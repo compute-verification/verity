@@ -4,8 +4,8 @@ sm_90 by default, against `registry.deepgemm`: the H200's first-hour go/no-go fo
 which quantises its input itself) and `ScaledMmFp8BlockGrouped_v1` (`fp8_einsum("bhr,hdr->bhd", recipe=(1, 128, 128))`), and the
 load-time weight processing whose words they bind as derived Inputs (`kernels.deepgemm_twins`).
 
-One GPU process writes `<out>/deepgemm_sm90_capture.json`, the property record `deepgemm_sm90_capture` (`properties.record`), and
-prints one line per case and then `DEEPGEMM-SM90 GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs first and
+One GPU process writes `<out>/deepgemm_capture.json`, the property record `deepgemm_capture` (`properties.record`), and
+prints one line per case and then `DEEPGEMM GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs first and
 nothing else runs when it fails (exit 3).  vLLM runs with DeepGEMM on (`VLLM_USE_DEEP_GEMM=1`, `VLLM_USE_DEEP_GEMM_E8M0=1`,
 `VLLM_BLOCKSCALE_FP8_GEMM_FLASHINFER=1`: the defaults on Hopper) and not batch invariant, so M < 32 takes FlashInfer's branch;
 `--batch-invariant` sends every M to DeepGEMM's (flashinfer.py:309-310).  GLM-5.3's engine pins `VLLM_USE_DEEP_GEMM=0`
@@ -50,7 +50,7 @@ GO needs 0 mismatches and 0 unresolved words (a word the twin flags non-finite w
 resolved weight block equal, deterministic reruns, the expected branch with the expected operands at every M, and the JIT kernels.
 
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
-    $PY tests/properties/deepgemm_sm90_capture_gpu.py --out DIR [--scratch DIR] [--quick] [--batch-invariant] [--only PHASES]
+    $PY tests/properties/deepgemm_capture_gpu.py --out DIR [--scratch DIR] [--quick] [--batch-invariant] [--only PHASES]
 """
 from __future__ import annotations
 
@@ -75,8 +75,8 @@ from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_block_fp8_capture_gpu as B
 from verity_vllm.properties.record import seal as seal_record
 
-SCHEMA = "verity-vllm/deepgemm-sm90-capture/v1"
-RECORD = "deepgemm_sm90_capture.json"
+SCHEMA = "verity-vllm/deepgemm-capture/v2"
+RECORD = "deepgemm_capture.json"
 GROUP = 128
 KERNEL = "FlashInferFp8DeepGEMMDynamicBlockScaledKernel"
 #: DeepSeek-V4-Pro's dense FP8 linears as one TP8 rank runs them, (name, K, N): hidden 7168, q_lora 1536, one 512-wide KV head, 128
@@ -672,7 +672,7 @@ def _verdict(doc: dict[str, Any]) -> bool:
 
 def _print_case(key: str, c: dict[str, Any]) -> None:
     t = c["totals"]
-    print(f"[deepgemm-sm90] case {key:52s} {'GO' if c['ok'] else 'NO-GO':5s} launches_ok={c['launches_ok']} branch={c['branch']} "
+    print(f"[deepgemm] case {key:52s} {'GO' if c['ok'] else 'NO-GO':5s} launches_ok={c['launches_ok']} branch={c['branch']} "
           f"words={t['words']} !={t['mismatch']} unresolved={t['unresolved']} nonfinite={t['nonfinite_words']} quant={t['quant_rows']}"
           f"!={t['quant_mismatch']} ref={t['reference_coords']}+{t['reference_quant_rows']} twin!={t['twin_mismatch']} "
           f"nf_ref={t['nonfinite_reference']}!={t['nonfinite_mismatch']} blocks={t['weight_blocks']}!={t['weight_mismatch']} "
@@ -691,10 +691,10 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
     doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "env": env, "quick": quick, "batch_invariant": batch_invariant,
                            "phases": sorted(only), "environment": G._environment(), "gate": C.gate(min_driver, want_cc, want_sms),
                            "errors": {}}
-    print(f"[deepgemm-sm90] gate {json.dumps(doc['gate'])}", flush=True)
+    print(f"[deepgemm] gate {json.dumps(doc['gate'])}", flush=True)
     if not doc["gate"]["ok"]:
         (outdir / RECORD).write_text(json.dumps(seal_record(doc, False), indent=1) + "\n")
-        print("DEEPGEMM-SM90 GATE-FAIL", flush=True)
+        print("DEEPGEMM GATE-FAIL", flush=True)
         raise SystemExit(3)
     doc["mufu"] = {"rcp_ok": None}
     if "mufu" in only:
@@ -706,7 +706,7 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
                     os.replace(b["tables_kept"], outdir / Path(b["tables_kept"]).name)
         except Exception as e:  # noqa: BLE001
             doc["errors"]["mufu"] = B._error(e)
-    print(f"[deepgemm-sm90] mufu rcp_ok={doc['mufu'].get('rcp_ok')}", flush=True)
+    print(f"[deepgemm] mufu rcp_ok={doc['mufu'].get('rcp_ok')}", flush=True)
     cfg = VllmConfig(compilation_config=CompilationConfig(custom_ops=["all"]))
     doc["selection"], doc["launches"], jobs = {}, [], []
     with set_current_vllm_config(cfg):
@@ -714,7 +714,7 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
             doc["selection"] = selection(cfg)
         except Exception as e:  # noqa: BLE001
             doc["errors"]["selection"] = B._error(e)
-        print(f"[deepgemm-sm90] selection {json.dumps(doc['selection'])[:1500]}", flush=True)
+        print(f"[deepgemm] selection {json.dumps(doc['selection'])[:1500]}", flush=True)
         if "linear" in only:
             for i, (model, name, K, N) in enumerate(linear_cases()):
                 try:
@@ -724,11 +724,11 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
                     doc["launches"] += launches
                     jobs += ljobs
                     for x in launches[1:]:
-                        print(f"[deepgemm-sm90] linear {model}/{name:28s} K={K:5d} N={N:5d} M={x['M']:4d} branch={x['branch']} "
+                        print(f"[deepgemm] linear {model}/{name:28s} K={K:5d} N={N:5d} M={x['M']:4d} branch={x['branch']} "
                               f"det={x['deterministic']} operands={x['operands_ok']}", flush=True)
                 except Exception as e:  # noqa: BLE001
                     doc["errors"][f"linear/{model}/{name}"] = B._error(e)
-                    print(f"[deepgemm-sm90] linear {model}/{name} ERROR {doc['errors'][f'linear/{model}/{name}'][:400]}", flush=True)
+                    print(f"[deepgemm] linear {model}/{name} ERROR {doc['errors'][f'linear/{model}/{name}'][:400]}", flush=True)
         if "einsum" in only:
             try:
                 with model_config(cfg, MODELS["dsv4"][2]):
@@ -736,20 +736,20 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
                 doc["launches"] += launches
                 jobs += ejobs
                 for x in launches[1:]:
-                    print(f"[deepgemm-sm90] einsum wo_a M={x['M']:4d} calls={x['calls']} det={x['deterministic']} "
+                    print(f"[deepgemm] einsum wo_a M={x['M']:4d} calls={x['calls']} det={x['deterministic']} "
                           f"operands={x['operands_ok']}", flush=True)
             except Exception as e:  # noqa: BLE001
                 doc["errors"]["einsum/dsv4/wo_a"] = B._error(e)
-                print(f"[deepgemm-sm90] einsum ERROR {doc['errors']['einsum/dsv4/wo_a'][:400]}", flush=True)
+                print(f"[deepgemm] einsum ERROR {doc['errors']['einsum/dsv4/wo_a'][:400]}", flush=True)
     doc["jit"] = jit(Path(env["DG_JIT_CACHE_DIR"]))
-    print(f"[deepgemm-sm90] jit files={doc['jit']['files']} gemms={doc['jit']['gemms']} layouts={doc['jit']['layouts']} "
+    print(f"[deepgemm] jit files={doc['jit']['files']} gemms={doc['jit']['gemms']} layouts={doc['jit']['layouts']} "
           f"types={doc['jit']['gemm_types']} ok={doc['jit']['ok']}", flush=True)
     try:
         doc["bind"] = bind_check()
     except Exception as e:  # noqa: BLE001
         doc["errors"]["bind"] = B._error(e)
         doc["bind"] = {"ok": False}
-    print(f"[deepgemm-sm90] bind ok={doc['bind']['ok']}; comparing {len(jobs)} jobs on {workers} workers", flush=True)
+    print(f"[deepgemm] bind ok={doc['bind']['ok']}; comparing {len(jobs)} jobs on {workers} workers", flush=True)
     results: dict[str, dict[str, Any]] = {}
     with ProcessPoolExecutor(max_workers=workers, mp_context=multiprocessing.get_context("spawn")) as ex:
         for res in ex.map(compare, jobs):
@@ -770,7 +770,7 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
     doc = seal_record(doc, _verdict(doc))
     (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
     tmp.cleanup()
-    print(f"DEEPGEMM-SM90 {'GO' if doc['ok'] else 'NO-GO'} {doc['digest']} totals={json.dumps(doc['totals'])} "
+    print(f"DEEPGEMM {'GO' if doc['ok'] else 'NO-GO'} {doc['digest']} totals={json.dumps(doc['totals'])} "
           f"no-go cases={[k for k, c in doc['cases'].items() if not c['ok']]} errors={sorted(doc['errors'])}", flush=True)
     return doc
 

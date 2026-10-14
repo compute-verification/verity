@@ -77,12 +77,13 @@ WORD_TYPES = (BF16, E4M3, F32)
 
 _UE8M0_CONF = ("model-untested: read from vLLM d9105ea80 per_token_group_quant.cu:42-160 (nvcc without fast-math); the ue8m0 rounding "
                "written as the bit form of per_token_group_quant.cu:381-387, equal on every reachable scale (Fp8Ue8m0Ceil_v1's doc); "
-               "tests/properties/deepgemm_sm90_capture_gpu.py is its hardware check")
-_FI_CONF = ("model-untested: read from FlashInfer 0.6.18 fp8_blockscale_gemm_kernel.cuh:820-895 and its sm_90 PTX (-use_fast_math); "
-            "MufuRcpFtz_v1's table is the RTX 4090's; tests/properties/deepgemm_sm90_capture_gpu.py is its hardware check")
+               "tests/properties/deepgemm_capture_gpu.py is its hardware check")
+_FI_CONF = ("model-untested: read from FlashInfer 0.6.18 fp8_blockscale_gemm_kernel.cuh:820-895 and its cc 9.0 PTX (-use_fast_math); "
+            "MufuRcpFtz_v1's table is core's, which the capture's mufu phase re-measures on its own GPU; "
+            "tests/properties/deepgemm_capture_gpu.py is its hardware check")
 _GEMM_CONF = ("model-untested as composed: the GEMM is ScaledMmFp8BlockSharedScale_v1 (exact-model-tested against CUTLASS's blockwise "
-              "kernel on the H100), read from DeepGEMM 8b1392b9 sm90_fp8_gemm_1d2d.cuh:283-347 and 405-420 as the same chain; "
-              "tests/properties/deepgemm_sm90_capture_gpu.py is its hardware check")
+              "kernel on a cc 9.0 GPU), read from DeepGEMM 8b1392b9's 1d2d kernel (the module docstring's file and lines) as the "
+              "same chain; tests/properties/deepgemm_capture_gpu.py is its hardware check")
 
 
 @primitive("F32LtFtz", 1, [("a", F32), ("b", F32)], BIT, conformance="exact-model-tested")

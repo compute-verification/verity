@@ -81,4 +81,11 @@ def check_targets(family: str) -> list:
     }[family]
 
 
-__all__ = ["EVALUATORS", "ROWS", "check_targets", "deepgemm_linear", "flashinfer_linear", "scaled_mm_fp8_block_grouped"]
+def register(row, evaluators: dict[str, str]) -> None:
+    """Register every family of `ROWS` through `rows`' ``_row`` and add its evaluator strings to ``evaluators``."""
+    evaluators |= EVALUATORS
+    for family, (fn, returns) in ROWS.items():
+        row(family, fn, returns, check_targets=lambda rng, f=family: check_targets(f))
+
+
+__all__ = ["EVALUATORS", "ROWS", "check_targets", "deepgemm_linear", "flashinfer_linear", "register", "scaled_mm_fp8_block_grouped"]

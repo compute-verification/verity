@@ -1,7 +1,7 @@
 """The sm_90 DeepGEMM capture without a GPU: its comparison jobs over operands and words made here (the kernels' words stood in for
 by the twins), a flipped word, quant byte, weight byte or scale found and located, the branch taps and operand checks on CPU
 tensors, the JIT scan on DeepGEMM's generated sources, the bindings, and the verdict (the GPU run is
-`tests/properties/deepgemm_sm90_capture_gpu.py --out ...` on an H200)."""
+`tests/properties/deepgemm_capture_gpu.py --out ...` on an H200)."""
 from __future__ import annotations
 
 import copy
@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 import torch
 
-from tests.properties import deepgemm_sm90_capture_gpu as X
+from tests.properties import deepgemm_capture_gpu as X
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
 from verity_vllm.program.kernels import deepgemm_twins as T
@@ -534,7 +534,7 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     assert seen["mufu"] == ["sm_90"] and seen["jit"] == [doc["env"]["DG_JIT_CACHE_DIR"]] and seen["linear"][0][4] == X.QUICK_LINEAR_M
     assert doc["totals"]["quant_rows"] == 32 and doc["totals"]["weight_blocks"] == 12 and doc["bind"]["ok"]
     printed = capsys.readouterr().out
-    assert "DEEPGEMM-SM90 GO" in printed and "no-go cases=[]" in printed and "case linear/dsv4/small/M32" in printed
+    assert "DEEPGEMM GO" in printed and "no-go cases=[]" in printed and "case linear/dsv4/small/M32" in printed
 
 
 def test_main_names_the_case_a_flipped_word_fails(tmp_path, monkeypatch, capsys) -> None:
@@ -546,7 +546,7 @@ def test_main_names_the_case_a_flipped_word_fails(tmp_path, monkeypatch, capsys)
     doc = json.loads((out / X.RECORD).read_text())
     assert doc["ok"] is False and doc["totals"]["mismatch"] == 1 and doc["mufu"] == {"rcp_ok": None}
     assert [k for k, c in doc["cases"].items() if not c["ok"]] == ["linear/dsv4/small/M32"]
-    assert "DEEPGEMM-SM90 NO-GO" in capsys.readouterr().out
+    assert "DEEPGEMM NO-GO" in capsys.readouterr().out
 
 
 def test_main_stops_at_a_failed_gate(tmp_path, monkeypatch, capsys) -> None:
@@ -557,11 +557,11 @@ def test_main_stops_at_a_failed_gate(tmp_path, monkeypatch, capsys) -> None:
         X.main(["--out", str(tmp_path / "out"), "--scratch", str(tmp_path), "--workers", "1"])
     doc = json.loads((tmp_path / "out" / X.RECORD).read_text())
     assert e.value.code == 3 and doc["ok"] is False and doc["digest"] == digest_of(doc) and "launches" not in doc
-    assert "DEEPGEMM-SM90 GATE-FAIL" in capsys.readouterr().out
+    assert "DEEPGEMM GATE-FAIL" in capsys.readouterr().out
 
 
 def test_the_record_is_a_registered_property() -> None:
     from verity_vllm.properties.record import seal
 
     doc = seal(_doc(), X._verdict(_doc()))
-    assert REGISTRY["deepgemm_sm90_capture"].schema == X.SCHEMA and doc["ok"] and doc["digest"] == digest_of(doc)
+    assert REGISTRY["deepgemm_capture"].schema == X.SCHEMA and doc["ok"] and doc["digest"] == digest_of(doc)
