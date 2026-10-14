@@ -4508,6 +4508,9 @@
    "signature": ["Pouw.SecurityProofs.WorkWeightedSampling : Pouw.Guarantees.WorkWeightedSampling"],
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
+  },
+  "Accounting.SecurityProofs.B4Covered": {
+   "owner": "@network-accounting"
   }
  },
  "shape": {
@@ -4606,6 +4609,10 @@
     ]
    },
    "Accounting.SecurityProofs.B4": {
+    "function": "Accounting.Actual.Run.acts",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.B4Covered": {
     "function": "Accounting.Actual.Run.acts",
     "outcome": "none"
    }
