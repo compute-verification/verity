@@ -7,14 +7,14 @@ import Proofs.Flock.Soundness.Assumptions.Inner
 /-!
 # n14: R's Ligerito stage's coins, as the verifier holds R's stream
 
-`lgSteps_of_lig` makes R's Ligerito's coin steps, at `MapsLeft`'s weave, `stacked/rep0`'s rounds of coins (`rep0`)
-from the ring switches' `k₂` on. `rep0` reads the verifier's hold of that stream (`C3.coins`, `commits.stream?`'s
-coins), so they are `StageHeld`'s first two parts at `stacked/rep0`, which `laterCoins_of_held`'s `h5` reads:
+At `MapsLeft`'s weave, R's Ligerito's coin steps are `stacked/rep0`'s rounds of coins (`rep0`) from the ring switches'
+`k₂`, as many as the stage takes (`LgHeld.lgCoins_of_weave`). `rep0` reads the verifier's hold of that stream
+(`C3.coins`, `commits.stream?`'s coins), so they are `StageHeld`'s first two parts at `stacked/rep0`, which `laterCoins_of_held`'s `h5` reads:
 
 * `commits_c3Of`, `heldCoins_rep0`: at the `C3` the verifier builds of its hold `cs` (`c3Of`), the coins it holds of
   `stacked/rep0` at round `q` are `rep0`'s round `q`;
-* `heldStage_of_lgCoins`: a stage whose coin steps are `rep0`'s rounds from `k₂` on has them as the coins the verifier
-  holds of `stacked/rep0` at the rounds from `k₂` to `rep0`'s round count (`StageHeld`'s first two parts at `ix = id`);
+* `heldStage_of_lgCoins`: a stage whose coin steps are `rep0`'s `n` rounds from `k₂` has them as the coins the
+  verifier holds of `stacked/rep0` at those rounds (`StageHeld`'s first two parts at `ix = id`);
 * `roundIn_stacked`, `holoSelOne_stacked`: R's stream last in `holoStreams`' order, its round `q` of coins is drawn at
   history round one past every earlier stream's and R's rounds before `q` (`roundAt_reps`, `holoSelOne_rep` at R);
 * `drawn_stacked`: where R's rounds from `k₂` each draw coins, the history's rounds from R's round `k₂`'s draw them in
@@ -26,8 +26,9 @@ coins), so they are `StageHeld`'s first two parts at `stacked/rep0`, which `late
   (`StackedCoins.innerCommits_held`), which `rep0`'s round count reads.
 
 `RRounds.lean` reads `holoStreams`' R rounds (at the verifier's `ish.stacked`) as META's (`stackedStreams_of_covers`).
-`LgHeld.lean` assembles `h5` (`stageHeld_lg`): the stage's start at R's round `k₂`'s history round (`stageStarts`), and
-its third part from the run's round total (`Compose.coins_total_holo`).
+`LgHeld.lean` assembles `h5` (`stageHeld_lg`; at R's run and `MapsLeft`, `stageHeld_lg_of_run`): the stage's start at
+R's round `k₂`'s history round (`stageStarts`), and its third part from the run's round total
+(`Compose.coins_total_holo`).
 -/
 
 namespace FlockC3.RegLevels
@@ -66,16 +67,15 @@ theorem heldCoins_rep0 {ish : Flock.RecVStar.Inner} {cs : Flock.RecVStar.InnerCo
     rfl
 
 /-- **R's Ligerito stage's coins are the verifier's hold of `stacked/rep0`** (`StageHeld`'s first two parts at
-`ix = id`): a stage whose coin steps are `rep0`'s rounds from `k₂` on (`lgSteps_of_lig`'s, at `MapsLeft`'s weave) has
-them as the coins `g q := rep0[q]!`, `q` over the rounds from `k₂` to `rep0`'s round count, each the coins the verifier
-holds of the stream at round `q` (`heldCoins_rep0`). -/
+`ix = id`): a stage whose coin steps are `rep0`'s `n` rounds from `k₂` (at `MapsLeft`'s weave, a prefix of the rounds
+from `k₂` on) has them as the coins `g q := rep0[q]!`, `q` over those rounds, each the coins the verifier holds of the
+stream at round `q` (`heldCoins_rep0`). -/
 theorem heldStage_of_lgCoins {ish : Flock.RecVStar.Inner} {cs : Flock.RecVStar.InnerCommits}
     {c3 : Flock.RecCoins.C3} (hc3 : Flock.Guarantees.c3Of ish (some cs) = some c3) {unit : String}
-    {ts : List FlockSoundness.Game.Step} {k₂ : ℕ}
+    {ts : List FlockSoundness.Game.Step} {k₂ n : ℕ}
     (hts : ts.filterMap Sum.getRight? =
-      ((List.range' k₂ ((FlockC3.Opening.rep0 c3 unit).size - k₂)).map fun i =>
-        (FlockC3.Opening.rep0 c3 unit)[i]!).map (coinArr FlockSoundness.Refine.fOf)) :
-    ts.filterMap Sum.getRight? = (List.range' k₂ ((FlockC3.Opening.rep0 c3 unit).size - k₂)).map
+      ((List.range' k₂ n).map fun i => (FlockC3.Opening.rep0 c3 unit)[i]!).map (coinArr FlockSoundness.Refine.fOf)) :
+    ts.filterMap Sum.getRight? = (List.range' k₂ n).map
         (coinArr FlockSoundness.Refine.fOf ∘ fun q => (FlockC3.Opening.rep0 c3 unit)[q]!) ∧
       ∀ q c, heldCoins (.ok cs) s!"{Flock.RecVStar.STACKED}/rep0" q = some c →
         (FlockC3.Opening.rep0 c3 unit)[q]! = c := by
