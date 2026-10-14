@@ -303,9 +303,10 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- (3) **Each accepted transcript's drawn statements label each drawn unit with itself**: `OwnReadsHJ` reads a unit's
+/-- **Each accepted transcript's drawn statements label each drawn unit with itself**: `OwnReadsHJ` reads a unit's
 position at its drawn statement's label (`idx`), and `HmRow.drawn` labels unit `u` with the registered population's
-`units.indices` at `u`, which `loadPublic` holds only to ascending; `RowsDrawn` and `RowsHeld` end with this conjunct. -/
+`units.indices` at `u`, which `loadPublic` holds only to ascending; `RowsDrawn` and `RowsHeld` end with this
+conjunct. -/
 def LabelsSelf (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) : Prop :=
   ∀ R ω t R₂ j tr, AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr → ∀ (u : Fin (F.Vs j).nv) d D dp idx,
     recordDraw tr.record = some d →

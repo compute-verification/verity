@@ -65,30 +65,26 @@ theorem opening_parts {sh : Flock.Shape} {M : Flock.RecAlgebra.Messages Flock.F1
   cases Flock.RecAlgebra.cm_pure h
   exact ⟨rsr, rs, k₂, lgr, lg, h₁, h₂, rfl⟩
 
-/-- **`LevelTie` from V*'s Ligerito**: where V*'s Ligerito over F returns zero residuals from `tIn` on the rounds `c`
-from round `k₂`, at a `fast100` schedule that is R's registered one, the proof carries V*'s messages, OOD values and
-`y_r`, a nonce per query and claim and the initial cap `cap`, every level's queries pass against `cap` (`Opened`), and
-`tIn` and `sws` are R's opening's output (`OpenRel`), the verifier's Ligerito accepts on a well-formed record of `c`'s
-rounds that retain the bytes it frames. The source's Ligerito steps take its kinds, the proof's messages, `c`'s rounds
-from `k₂` as coins, and the proof's rows. -/
-theorem levelTie_of_lig {cap₀ : Cap Dig} {e : ExecHolo} {u : C3Run e} {m : ℕ} {sch : Flock.Schedule}
-    {M : Flock.RecAlgebra.Messages Flock.F128} {tIn : Flock.F128} {sws : Array Flock.Switched}
-    {c : Array (Array Flock.F128)} {k₂ k₃ : ℕ} {lgr : Array Flock.F128} {lg : Flock.RecAlgebra.LgPts}
-    (hf : Flock.fast100 m = some sch) (hsch : Refine.schedOf sch = e.rsch.sch)
+/-- **V*'s Ligerito accepts on a record of `c`'s rounds**: where V*'s Ligerito over F returns zero residuals from `tIn`
+on the rounds `c` from round `k₂`, at a `fast100` schedule, the proof carries V*'s messages, OOD values and `y_r`, a
+nonce per query and claim and the initial cap `cap`, and every level's queries pass against `cap` (`Opened`), the
+verifier's Ligerito accepts from round `k₂` to the end of a well-formed record of `c`'s rounds that retain the bytes it
+frames, consuming `c`'s rounds from `k₂` on. -/
+theorem ligRun_of_lig {m : ℕ} {sch : Flock.Schedule} {M : Flock.RecAlgebra.Messages Flock.F128} {tIn : Flock.F128}
+    {sws : Array Flock.Switched} {c : Array (Array Flock.F128)} {k₂ k₃ : ℕ} {lgr : Array Flock.F128}
+    {lg : Flock.RecAlgebra.LgPts} (hf : Flock.fast100 m = some sch)
     (hlg : Flock.RecAlgebra.ligerito sch M tIn sws k₂ (Flock.RecAlgebra.Coins.ofRounds c) = .ok ((lgr, lg), k₃))
     (hz : ∀ x ∈ lgr, x = 0) (hne : Flock.RecAlgebra.NoEmpty c)
-    {msId : String} {cap : Array ByteArray} {p : Flock.LigeritoProof} (hcap : capDig cap = cap₀)
+    {msId : String} {cap : Array ByteArray} {p : Flock.LigeritoProof}
     (hpm : p.messages = M.msgs.map fun mm => (Flock.RecAlgebra.kv mm.1, Flock.RecAlgebra.kv mm.2))
     (hpo : p.oodValues = M.ood) (hyr : p.finalProof.yr = M.yr) (hic : (p.initialCap == cap) = true)
     (hqn : p.queryNonces.size = sch.levels.size) (hcn : p.consistencyNonces.size = sch.levels.size)
     (hcbn : p.claimNonces.size = M.ood.size + sch.levels.size)
-    (hopen : ∀ cs ∈ lg.conss.toList, Flock.RecAlgebra.Opened (Flock.MerkleScheme.sha512 msId) sch cap p M cs)
-    {nc : ℕ} (hop : OpenRel sch.m nc tIn sws u.opened)
-    (hk : u.lg.map kindOf <+: ligShape GF128 GF256 Dig e.rsch.sch)
-    (hl : u.lg.filterMap Sum.getLeft? = ligMsgs p capDig sch)
-    (hr : u.lg.filterMap Sum.getRight? = ((List.range' k₂ (c.size - k₂)).map (fun i => c[i]!)).map (coinArr fOf))
-    (ho : ∀ ℓ j, u.os.1 2 ℓ j = openRow p sch ℓ j) :
-    LevelTie cap₀ e u := by
+    (hopen : ∀ cs ∈ lg.conss.toList, Flock.RecAlgebra.Opened (Flock.MerkleScheme.sha512 msId) sch cap p M cs) :
+    ∃ (rs : Array Flock.Round) (P' : ByteArray), RoundsWF rs ∧
+      Flock.ligerito (Flock.MerkleScheme.sha512 msId) sch tIn cap p (Flock.basis sws) ⟨rs, k₂, ByteArray.empty⟩ =
+        .ok ((), ⟨rs, c.size, P'⟩) ∧
+      consumed rs k₂ c.size = (List.range' k₂ (c.size - k₂)).map (fun i => c[i]!) := by
   obtain ⟨ext, stV, hrun, hd, hmsg, hood, -, hlc, hfin, -⟩ := Flock.RecAlgebra.ligerito_checks hlg hz
   have : Fact (Flock.RecAlgebra.NoEmpty c) := ⟨hne⟩
   have hk₃ : k₃ = c.size := by
@@ -125,8 +121,81 @@ theorem levelTie_of_lig {cap₀ : Cap Dig} {e : ExecHolo} {u : C3Run e} {m : ℕ
     refine List.map_congr_left fun j hj => ?_
     obtain ⟨hj1, hj2⟩ := List.mem_range'_1.mp hj
     exact (hget j (by omega)).2.1
+  exact ⟨rs, P', hwf, hF rs hfit, hcons⟩
+
+/-- **`LevelTie` from V*'s Ligerito**: where V*'s Ligerito accepts on a record of `c`'s rounds (`ligRun_of_lig`), at a
+`fast100` schedule that is R's registered one, and `tIn` and `sws` are R's opening's output (`OpenRel`). The source's
+Ligerito steps take its kinds, the proof's messages, `c`'s rounds from `k₂` as coins, and the proof's rows. -/
+theorem levelTie_of_lig {cap₀ : Cap Dig} {e : ExecHolo} {u : C3Run e} {m : ℕ} {sch : Flock.Schedule}
+    {M : Flock.RecAlgebra.Messages Flock.F128} {tIn : Flock.F128} {sws : Array Flock.Switched}
+    {c : Array (Array Flock.F128)} {k₂ k₃ : ℕ} {lgr : Array Flock.F128} {lg : Flock.RecAlgebra.LgPts}
+    (hf : Flock.fast100 m = some sch) (hsch : Refine.schedOf sch = e.rsch.sch)
+    (hlg : Flock.RecAlgebra.ligerito sch M tIn sws k₂ (Flock.RecAlgebra.Coins.ofRounds c) = .ok ((lgr, lg), k₃))
+    (hz : ∀ x ∈ lgr, x = 0) (hne : Flock.RecAlgebra.NoEmpty c)
+    {msId : String} {cap : Array ByteArray} {p : Flock.LigeritoProof} (hcap : capDig cap = cap₀)
+    (hpm : p.messages = M.msgs.map fun mm => (Flock.RecAlgebra.kv mm.1, Flock.RecAlgebra.kv mm.2))
+    (hpo : p.oodValues = M.ood) (hyr : p.finalProof.yr = M.yr) (hic : (p.initialCap == cap) = true)
+    (hqn : p.queryNonces.size = sch.levels.size) (hcn : p.consistencyNonces.size = sch.levels.size)
+    (hcbn : p.claimNonces.size = M.ood.size + sch.levels.size)
+    (hopen : ∀ cs ∈ lg.conss.toList, Flock.RecAlgebra.Opened (Flock.MerkleScheme.sha512 msId) sch cap p M cs)
+    {nc : ℕ} (hop : OpenRel sch.m nc tIn sws u.opened)
+    (hk : u.lg.map kindOf <+: ligShape GF128 GF256 Dig e.rsch.sch)
+    (hl : u.lg.filterMap Sum.getLeft? = ligMsgs p capDig sch)
+    (hr : u.lg.filterMap Sum.getRight? = ((List.range' k₂ (c.size - k₂)).map (fun i => c[i]!)).map (coinArr fOf))
+    (ho : ∀ ℓ j, u.os.1 2 ℓ j = openRow p sch ℓ j) :
+    LevelTie cap₀ e u := by
+  obtain ⟨rs, P', hwf, hlig, hcons⟩ := ligRun_of_lig hf hlg hz hne hpm hpo hyr hic hqn hcn hcbn hopen
   exact ⟨msId, m, sch, tIn, sws, nc, cap, p, ⟨rs, k₂, ByteArray.empty⟩, ⟨rs, c.size, P'⟩, hf, hsch, hcap, hop, hwf,
-    hF rs hfit, hk, hl, hr.trans (congrArg (List.map (coinArr fOf)) hcons.symm), ho⟩
+    hlig, hk, hl, hr.trans (congrArg (List.map (coinArr fOf)) hcons.symm), ho⟩
+
+/-- **R's Ligerito steps woven from the proof's messages and `c`'s rounds are a play's tape** (`levelTie_of_lig`'s
+`hk`, `hl` and `hr`, `repStepsWoven_of_tie`'s analog at R): where V*'s Ligerito accepts on a record of `c`'s rounds
+(`ligRun_of_lig`), the model's compiled Ligerito plays on the proof's messages and the rounds the verifier's consumed
+before its final check (`ligerito_refines`), which consumes none (`finalProg_ok`), so those are `c`'s rounds from `k₂`
+on; steps woven from them along its shape are that play's tape (`weave_of_prefix`). -/
+theorem lgSteps_of_lig {e : ExecHolo} {u : C3Run e} {m : ℕ} {sch : Flock.Schedule}
+    {M : Flock.RecAlgebra.Messages Flock.F128} {tIn : Flock.F128} {sws : Array Flock.Switched}
+    {c : Array (Array Flock.F128)} {k₂ k₃ : ℕ} {lgr : Array Flock.F128} {lg : Flock.RecAlgebra.LgPts}
+    (hf : Flock.fast100 m = some sch) (hsch : Refine.schedOf sch = e.rsch.sch)
+    (hlg : Flock.RecAlgebra.ligerito sch M tIn sws k₂ (Flock.RecAlgebra.Coins.ofRounds c) = .ok ((lgr, lg), k₃))
+    (hz : ∀ x ∈ lgr, x = 0) (hne : Flock.RecAlgebra.NoEmpty c)
+    {msId : String} {cap : Array ByteArray} {p : Flock.LigeritoProof}
+    (hpm : p.messages = M.msgs.map fun mm => (Flock.RecAlgebra.kv mm.1, Flock.RecAlgebra.kv mm.2))
+    (hpo : p.oodValues = M.ood) (hyr : p.finalProof.yr = M.yr) (hic : (p.initialCap == cap) = true)
+    (hqn : p.queryNonces.size = sch.levels.size) (hcn : p.consistencyNonces.size = sch.levels.size)
+    (hcbn : p.claimNonces.size = M.ood.size + sch.levels.size)
+    (hopen : ∀ cs ∈ lg.conss.toList, Flock.RecAlgebra.Opened (Flock.MerkleScheme.sha512 msId) sch cap p M cs)
+    (hu : u.lg = FlockSoundness.Discharge.Exec.weave (ligShape GF128 GF256 Dig e.rsch.sch) (ligMsgs p capDig sch)
+      (((List.range' k₂ (c.size - k₂)).map (fun i => c[i]!)).map (coinArr fOf))) :
+    u.lg.map kindOf <+: ligShape GF128 GF256 Dig e.rsch.sch ∧ u.lg.filterMap Sum.getLeft? = ligMsgs p capDig sch ∧
+      u.lg.filterMap Sum.getRight? = ((List.range' k₂ (c.size - k₂)).map (fun i => c[i]!)).map (coinArr fOf) := by
+  obtain ⟨rs, P', hwf, hlig, hcons⟩ := ligRun_of_lig hf hlg hz hne hpm hpo hyr hic hqn hcn hcbn hopen
+  have hdim := (FlockSoundness.Refine.fast100_dims m sch hf).1
+  have hlv : ∀ i < sch.levels.size, FlockSoundness.Refine.LevelSeam (sch.levels.getD i default) := fun i hi => by
+    have he : sch.levels.getD i default = sch.levels[i] := by simp [Array.getD, hi]
+    rw [he]
+    exact FlockSoundness.Refine.fast100_level m sch hf _ (Array.getElem_mem hi)
+  obtain ⟨_pend, _initCh, _levels, _stF, _stF', tF, -, -, hpl, -, -, -, -, -, -, -, hfp, -⟩ :=
+    FlockSoundness.Refine.ligerito_refines (Flock.MerkleScheme.sha512 msId) sch tIn cap p (Flock.basis sws) 2
+      (fun _ => 0) capDig (fun _ ℓ j => openRow p sch ℓ j) hdim hlv
+      (fun i hi => by
+        rw [show sch.levels.getD i default = sch.levels[i] by simp [Array.getD, hi]]
+        exact FlockSoundness.Refine.fast100_alpha m sch hf _ (Array.getElem_mem hi))
+      (fun _ _ _ _ => rfl) (t := ⟨rs, k₂, ByteArray.empty⟩) (t' := ⟨rs, c.size, P'⟩) hwf hlig
+  obtain ⟨-, htF, -⟩ := FlockSoundness.Refine.finalProg_ok hfp
+  subst htF
+  obtain ⟨ts, hts, h1, h2⟩ := FlockSoundness.Discharge.PlaysCoin.toT_exact fOf hpl
+  have hk := FlockSoundness.Discharge.Exec.Spine.prefix hts
+    (FlockSoundness.Discharge.Exec.ligeritoC_spine (D := Dig) FlockSoundness.execArith 2 _ _ _)
+  rw [hsch] at hk
+  have h2' : ts.filterMap Sum.getRight? =
+      ((List.range' k₂ (c.size - k₂)).map (fun i => c[i]!)).map (coinArr fOf) :=
+    h2.trans (congrArg (List.map (coinArr fOf)) hcons)
+  have he : u.lg = ts := by
+    rw [hu, ← h1, ← h2']
+    exact FlockVBridge.Family.weave_of_prefix hk
+  rw [he]
+  exact ⟨hk, h1, h2'⟩
 
 /-- **(n7's levels) `LevelTie` from R's opening's run**, where `ℓ` is in the class's range: R's opening's algebra at
 the shape `RecOpening.shape?` gives at `mReg` returns zero residuals on V*'s rounds `c`, and at its ring switches'
@@ -166,3 +235,7 @@ theorem levelTie_of_run {st : Flock.Stmt} {hp : HoloParams} {cap₀ : Cap Dig} {
     hop hk hl hr ho
 
 end FlockC3.RegLevels
+
+#print axioms FlockC3.RegLevels.ligRun_of_lig
+#print axioms FlockC3.RegLevels.levelTie_of_lig
+#print axioms FlockC3.RegLevels.lgSteps_of_lig

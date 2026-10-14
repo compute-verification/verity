@@ -46,7 +46,8 @@ def OpensUnits (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : Fin nS) → 
 
 /-- **(n7's levels) `LevelTie` from R's opening's run and R's units**: `levelTie_of_run` at the messages w holds, its
 `Opened` from the proof's openings of R's rows (`hO hrs hss h64`), its caps' shape, the openings' `q` and, at the run's
-points, their `α` and units (`OpensUnits`). -/
+points, their `α` and units (`OpensUnits`); the source's Ligerito steps are the proof's messages and `c`'s rounds from
+the run's `k₂`, woven along the shape, and so a play's tape (`lgSteps_of_lig`). -/
 theorem levelTie_of_units (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : Fin nS) → (Vs s).Bits)
     (hG : ∀ s, (zs s).Good (Lb s)) {st : Flock.Stmt} {hp : HoloParams} {cap₀ : Cap Dig} {u : C3Run (holoAt st hp)}
     {cl : ℕ} {sh : Flock.Shape} {w : Array Flock.F128} {ops : FlockVBridge.AccChain.Openings}
@@ -75,9 +76,8 @@ theorem levelTie_of_units (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : F
         .ok ((lgr, lg), k₁) →
       (∀ ℓ < sh.sched.levels.size, ops.alpha ℓ = (lg.conss[ℓ]!).alpha) ∧ OpensUnits zs Lb sh ops sibs cap p lg ∧
       (∃ nc, OpenRel sh.sched.m nc rs.T rs.sws u.opened) ∧
-      u.lg.filterMap Sum.getRight? = ((List.range' k₂ (c.size - k₂)).map (fun i => c[i]!)).map (coinArr fOf))
-    (hk : u.lg.map kindOf <+: ligShape GF128 GF256 Dig (holoAt st hp).rsch.sch)
-    (hl : u.lg.filterMap Sum.getLeft? = ligMsgs p capDig sh.sched)
+      u.lg = FlockSoundness.Discharge.Exec.weave (ligShape GF128 GF256 Dig (holoAt st hp).rsch.sch)
+        (ligMsgs p capDig sh.sched) (((List.range' k₂ (c.size - k₂)).map (fun i => c[i]!)).map (coinArr fOf)))
     (ho : ∀ ℓ j, u.os.1 2 ℓ j = openRow p sh.sched ℓ j) :
     LevelTie cap₀ (holoAt st hp) u := by
   obtain ⟨hf, hsch⟩ := schedOf_holoAt hell hsh
@@ -85,10 +85,11 @@ theorem levelTie_of_units (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : F
   have hlast : Flock.RecAlgebra.Val.add ((msgsO sh w ops).tAtom.getD rs.T) rs.T = 0 := hz _ (by simp)
   rw [Flock.RecAlgebra.f128_eq_of_add_eq_zero hlast] at h₂
   have hzl : ∀ x ∈ lgr, x = 0 := fun x hx => hz x (by simp [hx])
-  obtain ⟨halpha, ⟨sess, un, cp, hu⟩, ⟨nc, hop⟩, hr⟩ := hR rsr rs k₂ lgr lg h₁ h₂
-  exact levelTie_of_lig hf hsch h₂ hzl hne hcap hpm hpo hyr hic hqn hcn hcbn
-    (opened_of_units zs Lb hG (sh := sh) (w := w) (ops := ops) (msId := msId) (conssAt_of_lig hf h₂ hzl hne) hcaps
-      sibs hO hrs hss h64 hq halpha sess un cp hu) hop hk hl hr ho
+  obtain ⟨halpha, ⟨sess, un, cp, hu⟩, ⟨nc, hop⟩, hw⟩ := hR rsr rs k₂ lgr lg h₁ h₂
+  have hopen := opened_of_units zs Lb hG (sh := sh) (w := w) (ops := ops) (msId := msId)
+    (conssAt_of_lig hf h₂ hzl hne) hcaps sibs hO hrs hss h64 hq halpha sess un cp hu
+  obtain ⟨hk, hl, hr⟩ := lgSteps_of_lig hf hsch h₂ hzl hne hpm hpo hyr hic hqn hcn hcbn hopen hw
+  exact levelTie_of_lig hf hsch h₂ hzl hne hcap hpm hpo hyr hic hqn hcn hcbn hopen hop hk hl hr ho
 
 end Units
 
@@ -207,9 +208,9 @@ theorem levelTie_of_reads (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : F
       (∀ ℓ < sh.sched.levels.size, ops.alpha ℓ = (lg.conss[ℓ]!).alpha) ∧
       OpensUnits zs Lb sh ops (sibsR sh ops sb e) (capR sh e0) (pR sh e0 w ops sb e) lg ∧
       (∃ nc, OpenRel sh.sched.m nc rs.T rs.sws u.opened) ∧
-      u.lg.filterMap Sum.getRight? = ((List.range' k₂ (c.size - k₂)).map (fun i => c[i]!)).map (coinArr fOf))
-    (hk : u.lg.map kindOf <+: ligShape GF128 GF256 Dig (holoAt st hp).rsch.sch)
-    (hl : u.lg.filterMap Sum.getLeft? = ligMsgs (pR sh e0 w ops sb e) capDig sh.sched)
+      u.lg = FlockSoundness.Discharge.Exec.weave (ligShape GF128 GF256 Dig (holoAt st hp).rsch.sch)
+        (ligMsgs (pR sh e0 w ops sb e) capDig sh.sched)
+        (((List.range' k₂ (c.size - k₂)).map (fun i => c[i]!)).map (coinArr fOf)))
     (ho : ∀ ℓ j, u.os.1 2 ℓ j = openRow (pR sh e0 w ops sb e) sh.sched ℓ j) :
     LevelTie cap₀ (holoAt st hp) u := by
   obtain ⟨hf, -⟩ := schedOf_holoAt hell hsh
@@ -226,8 +227,10 @@ theorem levelTie_of_reads (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : F
       simp only [sibsR, FlockVBridge.Family.levAt, FlockVBridge.Family.levelOf] at hy
       obtain ⟨k, rfl⟩ := Array.mem_ofFn.1 hy
       exact FlockVBridge.Family.size_fitB _ _)
-    hq hR hk hl ho
+    hq hR ho
 
 end Reads
 
 end FlockC3.RegLevels
+
+#print axioms FlockC3.RegLevels.levelTie_of_reads
