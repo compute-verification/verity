@@ -54,7 +54,8 @@ salt binder (`salt`, `saltFinder`), the verifier's value source (`valueSrcC3`, `
 | `SparseRepTie`'s pub half | `pubOf sh c = holoPub … (u.rep i)` at the tied source: check 5's `checkSparse` registers `sparseV` at the record's `sparseCoins` and the rep's inner points, custody, the rep play's outputs, and `holoPub`'s `U` against `layoutFactors`/`eqTable` | | 200–300 | `srcSparseTie_sparseOf`'s pub conjunct | W (round 2) |
 | `SparseRepTie`'s `h` half | `fOf w[s]! = (u.rep i).2.h s`: `ownPorts (.sparse _ hr)`'s `("h", rec-c{hr})`, read by `checkOwn`, tied as `ValueTie` ties a read | | 200+ | `srcSparseTie_sparseOf`'s `h` conjunct | W (round 2) |
 | `SparseSessionAt` from acceptance | `sparseCoins c3 unit i = ok sc` from check 5, the rec-sparse copy's `RegBit`s and its `RegOut` zeros (`SparseCopyAt`), as `OpeningZeroAtL` is from `WReadO` | | 300+ | `srcSparseTie_sparseOf`'s session conjunct | W (round 2) |
-| the public rows' premises | `RowsHeld` (`C3/PubRows/Check.lean:296`), with no producer yet; `PortsNamed` is derived (S, round 22): `RecVStar.checkMsgNames` refuses a circuit naming a port twice (`Flock/Test/MsgNames`), so `hPubRows_of_checked` reads it at each accepted session (`names_of_checkStmt`, `C3/PubRows/Shape.lean`) and `hbr_honest_reg` has no `hnames` | `C3/PubRows/Check.lean` | unsized | `hbr_honest_reg`'s `hdrawn` | E (round 4) |
+| the public rows' premises | `RowsHeld` is proved (round 24, `rowsHeld`, `C3/PubRows/Check.lean`): `VCommits`, `HPubRows`, `HeldIs`, `ChecksPubRows` and `RowsHeld` read a session only at a transcript it writes (`ZkOuter.Writes`, an outcome its game reaches; `sessions_stage_le` reads `cs` only there, `ZkOuter.prob_unwritten`), where the record's custody and the full draw draw every unit; `OwnIn` is `ownIn_checked` (round 21); `PortsNamed` is derived (round 22): `RecVStar.checkMsgNames` refuses a circuit naming a port twice (`Flock/Test/MsgNames`), so `hPubRows_of_checked` reads it at each accepted session (`names_of_checkStmt`, `C3/PubRows/Shape.lean`) and `hbr_honest_reg` has no `hnames` | `Recursive/Stage.lean`, `C3/PubRows/` | +150 −92 over 13 files | `hbr_honest_reg`'s `hreach` (`ChecksReached` at the checked family, which replaced `hdrawn`): `Flock.Guarantees.keepOwn` keeps a session's list where some transcript it accepts passes the checks, written or not; kept only at a transcript it writes, `checksAccepted_checked`'s proof gives `ChecksReached`, and `acceptsV_checked` needs each outcome's transcripts written (a lemma on `recGame`'s outcomes) | the guarantee's file (C, H) |
+| R's levels' tops reads | `TopRead`, `topRead_of_check`, `topLevel_of_check`, `topRead_of_accepted`, `topReads_of_accepted` (round 23): `RecCoins.checkStackedLevel` refuses a level whose `out` is not R's tops `rec-top-stacked-L<l>` read at node `pos[j] >>> H` (`checkTopReads`, `Flock/Test/TopReads`) | `C3/RegLevels/TopRead.lean` | +114 | on the session's own reads file `(F.zs …).own`, which C's link (d) and `HPubRows` read: each opening's `out` at its node `pos >>> H` of R's tops, through `fixedRow` | proved; C reads it |
 
 ## Start now (independent, rounds 1–4; proved, but a1c, a cleanup, is open)
 
@@ -120,17 +121,20 @@ is its read fact (its rounds' messages on the tape are its prover's for a witnes
 `hCommits_honest` (`VCommits` at the honest family, G's `hCommits_of` after `pubCommits_of_pubRows`) is proved, and `hcm`
 is it at the committed rounds (`vCommits_masked`); `hdec` is `vDecodesR_wmsgLeaf`. `hbr_honest` is at the checked family (`C3Family.checked`: the
 honest family at `checkedC3`, round 6), so its conclusion is `_hbr` itself, and the verifier's public-row and statement
-checks are the kept sessions' (`checksAccepted_checked`, into `hPubRows_of_checked` at `sparseAtShapeChecked`). What it
-takes, each with who discharges it:
+checks are those of a transcript each session writes (`hreach`, into `hPubRows_of_checked` at `rowsHeld` and
+`sparseAtShapeChecked`). What it takes, each with who discharges it:
 
 * `hrread`, `hsread`, `horead`, `hlread` (`RepsRead`, `SparseRead`, `OpeningRead`, `RegLevelsRead`), through
   `hReps_honest_of_read`, `hSparse_honest_of_read`, `hOpening_of_read`, `hRegLevels_honest_of_read`, and `hfr` (`HFrame`): at n6's fixed
   decoder, from `tape_c3DecOf` and the source's facts (n7). `SrcOK`'s `HLeafC3` is G's `HLeaf`: no decoder meets a
   read fact or `HFrame` at a history shorter than the inner rounds (`zip` stops at the last coin; at `t = []` the tape
   is empty), and the checked sessions refuse one (`hLeafC3_checked`, wherever V* has a statement).
-* `hdrawn` (`RowsHeld`): G's `RowsDrawn` at every value `fixedRow` knows, not only `rec-c<k>` (W). The drawn statement's
-  label of a unit is the unit by the verifier's refusal of any other (`RecVStar.checkLabels`, in `ChecksC3` and
-  `PubRowsChecked`; `label_of_checked`), so `RowsHeld` asks nothing of the labels (E).
+* `hreach` (`ChecksReached`): where a session accepts a transcript it writes, one it writes and accepts passes the
+  public-row and statement checks. There every unit is drawn (`rowsHeld`, `RowsHeld` proved: G's `RowsDrawn` at every
+  value `fixedRow` knows, from the record's custody, `drawn_of_acceptsZKR` and `hDraw` at the full draw), and the drawn
+  statement's label of a unit is the unit by the verifier's refusal of any other (`RecVStar.checkLabels`, in `ChecksC3`
+  and `PubRowsChecked`; `label_of_checked`). The checked family gives `ChecksAccepted` (`checksAccepted_checked`), at
+  a transcript `keepOwn` finds, written or not; `ChecksReached` needs `keepOwn` at the transcripts a session writes.
 * `PortsNamed` (G's `PortNamesUnique` at V*'s circuits) is no hypothesis: the statement check refuses a circuit naming a
   port twice (`checkMsgNames`), so it holds at each accepted session (`names_of_checkStmt`, in `hPubRows_of_checked`).
 * `hown` (`OwnIn`): each accepted session's reads hold `own`'s ports by name, value and reads. At

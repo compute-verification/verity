@@ -12,6 +12,8 @@
   "Flock.Test.RecOpenLeaves",
   "Flock.Test.ReadWhole",
   "Flock.Test.MsgNames",
+  "Flock.Test.TopReads",
+  "Flock.Test.SharedRows",
   "VStar"
  ],
  "exempt": {

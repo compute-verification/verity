@@ -34,6 +34,8 @@ import Proofs.Flock.C3.Sparse.MsgsRead
 import Proofs.Flock.C3.Sparse.SrcSessions
 import Proofs.Flock.C3.Sparse.MsgsLayers
 import Proofs.Flock.C3.Sparse.PubTie
+import Proofs.Flock.C3.Sparse.PubLift
+import Proofs.Flock.C3.Sparse.HeldStages
 import Proofs.Flock.C3.VStarList.Statements
 import Proofs.Flock.C3.VStarList.Shape
 import Proofs.Flock.C3.VStarList.Range
@@ -101,14 +103,17 @@ import Proofs.Flock.C3.RegLevels.ValueTie
 import Proofs.Flock.C3.RegLevels.OutRegs
 import Proofs.Flock.C3.RegLevels.TopTie
 import Proofs.Flock.C3.RegLevels.AccReads
+import Proofs.Flock.C3.RegLevels.SharedRows
 import Proofs.Flock.C3.RegLevels.LigWhole
 import Proofs.Flock.C3.RegLevels.Maps
 import Proofs.Flock.C3.RegLevels.ROpens
 import Proofs.Flock.C3.RegLevels.ROpensPR
 import Proofs.Flock.C3.RegLevels.LevelsChecked
+import Proofs.Flock.C3.RegLevels.TopRead
 import Proofs.Flock.C3.RegLevels.SrcMaps
 import Proofs.Flock.C3.RegLevels.LgCoins
 import Proofs.Flock.C3.RegLevels.RRounds
+import Proofs.Flock.C3.RegLevels.LgHeld
 
 /-!
 # Candidate 3's recursive guarantee: its open pieces
