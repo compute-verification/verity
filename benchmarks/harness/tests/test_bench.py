@@ -93,7 +93,10 @@ def test_cli_and_presets_use_the_benchmark_package_and_stable_gpu_ids(tmp_path):
         "vllm", "--preset", "llama31-8b-fp8-1gpu", "--arms", "stock,stock-fp8", "--out", str(tmp_path),
     ])
     assert args.command == "vllm"
-    assert get_preset(args.preset).gpu_id == "rtx-pro-6000"
+    preset = get_preset(args.preset)
+    assert preset.gpu_id == "rtx-pro-6000"
+    assert preset.engine_settings["resident_gpu_memory_utilization"] == 0.40
+    assert preset.engine_settings["block_gpu_memory_utilization"] == 0.80
     assert set(GPUS) == {"rtx-pro-6000", "h200"}
 
 
