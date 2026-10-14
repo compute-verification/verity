@@ -113,6 +113,3 @@ end VStarFamily
 end family
 
 end FlockVBridge.Family
-
-#print axioms FlockVBridge.OfVStar.outCols_of_unitLaid
-#print axioms FlockVBridge.Family.VStarFamily.partOutCols_of

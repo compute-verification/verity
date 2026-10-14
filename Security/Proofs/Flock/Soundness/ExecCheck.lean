@@ -587,5 +587,3 @@ theorem check_facts_typed {c : Circuit} {tags : Tags} {ls : Lean.Json} {tb : Typ
       exact hio.1 }
 
 end FlockSoundness
-
-#print axioms FlockSoundness.check_facts
