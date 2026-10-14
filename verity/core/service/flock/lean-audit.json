@@ -12,6 +12,7 @@
   "Flock.Test.RecOpenLeaves",
   "Flock.Test.ReadWhole",
   "Flock.Test.MsgNames",
+  "Flock.Test.Parsed",
   "VStar"
  ],
  "exempt": {
