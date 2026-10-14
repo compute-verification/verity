@@ -54,7 +54,7 @@ LEASE_MIN=${LEASE_MIN:-30}; VERIFY_AT=${VERIFY_AT:-o:32}; LEASE=${LEASE:-1 --wai
 [ "$LEASE_MIN" -le 30 ] || { echo "RUN_FAIL_LEASE: LEASE_MIN=$LEASE_MIN is over 30 minutes" >&2; exit 2; }
 stamp() { echo "ra-matmul: $* at $(date -u +%H:%M:%SZ)"; }
 on() { case $PHASE in all|"$1") return 0 ;; *) return 1 ;; esac; }
-export PYTHONPATH=$PWD:$PWD/catalog:$PWD/kernels:$PWD/experimental:$PWD/integrations/vllm:$PWD/benchmarks/pouw
+export PYTHONPATH=$PWD:$PWD/integrations/vllm:$PWD/benchmarks/pouw
 HEAD=$(git rev-parse HEAD); echo "tree $HEAD" | tee "$OUT/tree.txt"
 PASSES=$S/passes${LEG:+/$LEG}
 
