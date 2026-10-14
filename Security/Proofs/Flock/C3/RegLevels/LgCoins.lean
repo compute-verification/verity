@@ -1,5 +1,6 @@
 import Proofs.Flock.C3.Compose.HoloEncoded
 import Proofs.Flock.C3.RegLevels.SrcMaps
+import Proofs.Flock.C3.RegLevels.StackedCoins
 import Proofs.Flock.Recursive.AuditC3
 import Proofs.Flock.Soundness.Assumptions.Inner
 
@@ -20,9 +21,12 @@ coins), so they are `StageHeld`'s first two parts at `stacked/rep0`, which `late
   order (`StageHeld`'s last part);
 * `stackedRounds_coins`: every round of R's stream draws coins, at each shape `fast100` has (`drawn_stacked`'s `hpos`).
 
-Left for `h5`: `StageHeld`'s third part, the history's round count past the stage, which reads `rep0`'s round count
-against `stackedRounds` (R's held rounds are the stream's, `candidate3`, `checkStackedShape`); and that the stage starts
-at R's round `k₂`'s history round.
+* `stackedCoins_of_innerCommitsAt`: where the verifier holds the inner transcript and R's stream, META names R's shape,
+  at R's two claims, and the stream holds a round of coins for each round of `stackedRounds` there
+  (`StackedCoins.innerCommits_held`), which `rep0`'s round count reads.
+
+Left for `h5`: `StageHeld`'s third part, the history's round count past the stage, which also reads `holoStreams`'
+R rounds (at the verifier's `ish.stacked`) as META's; and that the stage starts at R's round `k₂`'s history round.
 -/
 
 namespace FlockC3.RegLevels
@@ -167,4 +171,19 @@ theorem stackedRounds_coins {sh : Flock.RecVStar.StackedShape} (hc : sh.claims =
       simp [show m > 35 by omega]
     simp [Flock.RecVStar.stackedRounds, hf] at h
 
+/-- **R's held coins are a round each of R's schedule**: where the verifier holds the inner transcript
+(`innerCommitsAt`) and its stream `stacked/rep0`, the inner statement's META names R's shape, at R's two claims, and the
+stream holds a round of coins for each round of `stackedRounds` at it (`StackedCoins.innerCommits_held`). -/
+theorem stackedCoins_of_innerCommitsAt {tr : Lean.Json} {record : String} {st : Flock.Stmt} {reg : Lean.Json}
+    {cs : Flock.RecVStar.InnerCommits} (h : Flock.Guarantees.innerCommitsAt tr record st reg = .ok cs)
+    {x : Flock.RecVStar.InnerStream} (hx : cs.stream? "stacked/rep0" = some x) :
+    ∃ sh rs, Flock.RecVStar.stackedShapeOf st.c.metaJ = .ok (some sh) ∧ sh.claims = Flock.RecVStar.STACKED_CLAIMS ∧
+      Flock.RecVStar.stackedRounds sh = some rs ∧ x.coins.size = rs.size := by
+  unfold Flock.Guarantees.innerCommitsAt at h
+  obtain ⟨shape, hsh, h⟩ := TopHold.eok_bind h
+  obtain ⟨sh, rfl, hc, rs, hrs, hsz⟩ := StackedCoins.innerCommits_held h hx
+  exact ⟨sh, rs, hsh, hc, hrs, hsz⟩
+
 end FlockC3.RegLevels
+
+#print axioms FlockC3.RegLevels.stackedCoins_of_innerCommitsAt
