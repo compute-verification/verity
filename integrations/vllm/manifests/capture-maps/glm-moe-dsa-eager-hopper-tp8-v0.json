@@ -17,8 +17,7 @@
    "config_sha256": "3ac72612095574542f7fff847ada8e59d9199dd8af44bdf625d7e02615572e69"
   },
   "inventory_runs": {
-   "VLLM_USE_DEEP_GEMM=0": "r20261003-072626-b966 (inv-tp8-cutlass.json, ranks 0-7, the target profile; tests/check/fixtures/glm_moe_dsa)",
-   "default": "r20261003-072626-b966 (inv-tp8-default.json, rank 0: DeepGemmFp8BlockScaledMMKernel; check-default.txt: 11 problems, 2 switches and 9 kernel expectations); r20261003-062327-45fd (ranks 0-7)",
+   "default": "r20261003-072626-b966 (inv-tp8-default.json, rank 0) and r20261003-062327-45fd (ranks 0-7), with the pinned source's dynamic FlashInfer/DeepGEMM class and GLM-5.3 shapes confirmed by deepgemm_sm90_capture/v1 GO r20261013-115825-d357",
    "VLLM_BATCH_INVARIANT=1": "r20261003-062327-45fd (log-bi.txt: refused, no sparse MLA backend supports batch invariance)"
   }
  },
@@ -42,22 +41,20 @@
     0
    ],
    "num_sms": 132,
-   "batch_invariant": false,
-   "fp8_block_gemm": "cutlass"
+   "batch_invariant": false
   },
   "env": {
-   "VLLM_USE_DEEP_GEMM": "0",
    "VLLM_BATCH_INVARIANT": "0"
   },
   "switches": {
    "VLLM_BATCH_INVARIANT": false,
-   "VLLM_USE_DEEP_GEMM": false,
-   "deep_gemm_e8m0": false,
+   "VLLM_USE_DEEP_GEMM": true,
+   "deep_gemm_e8m0": true,
    "VLLM_USE_FUSED_MOE_GROUPED_TOPK": true,
    "sparse_mla_num_splits": null
   },
   "env_reasons": {
-   "VLLM_USE_DEEP_GEMM": "0 puts every dense FP8 linear on CutlassFp8BlockScaledMMKernel, the kernel fp8.ScaledMmFp8Block@1 models (exact-model-tested on H100 with VLLM_USE_DEEP_GEMM=0). The default (1) selects DeepGemmFp8BlockScaledMMKernel with ue8m0 activation scales and weights requantized to ue8m0 at load: a different function with no Program yet. The indexer's DeepGEMM logits kernels are gated on the package, not on this variable, and still run.",
+   "VLLM_USE_DEEP_GEMM": "unset: vLLM's true default selects FlashInferFp8DeepGEMMDynamicBlockScaledKernel on sm_90. It runs FlashInfer below 32 tokens and DeepGEMM fp8_gemm_nt from 32, with ue8m0 activation scales and GLM-5.3's f32 weight scales requantized to ue8m0 at load. FlashInferFp8Linear_v1 and DeepGemmFp8Linear_v1 model the two branches.",
    "VLLM_BATCH_INVARIANT": "1 is refused at engine build on sm_90: FLASH_ATTN_MLA_SPARSE, FLASHMLA_SPARSE and FLASHINFER_MLA_SPARSE_SM90 all report 'batch invariance not supported'. The Commit runs without it and replay uses the same batch layout.",
    "VERITY_SPARSE_MLA_NUM_SPLITS": "off by default (unset or 0): the target serves vLLM's standard setup, FA3's heuristic split-KV and its combine in FlashAttnMLASparseImpl.forward_mqa (every decode step and a prefill over more than TOPK keys), which binds only to a Program of the split and its combine (cursor/fa3-sparse-split-8c79). 1 pins num_splits=1 (verity_vllm.engine.sparse_mla, read back as the switch sparse_mla_num_splits = 1), whose function is SparseMlaHead_v1: H200 run r20261012-224647-aacf (20,480 of 20,480 words), and run r20261013-001802-7e95 through the switch (GLM53-DSA GO; the heuristic differs on 3,240 of its 57,344 words). Its price, run r20261013-001656-57d6 (one TP8 rank: 8 heads, top-2048, CUDA-graph replay): 13.6 -> 57.7 us per layer at B1, 15.9 -> 58.4 us at B8 (about +3.3 ms per decode step over 78 layers), 50.7 -> 64.4 us at B64, the same at 4k and 32k context. Serving with it is pending a decision; the meta inventory with it on is run r20261013-002721-e2f9, otherwise equal to the pinned one."
   }
@@ -66,8 +63,7 @@
   "attention_backend": "FLASH_ATTN_MLA_SPARSE (FlashAttnMLASparseImpl, masked_mha_available false): decode and long prefill take the absorbed MQA path",
   "prefill_backend": "FlashAttnPrefillBackend, vllm_flash_attn_version 3 (qk head 256, v head 256, 8 heads per rank, scale 1/16): the dense-mha route",
   "fp8_linear_kernel": {
-   "VLLM_USE_DEEP_GEMM=0": "CutlassFp8BlockScaledMMKernel",
-   "default": "DeepGemmFp8BlockScaledMMKernel"
+   "default": "FlashInferFp8DeepGEMMDynamicBlockScaledKernel: FlashInfer fp8_blockscale_gemm for M < 32, DeepGEMM fp8_gemm_nt for M >= 32"
   },
   "fp8_moe_backend": "TRITON (oracle.fp8: on sm_90 with 128x128 block FP8 and no expert parallelism Triton is moved to the front)",
   "router": "GroupedTopKRouter -> _C.grouped_topk (sigmoid, n_group 1, topk_group 1, renormalize, routed_scaling_factor 2.5 inside the kernel)",
@@ -157,21 +153,24 @@
    "note": "one rank of VocabParallelEmbedding: the row table[tok - START] when the rank owns the token, else zeros (START = rank * VS)"
   },
   "fp8-block-linear": {
-   "status": "exists",
+   "status": "port",
    "definitions": [
     "Fp8GroupQuant_v1",
     "ScaledMmFp8BlockSharedScale_v1",
     "ScaledMmFp8Block_v1"
    ],
-   "note": "_C.per_token_group_fp8_quant + CUTLASS sm_90 blockwise GEMM (128x128 weight blocks, f32 promotion per 128-wide K block), exact-model-tested on H100 (VLLM_USE_DEEP_GEMM=0). Weights are the checkpoint words. The target's fp8_scale_construction (shared-per-block, the default) binds ScaledMmFp8BlockSharedScale_v1, ScaledMmFp8Block_v1's function with the scale products committed; per-coordinate binds ScaledMmFp8Block_v1."
+   "note": "The non-default VLLM_USE_DEEP_GEMM=0 route: _C.per_token_group_fp8_quant + CUTLASS sm_90 blockwise GEMM. Retained as a registered alternative, not selected by this workload."
   },
   "fp8-block-linear-deepgemm": {
-   "status": "tonight",
-   "definitions": [],
-   "note": "DeepGemmFp8BlockScaledMMKernel: fp8_gemm_nt with ue8m0 (power-of-two) activation scales and weights requantized to ue8m0 at load (requant_weight_ue8m0_inplace). Only if the serve keeps VLLM_USE_DEEP_GEMM=1.",
-   "branch": "cursor/hopper-block-fp8-8c79",
+   "status": "exists",
+   "definitions": [
+    "FlashInferFp8Linear_v1",
+    "DeepGemmFp8Linear_v1"
+   ],
+   "note": "The default FlashInferFp8DeepGEMMDynamicBlockScaledKernel: FlashInferFp8Linear_v1 below 32 tokens and DeepGemmFp8Linear_v1 from 32. GLM-5.3's f32 weight scales and e4m3 weights are requantized to ue8m0 at load and declared as the served weight operands.",
+   "branch": "cursor/deepgemm-sm90-8c79",
    "alternative_to": "fp8-block-linear",
-   "when": "VLLM_USE_DEEP_GEMM=1 (the default)"
+   "when": "vLLM's defaults on sm_90"
   },
   "silu-mul": {
    "status": "exists",
@@ -241,7 +240,7 @@
     "MoeExpertFp8BlockGemmW_v1",
     "MoeExpertFp8BlockGemmW_v2"
    ],
-   "note": "Triton fused_moe with 128x128 block FP8 (Fp8MoeBackend.TRITON): per_token_group_quant_fp8 of the expert input (ue8m0 iff DeepGEMM e8m0 is in use: off with VLLM_USE_DEEP_GEMM=0), w13 launch, then the w2 launch with MUL_ROUTED_WEIGHT. Registered (fp8.Fp8GroupQuant_v1, fp8_moe.MoeExpertFp8BlockGemm(W)_v1, Booleans _v2); tests/properties/glm53_block_fp8_capture_gpu.py pins the launches' statics on the H200"
+   "note": "Triton fused_moe with 128x128 block FP8 (Fp8MoeBackend.TRITON): the cc 9.0 oracle moves Triton to the front for dynamic-128 activations, static 128-block weights and no expert parallelism even when DeepGEMM is enabled by default. Registered (fp8.Fp8GroupQuant_v1, fp8_moe.MoeExpertFp8BlockGemm(W)_v1, Booleans _v2); tests/properties/glm53_block_fp8_capture_gpu.py pins the launches' statics on the H200"
   },
   "fused-rmsnorm-triton": {
    "status": "port",
@@ -874,7 +873,7 @@
     "M",
     "KVA"
    ],
-   "program": "fp8-block-linear",
+   "program": "fp8-block-linear-deepgemm",
    "tp": "replicated",
    "rank_identical": true,
    "target_only": false,
@@ -1032,7 +1031,7 @@
     "M",
     "=NHL * QKH"
    ],
-   "program": "fp8-block-linear",
+   "program": "fp8-block-linear-deepgemm",
    "tp": "column",
    "rank_identical": false,
    "target_only": false,
@@ -1101,7 +1100,7 @@
     "M",
     "=NHL * (DN + DV)"
    ],
-   "program": "fp8-block-linear",
+   "program": "fp8-block-linear-deepgemm",
    "tp": "column",
    "rank_identical": false,
    "target_only": false,
@@ -1259,7 +1258,7 @@
     "M",
     "H"
    ],
-   "program": "fp8-block-linear",
+   "program": "fp8-block-linear-deepgemm",
    "tp": "partial",
    "rank_identical": false,
    "target_only": false,
@@ -1327,7 +1326,7 @@
     "M",
     "=IH * ID"
    ],
-   "program": "fp8-block-linear",
+   "program": "fp8-block-linear-deepgemm",
    "tp": "replicated",
    "rank_identical": true,
    "target_only": false,
@@ -1506,7 +1505,7 @@
     "M",
     "=2 * IL"
    ],
-   "program": "fp8-block-linear",
+   "program": "fp8-block-linear-deepgemm",
    "tp": "column",
    "rank_identical": false,
    "target_only": false,
@@ -1565,7 +1564,7 @@
     "M",
     "H"
    ],
-   "program": "fp8-block-linear",
+   "program": "fp8-block-linear-deepgemm",
    "tp": "partial",
    "rank_identical": false,
    "target_only": false,
@@ -1876,7 +1875,7 @@
     "M",
     "=2 * SIL"
    ],
-   "program": "fp8-block-linear",
+   "program": "fp8-block-linear-deepgemm",
    "tp": "column",
    "rank_identical": false,
    "target_only": false,
@@ -1935,7 +1934,7 @@
     "M",
     "H"
    ],
-   "program": "fp8-block-linear",
+   "program": "fp8-block-linear-deepgemm",
    "tp": "partial",
    "rank_identical": false,
    "target_only": false,
@@ -2462,109 +2461,109 @@
    "pattern": "model.layers.{i}.self_attn.fused_qkv_a_proj",
    "type": "DeepSeekV2FusedQkvAProjLinear",
    "path": "kernels.quant_method.fp8_linear.type",
-   "value": "vllm.model_executor.kernels.linear.scaled_mm.cutlass.CutlassFp8BlockScaledMMKernel"
+   "value": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel"
   },
   {
    "pattern": "model.layers.{i}.self_attn.fused_qkv_a_proj",
    "type": "DeepSeekV2FusedQkvAProjLinear",
    "path": "kernels.quant_method.is_scale_e8m0",
-   "value": false
+   "value": true
   },
   {
    "pattern": "model.layers.{i}.self_attn.q_b_proj",
    "type": "ColumnParallelLinear",
    "path": "kernels.quant_method.fp8_linear.type",
-   "value": "vllm.model_executor.kernels.linear.scaled_mm.cutlass.CutlassFp8BlockScaledMMKernel"
+   "value": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel"
   },
   {
    "pattern": "model.layers.{i}.self_attn.q_b_proj",
    "type": "ColumnParallelLinear",
    "path": "kernels.quant_method.is_scale_e8m0",
-   "value": false
+   "value": true
   },
   {
    "pattern": "model.layers.{i}.self_attn.kv_b_proj",
    "type": "ColumnParallelLinear",
    "path": "kernels.quant_method.fp8_linear.type",
-   "value": "vllm.model_executor.kernels.linear.scaled_mm.cutlass.CutlassFp8BlockScaledMMKernel"
+   "value": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel"
   },
   {
    "pattern": "model.layers.{i}.self_attn.kv_b_proj",
    "type": "ColumnParallelLinear",
    "path": "kernels.quant_method.is_scale_e8m0",
-   "value": false
+   "value": true
   },
   {
    "pattern": "model.layers.{i}.self_attn.o_proj",
    "type": "RowParallelLinear",
    "path": "kernels.quant_method.fp8_linear.type",
-   "value": "vllm.model_executor.kernels.linear.scaled_mm.cutlass.CutlassFp8BlockScaledMMKernel"
+   "value": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel"
   },
   {
    "pattern": "model.layers.{i}.self_attn.o_proj",
    "type": "RowParallelLinear",
    "path": "kernels.quant_method.is_scale_e8m0",
-   "value": false
+   "value": true
   },
   {
    "pattern": "model.layers.{i}.self_attn.indexer.wq_b",
    "type": "ReplicatedLinear",
    "path": "kernels.quant_method.fp8_linear.type",
-   "value": "vllm.model_executor.kernels.linear.scaled_mm.cutlass.CutlassFp8BlockScaledMMKernel"
+   "value": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel"
   },
   {
    "pattern": "model.layers.{i}.self_attn.indexer.wq_b",
    "type": "ReplicatedLinear",
    "path": "kernels.quant_method.is_scale_e8m0",
-   "value": false
+   "value": true
   },
   {
    "pattern": "model.layers.{i}.mlp.gate_up_proj",
    "type": "MergedColumnParallelLinear",
    "path": "kernels.quant_method.fp8_linear.type",
-   "value": "vllm.model_executor.kernels.linear.scaled_mm.cutlass.CutlassFp8BlockScaledMMKernel"
+   "value": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel"
   },
   {
    "pattern": "model.layers.{i}.mlp.gate_up_proj",
    "type": "MergedColumnParallelLinear",
    "path": "kernels.quant_method.is_scale_e8m0",
-   "value": false
+   "value": true
   },
   {
    "pattern": "model.layers.{i}.mlp.down_proj",
    "type": "RowParallelLinear",
    "path": "kernels.quant_method.fp8_linear.type",
-   "value": "vllm.model_executor.kernels.linear.scaled_mm.cutlass.CutlassFp8BlockScaledMMKernel"
+   "value": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel"
   },
   {
    "pattern": "model.layers.{i}.mlp.down_proj",
    "type": "RowParallelLinear",
    "path": "kernels.quant_method.is_scale_e8m0",
-   "value": false
+   "value": true
   },
   {
    "pattern": "model.layers.{i}.mlp.shared_experts.gate_up_proj",
    "type": "MergedColumnParallelLinear",
    "path": "kernels.quant_method.fp8_linear.type",
-   "value": "vllm.model_executor.kernels.linear.scaled_mm.cutlass.CutlassFp8BlockScaledMMKernel"
+   "value": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel"
   },
   {
    "pattern": "model.layers.{i}.mlp.shared_experts.gate_up_proj",
    "type": "MergedColumnParallelLinear",
    "path": "kernels.quant_method.is_scale_e8m0",
-   "value": false
+   "value": true
   },
   {
    "pattern": "model.layers.{i}.mlp.shared_experts.down_proj",
    "type": "RowParallelLinear",
    "path": "kernels.quant_method.fp8_linear.type",
-   "value": "vllm.model_executor.kernels.linear.scaled_mm.cutlass.CutlassFp8BlockScaledMMKernel"
+   "value": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel"
   },
   {
    "pattern": "model.layers.{i}.mlp.shared_experts.down_proj",
    "type": "RowParallelLinear",
    "path": "kernels.quant_method.is_scale_e8m0",
-   "value": false
+   "value": true
   },
   {
    "pattern": "model.layers.{i}.self_attn.indexer.wk_weights_proj",

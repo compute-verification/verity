@@ -15,6 +15,7 @@ from verity.ml.circuits.defs import bind as ir_bind
 from verity_vllm.program.registry import act as _act
 from verity_vllm.program.registry import b1, gemm_bias as _gemm_bias
 from verity_vllm.program.registry import dsa as _dsa, dsa_norm as _dsa_norm
+from verity_vllm.program.registry import deepgemm as _deepgemm
 from verity_vllm.program.registry import boolean_rope as _rope
 from verity_vllm.program.registry import cublas_bf16 as _cublas_bf16, ll_bf16 as _ll_bf16
 from verity_vllm.program.registry import sparse_mla as _sparse_mla, sparse_mla_split as _sparse_mla_split
@@ -421,6 +422,8 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # (`frontend.targets.fp8_block_dot`), binds the version 3 forms over it (the role and its note stay as they were).
            "fp8_group_quant": lambda K, G: ir_bind(_fp8.Fp8GroupQuant, K=K, G=G),
            "scaled_mm_fp8_block": lambda K, N, G, SCALE, FP8_DOT=None: _fp8_vocab.block_gemm(K, N, G, SCALE, FP8_DOT),
+           "flashinfer_fp8_linear": lambda K, N: ir_bind(_deepgemm.FlashInferFp8Linear, K=K, N=N),
+           "deepgemm_fp8_linear": lambda K, N: ir_bind(_deepgemm.DeepGemmFp8Linear, K=K, N=N),
            # GPT-NeoX's nn.LayerNorm (weight + bias): torch's vectorized CUDA kernel, the Definition the eager Match fold binds
            # (`registry/layer_norm.py`, `engine/profiles/gen_ln_patterns.py`).  `rules/vllm_bindings/layer_norm.py` asks for it.
            "layer_norm_aten": lambda N, EPS: ir_bind(_LN.LayerNormAten, N=N, EPS=EPS),
@@ -506,6 +509,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                                   "_C.cutlass_scaled_mm on one token row -- per coordinate, ascending 128-tiles: temp = 4x HopperE4m3QgmmaDot32 from +0, "
                                   "acc = FFMA(temp, FMUL(x_s[kb], Ws[n//G][kb]), acc); cvt.rn.bf16.f32; shared-per-block forms each weight block's FMULs "
                                   "once; W e4m3 [N,K] + Ws f32 [N/G,K/G] Inputs",
+           "flashinfer_fp8_linear": "FlashInferFp8Linear_v1{K,N}: vLLM's default sm_90 block-FP8 linear for M < 32; FlashInfer "
+                                    "scale_1x128_kernel followed by the TRT-LLM swapAB GEMM",
+           "deepgemm_fp8_linear": "DeepGemmFp8Linear_v1{K,N}: vLLM's default sm_90 block-FP8 linear for M >= 32; ue8m0 group quant "
+                                  "followed by DeepGEMM fp8_gemm_nt, returning the materialised q, scale and bf16 output",
            "layer_norm_aten": "LayerNormAten_v1{N,EPS}: aten.layer_norm on a bf16 row with bf16 weight and bias -- torch 2.13 "
                               "vectorized_layer_norm_kernel<bf16, float>: Welford over 128 threads / 4 warps, rsqrtf(var + eps), "
                               "bf16(w * (rstd * (x - mean)) + b)",

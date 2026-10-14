@@ -16,16 +16,14 @@
   "attention_backend": null,
   "vllm_revision": "d9105ea80",
   "numerics_profile": "b1-eager-v3",
-  "flash_attn_version": null,
-  "fp8_block_gemm": "cutlass"
+  "flash_attn_version": null
  },
  "device": {
   "name": "NVIDIA H200",
   "memory_gb": 141
  },
  "env": {
-  "VLLM_BATCH_INVARIANT": "0",
-  "VLLM_USE_DEEP_GEMM": "0"
+  "VLLM_BATCH_INVARIANT": "0"
  },
  "tp": 8,
  "num_layers": null,
@@ -51,10 +49,10 @@
     "tuned_gemm_arch_family": "hopper"
    },
    "selections": {
-    "deep_gemm_supported": false,
-    "deep_gemm_e8m0": false,
+    "deep_gemm_supported": true,
+    "deep_gemm_e8m0": true,
     "VLLM_BATCH_INVARIANT": false,
-    "VLLM_USE_DEEP_GEMM": false,
+    "VLLM_USE_DEEP_GEMM": true,
     "VLLM_MOE_USE_DEEP_GEMM": true,
     "VLLM_USE_DEEP_GEMM_E8M0": true,
     "VLLM_USE_FUSED_MOE_GROUPED_TOPK": true,
@@ -994,10 +992,10 @@
        "act_q_static": false,
        "block_quant": true,
        "fp8_linear": {
-        "type": "vllm.model_executor.kernels.linear.scaled_mm.cutlass.CutlassFp8BlockScaledMMKernel",
+        "type": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel",
         "use_triton": false
        },
-       "is_scale_e8m0": false,
+       "is_scale_e8m0": true,
        "marlin_input_dtype": null,
        "quant_config": {
         "type": "vllm.model_executor.layers.quantization.fp8.Fp8Config",
@@ -1945,10 +1943,10 @@
        "act_q_static": false,
        "block_quant": true,
        "fp8_linear": {
-        "type": "vllm.model_executor.kernels.linear.scaled_mm.cutlass.CutlassFp8BlockScaledMMKernel",
+        "type": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel",
         "use_triton": false
        },
-       "is_scale_e8m0": false,
+       "is_scale_e8m0": true,
        "marlin_input_dtype": null,
        "quant_config": {
         "type": "vllm.model_executor.layers.quantization.fp8.Fp8Config",
@@ -2530,10 +2528,10 @@
        "act_q_static": false,
        "block_quant": true,
        "fp8_linear": {
-        "type": "vllm.model_executor.kernels.linear.scaled_mm.cutlass.CutlassFp8BlockScaledMMKernel",
+        "type": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel",
         "use_triton": false
        },
-       "is_scale_e8m0": false,
+       "is_scale_e8m0": true,
        "marlin_input_dtype": null,
        "quant_config": {
         "type": "vllm.model_executor.layers.quantization.fp8.Fp8Config",
@@ -2771,10 +2769,10 @@
        "act_q_static": false,
        "block_quant": true,
        "fp8_linear": {
-        "type": "vllm.model_executor.kernels.linear.scaled_mm.cutlass.CutlassFp8BlockScaledMMKernel",
+        "type": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel",
         "use_triton": false
        },
-       "is_scale_e8m0": false,
+       "is_scale_e8m0": true,
        "marlin_input_dtype": null,
        "quant_config": {
         "type": "vllm.model_executor.layers.quantization.fp8.Fp8Config",
@@ -3884,10 +3882,10 @@
        "act_q_static": false,
        "block_quant": true,
        "fp8_linear": {
-        "type": "vllm.model_executor.kernels.linear.scaled_mm.cutlass.CutlassFp8BlockScaledMMKernel",
+        "type": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel",
         "use_triton": false
        },
-       "is_scale_e8m0": false,
+       "is_scale_e8m0": true,
        "marlin_input_dtype": null,
        "quant_config": {
         "type": "vllm.model_executor.layers.quantization.fp8.Fp8Config",
@@ -4435,10 +4433,10 @@
        "act_q_static": false,
        "block_quant": true,
        "fp8_linear": {
-        "type": "vllm.model_executor.kernels.linear.scaled_mm.cutlass.CutlassFp8BlockScaledMMKernel",
+        "type": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel",
         "use_triton": false
        },
-       "is_scale_e8m0": false,
+       "is_scale_e8m0": true,
        "marlin_input_dtype": null,
        "quant_config": {
         "type": "vllm.model_executor.layers.quantization.fp8.Fp8Config",
@@ -4875,10 +4873,10 @@
        "act_q_static": false,
        "block_quant": true,
        "fp8_linear": {
-        "type": "vllm.model_executor.kernels.linear.scaled_mm.cutlass.CutlassFp8BlockScaledMMKernel",
+        "type": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel",
         "use_triton": false
        },
-       "is_scale_e8m0": false,
+       "is_scale_e8m0": true,
        "marlin_input_dtype": null,
        "quant_config": {
         "type": "vllm.model_executor.layers.quantization.fp8.Fp8Config",
@@ -5123,10 +5121,10 @@
        "act_q_static": false,
        "block_quant": true,
        "fp8_linear": {
-        "type": "vllm.model_executor.kernels.linear.scaled_mm.cutlass.CutlassFp8BlockScaledMMKernel",
+        "type": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel",
         "use_triton": false
        },
-       "is_scale_e8m0": false,
+       "is_scale_e8m0": true,
        "marlin_input_dtype": null,
        "quant_config": {
         "type": "vllm.model_executor.layers.quantization.fp8.Fp8Config",
@@ -5562,10 +5560,10 @@
        "act_q_static": false,
        "block_quant": true,
        "fp8_linear": {
-        "type": "vllm.model_executor.kernels.linear.scaled_mm.cutlass.CutlassFp8BlockScaledMMKernel",
+        "type": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel",
         "use_triton": false
        },
-       "is_scale_e8m0": false,
+       "is_scale_e8m0": true,
        "marlin_input_dtype": null,
        "quant_config": {
         "type": "vllm.model_executor.layers.quantization.fp8.Fp8Config",
@@ -5721,10 +5719,10 @@
     "tuned_gemm_arch_family": "hopper"
    },
    "selections": {
-    "deep_gemm_supported": false,
-    "deep_gemm_e8m0": false,
+    "deep_gemm_supported": true,
+    "deep_gemm_e8m0": true,
     "VLLM_BATCH_INVARIANT": false,
-    "VLLM_USE_DEEP_GEMM": false,
+    "VLLM_USE_DEEP_GEMM": true,
     "VLLM_MOE_USE_DEEP_GEMM": true,
     "VLLM_USE_DEEP_GEMM_E8M0": true,
     "VLLM_USE_FUSED_MOE_GROUPED_TOPK": true,
@@ -5748,10 +5746,10 @@
     "tuned_gemm_arch_family": "hopper"
    },
    "selections": {
-    "deep_gemm_supported": false,
-    "deep_gemm_e8m0": false,
+    "deep_gemm_supported": true,
+    "deep_gemm_e8m0": true,
     "VLLM_BATCH_INVARIANT": false,
-    "VLLM_USE_DEEP_GEMM": false,
+    "VLLM_USE_DEEP_GEMM": true,
     "VLLM_MOE_USE_DEEP_GEMM": true,
     "VLLM_USE_DEEP_GEMM_E8M0": true,
     "VLLM_USE_FUSED_MOE_GROUPED_TOPK": true,
@@ -5775,10 +5773,10 @@
     "tuned_gemm_arch_family": "hopper"
    },
    "selections": {
-    "deep_gemm_supported": false,
-    "deep_gemm_e8m0": false,
+    "deep_gemm_supported": true,
+    "deep_gemm_e8m0": true,
     "VLLM_BATCH_INVARIANT": false,
-    "VLLM_USE_DEEP_GEMM": false,
+    "VLLM_USE_DEEP_GEMM": true,
     "VLLM_MOE_USE_DEEP_GEMM": true,
     "VLLM_USE_DEEP_GEMM_E8M0": true,
     "VLLM_USE_FUSED_MOE_GROUPED_TOPK": true,
@@ -5802,10 +5800,10 @@
     "tuned_gemm_arch_family": "hopper"
    },
    "selections": {
-    "deep_gemm_supported": false,
-    "deep_gemm_e8m0": false,
+    "deep_gemm_supported": true,
+    "deep_gemm_e8m0": true,
     "VLLM_BATCH_INVARIANT": false,
-    "VLLM_USE_DEEP_GEMM": false,
+    "VLLM_USE_DEEP_GEMM": true,
     "VLLM_MOE_USE_DEEP_GEMM": true,
     "VLLM_USE_DEEP_GEMM_E8M0": true,
     "VLLM_USE_FUSED_MOE_GROUPED_TOPK": true,
@@ -5829,10 +5827,10 @@
     "tuned_gemm_arch_family": "hopper"
    },
    "selections": {
-    "deep_gemm_supported": false,
-    "deep_gemm_e8m0": false,
+    "deep_gemm_supported": true,
+    "deep_gemm_e8m0": true,
     "VLLM_BATCH_INVARIANT": false,
-    "VLLM_USE_DEEP_GEMM": false,
+    "VLLM_USE_DEEP_GEMM": true,
     "VLLM_MOE_USE_DEEP_GEMM": true,
     "VLLM_USE_DEEP_GEMM_E8M0": true,
     "VLLM_USE_FUSED_MOE_GROUPED_TOPK": true,
@@ -5856,10 +5854,10 @@
     "tuned_gemm_arch_family": "hopper"
    },
    "selections": {
-    "deep_gemm_supported": false,
-    "deep_gemm_e8m0": false,
+    "deep_gemm_supported": true,
+    "deep_gemm_e8m0": true,
     "VLLM_BATCH_INVARIANT": false,
-    "VLLM_USE_DEEP_GEMM": false,
+    "VLLM_USE_DEEP_GEMM": true,
     "VLLM_MOE_USE_DEEP_GEMM": true,
     "VLLM_USE_DEEP_GEMM_E8M0": true,
     "VLLM_USE_FUSED_MOE_GROUPED_TOPK": true,
@@ -5883,10 +5881,10 @@
     "tuned_gemm_arch_family": "hopper"
    },
    "selections": {
-    "deep_gemm_supported": false,
-    "deep_gemm_e8m0": false,
+    "deep_gemm_supported": true,
+    "deep_gemm_e8m0": true,
     "VLLM_BATCH_INVARIANT": false,
-    "VLLM_USE_DEEP_GEMM": false,
+    "VLLM_USE_DEEP_GEMM": true,
     "VLLM_MOE_USE_DEEP_GEMM": true,
     "VLLM_USE_DEEP_GEMM_E8M0": true,
     "VLLM_USE_FUSED_MOE_GROUPED_TOPK": true,

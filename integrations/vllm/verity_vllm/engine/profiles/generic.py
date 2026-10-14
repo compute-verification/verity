@@ -599,13 +599,25 @@ def build_profile(role: str, world: int = 1, *, moe_construction: str | None = N
     else:
         notes["alias_of_cos_sin"] = base.ALIAS_OF_COS_SIN.pattern
     if C.get("FP8_BLOCK"):
-        notes["fp8"] = {"scheme": "block-scaled dynamic e4m3 FP8 (vLLM Fp8LinearMethod -> CutlassFp8BlockScaledMMKernel)",
-                        "weight_block_size": [C["FP8_BLOCK"], C["FP8_BLOCK"]], "activation_group": C["FP8_BLOCK"],
-                        "kernels": ["_C.per_token_group_fp8_quant (per_token_group_quant_8bit_kernel)",
-                                    "_C.cutlass_scaled_mm blockwise (cutlass_3x_gemm_fp8_blockwise<bf16>, sm90)"],
-                        "env": ["VLLM_USE_DEEP_GEMM=0 (the DeepGEMM JIT path is not modelled)", "VLLM_USE_FLASHINFER_SAMPLER=0"],
-                        "families": ["Fp8GroupQuant_v1{K,G}", "ScaledMmFp8BlockSharedScale_v1{K,N,G} (fp8_scale_construction per-coordinate: "
-                                     "ScaledMmFp8Block_v1{K,N,G})"], "quantization_config": C.get("quantization_config")}
+        if arch == "dsa-moe":
+            notes["fp8"] = {
+                "scheme": "block-scaled dynamic e4m3 FP8 (vLLM default FlashInferFp8DeepGEMMDynamicBlockScaledKernel)",
+                "weight_block_size": [C["FP8_BLOCK"], C["FP8_BLOCK"]], "activation_group": C["FP8_BLOCK"],
+                "kernels": ["FlashInfer fp8_blockscale_gemm for M < 32",
+                            "per_token_group_quant_fp8(use_ue8m0=True) + DeepGEMM fp8_gemm_nt for M >= 32"],
+                "env": ["VLLM_USE_DEEP_GEMM unset (default true)", "VLLM_USE_FLASHINFER_SAMPLER=0"],
+                "families": ["FlashInferFp8Linear_v1{K,N}", "DeepGemmFp8Linear_v1{K,N}"],
+                "weight_processing": "GLM-5.3's f32 block scales are requantised to ue8m0 at load; the served tensors are declared weights",
+                "quantization_config": C.get("quantization_config"),
+            }
+        else:
+            notes["fp8"] = {"scheme": "block-scaled dynamic e4m3 FP8 (vLLM Fp8LinearMethod -> CutlassFp8BlockScaledMMKernel)",
+                            "weight_block_size": [C["FP8_BLOCK"], C["FP8_BLOCK"]], "activation_group": C["FP8_BLOCK"],
+                            "kernels": ["_C.per_token_group_fp8_quant (per_token_group_quant_8bit_kernel)",
+                                        "_C.cutlass_scaled_mm blockwise (cutlass_3x_gemm_fp8_blockwise<bf16>, sm90)"],
+                            "env": ["VLLM_USE_DEEP_GEMM=0 (the DeepGEMM JIT path is not modelled)", "VLLM_USE_FLASHINFER_SAMPLER=0"],
+                            "families": ["Fp8GroupQuant_v1{K,G}", "ScaledMmFp8BlockSharedScale_v1{K,N,G} (fp8_scale_construction per-coordinate: "
+                                         "ScaledMmFp8Block_v1{K,N,G})"], "quantization_config": C.get("quantization_config")}
     if arch in _MOE_ARCHES:
         moe = next(p for p in patterns if isinstance(p, (MoEFusedExperts, MoEFusedSharedExpertsFp8)))
         E, T, I, H = C["NUM_EXPERTS"], C["TOPK"], C["I"], C["H"]

@@ -35,7 +35,7 @@ from verity_vllm.program.registry import b1, cublas_bf16, dsa, dsa_norm, hopper,
 from verity_vllm.program.registry.boolean_rope import RoPEHeadGptJV2
 from verity_vllm.program.registry.sparse_mla_split import launch_num_splits
 
-H200 = TargetProfile(compute_capability=(9, 0), num_sms=132, batch_invariant=False, moe_backend="triton", fp8_block_gemm="cutlass")
+H200 = TargetProfile(compute_capability=(9, 0), num_sms=132, batch_invariant=False, moe_backend="triton")
 NH, P, R, L, V, NQ = 2, 16, 16, 16, 16, 16   # heads, nope, rope, latent, value, q_lora
 H, D, ROPE = 8, 32, 16                       # the indexer's heads, head dim, rope
 TOPK, MAXPOS, EPS, BN = 4, 8, 1e-6, 16

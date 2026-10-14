@@ -82,6 +82,14 @@ _define_once("gumbel_topp_token_select(Tensor logits, Tensor seed, float tempera
              "gumbel_topp_token_select",
              lambda logits, seed, temperature, top_p, pos, splits, S=None: logits.new_empty(tuple(logits.shape[:-1]), dtype=torch.int32))
 
+# vLLM's default Hopper block-FP8 linear.  The real op is registered in
+# `kernels/linear/scaled_mm/flashinfer.py`; this stand-in lets CPU-only derive
+# tests author the same exported node.
+_define_once("dynamic_flashinfer_deepgemm_blockscale_gemm(Tensor input, Tensor weight, Tensor weight_scale, int group_size, "
+             "bool use_deep_gemm_e8m0) -> Tensor", "dynamic_flashinfer_deepgemm_blockscale_gemm",
+             lambda input, weight, weight_scale, group_size, use_deep_gemm_e8m0:
+                 input.new_empty((*input.shape[:-1], weight.shape[0]), dtype=torch.bfloat16))
+
 # [GLM-5.3] DeepSeek sparse attention (vllm/models/deepseek_v32/attention.py) as three ops, the leaves `export_compat.dsa_ops_leaf`
 # puts in place of `fused_norm_rope`, `fused_q` and `_sparse_indexer_and_attn` while exporting.  The served kernels write the MLA and
 # indexer caches through a slot mapping and read them back through the forward context; here the cache rows are the first op's outputs

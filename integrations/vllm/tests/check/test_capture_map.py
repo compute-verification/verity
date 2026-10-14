@@ -1,5 +1,6 @@
 """The GLM-5.3 capture map (`manifests/capture-maps/glm-moe-dsa-eager-hopper-tp8-v0.json`) against the meta-device inventory of
-the same `config.json` at TP8 for the map's target (`verity-vllm meta-inventory`, run r20261003-072626-b966, ranks 0-7):
+the same `config.json` at TP8 for the map's target (`verity-vllm meta-inventory`, run r20261003-072626-b966, ranks 0-7, with
+the default dynamic dense-FP8 kernel facts refreshed from the pinned source and H200 GO run r20261013-115825-d357):
 every module the pinned vLLM builds has exactly one entry, so a module the map misses fails here; every tap reads tensors of
 the shape the inventory gives a rank; each rank built for the target's profile and switches; and the counts the H200 runbook
 cites are pinned."""
@@ -56,7 +57,7 @@ def test_the_map_the_fixture_and_the_config_are_one_checkpoint():
     assert DOC["tp"] == TP and {k: DOC["target"][k] for k in target["profile"]} == target["profile"]
     assert DOC["env"] == target["env"] and DOC["kv_cache_dtype"] == target["kv_cache_dtype"]
     assert DOC["device"] == {"name": target["device"], "memory_gb": target["device_memory_gb"]}
-    assert DOC["run"] in CMAP["pins"]["inventory_runs"]["VLLM_USE_DEEP_GEMM=0"]
+    assert DOC["run"] in CMAP["pins"]["inventory_runs"]["default"]
 
 
 def test_the_map_covers_the_inventory_with_no_problems(registry):
@@ -127,15 +128,15 @@ def test_a_wrong_weight_shape_fails():
 def test_a_different_kernel_fails_an_expectation():
     inv = copy.deepcopy(RANK0)
     g = next(g for g in inv["groups"] if g["pattern"] == "model.layers.{i}.self_attn.o_proj")
-    g["kernels"]["quant_method"]["fp8_linear"]["type"] = "DeepGemmFp8BlockScaledMMKernel"
+    g["kernels"]["quant_method"]["fp8_linear"]["type"] = "CutlassFp8BlockScaledMMKernel"
     problems = _check(inv=inv)
     assert len(problems) == 1 and problems[0].startswith("expect model.layers.{i}.self_attn.o_proj kernels.quant_method.fp8_linear.type")
 
 
 def test_a_different_switch_or_device_fails():
     rec = copy.deepcopy(RANK0)
-    rec["selections"]["VLLM_USE_DEEP_GEMM"] = True
-    assert check_target(CMAP, rec) == ["switch VLLM_USE_DEEP_GEMM = False, the inventory has True"]
+    rec["selections"]["VLLM_USE_DEEP_GEMM"] = False
+    assert check_target(CMAP, rec) == ["switch VLLM_USE_DEEP_GEMM = True, the inventory has False"]
     rec = copy.deepcopy(RANK0)
     rec["applied"]["compute_capability"] = [12, 0]
     assert check_target(CMAP, rec) == ["compute_capability = [9, 0], the inventory has [12, 0]"]
@@ -267,7 +268,7 @@ def test_the_check_command_passes_the_meta_build_and_a_live_document(tmp_path, c
     (tmp_path / "live.json").write_text(json.dumps(live))
     code, out = _cli_check(tmp_path / "live.json", capsys)
     assert code == 0 and out.count(": 0 problems") == TP
-    per_rank[2]["selections"] = {**RANK0["selections"], "VLLM_USE_DEEP_GEMM": True}
+    per_rank[2]["selections"] = {**RANK0["selections"], "VLLM_USE_DEEP_GEMM": False}
     (tmp_path / "live.json").write_text(json.dumps(MI.live_document(per_rank)))
     code, out = _cli_check(tmp_path / "live.json", capsys)
     assert code == 1 and out.count("FAIL") == 1 and "FAIL rank 5: switch VLLM_USE_DEEP_GEMM" in out
