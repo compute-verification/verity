@@ -238,6 +238,27 @@ theorem row_agree {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : Opti
     (hro R ω t R₂ τ o h j' u' q' hp').1 hv hs
   exact FlockSoundness.Registered.enc_eq_of_not_clash (fun hc => h.2 ⟨j, j', hc⟩) hp hp' hroot hn hdom hpos
 
+/-- **A chosen row for one read of R's level-`l` tops is the row at every other read of that node**:
+`row_agree` at the shared value `rec-top-stacked-L<l>`. This lets `MapsLeft` choose recursive cap entry `e l x`
+from one registrant read of node `x`; every opening at that node has the same encoded row off `RegColl`. -/
+theorem top_row_agree {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
+    {rows : Option (Array Flock.Registered.Port)} (hsh : SharedOwnRoot rows F)
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ} (hro : FlockC3.HPort.ReadsOwnAt F dg N k Rw)
+    {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
+    (h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) (j j' : Fin (vstarCount F.ish))
+    {u : Fin (F.Vs j).nv} {q : Fin (F.Vs j).c.ports.size} (hp : (F.zs R ω t R₂ j).rd.isRead (.inl (u, q)))
+    {u' : Fin (F.Vs j').nv} {q' : Fin (F.Vs j').c.ports.size} (hp' : (F.zs R ω t R₂ j').rd.isRead (.inl (u', q')))
+    {l : ℕ}
+    (hv : ((F.zs R ω t R₂ j).rd.port (.inl (u, q))).value = s!"rec-top-stacked-L{l}")
+    (hv' : ((F.zs R ω t R₂ j').rd.port (.inl (u', q'))).value = s!"rec-top-stacked-L{l}")
+    (hpos : (F.zs R ω t R₂ j).rd.readAt (.inl (u, q)) = (F.zs R ω t R₂ j').rd.readAt (.inl (u', q')))
+    {top : ByteArray}
+    (he : HiddenExec.encPortH (F.Vs j).c.ports[q.val]!
+      (FlockVBridge.Decode.regVal (F.zs R ω t R₂ j) (.inl (u, q))) = rowInV (capRow top)) :
+    HiddenExec.encPortH (F.Vs j').c.ports[q'.val]!
+        (FlockVBridge.Decode.regVal (F.zs R ω t R₂ j') (.inl (u', q'))) = rowInV (capRow top) :=
+  (row_agree hsh hro h j j' hp hp' (hv.trans hv'.symm) (hv ▸ sharedValue_top rows l) hpos).symm.trans he
+
 end Family
 
 end FlockC3.RegLevels

@@ -137,6 +137,98 @@ theorem accOutL_of_keysS (hU : F.HOpenUnits) (V : Reg → L.Ω → List (Cm × (
   rw [← hat]
   exact hacc R ω t R₂ τ o h (F.sessO ℓ) (F.unO ℓ r j) ⟨_, hq⟩ hrd hsite b hb hb'
 
+/-- **Level `ℓ`'s statement is a `.recOpen` of `2 q` instances** (`statements_recOpen` at the verifier's schedule,
+`sched_eq`), so its session has `2 q` units (`hnv`). -/
+theorem open_stmt {ℓ : ℕ} (hℓ : ℓ < F.sh.sched.levels.size) :
+    (∃ LANES H, F.stmts[F.sessO ℓ] = .recOpen ℓ LANES H (2 * F.q ℓ)) ∧ (F.Vs (F.sessO ℓ)).nv = 2 * F.q ℓ := by
+  obtain ⟨s, -, -, hs, -, -, -⟩ := statements_eq F.hstmts
+  have hss := F.sched_eq hs
+  subst hss
+  obtain ⟨hj, hst⟩ := statements_recOpen F.hstmts hs hℓ
+  have hsess : F.sessO ℓ = ⟨ℓ, hj⟩ := F.hsessO ℓ ⟨ℓ, hj⟩ ⟨_, _, _, hst⟩
+  have hstmt : F.stmts[F.sessO ℓ] =
+      .recOpen ℓ (2 ^ (F.sh.sched.levels[ℓ]!).lanes)
+        ((F.sh.sched.levels[ℓ]!).d - (F.sh.sched.levels[ℓ]!).cap) (2 * F.q ℓ) := by
+    exact (congrArg (fun j : Fin F.stmts.size => F.stmts[j]) hsess).trans
+      (by simpa only [Fin.getElem_fin, VStarFamily.q] using hst)
+  exact ⟨⟨_, _, hstmt⟩, (F.hnv _).trans (congrArg VStar.Stmt.instances hstmt)⟩
+
+/-- Obligation: discharged at C3's family by `readsOwnAt_of` (`ReachedChecked`: `readsOwn_of_hown` and the label
+check). **Each level's registered reads are of `own`'s entry of the port's name, at the unit's own row of its
+reads** (`ReadsOwnAt` at the openings' sessions). -/
+def ReadsOwnO : Prop :=
+  ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ ℓ < F.sh.sched.levels.size,
+    ∀ (u : Fin (F.Vs (F.sessO ℓ)).nv) (q : Fin (F.Vs (F.sessO ℓ)).c.ports.size),
+      (F.zs R ω t R₂ (F.sessO ℓ)).rd.isRead (.inl (u, q)) →
+      (F.zs R ω t R₂ (F.sessO ℓ)).rd.port (.inl (u, q)) ∈ (F.zs R ω t R₂ (F.sessO ℓ)).own ∧
+        ((F.zs R ω t R₂ (F.sessO ℓ)).rd.port (.inl (u, q))).name = (F.Vs (F.sessO ℓ)).c.ports[q].name ∧
+        ((F.zs R ω t R₂ (F.sessO ℓ)).rd.port (.inl (u, q))).reads[u.val]? =
+          some (some ((F.zs R ω t R₂ (F.sessO ℓ)).rd.readAt (.inl (u, q))))
+
+/-- Obligation: discharged by the verifier's check of each level's statement (`checkAcc_of_checkStmt`, from
+`ChecksAccepted`). **`checkAcc` and `checkAccReads` pass at each level's statement**, at its session's reads file and
+the shared rows `rows`. -/
+def LevelsAccChecked (i : Flock.RecVStar.Inner) (rows : Option (Array Flock.Registered.Port)) : Prop :=
+  ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ ℓ < F.sh.sched.levels.size,
+    Flock.RecVStar.checkAcc F.stmts[F.sessO ℓ] (F.zs R ω t R₂ (F.sessO ℓ)).own rows = .ok () ∧
+      Flock.RecVStar.checkAccReads i F.stmts[F.sessO ℓ] (F.zs R ω t R₂ (F.sessO ℓ)).own = .ok ()
+
+/-- **`OutReadsS` at `acc0`'s registration, from the verifier's checks of the levels** (`accPort_of_checks` at
+`acc_out`): V*'s `acc_out` is port `nIn + 1` (`OutsLaid`), a port `own` names, so its read is registered
+(`RowsRegistered`) and is of `own`'s `acc_out` entry at the unit's row (`ReadsOwnO`), which has `acc0`'s registration
+and reads `accReads`' rows (`accReads_recOpen` at the inner schedule, `hsch`), one on. -/
+theorem outReadsS_of_checks (hreg : F.RowsRegistered dg N k Rw) (hro : ReadsOwnO F dg N k Rw)
+    {i : Flock.RecVStar.Inner} (hsch : Flock.fast100 i.m = some F.sh.sched)
+    {rows : Option (Array Flock.Registered.Port)} (hck : LevelsAccChecked F dg N k Rw i rows)
+    {rws : Array Flock.Registered.Port} {w : Flock.Registered.Port} (hrows : rows = some rws)
+    (hw : rws.find? (·.name == "acc0") = some w)
+    (hlaid : ∀ ℓ < F.sh.sched.levels.size, OutsLaid (F.Vs (F.sessO ℓ)).c 0) :
+    OutReadsS F dg N k Rw fun _ _ _ _ => site w := by
+  intro R ω t R₂ τ o ha r ℓ hℓ j hj
+  obtain ⟨⟨LANES, H, hst⟩, hnv⟩ := open_stmt F hℓ
+  obtain ⟨-, -, hq, -, -, hn1, -⟩ := hlaid ℓ hℓ
+  obtain ⟨hca, hcr⟩ := hck R ω t R₂ τ o ha ℓ hℓ
+  have hl : Flock.RecVStar.accPorts F.stmts[F.sessO ℓ] = ["acc", "acc_out"] :=
+    (congrArg Flock.RecVStar.accPorts hst).trans rfl
+  have hwnt := (congrArg (Flock.RecVStar.accReads i) hst).trans (accReads_recOpen hsch ℓ LANES H (2 * F.q ℓ))
+  obtain ⟨p, hf, -⟩ := value_of_checkAcc hca "acc_out" (by rw [hl]; simp)
+  have hpn : p.name = "acc_out" := by simpa using Array.find?_some hf
+  have hrd : (F.zs R ω t R₂ (F.sessO ℓ)).rd.isRead (.inl (F.unO ℓ r j, ⟨_, hq⟩)) :=
+    hreg R ω t R₂ τ o ha _ _ _ ⟨p, Array.mem_of_find?_eq_some hf, hpn.trans hn1.symm⟩
+  obtain ⟨hmem, hname, hpos⟩ := hro R ω t R₂ τ o ha ℓ hℓ _ _ hrd
+  obtain ⟨⟨rws', w', hrows', hw', hsite⟩, hreads⟩ :=
+    accPort_of_checks hca hcr hl hwnt (nm := "acc_out") (d := 1) (by simp) hmem (hname.trans hn1)
+  obtain rfl : rws' = rws := Option.some.inj (hrows'.symm.trans hrows)
+  obtain rfl : w' = w := Option.some.inj (hw'.symm.trans hw)
+  refine ⟨hq, hrd, hsite, ?_⟩
+  have hlt : (F.unO ℓ r j).val < 2 * (F.sh.sched.levels[ℓ]!).q := lt_of_lt_of_eq (F.unO ℓ r j).isLt hnv
+  rw [hreads, getElem?_accRow _ hlt] at hpos
+  exact (Option.some.inj (Option.some.inj hpos)).symm
+
+/-- **`OutKeysS` from the verifier's checks of the levels** (`outReadsS_of_checks`, `outKeysS_of_reads` at the level's
+`2 q` units, `open_stmt`). -/
+theorem outKeysS_of_checks (hreg : F.RowsRegistered dg N k Rw) (hro : ReadsOwnO F dg N k Rw)
+    {i : Flock.RecVStar.Inner} (hsch : Flock.fast100 i.m = some F.sh.sched)
+    {rows : Option (Array Flock.Registered.Port)} (hck : LevelsAccChecked F dg N k Rw i rows)
+    {rws : Array Flock.Registered.Port} {w : Flock.Registered.Port} (hrows : rows = some rws)
+    (hw : rws.find? (·.name == "acc0") = some w)
+    (hlaid : ∀ ℓ < F.sh.sched.levels.size, OutsLaid (F.Vs (F.sessO ℓ)).c 0) :
+    OutKeysS F dg N k Rw fun _ _ _ _ => site w :=
+  outKeysS_of_reads F dg N k Rw (fun _ hℓ => (open_stmt F hℓ).2.ge)
+    (outReadsS_of_checks F dg N k Rw hreg hro hsch hck hrows hw hlaid)
+
+/-- **`AccOutL` from the verifier's checks of the levels** (`accOutL_of_keysS` at `outKeysS_of_checks`), wherever the
+registrant's rows of `acc0`'s registration are `V`'s. -/
+theorem accOutL_of_checks (hU : F.HOpenUnits) (V : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → ℕ → Array F128)
+    (hreg : F.RowsRegistered dg N k Rw) (hro : ReadsOwnO F dg N k Rw)
+    {i : Flock.RecVStar.Inner} (hsch : Flock.fast100 i.m = some F.sh.sched)
+    {rows : Option (Array Flock.Registered.Port)} (hck : LevelsAccChecked F dg N k Rw i rows)
+    {rws : Array Flock.Registered.Port} {w : Flock.Registered.Port} (hrows : rows = some rws)
+    (hw : rws.find? (·.name == "acc0") = some w) (hacc : F.AccRowsAreS dg N k Rw V fun _ _ _ _ => site w)
+    (hlaid : ∀ ℓ < F.sh.sched.levels.size, OutsLaid (F.Vs (F.sessO ℓ)).c 0) :
+    F.AccOutL dg N k Rw V :=
+  accOutL_of_keysS F dg N k Rw hU V _ hacc hlaid (outKeysS_of_checks F dg N k Rw hreg hro hsch hck hrows hw hlaid)
+
 end family
 
 section C3

@@ -44,6 +44,7 @@ import Proofs.Flock.C3.Sparse.PubLift
 import Proofs.Flock.C3.Sparse.HeldStages
 import Proofs.Flock.C3.Sparse.ClaimSparseOf
 import Proofs.Flock.C3.Sparse.PubChecked
+import Proofs.Flock.C3.Sparse.ClaimReads
 import Proofs.Flock.C3.VStarList.Statements
 import Proofs.Flock.C3.VStarList.Shape
 import Proofs.Flock.C3.VStarList.Range
