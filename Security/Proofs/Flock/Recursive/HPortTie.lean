@@ -151,7 +151,7 @@ its `h` (`hOfW_valOf` at `.h l`, `RepMaps`' columns of `w`). -/
 def HPortReads (zs : (j : Fin S) → (Vs j).Outer Reg') (mp : List (String × ℕ)) (s : Fin S) (un : Fin (Vs s).nv)
     (j : ℕ) (x : Fin 64 → Flock.F128) : Prop :=
   (∀ (l : Fin 64) (e : ℕ), e < 128 → ReadCol (FlockSoundness.Rows.ofNet (Vs s).hU) (rowCol mp 0 (128 * l.val + e))) ∧
-    ∀ (l : Fin 64) (e : ℕ), e < 128 → ∀ (q : Fin (Vs s).c.ports.size) (b : ℕ) (hb : b < Layout.portRowW (Vs s).c q),
+    ∀ (l : Fin 64) (e : ℕ), e < 128 → ∀ (q : Fin (Vs s).c.ports.size) (b : ℕ), b < Layout.portRowW (Vs s).c q →
       Aliased.srcKey (Vs s).c (j * (FlockSoundness.Rows.ofNet (Vs s).hU).nIn + rowCol mp 0 (128 * l.val + e)) =
           .msg q.val (b / 8) (b % 8) →
       (zs s).rd.isRead (.inl (un, q)) →
@@ -168,11 +168,8 @@ def HPortReads (zs : (j : Fin S) → (Vs j).Outer Reg') (mp : List (String × �
 theorem h_lt_ports (sh : Flock.RecSparse.Shape) {l e : ℕ} (hl : l < 64) (he : e < 128) :
     128 * l + e < 128 * ((Flock.RecSparse.messagePorts sh).map (·.2)).sum := by
   have h64 : 64 ≤ ((Flock.RecSparse.messagePorts sh).map (·.2)).sum := by
-    first
-    | (simp only [Flock.RecSparse.messagePorts, List.append_assoc, List.singleton_append, List.map_cons,
-        List.sum_cons]; exact Nat.le_add_right_of_le (le_of_eq rfl))
-    | (simp [Flock.RecSparse.messagePorts, Flock.RecSparse.SKIP])
-    | (simp [Flock.RecSparse.messagePorts, Flock.RecSparse.SKIP]; omega)
+    simp only [Flock.RecSparse.messagePorts, List.append_assoc, List.singleton_append]
+    exact Nat.le_add_right_of_le (le_of_eq rfl)
   omega
 
 /-- **w's element `l` is `x l`** at a RecSparse copy at w (`SparseCopyAt`'s registered message bits), under the
