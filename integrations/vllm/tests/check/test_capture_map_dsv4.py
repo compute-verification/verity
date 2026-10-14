@@ -44,13 +44,10 @@ ENV = CM.symbols(CMAP, CONFIG, TP)
 OWNERS = {
     "cursor/glm53-committed-ops-8c79": {"cublas-f32-out", "router-gemm"},
     "cursor/deepgemm-sm90-8c79": {"fp8-block-linear-flashinfer", "fp8-block-linear-deepgemm", "fp8-einsum-deepgemm"},
-    "cursor/dsv4-flashmla-8c79": {"flashmla-sparse-decode"},
-    "cursor/dsv4-mhc-8c79": {"mhc-post-pre-fma", "mhc-post", "hc-head"},
     "cursor/dsv4-routers-8c79": {"sqrtsoftplus-router", "hash-router", "silu-mul-clamp"},
-    "cursor/dsv4-indexer-8c79": {"dsv4-compressor-state", "dsv4-indexer-compress", "dsa-mqa-logits", "dsa-topk-fill",
-                                 "inv-rope-fp8-quant"},
 }
-#: each Program another row's branch registered and took to GO on the H200 -> its Definitions, word then Boolean
+#: each Program whose Definitions another row registered and took to GO on the H200 at DeepSeek-V4-Pro's statics -> those
+#: Definitions, word then Boolean
 PORTED = {
     "tp-allreduce": ["AllReduceMnnvl_v1", "AllReduceMultimem_v1", "AllReduceMnnvl_v2", "AllReduceMultimem_v2"],
     "dsv4-qnorm-rope-kv-insert": ["Dsv4QNormRopeKvInsert_v1", "Dsv4QNormRopeKvInsert_v2"],
@@ -59,6 +56,15 @@ PORTED = {
     "mhc-tf32": ["MhcPreBroadcast_v1", "MhcPostPreTf32_v1"],
     "flashmla-sparse-prefill": ["FlashMlaPrefill_v1", "FlashMlaGatherRow_v1", "Dsv4CombineTopkSwa_v1", "FlashMlaPrefill_v2",
                                 "FlashMlaGatherRow_v2", "Dsv4CombineTopkSwa_v2"],
+    "flashmla-sparse-decode": ["FlashMlaDecode_v1", "FlashMlaDecode_v2"],
+    "mhc-post-pre-fma": ["MhcFusedPostPre_v1"],
+    "mhc-post": ["MhcPost_v1", "MhcPost_v2"],
+    "hc-head": ["HcHead_v1", "HcHead_v2"],
+    "dsv4-compressor-state": ["Dsv4CompressorScore_v1", "Dsv4CompressorScore_v2"],
+    "dsv4-indexer-compress": ["Dsv4IndexerCompress_v1", "Dsv4IndexerCompress_v2"],
+    "dsa-mqa-logits": ["DsaMqaLogit_v3", "DsaMqaLogits_v3", "DsaMqaLogit_v4", "DsaMqaLogits_v4"],
+    "dsa-topk-fill": ["Dsv4ShortContextTopK_v1", "Dsv4ShortContextTopK_v2"],
+    "inv-rope-fp8-quant": ["Dsv4InvRopeQuantHead_v1", "Dsv4InvRopeQuantHead_v2"],
 }
 
 DECODE = ("hc-fused", "indexer-short", "decode-tokens")
@@ -319,8 +325,9 @@ def test_the_exists_programs_cite_what_the_build_binds():
 def test_the_program_statuses():
     """What has no Definition on main is `tonight` on the branch of the row that writes it.  The Programs that went GO on the H200
     on other rows' branches (the TP8 all-reduce at H 7168, the query norm and cache insert, the indexer's query, the head-512
-    compressor, the TF32 mHC pre and prefill's FlashMLA) are `port`: registered here, bound by no Build rule.  Committed-only are the
-    decode attention's indices, which no row states yet.  The step's two inputs from the schedule, its token ids and its
+    compressor, mHC, hc_head, FlashMLA's decode and prefill, and the indexer's compressor, logits, short-context fill and inverse
+    RoPE) are `port`: registered here, bound by no Build rule.  Committed-only are the decode attention's indices, which no row
+    states yet.  The step's two inputs from the schedule, its token ids and its
     positions, are root inputs no kernel computes, held by word equality (`copy-equality`)."""
     statuses = {pid: p["status"] for pid, p in CMAP["programs"].items()}
     assert {statuses[t["program"]] for t in CMAP["taps"]} == set(CM.STATUSES)
@@ -386,15 +393,15 @@ def test_the_runbook_counts():
 
     every = CM.counts(CMAP, ENV)
     assert (every["module_entries"], every["module_types"], every["tap_templates_by_status"]) == (
-        42, 28, {"exists": 5, "tonight": 36, "port": 30, "copy": 2, "committed-only": 5})
+        42, 28, {"exists": 5, "tonight": 17, "port": 49, "copy": 2, "committed-only": 5})
     assert brief(CM.counts(CMAP, ENV, STEPS["decode"])) == (
-        64, 2539, {"exists": 125, "tonight": 1582, "port": 586, "copy": 2, "committed-only": 244}, 122)
+        64, 2539, {"exists": 125, "tonight": 762, "port": 1406, "copy": 2, "committed-only": 244}, 122)
     assert brief(CM.counts(CMAP, ENV, STEPS["decode-scored"])) == (
-        68, 2659, {"exists": 125, "tonight": 1612, "port": 676, "copy": 2, "committed-only": 244}, 242)
+        68, 2659, {"exists": 125, "tonight": 792, "port": 1496, "copy": 2, "committed-only": 244}, 242)
     assert brief(CM.counts(CMAP, ENV, STEPS["prefill"])) == (
-        63, 2415, {"exists": 125, "tonight": 1067, "port": 1221, "copy": 2, "committed-only": 0}, 726)
+        63, 2415, {"exists": 125, "tonight": 792, "port": 1496, "copy": 2, "committed-only": 0}, 726)
     assert brief(CM.counts(CMAP, ENV, STEPS["mixed"])) == (
-        69, 2720, {"exists": 125, "tonight": 1128, "port": 1221, "copy": 2, "committed-only": 244}, 787)
+        69, 2720, {"exists": 125, "tonight": 792, "port": 1557, "copy": 2, "committed-only": 244}, 787)
 
 
 def test_the_bound_tap_counts():

@@ -353,10 +353,12 @@
    "branch": "cursor/deepgemm-sm90-8c79"
   },
   "flashmla-sparse-decode": {
-   "status": "tonight",
-   "definitions": [],
-   "note": "FlashMLA flash_mla_with_kvcache, sm90 sparse FP8 decode (is_fp8_kvcache, head_dim_v 512): per decode token and padded head the online softmax at softmax_scale = HD^-0.5 over the SWA rows at swa_indices (swa_lens of them) then the compressed rows at the layer's extra indices (extra_topk_length), each row dequantized from the 584-byte fp8_ds_mla layout, the head's attn_sink in the denominator; NHP heads written, NHL kept. Row DSV4-MLA (FlashMlaDecode_v1 and its parts)",
-   "branch": "cursor/dsv4-flashmla-8c79"
+   "status": "port",
+   "definitions": [
+    "FlashMlaDecode_v1",
+    "FlashMlaDecode_v2"
+   ],
+   "note": "FlashMLA flash_mla_with_kvcache, sm90 sparse FP8 decode (is_fp8_kvcache, head_dim_v 512; registry/flashmla.py, #1955): per decode token FlashMlaDecode_v1{NH 16, SPLITS, NW, DN 448, DR 64, QT 64, BN 64, HopperBF16WgmmaDot16, 512^-0.5}, each row's validity and its row dequantized from the 584-byte fp8_ds_mla layout (FlashMlaRowValid_v1, FlashMlaKvRow_v1) over the SWA rows at swa_indices (swa_lens of them) then the compressed rows at the layer's extra indices (extra_topk_length), then per head the online softmax at softmax_scale = HD^-0.5 in 64-row blocks at the planner's splits (FlashMlaDecodeHead_v1: FlashMlaSplit_v1, and FlashMlaCombine_v1 over a token cut into several), the head's attn_sink in the denominator; NHP heads written, NHL kept. The H200's GO: run r20261013-115825-52cf (tests/properties/dsv4_flashmla_capture_gpu.py, the decode cases swa, c4, c128, lone, batch and edge). Boolean _v2. Port until a Build rule binds it"
   },
   "flashmla-sparse-prefill": {
    "status": "port",
@@ -371,10 +373,11 @@
    "note": "FlashMLA flash_mla_sparse_fwd per prefill chunk (registry/flashmla_prefill.py, #1955): FlashMlaPrefill_v1{NH 16, NP, D 512, BN 64, HopperBF16WgmmaDot16, 512^-0.5} per token over the bf16 workspace dequantize_and_gather_k_cache writes (the CuTe gather, FlashMlaGatherRow_v1{DN 448, DR 64, QT 64}: the E4M3 byte times its group's scale s << 7), at the workspace indices and lengths combine_topk_swa_indices writes (registry/dsv4_indices.py, #1968: Dsv4CombineTopkSwa_v1{TOPK, RATIO, WINDOW 128, WIDTH}), with attn_sink. The H200's GO: run r20261013-115825-52cf (tests/properties/dsv4_flashmla_capture_gpu.py, the prefill cases), and for the indices run r20261013-205633-5489 (tests/properties/dsv4_indices_capture_gpu.py). Boolean _v2 each. Port until a Build rule binds it"
   },
   "mhc-post-pre-fma": {
-   "status": "tonight",
-   "definitions": [],
-   "note": "mhc_fused_post_pre_tilelang at M <= 16: mhc_fused_tilelang (the post: new residual[s] = post_mix[s] * x + sum_t comb_mix[t, s] * residual[t] in bf16 streams; the pre's 24 mix logits of the new residual against hc_fn and its square sum, by FMA in 4 K-splits) and mhc_pre_big_fuse_with_norm_tilelang (split sums, rsqrt RMS, scale and base, sigmoid pre / post mixes, 20 Sinkhorn iterations for comb_mix, the layer input as the pre-mix of the streams, then the attn_norm / ffn_norm RMSNorm). Row DSV4-MHC",
-   "branch": "cursor/dsv4-mhc-8c79"
+   "status": "port",
+   "definitions": [
+    "MhcFusedPostPre_v1"
+   ],
+   "note": "mhc_fused_post_pre_tilelang at M <= 16 (registry/mhc.py, #1961): per token MhcFusedPostPre_v1{HC 4, H 7168, NS 4, TH 256, TN 64, REPEAT 20, EPS 1e-6, HC_EPS 1e-6}, mhc_fused_tilelang per split of H (MhcFusedSplit_v1: the post, new residual[s] = post_mix[s] * x + sum_t comb_mix[t, s] * residual[t] in bf16 streams, and its share of the 24 mix logits against hc_fn and the square sum, by FMA) then mhc_pre_big_fuse_with_norm_tilelang (MhcPreBigFuse_v1: the split sums, rsqrt RMS, scale and base, sigmoid pre / post mixes, 20 Sinkhorn iterations for comb_mix, the layer input as the pre-mix of the streams, then the attn_norm / ffn_norm RMSNorm). The H200's GO: run r20261013-205619-36e8 (tests/properties/dsv4_mhc_capture_gpu.py, the fused cases at 1, 2, 7, 8, 9, 15 and 16 tokens). No Boolean version (boolean_mhc: over circuit-check's partition budget); its pieces have one (MhcFusedSplit_v2, MhcPreBigFuse_v2). Port until a Build rule binds it"
   },
   "mhc-tf32": {
    "status": "port",
@@ -385,16 +388,20 @@
    "note": "the TF32 pre (registry/mhc.py, #1961): DeepGEMM tf32_hc_prenorm_gemm (HopperTf32WgmmaDot8_v1 steps, split-K over compute_num_split's splits: MhcPrenormTf32_v1) then mhc_pre_big_fuse(_broadcast)_with_norm_tilelang. Layer 0's mhc_pre_broadcast_tilelang takes it at every token count (MhcPreBroadcast_v1, NS 28; its residual, the embedding copied to each of the HC streams, is a copy the Definition does not state: word-equal to embed per stream), so it checks one mHC pre on every decode step; every later post-and-pre past 16 tokens (route hc-split) is mhc_post_tilelang, the GEMM and the big fuse: MhcPostPreTf32_v1. The H200's GO: run r20261013-205619-36e8 (tests/properties/dsv4_mhc_capture_gpu.py: the broadcast at 1, 16, 64 and 65 tokens, the TF32 path at 17, 64, 65, 128 and 129). Neither composite has a Boolean version (boolean_mhc: over circuit-check's partition budget); its pieces have (MhcPrenormTf32_v2, MhcPreBigFuse_v2, MhcPreBigFuseBroadcast_v2, MhcPost_v2). Port until a Build rule binds it"
   },
   "mhc-post": {
-   "status": "tonight",
-   "definitions": [],
-   "note": "mhc_post_tilelang after the last layer: out[s] = post_mix[s] * x + sum_t comb_mix[t, s] * residual[t], [M, HC, H] bf16 (the same post the hc-split path runs inside each layer). Row DSV4-MHC",
-   "branch": "cursor/dsv4-mhc-8c79"
+   "status": "port",
+   "definitions": [
+    "MhcPost_v1",
+    "MhcPost_v2"
+   ],
+   "note": "mhc_post_tilelang after the last layer (registry/mhc.py, #1961): MhcPost_v1{HC 4, N 7168}, out[s] = post_mix[s] * x + sum_t comb_mix[t, s] * residual[t], [M, HC, H] bf16, the same post the hc-split path runs inside each layer. The H200's GO: run r20261013-205619-36e8 (tests/properties/dsv4_mhc_capture_gpu.py) checks this kernel inside the TF32 cases (MhcPostPreTf32_v1 at 17, 64, 65, 128 and 129 tokens, MhcPost_v1 among their reference pieces), not as a launch of its own after the last layer; it is elementwise over tokens. Boolean _v2. Port until a Build rule binds it"
   },
   "hc-head": {
-   "status": "tonight",
-   "definitions": [],
-   "note": "hc_head_fused_kernel_tilelang: the HC stream mixes of the final residual against hc_head_fn (f32), RMS-scaled, times hc_head_scale plus hc_head_base, sigmoid + hc_eps, then the weighted sum of the streams to [M, H] bf16. Row DSV4-MHC",
-   "branch": "cursor/dsv4-mhc-8c79"
+   "status": "port",
+   "definitions": [
+    "HcHead_v1",
+    "HcHead_v2"
+   ],
+   "note": "hc_head_fused_kernel_tilelang (registry/mhc.py, #1961): HcHead_v1{HC 4, H 7168, TH 128, EPS 1e-6, HC_EPS 1e-6}, the HC stream mixes of the final residual against hc_head_fn (f32), RMS-scaled, times hc_head_scale plus hc_head_base, sigmoid + hc_eps, then the weighted sum of the streams to [M, H] bf16. The H200's GO: run r20261013-205619-36e8 (tests/properties/dsv4_mhc_capture_gpu.py, the head cases at 1, 7, 16, 64 and 129 tokens). Boolean _v2. Port until a Build rule binds it"
   },
   "dsv4-qnorm-rope-kv-insert": {
    "status": "port",
@@ -405,16 +412,20 @@
    "note": "torch.ops._C.fused_deepseek_v4_qnorm_rope_kv_rope_quant_insert (registry/dsv4_qnorm_insert.py, #1969): per token Dsv4QNormRopeKvInsert_v1{NH 16, NHP 64, DN 448, DR 64, QB 64, EPS 1e-6}, the weightless RMSNorm of each live query head and GPT-J RoPE on its last DR dims (Dsv4QNormRope_v1), zero-filled to NHP heads, and the kv row's RoPE, ue8m0 FP8 quantisation of its NoPE part and its 584-byte cache row (Dsv4KvRopeQuant_v1), which the Program scatters at the step's slot mapping (no row where the slot is -1). The H200's GO: run r20261013-205619-f8bf (tests/properties/dsv4_qnorm_insert_capture_gpu.py). Boolean _v2. Port until a Build rule binds it"
   },
   "dsv4-compressor-state": {
-   "status": "tonight",
-   "definitions": [],
-   "note": "save_partial_states (_save_partial_states_kernel), every compressor: the state row [kv | score + ape[pos % ratio]] in f32, the kv half a copy of kv_score's. Row DSV4-IDX: Dsv4CompressorScore_v1{W}, W-generic (W = 2 * HD, HD or 2 * ID here)",
-   "branch": "cursor/dsv4-indexer-8c79"
+   "status": "port",
+   "definitions": [
+    "Dsv4CompressorScore_v1",
+    "Dsv4CompressorScore_v2"
+   ],
+   "note": "save_partial_states (_save_partial_states_kernel), every compressor (registry/dsv4_indexer.py, #1934): the state row [kv | score + ape[pos % ratio]] in f32, Dsv4CompressorScore_v1{W} on the score half (W-generic: W = 2 * HD, HD or 2 * ID here), the kv half a copy of kv_score's. The H200's GO: the indexer's (W 256) in run r20261013-090135-4fbc (tests/properties/dsv4_indexer_capture_gpu.py, case score/served), and the main attention's CSA and HCA states in run r20261013-211655-2a70 (#1968, tests/properties/dsv4_compressor_capture_gpu.py, cases score/c4 and score/c128). Boolean _v2. Port until a Build rule binds it"
   },
   "dsv4-indexer-compress": {
-   "status": "tonight",
-   "definitions": [],
-   "note": "compress_norm_rope_store_triton (the indexer's compressor, head ID): at a ratio boundary the softmax over the 8 overlapping state rows' scores weighting their kv, the compressor norm's RMSNorm, GPT-J RoPE on the last DR words and the ue8m0 FP8 cache entry (ID e4m3 bytes and an f32 scale). Row DSV4-IDX: Dsv4IndexerCompress_v1{D, ROPE, EPS}",
-   "branch": "cursor/dsv4-indexer-8c79"
+   "status": "port",
+   "definitions": [
+    "Dsv4IndexerCompress_v1",
+    "Dsv4IndexerCompress_v2"
+   ],
+   "note": "compress_norm_rope_store_triton (the indexer's compressor, head ID; registry/dsv4_indexer.py, #1934): Dsv4IndexerCompress_v1{D 128, ROPE 64, EPS 1e-6}, at a ratio boundary the softmax over the 8 overlapping state rows' scores weighting their kv (Dsv4CompressColumn_v1), the compressor norm's RMSNorm and GPT-J RoPE on the last DR words (Dsv4IndexerNormRope_v1) and the ue8m0 FP8 cache entry, ID e4m3 bytes and an f32 scale (Dsv4IndexerKQuant_v1). The H200's GO: run r20261013-090135-4fbc (tests/properties/dsv4_indexer_capture_gpu.py, cases compress/served and compress/edge). Boolean _v2. Port until a Build rule binds it"
   },
   "dsv4-compress-512": {
    "status": "port",
@@ -435,10 +446,14 @@
    "note": "fused_indexer_q_rope_quant (the CuTe DSL IndexerQFp8Kernel, as has_cutedsl() holds in the pinned venv; registry/dsv4_qnorm_insert.py, #1969): per token Dsv4IndexerQ_v1{H 64, D 128, DR 64, SCALE 128^-0.5 * 64^-0.5}, GPT-J RoPE on the last DR dims of each of the IH heads and ue8m0 FP8 per head (Dsv4IndexerQHead_v1), and the head weight (weights_proj's bf16 output) times q's scale and SCALE. Not DsaIndexerQ_v1 (GLM-5.3's Triton _fused_q_kernel). The H200's GO: run r20261013-205619-f8bf, with the insert's. Boolean _v2. Port until a Build rule binds it"
   },
   "dsa-mqa-logits": {
-   "status": "tonight",
-   "definitions": [],
-   "note": "DeepGEMM fp8_fp4_mqa_logits (prefill) / fp8_fp4_paged_mqa_logits (decode) with q = (values, None): per (query row, compressed key) the sum over the IH heads of relu(q_h . k) * w_h, times the key's scale. Row DSV4-IDX binds DsaMqaLogit_v3{H=64, D=128} (bits _v4: each sum's first product contracted, as the H200 does, from GLM-H1's branch); main's DsaMqaLogit_v1 is the uncontracted order",
-   "branch": "cursor/dsv4-indexer-8c79"
+   "status": "port",
+   "definitions": [
+    "DsaMqaLogit_v3",
+    "DsaMqaLogits_v3",
+    "DsaMqaLogit_v4",
+    "DsaMqaLogits_v4"
+   ],
+   "note": "DeepGEMM fp8_fp4_mqa_logits (prefill) / fp8_fp4_paged_mqa_logits (decode) with q = (values, None): per (query row, compressed key) the sum over the IH heads of relu(q_h . k) * w_h, times the key's scale, each sum's first product contracted as the H200 does. GLM-5.3's DsaMqaLogit_v3{H, D} (one logit) and DsaMqaLogits_v3{N, H, D} (one query token over N keys; registry/dsa.py, on main), H-generic, which #1934 binds at H 64, D 128; main's DsaMqaLogit_v1 is the uncontracted order. The H200's GO: run r20261013-090135-4fbc (tests/properties/dsv4_indexer_capture_gpu.py, cases logits/prefill and logits/decode). Boolean _v4 each (registry/boolean_dsa.py). Port until a Build rule binds it"
   },
   "dsa-topk": {
    "status": "port",
@@ -450,10 +465,12 @@
    "when": "every row has at most TOPK compressed keys"
   },
   "dsa-topk-fill": {
-   "status": "tonight",
-   "definitions": [],
-   "note": "_fill_short_context_topk_indices (attention.py:72, Triton, num_warps 8): slot j = j when j < (pos + 1) // CSA_R in int64, else -1. Row DSV4-IDX: Dsv4ShortContextTopK_v1{TOPK, RATIO}",
-   "branch": "cursor/dsv4-indexer-8c79"
+   "status": "port",
+   "definitions": [
+    "Dsv4ShortContextTopK_v1",
+    "Dsv4ShortContextTopK_v2"
+   ],
+   "note": "_fill_short_context_topk_indices (attention.py:72, Triton, num_warps 8; registry/dsv4_indexer.py, #1934): Dsv4ShortContextTopK_v1{TOPK 1024, RATIO 4}, slot j = j when j < (pos + 1) // CSA_R in int64, else -1. The H200's GO: run r20261013-090135-4fbc (tests/properties/dsv4_indexer_capture_gpu.py, case fill/served). Boolean _v2. Port until a Build rule binds it"
   },
   "dsv4-decode-indices": {
    "status": "committed-only",
@@ -461,10 +478,12 @@
    "note": "the decode attention's indices: decode_swa_indices / decode_swa_lens (the metadata builder: the last SW tokens' SWA slots), compute_global_topk_indices_and_lens (CSA: the indexer's local top-k through the block table, padding tokens length 0) and c128a_global_decode_topk_indices / _lens (HCA: every compressed block so far). FlashMlaDecode_v1 takes them as inputs; no row states them yet"
   },
   "inv-rope-fp8-quant": {
-   "status": "tonight",
-   "definitions": [],
-   "note": "fused_inv_rope_fp8_quant: the inverse GPT-J RoPE of each head's last DR dims, then e4m3 with one f32 scale per 1x128 group, regrouped to [M, OGL, HPG * HD] (tma_aligned_scales false on sm_90). Row DSV4-IDX: Dsv4InvRopeQuantHead_v1{CHUNKS, QG, ROPE}",
-   "branch": "cursor/dsv4-indexer-8c79"
+   "status": "port",
+   "definitions": [
+    "Dsv4InvRopeQuantHead_v1",
+    "Dsv4InvRopeQuantHead_v2"
+   ],
+   "note": "fused_inv_rope_fp8_quant (registry/dsv4_indexer.py, #1934): per (token, head) Dsv4InvRopeQuantHead_v1{CHUNKS 4, QG 128, ROPE 64}, the inverse GPT-J RoPE of the head's last DR dims (Dsv4InvRope_v1), then e4m3 with one f32 scale per 1x128 group (Dsv4InvRopeQuant_v1), regrouped to [M, OGL, HPG * HD] (tma_aligned_scales false on sm_90). The H200's GO: run r20261013-090135-4fbc (tests/properties/dsv4_indexer_capture_gpu.py, case inv_rope/served). Boolean _v2. Port until a Build rule binds it"
   },
   "sqrtsoftplus-router": {
    "status": "tonight",
