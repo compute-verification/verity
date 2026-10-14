@@ -4,6 +4,7 @@ import Proofs.Flock.C3.Compose.Bridge
 import Proofs.Flock.C3.Compose.BridgeOff
 import Proofs.Flock.C3.Compose.Discharge
 import Proofs.Flock.C3.Compose.Decoder
+import Proofs.Flock.C3.Compose.RepsOff
 import Proofs.Flock.C3.Compose.SrcClauses
 import Proofs.Flock.C3.Compose.Tied
 import Proofs.Flock.C3.Compose.HoloTys
