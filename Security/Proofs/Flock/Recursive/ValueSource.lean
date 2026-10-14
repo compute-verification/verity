@@ -17,6 +17,7 @@ SHAKE256 once.
 
 namespace FlockSoundness.Discharge.Recursion
 
+open Game Audit
 
 /-- Level `l`'s `coef` rows at R's opening `o`: opening `j`'s `coefAt (κ[l]) LANES eq(α_l)[j]` in words. -/
 def stackedCoefRows (o : Flock.RecCoins.Opening) (l LANES : ℕ) : Array (Array ℕ) :=
@@ -100,9 +101,9 @@ theorem opening_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : Flo
   obtain ⟨o, hop, h⟩ := FlockVBridge.PartS.bind_ok h
   split at h
   · cases h
-  · obtain ⟨gs, hgs, h⟩ := FlockVBridge.PartS.bind_ok h
-    split at hgs
-    · rename_i gs' hX
+  · split at h
+    · rename_i gs hX
+      obtain ⟨gs', hgs, h⟩ := FlockVBridge.PartS.bind_ok h
       cases hgs
       split at h
       · rename_i hj
@@ -110,26 +111,29 @@ theorem opening_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : Flo
         · cases h
         · exact ⟨o, _, _, hop, by simp only [openingVRows, hX, hj], h⟩
       · cases h
-    · cases hgs
+    · cases h
 
 theorem valueRows_coef {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {LANES H l : ℕ} {o : Flock.RecCoins.Opening}
     (hso : Flock.RecCoins.stackedParams c.unit.name = some (LANES, H)) (hop : Flock.RecCoins.opening c3 c.unit.name = .ok o)
     (hls : stackedLevels o LANES H = [l]) :
     valueRows (some c3) c "coef" = some (stackedCoefRows o l LANES, Flock.RecCoins.COEF_VALUE) := by
-  simp only [valueRows, hop, hso, hls] <;> first | rfl | decide | simp
+  simp only [valueRows, hop, hso, hls]
+  rfl
 
 theorem valueRows_dirs {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {LANES H l : ℕ} {o : Flock.RecCoins.Opening}
     (hso : Flock.RecCoins.stackedParams c.unit.name = some (LANES, H)) (hop : Flock.RecCoins.opening c3 c.unit.name = .ok o)
     (hls : stackedLevels o LANES H = [l]) :
     valueRows (some c3) c "dirs" = some (stackedDirsRows o l H, Flock.RecCoins.DIRS_VALUE) := by
-  simp only [valueRows, hop, hso, hls] <;> first | rfl | decide | simp
+  simp only [valueRows, hop, hso, hls]
+  rfl
 
 theorem valueRows_v {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {m cl j : ℕ} {o : Flock.RecCoins.Opening}
     {rows : Array (Array ℕ)} (hso : Flock.RecCoins.stackedParams c.unit.name = none)
     (hp : Flock.RecOpening.params c.unit.name = some (m, cl, j)) (hop : Flock.RecCoins.opening c3 c.unit.name = .ok o)
     (hr : openingVRows o j = some rows) :
     valueRows (some c3) c "v" = some (rows, Flock.RecCoins.V_VALUE) := by
-  simp only [valueRows, hop, hso, hp, hr] <;> first | rfl | decide | simp
+  simp only [valueRows, hop, hso, hp, hr]
+  rfl
 
 /-- **Check 5 at a `rec-open-stacked` unit runs `checkStackedLevel`** at its parameters. -/
 theorem stackedLevel_of_check {st : Flock.Stmt} {own : Array Flock.Registered.Port} {files : Option Flock.RecCoins.Source}
