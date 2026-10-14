@@ -310,28 +310,74 @@ def RemoteWindowRunConservationRelay : Prop :=
           (1 - (dw + Deployed.gammaPass N b ρ S L (lam + m * b) rounds cRoot F)) * Nd.declared a.T ≤
             ((Remote.Run.ofDeployedWindow A w tier (Deployed.rebuildBits b rounds cRoot F) Nd a).reads x : ℝ)
 
-/-!
-## Where the sketch receipt plugs in (not stated here)
+/-- **The remote bandwidth audit with deployed tensor-sketch receipts, for the verbatim class.** A session of `n`
+windows draws one `ks × (32·m)` signs matrix per window, runs `P` causal passes with `G` candidate oracles per pass,
+then draws `d` of the window's `P·N` receipts. Every pass is a `RateSketch.Device`: it obtains 32-byte sectors only
+whole and verbatim. If each pass rebuilds at most `X` bits, and the signs' rank tail is
+`Assumptions.SketchRank ks m r ε`, then the probability that every opening passes while the session or some window
+falls below its reading is at most
 
-The deployed receipt is `H(σ_t, root, j, sketch_σ(E_j))`, a hash of a `k_s`-row tensor-core sketch of block `j` under
-the window's signs `σ`, where this game's is `H(σ_t, R, j, E_j)`. The step from one to the other is lane
-ra-sketch-anyprover-lean's (`SketchRankFiber`, `RateAuditTensorSketchRank` in `RateAuditSketch.lean`), and it holds
-for the verbatim class only (a device that reads a sector's bytes as they are stored; `RateTensorSketchTable` is a
-prover outside it that no such bound covers). Its result plugs in through two statements of this shape:
+  `(1 − d̄)^(d·n) + (1 − d_w/n)^(d·n) + n·ε + n·P·G·(N/2^h + q/2^(8·r))`.
 
-* `SketchRank ks m r ε : Prop := pr (fun σ : SketchSigns ks m => ∃ u, rank_ℚ (signMatrix (σ.block u)) < r) ≤ ε`, a
-  number of the signs' law evaluated outside Lean (`r* = 12` at `k_s = 16`; at `k_s = 64`, `r* = 27`, `2^-215.85` a
-  compression).
-* `SketchSessionReduction`: for every deployed session `A` whose pass devices are of the verbatim sketch class, with
-  each window's signs drawn with its coins, there is a `Rate.DeployedSession A'` on the same store, with the same `n`,
-  `P`, `N`, `b`, `S`, `L`, `G` and at most `q` queries a pass, whose pass devices have the same tier reads, completions,
-  link bits and correct sets as `A`'s at every coin where every sector block has rank at least `r` and no query lands
-  on another block of the sketch's fiber; so for every event `Ev` of the session's reads and correct sets,
+The reading's non-sampling share is
 
-    `pr_A[Ev] ≤ pr_A'[Ev] + n·ε + n·P·G·q/2^(8·r)`.
+  `γ_sketch = (S + (L − ρ·256) + X)/(N·m·256)`.
 
-`RemoteSessionConservation` at `A'` then bounds the deployed session at `A` with `n·ε + n·P·G·q/2^(8·r)` added, and
-`SketchRank` names `ε`.
--/
+The two added receipt terms are exactly the rank-priced reduction behind `RateAuditTensorSketchRank`: one rank-tail
+event per window, and one `q/2^(8r)` unknown-sector query term per candidate pass. `N/2^h` covers a correct receipt
+whose tag was never queried. There is no compression slack `λ`: in the verbatim class an unobtained sector is uniform.
+`RateTensorSketchTable` proves why this statement cannot be extended to arbitrary layouts.
+
+Frozen (no-function, hash): a bound in the random-oracle model over a causal session of abstract verbatim-sector
+devices, not the rate audit's code. -/
+def RemoteSessionConservationSketch : Prop :=
+  ∀ (n P N m ρ h S L q ks G d r X : ℕ) (ε : ℝ≥0∞)
+    (A : RateSketch.SketchDeployedSession n P N m ρ h S L q ks G d) (dbar dw : ℝ),
+    0 < n → 0 < P → 0 < N → 0 < m → r ≤ 32 → dw ≤ 1 →
+    Assumptions.SketchRank ks m r ε →
+    (∀ w η j ι c E σ R O,
+      let B := (A.window w η).device j ι c
+      let D := RateSketch.Data.ofParts E R
+      (B.prog σ D).rebuilds O D * 256 ≤ X) →
+    pr (fun x : RateSketch.SketchStore N m ×
+        (Fin n → RateSketch.SketchWindowCoins P N m ρ h ks G d) =>
+      (∀ w t, (x.2 w).2.2 t ∈
+        (A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1) ∧
+        ((((∑ w, (A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 : ℕ)) : ℝ) <
+            (1 - (dbar + RateSketch.gammaSketch N m ρ S L X)) * (n * P * N * m * 256) ∨
+          ∃ w, (((A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 : ℕ) : ℝ) <
+            (1 - (dw + RateSketch.gammaSketch N m ρ S L X)) * (P * N * m * 256)))
+      ≤ ENNReal.ofReal (1 - dbar) ^ (d * n) + ENNReal.ofReal (1 - dw / n) ^ (d * n) +
+        (n : ℝ≥0∞) * ε + (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ h + (q : ℝ≥0∞) / 2 ^ (8 * r))
+
+/-- **The verbatim sketch session at the deployed receipt parameters.** `RemoteSessionConservationSketch` at 4 KiB
+tiles (`m = 128` 32-byte sectors), 16 sketch rows, SHA-512 tags, rank `r = 12`, 2,773 pooled openings per window,
+`d̄ = 0.15%` and `d_w = 1%`. From seven windows on, the two draw terms are at most `2^-40` each:
+
+  `2·2^-40 + n·ε + n·P·G·(N/2^512 + q/2^96)`.
+
+This is the exact 16-row reading. At the conservative caps `q = G = 2^55`, its query term alone is at least
+`2^14` before `n·P`, so the probability bound is vacuous; the proof does not hide that by replacing `q` or `G`.
+
+Frozen (no-function, hash): `RemoteSessionConservationSketch` at the deployed parameters. -/
+def RemoteSessionConservationSketchDeployed : Prop :=
+  ∀ (n P N ρ S L q G X : ℕ) (ε : ℝ≥0∞)
+    (A : RateSketch.SketchDeployedSession n P N 128 ρ 512 S L q 16 G 2773),
+    7 ≤ n → 0 < P → 0 < N →
+    Assumptions.SketchRank 16 128 12 ε →
+    (∀ w η j ι c E σ R O,
+      let B := (A.window w η).device j ι c
+      let D := RateSketch.Data.ofParts E R
+      (B.prog σ D).rebuilds O D * 256 ≤ X) →
+    pr (fun x : RateSketch.SketchStore N 128 ×
+        (Fin n → RateSketch.SketchWindowCoins P N 128 ρ 512 16 G 2773) =>
+      (∀ w t, (x.2 w).2.2 t ∈
+        (A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1) ∧
+        ((((∑ w, (A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 : ℕ)) : ℝ) <
+            (1 - (0.0015 + RateSketch.gammaSketch N 128 ρ S L X)) * (n * P * N * 32768) ∨
+          ∃ w, (((A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 : ℕ) : ℝ) <
+            (1 - (0.01 + RateSketch.gammaSketch N 128 ρ S L X)) * (P * N * 32768)))
+      ≤ 2 / 2 ^ 40 + (n : ℝ≥0∞) * ε +
+        (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ 512 + (q : ℝ≥0∞) / 2 ^ 96)
 
 end Accounting.Guarantees

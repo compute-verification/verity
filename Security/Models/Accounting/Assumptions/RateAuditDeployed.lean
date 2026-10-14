@@ -1,4 +1,6 @@
+import Mathlib.LinearAlgebra.Matrix.Rank
 import Definitions.Accounting.RateAuditDeployed
+import Definitions.Accounting.RateAuditSketchDeployed
 
 /-!
 # The deployed rate audit's measured capacity: the squaring ceiling (trusted)
@@ -12,11 +14,25 @@ hypothesis, never an `axiom`:
   `Rate.PIDevice.TimeBudget`: it splits the work across the node's concurrent GPUs and CPUs, each bounded by its
   measured rate times the pass duration; `PIDevice.TimeBudget.squaringCeiling` derives this assumption at the sum of
   their rates.
+* `SketchRank ks m r ε`: the probability that some sector's signs block has rational rank below `r` is at most `ε`.
+  Its numeric value is computed outside Lean.
 -/
 
 namespace Accounting.Assumptions
 
-open Accounting.Rate
+open Accounting.Rate Accounting.RateSketch
+open Pous (pr)
+
+/-- **The measured rank tail of the tensor-sketch signs.** A uniformly drawn `ks × (32·m)` signs matrix has some
+sector's `ks × 32` block below rational rank `r` with probability at most `ε`:
+
+  `Pr_σ[∃ u, rank_ℚ(block_u σ) < r] ≤ ε`.
+
+The finite probability is exact; only its numerical evaluation is outside Lean. At the deployed 16 rows the chosen
+rank is `r = 12`; at 64 rows it is `r = 27`. -/
+def SketchRank (ks m r : ℕ) (ε : ℝ≥0∞) : Prop :=
+  pr (fun σ : SketchSigns ks m =>
+    ∃ u, ((Accounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank < r) ≤ ε
 
 /-- **The squaring ceiling: a pass's completions cost at most the node's measured squaring capacity `F`.** From every
 on-chip state and in every world, the compute the chip's completions cost, at `cost x` per completion of `x` bits, is
