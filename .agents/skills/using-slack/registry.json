@@ -163,8 +163,11 @@
         "Security/Proofs/Pous/",
         "benchmarks/pous/",
         "benchmarks/bandwidth/",
+        "benchmarks/vllm_encoded/",
         "benchmarks/word_codec/",
         "benchmarks/codec_tensor/",
+        "benchmarks/kv_filler/",
+        "benchmarks/remote_session/",
         "integrations/vllm/verity_vllm/protocol_options/pous.py"
       ]
     },
@@ -251,6 +254,7 @@
         "tests/",
         "fixtures/",
         "benchmarks/census/",
+        "benchmarks/harness/",
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",
