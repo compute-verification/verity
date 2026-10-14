@@ -102,15 +102,19 @@ def toStatement (R : RegTable cls) (τ : Fin (2 ^ cls.sLog) → Fin (2 ^ cls.tLo
     (regs : List (Region cls.kLog (cls.m - cls.kLog))) : Statement :=
   ⟨cls.m, cls.kLog, cls.hk, cls.hk6, cls.pin, R.side τ false, R.side τ true, regs⟩
 
-theorem type_lt (a : Fin (2 ^ cls.shape.mReg)) : a.val / 2 ^ (cls.nu + cls.shape.pLog) < 2 ^ cls.tLog := by
-  rw [Nat.div_lt_iff_lt_mul (Nat.two_pow_pos _), ← pow_add]
-  exact a.isLt.trans_le (Nat.pow_le_pow_right (by norm_num) (by simp only [SparseShape.mReg, HoloClass.shape]; omega))
+theorem type_lt {a : ℕ} (h : a < 2 ^ (cls.nu + cls.shape.pLog + cls.tLog)) :
+    a / 2 ^ (cls.nu + cls.shape.pLog) < 2 ^ cls.tLog := by
+  rw [Nat.div_lt_iff_lt_mul (Nat.two_pow_pos _), ← pow_add, Nat.add_comm]
+  exact h
 
-/-- The stacked table the registered opening reads: bit `k + 2^ν·(p + 2^pLog·t)` is `R t p k`. -/
+/-- The stacked table the registered opening reads: bit `k + 2^ν·(p + 2^pLog·t)` is `R t p k`, and the padding's bits
+past the cells (`SparseShape.mReg`) are zero. -/
 def bits (R : RegTable cls) : Witness cls.shape.mReg := fun a =>
-  R ⟨a.val / 2 ^ (cls.nu + cls.shape.pLog), type_lt a⟩
-    ⟨a.val / 2 ^ cls.nu % 2 ^ cls.shape.pLog, Nat.mod_lt _ (Nat.two_pow_pos _)⟩
-    ⟨a.val % 2 ^ cls.nu, Nat.mod_lt _ (Nat.two_pow_pos _)⟩
+  if h : a.val < 2 ^ (cls.nu + cls.shape.pLog + cls.tLog) then
+    R ⟨a.val / 2 ^ (cls.nu + cls.shape.pLog), type_lt h⟩
+      ⟨a.val / 2 ^ cls.nu % 2 ^ cls.shape.pLog, Nat.mod_lt _ (Nat.two_pow_pos _)⟩
+      ⟨a.val % 2 ^ cls.nu, Nat.mod_lt _ (Nat.two_pow_pos _)⟩
+  else 0
 
 end RegTable
 
@@ -126,11 +130,13 @@ variable {cls : HoloClass} (rsch : RegSchedule cls)
 noncomputable def radius : ℝ := (1 - rsch.sch.level₀.rate) / 2 - eta
 
 /-- The registered word `w` is close to the registered table `R`: some level-0 message whose encoding is within the
-unique-decoding radius of `w` packs `R`'s stacked bits. -/
+unique-decoding radius of `w` packs `R`'s stacked bits in its cells. The padding's bits past them (`SparseShape.mReg`)
+are the registrant's: no claim reads them (`RegClaim.coord` is zero there) and the verifier never sees them. -/
 def Close {F K : Type} [Field F] [Field K] (A : Arith F K) (w : Oracle F) (R : RegTable cls) : Prop :=
   ∃ M : Message F rsch.sch.k0 rsch.sch.level₀.logCols,
     Model.Close rsch.radius (asTable rsch.sch w) (encode A rsch.sch.level₀.logLen M) ∧
-      witnessOf A cls.shape.mReg rsch.sch.k0 rsch.sch.level₀.logCols M = R.bits
+      ∀ a : Fin (2 ^ cls.shape.mReg), a.val < 2 ^ (cls.nu + cls.shape.pLog + cls.tLog) →
+        witnessOf A cls.shape.mReg rsch.sch.k0 rsch.sch.level₀.logCols M a = R.bits a
 
 /-- **Level 0 decodes uniquely**: the schedule is for the stacked table's `ν + pLog + tLog` bits, its level 0 holds
 them exactly (`2^k₀` lanes of `2^logCols` packed elements of 128 bits), and level 0's rate is at most `1/2`, so that

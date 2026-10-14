@@ -514,15 +514,15 @@ theorem parse_unit {tags : Tags} {bytes : ByteArray} {tables : List (String × B
       simp (config := { zeta := false }) only [jpA] at h
       (have hh := except_bind_ok h; clear h; obtain ⟨n, -, h⟩ := hh)
       (have hh := except_bind_ok h; clear h; obtain ⟨lo, -, h⟩ := hh)
-      ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpB at h)
+      (extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpB at h)
       replace h := ite_throw_ok h
       simp (config := { zeta := false }) only [jpB] at h
       split at h
-      · ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpC at h)
+      · (extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpC at h)
         replace h := ite_throw_ok h
         simp (config := { zeta := false }) only [jpC] at h
         (have hh := except_bind_ok h; clear h; obtain ⟨net, hbuild, h⟩ := hh)
-        ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) nets' at h)
+        (extract_lets (config := { underBinder := false, onlyGivenNames := true }) nets' at h)
         have hs := Except.ok.inj h
         subst hs
         refine ⟨_, Or.inl rfl, ?_⟩
@@ -836,8 +836,8 @@ theorem linesOf_four {text a b c d : String} {r : List String} (h : text.splitOn
   dsimp only
   split
   · refine ⟨?_, ?_, by rw [Array.size_pop]; omega⟩
-    · rw [Array.getD_eq_getD_getElem?, Array.getElem?_pop, if_pos (by omega), ← Array.getD_eq_getD_getElem?, h2]
-    · rw [Array.getD_eq_getD_getElem?, Array.getElem?_pop, if_pos (by omega), ← Array.getD_eq_getD_getElem?, h3]
+    · rw [Array.getD_eq_getD_getElem?, Array.getElem?_pop, ite_eq_left (by omega), ← Array.getD_eq_getD_getElem?, h2]
+    · rw [Array.getD_eq_getD_getElem?, Array.getElem?_pop, ite_eq_left (by omega), ← Array.getD_eq_getD_getElem?, h3]
   · exact ⟨h2, h3, by omega⟩
 
 /-! ## The parsed unit's name -/
@@ -926,12 +926,12 @@ theorem file_unitName {s : VStar.Stmt} {b : VStar.Bindings} {file : ByteArray}
     cases n with
     | zero =>
       have : ((linesOf text).extract 3 (3 + 0)).getD 0 "" = "" := by
-        rw [Array.getD_eq_getD_getElem?, Array.getElem?_extract, if_neg (by omega)]; rfl
+        rw [Array.getD_eq_getD_getElem?, Array.getElem?_extract, ite_eq_right (by omega)]; rfl
       rw [this, tokens_eq] at hfmt
       simp at hfmt
     | succ n =>
       have : ((linesOf text).extract 3 (3 + (n + 1))).getD 0 "" = (linesOf text).getD 3 "" := by
-        rw [Array.getD_eq_getD_getElem?, Array.getElem?_extract, if_pos (by omega), ← Array.getD_eq_getD_getElem?]
+        rw [Array.getD_eq_getD_getElem?, Array.getElem?_extract, ite_eq_left (by omega), ← Array.getD_eq_getD_getElem?]
       rw [this, h3]
       obtain ⟨rest, hr⟩ := header_eq u.name l
       rw [hr]

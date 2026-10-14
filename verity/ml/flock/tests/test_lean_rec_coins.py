@@ -15,8 +15,11 @@ Staging the level takes about a minute and each verify sets up its 158 MB circui
 module is slow; it catches what no test before it can: the Lean verifier's coefficients, positions and salts at real
 coins, against the ones V*'s Python registers. The algebra's parts are staged too, for their verifier-registered `v`,
 their message rows and their row ports, and every session's `rec-acc` reads, against the verifier's record of V*'s shared
-rows (`--rec-rows`); and check 5 on `rec-coins`' record of the inner session in place of its statement (`--rec-inner-coins`).
-A level staged with bit rows, which hidden outputs admit and V*'s statement does not, is refused under the inner shape."""
+rows (`--rec-rows`), and their rows of the chain; and check 5 on `rec-coins`' record of the inner session in place of its
+statement (`--rec-inner-coins`).
+A level staged with bit rows, which hidden outputs admit and V*'s statement does not, is refused under the inner shape.
+At candidate 3's inner shape, each session's setup first holds the inner statement to check 5's sparse refusals
+(`RecCoins.checkAtC3`), and refuses a session without the inner statement's files."""
 from __future__ import annotations
 
 import concurrent.futures as cf
@@ -33,6 +36,7 @@ from pathlib import Path
 import keyed
 import pytest
 from verity_flock import rec_bindings as RB
+from verity_flock import rec_outer as O
 from verity_flock import rec_vstage as S
 
 HERE = Path(__file__).resolve().parent
@@ -263,15 +267,25 @@ def salted(built, once) -> Path:
     return once("rec-coins-salted", make, _KEY)
 
 
+@pytest.fixture(scope="module")
+def level_major(built, once) -> Path:
+    """Level 3 staged on running sums whose openings run level-major (`rec_outer.chain_order` by level, then rep and
+    query): its `rec-acc` registration, reads file and `pub.bin`'s paths agree with that chain, whose level 3 starts at
+    row `2 · 395`."""
+    def order(queries):
+        return sorted(((q.rep, q.level, q.j) for q in queries), key=lambda k: (k[1], k[0], k[2]))
+
+    def make(d):
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(O, "chain_order", order)
+            _stage(d, levels=[LEVEL], algebra=False, evaluate=False)
+
+    return once("rec-coins-level-major", make, _KEY) / f"L{LEVEL}"
+
+
 def _rec_rows(dst: Path, parts: list[Path]) -> Path:
-    """The verifier's record of V*'s shared rows (`--rec-rows`) from staged parts: each row port's entry (every port but `v`
-    and `out`), which every part that has the port must agree on."""
-    ports: dict = {}
-    for d in parts:
-        for nm, e in json.loads((d / "registered.json").read_text())["ports"].items():
-            if nm not in ("v", "out"):
-                assert ports.setdefault(nm, e) == e, (d, nm)
-    dst.write_text(json.dumps({"format": "verity/registered-reads/v0", "ports": ports}))
+    """The verifier's record of V*'s shared rows (`--rec-rows`) from staged parts (`rec_vstage.shared_rows`)."""
+    dst.write_text(json.dumps(S.shared_rows(parts)))
     return dst
 
 
@@ -423,6 +437,22 @@ def test_a_sessions_rec_acc_reads_are_the_verifiers_one_registration(forged, sha
                         "rec-acc registration it must be"), v["why"]
 
 
+def test_a_value_the_shared_rows_register_is_read_at_that_registration(forged, shape, tmp_path):
+    """`SharedOwnRoot`'s check (`RecVStar.checkShared`): a session's port reading a value the verifier's shared rows
+    (`--rec-rows`) register must be that registration, but in reads. Shared rows that register level 3's `rec-coef` under
+    another root refuse the recorded level by its `coef`, which passes setup without that entry
+    (`test_the_honest_level_passes_setup_at_the_honest_inner_session`). R's tops, which need an entry, are
+    `Flock.Test.SharedRows`'."""
+    ports = json.loads((SET / "L3" / "registered.json").read_text())["ports"]
+    coef = ports["coef"]
+    other = {**coef, "root": coef["root"][:-1] + ("1" if coef["root"][-1] == "0" else "0")}
+    rows = tmp_path / "rows.json"
+    rows.write_text(json.dumps({"format": "verity/registered-reads/v0", "ports": {"acc0": ports["acc"], "x-coef": other}}))
+    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest", rows=rows)
+    assert v["why"] == (f"setup: {UNIT}: its port coef reads {coef['value']}, which the verifier's shared rows (--rec-rows) "
+                        f"register as x-coef: root {coef['root']}, against {other['root']}"), v["why"]
+
+
 def test_a_session_staged_under_another_salt_reads_rec_acc_as_another_registration(salted, forged, shape, rows, tmp_path):
     """`checkAcc` at another registration: level 3 staged under another salt of the running sums' row 0 reads the same rows
     as another `rec-acc`, consistently: it passes setup at its own registration and is refused at the verifier's by `acc`'s
@@ -451,6 +481,22 @@ def test_a_session_staged_under_another_salt_reads_rec_acc_as_another_registrati
     v = _verify(forged, c / "pub.bin", c / "registered.json", shape, "inner-honest", rows=rows)
     assert v["why"] == (f"setup: {UNIT}: its rec-acc ports acc and acc_out are two registrations: root {honest}, against "
                         f"{other}"), v["why"]
+
+
+def test_a_level_reading_rec_acc_off_its_openings_rows_of_the_chain_is_refused(level_major, forged, shape, tmp_path):
+    """`OpenKeysS`' positions (`RecVStar.checkAccReads`): the recorded level 3's `acc` reads rows 395 to 447 for rep 0 and
+    843 to 895 for rep 1 (the chain rep-major, then by level and query, at 448 openings a rep) and `acc_out` the next. On a
+    level-major chain, consistently registered, `acc` reads row `790 + u` at unit `u`, which passes `checkAcc` at its own
+    registration and is refused at unit 0."""
+    reads = lambda d: json.loads((d / "registered.json").read_text())["ports"]
+    honest = [395 + j for j in range(53)] + [843 + j for j in range(53)]
+    assert reads(SET / "L3")["acc"]["reads"] == honest
+    assert reads(SET / "L3")["acc_out"]["reads"] == [p + 1 for p in honest]
+    assert reads(level_major)["acc"]["reads"] == [790 + u for u in range(106)]
+    v = _verify(forged, level_major / "pub.bin", level_major / "registered.json", shape, "inner-honest",
+                rows=_acc_rows(tmp_path / "own.json", level_major))
+    assert v["why"] == (f"setup: {UNIT}: its port acc reads rec-acc at 790 in unit 0, not at 395 (the chain runs rep-major, "
+                        "then by level and query)"), v["why"]
 
 
 @pytest.mark.parametrize("other", ["verity/flock-circuit+seed-injection", "verity/flock-circuit@cec3e347"])
@@ -559,3 +605,80 @@ def test_check_5_reads_the_verifiers_coins_record_as_the_inner_statement(forged,
     p = _run(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest", "--rec-inner-circuit",
              str(u / "circuit.txt"), rows=acc, coins=coins)
     assert p.returncode == 2 and "--rec-inner-coins stands in for" in p.stderr, p.stderr
+
+
+#: the inner statement's unit range (META's `ranges`, the unit net's: 2 slots of 2^12 rows at 516) at k_log 22, so 16 inner
+#: point coordinates and a block of 2^(16 − (12 − 6)) = 1024 slots: the one RecSparse shape here at ELL 12 and S_LOG 1
+C3_SPARSE = (1, 12, 1, 0)
+
+
+def _c3(tmp_path: Path, sparse: tuple | None, m: int = 27, circuit: Path | None = None, files: bool = True,
+        coins: bool = False, verify: bool = False) -> str:
+    """`statement` (or `verify` on a session) at the inner statement's inner shape with the RecSparse shape ``sparse``, on an
+    empty outer circuit, which candidate 3's inner checks precede: its refusal at setup."""
+    u = SET / "u" / "stage"
+    (tmp_path / "empty").write_bytes(b"")
+    inner = tmp_path / "inner.json"
+    inner.write_text(json.dumps({"format": "verity/rec-inner/v1", "m": m, "k_log": 22, "claims": 8, "regions": 3,
+                                 **({"sparse": list(sparse)} if sparse else {})}))
+    session = ["--rec-inner-session", str(SET / "inner-honest" / "session")]
+    if coins:
+        (tmp_path / "coins.json").write_text("{}")
+        rec = ["--rec-inner-coins", str(tmp_path / "coins.json"), *session]
+    else:
+        rec = ["--rec-inner-circuit", str(circuit or u / "circuit.txt"), "--rec-inner-public", str(u / "pub-64.bin"),
+               "--rec-inner-partition", str(u / "partition.json"), *session] if files else []
+    base = [str(BIN), "--circuit", str(tmp_path / "empty"), "--public", str(tmp_path / "empty"), "--rec-inner", str(inner),
+            *rec]
+    if verify:
+        (tmp_path / "s").mkdir(exist_ok=True)
+        (tmp_path / "s" / "session.json").write_text("{}")
+        base.insert(1, "verify")
+        p = subprocess.run([*base, "--session", str(tmp_path / "s")], capture_output=True, text=True)
+        (v,) = [json.loads(line[8:]) for line in p.stdout.splitlines() if line.startswith("VERDICT ")]
+        return v["why"]
+    base.insert(1, "statement")
+    p = subprocess.run(base, capture_output=True, text=True)
+    assert p.returncode == 1, (p.stdout, p.stderr)
+    return p.stdout.strip()
+
+
+NOT_A_CIRCUIT = "setup: circuit: not a flock-circuit file"
+UNIT_RANGE = "rec-inner: the inner circuit's unit range (slot_log 12, pos0 516, count 2) is not at most {} slots of 2^{} rows inside the block"
+
+
+@pytest.mark.parametrize("m,sparse,why", [
+    (27, C3_SPARSE, None),
+    (26, C3_SPARSE, "rec-inner: the verifier's inner shape (m 26, k_log 22, regions 3) is not the inner statement's (m 27, "
+     "k_log 22, regions 3)"),
+    (27, (0, 12, 1, 0), "rec-inner: rec-sparse/n0-e12-s1-t0: rec-sparse's NU is at least 1, ELL at least 6 and T_LOG at most 16"),
+    (27, (1, 23, 1, 0), "rec-inner: the inner points are short of rec-sparse/n1-e23-s1-t0's"),
+    (27, (1, 12, 0, 0), UNIT_RANGE.format(1, 12)),
+], ids=["honest", "shape", "invalid", "short", "slots"])
+def test_candidate_3s_session_checks_the_sparse_range_on_the_inner_statement(built, tmp_path, m, sparse, why):
+    """`RecCoins.checkAtC3`, first in every candidate-3 session's setup: the inner statement set up from its files is the
+    inner shape's (`checkInnerStmt`) and passes check 5's sparse refusals at zero points (`checkInnerRange`). The honest
+    shape is refused only at its (empty) outer circuit; each other is refused by name."""
+    assert _c3(tmp_path, sparse, m) == (NOT_A_CIRCUIT if why is None else f"setup: {why}")
+
+
+def test_candidate_3s_session_needs_the_inner_statements_files(built, tmp_path):
+    """Candidate 3's session without the inner statement's files, or with `rec-coins`' record of it in place of them, is
+    refused at setup, by `statement` and by `verify`; an inner shape naming no RecSparse shape needs none. The unit range's
+    own refusal (`RecCoins.unitRangeOf`) sits behind the inner statement's setup, which refuses a META without one unit
+    range first; its Lean guards are `Test/InnerStreams.lean`'s."""
+    need = ("setup: rec-inner: candidate 3's session needs the inner statement (--rec-inner-circuit, --rec-inner-public, "
+            "--rec-inner-partition, --rec-inner-session): its sparse range is checked on it")
+    assert _c3(tmp_path, C3_SPARSE, files=False) == need
+    assert _c3(tmp_path, C3_SPARSE, coins=True) == need
+    assert _c3(tmp_path, C3_SPARSE, files=False, verify=True) == need
+    assert _c3(tmp_path, (0, 12, 1, 0), verify=True) == (
+        "setup: rec-inner: rec-sparse/n0-e12-s1-t0: rec-sparse's NU is at least 1, ELL at least 6 and T_LOG at most 16")
+    assert _c3(tmp_path, None, files=False) == NOT_A_CIRCUIT
+    head, meta, rest = (SET / "u" / "stage" / "circuit.txt").read_bytes().split(b"\n", 2)
+    m = json.loads(meta[5:])
+    m["ranges"] = [r for r in m["ranges"] if r["net"] != "unit"]
+    (tmp_path / "no-unit.txt").write_bytes(head + b"\nMETA " + json.dumps(m).encode() + b"\n" + rest)
+    assert _c3(tmp_path, C3_SPARSE, circuit=tmp_path / "no-unit.txt") == (
+        "setup: rec-coins: the inner session: the inner statement: not one unit range of vus_per_block x units_per_vu (a "
+        "power of two) units")

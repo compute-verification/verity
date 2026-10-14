@@ -8,7 +8,9 @@ import Proofs.Flock.Soundness.Refine.RepConverse
 `hcomb`, `hsize`) at a rep whose values meet `AlgebraHolds` and `AccHolds`, from E's `zerocheck_of_residuals` and
 `lincheck_of_residuals`, on a transcript from round 0 whose rounds' coins are the rep's. The points are the
 transcript's coins: `r`, `z`, `ρ = rhoOf`, the residual rounds' coins, and from round `k₁ = 3 + (m − 6)` the lincheck's
-`α`, `β` and challenges `ts = tsOf`.
+`α`, `β` and challenges `ts = tsOf`. `zclc_of_residuals_dec` gives the same checks at either shape, the lincheck's
+rounds ending at the comb the rep holds (`decoded`, which at a holo shape adds w's `h`); `zclc_of_residuals` is it at a
+plain shape, where that comb is `d.comb`.
 
 `rows_coins` is what makes the two meet: the points `verifierRows` returns (`info`, read by `Coins.ofRounds` from the
 rounds' coins) are those coins (rec_algebra.py:587–617, `RecAlgebra.zerocheck` and `RecAlgebra.lincheck`).
@@ -108,18 +110,19 @@ theorem rows_coins {sh : Shape} {rounds : Array (Array F128)} {extras : Array Cl
       info.lc.fold.beta = (t.rounds[t.k + 3 + (sh.m - 6) + 1]!).coins.getD 0 0 ∧
       info.lc.fold.lw = skipWeights info.zc.z ∧ info.lc.fold.rhoIn = info.zc.rho.extract 0 (sh.kLog - 6) ∧
       info.lc.fold.ts = tsOf t (t.k + 3 + (sh.m - 6)) sh.kLog ∧
-      info.lc.rPrime = (t.rounds[t.k + 3 + (sh.m - 6) + 2 + (sh.kLog - 6)]!).coins.getD 0 0 := by
+      info.lc.rPrime = (t.rounds[t.k + 3 + (sh.m - 6) + 2 + (sh.kLog - 6)]!).coins.getD 0 0 ∧
+      info.lc.rIn = info.lc.fold.ts.reverse := by
   subst hd
   obtain ⟨lins, k, hrun⟩ := run_of_rows hrows
   obtain ⟨-, _, _, _, _, k1, _, _, h0, h1, -, -, -⟩ := run_stages hrun
   obtain ⟨c₀, c₁, c₂, -, hc₁, hc₂, hr, hz, hrs, hk1, hrho⟩ := zerocheck_coins hm h0
-  obtain ⟨cα, cβ, cr, hcα, hcβ, hcr, hα, hβ, hrp, hlw, hrin, -, -, htsz, -, hts⟩ := lincheck_coins h1
+  obtain ⟨cα, cβ, cr, hcα, hcβ, hcr, hα, hβ, hrp, hlw, hrin, hrIn, -, htsz, -, hts⟩ := lincheck_coins h1
   have hzs : (symbolic sh).zc.size = sh.m - 6 := by simp [symbolic]
   have hls : (symbolic sh).lc.size = sh.kLog - 6 := by simp [symbolic]
   rw [hzs] at hrs hk1 hrho
   rw [hls] at hcr htsz hts
   subst hk1
-  refine ⟨?_, ?_, ?_, ?_, ?_, hlw, hrin, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, hlw, hrin, ?_, ?_, hrIn⟩
   · rw [hr, coins_at hne (k' := t.k + 1) hc₁ (by omega)]
   · rw [hz, coin_one hne (k' := t.k + 2) hc₂ (by omega)]
   · apply Array.ext
@@ -142,13 +145,55 @@ theorem rows_coins {sh : Shape} {rounds : Array (Array F128)} {extras : Array Cl
 
 /-! ## The checks -/
 
-/-- **`prog_of_checks`' zerocheck and lincheck checks from E.** At a rep `d` meeting E's preconditions
+/-- **`prog_of_checks`' zerocheck and lincheck checks from E, at either shape.** At a rep `d` meeting E's preconditions
 (`AlgebraHolds`, `AccHolds`), on a transcript `t` from round 0 whose rounds' coins are the rep's, with the setup's
 `m` and fold's `k_log` the shape's, a proof whose zerocheck and lincheck messages are those `d` holds (`ZcProofOf`,
 `LcProofOf`, with V*'s `v_C` for `final_c`) and whose comb is the circuit fold at `verifierRows`' fold points passes
 `prog_of_checks`' checks `hpc`, `hfold` (Piop.lean:84, 98), `hlfold`, `hcomb`, `hsize` (Piop.lean:146–148) at the
 transcript's coins: `r = pinned ++ coins(1)`, `z = coins(2)[0]`, `ρ = rhoOf t m`, `C i = coins(3 + i)`, from
-`k₁ = t.k + 3 + (m − 6)` the challenges `ts = tsOf t k₁ k_log`, and `comb = d.comb`. -/
+`k₁ = t.k + 3 + (m − 6)` the challenges `ts = tsOf t k₁ k_log`, and `comb = d.comb`; the lincheck's rounds end at the
+comb `d` holds (`decoded`), which at a holo shape adds w's `h` (`decoded_comb_get`). -/
+theorem zclc_of_residuals_dec (sh : Shape) (d : RepData) (halg : AlgebraHolds sh d) (hacc : AccHolds sh d)
+    (st : Setup) (p : Proof) (t : Transcript) (ht : t.k = 0) (hd : d.rounds = t.rounds.map (·.coins))
+    (hne : NoEmpty d.rounds) (hm : st.m = sh.m) (hm14 : 14 ≤ st.m) (hkL : st.fold.kLog = sh.kLog)
+    (hzp : ∀ v info kappa, verifierRows sh d.rounds d.extras d.comb = .ok (v, info, kappa) →
+      ZcProofOf (decoded sh d.w d.comb d.cons) (info.zc.vc.eval (valOf sh d.w d.comb d.cons)) p.zerocheck)
+    (hlp : LcProofOf (decoded sh d.w d.comb d.cons) p.lincheck)
+    (hfoldPts : ∀ v info kappa, verifierRows sh d.rounds d.extras d.comb = .ok (v, info, kappa) →
+      st.fold.folded info.lc.fold.alpha info.lc.fold.beta info.lc.fold.lw info.lc.fold.rhoIn info.lc.fold.ts =
+        .ok d.comb) :
+    dot (lagrange nodesL den6Inv ((t.rounds[t.k + 2]!).coins.getD 0 0)) p.zerocheck.round1c = p.zerocheck.finalC ∧
+      zcFold (pinned ++ (t.rounds[t.k + 1]!).coins) p.zerocheck (fun i => (t.rounds[t.k + 3 + i]!).coins) (st.m - 6)
+          (zcStart p.zerocheck ((t.rounds[t.k + 2]!).coins.getD 0 0)) =
+        (p.zerocheck.finalA * p.zerocheck.finalB, rhoOf t st.m) ∧
+      (List.range' 0 (st.fold.kLog - 6)).foldl
+          (fun s j => lStep p.lincheck.rounds j s (t.rounds[t.k + 3 + (st.m - 6) + 2 + j]!).coins)
+          ((t.rounds[t.k + 3 + (st.m - 6)]!).coins.getD 0 0 * p.zerocheck.finalA + p.zerocheck.finalB +
+            (t.rounds[t.k + 3 + (st.m - 6) + 1]!).coins.getD 0 0, #[]) =
+        (dot (decoded sh d.w d.comb d.cons).comb p.lincheck.zPartial, tsOf t (t.k + 3 + (st.m - 6)) st.fold.kLog) ∧
+      st.fold.folded ((t.rounds[t.k + 3 + (st.m - 6)]!).coins.getD 0 0)
+          ((t.rounds[t.k + 3 + (st.m - 6) + 1]!).coins.getD 0 0) (skipWeights ((t.rounds[t.k + 2]!).coins.getD 0 0))
+          ((rhoOf t st.m).extract 0 (st.fold.kLog - 6)) (tsOf t (t.k + 3 + (st.m - 6)) st.fold.kLog) = .ok d.comb ∧
+      d.comb.size = 64 := by
+  obtain ⟨v, info, kappa, S, rs, hrows, hS, hw, hc, hres, hzero⟩ := halg
+  have hacc' := hacc v info kappa hrows
+  have hzp' := hzp v info kappa hrows
+  obtain ⟨hr, hz, hrho, hα, hβ, hlw, hrin, hts, -⟩ := rows_coins hrows (by omega) ht hd hne
+  obtain ⟨hpc, hzf⟩ := zerocheck_of_residuals hrows hS hw hc hacc' hres hzero hzp'
+    (C := fun i => (t.rounds[t.k + 3 + i]!).coins) (fun i hi => by
+      rw [hrho, rhoOf, map_range_get _ _ hi])
+  have hlf := lincheck_of_residuals_dec hrows hS hw hc hacc' hres hzero hlp
+    (C := fun j => (t.rounds[t.k + 3 + (sh.m - 6) + 2 + j]!).coins) (fun j hj => by
+      rw [hts, tsOf, map_range_get _ _ hj])
+  rw [hm, hkL]
+  refine ⟨?_, ?_, ?_, ?_, hc⟩
+  · rw [← hz]; exact hpc
+  · rw [← hr, ← hz, ← hrho]; exact hzf
+  · rw [hzp'.fa, hzp'.fb, ← hα, ← hβ, ← hts]; exact hlf
+  · rw [← hα, ← hβ, ← hz, ← hrho, ← hts, ← hlw, ← hrin]; exact hfoldPts v info kappa hrows
+
+/-- **`prog_of_checks`' zerocheck and lincheck checks from E**, at a plain shape: `zclc_of_residuals_dec`, where the
+comb `d` holds is `d.comb` (`decoded_comb`). -/
 theorem zclc_of_residuals (sh : Shape) (d : RepData) (halg : AlgebraHolds sh d) (hacc : AccHolds sh d)
     (st : Setup) (p : Proof) (t : Transcript) (ht : t.k = 0) (hd : d.rounds = t.rounds.map (·.coins))
     (hne : NoEmpty d.rounds) (hm : st.m = sh.m) (hm14 : 14 ≤ st.m) (hkL : st.fold.kLog = sh.kLog)
@@ -171,22 +216,9 @@ theorem zclc_of_residuals (sh : Shape) (d : RepData) (halg : AlgebraHolds sh d) 
           ((t.rounds[t.k + 3 + (st.m - 6) + 1]!).coins.getD 0 0) (skipWeights ((t.rounds[t.k + 2]!).coins.getD 0 0))
           ((rhoOf t st.m).extract 0 (st.fold.kLog - 6)) (tsOf t (t.k + 3 + (st.m - 6)) st.fold.kLog) = .ok d.comb ∧
       d.comb.size = 64 := by
-  obtain ⟨v, info, kappa, S, rs, hrows, hS, hw, hc, hres, hzero⟩ := halg
-  have hacc' := hacc v info kappa hrows
-  have hzp' := hzp v info kappa hrows
-  obtain ⟨hr, hz, hrho, hα, hβ, hlw, hrin, hts, -⟩ := rows_coins hrows (by omega) ht hd hne
-  obtain ⟨hpc, hzf⟩ := zerocheck_of_residuals hpl hrows hS hw hc hacc' hres hzero hzp'
-    (C := fun i => (t.rounds[t.k + 3 + i]!).coins) (fun i hi => by
-      rw [hrho, rhoOf, map_range_get _ _ hi])
-  have hlf := lincheck_of_residuals hpl hrows hS hw hc hacc' hres hzero hlp
-    (C := fun j => (t.rounds[t.k + 3 + (sh.m - 6) + 2 + j]!).coins) (fun j hj => by
-      rw [hts, tsOf, map_range_get _ _ hj])
-  rw [hm, hkL]
-  refine ⟨?_, ?_, ?_, ?_, hc⟩
-  · rw [← hz]; exact hpc
-  · rw [← hr, ← hz, ← hrho]; exact hzf
-  · rw [hzp'.fa, hzp'.fb, ← hα, ← hβ, ← hts]; exact hlf
-  · rw [← hα, ← hβ, ← hz, ← hrho, ← hts, ← hlw, ← hrin]; exact hfoldPts v info kappa hrows
+  have h := zclc_of_residuals_dec sh d halg hacc st p t ht hd hne hm hm14 hkL hzp hlp hfoldPts
+  have hc := h.2.2.2.2
+  rwa [decoded_comb sh d.cons hpl hc] at h
 
 /-- **The rep's program from E's zerocheck and lincheck.** `prog_of_checks` with its zerocheck and lincheck checks from
 `zclc_of_residuals`, at the transcript's coins; the frames, counts, ring switching and Ligerito stay as

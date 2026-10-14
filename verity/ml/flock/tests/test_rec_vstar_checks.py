@@ -441,7 +441,8 @@ def test_candidate_3s_statements_are_the_ones_v_star_stages_and_each_is_needed(t
     own (`rec-open-stacked/…`) and R's opening at META's shape; an R level passes under its own name. Refused by name: an R
     level under the circuit table's name (`rec-open/l16-h1`, which no level of the table has, and `rec-open/l16-h3` at R's
     count, which the table's has at another), an opening at another shape, a RecSparse at another, R named without the
-    sparse phase whose claims it opens, and R at another m than the bucket's `table_m`."""
+    sparse phase whose claims it opens, the sparse phase without R, which opens them, and R at another m than the bucket's
+    `table_m`."""
     inner = _inner(tmp_path / "c3.json", *C3, sparse=SPARSE, stacked=R_SHAPE)
     rc, line = _statements(inner)
     want = _c3(*C3, SPARSE, R_SHAPE)
@@ -467,6 +468,9 @@ def test_candidate_3s_statements_are_the_ones_v_star_stages_and_each_is_needed(t
             (_inner(tmp_path / "no-sparse.json", *C3, stacked=R_SHAPE),
              "candidate 3's V* list: the inner shape names R's shape (m 23, claims 2) and no RecSparse shape (rec-inner "
              "--sparse): R opens the sparse phase's claims, so RecSparse is missing"),
+            (_inner(tmp_path / "no-r.json", *C3, sparse=SPARSE),
+             "candidate 3's V* list: the inner shape names RecSparse (rec-sparse/n18-e13-s6-t0) and no R's shape (stacked): "
+             "R opens the sparse phases' claims, so R is missing"),
             (_inner(tmp_path / "r24.json", *C3, sparse=SPARSE, stacked=(24, 2)),
              "candidate 3's V* list: R's m 24 is not rec-sparse/n18-e13-s6-t0's table_m 23")):
         rc, line = _statements(f)
@@ -514,7 +518,7 @@ def test_r_levels_circuit_file_is_v_stars_under_its_own_name(l16_h1, tmp_path):
 
 def test_rec_sparses_circuit_file_is_v_stars(tmp_path):
     """RecSparse at a small shape (NU 1, ELL 6, S_LOG 1), as `rec_sparse.statement` writes it over the two reps, is V*'s file
-    byte for byte as the sparse-only session's statement after V*'s (its bindings `rec_bindings`' alone, which registers
+    byte for byte as candidate 3's statement after V*'s (its bindings `rec_bindings`' alone, which registers
     RecSparse itself), and its own port is `h` under the table's h round
     (`rec-c38` at m 25, k_log 22) at both reps' rows; at an inner shape naming another RecSparse it is refused by the shape."""
     from verity_flock import rec_sparse as SP
@@ -529,10 +533,12 @@ def test_rec_sparses_circuit_file_is_v_stars(tmp_path):
     j = len(_v_star(*C3))
     flags = ["--circuit", str(tmp_path / "sparse" / "circuit.txt"), "--instances", "2", "--rec-part", str(j),
              "--rec-bindings", str(own)]
-    rc, line = _statements(_inner(tmp_path / "s.json", *C3, sparse=(1, 6, 1, 0)), *flags)
-    assert rc == 0 and line["checked"] == ["rec-sparse/n1-e6-s1-t0", 2] and line["own"] == [["h", "rec-c38", [0, 1]]], line
-    assert line["statements"][j:] == [["rec-sparse/n1-e6-s1-t0", 2]], line
-    rc, line = _statements(_inner(tmp_path / "s2.json", *C3, sparse=(1, 6, 2, 0)), *flags)
+    r22 = (SP.table_m(SP.Shape(1, 6, 1, 0)), 2)
+    rc, line = _statements(_inner(tmp_path / "s.json", *C3, sparse=(1, 6, 1, 0), stacked=r22), *flags)
+    assert rc == 0 and line["checked"] == ["rec-sparse/n1-e6-s1-t0", 2], line
+    assert line["own"] == [["h", "rec-c38", [0, 1]], ["claim", "rec-claim", [0, 1]]], line
+    assert line["statements"] == _c3(*C3, (1, 6, 1, 0), r22), line
+    rc, line = _statements(_inner(tmp_path / "s2.json", *C3, sparse=(1, 6, 2, 0), stacked=r22), *flags)
     assert rc == 1 and line["error"] == (
         "rec-sparse/n1-e6-s1-t0: a RecSparse unit, and the bucket's is rec-sparse/n1-e6-s2-t0 (rec-inner --sparse)"), line
 
@@ -551,4 +557,40 @@ def test_r_openings_circuit_file_is_v_stars(tmp_path):
                            "--rec-bindings", str(own))
     nr = len([nm for nm, _ in p.S["ports"] if nm.startswith("m")])
     assert rc == 0 and line["checked"] == ["rec-opening/m23-c2-p0", 1], line
-    assert line["own"] == [[f"m{i}", f"rec-opening-c{i}", [0]] for i in range(nr)], line
+    assert line["own"] == ([[f"m{i}", f"rec-opening-c{i}", [0]] for i in range(nr)]
+                           + [[f"claim{k}", "rec-claim", [k]] for k in range(R_SHAPE[1])]), line
+
+
+def test_a_claim_port_reads_its_own_reps_row_of_rec_claim(tmp_path):
+    """`checkOwn` holds which row each claim port reads: RecSparse's `claim` reads `rec-claim` at rep r's row in instance r
+    (`rec_sparse.reads`), and R's opening's `claim<k>` at row k (`rec_residuals.stage_opening`). `checkPubRows` holds the
+    rows a claim port opens to `rec-claim`'s, not which of them it opens, so a reads file swapping or repeating the reps'
+    claims is refused here, by the port compared. RecSparse's file also holds its other message ports, each `<p>` under
+    `rec-sparse-<p>` at both reps' rows (`rec_vstage.sparse_messages`), and one missing them is refused by the first."""
+    from verity_flock import rec_sparse as SP
+
+    inner = _inner(tmp_path / "c3.json", *C3, sparse=SPARSE, stacked=R_SHAPE)
+    msgs = [[nm, f"rec-sparse-{nm}", [0, 1]] for nm, _ in SP.message_ports(SP.Shape(*SPARSE))[1:-1]]
+    for unit, n, other, honest, bad in (
+            ("rec-sparse/n18-e13-s6-t0", 2, [["v", "rec-sparse-v", [0, 1]]] + msgs, [["claim", "rec-claim", [0, 1]]],
+             [["claim", "rec-claim", [1, 0]]]),
+            ("rec-opening/m23-c2-p0", 1, [], [["claim0", "rec-claim", [0]], ["claim1", "rec-claim", [1]]],
+             [["claim0", "rec-claim", [1]], ["claim1", "rec-claim", [1]]])):
+        check = ["--unit", unit, "--instances", str(n)]
+        rc, line = _statements(inner, *check)
+        own = line["own"]
+        claims = [p for p in own if p[1] == "rec-claim"]
+        rest = [p for p in own if p[1] != "rec-claim"]
+        assert rc == 0 and claims == honest, line
+        rc, line = _statements(inner, *check, "--registered", str(_reads(tmp_path / "honest.json", other + own)))
+        assert rc == 0 and line["checked"] == [unit, n], line
+        if msgs[0] in other:
+            short = [p for p in other if p != msgs[0]] + own
+            rc, line = _statements(inner, *check, "--registered", str(_reads(tmp_path / "short.json", short)))
+            (nm, v, rd) = msgs[0]
+            assert rc == 1 and line["error"] == (f"{unit}: the statement's message port {nm} under {v} reading {rd} is not in "
+                                                 "the registered reads"), line
+        rc, line = _statements(inner, *check, "--registered", str(_reads(tmp_path / "bad.json", other + rest + bad)))
+        (nm, _, rd), (_, _, want) = bad[0], claims[0]
+        assert rc == 1 and line["error"] == (f"{unit}: the registered reads' port {nm} under rec-claim reading {rd} is not "
+                                             f"the statement's: the statement's is {nm} under rec-claim reading {want}"), line
