@@ -217,11 +217,14 @@ def test_a_cap_other_than_the_registered_top_is_refused(tmp_path, change):
     lambda r: _stacked(r).__setitem__("leaves", 64),
     lambda r: _stacked(r).__setitem__("words", 32),
     lambda r: _stacked(r).__setitem__("word_bits", 32),
+    lambda r: _stacked(r).__delitem__("root"),
+    lambda r: _stacked(r).__delitem__("leaves"),
+    lambda r: _stacked(r).__delitem__("domain"),
     lambda r: r.__setitem__("program", "cd" * 64),
-], ids=["root", "domain", "leaves", "words", "word-bits", "program"])
+], ids=["root", "domain", "leaves", "words", "word-bits", "no-root", "no-leaves", "no-domain", "program"])
 def test_a_registered_entry_the_top_does_not_make_is_refused(tmp_path, change):
     """A record META binds whose entry `stacked` is not the one R's binding round's top makes: its root, domain, leaf count
-    or row width another, or its program another (the domain is the program's, derived, never read from the entry)."""
+    or row width another or absent, or its program another (the domain is the program's, derived, then checked)."""
     assert _read(C3, inner=_registered(tmp_path, change)) == (1, None, CAP)
 
 
