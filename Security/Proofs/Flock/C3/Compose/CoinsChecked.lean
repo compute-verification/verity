@@ -118,3 +118,7 @@ theorem stageCoins_checked {ss : Array VStar.Stmt} {dg : ByteArray → ByteArray
 end
 
 end FlockC3.Compose
+
+#print axioms FlockC3.Compose.claims_of_statements
+#print axioms FlockC3.Compose.custody_holoMapOne
+#print axioms FlockC3.Compose.stageCoins_checked

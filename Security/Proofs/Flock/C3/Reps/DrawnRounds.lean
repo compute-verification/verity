@@ -462,3 +462,5 @@ theorem repsDrawn_checked {ish : Flock.RecVStar.Inner} {reg : Lean.Json}
 end holo
 
 end FlockC3.Reps
+
+#print axioms FlockC3.Reps.repsDrawn_checked

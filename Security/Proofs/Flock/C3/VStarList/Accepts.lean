@@ -253,3 +253,5 @@ theorem acceptsC3_of_verify {I : Exec.Inputs} {r : String} {spec' : SessionSpec}
   c3_of_checks hsp hpub hzk htr hreg hcs hin hck (HiddenExec.setupTables_setupOne hset).1
 
 end FlockC3.VStarList
+
+#print axioms FlockC3.VStarList.acceptsC3_of_verify
