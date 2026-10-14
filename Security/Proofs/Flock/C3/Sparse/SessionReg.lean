@@ -24,9 +24,10 @@ array) and coins whose phase coins are check 5's (`csOf`).
   shape (`unitShape`, the inner shape's `sparse` entry, `SparseIs`) and check 5 gives both reps' coins.
 * `sparseSessionAt_of_regs`: `SparseSessionAt`, and its copy with `un.val = i.val` (the h-half tie's pin, K's
   `h_of_sessionAt`), from that, the constant 1 (`hone`), the message columns' registrations
-  (`hkeys`, which `bitAt_of_regBit` makes `wSparse`'s bits), and the registrations of `v` (`hv`), `tau` (`htau`) and the
-  zero outputs (`hz`), which the verifier does not check against the coins (`rec-sparse-tau` and `rec-sparse-zero` are
-  the prover's registrations, and no check reads their rows).
+  (`hkeys`, which `bitAt_of_regBit` makes `wSparse`'s bits; `SessionKeys.lean`'s `hkeys_of_rows` produces it from
+  `RecSparse.check`'s rows, `checkOwn`'s reads file and `RowsRegisteredC3`), and the registrations of `v` (`hv`),
+  `tau` (`htau`) and the zero outputs (`hz`), which the verifier does not check against the coins (`rec-sparse-tau`
+  and `rec-sparse-zero` are the prover's registrations, and no check reads their rows).
 -/
 
 namespace FlockC3.Sparse
@@ -349,8 +350,10 @@ copy 0 holds at the message columns (`wSparse`) and coins `c` whose phase coins 
 check 5's (`sparseCoins_of_accepted`, at `C` by `c3_eq_of_held`) at the inner shape's RecSparse shape
 (`c3Of_sparse`); the unit is the verifier's at that shape (`ParseFacts.recSparse`, `sparseParams_of_check`); its message
 columns a row reads register `wSparse`'s bits where they register any (`hkeys`, `bitAt_of_regBit` in the session's
-layer, which agrees with the registrant, and `nw_eq_msum`). The constant 1 (`hone`), `v`'s registered verifier row
-(`hv`), `tau`'s registered slots' types (`htau`) and the registered zero outputs (`hz`) are taken as given. -/
+layer, which agrees with the registrant, and `nw_eq_msum`; `SessionKeys.lean`'s `hkeys_of_rows` produces `hkeys` from
+`sparseColKeys_of_check`, `sparseOwnNames_of_checkOwn` and `RowsRegisteredC3`). The constant 1 (`hone`), `v`'s
+registered verifier row (`hv`), `tau`'s registered slots' types (`htau`) and the registered zero outputs (`hz`) are
+taken as given. -/
 theorem sparseSessionAt_of_regs (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
     {rows : Option (Array Flock.Registered.Port)} {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json}
     {coins : String → Option Flock.RecCoins.Source} (hchk : CoinsAccepted F rows wr reg coins)
