@@ -14,8 +14,9 @@ that the drawn statement labels itself reads its row of the port at one of those
 `HPubRows` reads every unit and every port of a name, at the verifier's own RecSparse shape; the check reads the drawn
 units, the first port of a name, and a rec-sparse unit's own shape. What closes the gap is the family's:
 
-* `RowsHeld`: an accepted session draws every unit that reads a value `fixedRow` knows, and labels it itself (G's
-  `RowsDrawn` at every such value, not only `rec-c<k>`);
+* `RowsHeld`: an accepted session draws every unit that reads a value `fixedRow` knows, at a label that reads the
+  unit's row (G's `RowsDrawn` at every such value, not only `rec-c<k>`, and at the verifier's labels rather than the
+  unit's own index);
 * `PortsNamed`: each circuit names each port once (G's `PortNamesUnique`);
 * `SparseAtShape`: a rec-sparse unit's shape is the verifier's own.
 -/
@@ -290,9 +291,11 @@ theorem pubRow_of_checked {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {h
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
   {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
 
-/-- **(n1) An accepted session draws the units that read a value `fixedRow` knows, and labels them itself**: G's
-`RowsDrawn` at every such value. `AcceptsZKR` checks the drawn units only (U4, `checkFull`, is not among its checks), so
-a unit it does not draw has a public row no check reads. -/
+/-- **(n1) An accepted session draws the units that read a value `fixedRow` knows, at labels reading their rows**: G's
+`RowsDrawn` at every such value, with the drawn statement's label of the unit (`Registered.unitIndices`, which the
+verifier derives and `loadPublic` does not make the unit's own index) reading in the port the row the unit's own index
+reads. `AcceptsZKR` checks the drawn units only (U4, `checkFull`, is not among its checks), so a unit it does not draw
+has a public row no check reads. -/
 def RowsHeld (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) : Prop :=
   ∀ R ω t R₂ j tr, AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr → ∀ reg ∈ (F.zs R ω t R₂ j).own,
     (RecVStar.fixedRow { reps := #[] } reg.value 0).isSome = true →
@@ -301,7 +304,8 @@ def RowsHeld (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) : Prop :=
         Draw.UnitDraw.ofJson (drawJ (F.zs R ω t R₂ j).I d (partOf (F.zs R ω t R₂ j).I d u.val)) = .ok D ∧
         HmOut.drawn (F.Vs j).c (F.zs R ω t R₂ j).pub
           (drawJ (F.zs R ω t R₂ j).I d (partOf (F.zs R ω t R₂ j).I d u.val)) = .ok dp ∧
-        Registered.unitIndices dp = .ok idx ∧ u.val ∈ D.proved ∧ idx.getD (D.proved.idxOf u.val) 0 = u.val
+        Registered.unitIndices dp = .ok idx ∧ u.val ∈ D.proved ∧
+        reg.reads[idx.getD (D.proved.idxOf u.val) 0]? = reg.reads[u.val]?
 
 /-- **(n1) Each of V*'s circuits names each port once** (G's `PortNamesUnique`): the check reads the first port of a
 name. -/

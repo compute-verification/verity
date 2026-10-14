@@ -220,7 +220,10 @@ variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
 
 /-- **The registrant holds the rows `own` names**: at each typing of the session, a record of registered reads holding
 every row of a port `own` names, at every unit, under the first port of its name, at the position that port gives the
-unit where it gives one. The honest registrant's: it committed every row it registered. -/
+unit's label where it gives one. The label is the one the drawn statement of any draw that draws the unit gives it
+(its `units.indices` at the unit's instance, `Registered.unitIndices`), the label `Registered.check` reads the position
+at; the verifier derives it (`Registered.derived`), and `loadPublic` does not make it the unit's own index. The honest
+registrant's: it committed every row it registered. -/
 def RegistrantOpens (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) : Prop :=
   ∀ (ht : x.I.tags.typed = false) (S₀ : Finset (Fin nv)) (d₀ : Lean.Json)
     (y₀ : ZkHidden.DrawSetupZHJ (inputsJ x.I 0) mPts S₀ d₀)
@@ -231,21 +234,26 @@ def RegistrantOpens (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) : Prop :=
         (rsShHJS x.dj y₀ ht hc (Layout.scopeOkH_of_scopeOk hscope) hU hpub),
       ∀ (u : Fin nv) (q : Fin c.ports.size), NamedBy x.own c q →
         rdH.isRead (.inl (u, q)) ∧ rdH.port (.inl (u, q)) = portOf x.own c.ports[q].name ∧
-          ∀ pos, (portOf x.own c.ports[q].name).reads[u.val]? = some (some pos) → rdH.readAt (.inl (u, q)) = pos
+          ∀ d D dp idx, Flock.Draw.UnitDraw.ofJson (drawJ x.I d (partOf x.I d u.val)) = .ok D →
+            HmOut.drawn c (pubZ x.I) (drawJ x.I d (partOf x.I d u.val)) = .ok dp →
+            Flock.Registered.unitIndices dp = .ok idx → u.val ∈ D.proved → ∀ pos,
+              (portOf x.own c.ports[q].name).reads[idx.getD (D.proved.idxOf u.val) 0]? = some (some pos) →
+                rdH.readAt (.inl (u, q)) = pos
 
-/-- **An accepted session labels each drawn unit with itself**: G's `RowsDrawn` labels at every drawn unit (the
-verifier derives the labels, `Registered.derived`). -/
+/-- **An accepted session draws each unit of its draw into a drawn statement**: at every accepted outcome, the record
+names a draw, which draws each unit of the law's draw into its table's drawn statement (`partOf`, `HmOut.drawn` at
+`drawJ`), and that statement labels its instances (`Registered.unitIndices`). -/
 def LabelsSelf (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) : Prop :=
   ∀ ω R' o, LiveAcceptsZKR x.I x.own (R', Lv.draw ω, x.wr (Lv.draw ω) R' o) → ∀ u ∈ Lv.draw ω,
     ∃ d D dp idx, recordDraw (x.wr (Lv.draw ω) R' o).record = some d ∧
       Flock.Draw.UnitDraw.ofJson (drawJ x.I d (partOf x.I d u.val)) = .ok D ∧
       HmOut.drawn c (pubZ x.I) (drawJ x.I d (partOf x.I d u.val)) = .ok dp ∧
-      Flock.Registered.unitIndices dp = .ok idx ∧ u.val ∈ D.proved ∧ idx.getD (D.proved.idxOf u.val) 0 = u.val
+      Flock.Registered.unitIndices dp = .ok idx ∧ u.val ∈ D.proved
 
 /-- **The registrant's record is the verifier's own at every accepted outcome** (`hown`): restricted to the rows `own`
-names, each drawn row is a row of a drawn unit (`LabelsSelf`), its port is `own`'s first of its name and the circuit's
-port `q` by name (`NamesOnce`), and its position is the one that port gives the unit, which acceptance requires
-(`reads_of_acceptsZKR`). -/
+names, each drawn row is a row of a unit its record's draw draws (`LabelsSelf`), its port is `own`'s first of its name
+and the circuit's port `q` by name (`NamesOnce`), and its position is the one that port gives the unit's label in that
+draw's statement, which acceptance requires (`reads_of_acceptsZKR`). -/
 theorem ownReads_cover (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) (hN : NamesOnce c) (hL : LabelsSelf x)
     (ht : x.I.tags.typed = false) {S₀ : Finset (Fin nv)} {d₀ : Lean.Json}
     (y₀ : ZkHidden.DrawSetupZHJ (inputsJ x.I 0) mPts S₀ d₀)
@@ -256,7 +264,11 @@ theorem ownReads_cover (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) (hN : NamesO
         (rsShHJS x.dj y₀ ht hc (Layout.scopeOkH_of_scopeOk hscope) hU hpub))
     (hH : ∀ (u : Fin nv) (q : Fin c.ports.size), NamedBy x.own c q →
       rdH.isRead (.inl (u, q)) ∧ rdH.port (.inl (u, q)) = portOf x.own c.ports[q].name ∧
-        ∀ pos, (portOf x.own c.ports[q].name).reads[u.val]? = some (some pos) → rdH.readAt (.inl (u, q)) = pos)
+        ∀ d D dp idx, Flock.Draw.UnitDraw.ofJson (drawJ x.I d (partOf x.I d u.val)) = .ok D →
+          HmOut.drawn c (pubZ x.I) (drawJ x.I d (partOf x.I d u.val)) = .ok dp →
+          Flock.Registered.unitIndices dp = .ok idx → u.val ∈ D.proved → ∀ pos,
+            (portOf x.own c.ports[q].name).reads[idx.getD (D.proved.idxOf u.val) 0]? = some (some pos) →
+              rdH.readAt (.inl (u, q)) = pos)
     (ω : Lv.Ω) (R' : Reg') (o : Tables.LiveOutJ J mPts)
     (hacc : LiveAcceptsZKR x.I x.own (R', Lv.draw ω, x.wr (Lv.draw ω) R' o)) :
     OwnReadsHJ x.I x.own c (pubZ x.I) (x.wr (Lv.draw ω) R' o)
@@ -264,14 +276,13 @@ theorem ownReads_cover (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) (hN : NamesO
   rintro p ⟨⟨-, u, q, rfl, hn⟩, hu⟩
   obtain ⟨-, hport, hat⟩ := hH u q hn
   obtain ⟨hmem, hname⟩ := portOf_spec hn
-  obtain ⟨d, D, dp, idx, hd, hD, hdp, hidx, hmD, hlab⟩ := hL ω R' o hacc u hu
+  obtain ⟨d, D, dp, idx, hd, hD, hdp, hidx, hmD⟩ := hL ω R' o hacc u hu
   obtain ⟨pos, hpos⟩ := FlockSoundness.Discharge.ZkReg.reads_of_acceptsZKR x.I ht hc hpub x.hTags
     (tr := x.wr (Lv.draw ω) R' o) hacc hmem hd hD hdp hidx hmD
-  rw [hlab] at hpos
   refine ⟨u, q, d, D, dp, idx, rfl, ?_, ?_, hd, hD, hdp, hidx, hmD, ?_⟩
   · rw [hport]; exact hmem
   · rw [hport, hname]; exact find_of_names hN q
-  · rw [hport, hlab, hpos, hat pos hpos]
+  · rw [hport, hpos, hat d D dp idx hD hdp hidx hmD pos hpos]
 
 /-- **The session with the honest registrant's record**: `x` with, at each typing, the registrant's record
 (`RegistrantOpens`) restricted to the rows `own` names. Its inputs, own list, draw files and writer are `x`'s, so its
@@ -302,8 +313,8 @@ theorem registrantCovers_coveredR {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D
 
 /-- **`RegistrantCovers` is not vacuous**: wherever V*'s sessions as the prover supplies them meet the guarantee's other
 hypotheses on them (the records' custody, the tags, the rate bound) and type, and their registrants hold the rows their
-reads files name (`RegistrantOpens`), their circuits name each port once (`NamesOnce`) and their accepted outcomes label
-each drawn unit with itself (`LabelsSelf`), the same sessions with the registrants' records (`coveredR`) meet all of
+reads files name at the verifier's labels (`RegistrantOpens`), their circuits name each port once (`NamesOnce`) and
+their accepted outcomes draw each unit of the law's draw into a drawn statement (`LabelsSelf`), the same sessions with the registrants' records (`coveredR`) meet all of
 them and `RegistrantCovers`, with the same inputs, own lists and writers, and so the same game: the guarantee at them
 reads the same prover. -/
 theorem registrantCovers_attained {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : Type}

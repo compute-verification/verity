@@ -340,7 +340,7 @@ theorem hPubRows_of_checked {rows : Option (Array Flock.Registered.Port)} (hchk 
   rw [hname] at hfind
   rw [hcs] at hchk'
   obtain ⟨w', c', hc', hdig⟩ := pubRow_of_checked ((𝓗).zs R ω t R₂ j) hacc (cs := cs) hchk' hrg hfix hfind hd hD
-    hdp hidx hu (by rw [hlab]; exact hread)
+    hdp hidx hu (hlab.trans hread)
   obtain ⟨sj, hsj, hck⟩ := stmt_of_session ((𝓗).zs R ω t R₂ j) hacc hst hd u
   have he := (fixedRow_or (hsp j sj _ _ _ _ _ _ _ hsj hck) hc).symm.trans hc'
   simp only [Option.some.injEq, Except.ok.injEq, Prod.mk.injEq] at he

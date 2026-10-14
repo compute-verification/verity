@@ -89,8 +89,9 @@ theorem hTape_of_frame {dg : ByteArray → ByteArray} {N k Rw : ℕ} (hfr : HFra
   hTape_iff_frame.2 hfr
 
 /-- **(n1) The public rows at the honest family, from the verifier's check**, where it reads every row `HPubRows`
-does: the accepted sessions draw and label the units reading a value `fixedRow` knows (`RowsHeld`), each circuit
-names each port once (`PortsNamed`) and V*'s rec-sparse units are at the verifier's shape (`SparseAtShape`). -/
+does: the accepted sessions draw the units reading a value `fixedRow` knows, at labels reading their rows
+(`RowsHeld`), each circuit names each port once (`PortsNamed`) and V*'s rec-sparse units are at the verifier's shape
+(`SparseAtShape`). -/
 theorem hPubRows_of_check' (hchk : ChecksPubRows 𝓗 wr reg) (hdrawn : RowsHeld 𝓗) (hnames : PortsNamed 𝓗)
     (hsp : SparseAtShape 𝓗) : HPubRows 𝓗 := by
   intro R ω t R₂ j ⟨tr', hacc⟩ rg hrg u q x hname hread b hrow
@@ -105,7 +106,7 @@ theorem hPubRows_of_check' (hchk : ChecksPubRows 𝓗 wr reg) (hdrawn : RowsHeld
   have hchk' := hchk R ω t R₂ j tr' hacc
   rw [hcs] at hchk'
   obtain ⟨w', c', hc', hdig⟩ := pubRow_of_checked ((𝓗).zs R ω t R₂ j) hacc (cs := cs) hchk' hrg hfix hfind hd hD
-    hdp hidx hu (by rw [hlab]; exact hread)
+    hdp hidx hu (hlab.trans hread)
   have he := (fixedRow_or (hsp j) hc).symm.trans hc'
   simp only [Option.some.injEq, Except.ok.injEq, Prod.mk.injEq] at he
   exact hdig.trans (he.2.symm.trans hb.symm)
