@@ -33,19 +33,30 @@ noncomputable abbrev vbHJ {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀
 
 /-- **The registrant's opening** of each commit string of `vbHJ`: at a registered row, the row and salt `rd` reads
 there; at a single gate, the value pinned by the registration (whose plain leaf ignores the salt). -/
-def regOpenZ {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
+noncomputable def regOpenZ {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit) {pub : Public}
     (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hscope : Layout.scopeOkH c = true)
     (rd : FlockSoundness.Registered.ReadsX (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
       (rsShHJS dj y₀ ht hc hscope hU hpub)) (R : Reg) :
-    (vbHJ (Reg := Reg) dj y₀ ht hc hscope hU hpub).Pos → (vbHJ (Reg := Reg) dj y₀ ht hc hscope hU hpub).Opening :=
+    (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub)).Pos →
+      (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub)).Pos ×
+        (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub)).Val × List UInt8 :=
   fun p => match p with
     | .inl uq => (.inl uq, rd.wv (.inl uq), rd.ws (.inl uq))
     | .inr g =>
         let readers := HiddenExec.keyReadersH (ZkHidden.sitesShHJ_parse dj y₀ ht hc hscope)
           (Layout.outsOf c hU n) (fun _ => pub)
         (.inr g, (Layout.widthOf readers.W (readers.rowBits (.inr g)), readers.regVal R (.inr g)), [])
+
+/-- `vbHJ` and its source layout assign each wire the same commit string. -/
+theorem vbHJ_pos {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
+    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) (ht : I.tags.typed = false) {c : Flock.Circuit}
+    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hscope : Layout.scopeOkH c = true)
+    (hU : Built c.unit) {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
+    (g : Fin ((keyProg c hU n).circuit (Layout.outsOf c hU n)).N) :
+    (vbHJ (Reg := Reg) dj y₀ ht hc hscope hU hpub).pos g =
+      (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub)).pos g := rfl
 
 /-- At a registered read, `regOpenZ` is the registrant's row opening. -/
 theorem regOpenZ_of_read {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
@@ -54,7 +65,7 @@ theorem regOpenZ_of_read {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (
     (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hscope : Layout.scopeOkH c = true)
     (rd : FlockSoundness.Registered.ReadsX (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
       (rsShHJS dj y₀ ht hc hscope hU hpub)) (R : Reg)
-    (p : (vbHJ (Reg := Reg) dj y₀ ht hc hscope hU hpub).Pos) (hp : rd.isRead p) :
+    (p : (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub)).Pos) (hp : rd.isRead p) :
     regOpenZ ht dj y₀ hc hU hpub hscope rd R p = (p, rd.wv p, rd.ws p) := by
   have hrow := rd.read_row p hp
   rcases p with uq | g
@@ -140,14 +151,19 @@ theorem zk_session_regValsR
             (rd.wv ((layShHJ dj y₀ ht hc hscope hU (pub := pub)).pos g)) g) _
       (le_trans (prob_mono ?_ _ _) hc'))
   rintro o ⟨hacc, u, hu, g, hg, hread, hleaf, hne⟩
-  refine ⟨hacc, u, hu, g, hg, ?_, hne⟩
-  rw [regOpenZ_of_read ht dj y₀ hc hU hpub hscope rd _ _ hread]
-  refine Prod.ext rfl ?_
-  show ((rsZHJS dj y₀ ht hc hscope hU hpub).scheme _).leaf (rd.wv _) (rd.ws _) = _
-  unfold HmRowsZX.scheme
-  split_ifs with hrow
-  · exact hleaf.symm
-  · exact absurd (rd.read_row _ hread) hrow
+  refine ⟨hacc, u, hu, g, hg, ?_⟩
+  constructor
+  · rw [vbHJ_pos dj y₀ ht hc hscope hU hpub g,
+      regOpenZ_of_read ht dj y₀ hc hU hpub hscope rd _ _ hread]
+    refine Prod.ext rfl ?_
+    show ((rsZHJS dj y₀ ht hc hscope hU hpub).scheme _).leaf (rd.wv _) (rd.ws _) = _
+    unfold HmRowsZX.scheme
+    split_ifs with hrow
+    · exact hleaf.symm
+    · exact absurd (rd.read_row _ hread) hrow
+  · rw [vbHJ_pos dj y₀ ht hc hscope hU hpub g,
+      regOpenZ_of_read ht dj y₀ hc hU hpub hscope rd _ _ hread]
+    exact hne
 
 /-- **A registered read whose session leaf is the registrant's, carrying another bit, is a registered-value
 disagreement** (`RegBadZ`) of the registrant's opening `regOpenZ`. -/
@@ -157,7 +173,8 @@ theorem regBadZ_of_leaf {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (F
     (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hscope : Layout.scopeOkH c = true)
     (rd : FlockSoundness.Registered.ReadsX (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
       (rsShHJS dj y₀ ht hc hscope hU hpub))
-    (R : Reg) (Xt : Fin (Layout.keyN c hU n) → Bool) (g : Fin ((keyProg c hU n).circuit (Layout.outsOf c hU n)).N)
+    (R : Reg) (Xt : Fin ((keyProg c hU n).circuit (Layout.outsOf c hU n)).N → Bool)
+    (g : Fin ((keyProg c hU n).circuit (Layout.outsOf c hU n)).N)
     (hread : rd.isRead ((layShHJ dj y₀ ht hc hscope hU (pub := pub)).pos g))
     (hleaf : (layShHJ dj y₀ ht hc hscope hU (pub := pub)).regLeaf R ((layShHJ dj y₀ ht hc hscope hU (pub := pub)).pos g) =
       rd.leaf ((layShHJ dj y₀ ht hc hscope hU (pub := pub)).pos g))
@@ -165,13 +182,18 @@ theorem regBadZ_of_leaf {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (F
       (rd.wv ((layShHJ dj y₀ ht hc hscope hU (pub := pub)).pos g)) g) :
     RegBadZ execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
       (vbHJ dj y₀ ht hc hscope hU hpub) (regOpenZ ht dj y₀ hc hU hpub hscope rd R) R Xt g := by
-  rw [regOpenZ_of_read ht dj y₀ hc hU hpub hscope rd R _ hread]
-  refine ⟨Prod.ext rfl ?_, hne⟩
-  show ((rsZHJS dj y₀ ht hc hscope hU hpub).scheme _).leaf (rd.wv _) (rd.ws _) = _
-  unfold HmRowsZX.scheme
-  split_ifs with hrow
-  · exact hleaf.symm
-  · exact absurd (rd.read_row _ hread) hrow
+  constructor
+  · rw [vbHJ_pos dj y₀ ht hc hscope hU hpub g,
+      regOpenZ_of_read ht dj y₀ hc hU hpub hscope rd R _ hread]
+    refine Prod.ext rfl ?_
+    show ((rsZHJS dj y₀ ht hc hscope hU hpub).scheme _).leaf (rd.wv _) (rd.ws _) = _
+    unfold HmRowsZX.scheme
+    split_ifs with hrow
+    · exact hleaf.symm
+    · exact absurd (rd.read_row _ hread) hrow
+  · rw [vbHJ_pos dj y₀ ht hc hscope hU hpub g,
+      regOpenZ_of_read ht dj y₀ hc hU hpub hscope rd R _ hread]
+    exact hne
 
 /-- **A layer carrying 0 at the constant has a registered-value disagreement there**: the constant is a single-gate
 commit string, and its registration-pinned value is 1. -/
@@ -181,7 +203,7 @@ theorem regBadZ_oneG {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin 
     (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hscope : Layout.scopeOkH c = true)
     (rd : FlockSoundness.Registered.ReadsX (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
       (rsShHJS dj y₀ ht hc hscope hU hpub))
-    (R : Reg) (Xt : Fin (Layout.keyN c hU n) → Bool)
+    (R : Reg) (Xt : Fin ((keyProg c hU n).circuit (Layout.outsOf c hU n)).N → Bool)
     (hne : Xt (Layout.oneG (c := c) (hU := hU) (n := n)) ≠ true) :
     RegBadZ execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
       (vbHJ dj y₀ ht hc hscope hU hpub) (regOpenZ ht dj y₀ hc hU hpub hscope rd R) R Xt
@@ -208,9 +230,10 @@ theorem regBadZ_oneG {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin 
       dsimp only [layShHJ, HiddenExec.keyLayoutH, Layout.Readers.layout, Layout.ofBits,
         HiddenExec.keyReadersH]
       exact Layout.ofRows_pos_none _ hrow
-    rw [hpos]
+    rw [vbHJ_pos dj y₀ ht hc hscope hU hpub _, hpos]
     rfl
-  · simpa [regOpenZ, ZkHidden.layShHJ, HiddenExec.keyLayoutH, Layout.Readers.layout,
+  · rw [vbHJ_pos dj y₀ ht hc hscope hU hpub _, hpos]
+    simpa [regOpenZ, ZkHidden.layShHJ, HiddenExec.keyLayoutH, Layout.Readers.layout,
       Layout.Readers.ofRows, Layout.keyGate] using hne
 
 /-- **`zk_session_regValsR` with the wrong units counted too**: on its assumptions, an accepted session whose draw meets
