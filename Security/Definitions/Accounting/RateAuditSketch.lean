@@ -159,6 +159,11 @@ def Accepts {s : ℕ} (A : Device N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin
     (O : Oracle N ρ h X Dg) (D : Data N m ρ X) (I : Fin s → Fin N) : Prop :=
   ∀ i, A.tags σ O D (I i) = O (D.stream, I i, dig σ (D.tile (I i)))
 
+/-- Every tile whose committed tag is correct, whether or not a verifier sampled it. -/
+def correct (A : Device N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig)
+    (O : Oracle N ρ h X Dg) (D : Data N m ρ X) : Finset (Fin N) :=
+  Finset.univ.filter fun t => A.tags σ O D t = O (D.stream, t, dig σ (D.tile t))
+
 end Device
 
 /-- **The digest's fiber** at signs `σ`: the most contents `a` of one sector `u` that give one digest `d` with the rest

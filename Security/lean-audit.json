@@ -6,6 +6,10 @@
    "owner": "@memory-accounting",
    "digest": "9d865547ca23af09cf67e3ad5149642660839a871ec3c4cb85abd72829fdb257"
   },
+  "Accounting.Assumptions.SketchRank": {
+   "owner": "@memory-accounting",
+   "digest": "727be124ba9dbc421e926b9388e089735913296fe529e8940e43750724733d8c"
+  },
   "Accounting.Assumptions.SquaringCeiling": {
    "owner": "@memory-accounting",
    "digest": "4bd7f6457fb6df920661b769a3ad9517f6e4f0e7a2fd0d36a43e376a2deeaca9"
@@ -1111,6 +1115,23 @@
    ],
    "assumptions": [],
    "type_hash": "aacbdc6e96631e4cce10ab559eaa9649053358ae15a63805e27d2f656fb6f754"
+  },
+  "Accounting.SecurityProofs.RemoteSessionConservationSketch": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RemoteSessionConservationSketch : Accounting.Guarantees.RemoteSessionConservationSketch"
+   ],
+   "assumptions": [],
+   "type_hash": "dcdb9843da94f3ddff21ee2a8c93161d40999c02990f9c11998c153458476501"
+  },
+  "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed :",
+    "  Accounting.Guarantees.RemoteSessionConservationSketchDeployed"
+   ],
+   "assumptions": [],
+   "type_hash": "3dc1b5b5bda8e63943398b0e39b99c3e55dde7e14c8a67a2a0d2c48247a7e537"
   },
   "Accounting.SecurityProofs.RemoteSessionRoutes": {
    "owner": "@memory-accounting",
@@ -5065,7 +5086,9 @@
    "Accounting.SecurityProofs.RateSketchTable": "completeness: like Accounting.SecurityProofs.RateSketchHonest, a device (a LayoutDevice of Security/Definitions/Accounting/RateAuditSketchLayout.lean, whose memory holds any function of the store) accepted at every signs, oracle and data, here one that reads N * d bits from a table of card Sig * N * d bits for any digest of at most 2^d values, below Accounting.SecurityProofs.RateAuditSketch's floor: a counterexample outside the verbatim class (rate-sketch-verbatim), not a property of a function",
    "Accounting.SecurityProofs.RateTensorSketchTable": "completeness: Accounting.SecurityProofs.RateSketchTable at the tensor-core sketch (Accounting.RateSketch.sketch, 32-byte sectors, k_s INT32 words), reading N * 32 * k_s bits at any number of rows k_s: a counterexample outside the verbatim class, not a property of a function",
    "Accounting.SecurityProofs.SketchRankFiber": "frozen (premise): Like Accounting.SecurityProofs.SketchBinds, it is a property of Accounting.RateSketch.sketch under a hypothesis on the window's signs (every sector's block has rank at least r over Q), which is neither an acceptance of the sketch nor a premise under shape.premises; Accounting.SecurityProofs.RateAuditTensorSketchRank prices the hypothesis as Pr_sigma[exists u, rank < r].",
-   "Flock.SecurityProofs.RecursiveAuditC3": "restatable: PublicAudit at candidate 3's table (holoInnerAt); (i), a probability statement whose event is its acceptance, takes beside its premises (_hCust, _hIC, _hA3, _hbr) the recursive model's input fields Vs.hU, Vs.hscope, zr.hDraw, zr.hTags and zr.hown, the count curve's _hk, _hRw, _hM, _hρ and _hr, the obligations _hob (VStarParses, over the verifier's own list) and _hF (TagsFound), and R's registration, its cap and the record's stacked entry (_hstk), none a premise; it fits once the recursive model's inputs and count curve, those two obligations and the registration are restated as premises (constants of Proofs.Flock.Recursive.Premises). Its hidden statement is the word the prover's runs open at R's level 0 against the cap (regStmt), no registrant's openings taken. V*'s list at candidate 3's inner shape is circuits' gap 2's eleven statements (#1847). It says nothing about a private inner session: at a private inner shape (ish.holo) RecVStar.statements refuses (statements_holo), so no run the verifier accepts has one until V*'s holo parts land (#1896)."
+   "Flock.SecurityProofs.RecursiveAuditC3": "restatable: PublicAudit at candidate 3's table (holoInnerAt); (i), a probability statement whose event is its acceptance, takes beside its premises (_hCust, _hIC, _hA3, _hbr) the recursive model's input fields Vs.hU, Vs.hscope, zr.hDraw, zr.hTags and zr.hown, the count curve's _hk, _hRw, _hM, _hρ and _hr, the obligations _hob (VStarParses, over the verifier's own list) and _hF (TagsFound), and R's registration, its cap and the record's stacked entry (_hstk), none a premise; it fits once the recursive model's inputs and count curve, those two obligations and the registration are restated as premises (constants of Proofs.Flock.Recursive.Premises). Its hidden statement is the word the prover's runs open at R's level 0 against the cap (regStmt), no registrant's openings taken. V*'s list at candidate 3's inner shape is circuits' gap 2's eleven statements (#1847). It says nothing about a private inner session: at a private inner shape (ish.holo) RecVStar.statements refuses (statements_holo), so no run the verifier accepts has one until V*'s holo parts land (#1896).",
+   "Accounting.SecurityProofs.RemoteSessionConservationSketch": "frozen (no-function,hash): It composes the verbatim-sector tensor-sketch rank bound at every candidate pass with a causal session's pooled draws; the one shared store and every device read, link sector, rebuild and correct receipt are explicit, but the random-oracle game is not the rate audit's code.",
+   "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservationSketch at the deployed 16-row, 4 KiB-tile and draw parameters, with the two draw terms bounded by 2^-40; its q/2^96 query term remains explicit."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -6002,7 +6025,7 @@
    ]
   },
   "Definitions.Accounting.RateAuditSketch": {
-   "digest": "8d857f2162c46ceb88e1804352ca6cb84bb92b41ad732a3784e9ccb9c5e9547e",
+   "digest": "917d6ca0f94779bf8afa49e2e66e198d67d0d3de6a16862e0ef150b52593894d",
    "definitions": {
     "Accounting.RateSketch.Chip": "6047f5e0c807b4fdf592c8f686397b220c07cb582ccd3649c93a99d61e15eb7a",
     "Accounting.RateSketch.Chip.below": "ef363861ca3259bc67f29ad0f9b3c5bb1f81986b1b7aeabc428ae8d968f564d8",
@@ -6028,6 +6051,7 @@
     "Accounting.RateSketch.Device.Accepts": "67cad3bc210e8f4b30778cc1c33f2d64290457ff804eac579a00a67396499c4c",
     "Accounting.RateSketch.Device.chip": "534c2eb274af7b70cfb87bb0b67685d4b73315a458ee6d2600696d23ff1daab2",
     "Accounting.RateSketch.Device.compute": "c865163142130b82307861e4c5f378111ba94bd70616aae0e5e44f598df88b30",
+    "Accounting.RateSketch.Device.correct": "99b74127e3bb13a8694856ab44b58a8dfaebe393a3a0e8622088304016ec62f3",
     "Accounting.RateSketch.Device.footprint": "e1ffee2c916bacdabab5cff64b1115227efc5eaf74be5d5199f23a9716d1b3c4",
     "Accounting.RateSketch.Device.held": "088789df71b9419dfa76bd42b30940079c201e0cb4e2b7530663ea8a983ecf64",
     "Accounting.RateSketch.Device.prog": "205ff7418c8f94bb5e576d690ea0e072be00251efd687e60183d858885c022d1",
@@ -6052,8 +6076,38 @@
     "Accounting.SecurityProofs.RateSketchHonest",
     "Accounting.SecurityProofs.RateSketchTable",
     "Accounting.SecurityProofs.RateTensorSketchTable",
+    "Accounting.SecurityProofs.RemoteSessionConservationSketch",
+    "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed",
     "Accounting.SecurityProofs.SketchBinds",
     "Accounting.SecurityProofs.SketchRankFiber"
+   ]
+  },
+  "Definitions.Accounting.RateAuditSketchDeployed": {
+   "digest": "fd1c02f279c356f70faa725ccd9a83522beceb5e2be54201b7fc2824334252b9",
+   "definitions": {
+    "Accounting.RateSketch.Data.ofParts": "a60b017a6780a68097308ef5ebf8e8f29470885faf50d90d39c9cd60471e390a",
+    "Accounting.RateSketch.SketchDeployedSession": "a840924e954cd6cfc03b388148c9df8f4384e2814b1ef1e93f1f46bdd0eb53e5",
+    "Accounting.RateSketch.SketchDeployedSession.win": "42ced0cac300e6968aa81375ebf78f5e1b400b8f51d80d9d3b8775309e0de629",
+    "Accounting.RateSketch.SketchDeployedSession.window": "50e54c2c9e6cc7a8c40bb09890403aaac639b933d2273660bef56068924b8bac",
+    "Accounting.RateSketch.SketchDeployedWindow": "e428b18ba71475208d12e34d6d9d90fb43ad2aa7ac59d9ba6d8a290790237d44",
+    "Accounting.RateSketch.SketchDeployedWindow.correctAll": "d8941bfb3cbe4ffdb13762ca657b45bdf3d8663d059268bf1213608aec88ec70",
+    "Accounting.RateSketch.SketchDeployedWindow.dev": "c2e43acc01ec4ffde73f090411bd411d68adfb8ae9de35bee96dd00fb0cfe32a",
+    "Accounting.RateSketch.SketchDeployedWindow.device": "4feca61860aa84c3d883eda5e03d681a8bc4974b05f876d14d6b9bd80e51f5c7",
+    "Accounting.RateSketch.SketchDeployedWindow.kept": "42e0066b786f1cf50a419510691f8153b3585d4f81fad1d2ed688ae04a88a339",
+    "Accounting.RateSketch.SketchDeployedWindow.oracle": "c6445828dc58b0f78acd44b5e3a6902e27bb7efd8151249e911765136ba53e96",
+    "Accounting.RateSketch.SketchDeployedWindow.pick": "d5cbd850529c8a22424e53d52e3156ff97e041ff5680f9c2d50c33a480d3b3b2",
+    "Accounting.RateSketch.SketchDeployedWindow.reads": "0419c361b49f7f30f72575b5ca46fd742e6511faacc2424edf4396154c7824a8",
+    "Accounting.RateSketch.SketchPassCoins": "371f4c1a0f16b2cbde2f4f192f39143871a4c1b09b6109ac354d76767e989702",
+    "Accounting.RateSketch.SketchStore": "00773f858bbb7e05a6df4502dcf5b3ea2b7a613a465ce8947835a2bc95879959",
+    "Accounting.RateSketch.SketchStream": "29266ed00efc5422dcdbe1740e6ce8bf08ddc1709078474088ff212adf03a4ab",
+    "Accounting.RateSketch.SketchWindowCoins": "d46e219fc4d46dc4953b7f2258d5239e8ff7ff2c147a5201dec86209f9d74a11",
+    "Accounting.RateSketch.gammaSketch": "bccba307e6211c544c0929ed4e9d24c1e62555948bda6a68c1a6e25000b5d38e",
+    "Accounting.RateSketch.instFintypeSketchPassCoins": "100ad544423e881509d9460993c9fcda72df07107a80a9f217a4fa735832a6ec",
+    "Accounting.RateSketch.instFintypeSketchWindowCoins": "e347fae6e7192c04c8b3117fcf91c06baacae0afca694194c5074646fa90be99"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.RemoteSessionConservationSketch",
+    "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed"
    ]
   },
   "Definitions.Accounting.RateAuditSketchInteractive": {
@@ -6260,6 +6314,8 @@
     "Accounting.SecurityProofs.RateAuditTensorSketch",
     "Accounting.SecurityProofs.RateAuditTensorSketchRank",
     "Accounting.SecurityProofs.RateTensorSketchTable",
+    "Accounting.SecurityProofs.RemoteSessionConservationSketch",
+    "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed",
     "Accounting.SecurityProofs.Sketch.CommitThenProject",
     "Accounting.SecurityProofs.Sketch.Exact",
     "Accounting.SecurityProofs.Sketch.LittlewoodOfford",
@@ -6874,6 +6930,8 @@
     "Accounting.SecurityProofs.RemoteSessionConservation",
     "Accounting.SecurityProofs.RemoteSessionConservationDeployed",
     "Accounting.SecurityProofs.RemoteSessionConservationRelay",
+    "Accounting.SecurityProofs.RemoteSessionConservationSketch",
+    "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed",
     "Accounting.SecurityProofs.RemoteSessionRoutes",
     "Accounting.SecurityProofs.RemoteSessionRunConservation",
     "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
@@ -15323,14 +15381,17 @@
    ]
   },
   "Models.Accounting.Assumptions.RateAuditDeployed": {
-   "digest": "f2f71d53163680f54c69c2b2c63dfbd582f381d06f492eb80f69ce8c0f66ef17",
+   "digest": "efd4d9ab62d36d7090c90942f2aa19f053bdc94cfccffa03274dbcb108d73799",
    "definitions": {
+    "Accounting.Assumptions.SketchRank": "727be124ba9dbc421e926b9388e089735913296fe529e8940e43750724733d8c",
     "Accounting.Assumptions.SquaringCeiling": "4bd7f6457fb6df920661b769a3ad9517f6e4f0e7a2fd0d36a43e376a2deeaca9"
    },
    "guarantees": [
     "Accounting.SecurityProofs.RemoteSessionConservation",
     "Accounting.SecurityProofs.RemoteSessionConservationDeployed",
     "Accounting.SecurityProofs.RemoteSessionConservationRelay",
+    "Accounting.SecurityProofs.RemoteSessionConservationSketch",
+    "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed",
     "Accounting.SecurityProofs.RemoteSessionRoutes",
     "Accounting.SecurityProofs.RemoteSessionRunConservation",
     "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
@@ -15552,11 +15613,13 @@
    ]
   },
   "Models.Accounting.Guarantees.RateAuditDeployed": {
-   "digest": "e3737ebe54b79ba7d6c7f085597e3e3b4dc819c5ed971d2062e31802381ffdd8",
+   "digest": "4594e4239286c965d8f6bbe3d942df219a814b7678d257434ceae2b24cbcfd8e",
    "definitions": {
     "Accounting.Guarantees.RemoteSessionConservation": "3f4411a964fa206d9530e594bd14116ff5f7cedbf7f9b2e2560182b381143ea6",
     "Accounting.Guarantees.RemoteSessionConservationDeployed": "b77ed5b9ba11dfd9eac1b11c65741b7f341d3404d6d77388387d18281eae0741",
     "Accounting.Guarantees.RemoteSessionConservationRelay": "e60e4d3f4bc74723b17528be1f7f72902c09635211e36cd9cf8a1c1e6958f8c0",
+    "Accounting.Guarantees.RemoteSessionConservationSketch": "a8914ef436d616c8db02d6b052247db53261e1db71fca857c1702e3bfefd9eb8",
+    "Accounting.Guarantees.RemoteSessionConservationSketchDeployed": "c7540fcda254f84ba696ef1d8700d31ea399ad04531ea5d35261f4dfe04dc259",
     "Accounting.Guarantees.RemoteSessionRoutes": "6813a372a70745fa98988fc999a8ff17869588001d426c30cccba8453372bf77",
     "Accounting.Guarantees.RemoteSessionRunConservation": "4587d6124824128a52413a2aaaaf458558c3a967a571e4776d972931cd45deb1",
     "Accounting.Guarantees.RemoteSessionRunConservationRelay": "d09517c694d81239ec79c958a0d54a316ce89945920f4cf2ca4b4fedbde9a509",
@@ -15567,6 +15630,8 @@
     "Accounting.SecurityProofs.RemoteSessionConservation",
     "Accounting.SecurityProofs.RemoteSessionConservationDeployed",
     "Accounting.SecurityProofs.RemoteSessionConservationRelay",
+    "Accounting.SecurityProofs.RemoteSessionConservationSketch",
+    "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed",
     "Accounting.SecurityProofs.RemoteSessionRoutes",
     "Accounting.SecurityProofs.RemoteSessionRunConservation",
     "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",

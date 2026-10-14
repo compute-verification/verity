@@ -1,4 +1,6 @@
+import Mathlib.LinearAlgebra.Matrix.Rank
 import Definitions.Accounting.RateAuditDeployed
+import Definitions.Accounting.RateAuditSketchDeployed
 
 /-!
 # The deployed rate audit's measured capacity: the squaring ceiling (trusted)
@@ -8,12 +10,30 @@ What the composed guarantee (`Models/Accounting/Guarantees/RateAuditDeployed.lea
 hypothesis, never an `axiom`:
 
 * `SquaringCeiling cost F A`: a pass's completions cost at most `F`, the node's squaring capacity over the pass (its
-  measured ceiling `s` times the pass's duration, in the unit `cost` is priced in).
+  measured ceiling `s` times the pass's duration, in the unit `cost` is priced in). The time is explicit in
+  `Rate.PIDevice.TimeBudget`: it splits the work across the node's concurrent GPUs and CPUs, each bounded by its
+  measured rate times the pass duration; `PIDevice.TimeBudget.squaringCeiling` derives this assumption at the sum of
+  their rates.
+* `SketchRank ks m r ε`: the probability that some sector's signs block has rational rank below `r` is at most `ε`.
+  Its numeric value is computed outside Lean.
 -/
 
 namespace Accounting.Assumptions
 
-open Accounting.Rate
+open Accounting.Rate Accounting.RateSketch
+open Pous (pr)
+open scoped ENNReal
+
+/-- **The measured rank tail of the tensor-sketch signs.** A uniformly drawn `ks × (32·m)` signs matrix has some
+sector's `ks × 32` block below rational rank `r` with probability at most `ε`:
+
+  `Pr_σ[∃ u, rank_ℚ(block_u σ) < r] ≤ ε`.
+
+The finite probability is exact; only its numerical evaluation is outside Lean. At the deployed 16 rows the chosen
+rank is `r = 12`; at 64 rows it is `r = 27`. -/
+def SketchRank (ks m r : ℕ) (ε : ℝ≥0∞) : Prop :=
+  pr (fun σ : SketchSigns ks m =>
+    ∃ u, ((Accounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank < r) ≤ ε
 
 /-- **The squaring ceiling: a pass's completions cost at most the node's measured squaring capacity `F`.** From every
 on-chip state and in every world, the compute the chip's completions cost, at `cost x` per completion of `x` bits, is
@@ -31,7 +51,12 @@ reference kernel's rate, 1.68× on the conservative reading (lane ra-squaring-ce
 
 **Why every world.** As for the device's `bounded` field (the link's `L` and the `q` queries), the bound is on the
 program, whatever its steps are answered with: it is the hardware's capacity, which no answer raises. A device whose
-completions would exceed `F` in some world is outside the node. -/
+completions would exceed `F` in some world is outside the node.
+
+**Where time and concurrency enter.** A `PIDevice.TimeBudget A cost k duration rate` assigns every unit of completion
+work in every world to one of `k` concurrent devices and bounds device `i` by `rate i * duration`. Its proved
+`squaringCeiling` lemma gives this `Prop` at `F = (∑ i, rate i) * duration`. Thus adding a GPU or CPU adds its rate;
+it does not silently give every processor the node's whole ceiling. -/
 def SquaringCeiling {N b h ρ S L q : ℕ} (cost : ℕ → ℕ) (F : ℕ) (A : PIDevice N b h ρ S L q) : Prop :=
   ∀ (st : Pous.Bits S) (w : IWorld N b h ρ), (A.chip st).work cost w [] ≤ F
 
