@@ -112,9 +112,3 @@ theorem topReads_of_accepted {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} (
   fun ℓ hℓ => topRead_of_accepted hco h (M.sess ℓ) (hP ℓ hℓ)
 
 end FlockC3.RegLevels
-
-#print axioms FlockC3.RegLevels.topRead_of_check
-#print axioms FlockC3.RegLevels.topLevel_of_check
-#print axioms FlockC3.RegLevels.topRead_of_accepted
-#print axioms FlockC3.RegLevels.topReads_of_accepted
-#print axioms FlockC3.RegLevels.dirsLevel_of_check
