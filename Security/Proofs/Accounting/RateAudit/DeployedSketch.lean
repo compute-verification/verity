@@ -530,7 +530,6 @@ theorem gammaSketch_mul (N m ρ S L X : ℕ) (hN : 0 < N) (hm : 0 < m) :
   have hNm : (N : ℝ) * m * 256 ≠ 0 := by positivity
   unfold gammaSketch
   rw [div_mul_cancel₀ _ hNm]
-  push_cast
 
 end Accounting.RateSketch
 
@@ -571,17 +570,19 @@ theorem RemoteSessionConservationSketch : Accounting.Guarantees.RemoteSessionCon
   refine (pr_mono (fun x hx => ?_)).trans (main.trans ?_)
   · obtain ⟨hall, hT | ⟨w, hw⟩⟩ := hx
     · refine ⟨hall, Or.inl ?_⟩
-      have hT' : ((∑ w, (A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 : ℕ) : ℝ) <
-          (1 - (dbar + gammaSketch N m ρ S L X)) * (((n : ℝ) * P) * ((N : ℝ) * (m * 256))) := by
-        simpa [mul_assoc] using hT
-      have hc := Deployed.count_lt (c := (n : ℝ) * P) hb hγ' hT'
+      have hc := Deployed.count_lt
+        (R := ((∑ w, (A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 : ℕ) : ℝ))
+        (t := dbar) (g := gammaSketch N m ρ S L X) (c := (n : ℝ) * P)
+        (Nn := N) (b := (m : ℝ) * 256) (sl := slack) hb hγ'
+        (by simpa [mul_assoc] using hT)
       rw [← mul_assoc]
       exact_mod_cast hc
     · refine ⟨hall, Or.inr ⟨w, ?_⟩⟩
-      have hw' : (((A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 : ℕ) : ℝ) <
-          (1 - (dw + gammaSketch N m ρ S L X)) * ((P : ℝ) * ((N : ℝ) * (m * 256))) := by
-        simpa [mul_assoc] using hw
-      have hc := Deployed.count_lt (c := (P : ℝ)) hb hγ' hw'
+      have hc := Deployed.count_lt
+        (R := (((A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 : ℕ) : ℝ))
+        (t := dw) (g := gammaSketch N m ρ S L X) (c := (P : ℝ))
+        (Nn := N) (b := (m : ℝ) * 256) (sl := slack) hb hγ'
+        (by simpa [mul_assoc] using hw)
       exact_mod_cast hc
   · have e1 : ((n : ℝ) * P * N) = ((n * P * N : ℕ) : ℝ) := by push_cast; ring
     have e2 : ((P : ℝ) * N) = ((P * N : ℕ) : ℝ) := by push_cast; ring
@@ -606,7 +607,7 @@ theorem sketchQueryTermCaps :
     (2 ^ 55 : ℝ≥0∞) * ((2 ^ 55 : ℝ≥0∞) / 2 ^ 96) = 2 ^ 14 := by
   rw [← mul_div_assoc]
   rw [show (2 : ℝ≥0∞) ^ 55 * 2 ^ 55 = 2 ^ 96 * 2 ^ 14 by
-    rw [← pow_add, ← pow_add]; norm_num]
+    rw [← pow_add, ← pow_add]]
   simpa using (ENNReal.mul_div_mul_left (c := (2 : ℝ≥0∞) ^ 96) (2 ^ 14) 1
     (pow_ne_zero _ (by norm_num)) (ENNReal.pow_ne_top ENNReal.ofNat_ne_top))
 
@@ -633,7 +634,6 @@ theorem RemoteSessionConservationSketchDeployed :
   refine h'.trans ?_
   rw [show (2 : ℝ≥0∞) / 2 ^ 40 = 1 / 2 ^ 40 + 1 / 2 ^ 40 by
     rw [ENNReal.div_add_div_same]; norm_num]
-  norm_num only [show 8 * 12 = 96 by norm_num]
   gcongr
   · exact Deployed.horizon_deployed n hn
   · exact Deployed.window_deployed n (by omega)
