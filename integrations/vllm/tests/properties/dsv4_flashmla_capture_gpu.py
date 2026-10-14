@@ -41,17 +41,36 @@ The cases: `swa` a window-only layer (compress_ratio 0) over swa_len 0..128; `c4
 buffer, as vLLM's `c128a` indices are); `lone` one token of 1152 rows, cut by the planner into its most splits; `batch` 160 tokens
 of random lengths (requests that share a partition); `edge` special words: UE8M0 scales 0x00 / 0xFE / 0xFF, E4M3 NaN bytes, -1
 indices within a length and valid ones past it, repeated indices, overflowing, zero and subnormal queries, an empty request, and
-sinks +-inf, NaN and +-1e30.  The prefill's: `swa` a window-only layer (index rows 128 wide, one pair); `c4` a compress-ratio 4
+sinks +-inf, NaN and +-1e30.  The batch cases (`BATCHES`; positions log-uniform over [0, 2^20), a token's lengths `token_lens`):
+`long17` 17 tokens of a compress-ratio 128 layer at W = 8192 (`c128l`) run eagerly, one at position 2^20 - 1 (130 blocks in 65
+splits: two partials on a combine lane) and 16 under 2^14; `long24` the same 17 padded to the CUDA graph of 24 (the long token in
+44 splits); `max` one token of 8000 C128 rows, 127 blocks in 127 splits (the most any batch gives a request: four partials on a
+lane); `graph` 500 C4 tokens and 12 pads, the largest CUDA graph (up to 10 requests in a partition); `eager` 1024 C128 tokens,
+vLLM's default max_num_seqs on the H200, past the largest graph (18 in a partition); `mtp` 2048 C4 tokens, 1024 sequences of a
+token and its MTP draft (23 in a partition); `swagraph` the window-only layer (the MTP layer's) at 500 tokens and 12 pads.
+The prefill's: `swa` a window-only layer (index rows 128 wide, one pair); `c4` a compress-ratio 4
 layer (rows 1152 wide: topk_length 1..1152, even and odd block counts, every NP from 1 to 9); `c128` a compress-ratio 128 layer (rows 256
 wide); `edge` (C4) UE8M0 scales 0x00 / 0xFE / 0xFF, E4M3 NaN and subnormal bytes, rows that overflow bf16, indices -1, -2,
 INT_MIN, s_kv and INT_MAX within a length and valid ones onto NaN rows past it, overflowing, zero and subnormal queries,
 topk_length 0, one row repeated, a length of 1152 with one valid index, and the decode's sinks.
+
+What the batch changes: the schedule and nothing else.  `get_mla_metadata` plans once per step over the batch's lengths (in the
+graph, on the step's first decode call); num_sm_parts is 132 at every batch (s_q 1, h_q 64).  Request i costs nb_i + 5 blocks,
+nb_i = ceil(n_i / 64) with n_i = max(ceil64(swa_len), 64) + ceil64(extra_len) (a pad's n is 64), every partition takes
+ceil(sum / 132) + 5 and the requests are cut greedily in order, so a request's SPLITS depend on every request's lengths: 1 to 127
+splits (127 only for one token of 127 blocks; two or more blocks to a partition give at most 66).  The combine is launched every
+step (num_sm_parts > 1) over (b, 1, 8) blocks, and a request of one split returns at once there (the decode kernel wrote its
+output, with the sink).  The Definitions take any SPLITS, so the batch selects their instance; the batch cases put the
+schedule's boundaries on the GPU.
 
 GO needs every case's words compared with 0 mismatches, the references sampled with 0 disagreements with the twins, every launch
 check, the selection and the bindings.
 
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
     $PY tests/properties/dsv4_flashmla_capture_gpu.py --out DIR [--scratch DIR] [--quick]
+
+The comparisons take about 2 CPU-hours of twin and four references of 127 or 130 blocks, about 12 minutes and 3 GB each; under
+--quick, `max`'s reference is most of it.
 """
 from __future__ import annotations
 
@@ -91,9 +110,11 @@ TOKEN_BYTES, DATA_BYTES, SCALE_BYTES = 584, 576, 8
 SWA_PBS = 64
 #: the extra caches: (page block, index width, index buffer width).  C4: 256-token blocks / 4; C128: 256 / 128, and its indices
 #: `buffer[:T, :W]` with W = min(max(next_pow2(max_seq_len / 128), 128), c128a_max_compressed) (here 128 of a 1024-wide buffer)
-LAYERS: dict[str, tuple[int, int, int] | None] = {"swa": None, "c4": (64, C4_TOPK, C4_TOPK), "c128": (2, 128, 1024)}
+#: `c128l` is a C128 layer in a step whose longest sequence is past 2^19 positions: W = 8192, the whole buffer (max_model_len 2^20)
+LAYERS: dict[str, tuple[int, int, int] | None] = {"swa": None, "c4": (64, C4_TOPK, C4_TOPK), "c128": (2, 128, 1024),
+                                                  "c128l": (2, 8192, 8192)}
 #: blocks of each cache; the last block of each is reserved for `edge`'s special rows
-CACHE_BLOCKS = {"swa": 48, "c4": 40, "c128": 512}
+CACHE_BLOCKS = {"swa": 48, "c4": 40, "c128": 512, "c128l": 4200}
 #: sha256 of vllm/third_party/flashmla/flash_mla_interface.py as cmake/external_projects/flashmla.cmake writes it from FlashMLA
 #: 6bc49418c5ead572ff0339191ddf3b155749e183 (the shim `import vllm._flashmla_C` before `flash_mla_cuda = torch.ops._flashmla_C`)
 INTERFACE_SHA256 = "84601897d0f3a748ef6a8046ed28285586c8db672ac08b71178e52574a3c57e5"
@@ -109,8 +130,22 @@ BATCH, QUICK_BATCH = 160, 24
 EDGE_LENS = ((128, 1024), (128, 300), (100, 200), (128, 1024), (128, 64), (0, 0), (128, 128), (64, 700))
 EDGE_SINKS = (0x7F800000, F_NINF, 0x7FC00000, 0, 0x7149F2CA, 0xF149F2CA, 1, 0x42B00000, 0xC2B00000, 0x3F800000, 0x80000000,
               0x3E800000, 0x41200000, 0xC1200000, 0x00800000, 0xBF800000)
+#: vLLM d9105ea80's decode batches on the H200: max_num_seqs 1024 (arg_utils.py:2662-2671, a GPU of 70 GiB or more but an A100),
+#: CUDA graphs of GRAPH_SIZES tokens up to min(2 max_num_seqs, 512) (compilation.py:700-701, config/vllm.py:2016-2024), a batch
+#: padded to the next size with tokens of slot -1, one past 512 run eagerly as it is; with DeepSeek-V4-Pro's MTP layer
+#: (num_nextn_predict_layers 1) a sequence decodes two tokens, each its own request
+MAX_NUM_SEQS = 1024
+GRAPH_SIZES = (1, 2, 4, *range(8, 256, 8), *range(256, 513, 16))
+#: max_model_len 2^20 (max_position_embeddings 1048576)
+MAX_POS = (1 << 20) - 1
+#: the batch cases: case -> (real tokens, pads), and under --quick
+BATCHES = {"long17": (17, 0), "long24": (17, 7), "max": (1, 0), "graph": (500, 12), "eager": (MAX_NUM_SEQS, 0),
+           "mtp": (2 * MAX_NUM_SEQS, 0), "swagraph": (500, 12)}
+QUICK_BATCHES = {**BATCHES, "graph": (20, 4), "eager": (40, 0), "mtp": (40, 0), "swagraph": (20, 4)}
 #: case -> (layer, seed)
-CASE_LAYERS = {"swa": ("swa", 1), "c4": ("c4", 2), "c128": ("c128", 3), "lone": ("c4", 4), "batch": ("c4", 5), "edge": ("c4", 6)}
+CASE_LAYERS = {"swa": ("swa", 1), "c4": ("c4", 2), "c128": ("c128", 3), "lone": ("c4", 4), "batch": ("c4", 5), "edge": ("c4", 6),
+               "long17": ("c128l", 7), "long24": ("c128l", 8), "max": ("c128l", 9), "graph": ("c4", 10), "eager": ("c128l", 15),
+               "mtp": ("c4", 16), "swagraph": ("swa", 17)}
 #: `_forward_prefill` (flashmla.py:266-398) per layer: (compress ratio, the compressed cache's page block, top_k: the indexer's 1024
 #: on C4, c128a's width on C128, here 128); a token's index row is round_up(top_k + WINDOW, 128) wide (max_image_tokens 0:
 #: DeepSeek-V4-Pro has no vision layers)
@@ -226,7 +261,47 @@ def _slots(rng, layer: str, k: int) -> np.ndarray:
     return rng.choice(usable, size=k, replace=k > usable).astype(np.int32)
 
 
+def token_lens(layer: str, pos: int) -> tuple[int, int | None]:
+    """A decode token's (swa_len, extra_len) at position pos: its min(pos + 1, 128) window rows (sparse_swa.py:979-989), on C4 the
+    indexer's min((pos + 1) // 4, 1024) (cache_utils.py:470-517), on C128 its (pos + 1) // 128 compressed rows, at most W
+    (sparse_mla.py:383-416)."""
+    swa = min(pos + 1, WINDOW)
+    if layer == "swa":
+        return swa, None
+    return swa, min((pos + 1) // (4 if layer == "c4" else 128), LAYERS[layer][1])
+
+
+def case_pads(case: str, quick: bool) -> int:
+    """A case's trailing pads (CUDA-graph padding, slot -1)."""
+    return (QUICK_BATCHES if quick else BATCHES).get(case, (0, 0))[1]
+
+
+def case_positions(case: str, quick: bool) -> list[int]:
+    """A batch case's real tokens' positions, log-uniform over [0, 2^20): `long17`'s (and `long24`'s) one at MAX_POS and 16 under
+    2^14; `max`'s one of 8000 C128 rows (127 blocks); a `c128l` case's first at MAX_POS (so W is 8192); `mtp`'s in pairs p, p + 1
+    (a sequence's token and its draft)."""
+    if case == "max":
+        return [8000 * 128 - 1]
+    if case == "long24":
+        return case_positions("long17", quick)
+    rng = np.random.default_rng(CASE_LAYERS[case][1] + 100)
+    real = (QUICK_BATCHES if quick else BATCHES)[case][0]
+    if case == "long17":
+        return [MAX_POS] + (np.exp2(rng.uniform(0, 14, real - 1)).astype(np.int64) - 1).tolist()
+    if case == "mtp":
+        p = np.minimum(np.exp2(rng.uniform(0, 20, real // 2)).astype(np.int64) - 1, MAX_POS - 1)
+        return np.stack([p, p + 1], axis=1).reshape(-1).tolist()
+    pos = (np.exp2(rng.uniform(0, 20, real)).astype(np.int64) - 1).tolist()
+    if CASE_LAYERS[case][0] == "c128l":
+        pos[0] = MAX_POS
+    return pos
+
+
 def case_lens(case: str, quick: bool) -> tuple[tuple[int, int | None], ...]:
+    if case in BATCHES:
+        layer = CASE_LAYERS[case][0]
+        pad = (0, None if layer == "swa" else 0)
+        return tuple(token_lens(layer, p) for p in case_positions(case, quick)) + (pad,) * case_pads(case, quick)
     if case == "batch":
         rng = np.random.default_rng(CASE_LAYERS[case][1] + 100)
         b = QUICK_BATCH if quick else BATCH
@@ -238,7 +313,9 @@ def case_lens(case: str, quick: bool) -> tuple[tuple[int, int | None], ...]:
 def case_operands(case: str, quick: bool = False) -> dict[str, Any]:
     """A case's launch operands as numpy words: q (b, 64, D) bf16 (pad heads +0), sink (64,) f32 (pad heads -inf), the SWA cache,
     swa_idx (b, WINDOW) with -1 past each length, swa_lens; on a compressed layer the extra cache, extra_buf (b, buffer width)
-    whose first `width` columns are the indices, extra_lens."""
+    whose first `width` columns are the indices, extra_lens.  A pad token (slot -1) has swa_len 0 over a row of -1
+    (sparse_swa.py:952-963) and extra_len 0 over valid slots, as a C4 pad's top-k or a C128 pad's stale position leaves them
+    (cache_utils.py:493-517, sparse_mla.py:384-416); the kernel reads none of them."""
     layer, seed = CASE_LAYERS[case]
     rng = np.random.default_rng(seed)
     lens = case_lens(case, quick)
@@ -261,6 +338,9 @@ def case_operands(case: str, quick: bool = False) -> dict[str, Any]:
         o["extra_buf"][:, :width] = -1
         for t, (_, e) in enumerate(lens):
             o["extra_buf"][t, :e] = _slots(rng, layer, e)
+        for t in range(b - case_pads(case, quick), b):
+            k = int(rng.integers(0, width + 1))
+            o["extra_buf"][t, :k] = _slots(rng, layer, k)
     if case == "edge":
         edge(rng, o)
     return o
@@ -836,8 +916,8 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
 
 def bind_check() -> dict[str, Any]:
     """The Programs bind at DeepSeek-V4-Pro's statics: a window-only token (two blocks, one split), a full compressed token cut in
-    two, the lone token's split, combine and head shapes, the KV row; the prefill's gather row and a token of one pair and of a
-    full C4 row's nine."""
+    two, the lone token's split, combine and head shapes, the combine of the most splits any batch gives a request (127), the KV
+    row; the prefill's gather row and a token of one pair and of a full C4 row's nine."""
     from verity.ml.circuits.defs import bind
 
     st = {k: v for k, v in F.FLASHMLA_DSV4.items() if k != "NH"}
@@ -851,6 +931,7 @@ def bind_check() -> dict[str, Any]:
         "FlashMlaSplit_v1{NB=2,PARTIAL=False,...}": lambda: bind(F.FlashMlaSplit, NB=2, PARTIAL=False, **blk),
         "FlashMlaSplit_v1{NB=1,PARTIAL=True,...}": lambda: bind(F.FlashMlaSplit, NB=1, PARTIAL=True, **blk),
         "FlashMlaCombine_v1{NS=18,D=512}": lambda: bind(F.FlashMlaCombine, NS=18, D=D),
+        "FlashMlaCombine_v1{NS=127,D=512}": lambda: bind(F.FlashMlaCombine, NS=127, D=D),
         "FlashMlaDecodeHead_v1{SPLITS=(0,9,18),...}": lambda: bind(F.FlashMlaDecodeHead, SPLITS=(0, 9, 18), **blk),
         "FlashMlaDecode_v1{NH=16,SPLITS=(0,2),NW=128,...}": lambda: bind(F.FlashMlaDecode, NH=NH, SPLITS=(0, 2), NW=128, **st),
         "FlashMlaDecode_v1{NH=16,SPLITS=(0,9,18),NW=128,...}": lambda: bind(F.FlashMlaDecode, NH=NH, SPLITS=(0, 9, 18), NW=128,
@@ -985,7 +1066,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--want-sms", type=int, default=132)
     ap.add_argument("--workers", type=int, default=C.cpu_workers())
     ap.add_argument("--quick", action="store_true",
-                    help=f"a decode batch of {QUICK_BATCH} and the reference on one token per case: a first signal in minutes")
+                    help=f"a decode batch of {QUICK_BATCH}, the batch cases at `QUICK_BATCHES` and the reference on one token per "
+                         "case: a first signal in about 15 minutes, most of it `max`'s reference")
     a = ap.parse_args(argv)
     doc = run(a.out, a.scratch, a.min_driver, a.want_cc, a.want_sms, a.workers, a.quick)
     return 0 if doc["ok"] else 1
