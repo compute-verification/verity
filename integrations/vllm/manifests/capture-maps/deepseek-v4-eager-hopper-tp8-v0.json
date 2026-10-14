@@ -490,16 +490,20 @@
    "note": "fused_inv_rope_fp8_quant (registry/dsv4_indexer.py, #1934): per (token, head) Dsv4InvRopeQuantHead_v1{CHUNKS 4, QG 128, ROPE 64}, the inverse GPT-J RoPE of the head's last DR dims (Dsv4InvRope_v1), then e4m3 with one f32 scale per 1x128 group (Dsv4InvRopeQuant_v1), regrouped to [M, OGL, HPG * HD] (tma_aligned_scales false on sm_90). The H200's GO: run r20261013-090135-4fbc (tests/properties/dsv4_indexer_capture_gpu.py, case inv_rope/served). Boolean _v2. Port until a Build rule binds it"
   },
   "sqrtsoftplus-router": {
-   "status": "tonight",
-   "definitions": [],
-   "note": "fused_topk_bias -> dsv4_topk (router/dsv4_topk.py): s = sqrt(softplus(logit)) in f32, the top K of E by s + e_score_correction_bias (selection only), weights s / sum(s) * routed_scaling_factor (2.5), ids int32. Row DSV4-ROUTE",
-   "branch": "cursor/dsv4-routers-8c79"
+   "status": "port",
+   "definitions": [
+    "MoeRouterSqrtSoftplus_v1",
+    "MoeRouterSqrtSoftplus_v2"
+   ],
+   "note": "fused_topk_bias -> dsv4_topk (router/dsv4_topk.py; registry/dsv4_moe.py, #1963): MoeRouterSqrtSoftplus_v1{E 384, SCALE 2.5}, s = sqrt(softplus(logit)) in f32 (Dsv4SqrtSoftplus_v1: ex2.approx, libdevice logf, sqrt.approx.ftz), the top K of E by s + e_score_correction_bias (selection only, the lowest index among equals), weights s / sum(s) * routed_scaling_factor (2.5, div.full), ids int32. The H200's GO: run r20261013-205619-5c39 (tests/properties/dsv4_moe_capture_gpu.py at a9be5ce66, capture and program check OK: the router rows at its edges, and MUFU ex2, rcp and sqrt against core's tables). Boolean MoeRouterSqrtSoftplus_v2. Port until a Build rule binds it"
   },
   "hash-router": {
-   "status": "tonight",
-   "definitions": [],
-   "note": "fused_topk_bias -> ops.topk_hash_softplus_sqrt on the first HASH layers: ids = tid2eid[input_id] (K per token), weights sqrt(softplus(logit)) at those ids, renormalised, x 2.5. Row DSV4-ROUTE",
-   "branch": "cursor/dsv4-routers-8c79"
+   "status": "port",
+   "definitions": [
+    "MoeRouterHash_v1",
+    "MoeRouterHash_v2"
+   ],
+   "note": "fused_topk_bias -> ops.topk_hash_softplus_sqrt on the first HASH layers (the CUDA kernel dsv4HashTopkSoftplusSqrt; registry/dsv4_moe.py, #1963): MoeRouterHash_v1{E 384, SCALE 2.5}, ids = tid2eid[input_id] (K per token, written unchanged), weights sqrt(softplus(logit)) at those ids (Dsv4HashWeight_v1, whose MUFU.LG2 on [1, 2) is MufuLg2Mantissa_v1), renormalised, x 2.5. The H200's GO: run r20261013-205619-5c39 (tests/properties/dsv4_moe_capture_gpu.py at a9be5ce66, capture and program check OK: the hash rows, and MUFU lg2 on every 1.m of [1, 2) as MufuLg2Mantissa_v1). Boolean MoeRouterHash_v2. Port until a Build rule binds it"
   },
   "marlin-mxfp4-moe": {
    "status": "port",
@@ -513,10 +517,12 @@
    "when": "decode batches of 1 to 16 tokens (the capture sweeps each), on target.driver: GRID is 132 SMs times the blocks per SM that ops.cu picks from the JIT'd kernel's registers"
   },
   "silu-mul-clamp": {
-   "status": "tonight",
-   "definitions": [],
-   "note": "torch.ops._C.silu_and_mul_with_clamp(out, x, limit = swiglu_limit (10.0), alpha 1.0, beta 0.0): silu(min(gate, limit)) * clamp(up, -limit, limit) per element in f32, to bf16. The routed experts reach it through apply_moe_activation (no expert map); the shared expert through SiluAndMulWithClamp.forward_cuda. Row DSV4-ROUTE",
-   "branch": "cursor/dsv4-routers-8c79"
+   "status": "port",
+   "definitions": [
+    "SiluMulClamp_v1",
+    "SiluMulClamp_v2"
+   ],
+   "note": "torch.ops._C.silu_and_mul_with_clamp(out, x, limit = swiglu_limit (10.0), alpha 1.0, beta 0.0) (registry/dsv4_moe.py, #1963): SiluMulClamp_v1{I 384, LIMIT 10.0}, per element SiluMulClampBf16_v1: silu(min(gate, limit)) * clamp(up, -limit, limit) in f32, to bf16. The routed experts reach it through apply_moe_activation (no expert map); the shared expert (one of 3072, 384 a rank) through SiluAndMulWithClamp.forward_cuda. The H200's GO: run r20261013-205619-5c39 (tests/properties/dsv4_moe_capture_gpu.py at a9be5ce66, capture and program check OK: the clamp rows, vectorised at d = 384 and scalar at d = 9). Boolean SiluMulClamp_v2. Port until a Build rule binds it"
   }
  },
  "binders": {

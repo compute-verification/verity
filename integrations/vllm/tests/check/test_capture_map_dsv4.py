@@ -44,7 +44,6 @@ ENV = CM.symbols(CMAP, CONFIG, TP)
 OWNERS = {
     "cursor/glm53-committed-ops-8c79": {"cublas-f32-out", "router-gemm"},
     "cursor/deepgemm-sm90-8c79": {"fp8-block-linear-flashinfer", "fp8-block-linear-deepgemm", "fp8-einsum-deepgemm"},
-    "cursor/dsv4-routers-8c79": {"sqrtsoftplus-router", "hash-router", "silu-mul-clamp"},
 }
 #: each Program whose Definitions another row registered and took to GO on the H200 at DeepSeek-V4-Pro's statics -> those
 #: Definitions, word then Boolean
@@ -66,6 +65,9 @@ PORTED = {
     "dsa-mqa-logits": ["DsaMqaLogit_v3", "DsaMqaLogits_v3", "DsaMqaLogit_v4", "DsaMqaLogits_v4"],
     "dsa-topk-fill": ["Dsv4ShortContextTopK_v1", "Dsv4ShortContextTopK_v2"],
     "inv-rope-fp8-quant": ["Dsv4InvRopeQuantHead_v1", "Dsv4InvRopeQuantHead_v2"],
+    "sqrtsoftplus-router": ["MoeRouterSqrtSoftplus_v1", "MoeRouterSqrtSoftplus_v2"],
+    "hash-router": ["MoeRouterHash_v1", "MoeRouterHash_v2"],
+    "silu-mul-clamp": ["SiluMulClamp_v1", "SiluMulClamp_v2"],
 }
 
 DECODE = ("hc-fused", "indexer-short", "decode-tokens")
@@ -326,8 +328,8 @@ def test_the_exists_programs_cite_what_the_build_binds():
 def test_the_program_statuses():
     """What has no Definition on main is `tonight` on the branch of the row that writes it.  The Programs that went GO on the H200
     on other rows' branches (the TP8 all-reduce at H 7168, the query norm and cache insert, the indexer's query, the head-512
-    compressor, mHC, hc_head, FlashMLA's decode and prefill, and the indexer's compressor, logits, short-context fill and inverse
-    RoPE) are `port`: registered here, bound by no Build rule.  Committed-only are the decode attention's indices, which no row
+    compressor, mHC, hc_head, FlashMLA's decode and prefill, the indexer's compressor, logits, short-context fill and inverse
+    RoPE, and the two routers and the clamped SwiGLU) are `port`: registered here, bound by no Build rule.  Committed-only are the decode attention's indices, which no row
     states yet.  The step's two inputs from the schedule, its token ids and its
     positions, are root inputs no kernel computes, held by word equality (`copy-equality`)."""
     statuses = {pid: p["status"] for pid, p in CMAP["programs"].items()}
@@ -394,15 +396,15 @@ def test_the_runbook_counts():
 
     every = CM.counts(CMAP, ENV)
     assert (every["module_entries"], every["module_types"], every["tap_templates_by_status"]) == (
-        42, 28, {"exists": 5, "tonight": 17, "port": 49, "copy": 2, "committed-only": 5})
+        42, 28, {"exists": 5, "tonight": 11, "port": 55, "copy": 2, "committed-only": 5})
     assert brief(CM.counts(CMAP, ENV, STEPS["decode"])) == (
-        64, 2539, {"exists": 125, "tonight": 762, "port": 1406, "copy": 2, "committed-only": 244}, 122)
+        64, 2539, {"exists": 125, "tonight": 518, "port": 1650, "copy": 2, "committed-only": 244}, 122)
     assert brief(CM.counts(CMAP, ENV, STEPS["decode-scored"])) == (
-        68, 2659, {"exists": 125, "tonight": 792, "port": 1496, "copy": 2, "committed-only": 244}, 242)
+        68, 2659, {"exists": 125, "tonight": 548, "port": 1740, "copy": 2, "committed-only": 244}, 242)
     assert brief(CM.counts(CMAP, ENV, STEPS["prefill"])) == (
-        63, 2415, {"exists": 125, "tonight": 792, "port": 1496, "copy": 2, "committed-only": 0}, 726)
+        63, 2415, {"exists": 125, "tonight": 548, "port": 1740, "copy": 2, "committed-only": 0}, 726)
     assert brief(CM.counts(CMAP, ENV, STEPS["mixed"])) == (
-        69, 2720, {"exists": 125, "tonight": 792, "port": 1557, "copy": 2, "committed-only": 244}, 787)
+        69, 2720, {"exists": 125, "tonight": 548, "port": 1801, "copy": 2, "committed-only": 244}, 787)
 
 
 def test_the_bound_tap_counts():
