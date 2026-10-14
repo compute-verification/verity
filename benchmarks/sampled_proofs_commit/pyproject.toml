@@ -1,0 +1,4 @@
+# Sampled proofs' Commit as an arm of the shared vLLM benchmark (`verity-bench vllm`). Not a package: `bench_arm.py` runs on a
+# GPU node (`run.sh`); its bookkeeping is tested here (`uv run tools/verity/check/suites.py benchmarks/sampled_proofs_commit`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
