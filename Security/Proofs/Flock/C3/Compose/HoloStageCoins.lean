@@ -145,3 +145,6 @@ end src
 end
 
 end FlockC3.Compose
+
+#print axioms FlockC3.Compose.custody_sel
+#print axioms FlockC3.Compose.stageCoins_holo
