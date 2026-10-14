@@ -262,5 +262,3 @@ theorem top_row_agree {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
 end Family
 
 end FlockC3.RegLevels
-
-#print axioms FlockC3.RegLevels.top_row_agree
