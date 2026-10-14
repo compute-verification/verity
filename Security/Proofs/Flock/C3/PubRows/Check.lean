@@ -294,7 +294,7 @@ theorem getD_idxOf {a : Array ℕ} {u : ℕ} (h : u ∈ a) : a.getD (a.idxOf u) 
 theorem checkLabel_ok {dj : Lean.Json} {pub : Public} {j : ℕ} (h : RecVStar.checkLabel dj pub j = .ok ())
     {D : Draw.UnitDraw} (hD : Draw.UnitDraw.ofJson dj = .ok D) {idx : Array ℕ}
     (hidx : Registered.unitIndices pub = .ok idx) : idx = D.proved := by
-  simp only [RecVStar.checkLabel, hD, hidx, bind, Except.bind] at h
+  simp only [RecVStar.checkLabel, hD, hidx, Bind.bind, Except.bind] at h
   split at h
   · simp [throw, throwThe, MonadExceptOf.throw] at h
   · rename_i hb
