@@ -588,8 +588,8 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None) -> list[
             return [("lean", f"the verifier is on this tree but its Lean package is not at {lean}", ROOT)]
         return [("lean", "skipped: verity/core/service/flock is not on this tree", ROOT)]
     verify = lean / ".lake" / "build" / "bin" / "flock-verify"
-    agreement: list[str] | str = ("skipped: the pinned upstream build was not sent (a merge changing verity/ml/flock/ requires "
-                                  "this step: `check.py --record` sends it)")
+    agreement: list[str] | str = ("skipped: the pinned upstream build was not sent (a merge changing verity/ml/flock/ or "
+                                  "verity/core/service/flock/ requires this step: `check.py --record` sends it)")
     if UPSTREAM_PIN.exists():
         got = agreement_files(out)
         if len(got) == 2:
@@ -1143,9 +1143,10 @@ def _env_key(e: dict[str, str]) -> dict[str, str]:
 
 
 def agreement_key(e: dict[str, str]) -> str | None:
-    """What the agreement job reads: the tracked files under verity/ml/flock/verifier/ (the Lean sources and toolchain pin, `ci.py`
-    and the scripts it runs, which import only the standard library and each other, `upstream.json` pinning the upstream build,
-    the inputs and the job's settings), the interpreter and the platform.  None when the tree's files cannot be listed."""
+    """What the agreement job reads: the tracked files `agreement_closure` names (verity/ml/flock/verifier/: `ci.py` and the scripts
+    it runs, which import only the standard library and each other, `upstream.json` pinning the upstream build,
+    the inputs and the job's settings; and the Lean package `flock-verify` is built from, verity/core/service/flock/, its sources and
+    toolchain pin), the interpreter and the platform.  None when the tree's files cannot be listed."""
     files = tracked_files()
     if files is None:
         return None

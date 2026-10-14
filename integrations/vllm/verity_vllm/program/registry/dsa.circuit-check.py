@@ -19,5 +19,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("DsaIndexerQ_v1", lambda: bind(dsa.DsaIndexerQ, H=32, D=128, ROPE=64)),
         ("DsaMqaLogit_v1", lambda: bind(dsa.DsaMqaLogit, H=32, D=128)),
         ("DsaMqaLogits_v1", lambda: bind(dsa.DsaMqaLogits, N=4, H=32, D=128)),
+        ("DsaMqaLogit_v3", lambda: bind(dsa.DsaMqaLogitV3, H=32, D=128)),
+        ("DsaMqaLogits_v3", lambda: bind(dsa.DsaMqaLogitsV3, N=4, H=32, D=128)),
         ("DsaTopKShortRow_v1", lambda: bind(dsa.DsaTopKShortRow, TOPK=2048)),
     ]

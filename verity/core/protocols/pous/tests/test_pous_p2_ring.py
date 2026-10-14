@@ -1,7 +1,8 @@
 """Falsification test of `Pous.P2.Assumptions.P2RingAuditSecure` (`Security/Models/Pous/Assumptions/P2.lean`), the
 test that `shape.conjectures` in `Security/lean-audit.json` and `Security/Properties/lean-audit.json` names for it and
 for `P2RingReducesToM1p`, which implies it: P2 in the ring model, with sequential reveal, accepts every `⌊ρ·|C|⌋`-bit, `(D, Q, L)`-bounded responder with probability at
-most `δ + ε`.
+most `δ + ε`. The same draws test the per-round form `P2RingRoundSecure`
+(`test_p2_ring_round_secure_at_a_scaled_point`).
 
 The audit is `p2ring` as `Security/Definitions/Pous/P2/Cost.lean` defines it: a uniform odd labeling of `Z/p`
 (sampled lazily, which is the same distribution), per-block keys `(K_j, τ_j)`, a responder that sees elements only
@@ -28,7 +29,7 @@ from __future__ import annotations
 
 import math
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from fractions import Fraction
 
 import pytest
@@ -273,6 +274,7 @@ def cases() -> list:
 @dataclass
 class Play:
     acceptance: list[Fraction]
+    right: list[int] = field(default_factory=list)
     D: int = 0
     Q: int = 0
     L: int = 0
@@ -288,6 +290,7 @@ def play(r: Responder) -> Play:
             right += r.answer(m, d.w[i], state, i) == d.code[i]
             out.D, out.Q, out.L = max(out.D, m.D), max(out.Q, m.Q), max(out.L, m.L)
         out.acceptance.append(Fraction(right, B) ** K)
+        out.right.append(right)
     return out
 
 
@@ -336,3 +339,23 @@ def test_p2_ring_audit_secure_at_a_scaled_point(case: Case):
         raise Counterexample(f"{r.name} (state {r.state_bits()} of {S} bits, D={p.D}, Q={p.Q}, L={p.L}) is accepted "
                              f"with probability {float(estimate):.4f} over {TRIALS} draws (seed {SEED}), above "
                              f"δ = {float(DELTA)} + {margin(TRIALS):.3f}; plan {r.plan}")
+
+
+@pytest.mark.parametrize("case", cases())
+def test_p2_ring_round_secure_at_a_scaled_point(case: Case):
+    """`Pous.P2.Assumptions.P2RingRoundSecure` at the same point, with `1 − p = KEPT/B`: given the first `j` answers
+    right, the next uniform challenge is answered right with probability at most `KEPT/B`, at every `j < K`. Given the
+    draw `ω` a responder answers each challenge right with probability exactly `s_ω/B`, so over the draws the rate at
+    round `j` is `Σ (s_ω/B)^(j+1) / Σ (s_ω/B)^j`, and it is above `KEPT/B` only if some draw has `s_ω > KEPT`. That
+    draw would have to lie in the conjecture's `bad`, which at `ε₀ = 2^-137` shows up among `TRIALS` seeded draws with
+    probability at most `TRIALS·K·ε₀`, so the rate is compared with `KEPT/B` with no margin. The responders outside
+    the region beat it, the side `RoundTests.lean` proves false (`round_tight`, `round_trunc`)."""
+    r = case.responder
+    p = play(r)
+    assert inside_region(r, p) == case.inside, (r.name, r.state_bits(), p.D, p.Q, p.L)
+    xs = [Fraction(s, B) for s in p.right]
+    for j in range(K):
+        if (seen := sum(x ** j for x in xs)) and (rate := sum(x ** (j + 1) for x in xs) / seen) > Fraction(KEPT, B):
+            raise Counterexample(f"{r.name} (state {r.state_bits()} of {S} bits, D={p.D}, Q={p.Q}, L={p.L}) answers "
+                                 f"round {j + 1} right with probability {float(rate):.4f} given the first {j} over "
+                                 f"{TRIALS} draws (seed {SEED}), above 1 − p = {KEPT}/{B}; blocks right {p.right}")

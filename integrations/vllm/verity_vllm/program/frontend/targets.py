@@ -33,6 +33,7 @@ from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32, BlackwellNvf4Om
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import fa2_check_inf as F2
 from verity_vllm.program.registry import attention_vocab
+from verity_vllm.program.registry import cuda_rmsnorm as CR
 from verity_vllm.program.registry import value_inputs as VI
 from verity_vllm.program.registry import fa3_check_inf as F3
 from verity_vllm.program.registry import fp8, nvfp4
@@ -162,13 +163,41 @@ def moe_expert_gemm_spec(profile, E: int, K: int, N: int, *, routed: bool):
 def moe_expert_fp8_dot(profile):
     """The e4m3 k32 step of the block-FP8 fused-MoE expert GEMMs (`TritonExperts`' `fused_moe_kernel`) on the declared target: the GEMM
     target's `fp8_moe_dot`, its own measurement rather than the per-tensor FP8 linear's (`fp8_dot`) or the blockwise one's
-    (`fp8_block_dot`); refused by name where the target records none (cc 9.0: GLM-5.3's experts bind `_v1` through their capture map)."""
+    (`fp8_block_dot`); refused by name where the target records none."""
     gt = gemm_target(profile)
     dot = FP8_DOTS.get(gt.fp8_moe_dot) if gt.fp8_moe_dot else None
     if dot is None:
         raise UnregisteredTarget(f"block-FP8 fused-MoE experts on {gt.key} ({profile.capability_str}): no registered e4m3 step "
                                  f"(GemmTarget.fp8_moe_dot)")
     return dot
+
+
+def wgmma_tile(config: dict, swap: bool) -> bool:
+    """Whether Triton lowers a `fused_moe_kernel` launch's `tl.dot` to wgmma (MMAv3), the one FP8 dot the Hopper Definitions model: the
+    dot's M (BLOCK_SIZE_N under SWAP_AB, else BLOCK_SIZE_M) a multiple of 64 over a multiple of 4 warps and its N a multiple of 8.  A
+    smaller tile takes `mma.sync` or FMA, which no Definition models."""
+    m, n = (config["BLOCK_SIZE_N"], config["BLOCK_SIZE_M"]) if swap else (config["BLOCK_SIZE_M"], config["BLOCK_SIZE_N"])
+    return config.get("num_warps", 4) % 4 == 0 and m % 64 == 0 and n % 8 == 0
+
+
+def moe_fp8_tuned_tile_refusal(profile, bm: Any, bn: Any, kb: Any, warps: Any, swap: Any) -> str | None:
+    """None when a tuned (not batch-invariant) block-FP8 `fused_moe_kernel` tile is one the Definitions model on the declared target:
+    cc 9.0, SWAP_AB = `enable_swap_ab` (BLOCK_SIZE_M < 64 and BLOCK_SIZE_N >= 64, vLLM d9105ea80 fused_moe/utils.py:628-633), BLOCK_SIZE_K
+    a multiple of the k32 step and a `wgmma_tile`; else why not.  The Build's rule and the fold's are this one."""
+    if tuple(profile.compute_capability) != (9, 0):
+        return (f"numerics_unregistered: a tuned (not batch-invariant) block-FP8 expert launch is modelled on cc 9.0 only (wgmma), not on "
+                f"cc {profile.capability_str}")
+    if not all(isinstance(v, int) and not isinstance(v, bool) and v > 0 for v in (bm, bn, kb, warps)):
+        return f"tiling BLOCK_SIZE_M/N/K={bm!r}/{bn!r}/{kb!r}, num_warps={warps!r} are not positive integers"
+    want = bm < 64 and bn >= 64
+    if swap is not want:
+        return f"numerics_unregistered: SWAP_AB={swap!r} is not enable_swap_ab(BLOCK_SIZE_M={bm}, BLOCK_SIZE_N={bn}) = {want} on cc 9.0"
+    if kb % 32:
+        return f"numerics_unregistered: BLOCK_SIZE_K={kb} is not a multiple of the k32 step"
+    if not wgmma_tile({"BLOCK_SIZE_M": bm, "BLOCK_SIZE_N": bn, "num_warps": warps}, want):
+        return (f"numerics_unregistered: the launch's tl.dot (BLOCK_SIZE_M {bm} x BLOCK_SIZE_N {bn}, SWAP_AB {want}, {warps} warps) is no "
+                f"wgmma tile: it takes mma.sync, whose e4m3 step no Definition models")
+    return None
 
 
 def moe_expert_fp8_gemm_spec(profile, E: int, K: int, N: int, G: int, KB: int, SWAP: bool, *, routed: bool):
@@ -412,15 +441,38 @@ def nvfp4_gemm_spec(profile, K: int, N: int):
     return bind(nvfp4.ScaledMmNvfp4, K=int(K), N=int(N), DOT=dot)
 
 
-def rmsnorm_fused_spec(profile, N: int, EPS: float | None = None, eps_input: bool = False):
+def rmsnorm_spec(profile, N: int, EPS: float, M: int = 1):
+    """The registered Definition of `_C.rms_norm` on one row for a launch of ``M`` rows.
+
+    Batch-invariant serving dispatches the Triton kernel.  Default serving dispatches
+    vLLM's width-8 CUDA kernel, whose launch block is selected from the launch's row
+    count and hidden size.
+    """
+    if profile.batch_invariant:
+        return bind(b1.RMSNormTriton, N=int(N), EPS=EPS)
+    return bind(CR.RMSNormCudaVector8, N=int(N), EPS=EPS,
+                BLOCK=CR.launch_block(int(M), int(N), fused=False))
+
+
+def rmsnorm_value_spec(profile, N: int):
+    """The registered-epsilon twin of :func:`rmsnorm_spec`, available on the
+    batch-invariant Triton path."""
+    if not profile.batch_invariant:
+        raise UnregisteredTarget("rms_norm without batch invariance has no registered-epsilon twin of RMSNormCudaVector8_v1")
+    return bind(VI.RMSNormTritonV3, N=int(N))
+
+
+def rmsnorm_fused_spec(profile, N: int, EPS: float | None = None, eps_input: bool = False, M: int = 1):
     """The registered Definition of `_C.fused_add_rms_norm` on one row on the declared target: under `batch_invariant` the generic
     kernel (`RMSNormFusedCuda_v2{N,EPS}`; with `eps_input` its twin `RMSNormFusedCuda_v4{N}` that reads eps as an input); refused by
-    name otherwise, where vLLM launches the width-8 kernel, whose block size off batch invariance has no registered Definition."""
+    name for a registered epsilon otherwise.  Default serving dispatches the width-8
+    kernel at the launch block selected from ``M`` and ``N``."""
     if not profile.batch_invariant:
-        raise UnregisteredTarget("fused_add_rms_norm without batch invariance launches the width-8 fused_add_rms_norm_kernel<bf16, 8> "
-                                 "(layernorm_kernels.cu, `!batch_invariant_launch`), whose block size off batch invariance is not "
-                                 "pinned: RMSNormFusedCuda_v1 models that kernel at the batch-invariant block size, and v2 is the "
-                                 "generic kernel launched only under batch invariance")
+        if eps_input:
+            raise UnregisteredTarget("fused_add_rms_norm without batch invariance has no registered-epsilon twin of "
+                                     "RMSNormFusedCudaVector8_v1")
+        return bind(CR.RMSNormFusedCudaVector8, N=int(N), EPS=EPS,
+                    BLOCK=CR.launch_block(int(M), int(N), fused=True))
     if eps_input:
         return bind(VI.RMSNormFusedCudaV4, N=N)
     return bind(b1.RMSNormFusedCuda, N=N, EPS=EPS)
@@ -494,5 +546,5 @@ def describe(profile) -> dict[str, Any]:
 __all__ = ["TARGETS", "DOTS", "FP8_DOTS", "FP4_DOTS", "UnregisteredTarget", "target_family", "gemm_target", "tensor_core_dot",
            "moe_expert_dot", "moe_expert_gemm_spec", "moe_expert_fp8_dot", "moe_expert_fp8_gemm_spec", "gemm_bias_dot", "gemm_bias_spec", "tuned_gemm_table",
            "check_flash_attn_registered", "fa3_kblock_n", "fa3_tile_m", "fa3_check_inf", "fa3_masked_from", "fa2_check_inf", "fa2_masked_from", "attention_geometry", "uses_accepted_kinds", "gemm_spec",
-           "scaled_mm_fp8_spec", "fp8_block_dot", "scaled_mm_fp8_block_spec", "nvfp4_quant_spec", "nvfp4_gemm_spec", "rmsnorm_fused_spec", "attention_spec", "describe",
+           "scaled_mm_fp8_spec", "fp8_block_dot", "scaled_mm_fp8_block_spec", "nvfp4_quant_spec", "nvfp4_gemm_spec", "rmsnorm_spec", "rmsnorm_value_spec", "rmsnorm_fused_spec", "attention_spec", "describe",
            "LaunchContextConflict", "parse_launch_context", "launch_seqlen_q"]
