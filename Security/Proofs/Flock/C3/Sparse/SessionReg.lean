@@ -256,9 +256,10 @@ theorem coinsAccepted_of_keep (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
     CoinsAccepted F rows wr reg coins := by
   intro R ω t R₂ j hex
   rw [hzs] at hex ⊢
-  exact FlockC3.PubRows.checks_of_keepOwn (Pc := fun J o tr =>
+  obtain ⟨_, tr', -, ha, hc⟩ := FlockC3.PubRows.checks_of_keepOwn (Pc := fun J o tr =>
     Flock.Guarantees.ChecksC3 F.ish (innerCommitsAt (wr t).1 (wr t).2 st reg).toOption (coins (wr t).2) j (F.bind j)
       rows J o tr) (fun _ _ _ hP => hP.2) hex
+  exact ⟨tr', ha, hc⟩
 
 /-- **The checked family passes check 5 where a session accepts**: a checked session keeps its own list only where a
 transcript it accepts passes `ChecksC3` (`coinsAccepted_of_keep`). -/
