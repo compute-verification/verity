@@ -131,7 +131,7 @@ theorem repPorts_v (S : VStar.RepS) (h : S.ports.length < (repPorts S).length) :
 
 theorem names_v (S : VStar.RepS) : (S.ports.map (·.1) ++ ["v"])[S.ports.length]! = "v" := by
   rw [getElem!_pos _ _ (by rw [List.length_append, List.length_map, List.length_singleton]; omega),
-    List.getElem_append_right (by rw [List.length_map]; omega)]
+    List.getElem_append_right (by simp only [List.length_map, Nat.le_refl])]
   simp only [List.length_map, Nat.sub_self, List.getElem_singleton]
 
 /-- **`v`'s columns at V*'s part**: port `S.ports.length` is `v`, and the key of column `vBase S + q`, for `q` within
