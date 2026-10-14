@@ -146,6 +146,16 @@ def test_the_profiler_record_pins_grid_split_count_and_reduction() -> None:
     assert not X._profile_record({"traceEvents": trace["traceEvents"][:1]})["ok"]
 
 
+def test_a_trace_with_no_kernels_fails_the_launch() -> None:
+    """r20261014-082004-e35b: the scan's in-process profiler sessions left Kineto returning empty traces to all 77 later
+    per-launch sessions, and the empty profile passed `ok` while silently dropping the served split-K override, so the
+    comparisons modeled serial chains against split-K kernels.  Every GEMM launches at least one kernel: an empty trace is a
+    broken profiler and fails the launch, never a quiet model downgrade."""
+    empty = X._profile_record({"traceEvents": []})
+    assert empty == {"launches": [], "split_k": None, "reduction_kernels": [], "ok": False}
+    assert not X._launch_ok({"deterministic": True, "operands_ok": True, "profile": empty})
+
+
 def test_cutedsl_splitk_is_not_a_profiled_cublas_split() -> None:
     trace = {"traceEvents": [
         {"cat": "kernel", "name": "kernel_cutlass_kernel_vllmmodel_executorkernelslinearcute_dsl_ll_bf16_splitkLLBf16SplitK",

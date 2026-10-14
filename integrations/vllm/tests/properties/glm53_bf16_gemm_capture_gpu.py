@@ -337,7 +337,9 @@ def _kernel_launches(trace: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _profile_record(trace: dict[str, Any]) -> dict[str, Any]:
-    """Kernel names, grids, the main split-K count and any separate reduction kernel from a Kineto Chrome trace."""
+    """Kernel names, grids, the main split-K count and any separate reduction kernel from a Kineto Chrome trace.  A trace with
+    no kernels fails: every GEMM launches at least one, so an empty trace is a broken profiler, never a license to downgrade
+    the comparison model to the route it would have shown."""
     launches = [{k: v for k, v in x.items() if k != "ts"} for x in _kernel_launches(trace)]
     # `LLBf16SplitK` has its split count in the dispatch record and reduces its cluster ranks in-kernel.  This field describes
     # cuBLAS's otherwise opaque split-K route, whose main kernel is followed by a separate reduction kernel.
@@ -346,7 +348,7 @@ def _profile_record(trace: dict[str, Any]) -> dict[str, Any]:
     reductions = [x for x in launches if "splitkreduce" in x["name"].lower()]
     split_k = main[-1]["grid"][2] if main and main[-1]["grid"][2] > 1 else None
     return {"launches": launches, "split_k": split_k, "reduction_kernels": reductions,
-            "ok": not main or (split_k is not None and bool(reductions))}
+            "ok": bool(launches) and (not main or (split_k is not None and bool(reductions)))}
 
 
 def _kernels(fn, trace_path: Path) -> dict[str, Any]:
