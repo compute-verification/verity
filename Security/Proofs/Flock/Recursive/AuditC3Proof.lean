@@ -15,7 +15,7 @@ In (i), as in `PublicAudit`'s:
   transcript against R's registration, check 5's sparse refusals), the event is empty (its first conjunct);
 * at one it builds, the class checks pass (`classOk_of_accepts`), and gap 2 holds at the word the prover's runs open
   (`zk_sessions_recursive_fork_regV`, `Recursive/RegExtract.lean`: the extraction from piece (a)'s runs, off a
-  registrant's row off a value the verifier registers itself at its rows, `valueSrcC3`, else `valueFinder`, and off a
+  registrant's row off a value the verifier registers itself at its rows, `valueSrcAll`, else `valueFinder`, and off a
   read's leaf off the table's, else `leafFinder`), here at
   the checked sessions (`checkedC3`), whose games are the typed sessions', so the transported prover plays them;
 * the hidden statement is the word the transported prover's runs open at R's level 0 against `cap` at each draw
@@ -187,7 +187,9 @@ theorem recursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
   rcases zk_sessions_recursive_fork_regV (Flock.Guarantees.holoTys st hp) (CT st hp) hp
     (classOk_of_accepts hacc.acceptsStmt) hA3
     (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr hCust
-      hT) (valueSrcC3 fun t => Flock.Guarantees.c3Of ish (Flock.Guarantees.innerHeld wr st reg t)) dg N hk hRw hM hρ hr'
+      hT)
+    (valueSrcAll (fun t => coins (wr t).2) fun t => Flock.Guarantees.c3Of ish (Flock.Guarantees.innerHeld wr st reg t))
+    dg N hk hRw hM hρ hr'
     (Flock.Guarantees.checkedT ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr hCust
       hT σ)
     wmsg Sk cmt msg cap (hbr hT)
