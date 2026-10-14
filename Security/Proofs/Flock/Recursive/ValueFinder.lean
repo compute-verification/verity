@@ -196,11 +196,3 @@ theorem prob_regTopValue_le
     (prob_regOrTop_le wr st reg bcs' lv cap hstk zs σ hX hT) (prob_valueColl_le zs vsrc dg N σ hV))
 
 end FlockSoundness.Discharge.Recursion
-
-#print axioms FlockSoundness.Discharge.Recursion.valueAt_of_some
-#print axioms FlockSoundness.Discharge.Recursion.valueColl_of_tie
-#print axioms FlockSoundness.Discharge.Recursion.value_tie_coll
-#print axioms FlockSoundness.Discharge.Recursion.ind_valueColl_le
-#print axioms FlockSoundness.Discharge.Recursion.prob_valueColl_le
-#print axioms FlockSoundness.Discharge.Recursion.prob_valueColl_fork
-#print axioms FlockSoundness.Discharge.Recursion.prob_regTopValue_le
