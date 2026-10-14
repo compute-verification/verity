@@ -30,7 +30,9 @@ editing on the pod.
 
 The pod holds no Slack credential, so its disk alert runs elsewhere: `control_disk_alert.py` runs on infra's VM (tmux
 `control-disk-alert`), reads `df` on the pod every 5 minutes over ssh, and posts in #agent-alerts at 90% and 95%, again under
-85%, and when the pod has been unreadable for 30 minutes. It stops when that VM is suspended.
+85%, and when the pod has been unreadable for 30 minutes. The same pass alerts when the steward's notes sync stalls (HEAD
+detached, an `index.lock` older than 10 minutes, or a change unpushed for an hour, on two reads in a row) and notes when it
+flows again. It stops when that VM is suspended.
 
 The steward holds a lease, so a second copy stands by instead of running. Its `--reap` reads `lane/*` tips from origin with the
 read-only deploy key; if `watch.log` shows `FETCH-FAILED`, remove `--reap` until the fetch works again.

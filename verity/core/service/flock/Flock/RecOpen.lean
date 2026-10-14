@@ -162,6 +162,41 @@ def leafSums : List (List Lin × List Lin) → List Lin → M (List Lin)
     let zs ← (leaves 7 p.1 p.2).mapM fun xy => HmNets.and xy.1 xy.2
     leafSums ps (xorL sums zs)
 
+/-- `leafSums` over `HmNets.Acc` sums: each product's ANDs are fresh variables, above every variable a sum holds, so each
+lands at its sum's end instead of being merged into it, which at a large residual's thousands of products is quadratic. -/
+def leafSumsGo : List (List Lin × List Lin) → List HmNets.Acc → M (List HmNets.Acc)
+  | [], sums => pure sums
+  | p :: ps, sums => do
+    let zs ← (leaves 7 p.1 p.2).mapM fun xy => HmNets.and xy.1 xy.2
+    leafSumsGo ps (List.zipWith HmNets.Acc.add sums zs)
+
+/-- What the compiled code runs for `leafSums` (`leafSums_eq_fast`). -/
+def leafSumsFast (ps : List (List Lin × List Lin)) (sums : List Lin) : M (List Lin) :=
+  (·.map HmNets.Acc.get) <$> leafSumsGo ps (sums.map HmNets.Acc.of)
+
+theorem zipWith_add_get : ∀ (sums : List HmNets.Acc) (zs : List Lin),
+    (List.zipWith HmNets.Acc.add sums zs).map HmNets.Acc.get = xorL (sums.map HmNets.Acc.get) zs
+  | [], _ => rfl
+  | _ :: _, [] => rfl
+  | a :: sums, z :: zs => by
+    simp only [List.zipWith_cons_cons, List.map_cons, xorL] at *
+    rw [HmNets.Acc.add_get]
+    exact congrArg _ (zipWith_add_get sums zs)
+
+theorem leafSumsGo_eq : ∀ (ps : List (List Lin × List Lin)) (sums : List HmNets.Acc),
+    (·.map HmNets.Acc.get) <$> leafSumsGo ps sums = leafSums ps (sums.map HmNets.Acc.get)
+  | [], _ => by simp [leafSumsGo, leafSums]
+  | p :: ps, sums => by
+    simp only [leafSumsGo, leafSums, map_bind]
+    congr 1
+    funext zs
+    rw [leafSumsGo_eq ps, zipWith_add_get]
+
+@[csimp] theorem leafSums_eq_fast : @leafSums = @leafSumsFast := by
+  funext ps sums
+  rw [leafSumsFast, leafSumsGo_eq, List.map_map]
+  simp [Function.comp_def, HmNets.Acc.of_get]
+
 /-- One residual: its added terms' XOR; if it has products, their leaf sums from `3^7` zero forms, committed, recombined
 and reduced, XORed in. -/
 def residual (S : GfS) (W V : List Lin) (r : Res) : M (List Lin) := do

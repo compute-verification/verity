@@ -1390,6 +1390,32 @@ def test_names_list_shows_a_handles_published_route_that_the_clone_lacks(fake, r
     assert rc == 0 and out.startswith("@circuits") and "bc-11111111" in out and "open" in out
 
 
+def test_http_get_reads_the_private_notes_raw_files_with_the_notes_token(monkeypatch):
+    """The notes repository is private: its raw files answer 404 without a token, so the published-route fallback (and
+    `names list` on a clone that lacks the route) only works when the request carries RESEARCH_NOTES_TOKEN."""
+    seen = []
+
+    class Reply(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return None
+
+    def urlopen(req, timeout):
+        seen.append((req.full_url, req.get_header("Authorization")))
+        return Reply(b'{"name": "x"}')
+
+    monkeypatch.setattr(slack.urllib.request, "urlopen", urlopen)
+    monkeypatch.setenv("RESEARCH_NOTES_TOKEN", "t0k")
+    assert slack.http_get(f"{slack.ROUTES_RAW}x.json") == b'{"name": "x"}'
+    assert slack.http_get("https://example.invalid/routes.d/x.json") == b'{"name": "x"}'
+    monkeypatch.delenv("RESEARCH_NOTES_TOKEN")
+    assert slack.http_get(f"{slack.ROUTES_RAW}x.json") == b'{"name": "x"}'
+    assert seen == [(f"{slack.ROUTES_RAW}x.json", "Bearer t0k"), ("https://example.invalid/routes.d/x.json", None),
+                    (f"{slack.ROUTES_RAW}x.json", None)]
+
+
 def notes_clone(tmp_path) -> Path:
     import subprocess
     bare, clone = tmp_path / "notes.git", tmp_path / "notes"
