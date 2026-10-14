@@ -263,3 +263,12 @@ end Family
 end
 
 end FlockC3.Sparse
+
+#print axioms FlockC3.Sparse.sparseZero_tie
+#print axioms FlockC3.Sparse.outBitRow_sparse
+#print axioms FlockC3.Sparse.outCols_of_sparse
+#print axioms FlockC3.Sparse.regOuts_sparse
+#print axioms FlockC3.Sparse.sparseSessionAt_of_zero
+#print axioms FlockC3.Sparse.sparseCheck_at
+#print axioms FlockC3.Sparse.sparseCoins_of_accepted
+#print axioms FlockC3.Sparse.sparseSessionAt_of_regs
