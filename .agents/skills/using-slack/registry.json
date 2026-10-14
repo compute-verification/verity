@@ -72,6 +72,7 @@
         "verity/core/protocols/sampled_proofs/",
         "archive/",
         "benchmarks/one_stage/",
+        "benchmarks/sampled_proofs_commit/",
         "benchmarks/commitments/",
         "archive/sp1/benchmarks/dot_product/",
         "archive/sp1/benchmarks/ir_call/",
