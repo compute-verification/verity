@@ -23,7 +23,8 @@ import verity_difftest as D
 from verity_difftest import protocol as P
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier import audit, lean_audit, service
-from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction, Issuer, LmsSigner, parameters_digest
+from verity.core.protocols.certifier.certificate import (CertifiedRecord, Direction, Issuer, LmsKey, LmsSigner,
+                                                        parameters_digest)
 from verity.core.protocols.certifier.commitment import commit
 from verity.core.protocols.certifier.grid import Certifier, GridParams
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, run_shaper
@@ -52,10 +53,10 @@ def _run(a, u, recs, e, prefixes, keyless):
         if keyless:
             out += a.check_link(link, recs, frames, syncs[:k], u.sync_set, u.grid)
         else:
-            out += a.check_link(link, recs, frames, syncs[:k], u.sync_set, u.grid, u.key)
+            out += a.check_link(link, recs, frames, syncs[:k], u.sync_set, u.grid, u.key, u.session)
     for link in u.ingress:
         out += (a.check_ingress_link(link, recs, u.windows) if keyless
-                else a.check_ingress_link(link, recs, u.windows, u.key, u.ingress_grid))
+                else a.check_ingress_link(link, recs, u.windows, u.key, u.ingress_grid, u.session))
     return out
 
 
@@ -123,6 +124,7 @@ def test_the_clock_is_the_first_link_checked_in_each_window(lean):
 
 
 SERVICE_FRAMES = [LogicalFrame(bytes([i, i]), 2 * i, 0) for i in range(8)]
+SESSION = bytes(range(lms.SESSION_BYTES))
 
 
 def _service_rounds(tmp_path, W, record=lambda w, r: r, certified=lambda w, e: e):
@@ -131,8 +133,8 @@ def _service_rounds(tmp_path, W, record=lambda w, r: r, certified=lambda w, e: e
     g, ss = GridParams(3, 2, 2), SyncSet((0, 1), (Fraction(1),))
     syncs = [ClockSync(w % 2, Fraction(1)) for w in range(W)]
     signer = LmsSigner.create(lms.keygen(lms.Params(8, 8, 4, toy=True), bytes(range(8))), tmp_path / "signer-state.json")
-    issuer = Issuer(signer)
-    lw = service.LinkWindows("responses", g, ss, signer.public_key(), "r-lean-audit-test", proof_deadline=60.0)
+    issuer = Issuer(signer, SESSION)
+    lw = service.LinkWindows("responses", g, ss, signer.public_key(), "r-lean-audit-test", SESSION, proof_deadline=60.0)
     stream = lw.stream(budget=8, delta=2.0 ** -40, challenger="challenger-test", coins=lambda n: b"\x07" * n,
                        clock=lambda: 0.0)
     egress = run_shaper(SERVICE_FRAMES, [0] * len(SERVICE_FRAMES), syncs, Certifier("responses", g))
@@ -190,7 +192,8 @@ def test_a_disagreement_with_the_reference_rejects(lean, tmp_path, monkeypatch):
     monkeypatch.setattr(service, "Audit", lambda: lean_audit.Audit(server=lean))
     lw, stream, opening, draw, syncs = next(_service_rounds(tmp_path, 1))
     a = lean_audit.Audit(server=lean)
-    vs = a.check_link("responses", [opening.records[0]], SERVICE_FRAMES, syncs[:1], lw.sync_set, lw.params, key=lw.key)
+    vs = a.check_link("responses", [opening.records[0]], SERVICE_FRAMES, syncs[:1], lw.sync_set, lw.params, key=lw.key,
+                     session=lw.certifier_session)
     assert vs == [audit.Verdict("responses", 0, "disagreement")] and not a.accepted and a.violations == vs
     assert a.lean == [audit.Verdict("responses", 0, None)] and a.reference == [audit.Verdict("responses", 0, "mismatch")]
     verdict = lw.verify(opening, draw, SERVICE_FRAMES, syncs)
@@ -215,14 +218,14 @@ def test_a_disagreement_with_the_reference_rejects(lean, tmp_path, monkeypatch):
 
 
 def test_outside_the_domain_it_refuses(lean, tmp_path):
-    """A certified record under a key the Lean can't verify, a certified record with no key, a raw grid that isn't tuples,
-    a frame of other than B bytes, a missing executable and no `lake` to build one each raise; none gets a verdict computed
+    """A certified record under a key the Lean can't verify, a certified record with no key or no session, a session id
+    not 32 bytes, a raw grid that isn't tuples, a frame of other than B bytes, a missing executable and no `lake` to build one each raise; none gets a verdict computed
     in Python, and the audit keeps no verdict or sync of a call that raised."""
     g = GridParams(1, 1, 1)
     ss = SyncSet((0,), (Fraction(1),))
     sync = [ClockSync(0, Fraction(1))]
     rec = run_shaper([], [], sync, Certifier("a", g))[0]
-    certified = Issuer(V2._Signer(V2._key(4))).certify(rec, Direction.EGRESS, g, parameters_digest(g, ss))
+    certified = Issuer(V2._Signer(V2._key(4)), SESSION).certify(rec, Direction.EGRESS, g, parameters_digest(g, ss))
 
     class OtherKey:
         key_id = certified.certificate.key_id
@@ -232,13 +235,19 @@ def test_outside_the_domain_it_refuses(lean, tmp_path):
 
     a = lean_audit.Audit(server=lean)
     with pytest.raises(ValueError, match="not an LmsKey"):
-        a.check_link("a", [certified], [], sync, ss, g, OtherKey())
-    assert a.check_link("b", [certified], [], sync, ss, g, OtherKey()) == [audit.Verdict("b", 0, "no-verdict")]
+        a.check_link("a", [certified], [], sync, ss, g, OtherKey(), SESSION)
+    assert a.check_link("b", [certified], [], sync, ss, g, OtherKey(), SESSION) == [audit.Verdict("b", 0, "no-verdict")]
     with pytest.raises(ValueError, match="pass key"):
         a.check_link("a", [certified], [], sync, ss, g)
+    key = LmsKey(V2._key(4).params, lms.public_key(V2._key(4)))
+    with pytest.raises(ValueError, match="pass key and session"):
+        a.check_link("a", [certified], [], sync, ss, g, key)
+    for short in (SESSION[:-1], SESSION + b"\0"):
+        with pytest.raises(ValueError, match="outside the Lean audit's domain: .*a certifier session id is 32 bytes"):
+            a.check_link("a", [certified], [], sync, ss, g, key, short)
     with pytest.raises(ValueError, match="pass params"):
         a.check_ingress_link("a", [dataclasses.replace(certified, head=dataclasses.replace(
-            certified.head, direction=Direction.INGRESS))], 1, OtherKey())
+            certified.head, direction=Direction.INGRESS))], 1, OtherKey(), session=SESSION)
     with pytest.raises(ValueError, match="tuple of tuples"):
         a.check_link("a", [dataclasses.replace(rec, grid=list(rec.grid))], [], sync, ss, g)
     with pytest.raises(ValueError, match="a frame of other than 1 bytes"):

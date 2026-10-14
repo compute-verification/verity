@@ -15,6 +15,10 @@ uninstrumented throwaway warm-up, our request ids) with two differences forced b
     plus `rank<r>/{values,snapshots.json,versions.json,cos_sin_cache.npy}`, `stats.rank<r>.json`, `tokens.rank<r>.json`, and the
     driver's `tokens.json` (what the engine returned = rank 0's sampler), `topology.json` (per-rank probe), `ranks.json`.
 
+`--inventory-out PATH`: every rank's module inventory of the loaded engine, before the warm-up, as one document
+(`meta_inventory.live_document` of `rank_inventory`), what `capture-map check --inventory` reads, so a capture-map check on the
+target costs no engine load of its own.
+
 `--no-observer`: the identical engine without the extension (the non-interference CONTROL; `tokens.json` only).  `--census`:
 no observer; one `torch.profiler` session per rank over the workload (`census.rank<r>.json` — the protected `census.py`
 profiles the driver process, which launches no kernel under TP).  `--tp 1` reproduces the in-process M1 topology with this
@@ -84,6 +88,8 @@ class Options:
     no_warmup: bool = option("--no-warmup", default=False, action="store_true")
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
     verify_weights: bool = option("--verify-weights", default=False, action="store_true")
+    inventory_out: str | None = option("--inventory-out", default=None,
+                                       help="every rank's live module inventory, before the warm-up -> PATH (`capture-map check --inventory`)")
     param_hashes: bool = option("--param-hashes", default=False, action="store_true",
                                 help="capture mode: sha256 of every rank's parameter shards -> param_hashes.rank<r>.json")
     record_collectives: bool = option("--record-collectives", default=False, action="store_true",
@@ -151,6 +157,12 @@ def main(args: Options) -> None:
     (out / "topology.json").write_text(json.dumps(topo, indent=1, default=str) + "\n")
     print(f"[tp2] engine built in {build_s:.1f}s; executor={topo['executor_class']}; in-process runner: {topo['in_process_runner']}; "
           f"ranks={[(r.get('pid'), (r.get('tp') or {}).get('rank'), (r.get('device') or {}).get('current')) for r in (topo['ranks'] or [])]}", flush=True)
+    if args.inventory_out:
+        from verity_vllm.engine.meta_inventory import write_live
+
+        inv = write_live(llm, Path(args.inventory_out), timeout=args.rpc_timeout, repo=cp["repo"], revision=cp.get("revision"),
+                         tp=args.tp, engine_kwargs=topo["engine_kwargs"])
+        print(f"[tp2] live inventory of ranks {sorted(inv['ranks'])} -> {args.inventory_out}", flush=True)
 
     if not args.no_warmup:
         warm = va.throwaway_requests(eng, wl["requests"])

@@ -221,6 +221,23 @@ def programs_of_record(s: Site, _rl: dict[str, str]) -> tuple[dict[str, dict], d
     return _loaded, _digs
 
 
+def request_labels(reqs: list[dict[str, Any]]) -> dict[str, str]:
+    """Request id -> the Programs' request label (``r<index>``)."""
+    return {str(r.get("request_id")): f"r{int(r.get('index', i))}" for i, r in enumerate(reqs)}
+
+
+def arrivals(s: Any, rl: dict[str, str]) -> tuple[dict[str, int], bool]:
+    """Each request's arrival step, and whether it moved off the declared one.  One schedule of record for every consumer: when the
+    population was placed on the engine's committed-step axis (binding.coverage.schedule.use == observed), the replay's, the
+    linkage's and the serving rows' arrivals are the same observed ones."""
+    from verity_vllm.check.replay import driver as SR
+
+    # [rev M-0570 (1), compiled f3fdaba37]
+    declared = {rl[str(r.get("request_id"))]: int(r.get("arrive_step") or 0) for r in s.reqs}
+    sched = (((s.row.get("commit") or {}).get("binding") or {}).get("coverage") or {}).get("schedule") or {}
+    return SR.arrivals_of_record(declared, sched)
+
+
 def seed_of(args: Any, rc: Any) -> tuple[int, str, str, str | None]:
     """[O6] the seed is not prover-choosable in advance: derived from the run root AFTER commitment unless a targeted seed is given."""
     from verity_vllm.check.replay import driver as SR, replay_codes as RC
@@ -329,16 +346,13 @@ def evaluate(s: Site, held: dict[str, Any], *, plan: bool = False, planner: Any 
 
     args, rc, reqs, sampling, row, pair = s.args, s.rc, s.reqs, s.sampling, s.row, s.pair
     held["bm"] = _bm = json.loads((s.out / f"binding_map_p{pair}.json").read_text())
-    _rl = {str(r.get("request_id")): f"r{int(r.get('index', i))}" for i, r in enumerate(reqs)}
+    _rl = request_labels(reqs)
     facts = planner.ready() if planner is not None else None
     held["loaded"], held["digs"] = _loaded, _digs = programs_of_record(s, _rl) if facts is None else ({}, {})
     held["progs"] = _progs = {k: v["instances"] for k, v in _loaded.items()}
-    _arr = {_rl[str(r.get("request_id"))]: int(r.get("arrive_step") or 0) for r in reqs}
-    # [rev M-0570 (1), compiled f3fdaba37] ONE schedule of record for every consumer: when the population was placed on the ENGINE's
-    # committed-step axis (binding.coverage.schedule.use == observed), the replay's and the linkage's arrivals are the same observed ones
-    _sched_r = (((row.get("commit") or {}).get("binding") or {}).get("coverage") or {}).get("schedule") or {}
-    _arr, _moved = SR.arrivals_of_record(_arr, _sched_r)
+    _arr, _moved = arrivals(s, _rl)
     if _moved:
+        _sched_r = (((row.get("commit") or {}).get("binding") or {}).get("coverage") or {}).get("schedule") or {}
         print(f"[delta] replay/linkage arrivals follow the engine schedule of record: {_arr} (declared {_sched_r.get('declared_arrive_steps')})", flush=True)
     if facts is None:
         _k0 = next(iter(_progs))
@@ -346,7 +360,7 @@ def evaluate(s: Site, held: dict[str, Any], *, plan: bool = False, planner: Any 
         facts = linkage_facts(_loaded, _progs, _pi0)
     from verity_vllm.pipeline import serving_rows as SRW
     _wp, held["rd"] = SRW.readers(args.serving_rows, s.com, rc, s.weights_of(held["pi0"].prefix) if "pi0" in held else None, _progs, _bm, _arr,
-                                  _loaded, s.manifest, args.label)
+                                  _loaded, s.manifest, args.label, _digs)
     _rd = held["rd"]
     _wc = None if plan else s.weights_check()
     _seed, _seed_src, _seed_form, _seed_chal = seed_of(args, rc)

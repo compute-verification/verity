@@ -43,6 +43,7 @@ SELF_CHECKED = [
     (bind(G.GemmCoordinate, K=64, DOT=P.HopperBF16WgmmaDot16), 2000),
     (bind(G.Gemm, K=32, N=3, DOT=P.AmpereBF16TcDot16), 500),
     (P.HopperE4m3QgmmaDot32, 20000),
+    (P.HopperE4m3MmaV2Dot32, 20000),
     (P.BlackwellE4m3QmmaDot32, 20000),
     (P.BlackwellE5m2QmmaDot32, 20000),
     (P.BlackwellNvf4OmmaDot64, 20000),

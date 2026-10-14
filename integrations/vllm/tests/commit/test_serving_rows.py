@@ -1,6 +1,7 @@
 """The opt-in serving rows (`commit.serving_rows`): M0's serving row leaf vector byte for byte, core's frame-v3-sha512 / hm96-sha512
-reference on the batch and parallel paths for a two-member population, ChaCha20 salts, the agreed domain rule, the registration
-shape and M0's per-member file layout, every output a hidden row (no output word in a public body).  `serving_row_leaf_vector.json` is flock-netlist's vector (notes-asset
+reference on the batch and parallel paths for a two-member population, ChaCha20 salts, core's served-domain rule, the registration
+(core's v1 record, accepted by `registration.check` against the verifier's own copies) and M0's per-member file layout, every output
+a hidden row (no output word in a public body).  `serving_row_leaf_vector.json` is flock-netlist's vector (notes-asset
 flock-netlist/serving-row-leaf-vector.json, sha256 92aa7f77...)."""
 
 from __future__ import annotations
@@ -19,13 +20,16 @@ from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.commitments.rowleaf import ROLE_X, row_leaf, sha512_row_layout
-from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.ml.circuits.defs import REGISTRY, bind
+from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R
 from verity_vllm.commit import serving_rows as SR
+from verity_vllm.program.registry import b1  # noqa: F401  (registers RoPEHead_v1 and SiluMul_v1)
 
 VECTOR = json.loads((Path(__file__).parent / "serving_row_leaf_vector.json").read_text())
-TEMPLATES = ["RoPEHead_v1{D=64}", "Norm_v1{N=128}"]
-PARTITION = {"format": "verity/partition/v1", "program": "ab" * 64,
-             "query": {"name": "Q_template_instances", "version": 0, "params": {"templates": TEMPLATES}}}
+DEFS = (bind(REGISTRY["RoPEHead_v1"], D=64), bind(REGISTRY["SiluMul_v1"], I=64))
+TEMPLATES = [P.template_id(d) for d in DEFS]
+LAW = D.parse_law("subset:1")
+RUN = "ab" * 32
 
 
 def population(n0: int, n1: int) -> tuple[SR.Member, SR.Member]:
@@ -33,8 +37,9 @@ def population(n0: int, n1: int) -> tuple[SR.Member, SR.Member]:
             SR.Member(TEMPLATES[1], (("in0", 128), ("in1", 64)), (("out.0", 128), ("out.1", 3)), n1, n0))
 
 
-def window(n0: int, n1: int, run: str = "r-test") -> SR.Window:
-    return SR.Window(PARTITION, "cd" * 64, n0 + n1, run, population(n0, n1))
+def window(n0: int, n1: int, run: str = RUN) -> SR.Window:
+    program, query = SR.population_program([(DEFS[0], n0), (DEFS[1], n1)])
+    return SR.Window(program, query, LAW, run, population(n0, n1))
 
 
 def data(w: SR.Window, seed: int = 3) -> list[dict[str, dict[str, np.ndarray]]]:
@@ -105,49 +110,66 @@ def test_salts_are_fresh_and_the_key_fixes_them():
     assert b.salts != c.salts and b.roots[ports[0]] != c.roots[ports[0]] and b.roots[out] != c.roots[out]
 
 
-def test_population_is_fixed_before_serving():
+def test_population_is_the_partitions():
     w = window(6, 2)
-    with pytest.raises(ValueError, match="population"):
-        SR.commit(SR.Window(PARTITION, "cd" * 64, 9, "r", w.members), data(w))
+    assert (w.population, [m.base for m in w.members]) == (8, [0, 6])
+    with pytest.raises(ValueError, match="partition's units"):
+        SR.Window(w.program, w.query, LAW, RUN, population(6, 3))
+    with pytest.raises(ValueError, match="partition's units"):
+        SR.Window(w.program, w.query, LAW, RUN, population(6, 2)[::-1])
     bad = data(w)
     bad[1]["rows"]["in0"] = bad[1]["rows"]["in0"][:1]
-    with pytest.raises(ValueError, match="Norm_v1"):
+    with pytest.raises(ValueError, match="SiluMul_v1"):
         SR.commit(w, bad)
 
 
-def test_domains_follow_the_agreed_rule_from_registration_fields(tmp_path):
-    w = window(9, 4, "r-dom")
+def test_the_registration_is_cores_v1_record_over_served_domains(tmp_path):
+    w = window(9, 4)
     c = SR.commit(w, data(w), salt_key=bytes(32))
-    idx = SR.index_doc(w.members, [[[0, 9, "0", 3, 0, "model.layers.0.self_attn.rotary_emb", "0", 0, 768]], []], "r-dom")
-    SR.write(c, tmp_path, {"row": 101, "run": "r-dom"}, idx)
+    idx = SR.index_doc(w.members, [[[0, 9, "r0", 3, 0, "model.layers.0.self_attn.rotary_emb", "0", 0, 768]], []], RUN)
+    win = SR.write(c, tmp_path, {"row": 101, "commitment": "vllm-v1"}, idx)
     rec = json.loads((tmp_path / "registration.json").read_text())
-    assert set(rec) == {"format", "commitment", "roots", "leaves", "domains", "partition", "partition_digest", "population", "registered_utc"}
-    assert rec["commitment"]["source"]["kind"] == "served" and rec["population"] == 13
-    assert rec["commitment"]["source"]["index"] == hashlib.sha512((tmp_path / "index.json").read_bytes()).hexdigest()
-    for p, leaves in rec["leaves"].items():
-        schema = SR.ROW_SCHEMA
-        binding = identity_digest_sha512("verity/one-stage/served-domain/v1", {"program": rec["partition"]["program"],
-                                                                                "partition": rec["partition_digest"], "port": p, "schema": schema,
-                                                                                "leaves": leaves, "run": rec["commitment"]["source"]["run"]})
-        dom = CommitmentDomain(binding, -1, RangeIndexedDomain(0, leaves), hash="sha512")
-        assert len(binding) == 64 and dom.domain_id.hex() == rec["domains"][p]
-        assert rec["domains"][p] == R.served_domain(rec["partition"]["program"], rec["partition_digest"], p, schema, leaves,
-                                                    rec["commitment"]["source"]["run"])
-    assert rec["leaves"] == {"RoPEHead_v1{D=64}/x": 9, "RoPEHead_v1{D=64}/cs": 9, "RoPEHead_v1{D=64}/out": 9,
-                             "Norm_v1{N=128}/in0": 4, "Norm_v1{N=128}/in1": 4, "Norm_v1{N=128}/out.0": 4, "Norm_v1{N=128}/out.1": 4}
-    other = SR.commit(window(9, 4, "r-other"), data(w), salt_key=bytes(32))
-    assert all(other.domains[p].domain_id != c.domains[p].domain_id for p in c.domains)
+    assert (rec["format"], rec["population"], rec["partition"], rec["window"]["kind"], rec["window"]["run"]) == (
+        R.FORMAT, 13, w.partition_digest, "served", RUN)
+    assert rec["window"]["index"] == hashlib.sha512((tmp_path / "index.json").read_bytes()).hexdigest() == win["index_sha512"]
+    assert win["registration_digest"] == R.digest(rec) and rec["program"] == P.program_digest(w.program)
+    leaves = {r["port"]: r["leaves"] for r in rec["roots"]}
+    assert leaves == {f"{TEMPLATES[0]}/{p}": 9 for p in ("x", "cs", "out")} | {f"{TEMPLATES[1]}/{p}": 4 for p in ("in0", "in1", "out.0", "out.1")}
+    for r in rec["roots"]:
+        binding = identity_digest_sha512("verity/one-stage/served-domain/v1", {"program": rec["program"], "partition": rec["partition"],
+                                                                                "port": r["port"], "schema": SR.ROW_SCHEMA, "leaves": r["leaves"], "run": RUN})
+        assert CommitmentDomain(binding, -1, RangeIndexedDomain(0, r["leaves"]), hash="sha512").domain_id.hex() == r["domain"]
+        assert r["root"] == c.roots[r["port"]].hex()
+    # the verifier's own copies: its window over its program, the run root of record, and the public bodies it holds
+    mine = window(9, 4)
+    publics = {m.template: (tmp_path / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)}
+    v = R.check(rec, mine.program, mine.query, LAW, SR.SCHEME, SR.expected_ports(mine), leaf_layer=SR.leaf_layer(publics))
+    assert v.ok, v.detail
+    other = window(9, 4, "cd" * 32)
+    v = R.check(rec, other.program, other.query, LAW, SR.SCHEME, SR.expected_ports(other), leaf_layer=SR.leaf_layer(publics))
+    assert not v.ok and "R3-domain" in v.codes
+    flipped = dict(publics, **{TEMPLATES[1]: publics[TEMPLATES[1]][:-1] + bytes([publics[TEMPLATES[1]][-1] ^ 1])})
+    assert R.check(rec, mine.program, mine.query, LAW, SR.SCHEME, SR.expected_ports(mine), leaf_layer=SR.leaf_layer(flipped)).codes == ("R4-leaf-layer",)
+    fewer = window(9, 3)
+    assert "R2-population" in R.check(rec, fewer.program, fewer.query, LAW, SR.SCHEME, SR.expected_ports(fewer),
+                                      leaf_layer=SR.leaf_layer(publics)).codes
+    # a stand-in is the same record but for its kind, which provenance cannot override; a kind core does not know is refused
+    stand = SR.registration(c, {"kind": "served", "run": "other", "of": {"run_root": RUN}}, kind="stand-in")
+    assert (stand["window"]["kind"], stand["window"]["run"], stand["roots"]) == ("stand-in", RUN, rec["roots"])
+    with pytest.raises(ValueError, match="window kind 'replayed'"):
+        SR.registration(c, {}, kind="replayed")
 
 
 def test_flock_input_files_wrap_each_members_bodies(tmp_path):
-    w = window(4, 3, "r-m0")
+    w = window(4, 3)
     d = data(w)
     c = SR.commit(w, d, salt_key=bytes(32))
-    SR.write(c, tmp_path / "w", {"row": 101, "run": "r-m0"}, SR.index_doc(w.members, [[], []], "r-m0"))
+    SR.write(c, tmp_path / "w", {"row": 101}, SR.index_doc(w.members, [[], []], RUN))
     meta = {"scheme": SR.SCHEME, "ports": [["in0", 128, 1], ["in1", 64, 1], ["out.0", 128, 1], ["out.1", 64, 1]], "input_ports": 2,
-            "out_ports": [["out.0", 128], ["out.1", 3]], "vus_per_block": 2, "units_per_vu": 8, "partition": {"rule": "verity/partition/v1", "digest": "cd" * 64}, "program_sha512": "ab" * 64, "program_digests": {}}
+            "out_ports": [["out.0", 128], ["out.1", 3]], "vus_per_block": 2, "units_per_vu": 8, "partition": {"rule": "verity/partition/v1", "digest": "cd" * 64}, "program_sha512": "ab" * 64, "program_digests": {},
+            "statement": "verity/flock-circuit", "subcircuit": "norm/n128"}
     text = "flock-circuit v2\nMETA " + json.dumps(meta) + "\nCIRCUIT unit\n..."
-    got = SR.flock_input_files(tmp_path / "w", 1, text, tmp_path / "m0", "norm/n128")
+    got = SR.flock_input_files(tmp_path / "w", 1, text, tmp_path / "m0")
     assert got["pub"].endswith("m1-pub-3.bin") and got["inst"].endswith("m1-inst-3.bin")
     pub, inst = Path(got["pub"]).read_bytes(), Path(got["inst"]).read_bytes()
     ph, pbody = pub.split(b"\n", 1)
@@ -164,12 +186,13 @@ def test_flock_input_files_wrap_each_members_bodies(tmp_path):
     assert ph["frame_v3"]["domain_ids"] == {p: c.domains[m.port(p)].domain_id.hex() for p in ("in0", "in1", "out.0", "out.1")}
     assert ph["units"]["indices"] == [4, 5, 6] and ph["units"]["blocks"] == [[4, 5], [6]]
     assert ph["circuit_sha512"] == hashlib.sha512(text.encode()).hexdigest()
+    assert (ph["statement"], ph["subcircuit"]) == ("verity/flock-circuit", "norm/n128")
     with pytest.raises(ValueError, match="ports"):
-        SR.flock_input_files(tmp_path / "w", 0, text, tmp_path / "m1", "rope-head/d64")
+        SR.flock_input_files(tmp_path / "w", 0, text, tmp_path / "m1")
     public_outputs = dict(meta, ports=meta["ports"][:2])
     del public_outputs["input_ports"]
     with pytest.raises(ValueError, match="ports"):
-        SR.flock_input_files(tmp_path / "w", 1, "flock-circuit v2\nMETA " + json.dumps(public_outputs) + "\n", tmp_path / "m2", "norm/n128")
+        SR.flock_input_files(tmp_path / "w", 1, "flock-circuit v2\nMETA " + json.dumps(public_outputs) + "\n", tmp_path / "m2")
 
 
 def test_a_shared_row_member_commits_its_tables_and_writes_m0s_shared_row_body(tmp_path):
@@ -179,8 +202,11 @@ def test_a_shared_row_member_commits_its_tables_and_writes_m0s_shared_row_body(t
     j = np.arange(3 * 5)
     refs = np.stack([j // 5, j % 5], axis=1)
     y = rng.integers(0, 1 << 16, size=(15, 1), dtype=np.uint16)
-    m = SR.Member("GemmCoordinate_v2{K=64}", (("x", 64), ("w", 64)), (("y", 1),), 15, 0, tables=(("x", 3), ("w", 5)))
-    w = SR.Window(PARTITION, "cd" * 64, 15, "r-g", (m,))
+    gemm = bind(REGISTRY["GemmCoordinate_v1"], K=64)
+    m = SR.Member(P.template_id(gemm), (("x", 64), ("w", 64)), (("y", 1),), 15, 0, tables=(("x", 3), ("w", 5)))
+    w = SR.Window(*SR.population_program([(gemm, 15)]), LAW, RUN, (m,))
+    assert SR.port_leaves(m) == {"x": 3, "w": 5, "y": 15}
+    assert {p: e["leaves"] for p, e in SR.expected_ports(w).items()} == {m.port("x"): 3, m.port("w"): 5, m.port("y"): 15}
     c = SR.commit(w, [{"rows": tables, "outs": {"y": y}, "refs": refs}], salt_key=bytes(32))
     assert c.domains[m.port("x")].count == 3 and c.domains[m.port("w")].count == 5 and c.domains[m.port("y")].count == 15
     assert c.roots == reference(c)
@@ -193,9 +219,9 @@ def test_a_shared_row_member_commits_its_tables_and_writes_m0s_shared_row_body(t
         + c.salts[m.port("x")] + c.salts[m.port("w")] + c.salts[m.port("y")]
     with pytest.raises(ValueError, match="refs"):
         SR.commit(w, [{"rows": tables, "outs": {"y": y}, "refs": refs + [0, 5]}])
-    SR.write(c, tmp_path / "w", {"row": 101, "run": "r-g"}, SR.index_doc((m,), [[]], "r-g"))
+    SR.write(c, tmp_path / "w", {"row": 101}, SR.index_doc((m,), [[]], RUN))
     meta = {"scheme": SR.SCHEME, "ports": [["x", 64, 1], ["w", 64, 1], ["y", 64, 1]], "input_ports": 2, "out_ports": [["y", 1]],
-            "vus_per_block": 4, "units_per_vu": 1}
-    got = SR.flock_input_files(tmp_path / "w", 0, "flock-circuit v2\nMETA " + json.dumps(meta) + "\n", tmp_path / "m0", "gemm/k64")
+            "vus_per_block": 4, "units_per_vu": 1, "subcircuit": "gemm/k64"}
+    got = SR.flock_input_files(tmp_path / "w", 0, "flock-circuit v2\nMETA " + json.dumps(meta) + "\n", tmp_path / "m0")
     head = json.loads(Path(got["pub"]).read_bytes().split(b"\n", 1)[0])
     assert head["shared_rows"] == {"x": 3, "w": 5, "y": 15} and head["instances"] == 15
