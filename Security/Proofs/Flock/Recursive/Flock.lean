@@ -288,7 +288,7 @@ def RegAgree (bits : Fin (Layout.keyN c hU nv) → Bool) : Prop :=
 theorem oneG_mem_io (u : Fin nv) :
     Layout.oneG (c := c) (hU := hU) (n := nv) ∈
       ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).io u := by
-  have P := parse_facts zo.hc
+  have P := parse_facts (ZkOuterD.hc zo.toZkOuterD)
   obtain ⟨ls, hls⟩ := P.check
   have C := check_facts P.typed hls
   have ho : c.outNet = c.unitNet := by
