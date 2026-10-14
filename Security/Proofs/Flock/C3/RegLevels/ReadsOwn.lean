@@ -59,7 +59,7 @@ theorem readsOwnAt_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {dg : By
   intro R ω t R₂ τ o h j u q hr
   obtain ⟨hre, _, _, _, _, _, hc3⟩ := hrc R ω t R₂ τ o h j
   obtain ⟨hmem, hname, d, D, dp, idx, hd, hD, hdp, hidx, hu, hpos⟩ := readsOwn_of_hown h j hre u q hr
-  obtain ⟨spec, sts, hst, -, -, -, hlb⟩ := hc3
+  obtain ⟨spec, sts, hst, -, -, -, hlb, -⟩ := hc3
   rw [FlockC3.PubRows.label_of_checked (F.zs R ω t R₂ j) (h.1 j).1 ⟨spec, sts, hst, hlb⟩ hd hD hdp hidx hu] at hpos
   exact ⟨hmem, hname, hpos⟩
 
