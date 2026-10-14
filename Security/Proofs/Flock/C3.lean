@@ -16,6 +16,7 @@ import Proofs.Flock.C3.Compose.DecodeFix
 import Proofs.Flock.C3.Compose.HoloStageCoins
 import Proofs.Flock.C3.Compose.LaterHeld
 import Proofs.Flock.C3.Compose.LaterHeldW
+import Proofs.Flock.C3.Compose.LaterHolo
 import Proofs.Flock.C3.Compose.HoloCoinTys
 import Proofs.Flock.C3.Compose.HoloEncoded
 import Proofs.Flock.C3.Compose.RowsReg
@@ -109,6 +110,8 @@ import Proofs.Flock.C3.RegLevels.ROpensPR
 import Proofs.Flock.C3.RegLevels.LevelsChecked
 import Proofs.Flock.C3.RegLevels.SrcMaps
 import Proofs.Flock.C3.RegLevels.LgCoins
+import Proofs.Flock.C3.RegLevels.RRounds
+import Proofs.Flock.C3.RegLevels.LgHeld
 
 /-!
 # Candidate 3's recursive guarantee: its open pieces

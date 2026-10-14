@@ -12,7 +12,7 @@ import Proofs.Flock.Recursive.HoloCoins
 history's rounds as it has coins, at a run whose stages are tied. Each tied stage takes its whole shape: a rep
 `holoRepShape` (`repKinds_of_tie`), a sparse phase `sparseKinds` (`sparseKinds_of_tie`), R's opening `opShape` at two
 claims (`opening_exact`) and R's Ligerito `ligShape` (`ligeritoC_exact`). So the stages' coins add up to `holoKinds`',
-which `holoCTs` counts after the link points.
+which `holoCTs` counts after the link points (`coins_total_holo`, the bound `h5`'s rounds read).
 `stageCoins_holo`: `srcOK_holo`'s `hcoins` at `holoCTs` and the tied source of `repsOfVals`. The reps' two conjuncts
 come from custody's coins half (`repCoins_repsOfVals`), and the rest from `LaterCoins`.
 -/
@@ -53,8 +53,27 @@ def LaterCoins {r : ℕ} {CT : Fin r → Type} {e : ExecHolo} (cs : List ((k : F
     CoinsAt cs (1 + nCoins (u.ts 0) + nCoins (u.ts 1) + nCoins (u.sp 0) + nCoins (u.sp 1) + nCoins u.op)
       (nCoins u.lg) u.lg
 
+/-- **A tied run's stages take `holoKinds`' coins**, `holoCTs`' count after the link points: each tied stage takes its
+whole shape. It bounds the rounds `laterCoins_of_held`'s `h4`, `h5` read (`RegLevels.stagesHeld_of_run`'s `htot`). -/
+theorem coins_total_holo {st : Flock.Stmt} {hp : HoloParams} {u : C3Run (holoAt st hp)} {cap₀ : Cap Dig}
+    {sh : Flock.Shape} {w : Array F128} {ops : FlockVBridge.AccChain.Openings}
+    (hr : ∀ i, RepTie (holoAt st hp) u i) (hs : ∀ i, FlockC3.Sparse.SparseTie (holoAt st hp) u i)
+    (ho : FlockC3.Opening.OpenTie sh w ops u) (hor : OpeningReadAt (runSteps u) u)
+    (hl : FlockC3.RegLevels.LevelTie cap₀ (holoAt st hp) u) :
+    1 + nCoins (u.ts 0) + nCoins (u.ts 1) + nCoins (u.sp 0) + nCoins (u.sp 1) + nCoins u.op + nCoins u.lg =
+      1 + (Exec.kindCoinTys (holoKinds (holoAt st hp))).length := by
+  have hkr := fun i => repKinds_of_tie (hr i)
+  have hks := fun i => sparseKinds_of_tie (hs i)
+  obtain ⟨_, ha⟩ := opening_plays_of ho hor
+  have hko : u.op.map Exec.kindOf = Exec.opShape GF128 2 := Exec.Exact.kinds ha (Exec.opening_exact _ _ _)
+  obtain ⟨_, hpl⟩ := lig_plays_of_levelTie hl
+  have hkl : u.lg.map Exec.kindOf = Exec.ligShape GF128 GF256 Dig (holoAt st hp).rsch.sch :=
+    Exec.Exact.kinds hpl (FlockC3.RegLevels.ligeritoC_exact _ _ _ _)
+  simp only [nCoins, coins_eq_kindCoins, hkr, hks, hko, hkl, kindCoinTys_length, holoKinds, kindCoins_append]
+  omega
+
 /-- **`StageCoins` at `holoCTs`** at a run whose stages are tied: stage `i` takes its coins' number of rounds, and
-those add up to `holoKinds`' coins, `holoCTs`' count after the link points. -/
+those add up to `holoKinds`' coins, `holoCTs`' count after the link points (`coins_total_holo`). -/
 theorem stageCoins_holoCTs {st : Flock.Stmt} {hp : HoloParams} {u : C3Run (holoAt st hp)} {cap₀ : Cap Dig}
     {sh : Flock.Shape} {w : Array F128} {ops : FlockVBridge.AccChain.Openings}
     {cs : List ((k : Fin (1 + (Exec.kindCoinTys (holoKinds (holoAt st hp))).length)) → holoCTs st hp k)}
@@ -64,19 +83,8 @@ theorem stageCoins_holoCTs {st : Flock.Stmt} {hp : HoloParams} {u : C3Run (holoA
     (h0 : CoinsAt cs 1 (nCoins (u.ts 0)) (u.ts 0)) (h1 : CoinsAt cs (1 + nCoins (u.ts 0)) (nCoins (u.ts 1)) (u.ts 1))
     (hlater : LaterCoins cs u) : StageCoins (CT := holoCTs st hp) cs u := by
   obtain ⟨hpts, h2, h3, h4, h5⟩ := hlater
-  have hkr := fun i => repKinds_of_tie (hr i)
-  have hks := fun i => sparseKinds_of_tie (hs i)
-  obtain ⟨_, ha⟩ := opening_plays_of ho hor
-  have hko : u.op.map Exec.kindOf = Exec.opShape GF128 2 := Exec.Exact.kinds ha (Exec.opening_exact _ _ _)
-  obtain ⟨_, hpl⟩ := lig_plays_of_levelTie hl
-  have hkl : u.lg.map Exec.kindOf = Exec.ligShape GF128 GF256 Dig (holoAt st hp).rsch.sch :=
-    Exec.Exact.kinds hpl (FlockC3.RegLevels.ligeritoC_exact _ _ _ _)
-  refine ⟨![nCoins (u.ts 0), nCoins (u.ts 1), nCoins (u.sp 0), nCoins (u.sp 1), nCoins u.op, nCoins u.lg], ?_,
-    hpts, h0, h1, h2, h3, h4, h5⟩
-  show 1 + nCoins (u.ts 0) + nCoins (u.ts 1) + nCoins (u.sp 0) + nCoins (u.sp 1) + nCoins u.op + nCoins u.lg =
-    1 + (Exec.kindCoinTys (holoKinds (holoAt st hp))).length
-  simp only [nCoins, coins_eq_kindCoins, hkr, hks, hko, hkl, kindCoinTys_length, holoKinds, kindCoins_append]
-  omega
+  exact ⟨![nCoins (u.ts 0), nCoins (u.ts 1), nCoins (u.sp 0), nCoins (u.sp 1), nCoins u.op, nCoins u.lg],
+    coins_total_holo hr hs ho hor hl, hpts, h0, h1, h2, h3, h4, h5⟩
 
 section src
 

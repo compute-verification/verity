@@ -2,6 +2,7 @@ import Proofs.Flock.C3.RegLevels.OpensRegs
 import Proofs.Flock.C3.PubRows.Shape
 import Proofs.Flock.VBridge.Family.AccRows
 import Proofs.Flock.Recursive.Raw
+import Proofs.Flock.Recursive.Stage
 
 /-!
 # n11: `OpenKeysS`' reads-file conjuncts at a level's `acc` and `acc_out`, from `checkAcc` and `checkAccReads`
@@ -11,23 +12,27 @@ at the opening's row of the chain (`ColKeyedS`: the reads file names the column'
 registration, and the read is at the position). A level's session's reads file gives all three where the verifier
 checked its statement (`checkAcc_of_checkStmt`):
 
+* `names_of_checkAcc`: `checkAcc` refuses a reads file naming a port twice (`checkNames`), so two entries of `own`
+  with one name are one, which `find?`'s first entry of a name, all `checkAcc` and `checkAccReads` read, needs;
 * `value_of_checkAcc`, `site_of_checkAcc`: `checkAcc` finds each of the statement's `accPorts` reading `rec-acc`, and
   every entry reading `rec-acc` has the registration (`site`) of `acc0` in the verifier's shared rows
   (`site_of_portDiff`);
 * `reads_of_checkAccReads`: `checkAccReads` finds `acc` reading `accReads`' rows, and `acc_out` the next ones
   (`accReads_recOpen`: the table's level `l`'s unit `u` reads row `u / q · n + opensBelow l + u % q`;
   `accReads_recOpenStacked`: R's level `l`'s unit `u` reads row `2 · n + opensBelow' l + u`; `getElem?_accRow`);
-* `accPort_of_checks`, `accPort_of_checkStmt`: so `own`'s entry of each name has `acc0`'s registration and those reads,
-  where `own` names each port once (`hnd`);
+* `accPort_of_checks`, `accPort_of_checkStmt`: so `own`'s entry of each name has `acc0`'s registration and those reads;
 * `accRead_drawn`: at a drawn unit, `OwnReadsHJ` puts a registered read of an `acc` (`acc_out`) column at `own`'s entry
   of its name, so the reads file names the column's port and the read's port has `acc0`'s registration; its position
   is `accReads`' row at the drawn statement's label of the unit (`idx`, which `OwnReadsHJ` reads), not at the unit;
-* `ReadsOwnC3`, `accRead_of_checked`: where a registered read's port is `own`'s entry of its name read at the unit's
-  position at every unit (`ReadsOwnC3`, `OwnReadsHJ`'s conclusion with the unit for its label), at an accepted session
-  whose statements the verifier checked (`ChecksAccepted`), the read is also at `accReads`' row of its unit.
-
-`checkAcc` and `checkAccReads` read `find?`'s first entry of a name, so both need `own`'s names unique (`hnd`), which
-neither the verifier nor the family states.
+* `readsOwn_of_hown`: V*'s sessions draw every unit (`VLaw.live`, `execOS_subset_full_mem`), so at an accepted outcome
+  the session's game reaches (`Reached`) `OwnReadsHJ` holds at every registered read: its port is `own`'s entry of its
+  name, read at the drawn statement's label of the unit (`AtLabel`; `HmRow.drawn` labels unit `u` with the registered
+  population's `units.indices` at `u`, which no check here holds to `u`);
+* `accRead_of_checked`: so at such an outcome of a session whose statements the verifier checked (`ChecksAccepted`), the
+  read is also at `accReads`' row of the unit's label;
+* `accRead_at_unit`: where the verifier's label check (`RecVStar.checkLabels`, `ChecksC3`'s conjunct, as the event's
+  `ChecksVR` states it) also passes at the outcome's own transcript, it makes that label the unit
+  (`PubRows.label_of_checked`), so the read is at `accReads`' row of the unit, which `OpenKeysS` reads.
 -/
 
 namespace FlockC3.RegLevels
@@ -58,12 +63,29 @@ theorem site_of_portDiff {a b : Flock.Registered.Port} (h : Flock.RecVStar.portD
     simp [Flock.RecVStar.portDiff?, e1, e2, e3, e4, e5, hne] at h
   simp only [FlockVBridge.Family.site, e1, e2, e3, e4, e5, e6]
 
+/-- **`checkAcc` names each port once** (`checkNames`): two entries of `own` with one name are one. -/
+theorem names_of_checkAcc {s : VStar.Stmt} {own : Array Flock.Registered.Port}
+    {rows : Option (Array Flock.Registered.Port)} (h : Flock.RecVStar.checkAcc s own rows = .ok ()) :
+    ∀ p ∈ own, ∀ p' ∈ own, p.name = p'.name → p = p' := by
+  unfold Flock.RecVStar.checkAcc at h
+  obtain ⟨⟨⟩, h, -⟩ := FlockSoundness.Refine.ebind_ok h
+  unfold Flock.RecVStar.checkNames at h
+  split at h
+  · cases h
+  · rename_i hd
+    simp only [Flock.RecVStar.dupName?, List.find?_eq_none] at hd
+    have hnd : (own.toList.map (·.name)).Nodup :=
+      List.nodup_iff_count_eq_one.2 fun nm hm => by simpa using hd nm hm
+    intro p hp p' hp' he
+    exact List.inj_on_of_nodup_map hnd (Array.mem_toList_iff.2 hp) (Array.mem_toList_iff.2 hp') he
+
 /-- **`checkAcc`'s first loop**: each of the statement's `accPorts` is `own`'s first entry of its name, reading
 `rec-acc`. -/
 theorem value_of_checkAcc {s : VStar.Stmt} {own : Array Flock.Registered.Port}
     {rows : Option (Array Flock.Registered.Port)} (h : Flock.RecVStar.checkAcc s own rows = .ok ()) :
     ∀ nm ∈ Flock.RecVStar.accPorts s, ∃ p, own.find? (·.name == nm) = some p ∧ p.value = Flock.RecVStar.ACC_VALUE := by
   unfold Flock.RecVStar.checkAcc at h
+  obtain ⟨⟨⟩, -, h⟩ := FlockSoundness.Refine.ebind_ok h
   obtain ⟨_, h, -⟩ := FlockSoundness.Refine.ebind_ok h
   refine FlockC3.PubRows.rows_forIn_each _ ?_ _ h
   intro nm r hr
@@ -87,6 +109,10 @@ theorem site_of_checkAcc {s : VStar.Stmt} {own : Array Flock.Registered.Port}
     ∃ rws w, rows = some rws ∧ rws.find? (·.name == "acc0") = some w ∧
       FlockVBridge.Family.site b = FlockVBridge.Family.site w := by
   unfold Flock.RecVStar.checkAcc at h
+  obtain ⟨⟨⟩, -, h'⟩ := FlockSoundness.Refine.ebind_ok h
+  clear h
+  have h := h'
+  clear h'
   obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
   dsimp only at h
   have hbm : b ∈ own.filter (·.value == Flock.RecVStar.ACC_VALUE) := Array.mem_filter.2 ⟨hb, by simpa using hv⟩
@@ -184,14 +210,13 @@ theorem getElem?_accRow (f : ℕ → ℕ) {m d u : ℕ} (hu : u < m) :
     (((Array.range m).map fun u => some (f u)).map (·.map (· + d)))[u]? = some (some (f u + d)) := by
   simp [hu]
 
-/-- **A level's `acc` or `acc_out` entry, from `checkAcc` and `checkAccReads`**, where `own` names each port once
-(`hnd`): the entry `pa` of the name has `acc0`'s registration in the verifier's shared rows and reads `accReads`' rows,
-the second one on. -/
+/-- **A level's `acc` or `acc_out` entry, from `checkAcc` and `checkAccReads`**, `own` naming each port once
+(`names_of_checkAcc`): the entry `pa` of the name has `acc0`'s registration in the verifier's shared rows and reads
+`accReads`' rows, the second one on. -/
 theorem accPort_of_checks {i : Flock.RecVStar.Inner} {s : VStar.Stmt} {own : Array Flock.Registered.Port}
     {rows : Option (Array Flock.Registered.Port)} (hacc : Flock.RecVStar.checkAcc s own rows = .ok ())
     (hrd : Flock.RecVStar.checkAccReads i s own = .ok ()) (hl : Flock.RecVStar.accPorts s = ["acc", "acc_out"])
-    {want : Array (Option ℕ)} (hw : Flock.RecVStar.accReads i s = .ok (some want))
-    (hnd : ∀ p ∈ own, ∀ p' ∈ own, p.name = p'.name → p = p') {nm : String} {d : ℕ}
+    {want : Array (Option ℕ)} (hw : Flock.RecVStar.accReads i s = .ok (some want)) {nm : String} {d : ℕ}
     (hnm : (nm, d) ∈ [("acc", 0), ("acc_out", 1)]) {pa : Flock.Registered.Port} (hpa : pa ∈ own)
     (hpn : pa.name = nm) :
     (∃ rws w, rows = some rws ∧ rws.find? (·.name == "acc0") = some w ∧
@@ -202,7 +227,7 @@ theorem accPort_of_checks {i : Flock.RecVStar.Inner} {s : VStar.Stmt} {own : Arr
     simp only [List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false] at hnm
     rcases hnm with ⟨rfl, -⟩ | ⟨rfl, -⟩ <;> simp
   obtain ⟨p, hf, hv⟩ := value_of_checkAcc hacc nm hnm'
-  obtain rfl : p = pa := hnd p (Array.mem_of_find?_eq_some hf) pa hpa
+  obtain rfl : p = pa := names_of_checkAcc hacc p (Array.mem_of_find?_eq_some hf) pa hpa
     ((by simpa using Array.find?_some hf : p.name = nm).trans hpn.symm)
   obtain ⟨p', hf', hr⟩ := reads_of_checkAccReads hrd hw (nm, d) hnm
   obtain rfl : p' = p := Option.some.inj (hf'.symm.trans hf)
@@ -217,15 +242,14 @@ theorem accPort_of_checkStmt {i : Flock.RecVStar.Inner} {tags : Flock.Tags} {tab
       rows = .ok ()) {s : VStar.Stmt}
     (hj : ∀ ss : Array VStar.Stmt, Flock.RecVStar.statements i = .ok ss → ss[j]? = some s)
     (hl : Flock.RecVStar.accPorts s = ["acc", "acc_out"]) {want : Array (Option ℕ)}
-    (hw : Flock.RecVStar.accReads i s = .ok (some want)) (hnd : ∀ p ∈ own, ∀ p' ∈ own, p.name = p'.name → p = p')
-    {nm : String} {d : ℕ} (hnm : (nm, d) ∈ [("acc", 0), ("acc_out", 1)]) {pa : Flock.Registered.Port}
-    (hpa : pa ∈ own) (hpn : pa.name = nm) :
+    (hw : Flock.RecVStar.accReads i s = .ok (some want)) {nm : String} {d : ℕ}
+    (hnm : (nm, d) ∈ [("acc", 0), ("acc_out", 1)]) {pa : Flock.Registered.Port} (hpa : pa ∈ own) (hpn : pa.name = nm) :
     (∃ rws w, rows = some rws ∧ rws.find? (·.name == "acc0") = some w ∧
       FlockVBridge.Family.site pa = FlockVBridge.Family.site w) ∧
       pa.reads = want.map (·.map (· + d)) := by
   obtain ⟨ss, s', hss, hs', hacc, hrd⟩ := checkAcc_of_checkStmt h
   obtain rfl : s' = s := Option.some.inj (hs'.symm.trans (hj ss hss))
-  exact accPort_of_checks hacc hrd hl hw hnd hnm hpa hpn
+  exact accPort_of_checks hacc hrd hl hw hnm hpa hpn
 
 /-! ## At a drawn unit -/
 
@@ -236,6 +260,11 @@ open FlockSoundness.Discharge.ZkReg (LiveAcceptsZKR)
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
   {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
+/-- An outcome the session's game reaches: the registration sent, the law's draw at some coins, and the transcript the
+session writes there (`ZkOuter.game`'s outcomes, `prob_auditLive_liveOfZJ_mono`'s). -/
+def Reached (o : Reg' × Finset (Fin nv) × Exec.Transcript) : Prop :=
+  ∃ ω R' x, o = (R', Lv.draw ω, zo.wr (Lv.draw ω) R' x)
+
 /-- **A drawn unit's registered read of a level's `acc` (`acc_out`) column, from `OwnReadsHJ`** (`zo.hown`) and the
 verifier's checks of the session's statement `s` (`accPort_of_checks`): the reads file names the column's port, and the
 read's port has `acc0`'s registration; its position is `accReads`' row at some index (the drawn statement's label of
@@ -245,8 +274,7 @@ theorem accRead_drawn {ω : Lv.Ω} {R' : Reg'} {o}
     {q : Fin c.ports.size} (hr : zo.rd.isRead (.inl (u, q))) {i : Flock.RecVStar.Inner} {s : VStar.Stmt}
     {rows : Option (Array Flock.Registered.Port)} (hck : Flock.RecVStar.checkAcc s zo.own rows = .ok ())
     (hrd : Flock.RecVStar.checkAccReads i s zo.own = .ok ()) (hl : Flock.RecVStar.accPorts s = ["acc", "acc_out"])
-    {want : Array (Option ℕ)} (hw : Flock.RecVStar.accReads i s = .ok (some want))
-    (hnd : ∀ p ∈ zo.own, ∀ p' ∈ zo.own, p.name = p'.name → p = p') {nm : String} {d : ℕ}
+    {want : Array (Option ℕ)} (hw : Flock.RecVStar.accReads i s = .ok (some want)) {nm : String} {d : ℕ}
     (hnm : (nm, d) ∈ [("acc", 0), ("acc_out", 1)]) (hq : c.ports[q].name = nm) :
     (∃ pt ∈ zo.own, pt.name = c.ports[q].name) ∧
       (∃ rws w, rows = some rws ∧ rws.find? (·.name == "acc0") = some w ∧
@@ -260,7 +288,7 @@ theorem accRead_drawn {ω : Lv.Ω} {R' : Reg'} {o}
     have h1 := List.find?_some hf
     rw [beq_iff_eq, getElem!_pos c.ports q.val q.isLt] at h1
     exact h1.symm.trans hq
-  obtain ⟨hsite, hreads⟩ := accPort_of_checks hck hrd hl hw hnd hnm hmem hn
+  obtain ⟨hsite, hreads⟩ := accPort_of_checks hck hrd hl hw hnm hmem hn
   refine ⟨⟨_, hmem, hn.trans hq.symm⟩, hsite, idx.getD (D.proved.idxOf u.val) 0, ?_⟩
   rw [← hreads]
   exact hpos
@@ -280,29 +308,54 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- (3) `OwnReadsHJ`'s conclusion at every unit, not only drawn ones: a registered read's port is `own`'s entry of its
-name, read at the unit's position. -/
-def ReadsOwnC3 (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ) : Prop :=
-  ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ j (u : Fin (F.Vs j).nv)
-    (q : Fin (F.Vs j).c.ports.size), (F.zs R ω t R₂ j).rd.isRead (.inl (u, q)) →
-      (F.zs R ω t R₂ j).rd.port (.inl (u, q)) ∈ (F.zs R ω t R₂ j).own ∧
+/-- **`reads` reads `pos` at the drawn statement's label of unit `u`** (`OwnReadsHJ`'s position): at the draw the
+transcript `tr` records, `u`'s table's drawn statement labels `u` with `idx.getD (D.proved.idxOf u.val) 0`
+(`Registered.unitIndices`), which `loadPublic` holds only to ascending; the verifier's label check holds it to `u`
+(`accRead_at_unit`). -/
+def AtLabel (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin)) (R₂ : Reg₂)
+    (j : Fin (vstarCount F.ish)) (tr : Exec.Transcript) (u : Fin (F.Vs j).nv) (reads : Array (Option ℕ)) (pos : ℕ) :
+    Prop :=
+  ∃ d D dp idx, recordDraw tr.record = some d ∧
+    Draw.UnitDraw.ofJson (drawJ (F.zs R ω t R₂ j).I d (partOf (F.zs R ω t R₂ j).I d u.val)) = .ok D ∧
+    HmOut.drawn (F.Vs j).c (F.zs R ω t R₂ j).pub (drawJ (F.zs R ω t R₂ j).I d (partOf (F.zs R ω t R₂ j).I d u.val)) =
+      .ok dp ∧ Registered.unitIndices dp = .ok idx ∧ u.val ∈ D.proved ∧
+    reads[idx.getD (D.proved.idxOf u.val) 0]? = some (some pos)
+
+/-- **`OwnReadsHJ`'s conclusion at every unit, from `hown`**: V*'s sessions draw every unit (`VLaw.live`, the full draw,
+`execOS_subset_full_mem`), so at an accepted outcome a session's game reaches (`Reached`) every registered read is a
+drawn unit's: its port is `own`'s entry of its name, read at the unit's label (`AtLabel`). -/
+theorem readsOwn_of_hown {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ} {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
+    (h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) (j : Fin (vstarCount F.ish))
+    (hre : Reached (F.zs R ω t R₂ j) (o j)) (u : Fin (F.Vs j).nv) (q : Fin (F.Vs j).c.ports.size)
+    (hr : (F.zs R ω t R₂ j).rd.isRead (.inl (u, q))) :
+    (F.zs R ω t R₂ j).rd.port (.inl (u, q)) ∈ (F.zs R ω t R₂ j).own ∧
       ((F.zs R ω t R₂ j).rd.port (.inl (u, q))).name = (F.Vs j).c.ports[q].name ∧
-      ((F.zs R ω t R₂ j).rd.port (.inl (u, q))).reads[u.val]? =
-        some (some ((F.zs R ω t R₂ j).rd.readAt (.inl (u, q))))
+      AtLabel F R ω t R₂ j (o j).2.2 u ((F.zs R ω t R₂ j).rd.port (.inl (u, q))).reads
+        ((F.zs R ω t R₂ j).rd.readAt (.inl (u, q))) := by
+  obtain ⟨ω', R', x, ho⟩ := hre
+  have hacc := (h.1 j).1
+  rw [ho] at hacc
+  obtain ⟨u₁, q₁, d, D, dp, idx, h₁, hmem, hf, hd, hD, hdp, hidx, hu, hpos⟩ :=
+    (F.zs R ω t R₂ j).hown ω' R' x hacc (.inl (u, q)) ⟨hr, execOS_subset_full_mem (F.Vs j).law.src ω' u⟩
+  simp only [Sum.inl.injEq, Prod.mk.injEq] at h₁
+  obtain ⟨rfl, rfl⟩ := h₁
+  have h1 := List.find?_some hf
+  rw [beq_iff_eq, getElem!_pos (F.Vs j).c.ports q.val q.isLt] at h1
+  rw [ho]
+  exact ⟨hmem, h1.symm, d, D, dp, idx, hd, hD, hdp, hidx, hu, hpos⟩
 
 /-- **`OpenKeysS`' reads-file conjuncts at an accepted session's level** (`accPort_of_checkStmt`): where the verifier
-checked the session's statements (`ChecksAccepted`; the first table's, `setup_zero_c`), its reads file names each port
-once (`hnd`) and a registered read's port is `own`'s entry of its name read at the unit's position (`ReadsOwnC3`), a
-registered read of the level's `acc` (`acc_out`) column at unit `u` is a read of a port the reads file names, of
-`acc0`'s registration in the shared rows, at `accReads`' row of `u` (the next one). -/
+checked the session's statements (`ChecksAccepted`; the first table's, `setup_zero_c`), at an accepted outcome the
+session reaches (`Reached`), a registered read of the level's `acc` (`acc_out`) column at unit `u` is a read of a port
+the reads file names, of `acc0`'s registration in the shared rows, at `accReads`' row (the next one) of `u`'s label
+(`AtLabel`). `OpenKeysS` reads it at `u`'s own row (`accRead_at_unit`). -/
 theorem accRead_of_checked {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : Option (Array Flock.Registered.Port)}
     {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json}
-    (hchk : FlockC3.PubRows.ChecksAccepted F rows wr reg) {dg : ByteArray → ByteArray} {N k Rw : ℕ}
-    (hro : ReadsOwnC3 F dg N k Rw)
-    (hnd : ∀ R ω t R₂ j, ∀ p ∈ (F.zs R ω t R₂ j).own, ∀ p' ∈ (F.zs R ω t R₂ j).own, p.name = p'.name → p = p')
-    {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂}
-    {τ o}
-    (h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) (j : Fin (vstarCount F.ish)) {s : VStar.Stmt}
+    (hchk : FlockC3.PubRows.ChecksAccepted F rows wr reg) {dg : ByteArray → ByteArray}
+    {N k Rw : ℕ} {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
+    (h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) (j : Fin (vstarCount F.ish))
+    (hre : Reached (F.zs R ω t R₂ j) (o j)) {s : VStar.Stmt}
     (hs : F.stmts[(j : ℕ)]? = some s) (hl : Flock.RecVStar.accPorts s = ["acc", "acc_out"])
     {want : Array (Option ℕ)} (hw : Flock.RecVStar.accReads F.ish s = .ok (some want)) {nm : String} {d : ℕ}
     (hnm : (nm, d) ∈ [("acc", 0), ("acc_out", 1)]) {u : Fin (F.Vs j).nv} {q : Fin (F.Vs j).c.ports.size}
@@ -310,16 +363,40 @@ theorem accRead_of_checked {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {ro
     (∃ pt ∈ (F.zs R ω t R₂ j).own, pt.name = (F.Vs j).c.ports[q].name) ∧
       (∃ rws w, rows = some rws ∧ rws.find? (·.name == "acc0") = some w ∧
         FlockVBridge.Family.site ((F.zs R ω t R₂ j).rd.port (.inl (u, q))) = FlockVBridge.Family.site w) ∧
-      (want.map (·.map (· + d)))[u.val]? = some (some ((F.zs R ω t R₂ j).rd.readAt (.inl (u, q)))) := by
+      AtLabel F R ω t R₂ j (o j).2.2 u (want.map (·.map (· + d))) ((F.zs R ω t R₂ j).rd.readAt (.inl (u, q))) := by
   obtain ⟨_, -, -, _, _, hset, hfm⟩ := hchk R ω t R₂ j ⟨_, (h.1 j).1⟩
   obtain ⟨h0, -⟩ := setup_zero_c (F.zs R ω t R₂ j).ht (F.zs R ω t R₂ j).hTags.1 (F.zs R ω t R₂ j).hcH hset
-  obtain ⟨hmem, hname, hpos⟩ := hro R ω t R₂ τ o h j u q hr
+  obtain ⟨hmem, hname, hpos⟩ := readsOwn_of_hown h j hre u q hr
   obtain ⟨hsite, hreads⟩ := accPort_of_checkStmt (array_forM_ok hfm 0 h0)
-    (fun ss hss => by rw [← Except.ok.inj (F.hstmts.symm.trans hss)]; exact hs) hl hw (hnd R ω t R₂ j) hnm hmem
-    (hname.trans hq)
+    (fun ss hss => by rw [← Except.ok.inj (F.hstmts.symm.trans hss)]; exact hs) hl hw hnm hmem (hname.trans hq)
   refine ⟨⟨_, hmem, hname⟩, hsite, ?_⟩
   rw [← hreads]
   exact hpos
+
+/-- **`OpenKeysS`' reads-file conjuncts at the unit's own row**: where moreover the verifier's label check
+(`RecVStar.checkLabels`, a conjunct of `ChecksC3`, which the event's `ChecksVR` states there) passes at the outcome's
+own transcript (`hlb`), it labels the drawn unit `u` with itself (`PubRows.label_of_checked`), so the read
+`accRead_of_checked` puts at `u`'s label is at `accReads`' row (the next one) of `u`. -/
+theorem accRead_at_unit {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : Option (Array Flock.Registered.Port)}
+    {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json}
+    (hchk : FlockC3.PubRows.ChecksAccepted F rows wr reg) {dg : ByteArray → ByteArray}
+    {N k Rw : ℕ} {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
+    (h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) (j : Fin (vstarCount F.ish))
+    (hre : Reached (F.zs R ω t R₂ j) (o j))
+    (hlb : ∃ spec sts, setupOf (zkInputs (F.zs R ω t R₂ j).I) (o j).2.2.record = .ok (spec, sts) ∧
+      RecVStar.checkLabels (recordDraw (o j).2.2.record) (F.zs R ω t R₂ j).I.count sts = .ok ())
+    {s : VStar.Stmt} (hs : F.stmts[(j : ℕ)]? = some s) (hl : Flock.RecVStar.accPorts s = ["acc", "acc_out"])
+    {want : Array (Option ℕ)} (hw : Flock.RecVStar.accReads F.ish s = .ok (some want)) {nm : String} {d : ℕ}
+    (hnm : (nm, d) ∈ [("acc", 0), ("acc_out", 1)]) {u : Fin (F.Vs j).nv} {q : Fin (F.Vs j).c.ports.size}
+    (hq : (F.Vs j).c.ports[q].name = nm) (hr : (F.zs R ω t R₂ j).rd.isRead (.inl (u, q))) :
+    (∃ pt ∈ (F.zs R ω t R₂ j).own, pt.name = (F.Vs j).c.ports[q].name) ∧
+      (∃ rws w, rows = some rws ∧ rws.find? (·.name == "acc0") = some w ∧
+        FlockVBridge.Family.site ((F.zs R ω t R₂ j).rd.port (.inl (u, q))) = FlockVBridge.Family.site w) ∧
+      (want.map (·.map (· + d)))[u.val]? = some (some ((F.zs R ω t R₂ j).rd.readAt (.inl (u, q)))) := by
+  obtain ⟨hown, hsite, d', D, dp, idx, hd, hD, hdp, hidx, hu, hpos⟩ :=
+    accRead_of_checked hchk h j hre hs hl hw hnm hq hr
+  rw [FlockC3.PubRows.label_of_checked (F.zs R ω t R₂ j) (h.1 j).1 hlb hd hD hdp hidx hu] at hpos
+  exact ⟨hown, hsite, hpos⟩
 
 end Family
 
