@@ -61,8 +61,8 @@ def simulate_launch(case: str, kind: str, o: dict) -> dict:
     return {"runs": [run, copy.deepcopy(run)], "views": True, "direct": d, "operands": True}
 
 
-def simulate(case: str, seeds=(7, 8)):
-    ops = {kind: X.requests(case, kind, seed) for kind, seed in zip(("served", "edge"), seeds)}
+def simulate(case: str, seeds=(7, 8, 9, 10)):
+    ops = {kind: X.requests(case, kind, seed) for kind, seed in zip(X.KINDS[X.PHASE[case]], seeds)}
     return ops, {kind: simulate_launch(case, kind, ops[kind]) for kind in ops}
 
 
@@ -94,7 +94,8 @@ def test_the_statics_are_dsv4s() -> None:
             assert st["W"] == min(max(1 << (max(max_len // X.HCA_R, 1) - 1).bit_length(), 128), X.stride(case))
     assert X.stride("c128") == 8192 and X.stride("c128-4096") == 128
     assert X.statics("c128", "edge")["W"] == 1024 and X.statics("c128-4096", "edge") == X.statics("c128-4096")
-    assert set(X.PTX_COUNTS) == set(X.KERNELS) and len(X.SOURCES) == 5 and X.TRITON_BLOCK == 1024
+    assert set(X.PTX_COUNTS) == set(X.PTX_SPECS) == set(X.KERNELS) and len(X.SOURCES) == 5 and X.TRITON_BLOCK == 1024
+    assert set(X.KINDS) == set(X.PHASE.values()) and set(X.SEEDS) == {k for ks in X.KINDS.values() for k in ks}
 
 
 @pytest.mark.parametrize("case", ["swa", "swa-4096"])
@@ -155,6 +156,25 @@ def test_the_c128_served_step_holds_what_it_means(case: str) -> None:
 
 
 @pytest.mark.parametrize("case", ["c128", "c128-4096"])
+def test_the_c128_one_and_full_steps_are_the_other_served_specializations(case: str) -> None:
+    """`one` is one decode token (num_decode_tokens 1, a constant to Triton), the served step's last request, its row the longest
+    (8192 lanes at 2^20, 32 at 4096); `full` the 16 requests with no padding (a multiple of 16); each with the two prefill tokens;
+    and the served and edge steps' counts are neither, so the four steps compile the kernel at each specialization a served step
+    can."""
+    st = X.statics(case)
+    one, full = X.requests(case, "one", 1), X.requests(case, "full", 1)
+    assert one["req"].tolist() == [0] and T.s64(one["pos"][:1]).tolist() == [X.MAX_LEN[case] - 1]
+    assert one["pos"].size == 1 + X.PREFILL and T.s64(one["slot"][:1])[0] >= 0
+    assert _c128_twin(case, "one", one)[1].tolist() == [min(X.MAX_LEN[case] // st["R"], st["W"])]
+    assert full["req"].tolist() == list(range(16)) and T.s64(full["pos"][:16]).tolist() == list(X.POSITIONS[case])
+    assert full["pos"].size == 16 + X.PREFILL and (T.s64(full["slot"][:16]) >= 0).all()
+    assert X.statics(case, "one") == X.statics(case, "full") == st
+    nd = {kind: X.requests(case, kind, 1)["req"].size for kind in X.KINDS["c128a"]}
+    assert nd == {"served": 16 + X.PADDING, "edge": X.EDGE_REQUESTS * X.EDGE_PER_REQUEST, "one": 1, "full": 16}
+    assert [n for n in nd.values() if n != 1 and n % 16] == [nd["served"], nd["edge"]]
+
+
+@pytest.mark.parametrize("case", ["c128", "c128-4096"])
 def test_the_c128_edge_step_holds_what_it_means(case: str) -> None:
     """Six requests' 42 tokens in a shuffled map; positions at the lane counts' edges and the int64 ends (INT64_MAX's + 1 wrapping
     negative; full rows past the width only where the row holds the width); slots of every sign; block rows whose products by 2
@@ -187,7 +207,7 @@ def test_observe_passes_the_twins_words(observed) -> None:
     """On the twin's words every launch check holds: the runs agree, the direct launch wrote the launcher's words and nothing
     around them, the HCA views and prefill rows are the kernel's, the operands are unchanged."""
     for case, ob in observed.items():
-        assert sorted(x["case"] for x in ob.recs) == sorted([case, f"{case}-edge"])
+        assert [x["case"] for x in ob.recs] == [X.case_name(case, k) for k in X.KINDS[X.PHASE[case]]]
         for x in ob.recs:
             assert X._launch_ok(x), x
         served = next(x for x in ob.recs if x["case"] == case)
@@ -200,9 +220,9 @@ SLIPS = {"swa": ["sentinel", "run_sentinel", "lens_sentinel", "second_run", "dir
 
 @pytest.mark.parametrize("phase,what", [(p, w) for p, ws in SLIPS.items() for w in ws])
 def test_the_launch_checks_catch_each_slip(observed, tmp_path, phase: str, what: str) -> None:
-    """A word written past the token rows (by the direct launch, or by both launches alike), a length past the tokens, a second launch that differs, a direct launch that differs
-    from the launcher, a returned view that is not the buffer's, a prefill row that is not the kernel's prefill branch, and an
-    operand written each fail their check."""
+    """A word written past the token rows (by the direct launch, or by both launches alike), a length past the tokens, a second
+    launch that differs, a direct launch that differs from the launcher, a returned view that is not the buffer's, a prefill row
+    that is not the kernel's prefill branch, and an operand written each fail their check."""
     case = SMALL[phase]
     ob = observed[case]
     rows = copy.deepcopy(ob.rows)
@@ -229,8 +249,8 @@ def test_the_launch_checks_catch_each_slip(observed, tmp_path, phase: str, what:
         s["operands"] = False
     recs, _ = X.observe(tmp_path, case, ob.ops, rows, quick=True)
     failed = {(x["case"], k) for x in recs for k, v in x["checks"].items() if v is not True}
-    want = {"sentinel": "untouched", "run_sentinel": "untouched", "lens_sentinel": "untouched", "second_run": "deterministic", "direct": "direct",
-            "views": "views", "prefill": "prefill", "operands": "operands"}[what]
+    want = {"sentinel": "untouched", "run_sentinel": "untouched", "lens_sentinel": "untouched", "second_run": "deterministic",
+            "direct": "direct", "views": "views", "prefill": "prefill", "operands": "operands"}[what]
     assert failed == {(case, want)}
 
 
@@ -322,19 +342,20 @@ def test_launch_hands_the_kernels_the_decodes_operands(tmp_path, monkeypatch) ->
     as the width, the lengths' buffer as both visible arguments, the [:requests] table of stride NB, block 64, a bool valid of the
     tokens' bytes and token_offset 0, and the kernel one program per token at the launcher's constexprs; the HCA launcher int64
     positions of every token, the decode-token count, the [:requests] table, block 2, int64 slots, the step's width and buffers of
-    stride c128a_max_compressed, and its kernel one program per token; `observe` passes every check and every word on what comes
-    back."""
+    stride c128a_max_compressed, and its kernel one program per token, at decode-token counts of 1, of a multiple of 16 and of
+    neither; `observe` passes every check and every word on what comes back."""
     calls: list = []
     _stand_in_vllm(monkeypatch, calls)
     torch = sys.modules["torch"]
     for case in ("swa-4096", "c128-4096", "c128"):
         calls.clear()
-        ops = {kind: X.requests(case, kind, seed) for kind, seed in zip(("served", "edge"), (3, 4))}
+        ops = {kind: X.requests(case, kind, seed) for kind, seed in zip(X.KINDS[X.PHASE[case]], (3, 4, 5, 6))}
         rows = {kind: X.launch(case, kind, ops[kind]) for kind in ops}
-        for kind, o in ops.items():
+        assert len(calls) == 3 * len(ops)
+        for i, (kind, o) in enumerate(ops.items()):
             st = X.statics(case, kind)
             nd, nreq = o["req"].size, o["table"].shape[0]
-            mine = calls[:3] if kind == "served" else calls[3:]
+            mine = calls[3 * i:3 * i + 3]
             if X.PHASE[case] == "swa":
                 assert [c["op"] for c in mine] == ["swa", "swa", "swa-kernel"]
                 assert mine[0] == {"op": "swa", "ws": ((nd + X.ROWS_PAD, 1, st["SW"]), st["SW"]), "window": st["SW"],
@@ -350,9 +371,11 @@ def test_launch_hands_the_kernels_the_decodes_operands(tmp_path, monkeypatch) ->
                                    "stride": S}
                 assert mine[2] == {"op": "c128-kernel", "grid": (n,), "strides": (S, S, st["NB"]), "R": st["R"], "W": st["W"],
                                    "nd": nd, "bs": st["BS"], "block": X.TRITON_BLOCK}
-                assert nd != 1 and nd % 16
+        if X.PHASE[case] == "c128a":
+            nd = [c["nd"] for c in calls if c["op"] == "c128-kernel"]
+            assert 1 in nd and any(n % 16 == 0 for n in nd) and any(n != 1 and n % 16 for n in nd), nd
         recs, jobs = X.observe(tmp_path / case, case, ops, rows, quick=False)
-        assert all(X._launch_ok(x) for x in recs) and len(recs) == 2, recs
+        assert all(X._launch_ok(x) for x in recs) and len(recs) == len(ops), recs
         for j in ([] if case == "c128" else jobs[:2] + jobs[-2:]):
             r = X.compare(j)
             assert "error" not in r and r["mismatch"] == 0 and r["twin_mismatch"] == 0 and r["reference"] == j["rows"][1] - j["rows"][0], r
@@ -381,25 +404,27 @@ def test_the_jobs_take_every_word_and_find_a_flipped_one(observed, case: str, tm
         t = tot.setdefault(r["case"], [0, 0])
         t[0] += r["words"]
         t[1] += r["mismatch"]
-    width = {kind: X.statics(case, kind)["SW" if X.PHASE[case] == "swa" else "W"] for kind in ("served", "edge")}
-    assert tot == {x["case"]: [x["tokens"] * (width["edge" if x["case"].endswith("-edge") else "served"] + 1), 0] for x in ob.recs}
+    width = {X.case_name(case, k): X.statics(case, k)["SW" if X.PHASE[case] == "swa" else "W"] for k in X.KINDS[X.PHASE[case]]}
+    assert tot == {x["case"]: [x["tokens"] * (width[x["case"]] + 1), 0] for x in ob.recs}
     j = [j for j in ob.jobs if j["case"] == f"{case}-edge"][1]
     lo = j["rows"][0]
     r = X.compare(_flipped(tmp_path / "rows", j, "got_rows", (lo + 1, 7)))
     assert r["mismatch"] == 1 and r["first_mismatch"] == {"token": lo + 1, "word": 7, "want": r["first_mismatch"]["want"],
                                                           "kernel": r["first_mismatch"]["want"] ^ 1}
     r = X.compare(_flipped(tmp_path / "lens", j, "got_lens", (lo + 2,)))
-    assert r["mismatch"] == 1 and r["first_mismatch"]["word"] == width["edge"] and r["first_mismatch"]["token"] == lo + 2
+    assert r["mismatch"] == 1 and r["first_mismatch"]["word"] == width[f"{case}-edge"] and r["first_mismatch"]["token"] == lo + 2
 
 
 def test_the_references_agree_with_the_twin(observed) -> None:
-    """The references `Dsv4SwaIndices_v1` and `Dsv4C128aGlobalTopk_v1` on every edge token and on the served steps' first, last
-    and padding tokens (the HCA row at 8192 on its first and last) agree with the twin on every word."""
+    """The references `Dsv4SwaIndices_v1` and `Dsv4C128aGlobalTopk_v1` on every edge token, on the served steps' first, last
+    and padding tokens (the HCA row at 8192 on its first and last), and on the HCA `one` and `full` steps' last token agree with
+    the twin on every word."""
     for case, ob in observed.items():
         tokens = {x["case"]: x["tokens"] for x in ob.recs}
         n = tokens[case]
         picks = {case: [0, n - 1] if case == "c128" else [0, len(X.POSITIONS[case]) - 1, n - 1],
-                 f"{case}-edge": list(range(tokens[f"{case}-edge"]))}
+                 f"{case}-edge": list(range(tokens[f"{case}-edge"])),
+                 **{f"{case}-{k}": [tokens[f"{case}-{k}"] - 1] for k in ("one", "full") if f"{case}-{k}" in tokens}}
         for j in ob.jobs:
             lo, hi = j["rows"]
             for i in (i for i in picks.get(j["case"], []) if lo <= i < hi):
@@ -408,10 +433,11 @@ def test_the_references_agree_with_the_twin(observed) -> None:
 
 
 def test_the_jobs_reference_every_token_or_a_sample(observed, tmp_path) -> None:
-    """A full run references every token; --quick every 16th served one and each job's first, and every edge one."""
+    """A full run references every token; --quick every 16th served and `full` one and each job's first, and every edge and `one`
+    one."""
     for case, ob in observed.items():
         for j in ob.jobs:
-            assert j["ref_every"] == (1 if j["case"].endswith("-edge") else X.QUICK_REF_EVERY), j
+            assert j["ref_every"] == (1 if j["case"].endswith(("-edge", "-one")) else X.QUICK_REF_EVERY), j
         _, full = X.observe(tmp_path / case, case, ob.ops, ob.rows, quick=False)
         assert {j["ref_every"] for j in full} == {1}
 
@@ -437,12 +463,14 @@ def _ptx(counts: dict, target: str = "sm_90a") -> str:
     return f".version 8.7\n.target {target}\n.address_size 64\n{body}\n\tadd.s32 \t%r9, %r1, 4;\n\tld.global.b32 \t%r3, [%rd1];\n"
 
 
-@pytest.mark.parametrize("slip", [None, "missing", "rem", "swa_no_div", "c128a_no_popc", "md1", "target"])
+@pytest.mark.parametrize("slip", [None, "missing", "rem", "swa_no_div", "c128a_no_popc", "no_one", "one_rem", "target"])
 def test_the_ptx_check(tmp_path, slip) -> None:
-    """A file of each kernel with its PTX_COUNTS passes; a kernel's compile missing, a remainder in it, the window's division
-    gone, the count without its popc, the HCA kernel's num_decode_tokens == 1 specialization or another target fail."""
+    """A file of each kernel's specializations (the HCA kernel's general one twice, as 18 and 16 decode tokens compile it, and
+    its num_decode_tokens == 1 one) passes; a kernel's compile missing, a remainder in one, the window's division gone, the count
+    without its popc, the one-token specialization missing or with a remainder, or another target fail."""
     cache = tmp_path / "triton_cache"
-    files = {"swa": [dict(X.PTX_COUNTS["swa"])], "c128a": [dict(X.PTX_COUNTS["c128a"])]}
+    hca, one = X.PTX_SPECS["c128a"]["num_decode_tokens"], X.PTX_SPECS["c128a"]["num_decode_tokens=1"]
+    files = {"swa": [dict(X.PTX_COUNTS["swa"])], "c128a": [dict(hca), dict(hca), dict(one)]}
     if slip == "missing":
         files["c128a"] = []
     elif slip == "rem":
@@ -450,9 +478,11 @@ def test_the_ptx_check(tmp_path, slip) -> None:
     elif slip == "swa_no_div":
         files["swa"] = [{k: v for k, v in X.PTX_COUNTS["swa"].items() if k != "div.s32"}]
     elif slip == "c128a_no_popc":
-        files["c128a"] = [{k: v for k, v in X.PTX_COUNTS["c128a"].items() if k != "popc.b32"}]
-    elif slip == "md1":
-        files["c128a"].append({**X.PTX_COUNTS["c128a"], "mad.wide.s32": 12, "mul.lo.s32": 10, "sub.s32": 8, "shl.b64": 0})
+        files["c128a"][:2] = [{k: v for k, v in hca.items() if k != "popc.b32"}] * 2
+    elif slip == "no_one":
+        files["c128a"].pop()
+    elif slip == "one_rem":
+        files["c128a"][-1] = {**one, "rem.s32": 1}
     i = 0
     for key, counts in files.items():
         for cnt in counts:
@@ -463,9 +493,11 @@ def test_the_ptx_check(tmp_path, slip) -> None:
     rec = X.ptx(cache, tmp_path / "out")
     failed = {k for k, v in rec["checks"].items() if not v}
     want = {None: set(), "missing": {"c128a"}, "rem": {"swa"}, "swa_no_div": {"swa"}, "c128a_no_popc": {"c128a"},
-            "md1": {"c128a"}, "target": {"target"}}[slip]
+            "no_one": {"c128a"}, "one_rem": {"c128a"}, "target": {"target"}}[slip]
     assert failed == want
     assert len(list((tmp_path / "out" / "ptx").glob("*.ptx"))) == i
+    if slip is None:
+        assert [e["spec"] for e in rec["kernels"]["c128a"]] == ["num_decode_tokens"] * 2 + ["num_decode_tokens=1"]
 
 
 def test_the_ptx_counts_are_the_kernels_ops() -> None:
@@ -478,7 +510,10 @@ def test_the_ptx_counts_are_the_kernels_ops() -> None:
     assert (hca["div.s64"], hca["div.u32"], hca["min.s64"], hca["ld.global.b64"]) == (1, 1, 1, 2)
     assert (hca["popc.b32"], hca["redux.sync.add.s32"], hca["shfl.sync.bfly.b32"]) == (1, 1, 2)
     assert "popc.b32" not in swa and "ld.global.b8" not in hca
-    for c in (swa, hca):
+    one = X.PTX_ONE
+    assert {k: (hca.get(k), one.get(k)) for k in {**hca, **one} if hca.get(k) != one.get(k)} == {
+        "shl.b64": (2, None), "mad.wide.s32": (13, 12), "mul.lo.s32": (11, 10), "sub.s32": (9, 8)}
+    for c in (swa, hca, one):
         assert X.ptx_counts(_ptx(c)) == c
 
 
@@ -522,15 +557,17 @@ def test_the_verdict_needs_every_check(path: tuple, value) -> None:
 
 
 def test_each_case_has_its_own_verdict() -> None:
-    """A case is its phase and its name: a case's launch error fails its served and edge cases and no other, a comparison's error
-    its own case, a missing launch record its case."""
+    """A case is its phase and its name: a case's launch error fails its steps' cases and no other, a comparison's error its own
+    case, a missing launch record its case."""
     want = [f"{p}/{c}" for p, c in X.CASES]
     assert want == ["swa/swa", "swa/swa-edge", "swa/swa-4096", "swa/swa-4096-edge", "c128a/c128", "c128a/c128-edge",
-                    "c128a/c128-4096", "c128a/c128-4096-edge"]
+                    "c128a/c128-one", "c128a/c128-full", "c128a/c128-4096", "c128a/c128-4096-edge", "c128a/c128-4096-one",
+                    "c128a/c128-4096-full"]
     assert list(X.cases(_doc())) == want and all(c["ok"] for c in X.cases(_doc()).values())
     doc = _doc()
     doc["errors"]["c128-4096"] = "boom"
-    assert {k for k, c in X.cases(doc).items() if not c["ok"]} == {"c128a/c128-4096", "c128a/c128-4096-edge"}
+    assert {k for k, c in X.cases(doc).items() if not c["ok"]} == {
+        "c128a/c128-4096", "c128a/c128-4096-edge", "c128a/c128-4096-one", "c128a/c128-4096-full"}
     doc = _doc()
     doc["errors"]["compare/swa/swa-edge"] = "boom"
     doc["launches"] = [x for x in doc["launches"] if x["case"] != "c128"]

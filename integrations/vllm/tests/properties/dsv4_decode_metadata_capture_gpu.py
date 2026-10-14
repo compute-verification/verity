@@ -34,22 +34,25 @@ others.  The operands are the integers a decode step holds (`requests`), so no m
   c128a      per case, `build_c128a_topk_metadata` (sparse_mla.py:295-358) as the HCA builder calls it (ratio 128, block size 2,
              max_compressed_tokens the step's active width, the buffers c128a_max_compressed wide, 150-177) on the decode tokens and
              two prefill tokens after them: the decode rows, lengths and prefill rows into sentinel buffers.  `served`: 16 requests
-             at positions from 0 to max_model_len - 1 (the step's width 8192 at 2^20, 128 at 4096) and two padding tokens (slot -1).
-             `edge`: six requests' 42 tokens in a shuffled map at the width 1024 of a step whose longest sequence is 65,664 to
-             131,199 tokens (a row 8192 wide written to 1024; at 4096, 128), at the lane counts' edges (0, 1, the block, the width,
-             past it where the row holds it) and the int64 ends (-1, -R - 1, INT64_MIN, INT64_MAX), slots of every sign and the
-             int64 ends, block rows whose products by 2 wrap int32.
+             at positions from 0 to max_model_len - 1 (the step's width 8192 at 2^20, 128 at 4096) and two padding tokens (slot -1);
+             `one`: the last of them alone and `full`: the 16 without padding, the kernel's num_decode_tokens == 1 and multiple of
+             16 specializations, which a served step of one request and of max_num_seqs compile.  `edge`: six requests' 42 tokens
+             in a shuffled map at the width 1024 of a step whose longest sequence is 65,664 to 131,199 tokens (a row 8192 wide
+             written to 1024; at 4096, 128), at the lane counts' edges (0, 1, the block, the width, past it where the row holds it)
+             and the int64 ends (-1, -R - 1, INT64_MIN, INT64_MAX), slots of every sign and the int64 ends, block rows whose
+             products by 2 wrap int32.
              Each launch twice, then the kernel itself once at the launcher's arguments into sentinel-filled buffers at an offset:
              every token's row and its length against `dsv4_decode_metadata_twin` (the kernel's stores) and the reference on every
              token (every 16th served one under --quick); the launches the same words, the outputs where the decode reads them (the
              returned views of the HCA buffers, [:tokens, :width]), the HCA prefill rows the kernel's prefill branch, the operands
              unchanged, and every other word of the sentinel buffers untouched.
-  ptx        the Triton cache's PTX of each kernel for sm_90a (one specialization each: the strides, widths and block sizes are
-             multiples of 16 or not alike in both cases, and the decode-token counts, 18 and 42, neither 1 nor a multiple of 16),
-             each holding PTX_COUNTS: the arithmetic the Definitions were read from (the window's p // 64 and the row's j // 2 as
-             div.s32 by the runtime block size and p % BS as p - (p // BS) * BS, no remainder; the window's byte as one
-             ld.global.b8, and.b16 and setp.ne.b16 and its start as max.s32; the row's (position + 1) // 128 as div.s64 or div.u32,
-             min.s64, the two int64 loads, the count as popc.b32, redux.sync.add.s32 and two shfl.sync.bfly.b32).
+  ptx        the Triton cache's PTX of each kernel for sm_90a, each file one of PTX_SPECS and each of those present (the strides,
+             widths and block sizes are multiples of 16 or not alike in every case; the HCA kernel compiles PTX_COUNTS at 18 and
+             42 decode tokens, again at 16, and PTX_ONE, whose decode addresses fold, at 1), holding PTX_COUNTS: the arithmetic the
+             Definitions were read from (the window's p // 64 and the row's j // 2 as div.s32 by the runtime block size and p % BS
+             as p - (p // BS) * BS, no remainder; the window's byte as one ld.global.b8, and.b16 and setp.ne.b16 and its start as
+             max.s32; the row's (position + 1) // 128 as div.s64 or div.u32, min.s64, the two int64 loads, the count as popc.b32,
+             redux.sync.add.s32 and two shfl.sync.bfly.b32).
   bind       the Programs bind at the served statics and the edge width.
 
 GO needs every case's words compared with 0 mismatches, the references with 0 disagreements with the twin, every launch check,
@@ -106,6 +109,11 @@ POSITIONS = {"swa": (0, 1, 126, 127, 128, 255, 1000, 4095, 65535, 100000, 262143
                       (1 << 20) - 2, (1 << 20) - 1),
              "c128-4096": (0, 126, 127, 128, 255, 256, 383, 1000, 1023, 2047, 2048, 2500, 3000, 3967, 4094, 4095)}
 PADDING, PREFILL = 2, 2
+#: each phase's steps: the HCA kernel's also `one` (the served step's last request alone) and `full` (its 16 requests, no
+#: padding), the num_decode_tokens Triton passes as the constant 1 and as a multiple of 16, as a served step of one request and of
+#: max_num_seqs do; the window kernel takes no token count
+KINDS = {"swa": ("served", "edge"), "c128a": ("served", "edge", "one", "full")}
+SEEDS = {"served": 301, "edge": 302, "one": 401, "full": 402}
 #: the SWA edge step's requests' query lengths, and the HCA edge step's requests and tokens per request
 SWA_EDGE_QLEN = (1, 2, 3, 4) * 3
 EDGE_REQUESTS, EDGE_PER_REQUEST = 6, 7
@@ -132,6 +140,13 @@ PTX_COUNTS = {"swa": {"and.b16": 1, "div.s32": 8, "ld.global.b8": 1, "mad.lo.s32
               "c128a": {"and.b16": 3, "div.s32": 8, "div.s64": 1, "div.u32": 1, "ld.global.b64": 2, "mad.lo.s32": 8,
                         "mad.wide.s32": 13, "min.s64": 1, "mul.lo.s32": 11, "popc.b32": 1, "redux.sync.add.s32": 1,
                         "shfl.sync.bfly.b32": 2, "shl.b16": 7, "shl.b32": 3, "shl.b64": 2, "shr.u32": 1, "sub.s32": 9}}
+#: the HCA kernel at num_decode_tokens == 1, which Triton passes as a constant: only token 0 decodes, so the decode branch's
+#: addresses fold (no shl.b64, one mul.lo.s32 and mad.wide.s32 fewer) and a prefill token's row token_idx - 1 is an offset (one
+#: sub.s32 fewer); the words' arithmetic is PTX_COUNTS["c128a"]'s, which a multiple of 16 also compiles to
+PTX_ONE = {**{k: v for k, v in PTX_COUNTS["c128a"].items() if k != "shl.b64"}, "mad.wide.s32": 12, "mul.lo.s32": 10, "sub.s32": 8}
+#: each kernel's specializations the cases compile, by name: every one must appear in the cache, and every file must be one
+PTX_SPECS = {"swa": {"served": PTX_COUNTS["swa"]},
+             "c128a": {"num_decode_tokens": PTX_COUNTS["c128a"], "num_decode_tokens=1": PTX_ONE}}
 #: the installed vLLM's files the Definitions and this script were read from, by sha256 at d9105ea80
 SOURCES = {"v1/attention/backends/mla/sparse_swa.py": "442673bbedfc44d415e26da12e7ea7427690cd4677972ea2c16065b9011d00d2",
            "models/deepseek_v4/sparse_mla.py": "98b829059c5381e48a60545c019878b86c0fc2314664664eb685215ec2129251",
@@ -142,6 +157,10 @@ _error, _save, _load = FX._error, FX._save, FX._load
 _chunks, _tally, _ref_rows, _flat_out, _version = CX._chunks, CX._tally, CX._ref_rows, CX._flat_out, CX._version
 _launch_ok, _words_ok = CX._launch_ok, CX._words_ok
 environment, stack = IX.environment, IX.stack
+
+
+def case_name(case: str, kind: str) -> str:
+    return case if kind == "served" else f"{case}-{kind}"
 
 
 def statics(case: str, kind: str = "served") -> dict[str, int]:
@@ -237,19 +256,20 @@ def c128_edge_positions(case: str, n: int, rng) -> np.ndarray:
 
 def c128_requests(case: str, kind: str, seed: int) -> dict[str, Any]:
     """One HCA step's operands: the decode tokens' `req`, then the PREFILL prefill tokens; every token's int64 position `pos` and
-    slot `slot` as uint64 words (decode tokens first); the block table (requests, NB) as words."""
+    slot `slot` as uint64 words (decode tokens first); the block table (requests, NB) as words.  `one` is the served step's last
+    request alone (its row the longest) and `full` its 16 requests without padding."""
     rng = np.random.default_rng(seed)
     st = statics(case, kind)
     W, R, BS, NB = st["W"], st["R"], st["BS"], st["NB"]
     pre = np.asarray([min(W * R, MAX_LEN[case]) - 1, 300], dtype=np.int64)
-    if kind == "served":
-        pos = np.asarray(POSITIONS[case], dtype=np.int64)
-        nreq = pos.size
+    if kind != "edge":
+        pos = np.asarray(POSITIONS[case][-1:] if kind == "one" else POSITIONS[case], dtype=np.int64)
+        nreq, pad = pos.size, PADDING if kind == "served" else 0
         table = block_rows(rng, [_cdiv(min((int(p) + 1) // R, W), BS) for p in pos], NB)
         slot = rng.integers(0, 1 << 31, nreq)
-        return {"req": np.concatenate([np.arange(nreq), np.zeros(PADDING)]).astype(np.int32), "table": table,
-                "pos": _w64(np.concatenate([pos, np.zeros(PADDING), pre])),
-                "slot": _w64(np.concatenate([slot, np.full(PADDING, -1), rng.integers(0, 1 << 31, PREFILL)]))}
+        return {"req": np.concatenate([np.arange(nreq), np.zeros(pad)]).astype(np.int32), "table": table,
+                "pos": _w64(np.concatenate([pos, np.zeros(pad), pre])),
+                "slot": _w64(np.concatenate([slot, np.full(pad, -1), rng.integers(0, 1 << 31, PREFILL)]))}
     n = EDGE_REQUESTS * EDGE_PER_REQUEST
     req = rng.permutation(np.repeat(np.arange(EDGE_REQUESTS), EDGE_PER_REQUEST)).astype(np.int32)
     slots = np.resize(np.array([5, 0, -1, -2, I64_MIN, I64_MAX, 1 << 40]), n)
@@ -412,14 +432,14 @@ def launch(case: str, kind: str, o: dict[str, Any]) -> dict[str, Any]:
     return launch_swa(case, o) if PHASE[case] == "swa" else launch_c128(case, kind, o)
 
 
-def launches(case: str, seeds: tuple[int, int]) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
-    ops = {kind: requests(case, kind, seed) for kind, seed in zip(("served", "edge"), seeds)}
+def launches(case: str, seeds: dict[str, int]) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+    ops = {kind: requests(case, kind, seed) for kind, seed in seeds.items()}
     return ops, {kind: launch(case, kind, ops[kind]) for kind in ops}
 
 
 def launch_case(work: Path, case: str, quick: bool) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     i = CASES_L.index(case)
-    return observe(work, case, *launches(case, (301 + 2 * i, 302 + 2 * i)), quick)
+    return observe(work, case, *launches(case, {kind: SEEDS[kind] + 2 * i for kind in KINDS[PHASE[case]]}), quick)
 
 
 def _outside(shape: tuple[int, ...], *spans: tuple[int, int]) -> np.ndarray:
@@ -470,7 +490,7 @@ def observe(work: Path, case: str, ops: dict[str, Any], rows: dict[str, dict[str
     recs: list[dict[str, Any]] = []
     jobs: list[dict[str, Any]] = []
     for kind, L in rows.items():
-        o, name = ops[kind], case if kind == "served" else f"{case}-edge"
+        o, name = ops[kind], case_name(case, kind)
         checks, got_rows, got_lens = (observe_swa if phase == "swa" else observe_c128)(case, kind, o, L)
         nd = o["req"].size
         rec = {"phase": phase, "case": name, "tokens": nd, "requests": int(o["table"].shape[0]), "checks": checks}
@@ -482,7 +502,7 @@ def observe(work: Path, case: str, ops: dict[str, Any], rows: dict[str, dict[str
             arrays = {"req": o["req"], "table": o["table"], "pos": o["pos"][:nd], "slot": o["slot"][:nd]}
         recs.append(rec)
         paths = _save(work / f"{phase}-{name}", **arrays, got_rows=got_rows, got_lens=got_lens)
-        every = _ref_every(quick) if kind == "served" else 1
+        every = _ref_every(quick) if kind in ("served", "full") else 1
         jobs += [{"phase": phase, "case": name, "statics": statics(case, kind), "paths": paths, "rows": [a, b], "ref_every": every}
                  for a, b in _chunks(nd, JOB_TOKENS)]
     return recs, jobs
@@ -556,9 +576,9 @@ def ptx_counts(text: str) -> dict[str, int]:
 
 
 def ptx(triton_cache: Path, outdir: Path) -> dict[str, Any]:
-    """The Triton cache's PTX of KERNELS: each file's target, sha256 and PTX_COUNT counts; ok when each kernel has a file and every
-    file holds its PTX_COUNTS.  The PTX, and the SASS where Triton's bundled `cuobjdump` disassembles the cubin, are copied to
-    `<out>/ptx/`."""
+    """The Triton cache's PTX of KERNELS: each file's target, sha256, PTX_COUNT counts and the PTX_SPECS specialization they are;
+    ok when every file is one of its kernel's and each of those has a file.  The PTX, and the SASS where Triton's bundled
+    `cuobjdump` disassembles the cubin, are copied to `<out>/ptx/`."""
     dest = outdir / "ptx"
     dest.mkdir(parents=True, exist_ok=True)
     try:
@@ -576,7 +596,9 @@ def ptx(triton_cache: Path, outdir: Path) -> dict[str, Any]:
             sha = hashlib.sha256(text.encode()).hexdigest()
             name = f"{key}.{len(entries)}.{sha[:12]}"
             shutil.copy(f, dest / f"{name}.ptx")
-            e: dict[str, Any] = {"sha256": sha, "target": re.findall(r"\.target\s+(\S+)", text), "counts": ptx_counts(text)}
+            counts = ptx_counts(text)
+            e: dict[str, Any] = {"sha256": sha, "target": re.findall(r"\.target\s+(\S+)", text), "counts": counts,
+                                 "spec": next((s for s, c in PTX_SPECS[key].items() if c == counts), None)}
             cubin = Path(f).with_suffix(".cubin")
             if tool and cubin.exists():
                 try:
@@ -587,7 +609,8 @@ def ptx(triton_cache: Path, outdir: Path) -> dict[str, Any]:
             entries.append(e)
         rec["kernels"][key] = entries
     rec["checks"] = {"target": all(e["target"] == ["sm_90a"] for es in rec["kernels"].values() for e in es),
-                     **{key: bool(es) and all(e["counts"] == PTX_COUNTS[key] for e in es) for key, es in rec["kernels"].items()}}
+                     **{key: all(e["spec"] for e in es) and {e["spec"] for e in es} == set(PTX_SPECS[key])
+                        for key, es in rec["kernels"].items()}}
     rec["ok"] = all(rec["checks"].values())
     return rec
 
@@ -638,18 +661,18 @@ def gpu(work: Path, outdir: Path, quick: bool, doc: dict[str, Any]) -> list[dict
     return jobs
 
 
-CASES = tuple((PHASE[c], n) for c in CASES_L for n in (c, f"{c}-edge"))
+CASES = tuple((PHASE[c], case_name(c, k)) for c in CASES_L for k in KINDS[PHASE[c]])
 
 
 def cases(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """Each case's verdict: its launch checks, its words and its errors (its case's launch, its comparisons), so a NO-GO names
     what failed."""
     out: dict[str, dict[str, Any]] = {}
-    for phase, case in CASES:
+    for base, phase, case in ((c, PHASE[c], case_name(c, k)) for c in CASES_L for k in KINDS[PHASE[c]]):
         launches_ = [x for x in doc["launches"] if x["phase"] == phase and x["case"] == case]
         comps = [r for r in doc.get("comparisons", []) if r["phase"] == phase and r["case"] == case]
         t = {k: sum(r[k] for r in comps) for k in TOTALS}
-        errors = [e for e in doc["errors"] if e == case.removesuffix("-edge") or e == f"compare/{phase}/{case}"]
+        errors = [e for e in doc["errors"] if e == base or e == f"compare/{phase}/{case}"]
         ok = bool(launches_) and all(_launch_ok(x) for x in launches_)
         out[f"{phase}/{case}"] = {"launches_ok": ok, "totals": t, "errors": errors, "ok": ok and _words_ok(t) and not errors}
     return out
