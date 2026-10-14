@@ -1,5 +1,6 @@
 import Proofs.Flock.C3.RegLevels.OpensRegs
 import Proofs.Flock.VBridge.Family.Registrants
+import Proofs.Flock.Recursive.SaltFinder
 
 /-!
 # The value tie: a registrant's row at a value the verifier registers itself is the verifier's, or SHA-512 collides
@@ -20,6 +21,11 @@ SHA-512 bindings breaks, each with both preimages in hand:
 `valueColl` outputs two different SHA-512 inputs with one digest. `dirs_tie` is `dirs_of_check` without its `hval`.
 At the reads it takes `hone`, `hpos` and `hseg`, VBridge's `PartPortsOne`, `ReadsOwn` and `ReadsUnsegmented` at the
 read, which acceptance does not give.
+
+`tie_root` is `tie_read` at a root given as the verifier's tree over `rows` (`hroot`), in place of `checkValue`'s.
+`salt_tie` is link (d) at R's level 0: a read whose leaf is a node's commit string under the held salts (`TopOf`) is
+the node's row, or `saltFinder`'s pair collides (`Recursive/SaltFinder.lean`, where `rowInV` lives so the guarantee
+reads it).
 
 `valueColl` evaluates SHA-512 at most `3n + 2^(D+1) + 2D + 7` times, `n` the rows and `D = log2ceil n`: the
 verifier's tree once (`4n` for the leaves, row digest, salt digest, `treeLeaf` and `rowLeaf` each; `2^D - n` pads;
@@ -287,15 +293,6 @@ theorem checkValue_root {c : Flock.Circuit} {pub : Flock.Public} {own : Array Re
 
 /-! ## What `commitRow` hashes -/
 
-/-- A row of u16 words' bytes, low byte first. -/
-def wordBytes (ws : List ℕ) : List UInt8 := ws.flatMap fun w => [(w % 256).toUInt8, (w / 256 % 256).toUInt8]
-
-/-- What `Firewall.rowDigest` hashes for `commitRow`'s row: `sha512/row/v1`'s first block, then the row's words
-zero-padded to whole blocks. -/
-def rowInV (row : Array ℕ) : List UInt8 :=
-  let ws := RecCoins.padTo row (Registered.rowWords row.size 16)
-  (HmRow.rowPrefix ws.size).data.toList ++ wordBytes ws.toList
-
 theorem foldl_bytes : ∀ (ws : List ℕ) (pre : ByteArray),
     (ws.foldl (fun b w => (b.push (w % 256).toUInt8).push (w / 256 % 256).toUInt8) pre).data.toList =
       pre.data.toList ++ wordBytes ws
@@ -317,6 +314,25 @@ theorem treeLeaf_commitRow (row : Array ℕ) (salt : ByteArray) :
     Hm96.Default512.treeLeaf (RecCoins.commitRow row salt) = (H512 (hm96Input (rowInV row) salt.data.toList)).1 := by
   rw [RecCoins.commitRow, rowDigest_eq]
   exact (hm96_treeLeaf (Val := List UInt8) id Function.injective_id (rowInV row) salt).symm
+
+theorem topRows_of_size {top : ByteArray} (htop : top.size = 64) :
+    Firewall.topRows top = [(Array.range 32).map (fun j => (top.get! (64 * 0 + 2 * j)).toNat +
+      256 * (top.get! (64 * 0 + 2 * j + 1)).toNat) ++ Array.replicate 32 0] := by
+  unfold Firewall.topRows
+  rw [htop]
+  rfl
+
+theorem capRow_size {top : ByteArray} (htop : top.size = 64) : (capRow top).size = 64 := by
+  rw [capRow, topRows_of_size htop]
+  simp
+
+/-- **A 64-byte node's commit string is `commitRow`'s of its row**: the row is 64 words, a whole block, so `commitRow`
+pads nothing. -/
+theorem commitRow_capRow {top : ByteArray} (htop : top.size = 64) (s : ByteArray) :
+    RecCoins.commitRow (capRow top) s = Hm96.Default512.commitString (Firewall.rowDigest (capRow top)) s := by
+  unfold RecCoins.commitRow RecCoins.padTo Registered.rowWords
+  rw [capRow_size htop, show (64 * (16 / 16) + 63) / 64 * 64 - 64 = 0 by rfl, Array.replicate_zero,
+    Array.append_empty]
 
 theorem wordBytes_length (ws : List ℕ) : (wordBytes ws).length = 2 * ws.length := by
   induction ws with
@@ -481,6 +497,44 @@ theorem tie_read (rd : FlockSoundness.Registered.ReadsX lay rs) {p : lay.Pos} (h
     rw [hpos]
     exact rd.committed p hp
   · cases hpos
+
+/-- **A registered read of a root that is the verifier's tree over `rows`** (`tie_read` with the root in place of
+`checkValue`): where the read's port's root is `FV3.root` of `rows` under `salt` (`hroot`) over `rows.size` leaves
+(`hn`), the read is of a row of `rows`, and its row bytes are that row's (`rowInV`), or `valueColl` collides. -/
+theorem tie_root (rd : FlockSoundness.Registered.ReadsX lay rs) {p : lay.Pos} (hp : rd.isRead p)
+    {rows : Array (Array ℕ)} {salt : ℕ → ByteArray}
+    (hroot : FV3.root (rd.port p).domain (leavesV (rd.port p).domain rows salt) Sha512.hash = (rd.port p).root)
+    (hn : (rd.port p).leaves = rows.size) :
+    rd.readAt p < rows.size ∧ (rs.enc p (rd.wv p) = rowInV rows[rd.readAt p]! ∨
+      ∃ x y, valueColl (rd.port p) rows salt (rd.readAt p) (rs.enc p (rd.wv p)) (rd.ws p) (rd.wpath p) =
+        some (x, y) ∧ x ≠ y ∧ H512 x = H512 y) := by
+  have ho := rd.committed p hp
+  refine ⟨?_, valueColl_spec hroot hn ho⟩
+  simp only [Registered.opensLeaf, Bool.and_eq_true, decide_eq_true_eq] at ho
+  rw [← hn]
+  exact ho.1.1
+
+/-- **A registered read of R's level-0 top at the held salts** (link (d) at level 0): where `bcs` are `cap`'s commit
+strings under `salt`, the salts the prover's workers committed R's level-0 top rows under (`TopOf`,
+`registrant-holds-openings`), and the read's leaf is `treeLeaf` of `bcs`'s string at its position (the table row the
+verifier holds there), the read's row bytes are that node's row's (`rowInV`), or its hm96 pair against the node under
+`salt` collides (`ReadsX.SaltClash`, `saltFinder`'s event). -/
+theorem salt_tie (rd : FlockSoundness.Registered.ReadsX lay rs) {p : lay.Pos} (hp : rd.isRead p)
+    {lv : FlockSoundness.Accounting.Level} {cap : FlockSoundness.Model.Cap FlockSoundness.Refine.Dig}
+    {salt : ℕ → ByteArray} {bcs : Array ByteArray} (htop : TopOf lv cap salt bcs) (hi : rd.readAt p < bcs.size)
+    (hleaf : (rd.leaf p).1 = Hm96.Default512.treeLeaf bcs[rd.readAt p]) :
+    rs.enc p (rd.wv p) = rowInV (capRows lv cap)[rd.readAt p]! ∨ rd.SaltClash (capRows lv cap) salt := by
+  have hrow : (capRows lv cap)[rd.readAt p]! = capRow (cap (rd.readAt p)).1 :=
+    getElem!_map_range _ (by rw [← htop.1]; exact hi)
+  have hbc : bcs[rd.readAt p] = RecCoins.commitRow (capRow (cap (rd.readAt p)).1) (salt (rd.readAt p)) :=
+    (htop.2 _ hi).trans (commitRow_capRow (cap (rd.readAt p)).2 _).symm
+  rw [hbc, treeLeaf_commitRow] at hleaf
+  rw [hrow]
+  by_cases hr : rs.enc p (rd.wv p) = rowInV (capRow (cap (rd.readAt p)).1)
+  · exact Or.inl hr
+  · refine Or.inr ⟨p, hp, ?_⟩
+    rw [hrow]
+    exact hm96Pair_spec _ _ _ _ hr (Subtype.ext hleaf)
 
 end Reads
 

@@ -49,7 +49,8 @@ is its read fact (its rounds' messages on the tape are its prover's for a witnes
 
 | # | lemma (stub) | file | size | depends on | owner |
 |---|---|---|---|---|---|
-| t0 | `stackedTop_of_innerCommits`: at the verifier's hold of the inner transcript, `stacked/rep0`'s first top is the binding round's, so where it is `cap`'s, `StackedTopAt`; the piece for lean's (b), the tie of `tr` to the sessions, and unused until then (the guarantee takes `_hstk`) | `C3/RegLevels/Top.lean`, `TopHold.lean` | proved (round 4) | | |
+| t0 | `stackedTop_of_innerCommits`: at the verifier's hold of the inner transcript, `stacked/rep0`'s first top is the binding round's, so where it is `cap`'s under the salts `salt` (`TopOf`, a binder: the salts the prover's workers committed R's level-0 top rows under, `registrant-holds-openings`), `StackedTopAt` at `salt`; the piece for lean's (b), the tie of `tr` to the sessions, and unused until then (the guarantee takes `_hstk`) | `C3/RegLevels/Top.lean`, `TopHold.lean` | proved (round 4; salt a binder, round 22) | | |
+| t1 | `salt_tie`: link (d) at R's level 0, a read whose leaf is a node's commit string under the held salts is that node's row (`capRow`), or `saltFinder`'s hm96 pair collides (`SaltColl`, a disjunct of the guarantee; `prob_regTopSalt_le` its union with `regFinder` and `topFinder`) | `C3/RegLevels/ValueTie.lean`, `Recursive/SaltFinder.lean` | proved (round 22) | | |
 | n1 | `hPubRows_of_check'` (from `ChecksPubRows`, `RowsHeld`, `PortsNamed`, `SparseAtShape`); `hTape_of_frame` (from `HFrame`, `hTape_iff_frame`) | `C3/PubRows/Honest.lean`, `Check.lean`, `Frame.lean` | proved (round 4) | | |
 | n1′ | `sparseAtShapeChecked`: `SparseAtShape` at the units `checkStmt` passes (`SparseAtShapeChecked`), for every family; `hPubRows_of_checked`: `hPubRows_of_check'` with it, where some transcript each accepting session accepts passes the verifier's checks (`ChecksAccepted`; at the checked family, `checksAccepted_checked`) | `C3/PubRows/Shape.lean` | proved (round 5, H; round 6) | | |
 | n2 | `hReps_of_read` (with `hRepStages_honest`, so `hReps_honest_of_read`): `HReps` from the reps' read fact (`RepsRead`) | `C3/HoloValues/Read.lean`, `Shape.lean`, `ZcLc.lean` | proved (round 5, C) | | |
@@ -120,8 +121,10 @@ takes, each with who discharges it:
   registrant's openings of every level-0 position are `_hreg` (`HoloReg.Opens`). Closeness is in `holds`, not a hypothesis.
 * The tie is the verifier's (round 4 follow-up): the event's `AcceptsC3` holds the inner transcript against `reg`
   (`innerCommitsAt`, `RecVStar.innerCommits` at the verifier's own `tr`, `record` and `reg`), whose binding round's top
-  must match the `stacked` entry's five fields as well as its canonical form. `_hstk : StackedTopAt … bcs'` carries
-  the registered strings explicitly; a different held top is `topFinder`'s one-run collision event. The digest is
+  must match the `stacked` entry's five fields as well as its canonical form. `_hstk : StackedTopAt … salt bcs'` carries
+  the registered strings explicitly, `cap`'s under `salt`, the held salts the guarantee is applied at
+  (`registrant-holds-openings`); a different held top is `topFinder`'s one-run collision event, and a read of the top
+  other than its node's row `saltFinder`'s. The digest is
   `metaRegistration st`, META's `registration` of the inner circuit the verifier reads off
   `--rec-inner-circuit`, the file `AcceptsPublic` sets `st` up from.
 * Who registers R: the inner session's prover. Its staging commits R's table and writes the registration record, and
