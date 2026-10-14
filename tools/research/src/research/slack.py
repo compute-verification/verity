@@ -125,7 +125,7 @@ DECIDED = ("decided", "approved", "denied")                      # new cards, th
 WAIT_EVERY_S = 30
 WAIT_GRACE = timedelta(minutes=5)                                # the site's default cron runs every minute
 ROUTES_DIR = "routes.d"                                          # in the notes: one `<name>.json` per inbox
-ROUTES_RAW = "https://raw.githubusercontent.com/danielreuter/research-notes/main/routes.d/"
+ROUTES_RAW = "https://raw.githubusercontent.com/compute-verification/research-notes/main/routes.d/"
 ROUTE_SCHEMA = "verity/slack-route/v1"
 LEAD_RE = re.compile(r"^\s*(?:(?::[a-z0-9_+'-]+:|[\u2600-\u27bf\U0001f000-\U0001faff]\ufe0f?)\s*)?"   # one emoji may lead (`:mega: @a`)
                      r"((?:(?:@[a-z0-9][a-z0-9._-]*|<!subteam\^[A-Z0-9]+(?:\|@?[^>]*)?>)[\s,:]*)+)")
@@ -142,7 +142,7 @@ BRANCH_RE = re.compile(r"\bcursor/([a-z0-9._-]*[a-z0-9])")
 TRAIN_PREP_RE = re.compile(r"^train-prep-((?:\d+-)+)")                  # `cursor/train-prep-1585-1586-on-041c30713-4292`
 RUN_ID_RE = re.compile(r"\br\d{8}-\d{6}-([0-9a-f]{4})\b|(?<![\w./#@-])([0-9a-f]{4})(?![\w/@-])")   # a run, or its last 4
 HISTORY_S = 86400                                                # how far back a reply's thread counts for `pr_watchers`
-GH, GH_REPO = "gh", "danielreuter/verity"                       # `pr_branches` asks gh for PR branches
+GH, GH_REPO = "gh", "compute-verification/verity"                       # `pr_branches` asks gh for PR branches
 TAG_SEP = " \u00b7 "
 _TAG = r"(?:[a-z0-9][a-z0-9._-]*|\([a-z]+\))"
 FOOTER_RE = re.compile(rf"\n_({_TAG}(?: \u00b7 {_TAG})*)_\s*$")                                  # `_ask · urgent_`
@@ -388,7 +388,7 @@ def broker_error(method: str, e: urllib.error.HTTPError) -> str:
     if e.code == 401:
         return f"{method}: the Slack broker rejected this agent's Cursor identity ({why}); set SLACK_BOT_TOKEN or ask @infra"
     if e.code == 403:
-        return f"{method}: the Slack broker refused the call ({why}): it serves danielreuter/verity's agents and BROKER_METHODS only"
+        return f"{method}: the Slack broker refused the call ({why}): it serves compute-verification/verity's agents and BROKER_METHODS only"
     if e.code == 413:
         return f"{method}: the request is larger than the broker takes ({why}); put the content in a file and link it"
     if e.code == 429:
@@ -2030,7 +2030,7 @@ def http_json(method: str, url: str, data: bytes | None, headers: dict[str, str]
 def route_error(what: str, e: urllib.error.HTTPError) -> str:
     why = f"HTTP {e.code}{_code(e)}"
     if e.code == 401:
-        return f"{what}: the route rejected this agent's Cursor identity ({why}): it takes managed agents on danielreuter/verity only"
+        return f"{what}: the route rejected this agent's Cursor identity ({why}): it takes managed agents on compute-verification/verity only"
     if e.code == 403:
         return f"{what}: the route refused ({why}): only a card's own asker may resolve it"
     if e.code == 429:

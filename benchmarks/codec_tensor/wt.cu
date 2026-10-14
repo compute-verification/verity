@@ -2146,9 +2146,10 @@ __global__ void __launch_bounds__(PASS_THREADS) pass_kernel(unsigned j, const u6
 
 // --- the fused decode GEMM --------------------------------------------------------------------------------------------
 //
-// Warp D + 1's lane 0 bulk-copies task i's TW stored words (SB bytes) into stage i mod stages; the D decoder warps
-// decode them in place; warp D, the MMA warp, takes the tasks in order and runs the plain kernel's 16 tiles on each.
-// The warps after D + 1, if any, tag the layer's store (`tag_warp`), read through L2 behind the bulk copies.
+// The copy lane bulk-copies task i's TW stored words (SB bytes) into stage i mod stages; the D decoder warps decode
+// them in place; warp D, the MMA warp, takes the tasks in order and runs the plain kernel's 16 tiles on each. The copy
+// lane is the MMA warp's lane 0, which copies task i + stages once the warp's loads of task i are behind `empty`, or
+// with two MMA warps, or a sketch, a producer warp's after them (fused_producers), which copies once `empty` lets it. The warps after these, if any, tag the layer's store (`tag_warp`), read through L2 behind the bulk copies.
 // The CTA's tasks are one sequence of words (task i's word w is word TW i + w), cut into units of 32: decoder warp d
 // takes units d, d + D, ..., lane l a unit's word l. A lane loads its word, decodes it, and writes its payload (stage
 // bytes PB w ..) only once every word of the task is loaded, since a payload overwrites the stored bytes of the words
@@ -2243,10 +2244,13 @@ __host__ __device__ constexpr int fused_mma_warps() {
   return NB8 == 4 && K <= 2 && !(SKK > 0 && SKW == 0) ? 2 : 1;
 }
 
-// The row groups: past M = 32 each MMA warp takes 32 rows of every task, else 1.
+// The producer warp after the MMA warps, where there are two or the kernel sketches (SKK > 0). Else the MMA warp copies
+// and relays the tasks itself, and the producer's warp is a decoder's: 11 decoders untagged at 12 warps, which the
+// decoders bind. Beside the sketch warps the copies in the MMA warp lengthen a stage's round trip, which at 7 stages
+// cost the 8-decoder kernel 6% at k = 2, and a ninth decoder won none of it back.
 template <int K, int NB8, int SKK, int SKW>
-__host__ __device__ constexpr int fused_row_groups() {
-  return NB8 > 4 ? fused_mma_warps<K, NB8, SKK, SKW>() : 1;
+__host__ __device__ constexpr int fused_producers() {
+  return fused_mma_warps<K, NB8, SKK, SKW>() >= 2 || SKK > 0 ? 1 : 0;
 }
 
 template <int SKK, int SKW>
@@ -2262,6 +2266,13 @@ int fused_mma(int k, int nb8) {
   if (nb8 > 8) return fused_mma_warps<3, 16, SKK, SKW>();
   if (nb8 > 4) return fused_mma_warps<3, 8, SKK, SKW>();
   return nb8 == 4 && k <= 2 ? fused_mma_warps<1, 4, SKK, SKW>() : fused_mma_warps<3, 1, SKK, SKW>();
+}
+
+template <int SKK, int SKW>
+int fused_prod(int k, int nb8) {
+  if (nb8 > 8) return fused_producers<3, 16, SKK, SKW>();
+  if (nb8 > 4) return fused_producers<3, 8, SKK, SKW>();
+  return nb8 == 4 && k <= 2 ? fused_producers<1, 4, SKK, SKW>() : fused_producers<3, 1, SKK, SKW>();
 }
 
 // Bytes [o, o + PB) of the stage, o = PB w, get y's low PB bytes as whole aligned words: the lane writes each word
@@ -2471,7 +2482,7 @@ __device__ __forceinline__ void sk_mma(const SkPart<KS> &P, const uint8_t *st, i
   }
 }
 
-// ro-sketch-blake3/v0 on SKW sketch warps of their own (after the producer), so the decoders and the MMA warp do none
+// ro-sketch-blake3/v0 on SKW sketch warps of their own (the last), so the decoders and the MMA warp do none
 // of it. Sketch warp q takes tasks ii = q, q + SKW, ... of each of the CTA's tiles: it loads the task's first B
 // fragments (k.signs, the rest PF steps ahead of their MMAs), waits on `ready`, reads the stage's stored bytes (a
 // step's A fragment a uint4 a lane, k_s / 8 MMAs) and arrives on
@@ -2945,12 +2956,12 @@ struct FusedSmem {
         tagq(reinterpret_cast<u32 *>(full + 2 * ((6 * stages + 1) / 2))), skbuf(reinterpret_cast<int *>(tagq + 4)),
         sksg(reinterpret_cast<u32 *>(skbuf + sk_buf_ints<SKK, SKW>())) {}
   // Thread 0 makes the stages' barriers anew for each segment, and finds it (Cut::next, after b's) in tagq[1 .. 3].
-  __device__ void setup(int stages, int nbs, int nchunks, int groups, int tskt, int b, int rg) const {
+  __device__ void setup(int stages, int nbs, int nchunks, int groups, int tskt, int b) const {
     for (int s = 0; s < stages; ++s) {
       mbar_init(full + s, 1);
       mbar_init(loaded + s, TW);
       mbar_init(decoded + s, TW);
-      mbar_init(empty + s, LANES * rg);
+      mbar_init(empty + s, LANES * RG);
       mbar_init(ready + s, 1);
       mbar_init(sketched + s, 1);
     }
@@ -2964,7 +2975,7 @@ struct FusedSmem {
 // The launch CTA's segment in tagq, run as the format's CTA b would; false when there is none, and for the tag warps,
 // which run none. Each segment derives what it uses from the kernel's parameters, which the kernel passes through
 // opaque(), and fused_next likewise, so nothing derived is held in registers through one segment's decode into the next.
-template <int K, int NB8, bool PARTIALS, int SKK, int SKW, int WARPS, bool BF>
+template <int K, int NB8, bool PARTIALS, int SKK, int SKW, int WARPS, bool BF = false>
 __device__ __forceinline__ bool fused_segment(const uint8_t *__restrict__ wstore, const uint8_t *__restrict__ x,
                                               float *__restrict__ y, int M, int N, int Kd, u64 base, int groups,
                                               int decoders, int stages, const u32 *__restrict__ tsteps,
@@ -2972,10 +2983,8 @@ __device__ __forceinline__ bool fused_segment(const uint8_t *__restrict__ wstore
                                               int *__restrict__ sk_out, int skt, int sgs) {
   extern __shared__ __align__(128) uint8_t smem[];
   const FusedSmem<NB8, SKK, SKW> S(smem, stages);
-  constexpr int MW = fused_mma_warps<K, NB8, SKK, SKW>();
-  constexpr int RG = fused_row_groups<K, NB8, SKK, SKW>(), NA = NB8 > 4 ? 4 : NB8;   // a warp's accumulators' NB8
-  static_assert(RG == 1 || !(SKK > 0 && SKW == 0), "a row group's MMA warps don't hash the decoders' sketches");
-  const int pipe = 32 * (decoders + MW + 1 + SKW);   // the threads that run the segments: all but the tag warps
+  constexpr int MW = fused_mma_warps<K, NB8, SKK, SKW>(), PW = fused_producers<K, NB8, SKK, SKW>();
+  const int pipe = 32 * (decoders + MW + PW + SKW);   // the threads that run the segments: all but the tag warps
   if (threadIdx.x >= pipe) return false;
   const int nchunks = Kd / TASK_COLS, nbs = N / 16;
   const int b = *(volatile u32 *)(S.tagq + 1), j0 = *(volatile u32 *)(S.tagq + 2), j1 = *(volatile u32 *)(S.tagq + 3);
@@ -2996,7 +3005,7 @@ __device__ __forceinline__ bool fused_segment(const uint8_t *__restrict__ wstore
   for (int e = threadIdx.x; e < sk_buf_ints<SKK, SKW>(); e += pipe) skbuf[e] = 0;
   asm volatile("bar.sync 2, %0;\n" ::"r"(pipe) : "memory");
 
-  if (warp == decoders + MW) {
+  if (PW && warp == decoders + MW) {
     if (lane == 0) {
       int r = 0;   // the next copy to relay
       const auto relay = [&] {
@@ -3023,10 +3032,34 @@ __device__ __forceinline__ bool fused_segment(const uint8_t *__restrict__ wstore
     [[maybe_unused]] SkJob J;
     J.blk = -1;
     int hashed = 0;   // the tiles whose hash has started
+    int r = 0, rs = 0;   // without a producer: the next copy lane 0 relays, its stage and its parity
+    u32 rp = 0;
+    // Lane 0 relays, while the warp waits on task i's `decoded`, the landed copies of tasks below i + stages: the ones
+    // a producer would have issued by now, so task i's decode waits on no copy the producer's wouldn't. It polls while
+    // copies are in flight, so a poll keeps the copy's stage and parity rather than dividing by `stages`.
+    [[maybe_unused]] const auto relay = [&](int c) {
+      for (c = min(c, ntasks); r < c && mbar_test(full + rs, rp); ++r) {
+        mbar_arrive(ready + rs);
+        if (++rs == stages) rs = 0, rp ^= 1;
+      }
+    };
+    if (!PW && lane == 0)
+      for (int i = 0; i < min(stages, ntasks); ++i) {
+        mbar_expect_tx(full + i, SB);
+        bulk_load(smem + i * SB, wstore + (q0 + i * gq) * SB, SB, full + i);
+      }
     for (int i = 0; i < ntasks; ++i) {
       const int s = i % stages;
       if constexpr (SKK > 0 && SKW == 0)
         while (J.blk >= 0 && !mbar_test(decoded + s, (i / stages) & 1)) sk_hash_block<SKK>(J, lane, sk);
+      if constexpr (!PW) {
+        if (lane == 0)
+          for (const int c = i + stages, ph = (i / stages) & 1;;) {
+            relay(c);
+            if (mbar_try(decoded + s, ph, 128)) break;
+          }
+        __syncwarp();
+      }
       // Every MMA warp waits out every task's phase in turn, so none waits on a stage's parity a phase early.
       mbar_wait(decoded + s, (i / stages) & 1);
       if (RG == 1 && MW > 1 && i % MW != warp - decoders) continue;
@@ -3061,6 +3094,11 @@ __device__ __forceinline__ bool fused_segment(const uint8_t *__restrict__ wstore
       // and the sketch warps' reads precede the decoders' stores, which the decoders fence.
       asm volatile("fence.proxy.async.shared::cta;\n" ::: "memory");
       mbar_arrive(empty + s);
+      if (!PW && lane == 0 && i + stages < ntasks) {
+        mbar_wait(empty + s, (i / stages) & 1);
+        mbar_expect_tx(full + s, SB);
+        bulk_load(smem + s * SB, wstore + (q0 + (i + stages) * gq) * SB, SB, full + s);
+      }
       store_task<NA, PARTIALS>(acc, y, M, N, kc, g0 + i * groups, g, tq, r0);
       if constexpr (SKK > 0 && SKW == 0)
         while (hashed * skt < ntasks && i == min(skt * (hashed + 1), ntasks - 1)) {
@@ -3080,13 +3118,13 @@ __device__ __forceinline__ bool fused_segment(const uint8_t *__restrict__ wstore
     decode_tasks<K, SKK, SKW, fresh_decode<K, WARPS>()>(smem, ready, loaded, decoded, sketched, stages, ntasks, q0,
                                                         gq, base, decoders, warp, lane, tsteps, sk);
   } else if constexpr (SKW > 0) {
-    if (warp < decoders + 1 + MW + SKW) {
+    if (warp < decoders + PW + MW + SKW) {
       const Sketch sk{skbuf, sgn, sk_out, tags, tag_base, tile0, skt, tiles, ntasks, q0, gq};
 #if WT_RECEIPT
-      receipt_warp<SKW, SKK, receipt_tasks<NB8>()>(smem, ready, sketched, S.tagq, stages, warp - decoders - 1 - MW,
+      receipt_warp<SKW, SKK, receipt_tasks<NB8>()>(smem, ready, sketched, S.tagq, stages, warp - decoders - PW - MW,
                                                     lane, sk);
 #else
-      sketch_warp<SKK, SKW, SignB>(smem, ready, sketched, stages, warp - decoders - 1 - MW, lane, sk);
+      sketch_warp<SKK, SKW, SignB>(smem, ready, sketched, stages, warp - decoders - PW - MW, lane, sk);
 #endif
     }
   }
@@ -3102,12 +3140,12 @@ __device__ __forceinline__ bool fused_next(int N, int Kd, int groups, int decode
   const FusedSmem<NB8, SKK, SKW> S(smem, stages);
   const int b = *(volatile u32 *)(S.tagq + 1), nchunks = Kd / TASK_COLS, tskt = SKK > 0 ? skt : 1;
   if (Cut(N / 16, nchunks, groups, tskt).next(b).b >= groups * nchunks) return false;
-  const int pipe = 32 * (decoders + fused_mma_warps<K, NB8, SKK, SKW>() + 1 + SKW);
+  const int pipe = 32 * (decoders + fused_mma_warps<K, NB8, SKK, SKW>() + fused_producers<K, NB8, SKK, SKW>() + SKW);
   asm volatile("fence.proxy.async.shared::cta;\n" ::: "memory");
   asm volatile("bar.sync 2, %0;\n" ::"r"(pipe) : "memory");
   if (threadIdx.x == 0) {
     for (int s = 0; s < 6 * stages; ++s) mbar_inval(S.full + s);
-    S.setup(stages, N / 16, nchunks, groups, tskt, b, fused_row_groups<K, NB8, SKK, SKW>());
+    S.setup(stages, N / 16, nchunks, groups, tskt, b);
   }
   asm volatile("bar.sync 2, %0;\n" ::"r"(pipe) : "memory");
   return true;
@@ -3118,7 +3156,7 @@ __device__ __forceinline__ bool fused_next(int N, int Kd, int groups, int decode
 // A + 1.
 // With SKK > 0 the decoders sketch (sk_begin) and the MMA warp hashes each tile (SkJob) into sk_out and tags
 // (ro-sketch-blake3/v0, index tag_base + v), and there are no tag warps; with SKW > 0 as well, SKW sketch warps after
-// the producer do all of it (sketch_warp).
+// the MMA warps and the producer do all of it (sketch_warp).
 // WARPS, the warps the launch bounds allow, is fused_warps' or fewer (wt_fused_sketch).
 // The grid is any number of CTAs (Cut): wt_fused_sketch's is the format's, or as many as the SMs hold where that pays.
 template <int K, int NB8, bool PARTIALS, int SKK, int SKW, int WARPS = fused_warps<NB8, SKK, SKW>(), bool BF = false>
@@ -3133,7 +3171,7 @@ __global__ void __launch_bounds__(WARPS * 32, 1) fused_kernel(
       for (int e = threadIdx.x; e < sgs; e += blockDim.x) S.sksg[e] = __ldg(signs + e);
     if (threadIdx.x == 0) {
       S.tagq[0] = 0;
-      S.setup(stages, N / 16, Kd / TASK_COLS, groups, SKK > 0 ? skt : 1, -1, fused_row_groups<K, NB8, SKK, SKW>());
+      S.setup(stages, N / 16, Kd / TASK_COLS, groups, SKK > 0 ? skt : 1, -1);
     }
   }
   __syncthreads();
@@ -3199,7 +3237,9 @@ static int fused_sketch(int k, const void *w, const uint8_t *x, float *y, int M,
   const int cap = sketch_warps ? fused_cap<16, 2>(nb8) : (sketch_k ? fused_cap<16, 0>(nb8) : fused_cap<0, 0>(nb8));
   const int mw =
       sketch_warps ? fused_mma<16, 2>(k, nb8) : (sketch_k ? fused_mma<16, 0>(k, nb8) : fused_mma<0, 0>(k, nb8));
-  const int warps = decoders + mw + 1 + taggers + sketch_warps;
+  const int pw =
+      sketch_warps ? fused_prod<16, 2>(k, nb8) : (sketch_k ? fused_prod<16, 0>(k, nb8) : fused_prod<0, 0>(k, nb8));
+  const int warps = decoders + mw + pw + taggers + sketch_warps;
   if (Kd % TASK_COLS || N % 16 || M < 1 || M > 128 || k < 1 || k > MAXK || decoders < FUSED_SPAN || taggers < 0 ||
       warps > cap || stages < (32 * decoders + TW - 1) / TW || (w && taggers && !tags))
     return 1;
@@ -3217,8 +3257,6 @@ static int fused_sketch(int k, const void *w, const uint8_t *x, float *y, int M,
   const int signs16 = sketch_k == 16 ? skt * ((SB + 511) / 512) * 32 : 0;
   auto go = [&](auto kern, int smem, int sgs) -> int {
     return launch_gemm(kern, smem, threads, groups, nchunks, nbs, w == nullptr, launched, [&](int gr, int fill) {
-      // Cut's grid where it pays: its CTAs' tasks are at most ceil(T / P) and a tile, and a CTA's change of segment
-      // drains and refills its stages, about `stages` tasks; the format's first CTA has ceil(nbs / groups) tasks.
       const long long T = (long long)nbs * nchunks;
       const bool cut = (T + fill - 1) / fill + (sketch_k ? skt : 1) + stages < (nbs + gr - 1) / gr;
       kern<<<cut ? fill : gr * nchunks, threads, smem, s>>>(static_cast<const uint8_t *>(w), x, y, M, N, Kd, base, gr,
@@ -3447,8 +3485,8 @@ int wt_gemm(int mode, const void *w, const uint8_t *x, float *y, int M, int N, i
 #undef G
 }
 
-// The fused decode GEMM at k rounds: `decoders` decoder warps, the MMA warps (fused_mma_warps), a producer and `taggers`
-// tag warps (block jl's ro-blake3/v1 tag, at index tag_base + jl, into tags[8 jl ..]), `stages` stored stages; tsteps
+// The fused decode GEMM at k rounds: `decoders` decoder warps, the MMA warps (fused_mma_warps), a producer where
+// fused_producers has one, and `taggers` tag warps (block jl's ro-blake3/v1 tag, at index tag_base + jl, into tags[8 jl ..]), `stages` stored stages; tsteps
 // as fused_kernel's.
 // wt_fused_sketch with sketch_k > 0 (16 at any k, 64 at k = 1; no tag warps) computes ro-sketch-blake3/v0 at
 // k_s = sketch_k over tiles of skt tasks (stages < 2 skt), the signs as sketching.sign_fragments, each vector v's tag at
@@ -3463,18 +3501,16 @@ int wt_fused_sketch(int k, const void *w, const uint8_t *x, float *y, int M, int
                     int decoders, int stages, int groups, int taggers, const u32 *tsteps, u32 *tags, u64 tag_base,
                     int sketch_k, const u32 *signs, int *sk_out, int skt, int sketch_warps, int *launched,
                     cudaStream_t s) {
-  return fused_sketch<false>(k, w, x, y, M, N, Kd, base, partials, decoders, stages, groups, taggers, tsteps, tags,
-                             tag_base, sketch_k, signs, sk_out, skt, sketch_warps, launched, s);
+  return fused_sketch<false>(k, w, x, y, M, N, Kd, base, partials, decoders, stages, groups, taggers, tsteps, tags, tag_base, sketch_k, signs, sk_out, skt, sketch_warps, launched, s);
 }
 
 // wt_fused_sketch over a BF16 matrix's plain fragments (its bytes as an N x 2K FP8 matrix's, Kd = 2K) and BF16 rows
 // x: beside the two sketch warps, partials only.
 int wt_fused_sketch_bf(int k, const void *w, const uint8_t *x, float *y, int M, int N, int Kd, u64 base, int partials,
-                       int decoders, int stages, int groups, int taggers, const u32 *tsteps, u32 *tags, u64 tag_base,
-                       int sketch_k, const u32 *signs, int *sk_out, int skt, int sketch_warps, int *launched,
-                       cudaStream_t s) {
-  return fused_sketch<true>(k, w, x, y, M, N, Kd, base, partials, decoders, stages, groups, taggers, tsteps, tags,
-                            tag_base, sketch_k, signs, sk_out, skt, sketch_warps, launched, s);
+                    int decoders, int stages, int groups, int taggers, const u32 *tsteps, u32 *tags, u64 tag_base,
+                    int sketch_k, const u32 *signs, int *sk_out, int skt, int sketch_warps, int *launched,
+                    cudaStream_t s) {
+  return fused_sketch<true>(k, w, x, y, M, N, Kd, base, partials, decoders, stages, groups, taggers, tsteps, tags, tag_base, sketch_k, signs, sk_out, skt, sketch_warps, launched, s);
 }
 
 int wt_fused(int k, const void *w, const uint8_t *x, float *y, int M, int N, int Kd, u64 base, int partials,
