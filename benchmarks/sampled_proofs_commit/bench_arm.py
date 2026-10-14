@@ -18,14 +18,18 @@ What the arm does not do, against the Commit of record:
 Each measured rep reports, as extras, the bytes and leaves committed, the steps, the root-ready delay (the time from
 the end of the last step to the run root) and ``serve_to_root_s``, the run's wall time to its root.
 
-Settings, all optional: ``VERITY_SP_ARM_WINDOW_MB`` (default 256), ``VERITY_SP_ARM_WINDOW_SLOTS`` (8) and
-``VERITY_SP_ARM_LEVELS`` (``drop``, or ``keep`` to retain every step's tree levels on host, as ``--retain none`` does).
+Settings, all optional: ``VERITY_SP_ARM_WINDOW_MB`` (default 256), ``VERITY_SP_ARM_WINDOW_SLOTS`` (8),
+``VERITY_SP_ARM_LEVELS`` (``drop``, or ``keep`` to retain every step's tree levels on host, as ``--retain none`` does) and
+``VERITY_SP_ARM_HOST_GB`` (64): once the collector's pinned host pool holds more, every further step is refused by name
+and the arm fails its gate, rather than the node's OOM guard stopping the run (or someone else's).
 """
 
 from __future__ import annotations
 
 import hashlib
 import os
+import sys
+import threading
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -50,13 +54,16 @@ def settings(environ: dict[str, str] | None = None) -> dict[str, Any]:
     window_mb = int(env.get("VERITY_SP_ARM_WINDOW_MB", "256"))
     slots = int(env.get("VERITY_SP_ARM_WINDOW_SLOTS", "8"))
     levels = env.get("VERITY_SP_ARM_LEVELS", "drop")
+    host_gb = float(env.get("VERITY_SP_ARM_HOST_GB", "64"))
+    if host_gb <= 0:
+        raise ValueError("VERITY_SP_ARM_HOST_GB must be positive")
     if window_mb < 1 or window_mb & (window_mb - 1):
         raise ValueError("VERITY_SP_ARM_WINDOW_MB must be a power of two")
     if slots < 3:
         raise ValueError("VERITY_SP_ARM_WINDOW_SLOTS must be at least 3")
     if levels not in ("drop", "keep"):
         raise ValueError("VERITY_SP_ARM_LEVELS must be 'drop' or 'keep'")
-    return {"window_mb": window_mb, "window_slots": slots, "levels": levels}
+    return {"window_mb": window_mb, "window_slots": slots, "levels": levels, "host_gb": host_gb}
 
 
 def digest(paths: list[Path]) -> str:
@@ -97,6 +104,9 @@ def record_of(rc: Any, t_end: float | None) -> dict[str, Any]:
         "errors": list(extra.get("errors") or [])[:3],
         "expected_tensors": int(extra.get("expected_tensors", 0)),
         "committed_tensors": int(extra.get("committed_tensors", 0)),
+        "pinned_pool_bytes": float(extra.get("pinned_pool_bytes") or 0),
+        "pinned_pool_blocks": float(extra.get("pinned_pool_blocks") or 0),
+        "pinned_allocs": float(extra.get("pinned_allocs") or 0),
     }
     if t_end is not None and last_end:
         out["root_after_serve_end_s"] = max(0.0, last_end + float(rc.root_ready_delay_s) - t_end)
@@ -116,6 +126,7 @@ class _Committing:
         self.weights: dict[str, Any] = {}
         self.window: dict[str, Any] = {}
         self.kernel = ""
+        self.peak: dict[str, int] = {}
         self.closed = False
 
     def ready(self, target: Any) -> None:
@@ -146,8 +157,7 @@ class _Committing:
         )
         if not com.windowed or com.retain != "none":
             raise RuntimeError(f"sampled-proofs arm: collector not windowed with retain none ({com.name}, retain {com.retain})")
-        if s["levels"] == "drop":
-            _drop_levels_after_each_step(com)
+        self.peak = _guard_steps(com, drop_levels=s["levels"] == "drop", cap_bytes=int(s["host_gb"] * 1e9))
         self.window = com.enable_windows(None)
         self.weights = dict(com.register_weights())
         com.install()
@@ -166,7 +176,15 @@ class _Committing:
         rec = record_of(rc, t_end)
         if t_end is not None and self.t_start is not None:
             rec["serve_to_root_s"] = (t_end - self.t_start) + rec.get("root_after_serve_end_s", 0.0)
+        rec["max_step_bytes"] = float(self.peak.get("step_bytes", 0))
+        rec["torch_pinned_bytes"] = float(_host_pinned_bytes())
+        if self.peak:
+            self.peak["step_bytes"] = 0
         self.runs.append(rec)
+        print(f"[sp-commit] run {len(self.runs)}: steps {rec['steps']} committed {rec['committed_bytes'] / 1e9:.1f} GB, "
+              f"max step {rec['max_step_bytes'] / 1e9:.2f} GB, pinned pool {rec['pinned_pool_bytes'] / 1e9:.1f} GB in "
+              f"{rec['pinned_pool_blocks']:.0f} blocks ({rec['pinned_allocs']:.0f} allocs), torch pinned "
+              f"{rec['torch_pinned_bytes'] / 1e9:.1f} GB, errors {rec['errors_n']}", file=sys.stderr, flush=True)
         return rec
 
     def spans(self) -> dict[str, float]:
@@ -200,6 +218,9 @@ class _Committing:
             "weights": {k: v for k, v in self.weights.items() if k in ("root", "tensors", "bytes", "wall_s", "hash")},
             "window": {k: self.window.get(k) for k in ("window_bytes", "slots", "layout")},
             "levels": self.settings["levels"],
+            "host_gb": self.settings["host_gb"],
+            "pinned_pool_peak_bytes": self.peak.get("pool_bytes", 0),
+            "refused_steps": self.peak.get("refused_steps", 0),
         }
 
     def close(self) -> None:
@@ -213,31 +234,60 @@ class _Committing:
                 self.com.close()
 
 
-def _drop_levels_after_each_step(com: Any) -> None:
-    """Keep each step's root and give its host tree levels back to the pool as soon as the root is bound."""
+def _guard_steps(com: Any, *, drop_levels: bool, cap_bytes: int) -> dict[str, int]:
+    """Wrap the worker's windowed step: refuse a step by name once the pinned pool holds ``cap_bytes`` (so the arm fails its
+    gate instead of taking the node's memory), and with ``drop_levels`` give the step's host tree levels back to the pool as
+    soon as its root is bound.  Only the worker thread's takes inside a step are redirected; any other thread's ``take``
+    keeps the pool's own slices."""
 
     inner = com._commit_step_windowed
     pool = com.pool
+    take = pool.take
+    local = threading.local()
+    peak = {"pool_bytes": 0, "step_bytes": 0, "refused_steps": 0}
+
+    def routed_take(nbytes: int) -> Any:
+        taken = getattr(local, "taken", None)
+        if taken is None:
+            return take(nbytes)
+        blk = pool.take_block(int(nbytes))
+        taken.append(blk)
+        return blk[: int(nbytes)]
 
     def commit_step(job: Any) -> None:
-        taken: list[Any] = []
-        take = pool.take
-
-        def take_block(nbytes: int) -> Any:
-            blk = pool.take_block(int(nbytes))
-            taken.append(blk)
-            return blk[: int(nbytes)]
-
-        pool.take = take_block
+        held = int(pool.bytes_total)
+        if held > cap_bytes:
+            peak["refused_steps"] += 1
+            raise RuntimeError(f"sampled-proofs arm: pinned pool {held / 1e9:.1f} GB over the {cap_bytes / 1e9:.0f} GB cap "
+                               "(VERITY_SP_ARM_HOST_GB); step not committed")
+        local.taken = [] if drop_levels else None
         try:
             inner(job)
         finally:
-            pool.take = take
-        com._gpu_levels[job.step] = []
-        for blk in taken:
-            pool.give_back(blk)
+            taken, local.taken = local.taken, None
+            if drop_levels:
+                com._gpu_levels[job.step] = []
+                for blk in taken or ():
+                    pool.give_back(blk)
+            done = com._done.get(job.step)
+            peak["step_bytes"] = max(peak["step_bytes"], int(getattr(done, "n_bytes", 0) or 0))
+            peak["pool_bytes"] = max(peak["pool_bytes"], int(pool.bytes_total))
 
+    pool.take = routed_take
     com._commit_step_windowed = commit_step
+    return peak
+
+
+def _host_pinned_bytes() -> int:
+    """Pinned host bytes torch's caching host allocator holds (the C++ fallback for a level buffer the pool did not give); -1
+    where torch or the statistic is missing."""
+
+    torch = sys.modules.get("torch")
+    stats = getattr(getattr(torch, "cuda", None), "host_memory_stats", None)
+    if stats is None:
+        return -1
+    got = stats()
+    return int(got.get("reserved_bytes.current", got.get("allocated_bytes.current", -1)))
 
 
 class _ArmModule:

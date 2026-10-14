@@ -16,7 +16,9 @@ def test_the_commit_arm_is_gated_against_stock_fp8():
 
 
 def test_settings_refuse_by_name():
-    assert bench_arm.settings({}) == {"window_mb": 256, "window_slots": 8, "levels": "drop"}
+    assert bench_arm.settings({}) == {"window_mb": 256, "window_slots": 8, "levels": "drop", "host_gb": 64.0}
+    with pytest.raises(ValueError, match="VERITY_SP_ARM_HOST_GB"):
+        bench_arm.settings({"VERITY_SP_ARM_HOST_GB": "0"})
     with pytest.raises(ValueError, match="VERITY_SP_ARM_WINDOW_MB"):
         bench_arm.settings({"VERITY_SP_ARM_WINDOW_MB": "96"})
     with pytest.raises(ValueError, match="VERITY_SP_ARM_WINDOW_SLOTS"):
@@ -85,6 +87,71 @@ def test_each_driver_call_closes_the_run_in_flight_and_opens_the_next():
     assert len(state.runs) == 3
     state.close()
     assert state.com.closed and len(state.runs) == 3
+
+
+class _FakePool:
+    def __init__(self):
+        self.free, self.all = [], []
+
+    def take(self, nbytes):
+        blk = bytearray(max(nbytes, 64))
+        self.all.append(blk)
+        return memoryview(blk)[:nbytes]
+
+    def take_block(self, nbytes):
+        for i, b in enumerate(self.free):
+            if len(b) >= nbytes:
+                return self.free.pop(i)
+        blk = bytearray(max(nbytes, 64))
+        self.all.append(blk)
+        return blk
+
+    def give_back(self, blk):
+        self.free.append(blk)
+
+    @property
+    def bytes_total(self):
+        return sum(len(b) for b in self.all)
+
+
+def _fake_windowed(fail_at=None):
+    com = SimpleNamespace(pool=_FakePool(), _gpu_levels={}, _done={})
+
+    def step(job):
+        com.pool.take(1000)
+        com.pool.take(100)
+        com._gpu_levels[job.step] = ["levels"]
+        com._done[job.step] = SimpleNamespace(n_bytes=8000)
+        if job.step == fail_at:
+            raise RuntimeError("worker step failed")
+
+    com._commit_step_windowed = step
+    return com
+
+
+def test_dropped_levels_are_reused_by_every_later_step_even_after_a_failed_one():
+    com = _fake_windowed(fail_at=1)
+    peak = bench_arm._guard_steps(com, drop_levels=True, cap_bytes=1 << 30)
+    for step in range(6):
+        try:
+            com._commit_step_windowed(SimpleNamespace(step=step))
+        except RuntimeError:
+            assert step == 1
+    assert com.pool.bytes_total == 1100 and len(com.pool.free) == 2
+    assert all(v == [] for v in com._gpu_levels.values())
+    assert peak["step_bytes"] == 8000 and peak["pool_bytes"] == 1100
+    other = com.pool.take(10)                      # outside a step: the pool's own slice, not a tracked block
+    assert len(other) == 10 and len(com.pool.free) == 2
+
+
+def test_steps_are_refused_by_name_once_the_pool_is_over_the_cap():
+    com = _fake_windowed()
+    peak = bench_arm._guard_steps(com, drop_levels=False, cap_bytes=2000)
+    com._commit_step_windowed(SimpleNamespace(step=0))
+    com._commit_step_windowed(SimpleNamespace(step=1))
+    with pytest.raises(RuntimeError, match="VERITY_SP_ARM_HOST_GB"):
+        com._commit_step_windowed(SimpleNamespace(step=2))
+    assert peak["refused_steps"] == 1 and com.pool.bytes_total == 2200
 
 
 def test_a_failed_gate_run_fails_the_arm_gate():
