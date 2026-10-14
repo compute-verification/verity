@@ -318,7 +318,7 @@ def test_the_program_statuses():
     assert tonight == OWNERS
     assert {pid for pid, s in statuses.items() if s == "committed-only"} == {
         "tp-allreduce", "flashmla-sparse-prefill", "mhc-tf32", "dsv4-qnorm-rope-kv-insert", "dsv4-compress-512", "dsv4-indexer-q",
-        "dsv4-decode-indices", "step-positions"}
+        "step-positions"}
     for p in CMAP["programs"].values():
         assert p["status"] != "exists" or p["definitions"]
         assert p["status"] != "tonight" or not p["definitions"]
@@ -333,15 +333,18 @@ def test_a_decode_step_leaves_one_mhc_pre_and_the_attention_bookkeeping_committe
     assert tf32 == [(f"hc_attn.first.{v}", 0) for v in ("residual", "post_mix", "comb_mix", "x")]
     assert not any(t["program"] == "flashmla-sparse-prefill" for t, _ in taps)
     assert {t["program"] for t, _ in taps if status[t["program"]] == "committed-only"} == {
-        "mhc-tf32", "tp-allreduce", "dsv4-qnorm-rope-kv-insert", "dsv4-compress-512", "dsv4-decode-indices", "step-positions"}
+        "mhc-tf32", "tp-allreduce", "dsv4-qnorm-rope-kv-insert", "dsv4-compress-512", "step-positions"}
 
 
-def test_the_csa_decode_row_is_a_program(registry):
-    """compute_global_topk_indices_and_lens' indices and lengths, at every CSA layer of a decode step, cite
-    `dsv4-csa-decode-indices` (`Dsv4GlobalTopk_v1`, registered); an HCA layer's length and indices, and the SWA ones, stay
-    committed-only.  Each layer has one length tap, under one committed name."""
-    p = CMAP["programs"]["dsv4-csa-decode-indices"]
-    assert p["status"] == "port" and all(d in registry for d in p["definitions"])
+def test_the_decode_index_rows_are_programs(registry):
+    """FlashMLA's decode indices and lengths each cite their row's Program, every one `port` at registered Definitions: every
+    layer's window (`dsv4-swa-decode-indices`, `Dsv4SwaIndices_v1`), a CSA layer's top-k (`dsv4-csa-decode-indices`,
+    `Dsv4GlobalTopk_v1`) and an HCA layer's ratio-128 row (`dsv4-hca-decode-indices`, `Dsv4C128aGlobalTopk_v1`).  Each layer has
+    one length tap, under one committed name."""
+    rows = {"swa": "dsv4-swa-decode-indices", "csa": "dsv4-csa-decode-indices", "hca": "dsv4-hca-decode-indices"}
+    for pid in rows.values():
+        p = CMAP["programs"][pid]
+        assert p["status"] == "port" and p["definitions"] and all(d in registry for d in p["definitions"]), pid
     csa, hca = (set(CM.layer_set(CMAP, k, ENV)) for k in ("csa", "hca"))
     by = {}
     for t, layer in CM._step_taps(CMAP, ENV, "decode", DECODE):
@@ -349,9 +352,10 @@ def test_the_csa_decode_row_is_a_program(registry):
             by.setdefault((t["port"], layer), []).append(t)
     for (port, layer), ts in by.items():
         assert len(ts) == 1, (port, layer)
-        on_row = port in (2, 3) and layer in csa
-        assert ts[0]["program"] == ("dsv4-csa-decode-indices" if on_row else "dsv4-decode-indices"), (port, layer)
+        row = "swa" if port in (0, 1) else "csa" if layer in csa else "hca"
+        assert ts[0]["program"] == rows[row], (port, layer)
     assert {layer for (port, layer) in by if port == 3} == csa | hca == set(range(ENV["L"]))
+    assert len(by) == 2 * ENV["L"] + 2 * (len(csa) + len(hca))
     lens = [t for t in CMAP["taps"] if t["id"].startswith("attn.extra_lens")]
     assert {t["commit"]["name"] for t in lens} == {"model.layers.{i}.attn/extra_lens"}
 
@@ -392,15 +396,15 @@ def test_the_runbook_counts():
 
     every = CM.counts(CMAP, ENV)
     assert (every["module_entries"], every["module_types"], every["tap_templates_by_status"]) == (
-        42, 28, {"exists": 5, "tonight": 36, "port": 10, "copy": 1, "committed-only": 27})
+        42, 28, {"exists": 5, "tonight": 36, "port": 14, "copy": 1, "committed-only": 23})
     assert brief(CM.counts(CMAP, ENV, STEPS["decode"])) == (
-        65, 2539, {"exists": 125, "tonight": 1582, "port": 336, "copy": 1, "committed-only": 495}, 122)
+        65, 2539, {"exists": 125, "tonight": 1582, "port": 520, "copy": 1, "committed-only": 311}, 122)
     assert brief(CM.counts(CMAP, ENV, STEPS["decode-scored"])) == (
-        69, 2659, {"exists": 125, "tonight": 1612, "port": 366, "copy": 1, "committed-only": 555}, 242)
+        69, 2659, {"exists": 125, "tonight": 1612, "port": 550, "copy": 1, "committed-only": 371}, 242)
     assert brief(CM.counts(CMAP, ENV, STEPS["prefill"])) == (
         63, 2415, {"exists": 125, "tonight": 1067, "port": 306, "copy": 1, "committed-only": 916}, 726)
     assert brief(CM.counts(CMAP, ENV, STEPS["mixed"])) == (
-        70, 2720, {"exists": 125, "tonight": 1128, "port": 366, "copy": 1, "committed-only": 1100}, 787)
+        70, 2720, {"exists": 125, "tonight": 1128, "port": 550, "copy": 1, "committed-only": 916}, 787)
 
 
 def test_the_bound_tap_counts():
