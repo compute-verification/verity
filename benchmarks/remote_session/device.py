@@ -406,6 +406,26 @@ class DeviceStore:
                  torch.empty((self.kept_at[self.H + 1], 8), dtype=torch.int64, device="cuda")) for _ in range(passes)]
         del held
 
+    def warmup(self, ns: int) -> dict:
+        """Run the store's own chained passes on a throwaway challenge for at least `ns` nanoseconds, keeping nothing,
+        to bring the GPU to its boost clocks and warm its caches and the allocator before a session's first window.
+        The passes read the whole store and build the full receipt tree, exactly as a session's do, but none is sent,
+        kept or opened: they touch only this store's chain constants (the plan-fixed templates `set_chain` installed at
+        construction are reread, not rewritten), and the real `begin_window` that follows resets the window's challenge
+        and the chain's previous root.  So no window accounts for them."""
+        if ns <= 0:
+            return {"passes": 0, "ns": 0}
+        self.start_chain(bytes(rb.CHALLENGE_BYTES), bytes(rb.DIGEST_BYTES))
+        t0 = time.perf_counter_ns()
+        passes = 0
+        while time.perf_counter_ns() - t0 < ns:
+            self.run_chain(passes % (1 << 32))
+            passes += 1
+        self.chain_previous = None
+        self.pass_gpu_ms.clear()
+        del self.chain_host_phases[:]
+        return {"passes": passes, "ns": time.perf_counter_ns() - t0}
+
     def signs_match(self, seed: bytes) -> bool:
         """The device's packed signs of a pass (`rs_signs16`) against the reference's (`skr.signs`, packed)."""
         torch = self.torch
@@ -715,6 +735,15 @@ class Device:
     def run_pass(self, seed: bytes):
         with self.torch.cuda.stream(self.main_stream):
             return self.store.run_pass(seed)
+
+    def warmup(self, ns: int) -> dict:
+        """Untimed passes on the main stream before a session's first window (`DeviceStore.warmup`)."""
+        with self.torch.cuda.stream(self.main_stream):
+            out = self.store.warmup(ns)
+        self.torch.cuda.synchronize()
+        self.store.pass_gpu_ms.clear()
+        self.offload_ns.clear()
+        return out
 
     def begin_window(self, challenge: bytes, previous: bytes | None) -> None:
         with self.torch.cuda.stream(self.main_stream):
