@@ -4,7 +4,7 @@
   "revision": "3f0d51f8e5640f98f1a96ea9044a0e55c0a83814",
   "case": "LLAMA31_8B",
   "precision": "fp8",
-  "gpu_type": "RTX PRO 6000",
+  "gpu_id": "rtx-pro-6000",
   "gpu_count": 1
  },
  "llama31-70b-fp8-8gpu": {
@@ -12,7 +12,7 @@
   "revision": null,
   "case": null,
   "precision": "fp8",
-  "gpu_type": "RTX PRO 6000",
+  "gpu_id": "rtx-pro-6000",
   "gpu_count": 8,
   "engine_settings": {
    "resident_gpu_memory_utilization": 0.44
@@ -24,7 +24,7 @@
   "revision": "aca966e4e02791568aa6a4ced368624b3d897f42",
   "case": "GLM53",
   "precision": "fp8",
-  "gpu_type": "H200",
+  "gpu_id": "h200",
   "gpu_count": 8,
   "engine_settings": {
    "max_num_batched_tokens": 32768

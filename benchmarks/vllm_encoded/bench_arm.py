@@ -1,4 +1,4 @@
-"""Bandwidth-audit arms for the shared ``verity-vllm bench`` driver.
+"""Bandwidth-audit arms for the shared ``verity-bench vllm`` driver.
 
 ``PLAIN`` installs the stack's plain kernels. ``AUDIT`` installs the encoded
 and receipted stack and is gated against ``PLAIN``. Both run with the same

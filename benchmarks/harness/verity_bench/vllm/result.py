@@ -3,13 +3,10 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
-from verity_vllm.config import option
-
-SCHEMA = "verity-vllm/overhead-benchmark/v1"
+SCHEMA = "verity-bench/vllm-overhead/v1"
 
 
 class IdentityMismatch(ValueError):
@@ -76,18 +73,15 @@ def judge(a: Mapping[str, Any], b: Mapping[str, Any], allow: tuple[str, ...] = (
     return {"accepted": True, "allowed": list(allow)}
 
 
-@dataclass(frozen=True, kw_only=True)
-class Options:
-    """Compare two benchmark results only when their identities agree."""
-
-    left: Path = option("left", type=Path)
-    right: Path = option("right", type=Path)
-    allow: list[str] = option("--allow", action="append", default=[],
-                              help="identity field or path allowed to differ; repeatable")
+def add_judge_arguments(parser: Any) -> None:
+    parser.add_argument("left", type=Path)
+    parser.add_argument("right", type=Path)
+    parser.add_argument("--allow", action="append", default=[],
+                        help="identity field or path allowed to differ; repeatable")
 
 
-def main(a: Options) -> int:
-    left = json.loads(a.left.read_text())
-    right = json.loads(a.right.read_text())
-    print(json.dumps(judge(left, right, tuple(a.allow))))
+def run_judge(args: Any) -> int:
+    left = json.loads(args.left.read_text())
+    right = json.loads(args.right.read_text())
+    print(json.dumps(judge(left, right, tuple(args.allow))))
     return 0
