@@ -253,7 +253,7 @@ theorem accOutRegs_of_check (hrec : Flock.RecOpen.check c = .ok ()) {LANES H : �
         Hm.bitL (MerkleScheme.rowBytes A).data.toList b) :
     ∀ t < 256, RegOut zo u hj (Family.outCol LANES H + 1024 + t) (Hm.bitL (MerkleScheme.rowBytes A).data.toList t) := by
   intro t ht
-  obtain ⟨-, hk, h⟩ := regOuts_of_laid zo hj (Flock.RecOpen.check_ok hrec hp).2
+  obtain ⟨hq', hk, h⟩ := regOuts_of_laid zo hj (Flock.RecOpen.check_ok hrec hp).2
     (by have := foldl_wordPorts 2048; omega) hlaid (jo := 1) (by decide) (fun _ => hread) (b := t) (by omega)
   have h' : RegOut zo u hj (Family.outCol LANES H + 1024 * 1 + t) _ := h
   convert h' using 1 <;> first | omega | exact (hval t ht hk).symm

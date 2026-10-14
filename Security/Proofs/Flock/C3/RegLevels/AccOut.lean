@@ -43,7 +43,7 @@ theorem outRead_drawn {ω : Lv.Ω} {R' : Reg'} {o}
     (∃ rws w, rows = some rws ∧ rws.find? (·.name == "acc0") = some w ∧
         site (zo.rd.port (.inl (u, ⟨_, hq⟩))) = site w) ∧
       ∃ x p, want[x]? = some (some p) ∧ zo.rd.readAt (.inl (u, ⟨_, hq⟩)) = p + 1 := by
-  obtain ⟨-, -, -, -, -, hn1, -⟩ := hlaid
+  obtain ⟨-, -, hq1, -, -, hn1, -⟩ := hlaid
   obtain ⟨-, hsite, x, hx⟩ := accRead_drawn zo hacc hu hr hck hrd hl hw hnd (nm := "acc_out") (d := 1) (by simp) hn1
   refine ⟨hsite, x, ?_⟩
   rw [Array.getElem?_map] at hx
