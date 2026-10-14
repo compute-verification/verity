@@ -218,7 +218,8 @@ theorem own_of_checkOwn {s : VStar.Stmt} {own : Array Flock.Registered.Port} (h 
 theorem sparseOwnNames_of_checkOwn {sh : RecSparse.Shape} {hr : ℕ} {own : Array Flock.Registered.Port}
     (h : RecVStar.checkOwn (.sparse sh hr) own = .ok ()) :
     ∀ nm ∈ (RecSparse.messagePorts sh).map (·.1), ∃ p ∈ own, p.name = nm := by
-  obtain ⟨Y, hY⟩ : ∃ Y, RecSparse.messagePorts sh = ("h", RecSparse.SKIP) :: (Y ++ [("claim", 1)]) := ⟨_, rfl⟩
+  obtain ⟨rest, hY⟩ : ∃ rest, RecSparse.messagePorts sh = ("h", RecSparse.SKIP) :: (rest ++ [("claim", 1)]) :=
+    ⟨_, rfl⟩
   have hown := own_of_checkOwn h
   have h3 := (checkOwn_ok h).2
   simp only [RecVStar.sparseMsgs, hY, List.drop_succ_cons, List.drop_zero, List.dropLast_concat] at h3
