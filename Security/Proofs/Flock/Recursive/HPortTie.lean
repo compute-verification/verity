@@ -217,17 +217,17 @@ theorem rowPort_of_checkRows {s : VStar.Stmt} {own : Array Flock.Registered.Port
     unfold Flock.RecVStar.checkRows at h
     dsimp only at h
     split at h
-    · first | cases h | (obtain ⟨_, h2, -⟩ := FlockSoundness.Refine.ebind_ok h; cases h2)
+    · cases h
     · split at h
-      · first | (rename_i ht; rw [hne] at ht; cases ht) | simp_all
-      · first | cases h | (obtain ⟨_, h2, -⟩ := FlockSoundness.Refine.ebind_ok h; cases h2)
+      · rename_i ht; rw [hne] at ht; cases ht
+      · cases h
   | some rws =>
     unfold Flock.RecVStar.checkRows at h
     dsimp only at h
     split at h
-    · first | cases h | (obtain ⟨_, h2, -⟩ := FlockSoundness.Refine.ebind_ok h; cases h2)
+    · cases h
     · split at h
-      · first | (rename_i ht; rw [hne] at ht; cases ht) | simp_all
+      · rename_i ht; rw [hne] at ht; cases ht
       · obtain ⟨_, h, -⟩ := FlockSoundness.Refine.ebind_ok h
         suffices hP : ∀ x ∈ Flock.RecVStar.rowPorts s, ∃ reg w, own.find? (·.name == x) = some reg ∧
             rws.find? (·.name == x) = some w ∧ Flock.RecVStar.portDiff? reg w = none by
@@ -241,15 +241,15 @@ theorem rowPort_of_checkRows {s : VStar.Stmt} {own : Array Flock.Registered.Port
           split at hr
           · rename_i w hw
             split at hr
-            · first | cases hr | (obtain ⟨_, h2, -⟩ := FlockSoundness.Refine.ebind_ok hr; cases h2)
+            · cases hr
             · rename_i hn
               refine ⟨⟨reg, w, hreg, hw, ?_⟩, ?_⟩
               · cases hd : Flock.RecVStar.portDiff? reg w with
                 | none => rfl
                 | some d => exact absurd hd (hn d)
               · cases hr; rfl
-          · first | cases hr | (obtain ⟨_, h2, -⟩ := FlockSoundness.Refine.ebind_ok hr; cases h2)
-        · first | cases hr | (obtain ⟨_, h2, -⟩ := FlockSoundness.Refine.ebind_ok hr; cases h2)
+          · cases hr
+        · cases hr
 
 end checks
 
