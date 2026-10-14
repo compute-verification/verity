@@ -243,6 +243,28 @@ def test_after_a_landing_the_declarations_command_starts_detached_on_the_commit(
     assert M.after_land(tmp_path, "nothere.decl:T", "abc", spawn=spawn) is None and len(started) == 1
 
 
+def test_the_after_landing_command_runs_in_a_worktree_of_the_landed_commit_that_goes_when_it_ends(tmp_path):
+    """12 Oct: drive started `post_train.py` in its queue clone, which the next tick reset and cleaned, so d779760ce's run lost
+    the `.venv` `uv run` had made there; the command gets a tree of its own, which the caller's checkout moving can't touch."""
+    repo, rec = tmp_path / "repo", tmp_path / "rec"
+    (repo / "mytools").mkdir(parents=True)
+    (repo / "mytools" / "decl.py").write_text(
+        "from research.store.tool import Tool\n"
+        f"T = Tool(name='check', after_land=['sh', '-c', 'pwd > {rec}; git rev-parse HEAD >> {rec}; echo $0 >> {rec}'])\n")
+    for args in (("init", "-q", "-b", "main"), ("add", "-A"), ("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "a")):
+        subprocess.run(["git", *args], cwd=repo, check=True)
+    landed = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+    (repo / "later.txt").write_text("the checkout moves on\n")
+    procs: list[subprocess.Popen] = []
+    M.after_land(repo, "mytools.decl:T", landed, log=lambda *_: None, spawn=lambda argv, **kw: procs.append(subprocess.Popen(argv, **kw)))
+    assert procs[0].wait() == 0
+    where, head, arg = rec.read_text().split()
+    assert Path(where) != repo and Path(where).name.startswith(f"research-after-land-{landed[:12]}-")
+    assert (head, arg) == (landed, landed)
+    assert not Path(where).exists()
+    assert subprocess.run(["git", "worktree", "list", "--porcelain"], cwd=repo, capture_output=True, text=True).stdout.count("worktree ") == 1
+
+
 def test_a_refused_push_sweeps_nothing_and_fails(tmp_path, monkeypatch, capsys):
     repo, gh, _tips, _merge = _world(tmp_path)
     _checked_c(tmp_path, monkeypatch, gh, repo)
@@ -271,7 +293,7 @@ def test_a_merge_without_the_remote_skips_the_sweep(tmp_path, monkeypatch, capsy
 
 def _steps(monkeypatch) -> list[tuple]:
     """Every after-landing step `caught_up` runs, in order: ("alert", old, new), ("mirror", sha), ("after_land", sha),
-    ("report", start, tip)."""
+    ("report", start, tip), ("landed", start, tip)."""
     import research.spec_alert as S
 
     ran: list[tuple] = []
@@ -279,6 +301,7 @@ def _steps(monkeypatch) -> list[tuple]:
     monkeypatch.setattr(M, "push_mirror", lambda _repo, sha, _name: ran.append(("mirror", sha)) or True)
     monkeypatch.setattr(M, "after_land", lambda _repo, _tool, sha, **_k: ran.append(("after_land", sha)))
     monkeypatch.setattr(M, "report_landings", lambda _repo, start, tip, **_k: ran.append(("report", start, tip)) or True)
+    monkeypatch.setattr(M, "label_landed", lambda _repo, start, tip, **_k: ran.append(("landed", start, tip)) or True)
     monkeypatch.setenv("RESEARCH_MERGE_MIRROR", "vy-nebius-1")
     return ran
 
@@ -308,9 +331,10 @@ def test_a_landing_pushed_another_way_gets_its_after_landing_steps_on_the_next_m
     tip = _git(other, "rev-parse", "HEAD")
     assert M.main(["--sweep", "--dry-run"]) == 0 and ran == [] and _marker(repo) == merge
     assert M.main(["--sweep"]) == 0
-    assert ran == [("alert", merge, tip), ("mirror", tip), ("after_land", tip), ("report", merge, tip)] and _marker(repo) == tip
+    assert ran == [("alert", merge, tip), ("mirror", tip), ("after_land", tip), ("report", merge, tip), ("landed", merge, tip)]
+    assert _marker(repo) == tip
     assert f"last ran for {merge[:12]}; catching up 2 commit(s) of main to {tip[:12]}" in capsys.readouterr().out
-    assert M.main(["--sweep"]) == 0 and len(ran) == 4, "caught up once"
+    assert M.main(["--sweep"]) == 0 and len(ran) == 5, "caught up once"
 
 
 def test_a_merge_with_push_runs_the_steps_from_the_marker_over_what_it_and_the_landings_it_missed_brought(tmp_path, monkeypatch,
@@ -323,7 +347,9 @@ def test_a_merge_with_push_runs_the_steps_from_the_marker_over_what_it_and_the_l
     assert M.main(["C", "--push"]) == 0, capsys.readouterr().err
     tip = _git(repo, "rev-parse", "origin/main")
     assert ran == [("alert", before, merge), ("mirror", merge), ("after_land", merge), ("report", before, merge),  # B's train
-                   ("alert", merge, tip), ("mirror", tip), ("after_land", tip), ("report", merge, tip)]          # the push's: C
+                   ("landed", before, merge),
+                   ("alert", merge, tip), ("mirror", tip), ("after_land", tip), ("report", merge, tip),          # the push's: C
+                   ("landed", merge, tip)]
     assert _marker(repo) == tip
 
 
@@ -351,12 +377,13 @@ def test_a_spec_dm_that_failed_is_sent_again_by_the_next_sweep_which_fails_until
     capsys.readouterr()
     assert M.main(["--sweep"]) == 1
     err, out = capsys.readouterr()[::-1]
-    assert ran == [("alert", merge, tip), ("mirror", tip), ("after_land", tip), ("report", merge, tip)] and _marker(repo) == tip
+    assert ran == [("alert", merge, tip), ("mirror", tip), ("after_land", tip), ("report", merge, tip), ("landed", merge, tip)]
+    assert _marker(repo) == tip
     assert f"{M.SPEC_ALERTED_REF} stays at {merge[:12]}" in out and f"{M.SPEC_ALERTED_REF} is {merge[:12]}, behind main" in err
     assert M.main(["--sweep"]) == 0
-    assert ran[4:] == [("alert", merge, tip)], "only the DM is retried"
+    assert ran[5:] == [("alert", merge, tip)], "only the DM is retried"
     assert _git(repo, "ls-remote", "origin", M.SPEC_ALERTED_REF).split()[0] == tip
-    assert M.main(["--sweep"]) == 0 and len(ran) == 5, "sent once"
+    assert M.main(["--sweep"]) == 0 and len(ran) == 6, "sent once"
 
 
 def test_a_marker_main_does_not_hold_runs_nothing_and_says_how_to_reset_it(tmp_path, monkeypatch, capsys):
@@ -510,6 +537,57 @@ def test_each_landing_is_one_line_naming_what_it_merged_and_its_checked_run(tmp_
         f"landed on main: {hand[:12]} “a fix pushed by hand”; checked by no run (no Check: trailer)"]
     assert M.landing_lines(repo, start, landing)[0].startswith(f"landed on main: {landing[:12]} #7 + feature + {heads['pinned'][:12]};")
     assert M.landing_lines(repo, hand, hand) == []
+
+
+def test_each_run_a_landing_names_gets_one_landed_label_on_the_remote_and_a_rerun_writes_none(tmp_path, monkeypatch):
+    """Step 3 of the store design: which check landed what is a `landed` label on the run (main's commit, at the commit's time),
+    so the store answers it without reading git; the lander's `*` id resolves to the one run with its suffix, and an id that
+    names no run is said, never guessed."""
+    from research.store.local import LocalStore
+
+    vault = tmp_path / "vault"
+    (tmp_path / "store.toml").write_text(f'[remote]\ntype = "fs"\npath = "{vault}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "store.toml"))
+    for rid in ("r20261010-104434-7273", "r20261010-110000-9827", "r20261011-010203-abcd"):
+        (vault / "attempts").mkdir(parents=True, exist_ok=True)
+        (vault / "attempts" / f"{rid}.json").write_text("{}")
+    repo = tmp_path / "r"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "root")
+    start = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "Merge train\n\nChecked: r20261010-104434-7273 (full check: passed), "
+         "r20261010-*-9827 (suites)\nSkipped-check: none")
+    first = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "Merge B\n\nCheck: r20261011-010203-abcd")
+    second = _git(repo, "rev-parse", "HEAD")
+    assert [(r, c) for r, c, _ts in M.landed_runs(repo, start, second)] == [
+        ("r20261010-104434-7273", first), ("r20261010-*-9827", first), ("r20261011-010203-abcd", second)]
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "queue: fast-forwarded, no trailer")
+    third = _git(repo, "rev-parse", "HEAD")
+    assert [(r, c) for r, c, _ts in M.landed_runs(repo, second, third, {third: "r20261011-020000-beef"})] == [
+        ("r20261011-020000-beef", third)], "a queue commit's run from `runs`, as landing_lines reads it"
+    st, said = LocalStore(), []
+    assert M.label_landed(repo, start, second, store=st, log=said.append), said
+    for rid, commit in (("r20261010-104434-7273", first), ("r20261010-110000-9827", first), ("r20261011-010203-abcd", second)):
+        lab, = st.labels(rid, "landed")
+        assert (lab.value, lab.by) == (commit, M.LANDED_BY) and lab.ts >= f"2026-10-1{rid[8]}T"
+        assert list((vault / "labels").rglob("*.json")), "pushed"
+    pushed = sorted((vault / "labels").rglob("*.json"))
+    assert len(pushed) == 3
+    assert M.label_landed(repo, "", second, store=st, log=said.append) and sorted((vault / "labels").rglob("*.json")) == pushed
+    assert all(len(st.labels(r, "landed")) == 1 for r in ("r20261010-104434-7273", "r20261011-010203-abcd")), "a rerun writes none"
+    monkeypatch.chdir(repo)
+    assert M.main(["--label-landed", start]) == 0 and sorted((vault / "labels").rglob("*.json")) == pushed, "the backfill"
+    (vault / "attempts" / "r20261010-120000-9827.json").write_text("{}")
+    st2 = LocalStore(tmp_path / "fresh")
+    assert not M.label_landed(repo, start, first, store=st2, log=said.append)
+    assert "no `landed` label on r20261010-*-9827: the id names no single run on the remote" in said[-2]
+    assert st2.labels("r20261010-104434-7273", "landed")[0].value == first
+    monkeypatch.setattr(M, "landed_runs", lambda *_a: [("r20261011-010203-abcd", second, "2026-09-28T23:00:00Z")])
+    st3 = LocalStore(tmp_path / "third")
+    assert M.label_landed(repo, start, second, store=st3, log=said.append)
+    assert st3.labels("r20261011-010203-abcd", "landed")[0].ts == "2026-10-11T01:02:03Z", "the lander's fixed date: the run's start"
 
 
 def test_the_landings_go_to_the_merge_thread_quietly_and_a_failed_post_leaves_them_standing(tmp_path, capsys):

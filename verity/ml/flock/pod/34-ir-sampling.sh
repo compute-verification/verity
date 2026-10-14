@@ -19,7 +19,7 @@ FEAT=; G=; [ "${GPU:-1}" = 1 ] && { FEAT="--features gpu"; G=--gpu; }
 B=$F/target/release/flock-ir-sampling; sha256sum $B | tee $O/binary.sha256
 [ -x $HOME/.local/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 [ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }
-export PATH=$W/py/bin:$PATH PYTHONPATH=$SRC:$SRC/catalog:$SRC/kernels:$SRC/experimental:$SRC/benchmarks/numerical/python:$SRC/verity/ml/flock/python:$SRC/integrations/vllm
+export PATH=$W/py/bin:$PATH PYTHONPATH=$SRC:$SRC/benchmarks/numerical/python:$SRC/verity/ml/flock/python:$SRC/integrations/vllm
 lscpu | grep -E 'Model name|^CPU\(s\)' | tee $O/host.txt; echo threads $TH | tee -a $O/host.txt; nvidia-smi -L 2>/dev/null | tee -a $O/host.txt
 python3 - <<EOF > $O/stage-self.txt 2>&1 || { tail -20 $O/stage-self.txt; exit 1; }
 from verity_flock import ir_sampling as S, ir_lower as IL

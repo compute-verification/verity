@@ -80,7 +80,8 @@ def _honest(spends=(1, 1, 1)) -> M.Session:
     signer = M.test_signer(M.SECRETS[0], 1, 1)
     tree = mc.CoinTree.draw(b"source", bytes(32), 8, 3, key=M.COIN_KEYS[0], salts=[bytes([j]) * 192 for j in range(3)])
     clock = M.Clock(1_000)
-    c = mc.MemoryChallenger(tree, signer, limit_ns=10, block_bytes=16, binding=b"vk", clock=clock)
+    c = mc.MemoryChallenger(tree, signer, log=M.ts.session_log(), limit_ns=10, block_bytes=16, binding=M.SETUP_ROOTS[0],
+                            clock=clock)
     while not c.done:
         j = len(c.rounds)
         i = c.challenge()

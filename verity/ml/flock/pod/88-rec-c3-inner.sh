@@ -79,7 +79,7 @@ mkdir -p $V
 python3 -m verity_flock.rec_vstage points $O/inner $D/circuit.txt $D/pub-$N.bin > $O/points.json 2> $O/points.err \
   || { tail -20 $O/points.err; exit 1; }
 wait $FP || { tail -30 $O/build-fold.log; exit 1; }
-/usr/bin/time -v -o $O/time-fold.txt $FOLD_BIN --plain-leaves --hide unit verity/flock-circuit $D/circuit.txt $D/pub-$N.bin \
+/usr/bin/time -v -o $O/time-fold.txt $FOLD_BIN --plain-leaves --partition $D/partition.json --hide unit verity/flock-circuit $D/circuit.txt $D/pub-$N.bin \
   $O/points.json os > $O/fold.json 2> $O/fold.err
 echo "fold exit $?"
 python3 -m verity_flock.rec_session --check-fold $O/fold.json --inner $O/inner > $O/check-fold.json; echo "check-fold exit $?"
@@ -89,8 +89,8 @@ echo "vstage exit $?"
 (cd $V && du -sb $(find . -name '*.bin' -o -name circuit.txt | LC_ALL=C sort)) > $O/vstage-sizes.txt 2>&1
 
 wait $LP
-$LEAN_BIN verify --statement verity/flock-circuit+plain-leaves --circuit $D/circuit.txt --public $D/pub-$N.bin --coins os \
-  --session $O/inner/prover > $O/lean.log 2>&1
+$LEAN_BIN verify --statement verity/flock-circuit+plain-leaves --circuit $D/circuit.txt --public $D/pub-$N.bin \
+  --partition $D/partition.json --coins os --session $O/inner/prover > $O/lean.log 2>&1
 echo "lean exit $?" | tee $O/lean-exit.txt
 
 python3 - $O <<'EOF'

@@ -3,10 +3,11 @@
     python -m tests.engine.moe_scope_cut LOG.jsonl.gz --layer L --steps 0,1 --out CUT.jsonl.gz [--origin WHERE] [--logits]
 
 Kept, in log order: the RunHeader; a `moe_scope_cut` Note naming the source (`--origin`, its sha256, the layer, the steps); every Root
-whose allocation a kept event reads or writes (the layer's `mlp.gate`, `w13` and `w2` weights); and per step its StepStart, every event
-of the layer's `vllm.moe_forward` subtree, the top-level node right after the scope when it carries the scope's module (the block's TP
-all-reduce, which a rank issues after the scope), with `--logits` the step's `logits_processor` nodes (the lm_head shard's GEMM and its
-TP all-gather), and its StepEnd.  Allocator records, the sampler and the other layers are left out: no MoE scope pattern reads them.
+whose allocation a kept event reads or writes (the layer's `mlp.gate`, `w13` and `w2` weights, and a shared expert's linears and the
+router's score bias); and per step its StepStart, every event of the layer's `vllm.moe_forward` or `vllm.moe_forward_shared` subtree, the
+top-level node right after the scope when it carries the scope's module (the block's TP all-reduce, which a rank issues after the scope,
+or the shared and routed outputs' add), with `--logits` the step's `logits_processor` nodes (the lm_head shard's GEMM and its TP
+all-gather), and its StepEnd.  Allocator records, the sampler and the other layers are left out: no MoE scope pattern reads them.
 The output is gzip with mtime 0, so one source always cuts to the same bytes.
 """
 from __future__ import annotations
@@ -21,7 +22,7 @@ from verity_vllm.observe.events import DispatchEnter, DispatchExit, Event, Note,
 from verity_vllm.observe.fold.tree import step_events
 from verity_vllm.observe.log import dumps, read_log, split_steps
 
-MOE_OP = "vllm.moe_forward.default"
+MOE_OPS = ("vllm.moe_forward.default", "vllm.moe_forward_shared.default")
 LOGITS_MODULE = "logits_processor"
 
 
@@ -36,9 +37,9 @@ def cut(events: Iterable[Event], layer: int, steps: set[int], source: dict, *, l
         if not step or step[0].step not in steps:
             continue
         se = step_events(step)
-        k = next((i for i, r in enumerate(se.roots) if r.op == MOE_OP and r.enter.module == module), None)
+        k = next((i for i, r in enumerate(se.roots) if r.op in MOE_OPS and r.enter.module == module), None)
         if k is None:
-            raise SystemExit(f"step {se.start.step}: no {MOE_OP} scope of {module}")
+            raise SystemExit(f"step {se.start.step}: no {' / '.join(MOE_OPS)} scope of {module}")
         nodes = [se.roots[k]] + [n for n in se.roots[k + 1:k + 2] if n.enter.module == module]
         if logits:
             nodes += [n for n in se.roots if n.enter.module == LOGITS_MODULE]

@@ -179,6 +179,14 @@ def live_document(per_rank: list[dict[str, Any]], **fields: Any) -> dict[str, An
     return {"schema": SCHEMA, **fields, "ranks": {str(r["rank"]): r for r in sorted(per_rank, key=lambda r: r["rank"])}}
 
 
+def write_live(llm: Any, path: Path, *, timeout: float | None = None, **fields: Any) -> dict[str, Any]:
+    """`live_document` of every rank of a loaded `llm` (`LLM.collective_rpc(rank_inventory)`), with `fields`, written to `path`."""
+    doc = live_document(llm.collective_rpc(rank_inventory, timeout=timeout), source="live", **fields)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(doc, indent=1, default=str) + "\n")
+    return doc
+
+
 # ----------------------------------------------------------------------------------------------------- the meta instantiation
 
 
@@ -306,6 +314,9 @@ def _selections() -> dict[str, Any]:
             out[k] = getattr(envs, k)
         except AttributeError:
             out[k] = None
+    from verity_vllm.engine import sparse_mla
+
+    out["sparse_mla_num_splits"] = sparse_mla.num_splits()
     return out
 
 
@@ -338,6 +349,9 @@ def main(a: Options) -> int:
     import torch
     import vllm
     from vllm.model_executor.model_loader.utils import get_model_architecture
+
+    from verity_vllm.engine import sparse_mla
+    sparse_mla.install()             # as a serving process does before its model's first forward (`_selections` reads it)
 
     from verity_vllm.program.frontend.export_compat import apply_target_profile, read_back_applied
 

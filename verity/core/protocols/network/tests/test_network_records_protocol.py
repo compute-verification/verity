@@ -32,7 +32,7 @@ from verity.core.protocols.certifier.schedule import expected_grids
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
-ID = "verity/network-records/v1"
+ID = "verity/network-records/v2"
 COMMITMENT_TAG = "verity-network-certifier/records/v1"
 KINDS = ("raw", "committed", "certified", "mixed")
 
@@ -114,8 +114,9 @@ def all_verdicts(u, c, e) -> tuple:
         return out
     audit = Audit()
     vs = [("egress", v) for link, (frames, syncs) in zip(u.egress, e)
-          for v in audit.check_link(link, c[0], frames, syncs, u.sync_set, u.grid, u.key)]
-    vs += [("ingress", v) for link in u.ingress for v in audit.check_ingress_link(link, c[0], u.windows, u.key, u.ingress_grid)]
+          for v in audit.check_link(link, c[0], frames, syncs, u.sync_set, u.grid, u.key, u.session)]
+    vs += [("ingress", v) for link in u.ingress
+           for v in audit.check_ingress_link(link, c[0], u.windows, u.key, u.ingress_grid, u.session)]
     return "accept", {}, [{"direction": d, "link": v.link, "verdict": v.violation or "accept", "window": v.window}
                           for d, v in vs]
 
