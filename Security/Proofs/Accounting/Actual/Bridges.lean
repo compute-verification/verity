@@ -270,7 +270,11 @@ theorem pouwRow : Guarantees.pouwRow := by
   simpa only [Pouw.AcceptsBy, Actual.timedRun, le_refl, true_and] using h
 
 theorem B4 : Guarantees.B4 := by
-  intro L E Ω _ _ _ S ℓ ends β link 𝒱 cert X spec record bucket jitter a b hc hα hT hXc hh hr
+  intro L E Ω _ _ _ S ℓ ends β link 𝒱 cert X spec record bucket jitter a b hcs hdl hT hsec
+  obtain ⟨hc, hcr⟩ := hcs
+  obtain ⟨hα, hlr⟩ := hdl
+  obtain ⟨hXc, hh⟩ := hsec
+  have hr : ∀ r, (S r).A.Causal ℓ ∧ (S r).A.Links ends β (link r) := fun r => ⟨hcr r, hlr r⟩
   obtain ⟨-, -, J, hJ⟩ := hT
   set O : Finset L := (X ∪ cert)ᶜ with hO
   have hOc : (↑O : Set L) = (↑X ∪ ↑cert)ᶜ := by rw [hO, coe_compl, coe_union]
