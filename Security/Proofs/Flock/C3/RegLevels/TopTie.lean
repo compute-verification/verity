@@ -16,9 +16,7 @@ namespace FlockC3.RegLevels
 open Flock
 open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open FlockVBridge FlockVBridge.AccChain
-open FlockSoundness.Refine (H512)
 open FlockSoundness.Discharge.Hm (bitL)
-open FlockSoundness.Discharge.HiddenExec (encPortH)
 
 theorem testBit_lohi (lo hi : ℕ) (hlo : lo < 256) (k : ℕ) :
     (lo + 256 * hi).testBit k = if k < 8 then lo.testBit k else hi.testBit (k - 8) := by
@@ -73,9 +71,10 @@ theorem hT_of_root {u : Fin nv} {j : ℕ} (hj : j < c.upv) {LANES H : ℕ} {p : 
     (∀ t < 512, RegOut zo u hj (Hm.outStart ((recOpenNet LANES H p).run Flock.HmNets.St.empty).2 p.bits outBits + t)
         (bitL top.data.toList t)) ∨
       ∃ x y, valueColl (zo.rd.port (.inl (u, ⟨_, hq⟩))) rows salt (zo.rd.readAt (.inl (u, ⟨_, hq⟩)))
-          (encPortH c.ports[HmOut.nIn c]! (FlockVBridge.Decode.regVal zo (.inl (u, ⟨_, hq⟩))))
+          (FlockSoundness.Discharge.HiddenExec.encPortH c.ports[HmOut.nIn c]!
+            (FlockVBridge.Decode.regVal zo (.inl (u, ⟨_, hq⟩))))
           (zo.rd.ws (.inl (u, ⟨_, hq⟩))) (zo.rd.wpath (.inl (u, ⟨_, hq⟩))) = some (x, y) ∧ x ≠ y ∧
-        H512 x = H512 y := by
+        FlockSoundness.Refine.H512 x = FlockSoundness.Refine.H512 y := by
   obtain ⟨-, hor⟩ := tie_root zo.rd hp hroot hn
   refine hor.imp (fun he t ht => ?_) id
   have he' : Layout.rowEncP (FlockSoundness.Discharge.Hidden.rowPre c.ports[HmOut.nIn c]!.v2)

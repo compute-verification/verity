@@ -76,12 +76,12 @@ variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type} {dg : ByteArray → Byte
 
 /-- **A session's read clashes with R's level-0 top under the held salts**: at the history `(R, ω, t)` and registration
 `R₂`, some session's registrant record clashes with `cap`'s rows under `salt` (`ReadsX.SaltClash`). -/
-def SaltColl (lv : Level) (cap : Cap Refine.Dig) (salt : ℕ → ByteArray)
+def SaltColl (lv : FlockSoundness.Accounting.Level) (cap : Cap Refine.Dig) (salt : ℕ → ByteArray)
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg') (R : Reg) (ω : L.Ω)
     (t : List (Cm × I.Coin)) (R₂ : Reg₂) : Prop :=
   ∃ j, (zs R ω t R₂ j).rd.SaltClash (FlockC3.RegLevels.capRows lv cap) salt
 
-theorem SaltColl.collision {lv : Level} {cap : Cap Refine.Dig} {salt : ℕ → ByteArray}
+theorem SaltColl.collision {lv : FlockSoundness.Accounting.Level} {cap : Cap Refine.Dig} {salt : ℕ → ByteArray}
     {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {R : Reg} {ω : L.Ω}
     {t : List (Cm × I.Coin)} {R₂ : Reg₂} (h : SaltColl lv cap salt zs R ω t R₂) : Merkle.Collision H512 := by
   obtain ⟨_, h⟩ := h
@@ -93,7 +93,7 @@ the prover's workers committed R's level-0 top rows under, which they hold (`reg
 `Finder.CR` budget counts the audit run and, at each registered read of each session, `hm96Pair`'s four SHA-512
 evaluations over both salts: the read's row bytes and its salt digest under the registrant's salt, and node `readAt`'s
 row bytes (`rowInV`, 256 bytes) and its salt digest under `salt`. -/
-noncomputable def saltFinder (lv : Level) (cap : Cap Refine.Dig) (salt : ℕ → ByteArray)
+noncomputable def saltFinder (lv : FlockSoundness.Accounting.Level) (cap : Cap Refine.Dig) (salt : ℕ → ByteArray)
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N)) : Finder Pair :=
   oneRun _ σ (onePick H512 (fun o : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × VRec Vs Reg' dg N) =>
@@ -101,7 +101,7 @@ noncomputable def saltFinder (lv : Level) (cap : Cap Refine.Dig) (salt : ℕ →
 
 /-- **A session's read clashes with the held salts at most `qS²/2^513` likely** under `cr/sha-512` for `saltFinder` at
 the budget `qS`: once per audit, whatever the number of sessions and reads. -/
-theorem prob_saltColl_le (lv : Level) (cap : Cap Refine.Dig) (salt : ℕ → ByteArray)
+theorem prob_saltColl_le (lv : FlockSoundness.Accounting.Level) (cap : Cap Refine.Dig) (salt : ℕ → ByteArray)
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
     {qS : ℝ} (hS : (saltFinder lv cap salt zs σ).CR H512 qS) :
