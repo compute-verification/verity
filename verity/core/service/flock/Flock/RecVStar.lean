@@ -289,6 +289,27 @@ def checkFile (s : VStar.Stmt) (b : VStar.Bindings) (circuitB : ByteArray) : V U
   if let some (k, line) := firstDiff? circuitB f then
     throw s!"{s.name}: the circuit file ({circuitB.size} bytes) is not V*'s ({f.size} bytes): they differ at byte {k}, line {line}"
 
+/-- V*'s row ports of the unit `u` under the subcircuit `sub` (`VStar.metaHead`'s `ports`), as (name, words, bits): an
+input row of its port's words, an output row of its port's rounded up to whole 64-word blocks, each 16 bits a word. -/
+def vstarRows (sub : VStar.Sub) (u : VStar.UnitC) : List (String × Nat × Nat) :=
+  (sub.inputs.zip u.inPorts).map (fun (nm, w) => (nm, w, 16 * w)) ++
+    (sub.outputs.zip u.outPorts).map fun (nm, w) => (nm, (w + 63) / 64 * 64, 16 * ((w + 63) / 64 * 64))
+
+/-- **The circuit parsed from V*'s file carries V*'s META** (`VStar.metaHead`): one unit per VU, no leaf cuts, the
+unit's input leaves its input words in order, and V*'s row ports (`vstarRows`). `checkFile` holds the bytes to V*'s;
+this holds what the verifier parsed from them, which no proof reads through `Lean.Json.parse`, to what V* wrote. -/
+def checkParsed (s : VStar.Stmt) (c : Circuit) : V Unit := do
+  let u ← match s.unit with
+    | .ok u => pure u
+    | .error e => throw s!"{s.name}: V*'s unit: {e}"
+  if c.upv != 1 || !c.leafCuts.isEmpty then
+    throw s!"{s.name}: the parsed circuit has {c.upv} units per VU and {c.leafCuts.size} leaf cuts, not V*'s 1, 0"
+  if c.leavesIn.getD 0 #[] != (Array.range u.inWords).map Int.ofNat then
+    throw s!"{s.name}: the parsed circuit's input leaves are not V*'s, its {u.inWords} input words in order"
+  let ports := c.ports.toList.map fun p => (p.name, p.words, p.bits)
+  if ports != vstarRows s.sub u then
+    throw s!"{s.name}: the parsed circuit's row ports {ports} are not V*'s {vstarRows s.sub u}"
+
 /-- A statement's population: the registered population's instances for a drawn session, else its own. -/
 def population (st : Stmt) : Nat := (st.pub.population.map (·.1)).getD st.n
 
@@ -343,13 +364,14 @@ def checkMeta (c : Circuit) (f : VStar.Bindings) : V Unit := do
   if mc != fc then throw s!"{name}: META program_digests {mc}, the verifier's bindings' {fc}"
 
 /-- `checkMeta` of the circuit `c`, parsed from the circuit file `circuitB`, against the verifier's own bindings `f`, then
-`check` on its unit over `n` instances at the inner shape `i` as V*'s statement `part`, and `checkFile` on `circuitB` under
-`f`. -/
+`check` on its unit over `n` instances at the inner shape `i` as V*'s statement `part`, `checkFile` on `circuitB` under
+`f`, and `checkParsed` on `c`. -/
 def checkCircuit (i : Inner) (part : Nat) (c : Circuit) (n : Nat) (circuitB : ByteArray) (f : VStar.Bindings) :
     V VStar.Stmt := do
   checkMeta c f
   let s ← check i c.unit.name n (some part)
   checkFile s f circuitB
+  checkParsed s c
   pure s
 
 /-- `m<k>`'s `k`. -/
