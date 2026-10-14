@@ -140,7 +140,8 @@ theorem vbridgeC_of_cap {S : ℕ} {Vs : Fin S → VStmt}
 
 /-- **(step 7) The guarantee's `_hbr` at the honest family, in its form**: at the word the transported prover's runs
 open at R's level 0 against `cap` (`regStmt`), whose cap is `cap`, which is `xR`'s (`hcap`), off the verifier's values'
-collisions (`ValueColl` at `valueSrcAll`) and the table leaves' (`LeafColl`): `hbr_honest`'s facts, with R's opening's
+collisions (`ValueColl` at `valueSrcAll`), the table leaves' (`LeafColl`) and R's level-0 top's under the held salts
+`salt` (`SaltColl`): `hbr_honest`'s facts, with R's opening's
 and levels' read facts off those (`OpeningReadOff`, `RegLevelsReadOff`: where the value ties `value_tie_coll` enter,
 which hold only off `ValueColl`), and the acceptance part `vbridgeOff_c3_off`'s at `xR`, moved to `regStmt` by
 `holoAccepts_of_cap`. -/
@@ -155,7 +156,7 @@ theorem hbr_honest_reg (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : Rec
     (bc : (j : Fin (vstarCount ish)) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → List UInt8)
     (dec : ℕ → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → (holoInnerAt T CT st hp).Msg)
     (wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String) (reg : Lean.Json)
-    (cap : Cap Dig) (hcap : xR.cap = cap)
+    (cap : Cap Dig) (hcap : xR.cap = cap) (salt : ℕ → ByteArray)
     (bcs' : Array ByteArray) (_htop : ∃ lv salt, StackedTopAt lv st reg xR.cap salt bcs')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (σ : Strategy (recGame L Reg (holoInnerAt T CT st hp) Cm fun R ω t => outerVR (zr R ω t) dg N))
@@ -171,7 +172,9 @@ theorem hbr_honest_reg (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : Rec
           (valueSrcAll (fun t => coins (wr t).2) fun t =>
             Flock.Guarantees.c3Of ish (Flock.Guarantees.innerHeld wr st reg t)) R ω t R₂ ∨
         LeafColl (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind
-          rows zr hCust h) R ω t R₂) dg N k Rw)
+          rows zr hCust h) R ω t R₂ ∨
+        SaltColl (holoAt st hp).rsch.sch.level₀ cap salt (Flock.Guarantees.checkedC3 ish
+          (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr hCust h) R ω t R₂) dg N k Rw)
     (hlread : ∀ h : Typed zr, RegLevelsReadOff
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg)
       (fun R ω t R₂ =>
@@ -180,7 +183,9 @@ theorem hbr_honest_reg (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : Rec
           (valueSrcAll (fun t => coins (wr t).2) fun t =>
             Flock.Guarantees.c3Of ish (Flock.Guarantees.innerHeld wr st reg t)) R ω t R₂ ∨
         LeafColl (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind
-          rows zr hCust h) R ω t R₂) dg N k Rw)
+          rows zr hCust h) R ω t R₂ ∨
+        SaltColl (holoAt st hp).rsch.sch.level₀ cap salt (Flock.Guarantees.checkedC3 ish
+          (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr hCust h) R ω t R₂) dg N k Rw)
     (hfr : ∀ h : Typed zr, HFrame
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) dg N k Rw)
     (hdrawn : ∀ h : Typed zr, RowsHeld
@@ -198,7 +203,9 @@ theorem hbr_honest_reg (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : Rec
           (valueSrcAll (fun t => coins (wr t).2) fun t =>
             Flock.Guarantees.c3Of ish (Flock.Guarantees.innerHeld wr st reg t)) R ω t R₂ ∨
         LeafColl (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind
-          rows zr hCust h) R ω t R₂)
+          rows zr hCust h) R ω t R₂ ∨
+        SaltColl (holoAt st hp).rsch.sch.level₀ cap salt (Flock.Guarantees.checkedC3 ish
+          (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr hCust h) R ω t R₂)
       (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows
         zr hCust h) dg N k Rw
       (Flock.Guarantees.regStmt T CT st hp
