@@ -90,11 +90,10 @@ recurs: note:<id>      # optional: the earlier note about the same thing
 What happened, with ids (run, PR, commit), and what it cost. What you did instead. The better abstraction, if you see one.
 ~~~
 
-Save it as `~/.research/notes/lanes/<lane>/<YYYYMMDDTHHMMZ>-friction-<slug>.md`. A Project worker without the notes clone
-writes it under the Project store's `internal/lanes/<lane>/`, which the mirror forwards. The notes are public: nothing
-private (lane contract §5b).
+Save it as `~/.research/notes/lanes/<lane>/<YYYYMMDDTHHMMZ>-friction-<slug>.md`. A worker that can't push the notes puts
+the note in its report, and its coordinator saves it. The notes are public: nothing private (lane contract §5b).
 
-**The coordinator's pass.** The root coordinator reads new friction notes once a day in its existing loop
+**The admin's pass.** The admin (`@top`) reads new friction notes once a day in its existing loop
 (`research notes mcp`, `search_notes` with `kind: friction` and `since`). It turns a repeat into a fix assigned to its owner.
 Only a repeat whose fix needs money, keys or a claim becomes a question for Daniel.
 
@@ -102,6 +101,10 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-13 (about 2:24 PM PDT, relayed by top): no Cursor Projects, and no agent state kept only in a Cursor store.
+  Each coordinator is a plain Cursor cloud agent that owns a vertical slice and runs its own subagents; coordinators
+  talk to each other through Slack and Linear; one admin agent holds `@top` in place of the Project's top-level agent;
+  and a successor takes over each lead: the handle stays, and its holder changes.
 - 2026-10-13 (1:33 PM PDT, relayed by top): the recursive audit (`Flock.Guarantees.RecursiveAuditC3`) may rest on the
   model claim `registrant-holds-openings` (`verity/core/claims`): the prover holds a row and a salt under every leaf it
   registered, R's level-0 staging salts included. Those salts are held by the prover's own workers behind the firewall.
