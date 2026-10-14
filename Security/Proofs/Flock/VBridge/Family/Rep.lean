@@ -479,11 +479,13 @@ def HOne : Prop :=
     layers F.zs dg N k Rw R ω t R₂ τ (F.sess p)
       (Const.Prog.oneAt (Placed.keyProg (F.Vs (F.sess p)).c (F.Vs (F.sess p)).hU (F.Vs (F.sess p)).nv) (F.un p r)) = true
 
-/-- Obligation: discharged by a verifier check recomputing the registered `v` from the rep's coins (not run today).
-**The registered `v` is the verifier's at the rep's coins** (a verifier gap). At an accepted outer proof, the `v`
-port of rep `r`'s copy of part `p` is registered bits of `verifierRows`' coefficients at the rep's coins, extra claims
-and comb (`vOf`), at the part's `V`; established by a verifier check that recomputes the registered `v` from its coins
-(not run today). -/
+/-- Obligation: discharged by check 5's `RecCoins.checkResiduals` (in the event as `ChecksC3`'s `RecCoins.check`),
+which holds the `v` port's registration to `verifierRows` at the inner session's coins, extra claims and comb
+(`checkValue` at `rec-v`).
+**The registered `v` is the verifier's at the rep's coins.** At an accepted outer proof, the `v` port of rep `r`'s copy
+of part `p` is registered bits of `verifierRows`' coefficients at the rep's coins, extra claims and comb (`vOf`), at the
+part's `V`; established from that check's rows (the registrant's rows at `rec-v`'s root, as `AccRowsAre` reads
+`rec-acc`'s) and the inner session's coins being the rep's. -/
 def HVCoins : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r p, p < (partsOf F.sh).size →
     ∀ q < 128 * nvOf F.sh p,
