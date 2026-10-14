@@ -401,5 +401,3 @@ theorem accRead_at_unit {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows 
 end Family
 
 end FlockC3.RegLevels
-
-#print axioms FlockC3.RegLevels.accRead_at_unit

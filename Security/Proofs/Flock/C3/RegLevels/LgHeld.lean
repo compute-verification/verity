@@ -162,9 +162,3 @@ theorem stageHeld_lg_of_run {r : ℕ} {CT : Fin r → Type} {Cm : Type} {t : Lis
   exact stageHeld_lg hh hc3 hrep hsp hsh hcl hrs hcsz htbl hts hss (hop rsr rsp k₂ h₁) hlg hn htot
 
 end FlockC3.RegLevels
-
-#print axioms FlockC3.RegLevels.weave_coins_prefix
-#print axioms FlockC3.RegLevels.eq_range'_of_prefix
-#print axioms FlockC3.RegLevels.lgCoins_of_weave
-#print axioms FlockC3.RegLevels.stageHeld_lg
-#print axioms FlockC3.RegLevels.stageHeld_lg_of_run
