@@ -255,13 +255,13 @@ theorem stageCoins_holo_held {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → 
   intro R ω t R₂ τ o hA'
   obtain ⟨cs, hh⟩ := hheld R ω t R₂ τ o hA'
   have hc3' := hc3 R ω t (layers zs dg N k Rw R ω t R₂ τ) cs hh
-  obtain ⟨spec, sess, hdec, hu⟩ := recordPoints_of hcus (by have := hleaf R ω t R₂ τ o hA'; omega)
-    (hrec R ω t R₂ τ o hA') (hpts R ω t R₂ τ o hA')
+  have hlen : 1 + (Exec.kindCoinTys (holoKinds (holoAt st hp))).length + 1 ≤ t.length := hleaf R ω t R₂ τ o hA'
+  obtain ⟨spec, sess, hdec, hu⟩ := recordPoints_of hcus (by omega) (hrec R ω t R₂ τ o hA') (hpts R ω t R₂ τ o hA')
   obtain ⟨xs, hxe, hxs⟩ := hx R ω t R₂ τ o hA' cs hh
   obtain ⟨hs, -, -, hleft⟩ := hmaps R ω t R₂ τ o hA'
   obtain ⟨_, _, _, _, -, -, hrun, hz⟩ := FlockC3.Opening.run_of_sessionAt hA' hosh hs
   obtain ⟨_, _, _, ho, hor⟩ := hot R ω t R₂ τ o hA'
-  exact laterCoins_holo hcus hdec hu (hleaf R ω t R₂ τ o hA') hh hc3' hrep hsp hsh hcl hrs hc hA hshape htblS htbl
+  exact laterCoins_holo hcus hdec hu hlen hh hc3' hrep hsp hsh hcl hrs hc hA hshape htblS htbl
     (hts R ω t R₂ τ o hA') (hcnt R ω t R₂ τ o hA' cs hh) (hss R ω t R₂ τ o hA' cs _ hh hc3') hxe hxs hrun hz hleft
     (coins_total_holo (hrt R ω t R₂ τ o hA') (hst R ω t R₂ τ o hA') ho hor (hlt R ω t R₂ τ o hA'))
 
