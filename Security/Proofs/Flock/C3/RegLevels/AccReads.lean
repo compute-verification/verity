@@ -396,7 +396,7 @@ theorem accRead_at_unit {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows 
   obtain ⟨hown, hsite, d', D, dp, idx, hd, hD, hdp, hidx, hu, hpos⟩ :=
     accRead_of_checked hchk h j hre hs hl hw hnm hq hr
   obtain ⟨spec, sts, hst, -, -, -, hlb⟩ := hc3
-  rw [FlockC3.PubRows.label_of_checked (F.zs R ω t R₂ j) (h.1 j).1 ⟨spec, sts, hst, hlb⟩ hd hD hdp hidx hu] at hpos
+  rw [FlockC3.PubRows.label_of_checked (F.zs R ω t R₂ j) (h.1 j).1 ⟨spec, sts, hst, hlb.1⟩ hd hD hdp hidx hu] at hpos
   exact ⟨hown, hsite, hpos⟩
 
 end Family
