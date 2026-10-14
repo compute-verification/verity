@@ -66,10 +66,14 @@ class PearlCArm:
         return self
 
     def engine_overrides(self, target: Any) -> dict[str, Any]:
-        """Headroom for the run's own device memory (B̃ about a byte per weight, the pass's leaf and flag buffers),
-        which sits beside vLLM's budget: without this the block mode's 0.90 utilization leaves nothing (OOM at 94.8
-        of 95 GiB, r20261014-062817-4c45)."""
-        return {"gpu_memory_utilization": float(os.environ.get("PEARLC_GPU_UTIL", "0.55"))}
+        """Headroom for the run's own device memory, which sits beside vLLM's budget: B̃ about a byte per weight, the
+        pass's leaf and flag buffers, and the per-shape ring buffers whose A (FP32) and C̃/U scale with the step's rows
+        times n. Without the utilization cap the block mode's 0.90 left nothing (OOM at 94.8 of 95 GiB,
+        r20261014-062817-4c45); without the step cap a 16,384-token prefill step's rings cost about 36 GiB and the full
+        sweep's big points OOMed in the gate (93.5 GiB torch-allocated, r20261014-065819-c0c3). The step cap applies to
+        this arm's engine only, so its chunking differs from the controls'; the per-token ratio stays the metric."""
+        return {"gpu_memory_utilization": float(os.environ.get("PEARLC_GPU_UTIL", "0.55")),
+                "max_num_batched_tokens": int(os.environ.get("PEARLC_STEP_TOKENS", "4096"))}
 
     def kernel_digest(self, target: Any) -> str | None:
         path = Path(self.cubin) if self.cubin else self.kernel_dir / "pearl_c_sm120.cubin"
@@ -166,7 +170,7 @@ class PearlCArm:
     def spans(self, target: Any) -> dict[str, Any]:
         return {} if self.stack is None else {"passes": float(len(self.stack.passes))}
 
-    def close(self, target: Any) -> None:
+    def close(self, target: Any = None) -> None:
         if self.stack is not None and self.stack._pass is None:
             self.stack.activate(None)
 
