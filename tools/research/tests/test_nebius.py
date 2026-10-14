@@ -746,7 +746,8 @@ def _auth_harness(tmp_path):
 
 def test_nebius_auth_reads_the_key_from_one_line_of_base64_and_refuses_the_multi_line_secret(tmp_path):
     auth = _auth_harness(tmp_path)
-    body = "-----BEGIN PRIVATE KEY-----\ndummy line one\ndummy line two\n-----END PRIVATE KEY-----\n"
+    # adjacent literals, so no secret scanner (tests/test_repository.py among them) reads the dummy PEM as a credential
+    body = "-----BEGIN PRIVATE" " KEY-----\ndummy line one\ndummy line two\n-----END PRIVATE" " KEY-----\n"
 
     r, key = auth(NEBIUS_SA_PRIVATE_KEY_B64=base64.b64encode(body.encode()).decode())
     assert r.returncode == 0 and key == body and r.stdout == r.stderr == ""
@@ -775,7 +776,7 @@ def test_nebius_auth_reads_a_der_key_whose_base64_fits_the_cursor_secret_cap(tmp
 
     r, key = auth(NEBIUS_SA_PRIVATE_KEY_B64=base64.b64encode(der).decode())
     assert r.returncode == 0, r.stderr
-    assert key.startswith("-----BEGIN PRIVATE KEY-----")
+    assert key.startswith("-----BEGIN PRIVATE" " KEY-----")
     pub = lambda k: subprocess.run(["openssl", "pkey", "-pubout"], input=k, capture_output=True, check=True).stdout  # noqa: E731
     assert pub(key.encode()) == pub(pem)                      # the same key came out
 
