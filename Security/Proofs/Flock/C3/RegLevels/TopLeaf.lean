@@ -238,3 +238,7 @@ theorem row_agree {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : Opti
 end Family
 
 end FlockC3.RegLevels
+
+#print axioms FlockC3.RegLevels.row_agree
+#print axioms FlockC3.RegLevels.sharedValue_top
+#print axioms FlockC3.RegLevels.leaf_top
