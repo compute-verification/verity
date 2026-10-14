@@ -1,4 +1,5 @@
 import Proofs.Flock.VBridge.Family.Registered
+import Proofs.Flock.VBridge.Family.OutCols
 import Flock.RecCoins
 
 /-!
@@ -16,7 +17,7 @@ what the part sessions' reads files and registrants hold there:
 * `hVCoins_of`: `HVCoins` from those and `RowsRegistered`;
 * `outCol_committed`, `outColAt_stackCol`: a copy's gate at a returned output's column is committed (it is an output of
   the program's circuit, `Layout.outsOf`), the committed conjunct of `RegOut`;
-* `PartOutCols`, `ZeroReads`: each part's `out` columns are its leaf's returned output (the parse), and the gates there
+* `PartOutCols`, `ZeroReads`: each part's `out` columns are its leaf's returned output (`partOutCols`), and the gates there
   are registered reads whose registrant's bit is 0 (`rec-residuals-zero`, `Recursion.zero_regOut` off `ValueColl`);
 * `hZeroL_of`: `HZeroL` from those (`copyVal_regOut` in the accepted `Good` layer).
 -/
@@ -189,8 +190,7 @@ theorem hVCoins_of {GS : Flock.RecAlgebra.GfS} {gs : Array (Array ℕ × Array �
 
 /-! ## `out` -/
 
-/-- Obligation: discharged by the parse of the part's circuit (`parse_circuitFile`, the lane that proves `HUnitName`)
-and its layout (`inWords_unitLaid`, `inRows_le_outStart`, as `partCols_of_resZeroAt`'s `hbase`). **A part's `out`
+/-- Proved by `partOutCols` (`Family/OutCols.lean`'s `partOutCols_of`, from the verifier's checks). **A part's `out`
 columns are its leaf's returned output.** In the circuit of part `p`'s statement, at every copy, column
 `partBase + e` (`e < 16 · RES_OUT_WORDS`) is a computed column, `outCol (e / 16) (e % 16)` of the copy's leaf's output
 `e / 16`. -/
@@ -201,6 +201,9 @@ def PartOutCols : Prop :=
         partBase S ns nv + e = Layout.outCol (F.Vs j).c (e / 16) (e % 16) ∧
           e / 16 < ((F.Vs j).c.leavesOut.getD cpy #[]).size ∧ (Rows.ofNet (F.Vs j).hU).nIn ≤ partBase S ns nv ∧
           partBase S ns nv + e < (Rows.ofNet (F.Vs j).hU).nIn + (Rows.ofNet (F.Vs j).hU).nComp
+
+/-- **`PartOutCols`**, at any family with a history (`partOutCols_of`). -/
+theorem partOutCols (hne : Nonempty (Reg × L.Ω × Reg₂)) : F.PartOutCols := F.partOutCols_of hne
 
 /-- Obligation: discharged, off `ValueColl`, by check 5's `checkZero` (`checkResiduals` holds the part's `out` to the
 zero rows `rec-residuals-zero` under `zeroSalt`, `rec_residuals.zero_salts`): `Recursion.zero_tie` gives the
