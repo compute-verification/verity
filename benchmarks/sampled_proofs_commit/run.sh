@@ -3,12 +3,12 @@
 # one GPU, eager (cwd = the source tree).  Builds the collector's three JIT extensions outside the lease, then runs the driver
 # under `gpu-lease 1 --wait`.  Results go to $RESEARCH_RUN_DIR/out/bench.
 #
-#   research run --on vy-nebius-2 --project verity --source . --cwd source --mem-gb 160 --campaign proofs \
+#   research run --on vy-nebius-2 --project verity --source . --cwd source --mem-gb 100 --campaign proofs \
 #     --env GPU_LEASE_WHO=proofs-sp-arm --env SWEEP=quick -- bash benchmarks/sampled_proofs_commit/run.sh
 #
 # SWEEP (quick | full, default quick), REPS (default 3), MAXMIN (the lease's bound in minutes, default 60).  WORK is the
 # e2e's vLLM environment on node 2 (benchmarks/pouw/pearl_c_vllm/setup.sh) and MODEL its Llama-3.1-8B-Instruct.
-# MODE=build stops after the extensions are built.
+# MODE=build stops after the extensions are built.  --mem-gb covers the arm's pinned pool, capped at VERITY_SP_ARM_HOST_GB (80).
 set -euo pipefail
 O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python

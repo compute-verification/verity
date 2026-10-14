@@ -16,7 +16,7 @@ def test_the_commit_arm_is_gated_against_stock_fp8():
 
 
 def test_settings_refuse_by_name():
-    assert bench_arm.settings({}) == {"window_mb": 256, "window_slots": 8, "levels": "drop", "host_gb": 64.0}
+    assert bench_arm.settings({}) == {"window_mb": 256, "window_slots": 8, "levels": "drop", "host_gb": 80.0}
     with pytest.raises(ValueError, match="VERITY_SP_ARM_HOST_GB"):
         bench_arm.settings({"VERITY_SP_ARM_HOST_GB": "0"})
     with pytest.raises(ValueError, match="VERITY_SP_ARM_WINDOW_MB"):
@@ -89,12 +89,17 @@ def test_each_driver_call_closes_the_run_in_flight_and_opens_the_next():
     assert state.com.closed and len(state.runs) == 3
 
 
+class _Block(bytearray):
+    def numel(self):
+        return len(self)
+
+
 class _FakePool:
     def __init__(self):
         self.free, self.all = [], []
 
     def take(self, nbytes):
-        blk = bytearray(max(nbytes, 64))
+        blk = _Block(max(nbytes, 64))
         self.all.append(blk)
         return memoryview(blk)[:nbytes]
 
@@ -102,7 +107,7 @@ class _FakePool:
         for i, b in enumerate(self.free):
             if len(b) >= nbytes:
                 return self.free.pop(i)
-        blk = bytearray(max(nbytes, 64))
+        blk = _Block(max(nbytes, 64))
         self.all.append(blk)
         return blk
 
@@ -114,12 +119,12 @@ class _FakePool:
         return sum(len(b) for b in self.all)
 
 
-def _fake_windowed(fail_at=None):
+def _fake_windowed(fail_at=None, sizes=(1000, 100)):
     com = SimpleNamespace(pool=_FakePool(), _gpu_levels={}, _done={})
 
     def step(job):
-        com.pool.take(1000)
-        com.pool.take(100)
+        for n in sizes:
+            com.pool.take(n)
         com._gpu_levels[job.step] = ["levels"]
         com._done[job.step] = SimpleNamespace(n_bytes=8000)
         if job.step == fail_at:
@@ -142,6 +147,16 @@ def test_dropped_levels_are_reused_by_every_later_step_even_after_a_failed_one()
     assert peak["step_bytes"] == 8000 and peak["pool_bytes"] == 1100
     other = com.pool.take(10)                      # outside a step: the pool's own slice, not a tracked block
     assert len(other) == 10 and len(com.pool.free) == 2
+
+
+def test_a_small_take_never_takes_a_big_free_block():
+    com = _fake_windowed(sizes=(100, 4000))        # a window's leaves first, the step's levels once its length is known
+    bench_arm._guard_steps(com, drop_levels=True, cap_bytes=1 << 30)
+    com.pool.free = [_Block(5000), _Block(1000)]
+    com.pool.all = list(com.pool.free)
+    for step in range(4):
+        com._commit_step_windowed(SimpleNamespace(step=step))
+    assert com.pool.bytes_total == 6000
 
 
 def test_steps_are_refused_by_name_once_the_pool_is_over_the_cap():

@@ -20,7 +20,7 @@ the end of the last step to the run root) and ``serve_to_root_s``, the run's wal
 
 Settings, all optional: ``VERITY_SP_ARM_WINDOW_MB`` (default 256), ``VERITY_SP_ARM_WINDOW_SLOTS`` (8),
 ``VERITY_SP_ARM_LEVELS`` (``drop``, or ``keep`` to retain every step's tree levels on host, as ``--retain none`` does) and
-``VERITY_SP_ARM_HOST_GB`` (64): once the collector's pinned host pool holds more, every further step is refused by name
+``VERITY_SP_ARM_HOST_GB`` (80): once the collector's pinned host pool holds more, every further step is refused by name
 and the arm fails its gate, rather than the node's OOM guard stopping the run (or someone else's).
 """
 
@@ -54,7 +54,7 @@ def settings(environ: dict[str, str] | None = None) -> dict[str, Any]:
     window_mb = int(env.get("VERITY_SP_ARM_WINDOW_MB", "256"))
     slots = int(env.get("VERITY_SP_ARM_WINDOW_SLOTS", "8"))
     levels = env.get("VERITY_SP_ARM_LEVELS", "drop")
-    host_gb = float(env.get("VERITY_SP_ARM_HOST_GB", "64"))
+    host_gb = float(env.get("VERITY_SP_ARM_HOST_GB", "80"))
     if host_gb <= 0:
         raise ValueError("VERITY_SP_ARM_HOST_GB must be positive")
     if window_mb < 1 or window_mb & (window_mb - 1):
@@ -157,6 +157,7 @@ class _Committing:
         )
         if not com.windowed or com.retain != "none":
             raise RuntimeError(f"sampled-proofs arm: collector not windowed with retain none ({com.name}, retain {com.retain})")
+        com.pool.block_bytes = max(1 << 20, int(com.win_bytes) // 8)  # one window's leaves, the most common take
         self.peak = _guard_steps(com, drop_levels=s["levels"] == "drop", cap_bytes=int(s["host_gb"] * 1e9))
         self.window = com.enable_windows(None)
         self.weights = dict(com.register_weights())
@@ -243,8 +244,17 @@ def _guard_steps(com: Any, *, drop_levels: bool, cap_bytes: int) -> dict[str, in
     inner = com._commit_step_windowed
     pool = com.pool
     take = pool.take
+    first_fit = pool.take_block
     local = threading.local()
     peak = {"pool_bytes": 0, "step_bytes": 0, "refused_steps": 0}
+
+    def best_fit(nbytes: int) -> Any:
+        # First fit hands a window's leaf buffer the level buffer of an earlier big step, so every big step allocates a
+        # fresh one and the pool grows without bound.
+        fits = [(int(b.numel()), i) for i, b in enumerate(pool.free) if int(b.numel()) >= nbytes]
+        if fits:
+            return pool.free.pop(min(fits)[1])
+        return first_fit(nbytes)
 
     def routed_take(nbytes: int) -> Any:
         taken = getattr(local, "taken", None)
@@ -274,6 +284,7 @@ def _guard_steps(com: Any, *, drop_levels: bool, cap_bytes: int) -> dict[str, in
             peak["pool_bytes"] = max(peak["pool_bytes"], int(pool.bytes_total))
 
     pool.take = routed_take
+    pool.take_block = best_fit
     com._commit_step_windowed = commit_step
     return peak
 
