@@ -580,11 +580,13 @@ static uint64_t kept_at(uint64_t nl, int h0, int h) {
 // each chunk's tiles done, the chunk's leaves and subtree (CUDA cores): the hashing runs under the later chunks' reads,
 // with no kernel boundary between them. pk is the pass's packed signs (`rs_signs16`); ctr is scratch of 1 + n / chunk
 // words (the next tile, each chunk's tiles done); ys holds all n receipts (8 words each); two slots of dig (8 words a leaf) and up (8
-// words for each of chunk/16 nodes) alternate between chunks. Levels h0 … H of the tree go to kept (level h0 first,
-// `kept_at`), the root last; levels below h0 are not kept. sa waits for the whole pass before anything queued on it
-// after.
+// words for each of chunk/16 nodes) alternate between chunks. `pad` is two digests per canonical padding leaf: the
+// leaves followed by scratch for their levels below h0. Padding is prepared on sb as soon as the pass starts, under
+// the tensor-core receipts, rather than as a tail after the real chunks. Levels h0 … H of the tree go to kept (level
+// h0 first, `kept_at`), the root last; levels below h0 are not kept. sa waits for the whole pass before anything
+// queued on it after.
 int rs_pass(const void *data, uint64_t n, const uint32_t *pk, unsigned *ctr, uint64_t *ys, uint64_t *dig, uint64_t *up,
-            uint64_t *kept, int h0, uint64_t chunk, int ctas, cudaStream_t sa, cudaStream_t sb) {
+            uint64_t *pad, uint64_t *kept, int h0, uint64_t chunk, int ctas, cudaStream_t sa, cudaStream_t sb) {
   static cudaEvent_t go, end;
   static bool made = false;
   if (!made) {
@@ -592,8 +594,8 @@ int rs_pass(const void *data, uint64_t n, const uint32_t *pk, unsigned *ctr, uin
       return 4;
     made = true;
   }
-  if (!data || !pk || !ctr || !ys || !dig || !up || !kept || n % PER_LEAF || chunk % 32 || chunk % PER_LEAF || !chunk ||
-      n % chunk || ctas < 0)
+  if (!data || !pk || !ctr || !ys || !dig || !up || !pad || !kept || n % PER_LEAF || chunk % 32 ||
+      chunk % PER_LEAF || !chunk || n % chunk || ctas < 0)
     return 1;
   const uint64_t nl = n / PER_LEAF, lc = chunk / PER_LEAF;
   if (nl < 2) return 1;
@@ -610,6 +612,20 @@ int rs_pass(const void *data, uint64_t n, const uint32_t *pk, unsigned *ctr, uin
     return 4;
   sketch16_pass_kernel<<<ctas, 32 * SK16_WARPS, 0, sa>>>((const uint4 *)data, n, pk, ys, ctr, (unsigned)(chunk / 32));
   if (cudaGetLastError()) return 4;
+  // These nodes depend on this pass's seed, but not on its receipts. Compute each once at the start and reuse the
+  // retained subtree roots when the real and padded halves are joined above hc.
+  const uint64_t pads = width - nl;
+  if (pads) {
+    uint64_t *pin = pad, *scratch = pad + 8 * pads;
+    if ((rc = rb_pads(nl, pads, pin, sb))) return rc;
+    for (int h = 0; h < hc; ++h) {
+      const uint64_t m = pads >> (h + 1), i0 = nl >> (h + 1);
+      uint64_t *out = h + 1 >= h0 ? kept + 8 * (kept_at(width, h0, h + 1) + i0) : scratch;
+      level_kernel<<<grid(m, 128), 128, 0, sb>>>(pin, out, h, i0, m);
+      if (out == scratch) scratch += 8 * m;
+      pin = out;
+    }
+  }
   for (uint64_t k = 0; k < chunks; ++k) {
     const int slot = k & 1;
     uint64_t *dig_k = dig + slot * lc * 8, *up_k = up + slot * lc * 8;
@@ -623,21 +639,6 @@ int rs_pass(const void *data, uint64_t n, const uint32_t *pk, unsigned *ctr, uin
       level_kernel<<<grid(m, 128), 128, 0, sb>>>(in, out, h, i0, m);
       if (out == scratch) scratch += 8 * m;
       in = out;
-    }
-  }
-  // Canonical frame-v3 pads from the real leaf count to `width`.  `nl` is chunk-aligned, so below `hc` every
-  // padding node belongs wholly to a missing chunk; batch all missing chunks level by level in `ys`, whose real
-  // receipts have been consumed by this point.
-  const uint64_t pads = width - nl;
-  if (pads) {
-    uint64_t *pin = ys, *scratch = ys + 8 * pads;
-    if ((rc = rb_pads(nl, pads, pin, sb))) return rc;
-    for (int h = 0; h < hc; ++h) {
-      const uint64_t m = pads >> (h + 1), i0 = nl >> (h + 1);
-      uint64_t *out = h + 1 >= h0 ? kept + 8 * (kept_at(width, h0, h + 1) + i0) : scratch;
-      level_kernel<<<grid(m, 128), 128, 0, sb>>>(pin, out, h, i0, m);
-      if (out == scratch) scratch += 8 * m;
-      pin = out;
     }
   }
   const uint64_t *in = kept + 8 * kept_at(width, h0, hc);

@@ -95,7 +95,7 @@ class Lib:
         self.so.rb_sketch_hash.argtypes = [v, u64, u64, v, v]
         self.so.rs_payload_leaves.argtypes = [v, u64, u64, v, v]
         self.so.rs_gather64.argtypes = [v, u64, v, v]
-        self.so.rs_pass.argtypes = [v, u64, v, v, v, v, v, v, i, u64, i, v, v]
+        self.so.rs_pass.argtypes = [v, u64, v, v, v, v, v, v, v, i, u64, i, v, v]
         self.so.rs_subtrees.argtypes = [v, v, v, u64, i, v, v, v]
         self.so.rs_signs16.argtypes = [b, i, v, v]
         self.so.rs_chain_set.argtypes = [b, v]
@@ -233,10 +233,12 @@ class DeviceStore:
             self.kept_at[h + 1] = self.kept_at[h] + (nl >> h)
         lc = self.chunk // PER_LEAF
         self.ring = None
+        pads = nl - self.blocks // PER_LEAF
         self.ring = (torch.empty(1 + self.blocks // self.chunk, dtype=torch.int32, device="cuda"),
                      torch.empty((self.blocks, 8), dtype=torch.int64, device="cuda"),
                      torch.empty((2 * lc, 8), dtype=torch.int64, device="cuda"),
-                     torch.empty((2 * lc, 8), dtype=torch.int64, device="cuda"))
+                     torch.empty((2 * lc, 8), dtype=torch.int64, device="cuda"),
+                     torch.empty((max(2 * pads, 1), 8), dtype=torch.int64, device="cuda"))
 
     def block(self, j: int) -> bytes:
         return self.dropped[j] if j in self.dropped else self.data[j * BLOCK:(j + 1) * BLOCK].cpu().numpy().tobytes()
@@ -328,14 +330,15 @@ class DeviceStore:
         t2 = time.perf_counter_ns()
         pk = torch.empty(PACK16_WORDS, dtype=torch.int32, device="cuda")
         kept = torch.empty((self.kept_at[self.H + 1], 8), dtype=torch.int64, device="cuda")
-        ctr, ys, dig, up = self.ring
+        ctr, ys, dig, up, pad = self.ring
         a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
         t3 = time.perf_counter_ns()
         a.record()
         main = torch.cuda.current_stream().cuda_stream
         rc = self.lib.so.rs_signs16(head, len(head), pk.data_ptr(), main) or self.lib.so.rs_pass(
             self.data.data_ptr(), self.blocks, pk.data_ptr(), ctr.data_ptr(), ys.data_ptr(), dig.data_ptr(),
-            up.data_ptr(), kept.data_ptr(), self.h0, self.chunk, self.sketch_ctas, main, self.side.cuda_stream)
+            up.data_ptr(), pad.data_ptr(), kept.data_ptr(), self.h0, self.chunk, self.sketch_ctas, main,
+            self.side.cuda_stream)
         if rc:
             raise RuntimeError(f"rs_pass: {rc}")
         b.record()
@@ -369,7 +372,7 @@ class DeviceStore:
         seed = torch.empty(rb.DIGEST_BYTES, dtype=torch.uint8, device="cuda")
         pk = torch.empty(PACK16_WORDS, dtype=torch.int32, device="cuda")
         kept = torch.empty((self.kept_at[self.H + 1], 8), dtype=torch.int64, device="cuda")
-        ctr, ys, dig, up = self.ring
+        ctr, ys, dig, up, pad = self.ring
         a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
         t1 = time.perf_counter_ns()
         a.record()
@@ -377,7 +380,7 @@ class DeviceStore:
         rc = self.lib.so.rs_chain_prepare(i, self.chain_previous.data_ptr(), seed.data_ptr(), pk.data_ptr(), main)
         if not rc:
             rc = self.lib.so.rs_pass(self.data.data_ptr(), self.blocks, pk.data_ptr(), ctr.data_ptr(), ys.data_ptr(),
-                                     dig.data_ptr(), up.data_ptr(), kept.data_ptr(), self.h0, self.chunk,
+                                     dig.data_ptr(), up.data_ptr(), pad.data_ptr(), kept.data_ptr(), self.h0, self.chunk,
                                      self.sketch_ctas, main, self.side.cuda_stream)
         if rc:
             raise RuntimeError(f"chained rs_pass: {rc}")
