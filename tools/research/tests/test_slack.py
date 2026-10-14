@@ -216,6 +216,8 @@ def test_handles_and_subscriptions(registry, capsys):
     assert rc == 0 and "@infra" in out and "SINFRA" in out and "#agent-alerts" in out
     rc, out, _ = run(capsys, "subscriptions", "--as", "infra")
     assert rc == 0 and f'channelId="{ALERTS}", topLevelOnly=true' in out and COORD not in out
+    assert 'subscribe_linear_issue(options={"scope": "team", "teamId": "INF"}' in out   # Linear-first: the issue is the doorbell
+    assert 'subscribe_linear_comment(options={"scope": "team", "teamId": "INF"}' in out
     rc, out, _ = run(capsys, "subscriptions", "--as", "old-accounting")
     assert rc == 0 and f'channelId="{COORD}", topLevelOnly=true' in out and ALERTS not in out
 

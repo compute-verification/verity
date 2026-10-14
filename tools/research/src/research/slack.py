@@ -1205,8 +1205,10 @@ def cmd_subscriptions(ns: argparse.Namespace, reg: dict) -> int:
             print(f'subscribe_slack_channel(channelId="{cid or "<#" + key + " id not recorded>"}", topLevelOnly=true, '
                   f"expiresInSeconds={EXPIRES_S})   # #{key}")
     if key := h.get("linear"):
+        print(f'subscribe_linear_issue(options={{"scope": "team", "teamId": "{key}"}}, expiresInSeconds={EXPIRES_S})   '
+              f"# an issue filed into or changing state in @{h['handle']}'s Linear team: the work item is its own doorbell")
         print(f'subscribe_linear_comment(options={{"scope": "team", "teamId": "{key}"}}, expiresInSeconds={EXPIRES_S})   '
-              f"# a comment on an issue in @{h['handle']}'s Linear team; the doorbell already carries each new ask")
+              f"# a comment on an issue in @{h['handle']}'s Linear team")
     print(f"# and subscribe_slack_thread(channelId, threadTs, expiresInSeconds={EXPIRES_S}) for each thread @{h['handle']} "
           f"starts, replies in or picks up (not for a status line alone); renew on every wake")
     print("# but not an announcement's thread (the merge thread is one): there the doorbell rings for a post that names "
