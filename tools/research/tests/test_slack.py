@@ -28,7 +28,7 @@ TOKEN = "dummy-verity-bot"
 BOT = "B0VERITY"
 COORD, ALERTS = "CCOORD", "CALERTS"
 HANDLES = ["infra", "proofs", "circuits", "compute-accounting", "memory-accounting", "network-accounting", "console",
-           "ci", "lean", "comms", "top", "old-accounting", "old-circuits-and-proofs"]
+           "ci", "lean", "comms", "top", "vllm", "benchmarks", "old-accounting", "old-circuits-and-proofs"]
 
 
 class FakeSlack:
@@ -1145,7 +1145,7 @@ def test_as_takes_only_a_name_this_agent_holds(fake, registry, routes_dirs, caps
     assert run(capsys, "send", "--as", "infra", "--text", "node 2 is free")[0] == 0
     before = len(fake.messages[COORD])
     rc, _, err = run(capsys, "send", "--as", "ci", "--thread", fake.messages[COORD][0]["ts"], "--text", "x")
-    assert rc == 2 and f"@ci is held by {held['ci'][0]}, and this agent is {held['infra'][0]}" in err
+    assert rc == 2 and f"@ci is held by {', '.join(held['ci'])}, and this agent is {held['infra'][0]}" in err
     rc, _, err = run(capsys, "close", "--as", "ci", "--thread", fake.messages[COORD][0]["ts"])
     assert rc == 2 and "post as your own handle" in err and len(fake.messages[COORD]) == before
     lander = next(a for a in held["old-circuits-and-proofs"] if len(a) > 11)
