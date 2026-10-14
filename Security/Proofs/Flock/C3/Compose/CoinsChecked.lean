@@ -109,43 +109,46 @@ theorem custody_holoMapOne {st : Flock.Stmt} {hp : HoloParams} {Cm : Type} {ish 
     InnerRecordCustody wr held sparse (holoMapOne st hp Cm ish tbl bc) := fun t =>
   ⟨fun i e he => ⟨((h t).1 i e he).1, fun _ _ hs => ((h t).1 i e he).2 _ _ (selC_of_holoSelOne hs)⟩, (h t).2⟩
 
-variable {nT : ℕ} {T : Fin nT → Type} {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : Law n}
-  {Reg Cm Reg' Reg₂ : Type} {S : ℕ} {Vs : Fin S → VStmt}
-
-local notation "ℐ" => holoInnerAt T (holoCTs st hp) st hp
-
-variable {ish : RecVStar.Inner} {reg : Lean.Json} {wr : List (Cm × (ℐ).Coin) → Lean.Json × String}
-  {coins : List (Cm × (ℐ).Coin) → Option Flock.RecCoins.Source} {bind : Fin S → VStar.Bindings}
-  {rows : Option (Array Flock.Registered.Port)}
-  {zr : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).OuterR Reg'}
-  {hC : Flock.Premises.RecordCustody zr} {h : Typed zr} {sh : Flock.Shape}
-
--- the hypotheses at `holoInnerAt`'s coins unfold its coin count (`holoKinds`, `zcShape`), which ran past the default
--- (r20261014-083229-2ab0)
+-- the hypotheses at `holoInnerAt`'s coins unfold its coin count (`holoKinds`, `zcShape`); at the default the
+-- elaboration ran out (r20261014-083229-2ab0)
 set_option maxHeartbeats 1600000 in
 /-- **The stages' coins at the checked sessions** (`hcoins` of `srcOK_holo_rs` and `srcOK_repsOfVals_pR`), at `zs` the
-checked sessions (`hzs`, `rfl`; stated at `zs`, as at the checked sessions themselves the signature does not
-elaborate) and reps whose rounds are the record's (`hrd`; `fun _ _ _ _ _ => rfl` at the decoder with its reads,
-`RepMaps.withReads`): the reps' from the guarantee's custody (`_hIC`) at the map's one-round draws, where the reps are
-drawn (`repsDrawn_checked`) wherever V*'s list builds (`hss`), the class checks pass (`hcls`) and the inner shape is the
-statement's (`hi`, `AcceptsC3`'s), and the link points' and the later stages' from `LaterCoins` (`laterCoins_of_held`).
-`halg` and `hacc` are E's (`withReads_algebraDecodes`), `hpr`, `hsv` and `hf` the value tie's. -/
-theorem stageCoins_checked {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
+checked sessions (`hzs`, `rfl`) and reps whose rounds are the record's (`hrd`; `fun _ _ _ _ _ => rfl` at the decoder
+with its reads, `RepMaps.withReads`): the reps' from the guarantee's custody (`_hIC`) at the map's one-round draws,
+where the reps are drawn (`repsDrawn_checked`) wherever V*'s list builds (`hss`), the class checks pass (`hcls`) and the
+inner shape is the statement's (`hi`, `AcceptsC3`'s), and the link points' and the later stages' from `LaterCoins`
+(`laterCoins_of_held`). `halg` and `hacc` are E's (`withReads_algebraDecodes`), `hpr`, `hsv` and `hf` the value tie's.
+Its binders are its own: at section variables for `wr` and `reg` the declaration is dropped without a message
+(r20261014-111750-93cf). -/
+theorem stageCoins_checked {nT : ℕ} {T : Fin nT → Type} {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : Law n}
+    {Reg Cm Reg' Reg₂ : Type} {S : ℕ} {Vs : Fin S → VStmt} {ish : Flock.RecVStar.Inner} {reg : Lean.Json}
+    {wr : List (Cm × (holoInnerAt T (holoCTs st hp) st hp).Coin) → Lean.Json × String}
+    {coins : List (Cm × (holoInnerAt T (holoCTs st hp) st hp).Coin) → Option Flock.RecCoins.Source}
+    {bind : Fin S → VStar.Bindings} {rows : Option (Array Flock.Registered.Port)}
+    {zr : Reg → L.Ω → List (Cm × (holoInnerAt T (holoCTs st hp) st hp).Coin) → Reg₂ → (j : Fin S) → (Vs j).OuterR Reg'}
+    {hC : Flock.Premises.RecordCustody zr} {h : Typed zr} {sh : Flock.Shape}
+    {zs : Reg → L.Ω → List (Cm × (holoInnerAt T (holoCTs st hp) st hp).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {ss : Array VStar.Stmt} {dg : ByteArray → ByteArray} {N k Rw : ℕ}
-    {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
-    {rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
-    {vals : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals}
+    {stp : Reg → L.Ω → List (Cm × (holoInnerAt T (holoCTs st hp) st hp).Coin) → ((j : Fin S) → (Vs j).Bits) →
+      C3Run (holoAt st hp)}
+    {rep : Reg → L.Ω → List (Cm × (holoInnerAt T (holoCTs st hp) st hp).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 →
+      RepData}
+    {vals : Reg → L.Ω → List (Cm × (holoInnerAt T (holoCTs st hp) st hp).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 →
+      UnitVals}
     {tbl : String} {bc : Cm → String → ℕ → List UInt8} {cap₀ : Cap Dig}
-    (hzs : zs = Flock.Guarantees.checkedC3 (I := ℐ) ish (Flock.Guarantees.innerHeld wr st reg) coins bind rows zr hC h)
-    (hS₀ : 0 < S) (hss : RecVStar.statements ish = .ok ss) (hcls : ClassOk (shapeOf st))
-    (hi : (RecVStar.checkInnerStmt ish st).isOk = true)
-    (halg : AlgebraDecodes (I := ℐ) zs dg N k Rw sh rep) (hacc : AccChains (I := ℐ) zs dg N k Rw sh rep)
+    (hzs : zs = Flock.Guarantees.checkedC3 (I := holoInnerAt T (holoCTs st hp) st hp) ish
+      (Flock.Guarantees.innerHeld wr st reg) coins bind rows zr hC h)
+    (hS₀ : 0 < S) (hss : Flock.RecVStar.statements ish = .ok ss) (hcls : ClassOk (shapeOf st))
+    (hi : (Flock.RecVStar.checkInnerStmt ish st).isOk = true)
+    (halg : AlgebraDecodes (I := holoInnerAt T (holoCTs st hp) st hp) zs dg N k Rw sh rep)
+    (hacc : AccChains (I := holoInnerAt T (holoCTs st hp) st hp) zs dg N k Rw sh rep)
     (hpr : ProofOfVals zs dg N k Rw sh rep vals)
     (hsv : SetupOfVals zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) sh rep vals)
     (hf : FramesOfVals zs dg N k Rw sh rep vals)
-    (hcus : InnerRecordCustody wr (fun w => innerCommitsAt w.1 w.2 st reg) ish.sparse (holoMap st hp Cm ish tbl bc))
-    (htbl : ∀ i : Fin 2, (((Flock.Guarantees.HoloStream.rep i).name tbl).startsWith s!"{RecVStar.SPARSE}/" ||
-      ((Flock.Guarantees.HoloStream.rep i).name tbl).startsWith s!"{RecVStar.STACKED}/") = false)
+    (hcus : FlockSoundness.Assumptions.InnerRecordCustody wr (fun w => innerCommitsAt w.1 w.2 st reg) ish.sparse
+      (Flock.Guarantees.holoMap st hp Cm ish tbl bc))
+    (htbl : ∀ i : Fin 2, (((Flock.Guarantees.HoloStream.rep i).name tbl).startsWith s!"{Flock.RecVStar.SPARSE}/" ||
+      ((Flock.Guarantees.HoloStream.rep i).name tbl).startsWith s!"{Flock.RecVStar.STACKED}/") = false)
     (hrd : ∀ R ω t Lb i, (rep R ω t Lb i).rounds =
       FlockC3.Reps.heldRounds (innerCommitsAt (wr t).1 (wr t).2 st reg) ((Flock.Guarantees.HoloStream.rep i).name tbl))
     (hrt : SrcRepTie zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)))
