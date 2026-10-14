@@ -44,7 +44,7 @@ theorem flatten_map_idx {α β : Type} (f : β → List α) : ∀ (ks : List β)
       · rw [List.map_cons, List.flatten_cons, List.getElem?_append_right (by omega)]
         exact hx
 
-theorem map_eq_range {α β : Type} (h : α → β) (d : α) (F : List α) :
+theorem map_eq_range {α : Type _} {β : Type _} (h : α → β) (d : α) (F : List α) :
     F.map h = (List.range F.length).map fun n => h ((F[n]?).getD d) := by
   refine List.ext_getElem (by simp) fun n h₁ _ => ?_
   have hn : n < F.length := by simpa using h₁
