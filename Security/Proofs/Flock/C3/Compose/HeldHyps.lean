@@ -183,11 +183,3 @@ theorem sparseCountedAt_of_rounds {Cm Coin : Type} {wr : List (Cm × Coin) → L
 end
 
 end FlockC3.Compose
-
-#print axioms FlockC3.Compose.heldOk_of_selC
-#print axioms FlockC3.Compose.heldOk_holo
-#print axioms FlockC3.Compose.heldOk_atSrc
-#print axioms FlockC3.Compose.c3Held_heldC3
-#print axioms FlockC3.Compose.held_commits
-#print axioms FlockC3.Compose.sparseStagesAt_sparseOf
-#print axioms FlockC3.Compose.sparseCountedAt_of_rounds
