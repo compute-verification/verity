@@ -372,13 +372,3 @@ theorem repsDrawn_holoMapAt {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → R
 end holo
 
 end FlockC3.Reps
-
-#print axioms FlockC3.Reps.zp_of_rounds
-#print axioms FlockC3.Reps.repIdx_of_size
-#print axioms FlockC3.Reps.repIdx_of_check
-#print axioms FlockC3.Reps.checkCommitRounds_of_checkCovers
-#print axioms FlockC3.Reps.repIdx_atRep
-#print axioms FlockC3.Reps.repsDrawn_holoMap
-#print axioms FlockC3.Reps.hchk_of_held
-#print axioms FlockC3.Reps.hchk_of_acceptsC3
-#print axioms FlockC3.Reps.repsDrawn_holoMapAt
