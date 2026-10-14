@@ -1,7 +1,7 @@
-"""cuBLAS's bf16 GEMMs on sm_90: GLM-5.3's and DeepSeek-V4-Pro's MoE router gates past the cuteDSL tier (`torch.mm(x, W.T,
-out_dtype=float32)`, `GateLinear` tier 4), their bf16-output linears, DeepSeek-V4-Pro's compressor `torch.mm(...,
-out_dtype=float32)` calls, and GLM-5.3's MLA absorbs (`torch.bmm` of the queries against `W_UK_T`, of the attention output against
-`W_UV`).
+"""cuBLAS's bf16 GEMMs on cc 9.0 with 132 SMs: MoE router gates at (K, N) = (6144, 256) and (7168, 384) past the cuteDSL tier
+(`torch.mm(x, W.T, out_dtype=float32)`, `GateLinear` tier 4); bf16-output linears at K/N = 6144/{19360,160} and
+7168/{16160,64}; K = 7168 compressor `torch.mm(..., out_dtype=float32)` calls at N = 2048, 1024 and 512; and MLA absorbs
+(`torch.bmm`) at (K, N) = (192, 512) and (512, 256).
 
     GemmF32Out_v1{K, N, DOT}        (x: Array<K, BF16>, w: Array<N, Array<K, BF16>>) -> Array<N, F32>
                                     `DotBf16_v2{K, DOT}` of x against each W row: the f32 accumulator is the output
@@ -22,9 +22,9 @@ row computes a value another computes, nor a step a value its accumulator's cons
 of `mla.MlaBmm_v1` (vLLM's batch-invariant Triton `bmm_kernel` on sm_120), which names no word; `tests/program/test_bf16_gemm.py`
 checks that they agree.  `bf16_gemm_check` holds the numpy models.
 
-The two split-K Definitions model cuBLAS 12.9.1's H200 route: split K into equal 64-element-aligned chunks (the final chunk holds
+The two split-K Definitions model cuBLAS 12.9.1's cc 9.0, 132-SM route: split K into equal 64-element-aligned chunks (the final chunk holds
 the remainder); run each chunk's ascending `HopperBF16WgmmaDot16_v1` chain from +0; store f32 partials; and have the separate
-reduction kernel add them serially in increasing split order in f32, rounding only the final result for a bf16 output.  The H200
+reduction kernel add them serially in increasing split order in f32, rounding only the final result for a bf16 output.  The device
 capture records cuBLAS's version, each selected kernel and launch grid, pins `SPLIT_K` by (M,K,N), and fits crafted cancellation
 rows against partition, reduction-order and partial-type alternatives.
 """
@@ -50,7 +50,9 @@ __all__ = ["BatchedGemm", "BatchedGemmWord", "ChainStep", "CublasSplitKGemm", "C
            "dot_step", "split_bounds"]
 
 BF16, F32 = Array(16, BL.BIT), Array(32, BL.BIT)
-CONFORMANCE = "not-yet-established: the capture's served shapes (tests/properties/glm53_bf16_gemm_capture_gpu.py)"
+CONFORMANCE = ("not-yet-established: K/N statics 6144/{19360,160,256}, 7168/{16160,64,384,2048,1024,512}, "
+               "and batched 192/512 and 512/256 on cc 9.0 with 132 SMs "
+               "(tests/properties/glm53_bf16_gemm_capture_gpu.py)")
 
 
 class ChainStep(NamedTuple):
@@ -169,7 +171,7 @@ def _splitk(gemm, add, cast=None):
 
 GEMM_F32_DOC = "`x[K] @ W[N, K]^T` with the f32 accumulator as the output: `DotBf16{K, DOT}` on each W row (torch.mm out_dtype=float32)"
 BATCHED_DOC = "torch.bmm on bf16: `Gemm{K, N, DOT}` of each member's x against its W (w[b][n][k] the operand at [b, k, n])"
-SPLITK_DOC = ("cuBLAS 12.9.1's captured split-K: equal 64-element-aligned contiguous chunks and a final remainder, one ascending DOT "
+SPLITK_DOC = ("cuBLAS 12.9.1's cc 9.0, 132-SM split-K: equal 64-element-aligned contiguous chunks and a final remainder, one ascending DOT "
               "chain from +0 per chunk, then a separate serial f32 reduction in increasing split order")
 
 GemmF32OutWord = CompositeDefinition("GemmF32Out", 1, ("K", "N", "DOT"), _gemm_f32_type(P.BF16, P.F32), _gemm_f32(G.DotBf16),

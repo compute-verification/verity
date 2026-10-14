@@ -145,10 +145,16 @@ CUBLAS_SPLITK_ALTERNATIVES = (
 
 
 def cublas_splitk_hypotheses(x: np.ndarray, w: np.ndarray, SPLIT_K: int, *, out: str) -> dict[str, np.ndarray]:
-    """The capture probe's split partition, partial precision and reduction-order alternatives."""
+    """The capture probe's distinct split partition, partial precision and reduction-order alternatives.
+
+    With two partials, reverse order is the same single commutative add as forward order; with two or three partials, this
+    pairwise tree has exactly forward order's parenthesization.  Those are not distinct hypotheses at those split counts.
+    """
     ans = {}
     for name in CUBLAS_SPLITK_ALTERNATIVES:
         partition, partial, reduction = name.split("-")
+        if (reduction == "reverse" and SPLIT_K == 2) or (reduction == "tree" and SPLIT_K <= 3):
+            continue
         ans[name] = cublas_splitk_rows(x, w, SPLIT_K, partition=partition, partial=partial, reduction=reduction, out=out)
     return ans
 

@@ -181,15 +181,32 @@ def _activation(gen, M: int, K: int, probe: bool = False):
 
 
 def splitk_probe_words(K: int, splits: int, output: str, N: int = 32, seed: int = 20261013) -> tuple[np.ndarray, np.ndarray, dict]:
-    """Craft finite cancellation rows that distinguish every modeled split-K hypothesis at these statics."""
+    """Craft finite rows that distinguish every distinct modeled split-K hypothesis at these statics.
+
+    Random k16-leading values separate contiguous from strided partitions.  Row 0 plants split partials around 2^25 so serial
+    forward reduction leaves +1 while reverse (and, from four splits, tree) loses it.  Row 1 makes the first partial 2^16 + 1
+    and the second -2^16, so rounding partials to bf16 loses the final +1 under either output type.
+    """
     from verity_vllm.program.registry import bf16_gemm_check as BC
 
+    if N < 3:
+        raise ValueError(f"split-K probe needs at least three output rows, got {N}")
     rng = np.random.default_rng(seed + K + splits + N + (output == "bf16"))
     values = np.array([s * 2.0 ** e for e in (-20, -10, -1, 0, 1, 10, 20, 30, 50) for s in (-1, 1)] + [0.0], np.float32)
     pool = (values.view(np.uint32) >> np.uint32(16)).astype(np.uint16)
     x = np.full((1, K), 0x3F80, np.uint16)
     w = np.zeros((N, K), np.uint16)
     w[:, 0:K:16] = rng.choice(pool, (N, K // 16))
+    starts = [int(cols[0]) for cols in BC._split_cols(K, splits, "contiguous")]
+    if splits >= 3:
+        order = ([0x4C00, 0xCC00, 0x3F80] if splits == 3
+                 else [0x4C00, 0x3F80, 0xCC00, 0x3F80] + [0] * (splits - 4))
+        w[0] = 0
+        w[0, starts] = order
+    w[1] = 0
+    w[1, starts[0]] = 0x4780
+    w[1, starts[0] + 1] = 0x3F80
+    w[1, starts[1]] = 0xC780
     models = BC.cublas_splitk_hypotheses(x, w, splits, out=output)
     candidate = models[BC.CUBLAS_SPLITK_HYPOTHESIS]
     differ = {name: int(np.count_nonzero(candidate != words)) for name, words in models.items()}
@@ -207,6 +224,11 @@ def _install_splitk_probe(x, w, splits: int, output: str) -> dict[str, Any]:
     x[0].copy_(torch.from_numpy(px.view(np.int16)).view(torch.bfloat16).to(x.device))
     w[:n].copy_(torch.from_numpy(pw.view(np.int16)).view(torch.bfloat16).to(w.device))
     return {"columns": n, "discriminator": differ}
+
+
+def _primary_output(output):
+    """The GEMM tensor: `GateLinear` returns it with router metadata, while the other routes return it directly."""
+    return output[0] if isinstance(output, tuple) else output
 
 
 def _u16(t) -> np.ndarray:
@@ -544,7 +566,7 @@ def launch(work: Path, weights: Weights, gates: dict[str, Any], model: str, phas
         old_w = probe_w[:n].clone()
         output = "f32" if phase in ("router", "f32out") else "bf16"
         probe = _install_splitk_probe(x, probe_w, profiled_split_k, output)
-        probe_out = fn()
+        probe_out = _primary_output(fn())
         torch.cuda.synchronize()
         probe_paths = _save(d / "splitk_probe", x=_u16(x[0:1]), w=_u16(probe_w[:n]),
                             out=(_u32 if output == "f32" else _u16)(probe_out[0:1, :n]))

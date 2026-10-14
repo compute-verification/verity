@@ -1,6 +1,6 @@
-"""vLLM's cuteDSL router GEMM `ll_bf16_gemm` (`GateLinear` tier 1: bf16 x bf16 -> f32 at M <= 16 on sm_90+), GLM-5.3's and
-DeepSeek-V4-Pro's MoE gates on decode steps, as its two kernels reduce K (vLLM d9105ea80 `kernels/linear/cute_dsl/`, CUTLASS DSL
-4.6.2):
+"""vLLM's cuteDSL router GEMM `ll_bf16_gemm` (`GateLinear` tier 1: bf16 x bf16 -> f32 at M <= 16 on cc 9.0+), at gate
+(K, N) = (6144, 256) and (7168, 384) on decode steps, as its two kernels reduce K (vLLM d9105ea80
+`kernels/linear/cute_dsl/`, CUTLASS DSL 4.6.2):
 
     LlBf16DotprodDot_v1{K, BS, VEC, FMA}     (x, w: Array<K, BF16>) -> F32
         `LLBf16Dotprod` (M <= 4): thread t of the CTA's BS runs one f32 chain from +0 over k = VEC BS i + VEC t + v (i, then the
@@ -25,12 +25,12 @@ is traced from the bf16 words, as `boolean_dense`'s elements are: `LL_FMA_STEP` 
 else `LL_MUL_ADD_STEP` (`F32Mul_v1`, then `F32Add_v1`), so the widened operands' 16 zero bits fold into its gates; each lane's
 first step is its own Definition, from the +0 accumulator with its constant bits folded, and each step is cut at the gates that
 read only x_k.  The rows on bits take each step of every W row at once, one batch over the rows sharing x_k's own gates, as the
-split-K's `DOT` steps do (`cublas_bf16.dot_step`), so no row computes a value another computes.  vLLM's sm_90
-dispatch at GLM-5.3's gate (K 6144, N 256): M <= 4 the dotprod at BS 128 (VEC 8, so 6 tiles of 1024); M 9 and 11 the split-K at
-SPLIT_K 8, else SPLIT_K 6 (TILE_K 256, WARPS 4, `mma.sync.m16n8k16`, `HopperBF16WgmmaDot16_v1`).  At DeepSeek-V4-Pro's (K 7168,
-N 384): M 1 and 2 the dotprod at BS 256 (3 tiles of 2048, then one of 1024 at width 4), M 3 and 4 at BS 128 (7 tiles); M 5 the
+split-K's `DOT` steps do (`cublas_bf16.dot_step`), so no row computes a value another computes.  vLLM's cc 9.0
+dispatch at K = 6144, N = 256: M <= 4 the dotprod at BS 128 (VEC 8, so 6 tiles of 1024); M 9 and 11 the split-K at SPLIT_K 8,
+else SPLIT_K 6 (TILE_K 256, WARPS 4, `mma.sync.m16n8k16`, `HopperBF16WgmmaDot16_v1`).  At K = 7168, N = 384: M 1 and 2 the
+dotprod at BS 256 (3 tiles of 2048, then one of 1024 at width 4), M 3 and 4 at BS 128 (7 tiles); M 5 the
 split-K at SPLIT_K 6, M 6, 8 and 12 at 8, M 7 to 16 otherwise at 7, over its 28 tiles of 256 (so ranks may take one tile fewer
-than rank 0).  `bf16_gemm_check.dispatch_sm90` holds the tables, beside the numpy models.  The H200's kernels are pinned by
+than rank 0).  `bf16_gemm_check.dispatch_sm90` holds the tables, beside the numpy models.  The cc 9.0, 132-SM kernels are pinned by
 `tests/properties/glm53_bf16_gemm_capture_gpu.py`, which also decides FMA.
 """
 from __future__ import annotations
@@ -53,7 +53,8 @@ __all__ = ["LL_FMA_STEP", "LL_MUL_ADD_STEP", "LlBf16DotprodDot", "LlBf16DotprodD
 
 BF16, F32 = Array(16, BL.BIT), Array(32, BL.BIT)
 WARP = 32
-CONFORMANCE = "not-yet-established: the capture's served gates (tests/properties/glm53_bf16_gemm_capture_gpu.py)"
+CONFORMANCE = ("not-yet-established: gates at K/N = 6144/256 and 7168/384 on cc 9.0 with 132 SMs "
+               "(tests/properties/glm53_bf16_gemm_capture_gpu.py)")
 
 
 def _check(name: str, **ok: bool) -> None:
