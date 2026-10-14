@@ -10,7 +10,8 @@ import Proofs.Flock.C3.RegLevels.LgHeld
 `stagesHeld_of_run`'s, within the history's rounds where the stages take `holoCTs`' count (`coins_total_holo`).
 `stageCoins_holo_held`: `stageCoins_holo` at `holoMap` with `hlater` from `laterCoins_holo` at every accepted outer
 proof and `hlt` from `srcLevelTie_of_maps`, both at R's run in V*'s sessions (`MapsAt`) at the `C3` the verifier
-builds of its hold (`C3Held`). The record facts the stages read are named below (`RecordPoints` … `RepStagesCounted`).
+builds of its hold (`C3Held`), and the reps' `henc` at the map's one-round draws (`coinsEncoded_holoMap`). The
+record facts the stages read are named below (`RecordPoints` … `RepStagesCounted`).
 -/
 
 namespace FlockC3.Compose
@@ -178,7 +179,9 @@ def MapsAt (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fi
 
 /-- **`stageCoins_holo` at the verifier's map**, `hlater` discharged: at every accepted outer proof `laterCoins_holo`,
 at R's run from `MapsAt`'s session (`run_of_sessionAt`) at the `C3` of the verifier's hold (`C3Held`), the stages'
-total from their ties (`coins_total_holo`), and `hlt` from `MapsAt` (`srcLevelTie_of_maps`). -/
+total from their ties (`coins_total_holo`), and `hlt` from `MapsAt` (`srcLevelTie_of_maps`). The reps' rounds are
+encoded and drawn at the map's one-round draws (`coinsEncoded_holoMap`; `hdr` at `holoSelOne`, as
+`repsDrawn_holoMapAt` gives it). -/
 theorem stageCoins_holo_held {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
@@ -202,9 +205,7 @@ theorem stageCoins_holo_held {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → 
     (hf : FramesOfVals zs dg N k Rw sh rep vals)
     (hcus : FlockSoundness.Assumptions.InnerRecordCustody wr held sparse (Flock.Guarantees.holoMap st hp Cm ish tbl bc))
     (hheldR : RepRoundsHeld zs dg N k Rw sh rep wr held s ix)
-    (henc : CoinsEncoded (CT := holoCTs st hp) (Flock.Guarantees.holoMap st hp Cm ish tbl bc).selC
-      (Flock.Guarantees.holoMap st hp Cm ish tbl bc).coin)
-    (hdr : RepsDrawn zs dg N k Rw sh rep vals (Flock.Guarantees.holoMap st hp Cm ish tbl bc).selC s ix)
+    (hdr : RepsDrawn zs dg N k Rw sh rep vals (holoSelOne ish tbl) s ix)
     (hrt : SrcRepTie zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)))
     (hst : FlockC3.Sparse.SrcSparseTie zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)))
     (hot : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun _ u => ∃ sh w ops,
@@ -231,7 +232,8 @@ theorem stageCoins_holo_held {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → 
       StageCoins (CT := holoCTs st hp) (t.map Prod.snd) u := by
   have hlt := FlockC3.RegLevels.srcLevelTie_of_maps M hell hosh unit (repsOfVals stp sh rep vals) c3 w
     kap e0 sb e hmaps
-  refine stageCoins_holo hleaf halg hacc hpr hsv hf hcus hheldR henc hdr hrt hst hot hlt ?_
+  refine stageCoins_holo hleaf halg hacc hpr hsv hf hcus hheldR coinsEncoded_holoMap
+    (fun _ _ _ h => selC_of_holoSelOne h) hdr hrt hst hot hlt ?_
   intro R ω t R₂ τ o hA'
   obtain ⟨cs, hh⟩ := hheld R ω t R₂ τ o hA'
   have hc3' := hc3 R ω t (layers zs dg N k Rw R ω t R₂ τ) cs hh
