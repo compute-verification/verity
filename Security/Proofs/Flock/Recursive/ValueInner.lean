@@ -199,26 +199,26 @@ theorem record_decode_of_load {unit : String} {f : Flock.RecCoins.Files} {inn : 
   | none =>
       cases hs : Flock.Zk.schedule st.m with
       | error e =>
-          simp [hi, hs, Functor.map, Except.map, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
+          simp [hi, hs, Functor.map, Except.map, Bind.bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
       | ok p =>
           cases hd : Flock.Record.decode spec f.record with
           | error e =>
-              simp [hi, hs, hd, Functor.map, Except.map, bind, Except.bind, throw, throwThe,
+              simp [hi, hs, hd, Functor.map, Except.map, Bind.bind, Except.bind, throw, throwThe,
                 MonadExceptOf.throw] at h
           | ok sess => exact ⟨spec, sess, hd⟩
   | some i =>
       cases hc : Flock.RecVStar.checkInnerStmt i st with
       | error e =>
-          simp [hi, hc, Functor.map, Except.map, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
+          simp [hi, hc, Functor.map, Except.map, Bind.bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
       | ok u =>
           cases hs : Flock.Zk.schedule st.m with
           | error e =>
-              simp [hi, hc, hs, Functor.map, Except.map, bind, Except.bind, throw, throwThe,
+              simp [hi, hc, hs, Functor.map, Except.map, Bind.bind, Except.bind, throw, throwThe,
                 MonadExceptOf.throw] at h
           | ok p =>
               cases hd : Flock.Record.decode spec f.record with
               | error e =>
-                  simp [hi, hc, hs, hd, Functor.map, Except.map, bind, Except.bind, throw, throwThe,
+                  simp [hi, hc, hs, hd, Functor.map, Except.map, Bind.bind, Except.bind, throw, throwThe,
                     MonadExceptOf.throw] at h
               | ok sess => exact ⟨spec, sess, hd⟩
 

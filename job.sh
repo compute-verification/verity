@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ "${K2_TARGET:-}" == 1 ]]; then
+  cd Security/Proofs
+  lake env lean Proofs/Flock/Recursive/ValueInner.lean
+  lake env lean Proofs/Flock/C3/Sparse/SessionZero.lean
+  lake env lean Proofs/Flock/Recursive/HPortTie.lean
+  exit
+fi
+
 python3 tools/verity/lean/lean_changed.py --records verity/core/service/flock --update --out "$OUT/flock"
 python3 tools/verity/lean/lean_changed.py --records Security --update --out "$OUT/security"
 python3 tools/verity/lean/lean_changed.py --records Security/Properties --update --out "$OUT/properties"
