@@ -63,6 +63,32 @@ def words (a b : Nat) : Array Int := (Array.range (b - a)).map fun i => Int.ofNa
 #guard refusal honest #[inOrder, inOrder.set! 200 199] == leavesRefused
 #guard refusal honest #[inOrder.pop] == leavesRefused
 
+/-! V*'s output layout (`outsOk`): `out` then `acc_out`, one output row each past the five input rows, every copy
+returning words `0..127` in order. A circuit carrying it passes `outsOk`; one missing any part is refused there, after
+the rows and leaves. -/
+
+def circuitOut (ports : Array Port) (leaves : Array (Array Int)) : Circuit :=
+  { circuit ports leaves with outPorts := #[("out", 64), ("acc_out", 64)], outRowPorts := #[1, 1],
+                              leavesOut := leaves.map fun _ => Array.range 128 }
+
+def refusalOut (ports : Array Port) (leaves : Array (Array Int)) : Option String :=
+  match Flock.RecOpen.check (circuitOut ports leaves) with
+  | .error e => some e
+  | .ok () => none
+
+def outsRefused : Option String :=
+  some ("circuit t: rec-open/l8-h2's outputs are not out then acc_out, 64 words each, one output row " ++
+    "each, every copy returning words 0..127")
+
+#guard outsOk (circuitOut honest #[inOrder]) && outsOk (circuitOut honest #[inOrder, inOrder])
+#guard refusal honest #[inOrder] == outsRefused
+#guard refusalOut (honest.set! 5 (port "outs" 64)) #[inOrder] == outsRefused
+#guard refusalOut (honest.set! 6 (port "acc_out" 32)) #[inOrder] == outsRefused
+#guard !outsOk { circuitOut honest #[inOrder] with outPorts := #[("out", 64)] }
+#guard !outsOk { circuitOut honest #[inOrder] with outRowPorts := #[2] }
+#guard !outsOk { circuitOut honest #[inOrder] with leavesOut := #[(Array.range 128).reverse] }
+#guard !outsOk { circuitOut honest #[inOrder, inOrder] with leavesOut := #[Array.range 128, Array.range 127] }
+
 def inner : RecVStar.Inner := { m := 25, kLog := 16, claims := 8, regions := 3 }
 
 def innerR : RecVStar.Inner := { inner with stacked := some { m := 22, claims := 2 } }
