@@ -176,6 +176,85 @@ theorem sparse_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : L
   exact sparse_of_name hss (Array.mem_of_getElem? hj)
     ((FlockVBridge.Sparse.unitName_params hp).trans hname.symm)
 
+/-- **`checkOwn` accepting, its second and third loops**: each of the statement's message-round ports is one of the
+reads file's, and each of its `sparseMsgs` is one of the file's ports. -/
+theorem checkOwn_ok {s : VStar.Stmt} {own : Array Flock.Registered.Port} (h : RecVStar.checkOwn s own = .ok ()) :
+    (∀ q ∈ RecVStar.ownPorts s, q ∈ RecVStar.msgPorts own) ∧
+      ∀ q ∈ RecVStar.sparseMsgs s, q ∈ own.toList.map fun p => (p.name, p.value, p.reads) := by
+  unfold RecVStar.checkOwn at h
+  simp only at h
+  split at h
+  · cases h
+  · split at h
+    · cases h
+    · rename_i hnone
+      split at h
+      · cases h
+      · rename_i hnone'
+        refine ⟨fun q hq => ?_, fun q hq => ?_⟩
+        · have hfind : (RecVStar.ownPorts s).find? (fun x => !(RecVStar.msgPorts own).contains x) = none := by
+            cases hf : (RecVStar.ownPorts s).find? (fun x => !(RecVStar.msgPorts own).contains x) with
+            | none => rfl
+            | some q' => exact absurd hf (hnone q')
+          simpa using List.find?_eq_none.1 hfind q hq
+        · have hfind : (RecVStar.sparseMsgs s).find?
+              (fun x => !(own.toList.map fun p => (p.name, p.value, p.reads)).contains x) = none := by
+            cases hf : (RecVStar.sparseMsgs s).find?
+                (fun x => !(own.toList.map fun p => (p.name, p.value, p.reads)).contains x) with
+            | none => rfl
+            | some q' => exact absurd hf (hnone' q')
+          simpa using List.find?_eq_none.1 hfind q hq
+
+/-- **`checkOwn` accepting, its second loop, at the reads file's ports**: each of the statement's message-round ports is
+a port of the reads file, by name, value and reads. -/
+theorem own_of_checkOwn {s : VStar.Stmt} {own : Array Flock.Registered.Port} (h : RecVStar.checkOwn s own = .ok ()) :
+    ∀ q ∈ RecVStar.ownPorts s, ∃ p ∈ own, (p.name, p.value, p.reads) = q := by
+  intro q hq
+  obtain ⟨p, hp, rfl⟩ := List.mem_map.1 ((checkOwn_ok h).1 q hq)
+  exact ⟨p, Array.mem_toList_iff.1 (List.mem_filter.1 hp).1, rfl⟩
+
+/-- **A RecSparse statement's reads file names every one of its message ports** (`RecSparse.messagePorts`): `h` and
+`claim` by `checkOwn`'s second loop (`ownPorts`), the others by its third (`sparseMsgs`, `checkOwn_ok`). -/
+theorem sparseOwnNames_of_checkOwn {sh : RecSparse.Shape} {hr : ℕ} {own : Array Flock.Registered.Port}
+    (h : RecVStar.checkOwn (.sparse sh hr) own = .ok ()) :
+    ∀ nm ∈ (RecSparse.messagePorts sh).map (·.1), ∃ p ∈ own, p.name = nm := by
+  obtain ⟨Y, hY⟩ : ∃ Y, RecSparse.messagePorts sh = ("h", RecSparse.SKIP) :: (Y ++ [("claim", 1)]) := ⟨_, rfl⟩
+  have hown := own_of_checkOwn h
+  have h3 := (checkOwn_ok h).2
+  simp only [RecVStar.sparseMsgs, hY, List.drop_succ_cons, List.drop_zero, List.dropLast_concat] at h3
+  intro nm hnm
+  rw [hY] at hnm
+  simp only [List.map_cons, List.map_append, List.map_nil, List.mem_cons, List.mem_append, List.not_mem_nil,
+    or_false] at hnm
+  rcases hnm with rfl | hnm | rfl
+  · obtain ⟨p, hp, he⟩ := hown ("h", s!"rec-c{hr}", #[some 0, some 1]) (by simp [RecVStar.ownPorts])
+    exact ⟨p, hp, (Prod.mk.inj he).1⟩
+  · obtain ⟨⟨a, b⟩, hx, rfl⟩ := List.mem_map.1 hnm
+    obtain ⟨p, hp, he⟩ := List.mem_map.1 (h3 _ (List.mem_map.2 ⟨(a, b), hx, rfl⟩))
+    exact ⟨p, Array.mem_toList_iff.1 hp, (Prod.mk.inj he).1⟩
+  · obtain ⟨p, hp, he⟩ := hown ("claim", RecVStar.CLAIM_VALUE, #[some 0, some 1]) (by simp [RecVStar.ownPorts])
+    exact ⟨p, hp, (Prod.mk.inj he).1⟩
+
+/-- **A statement the verifier checked as V*'s statement `j` has its message ports in the reads file**: each port of
+`ownAt ss j` is one of `own`'s by name, value and reads (`checkStmt_ok`'s `checkOwn`, its second and third loops). -/
+theorem ownIn_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
+    {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
+    {own : Array Flock.Registered.Port} {j : ℕ} {f : VStar.Bindings} {rows : Option (Array Flock.Registered.Port)}
+    (h : RecVStar.checkStmt (some i) tags tables st circuitB partition program (some own) (some j) (some f) rows =
+      .ok ()) {ss : Array VStar.Stmt} (hss : RecVStar.statements i = .ok ss) :
+    ∀ p ∈ ownAt ss j, ∃ p' ∈ own, p'.name = p.name ∧ p'.value = p.value ∧ p'.reads = p.reads := by
+  obtain ⟨-, -, ss', s, hss', hj, -, -, -, ho, -⟩ := FlockSoundness.Discharge.Recursion.checkStmt_ok h
+  obtain rfl := Except.ok.inj (hss'.symm.trans hss)
+  intro p hp
+  simp only [ownAt, hj, Option.map_some, Option.getD_some, List.map_toArray, List.mem_toArray, List.mem_map] at hp
+  obtain ⟨q, hq, rfl⟩ := hp
+  obtain ⟨h2, h3⟩ := checkOwn_ok ho
+  rcases List.mem_append.1 hq with hq | hq
+  · obtain ⟨p', hp', rfl⟩ := List.mem_map.1 (h2 q hq)
+    exact ⟨p', Array.mem_toList_iff.1 (List.mem_filter.1 hp').1, rfl, rfl, rfl⟩
+  · obtain ⟨p', hp', rfl⟩ := List.mem_map.1 (h3 q hq)
+    exact ⟨p', Array.mem_toList_iff.1 hp', rfl, rfl, rfl⟩
+
 end List
 
 section Session

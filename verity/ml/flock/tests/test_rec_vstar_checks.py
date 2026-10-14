@@ -477,6 +477,30 @@ def test_candidate_3s_statements_are_the_ones_v_star_stages_and_each_is_needed(t
         assert rc == 1 and line["error"] == why, line
 
 
+def test_a_rec_sparse_reads_file_holds_every_message_port(tmp_path):
+    """RecSparse's reads file holds `h` and `claim` (`ownPorts`) and every other message port `<p>` under `rec-sparse-<p>`
+    at rows 0 and 1 (`sparseMsgs`, as `rec_vstage.sparse_messages` registers them), beside its `v`; one of those missing,
+    read at other rows or under another value is refused by name (`checkOwn`'s third loop), so no message column the unit
+    reads is left unregistered."""
+    from verity_flock import rec_sparse as SP
+
+    inner = _inner(tmp_path / "c3.json", *C3, sparse=SPARSE, stacked=R_SHAPE)
+    unit = ["--unit", SP.unit_name(SP.Shape(*SPARSE)), "--instances", "2"]
+    rc, line = _statements(inner, *unit)
+    own = line["own"]
+    assert rc == 0 and [p[0] for p in own] == ["h", "claim"], line
+    msgs = [[nm, f"rec-sparse-{nm}", [0, 1]] for nm, _ in SP.message_ports(SP.Shape(*SPARSE))[1:-1]]
+    assert [m[0] for m in msgs[:2]] == ["pre0", "pre1"] and msgs[-1][0] == "u", msgs
+    other = [["v", "rec-sparse-v", [0, 1]]]
+    rc, line = _statements(inner, *unit, "--registered", str(_reads(tmp_path / "honest.json", other + own + msgs[::-1])))
+    assert rc == 0 and line["checked"] == [unit[1], 2], line
+    missing = lambda q: f"{unit[1]}: the statement's message port {q} under rec-sparse-{q} reading [0, 1] is not in the registered reads"  # noqa: E731
+    for k, (ports, q) in enumerate([(msgs[1:], "pre0"), (msgs[:-1], "u"), ([[*msgs[0][:2], [1, 0]]] + msgs[1:], "pre0"),
+                                    (msgs[:-1] + [["u", "rec-sparse-vt", [0, 1]]], "u")]):
+        rc, line = _statements(inner, *unit, "--registered", str(_reads(tmp_path / f"t{k}.json", other + own + ports)))
+        assert rc == 1 and line["error"] == missing(q), (k, line)
+
+
 def _staged(d: Path, text: str, part: dict, program) -> Path:
     from verity.ml.circuits.codec import canonical_json, encode_program
 
