@@ -13,8 +13,8 @@ each with its own producer, composed as `hRowKeys_of` composes `RowColKeys` and 
   `messagePorts` order), `RowColKeys`' circuit half. It has no producer yet: `RecSparse.check` compares the unit alone,
   not `c.ports` or `c.leavesIn`, so it needs `RecOpen.rowsOk`/`leavesOk`'s refusals at `RecSparse.ports sh`, and then
   `check_rows` and `srcKey_opening`'s twin through `srcKey_inOrder` (`RegLevels/OpensRegs.lean`);
-* `OwnNamesMsgs`: the session's reads file names every message port, `RowColKeys`' reads-file half. It is the
-  conclusion of S's `sparseOwnNames_of_checkOwn` (`PubRows/Shape.lean`, from `RecVStar.checkOwn (.sparse sh hr) own`);
+* `OwnNamesMsgs`: the session's reads file names every message port, `RowColKeys`' reads-file half, from
+  `sparseOwnNames_of_checkOwn` (`PubRows/Shape.lean`) at `RecVStar.checkOwn (.sparse sh hr) own`;
 * `hread`: the session registers each row of a port its reads file names at unit `u`: `RowsRegisteredC3` at one
   session and unit (`rowsRegisteredC3_of_covered`, `rowsCovered_checked`), the form `regReads_of_check`,
   `haout_of_laid` and `sparseSessionAt_of_zero` take.
@@ -76,15 +76,16 @@ theorem hkeys_of_rows (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) {dg : By
     {τ : (j : Fin (vstarCount F.ish)) → Strategy ((F.zs R ω t R₂ j).game dg N)}
     {o : (j : Fin (vstarCount F.ish)) → Reg' × Finset (Fin (F.Vs j).nv) × Exec.Transcript}
     (hA : Accepted (I := holoInnerAt T CT st hp) F.zs dg N k Rw R ω t R₂ τ o) {s : Fin (vstarCount F.ish)}
-    {sh : Flock.RecSparse.Shape} {name : String}
+    {sh : Flock.RecSparse.Shape} {hr : ℕ} {name : String}
     (hn : Flock.HmNets.netOf name (Flock.RecSparse.unitLaid sh) = .ok (F.Vs s).c.unit)
     (hcol : SparseColKeys (F.Vs s).c (F.Vs s).hU sh)
-    (sparseOwnNames_of_checkOwn : OwnNamesMsgs (F.zs R ω t R₂ s).own sh)
+    (hown : Flock.RecVStar.checkOwn (.sparse sh hr) (F.zs R ω t R₂ s).own = .ok ())
     (u : Fin (F.Vs s).nv) :
     ∀ q < 128 * ((Flock.RecSparse.messagePorts sh).map (·.2)).sum,
       ReadCol (Rows.ofNet (F.Vs s).hU) (rowCol (Flock.RecSparse.messagePorts sh) 0 q) →
         ∃ b, RegBit (F.zs R ω t R₂ s) u 0 (rowCol (Flock.RecSparse.messagePorts sh) 0 q) b :=
-  hkeys_of (F.zs R ω t R₂ s) hn hcol sparseOwnNames_of_checkOwn (hrr R ω t R₂ τ o hA s u)
+  hkeys_of (F.zs R ω t R₂ s) hn hcol (FlockC3.PubRows.sparseOwnNames_of_checkOwn hown)
+    (hrr R ω t R₂ τ o hA s u)
 
 end Family
 
