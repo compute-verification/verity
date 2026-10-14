@@ -64,3 +64,5 @@ theorem prob_leafColl_le (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ �
     (by positivity)).2 hev
 
 end FlockSoundness.Discharge.Recursion
+
+#print axioms FlockSoundness.Discharge.Recursion.prob_leafColl_le
