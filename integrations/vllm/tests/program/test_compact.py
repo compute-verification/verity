@@ -130,6 +130,15 @@ def test_the_real_shapes_are_one_progression_each():
     # contiguous rows collapse to one run, as the record's push does; a broadcast keeps its multiplicity
     assert K.from_json({"strided": ["n", 7, 0, D, D, 1, 5 * D]}) == [("n", (7, 0, 5 * D), (0, 0, 0), 1)]
     assert K.from_json({"strided": ["n", 3, 11, 1, 0, 0, 9]}) == [("n", (3, 11, 12), (0, 0, 0), 9)]
+    # [GLM-5.3] a transposed weight block (the MLA-absorb BatchedGemm read, ~1e6 leaves per operand at full scale): one progression of
+    # unit runs per row -- O(rows) progressions and O(rows) work, never the per-leaf O(count)
+    Kd, Nd = 512, 16
+    a = K.from_json({"strided": ["p", 2, 40, Kd, 1, Nd, Kd * Nd]})
+    assert a == [("p", (2, 40 + q, 41 + q), (0, Nd, Nd), Kd) for q in range(Nd)]
+    assert K.n_runs(a) == Kd * Nd
+    j = {"strided": ["p", 2, 40, Kd, 1, Nd, Kd * Nd - 3]}   # partial last row
+    assert K.from_json(j) == K.from_runs(runs(refs_from_json(j)))
+    assert K.file_items_from_refs_json(j) == [["P", 2, 40 + q, 41 + q, 0, Nd, Nd, Kd if q < Nd - 1 else Kd - 3] for q in range(Nd)]
 
 
 def test_bind_splits_counts_readers_per_progression_exactly_as_the_record_counts_runs():
@@ -358,11 +367,11 @@ def test_record_document_states_the_stored_form_it_loaded_like_the_fast_one(tmp_
 
 
 def test_stored_form_progressions_is_lossless_over_the_records_run_lists():
-    """[R17 mfast F2, COORD R17-34 (2) / M-0496] instances.jsonl v2: node-space references stored as progressions ["N", idx, lo, hi, dI, dL,
-    dH, count], parameter-space runs as before.  Over random Refs JSON (every fold shape incl. the attention gather and broadcasts):
-    (1) runs_from_file_items(file_items_from_refs_json(j)) == refs.runs(j) -- the stored form expands to the record's runs exactly;
-    (2) the same items from the run list (the converter's path) -- from_runs is the reference from_json equals; (3) no "n" run survives
-    un-compacted, every "p" item is a run."""
+    """[R17 mfast F2, COORD R17-34 (2) / M-0496; GLM-5.3 "P"] instances.jsonl v2: node- and parameter-space references stored as
+    progressions ["N"|"P", idx, lo, hi, dI, dL, dH, count].  Over random Refs JSON (every fold shape incl. the attention gather,
+    broadcasts and the scattered strideds): (1) runs_from_file_items(file_items_from_refs_json(j)) == refs.runs(j) -- the stored form
+    expands to the record's runs exactly; (2) the same items from the run list (the converter's path) -- from_runs is the reference
+    from_json equals; (3) no "n"/"p" run sequence survives un-compacted."""
     rng = random.Random(17)
     n_items = n_runs = 0
     for _ in range(3000):
@@ -371,8 +380,8 @@ def test_stored_form_progressions_is_lossless_over_the_records_run_lists():
         items = K.file_items_from_refs_json(j)
         assert [tuple(x) for x in K.runs_from_file_items(items)] == r, (j, items, r)
         assert items == K.file_items_from_runs(r), (j, items)
-        assert all((it[0] == "N" and len(it) == 8 and it[7] >= 2) or len(it) == 4 for it in items), items
-        assert not any(it[0] == "N" and it[4:7] == [0, 0, 0] and it[7] == 1 for it in items)
+        assert all((it[0] in ("N", "P") and len(it) == 8 and it[7] >= 2) or len(it) == 4 for it in items), items
+        assert not any(it[0] in ("N", "P") and it[4:7] == [0, 0, 0] and it[7] == 1 for it in items)
         assert [tuple(x) for x in K.runs_from_file_items([list(x) for x in r])] == r   # a v1 file passes through
         n_items += len(items); n_runs += len(r)
     assert n_items < n_runs

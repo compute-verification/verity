@@ -1104,7 +1104,7 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
                            "digest": result.digest, "n_instances": len(result.instances),
                            "note": "root-circuit node of instance k = n_input_nodes + k (program.json)", "requests": reqs_tab,
                            # [R17 mfast F2] how operand_refs items are stored: "runs" = every maximal run ["space", idx, lo, hi]; "progressions" =
-                           # "p" runs as before + node-space progressions ["N", idx, lo, hi, dI, dL, dH, count] (cb_a.compact.runs_from_file_items)
+                           # node- and parameter-space progressions ["N"|"P", idx, lo, hi, dI, dL, dH, count] (cb_a.compact.runs_from_file_items)
                            "operand_refs_form": _form}) + "\n"
         f.write(line)
         _dumps = json.dumps
