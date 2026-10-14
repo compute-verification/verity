@@ -266,8 +266,6 @@
     {"file": "verity_vllm/program/registry/dense.py", "kind": "sm-arch", "symbol": "AttnBlockSoftcap", "detail": "sm_89"},
     {"file": "verity_vllm/program/registry/dsa.py", "kind": "gpu", "symbol": "<module>", "detail": "h200", "count": 2},
     {"file": "verity_vllm/program/registry/dsa.py", "kind": "sm-arch", "symbol": "<module>", "detail": "sm_90", "count": 2},
-    {"file": "verity_vllm/program/registry/dsv4_qnorm_insert.py", "kind": "model", "symbol": "<module>", "detail": "deepseek"},
-    {"file": "verity_vllm/program/registry/dsv4_qnorm_insert.py", "kind": "sm-arch", "symbol": "<module>", "detail": "sm_90a"},
     {"file": "verity_vllm/program/registry/fp8.py", "kind": "gpu", "symbol": "<module>", "detail": "h100", "count": 2},
     {"file": "verity_vllm/program/registry/fp8.py", "kind": "model", "symbol": "<module>", "detail": "qwen"},
     {"file": "verity_vllm/program/frontend/gemm_targets.py", "kind": "gpu", "symbol": "<module>", "detail": "a100"},
@@ -299,7 +297,6 @@
     {"file": "verity_vllm/properties/protected.py", "kind": "model", "symbol": "new_patterns", "detail": "qwen"},
     {"file": "verity_vllm/properties/protected.py", "kind": "sm-arch", "symbol": "<module>", "detail": "sm_89", "count": 2},
     {"file": "verity_vllm/properties/protected.py", "kind": "sm-arch", "symbol": "new_patterns", "detail": "sm_89", "count": 2},
-    {"file": "verity_vllm/properties/record.py", "kind": "model", "symbol": "<module>", "detail": "deepseek"},
     {"file": "verity_vllm/query/required.py", "kind": "layer-class", "symbol": "<module>", "detail": "RotaryEmbedding"}
   ]
 }
