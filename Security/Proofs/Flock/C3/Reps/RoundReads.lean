@@ -16,8 +16,9 @@ message rounds and `roundOf σ m` the reps' history rounds before its stream rou
 `c₀` rep 0's history rounds). Left as hypotheses too: a part's session's unit name (`hpar`, `wSel_of_rounds`' `hck`)
 and the unit a rep reads at (`hun`).
 
-* `roundReads_ownAt`, `roundReads_checked`: `RoundReads` at `ownAt ss`, and at the checked family; `roundReads_holo`:
-  at the map's `sel`, at `c₀ := roundAt L .stacked 0`.
+* `roundReads_ownAt`, `roundReads_checked`: `RoundReads` at `ownAt ss`, and at the checked family; at the map's `sel`
+  and `c₀ := roundAt L .stacked 0`, `roundReads_checked` takes `holoSel_opening_at` as its `hsel`.
+* `holoSel_parts`: `wRoundReads_checked`'s `hsel` at the map's `sel` and `stageOf σ c₀`.
 * `wRoundReads_ownAt`, `wRoundReads_checked`: `WRoundReads` at `ownAt ss` where some outer proof is accepted
   (`AcceptedAt`), and at the checked family.
 -/
@@ -279,20 +280,6 @@ theorem wRoundReads_checked (hF : ∀ R ω t R₂ j, TagsFound (zr R ω t R₂ j
       (F := C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg)
       checksAccepted_checked) hss hA hpar hun hsel
 
-/-- **`RoundReads` at the checked family under the map's `sel`** (`holoMap`), at R's round 0's history round, where the
-inner shape names R at `STACKED_CLAIMS` claims: `roundReads_checked` at `holoSel_opening_at`. -/
-theorem roundReads_holo (hF : ∀ R ω t R₂ j, TagsFound (zr R ω t R₂ j).I) {dg : ByteArray → ByteArray} {N k Rw : ℕ}
-    {sh : Flock.Shape} {w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → Array F128}
-    {tbl : String} {bm : Cm → String → ℕ → List UInt8}
-    {Ls : List (Flock.Guarantees.HoloStream × Array Flock.RecVStar.SchedRound)}
-    (hS : Flock.Guarantees.holoStreams ish.m ish.kLog ish.claims ish.sparse ish.stacked = some Ls) {mR : ℕ}
-    (hst : ish.stacked = some ⟨mR, Flock.RecVStar.STACKED_CLAIMS⟩) :
-    RoundReads (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own
-        (Flock.Guarantees.holoMap st hp Cm ish tbl bm).sel bc dec wr reg).zs
-      dg N k Rw sh w (fun j => ownAt ss j) (Flock.Guarantees.holoMap st hp Cm ish tbl bm).sel
-      (Flock.Guarantees.roundAt Ls .stacked 0) :=
-  roundReads_checked hF (holoSel_opening_at hS hst)
-
 end Checked
 
 #print axioms stackedRounds_open
@@ -301,6 +288,5 @@ end Checked
 #print axioms roundAt_opening
 #print axioms holoSel_opening_at
 #print axioms holoSel_parts
-#print axioms roundReads_holo
 
 end FlockC3.Reps.RoundReads
