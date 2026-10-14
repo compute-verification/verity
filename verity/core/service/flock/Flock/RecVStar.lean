@@ -310,6 +310,31 @@ def checkParsed (s : VStar.Stmt) (c : Circuit) : V Unit := do
   if ports != vstarRows s.sub u then
     throw s!"{s.name}: the parsed circuit's row ports {ports} are not V*'s {vstarRows s.sub u}"
 
+/-- **V*'s part is the verifier's**: at a part's statement, V*'s row ports' elements and v elements are those of the
+verifier's part (`RecResiduals.part`) at the shape, holo flag and part the unit's name and META give, as
+`RecResiduals.check` derives it; the words `checkParsed` compares round them up (`portWordsOf`), so the counts are
+compared themselves. Any other statement passes. -/
+def checkPart (s : VStar.Stmt) (c : Circuit) : V Unit :=
+  match s with
+  | .inner _ _ pt =>
+    match RecResiduals.params c.unit.name with
+    | none => throw s!"{s.name}: unit {c.unit.name} is not rec-residuals/m<m>-k<k_log>-c<claims>-p<j>"
+    | some (m, k, cl, j) =>
+      match RecResiduals.shape? m k cl with
+      | none => throw s!"{s.name}: no rec-residuals shape at m {m}, k_log {k}, claims {cl}"
+      | some sh =>
+        match RecResiduals.holoOf c with
+        | .error e => throw e
+        | .ok holo =>
+          match RecResiduals.part { sh with holo } j with
+          | .error e => throw s!"{s.name}: {e}"
+          | .ok (_, ns, nv) =>
+            if pt.S.ports.map (·.2) != ns || pt.S.gf.nv != nv then
+              throw (s!"{s.name}: V*'s part has row ports of {pt.S.ports.map (·.2)} elements and {pt.S.gf.nv} v " ++
+                s!"elements, the verifier's {ns} and {nv}")
+            else pure ()
+  | _ => pure ()
+
 /-- A statement's population: the registered population's instances for a drawn session, else its own. -/
 def population (st : Stmt) : Nat := (st.pub.population.map (·.1)).getD st.n
 
@@ -365,13 +390,14 @@ def checkMeta (c : Circuit) (f : VStar.Bindings) : V Unit := do
 
 /-- `checkMeta` of the circuit `c`, parsed from the circuit file `circuitB`, against the verifier's own bindings `f`, then
 `check` on its unit over `n` instances at the inner shape `i` as V*'s statement `part`, `checkFile` on `circuitB` under
-`f`, and `checkParsed` on `c`. -/
+`f`, and `checkParsed` and `checkPart` on `c`. -/
 def checkCircuit (i : Inner) (part : Nat) (c : Circuit) (n : Nat) (circuitB : ByteArray) (f : VStar.Bindings) :
     V VStar.Stmt := do
   checkMeta c f
   let s ← check i c.unit.name n (some part)
   checkFile s f circuitB
   checkParsed s c
+  checkPart s c
   pure s
 
 /-- `m<k>`'s `k`. -/

@@ -13,6 +13,7 @@
   "Flock.Test.ReadWhole",
   "Flock.Test.MsgNames",
   "Flock.Test.Parsed",
+  "Flock.Test.Part",
   "VStar"
  ],
  "exempt": {
