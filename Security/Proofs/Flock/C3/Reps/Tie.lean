@@ -83,7 +83,8 @@ structure UnitSetup (S : Model.Statement) (sch₀ : Accounting.Schedule) (extra 
   extrasRel : ∀ (j : ℕ) (hj : j < extra.length), ClaimRel S.m v.extras[j]! extra[j]
 
 /-- **The record's frames**: a record from round 0 that answers the rep's frames (the lincheck's with hidden units),
-whose claims are the zerocheck's, the lincheck's and the extras, through ring switching and Ligerito to `t₄`. -/
+whose claims are the zerocheck's, the lincheck's and the extras, through ring switching and Ligerito to `t₄`, which
+ends at the record's last round (`whole`: the record is consumed whole, the verifier's S15/R2). -/
 structure UnitFrames (sh : Flock.Shape) (d : RepData) (v : UnitVals) : Prop where
   k0 : v.t.k = 0
   wf : RoundsWF v.t.rounds
@@ -111,6 +112,7 @@ structure UnitFrames (sh : Flock.Shape) (d : RepData) (v : UnitVals) : Prop wher
     (Flock.basis (rsSws v.claims v.rpp v.gamma))
     ⟨v.t.rounds, v.t.k + 3 + (v.st.m - 6) + 2 + (v.st.fold.kLog - 6) + 2 + v.claims.size + 1, ByteArray.empty⟩ =
       .ok ((), v.t₄)
+  whole : v.t₄.k = v.t.rounds.size
 
 /-- **The steps' part**: the steps take the kinds of `holoRepC`'s shape, their messages are the proof's
 (`holoRepMsgs`) and their coin steps the record's rounds the program consumes, the proof's level-0 cap is `cap₀` and
