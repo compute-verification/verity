@@ -122,6 +122,8 @@ variable {ish : RecVStar.Inner} {reg : Lean.Json} {wr : List (Cm × (ℐ).Coin) 
 
 local notation "𝒵" => Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) coins bind rows zr hC h
 
+-- elaborating this signature at `holoInnerAt` runs past the default
+set_option maxHeartbeats 1600000 in
 /-- **The stages' coins at the checked sessions** (`hcoins` of `srcOK_holo_rs` and `srcOK_repsOfVals_pR`), at reps
 whose rounds are the record's (`hrd`; `fun _ _ _ _ _ => rfl` at the decoder with its reads, `RepMaps.withReads`): the
 reps' from the guarantee's custody (`_hIC`) at the map's one-round draws, where the reps are drawn
