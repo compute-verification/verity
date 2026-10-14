@@ -341,6 +341,35 @@ def is_file_prog(it) -> bool:
     return len(it) == 8 and it[0] in _FILE_SPACES
 
 
+def p_item_indices(r) -> tuple[int, ...]:
+    """The parameter indices a stored parameter-space item reads: a "p" run's one, a "P" progression's `count` (O(1) when dI == 0,
+    the weight reads' shape).  Any other item reads none."""
+    if r[0] == "p":
+        return (r[1],)
+    if r[0] != "P":
+        return ()
+    idx, dI, c = r[1], r[4], r[7]
+    return (idx,) if dI == 0 or c <= 1 else tuple(range(idx, idx + c * dI, dI))
+
+
+def p_item_weight_span(r, w_param: int) -> tuple[int, int] | None:
+    """[lo, hi) union bounds of the runs of a stored parameter-space item that read parameter `w_param`; None when it reads none."""
+    if r[0] == "p":
+        return (r[2], r[3]) if r[1] == w_param else None
+    if r[0] != "P":
+        return None
+    _, idx, lo, hi, dI, dL, dH, c = r
+    if dI == 0:
+        if idx != w_param:
+            return None
+        last = c - 1
+        return min(lo, lo + last * dL), max(hi, hi + last * dH)
+    q, rem = divmod(w_param - idx, dI)
+    if rem or not 0 <= q < c:
+        return None
+    return lo + q * dL, hi + q * dH
+
+
 def expanded_file_args(args: Iterable) -> list:
     """Each operand of a stored instance row as the record form's per-leaf run lists, bit-identical to what `runs()` wrote (v1):
     a record-form operand passes through as the same object, one with any "N"/"P" progression item expands (`runs_from_file_items`).

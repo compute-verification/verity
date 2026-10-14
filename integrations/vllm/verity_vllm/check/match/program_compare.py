@@ -444,10 +444,9 @@ def load_oracle(d: str, label: str, cls: type[Prog] = Prog, compact: bool = Fals
     # [R17 mfast, rev F-r17-12] the checker reads the FILES OF RECORD and nothing beside them: a compact copy written into the fold dir by
     # the record's producer (unit 7's sidecars, withdrawn) is prover input whose content nothing the checker owns authenticates -- a forged
     # sidecar with the sources' true digests/sizes/sha256 pasted in was accepted (M-0497).  `instances.jsonl` itself may be stored in either
-    # form (F2, run_config.INSTANCES_SCHEMA_V2: operand references as progressions); this loader keeps only the parameter-space
-    # items -- "p" runs and [GLM-5.3] "P" progressions, read without expansion (a scattered weight operand is ~1e6 runs) -- so its
-    # semantics do not depend on the form.  The form read is stated (LOAD_NOTES ->
-    # impl.config.fold_load) so two documents of one capture under two stores are distinguishable by content.
+    # form (F2, run_config.INSTANCES_SCHEMA_V2: operand references as progressions); this loader keeps only the parameter-space items --
+    # "p" runs and [GLM-5.3] "P" progressions, read without expansion (a scattered weight operand is ~1e6 runs) -- so its semantics do not
+    # depend on the form.  The form read is stated (LOAD_NOTES -> impl.config.fold_load) so two documents of one capture under two stores are distinguishable by content.
     # [R17 mfast n2, COORD R17-37 (2) / F-r17-15 (iii)] the two record files are hashed AS READ (one pass: every byte the loader consumes
     # goes through sha256 before it is decoded), and the digests are stated beside the form (LOAD_NOTES -> impl.fold_load[dir].program_sha256 /
     # instances_sha256): a Match document -- the record checker's as much as the fast one's -- is tied to the IMMUTABLE INPUT ARTIFACTS by
@@ -478,7 +477,6 @@ def load_oracle(d: str, label: str, cls: type[Prog] = Prog, compact: bool = Fals
                 # the same references `Prog.inst[*].args` holds and are never read from the rows.  Operand arity is preserved (one list per
                 # operand, possibly empty) so `operand_roots[k]` still names operand k below.
                 rows.append({"node": o["node"], "step": o.get("step"), "row": o.get("row"), "rows": o.get("rows"), "hint": o.get("hint"),
-                             # "p" runs and [GLM-5.3] "P" progressions (one item per ~inner-leaf row of a scattered weight read, O(rows))
                              "spec": o.get("spec"), "operand_refs": [[r for r in a if r[0] in ("p", "P")] for a in (o.get("operand_refs") or [])],
                              "pattern": o.get("pattern"),
                              "request": o.get("request"),  # [X-09] the fold's own attribution when recorded
@@ -490,35 +488,6 @@ def load_oracle(d: str, label: str, cls: type[Prog] = Prog, compact: bool = Fals
 
 
 LOAD_NOTES: dict[str, dict] = {}   # fold dir -> {"source": "record files", "instances_schema": <header schema>, "operand_refs_form": runs|progressions}
-
-
-def _p_indices(r) -> tuple[int, ...]:
-    """The parameter indices a retained parameter-space item reads: a "p" run's one, a "P" progression's `count` (O(1) when dI == 0,
-    the weight reads' shape)."""
-    if r[0] == "p":
-        return (r[1],)
-    if r[0] != "P":
-        return ()
-    idx, dI, c = r[1], r[4], r[7]
-    return (idx,) if dI == 0 or c <= 1 else tuple(range(idx, idx + c * dI, dI))
-
-
-def _p_w_span(r, w_param: int) -> tuple[int, int] | None:
-    """[lo, hi) union bounds of the runs of a retained parameter-space item that read parameter `w_param`; None when it reads none."""
-    if r[0] == "p":
-        return (r[2], r[3]) if r[1] == w_param else None
-    if r[0] != "P":
-        return None
-    _, idx, lo, hi, dI, dL, dH, c = r
-    if dI == 0:
-        if idx != w_param:
-            return None
-        last = c - 1
-        return min(lo, lo + last * dL), max(hi, hi + last * dH)
-    q, rem = divmod(w_param - idx, dI)
-    if rem or not 0 <= q < c:
-        return None
-    return lo + q * dL, hi + q * dH
 
 
 def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], cls: type[Prog] = Prog, compact: bool = False) -> Prog:
@@ -585,8 +554,7 @@ def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], c
         for k, a in enumerate(o.get("operand_refs") or []):
             nm = oroots[k] if k < len(oroots) and oroots[k] else name
             for r in a:
-                w = _p_w_span(r, w_param)
-                if w is not None:
+                if (w := _p_w_span(r, w_param)) is not None:
                     sp = span.setdefault(nm, [w[0], w[1]])
                     sp[0], sp[1] = min(sp[0], w[0]), max(sp[1], w[1])
     byrange: dict[tuple[int, int], str] = {}
@@ -605,7 +573,7 @@ def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], c
     return p
 
 
-from verity_vllm.program.compact import expand_mixed as _expand_mixed, n_crosses_step as _n_crosses_step  # noqa: E402  [R17 mfast]
+from verity_vllm.program.compact import expand_mixed as _expand_mixed, n_crosses_step as _n_crosses_step, p_item_indices as _p_indices, p_item_weight_span as _p_w_span  # noqa: E402  [R17 mfast; GLM-5.3 "P"]
 
 
 def _norm_T(spec: str) -> str:
