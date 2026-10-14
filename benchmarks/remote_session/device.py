@@ -202,6 +202,8 @@ class DeviceStore:
         self.payload_h0 = max(1, min(payload_kept_from, chunk.bit_length() - 1))
         self.offload_handles = offload_handles
         self.side = torch.cuda.Stream(priority=-1)
+        self.timer_start = torch.cuda.Event(enable_timing=True)
+        self.timer_end = torch.cuda.Event(enable_timing=True)
         self.shape(chunk, kept_from, sketch_ctas)
         self.data = torch.empty(blocks * BLOCK, dtype=torch.uint8, device="cuda")
         chunk = 1 << 18
@@ -306,7 +308,7 @@ class DeviceStore:
         """The store from its payload, in place; the encode's rate in bytes a second of GPU time."""
         torch = self.torch
         self.kv.set_key(key)
-        a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+        a, b = self.timer_start, self.timer_end
         a.record()
         for j in range(0, self.blocks, chunk):
             m = min(chunk, self.blocks - j)
@@ -345,10 +347,9 @@ class DeviceStore:
             raise RuntimeError(f"rs_pass: {rc}")
         b.record()
         t4 = time.perf_counter_ns()
-        b.synchronize()
-        t5 = time.perf_counter_ns()
         self.root_host.copy_(kept[-1:], non_blocking=True)
         torch.cuda.current_stream().synchronize()
+        t5 = time.perf_counter_ns()
         root = self.root_host.numpy().astype(np.uint64).astype(">u8").tobytes()
         self.pass_gpu_ms.append(a.elapsed_time(b))
         self.pass_host_phases.append((t1 - t0, t2 - t1, t3 - t2, t4 - t3, t5 - t4, time.perf_counter_ns() - t5))
@@ -375,7 +376,7 @@ class DeviceStore:
         pk = torch.empty(PACK16_WORDS, dtype=torch.int32, device="cuda")
         kept = torch.empty((self.kept_at[self.H + 1], 8), dtype=torch.int64, device="cuda")
         ctr, ys, dig, up, pad = self.ring
-        a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+        a, b = self.timer_start, self.timer_end
         t1 = time.perf_counter_ns()
         a.record()
         main = torch.cuda.current_stream().cuda_stream
@@ -388,12 +389,11 @@ class DeviceStore:
             raise RuntimeError(f"chained rs_pass: {rc}")
         b.record()
         t2 = time.perf_counter_ns()
-        b.synchronize()
-        t3 = time.perf_counter_ns()
         self.root_host.copy_(kept[-1:], non_blocking=True)
         torch.cuda.current_stream().synchronize()
+        t3 = time.perf_counter_ns()
         root = self.root_host.numpy().astype(np.uint64).astype(">u8").tobytes()
-        self.chain_previous = kept[-1:].clone()
+        self.chain_previous = kept[-1:]
         self.pass_gpu_ms.append(a.elapsed_time(b))
         self.chain_host_phases.append((t1 - t0, t2 - t1, t3 - t2, time.perf_counter_ns() - t3))
         return root, (seed, pk, kept)
