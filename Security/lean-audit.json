@@ -4511,7 +4511,7 @@
   }
  },
  "shape": {
-  "premises": ["Definitions.Accounting.Physical", "Proofs.Flock.Recursive.Premises"],
+  "premises": ["Definitions.Accounting.Actual", "Definitions.Accounting.Physical", "Proofs.Flock.Recursive.Premises"],
   "properties": {
    "Flock.SecurityProofs.PublicAudit": {
     "conjuncts": [
