@@ -93,6 +93,5 @@ def test_default_kernel_export_keeps_the_dynamic_custom_op_as_a_leaf() -> None:
         assert site.dynamic_flashinfer_deepgemm_blockscale_gemm is iface.dynamic_flashinfer_deepgemm_blockscale_gemm
     assert site.dynamic_flashinfer_deepgemm_blockscale_gemm is original
 
-    model.quant_method.fp8_linear = object()
-    with default_fp8_linear_leaf(model, namespace=site):
+    with default_fp8_linear_leaf(None, namespace=site):
         assert site.dynamic_flashinfer_deepgemm_blockscale_gemm is original

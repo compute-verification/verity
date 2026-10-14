@@ -538,7 +538,6 @@ def moe_gate_leaf(model=None, site=None):
         yield
 
 
-_DYNAMIC_FP8_KERNEL = "FlashInferFp8DeepGEMMDynamicBlockScaledKernel"
 _DYNAMIC_FP8_OP = "dynamic_flashinfer_deepgemm_blockscale_gemm"
 
 
@@ -551,17 +550,12 @@ def default_fp8_linear_leaf(model=None, namespace=None):
     contains ``torch.cond`` and, under non-strict meta export, is traced
     through to the M-specific branch.  That exposes mutating implementation
     details (notably ``per_token_group_fp8_quant(use_ue8m0=True)``) instead of
-    the custom-op boundary the served engine dispatches.  For a model whose
-    instantiated ``quant_method.fp8_linear`` is exactly that kernel, author
-    the equivalent ``vllm_iface`` leaf for export.  The leaf has the same
-    signature and fake shape; another selected kernel is unchanged.
+    the custom-op boundary the served engine dispatches.  Whenever that exact
+    op is registered, author the equivalent ``vllm_iface`` leaf for export.
+    The leaf has the same signature and fake shape; a selected kernel that
+    does not call the op is unchanged.
     """
-    selected = {
-        type(kernel).__name__
-        for module in (model.modules() if model is not None else ())
-        if (kernel := getattr(getattr(module, "quant_method", None), "fp8_linear", None)) is not None
-    }
-    if selected != {_DYNAMIC_FP8_KERNEL}:
+    if model is None:
         yield
         return
     from verity_vllm.program.frontend.rules.vllm_iface import iface
