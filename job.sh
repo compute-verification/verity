@@ -27,6 +27,17 @@ for f in "$RESEARCH_RUN_DIR"/inputs/*; do
 done
 step lean-agreement 1 uv run --locked --extra torch-cpu python tools/verity/check/check.py --lean-agreement "$d/agreement" "$up" "$in"
 mkdir -p "$OUT/agreement"
-(cd "$d/agreement" && find . -path ./flock-agreement/upstream -prune -o -path ./flock-agreement/inputs -prune -o -path ./flock-agreement/work -prune -o -type f -size -20M -print | cpio -pdm --quiet "$OUT/agreement") || true
+python3 - "$d/agreement" "$OUT/agreement" <<'PY' || true
+import shutil, sys
+from pathlib import Path
+src, dst = map(Path, sys.argv[1:])
+skip = {"upstream", "inputs", "work"}
+for p in src.rglob("*"):
+    rel = p.relative_to(src)
+    if p.is_file() and not (len(rel.parts) > 1 and rel.parts[0] == "flock-agreement" and rel.parts[1] in skip) \
+            and p.stat().st_size < 20 << 20:
+        (dst / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(p, dst / rel)
+PY
 grep -rh "depends on axioms" "$OUT" --exclude=probes.txt > "$OUT/probes.txt" || true
 exit "$rc"
