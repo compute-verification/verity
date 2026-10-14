@@ -45,7 +45,7 @@ theorem source_of_check {sj : Flock.Stmt} {own : Array Flock.Registered.Port}
     exfalso
     revert h
     unfold Flock.RecCoins.check
-    simp [hso, hop, hsp, ho, hres] <;> (intro h; cases h)
+    simp [hso, hop, hsp, ho, hres]
 
 /-- **A part's circuit check 5 accepted has a `program_sha512`**: `checkValue`'s at `v` (`checkRows_root`). -/
 theorem prog_of_res {sj : Flock.Stmt} {own : Array Flock.Registered.Port} {f : Flock.RecCoins.Source}
@@ -103,15 +103,12 @@ def ReadsUnsegC3 (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArr
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ j (u : Fin (F.Vs j).nv)
     (q : Fin (F.Vs j).c.ports.size), (F.zs R ω t R₂ j).rd.isRead (.inl (u, q)) → (F.Vs j).c.ports[q.val]!.segs = none
 
-section accepted
-
-variable {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {src : List (Cm × (ℐ).Coin) → Option Flock.RecCoins.Source}
-  {c3 : List (Cm × (ℐ).Coin) → Option Flock.RecCoins.C3} {dg : ByteArray → ByteArray} {N k Rw : ℕ} {R : Reg}
-  {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
-
 /-- **Check 5 at an accepted session whose unit is a part's**: at its first statement, of the session's circuit, at a
 source `src` gives. -/
-theorem resCheck_of_accepted (hco : CoinsAcceptedAt F src c3) (h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o)
+theorem resCheck_of_accepted {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
+    {src : List (Cm × (ℐ).Coin) → Option Flock.RecCoins.Source} {c3 : List (Cm × (ℐ).Coin) → Option Flock.RecCoins.C3}
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ} {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
+    (hco : CoinsAcceptedAt F src c3) (h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o)
     (j : Fin (vstarCount F.ish)) {m kr cl i : ℕ} (hu : ResUnit (F.Vs j).c m kr cl i) :
     ∃ (sj : Flock.Stmt) (f : Flock.RecCoins.Source), sj.c = (F.Vs j).c ∧ src t = some f ∧
       Flock.RecCoins.check sj (some (F.zs R ω t R₂ j).own) (some f) (c3 t) = .ok () := by
@@ -124,7 +121,9 @@ theorem resCheck_of_accepted (hco : CoinsAcceptedAt F src c3) (h : Accepted (I :
 
 /-- **A registered read's port is the reads file's one entry of its name, read at the unit's position**
 (`ReadsOwnC3`, names once: `hnd`), `vRows_tie`'s and `zero_tie`'s `hone` and `hpos`. -/
-theorem readOne_of (hro : ReadsOwnC3 F dg N k Rw)
+theorem readOne_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {dg : ByteArray → ByteArray} {N k Rw : ℕ}
+    {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
+    (hro : ReadsOwnC3 F dg N k Rw)
     (hnd : ∀ R ω t R₂ j, ∀ p ∈ (F.zs R ω t R₂ j).own, ∀ p' ∈ (F.zs R ω t R₂ j).own, p.name = p'.name → p = p')
     (h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) (j : Fin (vstarCount F.ish)) {u : Fin (F.Vs j).nv}
     {q : Fin (F.Vs j).c.ports.size} (hr : (F.zs R ω t R₂ j).rd.isRead (.inl (u, q))) :
@@ -138,7 +137,10 @@ theorem readOne_of (hro : ReadsOwnC3 F dg N k Rw)
   exact congrArg (·.name) (getElem!_pos (F.Vs j).c.ports q.val q.isLt)
 
 /-- **`OwnNamesV` at an accepted part session**: its reads file names `v` and `out` (`own_v_out`). -/
-theorem ownVOut_of (hco : CoinsAcceptedAt F src c3) (h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o)
+theorem ownVOut_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
+    {src : List (Cm × (ℐ).Coin) → Option Flock.RecCoins.Source} {c3 : List (Cm × (ℐ).Coin) → Option Flock.RecCoins.C3}
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ} {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
+    (hco : CoinsAcceptedAt F src c3) (h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o)
     (j : Fin (vstarCount F.ish)) {m kr cl i : ℕ} (hu : ResUnit (F.Vs j).c m kr cl i) :
     (∃ pt ∈ (F.zs R ω t R₂ j).own, pt.name = "v") ∧ ∃ pt ∈ (F.zs R ω t R₂ j).own, pt.name = "out" := by
   obtain ⟨sj, f, hc, -, hck⟩ := resCheck_of_accepted hco h j hu
@@ -149,7 +151,10 @@ theorem ownVOut_of (hco : CoinsAcceptedAt F src c3) (h : Accepted (I := ℐ) F.z
 /-- **`VRowsAre` at an accepted part session, off `Bad`**: where `Bad` holds at `ValueColl` (`hbad`), the registrant's
 bit `b` at a `v` read `(u, q)` is `wbit` of the part's elements `vs` of `vOf` at the rep's rounds and comb (`hrep`, the
 inner session's as the source loads it), `vRows_tie` at the session's check 5. -/
-theorem vRowsOff_of (hco : CoinsAcceptedAt F src c3) (hro : ReadsOwnC3 F dg N k Rw)
+theorem vRowsOff_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
+    {src : List (Cm × (ℐ).Coin) → Option Flock.RecCoins.Source} {c3 : List (Cm × (ℐ).Coin) → Option Flock.RecCoins.C3}
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ} {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
+    (hco : CoinsAcceptedAt F src c3) (hro : ReadsOwnC3 F dg N k Rw)
     (hnd : ∀ R ω t R₂ j, ∀ p ∈ (F.zs R ω t R₂ j).own, ∀ p' ∈ (F.zs R ω t R₂ j).own, p.name = p'.name → p = p')
     (hus : ReadsUnsegC3 F dg N k Rw) {Bad : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Prop}
     (hbad : ∀ R ω t R₂, ValueColl F.zs (valueSrcAll src c3) R ω t R₂ → Bad R ω t R₂)
@@ -178,7 +183,10 @@ theorem vRowsOff_of (hco : CoinsAcceptedAt F src c3) (hro : ReadsOwnC3 F dg N k 
 
 /-- **`ZeroReads`' bit at an accepted part session, off `Bad`**: where `Bad` holds at `ValueColl` (`hbad`), an `out`
 read `(u, q)` is of one of the two zero rows and every bit the registrant holds there is 0 (`zero_tie`). -/
-theorem zeroOff_of (hco : CoinsAcceptedAt F src c3) (hro : ReadsOwnC3 F dg N k Rw)
+theorem zeroOff_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
+    {src : List (Cm × (ℐ).Coin) → Option Flock.RecCoins.Source} {c3 : List (Cm × (ℐ).Coin) → Option Flock.RecCoins.C3}
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ} {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
+    (hco : CoinsAcceptedAt F src c3) (hro : ReadsOwnC3 F dg N k Rw)
     (hnd : ∀ R ω t R₂ j, ∀ p ∈ (F.zs R ω t R₂ j).own, ∀ p' ∈ (F.zs R ω t R₂ j).own, p.name = p'.name → p = p')
     (hus : ReadsUnsegC3 F dg N k Rw) {Bad : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Prop}
     (hbad : ∀ R ω t R₂, ValueColl F.zs (valueSrcAll src c3) R ω t R₂ → Bad R ω t R₂)
@@ -196,8 +204,6 @@ theorem zeroOff_of (hco : CoinsAcceptedAt F src c3) (hro : ReadsOwnC3 F dg N k R
   obtain ⟨hu2, hor⟩ := zero_tie (zs := F.zs) (src := src) (c3 := c3) hc hck hf hso hop hsp ho hres hname hprog hr
     hone hpos (hus R ω t R₂ τ o h j u q hr)
   exact ⟨hu2, hor.resolve_right fun hv => hb (hbad R ω t R₂ hv)⟩
-
-end accepted
 
 end FlockC3.RegLevels
 
