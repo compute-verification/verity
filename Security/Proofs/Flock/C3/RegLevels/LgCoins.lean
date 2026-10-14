@@ -25,8 +25,9 @@ coins), so they are `StageHeld`'s first two parts at `stacked/rep0`, which `late
   at R's two claims, and the stream holds a round of coins for each round of `stackedRounds` there
   (`StackedCoins.innerCommits_held`), which `rep0`'s round count reads.
 
-Left for `h5`: `StageHeld`'s third part, the history's round count past the stage, which also reads `holoStreams`'
-R rounds (at the verifier's `ish.stacked`) as META's; and that the stage starts at R's round `k₂`'s history round.
+`RRounds.lean` reads `holoStreams`' R rounds (at the verifier's `ish.stacked`) as META's (`stackedStreams_of_covers`).
+Left for `h5`: `StageHeld`'s third part, the history's round count past the stage; and that the stage starts at R's
+round `k₂`'s history round.
 -/
 
 namespace FlockC3.RegLevels
@@ -182,7 +183,7 @@ theorem stackedCoins_of_innerCommitsAt {tr : Lean.Json} {record : String} {st : 
       Flock.RecVStar.stackedRounds sh = some rs ∧ x.coins.size = rs.size := by
   unfold FlockSoundness.Discharge.Recursion.innerCommitsAt at h
   obtain ⟨shape, hsh, h⟩ := TopHold.eok_bind h
-  obtain ⟨sh, rfl, hc, rs, hrs, hsz⟩ := StackedCoins.innerCommits_held h hx
+  obtain ⟨⟨sh, rfl, hc, rs, hrs, hsz⟩, -⟩ := StackedCoins.innerCommits_held h hx
   exact ⟨sh, rs, hsh, hc, hrs, hsz⟩
 
 end FlockC3.RegLevels
