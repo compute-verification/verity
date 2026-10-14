@@ -1,6 +1,7 @@
 import Proofs.Flock.Recursive.PartTie
 import Proofs.Flock.C3.RegLevels.LevelsChecked
 import Proofs.Flock.C3.RegLevels.AccReads
+import Proofs.Flock.C3.RegLevels.ReadsOwn
 
 /-!
 # The parts' value ties at C3's family: `OwnNamesV`, `VRowsAre` and `ZeroReads`' bit, off `ValueColl`
@@ -8,7 +9,7 @@ import Proofs.Flock.C3.RegLevels.AccReads
 L's ties at one read (`Recursive/PartTie.lean`), at every accepted outcome of C3's family off a bad event `Bad` that
 holds at `ValueColl` (`hbr_honest_reg`'s, whose `RepsReadOff` they enter), at a session whose unit is a `rec-residuals`
 part. The family's facts they read: check 5 at the verifier's source and candidate 3's inputs (`CoinsAcceptedAt`, the
-checked family's by `coinsAcceptedAt_checked`), each registered read the reads file's (`ReadsOwnC3`), each port named
+checked family's by `coinsAcceptedAt_checked`), each registered read the reads file's (`ReadsOwnAt`), each port named
 once (`hnd`), and no registered read of a segmented row (`ReadsUnsegC3`).
 
 * `ResUnit`: a unit named as part `i` of `rec-residuals` and as none of check 5's other units;
@@ -97,12 +98,6 @@ theorem coinsAcceptedAt_checked {ish : RecVStar.Inner} {ss : Array VStar.Stmt}
       exact ⟨spec, sts, hs, hco⟩) hex
   exact ⟨tr', hc⟩
 
-/-- Obligation: as G's `ReadsUnsegmented` (each session's registered check refuses a segmented bit row,
-`Registered.checkPort`). **No registered read is of a segmented row**, at C3's family. -/
-def ReadsUnsegC3 (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ) : Prop :=
-  ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ j (u : Fin (F.Vs j).nv)
-    (q : Fin (F.Vs j).c.ports.size), (F.zs R ω t R₂ j).rd.isRead (.inl (u, q)) → (F.Vs j).c.ports[q.val]!.segs = none
-
 /-- **Check 5 at an accepted session whose unit is a part's**: at its first statement, of the session's circuit, at a
 source `src` gives. -/
 theorem resCheck_of_accepted {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
@@ -120,10 +115,10 @@ theorem resCheck_of_accepted {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
   exact ⟨_, f, hc0, hf, hk⟩
 
 /-- **A registered read's port is the reads file's one entry of its name, read at the unit's position**
-(`ReadsOwnC3`, names once: `hnd`), `vRows_tie`'s and `zero_tie`'s `hone` and `hpos`. -/
+(`ReadsOwnAt`, names once: `hnd`), `vRows_tie`'s and `zero_tie`'s `hone` and `hpos`. -/
 theorem readOne_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
-    (hro : ReadsOwnC3 F dg N k Rw)
+    (hro : ReadsOwnAt F dg N k Rw)
     (hnd : ∀ R ω t R₂ j, ∀ p ∈ (F.zs R ω t R₂ j).own, ∀ p' ∈ (F.zs R ω t R₂ j).own, p.name = p'.name → p = p')
     (h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) (j : Fin (vstarCount F.ish)) {u : Fin (F.Vs j).nv}
     {q : Fin (F.Vs j).c.ports.size} (hr : (F.zs R ω t R₂ j).rd.isRead (.inl (u, q))) :
@@ -154,7 +149,7 @@ inner session's as the source loads it), `vRows_tie` at the session's check 5. -
 theorem vRowsOff_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
     {src : List (Cm × (ℐ).Coin) → Option Flock.RecCoins.Source} {c3 : List (Cm × (ℐ).Coin) → Option Flock.RecCoins.C3}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ} {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
-    (hco : CoinsAcceptedAt F src c3) (hro : ReadsOwnC3 F dg N k Rw)
+    (hco : CoinsAcceptedAt F src c3) (hro : ReadsOwnAt F dg N k Rw)
     (hnd : ∀ R ω t R₂ j, ∀ p ∈ (F.zs R ω t R₂ j).own, ∀ p' ∈ (F.zs R ω t R₂ j).own, p.name = p'.name → p = p')
     (hus : ReadsUnsegC3 F dg N k Rw) {Bad : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Prop}
     (hbad : ∀ R ω t R₂, ValueColl F.zs (valueSrcAll src c3) R ω t R₂ → Bad R ω t R₂)
@@ -186,7 +181,7 @@ read `(u, q)` is of one of the two zero rows and every bit the registrant holds 
 theorem zeroOff_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
     {src : List (Cm × (ℐ).Coin) → Option Flock.RecCoins.Source} {c3 : List (Cm × (ℐ).Coin) → Option Flock.RecCoins.C3}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ} {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
-    (hco : CoinsAcceptedAt F src c3) (hro : ReadsOwnC3 F dg N k Rw)
+    (hco : CoinsAcceptedAt F src c3) (hro : ReadsOwnAt F dg N k Rw)
     (hnd : ∀ R ω t R₂ j, ∀ p ∈ (F.zs R ω t R₂ j).own, ∀ p' ∈ (F.zs R ω t R₂ j).own, p.name = p'.name → p = p')
     (hus : ReadsUnsegC3 F dg N k Rw) {Bad : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Prop}
     (hbad : ∀ R ω t R₂, ValueColl F.zs (valueSrcAll src c3) R ω t R₂ → Bad R ω t R₂)

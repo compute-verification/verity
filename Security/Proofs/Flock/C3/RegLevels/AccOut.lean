@@ -1,5 +1,6 @@
 import Proofs.Flock.C3.RegLevels.OutRegs
 import Proofs.Flock.C3.RegLevels.AccReads
+import Proofs.Flock.C3.RegLevels.ReadsOwn
 
 /-!
 # n11: `AccOutL` (`HAccRows`' second half), from each opening's registered `acc_out` read
@@ -150,12 +151,12 @@ local notation "ℐ" => holoInnerAt T CT st hp
 /-- **An opening's `acc` (`acc_out`) read is at its chain position (the next one)**, at C3's family: where the verifier
 checked the session's statements (`ChecksAccepted`), the table's level `l` (`.recOpen`) at the inner schedule `sch`,
 its reads file names each port once (`hnd`) and a registered read is `own`'s entry of its name at the unit's position
-(`ReadsOwnC3`), the read of unit `r · q + j`, rep `r`'s opening `j`, is at row `r · n + opensBelow l + j` (plus `d`):
+(`ReadsOwnAt`), the read of unit `r · q + j`, rep `r`'s opening `j`, is at row `r · n + opensBelow l + j` (plus `d`):
 `accRead_of_checked` at `accReads_recOpen`'s rows, `accRow_opening`. -/
 theorem accPos_of_checked {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
     {rows : Option (Array Flock.Registered.Port)} {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json}
     (hchk : FlockC3.PubRows.ChecksAccepted F rows wr reg) {dg : ByteArray → ByteArray} {N k Rw : ℕ}
-    (hro : ReadsOwnC3 F dg N k Rw)
+    (hro : ReadsOwnAt F dg N k Rw)
     (hnd : ∀ R ω t R₂ j, ∀ p ∈ (F.zs R ω t R₂ j).own, ∀ p' ∈ (F.zs R ω t R₂ j).own, p.name = p'.name → p = p')
     {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
     (h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) (s : Fin (vstarCount F.ish)) {l LANES H m : ℕ}
