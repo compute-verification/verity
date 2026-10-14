@@ -21,7 +21,7 @@ namespace FlockC3.Compose
 open Flock Flock.RecVStar Flock.Guarantees FlockSoundness.Discharge.Exec FlockSoundness.Discharge.PlaysCoin
 open FlockSoundness.Discharge.Recursion FlockSoundness.Refine FlockLevel3
 
-theorem kindCoins_eq_length : ∀ σ : List Kind, kindCoins σ = (kindCoinTys σ).length
+theorem kindCoins_eq_length : ∀ σ : List FlockSoundness.Discharge.Exec.Kind, kindCoins σ = (kindCoinTys σ).length
   | [] => rfl
   | .msg _ :: σ => kindCoins_eq_length σ
   | .coin _ :: σ => by
