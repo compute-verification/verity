@@ -200,3 +200,10 @@ theorem zeroOff_of (hco : CoinsAcceptedAt F src c3) (hro : ReadsOwnC3 F dg N k R
 end accepted
 
 end FlockC3.RegLevels
+
+#print axioms FlockC3.RegLevels.coinsAcceptedAt_checked
+#print axioms FlockC3.RegLevels.ownVOut_of
+#print axioms FlockC3.RegLevels.vRowsOff_of
+#print axioms FlockC3.RegLevels.zeroOff_of
+#print axioms FlockSoundness.Discharge.Recursion.vRows_tie
+#print axioms FlockSoundness.Discharge.Recursion.zero_tie
