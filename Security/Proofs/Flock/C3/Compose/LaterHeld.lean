@@ -9,8 +9,8 @@ rounds the record's). `StageHeld` names that of a stage, and `coinsAt_stageHeld`
 `linkPoints_of_custody`: the link points are the history's first coin, from custody's third conjunct (the session
 record's points are the map's at the first coin) where the map's points are the first coin's coordinate
 (`PointsEncoded`) and the run's points are the record's.
-`laterCoins_of_held`: `LaterCoins` at a run whose link points are the record's and whose later stages (both sparse
-phases, R's opening, R's Ligerito) are each `StageHeld` from where the one before ends.
+`laterCoins_of_held` (`LaterHeldW.lean`, beside the word-level `StageHeldW` its sparse phases take): `LaterCoins` from
+those.
 `stageHeld_repsOfVals`: the reps' stages are `StageHeld` at `repsOfVals`, rep 0's from round 1 and rep 1's after it,
 from their rounds' custody (`RepRoundsHeld`) and draws (`RepsDrawn`).
 -/
@@ -99,44 +99,6 @@ theorem linkPoints_of_custody {Cm P : Type} {t : List (Cm × ((k : Fin r) → CT
 end
 
 end FlockC3.Reps
-
-namespace FlockC3.Compose
-
-noncomputable section
-
-open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
-open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled
-open FlockC3.Reps (nCoins CoinsEncoded StageHeld PointsEncoded)
-
-/-- **`LaterCoins` from the inner session's records**: the link points are the session record's (`hdec`, `hu`, at
-`PointsEncoded`), and each later stage is one stream's, drawn in order from the round after the stage before it
-(`StageHeld`): both sparse phases after the reps, R's opening after them, R's Ligerito after the opening. -/
-theorem laterCoins_of_held {r : ℕ} {CT : Fin r → Type} {e : ExecHolo} {Cm : Type}
-    {t : List (Cm × ((k : Fin r) → CT k))} {u : C3Run e}
-    {wr : List (Cm × ((k : Fin r) → CT k)) → Lean.Json × String}
-    {held : Lean.Json × String → Except String Flock.RecVStar.InnerCommits} {sparse : Option Flock.RecSparse.Shape}
-    {m : FlockSoundness.Assumptions.InnerRecordMap Cm ((k : Fin r) → CT k)} {sel : ℕ → String → ℕ → Prop}
-    {pts : Array (Array Flock.F128) → Fin 2 → Fin e.cls.mPts → GF128} {spec : Flock.SessionSpec}
-    {sess : Flock.Session}
-    (hcus : FlockSoundness.Assumptions.InnerRecordCustody wr held sparse m) (henc : CoinsEncoded sel m.coin)
-    (hsel : ∀ i s q, sel i s q → m.selC i s q)
-    (hpe : PointsEncoded pts m.points) (hdec : Flock.Record.decode spec (wr t).2 = .ok sess)
-    (hu : pts sess.points = u.pts) (hr : 0 < r) (hlen : r + 1 ≤ t.length)
-    (h2 : StageHeld t wr held sel (1 + nCoins (u.ts 0) + nCoins (u.ts 1)) (u.sp 0))
-    (h3 : StageHeld t wr held sel (1 + nCoins (u.ts 0) + nCoins (u.ts 1) + nCoins (u.sp 0)) (u.sp 1))
-    (h4 : StageHeld t wr held sel (1 + nCoins (u.ts 0) + nCoins (u.ts 1) + nCoins (u.sp 0) + nCoins (u.sp 1))
-      u.op)
-    (h5 : StageHeld t wr held sel
-      (1 + nCoins (u.ts 0) + nCoins (u.ts 1) + nCoins (u.sp 0) + nCoins (u.sp 1) + nCoins u.op) u.lg) :
-    LaterCoins (t.map Prod.snd) u :=
-  ⟨FlockC3.Reps.linkPoints_of_custody hcus hpe hdec hu hr (by omega),
-    FlockC3.Reps.coinsAt_stageHeld hcus henc hsel hlen h2, FlockC3.Reps.coinsAt_stageHeld hcus henc hsel hlen h3,
-    FlockC3.Reps.coinsAt_stageHeld hcus henc hsel hlen h4, FlockC3.Reps.coinsAt_stageHeld hcus henc hsel hlen h5⟩
-
-end
-
-end FlockC3.Compose
 
 namespace FlockC3.Reps
 

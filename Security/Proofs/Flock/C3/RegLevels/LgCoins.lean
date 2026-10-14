@@ -26,8 +26,8 @@ coins), so they are `StageHeld`'s first two parts at `stacked/rep0`, which `late
   (`StackedCoins.innerCommits_held`), which `rep0`'s round count reads.
 
 `RRounds.lean` reads `holoStreams`' R rounds (at the verifier's `ish.stacked`) as META's (`stackedStreams_of_covers`).
-Left for `h5`: `StageHeld`'s third part, the history's round count past the stage; and that the stage starts at R's
-round `k₂`'s history round.
+`LgHeld.lean` assembles `h5` (`stageHeld_lg`): the stage's start at R's round `k₂`'s history round (`stageStarts`), and
+its third part from the run's round total (`Compose.coins_total_holo`).
 -/
 
 namespace FlockC3.RegLevels
