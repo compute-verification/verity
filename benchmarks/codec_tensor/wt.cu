@@ -2957,6 +2957,7 @@ struct FusedSmem {
         sksg(reinterpret_cast<u32 *>(skbuf + sk_buf_ints<SKK, SKW>())) {}
   // Thread 0 makes the stages' barriers anew for each segment, and finds it (Cut::next, after b's) in tagq[1 .. 3].
   __device__ void setup(int stages, int nbs, int nchunks, int groups, int tskt, int b) const {
+    constexpr int RG = NB8 > 4 ? NB8 / 4 : 1;
     for (int s = 0; s < stages; ++s) {
       mbar_init(full + s, 1);
       mbar_init(loaded + s, TW);
@@ -2984,6 +2985,8 @@ __device__ __forceinline__ bool fused_segment(const uint8_t *__restrict__ wstore
   extern __shared__ __align__(128) uint8_t smem[];
   const FusedSmem<NB8, SKK, SKW> S(smem, stages);
   constexpr int MW = fused_mma_warps<K, NB8, SKK, SKW>(), PW = fused_producers<K, NB8, SKK, SKW>();
+  constexpr int RG = NB8 > 4 ? MW : 1, NA = NB8 > 4 ? 4 : NB8;
+  static_assert(RG == 1 || !(SKK > 0 && SKW == 0), "a row group's MMA warps don't hash the decoders' sketches");
   const int pipe = 32 * (decoders + MW + PW + SKW);   // the threads that run the segments: all but the tag warps
   if (threadIdx.x >= pipe) return false;
   const int nchunks = Kd / TASK_COLS, nbs = N / 16;
