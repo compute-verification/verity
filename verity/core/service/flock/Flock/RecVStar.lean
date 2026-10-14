@@ -1240,6 +1240,21 @@ def checkLabels (draw : Option Json) (count : Nat) (sts : Array Stmt) : V Unit :
   | none => pure ()
   | some d => (Array.range sts.size).forM fun j => checkLabel (tableDraw d count j) sts[j]!.pub j
 
+/-- **A value the verifier's shared rows register is one registration in every session** (`SharedOwnRoot`): each port of
+`--registered` reading a value some entry of `--rec-rows` reads agrees with the first such entry in every field but reads
+(`portDiff?`: value, root, leaf count, row width, domain), and a port reading R's tops `rec-top-stacked-L<l>`
+(`stackedTopLevel`) needs such an entry. -/
+def checkShared (s : VStar.Stmt) (registered : Array Registered.Port) (rows : Option (Array Registered.Port)) :
+    V Unit := do
+  for p in registered do
+    match rows.bind (·.find? (·.value == p.value)) with
+    | some w =>
+      if let some d := portDiff? p w false then
+        throw s!"{s.name}: its port {p.name} reads {p.value}, which the verifier's shared rows (--rec-rows) register as {w.name}: {d}"
+    | none =>
+      if (stackedTopLevel p.value).isSome then
+        throw s!"{s.name}: its port {p.name} reads R's tops {p.value}; pass the verifier's shared rows (--rec-rows F), which register it"
+
 /-- With an inner shape, the statement must be V*'s: `tags`, the statement the verifier set it up as (`--statement`), is
 V*'s own `Tags.circuit`, compared by name (`Tags.find?` gives each name one statement); it holds no lookup table
 (`tables`, the verifier's `--tables`/`--archive` MUFU tables, is empty: V*'s circuits read none); it needs the verifier's own
@@ -1248,8 +1263,8 @@ bindings (`bindings`, `--rec-bindings F`); its circuit must be in `ProvedScope.s
 (`v1Ports`), never `scopeOkH`'s `bitRows`, which `ProvedScope.check` admits under hidden outputs and V*'s statement
 (`VStmt.hscope`) does not cover; then `checkOwnBindings` of those bindings against the partition object and
 program, `checkCircuit` on the statement's circuit and population as statement `part` under those bindings,
-`checkMsgNames` on its circuit's `m<k>` ports, and `checkOwn`, `checkRows` and `checkAcc` (against the verifier's shared rows `rows`, `--rec-rows`) and `checkAccReads` on
-the verifier's own registered reads. -/
+`checkMsgNames` on its circuit's `m<k>` ports, and `checkOwn`, `checkRows` and `checkAcc` (against the verifier's shared rows `rows`, `--rec-rows`), `checkAccReads` and
+`checkShared` (against `rows`) on the verifier's own registered reads. -/
 def checkStmt (inner : Option Inner) (tags : Tags) (tables : List (String × ByteArray)) (st : Stmt) (circuitB : ByteArray)
     (partition : Option Json := none)
     (program : Option ByteArray := none) (registered : Option (Array Registered.Port) := none) (part : Option Nat := none)
@@ -1277,6 +1292,7 @@ def checkStmt (inner : Option Inner) (tags : Tags) (tables : List (String × Byt
       checkRows s r rows
       checkAcc s r rows
       checkAccReads i s r
+      checkShared s r rows
   | none =>
     if isVStar name then
       throw s!"{name}: one of V*'s statements; pass the verifier's own inner shape (--rec-inner F, from rec-inner)"

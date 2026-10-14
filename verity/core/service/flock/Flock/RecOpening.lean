@@ -197,6 +197,16 @@ def partW (sh : Shape) (j : Nat) : Except String (Array Nat) := do
   let st := RecResiduals.starts sizes
   pure (P.flatMap fun p => (Array.range sizes[p]!).map (st[p]! + ·))
 
+/-- Whether each running sum of Ligerito's final check (`.acc0 r`, `.acc1 r`, `r < 2`) is an element of some part's w
+(`partW`) when `S` is the shape's S: false where its parts are refused. -/
+def accHeld (sh : Shape) (S : GfS) : Bool :=
+  match RecResiduals.groups S (portSizes sh) with
+  | .error _ => false
+  | .ok gs => (List.range 2).all fun r => [Key.acc0 r, .acc1 r].all fun k => match wi sh k with
+    | some e => gs.any fun g => (g.2.1.flatMap fun p =>
+        (Array.range (portSizes sh)[p]!).map ((RecResiduals.starts (portSizes sh))[p]! + ·)).contains e
+    | none => false
+
 /-- The first element of a part's w (`W`, its slots in the opening's w) that is a claim's ring switch's (`.rs k u`) or
 a running sum's of Ligerito's final check (`.acc0 r`, `.acc1 r`) and not read in all 128 bits, with how many are. -/
 def rsUnread (sh : Shape) (W : Array Nat) (rd : Array Bool) (ns : List Nat) : Option (Nat × Nat) :=

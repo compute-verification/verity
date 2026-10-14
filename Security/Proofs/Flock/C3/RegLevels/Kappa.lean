@@ -53,7 +53,9 @@ theorem opening_lg {c3 : Flock.RecCoins.C3} {unit : String} {o : Flock.RecCoins.
         obtain ⟨⟨_res, _bs⟩, _hbuild, h⟩ := FlockVBridge.PartS.bind_ok h
         split at h
         · cases h
-        · cases h
+        · split at h
+          · cases h
+          cases h
           obtain ⟨k₁, hx⟩ := FlockC3.Opening.run'_ok hrun
           obtain ⟨⟨rsr, rs⟩, k₂, h₁, hx⟩ := Flock.RecAlgebra.cm_bind hx
           obtain ⟨⟨lgr, lg'⟩, k₃, h₂, hx⟩ := Flock.RecAlgebra.cm_bind hx

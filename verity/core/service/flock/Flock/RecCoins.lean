@@ -16,12 +16,15 @@ when those values are the ones the verifier computes here, from the inner sessio
   (registered.py:139) under `verifierSalt`.
 
 Every statement table row of `coef`, `dirs` or `v` must be the verifier's row at its position, and the registered root the
-root of the verifier's rows, which every instance reads at its own index (`checkValue`).
+root of the verifier's rows, which every instance reads at its own index (`checkValue`). A part's `out` port is the
+value V* registers as its unit's outputs, two all-zero rows under `zeroSalt` (`rec_residuals.zero_salts`), checked the
+same way (`checkZero`: `rec-residuals-zero` at `checkResiduals`, `rec-sparse-zero` at `checkSparse`).
 
 Candidate 3's statements are checked the same way at coins the prover's record does not hold, the coin server's record of
 the session (`C3`, `--rec-inner-transcript` with the verifier's inner shape `rec-inner --sparse`): RecSparse's `v`
 (`rec-sparse-v`, `checkSparse`) at each rep's inner points and `sparse/rep<r>`'s coins; R's levels' `coef` and `dirs`
-(`checkStackedLevel`) and R's opening's `v` (`checkOpening`) at `stacked/rep0`'s coins and the two reps' claim points.
+(`checkStackedLevel`) and R's opening's `v` (`checkOpening`) at `stacked/rep0`'s coins and the two reps' claim points; an R
+level's `out` reads R's tops `rec-top-stacked-L<l>` at each opening's node above its `H` siblings (`checkTopReads`).
 RecSparse's refusals that read only the points' sizes are checked on the inner statement itself at every candidate-3
 session's setup, whatever its unit (`checkAtC3`, `checkInnerRange`).
 -/
@@ -51,6 +54,18 @@ SHAKE256 of the tag, the program's SHA-512 hex, the value's name and `i` (u32 li
 def verifierSalt (program value : String) (i : Nat) : ByteArray :=
   Keccak.shake256 ((((VERIFIER_SALT.toUTF8.push 0 ++ program.toUTF8).push 0 ++ value.toUTF8).push 0) ++ le32 i.toUInt32)
     SALT_BYTES
+
+def ZERO_SALT : String := "verity/rec-v0/zero-residual-salt/v0"
+def ZERO_VALUE : String := "rec-residuals-zero"
+def OUT_WORDS : Nat := 128
+
+/-- Row `i`'s salt of a value's zero rows, the outputs V* registers itself (`rec_residuals.zero_salts`,
+rec_residuals.py:402): SHAKE256 of the tag, the value's name and `i` (u32 little-endian), NUL only before `i`. -/
+def zeroSalt (value : String) (i : Nat) : ByteArray :=
+  Keccak.shake256 ((ZERO_SALT.toUTF8 ++ value.toUTF8).push 0 ++ le32 i.toUInt32) SALT_BYTES
+
+/-- `n` rows of `w` zero words. -/
+def zeroRows (n w : Nat) : Array (Array Nat) := Array.replicate n (Array.replicate w 0)
 
 /-- F elements as u16 words, 8 each, `lo` then `hi` little-endian (`rec_open.words`, rec_open.py:120). -/
 def words (xs : Array F128) : Array Nat :=
@@ -170,10 +185,10 @@ def Inner.comb (inn : Inner) (r : Nat) (rep : Rep) : V (Array F128) := do
 
 /-- Port `port` of the statement is the value `value` the verifier registers itself, of `rows`: the verifier's registered
 reads hold it as `value` (`own`), of `rows.size` rows of their width, unit `i` reading row `i`; every table row's `b ‖ c`
-is the verifier's row at its position under `verifierSalt` of META's `program_sha512`; and the registered root is the
+is the verifier's row at its position under `salt` of META's `program_sha512`; and the registered root is the
 frame-v3-sha512 root of those rows (`Registered.rowLeaf`). `what i` names row `i`. -/
-def checkValue (c : Circuit) (pub : Public) (own : Array Registered.Port) (port value : String) (rows : Array (Array Nat))
-    (what : Nat → String) : V Unit := do
+def checkRows (salt : String → Nat → ByteArray) (c : Circuit) (pub : Public) (own : Array Registered.Port)
+    (port value : String) (rows : Array (Array Nat)) (what : Nat → String) : V Unit := do
   let unit := c.unit.name
   let some reg := own.find? (·.name == port)
     | throw s!"rec-coins: {unit}: the verifier's registered reads hold no port {port}: its {value} would be the prover's"
@@ -185,7 +200,7 @@ def checkValue (c : Circuit) (pub : Public) (own : Array Registered.Port) (port 
   if reg.reads != (Array.range n).map some then
     throw s!"rec-coins: {unit}: {value}: the reads file does not read row i of the verifier's {n} rows in unit i"
   let .ok prog := c.metaJ.getObjValAs? String "program_sha512" | throw s!"rec-coins: {unit}: META names no program_sha512"
-  let bcs := (Array.range n).map fun i => commitRow rows[i]! (verifierSalt prog value i)
+  let bcs := (Array.range n).map fun i => commitRow rows[i]! (salt prog i)
   let some t := pub.tables | throw s!"rec-coins: {unit}: {port} is not a table of a shared-row file"
   let some p := (List.range c.ports.size).find? (fun p => c.ports[p]!.name == port)
     | throw s!"rec-coins: {unit}: {port} is not a row of the circuit"
@@ -197,6 +212,16 @@ def checkValue (c : Circuit) (pub : Public) (own : Array Registered.Port) (port 
   let leaves := (Array.range n).map fun i => Registered.rowLeaf reg.domain i (Hm96.Default512.treeLeaf bcs[i]!)
   if FV3.root reg.domain leaves Sha512.hash != reg.root then
     throw s!"rec-coins: {unit}: {value}: the registered root is not the root of the verifier's {n} rows"
+
+/-- `checkRows` under `verifierSalt`: a value the verifier computes. -/
+def checkValue (c : Circuit) (pub : Public) (own : Array Registered.Port) (port value : String) (rows : Array (Array Nat))
+    (what : Nat → String) : V Unit :=
+  checkRows (verifierSalt · value) c pub own port value rows what
+
+/-- Port `out` of the statement is `value`'s `n` zero rows of `w` words under `zeroSalt`, as V* registers its unit's
+outputs (`rec_residuals.write_rows`, rec_residuals.py:498). -/
+def checkZero (c : Circuit) (pub : Public) (own : Array Registered.Port) (value : String) (n w : Nat) : V Unit :=
+  checkRows (fun _ => zeroSalt value) c pub own "out" value (zeroRows n w) fun r => s!"rep {r}'s zero outputs"
 
 /-- A `rec-open/l<LANES>-h<H>` statement: the level of the inner schedule with `LANES` lanes and `H` siblings below its
 cap, `2q` instances (rep `r`'s opening `j` instance `r·q + j`, `rec_outer.levels`), each instance's `coef` the verifier's
@@ -246,10 +271,12 @@ def checkResiduals (inn : Inner) (c : Circuit) (pub : Public) (own : Array Regis
     let full := base ++ comb
     pure (padTo (words (vs.map (full[·]!))) (RecResiduals.portWordsOf vs.size))
   checkValue c pub own "v" V_VALUE rows fun r => s!"rep {r}: part {j}'s {vs.size} elements of v"
+  checkZero c pub own ZERO_VALUE 2 OUT_WORDS
 
 /-! ### Candidate 3's statements: RecSparse, R's levels and R's opening -/
 
 def SPARSE_V_VALUE : String := "rec-sparse-v"
+def SPARSE_ZERO_VALUE : String := "rec-sparse-zero"
 
 /-- What check 5 reads of candidate 3's session beside the inner statement: the verifier's own inner shape (`rec-inner
 --sparse`: the bucket's RecSparse shape, and R's, the inner circuit's META's) and the coin server's record of the session
@@ -346,6 +373,7 @@ def checkSparse (inn : Inner) (c3 : C3) (c : Circuit) (pub : Public) (own : Arra
       ).mapError (s!"rec-coins: {unit}: rep {r}: " ++ ·)
     pure (padTo (words v) (RecSparse.portWords (RecSparse.nv sh)))
   checkValue c pub own "v" SPARSE_V_VALUE rows fun r => s!"rep {r}: RecSparse's v"
+  checkZero c pub own SPARSE_ZERO_VALUE 2 (RecSparse.outWords sh)
 
 /-- **Check 5's sparse refusals on the inner statement itself**: the verifier's inner shape `i` is candidate 3's at `st`
 (`RecVStar.checkInnerStmt`), and at its RecSparse shape, which is valid, the inner points' `k_log − 6` coordinates are not
@@ -374,7 +402,8 @@ structure Opening where
 `stacked/rep0`'s coins: the claims' ring switches, then Ligerito, built as `RecOpening.build` builds S (which must be
 `RecOpening.structureOf`'s), at both reps' registered claims (`rec_sparse.registered_claim`): rep `k`'s point
 `(r_k, ζ_p, ρ_t)` from its sparse coins, zero-padded to R's `m`, its skip weights eq(point[:6], ·) and `x` the rest; a
-claim's value is a row of `rec-claim`, w's, so it is none of v's. -/
+claim's value is a row of `rec-claim`, w's, so it is none of v's. Refused unless some part of that S holds each running
+sum (`RecOpening.accHeld`). -/
 def opening (c3 : C3) (unit : String) : V Opening := do
   let some r := c3.stacked | throw s!"rec-coins: {unit}: the verifier's inner shape names no R (the inner circuit's META's stacked)"
   let some sh := RecOpening.shape? r.m r.claims
@@ -401,12 +430,26 @@ def opening (c3 : C3) (unit : String) : V Opening := do
     let (res, st) ← (RecOpening.buildAll sh lins.toList 0).run { kappa }
     if some (⟨RecOpening.nw sh, st.vNames.size, st.ops, res⟩ : RecAlgebra.GfS) != (RecOpening.structureOf sh).toOption then
       throw "the structure moved with the coins"
+    if !RecOpening.accHeld sh ⟨RecOpening.nw sh, st.vNames.size, st.ops, res⟩ then
+      throw "no part of its S holds each of Ligerito's running sums"
     pure { sh, v := st.vVals, lg, kappa := st.kappa }
   built.mapError (s!"rec-coins: {unit}: R's opening at {RecVStar.STACKED}/rep0's coins: " ++ ·)
 
+/-- R's level `l`'s `out` port in the reads file: R's level-`l` tops `rec-top-stacked-L<l>` (`rec_vstage.stage_stacked`), opening
+`j` of `q` reading node `pos[j] >>> H` of them, the node `H` levels above its query position (`rec_outer.TopValue.position`:
+R's one rep's tops are the value's only run). -/
+def checkTopReads (unit : String) (own : Array Registered.Port) (l q H : Nat) (pos : Array Nat) : V Unit := do
+  let some reg := own.find? (·.name == "out")
+    | throw s!"rec-coins: {unit}: the verifier's registered reads hold no port out: R's level {l} tops would be the prover's"
+  if reg.value != s!"rec-top-stacked-L{l}" then
+    throw s!"rec-coins: {unit}: port out reads {reg.value}, not R's level {l} tops rec-top-stacked-L{l}"
+  if reg.reads != (Array.range q).map fun j => some (pos[j]! >>> H) then
+    throw s!"rec-coins: {unit}: rec-top-stacked-L{l}: the reads file does not read opening j's top at node pos[j] >>> {H}"
+
 /-- A level of R's openings, `rec-open-stacked/l<LANES>-h<H>`: the level of R's schedule with `LANES` lanes and `H` siblings
 below its cap, its `q` openings instance by instance (R's one rep, `rec_vstage.stage_stacked`), each instance's `coef`
-`coefAt (κ[ℓ]) LANES eq(α_ℓ)[j]` and its `dirs` the low `H` bits of its query position, at R's coins (`opening`). -/
+`coefAt (κ[ℓ]) LANES eq(α_ℓ)[j]`, its `dirs` the low `H` bits of its query position, and its `out` R's tops at the node
+above them (`checkTopReads`), at R's coins (`opening`). -/
 def checkStackedLevel (c3 : C3) (c : Circuit) (pub : Public) (own : Array Registered.Port) (LANES H : Nat) : V Unit := do
   let unit := c.unit.name
   let o ← opening c3 unit
@@ -422,6 +465,7 @@ def checkStackedLevel (c3 : C3) (c : Circuit) (pub : Public) (own : Array Regist
   let what := fun (j : Nat) => s!"R's level {l} opening {j}"
   checkValue c pub own "coef" COEF_VALUE ((Array.range q).map fun j => words (coefAt (o.kappa[l]!) LANES ea[j]!)) what
   checkValue c pub own "dirs" DIRS_VALUE ((Array.range q).map fun j => dirsRow (cons[l]!).pos[j]! H) what
+  checkTopReads unit own l q H (cons[l]!).pos
 
 /-- A part of R's opening, `rec-opening/m<m>-c<claims>-p<j>`, at R's shape: one instance, its `v` part `j`'s elements
 (`RecResiduals.groups` of `RecOpening.structureOf`) of the verifier's v at R's coins (`opening`). -/

@@ -49,7 +49,16 @@ import Proofs.Flock.Recursive.AuditC3Proof
 import Proofs.Flock.Recursive.Witness
 import Proofs.Flock.Recursive.TopRoot
 import Proofs.Flock.Recursive.TopFinder
+import Proofs.Flock.Recursive.SaltFinder
+import Proofs.Flock.Recursive.ValueSrc
 import Proofs.Flock.Recursive.ValueFinder
+import Proofs.Flock.Recursive.ValueSource
+import Proofs.Flock.Recursive.ValueBridge
+import Proofs.Flock.Recursive.LeafFinder
+import Proofs.Flock.Recursive.ValueChecked
+import Proofs.Flock.Recursive.ValueInner
+import Proofs.Flock.Recursive.PartTie
+import Proofs.Flock.Recursive.HPortTie
 
 /-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), hidden unit circuits' class,
 registered table and registered schedule, with the holographic table at them (`Holo`), the proofs of its guarantees
