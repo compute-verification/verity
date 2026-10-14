@@ -2,6 +2,7 @@
 `RecVStar.checkMsgNames` on a part (`.inner`) and a part of R's opening (`.opening`), each with row ports `m0` and `acc0`:
 a circuit whose ports are the statement's passes, and one with a port `m1` the statement has not is refused by name, at
 both forms; a port not named as a message round's (`acc1`, `v`) is never refused, nor is any port of another statement.
+A circuit naming a port twice is refused at every form, the statement's own ports included.
 -/
 import Flock.RecVStar
 
@@ -25,5 +26,9 @@ def refused (s : VStar.Stmt) (names : List String) : Bool := (checkMsgNames s (c
 #guard msgUnnamed part (circ ["m0", "m1", "m12"]) == some "m1"
 #guard !refused part ["m0", "acc1"]
 #guard !refused (.recOpen 0 4 2 4) ["m0", "m1"]
+#guard refused part ["m0", "acc0", "v", "m0"]
+#guard refused opening ["m0", "acc0", "acc0"]
+#guard refused (.recOpen 0 4 2 4) ["out", "v", "out"]
+#guard !refused (.recOpen 0 4 2 4) ["out", "v"]
 
 end Flock.Test.MsgNames

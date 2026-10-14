@@ -427,12 +427,16 @@ def rowPorts : VStar.Stmt → List String
 def msgUnnamed (s : VStar.Stmt) (c : Circuit) : Option String :=
   (c.ports.toList.map (·.name)).find? fun nm => (mIndex nm).isSome && !((ownPorts s).any (·.1 == nm))
 
-/-- **A part's circuit, and a part of R's opening's, names only its statement's message-round ports**: each port `m<k>`
-of the circuit is one of the statement's (`ownPorts`: a part's `m<k>` under `rec-c<k>`, R's opening's under
-`rec-opening-c<k>`), so the verifier's reads file reads it under the statement's value (`checkOwn`). The circuit file is
-V*'s for the statement (`checkFile`), whose ports are the statement's, so an honest session passes. -/
+/-- **A statement's circuit names each port once, and a part's circuit, and a part of R's opening's, names only its
+statement's message-round ports**: the verifier finds a registered port by its name (`Registered.checkPort`, the first
+port of the name), so each name is one port's; and each port `m<k>` of a part's circuit is one of the statement's
+(`ownPorts`: a part's `m<k>` under `rec-c<k>`, R's opening's under `rec-opening-c<k>`), so the verifier's reads file
+reads it under the statement's value (`checkOwn`). The circuit file is V*'s for the statement (`checkFile`), whose ports
+are the statement's, each name once (`HmRow.checkRows` refuses a name twice), so an honest session passes. -/
 def checkMsgNames (s : VStar.Stmt) (c : Circuit) : V Unit :=
-  match s with
+  if !decide (c.ports.toList.map (·.name)).Nodup then
+    throw s!"{s.name}: the circuit names a port twice"
+  else match s with
   | .inner .. | .opening .. =>
     match msgUnnamed s c with
     | some nm => throw s!"{s.name}: the circuit's port {nm} is named as a message round's, and the statement has no such port"
