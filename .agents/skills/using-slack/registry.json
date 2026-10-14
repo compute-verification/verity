@@ -163,6 +163,7 @@
         "Security/Proofs/Pous/",
         "benchmarks/pous/",
         "benchmarks/bandwidth/",
+        "benchmarks/host_tiles/",
         "benchmarks/vllm_encoded/",
         "benchmarks/word_codec/",
         "benchmarks/codec_mix/",
