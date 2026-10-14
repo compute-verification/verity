@@ -191,7 +191,3 @@ theorem innerCommits_held {tr : Json} {record : String} {reg : Option Json} {bou
       exact absurd (key _ h).1 ‹_›
 
 end FlockC3.RegLevels.StackedCoins
-
-#print axioms FlockC3.RegLevels.StackedCoins.shape_of_check
-#print axioms FlockC3.RegLevels.StackedCoins.candidate3_held
-#print axioms FlockC3.RegLevels.StackedCoins.innerCommits_held

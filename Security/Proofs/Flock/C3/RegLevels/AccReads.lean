@@ -372,7 +372,3 @@ theorem accRead_of_checked {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {ro
 end Family
 
 end FlockC3.RegLevels
-
-#print axioms FlockC3.RegLevels.names_of_checkAcc
-#print axioms FlockC3.RegLevels.readsOwn_of_hown
-#print axioms FlockC3.RegLevels.accRead_of_checked
