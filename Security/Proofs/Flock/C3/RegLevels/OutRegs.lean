@@ -263,7 +263,7 @@ theorem accOut_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : L
       .ok ()) {l LANES H q : ℕ}
     (hj : ∀ ss : Array VStar.Stmt, RecVStar.statements i = .ok ss → ss[j]? = some (.recOpenStacked l LANES H q)) :
     ∃ pt ∈ own, pt.name = "acc_out" := by
-  obtain ⟨ss, s, hss, hs, hacc⟩ := checkAcc_of_checkStmt h
+  obtain ⟨ss, s, hss, hs, hacc, -⟩ := checkAcc_of_checkStmt h
   obtain rfl : s = .recOpenStacked l LANES H q := Option.some.inj (hs.symm.trans (hj ss hss))
   refine own_of_checkAcc hacc "acc_out" ?_
   rw [show RecVStar.accPorts (.recOpenStacked l LANES H q) = ["acc", "acc_out"] from rfl]

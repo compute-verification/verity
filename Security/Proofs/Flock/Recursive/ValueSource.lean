@@ -45,6 +45,7 @@ theorem stacked_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : Flo
     split at h
     · cases h
     · obtain ⟨_u, hcv, hdv⟩ := FlockVBridge.PartS.bind_ok h
+      obtain ⟨_v, hdv, -⟩ := FlockVBridge.PartS.bind_ok hdv
       exact ⟨o, l, hop, hls, ⟨_, hcv⟩, _, hdv⟩
   · cases h
 
