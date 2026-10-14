@@ -33,8 +33,10 @@ excludes and `regFinder` prices once per audit: no new event, no guarantee recor
   (`checkOwn`), `--rec-rows` registers it (`checkRows` at the part's `m<hr>`), and `checkShared` holds both to its
   first entry of that value (`site_of_checkShared`).
 * `readsUnsegC3`: no read is of a segmented row (`VStmt.hscope`'s `v1Ports`).
-* `srcHReads_of`: `SrcHReads` from those, the RecSparse circuit's `h` keys (`HKeys`, named) and the algebra unit's row
-  of rep `i`'s `h` (`HAlgRows`, named).
+* `hKey_of_check`: at a copy of a unit `RecSparse.check` accepted, the key of `h`'s element `l`, bit `e` is bit
+  `128 l + e` of the port named `h` (`rowsOk`'s row 0, `leavesOk`, `srcKey_inOrder`).
+* `srcHReads_of`: `SrcHReads` from those, the columns of the RecSparse circuit's `h` (`HCols`, named) and the algebra
+  unit's row of rep `i`'s `h` (`HAlgRows`, named).
 -/
 
 namespace FlockSoundness.Discharge.Recursion
@@ -341,15 +343,56 @@ def HPortReads (zs : (j : Fin S) → (Vs j).Outer Reg') (mp : List (String × �
               ⟨b, lt_of_lt_of_le hb' ((Finset.le_sup (Finset.mem_univ q')).trans (Nat.le_succ _))⟩ =
             bitOf (x l) e
 
-/-- Obligation (the RecSparse circuit's parse): each column of `h`'s element `l`, bit `e` at copy `j` is an input
-column a row reads (W's `SparseCols`), and where its key is bit `b` of row `q`, `q` is the port named `h` and `b` is
-`128 l + e` (the whole registered row from bit 0, element `l` at `128 l`). -/
-def HKeys (V : VStmt) (mp : List (String × ℕ)) (j : ℕ) : Prop :=
-  (∀ (l : Fin 64) (e : ℕ), e < 128 → ReadCol (FlockSoundness.Rows.ofNet V.hU) (rowCol mp 0 (128 * l.val + e))) ∧
-    ∀ (l : Fin 64) (e : ℕ), e < 128 → ∀ (q : Fin V.c.ports.size) (b : ℕ), b < Layout.portRowW V.c q →
-      Aliased.srcKey V.c (j * (FlockSoundness.Rows.ofNet V.hU).nIn + rowCol mp 0 (128 * l.val + e)) =
-          .msg q.val (b / 8) (b % 8) →
-      V.c.ports[q].name = "h" ∧ b = 128 * l.val + e
+/-- Obligation (W's `SparseCols`): each column of `h`'s element `l`, bit `e` in the RecSparse circuit is an input
+column a row reads. -/
+def HCols (V : VStmt) (mp : List (String × ℕ)) : Prop :=
+  ∀ (l : Fin 64) (e : ℕ), e < 128 → ReadCol (FlockSoundness.Rows.ofNet V.hU) (rowCol mp 0 (128 * l.val + e))
+
+/-- **The RecSparse circuit's `h` keys, from the verifier's check** (`srcKey_inOrder`): at a unit `RecSparse.check`
+accepted, row 0 is `h` at 512 words (`rowsOk`) and copy `j` reads the rows' words in order (`leavesOk`), so where the
+key of `h`'s element `l`, bit `e` at copy `j` is bit `b` of row `q`, `q` is `h` and `b` is `128 l + e`. -/
+theorem hKey_of_check {V : VStmt} (hck : Flock.RecSparse.check V.c = .ok ()) {sh : Flock.RecSparse.Shape}
+    (hp : Flock.RecSparse.params V.c.unit.name = some sh) {j : ℕ} (hj : j < V.c.upv) (l : Fin 64) {e : ℕ}
+    (he : e < 128) (q : Fin V.c.ports.size) (b : ℕ)
+    (hkey : Aliased.srcKey V.c (j * (FlockSoundness.Rows.ofNet V.hU).nIn +
+        rowCol (Flock.RecSparse.messagePorts sh) 0 (128 * l.val + e)) = .msg q.val (b / 8) (b % 8)) :
+    V.c.ports[q].name = "h" ∧ b = 128 * l.val + e := by
+  obtain ⟨-, -, -, hrows, hlv, hn⟩ := FlockVBridge.Sparse.check_sparse_all hck hp
+  obtain ⟨h0, hname, hw, hbits⟩ := FlockVBridge.Sparse.rowsOk_h hrows
+  have hn' : Flock.HmNets.netOf (Flock.RecSparse.unitName sh) (Flock.RecSparse.unitLaid sh) = .ok V.c.unit := hn
+  have hl64 := l.isLt
+  obtain ⟨rest, hmp⟩ := FlockVBridge.Sparse.messagePorts_head sh
+  have hcol : rowCol (Flock.RecSparse.messagePorts sh) 0 (128 * l.val + e) = 128 * l.val + e := by
+    rw [hmp]
+    simp only [rowCol]
+    split <;> omega
+  have hsz : (Array.replicate (Flock.RecSparse.inWords sh) 16).size = Flock.RecSparse.inWords sh :=
+    Array.size_replicate
+  have h16 : ∀ x ∈ (Array.replicate (Flock.RecSparse.inWords sh) 16).toList, x = 16 := by
+    intro x hx
+    rw [Array.toList_replicate] at hx
+    exact List.eq_of_mem_replicate hx
+  have hN : 16 * (Array.replicate (Flock.RecSparse.inWords sh) 16).size ≤ V.c.unit.inWords * Flock.WORD := by
+    rw [FlockVBridge.Sparse.inWords_sparse hn', hsz]
+    show 16 * _ ≤
+      Flock.HmNets.groupWords ((Array.replicate (Flock.RecSparse.inWords sh) 16).foldl (· + ·) 0) * Flock.WORD
+    rw [← Array.foldl_toList, Array.toList_replicate, FlockVBridge.foldl_replicate16, Nat.zero_add]
+    exact Flock.HmNets.le_groupWords _
+  have hst : (FlockSoundness.Typed.starts V.c)[0]! = 0 := by
+    rw [FlockSoundness.Discharge.Layout.starts_get V.c h0]
+    simp
+  have hin := FlockVBridge.Sparse.h_le_inWords sh
+  have key := FlockC3.RegLevels.srcKey_inOrder (FlockVBridge.Sparse.inGroups_sparse hn') rfl h16
+    (Aliased.portBits_nodup V.hU) (j := j) (k := 128 * l.val + e)
+    (by rw [hsz]; exact FlockVBridge.Sparse.leavesOk_get hlv hj) h0 (by simp only [hw]; omega)
+    (by simp only [hbits]; omega) (by rw [hst, hsz]; simp only [hw]; omega) hN
+  rw [hst, Nat.mul_zero, Nat.zero_add] at key
+  rw [hcol, FlockSoundness.Discharge.Layout.ofNet_nIn_eq, key] at hkey
+  injection hkey with hq0 h8 hm8
+  obtain ⟨q, hq⟩ := q
+  dsimp only at hq0
+  subst hq0
+  exact ⟨hname, by omega⟩
 
 /-- `h`'s 64 elements are the first port's: their bits are below the message ports' total. -/
 theorem h_lt_ports (sh : Flock.RecSparse.Shape) {l e : ℕ} (hl : l < 64) (he : e < 128) :
@@ -594,14 +637,14 @@ theorem hSite_of_checked {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows
 
 /-- **`SrcHReads` from the verifier's checks** (`hSite_of_checked`, `readsUnsegC3`) and the named pieces: the reads at
 the units' own rows (`ReadsOwnAt`, from `ReachedChecked` by `readsOwnAt_of`), the RecSparse circuit's `h` keys
-(`HKeys`) and the algebra unit's row of rep `i`'s `h` (`HAlgRows`). -/
+(`HCols`; its keys `hKey_of_check`) and the algebra unit's row of rep `i`'s `h` (`HAlgRows`). -/
 theorem srcHReads_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : Option (Array Flock.Registered.Port)}
     {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json} (hchk : ChecksAccepted F rows wr reg)
     {dg : ByteArray → ByteArray} {N k Rw : ℕ} (hro : ReadsOwnAt F dg N k Rw)
     (hnd : ∀ R ω t R₂ j, ∀ p ∈ (F.zs R ω t R₂ j).own, ∀ p' ∈ (F.zs R ω t R₂ j).own, p.name = p'.name → p = p')
-    (hkeys : ∀ (s : Fin (vstarCount F.ish)) (j : ℕ), Flock.RecSparse.check (F.Vs s).c = .ok () →
+    (hcols : ∀ s : Fin (vstarCount F.ish), Flock.RecSparse.check (F.Vs s).c = .ok () →
       Flock.RecSparse.params (F.Vs s).c.unit.name = some (FlockC3.Sparse.unitShape (holoAt st hp)) →
-      HKeys (F.Vs s) (Flock.RecSparse.messagePorts (FlockC3.Sparse.unitShape (holoAt st hp))) j)
+      HCols (F.Vs s) (Flock.RecSparse.messagePorts (FlockC3.Sparse.unitShape (holoAt st hp))))
     {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin (vstarCount F.ish)) → (F.Vs j).Bits) → C3Run (holoAt st hp)}
     {w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin (vstarCount F.ish)) → (F.Vs j).Bits) → Fin 2 →
       Array Flock.F128}
@@ -610,9 +653,8 @@ theorem srcHReads_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : O
   obtain ⟨U, hU⟩ := halg R ω t R₂ τ o hA i
   refine ⟨U, fun s un j hj c hcp hun => ?_⟩
   obtain ⟨sh, hr, hss, s', u', q', st', hu', hss', hq', hrp, hr', hbits⟩ := hU s un j hj c hcp hun
-  have hk := hkeys s j hcp.1 hcp.2.1
-  refine ⟨hk.1, fun l e he q b hb hkey hread => ?_⟩
-  obtain ⟨hq, rfl⟩ := hk.2 l e he q b hb hkey
+  refine ⟨hcols s hcp.1 hcp.2.1, fun l e he q b _ hkey hread => ?_⟩
+  obtain ⟨hq, rfl⟩ := hKey_of_check hcp.1 hcp.2.1 hj l he q b hkey
   obtain ⟨hb', hv⟩ := hbits l e he
   obtain ⟨hst, hat⟩ := hSite_of_checked hchk hro hnd hA hss hss' hq hq' hrp (hun.trans hu'.symm) hread hr'
   have hseg := readsUnsegC3 F dg N k Rw R ω t R₂ τ o hA

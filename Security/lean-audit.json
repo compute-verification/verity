@@ -14144,7 +14144,7 @@
    ]
   },
   "Flock.RecSparse": {
-   "digest": "e816b0e9b15b46e4b97cf6baab96084242fc80b6459a5f20355de7d1a25b612e",
+   "digest": "155d27aaa37c8ee39cb7989c3c841c94a5f81e87df3f9aab6e767c7a96980157",
    "definitions": {
     "Flock.RecSparse.F_WORDS": "6a31481f620ca0a5d4818cbd492acb2935fd088f1180fd157e75b406477314e0",
     "Flock.RecSparse.Key": "4ca1464337153664cbc295574453599a3f7b406a3400f098142100e7961ef3bc",
@@ -14165,11 +14165,12 @@
     "Flock.RecSparse.Shape.stacked": "fd6f3688eaa4f0a766fa421696589f236134cd84daf9731ffb453843e9504d99",
     "Flock.RecSparse.Shape.tLog": "b4511bcca8344e9d3a430ec076e8a4eea3cf81045ea0ebfe5ed5c3be53999246",
     "Flock.RecSparse.Shape.valid": "41955ac96677fe1f48f4b285735b14fcb10bf581343c2a8a4cace338eb5bb847",
-    "Flock.RecSparse.check": "c35721c8803b5e6b15c510bc882a9add69029ea256a34a4d39bdfdae089d6978",
+    "Flock.RecSparse.check": "5c5c2f47d99c86d8c730948ed5e4f56c0055186bc02743b29717e816738bc212",
     "Flock.RecSparse.demux": "509c7b9f6cc367b9b698c89e8957e8e77dd13fd4e912001b596ad34280bb974d",
     "Flock.RecSparse.demuxLevel": "a82d3f801af602badd0fd50091b66e21e966bd2161f356c5267c828f941dce9c",
     "Flock.RecSparse.elem": "4936c5daa206924d4c968fd79e537b851aa2ae746c5dcf7aeb6e008b702dd8e4",
     "Flock.RecSparse.inWords": "00753c116ada7f2b501c429f644ecb3901eee8d58f4ce817bdf6ac3f10f53cc6",
+    "Flock.RecSparse.leavesOk": "053a8334ba6f9b43cc43c4d6b52cc46f6c791bdce0e6428a3dc3481d697de7eb",
     "Flock.RecSparse.messagePorts": "3b061721214a6be266f8a53e516bd1d5e3570569c71a98555870fe40e51639c7",
     "Flock.RecSparse.mulF": "f6f68450aa04eec5cd22b5f4d85d7645ae74a2991ca7689925782967e04c4f9c",
     "Flock.RecSparse.nv": "afcd149d24bb764f0d92a67b40fed073262eb493ce0f4a27d998b934eb8759eb",
@@ -14185,6 +14186,7 @@
     "Flock.RecSparse.put": "4bff7d3957b9b2b5caeeb72eda120e785db7526f7909177909db38980fc7a7cc",
     "Flock.RecSparse.resList": "0d7925dd1f1af0ed8a324ca52adfa82e85be95ca7dfbb32258e970914ab574a4",
     "Flock.RecSparse.residualNames": "f0f2a9f4924dd1fb2f1f569adddc1a6b77a0356f71254c3030c5304f52eb94f5",
+    "Flock.RecSparse.rowsOk": "123dbe79f8335dded00a4809abcc6e67d1caadfcb83e5eec93d9bb32a66cfd9f",
     "Flock.RecSparse.steps": "49d155ee325a5f6021d0fcd9af95d25fcb7e092175132d646e87366ef037fcad",
     "Flock.RecSparse.structureOf": "d7de4921217e334d0e42904a101c4d8dd64ec8729802d3af9cc4667124e82bcb",
     "Flock.RecSparse.tauWords": "10029dad4b735a23e73414ce43919ac815834d6acf54aa2d84a429780f2e4861",
