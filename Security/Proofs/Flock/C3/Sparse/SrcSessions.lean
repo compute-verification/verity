@@ -87,6 +87,3 @@ theorem srcSparseTie_sparseOf
 end
 
 end FlockC3.Sparse
-
-#print axioms FlockC3.Sparse.srcSparseTie_of_sessions
-#print axioms FlockC3.Sparse.srcSparseTie_sparseOf

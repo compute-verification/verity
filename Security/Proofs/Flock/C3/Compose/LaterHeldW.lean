@@ -146,8 +146,3 @@ theorem laterCoins_of_held {r : ℕ} {CT : Fin r → Type} {e : ExecHolo} {Cm : 
 end
 
 end FlockC3.Compose
-
-#print axioms FlockC3.Reps.flatten_map_idx
-#print axioms FlockC3.Reps.map_eq_range
-#print axioms FlockC3.Reps.coinsAt_stageHeldW
-#print axioms FlockC3.Compose.laterCoins_of_held
