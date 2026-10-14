@@ -132,12 +132,11 @@ theorem pr_unpaid_rank_le
         pr (fun x : Data N m ρ Sector × Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)) =>
           Bad A sketch σ x.2 x.1 i g) ≤ (g : ℝ≥0∞) / 2 ^ 256 := by
       intro i
-      change pr (fun x : Data N m ρ Sector × Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)) =>
-        Bad A sketch σ x.2 x.1 i g) ≤ (g : ℝ≥0∞) / 2 ^ 256
       refine Rate.pr_le_of_fiber _ _ (fun O => ?_)
       convert pr_le_div_of_card_mul_le (fun D : Data N m ρ Sector => Bad A sketch σ O D i g)
         g (Fintype.card Sector) Fintype.card_ne_zero (by simp [Sector])
-        (card_bad_le A sketch σ O i g) using 1 <;> norm_num [Sector]
+        (card_bad_le A sketch σ O i g) using 1
+      all_goals norm_num [Sector]
     refine (Finset.sum_le_sum (fun i _ => hi i)).trans ?_
     have hg : (g : ℝ≥0∞) = 2 ^ (256 - 8 * r) := by
       dsimp [g]
@@ -598,7 +597,6 @@ theorem RemoteSessionConservationSketch : Accounting.Guarantees.RemoteSessionCon
           exact Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
       _ = ENNReal.ofReal (1 - dbar) ^ (d * n) + ENNReal.ofReal (1 - dw / n) ^ (d * n) +
           (n : ℝ≥0∞) * ε + (n * P * G : ℝ≥0∞) * term := by
-        push_cast
         ring
 
 /-- At the conservative deployed caps, the rank-query term is already `2^14` before multiplying by windows or
@@ -630,7 +628,7 @@ theorem RemoteSessionConservationSketchDeployed :
         ENNReal.ofReal (1 - 0.0015) ^ (2773 * n) + ENNReal.ofReal (1 - 0.01 / n) ^ (2773 * n) +
           (n : ℝ≥0∞) * ε +
             (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ 512 + (q : ℝ≥0∞) / 2 ^ 96) := by
-    convert h using 1 <;> norm_num <;> ring
+    convert h using 1 <;> (norm_num; ring)
   refine h'.trans ?_
   rw [show (2 : ℝ≥0∞) / 2 ^ 40 = 1 / 2 ^ 40 + 1 / 2 ^ 40 by
     rw [ENNReal.div_add_div_same]; norm_num]
