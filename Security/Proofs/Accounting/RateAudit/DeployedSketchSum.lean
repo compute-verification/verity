@@ -702,6 +702,62 @@ theorem RemoteSessionConservationSketchSum :
             (n * P : ℝ≥0∞) * ((qtot : ℝ≥0∞) / 2 ^ (8 * r)) := by
         ring
 
+/-- **The verbatim sketch session at the deployed receipt parameters, under the per-pass query budget.**
+`RemoteSessionConservationSketchSum` at `RemoteSessionConservationSketchDeployed`'s parameters: 4 KiB tiles
+(`m = 128`), 16 sketch rows, SHA-512 tags, rank `r = 12`, 2,773 pooled openings per window, `d̄ = 0.15%`, `d_w = 1%`.
+From seven windows on,
+
+  `2·2^-40 + n·ε + (n·P·G)·N/2^512 + (n·P)·qtot/2^96`.
+
+At the conservative caps `G = qtot = 2^55` the query term is `n·P·2^-41` (`sketchQueryTermCapsSum`), where the product
+form's `G·q/2^96` alone was `2^14`. -/
+theorem RemoteSessionConservationSketchSumDeployed :
+    ∀ (n P N ρ S L q G X qtot : ℕ) (ε : ℝ≥0∞)
+      (A : RateSketch.SketchDeployedSession n P N 128 ρ 512 S L q 16 G 2773),
+      7 ≤ n → 0 < P → 0 < N →
+      Accounting.Assumptions.SketchRank 16 128 12 ε →
+      (∀ w η j ι c E σ R O,
+        let B := (A.window w η).device j ι c
+        let D := RateSketch.Data.ofParts E R
+        (B.prog σ D).rebuilds O D * 256 ≤ X) →
+      (∀ w η j ι σ E R (Os : Fin G → RateSketch.Oracle N ρ 512 Sector (Fin 16 → ZMod (2 ^ 32))),
+        let D := RateSketch.Data.ofParts E R
+        ∑ c, ((((A.window w η).device j ι c).prog σ D).queries (Os c) D).length ≤ qtot) →
+      pr (fun x : RateSketch.SketchStore N 128 ×
+          (Fin n → RateSketch.SketchWindowCoins P N 128 ρ 512 16 G 2773) =>
+        (∀ w t, (x.2 w).2.2 t ∈
+          (A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1) ∧
+          ((((∑ w, (A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 : ℕ)) : ℝ) <
+              (1 - (0.0015 + RateSketch.gammaSketch N 128 ρ S L X)) * (n * P * N * 32768) ∨
+            ∃ w, (((A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 : ℕ) : ℝ) <
+              (1 - (0.01 + RateSketch.gammaSketch N 128 ρ S L X)) * (P * N * 32768)))
+        ≤ 2 / 2 ^ 40 + (n : ℝ≥0∞) * ε +
+          (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ 512) +
+            (n * P : ℝ≥0∞) * ((qtot : ℝ≥0∞) / 2 ^ 96) := by
+  intro n P N ρ S L q G X qtot ε A hn hP hN hRank hX hq
+  have h := RemoteSessionConservationSketchSum n P N 128 ρ 512 S L q 16 G 2773 12 X qtot ε A
+    0.0015 0.01 (by omega) hP hN (by norm_num) (by norm_num) (by norm_num) hRank hX hq
+  have h' :
+      pr (fun x : RateSketch.SketchStore N 128 ×
+          (Fin n → RateSketch.SketchWindowCoins P N 128 ρ 512 16 G 2773) =>
+        (∀ w t, (x.2 w).2.2 t ∈
+          (A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1) ∧
+          ((((∑ w, (A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 : ℕ)) : ℝ) <
+              (1 - (0.0015 + RateSketch.gammaSketch N 128 ρ S L X)) * (n * P * N * 32768) ∨
+            ∃ w, (((A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 : ℕ) : ℝ) <
+              (1 - (0.01 + RateSketch.gammaSketch N 128 ρ S L X)) * (P * N * 32768))) ≤
+        ENNReal.ofReal (1 - 0.0015) ^ (2773 * n) + ENNReal.ofReal (1 - 0.01 / n) ^ (2773 * n) +
+          (n : ℝ≥0∞) * ε + (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ 512) +
+            (n * P : ℝ≥0∞) * ((qtot : ℝ≥0∞) / 2 ^ 96) := by
+    convert h using 1
+    norm_num [mul_assoc]
+  refine h'.trans ?_
+  rw [show (2 : ℝ≥0∞) / 2 ^ 40 = 1 / 2 ^ 40 + 1 / 2 ^ 40 by
+    rw [ENNReal.div_add_div_same]; norm_num]
+  gcongr
+  · exact Deployed.horizon_deployed n hn
+  · exact Deployed.window_deployed n (by omega)
+
 /-- At the conservative deployed caps the sum form's query term is `2^-41` before multiplying by windows and passes:
 `qtot = 2^55` total oracle queries per pass at rank `r = 12`. The product form's same-caps term,
 `sketchQueryTermCaps`, is `2^14`. -/
