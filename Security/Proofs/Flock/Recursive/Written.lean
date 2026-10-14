@@ -94,7 +94,8 @@ end ZkOuter
 theorem leaves_sessions {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type} (zs : (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ) :
     Leaves (fun b => ∀ j, (zs j).Writes (b j).2.1 (b j).2.2.2) (sessions zs dg N) :=
-  leaves_seqC S (Q := fun j o => (zs j).Writes o.1 o.2.2) fun j => (zs j).leaves_game dg N
+  leaves_seqC S (Q := fun j (o : Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript) =>
+    (zs j).Writes o.1 o.2.2) fun j => (zs j).leaves_game dg N
 
 end FlockSoundness.Discharge.Recursion
 
