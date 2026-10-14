@@ -67,8 +67,8 @@ where `checkValue` accepted the port at the verifier's `rows` and the source giv
 is of row `u` and the registrant's bit `b` is bit `b % 16` of the row's word `b / 16`, or `ValueColl`. -/
 theorem value_tie_coll {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {vsrc : ValueSrc L Reg Cm Reg₂ I Vs} {R : Reg} {ω : L.Ω} {t : List (Cm × I.Coin)} {R₂ : Reg₂} {j : Fin S}
-    {port value : String} {rows : Array (Array ℕ)} {what : ℕ → String}
-    (h : Flock.RecCoins.checkValue (Vs j).c (zs R ω t R₂ j).pub (zs R ω t R₂ j).own port value rows what = .ok ())
+    {port value : String} {rows : Array (Array ℕ)} {what : ℕ → String} {pub : Flock.Public}
+    (h : Flock.RecCoins.checkValue (Vs j).c pub (zs R ω t R₂ j).own port value rows what = .ok ())
     {prog : String} (hprog : (Vs j).c.metaJ.getObjValAs? String "program_sha512" = .ok prog)
     {u : Fin (Vs j).nv} {q : Fin (Vs j).c.ports.size}
     (hsrc : vsrc R ω t R₂ ⟨j, u, q⟩ = some (rows, Flock.RecCoins.verifierSalt prog value))
