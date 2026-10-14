@@ -137,7 +137,8 @@ theorem vbridgeC_of_cap {S : ℕ} {Vs : Fin S → VStmt}
     (hb : Flock.Premises.VBridgeC zs dg N k Rw x wmsg Sk cmt msg) :
     Flock.Premises.VBridgeC zs dg N k Rw x' wmsg Sk cmt msg := by
   obtain ⟨hoff, hcm, hdec, hfull⟩ := hb
-  exact ⟨fun R ω t R₂ hbad τ o ho => holoAccepts_of_cap (hx R ω) (hoff R ω t R₂ hbad τ o ho), hcm, hdec, hfull⟩
+  exact ⟨fun R ω t R₂ hbad τ o hout ho => holoAccepts_of_cap (hx R ω) (hoff R ω t R₂ hbad τ o hout ho), hcm, hdec,
+    hfull⟩
 
 /-- **(step 7) The guarantee's `_hbr` at the honest family, in its form**: at the word the transported prover's runs
 open at R's level 0 against `cap` (`regStmt`), whose cap is `cap`, which is `xR`'s (`hcap`), off the verifier's values'
@@ -219,10 +220,10 @@ theorem hbr_honest_reg (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : Rec
   have hrows : HPubRows
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) :=
     hPubRows_of_checked (hreach h) (sparseAtShapeChecked _)
-  exact ⟨fun R ω t R₂ hbad τ o ho => holoAccepts_of_cap hcap
+  exact ⟨fun R ω t R₂ hbad τ o hout ho => holoAccepts_of_cap hcap
       (vbridgeOff_c3_off (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) _
         dg N k Rw (fun _ _ _ _ => rfl) (hTape_of_frame (hfr h)) (hReps_honest_of_read (hrread h))
-        (hSparse_honest_of_read (hsread h)) hLgStages_honest (horead h) (hlread h) R ω t R₂ hbad τ o ho),
+        (hSparse_honest_of_read (hsread h)) hLgStages_honest (horead h) (hlread h) R ω t R₂ hbad τ o hout ho),
     Flock.Assumptions.vCommits_masked (holoInnerAt T CT st hp).r (hCommits_honest hrows (hown h) (hheld h)),
     vDecodesR_wmsgLeaf (I := holoInnerAt T CT st hp) (own := own) (sel := sel) dec, vFullR_of_read _ _⟩
 

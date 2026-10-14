@@ -337,8 +337,8 @@ theorem siteRowsShared_of_sharedRowsS (h : F.SharedRowsS dg N k Rw) (hu : F.Read
 collisions are `RegColl`'s, which `Accepted` excludes. -/
 theorem noRegistrantCollisionS : F.NoRegistrantCollisionS dg N k Rw := by
   intro R ω t R₂ τ o ha s s' u u' q q' hr hr' _ _
-  exact ⟨fun hc => ha.2 ⟨s, s', .inl (u, q), .inl (u', q'), hr, hr', Or.inl hc⟩,
-    fun hc => ha.2 ⟨s, s', .inl (u, q), .inl (u', q'), hr, hr', Or.inr hc⟩⟩
+  exact ⟨fun hc => ha.2.1 ⟨s, s', .inl (u, q), .inl (u', q'), hr, hr', Or.inl hc⟩,
+    fun hc => ha.2.1 ⟨s, s', .inl (u, q), .inl (u', q'), hr, hr', Or.inr hc⟩⟩
 
 /-- **`SharedRowsS`** (`noRegistrantCollisionS`). -/
 theorem sharedRowsS : F.SharedRowsS dg N k Rw := F.sharedRowsS_of dg N k Rw (F.noRegistrantCollisionS dg N k Rw)

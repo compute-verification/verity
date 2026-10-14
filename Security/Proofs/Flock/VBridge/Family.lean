@@ -129,8 +129,8 @@ theorem vbridge_of_reps
       (files R ω t (layers zs dg N k Rw R ω t R₂ τ)).Runs)
     (hcm : VCommits zs Sk cmt) (hdec : VDecodesR wmsg (fun _ _ a b => a = b) Sk msg) (hfull : VFullR (ℐ).r Sk) :
     Flock.Assumptions.VBridge (I := ℐ) zs dg N k Rw x wmsg Sk cmt msg :=
-  ⟨fun R ω t R₂ hc τ o h₀ =>
-    have h : Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o := ⟨h₀, hc⟩
+  ⟨fun R ω t R₂ hc τ o hout h₀ =>
+    have h : Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o := ⟨h₀, hc, hout⟩
     (files R ω t (layers zs dg N k Rw R ω t R₂ τ)).accepts regs (x R ω) T CT sch (hsch R ω t _) _
       (hfiles R ω t R₂ τ o h) (hruns R ω t R₂ τ o h fun r => by
         obtain ⟨v, info, kappa, hv, hvs⟩ := hvr R ω t R₂ τ o h r

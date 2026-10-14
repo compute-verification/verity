@@ -483,7 +483,7 @@ theorem srcHTie_of {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ →
     (h : SrcHReads zs dg N k Rw stp w) : SrcHTie zs dg N k Rw stp w := by
   intro R ω t R₂ τ o hA i s un j hj c hcp hun
   obtain ⟨U, hU⟩ := h R ω t R₂ τ o hA i
-  exact h_of_reads (u := stp R ω t (layers zs dg N k Rw R ω t R₂ τ)) hA.2 hcp U (hU s un j hj c hcp hun)
+  exact h_of_reads (u := stp R ω t (layers zs dg N k Rw R ω t R₂ τ)) hA.2.1 hcp U (hU s un j hj c hcp hun)
 
 /-- **`SrcHTie` at a copy of `SparseSessionAt`'s form at rep `i`'s unit**: the form `SparseRepTie`'s `h` conjunct
 takes, where `SparseSessionAt`'s copy is at unit `i` (which it does not yet state). -/

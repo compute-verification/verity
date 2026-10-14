@@ -70,8 +70,9 @@ theorem vbridgeOff_c3_off (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
     (hst : HLgStages F dg N k Rw) (hop : OpeningReadOff F Bad dg N k Rw) (hlv : RegLevelsReadOff F Bad dg N k Rw) :
     VBridgeOff (I := holoInnerAt T CT st hp) (fun R ω t R₂ => RegColl F.zs R ω t R₂ ∨ Bad R ω t R₂) F.zs dg N k Rw
       (fun _ _ => xR) F.wmsg := by
-  intro R ω t R₂ hc τ o h₀
-  have ha : Accepted (I := holoInnerAt T CT st hp) F.zs dg N k Rw R ω t R₂ τ o := ⟨h₀, fun h => hc (Or.inl h)⟩
+  intro R ω t R₂ hc τ o hout h₀
+  have ha : Accepted (I := holoInnerAt T CT st hp) F.zs dg N k Rw R ω t R₂ τ o :=
+    ⟨h₀, fun h => hc (Or.inl h), hout⟩
   have hb : ¬ Bad R ω t R₂ := fun h => hc (Or.inr h)
   have ht := htape R ω t R₂ τ o ha
   obtain ⟨hr₀, hv₀, hk₀⟩ := hreps R ω t R₂ τ o ha 0

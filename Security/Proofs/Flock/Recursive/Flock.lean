@@ -505,18 +505,21 @@ theorem sessions_le
     (qF qS qW qR : ℝ) (Q : ((j : Fin S) → (Vs j).Bits) → Prop)
     (hQ : ∀ (τ : (j : Fin S) → Strategy ((zs j).game dg N))
       (o : (j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript),
+      (∀ j, Game.Outcome ((zs j).game dg N) (τ j) (o j)) →
       (∀ j, LiveAcceptsZKR (zs j).I (zs j).own (o j) ∧ (zs j).Good ((zs j).layer dg N k Rw (τ j))) →
       Q fun j => (zs j).layer dg N k Rw (τ j))
     (s : Strategy (sessions zs dg N)) :
     prob (fun b => Accepts zs b ∧ ¬ Q (layers zs dg N k Rw b)) (sessions zs dg N) s ≤
       sumS zs dg N (fun j τ => (zs j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s := by
   classical
-  have hmono : ∀ b : VRec Vs Reg' dg N, Accepts zs b ∧ ¬ Q (layers zs dg N k Rw b) →
+  have hmono : ∀ b : VRec Vs Reg' dg N, Game.Outcome (sessions zs dg N) s b →
+      Accepts zs b ∧ ¬ Q (layers zs dg N k Rw b) →
       ∃ j, LiveAcceptsZKR (zs j).I (zs j).own (b j).2 ∧
         ¬ (zs j).Good ((zs j).layer dg N k Rw ((zs j).ofBase dg N (b j).1)) := by
-    rintro b ⟨hacc, hnq⟩
+    rintro b hout ⟨hacc, hnq⟩
     by_contra hno
-    refine hnq (hQ (fun j => (zs j).ofBase dg N (b j).1) (fun j => (b j).2) fun j => ⟨hacc j, ?_⟩)
+    refine hnq (hQ (fun j => (zs j).ofBase dg N (b j).1) (fun j => (b j).2)
+      (outcome_sessions zs dg N s hout) fun j => ⟨hacc j, ?_⟩)
     by_contra hg
     exact hno ⟨j, hacc j, hg⟩
   have hB : ∀ j τ₀, prob (fun a => LiveAcceptsZKR (zs j).I (zs j).own a ∧
@@ -527,7 +530,7 @@ theorem sessions_le
     split_ifs with hc
     · exact ZkOuter.accepts_le (Vs j).law.Lb (Vs j).law.src (hA3 j) (zs j) dg N hk hRw hM hρ (hr j) ht' _ hc
     · exact prob_le_one _ _ _
-  exact (prob_mono hmono _ _).trans
+  exact (Game.prob_mono_outcome _ s hmono).trans
     (prob_seqC_exists_le S _ _ (fun j r => LiveAcceptsZKR (zs j).I (zs j).own r.2 ∧
         ¬ (zs j).Good ((zs j).layer dg N k Rw ((zs j).ofBase dg N r.1)))
       (fun j τ₀ => (zs j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR ((zs j).ofBase dg N τ₀)) hB s)
@@ -573,6 +576,7 @@ theorem outerV_le
     (ht' : 0 ≤ t') (qF qS qW qR : ℝ) (Q : ((j : Fin S) → (Vs j).Bits) → Prop)
     (hQ : ∀ R₂ (τ : (j : Fin S) → Strategy ((zs R₂ j).game dg N))
       (o : (j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript),
+      (∀ j, Game.Outcome ((zs R₂ j).game dg N) (τ j) (o j)) →
       (∀ j, LiveAcceptsZKR (zs R₂ j).I (zs R₂ j).own (o j) ∧ (zs R₂ j).Good ((zs R₂ j).layer dg N k Rw (τ j))) →
       Q fun j => (zs R₂ j).layer dg N k Rw (τ j))
     (s : Strategy (outerV zs dg N)) :
@@ -645,7 +649,8 @@ theorem zk_sessions_recursive_upto
     ?_ ?_ htr hCR hin
   · rwa [add_zero] at h
   · exact avg_mono fun ω => leafAvg_mono (fun t s => outerV_le hA3 (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht'
-      qF qS qW qR (fun Xs => I.accepts (x σ.1 ω) ((wmsg Xs).zip (t.map Prod.snd))) (hbr σ.1 ω t) _) _
+      qF qS qW qR (fun Xs => I.accepts (x σ.1 ω) ((wmsg Xs).zip (t.map Prod.snd)))
+      (fun R₂ τ o _ => hbr σ.1 ω t R₂ τ o) _) _
   · refine le_of_eq ((congrArg avg (funext fun ω => ?_)).trans (avg_const 0))
     refine (leafAvg_congr_len (G := fun _ _ => 0) (fun t s _ => ?_) _).trans (leafAvg_const 0 _)
     exact le_antisymm ((prob_mono (fun b hb => hb.2 rfl) _ _).trans (prob_false _ _).le) zero_le
