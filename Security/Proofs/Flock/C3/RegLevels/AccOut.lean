@@ -53,7 +53,7 @@ theorem outRead_drawn {ω : Lv.Ω} {R' : Reg'} {o}
     rw [hw'] at hx
     cases a with
     | none => simp at hx
-    | some p => exact ⟨p, hw', (Option.some.inj (Option.some.inj hx)).symm⟩
+    | some p => exact ⟨p, rfl, (Option.some.inj (Option.some.inj hx)).symm⟩
 
 end Drawn
 
