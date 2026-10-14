@@ -26,8 +26,9 @@ The objects `Flock.Guarantees.AuditC3` reads, beside `ExecClass.lean`'s for `Pub
   by `topEntry`; the verifier checks them beside its canonical comparison.
 * `AcceptsC3`: the verifier's checks at candidate 3 of its own inputs, which the event carries: V*'s list builds, the
   inner transcript holds against R's registration (`innerCommitsAt`), the covers check passes there (all of
-  `RecVStar.checkCovers`), and check 5's sparse refusals pass (`SparseRangeOk`: `ℓ` in `[6, k_log]`, the unit range's
-  slots inside the block). `UnitsOf`: the slots' units are the unit range's.
+  `RecVStar.checkCovers`), check 5's sparse refusals pass (`SparseRangeOk`: `ℓ` in `[6, k_log]`, the unit range's
+  slots inside the block), and check 5's inner shape is the statement's (`RecVStar.checkInnerStmt`). `UnitsOf`: the
+  slots' units are the unit range's.
 * `holoInnerCL`, `holoInnerAt`: `schedInner` at `Model.holoTableCL` with `capReg := x.cap`, at a statement `x` a word
   and a cap; it is true when some table `R` within the unique-decoding radius of `x.w` (`RegSchedule.Close`) has a
   satisfiable hidden statement at the slots' types.
@@ -173,14 +174,15 @@ def SparseRangeOk (ish : Flock.RecVStar.Inner) (st : Flock.Stmt) : Prop :=
 /-- **Lean's verifier accepts its own inputs at candidate 3**: V*'s list builds (`RecVStar.statements`), it holds the
 inner transcript against R's registration (`innerCommitsAt`), the covers check passes at the commits it holds
 (`RecVStar.checkCovers`, all of it: the sparse-presence, stacked-presence and stacked-shape refusals, and each stream's
-rounds against its schedule, `checkCommitRounds`), and check 5's sparse refusals pass (`SparseRangeOk`). It is not the
-whole compiled acceptance: `AcceptsPublic` and `ChecksVR` carry the verifier's other checks. The verifier's acceptance
-at both setups gives all of it (`FlockC3.VStarList.acceptsC3_of_verify`). -/
+rounds against its schedule, `checkCommitRounds`), check 5's sparse refusals pass (`SparseRangeOk`), and check 5's
+inner shape is the inner statement's (`RecVStar.checkInnerStmt`: a RecSparse shape, and the statement's `m`, `k_log`
+and region count). It is not the whole compiled acceptance: `AcceptsPublic` and `ChecksVR` carry the verifier's other
+checks. The verifier's acceptance at both setups gives all of it (`FlockC3.VStarList.acceptsC3_of_verify`). -/
 def AcceptsC3 (ish : Flock.RecVStar.Inner) (st : Flock.Stmt) (tr : Lean.Json) (record : String) (reg : Lean.Json) :
     Prop :=
   (Flock.RecVStar.statements ish).isOk = true ∧ (innerCommitsAt tr record st reg).isOk = true ∧
     (∀ cs, innerCommitsAt tr record st reg = .ok cs → (Flock.RecVStar.checkCovers ish cs).isOk = true) ∧
-    SparseRangeOk ish st
+    SparseRangeOk ish st ∧ (Flock.RecVStar.checkInnerStmt ish st).isOk = true
 
 /-- **The slots' unit slots are the verifier's**: slot `σ` fills unit `pos0 + σ` of the inner circuit's unit range
 below its count, and none past it (`RecCoins.layoutFactors`). -/
