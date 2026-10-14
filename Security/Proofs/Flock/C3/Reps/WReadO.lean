@@ -17,8 +17,8 @@ computed row reads and a row-port bit keys (`WLocO`, one chosen by `wLocO`), and
   part has it so (`WLocO`), and there a good layer holds the registrant's value (`bitAt_of_regBit`), which is `w`'s in
   every part.
 * `el_wReadO_acc`, `sessionAt_wReadO`: `wReadO` is `w` at each running-sum element a part holds, which the part reads
-  whole (`readCol_acc`), so `SessionAt` at one `w` with every part at copy 0 holds at `wReadO`'s where some part holds
-  each running sum (`AccHeldO`).
+  whole (`readCol_acc`), and some part holds each running sum (`AccHeldO`, which `RecCoins.opening` refuses without:
+  `accHeldO_of_opening`), so `SessionAt` at one `w` with every part at copy 0 holds at `wReadO`'s.
 
 At the opening's shape not every element a part holds is read (at `m = 22`, `m24`'s first four elements are held and
 never read), so `wReadO` need not be `w` there, and `OpeningZeroAtL` asks nothing of those columns.
@@ -270,18 +270,70 @@ theorem el_wReadO_acc {Reg' : Type} {zs : (s : Fin S) → (Vs s).Outer Reg'}
   rw [rowColOfO, hns, hnv]
   exact ReadWhole.readCol_acc _ hc hu hpm hsh hS hg hp hpart he hwi hb
 
-/-- Obligation: discharged by the opening's S (Ligerito's final check, residuals `claims` and `claims + 1`, adds both
-running sums as terms, `RecOpening.accTerms`, and a part holding a residual holds its terms' elements).
-**Some part holds each running sum's element**: `acc0 r` and `acc1 r` (`r < 2`) are each element `e` of w at some
+/-- **Some part holds each running sum's element**: `acc0 r` and `acc1 r` (`r < 2`) are each element `e` of w at some
 position of some part's row ports. -/
 def AccHeldO (sh : Flock.Shape) (gs : Array (Array ℕ × Array ℕ × Array ℕ)) : Prop :=
   ∀ r < 2, ∀ k : Flock.RecAlgebra.Key, (k = .acc0 r ∨ k = .acc1 r) → ∃ (p e q : ℕ) (_ : p < gs.size),
     Flock.RecOpening.wi sh k = some e ∧ (wIdx (Flock.RecOpening.portSizes sh) gs[p].2.1)[q]? = some e
 
+/-- **`AccHeldO` where `RecOpening.accHeld` passed** at S and its parts `gs`. -/
+theorem accHeldO_of {GS : Flock.RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)}
+    (hg : Flock.RecResiduals.groups GS (Flock.RecOpening.portSizes sh) = .ok gs)
+    (h : Flock.RecOpening.accHeld sh GS = true) : AccHeldO sh gs := by
+  unfold Flock.RecOpening.accHeld at h
+  rw [hg] at h
+  dsimp only at h
+  intro r hr k hk
+  have hk' := List.all_eq_true.1 (List.all_eq_true.1 h r (List.mem_range.2 hr)) k
+    (by rcases hk with rfl | rfl <;> simp)
+  split at hk'
+  · rename_i e he
+    obtain ⟨p, hp, hc⟩ := Array.any_eq_true.1 hk'
+    obtain ⟨q, hq⟩ := Array.mem_iff_getElem?.1 (Array.contains_iff_mem.1 hc)
+    exact ⟨p, e, q, hp, he, hq⟩
+  · cases hk'
+
+/-- **`AccHeldO` at R's opening**: `RecCoins.opening` refuses unless some part of the shape's S holds each running sum
+(`RecOpening.accHeld`), so `AccHeldO` holds at that S's parts. -/
+theorem accHeldO_of_opening {c3 : Flock.RecCoins.C3} {unit : String} {o : Flock.RecCoins.Opening}
+    (ho : Flock.RecCoins.opening c3 unit = .ok o) {GS : Flock.RecAlgebra.GfS}
+    {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hS : Flock.RecOpening.structureOf o.sh = .ok GS)
+    (hg : Flock.RecResiduals.groups GS (Flock.RecOpening.portSizes o.sh) = .ok gs) : AccHeldO o.sh gs := by
+  refine accHeldO_of hg ?_
+  have h := ho
+  unfold Flock.RecCoins.opening at h
+  cases hr : c3.stacked with
+  | none => rw [hr] at h; cases h
+  | some r =>
+    rw [hr] at h
+    dsimp only at h
+    cases hsh : Flock.RecOpening.shape? r.m r.claims with
+    | none => rw [hsh] at h; cases h
+    | some sh =>
+      rw [hsh] at h
+      dsimp only at h
+      split at h
+      · cases h
+      · obtain ⟨cs, hcs, h⟩ := FlockVBridge.PartS.bind_ok h
+        obtain ⟨a, b, -, -, rfl⟩ := FlockC3.Opening.mapM_two hcs
+        obtain ⟨_, -, h⟩ := FlockVBridge.PartS.bind_ok h
+        have h := FlockC3.Opening.mapError_ok h
+        obtain ⟨_, -, h⟩ := FlockVBridge.PartS.bind_ok h
+        obtain ⟨⟨_, _⟩, -, h⟩ := FlockVBridge.PartS.bind_ok h
+        split at h
+        · cases h
+        · rename_i hS'
+          split at h
+          · cases h
+          rename_i hacc
+          cases h
+          obtain rfl := Except.ok.inj (hS.symm.trans (FlockC3.Opening.toOption_ok hS'))
+          simpa using hacc
+
 /-- **`SessionAt` at `wReadO`**: R's opening in V*'s sessions at one `w` (`SessionAt`), each part `p` of the groups `gs`
 copy 0 of unit `un p` in session `sess p` (`OpeningZeroAtL` at `w`) in a layer agreeing with the registrant, is in them
-at `wReadO`'s w where some part holds each running sum (`AccHeldO`): (a) is `openingZeroAtL_wReadO`, and (c)'s ends
-hold as `wReadO` is `w` at each running-sum element (`el_wReadO_acc`). -/
+at `wReadO`'s w: (a) is `openingZeroAtL_wReadO`, and (c)'s ends hold as `wReadO` is `w` at each running-sum element
+(`el_wReadO_acc`), which some part holds (`accHeldO_of_opening`). -/
 theorem sessionAt_wReadO {Reg' : Type} {zs : (s : Fin S) → (Vs s).Outer Reg'} {Lb : (s : Fin S) → (Vs s).Bits}
     (hA : ∀ s, (zs s).RegAgree (Lb s)) {unit : String} {c3 : Flock.RecCoins.C3} {w : Array F128}
     {ops : FlockVBridge.AccChain.Openings} (hs : FlockC3.Opening.SessionAt zs Lb sh unit c3 w ops)
@@ -289,10 +341,13 @@ theorem sessionAt_wReadO {Reg' : Type} {zs : (s : Fin S) → (Vs s).Outer Reg'} 
     {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hS : Flock.RecOpening.structureOf sh = .ok GS)
     (hg : Flock.RecResiduals.groups GS (Flock.RecOpening.portSizes sh) = .ok gs)
     (h : ∀ p < gs.size, OpeningZeroAtL (zs (sess p)) (Lb (sess p)) (un p) 0 sh gs p (Flock.RecAlgebra.el w)
-      (Flock.RecAlgebra.el o.v)) (hcov : AccHeldO sh gs) :
+      (Flock.RecAlgebra.el o.v)) :
     FlockC3.Opening.SessionAt zs Lb sh unit c3 (wReadO Vs sh sess un Lb) ops := by
   obtain ⟨o', ho', hsh, -, -, acc, sA, uA, cA, hop, hcoef, hrd⟩ := hs
   obtain rfl : o = o' := Except.ok.inj (ho.symm.trans ho')
+  have hcov : AccHeldO sh gs := by
+    subst hsh
+    exact accHeldO_of_opening ho hS hg
   have hval : ∀ r < 2, ∀ k : Flock.RecAlgebra.Key, (k = .acc0 r ∨ k = .acc1 r) →
       FlockC3.Opening.valO sh (wReadO Vs sh sess un Lb) (FlockC3.Opening.consO ops) k =
         FlockC3.Opening.valO sh w (FlockC3.Opening.consO ops) k := by
