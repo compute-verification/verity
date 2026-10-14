@@ -62,13 +62,14 @@ class Reads:
         return os.path.normpath(path if os.path.isabs(path) else os.path.join(os.getcwd(), path))
 
     def classify(self, path: str) -> tuple[str, str] | None:
-        """("R", path) for one of the suite's test modules, ("O", path) for a repository file outside the inputs, else None."""
+        """("R", path) for one of the suite's test modules, ("O", path) for a repository file outside the inputs (a cached
+        module reported as its source, which the import read it for), else None."""
         path = self._abs(path)
         name = os.path.basename(path)
         if path.startswith(self.suite) and name.startswith("test_") and name.endswith(".py"):
             return "R", os.path.relpath(path, self.root)
         if self.outside(path):
-            return "O", os.path.relpath(path, self.root)
+            return "O", os.path.relpath(_source(path), self.root)
         return None
 
     def outside(self, path: str) -> bool:

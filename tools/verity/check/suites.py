@@ -1286,7 +1286,7 @@ class Result:
     status: str                  # passed, cached, failed
     seconds: float = 0.0
     counts: dict | None = None
-    outside: list | None = None
+    outside: dict | None = None  # file read outside the inputs (a cached module as its source) -> the test module that read it ("*": a conftest or session fixture)
     unmarked_slow: list | None = None
     log: Path | None = None
     since: dict | None = None    # for a cached pass, the run it came from
@@ -1422,6 +1422,8 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
         elif kind == "X":
             untraced.setdefault(module, set()).add(rel)
     rep["reads"] = {m: sorted(fs) for m, fs in sorted(reads.items())}
+    out = rep.get("outside") or {}
+    rep["outside"] = dict.fromkeys(out, "*") if isinstance(out, list) else out      # a report written before the attribution
     # a child's read outside the inputs is the test's own: no key covers it, so nothing vouches for a pass
     passed = ran_all and reported and not rep["outside"] and not rep["unguarded"] and not child_outside and not timed_out
     return Result(suite, "passed" if passed else "failed", seconds, rep.get("counts"), rep.get("outside"),
@@ -1552,6 +1554,7 @@ def failing_path(out: Path) -> Path:
 
 def failing(out: Path, results: list[Result]) -> None:
     doc = [{"name": r.suite.name, "suite": r.suite.path, "failed_tests": (r.failed_tests or [])[:10],
+            "outside": r.outside or {}, "child_outside": r.child_outside or {},
             "log": r.log.name if r.log else None} for r in results if r.status == "failed"]
     tmp = failing_path(out).with_suffix(".tmp")
     tmp.write_text(json.dumps(doc, indent=1) + "\n")
@@ -1759,7 +1762,9 @@ def main(argv: list[str] | None = None) -> int:
                                                           "reused": r.reused, "seconds": round(r.seconds, 1), **u,
                                                           "components": components(s, ids_of[s], env, args, deps)}, indent=1) + "\n")
         elif r.outside:
-            print(f"        its tests read {len(r.outside)} files outside its inputs, for example {', '.join(r.outside[:3])}:"
+            few = [p + (f" (read by {m})" if m != "*" else " (read by a conftest or session fixture)")
+                   for p, m in list(r.outside.items())[:3]]
+            print(f"        its tests read {len(r.outside)} files outside its inputs, for example {', '.join(few)}:"
                   f" depend on the package, or list the path under [tool.verity.tests] inputs in {s.path}/pyproject.toml"
                   f" (a file of a dependency that lists `exports`: under those, if its dependents read it)")
         elif r.unguarded:
