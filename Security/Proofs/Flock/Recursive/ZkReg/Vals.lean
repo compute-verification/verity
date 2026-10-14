@@ -24,6 +24,11 @@ open scoped ENNReal
 
 variable {mPts n : ℕ} {Reg : Type}
 
+/-- The constant gate at the exact circuit type used by the value binding. -/
+noncomputable abbrev oneGK (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ) :
+    Fin ((keyProg c hU n).circuit (Layout.outsOf c hU n)).N :=
+  Layout.oneG (c := c) (hU := hU) (n := n)
+
 /-- **The value binding of a hidden-output `--zk` session of `J` tables** (`rsZHJS`'s). -/
 noncomputable abbrev vbHJ {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) (ht : I.tags.typed = false) {c : Flock.Circuit}
@@ -39,9 +44,7 @@ noncomputable def regOpenZ {I : Inputs} (ht : I.tags.typed = false) (dj : Finset
     (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hscope : Layout.scopeOkH c = true)
     (rd : FlockSoundness.Registered.ReadsX (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
       (rsShHJS dj y₀ ht hc hscope hU hpub)) (R : Reg) :
-    (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub)).Pos →
-      (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub)).Pos ×
-        (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub)).Val × List UInt8 :=
+    PosK c hU n → PosK c hU n × ValK c × List UInt8 :=
   fun p => match p with
     | .inl uq => (.inl uq, rd.wv (.inl uq), rd.ws (.inl uq))
     | .inr g =>
@@ -65,7 +68,7 @@ theorem regOpenZ_of_read {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (
     (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hscope : Layout.scopeOkH c = true)
     (rd : FlockSoundness.Registered.ReadsX (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
       (rsShHJS dj y₀ ht hc hscope hU hpub)) (R : Reg)
-    (p : (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub)).Pos) (hp : rd.isRead p) :
+    (p : PosK c hU n) (hp : rd.isRead p) :
     regOpenZ ht dj y₀ hc hU hpub hscope rd R p = (p, rd.wv p, rd.ws p) := by
   have hrow := rd.read_row p hp
   rcases p with uq | g
@@ -204,32 +207,30 @@ theorem regBadZ_oneG {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin 
     (rd : FlockSoundness.Registered.ReadsX (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
       (rsShHJS dj y₀ ht hc hscope hU hpub))
     (R : Reg) (Xt : Fin ((keyProg c hU n).circuit (Layout.outsOf c hU n)).N → Bool)
-    (hne : Xt (Layout.oneG (c := c) (hU := hU) (n := n)) ≠ true) :
+    (hne : Xt (oneGK c hU n) ≠ true) :
     RegBadZ execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
       (vbHJ dj y₀ ht hc hscope hU hpub) (regOpenZ ht dj y₀ hc hU hpub hscope rd R) R Xt
-        (Layout.oneG (c := c) (hU := hU) (n := n)) := by
+        (oneGK c hU n) := by
+  have hkey : Layout.keyRowOf c hU n (Layout.portRowW c) (oneGK c hU n) = none := by
+    unfold oneGK Layout.keyRowOf Layout.oneG
+    simp [Placed.oneGate]
+  have hunit : (keyProg c hU n).unit (oneGK c hU n) = none :=
+    Layout.unit_uniform_input (k := Placed.inGates n (Layout.keyB c hU)) (R := Placed.circuitRows c hU)
+      (ins := Placed.insOf n (Layout.keyB c hU) (Aliased.keyIdx c (Layout.keyB c hU)))
+      (one := Placed.oneGate n (Layout.keyB c hU))
+      (hone := Placed.insOf_ne_one n (Layout.keyB c hU) (Aliased.keyIdx c (Layout.keyB c hU))) n _
+      (by simp [oneGK, Layout.oneG, Placed.oneGate])
+  have hrow : HiddenExec.rowOfH c hU n (Layout.outsOf c hU n) (oneGK c hU n) = none := by
+    rw [HiddenExec.rowOfH_of_none _ hkey]
+    unfold HiddenExec.outRowOf
+    rw [hunit]
+  have hpos : (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub)).pos
+      (oneGK c hU n) = .inr (oneGK c hU n) := by
+    dsimp only [layShHJ, HiddenExec.keyLayoutH, Layout.Readers.layout, Layout.ofBits,
+      HiddenExec.keyReadersH]
+    exact Layout.ofRows_pos_none _ hrow
   refine ⟨?_, ?_⟩
-  · have hkey : Layout.keyRowOf c hU n (Layout.portRowW c)
-        (Layout.oneG (c := c) (hU := hU) (n := n)) = none := by
-      unfold Layout.keyRowOf Layout.oneG
-      simp [Placed.oneGate]
-    have hunit : (keyProg c hU n).unit (Layout.oneG (c := c) (hU := hU) (n := n)) = none :=
-      Layout.unit_uniform_input (k := Placed.inGates n (Layout.keyB c hU)) (R := Placed.circuitRows c hU)
-        (ins := Placed.insOf n (Layout.keyB c hU) (Aliased.keyIdx c (Layout.keyB c hU)))
-        (one := Placed.oneGate n (Layout.keyB c hU))
-        (hone := Placed.insOf_ne_one n (Layout.keyB c hU) (Aliased.keyIdx c (Layout.keyB c hU))) n _
-        (by simp [Layout.oneG, Placed.oneGate])
-    have hrow : HiddenExec.rowOfH c hU n (Layout.outsOf c hU n)
-        (Layout.oneG (c := c) (hU := hU) (n := n)) = none := by
-      rw [HiddenExec.rowOfH_of_none _ hkey]
-      unfold HiddenExec.outRowOf
-      rw [hunit]
-    have hpos : (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub)).pos
-        (Layout.oneG (c := c) (hU := hU) (n := n)) =
-        .inr (Layout.oneG (c := c) (hU := hU) (n := n)) := by
-      dsimp only [layShHJ, HiddenExec.keyLayoutH, Layout.Readers.layout, Layout.ofBits,
-        HiddenExec.keyReadersH]
-      exact Layout.ofRows_pos_none _ hrow
+  ·
     rw [vbHJ_pos dj y₀ ht hc hscope hU hpub _, hpos]
     rfl
   · rw [vbHJ_pos dj y₀ ht hc hscope hU hpub _, hpos]
