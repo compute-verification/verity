@@ -7,7 +7,8 @@
    "digest": "9d865547ca23af09cf67e3ad5149642660839a871ec3c4cb85abd72829fdb257"
   },
   "Accounting.Assumptions.SketchHashBudget": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "digest": "f3124bfd590b659120d11eac7d0a3f243c6fae7023c117bf8e6a9033d64f2f77"
   },
   "Accounting.Assumptions.SketchRank": {
    "owner": "@memory-accounting",
@@ -15384,8 +15385,9 @@
    ]
   },
   "Models.Accounting.Assumptions.RateAuditDeployed": {
-   "digest": "efd4d9ab62d36d7090c90942f2aa19f053bdc94cfccffa03274dbcb108d73799",
+   "digest": "c1f721bed97a072ac7ad3ecb703089db1ecbbe43d26f648b1538f1aa7c13f889",
    "definitions": {
+    "Accounting.Assumptions.SketchHashBudget": "f3124bfd590b659120d11eac7d0a3f243c6fae7023c117bf8e6a9033d64f2f77",
     "Accounting.Assumptions.SketchRank": "727be124ba9dbc421e926b9388e089735913296fe529e8940e43750724733d8c",
     "Accounting.Assumptions.SquaringCeiling": "4bd7f6457fb6df920661b769a3ad9517f6e4f0e7a2fd0d36a43e376a2deeaca9"
    },
@@ -15616,13 +15618,13 @@
    ]
   },
   "Models.Accounting.Guarantees.RateAuditDeployed": {
-   "digest": "4594e4239286c965d8f6bbe3d942df219a814b7678d257434ceae2b24cbcfd8e",
+   "digest": "22e962053c7a1542b486471bd42c3e723b8913c8f1c527de91dd2746b166df57",
    "definitions": {
     "Accounting.Guarantees.RemoteSessionConservation": "3f4411a964fa206d9530e594bd14116ff5f7cedbf7f9b2e2560182b381143ea6",
     "Accounting.Guarantees.RemoteSessionConservationDeployed": "b77ed5b9ba11dfd9eac1b11c65741b7f341d3404d6d77388387d18281eae0741",
     "Accounting.Guarantees.RemoteSessionConservationRelay": "e60e4d3f4bc74723b17528be1f7f72902c09635211e36cd9cf8a1c1e6958f8c0",
     "Accounting.Guarantees.RemoteSessionConservationSketch": "a8914ef436d616c8db02d6b052247db53261e1db71fca857c1702e3bfefd9eb8",
-    "Accounting.Guarantees.RemoteSessionConservationSketchDeployed": "c7540fcda254f84ba696ef1d8700d31ea399ad04531ea5d35261f4dfe04dc259",
+    "Accounting.Guarantees.RemoteSessionConservationSketchDeployed": "f8b5cb197681527966494ff35cee03269daf951f9c6d4f4d771bb84b4d5ca5a1",
     "Accounting.Guarantees.RemoteSessionRoutes": "6813a372a70745fa98988fc999a8ff17869588001d426c30cccba8453372bf77",
     "Accounting.Guarantees.RemoteSessionRunConservation": "4587d6124824128a52413a2aaaaf458558c3a967a571e4776d972931cd45deb1",
     "Accounting.Guarantees.RemoteSessionRunConservationRelay": "d09517c694d81239ec79c958a0d54a316ce89945920f4cf2ca4b4fedbde9a509",
