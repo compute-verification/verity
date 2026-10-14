@@ -115,7 +115,8 @@ While proving, check one file at a time, and leave the whole package and the Lea
     used.
 
   Then fix the proof: use `simp only [...]` outside terminal calls, split out a lemma, or shrink a `decide`. If an override
-  stays, give its reason beside it. Keep files to a few hundred declarations, so that Lake builds them in parallel and an
+  stays, give its reason in a `--` comment ending its line or just above it; the audit lists every override with its
+  reason and its module's build time (`heartbeats` in its report) and refuses none. Keep files to a few hundred declarations, so that Lake builds them in parallel and an
   edit re-elaborates little.
 - **Push after every commit.** Work that lives only in a VM's worktree is lost when the VM is suspended.
 
