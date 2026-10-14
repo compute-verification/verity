@@ -2,7 +2,8 @@
 `RecVStar.checkShared` (`SharedOwnRoot`): a session's port reading a value the verifier's shared rows (`--rec-rows`)
 register passes only at that registration (the first entry reading the value; the reads may differ), and a port reading
 R's tops `rec-top-stacked-L<l>` passes only where the shared rows register them. A port reading a value the shared rows
-do not register, other than R's tops, is not checked here.
+do not register, other than R's tops, is not checked here. RecSparse and R's opening fail closed unless the rows register
+`rec-claim`.
 -/
 import Flock.RecVStar
 
@@ -25,6 +26,10 @@ def passes (registered : Array Registered.Port) (rows : Option (Array Registered
 #guard passes #[port "coef" "rec-coef" (root := 2)] (some rows)
 #guard passes #[port "coef" "rec-coef" (root := 2)] none
 #guard passes #[port "m0" "rec-c0", port "h" "rec-c0" (reads := #[none])] (some rows)
+
+#guard !(RecVStar.checkShared (.sparse ⟨18, 13, 6, 0⟩ 38) #[] (some rows)).toBool
+#guard (RecVStar.checkShared (.sparse ⟨18, 13, 6, 0⟩ 38) #[]
+  (some (rows.push (port "claim" RecVStar.CLAIM_VALUE)))).toBool
 
 #guard !passes #[port "out" top (leaves := 128) (root := 2)] (some rows)
 #guard !passes #[port "out" top] (some rows)

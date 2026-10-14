@@ -301,11 +301,13 @@ def stage_stacked(public: dict, private: dict, program: str, sr: SimpleNamespace
 def shared_rows(algebra, stacked=()) -> dict:
     """The verifier's record of V*'s shared rows (`--rec-rows`: `RecVStar.checkRows`, `checkAcc`, `checkShared`) from staged
     statement directories: every row port of the algebra's parts ``algebra`` (all but ``v`` and ``out``), and, under its value,
-    the ``out`` entry of each of R's levels ``stacked`` (`stage_stacked`'s ``L<l>``, reading ``rec-top-stacked-L<l>``). Each
+    the ``out`` entry of each of R's levels ``stacked`` (`stage_stacked`'s ``L<l>``, reading ``rec-top-stacked-L<l>``), plus
+    their sibling ``open`` statement's ``claim`` registration. Each
     session's port reading a value listed here must be that registration but in reads (`checkShared`, the first entry of the
     value), so two entries of one name, or of one value, that differ are refused here."""
     ports: dict = {}
-    for d, top in [(Path(d), False) for d in algebra] + [(Path(d), True) for d in stacked]:
+    stacked = tuple(Path(d) for d in stacked)
+    for d, top in [(Path(d), False) for d in algebra] + [(d, True) for d in stacked]:
         for nm, e in json.loads((d / "registered.json").read_text())["ports"].items():
             if top != (nm == "out") or (not top and nm == "v"):
                 continue
@@ -313,6 +315,14 @@ def shared_rows(algebra, stacked=()) -> dict:
                 raise ValueError(f"{d}: its out reads {e['value']}, not one of R's tops rec-top-stacked-L<l>")
             if ports.setdefault(e["value"] if top else nm, e) != e:
                 raise ValueError(f"{d}: its port {nm} is not the other statements' {e['value'] if top else nm}")
+    if stacked:
+        opens = {d.parent / "open" / "registered.json" for d in stacked}
+        if len(opens) != 1:
+            raise ValueError("R's levels do not have one sibling opening")
+        claim = json.loads(opens.pop().read_text())["ports"]["claim"]
+        if claim["value"] != O.CLAIM_VALUE:
+            raise ValueError(f"R's opening claim reads {claim['value']}, not {O.CLAIM_VALUE}")
+        ports["claim"] = claim
     site = lambda e: {k: x for k, x in e.items() if k != "reads"}  # noqa: E731
     first: dict = {}
     for nm, e in ports.items():

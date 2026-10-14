@@ -1186,12 +1186,36 @@ def checkLabels (draw : Option Json) (count : Nat) (sts : Array Stmt) : V Unit :
   | none => pure ()
   | some d => (Array.range sts.size).forM fun j => checkLabel (tableDraw d count j) sts[j]!.pub j
 
+/-- Whether this statement reads the sparse phase's claim. -/
+def claimUnit : VStar.Stmt → Bool
+  | .sparse .. | .opening .. => true
+  | _ => false
+
+/-- Whether the verifier's shared rows register the sparse phase's claim. -/
+def sharedClaim (rows : Option (Array Registered.Port)) : Bool :=
+  (rows.bind (·.find? (·.value == CLAIM_VALUE))).isSome
+
+/-- A statement reading the sparse phase's claim requires its registration in `--rec-rows`. -/
+def checkClaimShared (s : VStar.Stmt) (rows : Option (Array Registered.Port)) : V Unit := do
+  if claimUnit s && !sharedClaim rows then
+    throw s!"{s.name}: it reads {CLAIM_VALUE}; pass the verifier's shared rows (--rec-rows F), which register it"
+
+theorem checkClaimShared_ok {s : VStar.Stmt} {rows : Option (Array Registered.Port)}
+    (h : checkClaimShared s rows = .ok ()) (hs : claimUnit s = true) : sharedClaim rows = true := by
+  unfold checkClaimShared at h
+  split at h
+  · cases h
+  · rename_i hf
+    simpa [hs] using hf
+
 /-- **A value the verifier's shared rows register is one registration in every session** (`SharedOwnRoot`): each port of
 `--registered` reading a value some entry of `--rec-rows` reads agrees with the first such entry in every field but reads
 (`portDiff?`: value, root, leaf count, row width, domain), and a port reading R's tops `rec-top-stacked-L<l>`
-(`stackedTopLevel`) needs such an entry. -/
+(`stackedTopLevel`) needs such an entry. RecSparse and R's opening also require `rec-claim`, so their accepted checks
+establish claim coverage rather than taking it as a premise. -/
 def checkShared (s : VStar.Stmt) (registered : Array Registered.Port) (rows : Option (Array Registered.Port)) :
     V Unit := do
+  checkClaimShared s rows
   for p in registered do
     match rows.bind (·.find? (·.value == p.value)) with
     | some w =>

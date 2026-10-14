@@ -210,8 +210,10 @@ def test_the_shared_rows_list_the_algebras_row_ports_and_rs_tops_and_refuse_two_
     p0 = staged("p0", {"m0": e("rec-c0"), "acc0": e(O.ACC_VALUE, "bb"), "v": e("rec-v"), "out": e("rec-zero")})
     p1 = staged("p1", {"m0": e("rec-c0"), "acc1": e(O.ACC_VALUE, "bb", (1,)), "v": e("rec-v", "cc")})
     top = staged("L0", {"out": e("rec-top-stacked-L0", "ee"), "acc": e(O.ACC_VALUE, "bb", (5,))})
+    staged("open", {"claim": e(O.CLAIM_VALUE, "ff")})
     assert S.shared_rows([p0, p1], [top])["ports"] == {"m0": e("rec-c0"), "acc0": e(O.ACC_VALUE, "bb"),
                                                        "acc1": e(O.ACC_VALUE, "bb", (1,)),
+                                                       "claim": e(O.CLAIM_VALUE, "ff"),
                                                        "rec-top-stacked-L0": e("rec-top-stacked-L0", "ee")}
     with pytest.raises(ValueError, match="its port m0 is not the other statements' m0"):
         S.shared_rows([p0, staged("p2", {"m0": e("rec-c0", "ab")})])
