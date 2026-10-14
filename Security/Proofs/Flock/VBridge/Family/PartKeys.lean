@@ -202,7 +202,3 @@ end VStarFamily
 end family
 
 end FlockVBridge.Family
-
-#print axioms FlockVBridge.OfVStar.srcKey_laid
-#print axioms FlockVBridge.OfVStar.srcKey_v
-#print axioms FlockVBridge.Family.VStarFamily.repKeys_part
