@@ -1225,6 +1225,14 @@ def checkShared (s : VStar.Stmt) (registered : Array Registered.Port) (rows : Op
       if (stackedTopLevel p.value).isSome then
         throw s!"{s.name}: its port {p.name} reads R's tops {p.value}; pass the verifier's shared rows (--rec-rows F), which register it"
 
+theorem checkShared_claim_ok {s : VStar.Stmt} {registered : Array Registered.Port}
+    {rows : Option (Array Registered.Port)} (h : checkShared s registered rows = .ok ())
+    (hs : claimUnit s = true) : sharedClaim rows = true := by
+  unfold checkShared at h
+  cases hc : checkClaimShared s rows with
+  | error e => simp [hc] at h
+  | ok u => cases u; exact checkClaimShared_ok hc hs
+
 /-- With an inner shape, the statement must be V*'s: `tags`, the statement the verifier set it up as (`--statement`), is
 V*'s own `Tags.circuit`, compared by name (`Tags.find?` gives each name one statement); it holds no lookup table
 (`tables`, the verifier's `--tables`/`--archive` MUFU tables, is empty: V*'s circuits read none); it needs the verifier's own
