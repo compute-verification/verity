@@ -27,6 +27,7 @@ def test_the_registry_names_each_harness_schema_once():
     from tests.properties import (
         dsv4_compressor_capture_gpu,
         dsv4_decode_index_row_capture_gpu,
+        dsv4_decode_metadata_capture_gpu,
         dsv4_flashmla_capture_gpu,
         dsv4_indexer_capture_gpu,
         dsv4_indices_capture_gpu,
@@ -53,6 +54,7 @@ def test_the_registry_names_each_harness_schema_once():
     assert REGISTRY["dsv4_compressor_capture"].schema == dsv4_compressor_capture_gpu.SCHEMA
     assert REGISTRY["dsv4_indices_capture"].schema == dsv4_indices_capture_gpu.SCHEMA
     assert REGISTRY["dsv4_decode_index_row_capture"].schema == dsv4_decode_index_row_capture_gpu.SCHEMA
+    assert REGISTRY["dsv4_decode_metadata_capture"].schema == dsv4_decode_metadata_capture_gpu.SCHEMA
 
 
 def test_harnesses_return_sealed_records(tmp_path):
