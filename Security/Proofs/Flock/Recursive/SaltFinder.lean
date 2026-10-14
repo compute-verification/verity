@@ -15,7 +15,8 @@ computable only with `salt i` in hand.
 * `ReadsX.SaltClash`, `SaltColl`: some session's registered read whose hm96 pair against row `readAt` of `rows` under
   `salt` collides;
 * `saltFinder`, `prob_saltColl_le`: the finder that plays the recursive audit once, with `salt` its input, and its
-  `qS²/2^513`; `prob_regTopSalt_le`: its union with `regFinder` and `topFinder`.
+  `qS²/2^513`; its union with `regFinder`, `topFinder` and `valueFinder` is `prob_regTopValueSalt_le`
+  (`Recursive/ValueFinder.lean`).
 -/
 
 namespace FlockC3.RegLevels
@@ -114,29 +115,8 @@ theorem prob_saltColl_le (lv : Level) (cap : Cap Refine.Dig) (salt : ℕ → Byt
   exact (ENNReal.le_ofReal_iff_toReal_le (ne_top_of_le_ne_top ENNReal.one_ne_top (prob_le_one _ _ _))
     (by positivity)).2 hev
 
-/-- **The registrant, top and held-salt finders union-bound their three one-run bad events** (the value tie's, at the
-values the verifier registers itself, is a fourth term when it lands). -/
-theorem prob_regTopSalt_le
-    (wr : List (Cm × I.Coin) → Lean.Json × String) (st : Flock.Stmt) (reg : Lean.Json)
-    (bcs' : Array ByteArray) (lv : Level) (cap : Cap Refine.Dig) (salt : ℕ → ByteArray)
-    (hstk : StackedTopAt lv st reg cap salt bcs')
-    (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
-    (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
-    {qX qT qS : ℝ} (hX : (regFinder zs dg N σ).CR H512 qX)
-    (hT : (topFinder wr st reg bcs' lv cap salt hstk zs σ).CR H512 qT)
-    (hS : (saltFinder lv cap salt zs σ).CR H512 qS) :
-    prob (fun o => (RegColl zs o.1 o.2.1 o.2.2.1 o.2.2.2.1 ∨
-        (AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ TopColl wr st reg bcs' o.2.2.1)) ∨
-        SaltColl lv cap salt zs o.1 o.2.1 o.2.2.1 o.2.2.2.1)
-      (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
-      ENNReal.ofReal (qX ^ 2 / 2 ^ (513 : ℝ)) + ENNReal.ofReal (qT ^ 2 / 2 ^ (513 : ℝ)) +
-        ENNReal.ofReal (qS ^ 2 / 2 ^ (513 : ℝ)) :=
-  (prob_or_le _ _ _ _).trans (add_le_add (prob_regOrTop_le wr st reg bcs' lv cap salt hstk zs σ hX hT)
-    (prob_saltColl_le lv cap salt zs σ hS))
-
 end FlockSoundness.Discharge.Recursion
 
 #print axioms FlockSoundness.Registered.ReadsX.SaltClash.collision
 #print axioms FlockSoundness.Discharge.Recursion.SaltColl.collision
 #print axioms FlockSoundness.Discharge.Recursion.prob_saltColl_le
-#print axioms FlockSoundness.Discharge.Recursion.prob_regTopSalt_le

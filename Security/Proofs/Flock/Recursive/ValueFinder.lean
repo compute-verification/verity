@@ -17,8 +17,11 @@ recursive audit and union-bounded with theirs:
   under `cr/sha-512` (`Finder.CR` at `qV`), at most `qV²/2^513` likely, once per audit;
 * `prob_valueColl_fork`: the fork form, the finder finds a collision or the event never happens;
 * `valueColl_of_tie`, `value_tie_coll`: `value_tie`'s collision disjunct is `ValueColl`;
-* `prob_regTopValue_le`: `RegColl`, the held top's `TopColl` and `ValueColl` union-bounded. A further case (C's level-0
-  salt finder) is one more `prob_or_le` around it.
+* `prob_regTopValue_le`: `RegColl`, the held top's `TopColl` and `ValueColl` union-bounded; `prob_regTopValueSalt_le`:
+  with the held salts' `SaltColl` (`saltFinder`), one more `prob_or_le` around it.
+
+`ValueSrc`, `valueAt`, `ValueColl`, `valuePick` and `valueFinder` are defined in `Recursive/ValueSrc.lean`, which the
+guarantee imports.
 
 An honest budget for `valueFinder` counts the audit's run and, at each read the search tests, what `valueColl`
 recomputes: at most `7n + 2D + 5` SHA-512 evaluations for `n` rows and `D = log2ceil n` (`3n + 2^(D+1) + 2D + 7`, and
@@ -31,27 +34,6 @@ open Game Audit Refine StrictCR
 open scoped ENNReal
 
 variable {n : ℕ} {L : Law n} {Reg Cm Reg₂ Reg' : Type} {I : Inner} {S : ℕ} {Vs : Fin S → VStmt}
-
-/-- **A read of V*'s sessions**: the session `j`, the unit `u` and the row port `q`, read at `.inl (u, q)`. -/
-abbrev VRead (Vs : Fin S → VStmt) : Type := (j : Fin S) × Fin (Vs j).nv × Fin (Vs j).c.ports.size
-
-/-- **The verifier's rows of the values it registers itself**: at each history `(R, ω, t)`, registration `R₂` and read
-`(j, u, q)`, the rows and their salts `RecCoins.checkValue` holds the port to, or none. -/
-abbrev ValueSrc (L : Law n) (Reg Cm Reg₂ : Type) (I : Inner) (Vs : Fin S → VStmt) : Type :=
-  Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → VRead Vs → Option (Array (Array ℕ) × (ℕ → ByteArray))
-
-/-- **`valueColl` at a read**: at the read `x = (j, u, q)`, against the verifier's rows and salts there, the registrant's
-row bytes (`encPortH` of its value), salt and path; nothing where the source has no rows. -/
-noncomputable def valueAt (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
-    (vsrc : ValueSrc L Reg Cm Reg₂ I Vs) (R : Reg) (ω : L.Ω) (t : List (Cm × I.Coin)) (R₂ : Reg₂) (x : VRead Vs) :
-    Pair :=
-  match vsrc R ω t R₂ x with
-  | none => none
-  | some (rows, salt) =>
-    FlockC3.RegLevels.valueColl ((zs R ω t R₂ x.1).rd.port (.inl x.2)) rows salt x.2.1.val
-      (FlockSoundness.Discharge.HiddenExec.encPortH (Vs x.1).c.ports[x.2.2.val]!
-        (FlockVBridge.Decode.regVal (zs R ω t R₂ x.1) (.inl x.2)))
-      ((zs R ω t R₂ x.1).rd.ws (.inl x.2)) ((zs R ω t R₂ x.1).rd.wpath (.inl x.2))
 
 theorem valueAt_of_some {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {vsrc : ValueSrc L Reg Cm Reg₂ I Vs} {R : Reg} {ω : L.Ω} {t : List (Cm × I.Coin)} {R₂ : Reg₂} {j : Fin S}
@@ -66,12 +48,6 @@ theorem valueAt_of_some {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ �
     | (unfold valueAt; rw [hsrc]; done)
     | (unfold valueAt; rw [hsrc]; rfl)
     | simp only [valueAt, hsrc]
-
-/-- **A registrant's row is off a value the verifier registers itself, by a collision**: at the history `(R, ω, t)`
-and registration `R₂`, some registered read of some session at which `valueAt` is a collision of SHA-512. -/
-def ValueColl (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
-    (vsrc : ValueSrc L Reg Cm Reg₂ I Vs) (R : Reg) (ω : L.Ω) (t : List (Cm × I.Coin)) (R₂ : Reg₂) : Prop :=
-  ∃ x : VRead Vs, (zs R ω t R₂ x.1).rd.isRead (.inl x.2) ∧ IsColl Refine.H512 (valueAt zs vsrc R ω t R₂ x)
 
 /-- **`value_tie`'s collision is `ValueColl`**: at a registered read `(u, q)` of session `j` where the source gives
 `rows` and `salt`, a collision of `valueColl` there. -/
@@ -110,13 +86,6 @@ theorem value_tie_coll {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ →
   obtain ⟨hu, hor⟩ := FlockC3.RegLevels.value_tie (zs R ω t R₂ j) h hprog hp hone hpos hseg
   exact ⟨hu, hor.imp id fun hc => valueColl_of_tie hsrc hp hc⟩
 
-open Classical in
-/-- **`valueFinder`'s output at an outcome**: `valueAt` at a read where `ValueColl`'s test passes, if there is one. -/
-noncomputable def valuePick (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
-    (vsrc : ValueSrc L Reg Cm Reg₂ I Vs) {β : Type} (o : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × β)) : Pair :=
-  if h : ValueColl zs vsrc o.1 o.2.1 o.2.2.1 o.2.2.2.1 then valueAt zs vsrc o.1 o.2.1 o.2.2.1 o.2.2.2.1 h.choose
-  else none
-
 theorem ind_valueColl_le (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (vsrc : ValueSrc L Reg Cm Reg₂ I Vs) {β : Type} (o : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × β)) :
     ind (fun o : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × β) => ValueColl zs vsrc o.1 o.2.1 o.2.2.1 o.2.2.2.1) o ≤
@@ -134,13 +103,6 @@ theorem ind_valueColl_le (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ �
         ValueColl zs vsrc o.1 o.2.1 o.2.2.1 o.2.2.2.1) o = 0 := if_neg h
     rw [h0]
     exact ind_nonneg _ _
-
-/-- **The value finder**: one run of the recursive audit against the prover `σ`, output `valueColl`'s pair at a
-registered read of the outcome's history and registration where it collides (`ValueColl`), else nothing. -/
-noncomputable def valueFinder (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
-    (vsrc : ValueSrc L Reg Cm Reg₂ I Vs) (dg : ByteArray → ByteArray) (N : ℕ)
-    (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N)) : Finder Pair :=
-  oneRun _ σ (valuePick zs vsrc)
 
 /-- **A registrant's row is off a verifier's value at most `qV²/2^513` likely** under `cr/sha-512` for `valueFinder`
 at the budget `qV`: once per audit, whatever the number of sessions and reads. -/
@@ -179,12 +141,12 @@ held top differs from the registered strings (`topFinder` at `qT`), or a registr
 theorem prob_regTopValue_le
     (wr : List (Cm × I.Coin) → Lean.Json × String) (st : Flock.Stmt) (reg : Lean.Json)
     (bcs' : Array ByteArray) (lv : FlockSoundness.Accounting.Level) (cap : FlockSoundness.Model.Cap Refine.Dig)
-    (hstk : StackedTopAt lv st reg cap bcs')
+    (salt : ℕ → ByteArray) (hstk : StackedTopAt lv st reg cap salt bcs')
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (vsrc : ValueSrc L Reg Cm Reg₂ I Vs) (dg : ByteArray → ByteArray) (N : ℕ)
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
     {qX qT qV : ℝ} (hX : (regFinder zs dg N σ).CR Refine.H512 qX)
-    (hT : (topFinder wr st reg bcs' lv cap hstk zs σ).CR Refine.H512 qT)
+    (hT : (topFinder wr st reg bcs' lv cap salt hstk zs σ).CR Refine.H512 qT)
     (hV : (valueFinder zs vsrc dg N σ).CR Refine.H512 qV) :
     prob (fun o => (RegColl zs o.1 o.2.1 o.2.2.1 o.2.2.2.1 ∨
         (AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ TopColl wr st reg bcs' o.2.2.1)) ∨
@@ -193,6 +155,30 @@ theorem prob_regTopValue_le
       ENNReal.ofReal (qX ^ 2 / 2 ^ (513 : ℝ)) + ENNReal.ofReal (qT ^ 2 / 2 ^ (513 : ℝ)) +
         ENNReal.ofReal (qV ^ 2 / 2 ^ (513 : ℝ)) :=
   (prob_or_le _ _ _ _).trans (add_le_add
-    (prob_regOrTop_le wr st reg bcs' lv cap hstk zs σ hX hT) (prob_valueColl_le zs vsrc dg N σ hV))
+    (prob_regOrTop_le wr st reg bcs' lv cap salt hstk zs σ hX hT) (prob_valueColl_le zs vsrc dg N σ hV))
+
+/-- **The registrant, held-top, value and held-salt cases, union-bounded**: `prob_regTopValue_le`, and a session's read
+of R's level-0 top off its row under the held salts (`saltFinder` at `qS`). -/
+theorem prob_regTopValueSalt_le
+    (wr : List (Cm × I.Coin) → Lean.Json × String) (st : Flock.Stmt) (reg : Lean.Json)
+    (bcs' : Array ByteArray) (lv : FlockSoundness.Accounting.Level) (cap : FlockSoundness.Model.Cap Refine.Dig)
+    (salt : ℕ → ByteArray) (hstk : StackedTopAt lv st reg cap salt bcs')
+    (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (vsrc : ValueSrc L Reg Cm Reg₂ I Vs) (dg : ByteArray → ByteArray) (N : ℕ)
+    (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
+    {qX qT qV qS : ℝ} (hX : (regFinder zs dg N σ).CR Refine.H512 qX)
+    (hT : (topFinder wr st reg bcs' lv cap salt hstk zs σ).CR Refine.H512 qT)
+    (hV : (valueFinder zs vsrc dg N σ).CR Refine.H512 qV) (hS : (saltFinder lv cap salt zs σ).CR Refine.H512 qS) :
+    prob (fun o => ((RegColl zs o.1 o.2.1 o.2.2.1 o.2.2.2.1 ∨
+        (AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ TopColl wr st reg bcs' o.2.2.1)) ∨
+        ValueColl zs vsrc o.1 o.2.1 o.2.2.1 o.2.2.2.1) ∨ SaltColl lv cap salt zs o.1 o.2.1 o.2.2.1 o.2.2.2.1)
+      (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
+      ENNReal.ofReal (qX ^ 2 / 2 ^ (513 : ℝ)) + ENNReal.ofReal (qT ^ 2 / 2 ^ (513 : ℝ)) +
+        ENNReal.ofReal (qV ^ 2 / 2 ^ (513 : ℝ)) + ENNReal.ofReal (qS ^ 2 / 2 ^ (513 : ℝ)) :=
+  (prob_or_le _ _ _ _).trans (add_le_add
+    (prob_regTopValue_le wr st reg bcs' lv cap salt hstk zs vsrc dg N σ hX hT hV) (prob_saltColl_le lv cap salt zs σ hS))
 
 end FlockSoundness.Discharge.Recursion
+
+#print axioms FlockSoundness.Discharge.Recursion.prob_regTopValue_le
+#print axioms FlockSoundness.Discharge.Recursion.prob_regTopValueSalt_le
