@@ -2,6 +2,7 @@ import Proofs.Flock.Recursive.PublicAudit
 import Proofs.Flock.Recursive.HoloExec
 import Proofs.Flock.Recursive.HoloCoins
 import Proofs.Flock.Recursive.HoloMap
+import Proofs.Flock.Recursive.TopFinder
 
 /-!
 # The recursive audit at candidate 3 (trusted)
@@ -31,8 +32,9 @@ What it takes, against `PublicAudit`:
 * R's registration, which says which table the audit is about, as `RecursiveAudit`'s `p`, `path₀` and `_hreg` say which
   private circuit: the record `reg`, the verifier of record's `--rec-inner-registration`, which `st`'s META binds by
   its digest (`metaRegistration st`, as the verifier reads it off `--rec-inner-circuit`, the file `st` is set up from),
-  and R's cap `cap`, the record's `stacked` entry (`_hstk`, `StackedTop`), a relation between public objects a user can
-  check, so `st` fixes the cap up to a collision. No registrant's openings are taken: the word is the one the prover's
+  and R's cap `cap`, the record's `stacked` entry at explicit strings `bcs'` (`_hstk`, `StackedTopAt`), a relation
+  between public objects a user can check, so `st` fixes the cap up to `topFinder`'s collision. No registrant's
+  openings are taken: the word is the one the prover's
   own runs open at R's level 0 against `cap` at each draw (`regWord`, the knowledge form of `note:41519fce`), on which
   two runs disagree only by a collision, read as an inner fork. The word's closeness to a codeword is no hypothesis: the
   statement holds only when some table within the unique-decoding radius of the word has a satisfiable hidden
@@ -285,8 +287,9 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
     -- check 5's source at the inner session's record (`--rec-inner-coins` with it, or the inner session's files), the
     -- verifier's own
     (coins : String → Option Flock.RecCoins.Source)
-    -- R's cap, the record's `stacked` entry
-    (cap : Cap Refine.Dig) (_hstk : StackedTop (holoAt st hp).rsch.sch.level₀ st reg cap)
+    -- R's cap and the explicit commit strings of the record's `stacked` entry
+    (cap : Cap Refine.Dig) (bcs' : Array ByteArray)
+    (_hstk : StackedTopAt (holoAt st hp).rsch.sch.level₀ st reg cap bcs')
     -- the verifier of record's inner shape (`--rec-inner`), and V*'s statements over its list, as the prover supplies
     -- their sessions
     (ish : RecVStar.Inner) {Vs : Fin (vstarCount ish) → VStmt}
@@ -339,6 +342,9 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
           outerVR (zr R ω t) dg N) σ = 0 ∨
     ∃ h : Typed zr,
       (regFinder (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h) dg N
+        (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ)).Finds Refine.H512 ∨
+      (topFinder wr st reg bcs' (holoAt st hp).rsch.sch.level₀ cap _hstk
+        (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h)
         (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ)).Finds Refine.H512 ∨
       RoundFork (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h) dg N k Rw
         (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ) cmt ∨
