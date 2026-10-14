@@ -32,7 +32,8 @@ CMAP = CM.load(MAP)
 #: `exists` Program -> {vocabulary role: representative statics}
 SITES = {
     "embedding-shard": {"embedding_shard": dict(VS=8, H=8, START=0)},
-    "fp8-block-linear": {"fp8_group_quant": dict(K=256, G=128), "scaled_mm_fp8_block": dict(K=256, N=256, G=128)},
+    "fp8-block-linear-deepgemm": {"flashinfer_fp8_linear": dict(K=256, N=256), "deepgemm_fp8_linear": dict(K=256, N=256)},
+    "rmsnorm-cuda": {"rmsnorm_cuda": dict(N=8, EPS=1e-6, BLOCK=1), "rmsnorm_fused_cuda": dict(N=8, EPS=1e-6, BLOCK=8)},
     "silu-mul": {"silu_mul": dict(I=8)},
     "bf16-add": {"residual_add": dict(N=8)},
     "moe-sum": {"moe_sum": dict(TOPK=2, H=8)},
@@ -96,16 +97,16 @@ def test_the_map_cites_the_definitions_the_build_binds_at_its_target():
 
 def test_a_stale_or_foreign_version_is_reported():
     """The map as it was cited: `SiluMul_v1` beside the Build's `SiluMul_v2`, the fused-norm residual add for MoERunner's ATen add,
-    the per-coordinate GEMM where the target binds the shared-scale one, and token selection's Boolean version alone."""
+    the small-M FlashInfer linear alone where the target also binds DeepGEMM's, and token selection's Boolean version alone."""
     cmap = copy.deepcopy(CMAP)
     cmap["programs"]["silu-mul"]["definitions"] = ["SiluMul_v1", "SiluMul_v2"]
     cmap["programs"]["bf16-add"]["definitions"] = ["Bf16AddF2fp_v1"]
-    cmap["programs"]["fp8-block-linear"]["definitions"] = ["Fp8GroupQuant_v1", "ScaledMmFp8Block_v1"]
+    cmap["programs"]["fp8-block-linear-deepgemm"]["definitions"] = ["FlashInferFp8Linear_v1"]
     cmap["programs"]["token-select"]["definitions"] = ["TokenSelect_v2"]
     assert violations(cmap) == [
         "bf16-add: the Build binds ResidualAdd_v1 at the map's target; the map does not cite it",
         "bf16-add: cites Bf16AddF2fp_v1; its roles ['residual_add'] bind ['ResidualAdd_v1']",
-        "fp8-block-linear: the Build binds ScaledMmFp8BlockSharedScale_v1 at the map's target; the map does not cite it",
+        "fp8-block-linear-deepgemm: the Build binds DeepGemmFp8Linear_v1 at the map's target; the map does not cite it",
         "silu-mul: cites SiluMul_v1; its roles ['silu_mul'] bind ['SiluMul_v2']",
         "token-select: the Build binds TokenSelect_v1 at the map's target; the map does not cite it",
     ]

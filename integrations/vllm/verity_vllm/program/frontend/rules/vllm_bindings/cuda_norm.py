@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import torch
 
-from verity.ml.circuits.defs import bind
 from verity.ml.circuits.refs import Coll
 from verity_vllm.program.frontend.derive import Alloc
 from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo
@@ -76,7 +75,7 @@ class CudaRmsNormRule(InPlaceRule):
         wc = ctx.coll(w)
         N = rows[0].type.n
         block = C.launch_block(len(rows), N, fused=False)
-        fn = bind(C.RMSNormCudaVector8, N=N, EPS=eps, BLOCK=block)
+        fn = ctx.kind("rmsnorm_cuda", node, N=N, EPS=eps, BLOCK=block)
         outs = [ctx.call(fn, row, wc, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, row in enumerate(rows)]
         ctx.rebind(out, from_rows(outs, lead), self, what="out")
         ctx.bind_weight_role(w, self, "rmsnorm.weight", N=N, EPS=eps)
@@ -127,7 +126,7 @@ class CudaFusedAddRmsNormRule(InPlaceRule):
         wc = ctx.coll(w)
         N = xr[0].type.n
         block = C.launch_block(len(xr), N, fused=True)
-        fn = bind(C.RMSNormFusedCudaVector8, N=N, EPS=eps, BLOCK=block)
+        fn = ctx.kind("rmsnorm_fused_cuda", node, N=N, EPS=eps, BLOCK=block)
         normed, residual = [], []
         for i, (a, b) in enumerate(zip(xr, rr)):
             out = ctx.call(fn, a, b, wc, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]")
