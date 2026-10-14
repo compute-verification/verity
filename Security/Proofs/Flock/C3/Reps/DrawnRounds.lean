@@ -42,10 +42,7 @@ theorem coins_of_checkCommitRounds {i : RecVStar.Inner} {cs : InnerCommits} {rep
         st.coins.map (·.size) = rep.map (·.1)) (fun a r hb => by
       try simp only at hb
       split at hb
-      · first
-        | exact absurd hb (checkThrow_ne _ _)
-        | exact absurd (checkBind_ok hb) fun ⟨_, h1, _⟩ => checkThrow_ne _ _ h1
-        | cases hb
+      · exact absurd hb (checkThrow_ne _ _)
       · rename_i hne
         refine ⟨fun hn => ?_, (Except.ok.inj hb).symm⟩
         rw [Bool.or_eq_false_iff] at hn
@@ -61,10 +58,7 @@ theorem repRounds_zp {m kLog claims : ℕ} {rs : Array SchedRound} (h : holoRepR
   refine ⟨out, hout, ?_⟩
   try dsimp only at h
   split at h
-  · first
-    | cases h
-    | (obtain ⟨_, h1, _⟩ := HoloRepCoins.obind_some h; cases h1)
-    | simp at h
+  · cases h
   · rename_i hcond
     simpa [zpRound] using hcond
 
@@ -103,9 +97,7 @@ theorem stream_of_custody {Cm Coin : Type} {wr : List (Cm × Coin) → Lean.Json
     | none =>
       have hc' : (cs.stream? s).bind (·.coins[q]?) = some _ := hc
       rw [hx] at hc'
-      first
-      | cases hc'
-      | simp at hc'
+      cases hc'
     | some x => exact ⟨cs, x, rfl, hx⟩
 
 theorem coinRounds_zero {m kLog claims : ℕ} {rs : Array SchedRound} (hc : 0 < claims)
