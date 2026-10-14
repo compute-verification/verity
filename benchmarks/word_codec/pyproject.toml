@@ -7,6 +7,8 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# tests/ imports the bandwidth audit's tags, which import the BLAKE3 reference and the framing.
-inputs = ["verity/__init__.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
-          "verity/core/protocols/bandwidth", "verity/ml/__init__.py", "verity/ml/crypto", "verity/ml/randomness"]
+# tests/ imports the bandwidth audit's tags, which import the BLAKE3 reference and the framing; the wide codec's tests
+# check it against PoUS's reference codec (verity.core.protocols.pous), which reads verity.errors and verity.ml.commitments.
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+          "verity/core/protocols/bandwidth", "verity/core/protocols/pous", "verity/ml/__init__.py", "verity/ml/commitments",
+          "verity/ml/crypto", "verity/ml/randomness"]

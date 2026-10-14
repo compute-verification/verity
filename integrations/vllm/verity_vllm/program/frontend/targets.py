@@ -33,6 +33,7 @@ from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32, BlackwellNvf4Om
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import fa2_check_inf as F2
 from verity_vllm.program.registry import attention_vocab
+from verity_vllm.program.registry import cuda_rmsnorm as CR
 from verity_vllm.program.registry import value_inputs as VI
 from verity_vllm.program.registry import fa3_check_inf as F3
 from verity_vllm.program.registry import fp8, nvfp4
@@ -440,15 +441,38 @@ def nvfp4_gemm_spec(profile, K: int, N: int):
     return bind(nvfp4.ScaledMmNvfp4, K=int(K), N=int(N), DOT=dot)
 
 
-def rmsnorm_fused_spec(profile, N: int, EPS: float | None = None, eps_input: bool = False):
+def rmsnorm_spec(profile, N: int, EPS: float, M: int = 1):
+    """The registered Definition of `_C.rms_norm` on one row for a launch of ``M`` rows.
+
+    Batch-invariant serving dispatches the Triton kernel.  Default serving dispatches
+    vLLM's width-8 CUDA kernel, whose launch block is selected from the launch's row
+    count and hidden size.
+    """
+    if profile.batch_invariant:
+        return bind(b1.RMSNormTriton, N=int(N), EPS=EPS)
+    return bind(CR.RMSNormCudaVector8, N=int(N), EPS=EPS,
+                BLOCK=CR.launch_block(int(M), int(N), fused=False))
+
+
+def rmsnorm_value_spec(profile, N: int):
+    """The registered-epsilon twin of :func:`rmsnorm_spec`, available on the
+    batch-invariant Triton path."""
+    if not profile.batch_invariant:
+        raise UnregisteredTarget("rms_norm without batch invariance has no registered-epsilon twin of RMSNormCudaVector8_v1")
+    return bind(VI.RMSNormTritonV3, N=int(N))
+
+
+def rmsnorm_fused_spec(profile, N: int, EPS: float | None = None, eps_input: bool = False, M: int = 1):
     """The registered Definition of `_C.fused_add_rms_norm` on one row on the declared target: under `batch_invariant` the generic
     kernel (`RMSNormFusedCuda_v2{N,EPS}`; with `eps_input` its twin `RMSNormFusedCuda_v4{N}` that reads eps as an input); refused by
-    name otherwise, where vLLM launches the width-8 kernel, whose block size off batch invariance has no registered Definition."""
+    name for a registered epsilon otherwise.  Default serving dispatches the width-8
+    kernel at the launch block selected from ``M`` and ``N``."""
     if not profile.batch_invariant:
-        raise UnregisteredTarget("fused_add_rms_norm without batch invariance launches the width-8 fused_add_rms_norm_kernel<bf16, 8> "
-                                 "(layernorm_kernels.cu, `!batch_invariant_launch`), whose block size off batch invariance is not "
-                                 "pinned: RMSNormFusedCuda_v1 models that kernel at the batch-invariant block size, and v2 is the "
-                                 "generic kernel launched only under batch invariance")
+        if eps_input:
+            raise UnregisteredTarget("fused_add_rms_norm without batch invariance has no registered-epsilon twin of "
+                                     "RMSNormFusedCudaVector8_v1")
+        return bind(CR.RMSNormFusedCudaVector8, N=int(N), EPS=EPS,
+                    BLOCK=CR.launch_block(int(M), int(N), fused=True))
     if eps_input:
         return bind(VI.RMSNormFusedCudaV4, N=N)
     return bind(b1.RMSNormFusedCuda, N=N, EPS=EPS)
@@ -522,5 +546,5 @@ def describe(profile) -> dict[str, Any]:
 __all__ = ["TARGETS", "DOTS", "FP8_DOTS", "FP4_DOTS", "UnregisteredTarget", "target_family", "gemm_target", "tensor_core_dot",
            "moe_expert_dot", "moe_expert_gemm_spec", "moe_expert_fp8_dot", "moe_expert_fp8_gemm_spec", "gemm_bias_dot", "gemm_bias_spec", "tuned_gemm_table",
            "check_flash_attn_registered", "fa3_kblock_n", "fa3_tile_m", "fa3_check_inf", "fa3_masked_from", "fa2_check_inf", "fa2_masked_from", "attention_geometry", "uses_accepted_kinds", "gemm_spec",
-           "scaled_mm_fp8_spec", "fp8_block_dot", "scaled_mm_fp8_block_spec", "nvfp4_quant_spec", "nvfp4_gemm_spec", "rmsnorm_fused_spec", "attention_spec", "describe",
+           "scaled_mm_fp8_spec", "fp8_block_dot", "scaled_mm_fp8_block_spec", "nvfp4_quant_spec", "nvfp4_gemm_spec", "rmsnorm_spec", "rmsnorm_value_spec", "rmsnorm_fused_spec", "attention_spec", "describe",
            "LaunchContextConflict", "parse_launch_context", "launch_seqlen_q"]

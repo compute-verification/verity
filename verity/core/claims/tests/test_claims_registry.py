@@ -63,7 +63,8 @@ def test_rate_audit_claims_are_cited_separately() -> None:
     assert "k >= 2 rounds" in work.name and "false when the payload is known" in work.name
     assert "Incompressible(W)" in work.name
     verbatim = get("rate-sketch-verbatim")
-    assert (verbatim.kind, verbatim.standing) == ("model", None) and "whole sectors" in verbatim.name
+    assert (verbatim.kind, verbatim.standing) == ("model", None) and "only as its blocks" in verbatim.name
+    assert "precomputed sketches" in verbatim.name
 
 
 def test_pous_end_to_end_rings_claims_are_cited_separately() -> None:

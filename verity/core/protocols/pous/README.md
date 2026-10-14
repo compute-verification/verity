@@ -58,9 +58,11 @@ print(v.profile().statement())                                                 #
 ~~~
 
 On the deployed path the timed rounds run on the memory challenger (`memory_challenger`), an auditor-trusted device
-inside the node's isolation boundary. It commits its indices in a coin tree before the session, hashes each whole
+on a machine the prover doesn't control at the prover's site (the auditor's own VM or box, under the auditor's account),
+never a process on the prover's node. It commits its indices in a coin tree before the session, hashes each whole
 answer after reading its receipt time (`block_digest`, its `sha512/row/v2` digest: the inner digest of C's leaf, which
-`answer_circuit.py` opens), and signs the session's round records once. `verdict` checks a
+`answer_circuit.py` opens), and signs the session's round records once, under a header bound to the setup's root of `C*`.
+A session's id is the auditor's for one audit, and its `SessionLog` refuses an id it has used. `verdict` checks a
 signed session in the clear and publishes only the verdict. It accepts S1's LMS over SHA-512 at `lms.DEPLOYED`
 (`memory_challenger.LMS`) and nothing else: a test-signed or unsigned record is refused.
 
@@ -69,12 +71,20 @@ from verity.ml.crypto import lms
 from verity.core.protocols.pous import memory_challenger as mc
 
 signer = mc.LmsSigner(key, lms.LeafState(state_path, lms.public_key(key), lms.DEPLOYED.H))  # key = lms.keygen(lms.DEPLOYED, seed)
-coins = mc.CoinTree.draw(challenger_secret, session_id, params.blocks, k)          # before the session
-c = mc.MemoryChallenger(coins, signer, limit_ns=500_000 + rtt, block_bytes=params.block_bytes)
+log = mc.SessionLog(log_path)                     # its own file (mc.SessionLog.create once), never in the key's directory
+coins = mc.CoinTree.draw(challenger_secret, session_id, params.blocks, k)          # session_id: the auditor's, for this audit
+c = mc.MemoryChallenger(coins, signer, log=log, limit_ns=500_000 + rtt, block_bytes=params.block_bytes,
+                        binding=vk.root)                                            # the id used; the setup's root of C*
 signed = c.run(blocks.__getitem__)                                                  # witness: never sent in the clear
 v = mc.verdict(signed, c.commitment, c.openings(), lambda i: mc.block_digest(blocks[i]), trusted={signer.public_key})
 print(v.public())                                                                   # {"accepted": ...}
 ~~~
+
+A recorded run is checked whole by `run.check(trusted, setup, digests, session, session_id)`: the setup's public
+outputs, the memory challenger's table of `C*`'s row digests (the harness's `DIGESTS.bin`) and its signed session, joined
+at P2's deployed point, the session under the id the auditor designated and signed under a key of `trusted`, the
+verifier's own list of memory-challenger keys, which never comes from the run's record. `pous-run TRUSTED.json SETUP.json
+DIGESTS.bin SESSION.json SESSION_ID` (`check/`) is the same check in Lean.
 
 Tests: `uv run pytest verity/core/protocols/pous` (about 8 s). P3's 64 KB-label segment vector runs with `VERITY_POUS_SLOW=1`.
 Regenerate the vectors with `python verity/core/protocols/pous/tests/pous_vectors.py`, and the Lean vectors with

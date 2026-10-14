@@ -90,11 +90,10 @@ recurs: note:<id>      # optional: the earlier note about the same thing
 What happened, with ids (run, PR, commit), and what it cost. What you did instead. The better abstraction, if you see one.
 ~~~
 
-Save it as `~/.research/notes/lanes/<lane>/<YYYYMMDDTHHMMZ>-friction-<slug>.md`. A Project worker without the notes clone
-writes it under the Project store's `internal/lanes/<lane>/`, which the mirror forwards. The notes are public: nothing
-private (lane contract §5b).
+Save it as `~/.research/notes/lanes/<lane>/<YYYYMMDDTHHMMZ>-friction-<slug>.md`. A worker that can't push the notes puts
+the note in its report, and its coordinator saves it. The notes are public: nothing private (lane contract §5b).
 
-**The coordinator's pass.** The root coordinator reads new friction notes once a day in its existing loop
+**The admin's pass.** The admin (`@top`) reads new friction notes once a day in its existing loop
 (`research notes mcp`, `search_notes` with `kind: friction` and `since`). It turns a repeat into a fix assigned to its owner.
 Only a repeat whose fix needs money, keys or a claim becomes a question for Daniel.
 
@@ -102,6 +101,15 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-13 (about 2:24 PM PDT, relayed by top): no Cursor Projects, and no agent state kept only in a Cursor store.
+  Each coordinator is a plain Cursor cloud agent that owns a vertical slice and runs its own subagents; coordinators
+  talk to each other through Slack and Linear; one admin agent holds `@top` in place of the Project's top-level agent;
+  and a successor takes over each lead: the handle stays, and its holder changes.
+- 2026-10-13 (1:33 PM PDT, relayed by top): the recursive audit (`Flock.Guarantees.RecursiveAuditC3`) may rest on the
+  model claim `registrant-holds-openings` (`verity/core/claims`): the prover holds a row and a salt under every leaf it
+  registered, R's level-0 staging salts included. Those salts are held by the prover's own workers behind the firewall.
+  In Lean the guarantee takes `salt` as a binder and is applied at the salts those workers committed under, never at
+  `∃ salt` or a `Classical.choose` of one, and every docstring that reads it cites the claim (lean's review).
 - 2026-10-13 (10:42 AM PDT): an agent closes an old PR without asking when every commit on it is already in another open
   PR ("close old PRs idgaf do that").
 - 2026-10-12 (4:08 PM PDT, to top): Daniel took every recommendation then open in top's walkthrough of his decisions,
@@ -118,11 +126,41 @@ Newest first. Each is Daniel's unless it names the coordinator.
   - PoUW's machine stop restates `TT_OUT` with a per-coin budget, and the static refund stays held.
   - P2 at 2^25 blocks may land first as a stopgap, with the sampled setup check at k = 140, while the word codec is
     the direction.
+- 2026-10-12 (3:59 PM PDT): the remote bandwidth audit's receipt is sketch-then-SHA-512. Each block's ±1 sketch,
+  re-keyed every pass from the chained seed, goes through one SHA-512 compression. The leaves and the frame-v3-sha512
+  tree are unchanged, so the one-hash rule holds. It rests on `RateAuditSketch`, and the full-block SHA-512 receipt
+  is not the default.
+
+- 2026-10-12 (1:53 PM PDT): the remote bandwidth audit treats the prover's resources as one undifferentiated pool.
+  Its guarantee is conservation: receipts over registered data worth at least 99% of the declared capacity were paid
+  for by resources somewhere (reads, held state, or rebuild compute). It makes no claim about where, so it takes no
+  identity assumption, and an undeclared helper only spends resources of its own.
+
+- 2026-10-12 (1:48 PM PDT), the remote bandwidth audit:
+  - The first goal is a mega-secure but slow implementation, and about 4× step overhead is acceptable for now. So
+    the stated codec gets the margin: three rounds, the public XOR mask between rounds (σ_K) and a 1,024-bit word.
+    Two rounds is a later upgrade, once the partial-completion attack is measured.
+  - "99%" is against the node's read capacity over time (R·T). A standing workstream hill-climbs on keeping compute
+    and memory bandwidth full with registered filler reads and matmul tiles.
+  - The claim is the hybrid: 0.15% averaged over a 10-minute horizon, with every window at most 1%.
+  - Never change the model's logits: the lm_head is encoded with a BF16 payload.
+
+- 2026-10-12 (11:55 AM PDT): the remote bandwidth audit may derive each pass's seed by Fiat–Shamir, from the window's
+  challenge, the pass index and the previous pass's root. Live coins per pass are impractical at its rate. This
+  narrows 5 Oct's "live coins only" for that protocol, for now. The same message: if a prover's CPUs can compute what
+  a bound receipt needs, they become a resource to exhaust or count, not a break.
+- 2026-10-12 (11:46 AM PDT): a scheme may refuse all-zero weights. "The weights are known" means no bound may assume
+  the weights are incompressible, not that W = 0 must be in a scheme's domain.
 - 2026-10-12 (about 10:03 AM PDT, in memory accounting's thread): no protocol or guarantee assumes trusted prover
   hardware ("in our setting we will never assume trusted prover hardware so forget about that more broadly"). Nothing
   the prover runs or hosts is trusted: not its GPUs, its host, its links, a confidential-computing enclave or a process
   on its machines. So the bandwidth audit treats host memory over PCIe as a slower tier of the prover's memory and
   prices relayed tags with `RateAuditInteractive`, instead of a trusted host challenger.
+- 2026-10-12 (9:13 AM PDT): for memory and bandwidth accounting:
+  - no assumption that the weights are incompressible, since they may be known, even all zeros;
+  - memory exhaustion is over the node's memory (HBM, KV cache included), not the model's size;
+  - no overhead target: as fast as possible subject to 99%;
+  - the guarantee is stated for the whole node.
 - 2026-10-12 (06:00Z, relayed by top): writing for Daniel puts its math in LaTeX, `\( \)` inline and `\[ \]`
   displayed, quantities included, and states a protocol or guarantee as its security assumptions, then the protocol's
   shape, then the properties provable under them.
