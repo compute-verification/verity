@@ -272,7 +272,7 @@ def _ptypes(spec) -> tuple:
 class _Specs:
     """The vocabulary's kinds for C on the declared target, bound once each (the same objects the rules' `ctx.kind` returns)."""
 
-    def __init__(self, C: ModelShape, target, world: int = 1, rank: int = 0) -> None:
+    def __init__(self, C: ModelShape, target, world: int = 1, rank: int = 0, M: int = 1) -> None:
         from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3 as VOC
         from verity_vllm.program.frontend import targets as TG
         VS, C = C.V // world, rank_shape(C, world)
@@ -285,8 +285,8 @@ class _Specs:
         else:
             self.embedding = self.kind("embedding_shard", VS=VS, H=C.H, START=rank * VS)
             self.all_reduce, self.all_gather = self.kind("all_reduce2", N=C.H), self.kind("all_gather2", N=VS)
-        self.norm0 = self.kind("rmsnorm", N=C.H, EPS=C.EPS)
-        self.fused = self.kind("rmsnorm_fused", N=C.H, EPS=C.EPS, TARGET=target)
+        self.norm0 = self.kind("rmsnorm", N=C.H, EPS=C.EPS, TARGET=target, M=M)
+        self.fused = self.kind("rmsnorm_fused", N=C.H, EPS=C.EPS, TARGET=target, M=M)
         self.qkv, self.o = self.gemm(C.H, C.QKV), self.gemm(C.NH * C.D, C.H)
         self.qkv_bias = self.qkv_fused = None
         if C.qkv_bias:
@@ -295,9 +295,11 @@ class _Specs:
                 self.qkv_bias = self.kind("bias_add", N=C.QKV)
             else:
                 self.qkv = self.qkv_fused = self.kind(role[0], K=C.H, N=C.QKV, **role[1])
-        self.head_norm = self.kind("rmsnorm", N=C.D, EPS=C.EPS) if C.qk_norm == "head" else None
+        self.head_norm = self.kind("rmsnorm", N=C.D, EPS=C.EPS, TARGET=target, M=M * C.NH) if C.qk_norm == "head" else None
         if C.qk_norm == "all":
-            self.q_norm, self.k_norm = (self.kind("rmsnorm", N=n * C.D * world, EPS=C.EPS) for n in (C.NH, C.KVH))
+            self.q_norm, self.k_norm = (
+                self.kind("rmsnorm", N=n * C.D * world, EPS=C.EPS, TARGET=target, M=M) for n in (C.NH, C.KVH)
+            )
             self.q_gather, self.k_gather = (self.kind("all_gather2", N=n * C.D) for n in (C.NH, C.KVH)) if world > 1 else (None, None)
         self.gate_up, self.down, self.logits = self.gemm(C.H, 2 * C.I), self.gemm(C.I, C.H), self.gemm(C.H, VS)
         if C.E:
@@ -662,7 +664,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
         raise Unexpressible(f"vocabulary cannot express: a history of {history} keys under the sliding window of {C.window} keys")
     target = phi.target_profile()
     world, rank = int(phi.tp.get("world", 1)), int(phi.tp.get("rank", 0))
-    specs = _Specs(C, target, world, rank)
+    specs = _Specs(C, target, world, rank, M)
     leaves = weight_leaves(C, world)
     wrec = Record(*leaves)
     n = M if wrapper == "step" else int(LP)
