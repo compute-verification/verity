@@ -43,6 +43,7 @@ def main() -> int:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--chunks", default="14,15,16,17,18", help="log2 of the chunk's blocks")
     ap.add_argument("--ctas", default="0", help="the receipts grid's CTAs, comma-separated (0: one an SM)")
+    ap.add_argument("--tree-ctas", default="0", help="the tree consumer's CTAs, comma-separated (0: one a group, at most 64)")
     ap.add_argument("--kept-from", type=int, default=6)
     ap.add_argument("--passes", type=int, default=30)
     ap.add_argument("--open-passes", type=int, default=300)
@@ -109,9 +110,10 @@ def main() -> int:
 
     out["pipelined"] = []
     for c in [int(x) for x in a.chunks.split(",")]:
-        for ctas in [int(x) for x in a.ctas.split(",")]:
+      for ctas in [int(x) for x in a.ctas.split(",")]:
+        for tree_ctas in [int(x) for x in a.tree_ctas.split(",")]:
             s = store
-            s.shape(1 << c, a.kept_from, ctas)
+            s.shape(1 << c, a.kept_from, ctas, tree_ctas)
             gpu, host = [], []
             prev = s.run_pass(seed)[0]
             ok = prev == plain_root
@@ -125,7 +127,8 @@ def main() -> int:
             names = ("head", "set_pass", "alloc", "launch", "wait", "root")
             ph = s.pass_host_phases[-a.passes:]
             phases = {k: sorted(x[j] for x in ph)[len(ph) // 2] for j, k in enumerate(names)}
-            row = {"chunk_log2": c, "ctas": ctas, "h0": s.h0, "root_ok": ok, "host_phases_p50_ns": phases,
+            row = {"chunk_log2": c, "ctas": ctas, "tree_ctas": tree_ctas, "h0": s.h0, "root_ok": ok,
+                   "host_phases_p50_ns": phases,
                    "gpu_ms": percentiles(sorted(gpu)), "host_ns": percentiles(sorted(host)),
                    "tau": sorted(gpu)[len(gpu) // 2] / read_ms, "tau_host": sorted(host)[len(host) // 2] / 1e6 / read_ms}
             challenge, prev_host = b"\x06" * 32, bytes(64)
