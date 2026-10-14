@@ -372,3 +372,13 @@ end VStarFamily
 end family
 
 end FlockVBridge.Family
+
+#print axioms FlockVBridge.OfVStar.srcKey_row
+#print axioms FlockVBridge.OfVStar.rowCol_snd
+#print axioms FlockVBridge.OfVStar.vBase_snd
+#print axioms FlockVBridge.OfVStar.partRep_snd
+#print axioms FlockVBridge.OfVStar.part_lt
+#print axioms FlockVBridge.Family.VStarFamily.part_counts
+#print axioms FlockVBridge.Family.VStarFamily.part_link
+#print axioms FlockVBridge.Family.VStarFamily.partVCols
+#print axioms FlockVBridge.Family.VStarFamily.partRowCols_holds
