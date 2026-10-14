@@ -124,6 +124,24 @@ def ChecksC3 (ish : RecVStar.Inner) (cs : Option Flock.RecVStar.InnerCommits) (c
     sts.forM (Flock.RecVStar.checkPubRows · (some own) cs ish.sparse) = .ok () ∧
     Flock.RecVStar.checkLabels (FlockSoundness.Discharge.Exec.recordDraw t.record) I.count sts = .ok ()
 
+/-- **`ChecksC3` reads the transcript only through its record's draw**: `setupOf` reads the record through
+`recordDraw` alone, and `checkLabels` reads that draw, so the checks transfer to any transcript whose record carries
+the same draw. -/
+theorem checksC3_of_recordDraw {ish : RecVStar.Inner} {cs : Option Flock.RecVStar.InnerCommits}
+    {coins : Option Flock.RecCoins.Source} {j : ℕ} {f : VStar.Bindings}
+    {rows : Option (Array Flock.Registered.Port)} {I : FlockSoundness.Discharge.Exec.Inputs}
+    {own : Array Flock.Registered.Port} {t t' : FlockSoundness.Discharge.Exec.Transcript}
+    (h : ChecksC3 ish cs coins j f rows I own t)
+    (hrec : FlockSoundness.Discharge.Exec.recordDraw t'.record = FlockSoundness.Discharge.Exec.recordDraw t.record) :
+    ChecksC3 ish cs coins j f rows I own t' := by
+  have hset : FlockSoundness.Discharge.Exec.setupOf (FlockSoundness.Discharge.ZkExec.zkInputs I) t'.record =
+      FlockSoundness.Discharge.Exec.setupOf (FlockSoundness.Discharge.ZkExec.zkInputs I) t.record := by
+    unfold FlockSoundness.Discharge.Exec.setupOf
+    rw [hrec]
+  unfold ChecksC3 at h ⊢
+  rw [hset, hrec]
+  exact h
+
 /-- **The verifier's checks at candidate 3 of every one of V*'s sessions**, as the prover supplies them: session `j` as
 V*'s statement `j` under `bind j` (`ChecksC3`), at the registration the outcome records. -/
 def ChecksVR {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} (ish : RecVStar.Inner)
