@@ -107,8 +107,9 @@ theorem site_of_checkAcc {s : VStar.Stmt} {own : Array Flock.Registered.Port}
     ∃ rws w, rows = some rws ∧ rws.find? (·.name == "acc0") = some w ∧
       FlockVBridge.Family.site b = FlockVBridge.Family.site w := by
   unfold Flock.RecVStar.checkAcc at h
-  obtain ⟨⟨⟩, -, h⟩ := FlockSoundness.Refine.ebind_ok h
-  obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
+  obtain ⟨⟨⟩, -, h'⟩ := FlockSoundness.Refine.ebind_ok h
+  clear h
+  obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h'
   dsimp only at h
   have hbm : b ∈ own.filter (·.value == Flock.RecVStar.ACC_VALUE) := Array.mem_filter.2 ⟨hb, by simpa using hv⟩
   split at h
