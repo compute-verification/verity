@@ -150,7 +150,7 @@ theorem open_stmt {ℓ : ℕ} (hℓ : ℓ < F.sh.sched.levels.size) :
       .recOpen ℓ (2 ^ (F.sh.sched.levels[ℓ]!).lanes)
         ((F.sh.sched.levels[ℓ]!).d - (F.sh.sched.levels[ℓ]!).cap) (2 * F.q ℓ) := by
     exact (congrArg (fun j : Fin F.stmts.size => F.stmts[j]) hsess).trans
-      (by simpa only [Fin.getElem_fin] using hst)
+      (by simpa only [Fin.getElem_fin, VStarFamily.q] using hst)
   exact ⟨⟨_, _, hstmt⟩, (F.hnv _).trans (congrArg VStar.Stmt.instances hstmt)⟩
 
 /-- Obligation: discharged at C3's family by `readsOwnAt_of` (`ReachedChecked`: `readsOwn_of_hown` and the label
