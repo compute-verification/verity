@@ -6,7 +6,8 @@
 # forgeries (a changed challenge, a changed query coin) that every verifier must reject. Run from the verity tree (research run
 # --cwd source). Outputs under out/: host.txt, stage.json, statement.txt, schedule.json, time-prove.txt, prove.txt/.err,
 # proxy.log, inner/ (session/, public.json, private.json, stage/:
-# the statement's circuit.txt and public file, claims.json: each rep's extra claims and circuit fold from Lean's
+# the statement's circuit.txt, public file and the verity/partition/v1 object it binds with its program (partition.json,
+# program.json), claims.json: each rep's extra claims and circuit fold from Lean's
 # InnerClaims.lean, which V*'s algebra reads), replay.txt, vstar.json, lean.log, forged-*, summary.json.
 # env: N=64 (instances: RoPE heads, one VU each; 64 at G=2 is m=27)  CPUS=32  FLOCK_WORK (as 76-read-gadget.sh)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -37,6 +38,7 @@ CLP=$!
 python3 verity/ml/flock/pod/rec_inner.py stage --n $N --sets $S/sets --out $D > $O/stage.json 2> $O/stage.err || { tail -20 $O/stage.err; exit 1; }
 cat $O/stage.json
 TB=(); [ -d $D/tables ] && TB=(--tables $D/tables)
+PART=(--partition $D/partition.json)
 
 # the schedule the proxy holds the session to, from the statement's public shape before the session (rec_live --schedule-for)
 $B statement --instances $D/pub-$N.bin --circuit $D/circuit.txt "${TB[@]}" > $O/statement.txt 2>&1 || { tail -5 $O/statement.txt; exit 1; }
@@ -56,11 +58,11 @@ SESS=$O/inner/session
 $B replay --instances $D/pub-$N.bin --circuit $D/circuit.txt "${TB[@]}" --sessions $SESS > $O/replay.txt 2>&1
 python3 -m verity_flock.rec_vstar $O/inner > $O/vstar.json 2> $O/vstar.err; echo "vstar exit $?"
 wait $LP
-$LEAN_BIN verify --statement verity/flock-circuit --circuit $D/circuit.txt --public $D/pub-$N.bin --coins os --session $SESS > $O/lean.log 2>&1
+$LEAN_BIN verify --statement verity/flock-circuit --circuit $D/circuit.txt --public $D/pub-$N.bin "${PART[@]}" --coins os --session $SESS > $O/lean.log 2>&1
 echo "lean exit $?"
-mkdir -p $O/inner/stage && cp $D/circuit.txt $D/pub-$N.bin $O/inner/stage/
+mkdir -p $O/inner/stage && cp $D/circuit.txt $D/pub-$N.bin $D/partition.json $D/program.json $O/inner/stage/
 wait $CLP
-/usr/bin/time -v -o $O/time-claims.txt $CLAIMS_BIN verity/flock-circuit $D/circuit.txt $D/pub-$N.bin $SESS os > $O/inner/claims.json 2> $O/claims.err
+/usr/bin/time -v -o $O/time-claims.txt $CLAIMS_BIN "${PART[@]}" verity/flock-circuit $D/circuit.txt $D/pub-$N.bin $SESS os > $O/inner/claims.json 2> $O/claims.err
 echo "claims exit $?"
 # forgeries every verifier must reject: rep 0's first challenge, and the first query coin of rep 0's level 0 (its position
 # moves); both go to replay and Lean through session.json and to V*'s reference through public.json
@@ -68,7 +70,7 @@ for F in challenge query; do
   FS=$S/forged-$F; rm -rf $FS; cp -r $O/inner $FS
   python3 verity/ml/flock/pod/rec_inner.py forge --what $F --inner $FS
   $B replay --instances $D/pub-$N.bin --circuit $D/circuit.txt "${TB[@]}" --sessions $FS/session > $O/forged-$F-replay.txt 2>&1
-  $LEAN_BIN verify --statement verity/flock-circuit --circuit $D/circuit.txt --public $D/pub-$N.bin --coins os --session $FS/session > $O/forged-$F-lean.txt 2>&1
+  $LEAN_BIN verify --statement verity/flock-circuit --circuit $D/circuit.txt --public $D/pub-$N.bin "${PART[@]}" --coins os --session $FS/session > $O/forged-$F-lean.txt 2>&1
   echo "forged $F lean exit $?"
   python3 -m verity_flock.rec_vstar $FS > $O/forged-$F-vstar.json 2>&1; echo "forged $F vstar exit $?"
 done

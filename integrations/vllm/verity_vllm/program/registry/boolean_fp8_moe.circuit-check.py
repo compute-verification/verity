@@ -36,6 +36,18 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
                                              DOT=BG.BlackwellE4m3QmmaDot32)),
         ("MoeExpertFp8GemmW_v2", lambda: bind(boolean_fp8_moe.MoeExpertFp8GemmWV2, E=3, K=32, N=40, G=32, KB=32, SWAP=False,
                                               DOT=BG.BlackwellE4m3QmmaDot32)),
+        # at cc 9.0's MMAv2 step (the small-batch H200 tiles, with and without SWAP_AB): the coordinates at the `_v2` coordinate's
+        # shape and at one served K tile (KB = G = 128), the GEMMs over a whole and a partial weight block, a pair form over 3 experts
+        ("MoeExpertFp8BlockCoordinate_v4/mmav2", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockCoordinateV4, K=64, G=32, KB=32,
+                                                              SWAP=False, DOT=BG.HopperE4m3MmaV2Dot32)),
+        ("MoeExpertFp8BlockCoordinateW_v4/mmav2", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockCoordinateWV4, K=128, G=128, KB=128,
+                                                               SWAP=True, DOT=BG.HopperE4m3MmaV2Dot32)),
+        ("MoeExpertFp8BlockGemm_v4/mmav2", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockGemmV4, K=32, N=40, G=32, KB=32, SWAP=True,
+                                                        DOT=BG.HopperE4m3MmaV2Dot32)),
+        ("MoeExpertFp8BlockGemmW_v4/mmav2", lambda: bind(boolean_fp8_moe.MoeExpertFp8BlockGemmWV4, K=32, N=40, G=32, KB=32, SWAP=False,
+                                                         DOT=BG.HopperE4m3MmaV2Dot32)),
+        ("MoeExpertFp8GemmW_v2/mmav2", lambda: bind(boolean_fp8_moe.MoeExpertFp8GemmWV2, E=3, K=32, N=40, G=32, KB=32, SWAP=True,
+                                                    DOT=BG.HopperE4m3MmaV2Dot32)),
         ("SiluMulFp8BlockQuantResult_v2", lambda: bind(boolean_fp8_moe.SiluMulFp8BlockQuantResultV2)),
         ("SiluMulFp8BlockQuantGroup_v2", lambda: bind(boolean_fp8_moe.SiluMulFp8BlockQuantGroupV2, G=4)),
         ("SiluMulFp8BlockQuant_v2", lambda: bind(boolean_fp8_moe.SiluMulFp8BlockQuantV2, I=8, G=4)),

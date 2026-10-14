@@ -12,7 +12,8 @@
 
 The verifier builds these inputs itself (`Anchors.call_inputs`, `Anchors.weight_inputs`), or compares a prover's
 (`Anchors.check_call`, `Anchors.check_weight`); it never takes them as stated.  A window's `Ledger` refuses a repeated
-call index, (forward, position): the Lean statement's A11, `UniqueCallIndices`.
+call index, (forward, position): the Lean statement's A11, `UniqueCallIndices`. `SaltWindows` refuses one across every
+window of a salt, since a call's noise key reads the salt and its call index.
 
 The tile checks' (`pc4`, `pc8`) anchored inputs are derived values, not ids: the noise lines E_A, E_B, F_A, F_B and
 G = F_Bᵀ·F_A, which the verifier derives from the scheme's seeds (`TileAnchors`, from `noise(ctx)`: seed_A reads the salt,
@@ -451,6 +452,38 @@ class Ledger:
         return {"domain": DRAW_DOMAIN, "receipt": self._receipt.digest().hex(), "source": self._source.hex()}
 
 
+class SaltWindows:
+    """Every window of one salt, opened in turn: a call index names one call across all of them, as within one window.
+
+    A call's noise key reads the salt and its call index, so a call index that two windows of a salt both use would
+    reuse one key. `open` refuses a receipt that lists a call of another salt or a call index an earlier window of this
+    salt listed, and only then opens the window's ledger (`Ledger.open`). `next_forward` is the first forward index no
+    window of the salt has used, where the verifier's enumeration of the next window's forwards starts."""
+
+    __slots__ = ("salt", "_seen", "_next")
+
+    def __init__(self, salt: bytes) -> None:
+        self.salt, self._seen, self._next = bytes(salt), set(), 0
+
+    @property
+    def next_forward(self) -> int:
+        return self._next
+
+    def open(self, receipt: Receipt) -> Ledger:
+        if not isinstance(receipt, Receipt):
+            raise TypeError("a window opens from its complete Receipt")
+        indices = [a.call_index for a, _, _ in receipt.calls]
+        if any(a.salt != self.salt for a, _, _ in receipt.calls):
+            raise DomainError("the window's receipt lists a call under another salt")
+        repeated = sorted((i for i in indices if i in self._seen), key=_index_parts)
+        if repeated:
+            raise DomainError(f"call index (forward, position) = {repeated[0]} is on an earlier window of this salt")
+        ledger = Ledger.open(receipt)
+        self._seen.update(indices)
+        self._next = max(self._next, 1 + max(f for f, _ in indices))
+        return ledger
+
+
 def replay_key(record: dict[str, str]):
     """The window's key from its audit record: `derive(source, DRAW_DOMAIN, {"receipt": digest})`."""
     from verity.ml.randomness import derive
@@ -463,4 +496,4 @@ def replay_key(record: dict[str, str]):
 
 
 __all__ = ["ANCHORED", "ANCHOR_RULE", "Anchors", "Derivation", "Ledger", "PUBLIC_INPUTS_FORMAT", "REGION_WORD_BITS", "Receipt",
-           "TileAnchors", "WORD_BITS", "public_ports", "region_bytes", "region_words", "replay_key"]
+           "SaltWindows", "TileAnchors", "WORD_BITS", "public_ports", "region_bytes", "region_words", "replay_key"]

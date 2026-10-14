@@ -230,8 +230,8 @@ are, and in place of `G as` the value of `G` at the type's universe levels with 
 `Meta.unfoldDefinition?` unfolds an applied constant), the proofs Lean abstracts out of a definition (its `G._proof_<n>`
 theorems) put back in place, as a theorem's type keeps them. Nothing else is reduced, and the text is hashed as every
 type is. A certified lift gets one line, "lifted into G: the same statement, its definition unfolded once", and `G`, new and
-read by no other guarantee, needs no reading of its own; the review then holds no statement change, so the merge needs no
-statement reviewer for it. Any other lift prints in full: a `G` whose value differs from `e` in anything the hash sees
+read by no other guarantee, needs no reading of its own; the review then holds no statement change. (No merge needs a
+statement reviewer, for a lift or any other change: Daniel, 8 Oct.) Any other lift prints in full: a `G` whose value differs from `e` in anything the hash sees
 (binder names and metadata aside), a `G` outside a `Guarantees` module, and a lift that moves a named assumption from the
 theorem's binders into `G`, which the record's `assumptions` would lose. Daniel's DM reads only the records, so it still
 lists a lifted guarantee as changed.

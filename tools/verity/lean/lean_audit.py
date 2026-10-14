@@ -503,15 +503,20 @@ def prune(pkg: Path) -> int:
     return n
 
 
+#: the kept builds a node holds before its least recently used go: every tree whose manifest or lakefile differs adds one
+#: (infra, 12 Oct: 71 of them, 19 GB, on a 200 GB disk)
+BUILDS_KEPT = 24
+
+
 class WarmBuilds:
     """Each package's own `.lake/build`, kept under its `build_key` by the last run whose audit of it passed, so an auditor
     change, or a change to one module, doesn't rebuild every module. An audited package's is moved in and back only when its
     audit passed: its compile-time code may write in it. A package in the tree only as a path dependency gets a copy, which
     never comes back. The audit still checks every statement against these `.olean` files and replays every declaration
-    through the kernel."""
+    through the kernel. The newest `kept` by use stay (`evict`)."""
 
-    def __init__(self, store: Path):
-        self.store = store
+    def __init__(self, store: Path, kept: int = BUILDS_KEPT):
+        self.store, self.kept = store, kept
 
     def _lock(self, k: str):
         self.store.mkdir(parents=True, exist_ok=True)
@@ -531,6 +536,7 @@ class WarmBuilds:
                 _move(src, dst)
             else:
                 shutil.copytree(src, dst, symlinks=True)
+                os.utime(src)
         log(f"lean-audit: {pkg}: build warm ({k[:12]}){'' if audited else ', a copy'}; {prune(work / pkg)} stale output(s) removed")
 
     def give_back(self, work: Path, passed: set[Path]) -> None:
@@ -543,6 +549,30 @@ class WarmBuilds:
                 if home.exists():
                     shutil.rmtree(home, ignore_errors=True)
                 _move(src, home)
+                os.utime(home)
+        self.evict()
+
+    def evict(self) -> int:
+        """Remove all but the `kept` builds last given back or copied from (a rename keeps a directory's mtime, so each sets it),
+        each only when its lock is free: a run holding it is taking it or giving it back. The number removed."""
+        held = []
+        for home in self.store.iterdir() if self.store.is_dir() else ():
+            try:
+                if home.is_dir():
+                    held.append((home.stat().st_mtime, home))
+            except OSError:                            # taken while listed
+                pass
+        n = 0
+        for _, home in sorted(held, reverse=True)[self.kept:]:
+            with open(self.store / f"{home.name}.lock", "w") as f:
+                try:
+                    fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    continue
+                if home.is_dir():
+                    shutil.rmtree(home, ignore_errors=True)
+                    n += 1
+        return n
 
 
 #: the disk the artifact cache may hold beyond what kept builds share with it (hard links), before its oldest go

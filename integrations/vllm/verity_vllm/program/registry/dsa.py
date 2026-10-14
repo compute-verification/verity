@@ -15,7 +15,8 @@ The indexer's per-token work (`deepseek_v32/attention.py`, `model_executor/layer
    (deepseek_v2.py:709, 742; f32 kernel arguments): `DsaIndexerQHead_v1`, a token's heads `DsaIndexerQ_v1`.
 4. DeepGEMM `fp8_mqa_logits` (prefill, `sm90_fp8_mqa_logits.cuh:225-317`) or `fp8_paged_mqa_logits` (decode,
    `sm90_fp8_paged_mqa_logits.cuh:270-355`), `clean_logits=False` (sparse_attn_indexer.py:496-503, 600-611): one epilogue for both,
-   per (query token, key): `DsaMqaLogit_v1`, a token's keys `DsaMqaLogits_v1`.
+   per (query token, key): `DsaMqaLogit_v3`, a token's keys `DsaMqaLogits_v3`.  `DsaMqaLogit_v1` reads the source's order, which the
+   H200 refutes: nvcc contracts each sum's first product into its second add.
 5. The top-2048 selection: prefill `ops.top_k_per_row_prefill` (`topKPerRowPrefill<512, false>`, sampler.cu:846-878), decode
    `cooperative_topk` on H200 (num_rows <= 64, sparse_attn_indexer.py:615-642; else `persistent_topk`).  A row of at most 2048 keys
    takes each kernel's shortcut (sampler.cu:388-412, cooperative_topk.cuh:494-501): `DsaTopKShortRow_v1`.  A longer row is a radix
@@ -43,15 +44,15 @@ reaches (s >= 1e-4 / 448), and `bits(s) >= 0x7F800000` unsigned (`fma.rn.ftz(s, 
 the polynomial gives y = 128 (e = 128, m = 1) and so the same scale, ex2(128) = +inf.  So the scale is a power of two in
 [2^-22, 2^127], or +inf when amax is.
 
-Registered functions (all `Name_v1`):
+Registered functions (`Name_v1` but where a version is written):
   U32And, I32Sub, F32CeilFtz                 primitives: and.b32, sub.s32, cvt.rpi.ftz.f32.f32
   DsaUe8m0Scale                             (amax: f32) -> f32
   DsaUe8m0Quant{N}                          (x: N f32) -> (q: N e4m3, scale: f32)
   DsaIndexerKRow{D,ROPE,EPS}                (k: D bf16, w, b: D f32, cs: ROPE bf16) -> (q: D e4m3, scale: f32): one cache slot
   DsaIndexerQHead{D,ROPE,NH}                (q: D bf16, cs: ROPE bf16, w: bf16) -> (q: D e4m3, w: f32): one (token, head)
   DsaIndexerQ{H,D,ROPE}                     (q: H x D bf16, cs: ROPE bf16, w: H bf16) -> (q: H x D e4m3, w: H f32): one token
-  DsaMqaLogit{H,D}                          (q: H x D e4m3, w: H f32, k: D e4m3, ks: f32) -> f32: one logit
-  DsaMqaLogits{N,H,D}                       (q, w, k: N x D e4m3, ks: N f32) -> N f32: one query token over N keys
+  DsaMqaLogit_v3{H,D}                       (q: H x D e4m3, w: H f32, k: D e4m3, ks: f32) -> f32: one logit (v1: refuted)
+  DsaMqaLogits_v3{N,H,D}                    (q, w, k: N x D e4m3, ks: N f32) -> N f32: one query token over N keys (v1: refuted)
   DsaTopKShortRow{TOPK}                     (len: i32) -> TOPK i32
 
 `cs` is the rotary cache row at the token's position, [cos 0..ROPE/2-1 | sin 0..ROPE/2-1] bf16 (`get_rope` builds it in the default
@@ -75,8 +76,12 @@ M32 = 0xFFFFFFFF
 
 _CONF = ("model-untested: read from the Triton kernels and their PTX at the commits the module docstring pins; "
          "tests/properties/glm53_dsa_capture_gpu.py is its hardware check")
-_LOGIT_CONF = ("model-untested: read from the two DeepGEMM epilogues the module docstring pins (nvcc without fast-math, so "
-               "`sum += relu * w` is an FFMA); tests/properties/glm53_dsa_capture_gpu.py is its hardware check")
+_LOGIT_V1_CONF = ("refuted on an H200 (sm_90): property glm53_dsa_capture, run r20261012-222325-ce92 (record 626052b647671ba1), "
+                  "828 of 19,513 prefill and 354 of 7,292 paged logits differ by 1 to 4 ulps; nvcc contracts each sum's first "
+                  "product, DsaMqaLogit_v3")
+_LOGIT_CONF = ("exact-model-tested; H200 (sm_90, 132 SMs; vLLM d9105ea80, DeepGEMM 8b1392b9): the operands and logits of property "
+               "glm53_dsa_capture's run r20261012-222325-ce92, every one of the 19,513 prefill and 7,292 paged logits equal "
+               "(tests/program/data/dsa_h200_logits.npz keeps eight that refute v1)")
 _TOPK_CONF = ("model-untested: read from vLLM d9105ea80 sampler.cu:388-412 and cooperative_topk.cuh:494-501; "
               "tests/properties/glm53_dsa_capture_gpu.py is its hardware check")
 
@@ -327,8 +332,9 @@ def check_logit_statics(H: int, D: int) -> None:
         raise ValueError(f"DeepGEMM's MQA logits need H % 8 == 0 and D % 32 == 0 (H={H}, D={D})")
 
 
-def mqa_logit(o: Ops, H: int, D: int, q, w, k, ks):
-    """`DsaMqaLogit_v1`'s body."""
+def mqa_logit(o: Ops, H: int, D: int, q, w, k, ks, contracted: bool = False):
+    """`DsaMqaLogit_v1`'s body, or with ``contracted`` `DsaMqaLogit_v3`'s: a lane's sum over its heads hs starts from
+    `mul(relu[hs0], w[hs0])` (v1) or from `fma(relu[hs0], w[hs0], mul(relu[hs1], w[hs1]))` (v3; the same at H = 8, one head)."""
     check_logit_statics(H, D)
     zero = o.word(0)
     relu = []
@@ -342,17 +348,27 @@ def mqa_logit(o: Ops, H: int, D: int, q, w, k, ks):
         sums = []
         for pair in (0, 1):
             hs = [2 * c + pair + 8 * j for j in range(H // 8)]
-            acc = o.mul(relu[hs[0]], w[hs[0]])
-            for h in hs[1:]:
+            if contracted and len(hs) > 1:
+                acc, rest = o.fma(relu[hs[0]], w[hs[0]], o.mul(relu[hs[1]], w[hs[1]])), hs[2:]
+            else:
+                acc, rest = o.mul(relu[hs[0]], w[hs[0]]), hs[1:]
+            for h in rest:
                 acc = o.fma(relu[h], w[h], acc)
             sums.append(acc)
         v.append(o.mul(o.add(sums[0], sums[1]), ks))
     return o.add(o.add(v[0], v[1]), o.add(v[2], v[3]))
 
 
-@composite("DsaMqaLogit", 1, ["H", "D"],
-           lambda S: ((("q", Array(S.H, Array(S.D, E4M3))), ("w", Array(S.H, F32)), ("k", Array(S.D, E4M3)), ("ks", F32)), F32),
-           conformance=_LOGIT_CONF)
+def _logit_sig(S):
+    return (("q", Array(S.H, Array(S.D, E4M3))), ("w", Array(S.H, F32)), ("k", Array(S.D, E4M3)), ("ks", F32)), F32
+
+
+def _logits_sig(S):
+    return ((("q", Array(S.H, Array(S.D, E4M3))), ("w", Array(S.H, F32)), ("k", Array(S.N, Array(S.D, E4M3))),
+             ("ks", Array(S.N, F32))), Array(S.N, F32))
+
+
+@composite("DsaMqaLogit", 1, ["H", "D"], _logit_sig, conformance=_LOGIT_V1_CONF)
 def DsaMqaLogit(B, S, q, w, k, ks):
     """One logit of DeepGEMM's sm90 MQA logits (prefill and paged decode share the epilogue): per head h, `acc[h]` = D/32
     `HopperE4m3QgmmaDot32` steps (wgmma m64nNk32 e4m3, the key row as A, the head's q as B) from `scale-d = 0`; the thread of quad lane
@@ -362,13 +378,26 @@ def DsaMqaLogit(B, S, q, w, k, ks):
     return mqa_logit(word_ops(B), S.H, S.D, q, w, k, ks)
 
 
-@composite("DsaMqaLogits", 1, ["N", "H", "D"],
-           lambda S: ((("q", Array(S.H, Array(S.D, E4M3))), ("w", Array(S.H, F32)), ("k", Array(S.N, Array(S.D, E4M3))),
-                       ("ks", Array(S.N, F32))), Array(S.N, F32)),
-           conformance=_LOGIT_CONF)
+@composite("DsaMqaLogits", 1, ["N", "H", "D"], _logits_sig, conformance=_LOGIT_V1_CONF)
 def DsaMqaLogits(B, S, q, w, k, ks):
     """One query token's logits over N keys: logit[n] = `DsaMqaLogit_v1{H, D}`(q, w, k[n], ks[n])."""
     return B.batch(bind(DsaMqaLogit, H=S.H, D=S.D), q, w, k, ks, axes=(None, None, 0, 0))
+
+
+@composite("DsaMqaLogit", 3, ["H", "D"], _logit_sig, conformance=_LOGIT_CONF)
+def DsaMqaLogitV3(B, S, q, w, k, ks):
+    """One logit of DeepGEMM's sm90 MQA logits as the SASS computes it: `DsaMqaLogit_v1` but for each lane's first two heads.  The
+    source starts each sum from j = 0's product and adds the others' (`sum[4] = {transform(0), ..}`, `sum[k] += transform(j * 4 +
+    k)`: sm90_fp8_mqa_logits.cuh:288-293, sm90_fp8_paged_mqa_logits.cuh:333-338), and nvcc contracts j = 0's product into j = 1's
+    add: `fma(relu[h0], w[h0], relu[h1] * w[h1])`, then one FFMA per j >= 2 in ascending j.  The rest is v1's: the per-head dots,
+    `v_c = (s0 + s1) * ks` and `(v_0 + v_1) + (v_2 + v_3)`."""
+    return mqa_logit(word_ops(B), S.H, S.D, q, w, k, ks, contracted=True)
+
+
+@composite("DsaMqaLogits", 3, ["N", "H", "D"], _logits_sig, conformance=_LOGIT_CONF)
+def DsaMqaLogitsV3(B, S, q, w, k, ks):
+    """One query token's logits over N keys: logit[n] = `DsaMqaLogit_v3{H, D}`(q, w, k[n], ks[n])."""
+    return B.batch(bind(DsaMqaLogitV3, H=S.H, D=S.D), q, w, k, ks, axes=(None, None, 0, 0))
 
 
 def topk_short(o: Ops, TOPK: int, n) -> list:
@@ -391,4 +420,4 @@ def DsaTopKShortRow(B, S, n):
 
 
 DSA_COMPOSITES = [DsaUe8m0Scale, DsaUe8m0Quant, DsaIndexerKRow, DsaIndexerQHead, DsaIndexerQ, DsaMqaLogit, DsaMqaLogits,
-                  DsaTopKShortRow]
+                  DsaMqaLogitV3, DsaMqaLogitsV3, DsaTopKShortRow]

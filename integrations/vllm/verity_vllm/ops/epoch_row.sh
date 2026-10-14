@@ -36,7 +36,7 @@ say() { echo "$(date -u +%FT%TZ) $*" | tee -a "$P"; }
 OPS=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 T=$(cd "$OPS/../../../.." && pwd -P)
 export PY=${PY:-/workspace/venv312/bin/python} HF_HOME=${HF_HOME:-/workspace/hf}
-export PYTHONPATH=$T/integrations/vllm:$T:$T/tools/research/src:$T/catalog:$T/kernels:$T/experimental
+export PYTHONPATH=$T/integrations/vllm:$T:$T/tools/research/src
 export SWEEP_DIR=${SWEEP_DIR:-/workspace/epoch/sweep} RESEARCH_STORE=${RESEARCH_STORE:-/workspace/epoch/store} NCCL_P2P_DISABLE=${NCCL_P2P_DISABLE:-1}
 export CUSTODY_DIR=${CUSTODY_DIR:-$(dirname "$(dirname "$RESEARCH_RUN_DIR")")/requests/$RESEARCH_RUN_ID/custody}
 D=$SWEEP_DIR/$ROW
