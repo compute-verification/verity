@@ -17,7 +17,7 @@ bound still need: Open now, next.
 Owners are round 21's workers (H, C, R, K, T, S, L, E), **rec-lean**, **W**, the next free worker, and S's successor. A
 size is in lines of proof: "+N" is what a branch has built, a range is an estimate of what is left. spec-2
 (`cursor/c3-spec-2-35f2`) is at `94649a946`, 14 Oct 01:57Z: round 21's T, K, R, L, E, U, S and C heads, and #1851's
-head `cb1d25f98`.
+head `cb1d25f98`; K's round 5 (`f5be751ac`) is on `cursor/c3-rl21-pieces-9b2a`.
 
 Closed since round 20, all on spec-2: the bridge (`acceptsC3_of_verify` and its checks, H; r20261013-194011-b18d),
 `SparseRangeOk` from check 5 (`sparseRangeOk_of_check`, H, in the bridge), the top finder (`TopColl`,
@@ -34,7 +34,7 @@ sparse rounds' forms (`holoForms_sparse_none`, `holoSelWords`' last conjunct, at
 | the reps' round count | `checkCommitRounds`' round-for-round check (on the bridge), into `repIdxB_of_rounds` (`C3/Reps/RepsCounted.lean`) with `hk` (`t₄.k` is the stream's round count, S15/R2) at each rep | | 20 after H's check | `drawnOf_holoMap_forms`' `hb` | H's check, then rec-lean |
 | the model's rep forms | `hA`: `repFormsAt (holoAt st hp) = repForms ish.m ish.kLog ish.claims` (the class's public statement's `m`, `kLog` and `2·regions + 2` claims, and `sch = schedAt m`, are the inner shape's), and `0 < ish.claims` | `C3/Compose/HoloSparseWords.lean` | 60–120 | `holoForms_sparse_none`'s `hA`, so `holoSelWords` at the sparse streams | rec-lean (round 22) |
 | the dirs value tie, (b) part 2 | `valueColl`, `tie_read`, `value_tie`, `dirs_tie` (merged); open: `hone`, `hpos`, `hseg` (VBridge's `PartPortsOne`, `ReadsOwn`, `ReadsUnsegmented`) at the read | `C3/RegLevels/ValueTie.lean` | | the tie without `hval`, in finder form | C |
-| the value collision's name | `ValueColl`, the bound's new disjunct (`valueColl`'s event, beside `TopColl`) | `Recursive/TopFinder.lean` or beside it | unsized | `prob_regOrTop_le` over the value tie's collision | K, C |
+| the value collision in the bound | `ValueColl`, `valueFinder`, `prob_valueColl_le`, `value_tie_coll`, `prob_regTopValue_le` (merged, K round 5); open: the guarantee's bound reading `prob_regTopValue_le`, and C's level-0 salt case as one more `prob_or_le` around it | `Recursive/ValueFinder.lean` | unsized | the value tie's collision disjunct priced in the bound | C (level-0 salt), then K |
 | OpenKeys, row 5 | row 5's remainder; `hnd` (`own` names each port once, `C3/RegLevels/AccReads.lean:194`, `OpensRegs.lean`); `ReadsOwnC3` (`AccReads.lean:285`) threaded to the checked sessions | `C3/RegLevels/{AccReads,OpensRegs}.lean` | unsized | OpenKeys at `RepMaps.OpenCols`, R's levels from the checked sessions | R (round 22) |
 | the laid outputs | `OutsLaid` (`C3/RegLevels/OutRegs.lean:35`): a fail-closed `outsOk` refusal in `RecOpen.checkAt`, then its proof | verifier, `C3/RegLevels/OutRegs.lean` | unsized | `haout_of_laid`'s premise | open (after C's round 22) |
 | `haout`'s second half | `haout` (`C3/RegLevels/OpensRegs.lean:105`) past `haout_of_laid` | `C3/RegLevels/{OpensRegs,OutRegs}.lean` | 100–150 | `haout` | C (later) |
