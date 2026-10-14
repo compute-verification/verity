@@ -40,6 +40,10 @@ open FlockVBridge.Family (CombFolds OpenedAll SetupRealizes ShapeIs CapShaped Li
   shapeOf_plain schedPart_plain proofOf_lengths)
 open FlockSoundness.Discharge.Exec (chunks ligFrames)
 
+local instance lawfulBEqByteArray : LawfulBEq ByteArray where
+  eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
+  rfl {a} := by show (a.data == a.data) = true; exact beq_self_eq_true _
+
 /-- The ring switches' coins at the verifier's rows, none where they refuse. -/
 def rppAt (sh : Flock.Shape) (d : RepData) : ℕ → Array F128 :=
   match verifierRows sh d.rounds d.extras d.comb with
