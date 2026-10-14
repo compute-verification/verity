@@ -64,6 +64,7 @@ import Proofs.Flock.C3.HoloValues.Frames
 import Proofs.Flock.C3.HoloValues.Runs
 import Proofs.Flock.C3.HoloValues.Shift
 import Proofs.Flock.C3.Reps.Frames
+import Proofs.Flock.C3.Reps.HoloVals
 import Proofs.Flock.C3.Reps.AlgL
 import Proofs.Flock.C3.Reps.Maps
 import Proofs.Flock.C3.Reps.OpensRead
