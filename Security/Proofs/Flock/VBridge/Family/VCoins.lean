@@ -9,13 +9,13 @@ what the part sessions' reads files and registrants hold there:
 * `vColOf_lt`: each `v` column is an input (the verifier's `RecResiduals.check`, as `rowColOf_lt`);
 * `PartVCols`, `OwnNamesV`: each `v` column is keyed by its bit of the part's `v` port (the parse of the parts'
   circuits), and each part's reads file names `v` (`FlockC3.RegLevels.own_of_checkValue` at check 5's `checkValue`);
-* `VRowsAre`: the registrant's bits at a part's `v` read are `vOf`'s at the rep (`FlockC3.RegLevels.vbit_of_rows`
-  from `value_tie_coll` at check 5's `rec-residuals` rows, off `ValueColl`);
+* `VRowsAre`: the registrant's bits at a part's `v` read are `vOf`'s at the rep (`Recursion.vRows_tie`: `value_tie_coll`
+  at check 5's `rec-residuals` rows, off `ValueColl`);
 * `hVCoins_of`: `HVCoins` from those and `RowsRegistered`;
 * `outCol_committed`, `outColAt_stackCol`: a copy's gate at a returned output's column is committed (it is an output of
   the program's circuit, `Layout.outsOf`), the committed conjunct of `RegOut`;
 * `PartOutCols`, `ZeroReads`: each part's `out` columns are its leaf's returned output (the parse), and the gates there
-  are registered reads whose registrant's bit is 0 (`rec-residuals-zero`);
+  are registered reads whose registrant's bit is 0 (`rec-residuals-zero`, `Recursion.zero_tie` off `ValueColl`);
 * `hZeroL_of`: `HZeroL` from those (`copyVal_regOut` in the accepted `Good` layer).
 -/
 
@@ -132,16 +132,15 @@ def PartVCols : Prop :=
           .msg qv.val (q / 8) (q % 8)
 
 /-- Obligation: discharged by check 5 (`ChecksC3`'s `RecCoins.check` at the part's `rec-residuals` unit:
-`residuals_of_check`'s `checkValue` at `v`, then `FlockC3.RegLevels.own_of_checkValue`). **Each part's reads file names
-`v`.** -/
+`Recursion.own_v_out`, `own_of_checkValue` at its `checkValue` at `v`). **Each part's reads file names `v`.** -/
 def OwnNamesV : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ p, p < (partsOf F.sh).size →
     ∃ pt ∈ (F.zs R ω t R₂ (F.sess p)).own, pt.name = "v"
 
-/-- Obligation: discharged by `FlockC3.RegLevels.vbit_of_rows`: at the part's `rec-residuals` unit, check 5 accepted
-`checkValue` at `v` of its rows (`residuals_of_check`), `value_tie_coll` there gives the registrant's bits as the rows'
-(or `ValueColl`, the guarantee's collision disjunct), and the inner session's coins, extra claims and comb are the
-rep's (the lane that proves `HFiles`). **The registrant's `v` is the verifier's at the rep.** At an accepted outer proof,
+/-- Obligation: discharged at each read by `Recursion.vRows_tie`, off `ValueColl` (the guarantee's collision
+disjunct): at the part's `rec-residuals` unit, check 5 accepted `checkValue` at `v` of `residualRows`' rows,
+`value_tie_coll` there gives the registrant's bits as the rows', and `rows_vOf` the rows' as `vOf`'s, where the inner
+session's coins, extra claims and comb are the rep's (the lane that proves `HFiles`). **The registrant's `v` is the verifier's at the rep.** At an accepted outer proof,
 the registrant's bit `b` at the `v` read of rep `r`'s unit of part `p` is `wbit` of part `p`'s elements of `vOf` at the
 rep's coins, extra claims and comb. -/
 def VRowsAre : Prop :=
@@ -187,11 +186,9 @@ def PartOutCols : Prop :=
           e / 16 < ((F.Vs j).c.leavesOut.getD cpy #[]).size ∧ (Rows.ofNet (F.Vs j).hU).nIn ≤ partBase S ns nv ∧
           partBase S ns nv + e < (Rows.ofNet (F.Vs j).hU).nIn + (Rows.ofNet (F.Vs j).hU).nComp
 
-/-- Obligation: open; it needs a verifier check. V* registers each part's `out` as the zero rows `rec-residuals-zero`
-under public salts (`rec_residuals.zero_salts`, `rec_residuals.py:498-499`), and the Lean verifier names neither the port
-nor the value: `checkResiduals` holds `v` only (`checkValue` at `rec-v`), `RecVStar.checkRows` the row ports only, and
-`Registered.check` opens whatever root the reads file states. A `checkValue`-like check of `out` at check 5 (the zero
-rows under `zero_salts`' salts) would give it as `VRowsAre`, by `value_tie_coll` there.
+/-- Obligation: discharged, off `ValueColl`, by check 5's `checkZero` (`checkResiduals` holds the part's `out` to the
+zero rows `rec-residuals-zero` under `zeroSalt`, `rec_residuals.zero_salts`): `Recursion.zero_tie` gives the
+registrant's bits at the `out` read `(u, q)` as 0, and the read is the gate's at its position (`rowOfH`, open).
 **A part's `out` gates are registered reads of zero bits.** At an accepted outer proof, the gate of rep `r`'s copy of
 part `p` at each `out` column is at a registered read, and the registrant's bit there is 0. -/
 def ZeroReads : Prop :=

@@ -12,11 +12,9 @@ as `HVCoins`' bits:
 * `rep_ok`: a rep's v is `verifierRows`' base then the zero comb, and `vOf` at any comb is that base then the comb
   (`verifierRows_comb`);
 * `full_vOf`, `row_vOf`, `rows_vOf`: the check's rows are bit for bit `wbit` of `sub vs (vOf …)` at the rep's coins,
-  extra claims and the checked comb;
-* `vbit_of_rows`: `VRowsAre`'s bits (`Family/VCoins.lean`) where the registrant's bits are those rows (`value_tie_coll`
-  at `rec-residuals`' rows, off `ValueColl`) and the rep is the family's.
+  extra claims and the checked comb, which `Recursion.vRows_tie` reads as `VRowsAre`'s bits (`Family/VCoins.lean`).
 
-The `mapM` the hypotheses state is `checkResiduals`' rows, and `residualRowsOf` on the value-source lane.
+The `mapM` the hypotheses state is `checkResiduals`' rows, definitionally `Recursion.residualRowsOf`.
 -/
 
 namespace FlockC3.RegLevels
@@ -178,29 +176,5 @@ theorem rows_vOf {inn : RecCoins.Inner} {sh : Shape} {extras : Array Claim} {vs 
   match r, hr with
   | 0, _ => exact row_vOf ha
   | 1, _ => exact row_vOf hb
-
-/-- **`VRowsAre`'s bits from check 5's rows**: where a registrant's bits `f` are rep `r`'s row of `checkResiduals`
-(`value_tie_coll` at `rec-residuals`' rows, off `ValueColl`) and the rep the check reads has the family's rounds and,
-where `vs` reaches the comb, its comb (the inner session's coins are the rep's: the lane that proves `HFiles`), `f` is
-`wbit` of `vOf` at them. -/
-theorem vbit_of_rows {inn : RecCoins.Inner} {sh : Shape} {extras : Array Claim} {vs : Array ℕ}
-    {rows : Array (Array ℕ)}
-    (h : (#[0, 1].mapM fun r => do
-      let rep ← inn.rep sh extras r
-      let base := rep.v.extract 0 (rep.v.size - 64)
-      let comb ← if vs.any (· ≥ base.size) then inn.comb r rep else pure RecCoins.ZERO_COMB
-      let full := base ++ comb
-      pure (RecCoins.padTo (RecCoins.words (vs.map (full[·]!))) (RecResiduals.portWordsOf vs.size)) :
-        V (Array (Array ℕ))) = .ok rows)
-    {r : ℕ} (hr : r < 2) {rounds : Array (Array F128)} {comb : Array F128}
-    (hrep : ∀ rep, inn.rep sh extras r = .ok rep →
-      rep.rounds = rounds ∧ (vs.any (· ≥ rep.v.size - 64) = true → inn.comb r rep = .ok comb))
-    {f : ℕ → Bool} (htie : ∀ b < 128 * vs.size, f b = ((rows[r]!)[b / 16]!).testBit (b % 16)) :
-    ∀ b < 128 * vs.size, f b = wbit (sub vs (vOf sh rounds extras comb)) b := by
-  obtain ⟨-, hall⟩ := rows_vOf h
-  obtain ⟨rep, hrp, hbits⟩ := hall r hr
-  obtain ⟨rfl, hcomb⟩ := hrep rep hrp
-  intro b hb
-  rw [htie b hb, hbits comb hcomb b hb]
 
 end FlockC3.RegLevels
