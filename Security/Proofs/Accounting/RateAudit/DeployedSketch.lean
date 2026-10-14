@@ -121,7 +121,8 @@ theorem pr_unpaid_rank_le
       refine pr_le_div_of_card_mul_le
         (α := Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)))
         (fun O => t ∈ A.correct sketch σ O D ∧ t ∉ queried A sketch σ O D)
-        1 (2 ^ h) Fintype.card_ne_zero (by positivity) ?_
+        1 (2 ^ h) Fintype.card_ne_zero (by positivity) ?_ <;>
+        simp only [Nat.cast_one, Nat.cast_pow, Nat.cast_ofNat] at *
       simpa [Device.correct, and_comm] using card_guess_le A sketch σ D t
     refine (Finset.sum_le_sum (fun t _ => ht t)).trans (le_of_eq ?_)
     simp [Finset.sum_const, Finset.card_univ, nsmul_eq_mul, div_eq_mul_inv]
@@ -239,6 +240,11 @@ theorem pr_unpaidAt_le (A : SketchDeployedWindow P N m ρ h S L q ks G) (σ : Sk
       ((Equiv.funSplitAt j (SketchPassCoins N ρ h ks G)).symm ((eCand.symm (y, Os)).2, ω')) i.1) = η := by
     funext i
     simp [η, i.2.ne]
+  have hηsplit :
+      (fun i : {i : Fin P // i < j} =>
+        if h : i.1 = j then (eCand.symm (y, Os)).2 else ω' ⟨i.1, h⟩) = η := by
+    funext i
+    simp [η, i.2.ne]
   have hdata :
       Data.ofParts (eCand.symm (y, Os)).1 (eCand.symm (y, Os)).2.1 = y.1 := by
     funext p
@@ -246,7 +252,7 @@ theorem pr_unpaidAt_le (A : SketchDeployedWindow P N m ρ h S L q ks G) (σ : Sk
   have horacle : (eCand.symm (y, Os)).2.2 c = y.2 := by
     simp [eCand]
   set_option maxRecDepth 2000 in
-    simpa [ePass, UnpaidAt, hpass, hη, hdata, horacle] using hy
+    simpa [ePass, UnpaidAt, hpass, hη, hηsplit, hdata, horacle] using hy
 
 /-- At fixed signs whose sector blocks have rank at least `r`, grinding contributes one union over the `P·G`
 candidate passes. -/
