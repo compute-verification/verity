@@ -268,10 +268,12 @@ theorem repUnitOfAlg_holoVals (hcls : ClassOk (Recursion.shapeOf st))
     RepUnitOfAlg zs dg N k Rw
       (tiedSrc (normSrc (repsOfVals stp sh rep fun R ω t Lb i => (b R ω t Lb i).vals sh (rep R ω t Lb i)))) sh rep := by
   have hf : FramesOfVals zs dg N k Rw sh rep fun R ω t Lb i => (b R ω t Lb i).vals sh (rep R ω t Lb i) :=
-    framesOfVals_holo' fun R ω t R₂ τ o hA i halg hacc => ⟨_, (hok R ω t R₂ τ o hA i halg hacc).framed halg⟩
+    framesOfVals_holo' fun R ω t R₂ τ o hA i halg hacc =>
+      ⟨_, HoloSrc.framed (hok R ω t R₂ τ o hA i halg hacc) halg⟩
   have hpr : ProofOfVals zs dg N k Rw sh rep fun R ω t Lb i => (b R ω t Lb i).vals sh (rep R ω t Lb i) :=
     proofOfVals_of_from fun R ω t R₂ τ o hA i halg hacc =>
-      proofFrom_of_framed ((hok R ω t R₂ τ o hA i halg hacc).framed halg) (hok R ω t R₂ τ o hA i halg hacc).fold
+      proofFrom_of_framed (HoloSrc.framed (hok R ω t R₂ τ o hA i halg hacc) halg)
+        (hok R ω t R₂ τ o hA i halg hacc).fold
   have hs : SetupOfVals zs dg N k Rw
       (tiedSrc (normSrc (repsOfVals stp sh rep fun R ω t Lb i => (b R ω t Lb i).vals sh (rep R ω t Lb i)))) sh rep
       fun R ω t Lb i => (b R ω t Lb i).vals sh (rep R ω t Lb i) :=
