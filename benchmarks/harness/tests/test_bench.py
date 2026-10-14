@@ -16,12 +16,13 @@ from verity_bench.vllm.table import render
 
 
 class FakeEngine:
-    def __init__(self, arm, events, *, gate_ok=True, bad_tokens=False):
+    def __init__(self, arm, events, *, gate_ok=True, bad_tokens=False, kv_tokens=None):
         self.arm, self.events, self.gate_ok, self.bad_tokens = arm, events, gate_ok, bad_tokens
         self.identity = {
             "vllm_version": "0.fake+gd9105ea80",
             "kernel_digest": f"digest-{arm.id}",
             "engine_overrides": {"quantization": "fp8"} if arm.id == "stock-fp8" else {},
+            **({"kv_cache_tokens": kv_tokens} if kv_tokens is not None else {}),
         }
 
     def gate(self, point):
@@ -56,12 +57,13 @@ class FakeEngine:
 
 
 class FakeFactory:
-    def __init__(self, *, resident_failure=None, gate_ok=True, bad_tokens=None):
+    def __init__(self, *, resident_failure=None, gate_ok=True, bad_tokens=None, kv_tokens=None):
         self.events = []
         self.resident_failure = resident_failure
         self.failed = False
         self.gate_ok = gate_ok
         self.bad_tokens = bad_tokens
+        self.kv_tokens = kv_tokens or {}
 
     def create(self, arm, preset, *, resident):
         self.events.append(("create", arm.id, resident))
@@ -69,7 +71,8 @@ class FakeFactory:
             self.failed = True
             raise ResidentCapacityError(f"{arm.id} does not fit")
         return FakeEngine(arm, self.events, gate_ok=self.gate_ok,
-                          bad_tokens=arm.id == self.bad_tokens)
+                          bad_tokens=arm.id == self.bad_tokens,
+                          kv_tokens=self.kv_tokens.get(arm.id))
 
 
 def inputs():
@@ -204,6 +207,52 @@ def test_a_failed_gate_records_the_failure_and_stops_before_timing(factory):
     assert doc["points"] == []
     assert not any(e[0] == "measure" for e in factory.events)
     validate(doc)
+
+
+def test_a_failed_greedy_gate_records_the_first_divergent_token():
+    preset, points, arms = inputs()
+    doc = run_benchmark(preset, arms, points, sweep="quick", reps=2,
+                        factory=FakeFactory(bad_tokens="candidate"), git_commit="abc")
+    failed, = [g for g in doc["gates"] if g["kind"] == "greedy-tokens" and not g["passed"]]
+    assert failed["first_divergence"] == {
+        "request": "b32-p512-mixed-0", "position": 0, "token": 8, "control_token": 7,
+    }
+    assert failed["divergent_requests"] == 1
+
+
+def test_unequal_kv_pools_fail_the_gate_and_name_the_pin():
+    """MEM-15: at b128-p8192 the audit arm's engine got a smaller KV pool than its plain twin's (its encoded store and
+    scratch shrink what vLLM's profiling leaves), vLLM scheduled the two arms differently once the point overran the
+    pool, and the greedy tokens diverged. Equal pools are a precondition of the token gate, so unequal pools must fail
+    loudly on their own, before any timing."""
+
+    preset, points, arms = inputs()
+    factory = FakeFactory(kv_tokens={"stock-fp8": 494_064, "candidate": 491_376})
+    doc = run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=factory, git_commit="abc")
+    gate, = [g for g in doc["gates"] if g["kind"] == "kv-pool"]
+    assert not gate["passed"]
+    assert (gate["tokens"], gate["control_tokens"]) == (491_376, 494_064)
+    assert "block_kv_cache_memory_bytes" in gate["detail"]
+    assert doc["points"] == []
+    assert not any(e[0] == "measure" for e in factory.events)
+    validate(doc)
+
+
+def test_equal_kv_pools_pass_and_are_recorded_in_the_identity():
+    preset, points, arms = inputs()
+    factory = FakeFactory(kv_tokens={"stock-fp8": 458_752, "candidate": 458_752})
+    doc = run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=factory, git_commit="abc")
+    gate, = [g for g in doc["gates"] if g["kind"] == "kv-pool"]
+    assert gate["passed"] and doc["points"]
+    assert {a["id"]: a["kv_cache_tokens"] for a in doc["identity"]["arms"]} == {
+        "stock-fp8": 458_752, "candidate": 458_752,
+    }
+
+
+def test_block_mode_pins_one_kv_pool_for_every_arm_of_the_llama_preset():
+    settings = get_preset("llama31-8b-fp8-1gpu").engine_settings
+    assert settings["block_kv_cache_memory_bytes"] == 56 * 2**30
+    assert "block_kv_cache_memory_bytes" not in get_preset("glm53-fp8-8gpu").engine_settings
 
 
 def test_result_schema_and_identity_strict_judge():
