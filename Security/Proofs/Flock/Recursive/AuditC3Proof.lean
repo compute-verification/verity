@@ -227,5 +227,3 @@ theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by
 
 end Flock.SecurityProofs
 
-#print axioms Flock.SecurityProofs.recursiveAuditC3At
-#print axioms Flock.SecurityProofs.RecursiveAuditC3

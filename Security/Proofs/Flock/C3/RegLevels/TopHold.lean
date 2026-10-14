@@ -677,5 +677,3 @@ end Session
 
 end FlockC3.RegLevels.TopHold
 
-#print axioms FlockC3.RegLevels.TopHold.candidate3_top
-#print axioms FlockC3.RegLevels.TopHold.innerCommits_top
