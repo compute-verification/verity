@@ -5,7 +5,9 @@ Cursor runs every agent shell command through it, on any VM, so it holds where t
 installed. A multi-line secret defeats `env | cut -d= -f1`: its later lines print as if they were names, which is how a line
 of the Nebius key reached agents' transcripts at least five times by 6 Oct. Refused, anywhere in the command (pipelines,
 `$(...)`, `bash -c`, `ssh HOST CMD`, `research pods ssh POD -- CMD`): `env` or `printenv` with nothing to run, `printenv` of a
-secret's name, a bare `set`, `export` or `export -p`, `declare`/`typeset` listing variables, and reading `/proc/*/environ`.
+secret's name, a bare `set`, `export` or `export -p`, `declare`/`typeset` listing variables, reading `/proc/*/environ`, and
+`tmux show-environment` (`showenv`) with no name or a secret's (11 Oct: piping tmux's global environment through `cut -d= -f1`
+printed the Nebius key's lines again).
 `compgen -e` lists names only and passes. Also refused: every process's full command line (`ps aux`, `ps -ef`, `ps -eo args`,
 `/proc/*/cmdline`), where a daemon's token can sit in argv; one process (`ps -p PID -o args`), a listing piped straight into
 `grep`/`rg`, and `pgrep -af PATTERN` pass. Reads Cursor's hook JSON on stdin and prints its verdict as JSON on stdout.
@@ -23,9 +25,10 @@ WRAPPER_ARG_OPTIONS = {"sudo": {"-u", "-g", "-C", "-h", "-p", "-U", "-r", "-t"},
 KEYWORDS = {"{", "}", "!", "if", "then", "elif", "else", "do", "while", "until"}
 SHELLS = {"bash", "sh", "zsh", "dash"}
 SSH_ARG_OPTIONS = set("bcDEeFIiJLlmOopQRSWw")
+TMUX_ARG_OPTIONS = set("cfLST")
 ENVIRON = re.compile(r"/proc/[^\s'\"]*environ|/proc/\*/cmdline")
 FILTERS = {"grep", "egrep", "fgrep", "rg"}
-FALLBACK = re.compile(r"(^|[\s|;&(`])(env|printenv|set|export|declare|typeset)(\s+-\S+)*\s*($|[|;&)>`])", re.M)
+FALLBACK = re.compile(r"(^|[\s|;&(`])(env|printenv|set|export|declare|typeset)(\s+-\S+)*\s*($|[|;&)>`])|show-?env", re.M)
 HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1[^\n]*\n.*?\n\s*\2[ \t]*(?=\n|$)", re.S)
 
 REASON = ("this command would print environment variables' values (a multi-line secret's later lines print even through "
@@ -155,6 +158,20 @@ def refused(words: list[str], filtered: bool = False) -> bool:
         return refused_text(" ".join(args[args.index("--") + 1:]))
     if name == "ps":
         return not filtered and every_argv(args)
+    if name == "tmux":
+        i = 0
+        while i < len(args) and args[i].startswith("-"):
+            i += 2 if args[i][-1] in TMUX_ARG_OPTIONS and len(args[i]) == 2 else 1
+        if i < len(args) and (args[i] == "showenv" or args[i].startswith("show-env")):      # tmux takes a command's prefix
+            rest, shown = args[i + 1:], []
+            while rest:
+                a, rest = rest[0], rest[1:]
+                if a == "-t":
+                    rest = rest[1:]
+                elif not a.startswith("-"):
+                    shown.append(a)
+            return not shown or any(secret(n) for n in shown)
+        return False
     if name == "xargs":
         rest = [a for a in args if not a.startswith("-")]
         return bool(rest) and refused(rest)

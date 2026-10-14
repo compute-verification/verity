@@ -76,7 +76,7 @@ def test_the_python_audit_against_itself_agrees_and_every_control_is_rejected(tm
     assert first["link_windows"] == first["same"] == 6 and not first["diffs"]
     names = [c["control"] for c in first["controls"]]
     assert names == ["drop", "duplicate", "raw-slot", "status", "committed-digest-byte", "certificate-other-window",
-                     "sync-outside-set", "sync-not-units", "ingress-drop", "ingress-duplicate", "ingress-status"]
+                     "certificate-other-session", "sync-outside-set", "sync-not-units", "ingress-drop", "ingress-duplicate", "ingress-status"]
     assert all(c["passed"] and c["expected_kind"] for c in first["controls"]), first["controls"]
     # the recorded verdicts: equal ones match, and one recorded rejection the replay doesn't give is a diff
     rows = [{"config": "synthetic", "run": "r0", "direction": d, "link": link, "window": w, "raw": None,
@@ -86,7 +86,7 @@ def test_the_python_audit_against_itself_agrees_and_every_control_is_rejected(tm
     assert again["recorded_compared"] == 6 and again["recorded_same_python"] == again["recorded_same_lean"] == 5
     assert [(d["window"], d["recorded"]) for d in again["diffs"]] == [(1, {"raw": None, "committed": "mismatch"})]
     s = lr.summarize([first, again])
-    assert s["runs"] == 1 and s["runs_same_verdict"] == 0 and s["K"] == {"natural": 0, "injected": 22, "failed": 0}
+    assert s["runs"] == 1 and s["runs_same_verdict"] == 0 and s["K"] == {"natural": 0, "injected": 24, "failed": 0}
 
 
 def test_a_broken_verifier_is_caught(tmp_path: Path) -> None:
@@ -153,7 +153,7 @@ def test_an_active_run_is_replayed_from_its_records_each_configuration_in_a_proc
     assert s["runs"] == s["runs_same_verdict"] == 1 and not s["errors"] and not s["left_out"]
     assert s["link_windows"] == s["same"] == s["recorded_compared"] == s["recorded_same_lean"] == 12
     assert s["natural_controls"]["python"] == s["natural_controls"]["lean"] and s["K"]["natural"] >= 1
-    assert s["K"]["injected"] == 11 and s["K"]["failed"] == 0  # on one configuration of the run
+    assert s["K"]["injected"] == 12 and s["K"]["failed"] == 0  # on one configuration of the run
     assert lr.main(["active", "--out", str(tmp_path / "none"), "--max-frames", "0", "--verifier", PYTHON,
                     str(root)]) == 0
     s = json.loads((tmp_path / "none" / "summary.json").read_text())

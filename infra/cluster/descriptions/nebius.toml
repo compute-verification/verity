@@ -28,7 +28,7 @@ fill = 10       # backfill: sweeps, censuses, anything that resumes from checkpo
 gpu_model = "rtx-pro-6000"
 owner = "verity"
 memory_gib = 1690
-stops_at = "2026-10-14T15:00:00Z"  # the VM's /etc/research/deadline
+stops_at = "2026-10-16T15:00:00Z"  # the VM's /etc/research/deadline
 system_cpus = "0-7"  # k3s and the system (the steward's CPU map, 07:13Z)
 numa = { 0 = "0-95", 1 = "96-191" }
 # The merge-train check slots: never preempted, never borrowed, never used by other work (research coordinator, 17:22Z), slot
@@ -59,7 +59,7 @@ borrow_gpus = 2
 gpu_model = "rtx-pro-6000"
 owner = "pous"
 memory_gib = 1690
-stops_at = "2026-10-10T05:30:00Z"  # the VM's /etc/research/deadline
+stops_at = "2026-10-16T15:00:00Z"  # the VM's /etc/research/deadline
 numa = { 0 = "0-95", 1 = "96-191" }
 # GPUs 0-3 on NUMA 0 and 4-7 on NUMA 1, no NVLink, the NIC on NUMA 1 (node2-ops read it at 19:09Z, 30 Sep).
 gpus = [
@@ -69,6 +69,8 @@ gpus = [
 
 # Verity on node 2 (decision 1 at Daniel's default): idle capacity only, preemptible, never in a window, GPUs included.
 # CPUs, memory and job caps are pous infra's interim terms (research-notes, 20260930T1629Z).
+# Its CPUs sit inside check slots a and b: a guest runs at nice 19 in the user slice (0-119 since vy-device-cores), so it takes
+# only what the checks leave idle (infra, 12 Oct). Renewed to the VM's stop.
 [[shares]]
 project = "verity"
 node = "vy-nebius-2"
@@ -76,7 +78,7 @@ cpus = "48-95"
 max_memory_gib = 1024
 max_job_memory_gib = 256
 max_jobs = 6
-until = "2026-10-07T12:00:00Z"
+until = "2026-10-16T15:00:00Z"
 
 # PoUW on node 1 (decision 1's other half): overflow onto idle GPUs, preemptible, evicted first, off the reserved CPUs
 # 0-95, and only work that neither ranks nor times sm_120 kernels (such jobs pin node = "vy-nebius-2"). On node 1 it
@@ -85,7 +87,7 @@ until = "2026-10-07T12:00:00Z"
 project = "pous"
 node = "vy-nebius-1"
 cpus = "96-191"
-until = "2026-10-07T12:00:00Z"
+until = "2026-10-16T15:00:00Z"
 
 # Policy: the values node services read from outside git today (a tmux pane's environment, Kueue's objects, slot and CPU-map
 # files), as agreed on 3 Oct 2026, each under the handle who decides a change (`owner`, which covers every key below it).
@@ -155,9 +157,9 @@ memory = { nominal = 0 }
 [policy.vy-nebius-2]
 owner = "infra"
 user-cpuset = { delegate = "cpu cpuset memory pids" }
-# merge-check slots d and e pause through every booked window but those marked slot-d=runs (infra, 1 Oct); d is the lander's
-# train checks' alone (only=trains), so a lane's quick tier never holds the slot a train waits for (top, 6 Oct)
-check-slots = { d = "0-47 windows=/workspace/pouw/fill/windows lead=30 only=trains", e = "48-79 windows=/workspace/pouw/fill/windows lead=30" }
+# two full-check slots that stop taking checks 90 min before every booked window, so a check started before it ends in time
+# (infra, 12 Oct); 120-127 are isolcpus (kernel cmdline)
+check-slots = { a = "0-63 windows=/workspace/pouw/fill/windows lead=90 mem=560", b = "64-119 windows=/workspace/pouw/fill/windows lead=90 mem=560" }
 # /workspace/pouw/fill/cpu-sets: compute accounting's verifies, 4 at a time in 40 GB each, on slot d's cores
 fill.cpu-sets = { bc-e6a46970-b6ef-5738-af64-182b143075d4 = "0-47 4 40" }
 # /workspace/pouw/fill/windows: the booked timed windows, as `fill.window."START" = MINUTES` (START in UTC, to the minute).

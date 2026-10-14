@@ -8,7 +8,7 @@ from dataclasses import replace
 import pytest
 
 from verity.ml.circuits.program import Program
-from verity.core.protocols.certifier.certificate import (CertifiedRecord, Direction, Issuer,
+from verity.core.protocols.certifier.certificate import (CertifiedRecord, Direction, Issuer, LmsSigner,
                                                                           RecordHead, parameters_digest)
 from verity.core.protocols.certifier.grid import Certifier, Record
 from verity.core.protocols.certifier.schedule import SyncSet, run_shaper
@@ -47,8 +47,8 @@ class Run:
 
     def __init__(self, tmp_path, *, proof_deadline=60.0, coins=b"\x07") -> None:
         self.signer = signers.signer(tmp_path)
-        self.issuer = Issuer(self.signer)
-        self.lw = LinkWindows(LINK, PARAMS, SYNC_SET, self.signer.public_key(), "r-network-test",
+        self.issuer = Issuer(self.signer, signers.SESSION)
+        self.lw = LinkWindows(LINK, PARAMS, SYNC_SET, self.signer.public_key(), "r-network-test", signers.SESSION,
                               proof_deadline=proof_deadline)
         self.clock = Clock()
         self.stream = self.lw.stream(budget=8, delta=DELTA, challenger="challenger-test", coins=lambda n: coins * n,
@@ -114,6 +114,7 @@ def test_the_spec_declares_each_public_item_with_its_reason(tmp_path):
     assert replace(lw, sync_set=SyncSet(tuple(range(16)), tuple(range(1, 9)))).charge == 7.0
     assert lw.spec.digest() != replace(lw, sync_set=SyncSet((0, 1), (1, 2))).spec.digest()
     assert lw.spec.digest() != replace(lw, run="another").spec.digest()
+    assert lw.spec.digest() != replace(lw, certifier_session=signers.OTHER_SESSION).spec.digest()
 
 
 def test_the_domain_is_one_stages_served_domain(tmp_path):
@@ -193,10 +194,23 @@ def test_a_bad_signature_is_a_reject(tmp_path):
     zeros = CertifiedRecord(eg.head, replace(eg.certificate, signature=bytes(len(eg.certificate.signature))))
     assert reject(run.round(run.lw.commit(0, zeros, ig, SALTS[0])))
     (tmp_path / "stranger").mkdir()
-    stranger = Issuer(signers.signer(tmp_path / "stranger", seed=b"other"))
+    stranger = Issuer(signers.signer(tmp_path / "stranger", seed=b"other"), signers.SESSION)
     signed = stranger.certify(ingress_records()[1], INGRESS, PARAMS, parameters_digest(PARAMS))
     assert reject(run.round(run.lw.commit(1, run.egress(egress_records()[1]), signed, SALTS[1])))
     assert run.round(run.honest(2)).accepted and run.stream.symbols == ("reject", "reject", "accept")
+
+
+def test_a_certificate_from_another_session_is_a_reject(tmp_path):
+    """The cross-session replay: the certifier's own key signed the link-window in an earlier session, and its
+    certificate signs another message than this session's, so it is rejected."""
+    run = Run(tmp_path)
+    earlier = LmsSigner(run.signer.key, run.signer.state)
+    replayed = Issuer(earlier, signers.OTHER_SESSION).certify(egress_records()[0], EGRESS, PARAMS,
+                                                              parameters_digest(PARAMS, SYNC_SET))
+    earlier.close()
+    assert replayed.verify(run.signer.public_key(), signers.OTHER_SESSION)
+    assert reject(run.round(run.lw.commit(0, replayed, run.ingress(ingress_records()[0]), SALTS[0])))
+    assert run.round(run.honest(1)).accepted and run.stream.symbols == ("reject", "accept")
 
 
 def test_a_digest_mismatch_is_a_reject(tmp_path):

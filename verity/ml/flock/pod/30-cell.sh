@@ -19,7 +19,7 @@ read -r Q PER_ < /sys/fs/cgroup/cpu.max 2>/dev/null || { read -r Q < /sys/fs/cgr
 TH=$([ "$Q" = max ] && nproc || echo $(( Q / PER_ ))); TH=${THREADS:-$TH}; export RAYON_NUM_THREADS=$TH
 [ -x $HOME/.local/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 [ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }
-export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/catalog:$REPO/kernels:$REPO/experimental:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python
+export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python
 if [ "$REL" = bf16-ampere ] && [ -z "${SET:-}" ] && [ -z "${K:-}" ]; then
   # the A100 row's frozen bench-instances/v1 set: rebuilt here from the committed seeds, refused unless every array matches the
   # committed manifest's sha256, then linked into the source tree (as pod_bootstrap.sh BENCH_INSTANCES=1 does)

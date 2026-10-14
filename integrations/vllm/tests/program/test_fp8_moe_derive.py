@@ -148,7 +148,7 @@ def test_scales_on_another_block_grid_refuse(on_target):
     assert "FusedMoeKernelFp8[vllm-moe]_v1: scale shapes" in hint and f"want ({E}, {NB}, {KG})" in hint, hint
 
 
-@pytest.mark.parametrize("cc", [(9, 0), (8, 9)])
+@pytest.mark.parametrize("cc", [(8, 0), (8, 9)])
 def test_a_target_without_an_e4m3_step_refuses_by_name(cc, on_target):
     on_target(TargetProfile(compute_capability=cc))
     hint = _hint(_derive(_Launch(True), _inputs(True)))

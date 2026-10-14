@@ -186,7 +186,8 @@ installs it first, so a machine without elan works), must pass clean and fail on
   guarantees by category. `"conjectures": {P: {"status": "open" | "falsified", "test": T, "why": W}}` names the
   conjectures a property may rest on, each a named assumption: one is a premise when it heads a hypothesis, and a
   property with a hypothesis reaching one lists it under its entry's `rests_on` (it is conditional). An open one names
-  its falsification test `T`, which a suite runs, so a counterexample fails `check`; a falsified one refuses every
+  its falsification test `T`, a pytest node id `PATH::NAME` from the repository's root that a suite runs
+  (`tests/test_lean_packages.py` checks the test exists), so a counterexample fails `check`; a falsified one refuses every
   property resting on it, which stays under `frozen` only as `falsified`. Every package is checked: without a `shape`
   section each guarantee is frozen or fails. An entry added to `frozen`, and a conjecture added or with a new status,
   is a claims change: the landing DM shows it with its reason (`research/spec_alert.py`), and nothing waits on it.
@@ -230,8 +231,8 @@ are, and in place of `G as` the value of `G` at the type's universe levels with 
 `Meta.unfoldDefinition?` unfolds an applied constant), the proofs Lean abstracts out of a definition (its `G._proof_<n>`
 theorems) put back in place, as a theorem's type keeps them. Nothing else is reduced, and the text is hashed as every
 type is. A certified lift gets one line, "lifted into G: the same statement, its definition unfolded once", and `G`, new and
-read by no other guarantee, needs no reading of its own; the review then holds no statement change, so the merge needs no
-statement reviewer for it. Any other lift prints in full: a `G` whose value differs from `e` in anything the hash sees
+read by no other guarantee, needs no reading of its own; the review then holds no statement change. (No merge needs a
+statement reviewer, for a lift or any other change: Daniel, 8 Oct.) Any other lift prints in full: a `G` whose value differs from `e` in anything the hash sees
 (binder names and metadata aside), a `G` outside a `Guarantees` module, and a lift that moves a named assumption from the
 theorem's binders into `G`, which the record's `assumptions` would lose. Daniel's DM reads only the records, so it still
 lists a lifted guarantee as changed.
@@ -377,8 +378,10 @@ module docstring has the layout and the rules. In short:
   `setup.sh` (the toolchain, Mathlib's cache, the dependencies' sources) and `cache.py get`, and compiles none of ArkLib.
 - A miss or a mismatch means building from source. So do a missing read credential (`LEAN_CACHE_R2_*`), the kill switch
   (disabled, quarantined or unreachable), and `LEAN_CACHE=off`.
-- The audit never reads the cache: `lake_env()` sets `LAKE_ARTIFACT_CACHE=false` and `LEAN_CACHE=off`, so the validator
-  builds from source.
+- The audit never reads the cache: `lake_env()` sets `LEAN_CACHE=off`, and `LAKE_ARTIFACT_CACHE=false` unless check's audit
+  names its node's own Lake cache (`--artifacts`, `lean_audit.LakeArtifacts`), which only a passing audit on that node
+  writes and the sandboxed builds only read. A module is then built from source or restored from an earlier passing audit,
+  as a kept build's modules are: Lake's input hash decides which, in both.
 - Only integration publishes, and only a clean checkout of a commit on `origin/main`. It builds with `cache.py build` inside
   its sandbox, then runs `cache.py publish` as root outside it, which hashes the staged files itself and signs with the
   bucket-scoped key (`/etc/verity/lean-cache.env`). The build's user wrote the stage, so the publisher follows no link

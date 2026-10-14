@@ -68,6 +68,8 @@ $PY -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version' || fail
 # ---- 2. vLLM d9105ea80 (cu129 wheel, sha pinned) + torch cu129 + the Python deps ---------------------------------------------------
 W="vllm-0.28.1rc1.dev472+gd9105ea80.cu129-cp38-abi3-manylinux_2_28_x86_64.whl"
 WSHA=7aa52ac71500caf74643135a340eb2d03ae0386d4282fc0b23846940029fbbb3
+# torchcodec from PyPI (0.17.0, built for another torch) breaks `import vllm` and cuteDSL on H200 (vy-glm53-h1, 12 Oct): the cu129 build
+TORCHCODEC="torchcodec==0.16.0+cu129"
 if ! $PY -c "import vllm, torch" 2>/dev/null; then
   [ -f "$WORK/wheels/$W" ] || curl -fLo "$WORK/wheels/$W" \
     "https://wheels.vllm.ai/d9105ea8001e0a6d77a96327d17515bb5791fb36/vllm-0.28.1rc1.dev472%2Bgd9105ea80.cu129-cp38-abi3-manylinux_2_28_x86_64.whl" \
@@ -79,12 +81,15 @@ if ! $PY -c "import vllm, torch" 2>/dev/null; then
   export UV_HTTP_TIMEOUT=${UV_HTTP_TIMEOUT:-600}
   for _try in 1 2; do
     uv pip install --python "$PY" --extra-index-url https://download.pytorch.org/whl/cu129 --index-strategy unsafe-best-match \
-      "$WORK/wheels/$W" "numpy>=1.26" safetensors huggingface_hub zstandard pytest ninja >"$OUT/pip.log" 2>&1 && break
+      "$WORK/wheels/$W" "$TORCHCODEC" "numpy>=1.26" safetensors huggingface_hub zstandard pytest ninja >"$OUT/pip.log" 2>&1 && break
     [ "$_try" = 2 ] && fail PIP "$(tail -3 "$OUT/pip.log")"
     log "pip install failed (attempt $_try): $(tail -1 "$OUT/pip.log" | cut -c1-160); retrying"
   done
 fi
 $PY -c "import ninja" 2>/dev/null || uv pip install --python "$PY" ninja >/dev/null 2>&1
+uv pip show --python "$PY" torchcodec 2>/dev/null | grep -qx "Version: ${TORCHCODEC#*==}" \
+  || uv pip install --python "$PY" --extra-index-url https://download.pytorch.org/whl/cu129 --index-strategy unsafe-best-match "$TORCHCODEC" \
+  >>"$OUT/pip.log" 2>&1 || fail PIP "$TORCHCODEC: $(tail -1 "$OUT/pip.log")"
 # the `verity-vllm` launcher ([project.scripts] entry point); verity_vllm resolves from PYTHONPATH like every process on the pod
 printf '#!%s\nimport sys\nfrom verity_vllm.pipeline.cli import main\nsys.exit(main())\n' "$PY" > "$VENV/bin/verity-vllm" \
   && chmod +x "$VENV/bin/verity-vllm" || fail VENV "cannot write $VENV/bin/verity-vllm"

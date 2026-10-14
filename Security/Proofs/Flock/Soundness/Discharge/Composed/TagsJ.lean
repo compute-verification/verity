@@ -11,11 +11,9 @@ namespace FlockSoundness.Discharge.Composed
 
 open Flock Exec
 
-set_option maxHeartbeats 4000000 in
 theorem parse_identity (tags : Tags) (x : Lean.Json) (b : ByteArray) (t : List (String × ByteArray)) :
     HmRow.parse { tags with identity := x } b t = HmRow.parse tags b t := by
-  have hc : ∀ c l, HmRow.check c { tags with identity := x } l = HmRow.check c tags l := fun _ _ => rfl
-  simp only [HmRow.parse, hc]
+  kernel_rfl
 
 theorem parse_tagsAt (tags : Tags) (count j : ℕ) (b : ByteArray) (t : List (String × ByteArray)) :
     HmRow.parse (tagsAt tags count j) b t = HmRow.parse tags b t := by

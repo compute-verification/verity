@@ -242,6 +242,7 @@ class Honest:
             store[(step, name)] = np.concatenate(arrs).tobytes()
         if mutate:
             mutate(store, entries)
+        self.store = store
 
         def committed(step, name, lo, hi):
             b = store.get((int(step), name))
