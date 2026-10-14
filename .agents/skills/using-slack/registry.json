@@ -133,6 +133,7 @@
         "Security/Proofs/Pous/",
         "benchmarks/pous/",
         "benchmarks/bandwidth/",
+        "benchmarks/rate_squaring/",
         "benchmarks/vllm_encoded/",
         "benchmarks/word_codec/",
         "benchmarks/codec_tensor/",
