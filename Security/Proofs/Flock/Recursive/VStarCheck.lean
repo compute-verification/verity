@@ -497,6 +497,3 @@ theorem vstarParsesScoped_of {S : ℕ} {t₀ : Flock.Tags} {i : RecVStar.Inner} 
     ⟨Except.ok.inj (hc.symm.trans (h j ss s cf hss hs hcf).1), (h j ss s cf hss hs hcf).2⟩
 
 end FlockSoundness.Discharge.Recursion
-
-#print axioms FlockSoundness.Discharge.Recursion.checkPart_ok
-#print axioms FlockSoundness.Discharge.Recursion.checkCircuit_ok
