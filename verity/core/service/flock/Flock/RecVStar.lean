@@ -493,21 +493,40 @@ def rowPorts : VStar.Stmt → List String
 def msgUnnamed (s : VStar.Stmt) (c : Circuit) : Option String :=
   (c.ports.toList.map (·.name)).find? fun nm => (mIndex nm).isSome && !((ownPorts s).any (·.1 == nm))
 
+/-- The algebra-message rounds a part may name: through the opening, before compiled Ligerito's rounds. -/
+def innerMsgRounds : VStar.Stmt → Option Nat
+  | .inner _ name _ => do
+    let (m, kLog, claims, _) ← RecResiduals.params name
+    pure (m + kLog + claims - 8)
+  | _ => none
+
+/-- The first circuit port naming a message round past the part's algebra messages. -/
+def msgRoundOutOfRange (rounds : Nat) (c : Circuit) : Option String :=
+  (c.ports.toList.map (·.name)).find? fun nm =>
+    match mIndex nm with
+    | some k => decide (rounds ≤ k)
+    | none => false
+
 /-- **A statement's circuit names each port once, and a part's circuit, and a part of R's opening's, names only its
 statement's message-round ports**: the verifier finds a registered port by its name (`Registered.checkPort`, the first
 port of the name), so each name is one port's; and each port `m<k>` of a part's circuit is one of the statement's
 (`ownPorts`: a part's `m<k>` under `rec-c<k>`, R's opening's under `rec-opening-c<k>`), so the verifier's reads file
 reads it under the statement's value (`checkOwn`). The circuit file is V*'s for the statement (`checkFile`), whose ports
-are the statement's, each name once (`HmRow.checkRows` refuses a name twice), so an honest session passes. -/
+are the statement's, each name once (`HmRow.checkRows` refuses a name twice), so an honest session passes. A part also
+refuses an `m<k>` at or past its algebra messages: compiled Ligerito's later rounds have no part message port. -/
 def checkMsgNames (s : VStar.Stmt) (c : Circuit) : V Unit :=
   if !decide (c.ports.toList.map (·.name)).Nodup then
     throw s!"{s.name}: the circuit names a port twice"
-  else match s with
-  | .inner .. | .opening .. =>
-    match msgUnnamed s c with
-    | some nm => throw s!"{s.name}: the circuit's port {nm} is named as a message round's, and the statement has no such port"
-    | none => pure ()
-  | _ => pure ()
+  else do
+    match s with
+    | .inner .. | .opening .. =>
+      match msgUnnamed s c with
+      | some nm => throw s!"{s.name}: the circuit's port {nm} is named as a message round's, and the statement has no such port"
+      | none => pure ()
+    | _ => pure ()
+    if let some rounds := innerMsgRounds s then
+      if let some nm := msgRoundOutOfRange rounds c then
+        throw s!"{s.name}: the circuit's port {nm} names message round {(mIndex nm).getD 0}, not below its {rounds} algebra-message rounds"
 
 def showReads (r : Array (Option Nat)) : String := toString (r.toList.map fun x => (x.map toString).getD "null")
 
@@ -1093,12 +1112,14 @@ def checkCovers (i : Inner) (cs : InnerCommits) : V Unit := do
   checkCommitRounds i cs
 
 /-- **Candidate 3's inner shape is its inner statement's**: it names the bucket's RecSparse shape (`rec-inner --sparse`),
-and its `m`, `k_log` and region count are those of the inner statement check 5 sets up (`m`, `kLog`, `regions`), as
-`innerOf` reads them, so V*'s list, the streams it holds and the class the sparse phase is weighed at are one table's. -/
+whose one type makes every private `τ` entry uniquely zero, and its `m`, `k_log` and region count are those of the inner
+statement check 5 sets up (`m`, `kLog`, `regions`), as `innerOf` reads them, so V*'s list, the streams it holds and the
+class the sparse phase is weighed at are one table's. -/
 def checkInnerShape (i : Inner) (m kLog regions : Nat) : Except String Unit := do
-  if i.sparse.isNone then
-    throw ("rec-inner: candidate 3's inner shape names no RecSparse shape (rec-inner --sparse): its V* list would have no " ++
-      "RecSparse statement, level of R's or part of R's opening")
+  let some sp := i.sparse | throw ("rec-inner: candidate 3's inner shape names no RecSparse shape (rec-inner --sparse): " ++
+    "its V* list would have no RecSparse statement, level of R's or part of R's opening")
+  if sp.tLog != 0 then
+    throw s!"rec-inner: candidate 3 supports one sparse type (T_LOG 0), not T_LOG {sp.tLog}"
   if i.m != m || i.kLog != kLog || i.regions != regions then
     throw (s!"rec-inner: the verifier's inner shape (m {i.m}, k_log {i.kLog}, regions {i.regions}) is not the inner " ++
       s!"statement's (m {m}, k_log {kLog}, regions {regions})")

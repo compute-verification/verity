@@ -15,11 +15,17 @@ def circ (names : List String) : Circuit :=
 
 def part : VStar.Stmt := .inner 0 "rec-residuals/m22-k6-c4-p0" { (default : VStar.Part) with S := { gf := default, ports := [("m0", 8), ("acc0", 8)] } }
 
+def partAt (k : Nat) : VStar.Stmt :=
+  .inner 0 "rec-residuals/m22-k6-c4-p0"
+    { (default : VStar.Part) with S := { gf := default, ports := [(s!"m{k}", 8), ("acc0", 8)] } }
+
 def opening : VStar.Stmt := .opening 22 2 0 { ops := [], res := [] } [("m0", 8), ("acc0", 8)] 1
 
 def refused (s : VStar.Stmt) (names : List String) : Bool := (checkMsgNames s (circ names)).toOption.isNone
 
 #guard !refused part ["m0", "acc0", "v", "out"]
+#guard !refused (partAt 23) ["m23", "acc0"]
+#guard refused (partAt 24) ["m24", "acc0"]
 #guard !refused opening ["m0", "acc0"]
 #guard refused part ["m0", "m1", "acc0"]
 #guard refused opening ["m0", "m1"]
