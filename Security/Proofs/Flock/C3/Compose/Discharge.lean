@@ -11,18 +11,19 @@ import Proofs.Flock.C3.PubRows.Shape
 
 `hbr_honest`: the guarantee's `_hbr` at G's commit strings, digests and messages (`skOf`, `cmtOf`, `wmsgOf`, `msgOf`,
 the decoder at `skLeaf`): `VBridgeC` at V*'s checked sessions (`checkedC3`), by `vbridgeC_c3` at `C3Family.checked`,
-from n1 (`hPubRows_of_checked` at the checks the checked sessions keep, `checksAccepted_checked`; `hTape_of_frame`),
+from n1 (`hPubRows_of_checked` at the checks of a transcript each session writes, `hreach`; `hTape_of_frame`),
 the stages at the honest family, `hCommits_honest` at the committed rounds (`vCommits_masked`) and
 `vDecodesR_wmsgLeaf`. Its `Vs` and `hob` are the guarantee's: at the verifier's
 list they are `vstarParsesScoped_of_list`'s (`VStarList/Statements.lean`), which is `_hob`. The decoder `dec` is free,
 and a stage's messages are `dec`'s, so no stage follows from the public rows alone: each stage is its read fact
 (`RepsRead`, `SparseRead`, `OpeningRead`, `RegLevelsRead`) and the tape its frame (`HFrame`), obligations on `dec` that
 n6 states at a fixed decoder (`C3/Compose/Decoder.lean`). What it takes besides is the verifier's: its list builds
-(`hss`), R's registered top is `xR`'s cap (`_htop`, which n6's `RegLevelsRead` reads), the accepted sessions read every
-row `HPubRows` does (`hdrawn`; each circuit names a port once, `PortsNamed`, from the statement check's
-refusal, `names_of_checkStmt`), their reads hold its own (`hown`, `OwnIn`; at `own := fun j => ownAt ss j` it
-is `ownIn_checked`, from `checkOwn`), and the rows it holds, at the records written at the history (`wr`), are the
-history's commitments (`hheld`).
+(`hss`), R's registered top is `xR`'s cap (`_htop`, which n6's `RegLevelsRead` reads), a session accepting a
+transcript it writes passes its checks at one it writes (`hreach`, `ChecksReached`, where every unit is drawn,
+`rowsHeld`, so the check reads every row `HPubRows` does; each circuit names a port once, `PortsNamed`, from the
+statement check's refusal, `names_of_checkStmt`), their reads hold its own (`hown`, `OwnIn`; at
+`own := fun j => ownAt ss j` it is `ownIn_checked`, from `checkOwn`), and the rows it holds, at the records written at
+the history (`wr`), are the history's commitments (`hheld`).
 
 `hbr_honest` is at a fixed word of R's cap (`fun _ _ => xR`); `hbr_honest_reg` is `_hbr` in its form, at the word the
 transported prover's runs open (`regStmt`): candidate 3's table reads only the cap (`holoAccepts_of_cap`), so VBridgeC
@@ -59,11 +60,12 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 /-- **(step 7) The guarantee's `_hbr` at the honest family**: VBridge at the committed rounds (`VBridgeC`) at V*'s
 checked sessions (`checkedC3`, the guarantee's), at G's commit strings and digests and the messages the decoder reads
 (the last round's from the layers in full, `skLeaf`), from the stages' read facts, the tape's frame and the verifier's
-facts at the checked family (`C3Family.checked`). A checked session keeps only what the verifier checks
-(`checksAccepted_checked`), so the public rows are `hPubRows_of_checked`'s, at the shape every checked rec-sparse unit
-has (`sparseAtShapeChecked`). The decoder `dec` is free, so the read facts are hypotheses: each says `dec`'s messages on
-its stage's rounds are its prover's for a witness its verifier row accepts, which n6 states at a fixed decoder. R's top
-(`_htop`) is what n6's `RegLevelsRead` reads. -/
+facts at the checked family (`C3Family.checked`). The public rows are `hPubRows_of_checked`'s at the checks of a
+transcript each session writes (`hreach`), at the shape every checked rec-sparse unit has (`sparseAtShapeChecked`). A
+checked session keeps its list where some transcript it accepts passes the checks, written or not
+(`checksAccepted_checked`), so `hreach` is not yet the checked family's. The decoder `dec` is free, so the read facts
+are hypotheses: each says `dec`'s messages on its stage's rounds are its prover's for a witness its verifier row
+accepts, which n6 states at a fixed decoder. R's top (`_htop`) is what n6's `RegLevelsRead` reads. -/
 theorem hbr_honest (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : RecVStar.statements ish = .ok ss)
     (bind : Fin (vstarCount ish) → VStar.Bindings) {Vs : Fin (vstarCount ish) → VStmt}
     (hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs)
@@ -87,8 +89,8 @@ theorem hbr_honest (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : RecVSta
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) dg N k Rw)
     (hfr : ∀ h : Typed zr, HFrame
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) dg N k Rw)
-    (hdrawn : ∀ h : Typed zr, RowsHeld
-      (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg))
+    (hreach : ∀ h : Typed zr, ChecksReached
+      (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) rows wr reg)
     (hown : ∀ h : Typed zr, OwnIn
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) own)
     (hheld : ∀ h : Typed zr, HeldIs
@@ -102,8 +104,7 @@ theorem hbr_honest (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : RecVSta
   intro h
   have hrows : HPubRows
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) :=
-    hPubRows_of_checked (checksAccepted_checked (coins := coins) (rows := rows) (zr := zr) (hCust := hCust) (h := h))
-      (hdrawn h) (sparseAtShapeChecked _)
+    hPubRows_of_checked (hreach h) (sparseAtShapeChecked _)
   exact vbridgeC_c3 (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg)
     dg N k Rw (hTape_of_frame (hfr h)) (hReps_honest_of_read (hrread h)) (hSparse_honest_of_read (hsread h))
     (hOpening_of_read (horead h)) (hRegLevels_honest_of_read (hlread h))
@@ -162,8 +163,8 @@ theorem hbr_honest_reg (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : Rec
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) dg N k Rw)
     (hfr : ∀ h : Typed zr, HFrame
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) dg N k Rw)
-    (hdrawn : ∀ h : Typed zr, RowsHeld
-      (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg))
+    (hreach : ∀ h : Typed zr, ChecksReached
+      (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) rows wr reg)
     (hown : ∀ h : Typed zr, OwnIn
       (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) own)
     (hheld : ∀ h : Typed zr, HeldIs
@@ -182,7 +183,7 @@ theorem hbr_honest_reg (ish : RecVStar.Inner) {ss : Array VStar.Stmt} (hss : Rec
   intro h
   refine vbridgeC_of_cap (x := fun _ _ => xR) (fun _ _ => ?_)
     (hbr_honest ish hss bind hob zr hCust coins rows own sel bc dec wr reg bcs' htop dg N k Rw hrread hsread horead hlread
-      hfr hdrawn hown hheld h)
+      hfr hreach hown hheld h)
   exact hcap
 
 end FlockC3.Compose

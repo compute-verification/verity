@@ -1,6 +1,7 @@
 import Proofs.Flock.C3.PubRows.Prefix
 import Proofs.Flock.C3.Compose.Honest
 import Proofs.Flock.VBridge.Family.Pub
+import Proofs.Flock.C3.Compose.RowsReg
 
 /-!
 # n1: what the verifier's check of the public rows gives
@@ -14,8 +15,9 @@ that the drawn statement labels itself reads its row of the port at one of those
 `HPubRows` reads every unit and every port of a name, at the verifier's own RecSparse shape; the check reads the drawn
 units, the first port of a name, and a rec-sparse unit's own shape. What closes the gap is the family's:
 
-* `RowsHeld`: an accepted session draws every unit that reads a value `fixedRow` knows (G's `RowsDrawn` at every such
-  value, not only `rec-c<k>`), whose label is the unit by the verifier's label check (`label_of_checked`);
+* `RowsHeld`: a session accepting a transcript it writes draws every unit that reads a value `fixedRow` knows (G's
+  `RowsDrawn` at every such value, not only `rec-c<k>`), whose label is the unit by the verifier's label check
+  (`label_of_checked`); every family holds it (`rowsHeld`: the record's custody and the full draw);
 * `PortsNamed`: each circuit names each port once (G's `PortNamesUnique`);
 * `SparseAtShape`: a rec-sparse unit's shape is the verifier's own.
 -/
@@ -353,12 +355,14 @@ theorem label_of_checked {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
   {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
 
-/-- **(n1) An accepted session draws the units that read a value `fixedRow` knows**: G's `RowsDrawn` at every such
-value. `AcceptsZKR` checks the drawn units only (U4, `checkFull`, is not among its checks), so a unit it does not draw
-has a public row no check reads. The drawn statement's label of the unit (`Registered.unitIndices`) is the unit by the
-verifier's label check (`label_of_checked`), not by this. -/
+/-- **(n1) A session accepting a transcript it writes draws the units that read a value `fixedRow` knows**: G's
+`RowsDrawn` at every such value, at the outcomes the session's game reaches (`ZkOuter.Writes`). `AcceptsZKR` checks the
+drawn units only (U4, `checkFull`, is not among its checks), so a unit it does not draw has a public row no check reads;
+a transcript it writes draws every unit (`rowsHeld`). The drawn statement's label of the unit
+(`Registered.unitIndices`) is the unit by the verifier's label check (`label_of_checked`), not by this. -/
 def RowsHeld (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) : Prop :=
-  ∀ R ω t R₂ j tr, AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr → ∀ reg ∈ (F.zs R ω t R₂ j).own,
+  ∀ R ω t R₂ j R' tr, (F.zs R ω t R₂ j).Writes R' tr → AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr →
+    ∀ reg ∈ (F.zs R ω t R₂ j).own,
     (RecVStar.fixedRow { reps := #[] } reg.value 0).isSome = true →
     ∀ (u : Fin (F.Vs j).nv) x, reg.reads[u.val]? = some (some x) →
       ∃ d D dp idx, recordDraw tr.record = some d ∧
@@ -366,6 +370,18 @@ def RowsHeld (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) : Prop :=
         HmOut.drawn (F.Vs j).c (F.zs R ω t R₂ j).pub
           (drawJ (F.zs R ω t R₂ j).I d (partOf (F.zs R ω t R₂ j).I d u.val)) = .ok dp ∧
         Registered.unitIndices dp = .ok idx ∧ u.val ∈ D.proved
+
+/-- **(n1) Every family holds its rows**: a transcript a session writes and accepts records the law's draw file (the
+record's custody, `hRec`), the table each unit is drawn into has a drawn statement (`drawn_of_acceptsZKR`), and that
+table's draw proves the unit (the coin server's draw, `hDraw`), since V*'s law, the full draw, draws every unit
+(`execOS_subset_full_mem`). -/
+theorem rowsHeld (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) : RowsHeld F := by
+  rintro R ω t R₂ j R' tr ⟨ω', o, rfl⟩ hacc _ _ _ u _ _
+  have hd := ((F.zs R ω t R₂ j).hRec _ _ _ (acceptsZK_of_R hacc)).1
+  obtain ⟨D, dp, idx, hD, hdp, hidx⟩ := FlockSoundness.Discharge.ZkReg.drawn_of_acceptsZKR (F.zs R ω t R₂ j).I
+    (F.zs R ω t R₂ j).ht (F.zs R ω t R₂ j).hcH (F.zs R ω t R₂ j).hpub (F.zs R ω t R₂ j).hTags hacc hd u.val
+  exact ⟨_, D, dp, idx, hd, hD, hdp, hidx, ((F.zs R ω t R₂ j).hDraw ω' (partOf (F.zs R ω t R₂ j).I _ u.val)).1 D hD u
+    (FlockSoundness.Discharge.Composed.mem_partS (execOS_subset_full_mem (F.Vs j).law.src ω' u))⟩
 
 /-- **(n1) Each of V*'s circuits names each port once** (G's `PortNamesUnique`): the check reads the first port of a
 name. -/

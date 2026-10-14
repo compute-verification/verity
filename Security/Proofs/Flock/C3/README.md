@@ -35,7 +35,7 @@ lines of proof: "+N" is what a branch has built, a range is an estimate of what 
 | the sparse rounds' forms | `holoSelWords`' last conjunct, `holoForms (holoAt st hp)` is `none` at `roundIn L (.sparse x) q + j`, from `roundAt_sparseRounds` and the alignment | `C3/Compose/HoloSparseWords.lean` | 40 | `coinWordsEncoded_holoMap` at the sparse streams | rec-lean (round 21) |
 | the word-level `StageHeld` | `StageHeldW`: a stage's coins are one stream's words `(g q)[w]`, flat index `p ↔ (q, w)`, history round `j + p = i + 1 − (g q).size + w`; its coins lemma, from `coinsAt_of_idx` at `f (q, w) = coinArr fOf #[(g q)[w]!]` with custody's coins half and `CoinWordsEncoded` at `holoSelWords`; `laterCoins_of_held`'s `h2`, `h3` at it | `C3/Compose/LaterHeld.lean` | 120–130 | the sparse phases' `StageCoins`, for `srcOK_holo_rs`'s `hcoins` | W |
 | the sparse stage's source | `SrcSparseTie` at `tiedSrc stp`, from `sparseTie_of_layer` at V*'s accepted RecSparse units and the word-level coins | `C3/Sparse/SrcTie.lean` | 80–120 | `srcOK_holo_rs`'s `hst` | W |
-| the public rows' premises | `RowsHeld` (`C3/PubRows/Check.lean`), with no producer yet; `OwnIn` is `ownIn_checked` (round 21); `PortsNamed` is derived (round 22): `RecVStar.checkMsgNames` refuses a circuit naming a port twice (`Flock/Test/MsgNames`), so `hPubRows_of_checked` reads it at each accepted session (`names_of_checkStmt`, `C3/PubRows/Shape.lean`) and `hbr_honest_reg` has no `hnames` | | unsized | `hbr_honest_reg`'s `hdrawn` | unassigned; E's rows, C's `ReadsOwn` and R's `ReadsOwnC3` are beside it |
+| the public rows' premises | `RowsHeld` is proved (round 24, `rowsHeld`, `C3/PubRows/Check.lean`): `VCommits`, `HPubRows`, `HeldIs`, `ChecksPubRows` and `RowsHeld` read a session only at a transcript it writes (`ZkOuter.Writes`, an outcome its game reaches; `sessions_stage_le` reads `cs` only there, `ZkOuter.prob_unwritten`), where the record's custody and the full draw draw every unit; `OwnIn` is `ownIn_checked` (round 21); `PortsNamed` is derived (round 22): `RecVStar.checkMsgNames` refuses a circuit naming a port twice (`Flock/Test/MsgNames`), so `hPubRows_of_checked` reads it at each accepted session (`names_of_checkStmt`, `C3/PubRows/Shape.lean`) and `hbr_honest_reg` has no `hnames` | `Recursive/Stage.lean`, `C3/PubRows/` | +142 −85 over 13 files | `hbr_honest_reg`'s `hreach` (`ChecksReached` at the checked family, which replaced `hdrawn`): `Flock.Guarantees.keepOwn` keeps a session's list where some transcript it accepts passes the checks, written or not; kept only at a transcript it writes, `checksAccepted_checked`'s proof gives `ChecksReached`, and `acceptsV_checked` needs each outcome's transcripts written (a lemma on `recGame`'s outcomes) | the guarantee's file (C, H) |
 | R's levels' tops reads | `TopRead`, `topRead_of_check`, `topLevel_of_check`, `topRead_of_accepted`, `topReads_of_accepted` (round 23): `RecCoins.checkStackedLevel` refuses a level whose `out` is not R's tops `rec-top-stacked-L<l>` read at node `pos[j] >>> H` (`checkTopReads`, `Flock/Test/TopReads`) | `C3/RegLevels/TopRead.lean` | +114 | on the session's own reads file `(F.zs …).own`, which C's link (d) and `HPubRows` read: each opening's `out` at its node `pos >>> H` of R's tops, through `fixedRow` | proved; C reads it |
 
 ## Start now (independent, rounds 1–4; proved, but a1c, a cleanup, is open)
@@ -99,17 +99,20 @@ is its read fact (its rounds' messages on the tape are its prover's for a witnes
 `hCommits_honest` (`VCommits` at the honest family, G's `hCommits_of` after `pubCommits_of_pubRows`) is proved, and `hcm`
 is it at the committed rounds (`vCommits_masked`); `hdec` is `vDecodesR_wmsgLeaf`. `hbr_honest` is at the checked family (`C3Family.checked`: the
 honest family at `checkedC3`, round 6), so its conclusion is `_hbr` itself, and the verifier's public-row and statement
-checks are the kept sessions' (`checksAccepted_checked`, into `hPubRows_of_checked` at `sparseAtShapeChecked`). What it
-takes, each with who discharges it:
+checks are those of a transcript each session writes (`hreach`, into `hPubRows_of_checked` at `rowsHeld` and
+`sparseAtShapeChecked`). What it takes, each with who discharges it:
 
 * `hrread`, `hsread`, `horead`, `hlread` (`RepsRead`, `SparseRead`, `OpeningRead`, `RegLevelsRead`), through
   `hReps_honest_of_read`, `hSparse_honest_of_read`, `hOpening_of_read`, `hRegLevels_honest_of_read`, and `hfr` (`HFrame`): at n6's fixed
   decoder, from `tape_c3DecOf` and the source's facts (n7). `SrcOK`'s `HLeafC3` is G's `HLeaf`: no decoder meets a
   read fact or `HFrame` at a history shorter than the inner rounds (`zip` stops at the last coin; at `t = []` the tape
   is empty), and the checked sessions refuse one (`hLeafC3_checked`, wherever V* has a statement).
-* `hdrawn` (`RowsHeld`): G's `RowsDrawn` at every value `fixedRow` knows, not only `rec-c<k>`. The drawn statement's
-  label of a unit is the unit by the verifier's refusal of any other (`RecVStar.checkLabels`, in `ChecksC3` and
-  `PubRowsChecked`; `label_of_checked`), so `RowsHeld` asks nothing of the labels (E).
+* `hreach` (`ChecksReached`): where a session accepts a transcript it writes, one it writes and accepts passes the
+  public-row and statement checks. There every unit is drawn (`rowsHeld`, `RowsHeld` proved: G's `RowsDrawn` at every
+  value `fixedRow` knows, from the record's custody, `drawn_of_acceptsZKR` and `hDraw` at the full draw), and the drawn
+  statement's label of a unit is the unit by the verifier's refusal of any other (`RecVStar.checkLabels`, in `ChecksC3`
+  and `PubRowsChecked`; `label_of_checked`). The checked family gives `ChecksAccepted` (`checksAccepted_checked`), at
+  a transcript `keepOwn` finds, written or not; `ChecksReached` needs `keepOwn` at the transcripts a session writes.
 * `PortsNamed` (G's `PortNamesUnique` at V*'s circuits) is no hypothesis: the statement check refuses a circuit naming a
   port twice (`checkMsgNames`), so it holds at each accepted session (`names_of_checkStmt`, in `hPubRows_of_checked`).
 * `hown` (`OwnIn`): each accepted session's reads hold `own`'s ports by name, value and reads. At
