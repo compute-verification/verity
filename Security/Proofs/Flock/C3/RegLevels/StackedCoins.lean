@@ -114,11 +114,12 @@ theorem candidate3_held {tr : Json} {rounds : Array Json} {t : String} {names : 
     exact SatisfiesM_Except_eq.1 (Array.size_mapM _ rs) coins hco
 
 /-- **The verifier's hold of the inner transcript holds R's stream to R's schedule** (`innerCommits_top`'s walk): its
-`stacked/rep0` stream is `candidate3`'s, so `Held` at the shape `innerCommits` was given. -/
+`stacked/rep0` stream is `candidate3`'s, so `Held` at the shape `innerCommits` was given, which is the shape the hold
+records (`InnerCommits.stacked`). -/
 theorem innerCommits_held {tr : Json} {record : String} {reg : Option Json} {bound : Option String}
     {shape : Option StackedShape} {cs : InnerCommits} {x : InnerStream}
     (h : innerCommits tr record reg bound shape = .ok cs) (hs : cs.stream? "stacked/rep0" = some x) :
-    Held shape x := by
+    Held shape x ∧ cs.stacked = shape := by
   unfold innerCommits at h
   extract_lets msgs0 extra stackedS declaredR jpMain at h
   split at h
@@ -146,7 +147,7 @@ theorem innerCommits_held {tr : Json} {record : String} {reg : Option Json} {bou
   · cases h
   rename_i t0 _
   have key : ∀ t', jpT t' = .ok cs → c3 = true ∧
-      ∃ out, candidate3 tr rounds t' names msgs' regR shape = .ok out ∧ cs.streams = out := by
+      ∃ out, candidate3 tr rounds t' names msgs' regR shape = .ok out ∧ cs.streams = out ∧ cs.stacked = shape := by
     intro t' hT
     simp (config := { zeta := false }) only [jpT] at hT
     extract_lets repNames reps jpC3 jpShape jpLoop at hT
@@ -170,7 +171,7 @@ theorem innerCommits_held {tr : Json} {record : String} {reg : Option Json} {bou
       obtain ⟨out, hout, hS⟩ := eok_bind hS
       have := Except.ok.inj hS
       subst this
-      exact ⟨hc3, out, hout, rfl⟩
+      exact ⟨hc3, out, hout, rfl, rfl⟩
     · have := Except.ok.inj hS
       subst this
       simp [InnerCommits.stream?] at hs
@@ -180,10 +181,10 @@ theorem innerCommits_held {tr : Json} {record : String} {reg : Option Json} {bou
       obtain ⟨w, hw, h⟩ := eok_bind h
       have : t' = w := Except.ok.inj hw
       subst this
-      obtain ⟨-, out, hout, hstreams⟩ := key t' h
+      obtain ⟨-, out, hout, hstreams, hstk⟩ := key t' h
       have hs' : out.find? (·.name == "stacked/rep0") = some x := hstreams ▸ hs
       have hq := Array.find?_some hs'
-      exact candidate3_held hout x (Array.mem_of_find?_eq_some hs') (beq_iff_eq.1 hq)
+      exact ⟨candidate3_held hout x (Array.mem_of_find?_eq_some hs') (beq_iff_eq.1 hq), hstk⟩
     · cases h
   · split at h
     · cases h
