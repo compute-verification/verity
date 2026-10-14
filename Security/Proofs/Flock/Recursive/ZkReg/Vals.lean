@@ -44,7 +44,7 @@ noncomputable def regOpenZ {I : Inputs} (ht : I.tags.typed = false) (dj : Finset
     (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hscope : Layout.scopeOkH c = true)
     (rd : FlockSoundness.Registered.ReadsX (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
       (rsShHJS dj y₀ ht hc hscope hU hpub)) (R : Reg) :
-    PosK c hU n → PosK c hU n × ValK c × List UInt8 :=
+    Recursion.PosK c hU n → Recursion.PosK c hU n × Recursion.ValK c × List UInt8 :=
   fun p => match p with
     | .inl uq => (.inl uq, rd.wv (.inl uq), rd.ws (.inl uq))
     | .inr g =>
@@ -68,7 +68,7 @@ theorem regOpenZ_of_read {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (
     (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hscope : Layout.scopeOkH c = true)
     (rd : FlockSoundness.Registered.ReadsX (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
       (rsShHJS dj y₀ ht hc hscope hU hpub)) (R : Reg)
-    (p : PosK c hU n) (hp : rd.isRead p) :
+    (p : Recursion.PosK c hU n) (hp : rd.isRead p) :
     regOpenZ ht dj y₀ hc hU hpub hscope rd R p = (p, rd.wv p, rd.ws p) := by
   have hrow := rd.read_row p hp
   rcases p with uq | g
