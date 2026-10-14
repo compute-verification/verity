@@ -157,7 +157,7 @@ theorem recursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
         FlockSoundness.Assumptions.InnerRecordMap Cm ((k : Fin (r st hp)) → CT st hp k)) :
     Flock.Guarantees.RecursiveAuditC3At CT im := by
   intro n Ω _ _ draw Reg Cm Reg' Reg₂ obj prog st hp reg wr coins cap _salt _bcs' _hstk ish Vs zr hCust _hRC _tbl _bc
-    _hIC bind rows hob hF dg N σ wmsg Sk cmt msg hA3 k Rw M hk hRw hM ρ hρ hr hbr
+    _hIC bind rows _vsrc hob hF dg N σ wmsg Sk cmt msg hA3 k Rw M hk hRw hM ρ hρ hr hbr
   by_cases hT : Typed zr
   swap
   · left
@@ -191,10 +191,10 @@ theorem recursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
     wmsg Sk cmt msg cap (hbr hT)
     with hf | hf | hf | hf | hb
   · exact Or.inl hf
-  · exact Or.inr (Or.inr (Or.inr (Or.inl hf)))
   · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inl hf))))
   · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl hf)))))
-  · refine Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (le_trans (prob_recT_le hob zr
+  · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl hf))))))
+  · refine Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (le_trans (prob_recT_le hob zr
       (fun R ω t R₂ j => And.left (hCust R ω t R₂ j)) hT hF σ _
       (fun o => AcceptsV (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg)
           (fun t => coins (wr t).2) bind rows zr hCust hT o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
@@ -207,7 +207,7 @@ theorem recursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
       (fun o ho => ho.2.1) (fun o hlen hall ho =>
         ⟨acceptsV_checked (cs := Flock.Guarantees.innerHeld wr st reg) (coins := fun t => coins (wr t).2) hlen.ge hall
           (verifies_zsOf zr _ hT o.1 o.2.1 o.2.2.1 o.2.2.2 hall (acceptsVR_of_V ho.2.1.1) ho.2.1.2).1 ho.2.2.1,
-          ho.2.2.2⟩)) hb))))))
+          ho.2.2.2⟩)) hb)))))))
 
 /-- **The recursive audit at candidate 3, as the verifier of record runs it.** -/
 theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by

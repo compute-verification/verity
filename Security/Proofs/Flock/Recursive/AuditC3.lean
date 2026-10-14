@@ -3,7 +3,7 @@ import Proofs.Flock.Recursive.HoloExec
 import Proofs.Flock.Recursive.HoloCoins
 import Proofs.Flock.Recursive.HoloMap
 import Proofs.Flock.Recursive.TopFinder
-import Proofs.Flock.Recursive.SaltFinder
+import Proofs.Flock.Recursive.ValueSrc
 
 /-!
 # The recursive audit at candidate 3 (trusted)
@@ -260,8 +260,9 @@ history where the verifier's checks at candidate 3 pass) and the word the transp
 against `cap` (`regStmt`), at the rounds before the last (VBridge at the committed rounds, `Flock.Premises.VBridgeC`):
 Lean's verifier, at the records written at the outcome's history, never builds `st`, accepts its inputs at candidate 3
 and accepts every session as V*'s statement of its index with its checks at candidate 3;
-or the sessions type and there is a registrant fork, a held top other than `bcs'` (`topFinder`), a session's read of
-R's level-0 top other than its row under the held salts (`saltFinder`), a round fork, a session fork, or an inner fork
+or the sessions type and there is a registrant fork, a held top other than `bcs'` (`topFinder`), a registrant's row
+off a value the verifier registers itself, at its rows and salts `vsrc` (`valueFinder`), a session's read of R's
+level-0 top other than its row under the held salts (`saltFinder`), a round fork, a session fork, or an inner fork
 of the transported prover's own runs at the checked sessions whose decoded transcripts play candidate 3's table to
 outcomes that clash
 against each other (`clashPickHL`); or, with `w` the word the transported prover's runs open at the draw (`regWord`),
@@ -313,6 +314,9 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
       (im st hp Cm ish tbl bc))
     -- the verifier of record's own inputs: V*'s bindings for each statement and the shared rows
     (bind : Fin (vstarCount ish) → VStar.Bindings) (rows : Option (Array Flock.Registered.Port))
+    -- the verifier's rows and salts of the values it registers itself (`coef`, `dirs`, `v`) at each read of V*'s
+    -- sessions, as `RecCoins.checkValue` holds the ports to
+    (vsrc : ValueSrc (drawLaw draw) Reg Cm Reg₂ (holoInnerAt (holoTys st hp) (CT st hp) st hp) Vs)
     -- obligation (gap 4(c)): where V*'s statement `j`'s file under `bind j` parses into scope, as the verifier's
     -- acceptance parses it, it parses to `Vs j`'s circuit
     (_hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs)
@@ -354,6 +358,8 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
         (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ)).Finds Refine.H512 ∨
       (topFinder wr st reg bcs' (holoAt st hp).rsch.sch.level₀ cap salt _hstk
         (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h)
+        (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ)).Finds Refine.H512 ∨
+      (valueFinder (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h) vsrc dg N
         (checkedT ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h σ)).Finds Refine.H512 ∨
       (saltFinder (holoAt st hp).rsch.sch.level₀ cap salt
         (checkedC3 ish (innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr _hCust h)
