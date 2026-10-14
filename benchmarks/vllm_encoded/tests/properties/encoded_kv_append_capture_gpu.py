@@ -18,6 +18,10 @@ raises on ``kv_cache_dtype != "auto"``, and its payloads are the exact BF16 word
 Definition applies nowhere, localizes the first differing element, and counts the elements the Definition's
 quantization would change, so the day the 8-bit mode lands this capture is re-pointed, not rewritten.
 
+Captured on the RTX PRO 6000 (run r20261014-194033-0a9c): one prefill and three decode appends, layers 0 and 31,
+172,032/172,032 cache bytes bit-exact against the codec reference; 81,324 of 86,016 elements would change under the
+Definition's quantization, first difference localized, both scales FP32 1.0.
+
 Run from the repository root on the node (`stack.sh` MODE=capture builds the libraries and launches it)::
 
     python benchmarks/vllm_encoded/tests/properties/encoded_kv_append_capture_gpu.py \
