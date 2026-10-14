@@ -69,12 +69,7 @@ theorem outColAt_stackCol {j : ℕ} (hj : j < c.upv) {col : ℕ} (hcol : col < (
   unfold FlockSoundness.Rows.stackCol
   split
   next hc => exact absurd hc h1
-  next =>
-    first
-    | rfl
-    | (split
-       · rfl
-       · exact absurd h2 ‹_›)
+  next => rfl
 
 /-- **A copy's gate at a returned output's column is committed**: it is unit `u`'s instance's gate there, which
 `Layout.outsOf` returns, an output of the program's circuit. -/
