@@ -1164,7 +1164,7 @@
    "target_only": false,
    "manifest_family": "instance_outputs",
    "commit": {
-    "name": "model.layers.{i}.self_attn/mqa_q",
+    "name": "model.layers.{i}.self_attn/q_pe",
     "binder": "attention"
    }
   },
@@ -1230,7 +1230,7 @@
    ],
    "note": "the rows of output forward_mqa's rows were up-projected into: every row on the sparse route; on a dense-mha step with decode tokens the first num_decode_tokens, through forward_impl's _v_up_proj (the same bmm)",
    "commit": {
-    "name": "model.layers.{i}.self_attn/v_absorb",
+    "name": "model.layers.{i}.self_attn/out",
     "binder": "attention"
    }
   },
@@ -1361,7 +1361,7 @@
    "manifest_family": "instance_outputs",
    "note": "computed on both routes; only the sparse route scores with it",
    "commit": {
-    "name": "model.layers.{i}.self_attn.indexer/q_fp8",
+    "name": "model.layers.{i}.self_attn/index_q",
     "binder": "attention"
    }
   },
@@ -1389,7 +1389,7 @@
    "manifest_family": "instance_outputs",
    "note": "computed on both routes; only the sparse route scores with it",
    "commit": {
-    "name": "model.layers.{i}.self_attn.indexer/weights",
+    "name": "model.layers.{i}.self_attn/index_weights",
     "binder": "attention"
    }
   },
@@ -1402,12 +1402,12 @@
    "site": {
     "kind": "cache_rows",
     "target": "model.layers.{i}.self_attn.indexer.k_cache.kv_cache",
-    "detail": "the rows at this step's slot_mapping written by fused_norm_rope: k_norm (LayerNorm, f32 weight and bias) + RoPE + FP8 e4m3 with a ue8m0 scale: 128 value bytes + one f32 scale"
+    "detail": "the rows at this step's slot_mapping written by fused_norm_rope: k_norm (LayerNorm, f32 weight and bias) + RoPE + FP8 e4m3 with a ue8m0 scale: each row's 128 value bytes (its f32 scale is indexer.k_scale)"
    },
    "dtype": "uint8",
    "shape": [
     "M",
-    "=ID + 4"
+    "ID"
    ],
    "program": "dsa-indexer-k",
    "tp": "replicated",
@@ -1425,7 +1425,33 @@
     }
    ],
    "commit": {
-    "name": "model.layers.{i}.self_attn.indexer.k_cache/rows",
+    "name": "model.layers.{i}.self_attn/index_k",
+    "binder": "attention"
+   }
+  },
+  {
+   "id": "indexer.k_scale",
+   "op": "layers.{i}.self_attn.indexer.k_cache.scale",
+   "port": 1,
+   "layers": "indexer",
+   "module": "model.layers.{i}.self_attn.indexer.k_cache",
+   "site": {
+    "kind": "cache_rows",
+    "target": "model.layers.{i}.self_attn.indexer.k_cache.kv_cache",
+    "detail": "the f32 ue8m0 scale of each row indexer.k_cache reads, at the same slots: the 4 bytes after its block's key rows"
+   },
+   "dtype": "float32",
+   "shape": [
+    "M",
+    1
+   ],
+   "program": "dsa-indexer-k",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": true,
+   "manifest_family": "instance_outputs",
+   "commit": {
+    "name": "model.layers.{i}.self_attn/index_k_scale",
     "binder": "attention"
    }
   },
@@ -1477,7 +1503,7 @@
    "route": "sparse-mqa",
    "note": "bound after _sparse_indexer_and_attn returns, on a step whose layer ran forward_mqa (the sparse route, or decode tokens): every row the indexer scored. A dense-mha step without decode tokens leaves the buffer untouched and binds none",
    "commit": {
-    "name": "model.layers.{i}.self_attn.indexer.indexer_op/topk",
+    "name": "model.layers.{i}.self_attn/topk",
     "binder": "attention"
    }
   },
@@ -2181,7 +2207,8 @@
    "type": "LayerNorm",
    "disposition": "fused",
    "taps": [
-    "indexer.k_cache"
+    "indexer.k_cache",
+    "indexer.k_scale"
    ],
    "reason": "its weight and bias are read by fused_norm_rope, which writes the normed, roped, quantized k straight into the indexer cache",
    "when": "indexer"
@@ -2191,7 +2218,8 @@
    "type": "DeepseekV32IndexerCache",
    "disposition": "taps",
    "taps": [
-    "indexer.k_cache"
+    "indexer.k_cache",
+    "indexer.k_scale"
    ],
    "when": "indexer"
   },

@@ -21,8 +21,10 @@ The POLICY (`Policy`, explicit, listed in the header as `query.policy`):
   recorded as a module's return slot (`<module>/<node>/<slot>[row]`), (c) TENSOR-RETURN: the acquisition binds the TENSORS a module
   returns, and a tensor is one fx node's output -- every row the Program unrolled it into, every port of its tuple; once any Value of
   a node's output at a step leaves its body, every Value of that node's output is required (the final norm's rows the logits never
-  read, the residual slot of the final fused norm nobody consumes).  Switch (b)+(c) off (`return_slots=False`) to see the
-  pure-dataflow population;
+  read, the residual slot of the final fused norm nobody consumes).  UNRETURNED: neither (b) nor (c) is a Call the correspondence
+  lowers to no runtime tensor (its fx node does not return it; `Correspondence.tensorless`) whose Values no Call reads and the
+  Program does not return: the DSA indexer's MQA logits and top-k while every key is selected.  Switch (b)+(c) off
+  (`return_slots=False`) to see the pure-dataflow population;
 * TP-04, a RANK Program only (result.json `tp.world` >= 2): every collective's output and its rank-local partial (`Population`); the
   row's rank manifests merge by `compose.merge_ranks` (rows keep their rank's digest, `tp_peer_binding` binds every output to each peer's partial).
 
@@ -125,6 +127,12 @@ class Residual:
 
 _LINEAR_WHY = ("vLLM `LinearBase.forward` returns `(output, output_bias)`; the collector binds slot 0.  The Program's Definition returns one "
                "array (`out`) and the Build recorded no return slot for the row -- the tuple slot is Python's, invisible to the Program")
+_FUSED_Q_WHY = ("vLLM's `fused_q` returns `(index_q_fp8, index_weights_out, q_pe)`; the Definition's ports `0` / `1` are its first two, and the "
+                "Build's hint `index_q` names the Call, not its slots (the attention binder commits them as `index_q` / `index_weights`)")
+_INDEX_K_WHY = ("the indexer cache row `fused_norm_rope` writes is the e4m3 key then its f32 scale; the Definition returns them as ports `0` / `1` "
+                "under the hint `index_k` (the attention binder commits them as `index_k` / `index_k_scale`)")
+_MLA_INTERIOR_WHY = ("a Value the MLA attention body exchanges between its Calls, which `_sparse_indexer_and_attn` hands over under vLLM's name "
+                     "and the attention binder commits under the body's module: its fx node's name differs per layer and step")
 NAMED_RESIDUALS: tuple[Residual, ...] = (
     Residual("Gemm_v1", "out", "0", _LINEAR_WHY, condition="own_parameter"),
     Residual("Gemm_v2", "out", "0", _LINEAR_WHY, condition="own_parameter"),
@@ -140,6 +148,12 @@ NAMED_RESIDUALS: tuple[Residual, ...] = (
     Residual("RoPE_v1", "query", "0", "the Build records RoPE's return slots by keyword (`query` / `key`); v1 spells them as the tuple index of "
              "`RotaryEmbedding.forward -> (q, k)`.  Same slot, two spellings"),
     Residual("RoPE_v1", "key", "1", "as `query` -> `0`"),
+    Residual("DsaIndexerQ_v1", "0", "index_q", _FUSED_Q_WHY),
+    Residual("DsaIndexerQ_v1", "1", "index_weights", _FUSED_Q_WHY),
+    Residual("DsaIndexerKRow_v1", "0", "index_k", _INDEX_K_WHY),
+    Residual("DsaIndexerKRow_v1", "1", "index_k_scale", _INDEX_K_WHY),
+    Residual("BatchedGemm_v1", "out", "ql_nope", _MLA_INTERIOR_WHY + " (the W_UK_T absorb's product)", condition="interior"),
+    Residual("SparseMla_v1", "out", "attn_mqa", _MLA_INTERIOR_WHY + " (`forward_mqa`'s latent attention output)", condition="interior"),
     Residual("*", "in", "in", "v1 encodes the token ids a module consumes as `<consuming module>/in` (family input_token_ids): the Value is the "
              "prompt input or the previous step's sampled id, spelt at its consumer", kind="encoding"),
     Residual("*", "sampled_token_ids", "sampled_token_ids", "v1 encodes the sampling event's output under the fixed path `runner.sampler` (the "
@@ -158,12 +172,14 @@ NAMED_RESIDUALS: tuple[Residual, ...] = (
 )
 
 
-def _residual_for(family: str, structural: str, own_parameter: bool, collective: str | None = None) -> Residual | None:
+def _residual_for(family: str, structural: str, own_parameter: bool, collective: str | None = None, interior: bool = False) -> Residual | None:
     fams = (family, f"<{collective}>") if collective else (family,)
     for r in NAMED_RESIDUALS:
         if r.kind != "member" or r.family not in fams or r.structural != structural:
             continue
         if r.condition in ("own_parameter", "operand_own_parameter") and not own_parameter:
+            continue
+        if (r.condition == "interior") != interior:
             continue
         return r
     return None
@@ -177,12 +193,14 @@ def under(path: str, module: str) -> bool:
     return len(a) > len(b) and a[: len(b)] == b
 
 
-def member_name(call: CallView, port: Port, name: CallName, *, own_parameter: bool, collective: str | None = None) -> tuple[str, str, Residual | None]:
+def member_name(call: CallView, port: Port, name: CallName, *, own_parameter: bool, collective: str | None = None,
+                interior: bool = False) -> tuple[str, str, Residual | None]:
     """(v1 member, structural member, residual applied or None) for the Value `port` of `call`.  `own_parameter`: the Call reads a
     parameter registered under its owning module -- for a collective (`collective` = its kind), whether its rank-local operand's
-    producer is such a Linear."""
+    producer is such a Linear.  `interior`: the Value is one two Calls of its module body exchange (a residual of condition
+    `interior` applies to it alone)."""
     structural = port.name if len(call.port_table) > 1 else (name.hint or "out")
-    r = _residual_for(call.family, structural, own_parameter, collective)
+    r = _residual_for(call.family, structural, own_parameter, collective, interior)
     return (r.v1_member if r else structural), structural, r
 
 
@@ -365,6 +383,13 @@ class Population:
             self.Q = Q_module_body_v1(P, corr)
             self.B = B = B_module
         step_of = self.step_of
+        #: UNRETURNED: Calls the correspondence lowers to no runtime tensor whose Values no Call reads and the Program does not return
+        #: (the DSA indexer's MQA logits and top-k while every key is selected): neither return slot nor returned tensor, so not required
+        self.unreturned: frozenset[int] = frozenset()
+        if corr.tensorless - literals:
+            word_B = B if query == Q_WORD_ID else boundary_without_literals(P, partition_by(lambda c: c.id), literals)
+            self.unreturned = frozenset(cid for cid in corr.tensorless - literals
+                                        if not any(ValueRef(cid, p.name) in word_B.values for p in P.call(cid).port_table))
         protocol: set[ValueRef] = set()
         if return_slots:
             # TENSOR-RETURN: the acquisition binds the TENSORS a module returns, and a tensor is one fx node's output -- every row the
@@ -381,7 +406,7 @@ class Population:
                 continue
             if c.family in SAMPLING_EVENTS or c.id in self.collectives:         # TP-04: a collective's output is required on every rank
                 protocol.update(ValueRef(c.id, p.name) for p in c.port_table)
-            elif return_slots:
+            elif return_slots and c.id not in self.unreturned:
                 n = corr.name(c.id)
                 if n.hint or (step_of(c.id), n.module, n.node) in returned_nodes:      # RETURN-SLOT (recorded) / TENSOR-RETURN (structural)
                     protocol.update(ValueRef(c.id, p.name) for p in c.port_table)
@@ -392,7 +417,11 @@ class Population:
         # a MoE block row's Value inside its body is committed as the row's `moe_block_stream` plane: no member (a member of the body's
         # `out` would be a second producer beside the block's own output, or beside its AllReduce's on a rank Program)
         self.plane_fed = frozenset(v for v in inside if fmt.moe_plane_kind(P.call(v.call).family, corr.module_of(v.call)) is not None)
-        self.interior = frozenset(inside) - self.plane_fed
+        # a Value inside its body that a residual of condition `interior` names is spelt under the module, as its binder commits it
+        named = {r.family for r in NAMED_RESIDUALS if r.condition == "interior"}
+        self.named_inside = frozenset(v for v in inside if (c := P.call(v.call)).family in named and
+                                      member_name(c, c.port(v.port), corr.name(v.call), own_parameter=False, interior=True)[2] is not None)
+        self.interior = frozenset(inside) - self.plane_fed - self.named_inside
         # (required_values() would recompute the boundary; the policy is validated the same way here)
         known_inputs = frozenset(P.inputs)
         for v in self.policy.prescribed_inputs:
@@ -479,7 +508,7 @@ class Population:
                 p = self.P.call(op.call)
                 r = member_name(p, p.port(op.port), self.corr.name(p.id), own_parameter=self.own_param[p.id])[2]
                 own = r is not None and r.condition == "own_parameter"
-        member, structural, resid = member_name(c, port, self.corr.name(c.id), own_parameter=own, collective=kind)
+        member, structural, resid = member_name(c, port, self.corr.name(c.id), own_parameter=own, collective=kind, interior=v in self.named_inside)
         return CallMember(port.name, member, port.elems, _dtype(port.width), structural, resid)
 
     def _ports(self) -> dict[int, list[str]]:
@@ -531,22 +560,32 @@ def _profile(res: Mapping[str, Any], profile: str | None) -> tuple[str, int | No
     return profile, fa, attn_obs
 
 
-def query_header(profile: str, hidden_family: str, *, return_slots: bool, query: str = QUERY_OF_RECORD,
+def hidden_family_of(P: ProgramView, profile: str) -> str | None:
+    """The attention hidden-stream family the Program's flash-attention launches put in the manifest under `profile`; None when it has
+    none (MLA / DSA sparse MLA: no `varlen_fwd`, so no hidden tap fires)."""
+    if not any(c.family in FLASH_ATTENTION_LAUNCHES for c in P.calls):
+        return None
+    return "fa3_hidden_m1_stream" if profile == "hopper" else "fa2_hidden_m1_stream"
+
+
+def query_header(profile: str, hidden_family: str | None, *, return_slots: bool, query: str = QUERY_OF_RECORD,
                  partition: Mapping[str, Any] | None = None, call_boundaries: bool = False) -> dict[str, Any]:
     """The manifest's query header; under Q_word, `partition` (`partition_of`) is the Program's `verity/partition/v1` object and digest,
     and `call_boundaries` says the manifest requires Values two Calls of one module body exchange."""
     word = query == Q_WORD_ID
     text = (Q_WORD_TEXT if word else Q_MODULE_BODY_TEXT) + f"; policy: prescribed = record-typed inputs (weights); protocol = sampling-event outputs" + \
         (" + recorded return slots + returned tensors (every Value of an fx node's output at a step once any of them crosses the module body boundary)"
-         if return_slots else "") + f"; hidden = {hidden_family}; profile = {profile}"
+         ", neither of which is a Call lowered to no runtime tensor whose Values nothing reads" if return_slots else "") + f"; hidden = {hidden_family or 'none'}; profile = {profile}"
     return {"query_id": query, "query_id_digest": hashlib.sha256(text.encode()).hexdigest(), "query_text": text,
             **({"partition": dict(partition)} if word and partition else {}),
             "engine": "q-word" if word else "v2-query", "boundary": "call" if word else "module-body", "profile": profile,
             "attention_hidden_family": hidden_family,
-            "required_families": ["input_token_ids", "instance_outputs", "sampled_token_ids", "weights", hidden_family] + (["call_boundaries"] if call_boundaries else []),
+            "required_families": ["input_token_ids", "instance_outputs", "sampled_token_ids", "weights"] + ([hidden_family] if hidden_family else []) +
+                                 (["call_boundaries"] if call_boundaries else []),
             "policy": {"prescribed_inputs": "every field of the Program's record-typed parameters",
                        "protocol_required": ["sampling-event outputs"] +
-                       (["recorded return slots (RETURN-SLOT)", "returned tensors: all rows / ports of an fx node's output once one crosses (TENSOR-RETURN)"]
+                       (["recorded return slots (RETURN-SLOT)", "returned tensors: all rows / ports of an fx node's output once one crosses (TENSOR-RETURN)",
+                         "neither: a Call lowered to no runtime tensor whose Values no Call reads and the Program does not return (UNRETURNED)"]
                         if return_slots else [])},
             "named_residuals": [r.as_dict() for r in NAMED_RESIDUALS]}
 
@@ -557,7 +596,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     """The v1-shaped manifest of ONE request Program (B=1 component) under `query` (+ `norm_scales`, + `taps`: `query.router_softmax` / `vocab_range` POLICY; + its partition given `program_digest`)."""
     pdig = (artifact or {}).get("program_digest") or res["program"]["digest"]
     profile, fa, attn_obs = _profile(res, profile)
-    hidden_family = "fa3_hidden_m1_stream" if profile == "hopper" else "fa2_hidden_m1_stream"
+    hidden_family = hidden_family_of(P, profile)
     tpinfo = res.get("tp") if isinstance(res.get("tp"), dict) else {}
     prog_world, prog_rank = int(tpinfo.get("world") or 1), int(tpinfo.get("rank") or 0)
     if (prog_world > 1 or ranks > 1) and (int(ranks) != prog_world or int(rank) != prog_rank):
@@ -677,7 +716,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
             a = attn.setdefault((step_of(c.id), m), {"rows": 0, "T_max": 0, "NH": int(st.get("NH", 0)), "KVH": int(st.get("KVH", st.get("NH", 0))), "D": int(st.get("D", 0))})
             a["rows"] += 1
             a["T_max"] = max(a["T_max"], int(st.get("T", 0)))
-    tap = "fa3.m1" if hidden_family[:3] == "fa3" else "fa2.m1"
+    tap = "fa3.m1" if (hidden_family or "")[:3] == "fa3" else "fa2.m1"
     for (step, mod), a in sorted(attn.items(), key=lambda kv: (kv[0][0], attn_bodies.index(kv[0][1]))):
         layer = attn_bodies.index(mod)
         if hidden_family[:3] == "fa3":

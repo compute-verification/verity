@@ -33,7 +33,7 @@ DOC = json.loads((FIX / "inventory-tp8-rank0.json").read_text())
 RANK0 = DOC["ranks"]["0"]
 TP = CMAP["target"]["tensor_parallel_size"]
 ENV = CM.symbols(CMAP, CONFIG, TP)
-TARGET_ONLY = {"attn", "indexer.q_fp8", "indexer.weights", "indexer.k_cache", "indexer.logits", "indexer.topk"}
+TARGET_ONLY = {"attn", "indexer.q_fp8", "indexer.weights", "indexer.k_cache", "indexer.k_scale", "indexer.logits", "indexer.topk"}
 
 
 @pytest.fixture(scope="module")
@@ -167,7 +167,7 @@ def test_the_target_only_taps_are_the_indexer_and_the_sparse_attention_and_name_
     assert {tid for tid, t in taps.items() if t["target_only"]} == TARGET_ONLY
     first = {tid: CMAP["programs"][taps[tid]["program"]]["definitions"][0] for tid in TARGET_ONLY}
     assert first == {"attn": "SparseMla_v1", "indexer.q_fp8": "DsaIndexerQ_v1", "indexer.weights": "DsaIndexerQ_v1",
-                     "indexer.k_cache": "DsaIndexerKRow_v1", "indexer.logits": "DsaMqaLogits_v3", "indexer.topk": "DsaTopKShortRow_v1"}
+                     "indexer.k_cache": "DsaIndexerKRow_v1", "indexer.k_scale": "DsaIndexerKRow_v1", "indexer.logits": "DsaMqaLogits_v3", "indexer.topk": "DsaTopKShortRow_v1"}
     assert {CMAP["programs"][taps[tid]["program"]]["status"] for tid in TARGET_ONLY} == {"port"}
     assert all(d in registry for tid in TARGET_ONLY for d in CMAP["programs"][taps[tid]["program"]]["definitions"])
 
@@ -192,11 +192,11 @@ def test_the_runbook_counts():
 
     every = CM.counts(CMAP, ENV)
     assert (every["module_entries"], every["module_types"], every["tap_templates_by_status"]) == (
-        40, 29, {"exists": 17, "tonight": 0, "port": 32, "copy": 2, "committed-only": 0})
+        40, 29, {"exists": 17, "tonight": 0, "port": 33, "copy": 2, "committed-only": 0})
     assert brief(CM.counts(CMAP, ENV, ("dense-mha",))) == (
-        47, 2347, {"exists": 721, "tonight": 0, "port": 1547, "copy": 79, "committed-only": 0}, 63)
+        48, 2368, {"exists": 721, "tonight": 0, "port": 1568, "copy": 79, "committed-only": 0}, 84)
     assert brief(CM.counts(CMAP, ENV, ("sparse-mqa",))) == (
-        49, 2389, {"exists": 643, "tonight": 0, "port": 1667, "copy": 79, "committed-only": 0}, 183)
+        50, 2410, {"exists": 643, "tonight": 0, "port": 1688, "copy": 79, "committed-only": 0}, 204)
 
 
 def test_the_bound_tap_counts():
@@ -206,20 +206,20 @@ def test_the_bound_tap_counts():
         return c["bound_taps_per_step"], c["bound_taps_per_step_by_binder"]
 
     common = {"allreduce_norm": 468, "moe": 525, "sampler": 1, "tp_partial": 2}
-    assert bound(("dense-mha",)) == (2272, {**common, "attention": 609, "module_hook": 667})
-    assert bound(("sparse-mqa",)) == (2293, {**common, "attention": 708, "module_hook": 589})
-    assert bound(("dense-mha", "sparse-mqa")) == (2449, {**common, "attention": 786, "module_hook": 667}), \
+    assert bound(("dense-mha",)) == (2293, {**common, "attention": 630, "module_hook": 667})
+    assert bound(("sparse-mqa",)) == (2314, {**common, "attention": 729, "module_hook": 589})
+    assert bound(("dense-mha", "sparse-mqa")) == (2470, {**common, "attention": 807, "module_hook": 667}), \
         "a mixed step binds both routes' attention taps, each over its own rows"
 
 
 def test_target_only_taps_are_named_on_the_target_only():
     """Off the map's target device a step commits no `target_only` tap: forward_mqa's attention and the indexer's taps."""
-    for routes, off in ((("dense-mha",), 63), (("sparse-mqa",), 63 + 78 + 21)):
+    for routes, off in ((("dense-mha",), 63 + 21), (("sparse-mqa",), 63 + 21 + 78 + 21)):
         on = CM.committer_names(CMAP, ENV, routes=routes, rank=0)
         elsewhere = CM.committer_names(CMAP, ENV, routes=routes, rank=0, on_target=False)
         assert set(elsewhere) < set(on) and len(on) - len(elsewhere) == off
         assert all(tap["target_only"] for n, (tap, _layer) in on.items() if n not in elsewhere)
-    assert "model.layers.4.self_attn/attn_mqa" not in elsewhere and "model.layers.4.self_attn/v_absorb" in elsewhere
+    assert "model.layers.4.self_attn/attn_mqa" not in elsewhere and "model.layers.4.self_attn/out" in elsewhere
 
 
 @pytest.mark.parametrize("route", ["dense-mha", "sparse-mqa"])

@@ -123,15 +123,20 @@ class Correspondence:
         self._impl_paths = tuple(implementation_paths)
         self.table = table
         self.problem = problem
+        #: the Calls the record lowers to no runtime tensor: every return slot is neither an fx output nor a written argument (a Value
+        #: internal to its occurrence's lowering, `runtime.ReturnSlot`); empty under the fallback, which records no return slots
+        self.tensorless: frozenset[int] = frozenset()
         if table is not None or document is not None:
-            if table is not None:
-                n, name_of = len(table), lambda cid: call_name_of(table.record(cid))
-            else:
-                recorded = {k: call_name_of(rec) for k, rec in enumerate(RuntimeCorrespondence.records(document))}
-                n, name_of = len(recorded), recorded.__getitem__
-            if n != len(P.calls):
-                raise ValueError(f"correspondence record has {n} Calls, the Program {len(P.calls)}: the record is of another Program")
-            self.names: dict[int, CallName] = {c.id: name_of(c.id) for c in P.calls}
+            records = iter(table) if table is not None else RuntimeCorrespondence.records(document)
+            recorded, tensorless = {}, []
+            for rec in records:
+                recorded[rec.call] = call_name_of(rec)
+                if rec.returns and all(r.output is None and r.written_arg is None for r in rec.returns):
+                    tensorless.append(rec.call)
+            if len(recorded) != len(P.calls):
+                raise ValueError(f"correspondence record has {len(recorded)} Calls, the Program {len(P.calls)}: the record is of another Program")
+            self.names: dict[int, CallName] = {c.id: recorded[c.id] for c in P.calls}
+            self.tensorless = frozenset(tensorless)
             self.source = "correspondence"
             self.digest: str | None = digest or correspondence_digest(table.doc if table is not None else document)
         else:
