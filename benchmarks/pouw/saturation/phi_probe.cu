@@ -15,7 +15,9 @@
 //           B, the receipt of A; so no receipt waits on an mma in flight
 //   mode 4  mode 3 with each half's receipt spread across the other half's mma.sync (a slice of words after every QMMA), so
 //           each warp's instruction stream alternates the two pipes instead of running one at a time
-// Gates (exit 3, before any rate is printed): every mode-2/3/4 kernel's accumulators equal mode 0's after the same mma rounds
+//   mode 5  mode 2's mma rounds and phi work, the phi reading the mma's (constant) A registers instead of its accumulators:
+//           the same instructions with no dependency between the pipes, what a prover hashing words it didn't compute runs
+// Gates (exit 3, before any rate is printed): every mode-2..5 kernel's accumulators equal mode 0's after the same mma rounds
 // (so the phi work did not change what the tensor cores computed), every mode-4 kernel's outputs equal its mode-3 twin's, two
 // launches of every kernel agree, and mode 1's thread-0 chains equal a host recomputation.
 //
@@ -142,8 +144,17 @@ __global__ void __launch_bounds__(THREADS, 2)
             interleaved<ROUNDS, VAR, 0, PER>(c, a, b, y, s);
             interleaved<ROUNDS, VAR, NACC / 2, PER>(c, a, b, y, s);
         }
+        if (MODE == 5) {
+            mma_rounds<0, NACC, PER>(c, a, b);
+            ++s;
+#pragma unroll
+            for (int j = 0; j < NACC; j++) {
+#pragma unroll
+                for (int w = 0; w < 4; w++) y[j] = phi<ROUNDS, VAR>(y[j], a[w], s, key(j, w));
+            }
+        }
     }
-    if (MODE >= 3) receipt<ROUNDS, VAR, NACC / 2, NACC>(y, c, s + 1);
+    if (MODE == 3 || MODE == 4) receipt<ROUNDS, VAR, NACC / 2, NACC>(y, c, s + 1);
     const long long t1 = clock64();
     uint32_t cx = 0, yx = 0;
 #pragma unroll
@@ -207,6 +218,9 @@ static const Kernel KERNELS[] = {
     K(4, 1, 1, 1), K(4, 2, 1, 1), K(4, 3, 1, 1), K(4, 4, 1, 1), K(4, 8, 1, 1),
     K(4, 1, 2, 0), K(4, 2, 2, 0), K(4, 3, 2, 0), K(4, 4, 2, 0), K(4, 8, 2, 0),
     K(4, 1, 2, 1), K(4, 2, 2, 1), K(4, 3, 2, 1), K(4, 4, 2, 1), K(4, 8, 2, 1),
+    K(5, 1, 1, 0), K(5, 2, 1, 0), K(5, 3, 1, 0), K(5, 4, 1, 0), K(5, 8, 1, 0),
+    K(5, 1, 2, 0), K(5, 2, 2, 0), K(5, 3, 2, 0), K(5, 4, 2, 0), K(5, 8, 2, 0),
+    K(5, 1, 1, 1), K(5, 2, 1, 1), K(5, 4, 1, 1), K(5, 2, 2, 1), K(5, 3, 2, 1),
 };
 
 struct Launch {
@@ -332,7 +346,7 @@ int main(int argc, char** argv) {
         const double warps = (double)nthreads / 32;
         for (const Launch& r : runs) {
             const double macs = k.mode == 1 ? 0 : warps * outer * k.per * NACC * 4096.0;
-            const double phis = k.mode == 0 ? 0 : (double)nthreads * 4 * (outer * NACC + (k.mode >= 3 ? NACC / 2 : 0));
+            const double phis = k.mode == 0 ? 0 : (double)nthreads * 4 * (outer * NACC + (k.mode == 3 || k.mode == 4 ? NACC / 2 : 0));
             mac_rate.push_back(macs / (sms * r.span_cycles));
             phi_rate.push_back(phis / (sms * r.span_cycles));
             mhz.push_back(r.span_cycles / (r.ms * 1e3));
