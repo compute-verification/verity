@@ -35,11 +35,19 @@ def read(srcs):
     events, ctx = [], {}
     for src in srcs or ["-"]:
         text = sys.stdin.read() if src == "-" else open(src).read()  # noqa: SIM115
-        for line in text.splitlines():
+        lines = text.splitlines()
+        for i, line in enumerate(lines):
             line = line.strip()
             if not line.startswith("{"):
                 continue
-            e = json.loads(line)
+            try:
+                e = json.loads(line)
+            except json.JSONDecodeError:
+                if (
+                    i == len(lines) - 1
+                ):  # a run still writing: its last line may be cut off
+                    continue
+                raise
             if e.get("event") == "start":
                 ctx = {
                     "prog": e.get("prog", "lookup_coissue"),
@@ -134,11 +142,14 @@ def detail(events):
         )
 
     summ = [e for e in events if e["event"] == "summary"]
-    fams = [
-        ("smem FR", r"fr_b\d+$"),
-        ("L1 FR", r"fr_l1_b\d+$"),
-        ("PRMT", r"prmt_"),
-        ("SHFL", r"shfl_"),
+    fams = [  # (column, route pattern whose group 1 labels the width)
+        ("smem FR (k_fr)", r"fr_(b\d+)$"),
+        ("smem FR (fused kernel, α = 1)", r"fused_fr_(b\d+)_a64$"),
+        ("L1 FR", r"fr_l1_(b\d+)$"),
+        ("PRMT", r"prmt_(b.*)$"),
+        ("SHFL", r"shfl_(b.*)$"),
+        ("DP4A (fused, α = 1)", r"fused_(dp4a)_a64$"),
+        ("DP4A+HFMA2 (fused, α = 1)", r"fused_(mix)_a64$"),
     ]
     by = defaultdict(dict)
     for r in summ:
@@ -156,7 +167,7 @@ def detail(events):
                 i8.append(f"{rate(d['int8']):.0f}")
         for _, pat in fams:
             got = [
-                (rate(r), name)
+                (rate(r), re.match(pat, name).group(1))
                 for d in by[key].values()
                 for name, r in d.items()
                 if re.match(pat, name)
@@ -167,8 +178,8 @@ def detail(events):
             top = max(got)[1]
             cells.append(
                 " ".join(
-                    f"{'*' if name == top else ''}{name[name.index('_b') + 1 :]}:{v:.0f}"
-                    for v, name in sorted(got, key=lambda x: x[1])
+                    f"{'*' if label == top else ''}{label}:{v:.0f}"
+                    for v, label in sorted(got, key=lambda x: x[1])
                 )
             )
         print(f"| {key[0]} | {key[1]} | {'/'.join(i8)} | " + " | ".join(cells) + " |")
