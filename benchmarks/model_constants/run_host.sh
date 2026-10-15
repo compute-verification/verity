@@ -51,22 +51,33 @@ for r in $(seq "$R"); do
 done
 [ "${GPU:-1}" = 0 ] && exit 0
 
-# QUIET_MAX: before the lease, wait (up to QUIET_WAIT_MIN, 30) until CPUs 0-119 are at most that busy and no GPU is held;
-# quiet.jsonl records that wait and a sample inside the lease.
-if [ -n "${QUIET_MAX:-}" ]; then
-  python3 "$MC/quiet.py" --max "$QUIET_MAX" --wait-min "${QUIET_WAIT_MIN:-30}" | sed 's/^{/{"label": "before", /' >> "$O/quiet.jsonl"
-fi
-
-# Under the lease: pcie's driver threads on CPUs 0-3 and 96-99 (as ra-host-tier's whole-node window), the CPUs' STREAM on
-# one thread a core of the rest. READERS and PAIRS (KERNEL:MODE) name the rows; KERNEL@MIB sets that row's MIB.
+# QUIET_MAX: before the lease, wait until CPUs 0-119 are at most that busy for QUIET_SUSTAIN (3) samples of 3 s, with
+# no GPU held and check slots a and b free; inside it, the same with 8 held, else it releases the lease and waits again,
+# for up to QUIET_WAIT_MIN (30, whole minutes) in all. quiet.jsonl records every gate.
 export PC=0-3,96-99 RC="$(evens 4 94),$(evens 100 118)" MC
 export READERS=${READERS:-read triad copy_nt} PAIRS=${PAIRS:-read:h2d triad:h2d copy_nt:h2d read:zcr}
+export GATE_END=$(( $(date +%s) + 60 * ${QUIET_WAIT_MIN:-30} ))
+gate() {  # label held [once]: 0 when quiet (or no QUIET_MAX), 3 when not and time is left; once: one sample, no wait
+  [ -n "${QUIET_MAX:-}" ] || return 0
+  local until=$GATE_END sustain=${QUIET_SUSTAIN:-3}
+  [ -n "${3:-}" ] && until=0 sustain=1
+  python3 "$MC/quiet.py" --max "$QUIET_MAX" --sustain "$sustain" --gpus-held "$2" --until "$until" --exit \
+    | sed "s/^{/{\"label\": \"$1\", /" >> "$O/quiet.jsonl"
+  local rc=${PIPESTATUS[0]}; [ "$rc" = 0 ] || [ "$(date +%s)" -ge "$GATE_END" ] && return 0; return 3
+}
+export -f gate
+
+# Under the lease: pcie's driver threads on CPUs 0-3 and 96-99 (as ra-host-tier's whole-node window), the CPUs'
+# STREAM on one thread a core of the rest. READERS and PAIRS (KERNEL:MODE) name the rows; KERNEL@MIB sets that row's
+# MIB.
+for try in $(seq 20); do
+until gate before 0; do :; done
 # shellcheck disable=SC2016
 gpu-lease 8 --wait --max-min "${MAXMIN:-10}" -- bash -c '
+  gate in-lease 8 once || exit 75
   nvidia-smi --query-gpu=index,uuid,name,pci.bus_id,pcie.link.gen.current,pcie.link.width.current,clocks.sm,clocks.mem \
     --format=csv > "$O/gpu.txt" 2>&1
   date -u +%FT%TZ >> "$O/gpu.txt"
-  python3 "$MC/quiet.py" | sed "s/^{/{\"label\": \"in-lease\", /" >> "$O/quiet.jsonl"
   P() { taskset -c "$PC" "$B/pcie" --seconds 3 --mib 1024 --host-node local "$@"; }
   tag() { sed "s/^{/{\"label\": \"$1\", /" | tee -a "$O/pcie.jsonl"; }
   mib() { [[ $1 == *@* ]] && echo "--mib ${1#*@}"; }
@@ -80,4 +91,7 @@ gpu-lease 8 --wait --max-min "${MAXMIN:-10}" -- bash -c '
     P --modes "$m" --seconds "$S" --start-at "$t" | tag "with-$k"
     wait; cat "$B/s.json"
   done
-  date -u +%FT%TZ >> "$O/gpu.txt"'
+  date -u +%FT%TZ >> "$O/gpu.txt"
+  python3 "$MC/quiet.py" | sed "s/^{/{\"label\": \"after\", /" >> "$O/quiet.jsonl"'
+rc=$?; [ "$rc" = 75 ] || exit "$rc"
+done
