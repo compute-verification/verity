@@ -1,7 +1,8 @@
-"""``verity.ml.circuits.silicon.integer``: IMMA m16n8k32 s8 x s8 -> s32, an exact integer step, against the PRO 6000 probe."""
+"""``verity.ml.circuits.silicon.integer``: IMMA m16n8k32 s8 x s8 -> s32, an exact integer step, against the PRO 6000 probes."""
 from __future__ import annotations
 
 import random
+from dataclasses import replace
 
 import pytest
 
@@ -23,6 +24,18 @@ SAT, WRAP = BLACKWELL_SM120_S8_M16N8K32, BLACKWELL_SM120_S8_M16N8K32_WRAP
 # Run r20261015-071801-6d3c (benchmarks/fp8_instantiation/imma.py `edge_case`): every entry of A is 127 and every entry
 # of B is sign * 127, zero incoming accumulator, the device word of one output: (k, sign) -> s32 value.
 DEVICE_EDGE = {(133_120, 1): 2_147_092_480, (133_120, -1): -2_147_092_480, (133_152, 1): 2_147_483_647}
+
+P, N = 0x7F, 0x81  # +127 and -127 as s8 codes; 0x81 is 129 as u8
+
+# Run r20261015-084000-06d8 (benchmarks/fp8_instantiation/imma_probe.py, structured.json, the .satfinite forms): one
+# mma.sync whose products run past s32 and come back, B all 0x7F.  (a_dtype, A codes, C) -> the device's D.
+DEVICE_CLAMP = {
+    ("s8", (P,) + (N,) * 31, S32_MAX): 2_146_999_777,               # first+: a clamp after each product gives S32_MAX - 499,999
+    ("s8", (N,) * 31 + (P,), S32_MAX): 2_146_999_777,               # last+: the same, with the k order reversed
+    ("s8", (N,) + (P,) * 31, S32_MIN): -2_146_999_778,              # first-
+    ("s8", (N,) * 16 + (P,) * 16, S32_MIN + 1000): S32_MIN + 1000,  # blocks16-: a clamp after 16 products gives S32_MIN + 258,064
+    ("u8", (N,) + (P,) * 31, S32_MIN): -2_146_967_266,              # u8 x s8: 129 * 127 + 31 * 127 * 127 above S32_MIN
+}
 
 
 def code(v: int) -> int:
@@ -68,10 +81,19 @@ def test_the_device_edge_words() -> None:
         assert (wrapped == word) == (abs(sign * k * 127 * 127) <= S32_MAX)
 
 
+def test_the_device_clamps_once_at_d() -> None:
+    """One instruction's sum leaves s32 and comes back: the device's D is the exact sum, so ``.satfinite`` clamps only at D."""
+    for (a_dtype, a, c), word in DEVICE_CLAMP.items():
+        model = replace(SAT, dtype=a_dtype)
+        assert s32_value(model.step(s32_word(c), list(a), [P] * 32)) == word
+
+
 def test_registry_entry() -> None:
     ins = INSTRUCTIONS["sm120.mma.m16n8k32.s8"]
-    assert ins.model is SAT and ins.status == "hypothesis" and ins.acc_dtype == "s32" and ins.shape == (16, 8, 32)
-    assert "r20261015-071801-6d3c" in ins.evidence[0]
+    assert ins.model is SAT and ins.status == "pinned" and ins.acc_dtype == "s32" and ins.shape == (16, 8, 32)
+    assert "r20261015-084000-06d8" in ins.evidence[0] and "r20261015-071801-6d3c" in ins.evidence[0]
+    assert ins.dossier == "art:86f39a17b5a0c8a8c92e5e25dcdfbee95d6f65408130bc1db6c54d440dfd8474"
+    assert "HYPOTHESIS" not in SAT.validated and "HYPOTHESIS" not in WRAP.validated
     assert MODELS[SAT.name] is SAT and MODELS[WRAP.name] is WRAP
 
 

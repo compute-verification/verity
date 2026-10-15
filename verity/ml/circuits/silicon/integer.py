@@ -6,12 +6,15 @@ result D is clamped to [-2^31, 2^31 - 1]; without it D wraps modulo 2^32.  Accum
 encodings, carried as unsigned ints like the FP32 words of the other models; operand words are 8-bit codes (two's
 complement for s8).
 
-What the model rests on (``hypothesis`` in ``instructions``): the PTX ISA's integer ``mma`` semantics, and one
-library-kernel probe on an RTX PRO 6000 (run r20261015-071801-6d3c: CUTLASS ``i16832gemm_s8`` through ``torch._int_mm``,
-which saturates).  Random int8 products are exact to k = 133,120; at the s32 edge, all-127 rows give +-2,147,092,480
-exactly; and the first sum past it (k = 133,152) is 2^31 - 1.  Not probed: one instruction per tile, nonzero incoming
-accumulators, code -128, u8 operands, the form without ``.satfinite``, and where ``.satfinite`` clamps when a sum leaves
-the range and comes back within one instruction (at D, as modelled here, or along the k order).
+What the model rests on (``pinned`` in ``instructions``): one ``mma.sync`` per tile on an RTX PRO 6000, run
+r20261015-084000-06d8 (``benchmarks/fp8_instantiation/imma_probe.py``), in eight forms: s8/u8 x s8/u8, with and without
+``.satfinite``, each lowered to one ``IMMA.16832.<A>.<B>[.SAT]``.  Every form reproduces ``IntegerMma`` at its operand
+formats bit for bit on 10,243,968 words, with code -128, random and +-2^31-edge incoming accumulators, and 0.29M-1.1M
+words per form whose exact sum leaves s32.  ``.satfinite`` clamps once, at D: tiles whose products run past the range
+and come back within the instruction exclude a clamp after every product or every 2, 4, 8 or 16 products, in either k
+order (in each form with a signed operand; u8 x u8 sums only grow, so there every clamp point gives the same word).
+Without it, D wraps modulo 2^32.  An earlier library-kernel probe (run r20261015-071801-6d3c, CUTLASS ``i16832gemm_s8``
+through ``torch._int_mm``) agrees: random int8 products exact to k = 133,120, and the s32 edge saturating.
 """
 from __future__ import annotations
 
@@ -94,12 +97,19 @@ class IntegerMma:
         return d & 0xFFFFFFFF
 
 
+_PRO6000_IMMA_PROBE = (
+    "run r20261015-084000-06d8 (RTX PRO 6000 Blackwell Server Edition, cc 12.0, driver 580.173.02, CUDA 13.0 V13.0.88, "
+    "sm_120a, GPU-415b238c): one mma.sync m16n8k32 per tile, 80,031 tiles (seed 20261015), 10,243,968 words per form, "
+    "0 mismatches in each of s8.s8, s8.u8, u8.s8, u8.u8 with and without .satfinite; SASS one IMMA.16832.<A>.<B>[.SAT] "
+    "per kernel"
+)
+
 _PRO6000_IMMA = (
-    "HYPOTHESIS: the PTX ISA's integer mma semantics; one library-kernel probe, run r20261015-071801-6d3c (RTX PRO 6000 "
-    "Blackwell Server Edition, cc 12.0, driver 580.173.02, torch 2.13.0+cu129, torch._int_mm -> CUTLASS "
-    "cutlass_80_tensorop_i16832gemm_s8_64x64_64x6_tn_align16, zero incoming accumulators): random int8 in [-127, 127], "
-    "256 x 256 outputs at k = 4096, 14,336, 65,536 and 133,120 equal to the exact product; all-127 against all +-127 at "
-    "k = 133,120 gives +-2,147,092,480 exactly; at k = 133,152 (true sum 2,147,608,608) it gives 2,147,483,647"
+    "the satfinite form on the device: " + _PRO6000_IMMA_PROBE + "; the clamp tiles admit only a clamp at D; trust "
+    "dossier art:86f39a17b5a0c8a8c92e5e25dcdfbee95d6f65408130bc1db6c54d440dfd8474 (PINNED).  Earlier, run "
+    "r20261015-071801-6d3c (torch._int_mm -> CUTLASS cutlass_80_tensorop_i16832gemm_s8_64x64_64x6_tn_align16, zero "
+    "incoming accumulators): random int8 at k = 4096, 14,336, 65,536 and 133,120 exact; all-127 against all +-127 at "
+    "k = 133,120 gives +-2,147,092,480; at k = 133,152 (true sum 2,147,608,608) it gives 2,147,483,647"
 )
 
 BLACKWELL_SM120_S8_M16N8K32 = IntegerMma(
@@ -113,7 +123,7 @@ BLACKWELL_SM120_S8_M16N8K32 = IntegerMma(
     validated=_PRO6000_IMMA,
 )
 
-#: The same instruction without ``.satfinite``: the PTX ISA's wrap modulo 2^32.  Nothing has run it.
+#: The same instruction without ``.satfinite``: D wraps modulo 2^32.  It has no registry entry of its own.
 BLACKWELL_SM120_S8_M16N8K32_WRAP = IntegerMma(
     name="blackwell_sm120_s8_m16n8k32_wrap",
     arch="sm_120",
@@ -122,5 +132,5 @@ BLACKWELL_SM120_S8_M16N8K32_WRAP = IntegerMma(
     operand_bits=8,
     k_per_instruction=32,
     satfinite=False,
-    validated="HYPOTHESIS: the PTX ISA's integer mma without .satfinite (D wraps modulo 2^32); unprobed",
+    validated="the form without .satfinite on the device: " + _PRO6000_IMMA_PROBE + "; out-of-range sums wrap modulo 2^32",
 )
