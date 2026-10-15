@@ -360,16 +360,97 @@ def simulate(s: Schedule, diffs: list[tuple[int, int]], samples: int, seed: int,
     return {"samples": samples, "hits": hit, "log2p": math.log2(hit / samples) if hit else None}
 
 
-def schedule_lines(kind: str, kseed: int, n: int = B2) -> list[str]:
-    """`trails.c`'s schedule, one line "a1 r1 a2 r2" per position: duo (lane 2 a copy of lane 1), duo2's two lanes, or
-    one duo2 lane alone as lane 1 (duo2-lane1, duo2-lane2)."""
+SCHED_KINDS = ("duo", "duo2", "duo2-lane1", "duo2-lane2")
+
+
+def lanes_of(kind: str, kseed: int, n: int = B2) -> list[tuple[list[int], list[int], list[int]]]:
+    """Each lane's (multipliers, addends, rotations) over a block: duo's one lane, duo2's two, or one duo2 lane alone."""
     ka = [twins.gen(kseed, 1, i, 0) | 1 for i in range(n)]
     kb = [twins.gen(kseed, 2, i, 0) | 1 for i in range(n)]
-    r1 = [twins.R1[i % 31] for i in range(n)]
-    r2 = [twins.R2[i % 29] for i in range(n)]
-    lanes = {"duo": (ka, [twins.rot_of(i) for i in range(n)]) * 2, "duo2": (ka, r1, kb, r2),
-             "duo2-lane1": (ka, r1) * 2, "duo2-lane2": (kb, r2) * 2}[kind]
-    return [" ".join(str(c[i]) for c in lanes) for i in range(n)]
+    kk = [twins.gen(kseed, 3, i, 0) for i in range(n)]
+    kc = [twins.gen(kseed, 4, i, 0) for i in range(n)]
+    l1 = (ka, kk, [twins.R1[i % 31] for i in range(n)])
+    l2 = (kb, kc, [twins.R2[i % 29] for i in range(n)])
+    return {"duo": [(ka, kk, [twins.rot_of(i) for i in range(n)])], "duo2": [l1, l2], "duo2-lane1": [l1],
+            "duo2-lane2": [l2]}[kind]
+
+
+def schedule_lines(kind: str, kseed: int, n: int = B2) -> list[str]:
+    """`trails.c`'s schedule, one line "a1 r1 a2 r2" per position (one lane: lane 2 a copy of lane 1)."""
+    lanes = lanes_of(kind, kseed, n)
+    cols = [c for a, _, r in (lanes * 2)[:2] for c in (a, r)]
+    return [" ".join(str(c[i]) for c in cols) for i in range(n)]
+
+
+def simulate_lanes(kind: str, kseed: int, diffs: list[tuple[int, int]], samples: int, seed: int, random_keys: bool,
+                   end: str) -> dict:
+    """The share of uniform states (and keys, if `random_keys`) for which the word differences `diffs` cancel in `kind`
+    itself: every lane's state collides after the last word, or (end = fold) the receipt agrees at the block's end
+    (duo: y ⊕ rotl(z, 16); duo2: its two lanes so folded, the second rotated by 8)."""
+    rng = np.random.default_rng(seed)
+    lanes = lanes_of(kind, kseed)
+    t0, t1 = diffs[0][0], diffs[-1][0]
+    ts = range(t0, B2 if end == "fold" else t1 + 1)
+    dmap = dict(diffs)
+    st = [[rng.integers(0, M, size=samples, dtype=U64) for _ in range(2)] for _ in lanes]
+    tw = [[y.copy(), z.copy()] for y, z in st]
+    for t in ts:
+        p = rng.integers(0, M, size=samples, dtype=U64)
+        q = p ^ U64(dmap.get(t, 0))
+        for (ka, kk, rr), s, s2 in zip(lanes, st, tw):
+            if random_keys:
+                a = rng.integers(0, M, size=samples, dtype=U64) | U64(1)
+                k = rng.integers(0, M, size=samples, dtype=U64)
+            else:
+                a, k = U64(ka[t]), U64(kk[t])
+            for v, w in ((s, p), (s2, q)):
+                u = v[0] ^ w ^ k
+                v[0] = (u * a + v[1]) & U64(MASK)
+                v[1] = (rotl_np(u, rr[t]) + v[0]) & U64(MASK)
+    if end == "collision":
+        ok = np.ones(samples, bool)
+        for s, s2 in zip(st, tw):
+            ok &= (s[0] == s2[0]) & (s[1] == s2[1])
+    else:
+        f = [s[0] ^ rotl_np(s[1], 16) for s in st]
+        g = [s[0] ^ rotl_np(s[1], 16) for s in tw]
+        if len(f) == 2:
+            f, g = [f[0] ^ rotl_np(f[1], 8)], [g[0] ^ rotl_np(g[1], 8)]
+        ok = f[0] == g[0]
+    hit = int(np.count_nonzero(ok))
+    return {"samples": samples, "hits": hit, "log2p": math.log2(hit / samples) if hit else None}
+
+
+def ladder(binary: str, kind: str, key: str, kseed: int, starts: str, max_bound: int, k1: int, k2: int, xr: int,
+           max_states: int, samples: int) -> dict:
+    """`trails.c` at bounds 1, 2, … up to `max_bound`: the first bound whose search finds a trail gives the cheapest
+    trail (the search is cheapest-first), a search that ends below the state cap without one shows that no trail costs
+    less than its bound, and a capped one shows nothing. The found trail is then measured on `kind` itself."""
+    import subprocess
+
+    lanes = 2 if kind == "duo2" else 1
+    sched = "\n".join(schedule_lines(kind, kseed)) + "\n"
+    lo, _, hi = starts.partition("-")
+    runs, found, proven = [], None, 0
+    for b in range(1, max_bound + 1):
+        cmd = [binary, key, str(lanes), str(b), lo, hi or lo, f"k1={k1}", f"k2={k2}", f"xr={xr}", f"max={max_states}"]
+        d = json.loads(subprocess.run(cmd, input=sched, capture_output=True, text=True, check=True).stdout)
+        runs.append({k: d[k] for k in ("bound", "complete", "expanded", "states")} | {"found": d["trail"] is not None})
+        if d["trail"] is not None:
+            found = d["trail"]
+            proven = found["cost"] if d["complete"] else proven
+            break
+        if not d["complete"]:
+            break
+        proven = b
+    out = {"kind": kind, "key": key, "kseed": hex(kseed), "starts": starts, "k1": k1, "k2": k2, "xr": xr,
+           "max_states": max_states, "lists_complete_below": k1 + k2 + 2, "no_trail_below": proven, "runs": runs,
+           "trail": found}
+    if found:
+        diffs = [(s["t"], s["dp"]) for s in found["steps"]]
+        found["word_diffs"] = [[t, hex(d)] for t, d in diffs]
+        found["measured"] = simulate_lanes(kind, kseed, diffs, samples, 7, key == "secret", found["end"])
+    return out
 
 
 def parse_starts(spec: str) -> list[int]:
@@ -392,11 +473,27 @@ def main() -> int:
     a.add_argument("--kseed", type=lambda x: int(x, 0), default=0xC0FFEE11)
     a.add_argument("--no-fold", action="store_true")
     b = sub.add_parser("schedule")
-    b.add_argument("--kind", choices=("duo", "duo2", "duo2-lane1", "duo2-lane2"), default="duo")
+    b.add_argument("--kind", choices=SCHED_KINDS, default="duo")
     b.add_argument("--kseed", type=lambda x: int(x, 0), default=0xC0FFEE11)
+    c = sub.add_parser("ladder")
+    c.add_argument("--bin", required=True, help="trails.c built")
+    c.add_argument("--kind", choices=SCHED_KINDS, default="duo")
+    c.add_argument("--key", choices=("known", "secret"), default="known")
+    c.add_argument("--kseed", type=lambda x: int(x, 0), default=0xC0FFEE11)
+    c.add_argument("--starts", default="0-255")
+    c.add_argument("--max-bound", type=int, default=12)
+    c.add_argument("--k1", type=int, default=4)
+    c.add_argument("--k2", type=int, default=4)
+    c.add_argument("--xr", type=int, default=3)
+    c.add_argument("--max-states", type=int, default=6_000_000)
+    c.add_argument("--samples", type=int, default=1 << 20)
     args = ap.parse_args()
     if args.cmd == "schedule":
         print("\n".join(schedule_lines(args.kind, args.kseed)))
+        return 0
+    if args.cmd == "ladder":
+        print(json.dumps(ladder(args.bin, args.kind, args.key, args.kseed, args.starts, args.max_bound, args.k1, args.k2,
+                                args.xr, args.max_states, args.samples)))
         return 0
     s = Schedule(args.kseed)
     trail, stats = search(s, parse_starts(args.starts), args.bound, args.key, args.k1, args.k2, not args.no_fold)
