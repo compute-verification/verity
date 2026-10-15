@@ -20,13 +20,26 @@ probability is 2^-cost. UNSAT at a bound proves, within this model, that no trai
 costs at least its first k words, so UNSAT there bounds every trail from t0 at once.
 
     python3 sat_trails.py floors --kind duo2 --t0 0-255 --k 8 --bounds 13,16,20,24,28,32,36,40,44,47 --jobs 8
+
+`long` raises the bound for a set of starts step by step, with no conflict budget: each start climbs 18, 20, 22, …,
+the lowest pending bound always first, and every finished step is a line of OUT/steps.jsonl as it finishes. A
+cheap open prefix (SAT, not a trail) moves that start to a longer window; SAT at the fold end is a trail. OUT/
+levels.jsonl gains a line each time every start of the set is UNSAT at a new bound, and OUT/proved.json holds
+the current state, so a run stopped at any point has proved its last level. `proved` reads the steps of any runs
+together:
+
+    python3 sat_trails.py long --t0 0-255:10 --bounds 18,20,22,24,26,28 --jobs 8 --out OUT
+    python3 sat_trails.py proved run1/out/steps.jsonl run2/out/steps.jsonl ...
 """
 
 from __future__ import annotations
 
 import argparse
+import heapq
 import json
 import multiprocessing as mp
+import os
+import queue
 import sys
 import time
 from pathlib import Path
@@ -283,8 +296,120 @@ def _floor_job(args: tuple) -> dict:
     return floor(*args)
 
 
+def step(kind: str, kseed: int, t0: int, k: int, b: int) -> dict:
+    """One step of `long`, solved to the end: UNSAT proves every trail from t0 costs more than b; SAT gives the
+    cheapest k-word prefix (open end) or a trail (fold end, when t0's k words reach the block's end) within b, with
+    its word differences measured on the function (`sim_log2p`, None when they don't collide)."""
+    n = min(k, B2 - t0)
+    end = "fold" if t0 + k >= B2 else "open"
+    lanes = [(a, r) for a, _, r in trails.lanes_of(kind, kseed)]
+    c, cost, rec = build(lanes, t0, n, end)
+    tot = ITotalizer(lits=cost, ubound=b + 1, top_id=c.n)
+    t = time.time()
+    with Solver(name="cadical195", bootstrap_with=c.clauses + tot.cnf.clauses) as s:
+        r = s.solve(assumptions=[-tot.rhs[b]])
+        out = {"t0": t0, "k": k, "n": n, "end": end, "bound": b, "status": "sat" if r else "unsat",
+               "s": round(time.time() - t, 1)}
+        if r:
+            m = set(x for x in s.get_model() if x > 0)
+            dp = [word(m, v) for v in rec["dp"]]
+            sim = trails.simulate_lanes(kind, kseed, [(t0 + i, d) for i, d in enumerate(dp)], 1 << 16, 1, False,
+                                        "fold" if end == "fold" else "collision")
+            out.update(cost=sum(1 for x in cost if holds(m, x)), dp=[hex(d) for d in dp], sim_log2p=sim["log2p"])
+    return out
+
+
+def _step_job(args: tuple) -> dict:
+    return step(*args)
+
+
+def _write_json(path: Path, obj) -> None:
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(obj, indent=1) + "\n")
+    os.replace(tmp, path)
+
+
+def long_run(kind: str, kseed: int, starts: list[int], bounds: list[int], k0: int, kmax: int, kstep: int,
+             jobs: int, out: Path) -> int:
+    """`long`: per start a chain of steps up `bounds`, scheduled lowest bound first over `jobs` processes."""
+    out.mkdir(parents=True, exist_ok=True)
+    order = {t0: i for i, t0 in enumerate(starts)}
+    best: dict[int, int | None] = {t0: None for t0 in starts}
+    stopped: dict[int, dict] = {}
+    heap = [(bounds[0], order[t0], t0, k0) for t0 in starts]
+    heapq.heapify(heap)
+    inflight: dict[int, tuple[int, int, float]] = {}
+    done_q: queue.Queue = queue.Queue()
+    level, t_start = None, time.time()
+    meta = {"kind": kind, "kseed": hex(kseed), "starts": starts, "bounds": bounds, "k0": k0, "kmax": kmax}
+    with open(out / "steps.jsonl", "a") as steps, open(out / "levels.jsonl", "a") as levels, mp.Pool(jobs) as pool:
+        def submit() -> None:
+            while heap and len(inflight) < jobs:
+                b, _, t0, k = heapq.heappop(heap)
+                inflight[t0] = (k, b, time.time())
+                pool.apply_async(_step_job, ((kind, kseed, t0, k, b),), callback=done_q.put,
+                                 error_callback=lambda e, t0=t0, k=k, b=b: done_q.put(
+                                     {"t0": t0, "k": k, "bound": b, "status": "error", "error": repr(e)}))
+
+        submit()
+        while inflight:
+            r = done_q.get()
+            t0 = r["t0"]
+            k, b, _ = inflight.pop(t0)
+            r["utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            steps.write(json.dumps(r) + "\n")
+            steps.flush()
+            if r["status"] == "unsat":
+                best[t0] = b
+                nxt = [x for x in bounds if x > b]
+                if nxt:
+                    heapq.heappush(heap, (nxt[0], order[t0], t0, k))
+            elif r["status"] == "sat" and r["end"] == "open" and r["sim_log2p"] is None and k + kstep <= kmax:
+                heapq.heappush(heap, (b, order[t0], t0, k + kstep))
+            else:
+                stopped[t0] = r
+            low = min((x if x is not None else -1) for x in best.values())
+            if low >= 0 and low != level:
+                level = low
+                levels.write(json.dumps({"bound": level, "starts": len(starts), "utc": r["utc"],
+                                         "elapsed_s": round(time.time() - t_start)}) + "\n")
+                levels.flush()
+            _write_json(out / "proved.json", meta | {
+                "subset_bound": level, "meaning": "every start of `starts` is UNSAT at subset_bound: no trail from "
+                "any of them costs subset_bound or less (probability above 2^-subset_bound-1), in the model",
+                "per_start": best, "stopped": stopped,
+                "inflight": {t: {"k": kk, "bound": bb, "since_s": round(time.time() - ts)}
+                             for t, (kk, bb, ts) in inflight.items()},
+                "updated_utc": r["utc"]})
+            submit()
+    return 0
+
+
+def proved(paths: list[str], base: int) -> dict:
+    """The all-starts bound from the steps of any `long` runs together: per start, its highest UNSAT bound (at least
+    `base`, what earlier runs proved for every start), and the least of those over the 256 starts."""
+    best = {t0: base for t0 in range(B2)}
+    found = []
+    for p in paths:
+        for line in Path(p).read_text().splitlines():
+            if not line.strip():
+                continue
+            r = json.loads(line)
+            if r["status"] == "unsat":
+                best[r["t0"]] = max(best[r["t0"]], r["bound"])
+            elif r["status"] == "sat" and (r["end"] == "fold" or r.get("sim_log2p") is not None):
+                found.append(r)
+    low = min(best.values())
+    behind = sorted(t for t, v in best.items() if v == low)
+    levels = {b: sum(v >= b for v in best.values()) for b in sorted(set(best.values()))}
+    return {"all_starts_bound": low, "log2p_at_most": -(low + 1), "starts_at_bound": len(behind),
+            "first_starts_at_bound": behind[:16], "starts_unsat_at_least": levels, "trails": found}
+
+
 def span(s: str) -> list[int]:
-    """"lo-hi" or "lo-hi:step", inclusive."""
+    """"lo-hi" or "lo-hi:step", inclusive, or a comma list of those."""
+    if "," in s:
+        return sorted({t for part in s.split(",") for t in span(part)})
     s, _, step = s.partition(":")
     lo, _, hi = s.partition("-")
     return list(range(int(lo), int(hi or lo) + 1, int(step or 1)))
@@ -311,8 +436,27 @@ def main() -> int:
     f.add_argument("--bounds", default="13,16,20,24,28,32,36,40,44,47")
     f.add_argument("--conflicts", type=int, default=2_000_000)
     f.add_argument("--jobs", type=int, default=1)
+    g = sub.add_parser("long")
+    g.add_argument("--kind", default="duo2", choices=trails.SCHED_KINDS)
+    g.add_argument("--kseed", type=lambda x: int(x, 0), default=0xC0FFEE11)
+    g.add_argument("--t0", default="0-255")
+    g.add_argument("--bounds", default="18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,47")
+    g.add_argument("--k0", type=int, default=8)
+    g.add_argument("--kmax", type=int, default=16)
+    g.add_argument("--kstep", type=int, default=4)
+    g.add_argument("--jobs", type=int, default=1)
+    g.add_argument("--out", type=Path, required=True)
+    p = sub.add_parser("proved")
+    p.add_argument("steps", nargs="+")
+    p.add_argument("--base", type=int, default=16, help="the bound earlier runs proved for every start")
     sub.add_parser("check")
     a = ap.parse_args()
+    if a.cmd == "long":
+        return long_run(a.kind, a.kseed, span(a.t0), [int(x) for x in a.bounds.split(",")], a.k0, a.kmax, a.kstep,
+                        a.jobs, a.out)
+    if a.cmd == "proved":
+        print(json.dumps(proved(a.steps, a.base), indent=1))
+        return 0
     if a.cmd == "floors":
         bounds = [int(x) for x in a.bounds.split(",")]
         tasks = [(a.kind, a.kseed, t0, a.k, bounds, a.conflicts) for t0 in span(a.t0)]
