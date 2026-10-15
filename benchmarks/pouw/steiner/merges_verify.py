@@ -2,13 +2,14 @@
 
 A form is a set of monomials (('x', r, k), ('y', k, j)); a step is replayed on those sets, the rank of every edge
 increment is computed by Gaussian elimination on its own matrix, and the terminals are rebuilt from the definition
-T[(r, j), s] = sum_{k < s L} x[r][k] y[k][j]. Also `lift`: a single-level computation for <a,b,c> (L = b) becomes one
-for <a,bm,c> (L = bm) by replacing each inner index k with k + i b for every block i = 0..m-1: an edge u (x) w becomes a
-chain of m edges (u (x) w in each block; each has rank 1), and a merge or copy stays one step, since the lift of a sum is
-the sum of the lifts. Same merges and copies, m times the edges.
+T[(r, j), s] = sum_{k < s L} x[r][k] y[k][j]. Also `lift`: a computation for <a,b,c> at L becomes one for <a,bm,c> at
+L m by replacing each inner index k with m k + i for i = 0..m-1 (the prefix k < sL becomes k < smL): an edge u (x) w
+becomes a chain of m edges (u (x) w on each copy; each has rank 1), and a merge or copy stays one step, since the lift of
+a sum is the sum of the lifts. Same merges and copies, m times the edges.
 
-`python3 merges_verify.py check FILE.jsonl` re-checks every sat line; `lift FILE.jsonl --m 2,3,...` lifts every
-single-level sat line and checks the result.
+`python3 merges_verify.py check FILE.jsonl` re-checks every sat line; `lift FILE.jsonl --m 2,3,...` lifts every sat
+line and checks the result; `prefix --levels 1,2,... --m 1,2,...` builds `prefix_222` (<2,2n,2> at L = 2 with n
+levels, 7n edges, 4n - 3 merges), lifts it and checks it.
 """
 
 from __future__ import annotations
@@ -118,21 +119,68 @@ def from_sat(res: dict) -> list:
     return out
 
 
-def lift(steps: list, b: int, m: int) -> list:
-    """Each edge becomes a chain of m edges (one per inner block); node indices are renumbered."""
+def lift(steps: list, m: int) -> list:
+    """Each edge becomes a chain of m edges, inner index k -> m k + i for i < m (so the prefix k < sL becomes
+    k < smL); node indices are renumbered."""
     out, where = [], [0]
     for st in steps:
         if st["type"] == "edge":
             prev = where[st["from"]]
             for i in range(m):
-                gx = [("x", v[1], v[2] + i * b) for v in st["gx"]]
-                gy = [("y", v[1] + i * b, v[2]) for v in st["gy"]]
+                gx = [("x", v[1], m * v[2] + i) for v in st["gx"]]
+                gy = [("y", m * v[1] + i, v[2]) for v in st["gy"]]
                 out.append({"type": "edge", "from": prev, "gx": gx, "gy": gy})
                 prev = len(out)
             where.append(prev)
         else:
             out.append({"type": st["type"], "of": [where[s] for s in st["of"]]})
             where.append(len(out))
+    return out
+
+
+def _e(frm, xs, ys):
+    return {"type": "edge", "from": frm, "gx": [("x", r, k) for r, k in xs], "gy": [("y", k, j) for k, j in ys]}
+
+
+#: <2,2,2> at L = 2 in 7 edges and one 3-summand merge; node 2 = T00, 5 = T10, 6 = T11, 8 = T01
+ONE_MERGE_222 = [
+    _e(0, [(0, 0)], [(0, 0)]),
+    _e(1, [(0, 1)], [(1, 0)]),
+    _e(1, [(0, 0), (1, 0)], [(0, 1), (1, 1)]),
+    _e(3, [(0, 0), (1, 0), (1, 1)], [(0, 0), (0, 1), (1, 1)]),
+    _e(4, [(1, 1)], [(0, 0), (0, 1), (1, 0), (1, 1)]),
+    _e(4, [(1, 0), (1, 1)], [(0, 0), (0, 1)]),
+    {"type": "merge", "of": [1, 3, 6]},
+    _e(7, [(0, 0), (0, 1), (1, 0), (1, 1)], [(1, 1)]),
+]
+ONE_MERGE_222_AT = {(0, 0): 2, (1, 0): 5, (1, 1): 6, (0, 1): 8}
+
+
+def prefix_222(levels: int) -> list:
+    """<2,2n,2> at L = 2 with n levels: level 1 is ONE_MERGE_222; level s >= 2 is ONE_MERGE_222 on inner indices
+    2s-2, 2s-1 rooted at T[(0,0), s-1], which reaches T[(0,0), s] itself and R + D_p for the other positions p
+    (R = T[(0,0), s-1], D_p level s's part of T[p, s]), and the merge (R + D_p) + R + T[p, s-1] = T[p, s] finishes
+    each. 7n edges and 4n - 3 merges against 8n."""
+    out: list = []
+    at = {}
+    for s in range(1, levels + 1):
+        sh = 2 * (s - 1)
+        root = 0 if s == 1 else at[(0, 0)]
+        base = len(out)
+        idx = lambda t: root if t == 0 else base + t  # noqa: E731
+        for st in ONE_MERGE_222:
+            if st["type"] == "edge":
+                out.append({"type": "edge", "from": idx(st["from"]),
+                            "gx": [("x", v[1], v[2] + sh) for v in st["gx"]],
+                            "gy": [("y", v[1] + sh, v[2]) for v in st["gy"]]})
+            else:
+                out.append({"type": st["type"], "of": [idx(t) for t in st["of"]]})
+        new = {p: base + t for p, t in ONE_MERGE_222_AT.items()}
+        if s > 1:
+            for p in ((1, 0), (1, 1), (0, 1)):
+                out.append({"type": "merge", "of": [new[p], root, at[p]]})
+                new[p] = len(out)
+        at = new
     return out
 
 
@@ -144,7 +192,17 @@ def main() -> None:
     p = sub.add_parser("lift")
     p.add_argument("file")
     p.add_argument("--m", default="2,3,4")
+    p = sub.add_parser("prefix")
+    p.add_argument("--levels", default="1,2,3,4")
+    p.add_argument("--m", default="1,2,4,8")
     args = ap.parse_args()
+    if args.cmd == "prefix":
+        for n in [int(x) for x in args.levels.split(",")]:
+            steps = prefix_222(n)
+            for m in [int(x) for x in args.m.split(",")]:
+                r = check(2, 2 * n * m, 2, 2 * m, lift(steps, m) if m > 1 else steps)
+                print(f"prefix <2,{2 * n * m},2> L={2 * m} levels={n}", json.dumps(r))
+        return
     for line in open(args.file):
         res = json.loads(line)
         if res.get("status") != "sat" or "steps" not in res:  # a cube group's summary line has no steps
@@ -154,9 +212,9 @@ def main() -> None:
         tag = f"<{a},{b},{c}> L={L} E={res['E']} M={res['M']} K={res['K']} arity={res['arity']}"
         if args.cmd == "check":
             print(tag, json.dumps(check(a, b, c, L, steps, res["arity"])))
-        elif L == b:
+        else:
             for m in [int(x) for x in args.m.split(",")]:
-                r = check(a, b * m, c, L * m, lift(steps, b, m), res["arity"])
+                r = check(a, b * m, c, L * m, lift(steps, m), res["arity"])
                 print(f"{tag} lifted x{m} -> <{a},{b * m},{c}> L={L * m}", json.dumps(r))
 
 
