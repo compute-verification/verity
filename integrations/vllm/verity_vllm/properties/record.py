@@ -68,6 +68,14 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "DsaIndexerQ_v1, every compared prefill and paged logit DsaMqaLogit_v3, every top-k row of at most 2048 keys "
              "DsaTopKShortRow_v1, and every compared FA3 sparse output SparseMlaHead_v1 at its row's valid count, bit for bit; "
              "the k_pe and q_pe RoPE words are each one named contraction."),
+    Property("dsv4_mhc_capture", "verity-vllm/dsv4-mhc-capture/v1",
+             "On the capture's cc 9.0 GPU (132 SMs), DeepGEMM serves the mHC prenorm GEMM (4 streams of hidden 7168) at vLLM's split "
+             "counts, RSQ, EX2 and expf are core's words, tf32_hc_prenorm_gemm's words on the probe are HopperTf32WgmmaDot8_v1's "
+             "candidate step alone (B rounded RNE to TF32, the squared sum's GPU FMUL/FFMA/FADD lo contraction), and at the served "
+             "statics (4 streams, hidden 7168, 20 Sinkhorn iterations) every word of every compared launch of the fused post + pre "
+             "(TileLang's FP32 path at <= 16 tokens, DeepGEMM's TF32 path above), the layer-0 broadcast pre and hc_head equals "
+             "mhc_twin, and the evaluated pieces (MhcFusedSplit_v1, MhcPost_v1, MhcPrenormTf32_v1, MhcPreBigFuse(Broadcast)_v1, "
+             "HcHead_v1) equal the kernel's words, bit for bit."),
     Property("dsv4_indexer_capture", "verity-vllm/dsv4-indexer-capture/v1",
              "On the capture's Hopper GPU, from the vLLM sources the Definitions were read from, vLLM selects the FP8 indexer cache, "
              "the one-stage head-128 compressor and f32 o-projection scales for the DSV4 indexer row, and at the row's TP8 statics "
@@ -95,6 +103,18 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "On the capture's GPU, MUFU ex2 / rcp are core's tables on every input, and vLLM's fused sigmoid noaux_tc router "
              "(_moe_C.grouped_topk, 256 experts, top-8, renormalized, x2.5) returns through its block and its warp kernel exactly the "
              "ids and weights of MoeRouterSigmoidBias_v1 for that kernel on every captured row and every logit whose sigmoid reads MUFU."),
+    Property("dsv4_flashmla_capture", "verity-vllm/dsv4-flashmla-capture/v1",
+             "On the capture's Hopper GPU, vLLM selects the FlashMLA sparse decode and prefill it vendors from FlashMLA 6bc49418 "
+             "and the CuTe K-cache gather for the DSV4 row's MLA, its planner's metadata is get_mla_metadata_kernel's, and at the "
+             "row's TP8 statics (16 heads padded to 64, the 128-token window, compress-ratio 4 and 128 rows, the sink) every "
+             "output word of every decode launch equals FlashMlaDecode_v1 at the token's SPLITS, every gathered workspace row "
+             "FlashMlaGatherRow_v1, and every output word of every prefill launch FlashMlaPrefill_v1 at the token's NP, bit for bit."),
+    Property("dsv4_qnorm_insert_capture", "verity-vllm/dsv4-qnorm-insert-capture/v1",
+             "On the capture's cc 9.0 GPU (132 SMs), vLLM d9105ea80 selects the fp8_ds_mla SWA cache for the hidden-7168 row's "
+             "attention, and at its TP8 statics (16 query heads of 512 padded to 64, the 64-token page, 64 indexer heads of 128) "
+             "every word of the q that the fused q-norm/RoPE/KV-quant insert op returns and every byte it writes to the cache (and "
+             "none other) equal Dsv4QNormRopeKvInsert_v1, each written row is the input FlashMlaKvRow_v1 dequantises, and every "
+             "byte of q_fp8 and word of weights_out the CuTe IndexerQFp8Kernel returns equal Dsv4IndexerQ_v1, bit for bit."),
     Property("dsv4_moe_capture", "verity-vllm/dsv4-moe-capture/v1",
              "On the capture's GPU, MUFU lg2 is MufuLg2Mantissa_v1 on every 1.m, MUFU ex2 / rcp / sqrt are core's tables, and "
              "the Triton router dsv4_topk (384 experts, top-6, renormalized, x2.5), the hash router "

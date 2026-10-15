@@ -312,9 +312,9 @@ def test_spec_lock_proved_in_that_names_no_package_is_refused(tmp_path):
 
 #: the numerical bench's lowerings, a registry move-check reads wherever the tree keeps it
 LOWERINGS = next(p for p in MC.PY_PATH_FILES if p.endswith("/bench/lowerings.py"))
-REGISTRY = 'REGISTRY = {\n    "flock_pure": "backends.flock.tool:FLOCK_PURE",\n    "pouw_gemm": "benchmarks.pouw.tool:POUW_GEMM",\n}\n'
+REGISTRY = 'REGISTRY = {\n    "flock_pure": "backends.flock.tool:FLOCK_PURE",\n    "pouw_vllm": "benchmarks.pouw.tool:POUW_VLLM",\n}\n'
 REGISTRY_FILES = {"backends/flock/tool.py": "FLOCK_PURE = 1\n", "backends/flock/prove.py": "",
-                  "benchmarks/pouw/tool.py": "POUW_GEMM = 1\n",
+                  "benchmarks/pouw/tool.py": "POUW_VLLM = 1\n",
                   "tools/research/src/research/store/tools_registry.py": REGISTRY,
                   LOWERINGS:
                       'DIRECTORIES = {\n    "C-Flock": REPO / "backends" / "flock" / "templates",\n}\n',

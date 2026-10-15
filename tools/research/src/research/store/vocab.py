@@ -327,7 +327,7 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        GRANT_ROLES),
     _k(READY, GROUP_VERIFICATION, BOOL, "the owner's word that pr:<n>@<head> is ready for the merge queue (`research queue ready`); a new head needs it "
        "again; a train member needs none (Q14)"),
-    _k(LEAN_REVIEW, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>: the art: id of an `audit.py --update` report (its audit.json); a lean-audit.json "
+    _k(LEAN_REVIEW, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>: the art: id of a `tools/verity/lean/check.py --update` report (its audit.json); a lean-audit.json "
        "change it printed whole as the same statements (moved under --moved, printed differently, rehashed); a record only, since no merge "
        "needs a statement reviewer (Daniel, 8 Oct)"),
     _k(LANDED, GROUP_VERIFICATION, TEXT, "on a run (a check, or a part of one), by research-merge: main's commit whose Check: or "

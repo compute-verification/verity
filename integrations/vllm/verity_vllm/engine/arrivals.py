@@ -95,6 +95,26 @@ def forwards_from_schedule(computed: list[dict[str, int]]) -> tuple[list[bool], 
     return ran, last_adv
 
 
+def scheduled_tokens(computed: list[dict[str, int]], prompt_len: dict[str, int]) -> list[tuple[int, int]]:
+    """Per iteration: the (prefill, decode) tokens its schedule computed, from successive `num_computed_tokens` snapshots.  A
+    request's tokens below its prompt length are prefill, the rest decode.  A count that went down (a preempted request
+    recomputed from the start) counts from 0."""
+    out: list[tuple[int, int]] = []
+    prev: dict[str, int] = {}
+    for snap in computed:
+        pre = dec = 0
+        for rid, nc in snap.items():
+            was = prev.get(rid, 0)
+            was = 0 if nc < was else was
+            p = prompt_len.get(rid, 0)
+            fill = max(0, min(nc, p) - min(was, p))
+            pre += fill
+            dec += (nc - was) - fill
+        prev.update(snap)
+        out.append((pre, dec))
+    return out
+
+
 def run_requests_arrivals(llm: Any, requests: list[Any], params_for: Callable[[Any], Any], *,
                           on_step: Callable[[list[Any]], None] | None = None, scheduler: Any | None = None,
                           clock: Callable[[], float] = time.perf_counter,
@@ -108,7 +128,10 @@ def run_requests_arrivals(llm: Any, requests: list[Any], params_for: Callable[[A
     ``step_timing`` adds ``timing["steps"]``, one entry per ``step()`` iteration:
     ``{"iter", "s" (the clock's duration of that ``step()`` call), "outputs"
     (request outputs it returned), "forward" (whether it ran a forward, by the
-    rule below), "forward_index" (that forward's index, else None)}``.  A
+    rule below), "forward_index" (that forward's index, else None),
+    "prefill_tokens" / "decode_tokens" (what its schedule computed, from the
+    scheduler's ``num_computed_tokens``: `scheduled_tokens`; None when the
+    scheduler isn't reachable)}``.  A
     duration is host time around ``step()``; it includes the device work only
     where vLLM synchronizes inside the step, as it does to return sampled tokens.
     """
@@ -219,8 +242,12 @@ def run_requests_arrivals(llm: Any, requests: list[Any], params_for: Callable[[A
               "generated_tokens_per_s": gen / dt if dt else None, "total_tokens_per_s": (gen + prompt) / dt if dt else None,
               "arrivals": True, "requests": rec}
     if step_timing:
+        tokens = (scheduled_tokens(computed, {r.request_id: len(r.prompt_token_ids) for r in reqs})
+                  if sched is not None and len(computed) == n_it else None)
         timing["steps"] = [{"iter": j, "s": step_s[j], "outputs": step_outs[j], "forward": bool(ran[j]),
-                            "forward_index": fwd_index[j] if ran[j] else None} for j in range(n_it)]
+                            "forward_index": fwd_index[j] if ran[j] else None,
+                            "prefill_tokens": None if tokens is None else tokens[j][0],
+                            "decode_tokens": None if tokens is None else tokens[j][1]} for j in range(n_it)]
     return finished, timing
 
 

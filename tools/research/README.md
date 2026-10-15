@@ -573,7 +573,7 @@ which returns once the machine has started the workload detached, so a pass wait
 for the run. It prints `LAUNCHED <name> <run id> on <machine>`, or `RUN-FAILED <name> <run id>: <why>`, and the next launch is
 the next period's; an invalid entry is one `RUN-FAILED <name>: <why>` line. The run's Attempt records what ran and how it
 ended (`research inspect <run id>`). The Lean runs it schedules are declared in `tools/verity/lean/tool.py`: `lean_audit`
-(`audit.py --all --build --fresh`, nightly on `main`) and `lean_upstream` (the entry above, weekly).
+(`check.py --all --build --fresh`, nightly on `main`) and `lean_upstream` (the entry above, weekly).
 
 ### A lane's older notes
 

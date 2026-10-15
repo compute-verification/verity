@@ -1459,7 +1459,9 @@ def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool, s
             entry.write_text(json.dumps({"key": key, "argv": argv, "passed_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}))
             rec["cache"] = {"stored": key}
         if name == "circuit-check" and (out / "circuit-check.json").exists():
-            rec["cache"] = json.loads((out / "circuit-check.json").read_text()).get("cache")
+            c = json.loads((out / "circuit-check.json").read_text()).get("cache")
+            # counts only: result.json's steps are its attempt's meta, capped at 256 KiB, and a list per target outgrows it
+            rec["cache"] = {k: len(v) if isinstance(v, list) else v for k, v in c.items()} if isinstance(c, dict) else c
     rec["seconds"] = round(time.monotonic() - t0, 1)
     rec = steps.end(rec)
     if rec["status"] == "failed" and log.exists():
@@ -1557,8 +1559,7 @@ def reuse(out: Path, done: list[dict]) -> dict:
     for s in done:
         c = s.get("cache") or {}
         if s["step"] == "circuit-check" and "hits" in c:
-            misses = {"untraced": len(c.get("untraced") or []), "errors": len(c.get("errors") or []),
-                      "changed": len(c.get("changed") or [])}
+            misses = {k: c.get(k) or 0 for k in ("untraced", "errors", "changed")}
             got["circuit-check"] = {"of": "targets", "reused": c["hits"], "rerun": c.get("stored", 0) + sum(misses.values()),
                                     "not_stored": misses}
         elif s["step"] in STEP_KEYS and s["status"] in ("passed", "failed"):

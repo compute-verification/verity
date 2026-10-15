@@ -5,11 +5,11 @@ import Proofs.Flock.C3.RegLevels.SrcMaps
 /-!
 # The claim tie at `sparseOf`'s tied source
 
-`playsT_claim_of_session`: at good layers, rep `i`'s sparse session at the words `w` and coins `c`
-(`SparseSessionAt`), with what the source reads there (`SparseSrcAt`), plays the rep's stage to the unit's claim at
-those `w` and `c` (`sparseClaim`): `sparseTie_of_session` and `claim_of_tie` with the witnesses kept, since the
-claim's value is the word at `wClaim`, which no message of the stage holds.
-`claim_sparseOf`: so the tied run of `sparseOf stp w c` registers that claim (`tieSparse`'s play). `coins_of_session`:
+`claim_sparseOf`: at good layers, rep `i`'s sparse session at the words `w` and coins `c` (`SparseSessionAt`), with
+what the source reads there (`SparseSrcAt`), plays the rep's stage to the unit's claim at those `w` and `c`
+(`sparseClaim`; `sparseTieLAt_of_session`, `sparseTieAt_of_layer` and `playsT_claim_of_tieAt`, which keep the
+witnesses, since the claim's value is the word at `wClaim`, which no message of the stage holds), so the tied run of
+`sparseOf stp w c` registers that claim (`tieSparse`'s play). `coins_of_session`:
 the coins `c` hold the record's sparse coins at `r_k`, `ζ_p` and `ρ_t` (`sparseCs`' layout). `ties_sparseOf`: the
 point and value ties there (`ties_of_ends`), where each rep's claim word is R's `rec-claim` row (`ClaimWords`).
 `hot_sparseOf` and `hlt_sparseOf`: `srcOK_holo_rs`' `hot` and `hlt` at `tiedSrc (sparseOf stp w c)`, the claim tie
@@ -33,53 +33,6 @@ open FlockVBridge.Sparse (SCoins nw nc nR wClaim verifierRow sparseBase check_sp
 section Sessions
 
 variable {nS : ℕ} {Vs : Fin nS → VStmt} {Reg' : Type}
-
-/-- **Rep `i`'s stage plays to its unit's claim at the session's words and coins**: the session's copy decodes at
-the good layer to the unit's rows at `w` and `c` (`decode_sparseR`, its residuals' columns registered zero), so the
-unit accepts there (`laid_sparse`) and its stage plays to `sparseClaim` at `w` and `c` (`playsT_claim_of_unit`). -/
-theorem playsT_claim_of_session {zs : (s : Fin nS) → (Vs s).Outer Reg'} {Lb : (s : Fin nS) → (Vs s).Bits}
-    {e : ExecHolo} {c3 : Flock.RecCoins.C3} {unit : String} {i : Fin 2} {w : Array Flock.F128} {c : SCoins}
-    {u : C3Run e} (hG : ∀ s, (zs s).Good (Lb s)) (hs : SparseSessionAt zs Lb e c3 unit i w c)
-    (hsrc : SparseSrcAt e u i w c) : PlaysT (sparseAt e u i) (u.sp i) (some (sparseClaim e.cls.shape w c)) := by
-  obtain ⟨⟨sc, hsc, hsh, hcs⟩, hw, s, un, j, hj, hck, hpar, hone, hu, hrw, hrv, hrt, h0⟩ := hs
-  obtain ⟨hpub, hh, hst⟩ := hsrc
-  have hnc : nc e.cls.shape ≤ c.cs.size := by
-    refine Nat.le_of_eq ?_
-    show nc (shOf (unitShape e)) = c.cs.size
-    rw [hcs, sparseCoins_size hsc, hsh, FlockVBridge.Sparse.degs_length, FlockVBridge.Sparse.nc,
-      FlockVBridge.Sparse.pLog_shOf, FlockVBridge.Sparse.shOf_tLog]
-  obtain ⟨hv, -, -, hn⟩ := check_sparse hck hpar
-  have hn' : Flock.HmNets.netOf (Flock.RecSparse.unitName (unitShape e)) (Flock.RecSparse.unitLaid (unitShape e)) =
-      .ok (Vs s).c.unit := hn
-  have hbase : (FlockSoundness.Rows.ofNet (Vs s).hU).nIn ≤ sparseBase (unitShape e) := by
-    rw [FlockSoundness.Discharge.Layout.ofNet_nIn_eq, inWords_sparse hn']
-    exact FlockVBridge.Decode.inRows_le_outStart _ _ _
-  have hnw : nw e.cls.shape ≤ ((Flock.RecSparse.messagePorts (unitShape e)).map (·.2)).sum :=
-    nw_le_msum (unitShape e)
-  have hnv : FlockVBridge.Sparse.nv e.cls.shape ≤ Flock.RecSparse.nv (unitShape e) := nv_le (unitShape e)
-  have hvs : (verifierRow e.cls.shape c).size = FlockVBridge.Sparse.nv e.cls.shape := Array.size_ofFn
-  obtain ⟨v, hL, hin, hout⟩ := decode_sparseR (zs s) (hG s).2 un hj hone (unitShape e) hn hu
-    (w := (w[·]!)) (vv := ((verifierRow e.cls.shape c)[·]!)) (τ := ((tauArr e)[·]!)) hrw hrv hrt
-    (fun k hk => (getElem!_neg w k (by omega)).trans rfl)
-    (fun k hk => (getElem!_neg (verifierRow e.cls.shape c) k (by omega)).trans rfl)
-  have h0' : ∀ t < 128 * (Flock.RecSparse.residualNames (unitShape e)).length, v (sparseBase (unitShape e) + t) = false :=
-    fun t ht => (hout t).trans (copyVal_regOut (zs s) (hG s).2
-      (FlockVBridge.keyProg_correct (Vs s).hU (Vs s).nv (hG s).1 un) hj (by omega) (h0 t ht))
-  simp only [Flock.RecSparse.Shape.valid, Bool.and_eq_true, decide_eq_true_eq] at hv
-  obtain ⟨hbits, -⟩ := laid_sparse (unitShape e) hv.2 v hL w (verifierRow (shOf (unitShape e)) c) (tauArr e) hin
-  rw [hst]
-  refine playsT_claim_of_unit (τ := tauArr e) ⟨hw, hnc, hpub,
-    fun σ => arr_ofFn_get (fun σ => (e.τ σ).val) σ.isLt, hh, _, out_eq (shOf (unitShape e)) w (tauArr e) c hw,
-    ⟨fun x hx => ?_, fun y hy => ?_⟩⟩
-  · obtain ⟨r, hr, rfl⟩ := Array.mem_iff_getElem.1 hx
-    refine eq_of_bitOf fun k hk => (hbits r hr k hk).symm.trans ((h0' _ ?_).trans (bitOf_zero k).symm)
-    have := Nat.lt_of_lt_of_eq hr (outOf_size (unitShape e) _ _ _ _)
-    omega
-  · rw [outOf_eq] at hy
-    split at hy
-    · simp at hy
-    · exact (tail_iff (shOf (unitShape e)) (tauArr e)).2
-        (fun s hs => (arr_ofFn_get (fun σ => (e.τ σ).val) hs).trans_lt (e.τ _).isLt) y hy
 
 /-- **The session's coins are the record's** at `r_k`, `ζ_p` and `ρ_t`: `c.cs` is `sparseCs` of the record's sparse
 coins, whose `ζ_c` and H2's take its first 12 (`sparseCoins_size`, `sparseCoins_sizes`). -/
@@ -125,8 +78,9 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 local notation "ℐ" => holoInnerAt T CT st hp
 
 /-- **The tied run of `sparseOf` registers the unit's claim**: its stage is the steps of `w` at `c` by definition, its
-reps `stp`'s (`SparseRepTie` at `tiedSrc stp`), so it plays to `sparseClaim` (`playsT_claim_of_session`), which
-`tieSparse` registers (`playOut_eq`). -/
+reps `stp`'s (`SparseRepTie` at `tiedSrc stp`), so it plays to `sparseClaim` at the session's copy
+(`sparseTieLAt_of_session`, `sparseTieAt_of_layer`, `playsT_claim_of_tieAt`), which `tieSparse` registers
+(`playOut_eq`). -/
 theorem claim_sparseOf {zs : (j : Fin S) → (Vs j).Outer Reg'} {Lb : (j : Fin S) → (Vs j).Bits}
     {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
     {w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → Array Flock.F128}
@@ -136,7 +90,8 @@ theorem claim_sparseOf {zs : (j : Fin S) → (Vs j).Outer Reg'} {Lb : (j : Fin S
     (hrt : SparseRepTie (holoAt st hp) (tiedSrc stp R ω t Lb) i (w R ω t Lb i) (c R ω t Lb i)) :
     (tiedSrc (sparseOf stp w c) R ω t Lb).claim i =
       sparseClaim (holoAt st hp).cls.shape (w R ω t Lb i) (c R ω t Lb i) := by
-  have hpl := playsT_claim_of_session (u := tiedSrc (sparseOf stp w c) R ω t Lb) hG hs ⟨hrt.1, hrt.2, rfl⟩
+  obtain ⟨s, hl⟩ := sparseTieLAt_of_session (u := tiedSrc (sparseOf stp w c) R ω t Lb) hG hs ⟨hrt.1, hrt.2, rfl⟩
+  have hpl := playsT_claim_of_tieAt (sparseTieAt_of_layer (zs s) (hG s) hl)
   have hpl' : PlaysT (sparseAt (holoAt st hp) (tieReps (sparseOf stp w c R ω t Lb)) i)
       ((sparseOf stp w c R ω t Lb).sp i) (some (sparseClaim (holoAt st hp).cls.shape (w R ω t Lb i) (c R ω t Lb i))) :=
     hpl

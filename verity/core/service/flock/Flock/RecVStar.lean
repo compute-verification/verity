@@ -289,6 +289,70 @@ def checkFile (s : VStar.Stmt) (b : VStar.Bindings) (circuitB : ByteArray) : V U
   if let some (k, line) := firstDiff? circuitB f then
     throw s!"{s.name}: the circuit file ({circuitB.size} bytes) is not V*'s ({f.size} bytes): they differ at byte {k}, line {line}"
 
+/-- V*'s row ports of the unit `u` under the subcircuit `sub` (`VStar.metaHead`'s `ports`), as (name, words, bits): an
+input row of its port's words, an output row of its port's rounded up to whole 64-word blocks, each 16 bits a word. -/
+def vstarRows (sub : VStar.Sub) (u : VStar.UnitC) : List (String × Nat × Nat) :=
+  (sub.inputs.zip u.inPorts).map (fun (nm, w) => (nm, w, 16 * w)) ++
+    (sub.outputs.zip u.outPorts).map fun (nm, w) => (nm, (w + 63) / 64 * 64, 16 * ((w + 63) / 64 * 64))
+
+/-- **The circuit parsed from V*'s file carries V*'s META** (`VStar.metaHead`): one unit per VU, no leaf cuts, the
+unit's input leaves its input words in order, and V*'s row ports (`vstarRows`). `checkFile` holds the bytes to V*'s;
+this holds what the verifier parsed from them, which no proof reads through `Lean.Json.parse`, to what V* wrote. -/
+def checkParsed (s : VStar.Stmt) (c : Circuit) : V Unit := do
+  let u ← match s.unit with
+    | .ok u => pure u
+    | .error e => throw s!"{s.name}: V*'s unit: {e}"
+  if c.upv != 1 || !c.leafCuts.isEmpty then
+    throw s!"{s.name}: the parsed circuit has {c.upv} units per VU and {c.leafCuts.size} leaf cuts, not V*'s 1, 0"
+  if c.leavesIn.getD 0 #[] != (Array.range u.inWords).map Int.ofNat then
+    throw s!"{s.name}: the parsed circuit's input leaves are not V*'s, its {u.inWords} input words in order"
+  let ports := c.ports.toList.map fun p => (p.name, p.words, p.bits)
+  if ports != vstarRows s.sub u then
+    throw s!"{s.name}: the parsed circuit's row ports {ports} are not V*'s {vstarRows s.sub u}"
+
+/-- The whole S's row ports' names (`VStar.Algebra.spec`'s): round `r`'s `m<r>`, then `acc0` and `acc1`. -/
+def portNames (sh : Shape) : Array String :=
+  (Array.range (RecAlgebra.rounds sh).size).map (s!"m{·}") ++ #["acc0", "acc1"]
+
+/-- Part `j`'s row ports, as indices of the whole S's (`RecResiduals.groups`' `P`). -/
+def partPorts (sh : Shape) (j : Nat) : Except String (Array Nat) := do
+  let gs ← RecResiduals.groups (← RecAlgebra.structureOf sh) (RecResiduals.portSizes sh)
+  let some (_, P, _) := gs[j]? | throw s!"part {j} of {gs.size}"
+  pure P
+
+/-- **V*'s part is the verifier's**: at a part's statement, V*'s row ports' elements and v elements are those of the
+verifier's part (`RecResiduals.part`) at the shape, holo flag and part the unit's name and META give, as
+`RecResiduals.check` derives it; the words `checkParsed` compares round them up (`portWordsOf`), so the counts are
+compared themselves. Its row ports' names are the whole S's (`portNames`) at the part's ports (`partPorts`). Any other
+statement passes. -/
+def checkPart (s : VStar.Stmt) (c : Circuit) : V Unit :=
+  match s with
+  | .inner _ _ pt =>
+    match RecResiduals.params c.unit.name with
+    | none => throw s!"{s.name}: unit {c.unit.name} is not rec-residuals/m<m>-k<k_log>-c<claims>-p<j>"
+    | some (m, k, cl, j) =>
+      match RecResiduals.shape? m k cl with
+      | none => throw s!"{s.name}: no rec-residuals shape at m {m}, k_log {k}, claims {cl}"
+      | some sh =>
+        match RecResiduals.holoOf c with
+        | .error e => throw e
+        | .ok holo =>
+          match RecResiduals.part { sh with holo } j with
+          | .error e => throw s!"{s.name}: {e}"
+          | .ok (_, ns, nv) =>
+            if pt.S.ports.map (·.2) != ns || pt.S.gf.nv != nv then
+              throw (s!"{s.name}: V*'s part has row ports of {pt.S.ports.map (·.2)} elements and {pt.S.gf.nv} v " ++
+                s!"elements, the verifier's {ns} and {nv}")
+            else
+              match partPorts { sh with holo } j with
+              | .error e => throw s!"{s.name}: {e}"
+              | .ok P =>
+                let names := P.toList.map ((portNames { sh with holo })[·]!)
+                if pt.S.ports.map (·.1) != names then
+                  throw s!"{s.name}: V*'s part's row ports are named {pt.S.ports.map (·.1)}, the verifier's {names}"
+                else pure ()
+  | _ => pure ()
+
 /-- A statement's population: the registered population's instances for a drawn session, else its own. -/
 def population (st : Stmt) : Nat := (st.pub.population.map (·.1)).getD st.n
 
@@ -343,13 +407,15 @@ def checkMeta (c : Circuit) (f : VStar.Bindings) : V Unit := do
   if mc != fc then throw s!"{name}: META program_digests {mc}, the verifier's bindings' {fc}"
 
 /-- `checkMeta` of the circuit `c`, parsed from the circuit file `circuitB`, against the verifier's own bindings `f`, then
-`check` on its unit over `n` instances at the inner shape `i` as V*'s statement `part`, and `checkFile` on `circuitB` under
-`f`. -/
+`check` on its unit over `n` instances at the inner shape `i` as V*'s statement `part`, `checkFile` on `circuitB` under
+`f`, and `checkParsed` and `checkPart` on `c`. -/
 def checkCircuit (i : Inner) (part : Nat) (c : Circuit) (n : Nat) (circuitB : ByteArray) (f : VStar.Bindings) :
     V VStar.Stmt := do
   checkMeta c f
   let s ← check i c.unit.name n (some part)
   checkFile s f circuitB
+  checkParsed s c
+  checkPart s c
   pure s
 
 /-- `m<k>`'s `k`. -/
@@ -948,6 +1014,16 @@ def innerCommits (tr : Json) (record : String) (reg : Option Json := none) (boun
   if c3 then return { reps, streams := ← candidate3 tr rounds t names msgs regR shape, stacked := shape }
   return { reps }
 
+/-- **Each sparse phase draws its schedule's coins round for round**: under the verifier's RecSparse shape, every held
+stream named `sparse/…` holds `sparsePhaseRounds`' coin count at each of its rounds, as `checkCommitRounds` holds the
+reps' streams to theirs (`sparseCoins` counts only the rounds that draw coins). -/
+def checkSparseCoins (i : Inner) (cs : InnerCommits) : V Unit := do
+  if let some sh := i.sparse then
+    for st in cs.streams do
+      if st.name.startsWith s!"{SPARSE}/" && st.coins.map (·.size) != (sparsePhaseRounds sh).map (·.1) then
+        throw (s!"rec inner transcript: {st.name} draws {st.coins.map (·.size)} coins by round, and its schedule " ++
+          s!"({RecSparse.unitName sh}) {(sparsePhaseRounds sh).map (·.1)}")
+
 /-- **Each stream's `c_k` sit at its schedule's message rounds** (`commitRounds`): the circuit table's two reps'
 (`InnerCommits.reps`) at `repRounds` of the inner shape `i`, `holoRepRounds` when its circuits are private (`i.holo`,
 `rec_live.schedule_for`'s `holo`), with the verifier's RecSparse shape `sparse/rep<x>`'s at `sparsePhaseRounds` of it,
@@ -956,7 +1032,8 @@ and R's (`stacked/rep0`) at `stackedRounds` of the verifier's R shape, R's held 
 this check is what puts the `j`-th `c_k` the verifier holds at the schedule's `j`-th message round. `checkStackedShape`
 holds R's transcript rounds to its schedule; this holds the `c_k` and tops the verifier keeps of them, and refuses R's
 stream under an inner shape naming no schedule of R's. It reads `sparse/rep0` and `sparse/rep1` only, so it refuses
-any other held stream named `sparse/…`. -/
+any other held stream named `sparse/…`. Every held stream draws its schedule's coins round for round: the reps' at
+their schedule, the sparse phases' at `sparsePhaseRounds` (`checkSparseCoins`). -/
 def checkCommitRounds (i : Inner) (cs : InnerCommits) : V Unit := do
   let some rep := (if i.holo then holoRepRounds else repRounds) i.m i.kLog i.claims
     | throw s!"rec-inner: the inner shape (m {i.m}, k_log {i.kLog}, claims {i.claims}) has no fast100 schedule"
@@ -970,6 +1047,7 @@ def checkCommitRounds (i : Inner) (cs : InnerCommits) : V Unit := do
       st.name != s!"{SPARSE}/rep0" && st.name != s!"{SPARSE}/rep1" then
     throw (s!"rec inner transcript: it holds {st.name}, and a sparse phase is one of the two reps' " ++
       s!"({SPARSE}/rep0, {SPARSE}/rep1)")
+  checkSparseCoins i cs
   let sp := match i.sparse with
     | some sh => [0, 1].filterMap fun x =>
       (cs.stream? s!"{SPARSE}/rep{x}").map fun st => (st.name, st.commits, sparsePhaseRounds sh)
@@ -1174,6 +1252,21 @@ def checkLabels (draw : Option Json) (count : Nat) (sts : Array Stmt) : V Unit :
   | none => pure ()
   | some d => (Array.range sts.size).forM fun j => checkLabel (tableDraw d count j) sts[j]!.pub j
 
+/-- **A value the verifier's shared rows register is one registration in every session** (`SharedOwnRoot`): each port of
+`--registered` reading a value some entry of `--rec-rows` reads agrees with the first such entry in every field but reads
+(`portDiff?`: value, root, leaf count, row width, domain), and a port reading R's tops `rec-top-stacked-L<l>`
+(`stackedTopLevel`) needs such an entry. -/
+def checkShared (s : VStar.Stmt) (registered : Array Registered.Port) (rows : Option (Array Registered.Port)) :
+    V Unit := do
+  for p in registered do
+    match rows.bind (·.find? (·.value == p.value)) with
+    | some w =>
+      if let some d := portDiff? p w false then
+        throw s!"{s.name}: its port {p.name} reads {p.value}, which the verifier's shared rows (--rec-rows) register as {w.name}: {d}"
+    | none =>
+      if (stackedTopLevel p.value).isSome then
+        throw s!"{s.name}: its port {p.name} reads R's tops {p.value}; pass the verifier's shared rows (--rec-rows F), which register it"
+
 /-- With an inner shape, the statement must be V*'s: `tags`, the statement the verifier set it up as (`--statement`), is
 V*'s own `Tags.circuit`, compared by name (`Tags.find?` gives each name one statement); it holds no lookup table
 (`tables`, the verifier's `--tables`/`--archive` MUFU tables, is empty: V*'s circuits read none); it needs the verifier's own
@@ -1182,8 +1275,8 @@ bindings (`bindings`, `--rec-bindings F`); its circuit must be in `ProvedScope.s
 (`v1Ports`), never `scopeOkH`'s `bitRows`, which `ProvedScope.check` admits under hidden outputs and V*'s statement
 (`VStmt.hscope`) does not cover; then `checkOwnBindings` of those bindings against the partition object and
 program, `checkCircuit` on the statement's circuit and population as statement `part` under those bindings,
-`checkMsgNames` on its circuit's `m<k>` ports, and `checkOwn`, `checkRows` and `checkAcc` (against the verifier's shared rows `rows`, `--rec-rows`) and `checkAccReads` on
-the verifier's own registered reads. -/
+`checkMsgNames` on its circuit's `m<k>` ports, and `checkOwn`, `checkRows` and `checkAcc` (against the verifier's shared rows `rows`, `--rec-rows`), `checkAccReads` and
+`checkShared` (against `rows`) on the verifier's own registered reads. -/
 def checkStmt (inner : Option Inner) (tags : Tags) (tables : List (String × ByteArray)) (st : Stmt) (circuitB : ByteArray)
     (partition : Option Json := none)
     (program : Option ByteArray := none) (registered : Option (Array Registered.Port) := none) (part : Option Nat := none)
@@ -1211,6 +1304,7 @@ def checkStmt (inner : Option Inner) (tags : Tags) (tables : List (String × Byt
       checkRows s r rows
       checkAcc s r rows
       checkAccReads i s r
+      checkShared s r rows
   | none =>
     if isVStar name then
       throw s!"{name}: one of V*'s statements; pass the verifier's own inner shape (--rec-inner F, from rec-inner)"

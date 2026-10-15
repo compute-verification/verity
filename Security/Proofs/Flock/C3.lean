@@ -4,6 +4,7 @@ import Proofs.Flock.C3.Compose.Bridge
 import Proofs.Flock.C3.Compose.BridgeOff
 import Proofs.Flock.C3.Compose.Discharge
 import Proofs.Flock.C3.Compose.Decoder
+import Proofs.Flock.C3.Compose.RepsOff
 import Proofs.Flock.C3.Compose.SrcClauses
 import Proofs.Flock.C3.Compose.Tied
 import Proofs.Flock.C3.Compose.HoloTys
@@ -19,12 +20,17 @@ import Proofs.Flock.C3.Compose.LaterHeld
 import Proofs.Flock.C3.Compose.LaterHeldW
 import Proofs.Flock.C3.Compose.LaterHolo
 import Proofs.Flock.C3.Compose.AtHoloHeld
+import Proofs.Flock.C3.Compose.HeldHyps
+import Proofs.Flock.C3.Compose.SparseEndsAt
+import Proofs.Flock.C3.Compose.LaterFamily
+import Proofs.Flock.C3.Compose.SrcOKFamily
 import Proofs.Flock.C3.Compose.HoloCoinTys
 import Proofs.Flock.C3.Compose.HoloEncoded
 import Proofs.Flock.C3.Compose.RowsReg
 import Proofs.Flock.C3.Compose.HoloStreamSizes
 import Proofs.Flock.C3.Compose.HoloSparseRounds
 import Proofs.Flock.C3.Compose.HoloSparseWords
+import Proofs.Flock.C3.Compose.CoinsChecked
 import Proofs.Flock.Soundness.Refine.HoloRepConverse
 import Proofs.Flock.C3.Sparse.Read
 import Proofs.Flock.C3.Sparse.Src
@@ -40,6 +46,7 @@ import Proofs.Flock.C3.Sparse.PubLift
 import Proofs.Flock.C3.Sparse.HeldStages
 import Proofs.Flock.C3.Sparse.ClaimSparseOf
 import Proofs.Flock.C3.Sparse.PubChecked
+import Proofs.Flock.C3.Sparse.ClaimReads
 import Proofs.Flock.C3.VStarList.Statements
 import Proofs.Flock.C3.VStarList.Shape
 import Proofs.Flock.C3.VStarList.Range
@@ -60,6 +67,7 @@ import Proofs.Flock.C3.HoloValues.Frames
 import Proofs.Flock.C3.HoloValues.Runs
 import Proofs.Flock.C3.HoloValues.Shift
 import Proofs.Flock.C3.Reps.Frames
+import Proofs.Flock.C3.Reps.HoloVals
 import Proofs.Flock.C3.Reps.AlgL
 import Proofs.Flock.C3.Reps.Maps
 import Proofs.Flock.C3.Reps.OpensRead
@@ -80,6 +88,7 @@ import Proofs.Flock.C3.Reps.ReadWhole
 import Proofs.Flock.C3.Reps.PortNames
 import Proofs.Flock.C3.Reps.RoundReads
 import Proofs.Flock.C3.Reps.RoundSel
+import Proofs.Flock.C3.Reps.RoundOfHolo
 import Proofs.Flock.C3.Reps.ReadWholeAt
 import Proofs.Flock.C3.Reps.WithReads
 import Proofs.Flock.C3.Reps.KeysInW
@@ -108,9 +117,11 @@ import Proofs.Flock.C3.RegLevels.VRows
 import Proofs.Flock.C3.RegLevels.AccReads
 import Proofs.Flock.C3.RegLevels.ValueTie
 import Proofs.Flock.C3.RegLevels.OutRegs
+import Proofs.Flock.C3.RegLevels.SharedRows
 import Proofs.Flock.C3.RegLevels.TopTie
 import Proofs.Flock.C3.RegLevels.TopLeaf
 import Proofs.Flock.C3.RegLevels.AccOut
+import Proofs.Flock.C3.RegLevels.PartTies
 import Proofs.Flock.C3.RegLevels.LigWhole
 import Proofs.Flock.C3.RegLevels.Maps
 import Proofs.Flock.C3.RegLevels.ROpens
@@ -118,6 +129,8 @@ import Proofs.Flock.C3.RegLevels.ROpensPR
 import Proofs.Flock.C3.RegLevels.LevelsChecked
 import Proofs.Flock.C3.RegLevels.TopRead
 import Proofs.Flock.C3.RegLevels.SrcMaps
+import Proofs.Flock.C3.Sparse.SessionReg
+import Proofs.Flock.C3.Sparse.SessionZero
 import Proofs.Flock.C3.RegLevels.LgCoins
 import Proofs.Flock.C3.RegLevels.RRounds
 import Proofs.Flock.C3.RegLevels.LgHeld
@@ -135,8 +148,9 @@ discharge what it takes besides: VBridge at candidate 3's table (`_hbr`) and V*'
 * (b) `C3/Compose/`, `FlockC3.Compose`: the family (`C3Family`, `C3Run`), the tape (`holoSteps`,
   `holoTableCL_plays`), VBridge from the stages' obligations (`vbridge_c3`), the honest family (`C3Family.honest`,
   n0), `_hbr` at it from n1 and the stages' read facts (`hbr_honest`), the fixed decoder at which n6 states the
-  read facts (`C3/Compose/Decoder.lean`), and `SrcOK`'s decode fixed point where each stage plays on its steps to the
-  run's own output (`decodeRun_runSteps`, `srcDecode_of_plays`).
+  read facts (`C3/Compose/Decoder.lean`), `SrcOK`'s decode fixed point where each stage plays on its steps to the
+  run's own output (`decodeRun_runSteps`, `srcDecode_of_plays`), and its stages' coins at the checked sessions from
+  the guarantee's custody (`stageCoins_checked`).
 * (c) `C3/HoloValues/`, `FlockC3.HoloValues`: each rep plays `holoRepC` (`HReps`; at the honest family, n2).
 * (d) `C3/Sparse/`, `FlockC3.Sparse`: each rep's sparse phase at session level (`HSparse`; n3), and its read fact on
   the source's runs' own steps from their sparse phases' plays (`SrcSparseOK`, `sparseReadAt_of_ok`), which a source

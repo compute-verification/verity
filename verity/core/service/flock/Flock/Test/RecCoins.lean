@@ -44,4 +44,11 @@ def hexOf (b : ByteArray) : String := String.join (b.toList.map fun x => (Nat.to
     "2c9284397d43972cf9cc3954c442d25e4100c793211da7718213450dfe0d300136ae0e706de7136e0f68f84862387cde689461618cee310d816d6af564b18cd1"
   | .error _ => false
 
+/-! R's opening part's one zero row (`checkOpening`), as `rec_residuals.stage_opening` registers it. -/
+#guard match Registered.domain "p" ZERO_VALUE OUT_WORDS 1 16 with
+  | .ok dom => hexOf (FV3.root dom #[Registered.rowLeaf dom 0
+      (Hm96.Default512.treeLeaf (commitRow (zeroRows 1 OUT_WORDS)[0]! (zeroSalt ZERO_VALUE 0)))] Sha512.hash) ==
+    "af8c0fa801627686aad3af3cc4c63840162705a903222f507a84c01e9f1414742bb6985e4eee425f0dd1539277a0b71fcb6d895abd7bad14ce4f03dc487265b9"
+  | .error _ => false
+
 end Flock.Test.RecCoins

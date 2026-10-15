@@ -133,22 +133,13 @@ def resolve_spec(spec: str | Path) -> ResolvedSpec:
     )
 
 
-PRESETS: dict[str, Preset] = {
-    path.stem: load_spec(path).preset
-    for path in sorted(SPEC_ROOT.glob("*.toml"))
-    if "vllm-spec/v0" in path.read_text(encoding="utf-8").splitlines()[0]
-}
+def served(preset: Preset, eager: bool) -> tuple[Preset, bool]:
+    """The preset as its engines are built, and whether they run eagerly: when asked, or when the preset requires it
+    (`enforce_eager`), and with CUDA graphs exactly when not."""
 
-unknown_gpus = sorted({preset.gpu_id for preset in PRESETS.values()} - GPUS.keys())
-if unknown_gpus:
-    raise ValueError(f"benchmark presets name unknown GPU ids: {unknown_gpus}")
-
-
-def get_preset(name: str) -> Preset:
-    try:
-        return PRESETS[name]
-    except KeyError:
-        raise ValueError(f"unknown benchmark preset {name!r} (known: {', '.join(PRESETS)})") from None
+    eager = bool(eager or preset.engine_settings.get("enforce_eager", False))
+    settings = {**preset.engine_settings, "cuda_graphs": not eager, "enforce_eager": eager}
+    return replace(preset, engine_settings=settings), eager
 
 
 def local_checkpoint(preset: Preset, path: str | Path) -> Preset:

@@ -135,7 +135,7 @@ place() {  # place KIND KEY GPUS MAX_MIN QUESTION [CPUS [MEM_GB [SUBMITTER]]]: t
   [ -z "${7:-}" ] || mem=(--mem-gb "$7")
   out=$(PYTHONPATH=$src/src python3 -m cluster submit "$src/descriptions/nebius.toml" --run-id "n2-$1-$2" --now "$(date +%s)" \
     --project verity --submitter "${8:-$OWNER}" --question "$5" --gpus "$3" --cpus "${6:-8}" "${mem[@]}" --max-s $(($4 * 60)) \
-    --preempt requeue --node vy-nebius-2 2> /dev/null | tail -1) || true
+    --preempt requeue --on vy-nebius-2 2> /dev/null | tail -1) || true
   python3 - "$1" "$2" "$5" "$out" << 'EOF'
 import json, sys, time
 kind, key, question, out = sys.argv[1:]

@@ -70,12 +70,18 @@ class TpRow(Row):
                  build: BuildConfig, match: MatchConfig, commit: CommitConfig):
         super().__init__(row=row, role=role, repo=repo, rev=rev, stages=stages, env=env, proc="tp_stage")
         self.W = world
-        self.gpu_util = gpu_util or TP_UTIL
+        self.gpu_util = gpu_util or self.workload_gpu_util() or TP_UTIL
         self.commit_util = commit.commit_gpu_util or self.gpu_util
         self.cb, self.cm, self.ck_ = build, match, commit
         self.trap = False
         self.config_run = commit.config_run == "1"
         self.replay_pending = False
+
+    def workload_gpu_util(self) -> str | None:
+        """The workload's ``gpu_memory_utilization``, for a model whose weights don't fit `TP_UTIL` (GLM-5.3 TP8, about 88 GB a
+        GPU).  An explicit ``--gpu-util`` / ``GPU_UTIL`` wins over it."""
+        v = (R.load_json(self.path(self.wl)) or {}).get("gpu_memory_utilization")
+        return None if v is None else str(v)
 
     def run(self) -> int:
         try:

@@ -85,7 +85,7 @@ theorem not_acceptsZKR_keepOwn {Q : VStmt} {z : Q.Outer Reg'}
     (tr : FlockSoundness.Discharge.Exec.Transcript) :
     ¬ AcceptsZKR (Flock.Guarantees.keepOwn z P).I (Flock.Guarantees.keepOwn z P).own tr := by
   intro h
-  have hf : (Flock.Guarantees.keepOwn z P).own = freshOwn Q.c := ite_eq_right fun ⟨_, _, hp⟩ => hP _ _ _ hp
+  have hf : (Flock.Guarantees.keepOwn z P).own = freshOwn Q.c := ite_eq_right fun ⟨_, _, _, _, hp⟩ => hP _ _ _ hp
   rw [hf] at h
   exact not_acceptsZKR_fresh z.I z.ht z.hTags z.hcH tr h
 
