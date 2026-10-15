@@ -238,7 +238,7 @@ class DeviceStore:
         ready_groups = self.blocks // ready_blocks
         self.ring = None
         pads = nl - self.blocks // PER_LEAF
-        self.ring = (torch.empty(2 + ready_groups + self.blocks // self.chunk, dtype=torch.int32, device="cuda"),
+        self.ring = (torch.empty(4 + ready_groups + self.blocks // self.chunk, dtype=torch.int32, device="cuda"),
                      torch.empty((self.blocks, 8), dtype=torch.int64, device="cuda"),
                      torch.empty((2 * lc, 8), dtype=torch.int64, device="cuda"),
                      torch.empty((2 * lc, 8), dtype=torch.int64, device="cuda"),
