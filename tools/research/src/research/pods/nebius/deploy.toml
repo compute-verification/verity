@@ -33,7 +33,8 @@ quiet = 'test -n "$(find /workspace/pouw/fill/status.txt -mmin -3)" && head -1 /
 
 [nodes.vy-nebius-cpu-1]
 record = "/workspace/research/deploy/record.jsonl"
-managed = ["/usr/local/lib/vy-monitoring/*", "/etc/systemd/system/vy-*", "/etc/systemd/system/*.d/*vy*", "/etc/systemd/system.control/*/*"]
+managed = ["/usr/local/bin/vy-*", "/usr/local/lib/vy-monitoring/*", "/etc/systemd/system/vy-*", "/etc/systemd/system/*.d/*vy*",
+           "/etc/systemd/system.control/*/*"]
 
 # ---- every node: the VM itself (pods/nebius/launch.sh installs these at first boot)
 
@@ -324,6 +325,27 @@ nodes = ["vy-nebius-1"]
 run = ["systemd:vy-store-evict.timer", "systemd:vy-store-evict-research.timer"]
 owner = "infra"
 
+[[file]]  # cpu-1 runs only research's pass (no job-pod store there), from the unit files below
+path = "/usr/local/bin/vy-store-evict"
+src = "tools/research/src/research/pods/nebius/sky/store_evict.sh"
+nodes = ["vy-nebius-cpu-1"]
+run = ["systemd:vy-store-evict-research.timer"]
+owner = "infra"
+
+[[file]]  # after its first install: `sudo systemctl daemon-reload && sudo systemctl enable --now vy-store-evict-research.timer`
+path = "/etc/systemd/system/vy-store-evict-research.service"
+src = "tools/research/src/research/pods/nebius/sky/store_evict_research.service"
+nodes = ["vy-nebius-cpu-1"]
+run = ["systemd:vy-store-evict-research.timer"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-store-evict-research.timer"
+src = "tools/research/src/research/pods/nebius/sky/store_evict_research.timer"
+nodes = ["vy-nebius-cpu-1"]
+run = ["systemd:vy-store-evict-research.timer"]
+owner = "infra"
+
 [[file]]
 path = "/usr/local/bin/vy-usage"
 src = "tools/research/src/research/pods/nebius/sky/usage_report.py"
@@ -539,7 +561,7 @@ owner = "infra"
 [[file]]
 path = "/etc/systemd/system/vy-store-evict-research.service.d/src.conf"
 src = "tools/research/src/research/pods/nebius/sky/store_evict_src.conf"
-nodes = ["vy-nebius-1"]
+nodes = ["vy-nebius-1", "vy-nebius-cpu-1"]
 run = ["systemd:vy-store-evict-research.timer"]
 owner = "infra"
 
