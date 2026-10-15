@@ -7,7 +7,6 @@ import json
 import os
 import sys
 from collections.abc import Sequence
-from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +14,7 @@ from verity_bench import jobs
 from verity_bench.vllm import cli as vllm_cli
 from verity_bench.vllm import result
 from verity_bench.vllm.arms import resolve_arms
+from verity_bench.vllm.presets import served
 from verity_bench.vllm.result import write
 from verity_bench.vllm.runner import ProcessEngineFactory, run_benchmark
 from verity_bench.vllm.table import render
@@ -52,14 +52,7 @@ def _point(args: Any) -> int:
     if item.identity != args.identity:
         raise ValueError(f"point identity changed: expected {item.identity}, invocation named {args.identity}")
     spec = plan.spec
-    preset = replace(
-        spec.preset,
-        engine_settings={
-            **spec.preset.engine_settings,
-            "cuda_graphs": not spec.eager,
-            "enforce_eager": spec.eager,
-        },
-    )
+    preset, eager = served(spec.preset, spec.eager)
     arms = resolve_arms(spec.arms, spec.arm_modules)
     doc = run_benchmark(
         preset,
@@ -67,7 +60,7 @@ def _point(args: Any) -> int:
         (item.point,),
         sweep=spec.sweep.id,
         reps=spec.reps,
-        factory=ProcessEngineFactory(eager=spec.eager),
+        factory=ProcessEngineFactory(eager=eager),
         git_commit=plan.toolchain.commit,
         config_identity={
             "resolved_spec_sha256": plan.spec_sha256,
@@ -132,10 +125,6 @@ def _parser() -> argparse.ArgumentParser:
     compare = commands.add_parser("compare", help="compare results only when their identities agree")
     result.add_judge_arguments(compare)
     compare.set_defaults(run=result.run_judge, command_parser=compare)
-
-    judge = commands.add_parser("judge", help=argparse.SUPPRESS)
-    result.add_judge_arguments(judge)
-    judge.set_defaults(run=result.run_judge, command_parser=judge)
 
     point = commands.add_parser("_vllm-point", help=argparse.SUPPRESS)
     point.add_argument("--spec", required=True)

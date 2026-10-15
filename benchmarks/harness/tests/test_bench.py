@@ -14,17 +14,16 @@ from verity_config import Admission
 from verity_bench import jobs
 from verity_bench.cli import _parser
 from verity_bench.vllm.arms import Arm, resolve_arms
-from verity_bench.vllm.cli import effective_eager
 from verity_bench.vllm.presets import (
     GPUS,
     SPEC_ROOT,
     SweepPoint,
     expand_sweep,
-    get_preset,
     load_spec,
     load_sweep,
     local_checkpoint,
     resolve_spec,
+    served,
 )
 from verity_bench.vllm.result import IdentityMismatch, judge, validate
 from verity_bench.vllm.runner import ResidentCapacityError, run_benchmark
@@ -92,7 +91,7 @@ class FakeFactory:
 
 
 def inputs():
-    preset = get_preset("llama31-8b-fp8-1gpu")
+    preset = load_spec("llama31-8b-fp8-1gpu").preset
     point = SweepPoint(32, 512, "mixed", 64)
     arms = (Arm("stock-fp8", precision="fp8"), Arm("candidate", control="stock-fp8"))
     return preset, (point,), arms
@@ -112,7 +111,7 @@ def test_cli_and_presets_use_the_benchmark_package_and_stable_gpu_ids(tmp_path):
         "vllm", "--preset", "llama31-8b-fp8-1gpu", "--arms", "stock,stock-fp8", "--out", str(tmp_path),
     ])
     assert args.command == "vllm"
-    preset = get_preset(args.preset)
+    preset = load_spec(args.preset).preset
     assert preset.gpu_id == "rtx-pro-6000"
     assert preset.engine_settings["resident_gpu_memory_utilization"] == 0.40
     assert preset.engine_settings["block_gpu_memory_utilization"] == 0.80
@@ -228,11 +227,12 @@ def test_plan_run_check_and_compare_are_top_level_commands(tmp_path):
 
 
 def test_glm53_keeps_the_verified_vllm_scheduler_default_and_runs_eager():
-    preset = get_preset("glm53-fp8-8gpu")
+    preset = load_spec("glm53-fp8-8gpu").preset
     assert preset.revision == "aca966e4e02791568aa6a4ced368624b3d897f42"
     assert "max_num_batched_tokens" not in preset.engine_settings
-    assert effective_eager(preset, requested=False) is True
-    assert get_preset("llama31-8b-fp8-1gpu").engine_settings["max_num_batched_tokens"] == 16_384
+    graphs_off, eager = served(preset, eager=False)
+    assert eager is True and graphs_off.engine_settings["cuda_graphs"] is False
+    assert load_spec("llama31-8b-fp8-1gpu").preset.engine_settings["max_num_batched_tokens"] == 16_384
 
 
 def test_stock_precisions_are_independent_reference_arms():
@@ -259,7 +259,7 @@ def test_graphs_are_refused_for_arms_bound_to_the_build():
     assert build_bound(bound_arm) == ("sampled-proofs:hm96",)
     assert build_bound(resolve_arms("stock")[0]) == ()
     with pytest.raises(ValueError, match="Build"):
-        ProcessEngineFactory(eager=False).create(bound_arm, get_preset("llama31-8b-fp8-1gpu"), resident=True)
+        ProcessEngineFactory(eager=False).create(bound_arm, load_spec("llama31-8b-fp8-1gpu").preset, resident=True)
 
 
 def test_a_dead_engine_process_reports_its_own_error_not_a_connection_reset():
@@ -296,12 +296,12 @@ def test_a_dead_engine_process_reports_its_own_error_not_a_connection_reset():
 def test_local_checkpoint_is_content_bound(tmp_path):
     (tmp_path / "config.json").write_bytes(b"config")
     (tmp_path / "weights.safetensors").write_bytes(b"weights")
-    preset = local_checkpoint(get_preset("llama31-8b-fp8-1gpu"), tmp_path)
+    preset = local_checkpoint(load_spec("llama31-8b-fp8-1gpu").preset, tmp_path)
     assert preset.model == str(tmp_path)
     assert preset.revision is preset.case is None
     assert len(preset.model_digest) == 64
     (tmp_path / "weights.safetensors").write_bytes(b"changed")
-    assert local_checkpoint(get_preset("llama31-8b-fp8-1gpu"), tmp_path).model_digest != preset.model_digest
+    assert local_checkpoint(load_spec("llama31-8b-fp8-1gpu").preset, tmp_path).model_digest != preset.model_digest
 
 
 def test_resident_engines_interleave_arms_rep_by_rep_and_discard_warmups():
@@ -377,9 +377,9 @@ def test_equal_kv_pools_pass_and_are_recorded_in_the_identity():
 
 
 def test_block_mode_pins_one_kv_pool_for_every_arm_of_the_llama_preset():
-    settings = get_preset("llama31-8b-fp8-1gpu").engine_settings
+    settings = load_spec("llama31-8b-fp8-1gpu").preset.engine_settings
     assert settings["block_kv_cache_memory_bytes"] == 56 * 2**30
-    assert "block_kv_cache_memory_bytes" not in get_preset("glm53-fp8-8gpu").engine_settings
+    assert "block_kv_cache_memory_bytes" not in load_spec("glm53-fp8-8gpu").preset.engine_settings
 
 
 def test_result_schema_and_identity_strict_judge():
