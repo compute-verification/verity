@@ -12,7 +12,8 @@ The solutions (Γ, 1/c) of all typings' systems form a subspace; the configurati
 coordinate of 1/c vanishes on it (no coefficients, over any extension field, make every typing's drop 3).
 
     python exact_branch.py LOG           (for each unrescued (S, H) in LOG: the (I, J) no typing rescues, if any)
-    python exact_branch.py --sample SEED TRIALS (the same on 3-sets unrescued on fresh hierarchies of 3×3 and 3×4)
+    python exact_branch.py --sample SEED TRIALS [GRIDS] (the same on 3-sets unrescued on fresh hierarchies of
+                                          GRIDS, default 3x3,3x4)
     python exact_branch.py --rank LOG N TRIALS (Theorem 6.7's bound ⌊w r⌋ per typing against direct ranks)
     python exact_branch.py --climb LOG Q STEPS RESTARTS (hill-climbs branches toward the largest drop every typing allows)
     python exact_branch.py --construct LOG Q (fact (c) at rank ρ <= Q against direct ranks, on built branches)
@@ -172,11 +173,11 @@ def main_exact(path):
           flush=True)
 
 
-def main_sample(seed, trials):
+def main_sample(seed, trials, shapes=((3, 3), (3, 4))):
     """`label_frac.py`'s search for unrescued 3-sets on fresh hierarchies, each then given to `exact`."""
     rng = np.random.default_rng(seed)
     for p in (2, 10007):
-        for shape in ((3, 3), (3, 4)):
+        for shape in shapes:
             cells = [(r, c) for r in range(shape[0]) for c in range(shape[1])]
             count = bad = ones = proved = 0
             for trial in range(trials):
@@ -393,7 +394,8 @@ if __name__ == "__main__":
     if sys.argv[1] == "--check":
         main_check(sys.argv[2], int(sys.argv[3]))
     elif sys.argv[1] == "--sample":
-        main_sample(int(sys.argv[2]), int(sys.argv[3]))
+        main_sample(int(sys.argv[2]), int(sys.argv[3]),
+                    *([tuple(tuple(map(int, g.split("x"))) for g in sys.argv[4].split(","))] if len(sys.argv) > 4 else []))
     elif sys.argv[1] == "--rank":
         main_rank(sys.argv[2], int(sys.argv[3]), int(sys.argv[4]))
     elif sys.argv[1] == "--construct":
