@@ -103,12 +103,13 @@ src = "tools/research/src/research/pods/nebius/runs-via-slot"
 nodes = ["vy-nebius-cpu-1"]
 owner = "infra"
 
-# ---- the shared nodes: how each reaches the other, for a check's twins (`check.py --on auto`, slot.py --twin)
+# ---- the shared nodes: how each reaches the others, for a check's twins (`check.py --on auto`, slot.py --twin); cpu-1's
+# authorized_keys takes the vy-cluster key from n1 and n2 only (from="10.80.0.18,10.80.0.42")
 
 [[file]]
 path = "/etc/vy/peers"
 src = "tools/research/src/research/pods/nebius/peers"
-nodes = ["vy-nebius-1", "vy-nebius-2"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
 owner = "infra"
 
 [[file]]
