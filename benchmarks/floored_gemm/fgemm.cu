@@ -30,6 +30,7 @@
 #include <cuda.h>
 #include <cuda_profiler_api.h>
 #include <cuda_runtime.h>
+#include <cuda_fp8.h>
 #include <nvml.h>
 
 #include <algorithm>
@@ -224,12 +225,39 @@ struct Args {
   int M, N, K, group;
   uint32_t seed;
   int KR;            // receipts over the first KR columns only (0: all K)
+  int batch;         // problems stacked in rows: A (batch M x K), B (batch N x K), U (batch x M x N); 0 is 1
+  uint32_t nzA, nzB; // the fused edit's noise keys (ML's NZ)
 };
+
+// the edit's noise (benchmarks/masked_gemm/egemm.cu): 16 bytes of a row from one hash h, element j's index into
+// S = {5, 7, -5, -7} the 2 bits at 4 (j % 8) + 2 (j / 8) of h; the SWAR add can't carry between bytes, and E4M3 adds in f16
+DEV uint32_t nz_sel(uint32_t h, int w) { return (h >> ((w & 1) * 16 + (w >> 1) * 2)) & 0x3333u; }
+template <bool F8> DEV uint32_t nz_add(uint32_t x, uint32_t h, int w) {
+  const uint32_t sel = nz_sel(h, w);
+  if constexpr (!F8) {
+    const uint32_t n = __byte_perm(0xF9FB0705u, 0, sel), n7 = __byte_perm(0x797B0705u, 0, sel);
+    return ((x & 0x7F7F7F7Fu) + n7) ^ ((x ^ n) & 0x80808080u);
+  } else {
+    // f16 high bytes of 5, 7, -5, -7; a pair's selector puts its two indices at nibbles 1 and 3, zero bytes elsewhere
+    const uint32_t lo = __byte_perm(0xC7C54745u, 0, ((sel & 0x3u) << 4) | ((sel & 0x30u) << 8) | 0x0404u);
+    const uint32_t hi = __byte_perm(0xC7C54745u, 0, ((sel & 0x300u) >> 4) | (sel & 0x3000u) | 0x0404u);
+    __half2_raw a = __nv_cvt_fp8x2_to_halfraw2((__nv_fp8x2_storage_t)(x & 0xFFFF), __NV_E4M3);
+    __half2_raw b = __nv_cvt_fp8x2_to_halfraw2((__nv_fp8x2_storage_t)(x >> 16), __NV_E4M3);
+    __half2 sa = __hadd2(*reinterpret_cast<__half2*>(&a), *reinterpret_cast<const __half2*>(&lo));
+    __half2 sb = __hadd2(*reinterpret_cast<__half2*>(&b), *reinterpret_cast<const __half2*>(&hi));
+    const uint32_t ra = __nv_cvt_halfraw2_to_fp8x2(*reinterpret_cast<__half2_raw*>(&sa), __NV_SATFINITE, __NV_E4M3);
+    const uint32_t rb = __nv_cvt_halfraw2_to_fp8x2(*reinterpret_cast<__half2_raw*>(&sb), __NV_SATFINITE, __NV_E4M3);
+    return (ra & 0xFFFF) | (rb << 16);
+  }
+}
+__host__ __device__ inline uint32_t nz_hash(uint32_t key, uint32_t row, uint32_t k16, uint32_t c16) {
+  return mix32(key ^ mix32(row * k16 + c16));
+}
 
 // TM x BN tile, 8 warps of WM x 32 (MI = WM / 16 row blocks of 16, NI = 4 column blocks of 8); thread 0 also issues
 // every TMA, refilling each slot as the CTA releases it; STAGES stages of 128 bytes of depth (4 atoms); the tail
 // stage holds the peel rows.
-template <int TM, int BN, int WM, int STAGES, bool F8 = false> struct ML {
+template <int TM, int BN, int WM, int STAGES, bool F8 = false, bool NZ = false> struct ML {
   static constexpr int BK = 128, WN = 32, WARPS_M = TM / WM, WARPS_N = BN / WN, NCW = WARPS_M * WARPS_N, NCT = NCW * 32,
                        MI = WM / 16, NI = WN / 8;
   static_assert(NCW == 8 || NCW == 16, "8 or 16 warps");
@@ -246,13 +274,15 @@ template <int TM, int BN, int WM, int STAGES, bool F8 = false> struct ML {
   uint32_t a_off[4], b_off[4];
   // the issuer's place in this CTA's load sequence: tile pt, step pkt of KT (+1 for the tail), slot ps, phase pph
   const Maps* maps;
-  int tiles_m, tiles_n, KT, steps, group, pt, pkt = 0, ps = 0;
+  int tiles_m, tiles_n, KT, steps, group, pt, pkt = 0, ps = 0, batch;
   uint32_t pph = 0;
   bool issuer;
+  // the fused edit: this tile's first rows of the stacked A and B, and the keys
+  uint32_t nz_rowA = 0, nz_rowB = 0, nz_keyA = 0, nz_keyB = 0;
 
-  DEV ML(uint8_t* smem, const Maps* m, int M, int N, int K, int grp, bool tail)
+  DEV ML(uint8_t* smem, const Maps* m, int M, int N, int K, int grp, bool tail, int nb = 1)
       : maps(m), tiles_m(M / TM), tiles_n(N / BN), KT(K / BK), steps(K / BK + tail), group(grp), pt(blockIdx.x),
-        issuer(threadIdx.x == 0) {
+        batch(nb > 0 ? nb : 1), issuer(threadIdx.x == 0) {
     base = (smem_u32(smem) + 1023) & ~1023u;
     bars = base + STAGES * STAGE;
   }
@@ -271,9 +301,12 @@ template <int TM, int BN, int WM, int STAGES, bool F8 = false> struct ML {
   }
   // the issuer's next load, once every thread has released its slot
   DEV void issue() {
-    if (pt >= tiles_m * tiles_n) return;
+    const int per = tiles_m * tiles_n;
+    if (pt >= per * batch) return;
     int tm, tn;
-    raster(pt, tiles_m, tiles_n, group, tm, tn);
+    const int b = pt / per;
+    raster(pt % per, tiles_m, tiles_n, group, tm, tn);
+    tm += b * tiles_m; tn += b * tiles_n;
     mbar_wait(empty(ps), pph ^ 1);
     mbar_expect_tx(full(ps), STAGE);
     if (pkt < KT) {
@@ -405,9 +438,30 @@ template <int TM, int BN, int WM, int STAGES, bool F8 = false> struct ML {
   }
   // atom j of a stage absorbs when a receipt boundary falls just after it
   __host__ __device__ static constexpr bool absorbs(int rs, int j) { return rs != 0 && (rs == 32 || j % 2 == 1); }
+  // the fused edit of slot s, step kt: every thread adds the noise to its 16-byte chunks of the stage (TMA's 128-byte
+  // swizzle: physical chunk c of row r holds logical chunk c ^ (r % 8)), then the CTA meets before any ldmatrix
+  DEV void edit(int kt) const {
+    if constexpr (NZ) {
+      const uint32_t sb = stage(s), k16 = KT * (BK / 16);
+#pragma unroll
+      for (int i = 0; i < (int)(STAGE / 16) / NCT; i++) {
+        const int c = threadIdx.x + i * NCT;
+        const bool isA = c < (int)(A_BYTES / 16);
+        const int cc = isA ? c : c - (int)(A_BYTES / 16), row = cc >> 3, lc = (cc & 7) ^ (row & 7);
+        const uint32_t h = nz_hash(isA ? nz_keyA : nz_keyB, (isA ? nz_rowA : nz_rowB) + row, k16, kt * (BK / 16) + lc);
+        const uint32_t addr = sb + c * 16;
+        uint32_t v0, v1, v2, v3;
+        asm volatile("ld.shared.v4.u32 {%0, %1, %2, %3}, [%4];" : "=r"(v0), "=r"(v1), "=r"(v2), "=r"(v3) : "r"(addr));
+        v0 = nz_add<F8>(v0, h, 0); v1 = nz_add<F8>(v1, h, 1); v2 = nz_add<F8>(v2, h, 2); v3 = nz_add<F8>(v3, h, 3);
+        asm volatile("st.shared.v4.u32 [%0], {%1, %2, %3, %4};" :: "r"(addr), "r"(v0), "r"(v1), "r"(v2), "r"(v3));
+      }
+      asm volatile("fence.proxy.async.shared::cta;" ::: "memory");
+      __syncthreads();
+    }
+  }
   template <int RS, int KIND, bool FIRST, bool LAST>
   DEV void stage_body(int (&acc)[MI][NI][4], St (&ch)[NCH<KIND>], const uint32_t (&kr)[NK<KIND>], uint32_t (&fa)[2][MI][4],
-                      uint32_t (&fb)[2][NI][2]) {
+                      uint32_t (&fb)[2][NI][2], int kt = 0) {
     const uint32_t sb = stage(s), done = empty(s);
     load(fa[1], fb[1], sb, 1);
     mma<FIRST, absorbs(RS, 0), KIND>(acc, ch, kr, fa[0], fb[0]);
@@ -418,6 +472,7 @@ template <int TM, int BN, int WM, int STAGES, bool F8 = false> struct ML {
     advance();
     if (!LAST) {
       mbar_wait_warp(full(s), ph);
+      edit(kt + 1);
       load(fa[0], fb[0], stage(s), 0);
     }
     mma<false, absorbs(RS, 3), KIND>(acc, ch, kr, fa[1], fb[1]);
@@ -429,20 +484,25 @@ template <int TM, int BN, int WM, int STAGES, bool F8 = false> struct ML {
     const int KT = K / BK, KRT = KR > 0 ? min(KR / BK, KT) : KT;
     uint32_t fa[2][MI][4], fb[2][NI][2];
     mbar_wait_warp(full(s), ph);
+    edit(0);
     load(fa[0], fb[0], stage(s), 0);
-    stage_body<RS, KIND, true, false>(acc, ch, kr, fa, fb);
+    if (KT == 1) {
+      stage_body<RS, KIND, true, true>(acc, ch, kr, fa, fb, 0);
+      return;
+    }
+    stage_body<RS, KIND, true, false>(acc, ch, kr, fa, fb, 0);
     if constexpr (RS == 0) {
 #pragma unroll 1
-      for (int kt = 1; kt < KT - 1; kt++) stage_body<RS, KIND, false, false>(acc, ch, kr, fa, fb);
-      stage_body<RS, KIND, false, true>(acc, ch, kr, fa, fb);
+      for (int kt = 1; kt < KT - 1; kt++) stage_body<RS, KIND, false, false>(acc, ch, kr, fa, fb, kt);
+      stage_body<RS, KIND, false, true>(acc, ch, kr, fa, fb, KT - 1);
     } else {
       const int e1 = min(KRT, KT - 1);
 #pragma unroll 1
-      for (int kt = 1; kt < e1; kt++) stage_body<RS, KIND, false, false>(acc, ch, kr, fa, fb);
+      for (int kt = 1; kt < e1; kt++) stage_body<RS, KIND, false, false>(acc, ch, kr, fa, fb, kt);
 #pragma unroll 1
-      for (int kt = max(e1, 1); kt < KT - 1; kt++) stage_body<0, KIND, false, false>(acc, ch, kr, fa, fb);
-      if (KRT >= KT) stage_body<RS, KIND, false, true>(acc, ch, kr, fa, fb);
-      else stage_body<0, KIND, false, true>(acc, ch, kr, fa, fb);
+      for (int kt = max(e1, 1); kt < KT - 1; kt++) stage_body<0, KIND, false, false>(acc, ch, kr, fa, fb, kt);
+      if (KRT >= KT) stage_body<RS, KIND, false, true>(acc, ch, kr, fa, fb, KT - 1);
+      else stage_body<0, KIND, false, true>(acc, ch, kr, fa, fb, KT - 1);
     }
   }
   // the peel: U = C - 256 (E_A W_hi^T + V_hi E_B^T) - (E_A W_lo^T + V_lo E_B^T), the tail stage's four atoms
@@ -474,11 +534,14 @@ template <int TM, int BN, int WM, int STAGES, bool F8 = false> struct ML {
   }
 };
 
-template <int TM, int BN, int WM, int STAGES, bool TAIL, int RS, int KIND, bool F8 = false> DEV void gemm_body(const Args& a) {
-  using L = ML<TM, BN, WM, STAGES, F8>;
+template <int TM, int BN, int WM, int STAGES, bool TAIL, int RS, int KIND, bool F8 = false, bool NZ = false>
+DEV void gemm_body(const Args& a) {
+  using L = ML<TM, BN, WM, STAGES, F8, NZ>;
   constexpr int MI = L::MI, NI = L::NI;
   extern __shared__ __align__(1024) uint8_t smem[];
-  L ml(smem, a.maps, a.M, a.N, a.K, a.group, TAIL);
+  const int nb = a.batch > 0 ? a.batch : 1;
+  L ml(smem, a.maps, a.M, a.N, a.K, a.group, TAIL, nb);
+  ml.nz_keyA = a.nzA; ml.nz_keyB = a.nzB;
   ml.init(threadIdx.x);
   const int warp = threadIdx.x / 32, lane = threadIdx.x % 32;
   ml.prologue();
@@ -487,10 +550,12 @@ template <int TM, int BN, int WM, int STAGES, bool TAIL, int RS, int KIND, bool 
   const int wm = warp / L::WARPS_N, wn = warp % L::WARPS_N, g = lane >> 2, q = lane & 3, ctid = threadIdx.x;
   uint32_t kr[L::template NK<KIND>];
   L::template keys<KIND>(kr, lane);
-  for (int t = blockIdx.x; t < tiles_m * tiles_n; t += gridDim.x) {
+  for (int t = blockIdx.x; t < tiles_m * tiles_n * nb; t += gridDim.x) {
     int tm, tn;
-    raster(t, tiles_m, tiles_n, a.group, tm, tn);
-    const uint32_t tile_id = tm * tiles_n + tn;
+    const int bi = t / (tiles_m * tiles_n);
+    raster(t % (tiles_m * tiles_n), tiles_m, tiles_n, a.group, tm, tn);
+    const uint32_t tile_id = bi * tiles_m * tiles_n + tm * tiles_n + tn;
+    ml.nz_rowA = (bi * tiles_m + tm) * TM; ml.nz_rowB = (bi * tiles_n + tn) * BN;
     St ch[NCH<KIND>];
 #pragma unroll
     for (int e = 0; e < NCH<KIND>; e++) {
@@ -509,7 +574,7 @@ template <int TM, int BN, int WM, int STAGES, bool TAIL, int RS, int KIND, bool 
     for (int mi = 0; mi < MI; mi++)
 #pragma unroll
       for (int ni = 0; ni < NI; ni++) {
-        int* p = a.U + (size_t)(row0 + 16 * mi) * a.N + col0 + 8 * ni;
+        int* p = a.U + (size_t)bi * a.M * a.N + (size_t)(row0 + 16 * mi) * a.N + col0 + 8 * ni;
         *reinterpret_cast<int2*>(p) = make_int2(acc[mi][ni][0], acc[mi][ni][1]);
         *reinterpret_cast<int2*>(p + (size_t)8 * a.N) = make_int2(acc[mi][ni][2], acc[mi][ni][3]);
       }

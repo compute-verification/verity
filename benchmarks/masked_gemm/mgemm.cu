@@ -15,7 +15,9 @@
 //   mgemm gate DIR M N K SEED        every arm at one small shape, inputs and outputs to DIR for mref.py
 //   mgemm bench REPS SHAPE...        interleaved timing, one JSON line a shape (SHAPE = name:m:n:k); MG_ARMS selects arms
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a mgemm.cu -lcuda -lcublasLt -lnvidia-ml
+#ifndef FG_LIB
 #define FG_LIB
+#endif
 #include "../floored_gemm/fgemm.cu"
 
 #include <cuda_fp8.h>
@@ -244,7 +246,7 @@ static void ltg_run(const LtG& L, cudaStream_t st) {
   CL(cublasLtMatmul(g_lt, L.op, al, L.B, L.la, L.A, L.lb, be, L.D, L.ld, L.D, L.ld, &L.algo, g_ws, g_wsz, st));
 }
 static LtG ltg(int fmt, int m, int n, int kk, int lda, int ldb, int ldd, const void* A, const void* B, void* D, int beta,
-               cudaStream_t st) {
+               cudaStream_t st, int batch = 1) {
   LtG L;
   L.A = A; L.B = B; L.D = D; L.fmt = fmt; L.beta = beta;
   const cudaDataType_t in = fmt == I8 ? CUDA_R_8I : CUDA_R_8F_E4M3, out = fmt == I8 ? CUDA_R_32I : CUDA_R_32F;
@@ -255,6 +257,13 @@ static LtG ltg(int fmt, int m, int n, int kk, int lda, int ldb, int ldd, const v
   CL(cublasLtMatrixLayoutCreate(&L.la, in, kk, n, ldb));
   CL(cublasLtMatrixLayoutCreate(&L.lb, in, kk, m, lda));
   CL(cublasLtMatrixLayoutCreate(&L.ld, out, n, m, ldd));
+  if (batch > 1) {   // problems stacked in rows, as fgemm.cu's Args batch
+    const int64_t sa = (int64_t)n * ldb, sb = (int64_t)m * lda, sd = (int64_t)m * ldd;
+    for (auto [lay, stride] : {std::pair{L.la, sa}, std::pair{L.lb, sb}, std::pair{L.ld, sd}}) {
+      CL(cublasLtMatrixLayoutSetAttribute(lay, CUBLASLT_MATRIX_LAYOUT_BATCH_COUNT, &batch, sizeof batch));
+      CL(cublasLtMatrixLayoutSetAttribute(lay, CUBLASLT_MATRIX_LAYOUT_STRIDED_BATCH_OFFSET, &stride, sizeof stride));
+    }
+  }
   cublasLtMatmulPreference_t pref;
   CL(cublasLtMatmulPreferenceCreate(&pref));
   CL(cublasLtMatmulPreferenceSetAttribute(pref, CUBLASLT_MATMUL_PREF_MAX_WORKSPACE_BYTES, &g_wsz, sizeof g_wsz));
@@ -680,6 +689,7 @@ static int mbench(int reps, const std::vector<std::string>& shapes) {
   return 0;
 }
 
+#ifndef MG_LIB
 int main(int argc, char** argv) {
   CL(cublasLtCreate(&g_lt));
   CK(cudaMalloc(&g_ws, g_wsz));
@@ -691,3 +701,4 @@ int main(int argc, char** argv) {
   fprintf(stderr, "usage: mgemm gate DIR M N K SEED | bench REPS name:m:n:k...\n");
   return 2;
 }
+#endif
