@@ -36,6 +36,9 @@ pencil's rank drops, and the case split for three directions.
 Part 15: the exhaustive GF(3) search for the rest of d = 2 (merges_gf3_search.py): its symmetries permute the D-cells
 and fix (0, 0), the first words' orbits are all of cell (0, 0)'s helpful words, the helpful set agrees with ranks,
 and on 2 x 2 at L = 2 every space in which all four directions help saves <= 2L, with totals re-checked by ranks.
+Part 16: d*L for two words on two D-rows in every case: the links split into at most two groups whose common-label
+certificates (labels from ker B of the group) have gaps summing to <= 2, on every star-colored pattern up to 2 x 4 and
+on pencils, with the words cancelling in Psi.
 """
 
 import random
@@ -1854,9 +1857,150 @@ def part15(rng):
           f"80 totals re-checked by ranks, the histogram reproduced in integer arithmetic: ok")
 
 
+def direction(beta, p):
+    """The point of P^1(F_p) of a nonzero beta in F_p^2, normalized."""
+    b = [int(x) % p for x in beta]
+    inv = pow(next(x for x in b if x), p - 2, p)
+    return tuple(x * inv % p for x in b)
+
+
+def group_gap(links, betas, idx, p):
+    """The common-label certificate on the links idx (cells (D-row, D-column) of a two-D-row grid): labels g_t, the
+    columns of a basis of ker B_idx, cancel both words; P has one column per D-column (both of its links' labels
+    stacked). Returns (|idx| - rank P, the labels, P): the links of idx save at most L times the first."""
+    k = len(idx)
+    if not k:
+        return 0, None, None
+    B = np.array([betas[t] for t in idx], dtype=np.int64).T % p
+    U = nullspace(B, k, p)
+    assert not (B @ U.T % p).any(), "labels do not cancel the words"
+    P = np.zeros((2 * len(U), max(links[t][1] for t in idx) + 1), dtype=np.int64)
+    for n, t in enumerate(idx):
+        R, C = links[t]
+        P[R * len(U):(R + 1) * len(U), C] += U[:, n]
+    return k - (rank(P % p, p) if len(U) else 0), U, P % p
+
+
+def two_row_split(links, betas, p):
+    """The proof's split of links in two D-rows into at most two groups whose gaps sum to <= 2."""
+    rows = [[t for t, (R, _) in enumerate(links) if R == i] for i in (0, 1)]
+    dirs = [direction(b, p) for b in betas]
+    r = [min(2, len({dirs[t] for t in rows[i]})) for i in (0, 1)]
+    at = {c: t for t, c in enumerate(links)}
+    shared = [C for (R, C) in links if R == 0 and (1, C) in at]
+    if min(r) == 0 or (r == [2, 2] and len(shared) <= 2):
+        return "one group", [list(range(len(links)))]
+    if r == [1, 1]:
+        return "a row each", rows
+    if r == [2, 2]:
+        def critical(t, i):
+            return len({dirs[u] for u in rows[i] if u != t}) < 2
+        C = next(C for C in shared if not critical(at[(0, C)], 0) and not critical(at[(1, C)], 1))
+        s, t = at[(0, C)], at[(1, C)]
+        return "both rows rich", [[u for u in rows[0] if u != s] + [t], [u for u in rows[1] if u != t] + [s]]
+    i = 0 if r[0] == 1 else 1
+    alpha = dirs[rows[i][0]]
+    for C in shared:
+        s, t = at[(i, C)] if i == 0 else at[(1, C)], at[(1, C)] if i == 0 else at[(0, C)]
+        if dirs[t] != alpha:
+            return "one row one direction", [rows[1 - i] + [s], [u for u in rows[i] if u != s]]
+    assert len(shared) <= 1, "a direction on both D-rows outside one D-column: its cells are not a star"
+    return "one group", [list(range(len(links)))]
+
+
+def tau(dirs_S, dirs_T):
+    r = [min(2, len(set(x))) for x in (dirs_S + dirs_T, dirs_S, dirs_T)]
+    return 2 * r[0] - r[1] - r[2]
+
+
+def part16(rng):
+    """d*L at d = 2 on two D-rows, for every cell pattern and every field. Links (one per helped cell, in D-rows 0
+    and 1) are split into at most two groups; each group's common-label certificate (labels from ker B_group) has gap
+    = coll + def, coll its D-columns holding two of its links. One group if a row is empty or uses one direction
+    with no shared column, or if both rows use two directions and at most two columns are shared (def = 0). Both
+    rows rich with >= 3 shared columns: a row has at most one critical link (its removal leaves one direction), so
+    some shared column C has none; groups row 0 - s_C + t_C and row 1 - t_C + s_C, gap 1 each. One row on one
+    direction alpha: the other row plus s_C for a shared C with t_C off alpha (gap 1), and the rest (gap 1)."""
+    import itertools
+    kinds = {}
+    exhaustive = tight = 0
+    pts7 = [(1, a) for a in range(7)] + [(0, 1)]
+    for Q in range(1, 5):
+        grid = [(R, C) for C in range(Q) for R in (0, 1)]
+        for mask in itertools.product((0, 1), repeat=2 * Q):
+            cells = [g for g, m in zip(grid, mask) if m]
+            if any(all((R, C) not in cells for R in (0, 1)) for C in range(Q)):
+                continue
+            for colors in itertools.product(range(min(len(cells), 5)), repeat=len(cells)):
+                if colors[0] or any(c > max(colors[:n], default=-1) + 1 for n, c in enumerate(colors)):
+                    continue
+                if any(colors[a] == colors[b] and cells[a][0] != cells[b][0] and cells[a][1] != cells[b][1]
+                       for a in range(len(cells)) for b in range(a)):
+                    continue
+                dirs = rng.sample(pts7, max(colors) + 1)
+                scalars = [rng.randrange(1, 7) for _ in colors]
+                betas = [(s * dirs[c][0] % 7, s * dirs[c][1] % 7) for c, s in zip(colors, scalars)]
+                if len(set(colors)) < 2:
+                    continue
+                kind, groups = two_row_split(cells, betas, 7)
+                gaps = [group_gap(cells, betas, g, 7)[0] for g in groups]
+                assert sum(gaps) <= 2, f"two-row split leaves gap {sum(gaps)} > 2 ({kind})"
+                for g, gap in zip(groups, gaps):
+                    cols = [cells[t][1] for t in g]
+                    if len(cols) == len(set(cols)):
+                        S = [direction(betas[t], 7) for t in g if cells[t][0] == 0]
+                        T = [direction(betas[t], 7) for t in g if cells[t][0] == 1]
+                        assert gap == tau(S, T), "a group without shared columns has gap != tau"
+                kinds[kind] = kinds.get(kind, 0) + 1
+                exhaustive += 1
+                tight += sum(gaps) == 2
+    pencils = saved_max = 0
+    for (Q, L, p, trials) in ((3, 2, 5, 80), (4, 2, 7, 80), (4, 2, 3, 60), (3, 3, 7, 25)):
+        shape = Shape(2, Q, L, L)
+        lams = [(1, a) for a in range(p)] + [(0, 1)]
+        for _ in range(trials):
+            Z1, Z2 = two_row_pair(shape, rng, p)
+            links, betas, ranks = [], [], []
+            for c in [(i, j) for i in range(2) for j in range(Q)]:
+                r, lam, b = min((rank((shape.D(c, 0) - b * (lam[0] * Z1 + lam[1] * Z2)) % p, p), lam, b)
+                                for lam in lams for b in range(1, p))
+                if r < L:
+                    links.append(c)
+                    betas.append((b * lam[0] % p, b * lam[1] % p))
+                    ranks.append(r)
+            if len({direction(b, p) for b in betas}) < 2:
+                continue
+            for a in range(len(links)):
+                for b in range(a):
+                    if direction(betas[a], p) == direction(betas[b], p):
+                        assert links[a][0] == links[b][0] or links[a][1] == links[b][1], "a direction's cells are not a star"
+            kind, groups = two_row_split(links, betas, p)
+            total_gap = 0
+            for g in groups:
+                gap, U, P = group_gap(links, betas, g, p)
+                total_gap += gap
+                if U is None or not len(U):
+                    continue
+                Psi_DW = sum(np.kron(U[:, n][:, None], (shape.D(links[t], 0) - betas[t][0] * Z1 - betas[t][1] * Z2) % p)
+                             for n, t in enumerate(g)) % p
+                Psi_D = sum(np.kron(U[:, n][:, None], shape.D(links[t], 0)) for n, t in enumerate(g)) % p
+                assert np.array_equal(Psi_D, Psi_DW), "the words do not cancel in Psi"
+                assert rank(Psi_D, p) == L * rank(P, p), "rank Psi != L rank P"
+                assert sum(ranks[links.index(links[t])] for t in g) >= rank(Psi_D, p), "subadditivity fails"
+            saved = sum(L - r for r in ranks)
+            assert saved <= L * total_gap <= 2 * L, "two D-rows save more than 2L"
+            saved_max = max(saved_max, saved)
+            pencils += 1
+    print(f"[two D-rows, d = 2, all cases] {exhaustive} star-colored patterns on 2 x Q (Q <= 4, <= 5 directions, "
+          f"random points of P^1(GF(7)) and scalars): the split's gaps sum to <= 2 ({tight} at 2), a group without "
+          f"shared columns has gap tau: ok, by case {kinds}; {pencils} pencils on 2 x 3, 2 x 4 (GF(3), GF(5), "
+          f"GF(7), L = 2, 3): helped cells per direction are stars, the words cancel in Psi, rank Psi = L rank P, "
+          f"savings <= L * (sum of gaps) <= 2L: ok (largest {saved_max})")
+
+
 if __name__ == "__main__":
     rng = random.Random(20261015)
-    parts = sys.argv[1:] or ["1", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"]
+    parts = sys.argv[1:] or ["1", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"]
     if "1" in parts:
         part1_2(rng)
     if "3" in parts:
@@ -1885,3 +2029,5 @@ if __name__ == "__main__":
         part14(rng)
     if "15" in parts:
         part15(rng)
+    if "16" in parts:
+        part16(rng)
