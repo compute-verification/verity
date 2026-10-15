@@ -9,6 +9,8 @@
 #          its first 200 kernels (every kernel kind, ~13 layers), with a 6 GiB KV cache so kernel replay's memory backup
 #          stays on the device (at 0.85 it goes to host memory, ~40 s a kernel: r20261015-042637-c9be)
 #   ncu_prefill (not default): the same for one eager 2,048-token prefill step
+#   phi    (not default) lease 1: phi_probe.cu, a keyed ARX receipt step over register-resident E4M3 mma.sync accumulators
+#          at commit strides L = 32 / 64 / 128 / 256 (gated); with its SASS and an opcode count per kernel
 # Timeouts run in the foreground so `research cancel` reaches the GPU process.
 # Untimed diagnostic (tier 2a): one leased GPU, the fill queue keeps running beside it.
 set -euo pipefail
@@ -34,6 +36,17 @@ if [[ " $STAGES " == *" micro "* || " $STAGES " == *" ncu "* ]]; then
   stamp "build hm96_rows.cubin"
   nice -n 19 "$CUDA/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -cubin -o "$d/hm96_rows.cubin" \
     "$ROOT/benchmarks/pouw/served_zk/hm96_rows.cu" 2> "$OUT/nvcc-rows.txt"
+fi
+if [[ " $STAGES " == *" phi "* ]]; then
+  stamp "build phi_probe"
+  nice -n 19 "$CUDA/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -o "$d/phi_probe" "$S/phi_probe.cu" \
+    2> "$OUT/nvcc-phi.txt"
+  "$CUDA/bin/cuobjdump" -sass "$d/phi_probe" > "$d/phi-sass.txt"
+  gzip -c "$d/phi-sass.txt" > "$OUT/phi-sass.txt.gz"
+  awk '/Function :/ { f = $3; next }
+       match($0, /\/\*[0-9a-f][0-9a-f][0-9a-f][0-9a-f]+\*\/[ \t]+(@!?U?P[0-9T][ \t]+)?[A-Z][A-Z0-9_]*/) {
+         n = split(substr($0, RSTART, RLENGTH), a, /[ \t]+/); c[f "\t" a[n]]++ }
+       END { for (k in c) print k "\t" c[k] }' "$d/phi-sass.txt" | sort > "$OUT/phi-sass-opcodes.tsv"
 fi
 
 split() {
@@ -82,9 +95,18 @@ ncu_stage() {
   done
 }
 
+phi() {
+  stamp "phi probe"
+  if timeout --foreground 300 "$d/phi_probe" --ms 60 --reps 5 > "$OUT/phi-probe.json" 2> "$OUT/phi-probe.err"; then
+    stamp "phi probe ok"
+  else
+    stamp "phi probe FAILED rc=$?"
+  fi
+}
+
 leased() {
   stamp "lease for: $*"
-  gpu-lease 1 --wait --max-min 30 -- bash -c "$(declare -f stamp split micro ncu_stage); $(declare -p OUT d S PY MODEL REV NCU METRICS); $*" \
+  gpu-lease 1 --wait --max-min 30 -- bash -c "$(declare -f stamp split micro ncu_stage phi); $(declare -p OUT d S PY MODEL REV NCU METRICS); $*" \
     || stamp "lease for '$*' FAILED rc=$?"
 }
 [[ " $STAGES " == *" split "* ]] && leased split "'bf16 eager'" "'fp8 eager'" "'bf16 graphs'" "'fp8 graphs'"
@@ -92,6 +114,7 @@ leased() {
 [[ " $STAGES " == *" micro "* ]] && leased micro
 [[ " $STAGES " == *" ncu "* ]] && leased ncu_stage "'bf16 decode'" "'fp8 decode'"
 [[ " $STAGES " == *" ncu_prefill "* ]] && leased ncu_stage "'fp8 prefill2048'" "'bf16 prefill2048'"
+[[ " $STAGES " == *" phi "* ]] && leased phi
 
 for rep in "$d"/ncu-*.ncu-rep; do
   [ -f "$rep" ] || continue
