@@ -15,8 +15,9 @@
 // 8 when A == B), 16 steps a chain per outer round. Integer chains are coupled within their half (each step reads two other
 // chains) so no step can be folded into the next; floating-point and load chains are self-chains. A pair in one instruction
 // stream ("a+b") runs at the slower op's pace, since a warp issues in order. Kernel <A, B, split> ("a|b") gives warps 0-3 of
-// each block op A on all 8 chains and warps 4-7 op B, and times each half by its own last warp: whether the two run beside
-// each other ("a|none" is A alone on half the warps). Gates (exit 3, before any rate): two launches agree, and thread 0's
+// each block op A on all 8 chains and warps 4-7 op B, B's round count scaled by the two ops' rates alone ("a|none", A on
+// half the warps) so both halves end together, and times each half by its own last warp: whether the two run beside each
+// other. Gates (exit 3, before any rate): two launches agree, and thread 0's
 // chains equal a host recomputation for every op but hfma2, bfma2, prmt and cvt8. The job writes the SASS opcode count of
 // each kernel beside the rates, which is what says one source op is one instruction.
 //
@@ -115,7 +116,7 @@ constexpr int WARPS = THREADS / 32, CLK = 1 + WARPS;
 
 template <int A, int B, bool SPLIT>
 __global__ void __launch_bounds__(THREADS, 4)
-    rates(const uint32_t* __restrict__ in, uint32_t* __restrict__ out, long long* __restrict__ clk, int outer) {
+    rates(const uint32_t* __restrict__ in, uint32_t* __restrict__ out, long long* __restrict__ clk, int outer, int outer_b) {
     constexpr bool TABLE = tabled(A) || tabled(B);
     __shared__ uint32_t tbl[TABLE ? TBL : 1];
     const int tid = blockIdx.x * blockDim.x + threadIdx.x, warp = threadIdx.x / 32;
@@ -131,7 +132,7 @@ __global__ void __launch_bounds__(THREADS, 4)
     const long long t0 = clock64();
     if (!SPLIT) run<A, B>(x, f, tbl, outer);
     else if (!second) run<A, A>(x, f, tbl, outer);
-    else run<B, B>(x, f, tbl, outer);
+    else run<B, B>(x, f, tbl, outer_b);
     const long long t1 = clock64();
     uint32_t v = 0;
 #pragma unroll
@@ -172,7 +173,7 @@ struct Kernel {
     std::string name;
     int a, b;
     bool split;
-    void (*fn)(const uint32_t*, uint32_t*, long long*, int);
+    void (*fn)(const uint32_t*, uint32_t*, long long*, int, int);
     std::vector<uint32_t> (*chains)(const std::vector<uint32_t>&, int);
 };
 
@@ -184,8 +185,10 @@ static const Kernel KERNELS[] = {
     K2(FFMA, IADD3), K2(FFMA, IMAD), K2(IADD3, IMAD), K2(FFMA, DP4A), K2(IADD3, DP4A), K2(FFMA, HFMA2),
     K2(IADD3, HFMA2), K2(FFMA, PRMT), K2(IADD3, PRMT), K2(FFMA, CVT8), K2(IADD3, CVT8), K2(FFMA, LDS),
     K2(DP4A, LDS), K2(FFMA, LDSC),
-    KS(FFMA, NONE), KS(IADD3, NONE), KS(DP4A, NONE), KS(LDS, NONE), KS(LDSC, NONE),
-    KS(FFMA, IADD3), KS(FFMA, DP4A), KS(IADD3, IMAD), KS(FFMA, LDS), KS(FFMA, LDSC), KS(DP4A, LDSC), KS(IADD3, LDSC),
+    KS(FFMA, NONE), KS(IADD3, NONE), KS(IMAD, NONE), KS(DP4A, NONE), KS(PRMT, NONE), KS(CVT8, NONE), KS(LDS, NONE),
+    KS(LDSC, NONE),
+    KS(FFMA, IADD3), KS(FFMA, IMAD), KS(FFMA, DP4A), KS(IADD3, IMAD), KS(FFMA, PRMT), KS(FFMA, CVT8), KS(IADD3, CVT8),
+    KS(FFMA, LDS), KS(FFMA, LDSC), KS(DP4A, LDSC), KS(IADD3, LDSC),
 };
 
 struct Launch {
@@ -193,7 +196,7 @@ struct Launch {
     std::vector<uint32_t> out;
 };
 
-static Launch launch(const Kernel& k, const uint32_t* d_in, int grid, int outer) {
+static Launch launch(const Kernel& k, const uint32_t* d_in, int grid, int outer, int outer_b) {
     const size_t nout = (size_t)grid * THREADS + 2 * CH;
     uint32_t* d_out;
     long long* d_clk;
@@ -204,7 +207,7 @@ static Launch launch(const Kernel& k, const uint32_t* d_in, int grid, int outer)
     CK(cudaEventCreate(&e0));
     CK(cudaEventCreate(&e1));
     CK(cudaEventRecord(e0));
-    k.fn<<<grid, THREADS>>>(d_in, d_out, d_clk, outer);
+    k.fn<<<grid, THREADS>>>(d_in, d_out, d_clk, outer, outer_b);
     CK(cudaEventRecord(e1));
     CK(cudaGetLastError());
     CK(cudaEventSynchronize(e1));
@@ -259,6 +262,7 @@ int main(int argc, char** argv) {
            "\"steps\": %d, \"threads_per_block\": %d, \"kernels\": [\n",
            prop.name, sms, CH, STEPS, THREADS);
     bool first = true;
+    double alone[NONE + 1] = {};  // each op's rate on half the warps ("a|none"), which sets a split pair's B rounds
     for (const Kernel& k : KERNELS) {
         if (!only.empty() && only.find("," + k.name + ",") == std::string::npos) continue;
         int bps = 0;
@@ -267,10 +271,12 @@ int main(int argc, char** argv) {
         CK(cudaFuncGetAttributes(&attr, k.fn));
         const int grid = sms * std::min(bps, blocks);
         const size_t nthreads = (size_t)grid * THREADS;
-        Launch cal = launch(k, d_in, grid, 64);
+        const double ratio = k.split && k.b != NONE && alone[k.a] > 0 && alone[k.b] > 0 ? alone[k.b] / alone[k.a] : 1.0;
+        Launch cal = launch(k, d_in, grid, 64, std::max(1, (int)(64 * ratio)));
         const int outer = std::max(64, (int)(64 * target_ms / std::max(cal.ms, 1e-3)));
+        const int outer_b = std::max(1, (int)(outer * ratio));
         std::vector<Launch> runs;
-        for (int r = 0; r < reps; r++) runs.push_back(launch(k, d_in, grid, outer));
+        for (int r = 0; r < reps; r++) runs.push_back(launch(k, d_in, grid, outer, outer_b));
         for (int r = 1; r < reps; r++)
             if (runs[r].out != runs[0].out) {
                 fprintf(stderr, "GATE %s: launches disagree\n", k.name.c_str());
@@ -289,11 +295,12 @@ int main(int argc, char** argv) {
         const bool pair = k.a != k.b, has_b = pair && k.b != NONE;
         // ops a thread of A (and of B) runs, and the threads that run them
         const double per_thread = (double)outer * STEPS * (pair && !k.split ? CH / 2 : CH);
+        const double per_thread_b = per_thread * outer_b / outer;
         const double threads = k.split ? nthreads / 2.0 : (double)nthreads;
         std::vector<double> ra, rb, mhz, ms, overlap;
         for (const Launch& r : runs) {
             ra.push_back(threads * per_thread / (sms * r.span_a));
-            rb.push_back(has_b ? threads * per_thread / (sms * r.span_b) : 0.0);
+            rb.push_back(has_b ? threads * per_thread_b / (sms * r.span_b) : 0.0);
             mhz.push_back(std::max(r.span_a, r.span_b) / (r.ms * 1e3));
             overlap.push_back(std::min(r.span_a, r.span_b) / std::max(r.span_a, r.span_b));
             ms.push_back(r.ms);
@@ -303,11 +310,12 @@ int main(int argc, char** argv) {
             return v[v.size() / 2];
         };
         printf("%s {\"kernel\": \"%s\", \"a\": \"%s\", \"b\": \"%s\", \"split\": %s, \"regs\": %d, \"blocks_per_sm\": %d, "
-               "\"grid\": %d, \"outer\": %d, \"ms\": %.4f, \"sm_mhz\": %.1f, \"a_per_sm_clk\": %.2f, \"b_per_sm_clk\": %.2f, "
+               "\"grid\": %d, \"outer\": %d, \"outer_b\": %d, \"ms\": %.4f, \"sm_mhz\": %.1f, \"a_per_sm_clk\": %.2f, \"b_per_sm_clk\": %.2f, "
                "\"span_overlap\": %.3f, \"host_checked\": %s, \"gate\": \"ok\"}",
                first ? "" : ",\n", k.name.c_str(), OPS[k.a], pair ? OPS[k.b] : "", k.split ? "true" : "false",
-               attr.numRegs, bps, grid, outer, med(ms), med(mhz), med(ra), med(rb), med(overlap),
+               attr.numRegs, bps, grid, outer, outer_b, med(ms), med(mhz), med(ra), med(rb), med(overlap),
                host_checked(k.a) && (k.split || host_checked(k.b)) ? "true" : "false");
+        if (k.split && k.b == NONE) alone[k.a] = med(ra);
         first = false;
         fflush(stdout);
     }
