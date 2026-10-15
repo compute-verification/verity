@@ -171,8 +171,9 @@ def main():
             continue
         per_iter = r["warps"] * r["iters"] / r["cyc_med"]
         overhead = {"IADD3", "ISETP", "BRA", "UIADD3", "UISETP", "NOP"}
-        work = Counter({o: c for o, c in ops.items() if base(o) not in overhead or o1 in ("iadd3",) or o2 in ("iadd3",)})
-        top = work.most_common(4)
+        keep_iadd3 = o1.startswith("iadd3") or o2.startswith("iadd3")
+        work = Counter({o: c for o, c in ops.items() if base(o) not in overhead or (keep_iadd3 and base(o) == "IADD3")})
+        top = work.most_common(4) or ops.most_common(4)
         label = o1 if o1 == o2 else f"{o1}+{o2}"
         if r["warps"] != 32:
             label += f"@{r['warps']}w"

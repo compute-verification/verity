@@ -126,9 +126,8 @@ static int amx(int threads, double seconds) {
     return 0;
   }
   for (int bf16 = 0; bf16 <= 1; bf16++) {
-    int counts[2] = {1, threads};
-    for (int ci = 0; ci < (threads > 1 ? 2 : 1); ci++) {
-      int nt = counts[ci];
+    {
+      int nt = threads;
       long total = 0;
       double secs = 0;
       omp_set_num_threads(nt);
