@@ -7,7 +7,8 @@
 # output that isn't the tool's JSON is. One line per run goes to the journal (journalctl -u vy-store-evict).
 # With $VY_EVICT_SRC (research's unit, store_evict_src.conf: /workspace/research/src) it also deletes the `research run` source
 # trees there recoverable on the node (a ref of $VY_EVICT_ORIGIN, default <root>/git/verity.git) that nothing uses, every hour whatever the mark
-# (`--src-dir`, store/evict.py `evict_src`); the line says how many went and why the rest stayed.
+# (`--src-dir`, store/evict.py `evict_src`); the line says how many went and why the rest stayed. vy-nebius-cpu-1 runs only
+# research's unit, every 30 minutes (store_evict_research.{service,timer}).
 # A tool too old for --src-dir still evicts the rest, and the line says so. Python runs from / so nothing in a writable cwd imports.
 # The node's runs have no private remote, so a fixture whose blob is gone fails its suite whenever the public export lacks it
 # (rec-coins, 11 Oct). Every artifact in `fixtures/artifacts.json` at the $VY_EVICT_KEEP_REFS newest `refs/research/src/*` commits

@@ -1,0 +1,10 @@
+# /etc/systemd/system/vy-store-evict-research.timer on vy-nebius-cpu-1 (`research deploy` installs it): every 30 minutes.
+[Unit]
+Description=research store eviction every 30 minutes
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=30min
+
+[Install]
+WantedBy=timers.target
