@@ -6,6 +6,7 @@ import json
 import random
 
 from verity_vllm.program import compact as K
+from verity_vllm.observe.fold.memory import access_runs
 from verity.ml.circuits.refs import refs_from_json, runs
 
 
@@ -493,6 +494,7 @@ def test_persist_program_writer_is_byte_identical_to_the_generic_conversion(tmp_
         for r in res.accesses:
             r2 = dict(r)
             r2["view"] = generic_view(r2["view"]) if r2.get("view") is not None else None
+            r2["refs"] = access_runs(r2["refs"])
             out.append(json.dumps(RC._jsonable(r2), separators=(",", ":")))
         return out
 

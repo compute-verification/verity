@@ -137,6 +137,15 @@ def geometry_refs(space: str, idx: int, base: int, shape: tuple[int, ...], strid
 
 
 
+
+def access_runs(refs: Refs | list | None) -> list | None:
+    """An access journal entry's refs as `runs()` lists: the fold keeps the `Refs` it read (shared with the instances, where a
+    transposed weight's runs would be one per element); a list is already runs."""
+    from verity.ml.circuits.refs import runs
+
+    return runs(refs) if isinstance(refs, Refs) else refs
+
+
 def address_ordered(view: ViewDesc, refs: Refs) -> tuple[ViewDesc, Refs]:
     """`view` written with `refs` (one producer's leaves base..base+numel in the view's row-major order) as the same element-to-leaf
     map with the axes in decreasing storage stride, so the write covers contiguous address runs: a transposed parameter view

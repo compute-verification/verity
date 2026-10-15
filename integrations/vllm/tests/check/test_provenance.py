@@ -13,6 +13,7 @@ from verity_vllm.observe.events import DispatchEnter, DispatchExit, ViewDesc
 from verity_vllm.observe.fold.fold import fold
 from verity_vllm.observe.fold.views import byte_extent, collapsed_dims, element_runs, row_view
 from verity_vllm.observe.log import LogWriter
+from verity_vllm.observe.fold.memory import access_runs
 from tests.observe import test_fold_synthetic as tfs
 
 M1 = Path(__file__).resolve().parents[2] / "data" / "logs" / "m1.jsonl.gz"
@@ -268,10 +269,10 @@ def test_toy_fold_journal_is_reproduced():
     rep = P.check(r)
     assert rep["status"] == "pass" and rep["n_mismatch"] == 0 and rep["reads"] > 0, rep
     # plant a wrong wire: the last read points at a different producer
-    reads = [a for a in r.accesses if a["kind"] == "read" and a["refs"] and a["refs"][0][0] == "n"]
+    reads = [a for a in r.accesses if a["kind"] == "read" and access_runs(a["refs"]) and access_runs(a["refs"])[0][0] == "n"]
     victim = reads[-1]
-    sp, ix, lo, hi = victim["refs"][0]
-    victim["refs"] = [(sp, ix + 1, lo, hi)] + [tuple(x) for x in victim["refs"][1:]]
+    sp, ix, lo, hi = access_runs(victim["refs"])[0]
+    victim["refs"] = [(sp, ix + 1, lo, hi)] + [tuple(x) for x in access_runs(victim["refs"])[1:]]
     rep = P.check(r)
     assert rep["status"] == "fail" and rep["n_mismatch"] == 1 and rep["mismatches"][0]["seq"] == victim["seq"]
 
