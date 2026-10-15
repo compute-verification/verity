@@ -663,6 +663,48 @@ __global__ void __launch_bounds__(128 * WPS, 1) k_mix(float* out, int iters, Blo
   if (s == 1234.5f) out[0] = s;
 }
 
+// The LP's mix in split warps: warps 0-7 (two a SMSP) run 16 FP8 MMAs and ND one-register IDP.4A an iteration, and
+// WR more warps a SMSP run NR one-register rotates an iteration, so the scheduler, not ptxas, interleaves the pipes.
+template <int ND, int NR, int WR>
+__global__ void __launch_bounds__(128 * (2 + WR), 1) k_lp2(float* out, int iters, BlockClk* rec) {
+  float acc[8][4], f[8];
+  int d[8];
+#pragma unroll
+  for (int r = 0; r < 8; r++) {
+    d[r] = threadIdx.x * 7 + r, f[r] = 0.f;
+#pragma unroll
+    for (int c = 0; c < 4; c++) acc[r][c] = 0.f;
+  }
+  const unsigned a0 = 0x30303030u ^ (threadIdx.x & 7), b0 = 0x28282828u ^ (threadIdx.x & 3);
+  const bool mma_warp = threadIdx.x < 256;
+  __syncthreads();
+  CLK_BEGIN
+  if (mma_warp) {
+    for (int it = 0; it < iters; it++) {
+#pragma unroll
+      for (int q = 0; q < 16; q++) {
+        asm volatile(
+            "mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};"
+            : "+f"(acc[q & 7][0]), "+f"(acc[q & 7][1]), "+f"(acc[q & 7][2]), "+f"(acc[q & 7][3])
+            : "r"(a0), "r"(a0 ^ 1u), "r"(a0 ^ 2u), "r"(a0 ^ 3u), "r"(b0), "r"(b0 ^ 1u));
+#pragma unroll
+        for (int n = (q * ND) / 16; n < ((q + 1) * ND) / 16; n++) filler<6>(d, f, n & 7, 0, 0);
+      }
+    }
+  } else {
+    for (int it = 0; it < iters; it++) {
+#pragma unroll
+      for (int n = 0; n < NR; n++) filler<7>(d, f, n & 7, 0, 0);
+    }
+  }
+  __syncthreads();
+  CLK_END
+  float s = 0.f;
+#pragma unroll
+  for (int r = 0; r < 8; r++) s += acc[r][0] + acc[r][1] + acc[r][2] + acc[r][3] + (float)d[r];
+  if (s == 1234.5f) out[0] = s;
+}
+
 // The first build's probe (MODE bits: 1 dp4a, 2 IMAD, 4 FFMA, 8 LOP3, one of each a chain step), for which ptxas
 // alternated IDP.4A and FFMA one by one. ROLL keeps the iteration loop rolled (8 chains a body).
 template <int MODE, bool ROLL>
@@ -1184,6 +1226,23 @@ static double filler_macs(int form) {
   return form <= 1 || form == 6 ? 4.0 : form == 4 || form == 5 || form == 7 || form == 8 ? 2.0 : 1.0;
 }
 
+template <int ND, int NR, int WR>
+static void run_lp2(int iters) {
+  float* out;
+  CK(cudaMalloc(&out, sizeof(float)));
+  auto launch = [&](BlockClk* rec) { k_lp2<ND, NR, WR><<<g_nsm, 128 * (2 + WR)>>>(out, iters, rec); };
+  Meas m = timed(launch, g_nsm, 5);
+  const double per = 1.0 * iters / m.cyc_med;  // iterations a warp a clock
+  const double t = per * 2 * 16 * 16, dp = per * 2 * ND, ro = per * WR * NR;
+  const double other = (dp * 128 + ro * 64) / 256;
+  printf(
+      "{\"kind\":\"lp2\",\"nd\":%d,\"nr\":%d,\"wr\":%d,\"cyc_per_iter\":%.3f,\"dp4a\":%.4f,\"rot\":%.4f,\"issue\":%.4f,"
+      "\"tensor_share\":%.4f,\"other_share\":%.4f,\"combined_share\":%.4f,\"sm_mhz\":%.1f}\n",
+      ND, NR, WR, m.cyc_med / iters, dp, ro, t / 16 + dp + ro, t, other, t + other, m.mhz);
+  fflush(stdout);
+  CK(cudaFree(out));
+}
+
 template <int NMMA, int ND, int NR, int NF, int NH>
 static void run_lp(int iters) {
   float* out;
@@ -1384,6 +1443,17 @@ int main(int argc, char** argv) {
     run_lp<0, 128, 128, 0, 0>(4096);
     run_lp<0, 128, 0, 128, 0>(4096);
     run_lp<0, 128, 128, 128, 0>(4096);
+  }
+  if (all || what == "lp2") {  // the LP's optimum (8 IDP.4A and 7 rotates a MMA) with the rotates in their own warps
+    run_lp<16, 128, 0, 0, 0>(2048);
+    run_lp2<128, 64, 1>(2048);
+    run_lp2<128, 128, 1>(2048);
+    run_lp2<128, 192, 1>(2048);
+    run_lp2<128, 224, 1>(2048);
+    run_lp2<128, 64, 2>(2048);
+    run_lp2<128, 112, 2>(2048);
+    run_lp2<112, 224, 1>(2048);
+    run_lp2<96, 224, 1>(2048);
   }
   if (all || what == "alt") {  // the first build's probe, unrolled as ptxas likes and rolled
     run_probe1<1, false>("v1 dp4a", 4096);
