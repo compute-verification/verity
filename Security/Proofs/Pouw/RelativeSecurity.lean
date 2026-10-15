@@ -1337,6 +1337,93 @@ def matMachine {price : K → ℕ} {κ κadd : ℝ} (G : MatGates kd price κ κ
   time_add_le := G.time_add_le
   time_sub_le := G.time_sub_le
 
+/-! ### The circuits exist: one GEMM kind per shape -/
+
+/-- A pair of matrices on the wires `Fin (a b + c d)`, row-major (routing only). -/
+def flatPair (a b c d : ℕ) : Circ kd (Mat ℤ a b × Mat ℤ c d) (Fin (a * b + c * d) → ℤ) :=
+  .seq (.pair (.seq .fst (.seq (Circ.uncurry (α := Fin a) (β := Fin b) (V := ℤ)) (.reindex finProdFinEquiv.symm)))
+      (.seq .snd (.seq (Circ.uncurry (α := Fin c) (β := Fin d) (V := ℤ)) (.reindex finProdFinEquiv.symm))))
+    (.seq .join (.reindex finSumFinEquiv.symm))
+
+/-- The wires `Fin (a c)` as an `a × c` matrix (routing only). -/
+def unflat (a c : ℕ) : Circ kd (Fin (a * c) → ℤ) (Mat ℤ a c) :=
+  .seq (.reindex finProdFinEquiv) (Circ.curry (α := Fin a) (β := Fin c) (V := ℤ))
+
+/-- The first matrix read off `flatPair`'s wires. -/
+def leftOf (a b c d : ℕ) (w : Fin (a * b + c * d) → ℤ) : Mat ℤ a b :=
+  fun i k => w (finSumFinEquiv (.inl (finProdFinEquiv (i, k))))
+
+/-- The second matrix read off `flatPair`'s wires. -/
+def rightOf (a b c d : ℕ) (w : Fin (a * b + c * d) → ℤ) : Mat ℤ c d :=
+  fun k j => w (finSumFinEquiv (.inr (finProdFinEquiv (k, j))))
+
+theorem leftOf_flatPair (a b c d : ℕ) (x : Mat ℤ a b × Mat ℤ c d) :
+    leftOf a b c d ((flatPair (kd := kd) a b c d).eval x) = x.1 := by
+  funext i k
+  simp [leftOf, flatPair, Circ.eval]
+
+theorem rightOf_flatPair (a b c d : ℕ) (x : Mat ℤ a b × Mat ℤ c d) :
+    rightOf a b c d ((flatPair (kd := kd) a b c d).eval x) = x.2 := by
+  funext i k
+  simp [rightOf, flatPair, Circ.eval]
+
+/-- The GEMM gate family: one kind per shape for the product, the sum and the difference. -/
+inductive GemmK
+  | mm (a b c : ℕ)
+  | add (a b : ℕ)
+  | sub (a b : ℕ)
+
+/-- Their exact semantics on `flatPair`'s wires, every operand in range. -/
+def gemmKind : GemmK → Kind
+  | .mm a b c => ⟨a * b + b * c, a * c, fun _ => true, fun w o =>
+      (leftOf a b b c w * rightOf a b b c w) (finProdFinEquiv.symm o).1 (finProdFinEquiv.symm o).2⟩
+  | .add a b => ⟨a * b + a * b, a * b, fun _ => true, fun w o =>
+      (leftOf a b a b w + rightOf a b a b w) (finProdFinEquiv.symm o).1 (finProdFinEquiv.symm o).2⟩
+  | .sub a b => ⟨a * b + a * b, a * b, fun _ => true, fun w o =>
+      (leftOf a b a b w - rightOf a b a b w) (finProdFinEquiv.symm o).1 (finProdFinEquiv.symm o).2⟩
+
+/-- Their prices: `κ₀` per multiply-accumulate, `κa` per entry. -/
+def gemmPrice (κ₀ κa : ℕ) : GemmK → ℕ
+  | .mm a b c => κ₀ * (a * b * c)
+  | .add a b => κa * (a * b)
+  | .sub a b => κa * (a * b)
+
+/-- The product circuit: `flatPair`, one `mm` gate, `unflat`. -/
+def gemmMul (a b c : ℕ) : Circ gemmKind (Mat ℤ a b × Mat ℤ b c) (Mat ℤ a c) :=
+  .seq (flatPair a b b c) (.seq (Circ.gate (kd := gemmKind) (.mm a b c)) (unflat a c))
+
+/-- The sum circuit. -/
+def gemmAdd (a b : ℕ) : Circ gemmKind (Mat ℤ a b × Mat ℤ a b) (Mat ℤ a b) :=
+  .seq (flatPair a b a b) (.seq (Circ.gate (kd := gemmKind) (.add a b)) (unflat a b))
+
+/-- The difference circuit. -/
+def gemmSub (a b : ℕ) : Circ gemmKind (Mat ℤ a b × Mat ℤ a b) (Mat ℤ a b) :=
+  .seq (flatPair a b a b) (.seq (Circ.gate (kd := gemmKind) (.sub a b)) (unflat a b))
+
+/-- **The circuits exist**: the GEMM gate family realizes `MatGates` with `κ = κ₀` and `κadd = κa`. -/
+def gemmGates (κ₀ κa : ℕ) : MatGates gemmKind (gemmPrice κ₀ κa) κ₀ κa where
+  mul := gemmMul
+  add := gemmAdd
+  sub := gemmSub
+  eval_mul a b c x := by
+    funext i j
+    simp only [gemmMul, Circ.eval, unflat, gemmKind, Function.comp_apply, Equiv.symm_apply_apply,
+      leftOf_flatPair, rightOf_flatPair, ite_true]
+  eval_add a b x := by
+    funext i j
+    simp only [gemmAdd, Circ.eval, unflat, gemmKind, Function.comp_apply, Equiv.symm_apply_apply,
+      leftOf_flatPair, rightOf_flatPair, ite_true]
+  eval_sub a b x := by
+    funext i j
+    simp only [gemmSub, Circ.eval, unflat, gemmKind, Function.comp_apply, Equiv.symm_apply_apply,
+      leftOf_flatPair, rightOf_flatPair, ite_true]
+  time_mul_le a b c := by
+    simp [gemmMul, Circ.prog, Circ.gates, flatPair, unflat, progOf, timeB, gemmPrice]
+  time_add_le a b := by
+    simp [gemmAdd, Circ.prog, Circ.gates, flatPair, unflat, progOf, timeB, gemmPrice]
+  time_sub_le a b := by
+    simp [gemmSub, Circ.prog, Circ.gates, flatPair, unflat, progOf, timeB, gemmPrice]
+
 end ModelB
 
 end ModelB
