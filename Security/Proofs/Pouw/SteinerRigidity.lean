@@ -7,11 +7,19 @@ The setting of `note:20261015T0416Z-draft-steiner-rigidity-laminar`: matrices ov
 `d(A, B) = rank (A - B)`, and a Steiner tree as a finite tree whose vertices carry matrices, its length the sum over
 its edges of the rank of the difference of the endpoints' labels.
 
-* `BlockRigidity` is Theorem 1 (block rigidity) and `ConjectureA` is its matmul case, both stated as `Prop`s.
-* Proved here: the rank metric's facts; for any connected labelled graph, the column space of the difference of two
-  labels lies in the sum of the edges' column spaces; and from it the merge-proof case (Corollary 6 of the note):
-  targets whose column spaces (or row spaces) are independent cost at least the sum of their ranks. One target, and
-  two targets in distinct cells of a block structure, are corollaries.
+* `BlockRigidity` is Theorem 1 (block rigidity) and `ConjectureA` is its matmul case, both stated as `Prop`s, and
+  both are proved: `blockRigidity` and `conjectureA`.
+* The proof follows the note. Lemma 1 (`treeLaminarDecomposition`): rooting the tree at a vertex labelled `0`, the
+  targets below each edge form a laminar family, and the steps of the edges sum to each target. Lemma 2: the
+  flattening is no longer than the decomposition (`rank_flattening_le`) and, for labels independent within each row
+  and each column of cells, at least the sum of the targets' ranks (`flatteningLowerBound`). Lemma 3 (`labelLemma`):
+  such labels exist for every laminar family, by induction up a binary refinement of it (`Hier`), typing each node
+  by the rule of Claims 3–5 and taking the labels from annihilators (Claims 1, 2). That gives Theorem 1 in coordinate
+  blocks (`blockRigidityCoord`), and an invertible change of coordinates gives it for independent subspaces.
+* Conjecture A: Theorem 1 on the full outputs gives `N³ ≤ length` (`conjectureA_lower`), and a spanning tree of the
+  spider (`0`, then each output cell's chain of prefix targets) has length `N³` (`conjectureA_upper`).
+* Also here: the rank metric's facts, and the merge-proof case (Corollary 6 of the note) for any connected labelled
+  graph: targets whose column spaces (or row spaces) are independent cost at least the sum of their ranks.
 -/
 
 namespace Pouw.SteinerRigidity

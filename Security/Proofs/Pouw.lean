@@ -147,6 +147,7 @@ import Proofs.Pouw.QTree
 import Proofs.Pouw.Reduction
 import Proofs.Pouw.Sampling
 import Proofs.Pouw.Sanity
+import Proofs.Pouw.SteinerRigidity
 import Proofs.Pouw.Theorem1
 import Proofs.Pouw.TileBound.AlignedExact
 import Proofs.Pouw.TileBound.Fp8
