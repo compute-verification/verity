@@ -50,12 +50,19 @@ theorem afterSparse_runSteps_shift {e : ExecHolo} (u : C3Run e) :
     FlockC3.Opening.afterSparse (shiftPts u) (runSteps (shiftPts u)) =
       FlockC3.Opening.afterSparse u (runSteps u) := by
   unfold FlockC3.Opening.afterSparse
-  rw [tape_runSteps, tape_runSteps] <;> rfl
+  rw [tape_runSteps, tape_runSteps]
+  rfl
 
 theorem openingReadAt_shift {st : Flock.Stmt} {hp : HoloParams} (u : C3Run (holoAt st hp)) :
     OpeningReadAt (runSteps (shiftPts u)) (shiftPts u) ↔ OpeningReadAt (runSteps u) u := by
   unfold OpeningReadAt
-  rw [afterSparse_runSteps_shift] <;> rfl
+  rw [afterSparse_runSteps_shift]
+  rfl
+
+theorem head_coinSteps {r : ℕ} {CT : Fin r → Type} (hr : 0 < r) (c : (k : Fin r) → CT k)
+    (cs : List ((k : Fin r) → CT k)) :
+    (FlockVBridge.Family.coinSteps CT 0 (c :: cs)).head? = some ⟨CT ⟨0, hr⟩, c ⟨0, hr⟩⟩ := by
+  simp only [FlockVBridge.Family.coinSteps, hr, ↓reduceDIte, List.singleton_append, List.head?_cons]
 
 section src
 
@@ -80,10 +87,7 @@ theorem repsOfVals_shift
     (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin)) (Lb : (j : Fin S) → (Vs j).Bits) :
     repsOfVals (fun R ω t Lb => shiftPts (stp R ω t Lb)) sh rep vals R ω t Lb =
       shiftPts (repsOfVals stp sh rep vals R ω t Lb) := by
-  first
-  | (simp only [repsOfVals, shiftPts, extraClaims_length]; done)
-  | exact c3Run_ext rfl rfl (funext fun i => by simp only [repsOfVals, shiftPts, extraClaims_length]) rfl rfl rfl
-      rfl rfl rfl rfl rfl rfl
+  simp only [repsOfVals, shiftPts, extraClaims_length]
 
 /-- **The shifted source is the source with its points shifted**, at every input, at a statement with no regions. -/
 theorem tiedSrc_repsOfVals_shift
@@ -104,16 +108,16 @@ theorem pointsFromHistory_of_stageCoins {ish : RecVStar.Inner} {tbl : String} {b
     (h : StageCoins (CT := holoCTs st hp) (t.map Prod.snd) u) : FlockC3.HPort.PointsFromHistory ish tbl bc t u := by
   intro e he
   obtain ⟨_, -, hh, -⟩ := h
-  cases t with
-  | nil => simp at he
-  | cons e' t' =>
-    simp only [List.getElem?_cons_zero, Option.some.injEq] at he
-    subst he
-    have hr : 0 < 1 + (Exec.kindCoinTys (holoKinds (holoAt st hp))).length := by omega
-    simp only [List.map_cons, FlockVBridge.Family.coinSteps, hr, ↓reduceDIte, List.singleton_append,
-      List.head?_cons, Option.some.injEq] at hh
-    have hc := (pointsEncoded_holoMap st hp Cm ish tbl bc hr e'.2).trans hh
-    exact (eq_of_heq (Sigma.mk.inj hc).2).symm
+  obtain ⟨t', rfl⟩ : ∃ t', t = e :: t' := by
+    cases t with
+    | nil => simp at he
+    | cons a t' =>
+      simp only [List.getElem?_cons_zero, Option.some.injEq] at he
+      exact ⟨t', by rw [he]⟩
+  have hr : 0 < 1 + (Exec.kindCoinTys (holoKinds (holoAt st hp))).length := by omega
+  have h0 := head_coinSteps (CT := holoCTs st hp) hr e.2 (t'.map Prod.snd)
+  have hc := (pointsEncoded_holoMap st hp Cm ish tbl bc hr e.2).trans (Option.some.inj (h0.symm.trans hh))
+  exact (eq_of_heq (Sigma.mk.inj hc).2).symm
 
 theorem not_pointsFromHistory_shift {ish : RecVStar.Inner} {tbl : String} {bc : Cm → String → Nat → List UInt8}
     {t : List (Cm × (ℐ).Coin)} {u : C3Run (holoAt st hp)} (ht : t ≠ []) (hm : 0 < (holoAt st hp).cls.mPts)
@@ -127,10 +131,7 @@ theorem not_pointsFromHistory_shift {ish : RecVStar.Inner} {tbl : String} {bc : 
   have h1 := congrFun (congrFun (h e he) 0) ⟨0, hm⟩
   have h2 := congrFun (congrFun (h' e he) 0) ⟨0, hm⟩
   have h3 : u.pts 0 ⟨0, hm⟩ + 1 = u.pts 0 ⟨0, hm⟩ := h2.trans h1.symm
-  first
-  | simpa using h3
-  | exact absurd (add_eq_left.mp h3) one_ne_zero
-  | exact absurd (add_right_eq_self.mp h3) one_ne_zero
+  simp at h3
 
 /-- **The counterexample**: at a statement with no regions and a link point, wherever a consumer's conclusion holds at
 the source `stp` at an accepted outer proof, it fails there at the source with every point shifted, which differs from
@@ -182,7 +183,8 @@ theorem pointsFromHistory_histPts {ish : RecVStar.Inner} {tbl : String} {bc : Cm
     AtSrc zs dg N k Rw (tiedSrc (repsOfVals (histPts ish tbl bc stp) sh rep vals)) fun t u =>
       FlockC3.HPort.PointsFromHistory ish tbl bc t u := by
   intro R ω t R₂ τ o _ e he
-  rw [pts_histPts, he] <;> rfl
+  rw [pts_histPts, he]
+  rfl
 
 end src
 
