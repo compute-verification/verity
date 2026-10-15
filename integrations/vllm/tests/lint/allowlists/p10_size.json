@@ -18,7 +18,7 @@
     {"file": "verity_vllm/check/replay/vu_query.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 813},
     {"file": "verity_vllm/check/root_policy.py", "kind": "function", "symbol": "evaluate", "detail": "lines", "count": 182},
     {"file": "verity_vllm/check/verdict.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 837},
-    {"file": "verity_vllm/check/weights_of_record.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 974},
+    {"file": "verity_vllm/check/weights_of_record.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 952},
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "function", "symbol": "NativeCollectCommitter._commit_step_windowed", "detail": "lines", "count": 399},
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1805},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 2399},

@@ -539,31 +539,9 @@ def live_param_digests(model, *, include_buffers: bool = True, raw_for: "re.Patt
     """sha256 of every live parameter (and buffer) of the served model, by `named_parameters()` name: the SAME tensors the committer's
     weights root covers (register_weights), hashed as raw contiguous bytes (bf16 words row-major).  Tensors whose name matches `raw_for`
     (default: the rotary cos_sin table) also keep their raw words under `raw[name]` (numpy uint16, in memory only -- not for the row
-    record) so `check` can run the analytic bound on them [MAN-09c]."""
-    import torch
-    t0 = time.perf_counter()
-    out: dict[str, dict[str, Any]] = {}
-    raws: dict[str, np.ndarray] = {}
-    seen: dict[int, str] = {}
-    items = list(model.named_parameters())
-    if include_buffers:
-        items += list(model.named_buffers())
-    for name, p in items:
-        if not isinstance(p, torch.Tensor) or p.numel() == 0:
-            continue
-        if id(p) in seen:
-            out[name] = dict(out[seen[id(p)]], alias_of=seen[id(p)])
-            if seen[id(p)] in raws:
-                raws[name] = raws[seen[id(p)]]
-            continue
-        seen[id(p)] = name
-        flat = p.detach().contiguous().reshape(-1)
-        raw = (flat.view(torch.uint8) if flat.dtype != torch.uint8 else flat).cpu().numpy()
-        out[name] = {"digest": hashlib.sha256(memoryview(raw).cast("B")).hexdigest(), "dtype": str(p.dtype).replace("torch.", ""),
-                     "shape": list(p.shape), "bytes": int(raw.nbytes)}
-        if raw_for is not None and raw_for.search(name) and p.dtype == torch.bfloat16:
-            raws[name] = np.ascontiguousarray(raw).view(np.uint16).reshape(list(p.shape))
-    return {"params": out, "raw": raws, "n": len(out), "wall_s": round(time.perf_counter() - t0, 3)}
+    record) so `check` can run the analytic bound on them [MAN-09c].  Hashed a chunk at a time on a thread pool (`param_digests`)."""
+    from verity_vllm.check.param_digests import param_digests
+    return param_digests(model, include_buffers=include_buffers, raw_for=raw_for)
 
 
 def _check_analytic(f: dict[str, Any], raw: np.ndarray | None) -> dict[str, Any]:
