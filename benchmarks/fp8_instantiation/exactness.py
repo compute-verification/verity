@@ -309,7 +309,7 @@ def build_ops(outdir: Path, seed: int = 4) -> dict:
     write_ops(outdir / "ops0_pearlc.bin", a_codes, b_codes)
     meta["ops0_pearlc"] = {"M": len(a_codes), "N": len(b_codes), "K": k, "a_flavors": "16 gauss, 16 outliers, 16 relu",
                            "b_flavor": "weight N(0, 0.02^2)", "a_admissible": sum(a_ok), "b_admissible": sum(b_ok)}
-    # a wide grid (x in {+-16, +-1/8}): products from 2^-6 to 2^8, so long chains need 30+ bits and are NOT exact
+    # a wide grid (x in {+-16, +-1/8}): products from 2^-6 to 2^8; exact while every prefix stays below 2^20 (g <= 2^-6)
     wide = [0x58, 0xD8, 0x20, 0xA0]                     # +16, -16, +1/8, -1/8
     a_w = [[rng.choice(wide) for _ in range(k)] for _ in range(16)]
     b_w = [[rng.choice(wide) for _ in range(k)] for _ in range(8)]
@@ -337,6 +337,28 @@ def code_int(c: int) -> int:
     return int(v)
 
 
+def theorem_chain(a: list[int], b: list[int], g: int | None) -> bool:
+    """The theorem applied step by step: every atom step (each window starts from +0) meets both conditions, and every
+    promotion add's exact sum is an FP32 value.  True means every intermediate is the exact prefix, so the word is exact."""
+    atoms = len(a) // 32
+    win = g or atoms
+    tot = 0
+    for w0 in range(0, atoms, win):
+        acc_word = 0
+        acc = 0
+        for j in range(w0, min(w0 + win, atoms)):
+            aa, bb = a[32 * j: 32 * j + 32], b[32 * j: 32 * j + 32]
+            aligned, representable = explain(acc_word, aa, bb)
+            if not (aligned and representable):
+                return False
+            acc = exact_sum(acc_word, aa, bb)
+            acc_word = rz_f32_word(acc)
+        tot += acc
+        if word_int(rz_f32_word(tot)) != tot:
+            return False
+    return True
+
+
 def compare(opsdir: Path, devdir: Path) -> dict:
     """Device words of every ops file against the model (`pearl_c.chain`, both devices) and the exact rational sums."""
     from verity.core.protocols.pouw.schemes import pearl_c
@@ -351,6 +373,7 @@ def compare(opsdir: Path, devdir: Path) -> dict:
         for tag, dev in (("u", SM120_UNPROMOTED), ("p", SM120)):
             words = struct.unpack(f"<{m * n}I", (devdir / f"ops{idx}.{tag}.bin").read_bytes())
             stats = {"elements": m * n, "device_vs_model_mismatch": 0, "exact": 0, "correctly_rounded": 0,
+                     "theorem_exact": 0, "theorem_exact_but_inexact": 0, "exact_without_theorem": 0,
                      "error_ulps": [], "error_sign": {"toward_zero": 0, "away": 0}, "rel_err_max": 0.0}
             blocks = {}
             for i in range(m):
@@ -364,6 +387,10 @@ def compare(opsdir: Path, devdir: Path) -> dict:
                     key = f"A{i // 16}xB{j // 8}" if name.endswith("grids") else f"A{i // 16}"
                     blk = blocks.setdefault(key, {"elements": 0, "exact": 0})
                     blk["elements"] += 1
+                    certified = theorem_chain(a_rows[i], b_rows[j], dev.g)
+                    stats["theorem_exact"] += certified
+                    stats["theorem_exact_but_inexact"] += certified and got != ex
+                    stats["exact_without_theorem"] += (not certified) and got == ex
                     if got == ex:
                         stats["exact"] += 1
                         blk["exact"] += 1
