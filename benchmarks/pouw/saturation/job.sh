@@ -12,6 +12,9 @@
 #   phi    (not default) lease 1: phi_probe.cu, a keyed ARX receipt step over register-resident E4M3 mma.sync accumulators
 #          at commit strides L = 32 ... 256 (gated), at 2 and 4 blocks an SM; its SASS and an opcode count per kernel; ncu's
 #          warp-state, scheduler and pipe sections over seven of its kernels
+#   isa    (not default) lease 1: isa_rates.cu, the throughput of single CUDA-core instructions (FFMA, IADD3, LOP3, IMAD,
+#          IDP4A, HFMA2, PRMT, the E4M3 decode, shared-memory lookups) alone and in pairs (gated), at 2 and 4 blocks an SM;
+#          its SASS and an opcode count per kernel
 # Timeouts run in the foreground so `research cancel` reaches the GPU process.
 # Untimed diagnostic (tier 2a): one leased GPU, the fill queue keeps running beside it.
 set -euo pipefail
@@ -38,17 +41,18 @@ if [[ " $STAGES " == *" micro "* || " $STAGES " == *" ncu "* ]]; then
   nice -n 19 "$CUDA/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -cubin -o "$d/hm96_rows.cubin" \
     "$ROOT/benchmarks/pouw/served_zk/hm96_rows.cu" 2> "$OUT/nvcc-rows.txt"
 fi
-if [[ " $STAGES " == *" phi "* ]]; then
-  stamp "build phi_probe"
-  nice -n 19 "$CUDA/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -o "$d/phi_probe" "$S/phi_probe.cu" \
-    2> "$OUT/nvcc-phi.txt"
-  "$CUDA/bin/cuobjdump" -sass "$d/phi_probe" > "$d/phi-sass.txt"
-  gzip -c "$d/phi-sass.txt" > "$OUT/phi-sass.txt.gz"
+probe_build() {  # NAME SOURCE: the binary in $d, its SASS and the opcode count of each kernel in $OUT
+  stamp "build $1"
+  nice -n 19 "$CUDA/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -o "$d/$1" "$S/$2" 2> "$OUT/nvcc-$1.txt"
+  "$CUDA/bin/cuobjdump" -sass "$d/$1" > "$d/$1-sass.txt"
+  gzip -c "$d/$1-sass.txt" > "$OUT/$1-sass.txt.gz"
   awk '/Function :/ { f = $3; next }
        match($0, /\/\*[0-9a-f][0-9a-f][0-9a-f][0-9a-f]+\*\/[ \t]+(@!?U?P[0-9T][ \t]+)?[A-Z][A-Z0-9_]*/) {
          n = split(substr($0, RSTART, RLENGTH), a, /[ \t]+/); c[f "\t" a[n]]++ }
-       END { for (k in c) print k "\t" c[k] }' "$d/phi-sass.txt" | sort > "$OUT/phi-sass-opcodes.tsv"
-fi
+       END { for (k in c) print k "\t" c[k] }' "$d/$1-sass.txt" | sort > "$OUT/$1-sass-opcodes.tsv"
+}
+[[ " $STAGES " == *" phi "* ]] && probe_build phi_probe phi_probe.cu
+[[ " $STAGES " == *" isa "* ]] && probe_build isa_rates isa_rates.cu
 
 split() {
   for cfg in "$@"; do
@@ -121,9 +125,21 @@ phi() {
   grep -v "^\s*$" "$d/phi-ncu.log" | tail -40 > "$OUT/phi-ncu.log.tail"
 }
 
+isa() {
+  for blocks in 2 4; do
+    stamp "isa rates, $blocks blocks an SM"
+    if timeout --foreground 300 "$d/isa_rates" --ms 60 --reps 5 --blocks $blocks > "$OUT/isa-rates-b$blocks.json" \
+        2> "$OUT/isa-rates-b$blocks.err"; then
+      stamp "isa rates b$blocks ok"
+    else
+      stamp "isa rates b$blocks FAILED rc=$?"
+    fi
+  done
+}
+
 leased() {
   stamp "lease for: $*"
-  gpu-lease 1 --wait --max-min 30 -- bash -c "$(declare -f stamp split micro ncu_stage phi); $(declare -p OUT d S PY MODEL REV NCU METRICS); $*" \
+  gpu-lease 1 --wait --max-min 30 -- bash -c "$(declare -f stamp split micro ncu_stage phi isa); $(declare -p OUT d S PY MODEL REV NCU METRICS); $*" \
     || stamp "lease for '$*' FAILED rc=$?"
 }
 [[ " $STAGES " == *" split "* ]] && leased split "'bf16 eager'" "'fp8 eager'" "'bf16 graphs'" "'fp8 graphs'"
@@ -133,6 +149,7 @@ leased() {
 [[ " $STAGES " == *" ncu_prefill "* ]] && leased ncu_stage "'fp8 prefill2048'" "'bf16 prefill2048'"
 [[ " $STAGES " == *" ncu_prefill8k "* ]] && leased ncu_stage "'fp8 prefill8192'"
 [[ " $STAGES " == *" phi "* ]] && leased phi
+[[ " $STAGES " == *" isa "* ]] && leased isa
 
 for rep in "$d"/ncu-*.ncu-rep; do
   [ -f "$rep" ] || continue
