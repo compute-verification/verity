@@ -384,8 +384,8 @@ __device__ __forceinline__ u64 pass_kept_at(u64 width, int h0, int h) {
   return at;
 }
 
-// The receipt tree behind the receipts, by a persistent grid of CONSUMER_THREADS-thread CTAs. ctr (rs_pass's layout)
-// holds the next tile, each group's counted tiles, each chunk's completed subtrees, the completed chunks, the next
+// The receipt tree behind the receipts, by persistent grids of CONSUMER_THREADS-thread CTAs sharing ctr (rs_pass's
+// layout): the next tile, each group's counted tiles, each chunk's completed subtrees, the completed chunks, the next
 // subtree to claim and the receipt grid's started flag. A CTA claims the next 2^h0-leaf subtree in order, waits until
 // the group holding it is counted, hashes its leaves and its levels below h0 in shared memory and keeps its root. The
 // CTA completing a chunk's last subtree builds that chunk's retained levels, and the one completing the last chunk the
@@ -394,8 +394,8 @@ __device__ __forceinline__ u64 pass_kept_at(u64 width, int h0, int h) {
 // Progress needs no residency and no scheduling order. While its group is short, a warp waits only if every tile is
 // taken (by warps already running, which finish them without waiting) or a receipt CTA has started (whose warps take
 // tiles until none is left); otherwise it takes the next tile and computes it itself (`pass_tile`, the signs read from
-// pk). So no wait depends on a CTA that isn't resident, whatever the stream priorities, the order the two grids are
-// placed in or what a co-tenant holds, and a pass whose receipt grid never gets an SM still completes.
+// pk). So no wait depends on a CTA that isn't resident, whatever the stream priorities, the order the grids are placed
+// in or what a co-tenant holds, and a pass whose receipt grid never gets an SM still completes.
 constexpr int CONSUMER_THREADS = 128;
 constexpr size_t CONSUMER_STAGING = (size_t)CONSUMER_THREADS / 32 * 32 * SK_ROWS * sizeof(int);
 
@@ -414,6 +414,7 @@ __global__ void __launch_bounds__(CONSUMER_THREADS) pass_consumer_kernel(const u
   unsigned *claim = chunks_done + 1;
   const unsigned *started = claim + 1;
   const int lane = threadIdx.x & 31, warp = threadIdx.x >> 5;
+  bool live = false;   // a receipt CTA has started (lane 0's; it stays set for the pass)
   for (;;) {
     if (!threadIdx.x) claimed = atomicAdd(claim, 1u);
     __syncthreads();
@@ -423,15 +424,10 @@ __global__ void __launch_bounds__(CONSUMER_THREADS) pass_consumer_kernel(const u
     const unsigned *group = ready + (c0 + first) * PER_LEAF / ready_blocks;
     for (;;) {
       int act = 0;   // 0: the group is counted, 1: take a tile, 2: wait
-#ifdef RS_SWEEP_HELP_ALWAYS
-      const bool help_always = true;
-#else
-      const bool help_always = false;
-#endif
-      if (!lane)
-        act = *(volatile const unsigned *)group >= tiles_per                                         ? 0
-              : (help_always || !*(volatile const unsigned *)started) && *(volatile const unsigned *)ctr < tiles ? 1
-                                                                                                    : 2;
+      if (!lane && *(volatile const unsigned *)group < tiles_per) {
+        live = live || *(volatile const unsigned *)started;
+        act = !live && *(volatile const unsigned *)ctr < tiles ? 1 : 2;
+      }
       act = __shfl_sync(~0u, act, 0);
       if (!act) break;
       if (act == 2) {
@@ -740,30 +736,31 @@ static uint64_t kept_at(uint64_t nl, int h0, int h) {
   return at;
 }
 
-// The consumer CTAs of a pass beside a receipt grid of ctas CTAs: as many as fit in what the receipt grid leaves of the
-// device, by both kernels' occupancy (an SM holds occ_p receipt CTAs or occ_c consumer CTAs), and at least one an SM.
-// The count bounds how many CTAs wait at once; progress doesn't depend on it (`pass_consumer_kernel`).
-static int pass_consumers(int ctas, size_t shared, uint64_t subtrees, uint64_t *out) {
+// The consumer CTAs of a pass beside a receipt grid of ctas CTAs, by both kernels' occupancy (an SM holds occ_p receipt
+// CTAs or occ_c consumer CTAs): `side` as many as fit in what the receipt grid leaves of the device, at least one an SM,
+// and `tail` the rest of a full device, which take the slots the receipt grid frees when it ends. Neither count bounds
+// progress (`pass_consumer_kernel`); together they are what the device holds once the reads are done.
+static int pass_consumers(int ctas, size_t shared, uint64_t subtrees, uint64_t *side, uint64_t *tail) {
   int dev, sms, occ_p, occ_c;
   if (cudaGetDevice(&dev) || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev) ||
       cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ_p, sketch16_pass_kernel, 32 * SK16_WARPS, 0) ||
       cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ_c, pass_consumer_kernel, CONSUMER_THREADS, shared) ||
       occ_p < 1 || occ_c < 1)
     return 4;
-  const int64_t fit = (int64_t)sms * occ_c - ((int64_t)ctas * occ_c + occ_p - 1) / occ_p;
-  uint64_t c = (uint64_t)(fit > sms ? fit : sms);
-#ifdef RS_SWEEP_CONSUMERS
-  c = RS_SWEEP_CONSUMERS;
-#endif
-  *out = c < subtrees ? c : subtrees;
+  const int64_t all = (int64_t)sms * occ_c, fit = all - ((int64_t)ctas * occ_c + occ_p - 1) / occ_p;
+  const int64_t s = fit > sms ? fit : sms;
+  *side = (uint64_t)s < subtrees ? (uint64_t)s : subtrees;
+  const uint64_t rest = all > s ? (uint64_t)(all - s) : 0, left = subtrees - *side;
+  *tail = rest < left ? rest : left;
   return 0;
 }
 
 // One pass over n blocks at data: its receipts by one persistent grid of ctas CTAs on sa (`sketch16_pass_kernel`, tensor
-// cores; 0: one an SM), and for h0 <= 8, on sb, a persistent consumer grid (`pass_consumer_kernel`, `pass_consumers`)
-// that builds each 2^h0-leaf subtree as soon as the receipt grid counts its group's tiles done, each chunk's retained
-// levels once its subtrees are, and the levels above them once every chunk is, so the whole receipt tree follows the
-// reads without a leaf or level kernel boundary. pk is the pass's packed signs (`rs_signs16`); ctr is scratch of
+// cores; 0: one an SM), and for h0 <= 8 persistent consumer grids (`pass_consumer_kernel`, `pass_consumers`), one on sb
+// beside the receipt grid and one behind it on sa, that build each 2^h0-leaf subtree as soon as the receipt grid counts
+// its group's tiles done, each chunk's retained levels once its subtrees are, and the levels above them once every
+// chunk is, so the whole receipt tree follows the reads without a leaf or level kernel boundary, and the tree hashing
+// left when the reads end has the whole device. pk is the pass's packed signs (`rs_signs16`); ctr is scratch of
 // 4 + n / min(chunk, CONSUMER_READY_BLOCKS) + n / chunk words: the next tile, each group's counted tiles, each chunk's
 // completed subtrees, the completed chunks, the next subtree to claim and whether a receipt CTA has started. ys holds
 // all n receipts (8 words each). dig and up are scratch for h0 > 8, whose tree is built chunk by chunk behind one
@@ -800,20 +797,18 @@ int rs_pass(const void *data, uint64_t n, const uint32_t *pk, unsigned *ctr, uin
   }
   const size_t tree_shared = 2 * (1ULL << h0) * 8 * sizeof(uint64_t);
   const size_t shared = tree_shared > CONSUMER_STAGING ? tree_shared : CONSUMER_STAGING;
-  uint64_t consumers = 0;
+  uint64_t side = 0, tail = 0;
   int rc;
   if (fused) {
-    if ((rc = pass_consumers(ctas, shared, groups, &consumers))) return rc;
-    if (groups + consumers >= (1ULL << 32)) return 1;
+    if ((rc = pass_consumers(ctas, shared, groups, &side, &tail))) return rc;
+    if (groups + side + tail >= (1ULL << 32)) return 1;
   }
   unsigned *started = ctr + 3 + ready_groups + chunks;
   if (cudaMemsetAsync(ctr, 0, 4 * (4 + ready_groups + chunks), sa) || cudaEventRecord(go, sa) ||
       cudaStreamWaitEvent(sb, go, 0))
     return 4;
   const unsigned ready_tiles = (unsigned)((fused ? ready_blocks : chunk) / 32);
-#ifndef RS_SWEEP_NO_RECEIPT_GRID
   sketch16_pass_kernel<<<ctas, 32 * SK16_WARPS, 0, sa>>>((const uint4 *)data, n, pk, ys, ctr, ready_tiles, started);
-#endif
   if (cudaGetLastError()) return 4;
   // These nodes depend on this pass's seed, but not on its receipts. Compute each once at the start and reuse the
   // retained subtree roots when the real and padded halves are joined above hc.
@@ -832,9 +827,13 @@ int rs_pass(const void *data, uint64_t n, const uint32_t *pk, unsigned *ctr, uin
   // h0 <= 8 fits the consumer's two 2^h0-digest reduction buffers in CUDA's default dynamic-shared-memory limit. Keep the old exact path
   // for diagnostic configurations with larger retained subtrees.
   if (fused) {
-    pass_consumer_kernel<<<(unsigned)consumers, CONSUMER_THREADS, shared, sb>>>((const uint4 *)data, n, pk, ys, ctr,
-                                                                                kept, width, chunk, ready_blocks, h0,
-                                                                                hc, H, chunks);
+    pass_consumer_kernel<<<(unsigned)side, CONSUMER_THREADS, shared, sb>>>((const uint4 *)data, n, pk, ys, ctr, kept,
+                                                                           width, chunk, ready_blocks, h0, hc, H,
+                                                                           chunks);
+    if (tail)
+      pass_consumer_kernel<<<(unsigned)tail, CONSUMER_THREADS, shared, sa>>>((const uint4 *)data, n, pk, ys, ctr, kept,
+                                                                             width, chunk, ready_blocks, h0, hc, H,
+                                                                             chunks);
   } else {
     for (uint64_t k = 0; k < chunks; ++k) {
       const int slot = k & 1;
