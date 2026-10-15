@@ -57,11 +57,15 @@ from verity_vllm.observe import triton_adapter
 
 from verity_vllm.engine import hooks
 from verity_vllm.engine.build import Engine
-from verity_vllm.engine.pinned import PinnedArena, spanned_bytes, storage_bytes_view
+from verity_vllm.engine.pinned import PinnedArena, device_backed, spanned_bytes, storage_bytes_view
 from verity_vllm.engine.run_facts import model_config_subset, profile_manifest
 
 
 SCHEMA = "verity-capture/log/v1"
+#: Ops whose output is their input, the same storage and view, so a snapshot of their call holds no new value.
+#: ``torch::from_blob`` dispatches ``aten.detach`` on the tensor C++ code just wrapped, whose device may not be its memory's
+#: (VLLM-8): their tensors are listed as skipped, never copied.
+IDENTITY_ALIAS_OPS = frozenset({"aten.detach.default", "aten.alias.default", "aten.lift_fresh.default"})
 
 
 @dataclass
@@ -636,11 +640,13 @@ class Capture:
             from torch.utils._python_dispatch import _disable_current_modes
 
             cap = self.cfg.snapshot_max_bytes if self.cfg.snapshot_max_bytes_op is None else self.cfg.snapshot_max_bytes_op
+            skip = f"{op} is an identity alias: its tensors are its input's, snapshotted where they are produced or read" \
+                if op in IDENTITY_ALIAS_OPS else None
             with _disable_current_modes():
-                self._snap_struct(eid, "args", args, cap)
+                self._snap_struct(eid, "args", args, cap, skip)
                 for k, v in kwargs.items():
-                    self._snap_struct(eid, f"kwargs.{k}", v, cap)
-                self._snap_struct(eid, "outs", out, cap)
+                    self._snap_struct(eid, f"kwargs.{k}", v, cap, skip)
+                self._snap_struct(eid, "outs", out, cap, skip)
         except Exception as e:  # noqa: BLE001
             self.errors.append({"where": "snapshot", "step": st.step, "id": eid, "error": repr(e)[:300]})
 
@@ -658,19 +664,26 @@ class Capture:
         except Exception as e:  # noqa: BLE001
             self.errors.append({"where": "snapshot-triton", "step": st.step, "id": eid, "error": repr(e)[:300]})
 
-    def _snap_struct(self, eid: int, path: str, x: Any, cap: int | None = None) -> None:
+    def _snap_struct(self, eid: int, path: str, x: Any, cap: int | None = None, skip: str | None = None) -> None:
         if isinstance(x, torch.Tensor):
-            self._snap_tensor(eid, path, x, cap=cap)
+            self._snap_tensor(eid, path, x, cap=cap, skip=skip)
         elif isinstance(x, (list, tuple)):
             for i, v in enumerate(x):
                 if isinstance(v, (torch.Tensor, list, tuple)):
-                    self._snap_struct(eid, f"{path}[{i}]", v, cap)
+                    self._snap_struct(eid, f"{path}[{i}]", v, cap, skip)
 
-    def _snap_tensor(self, eid: int, path: str, t: torch.Tensor, sub: dict | None = None, cap: int | None = None) -> None:
+    def _snap_tensor(self, eid: int, path: str, t: torch.Tensor, sub: dict | None = None, cap: int | None = None,
+                     skip: str | None = None) -> None:
         if t.numel() == 0:
             return
         view = self.storage.view_of(t)
         if view.alloc in self.root_allocs:
+            return
+        if skip is None and device_backed(t):
+            skip = "a CPU tensor whose storage is device memory (torch::from_blob without its device): not readable on the host"
+        if skip is not None:
+            self._snap_index.append({"event": eid, "path": path, "view": view.to_json(), "dtype": view.dtype, "shape": list(view.shape),
+                                     "skipped": skip})
             return
         full = self.cfg.snapshot_max_bytes
         if cap is None:
