@@ -15,7 +15,10 @@ honest Gaussian row; the worst live entry's point mass by rho*alpha; the largest
 differences on honest and floor rows; how often the bit-exact chain hides a changed product (absorption); and the
 spike-column attack on `pearl_c.form_v1` (every row's spikes in the same columns: those codes are known before the seeds).
 
-    python detection.py [--draws N] [--json FILE]
+    python detection.py [--draws N] [--fix | --low-r] [--json FILE]
+
+`--fix` runs the spike-column attack under the proposed fix rho' = max(rho, s/4) (`s5_stats_rho_s4`) beside v1; `--low-r`
+the worst entry of rows with s/rho in [1, 3.5], the rows the fix leaves as they are.
 """
 from __future__ import annotations
 
@@ -175,11 +178,13 @@ def spike_scan(pools: Pools, draws: int, rng: random.Random) -> list[dict]:
     return out
 
 
-def row_worst(pools: Pools, draws: int, rng: random.Random) -> list[dict]:
+def row_worst(pools: Pools, draws: int, rng: random.Random,
+              rs: tuple[float, ...] = (3.0, 4.0, 4.5, 5.0, 6.0, 7.0, 8.0)) -> list[dict]:
     """The worst entry of a row whose largest entry is s = r rho with r <= 8 (every entry live): rho*alpha = 448/(r + 4),
-    and v = alpha*x ranges over [0, 448 r/(r + 4)]; a 33-point scan, then the two best v again at 4x the draws."""
+    and v = alpha*x ranges over [0, 448 r/(r + 4)]; a 33-point scan, then the two best v again at 4x the draws.  r >= 1
+    always (s is the row's largest |x|, rho an RMS of some of them)."""
     out = []
-    for r in (3.0, 4.0, 4.5, 5.0, 6.0, 7.0, 8.0):
+    for r in rs:
         sigma, top = 448 / (r + 4), 448 * r / (r + 4)
         beta = beta_for(sigma)
         scan = [(v, summary(law(v, beta, pools, draws, rng))["p_max"]) for v in (i * top / 32 for i in range(33))]
@@ -394,6 +399,13 @@ def main(argv: list[str]) -> int:
     rng = random.Random(20261015)
     t0 = time.time()
     pools = Pools(3000, 7)
+    if "--low-r" in argv:
+        res = {"draws": draws, "worst_entry_low_s_over_rho": row_worst(pools, draws // 4, rng, (1.0, 1.5, 2.0, 2.5, 3.5)),
+               "seconds": round(time.time() - t0, 1)}
+        print(json.dumps(res, indent=1))
+        if "--json" in argv:
+            open(argv[argv.index("--json") + 1], "w").write(json.dumps(res, indent=1))
+        return 0
     res = {"draws": draws}
     res["noise_bound"] = noise_bound(pools, rng)
     res["honest_gaussian_row"] = honest_profile(pools, draws, rng)

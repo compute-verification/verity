@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # detection.py (#4) and rank.py (#9) on vy-nebius-cpu-1 in one of its proofs slots (cwd = the clone's root; the node's
-# python3 has numpy, and Pearl-C's Python needs nothing else).  --env A4_PARTS=detection runs detection.py alone;
-# --env A4_PARTS=fix runs the proposed fix rho' = max(rho, s/4) instead (detection.py --fix, rank.py --stats rho_s4).
+# python3 has numpy, and Pearl-C's Python needs nothing else).  A4_PARTS=detection runs detection.py alone;
+# A4_PARTS=fix runs the proposed fix rho' = max(rho, s/4) instead (detection.py --fix, rank.py --stats rho_s4), and
+# A4_PARTS=low detection.py --low-r.  research run passes no environment: set it inside the slot's command,
+# `bash -c 'A4_PARTS=fix bash "$RESEARCH_RUN_DIR/inputs/run_cpu.sh"'` (the node refuses anything but slot.py after env).
 #
 #   research run --on vy-nebius-cpu-1 --project verity --campaign pouw --source . --cwd clone \
 #     --send benchmarks/fp8_instantiation/run_cpu.sh -- env CHECK_SLOTS=/workspace/research/locks/proofs/slots \
@@ -12,6 +14,12 @@ mkdir -p "$O"
 export PYTHONPATH=$PWD
 SRC=benchmarks/fp8_instantiation
 python3 -c 'import sys, numpy; print(sys.version.split()[0], numpy.__version__)' > "$O/python.txt" 2>&1
+if [ "${A4_PARTS:-}" = low ]; then
+  python3 $SRC/detection.py --low-r --draws 4000 --json "$O/low_r.json" > "$O/low_r_stdout.txt" 2>&1
+  rc=$?
+  echo "low_r $rc" | tee "$O/status.txt"
+  exit $rc
+fi
 if [ "${A4_PARTS:-}" = fix ]; then
   python3 $SRC/detection.py --fix --json "$O/fix_detection.json" > "$O/fix_detection_stdout.txt" 2>&1 &
   det=$!
