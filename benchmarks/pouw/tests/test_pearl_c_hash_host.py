@@ -299,3 +299,25 @@ def test_sm120_h3_phases_are_the_verifiers(host, monkeypatch, sha):
             "leaves": b"".join(leaves), "tree_t": levels(dom_t, leaves, audit.HM96_TRANSCRIPT)}
     assert want["tree_b"][-64:] == root_b
     assert {name: host.read(pipe.b[name], len(v)) == v for name, v in want.items()} == dict.fromkeys(want, True)
+
+
+def test_a_caller_without_the_scratch_runs_the_reference_kernels(host, monkeypatch):
+    """A caller that owns the buffers and gives no `segdig_<tree>` (pouw_pearl_c_device's) gets s512_rows and s512_tile_leaves
+    under the default sha, writing the scheme's row digests and tile leaves."""
+    m, n, k, mr = 64, 128, 1024, 16
+    rng = np.random.default_rng(3)
+    a_rows = [rng.integers(0, 256, 4 * k, dtype=np.uint8).tobytes() for _ in range(m)]
+    c, u = (rng.integers(0, 2**32, (m, n), dtype=np.uint64).astype(np.uint32) for _ in range(2))
+    bufs = {name: host.alloc(size) for name, size in R.Pipeline.sizes(m, n, k, mr).items() if name not in R.SEGDIG}
+    for name, words in (("c", c), ("u", u)):
+        host.bufs[bufs[name]][:m * n * 4] = np.frombuffer(words.astype("<u4").tobytes(), np.uint8)
+    launched, launch = [], host.launch
+    monkeypatch.setattr(host, "launch", lambda name, *a, **kw: launched.append(name) or launch(name, *a, **kw))
+    monkeypatch.delenv("PEARLC_SHA", raising=False)
+    pipe = R.Pipeline(host, m, n, k, "sm120", dict.fromkeys(R.TIMING_KEYS, 0), host.put(b"".join(a_rows)), 0, bufs=bufs, m_real=mr)
+    by = {name: step for name, _, step in pipe.steps()}
+    by["rowdig_a"](), by["hash_leaf"]()
+    assert pipe.sha == "fast" and launched == ["s512_rows", "s512_tile_leaves"]
+    assert host.read(bufs["rowdig_a"], 64 * mr) == b"".join(C.row_digest(r) for r in a_rows[:mr])
+    assert host.read(bufs["leaves"], 64 * pipe.tiles) == b"".join(
+        C.leaf(C.Checked(c[:mr, c0:c0 + 64].tolist(), u[:mr, c0:c0 + 64].tolist()), "h3") for c0 in range(0, n, 64))
