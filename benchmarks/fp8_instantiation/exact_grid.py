@@ -13,6 +13,8 @@ summation order, against the accumulator's exact range (2^24 for FP32 accumulati
     e4m3ika       the same set, activations to M_a and weights to M_w with k M_a M_w <= 2^24 (`e4m3_split`)
     e4m3i448      the same set up to 448 (exact only for k <= 83; a quality reference)
     e2m1i         E2M1's integers {0, 1, 2, 3, 4, 6}
+    e2m1b         E2M1 (halves included) times a power-of-two scale 2^e per 16 along k, e in 0..E(k) with k (12 2^E)^2 <=
+                  2^24, under one scale per row: every product an integer in quarter units (nvf4 with UE4M3 scales 2^e)
 
 Reference formats (scales vary along k or the grid is not integer, so the FP32 sum rounds; products here in float64):
 
@@ -86,6 +88,21 @@ def grid(base: str, k: int) -> tuple[list[float], list[float], int]:
     if base == "e2m1i":
         return E2M1_INT, E2M1_INT, FP32_EXACT
     raise KeyError(base)
+
+
+def e2m1b_window(k: int) -> int:
+    """The largest E with k (12 2^E)^2 <= 2^24 (2 at k = 4096, 1 at 14,336): `e2m1b`'s block exponents 0..E."""
+    return max(e for e in range(8) if k * (12 * 2 ** e) ** 2 <= FP32_EXACT)
+
+
+def quant_blocks(m: torch.Tensor, window: int, levels: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    """`e2m1b`'s integer rows and per-row units: m ~ q * s[:, None], q = 2 e2m1 2^e with one e in 0..window per 16 along
+    k (the row's largest block at e = window), so q is an integer of magnitude at most 12 2^window."""
+    r, k = m.shape
+    u = m.abs().amax(dim=1).clamp(min=1e-30) / (6.0 * 2 ** window)
+    b = m.reshape(r, k // 16, 16) / u[:, None, None]
+    e = torch.exp2(torch.ceil(torch.log2(b.abs().amax(dim=2, keepdim=True).clamp(min=1e-30) / 6.0)).clamp(0, window))
+    return (2 * to_levels(b / e, levels) * e).reshape(r, k), u / 2
 
 
 def to_levels(v: torch.Tensor, levels: torch.Tensor) -> torch.Tensor:
@@ -204,6 +221,17 @@ def product(method: str, x: torch.Tensor, w: torch.Tensor, wcache: dict) -> tupl
         a_priori = k * float(la[-1]) * float(lw[-1])
         return s * sa[:, None] * sb[None, :], {"bound": bound, "acc": acc, "top": [float(la[-1]), float(lw[-1])],
                                                 "a_priori": a_priori, "exact": bound <= acc, "guaranteed": a_priori <= acc}
+    if base == "e2m1b":
+        window, levels = e2m1b_window(k), torch.tensor(E2M1, dtype=torch.float64, device=x.device)
+        if "w" not in wcache:
+            wcache["w"] = quant_blocks(w @ rotation(k, w.device) if rot else w, window, levels)
+        bi, sb = wcache["w"]
+        ai, sa = quant_blocks(x, window, levels)
+        bound = float((ai.abs().float() @ bi.abs().float().T).max())
+        a_priori = k * (12.0 * 2 ** window) ** 2
+        return (ai @ bi.T) * sa[:, None] * sb[None, :], {"bound": bound, "acc": FP32_EXACT, "top": [12.0 * 2 ** window] * 2,
+                                                         "a_priori": a_priori, "exact": bound <= FP32_EXACT,
+                                                         "guaranteed": a_priori <= FP32_EXACT}
     if base in ("fp8_tensor", "fp8_token", "fp8_block"):
         if "w" not in wcache:
             wcache["w"] = fp8_dequant(w @ rotation(k, w.device) if rot else w, base, "w")
@@ -265,6 +293,7 @@ def load(snapshot: str):
 def selftest() -> dict:
     """Grids, exactness and rotation on small tensors; every method runs on a tiny random Llama."""
     assert e4m3_ints(32) == list(range(17)) + list(range(18, 33, 2))
+    assert e2m1b_window(4096) == 2 and e2m1b_window(14336) == 1
     assert e4m3_split(4096) == (128, 32) and e4m3_split(14336) == (72, 16)
     assert e4m3_top(4096) == 64 and e4m3_top(14336) == 32 and max(e4m3_ints(448)) == 448 and len(e4m3_ints(448)) == 55
     for v in e4m3_ints(448):
@@ -277,7 +306,7 @@ def selftest() -> dict:
     x = torch.randn(64, 256, generator=g, dtype=torch.float64).to(dev)
     w = torch.randn(32, 256, generator=g, dtype=torch.float64).to(dev)
     out = {}
-    for m in EXACT + REFERENCE + ("e4m3i16_rot", "e2m1i_rot_wclip"):
+    for m in EXACT + REFERENCE + ("e4m3i16_rot", "e2m1i_rot_wclip", "e2m1b", "e2m1b_rot"):
         y, rec = product(m, x, w, {})
         out[m] = {"rel_err": float(torch.linalg.norm(y - x @ w.T) / torch.linalg.norm(x @ w.T)), **rec}
     assert out["int8"]["rel_err"] < out["e4m3i16"]["rel_err"] < out["e2m1i"]["rel_err"]
@@ -296,7 +325,7 @@ def selftest() -> dict:
 RATE = {"int8": (1024, "IMMA s8"), "e4m3i16": (1024, "QMMA e4m3"), "e4m3ik": (1024, "QMMA e4m3"),
         "e4m3ika": (1024, "QMMA e4m3"), "e4m3i448": (1024, "QMMA e4m3"), "e2m1i": (2048, "OMMA.SF nvf4, unit scales"), "fp8_tensor": (1024, "QMMA e4m3"),
         "fp8_token": (1024, "QMMA e4m3"), "fp8_block": (1024, "QMMA e4m3 + rescale per 128"),
-        "nvfp4": (2048, "OMMA.SF nvf4")}
+        "nvfp4": (2048, "OMMA.SF nvf4"), "e2m1b": (2048, "OMMA.SF nvf4, power-of-two scales")}
 
 
 def table(results: list[dict]) -> str:

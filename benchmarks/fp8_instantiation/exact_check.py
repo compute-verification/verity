@@ -26,7 +26,9 @@ from verity.ml.circuits.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32 as E
 from exact_grid import e4m3_ints
 
 E2M1_CODE = {1: 2, 2: 4, 3: 5, 4: 6, 6: 7}
+HALVES = {1: 1, 2: 2, 3: 3, 4: 4, 6: 5, 8: 6, 12: 7}
 UNIT = 0x38
+POW2 = {1: 0x38, 2: 0x40, 4: 0x48, 8: 0x50}
 
 
 def f32(word: int) -> float:
@@ -59,6 +61,24 @@ def case(name: str, fmt: str, k: int, values: list[int], rng: random.Random, fix
             "within_2^24": exact <= 2 ** 24, "model": got, "equal": got == exact}
 
 
+def scaled_case(name: str, k: int, scales: list[int], rng: random.Random, fixed: bool = False) -> dict:
+    """`e2m1b` on nvf4: E2M1 codes with halves (2 v in HALVES) and a power-of-two UE4M3 scale per 16; the sum in quarter
+    units is sum (2 v_a s_a)(2 v_b s_b)."""
+    def side():
+        v = [12 if fixed else rng.choice(list(HALVES)) for _ in range(k)]
+        sc = [max(scales) if fixed else rng.choice(scales) for _ in range(k // 16)]
+        return v, sc
+    (va, sa), (vb, sb) = side(), side()
+    exact = sum(va[i] * sa[i // 16] * vb[i] * sb[i // 16] for i in range(k))
+    acc = 0
+    for s in range(0, k, 64):
+        acc = NVF4.step_scaled(acc, [HALVES[v] for v in va[s:s + 64]], [HALVES[v] for v in vb[s:s + 64]],
+                               [POW2[c] for c in sa[s // 16:s // 16 + 4]], [POW2[c] for c in sb[s // 16:s // 16 + 4]])
+    got = f32(acc) * 4
+    return {"case": name, "format": "nvf4 pow2 scales", "k": k, "max": 12 * max(scales), "sum": exact,
+            "within_2^24": exact <= 2 ** 24, "model": got, "equal": got == exact}
+
+
 def main(argv: list[str]) -> int:
     rng = random.Random(0)
     cases = [
@@ -73,6 +93,11 @@ def main(argv: list[str]) -> int:
         case("nvf4 unit scales, k=465984, random {1,2,3,4,6}", "nvf4", 465984, [1, 2, 3, 4, 6], rng),
         case("nvf4 unit scales, k=14336, random {1,2,3,4,6}", "nvf4", 14336, [1, 2, 3, 4, 6], rng),
         case("nvf4 unit scales, k=2097152, {3, 6} (sum > 2^24)", "nvf4", 2097152, [3, 6], rng),
+        scaled_case("e2m1b E=2, k=4096, all 6 at scale 4 (k (12 2^E)^2 <= 2^24)", 4096, [1, 2, 4], rng, fixed=True),
+        scaled_case("e2m1b E=2, k=4096, random halves, scales {1, 2, 4}", 4096, [1, 2, 4], rng),
+        scaled_case("e2m1b E=1, k=14336, all 6 at scale 2", 14336, [1, 2], rng, fixed=True),
+        scaled_case("e2m1b E=1, k=14336, random halves, scales {1, 2}", 14336, [1, 2], rng),
+        scaled_case("e2m1b E=3, k=65536, random halves, scales {4, 8} (sum > 2^24)", 65536, [4, 8], rng),
     ]
     for c in cases:
         print(json.dumps(c), flush=True)
