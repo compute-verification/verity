@@ -247,12 +247,15 @@ def solve(kind: str, kseed: int, t0: int, n: int, bound: int, budget: float, end
 def floor(kind: str, kseed: int, t0: int, k: int, bounds: list[int], conflicts: int) -> dict:
     """The highest of `bounds` (ascending) below which no trail from t0 costs, through the open end: any trail
     starting at t0 (collision or fold, any length) costs at least the cheapest k-word prefix, so UNSAT at b proves
-    every trail from t0 costs more than b. Stops at the first bound that is SAT (reporting that prefix) or undecided."""
+    every trail from t0 costs more than b. A start whose k words reach the block's end takes the fold end over the
+    words left instead, which covers its collisions too (a collided state stays equal to the end at no cost).
+    Stops at the first bound that is SAT (reporting that prefix) or undecided."""
     n = min(k, B2 - t0)
+    end = "fold" if t0 + k >= B2 else "open"
     lanes = [(a, r) for a, _, r in trails.lanes_of(kind, kseed)]
-    c, cost, rec = build(lanes, t0, n, "open")
+    c, cost, rec = build(lanes, t0, n, end)
     tot = ITotalizer(lits=cost, ubound=bounds[-1] + 1, top_id=c.n)
-    out = {"kind": kind, "kseed": hex(kseed), "t0": t0, "k": n, "conflicts": conflicts, "floor": None,
+    out = {"kind": kind, "kseed": hex(kseed), "t0": t0, "k": n, "end": end, "conflicts": conflicts, "floor": None,
            "stopped": None, "prefix": None, "steps": []}
     with Solver(name="cadical195", bootstrap_with=c.clauses + tot.cnf.clauses) as s:
         for b in bounds:
