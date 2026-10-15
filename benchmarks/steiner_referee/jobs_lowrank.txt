@@ -1,0 +1,15 @@
+# Exact per-cell Steiner lengths for low-rank masks (RS-D2F, CMP-13): lowrank_cell.py R Q RHO S TRIALS SEED, RHO = min(r, L).
+# r = 2L: does any tree beat the chain? (the median attack stops saving at r = 2L)
+python3 lowrank_cell.py 4 2 2 3 12 101
+python3 lowrank_cell.py 4 2 2 4 12 102
+python3 lowrank_cell.py 4 2 2 5 8 103
+# L < r < 2L (median attack predicts (2L + r)/4 a target)
+python3 lowrank_cell.py 4 2 3 3 12 201
+python3 lowrank_cell.py 4 2 3 4 12 202
+python3 lowrank_cell.py 3 3 2 3 12 203
+python3 lowrank_cell.py 3 3 2 4 8 204
+# r = L, larger field (median attack 3r/4, dimension count r^2/(2r-1))
+python3 lowrank_cell.py 4 2 4 3 12 301
+python3 lowrank_cell.py 4 2 4 4 8 302
+python3 lowrank_cell.py 2 11 2 4 12 303
+python3 lowrank_cell.py 2 11 2 6 8 304
