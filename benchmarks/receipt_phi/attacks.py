@@ -31,7 +31,8 @@ random-operand work's words).
   linear sketch U = Xᵀ C in int8 digits, with both MAC counts.
 - ``duo_g``: duo's two-word cancellations are exactly the collisions of g_t(u) = rotl(u, r_t) + a_t·u (word t+1
   cancels a change at word t only if z is unchanged): the share of u with a partner, on a 16-bit analogue and at
-  w = 32 by solving for partners.
+  w = 32 by solving for partners. With it, ``duo_rotation_trail``: a fixed-difference trail of top-bit flips that
+  closes where the rotation r_t repeats, with probability 2^-(gap+1), so 2^-32 at phi.cu's period-31 schedule.
 """
 
 from __future__ import annotations
@@ -724,6 +725,48 @@ def mum_adaptive(samples: int, seed: int = 11) -> dict:
             "max_share": max(shares), "block_without_any_pair_independent_estimate": miss}
 
 
+def duo_rotation_trail(samples: int, t: int = 4, gap: int | None = None, seed: int = 12) -> dict:
+    """A fixed-difference trail through duo that closes where the rotation repeats. Flipping u_t's top bit adds
+    2^31 ± 2^{r−1} to z (a·2^31 = 2^31; the rotated bit lands at r − 1). Keeping u unchanged while y carries that
+    difference costs ½ a word (the 2^{r−1} carry), and a second top-bit flip at a word with the same r cancels it with
+    probability ½ (opposite sign), leaving 2^{r−1} in y for the next word to clear. So the trail passes with probability
+    2^-(g+1), g the gap to the next equal rotation: 31 in phi.cu's schedule. `gap` forces r_{t+gap} = r_t instead. The
+    probability is the product of per-word survival rates, with survivors resampled to `samples` after each word."""
+    rng = np.random.default_rng(seed)
+    r = twins.rot_of(t)
+    g = gap or next(j for j in range(1, B2) if twins.rot_of(t + j) == r)
+    top, lo, neg_lo = U(1 << 31), U(1 << (r - 1)), U((1 << 32) - (1 << (r - 1)))
+    deltas = [top] + [top] * (g >= 2) + [top ^ lo] * max(g - 2, 0) + [lo if g >= 2 else U(0), lo]
+    rots = [twins.rot_of(t + i) for i in range(len(deltas))]
+    rots[g] = r
+    y, z = (rng.integers(0, 1 << 32, size=samples, dtype=np.uint64) for _ in range(2))
+    y2, z2 = y.copy(), z.copy()
+    log2p, s, rates = 0.0, None, []
+    for i, d in enumerate(deltas):
+        a, c, ri = KA[t + i], KK[t + i], rots[i]
+        p = rng.integers(0, 1 << 32, size=samples, dtype=np.uint64)
+        u, u2 = y ^ p ^ c, y2 ^ p ^ d ^ c
+        y, z = (u * a + z) & M32, (rotl(u, ri) + (u * a + z)) & M32
+        y2, z2 = (u2 * a + z2) & M32, (rotl(u2, ri) + (u2 * a + z2)) & M32
+        dy, dz = (y2 - y) & M32, (z2 - z) & M32
+        if i == 0:
+            s = np.where(dz == ((top + lo) & M32), U(1), U(0))
+            ok = (dy == top) & ((dz == ((top + lo) & M32)) | (dz == ((top - lo) & M32)))
+        else:
+            sl = np.where(s == 1, lo, neg_lo)
+            want = (sl, U(0)) if i == g else (U(0), U(0)) if i == g + 1 else ((top + sl) & M32, (top + sl) & M32)
+            ok = (dy == want[0]) & (dz == want[1])
+        rate = float(np.mean(ok))
+        rates.append(rate)
+        if rate == 0:
+            return {"t": t, "r": r, "gap": g, "log2_probability": None, "rates": rates}
+        log2p += np.log2(rate)
+        keep = rng.choice(np.flatnonzero(ok), size=samples)
+        y, z, y2, z2, s = y[keep], z[keep], y2[keep], z2[keep], s[keep]
+    return {"t": t, "r": r, "gap": g, "words": len(deltas), "log2_probability": round(float(log2p), 2),
+            "predicted": -(g + 1), "rates": [round(x, 3) for x in rates]}
+
+
 def duo_g_image(bits: int = 16, keys_: int = 8, seed: int = 9) -> dict:
     """duo's word t changes the state's z exactly when g_t(u) = rotl(u, r_t) + a_t·u changes, and a change at word t is
     cancelled by word t+1 only if z is unchanged, so two-word cancellations are the collisions of g_t. The share of u
@@ -856,6 +899,7 @@ def main() -> int:
     if "duo_g" in todo:
         res["duo_g_image"] = duo_g_image()
         res["duo_adaptive"] = duo_adaptive(ns >> 4)
+        res["duo_rotation_trail"] = [duo_rotation_trail(ns >> 4, gap=g) for g in (1, 2, 3, 8, None)]
     if "decay" in todo:
         res["decay_8bit"] = decay(words=(1, 2) if args.quick else (1, 2, 3))
     print(json.dumps(res, indent=1))

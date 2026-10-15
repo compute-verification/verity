@@ -117,6 +117,16 @@ def test_decay_keeps_mad_bit0_linear_and_raises_duo() -> None:
     assert (attacks.two_word_table("duo", 9, 4, k8) == (yy ^ (((zz << 4) | (zz >> 4)) & 0xFF))).all()
 
 
+def test_duo_rotation_trail_costs_one_bit_a_word_of_gap() -> None:
+    """The top-bit trail closes at the next equal rotation with probability 2^-(gap+1): a quarter if two adjacent
+    rotations were equal, and 2^-32 at phi.cu's schedule, whose rotations repeat only every 31 words."""
+    for gap in (1, 3):
+        r = attacks.duo_rotation_trail(1 << 12, gap=gap)
+        assert abs(r["log2_probability"] - r["predicted"]) < 0.5
+    r = attacks.duo_rotation_trail(1 << 12)
+    assert r["gap"] == 31 and abs(r["log2_probability"] + 32) < 1.5
+
+
 def test_mum_adaptive_cancels_somewhere_in_every_block() -> None:
     """The function asserts each counted cancellation by stepping the chain; across a block's 255 adjacent pairs, a
     prover who knows the state finds one."""
