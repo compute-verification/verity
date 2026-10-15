@@ -53,10 +53,11 @@ done
 
 # QUIET_MAX: before the lease, wait until CPUs 0-119 are at most that busy for QUIET_SUSTAIN (3) samples of 3 s, with
 # no GPU held and check slots a and b free; inside it, the same with 8 held, else it releases the lease and waits again,
-# for up to QUIET_WAIT_MIN (30, whole minutes) in all, then exits 5 without measuring. quiet.jsonl records every gate.
+# for up to QUIET_WAIT_MIN (30, whole minutes) in all or until QUIET_UNTIL (a UNIX time), then exits 5 without
+# measuring. quiet.jsonl records every gate.
 export PC=0-3,96-99 RC="$(evens 4 94),$(evens 100 118)" MC
 export READERS=${READERS:-read triad copy_nt} PAIRS=${PAIRS:-read:h2d triad:h2d copy_nt:h2d read:zcr}
-export GATE_END=$(( $(date +%s) + 60 * ${QUIET_WAIT_MIN:-30} ))
+export GATE_END=${QUIET_UNTIL:-$(( $(date +%s) + 60 * ${QUIET_WAIT_MIN:-30} ))}
 gate() {  # label held [once]: 0 when quiet (or no QUIET_MAX), 3 when not and time is left, else exit 5; once: 1 sample
   [ -n "${QUIET_MAX:-}" ] || return 0
   local until=$GATE_END sustain=${QUIET_SUSTAIN:-3}
