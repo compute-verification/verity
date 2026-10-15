@@ -11,10 +11,12 @@
 //              at k = 128 P, 256 P, ..., K, so L = 128 P. Each thread chains the 4 words of each of its m16n8 accumulator
 //              tiles (one chain a tile) and folds its chains into one word a tile at the end. CR_SPREAD 0 runs every
 //              chain after the k-tile's last MMA; CR_SPREAD 1 interleaves them, a quarter of the chains after each of the
-//              k-tile's four 32-deep k-blocks (each chain's prefix is then at that k-block's end).
+//              k-tile's four 32-deep k-blocks (each chain's prefix is then at that k-block's end). CR_GRAIN G > 1 (P 1,
+//              no spread) runs every chain G times a k-tile, after every (4 / G)-th k-block: L = 128 / G, down to 32.
 //   CR_MODE 2  the dump: every k-block's prefix sums to global memory, and each thread's chain-word coordinates, so the
 //              host can recompute every receipt kernel's words
-// Compiled once per kernel: -DCR_NAME=name -DCR_CFG -DCR_VAR -DCR_ROUNDS -DCR_P -DCR_MODE -DCR_SPREAD (job.sh's cgemm).
+// Compiled once per kernel: -DCR_NAME=name -DCR_CFG -DCR_VAR -DCR_ROUNDS -DCR_P -DCR_MODE -DCR_SPREAD -DCR_GRAIN
+// (job.sh's cgemm).
 #include "cutlass_receipt.cuh"
 
 #include "cute/tensor.hpp"
@@ -35,6 +37,9 @@
 #ifndef CR_SPREAD
 #define CR_SPREAD 0
 #endif
+#ifndef CR_GRAIN
+#define CR_GRAIN 1
+#endif
 #define CR_STR2(x) #x
 #define CR_STR(x) CR_STR2(x)
 
@@ -50,8 +55,9 @@ struct Out {
 };
 __device__ Out g_out;
 
-template <class Base, int VAR, int ROUNDS, int P, int MODE, int SPREAD>
+template <class Base, int VAR, int ROUNDS, int P, int MODE, int SPREAD, int GRAIN>
 struct ReceiptMma : Base {
+    static_assert(GRAIN == 1 || (P == 1 && !SPREAD), "a grain above 1 receipts every k-tile, without spread");
     using MainloopPipeline = typename Base::MainloopPipeline;
     using PipelineState = typename Base::PipelineState;
     using TensorStorage = typename Base::TensorStorage;
@@ -109,13 +115,16 @@ struct ReceiptMma : Base {
 
         constexpr int KB = decltype(K_BLOCK_MAX)::value;
         static_assert(NN == decltype(size<1>(TileShape{}))::value / 16, "cutlass_receipt.cu's nn_max assumes 2 MMA warps in n");
+        static_assert(KB % GRAIN == 0, "a grain divides the k-tile's k-blocks");
+        constexpr int GS = KB / GRAIN;
         int kt = 0;
-        // After k-block b of k-tile kt: receipted k-tiles run φ on every chain at b = KB - 1, or (SPREAD) on the chains
-        // with nn * KB / NN == b, a quarter of them a k-block here.
+        // After k-block b of k-tile kt: receipted k-tiles run φ on every chain at b = KB - 1 (GRAIN > 1: at every
+        // b = GS - 1 mod GS, with w the k-block's index from 1), or (SPREAD) on the chains with nn * KB / NN == b, a
+        // quarter of them a k-block here.
         auto hook = [&](auto k_block, auto receipted) {
             constexpr int b = decltype(k_block)::value;
-            if constexpr (MODE == 1 && decltype(receipted)::value && (SPREAD || b == KB - 1)) {
-                const uint32_t w = (uint32_t)(kt + 1);
+            if constexpr (MODE == 1 && decltype(receipted)::value && (SPREAD || (b + 1) % GS == 0)) {
+                const uint32_t w = GRAIN > 1 ? (uint32_t)(kt * KB + b + 1) : (uint32_t)(kt + 1);
                 CUTLASS_PRAGMA_UNROLL
                 for (int mm = 0; mm < MM; ++mm)
                     CUTLASS_PRAGMA_UNROLL
@@ -227,7 +236,7 @@ using BaseMainloop = typename cutlass::gemm::collective::CollectiveBuilder<
     cutlass::layout::ColumnMajor, 16, float, Tile, Cluster,
     cutlass::gemm::collective::StageCountAutoCarveout<static_cast<int>(sizeof(typename Epilogue::SharedStorage))>,
     Schedule>::CollectiveOp;
-using Mainloop = cute::conditional_t<CR_MODE == 0, BaseMainloop, ReceiptMma<BaseMainloop, CR_VAR, CR_ROUNDS, CR_P, CR_MODE, CR_SPREAD>>;
+using Mainloop = cute::conditional_t<CR_MODE == 0, BaseMainloop, ReceiptMma<BaseMainloop, CR_VAR, CR_ROUNDS, CR_P, CR_MODE, CR_SPREAD, CR_GRAIN>>;
 using GemmKernel = cutlass::gemm::kernel::GemmUniversal<Shape<int, int, int, int>, Mainloop, Epilogue, void>;
 using Gemm = cutlass::gemm::device::GemmUniversalAdapter<GemmKernel>;
 
@@ -287,6 +296,7 @@ const cr_kernel K{CR_STR(CR_NAME),
                   CR_P,
                   CR_MODE,
                   CR_SPREAD,
+                  CR_GRAIN,
                   kTileM,
                   kTileN,
                   kThreads,

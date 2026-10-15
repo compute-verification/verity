@@ -21,9 +21,10 @@
 #          sections over eight of its kernels at 8,192
 #   cgemm  (not default) lease 1: cutlass_receipt.cu, the CUTLASS sm_120 FP8 GEMMs vLLM serves (prefill: cooperative
 #          128 x 128 x 128; decode: ping-pong 32 x 64 x 128), unmodified and with the phi receipt after every P-th k-tile
-#          (cutlass_receipt.kernels), gated, timed at Llama-3.1-8B's linear shapes; vllm_gemm_ref.py times vLLM's own
-#          cutlass_scaled_mm at the same shapes; ncu over six of the kernels. Built before the lease, one nvcc a kernel,
-#          against the harness's CUTLASS v4.8.0 checkout on node 2 (cloned if absent)
+#          or every first or second 32-deep k-block (cutlass_receipt.kernels), gated, timed at Llama-3.1-8B's linear
+#          shapes; vllm_gemm_ref.py times vLLM's own cutlass_scaled_mm at the same shapes; ncu over eight of the kernels.
+#          Built before the lease, one nvcc a kernel, against the harness's CUTLASS v4.8.0 checkout on node 2 (cloned if
+#          absent)
 #   gap    (not default) lease 1: gap_filler.py, forced work (φ pump, or a tag-like read of a 1 GiB store) on a
 #          low-priority stream beside vLLM's FP8 layer stack (its own ops), graph-replayed at high priority
 # Timeouts run in the foreground so `research cancel` reaches the GPU process.
@@ -67,7 +68,7 @@ probe_build() {  # NAME SOURCE [NVCC FLAGS]: the binary in $d, its SASS and the 
 [[ " $STAGES " == *" isa "* ]] && probe_build isa_rates isa_rates.cu
 [[ " $STAGES " == *" rgemm "* ]] && probe_build receipt_gemm receipt_gemm.cu -Xptxas -v
 cgemm_build() {  # cutlass_receipt in $d with one object a line of cutlass_receipt.kernels, compiled in parallel
-  local C=/workspace/pouw/harness/build/cutlass-v4.8.0 b="$d/cg" pids=() bad=0 name cfg var rounds p mode spread
+  local C=/workspace/pouw/harness/build/cutlass-v4.8.0 b="$d/cg" pids=() bad=0 name cfg var rounds p mode spread grain
   if [[ ! -d $C/include/cutlass ]]; then
     C=$d/cutlass
     git clone -q --depth 1 --branch v4.8.0 https://github.com/NVIDIA/cutlass "$C"
@@ -77,10 +78,10 @@ cgemm_build() {  # cutlass_receipt in $d with one object a line of cutlass_recei
   local fl=(-O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a --expt-relaxed-constexpr -I"$C/include"
             -I"$C/tools/util/include" -I"$S" -DCUTLASS_ENABLE_TENSOR_CORE_MMA=1)
   stamp "build cutlass_receipt kernels"
-  while read -r name cfg var rounds p mode spread; do
+  while read -r name cfg var rounds p mode spread grain; do
     [[ -z $name || $name == \#* ]] && continue
     nice -n 19 "$CUDA/bin/nvcc" "${fl[@]}" -Xptxas -v -DCR_NAME=$name -DCR_CFG=$cfg -DCR_VAR=$var -DCR_ROUNDS=$rounds \
-      -DCR_P=$p -DCR_MODE=$mode -DCR_SPREAD=${spread:-0} -c "$S/cutlass_receipt_kernel.cu" -o "$b/$name.o" 2> "$OUT/nvcc-cg-$name.txt" &
+      -DCR_P=$p -DCR_MODE=$mode -DCR_SPREAD=${spread:-0} -DCR_GRAIN=${grain:-1} -c "$S/cutlass_receipt_kernel.cu" -o "$b/$name.o" 2> "$OUT/nvcc-cg-$name.txt" &
     pids+=($!)
   done < "$S/cutlass_receipt.kernels"
   for pid in "${pids[@]}"; do wait "$pid" || bad=1; done
@@ -215,7 +216,7 @@ cgemm() {
     stamp "vllm gemm ref FAILED rc=$?"
   fi
   local run
-  for run in "p8192_qkv p_alu_p1,p_alu_p4,p_alu3_p1,p_alu3_p1s" "d32_gateup d_alu_p1,d_alu8_p1,d_alu32_p1"; do
+  for run in "p8192_qkv p_alu_p1,p_alu3_p1,p_alu3_p1s,p_imad_g4,p_alu_g4" "d32_gateup d_alu8_p1,d_alu32_p1,d_alu8_g4"; do
     set -- $run
     stamp "cutlass receipt ncu $1"
     if timeout --foreground 600 "$NCU" --clock-control none --kernel-name regex:device_kernel --section LaunchStats \

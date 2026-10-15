@@ -1,8 +1,8 @@
 // What phi receipts cost inside the FP8 GEMMs vLLM actually serves on sm_120 (CMP-8 round 2): Llama-3.1-8B's linears run
 // vLLM's cutlass_scaled_mm, CUTLASS's MainloopSm120TmaWarpSpecialized in two configurations (prefill: cooperative
 // 128x128x128; decode at batch 32: ping-pong 32x64x128). cutlass_receipt_kernel.cu builds each, unmodified (plain), with
-// phi.cuh's receipt in every P-th k-tile (L = 128 P; after its last k-block, or spread over its four k-blocks), or as the
-// prefix dump the gates read. This program gates them and
+// phi.cuh's receipt in every P-th k-tile (L = 128 P; after its last k-block, or spread over its four k-blocks), at every
+// first or second 32-deep k-block (grain 4 or 2: L = 32 or 64), or as the prefix dump the gates read. This program gates them and
 // times them against plain at Llama-8B's shapes.
 // Gates (exit 3, before any time is printed), at one small shape per configuration:
 //   - the dump kernel's prefix sums at every 32-deep k-block are within 1e-5 of the sum of |products| of a double host sum, and its
@@ -276,12 +276,15 @@ static void gate_cfg(int cfg, const std::vector<const cr_kernel*>& ks, unsigned 
                         uint32_t y = 0;
                         for (int kt = 0; kt < KT; kt++) {
                             if ((kt + 1) % k->p) continue;
-                            const size_t kb = (size_t)kt * KB + (k->spread ? (ch % NN) * KB / NN : KB - 1);
-                            for (int e = 0; e < 4; e++) {
-                                const uint32_t w = map[((size_t)t * CH + ch) * 4 + e];
-                                const int r = tm * TM + (int)(w >> 16), c = tn * TN + (int)(w & 0xffff);
-                                y = phi_host(k->var, k->rounds, y, f2u(dump[(kb * s.m + r) * s.n + c]),
-                                             (uint32_t)(kt + 1), key(ch, e));
+                            for (int g = 0; g < (k->spread ? 1 : k->grain); g++) {
+                                const size_t kb = (size_t)kt * KB +
+                                                  (k->spread ? (ch % NN) * KB / NN : (g + 1) * (KB / k->grain) - 1);
+                                const uint32_t kw = k->grain > 1 ? (uint32_t)(kb + 1) : (uint32_t)(kt + 1);
+                                for (int e = 0; e < 4; e++) {
+                                    const uint32_t w = map[((size_t)t * CH + ch) * 4 + e];
+                                    const int r = tm * TM + (int)(w >> 16), c = tn * TN + (int)(w & 0xffff);
+                                    y = phi_host(k->var, k->rounds, y, f2u(dump[(kb * s.m + r) * s.n + c]), kw, key(ch, e));
+                                }
                             }
                         }
                         f = rotl13(f) ^ y;
@@ -325,8 +328,9 @@ int main(int argc, char** argv) {
     for (size_t i = 0; i < ks.size(); i++) {
         auto* k = ks[i];
         printf("    {\"name\": \"%s\", \"cfg\": %d, \"var\": %d, \"rounds\": %d, \"p\": %d, \"L\": %d, \"mode\": %d, \"spread\": %d, "
-               "\"tile\": [%d, %d], \"threads\": %d, \"chains\": %d, \"stages\": %d, \"smem_bytes\": %d}%s\n",
-               k->name, k->cfg, k->var, k->rounds, k->p, 128 * k->p, k->mode, k->spread, k->tile_m, k->tile_n, k->threads,
+               "\"grain\": %d, \"tile\": [%d, %d], \"threads\": %d, \"chains\": %d, \"stages\": %d, \"smem_bytes\": %d}%s\n",
+               k->name, k->cfg, k->var, k->rounds, k->p, 128 * k->p / k->grain, k->mode, k->spread, k->grain, k->tile_m,
+               k->tile_n, k->threads,
                k->chains, k->stages, k->smem_bytes, i + 1 < ks.size() ? "," : "");
     }
     printf("  ],\n  \"gates\": [\n");
@@ -442,12 +446,14 @@ int main(int argc, char** argv) {
         for (size_t j = 0; j < sk.size(); j++) {
             auto* k = sk[j];
             const double t = med(ms[j]), f = med(mhz[j]);
-            const double words = k->mode == 1 ? (double)s.m * s.n * (s.k / (128.0 * k->p)) : 0.0;
+            const double words = k->mode == 1 ? (double)s.m * s.n * (s.k * k->grain / (128.0 * k->p)) : 0.0;
             printf("%s    {\"shape\": \"%s\", \"m\": %d, \"n\": %d, \"k\": %d, \"kernel\": \"%s\", \"cfg\": %d, \"var\": %d, "
-                   "\"rounds\": %d, \"p\": %d, \"L\": %d, \"spread\": %d, \"sets\": %d, \"launches\": %d, \"reps\": %d, \"ms\": %.5f, "
+                   "\"rounds\": %d, \"p\": %d, \"L\": %d, \"spread\": %d, \"grain\": %d, \"sets\": %d, \"launches\": %d, "
+                   "\"reps\": %d, \"ms\": %.5f, "
                    "\"ms_min\": %.5f, \"tflops\": %.1f, \"sm_mhz\": %.0f, \"macs_per_sm_clk\": %.1f, \"receipt_words\": %.0f, "
                    "\"phi1_per_sm_clk\": %.3f, \"wall_vs_plain\": %.4f, \"cycles_vs_plain\": %.4f}",
-                   first_row ? "" : ",\n", s.name, s.m, s.n, s.k, k->name, k->cfg, k->var, k->rounds, k->p, 128 * k->p, k->spread, sets,
+                   first_row ? "" : ",\n", s.name, s.m, s.n, s.k, k->name, k->cfg, k->var, k->rounds, k->p,
+                   128 * k->p / k->grain, k->spread, k->grain, sets,
                    launches, reps, t, *std::min_element(ms[j].begin(), ms[j].end()), 2.0 * s.m * s.n * (double)s.k / (t * 1e9), f,
                    f > 0 ? (double)s.m * s.n * s.k / (t * 1e-3 * f * 1e6 * prop.multiProcessorCount) : 0.0, words,
                    f > 0 ? words * k->rounds / (t * 1e-3 * f * 1e6 * prop.multiProcessorCount) : 0.0, med(wall[j]),
