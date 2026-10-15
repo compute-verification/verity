@@ -32,6 +32,7 @@ time (never the `rows` list).  A `ProgramView` built by hand from a tuple of `Ca
 
 from __future__ import annotations
 
+import bisect
 import gzip
 import json
 from array import array
@@ -288,6 +289,13 @@ class _Calls(_SequenceABC):
         return f"_Calls(n={len(self)})"
 
 
+def _disjoint_los(table: Sequence[Port]) -> list[int] | None:
+    """The ports' `lo` in table order when they are disjoint and ascending (then a run's overlapping ports are found by bisection, in
+    table order), else None."""
+    los = [p.lo for p in table]
+    return los if all(table[k].hi <= los[k + 1] for k in range(len(table) - 1)) else None
+
+
 class _OutOfOrder(Exception):
     """The streamed rows are not the body in order (row i is not at position i, or a read names a later Call)."""
 
@@ -304,6 +312,7 @@ class _Builder:
         self._spec_pidx: list[tuple[int, ...]] = []          # per spec: the port-name index of each port
         self._params = params
         self._param_pidx = [tuple(self._port_index(p.name) for p in pv.port_table) for pv in params]
+        self._param_lo = [_disjoint_los(pv.port_table) for pv in params]
 
     def _port_index(self, name: str) -> int:
         k = self._pname.get(name)
@@ -381,7 +390,15 @@ class _Builder:
                         sel = pidx
                     else:
                         lo, hi = int(run[2]), int(run[3])
-                        sel = [pi for p, pi in zip(pv.port_table, pidx) if p.lo < hi and lo < p.hi]
+                        los = self._param_lo[idx]
+                        if los is None:
+                            sel = [pi for p, pi in zip(pv.port_table, pidx) if p.lo < hi and lo < p.hi]
+                        else:                       # a weights struct has thousands of ports: the overlapping ones by bisection
+                            table, k, sel = pv.port_table, max(bisect.bisect_right(los, lo) - 1, 0), []
+                            while k < len(los) and los[k] < hi:
+                                if lo < table[k].hi:
+                                    sel.append(pidx[k])
+                                k += 1
                     for pi in sel:
                         if (pid, pi) not in seen:
                             seen.add((pid, pi))

@@ -215,3 +215,24 @@ def test_a_body_that_is_not_columnar_or_units_that_are_not_a_partition_go_to_bou
                   (VerificationUnit("a", frozenset(range(1, 9))),)):                                        # 8 is not a Call
         with pytest.raises(PartitionError):
             boundary_without_literals(P, lambda _P, units=units: units, frozenset())
+
+
+def test_a_wide_record_resolves_by_bisection_to_the_linear_scans_ports():
+    """A weights struct of hundreds of fields: each parameter run's ports, found by bisection, are the linear scan's, in table order;
+    a table whose ports overlap keeps the linear scan."""
+    rng = random.Random(5)
+    edges = sorted(rng.sample(range(1, 50_000), 299))
+    table = tuple(pv.Port(f"f{k}", lo, hi, hi - lo, 16) for k, (lo, hi) in enumerate(zip([0] + edges, edges + [50_000])))
+    runs = [("p", 0, a, a + rng.choice((1, 7, 400, 9_000))) for a in (rng.randrange(0, 49_000) for _ in range(500))]
+    for t in (table, table[:3] + (pv.Port("over", 0, 50_000, 50_000, 16),)):
+        b = pv._Builder((pv.InputView(-1, "weights", "x", t),))
+        assert (b._param_lo[0] is None) == (t is not table)
+        b.add(0, "Gemm_v1{K=4,N=8}", "call", "x", pv.definition_ports("Gemm_v1{K=4,N=8}"), [runs])
+        got = [b.c.port_names[p] for p in b.c.read_port]
+        want, seen = [], set()
+        for _s, _i, lo, hi in runs:
+            for p in t:
+                if p.lo < hi and lo < p.hi and p.name not in seen:
+                    seen.add(p.name)
+                    want.append(p.name)
+        assert got == want
