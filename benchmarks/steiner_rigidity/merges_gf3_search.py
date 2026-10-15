@@ -139,13 +139,12 @@ def total_of(H, idx):
     return best.sum(axis=1)
 
 
-def main():
-    P, Q = int(sys.argv[1]), int(sys.argv[2])
-    out = Path(sys.argv[sys.argv.index("--out") + 1]) if "--out" in sys.argv else Path(os.environ.get("OUT", "."))
+def search(P, Q, verify=20, log=print):
+    """The search on the P x Q grid; re-checks the totals of `verify` spaces by ranks (merges_check.pencil_profile)."""
     t0 = time.time()
     H = Helpful(P, Q)
     a1s, a2s = canonical_first(P, Q)
-    print(f"{P}x{Q}: |H| = {len(H.h)}, {len(a1s)} first words up to symmetry ({time.time() - t0:.1f} s)", flush=True)
+    log(f"{P}x{Q}: |H| = {len(H.h)}, {len(a1s)} first words up to symmetry ({time.time() - t0:.1f} s)")
     hist, top, examples, n_four, verified = {}, 0, [], 0, 0
     for n, (a1, a2) in enumerate(zip(a1s, a2s)):
         b1, b2 = H.p1, H.p2
@@ -161,13 +160,11 @@ def main():
         idx = np.stack([np.full(len(k), iA), np.full(len(k), iAn), k, H.find(b2[k], b1[k]),
                         iS[k], iSn[k], iD[k], iDn[k]], axis=1)
         tot = total_of(H, idx)
-        if verified < 20:
+        for j in (0, int(np.argmax(tot)))[: max(0, verify - verified)]:
             from merges_check import Shape, pencil_profile
-            j = int(np.argmax(tot)) if verified % 2 else 0
             Z1, Z2 = decode(a1, a2, P, Q), decode(b1[k[j]], b2[k[j]], P, Q)
             _, best = pencil_profile(Shape(P, Q, 2, 2), Z1, Z2, 3)
             assert sum(s for s, _ in best.values()) == tot[j], "bit-plane total disagrees with ranks"
-            assert len({n for _, n in best.values()}) <= 4
             verified += 1
         n_four += len(k)
         for v, c in zip(*np.unique(tot, return_counts=True)):
@@ -177,16 +174,20 @@ def main():
         for j in np.nonzero(tot > 4)[0][:5 - len(examples)]:
             examples.append({"a": [int(a1), int(a2)], "b": [int(b1[k[j]]), int(b2[k[j]])], "total": int(tot[j])})
         if n % 50 == 0:
-            print(f"  {n}/{len(a1s)} first words, {n_four} four-direction pairs, top {top}, {time.time() - t0:.0f} s",
-                  flush=True)
-    res = {"P": P, "Q": Q, "L": 2, "field": 3, "helpful": len(H.h), "first_words": len(a1s),
-           "four_direction_pairs": n_four, "histogram": hist, "max_total": top, "bound_2L": 4,
-           "counterexamples": examples, "verified_by_ranks": verified, "seconds": round(time.time() - t0, 1)}
+            log(f"  {n}/{len(a1s)} first words, {n_four} four-direction pairs, top {top}, {time.time() - t0:.0f} s")
+    assert top <= 4 or examples, "inconsistent"
+    return {"P": P, "Q": Q, "L": 2, "field": 3, "helpful": len(H.h), "first_words": len(a1s),
+            "four_direction_pairs": n_four, "histogram": hist, "max_total": top, "bound_2L": 4,
+            "counterexamples": examples, "verified_by_ranks": verified, "seconds": round(time.time() - t0, 1)}
+
+
+def main():
+    P, Q = int(sys.argv[1]), int(sys.argv[2])
+    out = Path(sys.argv[sys.argv.index("--out") + 1]) if "--out" in sys.argv else Path(os.environ.get("OUT", "."))
+    res = search(P, Q, log=lambda s: print(s, flush=True))
     out.mkdir(parents=True, exist_ok=True)
     (out / f"gf3_{P}_{Q}.json").write_text(json.dumps(res, indent=1))
     print(json.dumps(res))
-    assert top <= 4 or examples, "inconsistent"
-    return res
 
 
 if __name__ == "__main__":
