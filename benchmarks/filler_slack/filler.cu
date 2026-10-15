@@ -500,6 +500,7 @@ static void emit_v(const Dev& d, const Kern& k, uint32_t seed, uint32_t kseed, i
   }
 }
 
+#ifndef FILLER_LIB  // serve.cu includes the kernels without the benchmark
 static const int SLEEPS[] = {0, 400, 1600, 3200, 6400, 12800, 25600, 51200, 102400, 409600, 1000000};
 
 int main(int argc, char** argv) {
@@ -545,6 +546,37 @@ int main(int argc, char** argv) {
         }
       }
     return 0;
+  }
+  if (mode == "ssdump") {  // ssdump NAME FW PW SLEEP ITERS: per SM, the filler block's span and the probe block's warps
+    if (argc < 7) return 2;
+    set_keys(kseed0);
+    const int fw = atoi(argv[3]), pw = atoi(argv[4]);
+    for (const SKern& p : skernels())
+      if (p.name == argv[2]) {
+        launch(d, find(ks, "base-u1"), d.sms, fw, pw, atoi(argv[5]), atoi(argv[6]), 0x5EED1234u, &p);
+        std::vector<long long> fc((size_t)d.sms * MAXW * 2), pi((size_t)d.sms * MAXW * 4);
+        std::vector<uint32_t> sm(d.sms), sm2(d.sms);
+        CK(cudaMemcpy(fc.data(), d.fclk, fc.size() * sizeof(long long), cudaMemcpyDeviceToHost));
+        CK(cudaMemcpy(pi.data(), d.pinfo, pi.size() * sizeof(long long), cudaMemcpyDeviceToHost));
+        CK(cudaMemcpy(sm.data(), d.smid, sm.size() * sizeof(uint32_t), cudaMemcpyDeviceToHost));
+        CK(cudaMemcpy(sm2.data(), d.smid2, sm2.size() * sizeof(uint32_t), cudaMemcpyDeviceToHost));
+        for (int bl = 0; bl < 6; ++bl) {
+          long long lo = fc[2 * bl * MAXW], hi = fc[2 * bl * MAXW + 1];
+          for (int w = 1; w < fw; ++w) {
+            lo = std::min(lo, fc[2 * (bl * MAXW + w)]);
+            hi = std::max(hi, fc[2 * (bl * MAXW + w) + 1]);
+          }
+          for (int pb = 0; pb < d.sms; ++pb)
+            if (sm2[pb] == sm[bl])
+              for (int w = 0; w < pw; ++w) {
+                const long long* q = &pi[4 * (pb * MAXW + w)];
+                printf("D sm %u filler %lld..%lld (%lld) probe-block %d warp %d bodies %lld t0-lo %lld t1-hi %lld\n", sm[bl], lo,
+                       hi, hi - lo, pb, w, q[0], q[1] - lo, q[2] - hi);
+              }
+        }
+        return 0;
+      }
+    return 2;
   }
   if (mode == "one") {
     if (argc < 7) return 2;
@@ -618,3 +650,4 @@ int main(int argc, char** argv) {
   fclose(vf);
   return 0;
 }
+#endif
