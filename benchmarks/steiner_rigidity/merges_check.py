@@ -1801,7 +1801,7 @@ def part15(rng):
                 Zs[1][0] = 0
                 Zs[0][3], Zs[1][3] = (a * Zs[0][0] + c * Zs[0][1]) % 3, (b * Zs[0][0] + c * Zs[1][1]) % 3
 
-        def toeplitz(k):
+        def toeplitz(k, Zs=Zs):
             M = np.zeros((4 * (k + 1), 6 * k), dtype=np.int64)
             for i in range(k):
                 M[4 * i:4 * i + 4, 6 * i:6 * i + 6], M[4 * i + 4:4 * i + 8, 6 * i:6 * i + 6] = Zs[0], Zs[1]
