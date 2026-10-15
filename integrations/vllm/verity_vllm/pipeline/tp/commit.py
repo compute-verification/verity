@@ -30,6 +30,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from verity_vllm.acquire.sources import taps as TAPS
+from verity_vllm.check import weights_of_record as WR
 from verity_vllm.config import group, option
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline.tp import c2 as C2
@@ -319,7 +320,6 @@ def main(args: Options) -> int:
                 "build_program_digest_kind": None}
     (out / "versions.json").write_text(json.dumps(versions, indent=1, default=str) + "\n")
     reqs, sampling = wl["requests"], wl["sampling"]
-
     PH.warmups(args.warmup, lambda i: run_workload(eng, va.throwaway_requests(eng, reqs, seed=100 + i), sampling))
     envelope = {"batch": args.max_num_seqs, "max_prompt": max(len(r["prompt_token_ids"]) for r in reqs),
                 "max_new": max(int(r.get("max_tokens") or sampling.get("max_tokens") or 1) for r in reqs),
@@ -434,9 +434,10 @@ def main(args: Options) -> int:
                            "program_dirs": {str(r): str(builds[r]) for r in range(world) if builds.get(r)}}
         if len(weights_pin_cfg["program_dirs"]) != world:
             raise SystemExit(f"--checkpoint-dir needs a rank Program dir for every rank (--build-rank<r>): have {sorted(weights_pin_cfg['program_dirs'])} of {world}")
+        with PH.TL.span("prep.shard_pin"):      # every shard hashed once, here; each rank's record adopts the pin (WR.build_record shard_pin)
+            weights_pin_cfg["shard_pin"] = WR.record_shard_pin(str(args.checkpoint_dir), checkpoints_manifest=args.checkpoints_manifest, model=args.checkpoint_model)
     versions["weights_pin"] = {"checkpoint_dir": args.checkpoint_dir, "checkpoints_manifest": args.checkpoints_manifest, "required": (args.required_manifest is not None and not args.no_weights_pin),
-                               "rule": "MAN-09 per rank: sha256(served shard) == digest composed from the PINNED checkpoint shards by the rank Program's shard map, every field; "
-                                       "absent with --required-manifest = FAIL 'weights unpinned (MAN-09)' unless --no-weights-pin"}
+                               "rule": "MAN-09 per rank: sha256(served shard) == digest composed from the PINNED checkpoint shards by the rank Program's shard map, every field; absent with --required-manifest = FAIL 'weights unpinned (MAN-09)' unless --no-weights-pin"}
     flip_weight = None
     if args.flip_weight:
         fw = args.flip_weight.split(":")
@@ -495,7 +496,6 @@ def main(args: Options) -> int:
             raise SystemExit(f"fail-closed: rank {m['rank']}: manifest Program digest != this rank's Program digest")
     with PH.TL.span("prep.warmup_instrumented", kind=args.committer) as warm:
         warm["wall_s"] = round(WU.run(llm, lambda: run_workload(eng, va.throwaway_requests(eng, reqs, seed=200), sampling), out, args.committer, args.rpc_timeout)["wall_s"], 3)
-
     rows: list[dict] = []
     bundles_of: dict[int, dict[int, dict | None]] = {}     # --replay-deferred: pair -> rank -> what its finalize wrote for its bundle
     tokens_ref = None

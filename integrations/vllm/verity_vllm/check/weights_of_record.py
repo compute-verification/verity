@@ -39,7 +39,6 @@ import hashlib
 import json
 import os
 import re
-import struct
 import sys
 import time
 from pathlib import Path
@@ -49,17 +48,13 @@ import numpy as np
 from dataclasses import dataclass
 
 from verity_vllm.check import fp8_moe_scales, fp8_ue8m0
+from verity_vllm.check.checkpoint_index import CheckpointIndex, sha256_file  # noqa: F401  (sha256_file: the record's shard hash)
 from verity_vllm.config import UsageError, option
-from verity_vllm.check.tp_shards import replicated_qkv, shard_dim as _shard_dim, shard_dim0 as _shard_dim0
+from verity_vllm.check.tp_shards import kv_heads_replicated, replicated_qkv, rows_of, shard_dim as _shard_dim, shard_dim0 as _shard_dim0
 
 SCHEMA = "verity/commit/weights-of-record/v2"       # v2: host-independent root (analytic entries keyed by their exact inputs)
 SCHEMA_V1 = "verity/commit/weights-of-record/v1"    # v1 roots differ per deriving host for models with a rotary table; verdict unaffected
 FULL_DIGEST_RE = re.compile(r"[0-9a-f]{128}")       # a Program digest (sha512 hex): compared only whole, a prefix names no Program
-
-#: safetensors dtype -> (numpy view dtype, element bytes)
-_ST_DTYPE = {"BF16": (np.uint16, 2), "F16": (np.float16, 2), "F32": (np.float32, 4), "F64": (np.float64, 8),
-             "I64": (np.int64, 8), "I32": (np.int32, 4), "I16": (np.int16, 2), "I8": (np.int8, 1), "U8": (np.uint8, 1),
-             "BOOL": (np.uint8, 1), "F8_E4M3": (np.uint8, 1), "F8_E5M2": (np.uint8, 1)}
 
 #: fused (stacked along dim 0) fields of the served model <- the checkpoint's parts, in stacking order; `{s}` = the field suffix
 #: (`weight`, `bias`, `weight_scale_inv`, ...).  The rule applies only when the checkpoint has no tensor of the fused name itself
@@ -102,92 +97,6 @@ ENGINE_CONSTANT_RE = re.compile(r"([._]attn\._?(k|v|q|prob)_scale|\.rotary_emb\.
 PLACEHOLDER_RE = re.compile(r"^(.*\.attn\.)(k|v|q|prob)_scale$")
 
 
-# ------------------------------------------------------------------------------------------------------------------ checkpoint index
-
-def read_safetensors_header(path: str) -> tuple[dict[str, Any], int]:
-    with open(path, "rb") as f:
-        n = struct.unpack("<Q", f.read(8))[0]
-        hdr = json.loads(f.read(n))
-    return hdr, 8 + n
-
-
-def sha256_file(path: str, chunk: int = 1 << 24) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        while True:
-            b = f.read(chunk)
-            if not b:
-                break
-            h.update(b)
-    return h.hexdigest()
-
-
-class CheckpointIndex:
-    """Every tensor of every safetensors shard under `ckpt_dir`: name -> (shard, dtype, shape, byte range); shards memory-mapped on demand.
-    With `checkpoints_manifest` (manifests/checkpoints.json) the shard sha256s are verified against the pinned entry by name."""
-
-    def __init__(self, ckpt_dir: str, *, checkpoints_manifest: str | None = None, model: str | None = None, revision: str | None = None,
-                 verify_shards: bool = True):
-        self.dir = ckpt_dir
-        self.tensors: dict[str, tuple[str, str, list[int], int, int]] = {}
-        self.shards: list[str] = []
-        self.config = {}
-        cfg = os.path.join(ckpt_dir, "config.json")
-        if os.path.exists(cfg):
-            self.config = json.load(open(cfg))
-        for fn in sorted(os.listdir(ckpt_dir)):
-            if not fn.endswith(".safetensors"):
-                continue
-            path = os.path.join(ckpt_dir, fn)
-            hdr, base = read_safetensors_header(path)
-            self.shards.append(fn)
-            for name, meta in hdr.items():
-                if name == "__metadata__":
-                    continue
-                lo, hi = meta["data_offsets"]
-                self.tensors[name] = (fn, meta["dtype"], [int(x) for x in meta["shape"]], base + int(lo), base + int(hi))
-        if not self.shards:
-            raise FileNotFoundError(f"no *.safetensors shard under {ckpt_dir}")
-        self.pin: dict[str, Any] = {"manifest": checkpoints_manifest, "entry": None, "shards": {}}
-        if verify_shards:
-            self._verify_shards(checkpoints_manifest, model, revision)
-
-    def _verify_shards(self, manifest: str | None, model: str | None, revision: str | None) -> None:
-        entry = None
-        if manifest and os.path.exists(manifest):
-            ck = json.load(open(manifest))
-            for c in ck.get("checkpoints", []):
-                lp = str(c.get("local_path") or "")
-                if (lp and os.path.realpath(lp) == os.path.realpath(self.dir)) or \
-                        (model and c.get("repo") == model and (not revision or str(c.get("revision", "")).startswith(revision[:10]))):
-                    entry = c
-                    break
-        self.pin["entry"] = None if entry is None else {"repo": entry.get("repo"), "revision": entry.get("revision")}
-        for fn in self.shards:
-            sha = sha256_file(os.path.join(self.dir, fn))
-            pinned = ((entry or {}).get("files") or {}).get(fn, {}).get("sha256") if entry else None
-            self.pin["shards"][fn] = {"sha256": sha, "pinned_sha256": pinned,
-                                      "pinned": (sha == pinned) if pinned else None}
-
-    def has(self, name: str) -> bool:
-        return name in self.tensors
-
-    def array(self, name: str) -> np.ndarray:
-        fn, dt, shape, lo, hi = self.tensors[name]
-        npdt, isz = _ST_DTYPE[dt]
-        with open(os.path.join(self.dir, fn), "rb") as f:     # a positioned read: a whole-shard memmap keeps every page it touched resident
-            raw = f.read(hi - lo) if f.seek(lo) == lo else b""
-        n = 1
-        for s in shape:
-            n *= s
-        if len(raw) != n * isz:
-            raise ValueError(f"{name}: {len(raw)} bytes for shape {shape} dtype {dt}")
-        return np.frombuffer(raw, dtype=npdt).reshape(shape) if shape else np.frombuffer(raw, dtype=npdt).reshape(())
-
-    def dtype(self, name: str) -> str:
-        return self.tensors[name][1]
-
-
 # -------------------------------------------------------------------------------------------------------------------- composition
 
 def _f32_to_bf16_bits(x: np.ndarray) -> np.ndarray:
@@ -226,41 +135,95 @@ def strip_prefix(field: str, prefix: str) -> str:
     return field[len(prefix):] if prefix and field.startswith(prefix) else field
 
 
+def _rank_rows(srcs: list[str], served, ck: CheckpointIndex, world: int, rank: int) -> list[np.ndarray]:
+    """The rank's dim-0 slice of each whole checkpoint tensor `srcs`, read as its row range.  A source whose rows do not split by the
+    world is refused after the whole read of every source, the order in which composing from whole tensors meets the two faults."""
+    rows, err = [], None
+    for s in srcs:
+        try:
+            rows.append(rows_of(ck.tensors[s][2][0], world, rank))
+        except ValueError as e:
+            err = err or e
+    if err is not None:
+        for s in srcs:
+            served(s)
+        raise err
+    return [served(s, rows=r) for s, r in zip(srcs, rows)]
+
+
+def _compose_experts(name: str, m: re.Match, shape: list[int], ck: CheckpointIndex, world: int, rank: int, note: dict[str, Any],
+                     served) -> tuple[np.ndarray, dict[str, Any]]:
+    """The fused-MoE stack `name` (EXPERTS_RE match `m`): per expert its checkpoint parts, on the rank's scale grid, the rank's slice."""
+    container, routed, which, suffix = m.group(1), m.group(2), m.group(3), m.group(4)
+    e_n = int(shape[0]) if shape else 0
+    # the checkpoint's per-expert part names, decided by expert 0 (HF gate_proj|up_proj|down_proj, else Mixtral w1|w3|w2)
+    parts_of = next((tbl for tbl in (EXPERTS, EXPERTS_MIXTRAL) if all(ck.has(f"{container}.0.{p}.{suffix}") for p in tbl[which])), None)
+    if parts_of is None and e_n:
+        raise KeyError(f"{name}: no per-expert checkpoint tensors {container}.0.{{{'|'.join(EXPERTS[which] + EXPERTS_MIXTRAL[which])}}}.{suffix} "
+                       f"(fused experts {which}: the composition needs expert 0's parts under the container the served name declares)")
+    parts_of = parts_of or EXPERTS
+    note["rule"] = (f"fused experts {which}{' (vLLM RoutedExperts submodule)' if routed else ''} <- " + "|".join(parts_of[which])
+                    + f" per expert ({container}.<e>.<part>.{suffix})")
+    # w13's rank share is a row range of each part (block scales excepted: they move onto the rank's grid first); w2's is a column
+    # range, which touches every page of the tensor, so it is read whole
+    by_rows = world > 1 and which == "w13" and suffix != "weight_scale_inv"
+    stack = []
+    for e in range(e_n):
+        srcs = [f"{container}.{e}.{p}.{suffix}" for p in parts_of[which]]
+        if not all(ck.has(s) for s in srcs):
+            raise KeyError(f"{name}: expert {e} sources missing: {[s for s in srcs if not ck.has(s)]}")
+        if by_rows and all(ck.tensors[s][2] for s in srcs):
+            ps = _rank_rows(srcs, served, ck, world, rank)
+        else:
+            ps = fp8_moe_scales.on_rank_grid([served(s) for s in srcs], srcs, which, ck, world, note)
+            if world > 1:
+                ps = [_shard_dim0(p, world, rank) for p in ps] if which == "w13" else [_shard_dim(p, 1, world, rank) for p in ps]
+        if world > 1:
+            note["shard"] = f"rank {rank}/{world} ({'per-part dim 0' if which == 'w13' else 'dim 1'})"
+        stack.append(np.concatenate(ps, axis=0) if len(ps) > 1 else ps[0])
+    out = np.stack(stack, axis=0) if stack else np.zeros(shape, dtype=np.uint16)
+    if list(out.shape) != list(shape):
+        raise ValueError(f"{name}: composed shape {list(out.shape)} != Program shape {shape}")
+    return np.ascontiguousarray(out), note
+
+
 def compose(name: str, shape: list[int], bits: int, ck: CheckpointIndex, *, world: int = 1, rank: int = 0) -> tuple[np.ndarray, dict[str, Any]]:
     """The served model's tensor `name` (wrapper prefix already stripped) of `shape` / `bits`, composed from the checkpoint.
     Returns (raw words row-major, note {sources, rule, cast, shard})."""
     note: dict[str, Any] = {"sources": [], "rule": None, "cast": None, "shard": None}
     tied = bool(ck.config.get("tie_word_embeddings", False))
 
-    def served(src: str) -> np.ndarray:
-        a, cast = to_served(ck.array(src), ck.dtype(src), bits)
+    def served(src: str, rows: tuple[int, int] | None = None) -> np.ndarray:
+        a, cast = to_served(ck.array(src, rows=rows), ck.dtype(src), bits)
         if cast:
             note["cast"] = cast
         note["sources"].append(src)
         return a
 
     parts: list[np.ndarray] = []
+    whole: list[str] = []               # the parts are these whole checkpoint tensors, read below (a dim-0 shard: the rank's rows only)
     if ck.has(name):
         note["rule"] = "1:1"
-        parts = [served(name)]
-        if world > 1:
-            # a checkpoint that stores the fused tensor itself (Phi-3): the rank shard is PER PART, so split it by the config's geometry
-            fused = next((k for k in FUSED if re.search(r"\." + re.escape(k) + r"\.\w+$", name)), None)
-            if fused and (fused.endswith("qkv_proj") or fused == "self_attn.wqkv"):
-                c = ck.config
-                hq, hkv = int(c.get("num_attention_heads", 0)), int(c.get("num_key_value_heads") or c.get("num_attention_heads", 0))
-                d = int(c.get("head_dim") or (int(c.get("hidden_size", 0)) // max(hq, 1)))
-                if hq and d and parts[0].shape[0] == (hq + 2 * hkv) * d:
-                    a = parts[0]
-                    parts = [a[:hq * d], a[hq * d:(hq + hkv) * d], a[(hq + hkv) * d:]]
-                    note["rule"] = "1:1 fused tensor split q|k|v by config geometry"
-            elif fused:                                                                  # gate_up: two equal halves
+        # a checkpoint that stores the fused tensor itself (Phi-3): the rank shard is PER PART, so split it by the config's geometry
+        fused = next((k for k in FUSED if re.search(r"\." + re.escape(k) + r"\.\w+$", name)), None) if world > 1 else None
+        if not fused:
+            whole = [name]
+        elif fused.endswith("qkv_proj") or fused == "self_attn.wqkv":
+            parts = [served(name)]
+            c = ck.config
+            hq, hkv = int(c.get("num_attention_heads", 0)), int(c.get("num_key_value_heads") or c.get("num_attention_heads", 0))
+            d = int(c.get("head_dim") or (int(c.get("hidden_size", 0)) // max(hq, 1)))
+            if hq and d and parts[0].shape[0] == (hq + 2 * hkv) * d:
                 a = parts[0]
-                parts = [a[: a.shape[0] // 2], a[a.shape[0] // 2:]]
-                note["rule"] = "1:1 fused tensor split gate|up"
+                parts = [a[:hq * d], a[hq * d:(hq + hkv) * d], a[(hq + hkv) * d:]]
+                note["rule"] = "1:1 fused tensor split q|k|v by config geometry"
+        else:                                                                        # gate_up: two equal halves
+            a = served(name)
+            parts = [a[: a.shape[0] // 2], a[a.shape[0] // 2:]]
+            note["rule"] = "1:1 fused tensor split gate|up"
     elif name == "lm_head.weight" and tied and ck.has("model.embed_tokens.weight"):
         note["rule"] = "tied lm_head <- model.embed_tokens.weight"
-        parts = [served("model.embed_tokens.weight")]
+        whole = ["model.embed_tokens.weight"]
     elif name == "normalizer" or name.endswith(".normalizer"):
         # Gemma-2's embedding normalizer (dense M-0619 preflight on the real Gemma-2-2B Program: the ONE unresolved field of 316): a
         # non-persistent 0-d buffer `torch.tensor(hidden_size ** 0.5)` created at the served dtype in vLLM's Gemma2Model.__init__ -- no
@@ -281,30 +244,7 @@ def compose(name: str, shape: list[int], bits: int, ck: CheckpointIndex, *, worl
     else:
         m = EXPERTS_RE.match(name)
         if m:
-            container, routed, which, suffix = m.group(1), m.group(2), m.group(3), m.group(4)
-            e_n = int(shape[0]) if shape else 0
-            # the checkpoint's per-expert part names, decided by expert 0 (HF gate_proj|up_proj|down_proj, else Mixtral w1|w3|w2)
-            parts_of = next((tbl for tbl in (EXPERTS, EXPERTS_MIXTRAL) if all(ck.has(f"{container}.0.{p}.{suffix}") for p in tbl[which])), None)
-            if parts_of is None and e_n:
-                raise KeyError(f"{name}: no per-expert checkpoint tensors {container}.0.{{{'|'.join(EXPERTS[which] + EXPERTS_MIXTRAL[which])}}}.{suffix} "
-                               f"(fused experts {which}: the composition needs expert 0's parts under the container the served name declares)")
-            parts_of = parts_of or EXPERTS
-            note["rule"] = (f"fused experts {which}{' (vLLM RoutedExperts submodule)' if routed else ''} <- " + "|".join(parts_of[which])
-                            + f" per expert ({container}.<e>.<part>.{suffix})")
-            stack = []
-            for e in range(e_n):
-                srcs = [f"{container}.{e}.{p}.{suffix}" for p in parts_of[which]]
-                if not all(ck.has(s) for s in srcs):
-                    raise KeyError(f"{name}: expert {e} sources missing: {[s for s in srcs if not ck.has(s)]}")
-                ps = fp8_moe_scales.on_rank_grid([served(s) for s in srcs], srcs, which, ck, world, note)
-                if world > 1:
-                    ps = [_shard_dim0(p, world, rank) for p in ps] if which == "w13" else [_shard_dim(p, 1, world, rank) for p in ps]
-                    note["shard"] = f"rank {rank}/{world} ({'per-part dim 0' if which == 'w13' else 'dim 1'})"
-                stack.append(np.concatenate(ps, axis=0) if len(ps) > 1 else ps[0])
-            out = np.stack(stack, axis=0) if stack else np.zeros(shape, dtype=np.uint16)
-            if list(out.shape) != list(shape):
-                raise ValueError(f"{name}: composed shape {list(out.shape)} != Program shape {shape}")
-            return np.ascontiguousarray(out), note
+            return _compose_experts(name, m, shape, ck, world, rank, note, served)
         for fused, srcs in FUSED.items():
             m2 = re.match(r"^(.*)\." + re.escape(fused) + r"\.(\w+)$", name)
             if m2:
@@ -312,8 +252,19 @@ def compose(name: str, shape: list[int], bits: int, ck: CheckpointIndex, *, worl
                 names = [f"{base}.{s}.{suffix}" for s in srcs]
                 if all(ck.has(s) for s in names):
                     note["rule"] = f"fused {fused} <- " + "|".join(srcs) + " (dim 0)"
-                    parts = [served(s) for s in names]
+                    whole = names
                 break
+    shapes = [ck.tensors[s][2] for s in whole]
+    full = [int(sum(s[0] for s in shapes))] + list(shapes[0][1:]) if shapes and all(shapes) else None
+    if world > 1 and full and not kv_heads_replicated(name, shape, shapes, ck.config, world) and list(shape) != full and len(shape) >= 1 and shape[0] * world == full[0] \
+            and list(shape[1:]) == full[1:]:
+        ps = _rank_rows(whole, served, ck, world, rank)
+        out = np.concatenate(ps, axis=0) if len(ps) > 1 else ps[0]
+        note["shard"] = f"rank {rank}/{world}: per-part dim-0 slice"
+        if list(out.shape) != list(shape):
+            raise ValueError(f"{name}: composed shape {list(out.shape)} != Program shape {shape}")
+        return np.ascontiguousarray(out), note
+    parts = parts or [served(s) for s in whole]
     if not parts:
         raise KeyError(f"{name}: no checkpoint tensor and no composition rule")
     kv = replicated_qkv(name, shape, parts, ck.config, world, rank)
@@ -562,8 +513,8 @@ def weights_of_record(program: dict[str, Any], ck: CheckpointIndex, *, prefix: s
             unresolved.append({"field": field, "why": str(e)[:300]})
             out_fields.append({"field": field, "served_name": live, "shape": shape, "bits": bits, "digest": None, "pinned": False, "why": str(e)[:300]})
             continue
-        b = arr.tobytes()
-        n_bytes += len(b)
+        b = np.ascontiguousarray(arr).reshape(-1).view(np.uint8)      # arr.tobytes()'s bytes, not copied again
+        n_bytes += b.nbytes
         out_fields.append({"field": field, "served_name": live, "shape": shape, "bits": bits, "digest": hashlib.sha256(b).hexdigest(),
                            "pinned": True, **note})
     root = root_of_fields(out_fields)
@@ -784,12 +735,54 @@ def _default_manifest() -> str | None:
     return None
 
 
+def record_shard_pin(checkpoint_dir: str, *, checkpoints_manifest: str | None = None, model: str | None = None,
+                     revision: str | None = None) -> dict[str, Any] | None:
+    """The shard pin `build_record` takes with the same arguments: taken once by a TP driver, passed to every rank as `shard_pin`.
+    None when the checkpoint or manifest can't be read: each rank then takes the pin itself and its record names what failed."""
+    from verity_vllm.check.checkpoint_index import shard_pin
+    try:
+        return shard_pin(checkpoint_dir, checkpoints_manifest=checkpoints_manifest or _default_manifest(), model=model, revision=revision)
+    except (OSError, ValueError):
+        return None
+
+
+class StoredRows:
+    """The rows of an `instances.json.gz`, decoded from the file on each iteration in the form it stores them (a v2 row's argument
+    progressions are not expanded): for readers of row names and specs, never of per-leaf argument runs."""
+
+    def __init__(self, path: str):
+        self.path = path
+
+    def __iter__(self):
+        from verity_vllm.query.program_view import iter_instance_rows
+        return iter_instance_rows(self.path, expand=False)
+
+
+def load_program_head(program_dir: str) -> dict[str, Any]:
+    """`format.load_program` with the instance file's header (schema, digest, params) in memory and its rows `StoredRows`.  A document
+    whose params or digest follow its rows (not `derive_step`'s order) is read whole, its rows as stored."""
+    import gzip
+    from verity_vllm.query.program_view import _read_instance_header
+    path = os.path.join(program_dir, "instances.json.gz")
+    inst = _read_instance_header(path)
+    if {"params", "digest"} <= inst.keys():
+        inst["rows"] = StoredRows(path)
+    else:
+        with gzip.open(path, "rt") as f:
+            inst = json.load(f)
+    p = os.path.join(program_dir, "artifact.json")
+    return {"instances": inst, "result": json.load(open(os.path.join(program_dir, "result.json"))),
+            "artifact": json.load(open(p)) if os.path.exists(p) else None, "dir": program_dir}
+
+
 def build_record(program_dir: str, checkpoint_dir: str, *, checkpoints_manifest: str | None = None, model: str | None = None,
-                 revision: str | None = None, verify_shards: bool = True, kv_cache_dtype: str = "auto") -> dict[str, Any]:
-    from verity_vllm.query.manifest import format as MF
-    prog = MF.load_program(program_dir)
+                 revision: str | None = None, verify_shards: bool = True, kv_cache_dtype: str = "auto",
+                 shard_pin: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The record of one Program dir.  `shard_pin` (`record_shard_pin` of the same checkpoint and manifest) is adopted instead of hashing
+    every shard again; a pin of other shards or another manifest is refused.  The Program's rows are streamed, never expanded."""
+    prog = load_program_head(program_dir)
     ck = CheckpointIndex(checkpoint_dir, checkpoints_manifest=checkpoints_manifest or _default_manifest(), model=model, revision=revision,
-                         verify_shards=verify_shards)
+                         verify_shards=verify_shards, pin=shard_pin)
     return weights_of_record(prog, ck, kv_cache_dtype=kv_cache_dtype)
 
 

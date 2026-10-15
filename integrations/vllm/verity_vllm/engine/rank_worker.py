@@ -737,7 +737,7 @@ class TP2CaptureWorkerExtension:
                         raise RuntimeError(f"rank {rank}: no rank Program (instances.json.gz) under {pdir}")
                     pdir = subs[0]
                 rec = WR.build_record(str(pdir), str(weights_pin["checkpoint_dir"]), checkpoints_manifest=weights_pin.get("checkpoints_manifest"),
-                                      model=weights_pin.get("model"))
+                                      model=weights_pin.get("model"), shard_pin=weights_pin.get("shard_pin"))
                 rtp = (rec.get("tp") or {})
                 world_ = int(facts["tp"]["world_size"])
                 if int(rtp.get("world") or 1) != world_ or int(rtp.get("rank") or 0) != int(rank):
