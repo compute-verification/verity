@@ -836,6 +836,13 @@ class Device:
         rc = self.lib.so.rs_enable_peers()
         if count > 1 and rc:
             raise RuntimeError(f"rs_enable_peers: {rc}: the leader reads and writes every GPU over P2P")
+        # torch maps its expandable segments for a peer only once its own copy path has enabled that pair, so one copy
+        # each way between every two GPUs, before anything is allocated, lets rs_top reach every GPU's buffers.
+        for a in range(count):
+            for b in range(count):
+                if a != b:
+                    torch.empty(1, device=f"cuda:{b}").copy_(torch.empty(1, device=f"cuda:{a}"))
+        torch.cuda.synchronize()
         self.gpus = [Gpu(torch, g) for g in range(count)]
         self.rng = np.random.default_rng(seed)
         self.salt_key = self.rng.bytes(32)
