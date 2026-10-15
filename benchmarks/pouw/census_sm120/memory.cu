@@ -1,7 +1,8 @@
 // Memory census (item 5): the device's memory properties, DRAM read and write bandwidth by data pattern on a plain
 // cudaMalloc and on a cuMemCreate(CU_MEM_ALLOCATION_COMP_GENERIC) allocation (is compression per allocation, and which
-// patterns compress), device-to-device copy, an L2 footprint sweep (capacity knee and bandwidth; also for compressible
-// zeros), shared-memory load/store bandwidth a SM a clock, and random-row gather bandwidth by row size.
+// patterns compress), COMP_GENERIC zeros by how they were written and what the allocation held before, reads by load
+// path, device-to-device copy, an L2 footprint sweep (capacity knee and bandwidth; also for compressible zeros),
+// shared-memory load/store bandwidth a SM a clock, and random-row gather bandwidth by row size.
 #include "common.cuh"
 
 #include <cuda.h>

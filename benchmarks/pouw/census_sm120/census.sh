@@ -16,17 +16,21 @@
 #   cuda       cuda_pipes.cu: FFMA, FADD, FMUL, HFMA2, BF16 FMA, IMAD, IADD3, LOP3, SHF, PRMT, POPC, DP4A, min/max,
 #              BREV, FLO, F2FP packs (E4M3, E2M1, BF16, FP16), I2F, MUFU: warp instructions a SM a clock, alone and in
 #              1:1 pairs.
-#   coissue    coissue.cu: tensor and CUDA work in one kernel (k CUDA ops per MMA) and in two concurrent kernels.
+#   coissue    coissue.cu: tensor and CUDA work in one kernel (k CUDA ops per MMA), in two concurrent kernels, and
+#              warp-specialised (W MMA warps beside W' CUDA-op warps, per-warp clocks: the per-sub-partition frontier).
 #   memside    memside.cu: L2 reductions and atomics by type, width and address pattern; TMA bulk loads and bulk
 #              reductions; warp-specialised co-runs of RED, FFMA, QMMA and L2 reads.
-#   memory     memory.cu: device properties; DRAM read/write by data pattern, plain vs COMP_GENERIC allocations; D2D
-#              copy; L2 footprint sweep; shared-memory bandwidth; random-row gather by row size.
+#   memory     memory.cu: device properties; DRAM read/write by data pattern, plain vs COMP_GENERIC allocations; COMP_GENERIC
+#              zeros by how they were written and what the allocation held before; reads by load path (cg, nc, default);
+#              D2D copy; L2 footprint sweep; shared-memory bandwidth; random-row gather by row size.
+# `CENSUS_ONLY=<label>` passes a filter to every GPU binary (e.g. `split` for coissue's warp-specialised cases, `fill` for
+# memory's fill_methods).
 #   links      links.cu under `gpu-lease 2` (`CENSUS_GPUS=i,j` pins the pair): PCIe H2D/D2H/bidirectional per GPU,
 #              P2P, both GPUs' transfers at once; plus `nvidia-smi topo -m` and the PCIe tree.
 #   host       host.c, no lease, nice 19, 16 threads: STREAM-like host DRAM bandwidth, AMX int8/bf16 tile throughput;
 #              sequential read of a file written in the run's scratch (O_DIRECT); lscpu, lsblk.
 # Then census.py reads every section's JSON lines and the SASS of each kernel's loop and writes $OUT/census.json and
-# $OUT/census.md (constant, value, unit, run id, GPU UUID, method).
+# $OUT/census.md (constant, value, unit, run id, GPU UUID, method); `census.py --merge` joins runs' tables.
 set -uo pipefail
 OUT=${OUT:?run under research run}
 SRC=${CENSUS_SRC:-$PWD/benchmarks/pouw/census_sm120}
