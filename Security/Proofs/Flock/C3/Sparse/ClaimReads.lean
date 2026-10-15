@@ -235,7 +235,7 @@ theorem claim_word_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : 
   have hwc : FlockVBridge.Sparse.wClaim (holoAt st hp).cls.shape <
       ((Flock.RecSparse.messagePorts (FlockC3.Sparse.unitShape (holoAt st hp))).map (·.2)).sum :=
     Nat.lt_of_lt_of_le (Nat.lt_succ_self _) (FlockVBridge.Sparse.nw_le_msum (FlockC3.Sparse.unitShape (holoAt st hp)))
-  refine claim_eq_of_reads hA.2 hcp hwc ⟨hk.1, fun e he q b hb hkey hread => ?_⟩
+  refine claim_eq_of_reads hA.2.1 hcp hwc ⟨hk.1, fun e he q b hb hkey hread => ?_⟩
   obtain ⟨hq, rfl⟩ := hk.2 e he q b hb hkey
   obtain ⟨hb', hv⟩ := hbits _ he
   obtain ⟨hst, hat⟩ := claimSite_of_checked hchk hro hnd hsv hA hss hss' hx hq hq' hun hread hrd'
