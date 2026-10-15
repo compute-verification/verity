@@ -588,8 +588,8 @@ __device__ __forceinline__ void filler(int (&d)[8], float (&f)[8], int r, int x,
 // FORMs 6-9 read one vector register (the adversary's cheapest): 6 IDP.4A d, d, K, d; 7 the rotate SHF.L.W d, d, 5, d;
 // 8 HFMA2 d, d, K, d; 9 FFMA d, d, K, d. k_lp interleaves the LP's mix of them, ND/NR/NF/NH an iteration of NMMA MMAs
 // (16 or 0, the latter for the pipes alone), each form on its own 8 registers.
-template <int NMMA, int ND, int NR, int NF, int NH>
-__global__ void __launch_bounds__(256, 1) k_lp(float* out, int iters, BlockClk* rec) {
+template <int NMMA, int ND, int NR, int NF, int NH, int WPS = 2>
+__global__ void __launch_bounds__(128 * WPS, 1) k_lp(float* out, int iters, BlockClk* rec) {
   float acc[8][4], f[8];
   int d[8], r_[8], h[8];
 #pragma unroll
@@ -1243,20 +1243,20 @@ static void run_lp2(int iters) {
   CK(cudaFree(out));
 }
 
-template <int NMMA, int ND, int NR, int NF, int NH>
+template <int NMMA, int ND, int NR, int NF, int NH, int WPS = 2>
 static void run_lp(int iters) {
   float* out;
   CK(cudaMalloc(&out, sizeof(float)));
-  auto launch = [&](BlockClk* rec) { k_lp<NMMA, ND, NR, NF, NH><<<g_nsm, 256>>>(out, iters, rec); };
+  auto launch = [&](BlockClk* rec) { k_lp<NMMA, ND, NR, NF, NH, WPS><<<g_nsm, 128 * WPS>>>(out, iters, rec); };
   Meas m = timed(launch, g_nsm, 5);
-  const double per = 8.0 * iters / m.cyc_med / 4;  // iterations a SMSP a clock
+  const double per = 1.0 * WPS * iters / m.cyc_med;  // iterations a SMSP a clock
   const double t = per * NMMA * 16, dp = per * ND, ro = per * NR, ff = per * NF, hf = per * NH;
   const double other = (dp * 128 + ro * 64 + ff * 32 + hf * 64) / 256;
   printf(
-      "{\"kind\":\"lp\",\"nmma\":%d,\"nd\":%d,\"nr\":%d,\"nf\":%d,\"nh\":%d,\"cyc_per_iter\":%.3f,\"dp4a\":%.4f,"
+      "{\"kind\":\"lp\",\"wps\":%d,\"nmma\":%d,\"nd\":%d,\"nr\":%d,\"nf\":%d,\"nh\":%d,\"cyc_per_iter\":%.3f,\"dp4a\":%.4f,"
       "\"rot\":%.4f,\"ffma\":%.4f,\"hfma2\":%.4f,\"issue\":%.4f,\"tensor_share\":%.4f,\"other_share\":%.4f,"
       "\"combined_share\":%.4f,\"sm_mhz\":%.1f}\n",
-      NMMA, ND, NR, NF, NH, m.cyc_med / iters, dp, ro, ff, hf, per * (NMMA + ND + NR + NF + NH), t, other, t + other,
+      WPS, NMMA, ND, NR, NF, NH, m.cyc_med / iters, dp, ro, ff, hf, per * (NMMA + ND + NR + NF + NH), t, other, t + other,
       m.mhz);
   fflush(stdout);
   CK(cudaFree(out));
@@ -1454,6 +1454,18 @@ int main(int argc, char** argv) {
     run_lp2<128, 112, 2>(2048);
     run_lp2<112, 224, 1>(2048);
     run_lp2<96, 224, 1>(2048);
+  }
+  if (all || what == "lp4") {  // the interleaved mixes at 4 warps a SMSP, and the CUDA pipes alone at 4 and 8
+    run_lp<16, 128, 0, 0, 0, 4>(1024);
+    run_lp<16, 128, 112, 0, 0, 4>(1024);
+    run_lp<16, 128, 64, 0, 0, 4>(1024);
+    run_lp<16, 128, 32, 0, 0, 4>(1024);
+    run_lp<16, 96, 96, 0, 0, 4>(1024);
+    run_lp<16, 64, 64, 0, 0, 4>(1024);
+    run_lp<16, 128, 0, 32, 0, 4>(1024);
+    run_lp<0, 128, 128, 0, 0, 4>(2048);
+    run_lp<0, 128, 128, 0, 0, 8>(1024);
+    run_lp<0, 128, 0, 128, 0, 8>(1024);
   }
   if (all || what == "alt") {  // the first build's probe, unrolled as ptxas likes and rolled
     run_probe1<1, false>("v1 dp4a", 4096);

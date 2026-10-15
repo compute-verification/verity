@@ -34,7 +34,7 @@ routes share; `k_split` runs the dp4a and FFMA chains in different warps of each
 schedulers, not the SASS order, pick the mix. Raw pipe caps are the sm_120 census's
 (note:20261015T0608Z-draft-census-sm120), not repeated here.
 
-The combined room (sections `mix`, `lp`, `lp2`): `k_mix` runs FP8 `mma.sync` m16n8k32 on 8 accumulators with fillers
+The combined room (sections `mix`, `lp`, `lp2`, `lp4`): `k_mix` runs FP8 `mma.sync` m16n8k32 on 8 accumulators with fillers
 of one SASS form between the MMAs. The forms are IDP.4A on three registers (which ptxas reads through the operand reuse
 cache), with an immediate, or on one register; FFMA, MUFU.EX2, HFMA2, LOP3 and a rotate. `k_lp` interleaves the
 combined-room LP's mix of one-register forms, or runs them without MMAs to say which pipes they share. `k_lp2` puts the
