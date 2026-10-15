@@ -1277,7 +1277,7 @@ def test_an_fyi_from_the_starter_wakes_only_its_to_names(fake, registry, routes_
     circuits, lean = inbox(fake, routes_dirs, "circuits"), inbox(fake, routes_dirs, "lean")
     root = fake.add(COORD, text="@circuits @lean the move starts at 7", username="top", bot_id=BOT)
     assert run(capsys, "send", "--as", "top", "--thread", root["ts"], "--kind", "fyi", "--text", "shard 3/5 passed")[0] == 0
-    assert bells(fake, circuits) == [] and bells(fake, lean) == []                    # a progress note is for the digest
+    assert bells(fake, circuits) == [] and bells(fake, lean) == []                    # a progress note wakes no one
     note = next(m for m in reversed(fake.messages[COORD]) if m.get("username") == "top" and m is not root)
     assert slack.tags_of(note["text"]) == ["fyi", slack.QUIET]
     assert run(capsys, "send", "--as", "top", "--thread", root["ts"], "--kind", "fyi", "--to", "@lean",
@@ -1567,14 +1567,6 @@ def test_slack_py_runs_as_a_single_file_from_any_checkout(tmp_path, registry):
     assert "@circuits" in out.stdout
 
 
-@pytest.mark.parametrize("v", json.loads(VECTORS.read_text())["subscriptions"]["cases"], ids=lambda v: v["name"])
-def test_the_delivery_rule_matches_every_subscription_vector(v):
-    doc = json.loads(VECTORS.read_text())
-    got = slack.deliveries(v["msg"], v["root"], doc["registry"], doc["subscriptions"]["book"], set(doc["inboxes"]))
-    assert [[d["name"], d["deliver"]] for d in got] == v["deliveries"]
-    assert [d["name"] for d in got if d["why"] == "addressed"] == slack.route_targets(v["msg"], v["root"], doc["registry"], set(doc["inboxes"]), v.get("history", []), v.get("branches"))
-
-
 @pytest.mark.parametrize("v", json.loads(VECTORS.read_text())["doorbells"]["cases"], ids=lambda v: v["name"])
 def test_a_doorbell_matches_every_doorbell_vector(v):
     bell = slack.doorbell(v["author"], v["thread"], v["ts"], v["text"], v["urgent"])
@@ -1582,7 +1574,7 @@ def test_a_doorbell_matches_every_doorbell_vector(v):
     assert slack._mentions_thread(bell, v["thread"]) and slack._from(bell, v["author"]) and not bell.startswith("@")
 
 
-# ---- the messages API: send, close, list, subscribe, read --as ----------------------------------------------------------------------
+# ---- the messages API: send, close, list, read --as --------------------------------------------------------------------------------
 
 def posted(fake, out: str) -> dict:
     """The message a post printed `<ts> <permalink>` for (the doorbells it rang come after it)."""
@@ -1629,35 +1621,6 @@ def test_close_posts_a_status_line_and_reacts_and_list_shows_the_state(fake, reg
     assert rc == 0 and [(r["ts"], r["kind"], r["from"], r["to"], r["state"]) for r in rows] == [
         (second, "ask", "proofs", ["circuits"], "declined"), (first, "ask", "infra", ["circuits"], "done")]
     assert len(json.loads(run(capsys, "list", "--json")[1])) == 3 and json.loads(run(capsys, "list", "--open", "--json")[1])[0]["to"] == ["infra"]
-
-
-def test_a_listener_subscribes_and_reads_its_digest_and_a_wake_subscription_rings(fake, registry, routes_dirs, tmp_path, capsys, monkeypatch):
-    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000500, timezone.utc))
-    monkeypatch.setenv("RESEARCH_NOTES_CITE_CHECK", "0")
-    clone = notes_clone(tmp_path)
-    assert run(capsys, "names", "open", "--as", "comms", "--holder", "bc-comms")[0] == 0
-    assert run(capsys, "subscribe", "--as", "comms", "--filter", "all")[0] == 0
-    assert json.loads((clone / slack.ROUTES_DIR / "comms.json").read_text())["subscriptions"] == [{"filter": "all", "deliver": "digest"}]
-    rc, _, err = run(capsys, "subscribe", "--as", "comms", "--filter", "knd:ask")
-    assert rc == 2 and "terms are" in err
-    box = inbox(fake, routes_dirs, "circuits")
-    rc, out, err = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "one")
-    assert rc == 0 and "route @circuits: rang" in err and "route @comms: in its digest" in err
-    root = posted(fake, out)
-    root["reply_count"], root["latest_reply"] = 1, "1700000400.000000"
-    run(capsys, "send", "--as", "circuits", "--thread", root["ts"], "--quiet", "--text", "on it")
-    rc, out, _ = run(capsys, "read", "--as", "comms")
-    assert rc == 0 and "SLACK @comms: nothing new" in out and "DIGEST @comms: 2 post(s)" in out
-    assert "@infra ask: @circuits one" in out and "@circuits message: on it" in out
-    assert "DIGEST @comms: nothing new" in run(capsys, "read", "--as", "comms")[1]
-    rc, out, _ = run(capsys, "subscribe", "--as", "comms", "--filter", "kind:announce", "--deliver", "wake")
-    assert rc == 0 and "@comms wake   kind:announce" in out
-    comms_box = json.loads((clone / slack.ROUTES_DIR / "comms.json").read_text())["inbox_ts"]
-    run(capsys, "send", "--as", "proofs", "--kind", "announce", "--to", "@circuits", "--text", "a new verifier")
-    assert len(bells(fake, comms_box)) == 0 and len(bells(fake, box)) == 2              # `all` matched first: a digest, no doorbell
-    assert run(capsys, "subscribe", "--as", "comms", "--remove", "all")[1].splitlines()[-1] == "@comms wake   kind:announce"
-    run(capsys, "send", "--as", "proofs", "--kind", "announce", "--to", "@circuits", "--text", "another")
-    assert len(bells(fake, comms_box)) == 1
 
 
 def test_research_msg_is_the_front_door(registry, capsys):

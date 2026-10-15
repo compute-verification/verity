@@ -51,7 +51,7 @@ or `❌ declined — ...`), with no reaction: every handle posts through one bot
 
 A reply (`send --thread TS`) you post in your own thread without naming anyone wakes everyone the root addressed, which on an announcement is
 every handle. So a progress note goes out as `send --kind fyi`, which is quiet: it wakes only the `--to` names it starts
-with, and everyone else reads it in their digest.
+with, and everyone else reads it in the thread when they look.
 
 A reply under an announcement that names someone rings only the names it starts with, whatever PRs and runs its body
 mentions; so a landing or a prep post names each owner it needs at its start. One that names no one (quiet or not, a status

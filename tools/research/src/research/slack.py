@@ -2,19 +2,18 @@
 `.agents/skills/using-slack/SKILL.md`).
 
 A message is a post in #agent-coordination, sent by a name: a lead's handle in the registry (@infra, @proofs, @lean, ...), which
-`names open` gives an inbox thread. Only leads get names; a worker is reached through its lead. A thread is a conversation. Who a message reaches is one rule (`deliveries`): the names that
-lead it (`@a @b ...`), an announcement's audience, on a reply the thread's starter or the names it addressed, on a reply
-under an announcement that names no one the owners of the PRs it names (`pr_watchers`), and every name whose subscriptions match it. Each delivery is a `wake` (a doorbell in that name's inbox thread, which its agent subscribes to)
-or a `digest` (in that name's next `read --as`). The footer carries the post's kind and flags, which subscriptions filter on.
+`names open` gives an inbox thread. Only leads get names; a worker is reached through its lead. A thread is a conversation. Who a message reaches is one rule (`route_targets`): the names that
+lead it (`@a @b ...`), an announcement's audience, on a reply the thread's starter or the names it addressed, and on a reply
+under an announcement that names no one the owners of the PRs it names (`pr_watchers`). Each gets a doorbell in its inbox
+thread, which its agent subscribes to. The footer carries the post's kind and flags.
 Notes are records, never messages.
 
   research msg send --as NAME [--to @A @B ...] [--thread TS] [--kind WORD] [--quiet] [--urgent] (--text T | --file PATH)
                     [--verify CMD] [--ships URL#sha256=HEX | git:SHA]...     # prints `<ts> <permalink>`; --kind announce: an announcement
   research msg close --as NAME --thread TS [--link URL] [--note T] [--declined WHY]   # ✅ or ❌: a status line, and the reaction on an ask
   research msg list [--as NAME] [--hours H] [--open] [--json]     # threads: when, kind, from, to, state
-  research msg read --thread TS [--since TS] | --since TS | --as NAME [--peek] [--urgent] [--json]  # --as: unread doorbells, then the digest
+  research msg read --thread TS [--since TS] | --since TS | --as NAME [--peek] [--urgent] [--json]  # --as: NAME's unread doorbells
   research msg names open|read|close|list [--as NAME] [--forward-to @NAME] [--succeeds]  # the names you answer to (`inbox` too)
-  research msg subscribe --as NAME [--filter F [--deliver wake|digest] | --remove F]   # F: all, kind:K, from:@x, to:@x, thread:TS
   research msg traffic [--hours H] [--json]                        # the monitor: doorbells, pauses, dropped names, unanswered asks
   research msg watch --as NAME [--every S] [--polls N]             # block until a new doorbell; the hook a wake script runs
   research msg pickup --thread TS                                  # 👀 on an ask you own
@@ -149,8 +148,6 @@ FOOTER_RE = re.compile(rf"\n_({_TAG}(?: \u00b7 {_TAG})*)_\s*$")                 
 OLD_FOOTER_RE = re.compile(r"\n*_posted by <[^>\n]*>((?: \u00b7 [^\u00b7_\n]+)*)_\s*$")   # before 1 Oct 11:40 PDT
 LINK_RE = re.compile(r"<((?:https?|mailto):[^|>\s]+)(?:\|([^>]*))?>")
 FLAGS = ("urgent", QUIET)
-DELIVER = ("wake", "digest")                                     # how a subscription delivers
-FILTER_KEYS = ("kind", "from", "to", "thread")
 
 
 class SlackError(RuntimeError):
@@ -480,7 +477,7 @@ def client(ns: argparse.Namespace) -> Slack:
 
 
 def _footer(tags: tuple[str, ...] = ()) -> str:
-    """`_ask · urgent_`: what subscriptions filter on.  The author is the post's username, and its holder is in the directory."""
+    """`_ask · urgent_`: the post's kind and flags, which `list` and `traffic` read.  The author is the post's username, and its holder is in the directory."""
     tags = tuple(t for t in tags if t)
     return f"\n\n_{TAG_SEP.join(tags)}_" if tags else ""
 
@@ -810,45 +807,6 @@ def kind_of(msg: dict | None) -> str:
     return kind or ("announce" if is_announcement(msg) else "status" if is_status(text) else "message")
 
 
-def matches(filt: str, msg: dict, reg: dict, targets: list[str]) -> bool:
-    """Whether `msg` passes a subscription filter: space-separated terms, all of which hold.  `all`; `kind:K`; `from:@x`;
-    `to:@x` (x is among its targets); `thread:TS`.  An unknown term matches nothing, so a typo subscribes to nothing."""
-    for term in (filt or "").split():
-        key, _, val = term.partition(":")
-        val = val.lstrip("@")
-        if term == "all":
-            continue
-        if key == "kind" and kind_of(msg) == val or key == "from" and poster(msg, reg) == val or \
-                key == "to" and val in targets or key == "thread" and (msg.get("thread_ts") or msg.get("ts")) == val:
-            continue
-        return False
-    return bool((filt or "").split())
-
-
-def deliveries(msg: dict, root: dict | None, reg: dict, book: dict[str, dict], inboxes: set[str] | frozenset = frozenset(),
-               history: list[dict] | tuple = (), branches: dict[str, str] | None = None) -> list[dict]:
-    """Who gets `msg`, and how: each of `route_targets` is woken (`wake`, why `addressed`); then each other name in `book`
-    (name -> route) whose `subscriptions` match it, by its first matching subscription's `deliver` (`wake`: now; `digest`:
-    when that name reads its digest).  A quiet post wakes only the names it starts with (or, naming no one, its `pr_watchers`), and still reaches
-    digests.  Nothing in an inbox thread, and nothing by an unknown author, reaches anyone; the author never gets their own post."""
-    targets = route_targets(msg, root, reg, inboxes, history, branches)
-    out = [{"name": t, "deliver": "wake", "why": "addressed"} for t in targets]
-    thread, text = msg.get("thread_ts") or msg.get("ts"), msg.get("text") or ""
-    author = poster(msg, reg)
-    if author is None or thread in inboxes or text.startswith(INBOX_HEAD):
-        return out
-    for name in sorted(book):
-        r = book[name]
-        if name == author or name in targets or r.get("closed"):
-            continue
-        for s in r.get("subscriptions") or []:
-            mode = s.get("deliver", "digest")
-            if mode in DELIVER and matches(s.get("filter", ""), msg, reg, targets) and not (mode == "wake" and is_quiet(text)):
-                out.append({"name": name, "deliver": mode, "why": f"subscribes to {s['filter']}"})
-                break
-    return out
-
-
 def notes_root() -> Path:
     return Path(os.environ.get("RESEARCH_NOTES") or Path.home() / ".research" / "notes").expanduser()
 
@@ -1068,8 +1026,8 @@ def router_alert(api: Slack, ch: str, routes: Routes, author: str, src: str, ts:
 
 def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, link: str, *, urgent: bool = False,
             now: float | None = None, log=None) -> list[str]:
-    """Deliver the post `msg` (just posted at `link`): ring the doorbell of each name it wakes; a digest delivery waits for
-    its reader.  One line per name saying what happened."""
+    """Deliver the post `msg` (just posted at `link`): ring the doorbell of each name it wakes.  One line per name saying
+    what happened."""
     log = log or sys.stderr
     thread = msg.get("thread_ts") if msg.get("thread_ts") not in (None, msg.get("ts")) else None
     root = api.root(ch, thread) if thread else None
@@ -1089,13 +1047,9 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, link: str
     if routes.router_down:
         lines.append(router_alert(api, ch, routes, author, src, msg.get("ts") or src, now))
     humans = {poster({"user": p.get("slack_user")}, reg) for p in reg.get("humans", [])}
-    for d in deliveries(msg, root, reg, routes.all(), inboxes, history, branches):
-        name = d["name"]
+    for name in route_targets(msg, root, reg, inboxes, history, branches):
         if name in humans:
             continue                                                 # people read Slack itself
-        if d["deliver"] == "digest":
-            lines.append(f"@{name}: in its digest")
-            continue
         to, r = routes.resolve(name)
         if not r or (r.get("closed") and not r.get("forward_to")):
             h = next((h for h in reg["handles"] if h["handle"] == name), None)
@@ -1380,7 +1334,7 @@ def cmd_announce(ns: argparse.Namespace, reg: dict) -> int:
 
 def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
     """The one way to post: top-level (a new thread) or into `--thread`.  The `--to` names lead it, which is what routes it;
-    `--kind` rides in the footer, where subscriptions filter on it.  An announcement (`--kind announce`) gets its header,
+    `--kind` rides in the footer.  An announcement (`--kind announce`) gets its header,
     and with no `--to` it is for every handle."""
     h = acting_as(ns, reg, ns.handle)
     to = [name_entry(ns, reg, t, person_ok=True) for t in ns.to]
@@ -1432,19 +1386,19 @@ def cmd_list(ns: argparse.Namespace, reg: dict) -> int:
     --as, only those its name started or that reach it."""
     api, ch, routes = client(ns), channel_id(ns, reg, FRONT_DOOR), routes_of(ns)
     since = _now().timestamp() - ns.hours * 3600
-    inboxes, book, me = routes.inboxes(), routes.all(), (ns.handle or "").lstrip("@") or None
+    inboxes, me = routes.inboxes(), (ns.handle or "").lstrip("@") or None
     rows = []
     for m in api.paged("conversations.history", "messages", channel=ch, oldest=f"{since:.6f}"):
         if m.get("ts") in inboxes or (m.get("text") or "").startswith(INBOX_HEAD):
             continue
-        reach = deliveries(m, None, reg, book, inboxes)
+        reach = route_targets(m, None, reg, inboxes)
         author = poster(m, reg)
-        if me and author != me and me not in {d["name"] for d in reach}:
+        if me and author != me and me not in reach:
             continue
         state = "-" if is_announcement(m) else thread_state(m)
         if ns.open and state not in ("open", "seen", "answered", "-"):
             continue
-        rows.append({"ts": m["ts"], "kind": kind_of(m), "from": author, "to": [d["name"] for d in reach if d["why"] == "addressed"],
+        rows.append({"ts": m["ts"], "kind": kind_of(m), "from": author, "to": reach,
                      "state": state, "replies": m.get("reply_count", 0), "first": " ".join(DATE_TOKEN_RE.sub(r"\1", m.get("text") or "").split("\n", 1)[0].split())[:100]})
     if ns.json:
         print(json.dumps(rows, indent=2, ensure_ascii=False))
@@ -1454,30 +1408,6 @@ def cmd_list(ns: argparse.Namespace, reg: dict) -> int:
         print(f"{r['ts']} {both(r['ts'])} {r['kind']:<9} @{r['from'] or '?'} -> {to}  [{r['state']}, {r['replies']} replies]  {r['first']}")
     if not rows:
         print(f"no threads over the last {ns.hours:g} h" + (f" for @{me}" if me else ""))
-    return 0
-
-
-def cmd_subscribe(ns: argparse.Namespace, reg: dict) -> int:
-    """A name's subscriptions, in its route: list them, add `--filter F` (delivered by `--deliver`), or `--remove F`."""
-    routes, name = routes_of(ns), ns.handle.lstrip("@")
-    if ns.filter or ns.remove:
-        acting_as(ns, reg, name)
-    r = routes.get_route(name, fresh=name not in routes.local)
-    if not r:
-        raise SlackError(f"@{name} has no inbox; open one with `research msg names open --as {name}`")
-    subs = list(r.get("subscriptions") or [])
-    if ns.filter or ns.remove:
-        filt = " ".join((ns.filter or ns.remove).split())
-        if ns.filter and not all(t == "all" or t.partition(":")[0] in FILTER_KEYS and t.partition(":")[2].lstrip("@") for t in filt.split()):
-            raise SlackError(f"--filter {filt!r}: terms are all, kind:K, from:@x, to:@x, thread:TS")
-        subs = [s for s in subs if s.get("filter") != filt] + ([{"filter": filt, "deliver": ns.deliver}] if ns.filter else [])
-        r = {**r, "subscriptions": subs}
-        if not ns.dry_run:
-            print(publish_route(routes.root, r, f"routes.d: @{name} " + (f"subscribes to {filt}" if ns.filter else f"drops {filt}")))
-    for s in subs:
-        print(f"@{name} {s.get('deliver', 'digest'):<6} {s['filter']}")
-    if not subs:
-        print(f"@{name} has no subscriptions (it gets what's addressed to it)")
     return 0
 
 
@@ -1776,16 +1706,12 @@ def inbox_read(ns: argparse.Namespace, reg: dict, r: dict) -> int:
     api = client(ns)
     since = getattr(ns, "since", None)
     msgs = unread(api, r, since)
-    dig = digest(api, reg, routes_of(ns), r, since) if any(s.get("deliver", "digest") == "digest" for s in r.get("subscriptions") or []) else None
     if ns.json:
-        print(json.dumps(msgs if dig is None else {"doorbells": msgs, "digest": dig}, indent=2, ensure_ascii=False))
+        print(json.dumps(msgs, indent=2, ensure_ascii=False))
     else:
         print(render_unread(r["name"], msgs))
-        if dig is not None:
-            print(render_digest(r["name"], dig, reg))
     if not ns.peek:
         mark_read(r["name"], msgs)
-        mark_read(f"{r['name']}.digest", dig or [])
     return 1 if ns.urgent and not any("(URGENT)" in (m.get("text") or "") for m in msgs) else 0
 
 
@@ -1809,43 +1735,6 @@ def cmd_watch(ns: argparse.Namespace, reg: dict) -> int:
             mark_read(f"{name}.watch", new)
             return 0
     return 1
-
-
-DIGEST_FIRST_H = 24                                              # a first digest reaches back this far
-DIGEST_THREADS_D = 7                                             # replies count in threads started this recently
-
-
-def digest(api: Slack, reg: dict, routes: Routes, r: dict, since_ts: str | None = None) -> list[dict]:
-    """The posts since `since_ts`, else since `r`'s last digest, that its `digest` subscriptions match (what's addressed to it
-    came as doorbells)."""
-    p = seen_path(f"{r['name']}.digest")
-    since = float(since_ts) if since_ts else float(p.read_text().strip()) if p.is_file() else _now().timestamp() - DIGEST_FIRST_H * 3600
-    ch, inboxes, book = r["channel"], routes.inboxes(), {r["name"]: r}
-    picked = []
-
-    def take(m: dict, root: dict | None) -> None:
-        if any(d["name"] == r["name"] and d["deliver"] == "digest" for d in deliveries(m, root, reg, book, inboxes)):
-            picked.append(m)
-
-    for m in api.paged("conversations.history", "messages", channel=ch, oldest=f"{since - DIGEST_THREADS_D * 86400:.6f}"):
-        if float(m["ts"]) > since:
-            take(m, None)
-        if m.get("reply_count") and float(m.get("latest_reply") or 0) > since and m["ts"] not in inboxes:
-            for x in api.paged("conversations.replies", "messages", channel=ch, ts=m["ts"], oldest=f"{since:.6f}"):
-                if x.get("ts") != m["ts"] and float(x["ts"]) > since:
-                    take(x, m)
-    return sorted(picked, key=lambda m: float(m["ts"]))
-
-
-def render_digest(name: str, msgs: list[dict], reg: dict) -> str:
-    if not msgs:
-        return f"DIGEST @{name}: nothing new"
-    lines = [f"DIGEST @{name}: {len(msgs)} post(s) your subscriptions match"]
-    for m in msgs:
-        thread = f" in {m['thread_ts']}" if m.get("thread_ts") not in (None, m.get("ts")) else ""
-        first = " ".join(plain(m.get("text") or "").split("\n", 1)[0].split())[:150]
-        lines.append(f"- {m['ts']}{thread} @{poster(m, reg) or '?'} {kind_of(m)}: {first}")
-    return "\n".join(lines)
 
 
 # --- traffic: the monitor ---------------------------------------------------------------------------------------------------
@@ -2255,11 +2144,11 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--to", nargs="+", action="extend", default=[], metavar="@NAME", help="who it's for: handles or names with an inbox")
     p.add_argument("--thread", default=None, metavar="TS", help="reply in this thread (default: start one)")
     p.add_argument("--kind", default=None, metavar="WORD",
-                   help="a word the footer carries for subscriptions (ask, the default top-level with --to; announce; "
+                   help="a word the footer carries (ask, the default top-level with --to; announce; "
                         "fyi, which implies --quiet; ...)")
     p.add_argument("--verify", default=None, metavar="CMD", help="announce: a required action, and the command that shows it took")
     p.add_argument("--ships", action="append", default=[], metavar="URL#sha256=HEX|git:SHA", help="announce: code it runs, pinned")
-    p.add_argument("--quiet", action="store_true", help="wake only the names it starts with: no reply needed (digests still get it)")
+    p.add_argument("--quiet", action="store_true", help="wake only the names it starts with: no reply needed")
     p.add_argument("--urgent", action="store_true", help="the doorbells say URGENT, and `read --as` lists them first")
     p = cmd("close", "close a thread you were asked in: a status line (done, or --declined WHY), and the root's reaction",
             as_=True, thread=True, url=True)
@@ -2271,11 +2160,6 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--hours", type=float, default=24)
     p.add_argument("--open", action="store_true", help="leave out the done and declined")
     p.add_argument("--json", action="store_true")
-    p = cmd("subscribe", "a name's subscriptions: list, add --filter F, or --remove F", as_=True)
-    g = p.add_mutually_exclusive_group()
-    g.add_argument("--filter", default=None, help="all, kind:K, from:@x, to:@x, thread:TS (space-separated terms all hold)")
-    g.add_argument("--remove", default=None, metavar="FILTER")
-    p.add_argument("--deliver", choices=DELIVER, default="digest", help="wake: a doorbell now; digest: in `read --as` (default)")
     p = cmd("ask", "1:1: tag one handle or name in #agent-coordination, and ring its doorbell", as_=True, body=True, url=True)
     p.add_argument("--to", required=True, metavar="@OWNER")
     p.add_argument("--urgent", action="store_true", help="the doorbell says URGENT")
@@ -2339,8 +2223,8 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--thread", default=None, metavar="TS")
     p.add_argument("--since", default=None, metavar="TS", type=since_ts,
                    help="the channel since TS (a Slack ts, or an ISO time with its zone); with --thread, its replies since TS; "
-                        "with --as, NAME's doorbells and digest since TS")
-    p.add_argument("--as", dest="handle", default=None, metavar="NAME", help="NAME's unread doorbells, then its digest")
+                        "with --as, NAME's doorbells since TS")
+    p.add_argument("--as", dest="handle", default=None, metavar="NAME", help="NAME's unread doorbells")
     p.add_argument("--limit", type=int, default=None)
     p.add_argument("--peek", action="store_true", help="--as: don't mark them read")
     p.add_argument("--urgent", action="store_true", help="--as: exit 1 unless an unread doorbell is URGENT")
@@ -2376,7 +2260,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                 "pickup": cmd_pickup, "done": cmd_done, "decline": cmd_decline, "roster": cmd_roster, "match": cmd_match,
                 "verify-author": cmd_verify_author, "deliver": cmd_deliver, "read": cmd_read, "ask-daniel": cmd_ask_daniel, "names": cmd_inbox,
                 "inbox": cmd_inbox, "traffic": cmd_traffic, "send": cmd_send, "close": cmd_close, "list": cmd_list,
-                "subscribe": cmd_subscribe, "watch": cmd_watch, "linear": cmd_linear, "retract": cmd_retract}[ns.cmd](ns, reg)
+                "watch": cmd_watch, "linear": cmd_linear, "retract": cmd_retract}[ns.cmd](ns, reg)
     except SlackError as e:
         print(f"{prog}: {e}", file=sys.stderr)
         return 2
