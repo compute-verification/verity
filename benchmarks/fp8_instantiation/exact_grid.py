@@ -289,8 +289,8 @@ RATE = {"int8": (1024, "IMMA s8"), "e4m3i16": (1024, "QMMA e4m3"), "e4m3ik": (10
 
 
 def table(results: list[dict]) -> str:
-    rows = ["| format | exact? (k M^2 <= acc; observed max sum|a||b| / acc) | perplexity | worst linear: rel. error "
-            "(layer.linear) | tensor rate, MACs/SM/clk |", "|---|---|---:|---|---:|"]
+    rows = ["| format | exact? (k M^2 <= acc; observed bound / acc) | perplexity | worst linear: rel. error (layer.linear) "
+            "| tensor rate, MACs/SM/clk |", "|---|---|---:|---|---:|"]
     for r in results:
         m = r["method"]
         base = m.split("_rot")[0].split("_wclip")[0]
