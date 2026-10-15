@@ -146,6 +146,27 @@ def access_runs(refs: Refs | list | None) -> list | None:
     return runs(refs) if isinstance(refs, Refs) else refs
 
 
+def _nested(view: ViewDesc) -> bool:
+    """Whether `view`'s axes, by decreasing stride, nest (each stride at least the next axis's span): offsets decompose uniquely."""
+    ax = sorted((d for d in range(view.rank) if view.shape[d] > 1), key=lambda d: -view.strides[d])
+    return all(view.strides[x] > 0 and view.strides[x] >= view.strides[y] * view.shape[y] for x, y in zip(ax, ax[1:])) and \
+        all(view.strides[d] > 0 for d in ax)
+
+
+def _runs_meet(a: list[tuple[int, int]], b: list[tuple[int, int]]) -> bool:
+    """Whether two address-sorted, disjoint element-run lists share an element."""
+    i = j = 0
+    while i < len(a) and j < len(b):
+        (s, c), (t, e) = a[i], b[j]
+        if s < t + e and t < s + c:
+            return True
+        if s + c <= t + e:
+            i += 1
+        else:
+            j += 1
+    return False
+
+
 def address_ordered(view: ViewDesc, refs: Refs) -> tuple[ViewDesc, Refs]:
     """`view` written with `refs` (one producer's leaves base..base+numel in the view's row-major order) as the same element-to-leaf
     map with the axes in decreasing storage stride, so the write covers contiguous address runs: a transposed parameter view
@@ -288,7 +309,7 @@ _ROW_INVALIDATE_SCAN = 4096
 
 
 class _Alloc:
-    __slots__ = ("device", "generation", "id", "ivs", "live", "nbytes", "origin", "row_cache", "row_geoms", "starts")
+    __slots__ = ("device", "generation", "id", "ivs", "live", "nbytes", "origin", "root_maps", "row_cache", "row_geoms", "starts")
 
     def __init__(self, id: int, generation: int, nbytes: int, device: str, origin: str) -> None:
         self.id, self.generation, self.nbytes, self.device, self.origin = id, generation, nbytes, device, origin
@@ -304,6 +325,10 @@ class _Alloc:
         # every step (and every query row of a prefill), which made the fold's cost sum(context) x layers x steps.
         self.row_cache: dict[tuple, Refs] = {}
         self.row_geoms: dict[tuple, tuple[int, int, int]] = {}
+        # [VLLM-14] the permuted weight roots written here (`write_root`): (address-ordered root view, space, idx, base, leaf stride per
+        # axis, element runs), each an affine address -> leaf map that answers a read of any sub-box of its axes without slicing
+        # intervals; dropped by an ordinary write over its byte extent or a root write over its elements
+        self.root_maps: list[tuple[ViewDesc, str, int, int, tuple[int, ...], list[tuple[int, int]]]] = []
 
     def first_overlapping(self, lo: int) -> int:
         """Index of the first interval with `hi > lo` (== len(ivs) if none)."""
@@ -336,6 +361,7 @@ class MemoryModel:
             a.starts.clear()
             a.ivs.clear()
             a.row_cache.clear()
+            a.root_maps.clear()
             a.generation = ev.generation
         a.live = True
         a.nbytes, a.device, a.origin = ev.nbytes, ev.device, ev.origin
@@ -349,6 +375,7 @@ class MemoryModel:
         a.starts.clear()
         a.ivs.clear()
         a.row_cache.clear()
+        a.root_maps.clear()
         a.live = False
         self._n_frees += 1
 
@@ -384,6 +411,23 @@ class MemoryModel:
             pos += count
         self._n_writes += 1
 
+    def write_root(self, view: ViewDesc, refs: Refs) -> None:
+        """`write` of a weight root, in address order (`address_ordered`); a permuted root also keeps its address -> leaf map
+        (`_root_map_read`), so a read along its permuted axes (MLA's `W_UV^T`: one element run per element) costs no interval scan."""
+        pv, prefs = address_ordered(view, refs)
+        a = self._alloc_for_write(view.alloc)
+        keep, a.root_maps = a.root_maps, []
+        self.write(pv, prefs)
+        runs_ = element_runs(pv)
+        # roots sharing an allocation interleave (W_UK_T and W_UV), so a map is dropped only when the new root's elements meet its own
+        a.root_maps = [m for m in keep if not _runs_meet(m[5], runs_)]
+        if pv is not view and _nested(pv):
+            leaf, acc = [0] * view.rank, 1
+            for d in reversed(range(view.rank)):
+                leaf[d], acc = acc, acc * view.shape[d]
+            order = sorted(range(view.rank), key=lambda d: -view.strides[d])
+            a.root_maps.append((pv, refs.space, refs.idx, refs.base, tuple(leaf[d] for d in order), runs_))
+
     def _store_run(self, a: _Alloc, lo: int, hi: int, pieces: list[Refs], bits: int, dtype: str) -> None:
         w = bits // 8
         ivs: list[_Interval] = []
@@ -415,6 +459,8 @@ class MemoryModel:
                 new.append(right)
         ivs[i0:j] = new
         a.starts[i0:j] = [x.lo for x in new]
+        if a.root_maps:
+            a.root_maps = [m for m in a.root_maps if not (byte_extent(m[0])[0] < hi and lo < byte_extent(m[0])[1])]
         if a.row_cache:
             self._invalidate_rows(a, lo, hi)
 
@@ -445,7 +491,7 @@ class MemoryModel:
         if a is None or not a.live:
             self._n_unresolved += 1
             raise Unresolved(view, element_runs(view), "unknown" if a is None else "freed")
-        fast = self._fast_read(a, view)
+        fast = self._fast_read(a, view) or (self._root_map_read(a, view) if a.root_maps else None)
         if fast is not None:
             self._n_fast_reads += 1
             return fast
@@ -472,6 +518,32 @@ class MemoryModel:
         shape, strides = collapsed_dims(view)
         base = x.refs.base + (view.offset - x.lo // view.itemsize)
         return geometry_refs(x.refs.space, x.refs.idx, base, shape, strides)
+
+    def _root_map_read(self, a: _Alloc, view: ViewDesc) -> Refs | None:
+        """The read when `view` is a sub-box of a permuted weight root's axes (`write_root`): its leaf for element i is the root's
+        affine map at i, so the refs are `geometry_refs` of the view's own geometry over the root's leaf strides; else None."""
+        for rv, space, idx, base, leaf, _ in a.root_maps:
+            if rv.bits != view.bits or view.offset < rv.offset or not (self.allow_same_width_reinterpret or rv.dtype == view.dtype):
+                continue
+            axes = [d for d in range(rv.rank) if rv.shape[d] > 1]     # rv is address ordered: strides decrease
+            coord, rem = [0] * rv.rank, view.offset - rv.offset
+            for d in axes:
+                coord[d], rem = divmod(rem, rv.strides[d])
+            if rem or any(coord[d] >= rv.shape[d] for d in axes):
+                continue
+            shape, strides, used = [], [], set()
+            for n, st in zip(view.shape, view.strides):
+                if n == 1:
+                    continue
+                d = next((d for d in axes if d not in used and rv.strides[d] == st), None)
+                if d is None or coord[d] + n > rv.shape[d]:
+                    break
+                used.add(d)
+                shape.append(n)
+                strides.append(leaf[d])
+            else:
+                return geometry_refs(space, idx, base + sum(c * l for c, l in zip(coord, leaf)), tuple(shape), tuple(strides))
+        return None
 
     def _compatible(self, x: _Interval, view: ViewDesc) -> bool:
         return x.bits == view.bits and (self.allow_same_width_reinterpret or x.dtype == view.dtype)

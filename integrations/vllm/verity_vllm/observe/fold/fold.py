@@ -118,7 +118,7 @@ from verity_vllm.observe.events import (
     ViewDesc,
 )
 from verity_vllm.observe.log import split_steps
-from verity_vllm.observe.fold.memory import MemoryModel, Unresolved, address_ordered
+from verity_vllm.observe.fold.memory import MemoryModel, Unresolved
 from verity_vllm.observe.fold.patterns.collectives import FUSED_KIND as FUSED_COLLECTIVE_KIND, KINDS as COLLECTIVE_KINDS
 from verity_vllm.observe.fold.patterns.target import GEMM_TARGET_SCRATCH_KEY, X01_SCRATCH_KEY, WeightOnlyCalls
 from verity_vllm.observe.fold.resolver import (
@@ -482,7 +482,7 @@ class _Fold:
         w = _width_of(coll.type)
         if w != r.view.bits:
             raise FoldError(f"Root {r.name!r}: field {path!r} is {w}-bit, the view is {r.view.dtype}")
-        self._mem("write", self.mem.write, *address_ordered(r.view, coll.refs))
+        self._mem("write", self.mem.write_root, r.view, coll.refs)
         self._journal("root", r.view, coll.refs, what=f"{r.role}:{r.name}")
         self.weight_roots.setdefault(tuple(path), []).append((r.name, r.view.alloc))
 

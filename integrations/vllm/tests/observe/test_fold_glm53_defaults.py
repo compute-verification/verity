@@ -163,3 +163,42 @@ def test_a_transposed_weight_root_writes_one_run_per_inner_row_with_its_leaves_u
         assert pr[n * 8 * 192 + b * 192 + k] == r[b * 192 * 512 + k * 512 + n]
     contiguous, refs = view(7, (160, H)), Affine("p", 0, 0, 160 * H)
     assert address_ordered(contiguous, refs) == (contiguous, refs)
+
+
+def test_a_permuted_weight_root_answers_its_transposed_reads_from_its_own_map():
+    """`MemoryModel.write_root`: W_UK_T and W_UV interleave in one allocation; a read of `W_UV^T` (one element run per element) or of
+    W_UK_T comes from the root's address -> leaf map, equal leaf for leaf to the interval scan, until a write over it (VLLM-14)."""
+    from verity.ml.circuits.refs import Affine, runs
+    from verity_vllm.observe.fold.memory import MemoryModel
+
+    def slow(m, v):
+        a = m._allocs[v.alloc]
+        keep, a.root_maps = a.root_maps, []
+        try:
+            return runs(m.read(v))
+        finally:
+            a.root_maps = keep
+
+    w_uv = view(2, (8, 512, 256), strides=(448, 3584, 1), offset=192)
+    m = MemoryModel()
+    m.write_root(W_UK_T.view, Affine("p", 3, 0, 8 * 192 * 512))
+    m.write_root(w_uv, Affine("p", 4, 0, 8 * 512 * 256))
+    assert len(m._allocs[2].root_maps) == 2
+    w_uv_t = view(2, (8, 256, 512), strides=(448, 1, 3584), offset=192)
+    uk, uv_t = m.read(W_UK_T.view), m.read(w_uv_t)
+    for h, k, n in ((0, 0, 0), (7, 191, 511), (3, 17, 300)):
+        assert uk[(h * 192 + k) * 512 + n] == ("p", 3, (h * 192 + k) * 512 + n)
+    for h, r, c in ((0, 0, 0), (7, 255, 511), (5, 100, 33)):
+        assert uv_t[(h * 256 + r) * 512 + c] == ("p", 4, (h * 512 + c) * 256 + r)
+    boxes = [view(2, (2, 16, 24), strides=(448, 1, 3584), offset=192 + 5 * 448 + 7 * 3584),
+             view(2, (8, 24, 4), strides=(448, 3584, 1)), view(2, (4, 100, 7), strides=(448, 1, 3584), offset=448 + 3 + 3584 * 9)]
+    for v in boxes:
+        before = m.stats().extra["fast_reads"]
+        assert runs(m.read(v)) == slow(m, v)
+        assert m.stats().extra["fast_reads"] == before + 1
+    straddling = view(2, (8, 300, 512), strides=(448, 1, 3584))       # W_UK_T's 192 columns and 108 of W_UV's
+    assert m._root_map_read(m._allocs[2], straddling) is None
+    m.write(view(2, (4,), offset=192 + 5 * 448 + 7 * 3584), Affine("n", 9, 0, 4))
+    assert len(m._allocs[2].root_maps) == 0
+    assert runs(m.read(boxes[0])) == slow(m, boxes[0])
+    assert m.read(boxes[0])[0] == ("n", 9, 0)
