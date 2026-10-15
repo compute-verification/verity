@@ -5,17 +5,19 @@ combination of the x-constraints is supported on one grid row and none of the y-
 holds for every typing by Claim 1, and check.py verifies it, with the handle recursion, on smaller grids.
 Pure integer arithmetic, so the whole enumeration is quick on a few dozen cores.
 
-Usage: exhaustive_3x3.py [WORKERS] [LIMIT] [--full]. LIMIT checks only the first LIMIT hierarchies of each worker's
-share; --full also runs check.py's complete per-tree check (labels, (L), (I), handles) over GF(2) and GF(10007).
+Usage: exhaustive_3x3.py [WORKERS] [LIMIT] [--full] [--sample N]. LIMIT checks only the first LIMIT hierarchies of
+each worker's share; --full also runs check.py's complete per-tree check (labels, (L), (I), handles) over GF(2) and
+GF(10007); --sample N checks N random hierarchies (check.random_tree) instead of all of them.
 """
 
 import multiprocessing as mp
 import os
+import random
 import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from check import all_binary_trees, check_tree  # noqa: E402
+from check import all_binary_trees, check_tree, random_tree  # noqa: E402
 
 CELLS = [(r, c) for r in range(3) for c in range(3)]
 INDEX = {t: i for i, t in enumerate(CELLS)}
@@ -95,12 +97,17 @@ def independent(cons, masks):
     return True
 
 
+def share(wid, workers, sample):
+    if sample:
+        rng = random.Random(20261015 + wid)
+        return (random_tree(CELLS, rng) for _ in range(sample // workers))
+    return (tree for i, tree in enumerate(all_binary_trees(CELLS)) if i % workers == wid)
+
+
 def work(args):
-    wid, workers, limit, full = args
+    wid, workers, limit, full, sample = args
     done = 0
-    for i, tree in enumerate(all_binary_trees(CELLS)):
-        if i % workers != wid:
-            continue
+    for tree in share(wid, workers, sample):
         xc, yc = typing(tree)
         assert independent(xc, ROW), f"row independence fails: {tree}"
         assert independent(yc, COL), f"column independence fails: {tree}"
@@ -114,13 +121,15 @@ def work(args):
 
 
 if __name__ == "__main__":
-    args = [a for a in sys.argv[1:] if a != "--full"]
-    full = "--full" in sys.argv[1:]
+    argv = sys.argv[1:]
+    full = "--full" in argv
+    sample = int(argv[argv.index("--sample") + 1]) if "--sample" in argv else 0
+    args = [a for i, a in enumerate(argv) if a != "--full" and a != "--sample" and (i == 0 or argv[i - 1] != "--sample")]
     workers = int(args[0]) if args else 32
     limit = int(args[1]) if len(args) > 1 else 0
     t0 = time.time()
     with mp.Pool(workers) as pool:
-        counts = pool.map(work, [(w, workers, limit, full) for w in range(workers)])
-    print(f"[labeling] exhaustive 3x3: {sum(counts)} binary hierarchies on the full 3x3 grid: typing never stuck, (I) "
-          f"over GF(2), GF(3), GF(10007){' plus the full per-tree check' if full else ''}: ok "
-          f"({time.time() - t0:.0f} s, {workers} workers)")
+        counts = pool.map(work, [(w, workers, limit, full, sample) for w in range(workers)])
+    print(f"[labeling] {'random' if sample else 'exhaustive'} 3x3: {sum(counts)} binary hierarchies on the full 3x3 "
+          f"grid: typing never stuck, (I) over GF(2), GF(3), GF(10007){' plus the full per-tree check' if full else ''}: "
+          f"ok ({time.time() - t0:.0f} s, {workers} workers)")
