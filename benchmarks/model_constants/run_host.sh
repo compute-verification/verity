@@ -2,7 +2,8 @@
 # Part B of the model constants (cwd = the source tree): host DRAM on vy-nebius-2 by STREAM (stream.c: copy, triad, a
 # read, cached and non-temporal stores), each NUMA node's threads on its own memory, then under one short
 # gpu-lease 8 --wait --max-min MAXMIN (default 10) every GPU reading pinned host memory (benchmarks/host_tier/pcie.cu,
-# each GPU's buffer on its own node) alone and beside the CPUs' STREAM, timed together (--start-at). Results go to
+# each GPU's buffer on its own node) alone and beside the CPUs' STREAM, timed together (--start-at, both for the same
+# SECONDS_EACH, so a pair's PCIe row has no time alone in it). Results go to
 # $RESEARCH_RUN_DIR/out: env.txt, stream.jsonl, pcie.jsonl, gpu.txt.
 #
 #   research run --on vy-nebius-2 --project verity --source . --cwd source --mem-gb 64 --campaign cmp-12 \
@@ -66,7 +67,7 @@ gpu-lease 8 --wait --max-min "${MAXMIN:-10}" -- bash -c '
     k=${pair%:*} m=${pair#*:}
     t=$(python3 -c "import time; print(time.time() + 10)")
     st "readers-with-$m" "$RC" "$k" --start-at "$t" > "$B/s.json" &
-    P --modes "$m" --start-at "$t" | tag "with-$k"
+    P --modes "$m" --seconds "$S" --start-at "$t" | tag "with-$k"
     wait; cat "$B/s.json"
   done
   date -u +%FT%TZ >> "$O/gpu.txt"'
