@@ -16,6 +16,8 @@ the tree at 0, sum to at least L*(|G_T| - H)); then random computations with mer
 tree re-rooted at 0 through its lowest correct target and checked with A1a's flattening on its top targets.
 Part 6: one word added to the running sums of single-level links saves at most L over all its uses, and the links
 it helps lie in one D-row or one D-column.
+Part 7: Theorem C end to end on random computations that reuse accumulators and merge-built words across positions,
+and Strassen inside one block, which shows the per-word charge W' cannot be dropped.
 """
 
 import random
@@ -712,6 +714,221 @@ def part6(rng):
           f"({tight} save exactly L, {multi} of them across 2+ cells)")
 
 
+def reuse_dag(shape, rng, p):
+    """A random computation with words reused across positions. Classifies one-addend links, runs the flattening on
+    tau_0 with the links that add a tau_0 word, checks Lemma C per added word outside tau_0, Theorem B's per-tree bound
+    on the other heads, and #products >= L*(|G_T| - H' - W')."""
+    Xd, Yd = shape.P * shape.m, shape.Q * shape.m
+    zero = np.zeros((Xd, Yd), dtype=np.int64)
+    val, par, step, mrg = [zero], [None], [None], [None]
+
+    def prod_path(node, target):
+        for R in rank_one_terms(target - val[node], p):
+            val.append((val[node] + R) % p)
+            par.append(node)
+            step.append(R)
+            mrg.append(None)
+            node = len(val) - 1
+        return node
+
+    def merge(a, z, alpha, beta):
+        val.append((alpha * val[a] + beta * val[z]) % p)
+        par.append(None)
+        step.append(None)
+        mrg.append((a, alpha, z, beta))
+        return len(val) - 1
+
+    def partial(pos, s, ks):
+        out = np.zeros_like(zero)
+        for k in ks:
+            out[pos[0] * shape.m + k, pos[1] * shape.m + k] = 1
+        return out
+
+    positions = [(i, j) for i in range(shape.P) for j in range(shape.Q)]
+    acc = []  # tau_0 accumulators: (node, cell it was built for)
+    for _ in range(rng.randint(2, 5)):
+        pos, s = rng.choice(positions), rng.randrange(shape.S)
+        ks = [k for k in range(s * shape.L, (s + 1) * shape.L) if rng.random() < 0.6]
+        acc.append((prod_path(rng.choice([0] + [a for a, _ in acc]), partial(pos, s, ks)), (pos, s)))
+    words = []  # merge-built words: (node, {cell: coefficient})
+    for _ in range(rng.randint(1, 3)):
+        i, s = rng.randrange(shape.P), rng.randrange(shape.S)
+        star = rng.sample([((i, j), s) for j in range(shape.Q)], rng.randint(2, shape.Q))
+        ks = list(range(s * shape.L, (s + 1) * shape.L))
+        owner = [rng.randrange(len(star)) for _ in ks]
+        coef, node = {}, None
+        for n, cell in enumerate(star):
+            g = rng.randint(1, p - 1)
+            Pn = prod_path(0, partial(cell[0], s, [k for k, o in zip(ks, owner) if o == n]) * g % p)
+            node = Pn if node is None else merge(node, Pn, 1, 1)
+            coef[cell] = g
+        words.append((node, coef))
+    committed, cur = {}, {pos: 0 for pos in positions}
+    for c in range(1, shape.S + 1):
+        for pos in rng.sample(positions, len(positions)):
+            target, s = shape.T(pos, c), c - 1
+            action = rng.choice(["continue", "acc", "word", "word", "two", "restart", "wrong"])
+            if action == "continue":
+                start = cur[pos]
+            elif action == "acc":
+                helpful = [a for a, cell in acc if cell == (pos, s)]
+                Z = rng.choice(helpful) if helpful and rng.random() < 0.7 else rng.choice(acc)[0]
+                start = merge(cur[pos], Z, 1, rng.randint(1, p - 1) if Z not in helpful else 1)
+            elif action == "word":
+                Z, coef = rng.choice(words)
+                beta = pow(coef[(pos, s)], p - 2, p) if (pos, s) in coef else rng.randint(1, p - 1)
+                start = merge(cur[pos], Z, 1, beta)
+            elif action == "two":
+                start = merge(merge(cur[pos], rng.choice(acc)[0], 1, 1), rng.choice(words)[0], 1, 1)
+            elif action == "restart":
+                start = rng.randrange(len(val))
+            else:
+                start = cur[pos]
+                target = (target + np.outer([rng.randrange(p) for _ in range(Xd)],
+                                            [rng.randrange(p) for _ in range(Yd)])) % p
+            node = prod_path(start, target)
+            committed[(pos, c)] = (node, np.array_equal(val[node] % p, shape.T(pos, c) % p))
+            cur[pos] = node
+
+    def root_of(x):
+        while par[x] is not None:
+            x = par[x]
+        return x
+
+    def chain(x):
+        out = []
+        while par[x] is not None:
+            out.append(x)
+            x = par[x]
+        return out
+
+    trees = {}
+    for (pos, c), (node, ok) in committed.items():
+        if ok:
+            trees.setdefault(root_of(node), {}).setdefault(pos, []).append((c, node))
+    n_products = {}
+    for x in range(1, len(val)):
+        if par[x] is not None:
+            n_products[root_of(x)] = n_products.get(root_of(x), 0) + 1
+    links = {}  # head -> (pos, c, node, Z, beta, path length)
+    for v, lv in trees.items():
+        if v == 0 or mrg[v][1] != 1 or sum(len(cs) for cs in lv.values()) != 1:
+            continue
+        (pos, [(c, node)]), = lv.items()
+        if np.array_equal(val[mrg[v][0]] % p, shape.T(pos, c - 1) % p):
+            links[v] = (pos, c, node, mrg[v][2], mrg[v][3], len(chain(node)))
+    hi0 = {pos: max(c for c, _ in cs) for pos, cs in trees.get(0, {}).items()}
+    tau0_links = {v: l for v, l in links.items() if root_of(l[3]) == 0 and l[1] > hi0.get(l[0], 0)}
+    # Flattening on tau_0: tops (anchored at their nodes) and tau_0 links (anchored at Z, scaled by beta).
+    fam = [(pos, hi0[pos], node, 1, None) for pos, cs in trees.get(0, {}).items() for c, node in cs if c == hi0[pos]]
+    fam += [(l[0], l[1], l[3], l[4], v) for v, l in tau0_links.items()]
+    k = len(fam)
+    if k:
+        rows_of = [frozenset((pos[0], s) for s in (range(c) if v is None else [c - 1])) for pos, c, _, _, v in fam]
+        cols_of = [frozenset((pos[1], s) for s in (range(c) if v is None else [c - 1])) for pos, c, _, _, v in fam]
+        mats = {t: shape.T(pos, c) if v is None else shape.D(pos, c - 1) for t, (pos, c, _, _, v) in enumerate(fam)}
+        edges = []
+        for x in range(1, len(val)):
+            if par[x] is not None and root_of(x) == 0:
+                edges.append((frozenset(t for t, f in enumerate(fam) if x in chain(f[2])), step[x]))
+        if k == 1:
+            a1 = b = np.ones((1, 1), dtype=np.int64)
+        else:
+            a1, b, _ = set_labels(binary_hierarchy([S for S, _ in edges], range(k)), k, rows_of, cols_of, p)
+        a = (a1 * np.array([pow(int(f[3]), p - 2, p) for f in fam], dtype=np.int64)[None, :]) % p
+        lhs = flatten(a, b, mats, {}, p)
+        rhs = np.zeros_like(lhs)
+        for S, R in edges:
+            Lam = sum((fam[t][3] * np.outer(a[:, t], b[:, t]) for t in S),
+                      np.zeros((a.shape[0], b.shape[0]), dtype=np.int64)) % p
+            assert rank(Lam, p) <= 1, "edge label sum has rank > 1"
+            rhs = rhs + np.kron(Lam, R)
+        for t, (_, _, _, _, v) in enumerate(fam):
+            if v is not None:
+                for x in chain(links[v][2]):
+                    rhs = rhs + np.kron(np.outer(a[:, t], b[:, t]), step[x])
+        assert np.array_equal(lhs % p, rhs % p), "flattening identity fails on tau_0 with its links"
+        assert rank(lhs, p) == sum(rank(M, p) for M in mats.values()), "Lemma 2(b) fails"
+        assert n_products.get(0, 0) + sum(l[5] for l in tau0_links.values()) >= rank(lhs, p)
+    by_word = {}
+    for v, l in links.items():
+        if root_of(l[3]) != 0:
+            by_word.setdefault(l[3], []).append(l[5])
+    for Z, lens in by_word.items():
+        assert sum(lens) >= shape.L * (len(lens) - 1), "Lemma C fails"
+    bounds = tree_bounds({tau: {pos: [c for c, _ in cs] for pos, cs in lv.items()} for tau, lv in trees.items()},
+                         shape.L)
+    for tau in trees:
+        if tau not in links:
+            assert n_products.get(tau, 0) >= bounds[tau], "per-tree bound fails"
+    G = sum(len(cs) for lv in trees.values() for cs in lv.values())
+    H = sum(1 for tau in trees if tau != 0)
+    H1, W1 = sum(1 for tau in trees if tau != 0 and tau not in links), len(by_word)
+    total = sum(n_products.values())
+    assert total >= shape.L * (G - H1 - W1), "Theorem C fails"
+    saved = sum(max(0, shape.L - l[5]) for l in links.values() if root_of(l[3]) != 0)
+    return H - H1 - W1, sum(1 for lens in by_word.values() if len(lens) >= 2), saved
+
+
+def strassen_words(L, p=10007):
+    """Strassen inside one k-block of a 2x2 grid (halves of L/2 inner indices as the 2x2 split): seven tau_0
+    accumulators of L/2 products each, merged into the four outputs, each output a one-addend link from 0."""
+    shape, h2 = Shape(2, 2, L, L), L // 2
+    Xd = Yd = 2 * L
+
+    def side(coefs, k, d):
+        v = np.zeros(d, dtype=np.int64)
+        for (a, h), c in coefs.items():
+            v[a * L + h * h2 + k] += c
+        return v
+
+    A = lambda i, h: {(i, h): 1}  # noqa: E731
+    B = lambda h, j: {(j, h): 1}  # noqa: E731
+
+    def add(*ds):
+        out = {}
+        for sgn, d in ds:
+            for key, c in d.items():
+                out[key] = out.get(key, 0) + sgn * c
+        return out
+
+    Ms = [(add((1, A(0, 0)), (1, A(1, 1))), add((1, B(0, 0)), (1, B(1, 1)))),
+          (add((1, A(1, 0)), (1, A(1, 1))), B(0, 0)),
+          (A(0, 0), add((1, B(0, 1)), (-1, B(1, 1)))),
+          (A(1, 1), add((1, B(1, 0)), (-1, B(0, 0)))),
+          (add((1, A(0, 0)), (1, A(0, 1))), B(1, 1)),
+          (add((1, A(1, 0)), (-1, A(0, 0))), add((1, B(0, 0)), (1, B(0, 1)))),
+          (add((1, A(0, 1)), (-1, A(1, 1))), add((1, B(1, 0)), (1, B(1, 1))))]
+    Mv = [sum(np.outer(side(a, k, Xd), side(b, k, Yd)) for k in range(h2)) % p for a, b in Ms]
+    outputs = {(0, 0): [(1, 0), (1, 3), (-1, 4), (1, 6)], (0, 1): [(1, 2), (1, 4)], (1, 0): [(1, 1), (1, 3)],
+               (1, 1): [(1, 0), (-1, 1), (1, 2), (1, 5)]}
+    for pos, terms in outputs.items():
+        W = sum(s * Mv[i] for s, i in terms) % p
+        assert np.array_equal(W, shape.D(pos, 0) % p), "Strassen output wrong"
+    n_products, G, H1, W1 = 7 * h2, 4, 0, 4
+    assert n_products >= L * (G - H1 - W1), "Theorem C fails on Strassen"
+    assert n_products < L * G, "Strassen should beat L*|G_T|"
+    return n_products, L * G
+
+
+def part7(rng):
+    count, gain, reused, saved = 0, 0, 0, 0
+    for (P, Q, m, L, trials) in ((2, 2, 4, 2, 60), (2, 3, 4, 2, 40), (2, 3, 6, 3, 30), (3, 3, 4, 4, 15)):
+        shape = Shape(P, Q, m, L)
+        for _ in range(trials):
+            for p in (3, 10007):
+                g, r, s = reuse_dag(shape, rng, p)
+                count, gain, reused, saved = count + 1, gain + g, reused + r, saved + s
+    print(f"[reuse] {count} random computations reusing tau_0 accumulators and merge-built words across positions, "
+          "GF(3) and GF(10007): flattening on tau_0 with its one-addend links, Lemma C per added word, per-tree "
+          f"bound on other heads, #products >= L*(|G_T| - H' - W'): ok (H - H' - W' = {gain} heads no longer charged; "
+          f"{reused} words added to 2+ running sums; {saved} products saved by links adding merge-built words)")
+    for L in (2, 4, 6):
+        n_products, full = strassen_words(L)
+        print(f"[reuse] Strassen in one block, L={L}: four merge-built words, one link each, {n_products} products "
+              f"< L*|G_T| = {full}, so W' cannot be dropped; Theorem C holds")
+
+
 def part4(rng):
     count = 0
     for (P, Q, m, L, trials) in ((2, 2, 4, 2, 60), (2, 3, 4, 4, 30), (2, 2, 6, 3, 30)):
@@ -730,7 +947,7 @@ def part4(rng):
 
 if __name__ == "__main__":
     rng = random.Random(20261015)
-    parts = sys.argv[1:] or ["1", "3", "4", "5", "6"]
+    parts = sys.argv[1:] or ["1", "3", "4", "5", "6", "7"]
     if "1" in parts:
         part1_2(rng)
     if "3" in parts:
@@ -741,3 +958,5 @@ if __name__ == "__main__":
         part5(rng)
     if "6" in parts:
         part6(rng)
+    if "7" in parts:
+        part7(rng)
