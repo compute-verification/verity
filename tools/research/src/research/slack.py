@@ -107,6 +107,7 @@ SHIPS_CODE_RE = re.compile(r"\b(curl|wget|pip install|uv (?:pip|sync|tool)|git (
 SAFE_POINT = "Apply at your next safe point; don't interrupt running jobs."
 EXPIRES_S = 2592000                                              # 30 days; a lapsed subscription wakes no one and says nothing
 PAGE = 200
+RATE_RETRIES, RATE_WAIT_MAX_S = 3, 30                         # a 429: retry this often, waiting at most this long each time
 ROUTER_DOWN = "the router's events route doesn't answer"         # its owner's alert, by which the next sender sees it was sent
 ROUTER_ALERT_S = 21600                                           # 6 hours: one alert per outage, again if it outlasts that
 ROUTER_RECHECK_S = 300                                           # how stale a long-lived Routes' idea of the router may get
@@ -428,18 +429,23 @@ class Slack:
                   file=self.log or sys.stderr)
             return {"ok": True, "dry_run": True}
         args = {k: json.dumps(v) if isinstance(v, (dict, list)) else str(v) for k, v in params.items()}
-        try:
-            out = self._broker(method, args) if self.via == "broker" else self.transport(
-                self.base + method, urllib.parse.urlencode(args).encode(),
-                {"Authorization": f"Bearer {self.token}", "Content-Type": "application/x-www-form-urlencoded; charset=utf-8"})
-        except urllib.error.HTTPError as e:
-            if self.via == "broker":
-                raise SlackError(broker_error(method, e)) from None
-            hint = f" (rate limited; retry after {e.headers.get('Retry-After')} s)" if e.code == 429 else ""
-            raise SlackError(f"{method}: HTTP {e.code}{hint}") from None
-        except (urllib.error.URLError, OSError, ValueError) as e:
-            where = "the Slack broker is unreachable" if self.via == "broker" else type(e).__name__
-            raise SlackError(f"{method}: {where}: {getattr(e, 'reason', e)}") from None
+        for attempt in range(RATE_RETRIES + 1):
+            try:
+                out = self._broker(method, args) if self.via == "broker" else self.transport(
+                    self.base + method, urllib.parse.urlencode(args).encode(),
+                    {"Authorization": f"Bearer {self.token}", "Content-Type": "application/x-www-form-urlencoded; charset=utf-8"})
+                break
+            except urllib.error.HTTPError as e:
+                if e.code == 429 and attempt < RATE_RETRIES:                 # a burst of doorbells: wait as asked, then again
+                    _sleep(min(float(e.headers.get("Retry-After") or 1), RATE_WAIT_MAX_S))
+                    continue
+                if self.via == "broker":
+                    raise SlackError(broker_error(method, e)) from None
+                hint = f" (rate limited; retry after {e.headers.get('Retry-After')} s)" if e.code == 429 else ""
+                raise SlackError(f"{method}: HTTP {e.code}{hint}") from None
+            except (urllib.error.URLError, OSError, ValueError) as e:
+                where = "the Slack broker is unreachable" if self.via == "broker" else type(e).__name__
+                raise SlackError(f"{method}: {where}: {getattr(e, 'reason', e)}") from None
         if not isinstance(out, dict):
             raise SlackError(f"{method}: the answer is not a JSON object")
         if not out.get("ok"):
@@ -532,7 +538,8 @@ def _post(api: Slack, ch: str, handle: str, text: str, thread: str | None = None
         try:
             deliver(api, route[0], route[1], ch, msg, link)
         except SlackError as e:
-            print(f"route: posted, but no doorbell rang ({e}); the post itself stands", file=sys.stderr)
+            print(f"route: posted, but delivery stopped ({e}); the post itself stands: `research msg deliver --ts {ts}"
+                  + (f" --thread {thread}" if thread else "") + "` rings what it missed", file=sys.stderr)
     return ts
 
 
@@ -1042,7 +1049,7 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, link: str
         return []
     author = poster(msg, reg) or "?"
     urgent = urgent or "urgent" in tags_of(msg.get("text", ""))
-    src, lines = thread or msg.get("ts") or "", []
+    src, lines, missed = thread or msg.get("ts") or "", [], []
     if routes.router_down:
         lines.append(router_alert(api, ch, routes, author, src, msg.get("ts") or src, now))
     humans = {poster({"user": p.get("slack_user")}, reg) for p in reg.get("humans", [])}
@@ -1062,22 +1069,29 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, link: str
             continue
         if to == author:
             continue
-        rung = api.call("conversations.replies", channel=ch, ts=r["inbox_ts"], oldest=f"{now - 3600:.6f}", limit=PAGE).get("messages", [])
-        rung = [m for m in rung if m.get("ts") != r["inbox_ts"]]
-        if any(_rang(m.get("text") or "", msg.get("ts") or "", link) for m in rung):
-            continue
-        n = sum(_mentions_thread(m.get("text") or "", src) and _from(m.get("text") or "", author) for m in rung)
-        if n >= CAP_PER_HOUR:                                        # a loop is one author; a roll call is many, once each
-            if n == CAP_PER_HOUR:
-                api.call("chat.postMessage", channel=ch, thread_ts=src, username="router", unfurl_links="false",
-                         text=f"routing @{author} to {to} paused here for the hour ({CAP_PER_HOUR} doorbells) {QUIET}")
-                api.call("chat.postMessage", channel=ch, thread_ts=r["inbox_ts"], username="router", unfurl_links="false",
-                         text=f"from router, thread {src}: paused @{author} here for the hour ({CAP_PER_HOUR} doorbells)")
-            lines.append(f"@{to}: paused (cap of {CAP_PER_HOUR} an hour from @{author} in this thread)")
-            continue
-        api.call("chat.postMessage", channel=ch, thread_ts=r["inbox_ts"], username="router", unfurl_links="false",
-                 unfurl_media="false", text=doorbell(author, src, msg.get("ts") or src, msg.get("text", ""), urgent))
-        lines.append(f"@{to}: rang" + (f" (for @{name}, finished)" if to != name else ""))
+        try:
+            rung = api.call("conversations.replies", channel=ch, ts=r["inbox_ts"], oldest=f"{now - 3600:.6f}", limit=PAGE).get("messages", [])
+            rung = [m for m in rung if m.get("ts") != r["inbox_ts"]]
+            if any(_rang(m.get("text") or "", msg.get("ts") or "", link) for m in rung):
+                continue
+            n = sum(_mentions_thread(m.get("text") or "", src) and _from(m.get("text") or "", author) for m in rung)
+            if n >= CAP_PER_HOUR:                                        # a loop is one author; a roll call is many, once each
+                if n == CAP_PER_HOUR:
+                    api.call("chat.postMessage", channel=ch, thread_ts=src, username="router", unfurl_links="false",
+                             text=f"routing @{author} to {to} paused here for the hour ({CAP_PER_HOUR} doorbells) {QUIET}")
+                    api.call("chat.postMessage", channel=ch, thread_ts=r["inbox_ts"], username="router", unfurl_links="false",
+                             text=f"from router, thread {src}: paused @{author} here for the hour ({CAP_PER_HOUR} doorbells)")
+                lines.append(f"@{to}: paused (cap of {CAP_PER_HOUR} an hour from @{author} in this thread)")
+                continue
+            api.call("chat.postMessage", channel=ch, thread_ts=r["inbox_ts"], username="router", unfurl_links="false",
+                     unfurl_media="false", text=doorbell(author, src, msg.get("ts") or src, msg.get("text", ""), urgent))
+            lines.append(f"@{to}: rang" + (f" (for @{name}, finished)" if to != name else ""))
+        except SlackError as e:                                      # the others still ring; `deliver` rings this one later
+            lines.append(f"@{to}: NOT RUNG ({e})")
+            missed.append(to)
+    if missed:
+        lines.append(f"{len(missed)} doorbell(s) didn't ring ({' '.join('@' + n for n in missed)}): `research msg deliver --ts "
+                     f"{msg.get('ts')}" + (f" --thread {thread}" if thread else "") + "` rings only the ones still missing")
     for line in lines:
         print(f"route {line}", file=log)
     return lines
