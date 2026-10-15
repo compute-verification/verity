@@ -15,10 +15,11 @@ honest Gaussian row; the worst live entry's point mass by rho*alpha; the largest
 differences on honest and floor rows; how often the bit-exact chain hides a changed product (absorption); and the
 spike-column attack on `pearl_c.form_v1` (every row's spikes in the same columns: those codes are known before the seeds).
 
-    python detection.py [--draws N] [--fix | --low-r] [--json FILE]
+    python detection.py [--draws N] [--fix | --low-r | --conditional [--lines N]] [--json FILE]
 
 `--fix` runs the spike-column attack under the proposed fix rho' = max(rho, s/4) (`s5_stats_rho_s4`) beside v1; `--low-r`
-the worst entry of rows with s/rho in [1, 3.5], the rows the fix leaves as they are.
+the worst entry of rows with s/rho in [1, 3.5], the rows the fix leaves as they are; `--conditional` the worst laws'
+point masses given one shared line (`conditional`).
 """
 from __future__ import annotations
 
@@ -332,6 +333,29 @@ def absorption(pair: tuple[list[int], list[int]], trials: int, rng: random.Rando
                             sorted(hits.items())}}
 
 
+def conditional(pools: Pools, v: float, sigma: float, lines: int, rng: random.Random) -> dict:
+    """Schwartz-Zippel reads each variable's point mass given the others, and entries of a row share E'_i, of a column
+    F_k: the point mass of v's law (each line's own mode) with one line held and the other side's whole pool drawn, over
+    `lines` held lines per side.  `excess_sd` is the spread across held lines beyond the binomial spread of one estimate."""
+    beta = beta_for(sigma)
+    vw = P.f32_bits(P.f32(v))
+    eps = [PC.eprime(beta, e) for e in pools.e]
+    out = {"v": v, "rho_alpha": sigma, "lines": lines}
+    for name, held, other, pair in (("given_E", eps, pools.f, lambda h, o: (h, o)),
+                                    ("given_F", pools.f, eps, lambda h, o: (o, h))):
+        ps = []
+        for h in rng.sample(held, lines):
+            c = Counter(entry(vw, *pair(h, o)) for o in other)
+            ps.append(c.most_common(1)[0][1] / len(other))
+        ps.sort()
+        mean = sum(ps) / len(ps)
+        var = sum((p - mean) ** 2 for p in ps) / (len(ps) - 1)
+        excess = math.sqrt(max(0.0, var - mean * (1 - mean) / len(other)))
+        out[name] = {"mean": round(mean, 4), "p90": ps[int(0.9 * len(ps))], "max": ps[-1],
+                     "max_upper95": upper95(ps[-1], len(other)), "excess_sd": round(excess, 4)}
+    return out
+
+
 def s5_stats_rho_s4(x: list[int]) -> tuple[int, int, int, int]:
     """The proposed fix: `pearl_c.s5_stats` with rho' = max(rho, s/4) in rho's place, so alpha = 448/(s + 4 rho') keeps
     alpha*s + 4 rho'*alpha <= 448 and every row's noise is at least alpha*s/4 (the s/rho = 4 law at worst)."""
@@ -399,6 +423,15 @@ def main(argv: list[str]) -> int:
     rng = random.Random(20261015)
     t0 = time.time()
     pools = Pools(3000, 7)
+    if "--conditional" in argv:
+        lines = int(argv[argv.index("--lines") + 1]) if "--lines" in argv else 200
+        points = [(168.0, 56.0), (210.0, 56.0), (220.5, 56.0), (224.0, 56.0), (9.84, 1.25), (7.91, 1.0)]
+        res = {"pool_lines": len(pools.e), "conditional": [conditional(pools, v, s, lines, rng) for v, s in points],
+               "seconds": round(time.time() - t0, 1)}
+        print(json.dumps(res, indent=1))
+        if "--json" in argv:
+            open(argv[argv.index("--json") + 1], "w").write(json.dumps(res, indent=1))
+        return 0
     if "--low-r" in argv:
         res = {"draws": draws, "worst_entry_low_s_over_rho": row_worst(pools, draws // 4, rng, (1.0, 1.5, 2.0, 2.5, 3.5)),
                "seconds": round(time.time() - t0, 1)}
