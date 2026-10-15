@@ -155,6 +155,7 @@ class ProgramIndex:
         self._moe_geo: list[dict[str, dict[str, Any]]] = [RM.moe_geometry(self.rows[lo: hi + 1]) for lo, hi in self.segs]
         self._moe_ord: dict[int, int] = {}
         self._moe_kind: dict[int, str] = {}
+        self._moe_fused: set[int] = set()                  # act_quant rows of the fused SiLU quant: they read the up row, not an act row
         mcounts: dict[tuple, int] = {}
         for r in self.rows:
             mod0 = RM.split_name(r.get("name") or "")[0]
@@ -165,6 +166,8 @@ class ProgramIndex:
                 src = self.by_i.get(int(first[1])) if first and first[0] == "n" else None
                 prod = RM.split_name(src.get("name") or "")[0] if src else None
                 kind = "act_quant" if prod == mod0 and moe_plane_kind(RM.spec_family(src["spec"]), prod) == "act" else "in_quant"
+            elif kind == "act_quant":
+                self._moe_fused.add(int(r["i"]))
             if kind is not None:
                 key = (mod0, kind, self.step_of(int(r["i"])))
                 self._moe_kind[int(r["i"])] = kind
@@ -317,7 +320,7 @@ class ProgramIndex:
         if err is None and any(int(m[1]) <= 0 for m in mem):
             err = f"{fam} {kind} plane width 0 ({mod!r} step {s}: statics {st}, geometry {g})"
         if err is None:
-            err = self._plane_dataflow_error(i, kind, ord_, TOPK, mod, fp8=fam.startswith("MoeExpertFp8Gemm"))
+            err = self._plane_dataflow_error(i, kind, ord_, TOPK, mod, fp8=bool(g.get("fp8")))
         # `plane` = the plane the row PRODUCES: the first member's name (the router row produces two: router_w + router_ids)
         d = {"family": fam, "statics": st, "module": mod, "op_path": f"moe/L{layer}", "hint": hint, "row": ord_, "name_row": name_row,
              "members": ([] if err else mem), "step": s, "plane": mem[0][0], "plane_kind": kind, "moe_module": mod}
@@ -369,7 +372,7 @@ class ProgramIndex:
                 return f"act row {p} does not read up row {p} (Program dataflow {u}): not pair-major"
         elif kind == "act_quant":
             u = prod(0)
-            want = "up" if RM.spec_family(r["spec"]).startswith(RM.FUSED_ACT_QUANT) else "act"
+            want = "up" if i in self._moe_fused else "act"
             if u is None or u[0] != want or u[1] != p or u[2] != 0:
                 return f"act_quant row {p} does not read {want} row {p} (Program dataflow {u}): not pair-major"
         elif kind == "down":

@@ -237,83 +237,79 @@ MOE_PLANES = ("router_w", "router_ids", "up", "act", "down", "sum")
 #: block-FP8 experts (GLM-5.3's `TritonExperts` with DeepGEMM's ue8m0 quant): the w13 launch reads the input's e4m3 group quant
 #: (`in_q`, `in_scale`), the w2 launch the activation's (`act_q`, `act_scale`), each a `_C.per_token_group_fp8_quant` under the runner
 MOE_FP8_PLANES = ("router_w", "router_ids", "in_q", "in_scale", "up", "act", "act_q", "act_scale", "down", "sum")
-_MOE_ROUTERS = ("MoeRouterTopK", "MoeRouterSigmoidBias")
-#: `silu_and_mul_per_block_quant` (block FP8 without DeepGEMM's ue8m0): the activation's quant with no bf16 activation before it
-FUSED_ACT_QUANT = "SiluMulFp8BlockQuant"
+#: Definition family prefix -> the MoE plane kind of its rows, first match wins (a `W` launch before its prefix, the fused SiLU quant
+#: before SiluMul).  The kinds in `_RUNNER_KINDS` are plane rows only under the MoE runner module (`MOE_LEAF`).
+MOE_PLANE_FAMILIES = (("MoeRouterTopK", "router"), ("MoeRouterSigmoidBias", "router"), ("MoeExpertGemmW", "down"),
+                      ("MoeExpertFp8GemmW", "down"), ("MoeExpertGemm", "up"), ("MoeExpertFp8Gemm", "up"), ("MoeSum", "sum"),
+                      ("SiluMulFp8BlockQuant", "act_quant"), ("SiluMul", "act"), ("Fp8GroupQuant", "quant"))
+_RUNNER_KINDS = frozenset({"act_quant", "act", "quant"})
 
 
 def _on_runner(module: str) -> bool:
     return module.rsplit(".", 1)[-1] == MOE_LEAF
 
 
+def _group_static(g: dict[str, Any], st: dict[str, Any]) -> None:
+    """An expert GEMM with a group `G` static reads block-FP8 operands (xq, sx)."""
+    if "G" in st:
+        g["fp8"], g["G"] = True, int(st["G"])
+
+
 def moe_geometry(seg_rows: Iterable[dict]) -> dict[str, dict[str, Any]]:
     """[R14 moe] per MoE module of one step: M (tokens routed = router instances), TOPK, H, I, N_up from the Program's MoE instances.
     The block's values are produced INSIDE one module forward (`MoERunner`), so they are not module outputs: the query opens on them through
     the `moe_block_stream` family (MOE-03 source, names `moe/L<k>/<plane>`), one set of planes per MoE layer per step whatever the routing
-    chose (pair-major rows p = t*TOPK + k -- the sorted block schedule never enters the values).  Block-FP8 expert GEMMs set `fp8` and the
-    group `G`; the runner's group-quant rows are counted by their row width: K = H the input's (`in_quant_rows`), else the activation's
-    (`act_quant_rows`), and its SiluMul rows as `act_rows`."""
+    chose (pair-major rows p = t*TOPK + k -- the sorted block schedule never enters the values).  Expert GEMMs with a group `G` static
+    (block FP8) set `fp8` and `G`; the runner's group-quant rows are counted by their row width: K = H the input's (`in_quant_rows`), else
+    the activation's (`act_quant_rows`, with the fused SiLU quant's), and its SiluMul rows as `act_rows`."""
     geo: dict[str, dict[str, Any]] = {}
     quant_k: dict[str, list[int]] = {}
     for r in seg_rows:
-        fam = spec_family(r["spec"])
         mod = split_name(r.get("name") or "")[0]
-        on_runner = fam.startswith(("SiluMul", "Fp8GroupQuant")) and _on_runner(mod)
-        if not (fam.startswith(_MOE_ROUTERS + ("MoeExpertGemm", "MoeExpertFp8Gemm", "MoeSum")) or on_runner):
+        kind = moe_plane_kind(spec_family(r["spec"]), mod)
+        if kind is None:
             continue
         st = spec_statics(r["spec"])
-        g = geo.setdefault(mod, {"M": 0, "TOPK": 0, "E": 0, "H": 0, "I": 0, "N_up": 0, "expert_gemm_rows": 0, "act_rows": 0})
-        if fam.startswith(_MOE_ROUTERS):
+        g = geo.setdefault(mod, {"M": 0, "TOPK": 0, "E": 0, "H": 0, "I": 0, "N_up": 0, "expert_gemm_rows": 0, "act_rows": 0,
+                                 "fused_act_quant_rows": 0})
+        if kind == "router":
             g["M"] += 1
             g["TOPK"] = int(st.get("TOPK", g["TOPK"]))
             g["E"] = int(st.get("E", g["E"]))
-        elif fam.startswith(("MoeExpertGemmW", "MoeExpertFp8GemmW")):
+        elif kind == "down":
             g["H"] = int(st.get("N", g["H"]))
             g["I"] = int(st.get("K", g["I"]))
-        elif fam.startswith(("MoeExpertGemm", "MoeExpertFp8Gemm")):
+            _group_static(g, st)
+        elif kind == "up":
             g["N_up"] = int(st.get("N", g["N_up"]))
             g["expert_gemm_rows"] += 1
-        elif fam.startswith("MoeSum"):
+            _group_static(g, st)
+        elif kind == "sum":
             g["H"] = int(st.get("H", g["H"]))
             g["TOPK"] = int(st.get("TOPK", g["TOPK"]))
-        elif fam.startswith(FUSED_ACT_QUANT):
-            g["fused_act_quant_rows"] = g.get("fused_act_quant_rows", 0) + 1
-        elif fam.startswith("SiluMul"):
+        elif kind == "act_quant":
+            g["fused_act_quant_rows"] += 1
+        elif kind == "act":
             g["act_rows"] += 1
         else:
             quant_k.setdefault(mod, []).append(int(st.get("K", 0)))
-        if fam.startswith("MoeExpertFp8Gemm"):
-            g["fp8"], g["G"] = True, int(st.get("G", g.get("G", 0)))
     for mod, g in geo.items():
         ks = quant_k.get(mod, [])
         n_in = sum(1 for k in ks if k == g["H"]) if g["H"] != g["I"] else min(len(ks), g["M"])
-        g["in_quant_rows"], g["act_quant_rows"] = n_in, len(ks) - n_in + g.pop("fused_act_quant_rows", 0)
+        g["in_quant_rows"], g["act_quant_rows"] = n_in, len(ks) - n_in + g.pop("fused_act_quant_rows")
     return geo
 
 
 def moe_plane_kind(family: str, module: str) -> str | None:
     """[MAN-06f v3] the fused-MoE block row kinds whose values the collector commits as `moe_block_stream` PLANES (MOE-03: pair-major
-    planes per MoE layer per step) rather than as module outputs: `router` (MoeRouterTopK / MoeRouterTopKNorm / MoeRouterSigmoidBias:
-    router_w + router_ids per token), `up` (MoeExpertGemm / MoeExpertFp8Gemm: the w13 launch per pair), `act` (the SiluMul rows under the
-    MoE runner module `...experts`: the silu_and_mul per pair), `quant` (the Fp8GroupQuant rows under the runner: the input's group quant
-    per token, or the activation's per pair -- `ProgramIndex` tells them apart by what they read), `act_quant` (SiluMulFp8BlockQuant under
-    the runner: the activation's quant fused with the SiLU), `down` (MoeExpertGemmW /
-    MoeExpertFp8GemmW: the w2 launch per pair), `sum` (MoeSum per token).  None for every other row.  From the Program's spec family +
-    module name alone."""
-    if family.startswith(_MOE_ROUTERS):
-        return "router"
-    if family.startswith(("MoeExpertGemmW", "MoeExpertFp8GemmW")):
-        return "down"
-    if family.startswith(("MoeExpertGemm", "MoeExpertFp8Gemm")):
-        return "up"
-    if family.startswith("MoeSum"):
-        return "sum"
-    if family.startswith(FUSED_ACT_QUANT) and _on_runner(module):
-        return "act_quant"
-    if family.startswith("SiluMul") and _on_runner(module):
-        return "act"
-    if family.startswith("Fp8GroupQuant") and _on_runner(module):
-        return "quant"
+    planes per MoE layer per step) rather than as module outputs (`MOE_PLANE_FAMILIES`): `router` (router_w + router_ids per token),
+    `up` (the w13 launch per pair), `down` (the w2 launch per pair), `sum` (per token) and, under the MoE runner module `...experts`
+    only, `act` (the SiluMul per pair), `quant` (a group quant: the input's per token or the activation's per pair -- `ProgramIndex`
+    tells them apart by what they read) and `act_quant` (the activation's quant fused with the SiLU).  None for every other row.  From
+    the Program's spec family + module name alone."""
+    for prefix, kind in MOE_PLANE_FAMILIES:
+        if family.startswith(prefix):
+            return kind if kind not in _RUNNER_KINDS or _on_runner(module) else None
     return None
 
 

@@ -2,7 +2,6 @@
   "rule": "P3 (one evaluator interface, one challenge derivation)",
   "entries": [
     {"file": "verity_vllm/check/match/record.py", "kind": "if-ladder", "symbol": "read_record", "detail": "tag"},
-    {"file": "verity_vllm/query/manifest/format.py", "kind": "if-ladder", "symbol": "moe_plane_kind", "detail": "family"},
     {"file": "verity_vllm/commit/committer/hidden_gpu_src/hidden_gpu.py", "kind": "rng", "symbol": "cmd_check", "detail": "numpy.random.default_rng", "count": 2},
     {"file": "verity_vllm/commit/hidden_stream.py", "kind": "if-ladder", "symbol": "StreamLayout.word_index", "detail": "cls"},
     {"file": "verity_vllm/commit/hidden_stream.py", "kind": "if-ladder", "symbol": "thread_word_offset", "detail": "cls"},
@@ -21,7 +20,6 @@
     {"file": "verity_vllm/program/kernels/twins.py", "kind": "rng", "symbol": "check_log", "detail": "numpy.random.default_rng"},
     {"file": "verity_vllm/program/kernels/twins.py", "kind": "rng", "symbol": "main", "detail": "numpy.random.default_rng"},
     {"file": "verity_vllm/properties/holdout.py", "kind": "rng", "symbol": "generate", "detail": "random.Random"},
-    {"file": "verity_vllm/properties/holdout.py", "kind": "rng", "symbol": "make_workload", "detail": "random.Random"},
-    {"file": "verity_vllm/query/manifest/format.py", "kind": "if-ladder", "symbol": "moe_geometry", "detail": "fam"}
+    {"file": "verity_vllm/properties/holdout.py", "kind": "rng", "symbol": "make_workload", "detail": "random.Random"}
   ]
 }
