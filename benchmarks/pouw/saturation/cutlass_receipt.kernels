@@ -6,7 +6,8 @@
 # round; forced F adds F phi1 steps after every 32-deep k-block on receipt chains that read no accumulator; xvar 1 makes
 # the cheater's steps imad phi1 (`_xiX` in the name), xvar 2 FFMAs (`_xfX`), xvar 3 an alu phi1 and six FFMAs each
 # (`_xmX`), xvar 4 and 5 FFMAs and alu phi1 on eight chains (`_xgX`, `_xaX`); fvar 2 makes the forced steps FFMAs, `_ffF`;
-# var 2 is duo2, whose last column d2c (default 4) is its four-word states a thread: `p_duo2cC_g4` for C other than 4)
+# var 2 is duo2, whose column d2c (default 4) is its four-word states a thread (`p_duo2cC_g4` for C other than 4), and
+# d2keys 1 reads its keys from constant memory instead of immediates (`p_duo2cb_g4`))
 p_plain    0 0 1 1 0
 p_dump     0 0 1 1 2
 p_alu_p1   0 0 1 1 1
@@ -413,6 +414,7 @@ p_duo2c2_g4 0 2 1 1 1 0 4 0 0 0 0 0 2
 p_duo2_g4 0 2 1 1 1 0 4 0 0 0 0 0 4
 p_duo2c8_g4 0 2 1 1 1 0 4 0 0 0 0 0 8
 p_duo2c16_g4 0 2 1 1 1 0 4 0 0 0 0 0 16
+p_duo2cb_g4 0 2 1 1 1 0 4 0 0 0 0 0 4 1
 p_duo2_g4_x0 0 2 1 1 1 0 4 0 0 0 0 0 4
 p_duo2_g4_x1 0 2 1 1 1 0 4 1 0 0 0 0 4
 p_duo2_g4_x2 0 2 1 1 1 0 4 2 0 0 0 0 4

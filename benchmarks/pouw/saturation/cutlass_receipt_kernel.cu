@@ -26,7 +26,9 @@
 //              fires on a 64-bit coincidence, so the outputs and receipts the gates check are the design's.
 //   CR_FVAR V  the forced steps: 0 alu phi1, 2 one FFMA each (the FMA pipe alone; chains seeded as floats in [1, 2))
 //   CR_VAR 2   (mode 1) phi.cuh's duo2 instead of phi1: CR_D2C four-word duo2 states a thread, tile c's words into state
-//              c % CR_D2C at positions t = (4 c + e) % D2_KEYS, keys in constant memory; each state folded at the end
+//              c % CR_D2C at positions t = (4 c + e) % D2_KEYS, each state folded at the end. Its keys are immediates,
+//              as phi1's are. CR_D2KEYS 1 reads them from constant memory instead, as a coin-keyed kernel would: ptxas
+//              then hoists all 256 into registers with LDC and spills (r20261015-121331-0d0d)
 //   CR_XVAR V  the cheater's step: 0 alu phi1, 1 imad phi1 (IMAD on the FMA pipe, its LOP3 and SHF on the ALU), 2 one
 //              FFMA (the FMA pipe alone), on chains seeded as floats in [1, 2), 3 both pipes: an alu phi1 on the first
 //              chain and six FFMAs on the second (equal CUDA slots); 4 FFMAs and 5 alu phi1 steps round-robin over
@@ -74,6 +76,9 @@
 #endif
 #ifndef CR_D2C
 #define CR_D2C 4
+#endif
+#ifndef CR_D2KEYS
+#define CR_D2KEYS 0
 #endif
 #define CR_STR2(x) #x
 #define CR_STR(x) CR_STR2(x)
@@ -179,9 +184,15 @@ struct ReceiptMma : Base {
             if constexpr (VAR == 2 && MODE == 1 && decltype(receipted)::value && (SPREAD || (b + 1) % GS == 0)) {
                 for_each(make_int_sequence<CH * MW>{}, [&](auto i) {
                     constexpr int c = decltype(i)::value / MW, e = decltype(i)::value % MW, t = (c * MW + e) % D2_KEYS;
-                    if constexpr (!SPREAD || (c % NN) * KB / NN == b)
-                        duo2<t>(d2[c % CR_D2C], __float_as_uint(accum(e, c / NN, c % NN)), D2K[0][t], D2K[1][t],
-                                D2K[2][t], D2K[3][t]);
+                    if constexpr (!SPREAD || (c % NN) * KB / NN == b) {
+                        if constexpr (CR_D2KEYS == 1)
+                            duo2<t>(d2[c % CR_D2C], __float_as_uint(accum(e, c / NN, c % NN)), D2K[0][t], D2K[1][t],
+                                    D2K[2][t], D2K[3][t]);
+                        else {
+                            constexpr uint32_t kk = d2_key(0, t), ka = d2_key(1, t), kc = d2_key(2, t), kb = d2_key(3, t);
+                            duo2<t>(d2[c % CR_D2C], __float_as_uint(accum(e, c / NN, c % NN)), kk, ka, kc, kb);
+                        }
+                    }
                 });
             } else if constexpr (MODE == 1 && decltype(receipted)::value && (SPREAD || (b + 1) % GS == 0)) {
                 const uint32_t w = GRAIN > 1 ? (uint32_t)(kt * KB + b + 1) : (uint32_t)(kt + 1);
@@ -376,7 +387,7 @@ cr_impl* make(const cr_args& a, int* err) {
     uint32_t keys[4][D2_KEYS];
     for (int j = 0; j < 4; j++)
         for (int t = 0; t < D2_KEYS; t++) keys[j][t] = d2_key(j, t);
-    if (CR_VAR == 2 && cudaMemcpyToSymbol(D2K, keys, sizeof keys) != cudaSuccess) {
+    if (CR_VAR == 2 && CR_D2KEYS == 1 && cudaMemcpyToSymbol(D2K, keys, sizeof keys) != cudaSuccess) {
         *err = 2;
         return nullptr;
     }

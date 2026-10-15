@@ -54,8 +54,8 @@ __host__ __device__ __forceinline__ uint32_t rotlv(uint32_t x, int r) {
     return (x << r) | (x >> ((32 - r) & 31));
 #endif
 }
-// key j (0 KK, 1 KA, 2 KC, 3 KB) of position t, as the host fills the kernel's constant bank
-inline uint32_t d2_key(int j, int t) {
+// key j (0 KK, 1 KA, 2 KC, 3 KB) of position t
+__host__ __device__ constexpr uint32_t d2_key(int j, int t) {
     uint32_t x = 0x9e3779b9u * (uint32_t)(j * D2_KEYS + t + 1) ^ 0x632be5abu;
     x ^= x >> 16; x *= 0x7feb352du; x ^= x >> 15; x *= 0x846ca68bu; x ^= x >> 16;
     return j == 1 || j == 3 ? x | 1u : x;
