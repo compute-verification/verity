@@ -607,3 +607,21 @@ p_duo2_g4_mm4b 0 2 1 1 1 0 4 0 0 0 0 0 4 0 4 2 1
 p_duo2_g4_mm8b 0 2 1 1 1 0 4 0 0 0 0 0 4 0 8 2 1
 p_plain_mm2b 0 0 1 1 3 0 1 0 0 0 0 0 4 0 2 2 1
 p_plain_mm8b 0 0 1 1 3 0 1 0 0 0 0 0 4 0 8 2 1
+# round 3: one accumulator (xacc 1), the cheaper register cost at the 168-register cap, before and after the receipt
+p_alu_g4_mm3a1b 0 0 1 1 1 0 4 0 0 0 0 0 4 0 3 1 1
+p_alu_g4_mm5a1b 0 0 1 1 1 0 4 0 0 0 0 0 4 0 5 1 1
+p_alu_g4_mm6a1b 0 0 1 1 1 0 4 0 0 0 0 0 4 0 6 1 1
+p_alu_g4_mm8a1b 0 0 1 1 1 0 4 0 0 0 0 0 4 0 8 1 1
+p_alu_g4_mm10a1b 0 0 1 1 1 0 4 0 0 0 0 0 4 0 10 1 1
+p_alu_g4_mm12a1b 0 0 1 1 1 0 4 0 0 0 0 0 4 0 12 1 1
+p_alu_g4_mm2a1 0 0 1 1 1 0 4 0 0 0 0 0 4 0 2 1 0
+p_alu_g4_mm4a1 0 0 1 1 1 0 4 0 0 0 0 0 4 0 4 1 0
+p_alu_g4_mm6a1 0 0 1 1 1 0 4 0 0 0 0 0 4 0 6 1 0
+p_alu_g4_mm8a1 0 0 1 1 1 0 4 0 0 0 0 0 4 0 8 1 0
+p_duo2c2_g4_mm1a1b 0 2 1 1 1 0 4 0 0 0 0 0 2 0 1 1 1
+p_duo2c2_g4_mm2a1b 0 2 1 1 1 0 4 0 0 0 0 0 2 0 2 1 1
+p_duo2c2_g4_mm4a1b 0 2 1 1 1 0 4 0 0 0 0 0 2 0 4 1 1
+p_duo2c2_g4_mm6a1b 0 2 1 1 1 0 4 0 0 0 0 0 2 0 6 1 1
+p_duo2c2_g4_mm8a1b 0 2 1 1 1 0 4 0 0 0 0 0 2 0 8 1 1
+p_duo2c2_g4_mm2a1 0 2 1 1 1 0 4 0 0 0 0 0 2 0 2 1 0
+p_duo2c2_g4_mm4a1 0 2 1 1 1 0 4 0 0 0 0 0 2 0 4 1 0

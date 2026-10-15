@@ -14,13 +14,23 @@ round times every kernel at the shape, in a shuffled order). Per phase (p2048, p
 by the design's time, as one layer runs each once. At each τ, the largest extra-MAC share among variants whose ratio
 is within τ + RESOLUTION (the shuffled A/A controls' resolution, windows_eps.RESOLUTION), and the share a cheater mixing
 the two bracketing variants reaches at exactly τ (linear between measured points, from the null at ratio 1).
+
+ε_in's tensor part at τ reads the window as windows_eps.timed does, with the cheater's in-kernel MACs added: the most of
+share + BEST_ETA·max(0, τ − s)/η_w over the variants that fit and the null (share 0, s 1), where η_w is the GEMM's η
+(windows_eps.ETA_GEMM) times the design's rate kept against plain in this run. The null alone, BEST_ETA(τ − 1)/η_w, is
+the reading with no tensor work inside the kernel (windows_eps's CUDA-only rows add κ·added/ρ to it).
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import statistics
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from windows_eps import BEST_ETA, ETA_GEMM  # noqa: E402
 
 RESOLUTION = 0.002
 TAUS = (1.00, 1.01, 1.02, 1.05)
@@ -96,20 +106,25 @@ def main():
                                 "shape": ph, "extra_macs": ex, "honest_macs": hon, "extra_share": ex / hon, "ratio": q,
                                 "design_vs_plain": dvp})
     print()
-    print("| design | phase | " + " | ".join(f"τ = {t:.2f}: fits / mixed" for t in taus) + " |")
-    print("|---|---|" + "---|" * len(taus))
+    print("| design | phase | η_w | " + " | ".join(f"τ = {t:.2f}: fits / mixed / ε_in tensor (null)" for t in taus) + " |")
+    print("|---|---|---|" + "---|" * len(taus))
     for base in sorted({VARIANT.sub("", v) for v in variants}):
         for ph in phases:
             pts = [(1.0, 0.0)] + [(r["ratio"], r["extra_share"]) for r in out["rows"]
                                   if r["design"] == base and r["phase"] == ph and r["shape"] == ph]
             if len(pts) == 1:
                 continue
+            dvp = next(r["design_vs_plain"] for r in out["rows"] if r["design"] == base and r["shape"] == ph)
+            eta_w = ETA_GEMM[ph] / dvp
             cells = []
             for t in taus:
                 fit, mixed = frontier(pts, t)
-                cells.append(f"{fit:.4f} / {mixed:.4f}")
-                out["tau"].append({"design": base, "phase": ph, "tau": t, "fits": fit, "mixed": mixed})
-            print(f"| {base} | {ph} | " + " | ".join(cells) + " |")
+                null = BEST_ETA * max(0.0, t - 1) / eta_w
+                eps = max(sh + BEST_ETA * max(0.0, t - q) / eta_w for q, sh in pts if q <= t + RESOLUTION)
+                cells.append(f"{fit:.4f} / {mixed:.4f} / {eps:.4f} ({null:.4f})")
+                out["tau"].append({"design": base, "phase": ph, "tau": t, "eta_w": eta_w, "fits": fit, "mixed": mixed,
+                                   "eps_tensor": eps, "eps_null": null})
+            print(f"| {base} | {ph} | {eta_w:.3f} | " + " | ".join(cells) + " |")
     if a.json:
         json.dump(out, open(a.json, "w"), indent=1)
 
