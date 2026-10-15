@@ -806,10 +806,12 @@ static int pass_consumers(int ctas, size_t shared, uint64_t subtrees, uint64_t *
 // shard's n / 16 leaves); levels below h0 are not kept. The padding leaves pad_r0 … pad_r0 + pad_n − 1 (whole chunks'
 // worth, at the store's leaf positions) are hashed on sb from the start, under the tensor-core receipts, up to their
 // pad_n / lc nodes at hc in pad_out, `pad` scratch of 2 · pad_n digests. The levels above hc are `rs_top`'s. sa waits
-// for the whole shard pass before anything queued on it after.
+// for the whole shard pass before anything queued on it after. consumers > 0 is the one consumer grid's CTAs on sb, for
+// a shard read beside another on the same device (pinned host memory over PCIe, whose few receipt CTAs leave it the
+// device but whose consumers would otherwise fill it).
 int rs_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, unsigned *ctr, uint64_t *ys, uint64_t *dig,
             uint64_t *up, uint64_t *kept, int h0, uint64_t chunk, int ctas, uint64_t pad_r0, uint64_t pad_n,
-            uint64_t *pad, uint64_t *pad_out, cudaStream_t sa, cudaStream_t sb) {
+            uint64_t *pad, uint64_t *pad_out, cudaStream_t sa, cudaStream_t sb, int consumers) {
   constexpr int DEVICES = 64;
   static cudaEvent_t go[DEVICES], end[DEVICES];
   static bool made[DEVICES];
@@ -822,7 +824,7 @@ int rs_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, uns
     made[dev] = true;
   }
   if (!data || !pk || !ctr || !ys || !dig || !up || !kept || !n || n % PER_LEAF || chunk % 32 || chunk % PER_LEAF ||
-      !chunk || n % chunk || base % chunk || ctas < 0)
+      !chunk || n % chunk || base % chunk || ctas < 0 || consumers < 0)
     return 1;
   const uint64_t lc = chunk / PER_LEAF, chunks = n / chunk, base_leaf = base / PER_LEAF, nl = n / PER_LEAF;
   const int hc = log2_exact(lc);
@@ -839,7 +841,10 @@ int rs_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, uns
   uint64_t side = 0, tail = 0;
   int rc;
   if (fused) {
-    if ((rc = pass_consumers(ctas, shared, groups, &side, &tail))) return rc;
+    if (consumers)
+      side = (uint64_t)consumers < groups ? (uint64_t)consumers : groups;
+    else if ((rc = pass_consumers(ctas, shared, groups, &side, &tail)))
+      return rc;
     if (groups + side + tail >= (1ULL << 32)) return 1;
   }
   unsigned *started = ctr + 2 + ready_groups + chunks;

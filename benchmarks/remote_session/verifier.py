@@ -382,6 +382,14 @@ def main() -> int:
     allowance = v.allowance(rtt, a.quantile)
     print(f"verifier: rtt {json.dumps(rtt)}, allowance A = {allowance / 1e6:.3f} ms", flush=True)
     results, not_before = [], None
+
+    def record() -> None:
+        (a.out / "verifier.json").write_text(json.dumps(
+            {"schema": "verity/remote-session/verifier/v0", "peer": list(peer), "registration": wire.registration_json(reg),
+             "calibration": cal, "rtt": rtt, "allowance_ns": allowance, "sessions": results,
+             "process_cpu_ns": time.process_time_ns() - c0, "wire": conn.totals()}, indent=1))
+
+    record()
     for k in range(a.sessions):
         r = v.session(k, allowance, not_before)
         results.append(r)
@@ -389,10 +397,7 @@ def main() -> int:
         lg = r.get("ledger", {}).get("spec", {})
         print(f"verifier: session {k}: accepted={r['accepted']} failure={r['failure']} "
               f"passes={[w['passes'] for w in r['windows_seen']]} gamma={lg.get('gamma')}", flush=True)
-        (a.out / "verifier.json").write_text(json.dumps(
-            {"schema": "verity/remote-session/verifier/v0", "peer": list(peer), "registration": wire.registration_json(reg),
-             "calibration": cal, "rtt": rtt, "allowance_ns": allowance, "sessions": results,
-             "process_cpu_ns": time.process_time_ns() - c0, "wire": conn.totals()}, indent=1))
+        record()
     conn.send({"type": "bye"})
     if checks:
         checks.close(wait=True)

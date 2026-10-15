@@ -138,11 +138,12 @@ def main() -> int:
                 prev_host, handle = s.run_chain(i)
                 chain_host.append(time.perf_counter_ns() - t0)
                 chain_gpu.append(s.pass_gpu_ms[-1])
-                chain_seed_ok = chain_seed_ok and bytes(handle[0].cpu().numpy()) == want_seed
+                handle = s.ready(handle)
+                chain_seed_ok = chain_seed_ok and handle[0] == want_seed
                 want_pk = torch.empty(device.PACK16_WORDS, dtype=torch.int32, device="cuda")
                 want_signs = torch.from_numpy(skr.signs(want_seed)).cuda()
                 lib.call("rs_pack16", want_signs.data_ptr(), want_pk.data_ptr())
-                chain_signs_ok = chain_signs_ok and bool(torch.equal(handle[1], want_pk))
+                chain_signs_ok = chain_signs_ok and bool(torch.equal(handle[1], want_pk.cpu()))
                 chain_root_ok = chain_root_ok and prev_host == s.plain_root(want_seed)
             chain_ph = s.chain_host_phases[p0:]
             chain_names = ("alloc", "launch", "wait", "root")
