@@ -18,11 +18,14 @@
 //   CR_MODE 3  the builder's mainloop through the same copy, with no receipt (for CR_EXTRA alone)
 //   CR_HONEST H (mode 1) the receipt one step heavier per H words: at each receipt point the first H of a thread's chain
 //              words (chain-major, ch * 4 + e) get ROUNDS + 1 rounds
+//   CR_FORCED F (mode 1) forced work that reads no accumulator: F alu phi1 steps a thread after every 32-deep k-block on
+//              two chains of the receipt's own (seeded by the thread; a live coin in a protocol), folded into the
+//              thread's receipt word
 //   CR_EXTRA X (modes 1 and 3) a cheater's own CUDA work fused beside the GEMM: X more alu phi1 steps a thread after every
 //              32-deep k-block, on two chains of its own that never read the accumulators. They feed only a store that
 //              fires on a 64-bit coincidence, so the outputs and receipts the gates check are the design's.
 // Compiled once per kernel: -DCR_NAME=name -DCR_CFG -DCR_VAR -DCR_ROUNDS -DCR_P -DCR_MODE -DCR_SPREAD -DCR_GRAIN
-// -DCR_EXTRA -DCR_HONEST
+// -DCR_EXTRA -DCR_HONEST -DCR_FORCED
 // (job.sh's cgemm).
 #include "cutlass_receipt.cuh"
 
@@ -53,6 +56,9 @@
 #ifndef CR_HONEST
 #define CR_HONEST 0
 #endif
+#ifndef CR_FORCED
+#define CR_FORCED 0
+#endif
 #define CR_STR2(x) #x
 #define CR_STR(x) CR_STR2(x)
 
@@ -68,7 +74,7 @@ struct Out {
 };
 __device__ Out g_out;
 
-template <class Base, int VAR, int ROUNDS, int P, int MODE, int SPREAD, int GRAIN, int EXTRA, int HONEST>
+template <class Base, int VAR, int ROUNDS, int P, int MODE, int SPREAD, int GRAIN, int EXTRA, int HONEST, int FORCED>
 struct ReceiptMma : Base {
     static_assert(GRAIN == 1 || (P == 1 && !SPREAD), "a grain above 1 receipts every k-tile, without spread");
     using MainloopPipeline = typename Base::MainloopPipeline;
@@ -101,6 +107,7 @@ struct ReceiptMma : Base {
         CUTLASS_PRAGMA_UNROLL
         for (int c = 0; c < CH; ++c) y[c] = 0;
         uint32_t z[2] = {(uint32_t)thread_idx, ~(uint32_t)thread_idx};
+        uint32_t zf[2] = {(uint32_t)thread_idx ^ 0x243f6a88u, ~(uint32_t)thread_idx ^ 0x243f6a88u};
 
         Tensor sA = make_tensor(make_smem_ptr(shared_tensors.smem_A.data()), SmemLayoutA{});
         Tensor sB = make_tensor(make_smem_ptr(shared_tensors.smem_B.data()), SmemLayoutB{});
@@ -169,6 +176,11 @@ struct ReceiptMma : Base {
                                 g_out.map[(thread_idx * CH + mm * NN + nn) * MW + e] = (uint32_t(r) << 16) | uint32_t(c);
                         }
             }
+            if constexpr (MODE == 1 && FORCED > 0) {
+                const uint32_t p = (uint32_t)(kt * KB + b);
+                CUTLASS_PRAGMA_UNROLL
+                for (int j = 0; j < FORCED; ++j) zf[j & 1] = phi1<0>(zf[j & 1], p, 0x7f4a7c15u, key(j + 64, b));
+            }
             if constexpr ((MODE == 1 || MODE == 3) && EXTRA > 0) {
                 const uint32_t p = (uint32_t)(kt * KB + b);
                 CUTLASS_PRAGMA_UNROLL
@@ -224,6 +236,7 @@ struct ReceiptMma : Base {
             uint32_t f = 0;
             CUTLASS_PRAGMA_UNROLL
             for (int c = 0; c < CH; ++c) f = rotl13(f) ^ y[c];
+            if constexpr (FORCED > 0) f = rotl13(rotl13(f) ^ zf[0]) ^ zf[1];
             constexpr int NT = decltype(size(TiledMma{}))::value;
             const int tile = int(get<0>(blk_crd)) * g_out.tiles_n + int(get<1>(blk_crd));
             g_out.R[(size_t)tile * NT + thread_idx] = f;
@@ -260,7 +273,7 @@ using BaseMainloop = typename cutlass::gemm::collective::CollectiveBuilder<
     cutlass::layout::ColumnMajor, 16, float, Tile, Cluster,
     cutlass::gemm::collective::StageCountAutoCarveout<static_cast<int>(sizeof(typename Epilogue::SharedStorage))>,
     Schedule>::CollectiveOp;
-using Mainloop = cute::conditional_t<CR_MODE == 0, BaseMainloop, ReceiptMma<BaseMainloop, CR_VAR, CR_ROUNDS, CR_P, CR_MODE, CR_SPREAD, CR_GRAIN, CR_EXTRA, CR_HONEST>>;
+using Mainloop = cute::conditional_t<CR_MODE == 0, BaseMainloop, ReceiptMma<BaseMainloop, CR_VAR, CR_ROUNDS, CR_P, CR_MODE, CR_SPREAD, CR_GRAIN, CR_EXTRA, CR_HONEST, CR_FORCED>>;
 using GemmKernel = cutlass::gemm::kernel::GemmUniversal<Shape<int, int, int, int>, Mainloop, Epilogue, void>;
 using Gemm = cutlass::gemm::device::GemmUniversalAdapter<GemmKernel>;
 
@@ -323,6 +336,7 @@ const cr_kernel K{CR_STR(CR_NAME),
                   CR_GRAIN,
                   CR_EXTRA,
                   CR_HONEST,
+                  CR_FORCED,
                   kTileM,
                   kTileN,
                   kThreads,

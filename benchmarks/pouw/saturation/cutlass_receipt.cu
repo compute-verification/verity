@@ -316,6 +316,13 @@ static void gate_cfg(int cfg, const std::vector<const cr_kernel*>& ks, unsigned 
                         }
                         f = rotl13(f) ^ y;
                     }
+                    if (k->forced > 0) {
+                        uint32_t zf[2] = {(uint32_t)t ^ 0x243f6a88u, ~(uint32_t)t ^ 0x243f6a88u};
+                        for (int kb = 0; kb < KT * KB; kb++)
+                            for (int j = 0; j < k->forced; j++)
+                                zf[j & 1] = phi1<0>(zf[j & 1], (uint32_t)kb, 0x7f4a7c15u, key(j + 64, kb % KB));
+                        f = rotl13(rotl13(f) ^ zf[0]) ^ zf[1];
+                    }
                     bad += R[((size_t)tm * (s.n / TN) + tn) * NT + t] != f;
                 }
         gate("receipt words differ from the host's chains over the dump", k->name, bad != 0);
@@ -356,8 +363,8 @@ int main(int argc, char** argv) {
     for (size_t i = 0; i < ks.size(); i++) {
         auto* k = ks[i];
         printf("    {\"name\": \"%s\", \"cfg\": %d, \"var\": %d, \"rounds\": %d, \"p\": %d, \"L\": %d, \"mode\": %d, \"spread\": %d, "
-               "\"grain\": %d, \"extra\": %d, \"honest\": %d, \"tile\": [%d, %d], \"threads\": %d, \"chains\": %d, \"stages\": %d, \"smem_bytes\": %d}%s\n",
-               k->name, k->cfg, k->var, k->rounds, k->p, 128 * k->p / k->grain, k->mode, k->spread, k->grain, k->extra, k->honest, k->tile_m,
+               "\"grain\": %d, \"extra\": %d, \"honest\": %d, \"forced\": %d, \"tile\": [%d, %d], \"threads\": %d, \"chains\": %d, \"stages\": %d, \"smem_bytes\": %d}%s\n",
+               k->name, k->cfg, k->var, k->rounds, k->p, 128 * k->p / k->grain, k->mode, k->spread, k->grain, k->extra, k->honest, k->forced, k->tile_m,
                k->tile_n, k->threads,
                k->chains, k->stages, k->smem_bytes, i + 1 < ks.size() ? "," : "");
     }
