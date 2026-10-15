@@ -11,9 +11,8 @@ Notes are records, never messages.
   research msg send --as NAME [--to @A @B ...] [--thread TS] [--kind WORD] [--quiet] [--urgent] (--text T | --file PATH)
                     [--verify CMD] [--ships URL#sha256=HEX | git:SHA]...     # prints `<ts> <permalink>`; --kind announce: an announcement
   research msg close --as NAME --thread TS [--link URL] [--note T] [--declined WHY]   # ✅ or ❌: a status line, and the reaction on an ask
-  research msg list [--as NAME] [--hours H] [--open] [--json]     # threads: when, kind, from, to, state
   research msg read --thread TS [--since TS] | --since TS | --as NAME [--peek] [--urgent] [--json]  # --as: NAME's unread doorbells
-  research msg names open|read|close|list [--as NAME] [--forward-to @NAME] [--succeeds]  # the names you answer to (`inbox` too)
+  research msg names open|read|close|list [--as NAME] [--forward-to @NAME] [--succeeds]  # the names you answer to
   research msg traffic [--hours H] [--json]                        # the monitor: doorbells, pauses, dropped names, unanswered asks
   research msg watch --as NAME [--every S] [--polls N]             # block until a new doorbell; the hook a wake script runs
   research msg pickup --thread TS                                  # 👀 on an ask you own
@@ -1374,43 +1373,6 @@ def cmd_close(ns: argparse.Namespace, reg: dict) -> int:
     return _status(ns, reg, f"{DONE} done", "white_check_mark", " ".join(x for x in (ns.link, ns.note) if x))
 
 
-def thread_state(m: dict) -> str:
-    """An ask's state from its root alone: the owner's reaction, else whether anyone replied."""
-    names = {x.get("name") for x in m.get("reactions", [])}
-    return "done" if "white_check_mark" in names else "declined" if "x" in names else "seen" if "eyes" in names else \
-        "answered" if m.get("reply_count") else "open"
-
-
-def cmd_list(ns: argparse.Namespace, reg: dict) -> int:
-    """Threads started in the front door over the last --hours, newest first: when, kind, from, to, state, replies.  With
-    --as, only those its name started or that reach it."""
-    api, ch, routes = client(ns), channel_id(ns, reg, FRONT_DOOR), routes_of(ns)
-    since = _now().timestamp() - ns.hours * 3600
-    inboxes, me = routes.inboxes(), (ns.handle or "").lstrip("@") or None
-    rows = []
-    for m in api.paged("conversations.history", "messages", channel=ch, oldest=f"{since:.6f}"):
-        if m.get("ts") in inboxes or (m.get("text") or "").startswith(INBOX_HEAD):
-            continue
-        reach = route_targets(m, None, reg, inboxes)
-        author = poster(m, reg)
-        if me and author != me and me not in reach:
-            continue
-        state = "-" if is_announcement(m) else thread_state(m)
-        if ns.open and state not in ("open", "seen", "answered", "-"):
-            continue
-        rows.append({"ts": m["ts"], "kind": kind_of(m), "from": author, "to": reach,
-                     "state": state, "replies": m.get("reply_count", 0), "first": " ".join(DATE_TOKEN_RE.sub(r"\1", m.get("text") or "").split("\n", 1)[0].split())[:100]})
-    if ns.json:
-        print(json.dumps(rows, indent=2, ensure_ascii=False))
-        return 0
-    for r in rows:
-        to = " ".join("@" + t for t in r["to"]) or "-"
-        print(f"{r['ts']} {both(r['ts'])} {r['kind']:<9} @{r['from'] or '?'} -> {to}  [{r['state']}, {r['replies']} replies]  {r['first']}")
-    if not rows:
-        print(f"no threads over the last {ns.hours:g} h" + (f" for @{me}" if me else ""))
-    return 0
-
-
 def cmd_reply(ns: argparse.Namespace, reg: dict) -> int:
     h = acting_as(ns, reg, ns.handle)
     ch = channel_id(ns, reg)
@@ -1457,14 +1419,6 @@ def cmd_retract(ns: argparse.Namespace, reg: dict) -> int:
     api.call("chat.update", channel=ch, ts=ns.ts, text=text)
     print(f"retracted {ns.ts}")
     return 0
-
-
-def cmd_done(ns: argparse.Namespace, reg: dict) -> int:
-    return _status(ns, reg, f"{DONE} done", "white_check_mark", " ".join(x for x in (ns.link, ns.note) if x))
-
-
-def cmd_decline(ns: argparse.Namespace, reg: dict) -> int:
-    return _status(ns, reg, f"{DECLINED} declined", "x", ns.why)
 
 
 def cmd_roster(ns: argparse.Namespace, reg: dict) -> int:
@@ -2155,11 +2109,6 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--declined", default=None, metavar="WHY")
     p.add_argument("--link", default=None, metavar="URL", help="the result: a PR, file or art: id")
     p.add_argument("--note", default=None)
-    p = cmd("list", "threads in the front door: when, kind, from, to, state")
-    p.add_argument("--as", dest="handle", default=None, metavar="NAME", help="only those NAME started or that reach it")
-    p.add_argument("--hours", type=float, default=24)
-    p.add_argument("--open", action="store_true", help="leave out the done and declined")
-    p.add_argument("--json", action="store_true")
     p = cmd("ask", "1:1: tag one handle or name in #agent-coordination, and ring its doorbell", as_=True, body=True, url=True)
     p.add_argument("--to", required=True, metavar="@OWNER")
     p.add_argument("--urgent", action="store_true", help="the doorbell says URGENT")
@@ -2181,7 +2130,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p = cmd("reply", "a post in a thread; `@name` at its start also rings that name's doorbell", as_=True, thread=True, body=True, url=True)
     p.add_argument("--quiet", action="store_true", help="ring only the names it starts with: no reply needed")
     p.add_argument("--urgent", action="store_true", help="the doorbells say URGENT")
-    p = cmd("names", "the leads' names, each an inbox thread: open, read, close, list", url=True, aliases=("inbox",))
+    p = cmd("names", "the leads' names, each an inbox thread: open, read, close, list", url=True)
     p.add_argument("verb", choices=("open", "read", "close", "list"))
     p.add_argument("--as", dest="handle", default=None, metavar="NAME", help="the inbox's name: your handle")
     p.add_argument("--holder", default=None, metavar="BC_ID", help="open: the agent that holds it (default: this agent)")
@@ -2204,10 +2153,6 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--ts", required=True, help="the post's ts")
     p.add_argument("--thread", default=None, metavar="ROOT", help="its thread's root ts, when it is a reply")
     p.add_argument("--why", default=None, help="one line the blanked post keeps")
-    p = cmd("done", "\u2705 a status line, and the reaction on an ask or alert", as_=True, thread=True, url=True)
-    p.add_argument("--link", default=None, metavar="URL", help="the result: a PR, file or art: id")
-    p.add_argument("--note", default=None)
-    cmd("decline", "\u274c a status line, and the reaction on an ask or alert", as_=True, thread=True, url=True).add_argument("--why", required=True)
     p = cmd("roster", "an announcement's status lines; exit 0 only when every addressed handle is done", thread=True)
     p.add_argument("--json", action="store_true")
     p = cmd("match", "exit 0 if the post is addressed to you, 1 if not, 2 on error", as_=True)
@@ -2257,9 +2202,9 @@ def main(argv: list[str], prog: str = "research msg") -> int:
         if ns.cmd == "groups":
             return cmd_groups_sync(ns, reg, path)
         return {"handles": cmd_handles, "owners": cmd_owners, "subscriptions": cmd_subscriptions, "ask": cmd_ask, "announce": cmd_announce, "reply": cmd_reply,
-                "pickup": cmd_pickup, "done": cmd_done, "decline": cmd_decline, "roster": cmd_roster, "match": cmd_match,
+                "pickup": cmd_pickup, "roster": cmd_roster, "match": cmd_match,
                 "verify-author": cmd_verify_author, "deliver": cmd_deliver, "read": cmd_read, "ask-daniel": cmd_ask_daniel, "names": cmd_inbox,
-                "inbox": cmd_inbox, "traffic": cmd_traffic, "send": cmd_send, "close": cmd_close, "list": cmd_list,
+                "traffic": cmd_traffic, "send": cmd_send, "close": cmd_close,
                 "watch": cmd_watch, "linear": cmd_linear, "retract": cmd_retract}[ns.cmd](ns, reg)
     except SlackError as e:
         print(f"{prog}: {e}", file=sys.stderr)
