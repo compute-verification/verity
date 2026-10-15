@@ -618,8 +618,14 @@ def cmd_general(args, out) -> None:
                         terms = cand
                         break
             if len(terms) <= args.max_terminals and len({t["chain"] for t in terms}) >= 3:
+                if args.joint_only:
+                    ind = independence(terms, R, C)
+                    if ind["rows"] is not None or ind["cols"] is not None:
+                        continue
                 probs.append((f"rand_{R}x{C}_{len(probs)}", R, C, terms, {}))
-        solve_batch(probs, out, f"random_{R}x{C}", batch=R * C <= 20)
+        solve_batch(probs, out, f"random_{R}x{C}" + ("_joint" if args.joint_only else ""), batch=R * C <= 20)
+    if args.joint_only:
+        return
     # block grids: matmul's direct-sum structure with arbitrary block contents (2x2 grid of 2x2 blocks, exhaustive)
     inv = [m for m in itertools.product((0, 1), repeat=4) if (m[0] * m[3] + m[1] * m[2]) % 2]
     probs = []
@@ -1098,6 +1104,9 @@ def main() -> None:
     p.add_argument("--max-positions", type=int, default=5)
     p.add_argument("--max-terminals", type=int, default=8)
     p.add_argument("--grid-chains", type=int, default=300)
+    p.add_argument("--joint-only", action="store_true",
+                   help="keep only random families whose pairwise-trivial row and column spaces are jointly independent "
+                        "(the refined general version), and skip the grids")
     p = sub.add_parser("aligned")
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--sizes", nargs="+", default=["4x4", "3x5", "2x6"])

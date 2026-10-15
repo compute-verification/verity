@@ -2,6 +2,7 @@
 # The Conjecture A searches after run_exact_f2.sh, by phase ($PHASES, space-separated; default all but subspace):
 #   f3        exact <2,2,2>/F3 for each L in $F3_L (default 1: 8 terminals, 3^16 states)
 #   general   task 4: the hub example, random (i)+(ii) families, 2x2 block grids (exhaustive) and chained ones
+#   joint     task 4: random (i)+(ii) families whose pairwise-trivial row and column spaces are jointly independent
 #   aligned   task 4: (i)+(ii) families whose column and row spaces are coordinate subspaces
 #   grid      2x3 block grids of invertible 2x2 blocks (2^24 states each)
 #   exact     more exact F2 shapes ($EXACT, "a,b,c,L" items)
@@ -32,6 +33,9 @@ for phase in ${PHASES:-f3 general grid exact}; do
     general)
         python3 steiner.py --out "$OUT/general.jsonl" general --seed "${SEED:-1}" --families "${FAMILIES:-1000}" \
             --grid-chains "${GRID_CHAINS:-2000}" --sizes ${SIZES:-4x4 3x5 2x6 4x5} --max-terminals 8 ;;
+    joint)
+        python3 steiner.py --out "$OUT/joint.jsonl" general --joint-only --seed "${SEED:-1}" --families "${FAMILIES:-1000}" \
+            --sizes ${SIZES:-4x4 3x5 2x6 3x6} --max-positions 6 --max-terminals 8 ;;
     aligned)
         python3 steiner.py --out "$OUT/aligned.jsonl" aligned --seed "${SEED:-1}" --families "${FAMILIES:-2000}" \
             --max-positions 6 --sizes ${SIZES:-4x4 3x5 2x6 3x6} ;;
