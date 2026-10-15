@@ -106,8 +106,8 @@ def _leaves(h):
     return [h] if isinstance(h[0], int) else _leaves(h[0]) + _leaves(h[1])
 
 
-def minimal_from(path):
-    """`minimal` for every unrescued (S, H) line of an earlier run's output."""
+def configs(path):
+    """Each unrescued (S, H) line of an earlier run's output, as (p, S, cells, nodes, root, S as indices)."""
     pat = re.compile(r"p=(\d+) grid=\S+ S=(\(.*?\)\)) v=.* H=(.*)$")
     for line in open(path):
         m = pat.match(line.strip())
@@ -127,7 +127,13 @@ def minimal_from(path):
             return len(nodes) - 1
 
         root = build(H)
-        hits = minimal(cells, nodes, root, tuple(index[c] for c in S), p)
+        yield p, S, cells, nodes, root, tuple(index[c] for c in S)
+
+
+def minimal_from(path):
+    """`minimal` for every unrescued (S, H) line of an earlier run's output."""
+    for p, S, cells, nodes, root, Si in configs(path):
+        hits = minimal(cells, nodes, root, Si, p)
         size = len(_leaves(hits[0][2]))
         print(f"p={p} S={S}: smallest {size} cells; (2-core size, |S ∩ 2-core|) {sorted({h[:2] for h in hits})}; "
               f"e.g. {hits[0][2]}", flush=True)
