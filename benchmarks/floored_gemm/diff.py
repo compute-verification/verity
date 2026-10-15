@@ -80,12 +80,13 @@ def dbytes(T, d, js):
     return np.stack([((v >> (8 * j)) & 0xFF) - ((u >> (8 * j)) & 0xFF) for j in js], axis=-1)
 
 
-def unchanged(kind, keys, words, T, deltas):
-    """P[ΔR = 0] and P[ΔR = 0 | some read byte changed], over the states T [N, len(words)] (or [N, len(words), S] summed
-    over S), for the words (mi, ni, r, c) and fixed differences deltas."""
+def unchanged(kind, keys, words, T, deltas, given="some"):
+    """P[ΔR = 0] and P[ΔR = 0 | a read byte changed], over the states T [N, len(words)] (or [N, len(words), S] summed
+    over S), for the words (mi, ni, r, c) and fixed differences deltas; given="every": a read byte of every word changed."""
     js = BYTES[kind]
     rows = {}
     any_change = None
+    every_change = None
     for i, (mi, ni, r, c) in enumerate(words):
         db = dbytes(T[:, i], deltas[i], js)                    # [N, (S,) nb]
         ch = (db != 0).reshape(db.shape[0], -1).any(axis=1)    # changed at some checkpoint, before the sum can cancel it
@@ -95,12 +96,14 @@ def unchanged(kind, keys, words, T, deltas):
         ar = slot(kind, ni, r, c, 0)[0]
         rows[ar] = rows.get(ar, 0) + db @ K
         any_change = ch if any_change is None else any_change | ch
+        every_change = ch if every_change is None else every_change & ch
     zero = np.ones(T.shape[0], dtype=bool)
     for v in rows.values():
         zero &= (v == 0).all(axis=1)
     p = float(zero.mean())
-    cancel = float((zero & any_change).sum() / max(1, any_change.sum()))
-    return p, cancel, float(any_change.mean())
+    cond = any_change if given == "some" else every_change
+    cancel = float((zero & cond).sum() / max(1, cond.sum()))
+    return p, cancel, float(cond.mean())
 
 
 def product_deltas():
@@ -198,8 +201,9 @@ def check_sim():
 
 def persistent_pair_search(rng, NP=2000, top=3, NC=1000):
     """Two words reaching one R row, each off by its own δ over the last Sw checkpoints of k = 4,096 (S = 128): the best
-    P[R unchanged | a read byte changed] over δ pairs from ±2^k, ±(2^k + 1) and ±a b, for each unchained kind (the
-    per-row linear model); then its `top` pairs again on whole warp tiles (sim) for that kind and its chained twin."""
+    P[R unchanged | a read byte of both words changed] (over pairs where both change in at least a quarter of the states)
+    over δ pairs from ±2^k, ±(2^k + 1) and ±a b, for each unchained kind (the per-row linear model), with each word's
+    own P[unchanged] alone; then its `top` pairs again on whole warp tiles (sim) for that kind and its chained twin."""
     cand = sorted({1 << k for k in range(32)} | {(1 << k) + 1 for k in range(1, 31)} | {15, 143, 4200, 10961, 14641, 15367})
     cand = cand + [-x for x in cand]
     S = 128
@@ -217,13 +221,17 @@ def persistent_pair_search(rng, NP=2000, top=3, NC=1000):
                 for d2 in cand:
                     if abs(d2) < abs(d1) or (abs(d2) == abs(d1) and d2 < d1):
                         continue
-                    p, c, ch = unchanged(kind, keys, ws, T, [d1, d2])
-                    if ch > 0:
+                    p, c, ch = unchanged(kind, keys, ws, T, [d1, d2], given="every")
+                    if ch >= 0.25:
                         found.append((c, p, ch, Sw, d1, d2))
         found.sort(key=lambda f: -f[0])
         best = found[:top]
-        row = {"pairs_tried": len(found), "best": [{"cancel_given_change": c, "unchanged": p, "read_bytes_changed": ch,
-                                                     "window": Sw, "deltas": [d1, d2]} for c, p, ch, Sw, d1, d2 in best]}
+        row = {"pairs_tried": len(found), "best": []}
+        for c, p, ch, Sw, d1, d2 in best:
+            T = tr[:, :, S - Sw :]
+            alone = [unchanged(kind, keys, ws[i : i + 1], T[:, i : i + 1], [d])[0] for i, d in enumerate((d1, d2))]
+            row["best"].append({"cancel_given_both_changed": c, "unchanged": p, "both_changed": ch, "window": Sw,
+                                "deltas": [d1, d2], "each_word_alone_unchanged": alone})
         TT = tile_trajectory(rng, NC, 16)
         for kk in (kind, twin[kind]):
             if kk is None:
