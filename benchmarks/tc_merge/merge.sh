@@ -2,7 +2,8 @@
 # merge.cu on one GPU (cwd = the source tree): the exact tensor-core merge D = Z1 + Z2 checked bit for bit against
 # Z1 + Z2 on at least 2^20 words for each construction, a perturbed-weight control that must mismatch, then the
 # instruction's rate on merge operands. Build and verdicts outside the lease; only the device runs under it.
-# INT8=0 skips the int8 constructions, F16=0 the FP16 one. Results in $OUT.
+# INT8=0 skips the int8 constructions, F16=0 the FP16 one, FUSED=0 the split + merge; VARIANTS picks the split
+# variants (default 0 1 2 3). Results in $OUT.
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-12 --source . --cwd clone \
 #     --env GPU_LEASE_WHO=... --send benchmarks/tc_merge/merge.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/merge.sh"'
@@ -10,7 +11,7 @@ set -uxo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
 export D=benchmarks/tc_merge
-export INT8=${INT8:-1} F16=${F16:-1} FUSED=${FUSED:-1}
+export INT8=${INT8:-1} F16=${F16:-1} FUSED=${FUSED:-1} VARIANTS=${VARIANTS:-0 1 2 3}
 export B; B=$(mktemp -d /tmp/tc-merge.XXXXXX); trap 'rm -rf "$B"' EXIT
 nvcc -O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xptxas -v -o "$B/merge" $D/merge.cu > "$O/build.log" 2>&1 \
   || { tail -40 "$O/build.log"; exit 4; }
@@ -19,7 +20,7 @@ git rev-parse HEAD > "$O/commit.txt" 2>&1
 cuobjdump -sass "$B/merge" > "$B/merge.sass" 2>&1
 grep -oE '(IMMA|HMMA)\.[A-Z0-9.]+' "$B/merge.sass" | sort | uniq -c > "$O/mma-forms.txt" 2>&1
 # each fused timing kernel's opcodes (8 HMMAs a loop trip): the split's instructions a merge MMA
-for v in 0 1 2; do
+for v in $VARIANTS; do
   echo "== time_fused V$v" >> "$O/fused-opcodes.txt"
   awk -v pat="time_fusedILi${v}ELi8E" '$0 ~ "Function : " {f = index($0, pat) > 0; next} f' "$B/merge.sass" \
     | grep -oE '^\s+/\*[0-9a-f]+\*/\s+[A-Z][A-Z0-9_.]*' | awk '{print $2}' | sed 's/\..*//' | sort | uniq -c \
@@ -61,7 +62,7 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-20}" -- bash -c '
   if [ "$FUSED" = 1 ]; then
     # split on the CUDA cores from s32 words, then the merge: the signed L = 32 filler biased by +516128 (the producing
     # GEMM can start its accumulator there); every 20-bit word; and |D| up to 2^24 - 1.
-    for v in 0 1 2; do
+    for v in $VARIANTS; do
       for seed in 0x5EED1234 0xC0FFEE11; do
         "$B/merge" fused $v 8192 $seed -516128 516128 516128 2097152 >> "$O/check-fused.jsonl" 2>> "$O/errors.txt" || ok=0
         "$B/merge" fused $v 8192 $seed 0 1048575 0 8388608           >> "$O/check-fused.jsonl" 2>> "$O/errors.txt" || ok=0
@@ -83,7 +84,7 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-20}" -- bash -c '
     done
   fi
   if [ "$FUSED" = 1 ]; then
-    for v in 0 1 2; do
+    for v in $VARIANTS; do
       for bpsm in 2 4 8; do
         "$B/merge" timefused $v 200000 $bpsm >> "$O/time-fused.jsonl" 2>> "$O/errors.txt" \
           || echo "timefused v=$v rc $?" >> "$O/errors.txt"
