@@ -139,12 +139,15 @@ __device__ __forceinline__ void cp_wait() {
 //          d1+d2, d0+d2), whose pairwise products give the 5 digit-product coefficients.
 //   EPI 2: narrow inputs as FP32 (L = 1): products exact, sums exact below 2^24 (14400 * 1024 < 2^24), so the
 //          accumulators flush into C every FLUSHW words.
+//   EPI 3: generic inputs as int32 v = value * 2^9 (|v| < 2^18, L = 1): one mad.wide.s32 (IMAD.WIDE) a MAC, the
+//          36-bit product added into an int64 sum.
 template <int EPI, int TM, int TN, int L, int BKW, int STAGES, int FLUSHW, int MINB>
 __global__ void __launch_bounds__(256, MINB) k_gemm(const void* __restrict__ Av, const void* __restrict__ Bv,
                                               long long* __restrict__ C, int M, int N, int KW, int ntiles,
                                               BlockClk* rec) {
   using T = typename std::conditional<EPI == 2, float, int>::type;
   using V = typename std::conditional<EPI == 2, float4, int4>::type;
+  using Acc = typename std::conditional<EPI == 3, long long, T>::type;
   constexpr int BM = 16 * TM, BN = 16 * TN;
   __shared__ __align__(16) T As[STAGES][L][BKW][BM];
   __shared__ __align__(16) T Bs[STAGES][L][BKW][BN];
@@ -155,7 +158,7 @@ __global__ void __launch_bounds__(256, MINB) k_gemm(const void* __restrict__ Av,
   CLK_BEGIN
   for (int tile = blockIdx.x; tile < ntiles; tile += gridDim.x) {
     const int m0 = (tile / tiles_n) * BM, n0 = (tile % tiles_n) * BN;
-    T acc[L][TM][TN];
+    Acc acc[L][TM][TN];
 #pragma unroll
     for (int l = 0; l < L; l++)
 #pragma unroll
@@ -208,6 +211,8 @@ __global__ void __launch_bounds__(256, MINB) k_gemm(const void* __restrict__ Av,
 #pragma unroll
             for (int j = 0; j < TN; j++) {
               if constexpr (EPI == 2) acc[l][i][j] = __fmaf_rn(a[i], b[j], acc[l][i][j]);
+              else if constexpr (EPI == 3)
+                asm("mad.wide.s32 %0, %1, %2, %0;" : "+l"(acc[l][i][j]) : "r"(a[i]), "r"(b[j]));
               else acc[l][i][j] = __dp4a(a[i], b[j], acc[l][i][j]);
             }
         }
@@ -235,6 +240,8 @@ __global__ void __launch_bounds__(256, MINB) k_gemm(const void* __restrict__ Av,
           long long c;
           if constexpr (EPI == 0) {
             c = 64ll * acc[0][i][j];
+          } else if constexpr (EPI == 3) {
+            c = acc[0][i][j];
           } else {
             const long long p0 = acc[0][i][j], p1 = acc[1][i][j], p2 = acc[2][i][j];
             const long long p01 = acc[3][i][j], p12 = acc[4][i][j], p02 = acc[5][i][j];
@@ -427,15 +434,16 @@ __global__ void __launch_bounds__(512, 1) k_lut8(const uint2* __restrict__ A8, c
 
 // ---------------------------------------------------------------- pipe-pairing probe
 // 32 warps a SM, one block a SM, 8 independent chains per op; per chain step ND dp4a, NI IMAD, NF FFMA, NL LOP3 and
-// NF2 packed FFMA2 (fma.rn.f32x2). Immediates keep FFMA off the register-bank limit.
-template <int ND, int NI, int NF, int NL, int NF2>
+// NF2 packed FFMA2 (fma.rn.f32x2) and NW mad.wide.s32 (IMAD.WIDE). Immediates keep FFMA off the register-bank limit.
+template <int ND, int NI, int NF, int NL, int NF2, int NW>
 __global__ void __launch_bounds__(1024) k_probe(int* out, int iters, BlockClk* rec) {
   int d[8], m[8], l[8];
   float f[8];
   unsigned long long g[8];
+  long long wd[8];
 #pragma unroll
   for (int r = 0; r < 8; r++) {
-    d[r] = m[r] = l[r] = threadIdx.x + r, f[r] = (float)(threadIdx.x + r);
+    d[r] = m[r] = l[r] = threadIdx.x + r, f[r] = (float)(threadIdx.x + r), wd[r] = threadIdx.x + r;
     g[r] = ((unsigned long long)__float_as_uint(f[r] + 0.5f) << 32) | __float_as_uint(f[r]);
   }
   const int x = 0x01020304 + blockIdx.x, y = 0x05060708 ^ threadIdx.x;
@@ -455,13 +463,15 @@ __global__ void __launch_bounds__(1024) k_probe(int* out, int iters, BlockClk* r
       for (int q = 0; q < NL; q++) asm volatile("lop3.b32 %0, %0, %1, %2, 0x96;" : "+r"(l[r]) : "r"(x), "r"(y));
 #pragma unroll
       for (int q = 0; q < NF2; q++) asm volatile("fma.rn.f32x2 %0, %0, %1, %2;" : "+l"(g[r]) : "l"(gb), "l"(gc));
+#pragma unroll
+      for (int q = 0; q < NW; q++) asm volatile("mad.wide.s32 %0, %1, %2, %0;" : "+l"(wd[r]) : "r"(x), "r"(y));
     }
   }
   __syncthreads();
   CLK_END
   int s = 0;
 #pragma unroll
-  for (int r = 0; r < 8; r++) s += d[r] + m[r] + l[r] + __float_as_int(f[r]) + (int)g[r];
+  for (int r = 0; r < 8; r++) s += d[r] + m[r] + l[r] + __float_as_int(f[r]) + (int)g[r] + (int)wd[r];
   if (s == 0x7FFFFFFF) out[0] = s;
 }
 
@@ -646,6 +656,12 @@ static Operands upload(const std::vector<uint8_t>& A, const std::vector<uint8_t>
     for (int k = 0; k < K; k++)
       for (int j = 0; j < N; j++) Bf[(size_t)k * N + j] = (float)q_narrow(B[(size_t)k * N + j]);
     o.dA = to_dev(Af), o.dB = to_dev(Bf), o.KW = K;
+  } else if constexpr (EPI == 3) {
+    std::vector<int> Av((size_t)K * M), Bv((size_t)K * N);
+    for (int i = 0; i < M; i++)
+      for (int k = 0; k < K; k++) Av[(size_t)k * M + i] = (int)e4m3_v(A[(size_t)i * K + k]);
+    for (size_t x = 0; x < Bv.size(); x++) Bv[x] = (int)e4m3_v(B[x]);
+    o.dA = to_dev(Av), o.dB = to_dev(Bv), o.KW = K;
   } else {
     const int L = EPI == 1 ? 6 : 1;
     auto Ap = pack_int8(A, M, K, true, L, 0), Bp = pack_int8(B, N, K, false, L, 0);
@@ -654,14 +670,17 @@ static Operands upload(const std::vector<uint8_t>& A, const std::vector<uint8_t>
   return o;
 }
 
-static const char* gemm_route(int epi) { return epi == 0 ? "dp4a_int8" : epi == 1 ? "dp4a_karatsuba3" : "ffma_fp32"; }
+static const char* gemm_route(int epi) {
+  return epi == 0 ? "dp4a_int8" : epi == 1 ? "dp4a_karatsuba3" : epi == 2 ? "ffma_fp32" : "imad_wide";
+}
 
 template <int EPI, int TM, int BKW, int STAGES, int MINB>
 static void run_gemm(int M, int N, int K, int reps, int samples, int grid_blocks) {
   constexpr int BM = 16 * TM, BN = BM;
   std::vector<uint8_t> A, B;
-  gen_codes(A, (size_t)M * K, EPI != 1, 1 + EPI + M + K);
-  gen_codes(B, (size_t)K * N, EPI != 1, 2 + EPI + N + K);
+  constexpr bool generic = EPI == 1 || EPI == 3;
+  gen_codes(A, (size_t)M * K, !generic, 1 + EPI + M + K);
+  gen_codes(B, (size_t)K * N, !generic, 2 + EPI + N + K);
   Operands o = upload<EPI>(A, B, M, N, K);
   long long* dC;
   CK(cudaMalloc(&dC, sizeof(long long) * M * N));
@@ -677,8 +696,9 @@ static void run_gemm(int M, int N, int K, int reps, int samples, int grid_blocks
   long long bad = check(C, A, B, M, N, K, samples, &checked);
   char extra[160];
   snprintf(extra, sizeof extra, ",\"grid\":%d,\"tiles\":%d,\"config\":\"TM%d BKW%d S%d MINB%d\",\"instr_per_mac\":%s",
-           grid, ntiles, TM, BKW, STAGES, MINB, EPI == 0 ? "\"0.25 dp4a\"" : EPI == 1 ? "\"1.5 dp4a\"" : "\"1 FFMA\"");
-  emit(gemm_route(EPI), EPI == 1 ? "generic" : "narrow", M, N, K, m, occ, checked, bad, extra);
+           grid, ntiles, TM, BKW, STAGES, MINB,
+           EPI == 0 ? "\"0.25 dp4a\"" : EPI == 1 ? "\"1.5 dp4a\"" : EPI == 2 ? "\"1 FFMA\"" : "\"1 IMAD.WIDE\"");
+  emit(gemm_route(EPI), generic ? "generic" : "narrow", M, N, K, m, occ, checked, bad, extra);
   CK(cudaFree(o.dA));
   CK(cudaFree(o.dB));
   CK(cudaFree(dC));
@@ -877,20 +897,21 @@ static void run_lut8(int M, int N, int K, int reps, int samples) {
   CK(cudaFree(dC));
 }
 
-template <int ND, int NI, int NF, int NL, int NF2>
+template <int ND, int NI, int NF, int NL, int NF2, int NW = 0>
 static void run_probe(const char* name, int iters) {
   int* out;
   CK(cudaMalloc(&out, sizeof(int)));
-  auto launch = [&](BlockClk* rec) { k_probe<ND, NI, NF, NL, NF2><<<g_nsm, 1024>>>(out, iters, rec); };
+  auto launch = [&](BlockClk* rec) { k_probe<ND, NI, NF, NL, NF2, NW><<<g_nsm, 1024>>>(out, iters, rec); };
   Meas m = timed(launch, g_nsm, 5);
   const double steps = 32.0 * 8 * iters / m.cyc_med;  // chain steps a SM a clock (warp-wide)
-  const double total = steps * (ND + NI + NF + NL + NF2);
-  const double macs = steps * 32 * (4.0 * ND + 2.0 * NI + 1.0 * NF + 2.0 * NF2);
+  const double total = steps * (ND + NI + NF + NL + NF2 + NW);
+  const double macs = steps * 32 * (4.0 * ND + 2.0 * NI + 1.0 * NF + 2.0 * NF2 + 1.0 * NW);
   printf(
-      "{\"kind\":\"probe\",\"ops\":\"%s\",\"mix\":[%d,%d,%d,%d,%d],\"warp_instr_per_sm_clk\":%.3f,"
-      "\"dp4a\":%.3f,\"imad\":%.3f,\"ffma\":%.3f,\"lop3\":%.3f,\"ffma2\":%.3f,\"sm_mhz\":%.1f,"
+      "{\"kind\":\"probe\",\"ops\":\"%s\",\"mix\":[%d,%d,%d,%d,%d,%d],\"warp_instr_per_sm_clk\":%.3f,"
+      "\"dp4a\":%.3f,\"imad\":%.3f,\"ffma\":%.3f,\"lop3\":%.3f,\"ffma2\":%.3f,\"imad_wide\":%.3f,\"sm_mhz\":%.1f,"
       "\"mac_equiv_per_sm_clk\":%.1f}\n",
-      name, ND, NI, NF, NL, NF2, total, steps * ND, steps * NI, steps * NF, steps * NL, steps * NF2, m.mhz, macs);
+      name, ND, NI, NF, NL, NF2, NW, total, steps * ND, steps * NI, steps * NF, steps * NL, steps * NF2, steps * NW,
+      m.mhz, macs);
   fflush(stdout);
   CK(cudaFree(out));
 }
@@ -983,6 +1004,20 @@ int main(int argc, char** argv) {
     run_swar(128 * Q, 128 * 8, 4096, 9, 4096);
     run_lut(2048 * 8, 8 * Q * 2, 1024, 5, 4096);
     run_lut8(4096 * 4, 2 * Q * 4, 1024, 5, 4096);
+  }
+  if (all || what == "wide") {  // IMAD.WIDE: one exact generic MAC an instruction
+    run_gemm<3, 4, 8, 3, 2>(128, 128, 512, 1, 0, 0);
+    run_gemm<3, 8, 8, 3, 1>(256, 256, 512, 1, 0, 0);
+    run_probe<0, 0, 0, 0, 0, 1>("imad.wide", 4096);
+    run_probe<1, 0, 0, 0, 0, 1>("dp4a+imad.wide", 4096);
+    run_probe<0, 1, 0, 0, 0, 1>("imad+imad.wide", 4096);
+    run_probe<0, 0, 1, 0, 0, 1>("ffma+imad.wide", 4096);
+    run_probe<0, 0, 0, 1, 0, 1>("lop3+imad.wide", 4096);
+    run_gemm<3, 4, 8, 3, 2>(64 * Q * 2, 64 * 8, 4096, 9, 4096, 0);
+    run_gemm<3, 4, 4, 3, 2>(64 * Q * 2, 64 * 8, 4096, 9, 4096, 0);
+    run_gemm<3, 4, 8, 3, 3>(64 * Q * 2, 64 * 8, 4096, 9, 4096, 0);
+    run_gemm<3, 8, 8, 3, 1>(128 * Q, 128 * 8, 4096, 9, 4096, 0);
+    run_gemm<3, 8, 4, 3, 1>(128 * Q, 128 * 8, 4096, 9, 4096, 0);
   }
   if (all || what == "corun") run_corun(9, 4096);
   return 0;

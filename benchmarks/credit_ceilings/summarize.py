@@ -14,6 +14,7 @@ from pathlib import Path
 CREDIT = {
     "dp4a_int8": ("dp4a", 0.250),
     "dp4a_karatsuba3": ("dp4a", 0.250),
+    "imad_wide": ("dp4a (the FMA pipe)", 0.250),
     "ffma_fp32": ("dp4a (the FMA pipe)", 0.250),
     "imad_swar2": ("integer SWAR", 0.109),
     "smem_lut": ("shared-memory lookups", 0.094),
@@ -53,13 +54,14 @@ def main(out: Path) -> None:
                 f"{r['ffma_alone_macs_per_sm_clk']:.1f}); co-run time over the sum of alone times "
                 f"{r['corun_over_sum_of_alone']:.3f}."
             )
-    print("\n| probe | mix (dp4a, imad, ffma, lop3, ffma2) | warp instr/SM/clk | dp4a | imad | ffma | lop3 | ffma2 | MAC-equivalent/SM/clk | clock64 MHz |")
-    print("|---|---|---|---|---|---|---|---|---|---|")
+    print("\n| probe | mix (dp4a, imad, ffma, lop3, ffma2, imad.wide) | warp instr/SM/clk | dp4a | imad | ffma | lop3 | ffma2 | imad.wide | MAC-equivalent/SM/clk | clock64 MHz |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|")
     for r in rows:
         if r.get("kind") == "probe":
             print(
                 f"| {r['ops']} | {r['mix']} | {r['warp_instr_per_sm_clk']:.3f} | {r['dp4a']:.3f} | {r['imad']:.3f} | "
-                f"{r['ffma']:.3f} | {r['lop3']:.3f} | {r['ffma2']:.3f} | {r['mac_equiv_per_sm_clk']:.1f} | {r['sm_mhz']:.0f} |"
+                f"{r['ffma']:.3f} | {r['lop3']:.3f} | {r['ffma2']:.3f} | {r.get('imad_wide', 0.0):.3f} | "
+                f"{r['mac_equiv_per_sm_clk']:.1f} | {r['sm_mhz']:.0f} |"
             )
     print("\n| split warps (4 of each role a sub-partition) | mix (dp4a, ffma, ffma2) | dp4a | ffma | ffma2 | dp4a cycles | fma cycles | block cycles | MAC-equivalent/SM/clk |")
     print("|---|---|---|---|---|---|---|---|---|")
