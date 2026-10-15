@@ -10,12 +10,15 @@ runs one of two kinds of forced work, in short Triton programs that stop when th
         CUDA work that a verifier could force with live coins (the "other forced work" of the brief)
   tag   reads a 1 GiB store with 16-byte loads and folds each word into a φ chain: a stand-in for the bandwidth audit's
         tag or sketch pass over its store (DRAM-bound plus light CUDA)
+  mma   one 128 x 128 x 2,048 E4M3 tile a program (Triton's tl.dot, mma.sync on the tensor cores) over L2-resident
+        operands: a stand-in for a salted exact filler GEMM (tensor work forced beside the served step)
 
 For each phase (prefill 2,048 tokens; decode 32 sequences at context 1,024) and each sequence (the whole layer stack, its
 GEMMs only, its other kernels only), it reports the sequence's time alone and beside each filler, and the filler's work
-done while the sequence ran, as a share of what the filler does alone on the whole GPU in the same time (its "soak").
+done while the sequence ran, as a share of what the filler does alone on the whole GPU in the same time (its "soak"), and
+the share of that work that was free: (sequence alone + filler work's own solo time − both together) / filler's solo time.
 
-  python gap_filler.py [--phases prefill2048,decode32] [--reps 7] > gap-filler.json
+  python gap_filler.py [--phases prefill2048,decode32] [--reps 7] [--kinds pump,tag,mma] > gap-filler.json
 """
 from __future__ import annotations
 
@@ -31,6 +34,7 @@ import triton.language as tl
 H, NH, NKV, HD, FF, LAYERS = 4096, 32, 8, 128, 14336, 32
 PUMP_ITERS, PUMP_BLOCK, PUMP_CHAINS = 48, 128, 8
 TAG_BLOCK, TAG_WORDS = 256, 64  # a program reads 256 lanes x 64 x 16 B = 256 KiB
+MMA_BM, MMA_BN, MMA_BK, MMA_K, MMA_DIM = 128, 128, 128, 2048, 4096  # a program: one 128 x 128 x 2,048 E4M3 tile
 STORE_BYTES = 1 << 30
 
 
@@ -111,6 +115,31 @@ def _tag_body(store_ptr, out_ptr, go_ptr, stop_ptr, done_ptr, n_chunks, pid, see
         t = y ^ d
         y = _rotl13(t) + t + k
     tl.store(out_ptr + (pid % 65536) * BLOCK + lane, y)
+    if (tl.load(go_ptr, volatile=True) != 0) & (tl.load(stop_ptr, volatile=True) == 0):
+        tl.atomic_add(done_ptr, 1)
+
+
+@triton.jit
+def mma_kernel(a_ptr, b_ptr, out_ptr, go_ptr, stop_ptr, done_ptr, TILES_N: tl.constexpr, N_TILES: tl.constexpr,
+               K: tl.constexpr, BM: tl.constexpr, BN: tl.constexpr, BK: tl.constexpr):
+    pid = tl.program_id(0)
+    if tl.load(stop_ptr, volatile=True) == 0:
+        _mma_body(a_ptr, b_ptr, out_ptr, go_ptr, stop_ptr, done_ptr, pid, TILES_N, N_TILES, K, BM, BN, BK)
+
+
+@triton.jit
+def _mma_body(a_ptr, b_ptr, out_ptr, go_ptr, stop_ptr, done_ptr, pid, TILES_N: tl.constexpr, N_TILES: tl.constexpr,
+              K: tl.constexpr, BM: tl.constexpr, BN: tl.constexpr, BK: tl.constexpr):
+    t = pid % N_TILES
+    rm = (t // TILES_N) * BM + tl.arange(0, BM)
+    rn = (t % TILES_N) * BN + tl.arange(0, BN)
+    rk = tl.arange(0, BK)
+    acc = tl.zeros((BM, BN), dtype=tl.float32)
+    for k0 in range(0, K, BK):
+        a = tl.load(a_ptr + rm[:, None] * K + (k0 + rk)[None, :])
+        b = tl.load(b_ptr + rn[None, :] * K + (k0 + rk)[:, None])
+        acc = tl.dot(a, b, acc)
+    tl.store(out_ptr + (pid % 65536) * BM + tl.arange(0, BM), tl.sum(acc, 1).to(tl.uint32, bitcast=True))
     if (tl.load(go_ptr, volatile=True) != 0) & (tl.load(stop_ptr, volatile=True) == 0):
         tl.atomic_add(done_ptr, 1)
 
@@ -215,6 +244,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--phases", default="prefill2048,decode32")
     ap.add_argument("--reps", type=int, default=7)
+    ap.add_argument("--kinds", default="pump,tag,mma")
     a = ap.parse_args()
     gen = torch.Generator(device="cuda").manual_seed(7)
     least, greatest = torch.cuda.Stream.priority_range()
@@ -227,12 +257,18 @@ def main() -> int:
     n_chunks = STORE_BYTES // (TAG_WORDS * TAG_BLOCK * 16)
     sms = torch.cuda.get_device_properties(0).multi_processor_count
 
+    mma_a, mma_b = e4m3((MMA_DIM, MMA_K), gen), e4m3((MMA_DIM, MMA_K), gen)
+
     def launch_filler(kind: str, programs: int):
         with torch.cuda.stream(lo):
             if kind == "pump":
                 pump_kernel[(programs,)](sink, go, stop, done, 12345, ITERS=PUMP_ITERS, BLOCK=PUMP_BLOCK)
-            else:
+            elif kind == "tag":
                 tag_kernel[(programs,)](store, sink, go, stop, done, n_chunks, 12345, WORDS=TAG_WORDS, BLOCK=TAG_BLOCK)
+            else:
+                mma_kernel[(programs,)](mma_a, mma_b, sink, go, stop, done, TILES_N=MMA_DIM // MMA_BN,
+                                        N_TILES=(MMA_DIM // MMA_BM) * (MMA_DIM // MMA_BN), K=MMA_K, BM=MMA_BM,
+                                        BN=MMA_BN, BK=MMA_BK, num_warps=8, num_stages=3)
 
     e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
 
@@ -269,7 +305,8 @@ def main() -> int:
 
     out = {"schema": "verity-pouw/saturation-gap-filler/v1", "device": torch.cuda.get_device_name(0), "sms": sms,
            "priority_range": [least, greatest], "pump": {"iters": PUMP_ITERS, "block": PUMP_BLOCK, "chains": PUMP_CHAINS},
-           "tag": {"block": TAG_BLOCK, "words": TAG_WORDS, "bytes_per_program": TAG_WORDS * TAG_BLOCK * 16}, "phases": []}
+           "tag": {"block": TAG_BLOCK, "words": TAG_WORDS, "bytes_per_program": TAG_WORDS * TAG_BLOCK * 16},
+           "mma": {"tile": [MMA_BM, MMA_BN, MMA_K], "bk": MMA_BK, "operand": [MMA_DIM, MMA_K]}, "phases": []}
     for phase in [p for p in a.phases.split(",") if p]:
         L = Layers(phase, gen)
         L.prepare()
@@ -307,11 +344,16 @@ def main() -> int:
             row = {"seq": seq}
             alone = [replay(None)[0] for _ in range(a.reps)]
             row["ms_alone"] = statistics.median(alone)
-            for kind in ("pump", "tag"):
-                rate = filler_alone(kind, row["ms_alone"])
+            for kind in [k for k in a.kinds.split(",") if k]:
+                try:
+                    rate = filler_alone(kind, row["ms_alone"])
+                except Exception as e:  # a filler that doesn't compile or run here leaves the others' rows
+                    row[kind] = {"error": f"{type(e).__name__}: {e}"[:400]}
+                    continue
                 runs = [replay(kind) for _ in range(a.reps)]
                 ms = statistics.median(r[0] for r in runs)
                 progs = statistics.median(r[1] for r in runs)
+                solo_ms = progs / rate
                 row[kind] = {
                     "ms_with": ms,
                     "slowdown": ms / row["ms_alone"],
@@ -319,10 +361,17 @@ def main() -> int:
                     "programs": progs,
                     "alone_programs_per_ms": rate,
                     "soak": progs / (rate * ms) if rate > 0 else None,
+                    # the share of the filler's work that ran in time the sequence would have spent anyway: 1 if it
+                    # cost nothing, 0 if running both together took as long as running them one after the other
+                    "free": (row["ms_alone"] + solo_ms - ms) / solo_ms if solo_ms > 0 else None,
                 }
                 if kind == "tag":
                     row[kind]["store_gb_per_s"] = progs * TAG_WORDS * TAG_BLOCK * 16 / (ms * 1e6)
                     row[kind]["alone_gb_per_s"] = rate * TAG_WORDS * TAG_BLOCK * 16 / 1e6
+                if kind == "mma":
+                    flops = 2.0 * MMA_BM * MMA_BN * MMA_K
+                    row[kind]["tflops_with"] = progs * flops / (ms * 1e9)
+                    row[kind]["alone_tflops"] = rate * flops / 1e9
             print(f"{phase} {seq}: {json.dumps(row)}", file=sys.stderr)
             res["seqs"].append(row)
             del g
