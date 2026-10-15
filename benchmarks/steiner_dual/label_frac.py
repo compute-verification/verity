@@ -7,11 +7,15 @@ on S, reaches rank Λ(S) = max_r Σ_i dim(W_i ∩ R_{i,r}) (the same with b's an
 reaches v = min(max_r E_μ dim(W ∩ R_r), max_c E_μ dim(W ∩ C_c)) per unit of w, an LP; a branch into k targets then
 saves at most (v − 1) r, and the half charge needs v <= 1 + k/2.
 
-    python label_frac.py [seed] [trials] [min]   (prints each unrescued (H, S) with v and the best pair of typings;
-                                                  with min, also a minimal set of cells on which S stays unrescued)
+    python label_frac.py [seed] [trials]   (prints each unrescued (H, S) with v and the best pair of typings)
+    python label_frac.py --minimal LOG     (for each unrescued (H, S) in LOG, the smallest sets of cells on which S
+                                            stays unrescued, with their 2-cores, since peeling a cell alone in its
+                                            row or column costs q products and no merge charge)
 """
 
+import ast
 import itertools
+import re
 import sys
 from fractions import Fraction
 
@@ -71,23 +75,70 @@ def unrescued(cells, nodes, root, S, p):
     return not any(reachable(cells, a, b, S, p) for a, b in all_typings(cells, nodes, root, p))
 
 
+def core(cells):
+    """The 2-core of the row-column graph: peel cells alone in their row or column until none is."""
+    cells = set(cells)
+    while True:
+        rows = [c[0] for c in cells]
+        cols = [c[1] for c in cells]
+        leaf = {c for c in cells if rows.count(c[0]) == 1 or cols.count(c[1]) == 1}
+        if not leaf:
+            return cells
+        cells -= leaf
+
+
 def minimal(cells, nodes, root, S, p):
-    """Greedily drop cells outside S while S stays unrescued; returns the remaining cells and hierarchy."""
-    keep = set(range(len(cells)))
-    for t in range(len(cells)):
-        if t in S:
+    """The smallest sets of cells containing S on which S stays unrescued (every subset, smallest first), each as
+    (2-core size, |S ∩ 2-core|, hierarchy)."""
+    others = [t for t in range(len(cells)) if t not in S]
+    for n in range(len(others) + 1):
+        hits = []
+        for keep in itertools.combinations(others, n):
+            sub_cells, sub_nodes, sub_root, index = restrict(cells, nodes, root, set(S) | set(keep))
+            if unrescued(sub_cells, sub_nodes, sub_root, tuple(index[s] for s in S), p):
+                k = core(sub_cells)
+                hits.append((len(k), len(k & {cells[s] for s in S}), _nest(sub_nodes, sub_root, sub_cells)))
+        if hits:
+            return hits
+
+
+def _leaves(h):
+    return [h] if isinstance(h[0], int) else _leaves(h[0]) + _leaves(h[1])
+
+
+def minimal_from(path):
+    """`minimal` for every unrescued (S, H) line of an earlier run's output."""
+    pat = re.compile(r"p=(\d+) grid=\S+ S=(\(.*?\)\)) v=.* H=(.*)$")
+    for line in open(path):
+        m = pat.match(line.strip())
+        if not m:
             continue
-        sub = restrict(cells, nodes, root, keep - {t})
-        if unrescued(*sub[:3], tuple(sub[3][s] for s in S), p):
-            keep.discard(t)
-    sub_cells, sub_nodes, sub_root, _ = restrict(cells, nodes, root, keep)
-    return sub_cells, _nest(sub_nodes, sub_root, sub_cells)
+        p, S, H = int(m.group(1)), ast.literal_eval(m.group(2)), ast.literal_eval(m.group(3))
+        cells = sorted(_leaves(H))
+        index = {c: i for i, c in enumerate(cells)}
+        nodes = []
+
+        def build(h):
+            if isinstance(h[0], int):
+                nodes.append(("leaf", index[h]))
+            else:
+                left, right = build(h[0]), build(h[1])
+                nodes.append(("int", left, right))
+            return len(nodes) - 1
+
+        root = build(H)
+        hits = minimal(cells, nodes, root, tuple(index[c] for c in S), p)
+        size = len(_leaves(hits[0][2]))
+        print(f"p={p} S={S}: smallest {size} cells; (2-core size, |S ∩ 2-core|) {sorted({h[:2] for h in hits})}; "
+              f"e.g. {hits[0][2]}", flush=True)
 
 
 def main():
+    if sys.argv[1:2] == ["--minimal"]:
+        minimal_from(sys.argv[2])
+        return
     seed = int(sys.argv[1]) if len(sys.argv) > 1 else 0
     trials = int(sys.argv[2]) if len(sys.argv) > 2 else 12
-    minimize = len(sys.argv) > 3 and sys.argv[3] == "min"
     rng = np.random.default_rng(seed)
     worst = 0.0
     for p in (2, 10007):
@@ -114,8 +165,6 @@ def main():
                     print(f"p={p} grid={shape[0]}x{shape[1]} S={tuple(cells[t] for t in S)} v={Fraction(v).limit_denominator(64)} "
                           f"pair={pair}/2 row profiles={rows} column profiles={cols} H={_nest(nodes, root, cells)}",
                           flush=True)
-                    if minimize:
-                        print(f"   minimal: {minimal(cells, nodes, root, S, p)}", flush=True)
             print(f"p={p} grid={shape[0]}x{shape[1]}: {count} unrescued 3-sets", flush=True)
     print(f"largest v: {Fraction(worst).limit_denominator(64)} (the half charge for k = 3 needs v <= 5/2)")
 
