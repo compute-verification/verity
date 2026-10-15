@@ -173,6 +173,23 @@ __global__ void combine(const int32_t* __restrict__ M, int m, int n, int batch, 
   }
 }
 
+// win1_fused's one elementwise pass: C12 += M5 and C22 += M5 (M5 in Y, batch x m/2 x n/2).
+__global__ void add_m5(const int32_t* __restrict__ Y, int32_t* __restrict__ C, int m, int n, int batch) {
+  const int mh = m / 2, nh = n / 2, nv = nh / 4;
+  const size_t per = size_t(mh) * nv, total = per * batch;
+  for (size_t t = blockIdx.x * size_t(blockDim.x) + threadIdx.x; t < total; t += size_t(gridDim.x) * blockDim.x) {
+    const int b = int(t / per), r = int((t % per) / nv), c = int(t % nv);
+    const uint4 y = __ldcs(reinterpret_cast<const uint4*>(Y + size_t(b) * mh * nh + size_t(r) * nh + 4 * c));
+    uint4* p12 = reinterpret_cast<uint4*>(C + size_t(b) * m * n + size_t(r) * n + nh + 4 * c);
+    uint4* p22 = reinterpret_cast<uint4*>(reinterpret_cast<int32_t*>(p12) + size_t(mh) * n);
+    uint4 a = *p12, d = *p22;
+    a.x += y.x; a.y += y.y; a.z += y.z; a.w += y.w;
+    d.x += y.x; d.y += y.y; d.z += y.z; d.w += y.w;
+    __stcs(p12, a);
+    __stcs(p22, d);
+  }
+}
+
 __global__ void cmp_i32(const int32_t* a, const int32_t* b, size_t count, unsigned long long* bad) {
   unsigned long long z = 0;
   for (size_t i = blockIdx.x * size_t(blockDim.x) + threadIdx.x; i < count; i += size_t(gridDim.x) * blockDim.x)
@@ -244,6 +261,38 @@ static void run_plan(const Plan& p, const cublasLtMatmulAlgo_t* algo, const void
   LT(cublasLtMatmul(g_lt, p.op, al, B, p.la, A, p.lb, be, D, p.lc, D, p.lc, algo, g_ws, WS, 0));
 }
 
+// A GEMM over views: our A rows lda apart, B rows ldb apart, C and D rows ldc and ldd apart, per-batch strides s*.
+struct Plan2 {
+  cublasLtMatmulDesc_t op;
+  cublasLtMatrixLayout_t la, lb, lc, ld;
+  cublasLtMatmulAlgo_t algo;
+  int algo_id = -1;
+  float tuned_ms = 0;
+};
+static void layout2(cublasLtMatrixLayout_t* l, cudaDataType_t t, int rows, int cols, int ld, int batch, long long stride) {
+  LT(cublasLtMatrixLayoutCreate(l, t, rows, cols, ld));
+  if (batch > 1) {
+    LT(cublasLtMatrixLayoutSetAttribute(*l, CUBLASLT_MATRIX_LAYOUT_BATCH_COUNT, &batch, sizeof batch));
+    LT(cublasLtMatrixLayoutSetAttribute(*l, CUBLASLT_MATRIX_LAYOUT_STRIDED_BATCH_OFFSET, &stride, sizeof stride));
+  }
+}
+static Plan2 make_plan2(int m, int n, int k, int batch, int lda, long long sA, int ldb, long long sB, int ldc,
+                        long long sC, int ldd, long long sD) {
+  Plan2 p{};
+  LT(cublasLtMatmulDescCreate(&p.op, CUBLAS_COMPUTE_32I, CUDA_R_32I));
+  cublasOperation_t t = CUBLAS_OP_T, nn = CUBLAS_OP_N;
+  LT(cublasLtMatmulDescSetAttribute(p.op, CUBLASLT_MATMUL_DESC_TRANSA, &t, sizeof t));
+  LT(cublasLtMatmulDescSetAttribute(p.op, CUBLASLT_MATMUL_DESC_TRANSB, &nn, sizeof nn));
+  layout2(&p.la, CUDA_R_8I, k, n, ldb, batch, sB);
+  layout2(&p.lb, CUDA_R_8I, k, m, lda, batch, sA);
+  layout2(&p.lc, CUDA_R_32I, n, m, ldc, batch, sC);
+  layout2(&p.ld, CUDA_R_32I, n, m, ldd, batch, sD);
+  return p;
+}
+static void run2(const Plan2& p, int alpha, int beta, const void* A, const void* B, const void* C, void* D) {
+  LT(cublasLtMatmul(g_lt, p.op, &alpha, B, p.la, A, p.lb, &beta, C, p.lc, D, p.ld, &p.algo, g_ws, WS, 0));
+}
+
 static cudaEvent_t g_e0, g_e1;
 static float time_ms(const std::function<void()>& f, int iters) {
   CK(cudaEventRecord(g_e0));
@@ -283,6 +332,32 @@ static void tune(Plan& p, const void* A, const void* B, void* D) {
   cublasLtMatmulAlgoConfigGetAttribute(&p.algo, CUBLASLT_ALGO_CONFIG_TILE_ID, &u, sizeof u, &w); p.tile = int(u);
   cublasLtMatmulAlgoConfigGetAttribute(&p.algo, CUBLASLT_ALGO_CONFIG_STAGES_ID, &u, sizeof u, &w); p.stages = int(u);
   cublasLtMatmulAlgoConfigGetAttribute(&p.algo, CUBLASLT_ALGO_CONFIG_SPLITK_NUM, &p.splitk, sizeof p.splitk, &w);
+}
+
+static void tune2(Plan2& p, const void* A, const void* B, const void* C, void* D) {
+  cublasLtMatmulPreference_t pref;
+  LT(cublasLtMatmulPreferenceCreate(&pref));
+  size_t ws = WS;
+  LT(cublasLtMatmulPreferenceSetAttribute(pref, CUBLASLT_MATMUL_PREF_MAX_WORKSPACE_BYTES, &ws, sizeof ws));
+  cublasLtMatmulHeuristicResult_t res[16];
+  int got = 0;
+  LT(cublasLtMatmulAlgoGetHeuristic(g_lt, p.op, p.la, p.lb, p.lc, p.ld, pref, 16, res, &got));
+  cublasLtMatmulPreferenceDestroy(pref);
+  if (got == 0) { fprintf(stderr, "no cuBLASLt algorithm (view plan)\n"); exit(3); }
+  float best = 1e30f;
+  for (int i = 0; i < got; ++i) {
+    if (res[i].state != CUBLAS_STATUS_SUCCESS) continue;
+    p.algo = res[i].algo;
+    auto f = [&] { run2(p, 1, 0, A, B, C, D); };
+    f();
+    const float est = time_ms(f, 1);
+    const int iters = std::max(1, std::min(200, int(8.0f / std::max(est, 1e-3f))));
+    const float ms = std::min(time_ms(f, iters), time_ms(f, iters));
+    if (ms < best) { best = ms; p.tuned_ms = ms; p.algo_id = i; }
+  }
+  p.algo = res[p.algo_id].algo;
+  size_t w;
+  cublasLtMatmulAlgoConfigGetAttribute(&p.algo, CUBLASLT_ALGO_CONFIG_ID, &p.algo_id, sizeof p.algo_id, &w);
 }
 
 // ---- Winograd tables ----------------------------------------------------------------------------------------------
@@ -406,7 +481,11 @@ struct Method {
   std::string name, format;
   int level = 0, slot = -1, Q = 0;
   bool wide = false, gate_only = false;
+  // win1_fused: 4 computed sub-operands a side (the pass-through ones are views), cuBLASLt's epilogue accumulating
+  // into C (beta = 1, alpha = -1 for M4) and two s32 temporaries, X and Y
+  bool fused = false;
   Plan plan;
+  std::vector<Plan2> p2;
   void* out = nullptr;
   bool f32 = false;
   std::function<void()> ops, gemm, comb;
@@ -496,6 +575,21 @@ int main(int argc, char** argv) {
         break;
       }
   }
+  if (4 * amax <= 127 && (m / 2) % 16 == 0 && (n / 2) % 16 == 0 && (k / 2) % 16 == 0) {
+    const Table w1 = winograd(1);
+    Table t;
+    t.L = 1;
+    t.nb = 4;
+    for (int q : {2, 4, 5, 6}) t.a.push_back(w1.a[q]);  // S4 S1 S2 S3
+    for (int q : {3, 4, 5, 6}) t.b.push_back(w1.b[q]);  // T4 T1 T2 T3
+    t.ta.assign(4, 0);
+    t.tb.assign(4, 0);
+    t.w.assign(4, std::vector<long long>(4, 0));
+    Method x;
+    x.name = "win1_fused"; x.format = "int8"; x.level = 1; x.Q = 7; x.fused = true; x.slot = int(tables.size());
+    tables.push_back(t);
+    ms.push_back(x);
+  }
   for (size_t i = 0; i < tables.size(); ++i) upload(tables[i], int(i));
 
   // shared temporaries, sized for the largest Strassen method that fits beside the outputs
@@ -507,7 +601,8 @@ int main(int argc, char** argv) {
     if (!x.level) continue;
     const size_t blkA = size_t(m >> x.level) * (k >> x.level), blkB = size_t(n >> x.level) * (k >> x.level),
                  blkC = size_t(m >> x.level) * (n >> x.level);
-    const size_t needM = size_t(batch) * x.Q * blkC * 4, needS = size_t(batch) * x.Q * (blkA + blkB);
+    const size_t needM = size_t(batch) * (x.fused ? 2 : x.Q) * blkC * 4,
+                 needS = size_t(batch) * (x.fused ? 4 : x.Q) * (blkA + blkB);
     if (outs + needM + needS + (2ull << 30) > free_b) { x.gate_only = true; x.name += "_SKIPPED_MEMORY"; continue; }
     maxM = std::max(maxM, needM);
     maxS = std::max(maxS, needS);
@@ -536,6 +631,51 @@ int main(int argc, char** argv) {
       x.plan = make_plan(true, m, n, k, batch); x.out = Cf;
       Method* px = &x;
       x.gemm = [px, A8, B8] { run_plan(px->plan, &px->plan.algo, A8, B8, px->out); };
+    } else if (x.fused) {
+      const int mh = m / 2, nh = n / 2, kh = k / 2, slot = x.slot;
+      x.out = Cs;
+      int8_t* SAp = St;                                // S4 S1 S2 S3, batch x 4 x mh x kh
+      int8_t* SBp = St + size_t(batch) * 4 * mh * kh;  // T4 T1 T2 T3
+      int32_t* X = Mt;
+      int32_t* Y = Mt + size_t(batch) * mh * nh;
+      const long long sAv = (long long)m * k, sBv = (long long)n * k, sAt = 4ll * mh * kh, sBt = 4ll * nh * kh,
+                      sT = (long long)mh * nh, sC = (long long)m * n;
+      // (A, B; C -> D): 0 view, view -> temp; 1 view, view; temp -> view; 2 temp, temp -> temp;
+      // 3 temp, view; temp -> view; 4 temp, temp; temp -> view; 5 view, temp; view -> view
+      x.p2.push_back(make_plan2(mh, nh, kh, batch, k, sAv, k, sBv, nh, sT, nh, sT));
+      x.p2.push_back(make_plan2(mh, nh, kh, batch, k, sAv, k, sBv, nh, sT, n, sC));
+      x.p2.push_back(make_plan2(mh, nh, kh, batch, kh, sAt, kh, sBt, nh, sT, nh, sT));
+      x.p2.push_back(make_plan2(mh, nh, kh, batch, kh, sAt, k, sBv, nh, sT, n, sC));
+      x.p2.push_back(make_plan2(mh, nh, kh, batch, kh, sAt, kh, sBt, nh, sT, n, sC));
+      x.p2.push_back(make_plan2(mh, nh, kh, batch, k, sAv, kh, sBt, n, sC, n, sC));
+      const int8_t *A11 = A, *A12 = A + kh, *A22 = A + size_t(mh) * k + kh;
+      const int8_t *Bp11 = B, *Bp21 = B + kh, *Bp22 = B + size_t(nh) * k + kh;  // B'21 is our B's block (0, 1)
+      int32_t *C11 = Cs, *C12 = Cs + nh, *C21 = Cs + size_t(mh) * n, *C22 = Cs + size_t(mh) * n + nh;
+      int8_t *S4 = SAp, *S1 = SAp + size_t(mh) * kh, *S2 = SAp + 2 * size_t(mh) * kh, *S3 = SAp + 3 * size_t(mh) * kh;
+      int8_t *T4 = SBp, *T1 = SBp + size_t(nh) * kh, *T2 = SBp + 2 * size_t(nh) * kh, *T3 = SBp + 3 * size_t(nh) * kh;
+      x.ops = [=] {
+        operands_packed<1><<<grid_for(size_t(batch) * mh * (kh / 16)), 256>>>(A, m, k, batch, 4, slot, 0, SAp);
+        operands_packed<1><<<grid_for(size_t(batch) * nh * (kh / 16)), 256>>>(B, n, k, batch, 4, slot, 1, SBp);
+      };
+      Method* px = &x;
+      x.gemm = [=] {
+        const auto& P = px->p2;
+        run2(P[0], 1, 0, A11, Bp11, X, X);   // X = M1
+        run2(P[1], 1, 1, A12, Bp21, X, C11);  // C11 = M1 + M2
+        run2(P[2], 1, 1, S2, T2, X, X);       // X = U2 = M1 + M6
+        run2(P[3], 1, 1, S4, Bp22, X, C12);   // C12 = U2 + M3
+        run2(P[4], 1, 1, S3, T3, X, C22);     // C22 = U3 = U2 + M7
+        run2(P[5], -1, 1, A22, T4, C22, C21); // C21 = U3 - M4
+        run2(P[2], 1, 0, S1, T1, Y, Y);       // Y = M5
+      };
+      x.comb = [=] { add_m5<<<grid_for(size_t(batch) * mh * (nh / 4)), 256>>>(Y, Cs, m, n, batch); };
+      x.ops();
+      tune2(x.p2[0], A11, Bp11, X, X);
+      tune2(x.p2[1], A12, Bp21, X, C11);
+      tune2(x.p2[2], S2, T2, X, X);
+      tune2(x.p2[3], S4, Bp22, X, C12);
+      tune2(x.p2[4], S3, T3, X, C22);
+      tune2(x.p2[5], A22, T4, C21, C21);
     } else {
       const int L = x.level, mh = m >> L, nh = n >> L, kh = k >> L, Q = x.Q, slot = x.slot;
       x.plan = make_plan(false, mh, nh, kh, batch * Q);
@@ -573,6 +713,14 @@ int main(int argc, char** argv) {
   // tune each plan on its own operands (the Strassen plans after their operand kernels ran once)
   for (auto& x : ms) {
     if (x.name.find("SKIPPED") != std::string::npos) continue;
+    if (x.fused) {
+      printf("{\"kind\":\"plan\",\"method\":\"%s\",\"format\":\"int8\",\"level\":1,\"products\":7,\"algos\":[", x.name.c_str());
+      for (size_t i = 0; i < x.p2.size(); ++i) printf("%s%d", i ? "," : "", x.p2[i].algo_id);
+      printf("],\"tuned_gemm_ms\":[");
+      for (size_t i = 0; i < x.p2.size(); ++i) printf("%s%.6f", i ? "," : "", x.p2[i].tuned_ms);
+      printf("]}\n");
+      continue;
+    }
     if (x.ops) x.ops();
     if (x.name == "lt_int8") tune(x.plan, A, B, Cref);
     else if (x.name == "lt_fp8") tune(x.plan, A8, B8, Cf);
@@ -704,9 +852,10 @@ int main(int argc, char** argv) {
     // the plain GEMM's C does not; the combine reads them all and writes C
     double op_bytes = 0, comb_bytes = 0;
     if (L) {
-      const double sa = double(batch) * (m >> L) * (k >> L), sb = double(batch) * (n >> L) * (k >> L);
-      op_bytes = double(na + nbs) + x.Q * (sa + sb);
-      comb_bytes = double(batch) * x.Q * (m >> L) * double(n >> L) * 4 + double(nc) * 4;
+      const double sa = double(batch) * (m >> L) * (k >> L), sb = double(batch) * (n >> L) * (k >> L),
+                   sc = double(batch) * (m >> L) * double(n >> L) * 4;
+      op_bytes = double(na + nbs) + (x.fused ? 4 : x.Q) * (sa + sb);
+      comb_bytes = x.fused ? 5 * sc : x.Q * sc + double(nc) * 4;
     }
     printf("{\"kind\":\"time\",\"method\":\"%s\",\"format\":\"%s\",\"level\":%d,\"products\":%d,\"iters\":%d,"
            "\"median_ms\":%.6f,\"min_ms\":%.6f,\"tops\":%.2f,\"baseline\":\"%s\",\"baseline_ms\":%.6f,"
