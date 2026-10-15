@@ -7,6 +7,8 @@ rank <= 1, labels are independent within each grid row (a) and column (b), and t
 tracks agree with their linear-algebra definition.
 Part 3: the flattening identity on random Steiner trees with dense Steiner points.
 Part 4: the merge bound (Corollary 4): its identity on Strassen as an accumulate-and-merge DAG and on random DAGs.
+Part 5: the re-attachment bound (Corollary 7) on Strassen run chunk by chunk with prefix targets at L = 2: each merge's
+distance to the nearest earlier word, and Theorem 1's certificate (Lemmas 2 and 3) on the re-attached tree.
 """
 
 import itertools
@@ -457,9 +459,109 @@ def part4(rng, p=10007):
     print("[merges] 200 random DAGs with weighted merges: identity of Corollary 4 holds: ok")
 
 
+# ---------- Part 5: re-attaching merges (Corollary 7) on Strassen with prefix targets ----------
+
+def rank_one_terms(D, p):
+    """D as a sum of rank D rank-1 matrices (one pivot elimination per term)."""
+    D, out = D % p, []
+    while np.any(D):
+        i, j = map(int, np.argwhere(D)[0])
+        R = np.outer(D[:, j], D[i, :]) * pow(int(D[i, j]), p - 2, p) % p
+        out.append(R)
+        D = (D - R) % p
+    return out
+
+
+def chunked_strassen(c, balanced, p):
+    """2x2 grid, inner dimension 2c, L = 2. Each Strassen accumulator M_i runs over all chunks; after chunk s the
+    four prefix targets T_(pi, s+1) are merged from them. Rows (r,k) -> r*2c + k, columns (j,k) -> j*2c + k."""
+    K = 2 * c
+    e = lambda i: np.eye(2 * K, dtype=np.int64)[i]
+    nodes, val, targets = [("root",)], [np.zeros((2 * K, 2 * K), dtype=np.int64)], {}
+    acc = [0] * 8
+
+    def add(nd, v):
+        nodes.append(nd); val.append(v % p); return len(nodes) - 1
+
+    def merge(a, b, beta=1):
+        return add(("merge", a, 1, b, beta), val[a] + beta * val[b])
+
+    for s in range(c):
+        x = lambda i, k: e(i * K + 2 * s + k)
+        y = lambda k, j: e(j * K + 2 * s + k)
+        prods = [(x(0, 0) + x(1, 1), y(0, 0) + y(1, 1)), (x(1, 0) + x(1, 1), y(0, 0)), (x(0, 0), y(0, 1) - y(1, 1)),
+                 (x(1, 1), y(1, 0) - y(0, 0)), (x(0, 0) + x(0, 1), y(1, 1)), (x(1, 0) - x(0, 0), y(0, 0) + y(0, 1)),
+                 (x(0, 1) - x(1, 1), y(1, 0) + y(1, 1))]
+        for i, (u, v) in enumerate(prods, 1):
+            R = np.outer(u, v) % p
+            acc[i] = add(("prod", acc[i], R), val[acc[i]] + R)
+        M = acc
+        if balanced:
+            c11 = merge(merge(M[1], M[4]), merge(M[7], M[5], -1))
+            c22 = merge(merge(M[1], M[2], -1), merge(M[3], M[6]))
+        else:
+            c11 = merge(merge(merge(M[1], M[4]), M[5], -1), M[7])
+            c22 = merge(merge(merge(M[1], M[2], -1), M[3]), M[6])
+        for cell, w in {(0, 0): c11, (0, 1): merge(M[3], M[5]), (1, 0): merge(M[2], M[4]), (1, 1): c22}.items():
+            targets[(cell, s + 1)] = w
+    for ((r, j), s), w in targets.items():
+        T = np.zeros((2 * K, 2 * K), dtype=np.int64)
+        for k in range(2 * s):
+            T[r * K + k, j * K + k] = 1
+        assert np.array_equal(val[w], T), "chunked Strassen DAG misses a prefix target"
+    return nodes, val, targets
+
+
+def part5(p=10007, c=6):
+    for balanced in (False, True):
+        nodes, val, targets = chunked_strassen(c, balanced, p)
+        merges = [w for w, nd in enumerate(nodes) if nd[0] == "merge"]
+        # Corollary 7: re-attach each merge v to the earlier node Q_v nearest to it, by a path of rank(N_v - N_Q) steps.
+        dist = {v: min(range(v), key=lambda q: (rank((val[v] - val[q]) % p, p), q)) for v in merges}
+        d = {v: rank((val[v] - val[q]) % p, p) for v, q in dist.items()}
+        summand = [min(rank(val[nodes[v][1]], p), rank(val[nodes[v][3]], p)) for v in merges]
+        # The re-attached structure, built explicitly: a tree from 0 whose edges are rank-1 steps.
+        tval, tpar, tR, where = [val[0]], [None], [None], {0: 0}
+        for w, nd in enumerate(nodes[1:], 1):
+            if nd[0] == "prod":
+                tval.append(val[w]); tpar.append(where[nd[1]]); tR.append(nd[2] % p)
+                where[w] = len(tval) - 1
+            else:
+                at = where[dist[w]]
+                for R in rank_one_terms(val[w] - val[dist[w]], p):
+                    tval.append((tval[at] + R) % p); tpar.append(at); tR.append(R); at = len(tval) - 1
+                assert np.array_equal(tval[at], val[w])
+                where[w] = at
+        edges = [i for i in range(1, len(tval)) if np.any(tR[i])]
+        assert all(rank(tR[i], p) == 1 for i in edges)
+        assert len(edges) == 7 * c + sum(d.values())
+        # Theorem 1 on the full outputs (Section 2: the prefixes only add terminals), through Lemmas 2 and 3.
+        final = {cell: where[w] for (cell, s), w in targets.items() if s == c}
+
+        def below(i):
+            return {cell for cell, x in final.items() if any(y == i for y in _ancestors(x, tpar))}
+
+        tree = laminar_to_tree([below(i) for i in edges], list(final))
+        a, b, _ = check_tree(tree, p, check_rep=False)
+        index = {t: i for i, t in enumerate(leaves_of(tree))}
+        lam = lambda S: sum((np.outer(a[:, index[t]], b[:, index[t]]) for t in S),
+                            np.zeros((a.shape[0], b.shape[0]), dtype=np.int64)) % p
+        lhs = sum(np.kron(lam([t]), tval[x]) for t, x in final.items()) % p
+        rhs = sum(np.kron(lam(below(i)), tR[i]) for i in edges) % p
+        assert np.array_equal(lhs, rhs), "flattening identity fails on the re-attached tree"
+        assert rank(lhs, p) == 8 * c <= len(edges)
+        print(f"[re-attach] Strassen over {c} chunks of L = 2, {'balanced' if balanced else 'sequential'} merges: "
+              f"{7 * c} products, {len(merges)} merges, all {4 * c} prefix targets; re-attachment distances "
+              f"{sorted(set(d.values()))} (sum {sum(d.values())}, L*M = {2 * len(merges)}), Corollary 4's summand "
+              f"ranks up to {max(summand)} (sum {sum(summand)}); re-attached tree: {len(edges)} rank-1 edges, "
+              f"rank of the flattening {rank(lhs, p)} = 8c: ok")
+
+
 if __name__ == "__main__":
     rng = random.Random(20261015)
-    parts = sys.argv[1:] or ["1", "2", "3", "4"]
+    parts = sys.argv[1:] or ["1", "2", "3", "4", "5"]
+    if "5" in parts:
+        part5()
     if "4" in parts:
         part4(rng)
     if "2" in parts:
