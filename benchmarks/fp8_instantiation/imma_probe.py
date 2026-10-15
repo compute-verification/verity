@@ -2,6 +2,8 @@
 
     imma_probe.py gen --out CASES --meta META       the case file imma_probe.cu reads (seeded, about 80k tiles)
     imma_probe.py check --cases CASES --meta META --words DIR --sass SASS --json OUT [--structured OUT2]
+    imma_probe.py evidence --out-dir RUN/out --form s8s8_sat --instruction ID --model NAME --run RUN --json META
+                                                    one form's tc-evidence/v1 meta (benchmarks/tc_probe/trust.py)
 
 Eight forms (s8/u8 x s8/u8, with and without ``.satfinite``) run over the same tiles; each form reads the operand bytes in
 its own formats.  Families:
@@ -306,6 +308,35 @@ def check(args) -> int:
     return 0 if ok else 1
 
 
+def evidence(args) -> int:
+    """The ``tc-evidence/v1`` meta (``benchmarks/tc_probe/trust.py``'s nested ``tc_evidence``) of one form of a check run:
+    its families with their element and mismatch counts against the registry model, and the form's SASS."""
+    out = Path(args.out_dir)
+    rep = json.loads((out / "check.json").read_text())
+    meta = json.loads((out / "meta.json").read_text())
+    form = rep["forms"][args.form]
+    gpu = (out / "gpu.txt").read_text().splitlines()[1].split(", ")
+    sass = rep["sass"][f"imma_{args.form}"]
+    fams = {}
+    for f in meta:
+        n = f["tiles"] * 128
+        fams[f["family"]] = {"elements": n, "asserted": True, "mismatches": {args.model: form["mismatches_by_family"][f["family"]]}}
+    ext = fams["extremes"]["elements"]
+    fams["specials"] = {"elements": ext, "asserted": False, "mismatches": {args.model: form["mismatches_by_family"]["extremes"]},
+                        "note": "integer operands have no special encodings: the extremes family's constant tiles of -128, 127, 255 and 0"}
+    te = {"instruction": args.instruction, "sku": gpu[2], "arch": "sm_120", "driver": gpu[3], "gpu_uuid": gpu[1],
+          "nvcc": (out / "nvcc.txt").read_text().split("\n")[0].strip(), "seed": 20261015, "families": fams,
+          "total_mismatches_by_model": {args.model: form["mismatches"]},
+          "sass": {"single_instruction": sass["count"] == 1, "tile_kernel_mma_count": sass["count"], "expected_mma_count": 1,
+                   "ok": sass["count"] == 1, "opcode": sass["opcodes"]},
+          "clamp_hypotheses_consistent": form.get("clamp_hypotheses_consistent"), "form": args.form}
+    doc = {"run_id": args.run, "tc_evidence": te,
+           "workload_fingerprint": {"instruction": args.instruction, "model": args.model, "probe": "benchmarks/fp8_instantiation/imma_probe.py"}}
+    Path(args.json).write_text(json.dumps(doc, indent=1))
+    print(json.dumps({k: v for k, v in te.items() if k != "families"}))
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -317,7 +348,12 @@ def main() -> int:
     for a in ("--cases", "--meta", "--words", "--sass", "--json"):
         c.add_argument(a, required=True)
     c.add_argument("--structured")
+    e = sub.add_parser("evidence")
+    for a in ("--out-dir", "--form", "--instruction", "--model", "--run", "--json"):
+        e.add_argument(a, required=True)
     a = ap.parse_args()
+    if a.cmd == "evidence":
+        return evidence(a)
     if a.cmd == "gen":
         A, B, C, meta = generate(a.seed)
         write_cases(Path(a.out), A, B, C)
