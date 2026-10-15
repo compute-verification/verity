@@ -14,9 +14,10 @@ circuits have hidden unit circuits, whose templates are the registered table R's
 registered opening (`Model.holoTableCL`, `Recursion.holoInnerAt`). It is a conjunction:
 
 * (i) soundness in fork form, at an inner statement `st` that Lean's verifier sets up from its own partition object and
-  program (`AcceptsPublic`), the sparse phase's parameters `hp` (the verifier's own) and R's registration: the event is
-  empty, or the sessions type and there is a registrant fork, a round fork, a session fork or an inner fork of the
-  prover's own runs whose decoded transcripts play candidate 3's table to outcomes that clash (`clashPickHL`), or
+  program (`AcceptsPublic`), the sparse phase's parameters `hp := holoParamsAt ish st` derived from that statement and
+  the accepted candidate-3 shape, and R's registration: the event is empty, or the sessions type and there is a
+  registrant fork, a round fork, a session fork or an inner fork of the prover's own runs whose decoded transcripts
+  play candidate 3's table to outcomes that clash (`clashPickHL`), or
   Lean's verifier accepts `st`, builds V*'s statement list and accepts every session as V*'s statement of its index while
   no table near the word the prover's own runs open at R's level 0 (`regStmt`) has a satisfiable hidden statement, with
   probability at most `RecursiveSound`'s bound with candidate 3's error (`holoError`) as its inner term;
@@ -55,9 +56,9 @@ What it takes, against `PublicAudit`:
   (`AcceptsC3`): its list builds, it holds the inner transcript against `reg`, the covers check passes there (all of
   `RecVStar.checkCovers`: the sparse-presence, stacked-presence and stacked-shape refusals and each stream's rounds),
   check 5's sparse refusals pass, so `ℓ` is in `[6, k_log]` and the unit range's slots are inside the block
-  (`SparseRangeOk`), and check 5's inner shape is the inner statement's `m`, `k_log` and region count
-  (`RecVStar.checkInnerStmt`). These are not the whole compiled acceptance (`AcceptsPublic` and `ChecksVR` carry the rest). The
-  verifier's acceptance gives all of `AcceptsC3` (`FlockC3.VStarList.acceptsC3_of_verify`);
+  (`SparseRangeOk`), and check 5's inner shape has one sparse type and the inner statement's `m`, `k_log` and region
+  count (`RecVStar.checkInnerStmt`). These are not the whole compiled acceptance (`AcceptsPublic` and `ChecksVR` carry
+  the rest). The verifier's acceptance gives all of `AcceptsC3` (`FlockC3.VStarList.acceptsC3_of_verify`);
 * R's `m`: Lean's verifier never compares META's `stacked.m` with the bucket's `table_m`; it holds R's stream and each
   `rec-opening` unit to META's shape, and the unit names come from the outer program it compiles (the list). The model
   takes R's `m` from the class (`mReg`), and VBridge (`_hbr`, V*'s circuits compute this inner verifier at the list's
@@ -319,8 +320,11 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
   ∀
     -- the registration's draws, a finite space with an element, and the units each draws
     {n : ℕ} {Ω : Type} [Fintype Ω] [Inhabited Ω] {draw : Ω → Finset (Fin n)} {Reg Cm : Type} {Reg' Reg₂ : Type}
-    -- the verifier's own partition object and program, the inner statement and the sparse phase's parameters
-    (obj : Lean.Json) (prog : ByteArray) (st : Flock.Stmt) (hp : HoloParams)
+    -- the verifier's own partition object and program, the inner statement and candidate-3 shape
+    (obj : Lean.Json) (prog : ByteArray) (st : Flock.Stmt) (ish : RecVStar.Inner),
+    -- the sparse phase's parameters are derived from that accepted shape and statement, not another verifier input
+    let hp := holoParamsAt ish st
+    ∀
     -- the verifier of record's own inputs: R's registration (`--rec-inner-registration`, the record `st`'s META binds),
     -- and the coin server's records of V*'s inner session at each history (`--rec-inner-transcript` and
     -- `--rec-inner-session`)
@@ -333,9 +337,8 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
     -- record's `stacked` entry
     (cap : Cap Refine.Dig) (salt : ℕ → ByteArray) (bcs' : Array ByteArray)
     (_hstk : StackedTopAt (holoAt st hp).rsch.sch.level₀ st reg cap salt bcs')
-    -- the verifier of record's inner shape (`--rec-inner`), and V*'s statements over its list, as the prover supplies
-    -- their sessions
-    (ish : RecVStar.Inner) {Vs : Fin (vstarCount ish) → VStmt}
+    -- V*'s statements over the verifier's inner shape's list, as the prover supplies their sessions
+    {Vs : Fin (vstarCount ish) → VStmt}
     (zr : Reg → (drawLaw draw).Ω → List (Cm × (holoInnerAt (holoTys st hp) (CT st hp) st hp).Coin) → Reg₂ →
       (j : Fin (vstarCount ish)) → (Vs j).OuterR Reg')
     -- the records' custody
