@@ -26,6 +26,7 @@ N = _load("ncu_summary")
 W = _load("windows_eps")
 D = _load("drift_tau")
 T = _load("r3_table")
+M = _load("mma_window")
 
 
 def test_categories_keep_fp8_gemms_and_kv_writes_apart():
@@ -130,3 +131,19 @@ def test_held_reading_reproduces_w6b_held_alu():
     got = [T.held(rows, "k", "p", 0.51004, t) for t in (1.0035, 1.01, 1.02, 1.0528, 1.1848, 1.2229)]
     want = [0.0132, 0.0323, 0.0617, 0.1582, 0.5464, 0.6584]
     assert all(abs(g - w) < 0.0002 for g, w in zip(got, want))
+
+
+def test_mma_window_reads_the_largest_extra_share_within_tau():
+    """A variant fits within the A/A resolution; mixing two variants reaches τ exactly, from the null at ratio 1."""
+    pts = [(1.0, 0.0), (1.0097, 0.1875), (1.0148, 0.25), (1.0447, 0.375)]
+    assert M.frontier(pts, 1.0) == (0.0, 0.0)
+    fit, mixed = M.frontier(pts, 1.01)
+    assert fit == 0.1875 and mixed == pytest.approx(0.1875 + 0.0625 * 0.0003 / 0.0051)
+    fit, mixed = M.frontier(pts, 1.02)
+    assert fit == 0.25 and mixed == pytest.approx(0.25 + 0.125 * 0.0052 / 0.0299)
+    assert M.frontier(pts, 1.05) == (0.375, 0.375)
+
+
+def test_mma_window_pairs_each_round_with_the_design():
+    rows = {("d", "s"): {"ms_reps": [1.0, 2.0, 1.0]}, ("d_mm2", "s"): {"ms_reps": [1.01, 2.04, 1.03]}}
+    assert M.ratios(rows, "d", "d_mm2", "s") == pytest.approx(1.02)

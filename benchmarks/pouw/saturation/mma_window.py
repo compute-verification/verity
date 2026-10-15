@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The extra tensor work a cheater's own MMAs find inside a timed window (CMP-12, W6b's in-window ε term), derived.
 
-  python mma_window.py cutlass-cheat.json [--tau T ...] [--json OUT]
+  python mma_window.py cutlass-cheat.json ... [--tau T ...] [--json OUT]
 
 Input: `cutlass_receipt`'s JSON from job.sh's cheat stage, where each design kernel runs beside its `_mmX[aA]` variants
 (CR_XMMA: the same kernel plus X mma.sync m16n8k32 E4M3 a warp after every 32-deep k-block, on the k-block's own
@@ -13,12 +13,14 @@ Per shape, a variant's time ratio is the median over rounds of its time over the
 round times every kernel at the shape, in a shuffled order). Per phase (p2048, p8192), the four linears are weighted
 by the design's time, as one layer runs each once. At each τ, the largest extra-MAC share among variants whose ratio
 is within τ + RESOLUTION (the shuffled A/A controls' resolution, windows_eps.RESOLUTION), and the share a cheater mixing
-the two bracketing variants reaches at exactly τ (linear between measured points, from the null at ratio 1).
+the two bracketing variants reaches at exactly τ (linear between measured points, from the null at ratio 1). Several
+runs pool their variants' points: each ratio is against its own run's design.
 
 ε_in's tensor part at τ reads the window as windows_eps.timed does, with the cheater's in-kernel MACs added: the most of
 share + BEST_ETA·max(0, τ − s)/η_w over the variants that fit and the null (share 0, s 1), where η_w is the GEMM's η
 (windows_eps.ETA_GEMM) times the design's rate kept against plain in this run. The null alone, BEST_ETA(τ − 1)/η_w, is
-the reading with no tensor work inside the kernel (windows_eps's CUDA-only rows add κ·added/ρ to it).
+the reading with no tensor work inside the kernel (windows_eps's CUDA-only rows add κ·added/ρ to it). The table's ε is
+the larger of that and the mixed share at τ.
 """
 from __future__ import annotations
 
@@ -60,12 +62,23 @@ def frontier(points, tau):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("cheat")
+    ap.add_argument("cheat", nargs="+")
     ap.add_argument("--tau", type=float, action="append")
     ap.add_argument("--json")
     a = ap.parse_args()
     taus = a.tau or list(TAUS)
-    d = json.load(open(a.cheat))
+    out = {"source": a.cheat, "resolution": RESOLUTION, "rows": [], "tau": []}
+    print("| run | design | variant | X | xacc | phase | shape | extra MAC share | time ratio vs design | design vs plain |")
+    print("|---|---|---|---|---|---|---|---|---|---|")
+    for run, path in enumerate(a.cheat):
+        table(json.load(open(path)), run, out)
+    print()
+    tau_table(out, taus)
+    if a.json:
+        json.dump(out, open(a.json, "w"), indent=1)
+
+
+def table(d, run, out):
     kern = {k["name"]: k for k in d["kernels"]}
     rows = {(r["kernel"], r["shape"]): r for r in d["rows"]}
     shapes = sorted({r["shape"] for r in d["rows"]})
@@ -73,9 +86,6 @@ def main():
     variants = sorted({r["kernel"] for r in d["rows"] if VARIANT.search(r["kernel"])},
                       key=lambda k: (VARIANT.sub("", k), bool(VARIANT.search(k)[3]), int(VARIANT.search(k)[1]),
                                      int(VARIANT.search(k)[2] or 0)))
-    out = {"source": a.cheat, "resolution": RESOLUTION, "rows": [], "tau": []}
-    print("| design | variant | X | xacc | phase | shape | extra MAC share | time ratio vs design | design vs plain |")
-    print("|---|---|---|---|---|---|---|---|---|")
     for v in variants:
         base = VARIANT.sub("", v)
         k = kern[v]
@@ -93,40 +103,44 @@ def main():
                           rows[(base, s)]["wall_vs_plain"], extra, r["m"] * r["n"] * r["k"])
             for s in ss:
                 q, sh, _, dvp, ex, hon = per[s]
-                print(f"| {base} | {v} | {k['xmma']} | {k['xacc']} | {ph} | {s} | {sh:.4f} | {q:.4f} | {dvp:.4f} |")
-                out["rows"].append({"design": base, "variant": v, "xmma": k["xmma"], "xacc": k["xacc"], "phase": ph,
+                print(f"| {run} | {base} | {v} | {k['xmma']} | {k['xacc']} | {ph} | {s} | {sh:.4f} | {q:.4f} | {dvp:.4f} |")
+                out["rows"].append({"run": run, "design": base, "variant": v, "xmma": k["xmma"], "xacc": k["xacc"], "phase": ph,
                                     "shape": s, "extra_macs": ex, "honest_macs": hon, "extra_share": sh, "ratio": q,
                                     "design_vs_plain": dvp})
             tb = sum(per[s][2] for s in ss)
             q = sum(per[s][2] * per[s][0] for s in ss) / tb
             ex, hon = sum(per[s][4] for s in ss), sum(per[s][5] for s in ss)
             dvp = sum(per[s][2] for s in ss) / sum(rows[("p_plain", s)]["ms"] for s in ss)
-            print(f"| {base} | {v} | {k['xmma']} | {k['xacc']} | {ph} | **phase** | {ex / hon:.4f} | **{q:.4f}** | {dvp:.4f} |")
-            out["rows"].append({"design": base, "variant": v, "xmma": k["xmma"], "xacc": k["xacc"], "phase": ph,
+            print(f"| {run} | {base} | {v} | {k['xmma']} | {k['xacc']} | {ph} | **phase** | {ex / hon:.4f} | **{q:.4f}** | {dvp:.4f} |")
+            out["rows"].append({"run": run, "design": base, "variant": v, "xmma": k["xmma"], "xacc": k["xacc"], "phase": ph,
                                 "shape": ph, "extra_macs": ex, "honest_macs": hon, "extra_share": ex / hon, "ratio": q,
                                 "design_vs_plain": dvp})
-    print()
+
+
+def tau_table(out, taus):
+    designs = sorted({r["design"] for r in out["rows"]})
+    phases = sorted({r["phase"] for r in out["rows"]})
     print("| design | phase | η_w | " + " | ".join(f"τ = {t:.2f}: fits / mixed / ε_in tensor (null)" for t in taus) + " |")
     print("|---|---|---|" + "---|" * len(taus))
-    for base in sorted({VARIANT.sub("", v) for v in variants}):
+    for base in designs:
         for ph in phases:
             pts = [(1.0, 0.0)] + [(r["ratio"], r["extra_share"]) for r in out["rows"]
                                   if r["design"] == base and r["phase"] == ph and r["shape"] == ph]
             if len(pts) == 1:
                 continue
-            dvp = next(r["design_vs_plain"] for r in out["rows"] if r["design"] == base and r["shape"] == ph)
+            dvp = next(r["design_vs_plain"] for r in out["rows"] if r["design"] == base and r["shape"] == ph
+                       and r["run"] == 0) if any(r["run"] == 0 and r["design"] == base for r in out["rows"]) else next(
+                r["design_vs_plain"] for r in out["rows"] if r["design"] == base and r["shape"] == ph)
             eta_w = ETA_GEMM[ph] / dvp
             cells = []
             for t in taus:
                 fit, mixed = frontier(pts, t)
                 null = BEST_ETA * max(0.0, t - 1) / eta_w
                 eps = max(sh + BEST_ETA * max(0.0, t - q) / eta_w for q, sh in pts if q <= t + RESOLUTION)
-                cells.append(f"{fit:.4f} / {mixed:.4f} / {eps:.4f} ({null:.4f})")
+                cells.append(f"{fit:.4f} / {mixed:.4f} / {max(eps, mixed):.4f} ({null:.4f})")
                 out["tau"].append({"design": base, "phase": ph, "tau": t, "eta_w": eta_w, "fits": fit, "mixed": mixed,
-                                   "eps_tensor": eps, "eps_null": null})
+                                   "eps_tensor": max(eps, mixed), "eps_fits": eps, "eps_null": null})
             print(f"| {base} | {ph} | {eta_w:.3f} | " + " | ".join(cells) + " |")
-    if a.json:
-        json.dump(out, open(a.json, "w"), indent=1)
 
 
 if __name__ == "__main__":
