@@ -2,20 +2,23 @@
 // instantiated as the page's "keyed 32-bit ARX step", run over every accumulator word every PER mma rounds (commit stride
 // L = 32 * PER MACs per output entry), each thread chaining its own words (one chain per accumulator tile).
 //
-//   alu   phi1(y, p) = rotl(t, 13) + t + k_t, t = y ^ p ^ s   LOP3, SHF.L.W, IADD3: all on the integer ALU (k_t an immediate
-//                                                             per word, s the readout)
+//   alu   phi1(y, p) = rotl(t, 13) + t + k_t, t = y ^ p ^ s   all on the integer ALU: ptxas emits LOP3, LEA, IADD3 (k_t an
+//                                                             immediate per word, s the readout)
 //   imad  phi1(y, p) = t * (k_t | 1) + rotl(t, 13)             LOP3, SHF.L.W on the ALU, IMAD on the FMA pipe beside it
 //   ROUNDS = 2 applies a second phi1 against a constant
 //
-// Kernels (one wave, 8 warps a block, the occupancy's blocks per SM, every operand in registers):
+// Kernels (one wave of --blocks blocks an SM, at most the occupancy's, 8 warps a block, every operand in registers):
 //   mode 0  NACC independent m16n8k32 E4M3 mma.sync per round (QMMA), no phi: the tensor-core peak
 //   mode 1  phi only over the same words (fixed, read from memory): what one phi step costs, in FP32 lane slots
 //   mode 2  PER mma rounds then one phi step per accumulator word, the receipt at commit stride 32 * PER
-// Gates (exit 3, before any rate is printed): every mode-2 kernel's accumulators equal mode 0's after the same mma rounds (so the
-// phi work did not change what the tensor cores computed), two launches of every kernel agree, and mode 1's thread-0 chains
+//   mode 3  the same stride, staggered: PER rounds on half A, the receipt of half B (written a half-body ago), PER rounds on
+//           B, the receipt of A; so no receipt waits on an mma in flight
+// Gates (exit 3, before any rate is printed): every mode-2/3 kernel's accumulators equal mode 0's after the same mma rounds (so
+// the phi work did not change what the tensor cores computed), two launches of every kernel agree, and mode 1's thread-0 chains
 // equal a host recomputation.
 //
-//   nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -o phi_probe phi_probe.cu && ./phi_probe [--ms 60] [--reps 5]
+//   nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -o phi_probe phi_probe.cu
+//   ./phi_probe [--ms 60] [--reps 5] [--blocks 2]
 #include <cuda_runtime.h>
 
 #include <algorithm>
@@ -69,6 +72,24 @@ __device__ __forceinline__ void mma(float (&c)[4], const uint32_t (&a)[4], const
 
 __host__ __device__ inline float init_acc(uint32_t word) { return (float)(word & 0xff) * 0.25f; }
 
+template <int ROUNDS, int VAR, int J0, int J1>
+__device__ __forceinline__ void receipt(uint32_t (&y)[NACC], const float (&c)[NACC][4], uint32_t s) {
+#pragma unroll
+    for (int j = J0; j < J1; j++) {
+#pragma unroll
+        for (int w = 0; w < 4; w++) y[j] = phi<ROUNDS, VAR>(y[j], __float_as_uint(c[j][w]), s, key(j, w));
+    }
+}
+
+template <int J0, int J1, int PER>
+__device__ __forceinline__ void mma_rounds(float (&c)[NACC][4], const uint32_t (&a)[4], const uint32_t (&b)[2]) {
+#pragma unroll
+    for (int r = 0; r < PER; r++) {
+#pragma unroll
+        for (int j = J0; j < J1; j++) mma(c[j], a, b);
+    }
+}
+
 template <int MODE, int PER, int ROUNDS, int VAR>
 __global__ void __launch_bounds__(THREADS, 2)
     probe(const uint32_t* __restrict__ in, uint32_t* __restrict__ out, long long* __restrict__ clk, int outer) {
@@ -90,22 +111,17 @@ __global__ void __launch_bounds__(THREADS, 2)
     const long long t0 = clock64();
 #pragma unroll 1
     for (int o = 0; o < outer; o++) {
-        if (MODE != 1) {
-#pragma unroll
-            for (int r = 0; r < PER; r++) {
-#pragma unroll
-                for (int j = 0; j < NACC; j++) mma(c[j], a, b);
-            }
-        }
-        if (MODE != 0) {
-            s++;
-#pragma unroll
-            for (int j = 0; j < NACC; j++) {
-#pragma unroll
-                for (int w = 0; w < 4; w++) y[j] = phi<ROUNDS, VAR>(y[j], __float_as_uint(c[j][w]), s, key(j, w));
-            }
+        if (MODE == 0 || MODE == 2) mma_rounds<0, NACC, PER>(c, a, b);
+        if (MODE == 1 || MODE == 2) receipt<ROUNDS, VAR, 0, NACC>(y, c, ++s);
+        if (MODE == 3) {
+            ++s;
+            mma_rounds<0, NACC / 2, PER>(c, a, b);
+            receipt<ROUNDS, VAR, NACC / 2, NACC>(y, c, s);
+            mma_rounds<NACC / 2, NACC, PER>(c, a, b);
+            receipt<ROUNDS, VAR, 0, NACC / 2>(y, c, s);
         }
     }
+    if (MODE == 3) receipt<ROUNDS, VAR, NACC / 2, NACC>(y, c, s + 1);
     const long long t1 = clock64();
     uint32_t cx = 0, yx = 0;
 #pragma unroll
@@ -159,6 +175,10 @@ static const Kernel KERNELS[] = {
     K(2, 1, 1, 1), K(2, 2, 1, 1), K(2, 4, 1, 1), K(2, 8, 1, 1),
     K(2, 1, 2, 0), K(2, 2, 2, 0), K(2, 4, 2, 0), K(2, 8, 2, 0),
     K(2, 1, 2, 1), K(2, 2, 2, 1), K(2, 4, 2, 1), K(2, 8, 2, 1),
+    K(3, 1, 1, 0), K(3, 2, 1, 0), K(3, 4, 1, 0), K(3, 8, 1, 0),
+    K(3, 1, 1, 1), K(3, 2, 1, 1), K(3, 4, 1, 1), K(3, 8, 1, 1),
+    K(3, 1, 2, 0), K(3, 2, 2, 0), K(3, 4, 2, 0), K(3, 8, 2, 0),
+    K(3, 1, 2, 1), K(3, 2, 2, 1), K(3, 4, 2, 1), K(3, 8, 2, 1),
 };
 
 struct Launch {
@@ -203,10 +223,11 @@ static bool same_c(const std::vector<uint32_t>& x, const std::vector<uint32_t>& 
 
 int main(int argc, char** argv) {
     double target_ms = 60;
-    int reps = 5;
+    int reps = 5, blocks = 2;
     for (int i = 1; i + 1 < argc; i += 2) {
         if (!strcmp(argv[i], "--ms")) target_ms = atof(argv[i + 1]);
         else if (!strcmp(argv[i], "--reps")) reps = atoi(argv[i + 1]);
+        else if (!strcmp(argv[i], "--blocks")) blocks = atoi(argv[i + 1]);
     }
     cudaDeviceProp prop;
     CK(cudaGetDeviceProperties(&prop, 0));
@@ -236,7 +257,7 @@ int main(int argc, char** argv) {
         CK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&bps, k.fn, THREADS, 0));
         cudaFuncAttributes attr;
         CK(cudaFuncGetAttributes(&attr, k.fn));
-        const int grid = sms * std::min(bps, 2);
+        const int grid = sms * std::min(bps, blocks);
         const size_t nthreads = (size_t)grid * THREADS;
         Launch cal = launch(k, d_in, grid, 256);
         int outer = std::max(256, (int)(256 * target_ms / std::max(cal.ms, 1e-3)));
@@ -250,13 +271,10 @@ int main(int argc, char** argv) {
             }
         if (k.mode == 0) {
             mode0_out = runs[0].out, mode0_rounds = outer, mode0_grid = grid;
-        } else if (k.mode == 2) {
-            if (grid != mode0_grid) {
-                fprintf(stderr, "GATE %s: grid %d differs from mode 0's %d\n", k.name.c_str(), grid, mode0_grid);
-                return 3;
-            }
+        } else if (k.mode >= 2) {
             const int rounds = outer * k.per;
-            const Launch ref = rounds == mode0_rounds ? Launch{0, 0, mode0_out} : launch(KERNELS[0], d_in, grid, rounds);
+            const Launch ref = rounds == mode0_rounds && grid == mode0_grid ? Launch{0, 0, mode0_out}
+                                                                            : launch(KERNELS[0], d_in, grid, rounds);
             if (!same_c(ref.out, runs[0].out, nthreads)) {
                 fprintf(stderr, "GATE %s: accumulators differ from mode 0 after %d mma rounds\n", k.name.c_str(), rounds);
                 return 3;
@@ -274,7 +292,7 @@ int main(int argc, char** argv) {
         const double warps = (double)nthreads / 32;
         for (const Launch& r : runs) {
             const double macs = k.mode == 1 ? 0 : warps * outer * k.per * NACC * 4096.0;
-            const double phis = k.mode == 0 ? 0 : (double)nthreads * outer * NACC * 4;
+            const double phis = k.mode == 0 ? 0 : (double)nthreads * 4 * (outer * NACC + (k.mode == 3 ? NACC / 2 : 0));
             mac_rate.push_back(macs / (sms * r.span_cycles));
             phi_rate.push_back(phis / (sms * r.span_cycles));
             mhz.push_back(r.span_cycles / (r.ms * 1e3));
@@ -284,9 +302,10 @@ int main(int argc, char** argv) {
             return v[v.size() / 2];
         };
         printf("%s {\"kernel\": \"%s\", \"mode\": %d, \"per\": %d, \"L\": %d, \"rounds\": %d, \"var\": \"%s\", \"regs\": %d, "
-               "\"blocks_per_sm\": %d, \"outer\": %d, \"ms\": %.4f, \"sm_mhz\": %.1f, \"macs_per_sm_clk\": %.2f, "
+               "\"blocks_per_sm\": %d, \"grid\": %d, \"outer\": %d, \"ms\": %.4f, \"sm_mhz\": %.1f, \"macs_per_sm_clk\": %.2f, "
                "\"phi_per_sm_clk\": %.3f, \"gate\": \"ok\"}",
-               first ? "" : ",\n", k.name.c_str(), k.mode, k.per, 32 * k.per, k.rounds, VARS[k.var], attr.numRegs, bps, outer,
+               first ? "" : ",\n", k.name.c_str(), k.mode, k.per, 32 * k.per, k.rounds, VARS[k.var], attr.numRegs, bps, grid,
+               outer,
                med([&] { std::vector<double> v; for (auto& r : runs) v.push_back(r.ms); return v; }()), med(mhz),
                med(mac_rate), med(phi_rate));
         first = false;

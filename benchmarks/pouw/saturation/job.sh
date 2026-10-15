@@ -96,12 +96,15 @@ ncu_stage() {
 }
 
 phi() {
-  stamp "phi probe"
-  if timeout --foreground 300 "$d/phi_probe" --ms 60 --reps 5 > "$OUT/phi-probe.json" 2> "$OUT/phi-probe.err"; then
-    stamp "phi probe ok"
-  else
-    stamp "phi probe FAILED rc=$?"
-  fi
+  for blocks in 2 4; do
+    stamp "phi probe, $blocks blocks an SM"
+    if timeout --foreground 300 "$d/phi_probe" --ms 60 --reps 5 --blocks $blocks > "$OUT/phi-probe-b$blocks.json" \
+        2> "$OUT/phi-probe-b$blocks.err"; then
+      stamp "phi probe b$blocks ok"
+    else
+      stamp "phi probe b$blocks FAILED rc=$?"
+    fi
+  done
 }
 
 leased() {
