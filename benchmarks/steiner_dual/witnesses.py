@@ -47,8 +47,51 @@ def strassen_mod2():
     return len(M)
 
 
+def strassen_sets_any_field(p):
+    """Strassen transformed by W -> W R (R = [[1,0],[1,1]]) on the output side: every output pattern is a scalar
+    multiple of a 0/1 set, so <2,2,2> = sum_i R_i (x) 1_{S_i} with 7 rank-1 R_i over every field (checked over the
+    integers mod p, p = 0 meaning exact integers). The sets are not laminar ({11,21} and {21,22})."""
+    Rm = np.array([[1, 0], [1, 1]])
+    Rinv = np.array([[1, 0], [-1, 1]])
+    W = [np.array(w) for w in ([[1, 0], [0, 1]], [[0, 0], [1, -1]], [[0, 1], [0, 1]], [[1, 0], [1, 0]],
+                               [[-1, 1], [0, 0]], [[0, 0], [0, 1]], [[1, 0], [0, 0]])]
+    # Strassen's products as (u over A_rk, v over B_kc) with signs; A = X, B = Y R^{-1}
+    prods = [({(0, 0): 1, (1, 1): 1}, {(0, 0): 1, (1, 1): 1}), ({(1, 0): 1, (1, 1): 1}, {(0, 0): 1}),
+             ({(0, 0): 1}, {(0, 1): 1, (1, 1): -1}), ({(1, 1): 1}, {(1, 0): 1, (0, 0): -1}),
+             ({(0, 0): 1, (0, 1): 1}, {(1, 1): 1}), ({(1, 0): 1, (0, 0): -1}, {(0, 0): 1, (0, 1): 1}),
+             ({(0, 1): 1, (1, 1): -1}, {(1, 0): 1, (1, 1): 1})]
+    T = fq.matmul_targets(2)
+    total = {pos: np.zeros((4, 4), dtype=np.int64) for pos in T}
+    sets = []
+    for (ua, vb), w in zip(prods, W):
+        u = np.zeros(4, dtype=np.int64)
+        for (r, k), s in ua.items():
+            u[r * 2 + k] += s
+        # v over B_kc with B = Y R^{-1}: B_kc = sum_j Y_kj Rinv[j, c]  ->  coefficient of y_kj
+        v = np.zeros(4, dtype=np.int64)
+        for (k, c), s in vb.items():
+            for j in range(2):
+                v[k * 2 + j] += s * Rinv[j, c]
+        wp = w @ Rm
+        nz = wp[wp != 0]
+        assert len(set(nz.tolist())) == 1, wp
+        lam = int(nz[0])
+        S = {(r, c) for r in range(2) for c in range(2) if wp[r, c]}
+        sets.append(sorted(S))
+        Rk = lam * np.outer(u, v)
+        for pos in S:
+            total[pos] = total[pos] + Rk
+    for pos in T:
+        d = total[pos] - T[pos]
+        assert not (d % p if p else d).any(), pos
+    return sets
+
+
 if __name__ == "__main__":
     rz, tot = cellsum()
     print("cellwise exchange sum:", tot, "> rank Z =", rz)
     assert tot == rz + 1
     print("Strassen mod 2 set decomposition of <2,2,2>:", strassen_mod2(), "terms")
+    for p in (0, 2, 3, 5):
+        sets = strassen_sets_any_field(p)
+    print("7-term set decomposition of <2,2,2> over Z (hence every field):", sets)
