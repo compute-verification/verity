@@ -61,6 +61,11 @@ def test_degree2_passes_mad_and_fails_mum() -> None:
     assert r["mad"]["add"]["exact"] == 1.0 and r["mum"]["add"]["exact"] == 0.0 and r["mum"]["xor"]["exact"] == 0.0
 
 
+def test_low_bits_find_the_t_functions() -> None:
+    r = attacks.low_bits("u32", 16)
+    assert r["mad"]["k16"] == 1.0 and r["xma"]["k16"] == 1.0 and r["duo"]["k16"] == 0.0 and r["mum"]["k16"] == 0.0
+
+
 def test_xsm_top_bit_cancels() -> None:
     y, z, p0, p1 = sample()
     a, _ = attacks.step("xsm", *attacks.step("xsm", y, z, p0, 4), p1, 5)

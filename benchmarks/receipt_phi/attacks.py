@@ -19,6 +19,7 @@ random-operand work's words).
 - ``linearity``: the block receipt f(P) over b² = 256 words, tested for f(P ∘ Q) = f(P) ∘ f(Q) ∘ f(0)⁻¹ over
   Z/2^32, GF(2)^32 and Z/(2^32 − 1), with the share of exact hits and of output bits that are linear.
 - ``degree2``: the receipt's third derivative over Z/2^32 and GF(2)^32, which vanishes for degree ≤ 2 (Σp²'s class).
+- ``low_bits``: whether the receipt's low k bits depend only on the words' low k bits (a T-function chain's do).
 - ``carries``: ra's chain is linear mod 2^32 − 1 except for one carry per wrapped addition; the number of carries per
   block, and the share of blocks with none, whose receipt the linear form gives exactly.
 - ``anf`` and ``walsh``: the 8-bit analogue of two absorbed words (16 input bits, 8 output bits): the ANF degree of
@@ -440,6 +441,24 @@ def linearity(dist: str, trials: int, seed: int = 2) -> dict:
     return out
 
 
+def low_bits(dist: str, trials: int, seed: int = 12) -> dict:
+    """R1's low-bits shortcut: redraw every word's bits from k up, keep its low k bits, and count the blocks whose
+    receipt keeps its low k bits. A T-function chain keeps all of them (a k-bit matmul gives them); else about 2^-k."""
+    rng = np.random.default_rng(seed)
+    out = {}
+    for kind in KINDS:
+        y0 = np.full(trials, 0x12345678, dtype=np.uint64)
+        P = words(dist, rng, (trials, B2))
+        r0 = receipts(kind, P, y0)
+        r = {}
+        for k in (4, 8, 16):
+            m = U((1 << k) - 1)
+            Q = (P & m) | (rng.integers(0, 1 << 32, size=P.shape, dtype=np.uint64) & ~m & M32)
+            r[f"k{k}"] = float(np.mean((receipts(kind, Q, y0) & m) == (r0 & m)))
+        out[kind] = r
+    return out
+
+
 def degree2(dist: str, trials: int, seed: int = 8) -> dict:
     """The third derivative of the block receipt, Σ_{S ⊆ {P,Q,R}} (−1)^|S| f(ΣS), over Z/2^32 and GF(2)^32: zero for
     every degree-2 f, which is the class the Gram-matrix shortcut on Σp² batches."""
@@ -725,7 +744,7 @@ def main() -> int:
     if args.samples_log2:
         ns = 1 << args.samples_log2
     todo = args.only.split(",") if args.only else ["differential", "chain_end", "three_word", "linearity", "degree2",
-                                                    "carries", "small", "mum_lattice", "mad_sketch", "duo_g"]
+                                                    "low_bits", "carries", "small", "mum_lattice", "mad_sketch", "duo_g"]
     res = {}
     for dist in args.dist.split(","):
         if "differential" in todo:
@@ -739,6 +758,8 @@ def main() -> int:
             res.setdefault("linearity", {})[dist] = linearity(dist, nt)
         if "degree2" in todo:
             res.setdefault("degree2", {})[dist] = degree2(dist, nt >> 3)
+        if "low_bits" in todo:
+            res.setdefault("low_bits", {})[dist] = low_bits(dist, nt >> 2)
         if "carries" in todo:
             res.setdefault("carries_ra", {})[dist] = carries(dist, nt)
     if "small" in todo:
