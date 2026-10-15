@@ -106,7 +106,7 @@ def main(d: Path) -> int:
     peel = XA @ XB.T - EA @ W.T - V @ EB.T
     checks["peel_identity"] = bool((peel == U).all())
     U32 = U.astype(np.int32)
-    for name in ["lt", "plain", "g0", "duo32", "duo64", "duo2_32", "duo2_64", "add3_32"]:
+    for name in ["lt", "plain", "g0", "duo32", "duo64", "duo2_32", "duo2_64", "add3_32", "mul2_32"]:
         checks[f"U_{name}"] = bool((ld(f"U_{name}.bin", np.int32, (m, n)) == U32).all())
 
     # running sums at every 32 columns, as the kernel's s32 words
@@ -130,7 +130,7 @@ def main(d: Path) -> int:
             + g[None, :, None, None] + 8 * (e >> 1)[None, None, :, None])
     cols = (tn[:, None, None, None] * BN + wn[None, :, None, None] * 32 + 8 * np.arange(NI)[None, None, None, :]
             + 2 * q[None, :, None, None] + (e & 1)[None, None, :, None])
-    for name, rs, nch in [("duo32", 32, 8), ("duo64", 64, 8), ("duo2_32", 32, 16), ("duo2_64", 64, 16), ("add3_32", 32, 8)]:
+    for name, rs, nch in [("duo32", 32, 8), ("duo64", 64, 8), ("duo2_32", 32, 16), ("duo2_64", 64, 16), ("add3_32", 32, 8), ("mul2_32", 32, 8)]:
         idx = ((tile[:, None, None] * NCT + ctid[None, :, None]) * nch + np.arange(nch)[None, None, :]).astype(np.uint32)
         y = mix32(np.uint32(seed) ^ mix32(idx))
         z = mix32(y + np.uint32(0x9E3779B9))
@@ -146,7 +146,10 @@ def main(d: Path) -> int:
                             sl = slice(8 * ln + 4 * (t % 2), 8 * ln + 4 * (t % 2) + 4)
                             u = y[:, :, sl] ^ p ^ KK[ln, t]
                             y[:, :, sl] = (u + KA[ln, t] if name == "add3_32" else u * KA[ln, t]) + z[:, :, sl]
-                            z[:, :, sl] = rotl(u, rot_of(nch == 16, ln, t)) + y[:, :, sl]
+                            if name == "mul2_32":
+                                z[:, :, sl] = u * np.uint32(key_mul(ln + 2, t)) + y[:, :, sl]
+                            else:
+                                z[:, :, sl] = rotl(u, rot_of(nch == 16, ln, t)) + y[:, :, sl]
             fin = y[:, :, :8] ^ rotl(z[:, :, :8], 16)
             if nch == 16:
                 fin = fin ^ rotl(y[:, :, 8:] ^ rotl(z[:, :, 8:], 16), 8)

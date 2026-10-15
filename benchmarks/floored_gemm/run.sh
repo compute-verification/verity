@@ -55,13 +55,13 @@ gpu-lease 1 --wait --max-min 30 -- bash -c '
   M=gpu__time_duration.sum,sm__cycles_elapsed.avg,sm__inst_executed_pipe_tensor.sum,sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_elapsed,sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_active,sm__pipe_alu_cycles_active.avg.pct_of_peak_sustained_active,sm__pipe_fma_cycles_active.avg.pct_of_peak_sustained_active,smsp__issue_active.avg.pct_of_peak_sustained_active,dram__throughput.avg.pct_of_peak_sustained_elapsed
   for s in $NCU_SHAPES; do
     IFS=: read -r nm m n k c <<< "$s"
-    for arm in lt plain g0 c d c2 c3; do
+    for arm in lt plain g0 c d c2 c3 c4; do
       ncu --clock-control none --profile-from-start off --metrics $M --csv "$B/fgemm" one $arm $m $n $k $c \
         > "$O/ncu-$nm-$arm.csv" 2>&1 || echo "ncu $nm $arm rc $?" >> "$O/rc.txt"
     done
   done
   for c in Q W; do
-    for arm in g0 c c2 c3; do
+    for arm in g0 c c2 c3 c4; do
       ncu --clock-control none --profile-from-start off --section WarpStateStats --section SchedulerStats --csv \
         "$B/fgemm" one $arm 8192 4096 4096 $c > "$O/ncu-stall-$c-o-$arm.csv" 2>&1 || echo "ncu stall $c $arm rc $?" >> "$O/rc.txt"
       ncu --clock-control none --profile-from-start off --csv \
