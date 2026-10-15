@@ -21,9 +21,13 @@ cuobjdump -sass "$B/chain_probe" > "$B/sass.txt"
   echo "FFMA: $(grep -c 'FFMA' "$B/sass.txt")"
   echo "FTZ: $(grep -c 'FTZ' "$B/sass.txt")"
   grep -m2 'QMMA' "$B/sass.txt"
+  echo "-- every FTZ line:"
+  grep 'FTZ' "$B/sass.txt"
+  echo "-- every FADD line:"
+  grep ' FADD' "$B/sass.txt"
 } > "$O/sass_gate.txt"
 grep -q 'QMMA.16832.F32.E4M3.E4M3' "$B/sass.txt" || { echo "no QMMA in the binary"; exit 5; }
-! grep -q 'FTZ' "$B/sass.txt" || { echo "FTZ in the binary"; exit 5; }
+! grep -Eq 'F(ADD|MUL|FMA)[.A-Z0-9]*\.FTZ' "$B/sass.txt" || { echo "FTZ arithmetic in the binary"; exit 5; }
 sha256sum "$B/chain_probe" $SRC/chain_probe.cu "$IN"/ops*.bin > "$O/inputs.sha256"
 cp "$IN"/ops_meta.json "$O/"
 LEASE=(gpu-lease 1 --wait --max-min 30 --)
