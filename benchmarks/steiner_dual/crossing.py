@@ -112,6 +112,9 @@ def flip_pairs(terms):
     return out
 
 
+best_at = {}
+
+
 def walk_min(p, q, r, steps, rng, t0=2.0, t1=0.2, plus=0.01, start=None, gamma=2):
     """Anneal charge - gamma * saving. Returns the best state with saving > 0 by charge - 2 * saving, and, for each
     saving, the number of accepted states and the least charge among them."""
@@ -119,6 +122,7 @@ def walk_min(p, q, r, steps, rng, t0=2.0, t1=0.2, plus=0.01, start=None, gamma=2
     cur = min_deletion([t[2] for t in terms], 10 ** 6)[0] - gamma * (p * q * r - len(terms))
     best = (10 ** 6, None)
     visits = {}
+    best_at.clear()
     for step in range(steps):
         T = t0 * (t1 / t0) ** (step / steps)
         new = list(terms)
@@ -148,6 +152,8 @@ def walk_min(p, q, r, steps, rng, t0=2.0, t1=0.2, plus=0.01, start=None, gamma=2
             terms, cur = new, c
             n_s, low = visits.get(s_new, (0, charge))
             visits[s_new] = (n_s + 1, min(low, charge))
+            if s_new > 0 and charge <= low:
+                best_at[s_new] = (charge, list(new))
             v = charge - 2 * s_new
             if s_new > 0 and (v, -s_new) < (best[0], -(p * q * r - len(best[1] or ()))):
                 best = (v, list(new))
@@ -167,6 +173,8 @@ def main():
         val, terms, visits = walk_min(p, q, r, steps, rng, plus=0.0, start=start, gamma=gamma)
     print(f"<{p},{q},{r}> seed={seed} gamma={gamma} saving: (accepted states, least charge) "
           f"{dict(sorted(visits.items()))}", flush=True)
+    print(f"<{p},{q},{r}> seed={seed} gamma={gamma} best scheme at each saving: "
+          f"{ {s: (c, sorted(t)) for s, (c, t) in sorted(best_at.items())} }", flush=True)
     if terms is None:
         return
     assert is_scheme(terms, p, q, r)
