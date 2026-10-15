@@ -162,7 +162,7 @@ def rotation(k: int, device) -> torch.Tensor:
         h = hadamard(k // odd)
         if odd > 1:
             r, _ = torch.linalg.qr(torch.randn(odd, odd, generator=g, dtype=torch.float64))
-            h = torch.kron(h, r)
+            h = torch.kron(h.contiguous(), r.contiguous())
         signs = torch.randint(0, 2, (k,), generator=g).double() * 2 - 1
         _ROT[k] = (signs[:, None] * h).to(device)
     return _ROT[k]
@@ -190,8 +190,9 @@ def product(method: str, x: torch.Tensor, w: torch.Tensor, wcache: dict) -> tupl
         ai, sa = quant_rows(x, levels, False)
         s = ai @ bi.T
         bound = float((ai.abs().float() @ bi.abs().float().T).max())
-        return s * sa[:, None] * sb[None, :], {"bound": bound, "acc": acc, "top": float(lv[-1]),
-                                                "a_priori": k * float(lv[-1]) ** 2, "exact": bound <= acc}
+        a_priori = k * float(lv[-1]) ** 2
+        return s * sa[:, None] * sb[None, :], {"bound": bound, "acc": acc, "top": float(lv[-1]), "a_priori": a_priori,
+                                                "exact": bound <= acc, "guaranteed": a_priori <= acc}
     if base in ("fp8_tensor", "fp8_token", "fp8_block"):
         if "w" not in wcache:
             wcache["w"] = fp8_dequant(w @ rotation(k, w.device) if rot else w, base, "w")
@@ -240,6 +241,7 @@ def evaluate(model, ids: torch.Tensor, method: str) -> dict:
     return {"method": method, "tokens": int(ids.shape[1]), "nll": float(nll.mean()), "ppl": float(torch.exp(nll.mean())),
             "seconds": round(time.time() - t0, 1), "worst_linear": worst,
             "exact_all": all(r["exact"] for r in log) if log else None,
+            "guaranteed_all": all(r.get("guaranteed", False) for r in log) if log else None,
             "max_bound_over_acc": max((r["bound"] / r["acc"] for r in exact), default=None),
             "per_linear": log}
 
