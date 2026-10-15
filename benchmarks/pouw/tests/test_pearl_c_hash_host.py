@@ -1,7 +1,8 @@
-"""hash_h3.cuh on the host (pearl_c/hash_host.cpp, built with g++): each -h3 hashing kernel, launched as
-pearl_c_sm120/run.py launches it, writes the bytes the verifier's reference computes: the SHA-512 row digests, the seeds and
-line keys over them at the pinned vectors, the line raws, tickets and tile leaves, and the hm96-sha512 frame-v3-sha512 trees
-under ChaCha20 salts; then run.py's epoch, unit, commit and hashing phases end to end."""
+"""hash_h3.cuh and pearl_c_sm120/hash_fast.cuh on the host (pearl_c/hash_host.cpp, built with g++): each -h3 hashing kernel,
+launched as pearl_c_sm120/run.py launches it, writes the bytes the verifier's reference computes: the SHA-512 row digests
+(s512_rows, and hash_fast.cuh's segment and fold launches), the seeds and line keys over them at the pinned vectors, the line
+raws, tickets and tile leaves (both ways), and the hm96-sha512 frame-v3-sha512 trees under ChaCha20 salts; then run.py's epoch,
+unit, commit and hashing phases end to end with either kernel set."""
 
 from __future__ import annotations
 
@@ -12,11 +13,13 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
 HERE = Path(__file__).resolve().parents[1] / "pearl_c"
+FAST = HERE.parent / "pearl_c_sm120" / "hash_fast.cuh"
 _spec = importlib.util.spec_from_file_location("pearl_c_sm120_run", HERE.parent / "pearl_c_sm120" / "run.py")
 R = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(R)
@@ -50,6 +53,9 @@ class Host:
     def free(self, p: int) -> None:
         self.bufs.pop(p, None)
 
+    def sync(self) -> None:
+        pass
+
     def launch(self, name: str, grid, block: int, smem: int = 0, p=(), i=(), stream=None) -> None:
         a = R.Args()
         for j, v in enumerate(p):
@@ -74,7 +80,8 @@ def host(tmp_path_factory) -> Host:
 
 
 def test_every_hash_kernel_is_built(host):
-    names = set(re.findall(r'extern "C" __global__ void (?:__launch_bounds__\([^)]*\) )?(\w+)\(', (HERE / "hash_h3.cuh").read_text()))
+    names = set(re.findall(r'extern "C" __global__ void (?:__launch_bounds__\([^)]*\) )?(\w+)\(',
+                           (HERE / "hash_h3.cuh").read_text() + FAST.read_text()))
     built = {host.lib.kernel_name(i).decode() for i in range(len(names))}
     assert built == names and host.lib.kernel_name(len(names)) is None
 
@@ -107,6 +114,25 @@ def test_s512_rows_are_row_seg_v1_digests(host, k, rows):
     assert got == b"".join(C.row_digest(x) for x in xs)
     if k in H3_DIGESTS:
         assert got[:64].hex() == H3_DIGESTS[k]
+
+
+def fast_heads(host: Host) -> None:
+    """s512_heads as run.py's Pipeline launches it once a module: the states after every (j, s) segment header and every Q."""
+    host.launch("s512_heads", R.cdiv(R.RS_MAX_SEGS * (R.RS_MAX_SEGS + 1) // 2 + R.RS_MAX_SEGS + 1, 128), 128)
+
+
+@pytest.mark.parametrize("k,rows", [(256, 3), (768, 2), (4096, 2), (14336, 1), (32768, 1)])
+def test_fast_row_digests_are_s512_rows(host, k, rows):
+    """run.py's `row_digests` with hash_fast.cuh's kernels (s512_row_segs, a thread a segment over every row, then s512_folds,
+    a thread a row) writes s512_rows' bytes, `pearl_c.row_digest` of every row, at 1, 3, 16, 56 and 128 segments."""
+    rng = np.random.default_rng(k + 1)
+    xs = [h3_row(k)] + [rng.integers(0, 256, 4 * k, dtype=np.uint8).tobytes() for _ in range(rows - 1)]
+    src, want = host.put(b"".join(xs)), b"".join(C.row_digest(x) for x in xs)
+    fast_heads(host)
+    for sha in ("fast", "ref"):
+        out = host.alloc(64 * rows)
+        R.Pipeline.row_digests(SimpleNamespace(dev=host, k=k, sha=sha), src, out, host.alloc(64 * (k // 256) * rows), rows)
+        assert host.read(out, 64 * rows) == want, sha
 
 
 def unit_block(salt: bytes, root_b: bytes, unit: int) -> bytes:
@@ -166,6 +192,24 @@ def test_h3_tile_leaves_are_the_schemes(host, rows):
     assert host.read(lv, tiles * 64) == b"".join(want)
 
 
+@pytest.mark.parametrize("rows,cols", [(16, 128), (32, 128), (64, 192), (96, 128), (176, 192)])
+def test_fast_tile_leaves_are_s512_tile_leaves(host, rows, cols):
+    """run.py's `tile_leaves` with hash_fast.cuh's kernels (s512_tile_segs over every tile's segments, the full row blocks'
+    tiles first, then s512_folds at 32 segments a full tile and the last block's rows / 2) writes s512_tile_leaves' bytes,
+    each tile's `pearl_c.leaf` under -h3: no full block, one, and one or two beside a partial block of 16, 32 or 48 rows."""
+    rng = np.random.default_rng(rows + cols)
+    c, u = (rng.integers(0, 2**32, (rows, cols), dtype=np.uint64).astype(np.uint32) for _ in range(2))
+    tiles = R.cdiv(rows, 64) * (cols // 64)
+    want = b"".join(C.leaf(C.Checked(c[r0:r0 + 64, c0:c0 + 64].tolist(), u[r0:r0 + 64, c0:c0 + 64].tolist()), "h3")
+                    for r0 in range(0, rows, 64) for c0 in range(0, cols, 64))
+    fast_heads(host)
+    for sha in ("fast", "ref"):
+        b = {"c": host.put(c.astype("<u4").tobytes()), "u": host.put(u.astype("<u4").tobytes()), "leaves": host.alloc(64 * tiles),
+             "segdig_t": host.alloc(64 * 32 * tiles)}
+        R.Pipeline.tile_leaves(SimpleNamespace(dev=host, b=b, m_real=rows, n=cols, tiles=tiles, sha=sha))
+        assert host.read(b["leaves"], 64 * tiles) == want, sha
+
+
 def s512_levels(host: Host, base: int, count: int, dom: int, small: int = 4) -> None:
     """Pads, then s512_nodes up to a level of `small` nodes, then s512_tree_small: run.py's levels under -h3."""
     width = R.pow2(count)
@@ -205,11 +249,13 @@ def test_hm96_trees_are_the_verifiers(host, count, digests, nonce):
     assert want[-64:] == root
 
 
-def test_sm120_h3_phases_are_the_verifiers(host):
+@pytest.mark.parametrize("sha", ["fast", pytest.param("ref", marks=pytest.mark.slow)])
+def test_sm120_h3_phases_are_the_verifiers(host, monkeypatch, sha):
     """pearl_c_sm120/run.py's `Pipeline` under -h3 at 64 x 128 x 1024 (m_real 48: a partial row block), its epoch, unit, commit
-    and hashing phases on the host (every one of their kernels is hash_h3.cuh's): B's HM96 tree under weight 3's nonce, A's
-    under the unit index read from the unit block, seed_A over root_A with its line key, each row's seed and line key, the
-    tile leaves over C~ and U and the transcript tree, each equal to the reference's (`audit.commit_rows`, `pearl_c`)."""
+    and hashing phases on the host with either SHA-512 kernel set (``PEARLC_SHA``: hash_fast.cuh's segment and fold launches,
+    or hash_h3.cuh's s512_rows and s512_tile_leaves): B's HM96 tree under weight 3's nonce, A's under the unit index read from
+    the unit block, seed_A over root_A with its line key, each row's seed and line key, the tile leaves over C~ and U and the
+    transcript tree, each equal to the reference's (`audit.commit_rows`, `pearl_c`)."""
     S = R
     m, n, k, mr, w, idx = 64, 128, 1024, 48, 3, 5
     rng = np.random.default_rng(12)
@@ -226,13 +272,17 @@ def test_sm120_h3_phases_are_the_verifiers(host):
     keys = {"salt_key": salt_key, "hm": audit.hm96_kernel_constants(), "unit": salt + root_b + idx.to_bytes(8, "little"),
             "dom_a": dom_a.domain_id, "dom_b": dom_b.domain_id, "dom_t": dom_t.domain_id, "line_b": bytes(32)}
     host.sms = 4
+    launched, launch = set(), host.launch
+    monkeypatch.setattr(host, "launch", lambda name, *a, **kw: launched.add(name) or launch(name, *a, **kw))
     pipe = S.Pipeline(host, m, n, k, "sm120", {name: host.put(v) for name, v in keys.items()}, host.put(b"".join(a_rows)),
-                      host.put(b"".join(b_rows)), m_real=mr, weight=w)
+                      host.put(b"".join(b_rows)), m_real=mr, weight=w, sha=sha)
     for name, words in (("c", c), ("u", u)):
         host.bufs[pipe.b[name]][:m * n * 4] = np.frombuffer(words.astype("<u4").tobytes(), np.uint8)
     names = [nm for nm, phase, step in pipe.steps() if phase in ("epoch", "unit", "commit", "hashing") and (step() or True)]
     assert names == ["rowdig_b", "hash_rows_b", "tree_b", "pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a",
                      "hash_leaf", "tree_leaves_t", "tree_t"]
+    fast, ref = {"s512_row_segs", "s512_tile_segs", "s512_folds"}, {"s512_rows", "s512_tile_leaves"}
+    assert (launched & fast, launched & ref) == ((fast, set()) if sha == "fast" else (set(), ref))
 
     def levels(dom, values, nonce):
         salted = [v + audit.hm96_salt(salt_key, nonce, i) for i, v in enumerate(values)]
@@ -249,3 +299,25 @@ def test_sm120_h3_phases_are_the_verifiers(host):
             "leaves": b"".join(leaves), "tree_t": levels(dom_t, leaves, audit.HM96_TRANSCRIPT)}
     assert want["tree_b"][-64:] == root_b
     assert {name: host.read(pipe.b[name], len(v)) == v for name, v in want.items()} == dict.fromkeys(want, True)
+
+
+def test_a_caller_without_the_scratch_runs_the_reference_kernels(host, monkeypatch):
+    """A caller that owns the buffers and gives no `segdig_<tree>` (pouw_pearl_c_device's) gets s512_rows and s512_tile_leaves
+    under the default sha, writing the scheme's row digests and tile leaves."""
+    m, n, k, mr = 64, 128, 1024, 16
+    rng = np.random.default_rng(3)
+    a_rows = [rng.integers(0, 256, 4 * k, dtype=np.uint8).tobytes() for _ in range(m)]
+    c, u = (rng.integers(0, 2**32, (m, n), dtype=np.uint64).astype(np.uint32) for _ in range(2))
+    bufs = {name: host.alloc(size) for name, size in R.Pipeline.sizes(m, n, k, mr).items() if name not in R.SEGDIG}
+    for name, words in (("c", c), ("u", u)):
+        host.bufs[bufs[name]][:m * n * 4] = np.frombuffer(words.astype("<u4").tobytes(), np.uint8)
+    launched, launch = [], host.launch
+    monkeypatch.setattr(host, "launch", lambda name, *a, **kw: launched.append(name) or launch(name, *a, **kw))
+    monkeypatch.delenv("PEARLC_SHA", raising=False)
+    pipe = R.Pipeline(host, m, n, k, "sm120", dict.fromkeys(R.TIMING_KEYS, 0), host.put(b"".join(a_rows)), 0, bufs=bufs, m_real=mr)
+    by = {name: step for name, _, step in pipe.steps()}
+    by["rowdig_a"](), by["hash_leaf"]()
+    assert pipe.sha == "fast" and launched == ["s512_rows", "s512_tile_leaves"]
+    assert host.read(bufs["rowdig_a"], 64 * mr) == b"".join(C.row_digest(r) for r in a_rows[:mr])
+    assert host.read(bufs["leaves"], 64 * pipe.tiles) == b"".join(
+        C.leaf(C.Checked(c[:mr, c0:c0 + 64].tolist(), u[:mr, c0:c0 + 64].tolist()), "h3") for c0 in range(0, n, 64))
