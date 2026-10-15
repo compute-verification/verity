@@ -270,14 +270,16 @@ __global__ void __launch_bounds__(TPB) probe_k(uint32_t* out, int iters, uint32_
 // accumulator sets (the stride's first MMA reads C from one and writes D to the other, as mma.sync allows), so the
 // next stride's MMAs never wait for the absorb to read the words; bit 1: INT8 IMMA (s8 x s8 into INT32), PoUW's
 // arithmetic, instead of FP8 E4M3 into FP32; bit 2 (with bit 0): the absorb interleaved with the next stride's MMAs
-// (`il_stride`) instead of issued as one burst. K = -1 is the MMAs alone; K >= NK are controls with the absorb's
-// instruction count: FI_IMAD / FI_LOP3 / FI_FADD (4 per tile, chains that never read an accumulator) and ACC_LOP3
-// (one LOP3 per accumulator word into its own register, no chain).
+// (`il_stride`) instead of issued as one burst; bit 3: each warp starts rank·64C clocks late, rank its SM warp slot
+// / 4 (its place among its SMSP's warps), which spreads the warps' absorbs over a stride instead of starting them in
+// lockstep (64C clocks is one warp's INT8 MMAs of a stride). K = -1 is the MMAs alone; K >= NK are controls with the
+// absorb's instruction count: FI_IMAD / FI_LOP3 / FI_FADD (4 per tile, chains that never read an accumulator) and
+// ACC_LOP3 (one LOP3 per accumulator word into its own register, no chain).
 constexpr int FT = 4;
 enum Control { FI_IMAD = NK, FI_LOP3, FI_FADD, ACC_LOP3, NF };
 static const char* CONTROL_NAME[NF - NK] = {"fill-imad", "fill-lop3", "fill-fadd", "acc-lop3"};
-constexpr int NM = 6;  // FUSED's mode index, over MODE = 0, 1, 2, 3, 5, 7
-static const char* MODE_NAME[NM] = {"fp8", "fp8pp", "s8", "s8pp", "fp8il", "s8il"};
+constexpr int NM = 8;  // FUSED's mode index, over MODE = 0, 1, 2, 3, 5, 7, 10, 11
+static const char* MODE_NAME[NM] = {"fp8", "fp8pp", "s8", "s8pp", "fp8il", "s8il", "s8st", "s8ppst"};
 
 __device__ __forceinline__ void mma_ip(float (&d)[4], const uint32_t (&a)[4], const uint32_t (&b)[2]) {
   asm volatile(
@@ -429,6 +431,13 @@ __global__ void __launch_bounds__(TPB) fused_k(uint32_t* out, int iters, uint32_
     asm volatile("" : "+r"(xw[j][0]), "+r"(xw[j][1]), "+r"(xw[j][2]), "+r"(xw[j][3]));
   }
   __syncthreads();
+  if constexpr ((MODE & 8) != 0) {
+    uint32_t slot;
+    asm volatile("mov.u32 %0, %%warpid;" : "=r"(slot));
+    const long long d = (long long)(slot >> 2) * 64 * C, s0 = clock64();
+    while (clock64() - s0 < d) {
+    }
+  }
   const long long t0 = clock64();
   if constexpr (!PP) {
 #pragma unroll 1
@@ -500,7 +509,7 @@ static const int CS[NC] = {1, 2, 4, 8, 16, 32};
    FROW(7, M),  FROW(8, M), FROW(9, M), FROW(10, M), FROW(11, M), FROW(12, M), FROW(13, M), FROW(14, M),  \
    FROW(15, M)}
 static_assert(NF == 16, "FMODE lists every fused kind");
-static KFn FUSED[NM][NF + 1][NC] = {FMODE(0), FMODE(1), FMODE(2), FMODE(3), FMODE(5), FMODE(7)};
+static KFn FUSED[NM][NF + 1][NC] = {FMODE(0), FMODE(1), FMODE(2), FMODE(3), FMODE(5), FMODE(7), FMODE(10), FMODE(11)};
 
 static const char* fused_name(int k) { return k < 0 ? "none" : k < NK ? KIND_NAME[k] : CONTROL_NAME[k - NK]; }
 

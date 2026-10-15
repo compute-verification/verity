@@ -15,7 +15,8 @@ tensor time at every stride, so the total is T(L) = 8 h/L + 7L/n, least at L* = 
 h adds the page's Merkle term (0.4 slots a word, B200's, not measured here) to φ's.
 
 Each mode's rel is over its own bare loop: the interleaved modes' (fp8il, s8il) MMAs chain through a LOP3 each, and the
-bare rates line shows what that costs against peak (8 MMA lanes a clock is 1024 MACs). `fused-occ2.jsonl`, when
+bare rates line shows what that costs against peak (8 MMA lanes a clock is 1024 MACs). The staggered modes (s8st,
+s8ppst) start each warp of an SMSP a share of a stride late. `fused-occ2.jsonl`, when
 present, is the same sweep with every kernel pinned to 2 blocks per SM.
 """
 
@@ -28,7 +29,7 @@ import math
 import statistics
 from pathlib import Path
 
-MODES = ("fp8", "fp8pp", "s8", "s8pp", "fp8il", "s8il")
+MODES = ("fp8", "fp8pp", "s8", "s8pp", "fp8il", "s8il", "s8st", "s8ppst")
 CS = (1, 2, 4, 8, 16, 32)
 STEADY = (4, 8, 16, 32)
 LOOP = 3  # UIADD3, UISETP, BRA
@@ -103,7 +104,7 @@ def main() -> int:
         modes = sorted({m for m, _ in base}, key=MODES.index)
         print(f"\nBare loop MMA lanes per SM-clock{tag}: "
               + ", ".join(f"{m} {statistics.median(base[(m, c)] for c in CS):.3f}" for m in modes))
-        for mode in [m for m in ("fp8", "s8", "s8il") if m in modes]:
+        for mode in [m for m in ("fp8", "s8", "s8il", "s8ppst") if m in modes]:
             print(f"\n{mode}{tag}: MMA rate over the bare loop's at L = 32 C, and h_eff (median over C = 4..32)\n")
             print("| kind | " + " | ".join(f"L={32 * c}" for c in CS) + " | h_eff |")
             print("|---|" + "---|" * (len(CS) + 1))
@@ -123,7 +124,8 @@ def main() -> int:
             ("issue", "smsp__issue_active.avg.pct_of_peak_sustained_active")]
     for title, stem in [("L = 32 (s8)", "ncu-fused-2"), ("L = 32 (s8il)", "ncu-fused-5"),
                         ("L = 256 (s8pp, 2 blocks per SM)", "ncu-fused-c8-3"),
-                        ("L = 256 (s8il, 2 blocks per SM)", "ncu-fused-c8-5")]:
+                        ("L = 256 (s8il, 2 blocks per SM)", "ncu-fused-c8-5"),
+                        ("L = 256 (s8ppst, 2 blocks per SM)", "ncu-fused-c8-7")]:
         rows = [(k, ncu(o / f"{stem}-{row}.csv")) for row, k in enumerate(["none"] + kinds + controls)]
         if not any(m for _, m in rows):
             continue
