@@ -117,7 +117,7 @@ def test_the_readings_and_thresholds_the_protocol_states() -> None:
             assert timing.sketch_failure(c, 0, rows) <= Fraction(1, 2 ** bits) < timing.sketch_failure(c + 1, 0, rows)
             assert round(math.log2(c), 2) == want
     assert timing.sketch_rate(16, 11) == Fraction(1, 2 ** 88) + 128 * timing.sign_rank_at_most(16, 10)
-    node_day, passes = round(8 * timing.SHA512_PER_S * 86400), 86400 * 50
+    node_day, passes = round(timing.SHA512_PER_S * 86400), 86400 * 50
     assert timing.sketch_failure(node_day, passes) == timing.sketch_failure(node_day, passes, r=12)
     assert lg(timing.sketch_failure(node_day, passes)) == -43.02
     assert timing.sketch_failure(30 * node_day, 30 * passes) > Fraction(1, 2 ** 40)
