@@ -212,12 +212,15 @@ class Pouw:
 
 
 class Gemm:
-    """A plain dense GEMM on a stream of its own, `per_step` at a time, at most two steps in flight."""
+    """A plain dense GEMM on a stream of its own, `per_step` at a time, at most two steps in flight. At `duty` < 1 each
+    GEMM is followed on its stream by a one-CTA spin (`torch.cuda._sleep`) as long as `1/duty - 1` GEMMs alone, timed
+    here before anything else runs: a GEMM that holds the tensor pipe that fraction of the time."""
 
-    def __init__(self, shape: tuple[int, int, int], dtype: str, log, per_step: int = 4):
+    def __init__(self, shape: tuple[int, int, int], dtype: str, log, per_step: int = 4, duty: float = 1.0):
         import torch
 
         self.torch, self.shape, self.dtype, self.per_step, self.log = torch, shape, dtype, per_step, log
+        self.duty, self.sleep_cycles = duty, 0
         m, n, k = shape
         self.stream = torch.cuda.Stream()
         with torch.cuda.stream(self.stream):
@@ -238,8 +241,25 @@ class Gemm:
             del a32, b32, y, ref
             for _ in range(2 * per_step):
                 self.f()
+            if duty < 1.0:
+                e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+                e0.record()
+                for _ in range(16):
+                    self.f()
+                e1.record()
+                e1.synchronize()
+                gemm_ms = e0.elapsed_time(e1) / 16
+                cal = 1 << 24
+                e0.record()
+                torch.cuda._sleep(cal)
+                e1.record()
+                e1.synchronize()
+                self.sleep_cycles = int(cal / e0.elapsed_time(e1) * gemm_ms * (1 / duty - 1))
+                self.duty_cal = {"gemm_ms_alone": gemm_ms, "sleep_cycles": self.sleep_cycles}
+                log(f"gemm: duty {duty} {self.duty_cal}")
         torch.cuda.synchronize()
-        self.check = {"shape": list(shape), "dtype": dtype, "rows_checked": 64, "max_rel_err": err}
+        self.check = {"shape": list(shape), "dtype": dtype, "rows_checked": 64, "max_rel_err": err, "duty": duty,
+                      "sleep_cycles": self.sleep_cycles}
         log(f"gemm: check {self.check}")
         if not err < 1e-2:
             raise SystemExit(f"the GEMM's first 64 rows are off by {err} of their max")
@@ -257,6 +277,8 @@ class Gemm:
                 step = min(self.per_step, count - n) if count else self.per_step
                 for _ in range(step):
                     self.f()
+                    if self.sleep_cycles:
+                        torch.cuda._sleep(self.sleep_cycles)
                 n += step
                 ring[i % 2].record()
                 if i:
@@ -270,7 +292,8 @@ class Gemm:
         ms = ev[0].elapsed_time(ev[1])
         m, nn, k = self.shape
         return {"gemms": n, "gpu_ms": ms, "wall_s": wall, "gemms_per_s": n / (ms / 1e3), "gemm_ms": ms / n,
-                "tflops": 2 * m * nn * k * n / (ms / 1e3) / 1e12, "shape": list(self.shape), "dtype": self.dtype}
+                "tflops": 2 * m * nn * k * n / (ms / 1e3) / 1e12, "shape": list(self.shape), "dtype": self.dtype,
+                "duty": self.duty, "sleep_cycles": self.sleep_cycles}
 
     def profiler(self, on: bool) -> None:
         (self.torch.cuda.profiler.start if on else self.torch.cuda.profiler.stop)()
@@ -358,6 +381,7 @@ def main() -> int:
     ap.add_argument("--pouw-priority", type=int, help="Pearl-C's stream's priority (default: a plain stream's, 0)")
     ap.add_argument("--gemm-shape", default="8192x8192x8192")
     ap.add_argument("--gemm-dtype", choices=("fp8", "bf16"), default="fp8")
+    ap.add_argument("--gemm-duty", type=float, default=1.0, help="the fraction of the time the GEMM runs, alone")
     ap.add_argument("--gib", type=float, default=16.0)
     ap.add_argument("--sketch-ctas", type=int, default=128)
     ap.add_argument("--chunk-log2", type=int, default=18)
@@ -387,7 +411,7 @@ def main() -> int:
         pouw = Pouw(pc, a.ship, pc.parse_shape(a.shape), a.weights, a.graph_calls, not a.no_graph, a.pouw_priority, log)
         out["pouw_check"] = pouw.check
     if a.mode in ("gemm", "gemmjoint"):
-        gemm = Gemm(pc.parse_shape(a.gemm_shape), a.gemm_dtype, log)
+        gemm = Gemm(pc.parse_shape(a.gemm_shape), a.gemm_dtype, log, duty=a.gemm_duty)
         out["gemm_check"] = gemm.check
     gc.collect()
     gc.freeze()

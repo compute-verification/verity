@@ -11,7 +11,7 @@
 # PHASES (comma-separated): pouw<M>, audit, joint<M>, procs<M>, gemm, gemmjoint, each optionally nsys:, nsysk: (nsys
 # with each graph's kernels traced) or ncu: prefixed; M is Pearl-C's m (n = k = 8192). Suffixes: _h9 the audit at
 # h0 = 9 (the pass's unfused tree path), _p0 its side stream at priority 0, _q Pearl-C's stream at the greatest priority,
-# _bf16 the GEMM in BF16. SECONDS_RATE, SECONDS_NSYS: each window; WEIGHTS: Pearl-C's distinct weights; GIB: the store.
+# _bf16 the GEMM in BF16, _d<P> the GEMM at P% duty. SECONDS_RATE, SECONDS_NSYS: each window; WEIGHTS: Pearl-C's distinct weights; GIB: the store.
 set -uo pipefail
 ulimit -c 0
 OUT=${OUT:-${RESEARCH_RUN_DIR:?}/out}; mkdir -p "$OUT"
@@ -67,6 +67,7 @@ enforced.power.limit,power.max_limit,temperature.gpu,memory.used,memory.total --
     case $b in *_p0*) x="$x --side-priority 0" ;; esac
     case $b in *_q*) x="$x --pouw-priority -99" ;; esac
     case $b in *_bf16*) x="$x --gemm-dtype bf16" ;; esac
+    case $b in *_d[0-9]*) x="$x --gemm-duty $(echo "$b" | sed -n "s/.*_d\([0-9]*\).*/\1/p" | awk "{print \$1 / 100}")" ;; esac
     b=${b%%_*}
     case $b in
       gemmjoint) echo --mode gemmjoint $x ;;

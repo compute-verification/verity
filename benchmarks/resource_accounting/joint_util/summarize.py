@@ -176,6 +176,37 @@ def gemm_table(d: Path, v: str, dtype: str) -> dict | None:
     return out
 
 
+def duty_curve(d: Path, v: str) -> list[dict]:
+    """The FP8 GEMM at each duty (`_d<P>`, and 100% unsuffixed), alone and beside the audit: its TFLOPS and the audit's
+    passes/s and pass time."""
+    ar = load(d / f"audit{v}.json")
+    duties = sorted({int(p.stem.rsplit("_d", 1)[1]) for p in d.glob("gemm*_d*.json") if p.stem.rsplit("_d", 1)[1].isdigit()})
+    out = []
+    for pct in duties + [100]:
+        s = "" if pct == 100 else f"_d{pct}"
+        g, j = load(d / f"gemm{s}.json"), load(d / f"gemmjoint{v}{s}.json")
+        if not j:
+            continue
+        row = {"duty": pct / 100, "tflops_alone": g and g["gemm"]["tflops"], "tflops_joint": j["gemm"]["tflops"],
+               "passes_per_s_joint": j["audit"]["passes_per_s"], "pass_gpu_ms_p50": j["audit"]["pass_gpu_ms_p50"],
+               "pass_gpu_ms_max": j["audit"]["pass_gpu_ms_max"], "power_w": j["nvml"].get("power_w_median")}
+        if ar:
+            row["audit_slowdown"] = ar["audit"]["passes_per_s"] / j["audit"]["passes_per_s"]
+            row["audit_alone_pass_gpu_ms_p50"] = ar["audit"]["pass_gpu_ms_p50"]
+        out.append(row)
+    return out
+
+
+def show_duty(rows: list[dict]) -> str:
+    out = ["| GEMM duty | TFLOPS alone | TFLOPS beside the audit | audit passes/s | audit slowdown | pass ms p50 (max) | W |",
+           "|---|---|---|---|---|---|---|"]
+    f = lambda x, p=1: "-" if x is None else f"{x:.{p}f}"  # noqa: E731
+    out += [f"| {r['duty']:.0%} | {f(r['tflops_alone'])} | {f(r['tflops_joint'])} | {f(r['passes_per_s_joint'], 2)} | "
+            f"{f(r.get('audit_slowdown'), 3)} | {f(r['pass_gpu_ms_p50'], 2)} ({f(r['pass_gpu_ms_max'], 2)}) | {f(r['power_w'])} |"
+            for r in rows]
+    return "\n".join(out)
+
+
 def fmt(x) -> str:
     return "-" if x is None else f"{100 * x:5.1f}%"
 
@@ -220,10 +251,12 @@ def main() -> int:
     ts = [table(a.out, m, a.variant) for m in ms]
     ks = [k for k in (stretch(a.out, m, a.variant) for m in ms) if k]
     gs = [g for g in (gemm_table(a.out, a.variant, dt) for dt in ("fp8", "bf16")) if g]
+    dc = duty_curve(a.out, a.variant)
     if a.json:
-        print(json.dumps({"tables": ts, "stretch": ks, "gemm": gs}, indent=1))
+        print(json.dumps({"tables": ts, "stretch": ks, "gemm": gs, "duty": dc}, indent=1))
     else:
-        print("\n\n".join([show(t) for t in ts] + [show_stretch(k) for k in ks] + [show_gemm(g) for g in gs]))
+        print("\n\n".join([show(t) for t in ts] + [show_stretch(k) for k in ks] + [show_gemm(g) for g in gs]
+                          + ([show_duty(dc)] if dc else [])))
     return 0
 
 
