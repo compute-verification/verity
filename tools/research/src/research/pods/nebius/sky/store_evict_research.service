@@ -1,0 +1,13 @@
+# /etc/systemd/system/vy-store-evict-research.service on vy-nebius-cpu-1 (`research deploy` installs it; vy-nebius-1's is written
+# by cluster_up.sh): research's store eviction, which with src.conf also deletes the unused, recoverable `research run` source
+# trees of /workspace/research/src. cpu-1 is inode-bound (concurrent check and Lean trees), so its timer runs every 30 minutes.
+[Unit]
+Description=store eviction: drop local copies of research runs the remote store holds
+
+[Service]
+Type=oneshot
+User=research
+Nice=19
+IOSchedulingClass=idle
+Environment=VY_EVICT_STORE=/workspace/research/store VY_EVICT_RUNS=/workspace/research/runs
+ExecStart=/usr/local/bin/vy-store-evict
