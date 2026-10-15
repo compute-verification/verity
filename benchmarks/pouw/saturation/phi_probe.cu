@@ -13,9 +13,11 @@
 //   mode 2  PER mma rounds then one phi step per accumulator word, the receipt at commit stride 32 * PER
 //   mode 3  the same stride, staggered: PER rounds on half A, the receipt of half B (written a half-body ago), PER rounds on
 //           B, the receipt of A; so no receipt waits on an mma in flight
-// Gates (exit 3, before any rate is printed): every mode-2/3 kernel's accumulators equal mode 0's after the same mma rounds (so
-// the phi work did not change what the tensor cores computed), two launches of every kernel agree, and mode 1's thread-0 chains
-// equal a host recomputation.
+//   mode 4  mode 3 with each half's receipt spread across the other half's mma.sync (a slice of words after every QMMA), so
+//           each warp's instruction stream alternates the two pipes instead of running one at a time
+// Gates (exit 3, before any rate is printed): every mode-2/3/4 kernel's accumulators equal mode 0's after the same mma rounds
+// (so the phi work did not change what the tensor cores computed), every mode-4 kernel's outputs equal its mode-3 twin's, two
+// launches of every kernel agree, and mode 1's thread-0 chains equal a host recomputation.
 //
 //   nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -o phi_probe phi_probe.cu
 //   ./phi_probe [--ms 60] [--reps 5] [--blocks 2] [--only KERNEL,KERNEL]
@@ -90,6 +92,21 @@ __device__ __forceinline__ void mma_rounds(float (&c)[NACC][4], const uint32_t (
     }
 }
 
+template <int ROUNDS, int VAR, int J0, int PER>
+__device__ __forceinline__ void interleaved(float (&c)[NACC][4], const uint32_t (&a)[4], const uint32_t (&b)[2],
+                                            uint32_t (&y)[NACC], uint32_t s) {
+    constexpr int H = NACC / 2, Q = H * PER, U = H * 4, R0 = H - J0;
+#pragma unroll
+    for (int q = 0; q < Q; q++) {
+        mma(c[J0 + q % H], a, b);
+#pragma unroll
+        for (int u = q * U / Q; u < (q + 1) * U / Q; u++) {
+            const int j = R0 + u / 4, w = u % 4;
+            y[j] = phi<ROUNDS, VAR>(y[j], __float_as_uint(c[j][w]), s, key(j, w));
+        }
+    }
+}
+
 template <int MODE, int PER, int ROUNDS, int VAR>
 __global__ void __launch_bounds__(THREADS, 2)
     probe(const uint32_t* __restrict__ in, uint32_t* __restrict__ out, long long* __restrict__ clk, int outer) {
@@ -120,8 +137,13 @@ __global__ void __launch_bounds__(THREADS, 2)
             mma_rounds<NACC / 2, NACC, PER>(c, a, b);
             receipt<ROUNDS, VAR, 0, NACC / 2>(y, c, s);
         }
+        if (MODE == 4) {
+            ++s;
+            interleaved<ROUNDS, VAR, 0, PER>(c, a, b, y, s);
+            interleaved<ROUNDS, VAR, NACC / 2, PER>(c, a, b, y, s);
+        }
     }
-    if (MODE == 3) receipt<ROUNDS, VAR, NACC / 2, NACC>(y, c, s + 1);
+    if (MODE >= 3) receipt<ROUNDS, VAR, NACC / 2, NACC>(y, c, s + 1);
     const long long t1 = clock64();
     uint32_t cx = 0, yx = 0;
 #pragma unroll
@@ -179,7 +201,12 @@ static const Kernel KERNELS[] = {
     K(3, 1, 1, 1), K(3, 2, 1, 1), K(3, 4, 1, 1), K(3, 8, 1, 1),
     K(3, 1, 2, 0), K(3, 2, 2, 0), K(3, 4, 2, 0), K(3, 8, 2, 0),
     K(3, 1, 2, 1), K(3, 2, 2, 1), K(3, 4, 2, 1), K(3, 8, 2, 1),
-    K(2, 3, 1, 0), K(2, 3, 2, 0), K(2, 3, 2, 1), K(3, 3, 1, 0), K(3, 3, 2, 0), K(3, 3, 2, 1),
+    K(2, 3, 1, 0), K(2, 3, 1, 1), K(2, 3, 2, 0), K(2, 3, 2, 1),
+    K(3, 3, 1, 0), K(3, 3, 1, 1), K(3, 3, 2, 0), K(3, 3, 2, 1),
+    K(4, 1, 1, 0), K(4, 2, 1, 0), K(4, 3, 1, 0), K(4, 4, 1, 0), K(4, 8, 1, 0),
+    K(4, 1, 1, 1), K(4, 2, 1, 1), K(4, 3, 1, 1), K(4, 4, 1, 1), K(4, 8, 1, 1),
+    K(4, 1, 2, 0), K(4, 2, 2, 0), K(4, 3, 2, 0), K(4, 4, 2, 0), K(4, 8, 2, 0),
+    K(4, 1, 2, 1), K(4, 2, 2, 1), K(4, 3, 2, 1), K(4, 4, 2, 1), K(4, 8, 2, 1),
 };
 
 struct Launch {
@@ -283,6 +310,15 @@ int main(int argc, char** argv) {
                 fprintf(stderr, "GATE %s: accumulators differ from mode 0 after %d mma rounds\n", k.name.c_str(), rounds);
                 return 3;
             }
+            if (k.mode == 4) {
+                const Kernel* twin = nullptr;
+                for (const Kernel& t : KERNELS)
+                    if (t.mode == 3 && t.per == k.per && t.rounds == k.rounds && t.var == k.var) twin = &t;
+                if (!twin || launch(*twin, d_in, grid, outer).out != runs[0].out) {
+                    fprintf(stderr, "GATE %s: outputs differ from mode 3's\n", k.name.c_str());
+                    return 3;
+                }
+            }
         } else {
             const std::vector<uint32_t> want = k.chains(in, outer);
             for (int j = 0; j < NACC; j++)
@@ -296,7 +332,7 @@ int main(int argc, char** argv) {
         const double warps = (double)nthreads / 32;
         for (const Launch& r : runs) {
             const double macs = k.mode == 1 ? 0 : warps * outer * k.per * NACC * 4096.0;
-            const double phis = k.mode == 0 ? 0 : (double)nthreads * 4 * (outer * NACC + (k.mode == 3 ? NACC / 2 : 0));
+            const double phis = k.mode == 0 ? 0 : (double)nthreads * 4 * (outer * NACC + (k.mode >= 3 ? NACC / 2 : 0));
             mac_rate.push_back(macs / (sms * r.span_cycles));
             phi_rate.push_back(phis / (sms * r.span_cycles));
             mhz.push_back(r.span_cycles / (r.ms * 1e3));

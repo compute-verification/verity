@@ -11,7 +11,7 @@
 #   ncu_prefill (not default): the same for one eager 2,048-token prefill step
 #   phi    (not default) lease 1: phi_probe.cu, a keyed ARX receipt step over register-resident E4M3 mma.sync accumulators
 #          at commit strides L = 32 ... 256 (gated), at 2 and 4 blocks an SM; its SASS and an opcode count per kernel; ncu's
-#          warp-state, scheduler and pipe sections over five of its kernels
+#          warp-state, scheduler and pipe sections over seven of its kernels
 # Timeouts run in the foreground so `research cancel` reaches the GPU process.
 # Untimed diagnostic (tier 2a): one leased GPU, the fill queue keeps running beside it.
 set -euo pipefail
@@ -106,7 +106,8 @@ phi() {
       stamp "phi probe b$blocks FAILED rc=$?"
     fi
   done
-  local pick=mode0_per1_r1_alu,mode1_per1_r1_alu,mode2_per1_r1_alu,mode2_per2_r1_alu,mode2_per3_r2_alu
+  local pick=mode0_per1_r1_alu,mode1_per1_r1_alu,mode2_per1_r1_alu,mode2_per2_r1_alu,mode2_per3_r2_alu,mode4_per2_r1_alu
+  pick+=,mode4_per3_r2_alu
   stamp "phi ncu"
   if timeout --foreground 600 "$NCU" --clock-control none --section LaunchStats --section WarpStateStats \
       --section SchedulerStats --section ComputeWorkloadAnalysis --export "$d/phi-ncu" --force-overwrite \
