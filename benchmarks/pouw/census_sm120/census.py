@@ -8,6 +8,7 @@ backward-branch range) are counted, so a rate is for what ptxas emitted, not for
     python3 census.py OUT_DIR [RUN_ID]
     python3 census.py --merge MERGED.json OUT_DIR...   # every run's rows in one file, with each constant's spread
     python3 census.py --amx OUT_DIR                    # host_amx.sh's AMX table (amx_summary)
+    python3 census.py --units OUT_DIR...               # units.sh's texture and RT rows (units_summary)
 """
 
 import json
@@ -419,10 +420,80 @@ def amx_summary(out):
     print(f"{len(rows)} AMX rows, {len(gemm)} GEMM batches -> {out / 'amx-summary.json'}")
 
 
+GPU_SMS = 188
+GPU_FP8_MACS_PER_SM_CLOCK = 1024
+ISSUE_SLOT_PRICE = 4096  # the issue certificate's MACs a warp instruction (the converged model, A1u)
+# An estimate, not a measurement: Moller-Trumbore's FP32 multiplies a ray-triangle test (2 cross products, 3 dot
+# products, the reciprocal's 3 scalings). The RT core's algorithm isn't published.
+RT_MACS_PER_TEST = 27
+
+
+def smi_clock_mhz(out, part):
+    clk, reasons = [], Counter()
+    path = out / f"{part}-smi-during.csv"
+    for line in path.read_text().splitlines()[1:] if path.exists() else []:
+        p = [x.strip() for x in line.split(",")]
+        try:
+            clk.append(float(p[1].split()[0]))
+            reasons[p[4]] += 1
+        except (IndexError, ValueError):
+            pass
+    return (statistics.median(clk) if clk else None), dict(reasons)
+
+
+def units_summary(outs):
+    """units.sh's outputs -> units-summary.json and units.md beside the first: each texture case and the RT fit, as a
+    rate a SM a clock (clock-independent), a rate a GPU at each node clock, MAC-equivalents, the share of one GPU's FP8
+    tensor capacity, and the MAC-equivalents one issued warp instruction drives (against ISSUE_SLOT_PRICE)."""
+    cap = {mhz: GPU_SMS * GPU_FP8_MACS_PER_SM_CLOCK * mhz * 1e6 for mhz in NODE_CLOCKS_MHZ}
+    rows = []
+    for out in map(pathlib.Path, outs):
+        for t in (r for r in jsonl(out / "tex.jsonl") if r.get("probe") == "tex"):
+            per_clk = t["fetches_per_sm_per_clk"]
+            mac = t["mac_equiv_per_fetch"]
+            rows.append(dict(unit="tex", case=t["case"], sm_mhz=t["sm_mhz"], per_sm_per_clk=per_clk,
+                             per_gpu_per_s={str(m): per_clk * GPU_SMS * m * 1e6 for m in NODE_CLOCKS_MHZ},
+                             mac_equiv_each=mac, mac_equiv_per_sm_per_clk=per_clk * mac,
+                             share=per_clk * mac / GPU_FP8_MACS_PER_SM_CLOCK,
+                             mac_equiv_per_warp_instr=32 * mac, issue_caps=32 * mac <= ISSUE_SLOT_PRICE))
+        rt = [r for r in jsonl(out / "rt.jsonl") if r.get("probe") == "rt"]
+        mhz, reasons = smi_clock_mhz(out, "rt")
+        for b in sorted({r["build"] for r in rt}):
+            miss = [r for r in rt if r["build"] == b and r["mode"] == "miss"]
+            fit = [r for r in miss if r["k"] >= 64]
+            xs, ys = [r["k"] * r["rays"] for r in fit], [r["ms"] * 1e-3 for r in fit]
+            mx, my = statistics.mean(xs), statistics.mean(ys)
+            slope = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / sum((x - mx) ** 2 for x in xs)
+            best = max(miss, key=lambda r: r["triangle_tests_per_s"])
+            for case, per_s in ((f"{b}.slope", 1 / slope), (f"{b}.best.k{best['k']}", best["triangle_tests_per_s"])):
+                per_clk = per_s / GPU_SMS / (mhz * 1e6)
+                rows.append(dict(unit="rt", case=case, sm_mhz=mhz, clock_event_reasons=reasons, per_sm_per_clk=per_clk,
+                                 per_gpu_per_s={str(m): per_clk * GPU_SMS * m * 1e6 for m in NODE_CLOCKS_MHZ},
+                                 mac_equiv_each=RT_MACS_PER_TEST, mac_equiv_per_sm_per_clk=per_clk * RT_MACS_PER_TEST,
+                                 share=per_clk * RT_MACS_PER_TEST / GPU_FP8_MACS_PER_SM_CLOCK,
+                                 mac_equiv_per_warp_instr=32 * max(r["k"] for r in miss) * RT_MACS_PER_TEST,
+                                 issue_caps=False, errors=sum(r["errors"] for r in rt if r["build"] == b)))
+    first = pathlib.Path(outs[0])
+    doc = dict(capacity_macs_per_s_a_gpu={str(m): c for m, c in cap.items()}, issue_slot_price=ISSUE_SLOT_PRICE,
+               rt_macs_per_test_estimate=RT_MACS_PER_TEST, rows=rows)
+    (first / "units-summary.json").write_text(json.dumps(doc, indent=1))
+    f = lambda v, p=3: f"{v:.{p}g}"
+    lines = ["| unit | case | a SM a clock | a GPU @2430 /s | MAC-eq each | MAC-eq a GPU @2430 /s | share of FP8 | "
+             "MAC-eq a warp instr | issue caps |", "|---|---|---|---|---|---|---|---|---|"]
+    for r in rows:
+        lines.append(f"| {r['unit']} | `{r['case']}` | {f(r['per_sm_per_clk'], 4)} | {f(r['per_gpu_per_s']['2430'])} | "
+                     f"{r['mac_equiv_each']} | {f(r['per_gpu_per_s']['2430'] * r['mac_equiv_each'])} | "
+                     f"{f(r['share'])} | {r['mac_equiv_per_warp_instr']} | {'yes' if r['issue_caps'] else 'no'} |")
+    (first / "units.md").write_text("\n".join(lines) + "\n")
+    print("\n".join(lines))
+
+
 if __name__ == "__main__":
     if sys.argv[1] == "--merge":
         merge(sys.argv[2], sys.argv[3:])
     elif sys.argv[1] == "--amx":
         amx_summary(pathlib.Path(sys.argv[2]))
+    elif sys.argv[1] == "--units":
+        units_summary(sys.argv[2:])
     else:
         main()
