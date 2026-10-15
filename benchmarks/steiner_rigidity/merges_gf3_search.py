@@ -10,7 +10,9 @@ line). So a space's total is read off the membership of its 8 nonzero elements i
 The first basis word is a helpful word of cell (0, 0) (every space that helps anything has one, up to permuting block
 rows and columns), taken up to conjugation by GL_2(3) on every block and the permutations that fix (0, 0), all of
 which fix every D_t; the second ranges over H. Spaces where at most three directions help save at most 2L by Lemma C
-and the three-direction case split (merges_check.py part 14), so only four-direction spaces are scored.
+and the three-direction case split (merges_check.py part 14), so only four-direction spaces are scored. On 2 x Q grids
+it also counts the open case of part 14: helped cells sharing a D-column (else part 8 applies), generic rank below 2L
+(over GF(9)), and no three directions reaching every helped cell's best saving.
 """
 
 import itertools
@@ -130,6 +132,42 @@ def decode(p1, p2, P, Q):
     return bits.astype(np.int64).reshape(2 * P, 2 * Q)
 
 
+def _mul9(x, y):
+    return (x[0] * y[0] - x[1] * y[1]) % 3, (x[0] * y[1] + x[1] * y[0]) % 3
+
+
+def rank_gf9(M):
+    """Rank over GF(9) = GF(3)[i]/(i^2 + 1) of a matrix of pairs (a, b) = a + b i."""
+    M, r = [list(row) for row in M], 0
+    units = {x: y for x in itertools.product(range(3), repeat=2) for y in itertools.product(range(3), repeat=2)
+             if _mul9(x, y) == (1, 0)}
+    for c in range(len(M[0])):
+        piv = next((i for i in range(r, len(M)) if M[i][c] != (0, 0)), None)
+        if piv is None:
+            continue
+        M[r], M[piv] = M[piv], M[r]
+        M[r] = [_mul9(units[M[r][c]], x) for x in M[r]]
+        for i in range(len(M)):
+            if i != r and M[i][c] != (0, 0):
+                f = M[i][c]
+                M[i] = [tuple((u - v) % 3 for u, v in zip(x, _mul9(f, y))) for x, y in zip(M[i], M[r])]
+        r += 1
+    return r
+
+
+def generic_rank(Z1, Z2):
+    """Rank of Z1 + t Z2 over GF(3)(t): its largest rank at the six points of GF(9) outside GF(3), enough for a
+    nonzero minor of degree <= 4 = 2L."""
+    return max(rank_gf9([[((int(x) + a * int(y)) % 3, b * int(y) % 3) for x, y in zip(r1, r2)] for r1, r2 in zip(Z1, Z2)])
+               for a in range(3) for b in (1, 2))
+
+
+def needs_four(dsav, best):
+    """Whether no three directions reach every helped cell's best saving (dsav: direction x cell)."""
+    sets = [set(np.nonzero(dsav[:, c] == best[c])[0]) for c in range(len(best)) if best[c] > 0]
+    return not any(all(s & set(T) for s in sets) for T in itertools.combinations(range(4), 3))
+
+
 def total_of(H, idx):
     """Total saving of spaces given, per space, the H-index (or -1) of each of its 8 nonzero elements."""
     best = np.zeros((idx.shape[0], H.n_cells), dtype=np.int64)
@@ -146,6 +184,8 @@ def search(P, Q, verify=20, log=print):
     a1s, a2s = canonical_first(P, Q)
     log(f"{P}x{Q}: |H| = {len(H.h)}, {len(a1s)} first words up to symmetry ({time.time() - t0:.1f} s)")
     hist, top, examples, n_four, verified = {}, 0, [], 0, 0
+    opened = {"shared_column": 0, "rank_below_2L": 0, "needs_four_directions": 0}
+    open_top = dict.fromkeys(opened, 0)
     for n, (a1, a2) in enumerate(zip(a1s, a2s)):
         b1, b2 = H.p1, H.p2
         s1, s2 = add3(a1, a2, b1, b2)
@@ -167,6 +207,17 @@ def search(P, Q, verify=20, log=print):
             assert sum(s for s, _ in best.values()) == tot[j], "bit-plane total disagrees with ranks"
             verified += 1
         n_four += len(k)
+        if P == 2:
+            sav = np.where((idx >= 0)[:, :, None], H.sav[np.maximum(idx, 0)].astype(np.int64), 0)
+            dsav = sav.reshape(len(k), 4, 2, -1).max(axis=2)
+            best = dsav.max(axis=1).reshape(len(k), P, Q)
+            for j in np.nonzero(((best > 0).sum(axis=1) == 2).any(axis=1))[0]:
+                Z1, Z2 = decode(a1, a2, P, Q), decode(b1[k[j]], b2[k[j]], P, Q)
+                steps = ("shared_column", "rank_below_2L", "needs_four_directions")
+                ok = (True, generic_rank(Z1, Z2) < 4, needs_four(dsav[j], best[j].reshape(-1)))
+                for key, _ in itertools.takewhile(lambda x: x[1], zip(steps, ok)):
+                    opened[key] += 1
+                    open_top[key] = max(open_top[key], int(tot[j]))
         for v, c in zip(*np.unique(tot, return_counts=True)):
             hist[int(v)] = hist.get(int(v), 0) + int(c)
         if tot.max() > top:
@@ -178,7 +229,8 @@ def search(P, Q, verify=20, log=print):
     assert top <= 4 or examples, "inconsistent"
     return {"P": P, "Q": Q, "L": 2, "field": 3, "helpful": len(H.h), "first_words": len(a1s),
             "four_direction_pairs": n_four, "histogram": hist, "max_total": top, "bound_2L": 4,
-            "counterexamples": examples, "verified_by_ranks": verified, "seconds": round(time.time() - t0, 1)}
+            "counterexamples": examples, "verified_by_ranks": verified, "seconds": round(time.time() - t0, 1),
+            "two_rows_open_case": {"counts": opened, "max_total": open_top} if P == 2 else None}
 
 
 def main():

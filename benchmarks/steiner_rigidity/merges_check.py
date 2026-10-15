@@ -1788,6 +1788,42 @@ def part15(rng):
         for v, c in zip(*np.unique(g.total_of(H, idx[four]), return_counts=True)):
             hist[int(v)] = hist.get(int(v), 0) + int(c)
     assert hist == res["histogram"], f"integer arithmetic gives {hist}, the bit-plane search {res['histogram']}"
+    low = deg1 = 0
+    for n in range(120):
+        Zs = [np.array([[rng.randrange(3) for _ in range(6)] for _ in range(4)]) for _ in range(2)]
+        if n % 3:
+            w = rng.choice([2, 3])
+            A = np.array([[rng.randrange(3) for _ in range(w)] for _ in range(4)])
+            Zs = [A @ np.array([[rng.randrange(3) for _ in range(6)] for _ in range(A.shape[1])]) % 3 if n % 3 == 1
+                  else Z for Z in Zs]
+            if n % 3 == 2:
+                a, b, c = rng.randrange(3), rng.randrange(1, 3), rng.randrange(3)
+                Zs[1][0] = 0
+                Zs[0][3], Zs[1][3] = (a * Zs[0][0] + c * Zs[0][1]) % 3, (b * Zs[0][0] + c * Zs[1][1]) % 3
+
+        def toeplitz(k):
+            M = np.zeros((4 * (k + 1), 6 * k), dtype=np.int64)
+            for i in range(k):
+                M[4 * i:4 * i + 4, 6 * i:6 * i + 6], M[4 * i + 4:4 * i + 8, 6 * i:6 * i + 6] = Zs[0], Zs[1]
+            return rank(M, 3)
+
+        rho = toeplitz(7) - toeplitz(6)
+        assert g.generic_rank(*Zs) == rho, "generic rank over GF(9) disagrees with the Toeplitz ranks over GF(3)"
+        low += rho < 4
+        deg1 += n % 3 == 2 and rho < 4
+    J = np.zeros((4, 6), dtype=np.int64)
+    J[0, 1] = J[2, 3] = 1
+    J[1, 0] = J[3, 2] = 2
+    assert g.generic_rank(J, np.eye(4, 6, dtype=np.int64)) == 4, "the companion pencil of (t^2 + 1)^2 has rank 4"
+    assert g.rank_gf9([[((int(x) + 0) % 3, int(y)) for x, y in zip(r, e)] for r, e in zip(J, np.eye(4, 6, dtype=int))]) == 2
+    four = np.array([[2, 0, 0, 0], [0, 1, 0, 0], [0, 0, 2, 0], [0, 0, 0, 1]])
+    tied = four.copy()
+    tied[0, 3] = 1
+    assert g.needs_four(four, four.max(axis=0)) and not g.needs_four(tied, tied.max(axis=0))
+    assert deg1 >= 30
+    print(f"[gf3] generic rank over GF(9) = Toeplitz rank growth over GF(3) on 120 pencils ({low} below 2L, {deg1} "
+          "planted with a left kernel of degree 1), "
+          "four-direction cover test: ok")
     print(f"[gf3] 2x2: {res['four_direction_pairs']} four-direction spaces, largest total {res['max_total']} <= 2L = 4, "
           f"80 totals re-checked by ranks, the histogram reproduced in integer arithmetic: ok")
 
