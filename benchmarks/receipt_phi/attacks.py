@@ -743,8 +743,9 @@ def main() -> int:
     ns, nt = (1 << 12, 1 << 9) if args.quick else (1 << 16, 1 << 12)
     if args.samples_log2:
         ns = 1 << args.samples_log2
-    todo = args.only.split(",") if args.only else ["differential", "chain_end", "three_word", "linearity", "degree2",
-                                                    "low_bits", "carries", "small", "mum_lattice", "mad_sketch", "duo_g"]
+    every = ["differential", "chain_end", "three_word", "linearity", "degree2", "low_bits", "carries", "small",
+             "mum_lattice", "mad_sketch", "duo_g"]
+    todo = args.only.split(",") if args.only else every
     res = {}
     for dist in args.dist.split(","):
         if "differential" in todo:
