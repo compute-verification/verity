@@ -1228,6 +1228,34 @@ def balanced_exhaustive(L, p, procs):
     return min(c for c in parts if c is not None), searched, len(V1s) * len(V2s)
 
 
+def least_trees_words(p=3, L=2):
+    """Every cost-14 balanced normal-form tree at L = 2 whose edges are single products, and its number of distinct
+    mixed words up to scalars. Cost 14 forces rank V1 = rank V2 = 4 and rank(V2 - W) = 2 (W a summand of V1)."""
+    G = Grid(2, 2, L)
+    S = {t: G.target(*t, 1) for t in ((0, 0), (0, 1), (1, 0), (1, 1))}
+    rk = lambda M: rank(M % p, p)
+    rows = [[V for V in ((S[r, 0] + A) % p for g in range(2 * L + 1) for A in summands((S[r, 1] - S[r, 0]) % p, g, p))
+             if rk(V) == 2 * L] for r in (0, 1)]
+
+    def factors(D):
+        basis = rowspace(D, p)
+        vecs = [sum(c * b for c, b in zip(cs, basis)) % p for cs in itertools.product(range(p), repeat=len(basis))]
+        return next(((g, h) for g in vecs for h in vecs if (sym(g, h, p) == D).all()), None)
+
+    counts = {}
+    for V1 in rows[0]:
+        Ws = [W for g in range(2 * L + 1) for W in summands(V1, g, p)]
+        for V2, W in ((V2, W) for V2 in rows[1] for W in Ws if rk(V2 - W) == 2):
+            edges = [(0 * W, W), (W, V1), (W, V2), (V1, S[0, 0]), (V1, S[0, 1]), (V2, S[1, 0]), (V2, S[1, 1])]
+            fs = [factors((b - a) % p) for a, b in edges]
+            if None in fs:
+                continue
+            words = {tuple(w * pow(int(w[np.flatnonzero(w)[0]]), p - 2, p) % p) for f in fs for w in f
+                     if w[:G.nX].any() and w[G.nX:].any()}
+            counts[len(words)] = counts.get(len(words), 0) + 1
+    return counts
+
+
 def part8(rng, exhaustive=False, procs=1):
     """The counterexample to symmetric rigidity. Checks the tree exactly over the integers for P x Q blocks at
     inner length L (it is a polynomial identity, so it holds over every commutative ring), its symmetric cost on the
@@ -1256,8 +1284,10 @@ def part8(rng, exhaustive=False, procs=1):
     if exhaustive:
         best, searched, pairs = balanced_exhaustive(2, 3, procs)
         assert best == 14, f"least balanced normal-form cost {best}, expected 14"
+        words = least_trees_words()
+        assert words and min(words) >= 8, f"a 7-product tree with fewer than 8 mixed words: {words}"
         print(f"  part 8: every balanced normal-form tree at L = 2 over GF(3): {pairs} pairs (V1, V2), {searched} "
-              f"searched over W; least cost {best}")
+              f"searched over W; least cost {best}; the 7-product ones, by number of distinct mixed words: {words}")
 
 
 PARTS = {"1": part1, "2": part2, "3": part3, "4": part4, "5": part5, "6": part6, "7": part7, "8": part8}
