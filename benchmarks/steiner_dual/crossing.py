@@ -7,10 +7,11 @@ transitions from the standard algorithm to minimise that charge minus twice the 
 schedule that beats Question 6.3's half charge, and `schedule` builds it as a `sched.Graph` so that
 `sched.weight` recomputes it exactly.
 
-    python crossing.py p q r steps [seed] [rank|-] [gamma]
+    python crossing.py p q r steps [seed] [rank|-] [gamma] [cells]
 
 With a rank, the walk starts from a flip-graph scheme of that rank and makes no plus transitions. The annealed
-objective is charge - gamma * saving (default gamma = 2); a larger gamma pushes the walk to larger savings.
+objective is charge - gamma * saving (default gamma = 2); a larger gamma pushes the walk to larger savings. `cells`
+(for example 01,10,11,12) makes only those cells of C targets.
 """
 
 import math
@@ -115,11 +116,12 @@ def flip_pairs(terms):
 best_at = {}
 
 
-def walk_min(p, q, r, steps, rng, t0=2.0, t1=0.2, plus=0.01, start=None, gamma=2):
+def walk_min(p, q, r, steps, rng, t0=2.0, t1=0.2, plus=0.01, start=None, gamma=2, cells=None):
     """Anneal charge - gamma * saving. Returns the best state with saving > 0 by charge - 2 * saving, and, for each
-    saving, the number of accepted states and the least charge among them."""
-    terms = list(start) if start else standard(p, q, r)
-    cur = min_deletion([t[2] for t in terms], 10 ** 6)[0] - gamma * (p * q * r - len(terms))
+    saving, the number of accepted states and the least charge among them. `cells` (a mask) restricts the targets."""
+    terms = list(start) if start else standard(p, q, r, cells)
+    total = len(standard(p, q, r, cells))
+    cur = min_deletion([t[2] for t in terms], 10 ** 6)[0] - gamma * (total - len(terms))
     best = (10 ** 6, None)
     visits = {}
     best_at.clear()
@@ -142,7 +144,7 @@ def walk_min(p, q, r, steps, rng, t0=2.0, t1=0.2, plus=0.01, start=None, gamma=2
             ty[p2] ^= tx[p2]
             new[x], new[y] = tuple(tx), tuple(ty)
         _reduce(new)
-        s_new = p * q * r - len(new)
+        s_new = total - len(new)
         cap = cur + gamma * s_new + int(10 * T) + 1
         charge, _ = min_deletion([t[2] for t in new], cap)
         if charge is None:
@@ -155,7 +157,7 @@ def walk_min(p, q, r, steps, rng, t0=2.0, t1=0.2, plus=0.01, start=None, gamma=2
             if s_new > 0 and charge <= low:
                 best_at[s_new] = (charge, list(new))
             v = charge - 2 * s_new
-            if s_new > 0 and (v, -s_new) < (best[0], -(p * q * r - len(best[1] or ()))):
+            if s_new > 0 and (v, -s_new) < (best[0], -(total - len(best[1] or ()))):
                 best = (v, list(new))
     return best + (visits,)
 
@@ -165,9 +167,11 @@ def main():
     seed = int(sys.argv[5]) if len(sys.argv) > 5 else 0
     target = int(sys.argv[6]) if len(sys.argv) > 6 and sys.argv[6] != "-" else None
     gamma = float(sys.argv[7]) if len(sys.argv) > 7 else 2
+    cells = sum(1 << (int(c[0]) * r + int(c[1])) for c in sys.argv[8].split(",")) if len(sys.argv) > 8 else None
+    assert cells is None or target is None, "a fixed-rank start is for the full product"
     rng = random.Random(seed)
     if target is None:
-        val, terms, visits = walk_min(p, q, r, steps, rng, gamma=gamma)
+        val, terms, visits = walk_min(p, q, r, steps, rng, gamma=gamma, cells=cells)
     else:
         start = next(walk(p, q, r, target, rng, every=1))
         val, terms, visits = walk_min(p, q, r, steps, rng, plus=0.0, start=start, gamma=gamma)
@@ -177,7 +181,7 @@ def main():
           f"{ {s: (c, sorted(t)) for s, (c, t) in sorted(best_at.items())} }", flush=True)
     if terms is None:
         return
-    assert is_scheme(terms, p, q, r)
+    assert is_scheme(terms, p, q, r, cells)
     sch = Scheme(terms, p, q, r)
     charge, deleted = min_deletion([t[2] for t in terms], 10 ** 6)
     G = schedule(sch, deleted)

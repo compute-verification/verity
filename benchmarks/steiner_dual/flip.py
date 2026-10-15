@@ -12,9 +12,10 @@ import random
 import sys
 
 
-def standard(p, q, r):
+def standard(p, q, r, cells=None):
+    """The standard algorithm; with `cells` (a mask over C's cells), only those cells are targets."""
     return [(1 << (i * q + j), 1 << (j * r + k), 1 << (i * r + k))
-            for i in range(p) for j in range(q) for k in range(r)]
+            for i in range(p) for j in range(q) for k in range(r) if cells is None or cells >> (i * r + k) & 1]
 
 
 def tensor(terms):
@@ -36,8 +37,8 @@ def _bits(x):
         i += 1
 
 
-def is_scheme(terms, p, q, r):
-    return tensor(terms) == tensor(standard(p, q, r))
+def is_scheme(terms, p, q, r, cells=None):
+    return tensor(terms) == tensor(standard(p, q, r, cells))
 
 
 def _reduce(terms):

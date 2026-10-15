@@ -35,7 +35,8 @@ class Scheme:
         self.p, self.q, self.r = p, q, r
         self.m = len(terms)
         self.k = p * r
-        self.X = [sum(1 << i for i, t in enumerate(terms) if t[2] >> c & 1) for c in range(self.k)]
+        sets = [sum(1 << i for i, t in enumerate(terms) if t[2] >> c & 1) for c in range(self.k)]
+        self.X = [x for x in sets if x]
 
     def form(self, prods):
         """Rows (over A's entries) of the bilinear form sum_{i in prods} u_i v_i^T, as bitmasks over B's entries."""
