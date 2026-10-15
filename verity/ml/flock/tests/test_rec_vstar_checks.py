@@ -20,6 +20,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from test_rec_opening_unit import opening
 from test_rec_outer import BIN, staged  # noqa: F401
 from verity_flock import rec_algebra as A
 from verity_flock import rec_bindings as RB
@@ -567,18 +568,18 @@ def test_rec_sparses_circuit_file_is_v_stars(tmp_path):
         "rec-sparse/n1-e6-s1-t0: a RecSparse unit, and the bucket's is rec-sparse/n1-e6-s2-t0 (rec-inner --sparse)"), line
 
 
-def test_r_openings_circuit_file_is_v_stars(tmp_path):
+def test_r_openings_circuit_file_is_v_stars(once, tmp_path):
     """R's opening at m 23 (`rec-opening/m23-c2-p0`, one part), as `rec_residuals.stage_opening` writes it, is V*'s file byte
     for byte as candidate 3's statement 10, its own ports each `m<i>` under `rec-opening-c<i>` at R's one row. About two
-    minutes and 2.2 GB (each side builds the opening's unit): no cheaper test writes Lean's opening unit, so none
-    other catches its bytes drifting from the one the prover commits and the Lean verifier recomputes."""
+    minutes and 2.2 GB (each side builds the opening's unit; Python's is `test_rec_opening_unit.opening`'s, made once): no
+    cheaper test writes Lean's opening unit, so none other catches its bytes drifting from the one the prover commits and
+    the Lean verifier recomputes."""
     sh = A.Shape(R_SHAPE[0], 6, R_SHAPE[1], salt_len=0, opening_only=True)
     [p] = RR.parts(RR.spec(sh))
-    st = RR.statement(p.S, "rec-opening/m23-c2-p0", 1)
-    own = _staged(tmp_path / "open", st.text, st.part, st.program)
-    rc, line = _statements(_inner(tmp_path / "c3.json", *C3, sparse=SPARSE, stacked=R_SHAPE), "--circuit",
-                           str(tmp_path / "open" / "circuit.txt"), "--instances", "1", "--rec-part", "10",
-                           "--rec-bindings", str(own))
+    [f] = opening(once, R_SHAPE[0])
+    rc, line = _statements(_inner(tmp_path / "c3.json", *C3, sparse=SPARSE, stacked=R_SHAPE), "--circuit", str(f),
+                           "--instances", "1", "--rec-part", "10", "--rec-bindings",
+                           str(_bindings(f.parent, tmp_path / "bindings.json")))
     nr = len([nm for nm, _ in p.S["ports"] if nm.startswith("m")])
     assert rc == 0 and line["checked"] == ["rec-opening/m23-c2-p0", 1], line
     assert line["own"] == ([[f"m{i}", f"rec-opening-c{i}", [0]] for i in range(nr)]
