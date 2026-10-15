@@ -10,6 +10,13 @@ import torch
 
 _CUDA_MEMORY_TYPE_DEVICE = 2     # cudaMemoryTypeDevice
 
+#: Ops whose output is their input, the same storage and view: a snapshot of their call holds no new value, and the capture
+#: takes none.  ``torch::from_blob`` dispatches ``aten.detach`` on the tensor C++ code just wrapped, whose device may not be
+#: its memory's (VLLM-8).
+IDENTITY_ALIAS_OPS = frozenset({"aten.detach.default", "aten.alias.default", "aten.lift_fresh.default"})
+#: The snapshot index's reason for a `device_backed` tensor.
+DEVICE_BACKED = "a CPU tensor whose storage is device memory (torch::from_blob without its device): not readable on the host"
+
 
 class _PointerAttributes(ctypes.Structure):
     _fields_ = [("type", ctypes.c_int), ("device", ctypes.c_int), ("devicePointer", ctypes.c_void_p),

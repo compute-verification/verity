@@ -1,6 +1,6 @@
 """The capture's snapshots never copy what can't hold a new value or can't be read on the host (VLLM-8):
 
-* an identity alias's call (``aten.detach``, which ``torch::from_blob`` dispatches) lists its tensors as skipped;
+* an identity alias's call (``aten.detach``, which ``torch::from_blob`` dispatches) is not snapshotted at all;
 * a CPU tensor whose storage is device memory (`pinned.device_backed`) is listed as skipped, wherever it shows up;
 * every other tensor is still copied;
 * `device_backed` answers from the CUDA runtime's pointer attributes, and False when it can't tell.
@@ -43,12 +43,12 @@ def _capture():
     return cap
 
 
-def test_an_identity_alias_call_is_listed_as_skipped_and_copies_nothing():
+def test_an_identity_alias_call_is_not_snapshotted(monkeypatch):
     cap, t = _capture(), torch.arange(4, dtype=torch.uint8)
-    cap._after_call(7, "aten.detach.default", (t,), {}, t)
-    assert cap.errors == [] and cap._arena.taken == [] and cap._snap_pending == []
-    assert [(e["event"], e["path"]) for e in cap._snap_index] == [(7, "args[0]"), (7, "outs")]
-    assert all("identity alias" in e["skipped"] for e in cap._snap_index)
+    monkeypatch.setattr(C, "device_backed", lambda x: pytest.fail("an alias call's tensors were inspected"))
+    for op in pinned.IDENTITY_ALIAS_OPS:
+        cap._after_call(7, op, (t,), {}, t)
+    assert cap.errors == [] and cap._arena.taken == [] and cap._snap_pending == [] and cap._snap_index == []
 
 
 def test_a_device_backed_cpu_tensor_is_listed_as_skipped(monkeypatch):
@@ -56,7 +56,7 @@ def test_a_device_backed_cpu_tensor_is_listed_as_skipped(monkeypatch):
     monkeypatch.setattr(C, "device_backed", lambda x: x is t)
     other = torch.ones(4, dtype=torch.uint8)
     cap._after_call(8, "aten.add.Tensor", (t, other), {}, other)
-    assert [e["path"] for e in cap._snap_index] == ["args[0]"] and "device memory" in cap._snap_index[0]["skipped"]
+    assert [e["path"] for e in cap._snap_index] == ["args[0]"] and cap._snap_index[0]["skipped"] == pinned.DEVICE_BACKED
     assert cap._arena.taken == [4, 4] and [p["entry"]["path"] for p in cap._snap_pending] == ["args[1]", "outs"]
 
 
