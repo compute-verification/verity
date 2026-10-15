@@ -24,7 +24,8 @@
 //   CR_EXTRA X (modes 1 and 3) a cheater's own CUDA work fused beside the GEMM: X more phi1 steps a thread after every
 //              32-deep k-block, on two chains of its own that never read the accumulators. They feed only a store that
 //              fires on a 64-bit coincidence, so the outputs and receipts the gates check are the design's.
-//   CR_XVAR V  the cheater's phi1: 0 alu, 1 imad (IMAD on the FMA pipe beside the receipt's ALU work)
+//   CR_XVAR V  the cheater's step: 0 alu phi1, 1 imad phi1 (IMAD on the FMA pipe, its LOP3 and SHF on the ALU), 2 one
+//              FFMA (the FMA pipe alone), on chains seeded as floats in [1, 2)
 // Compiled once per kernel: -DCR_NAME=name -DCR_CFG -DCR_VAR -DCR_ROUNDS -DCR_P -DCR_MODE -DCR_SPREAD -DCR_GRAIN
 // -DCR_EXTRA -DCR_HONEST -DCR_FORCED -DCR_XVAR
 // (job.sh's cgemm).
@@ -110,7 +111,8 @@ struct ReceiptMma : Base {
         uint32_t y[CH];
         CUTLASS_PRAGMA_UNROLL
         for (int c = 0; c < CH; ++c) y[c] = 0;
-        uint32_t z[2] = {(uint32_t)thread_idx, ~(uint32_t)thread_idx};
+        uint32_t z[2] = {CR_XVAR == 2 ? 0x3f800000u | (uint32_t)thread_idx : (uint32_t)thread_idx,
+                         CR_XVAR == 2 ? 0x3f800000u | ((uint32_t)thread_idx << 8) : ~(uint32_t)thread_idx};
         uint32_t zf[2] = {(uint32_t)thread_idx ^ 0x243f6a88u, ~(uint32_t)thread_idx ^ 0x243f6a88u};
 
         Tensor sA = make_tensor(make_smem_ptr(shared_tensors.smem_A.data()), SmemLayoutA{});
@@ -188,7 +190,12 @@ struct ReceiptMma : Base {
             if constexpr ((MODE == 1 || MODE == 3) && EXTRA > 0) {
                 const uint32_t p = (uint32_t)(kt * KB + b);
                 CUTLASS_PRAGMA_UNROLL
-                for (int j = 0; j < EXTRA; ++j) z[j & 1] = phi1<CR_XVAR>(z[j & 1], p, 0x7f4a7c15u, key(j, b));
+                for (int j = 0; j < EXTRA; ++j)
+                    if constexpr (CR_XVAR == 2)
+                        z[j & 1] = __float_as_uint(fmaf(__uint_as_float(z[j & 1]), 0.99999994f,
+                                                        __uint_as_float(0x3f800000u | (key(j, b) >> 9))));
+                    else
+                        z[j & 1] = phi1<CR_XVAR>(z[j & 1], p, 0x7f4a7c15u, key(j, b));
             }
             if constexpr (b == KB - 1) ++kt;
         };

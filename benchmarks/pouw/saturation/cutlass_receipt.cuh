@@ -33,7 +33,7 @@ struct cr_kernel {
     int extra;                   // a cheater's own phi1 steps a thread after every 32-deep k-block (mode 3: no receipt)
     int honest;                  // the first honest chain words (ch * 4 + e) of each receipt point get rounds + 1
     int forced;                  // forced alu phi1 steps a thread after every 32-deep k-block that read no accumulator
-    int xvar;                    // the cheater's phi1 variant: 0 alu, 1 imad
+    int xvar;                    // the cheater's step: 0 alu phi1, 1 imad phi1, 2 FFMA
     int tile_m, tile_n, threads, chains, nn_max, kblocks, stages, smem_bytes;
     cr_impl* (*make)(const cr_args& a, int* err);
 };

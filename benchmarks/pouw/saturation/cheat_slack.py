@@ -8,10 +8,11 @@ removed (no cheater instructions; at most a different register allocation), so t
 
 Input: `cutlass_receipt`'s JSON from job.sh's cheat stage, where each design kernel runs beside its `_xX` variants: the
 same kernel plus X alu phi1 steps a thread after every 32-deep k-block on chains that never read the accumulators
-(`_xiX`: imad phi1 steps, whose IMAD issues to the FMA pipe). Per
+(`_xiX`: imad phi1 steps, whose IMAD issues to the FMA pipe; `_xfX`: FFMAs, the FMA pipe alone). Per
 phase (the four linears weighted by the design's time, as one layer runs each once):
 
-- added: the cheater's steps per SM-clock over φ's solo rate (21.2 alu, 26.6 imad steps an SM-clock), at the variant's time;
+- added: the cheater's steps per SM-clock over their solo rate (φ1: 21.2 alu, 26.6 imad; FFMA: the FMA pipe's 128),
+  at the variant's time: its share of the window's CUDA slots, an alu φ1 being 6 of them (h_φ) and an FFMA one;
 - slowdown: the variant's time over the design's, from each kernel's median against the plain kernel in the same rounds;
 - free share: (added work at φ's solo rate − the time it added) / added work, both in units of the design's time;
 - ν_f: the most free capacity any variant shows, added work − the time it added, as a share of the window's CUDA
@@ -27,8 +28,9 @@ import argparse
 import json
 import re
 
-PHI_SOLO = {0: 21.2, 1: 26.6}
-VARIANT = re.compile(r"_xi?(\d+)$")
+PHI_SOLO = {0: 21.2, 1: 26.6, 2: 128.0}
+VARIANT = re.compile(r"_x[if]?(\d+)$")
+XVAR = {0: "", 1: " imad", 2: " FFMA"}
 NOISE = 0.005
 KB = 4
 
@@ -73,7 +75,7 @@ def main():
             net = added_base_units - (slow - 1)
             out.append({"design": base, "extra": x, "xvar": xvar[v], "phase": ph, "added": added, "slowdown": slow, "free": free,
                         "net": net, "rate_kept_vs_plain": kept})
-            print(f"| {base} | {x}{' imad' if xvar[v] else ''} | {ph} | {100 * added:.1f}% | {slow:.4f}× | {100 * free:.0f}% | {100 * net:.1f}% | "
+            print(f"| {base} | {x}{XVAR[xvar[v]]} | {ph} | {100 * added:.1f}% | {slow:.4f}× | {100 * free:.0f}% | {100 * net:.1f}% | "
                   f"{100 * kept:.1f}% |")
     nu, net = {}, {}
     for o in out:
