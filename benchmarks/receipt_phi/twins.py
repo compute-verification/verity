@@ -2,8 +2,8 @@
 
 Each candidate absorbs committed words p into a chain value, keyed by position t (KA/KB odd, KK addends, all from
 `keys(kseed)` exactly as `phi.cu`'s `set_keys`). `absorb(kind, state, words, t0, keys)` takes the state as (y, z): z is
-used only by mum, which keeps a 64-bit state (y = hi, z = lo). The paired kinds (ram, xma) take words two at a time,
-keyed by the first word's position.
+used only by the wide kinds, mum (a 64-bit state, y = hi, z = lo) and duo (two words), whose receipt is y ^ z. The
+paired kinds (ram, xma) take words two at a time, keyed by the first word's position.
 
 ``OPS`` is the SASS each candidate should compile to per absorbed word; `sass_mix.py` counts what it does compile to.
 """
@@ -13,8 +13,9 @@ from __future__ import annotations
 M32 = 0xFFFFFFFF
 M64 = (1 << 64) - 1
 NKEY = 32
-KINDS = ("mad", "ra", "ram", "xma", "ar", "mum", "xsm", "xsm4", "mxm", "chi", "xsm2")
+KINDS = ("mad", "ra", "ram", "xma", "ar", "mum", "xsm", "xsm4", "mxm", "chi", "xsm2", "duo")
 PAIRED = ("ram", "xma")
+WIDE = ("mum", "duo")
 OPS = {
     "mad": "IMAD (y*a_t + p)",
     "ra": "LEA.HI or SHF.L.W+IADD (rotl(y, r_t) + p)",
@@ -27,6 +28,7 @@ OPS = {
     "mxm": "IMAD (y*a_t + p), SHF.R, LOP3 (^k_t), IMAD (*b_t)",
     "chi": "LOP3 (y^p^k_t), 2 SHF.L.W (rot 1, rot 2), LOP3 (u ^ ~r1 & r2)",
     "xsm2": "SHF, LOP3, IMAD, SHF, LOP3, IMAD",
+    "duo": "LOP3 (y^p^k_t), IMAD (u*a_t + z), LEA.HI or SHF.L.W+IADD (rotl(u, r_t) + y')",
 }
 
 
@@ -103,13 +105,17 @@ def absorb(kind: str, st: tuple[int, int], p: list[int], t0: int, k: Keys) -> tu
         elif kind == "xsm2":
             u = ((y ^ (y >> 16) ^ p[i]) * a) & M32
             y = ((u ^ (u >> 13) ^ c) * b) & M32
+        elif kind == "duo":
+            u = y ^ p[i] ^ c
+            y = (u * a + z) & M32
+            z = (rotl(u, rot_of(t)) + y) & M32
         else:
             raise ValueError(kind)
     return y, z
 
 
 def finish(kind: str, st: tuple[int, int]) -> int:
-    return st[0] ^ st[1] if kind == "mum" else st[0]
+    return st[0] ^ st[1] if kind in WIDE else st[0]
 
 
 PU, PW = 4, 8

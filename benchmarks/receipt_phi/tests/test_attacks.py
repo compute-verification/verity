@@ -34,7 +34,7 @@ def test_steps_are_the_twins(kind: str) -> None:
             want = twins.absorb(kind, st, [int(p0[i]), int(p1[i])], 4, K)
         else:
             want = twins.absorb(kind, twins.absorb(kind, st, [int(p0[i])], 4, K), [int(p1[i])], 5, K)
-        assert want[0] == int(a[i]) and (kind != "mum" or want[1] == int(b[i]))
+        assert want[0] == int(a[i]) and (kind not in twins.WIDE or want[1] == int(b[i]))
 
 
 @pytest.mark.parametrize("kind", [k for k in twins.KINDS if k != "chi"])
@@ -66,6 +66,24 @@ def test_xsm_top_bit_cancels() -> None:
     a, _ = attacks.step("xsm", *attacks.step("xsm", y, z, p0, 4), p1, 5)
     b, _ = attacks.step("xsm", *attacks.step("xsm", y, z, p0 ^ U(1 << 31), 4), p1 ^ U(0x80008000), 5)
     assert (a == b).all()
+
+
+def test_duo_cancels_exactly_through_g_partners() -> None:
+    """A word t+1 canceller exists only when word t left z unchanged, and every g_t partner gives one."""
+    y, z, p, p1 = sample(512)
+    ty, tz = attacks.step("duo", *attacks.step("duo", y, z, p, 4), p1, 5)
+    _, ok = attacks.invert("duo", *attacks.step("duo", y, z, p ^ U(1 << 9), 4), ty, tz, 5)
+    assert not ok.any()
+    c = attacks.KK[4]
+    u = y ^ p ^ c
+    hit = 0
+    for x, found in attacks.duo_partners(u, 4):
+        q = (x ^ y ^ c)[found]
+        a, b = attacks.step("duo", y[found], z[found], q, 4)
+        q1, ok = attacks.invert("duo", a, b, ty[found], tz[found], 5)
+        assert ok.all() and (q1 == (p1[found] ^ a ^ attacks.step("duo", y, z, p, 4)[0][found])).all()
+        hit += int(found.sum())
+    assert hit > 0
 
 
 def test_mum_lattice_patterns_cancel() -> None:

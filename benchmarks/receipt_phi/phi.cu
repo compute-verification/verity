@@ -50,8 +50,10 @@ __host__ __device__ __forceinline__ uint32_t gen(uint32_t seed, uint32_t a, uint
 __device__ __forceinline__ uint32_t rotl(uint32_t x, int r) { return __funnelshift_l(x, x, r); }
 __host__ __device__ constexpr int rot_of(int t) { return ((t * 7 + 5) % 31) + 1; }
 
-enum Kind { MAD = 0, RA, RAM, XMA, AR, MUM, XSM, XSM4, MXM, CHI, XSM2, NK };
-static const char* KIND_NAME[NK] = {"mad", "ra", "ram", "xma", "ar", "mum", "xsm", "xsm4", "mxm", "chi", "xsm2"};
+enum Kind { MAD = 0, RA, RAM, XMA, AR, MUM, XSM, XSM4, MXM, CHI, XSM2, DUO, NK };
+static const char* KIND_NAME[NK] = {"mad", "ra",  "ram", "xma", "ar",   "mum",
+                                    "xsm", "xsm4", "mxm", "chi", "xsm2", "duo"};
+__host__ __device__ constexpr bool wide(int k) { return k == MUM || k == DUO; }
 __host__ __device__ constexpr bool paired(int k) { return k == RAM || k == XMA; }
 
 struct St {
@@ -59,7 +61,7 @@ struct St {
 };
 
 // Absorb N words p[0..N-1] at key positions T0..T0+N-1 (paired kinds take them two at a time, keyed by the first).
-// MUM keeps a 64-bit state S = (y = hi, z = lo); every other candidate keeps one word y (z unused).
+// MUM keeps a 64-bit state S = (y = hi, z = lo) and DUO two words (y, z); every other candidate keeps one word y.
 template <int K, int N, int T0>
 __device__ __forceinline__ void absorb(St& s, const uint32_t* p) {
   if constexpr (paired(K)) static_assert(N % 2 == 0, "pairs");
@@ -96,13 +98,17 @@ __device__ __forceinline__ void absorb(St& s, const uint32_t* p) {
     } else if constexpr (K == XSM2) {
       uint32_t u = (s.y ^ (s.y >> 16) ^ p[i]) * KA[t];
       s.y = (u ^ (u >> 13) ^ KK[t]) * KB[t];
+    } else if constexpr (K == DUO) {
+      const uint32_t u = s.y ^ p[i] ^ KK[t];
+      s.y = u * KA[t] + s.z;
+      s.z = rotl(u, rot_of(t)) + s.y;
     }
   }
 }
 
 template <int K>
 __device__ __forceinline__ uint32_t finish(const St& s) {
-  return K == MUM ? (s.y ^ s.z) : s.y;
+  return wide(K) ? (s.y ^ s.z) : s.y;
 }
 
 // ---------------------------------------------------------------------------------------------------------------- pure
@@ -417,7 +423,7 @@ __global__ void __launch_bounds__(TPB) fused_k(uint32_t* out, int iters, uint32_
 using KFn = void (*)(uint32_t*, int, uint32_t, long long*);
 
 static KFn PURE[NK] = {pure_k<0>, pure_k<1>, pure_k<2>, pure_k<3>, pure_k<4>, pure_k<5>,
-                       pure_k<6>, pure_k<7>, pure_k<8>, pure_k<9>, pure_k<10>};
+                       pure_k<6>, pure_k<7>, pure_k<8>, pure_k<9>, pure_k<10>, pure_k<11>};
 static KFn PROBE[NP] = {probe_k<0>,  probe_k<1>,  probe_k<2>,  probe_k<3>,  probe_k<4>,  probe_k<5>,
                         probe_k<6>,  probe_k<7>,  probe_k<8>,  probe_k<9>,  probe_k<10>, probe_k<11>,
                         probe_k<12>, probe_k<13>, probe_k<14>, probe_k<15>, probe_k<16>, probe_k<17>};
@@ -427,8 +433,9 @@ static const int CS[NC] = {1, 2, 4, 8, 16, 32};
   {fused_k<K, 1, M>, fused_k<K, 2, M>, fused_k<K, 4, M>, fused_k<K, 8, M>, fused_k<K, 16, M>, fused_k<K, 32, M>}
 #define FMODE(M)                                                                                               \
   {FROW(-1, M), FROW(0, M), FROW(1, M), FROW(2, M),  FROW(3, M),  FROW(4, M),  FROW(5, M),  FROW(6, M), \
-   FROW(7, M),  FROW(8, M), FROW(9, M), FROW(10, M), FROW(11, M), FROW(12, M), FROW(13, M), FROW(14, M)}
-static_assert(NF == 15, "FMODE lists every fused kind");
+   FROW(7, M),  FROW(8, M), FROW(9, M), FROW(10, M), FROW(11, M), FROW(12, M), FROW(13, M), FROW(14, M),  \
+   FROW(15, M)}
+static_assert(NF == 16, "FMODE lists every fused kind");
 static KFn FUSED[4][NF + 1][NC] = {FMODE(0), FMODE(1), FMODE(2), FMODE(3)};
 
 static const char* fused_name(int k) { return k < 0 ? "none" : k < NK ? KIND_NAME[k] : CONTROL_NAME[k - NK]; }

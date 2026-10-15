@@ -23,6 +23,9 @@ random-operand work's words).
   each output bit and the largest linear correlation, against a random function's.
 - ``mad_sketch``: mad's receipts of every block of a small INT8 matmul, from the honest chain and from the cross-block
   linear sketch U = Xᵀ C in int8 digits, with both MAC counts.
+- ``duo_g``: duo's two-word cancellations are exactly the collisions of g_t(u) = rotl(u, r_t) + a_t·u (word t+1
+  cancels a change at word t only if z is unchanged): the share of u with a partner, on a 16-bit analogue and at
+  w = 32 by solving for partners.
 """
 
 from __future__ import annotations
@@ -108,6 +111,10 @@ def step(kind: str, y, z, p, t: int):
     if kind == "xsm2":
         u = ((y ^ (y >> U(16)) ^ p) * a) & M32
         return ((u ^ (u >> U(13)) ^ c) * b) & M32, z
+    if kind == "duo":
+        u = y ^ p ^ c
+        y2 = (u * a + z) & M32
+        return y2, (rotl(u, r) + y2) & M32
     raise ValueError(kind)
 
 
@@ -153,6 +160,10 @@ def invert(kind: str, y, z, ty, tz, t: int):
     elif kind == "xsm2":
         u = unxs(((ty * U(inv32(b))) & M32) ^ c, 13)
         p = ((u * U(inv32(a))) & M32) ^ y ^ (y >> U(16))
+    elif kind == "duo":
+        u = (((ty - z) & M32) * U(inv32(a))) & M32
+        ok = ((rotl(u, r) + ty) & M32) == tz
+        p = u ^ y ^ c
     else:
         raise ValueError(kind)
     return p, ok
@@ -213,7 +224,7 @@ def differential(dist: str, samples: int, seed: int = 1) -> dict:
     return out
 
 
-def three_word(dist: str, samples: int, kinds=("mum", "xsm4", "xsm2"), seed: int = 6) -> dict:
+def three_word(dist: str, samples: int, kinds=("mum", "xsm4", "xsm2", "duo"), seed: int = 6) -> dict:
     """``differential`` one word further: fixed Δ1 at word t and Δ2 at word t+1, the canceller at t+2 by inversion."""
     rng = np.random.default_rng(seed)
     deltas = [("xor", 1 << j) for j in range(32)] + [("add", 1 << j) for j in range(32)] + \
@@ -331,11 +342,11 @@ def mum_lattice(t: int = 4) -> dict:
 
 
 def receipts(kind: str, P: np.ndarray, y0: np.ndarray) -> np.ndarray:
-    """Block receipts: P is (trials, 256) words, y0 the chain's start (z starts at y0 ^ 0x9E3779B9 for mum)."""
+    """Block receipts: P is (trials, 256) words, y0 the chain's start (z starts at y0 ^ 0x9E3779B9 for the wide kinds)."""
     y, z = y0.copy(), y0 ^ U(0x9E3779B9)
     for t in range(P.shape[1]):
         y, z = step(kind, y, z, P[:, t], t)
-    return y ^ z if kind == "mum" else y
+    return y ^ z if kind in twins.WIDE else y
 
 
 def linearity(dist: str, trials: int, seed: int = 2) -> dict:
@@ -450,6 +461,10 @@ def step8(kind: str, y, z, p, t: int, k8):
     if kind == "xsm2":
         u = ((y ^ (y >> 4) ^ p) * a) & M8
         return ((u ^ (u >> 3) ^ c) * b) & M8, z
+    if kind == "duo":
+        u = y ^ p ^ c
+        y2 = (u * a + z) & M8
+        return y2, (rl(u, r) + y2) & M8
     raise ValueError(kind)
 
 
@@ -459,7 +474,7 @@ def two_word_table(kind: str, y: int, z: int, k8) -> np.ndarray:
     yy, zz = np.full_like(x, y), np.full_like(x, z)
     yy, zz = step8(kind, yy, zz, x & M8, 4, k8)
     yy, zz = step8(kind, yy, zz, x >> 8, 5, k8)
-    return (yy ^ zz) if kind == "mum" else yy
+    return (yy ^ zz) if kind in twins.WIDE else yy
 
 
 def anf_degrees(tab: np.ndarray, nbits: int = 16) -> list[int]:
@@ -509,6 +524,58 @@ def small(seed: int = 4, states: int = 4) -> dict:
     tab = rng.integers(0, 256, size=1 << 16)
     out["random"] = {"anf_degree_per_bit_min_over_states": anf_degrees(tab), "walsh_max_corr": walsh_max(tab)}
     return out
+
+
+def duo_g(u, t: int):
+    return (rotl(u, twins.rot_of(t)) + u * KA[t]) & M32
+
+
+def duo_partners(u, t: int) -> list:
+    """Every x ≠ u with g_t(x) = g_t(u), by guessing x's top r_t bits (rotl's low bits) and solving x bit by bit from
+    the bottom (bit i of a_t·x is x_i plus lower bits, a_t odd): 2^r_t solves. One (x, found) pair per guess."""
+    r, a, v = twins.rot_of(t), KA[t], duo_g(u, t)
+    out = []
+    for g in range(1 << r):
+        x = np.full(u.shape, U(g) << U(32 - r), dtype=np.uint64)
+        ok = np.ones(u.shape, dtype=bool)
+        for i in range(32):
+            low = x & U((1 << i) - 1)
+            bit = (((v - rotl(x, r) - low * a) & M32) >> U(i)) & U(1)
+            if i < 32 - r:
+                x |= bit << U(i)
+            else:
+                ok &= bit == ((x >> U(i)) & U(1))
+        out.append((x, ok & (x != u)))
+    return out
+
+
+def duo_adaptive(samples: int, t: int = 4, seed: int = 10) -> dict:
+    """The state-dependent two-word cancellation `duo_g_image` counts, at w = 32: the share of states whose word t
+    has a partner (a prover who knows the state changes p_t to reach it and fixes p_{t+1} by XOR)."""
+    rng = np.random.default_rng(seed)
+    u = rng.integers(0, 1 << 32, size=samples, dtype=np.uint64)
+    has = np.zeros(samples, dtype=bool)
+    for _, ok in duo_partners(u, t):
+        has |= ok
+    return {"t": t, "r": twins.rot_of(t), "share_with_partner": float(np.mean(has)), "samples": samples}
+
+
+def duo_g_image(bits: int = 16, keys_: int = 8, seed: int = 9) -> dict:
+    """duo's word t changes the state's z exactly when g_t(u) = rotl(u, r_t) + a_t·u changes, and a change at word t is
+    cancelled by word t+1 only if z is unchanged, so two-word cancellations are the collisions of g_t. The share of u
+    that have a partner, on the `bits`-bit analogue over random odd a and every rotation."""
+    rng = np.random.default_rng(seed)
+    m = (1 << bits) - 1
+    u = np.arange(1 << bits, dtype=np.int64)
+    shares = []
+    for _ in range(keys_):
+        a = int(rng.integers(0, 1 << (bits - 1))) * 2 + 1
+        for r in range(1, bits):
+            g = (((u << r) | (u >> (bits - r))) + a * u) & m
+            _, inv, n = np.unique(g, return_inverse=True, return_counts=True)
+            shares.append(float(np.mean(n[inv] > 1)))
+    return {"bits": bits, "mean_share_with_partner": float(np.mean(shares)), "min": min(shares), "max": max(shares),
+            "random_function": 1 - float(np.exp(-1))}
 
 
 def chi_image(bits: int = 16) -> float:
@@ -586,18 +653,23 @@ def main() -> int:
     ap.add_argument("--only", default="")
     ap.add_argument("--dist", default="u32,int26,fp32")
     ap.add_argument("--samples-log2", type=int, default=0)
+    ap.add_argument("--kinds", default="", help="restrict the per-kind attacks to these candidates")
     args = ap.parse_args()
+    global KINDS
+    if args.kinds:
+        KINDS = tuple(args.kinds.split(","))
     ns, nt = (1 << 12, 1 << 9) if args.quick else (1 << 16, 1 << 12)
     if args.samples_log2:
         ns = 1 << args.samples_log2
     todo = args.only.split(",") if args.only else ["differential", "three_word", "linearity", "degree2", "carries",
-                                                    "small", "mum_lattice", "mad_sketch"]
+                                                    "small", "mum_lattice", "mad_sketch", "duo_g"]
     res = {}
     for dist in args.dist.split(","):
         if "differential" in todo:
             res.setdefault("differential", {})[dist] = differential(dist, ns)
         if "three_word" in todo:
-            res.setdefault("three_word", {})[dist] = three_word(dist, ns >> 2)
+            three = [k for k in ("mum", "xsm4", "xsm2", "duo") if k in KINDS]
+            res.setdefault("three_word", {})[dist] = three_word(dist, ns >> 2, kinds=three)
         if "linearity" in todo:
             res.setdefault("linearity", {})[dist] = linearity(dist, nt)
         if "degree2" in todo:
@@ -611,6 +683,9 @@ def main() -> int:
         res["mum_lattice"] = mum_lattice()
     if "mad_sketch" in todo:
         res["mad_sketch"] = mad_sketch(n=128 if args.quick else 256)
+    if "duo_g" in todo:
+        res["duo_g_image"] = duo_g_image()
+        res["duo_adaptive"] = duo_adaptive(ns >> 4)
     print(json.dumps(res, indent=1))
     return 0
 

@@ -38,12 +38,12 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-30}" -- bash -c '
     ncu --metrics $M --csv -k regex:probe_k --launch-skip 1 -c 1 "$B/phi" one probe $p 2000 > "$O/ncu-probe-$p.csv" 2>&1 \
       || echo "ncu probe $p rc $?" >> "$O/errors.txt"
   done
-  for k in $(seq 0 10); do
+  for k in $(seq 0 11); do
     ncu --metrics $M --csv -k regex:pure_k --launch-skip 1 -c 1 "$B/phi" one pure $k 2000 > "$O/ncu-pure-$k.csv" 2>&1 \
       || echo "ncu pure $k rc $?" >> "$O/errors.txt"
   done
   for m in 0 1 2 3; do
-    for k in $(seq 0 15); do
+    for k in $(seq 0 16); do
       ncu --metrics $M --csv -k regex:fused_k --launch-skip 1 -c 1 "$B/phi" one fused $((6 * k)) 2000 $m \
         > "$O/ncu-fused-$m-$k.csv" 2>&1 || echo "ncu fused $m $k rc $?" >> "$O/errors.txt"
     done
