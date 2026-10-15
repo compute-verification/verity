@@ -2003,7 +2003,10 @@ def part16(rng):
 def part17(rng):
     """d >= 3: part 16's group splits are not enough, general labels still reach k - rank B. On random d = 3
     patterns whose disjoint links are independent, a split into <= 3 groups with common labels reaches total gap
-    <= rank B, or else the alternating label search does. On one recorded 3 x 3 pattern (7 links, rank B = 3) every
+    <= rank B, or else the alternating label search does; the misses are scalar coincidences, since re-drawing the
+    links' scalars (same cells, same directions) brings the split back to rank B. The smallest miss found, a full
+    2 x 3 block, has one group of gap 4 only because its shared-column consistency system is singular; scaling one
+    link off that value gives gap 3. On one recorded 3 x 3 pattern (7 links, rank B = 3) every
     split stops at gap 4, and labels with rank P = 4 = k - rank B exist; they are checked exactly, and against random
     words at L = 2. On realized spans of three words, savings <= L * (best gap) <= L * rank B."""
     import merges_split_search as ms
@@ -2020,6 +2023,15 @@ def part17(rng):
             continue
         misses += 1
         assert ms.label_search(links, betas, p, len(links) - 3, rng, 3000), "no label certificate reaches k - rank B"
+        assert any(ms.best_split(links, [tuple(rng.randrange(1, p) * x % p for x in b) for b in betas], p, 3, 3)[0]
+                   <= 3 for _ in range(10)), "a split miss survives re-drawing the link scalars"
+    block = [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2)]
+    block_betas = [(2, 4, 2), (3, 1, 3), (3, 3, 3), (2, 0, 3), (4, 4, 3), (1, 1, 2)]
+    assert ms.best_split(block, block_betas, p, 3, 0)[0] == 4, "the 2 x 3 block's best split is not 4"
+    assert ms.label_search(block, block_betas, p, 3, random.Random(0), 4000), "no label certificate on the 2 x 3 block"
+    for c in range(2, p):
+        scaled = [tuple(c * x % p for x in block_betas[0])] + block_betas[1:]
+        assert ms.certificate(block, scaled, list(range(6)), p, "row")[0] == 3, "a rescaled 2 x 3 block misses"
     links = [(0, 0), (0, 2), (1, 1), (1, 2), (2, 0), (2, 1), (2, 2)]
     betas = [(3, 2, 3), (3, 4, 1), (1, 1, 1), (1, 3, 2), (2, 0, 4), (2, 2, 2), (3, 0, 1)]
     tot, _ = ms.best_split(links, betas, p, 3, 0)
@@ -2053,7 +2065,9 @@ def part17(rng):
         top = max(top, sum(2 - r for r in rr))
         realized += 1
     print(f"[d = 3 labels] 30 random 3 x 3 patterns over GF(5): group splits reach gap <= rank B on {splits}, general "
-          f"labels on the other {misses}: ok; the recorded 7-link pattern: every split into <= 3 groups has gap >= 4, "
+          f"labels on the other {misses}, and re-drawn link scalars bring each miss back to rank B: ok; the full 2 x 3 "
+          f"block (6 links, four directions): best split 4, general labels reach 3, and scaling one link by any c != 1 "
+          f"gives one group of gap 3: ok; the recorded 7-link pattern: every split into <= 3 groups has gap >= 4, "
           f"rank-1 labels with rank P = {rank(Pm, p)} = k - rank B cancel the words, Psi identity at L = 2: ok; "
           f"20 realized spans of three words on 2 x 3 (GF(3), L = 2): savings <= L * best gap <= L * rank B: ok "
           f"(largest {top})")
