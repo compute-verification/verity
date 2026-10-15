@@ -973,4 +973,183 @@ end MatMachine
 
 end MatmulPeel
 
+section EditedInstances
+
+/-! ## Route (c): edited instances (Daniel, 18:20Z and 18:28Z)
+
+The protocol edits both operands, unpeeled: the useful output is the edited product `(A + E_A(σ)) (B + E_B(σ))`,
+and the edited product is what is served. Dynamic × dynamic only: both operands are the instance, adversarial, and
+both are edited fresh per instance. With no peel there are no correction products, so γ is the proof layer's cost
+(commitments, proving), the noise expansion and two additions. The floor is RS-D1E's (named `EditFloor`). -/
+
+/-- The bit-pair projection's algebra (RS-D1E): the mixed second difference of `(A + S) D (B + T)` in the two edits
+is `S D T`. The committed parts project to 0: `A D B`, `A D T` and `S D B` each lack one of the two edits. -/
+theorem edit_mixed_difference {R : Type} [Ring R] {a b c : ℕ} (A S : Mat R a b) (D : Mat R b b) (B T : Mat R b c) :
+    (A + S) * D * (B + T) - (A + S) * D * B - A * D * (B + T) + A * D * B = S * D * T := by
+  simp only [Matrix.add_mul, Matrix.mul_add]
+  abel
+
+/-- **The bit-pair coefficient** (RS-D1E): editing `A` at `(i, k)` by `d β` and `B` at `(k, l)` by `d' β'`, the
+`β β'` coefficient of the prefix-sum target `A' diag(p) B'` (with `p` the prefix's indicator) is `d p_k d'` at
+`(i, l)` and 0 elsewhere, whatever the committed `A` and `B`. -/
+theorem bitPair_coefficient {R : Type} [CommRing R] {a b c : ℕ} (A : Mat R a b) (B : Mat R b c) (p : Fin b → R)
+    (i : Fin a) (k : Fin b) (l : Fin c) (d d' : R) :
+    (A + Matrix.single i k d) * Matrix.diagonal p * (B + Matrix.single k l d') -
+        (A + Matrix.single i k d) * Matrix.diagonal p * B - A * Matrix.diagonal p * (B + Matrix.single k l d') +
+        A * Matrix.diagonal p * B =
+      Matrix.single i l (d * p k * d') := by
+  rw [edit_mixed_difference, Matrix.single_mul_mul_single, Matrix.diagonal_apply_eq]
+
+/-- The proof service's layer of a protocol (AGENTS.md's one proof service): live coins, messages and the verifier.
+A protocol is a service with a problem (`correct`) and an honest Solve. -/
+structure Service where
+  Seed : Type
+  [instSeed : Fintype Seed]
+  lam : ℕ
+  card_seed : Fintype.card Seed = 2 ^ lam
+  Com : Type
+  Ans : Type
+  Coins : Type
+  [instCoins : Fintype Coins]
+  verify : Com → Seed → Ans → Bool
+
+attribute [instance] Service.instSeed Service.instCoins
+
+namespace MatMachine
+
+variable {R : Type} [Ring R] (Mc : MatMachine R)
+
+/-- **An edit** (route (c)): a σ-indexed map on each operand, `A ↦ A + E_A(σ)` and `B ↦ B + E_B(σ)`, with the
+algorithm `gen` that expands σ into the two noise matrices (its time is part of γ). -/
+structure Edit (Seed : Type) (n : ℕ) where
+  EA : Seed → Mat R n n
+  EB : Seed → Mat R n n
+  gen : Mc.Alg Seed (Mat R n n × Mat R n n)
+  eval_gen : ∀ σ, Mc.eval gen σ = (EA σ, EB σ)
+
+variable {Mc} in
+/-- The edited product `(A + E_A(σ)) (B + E_B(σ))`, the useful output on the instance `(A, B)`. -/
+def Edit.product {Seed : Type} {n : ℕ} (E : Mc.Edit Seed n) (σ : Seed) (x : Mat R n n × Mat R n n) : Mat R n n :=
+  (x.1 + E.EA σ) * (x.2 + E.EB σ)
+
+/-- The edited product as an algorithm, `(σ, (A, B)) ↦ (A + E_A σ)(B + E_B σ)`: expand σ once, two additions, one
+product, and no peel. -/
+def editMul {Seed : Type} {n : ℕ} (E : Mc.Edit Seed n) : Mc.Alg (Seed × (Mat R n n × Mat R n n)) (Mat R n n) :=
+  Mc.seq (Mc.pair Mc.snd (Mc.seq Mc.fst E.gen))
+    (Mc.mul₂ (Mc.add₂ (Mc.seq Mc.fst Mc.fst) (Mc.seq Mc.snd Mc.fst))
+      (Mc.add₂ (Mc.seq Mc.fst Mc.snd) (Mc.seq Mc.snd Mc.snd)))
+
+theorem eval_editMul {Seed : Type} {n : ℕ} (E : Mc.Edit Seed n) (y : Seed × (Mat R n n × Mat R n n)) :
+    Mc.eval (Mc.editMul E) y = E.product y.1 y.2 := by
+  simp only [editMul, eval_mul₂, eval_add₂, Mc.eval_seq, Mc.eval_pair, Mc.eval_fst, Mc.eval_snd, E.eval_gen,
+    Edit.product]
+
+theorem time_editMul_le {Seed : Type} {n : ℕ} (E : Mc.Edit Seed n) :
+    Mc.time (Mc.editMul E) ≤ Mc.time E.gen + Mc.κ * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2 := by
+  apply le_trans
+  · unfold editMul
+    apply_rules [time_mul₂_le_of, time_add₂_le_of, Machine.time_pair_le_of, Machine.time_seq_le_of,
+      Machine.time_fst_le, Machine.time_snd_le, le_refl]
+  · linarith
+
+/-- **Honest Solve on edited instances** (`honestEdit`): compute the edited product, then run the proof layer
+`prove` on the transcript's inputs and the served product; the useful output is the edited product, unpeeled. -/
+def honestEdit {Seed Coins Pf : Type} {n : ℕ} (E : Mc.Edit Seed n)
+    (prove : Mc.Alg ((Seed × (Mat R n n × Mat R n n) × Coins) × Mat R n n) Pf) :
+    Mc.Alg (Seed × (Mat R n n × Mat R n n) × Coins) (Pf × Mat R n n) :=
+  Mc.seq (Mc.pair (Mc.pair Mc.fst Mc.snd) (Mc.seq (Mc.pair Mc.fst (Mc.seq Mc.snd Mc.fst)) (Mc.editMul E)))
+    (Mc.pair prove Mc.snd)
+
+theorem eval_honestEdit {Seed Coins Pf : Type} {n : ℕ} (E : Mc.Edit Seed n)
+    (prove : Mc.Alg ((Seed × (Mat R n n × Mat R n n) × Coins) × Mat R n n) Pf)
+    (y : Seed × (Mat R n n × Mat R n n) × Coins) :
+    Mc.eval (Mc.honestEdit E prove) y = (Mc.eval prove (y, E.product y.1 y.2.1), E.product y.1 y.2.1) := by
+  simp only [honestEdit, Mc.eval_seq, Mc.eval_pair, Mc.eval_fst, Mc.eval_snd, eval_editMul, Prod.mk.eta]
+
+/-- `honestEdit` costs one `n × n × n` product and two additions beyond the proof layer and the noise expansion:
+`time ≤ κ n³ + 2 κadd n² + time gen + time prove`, with no peel. -/
+theorem time_honestEdit_le {Seed Coins Pf : Type} {n : ℕ} (E : Mc.Edit Seed n)
+    (prove : Mc.Alg ((Seed × (Mat R n n × Mat R n n) × Coins) × Mat R n n) Pf) :
+    Mc.time (Mc.honestEdit E prove) ≤
+      Mc.κ * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2 + Mc.time E.gen + Mc.time prove := by
+  apply le_trans
+  · unfold honestEdit
+    apply_rules [Machine.time_pair_le_of, Machine.time_seq_le_of, Machine.time_fst_le, Machine.time_snd_le,
+      time_editMul_le, le_refl]
+  · linarith [Mc.time_mul_le n n n, Mc.time_add_le n n]
+
+/-- **The edited protocol** on the instance `(A, B)` (both operands adversarial, both edited): the service's coins,
+messages and verifier, the edited product as the problem, and `honestEdit` as Solve. -/
+def edited (S : Service) {n : ℕ} (E : Mc.Edit S.Seed n)
+    (prove : Mc.Alg ((S.Seed × (Mat R n n × Mat R n n) × S.Coins) × Mat R n n) (S.Com × S.Ans)) :
+    Protocol Mc.toMachine (Mat R n n × Mat R n n) (Mat R n n) where
+  Seed := S.Seed
+  lam := S.lam
+  card_seed := S.card_seed
+  Com := S.Com
+  Ans := S.Ans
+  Coins := S.Coins
+  correct σ x C := E.product σ x = C
+  solve := Mc.honestEdit E prove
+  verify := S.verify
+
+/-- **Completeness of the edited protocol**: if the proof layer's commitment reads neither σ nor the product
+(`hcom`, commit-first) and the verifier accepts its proof of the served product with probability at least `1 − η`
+on every instance (`hacc`), the edited protocol is complete; its answer is the edited product on every run. -/
+theorem edited_complete (S : Service) {n : ℕ} (E : Mc.Edit S.Seed n)
+    (prove : Mc.Alg ((S.Seed × (Mat R n n × Mat R n n) × S.Coins) × Mat R n n) (S.Com × S.Ans)) {η : ℝ}
+    (hcom : ∀ (σ σ' : S.Seed) (y : (Mat R n n × Mat R n n) × S.Coins) (C C' : Mat R n n),
+      (Mc.eval prove ((σ, y), C)).1 = (Mc.eval prove ((σ', y), C')).1)
+    (hacc : ∀ x : Mat R n n × Mat R n n, 1 - η ≤ prob fun ω : S.Seed × S.Coins =>
+      S.verify (Mc.eval prove ((ω.1, x, ω.2), E.product ω.1 x)).1 ω.1
+        (Mc.eval prove ((ω.1, x, ω.2), E.product ω.1 x)).2 = true) :
+    Complete (Mc.edited S E prove) η := by
+  refine ⟨fun σ σ' y => ?_, fun x => (hacc x).trans (prob_mono fun ω hω => ?_)⟩
+  · change ((Mc.eval (Mc.honestEdit E prove) (σ, y)).1).1 = ((Mc.eval (Mc.honestEdit E prove) (σ', y)).1).1
+    rw [eval_honestEdit, eval_honestEdit]
+    exact hcom σ σ' y _ _
+  · change E.product ω.1 x = (Mc.eval (Mc.honestEdit E prove) (ω.1, x, ω.2)).2 ∧
+      S.verify (Mc.eval (Mc.honestEdit E prove) (ω.1, x, ω.2)).1.1 ω.1
+        (Mc.eval (Mc.honestEdit E prove) (ω.1, x, ω.2)).1.2 = true
+    rw [eval_honestEdit]
+    exact ⟨rfl, hω⟩
+
+/-- **The edit floor** (a named hypothesis; RS-D1E proves it on paper by the bit-pair projection, `bitPair_coefficient`,
+with `F = c n³` per MAC slot, `c = ½` unconditional through Theorem W and `c = 1` under Conjecture A): on the edited
+protocol, every adversary that commits first has its accepted runs below `F` with probability at most `κ`. -/
+def EditFloor (S : Service) {n : ℕ} (E : Mc.Edit S.Seed n)
+    (prove : Mc.Alg ((S.Seed × (Mat R n n × Mat R n n) × S.Coins) × Mat R n n) (S.Com × S.Ans)) (F κ : ℝ) : Prop :=
+  AdvFloor (Mc.edited S E prove) F κ
+
+/-- **Relative security of edited instances** (route (c), end to end): with the edited protocol complete
+(`hcom`, `hacc`) and the edit floor `F` (named hypothesis `EditFloor`, with `κf < δ`), the edited protocol is relatively
+secure against the reference `N = κ n³` with `ε = U / F − 1`, `U = κ n³ + 2κadd n² + time gen + time prove`, and
+`γ = (2κadd n² + time gen + time prove) / (κ n³)`: the proof layer, the noise expansion and two additions, no peel. -/
+theorem relativelySecure_of_editFloor (S : Service) {n : ℕ} (E : Mc.Edit S.Seed n)
+    (prove : Mc.Alg ((S.Seed × (Mat R n n × Mat R n n) × S.Coins) × Mat R n n) (S.Com × S.Ans)) {κf δ η F : ℝ}
+    (hcom : ∀ (σ σ' : S.Seed) (y : (Mat R n n × Mat R n n) × S.Coins) (C C' : Mat R n n),
+      (Mc.eval prove ((σ, y), C)).1 = (Mc.eval prove ((σ', y), C')).1)
+    (hacc : ∀ x : Mat R n n × Mat R n n, 1 - η ≤ prob fun ω : S.Seed × S.Coins =>
+      S.verify (Mc.eval prove ((ω.1, x, ω.2), E.product ω.1 x)).1 ω.1
+        (Mc.eval prove ((ω.1, x, ω.2), E.product ω.1 x)).2 = true)
+    (hfloor : Mc.EditFloor S E prove F κf) (hκδ : κf < δ) (hF : 0 < F)
+    (hFU : F ≤ Mc.κ * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2 + Mc.time E.gen + Mc.time prove)
+    (hN : 0 < Mc.κ * (n : ℝ) ^ 3) :
+    RelativelySecure (Mc.edited S E prove)
+      ((Mc.κ * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2 + Mc.time E.gen + Mc.time prove) / F - 1) δ
+      ((2 * Mc.κadd * (n : ℝ) ^ 2 + Mc.time E.gen + Mc.time prove) / (Mc.κ * (n : ℝ) ^ 3)) η 0
+      (Mc.κ * (n : ℝ) ^ 3) := by
+  have hc := Mc.edited_complete S E prove hcom hacc
+  have hU := Mc.time_honestEdit_le E prove
+  refine ⟨hc, secureInf_of_core _ (core_of_floor _ hF hFU hfloor hc hU) hκδ ?_, ?_⟩
+  · rw [add_sub_cancel]
+    exact div_pos (hF.trans_le hFU) hF
+  · change Mc.time (Mc.honestEdit E prove) ≤ _
+    rw [add_mul, one_mul, div_mul_cancel₀ _ hN.ne', add_zero]
+    linarith
+
+end MatMachine
+
+end EditedInstances
+
 end Pouw.RelativeSecurity
