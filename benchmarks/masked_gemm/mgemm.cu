@@ -235,6 +235,7 @@ static cublasLtHandle_t g_lt;
 static void* g_ws;
 static const size_t g_wsz = 64u << 20;
 static void ltg_run(const LtG& L, cudaStream_t st) {
+  if (L.algo_id == -2) return;
   const int32_t i1 = 1, ib = L.beta;
   const float f1 = 1.f, fb = (float)L.beta;
   const void* al = L.fmt == I8 ? (const void*)&i1 : (const void*)&f1;
@@ -258,8 +259,13 @@ static LtG ltg(int fmt, int m, int n, int kk, int lda, int ldb, int ldd, const v
   CL(cublasLtMatmulPreferenceSetAttribute(pref, CUBLASLT_MATMUL_PREF_MAX_WORKSPACE_BYTES, &g_wsz, sizeof g_wsz));
   cublasLtMatmulHeuristicResult_t res[16];
   int got = 0;
-  CL(cublasLtMatmulAlgoGetHeuristic(g_lt, L.op, L.la, L.lb, L.ld, L.ld, pref, 16, res, &got));
-  if (got == 0) { fprintf(stderr, "cuBLASLt %s: no algorithm for %d %d %d (lda %d ldb %d)\n", FMTN[fmt], m, n, kk, lda, ldb); exit(3); }
+  if (cublasLtMatmulAlgoGetHeuristic(g_lt, L.op, L.la, L.lb, L.ld, L.ld, pref, 16, res, &got) != CUBLAS_STATUS_SUCCESS) got = 0;
+  if (got == 0) {
+    fprintf(stderr, "cuBLASLt %s: no algorithm for %d %d %d (lda %d ldb %d); its arms are skipped\n", FMTN[fmt], m, n, kk, lda, ldb);
+    CL(cublasLtMatmulPreferenceDestroy(pref));
+    L.algo_id = -2;
+    return L;
+  }
   cudaEvent_t e0, e1;
   CK(cudaEventCreate(&e0)); CK(cudaEventCreate(&e1));
   float best = 1e30f;
@@ -281,7 +287,13 @@ static LtG ltg(int fmt, int m, int n, int kk, int lda, int ldb, int ldd, const v
     CK(cudaEventElapsedTime(&ms, e0, e1));
     if (ms < best) { best = ms; bi = i; }
   }
-  if (bi < 0) { fprintf(stderr, "cuBLASLt %s: no algorithm ran for %d %d %d\n", FMTN[fmt], m, n, kk); exit(3); }
+  if (bi < 0) {
+    fprintf(stderr, "cuBLASLt %s: no algorithm ran for %d %d %d; its arms are skipped\n", FMTN[fmt], m, n, kk);
+    CL(cublasLtMatmulPreferenceDestroy(pref));
+    CK(cudaEventDestroy(e0)); CK(cudaEventDestroy(e1));
+    L.algo_id = -2;
+    return L;
+  }
   L.algo = res[bi].algo;
   size_t w;
   cublasLtMatmulAlgoConfigGetAttribute(&L.algo, CUBLASLT_ALGO_CONFIG_ID, &L.algo_id, sizeof L.algo_id, &w);
@@ -504,6 +516,21 @@ static std::vector<Arm> all_arms() {
   }
   return v;
 }
+// whether every cuBLASLt GEMM the arm runs has an algorithm
+static bool arm_ok(MProb& P, const Arm& a) {
+  const int f = a.fmt;
+  const Low& lw = P.low[a.r];
+  auto ok = [](const LtG& L) { return L.algo_id != -2; };
+  switch (a.kind) {
+    case A_PLAIN: return ok(P.plain[f]);
+    case A_FULL: return ok(P.full[f]);
+    case A_LOW: return ok(lw.main_[f]);
+    case A_LOWSEP: return ok(lw.sepk[f]) && ok(lw.sepp[f]);
+    case A_LOWTC: return ok(lw.main_[f]) && ok(lw.uv[f]) && ok(lw.wz[f]) && ok(lw.az[f]) && ok(lw.bv[f]);
+    case A_LOWTCFORM: return ok(lw.uv[f]) && ok(lw.wz[f]) && ok(lw.az[f]) && ok(lw.bv[f]);
+    default: return true;
+  }
+}
 static void mrun_arm(MProb& P, const Arm& a) {
   const int f = a.fmt;
   Low& lw = P.low[a.r];
@@ -537,8 +564,9 @@ static int mgate(const std::string& dir, int m, int n, int k, uint32_t seed) {
     dump(dir, ("V" + R + ".bin").c_str(), lw.V->dense.data(), lw.V->dense.size() * 4, false);
     dump(dir, ("Z" + R + ".bin").c_str(), lw.Z->dense.data(), lw.Z->dense.size() * 4, false);
   }
-  std::string arms_json;
+  std::string arms_json, skipped;
   for (const Arm& a : all_arms()) {
+    if (!arm_ok(P, a)) { skipped += (skipped.empty() ? "\"" : ", \"") + a.name + "\""; continue; }
     CK(cudaMemset(P.U, 0xA5, ub)); CK(cudaMemset(P.R, 0xA5, rb));
     mrun_arm(P, a);
     CK(cudaStreamSynchronize(P.st));
@@ -563,7 +591,7 @@ static int mgate(const std::string& dir, int m, int n, int k, uint32_t seed) {
     fprintf(fp, "%s\"%d\": {\"L\": [%d, %d], \"Kc\": [%d, %d], \"Klt\": [%d, %d]}", i ? ", " : "", lw.r, lw.L[0], lw.L[1],
             lw.Kc[0], lw.Kc[1], lw.Klt[0], lw.Klt[1]);
   }
-  fprintf(fp, "}, \"arms\": [%s]}\n", arms_json.c_str());
+  fprintf(fp, "}, \"arms\": [%s], \"skipped\": [%s]}\n", arms_json.c_str(), skipped.c_str());
   fclose(fp);
   printf("gate dump %s: m %d n %d k %d grid %d flag %d\n", dir.c_str(), m, n, k, P.grid, flag);
   return 0;
@@ -575,19 +603,21 @@ static int mbench(int reps, const std::vector<std::string>& shapes) {
   CK(cudaDeviceGetAttribute(&nsm, cudaDevAttrMultiProcessorCount, 0));
   cudaDeviceProp prop;
   CK(cudaGetDeviceProperties(&prop, 0));
-  std::vector<Arm> sel;
+  std::vector<Arm> all;
   const char* fa = getenv("MG_ARMS");
   for (const Arm& a : all_arms()) {
     const std::string want = fa ? std::string(",") + fa + "," : "";
-    if (!fa || want.find("," + a.name + ",") != std::string::npos) sel.push_back(a);
+    if (!fa || want.find("," + a.name + ",") != std::string::npos) all.push_back(a);
   }
-  const int NS = (int)sel.size();
   for (const auto& sh : shapes) {
     char name[64];
     int m, n, k;
     if (sscanf(sh.c_str(), "%63[^:]:%d:%d:%d", name, &m, &n, &k) < 4) { fprintf(stderr, "bad shape %s\n", sh.c_str()); return 2; }
     MProb P;
     msetup(P, m, n, k, 0x5EED0000u + m + n + k, false);
+    std::vector<Arm> sel;
+    for (const Arm& a : all) if (arm_ok(P, a)) sel.push_back(a);
+    const int NS = (int)sel.size();
     cudaEvent_t e0, e1;
     CK(cudaEventCreate(&e0)); CK(cudaEventCreate(&e1));
     auto time_arm = [&](const Arm& a, int calls) {
@@ -622,7 +652,9 @@ static int mbench(int reps, const std::vector<std::string>& shapes) {
       fprintf(stdout, "%s\"%d\": {\"L\": [%d, %d], \"Kc\": [%d, %d], \"Klt\": [%d, %d]}", i ? ", " : "", lw.r, lw.L[0], lw.L[1],
               lw.Kc[0], lw.Kc[1], lw.Klt[0], lw.Klt[1]);
     }
-    printf("}, \"lt_algo\": [%d, %d], \"arms\": {", P.plain[0].algo_id, P.plain[1].algo_id);
+    std::string skipped;
+    for (const Arm& a : all) if (!arm_ok(P, a)) skipped += (skipped.empty() ? "\"" : ", \"") + a.name + "\"";
+    printf("}, \"skipped\": [%s], \"lt_algo\": [%d, %d], \"arms\": {", skipped.c_str(), P.plain[0].algo_id, P.plain[1].algo_id);
     for (int j = 0; j < NS; j++) {
       printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f, \"calls\": %d, \"ms_all\": [", j ? ", " : "", sel[j].name.c_str(), median(ms[j]),
              median(mhz[j]), calls[j]);

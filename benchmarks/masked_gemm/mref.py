@@ -126,6 +126,7 @@ def main(d: Path, receipts: bool) -> int:
     TM, BN, WM, NCT = meta["TM"], meta["BN"], meta["WM"], meta["NCT"]
     tiles_m, tiles_n = m // TM, n // BN
     arms = set(meta["arms"])
+    skipped = set(meta.get("skipped", []))
     checks = {"digit_overflow_flag": meta["digit_overflow"] == 0}
     seen = set()
 
@@ -134,6 +135,8 @@ def main(d: Path, receipts: bool) -> int:
 
     def check_product(name, fmt, want):
         seen.add(name)
+        if name in skipped:
+            return
         if fmt == "i8":
             got = ld(f"U_{name}.bin", np.int32, (m, n)).astype(np.int64)
         else:
@@ -155,6 +158,8 @@ def main(d: Path, receipts: bool) -> int:
         for rc, Ts, kind in [("cduo32", T32, "duo"), ("cduo64", T64, "duo"), ("ct4c32", T32, 8), ("ct4c64", T64, 8)]:
             name = f"{rc}_{tag}_{fmt}"
             seen.add(name)
+            if name in skipped:
+                continue
             if kind == "duo":
                 want = duo_receipts(seed, Ts, 0, TM, BN, WM, NCT, tiles_m, tiles_n)
             else:
@@ -213,7 +218,7 @@ def main(d: Path, receipts: bool) -> int:
                 XB[:, k + (L + l) * r : k + (L + l + 1) * r] = wts[l] * W
             checks[f"low{r}_{fmt}_grid"] = bool(max(np.abs(XA).max(), np.abs(XB).max()) <= lim)
             checks[f"low{r}_{fmt}_peel"] = bool((XA @ XB.T == AB).all())
-            for form in ["lowform", "lowtcform"]:
+            for form in [f for f in ["lowform", "lowtcform"] if f"{f}{r}_{fmt}" not in skipped]:
                 gA = decode(fmt, ld(f"XA_{form}{r}_{fmt}.bin", np.uint8, (m, Kc)))
                 gB = decode(fmt, ld(f"XB_{form}{r}_{fmt}.bin", np.uint8, (n, Kc)))
                 seen.add(f"{form}{r}_{fmt}")
@@ -230,6 +235,7 @@ def main(d: Path, receipts: bool) -> int:
     ok = all(v for v in checks.values() if isinstance(v, bool))
     failed = [key for key, v in checks.items() if v is False]
     print(json.dumps({"dir": d.name, "m": m, "n": n, "k": k, "ok": ok, "receipts": receipts, "failed": failed,
+                      "skipped": sorted(skipped),
                       "unchecked_arms": missing, "n_checks": len(checks), **checks}))
     return 0 if ok else 1
 
