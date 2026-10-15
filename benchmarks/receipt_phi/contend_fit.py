@@ -1,137 +1,129 @@
-"""contend.sh's results: each filler class's cost to the tensor pipe, and which model explains it.
+"""contend.sh's results: each filler class's cost to the tensor pipe, by regime.
 
-For every type (FP8, INT8), class, ρ (fillers per MMA) and W (warps per scheduler), the cost of a filler is
-w = (c(ρ) - c(0)) / ρ, in scheduler cycles per filler instruction, where c is the loop's cycles per MMA per scheduler
-(16 at the tensor pipe's peak). Its error is half the gap between the two one-SM passes plus the larger rep spread.
-Models compared on every point:
+c is the loop's cycles per MMA per scheduler (16 at the tensor pipe's peak), measured on one SM; the bare loop's c0 is
+16.000 from W = 2 warps per scheduler. A filler's cost is w = (c(ρ) - c0) / ρ scheduler cycles, ρ fillers per MMA, over
+W = 2, 4, 8 (W = 1 is reported apart: one warp leaves the pipe idle at the loop branch). Cycle counts repeat exactly
+across reps, passes and SMs, so a w's error is its spread over W and ρ within its regime, not noise:
 
-- additive: c = c0 + w·ρ;
-- dispatch slot: c = max(c0, k + o + ρ), each instruction one issue slot of 1 per cycle, an MMA k slots, o the loop's
-  overhead instructions per MMA (from the SASS);
-- pipe: c = max(c0, ρ·p), p the class's pipe cycles per instruction on one scheduler.
+- dilute, ρ = 0.25-2: the least-squares w through the origin, and the range of the per-point w;
+- ρ = 4, and saturated, ρ = 8 and 16, where the class's own pipe (`PIPE`, cycles per instruction on one scheduler)
+  can bind: there c is compared with max(16 + w_dilute·ρ, p·ρ);
+- free: the largest ρ whose loss (1 - c0/c) is under 0.2%, at every W >= 2.
 
-    python3 contend_fit.py OUTDIR > fit.json   (and a Markdown summary on stderr)
+Split rows (fillers in their own warps) use the MMA warps' span. `python3 contend_fit.py OUTDIR > fit.json` writes the
+fit and prints the Markdown table on stderr.
 """
 
-import csv
 import collections
 import json
 import os
 import statistics
 import sys
 
-RHO_ASKED = (0.25, 0.5, 1, 2, 4)
+DILUTE = (0.25, 0.5, 1, 2)
+PIPE = {"iadd3": 2, "lop3": 2, "shf": 2, "prmt": 2, "iadd3r2": 2, "iadd3c": 2, "iadd3i": 2, "rot1": 2, "imad": 2,
+        "idp4a": 2, "ffma": 1, "ffma3": 1.5, "lds": 8, "mix_iadd3_shf": 2, "mix_iadd3_lds": 4}
 
 
 def load(path):
+    if not os.path.exists(path):
+        return []
     return [r for r in (json.loads(x) for x in open(path) if x.startswith("{")) if r.get("ok")]
 
 
-def by_key(rows):
+def table(rows):
     d = collections.defaultdict(list)
     for r in rows:
-        d[(r["type"], r["cls"], r["F"], r["W"])].append(r)
-    return d
+        d[(r["type"], r["cls"], r["F"], r["W"])].append(r["cyc_per_mma"])
+    return {k: statistics.median(v) for k, v in d.items()}
 
 
-def ncu_rows(path):
-    lines = [x for x in open(path, errors="replace") if x.startswith('"')]
-    if len(lines) < 3:
+def fit(c, t, cls, Ws, nfill):
+    """nfill[F]: the filler instructions the SASS has for F (ptxas can emit more than F); w is per instruction."""
+    pts, act = {}, {}
+    for W in Ws:
+        c0 = c.get((t, "none", 0, W))
+        for F in (2, 4, 8, 16, 32, 64, 128, 256):
+            v = c.get((t, cls, F, W))
+            if c0 is not None and v is not None:
+                pts[(F / 16, W)] = (v, c0)
+                act[F / 16] = nfill.get(F, F) / 16
+    if not pts:
         return None
-    rows = list(csv.reader(lines))
-    head, vals = rows[0], rows[2]
-    out = {}
-    for k, v in zip(head, vals):
-        try:
-            out[k] = float(v.replace(",", ""))
-        except ValueError:
-            out[k] = v
-    return out
+    dil = [(act[r], v - c0) for (r, W), (v, c0) in pts.items() if r in DILUTE]
+    w = sum(r * d for r, d in dil) / sum(r * r for r, _ in dil)
+    each = [d / r for r, d in dil]
+    by = lambda rho: [(v - c0) / act[rho] for (r, W), (v, c0) in pts.items() if r == rho]
+    free = 0.0
+    for rho in sorted({r for r, _ in pts}):
+        if all(1 - c0 / v < 0.002 for (r, W), (v, c0) in pts.items() if r == rho):
+            free = rho
+        else:
+            break
+    sat = {}
+    for rho in (4, 8, 16):
+        got = [v for (r, W), (v, c0) in pts.items() if r == rho]
+        if got:
+            pred = max(16 + w * act[rho], PIPE.get(cls, 0) * act[rho])
+            sat[rho] = {"c": [min(got), max(got)], "w": [min(by(rho)), max(by(rho))], "model": pred,
+                        "model_err": [min(got) / pred - 1, max(got) / pred - 1]}
+    return {"w": w, "w_range": [min(each), max(each)], "free_rho": free, "regimes": sat,
+            "loss_at_smallest": {f"rho={r}": round(1 - c0 / v, 5) for (r, W), (v, c0) in sorted(pts.items())
+                                 if r == min(x for x, _ in pts)}}
 
 
 def main():
     d = sys.argv[1]
-    a, b = load(os.path.join(d, "sweep-one-a.jsonl")), load(os.path.join(d, "sweep-one-b.jsonl"))
-    al = load(os.path.join(d, "sweep-all.jsonl")) if os.path.exists(os.path.join(d, "sweep-all.jsonl")) else []
-    sass = json.load(open(os.path.join(d, "contend-sass.json")))
-    exact = {(s["type"], s["cls"], s["F"]): s for s in sass}
-    ka, kb, kal = by_key(a), by_key(b), by_key(al)
-
-    def cpm(rows):
-        return statistics.median(r["cyc_per_mma"] for r in rows)
-
-    def spread(rows):
-        return max((r["cycles_hi"] - r["cycles_lo"]) / r["cycles"] * r["cyc_per_mma"] for r in rows)
-
-    types, classes = ("fp8", "s8"), sorted({r["cls"] for r in a if r["cls"] != "none"})
-    Ws = sorted({r["W"] for r in a})
-    res = {"base": {}, "points": [], "sass_inexact": [], "fit": {}}
-    for t in types:
-        for W in Ws:
-            ra, rb = ka[(t, "none", 0, W)], kb[(t, "none", 0, W)]
-            res["base"][f"{t}/W{W}"] = {"cyc_per_mma_a": [r["cyc_per_mma"] for r in ra],
-                                        "cyc_per_mma_b": [r["cyc_per_mma"] for r in rb],
-                                        "all_sms": [r["cyc_per_mma"] for r in kal.get((t, "none", 0, W), [])]}
+    one = load(os.path.join(d, "sweep-one-a.jsonl")) + load(os.path.join(d, "sweep-one-b.jsonl"))
+    allsm = load(os.path.join(d, "sweep-all.jsonl"))
+    split = load(os.path.join(d, "split.jsonl"))
+    c, call, cs = table(one), table(allsm), table(split)
+    res = {"base": {f"{t}/W{W}": v for (t, cl, F, W), v in sorted(c.items()) if cl == "none"},
+           "all_sms_max_dev": max((abs(call[k] - v) for k, v in c.items() if k in call), default=None),
+           "fused": {}, "split": {}, "w1": {}}
+    sass_path = os.path.join(d, "contend-sass.json")
+    sass = json.load(open(sass_path)) if os.path.exists(sass_path) else []
+    res["sass_inexact"] = [(s["type"], s["cls"], s["F"], s["fillers"]) for s in sass if not s["exact"]]
+    nfill = collections.defaultdict(dict)
     for s in sass:
-        if not s["exact"]:
-            res["sass_inexact"].append({k: s[k] for k in ("type", "cls", "F", "mma", "fillers", "other")})
-    ovh = {t: sum(exact[(t, "none", 0)]["other"].values()) / 16 for t in types if (t, "none", 0) in exact}
-    for t in types:
-        for c in classes:
-            for W in Ws:
-                c0a, c0b = cpm(ka[(t, "none", 0, W)]), cpm(kb[(t, "none", 0, W)])
-                for F in sorted({r["F"] for r in a if r["cls"] == c}):
-                    ra, rb = ka.get((t, c, F, W)), kb.get((t, c, F, W))
-                    if not ra or not rb:
-                        continue
-                    rho = F / 16
-                    da, db = cpm(ra) - c0a, cpm(rb) - c0b
-                    err = abs(da - db) / 2 + max(spread(ra), spread(rb), spread(ka[(t, "none", 0, W)]))
-                    rall = kal.get((t, c, F, W))
-                    dall = cpm(rall) - cpm(kal[(t, "none", 0, W)]) if rall and kal.get((t, "none", 0, W)) else None
-                    s = exact.get((t, c, F), {})
-                    res["points"].append({
-                        "type": t, "cls": c, "F": F, "rho": rho, "W": W, "c0": (c0a + c0b) / 2,
-                        "c": (cpm(ra) + cpm(rb)) / 2, "dc": (da + db) / 2, "dc_err": err, "w": (da + db) / 2 / rho,
-                        "w_err": err / rho, "dc_all_sms": dall, "sass_exact": s.get("exact"),
-                        "tensor_eff": 16 / ((cpm(ra) + cpm(rb)) / 2)})
-    # Per type, class and W: w over the asked ρ range (least squares through the origin of dc on ρ), and the largest ρ
-    # whose dc is within its error of zero (the free budget).
-    for t in types:
-        for c in classes:
-            for W in Ws:
-                pts = [p for p in res["points"] if p["type"] == t and p["cls"] == c and p["W"] == W]
-                asked = [p for p in pts if p["rho"] in RHO_ASKED]
-                if not asked:
-                    continue
-                sxx = sum(p["rho"] ** 2 for p in asked)
-                w = sum(p["rho"] * p["dc"] for p in asked) / sxx
-                resid = max(abs(p["dc"] - w * p["rho"]) for p in asked)
-                free = 0.0
-                for p in sorted(pts, key=lambda p: p["rho"]):
-                    if abs(p["dc"]) <= max(2 * p["dc_err"], 0.01 * p["c0"]):
-                        free = p["rho"]
-                    else:
-                        break
-                res["fit"][f"{t}/{c}/W{W}"] = {"w": w, "max_resid": resid, "free_rho": free,
-                                               "w_by_rho": {p["rho"]: round(p["w"], 4) for p in pts}}
-    res["loop_overhead_per_mma"] = ovh
-    ncu = {}
-    for f in sorted(os.listdir(d)):
-        if f.startswith("ncu-") and f.endswith(".csv"):
-            r = ncu_rows(os.path.join(d, f))
-            if r:
-                keep = {k: v for k, v in r.items() if isinstance(v, float) and (
-                    "issue_active" in k or "pipe_tensor" in k or "inst_executed.sum" in k or "inst_issued" in k
-                    or ("issue_stalled" in k and "per_issue_active" in k and v >= 0.05))}
-                ncu[f[4:-4]] = keep
-    res["ncu"] = ncu
+        nfill[(s["type"], s["cls"])][s["F"]] = s["fillers"]
+    nsplit = collections.defaultdict(dict)
+    for s in sass:
+        if "fill_only" in s["split"]:
+            nsplit[(s["type"], s["cls"])][s["F"]] = s["split"]["fill_only"]["fillers"]
+    classes = sorted({k[1] for k in c if k[1] != "none"})
+    for t in ("fp8", "s8"):
+        for cls in classes:
+            f = fit(c, t, cls, (2, 4, 8), nfill[(t, cls)])
+            if f:
+                res["fused"][f"{t}/{cls}"] = f
+            f1 = fit(c, t, cls, (1,), nfill[(t, cls)])
+            if f1:
+                res["w1"][f"{t}/{cls}"] = {"w": f1["w"], "w_range": f1["w_range"]}
+            if split:
+                # split W counts both groups: W = 4 is 2 MMA warps + 2 filler warps a scheduler, against the bare
+                # loop with the filler warps idle (F = 0 in split mode)
+                fs = fit(cs, t, cls, (4, 8), nsplit[(t, cls)])
+                if fs:
+                    res["split"][f"{t}/{cls}"] = fs
     json.dump(res, sys.stdout, indent=1)
-    md = ["| type | class | W | w (cyc/instr) | w at ρ=0.25 0.5 1 2 4 8 16 | free ρ |", "|---|---|---|---|---|---|"]
-    for key, v in res["fit"].items():
-        t, c, W = key.split("/")
-        wr = " ".join(f"{v['w_by_rho'].get(r, float('nan')):.2f}" for r in (0.25, 0.5, 1, 2, 4, 8, 16))
-        md.append(f"| {t} | {c} | {W[1:]} | {v['w']:.3f} ± {v['max_resid']:.3f} | {wr} | {v['free_rho']} |")
+    md = ["| class | FP8 w, ρ ≤ 2 | INT8 w, ρ ≤ 2 | FP8 / INT8 w at ρ = 4 | at ρ = 16 (model err) | free ρ FP8 / INT8 |"
+          + (" split FP8 / INT8 w |" if split else ""),
+          "|---|---|---|---|---|---|" + ("---|" if split else "")]
+    for cls in classes:
+        a, b = res["fused"].get(f"fp8/{cls}"), res["fused"].get(f"s8/{cls}")
+        if not a or not b:
+            continue
+        r4 = lambda x: "{:.2f}-{:.2f}".format(*x["regimes"][4]["w"]) if 4 in x["regimes"] else "-"
+        r16 = lambda x: ("{:.2f}-{:.2f} ({:+.0%})".format(*x["regimes"][16]["w"], x["regimes"][16]["model_err"][1])
+                         if 16 in x["regimes"] else "-")
+        row = (f"| {cls} | {a['w']:.2f} [{a['w_range'][0]:.2f}, {a['w_range'][1]:.2f}] | {b['w']:.2f} "
+               f"[{b['w_range'][0]:.2f}, {b['w_range'][1]:.2f}] | {r4(a)} / {r4(b)} | {r16(a)} / {r16(b)} | "
+               f"{a['free_rho']} / {b['free_rho']} |")
+        if split:
+            sa, sb = res["split"].get(f"fp8/{cls}"), res["split"].get(f"s8/{cls}")
+            row += f" {sa['w']:.2f} / {sb['w']:.2f} |" if sa and sb else " - |"
+        md.append(row)
     print("\n".join(md), file=sys.stderr)
 
 
