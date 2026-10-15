@@ -442,6 +442,35 @@ theorem int8_product_exact (A : Matrix m k ℤ) (B : Matrix k p ℤ) (hk : Finty
     (peel32 A B R S i j).valMinAbs = (A * B) i j :=
   s32_peel_recovers A B R S (int8_product_bounds A B hk hA hB) i j
 
+/-- A product of integer matrices with entries at most `M` in absolute value has entries at most `|k| M²`. -/
+theorem grid_product_bound (A : Matrix m k ℤ) (B : Matrix k p ℤ) {M : ℤ} (hA : ∀ i l, |A i l| ≤ M)
+    (hB : ∀ l j, |B l j| ≤ M) (i : m) (j : p) : |(A * B) i j| ≤ Fintype.card k * M ^ 2 := by
+  rw [Matrix.mul_apply]
+  calc |∑ l, A i l * B l j| ≤ ∑ l, |A i l * B l j| := Finset.abs_sum_le_sum_abs _ _
+    _ ≤ ∑ _l : k, M ^ 2 := Finset.sum_le_sum fun l _ => by
+        rw [abs_mul, sq]
+        exact mul_le_mul (hA i l) (hB l j) (abs_nonneg _) ((abs_nonneg _).trans (hA i l))
+    _ = Fintype.card k * M ^ 2 := by simp [Finset.sum_const, Finset.card_univ]
+
+/-- **RS-DEF's exactness condition (E)** on the integer grid: if the useful operands, the noise and the masked operands
+all have entries at most `M_op` and `n M_op² ≤ B_acc`, every product the peel computes, `(A + R)(B + S)`, `R (B + S)`
+and `A S`, has entries at most `B_acc`, so an accumulator exact up to `B_acc` (`2^24` for E4M3 integers with FP32
+accumulation, `2^31 − 1` for int8 with s32) computes each exactly, and the peel over `ℤ` is `A B` (`mask_peel`). -/
+theorem grid_peel_in_range (A R : Matrix m k ℤ) (B S : Matrix k p ℤ) {Mop Bacc : ℤ}
+    (hA : ∀ i l, |A i l| ≤ Mop) (hR : ∀ i l, |R i l| ≤ Mop) (hS : ∀ l j, |S l j| ≤ Mop)
+    (hAR : ∀ i l, |(A + R) i l| ≤ Mop) (hBS : ∀ l j, |(B + S) l j| ≤ Mop)
+    (hE : Fintype.card k * Mop ^ 2 ≤ Bacc) (i : m) (j : p) :
+    |((A + R) * (B + S)) i j| ≤ Bacc ∧ |(R * (B + S)) i j| ≤ Bacc ∧ |(A * S) i j| ≤ Bacc :=
+  ⟨(grid_product_bound _ _ hAR hBS i j).trans hE, (grid_product_bound _ _ hR hBS i j).trans hE,
+    (grid_product_bound _ _ hA hS i j).trans hE⟩
+
+/-- RS-DEF §1.1's instances meet (E): int8 operands in `[-126, 126]` (useful and noise in `[-63, 63]`) with s32
+accumulation for `n ≤ 135,266`, the largest such `n`; E4M3 integers in `[-16, 16]` with FP32 accumulation for
+`n ≤ 65,536`. -/
+theorem grid_instances :
+    (135266 : ℤ) * 126 ^ 2 ≤ 2 ^ 31 - 1 ∧ ¬ (135267 : ℤ) * 126 ^ 2 ≤ 2 ^ 31 - 1 ∧ (65536 : ℤ) * 16 ^ 2 ≤ 2 ^ 24 := by
+  norm_num
+
 /-- Saturating int8 arithmetic (clamped to `[-128, 127]`), the kind of non-exact accumulator the peel needs to avoid. -/
 def sat8 (z : ℤ) : ℤ := max (-128) (min 127 z)
 
@@ -451,6 +480,33 @@ theorem sat8_breaks_peel : sat8 (sat8 (100 + 100) - 100) ≠ 100 := by
   decide
 
 end Exactness
+
+section ZeroInstance
+
+/-! RS-DEF's Proposition Z, the algebra: what the zero instance's transcript is. `D` is any matrix (the prefix
+selector `diag(1_{k ≤ jL})` for the `j`-th prefix sum `P_j = A' D B'`). -/
+
+variable {α : Type*} [Ring α] {m k p r r' : Type*} [Fintype k] [Fintype r] [Fintype r']
+
+/-- **Z(a), σ before the instance**: an instance chosen after the noise as `A_M = −E`, `B_M = −F` makes every
+masked prefix sum zero, for free. -/
+theorem sigma_first_cancels (E : Matrix m k α) (F : Matrix k p α) (D : Matrix k k α) :
+    (-E + E) * D * (-F + F) = 0 := by
+  simp
+
+/-- **Z(c)**: with `A_M = B_M = 0` the masked prefix sums are `P_j = E (D F)`, one product with the noise `E`. -/
+theorem zero_instance_prefix (E : Matrix m k α) (F : Matrix k p α) (D : Matrix k k α) :
+    (0 + E) * D * (0 + F) = E * (D * F) := by
+  simp [Matrix.mul_assoc]
+
+/-- **Z(d)**: with rank-`r` noise `E = E_L E_R` and `F = F_L F_R` and `A_M = B_M = 0`, the masked prefix sums are
+`P_j = E_L Q_j F_R` with `Q_j = E_R D F_L` an `r × r'` matrix: products through the inner dimensions `r`, `r'`. -/
+theorem zero_instance_lowRank_prefix (EL : Matrix m r α) (ER : Matrix r k α) (FL : Matrix k r' α)
+    (FR : Matrix r' p α) (D : Matrix k k α) :
+    (0 + EL * ER) * D * (0 + FL * FR) = EL * (ER * D * FL) * FR := by
+  simp only [zero_add, Matrix.mul_assoc]
+
+end ZeroInstance
 
 section Reduction
 
