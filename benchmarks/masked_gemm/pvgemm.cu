@@ -1,5 +1,5 @@
 // Cutting P V's noise cost on sm_120a (H = 32 heads, head dimension 128, sequence s). The noise is SHA-512 in counter
-// mode (sha_noise.cuh: pm1, u17, u17w), V's fresh for every head, and P's either
+// mode (sha_noise.cuh: pm1, u17, u17w; u17p and u17wp their noise five lanes a patch), V's fresh for every head, and P's either
 //   shared: one E (s x s) a layer for all H heads, P'_h = P_h + E (sha_fill writes E, then E is added from the buffer), or
 //   unshared: fresh for every head, generated where P is produced.
 // The methods:
@@ -138,8 +138,6 @@ template <int MODE, int NS> __global__ void __launch_bounds__(PL::NT, 1) prod(co
 typedef void (*PKern)(const PArgs);
 static PKern PK_U[3] = {prod<1, 1>, prod<1, 2>, prod<1, 3>};
 
-static const char* ALN[3] = {"pm1", "u17", "u17w"};
-
 struct VProb {
   int s, H, grid, pgrid;
   uint32_t pE, pV;
@@ -212,22 +210,13 @@ static std::vector<VArm> vall() {
                                              {"sepSd", V_SEPSD}, {"fusS", V_FUSS}, {"fovS", V_FOVS}, {"fusSd", V_FUSSD},
                                              {"prodS", V_PRODS}, {"prodU", V_PRODU}, {"prodSlt", V_PRODSLT}, {"prodUlt", V_PRODULT},
                                              {"prodSd", V_PRODSD}, {"prodUd", V_PRODUD}};
-  for (int al = 0; al < 3; al++)
-    for (auto& [n, k] : per) v.push_back({std::string(n) + "_" + ALN[al], k, al});
+  for (int al = 0; al < NAL; al++)
+    for (auto& [n, k] : per)
+      if (al < 3 || (k != V_PRODU && k != V_PRODULT && k != V_PRODUD)) v.push_back({std::string(n) + "_" + ALN[al], k, al});
   return v;
 }
-static void genP(VProb& P, int al, const Sig& s) {
-  const uint32_t g = (P.pE + 255) / 256, KB = P.s / 128;
-  if (al == 0) sha_fill<1><<<g, 256, 0, P.st>>>(P.E, P.pE, KB, s);
-  else if (al == 1) sha_fill<2><<<g, 256, 0, P.st>>>(P.E, P.pE, KB, s);
-  else sha_fill<3><<<g, 256, 0, P.st>>>(P.E, P.pE, KB, s);
-}
-static void editV(VProb& P, int al, const Sig& s) {
-  const uint32_t g = (P.pV + 255) / 256, KB = P.s / 128;
-  if (al == 0) sha_edit<1, false><<<g, 256, 0, P.st>>>(nullptr, nullptr, P.Vt, P.XB, 0, P.pV, KB, s);
-  else if (al == 1) sha_edit<2, false><<<g, 256, 0, P.st>>>(nullptr, nullptr, P.Vt, P.XB, 0, P.pV, KB, s);
-  else sha_edit<3, false><<<g, 256, 0, P.st>>>(nullptr, nullptr, P.Vt, P.XB, 0, P.pV, KB, s);
-}
+static void genP(VProb& P, int al, const Sig& s) { fill_al(al, P.E, P.pE, P.s / 128, s, P.st); }
+static void editV(VProb& P, int al, const Sig& s) { edit_al<false>(al, nullptr, nullptr, P.Vt, P.XB, 0, P.pV, P.s / 128, s, P.st); }
 static void pv_gemm(VProb& P, Kern k, const Maps* m, const Sig& s) {
   Args a{m, P.U, P.R, P.s, HD, P.s, 8, P.seed, 0, P.H, 0, 0, {s.w[0], s.w[1], s.w[2], s.w[3]}, P.E};
   k<<<P.grid, CNT, CSMEM, P.st>>>(a);
@@ -247,13 +236,7 @@ static void vrun(VProb& P, const VArm& a) {
     case V_PRODMAX: prod_launch(P, prod<0, 0>, P.Pt, s); break;
     case V_PRODN: prod_launch(P, prod<1, 0>, P.Pt, s); break;
     case V_GENP: genP(P, al, s); break;
-    case V_GENV: {
-      const uint32_t g = (P.pV + 255) / 256;
-      if (al == 0) sha_gen<1><<<g, 256, 0, P.st>>>(P.G, 0, P.pV, s);
-      else if (al == 1) sha_gen<2><<<g, 256, 0, P.st>>>(P.G, 0, P.pV, s);
-      else sha_gen<3><<<g, 256, 0, P.st>>>(P.G, 0, P.pV, s);
-      break;
-    }
+    case V_GENV: gen_al(al, P.G, 0, P.pV, s, P.st); break;
     case V_EDITV: editV(P, al, s); break;
     case V_SEPS: sep_shared(P, al, s); ltg_run(P.ltx, P.st); break;
     case V_SEPSD: sep_shared(P, al, s); pv_gemm(P, RCK[0][1], P.mXX, s); break;

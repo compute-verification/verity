@@ -87,6 +87,75 @@ template <int NS, class F> DEV void sha_patch(const uint64_t* sg, uint32_t tag, 
     }
   }
 }
+
+// NS 2 and 3 with a patch's blocks hashed at once, the same noise as sha_patch: lanes base + i (i < 5) of a warp hash
+// blocks 0..4 (4 blocks can't fill a patch: 480 or 448 digits), lanes i < 3 blocks 5..7 if those fall short (5.5% of
+// patches for NS 2, 6.6% for NS 3); each lane writes its accepted words' digits at its offset, so buf holds the
+// patch's 512 noise bytes in entry order. Every lane of the warp calls it (shuffles), and a lane with !live writes nothing.
+template <int NS> DEV int sha_accepted(const uint64_t (&st)[8]) {
+  int n = 0;
+#pragma unroll
+  for (int i = 0; i < 8; i++) {
+    if constexpr (NS == 2) n += st[i] < U17_LIM;
+    else n += ((uint32_t)(st[i] >> 32) < U17W_LIM) + ((uint32_t)st[i] < U17W_LIM);
+  }
+  return n;
+}
+template <int NS> DEV void sha_digits(const uint64_t (&st)[8], uint8_t* buf, int pos) {
+  auto put7 = [&](uint32_t v) {
+#pragma unroll
+    for (int i = 0; i < 7; i++) {
+      const uint32_t q = v / 17u;
+      if (pos < 512) buf[pos] = (uint8_t)(v - 17u * q - 8);
+      pos++; v = q;
+    }
+  };
+#pragma unroll
+  for (int i = 0; i < 8; i++) {
+    if constexpr (NS == 2) {
+      uint64_t w = st[i];
+      if (w >= U17_LIM || pos >= 512) continue;
+      w %= P17_15;
+      const uint64_t q1 = w / P17_7, a = q1 / P17_7;
+      put7((uint32_t)(w - q1 * P17_7));
+      put7((uint32_t)(q1 - a * P17_7));
+      if (pos < 512) buf[pos] = (uint8_t)((uint32_t)a - 8);
+      pos++;
+    } else {
+      const uint32_t hi = (uint32_t)(st[i] >> 32), lo = (uint32_t)st[i];
+      if (hi < U17W_LIM && pos < 512) put7(hi % (uint32_t)P17_7);
+      if (lo < U17W_LIM && pos < 512) put7(lo % (uint32_t)P17_7);
+    }
+  }
+}
+template <int NS> DEV void sha_patch5(const uint64_t* sg, uint32_t tag, uint32_t p, uint8_t* buf, int i, int base, bool live) {
+  static_assert(NS == 2 || NS == 3, "multi-block alphabets only");
+  constexpr int DPW = NS == 2 ? 15 : 7;
+  const uint64_t ctr = (uint64_t)tag << 56 | (uint64_t)p * 8;
+  uint64_t st[8];
+  int acc = 0;
+  if (live) { sha_block(sg, ctr + i, st); acc = sha_accepted<NS>(st); }
+  int off = 0, tot = 0;
+#pragma unroll
+  for (int j = 0; j < 5; j++) {
+    const int a = __shfl_sync(0xFFFFFFFFu, acc, base + j);
+    off += j < i ? a : 0;
+    tot += a;
+  }
+  if (live) sha_digits<NS>(st, buf, DPW * off);
+  const bool more = live && DPW * tot < 512;
+  if (__any_sync(0xFFFFFFFFu, more)) {
+    acc = 0;
+    if (more && i < 3) { sha_block(sg, ctr + 5 + i, st); acc = sha_accepted<NS>(st); }
+    int off2 = 0;
+#pragma unroll
+    for (int j = 0; j < 3; j++) {
+      const int a = __shfl_sync(0xFFFFFFFFu, acc, base + j);
+      off2 += j < i ? a : 0;
+    }
+    if (more && i < 3) sha_digits<NS>(st, buf, DPW * (tot + off2));
+  }
+}
 // x + n bytewise: int8 (SWAR, no carry between bytes) or E4M3 (through f16, exact for |x + n| <= 16)
 template <bool F8> DEV uint32_t add_noise(uint32_t x, uint32_t n) {
   if constexpr (!F8) {

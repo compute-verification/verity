@@ -65,3 +65,84 @@ __global__ void __launch_bounds__(256) sha_fill(uint8_t* __restrict__ E, uint32_
     *reinterpret_cast<uint4*>(E + base + (size_t)(c / 8) * k + (c % 8) * 16) = make_uint4(n[0], n[1], n[2], n[3]);
   });
 }
+
+// the three passes with five lanes a patch (sha_patch5; 6 patches a warp, 48 a CTA): OUT 0 edits (A, B -> XA, XB), 1
+// folds to G, 2 fills E (A's patches only)
+constexpr int P5_PER_CTA = 48;
+template <int NS, int OUT, bool F8>
+__global__ void __launch_bounds__(256) sha_par(const uint8_t* __restrict__ A, uint8_t* __restrict__ XA, const uint8_t* __restrict__ B,
+                                               uint8_t* __restrict__ XB, uint32_t* __restrict__ G, uint32_t pa, uint32_t pb, uint32_t KB,
+                                               const __grid_constant__ Sig sg) {
+  __shared__ __align__(16) uint8_t nb[8][6][512];
+  const int warp = threadIdx.x / 32, lane = threadIdx.x % 32, gi = lane < 30 ? lane / 5 : 5, i = lane < 30 ? lane % 5 : 5;
+  const uint32_t idx = (blockIdx.x * 8 + warp) * 6 + gi;
+  const bool live = lane < 30 && idx < pa + pb, isA = idx < pa;
+  const uint32_t p = isA ? idx : idx - pa;
+  uint8_t* buf = nb[warp][gi];
+  sha_patch5<NS>(sg.w, 2 * (NS - 1) + (isA ? 0 : 1), p, buf, i, 5 * gi, live);
+  __syncwarp();
+  if constexpr (OUT == 1) {
+    uint32_t x = 0;
+    if (live)
+      for (int c = i; c < 32; c += 5) {
+        const uint4 n = *reinterpret_cast<const uint4*>(buf + 16 * c);
+        const uint32_t f = n.x ^ n.y ^ n.z ^ n.w;
+        x ^= __funnelshift_l(f, f, c);
+      }
+#pragma unroll
+    for (int j = 1; j < 5; j++) {
+      const uint32_t y = __shfl_sync(0xFFFFFFFFu, x, 5 * gi + j);
+      if (i == 0) x ^= y;
+    }
+    if (live && i == 0) G[idx] = x;
+  } else {
+    if (!live) return;
+    const size_t k = (size_t)KB * 128, base = (size_t)(p / KB) * 4 * k + (size_t)(p % KB) * 128;
+    for (int c = i; c < 32; c += 5) {
+      const uint4 n = *reinterpret_cast<const uint4*>(buf + 16 * c);
+      const size_t off = base + (size_t)(c / 8) * k + (c % 8) * 16;
+      if constexpr (OUT == 2) {
+        *reinterpret_cast<uint4*>(XA + off) = n;
+      } else {
+        const uint4 x = *reinterpret_cast<const uint4*>((isA ? A : B) + off);
+        *reinterpret_cast<uint4*>((isA ? XA : XB) + off) =
+            make_uint4(add_noise<F8>(x.x, n.x), add_noise<F8>(x.y, n.y), add_noise<F8>(x.z, n.z), add_noise<F8>(x.w, n.w));
+      }
+    }
+  }
+}
+
+// launchers by alphabet: pm1, u17 and u17w one thread a patch; u17p and u17wp the same noise as u17 and u17w, five lanes
+// a patch
+constexpr int NAL = 5;
+static const char* ALN[NAL] = {"pm1", "u17", "u17w", "u17p", "u17wp"};
+template <int NS, bool F8>
+static void edit_ns(bool par, const uint8_t* A, uint8_t* XA, const uint8_t* B, uint8_t* XB, uint32_t pa, uint32_t pb, uint32_t KB,
+                    const Sig& s, cudaStream_t st) {
+  if constexpr (NS > 1)
+    if (par) { sha_par<NS, 0, F8><<<(pa + pb + P5_PER_CTA - 1) / P5_PER_CTA, 256, 0, st>>>(A, XA, B, XB, nullptr, pa, pb, KB, s); return; }
+  sha_edit<NS, F8><<<(pa + pb + 255) / 256, 256, 0, st>>>(A, XA, B, XB, pa, pb, KB, s);
+}
+template <bool F8>
+static void edit_al(int al, const uint8_t* A, uint8_t* XA, const uint8_t* B, uint8_t* XB, uint32_t pa, uint32_t pb, uint32_t KB,
+                    const Sig& s, cudaStream_t st) {
+  if (al == 0) edit_ns<1, F8>(false, A, XA, B, XB, pa, pb, KB, s, st);
+  else if (al % 2) edit_ns<2, F8>(al == 3, A, XA, B, XB, pa, pb, KB, s, st);
+  else edit_ns<3, F8>(al == 4, A, XA, B, XB, pa, pb, KB, s, st);
+}
+static void gen_al(int al, uint32_t* G, uint32_t pa, uint32_t pb, const Sig& s, cudaStream_t st) {
+  const uint32_t g = (pa + pb + 255) / 256, g5 = (pa + pb + P5_PER_CTA - 1) / P5_PER_CTA;
+  if (al == 0) sha_gen<1><<<g, 256, 0, st>>>(G, pa, pb, s);
+  else if (al == 1) sha_gen<2><<<g, 256, 0, st>>>(G, pa, pb, s);
+  else if (al == 2) sha_gen<3><<<g, 256, 0, st>>>(G, pa, pb, s);
+  else if (al == 3) sha_par<2, 1, false><<<g5, 256, 0, st>>>(nullptr, nullptr, nullptr, nullptr, G, pa, pb, 0, s);
+  else sha_par<3, 1, false><<<g5, 256, 0, st>>>(nullptr, nullptr, nullptr, nullptr, G, pa, pb, 0, s);
+}
+static void fill_al(int al, uint8_t* E, uint32_t patches, uint32_t KB, const Sig& s, cudaStream_t st) {
+  const uint32_t g = (patches + 255) / 256, g5 = (patches + P5_PER_CTA - 1) / P5_PER_CTA;
+  if (al == 0) sha_fill<1><<<g, 256, 0, st>>>(E, patches, KB, s);
+  else if (al == 1) sha_fill<2><<<g, 256, 0, st>>>(E, patches, KB, s);
+  else if (al == 2) sha_fill<3><<<g, 256, 0, st>>>(E, patches, KB, s);
+  else if (al == 3) sha_par<2, 2, false><<<g5, 256, 0, st>>>(nullptr, E, nullptr, nullptr, nullptr, patches, 0, KB, s);
+  else sha_par<3, 2, false><<<g5, 256, 0, st>>>(nullptr, E, nullptr, nullptr, nullptr, patches, 0, KB, s);
+}

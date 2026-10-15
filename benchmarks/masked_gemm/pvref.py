@@ -2,7 +2,7 @@
 
 python3 pvref.py DIR prints one JSON line of checks and exits 0 only if every check passes.
 
-From the dumped P, V^T, Q, K and the seed alone (sref.py's sigma and patch noise, for pm1, u17 and u17w): the shared E
+From the dumped P, V^T, Q, K and the seed alone (sref.py's sigma and patch noise, for pm1, u17, u17w, u17p, u17wp): the shared E
 (s x s, A's tag) against genP's buffer; V's fresh noise (H 128 x s, B's tag) against editV's V' and genV's folded words;
 P + E broadcast over the heads (sepS's P'); every P V product, edited or not, per head, and the duo-32 receipts; S's row
 maxima (prodmax), exact; the producer's P~ (prodN) in [0, 119] and within 1 of a float64 softmax step; and the producer's
@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "floored_gemm"))
 from mref import duo_receipts, words  # noqa: E402
 from sref import fold, noise, sigma  # noqa: E402
 
-ALS = {"pm1": 1, "u17": 2, "u17w": 3}
+ALS = {"pm1": 1, "u17": 2, "u17w": 3, "u17p": 2, "u17wp": 3}   # u17p, u17wp: the noise of u17, u17w, five lanes a patch
 HD = 128
 
 
@@ -51,6 +51,8 @@ def main(d: Path) -> int:
         return np.matmul(X.reshape(H, s, s), Y.reshape(H, HD, s).transpose(0, 2, 1)).reshape(H * s, HD)
 
     def check_u(name, X, Y, duo=False):
+        if name not in arms:
+            return
         seen.add(name)
         if name in skipped:
             return
@@ -80,10 +82,11 @@ def main(d: Path) -> int:
     check_u("plain", P, Vt)
     check_u("cduo", P, Vt, duo=True)
 
+    by_ns = {}
     for al, ns in ALS.items():
-        E, pe = noise(s, s, key, ns, 0)
-        EV, pv = noise(H * HD, s, key, ns, 1)
-        EU, _ = noise(H * s, s, key, ns, 0)
+        if ns not in by_ns:
+            by_ns[ns] = noise(s, s, key, ns, 0), noise(H * HD, s, key, ns, 1), noise(H * s, s, key, ns, 0)
+        (E, pe), (EV, pv), (EU, _) = by_ns[ns]
         vals = np.array([-1, 1]) if ns == 1 else np.arange(-8, 9)
         checks[f"noise_{al}_in_S"] = bool(np.isin(np.concatenate([E.ravel(), EV.ravel(), EU.ravel()]), vals).all())
         Eb = np.tile(E, (H, 1))
@@ -109,6 +112,8 @@ def main(d: Path) -> int:
         check_u(f"fusSd_{al}", Ps, Vp, duo=True)
         for tag, En in [("S", Eb), ("U", EU)]:
             name = f"prod{tag}_{al}"
+            if name not in arms:
+                continue
             seen.add(name)
             if name not in skipped:
                 got = ld(f"XA_{name}.bin", np.int8, (H * s, s)).astype(np.int64)

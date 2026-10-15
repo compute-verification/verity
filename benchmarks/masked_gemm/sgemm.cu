@@ -1,7 +1,8 @@
 // The edited GEMM with its noise expanded from sigma by SHA-512 in counter mode (RS-D1b,
 // note:20261015T1815Z-draft-rs-d1b-independent; the generator is sha_noise.cuh), at the minimum bits an entry for two
 // alphabets: pm1, S = {+1, -1} (1 bit an entry), and u17, uniform {-8..8} (base-17 digits, about 4.6 bits an entry),
-// with u17w the same alphabet from 32-bit words (7 digits a word, no 64-bit division; separate passes only).
+// with u17w the same alphabet from 32-bit words (7 digits a word, no 64-bit division), and u17p and u17wp the noise of
+// u17 and u17w with a patch's blocks hashed at once on five lanes (sha_patch5); u17w, u17p and u17wp separate passes only.
 // Fresh sigma for every instance. int8 operands are kept in [-119, 119] and E4M3's in [-8, 8], so A' and B' can't
 // saturate and every sum is exact. gamma_gen is the generation alone; the edit methods:
 //   sform: the generation and the edit as one separate pass (one thread a patch of 4 rows x 128 columns)
@@ -32,7 +33,6 @@ GEMMS(o2_duo32, 32, DUO, 2, 2)
 // [alphabet][overlapped][duo 32]
 static Kern SK[2][2][2] = {{{s1_plain, s1_duo32}, {o1_plain, o1_duo32}}, {{s2_plain, s2_duo32}, {o2_plain, o2_duo32}}};
 static_assert(ML<128, 128, 32, 3, false, 2, 2>::SMEM == CSMEM, "one shared-memory size");
-static const char* ALN[3] = {"pm1", "u17", "u17w"};
 
 struct SProb {
   int m, n, k, batch, grid;
@@ -95,7 +95,7 @@ struct SArm { std::string name; int kind, al, fmt, duo; };
 static std::vector<SArm> sall() {
   std::vector<SArm> v;
   for (int f = 0; f < 2; f++) v.push_back({std::string("plain_") + FMTN[f], S_PLAIN, 0, f, 0});
-  for (int al = 0; al < 3; al++) {
+  for (int al = 0; al < NAL; al++) {
     const std::string A = ALN[al];
     v.push_back({"gen_" + A, S_GEN, al, 0, 0});
     for (int f = 0; f < 2; f++) {
@@ -104,7 +104,7 @@ static std::vector<SArm> sall() {
       v.push_back({"slt_" + A + F, S_LT, al, f, 0});
       v.push_back({"sduo_" + A + F, S_DUO, al, f, 1});
     }
-    if (al == 2) continue;
+    if (al >= 2) continue;
     v.push_back({"fus_" + A + "_i8", S_FUS, al, 0, 0});
     v.push_back({"fusd_" + A + "_i8", S_FUS, al, 0, 1});
     v.push_back({"fov_" + A + "_i8", S_FOV, al, 0, 0});
@@ -118,13 +118,8 @@ static bool sarm_ok(const SProb& P, const SArm& a) {
   return true;
 }
 static void sform(SProb& P, int al, int f, const Sig& s) {
-  const uint32_t g = (P.pa + P.pb + 255) / 256;
-  if (al == 0 && f == I8) sha_edit<1, false><<<g, 256, 0, P.st>>>(P.A[f], P.XA, P.B[f], P.XB, P.pa, P.pb, P.KB, s);
-  if (al == 0 && f == E4) sha_edit<1, true><<<g, 256, 0, P.st>>>(P.A[f], P.XA, P.B[f], P.XB, P.pa, P.pb, P.KB, s);
-  if (al == 1 && f == I8) sha_edit<2, false><<<g, 256, 0, P.st>>>(P.A[f], P.XA, P.B[f], P.XB, P.pa, P.pb, P.KB, s);
-  if (al == 1 && f == E4) sha_edit<2, true><<<g, 256, 0, P.st>>>(P.A[f], P.XA, P.B[f], P.XB, P.pa, P.pb, P.KB, s);
-  if (al == 2 && f == I8) sha_edit<3, false><<<g, 256, 0, P.st>>>(P.A[f], P.XA, P.B[f], P.XB, P.pa, P.pb, P.KB, s);
-  if (al == 2 && f == E4) sha_edit<3, true><<<g, 256, 0, P.st>>>(P.A[f], P.XA, P.B[f], P.XB, P.pa, P.pb, P.KB, s);
+  if (f == I8) edit_al<false>(al, P.A[f], P.XA, P.B[f], P.XB, P.pa, P.pb, P.KB, s, P.st);
+  else edit_al<true>(al, P.A[f], P.XA, P.B[f], P.XB, P.pa, P.pb, P.KB, s, P.st);
 }
 static void scg(SProb& P, Kern kern, const Maps* maps, const Sig& s) {
   Args a{maps, P.U, P.R, P.m, P.n, P.k, 8, P.seed, 0, P.batch, 0, 0, {s.w[0], s.w[1], s.w[2], s.w[3]}};
@@ -133,14 +128,9 @@ static void scg(SProb& P, Kern kern, const Maps* maps, const Sig& s) {
 static void srun(SProb& P, const SArm& a) {
   const Sig s = sigma(P.seed, P.inst++);
   const int f = a.fmt;
-  const uint32_t g = (P.pa + P.pb + 255) / 256;
   switch (a.kind) {
     case S_PLAIN: ltg_run(P.plain[f], P.st); break;
-    case S_GEN:
-      if (a.al == 0) sha_gen<1><<<g, 256, 0, P.st>>>(P.G, P.pa, P.pb, s);
-      else if (a.al == 1) sha_gen<2><<<g, 256, 0, P.st>>>(P.G, P.pa, P.pb, s);
-      else sha_gen<3><<<g, 256, 0, P.st>>>(P.G, P.pa, P.pb, s);
-      break;
+    case S_GEN: gen_al(a.al, P.G, P.pa, P.pb, s, P.st); break;
     case S_FORM: sform(P, a.al, f, s); break;
     case S_LT: sform(P, a.al, f, s); ltg_run(P.sep[f], P.st); break;
     case S_DUO: sform(P, a.al, f, s); scg(P, RCK[f][1], P.mx, s); break;

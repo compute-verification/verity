@@ -10,7 +10,7 @@ import math
 import re
 import sys
 
-ALS = ["pm1", "u17", "u17w"]
+ALS = ["pm1", "u17", "u17w", "u17p", "u17wp"]
 NONE = ["slt_{a}_i8", "slt_{a}_e4", "fus_{a}_i8", "fov_{a}_i8"]
 DUO = ["sduo_{a}_i8", "sduo_{a}_e4", "fusd_{a}_i8", "fovd_{a}_i8"]
 GROUPS = {"Llama linears": ["qkv", "o", "gate_up", "down"], "4096^3": ["sq4096"],

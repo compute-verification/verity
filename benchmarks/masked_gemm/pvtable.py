@@ -9,21 +9,21 @@ import json
 import re
 import sys
 
-ALS = ["pm1", "u17", "u17w"]
-# (label, arms summed with sign); "prodN" subtracted for the producer routes
-ROWS = [("gamma_gen, shared (E + V's noise)", [("genP", 1), ("genV", 1)], False),
-        ("shared, separate pass + cuBLASLt", [("sepS", 1)], True),
-        ("shared, fused (serialized)", [("fusS", 1)], True),
-        ("shared, fused (overlapped)", [("fovS", 1)], True),
-        ("producer, shared E + cuBLASLt", [("prodSlt", 1)], True),
-        ("producer, unshared SHA + cuBLASLt", [("prodUlt", 1)], True),
-        ("shared, separate pass + duo 32", [("sepSd", 1)], False),
-        ("shared, fused + duo 32", [("fusSd", 1)], False),
-        ("producer, shared E + duo 32", [("prodSd", 1)], False),
-        ("producer, unshared SHA + duo 32", [("prodUd", 1)], False),
-        ("(producer's increment, shared: prodS - prodN)", [("prodS", 1)], False),
-        ("(producer's increment, unshared: prodU - prodN)", [("prodU", 1)], False),
-        ("(V's edit pass alone)", [("editV", 1)], False)]
+ALS = ["pm1", "u17", "u17w", "u17p", "u17wp"]
+# (label, arms summed with sign); prodN subtracted from the producer's arms (attention writes P~ anyway)
+ROWS = [("gamma_gen, shared (E + V's noise)", [("genP", 1), ("genV", 1)]),
+        ("shared, separate pass + cuBLASLt", [("sepS", 1)]),
+        ("shared, fused (serialized)", [("fusS", 1)]),
+        ("shared, fused (overlapped)", [("fovS", 1)]),
+        ("producer, shared E + cuBLASLt", [("prodSlt", 1)]),
+        ("producer, unshared SHA + cuBLASLt", [("prodUlt", 1)]),
+        ("shared, separate pass + duo 32", [("sepSd", 1)]),
+        ("shared, fused + duo 32", [("fusSd", 1)]),
+        ("producer, shared E + duo 32", [("prodSd", 1)]),
+        ("producer, unshared SHA + duo 32", [("prodUd", 1)]),
+        ("(producer's increment, shared: prodS - prodN)", [("prodS", 1)]),
+        ("(producer's increment, unshared: prodU - prodN)", [("prodU", 1)]),
+        ("(V's edit pass alone)", [("editV", 1)])]
 NONE = ["sepS", "fusS", "fovS", "prodSlt", "prodUlt"]
 DUO = ["sepSd", "fusSd", "prodSd", "prodUd"]
 
@@ -52,14 +52,14 @@ def arm_gate(name, checks):
     return "pass" if all(k in checks and all(checks[k]) for k in keys) else "FAIL"
 
 
-def value(arms, parts, al, sub_prodn):
+def value(arms, parts, al):
     t = 0.0
     for a, sign in parts:
         name = f"{a}_{al}"
         if name not in arms:
             return None
         t += sign * arms[name]["ms"]
-    if sub_prodn or parts[0][0] in ("prodS", "prodU", "prodSd", "prodUd") or parts[0][0].startswith("prod"):
+    if parts[0][0].startswith("prod"):
         t -= arms["prodN"]["ms"]
     return t / arms["plain"]["ms"]
 
@@ -82,10 +82,10 @@ def main(bench, gate):
                 f"= {arms['prodN']['ms'] / arms['plain']['ms']:.2f}, its row-max pass {arms['prodmax']['ms'] / arms['plain']['ms']:.2f}; "
                 f"duo 32 alone {arms['cduo']['ms'] / arms['plain']['ms']:.2f})", "",
                 "| method | " + " | ".join(ALS) + " |", "|---|" + "---|" * len(ALS)]
-        for label, parts, sub in ROWS:
+        for label, parts in ROWS:
             cells = []
             for al in ALS:
-                v = value(arms, parts, al, sub)
+                v = value(arms, parts, al)
                 names_ = [f"{p}_{al}" for p, _ in parts]
                 bad = [n for n in names_ if verdict.get(n) != "pass"]
                 cells.append("–" if v is None else f"{v:.3f}" + (f" ({', '.join(verdict.get(n, 'untimed') for n in bad)})" if bad else ""))
@@ -97,7 +97,7 @@ def main(bench, gate):
                 for p in pats:
                     if verdict.get(f"{p}_{al}") != "pass":
                         continue
-                    v = value(arms, [(p, 1)], al, p.startswith("prod"))
+                    v = value(arms, [(p, 1)], al)
                     if v is not None and (best is None or v < best[0]):
                         best = (v, p)
                 cells.append(f"{best[0]:.2f} ({best[1]})" if best else "–")

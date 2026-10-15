@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "floored_gemm"))
 from mref import decode, duo_receipts, words  # noqa: E402
 
 FMTS = ["i8", "e4"]
-ALS = {"pm1": 1, "u17": 2, "u17w": 3}
+ALS = {"pm1": 1, "u17": 2, "u17w": 3, "u17p": 2, "u17wp": 3}   # u17p, u17wp: the noise of u17, u17w, five lanes a patch
 M64 = (1 << 64) - 1
 P17_15 = 17**15
 U17_LIM = 6 * P17_15
@@ -128,9 +128,11 @@ def main(d: Path, receipts: bool) -> int:
     for f, (A, B) in ops.items():
         checks[f"AB_{f}_range"] = A is not None and B is not None and bool(max(np.abs(A).max(), np.abs(B).max()) <= (119 if f == "i8" else 8))
         check_product(f"plain_{f}", f, product(A, B))
+    by_ns = {}
     for al, ns in ALS.items():
-        EA, pa = noise(batch * m, k, key, ns, 0)
-        EB, pb = noise(batch * n, k, key, ns, 1)
+        if ns not in by_ns:
+            by_ns[ns] = noise(batch * m, k, key, ns, 0), noise(batch * n, k, key, ns, 1)
+        (EA, pa), (EB, pb) = by_ns[ns]
         vals = np.array([-1, 1]) if ns == 1 else np.arange(-8, 9)
         allE = np.concatenate([EA.ravel(), EB.ravel()])
         checks[f"noise_{al}_in_S"] = bool(np.isin(allE, vals).all())
@@ -153,7 +155,7 @@ def main(d: Path, receipts: bool) -> int:
                 checks[f"XA_{name}"] = gA is not None and bool((gA == Ae).all())
                 checks[f"XB_{name}"] = gB is not None and bool((gB == Be).all())
             arms_f = [f"slt_{al}_{f}", f"sduo_{al}_{f}"]
-            if f == "i8" and al != "u17w":
+            if f == "i8" and al in ("pm1", "u17"):
                 arms_f += [f"fus_{al}_i8", f"fusd_{al}_i8", f"fov_{al}_i8", f"fovd_{al}_i8"]
             for a in arms_f:
                 check_product(a, f, AeBe)

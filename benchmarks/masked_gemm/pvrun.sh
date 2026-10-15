@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Cutting P V's noise cost (pvgemm.cu's header) and u17 from 32-bit words (sgemm.cu's u17w) on one leased sm_120 GPU
-# (cwd = the clone's root): both builds outside any lease; then one short lease for the device gates (sgemm at four small
-# shapes, pvgemm at three) and the interleaved timings (sgemm's u17 against u17w at the edited-GEMM table's shapes, pvgemm
-# at s = 2048 and 8192, H = 32); after it, sref.py and pvref.py check every gated arm against hashlib and numpy, and
-# stable.py and pvtable.py render the tables (an arm whose gate failed is marked). Clocks are read, never set.
+# Cutting P V's noise cost (pvgemm.cu's header) and u17 from 32-bit words (sgemm.cu's u17w; u17p and u17wp the same
+# noise five lanes a patch) on one leased sm_120 GPU (cwd = the clone's root): both builds outside any lease; then one
+# short lease for the device gates (sgemm at four small shapes, pvgemm at three) and the interleaved timings (sgemm's
+# alphabets at the edited-GEMM table's shapes, pvgemm at s = 2048 and 8192, H = 32); after it, sref.py and pvref.py
+# check every gated arm against hashlib and numpy, and stable.py and pvtable.py render the tables (an arm whose gate
+# failed is marked). Clocks are read, never set.
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd clone --env GPU_LEASE_WHO=T1 \
 #     --send benchmarks/masked_gemm/pvrun.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/pvrun.sh"'
@@ -34,7 +35,10 @@ grep -B2 -E "[1-9][0-9]* bytes spill" "$O/build-pvgemm.log" | grep -E "entry|spi
 
 export REPS=${REPS:-7} PV_S=${PV_S:-"2048 8192"}
 export SHAPES=${SHAPES:-"qkv:8192:6144:4096:1 o:8192:4096:4096:1 gate_up:8192:28672:4096:1 down:8192:4096:14336:1 sq4096:4096:4096:4096:1 qk2k:2048:2048:128:32 pv2k:2048:128:2048:32 qk8k:8192:8192:128:32 pv8k:8192:128:8192:32"}
-export SG_ARMS=${SG_ARMS:-"plain_i8,plain_e4,gen_pm1,gen_u17,gen_u17w,sform_u17_i8,sform_u17w_i8,slt_pm1_e4,slt_u17_i8,slt_u17_e4,slt_u17w_i8,slt_u17w_e4,sduo_u17_i8,sduo_u17w_i8"}
+ALS="pm1 u17 u17w u17p u17wp"
+SG_DEF=plain_i8,plain_e4
+for a in $ALS; do SG_DEF+=",gen_$a,sform_${a}_i8,slt_${a}_i8,slt_${a}_e4,sduo_${a}_i8"; done
+export SG_ARMS=${SG_ARMS:-$SG_DEF}
 mkdir -p "$B"/g{1,2,3,4} "$B"/v{1,2,3}
 # shellcheck disable=SC2016
 gpu-lease 1 --wait --max-min 12 -- bash -c '
