@@ -28,7 +28,8 @@ proof workers' results land here as theorems or as named hypotheses.
   `κ n³ + 2κadd n²` beyond the proof layer and the noise expansion, and `relativelySecure_of_editFloor` gives relative
   security from the named hypothesis `EditFloor` (RS-D1E's floor). The bit-pair projection's algebra
   (`bitPair_coefficient`) and the abstract core of RS-D1E's homogenization for one word (`bitProj_rank_le`,
-  `products_ge_half_rank`) are proved.
+  `products_ge_half_rank`, and `editedEntry_products_ge`: an edited prefix-sum entry with `r` live terms needs at least
+  `r / 2` plain products, whatever the committed instance) are proved.
 * The Model B bridge (RS-MODEL): typed circuits of priced gates with free routing; `ModelB.machine` is a `Machine`
   whose time is `timeB`, `ModelB.matMachine` a `MatMachine` from priced circuits (`MatGates`, realized by a GEMM gate
   family), and `matMachine120` the sm_120 instance at `price120` with the worst-case `κ = 16` u (circuits named
@@ -1109,6 +1110,51 @@ theorem products_ge_half_rank {X Y K : Type} [Fintype X] [Fintype Y] [DecidableE
       hT x y 0 0 (.inl rfl) (.inl rfl)]
   rw [h]
   exact bitProj_rank_le u v r
+
+/-- The edited prefix-sum entry `(i, l)` of `A′ diag(p) B′` as a word in the noise bits (RS-D1E's Lemma 1 form):
+`A′_ik = c_ik + d_ik z_(i,k)` and `B′_kl = c′_kl + d′_kl z′_(k,l)`, the constants `c` adversarial. -/
+def editedEntry {K : Type} [CommRing K] {a b c : ℕ} (C D : Mat K a b) (C' D' : Mat K b c) (p : Fin b → K)
+    (i : Fin a) (l : Fin c) (z : (Fin a × Fin b) ⊕ (Fin b × Fin c) → K) : K :=
+  ∑ k, (C i k + D i k * z (.inl (i, k))) * p k * (C' k l + D' k l * z (.inr (k, l)))
+
+/-- **RS-D1E's Lemma 2, counted** (over a field): a word computed with `m` plain products that agrees with an
+edited prefix-sum entry at every bit pair's four points has `m ≥ #{k : d_ik p_k d′_kl ≠ 0} / 2`, whatever the
+committed constants. (One entry; the floor's sum over all entries is Theorem B's accounting.) -/
+theorem editedEntry_products_ge {K : Type} [Field K] [DecidableEq K] {a b c m : ℕ} (C D : Mat K a b)
+    (C' D' : Mat K b c) (p : Fin b → K) (i : Fin a) (l : Fin c)
+    (u v : Fin m → Aff (Fin a × Fin b) (Fin b × Fin c) K) (r : Aff (Fin a × Fin b) (Fin b × Fin c) K)
+    (hT : ∀ x y s t, (s = 0 ∨ s = 1) → (t = 0 ∨ t = 1) →
+      editedEntry C D C' D' p i l (bitPt x y s t) =
+        ∑ j, (u j).eval (bitPt x y s t) * (v j).eval (bitPt x y s t) + r.eval (bitPt x y s t)) :
+    Fintype.card {k // D i k * p k * D' k l ≠ 0} ≤ 2 * m := by
+  let U : Fin b → Aff (Fin a × Fin b) (Fin b × Fin c) K := fun k => ⟨C i k * p k, Pi.single (i, k) (D i k * p k), 0⟩
+  let V : Fin b → Aff (Fin a × Fin b) (Fin b × Fin c) K := fun k => ⟨C' k l, 0, Pi.single (k, l) (D' k l)⟩
+  have hw : editedEntry C D C' D' p i l =
+      fun z => ∑ k, (U k).eval z * (V k).eval z + (⟨0, 0, 0⟩ : Aff _ _ K).eval z := by
+    funext z
+    simp only [editedEntry, Aff.eval, U, V, Pi.single_apply, Pi.zero_apply, zero_mul, Finset.sum_const_zero,
+      add_zero, ite_mul, Finset.sum_ite_eq', Finset.mem_univ, ite_true]
+    refine Finset.sum_congr rfl fun k _ => ?_
+    ring
+  have hproj : bitProj (editedEntry C D C' D' p i l) =
+      ∑ k, Matrix.vecMulVec (Pi.single (i, k) (D i k * p k)) (Pi.single (k, l) (D' k l)) := by
+    rw [hw, bitProj_add (fun z => ∑ k, (U k).eval z * (V k).eval z), bitProj_aff, add_zero,
+      bitProj_sum (fun k z => (U k).eval z * (V k).eval z)]
+    simp only [bitProj_mul, U, V, Matrix.zero_vecMulVec, add_zero]
+  have hdiag : (bitProj (editedEntry C D C' D' p i l)).submatrix (fun k => (i, k)) (fun k => (k, l)) =
+      Matrix.diagonal fun k => D i k * p k * D' k l := by
+    rw [hproj]
+    ext k k'
+    simp only [Matrix.submatrix_apply, Matrix.sum_apply, Matrix.vecMulVec_apply, Pi.single_apply, Prod.mk.injEq,
+      true_and, and_true, Matrix.diagonal_apply]
+    by_cases h : k = k'
+    · subst h
+      simp [mul_assoc]
+    · simp [h]
+  calc Fintype.card {k // D i k * p k * D' k l ≠ 0}
+      = (Matrix.diagonal fun k => D i k * p k * D' k l).rank := (Matrix.rank_diagonal _).symm
+    _ ≤ (bitProj (editedEntry C D C' D' p i l)).rank := hdiag ▸ Matrix.rank_submatrix_le _ _ _
+    _ ≤ 2 * m := products_ge_half_rank u v r _ hT
 
 /-- The proof service's layer of a protocol (AGENTS.md's one proof service): live coins, messages and the verifier.
 A protocol is a service with a problem (`correct`) and an honest Solve. -/
