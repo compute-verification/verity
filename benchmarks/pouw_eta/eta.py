@@ -22,6 +22,9 @@ timed back to back.  The schedules, over the served call's steps (`SERVED`, pouw
   par<c>      c independent served calls at once, each serial on a stream of its own (W a multiple of c): batching calls
               by concurrency rather than by rows
 
+A shape `MxNxK@64` (time and power modes) forces the 64 x 64 tile: its GEMMs (96 registers x 256 threads, 48 KB) leave room
+on an SM for a 128-thread hash CTA, where the 128 x 128 mainloop's (168 x 384, the whole register file) leave none.
+
 Modes (ETA_MODE): `time` (default) prints one JSON line per (shape, W, schedule); `profile` runs each shape's steps once
 under cuProfilerStart/Stop for ncu (`--profile-from-start off`): one serial call kernel by kernel, then (ETA_GRAPHS=1, for
 `--graph-profiling graph`) each schedule's graph once, in the order its `profile` line lists; `clock` holds gemm_pearlc at
@@ -276,16 +279,18 @@ def shape_row(shape, w, bm, pipes) -> dict:
             "macs_computed": p.m * shape[1] * shape[2], "bm_forced": bm}
 
 
+def shape_spec(spec: str) -> tuple:
+    """`MxNxK`, or `MxNxK@64` to force the 64 x 64 tile: (shape, bm or None)."""
+    spec, _, bm_s = spec.partition("@")
+    return R.parse_shape(spec), int(bm_s) if bm_s else None
+
+
 def time_mode(dev: R.Dev, nv: R.Nvml, lanes: Lanes) -> None:
     reps = int(os.environ.get("ETA_REPS", "15"))
     ws = [int(x) for x in os.environ.get("ETA_WS", "1 3").split()]
     scheds = os.environ.get("ETA_SCHEDULES", " ".join(SCHEDULES)).split()
     for spec in os.environ.get("ETA_SHAPES", "32x8192x8192 128x8192x8192 8192x8192x8192").split():
-        bm = None
-        if "@" in spec:
-            spec, bm_s = spec.split("@")
-            bm = int(bm_s)
-        shape = R.parse_shape(spec)
+        shape, bm = shape_spec(spec)
         for w in ws:
             pipes, own = make(dev, shape, w, bm, 101)
             fns = [steps_of(p) for p in pipes]
@@ -431,15 +436,15 @@ def power_mode(dev: R.Dev, nv: R.Nvml, lanes: Lanes) -> None:
     scheds = os.environ.get("ETA_SCHEDULES", "serial nohash gemm gemm_ct plain").split()
     info = limits(nv)
     for spec in os.environ.get("ETA_SHAPES", "32x8192x8192 128x8192x8192 8192x8192x8192").split():
-        shape = R.parse_shape(spec)
-        pipes, own = make(dev, shape, w, None, 101)
+        shape, bm = shape_spec(spec)
+        pipes, own = make(dev, shape, w, bm, 101)
         fns = [steps_of(p) for p in pipes]
-        base, calls = shape_row(shape, w, None, pipes), 2 * w
+        base, calls = shape_row(shape, w, bm, pipes), 2 * w
         for sched in scheds:
             if sched == "plain" and "gemm_fast" not in fns[0] or sched.startswith("par") and w % int(sched[3:]):
                 continue
             g = Graph(lanes, lambda: enqueue(lanes, pipes, fns, sched, calls))
-            n = max(1, int(hold * 1e3 / statistics.median(timed(lanes, g.launch, 3))))
+            n = max(1, int(hold * 1e3 / max(statistics.median(timed(lanes, g.launch, 3)), 1e-3)))
             ms, st = sampled(nv, lambda: timed(lanes, lambda: [g.launch() for _ in range(n)], 1)[0])
             g.close()
             per_call = ms / (n * calls)

@@ -4,7 +4,8 @@
 # gate: nothing below runs unless it passes), run.py's split, eta.py's schedules and batch curve, the clock hold, then ncu
 # (--clock-control none: the node's lock stays as it is) kernel by kernel and graph by graph.  CSVs from the reports after.
 # ETA_LEASE names B's script instead (lease_pearlc2.sh: the SHA-512 probe, par<c>, the power holds; lease_pearlc3.sh:
-# serial-r32).
+# serial-r32; lease_data.sh: gemm_fast on low-power operands; lease_fast.sh: hash_fast.cuh's gates and timings;
+# lease_cores.sh: the served call at the 64 x 64 tile, hash CTAs beside the GEMM's).
 # Run from a clone of the pushed commit: research run ... --cwd clone --send job_pearlc.sh -- bash "$RESEARCH_RUN_DIR/inputs/job_pearlc.sh"
 set -euo pipefail
 d=$(mktemp -d); trap 'rm -rf "$d"' EXIT
