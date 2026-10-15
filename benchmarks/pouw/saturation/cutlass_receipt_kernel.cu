@@ -7,12 +7,14 @@
 // with the builder's stage count. vLLM's epilogue uses its own Sm90{Col,Row}OrScalarBroadcast; this uses CUTLASS's
 // Sm90{Col,Row}Broadcast, the same loads without the scalar option.
 //   CR_MODE 0  the builder's mainloop, unmodified
-//   CR_MODE 1  the same mainloop with phi.cuh's receipt after every P-th k-tile's last MMA: the accumulators then hold the
-//              prefix sums at k = 128 P, 256 P, ..., K, so L = 128 P. Each thread chains the 4 words of each of its
-//              m16n8 accumulator tiles (one chain a tile) and folds its chains into one word a tile at the end.
-//   CR_MODE 2  the dump: every k-tile's prefix sums to global memory, and each thread's chain-word coordinates, so the host
-//              can recompute every receipt kernel's words
-// Compiled once per kernel: -DCR_NAME=name -DCR_CFG -DCR_VAR -DCR_ROUNDS -DCR_P -DCR_MODE (see job.sh's cgemm stage).
+//   CR_MODE 1  the same mainloop with phi.cuh's receipt in every P-th k-tile: the accumulators then hold the prefix sums
+//              at k = 128 P, 256 P, ..., K, so L = 128 P. Each thread chains the 4 words of each of its m16n8 accumulator
+//              tiles (one chain a tile) and folds its chains into one word a tile at the end. CR_SPREAD 0 runs every
+//              chain after the k-tile's last MMA; CR_SPREAD 1 interleaves them, a quarter of the chains after each of the
+//              k-tile's four 32-deep k-blocks (each chain's prefix is then at that k-block's end).
+//   CR_MODE 2  the dump: every k-block's prefix sums to global memory, and each thread's chain-word coordinates, so the
+//              host can recompute every receipt kernel's words
+// Compiled once per kernel: -DCR_NAME=name -DCR_CFG -DCR_VAR -DCR_ROUNDS -DCR_P -DCR_MODE -DCR_SPREAD (job.sh's cgemm).
 #include "cutlass_receipt.cuh"
 
 #include "cute/tensor.hpp"
@@ -30,6 +32,9 @@
 #error "build for sm_120a with CUDA 12.8 or later"
 #endif
 
+#ifndef CR_SPREAD
+#define CR_SPREAD 0
+#endif
 #define CR_STR2(x) #x
 #define CR_STR(x) CR_STR2(x)
 
@@ -45,7 +50,7 @@ struct Out {
 };
 __device__ Out g_out;
 
-template <class Base, int VAR, int ROUNDS, int P, int MODE>
+template <class Base, int VAR, int ROUNDS, int P, int MODE, int SPREAD>
 struct ReceiptMma : Base {
     using MainloopPipeline = typename Base::MainloopPipeline;
     using PipelineState = typename Base::PipelineState;
@@ -102,22 +107,30 @@ struct ReceiptMma : Base {
         };
         auto gemm_kblock = [&](auto k_block) { cute::gemm(tiled_mma, tCrA(_, _, k_block), tCrB(_, _, k_block), accum); };
 
+        constexpr int KB = decltype(K_BLOCK_MAX)::value;
+        static_assert(NN == decltype(size<1>(TileShape{}))::value / 16, "cutlass_receipt.cu's nn_max assumes 2 MMA warps in n");
         int kt = 0;
-        auto hook = [&]() {
-            if constexpr (MODE == 1) {
+        // After k-block b of k-tile kt: receipted k-tiles run φ on every chain at b = KB - 1, or (SPREAD) on the chains
+        // with nn * KB / NN == b, a quarter of them a k-block here.
+        auto hook = [&](auto k_block, auto receipted) {
+            constexpr int b = decltype(k_block)::value;
+            if constexpr (MODE == 1 && decltype(receipted)::value && (SPREAD || b == KB - 1)) {
                 const uint32_t w = (uint32_t)(kt + 1);
                 CUTLASS_PRAGMA_UNROLL
                 for (int mm = 0; mm < MM; ++mm)
                     CUTLASS_PRAGMA_UNROLL
                     for (int nn = 0; nn < NN; ++nn)
-                        CUTLASS_PRAGMA_UNROLL
-                        for (int e = 0; e < MW; ++e)
-                            y[mm * NN + nn] = phi<ROUNDS, VAR>(y[mm * NN + nn], __float_as_uint(accum(e, mm, nn)), w,
-                                                               key(mm * NN + nn, e));
+                        if (!SPREAD || nn * KB / NN == b) {
+                            CUTLASS_PRAGMA_UNROLL
+                            for (int e = 0; e < MW; ++e)
+                                y[mm * NN + nn] = phi<ROUNDS, VAR>(y[mm * NN + nn], __float_as_uint(accum(e, mm, nn)), w,
+                                                                   key(mm * NN + nn, e));
+                        }
             } else if constexpr (MODE == 2) {
                 Tensor tCcC = thread_mma.partition_C(make_identity_tensor(take<0, 2>(TileShape{})));
                 const int m0 = int(get<0>(blk_crd)) * decltype(size<0>(TileShape{}))::value;
                 const int n0 = int(get<1>(blk_crd)) * decltype(size<1>(TileShape{}))::value;
+                const size_t kb = (size_t)kt * KB + b;
                 CUTLASS_PRAGMA_UNROLL
                 for (int mm = 0; mm < MM; ++mm)
                     CUTLASS_PRAGMA_UNROLL
@@ -125,12 +138,12 @@ struct ReceiptMma : Base {
                         CUTLASS_PRAGMA_UNROLL
                         for (int e = 0; e < MW; ++e) {
                             const int r = int(get<0>(tCcC(e, mm, nn))), c = int(get<1>(tCcC(e, mm, nn)));
-                            g_out.dump[((size_t)kt * g_out.m + m0 + r) * g_out.n + n0 + c] = accum(e, mm, nn);
-                            if (kt == 0 && m0 == 0 && n0 == 0)
+                            g_out.dump[(kb * g_out.m + m0 + r) * g_out.n + n0 + c] = accum(e, mm, nn);
+                            if (kb == 0 && m0 == 0 && n0 == 0)
                                 g_out.map[(thread_idx * CH + mm * NN + nn) * MW + e] = (uint32_t(r) << 16) | uint32_t(c);
                         }
             }
-            ++kt;
+            if constexpr (b == KB - 1) ++kt;
         };
 
         // One k-tile of the main loop. The stride is unrolled at compile time: a runtime `(kt + 1) % P` test is
@@ -150,10 +163,7 @@ struct ReceiptMma : Base {
                 }
                 copy_kblock(k_block_next);
                 gemm_kblock(k_block);
-                if (k_block == K_BLOCK_MAX - 1) {
-                    if constexpr (decltype(receipted)::value) hook();
-                    else ++kt;
-                }
+                hook(k_block, receipted);
             });
         };
 
@@ -176,7 +186,7 @@ struct ReceiptMma : Base {
             }
             if (k_block_next > 0) copy_kblock(k_block_next);
             gemm_kblock(k_block);
-            if (k_block == K_BLOCK_MAX - 1) hook();
+            hook(k_block, cute::true_type{});
         });
 
         if constexpr (MODE == 1) {
@@ -217,7 +227,7 @@ using BaseMainloop = typename cutlass::gemm::collective::CollectiveBuilder<
     cutlass::layout::ColumnMajor, 16, float, Tile, Cluster,
     cutlass::gemm::collective::StageCountAutoCarveout<static_cast<int>(sizeof(typename Epilogue::SharedStorage))>,
     Schedule>::CollectiveOp;
-using Mainloop = cute::conditional_t<CR_MODE == 0, BaseMainloop, ReceiptMma<BaseMainloop, CR_VAR, CR_ROUNDS, CR_P, CR_MODE>>;
+using Mainloop = cute::conditional_t<CR_MODE == 0, BaseMainloop, ReceiptMma<BaseMainloop, CR_VAR, CR_ROUNDS, CR_P, CR_MODE, CR_SPREAD>>;
 using GemmKernel = cutlass::gemm::kernel::GemmUniversal<Shape<int, int, int, int>, Mainloop, Epilogue, void>;
 using Gemm = cutlass::gemm::device::GemmUniversalAdapter<GemmKernel>;
 
@@ -276,10 +286,13 @@ const cr_kernel K{CR_STR(CR_NAME),
                   CR_ROUNDS,
                   CR_P,
                   CR_MODE,
+                  CR_SPREAD,
                   kTileM,
                   kTileN,
                   kThreads,
                   kTileM * kTileN / kThreads / 4,
+                  kTileN / 16,
+                  128 / 32,
                   BaseMainloop::DispatchPolicy::Stages,
                   int(sizeof(typename GemmKernel::SharedStorage)),
                   &make};

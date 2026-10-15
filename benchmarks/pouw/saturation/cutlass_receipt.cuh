@@ -13,7 +13,7 @@ struct cr_args {
     const float *sa, *sb;        // per-row (token) and per-column (channel) scales
     void* D;                     // m x n bf16, row-major: bf16(sa[m] * (sb[n] * acc))
     uint32_t* R;                 // receipt kernels: one word a tile and MMA thread, its chains folded
-    float* dump;                 // the dump kernel: every k-tile's prefix sums, [k / 128][m][n]
+    float* dump;                 // the dump kernel: every 32-deep k-block's prefix sums, [k / 32][m][n]
     uint32_t* map;               // the dump kernel: (row << 16 | col) within the tile of each thread's chain words
 };
 
@@ -26,7 +26,10 @@ struct cr_kernel {
     const char* name;
     int cfg;                     // 0: vLLM's prefill kernel (cooperative 128x128x128), 1: its decode kernel (ping-pong 32x64x128)
     int var, rounds, p, mode;    // phi.cuh's VAR and ROUNDS, L = 128 p; mode 0 plain, 1 receipt, 2 dump
-    int tile_m, tile_n, threads, chains, stages, smem_bytes;
+    // spread 0: every chain after the k-tile's last k-block. spread 1: chain (mm, nn) after k-block nn * kblocks / nn_max
+    // of the k-tile, its prefix at that k-block's end.
+    int spread;
+    int tile_m, tile_n, threads, chains, nn_max, kblocks, stages, smem_bytes;
     cr_impl* (*make)(const cr_args& a, int* err);
 };
 

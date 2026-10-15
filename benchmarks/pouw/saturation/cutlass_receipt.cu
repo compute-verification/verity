@@ -1,10 +1,11 @@
 // What phi receipts cost inside the FP8 GEMMs vLLM actually serves on sm_120 (CMP-8 round 2): Llama-3.1-8B's linears run
 // vLLM's cutlass_scaled_mm, CUTLASS's MainloopSm120TmaWarpSpecialized in two configurations (prefill: cooperative
 // 128x128x128; decode at batch 32: ping-pong 32x64x128). cutlass_receipt_kernel.cu builds each, unmodified (plain), with
-// phi.cuh's receipt after every P-th k-tile (L = 128 P), or as the prefix dump the gates read. This program gates them and
+// phi.cuh's receipt in every P-th k-tile (L = 128 P; after its last k-block, or spread over its four k-blocks), or as the
+// prefix dump the gates read. This program gates them and
 // times them against plain at Llama-8B's shapes.
 // Gates (exit 3, before any time is printed), at one small shape per configuration:
-//   - the dump kernel's prefix sums at every k-tile are within 1e-5 of the sum of |products| of a double host sum, and its
+//   - the dump kernel's prefix sums at every 32-deep k-block are within 1e-5 of the sum of |products| of a double host sum, and its
 //     chain-word map covers the tile once;
 //   - plain's bf16 output is bf16(sa * (sb * prefix at K)) of the dump's final prefix, bit for bit;
 //   - every kernel's bf16 output equals plain's bit for bit;
@@ -180,6 +181,7 @@ static void gate_cfg(int cfg, const std::vector<const cr_kernel*>& ks, unsigned 
     }
     const Shape s = cfg == 0 ? Shape{"gate0", 256, 384, 2048} : Shape{"gate1", 32, 256, 2048};
     const int KT = s.k / 128, TM = plain->tile_m, TN = plain->tile_n, NT = plain->threads, CH = plain->chains;
+    const int KB = plain->kblocks, NN = plain->nn_max, KD = KT * KB, KBD = 128 / KB;
     const int tiles = (s.m / TM) * (s.n / TN);
     Bufs b;
     CK(cudaMalloc(&b.A, (size_t)s.m * s.k));
@@ -198,7 +200,7 @@ static void gate_cfg(int cfg, const std::vector<const cr_kernel*>& ks, unsigned 
     CK(cudaMalloc(&D0, dbytes));
     CK(cudaMalloc(&D1, dbytes));
     CK(cudaMalloc(&b.R, (size_t)tiles * NT * 4));
-    CK(cudaMalloc(&b.dump, (size_t)KT * s.m * s.n * 4));
+    CK(cudaMalloc(&b.dump, (size_t)KD * s.m * s.n * 4));
     CK(cudaMalloc(&b.map, (size_t)NT * CH * 4 * 4));
     CK(cudaMemset(b.map, 0xff, (size_t)NT * CH * 4 * 4));
     auto run = [&](const cr_kernel* k, void* D) {
@@ -220,7 +222,7 @@ static void gate_cfg(int cfg, const std::vector<const cr_kernel*>& ks, unsigned 
     std::vector<uint8_t> A((size_t)s.m * s.k), B((size_t)s.n * s.k);
     CK(cudaMemcpy(A.data(), b.A, A.size(), cudaMemcpyDeviceToHost));
     CK(cudaMemcpy(B.data(), b.B, B.size(), cudaMemcpyDeviceToHost));
-    std::vector<float> dump((size_t)KT * s.m * s.n);
+    std::vector<float> dump((size_t)KD * s.m * s.n);
     std::vector<uint32_t> map((size_t)NT * CH * 4);
     std::vector<uint16_t> D(s.m * (size_t)s.n);
     CK(cudaMemcpy(dump.data(), b.dump, dump.size() * 4, cudaMemcpyDeviceToHost));
@@ -234,17 +236,17 @@ static void gate_cfg(int cfg, const std::vector<const cr_kernel*>& ks, unsigned 
     for (int r = 0; r < s.m; r++)
         for (int c = 0; c < s.n; c++) {
             double sum = 0, mag = 0;
-            for (int kt = 0; kt < KT; kt++) {
-                for (int kk = kt * 128; kk < kt * 128 + 128; kk++) {
+            for (int kb = 0; kb < KD; kb++) {
+                for (int kk = kb * KBD; kk < kb * KBD + KBD; kk++) {
                     const double p = av[(size_t)r * s.k + kk] * bv[(size_t)c * s.k + kk];
                     sum += p;
                     mag += std::fabs(p);
                 }
-                const double got = dump[((size_t)kt * s.m + r) * s.n + c], e = std::fabs(got - sum) / std::max(mag, 1e-30);
+                const double got = dump[((size_t)kb * s.m + r) * s.n + c], e = std::fabs(got - sum) / std::max(mag, 1e-30);
                 worst = std::max(worst, e);
                 bad_prefix += e > 1e-5;
             }
-            const float acc = dump[((size_t)(KT - 1) * s.m + r) * s.n + c];
+            const float acc = dump[((size_t)(KD - 1) * s.m + r) * s.n + c];
             const float t = sb[c] * acc, u = sa[r] * t;
             bad_d += bf16_rn(u) != D[(size_t)r * s.n + c];
         }
@@ -274,10 +276,11 @@ static void gate_cfg(int cfg, const std::vector<const cr_kernel*>& ks, unsigned 
                         uint32_t y = 0;
                         for (int kt = 0; kt < KT; kt++) {
                             if ((kt + 1) % k->p) continue;
+                            const size_t kb = (size_t)kt * KB + (k->spread ? (ch % NN) * KB / NN : KB - 1);
                             for (int e = 0; e < 4; e++) {
                                 const uint32_t w = map[((size_t)t * CH + ch) * 4 + e];
                                 const int r = tm * TM + (int)(w >> 16), c = tn * TN + (int)(w & 0xffff);
-                                y = phi_host(k->var, k->rounds, y, f2u(dump[((size_t)kt * s.m + r) * s.n + c]),
+                                y = phi_host(k->var, k->rounds, y, f2u(dump[(kb * s.m + r) * s.n + c]),
                                              (uint32_t)(kt + 1), key(ch, e));
                             }
                         }
@@ -321,10 +324,10 @@ int main(int argc, char** argv) {
     printf("  \"kernels\": [\n");
     for (size_t i = 0; i < ks.size(); i++) {
         auto* k = ks[i];
-        printf("    {\"name\": \"%s\", \"cfg\": %d, \"var\": %d, \"rounds\": %d, \"p\": %d, \"L\": %d, \"mode\": %d, \"tile\": [%d, %d], "
-               "\"threads\": %d, \"chains\": %d, \"stages\": %d, \"smem_bytes\": %d}%s\n",
-               k->name, k->cfg, k->var, k->rounds, k->p, 128 * k->p, k->mode, k->tile_m, k->tile_n, k->threads, k->chains,
-               k->stages, k->smem_bytes, i + 1 < ks.size() ? "," : "");
+        printf("    {\"name\": \"%s\", \"cfg\": %d, \"var\": %d, \"rounds\": %d, \"p\": %d, \"L\": %d, \"mode\": %d, \"spread\": %d, "
+               "\"tile\": [%d, %d], \"threads\": %d, \"chains\": %d, \"stages\": %d, \"smem_bytes\": %d}%s\n",
+               k->name, k->cfg, k->var, k->rounds, k->p, 128 * k->p, k->mode, k->spread, k->tile_m, k->tile_n, k->threads,
+               k->chains, k->stages, k->smem_bytes, i + 1 < ks.size() ? "," : "");
     }
     printf("  ],\n  \"gates\": [\n");
     if (!profile) {
@@ -441,10 +444,10 @@ int main(int argc, char** argv) {
             const double t = med(ms[j]), f = med(mhz[j]);
             const double words = k->mode == 1 ? (double)s.m * s.n * (s.k / (128.0 * k->p)) : 0.0;
             printf("%s    {\"shape\": \"%s\", \"m\": %d, \"n\": %d, \"k\": %d, \"kernel\": \"%s\", \"cfg\": %d, \"var\": %d, "
-                   "\"rounds\": %d, \"p\": %d, \"L\": %d, \"sets\": %d, \"launches\": %d, \"reps\": %d, \"ms\": %.5f, "
+                   "\"rounds\": %d, \"p\": %d, \"L\": %d, \"spread\": %d, \"sets\": %d, \"launches\": %d, \"reps\": %d, \"ms\": %.5f, "
                    "\"ms_min\": %.5f, \"tflops\": %.1f, \"sm_mhz\": %.0f, \"macs_per_sm_clk\": %.1f, \"receipt_words\": %.0f, "
                    "\"phi1_per_sm_clk\": %.3f, \"wall_vs_plain\": %.4f, \"cycles_vs_plain\": %.4f}",
-                   first_row ? "" : ",\n", s.name, s.m, s.n, s.k, k->name, k->cfg, k->var, k->rounds, k->p, 128 * k->p, sets,
+                   first_row ? "" : ",\n", s.name, s.m, s.n, s.k, k->name, k->cfg, k->var, k->rounds, k->p, 128 * k->p, k->spread, sets,
                    launches, reps, t, *std::min_element(ms[j].begin(), ms[j].end()), 2.0 * s.m * s.n * (double)s.k / (t * 1e9), f,
                    f > 0 ? (double)s.m * s.n * s.k / (t * 1e-3 * f * 1e6 * prop.multiProcessorCount) : 0.0, words,
                    f > 0 ? words * k->rounds / (t * 1e-3 * f * 1e6 * prop.multiProcessorCount) : 0.0, med(wall[j]),
