@@ -17,5 +17,5 @@ print `unknown constant` and fail the build here.
 #print axioms FlockSoundness.Discharge.Recursion.ZkOuter.outcome_writes
 #print axioms FlockSoundness.Discharge.Recursion.outcome_sessions
 #print axioms Flock.Guarantees.checksC3_of_recordDraw
-#print axioms FlockSoundness.Discharge.Recursion.ChecksC3Reached
-#print axioms FlockSoundness.Discharge.Recursion.reachedChecked_of
+#print axioms FlockC3.HPort.ChecksC3Reached
+#print axioms FlockC3.HPort.reachedChecked_of
