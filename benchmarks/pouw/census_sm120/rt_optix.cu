@@ -1,11 +1,12 @@
 // RT-core census (round 3): triangle tests a second through OptiX (the driver's libnvoptix; headers from optix-dev).
-// The scene is K triangles in the planes z = 1..K, all with the footprint (-1,-1), (1,-1), (-1,1), so every triangle's
-// bounding box is [-1,1]^2 and no box excludes a ray inside it. A 2,048 x 2,048 launch of rays along +z from z = 0:
-// in miss mode the rays start in (0.05, 0.95)^2, inside every box and outside every triangle, so each ray costs K
-// triangle tests and the BVH's box tests and ends in the miss program; in hit mode they start inside the triangles
-// and stop at the nearest. One TRACE instruction a ray (a warp instruction for 32 rays) starts the work, so K
-// sets the tests a traced instruction drives. Prints one JSON line a (mode, K): best of 5 launches by CUDA events.
-// Two builds (fast trace, fast build) of each scene.
+// Scene "stack" is K triangles in the planes z = 1..K, all with the footprint (-1,-1), (1,-1), (-1,1), so every
+// triangle's bounding box is [-1,1]^2 and no box excludes a ray inside it; scene "dup" is K copies of one triangle at
+// z = 1, which no builder can separate into boxes, so its traversal has the fewest box tests a triangle test.
+// A 2,048 x 2,048 launch of rays along +z from z = 0: in miss mode the rays start in (0.05, 0.95)^2, inside every box
+// and outside every triangle, so each ray costs K triangle tests and the BVH's box tests and ends in the miss program;
+// in hit mode they start inside the triangles and stop at the nearest. One TRACE instruction a ray (a warp instruction
+// for 32 rays) starts the work, so K sets the tests a traced instruction drives. Prints one JSON line a (scene, build,
+// mode, K): best of 5 launches by CUDA events. Two builds (fast trace, fast build) of each scene.
 // Usage: rt DEVICE_PROGRAMS.optixir
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -61,10 +62,10 @@ struct Gas {
   size_t bytes = 0;
 };
 
-static Gas build(OptixDeviceContext ctx, int k, unsigned int build_flags) {
+static Gas build(OptixDeviceContext ctx, int k, unsigned int build_flags, bool dup) {
   std::vector<float3> v;
   for (int i = 0; i < k; i++) {
-    const float z = 1.f + i;
+    const float z = dup ? 1.f : 1.f + i;
     v.push_back(make_float3(-1.f, -1.f, z));
     v.push_back(make_float3(1.f, -1.f, z));
     v.push_back(make_float3(-1.f, 1.f, z));
@@ -191,9 +192,10 @@ int main(int argc, char** argv) {
     const char* name;
     unsigned int flags;
   } builds[] = {{"fast_trace", OPTIX_BUILD_FLAG_PREFER_FAST_TRACE}, {"fast_build", OPTIX_BUILD_FLAG_PREFER_FAST_BUILD}};
+  for (const char* scene : {"stack", "dup"})
   for (const auto& b : builds)
   for (int k : ks) {
-    Gas g = build(ctx, k, b.flags);
+    Gas g = build(ctx, k, b.flags, scene[0] == 'd');
     for (unsigned int mode = 0; mode <= 1; mode++) {
       Params p{g.handle, derr, W, H, mode};
       CK(cudaMemcpy(dpar, &p, sizeof p, cudaMemcpyHostToDevice));
@@ -211,11 +213,11 @@ int main(int argc, char** argv) {
         if (r > 0 && ms < best) best = ms;
       }
       const double rays = (double)W * H, rps = rays / (best * 1e-3);
-      printf("{\"probe\":\"rt\",\"build\":\"%s\",\"mode\":\"%s\",\"k\":%d,\"rays\":%.0f,\"ms\":%.4f,\"rays_per_s\":%.5g,"
-             "\"triangle_tests_per_s\":%.5g,\"rays_per_sm_per_s\":%.5g,\"errors\":%u,\"gas_bytes\":%zu,\"sms\":%d,"
-             "\"optix_abi\":%d}\n",
-             b.name, mode ? "hit" : "miss", k, rays, best, rps, mode ? rps : rps * k, rps / prop.multiProcessorCount, errs,
-             g.bytes, prop.multiProcessorCount, OPTIX_ABI_VERSION);
+      printf("{\"probe\":\"rt\",\"scene\":\"%s\",\"build\":\"%s\",\"mode\":\"%s\",\"k\":%d,\"rays\":%.0f,\"ms\":%.4f,"
+             "\"rays_per_s\":%.5g,\"triangle_tests_per_s\":%.5g,\"rays_per_sm_per_s\":%.5g,\"errors\":%u,"
+             "\"gas_bytes\":%zu,\"sms\":%d,\"optix_abi\":%d}\n",
+             scene, b.name, mode ? "hit" : "miss", k, rays, best, rps, mode ? rps : rps * k,
+             rps / prop.multiProcessorCount, errs, g.bytes, prop.multiProcessorCount, OPTIX_ABI_VERSION);
       fflush(stdout);
     }
     CK(cudaFree(g.buf));

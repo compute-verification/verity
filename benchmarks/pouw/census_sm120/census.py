@@ -458,21 +458,25 @@ def units_summary(outs):
                              mac_equiv_per_warp_instr=32 * mac, issue_caps=32 * mac <= ISSUE_SLOT_PRICE))
         rt = [r for r in jsonl(out / "rt.jsonl") if r.get("probe") == "rt"]
         mhz, reasons = smi_clock_mhz(out, "rt")
-        for b in sorted({r["build"] for r in rt}):
-            miss = [r for r in rt if r["build"] == b and r["mode"] == "miss"]
+        for r in rt:
+            r.setdefault("scene", "stack")
+        for s, b in sorted({(r["scene"], r["build"]) for r in rt}):
+            miss = [r for r in rt if (r["scene"], r["build"]) == (s, b) and r["mode"] == "miss"]
             fit = [r for r in miss if r["k"] >= 64]
             xs, ys = [r["k"] * r["rays"] for r in fit], [r["ms"] * 1e-3 for r in fit]
             mx, my = statistics.mean(xs), statistics.mean(ys)
             slope = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / sum((x - mx) ** 2 for x in xs)
             best = max(miss, key=lambda r: r["triangle_tests_per_s"])
-            for case, per_s in ((f"{b}.slope", 1 / slope), (f"{b}.best.k{best['k']}", best["triangle_tests_per_s"])):
+            for case, per_s in ((f"{s}.{b}.slope", 1 / slope),
+                                (f"{s}.{b}.best.k{best['k']}", best["triangle_tests_per_s"])):
                 per_clk = per_s / GPU_SMS / (mhz * 1e6)
                 rows.append(dict(unit="rt", case=case, sm_mhz=mhz, clock_event_reasons=reasons, per_sm_per_clk=per_clk,
                                  per_gpu_per_s={str(m): per_clk * GPU_SMS * m * 1e6 for m in NODE_CLOCKS_MHZ},
                                  mac_equiv_each=RT_MACS_PER_TEST, mac_equiv_per_sm_per_clk=per_clk * RT_MACS_PER_TEST,
                                  share=per_clk * RT_MACS_PER_TEST / GPU_FP8_MACS_PER_SM_CLOCK,
                                  mac_equiv_per_warp_instr=32 * max(r["k"] for r in miss) * RT_MACS_PER_TEST,
-                                 issue_caps=False, errors=sum(r["errors"] for r in rt if r["build"] == b)))
+                                 issue_caps=False,
+                                 errors=sum(r["errors"] for r in rt if (r["scene"], r["build"]) == (s, b))))
     first = pathlib.Path(outs[0])
     doc = dict(capacity_macs_per_s_a_gpu={str(m): c for m, c in cap.items()}, issue_slot_price=ISSUE_SLOT_PRICE,
                rt_macs_per_test_estimate=RT_MACS_PER_TEST, rows=rows)
