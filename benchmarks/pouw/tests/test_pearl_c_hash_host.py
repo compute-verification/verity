@@ -96,17 +96,24 @@ H3_SEEDS = {(7, 3): "48f3f41d75a3d208007bdf3f7ffd1f4649de6ac8cbeae2bc03bdc306b33
 
 @pytest.mark.parametrize("k,rows", [(256, 3), (768, 2), (4096, 2), (14336, 1), (32768, 1)])
 def test_s512_rows_are_row_seg_v1_digests(host, k, rows):
-    """s512_rows, a block a row of 128 threads, is `pearl_c.row_digest` (``sha512/row-seg/v1``) of every row: 1, 3, 16, 56 and
-    128 segments (an odd count ends the outer hash in the digests' block, an even one in a padding block of its own), and
-    the pinned rows' digests are the pinned bytes."""
+    """s512_rows, a block a row, is `pearl_c.row_digest` (``sha512/row-seg/v1``) of every row: 1, 3, 16, 56 and 128 segments
+    (an odd count ends the outer hash in the digests' block, an even one in a padding block of its own), and the pinned rows'
+    digests are the pinned bytes, at the width run.py launches it (`rows_threads`) and at every other warp count up to
+    its bound."""
     rng = np.random.default_rng(k)
     xs = [h3_row(k)] + [rng.integers(0, 256, 4 * k, dtype=np.uint8).tobytes() for _ in range(rows - 1)]
-    out = host.alloc(64 * rows)
-    host.launch("s512_rows", rows, 128, p=(host.put(b"".join(xs)), out), i=(rows, k))
-    got = host.read(out, 64 * rows)
-    assert got == b"".join(C.row_digest(x) for x in xs)
+    want = b"".join(C.row_digest(x) for x in xs)
+    assert R.rows_threads(k) in (32, 64, 96, 128)
+    for threads in (32, 64, 96, 128):
+        out = host.alloc(64 * rows)
+        host.launch("s512_rows", rows, threads, p=(host.put(b"".join(xs)), out), i=(rows, k))
+        assert host.read(out, 64 * rows) == want, threads
     if k in H3_DIGESTS:
-        assert got[:64].hex() == H3_DIGESTS[k]
+        assert want[:64].hex() == H3_DIGESTS[k]
+
+
+def test_s512_rows_launches_a_warp_per_32_segments():
+    assert [R.rows_threads(k) for k in (256, 4096, 8192, 8448, 14336, 16384, 24576, 32768)] == [32, 32, 32, 64, 64, 64, 96, 128]
 
 
 def unit_block(salt: bytes, root_b: bytes, unit: int) -> bytes:

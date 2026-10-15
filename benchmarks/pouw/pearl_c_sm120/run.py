@@ -292,6 +292,12 @@ def depth(n: int) -> int:
     return pow2(n).bit_length() - 1
 
 
+def rows_threads(k: int) -> int:
+    """s512_rows' CTA: a warp per 32 of a row's k / 256 segments, at most its launch bound (128).  Its threads stride the
+    segments, so the digests are the same at any width; a wider CTA only idles threads past the segment count."""
+    return min(128, 32 * cdiv(k // 256, 32))
+
+
 def gemm_tile(name: str) -> tuple[int, int]:
     """A GEMM kernel's CTA tile (rows, columns): 64 x 64 for the _d kernels, 128 x 32 for gemm_words, else 128 x 128."""
     if name.startswith("gemm_words"):
@@ -414,12 +420,12 @@ class Pipeline:
                                                 i=(count, width)))]
 
     def row_tree(self, tag: str, x: str, count: int, dom: str) -> list[tuple[str, object]]:
-        """A tree over `count` FP32 rows of x: their row digests (s512_rows, a CTA a row), the HM96 leaves over them, then
-        its levels.  A's salt nonce is its unit index, read from `unit`; B's HM96_WEIGHTS + weight."""
-        d, b = self.dev, self.b
+        """A tree over `count` FP32 rows of x: their row digests (s512_rows, a CTA a row, `rows_threads` wide), the HM96
+        leaves over them, then its levels.  A's salt nonce is its unit index, read from `unit`; B's HM96_WEIGHTS + weight."""
+        d, b, threads = self.dev, self.b, rows_threads(self.k)
         nonce = (0, 0) if tag == "a" else nonce_args(HM96_WEIGHTS + self.weight)
         block = self.keys["unit"] + 96 if tag == "a" else 0
-        return [(f"rowdig_{tag}", lambda: d.launch("s512_rows", count, 128, p=(b[x], b[f"rowdig_{tag}"]), i=(count, self.k))),
+        return [(f"rowdig_{tag}", lambda: d.launch("s512_rows", count, threads, p=(b[x], b[f"rowdig_{tag}"]), i=(count, self.k))),
                 (f"hash_rows_{tag}", lambda: Pipeline.hm_level0(self, tag, b[f"rowdig_{tag}"], count, dom, block, nonce)),
                 (f"tree_{tag}", lambda: self.levels(tag, count, dom))]
 
