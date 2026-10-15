@@ -21,6 +21,7 @@ import Proofs.Flock.C3.Compose.LaterHeldW
 import Proofs.Flock.C3.Compose.LaterHolo
 import Proofs.Flock.C3.Compose.AtHoloHeld
 import Proofs.Flock.C3.Compose.HeldHyps
+import Proofs.Flock.C3.Compose.RepsHeld
 import Proofs.Flock.C3.Compose.SparseEndsAt
 import Proofs.Flock.C3.Compose.LaterFamily
 import Proofs.Flock.C3.Compose.SrcOKFamily
@@ -130,10 +131,12 @@ import Proofs.Flock.C3.RegLevels.LevelsChecked
 import Proofs.Flock.C3.RegLevels.TopRead
 import Proofs.Flock.C3.RegLevels.SrcMaps
 import Proofs.Flock.C3.Sparse.SessionReg
+import Proofs.Flock.C3.Sparse.SessionKeys
 import Proofs.Flock.C3.Sparse.SessionZero
 import Proofs.Flock.C3.RegLevels.LgCoins
 import Proofs.Flock.C3.RegLevels.RRounds
 import Proofs.Flock.C3.RegLevels.LgHeld
+import Proofs.Flock.C3.RegLevels.Reached
 
 /-!
 # Candidate 3's recursive guarantee: its open pieces

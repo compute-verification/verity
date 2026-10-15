@@ -236,7 +236,7 @@ theorem row_agree {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : Opti
         (FlockVBridge.Decode.regVal (F.zs R ω t R₂ j') (.inl (u', q'))) := by
   obtain ⟨hroot, hn, hdom⟩ := hsh R ω t R₂ j j' ⟨_, (h.1 j).1⟩ ⟨_, (h.1 j').1⟩ _ (hro R ω t R₂ τ o h j u q hp).1 _
     (hro R ω t R₂ τ o h j' u' q' hp').1 hv hs
-  exact FlockSoundness.Registered.enc_eq_of_not_clash (fun hc => h.2 ⟨j, j', hc⟩) hp hp' hroot hn hdom hpos
+  exact FlockSoundness.Registered.enc_eq_of_not_clash (fun hc => h.2.1 ⟨j, j', hc⟩) hp hp' hroot hn hdom hpos
 
 /-- **A chosen row for one read of R's level-`l` tops is the row at every other read of that node**:
 `row_agree` at the shared value `rec-top-stacked-L<l>`. This lets `MapsLeft` choose recursive cap entry `e l x`

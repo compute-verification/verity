@@ -97,6 +97,13 @@ noncomputable def holoAt (st : Flock.Stmt) (hp : HoloParams) : ExecHolo :=
     ⟨if hp.EllOk (execClassAt st).cls.kLog then schedAt (HoloClass.ofExec (execClassAt st).cls hp).shape.mReg
       else default⟩, hp.τ⟩
 
+/-- **`holoAt` at the typing `τv`**: only the typing replaced. Every other field is `holoAt st hp`'s own term, so a
+defeq that crosses the typing short-circuits on shared subterms; feeding `holoAt` a modified `HoloParams` instead makes
+the unifier and the kernel unfold `holoAt`'s whole body at every failed congruence, which times out. -/
+noncomputable def holoAtτ (st : Flock.Stmt) (hp : HoloParams)
+    (τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog)) : ExecHolo :=
+  { holoAt st hp with τ := τv }
+
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {D Sl : Type}
 
 /-- **R's registration**: the registered word and its level-0 cap. -/
@@ -189,6 +196,21 @@ below its count, and none past it (`RecCoins.layoutFactors`). -/
 def UnitsOf (st : Flock.Stmt) (hp : HoloParams) : Prop :=
   ∃ rng, unitRangeOf st = .ok rng ∧ ∀ σ, hp.units σ = if σ.val < rng.count then {rng.pos0 + σ.val} else ∅
 
+/-- **Candidate 3's holographic parameters from the verifier's own accepted data**: the shape it reads from
+`--rec-inner`, and the unit range of the statement it builds from its partition object and program. `checkInnerStmt`
+refuses `T_LOG ≠ 0`, so the one possible slot type is zero; no clear private `τ` row is an input to the verifier. -/
+def holoParamsAt (ish : Flock.RecVStar.Inner) (st : Flock.Stmt) : HoloParams :=
+  let sp := ish.sparse.getD { nu := 0, ell := 0, sLog := 0, tLog := 0 }
+  { ell := sp.ell
+    nu := sp.nu
+    sLog := sp.sLog
+    tLog := sp.tLog
+    units := fun σ =>
+      match (unitRangeOf st).toOption with
+      | some rng => if σ.val < rng.count then {rng.pos0 + σ.val} else ∅
+      | none => ∅
+    τ := fun _ => ⟨0, Nat.two_pow_pos _⟩ }
+
 variable {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 
 /-- **Candidate 3's compiled inner protocol**: `schedInner` at `Model.holoTableCL` on the class's public statement,
@@ -207,6 +229,12 @@ noncomputable def holoInnerCL (A : Arith F K) (H : List UInt8 → D) (E : Merkle
 leaves, at `holoAt st hp`. -/
 noncomputable abbrev holoInnerAt (st : Flock.Stmt) (hp : HoloParams) : Inner :=
   holoInnerCL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (holoAt st hp)
+
+/-- **Candidate 3's inner protocol at the typing `τv`**: `holoInnerAt` at `holoAtτ`. Its `Stmt`, `Msg`, `Coin` and `r`
+are `schedInner`'s parameters, independent of the typing, so they are `holoInnerAt st hp`'s own. -/
+noncomputable abbrev holoInnerAtτ (st : Flock.Stmt) (hp : HoloParams)
+    (τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog)) : Inner :=
+  holoInnerCL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (holoAtτ st hp τv)
 
 /-! ### The error -/
 
@@ -230,6 +258,12 @@ noncomputable def holoError (e : ExecHolo) : ℝ :=
   linkError e.sch ⟨e.cls.kLog, e.regs.length, e.cls.mPts⟩ +
     (repError e.sch ⟨e.cls.kLog, e.regs.length, e.cls.mPts⟩ + sparseError e.cls.shape) ^ 2 +
     regOpenError e.rsch.sch
+
+/-- **`holoAtτ` keeps the error**: `holoError` reads only the typing-independent fields, which are `holoAt st hp`'s
+own terms. -/
+theorem holoError_holoAtτ (st : Flock.Stmt) (hp : HoloParams)
+    (τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog)) : holoError (holoAtτ st hp τv) = holoError (holoAt st hp) :=
+  rfl
 
 /-! ### Clashes -/
 

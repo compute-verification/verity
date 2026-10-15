@@ -326,6 +326,148 @@ theorem innerAtLeavesL_reg {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Ty
   · exact ite_one_zero_iff Iff.rfl
   exact (prob_rounds _ _ _ _).symm
 
+theorem regWord_ofτ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
+    {st : Flock.Stmt} (hp : HoloParams) (τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog))
+    (zs : Reg → L.Ω → List (Cm × (holoInnerAtτ T CT st hp τv).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray) (N k Rw : ℕ)
+    (wmsg : ((j : Fin S) → (Vs j).Bits) → List (holoInnerAtτ T CT st hp τv).Msg)
+    (σ : Strategy (recGame L Reg (holoInnerAtτ T CT st hp τv) Cm fun R ω t => outerV (zs R ω t) dg N))
+    (cap : Cap Refine.Dig) {ω : L.Ω} {pos : ℕ}
+    (hex : ∃ col, Flock.Guarantees.RunOpensRegτ T CT st hp τv zs dg N k Rw wmsg σ cap ω pos col) (ℓ : ℕ) :
+    Flock.Guarantees.regWordτ T CT st hp τv zs dg N k Rw wmsg σ cap ω ℓ pos = hex.choose.getD ℓ 0 := by
+  simp only [Flock.Guarantees.regWordτ, dite_eq_left hex]
+
+/-- **`regClash_fork` at the typing `τv`**: the per-draw fact with the runs' outcomes decoded against the table at
+`τv` (`holoAtτ`) and the word theirs (`regStmtτ`). -/
+theorem regClash_forkτ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
+    [∀ k, Nonempty (CT k)] {st : Flock.Stmt} (hp : HoloParams) (τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog))
+    (zs : Reg → L.Ω → List (Cm × (holoInnerAtτ T CT st hp τv).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray) (N k Rw : ℕ)
+    (wmsg : ((j : Fin S) → (Vs j).Bits) → List (holoInnerAtτ T CT st hp τv).Msg)
+    (σ : Strategy (recGame L Reg (holoInnerAtτ T CT st hp τv) Cm fun R ω t => outerV (zs R ω t) dg N))
+    (cap : Cap Refine.Dig) {ω : L.Ω} {d} {o : OutHL GF128 Refine.Dig (List UInt8)}
+    (hd : LeafRun zs dg N k Rw wmsg σ ω d)
+    (ho : outHL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (holoAtτ st hp τv)
+      (Flock.Guarantees.regStmtτ T CT st hp τv zs dg N k Rw wmsg σ cap σ.1 ω) d = some o)
+    (hc : RegClash Refine.H512 Refine.enc512 Refine.leafPlain (holoAtτ st hp τv).rsch.sch.level₀
+      (Flock.Guarantees.regStmtτ T CT st hp τv zs dg N k Rw wmsg σ cap σ.1 ω) o) :
+    (forkG (clashPickHL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (holoAtτ st hp τv)
+        (Flock.Guarantees.regStmtτ T CT st hp τv zs dg N k Rw wmsg σ cap σ.1 ω)) 0
+      (holoInnerAtτ T CT st hp τv).r
+      (fun t => (outerV (zs σ.1 ω t) dg N).map fun b => (σ.1, ω, t, b))
+      (fun t s => StrictCR.oneRun (outerV (zs σ.1 ω t) dg N)
+        (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outerV (zs σ.1 ω t) dg N) s) (decodedV zs dg N k Rw wmsg σ.1 ω t))
+      (σ.2 ω)).Finds Refine.H512 := by
+  obtain ⟨y, hy, hlt, hv, hne⟩ := hc
+  obtain ⟨O, hO, hOω, rfl⟩ := rec_of_leafRun zs dg N k Rw wmsg σ hd
+  have hex : ∃ col, Flock.Guarantees.RunOpensRegτ T CT st hp τv zs dg N k Rw wmsg σ cap ω y.1 col :=
+    ⟨y.2.1, O, hO, hOω, o, Eq.trans (outHL_cap T CT _ _ _ _ _ _) ho, y, hy, rfl, hv, rfl⟩
+  obtain ⟨O₂, hO₂, hO₂ω, o₂, ho₂, y₂, hy₂, hp₂, hv₂, hc₂⟩ := hex.choose_spec
+  have hcol : rowFin (holoAtτ st hp τv).rsch.sch.level₀.lanes
+      ((Flock.Guarantees.regStmtτ T CT st hp τv zs dg N k Rw wmsg σ cap σ.1 ω).column
+        (holoAtτ st hp τv).rsch.sch.level₀.lanes y.1) = rowFin (holoAtτ st hp τv).rsch.sch.level₀.lanes y₂.2.1 := by
+    funext lane
+    simp only [rowFin, HoloReg.column]
+    rw [List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_range lane.isLt, hc₂]
+    exact regWord_ofτ T CT hp τv zs dg N k Rw wmsg σ cap hex lane
+  refine forkG_zero_of Refine.H512 _ r _ _ (σ.2 ω) hd (leafRun_of_rec zs dg N k Rw wmsg σ hO₂ hO₂ω)
+    (collOf_isColl Refine.H512 _ ⟨o, o₂, ho, Eq.trans (outHL_cap T CT _ _ _ _ _ _) ho₂, Or.inr ?_⟩)
+  refine clash₀_of_two Refine.H512 Refine.enc512 Refine.leafPlain _ cap o o₂ hy hy₂ hlt hp₂ hv hv₂ ?_
+  rw [← hcol]
+  exact fun h => hne (rowFin_inj hv.1 (by simp only [HoloReg.column, List.length_map, List.length_range]) h)
+
+/-- **`innerAtLeavesL_reg` at the typing `τv`**: the inner term at the word the runs open, with piece (a)'s runs
+(`holo_runs_sound`) at `holoAtτ st hp τv`, whose typing-independent hypotheses are `holoAt st hp`'s
+(`holoAtτ_fast100`, `holoAtτ_rsch`, `holoAtτ_units`) and whose layout reads no typing (`holoAtτ_linkLayout`); the
+error is `holoAt st hp`'s own (`holoError_holoAtτ`). -/
+theorem innerAtLeavesL_regτ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
+    [∀ k, Nonempty (CT k)] {st : Flock.Stmt} (hp : HoloParams) (τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog))
+    (hcls : ClassOk (shapeOf st))
+    (zs : Reg → L.Ω → List (Cm × (holoInnerAtτ T CT st hp τv).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray) (N k Rw : ℕ)
+    (σ : Strategy (recGame L Reg (holoInnerAtτ T CT st hp τv) Cm fun R ω t => outerV (zs R ω t) dg N))
+    (wmsg : ((j : Fin S) → (Vs j).Bits) → List (holoInnerAtτ T CT st hp τv).Msg) (cap : Cap Refine.Dig)
+    (hno : ¬ InnerForkRec zs dg N k Rw σ (Flock.Guarantees.regStmtτ T CT st hp τv zs dg N k Rw wmsg σ cap) wmsg
+      Refine.H512 (clashPickHL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (holoAtτ st hp τv))) :
+    ∀ ref, InnerAtLeavesL σ (fun R ω t o => AcceptsV (zs R ω t) o)
+      (Flock.Guarantees.regStmtτ T CT st hp τv zs dg N k Rw wmsg σ cap)
+      (W := ((j : Fin S) → (Vs j).Bits) × (holoInnerAtτ T CT st hp τv).Stmt)
+      (fun R ω t _ o => (layers (zs R ω t o.1) dg N k Rw o.2,
+        Flock.Guarantees.regStmtτ T CT st hp τv zs dg N k Rw wmsg σ cap R ω))
+      (fun w => wmsg w.1) ref (ENNReal.ofReal (holoError (holoAt st hp))) := by
+  classical
+  let _ : Inhabited Refine.Dig := ⟨Refine.H512 []⟩
+  intro ref ω
+  let x := Flock.Guarantees.regStmtτ T CT st hp τv zs dg N k Rw wmsg σ cap σ.1 ω
+  let pk := clashPickHL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (holoAtτ st hp τv) x
+  by_cases hx : (holoInnerAtτ T CT st hp τv).holds x
+  · refine le_trans (leafAvg_mono (G := fun _ _ => 0) (fun t s => ?_) _) ?_
+    · exact le_of_eq (ite_eq_right fun h => h.1 hx)
+    · exact (leafAvg_const 0 _).le.trans zero_le
+  let f := fun t : List (Cm × (holoInnerAtτ T CT st hp τv).Coin) =>
+    (outerV (zs σ.1 ω t) dg N).map fun b => (σ.1, ω, t, b)
+  let V : (t : List (Cm × (holoInnerAtτ T CT st hp τv).Coin)) → Strategy (f t) →
+      List ((holoInnerAtτ T CT st hp τv).Msg × (holoInnerAtτ T CT st hp τv).Coin) → Prop := fun t s u =>
+    ∃ b, Game.Outcome (outerV (zs σ.1 ω t) dg N)
+      (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outerV (zs σ.1 ω t) dg N) s) b ∧
+      AcceptsV (zs σ.1 ω t) b ∧ decodedV zs dg N k Rw wmsg σ.1 ω t b = u
+  let Tr : (t : List (Cm × (holoInnerAtτ T CT st hp τv).Coin)) → Strategy (f t) →
+      StrictCR.Finder (List ((holoInnerAtτ T CT st hp τv).Msg × (holoInnerAtτ T CT st hp τv).Coin)) := fun t s =>
+    StrictCR.oneRun (outerV (zs σ.1 ω t) dg N)
+      (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outerV (zs σ.1 ω t) dg N) s) (decodedV zs dg N k Rw wmsg σ.1 ω t)
+  let Q := (holoInnerAtτ T CT st hp τv).accepts x
+  let G := AtLeafL (holoInnerAtτ T CT st hp τv).r f V (σ.2 ω)
+  let s := refStratL Q (holoInnerAtτ T CT st hp τv).r f (ref ω) id V (σ.2 ω)
+  have hVT : ∀ t s' u, V t s' u → Game.Outcome (Tr t s').g (Tr t s').s (id u) := by
+    rintro t s' u ⟨b, hb, -, rfl⟩
+    exact outcome_oneRun _ _ _ hb
+  have hr0 : 0 < (holoInnerAtτ T CT st hp τv).r := Nat.succ_pos r
+  have hfork : ∀ t t' o o', Game.Outcome (holoInnerAtτ T CT st hp τv).game s t →
+      Game.Outcome (holoInnerAtτ T CT st hp τv).game s t' → G t → G t' →
+      outHL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (holoAtτ st hp τv) x t = some o →
+      outHL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (holoAtτ st hp τv) x t' = some o' →
+      ClashRunHL Refine.H512 Refine.enc512 Refine.leafPlain (holoAtτ st hp τv).sch (holoAtτ st hp τv).rsch.sch x.cap
+        o o' → False := by
+    intro t t' o o' ht ht' hG hG' ho ho' hc
+    obtain ⟨i, hi, hF⟩ := Inner.fork_of_outcomes Refine.H512 _ hr0 (pickOn G pk) s ht ht'
+      ((congrArg (StrictCR.IsColl Refine.H512) (pickOn_of hG hG')).mpr
+        (collOf_isColl Refine.H512 _ ⟨o, o', ho, ho', hc⟩))
+    exact hno ⟨ω, i, hi, finds_forkG_refL Refine.H512 pk Q G i _ f (ref ω) id V Tr (σ.2 ω) hVT (fun _ hu => hu)
+      (clashPickHL_lastFree T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (holoAtτ st hp τv) x) hF⟩
+  have hreg : ∀ t o, Game.Outcome (holoInnerAtτ T CT st hp τv).game s t → G t →
+      outHL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (holoAtτ st hp τv) x t = some o →
+      RegClash Refine.H512 Refine.enc512 Refine.leafPlain (holoAtτ st hp τv).rsch.sch.level₀ x o → False := by
+    intro t o ht hG ho hc
+    obtain ⟨u, u', rfl, hl, hlc, hu'⟩ := outcome_contF_refL Q G _ f (ref ω) id V Tr (σ.2 ω) hVT (fun _ hu => hu) t
+      (outcome_contF (holoInnerAtτ T CT st hp τv).r id s ht) hG
+    exact hno ⟨ω, 0, hr0, regClash_forkτ T CT hp τv zs dg N k Rw wmsg σ cap hu'
+      ((outHL_lastCoin T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (holoAtτ st hp τv) x hl
+        hlc).symm.trans ho) hc⟩
+  rcases FlockC3.Fork.holo_runs_sound T CT execArith execArith_correct Refine.H512 Refine.enc512 Refine.leafPlain
+      (holoAtτ st hp τv) (FlockC3.Fork.holoAtτ_fast100 hp hcls τv) (FlockC3.Fork.holoAtτ_linkLayout hp hcls τv)
+      (FlockC3.Fork.holoAtτ_rsch st hp τv) (FlockC3.Fork.holoAtτ_units st hp τv) x hx G s with
+    ⟨t, t', o, o', ht, ht', hG, hG', ho, ho', hc | hc | hc | hc⟩ | hle
+  · exact (hfork t t' o o' ht ht' hG hG' (outHL_of_plays T CT _ _ _ _ _ x ho) (outHL_of_plays T CT _ _ _ _ _ x ho')
+      (Or.inl hc)).elim
+  · exact (hfork t t' o o' ht ht' hG hG' (outHL_of_plays T CT _ _ _ _ _ x ho) (outHL_of_plays T CT _ _ _ _ _ x ho')
+      (Or.inr hc)).elim
+  · exact (hreg t o ht hG (outHL_of_plays T CT _ _ _ _ _ x ho) hc).elim
+  · exact (hreg t' o' ht' hG' (outHL_of_plays T CT _ _ _ _ _ x ho') hc).elim
+  have hlast : (holoInnerAtτ T CT st hp τv).LastFree := schedInner_lastFree T CT _ _ _ _
+  rw [← holoError_holoAtτ st hp τv]
+  refine le_trans ?_ hle
+  refine le_trans (leafAvg_mono (G := fun t s =>
+    if ∃ m, Q (id (relabelL (ref ω) m t)) ∧ V t s (relabelL (ref ω) m t) then 1 else 0)
+    (fun t s => ite_one_zero_le ?_) _) ?_
+  · rintro ⟨-, m, b, hb, ha, hd, hq⟩
+    exact ⟨m, hq, b, hb, ha, hd⟩
+  refine (leafAvg_relabelL_le Q (holoInnerAtτ T CT st hp τv).r f (ref ω) id V (σ.2 ω) fun u m ρ ρ' hu hq =>
+    hlast x u m ρ ρ' hu hq).trans (le_of_eq ?_)
+  refine Eq.trans (leafAvg_congr_len (G := fun u s' => prob (fun u => Q u ∧ G u) (.ret (id u)) s')
+    (fun u s' _ => ?_) _) ?_
+  · exact ite_one_zero_iff Iff.rfl
+  exact (prob_rounds _ _ _ _).symm
+
 end Chain
 
 end FlockSoundness.Discharge.Recursion

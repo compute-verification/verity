@@ -11,6 +11,8 @@ the map's (`osh`, `w`). One `wr` writes check 5's record throughout: the family'
 (`CoinsAccepted`) and the custody assumption's (`InnerRecordCustody`) are the same binder. The family's premises stay
 premises, carried as named binders: `CoinsAccepted` (`hchk`), `SparseIs` (`hsi`), the sparse statement with check 5's
 files tie (`hsS`, `hfiles`), and the run's points as the history's first coin (`hpts`, `PointsFromHistory`).
+`srcOK_holo_family_hist`: `srcOK_holo_family` at `histPts`' source, whose points are the history's first coin by
+definition, so its `hpts` is `pointsFromHistory_histPts` and it carries the rest.
 -/
 
 namespace FlockC3.Compose
@@ -113,6 +115,87 @@ theorem srcOK_holo_family {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : 
       hosh hmaps hc3 hrep hsp hsh hcl hrs hc hA hshape htblS htbl hpts hheld hcnt hsst hx hts)
     hrp hsm he (fun R ω t R₂ τ o hAcc => (hmaps R ω t R₂ τ o hAcc).2.2.1) hall hk hr hlg hos hrt hst hot
     (FlockC3.RegLevels.srcLevelTie_of_maps M hell hosh unit (repsOfVals stp sh rep vals) c3 w kap e0 sb e hmaps)
+
+/-- **`srcOK_holo_family` at `histPts`' source, without `hpts`**: the run's points are the history's first coin by the
+source's definition (`pointsFromHistory_histPts`); every other premise is `srcOK_holo_family`'s at that source. -/
+theorem srcOK_holo_family_hist {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Array VStar.Stmt}
+    {hss : RecVStar.statements ish = .ok ss} {bind : Fin (vstarCount ish) → VStar.Bindings}
+    {Vs : Fin (vstarCount ish) → VStmt} {hob : VStarParsesScoped Flock.Tags.circuit ish bind Vs}
+    {zr : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin (vstarCount ish)) → (Vs j).OuterR Reg'}
+    {hCust : Flock.Premises.RecordCustody zr} {h : Typed zr} {coins : String → Option Flock.RecCoins.Source}
+    {rows : Option (Array Flock.Registered.Port)} {own : Fin (vstarCount ish) → Array Flock.Registered.Port}
+    {sel : ℕ → String → ℕ → Prop}
+    {bc : (j : Fin (vstarCount ish)) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → List UInt8}
+    {dec : ℕ → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → (ℐ).Msg}
+    {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json}
+    {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin (vstarCount ish)) → (Vs j).Outer Reg'}
+    (hzs : zs = (C3Family.checked (T := Flock.Guarantees.holoTys st hp) (CT := holoCTs st hp) (xR := xR) ish hss
+      bind hob zr hCust h coins rows own sel bc dec wr reg).zs)
+    (hF : ∀ R ω t R₂ j, TagsFound (zr R ω t R₂ j).I) (hS : 0 < vstarCount ish)
+    {dg : ByteArray → ByteArray} {N k Rw c₀ : ℕ} {stmt : Fin (vstarCount ish) → VStar.Stmt} {sh : Flock.Shape}
+    {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → C3Run (holoAt st hp)}
+    {rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → Fin 2 → RepData}
+    {vals : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → Fin 2 → UnitVals}
+    {held : Lean.Json × String → Except String RecVStar.InnerCommits} {sparse : Option RecSparse.Shape}
+    {tbl unit : String} {bcM : Cm → String → Nat → List UInt8} {s : Fin 2 → String} {ix : Fin 2 → ℕ → ℕ}
+    {rr rs : Array RecVStar.SchedRound} {sp : RecSparse.Shape} {shR : RecVStar.StackedShape}
+    {M : FlockC3.Reps.StackedMaps stmt Vs} {osh : Flock.Shape}
+    {c3 : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → RecCoins.C3}
+    {w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → Array F128}
+    {kap : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin (vstarCount ish)) → (Vs j).Bits) →
+      Array (Array (Array F128))}
+    {e0 : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → ℕ → ByteArray}
+    {sb : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → ℕ → ℕ → ℕ → ByteArray}
+    {e : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → ℕ → ℕ → ByteArray}
+    {cap₀ : Cap Dig}
+    (hchk : FlockC3.Sparse.CoinsAccepted (C3Family.checked (T := Flock.Guarantees.holoTys st hp)
+      (CT := holoCTs st hp) (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) rows wr reg
+      coins)
+    (hsi : FlockC3.VStarList.SparseIs ish hp) {sI : Fin (vstarCount ish)} {shS : Flock.RecSparse.Shape} {hR : ℕ}
+    (hsS : ss[(sI : ℕ)]? = some (.sparse shS hR))
+    (hfiles : ∀ r src, coins r = some src → ∃ f, src = .files f ∧ f.record = r)
+    (halg : AlgebraDecodes (I := ℐ) zs dg N k Rw sh rep) (hacc : AccChains (I := ℐ) zs dg N k Rw sh rep)
+    (hpr : ProofOfVals zs dg N k Rw sh rep vals)
+    (hsv : SetupOfVals zs dg N k Rw (tiedSrc (repsOfVals (histPts ish tbl bcM stp) sh rep vals)) sh rep vals)
+    (hf : FramesOfVals zs dg N k Rw sh rep vals)
+    (hcus : FlockSoundness.Assumptions.InnerRecordCustody wr held sparse
+      (Flock.Guarantees.holoMap st hp Cm ish tbl bcM))
+    (hheldR : RepRoundsHeld zs dg N k Rw sh rep wr held s ix)
+    (hdr : RepsDrawn zs dg N k Rw sh rep vals (holoSelOne ish tbl) s ix)
+    (hrt : SrcRepTie zs dg N k Rw (tiedSrc (repsOfVals (histPts ish tbl bcM stp) sh rep vals)))
+    (hst : FlockC3.Sparse.SrcSparseTie zs dg N k Rw (tiedSrc (repsOfVals (histPts ish tbl bcM stp) sh rep vals)))
+    (hot : AtSrc zs dg N k Rw (tiedSrc (repsOfVals (histPts ish tbl bcM stp) sh rep vals)) fun _ u => ∃ sh w ops,
+      FlockC3.Opening.OpenTie sh w ops u ∧ OpeningReadAt (runSteps u) u)
+    (hell : hp.EllOk (execClassAt st).cls.kLog)
+    (hosh : RecOpening.shape? (holoAt st hp).cls.shape.mReg 2 = some osh)
+    (hmaps : MapsAt zs dg N k Rw M osh unit (repsOfVals (histPts ish tbl bcM stp) sh rep vals) c3 w kap e0 sb e cap₀)
+    (hc3 : C3Held wr held ish c3) (hrep : holoRounds ish.m ish.kLog ish.claims = some rr)
+    (hsp : ish.sparse = some sp) (hsh : ish.stacked = some shR) (hcl : shR.claims = RecVStar.STACKED_CLAIMS)
+    (hrs : RecVStar.stackedRounds shR = some rs) (hc : 0 < ish.claims)
+    (hA : repFormsAt (holoAt st hp) = repForms ish.m ish.kLog ish.claims)
+    (hshape : (holoAt st hp).cls.shape = sparseOf sp) (htblS : tbl ≠ s!"{RecVStar.SPARSE}/")
+    (htbl : tbl ≠ s!"{RecVStar.STACKED}/")
+    (hheld : AtSrc zs dg N k Rw (tiedSrc (repsOfVals (histPts ish tbl bcM stp) sh rep vals)) fun t _ =>
+      HeldOk wr held t)
+    (hcnt : AtSrc zs dg N k Rw (tiedSrc (repsOfVals (histPts ish tbl bcM stp) sh rep vals)) fun t _ =>
+      SparseCountedAt wr held sp t)
+    (hsst : AtSrc zs dg N k Rw (tiedSrc (repsOfVals (histPts ish tbl bcM stp) sh rep vals)) fun t u =>
+      SparseStagesAt wr held ish unit sp t u)
+    (hx : AtSrc zs dg N k Rw (tiedSrc (repsOfVals (histPts ish tbl bcM stp) sh rep vals)) fun t _ =>
+      StackedHeldAt wr held rs t)
+    (hts : AtSrc zs dg N k Rw (tiedSrc (repsOfVals (histPts ish tbl bcM stp) sh rep vals)) fun _ u =>
+      RepStagesCounted rr u)
+    (hrp : RepsMsgsRead zs dg N k Rw (tiedSrc (repsOfVals (histPts ish tbl bcM stp) sh rep vals)) own sel)
+    (hsm : SparseMsgsRead zs dg N k Rw (tiedSrc (repsOfVals (histPts ish tbl bcM stp) sh rep vals)) own sel)
+    (he : PartEnds sparsePart zs dg N k Rw (tiedSrc (repsOfVals (histPts ish tbl bcM stp) sh rep vals)) c₀)
+    (hall : OpenAll zs dg N k Rw osh w) (hk : RsKeys zs dg N k Rw osh w)
+    (hr : RoundReads zs dg N k Rw osh w own sel c₀)
+    (hlg : LigMsgsRead zs dg N k Rw (tiedSrc (repsOfVals (histPts ish tbl bcM stp) sh rep vals)) own sel)
+    (hos : ∀ s < 3, OpensReadAt zs dg N k Rw (tiedSrc (repsOfVals (histPts ish tbl bcM stp) sh rep vals)) s) :
+    SrcOK zs dg N k Rw (tiedSrc (normSrc (repsOfVals (histPts ish tbl bcM stp) sh rep vals))) own sel :=
+  srcOK_holo_family hzs hF hS hchk hsi hsS hfiles halg hacc hpr hsv hf hcus hheldR hdr hrt hst hot hell hosh hmaps hc3
+    hrep hsp hsh hcl hrs hc hA hshape htblS htbl pointsFromHistory_histPts hheld hcnt hsst hx hts hrp hsm he hall hk hr
+    hlg hos
 
 end
 

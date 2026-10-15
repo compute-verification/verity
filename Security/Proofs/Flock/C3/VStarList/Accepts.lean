@@ -23,6 +23,9 @@ covers check (`RecVStar.checkCovers`). So:
 * Every candidate-3 session either setup accepts is one these read: the verifier holds the inner files
   (`files_of_checkInner`), the inner transcript (`commits_of_checks`) and R's registration, both JSON
   (`held_of_commits`).
+* `sparse_of_acceptsC3`: `AcceptsC3` names a RecSparse shape (`checkInnerStmt`), so `hcoins_of_acceptsC3`: at an
+  accepted candidate-3 session check 5's source is the files of the record the verifier holds the inner transcript
+  against, never `--rec-inner-coins`'s record, which `checkAtC3` refuses there.
 -/
 
 namespace FlockC3.VStarList
@@ -78,6 +81,27 @@ theorem files_of_checkInner {src : Option RecCoins.Source} (hsp : ish.sparse.isS
   obtain ⟨⟨⟩, h1, -⟩ := ebind_ok h
   obtain ⟨f, -, -, hf, -⟩ := checkAtC3_spec h1 hsp
   exact ⟨f, hf⟩
+
+/-- **Candidate 3's acceptance names a RecSparse shape**: `AcceptsC3` holds the inner shape to the inner statement's
+(`checkInnerStmt`), and `checkInnerShape` refuses an inner shape with no RecSparse shape. -/
+theorem sparse_of_acceptsC3 (h : AcceptsC3 ish st tr record reg) : ish.sparse.isSome = true := by
+  obtain ⟨⟨⟩, hi⟩ := ok_of_isOk h.2.2.2.2
+  exact (checkInnerStmt_ok hi).1
+
+/-- **Check 5's source at an accepted candidate-3 session is the files of its record**, `_hcoins`'s form at the record
+`r`: `AcceptsC3` at `r` names a RecSparse shape (`sparse_of_acceptsC3`), where `checkInner` refuses every source but
+the inner statement's files (`files_of_checkInner`: `--rec-inner-coins` is refused there), and the verifier holds the
+inner transcript against its source's record (`hrec`: `verify` reads it as `recCoins.map (·.record)`), so the files'
+record is `r`. -/
+theorem hcoins_of_acceptsC3 {coins : String → Option RecCoins.Source} {r : String}
+    (hA : AcceptsC3 ish st tr r reg) (hin : RecSetup.checkInner (some ish) (coins r) bound = .ok ())
+    (hrec : ∀ s, coins r = some s → s.record = r) :
+    ∀ s, coins r = some s → ∃ f, s = .files f ∧ f.record = r := by
+  intro s hs
+  obtain ⟨f, hf⟩ := files_of_checkInner (sparse_of_acceptsC3 hA) hin
+  rw [hf] at hs
+  cases hs
+  exact ⟨f, rfl, hrec _ hf⟩
 
 theorem checkInner_ok (hsp : ish.sparse.isSome = true)
     (h : RecSetup.checkInner (some ish) (some (.files f)) bound = .ok ()) :

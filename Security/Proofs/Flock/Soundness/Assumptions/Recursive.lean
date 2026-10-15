@@ -38,12 +38,14 @@ sessions read that the history does not fix, its running sums `rec-acc` and with
 
 * **they accept only an accepted inner transcript** (`VBridgeOff RegColl`): where no two of V*'s sessions' registrant
   records clash (`RegColl`: two registered reads whose openings or hm96 leaves are a SHA-512 collision, which the
-  recursive guarantees answer with a registrant fork, `regFinder`), at all strategies of V*'s sessions there, when
-  every session's outcome `flock-verify verify --zk --registered` accepts and every session's value layer is
-  `Good` (no wrong unit, and at every unit each registered read carries the registrant's value: the hidden circuit's
-  rows as registered, `R₂`'s values, and the values V* registers itself, the coins and the comb `coef`), the messages
-  `wmsg` reads from the layers hold an inner transcript the inner verifier accepts on the hidden circuit's statement
-  `x R ω` at the rounds' coins;
+  recursive guarantees answer with a registrant fork, `regFinder`), at all strategies of V*'s sessions there and at
+  every record that is a genuine session-game outcome (each session's record is one its game reaches against its
+  strategy, `Game.Outcome`; an accepted record is always such an outcome, since the audit only ever accepts what its
+  sessions play), when every session's outcome `flock-verify verify --zk --registered` accepts and every session's
+  value layer is `Good` (no wrong unit, and at every unit each registered read carries the registrant's value: the
+  hidden circuit's rows as registered, `R₂`'s values, and the values V* registers itself, the coins and the comb
+  `coef`), the messages `wmsg` reads from the layers hold an inner transcript the inner verifier accepts on the hidden
+  circuit's statement `x R ω` at the rounds' coins;
 * **their public files register the firewall's commitments** (`VCommits`): the digest session `j`'s value binding
   registers at each commit string of stage `i`'s `Sk i j` is the firewall's stage-`i` commitment's, `cmt j`, at every
   `R₂` and registration `R'` where session `j` accepts a transcript it writes at `R'` (`ZkOuter.Writes`, an outcome
