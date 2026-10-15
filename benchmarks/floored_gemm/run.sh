@@ -58,6 +58,10 @@ gpu-lease 1 --wait --max-min 30 -- bash -c '
       ncu --clock-control none --profile-from-start off --metrics $M --csv "$B/fgemm" one $arm $m $n $k $c \
         > "$O/ncu-$nm-$arm.csv" 2>&1 || echo "ncu $nm $arm rc $?" >> "$O/rc.txt"
     done
+  done
+  for arm in g0 c c2; do
+    ncu --clock-control none --profile-from-start off --section WarpStateStats --section SchedulerStats --csv \
+      "$B/fgemm" one $arm 8192 4096 4096 Q > "$O/ncu-stall-q_o-$arm.csv" 2>&1 || echo "ncu stall $arm rc $?" >> "$O/rc.txt"
   done'
 python3 $D/table.py "$O/bench.jsonl" "$O" > "$O/table.md" 2> "$O/table.err"
 cat "$O/rc.txt" "$O/table.md"

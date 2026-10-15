@@ -13,7 +13,8 @@
 // note:20261015T0432Z-draft-receipt-phi: u = y ^ p ^ k_t; y = u a_t + z; z = rotl(u, r_t) + y; receipt y ^ rotl(z, 16)) or
 // duo2, the follow-up's margin variant (note:20261015T0711Z-draft-receipt-phi-followup; receipt_phi/phi.cu's DUO2): two duo
 // lanes on each word, keys (a, k) and (b, c), rotations R1 and R2, receipt y ^ rotl(z, 16) ^ rotl(y2 ^ rotl(z2, 16), 8);
-// 6 ops a word. At each receipt boundary in ascending k, a thread absorbs its words acc[mi][ni][e] in (mi, ni) order at
+// 6 ops a word. At each receipt boundary in ascending k, a thread absorbs its words acc[mi][ni][e] in (mi, ni) order (each
+// right after the MMA that completes it) at
 // key position t = mi NI + ni, into chain 4 (t % 2) + e (two chains a word index, for latency). The keys are compile-time constants, standing for constant-bank operands (same op
 // count, no registers; a deployment loads them per challenge): held in registers, they push the 128 x 128 kernels into
 // spills. The key schedule (16 positions) is a cost stand-in for the reviewed one.
@@ -268,40 +269,36 @@ template <int TM, int BN, int WM, int STAGES> struct ML {
   template <int KIND, int IDX> DEV static void absorb_at(St (&ch)[NCH<KIND>], const int (&w)[4]) {
     absorb<KIND, IDX / NI, IDX % NI>(ch, w);
   }
-  template <int KIND, int IDX = 0> DEV static void absorb_all(St (&ch)[NCH<KIND>], int (&acc)[MI][NI][4]) {
-    if constexpr (IDX < MI * NI) {
-      absorb_at<KIND, IDX>(ch, acc[IDX / NI][IDX % NI]);
-      absorb_all<KIND, IDX + 1>(ch, acc);
-    }
-  }
-  // one atom: ABS, absorb each accumulator's running sum (the previous atom's result) just before its next MMA
+  // one atom: ABS, absorb each accumulator's running sum right after its MMA. Reading the MMA's own result keeps ptxas
+  // from hoisting the absorbs above the atom's MMAs (absorbing the previous atom's result before each MMA, it moved all
+  // of them ahead of the atom's first MMA, and the two warps on an SMSP then ran MMAs and absorbs in phase)
   template <bool FROM0, bool ABS, int KIND, int IDX = 0>
   DEV static void mma(int (&acc)[MI][NI][4], St (&ch)[NCH<KIND>], const uint32_t (&fa)[MI][4], const uint32_t (&fb)[NI][2]) {
     if constexpr (IDX < MI * NI) {
       constexpr int mi = IDX / NI, ni = IDX % NI;
-      if constexpr (ABS) absorb_at<KIND, IDX>(ch, acc[mi][ni]);
       if (FROM0) imma0(acc[mi][ni], fa[mi], fb[ni]);
       else imma(acc[mi][ni], fa[mi], fb[ni]);
+      if constexpr (ABS) absorb_at<KIND, IDX>(ch, acc[mi][ni]);
       mma<FROM0, ABS, KIND, IDX + 1>(acc, ch, fa, fb);
     }
   }
-  // atom j of a stage absorbs when a receipt boundary falls just before it (never before the tile's first atom)
-  __host__ __device__ static constexpr bool absorbs(int rs, bool first, int j) { return rs != 0 && !(first && j == 0) && (rs == 32 || j % 2 == 0); }
+  // atom j of a stage absorbs when a receipt boundary falls just after it
+  __host__ __device__ static constexpr bool absorbs(int rs, int j) { return rs != 0 && (rs == 32 || j % 2 == 1); }
   template <int RS, int KIND, bool FIRST, bool LAST>
   DEV void stage_body(int (&acc)[MI][NI][4], St (&ch)[NCH<KIND>], uint32_t (&fa)[2][MI][4], uint32_t (&fb)[2][NI][2]) {
     const uint32_t sb = stage(s), done = empty(s);
     load(fa[1], fb[1], sb, 1);
-    mma<FIRST, absorbs(RS, FIRST, 0), KIND>(acc, ch, fa[0], fb[0]);
+    mma<FIRST, absorbs(RS, 0), KIND>(acc, ch, fa[0], fb[0]);
     load(fa[0], fb[0], sb, 2);
-    mma<false, absorbs(RS, FIRST, 1), KIND>(acc, ch, fa[1], fb[1]);
+    mma<false, absorbs(RS, 1), KIND>(acc, ch, fa[1], fb[1]);
     load(fa[1], fb[1], sb, 3);
-    mma<false, absorbs(RS, FIRST, 2), KIND>(acc, ch, fa[0], fb[0]);
+    mma<false, absorbs(RS, 2), KIND>(acc, ch, fa[0], fb[0]);
     advance();
     if (!LAST) {
       mbar_wait_warp(full(s), ph);
       load(fa[0], fb[0], stage(s), 0);
     }
-    mma<false, absorbs(RS, FIRST, 3), KIND>(acc, ch, fa[1], fb[1]);
+    mma<false, absorbs(RS, 3), KIND>(acc, ch, fa[1], fb[1]);
     release(done);
   }
   template <int RS, int KIND> DEV void tile(int K, int (&acc)[MI][NI][4], St (&ch)[NCH<KIND>]) {
@@ -313,7 +310,6 @@ template <int TM, int BN, int WM, int STAGES> struct ML {
 #pragma unroll 1
     for (int kt = 1; kt < KT - 1; kt++) stage_body<RS, KIND, false, false>(acc, ch, fa, fb);
     stage_body<RS, KIND, false, true>(acc, ch, fa, fb);
-    if constexpr (RS != 0) absorb_all<KIND>(ch, acc);
   }
   // the peel: U = C - 256 (E_A W_hi^T + V_hi E_B^T) - (E_A W_lo^T + V_lo E_B^T), the tail stage's four atoms
   DEV void peel(int (&acc)[MI][NI][4]) {
