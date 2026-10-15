@@ -1317,13 +1317,16 @@ variable (kd : K → Kind)
 
 /-- A typed Model B circuit. `gate k` is one gate of kind `k` (off its range `ok` it outputs 0, which only adds
 programs); the rest is routing, which moves wires and computes nothing: `reindex` (read wires in any order, with
-fan-out), `curry` and `uncurry` (reshape a block), `join` (two bundles side by side), and the combinators. -/
+fan-out), `curry` and `uncurry` (reshape a block), `join` (two bundles side by side), `ofBits` (bit wires, such as σ and
+the coins, read as 0/1 integer wires, as RS-MODEL's `extra` inputs are), and the combinators. A protocol in Model B
+has bit bundles (`α → Bool`) for σ and the coins, and integer bundles for its matrices and messages. -/
 inductive Circ : Type → Type → Type 1 where
   | gate (k : K) : Circ (Fin (kd k).arity → ℤ) (Fin (kd k).outs → ℤ)
   | reindex {α β V : Type} (f : β → α) : Circ (α → V) (β → V)
   | curry {α β V : Type} : Circ (α × β → V) (α → β → V)
   | uncurry {α β V : Type} : Circ (α → β → V) (α × β → V)
   | join {α β V : Type} : Circ ((α → V) × (β → V)) (α ⊕ β → V)
+  | ofBits {α : Type} : Circ (α → Bool) (α → ℤ)
   | seq {I J O : Type} : Circ I J → Circ J O → Circ I O
   | pair {I J O : Type} : Circ I J → Circ I O → Circ I (J × O)
   | fst {I J : Type} : Circ (I × J) I
@@ -1338,6 +1341,7 @@ def Circ.eval : {I O : Type} → Circ kd I O → I → O
   | _, _, .curry, w => fun a b => w (a, b)
   | _, _, .uncurry, w => fun p => w p.1 p.2
   | _, _, .join, w => Sum.elim w.1 w.2
+  | _, _, .ofBits, w => fun a => if w a then 1 else 0
   | _, _, .seq f g, x => g.eval (f.eval x)
   | _, _, .pair f g, x => (f.eval x, g.eval x)
   | _, _, .fst, x => x.1
@@ -1350,6 +1354,7 @@ def Circ.gates : {I O : Type} → Circ kd I O → List K
   | _, _, .curry => []
   | _, _, .uncurry => []
   | _, _, .join => []
+  | _, _, .ofBits => []
   | _, _, .seq f g => f.gates ++ g.gates
   | _, _, .pair f g => f.gates ++ g.gates
   | _, _, .fst => []
