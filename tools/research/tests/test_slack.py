@@ -334,6 +334,7 @@ class FakeBroker:
 
     def __init__(self, state: FakeSlack):
         self.state, self.requests, self.identities, self.fail, self.valid = state, [], [], None, OIDC
+        self.fails: list[Exception] = []                                                   # raised once each, in order
 
     def oidc(self, aud: str) -> str:
         self.identities.append(aud)
@@ -342,6 +343,8 @@ class FakeBroker:
     def __call__(self, url: str, data: bytes, headers: dict) -> dict:
         req = json.loads(data)
         self.requests.append((url, req, headers))
+        if self.fails:
+            raise self.fails.pop(0)
         if self.fail:
             raise self.fail
         if headers.get("Authorization") != f"Bearer {self.valid}":
@@ -432,11 +435,23 @@ def test_forcing_the_broker_with_a_token_present(broker, registry, capsys, monke
     (http_error(502, ""), "down or switched off (HTTP 502)"),
     (urllib.error.URLError(ConnectionRefusedError(111, "Connection refused")), "the Slack broker is unreachable"),
 ])
-def test_broker_failures_are_clear_exit_2_and_never_show_the_identity(broker, registry, capsys, fail, says):
+def test_broker_failures_are_clear_exit_2_and_never_show_the_identity(broker, registry, capsys, monkeypatch, fail, says):
+    waits: list[float] = []
+    monkeypatch.setattr(slack, "_sleep", waits.append)
     broker.fail = fail
     rc, out, err = run(capsys, "pickup", "--thread", "1.0")
     assert rc == 2 and says in err and err.startswith("research msg: reactions.add: ")
     assert OIDC not in out + err
+    assert waits == ([30.0] * slack.RATE_RETRIES if getattr(fail, "code", None) == 429 else [])
+
+
+def test_a_rate_limited_call_waits_as_asked_then_succeeds(broker, monkeypatch):
+    """A burst of doorbells draws a 429 from Slack; giving up there left the last handles unrung (15 Oct review)."""
+    waits: list[float] = []
+    monkeypatch.setattr(slack, "_sleep", waits.append)
+    broker.fails = [http_error(429, {"error": "rate_limited"}, Retry_After="2"), http_error(429, {"error": "rate_limited"}, Retry_After="99")]
+    slack.Slack(None).call("chat.postMessage", channel=COORD, text="after the burst")
+    assert waits == [2.0, float(slack.RATE_WAIT_MAX_S)] and broker.state.messages[COORD][-1]["text"] == "after the burst"
 
 
 def test_a_long_running_client_gets_a_new_identity_once_the_broker_rejects_its_cached_one(broker, monkeypatch):
@@ -1046,6 +1061,27 @@ def inbox(fake, routes_dirs, name, where="local"):
     root = fake.add(COORD, text=f"{slack.INBOX_HEAD}{name}. pointers", username=name, bot_id=BOT)
     add_route(routes_dirs[0] if where == "local" else routes_dirs[1], name, root["ts"])
     return root["ts"]
+
+
+def test_a_doorbell_that_fails_leaves_the_others_ringing_and_deliver_rings_it_later(fake, registry, routes_dirs, capsys, monkeypatch):
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
+    first, second = inbox(fake, routes_dirs, "circuits"), inbox(fake, routes_dirs, "proofs")
+    real = slack.post
+
+    def flaky(url, data, headers):
+        if url.endswith("chat.postMessage") and f"thread_ts={first}".encode() in data:
+            raise http_error(500, {"error": "internal_error"})
+        return real(url, data, headers)
+
+    monkeypatch.setattr(slack, "post", flaky)
+    rc, out, err = run(capsys, "send", "--as", "infra", "--to", "@circuits", "@proofs", "--text", "node 2 is free")
+    ts = out.split()[0]
+    assert rc == 0 and "route @circuits: NOT RUNG (chat.postMessage: HTTP 500)" in err and "route @proofs: rang" in err
+    assert f"`research msg deliver --ts {ts}` rings only the ones still missing" in err
+    assert (len(bells(fake, first)), len(bells(fake, second))) == (0, 1)
+    monkeypatch.setattr(slack, "post", real)
+    assert run(capsys, "deliver", "--ts", ts)[0] == 0
+    assert (len(bells(fake, first)), len(bells(fake, second))) == (1, 1)
 
 
 def test_deliver_rings_for_a_persons_typed_post_once(fake, registry, routes_dirs, capsys, monkeypatch):
