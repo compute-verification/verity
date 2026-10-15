@@ -58,7 +58,7 @@ def test_every_model_satisfies_the_protocol() -> None:
         assert m.name == name
         assert m.k > 0 and m.words_per_step >= m.k
         assert m.operand_bits in (4, 8, 16)
-        assert m.dtype in ("bf16", "e4m3", "e5m2", "e2m1")
+        assert m.dtype in ("bf16", "e4m3", "e5m2", "e2m1", "s8", "u8")
         assert isinstance(m.validated, str) and m.validated
         assert isinstance(m.product(0, 0), Term)
 

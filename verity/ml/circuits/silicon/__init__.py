@@ -3,6 +3,7 @@
     term          operand formats (bf16, e4m3, e5m2, e2m1): exact decoders and exact products as `Term`s; the FP32 word codecs
     models        the step semantics: `GroupSum` (Hawkeye's grouped truncating accumulation; alias `Pipeline`) and
                   `BlockScaledAlignAdd` (autoproof's model of Blackwell's block-scaled FP4 path); the validated instances
+    integer       `IntegerMma`: the integer mma step (s8 x s8 -> s32, exact, `.satfinite` clamps or wraps modulo 2^32)
     instructions  the registry `INSTRUCTIONS`: PTX instruction class -> model, status (pinned / hypothesis / unprobed), evidence
     silicon       the historical entry point; a shim re-exporting `term` and `models` (`silicon.tc_dot` is the frozen target's step)
     total         the total function on every encoding (NaN, infinities, saturation; measured on A100, RTX 4090, H100)

@@ -39,6 +39,7 @@ EXPECTED_IDS = {
     "sm120.mma.m16n8k32.e5m2",
     "sm120.mma.m16n8k64.e2m1.nvf4",
     "sm120.mma.m16n8k64.e2m1.mxf4",
+    "sm120.mma.m16n8k32.s8",
     "sm100.tcgen05.mma.e2m1.nvf4",
     "sm100.tcgen05.mma.e2m1.mxf4",
     "sm100.tcgen05.mma.bf16",
@@ -96,7 +97,7 @@ def test_statuses_are_consistent_with_models_and_evidence() -> None:
             assert len(ins.evidence) >= 1 and "HYPOTHESIS" not in ins.model.validated
         if ins.status == "hypothesis":
             assert ins.evidence, f"{ins.id}: say what the hypothesis leans on"
-        assert ins.acc_dtype == "f32"
+        assert ins.acc_dtype == ("s32" if ins.a_dtype in ("s8", "u8") else "f32")
         assert ins.scale in (None, "ue4m3", "ue8m0")
         if ins.a_dtype == "e2m1":
             assert ins.scale is not None
