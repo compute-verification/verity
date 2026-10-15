@@ -28,7 +28,7 @@ TOKEN = "dummy-verity-bot"
 BOT = "B0VERITY"
 COORD, ALERTS = "CCOORD", "CALERTS"
 HANDLES = ["infra", "proofs", "circuits", "compute-accounting", "memory-accounting", "network-accounting", "console",
-           "ci", "lean", "comms", "top", "old-accounting", "old-circuits-and-proofs"]
+           "ci", "lean", "comms", "top", "vllm", "benchmarks", "old-accounting", "old-circuits-and-proofs"]
 
 
 class FakeSlack:
@@ -216,6 +216,8 @@ def test_handles_and_subscriptions(registry, capsys):
     assert rc == 0 and "@infra" in out and "SINFRA" in out and "#agent-alerts" in out
     rc, out, _ = run(capsys, "subscriptions", "--as", "infra")
     assert rc == 0 and f'channelId="{ALERTS}", topLevelOnly=true' in out and COORD not in out
+    assert 'subscribe_linear_issue(options={"scope": "team", "teamId": "INF"}' in out   # Linear-first: the issue is the doorbell
+    assert 'subscribe_linear_comment(options={"scope": "team", "teamId": "INF"}' in out
     rc, out, _ = run(capsys, "subscriptions", "--as", "old-accounting")
     assert rc == 0 and f'channelId="{COORD}", topLevelOnly=true' in out and ALERTS not in out
 
@@ -1145,7 +1147,7 @@ def test_as_takes_only_a_name_this_agent_holds(fake, registry, routes_dirs, caps
     assert run(capsys, "send", "--as", "infra", "--text", "node 2 is free")[0] == 0
     before = len(fake.messages[COORD])
     rc, _, err = run(capsys, "send", "--as", "ci", "--thread", fake.messages[COORD][0]["ts"], "--text", "x")
-    assert rc == 2 and f"@ci is held by {held['ci'][0]}, and this agent is {held['infra'][0]}" in err
+    assert rc == 2 and f"@ci is held by {', '.join(held['ci'])}, and this agent is {held['infra'][0]}" in err
     rc, _, err = run(capsys, "close", "--as", "ci", "--thread", fake.messages[COORD][0]["ts"])
     assert rc == 2 and "post as your own handle" in err and len(fake.messages[COORD]) == before
     lander = next(a for a in held["old-circuits-and-proofs"] if len(a) > 11)
@@ -1503,6 +1505,39 @@ def test_traffic_counts_doorbells_and_reports_dropped_names_and_unanswered_asks(
     assert f"UNANSWERED {retired['ts']} by @top to no one it can ring" in out
     stale = [s["ts"] for s in rep["unanswered"]]
     assert old["ts"] in stale and fyi["ts"] not in stale and bare["ts"] not in stale
+
+
+def test_traffic_asks_origin_main_before_dropping_an_unknown_group(fake, registry, routes_dirs, capsys, monkeypatch):
+    """A stale analysis checkout must not report a fresher sender's group mentions as dropped (14 Oct: three false
+    DROPPED lines for groups created that morning); a group origin/main doesn't know either still drops."""
+    inbox(fake, routes_dirs, "circuits")
+    fake.add(COORD, text="<!subteam^SNEWGROUP> teams exist", username="comms", bot_id=BOT, ts="1600000000.000001")
+    fake.add(COORD, text="<!subteam^SNOWHERE> hello", username="comms", bot_id=BOT, ts="1600000000.000002")
+    monkeypatch.setattr(slack, "origin_groups", lambda path: {"SNEWGROUP"})
+    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--json")
+    assert rc == 0 and {d["name"] for d in json.loads(out)["dropped"]} == {"subteam^SNOWHERE"}
+
+
+def test_origin_groups_reads_the_registry_as_origin_main_has_it(tmp_path):
+    """`origin_groups` fetches, then reads origin/main's registry, so it sees a group the clone's checkout predates; where
+    git can't answer it returns empty, keeping traffic's old behavior."""
+    import subprocess
+    git = lambda cwd, *a: subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *a],  # noqa: E731
+                                         cwd=cwd, check=True, capture_output=True)
+    upstream = tmp_path / "upstream"
+    upstream.mkdir()
+    git(upstream, "init", "-q", "-b", "main")
+    (upstream / "registry.json").write_text(json.dumps({"handles": [{"handle": "a", "usergroup": "SOLD"}]}))
+    git(upstream, "add", "-A")
+    git(upstream, "commit", "-qm", "one")
+    clone = tmp_path / "clone"
+    git(tmp_path, "clone", "-q", str(upstream), str(clone))
+    (upstream / "registry.json").write_text(json.dumps({"handles": [{"handle": "a", "usergroup": "SOLD"},
+                                                                    {"handle": "b", "usergroup": "SNEW"}]}))
+    git(upstream, "add", "-A")
+    git(upstream, "commit", "-qm", "two")                            # the clone's checkout predates this
+    assert slack.origin_groups(clone / "registry.json") == {"SOLD", "SNEW"}
+    assert slack.origin_groups(tmp_path / "nowhere" / "registry.json") == set()
 
 
 def test_verify_author_accepts_a_routed_workers_name_and_the_router(fake, registry, routes_dirs, capsys):

@@ -47,11 +47,15 @@ def row_digest(block_bytes: int, block: bytes | Iterable[bytes]) -> bytes:
     return h.digest()
 
 
+def row_leaf(params: Geometry, salt: bytes, i: int, row: bytes) -> bytes:
+    """Leaf `i`'s digest from block `i`'s `sha512/row/v2` digest `row`."""
+    s, v = divmod(i, params.blocks_per_segment)
+    return hashlib.sha512(b"\x00" + tag(salt_value(salt), s).to_bytes(32, "little") + v.to_bytes(2, "little") + row).digest()
+
+
 def leaf_hash(params: Geometry, salt: bytes, i: int, block: bytes | Iterable[bytes]) -> bytes:
     """Leaf `i`'s digest; `block` is the block or its bytes in chunks, in order."""
-    s, v = divmod(i, params.blocks_per_segment)
-    return hashlib.sha512(b"\x00" + tag(salt_value(salt), s).to_bytes(32, "little") + v.to_bytes(2, "little")
-                          + row_digest(params.block_bytes, block)).digest()
+    return row_leaf(params, salt, i, row_digest(params.block_bytes, block))
 
 
 def segment_leaves(params: Geometry, salt: bytes, s: int, blocks: Sequence[bytes]) -> list[bytes]:
@@ -155,6 +159,13 @@ class VerifierKey:
         if len(leaves) != params.blocks or any(type(x) is not bytes or len(x) != DIGEST_BYTES for x in leaves):
             raise ValueError(f"expected {params.blocks} {DIGEST_BYTES}-byte leaf digests")
         return cls(params, salt, MerkleTree(leaves).root, leaves)
+
+    @classmethod
+    def from_row_digests(cls, params: Geometry, salt: bytes, rows: Sequence[bytes]) -> VerifierKey:
+        """`vk` from every block's `sha512/row/v2` digest, in block order: the memory challenger's table of `C*`."""
+        if len(rows) != params.blocks or any(type(r) is not bytes or len(r) != DIGEST_BYTES for r in rows):
+            raise ValueError(f"expected {params.blocks} {DIGEST_BYTES}-byte row digests")
+        return cls.from_leaves(params, salt, [row_leaf(params, salt, i, r) for i, r in enumerate(rows)])
 
     @classmethod
     def from_segments(cls, params: Geometry, salt: bytes, segments: Iterable[Sequence[bytes]]) -> VerifierKey:

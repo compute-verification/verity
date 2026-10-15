@@ -178,17 +178,18 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "a floor of 0.025 of a root at 512 bits, down to 0.003 at 2,048, against a per-bit price of 0.32), and holds "
           "only for words whose payload is unknown, under Incompressible(W)",
           "Rate codec work", "measured"),
-    # the sketch-then-hash rate audit's device (Accounting.Guarantees.RateAuditSketch,
-    # Security/Models/Accounting/Guarantees/RateAuditSketch.lean): falsified by a device or host that passes while holding,
-    # reading or sending something other than E's sectors as they are; Accounting.Guarantees.RateSketchTable is why the
-    # class is needed: a prover whose memory may hold any function of E (RateAudit's model) passes on every coin reading
-    # only the digest's d bits per tile, from a table of |signs| * N * d bits, at any number of rows
+    # the sketch-then-hash receipt's model, restated by Daniel on 13 Oct: falsified by a prover that passes while holding
+    # some tier's share of the store as anything other than E's blocks. Accounting.Guarantees.RateSketchTable is why the
+    # model is needed: a prover whose memory may hold any function of E (RateAudit's model) passes on every coin reading
+    # only the digest's d bits per tile, from a table of |signs| * N * d bits, at any number of rows. What Lean proves is
+    # the narrower verbatim class (Accounting.Guarantees.RateAuditSketch, RateAuditTensorSketchRank: on-chip state, device
+    # memory, the side link and rebuilding each return whole sectors as they are); the restated form, where a device that
+    # computes from blocks it read has those reads counted, is the remote audit's composition, not yet proved for the sketch
     Entry("rate-sketch-verbatim", "model",
-          "Rate sketch verbatim device model: the rate device model for a sketch-then-hash tag, with on-chip state, device "
-          "memory, the side link and rebuilding each returning whole sectors of E or of the certified stream as they are, "
-          "the sectors on chip chosen before the signs, so nothing the device holds, reads or takes in is a function of "
-          "several sectors; a host that computes sketches after the signs are revealed and sends them over the link is "
-          "outside it", "Rate sketch verbatim"),
+          "Rate sketch store-as-blocks model: in every tier the prover holds the store only as its blocks (any number of "
+          "copies, anywhere), and any device may compute from the blocks it reads, every such read counted; a layout from "
+          "which sketches cost less to read than the blocks themselves, such as a table of precomputed sketches, is "
+          "outside it", "Rate sketch store as blocks"),
     Entry("hash-derived-key", "assumption",
           "A key derived as counter-mode hash output over a public label is not in the 2^-64 fraction of keys for which the "
           "pinned-key hiding bound (N * 2^-192) fails: hm96's pinned keys are H(label || u32be i), with H the instance's hash "
@@ -202,13 +203,17 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "never restores an earlier copy of the state the device keeps there", "Trusted Nebius host", "standard"),
     Entry("transparent-setup", "guarantee", "Transparent setup (no trusted setup)", "Transparent setup"),
     # `Pous.EndToEnd.EndToEndRing`'s steps to the deployed system (Security/Properties/Pous/EndToEnd.lean), beside
-    # prf/sha-512 for the memory challenger's index streams: the model, the numbers and the instantiation
+    # prf/sha-512 for the memory challenger's index streams: the model, the numbers and the instantiation.  Its one
+    # session per audit cites trusted-nebius-host as network-accounting widens it
+    # (pending network-accounting's widening, Daniel decision 2)
     Entry("pous-ring-device", "model",
           "PoUS ring model of the server: the deployed server is a ring-model server whose state is bounded between "
-          "setup, the session and its rounds, with one session per audit and the memory challenger's coins drawn online, "
+          "setup, the session and its rounds, with one session per audit (the memory challenger refuses a used session "
+          "id from its session log, and its host never restores an earlier copy of the state the device keeps there: "
+          "trusted-nebius-host, pending network-accounting's widening) and the memory challenger's coins drawn online, "
           "after its state is fixed", "PoUS ring device"),
     # its falsification test is the measurement behind ROOT_CALL_NS (verity/core/protocols/pous/PROTOCOL.md, P2's SeqRoot):
-    # the timing red team's floor, note:20261004T2102Z-report-relay-p2-redteam-timing
+    # the timing red team's modelled floor, note:20261004T2102Z-report-relay-p2-redteam-timing
     # (art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57), and the 8-core cooperation run
     # r20260929-060834-0ec4 (art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed); a faster squaring on the
     # stated device falsifies it
@@ -216,8 +221,10 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "PoUS ring speed: on the stated device (up to 8 cores of one chiplet cooperating, each at least as slow as a "
           "Zen 5 core at 5.7 GHz with full-rate IFMA), within Δ + RTT (at most 854 µs) no server finishes a 16,447th "
           "sequential multiplication round (one root's depth, so D = 16,446), more than Q = 2^20 key queries or more than "
-          "L = 2^64 ring operations per answer; measured: a cooperating 8-core 16,448-bit squaring takes at least 103.6 ns, "
-          "so 16,447 rounds take 1.995× Δ + RTT, and 1.64× and 1.25× under the timing red team's sync model",
+          "L = 2^64 ring operations per answer; its margin is a modelled floor cut by a measured speedup: the timing red "
+          "team's modelled single-core floor of 361.55 ns per 16,448-bit squaring (that Zen 5 core, regate.py) over the "
+          "measured 8-core cooperation speedup of 3.490× is about 103.6 ns per cooperating squaring, so 16,447 rounds take "
+          "1.995× Δ + RTT, and 1.64× and 1.25× under the timing red team's sync model",
           "PoUS ring speed", "measured"),
     Entry("pous-ring-instantiation", "assumption",
           "P2 with the identity labeling, SHA-512-CTR keys and its published Merkle root of C* is no easier to answer "
