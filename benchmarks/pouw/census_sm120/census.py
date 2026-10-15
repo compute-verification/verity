@@ -6,6 +6,7 @@ the CUDA-pipe probe are recomputed per SASS instruction: the opcodes of each ker
 backward-branch range) are counted, so a rate is for what ptxas emitted, not for the PTX. Stdlib only.
 
     python3 census.py OUT_DIR [RUN_ID]
+    python3 census.py --merge MERGED.json OUT_DIR...   # every run's rows in one file, with each constant's spread
 """
 
 import json
@@ -332,5 +333,30 @@ def main():
     print(f"{len(rows)} rows -> {out / 'census.json'}")
 
 
+def merge(dest, dirs):
+    rows, runs = [], []
+    for d in dirs:
+        doc = json.loads((pathlib.Path(d) / "census.json").read_text())
+        rows += doc["rows"]
+        runs.append(dict(dir=str(d), run_id=doc["meta"].get("run_id"), gpu_uuid=doc["meta"].get("gpu_uuid")))
+    by = {}
+    for r in rows:
+        if isinstance(r["value"], (int, float)) and r["gpu_uuid"].startswith("GPU-") and "+" not in r["gpu_uuid"]:
+            by.setdefault(r["constant"], {}).setdefault(r["gpu_uuid"], []).append(r["value"])
+    spread = {}
+    for k, g in by.items():
+        vals = [max(v) for v in g.values()]
+        if len(vals) > 1:
+            hi, lo = max(vals), min(vals)
+            spread[k] = dict(gpus=len(vals), min=lo, max=hi, rel=round((hi - lo) / hi, 5) if hi else 0.0)
+    pathlib.Path(dest).write_text(json.dumps(dict(runs=runs, rows=rows, spread=spread), indent=1))
+    rel = sorted(s["rel"] for s in spread.values())
+    print(f"{len(rows)} rows from {len(runs)} outputs -> {dest}; {len(spread)} constants on >1 GPU, median spread "
+          f"{rel[len(rel) // 2] if rel else 0:.4%}")
+
+
 if __name__ == "__main__":
-    main()
+    if sys.argv[1] == "--merge":
+        merge(sys.argv[2], sys.argv[3:])
+    else:
+        main()
