@@ -9,8 +9,8 @@
 #   subspace  task 3: subspace-restricted DW, for each "a,b,c,L,samples,budget_s,batch_k" item in $SUB (default <2,4,2>/L=2,
 #             then <2,3,2> with L=3 and L=1), subspaces of dimension at most $SUB_MAX_K (24)
 #   sa        annealing over Steiner points on the whole space: calibration against exact DW, then $SA_SHAPES
-#   full2x2   exact <2,b,2> with L=b for each b in $FULL_B (default 2 3; b=3 is 2^36 states, 3 arrays of 64 GiB) by
-#             dw_2b2, after its relaxation, symmetry and dw_f2 cross-checks
+#   full      exact <a,b,c> with L=b for each "a,b,c" in $FULL_SHAPES (default <2,2,4>: 2^32 states, 19 arrays of 4 GiB;
+#             <2,3,2>: 2^36, 3 arrays of 64 GiB) by dw_full, after its relaxation, orbit and dw_f2 cross-checks
 # $THREADS overrides the thread count (default nproc, at most 64); $FAMILIES, $SIZES and $SEED the families'
 # count, sizes and seed.
 # Run from the clone's root; results in $OUT.
@@ -51,9 +51,9 @@ for phase in ${PHASES:-f3 general grid exact}; do
             python3 steiner.py --out "$OUT/subspace_$a$b${cc}_L$L.jsonl" subspace --a "$a" --b "$b" --c "$cc" --L "$L" \
                 --samples "$samples" --budget-s "$budget" --batch-k "$bk" --max-k "${SUB_MAX_K:-24}"
         done ;;
-    full2x2)
-        gcc -O3 -march=native -fopenmp -o "$d/dw_2b2" dw_2b2.c
-        python3 steiner.py --out "$OUT/full2x2.jsonl" full2x2 --b ${FULL_B:-2 3} --cross 200 ;;
+    full)
+        gcc -O3 -march=native -fopenmp -o "$d/dw_full" dw_full.c
+        python3 steiner.py --out "$OUT/full.jsonl" full --shapes ${FULL_SHAPES:-2,2,4 2,3,2} ;;
     sa)
         gcc -O3 -march=native -fopenmp -o "$d/sa" sa.c -lm
         python3 steiner.py --out "$OUT/sa_calibrate.jsonl" sa-calibrate --per-size 10 --iters 200000 --restarts 46
