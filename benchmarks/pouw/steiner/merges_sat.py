@@ -23,12 +23,14 @@ The CNF restricts to computations that some optimal one can be put into (so UNSA
 
 Rank bound: every value is a sum of edge increments, so #edges >= the tensor rank of the target set, whatever M and K.
 
-Subcommands: `solve` (one budget), `table` (min E for each M or K, in parallel), `replay` (re-check a JSON line).
+Subcommands: `batch` (a named plan), `solve` (one budget; --cubes splits it into one job per orbit of the first edge,
+--procs at a time), `table` (min E for each M or K, in parallel).
 """
 
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import multiprocessing as mp
 import os
@@ -152,6 +154,17 @@ def symmetry_ops(a: int, b: int, c: int, L: int):
 
 def first_edge_forbid(a: int, b: int, c: int, L: int) -> list[tuple[int, int]]:
     """The rank-1 (u, w) whose value is not the least of its orbit under the group symmetry_ops generates."""
+    return [p for orbit in first_edge_orbits(a, b, c, L) for p in orbit[1:]]
+
+
+def first_edge_reps(a: int, b: int, c: int, L: int) -> list[tuple[int, int]]:
+    """The least (u, w) of each orbit: the first edges a cube split (`cubed`) tries, one job each."""
+    return [orbit[0] for orbit in first_edge_orbits(a, b, c, L)]
+
+
+@functools.cache
+def first_edge_orbits(a: int, b: int, c: int, L: int) -> list[list[tuple[int, int]]]:
+    """The orbits of rank-1 (u, w) under the group symmetry_ops generates, each with its least value first."""
     R, C = a * b, b * c
     ops = symmetry_ops(a, b, c, L)
     targets = set()
@@ -173,7 +186,7 @@ def first_edge_forbid(a: int, b: int, c: int, L: int) -> list[tuple[int, int]]:
             if img not in targets:
                 raise SystemExit(f"symmetry_ops: a generator maps a target of {(a, b, c, L)} outside the targets")
     seen: set[tuple[int, int]] = set()
-    bad = []
+    orbits = []
     for u in range(1, 1 << R):
         for w in range(1, 1 << C):
             if (u, w) in seen:
@@ -187,23 +200,24 @@ def first_edge_forbid(a: int, b: int, c: int, L: int) -> list[tuple[int, int]]:
                         orbit.add(y)
                         todo.append(y)
             seen |= orbit
-            least = min(orbit, key=lambda p: outer(p[0], p[1], R, C))
-            bad += [p for p in orbit if p != least]
-    return bad
+            orbits.append(sorted(orbit, key=lambda p: outer(p[0], p[1], R, C)))
+    return orbits
 
 
 # ---------------------------------------------------------------- the encoding
 
 
 def encode(R: int, C: int, terms: list[int], E: int, M: int, K: int, arity: int, extra_steps: int = 0,
-           blocks: bool = False, first_forbid: list[tuple[int, int]] | None = None):
+           blocks: bool = False, first_forbid: list[tuple[int, int]] | None = None,
+           first_fix: tuple[int, int] | None = None):
     """CNF for: a computation with <= E edges + copies, <= M merges, <= K copies covering terms. Returns (clauses,
     decode) where decode(model) gives the steps.
 
     blocks: list the steps as tau_0, head 1, tau_1, head 2, ... where tau_i is the merge-free tree under head i (a
     topological order of every computation: a node not below head i never reads one that is), each edge reading its
     own block and each head earlier blocks, with the value order only between adjacent steps of one block.
-    first_forbid: (u, w) pairs the first edge may not be (rank-1 values not least in their symmetry orbit)."""
+    first_forbid: (u, w) pairs the first edge may not be (rank-1 values not least in their symmetry orbit).
+    first_fix: the first edge's (u, w) (one cube of a split over the orbits' least elements)."""
     P = R * C
     S = E + M + extra_steps
     pool = IDPool()
@@ -367,6 +381,11 @@ def encode(R: int, C: int, terms: list[int], E: int, M: int, K: int, arity: int,
         for (uu, ww) in first_forbid:
             cl.append([-ed[1]] + [-u1[i] if (uu >> i) & 1 else u1[i] for i in range(R)]
                       + [-w1[j] if (ww >> j) & 1 else w1[j] for j in range(C)])
+    if first_fix:
+        uu, ww = first_fix
+        cl.append([ed[1]])
+        cl += [[V("u", 1, i) if (uu >> i) & 1 else -V("u", 1, i)] for i in range(R)]
+        cl += [[V("w", 1, j) if (ww >> j) & 1 else -V("w", 1, j)] for j in range(C)]
 
     # adjacent independent steps in increasing value order (bit P-1 most significant); with blocks, only inside a block
     for t in range(1, S):
@@ -466,13 +485,17 @@ def solve(job: dict) -> dict:
     E, M, K, arity = job["E"], job["M"], job["K"], job["arity"]
     t0 = time.time()
     blocks = job.get("enc", "flat") == "blocks"
-    forbid = first_edge_forbid(a, b, c, L) if blocks else None
-    clauses, decode, nvars = encode(R, C, terms, E, M, K, arity, blocks=blocks, first_forbid=forbid)
+    fix = tuple(job["first"]) if job.get("first") else None
+    if fix and not blocks:
+        raise SystemExit("a cube (job['first']) needs the block encoding, whose first step is the least root edge")
+    forbid = first_edge_forbid(a, b, c, L) if blocks and not fix else None
+    clauses, decode, nvars = encode(R, C, terms, E, M, K, arity, blocks=blocks, first_forbid=forbid, first_fix=fix)
     t1 = time.time()
     res = dict(job, R=R, C=C, naive=a * b * c, vars=nvars, clauses=len(clauses), encode_s=round(t1 - t0, 2))
     with Solver(name=job.get("solver", "cadical195"), bootstrap_with=clauses) as s:
         r = s.solve()
         res["solve_s"] = round(time.time() - t1, 2)
+        res["cpu_s"] = round(time.process_time(), 2)
         res["status"] = "sat" if r else "unsat"
         if r:
             steps = decode(s.get_model())
@@ -486,13 +509,55 @@ def _child(job: dict, conn) -> None:
     conn.close()
 
 
+def cubed(j: dict) -> list[dict]:
+    """j split by its first edge, one job per orbit's least (u, w), together the group j's budget names: the cubes
+    cover every computation the block encoding keeps, so the budget is SAT iff one cube is."""
+    a, b, c, L = j["shape"]
+    reps = first_edge_reps(a, b, c, L)
+    key = f"{list(j['shape'])} {j['model']} E={j['E']} M={j['M']} K={j['K']} ar={j['arity']}"
+    return [dict(j, enc="blocks", first=list(p), group=key, cube=i, cubes=len(reps)) for i, p in enumerate(reps)]
+
+
 def run_jobs(jobs: list[dict], procs: int, emit) -> None:
-    """Each job in its own process (CaDiCaL ignores pysat's interrupt), killed at its timeout (status unknown)."""
+    """Each job in its own process (CaDiCaL ignores pysat's interrupt), killed at its timeout (status unknown). The
+    cubes of one group end together: the first SAT cube kills the rest, and after the group's last cube comes its own
+    line (summary: sat if a cube is, unsat if every cube is, else unknown; solve_s from its first cube's start)."""
     pending = list(jobs)
     running = {}
+    groups: dict[str, dict] = {}
+    for j in jobs:
+        if "group" in j:
+            groups.setdefault(j["group"], {"left": 0, "statuses": [], "cpu": 0.0, "t0": None, "job": j})["left"] += 1
+
+    def finish(res):
+        emit(res)
+        key = res.get("group")
+        if key is None:
+            return
+        g = groups[key]
+        g["left"] -= 1
+        g["statuses"].append(res["status"])
+        g["cpu"] += res.get("solve_s") or 0
+        if res["status"] == "sat":
+            for r2, (p2, j2, _) in list(running.items()):
+                if j2.get("group") == key:
+                    p2.kill()
+                    p2.join()
+                    running.pop(r2)
+                    g["left"] -= 1
+            g["left"] -= sum(1 for x in pending if x.get("group") == key)
+            pending[:] = [x for x in pending if x.get("group") != key]
+        if g["left"] == 0:
+            st = "sat" if "sat" in g["statuses"] else "unsat" if all(s == "unsat" for s in g["statuses"]) else "unknown"
+            base = {k: v for k, v in g["job"].items() if k not in ("first", "cube")}
+            emit(dict(base, summary=True, status=st, cubes_done=len(g["statuses"]),
+                      solve_s=round(time.monotonic() - g["t0"], 2), cpu_s=round(g["cpu"], 2)))
+
     while pending or running:
         while pending and len(running) < procs:
             j = pending.pop(0)
+            if "group" in j and groups[j["group"]]["t0"] is None:
+                groups[j["group"]]["t0"] = time.monotonic()
             r, w = mp.Pipe(duplex=False)
             p = mp.Process(target=_child, args=(j, w), daemon=True)
             p.start()
@@ -501,20 +566,22 @@ def run_jobs(jobs: list[dict], procs: int, emit) -> None:
         deadlines = [d for (_, _, d) in running.values() if d is not None]
         ready = mp_wait(list(running), timeout=max(0.0, min(deadlines) - time.monotonic()) if deadlines else None)
         for r in ready:
+            if r not in running:  # killed by a SAT cube of its group
+                continue
             p, j, _ = running.pop(r)
             try:
                 res = r.recv()
             except EOFError:
                 res = dict(j, status="crashed", solve_s=None)
             p.join()
-            emit(res)
+            finish(res)
         now = time.monotonic()
         for r, (p, j, d) in list(running.items()):
-            if d is not None and now >= d:
+            if r in running and d is not None and now >= d:
                 p.kill()
                 p.join()
                 running.pop(r)
-                emit(dict(j, status="unknown", solve_s=j["timeout"]))
+                finish(dict(j, status="unknown", solve_s=j["timeout"]))
 
 
 def jobs_for_table(shape, model: str, Ms: list[int], arity: int, lo: int, timeout: float) -> list[dict]:
@@ -576,6 +643,24 @@ def plan(name: str, timeout: float) -> list[dict]:
                     J += [job(shape, "merge", E, m, 2, timeout) for m in Ms if m]
                 if copies:
                     J += [job(shape, "copy", E, k, 3, timeout) for k in (1, 2, 3)]
+    elif name == "w4":
+        # the open questions, most wanted first: (shape, E, M, K, arity, split into first-edge cubes)
+        for shape, E, M, K, ar, cube in (
+            ((2, 2, 3, 2), 11, 1, 0, 2, True),  # the requested table's open entry: one 2-summand merge
+            ((2, 2, 4, 2), 14, 1, 0, 3, True),  # one merge saving L = 2 (rank 14)
+            ((3, 2, 3, 2), 16, 1, 0, 3, True),  # one merge saving L = 2
+            ((2, 2, 4, 2), 15, 1, 0, 2, True),  # one 2-summand merge saving 1
+            ((2, 2, 4, 2), 15, 0, 1, 3, True),  # one copy saving 1 (14 edges + 1 copy)
+            *(((2, 4, 2, 2), 14, m, 0, 3, False) for m in (6, 5, 4, 3, 2)),  # prefixes, both levels saving 1 (446 orbits)
+            ((3, 2, 3, 2), 15, 1, 0, 3, True),  # one merge saving 3 > L: refutes B
+            ((2, 2, 6, 2), 22, 1, 0, 3, True),  # one merge saving L (rank 21)
+            ((2, 2, 6, 2), 21, 1, 0, 3, True),  # one merge saving 3 > L: refutes B
+            ((3, 2, 3, 2), 17, 0, 1, 3, True),  # one copy saving 1
+            ((3, 2, 3, 2), 17, 0, 2, 3, True),  # two copies saving 1
+            ((3, 2, 3, 2), 16, 2, 0, 3, True),  # two merges saving 2 = L·M/2
+        ):
+            j = job(shape, "merge" if K == 0 else "copy", E, M if K == 0 else K, ar, timeout)
+            J += cubed(j) if cube else [j]
     else:
         raise SystemExit(f"unknown plan {name}")
     return J
@@ -597,6 +682,8 @@ def main() -> None:
     p.add_argument("--arity", type=int, default=3)
     p.add_argument("--timeout", type=float, default=0)
     p.add_argument("--enc", choices=["flat", "blocks"], default="blocks")
+    p.add_argument("--cubes", action="store_true", help="split by the first edge (`cubed`), --procs at a time")
+    p.add_argument("--procs", type=int, default=1)
     p = sub.add_parser("table")
     p.add_argument("--shape", required=True, help="a,b,c,L")
     p.add_argument("--model", choices=["merge", "copy"], default="merge")
@@ -613,17 +700,20 @@ def main() -> None:
     elif args.cmd == "solve":
         jobs = [{"shape": shape, "model": "merge" if args.K == 0 else "copy", "E": args.E, "M": args.M, "K": args.K,
                  "arity": args.arity, "timeout": args.timeout, "enc": args.enc}]
+        if args.cubes:
+            jobs = cubed(jobs[0])
     else:
         jobs = jobs_for_table(shape, args.model, [int(x) for x in args.values.split(",")], args.arity, args.lo,
                               args.timeout)
     def emit(res):
         out.write(json.dumps(res) + "\n")
         out.flush()
-        print(f"{res['shape']} {res['model']} E={res['E']} M={res['M']} K={res['K']} ar={res['arity']}: "
+        part = (" all cubes" if res.get("summary") else f" cube {res['cube']}/{res['cubes']}") if "group" in res else ""
+        print(f"{res['shape']} {res['model']} E={res['E']} M={res['M']} K={res['K']} ar={res['arity']}{part}: "
               f"{res['status']} {res['solve_s']}s" + (f" replay={res['replay']['ok']}" if "replay" in res else ""),
               file=sys.stderr, flush=True)
 
-    run_jobs(jobs, 1 if args.cmd == "solve" else args.procs, emit)
+    run_jobs(jobs, args.procs, emit)
 
 
 if __name__ == "__main__":

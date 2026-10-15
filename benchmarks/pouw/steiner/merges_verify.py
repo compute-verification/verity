@@ -147,7 +147,7 @@ def main() -> None:
     args = ap.parse_args()
     for line in open(args.file):
         res = json.loads(line)
-        if res.get("status") != "sat":
+        if res.get("status") != "sat" or "steps" not in res:  # a cube group's summary line has no steps
             continue
         a, b, c, L = res["shape"]
         steps = from_sat(res)
