@@ -101,6 +101,13 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-14 (12:53 PM PDT): hard switches, one abstraction per job. The moves we've made are total: the new repository,
+  one cloud agent per lead talking horizontally, and Linear as the work-item layer (the brief colocated in the issue,
+  filed into the owning team; pickup is the issue's state change; Slack narrows to conversation, broadcasts, alerts and
+  Daniel's cards). No second path stays alive beside any of these, and every bridge kept for the transition names its
+  end state. Old agents that still hold context stay reachable for a while as read-only context sources — they hold no
+  handle and do no work — then are archived. The admin enforces all of it: audits for splits, assigns each a fate, and
+  tells Daniel when an abstraction fails, is abused or turns into red tape.
 - 2026-10-14 (11:34 AM PDT, broadening his 10:14 AM ruling): every coordinator and worker opens and edits its own PRs
   with no approval step, through Cursor's PR tool or gh through the broker, whichever works. Waiting on dashboard
   clicks cost about six hours across fourteen finished PRs overnight on 14 Oct; the launcher no longer pins PR
