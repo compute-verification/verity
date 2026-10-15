@@ -7,7 +7,12 @@ group saves at most L * gap, gap = |group| - rank P. Part 16 of merges_check.py 
 D-rows always split into two groups with total gap <= 2. This script searches, at any d, for a split into at most d
 groups with total gap <= rank B, on patterns whose disjoint links are independent (others can't all be helped).
 
+Where no split reaches rank B, `--coupled SRC` tries part 13's coupling on two groups (labels u_t h0^T on one,
+g0 v_t^T on the other, cancelling through one direction lam), alone or with one more uncoupled group, on every miss
+recorded in SRC/split_*.json.
+
     python merges_split_search.py P Q d p TRIALS SEED [--realized L] [--out DIR]
+    python merges_split_search.py --coupled SRC [--out DIR]
 """
 import argparse
 import itertools
@@ -82,6 +87,79 @@ def best_split(links, betas, p, groups, target):
     return best
 
 
+def lam_space(B, lam, p):
+    """(basis X of {x : B x in span lam} as columns, the coefficients c with B X = lam c^T), or (None, None)."""
+    n = B.shape[1]
+    N = nullspace(np.concatenate([B, -np.array(lam, dtype=np.int64)[:, None]], axis=1) % p, n + 1, p)
+    if not len(N):
+        return None, None
+    return N[:, :n].T % p, N[:, n] % p
+
+
+def coupled_pair(links, betas, p, Y1, Y2, lam):
+    """Part 13's coupling on any two groups: M_t = u_t h0^T on Y1 and M_t = g0 v_t^T on Y2, with B_Y1 U = lam g0^T and
+    B_Y2 V = -lam h0^T, so the words cancel. (rank P, labels by link), or (-1, None) when lam is outside im B_Y1 or
+    im B_Y2."""
+    B = np.array(betas, dtype=np.int64).T % p
+    U, g0 = lam_space(B[:, Y1], lam, p)
+    V, c = lam_space(B[:, Y2], lam, p)
+    if U is None or V is None or not g0.any() or not c.any():
+        return -1, None
+    h0 = -c % p
+    a, b = U.shape[1], V.shape[1]
+    Ms = {t: np.outer(U[i], h0) % p for i, t in enumerate(Y1)}
+    Ms.update({t: np.outer(g0, V[i]) % p for i, t in enumerate(Y2)})
+    for j in range(len(B)):
+        assert not (sum(B[j, t] * Ms[t] for t in Ms) % p).any(), "coupled labels do not cancel the words"
+    P = np.zeros((a * (1 + max(r for r, _ in links)), b * (1 + max(c for _, c in links))), dtype=np.int64)
+    for t, M in Ms.items():
+        r, c = links[t]
+        P[r * a:(r + 1) * a, c * b:(c + 1) * b] += M
+    return rank(P % p, p), Ms
+
+
+def best_coupled(links, betas, p, target, extra):
+    """The smallest total gap over a coupled pair covering every link (extra = 0), or a coupled pair plus one
+    uncoupled group of <= extra links; stops at target: (total, (Y1, Y2, lam, Y3))."""
+    k, d = len(links), len(betas[0])
+    lams = [v for v in itertools.product(range(p), repeat=d) if any(v) and v[next(i for i in range(d) if v[i])] == 1]
+    best = (k + 1, None)
+    for size in range(extra + 1):
+        for Y3 in itertools.combinations(range(k), size):
+            g3 = min(certificate(links, betas, list(Y3), p, s)[0] for s in ("row", "col"))
+            rest = [t for t in range(k) if t not in Y3]
+            for mask in range(1, 2 ** len(rest) - 1):
+                Y1 = [rest[i] for i in range(len(rest)) if mask >> i & 1]
+                Y2 = [rest[i] for i in range(len(rest)) if not mask >> i & 1]
+                for lam in lams:
+                    r, _ = coupled_pair(links, betas, p, Y1, Y2, lam)
+                    if r >= 0 and len(rest) - r + g3 < best[0]:
+                        best = (len(rest) - r + g3, (Y1, Y2, lam, list(Y3)))
+                        if best[0] <= target:
+                            return best
+    return best
+
+
+def coupled_on_misses(src, out):
+    """Classify every split miss in src/split_*.json: coupled pair, coupled pair plus a group, or labels only."""
+    res = []
+    for f in sorted(Path(src).glob("split_*.json")):
+        j = json.loads(f.read_text())
+        for o in j["over_rank"]:
+            links, betas = [tuple(x) for x in o["links"]], [tuple(b) for b in o["betas"]]
+            rB = rank(np.array(betas), j["p"])
+            pair = best_coupled(links, betas, j["p"], rB, 0)
+            plus = pair if pair[0] <= rB else best_coupled(links, betas, j["p"], rB, 4)
+            res.append({"file": f.name, "links": links, "betas": betas, "rank_B": rB, "pair": pair[0],
+                        "pair_plus_group": plus[0], "how": plus[1]})
+            print(f.name, len(links), "rank B", rB, "coupled pair", pair[0], "pair plus a group", plus[0], flush=True)
+    Path(out).mkdir(parents=True, exist_ok=True)
+    (Path(out) / "coupled_misses.json").write_text(json.dumps(res, indent=1))
+    n = len(res)
+    print(f"{n} split misses: a coupled pair reaches rank B on {sum(r['pair'] <= r['rank_B'] for r in res)}, "
+          f"with one more group on {sum(r['pair_plus_group'] <= r['rank_B'] for r in res)}")
+
+
 def label_search(links, betas, p, need, rng, tries):
     """Rank-1 labels M_t = g_t h_t^T with sum_t beta_tj M_t = 0, by alternating solves from shared starts (per
     D-column, per D-row, per random pool, all distinct): the first (g, h) with rank P >= need, or None."""
@@ -151,6 +229,12 @@ def realized(rng, P, Q, L, d, p):
 
 
 def main():
+    if "--coupled" in sys.argv:
+        ap = argparse.ArgumentParser()
+        ap.add_argument("--coupled", required=True, help="a directory of split_*.json")
+        ap.add_argument("--out", default=os.environ.get("OUT", "."))
+        a = ap.parse_args()
+        return coupled_on_misses(a.coupled, a.out)
     ap = argparse.ArgumentParser()
     for name in ("P", "Q", "d", "p", "trials", "seed"):
         ap.add_argument(name, type=int)

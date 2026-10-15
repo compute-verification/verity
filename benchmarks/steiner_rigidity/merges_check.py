@@ -2006,7 +2006,8 @@ def part17(rng):
     <= rank B, or else the alternating label search does; the misses are scalar coincidences, since re-drawing the
     links' scalars (same cells, same directions) brings the split back to rank B. The smallest miss found, a full
     2 x 3 block, has one group of gap 4 only because its shared-column consistency system is singular; scaling one
-    link off that value gives gap 3. On one recorded 3 x 3 pattern (7 links, rank B = 3) every
+    link off that value gives gap 3, and part 13's coupling of two groups through one direction reaches 3 as it
+    stands. On one recorded 3 x 3 pattern (7 links, rank B = 3) every
     split stops at gap 4, and labels with rank P = 4 = k - rank B exist; they are checked exactly, and against random
     words at L = 2. On realized spans of three words, savings <= L * (best gap) <= L * rank B."""
     import merges_split_search as ms
@@ -2032,6 +2033,9 @@ def part17(rng):
     for c in range(2, p):
         scaled = [tuple(c * x % p for x in block_betas[0])] + block_betas[1:]
         assert ms.certificate(block, scaled, list(range(6)), p, "row")[0] == 3, "a rescaled 2 x 3 block misses"
+    r_pair, Ms = ms.coupled_pair(block, block_betas, p, [0, 1], [2, 3, 4, 5], (1, 2, 1))
+    assert r_pair == 3 and all(rank(M, p) <= 1 for M in Ms.values()), "the coupled pair misses the 2 x 3 block"
+    assert ms.best_coupled(block, block_betas, p, 3, 0)[0] == 3
     links = [(0, 0), (0, 2), (1, 1), (1, 2), (2, 0), (2, 1), (2, 2)]
     betas = [(3, 2, 3), (3, 4, 1), (1, 1, 1), (1, 3, 2), (2, 0, 4), (2, 2, 2), (3, 0, 1)]
     tot, _ = ms.best_split(links, betas, p, 3, 0)
@@ -2066,8 +2070,8 @@ def part17(rng):
         realized += 1
     print(f"[d = 3 labels] 30 random 3 x 3 patterns over GF(5): group splits reach gap <= rank B on {splits}, general "
           f"labels on the other {misses}, and re-drawn link scalars bring each miss back to rank B: ok; the full 2 x 3 "
-          f"block (6 links, four directions): best split 4, general labels reach 3, and scaling one link by any c != 1 "
-          f"gives one group of gap 3: ok; the recorded 7-link pattern: every split into <= 3 groups has gap >= 4, "
+          f"block (6 links, four directions): best split 4, general labels and a coupled pair (part 13's coupling "
+          f"through lambda = (1, 2, 1)) reach 3, and scaling one link by any c != 1 gives one group of gap 3: ok; the recorded 7-link pattern: every split into <= 3 groups has gap >= 4, "
           f"rank-1 labels with rank P = {rank(Pm, p)} = k - rank B cancel the words, Psi identity at L = 2: ok; "
           f"20 realized spans of three words on 2 x 3 (GF(3), L = 2): savings <= L * best gap <= L * rank B: ok "
           f"(largest {top})")
