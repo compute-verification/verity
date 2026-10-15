@@ -134,6 +134,7 @@ import Proofs.Flock.C3.RegLevels.LgCoins
 import Proofs.Flock.C3.RegLevels.RRounds
 import Proofs.Flock.C3.RegLevels.LgHeld
 import Proofs.Flock.C3.RegLevels.Reached
+import Proofs.Flock.C3.RegLevels.ProbeK9
 
 /-!
 # Candidate 3's recursive guarantee: its open pieces
