@@ -17,6 +17,7 @@ CREDIT = {
     "ffma_fp32": ("dp4a (the FMA pipe)", 0.250),
     "imad_swar2": ("integer SWAR", 0.109),
     "smem_lut": ("shared-memory lookups", 0.094),
+    "smem_lut8": ("shared-memory lookups", 0.094),
     "corun_dp4a_ffma": ("dp4a + SWAR + lookups", 0.453),
 }
 
@@ -32,15 +33,15 @@ def main(out: Path) -> None:
                 smi.append(float(parts[1].split()[0]))
     smi_txt = f"{statistics.median(smi):.0f} MHz (min {min(smi):.0f}, max {max(smi):.0f}, n={len(smi)})" if smi else "n/a"
     print(f"# credit ceilings: {out}\n\nnvidia-smi clocks.sm over the lease: {smi_txt}\n")
-    print("| route | inputs | shape | MACs/SM/clk | share | M5 row | credit | measured/credit | clock64 MHz | blocks/SM | checked | mismatches |")
-    print("|---|---|---|---|---|---|---|---|---|---|---|---|")
+    print("| route | inputs | shape | config | MACs/SM/clk | share | M5 row | credit | measured/credit | clock64 MHz | blocks/SM | checked | mismatches |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for r in rows:
         if r.get("kind") != "route":
             continue
         row, credit = CREDIT.get(r["route"], ("", float("nan")))
         shape = f"{r['M']}x{r['N']}x{r['K']}" if "Kd" not in r else f"Kd {r['Kd']}, Kf {r['Kf']}"
         print(
-            f"| {r['route']} | {r['dist']} | {shape} | {r['macs_per_sm_clk']:.1f} | {r['share_of_1024']:.4f} | {row} | "
+            f"| {r['route']} | {r['dist']} | {shape} | {r.get('config', '')} | {r['macs_per_sm_clk']:.1f} | {r['share_of_1024']:.4f} | {row} | "
             f"{credit:.3f} | {r['share_of_1024'] / credit:.3f} | {r['sm_mhz']:.0f} | {r['blocks_per_sm']} | "
             f"{r['checked']} | {r['mismatches']} |"
         )
@@ -59,6 +60,14 @@ def main(out: Path) -> None:
             print(
                 f"| {r['ops']} | {r['mix']} | {r['warp_instr_per_sm_clk']:.3f} | {r['dp4a']:.3f} | {r['imad']:.3f} | "
                 f"{r['ffma']:.3f} | {r['lop3']:.3f} | {r['ffma2']:.3f} | {r['mac_equiv_per_sm_clk']:.1f} | {r['sm_mhz']:.0f} |"
+            )
+    print("\n| split warps (even: dp4a, odd: FFMA/FFMA2) | mix (dp4a, ffma, ffma2) | dp4a | ffma | ffma2 | dp4a cycles | fma cycles | block cycles | MAC-equivalent/SM/clk |")
+    print("|---|---|---|---|---|---|---|---|---|")
+    for r in rows:
+        if r.get("kind") == "split":
+            print(
+                f"| {r['ops']} | {r['mix']} | {r['dp4a']:.3f} | {r['ffma']:.3f} | {r['ffma2']:.3f} | {r['dp4a_cycles']:.0f} | "
+                f"{r['fma_cycles']:.0f} | {r['block_cycles']:.0f} | {r['mac_equiv_per_sm_clk']:.1f} |"
             )
     for r in rows:
         if r.get("kind") in ("decoder_selftest", "device"):

@@ -367,6 +367,64 @@ __global__ void __launch_bounds__(512) k_lut(const unsigned short* __restrict__ 
   }
 }
 
+// The same table route with fewer barriers and more reuse: a stage is 8 k's, T[buf][kk][code] = (hi, lo) for 2
+// columns, double-buffered in 64 KB of dynamic shared memory; A8 holds 8 codes of a row as a uint2, k-major
+// [K/8][M]; 512 threads x RM rows a block, so the build (2,048 entries a stage) is spread over 4,096 x 2 x 8 MACs.
+template <int RM>
+__global__ void __launch_bounds__(512, 1) k_lut8(const uint2* __restrict__ A8, const int* __restrict__ Bv,
+                                                 long long* __restrict__ C, int M, int N, int K, BlockClk* rec) {
+  extern __shared__ int4 T8[];  // [2][8][256]
+  const int col0 = blockIdx.x * 2, t = threadIdx.x, rowb = blockIdx.y * (512 * RM);
+  int h0[RM], l0[RM], h1[RM], l1[RM];
+#pragma unroll
+  for (int r = 0; r < RM; r++) h0[r] = l0[r] = h1[r] = l1[r] = 0;
+  auto build = [&](int buf, int k0) {
+#pragma unroll
+    for (int q = 0; q < 4; q++) {
+      const int e = t + 512 * q, kk = e >> 8, code = e & 255;
+      const int s = code >> 7, ex = (code >> 3) & 15, m = code & 7;
+      int va = ex == 0 ? m : (8 + m) << (ex - 1);
+      if (s) va = -va;
+      const long long p0 = (long long)va * __ldg(Bv + (size_t)(k0 + kk) * N + col0);
+      const long long p1 = (long long)va * __ldg(Bv + (size_t)(k0 + kk) * N + col0 + 1);
+      const int hh0 = (int)(p0 >> 18), hh1 = (int)(p1 >> 18);
+      T8[(buf * 8 + kk) * 256 + code] =
+          make_int4(hh0, (int)(p0 - ((long long)hh0 << 18)), hh1, (int)(p1 - ((long long)hh1 << 18)));
+    }
+  };
+  CLK_BEGIN
+  build(0, 0);
+  __syncthreads();
+  const int nst = K / 8;
+  for (int st = 0; st < nst; st++) {
+    const int buf = st & 1;
+    if (st + 1 < nst) build(buf ^ 1, 8 * (st + 1));
+    const int4* Tb = T8 + buf * 8 * 256;
+#pragma unroll
+    for (int r = 0; r < RM; r++) {
+      const uint2 cc = __ldg(A8 + (size_t)st * M + rowb + r * 512 + t);
+#pragma unroll
+      for (int kk = 0; kk < 8; kk += 2) {
+        const unsigned w = kk < 4 ? cc.x : cc.y;
+        const int sh = 8 * (kk & 3);
+        const int4 x = Tb[kk * 256 + ((w >> sh) & 255)], y = Tb[(kk + 1) * 256 + ((w >> (sh + 8)) & 255)];
+        h0[r] += x.x + y.x;
+        l0[r] += x.y + y.y;
+        h1[r] += x.z + y.z;
+        l1[r] += x.w + y.w;
+      }
+    }
+    __syncthreads();
+  }
+  CLK_END
+#pragma unroll
+  for (int r = 0; r < RM; r++) {
+    const size_t row = rowb + r * 512 + t;
+    C[row * N + col0] = ((long long)h0[r] << 18) + l0[r];
+    C[row * N + col0 + 1] = ((long long)h1[r] << 18) + l1[r];
+  }
+}
+
 // ---------------------------------------------------------------- pipe-pairing probe
 // 32 warps a SM, one block a SM, 8 independent chains per op; per chain step ND dp4a, NI IMAD, NF FFMA, NL LOP3 and
 // NF2 packed FFMA2 (fma.rn.f32x2). Immediates keep FFMA off the register-bank limit.
@@ -407,6 +465,49 @@ __global__ void __launch_bounds__(1024) k_probe(int* out, int iters, BlockClk* r
   if (s == 0x7FFFFFFF) out[0] = s;
 }
 
+
+// Split warps: even warps run ND dp4a a chain step, odd warps NF FFMA and NF2 FFMA2, so the warp schedulers interleave
+// the two routes at run time and no static SASS order decides the mix. Each warp records its own loop cycles.
+template <int ND, int NF, int NF2>
+__global__ void __launch_bounds__(1024) k_split(int* out, int iters, long long* wcyc, BlockClk* rec) {
+  int d[8];
+  float f[8];
+  unsigned long long g[8];
+#pragma unroll
+  for (int r = 0; r < 8; r++) {
+    d[r] = threadIdx.x + r, f[r] = (float)(threadIdx.x + r);
+    g[r] = ((unsigned long long)__float_as_uint(f[r] + 0.5f) << 32) | __float_as_uint(f[r]);
+  }
+  const int x = 0x01020304 + blockIdx.x, y = 0x05060708 ^ threadIdx.x, warp = threadIdx.x >> 5;
+  const unsigned long long gb = 0x3F8001003F800100ull, gc = 0x3F0000003F000000ull;
+  __syncthreads();
+  CLK_BEGIN
+  const long long c0 = clock64();
+  if ((warp & 1) == 0) {
+    for (int it = 0; it < iters; it++)
+#pragma unroll
+      for (int r = 0; r < 8; r++)
+#pragma unroll
+        for (int q = 0; q < ND; q++) asm volatile("dp4a.s32.s32 %0, %1, %2, %0;" : "+r"(d[r]) : "r"(x), "r"(y));
+  } else {
+    for (int it = 0; it < iters; it++)
+#pragma unroll
+      for (int r = 0; r < 8; r++) {
+#pragma unroll
+        for (int q = 0; q < NF; q++) asm volatile("fma.rn.f32 %0, %0, 0f3F800100, 0f3F000000;" : "+f"(f[r]));
+#pragma unroll
+        for (int q = 0; q < NF2; q++) asm volatile("fma.rn.f32x2 %0, %0, %1, %2;" : "+l"(g[r]) : "l"(gb), "l"(gc));
+      }
+  }
+  const long long c1 = clock64();
+  if ((threadIdx.x & 31) == 0) wcyc[blockIdx.x * 32 + warp] = c1 - c0;
+  __syncthreads();
+  CLK_END
+  int s = 0;
+#pragma unroll
+  for (int r = 0; r < 8; r++) s += d[r] + __float_as_int(f[r]) + (int)g[r];
+  if (s == 0x7FFFFFFF) out[0] = s;
+}
 
 // ---------------------------------------------------------------- host side
 
@@ -527,13 +628,6 @@ static std::vector<int> pack_int8(const std::vector<uint8_t>& X, int rows, int K
 
 using GemmFn = void (*)(const void*, const void*, long long*, int, int, int, int, BlockClk*);
 
-template <int EPI>
-static GemmFn gemm_fn() {
-  if constexpr (EPI == 0) return GEMM_NARROW;
-  else if constexpr (EPI == 1) return GEMM_K3;
-  else return GEMM_FFMA;
-}
-
 // Device operands for one route: A is M x K, B is K x N codes; the layout is the route's.
 struct Operands {
   void *dA = nullptr, *dB = nullptr;
@@ -560,9 +654,9 @@ static Operands upload(const std::vector<uint8_t>& A, const std::vector<uint8_t>
 
 static const char* gemm_route(int epi) { return epi == 0 ? "dp4a_int8" : epi == 1 ? "dp4a_karatsuba3" : "ffma_fp32"; }
 
-template <int EPI>
+template <int EPI, int TM, int BKW, int STAGES, int MINB>
 static void run_gemm(int M, int N, int K, int reps, int samples, int grid_blocks) {
-  constexpr int BM = EPI == 1 ? 64 : 128, BN = BM;
+  constexpr int BM = 16 * TM, BN = BM;
   std::vector<uint8_t> A, B;
   gen_codes(A, (size_t)M * K, EPI != 1, 1 + EPI + M + K);
   gen_codes(B, (size_t)K * N, EPI != 1, 2 + EPI + N + K);
@@ -570,7 +664,7 @@ static void run_gemm(int M, int N, int K, int reps, int samples, int grid_blocks
   long long* dC;
   CK(cudaMalloc(&dC, sizeof(long long) * M * N));
   const int ntiles = (M / BM) * (N / BN), grid = grid_blocks > 0 ? grid_blocks : ntiles;
-  GemmFn f = gemm_fn<EPI>();
+  GemmFn f = k_gemm<EPI, TM, TM, EPI == 1 ? 6 : 1, BKW, STAGES, EPI == 2 ? 1024 : 0, MINB>;
   int occ = 0;
   CK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ, f, 256, 0));
   auto launch = [&](BlockClk* rec) { f<<<grid, 256>>>(o.dA, o.dB, dC, M, N, o.KW, ntiles, rec); };
@@ -580,8 +674,8 @@ static void run_gemm(int M, int N, int K, int reps, int samples, int grid_blocks
   long long checked;
   long long bad = check(C, A, B, M, N, K, samples, &checked);
   char extra[160];
-  snprintf(extra, sizeof extra, ",\"grid\":%d,\"tiles\":%d,\"instr_per_mac\":%s", grid, ntiles,
-           EPI == 0 ? "\"0.25 dp4a\"" : EPI == 1 ? "\"1.5 dp4a\"" : "\"1 FFMA\"");
+  snprintf(extra, sizeof extra, ",\"grid\":%d,\"tiles\":%d,\"config\":\"TM%d BKW%d S%d MINB%d\",\"instr_per_mac\":%s",
+           grid, ntiles, TM, BKW, STAGES, MINB, EPI == 0 ? "\"0.25 dp4a\"" : EPI == 1 ? "\"1.5 dp4a\"" : "\"1 FFMA\"");
   emit(gemm_route(EPI), EPI == 1 ? "generic" : "narrow", M, N, K, m, occ, checked, bad, extra);
   CK(cudaFree(o.dA));
   CK(cudaFree(o.dB));
@@ -746,6 +840,41 @@ static void run_lut(int M, int N, int K, int reps, int samples) {
   CK(cudaFree(dC));
 }
 
+static void run_lut8(int M, int N, int K, int reps, int samples) {
+  std::vector<uint8_t> A, B;
+  gen_codes(A, (size_t)M * K, false, 17 + M + K);
+  gen_codes(B, (size_t)K * N, false, 18 + N + K);
+  std::vector<int> Bv((size_t)K * N);
+  for (size_t x = 0; x < Bv.size(); x++) Bv[x] = (int)e4m3_v(B[x]);
+  std::vector<uint2> A8((size_t)(K / 8) * M);
+  for (int i = 0; i < M; i++)
+    for (int k = 0; k < K; k += 8) {
+      uint32_t w[2] = {0, 0};
+      for (int b = 0; b < 8; b++) w[b / 4] |= (uint32_t)A[(size_t)i * K + k + b] << (8 * (b % 4));
+      A8[(size_t)(k / 8) * M + i] = make_uint2(w[0], w[1]);
+    }
+  uint2* dA = to_dev(A8);
+  int* dB = to_dev(Bv);
+  long long* dC;
+  CK(cudaMalloc(&dC, sizeof(long long) * M * N));
+  constexpr int RM = 8;
+  const int smem = 2 * 8 * 256 * sizeof(int4);
+  CK(cudaFuncSetAttribute(k_lut8<RM>, cudaFuncAttributeMaxDynamicSharedMemorySize, smem));
+  dim3 grid(N / 2, M / (512 * RM));
+  int occ = 0;
+  CK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ, k_lut8<RM>, 512, smem));
+  auto launch = [&](BlockClk* rec) { k_lut8<RM><<<grid, 512, smem>>>(dA, dB, dC, M, N, K, rec); };
+  Meas m = timed(launch, grid.x * grid.y, reps);
+  std::vector<long long> C((size_t)M * N);
+  CK(cudaMemcpy(C.data(), dC, sizeof(long long) * M * N, cudaMemcpyDeviceToHost));
+  long long checked;
+  long long bad = check(C, A, B, M, N, K, samples, &checked);
+  emit("smem_lut8", "generic", M, N, K, m, occ, checked, bad, ",\"lds128_per_mac\":0.5");
+  CK(cudaFree(dA));
+  CK(cudaFree(dB));
+  CK(cudaFree(dC));
+}
+
 template <int ND, int NI, int NF, int NL, int NF2>
 static void run_probe(const char* name, int iters) {
   int* out;
@@ -764,6 +893,36 @@ static void run_probe(const char* name, int iters) {
   CK(cudaFree(out));
 }
 
+template <int ND, int NF, int NF2>
+static void run_split(const char* name, int iters) {
+  int* out;
+  long long* wc;
+  CK(cudaMalloc(&out, sizeof(int)));
+  CK(cudaMalloc(&wc, sizeof(long long) * 32 * g_nsm));
+  auto launch = [&](BlockClk* rec) { k_split<ND, NF, NF2><<<g_nsm, 1024>>>(out, iters, wc, rec); };
+  Meas m = timed(launch, g_nsm, 5);
+  std::vector<long long> h(32 * g_nsm);
+  CK(cudaMemcpy(h.data(), wc, sizeof(long long) * h.size(), cudaMemcpyDeviceToHost));
+  std::vector<double> td, tf;
+  for (int b = 0; b < g_nsm; b++) {
+    long long a = 0, c = 0;
+    for (int w = 0; w < 32; w++) (w & 1 ? c : a) = std::max(w & 1 ? c : a, h[b * 32 + w]);
+    td.push_back((double)a), tf.push_back((double)c);
+  }
+  std::sort(td.begin(), td.end());
+  std::sort(tf.begin(), tf.end());
+  const double Td = td[g_nsm / 2], Tf = tf[g_nsm / 2], T = m.cyc_med, steps = 16.0 * 8 * iters;
+  const double dp4a = steps * ND / Td, ffma = steps * NF / Tf, ffma2 = steps * NF2 / Tf;
+  const double macs = steps * 32 * (4.0 * ND + 1.0 * NF + 2.0 * NF2) / T;
+  printf(
+      "{\"kind\":\"split\",\"ops\":\"%s\",\"mix\":[%d,%d,%d],\"dp4a\":%.3f,\"ffma\":%.3f,\"ffma2\":%.3f,"
+      "\"dp4a_cycles\":%.0f,\"fma_cycles\":%.0f,\"block_cycles\":%.0f,\"sm_mhz\":%.1f,\"mac_equiv_per_sm_clk\":%.1f}\n",
+      name, ND, NF, NF2, dp4a, ffma, ffma2, Td, Tf, T, m.mhz, macs);
+  fflush(stdout);
+  CK(cudaFree(out));
+  CK(cudaFree(wc));
+}
+
 int main(int argc, char** argv) {
   std::string what = argc > 1 ? argv[1] : "all";
   cudaDeviceProp p;
@@ -774,11 +933,12 @@ int main(int argc, char** argv) {
   const bool all = what == "all";
   const int Q = g_nsm / 4;  // 47 on the RTX PRO 6000: grids are multiples of the SM count
   if (all || what == "small") {  // every output checked
-    run_gemm<0>(256, 256, 512, 1, 0, 0);
-    run_gemm<1>(128, 128, 512, 1, 0, 0);
-    run_gemm<2>(256, 256, 2048, 1, 0, 0);
+    run_gemm<0, 8, 8, 3, 2>(256, 256, 512, 1, 0, 0);
+    run_gemm<1, 4, 2, 3, 1>(128, 128, 512, 1, 0, 0);
+    run_gemm<2, 8, 8, 3, 2>(256, 256, 2048, 1, 0, 0);
     run_swar(256, 256, 512, 1, 0);
     run_lut(2048, 16, 256, 1, 0);
+    run_lut8(4096, 4, 256, 1, 0);
   }
   if (all || what == "probe") {
     run_probe<1, 0, 0, 0, 0>("dp4a", 4096);
@@ -796,14 +956,31 @@ int main(int argc, char** argv) {
     run_probe<2, 0, 1, 1, 0>("2dp4a+ffma+lop3", 4096);
     run_probe<0, 0, 1, 0, 1>("ffma+ffma2", 4096);
     run_probe<0, 1, 1, 0, 0>("imad+ffma", 4096);
+    run_split<1, 0, 0>("split dp4a | idle", 4096);
+    run_split<1, 1, 0>("split dp4a | ffma", 4096);
+    run_split<1, 2, 0>("split dp4a | 2ffma", 4096);
+    run_split<2, 1, 0>("split 2dp4a | ffma", 4096);
+    run_split<1, 0, 1>("split dp4a | ffma2", 4096);
+    run_split<2, 0, 1>("split 2dp4a | ffma2", 4096);
+    run_split<4, 0, 1>("split 4dp4a | ffma2", 4096);
   }
   if (all || what == "big") {  // timed; 4096 sampled outputs checked
-    run_gemm<0>(128 * Q, 128 * 8, 8192, 9, 4096, 0);
-    run_gemm<1>(64 * Q, 64 * 8, 4096, 9, 4096, 0);
-    run_gemm<1>(64 * Q * 2, 64 * 8, 4096, 9, 4096, 0);
-    run_gemm<2>(128 * Q, 128 * 8, 4096, 9, 4096, 0);
+    run_gemm<0, 8, 8, 3, 2>(128 * Q, 128 * 8, 8192, 9, 4096, 0);
+    run_gemm<0, 8, 8, 3, 1>(128 * Q, 128 * 8, 8192, 9, 4096, 0);
+    run_gemm<0, 8, 4, 3, 2>(128 * Q, 128 * 8, 8192, 9, 4096, 0);
+    run_gemm<0, 8, 4, 4, 2>(128 * Q, 128 * 8, 8192, 9, 4096, 0);
+    run_gemm<0, 8, 2, 4, 2>(128 * Q, 128 * 8, 8192, 9, 4096, 0);
+    run_gemm<1, 4, 4, 3, 1>(64 * Q * 2, 64 * 8, 4096, 9, 4096, 0);
+    run_gemm<1, 4, 2, 3, 1>(64 * Q * 2, 64 * 8, 4096, 9, 4096, 0);
+    run_gemm<1, 4, 1, 4, 1>(64 * Q * 2, 64 * 8, 4096, 9, 4096, 0);
+    run_gemm<1, 4, 2, 3, 2>(64 * Q * 2, 64 * 8, 4096, 9, 4096, 0);
+    run_gemm<2, 8, 8, 3, 2>(128 * Q, 128 * 8, 4096, 9, 4096, 0);
+    run_gemm<2, 8, 8, 3, 1>(128 * Q, 128 * 8, 4096, 9, 4096, 0);
+    run_gemm<2, 8, 4, 3, 2>(128 * Q, 128 * 8, 4096, 9, 4096, 0);
+    run_gemm<2, 8, 2, 4, 2>(128 * Q, 128 * 8, 4096, 9, 4096, 0);
     run_swar(128 * Q, 128 * 8, 4096, 9, 4096);
     run_lut(2048 * 8, 8 * Q * 2, 1024, 5, 4096);
+    run_lut8(4096 * 4, 2 * Q * 4, 1024, 5, 4096);
   }
   if (all || what == "corun") run_corun(9, 4096);
   return 0;
