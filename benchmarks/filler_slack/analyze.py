@@ -58,7 +58,7 @@ def paired(rows: list[dict], phase: str, base_phase: str) -> list[tuple[dict, di
 
 
 OPS = ("none", "iadd3", "lop3", "imad", "prmt", "mix", "imma", "merge", "reuse", "unif", "cbank", "lop3x", "imadm",
-       "mixm")
+       "mixm", "faddm", "mixf", "mix3")
 
 
 def probe_overhead(sass: dict) -> dict[str, float]:
@@ -132,7 +132,8 @@ IDLE_NS = 1000000
 # Merge-capable forms by what their addend can be: a per-lane computed word (one distinct word a lane, 32 a warp
 # instruction), or a warp-uniform / constant word (one distinct word a warp instruction).
 MERGE_CLASS = {"merge": "merge-lane", "reuse": "merge-lane", "prmt": "merge-lane", "lop3x": "merge-lane",
-               "imadm": "merge-lane", "mixm": "merge-lane", "unif": "merge-uniform", "cbank": "merge-uniform"}
+               "imadm": "merge-lane", "mixm": "merge-lane", "faddm": "merge-lane", "mixf": "merge-lane",
+               "mix3": "merge-lane", "unif": "merge-uniform", "cbank": "merge-uniform"}
 
 
 def op_groups(op: str) -> tuple[str, ...]:
