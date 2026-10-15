@@ -8,9 +8,9 @@ them. V*'s statements are indexed by the verifier's own list (`vstarCount ish`),
 circuits' gap 2's (#1847, merged here at `100c17932`): eleven statements in the writer's order, 0–3 `rec-open`, 4–5
 `rec-residuals`, 6 `rec-sparse`, 7–9 R's levels `rec-open-stacked`, 10 `rec-opening` at META's `stacked` shape.
 
-What stays open is the hypotheses the discharge takes, `hbr_honest_reg`'s (`C3/Compose/Discharge.lean`, `_hbr` itself)
-and `srcOK_holo_rs`'s (`C3/Compose/AtHolo.lean`, `SrcOK` at the checked family), and what the event's bridge and the
-bound still need: Open now, next.
+What stays open is the hypotheses the discharge takes, `hbr_honest_reg`'s (`C3/Compose/Discharge.lean`, `_hbr` itself;
+at the honest source, `hbr_honest_src`'s) and `srcOK_holo_rs`'s (`C3/Compose/AtHolo.lean`, `SrcOK` at the checked
+family), and what the event's bridge and the bound still need: Open now, next.
 
 ## Open now (round 21, against Wed 14 Oct EOD PT)
 
@@ -161,6 +161,10 @@ checks are those of a transcript each session writes (`checksReached_checked`, i
   `RepUnitOfAlg` are the four parts' (`hpr`, `hsv`, `hf`, the values' cap `hcap`). Left there: V*'s sessions and
   copies (`hsess`, the `SparseSessionAt` row), the pub read (`hpub`), `HCols`, `HAlgRows`, `hcap`, and G's items 1–4
   at every accepted proof (`srcOK_holo_held` and `srcSparseTie_of_copies` take them so, not off `Bad`).
+  `hbr_honest_src` (`C3/Compose/HonestSrc.lean`) is `hbr_honest_reg` there, at `stp := histPts ish tbl bcM stp0`,
+  `own := ownAt ss` and the map's `sel`, its `SrcOK` `srcOK_holo_family_hist`'s: what the checks give is discharged
+  (`HeldOk`, `SparseCountedAt` from `checkCovers`, `hdr`, `hrec`, `he` and `hr` at R's first round from
+  `checkInnerStmt`, `HeldIs`, `_htop`); left: those above, `hrd`, `hbc`, the other parts' read facts, `hmaps`, `hot`.
 * `ChecksReached` is no hypothesis: where a session accepts a transcript it writes, one it writes and accepts passes
   the public-row and statement checks (`checksReached_checked`: `keepOwn` keeps the list only at such a transcript).
   There every unit is drawn (`rowsHeld`, `RowsHeld` proved: G's `RowsDrawn` at every value `fixedRow` knows, from the
