@@ -6,6 +6,7 @@ hierarchies of larger grids, over GF(2) and GF(10007): the typing rule always su
 rank <= 1, labels are independent within each grid row (a) and column (b), and the representability sets the proof
 tracks agree with their linear-algebra definition.
 Part 3: the flattening identity on random Steiner trees with dense Steiner points.
+Part 4: the merge bound (Corollary 4): its identity on Strassen as an accumulate-and-merge DAG and on random DAGs.
 """
 
 import itertools
@@ -333,9 +334,116 @@ def part3(rng, p=10007, m=2):
     print(f"[flattening] 40 random Steiner trees with dense Steiner points: identity holds, rank = m|P|: ok")
 
 
+# ---------- Part 4: computations with merges (Corollary 4) ----------
+
+def laminar_to_tree(sets, universe):
+    """A binary hierarchy (nested tuples of cells) refining a laminar family of sets of cells."""
+    fam = {frozenset(s) for s in sets if s} | {frozenset([u]) for u in universe} | {frozenset(universe)}
+    fam = sorted(fam, key=len)
+
+    def build(S):
+        kids = [T for T in fam if T < S and not any(T < U < S for U in fam)]
+        trees = [build(T) for T in kids] if len(S) > 1 else [next(iter(S))]
+        while len(trees) > 1:
+            trees = [(trees[0], trees[1])] + trees[2:]
+        return trees[0]
+
+    return build(frozenset(universe))
+
+
+def run_dag(nodes, targets, p, shape):
+    """nodes: list of ("root",), ("prod", parent, R), ("merge", a, alpha, b, beta); H keeps arc a, deletes arc b.
+    targets: {cell: node index}. Returns (lhs, rhs, labels) of the merge identity, with Lemma 3 labels for H."""
+    val, omega, hpar = [], [], []
+    for nd in nodes:
+        if nd[0] == "root":
+            val.append(np.zeros(shape, dtype=np.int64)); omega.append(1); hpar.append(None)
+        elif nd[0] == "prod":
+            val.append((val[nd[1]] + nd[2]) % p); omega.append(omega[nd[1]]); hpar.append(nd[1])
+        else:
+            _, a, al, b, be = nd
+            val.append((al * val[a] + be * val[b]) % p); omega.append(al * omega[a] % p); hpar.append(a)
+
+    def below(w):
+        out = set()
+        for cell, x in targets.items():
+            while x is not None:
+                if x == w:
+                    out.add(cell)
+                    break
+                x = hpar[x]
+        return out
+
+    cells = list(targets)
+    tree = laminar_to_tree([below(w) for w in range(len(nodes))], cells)
+    a, b, _ = check_tree(tree, p, check_rep=False)
+    index = {t: i for i, t in enumerate(leaves_of(tree))}
+    inv = lambda z: pow(int(z) % p, p - 2, p)
+    lam = lambda S: sum((np.outer(a[:, index[t]], b[:, index[t]]) for t in S), np.zeros((a.shape[0], b.shape[0]),
+                                                                                          dtype=np.int64)) % p
+    lhs = sum(np.kron(lam([t]), val[w] * inv(omega[w]) % p) for t, w in targets.items()) % p
+    rhs = np.zeros_like(lhs)
+    for w, nd in enumerate(nodes):
+        S = below(w)
+        assert rank(lam(S), p) <= 1
+        if nd[0] == "prod":
+            rhs = (rhs + np.kron(lam(S), nd[2] * inv(omega[w]) % p)) % p
+        elif nd[0] == "merge":
+            rhs = (rhs + np.kron(lam(S), val[nd[3]] * (nd[4] * inv(omega[w]) % p) % p)) % p
+    return lhs, rhs, val
+
+
+def part4(rng, p=10007):
+    # Strassen 2x2 as an accumulate-and-merge DAG. Rows (i,k) -> 2i+k, columns (j,k') -> 2j+k'.
+    def x(i, k):
+        v = np.zeros(4, dtype=np.int64); v[2 * i + k] = 1; return v
+
+    def y(k, j):
+        v = np.zeros(4, dtype=np.int64); v[2 * j + k] = 1; return v
+
+    prods = [(x(0, 0) + x(1, 1), y(0, 0) + y(1, 1)), (x(1, 0) + x(1, 1), y(0, 0)), (x(0, 0), y(0, 1) - y(1, 1)),
+             (x(1, 1), y(1, 0) - y(0, 0)), (x(0, 0) + x(0, 1), y(1, 1)), (x(1, 0) - x(0, 0), y(0, 0) + y(0, 1)),
+             (x(0, 1) - x(1, 1), y(1, 0) + y(1, 1))]
+    nodes = [("root",)] + [("prod", 0, np.outer(u, v) % p) for u, v in prods]  # P1..P7 are nodes 1..7
+    P = lambda i: i
+    nodes += [("merge", P(1), 1, P(4), 1), ("merge", 8, 1, P(5), -1), ("merge", 9, 1, P(7), 1),   # 10 = C11
+              ("merge", P(3), 1, P(5), 1),                                                       # 11 = C12
+              ("merge", P(2), 1, P(4), 1),                                                       # 12 = C21
+              ("merge", P(1), 1, P(2), -1), ("merge", 13, 1, P(3), 1), ("merge", 14, 1, P(6), 1)]  # 15 = C22
+    targets = {(0, 0): 10, (0, 1): 11, (1, 0): 12, (1, 1): 15}
+    lhs, rhs, val = run_dag(nodes, targets, p, (4, 4))
+    for (r, c), w in targets.items():
+        T = np.zeros((4, 4), dtype=np.int64)
+        for k in range(2):
+            T[2 * r + k, 2 * c + k] = 1
+        assert np.array_equal(val[w], T), "Strassen DAG does not compute the product"
+    assert np.array_equal(lhs, rhs), "merge identity fails on Strassen"
+    loss = sum(rank(val[nd[3]], p) for nd in nodes if nd[0] == "merge")
+    print(f"[merges] Strassen DAG: 7 products, 8 merges, rank of the flattening {rank(lhs, p)}, "
+          f"bound 7 >= {rank(lhs, p)} - {loss}: ok")
+    for trial in range(200):
+        shape = (4, 4)
+        nodes = [("root",)]
+        for _ in range(rng.randint(3, 9)):
+            if len(nodes) > 2 and rng.random() < 0.35:
+                a, b = rng.sample(range(len(nodes)), 2)
+                nodes.append(("merge", a, rng.randrange(1, p), b, rng.randrange(1, p)))
+            else:
+                u = np.array([rng.randrange(p) for _ in range(4)], dtype=np.int64)
+                v = np.array([rng.randrange(p) for _ in range(4)], dtype=np.int64)
+                nodes.append(("prod", rng.randrange(len(nodes)), np.outer(u, v) % p))
+        picks = rng.sample(range(1, len(nodes)), min(4, len(nodes) - 1))
+        cells = rng.sample([(r, c) for r in range(2) for c in range(2)], len(picks))
+        lhs, rhs, _ = run_dag(nodes, dict(zip(cells, picks)), p, shape)
+        assert np.array_equal(lhs, rhs), "merge identity fails"
+    print("[merges] 200 random DAGs with weighted merges: identity of Corollary 4 holds: ok")
+
+
 if __name__ == "__main__":
     rng = random.Random(20261015)
-    parts = sys.argv[1:] or ["1", "2", "3"]
+    parts = sys.argv[1:] or ["1", "2", "3", "4"]
+    if "4" in parts:
+        part4(rng)
     if "2" in parts:
         part2(rng)
     if "3" in parts:
