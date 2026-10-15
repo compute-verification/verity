@@ -15,6 +15,7 @@ the kernel-engineering skill (`.agents/skills/kernel-engineering/SKILL.md`).
 | `pearl_c4/` | RTX PRO 6000 | Pearl-C4 (NVFP4 and MXFP4) and its harness arms |
 | `nvfp4_sm120/` | RTX PRO 6000 | The plain NVFP4 GEMM as harness baseline entries (`nvf4_plain.cu` on `mainloop_nvf4.cuh`), and its standalone benches |
 | `pouw_hash/` | RTX PRO 6000 | The PoUW hash kernels' bench and check (`run.sh`, `check.py`) |
+| `rs_attacks/` | CPU, RTX PRO 6000 | Attacks on the committed prefix targets of (A + UVᵀ)(B + WZᵀ) with rank-r masks: `attacks.py` checks each route bit for bit and prices it (ledger and time), with the threshold r* (`check`, `table`); `prefix.cu` (`prefix.sh`, under `gpu-lease`) times the honest int8 step against the CUDA-core routes on one GPU |
 | `kernels/` | RTX 4090 | NCP's native u8xs8 route-U GEMM and Pearl's e4m3 GEMM on the `ada` device (`pouw_gemm.cu`), JIT-built as a torch extension |
 | `vllm_bench.py` | RTX 4090 | Overhead against plain vLLM for BF16, stock FP8, W7A7, NCP and Pearl by wrapping every `LinearBase` layer's apply; `pearl_c_vllm/` reads its prompts and model lookup |
 | `gamma.py` | CPU | γ accounting: each scheme's honest reference priced term by term under W1, split into checked and unchecked work |

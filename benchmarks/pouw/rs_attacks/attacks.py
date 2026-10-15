@@ -209,13 +209,20 @@ def check():
 
 # Prices a committed word a block, in int8 tensor MAC slots (an m16n8k32 IMMA is 4,096 slots for 128 words).
 # ledger: the converged model's dual weights (y_T 63/64, y_H 1/8, y_I 1/4, y_M 1/256; L, A, U and shared memory
-# unpriced), i.e. priced use. time: the census rates (r20261015-064426-11ec), each op alone on the SM.
+# unpriced), i.e. priced use. time: the census rates (r20261015-064426-11ec), each op alone on the SM; prefix.cu
+# measured IDP.4A at 16.6 and IMAD at 16.2-16.6 a word (r20261015-191053-26cf). sm_120a has no packed FFMA2:
+# fma.rn.f32x2 lowers to two FFMAs (the same run's SASS), so an FP32 FMA or add is one lane-op.
 PRICES = {
-    "ledger": dict(fma=1.0, fma_note="FFMA2, 2 FMAs a lane-op at 1/4 credit a warp instr (w = 0, unmeasured)",
-                   add=1.0, iop=2.0, imad=4.0, dp4a_op=4.0, lookup=2.0),
-    "time": dict(fma=1024 / 124, fma_note="FFMA 3.885 warp instr/SM/clk (124 lanes)",
-                 add=1024 / 124, iop=1024 / 64, imad=1024 / 64, dp4a_op=1024 / 64, lookup=1024 / 16),
+    "ledger": dict(fma=2.0, add=2.0, iop=2.0, imad=4.0, dp4a_op=4.0, lookup=2.0),
+    "time": dict(fma=1024 / 124, add=1024 / 124, iop=1024 / 64, imad=1024 / 64, dp4a_op=1024 / 64,
+                 lookup=1024 / 16),
 }
+
+
+def overflow_rows(r, L, cap=127):
+    """Fraction of G_s rows (r entries, each about N(0, r L) for ±1 factors) with an entry beyond cap."""
+    p = math.erfc((cap + 0.5) / math.sqrt(2 * r * L))
+    return 1 - (1 - p) ** r
 
 
 def bits_signed(v):
@@ -230,7 +237,7 @@ def routes(r, L, n, price, beta=1):
     out = {}
     out["honest-shaped (E_s F_s, tensor)"] = L
     sig8 = math.ceil(bits_signed(g_max) / 8)
-    out[f"tensor int8, G_s in {sig8} byte slice(s)"] = 32 * math.ceil(r * sig8 / 32)
+    out["tensor int8 (K = 32 or 16: both hold the pipe 16 cycles)"] = 32 * math.ceil(r / 32)
     if g_max <= 2048:
         out["tensor FP16 (k16), FP32 accumulate"] = 32 * math.ceil(r / 16)
     conv = p["iop"]                     # magic-number FP32 -> s32 fold into the running word: one IADD3
@@ -240,7 +247,20 @@ def routes(r, L, n, price, beta=1):
         if r >= 2 and r % 2 == 0:
             out["CUDA FP32, Strassen 1 level on r"] = 7 * r / 8 * p["fma"] + 2 * p["add"] + conv + lower
     out["CUDA IMAD (exact mod 2^32)"] = r * p["imad"] + lower
-    out[f"CUDA IDP.4A, G_s in {sig8} slice(s)"] = math.ceil(r * sig8 / 4) * p["dp4a_op"] + lower
+    # one int8 slice of G_s for the rows that fit (|G| is about sqrt(r L), far below its bound r L); the rest take
+    # sig8 slices, a second accumulator and one op to merge them
+    q = overflow_rows(r, L) if beta == 1 else 1.0
+    one = math.ceil(r / 4) * p["dp4a_op"]
+    out["CUDA IDP.4A, G_s in one int8 slice (rare rows in two)"] = (
+        (1 - q) * one + q * (math.ceil(r * sig8 / 4) * p["dp4a_op"] + p["iop"]) + lower)
+    if g_max < 2 ** 15:
+        out["CUDA IDP.2A (16-bit G_s × 8-bit Z)"] = math.ceil(r / 2) * p["dp4a_op"] + lower
+    # RS-D2F's rank-metric Steiner trees (note:20261015T1816Z-draft-rs-d2-lowrank-floor): their Steiner points are
+    # rational, so exact arithmetic is mod 2^32, one IMAD a rank-one step a word
+    if 2 <= r <= L and r % 2 == 0:
+        out["Steiner hub tree mod 2^32 (IMAD), 3r/4 steps"] = 3 * r / 4 * p["imad"] + lower
+    if L <= r <= 2 * L:
+        out["Steiner median tree mod 2^32 (IMAD), (2L + r)/4 steps"] = (2 * L + r) / 4 * p["imad"] + lower
     if beta == 1:
         best = None
         for t in range(1, 17):
@@ -294,13 +314,44 @@ def hk_rank_per_word(r):
 
 def algebraic(L):
     rows = []
-    for r in (1, 2, 4, 8, 16, 24, 32, 48, 64):
-        steiner = min(r, L)
+    for r in (1, 2, 4, 8, 16, 24, 32, 48, 64, 96):
+        # the chain, or RS-D2F's hub / median trees (rank-one steps a prefix): (2 min(r, L) + min(r, 2L)) / 4
+        steiner = min(min(r, L), (2 * min(r, L) + min(r, 2 * L)) / 4 if r >= 2 else 1)
         strassen = min(r * (7 / 8) ** int(math.log2(r)) if r > 1 else 1, L * (7 / 8) ** int(math.log2(L)))
         hk = min(hk_rank_per_word(r), hk_rank_per_word(L))
         rows.append(dict(r=r, L=L, steiner=steiner / L, strassen=strassen / (L * (7 / 8) ** int(math.log2(L))),
                          hk=hk / hk_rank_per_word(L)))
     return rows
+
+
+def algebraic_threshold(L, eps):
+    """Model (1): smallest r whose best known Steiner length a prefix is at least (1 - eps) L."""
+    r = 1
+    while min(min(r, L), (2 * min(r, L) + min(r, 2 * L)) / 4 if r >= 2 else 1) < (1 - eps) * L:
+        r += 1
+    return r
+
+
+# prefix.cu's mix48 (r20261015-191053-26cf): the tensor pipe keeps 0.861 of its peak beside IDP.4A words at 0.67 of
+# their rate alone (16.6 a word); mix16 and mix32 give (0.952, 0.247) and (0.925, 0.48). Beyond 0.67 is unmeasured.
+MIX = (0.861, 0.67)
+DP4A_TIME = 16.6
+
+
+def time_overlap(r, L):
+    """Units a word a block with both pipes busy at MIX: the tensor route beside the one-slice IDP.4A route, for the
+    attack (inner dimension r) and for the honest prover (inner dimension L), and their ratio."""
+    fm, fi = MIX
+    att = 1 / (fm / (32 * math.ceil(r / 32)) + fi / (DP4A_TIME * math.ceil(r / 4)))
+    hon = 1 / max(1 / L, fm / L + fi / (DP4A_TIME * L / 4))
+    return att, hon, min(att, hon) / hon
+
+
+def time_overlap_threshold(L, eps):
+    r = 1
+    while time_overlap(r, L)[2] < 1 - eps:
+        r += 1
+    return r
 
 
 def threshold(L, n, price, eps, rho, beta=1, rmax=4096, lookups=True):
@@ -350,6 +401,24 @@ def table(json_out=None):
             res["algebraic"].append(row)
             print(f"   L={L:>3} r={row['r']:>3}  Steiner {row['steiner']:5.2f}  Strassen {row['strassen']:5.2f}  "
                   f"HK {row['hk']:5.2f}")
+    res["algebraic_thresholds"] = []
+    for L in (32, 64, 128):
+        for eps in (0.0, 0.05, 0.1):
+            rs = algebraic_threshold(L, eps)
+            res["algebraic_thresholds"].append(dict(L=L, eps=eps, rstar=rs))
+            print(f"   model (1) r* (Steiner, best known tree): L={L:>3} eps={eps:<4} r*={rs}")
+    print("\n== time with the tensor and integer pipes overlapped at the measured mix point "
+          f"(tensor {MIX[0]}, IDP.4A {MIX[1]})")
+    res["time_overlap"] = []
+    for L in (32, 64):
+        for r in (1, 4, 8, 16, 24, 28, 32, 48, 64):
+            att, hon, ratio = time_overlap(r, L)
+            res["time_overlap"].append(dict(L=L, r=r, attack=att, honest=hon, ratio=ratio))
+            print(f"   L={L:>3} r={r:>3}  attack {att:6.2f}  honest {hon:6.2f}  ratio {ratio:5.2f}")
+        for eps in (0.0, 0.05, 0.1):
+            rs = time_overlap_threshold(L, eps)
+            res["time_overlap"].append(dict(L=L, eps=eps, rstar=rs))
+            print(f"   time-overlap r*: L={L:>3} eps={eps:<4} r*={rs}")
     print("\n== threshold r*: smallest r at which no route beats (1 - eps)·(honest + receipts)")
     print(f"{'prices':<7} {'L':>4} {'eps':>5} {'rho':>5} {'r* (all)':>9} {'r* (no lookups)':>16}")
     for price in ("ledger", "time"):
