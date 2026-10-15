@@ -18,10 +18,13 @@ nvcc --version > "$O/nvcc.txt"
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 cuobjdump -sass "$B/merge" > "$B/merge.sass" 2>&1
 grep -oE '(IMMA|HMMA)\.[A-Z0-9.]+' "$B/merge.sass" | sort | uniq -c > "$O/mma-forms.txt" 2>&1
-# the fused timing kernel's opcodes: the split's instructions a merge MMA
-awk '/Function : .*time_fused/{f=1; next} /Function :/{f=0} f' "$B/merge.sass" \
-  | grep -oE '^\s+/\*[0-9a-f]+\*/\s+[A-Z][A-Z0-9_.]*' | awk '{print $2}' | sed 's/\..*//' | sort | uniq -c \
-  | sort -rn > "$O/fused-opcodes.txt" 2>&1
+# each fused timing kernel's opcodes (8 HMMAs a loop trip): the split's instructions a merge MMA
+for v in 0 1 2; do
+  echo "== time_fused V$v" >> "$O/fused-opcodes.txt"
+  awk -v pat="time_fusedILi${v}ELi8E" '$0 ~ "Function : " {f = index($0, pat) > 0; next} f' "$B/merge.sass" \
+    | grep -oE '^\s+/\*[0-9a-f]+\*/\s+[A-Z][A-Z0-9_.]*' | awk '{print $2}' | sed 's/\..*//' | sort | uniq -c \
+    | sort -rn >> "$O/fused-opcodes.txt" 2>&1
+done
 gzip -c "$B/merge.sass" > "$O/merge.sass.gz"
 # shellcheck disable=SC2016
 gpu-lease 1 --wait --max-min "${MAXMIN:-20}" -- bash -c '
@@ -58,10 +61,12 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-20}" -- bash -c '
   if [ "$FUSED" = 1 ]; then
     # split on the CUDA cores from s32 words, then the merge: the signed L = 32 filler biased by +516128 (the producing
     # GEMM can start its accumulator there); every 20-bit word; and |D| up to 2^24 - 1.
-    for seed in 0x5EED1234 0xC0FFEE11; do
-      "$B/merge" fused 8192 $seed -516128 516128 516128 2097152 >> "$O/check-fused.jsonl" 2>> "$O/errors.txt" || ok=0
-      "$B/merge" fused 8192 $seed 0 1048575 0 8388608           >> "$O/check-fused.jsonl" 2>> "$O/errors.txt" || ok=0
-      "$B/merge" fused 8192 $seed 0 1048575 0 14679040          >> "$O/check-fused.jsonl" 2>> "$O/errors.txt" || ok=0
+    for v in 0 1 2; do
+      for seed in 0x5EED1234 0xC0FFEE11; do
+        "$B/merge" fused $v 8192 $seed -516128 516128 516128 2097152 >> "$O/check-fused.jsonl" 2>> "$O/errors.txt" || ok=0
+        "$B/merge" fused $v 8192 $seed 0 1048575 0 8388608           >> "$O/check-fused.jsonl" 2>> "$O/errors.txt" || ok=0
+        "$B/merge" fused $v 8192 $seed 0 1048575 0 14679040          >> "$O/check-fused.jsonl" 2>> "$O/errors.txt" || ok=0
+      done
     done
   fi
   [ $ok = 1 ] || { echo "check failed: not timed" >> "$O/errors.txt"; exit 6; }
@@ -78,8 +83,11 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-20}" -- bash -c '
     done
   fi
   if [ "$FUSED" = 1 ]; then
-    for bpsm in 2 4 8; do
-      "$B/merge" timefused 200000 $bpsm >> "$O/time-fused.jsonl" 2>> "$O/errors.txt" || echo "timefused rc $?" >> "$O/errors.txt"
+    for v in 0 1 2; do
+      for bpsm in 2 4 8; do
+        "$B/merge" timefused $v 200000 $bpsm >> "$O/time-fused.jsonl" 2>> "$O/errors.txt" \
+          || echo "timefused v=$v rc $?" >> "$O/errors.txt"
+      done
     done
   fi
   nvidia-smi --query-gpu=clocks.sm,power.draw --format=csv,noheader -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1

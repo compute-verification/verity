@@ -10,8 +10,8 @@
 //   merge time  N_DIGITS ITERS BLOCKS_PER_SM     one JSON line: MMAs a SM a cycle on merge operands
 //   merge f16 TILES SEED LO HI BIAS Z1SPAN       the FP16 merge (two 11-bit digits, weights 1 and 2^11), checked
 //   merge timef16 ITERS BLOCKS_PER_SM            its rate, in units a word (one unit = 1/256 SMSP tensor cycle)
-//   merge fused TILES SEED LO HI BIAS Z1SPAN     the FP16 merge with its CUDA-core digit split from s32 words, checked
-//   merge timefused ITERS BLOCKS_PER_SM          its rate: split + merge, everything counted
+//   merge fused V TILES SEED LO HI BIAS Z1SPAN   the FP16 merge with its CUDA-core digit split from s32 words, checked
+//   merge timefused V ITERS BLOCKS_PER_SM        its rate: split + merge, everything counted (V: the split variant)
 //
 // Fragment layout as benchmarks/tc_probe/mma_tiles.cu (PTX "mma.m16n8k32" 8-bit figure), g = lane>>2, t = lane&3:
 // A reg i holds row g (+8 for odd i), k = 4t..4t+3 (+16 for i >= 2); B reg i holds column g, the same k range;
@@ -185,15 +185,36 @@ __global__ void time_merge_f16(uint64_t iters, uint32_t wreg0, uint32_t wreg1, u
 
 // The split on the CUDA cores, from four s32 words u in the C/D fragment layout ((g,2t), (g,2t+1), (g+8,2t), (g+8,2t+1))
 // straight into the merge's A fragment: lo = u & 0x3FF and hi = (u >> 10) & 0x3FF, each as the FP16 1024 + d (bits
-// 0x6400 | d), two words a register. Integer instructions only (4 PRMT, 2 SHF, 4 LOP3 a lane); the 1024s add the public
-// constant SPLIT_OFFSET to D. Exact for u in [0, 2^20).
+// 0x6400 | d), two words a register. Integer instructions only; the 1024s add the public constant SPLIT_OFFSET to D.
+// Exact for u in [0, 2^20). Variant V sets how many ALU instructions a lane spends a merge MMA:
+//   V0: C++ masks; ptxas emits the mask and the OR as two LOP3s (4 PRMT, 2 SHF, 8 LOP3 = 14 ALU)
+//   V1: one lop3 (x & 0x03FF03FF) | magic with magic in a register (4 PRMT, 2 SHF, 4 LOP3 = 10 ALU)
+//   V2: V1 with the hi shift on the IMAD pipe, x >> 2 as mul.hi by an opaque 2^30 (8 ALU + 2 IMAD)
+// magic = 0x64006400 and mulhi = 0x40000000 arrive as kernel arguments so ptxas can't fold them back into immediates.
 constexpr int64_t SPLIT_OFFSET = 1024 + 1024 * 1024;
 
-__device__ __forceinline__ void split_f16(const uint32_t u[4], uint32_t af[4]) {
-  af[0] = (__byte_perm(u[0], u[1], 0x5410) & 0x03FF03FFu) | 0x64006400u;
-  af[1] = (__byte_perm(u[2], u[3], 0x5410) & 0x03FF03FFu) | 0x64006400u;
-  af[2] = ((__byte_perm(u[0], u[1], 0x6521) >> 2) & 0x03FF03FFu) | 0x64006400u;
-  af[3] = ((__byte_perm(u[2], u[3], 0x6521) >> 2) & 0x03FF03FFu) | 0x64006400u;
+template <int V>
+__device__ __forceinline__ uint32_t mask_or(uint32_t x, uint32_t magic) {
+  if (V == 0) return (x & 0x03FF03FFu) | 0x64006400u;
+  uint32_t r;
+  asm("lop3.b32 %0, %1, 0x03FF03FF, %2, 0xEA;" : "=r"(r) : "r"(x), "r"(magic));
+  return r;
+}
+
+template <int V>
+__device__ __forceinline__ uint32_t shr2(uint32_t x, uint32_t mulhi) {
+  if (V < 2) return x >> 2;
+  uint32_t r;
+  asm("mul.hi.u32 %0, %1, %2;" : "=r"(r) : "r"(x), "r"(mulhi));
+  return r;
+}
+
+template <int V>
+__device__ __forceinline__ void split_f16(const uint32_t u[4], uint32_t af[4], uint32_t magic, uint32_t mulhi) {
+  af[0] = mask_or<V>(__byte_perm(u[0], u[1], 0x5410), magic);
+  af[1] = mask_or<V>(__byte_perm(u[2], u[3], 0x5410), magic);
+  af[2] = mask_or<V>(shr2<V>(__byte_perm(u[0], u[1], 0x6521), mulhi), magic);
+  af[3] = mask_or<V>(shr2<V>(__byte_perm(u[2], u[3], 0x6521), mulhi), magic);
 }
 
 // Column g's radix weights at the lane's k-slots: 1.0 at slot g (lo), 1024.0 at slot 8 + g (hi).
@@ -202,8 +223,9 @@ __device__ __forceinline__ void split_weights(int g, int t, uint32_t bf[2]) {
   bf[1] = (2 * t == g ? 0x6400u : 0u) | (2 * t + 1 == g ? 0x64000000u : 0u);
 }
 
+template <int V>
 __global__ void fused_tiles(const uint32_t* __restrict__ Z2, const float* __restrict__ C, float* __restrict__ D,
-                            int ntiles) {
+                            int ntiles, uint32_t magic, uint32_t mulhi) {
   const int warp = (blockIdx.x * blockDim.x + threadIdx.x) >> 5;
   if (warp >= ntiles) return;
   const int lane = threadIdx.x & 31, g = lane >> 2, t = lane & 3;
@@ -215,7 +237,7 @@ __global__ void fused_tiles(const uint32_t* __restrict__ Z2, const float* __rest
     u[i] = Z2[o + at[i]];
     cf[i] = C[o + at[i]];
   }
-  split_f16(u, af);
+  split_f16<V>(u, af, magic, mulhi);
   split_weights(g, t, bf);
   mma_f16(df, af, bf, cf);
   for (int i = 0; i < 4; ++i) D[o + at[i]] = df[i];
@@ -223,8 +245,8 @@ __global__ void fused_tiles(const uint32_t* __restrict__ Z2, const float* __rest
 
 // Split + merge throughput: each chain's next Z2 words are another chain's accumulator bits, so the split is redone
 // every MMA and nothing is hoisted.
-template <int CH>
-__global__ void time_fused(uint64_t iters, unsigned long long* cycles, uint32_t* sink) {
+template <int V, int CH>
+__global__ void time_fused(uint64_t iters, unsigned long long* cycles, uint32_t* sink, uint32_t magic, uint32_t mulhi) {
   const int lane = threadIdx.x & 31, g = lane >> 2, t = lane & 3;
   uint32_t bf[2];
   split_weights(g, t, bf);
@@ -242,7 +264,7 @@ __global__ void time_fused(uint64_t iters, unsigned long long* cycles, uint32_t*
       const uint32_t u[4] = {__float_as_uint(src[0]), __float_as_uint(src[1]), __float_as_uint(src[2]),
                              __float_as_uint(src[3])};
       uint32_t af[4];
-      split_f16(u, af);
+      split_f16<V>(u, af, magic, mulhi);
       mma_f16(c[k], af, bf, c[k]);
     }
   }
@@ -567,7 +589,13 @@ int run_time_f16(uint64_t iters, int bpsm) {
 
 // The fused split + merge on s32 words: Z2 + bias in [0, 2^20) (a bias the producing GEMM can start its accumulator at),
 // Z1 an FP32 integer; D must be Z1 + Z2 + bias + SPLIT_OFFSET bit for bit.
-int run_check_fused(int ntiles, uint32_t seed, int64_t lo, int64_t hi, int64_t bias, int64_t z1span) {
+constexpr uint32_t MAGIC = 0x64006400u, MULHI = 0x40000000u;
+
+int run_check_fused(int v, int ntiles, uint32_t seed, int64_t lo, int64_t hi, int64_t bias, int64_t z1span) {
+  if (v < 0 || v > 2) {
+    fprintf(stderr, "variant is 0..2\n");
+    return 2;
+  }
   if (lo + bias < 0 || hi + bias >= (1LL << 20)) {
     fprintf(stderr, "domain [%lld,%lld]+%lld outside [0,2^20)\n", (long long)lo, (long long)hi, (long long)bias);
     return 2;
@@ -603,7 +631,10 @@ int run_check_fused(int ntiles, uint32_t seed, int64_t lo, int64_t hi, int64_t b
   CK(cudaMemcpy(dC, C.data(), words * 4, cudaMemcpyHostToDevice));
   CK(cudaMemset(dD, 0xA5, words * 4));
   constexpr int WPB = 4;
-  fused_tiles<<<(ntiles + WPB - 1) / WPB, 32 * WPB>>>(dZ, dC, dD, ntiles);
+  const int nb = (ntiles + WPB - 1) / WPB;
+  if (v == 0) fused_tiles<0><<<nb, 32 * WPB>>>(dZ, dC, dD, ntiles, MAGIC, MULHI);
+  if (v == 1) fused_tiles<1><<<nb, 32 * WPB>>>(dZ, dC, dD, ntiles, MAGIC, MULHI);
+  if (v == 2) fused_tiles<2><<<nb, 32 * WPB>>>(dZ, dC, dD, ntiles, MAGIC, MULHI);
   CK(cudaGetLastError());
   CK(cudaDeviceSynchronize());
   CK(cudaMemcpy(D.data(), dD, words * 4, cudaMemcpyDeviceToHost));
@@ -617,14 +648,26 @@ int run_check_fused(int ntiles, uint32_t seed, int64_t lo, int64_t hi, int64_t b
   CK(cudaFree(dC));
   CK(cudaFree(dD));
   printf(
-      "{\"mode\":\"check_fused\",\"digit_bits\":10,\"lo\":%lld,\"hi\":%lld,\"bias\":%lld,\"offset\":%lld,"
+      "{\"mode\":\"check_fused\",\"variant\":%d,\"digit_bits\":10,\"lo\":%lld,\"hi\":%lld,\"bias\":%lld,\"offset\":%lld,"
       "\"z1span\":%lld,\"max_abs_result\":%lld,\"tiles\":%d,\"seed\":%u,\"merged_words\":%zu,\"mismatches\":%lld}\n",
-      (long long)lo, (long long)hi, (long long)bias, (long long)SPLIT_OFFSET, (long long)z1span, (long long)maxabs,
+      v, (long long)lo, (long long)hi, (long long)bias, (long long)SPLIT_OFFSET, (long long)z1span, (long long)maxabs,
       ntiles, seed, words, bad);
   return bad ? 1 : 0;
 }
 
-int run_time_fused(uint64_t iters, int bpsm) {
+template <int V, int CH>
+void launch_time_fused(int blocks, int threads, uint64_t iters, unsigned long long* dcyc, uint32_t* dsink) {
+  time_fused<V, CH><<<blocks, threads>>>(iters / 8 + 1, dcyc, dsink, MAGIC, MULHI);
+  CK(cudaDeviceSynchronize());
+  time_fused<V, CH><<<blocks, threads>>>(iters, dcyc, dsink, MAGIC, MULHI);
+  CK(cudaDeviceSynchronize());
+}
+
+int run_time_fused(int v, uint64_t iters, int bpsm) {
+  if (v < 0 || v > 2) {
+    fprintf(stderr, "variant is 0..2\n");
+    return 2;
+  }
   cudaDeviceProp p;
   CK(cudaGetDeviceProperties(&p, 0));
   constexpr int CH = 8, WARPS = 4;
@@ -633,20 +676,19 @@ int run_time_fused(uint64_t iters, int bpsm) {
   uint32_t* dsink;
   CK(cudaMalloc(&dcyc, 3 * blocks * sizeof(unsigned long long)));
   CK(cudaMalloc(&dsink, blocks * 4));
-  time_fused<CH><<<blocks, 32 * WARPS>>>(iters / 8 + 1, dcyc, dsink);
-  CK(cudaDeviceSynchronize());
-  time_fused<CH><<<blocks, 32 * WARPS>>>(iters, dcyc, dsink);
-  CK(cudaDeviceSynchronize());
+  if (v == 0) launch_time_fused<0, CH>(blocks, 32 * WARPS, iters, dcyc, dsink);
+  if (v == 1) launch_time_fused<1, CH>(blocks, 32 * WARPS, iters, dcyc, dsink);
+  if (v == 2) launch_time_fused<2, CH>(blocks, 32 * WARPS, iters, dcyc, dsink);
   std::vector<unsigned long long> cyc(3 * blocks);
   CK(cudaMemcpy(cyc.data(), dcyc, 3 * blocks * sizeof(unsigned long long), cudaMemcpyDeviceToHost));
   double mean_cyc;
   const double mma_per_sm_cycle = sm_rate(cyc, blocks, (double)iters * CH * WARPS, &mean_cyc);
   const double cyc_per_mma_smsp = 4.0 / mma_per_sm_cycle;
   printf(
-      "{\"mode\":\"time_fused\",\"iters\":%llu,\"blocks\":%d,\"bpsm\":%d,\"warps\":%d,\"chains\":%d,"
+      "{\"mode\":\"time_fused\",\"variant\":%d,\"iters\":%llu,\"blocks\":%d,\"bpsm\":%d,\"warps\":%d,\"chains\":%d,"
       "\"mean_block_cycles\":%.0f,\"mma_per_sm_cycle\":%.5f,\"cycles_per_mma_smsp\":%.4f,"
       "\"units_per_word_measured\":%.4f,\"sms\":%d}\n",
-      (unsigned long long)iters, blocks, bpsm, WARPS, CH, mean_cyc, mma_per_sm_cycle, cyc_per_mma_smsp,
+      v, (unsigned long long)iters, blocks, bpsm, WARPS, CH, mean_cyc, mma_per_sm_cycle, cyc_per_mma_smsp,
       cyc_per_mma_smsp * 256.0 / (M * N), p.multiProcessorCount);
   CK(cudaFree(dcyc));
   CK(cudaFree(dsink));
@@ -664,13 +706,14 @@ int main(int argc, char** argv) {
     return run_check_f16(atoi(argv[2]), (uint32_t)strtoul(argv[3], 0, 0), atoll(argv[4]), atoll(argv[5]),
                          atoll(argv[6]), atoll(argv[7]), argc >= 9 ? atoi(argv[8]) : 0);
   if (argc >= 4 && !strcmp(argv[1], "timef16")) return run_time_f16(strtoull(argv[2], 0, 0), atoi(argv[3]));
-  if (argc >= 8 && !strcmp(argv[1], "fused"))
-    return run_check_fused(atoi(argv[2]), (uint32_t)strtoul(argv[3], 0, 0), atoll(argv[4]), atoll(argv[5]),
-                           atoll(argv[6]), atoll(argv[7]));
-  if (argc >= 4 && !strcmp(argv[1], "timefused")) return run_time_fused(strtoull(argv[2], 0, 0), atoi(argv[3]));
+  if (argc >= 9 && !strcmp(argv[1], "fused"))
+    return run_check_fused(atoi(argv[2]), atoi(argv[3]), (uint32_t)strtoul(argv[4], 0, 0), atoll(argv[5]),
+                           atoll(argv[6]), atoll(argv[7]), atoll(argv[8]));
+  if (argc >= 5 && !strcmp(argv[1], "timefused"))
+    return run_time_fused(atoi(argv[2]), strtoull(argv[3], 0, 0), atoi(argv[4]));
   fprintf(stderr,
           "usage: merge check N TILES SEED LO HI BIAS [PERTURB] | merge time N ITERS BLOCKS_PER_SM\n"
           "       merge f16 TILES SEED LO HI BIAS Z1SPAN [PERTURB] | merge timef16 ITERS BLOCKS_PER_SM\n"
-          "       merge fused TILES SEED LO HI BIAS Z1SPAN | merge timefused ITERS BLOCKS_PER_SM\n");
+          "       merge fused V TILES SEED LO HI BIAS Z1SPAN | merge timefused V ITERS BLOCKS_PER_SM\n");
   return 2;
 }
