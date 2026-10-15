@@ -21,7 +21,7 @@ from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_row_major
 from verity_vllm.observe.fold.patterns.ops import base_op, bound_args
 from verity_vllm.observe.fold.patterns.resolutions import attribution_for, hint_of, unsupported
-from verity_vllm.observe.fold.resolver import Collective, Compute, PerRow, Resolution, StepContext
+from verity_vllm.observe.fold.resolver import Collective, Compute, PerRow, Resolution, Shared, StepContext
 from verity_vllm.observe.fold.tree import TreeNode
 
 ALL_REDUCE_OP = "vllm.all_reduce"
@@ -80,3 +80,54 @@ class TpCollective:
             return unsupported(node, f"{kind}: in-place collective (received storage is the partial's); the fold states a fresh received storage", partial=repr(x), received=repr(out))
         return Compute(spec, M, (Collective(x, kind, site),), (PerRow(out),), tuple(sorted(node.ids())),
                        hint=hint_of(node, kind), kernels=(), attribution=attribution_for(ctx, M, node.phase), pattern=self.name)
+
+
+FUSED_AR_NORM_OP = "vllm.flashinfer_trtllm_fused_allreduce_norm"
+FUSED_KIND = "fused_allreduce_rms_norm"
+AR_RESIDUAL_RMS_NORM = 1          # FlashInfer `AllReduceFusionPattern.kARResidualRMSNorm`
+
+
+class TpFusedAllReduceRmsNorm:
+    """`vllm.flashinfer_trtllm_fused_allreduce_norm(allreduce_in! [M,N], residual [M,N], rms_gamma [N], eps, world, pdl, fp32_acc,
+    max_token_num, pattern_code=kARResidualRMSNorm, norm_out! [M,N])` (`fused_allreduce_rms_norm`'s fused path, DeepSeek-V3.2's decoder
+    layer) -> `Compute(AllReduceRmsNormMnnvl_v1{WORLD,N,SHOT,CLUSTER,EPS,FMA}, rows=M, (Collective(allreduce_in, kind, site),
+    PerRow(residual), Shared(rms_gamma)), (PerRow(norm_out), PerRow(allreduce_in)))`: the Build's `FusedAllReduceRmsNormRule`, row for
+    row.  The kernel writes the new residual into ``allreduce_in`` (read first, as every Compute reads before it writes); SHOT and CLUSTER
+    are FlashInfer's for (M, N), FMA the captured entries' (`tp_allreduce.CAPTURED`, refused unless they agree)."""
+
+    name: str = "tp.fused_allreduce_rms_norm"
+
+    def __init__(self, world: int = 8) -> None:
+        self.world = int(world)
+
+    def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
+        if node.is_triton or base_op(node.op) != FUSED_AR_NORM_OP:
+            return None
+        from verity.ml.circuits.defs import bind
+        from verity_vllm.program.registry import tp_allreduce as T
+
+        a = bound_args(node)
+        x, res, w, out = (a.get(k) for k in ("allreduce_in", "residual", "rms_gamma", "norm_out"))
+        eps, world, fp32, code = (a.get(k) for k in ("rms_eps", "world_size", "fp32_acc", "pattern_code"))
+        if not all(isinstance(v, ViewDesc) for v in (x, res, w, out)):
+            return unsupported(node, "fused all-reduce norm without allreduce_in / residual / rms_gamma / norm_out views", args={k: repr(v) for k, v in a.items()})
+        if world != self.world or fp32 is not True or code != AR_RESIDUAL_RMS_NORM or a.get("quant_out") is not None \
+                or a.get("scale_out") is not None or float(a.get("weight_bias", 0.0) or 0.0) != 0.0 or not isinstance(eps, float):
+            return unsupported(node, "only kARResidualRMSNorm with fp32 accumulation, no quantisation and weight bias 0 at the profile's world",
+                               world_size=world, fp32_acc=fp32, pattern_code=code)
+        site = node.enter.module
+        if not site:
+            return unsupported(node, f"{FUSED_KIND}: no issuing module recorded (site unknown; fail closed)")
+        M, N = x.shape if x.rank == 2 else (None, None)
+        views_ok = all(v.rank == 2 and v.shape == (M, N) and v.dtype == "bfloat16" and is_row_major(v) for v in (x, res, out))
+        if not views_ok or w.shape != (N,) or w.dtype != "bfloat16" or len({x.alloc, res.alloc, out.alloc}) != 3:
+            return unsupported(node, "expected distinct row-major bf16 [M,N] allreduce_in / residual / norm_out and a [N] gamma",
+                               allreduce_in=repr(x), residual=repr(res), norm_out=repr(out), gamma=repr(w))
+        fma = {c.statics["FMA"] for c in T.CAPTURED if c.route == "fused" and c.N == N and c.lo <= M <= c.hi}
+        if len(fma) != 1:
+            return unsupported(node, "the captured fused entries do not name one FMA for this call", N=N, M=M, fma=sorted(fma))
+        spec = bind(T.AllReduceRmsNormMnnvl, WORLD=self.world, N=N, SHOT=T.mnnvl_shot(M, N, self.world), CLUSTER=T.mnnvl_grid(M, N)[1],
+                    EPS=eps, FMA=fma.pop())
+        return Compute(spec, M, (Collective(x, FUSED_KIND, site), PerRow(res), Shared(w)), (PerRow(out), PerRow(x)), tuple(sorted(node.ids())),
+                       hint=hint_of(node, FUSED_KIND), kernels=("allreduce_fusion", "oneshot", "twoshot", "rmsNormLamport"),
+                       attribution=attribution_for(ctx, M, node.phase), pattern=self.name)
