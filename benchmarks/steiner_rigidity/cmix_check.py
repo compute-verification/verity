@@ -22,6 +22,9 @@ Parts:
   7  The L-shape at every L: the gate lemma (a nearby rank summand), the exact case (both Steiner points on their
      gates gives rank(V - U) >= 2L) step by step, and the surgery that moves a tree onto its gates without raising
      its cost, on random trees.
+  8  Symmetric rigidity fails at depth 3: a merge-free tree with mixed words computes 2 x 2 matrix multiplication
+     in 7 products, exactly over the integers, and its P x Q family saves (LQ/4)(P - 1) products with PLQ distinct
+     mixed words. With --big, the exhaustive normal-form search at L = 2 over GF(3) that found it (least cost 14).
 
 Run: python cmix_check.py [part ...] [--big]   (--big adds the 5-dimensional GF(3) instances, about 14 M states)
 """
@@ -1112,7 +1115,145 @@ def part7(rng):
           f"{caught} broken-gate runs caught; mutations caught")
 
 
-PARTS = {"1": part1, "2": part2, "3": part3, "4": part4, "5": part5, "6": part6, "7": part7}
+# ---------------------------------------------------------------------------------------------------------------
+# Part 8: symmetric rigidity fails at depth 3. Moving each Steiner point, from the leaves up, onto a geodesic between
+# its two children (the gate lemma) never raises the cost, so the balanced tree 0 - W - {V1 - {00, 01},
+# V2 - {10, 11}} on the full 2 x 2 block is the finite family V_r = S_r0 + (a summand of S_r1 - S_r0), W a summand
+# of V1 or V2, of cost 4L + rank V_i + rank(V_other - W). At L = 2 over GF(3) its least cost is 14 < 16, and one
+# least tree is a merge-free 7-product tree for 2 x 2 matrix multiplication that holds over the integers.
+
+
+def winograd_tree(P, Q, L):
+    """The merge-free tree for the P x Q block at inner length L (Q, L even). For each inner pair (k, k') = (2j, 2j+1)
+    and column pair (c, c') = (2m, 2m+1):
+      W_m   += y_kc' y_k'c
+      V_rm  += -(x_rk - y_k'c)(x_rk' - y_kc')              (V_rm hangs from W_m)
+      t_rc  += x_rk (y_kc + x_rk' - y_kc')                 (t_rc, t_rc' hang from V_rm)
+      t_rc' += x_rk' (y_k'c' + x_rk - y_k'c)
+    Returns the grid and the edges (parent, child, products (coefficient, g, h))."""
+    G = Grid(P, Q, L)
+    e = lambda i: np.eye(G.n, dtype=np.int64)[i]
+    x = lambda r, k: e(G.x(r, k))
+    y = lambda k, c: e(G.y(k, c))
+    edges = {}
+    for m in range(Q // 2):
+        c, c2 = 2 * m, 2 * m + 1
+        for j in range(L // 2):
+            k, k2 = 2 * j, 2 * j + 1
+            edges.setdefault(("0", ("W", m)), []).append((1, y(k, c2), y(k2, c)))
+            for r in range(P):
+                edges.setdefault((("W", m), ("V", r, m)), []).append((-1, x(r, k) - y(k2, c), x(r, k2) - y(k, c2)))
+                edges.setdefault((("V", r, m), ("t", r, c)), []).append((1, x(r, k), y(k, c) + x(r, k2) - y(k, c2)))
+                edges.setdefault((("V", r, m), ("t", r, c2)), []).append((1, x(r, k2), y(k2, c2) + x(r, k) - y(k2, c)))
+    return G, edges
+
+
+def tree_values(G, edges):
+    """Each node's doubled quadratic form over the integers: a product a*g*h adds a(g h^T + h g^T), and a target
+    sum_k x_rk y_kc is G.target(r, c, 1)."""
+    vals = {"0": np.zeros((G.n, G.n), dtype=np.int64)}
+    pending = dict(edges)
+    while pending:
+        for (u, v), prods in list(pending.items()):
+            if u in vals:
+                vals[v] = vals[u] + sum(a * (np.outer(g, h) + np.outer(h, g)) for a, g, h in prods)
+                del pending[u, v]
+    return vals
+
+
+def winograd_check(P, Q, L, edges=None):
+    """Exact over the integers: every target is its sum_k x_rk y_kc, the tree has (LQ/4)(3P + 1) products against
+    LPQ pure ones, and it uses PLQ distinct mixed words. Returns (products, mixed words)."""
+    G, tree = winograd_tree(P, Q, L)
+    edges = edges or tree
+    vals = tree_values(G, edges)
+    for r in range(P):
+        for c in range(Q):
+            assert (vals["t", r, c] == G.target(r, c, 1)).all(), f"target ({r}, {c}) is not sum_k x_rk y_kc"
+    prods = [(g, h) for ps in edges.values() for _, g, h in ps]
+    mixed = {tuple(w) for g, h in prods for w in (g, h) if w[:G.nX].any() and w[G.nX:].any()}
+    assert len(prods) == L * Q * (3 * P + 1) // 4 < L * P * Q or P == 1
+    assert len(mixed) == P * L * Q
+    return len(prods), len(mixed)
+
+
+BALANCED = None
+
+
+def set_balanced(data):
+    global BALANCED
+    BALANCED = data
+
+
+def balanced_row(i):
+    """Least balanced cost over every V2 and every W, for one V1, from BALANCED."""
+    V1s, V2s, sig, L, p = BALANCED
+    least = None
+    for j, V2 in enumerate(V2s):
+        r1, r2 = rank(V1s[i], p), rank(V2, p)
+        if max(r1, r2) >= 3 * L:
+            continue
+        mine, other, ws = (V1s[i], V2, sig[0][i]) if r1 <= r2 else (V2, V1s[i], sig[1][j])
+        cost = 4 * L + rank(mine, p) + min(rank((other - W) % p, p) for W in ws)
+        least = cost if least is None else min(least, cost)
+    return least
+
+
+def balanced_exhaustive(L, p, procs):
+    """Every balanced normal-form tree of the full 2 x 2 block: V1 = S_00 + a summand of S_01 - S_00, V2 likewise in
+    row 1, W a summand of whichever of V1, V2 has the lower rank. A pair with max(rank V1, rank V2) >= 3L needs no
+    search: rank(V2 - W) >= L from V2's x1 rows (W has none), so the cost is >= 4L + 3L + L. Returns the least cost
+    among the rest, how many pairs needed a search, and how many pairs there are."""
+    G = Grid(2, 2, L)
+    S = {t: G.target(*t, 1) for t in ((0, 0), (0, 1), (1, 0), (1, 1))}
+    V1s = [(S[0, 0] + A) % p for g in range(2 * L + 1) for A in summands((S[0, 1] - S[0, 0]) % p, g, p)]
+    V2s = [(S[1, 0] + A) % p for g in range(2 * L + 1) for A in summands((S[1, 1] - S[1, 0]) % p, g, p)]
+    low = lambda Vs: [[W for g in range(rank(V, p) + 1) for W in summands(V, g, p)] if rank(V, p) < 3 * L else []
+                      for V in Vs]
+    data = (V1s, V2s, (low(V1s), low(V2s)), L, p)
+    searched = sum(max(rank(a, p), rank(b, p)) < 3 * L for a in V1s for b in V2s)
+    set_balanced(data)
+    if procs > 1:
+        import multiprocessing
+        with multiprocessing.get_context("fork").Pool(procs, set_balanced, (data,)) as pool:
+            parts = pool.map(balanced_row, range(len(V1s)), chunksize=1)
+    else:
+        parts = [balanced_row(i) for i in range(len(V1s))]
+    return min(c for c in parts if c is not None), searched, len(V1s) * len(V2s)
+
+
+def part8(rng, exhaustive=False, procs=1):
+    """The counterexample to symmetric rigidity. Checks the tree exactly over the integers for P x Q blocks at
+    inner length L (it is a polynomial identity, so it holds over every commutative ring), its symmetric cost on the
+    2 x 2 block (14, every edge one product), and with `exhaustive` that 14 is the least balanced normal-form cost
+    at L = 2 over GF(3). Mutation: a sign flipped in one correction product breaks a target."""
+    report = []
+    for P, Q, L in ((2, 2, 2), (3, 2, 2), (4, 2, 2), (2, 4, 2), (3, 2, 4), (8, 4, 4)):
+        prods, words = winograd_check(P, Q, L)
+        report.append(f"{P}x{Q}, L={L}: {prods} products < {L * P * Q}, {words} mixed words")
+    G, edges = winograd_tree(2, 2, 2)
+    vals = tree_values(G, edges)
+    for p in (3, 5, 10007):
+        cost = sum(rank((vals[v] - vals[u]) % p, p) for u, v in edges)
+        assert cost == 14 and all(rank((vals[v] - vals[u]) % p, p) == 2 for u, v in edges), "symmetric cost 14"
+    broken = dict(edges)
+    (a, g, h), = broken[("V", 1, 0), ("t", 1, 1)]
+    broken[("V", 1, 0), ("t", 1, 1)] = [(a, g, h - 2 * np.eye(G.n, dtype=np.int64)[G.x(1, 0)])]
+    try:
+        winograd_check(2, 2, 2, broken)
+        raise RuntimeError("mutation not caught: a sign flipped in a correction product")
+    except AssertionError:
+        pass
+    print("  part 8: the merge-free tree computes every target exactly over the integers (" + "; ".join(report)
+          + "); on the 2 x 2 block at L = 2 its symmetric cost is 14 < 16 over GF(3), GF(5), GF(10007); mutation caught")
+    if exhaustive:
+        best, searched, pairs = balanced_exhaustive(2, 3, procs)
+        assert best == 14, f"least balanced normal-form cost {best}, expected 14"
+        print(f"  part 8: every balanced normal-form tree at L = 2 over GF(3): {pairs} pairs (V1, V2), {searched} "
+              f"searched over W; least cost {best}")
+
+
+PARTS = {"1": part1, "2": part2, "3": part3, "4": part4, "5": part5, "6": part6, "7": part7, "8": part8}
 
 
 def main(argv):
@@ -1136,6 +1277,8 @@ def main(argv):
             part4(rng, range(a, b), args.procs, args.out, args.steps)
         elif name == "6":
             part6(rng, args.field, args.procs)
+        elif name == "8":
+            part8(rng, exhaustive=args.big, procs=args.procs)
         else:
             PARTS[name](rng)
     print("ok")
