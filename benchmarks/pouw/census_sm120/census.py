@@ -204,7 +204,8 @@ def main():
                 f"{r['xop']}; alone {r['mma_macs_per_sm_per_clk_alone']:.1f} MAC/SM/clk and "
                 f"{r['x_warp_ops_per_sm_per_clk_alone']:.3f} PTX warp ops/SM/clk; while both ran the MMAs kept "
                 f"{r['mma_fraction_during_overlap']:.3f} and the {r['xop']} warps {r['x_fraction_during_overlap']:.3f} "
-                f"of their alone rates", "coissue",
+                f"of their alone rates (role spans are the slowest warp's: with fewer than 4 op warps, the MMA warps "
+                f"on a sub-partition that has an op warp)", "coissue",
                 mma_fraction_during_overlap=round(r["mma_fraction_during_overlap"], 4),
                 x_fraction_during_overlap=round(r["x_fraction_during_overlap"], 4))
         elif r.get("mode") == "two_kernels":
@@ -284,6 +285,15 @@ def main():
                 float(f"{r['read_bytes_per_s']:.4g}"), "B/s",
                 f"memory.cu k_read_path: {r['path']}, {r['blocks_per_sm']} x 512-thread blocks a SM (grid-stride), "
                 f"{r['data']} over {r['footprint_bytes'] >> 20} MiB", "memory")
+        elif p == "fill_method":
+            reads = ", ".join(f"{x:.3g}" for x in r["m5_reads_bytes_per_s"])
+            row(f"fill_method.zeros.{r['method']}.t{r['trial']}.m5_read.bytes_per_s",
+                float(f"{r['m5_best_after_first']:.4g}"), "B/s",
+                f"memory.cu fill_methods: fresh 4 GiB COMP_GENERIC allocation, zeros written by {r['method']}; best of "
+                f"reads 2-6 with M5's k_read (one __ldg a lane, 8 x 512 a SM); all six: {reads}", "memory")
+            row(f"fill_method.zeros.{r['method']}.t{r['trial']}.cg_read.bytes_per_s",
+                float(f"{r['cg_b4_read_bytes_per_s']:.4g}"), "B/s",
+                f"memory.cu fill_methods: same allocation read with ld.global.cg x4, 4 x 512 a SM, best of 4", "memory")
         elif p == "gather":
             row(f"gather.{r['target']}.row{r['row_bytes']}.bytes_per_s", float(f"{r['bytes_per_s']:.4g}"), "B/s",
                 f"memory.cu k_gather: random rows of {r['row_bytes']} B from a {'4 GiB' if r['target'] == 'dram' else '32 MiB'}"
