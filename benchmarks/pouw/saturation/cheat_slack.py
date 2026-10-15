@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """The CUDA slack a cheater's fused kernel finds beside each served receipt design (CMP-8 round 2, section 2), derived.
 
-  python cheat_slack.py cutlass-cheat.json [--drop X ...] [--json OUT]
+  python cheat_slack.py cutlass-cheat.json [--drop X ...] [--xvar V,...] [--json OUT]
 
 --drop X skips the X-step variants: runs before the cheater's store test read z[0] have x1 kernels whose chain nvcc
 removed (no cheater instructions; at most a different register allocation), so their X = 1 rows measure no work.
+--xvar keeps only the cheaters of those step kinds (0 alu, 1 imad, 2 FFMA), e.g. 0,1 for ALU-pipe work alone.
 
 Input: `cutlass_receipt`'s JSON from job.sh's cheat stage, where each design kernel runs beside its `_xX` variants: the
 same kernel plus X alu phi1 steps a thread after every 32-deep k-block on chains that never read the accumulators
@@ -39,6 +40,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("cheat")
     ap.add_argument("--drop", type=int, action="append", default=[])
+    ap.add_argument("--xvar")
     ap.add_argument("--json")
     a = ap.parse_args()
     d = json.load(open(a.cheat))
@@ -54,7 +56,7 @@ def main():
                       key=lambda k: (VARIANT.sub("", k), xvar[k], int(VARIANT.search(k)[1])))
     for v in variants:
         base, x = VARIANT.sub("", v), int(VARIANT.search(v)[1])
-        if x in a.drop:
+        if x in a.drop or (a.xvar and x and str(xvar[v]) not in a.xvar.split(",")):
             continue
         for ph in phases:
             shapes = [s for (k, s) in rows if k == base and s.startswith(ph + "_")]
