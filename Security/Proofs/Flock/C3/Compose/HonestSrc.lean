@@ -2,6 +2,8 @@ import Proofs.Flock.C3.Compose.Discharge
 import Proofs.Flock.C3.Compose.RepsHeld
 import Proofs.Flock.C3.Compose.SrcOKFamily
 import Proofs.Flock.C3.Compose.Custody
+import Proofs.Flock.C3.Compose.SparseEndsAt
+import Proofs.Flock.C3.Reps.RoundReads
 import Proofs.Flock.C3.Sparse.HeldStages
 import Proofs.Flock.C3.Sparse.SessionReg
 import Proofs.Flock.C3.RegLevels.SrcMaps
@@ -329,8 +331,8 @@ theorem hbr_honest_src {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Arr
       (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) own sel bc := by
     subst hsel
     exact heldIs_of_custody (C3Family.checked (T := Flock.Guarantees.holoTys st hp) (CT := holoCTs st hp) (xR := xR)
-      ish hss bind hob zr hCust h coins rows own (Flock.Guarantees.holoMap st hp Cm ish tbl bcM).sel bc dec wr reg) own bc
-      wr reg (Flock.Guarantees.holoMap st hp Cm ish tbl bcM) (fun _ _ _ => rfl) hIC hbc
+      ish hss bind hob zr hCust h coins rows own (Flock.Guarantees.holoMap st hp Cm ish tbl bcM).sel bc dec wr reg)
+      own bc wr reg (Flock.Guarantees.holoMap st hp Cm ish tbl bcM) (fun _ _ _ => rfl) hIC hbc
   have htop : ∃ lv salt, StackedTopAt lv st reg xR.cap salt bcs' := ⟨_, salt, by rw [hcap]; exact hstk⟩
   clear hzsF
   subst hdec
