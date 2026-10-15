@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """The η study's tables from fetched runs: job_pearlc.sh's run dir (eta.py's rows, run.py's split, ncu by kernel and by graph)
-and job_base.sh's (lt_probe.py's rows, ncu on cuBLASLt, the harness's bench.json).  Markdown on stdout; no GPU.
+and job_base.sh's (lt_probe.py's rows, ncu on cuBLASLt, the harness's bench.json); or, given a lease_pearlc2.sh run alone,
+its SHA-512 probe, par<c> and power tables.  Markdown on stdout; no GPU.
 
   python3 analyze.py ~/.research/runs/<pearlc run> ~/.research/runs/<base run>
+  python3 analyze.py ~/.research/runs/<second-lease run>
 """
 from __future__ import annotations
 
@@ -97,8 +99,40 @@ def f(x, nd=3):
     return "" if x is None or x == "" else (f"{x:.{nd}f}" if isinstance(x, float) else str(x))
 
 
+def second(pc: Path) -> None:
+    """lease_pearlc2.sh's tables: the SHA-512 probe, par<c>, the power holds."""
+    sha = [r for r in jsonl(pc / "eta_sha.jsonl") if r["kind"] == "sha"]
+    if sha:
+        print("## the SHA-512 probe (CUDA graphs of 10 launches; compressions/s)\n")
+        print("| kernel | m or rows | threads a CTA | ms | compressions | compressions/s | digests = served |")
+        print("|---|---|---|---|---|---|---|")
+        for r in sha:
+            print(f"| {r['kernel']} | {r['shape'][0] if 'shape' in r else r['rows']} | {r['block']} | {f(r['ms'], 4)} | "
+                  f"{r['compressions']} | {r['compressions_per_s']:.3g} | {r.get('same_digests', '')} |")
+    par = [r for r in jsonl(pc / "eta_par.jsonl") if r["kind"] == "eta"]
+    if par:
+        print("\n## c independent calls at once (W = 8)\n")
+        print("| m | schedule | ms/call | MHz | η | η_cap |")
+        print("|---|---|---|---|---|---|")
+        for r in par:
+            print(f"| {r['shape'][0]} | {r['schedule']} | {f(r.get('per_call_ms'), 4)} | {f(r.get('sm_mhz'), 0)} | "
+                  f"{f(r.get('eta'), 4)} | {f(r.get('eta_cap'), 4)} |")
+    pw = [r for r in jsonl(pc / "eta_power.jsonl") if r["kind"] == "power"]
+    if pw:
+        print("\n## each schedule held 2 s under NVML (W = 4; the middle half's medians)\n")
+        print("| m | schedule | ms/call | SM MHz | power W | throttle | mJ a call | η | η_cap |")
+        print("|---|---|---|---|---|---|---|---|---|")
+        for r in pw:
+            print(f"| {r['shape'][0]} | {r['schedule']} | {f(r['per_call_ms'], 4)} | {f(float(r['sm_mhz_median'] or 0), 0)} | "
+                  f"{f(r['power_w_median'], 1)} | {','.join(r['throttle_seen'])} | {f(r.get('energy_mj_per_call'), 1)} | "
+                  f"{f(r.get('eta'), 4)} | {f(r.get('eta_cap'), 4)} |")
+
+
 def main(argv: list[str]) -> int:
     pc = Path(argv[1]) / "out"
+    if (pc / "eta_sha.jsonl").exists() or (pc / "eta_power.jsonl").exists():
+        second(pc)
+        return 0
     base = Path(argv[2]) / "out" if len(argv) > 2 else None
     eta = [r for r in jsonl(pc / "eta_time.jsonl") if r["kind"] == "eta"]
     print("## eta.py: per call, graphs of 2W calls\n")
