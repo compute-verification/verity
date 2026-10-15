@@ -327,10 +327,32 @@ def absorption(pair: tuple[list[int], list[int]], trials: int, rng: random.Rando
                             sorted(hits.items())}}
 
 
-def spike_attack(rng: random.Random, k: int = 1024, m: int = 32, seeds: int = 8) -> dict:
+def s5_stats_rho_s4(x: list[int]) -> tuple[int, int, int, int]:
+    """The proposed fix: `pearl_c.s5_stats` with rho' = max(rho, s/4) in rho's place, so alpha = 448/(s + 4 rho') keeps
+    alpha*s + 4 rho'*alpha <= 448 and every row's noise is at least alpha*s/4 (the s/rho = 4 law at worst)."""
+    s, rho, _, _ = PC.s5_stats(x)
+    rho2 = max(rho, fp32.mul(s, 0x3E800000))        # non-negative words order as their values
+    alpha = fp32.div(PC.S5_QMAX, max(fp32.add(s, fp32.mul(PC.S5_FOUR, rho2)), PC.S5_FLOOR))
+    return s, rho2, alpha, fp32.mul(fp32.mul(rho2, alpha), PC.S5_LINE)
+
+
+def form(rows, e_rows, f, stats=PC.s5_stats) -> list[list[int]]:
+    """`pearl_c.form_v1`'s codes on sm120, with the row statistics `stats`."""
+    if stats is PC.s5_stats:
+        return PC.form_v1(rows, e_rows, f, SM120).codes
+    out = []
+    for x, e_row in zip(rows, e_rows):
+        _, _, alpha, beta = stats(x)
+        ep = PC.eprime(beta, e_row)
+        out.append([P.f32_to_fp8(P.f32_of_bits(ATOM.step(fp32.mul(alpha, xt), ep, f[t]))) for t, xt in enumerate(x)])
+    return out
+
+
+def spike_attack(rng: random.Random, k: int = 1024, m: int = 32, seeds: int = 8, stats=PC.s5_stats) -> dict:
     """Rows at the noise floor with k/64 spikes in the SAME columns for every row (the cheater's choice of A): each spike's
     noised code is predicted before the seeds exist (+-448, the sign of the spike), so the spike columns' products could be
-    shared by every row (accumulator fan-out) and a wrong polynomial using the constant +-448 is never caught."""
+    shared by every row (accumulator fan-out) and a wrong polynomial using the constant +-448 is never caught.  `stats`
+    other than `pearl_c.s5_stats` forms the same rows under that fix; the hit rate is then the predicted code's."""
     cols = sorted(rng.sample([p for p in range(k) if p % 8], k // 64))
     rows, signs = [], []
     for _ in range(m):
@@ -341,26 +363,34 @@ def spike_attack(rng: random.Random, k: int = 1024, m: int = 32, seeds: int = 8)
         rows.append(base)
         signs.append(sg)
     adm = [admissible(r) for r in rows]
-    hits = total = 0
     t0 = time.time()
+    codes = Counter()
     for s in range(seeds):
         seed_b = PC.S512Seed(rng.randbytes(32))
         seed_a = PC.S512Seed(rng.randbytes(32))
         f = PC._basis(seed_b, 0, k, PC.LINE_NORM_V1)
         e = [PC.sample_line(seed_a, 0, 0, i) for i in range(m)]
-        formed = PC.form_v1(rows, e, f, SM120)
+        formed = form(rows, e, f, stats)
         for i in range(m):
             for p in cols:
-                total += 1
-                hits += formed.codes[i][p] == (0x7E if signs[i] > 0 else 0xFE)
+                codes[formed[i][p] if signs[i] > 0 else formed[i][p] ^ 0x80] += 1
+    total = sum(codes.values())
+    _, rho, alpha, _ = stats(rows[0])
     return {"k": k, "rows": m, "spike_columns": len(cols), "all_rows_admissible": all(a[0] for a in adm),
-            "rho_alpha": round(adm[0][1], 4), "seeds": seeds, "spike_entries": total,
-            "predicted_code_hit_rate": hits / total, "products_shareable_fraction": round(len(cols) / k, 5),
-            "seconds": round(time.time() - t0, 1)}
+            "rho_alpha": round(P.f32_of_bits(rho) * P.f32_of_bits(alpha), 4), "seeds": seeds, "spike_entries": total,
+            "predicted_code_hit_rate": codes.most_common(1)[0][1] / total, "predicted_code": value(codes.most_common(1)[0][0]),
+            "products_shareable_fraction": round(len(cols) / k, 5), "seconds": round(time.time() - t0, 1)}
 
 
 def main(argv: list[str]) -> int:
     draws = int(argv[argv.index("--draws") + 1]) if "--draws" in argv else 4000
+    if "--fix" in argv:
+        res = {"fix": "rho' = max(rho, s/4)", "spike_attack_v1": spike_attack(random.Random(5)),
+               "spike_attack_fixed": spike_attack(random.Random(5), stats=s5_stats_rho_s4)}
+        print(json.dumps(res, indent=1))
+        if "--json" in argv:
+            open(argv[argv.index("--json") + 1], "w").write(json.dumps(res, indent=1))
+        return 0
     rng = random.Random(20261015)
     t0 = time.time()
     pools = Pools(3000, 7)

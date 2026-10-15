@@ -14,7 +14,10 @@ Ranks are over Q, computed mod two primes below 2^31 (a rank mod p is at most th
 every maximal nonzero minor): every E4M3 code is an integer multiple of 2^-9, so 2^9 A~ and 2^18 (Q(alpha x) + E'F^T) are
 integer matrices.  `spectrum` gives the formed chunk's singular values at 1, 32, 33 and L, over the first, in float64.
 
-    python rank.py [--rows M] [--jobs J] [--json FILE]
+`--stats rho_s4` forms every row with `detection.s5_stats_rho_s4` (the proposed fix rho' = max(rho, s/4)) in place of
+`pearl_c.s5_stats`.
+
+    python rank.py [--rows M] [--jobs J] [--only NAMES] [--stats v1|rho_s4] [--json FILE]
 """
 from __future__ import annotations
 
@@ -121,7 +124,15 @@ def family_rows(name: str, m: int, rng: random.Random, side: int) -> list[list[i
 
 # ---- forming the chunk ------------------------------------------------------------------------------------------------
 
-def form_chunk(name: str, side: int, m: int, seed: int) -> dict:
+def _stats(variant: str):
+    if variant == "v1":
+        return PC.s5_stats
+    from detection import s5_stats_rho_s4
+    return {"rho_s4": s5_stats_rho_s4}[variant]
+
+
+def form_chunk(name: str, side: int, m: int, seed: int, variant: str = "v1") -> dict:
+    stats = _stats(variant)
     rng = random.Random(seed)
     rows = family_rows(name, m, rng, side)
     seed_b = PC.S512Seed(rng.randbytes(32))
@@ -131,7 +142,7 @@ def form_chunk(name: str, side: int, m: int, seed: int) -> dict:
     formed, free, noise, inp = [], [], [], []
     admissible = 0
     for i, x in enumerate(rows):
-        s, rho, alpha, beta = PC.s5_stats(x)
+        s, rho, alpha, beta = stats(x)
         admissible += (P.f32_of_bits(rho) * P.f32_of_bits(alpha) >= P.SIGMA_MIN) and PC.live_row(x)
         ep = PC.eprime(beta, PC.sample_line(seed_e, side, 0, i))
         epi = [code_int(c) for c in ep]
@@ -148,7 +159,8 @@ def form_chunk(name: str, side: int, m: int, seed: int) -> dict:
         free.append(fe)
         noise.append(no)
         inp.append(ip)
-    out = {"family": name, "side": "A" if side == 0 else "B", "rows": m, "admissible_rows": admissible, "ranks": {}}
+    out = {"family": name, "side": "A" if side == 0 else "B", "stats": variant, "rows": m, "admissible_rows": admissible,
+           "ranks": {}}
     for L in LS:
         sub = lambda mat: [r[:L] for r in mat]
         a = np.array(sub(formed), dtype=np.float64)
@@ -165,9 +177,9 @@ CASES = [("gauss", 0), ("outliers", 0), ("relu", 0), ("near_zero", 0), ("rank1",
 
 
 def _run(args):
-    name, side, m, seed = args
+    name, side, m, seed, variant = args
     t0 = time.time()
-    r = form_chunk(name, side, m, seed)
+    r = form_chunk(name, side, m, seed, variant)
     r["seconds"] = round(time.time() - t0, 1)
     return r
 
@@ -175,7 +187,8 @@ def _run(args):
 def main(argv: list[str]) -> int:
     m = int(argv[argv.index("--rows") + 1]) if "--rows" in argv else 512
     jobs = int(argv[argv.index("--jobs") + 1]) if "--jobs" in argv else 1
-    cases = [(name, side, m, 1000 + i) for i, (name, side) in enumerate(CASES)]
+    variant = argv[argv.index("--stats") + 1] if "--stats" in argv else "v1"
+    cases = [(name, side, m, 1000 + i, variant) for i, (name, side) in enumerate(CASES)]
     if "--only" in argv:
         keep = argv[argv.index("--only") + 1].split(",")
         cases = [c for c in cases if c[0] in keep]
@@ -184,7 +197,7 @@ def main(argv: list[str]) -> int:
             res = pool.map(_run, cases)
     else:
         res = [_run(c) for c in cases]
-    text = json.dumps({"k": K, "chunk_start": S0, "primes": PRIMES, "cases": res}, indent=1)
+    text = json.dumps({"k": K, "chunk_start": S0, "primes": PRIMES, "stats": variant, "cases": res}, indent=1)
     if "--json" in argv:
         open(argv[argv.index("--json") + 1], "w").write(text)
     print(text)
