@@ -41,7 +41,7 @@ def planes(M):
 
 
 def unit(P, Q, t):
-    D = np.zeros((2 * P, 2 * Q), dtype=np.int64)
+    D = np.zeros((2 * P, 2 * Q), dtype=np.int8)
     for k in range(2):
         D[2 * t[0] + k, 2 * t[1] + k] = 1
     return D
@@ -51,7 +51,7 @@ def rank_le1(nr, nc):
     """All matrices of rank <= 1 over GF(3), nr x nc."""
     us = [np.array(u) for u in itertools.product(range(3), repeat=nr) if next((x for x in u if x), 0) == 1]
     vs = [np.array(v) for v in itertools.product(range(3), repeat=nc) if any(v)]
-    out = [np.zeros((nr, nc), dtype=np.int64)] + [np.outer(u, v) % 3 for u in us for v in vs]
+    out = [np.zeros((nr, nc), dtype=np.int8)] + [(np.outer(u, v) % 3).astype(np.int8) for u in us for v in vs]
     return np.array(out)
 
 
@@ -80,11 +80,10 @@ class Helpful:
         R1 = rank_le1(2 * P, 2 * Q)
         rk = np.array([0] + [1] * (len(R1) - 1))
         cells = [(i, j) for i in range(P) for j in range(Q)]
-        mats = np.concatenate([(unit(P, Q, t) + R1) % 3 for t in cells])
-        p1, p2 = planes(mats)
+        p1, p2 = (np.concatenate(x) for x in zip(*(planes((unit(P, Q, t) + R1) % 3) for t in cells)))
         keys, inv = np.unique(np.stack([p1, p2], axis=1), axis=0, return_inverse=True)
         inv = inv.reshape(-1)
-        self.sav = np.zeros((len(keys), len(cells)), dtype=np.int64)
+        self.sav = np.zeros((len(keys), len(cells)), dtype=np.int8)
         self.sav[inv, np.repeat(np.arange(len(cells)), len(R1))] = np.tile(2 - rk, len(cells))
         self.p1, self.p2 = keys[:, 0], keys[:, 1]
         h = self.hash(self.p1, self.p2)
@@ -136,7 +135,7 @@ def total_of(H, idx):
     best = np.zeros((idx.shape[0], H.n_cells), dtype=np.int64)
     for e in range(idx.shape[1]):
         j = idx[:, e]
-        best = np.maximum(best, np.where((j >= 0)[:, None], H.sav[np.maximum(j, 0)], 0))
+        best = np.maximum(best, np.where((j >= 0)[:, None], H.sav[np.maximum(j, 0)].astype(np.int64), 0))
     return best.sum(axis=1)
 
 
