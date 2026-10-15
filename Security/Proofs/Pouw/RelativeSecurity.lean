@@ -42,7 +42,7 @@ proof workers' results land here as theorems or as named hypotheses.
   `Int8Gemm120`). `relativelySecure_edited120` is route (c) on the int8 grid at 1 u, `relativelySecure_edited120_wide`
   on unrestricted operands at 16 u. Machines take any additive `Price`. The service range-checks the committed instance
   into `G_use = [−(127 − s), 127 − s]` (`GridService`, RS-RT's V6), and with noise bounded by `s` the edits are int8
-  (`edit_int8`, `GridService.accepted_edit_int8`).
+  (`edit_int8`, `accepted_edit_int8`).
 * B_θ (RS-MODEL §6.2, θ = 1/5): `price120θ` over instructions with their shared-memory words; B's circuits lift at
   `4/5` and every B_θ adversary has a B shadow, so B's floor carries at `4/5` (`serviceFloor_θ`). Route (c) there at
   `N = 0.8 n³` u takes any B floor `F_B ≤ n³` (`relativelySecure_edited120θ_of_floor`, `ε = U / (0.8 F_B) − 1`):
@@ -1977,7 +1977,7 @@ theorem edit_int8 {Mc : MatMachine ℤ} {Seed : Type} {n : ℕ} {E : Mc.Edit See
 
 /-- **An accepted transcript's edited instance is int8**: the range check puts the committed instance in `G_use`, so
 under every σ its edits are int8 operands, the grid the edit floor prices at 1 u. -/
-theorem GridService.accepted_edit_int8 {Mc : MatMachine ℤ} {n : ℕ} {s : ℤ} (S : GridService n (127 - s))
+theorem accepted_edit_int8 {Mc : MatMachine ℤ} {n : ℕ} {s : ℤ} (S : GridService n (127 - s))
     {E : Mc.Edit S.Seed n} (hE : E.Bounded s) {c : S.Com} {σ : S.Seed} {a : S.Ans} (h : S.verify c σ a = true)
     (σ' : S.Seed) :
     (∀ i k, Int8 ((E.edit σ' (S.committed c)).1 i k)) ∧ ∀ k j, Int8 ((E.edit σ' (S.committed c)).2 k j) :=
