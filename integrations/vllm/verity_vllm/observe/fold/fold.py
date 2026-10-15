@@ -905,7 +905,7 @@ class _Fold:
         if len(c.outputs) != len(comps):
             raise FoldError(f"{spec_label(c.spec)}: {len(c.outputs)} outputs for a return with {len(comps)} components")
         for i, (out, meta) in enumerate(outs):
-            for k, op in enumerate(c.outputs):
+            for k, op in ((k, op) for k, op in enumerate(c.outputs) if op is not None):   # None: kept in registers, never written
                 part = out[k] if isinstance(ret, TupleT) else out
                 self._write_operand(op, i, part.refs, part.type, f"{spec_label(c.spec)} output {k} row {i}",
                                     token=(part.type == I32))
