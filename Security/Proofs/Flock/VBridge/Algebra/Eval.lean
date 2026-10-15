@@ -11,7 +11,7 @@ differ by the consistency sums weighted by `kappa`.
   read through the running sums.
 -/
 
-namespace FlockVBridge.Algebra
+namespace Flock.RecAlgebra
 
 open Flock
 
@@ -33,8 +33,8 @@ theorem kapSum_init (lvs : Array Level) (r : Nat) :
 
 /-- The residuals of a built S at w, the coefficient slots and the comb are the symbolic residuals evaluated at the
 message elements they hold, each consistency sum read through the running sums (`hacc`). -/
-theorem build_eval {lins : Array Lin} {b : Built} (hb : build sh lins = .ok b) (hw : w.size = b.S.nw)
-    (hc : comb.size = 64)
+theorem build_eval {lins : Array Lin} {b : Built} (hb : build sh lins = .ok b)
+    (hw : w.size = b.S.nw) (hc : comb.size = 64)
     (hacc : ∀ r < 2, valOf sh w comb cons (.acc1 r) + valOf sh w comb cons (.acc0 r) = kapSum b.kappa r cons) :
     residuals b.S w (b.vVals ++ comb) = .ok (lins.map (Lin.eval (valOf sh w comb cons))) := by
   unfold build at hb
@@ -92,7 +92,7 @@ def decoded (sh : Shape) (w comb : Array F128) (cons : Nat → Nat → F128) : M
 
 /-- `GfResiduals` on the S `structureOf` builds and the v `verifierRows` gives at the rep's coins computes `run` over
 F at those coins, on the messages w holds, when the running sums w holds differ by the consistency sums weighted by
-`kappa` (`hacc`). -/
+`kappa` (`hacc`). At a holo shape each comb element also carries w's `h` (`valOf`, `hOf`). -/
 theorem residuals_eq_run {rounds : Array (Array F128)} {extras : Array Claim} {v : Array F128} {info : Info Lin}
     {kappa : Array (Array (Array F128))} {S : GfS}
     (hrows : verifierRows sh rounds extras comb = .ok (v, info, kappa)) (hS : structureOf sh = .ok S)
@@ -131,4 +131,4 @@ theorem residuals_eq_run {rounds : Array (Array F128)} {extras : Array Claim} {v
 
 end Eval
 
-end FlockVBridge.Algebra
+end Flock.RecAlgebra

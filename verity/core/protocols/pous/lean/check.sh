@@ -34,20 +34,20 @@ expect() { # file target exit substring
 expect submissions/reference.lean Pous.Guarantees.KFloor 0 '"verdict":"PASS"'
 
 cat > "$tmp/sorry.lean" <<'EOF'
-import Models.Pous.Guarantees
+import Proofs.Pous.Statements
 theorem solution : Pous.Guarantees.Theorem1ii := sorry
 EOF
 expect "$tmp/sorry.lean" Pous.Guarantees.Theorem1ii 1 'sorryAx'
 
 cat > "$tmp/rogue_axiom.lean" <<'EOF'
-import Models.Pous.Guarantees
+import Proofs.Pous.Statements
 axiom cheat : False
 theorem solution : Pous.Guarantees.Theorem1ii := cheat.elim
 EOF
 expect "$tmp/rogue_axiom.lean" Pous.Guarantees.Theorem1ii 1 'unregistered axioms: [cheat]'
 
 cat > "$tmp/wrong_statement.lean" <<'EOF'
-import Models.Pous.Guarantees
+import Proofs.Pous.Statements
 theorem solution : Pous.Params.ρ = 18 / 19 := rfl
 EOF
 expect "$tmp/wrong_statement.lean" Pous.Guarantees.KFloor 1 'does not have the pinned type'
@@ -65,7 +65,7 @@ POUS_GRADE_TIMEOUT=120 expect "$tmp/near_miss.lean" Pous.Guarantees.BandChainMee
 
 # `native_decide` rests on an auxiliary axiom per use (`solution._native.native_decide.ax_…`).
 cat > "$tmp/native.lean" <<'EOF'
-import Models.Pous.Guarantees
+import Proofs.Pous.Statements
 theorem solution : Pous.Guarantees.Theorem1ii := by
   have : (2 : ℕ) + 2 = 4 := by native_decide
   exact sorry
@@ -73,7 +73,7 @@ EOF
 expect "$tmp/native.lean" Pous.Guarantees.Theorem1ii 1 'native_decide.ax'
 
 cat > "$tmp/import.lean" <<'EOF'
-import Models.Pous.Guarantees
+import Proofs.Pous.Statements
 import Proofs.Pous
 theorem solution : Pous.Guarantees.Theorem1ii := Pous.SecurityProofs.Theorem1ii
 EOF
@@ -81,7 +81,7 @@ expect "$tmp/import.lean" Pous.Guarantees.Theorem1ii 1 'may import only'
 
 # Adds `solution` without kernel checking; the option name is assembled so the textual filter misses it.
 cat > "$tmp/kernel_bypass.lean" <<'EOF'
-import Models.Pous.Guarantees
+import Proofs.Pous.Statements
 open Lean Elab Command in
 run_cmd liftCoreM do
   let opt : Name := .str (.str .anonymous ("deb" ++ "ug")) ("skipKernel" ++ "TC")
@@ -96,7 +96,7 @@ expect "$tmp/kernel_bypass.lean" Pous.Guarantees.Theorem1ii 1 'the kernel reject
 # compile and reach the grader.
 grader_hash=$(sha256sum .lake/build/bin/pous-grader)
 cat > "$tmp/rt_registry_tamper.lean" <<'EOF'
-import Models.Pous.Guarantees
+import Proofs.Pous.Statements
 #eval show IO Unit from do
   for p in ["AXIOMS", "ROOT/AXIOMS", "ROOT/Grader/Registry.lean", "ROOT/TRUSTED.sha256"] do
     try
@@ -109,7 +109,7 @@ import Models.Pous.Guarantees
 theorem solution : Pous.Guarantees.Theorem1ii := sorry
 EOF
 cat > "$tmp/rt_grader_swap.lean" <<'EOF'
-import Models.Pous.Guarantees
+import Proofs.Pous.Statements
 #eval show IO Unit from do
   let g := "ROOT/.lake/build/bin/pous-grader"
   try IO.FS.rename g (g ++ ".orig") catch _ => pure ()

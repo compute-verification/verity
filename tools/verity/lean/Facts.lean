@@ -12,7 +12,8 @@ judgement; `audit.py` holds the policy.
   imported module, the roots' dependencies' included; `graph`: each one's `.olean` file and what it imports.
 - `declarations`: how many constants of each kind those modules declare.
 - `axioms`: every axiom any of them uses, found by walking the bodies; `offenders`: each one that uses an axiom outside
-  `allowed`.
+  `allowed`; `unreported_errors`: each one holding a `sorry` the elaborator made for an error (`sorryAx α true`) where
+  a module built, so the error was never reported.
 - `declared_axioms`: the `axiom` declarations among them.
 - `escapes`: the `opaque` ones (a `partial def` is one), and the `unsafe`, `@[implemented_by]` and `@[extern]` ones:
   compiled code with no definition a proof can unfold. The attributes are read from the modules' data.
@@ -30,6 +31,8 @@ judgement; `audit.py` holds the policy.
 - `instances`: each constant with a declaration range whose name (a private one's as written) ends in a component
   starting with `inst`, with that component as an identifier (`id`) and where its declaration's name is (`at`: line,
   codepoint column). An anonymous `instance` has its name there as the keyword `instance` itself.
+- `spans`: for each module under the roots, the first and last source line of each declaration range it holds, so that
+  `audit.py` can find a declaration in the source that the module does not hold.
 
 The hashes in the document are Lean's `Expr.hash`, which has 32 bits; `audit.py` keeps them only to check records written
 before SHA-256. When `CONFIG` names a `canon` path, the pins' statements and the definitions they read are also written
@@ -52,6 +55,10 @@ open Lean Meta
 namespace LeanAudit
 
 def under (ps : Array Name) (m : Name) : Bool := ps.any (·.isPrefixOf m)
+
+/-- The module with index `i`. `EnvironmentHeader.moduleNames` maps over every imported module on each call, which made
+the walks over `Security`'s guarantees' reads take 25 minutes. -/
+def moduleName (env : Environment) (i : ModuleIdx) : Name := env.header.modules[i.toNat]!.module
 
 def kind : ConstantInfo → String
   | .axiomInfo _ => "axiom"
@@ -186,7 +193,7 @@ partial def liftOf (env : Environment) (meaning : Array Name) : Expr → Option 
     let .const g us := e.getAppFn | none
     let .defnInfo v ← env.find? g | none
     let i ← env.getModuleIdxFor? g
-    guard (us.length == v.levelParams.length && under meaning env.header.moduleNames[i.toNat]!)
+    guard (us.length == v.levelParams.length && under meaning (moduleName env i))
     return (g, inlineAuxProofs env ((v.value.instantiateLevelParams v.levelParams us).beta e.getAppArgs))
 
 /-- What a constant's axioms depend on (as `Lean.collectAxioms` walks it). -/
@@ -197,6 +204,15 @@ def uses : ConstantInfo → Array Name
   | .ctorInfo v => v.type.getUsedConstants
   | .recInfo v => v.type.getUsedConstants
   | .quotInfo _ => #[]
+
+/-- A `sorry` the elaborator made for an error (`sorryAx α true`), as opposed to a written one (`sorryAx α false`). -/
+def syntheticSorry (e : Expr) : Bool :=
+  (e.find? fun s => s.isAppOf ``sorryAx && s.getAppNumArgs ≥ 2 && s.getArg! 1 == mkConst ``Bool.true).isSome
+
+/-- Whether `ci`'s type or value holds a `syntheticSorry`. -/
+def unreported : ConstantInfo → Bool
+  | .defnInfo v | .thmInfo v | .opaqueInfo v => syntheticSorry v.type || syntheticSorry v.value
+  | ci => syntheticSorry ci.type
 
 /-- What a statement means through a constant: its type, a definition's value, an inductive type's constructors.
 Theorems contribute nothing (a proof is irrelevant to what a statement says). -/
@@ -258,7 +274,7 @@ def reads (env : Environment) (meaning : Array Name) (roots : Array Name) :
       seen := seen.insert c
       let some ci := env.find? c | continue
       let some i := env.getModuleIdxFor? c | continue
-      let m := env.header.moduleNames[i.toNat]!
+      let m := moduleName env i
       if ci matches .thmInfo _ then continue
       if !under meaning m then
         outside := outside.push (c, m)
@@ -283,24 +299,79 @@ def reaches (env : Environment) (meaning : Array Name) (e : Expr) : Array String
   let all := (cs ++ rs.map (·.1) ++ outside.map (·.1)).foldl (fun (s : NameSet) c => s.insert c) {}
   all.toArray.qsort Name.lt |>.map toString
 
+/-- The constants an expression uses and, transitively, those the definitions under `meaning` it uses read, without
+entering an inductive type's constructors: mentioning a structure is not applying the functions its fields' types name
+(an outer session's `hown` names `Zk.verify`), while a definition that applies them still reaches them. -/
+def applies (env : Environment) (meaning : Array Name) (e : Expr) : Array String := Id.run do
+  let mut seen : NameSet := {}
+  let mut stack := e.getUsedConstants
+  repeat
+    match stack.back? with
+    | none => break
+    | some c =>
+      stack := stack.pop
+      if seen.contains c then continue
+      seen := seen.insert c
+      let some ci := env.find? c | continue
+      let some i := env.getModuleIdxFor? c | continue
+      if ci matches .thmInfo _ | .inductInfo _ | .ctorInfo _ | .recInfo _ then continue
+      if !under meaning (moduleName env i) then continue
+      stack := stack ++ meaningDeps ci
+  return seen.toArray.qsort Name.lt |>.map toString
+
 /-- One hypothesis of a statement's shape: where it came from (`binder`, a binder of the statement, or `field`, a `Prop`
-field of a structure the package declares that a binder ranges over), its name, the binder's position (`at`), its type, its head constant and that constant's module, and what it
-reaches (`reaches`). A conjunction counts as each of its conjuncts. -/
+field of a structure the package declares that a binder ranges over), its name, the binder's position (`at`), its type,
+its head constant and that constant's module, and what it reaches (`reaches`). The head is its body's, under its leading
+binders (`∀ j, P j` is headed by `P`); `guarded` says those binders include a hypothesis (`A → B`), and `applies` is what
+its body applies (`applies`). A conjunction counts as each of its conjuncts. -/
 partial def hypothesisJson (env : Environment) (meaning : Array Name) (moduleOf : Name → Option Name) (source name : String)
     (pos : Nat) (t : Expr) : MetaM (Array Json) := do
   let t ← instantiateMVars t
   if t.isAppOfArity ``And 2 then
     return (← hypothesisJson env meaning moduleOf source s!"{name}.1" pos t.appFn!.appArg!) ++
       (← hypothesisJson env meaning moduleOf source s!"{name}.2" pos t.appArg!)
-  let head : Option Name := match t.getAppFn with | .const c _ => some c | _ => none
+  let (head, guarded, body) ← forallTelescope t fun ys b => do
+    let guarded ← ys.anyM fun y => do isProp (← y.fvarId!.getType)
+    let head : Option Name := match b.getAppFn with | .const c _ => some c | _ => none
+    return (head, guarded, applies env meaning b)
   return #[Json.mkObj [("source", toJson source), ("name", toJson name), ("at", toJson pos),
     ("type", toJson (toString (← ppExpr t))),
     ("head", toJson (head.map toString)), ("module", toJson ((head.bind moduleOf).map toString)),
-    ("reaches", toJson (reaches env meaning t))]]
+    ("reaches", toJson (reaches env meaning t)), ("guarded", toJson guarded), ("applies", toJson body)]]
+
+partial def conjuncts (e : Expr) : List Expr :=
+  if e.isAppOfArity ``And 2 then conjuncts e.appFn!.appArg! ++ conjuncts e.appArg! else [e]
+
+/-- The events of a conclusion: each argument `fun o => A₁ ∧ … ∧ Aₙ` of a constant `c` (`prob (fun o => …) g σ`) whose
+body is a proposition, under any binders of the conclusion (`∃ h, … ∨ prob …`), with `c` (`head`) and, for each
+conjunct `Aᵢ` of the body (`conjuncts`, its `∧`s flattened), what it applies (`applies`) and whether it holds under a
+hypothesis of its own (`guarded`). -/
+partial def eventsOf (env : Environment) (meaning : Array Name) (e : Expr) : MetaM (Array Json) := do
+  match e with
+  | .mdata _ b => eventsOf env meaning b
+  | .proj _ _ b => eventsOf env meaning b
+  | .lam n t b bi | .forallE n t b bi =>
+    withLocalDecl n bi t fun x => eventsOf env meaning (b.instantiate1 x)
+  | .app .. =>
+    let args := e.getAppArgs
+    let mut out := #[]
+    if let .const c _ := e.getAppFn then
+      for a in args do
+        if !a.isLambda then continue
+        out := out ++ (← lambdaTelescope a fun _ b => do
+          unless ← isProp b do return #[]
+          let cs ← (conjuncts b).mapM fun e => forallTelescope e fun ys body => do
+            let guarded ← ys.anyM fun y => do isProp (← y.fvarId!.getType)
+            return Json.mkObj [("applies", toJson (applies env meaning body)), ("guarded", toJson guarded)]
+          return #[Json.mkObj [("head", toJson c.toString), ("conjuncts", toJson cs)]])
+    for a in args do
+      out := out ++ (← eventsOf env meaning a)
+    return out
+  | _ => return #[]
 
 /-- One part of a statement's shape, for the audit's shape rule: its binders (`inputs`: those that aren't propositions,
 each with its position and its type's head), its hypotheses (`hypothesisJson`: each `Prop` binder, and each `Prop` field
-of a structure an input ranges over), and what its conclusion reaches. -/
+of a structure an input ranges over), what its conclusion reaches, and its events (`eventsOf`). -/
 def shapeOf (env : Environment) (meaning : Array Name) (moduleOf : Name → Option Name) (stmt : Expr) : MetaM Json :=
   forallTelescope stmt fun xs concl => do
     let mut inputs := #[]
@@ -314,26 +385,26 @@ def shapeOf (env : Environment) (meaning : Array Name) (moduleOf : Name → Opti
       let head : Option Name := match t.getAppFn with | .const c _ => some c | _ => none
       inputs := inputs.push <| Json.mkObj [("name", toJson d.userName.toString), ("at", toJson i),
         ("head", toJson (head.map toString))]
-      let some s := head | continue
-      if !((moduleOf s).map (under meaning ·)).getD false then continue
-      let some (.inductInfo iv) := env.find? s | continue
-      let [ctor] := iv.ctors | continue
-      if iv.numIndices != 0 || iv.isRec then continue
-      let some (.ctorInfo cv) := env.find? ctor | continue
-      let ctorType ← instantiateForall (cv.type.instantiateLevelParams cv.levelParams t.getAppFn.constLevels!)
-        (t.getAppArgs.extract 0 cv.numParams)
-      hyps := hyps ++ (← forallTelescope ctorType fun fs _ => do
-        let mut out := #[]
-        for f in fs do
-          let fd ← f.fvarId!.getDecl
-          if ← isProp fd.type then
-            out := out ++ (← hypothesisJson env meaning moduleOf "field" s!"{d.userName}.{fd.userName}" i fd.type)
-        return out)
+      -- a family of structures (`Vs : Fin S → VStmt`) holds their fields at every index
+      hyps := hyps ++ (← forallTelescope t fun _ cod => do
+        let cod ← whnfR cod
+        let some s := (match cod.getAppFn with | .const c _ => some c | _ => none) | return #[]
+        if !((moduleOf s).map (under meaning ·)).getD false then return #[]
+        let some (.inductInfo iv) := env.find? s | return #[]
+        let [ctor] := iv.ctors | return #[]
+        if iv.numIndices != 0 || iv.isRec then return #[]
+        let some (.ctorInfo cv) := env.find? ctor | return #[]
+        let ctorType ← instantiateForall (cv.type.instantiateLevelParams cv.levelParams cod.getAppFn.constLevels!)
+          (cod.getAppArgs.extract 0 cv.numParams)
+        forallTelescope ctorType fun fs _ => do
+          let mut out := #[]
+          for f in fs do
+            let fd ← f.fvarId!.getDecl
+            if ← isProp fd.type then
+              out := out ++ (← hypothesisJson env meaning moduleOf "field" s!"{d.userName}.{fd.userName}" i fd.type)
+          return out)
     return Json.mkObj [("inputs", toJson inputs), ("hypotheses", toJson hyps),
-      ("conclusion", toJson (reaches env meaning concl))]
-
-partial def conjuncts (e : Expr) : List Expr :=
-  if e.isAppOfArity ``And 2 then conjuncts e.appFn!.appArg! ++ conjuncts e.appArg! else [e]
+      ("conclusion", toJson (reaches env meaning concl)), ("events", toJson (← eventsOf env meaning concl))]
 
 /-- The statement's shape, one part per conjunct of a statement that is a conjunction (`shapeOf` each), after a lifted
 definition is unfolded once (`liftOf`) and its `let`s are inlined. -/
@@ -347,7 +418,7 @@ def pinInfo (env : Environment) (meaning : Array Name) (axioms : Std.HashMap Nam
     (ranges : Std.HashMap Name DeclarationRanges) (rs : Array (Name × Name × ConstantInfo) × Array (Name × Name)) (n : Name) :
     MetaM Json := do
   let some ci := env.find? n | return Json.mkObj [("kind", "missing")]
-  let moduleOf (c : Name) : Option Name := (env.getModuleIdxFor? c).map fun i => env.header.moduleNames[i.toNat]!
+  let moduleOf (c : Name) : Option Name := (env.getModuleIdxFor? c).map fun i => moduleName env i
   let signature := toString (← PrettyPrinter.ppSignature n).fmt
   let hypotheses ← forallTelescope ci.type fun xs _ => do
     let mut out := #[]
@@ -416,6 +487,7 @@ unsafe def main (args : List String) : IO UInt32 := do
   let mnames := env.header.moduleNames
   let mut modules := #[]
   let mut imports := #[]
+  let mut spans := #[]
   let mut audited := #[]
   let mut ranges : Std.HashMap Name DeclarationRanges := {}
   for h : i in [0:mnames.size] do
@@ -427,12 +499,15 @@ unsafe def main (args : List String) : IO UInt32 := do
     if !under roots m then continue
     modules := modules.push (toJson m.toString)
     imports := imports.push (m.toString, toJson (data.imports.map (·.module.toString)))
+    spans := spans.push (m.toString, toJson ((entriesOf DeclarationRanges data declRangeExt.name).map fun (_, r) =>
+      #[r.range.pos.line, r.range.endPos.line]))
     audited := audited.push (m, data)
   let decls := audited.foldl (fun acc (_, data) => acc ++ data.constNames) #[]
   let axioms := axiomsOf env (decls ++ pins)
   let mut counts : Std.HashMap String Nat := {}
   let mut used : NameSet := {}
   let mut offenders := #[]
+  let mut unreportedErrors := #[]
   let mut declared := #[]
   let mut escapes := #[]
   let mut specDefs := #[]
@@ -459,6 +534,8 @@ unsafe def main (args : List String) : IO UInt32 := do
       if !bad.isEmpty then
         offenders := offenders.push <| Json.mkObj [("name", toJson n.toString), ("module", toJson m.toString),
           ("axioms", toJson (bad.qsort Name.lt |>.map toString))]
+      if (uses ci).contains ``sorryAx && unreported ci then
+        unreportedErrors := unreportedErrors.push <| Json.mkObj [("name", toJson n.toString), ("module", toJson m.toString)]
       let why := (if ci matches .opaqueInfo _ then #["opaque"] else #[]) ++ (if ci.isUnsafe then #["unsafe"] else #[]) ++
         (if impl.contains n then #["implemented_by"] else #[]) ++ (if ext.contains n then #["extern"] else #[])
       if !why.isEmpty then
@@ -486,7 +563,7 @@ unsafe def main (args : List String) : IO UInt32 := do
       h.putStrLn (Json.mkObj [("id", toJson s!"pin:{p}"), ("canon", toJson (canonText ci.type))]).compress
       let head := liftOf env meaning ci.type
       if let some (g, s) := head then
-        let m := (env.getModuleIdxFor? g).map fun i => env.header.moduleNames[i.toNat]!.toString
+        let m := (env.getModuleIdxFor? g).map fun i => (moduleName env i).toString
         h.putStrLn (Json.mkObj [("id", toJson s!"lift:{p}"), ("head", toJson g.toString), ("module", toJson m),
           ("canon", toJson (canonText s))]).compress
       if !back.isEmpty then
@@ -520,10 +597,10 @@ unsafe def main (args : List String) : IO UInt32 := do
     graph := graph.push (mnames[i].toString, Json.mkObj [("olean", toJson olean),
       ("imports", toJson (env.header.moduleData[i]!.imports.map (·.module.toString)))])
   let doc := Json.mkObj [("lean", toJson Lean.versionString), ("modules", toJson modules), ("imports", Json.mkObj imports.toList),
-    ("oleans", toJson oleans), ("graph", Json.mkObj graph.toList),
+    ("spans", Json.mkObj spans.toList), ("oleans", toJson oleans), ("graph", Json.mkObj graph.toList),
     ("declarations", Json.mkObj (counts.toList.map fun (k, v) => (k, toJson v))),
     ("axioms", toJson (used.toArray.qsort Name.lt |>.map toString)), ("offenders", toJson offenders),
-    ("declared_axioms", toJson declared), ("escapes", toJson escapes), ("spec_definitions", toJson specDefs),
+    ("unreported_errors", toJson unreportedErrors), ("declared_axioms", toJson declared), ("escapes", toJson escapes), ("spec_definitions", toJson specDefs),
     ("instances", toJson instances), ("pins", Json.mkObj pinned.toList),
     ("moved_conflicts", toJson conflicts)]
   IO.FS.writeFile out doc.compress

@@ -43,9 +43,9 @@ ask:
 
 - one stand-alone question to the owner of what the change touches, or to your coordinator when owners disagree or you
   can't tell who owns it (a handle holder: on Slack, `research msg send --to @HANDLE`; a worker: its report or reply to
-  the coordinator that launched it). The coordinator decides, and says what it decided. Only money (spend past a
-  `budgets.toml` line), keys (access, a credential, a node's root) and claims (what a guarantee says or rests on) go on to
-  Daniel, as written;
+  the coordinator that launched it). The coordinator decides, and says what it decided. Only keys (access, a credential,
+  a node's root) and claims (what a guarantee says or rests on) go on to Daniel, as written; spend is its lead's call
+  (13 Oct), with pods still bounding themselves under a `budgets.toml` line;
 - the case, the change, and your recommendation, in a few lines;
 - meanwhile, prepare the change on your branch, and mark it ready only after the answer.
 
@@ -90,11 +90,10 @@ recurs: note:<id>      # optional: the earlier note about the same thing
 What happened, with ids (run, PR, commit), and what it cost. What you did instead. The better abstraction, if you see one.
 ~~~
 
-Save it as `~/.research/notes/lanes/<lane>/<YYYYMMDDTHHMMZ>-friction-<slug>.md`. A Project worker without the notes clone
-writes it under the Project store's `internal/lanes/<lane>/`, which the mirror forwards. The notes are public: nothing
-private (lane contract §5b).
+Save it as `~/.research/notes/lanes/<lane>/<YYYYMMDDTHHMMZ>-friction-<slug>.md`. A worker that can't push the notes puts
+the note in its report, and its coordinator saves it. The notes are public: nothing private (lane contract §5b).
 
-**The coordinator's pass.** The root coordinator reads new friction notes once a day in its existing loop
+**The admin's pass.** The admin (`@top`) reads new friction notes once a day in its existing loop
 (`research notes mcp`, `search_notes` with `kind: friction` and `since`). It turns a repeat into a fix assigned to its owner.
 Only a repeat whose fix needs money, keys or a claim becomes a question for Daniel.
 
@@ -102,6 +101,152 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-14 (12:53 PM PDT): hard switches, one abstraction per job. The moves we've made are total: the new repository,
+  one cloud agent per lead talking horizontally, and Linear as the work-item layer (the brief colocated in the issue,
+  filed into the owning team; pickup is the issue's state change; Slack narrows to conversation, broadcasts, alerts and
+  Daniel's cards). No second path stays alive beside any of these, and every bridge kept for the transition names its
+  end state. Old agents that still hold context stay reachable for a while as read-only context sources — they hold no
+  handle and do no work — then are archived. The admin enforces all of it: audits for splits, assigns each a fate, and
+  tells Daniel when an abstraction fails, is abused or turns into red tape.
+- 2026-10-14 (11:34 AM PDT, broadening his 10:14 AM ruling): every coordinator and worker opens and edits its own PRs
+  with no approval step, through Cursor's PR tool or gh through the broker, whichever works (for a branch other than
+  the agent's own run branch, which the PR tool refuses: `research queue open --head BRANCH --title T --body-file F`,
+  which goes through the broker and refuses a duplicate or a moved head). Waiting on dashboard
+  clicks cost about six hours across fourteen finished PRs overnight on 14 Oct; the launcher no longer pins PR
+  creation off per run. A cloud agent whose launch-time run rules still gate both paths registers the request and
+  posts the exact payload where it registered it, so a capable hand opens it without a duplicate; the ruling reaches
+  such an agent at its next launch.
+- 2026-10-13 (11:01 PM PDT, cards 2e0ff59b and 54bd993d): a guarantee's checked family may fold in a check the compiled
+  verifier already runs, and a new fail-closed refusal modelled the same way: the statement moves toward what the
+  verifier refuses, and the landing DM shows the moved records. The same night: a free statement parameter whose
+  adversarial values break a proof is closed by a side condition decidable at any literal instantiation, discharged by
+  computation at use (never a listed assumption), keeping the general form.
+- 2026-10-13 (about 2:24 PM PDT, relayed by top): no Cursor Projects, and no agent state kept only in a Cursor store.
+  Each coordinator is a plain Cursor cloud agent that owns a vertical slice and runs its own subagents; coordinators
+  talk to each other through Slack and Linear; one admin agent holds `@top` in place of the Project's top-level agent;
+  and a successor takes over each lead: the handle stays, and its holder changes.
+- 2026-10-13 (2:22 PM PDT): leads decide open questions themselves, spend included; Daniel's explicit rulings stand until
+  he reverses them. Of 8 Oct's "money, keys and claims", spend is now its lead's own call (pods still bound themselves
+  under a `budgets.toml` line, and a budget line named in a standing ruling stands); keys and claims still go to Daniel.
+- 2026-10-13 (1:33 PM PDT, relayed by top): the recursive audit (`Flock.Guarantees.RecursiveAuditC3`) may rest on the
+  model claim `registrant-holds-openings` (`verity/core/claims`): the prover holds a row and a salt under every leaf it
+  registered, R's level-0 staging salts included. Those salts are held by the prover's own workers behind the firewall.
+  In Lean the guarantee takes `salt` as a binder and is applied at the salts those workers committed under, never at
+  `∃ salt` or a `Classical.choose` of one, and every docstring that reads it cites the claim (lean's review).
+- 2026-10-13 (10:42 AM PDT): an agent closes an old PR without asking when every commit on it is already in another open
+  PR ("close old PRs idgaf do that").
+- 2026-10-12 (4:08 PM PDT, to top): Daniel took every recommendation then open in top's walkthrough of his decisions,
+  unread, for maximum research velocity, and may revisit any of them later. The ones that set rules:
+  - The network certifier and the memory challenger are the auditor's hardware, so they survive the 10:03 AM ruling
+    below, on two conditions: each runs on a machine the prover doesn't control (the auditor's own VM or box, under the
+    auditor's account, never a process on the prover's node), and `trusted-nebius-host` trusts only such a device and
+    its host provider, never a host the prover controls. The bandwidth audit's challenger runs on the GPU's own node,
+    so it is prover hardware and not one of them.
+  - PoUS keeps sending each challenge when the last answer arrives, and the actual-circuit model's bridge covers that
+    schedule, rather than PoUS moving to a fixed one.
+  - PoUS's conjecture is restated once, per round and for any store size in a stated range, with today's whole-audit
+    form at 2^19 blocks derived from it.
+  - PoUW's machine stop restates `TT_OUT` with a per-coin budget, and the static refund stays held.
+  - P2 at 2^25 blocks may land first as a stopgap, with the sampled setup check at k = 140, while the word codec is
+    the direction.
+- 2026-10-12 (3:59 PM PDT): the remote bandwidth audit's receipt is sketch-then-SHA-512. Each block's ±1 sketch,
+  re-keyed every pass from the chained seed, goes through one SHA-512 compression. The leaves and the frame-v3-sha512
+  tree are unchanged, so the one-hash rule holds. It rests on `RateAuditSketch`, and the full-block SHA-512 receipt
+  is not the default.
+
+- 2026-10-12 (1:53 PM PDT): the remote bandwidth audit treats the prover's resources as one undifferentiated pool.
+  Its guarantee is conservation: receipts over registered data worth at least 99% of the declared capacity were paid
+  for by resources somewhere (reads, held state, or rebuild compute). It makes no claim about where, so it takes no
+  identity assumption, and an undeclared helper only spends resources of its own.
+
+- 2026-10-12 (1:48 PM PDT), the remote bandwidth audit:
+  - The first goal is a mega-secure but slow implementation, and about 4× step overhead is acceptable for now. So
+    the stated codec gets the margin: three rounds, the public XOR mask between rounds (σ_K) and a 1,024-bit word.
+    Two rounds is a later upgrade, once the partial-completion attack is measured.
+  - "99%" is against the node's read capacity over time (R·T). A standing workstream hill-climbs on keeping compute
+    and memory bandwidth full with registered filler reads and matmul tiles.
+  - The claim is the hybrid: 0.15% averaged over a 10-minute horizon, with every window at most 1%.
+  - Never change the model's logits: the lm_head is encoded with a BF16 payload.
+
+- 2026-10-12 (11:55 AM PDT): the remote bandwidth audit may derive each pass's seed by Fiat–Shamir, from the window's
+  challenge, the pass index and the previous pass's root. Live coins per pass are impractical at its rate. This
+  narrows 5 Oct's "live coins only" for that protocol, for now. The same message: if a prover's CPUs can compute what
+  a bound receipt needs, they become a resource to exhaust or count, not a break.
+- 2026-10-12 (11:46 AM PDT): a scheme may refuse all-zero weights. "The weights are known" means no bound may assume
+  the weights are incompressible, not that W = 0 must be in a scheme's domain.
+- 2026-10-12 (about 10:03 AM PDT, in memory accounting's thread): no protocol or guarantee assumes trusted prover
+  hardware ("in our setting we will never assume trusted prover hardware so forget about that more broadly"). Nothing
+  the prover runs or hosts is trusted: not its GPUs, its host, its links, a confidential-computing enclave or a process
+  on its machines. So the bandwidth audit treats host memory over PCIe as a slower tier of the prover's memory and
+  prices relayed tags with `RateAuditInteractive`, instead of a trusted host challenger.
+- 2026-10-12 (9:13 AM PDT): for memory and bandwidth accounting:
+  - no assumption that the weights are incompressible, since they may be known, even all zeros;
+  - memory exhaustion is over the node's memory (HBM, KV cache included), not the model's size;
+  - no overhead target: as fast as possible subject to 99%;
+  - the guarantee is stated for the whole node.
+- 2026-10-12 (06:00Z, relayed by top): writing for Daniel puts its math in LaTeX, `\( \)` inline and `\[ \]`
+  displayed, quantities included, and states a protocol or guarantee as its security assumptions, then the protocol's
+  shape, then the properties provable under them.
+- 2026-10-11 (8:53 PM PDT, through his console): a part of `check` whose cold run takes more than about 10 minutes may
+  run right after its train lands instead of before, on every landing that changed its inputs, and a failure there
+  reverts the landing at once; a reused verdict stays in the gate, and the Lean check always runs before landing.
+  `main` then passes every part except those in the post-landing tier, and citations and tables read only commits
+  whose trailing parts passed. ci and infra build it; until they do, the whole `check` stays before landing. This
+  replaces 7 Oct's "not into teaching `research merge` to land on part of a check" for those parts.
+- 2026-10-11 (about 7 PM PDT, relayed by top): check time comes down by a lot, and everyone may do whatever it takes.
+  A change to how `check` runs (a suite's declared inputs, Lean reuse per module or declaration, circuit-check's task
+  list, scheduling, sharding, more slots or machines under a budget line, splitting or cutting a slow test) lands on its
+  own passing check with no review by the file's owner, who is told, not asked. infra owns check time as an outcome,
+  and each lever's owner builds it, or infra does in its place. Only spend past a budget line and moving a part out of
+  the gate that `main`'s passing check covers go to Daniel. The same evening: hand landing is to be automated, and ci
+  owns it. From an owner's ready mark to `main` moving (the prep, the merge check, the landing, the sweep, the spec DM),
+  no agent acts unless the automation refuses; the lander handles what it refuses (a conflict, a failed check, a
+  revert), and infra hosts it.
+- 2026-10-11 (relayed by top): the store has no API server. Writers and guards use the bucket, and displays query an
+  index derived from it. D2–D4 (the keys, private metadata in the index, what is public) are as in the design,
+  note:verity-top/20261011T1758Z-draft-store-contract.
+- 2026-10-09 (7:04 PM PDT, relayed by top): the end goal is sampled proofs through recursion with hidden unit circuits,
+  on four assumptions: record custody, the OS's randomness, the coin server's randomness, and SHA-512 entering only
+  through reductions. The partition is hidden from the start. The auditor checks only padded counts. The outer proof
+  proves coverage against the committed partition: each sampled unit sits in exactly one slot, of its committed type,
+  on its committed values. Revealing each sampled unit's type would leak the architecture, since a uniform sample's
+  type mix estimates the model's. The public-unit case is this design with the partition opened, and
+  `RecursiveAudit` is stated for it first. The same night:
+  - The universal unit (option 3) is frozen. Its registration, hidden reads, statement hiding and `circuit_indist`
+    are kept; its unit-specific work stops.
+  - VBridge is to become a theorem about one Lean function: Lean's `VStar.statements` builder, proved correct one
+    building block at a time.
+  - Hiding the type mix costs padding, not an evaluation of every type. A session picks its type's matrix by a hidden
+    index, small types are padded to the shape's nonzero bound, and session counts are padded per shape.
+  - No benchmark harness is built until the theory lands.
+  - (7:08 PM) One key per protecting party, drawn once at setup from the OS before anything else: the developer's for
+    its registrations and the firewall, the challenger's for coin commitments. It is public and a constant in V\*, so
+    one V\* serves every registration. A Lean bound over the key chooses the data and the auditor's choices (prompts,
+    coins) after the key, never before it. A key on a wire stays the fallback: hm96's key is a GF(2) Hankel multiplier,
+    XORs as a constant and an AND per product as a wire.
+- 2026-10-09 (4:48–5:00 PM PDT, relayed by top): a key that hides a commitment is drawn by the party the hiding
+  protects, and fixed in the commitment before use (which party's key, and when it is drawn: 7:08 PM, above). hm96's
+  pinned key stays only where the key is wired into a circuit (the row gadget), as a named exception. The inner phase's
+  coins are sent live, because the auditor sees only hiding commitments that are never opened; committed coins are for
+  V\*'s outer sessions. "The verifier accepts the inner statement" in a soundness event means the statement-level checks
+  the auditor runs, never acceptance of the inner transcript, which VBridge derives.
+- 2026-10-09 (9:01 AM PDT, relayed by top): a part's verdict in `check` is keyed on the code that decides that verdict (a
+  suite's runner and harness), not on every line of the check tool; that is what the 7 Oct ruling's "the check's code" means.
+  The other half of reuse is declared inputs narrowed to what each suite reads, and since the guard fails a suite that
+  reads outside its inputs, narrowing fails closed. The same day:
+  - Raising `maxHeartbeats` is not banned. The kernel checks a proof the same way at any limit, so an override is a
+    question of cost, not soundness. The Lean check records each override (file, value, reason, measured time) and the
+    nightly report lists them; nothing blocks on one.
+  - A premise is listed only if it is a fact about the world. Anything the code could check, or that could be proved,
+    becomes a check or a proof instead.
+  - A property with several conjuncts gets one shape-check entry per conjunct, so it stays one statement.
+  - A private circuit's class is "any description of its width, read in gate order", provided the format makes a
+    malformed description impossible: each gate reads only inputs and earlier gates, so no description has a cycle. The
+    class then reveals exactly its gate count, inputs and outputs.
+  - Salts are drawn from the OS, not expanded by a PRG. What remains is salted SHA-512's hiding, stated as a reduction,
+    and the OS's randomness, a listed premise.
+  - A public constant that sets how many statements a proof has (V\*'s `MAX_SLOTS`) appears in the soundness bound,
+    whose sum depends on it.
 - 2026-10-08 (11:02 PM PDT, relayed by top): parallel proof work runs against fixed statements. The final theorem's
   statement and each open piece's statement go on the branch before a worker starts, workers prove against them, and
   integration runs continuously; what the deadline leaves open is a gap list of exact lemma names
@@ -146,7 +291,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
     blocked the rest, not with landing counts;
   - only the lander lands, restacks and reruns. A lane pushes its PR, marks it ready and goes back to research, and hears
     back only if the PR fails. A lane holds at most two open PRs. This ends 6 Oct's trains without ready marks: a PR
-    joins a train on its owner's `ready` label, and only the quick-tier pass stays waived;
+    joins a train on its owner's `ready` label, and only the quick-tier pass stays waived. Since 12 Oct, ci's
+    `research queue drive` lands, restacks and reruns, and the lander handles what it refuses (11 Oct);
   - infra keeps the machines up and the checks fast, and builds nothing new unless it removes a measured research cost.
     Kueue as the only scheduler (#1460) is one, since it takes slot assignment off the coordinator;
   - the Python verifiers move into `verity/core/`, by one agent with `main` frozen, and `Security/Models/` tracks which of
@@ -181,7 +327,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
   call. "Network transparency" is "network accounting".
 - 2026-10-06 (8:53 AM PDT), the coordinator: a PR in a tip that is being checked keeps its head until the tip lands or ci
   asks for a change. A conflict is fixed at the tip (ci restacks it), not by pushing to the PR: a new head refuses every
-  tip that pins the old one at landing, and their checks are spent for nothing.
+  tip that pins the old one at landing, and their checks are spent for nothing. Since 12 Oct, drive leaves a conflicting
+  PR out of `next` for the lander (11 Oct), and a new head still cancels the checks of the trains above it.
 - 2026-10-06 (8:07 AM PDT): one hash covers derivations and PRFs: `derive` is SHA-512, P2's key expansion counter-mode
   SHA-512, and SHA-512 truncated to 256 bits counts as SHA-512; Pearl's FP8 scheme keeps BLAKE3 as Pearl's own
   definition.
@@ -190,7 +337,7 @@ Newest first. Each is Daniel's unless it names the coordinator.
   - a train member needs no quick-tier pass (its own line below);
   - a flaky test is deleted, not rerun or fixed (testing skill, "Write tests that mean something");
   - an auditor-trusted device runs on Nebius, with trust in Nebius a named assumption, rather than on hardware that
-    attests.
+    attests (since 12 Oct: on a machine the prover doesn't control, 4:08 PM PDT above).
 - 2026-10-06 (8:14 AM PDT): a protocol carries no policy parameter. It surfaces what its draw established (ε at δ, in the
   integrity profile), and accounting decides later what it accepts. The model's size is public.
 - 2026-10-06 (7:51 to 8:14 AM PDT): one hash, SHA-512 with its whole output, everywhere: Pearl-C's `-h3` (its cost over
@@ -276,7 +423,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
 - 2026-10-02 (10:27 PM PDT): `hash-derived-key` (`Hm96Hiding` at the pinned key) stays a named assumption. Hiding is
   proved at a fresh uniform key, and nobody works on proving that the pinned key behaves like one.
 - 2026-10-02 (10:27 PM PDT): the lander starts every merge check (`check --record`, `research merge`). The PR captain
-  (`ci`) trial-merges, preflights and hands over train tips, but never starts a merge check itself.
+  (`ci`) trial-merges, preflights and hands over train tips, but never starts a merge check itself. Since 11 Oct, ci's
+  landing automation starts them too.
 - 2026-10-02 (7:23 AM PDT): an overhead reported to Daniel is the `--zk` prover's only (no M0 number and no `--zk`/M0
   ratio), normalized to the chip's peak: prover seconds over the time the computation's FLOPs take at the census's dense
   datasheet peak for its dtype, never over a measured runtime such as a vLLM run's, written to one significant digit

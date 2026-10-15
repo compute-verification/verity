@@ -36,7 +36,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from verity_vllm.collectives.collective_sites import MOE_COLLECTIVE_CLASSES, MOE_COLLECTIVE_MODULES
-from verity_vllm.engine import hooks
+from verity_vllm.engine import hooks, sparse_mla  # noqa: F401  (arms the serving switches before vLLM builds this rank's model)
 
 
 def repo_modules_loaded() -> dict[str, Any]:

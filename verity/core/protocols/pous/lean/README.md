@@ -1,11 +1,12 @@
 # POUS Lean: the grader, and where its security analysis is
 
 This package (`pous_grader`) is code: the grader, its driver `grade.sh`, the trusted-file hashes and the submissions. It
-imports only Lean. PoUS's definitions, guarantees and proofs for the timed POUS audit game with perfect isolation
-(`../PROTOCOL.md`) are part of the security analysis, `Security/` (Daniel's Lean layout ruling, 5 Oct),
-listed below by their paths there. Declarations kept their names (`python3 tools/move/lean.py --resolve MODULE` maps a
-module's old name). Conventions follow the other Lean packages: the same toolchain and Mathlib pin, `autoImplicit` off,
-no `axiom` (an assumption is a named `Prop` hypothesis), and a check file.
+imports only Lean. PoUS's definitions, guarantees and proofs for the timed POUS audit game, whose responder gets no
+outside help (a deployment accounts for help: `../PROTOCOL.md`, "The problem"), are part of the security analysis,
+`Security/` (Daniel's Lean layout ruling, 5 Oct), listed below by their paths there. Declarations kept their names
+(`python3 tools/move/lean.py --resolve MODULE` maps a module's old name). Conventions follow the other Lean packages:
+the same toolchain and Mathlib pin, `autoImplicit` off, no `axiom` (an assumption is a named `Prop` hypothesis), and a
+check file.
 
 ~~~text
 Definitions/Pous.lean               trusted, the definitions: imports every module under Definitions/Pous/
@@ -45,17 +46,19 @@ Definitions/Pous/P2/Cost.lean       P2's cost model, the generic ring over `Z/p`
                                     `MeetsOn`, `MeetsWithSlack`, and P2 in it (`p2ring`)
 Models/Pous/Assumptions.lean         trusted, the assumptions: named hypotheses (Lemma A, Conjecture B1′)
 Models/Pous/Assumptions/P2.lean      P2's named open step `PrimeP16448`, the primality of its modulus
-Models/Pous/Guarantees.lean          trusted, the guarantees: 73 statements, the 62 grade.sh grades against,
-                                    `InvExPostFactoTwoLayer`, which `N10Refuted` negates, and ten proved results
-                                    cited outside the package
-Models/Pous/Guarantees/P2.lean       six statements about the abstract model `m1p` at P2's parameters,
-                                    which grade.sh also grades against; none is about the concrete P2
+Models/Pous/Guarantees.lean          trusted, the frozen statements: 31, each with its category, the 28
+                                    grade.sh grades against and three proved results cited outside the package
+Models/Pous/Guarantees/P2.lean       seven frozen statements about the abstract model `m1p` at P2's parameters,
+                                    six of which grade.sh grades against; none is about the concrete P2
 Models/Pous/Guarantees/SecureErasure.lean
-                                    four statements, which grade.sh also grades against: the digest is almost
-                                    universal (`DigestAU`), secure erasure from any sequential audit bound
-                                    (`SecureErasureMeets`), and on the band at every `N` and at 96 GiB
-                                    (`SecureErasureMeetsFamily`, `SecureErasureMeets96GiB`); no named assumption,
-                                    no bandwidth-separation premise
+                                    two frozen statements, which grade.sh grades against: secure erasure on the
+                                    band at every `N` and at 96 GiB (`SecureErasureMeetsFamily`,
+                                    `SecureErasureMeets96GiB`); no named assumption, no bandwidth-separation premise
+Proofs/Pous/Statements.lean         trusted, the lemmas' statements (math, not claims): 42 lemmas, the
+                                    completeness theorem `ContinuousComplete` and `InvExPostFactoTwoLayer`, which
+                                    `N10Refuted` negates, among them `DigestAU` and `SecureErasureMeets`; it
+                                    imports no proof, and grade.sh grades `KFloor`, `Theorem1ii` and the open
+                                    `A2LemmaAM1`, `A5RabinGcd` and `A7Params` against it
 Proofs/Pous.lean                    proved, the proofs: imports every proof module, and proves
                                     Pous.SecurityProofs.X : Pous.Guarantees.X for each proved guarantee
 Proofs/Pous/{Sanity,Accounting/Numbers}.lean
@@ -107,7 +110,8 @@ bash check.sh                       # the audit, the open targets, and the grade
 ~~~
 
 **Trusted without proof:** the statements in the three layers `Security/lean-audit.json`'s `meaning` lists,
-`Definitions/Pous`, `Models/Pous/Assumptions` and `Models/Pous/Guarantees` (each directory and its own `.lean` file);
+`Definitions/Pous`, `Models/Pous/Assumptions` and `Models/Pous/Guarantees` (each directory and its own `.lean` file),
+and the lemmas' statements in `Proofs/Pous/Statements.lean` that grade.sh grades against;
 Lean's kernel; the Mathlib pin; the grader and its sandbox. Everything else is checked by machine. Docstring paths such
 as `lean/submissions/…` and `docs/…` name the POUS Project store, where the provers' drafts and reviews live.
 
@@ -122,7 +126,7 @@ continuous audit's counting step (`PousContinuous.pr_misses_le`, `pr_misses_gt_l
 `main`, Daniel gets a DM showing it (Verity's `AGENTS.md`).
 
 **Submissions** are one file that imports only the trusted layers (`Definitions.Pous`, `Models.Pous.Assumptions`,
-`Models.Pous.Guarantees`), the proved `Proofs.Pous.Sanity` and `Proofs.Pous.Accounting.Numbers`, and `Mathlib.*`, and declares `theorem solution : Pous.Guarantees.<Name>`. `grade.sh` builds the trusted layer and the
+`Models.Pous.Guarantees`, `Proofs.Pous.Statements`), the proved `Proofs.Pous.Sanity` and `Proofs.Pous.Accounting.Numbers`, and `Mathlib.*`, and declares `theorem solution : Pous.Guarantees.<Name>`. `grade.sh` builds the trusted layer and the
 grader first and records their hashes; compiles the submission with `lean` in a scratch directory inside a user, mount,
 PID and network namespace where every other mount is read-only (so compile-time IO can change nothing, and its processes
 die with the build); checks the hashes again; then runs the grader. The grader loads the submission's `.olean` as data,
@@ -142,6 +146,7 @@ sha256sum lean-toolchain lakefile.toml lake-manifest.json grade.sh Grader/Regist
   ../../../../../Security/lean-toolchain ../../../../../Security/lakefile.toml ../../../../../Security/lake-manifest.json \
   ../../../../../Security/Proofs/lakefile.toml ../../../../../Security/Proofs/lake-manifest.json \
   ../../../../../Security/Definitions/Pous.lean ../../../../../Security/Models/Pous/Assumptions.lean ../../../../../Security/Models/Pous/Guarantees.lean \
-  ../../../../../Security/Proofs/Pous/Sanity.lean ../../../../../Security/Proofs/Pous/Accounting/Numbers.lean \
+  ../../../../../Security/Proofs/Pous/Statements.lean ../../../../../Security/Proofs/Pous/Sanity.lean \
+  ../../../../../Security/Proofs/Pous/Accounting/Numbers.lean \
   $(find ../../../../../Security/Definitions/Pous ../../../../../Security/Models/Pous/Assumptions ../../../../../Security/Models/Pous/Guarantees -name '*.lean' | LC_ALL=C sort) > TRUSTED.sha256
 ~~~

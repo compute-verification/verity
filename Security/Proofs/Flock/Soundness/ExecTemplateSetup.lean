@@ -864,15 +864,13 @@ end template
 variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
   {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
 
-/-- **The accepted template statement's layout, from `Stmt.setupH`** (`tags.typed`, a template read). Its circuit carries
-the class `k` (`Circuit.cls`), and `TemplateLayout` holds for the class's unit, over the words of the tables it holds.
-A part may place a derived layout or a generated read. -/
-theorem setupH_templateLayout (ht : tags.typed = true)
+/-- **The accepted template statement's parse and check facts, from `Stmt.setupH`** (`tags.typed`, a template read): its
+circuit carries the class `k` (`Circuit.cls`), and `ParseFactsT` and `CheckFactsT` hold for it. -/
+theorem setupH_factsT (ht : tags.typed = true)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {t : Typed.Template}
     (hr : Typed.read tags cf tables = .ok (k, .inr t)) :
-    st.c.cls = some k ∧ st.c.typed = some (HmRow.blockOf t) ∧
-      TemplateLayout st (HmRow.blockOf t) (Typed.wordsIn k.held) k.done (k.done.getD k.unit default) := by
-  obtain ⟨hp, hpin, hda, hdb, hm, hk⟩ := setupH_spec_typed ht h
+    st.c.cls = some k ∧ ParseFactsT tags t st.c ∧ CheckFactsT st.c (HmRow.blockOf t) := by
+  obtain ⟨hp, -, -, -, -, -⟩ := setupH_spec_typed ht h
   obtain ⟨k', r, hr', hcase⟩ := parseTyped_spec hp
   rw [hr] at hr'
   obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj hr')
@@ -881,19 +879,28 @@ theorem setupH_templateLayout (ht : tags.typed = true)
     have P := parse_facts_tmpl hpc
     obtain ⟨ls', hcheck⟩ := P.check
     have C := check_facts_typed P.typed hcheck
-    obtain ⟨name, ty, htm⟩ := Typed.read_template hr
-    refine ⟨by rw [hc], by rw [hc]; exact P.typed, ?_⟩
-    have P' : ParseFactsT tags t st.c := by
-      rw [hc]
+    refine ⟨by rw [hc], ?_, ?_⟩
+    · rw [hc]
       exact ⟨P.pre, P.portWords, P.v1Segs, P.unitNet, P.root, P.shaNet, P.hmNet, P.kinds, ⟨ls', hcheck⟩,
         (by rw [← P.rowNets]; exact HmNets.check_congr rfl rfl rfl), P.typed, P.upv,
-        P.leavesIn, P.wires, P.leafCuts⟩
-    have C' : CheckFactsT st.c (HmRow.blockOf t) := by
-      rw [hc]
+        P.leavesIn, P.wires, P.leafCuts, P.v1⟩
+    · rw [hc]
       exact ⟨C.bound_slotLog, C.disj, C.unit_lookup, C.count, C.one_range, C.root_perVu, C.rangeLogs, C.root_zero,
         C.sha_in, C.hm_in, C.perVu_sha, C.perVu_hm, C.rows_after, C.ins⟩
-    exact templateLayout_of P' C' htm k.hd (read_held hr) rfl hpin hda hdb hm hk
   · cases hrn
+
+/-- **The accepted template statement's layout, from `Stmt.setupH`** (`tags.typed`, a template read). Its circuit carries
+the class `k` (`Circuit.cls`), and `TemplateLayout` holds for the class's unit, over the words of the tables it holds.
+A part may place a derived layout or a generated read. -/
+theorem setupH_templateLayout (ht : tags.typed = true)
+    (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {t : Typed.Template}
+    (hr : Typed.read tags cf tables = .ok (k, .inr t)) :
+    st.c.cls = some k ∧ st.c.typed = some (HmRow.blockOf t) ∧
+      TemplateLayout st (HmRow.blockOf t) (Typed.wordsIn k.held) k.done (k.done.getD k.unit default) := by
+  obtain ⟨-, hpin, hda, hdb, hm, hk⟩ := setupH_spec_typed ht h
+  obtain ⟨hcls, P', C'⟩ := setupH_factsT ht h hr
+  obtain ⟨name, ty, htm⟩ := Typed.read_template hr
+  exact ⟨hcls, P'.typed, templateLayout_of P' C' htm k.hd (read_held hr) rfl hpin hda hdb hm hk⟩
 
 /-- **The unit's shape, from `deriveChecked`**: its constant row and order (#404's `unit_const_row`, `order_cols`), its
 inputs (`unit_inputs`), and its parts' reads (#411's `part_reads`, `callee_prod`). -/
@@ -1187,37 +1194,19 @@ theorem setupH_copySrc_lt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tab
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {t : Typed.Template}
     (hr : Typed.read tags cf tables = .ok (k, .inr t)) {g w : ℕ} (hg : g < st.c.g)
     (hw : w < (k.done.getD k.unit default).inCols.size) : Typed.copySrc st.c g w < 2 ^ st.c.kLog := by
-  obtain ⟨hp, -, -, -, -, -⟩ := setupH_spec_typed ht h
-  obtain ⟨k', r, hr', hcase⟩ := parseTyped_spec hp
-  rw [hr] at hr'
-  obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj hr')
-  rcases hcase with ⟨t', c', hrt, hpc, hc⟩ | ⟨net, c', hrn, -, -⟩
-  · cases hrt
-    have P := parse_facts_tmpl hpc
-    obtain ⟨ls', hcheck⟩ := P.check
-    have C := check_facts_typed P.typed hcheck
-    have P' : ParseFactsT tags t st.c := by
-      rw [hc]
-      exact ⟨P.pre, P.portWords, P.v1Segs, P.unitNet, P.root, P.shaNet, P.hmNet, P.kinds, ⟨ls', hcheck⟩,
-        (by rw [← P.rowNets]; exact HmNets.check_congr rfl rfl rfl), P.typed, P.upv,
-        P.leavesIn, P.wires, P.leafCuts⟩
-    have C' : CheckFactsT st.c (HmRow.blockOf t) := by
-      rw [hc]
-      exact ⟨C.bound_slotLog, C.disj, C.unit_lookup, C.count, C.one_range, C.root_perVu, C.rangeLogs, C.root_zero,
-        C.sha_in, C.hm_in, C.perVu_sha, C.perVu_hm, C.rows_after, C.ins⟩
-    obtain ⟨name, ty, htm, hty⟩ := read_template_ty hr
-    obtain ⟨-, -, -, -, -, hti, -⟩ := Typed.templateOf_spec htm
-    obtain ⟨-, hbi, -⟩ := HmRow.blockOf_spec t
-    have hne : 0 < st.c.ports.size := by
-      by_contra h0
-      have hp0 : st.c.ports = #[] := Array.eq_empty_of_size_eq_zero (by omega)
-      have hins : ty.ins = #[] := by rw [← hti, ← hbi, C'.ins, hp0]; simp
-      have hin := unit_inCols_size k.hd hty
-      have : ty.inBits = 0 := by unfold CircuitType.inBits; rw [hins]; rfl
-      omega
-    unfold Typed.copySrc
-    exact msgCol_lt P' C' hg (portAt_lt st.c hne _) _ _ (Nat.mod_lt _ (by norm_num))
-  · cases hrn
+  obtain ⟨-, P', C'⟩ := setupH_factsT ht h hr
+  obtain ⟨name, ty, htm, hty⟩ := read_template_ty hr
+  obtain ⟨-, -, -, -, -, hti, -⟩ := Typed.templateOf_spec htm
+  obtain ⟨-, hbi, -⟩ := HmRow.blockOf_spec t
+  have hne : 0 < st.c.ports.size := by
+    by_contra h0
+    have hp0 : st.c.ports = #[] := Array.eq_empty_of_size_eq_zero (by omega)
+    have hins : ty.ins = #[] := by rw [← hti, ← hbi, C'.ins, hp0]; simp
+    have hin := unit_inCols_size k.hd hty
+    have : ty.inBits = 0 := by unfold CircuitType.inBits; rw [hins]; rfl
+    omega
+  unfold Typed.copySrc
+  exact msgCol_lt P' C' hg (portAt_lt st.c hne _) _ _ (Nat.mod_lt _ (by norm_num))
 
 /-- **The inputs of an accepted template statement copy their message bits** (a table class's `copy`): input `w` of
 template instance `g` is a copy row of `Typed.copySrc st.c g w` in the model of the accepted statement. -/

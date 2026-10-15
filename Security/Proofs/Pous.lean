@@ -17,6 +17,8 @@ import Proofs.Pous.Continuous
 import Proofs.Pous.SecureErasure
 import Proofs.Pous.Graded.Band
 import Proofs.Pous.P2.Margin
+import Proofs.Pous.P2.Bridge
+import Proofs.Pous.P2.Wide
 import Proofs.Pous.Accounting.Numbers
 import Proofs.Pous.Audit.SampledAudit
 import Proofs.Pous.B5.ExPostFacto
@@ -28,6 +30,8 @@ import Proofs.Pous.P2.Domain
 import Proofs.Pous.P2.RingBasic
 import Proofs.Pous.P2.RingTight
 import Proofs.Pous.P2.RingTrunc
+import Proofs.Pous.P2.Rounds
+import Proofs.Pous.P2.RoundTests
 import Proofs.Pous.P2.Rows
 import Proofs.Pous.P3.Column.BandComb
 import Proofs.Pous.P3.Column.BandTwoWay
@@ -43,14 +47,16 @@ import Proofs.Pous.Thm1.Theorem1iiiTimed
 import Proofs.Pous.Chain.PubFamily
 import Proofs.Pous.Chain.PubRounds
 import Proofs.Pous.Rebuild.Exclusion
+import Proofs.Pous.EndToEnd
 
 /-!
 # The proved guarantees
 
 `Pous.SecurityProofs.X : Pous.Guarantees.X` for every statement of `Security/Models/Pous/Guarantees.lean`,
-`Security/Models/Pous/Guarantees/P2.lean` and `Security/Models/Pous/Guarantees/SecureErasure.lean` that has
-a proof. `lean-audit.json` pins these theorems, so a change to a guarantee, or to a definition it reads, changes their
-records. The open statements (`A2LemmaAM1`, `A5RabinGcd`, `A7Params`, `M1Meets`) have no entry here.
+`Security/Models/Pous/Guarantees/P2.lean`, `Security/Models/Pous/Guarantees/SecureErasure.lean` (the frozen statements)
+and `Security/Proofs/Pous/Statements.lean` (the lemmas) that has a proof. `lean-audit.json` pins these theorems, so a
+change to a guarantee, or to a definition it reads, changes their records. The open statements (`A2LemmaAM1`,
+`A5RabinGcd`, `A7Params`, `M1Meets`) have no entry here.
 
 Two proofs were written against a prover's copy of a trusted recursive definition, and a bridge lemma shows the copy
 equal to the trusted one: `PousPebbling.chain` (`Pous.HashChain.chain`) and `PousThm1.seqState`
@@ -193,8 +199,26 @@ theorem P2ErrorSplitB19Uncond : Pous.Guarantees.P2ErrorSplitB19Uncond := by
     (PousMargin.b19_256_129 b hsp hb D).2.2.2.2⟩
 
 theorem P2SlackFamilyFreeBlocks : Pous.Guarantees.P2SlackFamilyFreeBlocks := Pous.FreeBlocks.p2_slack_family_free_blocks
+theorem P2SlackFamilyWide : Pous.Guarantees.P2SlackFamilyWide := PousP2Wide.p2_slack_family_wide
+theorem P2SlackFamilyFreeBlocksWide : Pous.Guarantees.P2SlackFamilyFreeBlocksWide :=
+  PousP2Wide.p2_slack_family_free_blocks_wide
 
-/-! ## Proved results cited outside the package (`Security/Models/Pous/Guarantees.lean`) -/
+theorem P2RingAuditSecureOfReduces : Pous.Guarantees.P2RingAuditSecureOfReduces := by
+  intro D Q L h W A₁ A₂
+  obtain ⟨W', D', A₁', A₂', hle⟩ := h W A₁ A₂
+  have h104 := (P2ErrorSplitB19Uncond 16432 (by norm_num) (by norm_num) D').2.2.2.2.2.1 W' A₁' A₂'
+  calc pr (seqAcceptsOn _ 105 W A₁ A₂)
+      ≤ pr (seqAccepts _ 105 W' A₁' A₂') + (2⁻¹ : ENNReal) ^ 130 := hle
+    _ ≤ pr (seqAccepts _ 104 W' A₁' A₂') + (2⁻¹ : ENNReal) ^ 130 :=
+        add_le_add (PousP2Bridge.pr_seqAccepts_le _ (by norm_num) W' A₁' A₂') le_rfl
+    _ ≤ ENNReal.ofReal Params.δ + (2⁻¹ : ENNReal) ^ 129 + (2⁻¹ : ENNReal) ^ 130 := add_le_add h104 le_rfl
+    _ = _ := add_assoc _ _ _
+
+theorem P2RingAuditSecureOfRoundSecure : Pous.Guarantees.P2RingAuditSecureOfRoundSecure :=
+  PousP2Rounds.auditSecure_of_roundSecure
+theorem P2RingGradedOfRoundSecure : Pous.Guarantees.P2RingGradedOfRoundSecure := PousP2Rounds.graded
+
+/-! ## Proved results cited outside the package (`Security/Models/Pous/Guarantees.lean`, `Statements.lean`) -/
 
 theorem B5Stacked : Pous.Guarantees.B5Stacked := @PousBridge.b5_stacked
 theorem DenseMeets64 : Pous.Guarantees.DenseMeets64 := PousDenseReCert.dense_meets_64

@@ -51,7 +51,9 @@ systemd-tmpfiles --create /etc/tmpfiles.d/gpu-lease.conf
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
-apt-get install -y -q git rsync fio jq python3-venv util-linux ripgrep
+# python3-numpy: `python3 tools/verity/lean/check.py --update` runs PoUW's vector generators, which import numpy, under that
+# python3 (node 2 and cpu-1 lacked it, 11 Oct)
+apt-get install -y -q git rsync fio jq python3-venv python3-numpy util-linux ripgrep
 UV_VERSION=0.12.20        # tools/verity/check/pod_setup.sh's pin, the only uv check's preflight accepts (tests/test_uv_pin.py)
 [ "$(uv --version 2> /dev/null | cut -d' ' -f2)" = "$UV_VERSION" ] \
   || curl -LsSf "https://astral.sh/uv/$UV_VERSION/install.sh" | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh
@@ -105,9 +107,13 @@ f=/etc/research/deadline
 d=""; read -r d _rest < "$f" 2>/dev/null
 case $d in ''|*[!0-9]*) d=0;; esac
 [ "$(date +%s)" -ge $((d - 300)) ] || exit 0
-id=$(curl -sf -H 'Metadata: true' http://metadata.nebius.internal/v1/instance-data/id) || exit 1
+id=$(curl -sf -H 'Metadata: true' http://metadata.nebius.internal/v1/instance-data/id) || id=unknown
 logger -t vy-deadline "deadline $d reached: stopping $id"
-exec /usr/local/sbin/vy-nebius-stop "$id"
+/usr/local/sbin/vy-nebius-stop "$id" && exit 0
+# A VM whose recovery_policy is FAIL (every preemptible one) stays stopped and unbilled after a guest poweroff, so that is the
+# fallback when the attached service account can't stop it through the API; under RECOVER Nebius restarts it.
+logger -t vy-deadline "API stop of $id refused: powering off"
+exec systemctl poweroff
 EOF
 chmod 755 /usr/local/sbin/vy-deadline-check
 cat > /etc/systemd/system/vy-deadline.service <<'EOF'

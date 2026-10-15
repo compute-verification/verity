@@ -2,7 +2,7 @@
 name: using-slack
 description: >
   The coordination API: how Verity's coordinators and service agents talk on Slack (computeverification.slack.com). Handles
-  (user groups @infra, @proofs, @circuits, @compute-accounting, @memory-accounting, @network-accounting, and the
+  (user groups @infra, @proofs, @circuits, @compute-accounting, @memory-accounting, @network-accounting, @console, and the
   advisors @old-accounting and @old-circuits-and-proofs) are roles; everything between them happens in #agent-coordination,
   #agent-alerts is machines to @infra, and #ask-daniel holds everything that needs Daniel, one question per card (`research
   msg ask-daniel`: blocking or default, options with a recommendation, a Pacific deadline). Covers the three interactions
@@ -18,11 +18,17 @@ description: >
 
 The coordination API has one place, three interactions and one lifecycle.
 
-- **Handles** are roles: `@infra`, `@proofs`, `@circuits`, `@compute-accounting` (proof of useful work),
-  `@memory-accounting` (proof of useful space), `@network-accounting` (the network certifier), plus two advisors,
-  `@old-accounting` and `@old-circuits-and-proofs`, who advise their successors and relay their old workers' results. The
-  registry names each one's holder; one agent may hold several, and one handle may have two holders, and posts as whichever it acts for (`--as`). They are Slack user groups, so
-  a human's composer autocompletes them. Daniel is a member of each, so a tag notifies him too.
+- **Handles** are roles, one per coordinator: `@infra`, `@proofs`, `@circuits`, `@compute-accounting` (proof of useful work),
+  `@memory-accounting` (proof of useful space), `@network-accounting` (the network certifier), `@lean`, `@ci`, `@comms`,
+  `@vllm`, `@benchmarks`, `@console` and `@top` (the admin, Daniel's coordinator), plus two advisors,
+  `@old-accounting` and `@old-circuits-and-proofs`, who advise their successors and relay their old workers' results. Since
+  14 Oct each coordinator but `@console` is a plain cloud agent that owns a vertical slice and runs its own subagents.
+  `@console` is Daniel's desktop agent on his laptop, which holds no Slack inbox: reach it through its Linear team CON (an
+  ask to `@console` files there, and `send` says so where it would ring an inbox). The registry names
+  each handle's holder, and during a handover both the successor and its predecessor, until the predecessor posts
+  "stopped" in their pairing thread and a registry PR drops it. One agent may hold several handles, and posts as whichever
+  it acts for (`--as`). Handles with a user group are Slack user groups, so a human's composer autocompletes them, and
+  Daniel is a member of each, so a tag notifies him too.
 - **Only handle holders and the named humans are on Slack.** Workers never post, read or subscribe; a worker asks its own
   coordinator, and the   coordinator asks on Slack and relays the answer. So a coordinator decides which of its workers hears
   what.
@@ -47,11 +53,13 @@ A reply (`send --thread TS`) you post in your own thread without naming anyone w
 every handle. So a progress note goes out as `send --kind fyi`, which is quiet: it wakes only the `--to` names it starts
 with, and everyone else reads it in their digest.
 
-A reply under an announcement, quiet or not (a status line aside), also rings the owner of each PR it names, by number
-(`#1585`, or the numbers in a `train-prep-...` branch) or by its `cursor/` branch: the owner is the handle whose holder's agent
-id ends in the branch's last 4 characters (or that lists them in `branch_suffixes`). It also rings a handle that, earlier in
-the thread, named a run id (`dd21`) beside one of its own PRs, when the post names that run. A PR whose owner can't be found
-rings whoever named it in the thread. Everything else there stays in `research msg read`.
+A reply under an announcement that names someone rings only the names it starts with, whatever PRs and runs its body
+mentions; so a landing or a prep post names each owner it needs at its start. One that names no one (quiet or not, a status
+line aside) also rings the owner of each PR it names, by number (`#1585`, or the numbers in a `train-prep-...` branch) or by
+its `cursor/` branch: the owner is the handle whose holder's agent id ends in the branch's last 4 characters (or that lists
+them in `branch_suffixes`). It also rings a handle that, earlier in the thread, named a run id (`dd21`) beside one of its own
+PRs, when the post names that run. A PR whose owner can't be found rings the handle that named it in the thread. Everything
+else there stays in `research msg read`.
 
 Only the names a post starts with ring anyone. So `send`, `reply` and `ask` refuse a body that names a handle with `@` past
 its start, or writes `handle:` after its leading names, at the start of a later line or of a sentence (`@top ci: rebuild`).
@@ -83,22 +91,29 @@ your own post and needs `SLACK_BOT_TOKEN`; the doorbells it rang keep their copy
 research msg subscriptions --as <your handle>    # prints the subscribe calls to make; exit 2 while a channel id is missing
 ~~~
 
-- **Holders in the top-level's Project don't subscribe to `#agent-coordination`.** The top-level agent (bc-7f347b4b) reads it
-  and forwards each holder only the posts addressed to it. The registry's `subscribers` lists only the holders outside that
-  Project (the `old-*` handles). A forwarded post that turns out not to be for you ends the turn silently. On timer wakes,
-  still run `match` over the channel to catch anything missed.
+- **A holder subscribes to its own inbox thread, not to `#agent-coordination`'s top level.** The sender rings the inbox of
+  each handle a post addresses (`routes.d`, mode `cli`); no agent forwards. The registry's `subscribers` lists the holders
+  that still take the channel top level as well (the `old-*` advisors). A doorbell for a
+  post that turns out not to be for you ends the turn silently. On timer wakes, still run `match` over the channel to catch
+  anything missed.
+- **A holder also subscribes to its own Linear team**, both kinds (`subscribe_linear_issue` for creations and state
+  changes, `subscribe_linear_comment` for comments), since work items are Linear-first (below): an issue filed into your
+  team is its own doorbell. The `subscriptions` command prints both calls.
 - `@infra` subscribes to `#agent-alerts` and `#ask-daniel`. Every channel subscription is `topLevelOnly: true`.
 - Subscribe to a thread (`subscribe_slack_thread`) when you post the root, reply in it or pick it up; not for a status line
   alone. So an ask's asker and owner hear each other, and a big announcement doesn't wake everyone for each reply.
 - Never subscribe to an announcement's thread (the merge thread is one), and unsubscribe from any you hold: there the
-  doorbell rings you for a post that names you at its start, one of your PRs, or a run you named beside one of your PRs.
+  doorbell rings you for a post that names you at its start, or, naming no one, one of your PRs or a run you named beside
+  one of your PRs.
 - Ask for 30 days (`expiresInSeconds: 2592000`); "On every wake" below says when to renew.
 
 ~~~text
-subscribe_slack_channel(channelId=<#agent-coordination id>, topLevelOnly=true, expiresInSeconds=2592000)  # the top-level and old-* holders only
+subscribe_slack_channel(channelId=<#agent-coordination id>, topLevelOnly=true, expiresInSeconds=2592000)  # the old-* holders only
 subscribe_slack_channel(channelId=<#agent-alerts id>, topLevelOnly=true, expiresInSeconds=2592000)       # @infra only
 subscribe_slack_channel(channelId=<#ask-daniel id>, topLevelOnly=true, expiresInSeconds=2592000)         # @infra only
 subscribe_slack_thread(channelId=<channel id>, threadTs=<the root's ts>, expiresInSeconds=2592000)
+subscribe_linear_issue(options={"scope": "team", "teamId": <your registry `linear` key>}, expiresInSeconds=2592000)
+subscribe_linear_comment(options={"scope": "team", "teamId": <your registry `linear` key>}, expiresInSeconds=2592000)
 ~~~
 
 ## On every wake
@@ -158,6 +173,14 @@ canceled, so the team's open issues are its open asks. If Linear fails, the ask 
 
 An alert in `#agent-alerts` takes the same `pickup` and `close` from `@infra`, with `--channel agent-alerts`.
 
+**Work items are Linear-first** (Daniel, 14 Oct, top's announcement 1792006806.178789). The full brief — context, the
+done-condition, pointers — goes in the issue itself, filed into the owning team at creation; no brief-in-Slack with a
+link. The issue is its own doorbell: every holder subscribes to its team (Subscriptions above), so filing it wakes the
+owner without a separate Slack ping. Taking an issue is a workflow-state change out of the backlog — that change is the
+guarantee the work was seen, and the watcher flags issues that sit untouched. Slack carries what it is good at:
+conversation in threads, broadcasts, alerts and `#ask-daniel`; pairing threads and ready marks are unchanged. The
+`research msg ask` flow above still rings its Slack doorbell beside the issue it files.
+
 ## Announcing
 
 ~~~bash
@@ -185,8 +208,9 @@ An addressed handle, woken by one, does four things:
 ## Asking Daniel
 
 `#ask-daniel` is the one channel for everything that needs Daniel (his design, 1:39 PM PDT on 30 Sep). A coordinator asks him
-directly, **one question per card**; a worker asks its coordinator, which asks for it. Only money, keys and claims need him
-(8 Oct): spend past a budget line, access and keys, and what a guarantee says or rests on. Anything else is its owner's call.
+directly, **one question per card**; a worker asks its coordinator, which asks for it. Only keys and claims need him
+(8 Oct, narrowed 13 Oct): access and keys, and what a guarantee says or rests on. Anything else, spend included, is its
+owner's call; his explicit standing rulings, a budget line named in one included, stand until he reverses them.
 
 **Ping him, every time** (Daniel, 2:43 PM PDT on 1 Oct). A decision that waits in a note or a lead's thread waits forever.
 `research msg ask-daniel` posts the card and mentions him on it, so Slack notifies him. If the card route fails, post the
@@ -253,7 +277,7 @@ research msg ask-daniel resolve <id> --choice no --note 'his reply: <permalink>'
 Add or change a handle in `registry.json` (the tests check it loads). Then, with a token that has `usergroups:write`:
 
 ~~~bash
-research msg groups sync            # the plan: which user groups it would create, update or re-enable
+research msg groups sync            # the plan: which user groups it would create, update, re-enable, or disable (a retired name's)
 research msg groups sync --apply    # makes the changes; writes each group's id, and the bot's, into registry.json; commit that
 ~~~
 

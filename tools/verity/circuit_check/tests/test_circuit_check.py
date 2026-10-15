@@ -146,8 +146,8 @@ def test_an_id_only_the_catalog_registers_resolves_through_the_suite(monkeypatch
     monkeypatch.setattr(TG, "suite", lambda: SUITE)
     for fid in ("GatherBf16x64_v2", "GatherBf16x1100_v2", "GatherBf16x1024u10_v1"):
         assert TG.definition(fid) is SUITE[fid]
-    [res] = [fid for fid in SUITE if fid.startswith("GfResiduals_v1{S={")]
-    assert TG.definition(res) is SUITE[res]
+    res = [fid for fid in SUITE if fid.startswith("GfResiduals_v1{S={")]
+    assert res and all(TG.definition(fid) is SUITE[fid] for fid in res)
     with pytest.raises(KeyError):
         TG.definition("NoSuchDefinition_v9")
 
@@ -597,6 +597,9 @@ def test_the_cli_writes_a_report_and_fails_by_name(tmp_path, capsys):
     r = json.loads(out.read_text())
     assert r["schema"] == CK.SCHEMA and [t["target"] for t in r["targets"]] == ["Bf16ToF32_v1", "RoPEHead_v1{D=8}"]
     assert r["summary"]["ok"] and all(t["kind"] == "definition" for t in r["targets"])
+    assert cli.main(["RoPEHead_v1{D=8}", "--lower-max-ands", "1", "--out", str(out), "-q"]) == 0
+    [real] = json.loads(out.read_text())["targets"][0]["correspondence"]["realizations"]
+    assert not real["lowered"] and real["reason"].endswith("over the whole-Definition budget (1)")
     capsys.readouterr()
     fp8 = "ScaledMmFp8Block_v1{K=128,N=128,G=128}"
     assert cli.main([fp8, "-q"]) == 0                                            # a known failure: named, not failing
@@ -705,6 +708,18 @@ def test_parallel_jobs_give_the_serial_report(tmp_path):
     assert strip(cli.run(specs, OPTS, log=None, jobs=3)) == strip(cli.run(specs, OPTS, log=None, jobs=1))
 
 
+def test_an_isolated_target_stays_traced():
+    """`parallel` forks each item from its zygote, and the child keeps the tracer's hook: the fork is the checker's own, so it
+    must not make every isolated target's verdict uncacheable."""
+    import operator
+
+    from circuit_check import cache as CC
+    from circuit_check import cli
+
+    (got,) = [v for _, v, _, _ in cli.parallel(operator.call, [CC.untraced], 1, CC.trace, (cli.REPO,))]
+    assert got == []
+
+
 def test_the_cache_reads_the_tree_as_git_has_it(tmp_path):
     """A build or bytecode inside the tree (ignored by git) changes no recorded read; a new file git sees does."""
     import subprocess
@@ -745,3 +760,16 @@ def test_the_cache_key_is_the_same_on_hosts_that_differ_only_in_their_kernel(mon
     assert CC.key({"target": "F32Mul_v1"}) == here
     monkeypatch.setattr(platform, "machine", lambda: "aarch64")
     assert CC.key({"target": "F32Mul_v1"}) != here                  # a different CPU is a different machine
+
+
+def test_the_cache_key_is_the_same_in_every_check_slot(monkeypatch):
+    """Each check slot keeps its tests' results apart (`VERITY_TEST_CACHE`, `tools/verity/check/slot.py`); a report one slot
+    stored must count in another, while a variable that can change what a check computes still keys it."""
+    from circuit_check import cache as CC
+
+    monkeypatch.setenv("VERITY_TEST_CACHE", "/home/research/.cache/verity/tests-slot-a")
+    here = CC.key({"target": "F32Mul_v1"})
+    monkeypatch.setenv("VERITY_TEST_CACHE", "/home/research/.cache/verity/tests-slot-b")
+    assert CC.key({"target": "F32Mul_v1"}) == here
+    monkeypatch.setenv("VERITY_REGRESSION", "1" if os.environ.get("VERITY_REGRESSION") != "1" else "0")
+    assert CC.key({"target": "F32Mul_v1"}) != here

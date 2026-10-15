@@ -16,7 +16,7 @@
         "old-accounting",
         "old-circuits-and-proofs"
       ],
-      "routed_by": "the top-level agent (bc-7f347b4b): it reads the channel and forwards each holder in its Project only the posts addressed to it"
+      "routed_by": "each sender: `research msg` rings the addressed handles' inbox threads (routes.d, mode cli), and every holder subscribes to its own inbox thread; no agent forwards"
     },
     "agent-alerts": {
       "id": "C0C5Q30MCNA",
@@ -45,7 +45,7 @@
   "handles": [
     {
       "handle": "infra",
-      "holder": "the infra coordinator (bc-17cc41f1-6227-5fab-bc64-3fa2f224558b)",
+      "holder": "the infra coordinator (bc-c12aaa73-e9b3-5552-b46a-b20fb65e9e59)",
       "remit": "Machines and task infra: utilization, the scheduler, buying compute, alerts, and one API for agents' jobs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-infra",
       "usergroup": "S0C5APDSYF9",
@@ -55,12 +55,16 @@
         "infra/cluster/",
         "tools/agent-guard/",
         "tools/research/",
-        "benchmarks/judge.py"
+        "benchmarks/judge.py",
+        ".cursor/"
+      ],
+      "branch_suffixes": [
+        "558b"
       ]
     },
     {
       "handle": "proofs",
-      "holder": "the proofs coordinator (bc-8416bc72-c4cc-5551-93a8-b14a6e5f95d4); the research coordinator (bc-8ece7cde) keeps running the merge trains",
+      "holder": "the proofs coordinator (bc-ba600890-a6b7-5b7c-812b-ad5d864f9b2a); the research coordinator (bc-8ece7cde) keeps running the merge trains",
       "remit": "Proofs: Lean, red team, C-Flock, backend sweeps, consolidation and the merge trains.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (proof)",
       "usergroup": "S0C5Q6KJZTQ",
@@ -68,33 +72,59 @@
       "owns": [
         "verity/",
         "verity/core/protocols/sampled_proofs/",
+        "archive/",
         "benchmarks/one_stage/",
         "benchmarks/commitments/",
         "archive/sp1/benchmarks/dot_product/",
         "archive/sp1/benchmarks/ir_call/",
         "benchmarks/latency_compare.py",
-        "benchmarks/private_circuit/"
+        "benchmarks/private_circuit/",
+        "integrations/vllm/verity_vllm/protocol_options/sampled_proofs.py"
+      ],
+      "branch_suffixes": [
+        "95d4"
       ]
     },
     {
       "handle": "circuits",
-      "holder": "the circuits coordinator (bc-b8aaadaa-aefd-503e-9863-5eabb3a28c79)",
+      "holder": "the circuits coordinator (bc-cb6f399a-8db3-5399-91e2-1491d15ac491)",
       "remit": "Circuits of real workloads: the vLLM integration, the epoch run, sm_120 GEMM, TP2.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (circuit)",
       "usergroup": "S0C5U3LHMFT",
       "linear": "CIR",
       "owns": [
         "integrations/",
+        "benchmarks/served_units/",
         "tools/verity/circuit_check/",
         "benchmarks/native_peak/",
         "benchmarks/tc_probe/",
         "benchmarks/tc_probe_fp4/",
-        "verity/ml/circuits/ops/"
+        "benchmarks/load_time/",
+        "verity/ml/circuits/ops/",
+        "integrations/vllm/verity_vllm/program/",
+        "integrations/vllm/verity_vllm/query/",
+        "integrations/vllm/verity_vllm/correspondence/",
+        "integrations/vllm/verity_vllm/acquire/",
+        "integrations/vllm/verity_vllm/commit/",
+        "integrations/vllm/verity_vllm/properties/",
+        "integrations/vllm/verity_vllm/pipeline/build.py",
+        "integrations/vllm/verity_vllm/pipeline/match.py",
+        "integrations/vllm/verity_vllm/pipeline/commit.py",
+        "integrations/vllm/verity_vllm/pipeline/commit_group.py",
+        "integrations/vllm/verity_vllm/pipeline/commit_plan.py",
+        "integrations/vllm/workloads/",
+        "integrations/vllm/manifests/",
+        "integrations/vllm/tests/properties/",
+        "integrations/vllm/tests/check/test_capture_map.py",
+        "integrations/vllm/tests/check/test_capture_map_versions.py"
+      ],
+      "branch_suffixes": [
+        "8c79"
       ]
     },
     {
       "handle": "compute-accounting",
-      "holder": "the compute-accounting coordinator (bc-e90634dd-8e87-5b7b-8ecd-97abfd87e3fa)",
+      "holder": "the compute-accounting coordinator (bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac)",
       "remit": "Proof of useful work: verity/core/protocols/pouw, its schemes and their runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0C5U3Q04JD",
@@ -108,28 +138,68 @@
         "Security/Models/Nci/",
         "Security/Proofs/Nci/",
         "benchmarks/pouw/",
-        ".agents/skills/kernel-engineering/"
+        "benchmarks/numerical/",
+        ".agents/skills/kernel-engineering/",
+        "integrations/vllm/verity_vllm/protocol_options/pouw.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_circuit.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_cuda/",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_device.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_native.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_device.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_graphs.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_host.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_kernel.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_manifest.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_screen.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_triton.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_whole.py"
+      ],
+      "branch_suffixes": [
+        "e3fa"
       ]
     },
     {
       "handle": "memory-accounting",
-      "holder": "the memory-accounting coordinator (bc-15ada664-f325-5371-a473-65d408be3cf5)",
+      "holder": "the memory-accounting coordinator (bc-4635cc01-e765-5c9d-9959-13885e12b0c1)",
       "remit": "Proof of useful space: verity/core/protocols/pous, its Lean package and its runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0C5VRGBZFE",
       "linear": "MEM",
       "owns": [
-        "verity/core/protocols/pous/",
-        "verity/core/devices/memory_challenger/",
         "Security/Definitions/Pous/",
         "Security/Models/Pous/",
         "Security/Proofs/Pous/",
-        "benchmarks/pous/"
+        "benchmarks/bandwidth/",
+        "benchmarks/codec_mix/",
+        "benchmarks/codec_tensor/",
+        "benchmarks/ephemeral/",
+        "benchmarks/fill_compute/",
+        "benchmarks/host_tier/",
+        "benchmarks/host_tiles/",
+        "benchmarks/kv_filler/",
+        "benchmarks/link_pricing/",
+        "benchmarks/overhead_frontier/",
+        "benchmarks/pous/",
+        "benchmarks/rate_redteam/",
+        "benchmarks/rate_squaring/",
+        "benchmarks/remote_session/",
+        "benchmarks/resource_accounting/",
+        "benchmarks/sketch_tag/",
+        "benchmarks/tag_fast/",
+        "benchmarks/vllm_encoded/",
+        "benchmarks/word_codec/",
+        "integrations/vllm/verity_vllm/protocol_options/pous.py",
+        "verity/core/devices/memory_challenger/",
+        "verity/core/protocols/bandwidth/",
+        "verity/core/protocols/pous/"
+      ],
+      "branch_suffixes": [
+        "3cf5"
       ]
     },
     {
       "handle": "network-accounting",
-      "holder": "the network-accounting coordinator (bc-ecea50f6-c509-5918-b17a-d2148d57728f)",
+      "holder": "the network-accounting coordinator (bc-5ff45337-ab03-5a59-9418-8ccb0270a190)",
       "remit": "Network accounting: the network certifier (verity/core/protocols/certifier) and its timing-channel proofs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0C6LGGSY6L",
@@ -141,58 +211,83 @@
         "Security/Models/NetworkCertifier/",
         "Security/Proofs/NetworkCertifier/",
         "benchmarks/network_traces/"
+      ],
+      "branch_suffixes": [
+        "728f"
       ]
     },
     {
+      "handle": "console",
+      "holder": "Daniel's desktop agent (f7772a12-d61f-4bbb-8c4f-e79e8d6d30dc), on his laptop: no Slack inbox, reached through its Linear team CON (Daniel, 2026-10-14 3:38 PM PDT)",
+      "remit": "The live console and docs site: panels, formats, frontends, and what agents publish to them.",
+      "charter": "Daniel, 2026-10-11 (via top)",
+      "usergroup": "S0C5LSDENA1",
+      "linear": "CON"
+    },
+    {
       "handle": "ci",
-      "holder": "the CI lead (bc-81ff5c35-39a9-5232-a6b5-8e933b944292)",
+      "holder": "the ci coordinator (bc-1e3239d1-d0b7-5a0a-8e56-9b3b01792a98)",
       "remit": "Open PRs: shepherds each to a passing check and into the merge trains.",
       "charter": "Daniel, 2026-10-01 10:56 AM PDT (leads get handles); named ci, not pr-captain (Daniel, 1:07 PM PDT)",
-      "usergroup": null,
+      "usergroup": "S0C93AFCRT8",
       "linear": "CI",
       "owns": [
+        "tools/config/",
         "tools/verity/check/",
+        "tools/verity/cli/",
         "tools/move/",
         "tools/research/src/research/queue.py",
         "tools/research/src/research/quick_tier.py",
         "tools/research/src/research/merge.py"
+      ],
+      "branch_suffixes": [
+        "4292"
       ]
     },
     {
       "handle": "lean",
-      "holder": "the lean agent (bc-19c498a8-628e-5c04-8f61-fe785a24741b)",
+      "holder": "the lean coordinator (bc-b8aa4f87-8653-5bf1-87f8-944f12e26f1e)",
       "remit": "Lean: the Lean audit and its tooling; a change to a Lean guarantee DMs Daniel when it lands.",
       "charter": "Daniel, 2026-10-01 10:18 AM PDT",
-      "usergroup": null,
+      "usergroup": "S0C93AE54K0",
       "linear": "LEAN",
       "owns": [
         "tools/verity/lean/",
+        "tools/lean/",
         ".agents/skills/lean-proofs/",
         "Security/"
+      ],
+      "branch_suffixes": [
+        "741b"
       ]
     },
     {
       "handle": "comms",
-      "holder": "comms (bc-3e100045-0b60-5d20-951e-7207a989b252)",
+      "holder": "the comms coordinator (bc-9e9cd438-d8ff-537a-9545-7fff2c9038e0)",
       "remit": "Agent-to-agent messages: research msg, the names directory, routing, and its traffic.",
       "charter": "Daniel, 2026-10-01 9:12 AM PDT",
-      "usergroup": null,
+      "usergroup": "S0C8PTRMVV5",
       "linear": "COMM",
       "owns": [
         ".agents/skills/using-slack/",
         "tools/research/src/research/slack.py",
         "tools/research/tests/test_slack.py",
         "tools/research/tests/slack_routing_vectors.json"
+      ],
+      "branch_suffixes": [
+        "b252"
       ]
     },
     {
       "handle": "top",
-      "holder": "top-level, Daniel's coordinator (bc-7f347b4b-6175-4b6e-84c6-731add2f8589)",
+      "holder": "the admin, Daniel's coordinator (bc-2b2d3505-b12f-5f7a-9a19-768dbe4d7308); until it posts stopped, its predecessor (bc-7f347b4b-6175-4b6e-84c6-731add2f8589)",
       "remit": "Top-level: Daniel's coordinator across every lead.",
       "charter": "Daniel",
-      "usergroup": null,
+      "usergroup": "S0C977GL9R7",
       "linear": "TOP",
-      "branch_suffixes": ["c3b2"],
+      "branch_suffixes": [
+        "c3b2"
+      ],
       "owns": [
         "AGENTS.md",
         "README.md",
@@ -204,6 +299,29 @@
         "uv.lock",
         ".gitattributes",
         ".gitignore"
+      ]
+    },
+    {
+      "handle": "vllm",
+      "holder": "the vLLM coordinator (bc-978a9463-2354-5168-8a9a-e18df53b9411)",
+      "remit": "The vLLM integration: what the served model runs under verification, and its hookup to the protocols.",
+      "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
+      "usergroup": "S0C954BELSW",
+      "owns": [
+        "integrations/vllm/"
+      ],
+      "linear": "VLLM"
+    },
+    {
+      "handle": "benchmarks",
+      "holder": "the benchmarks coordinator (bc-681a0244-a22d-5924-b0a3-06223ae547e4)",
+      "remit": "Benchmarks: the overhead and throughput measurements across backends, and the tables rendered from them.",
+      "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
+      "usergroup": "S0C9ZLL7T88",
+      "linear": "BENCH",
+      "owns": [
+        "benchmarks/harness/",
+        "benchmarks/specs/"
       ]
     },
     {

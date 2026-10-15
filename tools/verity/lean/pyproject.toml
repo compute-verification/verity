@@ -17,5 +17,8 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# The tests read this directory's README, so its Markdown is keyed (`suites.markdown`).
-inputs = ["tools/verity/lean/README.md"]
+# The tests read this directory's README, so its Markdown is keyed (`suites.markdown`), and load `lean_audit.py`, which loads
+# `tools/verity/check/common.py`; `test_lean_changed.py` loads `lean_changed.py`, which loads the check tool's
+# `lean_slot.py` and `slot.py`.
+inputs = ["tools/verity/lean/README.md", "tools/verity/check/common.py", "tools/verity/check/lean_slot.py",
+          "tools/verity/check/slot.py"]

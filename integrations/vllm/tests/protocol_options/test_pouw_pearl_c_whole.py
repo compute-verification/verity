@@ -515,5 +515,5 @@ def test_a_calls_steps_split_after_its_a_tree_and_before_its_tile_hashing():
     run.hashing = False
     assert PPD.PearlCDeviceRun._call_cuts(run, pipe) == (0, len(run._call_names()))
     run._call_names = lambda: ("lines_ea", "hash_rows_a", "gemm_pearlc", "hash_leaf")
-    with pytest.raises(RuntimeError, match="A's tree"):
+    with pytest.raises(RuntimeError, match="A's commitment"):
         PPD.PearlCDeviceRun._call_cuts(run, pipe)

@@ -18,7 +18,9 @@ coin.  Each call of a replaced ``apply(layer, x, bias)`` is one unit of the run'
 Its commitment to the weights of record is made first, in the composition's weight phase (`commit_weights`: every
 layer's weight root); `commitment` is the scheme, the salt, the weights root the salt is derived from, the epoch's coin
 commitment and its salt coin's opening and, once closed,
-the transcript root with its unit and tile counts.  The audit (drawing tiles, opening them) is `verity.core.protocols.pouw.audit`'s,
+the transcript root with its unit and tile counts.  Pearl-C's also says what it claims of the weights (``registration``,
+`weights_claim`): the executor applies no keyed rotation and reads no curated list, so it claims nothing about which
+weights were served.  The audit (drawing tiles, opening them) is `verity.core.protocols.pouw.audit`'s,
 after the run.  Beside sampled proofs the composition asks `verity.core.protocols.pouw.circuit` (`protocol_options.CIRCUITS`), and only
 ``ncp-v2`` has a circuit.  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
 `NcpWeight_v1` Program call, once per run, and each call to its own `NcpLinear_v1` Program call reading it, their units
@@ -78,7 +80,7 @@ UNQUANTIZED = ("bfloat16", "float16", "float32")
 QUANT_PARAMS = ("weight_scale", "weight_scale_inv", "input_scale", "weight_zero_point", "weight_packed")
 #: The pinned int7 quantizer of the FP8 lane's reference (docs/pouw-fp8/reference.md), applied without a basis rotation.
 QUANTIZER = "verity.pouw.symmetric-int7-rowmax-rne-f32/v1"
-KEYS = ("coins", "retain_steps", "transcript_dir", "draws", "tamper", "device", "kernel", "cubin", "schedule")
+KEYS = ("coins", "retain_steps", "transcript_dir", "draws", "tamper", "device", "kernel", "cubin", "schedule", "start_forward")
 #: ``ncp-v2``'s negative controls (`Settings.tamper`): a prover that commits and opens one value wrong
 TAMPERS = ("tile", "bias")
 #: where the Commit computes `ncp-v2`'s values: the host (`pouw_native`, the default) or ``cuda``, the serving kernel
@@ -91,6 +93,12 @@ PLACEHOLDER = (
     "for the life of the install",
     "the executor runs on the host in numpy, not a native route-U kernel",
 )
+#: The transforms Pearl-C's executor applies to a checkpoint's weights before committing them: none.  The keyed 8-block
+#: rotation (`registration.ROTATION_8`) is not built on the device, so served FP8 registers only a curated unrotated
+#: checkpoint, and no curated list is wired here.
+SERVED_TRANSFORMS: tuple[str, ...] = ()
+#: What Pearl-C's commitment says of weights that are not registered (`weights_claim`)
+UNREGISTERED = "nothing about which weights were served: the checkpoint is not registered"
 #: The host bytes `weight_operands` works in at a time (its copy of the weight's rows and their int64 noise and sums).
 FORM_BYTES = 1 << 28
 _INV63 = np.float32(1.0) / np.float32(63.0)
@@ -122,6 +130,10 @@ class Settings:
     cubin: str | None = None
     #: Pearl-C on sm_120: the schedule each pass runs under (`verity.core.protocols.pouw.serving.SCHEDULES`), serial by default
     schedule: str = "serial"
+    #: ``ncp-v2``: the anchored forward index the install's first pass takes.  A salt's first window starts at 0; a second
+    #: served window under the same salt starts at the verifier's `anchors.SaltWindows.next_forward`, so no call index
+    #: repeats across the salt's windows (a repeat would reuse a noise key, and `SaltWindows.open` refuses it)
+    start_forward: int = 0
 
     @classmethod
     def of(cls, raw: Mapping[str, Any]) -> Settings:
@@ -155,7 +167,10 @@ class Settings:
         schedule = raw.get("schedule", "serial")
         if schedule not in SCHEDULES:
             raise ValueError(f"pouw setting 'schedule' is one of {', '.join(SCHEDULES)}")
-        return cls(coins, retain, tdir, draws, tamper, device, *paths, schedule)
+        start = raw.get("start_forward", 0)
+        if not isinstance(start, int) or isinstance(start, bool) or start < 0:
+            raise ValueError("pouw setting 'start_forward' is a non-negative integer (the salt's SaltWindows.next_forward)")
+        return cls(coins, retain, tdir, draws, tamper, device, *paths, schedule, start)
 
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
@@ -180,7 +195,16 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
                 out.append(str(e))
         elif settings.schedule != "serial":
             out.append(f"{scheme}: the pouw setting 'schedule' is Pearl-C's; this executor runs serially")
+        if settings.start_forward and scheme not in pouw_circuit.SCHEMES:
+            out.append(f"{scheme}: the pouw setting 'start_forward' anchors the circuit-backed executor's forward indices "
+                       f"({', '.join(pouw_circuit.SCHEMES)}); this executor counts its own from 0")
     return tuple(out)
+
+
+def requires_build(scheme: str, ctx: Context) -> bool:
+    """The circuit-backed executor is lowered into the row's Build."""
+
+    return scheme in pouw_circuit.SCHEMES
 
 
 def keeps_weight_copy(scheme: str, ctx: Context) -> bool:
@@ -402,10 +426,10 @@ class _CircuitRun:
         self.records: list[PC.CallRecord] = []
         self.sides: dict[int, PC.WeightRecord] = {}     # each weight's side, committed at the run's first call on it
         self.seconds: list[float] = []                  # each call's executor wall time: quantize, commit, dequantize
-        self.forward, self.row_base, self.rows_seen = -1, 0, 0
+        self.forward, self.row_base, self.rows_seen = settings.start_forward - 1, 0, 0
         self.commits: dict[str, Any] = {
             "scheme": scheme, "salt": salt.hex(), "weights_root": weights_root(weight_roots).hex(), "quantizer": QUANTIZER,
-            "calls_root": None, "calls": 0}
+            "calls_root": None, "calls": 0, "start_forward": settings.start_forward}
         self.details: dict[str, Any] = {
             "scheme": scheme, "quantizer": QUANTIZER, "basis": "none", "layers": len(weight_roots),
             "circuit": "verity.core.protocols.pouw.circuit: each weight's side is its own NcpWeight_v1 Program call, once per run, and each "
@@ -417,7 +441,8 @@ class _CircuitRun:
             "placeholder": list(PLACEHOLDER)}
 
     def gemm(self, w: int, x: Any, weight: Any, bias: Any) -> Any:
-        """The call's anchored fields: the forward index counts the passes (a pass starts at linear 0), the position is
+        """The call's anchored fields: the forward index counts the passes from ``start_forward`` (a pass starts at linear
+        0; a salt's second window starts where `anchors.SaltWindows.next_forward` says), the position is
         ``w << 32``, the weight id is ``w``, a pass's rows get global ids from the rows served before it, and the weight's
         rows are its columns 0 … n − 1."""
         t0 = time.monotonic()
@@ -582,6 +607,20 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
     return {"weight_roots": roots, "shapes": {str(w): list(v) for w, v in shapes.items()}}
 
 
+def weights_claim(scheme: Any, curated: bool = False, needs_gamma_fold: bool = False) -> dict[str, Any]:
+    """What served FP8 (Pearl-C) claims of the weights it serves, the commitment's ``registration``.  It claims registered
+    weights only when `SERVED_TRANSFORMS` pass the registered-weights rule (`registration.check_registration`, Pearl-C4's
+    too); a keyed transform would take its key from the epoch's salt coin (`registration.rotation_key`).  Otherwise the
+    claim says it is about nothing (`UNREGISTERED`) and names the refusal, and serving goes on: the salt is still the
+    challenger's live coin (`Epoch.start`), so what the draw establishes of the work is unchanged."""
+    out: dict[str, Any] = {"transforms": list(SERVED_TRANSFORMS), "curated": curated}
+    try:
+        scheme.check_registration(SERVED_TRANSFORMS, curated, needs_gamma_fold)
+    except DomainError as e:
+        return {**out, "registered": False, "claims": UNREGISTERED, "refused": str(e)}
+    return {**out, "registered": True}
+
+
 def challenged(settings: Mapping[str, Mapping[str, Any]], enabled: Any, epoch: int = 0) -> dict[str, dict[str, Any]]:
     """`settings` (the loaded protocols config) with PoUW's ``coins`` a challenger of `epoch` held in this process
     (`verity.core.protocols.pouw.coins.Challenger`) when `enabled` (the protocol set) has PoUW, for a pipeline
@@ -608,6 +647,7 @@ def install(scheme: str, target: Target) -> Option:
         run = PPD.PearlCDeviceRun(s, entry, PPD.Kernel.load(settings.kernel, settings.cubin),
                                   {w: m.weight for w, m in enumerate(layers)}, roots, commitment, opening,
                                   schedule=settings.schedule, salt_key=_SALT_KEYS.get(entry))
+        run.commits["registration"] = weights_claim(s)
     else:
         run = (_CircuitRun(scheme, entry, settings, roots, salt, commit=target.context.stage != "capture") if s is None
                else _Run(s, entry, settings, roots, salt))

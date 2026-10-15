@@ -9,6 +9,10 @@ The verifier computes `GfResiduals`' S itself (`RecAlgebra.structureOf`), groups
 lookup is checked (`pos`), so a term the part does not read is refused, never sent to element 0. Soundness reads only
 the renumbering's checks and the comparison with the file's unit; the grouping decides which residuals a part holds and
 is checked to cover every residual once, in order.
+
+A holo shape (`Shape.holo`, hidden unit circuits) has `h`'s round as a row port after `z_partial`'s, which the comb's
+operands read (`RecAlgebra.atomOp`). A part's name does not say whether its shape is holo; the statement does, in META
+(`HOLO_KEY`, absent meaning plain), and `check` builds the one net it selects.
 -/
 import Flock.RecOpen
 import Flock.RecAlgebra
@@ -20,6 +24,8 @@ open HmNets hiding and
 
 def MAX_REGIONS : Nat := 64
 def MAX_SLOTS : Nat := 160
+/-- `rec_residuals.MAX_LONE_SLOTS`: the slots of a residual that fits no part alone under `MAX_SLOTS` and stands alone. -/
+def MAX_LONE_SLOTS : Nat := 223
 def RES_OUT_WORDS : Nat := 128
 def PER_SLOT : Nat := 3
 
@@ -115,13 +121,15 @@ def touched (S : GfS) (st : Array Nat) (r : Res) : Array Nat × Array Nat := Id.
   return (sortDedup P, sortDedup V)
 
 /-- `parts`' grouping: each residual, in S's order, into the first part it fits, as its residuals, row ports and v
-elements; refused when a residual alone fits no part, or when the parts do not hold every residual once, in order. -/
+elements, or alone within `MAX_LONE_SLOTS`; refused when a residual alone fits no part, or when the parts do not hold
+every residual once, in order. -/
 def groups (S : GfS) (sizes : Array Nat) : Except String (Array (Array Nat × Array Nat × Array Nat)) := do
   let st := starts sizes
-  let fit (g : Array Nat × Array Nat × Array Nat) (P V : Array Nat) : Bool :=
+  let fitN (n : Nat) (g : Array Nat × Array Nat × Array Nat) (P V : Array Nat) : Bool :=
     let ps := union g.2.1 P
-    regions ps.size ≤ MAX_REGIONS && slots (ps.toList.map (sizes[·]!)) (union g.2.2 V).size ≤ MAX_SLOTS
+    regions ps.size ≤ MAX_REGIONS && slots (ps.toList.map (sizes[·]!)) (union g.2.2 V).size ≤ n
       && 8 * (g.1.size + 1) ≤ RES_OUT_WORDS
+  let fit := fitN MAX_SLOTS
   let mut gs : Array (Array Nat × Array Nat × Array Nat) := #[]
   for i in [0:S.res.size] do
     let (P, V) := touched S st S.res[i]!
@@ -130,8 +138,8 @@ def groups (S : GfS) (sizes : Array Nat) : Except String (Array (Array Nat × Ar
       let (R, P0, V0) := gs[gi]!
       gs := gs.set! gi (R.push i, union P0 P, union V0 V)
     | none =>
-      unless fit (#[], #[], #[]) P V do
-        throw s!"residual {i} alone reads more than {MAX_REGIONS} regions or {MAX_SLOTS} sha512x3 slots"
+      unless fitN MAX_LONE_SLOTS (#[], #[], #[]) P V do
+        throw s!"residual {i} alone reads more than {MAX_REGIONS} regions or {MAX_LONE_SLOTS} sha512x3 slots"
       gs := gs.push (#[i], P, V)
   let all := gs.foldl (fun a g => a ++ g.1) #[]
   if (all.qsort (· < ·)).toList != List.range S.res.size then
@@ -260,6 +268,59 @@ def unitLaid (S : RecOpen.GfS) (ns : List Nat) (nv : Nat) : Laid :=
   let r := (unitNet' S ns nv).run St.empty
   layout r.2 (Array.replicate ((portWords ns nv).foldl (· + ·) 0) 16) (Array.replicate RES_OUT_WORDS 16) r.1.toArray
 
+/-! ## Whole reads -/
+
+/-- The input columns the net's computed rows read: rows `min (inWords · WORD) constPos … constPos − 1`, in A and in B
+(the audit's `Rows.ofNet`). -/
+def readIns (g : Net) : Array Bool :=
+  let nIn := min (g.inWords * WORD) g.constPos
+  (List.range' nIn (g.constPos - nIn)).foldl
+    (fun rd r => (g.a.row r ++ g.b.row r).foldl (fun rd c => rd.setIfInBounds c true) rd)
+    (Array.replicate nIn false)
+
+/-- The input column of bit `q` of the row ports' elements, the ports of `ns` elements from column `k`, each
+`16 · portWordsOf n` columns (`unitNet'`'s `w`). -/
+def rowCol : List Nat → Nat → Nat → Nat
+  | [], k, _ => k
+  | n :: ns, k, q => if q < 128 * n then k + q else rowCol ns (k + 16 * portWordsOf n) (q - 128 * n)
+
+/-- How many of row-port element `q`'s 128 columns `rd` marks read. -/
+def readBits (rd : Array Bool) (ns : List Nat) (q : Nat) : Nat :=
+  ((List.range 128).filter fun b => rd.getD (rowCol ns 0 (128 * q + b)) false).length
+
+/-- The first row-port element some but not all of whose 128 columns are read, with how many are. -/
+def partlyRead (rd : Array Bool) (ns : List Nat) : Option (Nat × Nat) :=
+  ((List.range ns.sum).map fun q => (q, readBits rd ns q)).find? fun (_, k) => k != 0 && k != 128
+
+/-! ## The row ports' names -/
+
+/-- Each circuit port's first leaf (`HmRow.delta`'s `starts`). -/
+def leafStarts (c : Circuit) : Array Nat :=
+  (c.ports.foldl (fun (acc : Array Nat × Nat) p => (acc.1.push acc.2, acc.2 + p.words)) (#[], 0)).1
+
+/-- The circuit port whose message bit `HmRow.delta` copies into input column `col` of copy `k`, at a unit whose first
+input group is one 16-bit port per word from column 0 (`unitLaid`'s), or none: a forced zero, or a column past it. -/
+def keyPort (c : Circuit) (k col : Nat) : Option Nat :=
+  if col / 16 < (c.unit.inGroups.getD 0 default).bits.size then
+    if (c.leavesIn.getD k #[])[col / 16]! < 0 then none else
+      let x := ((c.leavesIn.getD k #[])[col / 16]!).toNat
+      let q := ((List.range (leafStarts c).size).reverse.find? (fun q => (leafStarts c)[q]! ≤ x)).getD 0
+      if 16 * (x - (leafStarts c)[q]!) + col % 16 < c.ports[q]!.bits then some q else none
+  else none
+
+/-- The first bit `b` of a row-port element `a < n` whose column at copy `k` (each copy below `upv`, and copy 0) a
+circuit port `q` keys whose name is not each of `need a`, as `(k, a, b, q)`. -/
+def misnamed (c : Circuit) (ns : List Nat) (n : Nat) (need : Nat → List String) : Option (Nat × Nat × Nat × Nat) :=
+  (List.range (max 1 c.upv)).findSome? fun k => (List.range n).findSome? fun a =>
+    (List.range 128).findSome? fun b => match keyPort c k (rowCol ns 0 (128 * a + b)) with
+      | some q => if (need a).all (· == c.ports[q]!.name) then none else some (k, a, b, q)
+      | none => none
+
+/-- The row ports `spec` names for an element of w of key `k`: `m<r>` for each round `r` that holds `k`. -/
+def roundNames (rounds : Array (Array RecAlgebra.Key)) : Option RecAlgebra.Key → List String
+  | some k => ((List.range rounds.size).filter fun r => rounds[r]!.contains k).map (s!"m{·}")
+  | none => []
+
 /-- Part `j` of the shape's algebra: its S, its row ports' elements and its v elements' number. -/
 def part (sh : Shape) (j : Nat) : Except String (RecOpen.GfS × List Nat × Nat) := do
   let S ← RecAlgebra.structureOf sh
@@ -269,38 +330,86 @@ def part (sh : Shape) (j : Nat) : Except String (RecOpen.GfS × List Nat × Nat)
   let some (R, P, V) := gs[j]? | throw s!"part {j} of {gs.size}"
   pure (← partS S sizes R P V, P.toList.map (sizes[·]!), V.size)
 
-/-- A unit named `rec-residuals/…` is the verifier's part at the shape and part its name gives, equal in every field;
-any other unit passes. The shape is bounded by the file's unit before the structure is computed, and the part's input
-and output bits are compared before its net is built. Irreducible, so that no unification against it builds the net. -/
+/-- Part `j`'s w: w's slots of its row ports' elements, in order (`partS`' `wIdx`). -/
+def partW (sh : Shape) (j : Nat) : Except String (Array Nat) := do
+  let sizes := portSizes sh
+  let gs ← groups (← RecAlgebra.structureOf sh) sizes
+  let some (_, P, _) := gs[j]? | throw s!"part {j} of {gs.size}"
+  let st := starts sizes
+  pure (P.flatMap fun p => (Array.range sizes[p]!).map (st[p]! + ·))
+
+/-- META's key that says the statement is over a holo shape's parts (`rec_residuals.HOLO_KEY`); absent means plain. -/
+def HOLO_KEY : String := "holo"
+
+/-- Whether the statement is over a holo shape's parts: META's `HOLO_KEY`, a boolean, or false when absent. -/
+def holoOf (c : Circuit) : V Bool :=
+  match c.metaJ.getObjVal? HOLO_KEY with
+  | .error _ => pure false
+  | .ok (.bool b) => pure b
+  | .ok _ => throw s!"circuit {c.name}: META {HOLO_KEY} is not a boolean"
+
+/-- A unit named `rec-residuals/…` is the verifier's part at the shape and part its name gives, holo when the statement
+says so (`holoOf`), equal in every field, its computed rows read each row-port element in all 128 bits or in none
+(`partlyRead`), and each bit of an element of w that round `r` holds is keyed at each copy by a circuit port named
+`m<r>` where a port keys it (`misnamed`, `roundNames`); any other unit passes. The shape is bounded by the file's unit
+before the structure is computed, and the part's input and output bits are compared before its net is built.
+Irreducible, so that no unification against it builds the net. -/
 @[irreducible] def check (c : Circuit) : V Unit :=
   match params c.unit.name with
   | some (m, k, cl, j) =>
     match shape? m k cl with
     | none => throw s!"circuit {c.name}: rec-residuals' m has a fast100 schedule, k_log is at least 6, claims at least 2"
-    | some sh =>
+    | some sh0 =>
       if k > RecOpen.inBits c.unit || cl > RecOpen.inBits c.unit then
         throw s!"circuit {c.name}: unit {c.unit.name}'s k_log or claims exceed its {RecOpen.inBits c.unit} input bits"
-      else match part sh j with
+      else match holoOf c with
+      | .error e => throw e
+      | .ok holo =>
+        let sh := { sh0 with holo }
+        let kind := if holo then "holo" else "plain"
+        match part sh j with
         | .error e => throw s!"circuit {c.name}: unit {c.unit.name}: {e}"
         | .ok (S, ns, nv) =>
           let bits := 16 * (portWords ns nv).foldl (· + ·) 0
           if RecOpen.inBits c.unit != bits || RecOpen.outBits c.unit != 16 * RES_OUT_WORDS then
             throw (s!"circuit {c.name}: unit {c.unit.name} has {RecOpen.inBits c.unit} input and " ++
-              s!"{RecOpen.outBits c.unit} output bits, not its part's {bits} and {16 * RES_OUT_WORDS}")
+              s!"{RecOpen.outBits c.unit} output bits, not its {kind} part's {bits} and {16 * RES_OUT_WORDS} " ++
+              s!"(META {HOLO_KEY}: {holo})")
           else match netOf (unitName m k cl j) (unitLaid S ns nv) with
             | .error e => throw e
             | .ok g =>
-              if c.unit = g then pure ()
-              else throw s!"circuit {c.name}: not the verifier's {c.unit.name} ({firstDiff c.unit g})"
+              if c.unit = g then
+                match partlyRead (readIns g) ns with
+                | none => match partW sh j with
+                  | .error e => throw s!"circuit {c.name}: unit {c.unit.name}: {e}"
+                  | .ok W =>
+                    let rs := RecAlgebra.rounds sh
+                    let wn := RecAlgebra.wNames sh
+                    match misnamed c ns W.size (fun a => roundNames rs wn[W[a]!]?) with
+                    | none => pure ()
+                    | some (k, a, b, q) =>
+                      throw (s!"circuit {c.name}: unit {c.unit.name}'s copy {k} keys bit {b} of row-port element {a} " ++
+                        s!"by port {c.ports[q]!.name}, not {roundNames rs wn[W[a]!]?}")
+                | some (q, n) => throw s!"circuit {c.name}: unit {c.unit.name} reads {n} of row-port element {q}'s 128 bits"
+              else throw s!"circuit {c.name}: not the verifier's {kind} {c.unit.name} ({firstDiff c.unit g})"
   | none =>
     if c.unit.name.startsWith "rec-residuals/" then
       throw s!"circuit {c.name}: unit {c.unit.name} is not rec-residuals/m<m>-k<k_log>-c<claims>-p<j>"
     else pure ()
 
-/-- `check` reads a circuit's name and unit only. -/
-theorem check_congr {c c' : Circuit} (hn : c.name = c'.name) (hu : c.unit = c'.unit) : check c = check c' := by
-  unfold check
-  rw [hn, hu]
+theorem misnamed_congr {c c' : Circuit} (hu : c.unit = c'.unit) (hp : c.ports = c'.ports)
+    (hl : c.leavesIn = c'.leavesIn) (hv : c.upv = c'.upv) : misnamed c = misnamed c' := by
+  funext ns n need
+  unfold misnamed keyPort leafStarts
+  rw [hu, hp, hl, hv]
+
+/-- `check` reads a circuit's name, unit, META, ports, leaves and units per VU only (the last four by `rfl` where the
+two share them). -/
+theorem check_congr {c c' : Circuit} (hn : c.name = c'.name) (hu : c.unit = c'.unit) (hm : c.metaJ = c'.metaJ := by rfl)
+    (hp : c.ports = c'.ports := by rfl) (hl : c.leavesIn = c'.leavesIn := by rfl) (hv : c.upv = c'.upv := by rfl) :
+    check c = check c' := by
+  unfold check holoOf
+  rw [hn, hu, hm, misnamed_congr hu hp hl hv, hp]
 
 end RecResiduals
 end Flock

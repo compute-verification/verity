@@ -21,8 +21,9 @@ at the whole draw has the whole draw's count, and none exists at the tables' at 
   emptiness at 16 drawn units, two tables and `g = 1`, and the statements' `y₀` at the same draw.
 
 What none of this covers: that a session `verify --zk` accepts exists at a draw of the file, `RecordsLiveZKJ`, `hpub`,
-`hpt`, `hkd`, A3, the count curve's parameters, `TableCRZ`, and `zk_session_composedHJ`'s and `zk_session_viewHJ`'s
-`hdm` (`avoidsMask`, which no check implies) and `hKey` (a named assumption).
+`hpt`, `hkd`, A3, the count curve's parameters, `TableCRZ`, `zk_session_composedHJ`'s and `zk_session_viewHJ`'s `hdm`
+(`avoidsMask`, which no check implies), and `zk_session_composedHJ`'s `hKey` (a named assumption); `zk_session_viewHJ`'s
+`hT1` holds at the pinned key's hiding gap (`CROnly.hm96Hiding_gap`).
 -/
 
 namespace FlockSoundness.Discharge.ZkHidden
@@ -170,8 +171,8 @@ theorem zk_session_composedHJ_nonvacuous (I : Inputs) (ht : I.tags.typed = false
 server's draw file (`DrawFileZK`, `subset kd`, the tables dividing `kd`) and one session `verify --zk` accepts at the
 draw `dj S`, on the inputs `ht`, `hTags`, `hc`, `hU` and `hscope` describe: at `mPts = mPtsOf c.g (kd / nTab I)` there
 is a `y₀` (table 0's setup) and every table of `dj S` is set up, so the conclusion's `ys` exist at `S`. The proof
-applies `zk_session_viewHJ` to this `y₀`. Not covered: the session's existence, `hdm` (`avoidsMask`, which no check
-implies) and `hKey` (a named assumption). -/
+applies `zk_session_viewHJ` to this `y₀`. Not covered: the session's existence and `hdm` (`avoidsMask`, which no check
+implies); `hT1` holds at the pinned key's hiding gap (`CROnly.hm96Hiding_gap`). -/
 theorem zk_session_viewHJ_nonvacuous (I : Inputs) (ht : I.tags.typed = false) (hTags : TagsOkZHJ I)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     (hscope : Layout.scopeOkH c = true) (kd : ℕ) (hdiv : kd % nTab I = 0)

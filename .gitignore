@@ -50,9 +50,12 @@ runs/
 
 # Fetched fixtures: registered in fixtures/artifacts.json, fetched by `research data fetch-fixtures` (store README §7.3)
 archive/direct/fixtures/crosscheck_units.json
+verity/ml/flock/tests/fixtures/f1-gate
 verity/ml/flock/tests/fixtures/hidden-outputs
 verity/ml/flock/tests/fixtures/public-inputs
 verity/ml/flock/tests/fixtures/public-inputs-blocks
+verity/ml/flock/tests/fixtures/rec-c3-inner
+verity/ml/flock/tests/fixtures/rec-coins
 archive/gkr/fixtures/babybear-transcripts/transcript_vu4.json
 archive/gkr/fixtures/babybear-transcripts/transcript_vu64.json
 archive/gkr/fixtures/v2_synth/circuit.txt
