@@ -397,8 +397,8 @@ static double quant(std::vector<double>& v, double q) {  // v sorted
 
 // --drift SECONDS: the honest kernels' times as the clock drifts, clocks read and never set. Plain and every receipt
 // kernel --only names are made at every selected shape; then rounds run back to back until SECONDS have passed. Each
-// round runs, kernel by kernel, every selected shape in order, BLOCK launches each, every launch between its own
-// events, and reads NVML (SM clock, temperature, power, clock-event reasons) after each block. The CSV gets a row a
+// round runs, kernel by kernel, every selected shape in order, BLOCK launches each behind an untimed one, every launch
+// between its own events, and reads NVML (SM clock, temperature, power, clock-event reasons) after each block. The CSV gets a row a
 // block; stdout gets each (kernel, shape)'s launch-time quantiles over the whole run.
 static int drift(double seconds, const char* csv, int block, const std::vector<const cr_kernel*>& ks,
                  const std::vector<std::string>& shapes_sel, const std::vector<std::string>& only, const cudaDeviceProp& prop,
@@ -465,6 +465,11 @@ static int drift(double seconds, const char* csv, int block, const std::vector<c
     long rounds = 0;
     for (; since() < seconds; ++rounds)
         for (auto& l : live) {
+            // an untimed lead launch, so the first timed one starts behind a kernel rather than behind the host
+            if (l.impl.back()->launch(nullptr) != 0) {
+                fprintf(stderr, "drift: %s at %s: launch failed\n", l.k->name, l.s->name);
+                return 2;
+            }
             for (int i = 0; i < block; i++) {
                 CK(cudaEventRecord(ev[i]));
                 if (l.impl[i % l.impl.size()]->launch(nullptr) != 0) {
