@@ -8,7 +8,9 @@
 //   t5_rawbits   QMMA f32 D registers fed as E4M3x4 A registers to the next QMMA (raw float bits as FP8 codes)
 //   t6_bf16copy  QMMA f32 D registers fed as BF16x2 A registers to an HMMA k16 (high half = D truncated to BF16)
 //   t7_split     a full-width f32 tile output minus its own TF32 truncation, the subtraction in the accumulator input:
-//                an exact low digit with no CUDA arithmetic (A' needs a register permutation, two MOVs)
+//                an exact low digit with no CUDA arithmetic (A' needs a register permutation: four MOVs in the SASS)
+//   t8_split_bf16  t7 in BF16 only (W1's formats), twice: three exact BF16 digits of a 24-bit value; t8b shows a low
+//                half that is a BF16 NaN code poisons the split
 //
 // One warp per kernel.  Fragment layouts are PTX ISA 9.4's (g = lane>>2, t = lane&3):
 //   8-bit A (k32) reg r: row g+8(r&1), cols 4t+16(r>>1)+j     8-bit B (k32) reg r: k 4t+16r+j, n g
@@ -275,6 +277,31 @@ extern "C" __global__ void __launch_bounds__(32) t7_split(const float* __restric
     hmma_tf32_k8(d1, a2, b2, d0);
     store_d(D0out, d0, g, t);
     store_d(D1out, d1, g, t);
+}
+
+// t7 in BF16, W1's own formats only.  D0 = V + 0*0, then twice D_{i+1} = D_i + bf16(A'_i)*B2 with A'_i = {c0,c2,c1,c3} of
+// D_i: as a k16 BF16 A, A'[r][2t+1] = hi16(D[r][2t]) and A'[r][2t+9] = hi16(D[r][2t+1]), and B2 sends those to columns
+// 2t and 2t+1 with weight -1 (the low halves meet zeros).  So D1 = D0 - trunc_bf16(D0), D2 = D1 - trunc_bf16(D1): three
+// BF16 digits of a 24-bit value.  A low half whose exponent field is all ones is a BF16 NaN or Inf code, and code * 0 is
+// NaN, so V's mantissa bits 14..7 must not all be set (t8b sets them).
+extern "C" __global__ void __launch_bounds__(32) t8_split_bf16(const float* __restrict__ V, const uint16_t* __restrict__ B2t,
+                                                               float* __restrict__ D1out, float* __restrict__ D2out) {
+    const int lane = threadIdx.x, g = lane >> 2, t = lane & 3;
+    float c[4];
+    for (int i = 0; i < 4; ++i) c[i] = V[(g + 8 * (i >> 1)) * 8 + 2 * t + (i & 1)];
+    const uint32_t za[4] = {0u, 0u, 0u, 0u}, zb[2] = {0u, 0u};
+    uint32_t b2[2];
+    for (int r = 0; r < 2; ++r) b2[r] = *reinterpret_cast<const uint32_t*>(B2t + g * 16 + 2 * t + 8 * r);
+    float d0[4];
+    hmma_bf16_k16(d0, za, zb, c);
+    const uint32_t a1[4] = {__float_as_uint(d0[0]), __float_as_uint(d0[2]), __float_as_uint(d0[1]), __float_as_uint(d0[3])};
+    float d1[4];
+    hmma_bf16_k16(d1, a1, b2, d0);
+    const uint32_t a2[4] = {__float_as_uint(d1[0]), __float_as_uint(d1[2]), __float_as_uint(d1[1]), __float_as_uint(d1[3])};
+    float d2[4];
+    hmma_bf16_k16(d2, a2, b2, d1);
+    store_d(D1out, d1, g, t);
+    store_d(D2out, d2, g, t);
 }
 
 // ---------------------------------------------------------------------------------------------------------------- host
@@ -650,6 +677,63 @@ int main() {
         cudaFree(dB2);
         cudaFree(d0);
         cudaFree(d1);
+    }
+
+    // t8: V as t7 but with mantissa bits 14..7 never all set; D1 and D2 must be the low digits exactly, D2 exact in BF16,
+    // and hi(D0) + hi(D1) + D2 = V.  t8b: the same with bits 14..7 all set, so every low half is a BF16 NaN code.
+    for (int poison = 0; poison < 2; ++poison) {
+        std::vector<float> V(128);
+        for (auto& x : V) {
+            rng = rng * 1664525u + 1013904223u;
+            uint32_t m = rng & 0x7fffffu;
+            if (poison) m |= 0x7f80u;
+            else if ((m & 0x7f80u) == 0x7f80u) m &= ~0x80u;
+            const uint32_t u = (uint32_t)(127 + rnd(0, 9)) << 23 | m;
+            memcpy(&x, &u, 4);
+        }
+        std::vector<uint16_t> B2t(8 * 16, 0);
+        for (int n = 0; n < 8; ++n) B2t[n * 16 + (n % 2 ? n + 8 : n + 1)] = 0xbf80u;
+        float* dV = dev(V);
+        uint16_t* dB2 = dev(B2t);
+        float *d1, *d2;
+        CK(cudaMalloc(&d1, 128 * sizeof(float)));
+        CK(cudaMalloc(&d2, 128 * sizeof(float)));
+        t8_split_bf16<<<1, 32>>>(dV, dB2, d1, d2);
+        CK(cudaDeviceSynchronize());
+        auto D1 = back(d1, 128);
+        auto D2 = back(d2, 128);
+        auto hi = [](float x) {
+            uint32_t u;
+            memcpy(&u, &x, 4);
+            u &= 0xffff0000u;
+            memcpy(&x, &u, 4);
+            return x;
+        };
+        std::vector<double> g1(D1.begin(), D1.end()), w1(128), g2(D2.begin(), D2.end()), w2(128), sum(128), v(128),
+            low16(128, 0.0), zero(128, 0.0), isnan1(128), all1(128, 1.0);
+        for (int i = 0; i < 128; ++i) {
+            const float l1 = V[i] - hi(V[i]);
+            w1[i] = l1;
+            w2[i] = (double)l1 - (double)hi(l1);
+            sum[i] = (double)hi(V[i]) + (double)hi(D1[i]) + (double)D2[i];
+            v[i] = V[i];
+            uint32_t u;
+            memcpy(&u, &D2[i], 4);
+            low16[i] = (double)(u & 0xffffu);
+            isnan1[i] = std::isnan(D1[i]) ? 1.0 : 0.0;
+        }
+        if (!poison) {
+            res.push_back(compare("t8_split_bf16.d1_low_digit", g1, w1));
+            res.push_back(compare("t8_split_bf16.d2_low_digit", g2, w2));
+            res.push_back(compare("t8_split_bf16.d2_exact_in_bf16", low16, zero));
+            res.push_back(compare("t8_split_bf16.three_digits_sum_to_v", sum, v));
+        } else {
+            res.push_back(compare("t8b_nan_low_half.d1_all_nan", isnan1, all1));
+        }
+        cudaFree(dV);
+        cudaFree(dB2);
+        cudaFree(d1);
+        cudaFree(d2);
     }
 
     char uuid[64];
