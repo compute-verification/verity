@@ -730,6 +730,31 @@
    "name": "dsa.fa3_sparse_mla_split"
   },
   {
+   "__type__": "DynamicDeepGemmFp8Linear",
+   "name": "fp8.dynamic_deepgemm_linear"
+  },
+  {
+   "__type__": "TpFusedAllReduceRmsNorm",
+   "name": "tp.fused_allreduce_rms_norm",
+   "world": 8
+  },
+  {
+   "__type__": "CudaRmsNorm",
+   "name": "norm.rms_norm_cuda"
+  },
+  {
+   "__type__": "CudaFusedAddRmsNorm",
+   "name": "norm.fused_add_rms_norm_cuda"
+  },
+  {
+   "__type__": "CublasLinear",
+   "name": "gemm.cublas_linear_default"
+  },
+  {
+   "__type__": "MlaAbsorbBmm",
+   "name": "gemm.mla_absorb_bmm"
+  },
+  {
    "__type__": "PerTokenGroupFp8Quant",
    "group": 128,
    "name": "fp8.per_token_group_fp8_quant"
@@ -1393,6 +1418,10 @@
     "64": 8
    },
    "scope_patterns": []
+  },
+  {
+   "__type__": "ResidualAddPattern",
+   "name": "residual_add.aten_add"
   },
   {
    "__type__": "GemmLaunch",

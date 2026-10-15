@@ -257,7 +257,7 @@ def test_the_sparse_attention_family_builds_its_h200_dsa_and_shared_moe_profile(
     )
     shared = next(p for p in profile.patterns if isinstance(p, MoEFusedSharedExpertsFp8))
     assert shared.group == 128 and shared.gate_spec is None
-    assert profile.notes["moe"]["status"].startswith("constructive except the gate")
+    assert profile.notes["moe"]["status"].startswith("constructive")
     vals, prov = FF.resolve_facts(G.rank_hf_config(cfg, 8), {})
     assert {k: vals[k] for k in ("NUM_EXPERTS", "N_GROUP", "TOPK_GROUP", "RENORMALIZE", "SCORING", "ROUTED_SCALING_FACTOR", "SHARED_I",
                                  "INDEX_HEADS", "INDEX_HEAD_DIM", "INDEX_TOPK", "INDEX_TOPK_FREQ", "INDEX_SKIP_TOPK_OFFSET", "FIRST_DENSE")} == {

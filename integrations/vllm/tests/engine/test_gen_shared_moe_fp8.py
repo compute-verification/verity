@@ -1,14 +1,15 @@
 """The block-FP8 shared-expert MoE scope (`gen_shared_moe_patterns.MoEFusedSharedExpertsFp8`) on synthetic `vllm.moe_forward_shared`
 events shaped as vLLM d9105ea80 issues them for GLM-5.3 at a TP8 rank on the H200 (H 6144, routed and shared intermediate 256 per rank,
-256 experts, top 8, block 128, routed scaling 2.5), without batch invariance, under a header that attests `TritonExperts` and the
-cutlass block-FP8 linears.
+256 experts, top 8, block 128, routed scaling 2.5), without batch invariance, under a header that attests `TritonExperts` and vLLM's
+default dynamic block-FP8 linears.
 
 It checks that the scope claims every event and binds the gate (both tiers, through the profile's `gate_spec`), the shared expert's
-two quantised linears and SiLU, the sigmoid router, the routed input quant, both pair forms on Hopper's tuned tiles with #1944's
-MMAv2/QGMMA step selection (`fp8_moe.sm90_dot`), the fused SiLU quant and `moe_sum`, with operand rows the Definitions' parameters
-fit, and that the combine after the op is `ResidualAdd_v1`; and that it refuses, by name, a missing gate Definition, an unattested
-cuteDSL gate, a missing attestation, a bad k32 pin, another router, another block, the unfused SiLU quant and shared experts that
-read another input; and that `run_facts` attests the cuteDSL gate tier only when a gate is eligible for it.
+two dynamic block-FP8 linears and SiLU, the sigmoid router, the routed input quant, both pair forms on Hopper's tuned tiles with #1944's
+MMAv2/QGMMA step selection (`fp8_moe.sm90_dot`), the routed SiLU and its quant and `moe_sum`, with operand rows the Definitions'
+parameters fit, and that the combine after the op is `ResidualAdd_v1`; that without a `gate_spec` the gate is the Build's
+(`served_gate_spec`); and that it refuses, by name, a gate with no Definition, an unattested cuteDSL gate, a missing attestation, a
+bad k32 pin, another router, another block, the fused SiLU quant and shared experts that read another input; and that `run_facts`
+attests the cuteDSL gate tier only when a gate is eligible for it.
 """
 from __future__ import annotations
 
@@ -22,11 +23,10 @@ from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.types import Array
 from verity_vllm.engine.profiles.gen_ln_patterns import ResidualAddPattern
 from verity_vllm.engine.profiles.gen_ov_moe_patterns import TRITON_EXPERTS, MoEFusedExpertsFp8
-from verity_vllm.engine.profiles.gen_shared_moe_patterns import GATE_CUBLAS, GATE_CUTEDSL, MoEFusedSharedExpertsFp8
+from verity_vllm.engine.profiles.gen_shared_moe_patterns import GATE_CUBLAS, GATE_CUTEDSL, MoEFusedSharedExpertsFp8, served_gate_spec
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, TritonLaunch, ViewDesc
 from verity_vllm.observe.fold.resolver import Compute, Gather, Group, PerRow, Shared, StepContext, Transparent, Unsupported, resolve_step
 from verity_vllm.observe.fold.tree import step_events
-from verity_vllm.program.frontend import targets as T
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.registry import moe as MOE
 from verity_vllm.program.registry.prims import BF16, F32
@@ -47,7 +47,8 @@ EMPTY = ("aten::empty.memory_format(SymInt[] size, *, ScalarType? dtype=None, La
          "MemoryFormat? memory_format=None) -> Tensor")
 QUANT = ("_C::per_token_group_fp8_quant(Tensor input, Tensor! output_q, Tensor! output_s, int group_size, float eps, float fp8_min, "
          "float fp8_max, bool scale_ue8m0, bool column_major_scales, bool tma_aligned) -> ()")
-SCALED_MM = "_C::cutlass_scaled_mm(Tensor! out, Tensor a, Tensor b, Tensor a_scales, Tensor b_scales, Tensor? bias) -> ()"
+DYN_MM = ("vllm::dynamic_flashinfer_deepgemm_blockscale_gemm(Tensor input, Tensor weight, Tensor weight_scale, int group_size, "
+          "bool use_deep_gemm_e8m0) -> Tensor")
 SILU = "_C::silu_and_mul(Tensor($0! -> ) result, Tensor input) -> ()"
 SILU_QUANT = ("_C::silu_and_mul_per_block_quant(Tensor! out, Tensor input, Tensor! scales, int group_size, Tensor? scale_ub, "
               "bool is_scale_transposed) -> ()")
@@ -98,8 +99,8 @@ NAMES = {"gate_w": f"{PRE}.gate.weight", "bias": f"{PRE}.gate.e_score_correction
          "w2": f"{PRE}.experts.w2_weight", "w2_s": f"{PRE}.experts.w2_weight_scale_inv"}
 
 
-def scope_events(M: int, *, gate: str = GATE_CUBLAS, tile=None, router_args=None, fused_silu_quant: bool = True,
-                 shared_input=None, quant_group: int = G):
+def scope_events(M: int, *, gate: str = GATE_CUBLAS, tile=None, router_args=None, fused_silu_quant: bool = False,
+                 shared_input=None, quant_group: int = G, shared_group: int = G):
     """One `vllm.moe_forward_shared` of layer LAYER, then the combine `aten.add.Tensor(shared, routed)` outside it."""
     nid = [1000]
 
@@ -122,16 +123,13 @@ def scope_events(M: int, *, gate: str = GATE_CUBLAS, tile=None, router_args=None
     def empty(v):
         op("aten.empty.memory_format", EMPTY, [list(v.shape), None, None, None, None, None], v)
 
-    def quant(x, xq, xs, column_major):
+    def quant(x, xq, xs):
         empty(xq)
         empty(xs)
-        op("_C.per_token_group_fp8_quant.default", QUANT, [x, xq, xs, quant_group, 1e-10, -448.0, 448.0, False, column_major, False])
+        op("_C.per_token_group_fp8_quant.default", QUANT, [x, xq, xs, quant_group, 1e-10, -448.0, 448.0, True, False, False])
 
-    def scaled_mm(out, xq, xs, w, ws):
-        K, N = xq.shape[1], out.shape[1]
-        empty(out)
-        op("_C.cutlass_scaled_mm.default", SCALED_MM, [out, xq, view(w.alloc, (K, N), E4M3, strides=(1, K)), xs,
-                                                       view(ws.alloc, (K // G, cdiv(N, G)), "float32", strides=(1, K // G)), None])
+    def dyn_mm(out, x, w, ws):
+        op("vllm.dynamic_flashinfer_deepgemm_blockscale_gemm.default", DYN_MM, [x, w, ws, shared_group, True], out)
 
     sx = shared_input or hidden
     evs.append(DispatchEnter(scope, None, 0, "forward", "vllm.moe_forward_shared.default", SCOPE, [hidden, hidden, sx, None, "layer", 0], {}, 7,
@@ -143,16 +141,12 @@ def scope_events(M: int, *, gate: str = GATE_CUBLAS, tile=None, router_args=None
     else:
         empty(scores)
     # the shared expert
-    xq1, xs1 = view(321, (M, H), E4M3), view(322, (M, H // G), "float32", strides=(1, M))
-    quant(sx, xq1, xs1, True)
     gu = view(323, (M, 2 * SI))
-    scaled_mm(gu, xq1, xs1, W["sgu"], W["sgu_s"])
+    dyn_mm(gu, sx, W["sgu"], W["sgu_s"])
     h = view(324, (M, SI))
     empty(h)
     op("_C.silu_and_mul.default", SILU, [h, gu])
-    xq2, xs2 = view(325, (M, SI), E4M3), view(326, (M, SI // G), "float32", strides=(1, M))
-    quant(h, xq2, xs2, True)
-    scaled_mm(shared_out, xq2, xs2, W["sd"], W["sd_s"])
+    dyn_mm(shared_out, h, W["sd"], W["sd_s"])
     # the router
     w_, ids = view(297, (M, TOPK), "float32"), view(298, (M, TOPK), "int32")
     ra = {"n_group": 1, "topk_group": 1, "topk": TOPK, "renormalize": True, "routed_scaling_factor": RSF, "scoring_func": 1, **(router_args or {})}
@@ -161,7 +155,7 @@ def scope_events(M: int, *, gate: str = GATE_CUBLAS, tile=None, router_args=None
     # the routed experts
     P = M * TOPK
     xq, xs = view(310, (M, H), E4M3), view(311, (M, H // G), "float32")
-    quant(hidden, xq, xs, False)
+    quant(hidden, xq, xs)
     bm, bn, bk = tile or TUNED[min(TUNED, key=lambda k: abs(k - M))]
     naive = P <= E // 4
     if naive:
@@ -186,14 +180,14 @@ def scope_events(M: int, *, gate: str = GATE_CUBLAS, tile=None, router_args=None
 
     launch(xq, xs, W["w13"], W["w13_s"], cache1, None, 2 * I, H, dict(CONSTS, **tile_c))
     hq, hs = view(312, (P, I), E4M3), view(313, (P, I // G), "float32")
-    empty(hq)
-    empty(hs)
     if fused_silu_quant:
+        empty(hq)
+        empty(hs)
         op("_C.silu_and_mul_per_block_quant.default", SILU_QUANT, [hq, view(301, (P, 2 * I), offset=P * I), hs, G, None, False])
     else:
         cache2 = view(301, (P, I))
         op("_C.silu_and_mul.default", SILU, [cache2, view(301, (P, 2 * I), offset=P * I)])
-        quant(cache2, hq, hs, False)
+        quant(cache2, hq, hs)
     launch(hq, hs, W["w2"], W["w2_s"], cache3, w_, H, I, dict(CONSTS, **tile_c, MUL_ROUTED_WEIGHT=True, top_k=1))
     empty(routed_out)
     op("_moe_C.moe_sum.default", "_moe_C::moe_sum(Tensor input, Tensor($0! -> ) output, Tensor? topk_ids=None, Tensor? expert_map=None) -> ()",
@@ -210,7 +204,7 @@ def scope(**kw) -> MoEFusedSharedExpertsFp8:
     return MoEFusedSharedExpertsFp8(C, group=G, **{"gate_spec": gate_spec, **kw})
 
 
-def _ctx(start, *, target=H200, experts=TRITON_EXPERTS, fp8_kernel="CutlassFp8BlockScaledMMKernel", ll_bf16=None, pattern=None):
+def _ctx(start, *, target=H200, experts=TRITON_EXPERTS, fp8_kernel="FlashInferFp8DeepGEMMDynamicBlockScaledKernel", ll_bf16=None, pattern=None):
     prof = {"target": target.to_json(), "backends": {}}
     if experts is not None:
         prof["backends"]["moe_experts_class"] = experts
@@ -254,30 +248,31 @@ def test_the_shared_scope_folds_the_gate_the_shared_expert_the_router_and_the_ro
     computes = [p for p in g.parts if isinstance(p, Compute)]
     bm, bn, kb = TUNED[min(TUNED, key=lambda k: abs(k - M))]
     fp8 = f"G={G},KB={kb},SWAP={bm < 64 and bn >= 64},DOT={dot}"
+    linear = "FlashInferFp8Linear_v1" if M < 32 else "DeepGemmFp8Linear_v1"
     assert [c.spec.id for c in computes] == [
         bind(GateStandIn, K=H, N=E, TIER=gate).id,
-        f"Fp8GroupQuant_v1{{K={H},G={G}}}", T.scaled_mm_fp8_block_spec(H200, H, 2 * SI, G).id, f"SiluMul_v2{{I={SI}}}",
-        f"Fp8GroupQuant_v1{{K={SI},G={G}}}", T.scaled_mm_fp8_block_spec(H200, SI, H, G).id,
+        f"{linear}{{K={H},N={2 * SI}}}", f"SiluMul_v2{{I={SI}}}", f"{linear}{{K={SI},N={H}}}",
         bind(MOE.MoeRouterSigmoidBias, E=E, TOPK=TOPK, SCALE=RSF, KERNEL="block").id,
-        f"Fp8GroupQuant_v1{{K={H},G={G}}}", f"MoeExpertFp8Gemm_v1{{E={E},K={H},N={2 * I},{fp8}}}", f"SiluMulFp8BlockQuant_v1{{I={I},G={G}}}",
-        f"MoeExpertFp8GemmW_v1{{E={E},K={I},N={H},{fp8}}}", f"MoeSum_v1{{TOPK={TOPK},H={H}}}"]
+        f"Fp8GroupQuantUe8m0_v1{{K={H},G={G}}}", f"MoeExpertFp8Gemm_v1{{E={E},K={H},N={2 * I},{fp8}}}", f"SiluMul_v2{{I={I}}}",
+        f"Fp8GroupQuantUe8m0_v1{{K={I},G={G}}}", f"MoeExpertFp8GemmW_v1{{E={E},K={I},N={H},{fp8}}}", f"MoeSum_v1{{TOPK={TOPK},H={H}}}"]
     P = M * TOPK
-    assert [c.rows for c in computes] == [M] * 8 + [P, P, P, M]
+    assert [c.rows for c in computes] == [M] * 6 + [P, P, P, P, M]
     assert all(_fits(c) for c in computes)
-    gc, q1, m1, silu, q2, m2, router, qr, up, sq, down, msum = computes
+    gc, m1, silu, m2, router, qr, up, rs, rq, down, msum = computes
     # the gate reads hidden_states and the gate weight, and writes the scores the router reads
     assert gc.operands[0].view.alloc == 295 and gc.operands[1].view == weights()["gate_w"] and gc.roots == (None, f"{PRE}.gate.weight")
     assert router.operands[0].view == gc.outputs[0].view and router.roots == (None, f"{PRE}.gate.e_score_correction_bias")
     assert gc.kernels == (f"{gate}_gate_kernel",) and router.kernels == ("single_group_topk_block_kernel",)
-    # the shared expert: hidden -> quant -> gate_up -> SiLU -> quant -> down, into the op's first output
-    assert q1.operands[0].view.alloc == 295 and m1.operands[0].view == q1.outputs[0].view and silu.operands[0].view == m1.outputs[0].view
-    assert q2.operands[0].view == silu.outputs[0].view and m2.operands[0].view == q2.outputs[0].view and m2.outputs[0].view.alloc == 330
-    assert m1.roots[2:] == (NAMES["sgu"], NAMES["sgu_s"]) and m2.roots[2:] == (NAMES["sd"], NAMES["sd_s"])
-    # the routed pairs: w13 gathers its token's quantised row; the fused SiLU quant writes w2's A and scales
+    # the shared expert: hidden -> gate_up -> SiLU -> down, into the op's first output
+    out = [next(o for o in m.outputs if o is not None).view for m in (m1, m2)]
+    assert m1.operands[0].view.alloc == 295 and silu.operands[0].view == out[0]
+    assert m2.operands[0].view == silu.outputs[0].view and out[1].alloc == 330
+    assert m1.roots[1:] == (NAMES["sgu"], NAMES["sgu_s"]) and m2.roots[1:] == (NAMES["sd"], NAMES["sd_s"])
+    # the routed pairs: w13 gathers its token's quantised row; the SiLU and its quant write w2's A and scales
     assert qr.operands[0].view.alloc == 295 and [type(o) for o in up.operands] == [Gather, Gather, PerRow, Shared, Shared]
     assert up.operands[0].indices == tuple(p // TOPK for p in range(P)) and up.operands[2].view.alloc == router.outputs[1].view.alloc
-    assert sq.operands[0].view.shape == (P, 2 * I) and (sq.operands[0].view.alloc, sq.operands[0].view.offset) == (301, P * I)
-    assert (down.operands[0].view, down.operands[1].view) == (sq.outputs[0].view, sq.outputs[1].view)
+    assert rs.operands[0].view.shape[-1] == 2 * I and (rs.operands[0].view.alloc, rs.operands[0].view.offset) == (301, P * I)
+    assert rq.operands[0].view == rs.outputs[0].view and (down.operands[0].view, down.operands[1].view) == (rq.outputs[0].view, rq.outputs[1].view)
     assert down.operands[3].view.alloc == router.outputs[0].view.alloc
     assert up.roots[3:] == (NAMES["w13"], NAMES["w13_s"]) and down.roots[4:] == (NAMES["w2"], NAMES["w2_s"])
     assert msum.outputs[0].view.alloc == 300
@@ -294,20 +289,33 @@ def test_the_cutedsl_gate_binds_the_gate_weight_root_by_the_empty_it_fills():
     assert gc.consumed == (empty.id,) and gc.operands[1].view == weights()["gate_w"]
 
 
+@pytest.mark.parametrize("M,tier,want", [
+    (1, GATE_CUTEDSL, "LlBf16DotprodGemm_v1{N=256,K=6144,BS=128,VEC=8,FMA=1}"),
+    (256, GATE_CUBLAS, "CublasSplitKGemmF32Out_v1{K=6144,N=256,SPLIT_K=3,DOT=HopperBF16WgmmaDot16_v1}"),
+    (4, GATE_CUBLAS, None), (32, GATE_CUTEDSL, None), (64, GATE_CUBLAS, None)])
+def test_without_a_gate_spec_the_gate_is_the_builds_on_the_tier_vllm_dispatches(M, tier, want):
+    got = served_gate_spec(H200, H, E, M, tier)
+    assert (got[0].id if got else None) == want
+    assert served_gate_spec(dataclasses.replace(H200, batch_invariant=True), H, E, 1, GATE_CUTEDSL) is None
+    if want is not None:
+        res, _ = _resolve(M, gate=tier, ctx_kw={"pattern": scope(gate_spec=None), "ll_bf16": tier == GATE_CUTEDSL})
+        assert isinstance(res[0], Group) and next(p for p in res[0].parts if isinstance(p, Compute)).spec.id == want, _reasons(res)
+
+
 @pytest.mark.parametrize("M,kw,ctx_kw,needle", [
     (4, {"pattern": None}, {}, "no registered bf16 x bf16 -> f32 gate Definition for the cublas tier"),
     (4, {"gate": GATE_CUTEDSL}, {}, "does not attest the cuteDSL ll_bf16_gemm tier"),
     (32, {"gate": GATE_CUTEDSL}, {"ll_bf16": True}, "does not attest the cuteDSL ll_bf16_gemm tier at M <= 16"),
     (4, {}, {"experts": None}, f"does not attest {TRITON_EXPERTS}"),
-    (4, {}, {"fp8_kernel": None}, "the shared expert's cutlass_scaled_mm did not resolve at block 128"),
+    (4, {"shared_group": 64}, {}, "the shared expert's gate_up dynamic_flashinfer_deepgemm_blockscale_gemm did not resolve"),
     (4, {"tile": (64, 64, 16)}, {}, "k32 step"),
     (4, {"tile": (8, 64, 128)}, {"target": TargetProfile(compute_capability=(12, 0), num_sms=188, moe_backend="triton", batch_invariant=False)},
      "modelled on cc 9.0 only"),
     (4, {"router_args": {"n_group": 8, "topk_group": 4}}, {}, "one group, renormalized, sigmoid"),
     (4, {"router_args": {"routed_scaling_factor": 1.0}}, {}, "at the profile's routed_scaling_factor"),
-    (4, {"fused_silu_quant": False}, {}, "block-FP8 shared-expert shape"),
+    (4, {"fused_silu_quant": True}, {}, "block-FP8 shared-expert shape"),
     (4, {"shared_input": ViewDesc(296, 0, (4, H), (H, 1), "bfloat16", CUDA)}, {}, "does not take the hidden states"),
-    (4, {"quant_group": 64}, {}, "did not resolve at block 128"),
+    (4, {"quant_group": 64}, {}, "did not resolve to the w13 launch's A and a_scale"),
 ])
 def test_the_shared_scope_refuses_by_name(M, kw, ctx_kw, needle):
     if "pattern" in kw:

@@ -49,7 +49,7 @@ from verity_vllm.engine.profiles.gen_dense2_patterns import with_dense2_patterns
 from verity_vllm.engine.profiles.gen_dense_gemma2_patterns import with_gemma2_patterns
 from verity_vllm.engine.profiles.gen_dense_softcap_patterns import with_softcap_patterns
 from verity_vllm.engine.profiles.gen_llama_patterns import ADA_TUNED_GEMM, with_tuned_gemm
-from verity_vllm.engine.profiles.gen_ln_patterns import with_ln_patterns
+from verity_vllm.engine.profiles.gen_ln_patterns import ResidualAddPattern, with_ln_patterns
 from verity_vllm.engine.profiles.gen_ov_moe_patterns import (FUSED_MOE_NUM_STAGES, FUSED_MOE_NUM_WARPS, FUSED_MOE_PINS, MOE_CONSTRUCTION_PATTERNS,
                                   MOE_FP8_CONSTRUCTION_PATTERNS, ROUTER_VPT_BY_E, MoEFusedExperts, MoEFusedExpertsFp8)
 from verity_vllm.engine.profiles.gen_shared_moe_patterns import MoEFusedSharedExpertsFp8
@@ -516,12 +516,12 @@ def _moe_patterns(C: dict[str, Any], patterns: list, *, world: int, moe_construc
 
 
 def _dsa_patterns(C: dict[str, Any], patterns: list) -> list:
-    """GLM-5.3's pinned DSA kernels and block-FP8 shared-expert scope."""
+    """GLM-5.3's pinned DSA kernels, block-FP8 shared-expert scope and the `shared + routed` combine after it."""
     if int(C.get("FP8_BLOCK") or 0) != 128:
         raise ValueError(f"dsa-moe requires the recorded block-128 FP8 experts, got FP8_BLOCK={C.get('FP8_BLOCK')!r}")
     out = with_tuned_gemm(patterns)
     moe = MoEFusedSharedExpertsFp8(C, group=128, gate_spec=None)
-    out.insert(next(i for i, p in enumerate(out) if type(p).__name__ == "GemmLaunchTuned") + 1, moe)
+    out[next(i for i, p in enumerate(out) if type(p).__name__ == "GemmLaunchTuned") + 1:0] = [moe, ResidualAddPattern()]
     return dsa_patterns() + out
 
 
@@ -627,8 +627,7 @@ def build_profile(role: str, world: int = 1, *, moe_construction: str | None = N
                        f"Fp8GroupQuant_v1{{K={I},G={moe.group}}}", f"MoeExpertFp8GemmW_v1{{E={E},K={I},N={H},{fp8}}}"]
         else:
             experts = [f"MoeExpertGemm_v1{{E={E},K={H},N={2 * I}}}", f"SiluMul_v2{{I={I}}}", f"MoeExpertGemmW_v1{{E={E},K={I},N={H}}}"]
-        notes["moe"] = {"status": ("constructive except the gate: no registered bf16 x bf16 -> f32 gate Definition"
-                                     if arch == "dsa-moe" else "constructive: Computes over registry.moe definitions per step per rank"),
+        notes["moe"] = {"status": "constructive: Computes over registry.moe definitions per step per rank",
                         "scope_pattern": f"gen_ov_moe_patterns.{type(moe).__name__} (vllm.moe_forward*), renormalize={bool(C.get('RENORMALIZE', False))}",
                         "definitions": [f"MoeRouterTopK{'Ordered' if moe.router == 'ordered' else ''}{'Norm' if C.get('RENORMALIZE') else ''}_v1"
                                         f"{{E={E},TOPK={T},VPT={C['ROUTER_VPT']}}}", *experts,
