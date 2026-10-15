@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import pickle
 import random
 import shutil
 import subprocess
 from pathlib import Path
 
+import keyed
 import pytest
 from test_rec_open import _tree
 from verity_flock import circuit as FC
@@ -95,13 +97,19 @@ def test_a_value_the_verifier_registers_is_a_function_of_its_rows_alone():
 
 
 @pytest.fixture(scope="module")
-def staged(tmp_path_factory):
+def staged(once):
+    """Level 1 staged once on the machine (`once`, here and in `test_rec_vstar_checks`), with what `rec_outer.stage` said."""
     qs, layers = _queries(level=1)
     (level,) = O.levels(qs)
     coefs = _coefs(qs)
     tops = O.TopValue.build(PROGRAM, 1, {0: _top(layers[1], 2), 1: _top(layers[1], 3)})
-    d = tmp_path_factory.mktemp("rec-outer")
-    return d, O.stage(level, d, O.Chain.build(PROGRAM, qs, coefs), coefs, tops, link_rows=True), tops, level, coefs
+
+    def make(d):
+        s = O.stage(level, d / "level", O.Chain.build(PROGRAM, qs, coefs), coefs, tops, link_rows=True)
+        (d / "stage.pickle").write_bytes(pickle.dumps(s))
+
+    d = once("rec-outer-staged", make, lambda: keyed.key(code=[__name__]))
+    return d / "level", pickle.loads((d / "stage.pickle").read_bytes()), tops, level, coefs
 
 
 @pytest.mark.slow
