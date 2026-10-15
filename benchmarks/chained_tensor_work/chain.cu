@@ -16,8 +16,9 @@
 //   chain gate DIR KEYS M K S SEED     every step of every arm, poisoned first, to DIR for ref.py; the lt arm's roots too
 //   chain bench KEYS REPS SHAPE...     interleaved timing, a JSON line an (shape, arm); SHAPE = name:m:k:S
 //   chain one KEYS ARM M K S           one chain run of ARM after a warm-up (for ncu)
-// Arms: G/C[o], G in {lt, kP, kW}, C the commit stride (0 none, else X_j committed when C divides j), o overlapping the
-// commitments on a second stream (three X buffers); hash (one commitment of an X), and its parts rowdig, leaves, tree.
+// Arms: G/C[o|h|g], G in {lt, kP, kW}, C the commit stride (0 none, else X_j committed when C divides j); o overlaps the
+// commitments on a second stream of the same priority (four X buffers), h with the commitments' stream at the greatest
+// priority, g with the GEMM's; hash (one commitment of an X), and its parts rowdig, leaves, tree.
 #include <cublasLt.h>
 #include <cuda.h>
 #include <cuda_profiler_api.h>
@@ -75,7 +76,7 @@ struct Chain {
   std::vector<fg::Maps*> maps[3];   // [gemm][s nbuf + buffer]
   uint8_t *segdig, *rowdig, *tree;
   Keys* keys;
-  cudaStream_t st, st2;
+  cudaStream_t st, st2, sg, sh;   // st and st2 the default priority, sg and sh the greatest
   std::vector<cudaEvent_t> ev_out, ev_hash;
   std::vector<bool> hash_pending;
 };
@@ -90,6 +91,10 @@ static void setup(Chain& C, Keys* keys, int m, int k, int S, int nbuf, uint64_t 
   if (keys->ndom <= S) { fprintf(stderr, "keys have %d domain ids, the chain needs %d\n", keys->ndom, S + 1); exit(2); }
   CK(cudaStreamCreateWithFlags(&C.st, cudaStreamNonBlocking));
   CK(cudaStreamCreateWithFlags(&C.st2, cudaStreamNonBlocking));
+  int lo, hi;
+  CK(cudaDeviceGetStreamPriorityRange(&lo, &hi));
+  CK(cudaStreamCreateWithPriority(&C.sg, cudaStreamNonBlocking, hi));
+  CK(cudaStreamCreateWithPriority(&C.sh, cudaStreamNonBlocking, hi));
   fg::Rng r{seed * 0x100000001B3ull + 29};
   std::vector<int8_t> h((size_t)m * k);
   for (int b = 0; b < nbuf; b++) {
@@ -179,6 +184,7 @@ struct Arm {
   std::string name;
   int g = LT, c = 0, hash = 0;   // hash: 0 a chain, else the commitment parts alone
   bool overlap = false;
+  char prio = 'o';
 };
 static Arm parse_arm(const std::string& s) {
   Arm a;
@@ -192,11 +198,12 @@ static Arm parse_arm(const std::string& s) {
   a.g = g == "lt" ? LT : g == "kP" ? KP : g == "kW" ? KW : -1;
   if (a.g < 0 || sl == std::string::npos) { fprintf(stderr, "arm %s\n", s.c_str()); exit(2); }
   std::string c = s.substr(sl + 1);
-  if (!c.empty() && c.back() == 'o') { a.overlap = true; c.pop_back(); }
+  if (!c.empty() && (c.back() == 'o' || c.back() == 'h' || c.back() == 'g')) { a.overlap = true; a.prio = c.back(); c.pop_back(); }
   a.c = atoi(c.c_str());
   return a;
 }
 
+static cudaStream_t gemm_stream(Chain& C, const Arm& a) { return a.overlap && a.prio == 'g' ? C.sg : C.st; }
 // S steps of the arm from X_0 (in buffer 0), the buffers rotating mod nbuf; with overlap, a step that overwrites a buffer
 // waits for that buffer's commitment
 static void run_chain(Chain& C, const Arm& a) {
@@ -204,25 +211,26 @@ static void run_chain(Chain& C, const Arm& a) {
     for (int s = 0; s < C.S; s++) commit(C, s % C.nbuf, s + 1, C.st, a.hash);
     return;
   }
+  const cudaStream_t gs = gemm_stream(C, a), hs = a.prio == 'h' ? C.sh : C.st2;
   for (int s = 0; s < C.S; s++) {
     const int bin = s % C.nbuf, bout = (s + 1) % C.nbuf;
-    if (a.overlap && C.hash_pending[bout]) { CK(cudaStreamWaitEvent(C.st, C.ev_hash[bout], 0)); C.hash_pending[bout] = false; }
-    step(C, a.g, s, bin, bout, C.st);
+    if (a.overlap && C.hash_pending[bout]) { CK(cudaStreamWaitEvent(gs, C.ev_hash[bout], 0)); C.hash_pending[bout] = false; }
+    step(C, a.g, s, bin, bout, gs);
     if (a.c && (s + 1) % a.c == 0) {
       if (a.overlap) {
-        CK(cudaEventRecord(C.ev_out[bout], C.st));
-        CK(cudaStreamWaitEvent(C.st2, C.ev_out[bout], 0));
-        commit(C, bout, s + 1, C.st2);
-        CK(cudaEventRecord(C.ev_hash[bout], C.st2));
+        CK(cudaEventRecord(C.ev_out[bout], gs));
+        CK(cudaStreamWaitEvent(hs, C.ev_out[bout], 0));
+        commit(C, bout, s + 1, hs);
+        CK(cudaEventRecord(C.ev_hash[bout], hs));
         C.hash_pending[bout] = true;
       } else {
-        commit(C, bout, s + 1, C.st);
+        commit(C, bout, s + 1, gs);
       }
     }
   }
   if (a.overlap) {
     for (int b = 0; b < C.nbuf; b++)
-      if (C.hash_pending[b]) { CK(cudaStreamWaitEvent(C.st, C.ev_hash[b], 0)); C.hash_pending[b] = false; }
+      if (C.hash_pending[b]) { CK(cudaStreamWaitEvent(gs, C.ev_hash[b], 0)); C.hash_pending[b] = false; }
   }
 }
 
@@ -281,7 +289,7 @@ static int cmd_bench(const std::string& kdir, int reps, const std::vector<std::s
     if (sscanf(sh.c_str(), "%63[^:]:%d:%d:%d", name, &m, &k, &S) != 4) { fprintf(stderr, "shape %s\n", sh.c_str()); return 2; }
     Keys keys(kdir, m);
     Chain C;
-    setup(C, &keys, m, k, S, 3, 0x5EED0000ull + m + k);
+    setup(C, &keys, m, k, S, 4, 0x5EED0000ull + m + k);
     cudaEvent_t e0, e1;
     CK(cudaEventCreate(&e0)); CK(cudaEventCreate(&e1));
     const int na = (int)arms.size();
@@ -289,9 +297,10 @@ static int cmd_bench(const std::string& kdir, int reps, const std::vector<std::s
     for (int rep = -2; rep < reps; rep++)
       for (int t = 0; t < na; t++) {
         const int ai = (t + (rep < 0 ? 0 : rep)) % na;
-        CK(cudaEventRecord(e0, C.st));
+        const cudaStream_t gs = gemm_stream(C, arms[ai]);
+        CK(cudaEventRecord(e0, gs));
         run_chain(C, arms[ai]);
-        CK(cudaEventRecord(e1, C.st));
+        CK(cudaEventRecord(e1, gs));
         CK(cudaEventSynchronize(e1));
         const unsigned c = nv.sm();
         float x;

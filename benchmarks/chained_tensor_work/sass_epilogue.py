@@ -29,7 +29,7 @@ def width_of(op: str) -> int:
     """Registers an instruction's first operand spans: an IMMA.16832's D is 4, a 64- or 128-bit store's data 2 or 4."""
     if op.startswith("IMMA"):
         return 4
-    return 4 if ".128" in op else 2 if ".64" in op else 1
+    return 4 if ".128" in op else 2 if ".64" in op or ".WIDE" in op else 1
 
 
 def analyse(lines: list[tuple[str, str]]) -> dict:
@@ -40,7 +40,7 @@ def analyse(lines: list[tuple[str, str]]) -> dict:
     for op, args in lines[: last + 1]:
         if op.startswith("IMMA"):
             acc |= regs(args.split(",")[0], 4)
-    readers, stored = Counter(), 0
+    readers, stored, examples = Counter(), 0, []
     for op, args in lines[last + 1:]:
         parts = [p.strip() for p in args.split(",")]
         if not parts or not parts[0]:
@@ -55,9 +55,11 @@ def analyse(lines: list[tuple[str, str]]) -> dict:
         srcs = set().union(*(regs(p) for p in parts[1:])) if len(parts) > 1 else set()
         if srcs & acc:
             readers[op] += 1
+            if op.split(".")[0] not in STORES:
+                examples.append(f"{op} {args}")
         acc -= regs(parts[0], width_of(op))
     return {"imma": sum(op.startswith("IMMA") for op, _ in lines), "readers": dict(readers), "accumulator_regs_stored": stored,
-            "non_store_readers": sum(c for op, c in readers.items() if op.split(".")[0] not in STORES)}
+            "non_store_readers": sum(c for op, c in readers.items() if op.split(".")[0] not in STORES), "non_store_examples": examples[:8]}
 
 
 def main(path: str) -> int:

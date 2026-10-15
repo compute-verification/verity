@@ -7,7 +7,8 @@
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-12 --source . --cwd clone --env GPU_LEASE_WHO=T2 \
 #     --send benchmarks/chained_tensor_work/run.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/run.sh"'
-# STAGE=build|gate|all (default all); REPS (default 25); SHAPES (name:m:k:S ...); ARMS (chain.cu's); VERIFY (M:K ...)
+# STAGE=build|gate|all (default all); REPS (default 25); SHAPES (name:m:k:S ...); ARMS (chain.cu's); NCU (default 1);
+# VERIFY (M:K ..., or none)
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -42,7 +43,7 @@ done
 cat "$O/gate.jsonl"
 [ "$STAGE" = gate ] && exit 0
 
-export REPS=${REPS:-25}
+export REPS=${REPS:-25} NCU=${NCU:-1}
 # shellcheck disable=SC2016
 gpu-lease 1 --wait --max-min 30 -- bash -c '
   nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,clocks.applications.graphics,power.limit \
@@ -54,7 +55,7 @@ gpu-lease 1 --wait --max-min 30 -- bash -c '
   echo "bench rc $?" >> "$O/rc.txt"
   kill $smi
   M=gpu__time_duration.sum,sm__cycles_elapsed.avg,sm__inst_executed_pipe_tensor.sum,sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_elapsed,sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_active,sm__pipe_alu_cycles_active.avg.pct_of_peak_sustained_active,sm__pipe_fma_cycles_active.avg.pct_of_peak_sustained_active,smsp__issue_active.avg.pct_of_peak_sustained_active,dram__throughput.avg.pct_of_peak_sustained_elapsed
-  for arm in lt/0 kP/0 kW/0 hash; do
+  [ "$NCU" = 1 ] && for arm in lt/0 kP/0 kW/0 hash; do
     a=${arm//\//_}
     ncu --clock-control none --profile-from-start off --launch-count 12 --metrics $M --csv "$B/chain" one "$B/keys" $arm 8192 8192 4 \
       > "$O/ncu-big-$a.csv" 2>&1 || echo "ncu big $arm rc $?" >> "$O/rc.txt"
@@ -63,6 +64,7 @@ cat "$O/rc.txt"
 head -c 3000 "$O/bench.jsonl" | cut -c1-400
 
 for v in ${VERIFY:-"8192:8192 4096:4096"}; do
+  [ "$v" = none ] && continue
   IFS=: read -r vm vk <<< "$v"
   python3 $D/verify.py "$vm" "$vk" 1 8 64 128 >> "$O/verify.jsonl" 2>> "$O/verify.err" || echo "verify $v rc $?" >> "$O/rc.txt"
 done
