@@ -10,6 +10,8 @@ phase (the four linears weighted by the design's time, as one layer runs each on
 - added: the cheater's steps per SM-clock over φ's solo rate (21.2 alu steps an SM-clock, round 1), at the variant's time;
 - slowdown: the variant's time over the design's, from each kernel's median against the plain kernel in the same rounds;
 - free share: (added work at φ's solo rate − the time it added) / added work, both in units of the design's time;
+- ν_f: the most free capacity any variant shows, added work − the time it added, as a share of the window's CUDA
+  capacity at the design's time (the lemma's ν: what the cheater gains for free);
 - ν_f at no rate loss: the most added share among variants within NOISE of the design's time.
 """
 from __future__ import annotations
@@ -34,8 +36,8 @@ def main():
     rows = {(r["kernel"], r["shape"]): r for r in d["rows"]}
     phases = sorted({r["shape"].split("_")[0] for r in d["rows"]})
     out = []
-    print("| design | X | phase | added (share of φ solo) | slowdown | free share | rate kept vs plain |")
-    print("|---|---|---|---|---|---|---|")
+    print("| design | X | phase | added (share of φ solo) | slowdown | free share | free capacity | rate kept vs plain |")
+    print("|---|---|---|---|---|---|---|---|")
     variants = sorted({r["kernel"] for r in d["rows"] if re.search(r"_x\d+$", r["kernel"])},
                       key=lambda k: (k.rsplit("_x", 1)[0], int(k.rsplit("_x", 1)[1])))
     for v in variants:
@@ -57,18 +59,24 @@ def main():
             added_base_units = added * slow
             free = (added_base_units - (slow - 1)) / added_base_units
             kept = tp / tv
+            net = added_base_units - (slow - 1)
             out.append({"design": base, "extra": x, "phase": ph, "added": added, "slowdown": slow, "free": free,
-                        "rate_kept_vs_plain": kept})
-            print(f"| {base} | {x} | {ph} | {100 * added:.1f}% | {slow:.4f}× | {100 * free:.0f}% | {100 * kept:.1f}% |")
-    nu = {}
+                        "net": net, "rate_kept_vs_plain": kept})
+            print(f"| {base} | {x} | {ph} | {100 * added:.1f}% | {slow:.4f}× | {100 * free:.0f}% | {100 * net:.1f}% | "
+                  f"{100 * kept:.1f}% |")
+    nu, net = {}, {}
     for o in out:
+        k = (o["design"], o["phase"])
+        net[k] = max(net.get(k, 0.0), o["net"])
         if o["slowdown"] <= 1 + NOISE:
             k = (o["design"], o["phase"])
             nu[k] = max(nu.get(k, 0.0), o["added"])
-    print("\nν_f at no rate loss (within", f"{100 * NOISE:.1f}%):",
+    print("\nν_f (most free capacity):", json.dumps({f"{k}@{p}": round(v, 4) for (k, p), v in sorted(net.items())}))
+    print("ν_f at no rate loss (within", f"{100 * NOISE:.1f}%):",
           json.dumps({f"{k}@{p}": round(v, 4) for (k, p), v in sorted(nu.items())}))
     if a.json:
-        json.dump({"rows": out, "nu_f": {f"{k}@{p}": v for (k, p), v in nu.items()}}, open(a.json, "w"), indent=1)
+        json.dump({"rows": out, "nu_f": {f"{k}@{p}": v for (k, p), v in net.items()},
+                   "nu_f_no_rate_loss": {f"{k}@{p}": v for (k, p), v in nu.items()}}, open(a.json, "w"), indent=1)
 
 
 if __name__ == "__main__":

@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """PoUW windows restricted to the served FP8 GEMMs (CMP-8 round 2, section 2 of the saturation follow-up), derived.
 
-  python windows_eps.py receipt-table.json gap-filler.json cutlass-receipt.json cutlass-corun.json [--json OUT]
+  python windows_eps.py receipt-table.json gap-filler.json cutlass-receipt.json cutlass-corun.json [--cheat C ...] [--json OUT]
 
 Inputs: `cutlass_receipt_table.py --json` over a cgemm run (rate kept per kernel and phase), `gap_filler.py`'s JSON,
 that cgemm run's own `cutlass-receipt.json` (the receipt-free kernel's time per linear, for the wave tails), and a corun
-run's `cutlass-corun.json` (the idle SM-time a low-priority pump finds beside each design's kernel). Round 1's
+run's `cutlass-corun.json` (the idle SM-time a low-priority pump finds beside each design's kernel), and optionally
+`cheat_slack.py --json` over cheat runs (ν_f measured: the most free capacity a cheater's own CUDA work fused into each
+design's kernel found, over every --cheat given; without one, ν_f is read off section 1's points at no rate loss). Round 1's
 numbers (`note:20261015T0417Z-draft-saturation-budget`) are constants below: the step split (`r20261015-042637-c9be`,
 FP8 graphs) and the GEMMs' η.
 
@@ -42,12 +44,13 @@ DESIGNS = [  # name, prefill kernel, decode kernel
     ("1× alu, L = 32", "p_alu_g4", "d_alu_g4"),
     ("3× alu, L = 128, spread (crossover)", "p_alu3_p1s", "d_alu16_p1"),
 ]
-SCENARIOS = [  # name, measured idle SM-time as served?, ν_f (CUDA slack a fused cheater uses; None: section 1's)
-    ("as served (measured idle, ν_f from section 1)", True, None),
-    ("tail filler, ν_f 0.04 (round 1's probe bound)", False, 0.04),
-    ("tail filler, ν_f 0.01", False, 0.01),
-    ("tail filler, ν_f from section 1", False, None),
+SCENARIOS = [  # name, measured idle SM-time as served?, ν_f (CUDA slack a fused cheater uses; None: measured)
+    ("as served (measured idle and ν_f)", True, None),
+    ("tails filled, measured ν_f", False, None),
+    ("tails filled, ν_f 0.01", False, 0.01),
+    ("tails filled, ν_f 0", False, 0.0),
 ]
+MEASURED_CREDIT = 2  # round 1 #10: at most ~1 MAC a CUDA slot through FP8, 2.1 through INT8
 
 
 def coverage(ph):
@@ -116,9 +119,15 @@ def main():
     ap.add_argument("gap")
     ap.add_argument("cutlass")
     ap.add_argument("corun")
+    ap.add_argument("--cheat", action="append", default=[])
     ap.add_argument("--json")
     a = ap.parse_args()
     idle = measured_idle(json.load(open(a.corun)))
+    cheat = None
+    for c in a.cheat:
+        for key_, v in json.load(open(c))["nu_f"].items():
+            cheat = cheat or {}
+            cheat[key_] = max(cheat.get(key_, 0.0), v)
     tab = json.load(open(a.table))
     kept = {(p["kernel"], p["phase"]): p["rate_kept"] for p in tab["phases"]}
     meta = {r["kernel"]: r for r in tab["rows"]}
@@ -144,10 +153,11 @@ def main():
         print(f"| {k} | {ph} | {100 * v['idle']:.1f}% | {100 * v['tail']:.1f}% | {100 * v['residue']:.1f}% |")
     res["measured_idle"] = {f"{k}@{ph}": v for (k, ph), v in idle.items()}
 
-    print("\n| design | phase | rate kept | honest overhead (step) | κ | η_w | ×ν | f terms | idle (corun) | "
-          + " | ".join(f"ε_in: {s[0]}" for s in SCENARIOS) + " | page's reading (ν_w = 1 − φ share) | "
-          + " | ".join(f"ε end to end: {s[0]}" for s in SCENARIOS) + " |")
-    print("|---|---|---|---|---|---|---|---|---|---|---|" + "---|" * len(SCENARIOS) + "---|" + "---|" * len(SCENARIOS))
+    print("\n| design | phase | rate kept | honest overhead (step) | κ | η_w | ×ν | f terms | idle (corun) | ν_f | "
+          "trading pays above (MACs a slot) | " + " | ".join(f"ε_in: {s[0]}" for s in SCENARIOS)
+          + " | page's reading (ν_w = 1 − φ share) | " + " | ".join(f"ε end to end: {s[0]}" for s in SCENARIOS)
+          + f" | ε_in: tails filled, measured ν_f, κ = max({MEASURED_CREDIT}, L/3) |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|" + "---|" * (2 * len(SCENARIOS) + 2))
     for name, pk, dk in DESIGNS:
         for ph in PHASES:
             k = dk if ph == "d32" else pk
@@ -165,22 +175,29 @@ def main():
             mult = kappa / (RHO * eta_w)
             f_terms = F + kappa * F * h / L
             nu_idle = max(0.0, idle[(k, ph)]["idle"]) if (k, ph) in idle else nu_tail[ph]
-            nu_f = frontier_slack(tab, k, ph)
+            nu_f = None if cheat is None else cheat.get(f"{k}@{ph}")
+            src = "section 1" if nu_f is None else "cheat run"
+            nu_f = frontier_slack(tab, k, ph) if nu_f is None else nu_f
             k_star = trade_threshold(tab, k, ph)
             eps = [f_terms + mult * (nu_f if nf is None else nf) + (BEST_ETA * nu_idle / eta_w if served else 0.0)
                    for _, served, nf in SCENARIOS]
             page = f_terms + mult * max(0.0, 1 - share)
+            kappa_m = max(MEASURED_CREDIT, L / 3)
+            eps_m = F + kappa_m * F * h / L + kappa_m / (RHO * eta_w) * nu_f
             cov = res["coverage"][ph]["macs"]
             e2e = [1 - cov * (1 - min(1.0, e)) for e in eps]
             res["designs"].append({"design": name, "kernel": k, "phase": ph, "L": L, "rounds": rounds, "var": var,
                                    "rate_kept": kp, "phi_share": share, "overhead": over, "kappa": kappa, "h": h,
-                                   "eta_w": eta_w, "nu_multiplier": mult, "f_terms": f_terms, "idle": nu_idle, "nu_f_frontier": nu_f, "trade_threshold": k_star,
+                                   "eta_w": eta_w, "nu_multiplier": mult, "f_terms": f_terms, "idle": nu_idle,
+                                   "nu_f": nu_f, "nu_f_source": src,
+                                   "trade_threshold": k_star, "kappa_measured_credit": kappa_m, "eps_in_measured_credit": eps_m,
                                    "eps_in": dict(zip([s[0] for s in SCENARIOS], eps)), "eps_page": page,
                                    "eps_end_to_end": dict(zip([s[0] for s in SCENARIOS], e2e))})
             fmt = lambda e: f"{100 * e:.1f}%" if e < 1 else "vacuous"
             print(f"| {name} | {ph} | {100 * kp:.1f}% | {100 * over:.1f}% | {kappa:.1f} | {eta_w:.3f} | {mult:.2f} | "
-                  f"{100 * f_terms:.2f}% | {100 * nu_idle:.1f}% | {100 * nu_f:.1f}% | {k_star:.1f} | " + " | ".join(fmt(e) for e in eps)
-                  + f" | {fmt(page)} | " + " | ".join(fmt(e) for e in e2e) + " |")
+                  f"{100 * f_terms:.2f}% | {100 * nu_idle:.1f}% | {100 * nu_f:.1f}% | {k_star:.1f} | "
+                  + " | ".join(fmt(e) for e in eps)
+                  + f" | {fmt(page)} | " + " | ".join(fmt(e) for e in e2e) + f" | {fmt(eps_m)} |")
 
     print("\n| phase | sequence | alone ms | filler | slowdown | filler's share of its solo rate | free share of its work "
           "| covert TFLOPS (mma) |")
