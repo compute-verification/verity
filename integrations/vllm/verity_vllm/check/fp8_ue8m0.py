@@ -45,6 +45,20 @@ def build_roles(program_dir: str | None) -> dict[str, dict[str, Any]]:
     return {}
 
 
+def served_words(ck: Any, src: str, bits: int, rows: tuple[int, int] | None = None) -> tuple[np.ndarray, str] | None:
+    """A bf16 field whose checkpoint tensor is e4m3 beside a `weight_scale_inv`: vLLM's upcast at load (deepseek_v2
+    `_try_load_fp8_indexer_wk`: GLM-5.3's indexer wk, fused bf16 with weights_proj) = bf16_RNE(f32(w) * scale over its block); else None."""
+    scale = src + "_scale_inv"
+    if bits != 16 or ck.dtype(src) != "F8_E4M3" or not src.endswith(".weight") or not ck.has(scale):
+        return None
+    from verity_vllm.program.kernels.fp8_twins import np_e4m3_to_f32
+    w, s = ck.array(src), ck.array(scale).astype(np.float32)
+    full = np.repeat(np.repeat(s, w.shape[0] // s.shape[0], axis=0), w.shape[1] // s.shape[1], axis=1)
+    u = np.ascontiguousarray(np_e4m3_to_f32(w) * full, dtype=np.float32).view(np.uint32)
+    out = ((u + 0x7FFF + ((u >> 16) & 1)) >> 16).astype(np.uint16)
+    return (out if rows is None else out[rows[0]:rows[1]]), f"e4m3 x {scale} -> bf16 (RNE; vLLM's FP8 indexer wk upcast)"
+
+
 def requant(w: np.ndarray, s: np.ndarray, G: int) -> tuple[np.ndarray, np.ndarray]:
     """(e4m3 words [N, K], f32 words [cdiv(N, G), K / G]) -> the ue8m0 requantised pair, as `requant_weight_ue8m0_inplace`."""
     from verity_vllm.program.kernels.fp8_twins import np_e4m3_to_f32, np_f32_to_e4m3_sat

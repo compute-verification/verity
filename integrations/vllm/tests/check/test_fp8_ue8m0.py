@@ -67,3 +67,30 @@ def test_the_builds_roles_decide_which_fields_take_the_rewrite():
     assert [rw.covers(f) for f in fields] == [True] * 6 + [False]
     assert not any(U.Rewrites(fields, {}, lambda f: None, cfg).covers(f) for f in fields)
     assert not U.Rewrites(fields, roles, lambda f: None, {}).covers(fields[0])
+
+
+def test_an_e4m3_weight_beside_its_scale_is_vllms_bf16_upcast():
+    """GLM-5.3's indexer wk (e4m3 [128, 6144], scale [1, 48]) as vLLM upcasts it into the fused bf16 wk_weights_proj:
+    `scaled_dequantize(w, s, group (128, 128), bf16)` = bf16(f32(w) * s), word for word; bf16 tensors and other widths are not this rule."""
+    rng = np.random.default_rng(3)
+    w = torch.from_numpy(np.clip(rng.standard_normal((128, 512)) * 64, -440, 440).astype(np.float32)).to(torch.float8_e4m3fn)
+    s = torch.from_numpy(rng.uniform(1e-4, 3e-3, (1, 4)).astype(np.float32))
+
+    class Ck:
+        t = {"m.wk.weight": ("F8_E4M3", w.view(torch.uint8).numpy()), "m.wk.weight_scale_inv": ("F32", s.numpy()),
+             "m.wp.weight": ("BF16", np.zeros((2, 512), np.uint16))}
+
+        def dtype(self, n):
+            return self.t[n][0]
+
+        def array(self, n):
+            return self.t[n][1]
+
+        def has(self, n):
+            return n in self.t
+
+    want = (w.to(torch.float32) * s.repeat_interleave(128, 0).repeat_interleave(128, 1)).to(torch.bfloat16).view(torch.int16).numpy().view(np.uint16)
+    got, note = U.served_words(Ck(), "m.wk.weight", 16)
+    assert np.array_equal(got, want) and "scale_inv" in note
+    assert np.array_equal(U.served_words(Ck(), "m.wk.weight", 16, (8, 40))[0], want[8:40])
+    assert U.served_words(Ck(), "m.wp.weight", 16) is None and U.served_words(Ck(), "m.wk.weight", 8) is None

@@ -194,7 +194,7 @@ def compose(name: str, shape: list[int], bits: int, ck: CheckpointIndex, *, worl
     tied = bool(ck.config.get("tie_word_embeddings", False))
 
     def served(src: str, rows: tuple[int, int] | None = None) -> np.ndarray:
-        a, cast = to_served(ck.array(src, rows=rows), ck.dtype(src), bits)
+        a, cast = fp8_ue8m0.served_words(ck, src, bits, rows) or to_served(ck.array(src, rows=rows), ck.dtype(src), bits)
         if cast:
             note["cast"] = cast
         note["sources"].append(src)
