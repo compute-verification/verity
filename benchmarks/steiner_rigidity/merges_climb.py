@@ -9,9 +9,9 @@ there): for R = 2 that is the case merges_check.py part 14 leaves open. Each res
 among states with generic rank < R*L, and among those that also have four or more winning directions and a D-column
 with two helped cells (the open case).
 
-`python merges_climb.py --fixed SRC [--restarts N] [--steps N] [--seed S] [--out DIR]` instead takes every split
-miss in SRC/split_*.json (from merges_split_search.py) that no coupled pair closes, and anneals its words for the
-fixed B at L = 2 and 3, writing the best totals against L * rank B to `fixed_climb.json`.
+`python merges_climb.py --fixed SRC [--Ls 2,3] [--restarts N] [--steps N] [--seed S] [--out DIR]` instead takes
+every split miss in SRC/split_*.json (from merges_split_search.py) that no coupled pair closes, and anneals its words
+for the fixed B at each L, writing the best totals against L * rank B to `fixed_climb.json`.
 """
 
 import itertools
@@ -241,8 +241,8 @@ def fixed_climb(links, betas, p, L, restarts, steps, rng):
     return top
 
 
-def fixed_main(src, out, restarts, steps, rng):
-    """The split misses in src/split_*.json that no coupled pair closes: anneal their words at L = 2, 3."""
+def fixed_main(src, out, restarts, steps, rng, Ls):
+    """The split misses in src/split_*.json that no coupled pair closes: anneal their words at each L in Ls."""
     res = []
     for f in sorted(Path(src).glob("split_*.json")):
         j = json.loads(f.read_text())
@@ -250,7 +250,7 @@ def fixed_main(src, out, restarts, steps, rng):
             if o["coupled_pair"] <= o["rank_B"]:
                 continue
             links = [tuple(x) for x in o["links"]]
-            for L in (2, 3):
+            for L in Ls:
                 top = fixed_climb(links, o["betas"], j["p"], L, restarts, steps, rng)
                 res.append({"file": f.name, "links": links, "betas": o["betas"], "labels_reach": o["labels_reach"],
                             "L": L, "max_total": top, "bound": o["rank_B"] * L})
@@ -263,11 +263,12 @@ def fixed_main(src, out, restarts, steps, rng):
 
 def main():
     if "--fixed" in sys.argv:
-        opt = {a: sys.argv[sys.argv.index(a) + 1] for a in ("--fixed", "--restarts", "--steps", "--seed", "--out")
-               if a in sys.argv}
+        opt = {a: sys.argv[sys.argv.index(a) + 1] for a in ("--fixed", "--restarts", "--steps", "--seed", "--out",
+                                                             "--Ls") if a in sys.argv}
         return fixed_main(opt["--fixed"], Path(opt.get("--out", os.environ.get("OUT", "."))),
                           int(opt.get("--restarts", 12)), int(opt.get("--steps", 6000)),
-                          random.Random(int(opt.get("--seed", 20261015))))
+                          random.Random(int(opt.get("--seed", 20261015))),
+                          [int(x) for x in opt.get("--Ls", "2,3").split(",")])
     p, (R, C), L, d = int(sys.argv[1]), map(int, sys.argv[2].split("x")), int(sys.argv[3]), int(sys.argv[4])
     opt = {a: sys.argv[sys.argv.index(a) + 1] for a in ("--restarts", "--steps", "--seed", "--out") if a in sys.argv}
     open_mode = "--open" in sys.argv
