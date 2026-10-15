@@ -59,7 +59,7 @@ class CublasLinear:
         spec = (bind(cublas_bf16.CublasSplitKGemmWord, K=K, N=N, SPLIT_K=statics["SPLIT_K"], DOT=dot) if kernel == "splitk"
                 else bind(b1.GemmV2, K=K, N=N, DOT=dot))
         return Compute(spec, M, (PerRow(x), Shared(w)), (PerRow(out),), tuple(sorted(node.ids())), hint=hint_of(node, roots[0].name),
-                       kernels=("gemm", "splitK", "cutlass", "sm90"), attribution=attribution_for(ctx, M, node.phase), pattern=self.name)
+                       kernels=("gemm", "splitK", "cutlass"), attribution=attribution_for(ctx, M, node.phase), pattern=self.name)
 
 
 def _permuted(v: ViewDesc, order: tuple[int, ...]) -> ViewDesc:
@@ -91,8 +91,8 @@ class MlaAbsorbBmm:
         if x.rank != 3 or w.rank != 3 or out.rank != 3 or {x.dtype, w.dtype, out.dtype} != {"bfloat16"}:
             return unsupported(node, "MLA absorb bmm takes bf16 [B,M,K] x [B,K,N] -> [B,M,N]", x=repr(x), w=repr(w), out=repr(out))
         (B, M, K), (B2, K2, N) = x.shape, w.shape
-        if (B2, K2) != (B, K) or out.shape != (B, M, N) or x.strides[2] != 1 or w.strides[1] != 1 or out.strides[2] != 1:
-            return unsupported(node, "bmm shapes or inner strides are not [B,M,K] x [B,K,N] -> [B,M,N] with unit inner strides",
+        if (B2, K2) != (B, K) or out.shape != (B, M, N) or x.strides[2] != 1 or out.strides[2] != 1:
+            return unsupported(node, "bmm shapes or inner strides are not [B,M,K] x [B,K,N] -> [B,M,N] with unit-stride x and out rows",
                                x=repr(x), w=repr(w), out=repr(out))
         roots = ctx.roots_of(w)
         if not roots:
@@ -104,5 +104,5 @@ class MlaAbsorbBmm:
             return unsupported(node, str(e))
         spec = bind(cublas_bf16.BatchedGemmWord, B=B, K=K, N=N, DOT=dot)
         return Compute(spec, M, (PerRow(_permuted(x, (1, 0, 2))), Shared(_permuted(w, (0, 2, 1)))), (PerRow(_permuted(out, (1, 0, 2))),),
-                       tuple(sorted(node.ids())), hint=hint_of(node, roots[0].name), kernels=("gemm", "cutlass", "sm90"),
+                       tuple(sorted(node.ids())), hint=hint_of(node, roots[0].name), kernels=("gemm", "cutlass"),
                        attribution=attribution_for(ctx, M, node.phase), pattern=self.name)
