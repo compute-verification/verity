@@ -1455,6 +1455,35 @@ theorem timeB_progOf_append (price : K → ℕ) (l m : List K) :
   rw [progOf, List.map_append, timeB_append]
   rfl
 
+theorem timeB_progOf (price : K → ℕ) (l : List K) : timeB price (progOf l) = (l.map price).sum := by
+  simp [timeB, progOf, Function.comp_def]
+
+/-- An additive price on gate lists, nonnegative and additive under concatenation: RS-MODEL's `timeB` at a per-kind
+price in ℕ (`Price.ofNat`), or the sum of a rational per-kind price (`Price.ofRat`, for `B_θ`). -/
+structure Price (K : Type) where
+  t : List K → ℝ
+  nonneg : ∀ l, 0 ≤ t l
+  append : ∀ l m, t (l ++ m) = t l + t m
+
+theorem Price.t_nil (p : Price K) : p.t [] = 0 := by
+  have h := p.append [] []
+  rw [List.nil_append] at h
+  linarith
+
+/-- RS-MODEL's `timeB` at a per-kind price in ℕ. -/
+def Price.ofNat (price : K → ℕ) : Price K where
+  t l := (timeB price (progOf l) : ℝ)
+  nonneg _ := Nat.cast_nonneg _
+  append l m := by rw [timeB_progOf_append, Nat.cast_add]
+
+/-- The sum of a nonnegative rational per-kind price. -/
+def Price.ofRat (price : K → ℚ) (h : ∀ k, 0 ≤ price k) : Price K where
+  t l := (((l.map price).sum : ℚ) : ℝ)
+  nonneg l := Rat.cast_nonneg.mpr (List.sum_nonneg fun x hx => by
+    obtain ⟨k, -, rfl⟩ := List.mem_map.mp hx
+    exact h k)
+  append l m := by rw [List.map_append, List.sum_append, Rat.cast_add]
+
 variable (kd : K → Kind)
 
 /-- A typed Model B circuit. `gate k` is one gate of kind `k` (off its range `ok` it outputs 0, which only adds
@@ -1514,13 +1543,14 @@ def Alg (I O : Type) : Type := {p : (I → O) × List K // ∃ c : Circ kd I O, 
 def Circ.alg {I O : Type} (c : Circ kd I O) : Alg kd I O := ⟨(c.eval, c.gates), c, rfl, rfl⟩
 
 variable (kd) in
-/-- **Model B as a `Machine`**: time is `timeB` of the gate list and a run costs its time (Model B is oblivious);
-composition concatenates gate lists, so time is additive (RS-DEF's T1, `timeB_append`), and routing is free. -/
-def machine (price : K → ℕ) : Machine where
+/-- **Model B as a `Machine`**, at an additive price `p` (`timeB` for RS-MODEL's B, `Price.ofNat`): time is `p` of the
+gate list and a run costs its time (Model B is oblivious); composition concatenates gate lists, so time is additive
+(RS-DEF's T1, `timeB_append`), and routing is free. -/
+def machine (p : Price K) : Machine where
   Alg := Alg kd
   eval f := f.1.1
-  time f := (timeB price (progOf f.1.2) : ℝ)
-  cost f _ := (timeB price (progOf f.1.2) : ℝ)
+  time f := p.t f.1.2
+  cost f _ := p.t f.1.2
   seq f g := ⟨(g.1.1 ∘ f.1.1, f.1.2 ++ g.1.2), by
     obtain ⟨c, hc, hc'⟩ := f.2
     obtain ⟨d, hd, hd'⟩ := g.2
@@ -1535,53 +1565,51 @@ def machine (price : K → ℕ) : Machine where
   eval_pair _ _ _ := rfl
   eval_fst _ := rfl
   eval_snd _ := rfl
-  time_nonneg _ := Nat.cast_nonneg _
+  time_nonneg f := p.nonneg f.1.2
   cost_le_time _ _ := le_rfl
-  time_seq_le f g := by
-    show ((timeB price (progOf (f.1.2 ++ g.1.2)) : ℕ) : ℝ) ≤ _
-    rw [timeB_progOf_append, Nat.cast_add]
+  time_seq_le f g := (p.append f.1.2 g.1.2).le
   le_time_seq f g := by
-    show _ ≤ ((timeB price (progOf (f.1.2 ++ g.1.2)) : ℕ) : ℝ)
-    rw [timeB_progOf_append, Nat.cast_add]
-    linarith [Nat.cast_nonneg (α := ℝ) (timeB price (progOf g.1.2))]
-  time_pair_le f g := by
-    show ((timeB price (progOf (f.1.2 ++ g.1.2)) : ℕ) : ℝ) ≤ _
-    rw [timeB_progOf_append, Nat.cast_add]
+    show _ ≤ p.t (f.1.2 ++ g.1.2)
+    rw [p.append]
+    linarith [p.nonneg g.1.2]
+  time_pair_le f g := (p.append f.1.2 g.1.2).le
   le_time_pair_left f g := by
-    show _ ≤ ((timeB price (progOf (f.1.2 ++ g.1.2)) : ℕ) : ℝ)
-    rw [timeB_progOf_append, Nat.cast_add]
-    linarith [Nat.cast_nonneg (α := ℝ) (timeB price (progOf g.1.2))]
+    show _ ≤ p.t (f.1.2 ++ g.1.2)
+    rw [p.append]
+    linarith [p.nonneg g.1.2]
   le_time_pair_right f g := by
-    show _ ≤ ((timeB price (progOf (f.1.2 ++ g.1.2)) : ℕ) : ℝ)
-    rw [timeB_progOf_append, Nat.cast_add]
-    linarith [Nat.cast_nonneg (α := ℝ) (timeB price (progOf f.1.2))]
-  time_fst := by simp [Circ.alg, Circ.gates, progOf, timeB]
-  time_snd := by simp [Circ.alg, Circ.gates, progOf, timeB]
+    show _ ≤ p.t (f.1.2 ++ g.1.2)
+    rw [p.append]
+    linarith [p.nonneg f.1.2]
+  time_fst := p.t_nil
+  time_snd := p.t_nil
 
-/-- A circuit's time in `machine` is RS-MODEL's `time_B` of its program. -/
-theorem time_alg (price : K → ℕ) {I O : Type} (c : Circ kd I O) :
-    (machine kd price).time c.alg = (timeB price c.prog : ℝ) := rfl
+/-- A circuit's time in `machine` is the price of its gates. -/
+theorem time_alg (p : Price K) {I O : Type} (c : Circ kd I O) : (machine kd p).time c.alg = p.t c.gates := rfl
 
-theorem eval_alg (price : K → ℕ) {I O : Type} (c : Circ kd I O) :
-    (machine kd price).eval c.alg = c.eval := rfl
+/-- At `Price.ofNat`, it is RS-MODEL's `time_B` of its program. -/
+theorem time_alg_ofNat (price : K → ℕ) {I O : Type} (c : Circ kd I O) :
+    (machine kd (.ofNat price)).time c.alg = (timeB price c.prog : ℝ) := rfl
+
+theorem eval_alg (p : Price K) {I O : Type} (c : Circ kd I O) : (machine kd p).eval c.alg = c.eval := rfl
 
 variable (kd) in
 /-- Circuits for the matrix operations over ℤ at their prices: an `a × b` by `b × c` product at `κ` per
 multiply-accumulate, an entrywise sum or difference at `κadd` per entry. -/
-structure MatGates (price : K → ℕ) (κ κadd : ℝ) where
+structure MatGates (p : Price K) (κ κadd : ℝ) where
   mul : ∀ a b c : ℕ, Circ kd (Mat ℤ a b × Mat ℤ b c) (Mat ℤ a c)
   add : ∀ a b : ℕ, Circ kd (Mat ℤ a b × Mat ℤ a b) (Mat ℤ a b)
   sub : ∀ a b : ℕ, Circ kd (Mat ℤ a b × Mat ℤ a b) (Mat ℤ a b)
   eval_mul : ∀ (a b c : ℕ) (x : Mat ℤ a b × Mat ℤ b c), (mul a b c).eval x = x.1 * x.2
   eval_add : ∀ (a b : ℕ) (x : Mat ℤ a b × Mat ℤ a b), (add a b).eval x = x.1 + x.2
   eval_sub : ∀ (a b : ℕ) (x : Mat ℤ a b × Mat ℤ a b), (sub a b).eval x = x.1 - x.2
-  time_mul_le : ∀ a b c : ℕ, (timeB price (mul a b c).prog : ℝ) ≤ κ * ((a : ℝ) * b * c)
-  time_add_le : ∀ a b : ℕ, (timeB price (add a b).prog : ℝ) ≤ κadd * ((a : ℝ) * b)
-  time_sub_le : ∀ a b : ℕ, (timeB price (sub a b).prog : ℝ) ≤ κadd * ((a : ℝ) * b)
+  time_mul_le : ∀ a b c : ℕ, p.t (mul a b c).gates ≤ κ * ((a : ℝ) * b * c)
+  time_add_le : ∀ a b : ℕ, p.t (add a b).gates ≤ κadd * ((a : ℝ) * b)
+  time_sub_le : ∀ a b : ℕ, p.t (sub a b).gates ≤ κadd * ((a : ℝ) * b)
 
 /-- **Model B as a `MatMachine`** over ℤ, from circuits for the matrix operations. -/
-def matMachine {price : K → ℕ} {κ κadd : ℝ} (G : MatGates kd price κ κadd) : MatMachine ℤ where
-  toMachine := machine kd price
+def matMachine {p : Price K} {κ κadd : ℝ} (G : MatGates kd p κ κadd) : MatMachine ℤ where
+  toMachine := machine kd p
   κ := κ
   κadd := κadd
   mul a b c := (G.mul a b c).alg
@@ -1593,6 +1621,26 @@ def matMachine {price : K → ℕ} {κ κadd : ℝ} (G : MatGates kd price κ κ
   time_mul_le := G.time_mul_le
   time_add_le := G.time_add_le
   time_sub_le := G.time_sub_le
+
+variable (kd) in
+/-- Circuits for a grid product: exact on the shapes `shape` with operand entries in the grid `Gr`, at `κG` per
+multiply-accumulate. Off the grid or the shapes they may compute anything. -/
+structure GridGates (p : Price K) (Gr : ℤ → Prop) (shape : ℕ → ℕ → ℕ → Prop) (κG : ℝ) where
+  mul : ∀ a b c : ℕ, Circ kd (Mat ℤ a b × Mat ℤ b c) (Mat ℤ a c)
+  eval_mul : ∀ (a b c : ℕ) (x : Mat ℤ a b × Mat ℤ b c), shape a b c → (∀ i k, Gr (x.1 i k)) →
+    (∀ k j, Gr (x.2 k j)) → (mul a b c).eval x = x.1 * x.2
+  time_mul_le : ∀ a b c : ℕ, shape a b c → p.t (mul a b c).gates ≤ κG * ((a : ℝ) * b * c)
+
+/-- **Model B as a `GridMatMachine`** over ℤ: `matMachine G` with the grid product from `I`. -/
+def gridMatMachine {p : Price K} {κ κadd κG : ℝ} {Gr : ℤ → Prop} {shape : ℕ → ℕ → ℕ → Prop}
+    (G : MatGates kd p κ κadd) (I : GridGates kd p Gr shape κG) : GridMatMachine ℤ where
+  toMatMachine := matMachine G
+  G := Gr
+  shape := shape
+  κG := κG
+  mulG a b c := (I.mul a b c).alg
+  eval_mulG := I.eval_mul
+  time_mulG_le := I.time_mul_le
 
 /-! ### The circuits exist: one GEMM kind per shape -/
 
@@ -1658,7 +1706,7 @@ def gemmSub (a b : ℕ) : Circ gemmKind (Mat ℤ a b × Mat ℤ a b) (Mat ℤ a 
   .seq (flatPair a b a b) (.seq (Circ.gate (kd := gemmKind) (.sub a b)) (unflat a b))
 
 /-- **The circuits exist**: the GEMM gate family realizes `MatGates` with `κ = κ₀` and `κadd = κa`. -/
-def gemmGates (κ₀ κa : ℕ) : MatGates gemmKind (gemmPrice κ₀ κa) κ₀ κa where
+def gemmGates (κ₀ κa : ℕ) : MatGates gemmKind (.ofNat (gemmPrice κ₀ κa)) κ₀ κa where
   mul := gemmMul
   add := gemmAdd
   sub := gemmSub
@@ -1675,11 +1723,11 @@ def gemmGates (κ₀ κa : ℕ) : MatGates gemmKind (gemmPrice κ₀ κa) κ₀ 
     simp only [gemmSub, Circ.eval, unflat, gemmKind, Function.comp_apply, Equiv.symm_apply_apply,
       leftOf_flatPair, rightOf_flatPair, ite_true]
   time_mul_le a b c := by
-    simp [gemmMul, Circ.prog, Circ.gates, flatPair, unflat, progOf, timeB, gemmPrice]
+    simp [gemmMul, Price.ofNat, Circ.gates, flatPair, unflat, progOf, timeB, gemmPrice]
   time_add_le a b := by
-    simp [gemmAdd, Circ.prog, Circ.gates, flatPair, unflat, progOf, timeB, gemmPrice]
+    simp [gemmAdd, Price.ofNat, Circ.gates, flatPair, unflat, progOf, timeB, gemmPrice]
   time_sub_le a b := by
-    simp [gemmSub, Circ.prog, Circ.gates, flatPair, unflat, progOf, timeB, gemmPrice]
+    simp [gemmSub, Price.ofNat, Circ.gates, flatPair, unflat, progOf, timeB, gemmPrice]
 
 /-! ### sm_120 (RS-MODEL §4) -/
 
@@ -1695,17 +1743,17 @@ def price120 : K120 → ℕ
 /-- **Model B on sm_120 as a `MatMachine`**, with one worst-case constant: `κ = 16` u per product (an s32 product as
 4 × 4 int8 limb products on the tensor pipe at 1 u each) and `κadd = 1` u per entry (one ALU lane). It reads the
 kinds' silicon semantics `kd` and the circuits `G` over them (named hypothesis `Gemm120`). -/
-def matMachine120 (kd : K120 → Kind) (G : MatGates kd price120 16 1) : MatMachine ℤ := matMachine G
+def matMachine120 (kd : K120 → Kind) (G : MatGates kd (.ofNat price120) 16 1) : MatMachine ℤ := matMachine G
 
-theorem matMachine120_κ (kd : K120 → Kind) (G : MatGates kd price120 16 1) : (matMachine120 kd G).κ = 16 := rfl
+theorem matMachine120_κ (kd : K120 → Kind) (G : MatGates kd (.ofNat price120) 16 1) : (matMachine120 kd G).κ = 16 := rfl
 
-theorem matMachine120_κadd (kd : K120 → Kind) (G : MatGates kd price120 16 1) : (matMachine120 kd G).κadd = 1 :=
+theorem matMachine120_κadd (kd : K120 → Kind) (G : MatGates kd (.ofNat price120) 16 1) : (matMachine120 kd G).κadd = 1 :=
   rfl
 
 /-- **The sm_120 circuits** (a named hypothesis): over the kinds' silicon semantics `kd`, exact circuits for the
 matrix operations over ℤ at 16 u per product and 1 u per entry. RS-MODEL prices sm_120's kinds and gives them no
 semantics, so this is where `mma`'s exact semantics and the limb decomposition enter. -/
-def Gemm120 (kd : K120 → Kind) : Prop := Nonempty (MatGates kd price120 16 1)
+def Gemm120 (kd : K120 → Kind) : Prop := Nonempty (MatGates kd (.ofNat price120) 16 1)
 
 /-- The int8 grid, `G_op`. -/
 def Int8 (z : ℤ) : Prop := -128 ≤ z ∧ z ≤ 127
@@ -1716,15 +1764,9 @@ def Tile120 (a b c : ℕ) : Prop := 16 ∣ a ∧ 32 ∣ b ∧ 8 ∣ c ∧ b ≤ 
 theorem tile120_square {n : ℕ} (h32 : 32 ∣ n) (h17 : n ≤ 2 ^ 17) : Tile120 n n n :=
   ⟨(by norm_num : (16 : ℕ) ∣ 32).trans h32, h32, (by norm_num : (8 : ℕ) ∣ 32).trans h32, h17⟩
 
-variable (kd) in
 /-- Circuits for the int8 product on sm_120's tile shapes: exact on int8 operands at 1 u per multiply-accumulate
-(RS-MODEL's `gemm120`: `a b c` u for the `m16n8k32` tile GEMM). Off the grid or the tile shapes they may compute
-anything. -/
-structure Int8Gates120 (kd : K120 → Kind) where
-  mul : ∀ a b c : ℕ, Circ kd (Mat ℤ a b × Mat ℤ b c) (Mat ℤ a c)
-  eval_mul : ∀ (a b c : ℕ) (x : Mat ℤ a b × Mat ℤ b c), Tile120 a b c → (∀ i k, Int8 (x.1 i k)) →
-    (∀ k j, Int8 (x.2 k j)) → (mul a b c).eval x = x.1 * x.2
-  time_mul_le : ∀ a b c : ℕ, Tile120 a b c → (timeB price120 (mul a b c).prog : ℝ) ≤ (a : ℝ) * b * c
+(RS-MODEL's `gemm120`: `a b c` u for the `m16n8k32` tile GEMM). -/
+abbrev Int8Gates120 (kd : K120 → Kind) : Type 1 := GridGates kd (.ofNat price120) Int8 Tile120 1
 
 /-- **The int8 circuits** (a named hypothesis, the width-typed refinement): over the kinds' silicon semantics `kd`,
 exact int8 × int8 products on tile-multiple shapes at 1 u per multiply-accumulate, s32 exact. -/
@@ -1732,27 +1774,21 @@ def Int8Gemm120 (kd : K120 → Kind) : Prop := Nonempty (Int8Gates120 kd)
 
 /-- **Model B on sm_120 with the operand grid typed**: the worst-case `matMachine120` (16 u per product on all
 operands, 1 u per entry for sums) with the int8 product at `κG = 1` u on `G_op = int8` and the tile shapes. -/
-def gridMatMachine120 (kd : K120 → Kind) (G : MatGates kd price120 16 1) (I : Int8Gates120 kd) :
-    GridMatMachine ℤ where
-  toMatMachine := matMachine120 kd G
-  G := Int8
-  shape := Tile120
-  κG := 1
-  mulG a b c := (I.mul a b c).alg
-  eval_mulG := I.eval_mul
-  time_mulG_le a b c h := (I.time_mul_le a b c h).trans_eq (one_mul _).symm
+def gridMatMachine120 (kd : K120 → Kind) (G : MatGates kd (.ofNat price120) 16 1) (I : Int8Gates120 kd) :
+    GridMatMachine ℤ :=
+  gridMatMachine G I
 
-theorem gridMatMachine120_κG (kd : K120 → Kind) (G : MatGates kd price120 16 1) (I : Int8Gates120 kd) :
+theorem gridMatMachine120_κG (kd : K120 → Kind) (G : MatGates kd (.ofNat price120) 16 1) (I : Int8Gates120 kd) :
     (gridMatMachine120 kd G I).κG = 1 := rfl
 
-theorem gridMatMachine120_κadd (kd : K120 → Kind) (G : MatGates kd price120 16 1) (I : Int8Gates120 kd) :
+theorem gridMatMachine120_κadd (kd : K120 → Kind) (G : MatGates kd (.ofNat price120) 16 1) (I : Int8Gates120 kd) :
     (gridMatMachine120 kd G I).κadd = 1 := rfl
 
 /-- **Route (c) on sm_120, on the int8 grid** (`κ = 1` u on `G_op = int8`): when every promised instance's edits stay
 int8 (`hgrid`) and `32 ∣ n ≤ 2^17`, the edited protocol served by the int8 tile GEMM is relatively secure against
 `N = n³` u, with `ε = U / F − 1`, `U = n³ + 2 n² + time gen + time prove`, and
 `γ = (2 n² + time gen + time prove) / n³`. -/
-theorem relativelySecure_edited120 (kd : K120 → Kind) (G : MatGates kd price120 16 1) (I : Int8Gates120 kd)
+theorem relativelySecure_edited120 (kd : K120 → Kind) (G : MatGates kd (.ofNat price120) 16 1) (I : Int8Gates120 kd)
     (S : Service) {n : ℕ} (hn : 0 < n) (h32 : 32 ∣ n) (h17 : n ≤ 2 ^ 17)
     (E : (gridMatMachine120 kd G I).Edit S.Seed n)
     (prove : (gridMatMachine120 kd G I).Alg ((S.Seed × (Mat ℤ n n × Mat ℤ n n) × S.Coins) × Mat ℤ n n)
@@ -1784,7 +1820,7 @@ theorem relativelySecure_edited120 (kd : K120 → Kind) (G : MatGates kd price12
 
 /-- **Route (c) on sm_120, unrestricted operands** (the worst case, `κ = 16` u): reference `N = 16 n³` u, `ε = U / F − 1`
 with `U = 16 n³ + 2 n² + time gen + time prove`, and `γ = (2 n² + time gen + time prove) / (16 n³)`. -/
-theorem relativelySecure_edited120_wide (kd : K120 → Kind) (G : MatGates kd price120 16 1) (S : Service) {n : ℕ}
+theorem relativelySecure_edited120_wide (kd : K120 → Kind) (G : MatGates kd (.ofNat price120) 16 1) (S : Service) {n : ℕ}
     (hn : 0 < n) (E : (matMachine120 kd G).Edit S.Seed n)
     (prove : (matMachine120 kd G).Alg ((S.Seed × (Mat ℤ n n × Mat ℤ n n) × S.Coins) × Mat ℤ n n) (S.Com × S.Ans))
     {κf δ η F : ℝ}
