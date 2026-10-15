@@ -4,7 +4,7 @@
 //   dp4a : T += dp4a(g, z)                       (r <= 4, G_s in one int8 slice; ceil(r/4) IDP.4A a word)
 //   imad : T += sum_a g_a z_a                    (r IMADs a word, exact mod 2^32)
 //   ffma : T += bits(magic + sum_a g_a z_a) - magic_bits   (r FFMAs and one IADD3 a word)
-//   ffma2: the same with two words a packed FMA             (r/2 FFMA2 and one IADD3 a word)
+//   ffma2: the same with two words a packed FMA (fma.rn.f32x2; sm_120a has no FFMA2, ptxas emits two FFMAs)
 //   mixWM: the honest kernel's 8 tiles and WM dp4a words in one warp (do the tensor and integer pipes overlap?)
 //   t16, t8816 : the int8 MMAs with K = 16 (m16n8k16, m8n8k16), the tensor route's shortest inner dimension
 // where g is the row's G_s = U D_s (changed every block) and z the word's column of Z (fixed). The integer kernels
@@ -277,7 +277,7 @@ __global__ void k_ffma(int blocks, int* out, long long* cyc) {
   if (threadIdx.x == 0) cyc[blockIdx.x] = t1 - t0;
 }
 
-// k_ffma with two words a packed FMA (fma.rn.f32x2, SASS FFMA2): r FFMA2 and two IADD3 a word pair.
+// k_ffma with two words a packed FMA (fma.rn.f32x2): on sm_120a that is 2r FFMAs and two IADD3 a word pair.
 __device__ __forceinline__ unsigned long long pk2(float lo, float hi) {
   return (unsigned long long)__float_as_uint(lo) | ((unsigned long long)__float_as_uint(hi) << 32);
 }
