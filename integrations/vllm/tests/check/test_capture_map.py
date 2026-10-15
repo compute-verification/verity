@@ -33,7 +33,7 @@ DOC = json.loads((FIX / "inventory-tp8-rank0.json").read_text())
 RANK0 = DOC["ranks"]["0"]
 TP = CMAP["target"]["tensor_parallel_size"]
 ENV = CM.symbols(CMAP, CONFIG, TP)
-TARGET_ONLY = {"attn", "indexer.q_fp8", "indexer.weights", "indexer.k_cache", "indexer.logits", "indexer.topk"}
+TARGET_ONLY = {"attn", "indexer.q_fp8", "indexer.weights", "indexer.k_cache", "indexer.k_scale", "indexer.logits", "indexer.topk"}
 
 
 @pytest.fixture(scope="module")
@@ -167,7 +167,7 @@ def test_the_target_only_taps_are_the_indexer_and_the_sparse_attention_and_name_
     assert {tid for tid, t in taps.items() if t["target_only"]} == TARGET_ONLY
     first = {tid: CMAP["programs"][taps[tid]["program"]]["definitions"][0] for tid in TARGET_ONLY}
     assert first == {"attn": "SparseMla_v1", "indexer.q_fp8": "DsaIndexerQ_v1", "indexer.weights": "DsaIndexerQ_v1",
-                     "indexer.k_cache": "DsaIndexerKRow_v1", "indexer.logits": "DsaMqaLogits_v3", "indexer.topk": "DsaTopKShortRow_v1"}
+                     "indexer.k_cache": "DsaIndexerKRow_v1", "indexer.k_scale": "DsaIndexerKRow_v1", "indexer.logits": "DsaMqaLogits_v3", "indexer.topk": "DsaTopKShortRow_v1"}
     assert {CMAP["programs"][taps[tid]["program"]]["status"] for tid in TARGET_ONLY} == {"port"}
     assert all(d in registry for tid in TARGET_ONLY for d in CMAP["programs"][taps[tid]["program"]]["definitions"])
 
@@ -214,12 +214,12 @@ def test_the_bound_tap_counts():
 
 def test_target_only_taps_are_named_on_the_target_only():
     """Off the map's target device a step commits no `target_only` tap: forward_mqa's attention and the indexer's taps."""
-    for routes, off in ((("dense-mha",), 63), (("sparse-mqa",), 63 + 78 + 21)):
+    for routes, off in ((("dense-mha",), 63 + 21), (("sparse-mqa",), 63 + 21 + 78 + 21)):
         on = CM.committer_names(CMAP, ENV, routes=routes, rank=0)
         elsewhere = CM.committer_names(CMAP, ENV, routes=routes, rank=0, on_target=False)
         assert set(elsewhere) < set(on) and len(on) - len(elsewhere) == off
         assert all(tap["target_only"] for n, (tap, _layer) in on.items() if n not in elsewhere)
-    assert "model.layers.4.self_attn/attn_mqa" not in elsewhere and "model.layers.4.self_attn/v_absorb" in elsewhere
+    assert "model.layers.4.self_attn/attn_mqa" not in elsewhere and "model.layers.4.self_attn/out" in elsewhere
 
 
 @pytest.mark.parametrize("route", ["dense-mha", "sparse-mqa"])
