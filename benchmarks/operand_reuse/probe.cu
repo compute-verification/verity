@@ -7,6 +7,8 @@
 //   t4_s8copy    IMMA k32 s8->s32; its s32 D registers are the A operand (four s8 digits each) of the next IMMA
 //   t5_rawbits   QMMA f32 D registers fed as E4M3x4 A registers to the next QMMA (raw float bits as FP8 codes)
 //   t6_bf16copy  QMMA f32 D registers fed as BF16x2 A registers to an HMMA k16 (high half = D truncated to BF16)
+//   t7_split     a full-width f32 tile output minus its own TF32 truncation, the subtraction in the accumulator input:
+//                an exact low digit with no CUDA arithmetic (A' needs a register permutation, two MOVs)
 //
 // One warp per kernel.  Fragment layouts are PTX ISA 9.4's (g = lane>>2, t = lane&3):
 //   8-bit A (k32) reg r: row g+8(r&1), cols 4t+16(r>>1)+j     8-bit B (k32) reg r: k 4t+16r+j, n g
@@ -253,6 +255,26 @@ extern "C" __global__ void __launch_bounds__(32) t6_bf16copy(const uint8_t* __re
     hmma_bf16_k16(d, a2, b2, z);
     store_d(Dmid, d1, g, t);
     store_d(Dout, d, g, t);
+}
+
+// V 16x8 full-width f32, B2t 8x8 f32 (n-major, the -1 selector).  D0 = V + 0*0 (a tile output holding V), then
+// D1 = D0 + tf32(A')*B2 with A' = {c0,c2,c1,c3} of D0 (A'[r][t] = D0[r][2t], A'[r][t+4] = D0[r][2t+1]) and B2 the
+// selector that sends A'[r][k] to column 2k (k < 4) or 2(k-4)+1 with weight -1: D1 = D0 - trunc_tf32(D0), the low digit,
+// with the subtraction done in the accumulator input.
+extern "C" __global__ void __launch_bounds__(32) t7_split(const float* __restrict__ V, const float* __restrict__ B2t,
+                                                          float* __restrict__ D0out, float* __restrict__ D1out) {
+    const int lane = threadIdx.x, g = lane >> 2, t = lane & 3;
+    float c[4];
+    for (int i = 0; i < 4; ++i) c[i] = V[(g + 8 * (i >> 1)) * 8 + 2 * t + (i & 1)];
+    const uint32_t za[4] = {0u, 0u, 0u, 0u}, zb[2] = {0u, 0u};
+    float d0[4];
+    hmma_tf32_k8(d0, za, zb, c);
+    const uint32_t a2[4] = {__float_as_uint(d0[0]), __float_as_uint(d0[2]), __float_as_uint(d0[1]), __float_as_uint(d0[3])};
+    uint32_t b2[2] = {__float_as_uint(B2t[g * 8 + t]), __float_as_uint(B2t[g * 8 + t + 4])};
+    float d1[4];
+    hmma_tf32_k8(d1, a2, b2, d0);
+    store_d(D0out, d0, g, t);
+    store_d(D1out, d1, g, t);
 }
 
 // ---------------------------------------------------------------------------------------------------------------- host
@@ -592,6 +614,42 @@ int main() {
         cudaFree(dB2);
         cudaFree(dM);
         cudaFree(dO);
+    }
+
+    // t7: V with full 24-bit significands in [1, 1024); D1 must be D0 - trunc_tf32(D0) exactly, and trunc + D1 = D0.
+    {
+        std::vector<float> V(128), B2t(64, 0.f);
+        for (auto& x : V) {
+            rng = rng * 1664525u + 1013904223u;
+            const uint32_t u = (uint32_t)(127 + rnd(0, 9)) << 23 | (rng & 0x7fffffu);
+            memcpy(&x, &u, 4);
+        }
+        for (int k = 0; k < 8; ++k) B2t[(k < 4 ? 2 * k : 2 * (k - 4) + 1) * 8 + k] = -1.f;
+        float *dV = dev(V), *dB2 = dev(B2t), *d0, *d1;
+        CK(cudaMalloc(&d0, 128 * sizeof(float)));
+        CK(cudaMalloc(&d1, 128 * sizeof(float)));
+        t7_split<<<1, 32>>>(dV, dB2, d0, d1);
+        CK(cudaDeviceSynchronize());
+        auto D0 = back(d0, 128);
+        auto D1 = back(d1, 128);
+        std::vector<double> g0(D0.begin(), D0.end()), w0(V.begin(), V.end()), g1(D1.begin(), D1.end()), w1(128),
+            sum(128);
+        for (int i = 0; i < 128; ++i) {
+            uint32_t u;
+            memcpy(&u, &D0[i], 4);
+            u &= 0xffffe000u;
+            float hi;
+            memcpy(&hi, &u, 4);
+            w1[i] = (double)D0[i] - (double)hi;
+            sum[i] = (double)hi + (double)D1[i];
+        }
+        res.push_back(compare("t7_split.d0_is_v", g0, w0));
+        res.push_back(compare("t7_split.low_digit", g1, w1));
+        res.push_back(compare("t7_split.hi_plus_low_is_v", sum, w0));
+        cudaFree(dV);
+        cudaFree(dB2);
+        cudaFree(d0);
+        cudaFree(d1);
     }
 
     char uuid[64];
