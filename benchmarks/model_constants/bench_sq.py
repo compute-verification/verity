@@ -6,9 +6,10 @@ against `kv.cu`'s, then every rate in the same process, on the same GPU.
   `--chain-steps` squarings of `--chain-words` words fed lazily, against kv.cu's chain and `pow(x, 2^steps, p)`. Any
   mismatch exits 2 before a rate is taken.
 - rates: kv.cu's squaring chain (`kv_chain` what 0, ILP 1 and 2, each library: the default form and FOLD 6) as
-  `benchmarks/word_codec/kv_bench.py` times it; the tensor-core chain in its three modes (0 the squaring, 1 without
-  MMAs, 2 without the fold and carries) at W = 1, 2, 4 words a warp and each CTA count an SM; the pipe's int8 MMA rate
-  on register operands; and both units at once, time-boxed, at each split of a CTA's 8 warps.
+  `benchmarks/word_codec/kv_bench.py` times it; the tensor-core chain in its modes (0 the squaring, 1 without MMAs, 2
+  without the fold and carries, 3 and 4 as 0 and 1 in the lean form) at W = 1, 2, 4 words a warp and each CTA count an
+  SM; the pipe's int8 MMA rate on register operands; and both units at once, time-boxed, at each split of a CTA's 8
+  warps (the lean form), with each library's CUDA cores alone in the same kernel. The gate covers both forms.
 
     python bench_sq.py --lib default=kv.so --lib fold6=kv-f6.so --out OUT
 """
@@ -31,6 +32,7 @@ WARPS = 4
 MIX_WARPS = 8
 MMA_MACS = 16 * 8 * 32
 TC_MMAS = 10  # the plan's MMAs a squaring
+TC_MODES = (0, 1, 2, 3, 4)  # imma_sq.cu's chain modes: 0 square, 1 no MMAs, 2 no carries, 3 square_lean, 4 lean no MMAs
 SEED = 20261015
 SQ_REF, SQ_CEILING_FACTOR = 1.499e10, 1.597  # timing.SQUARINGS_PER_S["p1024"] = 1.597 x kv.cu's 1.499e10
 
@@ -46,11 +48,11 @@ class Lib:
         so = self.so = ctypes.CDLL(str(Path(path).resolve()))
         so.kv_prim.argtypes = [i, v, v, v, i, v]
         so.kv_chain.argtypes = [i, i, i, q, i, v, v]
-        so.mc_gate.argtypes = [v, v, v, i, i, v]
+        so.mc_gate.argtypes = [i, v, v, v, i, i, v]
         so.mc_chain.argtypes = [i, i, q, i, v, v]
         so.mc_chain_occupancy.argtypes = [i, i]
         so.mc_mma.argtypes = [i, q, i, v, v]
-        so.mc_mix.argtypes = [i, ll, i, v, v, v]
+        so.mc_mix.argtypes = [i, i, ll, i, v, v, v]
         self.fold6 = so.mc_fold6()
 
     def call(self, fn: str, *args) -> None:
@@ -91,7 +93,7 @@ def mismatches(a: torch.Tensor, b: torch.Tensor) -> int:
     return int((a != b).any(dim=1).sum().item())
 
 
-def gate(lib: Lib, words: int, chain_words: int, chain_steps: int, sample: int) -> dict:
+def gate(lib: Lib, lean: int, words: int, chain_words: int, chain_steps: int, sample: int) -> dict:
     g = torch.Generator(device="cuda").manual_seed(SEED)
     rnd = torch.randint(-(1 << 31), 1 << 31, (words, NL), dtype=torch.int32, device="cuda", generator=g)
     edges = to_dev(edge_cases())
@@ -101,7 +103,7 @@ def gate(lib: Lib, words: int, chain_words: int, chain_steps: int, sample: int) 
     mc_lazy, mc_can = torch.empty_like(a), torch.empty_like(a)
     lib.call("kv_prim", 4, a.data_ptr(), a.data_ptr(), kv_lazy.data_ptr(), n, st())
     lib.call("kv_prim", 3, kv_lazy.data_ptr(), kv_lazy.data_ptr(), kv_can.data_ptr(), n, st())
-    lib.call("mc_gate", a.data_ptr(), mc_lazy.data_ptr(), mc_can.data_ptr(), n, 188 * 16, st())
+    lib.call("mc_gate", lean, a.data_ptr(), mc_lazy.data_ptr(), mc_can.data_ptr(), n, 188 * 16, st())
     torch.cuda.synchronize()
     bad = mismatches(mc_can, kv_can)
     lazy_diff = mismatches(mc_lazy, kv_lazy)
@@ -117,7 +119,7 @@ def gate(lib: Lib, words: int, chain_words: int, chain_steps: int, sample: int) 
     t_kv, t_mc, t_can = torch.empty_like(c0), torch.empty_like(c0), torch.empty_like(c0)
     for _ in range(chain_steps):
         lib.call("kv_prim", 4, x_kv.data_ptr(), x_kv.data_ptr(), t_kv.data_ptr(), chain_words, st())
-        lib.call("mc_gate", x_mc.data_ptr(), t_mc.data_ptr(), t_can.data_ptr(), chain_words, 188 * 16, st())
+        lib.call("mc_gate", lean, x_mc.data_ptr(), t_mc.data_ptr(), t_can.data_ptr(), chain_words, 188 * 16, st())
         x_kv, t_kv = t_kv, x_kv
         x_mc, t_mc = t_mc, x_mc
     kc, mcn = torch.empty_like(c0), torch.empty_like(c0)
@@ -129,12 +131,12 @@ def gate(lib: Lib, words: int, chain_words: int, chain_steps: int, sample: int) 
     cx, cy = from_dev(c0[:64]), from_dev(mcn[:64])
     bad_chain_pow = sum(1 for x, y in zip(cx, cy) if y != pow(x, e, P))
     ok = bad == 0 and bad_pow == 0 and bad_pow_kv == 0 and bad_chain == 0 and bad_chain_pow == 0
-    out = {"words": n, "random_words": words, "edge_cases": edges.shape[0], "mismatch_vs_kv": bad,
+    out = {"lean": lean, "words": n, "random_words": words, "edge_cases": edges.shape[0], "mismatch_vs_kv": bad,
            "lazy_differs_vs_kv": lazy_diff, "pow_checked": len(idx), "mismatch_vs_pow": bad_pow,
            "kv_mismatch_vs_pow": bad_pow_kv, "first_mismatches": first, "chain_words": chain_words,
            "chain_steps": chain_steps, "chain_mismatch_vs_kv": bad_chain, "chain_pow_checked": 64,
            "chain_mismatch_vs_pow": bad_chain_pow, "ok": ok}
-    log(f"gate {lib.name}: {'ok' if ok else 'FAIL'}: {n} words ({edges.shape[0]} edge cases) canonical vs kv.cu "
+    log(f"gate {lib.name} {'lean' if lean else 'plain'}: {'ok' if ok else 'FAIL'}: {n} words ({edges.shape[0]} edge cases) canonical vs kv.cu "
         f"{bad} differ (lazy forms differ in {lazy_diff}), pow {bad_pow}/{len(idx)} (kv.cu {bad_pow_kv}); chain "
         f"{chain_words} x {chain_steps} vs kv.cu {bad_chain}, pow {bad_chain_pow}/64")
     return out
@@ -213,26 +215,27 @@ def mma_rate(lib: Lib, nacc: int, sms: int, reps: int, target_s: float) -> dict:
     return {"nacc": nacc, "best": best, "rows": rows}
 
 
-def mix(lib: Lib, sms: int, reps: int, seconds: float, mhz: float) -> list[dict]:
+def mix(lib: Lib, lean: int, cws, sms: int, reps: int, seconds: float, mhz: float) -> list[dict]:
     cycles = int(seconds * mhz * 1e6)
     xr = torch.zeros(1, dtype=torch.int64, device="cuda")
     counts = torch.zeros(2, dtype=torch.int64, device="cuda")
     rows = []
     for per_sm in (1, 2):
-        for cw in range(MIX_WARPS + 1):
+        for cw in cws:
             grid = sms * per_sm
             res = []
             for _ in range(reps):
                 counts.zero_()
-                (t,) = timed(lambda: lib.call("mc_mix", cw, cycles, grid, counts.data_ptr(), xr.data_ptr(), st()), 1,
-                             warm=0)
+                (t,) = timed(lambda: lib.call("mc_mix", lean, cw, cycles, grid, counts.data_ptr(), xr.data_ptr(), st()),
+                             1, warm=0)
                 c = counts.tolist()
                 res.append((t, c[0], c[1]))
             t, cu, tc = sorted(res)[len(res) // 2]
-            rows.append({"per_sm": per_sm, "cuda_warps": cw, "tc_warps": MIX_WARPS - cw, "median_s": t,
-                         "cuda_squarings": cu, "tc_squarings": tc, "cuda_per_s": cu / t, "tc_per_s": tc / t,
-                         "per_s": (cu + tc) / t})
-            log(f"mix {lib.name} {per_sm}/SM cw={cw}: CUDA {cu / t:.3e} + TC {tc / t:.3e} = {(cu + tc) / t:.3e}/s")
+            rows.append({"lib": lib.name, "lean": lean, "per_sm": per_sm, "cuda_warps": cw, "tc_warps": MIX_WARPS - cw,
+                         "median_s": t, "cuda_squarings": cu, "tc_squarings": tc, "cuda_per_s": cu / t,
+                         "tc_per_s": tc / t, "per_s": (cu + tc) / t})
+            log(f"mix {lib.name} {'lean' if lean else 'plain'} {per_sm}/SM cw={cw}: CUDA {cu / t:.3e} + TC {tc / t:.3e} "
+                f"= {(cu + tc) / t:.3e}/s")
     return rows
 
 
@@ -260,9 +263,9 @@ def main() -> int:
     for lib in libs:
         r = res["libs"][lib.name] = {"path": lib.path, "fold6": lib.fold6}
         if "gate" in only:
-            r["gate"] = gate(lib, ns.gate_words, ns.chain_words, ns.chain_steps, ns.pow_sample)
+            r["gate"] = [gate(lib, lean, ns.gate_words, ns.chain_words, ns.chain_steps, ns.pow_sample) for lean in (0, 1)]
             (out / "bench.json").write_text(json.dumps(res, indent=1))
-            if not r["gate"]["ok"]:
+            if not all(x["ok"] for x in r["gate"]):
                 log("gate failed: no rates")
                 return 2
     for lib in libs:
@@ -276,7 +279,7 @@ def main() -> int:
     r = res["libs"][lib.name]
     if "tc" in only:
         r["tc"] = []
-        for mode in (0, 1, 2):
+        for mode in TC_MODES:
             for w in (1, 2, 4):
                 x = mc_chain(lib, mode, w, sms, ns.reps, ns.target_s)
                 r["tc"].append(x)
@@ -291,12 +294,15 @@ def main() -> int:
             log(f"mma NACC={x['nacc']}: {b['macs_per_s']:.3e} int8 MAC/s at {b['per_sm']} CTAs/SM "
                 f"({b['macs_per_s'] / (sms * ns.mhz * 1e6):.0f} a clock an SM at {ns.mhz:.0f} MHz)")
         (out / "bench.json").write_text(json.dumps(res, indent=1))
-    if "mix" in only:
-        r["mix"] = mix(lib, sms, max(3, ns.reps // 2), ns.mix_s, ns.mhz)
+    if "mix" in only:  # the first library at every split, lean; each library's CUDA cores alone in the same kernel
+        mreps = max(3, ns.reps // 2)
+        r["mix"] = mix(lib, 1, range(MIX_WARPS + 1), sms, mreps, ns.mix_s, ns.mhz)
+        for other in libs:
+            r["mix"] += mix(other, 1, (MIX_WARPS,), sms, mreps, ns.mix_s, ns.mhz)
         (out / "bench.json").write_text(json.dumps(res, indent=1))
     if "ncu" in only:  # one short launch of each chain, for Nsight Compute (-k regex:chain_kernel)
         xr = torch.zeros(1, dtype=torch.int64, device="cuda")
-        for mode, w in ((0, 1), (0, 2), (1, 1), (2, 1)):
+        for mode, w in ((0, 1), (3, 1), (4, 1), (1, 1), (2, 1)):
             lib.call("mc_chain", mode, w, 256, sms * lib.so.mc_chain_occupancy(mode, w), xr.data_ptr(), st())
         lib.call("kv_chain", 0, 1, 1, 256, sms * 4, xr.data_ptr(), st())
         torch.cuda.synchronize()
@@ -307,7 +313,7 @@ def main() -> int:
         if "kv_square" in x:
             summ[f"kv_{name}"] = max(v["best"]["per_s"] for v in x["kv_square"].values())
     if "tc" in r:
-        for mode in (0, 1, 2):
+        for mode in TC_MODES:
             summ[f"tc_mode{mode}"] = max(x["best"]["per_s"] for x in r["tc"] if x["mode"] == mode)
     if "mma" in r:
         summ["mma_macs_per_s"] = max(x["best"]["macs_per_s"] for x in r["mma"])

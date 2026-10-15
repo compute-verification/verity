@@ -40,7 +40,8 @@ gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" -- bash -c '
   if [ "$NCU" = 1 ] && [ $rc = 0 ]; then
     "$NCU_BIN" --clock-control none --section SpeedOfLight --section ComputeWorkloadAnalysis --section InstructionStats \
       --section Occupancy --section MemoryWorkloadAnalysis --section WarpStateStats --section SchedulerStats \
-      --section SourceCounters -k "regex:chain_kernel" -f -o "$O/ncu-chain" \
+      --section SourceCounters --metrics l1tex__data_pipe_lsu_wavefronts_mem_shared.sum,l1tex__data_bank_conflicts_pipe_lsu_mem_shared.sum,smsp__inst_executed_pipe_lsu.sum,smsp__inst_executed_op_shared_ld.sum,smsp__inst_executed_op_shared_st.sum \
+      -k "regex:chain_kernel" -f -o "$O/ncu-chain" \
       "$PY" $MC/bench_sq.py --lib default="$B/mc-default.so" --out "$O/ncu" --only ncu > "$O/ncu-chain.log" 2>&1
     "$NCU_BIN" --import "$O/ncu-chain.ncu-rep" --csv --page raw > "$O/ncu-chain.csv" 2>&1
   fi

@@ -10,9 +10,13 @@
 // n = 8S - 1, where 2^(8S) = 2c; at the full-slot p1024, 2^(8S) = 2^1024 = c, so the fold weight is c = 105, the lazy value
 // is below 2^1024 as kv.cu's is, and canonical is that value less p when it is at least p.
 //
-// Kernels (extern "C" launchers at the end): the gate (one squaring of each of n words, lazy and canonical out); the
-// timed chain of W words a warp in three modes (0 the squaring; 1 the same with each MMA replaced by an ALU op on its
-// operands, the CUDA-core path alone; 2 the operands and MMAs with their coefficients stored, no fold or carries);
+// square_lean is the same arithmetic in fewer LSU instructions (shared memory and shuffles, the pipe the plain form is
+// bound by): 52 a squaring in its SASS against 68.
+//
+// Kernels (extern "C" launchers at the end): the gate (one squaring of each of n words, lazy and canonical out, either
+// form); the timed chain of W words a warp in five modes (0 the squaring; 1 the same with each MMA replaced by an ALU op
+// on its operands, the CUDA-core path alone; 2 the operands and MMAs with their coefficients stored, no fold or carries;
+// 3 and 4 as 0 and 1 in square_lean);
 // independent MMAs on register operands (the tensor pipe's int8 rate at this shape); and a time-boxed CTA of 8 warps,
 // cw of them squaring on the CUDA cores with kv.cu's sqr (a word a thread) and the rest on the tensor cores.
 #ifndef KV_FIELD
@@ -46,18 +50,23 @@ constexpr int GLEN = 32 * U + 68;
 constexpr int GSTRIDE = ((GLEN + 31) / 32) * 32 + 16;
 constexpr int CSTRIDE = 36;                              // coefficient slots a column (conflict-free C stores)
 constexpr int CO = CSTRIDE * 8;
-constexpr int WORD_BYTES = 4 * GSTRIDE + 4 * CO;
+// square_lean's B operands: row q holds limbs 4i + q at i + 8 (i = 0 .. 7), zero at -8 .. -1 and 8 .. 15; a stride of 24
+// words makes a half warp's 64-bit loads of rows 0 .. 3 hit 32 distinct banks.
+constexpr int USTRIDE = 24;
+constexpr int WORD_BYTES = 4 * GSTRIDE + 4 * CO + 4 * 4 * USTRIDE;
 static_assert(GM % 4 == 3 && GSTRIDE % 16 == 0, "B's loads and the copies are aligned");
 
 struct Scratch {
   uint8_t *g;
   int32_t *co;
+  u32 *u;
 };
 
 __device__ __forceinline__ Scratch scratch_at(uint8_t *base) {
   Scratch s;
   s.g = base;
   s.co = reinterpret_cast<int32_t *>(base + 4 * GSTRIDE);
+  s.u = reinterpret_cast<u32 *>(base + 4 * GSTRIDE + 4 * CO);
   return s;
 }
 
@@ -65,6 +74,7 @@ __device__ __forceinline__ void init(Scratch s, int lane) {
   u32 *g = reinterpret_cast<u32 *>(s.g);
   for (int e = lane; e < GSTRIDE; e += 32) g[e] = 0;
   for (int e = lane; e < CO; e += 32) s.co[e] = 0;
+  for (int e = lane; e < 4 * USTRIDE; e += 32) s.u[e] = 0;
   __syncwarp();
 }
 
@@ -80,9 +90,27 @@ __device__ __forceinline__ void put(Scratch s, u64 v, int lane) {
   __syncwarp();
 }
 
+// The same copies in word stores: G's aligned word K - l is lane l's limb byte-swapped, copy c's word K - l is that word
+// funnel-shifted with lane l - 1's by c bytes, and copy c's word K - 32 (lane 31's top bytes) is written by lane c - 1.
+constexpr int GK = (GM - 3) / 4;
+__device__ __forceinline__ void put_words(Scratch s, u64 v, int lane) {
+  const u32 own = __byte_perm((u32)v, 0, 0x0123);
+  u32 prev = __shfl_up_sync(FULL, own, 1);
+  if (lane == 0) prev = 0;
+  const u32 top = __shfl_sync(FULL, own, 31);
+  u32 *g = reinterpret_cast<u32 *>(s.g);
+  g[GK - lane] = own;
+#pragma unroll
+  for (int c = 1; c < 4; ++c) g[c * (GSTRIDE / 4) + GK - lane] = __funnelshift_r(own, prev, 8 * c);
+  if (lane < 3) g[(lane + 1) * (GSTRIDE / 4) + GK - 32] = top << (24 - 8 * lane);
+  s.u[USTRIDE * (lane & 3) + (lane >> 2) + 8] = (u32)v;
+  __syncwarp();
+}
+
 // The square's byte coefficients c_m (m = 32 col + r at slot CSTRIDE col + r) into s.co. MMA false replaces each MMA
-// by an ALU op on its operands (mode 1).
-template <bool MMA>
+// by an ALU op on its operands (mode 1). UB takes B from s.u: B_w's column g, rows 4q .. 4q + 3 and 16 + 4q .. are limbs
+// 8 (g - w) + q and 8 (g - w) + 4 + q, so lane (g, q)'s ten are row q's words 2g .. 2g + 9, five aligned pairs.
+template <bool MMA, bool UB = false>
 __device__ __forceinline__ void square_coeffs(Scratch s, int lane) {
   const int g = lane >> 2, q = lane & 3;
   const int sig = (GM - g) & 3;
@@ -100,12 +128,22 @@ __device__ __forceinline__ void square_coeffs(Scratch s, int lane) {
   // B for w in [0, U]: column s = g, k = 4q + b (reg 0), 16 + 4q + b (reg 1); a_x .. a_(x+3) is the byte swap of G_0's
   // aligned word at GM - x - 3.
   u32 breg[U + 1][2];
+  if constexpr (UB) {
+    const uint2 *row = reinterpret_cast<const uint2 *>(s.u + USTRIDE * q + 2 * g);
 #pragma unroll
-  for (int dd = 0; dd <= U; ++dd) {
-    const int x0 = 32 * (g - dd) + 4 * q;
-    const int y0 = GM - x0 - 3, y1 = GM - x0 - 19;
-    breg[dd][0] = (y0 >= 0 && y0 < GLEN) ? __byte_perm(g0[y0 >> 2], 0, 0x0123) : 0u;
-    breg[dd][1] = (y1 >= 0 && y1 < GLEN) ? __byte_perm(g0[y1 >> 2], 0, 0x0123) : 0u;
+    for (int dd = 0; dd <= U; ++dd) {
+      const uint2 p = row[U - dd];
+      breg[dd][0] = p.x;
+      breg[dd][1] = p.y;
+    }
+  } else {
+#pragma unroll
+    for (int dd = 0; dd <= U; ++dd) {
+      const int x0 = 32 * (g - dd) + 4 * q;
+      const int y0 = GM - x0 - 3, y1 = GM - x0 - 19;
+      breg[dd][0] = (y0 >= 0 && y0 < GLEN) ? __byte_perm(g0[y0 >> 2], 0, 0x0123) : 0u;
+      breg[dd][1] = (y1 >= 0 && y1 < GLEN) ? __byte_perm(g0[y1 >> 2], 0, 0x0123) : 0u;
+    }
   }
   int32_t acc[2][4];
 #pragma unroll
@@ -154,6 +192,17 @@ __device__ __forceinline__ u64 lookahead(u64 v, int lane, u32 &out) {
 
 __device__ __forceinline__ u64 add_low(u64 v, int lane, u32 k) { return lane == 0 ? v + k : v; }
 
+// Digits below 2^33 to limbs below 2^32, folding the carry out of 2^1024 back in at lane 0 (x c) until none is left.
+__device__ __forceinline__ u64 finish(u64 acc, int lane) {
+  u32 out;
+  acc = lookahead(acc, lane, out);
+  if (out) {
+    acc = lookahead(add_low(acc, lane, FW), lane, out);
+    if (out) acc = lookahead(add_low(acc, lane, FW), lane, out);
+  }
+  return acc;
+}
+
 // The square mod p, lazily: the coefficients folded at byte 128 (x c), carried; limbs < 2^32 (value < 2^1024),
 // congruent to a^2. Any a < 2^1024.
 template <bool MMA>
@@ -176,13 +225,33 @@ __device__ __forceinline__ u64 square(Scratch s, u64 v, int lane) {
     if (lane == 0) in = top * FW;
     acc += in;
   }
-  u32 out;
-  acc = lookahead(acc, lane, out);
-  if (out) {
-    acc = lookahead(add_low(acc, lane, FW), lane, out);
-    if (out) acc = lookahead(add_low(acc, lane, FW), lane, out);
+  return finish(acc, lane);
+}
+
+// square with fewer LSU instructions (the pipe it is bound by): the copies in word stores, each lane's 8 coefficients in
+// two 128-bit loads (c_(4l .. 4l+3) are slots CSTRIDE (l >> 3) + 4 (l & 7) .. + 3, and c_(k+128) 4 columns on), and two
+// carry rounds of 32-bit shuffles: c_m < 128 * 255^2 < 2^23, so a lane's sum is below 2^54 and its first carry below 2^22
+// (lane 0 takes lane 31's times c, below 2^29), the second carry is at most 1 (at most c into lane 0), and every digit is
+// then below 2^33, as `lookahead` needs.
+template <bool MMA>
+__device__ __forceinline__ u64 square_lean(Scratch s, u64 v, int lane) {
+  put_words(s, v, lane);
+  square_coeffs<MMA, true>(s, lane);
+  const int base = CSTRIDE * (lane >> 3) + 4 * (lane & 7);
+  const int4 lo = *reinterpret_cast<const int4 *>(s.co + base);
+  const int4 hi = *reinterpret_cast<const int4 *>(s.co + base + 4 * CSTRIDE);
+  const int64_t d0 = lo.x + (int64_t)FW * hi.x, d1 = lo.y + (int64_t)FW * hi.y;
+  const int64_t d2 = lo.z + (int64_t)FW * hi.z, d3 = lo.w + (int64_t)FW * hi.w;
+  u64 acc = (u64)d0 + ((u64)d1 << 8) + ((u64)d2 << 16) + ((u64)d3 << 24);
+#pragma unroll
+  for (int round = 0; round < 2; ++round) {
+    const u32 c = (u32)(acc >> DB);
+    acc &= MASK;
+    u32 in = __shfl_up_sync(FULL, c, 1);
+    const u32 top = __shfl_sync(FULL, c, 31);
+    acc += lane == 0 ? (u64)top * FW : (u64)in;
   }
-  return acc;
+  return finish(acc, lane);
 }
 
 // v < 2^1024 to [0, p): v - p = v + c - 2^1024 when that carries out of 2^1024.
@@ -193,6 +262,7 @@ __device__ __forceinline__ u64 canon(u64 v, int lane) {
 }
 
 // The gate: one squaring of each word (NL limbs, any value below 2^1024), the lazy result and the canonical one.
+template <bool LEAN>
 __global__ void __launch_bounds__(32) gate_kernel(const u32 *__restrict__ in, u32 *__restrict__ lazy,
                                                   u32 *__restrict__ canonical, int n) {
   __shared__ __align__(16) uint8_t buf[WORD_BYTES];
@@ -201,7 +271,7 @@ __global__ void __launch_bounds__(32) gate_kernel(const u32 *__restrict__ in, u3
   init(s, lane);
   for (int i = blockIdx.x; i < n; i += gridDim.x) {
     const u64 v = in[(u64)i * NL + lane];
-    const u64 y = square<true>(s, v, lane);
+    const u64 y = LEAN ? square_lean<true>(s, v, lane) : square<true>(s, v, lane);
     lazy[(u64)i * NL + lane] = (u32)y;
     canonical[(u64)i * NL + lane] = (u32)canon(y, lane);
   }
@@ -218,7 +288,8 @@ __device__ __forceinline__ u64 seed_limb(u64 id, int lane) {
 }
 
 // W independent words a warp, each squared `steps` times; mode 0 the squaring, 1 without MMAs, 2 without the fold and
-// carries (each step's word is the previous one XOR a coefficient, so the operands change).
+// carries (each step's word is the previous one XOR a coefficient, so the operands change); 3 and 4 are 0 and 1 in
+// square_lean.
 template <int W, int MODE>
 __global__ void __launch_bounds__(WARPS * 32) chain_kernel(u64 steps, unsigned long long *xr) {
   extern __shared__ __align__(16) uint8_t smem[];
@@ -240,6 +311,10 @@ __global__ void __launch_bounds__(WARPS * 32) chain_kernel(u64 steps, unsigned l
         v[w] = square<true>(s[w], v[w], lane);
       } else if constexpr (MODE == 1) {
         v[w] = square<false>(s[w], v[w], lane);
+      } else if constexpr (MODE == 3) {
+        v[w] = square_lean<true>(s[w], v[w], lane);
+      } else if constexpr (MODE == 4) {
+        v[w] = square_lean<false>(s[w], v[w], lane);
       } else {
         put(s[w], v[w], lane);
         square_coeffs<true>(s[w], lane);
@@ -280,6 +355,7 @@ __global__ void __launch_bounds__(WARPS * 32) mma_kernel(u64 steps, unsigned lon
 // the tensor cores (a word a warp); every warp squares until its SM's clock64 passes t0 + cycles and adds what it
 // finished to counts[0] (CUDA cores) or counts[1] (tensor cores).
 constexpr int MIX_WARPS = 8;
+template <bool LEAN>
 __global__ void __launch_bounds__(MIX_WARPS * 32, 1) mix_kernel(int cw, long long cycles, unsigned long long *counts,
                                                                 unsigned long long *xr) {
   extern __shared__ __align__(16) uint8_t smem[];
@@ -312,7 +388,7 @@ __global__ void __launch_bounds__(MIX_WARPS * 32, 1) mix_kernel(int cw, long lon
     u64 v = seed_limb((u64)blockIdx.x * MIX_WARPS + warp, lane);
 #pragma unroll 1
     while (clock64() - t0 < cycles) {
-      v = square<true>(s, v, lane);
+      v = LEAN ? square_lean<true>(s, v, lane) : square<true>(s, v, lane);
       ++done;
     }
     h = v;
@@ -346,25 +422,28 @@ extern "C" {
 int mc_word_bytes() { return mc::WORD_BYTES; }
 int mc_fold6() { return kv::FOLD6; }
 
-int mc_gate(const void *in, void *lazy, void *canonical, int n, int grid, cudaStream_t s) {
-  mc::gate_kernel<<<grid, 32, 0, s>>>((const uint32_t *)in, (uint32_t *)lazy, (uint32_t *)canonical, n);
+int mc_gate(int lean, const void *in, void *lazy, void *canonical, int n, int grid, cudaStream_t s) {
+  if (lean) mc::gate_kernel<true><<<grid, 32, 0, s>>>((const uint32_t *)in, (uint32_t *)lazy, (uint32_t *)canonical, n);
+  else mc::gate_kernel<false><<<grid, 32, 0, s>>>((const uint32_t *)in, (uint32_t *)lazy, (uint32_t *)canonical, n);
   return cudaGetLastError() == cudaSuccess ? 0 : 1;
 }
 
 int mc_chain(int mode, int w, uint64_t steps, int grid, unsigned long long *xr, cudaStream_t s) {
-#define MC_CHAIN(W, M) if (w == W && mode == M) return mc::launch_chain<W, M>(steps, grid, xr, s);
-  MC_CHAIN(1, 0) MC_CHAIN(2, 0) MC_CHAIN(4, 0)
-  MC_CHAIN(1, 1) MC_CHAIN(2, 1) MC_CHAIN(4, 1)
-  MC_CHAIN(1, 2) MC_CHAIN(2, 2) MC_CHAIN(4, 2)
+#define MC_CHAIN(M) \
+  if (mode == M && w == 1) return mc::launch_chain<1, M>(steps, grid, xr, s); \
+  if (mode == M && w == 2) return mc::launch_chain<2, M>(steps, grid, xr, s); \
+  if (mode == M && w == 4) return mc::launch_chain<4, M>(steps, grid, xr, s);
+  MC_CHAIN(0) MC_CHAIN(1) MC_CHAIN(2) MC_CHAIN(3) MC_CHAIN(4)
 #undef MC_CHAIN
   return 3;
 }
 
 int mc_chain_occupancy(int mode, int w) {
-#define MC_OCC(W, M) if (w == W && mode == M) return mc::occupancy<W, M>();
-  MC_OCC(1, 0) MC_OCC(2, 0) MC_OCC(4, 0)
-  MC_OCC(1, 1) MC_OCC(2, 1) MC_OCC(4, 1)
-  MC_OCC(1, 2) MC_OCC(2, 2) MC_OCC(4, 2)
+#define MC_OCC(M) \
+  if (mode == M && w == 1) return mc::occupancy<1, M>(); \
+  if (mode == M && w == 2) return mc::occupancy<2, M>(); \
+  if (mode == M && w == 4) return mc::occupancy<4, M>();
+  MC_OCC(0) MC_OCC(1) MC_OCC(2) MC_OCC(3) MC_OCC(4)
 #undef MC_OCC
   return -3;
 }
@@ -378,10 +457,12 @@ int mc_mma(int nacc, uint64_t steps, int grid, unsigned long long *xr, cudaStrea
   return cudaGetLastError() == cudaSuccess ? 0 : 1;
 }
 
-int mc_mix(int cw, long long cycles, int grid, unsigned long long *counts, unsigned long long *xr, cudaStream_t s) {
+int mc_mix(int lean, int cw, long long cycles, int grid, unsigned long long *counts, unsigned long long *xr,
+           cudaStream_t s) {
   const int smem = (mc::MIX_WARPS - cw) * mc::WORD_BYTES;
-  if (cudaFuncSetAttribute(mc::mix_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem) != cudaSuccess) return 2;
-  mc::mix_kernel<<<grid, mc::MIX_WARPS * 32, smem, s>>>(cw, cycles, counts, xr);
+  auto k = lean ? mc::mix_kernel<true> : mc::mix_kernel<false>;
+  if (cudaFuncSetAttribute(k, cudaFuncAttributeMaxDynamicSharedMemorySize, smem) != cudaSuccess) return 2;
+  k<<<grid, mc::MIX_WARPS * 32, smem, s>>>(cw, cycles, counts, xr);
   return cudaGetLastError() == cudaSuccess ? 0 : 1;
 }
 
