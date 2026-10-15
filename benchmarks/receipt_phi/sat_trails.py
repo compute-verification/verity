@@ -44,8 +44,11 @@ import sys
 import time
 from pathlib import Path
 
-from pysat.card import EncType, ITotalizer
-from pysat.solvers import Solver
+try:
+    from pysat.card import ITotalizer
+    from pysat.solvers import Solver
+except ImportError:  # `proved` only reads outputs
+    ITotalizer = Solver = None
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import trails  # noqa: E402
