@@ -57,7 +57,8 @@ def paired(rows: list[dict], phase: str, base_phase: str) -> list[tuple[dict, di
     return out
 
 
-OPS = ("none", "iadd3", "lop3", "imad", "prmt", "mix", "imma", "merge", "reuse", "unif", "cbank", "lop3x")
+OPS = ("none", "iadd3", "lop3", "imad", "prmt", "mix", "imma", "merge", "reuse", "unif", "cbank", "lop3x", "imadm",
+       "mixm")
 
 
 def probe_overhead(sass: dict) -> dict[str, float]:
@@ -76,6 +77,29 @@ def probe_overhead(sass: dict) -> dict[str, float]:
         loops = [lp["n"] for lp in v["loops"] if "NANOSLEEP" in lp["ops"] and lp["n"] >= int(pb)]
         if loops:
             out[name] = min(loops) / int(pb)
+    return out
+
+
+def sass_forms(sass: dict) -> dict:
+    """Per second-stream probe, its body's shapes and register reads (the loop probe_overhead reads); per in-loop
+    extra, the shapes its filler loop holds beyond base-u1's."""
+    out = {}
+    base = max(sass.get("0,0,0,1,1", {}).get("loops", []), key=lambda lp: lp["n"], default=None)
+    for key, v in sass.items():
+        f = key[3:].split(",") if key.startswith("pk:") else key.split(",")
+        if key.startswith("pk:"):
+            body = [lp for lp in v["loops"] if "NANOSLEEP" in lp["ops"] and lp["n"] >= int(f[1])]
+            if body:
+                lp = min(body, key=lambda lp: lp["n"])
+                out[f"s-{OPS[int(f[0])]}-b{f[1]}"] = {k: lp.get(k) for k in ("n", "shapes", "vreads", "reuse_hits",
+                                                                              "ureads", "creads")}
+        elif len(f) == 5 and f[0] == "0" and f[1] != "0" and base and v["loops"]:
+            lp = max(v["loops"], key=lambda lp: lp["n"])
+            extra = {s: c - base["shapes"].get(s, 0) for s, c in lp.get("shapes", {}).items()
+                     if c > base["shapes"].get(s, 0)}
+            out[f"x-{OPS[int(f[1])]}-u{f[3]}-x{f[2]}"] = {
+                "n_over_base": lp["n"] - base["n"], "extra_shapes": extra,
+                **{k: lp.get(k, 0) - base.get(k, 0) for k in ("vreads", "reuse_hits", "ureads", "creads")}}
     return out
 
 
@@ -105,6 +129,18 @@ def bracket(points: list[tuple[int, float, float]], thr: float) -> dict:
 FAMILY = {"probe": ("probe-base", "in-kernel"), "ss-probe": ("ss-base", "second-stream"),
           "ssf-probe": ("ss-base", "second-stream-first")}
 IDLE_NS = 1000000
+# Merge-capable forms by what their addend can be: a per-lane computed word (one distinct word a lane, 32 a warp
+# instruction), or a warp-uniform / constant word (one distinct word a warp instruction).
+MERGE_CLASS = {"merge": "merge-lane", "reuse": "merge-lane", "prmt": "merge-lane", "lop3x": "merge-lane",
+               "imadm": "merge-lane", "mixm": "merge-lane", "unif": "merge-uniform", "cbank": "merge-uniform"}
+
+
+def op_groups(op: str) -> tuple[str, ...]:
+    """The frontier groups a probe or extra of class `op` joins besides its own kernel: any integer class, and its
+    merge class with any merge-capable form."""
+    if op == "imma":
+        return ("covert-imma",)
+    return ("any-int",) + ((MERGE_CLASS[op], "merge-any") if op in MERGE_CLASS else ())
 
 
 def method_a(rows: list[dict], over: dict[str, float]) -> dict:
@@ -136,7 +172,7 @@ def method_a(rows: list[dict], over: dict[str, float]) -> dict:
                 "rel_idle": rate / idle[(r["phase"], r["kernel"], r["pw"], r["rep"])]}
         imma = r["pop"] == "imma"
         nu = r["probe_inst_per_sm_clk_med"] / PEAK if imma else r["probe_inst_per_sm_clk_med"] / 4 * over.get(r["kernel"], 1.0)
-        groups = (f"{fam}/{r['kernel']}", f"{fam}/{'covert-imma' if imma else 'any-int'}")
+        groups = (f"{fam}/{r['kernel']}",) + tuple(f"{fam}/{g}" for g in op_groups(r["pop"]))
         if r["sleep_ns"] != IDLE_NS:
             for ref, rel in rels.items():
                 for g in groups:
@@ -160,9 +196,12 @@ def method_a(rows: list[dict], over: dict[str, float]) -> dict:
     return out
 
 
-def method_b(rows: list[dict]) -> dict:
+def method_b(rows: list[dict], forms: dict | None = None) -> dict:
     """rel: the filler's rate with k extras per MMA over the full-rate filler (base-u1 at 16 filler warps, the occupancy
-    maximum) of the same rep; rel_own: over the adjacent base of the same unroll and occupancy."""
+    maximum) of the same rep; rel_own: over the adjacent base of the same unroll and occupancy. A kernel whose filler
+    loop holds fewer than X instructions beyond base-u1's (ptxas moved the extras out of the loop: a linear recurrence)
+    is skipped, since its rate change is layout alone."""
+    forms = forms or {}
     full = {r["rep"]: r["mma_per_sm_clk_med"] for r in rows if r["phase"] == "occupancy" and r["kernel"] == "base-u1"
             and r["fw"] == 16}
     pts: dict[tuple, list] = defaultdict(list)
@@ -170,12 +209,16 @@ def method_b(rows: list[dict]) -> dict:
     for r, b in paired(rows, "inloop", "inloop-base"):
         if b["unr"] != r["unr"] or r["rep"] not in full:
             continue
+        if r["unr"] == 1 and forms.get(r["kernel"], {}).get("n_over_base", r["x"]) < r["x"]:
+            continue
         rel = r["mma_per_sm_clk_med"] / full[r["rep"]]
         rel_own = r["mma_per_sm_clk_med"] / b["mma_per_sm_clk_med"]
         nu = r["k"] * r["mma_per_sm_clk_med"] / 4
         cost = (1 / rel_own - 1) * (4 / b["mma_per_sm_clk_med"]) / r["k"]  # SMSP-cycles lost per extra instruction
         pts[(r["xop"], r["fw"])].append((r["rep"], nu, rel))
         pts[("any", r["fw"])].append((r["rep"], nu, rel))
+        for g in op_groups(r["xop"])[1:]:
+            pts[(g, r["fw"])].append((r["rep"], nu, rel))
         detail[(r["xop"], r["unr"], r["x"], r["fw"])].append((r["k"], nu, rel, rel_own, cost))
     out = {"frontier": {}, "points": {}}
     for key, p in sorted(pts.items(), key=str):
@@ -261,10 +304,11 @@ def main() -> int:
         "occupancy": occupancy(rows),
         "probe_overhead": over,
         "a_probe": method_a(rows, over),
-        "b_inloop": method_b(rows),
+        "b_inloop": method_b(rows, sass_forms(sass)),
         "c_ncu": method_c(o),
         "clocks": clocks(o, rows),
         "sass_base_loops": {k: v["loops"] for k, v in sass.items() if k in ("0,0,0,1,1", "0,0,0,4,1", "1,0,0,1,256")},
+        "sass_forms": sass_forms(sass),
     }
     print(json.dumps(summary, indent=1))
     return 0

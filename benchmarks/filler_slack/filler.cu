@@ -98,12 +98,20 @@ __device__ __forceinline__ void mma_s8(uint32_t (&d)[4], const uint32_t (&a)[4],
 //   UNIF   y[u] += a warp-uniform word  IADD3 Rd, Rd, UR,  RZ         one vector read (addend in a uniform register)
 //   CBANK  y[u] += KK[imm]              IADD3 Rd, Rd, c[0x3][..], RZ  one vector read (addend from the constant bank)
 //   LOP3X  y[u] = byte-merge(y[u],y[v]) LOP3 Rd, Rd, Rv, imm, lut     two vector reads (a byte-packing merge)
+//   IMADM  y[u] += c1·y[v] (c1 odd)     IMAD Rd, Rv, Rc1.reuse, Rd    on the FMA pipe; the scale c1 is fixed, so from the
+//                                                                     reuse cache: two fresh vector reads
+//   MIXM   MERGE and IMADM alternating                                one ALU-pipe and one FMA-pipe merge
+// (An immediate scale, `IMAD Rd, Rv, imm, Rd`, would read the same two registers, but ptxas 13.0 drops that loop-carried
+// IMAD from the probe and filler loops and folds the values from before the loop.)
 // PRMT (Round 1's `__byte_perm(y[u], y[v], imm)`, SASS `PRMT Rd, Ra, imm, Rb`) is already a two-register byte-packing
 // merge, so Round 2 reuses it. UNIF and CBANK read only one vector register, but a uniform/constant addend is identical
 // across a warp's 32 lanes, so the note argues what such a merge can and cannot combine.
-enum Op { O_NONE = 0, O_IADD3, O_LOP3, O_IMAD, O_PRMT, O_MIX, O_IMMA, O_MERGE, O_REUSE, O_UNIF, O_CBANK, O_LOP3X, NOPS };
-static const char* OP_NAME[NOPS] = {"none",  "iadd3", "lop3", "imad",  "prmt",  "mix",
-                                    "imma", "merge", "reuse", "unif", "cbank", "lop3x"};
+enum Op {
+  O_NONE = 0, O_IADD3, O_LOP3, O_IMAD, O_PRMT, O_MIX, O_IMMA, O_MERGE, O_REUSE, O_UNIF, O_CBANK, O_LOP3X, O_IMADM, O_MIXM,
+  NOPS
+};
+static const char* OP_NAME[NOPS] = {"none",  "iadd3", "lop3", "imad",  "prmt",  "mix",   "imma",
+                                    "merge", "reuse", "unif", "cbank", "lop3x", "imadm", "mixm"};
 
 __device__ __forceinline__ uint32_t maj3(uint32_t a, uint32_t b, uint32_t c) { return (a & b) | (a & c) | (b & c); }
 
@@ -123,12 +131,13 @@ __device__ __forceinline__ uint32_t unif_addend() {
 template <int OP, int NY>
 __device__ __forceinline__ void xop(uint32_t (&y)[NY], const uint32_t (&c)[4], int e) {
   const int u = e & (NY - 1), v = (e + 3) & (NY - 1);
-  const int op = OP == O_MIX ? ((e & 1) ? O_IMAD : O_IADD3) : OP;
+  const int op = OP == O_MIX ? ((e & 1) ? O_IMAD : O_IADD3) : OP == O_MIXM ? ((e & 1) ? O_IMADM : O_MERGE) : OP;
   if (op == O_IADD3) y[u] = y[u] + y[v] + c[e & 3];
   if (op == O_LOP3) y[u] = maj3(y[u], y[v], c[e & 3]);
   if (op == O_IMAD) y[u] = y[u] * c[e & 3] + y[v];
   if (op == O_PRMT) y[u] = __byte_perm(y[u], y[v], 0x5140);
   if (op == O_MERGE) y[u] = y[u] + y[v];
+  if (op == O_IMADM) y[u] = y[v] * c[1] + y[u];
   if (op == O_REUSE) y[u] = y[u] + c[0];
   if (op == O_UNIF) y[u] = y[u] + unif_addend();
   if (op == O_CBANK) y[u] = y[u] + KK[e & (NKEY - 1)];
@@ -350,14 +359,15 @@ struct SKern {
 #define SK(OP, PB) {std::string("s-") + OP_NAME[OP] + "-b" #PB, OP, PB, pk<OP, PB>}
 static std::vector<SKern> skernels() {
   return {SK(O_IADD3, 16), SK(O_IMAD, 16), SK(O_MIX, 16),  SK(O_IMMA, 32),  SK(O_MERGE, 16), SK(O_REUSE, 16),
-          SK(O_UNIF, 16),  SK(O_CBANK, 16), SK(O_PRMT, 16), SK(O_LOP3X, 16)};
+          SK(O_UNIF, 16),  SK(O_CBANK, 16), SK(O_PRMT, 16), SK(O_LOP3X, 16), SK(O_IMADM, 16), SK(O_MIXM, 16)};
 }
 
 static std::vector<Kern> kernels() {
   return {BASE(1),          BASE(4),          XROW1(O_IADD3),   XROW1(O_LOP3),   XROW1(O_IMAD),  XROW1(O_PRMT),
           XROW1(O_MIX),     XROW4(O_IADD3),   XROW4(O_IMAD),    XROW4(O_MIX),    PK(O_IADD3, 256), PK(O_LOP3, 256),
           PK(O_IMAD, 256),  PK(O_PRMT, 256),  PK(O_MIX, 256),   PK(O_IMMA, 32),  PK(O_IADD3, 16), PK(O_IMAD, 16),
-          PK(O_MIX, 16),    XROW2(O_MERGE),   XROW2(O_REUSE),   XROW2(O_UNIF),   XROW2(O_CBANK),  XROW2(O_LOP3X)};
+          PK(O_MIX, 16),    XROW2(O_MERGE),   XROW2(O_REUSE),   XROW2(O_UNIF),   XROW2(O_CBANK),  XROW2(O_LOP3X),
+          XROW2(O_IMADM),   XROW2(O_MIXM)};
 }
 
 static void set_keys(uint32_t kseed) {
