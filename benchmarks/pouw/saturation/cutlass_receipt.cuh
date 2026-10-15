@@ -38,6 +38,7 @@ struct cr_kernel {
     int fvar;                    // the forced steps: 0 alu phi1, 2 FFMA
     int d2c;                     // var 2 (duo2): the four-word states a thread, tile c's words into state c % d2c
     int xmma, xacc;              // a cheater's own mma.sync m16n8k32 a warp after every 32-deep k-block, into xacc tiles
+    int xpos;                    // 0: after the k-block's receipt steps, 1: before them
     int tile_m, tile_n, threads, chains, nn_max, kblocks, stages, smem_bytes;
     cr_impl* (*make)(const cr_args& a, int* err);
 };

@@ -37,9 +37,10 @@
 //              every 32-deep k-block's 16 (prefill) honest ones, so X / 16 extra MMAs per honest MMA, on the k-block's own
 //              register fragments (no operand traffic: the cheapest operands a cheater has) into CR_XACC (default 2)
 //              m16n8 FP32 accumulator tiles of its own. Each thread folds them into one word, stored to cr_args::X; the
-//              outputs and receipts the gates check are the design's
+//              outputs and receipts the gates check are the design's. CR_XPOS 0 issues them after the k-block's
+//              receipt steps, 1 right after its honest MMAs (before the receipt), so the tensor pipe runs them under it
 // Compiled once per kernel: -DCR_NAME=name -DCR_CFG -DCR_VAR -DCR_ROUNDS -DCR_P -DCR_MODE -DCR_SPREAD -DCR_GRAIN
-// -DCR_EXTRA -DCR_HONEST -DCR_FORCED -DCR_XVAR -DCR_FVAR -DCR_D2C -DCR_XMMA -DCR_XACC
+// -DCR_EXTRA -DCR_HONEST -DCR_FORCED -DCR_XVAR -DCR_FVAR -DCR_D2C -DCR_XMMA -DCR_XACC -DCR_XPOS
 // (job.sh's cgemm).
 #include "cutlass_receipt.cuh"
 
@@ -90,6 +91,9 @@
 #endif
 #ifndef CR_XACC
 #define CR_XACC 2
+#endif
+#ifndef CR_XPOS
+#define CR_XPOS 0
 #endif
 #define CR_STR2(x) #x
 #define CR_STR(x) CR_STR2(x)
@@ -196,6 +200,11 @@ struct ReceiptMma : Base {
         // quarter of them a k-block here.
         auto hook = [&](auto k_block, auto receipted) {
             constexpr int b = decltype(k_block)::value;
+            if constexpr ((MODE == 1 || MODE == 3) && CR_XMMA > 0 && CR_XPOS == 1) {
+                CUTLASS_PRAGMA_UNROLL
+                for (int j = 0; j < CR_XMMA; ++j)
+                    cute::gemm(tiled_mma, tCrA(_, j % MM, k_block), tCrB(_, (j / MM) % NN, k_block), xacc(_, j % XA));
+            }
             if constexpr (VAR == 2 && MODE == 1 && decltype(receipted)::value && (SPREAD || (b + 1) % GS == 0)) {
                 for_each(make_int_sequence<CH * MW>{}, [&](auto i) {
                     constexpr int c = decltype(i)::value / MW, e = decltype(i)::value % MW, t = (c * MW + e) % D2_KEYS;
@@ -267,7 +276,7 @@ struct ReceiptMma : Base {
                     else
                         z[j % XC] = phi1<CR_XVAR == 5 ? 0 : CR_XVAR>(z[j % XC], p, 0x7f4a7c15u, key(j, b));
             }
-            if constexpr ((MODE == 1 || MODE == 3) && CR_XMMA > 0) {
+            if constexpr ((MODE == 1 || MODE == 3) && CR_XMMA > 0 && CR_XPOS == 0) {
                 CUTLASS_PRAGMA_UNROLL
                 for (int j = 0; j < CR_XMMA; ++j)
                     cute::gemm(tiled_mma, tCrA(_, j % MM, k_block), tCrB(_, (j / MM) % NN, k_block), xacc(_, j % XA));
@@ -454,6 +463,7 @@ const cr_kernel K{CR_STR(CR_NAME),
                   CR_D2C,
                   CR_XMMA,
                   CR_XMMA > 0 ? CR_XACC : 0,
+                  CR_XPOS,
                   kTileM,
                   kTileN,
                   kThreads,
