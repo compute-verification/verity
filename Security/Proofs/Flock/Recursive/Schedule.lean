@@ -7,12 +7,13 @@ import Proofs.Flock.Soundness.Refine.LiveSim
 
 `Inner` has `r` uniform rounds, each a message and then a live coin. A verifier written as a `Game`, whose shape may
 depend on the prover's messages (it may stop early, or let the prover choose which of two interleaved runs moves next),
-becomes an inner protocol once a fixed schedule says what each round carries: round `k` sends a list of messages, each of
-one of the types `T i`, and then draws a coin of type `CT k`.
+becomes an inner protocol once a fixed schedule says what each round carries: round `k < r` sends a list of messages,
+each of one of the types `T i`, and then draws a coin of type `CT k`; round `r` sends the last messages.
 
-* `schedInner`: that protocol. Each round's coin is the whole product `∀ k, CT k`, of which round `k` reads coordinate
-  `k`; the verifier plays the game with round `0`'s messages, round `0`'s coin, round `1`'s messages, and so on
-  (`Game.PlaysT`), and accepts when the game ends in an accepted outcome. A round whose messages have the wrong types, or
+* `schedInner`: that protocol, with `r + 1` rounds. Each round's coin is the whole product `∀ k, CT k`, of which round
+  `k < r` reads coordinate `k` and round `r` reads none (a game that ends with a message, as C-Flock's table ends with
+  the openings, needs a round after its last coin); the verifier plays the game with round `0`'s messages, round `0`'s
+  coin, round `1`'s messages, and so on (`Game.PlaysT`), and accepts when the game ends in an accepted outcome. A round whose messages have the wrong types, or
   too many, or whose coin's type is not the one the game draws there, makes the run fail.
 * `sched_sound`: the schedule's verifier is as sound as the game. Against every prover it accepts with probability at
   most the game's `value`, the best any prover achieves when the game draws its own coins.
@@ -57,7 +58,7 @@ def schedInner {α : Type} (Stmt : Type) (g : Stmt → Game α) (p : Stmt → α
   Coin := (k : Fin r) → CT k
   fintype := inferInstance
   nonempty := inferInstance
-  r := r
+  r := r + 1
   accepts x t := ∃ a, PlaysT (g x) (schedSteps T CT 0 t) a ∧ p x a
   holds := holds
 
@@ -154,9 +155,41 @@ theorem avg_round_le (p : α → Prop) {n j : ℕ} (hj : j < r)
             exact hC (Sigma.mk.inj_iff.1 (Sum.inr.inj hx)).1
 
 open Classical in
-/-- **The schedule's rounds from round `j` on**, `n` of them with `j + n = r`: the run on their steps ends accepted no
-more often than the game's value. -/
-theorem leafAvg_plays_le (p : α → Prop) : ∀ (n j : ℕ), j + n = r →
+/-- A run on messages alone ends accepted no more often than the game's value. -/
+theorem plays_msgs_le (p : α → Prop) : ∀ (g : Game α) (ms : List (SMsg T)),
+    (if ∃ a, PlaysT g (ms.map (fun e => Sum.inl ⟨T e.1, e.2⟩)) a ∧ p a then (1 : ℝ≥0∞) else 0) ≤ value p g
+  | g, [] => by
+      split_ifs with h
+      · obtain ⟨a, ha, hp⟩ := h
+        rw [ha.nil_inv]
+        simp [value, hp]
+      · exact zero_le
+  | g, e :: ms => by
+      split_ifs with h
+      · obtain ⟨a, ha, hp⟩ := h
+        cases g with
+        | ret b =>
+            have := ha.ret_inv.1
+            simp at this
+        | coin C k =>
+            obtain ⟨x, hx, _⟩ := ha.coin_inv
+            simp at hx
+        | send M k =>
+            obtain ⟨m, hm, hk⟩ := ha.send_inv
+            have hT : T e.1 = M := (Sigma.mk.inj_iff.1 (Sum.inl.inj hm)).1
+            subst hT
+            have hm' := (Sigma.mk.inj_iff.1 (Sum.inl.inj hm)).2
+            have ih := plays_msgs_le p (k e.2) ms
+            rw [if_pos ⟨a, (eq_of_heq hm').symm ▸ hk, hp⟩] at ih
+            refine ih.trans ?_
+            rw [value_send]
+            exact le_iSup (fun m => value p (k m)) e.2
+      · exact zero_le
+
+open Classical in
+/-- **The schedule's rounds from round `j` on**, `n` of them with `j + n = r + 1`: the run on their steps ends accepted
+no more often than the game's value. -/
+theorem leafAvg_plays_le (p : α → Prop) : ∀ (n j : ℕ), j + n = r + 1 →
     ∀ (f : List (List (SMsg T) × ((k : Fin r) → CT k)) → Game β)
       (s : Strategy (rounds (List (SMsg T)) ((k : Fin r) → CT k) n f)) (g : Game α),
       leafAvg n f (fun t _ => if ∃ a, PlaysT g (schedSteps T CT j t) a ∧ p a then 1 else 0) s ≤ value p g
@@ -168,7 +201,12 @@ theorem leafAvg_plays_le (p : α → Prop) : ∀ (n j : ℕ), j + n = r →
         simp [value, hp]
       · exact zero_le
   | n + 1, j, hjn, f, s, g => by
-      have hj : j < r := by omega
+      by_cases hj : j < r
+      swap
+      · obtain rfl : n = 0 := by omega
+        show avg (fun ρ => if ∃ a, PlaysT g (schedSteps T CT j [(s.1, ρ)]) a ∧ p a then (1 : ℝ≥0∞) else 0) ≤ value p g
+        simp only [schedSteps, dif_neg hj, List.nil_append, List.append_nil, avg_const]
+        exact plays_msgs_le T p g s.1
       have := avg_round_le T CT p hj (leafAvg_plays_le p n (j + 1) (by omega)) (fun ρ t => f ((s.1, ρ) :: t))
         (fun ρ => s.2 ρ) g s.1
       refine le_of_eq_of_le ?_ this
@@ -184,8 +222,8 @@ protocol on the schedule is `ε`-sound. -/
 theorem sched_sound {Stmt : Type} (g : Stmt → Game α) (p : Stmt → α → Prop) (holds : Stmt → Prop) {ε : ℝ≥0∞}
     (h : ∀ x, ¬ holds x → value (p x) (g x) ≤ ε) : InnerSound (schedInner T CT Stmt g p holds) ε := by
   intro x hx s
-  refine le_trans (le_of_eq ?_) ((leafAvg_plays_le T CT (p x) r 0 (by omega) .ret s (g x)).trans (h x hx))
-  exact prob_rounds _ r _ s
+  refine le_trans (le_of_eq ?_) ((leafAvg_plays_le T CT (p x) (r + 1) 0 (by omega) .ret s (g x)).trans (h x hx))
+  exact prob_rounds _ (r + 1) _ s
 
 end Schedule
 

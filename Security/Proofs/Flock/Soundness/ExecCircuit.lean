@@ -249,6 +249,10 @@ structure ParseFacts (tags : Tags) (c : Circuit) : Prop where
   recNet : RecOpen.check c = .ok ()
   /-- a `rec-residuals/m<m>-k<k>-c<c>-p<j>` unit is the verifier's -/
   recResiduals : RecResiduals.check c = .ok ()
+  /-- a `rec-sparse/n<NU>-e<ELL>-s<S_LOG>-t<T_LOG>` unit is the verifier's -/
+  recSparse : RecSparse.check c = .ok ()
+  /-- a `rec-opening/m<m>-c<claims>-p<j>` unit is the verifier's -/
+  recOpening : RecOpening.check c = .ok ()
   /-- not a typed template: `parse`'s `tmpl` is `none` -/
   typed : c.typed = none
 
@@ -387,6 +391,8 @@ theorem parse_facts_nets {tags : Tags} {bytes : ByteArray} {tables : List (Strin
   (have hh := except_bind_ok h; clear h; obtain ⟨w', hrows, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨w'', hrec, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨w''', hres, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨w'''', hsparse, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨w5, hopening, h⟩ := hh)
   have hc : c0 = c := Except.ok.inj h
   subst hc
   have hnetOf : ∀ nm i, netOf nm = .ok i → i < nets2.size := by
@@ -542,7 +548,8 @@ theorem parse_facts_nets {tags : Tags} {bytes : ByteArray} {tables : List (Strin
           unitNet := findIdx?_lt hunit, shaNet := hnetOf _ _ hsha,
           hmNet := hnetOf _ _ hhm, kinds := hkinds, check := ⟨ls, by cases w; exact hcheck⟩,
           rowNets := by cases w'; exact hrows, recNet := by cases w''; exact hrec,
-          recResiduals := by cases w'''; exact hres, typed := rfl }
+          recResiduals := by cases w'''; exact hres, recSparse := by cases w''''; exact hsparse,
+          recOpening := by cases w5; exact hopening, typed := rfl }
 
 /-- **What `HmRow.parse` accepted, with nets `pre` first**: its nets are `pre`'s, then the file's own, and its unit is
 the first named `unit`. -/

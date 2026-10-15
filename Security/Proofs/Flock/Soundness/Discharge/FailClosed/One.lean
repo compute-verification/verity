@@ -445,19 +445,22 @@ theorem setupZJ_of_verifiesZK (I : Inputs) (hh : I.tags.hiddenOutputs = false) {
   obtain ⟨y, -, -, -⟩ := drawSetupZJ_of ht' x (sch := schs[0].1) (tPad := schs[0].2) (by rw [hx]; exact hz')
   exact ⟨y⟩
 
-set_option linter.unusedVariables false in
 /-- Zero knowledge at a public-output statement of one table under `--zk`, at every statement the check passes:
-`zk_session_composed`'s second half. -/
+`zk_session_composed`'s second half, at the pinned key's hiding gap (`Composed.zk_session_view`).
+
+The bound is per hidden leaf the commitments' hiding gap at hm96-sha512's pinned key `K*` (`ZkView.My`, `ZkView.saltHash`),
+`hidingGap My saltHash`, where hm96 hiding holds with no premise (`CROnly.hm96Hiding_gap`). Nothing here proves it small
+for `K*`: it is below `2^-193` for all but `2^-64` of keys (`CROnly.hm96_sha512_tail`), and that `K*` is not one of the
+others is unproved. -/
 def ViewZ (I : Inputs) : Prop :=
   ∀ (P : LigProver) {n mPts : ℕ} {Reg : Type} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZK I mPts S₀ (dj S₀))
-    -- hash-derived-key
-    (hKey : Assumptions.Zk.HashDerivedKeyHm96),
+    (y₀ : DrawSetupZK I mPts S₀ (dj S₀)),
     ScopeZ I → ∀ (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S)),
-      ZkViewAt (coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st) ((2 : ℝ≥0∞) ^ (-193 : ℤ))
+      ZkViewAt (coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st) (ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash))
 
 theorem viewZ (I : Inputs) : ViewZ I :=
-  @fun P _ _ _ dj _ y₀ hKey hs => Composed.zk_session_view P I dj y₀ hs.typed (fun _ y => DrawSetupZK.avoidsMask y) hKey
+  @fun P _ _ _ dj _ y₀ hs => Composed.zk_session_view P I dj y₀ hs.typed hs.parseRow hs.outNet
+    (fun _ y => DrawSetupZK.avoidsMask y) (CROnly.hm96Hiding_gap ZkView.My ZkView.saltHash)
 
 end
 
@@ -612,22 +615,25 @@ theorem setupZHJ_of_verifiesZK (I : Inputs) (hh : I.tags.hiddenOutputs = true) {
     (sch := schs[0].1) (tPad := schs[0].2) (by rw [hx]; exact hz')
   exact ⟨y⟩
 
-set_option linter.unusedVariables false in
 /-- Zero knowledge at a hidden-output statement of any number of tables under `--zk`, at every statement the check
-passes: `zk_session_composedHJ`'s second half. -/
+passes: `zk_session_composedHJ`'s second half, at the pinned key's hiding gap (`ZkHidden.zk_session_viewHJ`).
+
+The bound is per hidden leaf the commitments' hiding gap at hm96-sha512's pinned key `K*` (`ZkView.My`, `ZkView.saltHash`),
+`hidingGap My saltHash`, where hm96 hiding holds with no premise (`CROnly.hm96Hiding_gap`). Nothing here proves it small
+for `K*`: it is below `2^-193` for all but `2^-64` of keys (`CROnly.hm96_sha512_tail`), and that `K*` is not one of the
+others is unproved. -/
 def ViewZHJ (I : Inputs) : Prop :=
   ∀ (P : LigProver) {n mPts : ℕ} {Reg : Type} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
-    -- hash-derived-key
-    (hKey : Assumptions.Zk.HashDerivedKeyHm96),
+    {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀),
     ScopeZ I → ∀ (S : Finset (Fin n)) (R : Reg)
       (ys : ∀ j : Fin (nTab I), DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)),
       ZkViewAtJ (fun j => coinedOf P ((planZHJ (Reg := Reg) dj y₀ S R).get
-        (Fin.cast (planZHJ_length dj y₀ S R).symm j)) (ys j).x.st) ((2 : ℝ≥0∞) ^ (-193 : ℤ))
+        (Fin.cast (planZHJ_length dj y₀ S R).symm j)) (ys j).x.st) (ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash))
 
 theorem viewZHJ (I : Inputs) : ViewZHJ I :=
-  @fun P _ _ _ dj _ _ y₀ hKey hs =>
-    ZkHidden.zk_session_viewHJ P I dj y₀ hs.typed (fun _ _ y => DrawSetupZHJ.avoidsMask y) hKey
+  @fun P _ _ _ dj _ _ y₀ hs =>
+    ZkHidden.zk_session_viewHJ P I dj y₀ hs.typed (fun _ _ y => DrawSetupZHJ.avoidsMask y)
+      (CROnly.hm96Hiding_gap ZkView.My ZkView.saltHash)
 
 open FlockSoundness.Discharge.ZkReg (OwnReadsHJ regPathsHJ rsShHJS rsZHJS rsZHJS_computes)
 
@@ -691,23 +697,21 @@ theorem soundZHJR (I : Inputs) (hh : I.tags.hiddenOutputs = true) : SoundZHJR I 
   @fun _ _ _ own dj _ _ y₀ wr dg N kd hkd _ _ _ Lb src hA3 hDraw hRec _ _ _ hk hRw hM _ hρ hr _ ht' K₀ τ _ _ hCR =>
     zk_session_soundHJR I hh own dj y₀ wr dg N kd hkd Lb src hA3 hDraw hRec hk hRw hM hρ hr ht' K₀ τ hCR
 
-set_option linter.unusedVariables false in
 /-- Zero knowledge at a hidden-output statement of any number of tables under `--zk --registered F`, at every statement
-the check passes with the verifier's registered reads: `ViewZHJ` at `ScopeZR`. The view reads the statement's tags,
-not its public file, so a shared-row one changes nothing in it. -/
+the check passes with the verifier's registered reads: `ViewZHJ` at `ScopeZR`, at the same bound. The view reads the
+statement's tags, not its public file, so a shared-row one changes nothing in it. -/
 def ViewZHJR (I : Inputs) : Prop :=
   ∀ (P : LigProver) {n mPts : ℕ} {Reg : Type} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
-    -- hash-derived-key
-    (hKey : Assumptions.Zk.HashDerivedKeyHm96),
+    {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀),
     ScopeZR I → ∀ (S : Finset (Fin n)) (R : Reg)
       (ys : ∀ j : Fin (nTab I), DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)),
       ZkViewAtJ (fun j => coinedOf P ((planZHJ (Reg := Reg) dj y₀ S R).get
-        (Fin.cast (planZHJ_length dj y₀ S R).symm j)) (ys j).x.st) ((2 : ℝ≥0∞) ^ (-193 : ℤ))
+        (Fin.cast (planZHJ_length dj y₀ S R).symm j)) (ys j).x.st) (ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash))
 
 theorem viewZHJR (I : Inputs) : ViewZHJR I :=
-  @fun P _ _ _ dj _ _ y₀ hKey hs =>
-    ZkHidden.zk_session_viewHJ P I dj y₀ hs.typed (fun _ _ y => DrawSetupZHJ.avoidsMask y) hKey
+  @fun P _ _ _ dj _ _ y₀ hs =>
+    ZkHidden.zk_session_viewHJ P I dj y₀ hs.typed (fun _ _ y => DrawSetupZHJ.avoidsMask y)
+      (CROnly.hm96Hiding_gap ZkView.My ZkView.saltHash)
 
 end
 
@@ -724,7 +728,12 @@ most the case's bound. Without `--zk`, `SoundExec` (public outputs) or `SoundExe
 knowledge `ViewZHJR`, at a public file with or without shared rows. Everywhere else `--registered F` accepts no more than
 the verifier does without it (the second conjunct), so the claims without it hold. No hypothesis on the circuit file or
 the statement's form: the verifier refuses every statement the claims do not cover (`Flock.ProvedScope.check`), and
-there the event is empty. -/
+there the event is empty.
+
+The zero-knowledge views are within `2·|Hid|` times the commitments' hiding gap at hm96-sha512's pinned key `K*`,
+`hidingGap My saltHash`, and take no premise on the key or on SHA-512. Nothing here proves the gap small for `K*`: it is
+below `2^-193` for all but `2^-64` of keys (`CROnly.hm96_sha512_tail`), and that `K*` is not one of the others is
+unproved. -/
 theorem flock_verify_sound (zk : Bool) (I : Inputs) :
     (if hh : I.tags.hiddenOutputs = true then
       if zk then (∀ hn : I.count ≤ 1, SoundZH I hh hn) ∧ SoundZHJ I hh ∧ ViewZHJ I ∧ SoundZHJR I hh ∧ ViewZHJR I

@@ -107,7 +107,6 @@ theorem replay_cons_size (st : Setup) (lay : Zk.PadLayout) (p : Proof) (root : B
   obtain ⟨_, _, _, h⟩ := bind_ok h
   obtain ⟨_, _, _, h⟩ := bind_ok h
   obtain ⟨_, _, _, h⟩ := bind_ok h
-  obtain ⟨-, h⟩ := check_bind h
   obtain ⟨_, _, _, h⟩ := bind_ok h
   obtain ⟨_, _, _, h⟩ := bind_ok h
   obtain ⟨_, _, _, h⟩ := bind_ok h

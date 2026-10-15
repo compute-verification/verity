@@ -56,8 +56,8 @@ structure Shape where
   deriving DecidableEq, Repr
 
 /-- The menu, public and fixed per model, never per audit. `shapes`: the shapes a session may take; `inner s`: the inner
-session's shape V* is staged over for a session of shape `s` (a parameter until lean's map beside `VStar.statements`,
-over F6's menu as data, lands with F5); `types s`: the public bound on the types a session of shape `s` selects among
+session's shape V* is staged over for a session of shape `s` (a pinned menu's is `VStar.Menu.inner`, in
+`Menu.ofEntries`); `types s`: the public bound on the types a session of shape `s` selects among
 (its type table's size, the real count padded up to it); `padded k`: the sessions an audit of `k` drawn units runs, by
 shape and in order, a function of `k` and the menu alone. -/
 structure Menu where
@@ -83,7 +83,7 @@ fact about our own code (V*'s builder), not about the world: `#guard menu₀.sta
 yet. -/
 def Menu.Staged (M : Menu) : Prop := ∀ s ∈ M.shapes, ∃ vs, M.vstar s = .ok vs
 
-/-- The live verifier's range check (`Flock.checkInRange`, which `Stmt.setup` makes on every statement) on the inner
+/-- The live verifier's range check (`Flock.checkInRange`, which `setupH` and `setupTables` make on every hm96 statement) on the inner
 session of a session of shape `s`, read off its inner shape: the block size `k_log`; the public regions, two claims each
 past the two every session opens (`Stmt.nClaims`); and a link point's coordinates, `PT_LOCAL` and the table's block bits
 `m − k_log`. -/

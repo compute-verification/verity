@@ -70,8 +70,8 @@ def _attention_dot_value(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM):
 # -- the kinds whose program values are inputs (`TargetProfile.registered_values`): the value is the kind's last operand, a field of
 # the registered `values` parameter (`Ctx.supplied`); the rules ask for them instead of the constant-holding kinds under the switch
 _VALUE_KINDS = {
-    "rmsnorm_value": lambda N: ir_bind(_vi.RMSNormTritonV3, N=N),
-    "rmsnorm_fused_value": lambda N, TARGET: _targets.rmsnorm_fused_spec(TARGET, N, eps_input=True),
+    "rmsnorm_value": lambda N, TARGET, M=1: _targets.rmsnorm_value_spec(TARGET, N),
+    "rmsnorm_fused_value": lambda N, TARGET, M=1: _targets.rmsnorm_fused_spec(TARGET, N, eps_input=True, M=M),
     "attention_value": lambda T, NH, KVH, D: ir_bind(_vi.AttentionV10, T=T, NH=NH, KVH=KVH, D=D, BN=b1.fa2_kblock_n(D)),
     "attention_dot_value": _attention_dot_value,
     "attention_dot_plain_value": lambda T, NH, KVH, D, BN, DOT, INV: ir_bind(_vi.AttentionV12, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV),
@@ -98,10 +98,10 @@ PROFILE_B1_EAGER = Vocabulary(
         "pouw_linear_row_bias": lambda K, N: ir_bind(_pouw_rows.NcpLinearRowBias, K=K, N=N),
         "bias_add": lambda N: ir_bind(b1.BiasAdd, N=N),
         "gemm_bias": lambda K, N: ir_bind(_gemm_bias.GemmBias, K=K, N=N),
-        "rmsnorm": lambda N, EPS: ir_bind(b1.RMSNormTriton, N=N, EPS=EPS),
-        # `_C.fused_add_rms_norm` by the declared target (`frontend.targets.rmsnorm_fused_spec`, which the fold calls too): the rule
-        # states `TARGET`, and without it the role has no kind
-        "rmsnorm_fused": lambda N, EPS, TARGET: _targets.rmsnorm_fused_spec(TARGET, N, EPS),
+        # The target and launch row count select the batch-invariant kernels or
+        # vLLM's default width-8 CUDA kernels and their launch blocks.
+        "rmsnorm": lambda N, EPS, TARGET, M=1: _targets.rmsnorm_spec(TARGET, N, EPS, M),
+        "rmsnorm_fused": lambda N, EPS, TARGET, M=1: _targets.rmsnorm_fused_spec(TARGET, N, EPS, M=M),
         "rope": lambda NHEADS, D: ir_bind(b1.RoPE, NHEADS=NHEADS, D=D),
         "attention": lambda T, NH, KVH, D: ir_bind(b1.Attention, T=T, NH=NH, KVH=KVH, D=D),
         "silu_mul": lambda I: ir_bind(b1.SiluMul, I=I),
@@ -117,8 +117,10 @@ PROFILE_B1_EAGER = Vocabulary(
         "pouw_linear_row_bias": "NcpLinearRowBias_v1{K,N}: one row of a biased pouw:ncp-v2 linear's served y (NcpDequant adds the bias)",
         "bias_add": "BiasAdd_v1{N}: aten.add(bf16, bf16)",
         "gemm_bias": "GemmBias_v1{K,N}: Gemm_v1 then BiasAdd_v1 per output word (the batch-invariant linear with a bias)",
-        "rmsnorm": "RMSNormTriton_v1{N,EPS}: vLLM batch-invariant Triton _rms_norm_kernel",
-        "rmsnorm_fused": "RMSNormFusedCuda_v2{N,EPS}: vLLM CUDA fused_add_rms_norm (generic kernel)",
+        "rmsnorm": "target-selected norm: batch-invariant Triton RMSNormTriton_v1{N,EPS}, otherwise "
+                   "RMSNormCudaVector8_v1{N,EPS,BLOCK} at the launch's block",
+        "rmsnorm_fused": "target-selected fused norm: batch-invariant generic RMSNormFusedCuda_v2{N,EPS}, otherwise "
+                         "RMSNormFusedCudaVector8_v1{N,EPS,BLOCK} at the launch's block",
         "rope": "RoPE_v1{NHEADS,D}: vLLM _C.rotary_embedding NeoX, bf16 cos/sin cache row as Input",
         "attention": "Attention_v1{T,NH,KVH,D}: FA2 causal GQA over [T][KVH][D] caches",
         "silu_mul": "SiluMul_v1{I}: vLLM _C.silu_and_mul",
@@ -188,13 +190,6 @@ from verity_vllm.program.registry import topp_words as _topp_words  # the keep w
 from verity_vllm.program.registry import layer_norm as _LN
 
 
-def _norm_v2(role: str):
-    def bind_norm(N, EPS):
-        rec = b1.norm_bundle({"H": N, "EPS": EPS})
-        return rec[role]
-    return bind_norm
-
-
 PROFILE_B1_EAGER_V2 = Vocabulary(
     "b1-eager-v2", "profile", "b1-eager-v2",
     kinds={
@@ -202,8 +197,8 @@ PROFILE_B1_EAGER_V2 = Vocabulary(
         "pouw_linear_row": lambda K, N: ir_bind(_pouw_rows.NcpLinearRow, K=K, N=N),
         "pouw_linear_row_bias": lambda K, N: ir_bind(_pouw_rows.NcpLinearRowBias, K=K, N=N),
         "bias_add": lambda N: ir_bind(b1.BiasAdd, N=N),
-        "rmsnorm": _norm_v2("L0"),
-        "rmsnorm_fused": lambda N, EPS, TARGET: _targets.rmsnorm_fused_spec(TARGET, N, EPS),
+        "rmsnorm": lambda N, EPS, TARGET, M=1: _targets.rmsnorm_spec(TARGET, N, EPS, M),
+        "rmsnorm_fused": lambda N, EPS, TARGET, M=1: _targets.rmsnorm_fused_spec(TARGET, N, EPS, M=M),
         "rope": lambda NHEADS, D: ir_bind(b1.RoPE, NHEADS=NHEADS, D=D),
         "attention": lambda T, NH, KVH, D: ir_bind(b1.AttentionV2, T=T, NH=NH, KVH=KVH, D=D, **b1.ATTENTION_FA2),
         "silu_mul": lambda I: ir_bind(b1.SiluMul, I=I),
@@ -307,6 +302,11 @@ def _moe_ffn_fixed(E: int, TOPK: int, VPT: int, H: int, I: int):
     return ir_bind(_mp.MoeFfnFixedL, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I)
 
 
+def _silu_mul_fp8_block_quant(I: int, G: int):
+    from verity_vllm.program.registry import fp8_moe as _fm  # noqa: PLC0415
+    return ir_bind(_fm.SiluMulFp8BlockQuant, I=I, G=G)
+
+
 def _moe_expert_dot(routed, E, K, N, DOT, G, KB, SWAP):
     if G is None and KB is None and SWAP is None:
         return ir_bind(_moe.MoeExpertGemmWV2 if routed else _moe.MoeExpertGemmV2, E=E, K=K, N=N, DOT=DOT)
@@ -369,6 +369,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "moe_expert_gemm_dot": lambda E, K, N, DOT, G=None, KB=None, SWAP=None: _moe_expert_dot(False, E, K, N, DOT, G, KB, SWAP),
            "moe_expert_gemm_w_dot": lambda E, K, N, DOT, G=None, KB=None, SWAP=None: _moe_expert_dot(True, E, K, N, DOT, G, KB, SWAP),
            "moe_sum": lambda TOPK, H: ir_bind(_moe.MoeSum, TOPK=TOPK, H=H),
+           # the one-group sigmoid router (`_moe_C.grouped_topk`, DeepSeek-V3 / GLM `noaux_tc`) and the block-FP8 experts' fused activation
+           # and w2-input quant (`_C.silu_and_mul_per_block_quant`): `rules/vllm_moe_router.py`, `rules/vllm_moe_fp8.py`
+           "moe_router_sigmoid_bias": lambda E, TOPK, RSF, KERNEL: ir_bind(_moe.MoeRouterSigmoidBias, E=E, TOPK=TOPK, SCALE=RSF, KERNEL=KERNEL),
+           "silu_mul_fp8_block_quant": lambda I, G: _silu_mul_fp8_block_quant(I, G),
            # [R17-42 route A (3)] the fused-MoE block under `TargetProfile.moe_construction = "padded"` as ONE kind per token: the fixed-slot
            # construction from the router logits (`registry.moe_pad.MoeFfnFixedL_v1`: ALL E expert bodies on their own weights, the TOPK slot
            # outputs selected by the router ids, `MoeSum_v1`); its lift of record is the hand-authored `LMoeFfnL_v1` (unselected slots DISABLED).
@@ -435,6 +439,13 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "moe_expert_gemm_w_dot": "MoeExpertGemmW_v2{E,K,N,DOT}: MoeExpertGemmW_v1 with the target's k16 step DOT — "
                                     "bf16_rne(f32mul(DotBf16_v2{K,DOT}(x, W[e][n,:]), g))",
            "moe_sum": "MoeSum_v1{TOPK,H}: _moe_C.moe_sum — per token, ascending-k f32 sum of the TOPK weighted expert rows from +0, one bf16 RNE",
+           "moe_router_sigmoid_bias": "MoeRouterSigmoidBias_v1{E,TOPK,SCALE=RSF,KERNEL}: _moe_C.grouped_topk(n_group=1, topk_group=1, renormalize=True, "
+                                      "SIGMOID) per token row of f32 logits with the f32 selection bias -> (weights f32[TOPK], ids i32[TOPK]); "
+                                      "KERNEL the launch (block / warp kernel, registry.moe)",
+           "silu_mul_fp8_block_quant": "SiluMulFp8BlockQuant_v1{I,G}: _C.silu_and_mul_per_block_quant(group_size=G, scale_ub=None, scales not "
+                                       "transposed) per (token, slot) row [gate || up] bf16[2I] -> (q e4m3[I], scale f32[I/G]): f32 SiLU x up, "
+                                       "the group's fmaxf absmax, scale = max(absmax / 448, 1 / (448 * 512)), q = e4m3(clamp(result / scale)) "
+                                       "(registry.fp8_moe)",
            "moe_ffn_fixed": "MoeFfnFixedL_v1{E,TOPK,VPT,H,I}: [R17-42 padded] the whole fused block of one token from its router logits -- "
                             "MoeRouterTopK_v1 -> ALL E MoeExpertBody_v1{H,I} on their own weights (g_e the routed weight of the slot the router "
                             "picked, 0.0f otherwise) -> the TOPK slot outputs selected by the ids -> MoeSum_v1; value-equal to the indexed-read "

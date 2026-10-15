@@ -29,7 +29,7 @@ REPO = Path(__file__).resolve().parents[5]
 
 
 def _options(a: argparse.Namespace) -> CK.Options:
-    return CK.Options(vectors=a.vectors, seed=a.seed, X=a.X, W=a.W, extras=a.extras)
+    return CK.Options(vectors=a.vectors, seed=a.seed, X=a.X, W=a.W, extras=a.extras, lower_max_ands=a.lower_max_ands)
 
 
 _TASKS: list[tuple] = []
@@ -303,12 +303,31 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     listed targets go first, heaviest first.  The sum counts each process's copy of the task list, which they share, so the bound
     is conservative by that much per process.  An unlisted target that peaks well over `HEAVY_GB` can still break it: the process
     it gets killed in is reported as that target's failure (``circuit-check/killed``, with its peak), the other targets run on,
-    and its peak belongs in `HEAVY`."""
+    and its peak belongs in `HEAVY`.
+
+    The task list (each target and its key) is a cache entry too, under the catalog's own key: while everything its build
+    could depend on is unchanged (`cache.task_list_reads`), a run whose every target is reused as it was recorded builds no
+    Definition. Any other run builds the list."""
     tracing = cache is not None and CC.tracing()
+    listed = None
+    if tracing and everything and not specs:
+        TG.load_registries()
+        listed = CC.key({"target": ["task-list", "--all"], "as_call": as_call,
+                         "options": {k: getattr(opts, k) for k in opts.__dataclass_fields__}})
+        if (hit := CC.lookup(cache, listed, REPO, moved=False)) is not None:
+            got = [CC.lookup(cache, k, REPO, moved=False) for k in hit[0]["keys"]]
+            if all(g is not None and not _errored(g[0]) for g in got):
+                rep = CK.report([{**g[0], "cache": {"hit": g[1]}} for g in got], opts)
+                rep["peaks"] = []
+                rep["cache"] = {"hits": len(got), "stored": 0, "untraced": [], "errors": [], "changed": [], "task_list": hit[1]}
+                return rep
     tasks = _tasks(specs, opts, everything, as_call)
     out: list[dict | None] = [None] * len(tasks)
     keys = [target_key(t[0], t[1], opts, _info(t).get("as_call", as_call), tuple(_info(t).get("roots", ()))) for t in tasks] \
         if tracing else []
+    if listed is not None and not CC.untraced():
+        reads = CC.task_list_reads([*TG.REACHED.values(), *(r for t in tasks for r in _info(t).get("roots", ()))])
+        CC.store(cache, listed, REPO, reads, {"targets": [list(t[:2]) for t in tasks], "keys": keys}, CC.seen(REPO, reads))
     stats = {"hits": 0, "stored": 0, "untraced": [], "errors": [], "changed": []}
 
     def done(i: int, r: dict, got: dict | None = None, untraced: list[str] | None = None, worker: dict | None = None) -> None:
@@ -400,9 +419,10 @@ PEAKS_REPORTED = 50
 
 
 def budget_gb(mem_gb: int | None) -> float:
-    """What the targets' processes may take together, in GiB: ``mem_gb`` (all of circuit-check) less what this process holds
-    now (its own copy of the task list), or by default what `memory_gb` leaves, which has this process's use taken off already."""
-    return memory_gb() if mem_gb is None else mem_gb - (_rss_gb() or 0.0)
+    """What the targets' processes may take together, in GiB: what `memory_gb` leaves (this process's use taken off already),
+    and with ``mem_gb`` (all of circuit-check: a check slot's mem=) at most that less what this process holds now (its own copy
+    of the task list)."""
+    return memory_gb() if mem_gb is None else min(mem_gb - (_rss_gb() or 0.0), memory_gb())
 
 
 def heavy() -> dict[str, float]:
@@ -453,6 +473,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("-X", type=int, default=CK.Options.X)
     ap.add_argument("-W", type=int, default=CK.Options.W)
     ap.add_argument("--extras", type=int, default=CK.Options.extras)
+    ap.add_argument("--lower-max-ands", type=int, default=CK.Options.lower_max_ands,
+                    help="lower a Definition whole when the piece pins estimate at most this many ANDs")
     ap.add_argument("--as-call", action="store_true", help="hold a Definition target to the partition invariant as a Call "
                     "(default: when its family is a Call of a served Program)")
     ap.add_argument("--strict", action="store_true", help="fail on the known failures too (circuit_check.known)")
@@ -479,7 +501,8 @@ def main(argv: list[str] | None = None) -> int:
     if c := rep.get("cache"):
         print(f"circuit-check: {c['hits']} of {len(rep['targets'])} targets reused (every file, listing, probe, catalog unit and pin their checks read or resolved is "
               f"unchanged), {c['stored']} stored, {len(c['untraced'])} not cacheable (the tracer could not see what they read), "
-              f"{len(c['errors'])} not stored because the check raised, {len(c['changed'])} because the tree changed while they ran")
+              f"{len(c['errors'])} not stored because the check raised, {len(c['changed'])} because the tree changed while they ran"
+              + ("; the task list reused, so no Definition was built" if c.get("task_list") else ""))
     if a.update_pins:
         update_pins(rep)
     s = rep["summary"]

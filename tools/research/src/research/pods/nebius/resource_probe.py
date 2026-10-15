@@ -7,14 +7,18 @@ idle GPU memory and custody backlog against the steward's watermarks. It reads; 
 
 Exit 0: every metric is under its watermark (the steward's tick ends silently). Exit 1: one or more breaches, one line each on
 stdout (`--json` prints the whole reading instead). Exit 2: the probe, or one of its sources, failed: never read as all clear.
-`--reading` prints read()'s JSON and exits 0, writing nothing: its caller keeps the rate base and evaluates (`research monitors`).
+`--reading` prints read()'s JSON and exits 0, writing nothing but the directory walk's output: its caller keeps the rate base
+and evaluates (`research monitors`).
 
 Sources, all cheap: statvfs of `/` and `/workspace`; `/proc/meminfo`; the ramlock dir's live reservations (research.mem's
 convention); replay RAM to come (node 1: Kueue's pending `*-replay-*` Workloads' memory requests, floored at a bundle's size;
 node 2: queued `*replay*` fill jobs' `mem_gb=` and running `*commit*` jobs, see replay_queue_fill); GPU memory held at 0% for 15 min (node 1: Prometheus'
 DCGM series; node 2: the tail of the utilisation sampler's JSONL, so a timed window is never disturbed); finished run dirs
-without `.custody`, `.fetched` or `preserved.json`. Inode growth per hour compares with a base reading kept in `--state`, at
-least 15 min old (so one burst between two close ticks isn't an hourly rate) and replaced once it is an hour old.
+without `.custody`, `.fetched` or `preserved.json`. Inode growth per hour compares with the oldest of the last hour's readings,
+kept in `--state`: one at least 15 min old warns (so one burst between two close ticks isn't an hourly rate), and only one at
+least 45 min old makes the HARD line that pages. The inode line on /workspace names the directories two levels down that gained
+most between the last two `du --inodes` walks, which the probe starts in the background (idle I/O class) at most hourly, never
+in a timed window: a walk of node 1's 11M inodes takes about 100 s, so no reading waits on one.
 The watermarks are the resource steward's policy (research-notes `lanes/resource-steward/`).
 """
 from __future__ import annotations
@@ -24,6 +28,7 @@ import calendar
 import json
 import os
 import re
+import shlex
 import subprocess
 import time
 import urllib.parse
@@ -39,7 +44,7 @@ LIMITS: dict[str, dict[str, float]] = {
 }
 COMMON = {"root_free_gb": 60.0, "root_hard_free_gb": 45.0, "inode_pct": 80.0, "mem_avail_pct": 10.0, "idle_gpu_gib": 20.0,
           "idle_gpu_s": 900.0, "unpreserved_runs": 10, "unpreserved_age_s": 3600.0, "inode_growth_per_h": 100_000,
-          "inode_rate_min_s": 900.0, "inode_base_max_s": 3600.0, "inode_hard_h": 12.0,
+          "inode_rate_min_s": 900.0, "inode_page_base_s": 2700.0, "inode_base_max_s": 3600.0, "inode_hard_h": 12.0,
           "replay_share": 0.5, "replay_floor_gb": 90.0}
 PROMETHEUS = os.environ.get("VY_PROMETHEUS", "http://10.43.136.178")
 DCGM = 'service="nvidia-dcgm-exporter"'
@@ -221,8 +226,50 @@ def scratch(cache: Path, now: float) -> list[dict[str, Any]]:
     return out
 
 
+def _du(f: Path) -> dict[str, int]:
+    out = {}
+    for ln in f.read_text(errors="replace").splitlines():
+        n, _, p = ln.partition("\t")
+        if n.isdigit():
+            out[p] = int(n)
+    return out
+
+
+def inode_dirs(state: Path, ws: str, now: float, every_s: float, *, walk: bool) -> dict[str, Any] | None:
+    """The three directories under `ws`, two levels down, that gained the most inodes between the last two walks (None before
+    there are two). With `walk`, a new walk starts in the background once the last is `every_s` old and none is running (its
+    output, which du writes as it goes, changed in the last 10 min); it replaces the last walk only once it ends."""
+    cur, prev, tmp = (state / f"inode-dirs{s}" for s in (".txt", ".prev.txt", ".tmp"))
+
+    def age(f: Path) -> float | None:
+        try:
+            return now - f.stat().st_mtime
+        except OSError:
+            return None
+
+    last, running = age(cur), age(tmp)
+    if walk and (last is None or last >= every_s) and (running is None or running > 600):
+        state.mkdir(parents=True, exist_ok=True)
+        c, p, t = (shlex.quote(str(x)) for x in (cur, prev, tmp))
+        sh = (f"nice -n 19 ionice -c3 du --inodes -x -d 2 {shlex.quote(ws)} > {t} 2>/dev/null; "
+              f"[ -s {t} ] && {{ [ -e {c} ] && mv -f {c} {p}; mv -f {t} {c}; }}")
+        subprocess.Popen(["sh", "-c", sh], start_new_session=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL)
+    if last is None or age(prev) is None:
+        return None
+    c, p = _du(cur), _du(prev)
+    leaves = [d for d in c if d != ws and not any(o.startswith(d + "/") for o in c)]
+    top = sorted(((c[d] - p.get(d, 0), d) for d in leaves), reverse=True)[:3]
+    return {"over_s": round(age(prev) - last), "top": [{"dir": os.path.relpath(d, ws), "gained": n} for n, d in top if n > 0]}
+
+
+def _bases(prev: Any) -> list[dict[str, Any]]:
+    """The rate's base readings: a list, or one reading as an older state kept it."""
+    return prev if isinstance(prev, list) else [prev] if prev else []
+
+
 def evaluate(r: dict[str, Any], prev: dict[str, Any] | None, lim: dict[str, float]) -> list[str]:
-    """The breaches of one reading (`r`, from read()) against the limits; `prev` is the previous reading, for rates."""
+    """The breaches of one reading (`r`, from read()) against the limits; `prev` is the rate's base readings (next_base())."""
     b = []
     root, ws = r["disk"]["root"], r["disk"]["workspace"]
     if root["free_b"] < lim["root_hard_free_gb"] * GB:
@@ -236,15 +283,26 @@ def evaluate(r: dict[str, Any], prev: dict[str, Any] | None, lim: dict[str, floa
     for k, d in r["disk"].items():
         if d["ipct"] >= lim["inode_pct"]:
             b.append(f"{d['path']} inodes {d['ipct']:.1f}% >= {lim['inode_pct']:.0f}%")
-        p = ((prev or {}).get("disk") or {}).get(k)
-        if p and r["t"] >= p.get("t", r["t"]) + lim["inode_rate_min_s"]:
-            rate = (d["iused"] - p["iused"]) / (r["t"] - p["t"]) * 3600
+        olds = [x["disk"][k] for x in _bases(prev) if k in (x.get("disk") or {})
+                and r["t"] >= x["disk"][k].get("t", r["t"]) + lim["inode_rate_min_s"]]
+        if olds:
+            p = min(olds, key=lambda x: x["t"])
+            span = r["t"] - p["t"]
+            rate = (d["iused"] - p["iused"]) / span * 3600
             if rate > lim["inode_growth_per_h"]:
                 left_h = (lim["inode_pct"] / 100 * d.get("inodes", 0) - d["iused"]) / rate
-                if left_h < lim["inode_hard_h"]:
-                    b.append(f"HARD {d['path']} gaining {rate:,.0f} inodes/h: {lim['inode_pct']:.0f}% of inodes in {max(left_h, 0):.1f} h")
+                g = r.get("inode_dirs") if k == "workspace" else None
+                tops = ", ".join(f"{x['dir']} +{x['gained']:,}" for x in (g or {}).get("top") or [])
+                grew = f" (growing {tops} in {g['over_s'] / 60:.0f} min)" if tops else ""
+                if left_h < lim["inode_hard_h"] and span >= lim["inode_page_base_s"]:
+                    b.append(f"HARD {d['path']} gaining {rate:,.0f} inodes/h over {span / 60:.0f} min: "
+                             f"{lim['inode_pct']:.0f}% of inodes in {max(left_h, 0):.1f} h{grew}")
+                elif left_h < lim["inode_hard_h"]:
+                    b.append(f"{d['path']} gaining {rate:,.0f} inodes/h over {span / 60:.0f} min: {lim['inode_pct']:.0f}% of "
+                             f"inodes in {max(left_h, 0):.1f} h if it holds; pages once it holds for "
+                             f"{lim['inode_page_base_s'] / 60:.0f} min{grew}")
                 else:
-                    b.append(f"{d['path']} gaining {rate:,.0f} inodes/h > {lim['inode_growth_per_h']:,.0f}")
+                    b.append(f"{d['path']} gaining {rate:,.0f} inodes/h > {lim['inode_growth_per_h']:,.0f}{grew}")
     m = r["mem"]
     if m["avail_pct"] < lim["mem_avail_pct"]:
         b.append(f"RAM available {m['avail_pct']:.1f}% < {lim['mem_avail_pct']:.0f}%")
@@ -262,9 +320,10 @@ def evaluate(r: dict[str, Any], prev: dict[str, Any] | None, lim: dict[str, floa
     return b
 
 
-def next_base(r: dict[str, Any], base: dict[str, Any] | None, lim: dict[str, float]) -> dict[str, Any]:
-    """The base reading the next inode rate compares with: `base` until it is `inode_base_max_s` old, then this reading."""
-    return base if base and r["t"] - base.get("t", 0) < lim["inode_base_max_s"] else {"t": r["t"], "disk": r["disk"]}
+def next_base(r: dict[str, Any], base: Any, lim: dict[str, float]) -> list[dict[str, Any]]:
+    """The base readings the next inode rate compares with: those of `base` under `inode_base_max_s` old, and this one."""
+    kept = [x for x in _bases(base) if r["t"] - x.get("t", 0) < lim["inode_base_max_s"]]
+    return kept + [{"t": r["t"], "disk": {k: {"t": d.get("t", r["t"]), "iused": d["iused"]} for k, d in r["disk"].items()}}]
 
 
 def read(node: str, *, now: float, home: Path, ws: str = "/workspace") -> dict[str, Any]:
@@ -297,6 +356,10 @@ def read(node: str, *, now: float, home: Path, ws: str = "/workspace") -> dict[s
         r["errors"].append(f"idle_gpus: {type(e).__name__}: {str(e)[:200]}")
     r["unpreserved"] = unpreserved(Path(ws) / "research/runs", now, lim["unpreserved_age_s"])
     r["scratch"] = scratch(home / ".cache/verity-check", now)
+    try:
+        r["inode_dirs"] = inode_dirs(home / ".local/state/resource-steward", ws, now, lim["inode_base_max_s"], walk=not r["timed"])
+    except Exception as e:  # noqa: BLE001
+        r["errors"].append(f"inode_dirs: {type(e).__name__}: {str(e)[:200]}")
     return r
 
 

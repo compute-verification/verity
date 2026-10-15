@@ -18,7 +18,7 @@ REPO=${REPO:-$(cd "$(dirname "$0")/../.." && pwd)}; cd "$REPO"
 D=${SWEEP_DIR:-/workspace/cp/sweep}/$ROW; POS=${3:-$D/commit}; OUT=$D/negatives; mkdir -p "$OUT"
 WL=workloads/$ROW.json; MAN=$D/manifest.json
 PY=${PY:-/workspace/venv-cu129/bin/python}; export PATH=$(dirname "$PY"):${CUDA_HOME:-/usr/local/cuda}/bin:$PATH
-export PYTHONPATH=$REPO:$REPO/vllm-poc HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 VLLM_BATCH_INVARIANT=1 TOKENIZERS_PARALLELISM=false
+export PYTHONPATH=$REPO HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 VLLM_BATCH_INVARIANT=1 TOKENIZERS_PARALLELISM=false
 export VERITY_TREE=$REPO NATIVE_COLLECT_BUILD=${NATIVE_COLLECT_BUILD:-/workspace/cp/nc_build}
 GPU_UTIL=${GPU_UTIL:-0.5}
 FA_VER=$($PY -c "from verity_vllm.program.frontend.target_profile import TargetProfile; print(TargetProfile.from_device().effective_flash_attn_version())" 2>/dev/null || echo 2)

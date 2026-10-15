@@ -25,7 +25,9 @@ proxy event by event:
   (`drain := true`, answered by `delivered`), which is when the request reached the server. A refused connection is
   `delivery-refused` on ingress. The server's bytes are cut into events, each read at time s ready at bucket
   ⌊(s − origin)/τ_b⌋ + 1. An event without a position, too long for a frame, or on a stream with no released request is
-  `malformed`, as are bytes left unframed at the stream's end.
+  `malformed`, as are bytes left unframed at the stream's end. A frame the shaper hands at a bucket after its `h`
+  (ready after it, or read after that bucket's tick) is late, and faults the window it is handed in
+  `coverage-never-established`.
 * **Late forwards.** At each egress tick, a released request not delivered by `origin + min(t·τ_in + slack, (a + 1)·τ_b)`
   faults its ingress window (if still open) and every egress window until its stream has ended and every frame read
   before the end is handed.

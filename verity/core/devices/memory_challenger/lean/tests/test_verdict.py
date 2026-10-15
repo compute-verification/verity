@@ -111,7 +111,7 @@ def records(signer=None, malformed: bool = True) -> st.SearchStrategy:
 @pytest.mark.slow
 def test_verdict_agrees(server):
     """The whole verdict on drawn records under the test signers' keys: accepted ones, every rejection reason, refusals."""
-    stats = D.run(port(records()), examples=400, server=server)
+    stats = D.run(port(records()), examples=500, server=server)
     assert stats.outputs > 250 and stats.rejects > 20, stats
 
 
@@ -134,7 +134,8 @@ def _honest(spends=(1, 1, 1)) -> M.Session:
     signer = M.test_signer(M.SECRETS[0], 1, 1)
     tree = mc.CoinTree.draw(b"source", bytes(32), 8, 3, key=M.COIN_KEYS[0], salts=[bytes([j]) * 192 for j in range(3)])
     clock = M.Clock(1_000)
-    c = mc.MemoryChallenger(tree, signer, limit_ns=10, block_bytes=16, binding=b"vk", clock=clock)
+    c = mc.MemoryChallenger(tree, signer, log=M.ts.session_log(), limit_ns=10, block_bytes=16, binding=M.SETUP_ROOTS[0],
+                            clock=clock)
     while not c.done:
         j = len(c.rounds)
         i = c.challenge()
@@ -160,7 +161,7 @@ def controls() -> dict[str, tuple[M.Session, tuple[str, ...]]]:
         "untrusted key": (dataclasses.replace(s, trusted=()),
                           ("the session is signed by a key that is not a trusted memory challenger's",)),
         "unknown scheme": (M._unsigned(s, scheme="none"), ("signature scheme 'none' is not accepted",)),
-        "wrong header": (s.resign(commitment=dataclasses.replace(s.commitment, binding=b"another")),
+        "wrong header": (s.resign(commitment=dataclasses.replace(s.commitment, binding=M.SETUP_ROOTS[1])),
                          ("the signed header is not the session's commitment",)),
         "incomplete session": (s.resign(rounds=s.signed.rounds[:-1]), ("the session ended complete after 2 of 3 rounds",)),
         "wrong coin": (_salt(s, 1), ("round 1's index is not its committed coin",)),

@@ -3,3 +3,5 @@
 # The research coordinator owns this file.
 
 hold_label = "hold"
+# ready marks written before this don't count, on any VM's queue (`--marked-after` overrides it): drive's cutoff, 12 Oct
+marked_after = "2026-10-12T06:00:00Z"

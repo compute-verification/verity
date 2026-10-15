@@ -22,9 +22,9 @@ reference, which no finder at a budget computes, so `stage_bind` bounds that pro
   value binding's openings, the trial for `c` as a finder of the openings of `c` it reads, and
   `candTermZC ≤ slack + Σ_c κ_c·Pr[the trial for c opens c's digest to a value other than wv c]`;
 * `zk_flock_candTransferC`: `zk_flock_candValsC` in that form, `htr`'s shape at one history;
-* `zk_session_candValsR`: `zk_flock_candValsC` for `flock-verify verify --zk --registered F` sessions, at the committed
-  values `zk_session_soundR` reads (`XplurZC` at `simZ … τ`, the rows `rsZAtS`), as `zk_session_regValsR` is
-  `zk_flock_regValsC_cr` there; `candTermZC_le` puts its bound in `htr`'s shape.
+* `zk_session_candValsR`: `zk_flock_candValsC` for `flock-verify verify --zk --registered F` sessions of `J`
+  hidden-output tables, at the committed values their simulation decodes (`XplurZC` at `simZHJ … τ`, the value binding
+  `vbHJ`), as `zk_session_regValsR` is `zk_flock_regValsC_cr` there; `candTermZC_le` puts its bound in `htr`'s shape.
 -/
 
 namespace FlockSoundness.Discharge.Recursion
@@ -550,85 +550,69 @@ section Session
 
 open Exec Refine Flock FlockLevel3 ZkExec ZkBind Integrate Placed DecodeZL Composed
 
+open ZkHidden (planZHJ tabZHJ DrawSetupZHJ TagsOkZHJ DrawOkZKHJ placeZHJ)
+open FlockSoundness.Discharge.Tables (LiveOutJ)
+
 /-- **The committed values of a `--zk --registered` session are a candidate's on a set of commit strings, but for the
-trial's readings off it**: `zk_flock_candValsC` at the session's simulation (`simZ`), the rows `rsZAtS` and their value
-binding, on `zk_session_soundR`'s assumptions without A3. -/
+trial's readings off it**: `zk_flock_candValsC` at the session's simulation (`simZHJ`), at `J` hidden-output tables and
+the value binding `vbHJ`, with `cr/sha-512` for the knowledge finders of the simulation (`hCR`). -/
 theorem zk_session_candValsR
     (I : Inputs) (ht : I.tags.typed = false) (own : Array Flock.Registered.Port)
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZK I mPts S₀ (dj S₀))
-    (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
+    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+    (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the session's circuit and public file
-    {c : Flock.Circuit} (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
-    {pub : Public} (hpub : HmRow.loadPublic (zkTags I) c I.publicFile = .ok pub)
-    (hscope : Layout.scopeOk c = true)
+    {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
+    {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
+    (hscope : Layout.scopeOkH c = true)
     -- the law
-    {m : ℕ} (St : Fin m → Flock.Draw.Stratum) (Kd pop : ℕ)
-    {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
+    (Lv : Law n)
     -- the coin server's draw at each of the law's draws
-    (hDraw : ∀ ω, DrawOkZK I dj mPts ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
+    (hDraw : ∀ ω, DrawOkZKHJ I dj mPts (Lv.draw ω))
     -- the verify command's tags and the coin server's record of the live session
-    (hTags : TagsOk I) (hRec : RecordsLiveZK I dj wr)
+    (hTags : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
-    (hr : ∀ S R j, rateZ (planZAt (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
+    (hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
     -- the commit strings and the candidate
-    (Sk : Finset ((rsZAtS (Reg := Reg) ht dj y₀ hc hU hpub hscope).bindingZ
-      (rsZAtS_computes ht dj y₀ hc hU hpub hscope)).Pos)
-    (wv : ((rsZAtS (Reg := Reg) ht dj y₀ hc hU hpub hscope).bindingZ
-      (rsZAtS_computes ht dj y₀ hc hU hpub hscope)).Pos →
-      ((rsZAtS (Reg := Reg) ht dj y₀ hc hU hpub hscope).bindingZ (rsZAtS_computes ht dj y₀ hc hU hpub hscope)).Val)
+    (Sk : Finset (vbHJ (Reg := Reg) dj y₀ ht hc hscope hU hpub).Pos)
+    (wv : (vbHJ (Reg := Reg) dj y₀ ht hc hscope hU hpub).Pos → (vbHJ (Reg := Reg) dj y₀ ht hc hscope hU hpub).Val)
     -- the live prover, and cr/sha-512 for the knowledge finders of its simulation
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
+    (τ : Strategy (auditLive Lv Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     {qF qS : ℝ}
-    (hCR : ∀ ω j, TableCRZ execArith hs512 (planZAt dj y₀
-        ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω)
-        (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _
-          (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ))) j
-      (zcStrat execArith hs512 (planZAt dj y₀)
-        (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _
-          (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ) ω)) qF qS) :
+    (hCR : ∀ ω j, TableCRZ execArith hs512
+      (planZHJ dj y₀ (Lv.draw ω) (reg (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ))) j
+      (zcStrat execArith hs512 (planZHJ dj y₀) (cont (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ) ω)) qF qS) :
     prob (fun o => LiveAcceptsZKR I own o ∧
         ∃ u ∈ o.2.1, ∃ g ∈ ((keyProg c hU n).partition (Layout.outsOf c hU n)).io u,
-          CandBadZ execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZAt dj y₀) (tabZAt dj y₀)
-            ((rsZAtS ht dj y₀ hc hU hpub hscope).bindingZ (rsZAtS_computes ht dj y₀ hc hU hpub hscope)) Sk wv
-            (XplurZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZAt dj y₀) (tabZAt dj y₀)
-              ((rsZAtS ht dj y₀ hc hU hpub hscope).bindingZ (rsZAtS_computes ht dj y₀ hc hU hpub hscope))
-              (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _
-                (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ))
-              (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _
-                (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ)) k Rw) g)
-        (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
-      ksAvgStrictZ (planZAt dj y₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
-          (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _
-            (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ)) +
-        linkBoundZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZAt dj y₀) (tabZAt dj y₀)
-          ((rsZAtS ht dj y₀ hc hU hpub hscope).bindingZ (rsZAtS_computes ht dj y₀ hc hU hpub hscope))
-          k Rw M ρ t' (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr
-            _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ))
-          (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _
-            (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ)) +
-        candTermZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZAt dj y₀) (tabZAt dj y₀)
-          ((rsZAtS ht dj y₀ hc hU hpub hscope).bindingZ (rsZAtS_computes ht dj y₀ hc hU hpub hscope)) Sk wv
-          (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _
-            (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ))
-          (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _
-            (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ)) k Rw ρ := by
-  have hdec := decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _
-    (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)
-  have hc' := zk_flock_candValsC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZAt dj y₀)
-    (tabZAt dj y₀) execArith_correct ((sitesZAt ht dj y₀).placeKey hU (sitesZAt_parse ht dj y₀ hc) (Layout.outsOf c hU n))
-    ((rsZAtS ht dj y₀ hc hU hpub hscope).bindingZ (rsZAtS_computes ht dj y₀ hc hU hpub hscope)) Sk wv hk hRw hM hρ hr
-    ht' (simZ execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ) hCR
+          CandBadZ execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
+            (vbHJ dj y₀ ht hc hscope hU hpub) Sk wv
+            (XplurZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
+              (vbHJ dj y₀ ht hc hscope hU hpub) (reg (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ))
+              (cont (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ)) k Rw) g)
+        (auditLive Lv Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
+      ksAvgStrictZ (planZHJ dj y₀) Lv k qF qS (reg (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ)) +
+        linkBoundZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
+          (vbHJ dj y₀ ht hc hscope hU hpub) k Rw M ρ t'
+          (reg (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ))
+          (cont (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ)) +
+        candTermZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
+          (vbHJ dj y₀ ht hc hscope hU hpub) Sk wv (reg (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ))
+          (cont (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ)) k Rw ρ := by
+  have hdec := decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
+    (ZkHidden.runsZCJH_live I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr Lv hTags hRec hDraw)
+  have hc' := zk_flock_candValsC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀)
+    (tabZHJ dj y₀) execArith_correct (placeZHJ dj y₀ ht hc hscope hU) (vbHJ dj y₀ ht hc hscope hU hpub) Sk wv
+    hk hRw hM hρ hr ht' (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ) hCR
   exact le_trans (prob_mono (fun o h => ⟨acceptsZK_of_R h.1, h.2⟩) _ _)
-    (zk_headline_exec_drawn execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ (fun _ S => ∃ u ∈ S,
+    (zk_headline_exec_drawnJ execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ (fun _ S => ∃ u ∈ S,
       ∃ g ∈ ((keyProg c hU n).partition (Layout.outsOf c hU n)).io u,
-        CandBadZ execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZAt dj y₀) (tabZAt dj y₀)
-          ((rsZAtS ht dj y₀ hc hU hpub hscope).bindingZ (rsZAtS_computes ht dj y₀ hc hU hpub hscope)) Sk wv
-          (XplurZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZAt dj y₀) (tabZAt dj y₀)
-            ((rsZAtS ht dj y₀ hc hU hpub hscope).bindingZ (rsZAtS_computes ht dj y₀ hc hU hpub hscope))
-            (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ))
-            (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ)) k Rw) g) _ hc')
+        CandBadZ execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
+          (vbHJ dj y₀ ht hc hscope hU hpub) Sk wv
+          (XplurZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
+            (vbHJ dj y₀ ht hc hscope hU hpub) (reg (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ))
+            (cont (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ)) k Rw) g) _ hc')
 
 end Session
 

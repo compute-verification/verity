@@ -1,8 +1,26 @@
 {
- "roots": ["Flock", "FlockVerify", "Flock.Test.Sha512"],
+ "roots": [
+  "Flock",
+  "FlockVerify",
+  "Flock.Test.Full",
+  "Flock.Test.Sha512",
+  "Flock.Test.InnerStreams",
+  "Flock.Test.RecCoins",
+  "Flock.Test.RecOpen",
+  "Flock.Test.RecOpening",
+  "Flock.Test.RecOpenLeaves",
+  "Flock.Test.ReadWhole",
+  "Flock.Test.MsgNames",
+  "Flock.Test.TopReads",
+  "Flock.Test.Labels",
+  "VStar"
+ ],
  "exempt": {
   "FlockFirewall": "the flock-firewall executable's entry point; its commands are Flock.Firewall.cmd and (`contract`) Flock.Firewall.Contract.cmd, audited under Flock",
-  "FlockRows": "the flock-rows executable's entry point, one line; its command is Flock.Rows.cmd, audited under Flock"
+  "FlockRows": "the flock-rows executable's entry point, one line; its command is Flock.Rows.cmd, audited under Flock",
+  "FlockWitness": "the flock-witness executable's entry point, one line; its command is Flock.Witness.cmd, audited under Flock",
+  "FlockRecSparse": "the flock-rec-sparse executable's entry point, one line; its command is Flock.RecSparseCmd.cmd, audited under Flock",
+  "FlockRecOpening": "the flock-rec-opening executable's entry point, one line; its command is Flock.RecOpeningCmd.cmd, audited under Flock"
  },
  "assumptions": {
   "Flock.Firewall.Contract.FirewallComputes": {
@@ -38,6 +56,13 @@
   "_private.Flock.Program.0.Flock.Program.gateIn": "partial def: a gate's inputs in an activation, resolving references through scopes (descriptor §6, §7); no proof is about it, and qword_program_agree.py covers it",
   "Flock.Extract.evalDef": "partial def: cut.evaluate_definition with its memo, recursing through a separable body's members (PROTOCOL.md 16.7); no proof is about it, and qword_program_agree.py covers it"
  },
+ "layers": {
+  "VStar": {
+   "imports": ["Lean", "Std", "Flock", "VStar"],
+   "except": [],
+   "why": "V*'s circuit is code: Lean core and its Std, and C-Flock's verifier (its builder, layout, rows and hashes), no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  }
+ },
  "reads_exempt": {
   "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
  },
@@ -65,10 +90,10 @@
     "        And (Eq (pub.coinCommit stream k) (Option.some c))",
     "          (And (Eq opening.size Flock.Firewall.Contract.SALT_BYTES)",
     "            (Eq c.data (Flock.Firewall.Contract.commitBC (Flock.Firewall.Contract.coinMsg stream k cs) opening).data)))",
-    "      (And (Eq pub.schedule Option.none) (And (Eq pub.coins List.nil.toArray) (Eq opening.size 0))))"
+    "      (And (Eq pub.coins List.nil.toArray) (Eq opening.size 0)))"
    ],
    "assumptions": [],
-   "type_hash": "0edd1b59896bb22ca9de3a923c15b3c8f82ba19a82627d62f68a0f81eed8cc80"
+   "type_hash": "f7c75fc8ff69fd14d2eb14fdf528503aa90514b4631c436a3973c0793267c6eb"
   },
   "Flock.Firewall.Contract.holds_coins_binding": {
    "owner": "@firewall-contract",
@@ -280,7 +305,7 @@
    "guarantees": ["Flock.Firewall.Contract.holds_computed"]
   },
   "Flock.Firewall.Contract": {
-   "digest": "4bf87a37528ce9cdfb928187f13634784af2199f5a6bfcda1c58bb2550f01762",
+   "digest": "4662bc298921b35c2c5c3f31f44a9dfec6b2105bd14ffb344f9c3bacce27c236",
    "definitions": {
     "Flock.Firewall.Contract.By": "d91fb21fc66675874eb81a58c294ef88d3b1b06b3de8d8421c92c9264583a53e",
     "Flock.Firewall.Contract.By.casesOn": "2b6107e1f89c6e2113a2dec80173ed689020034ea2d503bde43c893b99319c03",
@@ -336,7 +361,6 @@
     "Flock.Firewall.Contract.Verdict.accepted": "49b3f5069d9448f44fbb62bea541f5c15d83aa19936218fd78b3b1b167e04567",
     "Flock.Firewall.Contract.Verdict.cut": "85ea441c0e09bd7619af0e21b9c1e0150a6094bf8c432e9b01b39fcfa84883e4",
     "Flock.Firewall.Contract.bytesEq": "c4b29028da21ff73831875115b5c900a548873834563a21b2b3bf2144cd2cb56",
-    "Flock.Firewall.Contract.coinError": "3ef439292fb9ffb919412dd08ef9bb68304293d0092d88eb2831d19dfc629281",
     "Flock.Firewall.Contract.coinMsg": "b009e6f90480529c065a50c8c7da5db177876ca7dc431ff85b038a1099ddfceb",
     "Flock.Firewall.Contract.coinPair": "eff873cbe9af8a350a12211a12b1dfa320eb3875967b6ac1bda4bd5bea52bb2b",
     "Flock.Firewall.Contract.commitBC": "27bd408fc640be0ed9d38299371f18e5bfe8548c6fe5c866c16d0dae82f44c52",
@@ -349,13 +373,13 @@
     "Flock.Firewall.Contract.owes": "b2d2614915f6cdf36cc10ccc41d8c1db0cc5d66ac09c59e95e7582de74fa9c4f",
     "Flock.Firewall.Contract.pairwiseDistinct": "d2a5394b192d247c2b3ff0cffe1cb0b64cbddc46bd8925f52f5892e47acecd97",
     "Flock.Firewall.Contract.roundAt": "7e93c1d73124dd2a19a07cec4eed2882647943b04ff77855c501c2853e1e5cac",
-    "Flock.Firewall.Contract.run": "4e9177b7847d12a5107d2d9a5e505713f0eb61d3437dd45566544d5c7ce84f44",
+    "Flock.Firewall.Contract.run": "023132311ee04af5726060196e033d6f9600afde7c247601605f0f4fec95ff4d",
     "Flock.Firewall.Contract.scheduled": "131c5d051e01259eba74919c3dfd699d2aacc7e02fb66d484ed710a391f1a7e6",
     "Flock.Firewall.Contract.scheduled._sparseCasesOn_1": "4ad34b9d177ed480ac2bcfb0da6ade7381456af23adf8496af5b42987dd6fe43",
     "Flock.Firewall.Contract.scheduled._sparseCasesOn_2": "d9346660e75c576389c8d66ae5ea31f252992f25664c66dcc946788fedea11fd",
     "Flock.Firewall.Contract.scheduled._sparseCasesOn_7": "0e19d0f64f0a8e43f2402196a9f71826a2e260e36b0ce591e900e3a55f8b7e82",
     "Flock.Firewall.Contract.scheduled._sparseCasesOn_8": "ee7aca1fbb1faa6417a41e156b98030a8abb4ccfa990a3398c52f37fbc0f1861",
-    "Flock.Firewall.Contract.step": "68f5980707e351b98a70c1ce9849966202b6301b096b6545f2e351f01e66bf40",
+    "Flock.Firewall.Contract.step": "067e5827e8f0dfa31ba83fd84d39a4dedb1dfb63e7acc2d4da2f15434cb76bd2",
     "Flock.Firewall.Contract.streams": "53e31cfd94db8cd1ec2deae5551b35b257ad37f298c41929848e82651d4111d6",
     "Flock.Firewall.Contract.streams._sparseCasesOn_1": "a476d27ac8aa57c89ef97051c0aeb52ae1b4f11d4ce32ef8bb2c0a3b2b62f4a3",
     "Flock.Firewall.Contract.tapeError": "6192f99f01cdc9102d90f5527433e4e6f0cde62d44a7809caf0a988d9b05d323",

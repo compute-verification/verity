@@ -48,7 +48,7 @@ def test_what_any_process_reads_outside_the_inputs_fails_the_suite(tmp_path, mon
     S, suite = _suite(tmp_path, monkeypatch, reads_outside=True)
     r = S.run(suite, ["pkg"], [], tmp_path / "logs", workers)
     assert (r.status, r.workers, r.unguarded) == ("failed", workers, [])
-    assert r.outside == ["outside/by_conftest.txt", "outside/by_test.txt"]
+    assert r.outside == {"outside/by_conftest.txt": "*", "outside/by_test.txt": "pkg/tests/test_reads.py"}
     assert r.counts["passed"] == 4
 
 
@@ -56,7 +56,50 @@ def test_a_parallel_suite_that_reads_only_its_inputs_passes(tmp_path, monkeypatc
     pytest.importorskip("xdist")
     S, suite = _suite(tmp_path, monkeypatch, reads_outside=False)
     r = S.run(suite, ["pkg"], [], tmp_path / "logs", 2)
-    assert (r.status, r.outside, r.unguarded, r.counts["passed"]) == ("passed", [], [], 4), r.log.read_text()
+    assert (r.status, r.outside, r.unguarded, r.counts["passed"]) == ("passed", {}, [], 4), r.log.read_text()
+
+
+def test_a_cached_module_read_outside_the_inputs_is_named_as_its_source(tmp_path, monkeypatch):
+    """Train 21b3d26fe1a6 (14 Oct): a suite imported an undeclared helper through its warm `__pycache__`, and the failure named
+    only `...cpython-*.pyc`, which no PR's diff touches, so drive found no culprit. The read is named as the `.py` source,
+    attributed to the test module that imported it, warm or cold cache alike."""
+    import py_compile
+    S, suite = _suite(tmp_path, monkeypatch, reads_outside=False)
+    (tmp_path / "outside" / "helper.py").write_text("X = 1\n")
+    py_compile.compile(str(tmp_path / "outside" / "helper.py"))
+    (tmp_path / "pkg" / "tests" / "test_reads.py").write_text(
+        "import importlib.util\nfrom pathlib import Path\nROOT = Path(__file__).resolve().parents[2]\n\n"
+        "def test_imports_a_helper():\n"
+        "    spec = importlib.util.spec_from_file_location('helper_under_test', ROOT / 'outside' / 'helper.py')\n"
+        "    mod = importlib.util.module_from_spec(spec)\n    spec.loader.exec_module(mod)\n    assert mod.X == 1\n")
+    r = S.run(suite, ["pkg"], [], tmp_path / "logs")
+    assert (r.status, r.counts["passed"]) == ("failed", 1), r.log.read_text()
+    assert r.outside == {"outside/helper.py": "pkg/tests/test_reads.py"}, r.log.read_text()
+
+
+def test_a_suites_tmp_paths_are_under_its_own_basetemp_and_gone_when_it_ends(tmp_path, tmp_path_factory, monkeypatch):
+    """pytest keeps its last three base temps (a flock suite's is ~45 GB: vy-cpu-1 and vy-cpu-2 filled on 11 Oct); each suite gets
+    its own `--basetemp`, removed when it ends, unless the caller passed one, and a killed suites.py's are swept by the next."""
+    import os
+    import tempfile
+    S, suite = _suite(tmp_path, monkeypatch, reads_outside=False)
+    tmp = tmp_path_factory.mktemp("tmp")                         # outside the suite's tree, as /tmp is
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp))
+    monkeypatch.setenv("EXPECT", str(tmp / f"{S.BASETEMP}-{os.getpid()}-"))
+    (tmp_path / "pkg" / "tests" / "test_reads.py").write_text(
+        "import os\n\ndef test_tmp(tmp_path):\n    (tmp_path / 'big').write_bytes(b'x' * 4096)\n"
+        "    assert str(tmp_path).startswith(os.environ['EXPECT'])\n")
+    r = S.run(suite, ["pkg"], [], tmp_path / "logs")
+    assert (r.status, r.counts["passed"]) == ("passed", 1), r.log.read_text()
+    assert list(tmp.iterdir()) == []
+    mine = tmp_path_factory.mktemp("mine")
+    monkeypatch.setenv("EXPECT", str(mine))
+    r = S.run(suite, ["pkg"], [f"--basetemp={mine}"], tmp_path / "logs")
+    assert r.status == "passed" and (mine / "test_tmp0" / "big").exists() and list(tmp.iterdir()) == []
+    dead, live = tmp / f"{S.BASETEMP}-999999999-pkg-x", tmp / f"{S.BASETEMP}-{os.getppid()}-pkg-y"
+    dead.mkdir()
+    live.mkdir()
+    assert S.sweep_basetemps() == [dead] and live.exists()
 
 
 @pytest.mark.parametrize("listed", [False, True])
@@ -69,7 +112,8 @@ def test_markdown_inside_the_inputs_is_outside_them_unless_the_suite_lists_markd
         "from pathlib import Path\n\ndef test_prose():\n    (Path(__file__).resolve().parents[1] / 'README.md').read_text()\n")
     suite = S.Suite("pkg", "pkg", (), ("pkg/README.md",) if listed else ())
     r = S.run(suite, ["pkg"], [], tmp_path / "logs")
-    assert (r.status, r.outside) == (("passed", []) if listed else ("failed", ["pkg/README.md"])), r.log.read_text()
+    want = ("passed", {}) if listed else ("failed", {"pkg/README.md": "pkg/tests/test_reads.py"})
+    assert (r.status, r.outside) == want, r.log.read_text()
 
 
 @pytest.mark.parametrize("workers", [1, 2])
@@ -133,10 +177,10 @@ def test_a_suite_without_the_guards_report_fails(tmp_path, monkeypatch):
 def test_a_worker_that_sends_no_record_leaves_the_suite_unguarded(monkeypatch):
     monkeypatch.delenv("VERITY_SUITE_REPORT", raising=False)   # load it inert: no second audit hook in this process
     G = _load(monkeypatch, "guard_under_test", HERE / "guard" / "verity_suite_guard.py")
-    record = {"outside": ["a.txt"], "watched": ["uv.lock"], "distributions": ["numpy"], "missing": ["torch"]}
+    record = {"outside": {"a.txt": "pkg/tests/test_a.py"}, "watched": ["uv.lock"], "distributions": ["numpy"], "missing": ["torch"]}
     G.pytest_testnodedown(SimpleNamespace(gateway=SimpleNamespace(id="gw0"), workeroutput={G._KEY: record}), None)
     G.pytest_testnodedown(SimpleNamespace(gateway=SimpleNamespace(id="gw1")), error="crashed")
-    assert (G._outside, G._watched, G._unguarded) == ({"a.txt"}, {"uv.lock"}, ["gw1"])
+    assert (G._outside, G._watched, G._unguarded) == ({"a.txt": "pkg/tests/test_a.py"}, {"uv.lock"}, ["gw1"])
     assert G._record == {"distributions": {"numpy"}, "missing": {"torch"}}
 
 

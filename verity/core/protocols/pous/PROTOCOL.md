@@ -39,7 +39,7 @@ fails is the `feistel-indifferentiability` claim, now refuted, and every sentenc
 deadline into a count of whole `Π₂` calls (`call_ns`, the effective `D`, the cliff, the cap): each holds in the
 ideal-permutation model only, and none bounds an adversary at the reference `Π₂`.
 
-## The problem: timed audit, perfect isolation
+## The problem: timed audit, help accounted
 
 - **Syntax.** A trusted encoder `Enc(W) → (pp, C, vk)` runs once and erases its secrets. `W` is arbitrary and fixed
   before any setup randomness (all zeros included). Decoding `Dec(pp, C) = W` is public and bit-exact. `C` is `N`
@@ -52,6 +52,15 @@ ideal-permutation model only, and none bounds an adversary at the reference `Π�
   else. The memory challenger issues `k` uniform block indices, all at once or one at a time. Each answer is due within
   the deadline, so the responder is `(D, Q)`-bounded, with no outside help. Whenever a challenge arrives the adversary's
   state is at most `ρ|C|` bits; `W` and `pp` are free.
+- **Deployment: help is accounted, not excluded.** No guarantee assumes trusted prover hardware (Daniel, 12 Oct 2026),
+  so nothing attests the prover's machine and nothing asks that its responder be isolated. The game's "no outside
+  help" is read through the help-accounted row of console's actual-circuit model, the model a certificate cites under
+  the id `perfect-isolation` (kept from the earlier model, since certificates pin it): on PoUS's challenge schedule,
+  some challenge tick `t_j` has `mem_X(t_j) + 2^e·h ≥ S` for the audited location `X`, where `h` is the help `X`
+  received. It is proved at `e = 0` for a location that does no arithmetic modulo `p` (PR #1860), for challenges on a
+  fixed schedule. PoUS keeps sending each challenge when the last answer arrives, and the model's bridge is to cover
+  that schedule (Daniel, 12 Oct); that bridge is not written yet. An accepted audit bounds what `X` held plus what it
+  was helped, never `X`'s memory alone.
 - **Requirement.** `Pr[every answer correct and on time] ≤ δ + ε_crypto`. The honest prover stores `C` and answers by
   lookup.
 - **Cost** (not modeled in Lean): encoded matmuls at most 2× the tuned plaintext sequence, decoding on every use.
@@ -340,9 +349,10 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   - `segDom_inj` is the certificates' hypothesis.
   - `tests/test_pous_protocol.py` checks it for every scheme, and replays the attack on real labels.
   - `benchmarks/pous` gates every implementation's tags against `salt ‖ u64 s` over 448 segments.
-- **Claims.** `protocol.claim(id)` resolves an id from `verity.core.claims`, or from `protocol.LOCAL_CLAIMS` until core holds
-  it: `ideal-permutation`, `perfect-isolation`, `sequential-step-floor`, `feistel-indifferentiability` (refuted at the
-  reference `Π₂`: "Main caveat"), and P2's `m1-ideal-permutations`, `sms-m1-instantiation`, `seq-root`.
+- **Claims.** `protocol.claim(id)` resolves an id from `verity.core.claims`, or from `protocol.LOCAL_CLAIMS` until core
+  holds it: `ideal-permutation`, `perfect-isolation` (the help-accounted row: "The problem"), `sequential-step-floor`,
+  `feistel-indifferentiability` (refuted at the reference `Π₂`: "Main caveat"), and P2's `m1-ideal-permutations`,
+  `sms-m1-instantiation`, `seq-root`.
 - **Tests.** `tests/test_pous_protocol.py` runs one conformance suite over every scheme, plus a toy that implements
   only the two methods. Each registered scheme's vectors are pinned in `tests/fixtures/schemes/<name>.json`, written
   by `tests/pous_scheme_vectors.py`: the certificate at the registered point, and a small instance's segment digests
@@ -423,9 +433,10 @@ requirement.
 | `scheme` | P3's `encode_segment(params, prims, salt, s, w_seg) -> blocks` and `decode_segment(params, prims, salt, s, blocks) -> w_seg` on bytes; `P3`, the two as a codec; `encode` and `decode` over all of `W`, segment by segment; the `*_prog` oracle programs |
 | `layout` | `Layout.of(params, [(name, size)], align)`, `Layout.of_ranges(params, [(name, offset, size)])`, `pack`, `decode_tensor(..., codec=params.codec)` |
 | `setup` | `commit` (streamed over segments), `draw_salt`; `verifier_setup(params, prims, commitment, salt, encoded=C*, w=None, public_encoder=PUBLIC_ENCODER)`, which picks `verifier_key_from_encoding(params, prims, commitment, salt, C*, codec=params.codec)` (public encoder, the default) or `verifier_key(params, prims, W or its segments, commitment, salt, encoded=None, codec=params.codec)` (the verifier encodes); `server_root`, `check_server_root` |
-| `verifier` | `VerifierKey` (`root` and leaf digests; `build`, `from_leaves`, `from_segments`), `leaf_hash` (whole or chunked blocks), `segment_leaves`, `MerkleTree` (audit paths), `verify_path` |
+| `verifier` | `VerifierKey` (`root` and leaf digests; `build`, `from_leaves`, `from_segments`, `from_row_digests`), `leaf_hash` (whole or chunked blocks), `row_leaf` (from a block's row digest), `segment_leaves`, `MerkleTree` (audit paths), `verify_path` |
 | `audit` | `challenge_key`, `HonestResponder`, `UnsignedRounds` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 241.5 µs); `UnsignedRounds` refuses a band deadline past the cliff |
-| `memory_challenger` | the memory challenger, which signs its rounds and on the deployed path replaces `audit.UnsignedRounds`: `CoinTree` (its `k` indices from its own secret, committed before the session; `CoinOpening`, `verify_coin`), `MemoryChallenger(coins, signer, limit_ns=, block_bytes=)` with its `SessionCommitment`, `challenge()`, `receive(block)` (one `Round` each: index, send and receipt times, `H(block)`; the first late round ends the session), `close()` (one signature, `SignedSession`) and `openings()`; `LmsSigner`, `register`; `verdict` (what the prover will prove of a signed session, checked in the clear; its public output is `Verdict.public`); `covering_certificate` |
+| `memory_challenger` | the memory challenger, which signs its rounds and on the deployed path replaces `audit.UnsignedRounds`: `CoinTree` (its `k` indices from its own secret, committed before the session; `CoinOpening`, `verify_coin`), `MemoryChallenger(coins, signer, log=, limit_ns=, block_bytes=, binding=)` with its `SessionCommitment` (`binding` the setup's 64-byte root of `C*`, required; `session` the auditor's id for the audit, which `log`, a `SessionLog`, records as used before the first challenge and refuses again), `challenge()`, `receive(block)` (one `Round` each: index, send and receipt times, `H(block)`; the first late round ends the session), `close()` (one signature, `SignedSession`) and `openings()`; `LmsSigner`, `register`; `verdict` (what the prover will prove of a signed session, checked in the clear; its public output is `Verdict.public`); `covering_certificate` |
+| `run` | the composed check of a recorded run: `check(trusted, setup, digests, session, session_id)` over the verifier's list of memory-challenger keys (never the run's record), the setup's public outputs (`Setup`), the memory challenger's table of `C*`'s row digests, one `Session` (signed session, commitment, openings) and the id the auditor designated for the session, at P2's deployed point (`DEPLOYED`) under `memory_challenger.SCHEMES`, raising `Refused` with the first reason; `check_at` at another `Point`; `PousCheck.Run.check` (`pous-run`) in Lean |
 | `adversary` | holdings (Lean `ColState`), `schedule`, `answer_prog`, strategies, `measure`; `col_round` is Lean's `colRound` |
 | `protocol` | the generic protocol: `Scheme` (abstract), `Certificate`, `TimedAudit` (refuses what none of its certificates covers), `StorageProfile`, `PRIVATE`/`PUBLIC`, `verifier_key`, `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key`, `responder`, `claim`, `LOCAL_CLAIMS` |
 | `schemes` | `band.Band`, `dense.Dense`, `p3.P3`, `p2.P2` (experimental; one module each) as `protocol.Scheme`s with their certificates; `REGISTRY`, `DEFAULT` (`band-chain/d12/v1`), `get(name, segments, params)` |
@@ -606,9 +617,10 @@ The game assumes three requirements on the protocol, and the certificate says no
    ideal-permutation model (not at the reference `Π₂`: "Main caveat").
 3. **Every answer past `Δ` is counted late.**
 
-**Isolation over the whole graded window.** Perfect isolation ("The problem") is assumed for the whole graded audit, not
+**Help over the whole graded window.** The game's "no outside help" ("The problem") covers the whole graded audit, not
 round by round: from the first challenge to the last answer the server has no outside help, and its state when each
-challenge arrives is its storage at rest. The worst row is `t = 3`, `k = 243` rounds. After a late answer the prover
+challenge arrives is its storage at rest. In a deployment the help-accounted row counts, in `h`, the help received over
+that same window. The worst row is `t = 3`, `k = 243` rounds. After a late answer the prover
 times the next arrival, so the certificate needs the whole window to be too short to re-encode `C` from `W`.
 Re-encoding a segment takes `R(d) = Σ_{v<512} (min(v, d) + 1) ≥ R(5) = 3,057` sequential `Π₂` calls (6,578 at
 `d = 12`). The window is wall-clock time, and a rebuild runs through the rounds and the memory challenger's gaps between
@@ -670,8 +682,8 @@ not reach; it is re-pinned at `k = 111`, four challenges more.
 
 **Not proved here:**
 - a concrete permutation for `Π₂` (the main caveat);
-- the conversion of the deadline into `D = 5` rounds, which assumes no ASIC and at least 50 ns per Keccak-f, and perfect
-  isolation: both outside Lean;
+- the conversion of the deadline into `D = 5` rounds, which assumes no ASIC and at least 50 ns per Keccak-f, and the
+  reading of help through the help-accounted row ("The problem"): both outside Lean;
 - decode cost, which isn't modeled.
 
 ## Guarantees and lemmas
@@ -682,8 +694,8 @@ category. The lemmas (`KFloor`, Theorem 1, Track A, the pebbling and sampled-aud
 transfer, the column game's rows, the secure-erasure digest, `PerAnswer`, `ContinuousTimeAverage`, and the falsified
 `InvExPostFactoTwoLayer` beside `N10Refuted`) are stated under the same `Pous.Guarantees` names in
 `Security/Proofs/Pous/Statements.lean`, and `ContinuousComplete`, the memory challenger's completeness, with them.
-The properties of the Lean verdicts `PousCheck.TimedAudit` and `MemoryChallenger.verdict` are in
-`Security/Properties/Pous/`.
+The properties of the Lean verdicts `PousCheck.TimedAudit` and `MemoryChallenger.verdict`, and of the composed check
+`PousCheck.Run.check`, are in `Security/Properties/Pous/`.
 
 | Statements | What | Status |
 |---|---|---|
@@ -716,6 +728,97 @@ The properties of the Lean verdicts `PousCheck.TimedAudit` and `MemoryChallenger
 **Why N10 fails.** Top label `v` reads only column `v` of the lower layer, so an adversary can pay for a lower label a
 column at a time, where whole-label pebbling charges it a whole label. N10′, the column-aware restatement over
 `Pous.ColumnGame`, is being drafted.
+
+### P2 end to end (`Security/Properties/Pous/EndToEnd.lean`)
+
+Two kinds of statement at P2's deployed point, which nothing joins inside Lean:
+
+- `Pous.EndToEnd.RunCheckAccepts` and `RunCertifies`, about the deployed code, deterministic and with no assumption.
+  When the composed check (`run.check`, Lean's `PousCheck.Run.check`) accepts, against the verifier's own list of
+  memory-challenger keys (`trusted`, which never comes from the run's record), the setup's public outputs, the memory
+  challenger's table and its signed session under the id the auditor designated, the session audits that setup at the
+  deployed point (`AuditsSetup`: every block, `k = 105`, within `Δ + RTT`, 2,056-byte answers, bound to the published
+  root), runs under the designated id and is signed under a key in `trusted`, and for every `C*` of the point's shape
+  whose leaves have the published root, every one of the device's 105 recorded answers was the challenged block of
+  `C*` on time on the device's own clock; or the run holds a SHA-512 collision or an LMS forgery. `RunCheckAccepts` is
+  proved (`Pous.EndToEnd.SecurityProofs.runCheckAccepts`). `RunCertifies` adds setup's
+  acceptance (`Accepted`): `C*` decodes to the committed `W` and its root is published. It follows from
+  `RunCheckAccepts` and setup's `AcceptsDecodes` and `PublishesRoot` (`runCertifies_of`), which are open, so it is a
+  statement no guarantee states yet (`unstated`).
+- `Pous.EndToEnd.EndToEndRing`, **in the ring model, with ω uniform**: a server holding at most `⌊ρ·|C|⌋` bits
+  between setup, the session and its rounds, each answer `(D, Q, L)`-bounded (`Server S D Q L`), shown the session
+  commitment the code builds, with the memory challenger's coins drawn online by the code's own sampler and coin tree,
+  passes with probability at most `1% + 2^-128`. It is proved (`Pous.EndToEnd.SecurityProofs.endToEndRing`) from two
+  named assumptions: `P2RingAuditSecure D Q L` (open), and `CoinCommitHides` at `2^-131` (`statistical-hiding`: the
+  coin tree's root and hm96 key hide the indices; the leftover-hash argument is in its docstring, and Lean has no
+  leftover hash lemma to prove it with). The budget is `2^-129 + 2^-130 + 2^-131 + ε_rs ≤ 2^-128`, with `ε_rs = 0`
+  proved (`DrawExact`: `uniformOn` reads 11 bytes at `2^19` blocks and `2^19` divides `2^88`, so no word is rejected).
+  `EndToEndRingDeployed` is it at one root's depth, `D = 16,446`, about half of `RingTight`'s falsification at
+  32,894, with `Q = 2^20` and `L = 2^64` (the truncation attack passes `k = 105` only at about `2^168`). In the ring
+  model a root is 16,447 multiplication rounds (16,446 over the exponent's bits and one to fix the sign,
+  `rootProg_cost`), and recomputing a block takes two, `2 · 16,447 = 32,894`; 16,446 is the largest `D` at which that
+  program cannot finish one root. The timing keeps its 2× margin there: at SeqRoot's floor, the timing red team's
+  modelled 361.55 ns per single-core squaring cut by the measured 8-core speedup of 3.490× to about 103.6 ns per
+  cooperating squaring, 16,447 rounds take 1,704 µs, 1.995× `Δ + RTT`, and 1.64× and 1.25× under the red team's sync
+  model. `HonestPassesRing` and
+  `HonestPassesAccepts` prove that the honest full-state server passes P2's ring audit, and the end-to-end event, with
+  probability 1.
+
+`P2RingAuditSecure` is also derived from the per-round conjecture `P2RingRoundSecure p ε₀ D Q L` (Daniel's ruling of
+12 Oct, item 5): at every block count from `2^19` to `2^25`, at a boundary where the server holds at most `⌊ρ·|C|⌋`
+bits, a uniform challenge is answered with probability at most `1 − p` given the earlier answers, outside an event of
+mass `k·ε₀` over `k` rounds (one `ε₀` per round, the same at every block count). `Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure` gives `P2RingAuditSecure` from it when
+`(1 − p)^105 + 105·ε₀ ≤ 1% + 2^-129 + 2^-130` (`p = 0.043` with `ε₀ = 2^-137` suffices; `p < 0.04291` doesn't), and
+`Pous.SecurityProofs.P2RingGradedOfRoundSecure` is the graded bound: a server held at most `⌊ρ·|C|⌋` bits at `m` of
+the `k` boundaries passes with probability at most `(1 − p)^m + k·ε₀`. Its falsification tests are
+`Security/Proofs/Pous/P2/RoundTests.lean`'s, at every block count in the range: recomputation forces `p = 0` at
+`D ≥ 32,894`, and truncation refutes `p = 0.043` from `L ≥ 2^167` at `2^19`.
+
+`EndToEndRing` reaches the deployed system only through four claims, each cited on its own:
+
+- `pous-ring-device` (the model): the deployed server is a `Server`, its state bounded between setup, the session and
+  its rounds, with one session per audit (the memory challenger's `SessionLog`, of which its host never restores an
+  earlier copy: `trusted-nebius-host` (pending network-accounting's widening, Daniel decision 2)) and the coins drawn
+  online;
+- `pous-ring-speed` (the numbers): within `Δ + RTT` no allowed hardware finishes a 16,447th sequential multiplication
+  round (`D = 16,446`), more than `2^20` key queries or `2^64` ring operations per answer. It rests on the floor
+  behind `ROOT_CALL_NS` (SeqRoot, under P2 in "The generic protocol"), a model cut by a measurement: the timing red
+  team's modelled single-core floor, `note:20261004T2102Z-report-relay-p2-redteam-timing`
+  (art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57), and the 8-core cooperation speedup measured
+  in run `r20260929-060834-0ec4` (art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed); its margin is
+  1.995×, and 1.64× and 1.25× under the red team's sync model;
+- `pous-ring-instantiation`: P2 with the identity labeling and SHA-512-CTR keys is no easier than `p2ring` with
+  uniform ω;
+- `prf/sha-512`: the memory challenger's derived index streams are as good as uniform bytes.
+
+Two gaps stood between these statements and the deployed verifier:
+
+- G-1, one session per audit: the check's half is fixed in code; one session per id is the memory challenger's
+  `SessionLog` under its host presumption, which `trusted-nebius-host` covers as network-accounting widens it
+  (pending network-accounting's widening, Daniel decision 2). Every session names its setup: a `SessionCommitment`'s
+  `binding` has no default, the `MemoryChallenger` refuses one that is not a 64-byte root, and the harness's memory
+  challenger (`benchmarks/pous/memory_challenger/live.py`) binds every session to the root the setup publishes for the
+  `C*` its digests describe (`VerifierKey.from_row_digests`). Every session is also its audit's: its id (`session`, in
+  the signed header) is the auditor's, designated for one audit, and the device runs at most one session under an id.
+  Its `SessionLog` is a file of its own, never in the signer's key directory (`live.py --session-log`, `bench.py
+  --mc-session-log`). It is append-only: the id goes in, fsynced, when the session commits, before its first challenge,
+  so a session that never runs has used its id too. A used id is refused, a log that is missing or unreadable refuses
+  every session, and nothing rewrites, truncates or remakes a log. A file cannot see its host restore an earlier copy of
+  it, from a snapshot, a backup or otherwise, nor restart the memory challenger onto one. That the host never does is
+  `trusted-nebius-host` (`verity.core.claims`) as network-accounting widens it, in Daniel's words: "An auditor-trusted
+  device (a network certifier, the memory challenger) runs its stated code on its Nebius host, and its host never
+  restores an earlier copy of the state the device keeps there"
+  (pending network-accounting's widening, Daniel decision 2). This log is part of that state, as is the LMS leaf state.
+  Under one secret a reused id would also replay the coins, which `CoinTree.draw` derives from the secret and the id.
+  The composed check accepts a session only under the id the auditor designated (`run.check`'s `session_id`), so an
+  audit has at most one session it can accept. The Lean states the check's side (`RunCheckAccepts`: an accepted session
+  carries the designated id); the device's refusal is its code and log, which the Lean does not model.
+- G-2, the composed setup-to-challenger check, fixed: `run.check` (`PousCheck.Run.check`, `pous-run TRUSTED.json
+  SETUP.json DIGESTS.bin SESSION.json SESSION_ID`) refuses a run unless the setup published `2^19` blocks under a
+  24-byte salt, the table's leaves have the published root, the session audits that setup at the deployed point, is
+  bound to that root and carries the designated id, and the verdict accepts it against the table under a key of the
+  verifier's own list (`TRUSTED.json`, never the run's record). `check/tests/test_run.py` holds the two
+  to one another, and `Accepted` is now setup's acceptance and this check's.
 
 ## Named assumptions (`Security/Models/Pous/Assumptions.lean`)
 

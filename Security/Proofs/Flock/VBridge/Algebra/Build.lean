@@ -9,27 +9,41 @@ evaluated (`noCons`), plus the running sums w holds where it has consistency sum
 residual's coefficients on the consistency sums into `kappa`, and only Ligerito's final check, residuals `fin` and
 `fin + 1`, has any.
 
-* `valOf` is a message element's value: its element of w, its ring switch's transpose of w, the comb's element, or
-  the level's consistency sum.
+* `valOf` is a message element's value: its element of w, its ring switch's transpose of w, the comb's element (at a
+  holo shape plus w's `h`, `hOf`, as `atomOp` reads it), or the level's consistency sum.
 * `kapSum kappa r cons` is the final check's component `r` on the levels' consistency sums `cons`.
 -/
 
-namespace FlockVBridge.Algebra
+namespace Flock.RecAlgebra
 
 open Flock FlockSoundness.Refine
 
 /-! ## Values -/
+
+/-- A holo shape's `h[l]` as w holds it, the comb operand's second term (`atomOp`); zero off a holo shape. -/
+def hOf (sh : Shape) (w : Array F128) (l : Nat) : F128 :=
+  if sh.holo then match wi sh (.h l) with
+    | some i => w[i]!
+    | none => 0
+  else 0
 
 /-- A message element's value at w, the comb and the levels' consistency sums. -/
 def valOf (sh : Shape) (w comb : Array F128) (cons : Nat → Nat → F128) : Key → F128
   | .rsT k u => match wi sh (.rs k 0) with
     | some i => termValue w comb (.wt i u)
     | none => 0
-  | .comb l => comb[l]!
+  | .comb l => comb[l]! + hOf sh w l
   | .cons level l => cons level l
   | k => match wi sh k with
     | some i => w[i]!
     | none => 0
+
+theorem hOf_plain {sh : Shape} (hp : sh.holo = false) (w : Array F128) (l : Nat) : hOf sh w l = 0 := by
+  simp [hOf, hp]
+
+theorem hOf_holo {sh : Shape} (hh : sh.holo = true) (w : Array F128) {l i : Nat} (hi : wi sh (.h l) = some i) :
+    hOf sh w l = w[i]! := by
+  simp [hOf, hh, hi]
 
 /-- `Σ_{i < n} f i`. -/
 def rangeSum (n : Nat) (f : Nat → F128) : F128 := (List.range n).foldl (fun acc i => acc + f i) 0
@@ -195,10 +209,11 @@ section Build
 
 variable (sh : Shape) (comb0 : Nat)
 
-/-- The op table's operands for message elements: each is the element's term alone; v's names and values align. -/
+/-- The op table's operands for message elements: each is the element's operand (`atomOp`); v's names and values
+align. -/
 def OpsOk (st : BSt) : Prop :=
   st.vNames.size = st.vVals.size ∧
-    ∀ k i, st.opOf.lookup k = some i → ∃ t, atomTerm sh comb0 k = .ok t ∧ st.ops[i]? = some #[t]
+    ∀ k i, st.opOf.lookup k = some i → ∃ op, atomOp sh comb0 k = .ok op ∧ st.ops[i]? = some op
 
 /-- Operands `F` and v values `V` extend `st`'s. -/
 def ExtTo (st : BSt) (F : Array (Array Term)) (V : Array F128) : Prop :=
@@ -247,13 +262,6 @@ theorem OpsOk.push {st : BSt} (hi : OpsOk sh comb0 st) (n : VName) (x : F128) (o
 
 variable (w comb : Array F128) (cons : Nat → Nat → F128)
 
-theorem atom_val {k : Key} {t : Term} {V : Array F128} (ha : atomTerm sh comb0 k = .ok t) (hV : V.size = comb0) :
-    termValue w (V ++ comb) t = valOf sh w comb cons k := by
-  cases k <;> simp only [atomTerm, valOf] at ha ⊢ <;> (try split at ha) <;> (try cases ha) <;>
-    (try simp_all [termValue])
-  rename_i l
-  rw [getElem!_def, getElem!_def, Array.getElem?_append_right (by omega), show comb0 + l - V.size = l from by omega]
-
 theorem opValue_single {S : GfS} {o : Nat} {t : Term} (v : Array F128) (h : S.ops[o]? = some #[t]) :
     opValue S w v o = termValue w v t := by
   simp only [opValue, getElem!_def, h]
@@ -267,10 +275,92 @@ theorem mulSum_cons (S : GfS) (v : Array F128) (p : Nat × Nat) (ps : Array (Nat
     mulSum w S v (#[p] ++ ps) = opValue S w v p.1 * opValue S w v p.2 + mulSum w S v ps := by
   simp only [mulSum, afoldl_append, afoldl_single]
 
+/-- A message element's operand is its term, or at a holo shape a comb's term and its `h`. -/
+theorem atomOp_cases {k : Key} {op : Array Term} (h : atomOp sh comb0 k = .ok op) :
+    ∃ t, atomTerm sh comb0 k = .ok t ∧ (op = #[t] ∨ sh.holo = true ∧ ∃ i, op = #[t, .w i]) := by
+  unfold atomOp at h
+  cases ht : atomTerm sh comb0 k with
+  | error e => rw [ht] at h; cases h
+  | ok t =>
+    rw [ht] at h
+    refine ⟨t, rfl, ?_⟩
+    simp only [bind, Except.bind] at h
+    split at h
+    · split at h
+      · cases h
+        exact .inr ⟨by assumption, _, rfl⟩
+      · cases h
+    · cases h
+      exact .inl rfl
+
+/-- Off a holo shape, a message element's operand is its term alone. -/
+theorem atomOp_plain {k : Key} {op : Array Term} (hp : sh.holo = false) (h : atomOp sh comb0 k = .ok op) :
+    ∃ t, atomTerm sh comb0 k = .ok t ∧ op = #[t] := by
+  obtain ⟨t, ht, h1 | ⟨h2, -⟩⟩ := atomOp_cases h
+  · exact ⟨t, ht, h1⟩
+  · rw [hp] at h2; cases h2
+
+/-- Off the comb, a message element's operand is its term alone. -/
+theorem atomOp_single {k : Key} {op : Array Term} (hk : ∀ l, k ≠ .comb l) (h : atomOp sh comb0 k = .ok op) :
+    ∃ t, atomTerm sh comb0 k = .ok t ∧ op = #[t] := by
+  obtain ⟨t, ht, h1 | ⟨-, i, h2⟩⟩ := atomOp_cases h
+  · exact ⟨t, ht, h1⟩
+  · exfalso
+    unfold atomOp at h
+    rw [ht] at h
+    simp only [bind, Except.bind] at h
+    split at h
+    · exact hk _ rfl
+    · cases h
+      simp at h2
+
+/-- At a holo shape, a comb's operand is its slot and its `h`. -/
+theorem atomOp_comb {l : Nat} {op : Array Term} (hh : sh.holo = true) (h : atomOp sh comb0 (.comb l) = .ok op) :
+    ∃ i, wi sh (.h l) = some i ∧ op = #[.v (comb0 + l), .w i] := by
+  unfold atomOp at h
+  simp only [atomTerm, bind, Except.bind, hh] at h
+  cases hw : wi sh (.h l) with
+  | none => rw [hw] at h; cases h
+  | some i => rw [hw] at h; cases h; exact ⟨i, rfl, rfl⟩
+
+theorem atom_val {k : Key} {t : Term} (V : Array F128) (ha : atomTerm sh comb0 k = .ok t)
+    (hk : ∀ l, k ≠ .comb l) : termValue w (V ++ comb) t = valOf sh w comb cons k := by
+  cases k
+  case comb l => exact absurd rfl (hk l)
+  all_goals clear hk
+  all_goals (simp only [atomTerm, valOf] at ha ⊢; (try split at ha) <;> (try cases ha) <;> (try simp_all [termValue]))
+
+/-- A message element's operand sums to its value, at either shape. -/
+theorem atomOp_val {k : Key} {op : Array Term} {V : Array F128} (h : atomOp sh comb0 k = .ok op)
+    (hV : V.size = comb0) : op.foldl (fun x t => x + termValue w (V ++ comb) t) 0 = valOf sh w comb cons k := by
+  by_cases hk : ∃ l, k = .comb l
+  · obtain ⟨l, rfl⟩ := hk
+    have hv : termValue w (V ++ comb) (.v (comb0 + l)) = comb[l]! := by
+      rw [termValue, getElem!_def, getElem!_def, Array.getElem?_append_right (by omega),
+        show comb0 + l - V.size = l from by omega]
+    show _ = comb[l]! + hOf sh w l
+    cases hh : sh.holo
+    · obtain ⟨t, ht, rfl⟩ := atomOp_plain hh h
+      simp only [atomTerm, Except.ok.injEq] at ht
+      subst ht
+      rw [afoldl_single, hv, hOf_plain hh, f128_add_zero]
+    · obtain ⟨i, hi, rfl⟩ := atomOp_comb hh h
+      simp only [List.foldl_toArray', List.foldl_cons, List.foldl_nil]
+      rw [f128_zero_add, hv, hOf_holo hh w hi]
+      rfl
+  · obtain ⟨t, ht, rfl⟩ := atomOp_single (fun l e => hk ⟨l, e⟩) h
+    rw [afoldl_single]
+    exact atom_val w comb cons V ht fun l e => hk ⟨l, e⟩
+
+theorem opValue_atom {S : GfS} {o : Nat} {k : Key} {op : Array Term} {V : Array F128} (h : S.ops[o]? = some op)
+    (ha : atomOp sh comb0 k = .ok op) (hV : V.size = comb0) : opValue S w (V ++ comb) o = valOf sh w comb cons k := by
+  simp only [opValue, getElem!_def, h]
+  exact atomOp_val w comb cons ha hV
+
 theorem varOp_spec {k : Key} {st st' : BSt} {o : Nat} (hi : OpsOk sh comb0 st)
     (hr : varOp sh comb0 k st = .ok (o, st')) :
     OpsOk sh comb0 st' ∧ Ext st st' ∧ st'.vNames = st.vNames ∧ st'.vVals = st.vVals ∧ st'.kappa = st.kappa ∧
-      ∃ t, atomTerm sh comb0 k = .ok t ∧ st'.ops[o]? = some #[t] := by
+      ∃ op, atomOp sh comb0 k = .ok op ∧ st'.ops[o]? = some op := by
   unfold varOp at hr
   obtain ⟨st0, st1, hg, hr⟩ := bm_bind hr
   cases hg
@@ -287,7 +377,7 @@ theorem varOp_spec {k : Key} {st st' : BSt} {o : Nat} (hi : OpsOk sh comb0 st)
     obtain ⟨_, st3, hs, hr⟩ := bm_bind hr
     cases hs
     cases hr
-    refine ⟨⟨hi.1, fun k' i' hk' => ?_⟩, ⟨⟨#[#[t']], Array.push_eq_append⟩, ⟨#[], by simp⟩⟩, rfl, rfl,
+    refine ⟨⟨hi.1, fun k' i' hk' => ?_⟩, ⟨⟨#[t'], Array.push_eq_append⟩, ⟨#[], by simp⟩⟩, rfl, rfl,
       rfl, t', ha, by simp⟩
     simp only [List.lookup_append] at hk'
     cases hk'' : st.opOf.lookup k' with
@@ -295,7 +385,7 @@ theorem varOp_spec {k : Key} {st st' : BSt} {o : Nat} (hi : OpsOk sh comb0 st)
       rw [hk''] at hk'
       cases hk'
       obtain ⟨t2, h2, h3⟩ := hi.2 k' _ hk''
-      exact ⟨t2, h2, (Ext.push st (.const 0) 0 #[t']).ops? h3⟩
+      exact ⟨t2, h2, (Ext.push st (.const 0) 0 t').ops? h3⟩
     | none =>
       rw [hk''] at hk'
       simp only [List.lookup, Option.none_or] at hk'
@@ -310,8 +400,8 @@ theorem varOp_spec {k : Key} {st st' : BSt} {o : Nat} (hi : OpsOk sh comb0 st)
 theorem coefOps_spec (ri : Nat) : ∀ (l : List (Key × F128)) (st st' : BSt) (ps : Array (Nat × Nat)),
     OpsOk sh comb0 st → coefOps sh comb0 ri l st = .ok (ps, st') →
     OpsOk sh comb0 st' ∧ Ext st st' ∧ st'.kappa = st.kappa ∧
-      ∀ (S : GfS) (V : Array F128), ExtTo st' S.ops V → V.size = comb0 →
-        mulSum w S (V ++ comb) ps = tEval (valOf sh w comb cons) l
+      (∀ (S : GfS) (V : Array F128), ExtTo st' S.ops V → V.size = comb0 →
+        mulSum w S (V ++ comb) ps = tEval (valOf sh w comb cons) l)
   | [], st, st', ps, hi, hr => by
     cases hr
     exact ⟨hi, Ext.refl _, rfl, fun _ _ _ _ => rfl⟩
@@ -324,7 +414,7 @@ theorem coefOps_spec (ri : Nat) : ∀ (l : List (Key × F128)) (st st' : BSt) (p
     obtain ⟨ps', st4, hc, hr⟩ := bm_bind hr
     cases hr
     have hA := hi.push (.coef ri k) x #[.v st.vNames.size]
-    obtain ⟨h3i, h3e, h3n, h3v, h3k, t, ht, ho⟩ := varOp_spec hA hv
+    obtain ⟨h3i, h3e, h3n, h3v, h3k, op, hop, ho⟩ := varOp_spec hA hv
     obtain ⟨h4i, h4e, h4k, hval⟩ := coefOps_spec ri rest st3 st' ps' h3i hc
     refine ⟨h4i, (Ext.push st _ _ _).trans (h3e.trans h4e), by rw [h4k, h3k], fun S V hSV hV => ?_⟩
     rw [mulSum_cons, hval S V hSV hV, tEval]
@@ -334,14 +424,14 @@ theorem coefOps_spec (ri : Nat) : ∀ (l : List (Key × F128)) (st st' : BSt) (p
       rcases Nat.lt_or_ge st.vNames.size V.size with h' | h'
       · exact h'
       · rw [Array.getElem?_eq_none h'] at hx; cases hx
-    rw [opValue_single w _ hslot, opValue_single w _ (h4e.trans hSV |>.ops? ho), atom_val w comb cons ht hV]
+    rw [opValue_single w _ hslot, opValue_atom w comb cons (h4e.trans hSV |>.ops? ho) hop hV]
     simp only [termValue, getElem!_def, Array.getElem?_append_left hlt, hx]
 
 theorem prodOps_spec (ri : Nat) : ∀ (l : List ((Key × Key) × F128)) (st st' : BSt) (ps : Array (Nat × Nat)),
     OpsOk sh comb0 st → prodOps sh comb0 ri l st = .ok (ps, st') →
     OpsOk sh comb0 st' ∧ Ext st st' ∧ st'.kappa = st.kappa ∧
-      ∀ (S : GfS) (V : Array F128), ExtTo st' S.ops V → V.size = comb0 →
-        mulSum w S (V ++ comb) ps = tEval (fun ab => valOf sh w comb cons ab.1 * valOf sh w comb cons ab.2) l
+      (∀ (S : GfS) (V : Array F128), ExtTo st' S.ops V → V.size = comb0 →
+        mulSum w S (V ++ comb) ps = tEval (fun ab => valOf sh w comb cons ab.1 * valOf sh w comb cons ab.2) l)
   | [], st, st', ps, hi, hr => by
     cases hr
     exact ⟨hi, Ext.refl _, rfl, fun _ _ _ _ => rfl⟩
@@ -355,13 +445,14 @@ theorem prodOps_spec (ri : Nat) : ∀ (l : List ((Key × Key) × F128)) (st st' 
       obtain ⟨ob, st3, hb, hr⟩ := bm_bind hr
       obtain ⟨ps', st4, hc, hr⟩ := bm_bind hr
       cases hr
-      obtain ⟨h2i, h2e, -, -, h2k, ta, hta, hoa⟩ := varOp_spec hi ha
-      obtain ⟨h3i, h3e, -, -, h3k, tb, htb, hob⟩ := varOp_spec h2i hb
+      obtain ⟨h2i, h2e, -, -, h2k, opa, hopa, hoa⟩ := varOp_spec hi ha
+      obtain ⟨h3i, h3e, -, -, h3k, opb, hopb, hob⟩ := varOp_spec h2i hb
       obtain ⟨h4i, h4e, h4k, hval⟩ := prodOps_spec ri rest st3 st' ps' h3i hc
       refine ⟨h4i, h2e.trans (h3e.trans h4e), by rw [h4k, h3k, h2k], fun S V hSV hV => ?_⟩
       have hx : x = 1 := by simpa using hx1
-      rw [mulSum_cons, hval S V hSV hV, tEval, hx, opValue_single w _ ((h3e.trans (h4e.trans hSV)).ops? hoa),
-        opValue_single w _ ((h4e.trans hSV).ops? hob), atom_val w comb cons hta hV, atom_val w comb cons htb hV]
+      rw [mulSum_cons, hval S V hSV hV, tEval, hx,
+        opValue_atom w comb cons ((h3e.trans (h4e.trans hSV)).ops? hoa) hopa hV,
+        opValue_atom w comb cons ((h4e.trans hSV).ops? hob) hopb hV]
       (apply fOf_injective; simp only [fOf_add, fOf_mul, fOf_one]; ring)
 
 /-- A key's consistency sum, or zero. -/
@@ -529,9 +620,9 @@ theorem buildRes_spec {fin ri : Nat} {f : Lin} {st st' : BSt} {res : Res} (hi : 
       (∀ r', kapSum st'.kappa r' cons =
         kapSum st.kappa r' cons + (if ri = fin + r' then tEval (valOf sh w comb cons) (consOf f) else 0)) ∧
       (consOf f ≠ [] → ri = fin ∨ ri = fin + 1) ∧
-      ∀ (S : GfS) (V : Array F128), ExtTo st' S.ops V → V.size = comb0 →
+      (∀ (S : GfS) (V : Array F128), ExtTo st' S.ops V → V.size = comb0 →
         resValue S w (V ++ comb) res = noCons (valOf sh w comb cons) f + (if consOf f = [] then 0 else
-          valOf sh w comb cons (.acc1 (ri - fin)) + valOf sh w comb cons (.acc0 (ri - fin))) := by
+          valOf sh w comb cons (.acc1 (ri - fin)) + valOf sh w comb cons (.acc0 (ri - fin)))) := by
   unfold buildRes at hr
   obtain ⟨acc, st1, h1, hr⟩ := bm_bind hr
   obtain ⟨a1, a2, a3, a4, aks, afin, aval⟩ := accTerms_spec w comb cons h1
@@ -571,8 +662,8 @@ theorem buildAll_spec {fin : Nat} : ∀ (fs : List Lin) (ri : Nat) (st st' : BSt
       (∀ r', kapSum st'.kappa r' cons = kapSum st.kappa r' cons +
         (if ri ≤ fin + r' then tEval (valOf sh w comb cons) (consOf (fs.getD (fin + r' - ri) {})) else 0)) ∧
       (∀ fi ∈ fs.zipIdx ri, consOf fi.1 ≠ [] → fi.2 = fin ∨ fi.2 = fin + 1) ∧
-      ∀ (S : GfS) (V : Array F128), ExtTo st' S.ops V → V.size = comb0 →
-        rs.toList.map (resValue S w (V ++ comb)) = (fs.zipIdx ri).map (resForm (valOf sh w comb cons) fin)
+      (∀ (S : GfS) (V : Array F128), ExtTo st' S.ops V → V.size = comb0 →
+        rs.toList.map (resValue S w (V ++ comb)) = (fs.zipIdx ri).map (resForm (valOf sh w comb cons) fin))
   | [], ri, st, st', rs, hi, hr => by
     cases hr
     refine ⟨hi, Ext.refl _, fun r' => ?_, by simp, fun _ _ _ _ => rfl⟩
@@ -619,4 +710,4 @@ theorem kapSum_zero {K : Array (Array (Array F128))}
 
 end Build
 
-end FlockVBridge.Algebra
+end Flock.RecAlgebra

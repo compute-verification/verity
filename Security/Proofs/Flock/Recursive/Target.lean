@@ -221,8 +221,9 @@ theorem flock_inner_sound_fast100 (A : Arith F K) (hA : A.Correct) (cls : HClass
     (ENNReal.ofReal_le_ofReal (tableError_le_of_le_33 hm1 hm2 hsch _ hshape))
 
 /-- **C-Flock's compiled inner protocol on the class**: `flockInner` with the compiled table (`Model.tableCL` under the
-leaf scheme `Lf`) as the verifier. Its round messages are the level-0 cap, each round's proof messages and Merkle tops,
-and the openings with their salts, which is what the firewall commits and V* registers; the oracles are never sent
+leaf scheme `Lf`) as the verifier. Its round messages are the level-0 cap, each round's proof messages and Merkle tops
+(each of rep 0's steps after the prover's choice `true`, as `interleave` reads it), and, in the round after the last
+coin, the openings with their salts, which is what the firewall commits and V* registers; the oracles are never sent
 whole. Its statements and their truth are `flockInner`'s. -/
 noncomputable def flockInnerCL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (cls : HClass) (regs : List (Region cls.kLog (cls.m - cls.kLog)))
