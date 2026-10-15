@@ -86,9 +86,9 @@ def table(rows):
             by[key][r["route"]] = r
     print(
         "| n | S | T_int8 ms (each program) | T_tensor/T_int8 (route) | best route | α | b | T_best/T_tensor | η̂ | "
-        "best lookup / own_mma | η̂_note | SM clock MHz |"
+        "fused FR / fused α=0 | fused DP4A(+HFMA2) / fused α=0 | η̂_note | SM clock MHz |"
     )
-    print("|---|---|---|---|---|---|---|---|---|---|---|---|")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for n, a in sorted(by, key=keyorder):
         d = by[(n, a)]
         full = {k: v for k, v in d.items() if kind(k) != "part"}
@@ -100,13 +100,14 @@ def table(rows):
         look = [v for k, v in full.items() if kind(k) == "lookup"]
         tfix = min(v["median_ms"] for v in fixed)
         tlook = min(v["median_ms"] for v in look) if look else float("nan")
-        fused_look = [v for k, v in full.items() if k.startswith("fused_fr_b")]
-        own = d.get("own_mma")
-        inkernel = (
-            (min(v["median_ms"] for v in fused_look) / own["median_ms"])
-            if fused_look and own
-            else float("nan")
-        )
+        # the co-issue hybrids against the same 512-thread kernel with its CUDA-core warps idle (α = 0): same occupancy
+        # and epilogue, so the ratio is what co-issue itself gains or loses
+        a0 = d.get("fused_fr_a0")
+
+        def inkernel(prefixes):
+            h = [v["median_ms"] for k, v in full.items() if k.startswith(prefixes)]
+            return min(h) / a0["median_ms"] if h and a0 else float("nan")
+
         clk = (
             min(v["clk_min"] for v in full.values()),
             max(v["clk_max"] for v in full.values()),
@@ -115,7 +116,8 @@ def table(rows):
         print(
             f"| {n} | {a} | {t8} | {tens['median_ms']:.4f} ({tens['route']}) | {best['route']} | "
             f"{best['alpha']:.4f} | {best['b']} | {best['median_ms'] / tens['median_ms']:.4f} | "
-            f"{1 - best['median_ms'] / tens['median_ms']:+.4f} | {inkernel:.4f} | {1 - tlook / tfix:+.4f} | "
+            f"{1 - best['median_ms'] / tens['median_ms']:+.4f} | {inkernel('fused_fr_b'):.4f} | "
+            f"{inkernel(('fused_dp4a', 'fused_mix')):.4f} | {1 - tlook / tfix:+.4f} | "
             f"{clk[0]}–{clk[1]} |"
         )
 
@@ -190,14 +192,14 @@ def detail(events):
             pre[(e["n"], e["alphabet"])][e["route"]] = e
     if pre:
         print(
-            "\nFused co-issue α sweep: pre-pass time / own_mma's pre-pass, best b per α (interleaved best in the main "
-            "table):\n"
+            "\nFused co-issue α sweep: pre-pass time over the same kernel's at α = 0 (fused_fr_a0: CUDA-core warps idle, "
+            "same occupancy and epilogue), best b per α (interleaved best in the main table):\n"
         )
-        print("| n | S | role | α·64 : T/T_own_mma |")
+        print("| n | S | role | α·64 : T/T_fused α=0 |")
         print("|---|---|---|---|")
         for key in sorted(pre, key=keyorder):
             d = pre[key]
-            own = d.get("own_mma")
+            own = d.get("fused_fr_a0")
             if not own:
                 continue
             for role, pat in (
