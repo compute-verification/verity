@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """PoUW windows restricted to the served FP8 GEMMs (CMP-8 round 2, section 2 of the saturation follow-up), derived.
 
-  python windows_eps.py receipt-table.json gap-filler.json cutlass-receipt.json cutlass-corun.json [--cheat C ...] [--json OUT]
+  python windows_eps.py receipt-table.json gap-filler.json cutlass-receipt.json cutlass-corun.json [--cheat C ...]
+      [--more T ...] [--json OUT]
+
+--more adds the designs a later run measured (`cutlass_receipt_table.py --json` over a cheat run, such as CR_FORCED's)
+that the first table lacks, at their own run's rate kept; its cheater variants are left out.
 
 Inputs: `cutlass_receipt_table.py --json` over a cgemm run (rate kept per kernel and phase), `gap_filler.py`'s JSON,
 that cgemm run's own `cutlass-receipt.json` (the receipt-free kernel's time per linear, for the wave tails), and a corun
@@ -23,6 +27,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 
 F = 0.001
 RHO = 8
@@ -42,6 +47,7 @@ DESIGNS = [  # name, prefill kernel, decode kernel
     ("1× imad, L = 128, spread", "p_imad_p1s", "d_alu_p1"),
     ("1× alu, L = 64", "p_alu_g2", None),
     ("1× alu, L = 32", "p_alu_g4", "d_alu_g4"),
+    ("1× alu, L = 32, 1 forced step", "p_alu_g4_f1", None),
     ("3× alu, L = 128, spread (crossover)", "p_alu3_p1s", "d_alu16_p1"),
 ]
 SCENARIOS = [  # name, measured idle SM-time as served?, ν_f (CUDA slack a fused cheater uses; None: measured)
@@ -120,6 +126,7 @@ def main():
     ap.add_argument("cutlass")
     ap.add_argument("corun")
     ap.add_argument("--cheat", action="append", default=[])
+    ap.add_argument("--more", action="append", default=[])
     ap.add_argument("--json")
     a = ap.parse_args()
     idle = measured_idle(json.load(open(a.corun)))
@@ -129,6 +136,11 @@ def main():
             cheat = cheat or {}
             cheat[key_] = max(cheat.get(key_, 0.0), v)
     tab = json.load(open(a.table))
+    for t in map(lambda p: json.load(open(p)), a.more):
+        have = {r["kernel"] for r in tab["rows"]}
+        new = lambda k: k not in have and not re.search(r"_x\d+$", k)
+        tab["rows"] += [r for r in t["rows"] if new(r["kernel"])]
+        tab["phases"] += [p for p in t["phases"] if new(p["kernel"])]
     kept = {(p["kernel"], p["phase"]): p["rate_kept"] for p in tab["phases"]}
     meta = {r["kernel"]: r for r in tab["rows"]}
     cr = json.load(open(a.cutlass))
