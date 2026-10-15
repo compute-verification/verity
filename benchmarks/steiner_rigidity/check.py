@@ -393,6 +393,12 @@ def run_dag(nodes, targets, p, shape):
     return lhs, rhs, val
 
 
+def _ancestors(x, hpar):
+    while x is not None:
+        yield x
+        x = hpar[x]
+
+
 def part4(rng, p=10007):
     # Strassen 2x2 as an accumulate-and-merge DAG. Rows (i,k) -> 2i+k, columns (j,k') -> 2j+k'.
     def x(i, k):
@@ -421,6 +427,18 @@ def part4(rng, p=10007):
     loss = sum(rank(val[nd[3]], p) for nd in nodes if nd[0] == "merge")
     print(f"[merges] Strassen DAG: 7 products, 8 merges, rank of the flattening {rank(lhs, p)}, "
           f"bound 7 >= {rank(lhs, p)} - {loss}: ok")
+    # The per-product form: with the same labels, sum over products of rank Lambda(lambda_e) >= rank of the flattening.
+    cells = list(targets)
+    hpar = [None] + [0] * 7 + [nd[1] for nd in nodes[8:]]
+    below = lambda w: {c for c, x in targets.items() if any(y == w for y in _ancestors(x, hpar))}
+    tree = laminar_to_tree([below(w) for w in range(len(nodes))], cells)
+    a, b, _ = check_tree(tree, p, check_rep=False)
+    index = {t: i for i, t in enumerate(leaves_of(tree))}
+    coeff = {(0, 0): [1, 0, 0, 1, -1, 0, 1], (0, 1): [0, 0, 1, 0, 1, 0, 0], (1, 0): [0, 1, 0, 1, 0, 0, 0],
+             (1, 1): [1, -1, 1, 0, 0, 1, 0]}
+    ranks = [rank(sum(coeff[t][e] * np.outer(a[:, index[t]], b[:, index[t]]) for t in cells) % p, p) for e in range(7)]
+    assert sum(ranks) >= 8
+    print(f"[merges] Strassen, per-product form: rank Lambda(lambda_e) = {ranks}, sum {sum(ranks)} >= 8: ok")
     for trial in range(200):
         shape = (4, 4)
         nodes = [("root",)]
