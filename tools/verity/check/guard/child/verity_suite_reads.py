@@ -62,13 +62,16 @@ class Reads:
         return os.path.normpath(path if os.path.isabs(path) else os.path.join(os.getcwd(), path))
 
     def classify(self, path: str) -> tuple[str, str] | None:
-        """("R", path) for one of the suite's test modules, ("O", path) for a repository file outside the inputs, else None."""
+        """("R", path) for one of the suite's test modules, ("O", path) for a repository file outside the inputs, else None.
+        An outside read is reported as the file to declare: a cached module's read names its source, as `outside` judges it
+        (on 14 Oct a failure naming raw `__pycache__/*.pyc` paths was twice misread as the guard not covering declared
+        sources' bytecode)."""
         path = self._abs(path)
         name = os.path.basename(path)
         if path.startswith(self.suite) and name.startswith("test_") and name.endswith(".py"):
             return "R", os.path.relpath(path, self.root)
         if self.outside(path):
-            return "O", os.path.relpath(path, self.root)
+            return "O", os.path.relpath(_source(path), self.root)
         return None
 
     def outside(self, path: str) -> bool:

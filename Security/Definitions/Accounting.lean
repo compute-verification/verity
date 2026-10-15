@@ -23,6 +23,7 @@ import Definitions.Accounting.RateAuditJoint
 import Definitions.Accounting.RateAuditPartial
 import Definitions.Accounting.RateAuditRemote
 import Definitions.Accounting.RateAuditSketch
+import Definitions.Accounting.RateAuditSketchDeployed
 import Definitions.Accounting.RateAuditSketchInteractive
 import Definitions.Accounting.RateAuditSketchLayout
 import Definitions.Accounting.Remote

@@ -976,6 +976,28 @@ def test_the_source_scan_refuses_kernel_bypasses_but_not_prose(tmp_path):
     assert [h.split(" names ")[0] for h in hits] == ["unchecked: P/A.lean:2", "unchecked: lakefile.toml:3"]
 
 
+def test_each_heartbeat_override_is_listed_with_its_value_reason_and_module_build_time_and_none_is_refused(tmp_path):
+    """`heartbeats` (Daniel, 2026-10-09: not banned, listed): an override with its reason ending its line, one with the
+    comments just above as its reason, one with none, `synthInstance`'s, and one in a comment, which is not an override;
+    each with its module's time from the audit's build log (`build_seconds`, which skips a non-module like `:c.o`), or
+    None for a module the build didn't build."""
+    (tmp_path / "P").mkdir()
+    (tmp_path / "P" / "A.lean").write_text(
+        "set_option maxHeartbeats 400000 in -- the `omega` over 40 cases\ntheorem a : True := trivial\n\n"
+        "-- unfolding `step` twice;\n-- measured 9 s\nset_option maxHeartbeats 0 in\ntheorem b : True := trivial\n")
+    (tmp_path / "P" / "B.lean").write_text("theorem c : True := trivial\nset_option synthInstance.maxHeartbeats 100000\n"
+                                           "/- set_option maxHeartbeats 1 in -/\n")
+    log = tmp_path / "build.log"
+    log.write_text("✔ [1/3] Built P.A (1m 2.5s)\n✔ [2/3] Built P.A:c.o (900ms)\n✔ [3/3] Built P.C (250ms)\n")
+    assert A.build_seconds([log, tmp_path / "missing.log"]) == {"P.A": 62.5, "P.C": 0.2}
+    got = A.heartbeats(tmp_path, A.lean_modules(tmp_path), A.build_seconds([log]))
+    assert [(h["file"], h["line"], h["option"], h["value"], h["reason"], h["module_seconds"]) for h in got] == [
+        ("P/A.lean", 1, "maxHeartbeats", 400000, "the `omega` over 40 cases", 62.5),
+        ("P/A.lean", 6, "maxHeartbeats", 0, "unfolding `step` twice; measured 9 s", 62.5),
+        ("P/B.lean", 2, "synthInstance.maxHeartbeats", 100000, None, None)]
+    assert A.scans(tmp_path, A.lean_modules(tmp_path), {}) == []
+
+
 def test_the_dependency_scan_reads_what_the_build_takes_from_fetched_packages(tmp_path):
     dep, other = tmp_path / ".lake" / "packages" / "dep", tmp_path / ".lake" / "packages" / "other"
     lib = dep / ".lake" / "build" / "lib" / "lean"
