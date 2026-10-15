@@ -1,9 +1,11 @@
 """The receipt φ candidates of `phi.cu`, word for word in Python (no numpy, so `gate.py` runs on a node's bare Python).
 
-Each candidate absorbs committed words p into a chain value, keyed by position t (KA/KB odd, KK addends, all from
+Each candidate absorbs committed words p into a chain value, keyed by position t (KA/KB odd, KK/KC addends, all from
 `keys(kseed)` exactly as `phi.cu`'s `set_keys`). `absorb(kind, state, words, t0, keys)` takes the state as (y, z): z is
 used only by the wide kinds, mum (a 64-bit state, y = hi, z = lo) and duo (two words), which `finish` folds into the
-32-bit receipt. The paired kinds (ram, xma) take words two at a time, keyed by the first word's position.
+32-bit receipt. duo2's state is (y, z, y2, z2): two duo lanes absorbing the same word, lane 2 with multiplier KB,
+addend KC and its own rotations. The paired kinds (ram, xma) take words two at a time, keyed by the first word's
+position.
 
 ``OPS`` is the SASS each candidate should compile to per absorbed word; `sass_mix.py` counts what it does compile to.
 """
@@ -13,9 +15,9 @@ from __future__ import annotations
 M32 = 0xFFFFFFFF
 M64 = (1 << 64) - 1
 NKEY = 32
-KINDS = ("mad", "ra", "ram", "xma", "ar", "mum", "xsm", "xsm4", "mxm", "chi", "xsm2", "duo")
+KINDS = ("mad", "ra", "ram", "xma", "ar", "mum", "xsm", "xsm4", "mxm", "chi", "xsm2", "duo", "duo2")
 PAIRED = ("ram", "xma")
-WIDE = ("mum", "duo")
+WIDE = ("mum", "duo", "duo2")
 OPS = {
     "mad": "IMAD (y*a_t + p)",
     "ra": "LEA.HI or SHF.L.W+IADD (rotl(y, r_t) + p)",
@@ -29,7 +31,14 @@ OPS = {
     "chi": "LOP3 (y^p^k_t), 2 SHF.L.W (rot 1, rot 2), LOP3 (u ^ ~r1 & r2)",
     "xsm2": "SHF, LOP3, IMAD, SHF, LOP3, IMAD",
     "duo": "LOP3 (y^p^k_t), IMAD (u*a_t + z), LEA.HI or SHF.L.W+IADD (rotl(u, r_t) + y')",
+    "duo2": "duo twice: lane 1 (a_t, k_t, R1), lane 2 (b_t, c_t, R2) on the same word",
 }
+
+# duo2's rotations: lane 1 a permutation of 1..31 (period 31), lane 2 of 2..30 (period 29), so the two lanes repeat a
+# rotation together only 899 words apart. In each lane no 2, 3 or 4 consecutive rotations sum to a multiple of 32, and
+# the lanes differ at every position of a 256-word block.
+R1 = (15, 18, 20, 5, 29, 25, 4, 9, 1, 6, 12, 28, 8, 7, 31, 19, 10, 17, 3, 11, 27, 14, 2, 26, 16, 30, 13, 23, 21, 24, 22)
+R2 = (6, 23, 7, 19, 4, 14, 10, 12, 9, 28, 11, 20, 26, 2, 22, 17, 5, 16, 15, 3, 25, 8, 13, 29, 30, 27, 21, 24, 18)
 
 
 def lowbias32(x: int) -> int:
@@ -57,18 +66,31 @@ def rot_of(t: int) -> int:
 
 
 class Keys:
-    def __init__(self, ka, kb, kk):
+    def __init__(self, ka, kb, kk, kc=None):
         self.ka, self.kb, self.kk = list(ka), list(kb), list(kk)
+        self.kc = list(kc) if kc is not None else [0] * len(self.ka)
 
 
 def keys(kseed: int) -> Keys:
     ka = [gen(kseed, 1, i, 0) | 1 for i in range(NKEY)]
     kb = [gen(kseed, 2, i, 0) | 1 for i in range(NKEY)]
     kk = [gen(kseed, 3, i, 0) for i in range(NKEY)]
-    return Keys(ka, kb, kk)
+    kc = [gen(kseed, 4, i, 0) for i in range(NKEY)]
+    return Keys(ka, kb, kk, kc)
 
 
-def absorb(kind: str, st: tuple[int, int], p: list[int], t0: int, k: Keys) -> tuple[int, int]:
+def absorb(kind: str, st: tuple[int, ...], p: list[int], t0: int, k: Keys) -> tuple[int, ...]:
+    if kind == "duo2":
+        y, z, y2, z2 = st
+        for i, w in enumerate(p):
+            t = t0 + i
+            u = y ^ w ^ k.kk[t]
+            y = (u * k.ka[t] + z) & M32
+            z = (rotl(u, R1[t % 31]) + y) & M32
+            u = y2 ^ w ^ k.kc[t]
+            y2 = (u * k.kb[t] + z2) & M32
+            z2 = (rotl(u, R2[t % 29]) + y2) & M32
+        return y, z, y2, z2
     y, z = st
     n = len(p)
     step = 2 if kind in PAIRED else 1
@@ -114,8 +136,12 @@ def absorb(kind: str, st: tuple[int, int], p: list[int], t0: int, k: Keys) -> tu
     return y, z
 
 
-def finish(kind: str, st: tuple[int, int]) -> int:
-    """The block's receipt: mum's hi ^ lo, duo's y ^ rotl(z, 16), every other kind's y."""
+def finish(kind: str, st: tuple[int, ...]) -> int:
+    """The block's receipt: mum's hi ^ lo, duo's y ^ rotl(z, 16), duo2's lanes so folded with lane 2 rotated by 8,
+    every other kind's y."""
+    if kind == "duo2":
+        y, z, y2, z2 = st
+        return y ^ rotl(z, 16) ^ rotl(y2 ^ rotl(z2, 16), 8)
     y, z = st
     return y ^ z if kind == "mum" else y ^ rotl(z, 16) if kind == "duo" else y
 
@@ -126,7 +152,8 @@ PU, PW = 4, 8
 def pure_chains(kind: str, iters: int, seed: int, kseed: int, tid: int) -> list[int]:
     """`pure_k<kind>`'s PU output words for thread `tid`: chain u absorbs chain u+1's state (and u+2's, for a pair)."""
     k = keys(kseed)
-    st = [(gen(seed, tid, u, 100), gen(seed, tid, u, 101)) for u in range(PU)]
+    n = 4 if kind == "duo2" else 2
+    st = [tuple(gen(seed, tid, u, 100 + j) for j in range(n)) for u in range(PU)]
     step = 2 if kind in PAIRED else 1
     for _ in range(iters):
         for r in range(0, PW, step):
