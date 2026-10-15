@@ -24,9 +24,9 @@ its own root left the node. So every read serves at most one receipt of the sess
 (`IntegrityProfile.bound`). Pooled over the session's windows instead, the openings bound the wrong receipts of all
 of them at once, and each window's share, except with \(\delta\) for the session (§10).
 
-`ledger` turns that into γ, given the node's capacity \(R\) (HBM plus host DRAM read bandwidth; specified or measured,
-§1 "Which \(R\) is the headline") and its
-on-chip storage \(S_{\text{chip}}\). Over the session's span \(\Sigma = D_{W-1} - b_{-1}\), the reads of registered
+`ledger` turns that into γ, given the node's capacity \(R\) (its read bandwidth over every registered tier, its GPUs'
+HBM plus its host's DRAM; specified or measured, §1 "The node, and its one \(R\)" and "Which \(R\) is the headline")
+and its on-chip storage \(S_{\text{chip}}\). Over the session's span \(\Sigma = D_{W-1} - b_{-1}\), the reads of registered
 data are at least \((1 - \gamma) R \Sigma\), with
 
 \[
@@ -38,7 +38,7 @@ data are at least \((1 - \gamma) R \Sigma\), with
 | \(\mu_{\text{timing}}\) | \(1 - \sum_t U_t b / (R\Sigma)\): the span the receipts don't fill (the gap \(g\) after each pass, the session's two ends, blocks a plan leaves out) | the record |
 | \(\mu_{\text{sample}}\) | \(\sum_t m^*_t\, b / (R\Sigma)\) read per window (`Ledger.sample`), or the pooled bound's wrong receipts \(\cdot\, b / (R\Sigma)\) read over the horizon (`Ledger.horizon`, §10) | the record's profiles, at δ |
 | \(\mu_{\text{chip}}\) | \(\sum_t P_t S_{\text{chip}} / (R\Sigma)\): each pass, what is held on chip needn't be read again | \(S_{\text{chip}}\), measured |
-| \(\lambda\) | AuditRO's slack: per pass of \(k\) receipts (every certified one, in either reading), `named_bits(k)`, a whole number of bits at least \(\log_2(q^k/k!) \ge \log_2 C(q, k)\) at \(q = 2^{64}\) (`queries_log2`), and `slack_log2`; 0.125% at the whole HBM's 22.9M 4 KiB blocks a pass (41.0 bits a block), more than \(\mu_{\text{sample}}\) | proved (`Bandwidth.Guarantees.AuditRO`, applied per pass) |
+| \(\lambda\) | AuditRO's slack: per pass of \(k\) receipts (every certified one, in either reading), `named_bits(k)`, a whole number of bits at least \(\log_2(q^k/k!) \ge \log_2 C(q, k)\) at \(q = 2^{64}\) (`queries_log2`), and `slack_log2`; 0.116% at the node's 192.6M 4 KiB blocks a pass over every tier (37.9 bits a block), more than \(\mu_{\text{sample}}\) | proved (`Bandwidth.Guarantees.AuditRO`, applied per pass) |
 | \(\mu_{\text{rebuild}}\) | \(C_{\text{sq}} b / (E_{\text{sq}} R)\): blocks re-encoded from their payloads in place of reads, each at least the record's codec's \(E_{\text{sq}}\) squarings (`Codec.encode_squarings`: 98,016 at p1024/k3/masked, 65,344 at k = 2, 65,152 at p512/k2) at the node's stated ceiling of \(C_{\text{sq}}\) squarings a second at that width (`Rebuild`) | the record's codec, and assumption 5 stated per width (`WorkHardness(p, k)`) |
 | \(\mu_{\text{host}}\) | the host tier's own shortfall, and host DRAM bandwidth PCIe can't carry | a model, measured capacities |
 | \(\mu_{\text{link}}\) | under a registration that binds \(z\) only (0 otherwise): relays that meet \(z\) and a copy of the block over a link (§4) | a model |
@@ -46,10 +46,11 @@ data are at least \((1 - \gamma) R \Sigma\), with
 The protocol bounds the first four, prices \(\mu_{\text{rebuild}}\) from the record's codec (its name and parameters)
 at a stated squaring ceiling, and passes the last two through: the record can't bound them (a protocol carries no
 policy parameter). `ledger` takes the rebuild model as a `Rebuild(codec, squarings_per_s)` and refuses one of another
-codec than the record's, or a bare fraction. At the stated ceiling, 1.597 × `kv.cu`'s 1.499·10^10 squarings a second
-at 1,024 bits for each RTX PRO 6000 with its share of the host (ra-squaring-ceiling, #1887; 1.567 × 5.13·10^10 at 512
-bits), and its measured read rate of 1.488 TB/s, \(\mu_{\text{rebuild}}\) is 0.067% under the default codec, 0.10% at
-k = 2 and 0.34% under p512/k2 (`timing.SQUARINGS_PER_S`, `timing.READ_BYTES_PER_S`). The failure probability is \(W\delta\) for a session of \(W\) windows read per window, or
+codec than the record's, or a bare fraction. The stated ceiling is the node's, the sum over its devices: 1.597 ×
+`kv.cu`'s 1.499·10^10 squarings a second at 1,024 bits for each RTX PRO 6000 with its share of the host
+(ra-squaring-ceiling, #1887; 1.567 × 5.13·10^10 at 512 bits), 1.915·10^11 for the node's eight. There, and at the
+node's measured \(R\) of 12.92 TB/s, \(\mu_{\text{rebuild}}\) is 0.062% under the default codec, 0.093% at k = 2 and
+0.31% under p512/k2 (`timing.SQUARINGS_PER_S`, `timing.READ_BYTES_PER_S`). The failure probability is \(W\delta\) for a session of \(W\) windows read per window, or
 \(\delta\) read over the horizon, plus \(2^{-\text{slack}}\) per pass, plus \(s/2^{512}\) per window for guessing a
 receipt. Under the default receipt kind, sketch-sha512, a receipt also rests on `RateAuditSketch`, which adds at most
 \(C \cdot 2^{-95.12}\) a session at 16 rows for a prover of \(C\) SHA-512 compressions (`timing.sketch_failure`, §4):
@@ -69,26 +70,51 @@ charged \(A\) and the rest of the pass in flight at its challenge, where the ses
 \(\mu_{\text{timing}}\) is up to about \((A + t_{\text{pass}})/(T + A)\) (§10).
 
 The window is stated: \(T\) = 60 s (`Params.window_ns`, §2), with 33,273 openings a window (`Params.samples`), 555 a
-second. There, on one RTX PRO 6000 with its whole HBM as the store, every window's whole \(\gamma_t\) is under 1%:
-0.745–0.776% in the worst window at RTT 1–20 ms. The horizon's 0.15% over 10 minutes is stated for its pooled
-\(\mu_{\text{sample}}\) (0.0083%), with its whole γ (0.56%) reported beside it: \(\mu_{\text{chip}}\) exceeds 0.15%
-by itself, and λ with \(\mu_{\text{rebuild}}\) (§10, `timing.stated`). Below about
-33 GB a GPU no \(T\) meets 1% (§10, `timing.store_floor`). 20 s and 1 s are options with their own readings: at 20 s
-and 11,091 openings every window's \(\mu_{\text{sample}}\) is 0.25% and its whole \(\gamma_t\) 1.23–1.32%, and at 1 s
-and 2,773 its \(\mu_{\text{sample}}\) is under 1% and its whole \(\gamma_t\) 5–14%.
+second. There, on one node whose store spans every tier (94 GB of each GPU's HBM and host DRAM's share, 789 GB,
+`timing.spanning`), every window's whole \(\gamma_t\) is under 1% at the measured \(R\): 0.885–0.917% in the worst
+window at RTT 1–20 ms. The horizon's 0.15% over 10 minutes is stated for its pooled \(\mu_{\text{sample}}\)
+(0.0083%), with its whole γ (0.66%) reported beside it: \(\mu_{\text{chip}}\) exceeds 0.15% by itself, and λ with
+\(\mu_{\text{rebuild}}\) (§10, `timing.stated`). Below about 372 GB over every tier (44 GB a GPU) no \(T\) meets 1%
+(§10, `timing.store_floor`). 20 s and 1 s are options with their own readings: at 20 s and 11,091 openings every
+window's \(\mu_{\text{sample}}\) is 0.25% and its whole \(\gamma_t\) 1.26–1.35%, and at 1 s and 2,773 its
+\(\mu_{\text{sample}}\) is under 1% and its whole \(\gamma_t\) 5–11%.
 
-**Which \(R\) is the headline** (Daniel, 13 Oct). γ is reported twice: against the GPU's specified read bandwidth,
-which is the headline, and against the measured one beside it. The figures above are at the measured \(R\) = 1.488
-TB/s. The RTX PRO 6000 Server Edition is specified at 1.597 TB/s, which no measured kernel reaches, so at spec every
-reading also carries that gap: \(\gamma_{\text{spec}} = 1 - (1 - \gamma_{\text{meas}})\,R_{\text{meas}}/R_{\text{spec}}\),
-about 7.5% for the worst stated window. The 1% per window holds at the measured \(R\) only. The two-machine sessions
-over an 85 GiB store read 0.0997 and 0.0999 at spec and 0.0659 and 0.0661 at the measured read rate, both
-honest sessions accepted and a prover dropping 1/16 of its blocks rejected in its first window (#2005, #2028;
-verifier r20261014-193042-3d4f, prover r20261014-193057-8fec). Either reading's \(R\) is the verifier's, never the
-prover's: a node's own calibration can only raise it, because every term but the timing term is a fixed byte count
-over \(R\Sigma\), and a prover reporting a slower read would shrink them all with no more bytes read (MEM-24: 0.066 read as
-0.0057 at the slowest calibration still accepted). The measured reading takes the fastest read the verifier has seen on
-the GPU, 1,539 GB/s (`benchmarks/remote_session/verifier.py`'s `MEASURED_BYTES_PER_S`). \(R\) is the rate of plain, incompressible reads,
+**The node, and its one \(R\)** (MEM-26). The prover is the whole node (below), so every capacity a ledger takes is
+the node's, the sum over its devices, whatever share of the node the store is on:
+
+- \(R\) is the node's read capacity over every registered tier: its 8 GPUs' HBM plus its host's DRAM. Measured, that
+  is 8 × 1,539 + 606.8 = 12,918.8 GB/s (`timing.READ_BYTES_PER_S`); specified, 8 × 1,597 + 819.2 = 13,595.2 GB/s
+  (`timing.SPEC_BYTES_PER_S`).
+- \(S_{\text{chip}}\) is every GPU's on-chip storage and the host's caches: 8 × 263,163,904 + 940,435,456 =
+  3,045,746,688 B (`timing.CHIP_BYTES`; the host's part, two Xeon 6776P sockets' caches, is an estimate).
+- \(C_{\text{sq}}\) is the sum of the devices' ceilings, 8 × one GPU's share (`timing.SQUARINGS_PER_S`).
+
+One device's own values are `timing`'s `GPU_` and `HOST_` constants. A device the store isn't on can still hold store
+bytes on chip and re-encode blocks, which is why \(S_{\text{chip}}\) and \(C_{\text{sq}}\) are the node's in every
+session (the red team's R6, F1). A session over part of the node, as on one GPU, establishes its certified bytes,
+\((1 - \gamma) R \Sigma\), in which \(R\) cancels, so they are the same at either \(R\). Its γ is the node's only once
+the store spans the node. A store on one GPU leaves the other GPUs and host DRAM idle, about 88% of \(R\), in
+\(\mu_{\text{timing}}\). A store in all 8 GPUs' HBM and none of host DRAM leaves host DRAM's 4.7% of \(R\) idle: 752 GB
+of HBM reads 5.56–5.59% in the worst stated window (§10). Every window under 1% needs the store over every tier, host
+DRAM holding its share.
+
+**Which \(R\) is the headline** (Daniel, 13 Oct). γ is reported twice: against the node's specified read bandwidth,
+which is the headline, and against the measured one beside it. The figures above are at the measured \(R\) = 12.92
+TB/s. The node is specified at 13.60 TB/s (the RTX PRO 6000 Server Edition's 1.597 TB/s a GPU and 16 channels of
+DDR5-6400), which no measured kernel reaches, so at spec every reading also carries that gap:
+\(\gamma_{\text{spec}} = 1 - (1 - \gamma_{\text{meas}})\,R_{\text{meas}}/R_{\text{spec}}\), 5.82–5.85% for the worst
+stated window. The 1% per window holds at the measured \(R\) only. The two-machine sessions so far are one GPU's, over
+an 85 GiB store: both honest sessions accepted and a prover dropping 1/16 of its blocks rejected in its first window
+(#2005, #2028; verifier r20261014-193042-3d4f, prover r20261014-193057-8fec). At one GPU's constants they read 0.0997
+and 0.0999 at spec and 0.0659 and 0.0661 measured. At the node's \(S_{\text{chip}}\) and \(C_{\text{sq}}\) they
+certify 416.10 and 416.01 TB of the 433.9 TB their receipts claim over 300 s (431.4 TB at one GPU's), and their γ
+against the node's \(R\) is 0.898 at spec and 0.893 measured, nearly all of it the idle node. Either reading's \(R\)
+is the verifier's, never the prover's: a node's own calibration can only raise it, because every term but the timing
+term is a fixed byte count over \(R\Sigma\), and a prover reporting a slower read would shrink them all with no more
+bytes read (MEM-24: 0.066 read as 0.0057 at the slowest calibration still accepted). The measured reading takes each
+tier's fastest measured read: 1,539 GB/s a GPU (the honest session of 14 Oct, `timing.GPU_READ_BYTES_PER_S`) and
+606.8 GB/s of host DRAM (r20261015-081037-5ecf, `timing.HOST_READ_BYTES_PER_S`), which
+`benchmarks/remote_session/verifier.py`'s ledgers take as `timing.READ_BYTES_PER_S`. \(R\) is the rate of plain, incompressible reads,
 which the store's encoded blocks are: the GPU's compression engine reads a compressible buffer faster
 (7.55 TB/s against 1.536 TB/s plain, r20261015-043430-0a05), but the encoded store reads at 1.515 TB/s under a
 compressible allocation, since the hardware compresses 128-byte units, one codec word, and no encoded word is constant
@@ -708,8 +734,8 @@ of \(T\) = 1, 20 and 60 s (the stated window), RTT 1–50 ms (half each way), \(
 
 A session's ends are its only round-trip cost, so a long session reaches the steady state \(g/(t_{\text{pass}} + g)\)
 whatever \(T\) is. At \(T\) = 1 s and \(W\) = 100 it is still 0.26–0.31% at 20 ms passes and 0.10–0.15% at 50 ms. A
-pass reads distinct blocks, so it is at most a read of the store: about 63 ms for a GPU's 94 GB at its measured
-1.488 TB/s.
+pass reads distinct blocks, so it is at most a read of the store: about 61 ms for the node's 789 GB over every tier
+at its measured 12.92 TB/s, as for each GPU's 94 GB of it at 1,539 GB/s.
 
 A window by itself does pay its ends. Its span is \(T + A\), the pass in flight at its challenge belongs to the window
 before, and its own chain starts only when that pass ends. So a window is charged \(A\) and up to a pass whatever
@@ -747,58 +773,63 @@ most \(\sum_t f_t U_t\) the bounds above allow), with `floor`, the largest \(f_t
 \(f_t\), from `floors`, is its `floor`, and \(f_t U_t\) its `horizon`), and the worst window's γ either way beside the
 session's (`worst`, `worst_horizon`). All of it starts from each window's profile and span, which the record keeps.
 
-**The whole γ.** `timing.stated` reads the claim through `ledger`: an honest 10-minute session on one RTX PRO 6000
-at its measured \(R\) = 1.488 TB/s and \(S_{\text{chip}}\) = 263,163,904 B, under the default codec at the stated
-squaring ceiling, where a pass is the store's read at \(R\). \(\mu_{\text{chip}}\) is about \(S_{\text{chip}}\) over
-the store, and a window's \(\mu_{\text{timing}}\) about \((\text{RTT} + 2 t_{\text{pass}})/T\), so the store's size
-trades one against the other. Among the grid's stores the whole HBM, 94 GB with 63 ms passes, is best except at
-\(T\) = 1 s. The worst window's terms and its \(\gamma_t\), and over the horizon's \(W\) windows the pooled
+**The whole γ.** `timing.stated` reads the claim through `ledger`: an honest 10-minute session on one node of 8 RTX
+PRO 6000s and their host, at the node's measured \(R\) = 12.92 TB/s (and at spec, 13.60 TB/s) and \(S_{\text{chip}}\)
+= 3,045,746,688 B, under the default codec at the node's stated squaring ceiling. Over every tier, the store is the
+same GB of each GPU's HBM and host DRAM's share (`timing.spanning`), and a pass is its read at \(R\). In HBM alone, it
+is the same GB a GPU and nothing on host DRAM, and a pass is its read at the GPUs' 12.31 TB/s.
+\(\mu_{\text{chip}}\) is about \(S_{\text{chip}}\) over the store, and a window's \(\mu_{\text{timing}}\) about
+\((\text{RTT} + 2 t_{\text{pass}})/T\), so the store's size trades one against the other. Among the grid's stores 94 GB
+a GPU, 789 GB over every tier with 61 ms passes, is best except at \(T\) = 1 s. The worst window's terms and its
+\(\gamma_t\), at the measured \(R\) and at spec, and over the horizon's \(W\) windows the pooled
 \(\mu_{\text{sample}}\) and the whole γ, at RTT 1 and 20 ms:
 
-| \(T\) | openings a window | store | \(\mu_{\text{timing}}\) | \(\mu_{\text{sample}}\) | \(\mu_{\text{chip}}\) | λ | \(\mu_{\text{rebuild}}\) | worst \(\gamma_t\) | \(W\) | pooled \(\mu_{\text{sample}}\) | horizon γ |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 60 s | 33,273 | 94 GB | 0.19–0.22% | 0.083% | 0.28% | 0.125% | 0.067% | 0.745–0.776% | 10 | 0.0083% | 0.563–0.567% |
-| 60 s | 33,273 | 62 GB | 0.21–0.24% | 0.083% | 0.42% | 0.127% | 0.067% | 0.911–0.942% | 10 | 0.0083% | 0.751–0.755% |
-| 60 s | 33,273 | 30 GB | 0.30–0.34% | 0.083% | 0.87% | 0.130% | 0.067% | 1.459–1.490% | 10 | 0.0083% | 1.329–1.332% |
-| 20 s | 11,091 | 94 GB | 0.51–0.60% | 0.25% | 0.28% | 0.124% | 0.067% | 1.227–1.320% | 30 | 0.0083% | 0.563–0.567% |
-| 20 s | 11,091 | 62 GB | 0.42–0.52% | 0.25% | 0.42% | 0.126% | 0.067% | 1.286–1.380% | 30 | 0.0083% | 0.751–0.755% |
-| 20 s | 11,091 | 30 GB | 0.41–0.50% | 0.25% | 0.87% | 0.129–0.130% | 0.067% | 1.728–1.821% | 30 | 0.0083% | 1.329–1.332% |
-| 1 s | 2,773 | 30 GB | 3.27–5.04% | 0.94–0.96% | 0.83–0.85% | 0.124–0.126% | 0.067% | 5.275–7.006% | 600 | 0.0017% | 1.323–1.326% |
-| 1 s | 2,773 | 94 GB | 10.97–12.53% | 0.87–0.89% | 0.24–0.25% | 0.109–0.111% | 0.067% | 12.282–13.822% | 600 | 0.0017% | 0.557–0.560% |
-| 90 s | 11,091 | 94 GB | 0.19–0.21% | 0.25% | 0.28% | 0.125% | 0.067% | 0.910–0.931% | 6 | 0.042% | 0.597–0.600% |
+| \(T\) | openings a window | store, GB a GPU | \(\mu_{\text{timing}}\) | \(\mu_{\text{sample}}\) | \(\mu_{\text{chip}}\) | λ | \(\mu_{\text{rebuild}}\) | worst \(\gamma_t\) | at spec | \(W\) | pooled \(\mu_{\text{sample}}\) | horizon γ |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 60 s | 33,273 | 789 GB, 94, every tier | 0.24–0.27% | 0.083% | 0.39% | 0.115% | 0.062% | 0.885–0.917% | 5.817–5.847% | 10 | 0.0083% | 0.657–0.660% |
+| 60 s | 33,273 | 520 GB, 62, every tier | 0.23–0.26% | 0.083% | 0.58% | 0.117% | 0.062% | 1.073–1.105% | 5.995–6.025% | 10 | 0.0083% | 0.897–0.900% |
+| 60 s | 33,273 | 252 GB, 30, every tier | 0.29–0.33% | 0.083% | 1.21% | 0.120% | 0.062% | 1.766–1.797% | 6.653–6.683% | 10 | 0.0083% | 1.654–1.657% |
+| 60 s | 33,273 | 752 GB, 94, HBM | 4.93–4.96% | 0.079% | 0.39% | 0.110% | 0.062% | 5.562–5.592% | 10.261–10.289% | 10 | 0.0079% | 5.345–5.348% |
+| 20 s | 11,091 | 789 GB, 94, every tier | 0.45–0.54% | 0.25% | 0.38% | 0.115% | 0.062% | 1.256–1.350% | 6.169–6.258% | 30 | 0.0083% | 0.657–0.660% |
+| 20 s | 11,091 | 520 GB, 62, every tier | 0.50–0.59% | 0.25% | 0.58% | 0.117% | 0.062% | 1.508–1.602% | 6.408–6.497% | 30 | 0.0083% | 0.897–0.900% |
+| 20 s | 11,091 | 252 GB, 30, every tier | 0.40–0.49% | 0.25% | 1.20% | 0.120% | 0.062% | 2.031–2.124% | 6.905–6.993% | 30 | 0.0083% | 1.654–1.657% |
+| 1 s | 2,773 | 252 GB, 30, every tier | 2.60–4.38% | 0.95–0.97% | 1.16–1.18% | 0.115–0.118% | 0.062% | 4.922–6.661% | 9.653–11.305% | 600 | 0.0017% | 1.647–1.650% |
+| 1 s | 2,773 | 789 GB, 94, every tier | 8.00–9.62% | 0.90–0.92% | 0.35–0.36% | 0.105–0.106% | 0.062% | 9.438–11.031% | 13.944–15.457% | 600 | 0.0017% | 0.651–0.654% |
+| 90 s | 11,091 | 789 GB, 94, every tier | 0.17–0.19% | 0.25% | 0.39% | 0.116% | 0.062% | 0.984–1.004% | 5.910–5.930% | 6 | 0.042% | 0.696–0.700% |
 
-At the stated \(T\) = 60 s, then, every window is under 1% for the whole \(\gamma_t\): 0.745–0.776% with the whole
-HBM as the store, and 0.91–0.94% at 62 GB. At the 20 s option, every window under 1% holds for \(\mu_{\text{sample}}\)
-(0.25%) and not for the whole \(\gamma_t\), which is 1.23% at best. At \(T\) = 90 s with 11,091 a window it is
-0.91–0.93%. The 1 s option's per-window claim is \(\mu_{\text{sample}}\) alone. Its
-whole \(\gamma_t\) is 5–14%, nearly all \(\mu_{\text{timing}}\): the window's idle ends, which the record states
-exactly.
+At the stated \(T\) = 60 s, then, every window is under 1% for the whole \(\gamma_t\) at the measured \(R\):
+0.885–0.917% with 94 GB a GPU over every tier, and 1.07–1.11% at 62 GB a GPU. At spec it is 5.8% at best, the
+measured kernels' shortfall from the datasheets. The same 94 GB a GPU in HBM alone is 5.56–5.59%, host DRAM's idle
+4.7% of \(R\) in \(\mu_{\text{timing}}\). At the 20 s option, every window under 1% holds for \(\mu_{\text{sample}}\)
+(0.25%) and not for the whole \(\gamma_t\), which is 1.26% at best. At \(T\) = 90 s with 11,091 a window it is
+0.98–1.00%. The 1 s option's per-window claim is \(\mu_{\text{sample}}\) alone. Its whole \(\gamma_t\) is 5–11%,
+nearly all \(\mu_{\text{timing}}\): the window's idle ends, which the record states exactly.
 
 **The store floor.** No \(T\) brings every window under 1% on too small a store. As \(T\) grows, a window's
 \(\mu_{\text{sample}}\) (at 555 openings a second) and its ends vanish, and its \(\gamma_t\) tends to
 \((g + (S_{\text{chip}} + \Lambda)/R + \mu_{\text{rebuild}}(t_{\text{pass}} + g))/(t_{\text{pass}} + g)\),
 where \(t_{\text{pass}}\) is the store's read at \(R\) and \(\Lambda\) a pass's `named_bits` and `slack_log2` in bytes,
-whose share a block depends on the store's size (`timing.store_floor` solves for it). Below 32.8 GB a GPU,
-\(\mu_{\text{chip}}\), λ and \(\mu_{\text{rebuild}}\) alone exceed 1%. With the chain's steady state at \(g\) =
-50 µs, no \(T\) meets 1% below 41.9 GB. The suite checks the closed form against `ledger` on a 20-minute window, 2%
-either side of it.
+whose share a block depends on the store's size (`timing.store_floor` solves for it). Below 371.9 GB over every tier
+(44.3 GB a GPU), \(\mu_{\text{chip}}\), λ and \(\mu_{\text{rebuild}}\) alone exceed 1%. With the chain's steady state
+at \(g\) = 50 µs, no \(T\) meets 1% below 449.6 GB (53.6 GB a GPU). The suite checks the closed form against `ledger`
+on a 20-minute window, 2% either side of it.
 
 **The horizon's 0.15%** is stated for its pooled \(\mu_{\text{sample}}\), with the whole γ reported beside it (Daniel,
 13 Oct: the default put to him, which applied with no objection by its deadline). The pooled
-\(\mu_{\text{sample}}\) is 0.0083% at every stated and optional \(T\), and the whole γ 0.56% at best.
-\(\mu_{\text{chip}}\) (\(S_{\text{chip}}\) over a GPU's store, 0.28% at the whole HBM) exceeds 0.15% by itself, and
-λ (41.0 bits a 4 KiB block, 0.125%) does with \(\mu_{\text{rebuild}}\). Neither λ nor \(\mu_{\text{chip}}\) shrinks
-with more openings or longer windows. The whole γ meets 0.15% at no
-\(T\) and no count of openings today. Even with λ and \(\mu_{\text{chip}}\) at 0 it would be 0.159–0.162%: the
-chain's steady state (0.079% at \(g\) = 50 µs and 63 ms passes, 0.083–0.086% with the session's ends),
-\(\mu_{\text{rebuild}}\) (0.067%) and the pooled \(\mu_{\text{sample}}\).
+\(\mu_{\text{sample}}\) is 0.0083% at every stated and optional \(T\), and the whole γ 0.66% at best.
+\(\mu_{\text{chip}}\) (the node's \(S_{\text{chip}}\) over its store, 0.39% at 94 GB a GPU over every tier) exceeds
+0.15% by itself, and λ (37.9 bits a 4 KiB block, 0.116%) does with \(\mu_{\text{rebuild}}\). Neither λ nor
+\(\mu_{\text{chip}}\) shrinks with more openings or longer windows. The whole γ meets 0.15% at no
+\(T\) and no count of openings today. Even with λ and \(\mu_{\text{chip}}\) at 0 it would be 0.156–0.159%: the
+chain's steady state (0.082% at \(g\) = 50 µs and 61 ms passes, 0.086–0.089% with the session's ends),
+\(\mu_{\text{rebuild}}\) (0.062%) and the pooled \(\mu_{\text{sample}}\).
 
-**What λ and \(\mu_{\text{chip}}\) would take** (the grid's last sections, at 94 GB and 63 ms passes). λ is
-AuditRO's \(C(q, k)\) for a pass's \(k\) receipts, bounded by \(q^k/k!\), which takes no assumption: about
-\(\log_2(e q/k)\) a receipt, 41.0 bits at 4 KiB (0.125%). Under 0.05% it may be 16.4 bits a 4 KiB receipt. Two ways
-get there:
+**What λ and \(\mu_{\text{chip}}\) would take** (the grid's last sections, at 789 GB over every tier and 61 ms
+passes). λ is AuditRO's \(C(q, k)\) for a pass's \(k\) receipts, bounded by \(q^k/k!\), which takes no assumption:
+about \(\log_2(e q/k)\) a receipt, 37.9 bits at 4 KiB (0.116%). Under 0.05% it may be 16.4 bits a 4 KiB receipt. Two
+ways get there:
 
-- **Wider receipts.** A receipt of \(m\) blocks gives 0.064%, 0.043% and 0.033% at 8, 12 and 16 KiB (bounded by
+- **Wider receipts.** A receipt of \(m\) blocks gives 0.059%, 0.040% and 0.030% at 8, 12 and 16 KiB (bounded by
   \(q^k\) instead, 64 bits a receipt, 0.098%, 0.065% and 0.049%). On the GPU a receipt's sketch is the same work a byte, and
   its hash and share of the tree are \(1/m\). #1916's τ of 1.26 a pass scales to about 1.09 at 16 KiB (from its
   measured parts; the whole isn't measured). The openings pay instead. Each carries \(m\) blocks: 20.9 KB at
@@ -806,13 +837,15 @@ get there:
   0.70–0.90 GB a window and 93–120 Mb/s per node. Each opening's proof unit also decodes \(m\) blocks (check 3).
   sketch-sha512's rate a compression goes from \(2^{-95.12}\) to \(2^{-93.88}\) at 16 KiB's 512 sectors.
   `RateAuditSketch` would need restating for a receipt of \(m\) blocks, and the registration would name \(m\).
-- **Fewer queries.** At 4 KiB, 0.05% needs \(q \le 2^{39.4}\) queries to a pass's oracle:
-  104 s of one GPU's SHA-512. No prover hardware is trusted, so the protocol can't state such a bound.
+- **Fewer queries.** At 4 KiB, 0.05% needs \(q \le 2^{42.5}\) queries to a pass's oracle:
+  874 s of one GPU's SHA-512, 109 s of the node's. No prover hardware is trusted, so the protocol can't state such a
+  bound.
 
 \(\mu_{\text{chip}}\) is \(S_{\text{chip}}\) over a pass's reads, and a pass reads each block at most once. So it
-falls only with more store read at \(R\): 526 GB a GPU for 0.05%, 5.5 times the RTX PRO 6000's 96 GB. At its whole
-HBM it is 0.274%. Host DRAM doesn't substitute. Over PCIe at 64 GB/s, a pass longer than the HBM's 63 ms read
-leaves the HBM idle: at 200 ms, \(\mu_{\text{chip}}\) is 0.085% and the HBM is idle 66% of the capacity.
+falls only with more store read at \(R\): 6.09 TB over every tier for 0.05%, 7.9 times the node's 768 GB of HBM. At
+94 GB a GPU and host DRAM's share it is 0.386%. Host DRAM beyond its share doesn't substitute: at its 606.8 GB/s, a
+pass longer than the HBM's 61 ms read leaves the HBM idle. At 200 ms, \(\mu_{\text{chip}}\) is 0.118% and 66% of the
+capacity is idle.
 
 What would lower \(\mu_{\text{chip}}\) instead is a flush. Each pass's root would key a computation that needs the
 chip's whole storage, and its output would go into the next seed, so the chip's state carries nothing of the store
@@ -826,10 +859,10 @@ into the next pass. That needs three things:
 - **The GPU's time.** At least one write and one read of \(S_{\text{chip}}\): 26–105 µs at 5–20 TB/s on chip
   (unmeasured). That adds 0.04–0.17% to the steady state.
 
-At the stated \(T\) = 60 s with 94 GB and RTT 1 ms, the horizon's whole γ is 0.56% (0.63% bounded by \(q^k\)).
-16 KiB receipts make it 0.47%, and a 26 µs flush with them 0.23%. The worst window's \(\gamma_t\) goes from 0.745% to
-0.65% and 0.41%. With λ and \(\mu_{\text{chip}}\) at 0 the horizon's γ is 0.16%, because the chain's steady state and
-\(\mu_{\text{rebuild}}\) alone exceed 0.15%.
+At the stated \(T\) = 60 s with 789 GB over every tier and RTT 1 ms, the horizon's whole γ is 0.66% (0.74% bounded
+by \(q^k\)). 16 KiB receipts make it 0.57%, and a 26 µs flush with them 0.23%. The worst window's \(\gamma_t\) goes
+from 0.885% to 0.80% and 0.46%. With λ and \(\mu_{\text{chip}}\) at 0 the horizon's γ is 0.16%, because the chain's
+steady state and \(\mu_{\text{rebuild}}\) alone exceed 0.15%.
 
 ## Appendix A. Live coins, and why the protocol doesn't use them
 
