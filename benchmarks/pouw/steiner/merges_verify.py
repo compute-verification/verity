@@ -9,7 +9,8 @@ a sum is the sum of the lifts. Same merges and copies, m times the edges.
 
 `python3 merges_verify.py check FILE.jsonl` re-checks every sat line; `lift FILE.jsonl --m 2,3,...` lifts every sat
 line and checks the result; `prefix --levels 1,2,... --m 1,2,...` builds `prefix_222` (<2,2n,2> at L = 2 with n
-levels, 7n edges, 4n - 3 merges), lifts it and checks it.
+levels, 7n edges, 4n - 3 merges), lifts it and checks it; `bounds FILE.jsonl` places known computations side by side
+on disjoint positions (`side_by_side`, with `naive` paths for the rest) and checks the <2,2,4> and <3,2,3> upper bounds.
 """
 
 from __future__ import annotations
@@ -184,6 +185,57 @@ def prefix_222(levels: int) -> list:
     return out
 
 
+def naive(a: int, b: int, c: int) -> list:
+    """One path per position, x[r][k] y[k][j] for k = 0..b-1: a·b·c edges, every prefix on the way."""
+    out: list = []
+    for r in range(a):
+        for j in range(c):
+            for k in range(b):
+                out.append(_e(0 if k == 0 else len(out), [(r, k)], [(k, j)]))
+    return out
+
+
+def side_by_side(*parts) -> list:
+    """Runs computations one after another from node 0; a part (steps, rows, cols) renames x[r][k] to x[rows[r]][k]
+    and y[k][j] to y[k][cols[j]]. Parts on disjoint positions build each other's terminals untouched."""
+    out: list = []
+    for steps, rows, cols in parts:
+        base = len(out)
+        at = lambda t: 0 if t == 0 else base + t  # noqa: E731
+        for st in steps:
+            if st["type"] == "edge":
+                out.append({"type": "edge", "from": at(st["from"]),
+                            "gx": [("x", rows[v[1]], v[2]) for v in st["gx"]],
+                            "gy": [("y", v[1], cols[v[2]]) for v in st["gy"]]})
+            else:
+                out.append({"type": st["type"], "of": [at(t) for t in st["of"]]})
+    return out
+
+
+def bounds(models: list) -> list:
+    """The upper bounds beyond the requested shapes: (name, shape, arity, steps). `models` are merges_sat lines; the
+    <2,2,2> one with two 2-summand merges and the <2,2,3> one with one merge are read from them."""
+    def pick(shape, E, M, arity):
+        for r in models:
+            if r.get("status") == "sat" and "steps" in r and r["shape"] == shape and (r["E"], r["M"], r["arity"]) == (
+                    E, M, arity):
+                return from_sat(r)
+        raise SystemExit(f"no sat model for {shape} E={E} M={M} arity={arity} in the input")
+    m2 = pick([2, 2, 2, 2], 7, 2, 2)
+    m3 = pick([2, 2, 3, 2], 11, 1, 3)
+    n2 = naive(2, 2, 2)
+    return [
+        ("<2,2,4> one-merge <2,2,2> + naive", (2, 2, 4, 2), 3,
+         side_by_side((ONE_MERGE_222, [0, 1], [0, 1]), (n2, [0, 1], [2, 3]))),
+        ("<2,2,4> two one-merge <2,2,2>", (2, 2, 4, 2), 3,
+         side_by_side((ONE_MERGE_222, [0, 1], [0, 1]), (ONE_MERGE_222, [0, 1], [2, 3]))),
+        ("<2,2,4> 2-summand <2,2,2> + naive", (2, 2, 4, 2), 2, side_by_side((m2, [0, 1], [0, 1]), (n2, [0, 1], [2, 3]))),
+        ("<2,2,4> two 2-summand <2,2,2>", (2, 2, 4, 2), 2, side_by_side((m2, [0, 1], [0, 1]), (m2, [0, 1], [2, 3]))),
+        ("<3,2,3> one-merge <2,2,3> + naive row", (3, 2, 3, 2), 3,
+         side_by_side((m3, [0, 1], [0, 1, 2]), (naive(1, 2, 3), [2], [0, 1, 2]))),
+    ]
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -197,7 +249,13 @@ def main() -> None:
     p = sub.add_parser("prefix")
     p.add_argument("--levels", default="1,2,3,4")
     p.add_argument("--m", default="1,2,4,8")
+    p = sub.add_parser("bounds", help="side-by-side upper bounds for <2,2,4> and <3,2,3> at L = 2")
+    p.add_argument("file", help="merges_sat lines holding the <2,2,2> (E=7, M=2, arity 2) and <2,2,3> (E=11, M=1) models")
     args = ap.parse_args()
+    if args.cmd == "bounds":
+        for name, (a, b, c, L), arity, steps in bounds([json.loads(line) for line in open(args.file)]):
+            print(f"bound {name} <{a},{b},{c}> L={L} arity={arity}", json.dumps(check(a, b, c, L, steps, arity)))
+        return
     if args.cmd == "prefix":
         for n in [int(x) for x in args.levels.split(",")]:
             steps = prefix_222(n)
