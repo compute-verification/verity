@@ -160,6 +160,21 @@ def test_the_assignment_check_reads_the_launch_blocks() -> None:
     assert X._assignment_ok({**L, "sorted_token_ids": None}, ids) is None
 
 
+def test_reruns_are_compared_as_bits() -> None:
+    """Two runs that wrote the same bf16 words, NaNs among them, are deterministic though `torch.equal` says they differ; a NaN
+    with one payload bit flipped, -0 for +0, another dtype or another shape is not the same words."""
+    words = torch.tensor([[0x3F80, 0x7FC0, -0x40], [0x7F81, 0x0000, -0x8000]], dtype=torch.int16)
+    a, b = words.view(torch.bfloat16), words.clone().view(torch.bfloat16)
+    assert not torch.equal(a, b) and X.same_words(a, b) and X.same_words(a.t(), b.t())
+    nan = words.clone()
+    nan[0, 1] ^= 1
+    assert torch.isnan(nan.view(torch.bfloat16)[0, 1]) and not X.same_words(a, nan.view(torch.bfloat16))
+    zero = words.clone()
+    zero[1, 1] ^= -0x8000
+    assert torch.equal(a[1, 1], zero.view(torch.bfloat16)[1, 1]) and not X.same_words(a, zero.view(torch.bfloat16))
+    assert not X.same_words(a, b.to(torch.float32)) and not X.same_words(a, b.reshape(3, 2))
+
+
 WGMMA_PTX = "wgmma.mma_async.sync.aligned.m64n16k32.f32.e4m3.e4m3 {%f1}, %rd1, %rd2, p, 1, 1;\n"
 MMAV2_PTX = ("cvt.rn.f16x2.e4m3x2 %r1, %rs1;\n" * 4 + "mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f1}, {%r1}, {%r2}, {%f2};\n" * 8)
 

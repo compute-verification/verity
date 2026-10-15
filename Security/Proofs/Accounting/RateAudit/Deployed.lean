@@ -332,6 +332,25 @@ theorem toInteractive_eq {τ : ℕ} (A : PIDevice N b h ρ S L q) (X : ℕ) (tie
   have ht : (A.toInteractive X).tags E R O = A.tags E R O := h₁
   simp only [InteractiveDevice.correct, PIDevice.correct, ht]
 
+namespace TimeBudget
+
+/-- A pass whose work is split across concurrent devices uses at most their summed rate times the pass duration. -/
+theorem work_le (A : PIDevice N b h ρ S L q) (cost : ℕ → ℕ) (k duration : ℕ) (rate : Fin k → ℕ)
+    (B : A.TimeBudget cost k duration rate) (st : Pous.Bits S) (w : IWorld N b h ρ) :
+    (A.chip st).work cost w [] ≤ (∑ i, rate i) * duration := by
+  rw [B.work_eq]
+  calc
+    ∑ i, B.workAt st w i ≤ ∑ i, rate i * duration := Finset.sum_le_sum fun i _ => B.workAt_le st w i
+    _ = (∑ i, rate i) * duration := by rw [Finset.sum_mul]
+
+/-- The explicit time budget implies the per-pass squaring ceiling used by the composed remote guarantee. -/
+theorem squaringCeiling (A : PIDevice N b h ρ S L q) (cost : ℕ → ℕ) (k duration : ℕ) (rate : Fin k → ℕ)
+    (B : A.TimeBudget cost k duration rate) :
+    Assumptions.SquaringCeiling cost ((∑ i, rate i) * duration) A :=
+  fun st w => work_le A cost k duration rate B st w
+
+end TimeBudget
+
 /-- `WorkHardness` and the squaring ceiling: a pass completes at most `b·F/(rounds·c_root)` bits. -/
 theorem completed_le (A : PIDevice N b h ρ S L q) {rounds cRoot F : ℕ} {cost : ℕ → ℕ} (hrc : 0 < rounds * cRoot)
     (hW : Assumptions.WorkHardness b rounds cRoot cost) (hF : Assumptions.SquaringCeiling cost F A) (E : Store N b)

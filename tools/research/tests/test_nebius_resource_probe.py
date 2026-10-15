@@ -103,6 +103,10 @@ def test_replay_queue_against_half_of_available_ram_after_reservations():
     # 1800 GB * 40% = 720 GB available; half is 360
     assert P.evaluate(reading(avail_pct=40.0, replay_gb=350), None, lim("n1")) == []
     assert "queued replay" in P.evaluate(reading(avail_pct=40.0, replay_gb=350, reserved_gb=100), None, lim("n1"))[0]
+    # reservations past MemAvailable (node 1, 9 Oct 10:29Z: "0 GB > half of available RAM -95 GB"): no queue, no breach
+    assert P.evaluate(reading(avail_pct=10.0, reserved_gb=275), None, lim("n1")) == []
+    b = P.evaluate(reading(avail_pct=10.0, replay_gb=90, reserved_gb=275), None, lim("n1"))
+    assert "half of available RAM 0 GB" in b[-1]
 
 
 def test_replay_queue_kueue_counts_pending_replays_at_a_floor():

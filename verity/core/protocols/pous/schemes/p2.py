@@ -92,9 +92,11 @@ P2_CLAIMS = ("m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "rando
 - SeqRoot;
 - counter-mode SHA-512 as a random oracle for the keys (v4's, the spec's P2-EXP-IO), or SHAKE256 for v2's segment seeds
   (whose ChaCha8 streams P2-EXP-IO does not name);
-- perfect isolation;
+- the help-accounted row (`perfect-isolation`, the earlier model's id): the certificate bounds what the audited location
+  held plus the help it received, and nothing attests the prover's machine;
 - SHA-512 collision resistance for the commitment to W and for `vk`;
-- a live, designated verifier, whose memory challenger runs on a Nebius VM that nothing attests (core's `trusted-nebius-host`)."""
+- a live, designated verifier, whose memory challenger is the auditor's hardware, a Nebius VM under the auditor's
+  account that the prover doesn't control and nothing attests (core's `trusted-nebius-host`)."""
 
 POINT = (16448, 21065, 1 << 16)
 """`w`, `c0` and blocks per segment at the registered point.  `2^19` blocks, the certificate's store (1.08 GB), are 8
@@ -116,7 +118,7 @@ and half of it 854,029.18 ns (`note:20261004T2102Z-report-relay-p2-redteam-timin
 art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57; spec v1.1, `p2/PROTOCOL.md` §12)."""
 
 DELTA_NS = 500_000
-"""Δ at the spec's operating point, 0.5 ms with an on-node verifier (`p2/PROTOCOL.md` §6, decision F2)."""
+"""Δ at the spec's operating point, 0.5 ms, with the verifier off the responder's node (`p2/PROTOCOL.md` §6, decision F2)."""
 
 RTT_ALLOWANCE_CAP_NS = 354_000
 """The cap on the measured RTT allowance in spec v1.1, Daniel's ruling of 4 Oct 2026 (`p2/PROTOCOL.md` §12): the

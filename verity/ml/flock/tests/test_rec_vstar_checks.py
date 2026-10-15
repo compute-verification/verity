@@ -379,6 +379,24 @@ def test_verify_refuses_a_v_star_statement_without_the_session_index_or_the_veri
         f'{{"{tid}":"{other}"}}'), p.stdout
 
 
+def test_the_verifiers_bindings_are_its_own_partition_objects(staged, tmp_path):  # noqa: F811
+    """`RecVStar.checkOwnBindings`: bindings whose partition digest is not the verifier's partition object's are refused by
+    that digest, before META is compared with them (which would refuse the same file by META's digest instead)."""
+    d = staged[0]
+    inner = _inner(tmp_path / "inner.json", 25, 22, 8)
+    mine = json.loads(_bindings(d, tmp_path / "bindings.json").read_text())
+    other = ("0" if mine["partition"][0] != "0" else "1") + mine["partition"][1:]
+    (tmp_path / "theirs.json").write_text(json.dumps({**mine, "partition": other}))
+    files = ["--statement", "verity/flock-circuit", "--circuit", str(d / "circuit.txt"), "--public", str(d / "pub.bin"),
+             "--partition", str(d / "partition.json"), "--program", str(d / "program.json"),
+             "--registered", str(d / "registered.json"), "--rec-inner", str(inner), "--rec-part", "0"]
+    p = subprocess.run([str(BIN), "statement", *files, "--rec-bindings", str(tmp_path / "theirs.json")],
+                       capture_output=True, text=True)
+    assert p.returncode == 1 and p.stdout.strip() == (
+        f"setup: rec-open/l8-h1: the verifier's bindings' partition digest {other}, its partition object's "
+        f"{mine['partition']}"), p.stdout
+
+
 PRIVATE = "the inner session's circuits are private (rec-inner holo): V*'s circuit writer does not write holo parts yet"
 
 

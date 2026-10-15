@@ -59,7 +59,8 @@ from verity_vllm.protocol_options.interface import Context, Installed, Option, T
 
 __all__ = ["ADAPTERS", "RECORD_SCHEMA", "SITES", "Composition", "Context", "Installed", "Option", "Refused", "Target", "adapter",
            "WeightsView", "at_capture", "at_commit", "at_row", "capture_context", "commit_context", "commit_guard", "install", "into_verdict", "load_settings",
-           "parse", "refusals", "register_weights", "undeclared", "weights_view", "CIRCUITS", "circuit_registry", "traced_as"]
+           "parse", "refusals", "register_weights", "requires_build", "undeclared", "weights_view", "CIRCUITS", "circuit_registry",
+           "traced_as"]
 
 #: protocol -> its adapter module in this package
 ADAPTERS = {"pouw": "pouw", "pous": "pous", "sampled-proofs": "sampled_proofs"}
@@ -126,6 +127,14 @@ def traced_as(entry: str, m: int, k: int, n: int) -> Any:
     name, _, scheme = entry.partition(":")
     reg = circuit_registry(name)
     return None if reg is None else reg.traced_as(scheme, m, k, n)
+
+
+def requires_build(entry: str, ctx: Context) -> bool:
+    """Whether ``entry``'s adapter binds its served computation to a row Build."""
+
+    name, _, scheme = entry.partition(":")
+    required = getattr(adapter(name), "requires_build", None)
+    return bool(required(scheme, ctx)) if callable(required) else False
 
 
 def _has_circuit(name: str, scheme: str, out: list[str]) -> bool:

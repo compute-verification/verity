@@ -43,9 +43,9 @@ ask:
 
 - one stand-alone question to the owner of what the change touches, or to your coordinator when owners disagree or you
   can't tell who owns it (a handle holder: on Slack, `research msg send --to @HANDLE`; a worker: its report or reply to
-  the coordinator that launched it). The coordinator decides, and says what it decided. Only money (spend past a
-  `budgets.toml` line), keys (access, a credential, a node's root) and claims (what a guarantee says or rests on) go on to
-  Daniel, as written;
+  the coordinator that launched it). The coordinator decides, and says what it decided. Only keys (access, a credential,
+  a node's root) and claims (what a guarantee says or rests on) go on to Daniel, as written; spend is its lead's call
+  (13 Oct), with pods still bounding themselves under a `budgets.toml` line;
 - the case, the change, and your recommendation, in a few lines;
 - meanwhile, prepare the change on your branch, and mark it ready only after the answer.
 
@@ -90,11 +90,10 @@ recurs: note:<id>      # optional: the earlier note about the same thing
 What happened, with ids (run, PR, commit), and what it cost. What you did instead. The better abstraction, if you see one.
 ~~~
 
-Save it as `~/.research/notes/lanes/<lane>/<YYYYMMDDTHHMMZ>-friction-<slug>.md`. A Project worker without the notes clone
-writes it under the Project store's `internal/lanes/<lane>/`, which the mirror forwards. The notes are public: nothing
-private (lane contract §5b).
+Save it as `~/.research/notes/lanes/<lane>/<YYYYMMDDTHHMMZ>-friction-<slug>.md`. A worker that can't push the notes puts
+the note in its report, and its coordinator saves it. The notes are public: nothing private (lane contract §5b).
 
-**The coordinator's pass.** The root coordinator reads new friction notes once a day in its existing loop
+**The admin's pass.** The admin (`@top`) reads new friction notes once a day in its existing loop
 (`research notes mcp`, `search_notes` with `kind: friction` and `since`). It turns a repeat into a fix assigned to its owner.
 Only a repeat whose fix needs money, keys or a claim becomes a question for Daniel.
 
@@ -102,6 +101,33 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-14 (12:53 PM PDT): hard switches, one abstraction per job. The moves we've made are total: the new repository,
+  one cloud agent per lead talking horizontally, and Linear as the work-item layer (the brief colocated in the issue,
+  filed into the owning team; pickup is the issue's state change; Slack narrows to conversation, broadcasts, alerts and
+  Daniel's cards). No second path stays alive beside any of these, and every bridge kept for the transition names its
+  end state. Old agents that still hold context stay reachable for a while as read-only context sources — they hold no
+  handle and do no work — then are archived. The admin enforces all of it: audits for splits, assigns each a fate, and
+  tells Daniel when an abstraction fails, is abused or turns into red tape.
+- 2026-10-14 (11:34 AM PDT, broadening his 10:14 AM ruling): every coordinator and worker opens and edits its own PRs
+  with no approval step, through Cursor's PR tool or gh through the broker, whichever works (for a branch other than
+  the agent's own run branch, which the PR tool refuses: `research queue open --head BRANCH --title T --body-file F`,
+  which goes through the broker and refuses a duplicate or a moved head). Waiting on dashboard
+  clicks cost about six hours across fourteen finished PRs overnight on 14 Oct; the launcher no longer pins PR
+  creation off per run. A cloud agent whose launch-time run rules still gate both paths registers the request and
+  posts the exact payload where it registered it, so a capable hand opens it without a duplicate; the ruling reaches
+  such an agent at its next launch.
+- 2026-10-13 (11:01 PM PDT, cards 2e0ff59b and 54bd993d): a guarantee's checked family may fold in a check the compiled
+  verifier already runs, and a new fail-closed refusal modelled the same way: the statement moves toward what the
+  verifier refuses, and the landing DM shows the moved records. The same night: a free statement parameter whose
+  adversarial values break a proof is closed by a side condition decidable at any literal instantiation, discharged by
+  computation at use (never a listed assumption), keeping the general form.
+- 2026-10-13 (about 2:24 PM PDT, relayed by top): no Cursor Projects, and no agent state kept only in a Cursor store.
+  Each coordinator is a plain Cursor cloud agent that owns a vertical slice and runs its own subagents; coordinators
+  talk to each other through Slack and Linear; one admin agent holds `@top` in place of the Project's top-level agent;
+  and a successor takes over each lead: the handle stays, and its holder changes.
+- 2026-10-13 (2:22 PM PDT): leads decide open questions themselves, spend included; Daniel's explicit rulings stand until
+  he reverses them. Of 8 Oct's "money, keys and claims", spend is now its lead's own call (pods still bound themselves
+  under a `budgets.toml` line, and a budget line named in a standing ruling stands); keys and claims still go to Daniel.
 - 2026-10-13 (1:33 PM PDT, relayed by top): the recursive audit (`Flock.Guarantees.RecursiveAuditC3`) may rest on the
   model claim `registrant-holds-openings` (`verity/core/claims`): the prover holds a row and a salt under every leaf it
   registered, R's level-0 staging salts included. Those salts are held by the prover's own workers behind the firewall.
@@ -123,11 +149,41 @@ Newest first. Each is Daniel's unless it names the coordinator.
   - PoUW's machine stop restates `TT_OUT` with a per-coin budget, and the static refund stays held.
   - P2 at 2^25 blocks may land first as a stopgap, with the sampled setup check at k = 140, while the word codec is
     the direction.
+- 2026-10-12 (3:59 PM PDT): the remote bandwidth audit's receipt is sketch-then-SHA-512. Each block's ±1 sketch,
+  re-keyed every pass from the chained seed, goes through one SHA-512 compression. The leaves and the frame-v3-sha512
+  tree are unchanged, so the one-hash rule holds. It rests on `RateAuditSketch`, and the full-block SHA-512 receipt
+  is not the default.
+
+- 2026-10-12 (1:53 PM PDT): the remote bandwidth audit treats the prover's resources as one undifferentiated pool.
+  Its guarantee is conservation: receipts over registered data worth at least 99% of the declared capacity were paid
+  for by resources somewhere (reads, held state, or rebuild compute). It makes no claim about where, so it takes no
+  identity assumption, and an undeclared helper only spends resources of its own.
+
+- 2026-10-12 (1:48 PM PDT), the remote bandwidth audit:
+  - The first goal is a mega-secure but slow implementation, and about 4× step overhead is acceptable for now. So
+    the stated codec gets the margin: three rounds, the public XOR mask between rounds (σ_K) and a 1,024-bit word.
+    Two rounds is a later upgrade, once the partial-completion attack is measured.
+  - "99%" is against the node's read capacity over time (R·T). A standing workstream hill-climbs on keeping compute
+    and memory bandwidth full with registered filler reads and matmul tiles.
+  - The claim is the hybrid: 0.15% averaged over a 10-minute horizon, with every window at most 1%.
+  - Never change the model's logits: the lm_head is encoded with a BF16 payload.
+
+- 2026-10-12 (11:55 AM PDT): the remote bandwidth audit may derive each pass's seed by Fiat–Shamir, from the window's
+  challenge, the pass index and the previous pass's root. Live coins per pass are impractical at its rate. This
+  narrows 5 Oct's "live coins only" for that protocol, for now. The same message: if a prover's CPUs can compute what
+  a bound receipt needs, they become a resource to exhaust or count, not a break.
+- 2026-10-12 (11:46 AM PDT): a scheme may refuse all-zero weights. "The weights are known" means no bound may assume
+  the weights are incompressible, not that W = 0 must be in a scheme's domain.
 - 2026-10-12 (about 10:03 AM PDT, in memory accounting's thread): no protocol or guarantee assumes trusted prover
   hardware ("in our setting we will never assume trusted prover hardware so forget about that more broadly"). Nothing
   the prover runs or hosts is trusted: not its GPUs, its host, its links, a confidential-computing enclave or a process
   on its machines. So the bandwidth audit treats host memory over PCIe as a slower tier of the prover's memory and
   prices relayed tags with `RateAuditInteractive`, instead of a trusted host challenger.
+- 2026-10-12 (9:13 AM PDT): for memory and bandwidth accounting:
+  - no assumption that the weights are incompressible, since they may be known, even all zeros;
+  - memory exhaustion is over the node's memory (HBM, KV cache included), not the model's size;
+  - no overhead target: as fast as possible subject to 99%;
+  - the guarantee is stated for the whole node.
 - 2026-10-12 (06:00Z, relayed by top): writing for Daniel puts its math in LaTeX, `\( \)` inline and `\[ \]`
   displayed, quantities included, and states a protocol or guarantee as its security assumptions, then the protocol's
   shape, then the properties provable under them.

@@ -1,0 +1,12 @@
+# /etc/systemd/system/vy-store-evict-research.service on every node (`research deploy` and cluster_up.sh install it): research's
+# store eviction, which with src.conf also deletes the unused, recoverable `research run` source trees of /workspace/research/src.
+[Unit]
+Description=store eviction: drop local copies of research runs the remote store holds
+
+[Service]
+Type=oneshot
+User=research
+Nice=19
+IOSchedulingClass=idle
+Environment=VY_EVICT_STORE=/workspace/research/store VY_EVICT_RUNS=/workspace/research/runs
+ExecStart=/usr/local/bin/vy-store-evict

@@ -56,12 +56,29 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "for bit, on every rank.  Apart from that verdict, h7168.ok says the same at vLLM's defaults of 7168-wide "
              "tensor_model_parallel_all_reduce (the hidden-7168 pass): FlashInfer's to 36 tokens, multimem past it at its own probe's "
              "trees and FTZ."),
+    Property("glm53_bf16_gemm_capture", "verity-vllm/glm53-bf16-gemm-capture/v3",
+             "On the capture device (cc 9.0, 132 SMs), the hidden-6144/N-256 and hidden-7168/N-384 MoE gates (GateLinear) run "
+             "cuteDSL ll_bf16_gemm on the kernel the cc 9.0 dispatch table names at M <= 16 and cuBLAS past it, and under the split-K-off "
+             "cuBLAS switch every f32 gate word equals LlBf16DotprodGemm_v1 at the decided FMA, LlBf16SplitKGemm_v1 or "
+             "GemmF32Out_v1, every hidden-7168 compressor word GemmF32Out_v1, every lm_head-shard and indexer-projection word "
+             "core's Gemm_v2, and every hidden-6144 K/N = 192/512 or 512/256 q_nope / v absorb word BatchedGemm_v1, bit for bit."),
     Property("glm53_dsa_capture", "verity-vllm/glm53-dsa-capture/v2",
              "On the capture's Hopper GPU, vLLM selects FLASH_ATTN_MLA_SPARSE and the bf16 _fused_q_kernel for GLM-5.3's sparse MLA, "
              "and at GLM-5.3's TP8 statics every indexer-cache slot equals DsaIndexerKRow_v1, every index query and weight "
              "DsaIndexerQ_v1, every compared prefill and paged logit DsaMqaLogit_v3, every top-k row of at most 2048 keys "
              "DsaTopKShortRow_v1, and every compared FA3 sparse output SparseMlaHead_v1 at its row's valid count, bit for bit; "
              "the k_pe and q_pe RoPE words are each one named contraction."),
+    Property("dsv4_indexer_capture", "verity-vllm/dsv4-indexer-capture/v1",
+             "On the capture's Hopper GPU, from the vLLM sources the Definitions were read from, vLLM selects the FP8 indexer cache, "
+             "the one-stage head-128 compressor and f32 o-projection scales for the DSV4 indexer row, and at the row's TP8 statics "
+             "every compared state score row equals Dsv4CompressorScore_v1, every "
+             "written indexer-cache entry Dsv4IndexerCompress_v1 of the state rows the kernel reads, every short-context fill row "
+             "Dsv4ShortContextTopK_v1, every inverse-RoPE FP8 head Dsv4InvRopeQuantHead_v1, every compared prefill and paged logit "
+             "DsaMqaLogit_v3 at 64 heads and every top-k row of at most 1024 keys DsaTopKShortRow_v1, bit for bit."),
+    Property("glm53_cuda_rmsnorm_capture", "verity-vllm/glm53-cuda-rmsnorm-capture/v1",
+             "On the capture's cc 9.0 GPU, vLLM's default non-batch-invariant BF16 rms_norm and fused_add_rms_norm launch their pinned "
+             "width-8 paths and block sizes at hidden sizes 6144 and 7168, and every output and residual word equals the "
+             "registered CUDA vector-8 Definitions, including planted finite, subnormal, infinity and NaN rows."),
     Property("blackwell_fp8_capture", "verity-vllm/blackwell-fp8-capture/v1",
              "On the capture's cc 12.0 GPU, vLLM selects CutlassFp8BlockScaledMMKernel (and TritonFp8BlockScaledMMKernel under "
              "--linear-backend triton) for the 235B FP8 TP8 row's linears and TritonExperts at block [64, 64] for its experts, the "

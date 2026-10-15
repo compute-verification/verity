@@ -35,8 +35,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # commits them into its origin so the queue's clone runs the `lean-audit` record driver it configures.
 inputs = [".agents/skills", "verity/README.md", ".gitignore", "archive/direct", "fixtures", "infra/ops", "integrations/vllm", "verity", "verity/ml/circuits", "verity/ml/kernels",
           "verity/core", "tools/verity/check/lean_slot.py", "tools/verity/check/slot.py", "tools/verity/check/tool.py", "benchmarks/tc_probe",
-          "pyproject.toml", "verity/ml/flock/pyproject.toml", "archive/gkr/pyproject.toml", "benchmarks/numerical/pyproject.toml",
-          "archive/sp1/pyproject.toml", "benchmarks/commitments/pyproject.toml", "benchmarks/network_traces/pyproject.toml",
+          "pyproject.toml", "tools/config/pyproject.toml", "verity/ml/flock/pyproject.toml", "archive/gkr/pyproject.toml", "benchmarks/numerical/pyproject.toml",
+          "benchmarks/harness/pyproject.toml", "archive/sp1/pyproject.toml", "benchmarks/commitments/pyproject.toml", "benchmarks/network_traces/pyproject.toml",
           "benchmarks/pouw/pyproject.toml", "tools/verity/check/pyproject.toml", "tools/verity/circuit_check/pyproject.toml",
           "infra/cluster", "tools/verity/lean/pyproject.toml", "tools/verity/lean/run_daily.py", "tools/verity/lean/merge.py",
           "tools/verity/lean/check.py", "benchmarks/native_peak/pyproject.toml",

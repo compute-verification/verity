@@ -181,9 +181,12 @@
    "note": "torch.ops._C.silu_and_mul (CUDA act_and_mul_kernel): SiluMul_v2, the Build's silu_mul. SiluMul_v1 is not this kernel's function (NaN, gate -inf, gates past expf overflow, -0)"
   },
   "silu-mul-block-quant": {
-   "status": "committed-only",
-   "definitions": [],
-   "note": "ops.silu_and_mul_per_block_quant(intermediate_cache1, group_size=128, e4m3) (csrc fused_silu_mul_block_quant.cu), which TritonExperts.apply launches in place of silu_and_mul + the w2 input's group quant for SiLU with 128x128 block FP8, no LoRA and no DeepGEMM e8m0: per element f32 silu(gate) * up kept in registers (never rounded to bf16), per 128-group max |y|, scale = max / 448 floored by the kernel's minimum, then e4m3 RN of y / scale. No Definition yet (fp8_moe.py on cursor/hopper-block-fp8-8c79 leaves it to its own); its two outputs are the w2 Program's xq and sx"
+   "status": "port",
+   "definitions": [
+    "SiluMulFp8BlockQuant_v1",
+    "SiluMulFp8BlockQuant_v2"
+   ],
+   "note": "ops.silu_and_mul_per_block_quant(intermediate_cache1, group_size=128, e4m3) (csrc fused_silu_mul_block_quant.cu), which TritonExperts.apply launches in place of silu_and_mul + the w2 input's group quant for SiLU with 128x128 block FP8, no LoRA and no DeepGEMM e8m0: per element f32 silu(gate) * up kept in registers (never rounded to bf16), per 128-group max |y|, scale = max / 448 floored by the kernel's minimum, then e4m3 RN of y / scale. fp8_moe.SiluMulFp8BlockQuant_v1{I, G} (Boolean _v2); its two outputs are the w2 Program's xq and sx; tests/properties/glm53_block_fp8_capture_gpu.py compares the served w2 input against it on the H200"
   },
   "bf16-add": {
    "status": "exists",
@@ -221,16 +224,24 @@
    "note": "a value the runtime only moves (a cache write): checked by word equality against the taps it copies, no Program"
   },
   "sigmoid-router": {
-   "status": "tonight",
-   "definitions": [],
-   "note": "_C.grouped_topk(logits, n_group=1, topk_group=1, topk=8, renormalize=True, routed_scaling_factor=2.5, bias, scoring_func=1): sigmoid scores, + e_score_correction_bias for selection only, top-8 of 256, renormalise, x2.5. MoeRouterSigmoidBias_v1{E, TOPK, SCALE, KERNEL} per token row: inputs logits (Array(E, F32), the gate's f32 row) and bias (Array(E, F32), e_score_correction_bias); output (topk_weights Array(TOPK, F32), topk_ids Array(TOPK, I32)) as the kernel writes them; KERNEL block (single_group_topk_block_kernel, M <= 1024 at E = 256) or warp",
-   "branch": "cursor/sigmoid-router-8c79"
+   "status": "port",
+   "definitions": [
+    "MoeRouterSigmoidBias_v1",
+    "MoeRouterSigmoidBias_v2"
+   ],
+   "note": "_C.grouped_topk(logits, n_group=1, topk_group=1, topk=8, renormalize=True, routed_scaling_factor=2.5, bias, scoring_func=1): sigmoid scores, + e_score_correction_bias for selection only, top-8 of 256, renormalise, x2.5. MoeRouterSigmoidBias_v1{E, TOPK, SCALE, KERNEL} per token row: inputs logits (Array(E, F32), the gate's f32 row) and bias (Array(E, F32), e_score_correction_bias); output (topk_weights Array(TOPK, F32), topk_ids Array(TOPK, I32)) as the kernel writes them; KERNEL block (single_group_topk_block_kernel, M <= 1024 at E = 256) or warp. Registered (moe.MoeRouterSigmoidBias_v1, Boolean _v2); its capture GO is on sm_120, not yet cc 9.0"
   },
   "fp8-moe-triton": {
-   "status": "tonight",
-   "definitions": [],
-   "note": "Triton fused_moe with 128x128 block FP8 (Fp8MoeBackend.TRITON): per_token_group_quant_fp8 of the expert input (ue8m0 iff DeepGEMM e8m0 is in use: off with VLLM_USE_DEEP_GEMM=0), w13 launch, then the w2 launch with MUL_ROUTED_WEIGHT",
-   "branch": "cursor/hopper-block-fp8-8c79"
+   "status": "port",
+   "definitions": [
+    "Fp8GroupQuant_v1",
+    "Fp8GroupQuant_v2",
+    "MoeExpertFp8BlockGemm_v1",
+    "MoeExpertFp8BlockGemm_v2",
+    "MoeExpertFp8BlockGemmW_v1",
+    "MoeExpertFp8BlockGemmW_v2"
+   ],
+   "note": "Triton fused_moe with 128x128 block FP8 (Fp8MoeBackend.TRITON): per_token_group_quant_fp8 of the expert input (ue8m0 iff DeepGEMM e8m0 is in use: off with VLLM_USE_DEEP_GEMM=0), w13 launch, then the w2 launch with MUL_ROUTED_WEIGHT. Registered (fp8.Fp8GroupQuant_v1, fp8_moe.MoeExpertFp8BlockGemm(W)_v1, Booleans _v2); tests/properties/glm53_block_fp8_capture_gpu.py pins the launches' statics on the H200"
   },
   "fused-rmsnorm-triton": {
    "status": "port",
@@ -240,11 +251,14 @@
    "note": "deepseek_v32 common/kernels.py _rms_norm inside _fused_norm_rope_kernel: f32 tl.sum(x*x)/N, tl.rsqrt(+eps), * f32(w), to bf16. Its reduction tree and rsqrt must be pinned against the existing Triton RMSNorm family"
   },
   "rmsnorm-cuda": {
-   "status": "port",
+   "status": "exists",
    "definitions": [
-    "RMSNormFusedCuda_v1"
+    "RMSNormCudaVector8_v1",
+    "RMSNormFusedCudaVector8_v1",
+    "RMSNormCudaVector8_v2",
+    "RMSNormFusedCudaVector8_v2"
    ],
-   "note": "vLLM's CUDA rms_norm / fused_add_rms_norm launched without batch invariance; RMSNormFusedCuda@1 models the width-8 fused kernel at the batch-invariant block size, so the non-batch-invariant block size must be pinned"
+   "note": "vLLM's default non-batch-invariant BF16 rms_norm / fused_add_rms_norm width-8 paths. The Program records BLOCK because M < 256 launches rms_norm at min(N/8,1024) and fused_add_rms_norm at min(N,1024), while M >= 256 launches both at 256; the H200 capture checks M 1,42,43,64,256,2048 at GLM-5.3 N=6144 and DeepSeek-V4-Pro N=7168"
   },
   "fused-rope-triton": {
    "status": "port",
@@ -271,14 +285,34 @@
    "note": "FlashInfer's allreduce_fusion on its MNNVL workspace (kARResidualRMSNorm, fp32_acc, weight_bias 0) on decode steps: AllReduceRmsNormMnnvl_v1 at the shot mnnvl_shot names, its sum * rcp(N) + eps contraction decided per shot by the H200 capture (FMA in both shots); on prefill steps the TP8 all-reduce (tp-allreduce) then fused_add_rms_norm (rmsnorm-cuda). _can_use_flashinfer reads neither the custom all-reduce nor symmetric memory, so the split at 42 tokens is the same at every setting. Covered (tp_allreduce.CAPTURED) at 1-42 tokens both at vLLM's defaults and with the custom all-reduce off. Port until a Build rule binds it"
   },
   "cublas-bf16-gemm": {
-   "status": "committed-only",
-   "definitions": [],
-   "note": "cuBLAS/cuBLASLt BF16 GEMM (F.linear, torch.mm out_dtype=f32, torch.bmm). The registered BF16 GEMMs model vLLM's batch-invariant Triton matmul_persistent, which runs only under VLLM_BATCH_INVARIANT=1 (refused for this model)"
+   "status": "port",
+   "definitions": [
+    "Gemm_v2",
+    "Gemm_v3",
+    "BatchedGemm_v1",
+    "BatchedGemm_v2",
+    "CublasSplitKGemm_v1",
+    "CublasSplitKGemm_v2"
+   ],
+   "note": "cuBLAS/cuBLASLt BF16 GEMM at vLLM's default: a non-split output coordinate is core's Gemm_v2{K, N, HopperBF16WgmmaDot16_v1} (Boolean Gemm_v3); a split-K bf16 output is cublas_bf16.CublasSplitKGemm_v1{K, N, SPLIT_K, DOT} / _v2, with SPLIT_K pinned by bf16_gemm_check.default_cublas_split_k for cuBLAS 12.9.1 on the H200. q_nope_absorb and v_absorb (torch.bmm on the load-derived W_UK_T / W_UV views) are cublas_bf16.BatchedGemm_v1{NHL, K, N, DOT} / _v2. tests/properties/glm53_bf16_gemm_capture_gpu.py pins each kernel, grid, split count, cuBLAS version, hypothesis fit and every output word on the H200; its split-K-off run remains a named comparison variant"
   },
   "router-gemm": {
-   "status": "committed-only",
-   "definitions": [],
-   "note": "GateLinear bf16 x bf16 -> f32: cuteDSL ll_bf16_gemm for M <= 16 when available, else cuBLAS torch.mm(out_dtype=f32); which tier runs is a flag of the module (allow_ll_bf16_gemm / allow_cublas_router_gemm)"
+   "status": "port",
+   "definitions": [
+    "LlBf16DotprodGemm_v1",
+    "LlBf16DotprodGemm_v2",
+    "LlBf16DotprodDot_v1",
+    "LlBf16DotprodDot_v2",
+    "LlBf16SplitKGemm_v1",
+    "LlBf16SplitKGemm_v2",
+    "LlBf16SplitKDot_v1",
+    "LlBf16SplitKDot_v2",
+    "GemmF32Out_v1",
+    "GemmF32Out_v2",
+    "CublasSplitKGemmF32Out_v1",
+    "CublasSplitKGemmF32Out_v2"
+   ],
+   "note": "GateLinear bf16 x bf16 -> f32, by M as bf16_gemm_check.dispatch_sm90 names vLLM's kernel: M <= 4 cuteDSL ll_bf16 dotprod (LlBf16DotprodGemm_v1{256, 6144, BS 128, VEC 8, FMA}; FMA the H200 capture decides), 5 <= M <= 16 ll_bf16 split-K (LlBf16SplitKGemm_v1{256, 6144, SPLIT_K 6, or 8 at M 9 and 11, TILE_K 256, WARPS 4, HopperBF16WgmmaDot16_v1}), M > 16 default cuBLAS torch.mm(out_dtype=f32), either GemmF32Out_v1 / _v2 or CublasSplitKGemmF32Out_v1 / _v2 at bf16_gemm_check.default_cublas_split_k's H200 split count. tests/properties/glm53_bf16_gemm_capture_gpu.py pins the dispatch, cuBLAS selection, hypotheses and words on the H200"
   },
   "fa3-prefill-attention": {
    "status": "port",

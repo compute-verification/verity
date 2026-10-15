@@ -7,6 +7,7 @@ from __future__ import annotations
 import hashlib
 import itertools
 import math
+import random
 from fractions import Fraction
 
 import pytest
@@ -66,6 +67,35 @@ def test_the_sign_bound_holds_for_every_small_sign_matrix(rows: int, cols: int) 
 def test_the_bound_is_exact_at_two_rows(cols: int) -> None:
     """Two ±1 rows have rank 1 just when the second is ± the first."""
     assert timing.sign_rank_at_most(2, 1, cols) == Fraction(2, 2 ** cols)
+
+
+def test_seeded_sampling_does_not_falsify_the_rank_tail() -> None:
+    """Seeded sampling at small parameters against the formulas behind `Accounting.Assumptions.SketchRank`
+    (art:d3c891e4 evaluates the deployed 16 × 4096 number, out of any sampler's reach): 10,000 draws a check at seed
+    20261014.  The F2 law is exact, so the empirical CDF matches it two-sided; the ±1 bound and the union bound over
+    sectors (the assumption's `∃ u` event) are upper bounds that sampling sits below, up to noise, and they are tight
+    here (at 4 × 5 the bound on rank ≤ 2 is exactly 0.02588 by enumeration), so a wrong formula shows as systematic
+    excess.  The margins come from a sweep of seeds 0..19 at this size: worst |emp − exact| 0.0025 (F2 at rank ≤ 6)
+    and 0.0115 (≤ 7), worst excess over the bound 0.0007 (5 × 7 at rank ≤ 3) and 0.0066 (∃u over 3 sectors of 4 × 5),
+    each at most about half its margin."""
+    rng, n = random.Random(20261014), 10_000
+    f2 = [0, 0]
+    for _ in range(n):
+        r = rank_mod([[rng.getrandbits(1) for _ in range(10)] for _ in range(8)], 2)
+        f2[0] += r <= 6
+        f2[1] += r <= 7
+    assert abs(f2[0] / n - timing.gf2_rank_at_most(8, 10, 6)) < 0.005
+    assert abs(f2[1] / n - timing.gf2_rank_at_most(8, 10, 7)) < 0.022
+    # A ±1 matrix of at most 8 rows has every minor at most 8^4 (Hadamard), so its rank mod PRIME is its rank over Q.
+    tails = [0, 0, 0]
+    for _ in range(n):
+        tails[0] += rank_mod([[rng.choice((1, -1)) for _ in range(7)] for _ in range(5)], PRIME) <= 3
+        tails[1] += rank_mod([[rng.choice((1, -1)) for _ in range(10)] for _ in range(8)], PRIME) <= 6
+        tails[2] += any(rank_mod([[rng.choice((1, -1)) for _ in range(5)] for _ in range(4)], PRIME) < 3
+                        for _ in range(3))
+    assert tails[0] / n <= timing.sign_rank_at_most(5, 3, 7) + 0.004
+    assert tails[1] / n <= timing.sign_rank_at_most(8, 6, 10) + 0.004
+    assert tails[2] / n <= 3 * timing.sign_rank_at_most(4, 2, 5) + 0.012
 
 
 def lg(x: Fraction) -> float:

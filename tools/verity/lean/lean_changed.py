@@ -380,9 +380,17 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                     f"refuse; reports in {mine_out}")
                 if p == pkg:
                     record, mine = tree / pkg / "lean-audit.json", ROOT / pkg / "lean-audit.json"
-                    if update and not run_dir and record.read_bytes() != mine.read_bytes():
-                        shutil.copyfile(record, mine)
-                        log(f"lean-records: wrote {mine}")
+                    if update and record.read_bytes() != mine.read_bytes():
+                        # Keep the regenerated record now: the next requirer iteration's `sync` restores the committed
+                        # one over `record`, and a recorded run never writes ROOT (the commit's shared source tree), so
+                        # without this copy the record a lane must commit survives nowhere the run keeps (LEAN-10).
+                        kept = out / "record" / "lean-audit.json"
+                        kept.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copyfile(record, kept)
+                        log(f"lean-records: the regenerated record is {kept}; commit it over {pkg}/lean-audit.json")
+                        if not run_dir:
+                            shutil.copyfile(record, mine)
+                            log(f"lean-records: wrote {mine}")
                 elif got:
                     log(f"lean-records: {p} requires {pkg}, and its records fail on this tree: what its guarantees read "
                         f"changed; if that is meant, run --records {p} --update")

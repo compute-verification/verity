@@ -209,23 +209,33 @@ def _stage(d: Path, **kw) -> dict:
                    pts=json.loads((SET / "points-honest.json").read_text()), salts=SET / "acc-salts.bin", **kw)
 
 
-def test_a_dirs_registered_one_bit_off_is_refused_at_its_opening(forged, shape, tmp_path):
+@pytest.fixture(scope="module")
+def dirs_forged(built, once) -> Path:
+    """Level 3 staged with rep 0's opening 0 `dirs` registered one bit off (bit 0 of its first word), the opening's climb
+    aside."""
+    honest = S.R.dirs_words
+
+    def make(d):
+        first = []
+
+        def dirs_words(pos, H):
+            w = honest(pos, H)
+            if not first:
+                first.append(pos)
+                w = [w[0] ^ 1, *w[1:]]
+            return w
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(S.R, "dirs_words", dirs_words)
+            _stage(d, levels=[LEVEL], algebra=False)
+
+    return once("rec-coins-dirs", make, _KEY) / f"L{LEVEL}"
+
+
+def test_a_dirs_registered_one_bit_off_is_refused_at_its_opening(dirs_forged, shape, tmp_path):
     """`HDirCols`' check (`RecCoins.checkOpen`'s `dirs`): level 3 staged with rep 0's opening 0 `dirs` registered one bit
     off, the opening's climb aside, is refused at that opening by the position the verifier's coins give."""
-    honest = S.R.dirs_words
-    first = []
-
-    def dirs_words(pos, H):
-        w = honest(pos, H)
-        if not first:
-            first.append(pos)
-            w = [w[0] ^ 1, *w[1:]]
-        return w
-
-    with pytest.MonkeyPatch.context() as mp:
-        mp.setattr(S.R, "dirs_words", dirs_words)
-        _stage(tmp_path, levels=[LEVEL], algebra=False)
-    out = tmp_path / f"L{LEVEL}"
+    out = dirs_forged
     v = _verify(out, out / "pub.bin", out / "registered.json", shape, "inner-honest", rows=_acc_rows(tmp_path / "rows.json", out))
     assert v["why"] == (f"setup: rec-coins: {UNIT}: level {LEVEL} rep 0 opening 0: the statement's dirs row is not the "
                         "verifier's rec-dirs row 0"), v["why"]
@@ -463,6 +473,26 @@ def test_a_part_staged_under_another_salt_is_refused_at_the_verifiers_shared_row
     assert root(b / "registered.json") != root(rows)
     assert other.result()["why"] == (f"setup: {unit}: its row port acc0 is not the verifier's shared row acc0 (--rec-rows): "
                                      f"root {root(b / 'registered.json')}, against {root(rows)}"), other.result()["why"]
+
+
+def test_the_registered_reads_hold_no_message_round_port_the_statement_lacks(algebra, shape, undrawn, rows, tmp_path):
+    """`RecVStar.checkOwn`: a part's reads file with one null read (a unit outside the population, which the registered
+    reads' own check accepts) appended to one message-round port is refused by that port against the statement's, with the
+    verifier's shared rows unedited; `checkRows` would refuse the same file by the shared row, so the exact refusal pins
+    `checkOwn`. One verify sets the part's statement up over its whole population, about 9 minutes."""
+    ports = lambda p: json.loads((p / "registered.json").read_text())["ports"]
+    a = next(p for p in sorted(algebra.iterdir()) if any(re.fullmatch(r"m\d+", k) for k in ports(p)))
+    d = shutil.copytree(a, tmp_path / "extra")
+    r = json.loads((d / "registered.json").read_text())
+    port = next(k for k in r["ports"] if re.fullmatch(r"m\d+", k))
+    value, honest = r["ports"][port]["value"], r["ports"][port]["reads"]
+    r["ports"][port]["reads"] = [*honest, None]
+    (d / "registered.json").write_text(json.dumps(r))
+    show = lambda rd: "[" + ", ".join("null" if x is None else str(x) for x in rd) + "]"
+    v = _verify(d, d / "pub.bin", d / "registered.json", shape, "inner-honest", "--rec-inner-transcript",
+                str(SET / "inner-honest" / "public.json"), session=undrawn, rows=rows)
+    assert v["why"] == (f"setup: {_unit(d)}: the registered reads' port {port} under {value} reading {show([*honest, None])} "
+                        f"is not the statement's: the statement's is {port} under {value} reading {show(honest)}"), v["why"]
 
 
 def test_a_sessions_rec_acc_reads_are_the_verifiers_one_registration(forged, shape, rows, tmp_path):

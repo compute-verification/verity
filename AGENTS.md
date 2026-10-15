@@ -60,6 +60,8 @@ Top-level directories (a grouping, not an import name, except `verity/`):
 - `infra/`: our machines.
   - `cluster/` (`cluster`): the shared machines' policy, planner and ledger. Stdlib only.
   - `control/`: the control pod's boot script and loops.
+  - `cursor/`: the coordinators, each a plain Cursor cloud agent: `launch_coordinator.py` creates and archives them from
+    Daniel's laptop.
   - `nebius/`: the console's units.
   - `ops/` (`verity_ops`): `ops deploy` and `ops keeper`, on top of `research`.
 - `archive/`: proof systems and code that are kept but not developed: A-GKR, B-Ligero, D-SP1 and the VOLE prover, still in
@@ -260,8 +262,9 @@ Glossary, the skills, READMEs, docstrings and CLI help. When code has to change 
 owner and the PR, and the docs change with that PR. A stale statement found later is fixed on sight, by whoever finds
 it. `tests/test_doc_paths.py` fails on a maintained doc that names a repository path that no longer exists.
 
-Make every decision yourself except money, keys and claims (Daniel, 8 Oct). Spend past a budget line, access and keys,
-and what a guarantee says or rests on go to Daniel through your coordinator, with your recommendation. A change that
+Make every decision yourself except keys and claims (Daniel, 8 Oct; spend became its lead's call 13 Oct). Access and
+keys, and what a guarantee says or rests on, go to Daniel through your coordinator, with your recommendation; pods
+still bound themselves under a `budgets.toml` line, and a budget line named in a standing ruling stands. A change that
 crosses owners goes to the other owner, and the coordinator settles a disagreement. When a tool, rule or step gets in
 your way, fix it at the source if the fix is clearly yours. Record each ruling you get. The friction skill,
 `.agents/skills/friction/SKILL.md`, has the rulings so far and the friction notes.
@@ -283,6 +286,9 @@ Never print a secret's value.
 
 ## Where writing goes
 
+- **Work items** are Linear issues (Daniel, 14 Oct). The full brief — context, done-condition, pointers — lives in the
+  issue, filed into the owning team at creation; each lead's subscription to its own team is the wake path, and pickup
+  is the issue's state change. Slack carries conversation, broadcasts, alerts and Daniel's cards, never the brief.
 - **This repo** holds code, tests, small fixtures, and maintained current-truth docs only: `README.md`, `AGENTS.md`,
   `DESIGN.md`, `DISCREPANCIES.md`, `SKILL.md`, `CHANGELOG.md`, `*.template.md`, and `PROTOCOL.md`.
   - A protocol keeps a `PROTOCOL.md` only while it is experimental. Lean is the source of truth for a mature protocol,
@@ -305,11 +311,20 @@ Never print a secret's value.
   - Tables and reports are rendered on demand from code plus the store.
 - **Findings and claims about a run** are labels, never edits to a shared table:
   `research data label <run id|art:…> <key> <value> --by <lane> --ref <run id>`.
-- **Architecture decisions** go in Notion, which the coordinator publishes.
+- **Open work** (an ask that outlives its thread, what a handoff hands over) is an issue in the owning handle's Linear
+  team (the using-slack skill).
+- **Architecture decisions** and Daniel's decisions log go in Notion, which the admin keeps.
 
 ## Lanes (worker agents)
 
 If your launch message names you a lane, `~/.research/notes/kb/LANE-CONTRACT.md` is your rulebook.
+
+Each coordinator (a handle's holder in `.agents/skills/using-slack/registry.json`) is a plain Cursor cloud agent on the
+one-repo environment "Verity compute-verification". It owns one vertical slice and runs its own workers as subagents.
+There are no Cursor Projects (Daniel, 13 Oct). The admin holds `@top`: it opens handovers, keeps the roster, the
+quiet-lane sweep and Daniel's decisions log, relays to Daniel, and announces and settles; it does no lane work.
+Coordinators are launched, handed over and archived from Daniel's laptop with `infra/cursor/launch_coordinator.py`
+(`infra/cursor/README.md`).
 
 - **Reread the rules every night.** At the start of each night, reread this file and the rulings in
   `.agents/skills/friction/SKILL.md` and `.agents/skills/lean-proofs/SKILL.md`: rules change during the day, and a lane
@@ -329,7 +344,8 @@ If your launch message names you a lane, `~/.research/notes/kb/LANE-CONTRACT.md`
   its check fails.
 - **Slack is for handle holders** (coordinators and service agents) and named humans only, at computeverification.slack.com.
   A worker asks its own coordinator. The coordination API is `research msg`: the using-slack skill,
-  `.agents/skills/using-slack/SKILL.md`.
+  `.agents/skills/using-slack/SKILL.md`. Work for another lead goes in as a Linear issue into its team (Where writing
+  goes); Slack is the conversation around it, not the brief.
 
 ## Skills
 

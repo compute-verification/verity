@@ -51,7 +51,7 @@ OUTCOMES = ("screened", "frontier", "kept", "dropped", "voided", "superseded")
 #: label keys (`research.store.vocab`): the producing lane about its own attempt
 KERNEL_OUTCOME, KERNEL_REASON = "kernel_outcome", "kernel_reason"
 #: a call's step groups, as `verity.core.protocols.pouw.serving.GROUPS` (#567) names them; checked against it when it is importable
-GROUPS = ("a_tree", "forming", "gemm", "cleanup", "tile_hash", "screen")
+GROUPS = ("row_seeds", "a_tree", "forming", "gemm", "cleanup", "tile_hash", "screen")
 PHASES = ("before", "gemm", "after")
 ONE_LINE = 240
 

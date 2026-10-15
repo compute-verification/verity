@@ -23,6 +23,11 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
     research queue judge RUN [--on MACHINE] [--by LANE]
                                                    the mark `ready --on` writes, from its quick-tier run RUN that already ended
                                                    (its caller gone), for the open PR at the head the tier ran at, or at its tree
+    research queue open --head BRANCH --title T --body-file F [--sha SHA] [--base main] [--draft]
+                                                   open a PR for any pushed branch through gh (the repo's broker wrapper when the
+                                                   checkout has one), for a lead whose PR tool opens PRs only from its own run
+                                                   branch; refuses when BRANCH isn't on the remote, isn't at --sha, or already
+                                                   has an open PR; prints the PR's URL (`open_pr`)
     common flags: [--shadow] [--workdir DIR] [--rules FILE] [--repo OWNER/NAME] [--remote URL]
 
 Admission.  A PR is admitted while it is open against `main`, has an owner, carries no hold label, and is marked ready at its head;
@@ -704,12 +709,23 @@ class Queue:
             if m.pr in entries and entries[m.pr].pr.head == m.head:
                 entries[m.pr].state, entries[m.pr].position, entries[m.pr].commit = "queued", i, m.commit
         conflicts = state.get("conflicts", {})
+        main = _out(self.workdir, "rev-parse", "refs/remotes/origin/main")
         for n, e in entries.items():
             if e.state == "ready" and (c := conflicts.get(str(n))) and c["head"] == e.pr.head:
                 e.state, e.why = "refused", f"{c['why']} (at the last sync)"
+            elif e.state == "ready" and (files := conflicting_files(self.workdir, main, e.pr.head)):
+                e.state, e.why = "refused", (f"conflicts with `main` in {', '.join(files)}: merge `main` into the branch and "
+                                             f"re-mark it")
             elif e.state == "ready":
                 e.why = f"admitted: the next sync merges it onto `{self.branch}`, and drive checks and lands it in a train"
         return entries
+
+
+def conflicting_files(repo: Path, base: str, head: str) -> list[str]:
+    """The files a merge of ``head`` onto ``base`` would leave conflicted, from `git merge-tree` (no worktree touched), so
+    `status` names a conflict on any VM, not only on the one whose last sync recorded it; [] when it merges cleanly."""
+    r = _git(repo, "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head, check=False)
+    return sorted({f for f in r.stdout.splitlines()[1:] if f}) if r.returncode == 1 else []
 
 
 class _Refreshed:
@@ -1100,9 +1116,44 @@ def _mark(store, pr: PR, by: str, failed: str | None, command: str) -> int:
     return 1 if lost else 0
 
 
+def broker_gh(top: Path) -> str:
+    """The gh to open PRs with: the checkout's broker wrapper (`<git common dir>/verity-auth/bin/gh`, which trades the agent's
+    identity for an installation token) when it has one, else gh on PATH."""
+    common = _git(top, "rev-parse", "--path-format=absolute", "--git-common-dir", check=False).stdout.strip()
+    wrapper = Path(common) / "verity-auth" / "bin" / "gh" if common else None
+    return str(wrapper) if wrapper and wrapper.is_file() else (shutil.which("gh") or "gh")
+
+
+def open_pr(top: Path, repo: str, head: str, title: str, body: str, *, base: str = "main", sha: str | None = None,
+            draft: bool = False, gh: str | None = None, run=subprocess.run) -> str:
+    """Open a PR for ``head``, a branch already pushed to origin, and return its URL.  Refuses (`QueueError`) when the branch
+    isn't on origin, when ``sha`` is given and the branch isn't at it (the owner's pinned head), and when an open PR already has
+    that head, so a relayed request can never open a duplicate or a moved head."""
+    found = _git(top, "ls-remote", "origin", f"refs/heads/{head}", check=False).stdout.split()
+    if not found:
+        raise QueueError(f"open: no branch {head!r} on origin: push it first")
+    if sha and not found[0].startswith(sha):
+        raise QueueError(f"open: origin's {head} is at {found[0][:12]}, not {sha}: the head moved; re-check it with its owner")
+    gh = gh or broker_gh(top)
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+
+    def call(*args: str) -> str:
+        r = run([gh, *args], cwd=top, capture_output=True, text=True, env=env, timeout=120)
+        if r.returncode:
+            raise QueueError(f"open: gh {args[0]} {args[1]}: {(r.stderr or r.stdout).strip()[-300:]}")
+        return r.stdout
+
+    existing = json.loads(call("pr", "list", "--repo", repo, "--head", head, "--state", "open", "--json", "number,url") or "[]")
+    if existing:
+        raise QueueError(f"open: {head} already has PR #{existing[0]['number']} ({existing[0]['url']}); nothing opened")
+    out = call("pr", "create", "--repo", repo, "--head", head, "--base", base, "--title", title, "--body", body,
+               *(["--draft"] if draft else []))
+    return out.strip().splitlines()[-1]
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research queue", description=__doc__.split("\n\n")[0])
-    ap.add_argument("command", choices=["status", "sync", "land", "eject", "ready", "judge", "drive", "report"])
+    ap.add_argument("command", choices=["status", "sync", "land", "eject", "ready", "judge", "drive", "report", "open"])
     ap.add_argument("pr", nargs="?", help="eject, ready: the PR number; judge: the quick tier's run id")
     ap.add_argument("--reason", help="eject: why, for the owner's notice")
     ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE"),
@@ -1130,7 +1181,27 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--first", metavar="N[,N...]", default="", help="sync/drive: put these ready PRs at the bottom of `next`, in this "
                                                                     "order, ahead of members that keep their place (a fix the next "
                                                                     "train needs)")
+    ap.add_argument("--head", help="open: the pushed branch to open a PR for")
+    ap.add_argument("--sha", help="open: refuse unless origin's branch is at this commit (the owner's pinned head)")
+    ap.add_argument("--title", help="open: the PR's title")
+    ap.add_argument("--body-file", type=Path, help="open: the PR's body, verbatim (its first line `Lane NAME` names the owner)")
+    ap.add_argument("--base", default="main", help="open: the base branch (default main)")
+    ap.add_argument("--draft", action="store_true", help="open: as a draft (default: ready for review)")
     a = ap.parse_args(argv)
+    if a.command == "open":
+        if not (a.head and a.title and a.body_file):
+            ap.error("open needs --head BRANCH, --title T and --body-file F")
+        try:
+            top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
+            remote = a.remote or _out(top, "remote", "get-url", "origin")
+            repo = a.repo or ((m := SLUG_RE.search(remote)) and m.group(1))
+            if not repo:
+                raise QueueError(f"can't tell OWNER/NAME from {remote!r}: pass --repo")
+            print(open_pr(top, repo, a.head, a.title, a.body_file.read_text(), base=a.base, sha=a.sha, draft=a.draft))
+            return 0
+        except (QueueError, OSError) as e:
+            print(f"research queue: {e}", file=sys.stderr)
+            return 1
     if a.first and not re.fullmatch(r"\d+(,\d+)*", a.first):
         ap.error(f"--first {a.first!r}: PR numbers separated by commas")
     if a.marked_after and not re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", a.marked_after):
