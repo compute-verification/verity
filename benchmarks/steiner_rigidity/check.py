@@ -546,6 +546,7 @@ def part5(p=10007, c=6):
         index = {t: i for i, t in enumerate(leaves_of(tree))}
         lam = lambda S: sum((np.outer(a[:, index[t]], b[:, index[t]]) for t in S),
                             np.zeros((a.shape[0], b.shape[0]), dtype=np.int64)) % p
+        assert all(rank(lam(below(i)), p) <= 1 for i in edges), "(L) fails on the re-attached tree"
         lhs = sum(np.kron(lam([t]), tval[x]) for t, x in final.items()) % p
         rhs = sum(np.kron(lam(below(i)), tR[i]) for i in edges) % p
         assert np.array_equal(lhs, rhs), "flattening identity fails on the re-attached tree"
