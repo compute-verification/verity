@@ -28,8 +28,10 @@ excludes and `regFinder` prices once per audit: no new event, no guarantee recor
   part's row port's entry to `--rec-rows`' entry of its name, registration and reads, and `checkOwn` a message-round
   port's entry to its value and reads (`mIndex_m`: `m<hr>` is round `hr`'s).
 * `ReadsOwnAt`, `readsOwnAt_of`: a registered read is the reads file's entry of its name at the unit's own row, from
-  `readsOwn_of_hown` and the label check at reached, checked outcomes (`ReachedChecked`, named: `accRead_at_unit`'s
-  premises at every session).
+  `readsOwn_of_hown` and the label check at reached, checked outcomes (`ReachedChecked`: `accRead_at_unit`'s
+  premises at every session). `reachedChecked_of` discharges it: an accepted record is a session-game outcome
+  (`Accepted`'s tie), so each session's record is reached and written, and `ChecksC3Reached` (named, `ChecksReached`'s
+  form at `ChecksC3`) transfers the checks to it along the record's draw (`checksC3_of_recordDraw`).
 * `hSite_of_checked`: the two reads' registration and position: both entries read `rec-c<hr>` at both reps' rows
   (`checkOwn`), `--rec-rows` registers it (`checkRows` at the part's `m<hr>`), and `checkShared` holds both to its
   first entry of that value (`site_of_checkShared`).
@@ -483,7 +485,7 @@ theorem srcHTie_of {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ →
     (h : SrcHReads zs dg N k Rw stp w) : SrcHTie zs dg N k Rw stp w := by
   intro R ω t R₂ τ o hA i s un j hj c hcp hun
   obtain ⟨U, hU⟩ := h R ω t R₂ τ o hA i
-  exact h_of_reads (u := stp R ω t (layers zs dg N k Rw R ω t R₂ τ)) hA.2 hcp U (hU s un j hj c hcp hun)
+  exact h_of_reads (u := stp R ω t (layers zs dg N k Rw R ω t R₂ τ)) hA.2.1 hcp U (hU s un j hj c hcp hun)
 
 /-- **`SrcHTie` at a copy of `SparseSessionAt`'s form at rep `i`'s unit**: the form `SparseRepTie`'s `h` conjunct
 takes, where `SparseSessionAt`'s copy is at unit `i` (which it does not yet state). -/
@@ -561,6 +563,48 @@ def ReachedChecked (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteA
     Reached (F.zs R ω t R₂ j) (o j) ∧ ∃ (ish : Flock.RecVStar.Inner) (cs : Option Flock.RecVStar.InnerCommits)
       (coins : Option Flock.RecCoins.Source) (f : VStar.Bindings) (rows' : Option (Array Flock.Registered.Port)),
       Flock.Guarantees.ChecksC3 ish cs coins j f rows' (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own (o j).2.2
+
+/-- Obligation (`ChecksReached`'s form, at candidate 3's checks): where session `j` accepts a transcript it writes,
+some transcript it writes and accepts passes the verifier's candidate-3 checks of that session (`ChecksC3` at the
+family's shape, commits, coins and bindings). The checked family's written re-gate discharges it, as it discharges
+`ChecksReached`. -/
+def ChecksC3Reached (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
+    (cs : List (Cm × (ℐ).Coin) → Option Flock.RecVStar.InnerCommits)
+    (coins : List (Cm × (ℐ).Coin) → Option Flock.RecCoins.Source)
+    (rows : Option (Array Flock.Registered.Port)) : Prop :=
+  ∀ R ω t R₂ (j : Fin (vstarCount F.ish)),
+    (∃ R' tr', (F.zs R ω t R₂ j).Writes R' tr' ∧ AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr') →
+    ∃ R' tr', (F.zs R ω t R₂ j).Writes R' tr' ∧ AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr' ∧
+      Flock.Guarantees.ChecksC3 F.ish (cs t) (coins t) j (F.bind j) rows (F.zs R ω t R₂ j).I
+        (F.zs R ω t R₂ j).own tr'
+
+/-- **`ReachedChecked` from `ChecksC3Reached`**: an accepted record is a session-game outcome (`Accepted`'s outcome
+tie), so each session's record is one its game reaches (`Reached`, `ZkOuter.outcome_writes`) — a transcript the
+session writes and accepts. `ChecksC3Reached` then checks some written, accepted transcript; under V*'s full draw
+every written record carries one draw (`execOS_subset_full_mem`, through the record's custody `hRec`), so the checks
+transfer to the outcome's own transcript (`checksC3_of_recordDraw`). -/
+theorem reachedChecked_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {dg : ByteArray → ByteArray} {N k Rw : ℕ}
+    {cs : List (Cm × (ℐ).Coin) → Option Flock.RecVStar.InnerCommits}
+    {coins : List (Cm × (ℐ).Coin) → Option Flock.RecCoins.Source}
+    {rows : Option (Array Flock.Registered.Port)}
+    (hcr : ChecksC3Reached F cs coins rows) : ReachedChecked F dg N k Rw := by
+  intro R ω t R₂ τ o hA j
+  obtain ⟨ω₁, x₁, hx₁⟩ := (F.zs R ω t R₂ j).outcome_writes dg N (τ j) (hA.2.2 j)
+  have hwr : (o j).2.2 = (F.zs R ω t R₂ j).wr ((F.Vs j).law.live.draw ω₁) (τ j).1 x₁ := by rw [hx₁]
+  have hacc₁ : AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own
+      ((F.zs R ω t R₂ j).wr ((F.Vs j).law.live.draw ω₁) (τ j).1 x₁) := by
+    rw [← hwr]
+    exact (hA.1 j).1
+  obtain ⟨R₁, tr₁, hw₁, hacc₂, hc3⟩ := hcr R ω t R₂ j ⟨(τ j).1, _, ⟨ω₁, x₁, rfl⟩, hacc₁⟩
+  obtain ⟨ω₂, x₂, rfl⟩ := hw₁
+  have huniv : (F.Vs j).law.live.draw ω₁ = (F.Vs j).law.live.draw ω₂ :=
+    (Finset.eq_univ_iff_forall.2 fun u => execOS_subset_full_mem (F.Vs j).law.src ω₁ u).trans
+      (Finset.eq_univ_iff_forall.2 fun u => execOS_subset_full_mem (F.Vs j).law.src ω₂ u).symm
+  have hd₁ := ((F.zs R ω t R₂ j).hRec _ _ x₁ (acceptsZK_of_R hacc₁)).1
+  have hd₂ := ((F.zs R ω t R₂ j).hRec _ _ x₂ (acceptsZK_of_R hacc₂)).1
+  refine ⟨⟨ω₁, (τ j).1, x₁, hx₁⟩, F.ish, cs t, coins t, F.bind j, rows,
+    Flock.Guarantees.checksC3_of_recordDraw hc3 ?_⟩
+  rw [hwr, hd₁, hd₂, huniv]
 
 /-- **A registered read's port is the reads file's entry of its name, read at the unit's own row.** -/
 def ReadsOwnAt (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray) (N k Rw : ℕ) : Prop :=

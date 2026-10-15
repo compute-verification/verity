@@ -105,14 +105,16 @@ theorem prob_regColl_le (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ �
     (by positivity)).2 hev
 
 /-- **`VBridge` off `Bad`**: at every history `(R, ω, t)` and registration `R₂` where `Bad` fails, and strategies `τ` of
-V*'s sessions there, when every session accepts and every layer is `Good`, the inner verifier accepts the messages
-`wmsg` reads from the layers. -/
+V*'s sessions there, at every record that is a genuine session-game outcome (each session's outcome is one its game
+reaches against `τ j`, `Game.Outcome`), when every session accepts and every layer is `Good`, the inner verifier
+accepts the messages `wmsg` reads from the layers. -/
 def VBridgeOff (Bad : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → Prop)
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (x : Reg → L.Ω → I.Stmt)
     (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg) : Prop :=
   ∀ R ω t R₂, ¬ Bad R ω t R₂ → ∀ (τ : (j : Fin S) → Strategy ((zs R ω t R₂ j).game dg N))
     (o : (j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript),
+    (∀ j, Game.Outcome ((zs R ω t R₂ j).game dg N) (τ j) (o j)) →
     (∀ j, LiveAcceptsZKR (zs R ω t R₂ j).I (zs R ω t R₂ j).own (o j) ∧
       (zs R ω t R₂ j).Good ((zs R ω t R₂ j).layer dg N k Rw (τ j))) →
     I.accepts (x R ω) ((wmsg fun j => (zs R ω t R₂ j).layer dg N k Rw (τ j)).zip (t.map Prod.snd))
@@ -121,7 +123,7 @@ theorem VBridge.off {Bad : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → P
     {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
     {N k Rw : ℕ} {x : Reg → L.Ω → I.Stmt} {wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg}
     (h : Recursion.VBridge zs dg N k Rw x wmsg) : VBridgeOff Bad zs dg N k Rw x wmsg :=
-  fun R ω t R₂ _ => h R ω t R₂
+  fun R ω t R₂ _ τ o _ => h R ω t R₂ τ o
 
 /-- `outerV_le` with `Q` reading the registration the prover sends. -/
 theorem outerV_le_dep
@@ -132,6 +134,7 @@ theorem outerV_le_dep
     {t' : ℝ} (ht' : 0 ≤ t') (qF qS qW qR : ℝ) (Q : Reg₂ → ((j : Fin S) → (Vs j).Bits) → Prop)
     (hQ : ∀ R₂ (τ : (j : Fin S) → Strategy ((zs R₂ j).game dg N))
       (o : (j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript),
+      (∀ j, Game.Outcome ((zs R₂ j).game dg N) (τ j) (o j)) →
       (∀ j, LiveAcceptsZKR (zs R₂ j).I (zs R₂ j).own (o j) ∧ (zs R₂ j).Good ((zs R₂ j).layer dg N k Rw (τ j))) →
       Q R₂ fun j => (zs R₂ j).layer dg N k Rw (τ j))
     (s : Strategy (outerV zs dg N)) :
@@ -210,7 +213,8 @@ theorem zk_sessions_recursive_upto_off
         · exact Or.inl ⟨ha, fun h => h.elim hb hn⟩
       · exact outerV_le_dep hA3 (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht' qF qS qW qR
           (fun R₂ Xs => Bad σ.1 ω t R₂ ∨ I.accepts (x σ.1 ω) ((wmsg Xs).zip (t.map Prod.snd)))
-          (fun R₂ τ o h => (Classical.em (Bad σ.1 ω t R₂)).elim Or.inl fun hb => Or.inr (hbr σ.1 ω t R₂ hb τ o h)) s
+          (fun R₂ τ o hout h =>
+            (Classical.em (Bad σ.1 ω t R₂)).elim Or.inl fun hb => Or.inr (hbr σ.1 ω t R₂ hb τ o hout h)) s
     refine le_trans (b := expAt σ fun ω t s => sumV (zs σ.1 ω t) dg N
         (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s +
           prob (fun b => Bad σ.1 ω t b.1) (outerV (zs σ.1 ω t) dg N) s)
