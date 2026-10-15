@@ -10,6 +10,7 @@ summation order, against the accumulator's exact range (2^24 for FP32 accumulati
     int8          integers |x| <= 127 (IMMA s8 x s8 -> s32)
     e4m3i16       E4M3's integers |x| <= 16, all integers
     e4m3ik        E4M3's exact integers (1..16, 18..32 by 2, 36..64 by 4, ...) up to M(k), the largest with k M^2 <= 2^24
+    e4m3ika       the same set, activations to M_a and weights to M_w with k M_a M_w <= 2^24 (`e4m3_split`)
     e4m3i448      the same set up to 448 (exact only for k <= 83; a quality reference)
     e2m1i         E2M1's integers {0, 1, 2, 3, 4, 6}
 
@@ -62,18 +63,28 @@ E2M1 = [0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0]
 E2M1_INT = [0, 1, 2, 3, 4, 6]
 
 
-def grid(base: str, k: int) -> tuple[list[float], int]:
-    """(nonnegative levels, accumulator exact range) of an exact format at depth k."""
+def e4m3_split(k: int) -> tuple[int, int]:
+    """(activation top, weight top) among E4M3's integers: the weight top at most half of sqrt(2^24 / k), the activation
+    top the largest with k M_a M_w <= 2^24 (128 and 32 at k = 4096, 72 and 16 at k = 14,336)."""
+    mw = max(v for v in e4m3_ints(448) if 2 * v <= math.sqrt(FP32_EXACT / k))
+    return max(v for v in e4m3_ints(448) if k * v * mw <= FP32_EXACT), mw
+
+
+def grid(base: str, k: int) -> tuple[list[float], list[float], int]:
+    """(activation levels, weight levels, accumulator exact range) of an exact format at depth k; levels nonnegative."""
     if base == "int8":
-        return list(range(128)), S32_EXACT
+        return list(range(128)), list(range(128)), S32_EXACT
     if base == "e4m3i16":
-        return list(range(17)), FP32_EXACT
+        return list(range(17)), list(range(17)), FP32_EXACT
     if base == "e4m3ik":
-        return e4m3_ints(e4m3_top(k)), FP32_EXACT
+        return e4m3_ints(e4m3_top(k)), e4m3_ints(e4m3_top(k)), FP32_EXACT
+    if base == "e4m3ika":
+        ma, mw = e4m3_split(k)
+        return e4m3_ints(ma), e4m3_ints(mw), FP32_EXACT
     if base == "e4m3i448":
-        return e4m3_ints(448), FP32_EXACT
+        return e4m3_ints(448), e4m3_ints(448), FP32_EXACT
     if base == "e2m1i":
-        return E2M1_INT, FP32_EXACT
+        return E2M1_INT, E2M1_INT, FP32_EXACT
     raise KeyError(base)
 
 
@@ -169,7 +180,7 @@ def rotation(k: int, device) -> torch.Tensor:
     return _ROT[k]
 
 
-EXACT = ("int8", "e4m3i16", "e4m3ik", "e4m3i448", "e2m1i")
+EXACT = ("int8", "e4m3i16", "e4m3ik", "e4m3ika", "e4m3i448", "e2m1i")
 REFERENCE = ("fp8_tensor", "fp8_token", "fp8_block", "nvfp4")
 
 
@@ -182,18 +193,17 @@ def product(method: str, x: torch.Tensor, w: torch.Tensor, wcache: dict) -> tupl
         q = rotation(k, x.device)
         x = x @ q
     if base in EXACT:
-        lv, acc = grid(base, k)
-        levels = torch.tensor(lv, dtype=torch.float64, device=x.device)
+        la, lw, acc = grid(base, k)
         if "w" not in wcache:
             wq = w @ rotation(k, w.device) if rot else w
-            wcache["w"] = quant_rows(wq, levels, clip)
+            wcache["w"] = quant_rows(wq, torch.tensor(lw, dtype=torch.float64, device=x.device), clip)
         bi, sb = wcache["w"]
-        ai, sa = quant_rows(x, levels, False)
+        ai, sa = quant_rows(x, torch.tensor(la, dtype=torch.float64, device=x.device), False)
         s = ai @ bi.T
         bound = float((ai.abs().float() @ bi.abs().float().T).max())
-        a_priori = k * float(lv[-1]) ** 2
-        return s * sa[:, None] * sb[None, :], {"bound": bound, "acc": acc, "top": float(lv[-1]), "a_priori": a_priori,
-                                                "exact": bound <= acc, "guaranteed": a_priori <= acc}
+        a_priori = k * float(la[-1]) * float(lw[-1])
+        return s * sa[:, None] * sb[None, :], {"bound": bound, "acc": acc, "top": [float(la[-1]), float(lw[-1])],
+                                                "a_priori": a_priori, "exact": bound <= acc, "guaranteed": a_priori <= acc}
     if base in ("fp8_tensor", "fp8_token", "fp8_block"):
         if "w" not in wcache:
             wcache["w"] = fp8_dequant(w @ rotation(k, w.device) if rot else w, base, "w")
@@ -255,6 +265,7 @@ def load(snapshot: str):
 def selftest() -> dict:
     """Grids, exactness and rotation on small tensors; every method runs on a tiny random Llama."""
     assert e4m3_ints(32) == list(range(17)) + list(range(18, 33, 2))
+    assert e4m3_split(4096) == (128, 32) and e4m3_split(14336) == (72, 16)
     assert e4m3_top(4096) == 64 and e4m3_top(14336) == 32 and max(e4m3_ints(448)) == 448 and len(e4m3_ints(448)) == 55
     for v in e4m3_ints(448):
         assert float(torch.tensor(float(v)).to(torch.float8_e4m3fn).float()) == v
@@ -283,7 +294,7 @@ def selftest() -> dict:
 
 #: sm_120 dense tensor rate (MACs/SM/clk, note:20261015T0608Z-draft-census-sm120) of the instruction each format runs on
 RATE = {"int8": (1024, "IMMA s8"), "e4m3i16": (1024, "QMMA e4m3"), "e4m3ik": (1024, "QMMA e4m3"),
-        "e4m3i448": (1024, "QMMA e4m3"), "e2m1i": (2048, "OMMA.SF nvf4, unit scales"), "fp8_tensor": (1024, "QMMA e4m3"),
+        "e4m3ika": (1024, "QMMA e4m3"), "e4m3i448": (1024, "QMMA e4m3"), "e2m1i": (2048, "OMMA.SF nvf4, unit scales"), "fp8_tensor": (1024, "QMMA e4m3"),
         "fp8_token": (1024, "QMMA e4m3"), "fp8_block": (1024, "QMMA e4m3 + rescale per 128"),
         "nvfp4": (2048, "OMMA.SF nvf4")}
 
