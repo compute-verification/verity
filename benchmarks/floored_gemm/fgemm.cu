@@ -22,9 +22,9 @@
 // Kernels: form (A~ or B~ and the tail rows P_A = [E_A | V_hi | E_A | V_lo], P_B = [W_hi | E_B | W_lo | E_B], one warp a row),
 // and the GEMM (8 warps of s32 accumulators over a TMA ring; thread 0 issues each load as its slot is released).
 // cuBLASLt's int8 GEMM (s32 out) is the baseline. Modes:
-//   fgemm gate DIR M N K GRID SEED C    every arm on one small shape at tile config C (P, D or Q), inputs and outputs to DIR for ref.py
-//   fgemm bench REPS SHAPE...           interleaved timing, one JSON line a shape (SHAPE = name:m:n:k[:P|D|Q])
-//   fgemm one ARM M N K [P|D|Q]         warm-up then one call of ARM (for ncu)
+//   fgemm gate DIR M N K GRID SEED C    every arm on one small shape at tile config C (P, D, Q or W), inputs and outputs to DIR for ref.py
+//   fgemm bench REPS SHAPE...           interleaved timing, one JSON line a shape (SHAPE = name:m:n:k[:P|D|Q|W])
+//   fgemm one ARM M N K [P|D|Q|W]       warm-up then one call of ARM (for ncu)
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a fgemm.cu -lcuda -lcublasLt -lnvidia-ml
 #include <cublasLt.h>
 #include <cuda.h>
@@ -165,7 +165,7 @@ struct Args {
 template <int TM, int BN, int WM, int STAGES> struct ML {
   static constexpr int BK = 128, WN = 32, WARPS_M = TM / WM, WARPS_N = BN / WN, NCW = WARPS_M * WARPS_N, NCT = NCW * 32,
                        MI = WM / 16, NI = WN / 8;
-  static_assert(NCW == 8, "8 warps");
+  static_assert(NCW == 8 || NCW == 16, "8 or 16 warps");
   // no producer warp: a ninth warp puts three warps on one of the SM's four 16,384-register partitions, capping every
   // thread at 168 registers, and the receipt kernels spill there
   static constexpr int NT = NCT;
@@ -384,7 +384,7 @@ template <int TM, int BN, int WM, int STAGES, bool TAIL, int RS, int KIND> DEV v
 // ---------------------------------------------------------------- the kernels
 // configurations: P (prefill) 128 x 128 tiles, warps 64 x 32, 3 stages; D (decode) 128 x 32, warps 16 x 32, 4 stages
 #define GEMM(NAME, TM, BN, WM, ST, TAIL, RS, KIND)                                                               \
-  __global__ void __launch_bounds__(256, 1) NAME(const Args a) { gemm_body<TM, BN, WM, ST, TAIL, RS, KIND>(a); }
+  __global__ void __launch_bounds__(ML<TM, BN, WM, ST>::NT, 1) NAME(const Args a) { gemm_body<TM, BN, WM, ST, TAIL, RS, KIND>(a); }
 GEMM(p_plain, 128, 128, 64, 3, false, 0, NONE)
 GEMM(p_g0, 128, 128, 64, 3, true, 0, NONE)
 GEMM(p_duo32, 128, 128, 64, 3, true, 32, DUO)
@@ -403,6 +403,12 @@ GEMM(q_duo32, 128, 64, 32, 4, true, 32, DUO)
 GEMM(q_duo64, 128, 64, 32, 4, true, 64, DUO)
 GEMM(q_duo2_32, 128, 64, 32, 4, true, 32, DUO2)
 GEMM(q_duo2_64, 128, 64, 32, 4, true, 64, DUO2)
+GEMM(w_plain, 128, 128, 32, 3, false, 0, NONE)
+GEMM(w_g0, 128, 128, 32, 3, true, 0, NONE)
+GEMM(w_duo32, 128, 128, 32, 3, true, 32, DUO)
+GEMM(w_duo64, 128, 128, 32, 3, true, 64, DUO)
+GEMM(w_duo2_32, 128, 128, 32, 3, true, 32, DUO2)
+GEMM(w_duo2_64, 128, 128, 32, 3, true, 64, DUO2)
 
 // Forming, one warp a row. own[col] = pi1 | pi2 << 8 | s1 << 16 | s2 << 17: the noise at column col of chunk s is
 // (-1)^s1 E[r, pi1] + (-1)^s2 E[r, pi2] (F_own's row col). inv[s 32 + j] = c1 | c2 << 8 | s1 << 16 | s2 << 17 for the other
@@ -515,6 +521,9 @@ static Cfg cfg_p() { return {'P', 128, 128, 64, 256, ML<128, 128, 64, 3>::SMEM, 
 static Cfg cfg_d() { return {'D', 128, 32, 16, 256, ML<128, 32, 16, 4>::SMEM, {d_plain, d_g0, d_duo32, d_duo64, d_duo2_32, d_duo2_64}}; }
 // Q: 128 x 64 tiles of 32 x 32 warps (32 accumulators a thread, against P's 64), for the receipt kernels' registers
 static Cfg cfg_q() { return {'Q', 128, 64, 32, 256, ML<128, 64, 32, 4>::SMEM, {q_plain, q_g0, q_duo32, q_duo64, q_duo2_32, q_duo2_64}}; }
+// W: 128 x 128 tiles of 16 warps of 32 x 32 (four warps an SMSP, 128 registers a thread), so one warp's receipt chains
+// can issue while another waits on its own
+static Cfg cfg_w() { return {'W', 128, 128, 32, 512, ML<128, 128, 32, 3>::SMEM, {w_plain, w_g0, w_duo32, w_duo64, w_duo2_32, w_duo2_64}}; }
 static const char* GNAME[6] = {"plain", "g0", "duo32", "duo64", "duo2_32", "duo2_64"};
 static const int GRS[6] = {0, 0, 32, 64, 32, 64};
 
@@ -623,7 +632,7 @@ struct Host {   // what the gate dumps
 
 static void setup(Prob& P, int m, int n, int k, int grid_cap, uint32_t seed, Host* keep, char force = 0) {
   P.m = m; P.n = n; P.k = k; P.seed = seed;
-  P.cfg = force == 'P' ? cfg_p() : force == 'D' ? cfg_d() : force == 'Q' ? cfg_q() : m >= 1024 ? cfg_p() : cfg_d();
+  P.cfg = force == 'P' ? cfg_p() : force == 'D' ? cfg_d() : force == 'Q' ? cfg_q() : force == 'W' ? cfg_w() : m >= 1024 ? cfg_p() : cfg_d();
   if (m % P.cfg.TM || n % P.cfg.BN || k % 128 || k < 256) { fprintf(stderr, "shape %d %d %d not tiled\n", m, n, k); exit(2); }
   int nsm;
   CK(cudaDeviceGetAttribute(&nsm, cudaDevAttrMultiProcessorCount, 0));
@@ -673,7 +682,7 @@ static void form(Prob& P, int i) {
 }
 static void gemm(Prob& P, int kind, int i) {
   Args a{kind == 0 ? P.maps_plain[i] : P.maps_noised[i], P.U, P.R, P.m, P.n, P.k, P.group, P.seed};
-  P.cfg.k[kind]<<<P.grid, 256, P.cfg.smem, P.st>>>(a);
+  P.cfg.k[kind]<<<P.grid, P.cfg.NCT, P.cfg.smem, P.st>>>(a);
 }
 // the arms: lt (a), plain (my mainloop on Q(A), Q(B)), form, g0 (the noised GEMM and peel alone), and the whole noised call
 // form + GEMM: b (no receipts), c (duo, stride 32), d (duo, 64), c2 / d2 (duo2); and with B~ formed once per challenge
@@ -815,10 +824,10 @@ static int cmd_bench(int reps, const std::vector<std::string>& shapes) {
     int flag;
     CK(cudaMemcpy(&flag, P.flag, 4, cudaMemcpyDeviceToHost));
     const double macs = (double)m * n * k;
-    printf("{\"shape\": \"%s\", \"m\": %d, \"n\": %d, \"k\": %d, \"sms\": %d, \"gpu\": \"%s\", \"grid\": %d, \"tile\": \"%dx%d\", "
+    printf("{\"shape\": \"%s\", \"m\": %d, \"n\": %d, \"k\": %d, \"sms\": %d, \"gpu\": \"%s\", \"grid\": %d, \"tile\": \"%dx%d/%dw\", "
            "\"weight_copies\": %d, \"limb_overflow\": %d, \"lt\": {\"algo\": %d, \"tile\": %d, \"stages\": %d, \"splitk\": %d, "
            "\"candidates\": %d}, \"arms\": {",
-           name, m, n, k, nsm, prop.name, P.grid, P.cfg.TM, P.cfg.BN, P.nb, flag, P.lt.algo_id, P.lt.tile, P.lt.stages,
+           name, m, n, k, nsm, prop.name, P.grid, P.cfg.TM, P.cfg.BN, P.cfg.NCT / 32, P.nb, flag, P.lt.algo_id, P.lt.tile, P.lt.stages,
            P.lt.splitk, P.lt.ncand);
     for (int a = 0; a < NARM; a++) {
       const double t = median(ms[a]), f = median(mhz[a]);
@@ -866,6 +875,6 @@ int main(int argc, char** argv) {
     return cmd_bench(atoi(argv[2]), s);
   }
   if (argc >= 6 && !strcmp(argv[1], "one")) return cmd_one(argv[2], atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), argc > 6 ? argv[6][0] : 0);
-  fprintf(stderr, "usage: fgemm gate DIR M N K GRID SEED P|D|Q | bench REPS name:m:n:k[:C]... | one ARM M N K [C]\n");
+  fprintf(stderr, "usage: fgemm gate DIR M N K GRID SEED P|D|Q|W | bench REPS name:m:n:k[:C]... | one ARM M N K [C]\n");
   return 2;
 }

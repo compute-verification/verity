@@ -53,7 +53,7 @@ LINEAR = {(6144, 4096): "q/k/v", (4096, 4096): "o", (28672, 4096): "gate/up", (4
 
 
 def best(bench):
-    """One row per (m, n, k): each arm at its faster tile config (its ms, eta and config)."""
+    """One row per (m, n, k): each arm at its fastest tile config (its ms, eta and config)."""
     by = {}
     for s in bench:
         key = (s["m"], s["n"], s["k"])
@@ -68,7 +68,7 @@ def best(bench):
 def print_best(bench):
     rows = best(bench)
     arms = [a for a in ("lt", "b", "c", "d", "c2", "d2", "bA", "cA", "c2A") if all(a in r["arms"] for r in rows)]
-    print("Each arm at its faster tile (128x128 or 128x64 for m >= 4096): η, and time over (a)'s")
+    print("Each arm at its fastest tile config: η, and time over (a)'s")
     print()
     print("| shape | " + " | ".join(f"{a} η" for a in arms) + " | " + " | ".join(f"{a} vs (a)" for a in arms[1:]) + " |")
     print("|" + "---|" * (1 + 2 * len(arms) - 1))
@@ -112,7 +112,7 @@ def main() -> int:
         print()
         print("| shape | arm | call tensor % | GEMM tensor % | GEMM ALU % | GEMM issue % | GEMM DRAM % | kernels | ns |")
         print("|---|---|---|---|---|---|---|---|---|")
-        for f in sorted(out.glob("ncu-*.csv")):
+        for f in sorted(p for p in out.glob("ncu-*.csv") if not p.name.startswith("ncu-stall")):
             nm, arm = f.stem[4:].rsplit("-", 1)
             r = ncu_tensor(f)
             if r:
