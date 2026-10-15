@@ -11,12 +11,12 @@ import sqlite3
 import statistics
 import sys
 
-#: the bandwidth audit's kernels (`benchmarks/remote_session/session.cu`); every other kernel is Pearl-C's
-AUDIT_KERNELS = ("sketch16", "pass_consumer", "chain_prepare", "level_kernel", "signs16", "wait_kernel", "rb_", "rs_")
+#: the bandwidth audit's kernels are in `benchmarks/remote_session/session.cu`'s namespace; every other kernel is Pearl-C's
+AUDIT_NAMESPACE = "rb::"
 
 
 def protocol_of(name: str) -> str:
-    return "audit" if any(t in name for t in AUDIT_KERNELS) else "pouw"
+    return "audit" if name.startswith(AUDIT_NAMESPACE) else "pouw"
 
 
 def union(intervals: list[tuple[int, int]]) -> int:

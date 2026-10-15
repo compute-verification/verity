@@ -7,7 +7,7 @@ clock (the SMs' from NVML in that run; L2's and DRAM's from ncu); in the joint r
 GPU-metric sampler measures the same resource (`nsys_summary.py`: SMs active, tensor active, warps in flight, DRAM
 bandwidth), its device-wide reading is beside it, and it is the joint run's measured value.
 
-    python summarize.py OUT_DIR [--m 32,128] [--json]
+    python summarize.py OUT_DIR [--m 32,128] [--variant _h9] [--json]
 """
 from __future__ import annotations
 
@@ -28,11 +28,14 @@ RESOURCES = [
     ("XU issue", "sm__inst_executed_pipe_xu", "sm"),
     ("uniform issue", "sm__inst_executed_pipe_uniform", "sm"),
     ("TMA pipe", "sm__pipe_tma_cycles_active", "sm"),
+    ("ALU heavy", "sm__pipe_aluheavy_cycles_active", "sm"),
+    ("SM sub-unit max (sm__throughput)", "sm__throughput", "sm"),
     ("SM issue (all inst)", "sm__inst_executed", "sm"),
     ("SM active cycles", "sm__cycles_active", "sm"),
     ("warp occupancy", "sm__warps_active", "sm"),
     ("L1/LSU wavefronts", "l1tex__data_pipe_lsu_wavefronts", "sm"),
     ("L2 sectors", "lts__t_sectors", "lts"),
+    ("L2 sub-unit max (lts__throughput)", "lts__throughput", "lts"),
     ("L2 reductions (sectors)", "lts__t_sectors_op_red", "lts"),
     ("L2 atomics (sectors)", "lts__t_sectors_op_atom", "lts"),
     ("L2 atomic unit busy", "lts__d_atomic_input_cycles_active", "lts"),
@@ -43,7 +46,7 @@ NSYS = {
     "SM active cycles": "SMs Active",
     "SM issue (all inst)": "SM Issue",
     "tensor pipe (all)": "Tensor Active",
-    "warp occupancy": "Compute Warps In Flight",
+    "warp occupancy": "Compute Warps in Flight [Throughput",
 }
 NSYS_DRAM = ("DRAM Read Bandwidth", "DRAM Write Bandwidth")
 
@@ -74,10 +77,10 @@ def util(busy: dict, ncu: dict, rate_json: dict, per_s: float, base: str, domain
     return b * per_s / clock(rate_json, ncu, domain)
 
 
-def table(d: Path, m: int) -> dict:
-    pr, ar, jr = load(d / f"pouw{m}.json"), load(d / "audit.json"), load(d / f"joint{m}.json")
-    pn, an = load(d / f"ncu_pouw{m}.sum.json"), load(d / "ncu_audit.sum.json")
-    pg, ag, jg = (load(d / f"nsys_{x}.gpu.json") for x in (f"pouw{m}", "audit", f"joint{m}"))
+def table(d: Path, m: int, v: str) -> dict:
+    pr, ar, jr = load(d / f"pouw{m}.json"), load(d / f"audit{v}.json"), load(d / f"joint{m}{v}.json")
+    pn, an = load(d / f"ncu_pouw{m}.sum.json"), load(d / f"ncu_audit{v}.sum.json")
+    pg, ag, jg = (load(d / f"nsys_{x}.gpu.json") for x in (f"pouw{m}", f"audit{v}", f"joint{m}{v}"))
     rows = []
     for name, base, dom in RESOURCES:
         row = {"resource": name}
@@ -118,7 +121,8 @@ def table(d: Path, m: int) -> dict:
         if ar:
             rates["procs_audit_slowdown"] = ar["audit"]["passes_per_s"] / pa["audit"]["passes_per_s"]
     clocks = {k: (j or {}).get("nvml", {}).get("sm_mhz_median") for k, j in (("pouw", pr), ("audit", ar), ("joint", jr))}
-    return {"m": m, "rows": rows, "rates": rates, "sm_mhz": clocks}
+    power = {k: (j or {}).get("nvml", {}).get("power_w_median") for k, j in (("pouw", pr), ("audit", ar), ("joint", jr))}
+    return {"m": m, "audit_variant": v or "as shipped", "rows": rows, "rates": rates, "sm_mhz": clocks, "power_w": power}
 
 
 def fmt(x) -> str:
@@ -126,7 +130,8 @@ def fmt(x) -> str:
 
 
 def show(t: dict) -> str:
-    out = [f"m = {t['m']} (n = k = 8192); SM MHz {t['sm_mhz']}", f"rates {json.dumps({k: round(v, 3) for k, v in t['rates'].items()})}",
+    out = [f"m = {t['m']} (n = k = 8192), audit {t['audit_variant']}; SM MHz {t['sm_mhz']}; power W {t['power_w']}",
+           f"rates {json.dumps({k: round(v, 3) for k, v in t['rates'].items()})}",
            "| resource | PoUW alone | audit alone | joint (ncu sum) | joint (nsys) | idle joint |", "|---|---|---|---|---|---|"]
     for r in t["rows"]:
         ns = r.get("nsys") or {}
@@ -140,9 +145,10 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("out", type=Path)
     ap.add_argument("--m", default="32,128")
+    ap.add_argument("--variant", default="_h9", help="the audit's phase suffix (run.sh's _h9, _p0; '' as shipped)")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args()
-    ts = [table(a.out, int(m)) for m in a.m.split(",")]
+    ts = [table(a.out, int(m), a.variant) for m in a.m.split(",")]
     print(json.dumps(ts, indent=1) if a.json else "\n\n".join(show(t) for t in ts))
     return 0
 
