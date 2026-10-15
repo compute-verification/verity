@@ -145,6 +145,45 @@ theorem time_snd_le {I J : Type} : Mc.time (Mc.snd (I := I) (J := J)) ≤ 0 := M
 
 end Machine
 
+/-- The axioms are satisfiable with nontrivial prices: algorithms are functions annotated with a cost, composition
+adds costs, routing is free, and an `a × b` by `b × c` product costs exactly `a b c`. (This model has no floor: any
+function is an algorithm. A floor needs a syntactic model, RS-MODEL's.) -/
+def costed : Machine where
+  Alg I O := (I → O) × ℕ
+  eval f := f.1
+  time f := f.2
+  seq f g := (g.1 ∘ f.1, f.2 + g.2)
+  pair f g := (fun x => (f.1 x, g.1 x), f.2 + g.2)
+  fst := (Prod.fst, 0)
+  snd := (Prod.snd, 0)
+  eval_seq _ _ _ := rfl
+  eval_pair _ _ _ := rfl
+  eval_fst _ := rfl
+  eval_snd _ := rfl
+  time_nonneg _ := Nat.cast_nonneg _
+  time_seq_le _ _ := by push_cast; rfl
+  le_time_seq _ g := by push_cast; linarith [Nat.cast_nonneg (α := ℝ) g.2]
+  time_pair_le _ _ := by push_cast; rfl
+  le_time_pair_left _ g := by push_cast; linarith [Nat.cast_nonneg (α := ℝ) g.2]
+  le_time_pair_right f _ := by push_cast; linarith [Nat.cast_nonneg (α := ℝ) f.2]
+  time_fst := by simp
+  time_snd := by simp
+
+/-- `costed` with matrix arithmetic over a ring: `κ = κadd = 1`. -/
+def costedMat (R : Type) [Ring R] : MatMachine R where
+  toMachine := costed
+  κ := 1
+  κadd := 1
+  mul a b c := (fun x => x.1 * x.2, a * b * c)
+  add a b := (fun x => x.1 + x.2, a * b)
+  sub a b := (fun x => x.1 - x.2, a * b)
+  eval_mul _ _ _ _ := rfl
+  eval_add _ _ _ := rfl
+  eval_sub _ _ _ := rfl
+  time_mul_le a b c := by simp [costed]
+  time_add_le a b := by simp [costed]
+  time_sub_le a b := by simp [costed]
+
 end Machine
 
 section Definition
