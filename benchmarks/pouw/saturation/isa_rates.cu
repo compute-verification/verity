@@ -43,8 +43,8 @@ constexpr int THREADS = 256, CH = 8, STEPS = 16, TBL = 4096, IN_WORDS = 1024;
 
 enum Op : int { FFMA, IADD3, LOP3, IMAD, DP4A, HFMA2, BFMA2, PRMT, CVT8, LDS, LDSC };
 static const char* OPS[] = {"ffma", "iadd3", "lop3", "imad", "dp4a", "hfma2", "bfma2", "prmt", "cvt8", "lds", "ldsc"};
-constexpr bool host_checked(int op) { return op != HFMA2 && op != BFMA2 && op != PRMT && op != CVT8; }
-constexpr bool tabled(int op) { return op == LDS || op == LDSC; }
+__host__ __device__ constexpr bool host_checked(int op) { return op != HFMA2 && op != BFMA2 && op != PRMT && op != CVT8; }
+__host__ __device__ constexpr bool tabled(int op) { return op == LDS || op == LDSC; }
 
 __host__ __device__ inline uint32_t dp4a_s8(uint32_t a, uint32_t b, uint32_t c) {
 #ifdef __CUDA_ARCH__
