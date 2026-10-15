@@ -1,6 +1,7 @@
 // CUDA-pipe census (item 2): warp instructions a SM a clock for each non-tensor op an adversary or the honest prover
 // can use (FFMA, FADD, FMUL, HFMA2, BF16 FMA, IMAD, IADD3, LOP3, SHF, PRMT, POPC, DP4A, the FP8/FP4/BF16/FP16 packing
-// converts, I2F, MUFU, min/max, BREV, FLO), alone and in 1:1 pairs (which pipes issue side by side).
+// converts, I2F, MUFU, min/max, BREV, FLO), alone and in 1:1 pairs (which pipes issue side by side). The `_c` variants
+// take immediates for some operands: an all-register FFMA is register-bank bound, an FFMA with immediates is not.
 //
 // Each op updates eight registers in rotation, r_i = op(r_i, r_{i+1}, r_{i+2}), so no two consecutive ops have three or
 // fewer distinct inputs and ptxas can't merge them (an IADD3 pair is two PTX adds on purpose). One block a SM of 32 warps;
@@ -41,7 +42,12 @@ DEF_OP(op_f2fp_bf16x2, asm volatile("cvt.rn.bf16x2.f32 %0, %1, %2;" : "=r"(x) : 
 DEF_OP(op_f2fp_f16x2, asm volatile("cvt.rn.f16x2.f32 %0, %1, %2;" : "=r"(x) : "f"(F(y)), "f"(F(z))))
 DEF_OP(op_i2f, float t; asm volatile("cvt.rn.f32.u32 %0, %1;" : "=f"(t) : "r"(y)); x = __float_as_uint(t))
 DEF_OP(op_mufu_ex2, float t; asm volatile("ex2.approx.ftz.f32 %0, %1;" : "=f"(t) : "f"(F(y))); x = __float_as_uint(t))
-DEF_OP(op_mufu_rcp, float t; asm volatile("rcp.approx.ftz.f32 %0, %1;" : "=f"(t) : "f"(F(y))); x = __float_as_uint(t))
+// Constant-operand variants: the same pipes with fewer register-file reads (immediates instead of registers).
+DEF_OP(op_ffma_c1, float t = F(x); asm volatile("fma.rn.f32 %0, %0, %1, 0f3F000000;" : "+f"(t) : "f"(F(y))); x = __float_as_uint(t))
+DEF_OP(op_ffma_c2, float t = F(x); asm volatile("fma.rn.f32 %0, %0, 0f3F7FFFFE, 0f3F000000;" : "+f"(t)); x = __float_as_uint(t))
+DEF_OP(op_imad_c, asm volatile("mad.lo.u32 %0, %0, %1, 0x9e3779b9;" : "+r"(x) : "r"(y)))
+DEF_OP(op_iadd3_c, asm volatile("add.u32 %0, %0, %1;\n\tadd.u32 %0, %0, 0x01234567;" : "+r"(x) : "r"(y)))
+DEF_OP(op_lop3_c, asm volatile("lop3.b32 %0, %0, %1, 0x5bd1e995, 0x96;" : "+r"(x) : "r"(y)))
 
 constexpr int ROUNDS = 16;
 
@@ -130,7 +136,11 @@ int main(int argc, char** argv) {
   measure<op_f2fp_f16x2, op_f2fp_f16x2>(only);
   measure<op_i2f, op_i2f>(only);
   measure<op_mufu_ex2, op_mufu_ex2>(only);
-  measure<op_mufu_rcp, op_mufu_rcp>(only);
+  measure<op_ffma_c1, op_ffma_c1>(only);
+  measure<op_ffma_c2, op_ffma_c2>(only);
+  measure<op_imad_c, op_imad_c>(only);
+  measure<op_iadd3_c, op_iadd3_c>(only);
+  measure<op_lop3_c, op_lop3_c>(only);
   // 1:1 pairs: does the second op issue beside the first?
   measure<op_ffma, op_lop3>(only);
   measure<op_ffma, op_imad>(only);
@@ -146,6 +156,14 @@ int main(int argc, char** argv) {
   measure<op_lop3, op_shf>(only);
   measure<op_imad, op_f2fp_e4m3x2>(only);
   measure<op_hfma2, op_ffma>(only);
+  measure<op_ffma_c2, op_lop3_c>(only);
+  measure<op_ffma_c2, op_imad_c>(only);
+  measure<op_ffma_c2, op_iadd3_c>(only);
+  measure<op_ffma_c2, op_f2fp_e4m3x2>(only);
+  measure<op_ffma_c2, op_mufu_ex2>(only);
+  measure<op_ffma_c1, op_lop3_c>(only);
+  measure<op_imad_c, op_lop3_c>(only);
+  measure<op_fadd, op_lop3_c>(only);
   printf("{\"probe\":\"cuda_pipe\",\"done\":true}\n");
   return 0;
 }
