@@ -96,6 +96,13 @@ noncomputable def holoAt (st : Flock.Stmt) (hp : HoloParams) : ExecHolo :=
     ⟨if hp.EllOk (execClassAt st).cls.kLog then schedAt (HoloClass.ofExec (execClassAt st).cls hp).shape.mReg
       else default⟩, hp.τ⟩
 
+/-- **`holoAt` at the typing `τv`**: only the typing replaced. Every other field is `holoAt st hp`'s own term, so a
+defeq that crosses the typing short-circuits on shared subterms; feeding `holoAt` a modified `HoloParams` instead makes
+the unifier and the kernel unfold `holoAt`'s whole body at every failed congruence, which times out. -/
+noncomputable def holoAtτ (st : Flock.Stmt) (hp : HoloParams)
+    (τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog)) : ExecHolo :=
+  { holoAt st hp with τ := τv }
+
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {D Sl : Type}
 
 /-- **R's registration**: the registered word and its level-0 cap. -/
@@ -206,6 +213,12 @@ leaves, at `holoAt st hp`. -/
 noncomputable abbrev holoInnerAt (st : Flock.Stmt) (hp : HoloParams) : Inner :=
   holoInnerCL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (holoAt st hp)
 
+/-- **Candidate 3's inner protocol at the typing `τv`**: `holoInnerAt` at `holoAtτ`. Its `Stmt`, `Msg`, `Coin` and `r`
+are `schedInner`'s parameters, independent of the typing, so they are `holoInnerAt st hp`'s own. -/
+noncomputable abbrev holoInnerAtτ (st : Flock.Stmt) (hp : HoloParams)
+    (τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog)) : Inner :=
+  holoInnerCL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (holoAtτ st hp τv)
+
 /-! ### The error -/
 
 /-- **One rep's sparse phase**, each coin its degree over `qF`: H1's 6 coins, H2's 6 rounds of degree 2, H3's `ν` rounds
@@ -228,6 +241,12 @@ noncomputable def holoError (e : ExecHolo) : ℝ :=
   linkError e.sch ⟨e.cls.kLog, e.regs.length, e.cls.mPts⟩ +
     (repError e.sch ⟨e.cls.kLog, e.regs.length, e.cls.mPts⟩ + sparseError e.cls.shape) ^ 2 +
     regOpenError e.rsch.sch
+
+/-- **`holoAtτ` keeps the error**: `holoError` reads only the typing-independent fields, which are `holoAt st hp`'s
+own terms. -/
+theorem holoError_holoAtτ (st : Flock.Stmt) (hp : HoloParams)
+    (τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog)) : holoError (holoAtτ st hp τv) = holoError (holoAt st hp) :=
+  rfl
 
 /-! ### Clashes -/
 
