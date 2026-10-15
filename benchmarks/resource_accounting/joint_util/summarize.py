@@ -81,6 +81,7 @@ def table(d: Path, m: int, v: str) -> dict:
     pr, ar, jr = load(d / f"pouw{m}.json"), load(d / f"audit{v}.json"), load(d / f"joint{m}{v}.json")
     pn, an = load(d / f"ncu_pouw{m}.sum.json"), load(d / f"ncu_audit{v}.sum.json")
     pg, ag, jg = (load(d / f"nsys_{x}.gpu.json") for x in (f"pouw{m}", f"audit{v}", f"joint{m}{v}"))
+    ns = nsys_rows({"pouw_alone": pg, "audit_alone": ag, "joint": jg})
     rows = []
     for name, base, dom in RESOURCES:
         row = {"resource": name}
@@ -93,11 +94,8 @@ def table(d: Path, m: int, v: str) -> dict:
             b = util(an["busy_cycles_per_unit"], an, jr, jr["audit"]["passes_per_s"], base, dom)
             row["joint_pouw_part"], row["joint_audit_part"] = a, b
             row["joint"] = None if a is None or b is None else a + b
-        if name in NSYS:
-            row["nsys"] = {k: nsys_metric(g, NSYS[name]) for k, g in (("pouw_alone", pg), ("audit_alone", ag), ("joint", jg))}
-        if base == "dram__bytes":
-            row["nsys"] = {k: sum(x for x in (nsys_metric(g, p) for p in NSYS_DRAM) if x is not None) if g else None
-                           for k, g in (("pouw_alone", pg), ("audit_alone", ag), ("joint", jg))}
+        if name in ns:
+            row["nsys"] = ns[name]
         meas = (row.get("nsys") or {}).get("joint")
         best = meas if meas is not None else row.get("joint")
         row["idle_joint"] = None if best is None else 1.0 - best
@@ -125,8 +123,78 @@ def table(d: Path, m: int, v: str) -> dict:
     return {"m": m, "audit_variant": v or "as shipped", "rows": rows, "rates": rates, "sm_mhz": clocks, "power_w": power}
 
 
+def nsys_rows(gs: dict) -> dict:
+    """Each nsys-measured row's device-wide mean in each run of `gs` (label: gpu.json)."""
+    out = {row: {k: nsys_metric(g, p) for k, g in gs.items()} for row, p in NSYS.items()}
+    out["DRAM bytes"] = {k: sum(x for x in (nsys_metric(g, p) for p in NSYS_DRAM) if x is not None) if g else None
+                         for k, g in gs.items()}
+    return out
+
+
+def stretch(d: Path, m: int, v: str) -> dict | None:
+    """Pearl-C's kernels under nsysk (each graph node traced), alone and beside the audit (and with Pearl-C's stream at
+    the greatest priority, _q): each kernel's mean duration, and a call's summed kernel time against its wall time."""
+    runs = {"alone": f"pouw{m}", "joint": f"joint{m}{v}", "joint_q": f"joint{m}{v}_q"}
+    got = {k: (load(d / f"nsysk_{x}.gpu.json"), load(d / f"nsysk_{x}.json")) for k, x in runs.items()}
+    got = {k: (g, j) for k, (g, j) in got.items() if g and j and "kernels" in g}
+    if "alone" not in got:
+        return None
+    per_call = {}
+    for k, (g, j) in got.items():
+        calls = j["pouw"]["calls"] * g["kernels"]["window_ns"] / (j["pouw"]["gpu_ms"] * 1e6)
+        p = g["kernels"]["by_protocol"].get("pouw", {})
+        per_call[k] = {"call_ms": j["pouw"]["call_ms"], "kernel_ms": p.get("sum_ns", 0) / calls / 1e6,
+                       "kernels_per_call": p.get("kernels", 0) / calls}
+    kernels = {}
+    for name, a in got["alone"][0]["kernels"]["top"].items():
+        if a["protocol"] != "pouw":
+            continue
+        row = {"alone_us": a["sum_ns"] / a["count"] / 1e3}
+        for k in ("joint", "joint_q"):
+            b = got.get(k, (None,))[0]
+            b = b and b["kernels"]["top"].get(name)
+            if b:
+                row[f"{k}_us"] = b["sum_ns"] / b["count"] / 1e3
+        kernels[name] = row
+    return {"m": m, "per_call": per_call, "kernels": kernels}
+
+
+def gemm_table(d: Path, v: str, dtype: str) -> dict | None:
+    s = "" if dtype == "fp8" else f"_{dtype}"
+    g, j, ar = load(d / f"gemm{s}.json"), load(d / f"gemmjoint{v}{s}.json"), load(d / f"audit{v}.json")
+    if not g:
+        return None
+    out = {"dtype": dtype, "shape": g["gemm"]["shape"], "tflops_alone": g["gemm"]["tflops"],
+           "power_w": {"alone": g["nvml"].get("power_w_median"), "joint": (j or {}).get("nvml", {}).get("power_w_median")},
+           "sm_mhz": {"alone": g["nvml"].get("sm_mhz_median"), "joint": (j or {}).get("nvml", {}).get("sm_mhz_median")}}
+    if j:
+        out.update({"tflops_joint": j["gemm"]["tflops"], "passes_per_s_joint": j["audit"]["passes_per_s"],
+                    "gemm_slowdown": g["gemm"]["tflops"] / j["gemm"]["tflops"]})
+        if ar:
+            out["audit_slowdown"] = ar["audit"]["passes_per_s"] / j["audit"]["passes_per_s"]
+    out["nsys"] = nsys_rows({"alone": load(d / f"nsys_gemm{s}.gpu.json"), "joint": load(d / f"nsys_gemmjoint{v}{s}.gpu.json")})
+    return out
+
+
 def fmt(x) -> str:
     return "-" if x is None else f"{100 * x:5.1f}%"
+
+
+def show_stretch(t: dict) -> str:
+    out = [f"Pearl-C's kernels at m = {t['m']} (nsysk): per call " + json.dumps(
+        {k: {kk: round(vv, 4) for kk, vv in v.items()} for k, v in t["per_call"].items()}),
+           "| kernel | alone us | joint us | joint, Pearl-C first us |", "|---|---|---|---|"]
+    for name, r in sorted(t["kernels"].items(), key=lambda kv: -kv[1]["alone_us"]):
+        cell = lambda k: "-" if k not in r else f"{r[k]:.1f} ({r[k] / r['alone_us']:.2f}x)"  # noqa: E731
+        out.append(f"| {name} | {r['alone_us']:.1f} | {cell('joint_us')} | {cell('joint_q_us')} |")
+    return "\n".join(out)
+
+
+def show_gemm(t: dict) -> str:
+    head = {k: (round(v, 3) if isinstance(v, float) else v) for k, v in t.items() if k != "nsys"}
+    out = [f"GEMM {json.dumps(head)}", "| resource (nsys) | GEMM alone | GEMM + audit |", "|---|---|---|"]
+    out += [f"| {row} | {fmt(r['alone'])} | {fmt(r['joint'])} |" for row, r in t["nsys"].items()]
+    return "\n".join(out)
 
 
 def show(t: dict) -> str:
@@ -148,8 +216,14 @@ def main() -> int:
     ap.add_argument("--variant", default="_h9", help="the audit's phase suffix (run.sh's _h9, _p0; '' as shipped)")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args()
-    ts = [table(a.out, int(m), a.variant) for m in a.m.split(",")]
-    print(json.dumps(ts, indent=1) if a.json else "\n\n".join(show(t) for t in ts))
+    ms = [int(m) for m in a.m.split(",")]
+    ts = [table(a.out, m, a.variant) for m in ms]
+    ks = [k for k in (stretch(a.out, m, a.variant) for m in ms) if k]
+    gs = [g for g in (gemm_table(a.out, a.variant, dt) for dt in ("fp8", "bf16")) if g]
+    if a.json:
+        print(json.dumps({"tables": ts, "stretch": ks, "gemm": gs}, indent=1))
+    else:
+        print("\n\n".join([show(t) for t in ts] + [show_stretch(k) for k in ks] + [show_gemm(g) for g in gs]))
     return 0
 
 

@@ -11,6 +11,12 @@ chained prover passes, or both at once in one process on two streams.
   CTAs), a pass's root checked against the plain pass's first, then one window's chained passes (`run_chain`, each
   root copied to the host as the prover sends it) back to back on a stream of its own.
 - `joint`: both in one process (the audit on a thread), started together, for the same `--seconds`.
+- `gemm`, `gemmjoint`: in Pearl-C's place, a plain dense GEMM (`torch._scaled_mm`, cuBLASLt, E4M3 in and BF16 out; or
+  BF16, `--gemm-dtype`) at `--gemm-shape`, back to back on a stream of its own: what the tensor pipe gives work neither
+  protocol checks, alone and beside the audit.
+
+`--pouw-priority` creates Pearl-C's stream at that priority (clamped to the context's range; the default stream's is
+0, the audit's side stream's -1).
 
 The timed window is bracketed by cuProfilerStart/Stop, so `nsys --capture-range=cudaProfilerApi` and `ncu
 --profile-from-start off` see that window only; `--count` stops a loop after that many calls or passes instead of
@@ -88,14 +94,16 @@ class Pouw:
 
     EXTRA = None
 
-    def __init__(self, pc, ship: str, shape: tuple[int, int, int], weights: int, graph_calls: int, graph: bool, log):
+    def __init__(self, pc, ship: str, shape: tuple[int, int, int], weights: int, graph_calls: int, graph: bool,
+                 priority: int | None, log):
         P, vp, u, i32, u64 = C.POINTER, C.c_void_p, C.c_uint, C.c_int, C.c_uint64
         self.pc, self.log = pc, log
         dev = self.dev = pc.Dev(open(os.path.join(ship, "pearl_c_sm120.cubin"), "rb").read())
         refused = dev.identity(os.environ.get("PEARLC_EXPECT_UUID"))
         if refused:
             raise SystemExit(f"REFUSED: {refused}")
-        pc.bind(dev.cu, {"cuStreamCreate": [P(vp), u], "cuStreamBeginCapture_v2": [vp, i32],
+        pc.bind(dev.cu, {"cuStreamCreate": [P(vp), u], "cuStreamCreateWithPriority": [P(vp), u, i32],
+                         "cuCtxGetStreamPriorityRange": [P(i32), P(i32)], "cuStreamBeginCapture_v2": [vp, i32],
                          "cuStreamEndCapture": [vp, P(vp)], "cuGraphInstantiateWithFlags": [P(vp), vp, u64],
                          "cuGraphLaunch": [vp, vp], "cuStreamSynchronize": [vp], "cuProfilerStart": [],
                          "cuProfilerStop": [], "cuCtxGetCurrent": [P(vp)]})
@@ -132,7 +140,15 @@ class Pouw:
             self.pipes.append(p)
             self.calls.append(call)
         stream = vp()
-        dev.ck("cuStreamCreate", C.byref(stream), 1)
+        self.priority = None
+        if priority is None:
+            dev.ck("cuStreamCreate", C.byref(stream), 1)
+        else:
+            least, greatest = i32(), i32()
+            dev.ck("cuCtxGetStreamPriorityRange", C.byref(least), C.byref(greatest))
+            self.priority = max(greatest.value, min(least.value, priority))
+            dev.ck("cuStreamCreateWithPriority", C.byref(stream), 1, self.priority)
+            log(f"pouw: stream priority {self.priority} (range {least.value}..{greatest.value})")
         self.stream = dev.stream = stream
         self.launches_per_call = None
         self.graph_calls = max(weights, graph_calls // weights * weights) if graph else weights
@@ -189,10 +205,75 @@ class Pouw:
         dev.ck("cuEventElapsedTime", C.byref(ms), ev[0], ev[1])
         return {"calls": calls, "gpu_ms": ms.value, "wall_s": wall, "calls_per_s": calls / (ms.value / 1e3),
                 "call_ms": ms.value / calls, "graph_calls": self.graph_calls if self.exec is not None else None,
-                "weights": self.weights, "shape": list(self.shape), "m_padded": self.m}
+                "weights": self.weights, "shape": list(self.shape), "m_padded": self.m, "priority": self.priority}
 
     def profiler(self, on: bool) -> None:
         self.dev.ck("cuProfilerStart" if on else "cuProfilerStop")
+
+
+class Gemm:
+    """A plain dense GEMM on a stream of its own, `per_step` at a time, at most two steps in flight."""
+
+    def __init__(self, shape: tuple[int, int, int], dtype: str, log, per_step: int = 4):
+        import torch
+
+        self.torch, self.shape, self.dtype, self.per_step, self.log = torch, shape, dtype, per_step, log
+        m, n, k = shape
+        self.stream = torch.cuda.Stream()
+        with torch.cuda.stream(self.stream):
+            g = torch.Generator(device="cuda")
+            g.manual_seed(3)
+            a32 = torch.randn(m, k, device="cuda", generator=g)
+            b32 = torch.randn(n, k, device="cuda", generator=g)
+            if dtype == "fp8":
+                a, b = a32.to(torch.float8_e4m3fn), b32.to(torch.float8_e4m3fn)
+                one = torch.ones((), device="cuda")
+                self.f = lambda: torch._scaled_mm(a, b.t(), scale_a=one, scale_b=one, out_dtype=torch.bfloat16)
+            else:
+                a, b = a32.to(torch.bfloat16), b32.to(torch.bfloat16)
+                self.f = lambda: a @ b.t()
+            y = self.f()
+            ref = a[:64].float() @ b.float().t()
+            err = ((y[:64].float() - ref).abs().max() / ref.abs().max()).item()
+            del a32, b32, y, ref
+            for _ in range(2 * per_step):
+                self.f()
+        torch.cuda.synchronize()
+        self.check = {"shape": list(shape), "dtype": dtype, "rows_checked": 64, "max_rel_err": err}
+        log(f"gemm: check {self.check}")
+        if not err < 1e-2:
+            raise SystemExit(f"the GEMM's first 64 rows are off by {err} of their max")
+        self.events = [torch.cuda.Event(enable_timing=True) for _ in range(4)]
+        self.done = 0
+
+    def loop(self, seconds: float, count: int, started: threading.Barrier | None) -> dict:
+        torch, ev = self.torch, self.events
+        with torch.cuda.stream(self.stream):
+            if started is not None:
+                started.wait()
+            ev[0].record()
+            t0, n, i, ring, last = time.perf_counter(), 0, 0, ev[2:], 0
+            while (n < count) if count else (time.perf_counter() - t0 < seconds):
+                step = min(self.per_step, count - n) if count else self.per_step
+                for _ in range(step):
+                    self.f()
+                n += step
+                ring[i % 2].record()
+                if i:
+                    ring[(i - 1) % 2].synchronize()
+                    self.done = last
+                last = n
+                i += 1
+            ev[1].record()
+            ev[1].synchronize()
+        wall = time.perf_counter() - t0
+        ms = ev[0].elapsed_time(ev[1])
+        m, nn, k = self.shape
+        return {"gemms": n, "gpu_ms": ms, "wall_s": wall, "gemms_per_s": n / (ms / 1e3), "gemm_ms": ms / n,
+                "tflops": 2 * m * nn * k * n / (ms / 1e3) / 1e12, "shape": list(self.shape), "dtype": self.dtype}
+
+    def profiler(self, on: bool) -> None:
+        (self.torch.cuda.profiler.start if on else self.torch.cuda.profiler.stop)()
 
 
 class Audit:
@@ -267,13 +348,16 @@ class Audit:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--mode", choices=("pouw", "audit", "joint"), required=True)
+    ap.add_argument("--mode", choices=("pouw", "audit", "joint", "gemm", "gemmjoint"), required=True)
     ap.add_argument("--ship", required=True, help="Pearl-C's built ship (its run.py, cubin and check/)")
     ap.add_argument("--lib", help="session.so (audit, joint)")
     ap.add_argument("--shape", default="128x8192x8192")
     ap.add_argument("--weights", type=int, default=4)
     ap.add_argument("--graph-calls", type=int, default=16)
     ap.add_argument("--no-graph", action="store_true")
+    ap.add_argument("--pouw-priority", type=int, help="Pearl-C's stream's priority (default: a plain stream's, 0)")
+    ap.add_argument("--gemm-shape", default="8192x8192x8192")
+    ap.add_argument("--gemm-dtype", choices=("fp8", "bf16"), default="fp8")
     ap.add_argument("--gib", type=float, default=16.0)
     ap.add_argument("--sketch-ctas", type=int, default=128)
     ap.add_argument("--chunk-log2", type=int, default=18)
@@ -291,21 +375,26 @@ def main() -> int:
     pc = load_pc(a.ship)
     out: dict = {"mode": a.mode, "args": vars(a), "utc_start": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                  "visible": os.environ.get("CUDA_VISIBLE_DEVICES"), "uuid": os.environ.get("GPU_LEASE_UUID")}
-    audit = pouw = None
-    if a.mode in ("audit", "joint"):
+    audit = pouw = gemm = None
+    if a.mode in ("audit", "joint", "gemm", "gemmjoint"):
         import torch
 
         torch.cuda.init()
+    if a.mode in ("audit", "joint", "gemmjoint"):
         audit = Audit(a.lib, a.gib, a.sketch_ctas, a.chunk_log2, a.kept_from, a.side_priority, log)
         out["audit_gate"] = audit.gate
     if a.mode in ("pouw", "joint"):
-        pouw = Pouw(pc, a.ship, pc.parse_shape(a.shape), a.weights, a.graph_calls, not a.no_graph, log)
+        pouw = Pouw(pc, a.ship, pc.parse_shape(a.shape), a.weights, a.graph_calls, not a.no_graph, a.pouw_priority, log)
         out["pouw_check"] = pouw.check
+    if a.mode in ("gemm", "gemmjoint"):
+        gemm = Gemm(pc.parse_shape(a.gemm_shape), a.gemm_dtype, log)
+        out["gemm_check"] = gemm.check
     gc.collect()
     gc.freeze()
     gc.disable()
     wait_go(a)
-    prof = pouw or audit
+    prof = pouw or gemm or audit
+    front, key = (pouw, "pouw") if pouw else (gemm, "gemm")
     if a.watchdog:
         faulthandler.dump_traceback_later(a.seconds + a.watchdog, exit=True)
     stop = threading.Event()
@@ -314,19 +403,19 @@ def main() -> int:
         t0 = time.perf_counter()
         while not stop.wait(1.0):
             log(json.dumps({"t": round(time.perf_counter() - t0, 1), "calls": getattr(pouw, "done", None),
-                            "passes": getattr(audit, "done", None)}))
+                            "gemms": getattr(gemm, "done", None), "passes": getattr(audit, "done", None)}))
     threading.Thread(target=progress, daemon=True).start()
     with Sampler(pc, os.environ.get("GPU_LEASE_UUID") or os.environ.get("PEARLC_EXPECT_UUID") or "") as smp:
         prof.profiler(True)
-        if a.mode == "joint":
+        if front and audit:
             started, got = threading.Barrier(2), {}
             th = threading.Thread(target=lambda: got.update(audit=audit.loop(a.seconds, a.count, started)))
             th.start()
-            out["pouw"] = pouw.loop(a.seconds, a.count, started)
+            out[key] = front.loop(a.seconds, a.count, started)
             th.join()
             out["audit"] = got["audit"]
-        elif a.mode == "pouw":
-            out["pouw"] = pouw.loop(a.seconds, a.count, None)
+        elif front:
+            out[key] = front.loop(a.seconds, a.count, None)
         else:
             out["audit"] = audit.loop(a.seconds, a.count, None)
         prof.profiler(False)
@@ -336,7 +425,7 @@ def main() -> int:
     out["nvml"] = smp.summary()
     out["utc_end"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     Path(a.out).write_text(json.dumps(out, indent=1))
-    log(json.dumps({k: out.get(k) for k in ("mode", "pouw", "audit", "nvml")}))
+    log(json.dumps({k: out.get(k) for k in ("mode", "pouw", "gemm", "audit", "nvml")}))
     return 0
 
 

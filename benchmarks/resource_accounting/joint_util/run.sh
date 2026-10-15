@@ -8,8 +8,10 @@
 #   research run --on vy-nebius-2 --project verity --campaign pouw --source . --cwd clone --env GPU_LEASE_WHO=<id> \
 #     --send benchmarks/resource_accounting/joint_util/run.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/run.sh"'
 #
-# PHASES (comma-separated): pouw<M>, audit, joint<M>, procs<M>, each optionally nsys: or ncu: prefixed; M is Pearl-C's
-# m (n = k = 8192). SECONDS_RATE, SECONDS_NSYS: each window; WEIGHTS: Pearl-C's distinct weights; GIB: the store.
+# PHASES (comma-separated): pouw<M>, audit, joint<M>, procs<M>, gemm, gemmjoint, each optionally nsys:, nsysk: (nsys
+# with each graph's kernels traced) or ncu: prefixed; M is Pearl-C's m (n = k = 8192). Suffixes: _h9 the audit at
+# h0 = 9 (the pass's unfused tree path), _p0 its side stream at priority 0, _q Pearl-C's stream at the greatest priority,
+# _bf16 the GEMM in BF16. SECONDS_RATE, SECONDS_NSYS: each window; WEIGHTS: Pearl-C's distinct weights; GIB: the store.
 set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:?}/out}; mkdir -p "$OUT"
 J=benchmarks/resource_accounting/joint_util
@@ -20,7 +22,6 @@ NSYS=${NSYS:-$(command -v nsys || echo "$CUDA/bin/nsys")}
 D=$(mktemp -d /tmp/joint-util.XXXXXX); trap 'rm -rf "$D"' EXIT
 export OUT J CUDA PY NSYS D
 export PHASES=${PHASES:-pouw32,pouw128,audit,joint32,joint128,procs128,nsys:pouw32,nsys:pouw128,nsys:audit,nsys:joint32,nsys:joint128,ncu:pouw32,ncu:pouw128,ncu:audit}
-# a phase's _h9 suffix runs the audit at h0 = 9 (the pass's unfused tree path), _p0 with its side stream at priority 0
 export SECONDS_RATE=${SECONDS_RATE:-20} SECONDS_NSYS=${SECONDS_NSYS:-8} WEIGHTS=${WEIGHTS:-4} GIB=${GIB:-16}
 export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
 export METRICS=gpu__time_duration.sum,sm__cycles_elapsed.avg,sm__cycles_elapsed.avg.per_second,lts__cycles_elapsed.avg,\
@@ -56,15 +57,19 @@ git rev-parse HEAD > "$OUT/commit.txt" 2>/dev/null || true
 # shellcheck disable=SC2016
 gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
   export PEARLC_EXPECT_UUID=$GPU_LEASE_UUID
-  nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,power.draw,temperature.gpu,memory.used,memory.total \
-    --format=csv,noheader -i "$GPU_LEASE_UUID" > "$OUT/gpu.txt" 2>&1
+  nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,clocks.mem,clocks.max.mem,power.draw,power.limit,\
+enforced.power.limit,power.max_limit,temperature.gpu,memory.used,memory.total --format=csv -i "$GPU_LEASE_UUID" > "$OUT/gpu.txt" 2>&1
   L=("$PY" "$J/loop.py" --ship "$D/ship" --lib "$D/session.so" --weights "$WEIGHTS" --gib "$GIB")
-  args() {  # a phase body (pouw32, audit, joint128, audit_h9, joint128_p0, ...): loop.py arguments
+  args() {  # a phase body (pouw32, audit, joint128, audit_h9, joint128_p0, gemmjoint_h9, ...): loop.py arguments
     local b=$1 x=
     case $b in *_h9*) x="--kept-from 9" ;; esac
     case $b in *_p0*) x="$x --side-priority 0" ;; esac
+    case $b in *_q*) x="$x --pouw-priority -99" ;; esac
+    case $b in *_bf16*) x="$x --gemm-dtype bf16" ;; esac
     b=${b%%_*}
     case $b in
+      gemmjoint) echo --mode gemmjoint $x ;;
+      gemm) echo --mode gemm $x ;;
       pouw*) echo --mode pouw --shape "${b#pouw}x8192x8192" $x ;;
       joint*) echo --mode joint --shape "${b#joint}x8192x8192" $x ;;
       audit) echo --mode audit $x ;;
@@ -74,17 +79,18 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
   for ph in ${PHASES//,/ }; do
     name=${ph//:/_}; body=${ph#*:}; t0=$(date +%s)
     case $ph in
-      ncu:pouw*|ncu:audit*)
-        units=$([ "${body%%_*}" = audit ] && echo 2 || echo 4)
+      ncu:*)
+        units=$(case ${body%%_*} in audit | gemm) echo 2 ;; *) echo 4 ;; esac)
         "${T[@]}" 900 "$CUDA/bin/ncu" --profile-from-start off --clock-control none --cache-control none --replay-mode kernel \
           --metrics "$METRICS" -f -o "$D/$name" "${L[@]}" $(args "$body") --no-graph --count "$units" --out "$OUT/$name.json" \
           > "$OUT/$name.log" 2>&1
         rc=$?; echo "$units" > "$D/$name.units" ;;
-      nsys:*)
+      nsys:* | nsysk:*)
+        g=$([ "${ph%%:*}" = nsysk ] && echo --cuda-graph-trace=node)
         "${T[@]}" $((SECONDS_NSYS + 240)) "$NSYS" profile --capture-range=cudaProfilerApi --capture-range-end=stop \
-          --gpu-metrics-devices=cuda-visible --gpu-metrics-set=gb20x --gpu-metrics-frequency=10000 --trace=cuda --sample=none \
-          --cpuctxsw=none --force-overwrite=true -o "$D/$name" "${L[@]}" $(args "$body") --seconds "$SECONDS_NSYS" \
-          --watchdog 40 --out "$OUT/$name.json" > "$OUT/$name.log" 2>&1
+          --gpu-metrics-devices=cuda-visible --gpu-metrics-set=gb20x --gpu-metrics-frequency=10000 --trace=cuda $g \
+          --sample=none --cpuctxsw=none --force-overwrite=true -o "$D/$name" "${L[@]}" $(args "$body") \
+          --seconds "$SECONDS_NSYS" --watchdog 40 --out "$OUT/$name.json" > "$OUT/$name.log" 2>&1
         rc=$? ;;
       procs*)
         m=${body#procs}; sfx=${m#"${m%%_*}"}; m=${m%%_*}; rm -f "$D"/r1 "$D"/r2 "$D"/go
@@ -107,7 +113,7 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
 echo "lease rc=$?" | tee -a "$OUT/phases.txt"
 
 # C. off the lease: the reports reduced
-for r in "$D"/nsys_*.nsys-rep; do
+for r in "$D"/nsys*.nsys-rep; do
   [ -e "$r" ] || continue
   n=$(basename "$r" .nsys-rep)
   nice -n 19 "$NSYS" export --type sqlite --force-overwrite=true -o "$D/$n.sqlite" "$r" > /dev/null 2>&1 \
