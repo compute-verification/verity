@@ -386,6 +386,17 @@ __device__ __forceinline__ u64 pass_kept_at(u64 width, int h0, int h) {
   return at;
 }
 
+// A consumer warp's tile (`pass_consumer_kernel`): the next one from ctr[0], if any is left, by pass_tile. It is out
+// of line because inlined, its registers crowd the consumer's leaf loop, which then recomputes an address for every
+// receipt it loads.
+__device__ __noinline__ void help_tile(const uint4 *__restrict__ data, u64 n, const u32 *pk, int *S, u64 *ys,
+                                       unsigned *ctr, unsigned tiles_per, int lane) {
+  unsigned tile = 0;
+  if (!lane) tile = atomicAdd(ctr, 1u);
+  tile = __shfl_sync(~0u, tile, 0);
+  if (tile < n / 32) pass_tile(data, n, pk, S, ys, ctr + 1, tile, tiles_per, lane);
+}
+
 // The receipt tree behind the receipts, by persistent grids of CONSUMER_THREADS-thread CTAs sharing ctr (rs_pass's
 // layout): the next tile, each group's counted tiles, each chunk's completed subtrees, the completed chunks, the next
 // subtree to claim and the receipt grid's started flag. A CTA claims the next 2^h0-leaf subtree in order, waits until
@@ -395,7 +406,7 @@ __device__ __forceinline__ u64 pass_kept_at(u64 width, int h0, int h) {
 //
 // Progress needs no residency and no scheduling order. While its group is short, a warp waits only if every tile is
 // taken (by warps already running, which finish them without waiting) or a receipt CTA has started (whose warps take
-// tiles until none is left); otherwise it takes the next tile and computes it itself (`pass_tile`, the signs read from
+// tiles until none is left); otherwise it takes the next tile and computes it itself (`help_tile`, the signs read from
 // pk). So no wait depends on a CTA that isn't resident, whatever the stream priorities, the order the grids are placed
 // in or what a co-tenant holds, and a pass whose receipt grid never gets an SM still completes.
 constexpr int CONSUMER_THREADS = 128;
@@ -436,12 +447,7 @@ __global__ void __launch_bounds__(CONSUMER_THREADS) pass_consumer_kernel(const u
         __nanosleep(256);
         continue;
       }
-      unsigned tile = 0;
-      if (!lane) tile = atomicAdd(ctr, 1u);
-      tile = __shfl_sync(~0u, tile, 0);
-      if (tile < tiles)
-        pass_tile(data, n, pk, reinterpret_cast<int *>(scratch) + warp * 32 * SK_ROWS, ys, ready, tile, tiles_per,
-                  lane);
+      help_tile(data, n, pk, reinterpret_cast<int *>(scratch) + warp * 32 * SK_ROWS, ys, ctr, tiles_per, lane);
     }
     __threadfence();
     __syncthreads();   // the staging the warps computed tiles in is the leaves' buffer
