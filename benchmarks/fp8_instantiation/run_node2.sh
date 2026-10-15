@@ -31,7 +31,7 @@ layers $CAPS/llama8b-w0 instruct
 if [ "${A4_BASE:-}" = 1 ]; then
   CAP=$CAPS/llama8b-base-w0
   mkdir -p "$CAP"
-  cp -n $CAPS/llama8b-w0/ids.npy "$CAP/ids.npy"
+  cp $CAPS/llama8b-w0/ids.npy $CAPS/llama8b-w0/tokens.json "$CAP/"
   cp "$RESEARCH_RUN_DIR/inputs/pearlc_capture.py" "$O/pearlc_capture.py"
   sed -i 's/^    from datasets import load_dataset$/    try:\n        from datasets import load_dataset\n    except ImportError:\n        load_dataset = None/' "$O/pearlc_capture.py"
   HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 $PY "$O/pearlc_capture.py" --model unsloth/Llama-3.1-8B \

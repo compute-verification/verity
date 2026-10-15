@@ -203,17 +203,23 @@ def check(k: int = 256, m: int = 4, n: int = 4) -> dict:
 
 # ---- a capture ------------------------------------------------------------------------------------------------------
 
-def weight_rows(snapshot: Path, name: str, rows) -> np.ndarray:
+def weight_meta(snapshot: Path, name: str) -> tuple[Path, int, dict]:
+    """A linear's weight tensor in the snapshot's safetensors (the manifest names the module, the index its `.weight`)."""
     idx = json.loads((snapshot / "model.safetensors.index.json").read_text())["weight_map"]
-    path = snapshot / idx[name]
+    key = name if name in idx else name + ".weight"
+    path = snapshot / idx[key]
     with open(path, "rb") as fh:
         hlen = struct.unpack("<Q", fh.read(8))[0]
-        meta = json.loads(fh.read(hlen))[name]
-        assert meta["dtype"] == "BF16"
-        n, k = meta["shape"]
-        off = 8 + hlen + meta["data_offsets"][0]
-        mm = np.memmap(path, dtype=np.uint16, mode="r", offset=off, shape=(n, k))
-        return (mm[np.asarray(rows)].astype(np.uint32) << 16).view(np.float32).astype(np.float64)
+        return path, hlen, json.loads(fh.read(hlen))[key]
+
+
+def weight_rows(snapshot: Path, name: str, rows) -> np.ndarray:
+    path, hlen, meta = weight_meta(snapshot, name)
+    assert meta["dtype"] == "BF16"
+    n, k = meta["shape"]
+    off = 8 + hlen + meta["data_offsets"][0]
+    mm = np.memmap(path, dtype=np.uint16, mode="r", offset=off, shape=(n, k))
+    return (mm[np.asarray(rows)].astype(np.uint32) << 16).view(np.float32).astype(np.float64)
 
 
 def split_channels(x_all: np.ndarray) -> np.ndarray:
@@ -300,9 +306,7 @@ def run(capture: Path, n_rows: int, n_cols: int, layers: list[int], draws: int, 
         rows = rows_of[entry["file"]]
         x_detect = entry["file"] not in seen
         seen.add(entry["file"])
-        with open(snapshot / json.loads((snapshot / "model.safetensors.index.json").read_text())["weight_map"][name], "rb") as fh:
-            hlen = struct.unpack("<Q", fh.read(8))[0]
-            n_out = json.loads(fh.read(hlen))[name]["shape"][0]
+        n_out = weight_meta(snapshot, name)[2]["shape"][0]
         cols = np.sort(rng.choice(n_out, min(n_cols, n_out), replace=False))
         out["linears"][name] = {f"split={s}": one_linear(x_all, snapshot, name, rows, cols, s, layer * 31 + len(name),
                                                          pools, draws, x_detect)
