@@ -10,6 +10,8 @@
 //   POP, PB       warps FW..FW+PW-1 of every block run a dependent-free stream of class POP, PB a body, with an optional
 //                 __nanosleep between bodies, until the block's filler warps finish (method a, co-resident probe); POP =
 //                 IMMA runs covert MMAs instead (the tensor time the filler leaves idle)
+//   pk<POP, PB>   the same probe as its own kernel on a second stream, one block on every SM beside the plain filler's
+//                 (base-u1's own binary), until that SM's filler warps finish (method a, second stream)
 //
 // One block per SM (it reserves the SM's shared memory). Filler warps are 0..FW-1, so with FW and PW multiples of 4
 // every SMSP holds FW/4 filler and PW/4 probe warps. Modes:
@@ -124,75 +126,14 @@ __device__ __forceinline__ void trip(uint32_t (&acc)[FT][4], St (&s)[FT], const 
   }
 }
 
-// out: OUTW words per filler thread (4 receipts, 16 accumulator words, the extras' fold). fclk: t0, t1 per filler warp
-// slot (block · MAXW + warp). pinfo: bodies, t0, t1, fold per probe warp slot. smid: per block. A probe body is PB ops.
-template <int POP, int XOP, int X, int UNR, int PB>
-__global__ void __launch_bounds__(1024, 1)
-    fk(uint32_t* out, long long* fclk, long long* pinfo, uint32_t* smid, int iters, int fw, int sleep_ns, uint32_t seed) {
-  __shared__ int done;
-  const int warp = threadIdx.x >> 5, lane = threadIdx.x & 31;
-  if (threadIdx.x == 0) {
-    done = 0;
-    uint32_t id;
-    asm volatile("mov.u32 %0, %%smid;" : "=r"(id));
-    smid[blockIdx.x] = id;
-  }
-  __syncthreads();
-  if (warp < fw) {
-    const uint32_t ftid = (blockIdx.x * fw + warp) * 32 + lane;
-    uint32_t a[4], b[2][2], acc[FT][4], y[8], c[4];
-    St s[FT];
-#pragma unroll
-    for (int i = 0; i < 4; ++i) a[i] = gen(seed, ftid, 7, i);
-#pragma unroll
-    for (int i = 0; i < 2; ++i)
-#pragma unroll
-      for (int k = 0; k < 2; ++k) b[i][k] = gen(seed, ftid, 8 + i, k);
-#pragma unroll
-    for (int j = 0; j < FT; ++j) {
-      s[j].y = gen(seed, ftid, j, 100);
-      s[j].z = gen(seed, ftid, j, 101);
-#pragma unroll
-      for (int r = 0; r < 4; ++r) acc[j][r] = 0;
-    }
-#pragma unroll
-    for (int u = 0; u < 8; ++u) y[u] = gen(seed, ftid, 20 + u, 0);
-#pragma unroll
-    for (int r = 0; r < 4; ++r) c[r] = gen(seed, ftid, 30 + r, 0) | 1u;
-    // Opaque to ptxas, so it keeps the operands in registers instead of recomputing gen() inside the timed loop.
-#pragma unroll
-    for (int i = 0; i < 4; ++i) asm volatile("" : "+r"(a[i]), "+r"(c[i]));
-    asm volatile("" : "+r"(b[0][0]), "+r"(b[0][1]), "+r"(b[1][0]), "+r"(b[1][1]));
-#pragma unroll
-    for (int j = 0; j < FT; ++j) asm volatile("" : "+r"(s[j].y), "+r"(s[j].z));
-#pragma unroll
-    for (int u = 0; u < 8; ++u) asm volatile("" : "+r"(y[u]));
-    __syncwarp();
-    const long long t0 = clock64();
-#pragma unroll 1
-    for (int it = 0; it < iters; it += UNR) trip<XOP, X, UNR>(acc, s, a, b, y, c);
-    const long long t1 = clock64();
-    uint32_t* o = out + (size_t)ftid * OUTW;
-#pragma unroll
-    for (int j = 0; j < FT; ++j) {
-      o[j] = finish(s[j]);
-#pragma unroll
-      for (int r = 0; r < 4; ++r) o[4 + 4 * j + r] = acc[j][r];
-    }
-    uint32_t fold = 0;
-#pragma unroll
-    for (int u = 0; u < 8; ++u) fold ^= y[u];
-    o[20] = X > 0 ? fold : 0u;
-    o[21] = o[22] = o[23] = 0;
-    if (lane == 0) {
-      fclk[2 * (blockIdx.x * MAXW + warp)] = t0;
-      fclk[2 * (blockIdx.x * MAXW + warp) + 1] = t1;
-    }
-    __syncwarp();
-    if (lane == 0) atomicAdd(&done, 1);
-  } else if constexpr (POP != O_NONE) {
+// A probe warp: a dependent-free stream of POP in bodies of PB ops, with an optional __nanosleep between bodies, until
+// *vd reaches target. pinfo slot blockIdx.x · MAXW + warp: bodies, t0, t1, fold.
+template <int POP, int PB>
+__device__ __forceinline__ void probe(long long* pinfo, const volatile int* vd, int target, int sleep_ns, uint32_t seed,
+                                      int warp, int lane) {
+  {
     const uint32_t ptid = 0x100000u + blockIdx.x * 1024 + threadIdx.x;
-    const volatile int* vd = &done;
+    const int fw = target;
     long long n = 0, t0 = 0, t1 = 0;
     uint32_t fold = 0;
     if constexpr (POP == O_IMMA) {
@@ -253,8 +194,101 @@ __global__ void __launch_bounds__(1024, 1)
   }
 }
 
+// out: OUTW words per filler thread (4 receipts, 16 accumulator words, the extras' fold). fclk: t0, t1 per filler warp
+// slot (block · MAXW + warp). pinfo: bodies, t0, t1, fold per probe warp slot. smid: per block. A probe body is PB ops.
+// gdone: indexed by SM id; every filler warp adds 1 to its SM's word when it ends (what a probe kernel on another stream
+// waits for).
+template <int POP, int XOP, int X, int UNR, int PB>
+__global__ void __launch_bounds__(1024, 1)
+    fk(uint32_t* out, long long* fclk, long long* pinfo, uint32_t* smid, int* gdone, int iters, int fw, int sleep_ns,
+       uint32_t seed) {
+  __shared__ int done;
+  const int warp = threadIdx.x >> 5, lane = threadIdx.x & 31;
+  if (threadIdx.x == 0) {
+    done = 0;
+    uint32_t id;
+    asm volatile("mov.u32 %0, %%smid;" : "=r"(id));
+    smid[blockIdx.x] = id;
+  }
+  __syncthreads();
+  if (warp < fw) {
+    const uint32_t ftid = (blockIdx.x * fw + warp) * 32 + lane;
+    uint32_t a[4], b[2][2], acc[FT][4], y[8], c[4];
+    St s[FT];
+#pragma unroll
+    for (int i = 0; i < 4; ++i) a[i] = gen(seed, ftid, 7, i);
+#pragma unroll
+    for (int i = 0; i < 2; ++i)
+#pragma unroll
+      for (int k = 0; k < 2; ++k) b[i][k] = gen(seed, ftid, 8 + i, k);
+#pragma unroll
+    for (int j = 0; j < FT; ++j) {
+      s[j].y = gen(seed, ftid, j, 100);
+      s[j].z = gen(seed, ftid, j, 101);
+#pragma unroll
+      for (int r = 0; r < 4; ++r) acc[j][r] = 0;
+    }
+#pragma unroll
+    for (int u = 0; u < 8; ++u) y[u] = gen(seed, ftid, 20 + u, 0);
+#pragma unroll
+    for (int r = 0; r < 4; ++r) c[r] = gen(seed, ftid, 30 + r, 0) | 1u;
+    // Opaque to ptxas, so it keeps the operands in registers instead of recomputing gen() inside the timed loop.
+#pragma unroll
+    for (int i = 0; i < 4; ++i) asm volatile("" : "+r"(a[i]), "+r"(c[i]));
+    asm volatile("" : "+r"(b[0][0]), "+r"(b[0][1]), "+r"(b[1][0]), "+r"(b[1][1]));
+#pragma unroll
+    for (int j = 0; j < FT; ++j) asm volatile("" : "+r"(s[j].y), "+r"(s[j].z));
+#pragma unroll
+    for (int u = 0; u < 8; ++u) asm volatile("" : "+r"(y[u]));
+    __syncwarp();
+    const long long t0 = clock64();
+#pragma unroll 1
+    for (int it = 0; it < iters; it += UNR) trip<XOP, X, UNR>(acc, s, a, b, y, c);
+    const long long t1 = clock64();
+    uint32_t* o = out + (size_t)ftid * OUTW;
+#pragma unroll
+    for (int j = 0; j < FT; ++j) {
+      o[j] = finish(s[j]);
+#pragma unroll
+      for (int r = 0; r < 4; ++r) o[4 + 4 * j + r] = acc[j][r];
+    }
+    uint32_t fold = 0;
+#pragma unroll
+    for (int u = 0; u < 8; ++u) fold ^= y[u];
+    o[20] = X > 0 ? fold : 0u;
+    o[21] = o[22] = o[23] = 0;
+    if (lane == 0) {
+      fclk[2 * (blockIdx.x * MAXW + warp)] = t0;
+      fclk[2 * (blockIdx.x * MAXW + warp) + 1] = t1;
+    }
+    __syncwarp();
+    if (lane == 0) {
+      uint32_t id;
+      asm volatile("mov.u32 %0, %%smid;" : "=r"(id));
+      atomicAdd(&done, 1);
+      atomicAdd(gdone + id, 1);
+    }
+  } else if constexpr (POP != O_NONE) {
+    probe<POP, PB>(pinfo, &done, fw, sleep_ns, seed, warp, lane);
+  }
+}
+
+// The probe as its own kernel, launched on a second stream after the filler (method a, "second stream": the filler's
+// binary is the plain base-u1, untouched): PW warps a block, one block an SM beside the filler's (dynamic shared memory
+// sizes, see launch), until the FW filler warps on its own SM have ended (gdone[smid] reaches FW).
+template <int POP, int PB>
+__global__ void __launch_bounds__(1024, 1)
+    pk(long long* pinfo, uint32_t* smid, const int* gdone, int fw, int sleep_ns, uint32_t seed) {
+  const int warp = threadIdx.x >> 5, lane = threadIdx.x & 31;
+  uint32_t id;
+  asm volatile("mov.u32 %0, %%smid;" : "=r"(id));
+  if (threadIdx.x == 0) smid[blockIdx.x] = id;
+  probe<POP, PB>(pinfo, (const volatile int*)(gdone + id), fw, sleep_ns, seed, warp, lane);
+}
+
 // ---------------------------------------------------------------------------------------------------------------- host
-using KFn = void (*)(uint32_t*, long long*, long long*, uint32_t*, int, int, int, uint32_t);
+using KFn = void (*)(uint32_t*, long long*, long long*, uint32_t*, int*, int, int, int, uint32_t);
+using PFn = void (*)(long long*, uint32_t*, const int*, int, int, uint32_t);
 struct Kern {
   std::string name;
   int pop, xop, x, unr, pb;
@@ -266,6 +300,15 @@ struct Kern {
 #define XROW1(OP) XK(OP, 1, 1), XK(OP, 2, 1), XK(OP, 3, 1), XK(OP, 4, 1), XK(OP, 6, 1), XK(OP, 8, 1), XK(OP, 12, 1), XK(OP, 16, 1)
 #define XROW4(OP) XK(OP, 1, 4), XK(OP, 2, 4), XK(OP, 4, 4)
 #define PK(OP, PB) {std::string("p-") + OP_NAME[OP] + "-b" #PB, OP, O_NONE, 0, 1, PB, fk<OP, O_NONE, 0, 1, PB>}
+
+// Second-stream probes (pk), beside base-u1.
+struct SKern {
+  std::string name;
+  int pop, pb;
+  PFn fn;
+};
+#define SK(OP, PB) {std::string("s-") + OP_NAME[OP] + "-b" #PB, OP, PB, pk<OP, PB>}
+static std::vector<SKern> skernels() { return {SK(O_IADD3, 16), SK(O_IMAD, 16), SK(O_MIX, 16), SK(O_IMMA, 32)}; }
 
 static std::vector<Kern> kernels() {
   return {BASE(1),          BASE(4),          XROW1(O_IADD3),   XROW1(O_LOP3),   XROW1(O_IMAD),  XROW1(O_PRMT),
@@ -284,11 +327,16 @@ static void set_keys(uint32_t kseed) {
   CK(cudaMemcpyToSymbol(KK, kk, sizeof kk));
 }
 
+// smem: what a filler block reserves alone (one block an SM). With a second-stream probe the filler reserves SS_F and
+// the probe SS_P: two fillers or a filler and two probes don't fit an SM's shared memory, a filler and one probe do.
+constexpr int SS_F = 56 * 1024, SS_P = 36 * 1024, NSMID = 1024;
 struct Dev {
   int sms = 0, smem = 0;
-  uint32_t *out = nullptr, *smid = nullptr;
+  uint32_t *out = nullptr, *smid = nullptr, *smid2 = nullptr;
   long long *fclk = nullptr, *pinfo = nullptr;
+  int* gdone = nullptr;
   cudaEvent_t e0, e1;
+  cudaStream_t s1, s2;
   size_t out_words = 0;
 };
 
@@ -306,10 +354,22 @@ static Dev make_dev() {
   CK(cudaMalloc(&d.fclk, (size_t)d.sms * MAXW * 2 * sizeof(long long)));
   CK(cudaMalloc(&d.pinfo, (size_t)d.sms * MAXW * 4 * sizeof(long long)));
   CK(cudaMalloc(&d.smid, (size_t)d.sms * sizeof(uint32_t)));
+  CK(cudaMalloc(&d.smid2, (size_t)d.sms * sizeof(uint32_t)));
+  CK(cudaMalloc(&d.gdone, NSMID * sizeof(int)));
   CK(cudaEventCreate(&d.e0));
   CK(cudaEventCreate(&d.e1));
+  CK(cudaStreamCreateWithFlags(&d.s1, cudaStreamNonBlocking));
+  CK(cudaStreamCreateWithFlags(&d.s2, cudaStreamNonBlocking));
+  if (d.smem < SS_F + SS_P) {
+    fprintf(stderr, "shared memory %d < %d\n", d.smem, SS_F + SS_P);
+    exit(3);
+  }
   for (const Kern& k : kernels()) {
     CK(cudaFuncSetAttribute(k.fn, cudaFuncAttributeMaxDynamicSharedMemorySize, d.smem));
+    CK(cudaFuncSetAttribute(k.fn, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
+  }
+  for (const SKern& k : skernels()) {
+    CK(cudaFuncSetAttribute(k.fn, cudaFuncAttributeMaxDynamicSharedMemorySize, SS_P));
     CK(cudaFuncSetAttribute(k.fn, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
   }
   return d;
@@ -317,7 +377,7 @@ static Dev make_dev() {
 
 struct Result {
   double ms = 0, mhz = 0, cyc_med = 0, rate_med = 0, rate_min = 0, probe_med = 0, probe_min = 0, sleep_frac = 0;
-  int distinct = 0, blocks = 0;
+  int distinct = 0, blocks = 0, pdistinct = 0, paired = 0;
 };
 
 static double median(std::vector<double> v) {
@@ -325,25 +385,49 @@ static double median(std::vector<double> v) {
   return v.empty() ? 0 : v[v.size() / 2];
 }
 
-// One launch over `blocks` blocks of FW + PW warps. rate: filler warp-MMAs per SM-clock over the block's filler span
-// (first t0 to last t1 of its filler warps); probe: probe warp-instructions (bodies · 256) per SM-clock over the same span.
-static Result launch(Dev& d, const Kern& k, int blocks, int fw, int pw, int sleep_ns, int iters, uint32_t seed) {
-  const int threads = 32 * (fw + pw);
+// One launch over `blocks` blocks of FW + PW warps (FW filler warps and PW of the kernel's own probe), or, with sk, FW
+// filler warps a block (shared memory SS_F) and then sk's PW probe warps a block on a second stream (SS_P; blocks must be
+// every SM, so each probe block has a filler block beside it). rate: filler warp-MMAs per SM-clock over the block's
+// filler span (first t0 to last t1 of its filler warps); probe: probe instructions (bodies · PB) per SM-clock over the
+// span of the filler block on the same SM. smem: the filler's (0: d.smem, one block an SM).
+static Result launch(Dev& d, const Kern& k, int blocks, int fw, int pw, int sleep_ns, int iters, uint32_t seed,
+                     const SKern* sk = nullptr, int smem = 0) {
+  const int threads = 32 * (fw + (sk ? 0 : pw));
+  if (sk && blocks != d.sms) {
+    fprintf(stderr, "a second-stream probe needs a filler block on every SM\n");
+    exit(2);
+  }
   CK(cudaMemset(d.out, 0xA5, d.out_words * sizeof(uint32_t)));
   CK(cudaMemset(d.fclk, 0, (size_t)d.sms * MAXW * 2 * sizeof(long long)));
   CK(cudaMemset(d.pinfo, 0, (size_t)d.sms * MAXW * 4 * sizeof(long long)));
-  CK(cudaEventRecord(d.e0));
-  k.fn<<<blocks, threads, d.smem>>>(d.out, d.fclk, d.pinfo, d.smid, iters, fw, sleep_ns, seed);
-  CK(cudaEventRecord(d.e1));
+  CK(cudaMemset(d.gdone, 0, NSMID * sizeof(int)));
+  CK(cudaMemset(d.smid2, 0xFF, (size_t)d.sms * sizeof(uint32_t)));
+  CK(cudaDeviceSynchronize());
+  CK(cudaEventRecord(d.e0, d.s1));
+  k.fn<<<blocks, threads, sk ? SS_F : (smem ? smem : d.smem), d.s1>>>(d.out, d.fclk, d.pinfo, d.smid, d.gdone, iters,
+                                                                       fw, sleep_ns, seed);
+  if (sk) sk->fn<<<blocks, 32 * pw, SS_P, d.s2>>>(d.pinfo, d.smid2, d.gdone, fw, sleep_ns, seed);
+  CK(cudaEventRecord(d.e1, d.s1));
   CK(cudaEventSynchronize(d.e1));
+  CK(cudaStreamSynchronize(d.s2));
   CK(cudaGetLastError());
   float ms = 0;
   CK(cudaEventElapsedTime(&ms, d.e0, d.e1));
   std::vector<long long> fc((size_t)blocks * MAXW * 2), pi((size_t)blocks * MAXW * 4);
-  std::vector<uint32_t> sm(blocks);
+  std::vector<uint32_t> sm(blocks), sm2(blocks);
   CK(cudaMemcpy(fc.data(), d.fclk, fc.size() * sizeof(long long), cudaMemcpyDeviceToHost));
   CK(cudaMemcpy(pi.data(), d.pinfo, pi.size() * sizeof(long long), cudaMemcpyDeviceToHost));
   CK(cudaMemcpy(sm.data(), d.smid, sm.size() * sizeof(uint32_t), cudaMemcpyDeviceToHost));
+  CK(cudaMemcpy(sm2.data(), d.smid2, sm2.size() * sizeof(uint32_t), cudaMemcpyDeviceToHost));
+  // second stream: probe instructions on each SM, and how many probe blocks each SM ran
+  std::vector<double> sops(NSMID, 0.0);
+  std::vector<int> sblocks(NSMID, 0);
+  if (sk)
+    for (int bl = 0; bl < blocks; ++bl) {
+      if (sm2[bl] >= (uint32_t)NSMID) continue;
+      sblocks[sm2[bl]]++;
+      for (int w = 0; w < pw; ++w) sops[sm2[bl]] += (double)pi[4 * (bl * MAXW + w)] * sk->pb;
+    }
   Result r;
   r.ms = ms;
   r.blocks = blocks;
@@ -359,12 +443,22 @@ static Result launch(Dev& d, const Kern& k, int blocks, int fw, int pw, int slee
     span.push_back(sp);
     rate.push_back((double)fw * iters * FT / sp);
     double ops = 0;
-    for (int w = fw; w < fw + pw; ++w) ops += (double)pi[4 * (bl * MAXW + w)] * k.pb;
+    if (sk) {
+      ops = sm[bl] < (uint32_t)NSMID ? sops[sm[bl]] : 0;
+      r.paired += sm[bl] < (uint32_t)NSMID && sblocks[sm[bl]] == 1;
+    } else {
+      for (int w = fw; w < fw + pw; ++w) ops += (double)pi[4 * (bl * MAXW + w)] * k.pb;
+    }
     probe.push_back(ops / sp);
   }
   std::vector<uint32_t> u(sm);
   std::sort(u.begin(), u.end());
   r.distinct = (int)(std::unique(u.begin(), u.end()) - u.begin());
+  if (sk) {
+    std::vector<uint32_t> u2(sm2);
+    std::sort(u2.begin(), u2.end());
+    r.pdistinct = (int)(std::unique(u2.begin(), u2.end()) - u2.begin());
+  }
   r.cyc_med = median(span);
   r.mhz = *std::max_element(span.begin(), span.end()) / (ms * 1e3);
   r.rate_med = median(rate);
@@ -386,10 +480,11 @@ static void emit(const char* phase, const Kern& k, int fw, int pw, int sleep_ns,
   printf("{\"phase\":\"%s\",\"kernel\":\"%s\",\"pop\":\"%s\",\"pb\":%d,\"xop\":\"%s\",\"x\":%d,\"unr\":%d,\"k\":%.4f,"
          "\"fw\":%d,\"pw\":%d,\"sleep_ns\":%d,\"iters\":%d,\"rep\":%d,\"seed\":%u,\"blocks\":%d,\"distinct_sms\":%d,"
          "\"ms\":%.5f,\"cycles_med\":%.0f,\"mhz\":%.2f,\"mma_per_sm_clk_med\":%.7f,\"mma_per_sm_clk_min\":%.7f,"
-         "\"probe_inst_per_sm_clk_med\":%.6f,\"probe_inst_per_sm_clk_min\":%.6f}\n",
+         "\"probe_inst_per_sm_clk_med\":%.6f,\"probe_inst_per_sm_clk_min\":%.6f,\"probe_distinct_sms\":%d,"
+         "\"paired_sms\":%d}\n",
          phase, k.name.c_str(), OP_NAME[k.pop], k.pb, OP_NAME[k.xop], k.x, k.unr, (double)k.x / (FT * k.unr), fw, pw,
          sleep_ns, iters, rep, seed, r.blocks, r.distinct, r.ms, r.cyc_med, r.mhz, r.rate_med, r.rate_min, r.probe_med,
-         r.probe_min);
+         r.probe_min, r.pdistinct, r.paired);
   fflush(stdout);
 }
 
@@ -405,6 +500,8 @@ static void emit_v(const Dev& d, const Kern& k, uint32_t seed, uint32_t kseed, i
   }
 }
 
+static const int SLEEPS[] = {0, 400, 1600, 3200, 6400, 12800, 25600, 51200, 102400, 409600, 1000000};
+
 int main(int argc, char** argv) {
   if (argc < 2) {
     fprintf(stderr, "usage: filler gate|sweep|one|list ...\n");
@@ -414,6 +511,7 @@ int main(int argc, char** argv) {
   const std::vector<Kern> ks = kernels();
   if (mode == "list") {
     for (const Kern& k : ks) printf("%s\n", k.name.c_str());
+    for (const SKern& k : skernels()) printf("%s\n", k.name.c_str());
     return 0;
   }
   const uint32_t kseed0 = 0xC0FFEE11u;
@@ -434,12 +532,30 @@ int main(int argc, char** argv) {
           printf("\n");
         }
       }
+    // Second-stream probes beside base-u1 (a filler block on every SM; the first two blocks' threads printed).
+    const Kern& b1 = find(ks, "base-u1");
+    for (const SKern& p : skernels())
+      for (int iters : {4, 12}) {
+        launch(d, b1, d.sms, fw, pw, 0, iters, seed, &p);
+        CK(cudaMemcpy(h.data(), d.out, h.size() * sizeof(uint32_t), cudaMemcpyDeviceToHost));
+        for (int t = 0; t < blocks * fw * 32; ++t) {
+          printf("G ss-%s %u %u %d %d", p.name.c_str(), seed, kseed, iters, t);
+          for (int i = 0; i < 20; ++i) printf(" %08x", h[(size_t)t * OUTW + i]);
+          printf("\n");
+        }
+      }
     return 0;
   }
   if (mode == "one") {
     if (argc < 7) return 2;
     set_keys(kseed0);
-    const Kern& k = find(ks, argv[2]);
+    const std::string name = argv[2];
+    for (const SKern& p : skernels())
+      if (p.name == name) {
+        launch(d, find(ks, "base-u1"), d.sms, atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), atoi(argv[6]), 0x5EED1234u, &p);
+        return 0;
+      }
+    const Kern& k = find(ks, name);
     launch(d, k, d.sms, atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), atoi(argv[6]), 0x5EED1234u);
     return 0;
   }
@@ -478,11 +594,24 @@ int main(int argc, char** argv) {
       const int fw = 16;
       emit("probe-plain", b1, fw, 0, 0, iters, rep, seed, launch(d, b1, d.sms, fw, 0, 0, iters, seed));
       for (int pw : {4, 8, 16})
-        for (int sl : {0, 400, 1600, 6400, 25600, 102400, 409600, 1000000}) {
+        for (int sl : SLEEPS) {
           emit("probe-base", k, fw, 0, 0, iters, rep, seed, launch(d, k, d.sms, fw, 0, 0, iters, seed));
           Result r = launch(d, k, d.sms, fw, pw, sl, iters, seed);
           emit("probe", k, fw, pw, sl, iters, rep, seed, r);
           if (pw == 4 && sl == 0) emit_v(d, k, seed, kseed0, iters, vf);
+        }
+    }
+    // Method a, second stream: the plain filler (base-u1's own binary, shared memory SS_F) and a probe kernel on a
+    // second stream, one probe block beside each filler block; each launch follows the filler alone at SS_F.
+    for (const SKern& p : skernels()) {
+      const int fw = 16;
+      const Kern pkn{p.name, p.pop, O_NONE, 0, 1, p.pb, b1.fn};
+      for (int pw : {4, 8, 16})
+        for (int sl : SLEEPS) {
+          emit("ss-base", b1, fw, 0, 0, iters, rep, seed, launch(d, b1, d.sms, fw, 0, 0, iters, seed, nullptr, SS_F));
+          Result r = launch(d, b1, d.sms, fw, pw, sl, iters, seed, &p);
+          emit("ss-probe", pkn, fw, pw, sl, iters, rep, seed, r);
+          if (pw == 4 && sl == 0) emit_v(d, pkn, seed, kseed0, iters, vf);
         }
     }
   }

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # filler.cu on one GPU (cwd = the source tree): the build and each loop's SASS opcode mix; the gate (every kernel's
 # receipts and accumulators against twin.py, two seed and key pairs) before anything is timed; the sweep (the filler
-# alone by occupancy, method b's in-loop extras and method a's co-resident probes, each beside a filler-alone launch);
+# alone by occupancy, method b's in-loop extras and method a's probes, in the filler's kernel and as a kernel on a second
+# stream, each beside a filler-alone launch);
 # ncu on the filler alone and a few probe and extra configurations, NCU_REPS times (method c, clocks left alone:
 # --clock-control none); then, after the lease, the timed launches' sampled receipts against twin.py. Clocks and power
 # are sampled every 200 ms throughout the lease. Results in $OUT.
@@ -36,13 +37,14 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-30}" -- bash -c '
   ok=1
   for sk in "0x5EED1234 0xC0FFEE11" "7 99"; do
     tag=$(echo "$sk" | tr " " "-")
-    "$B/filler" gate $sk > "$B/gate-$tag.txt" 2>> "$O/errors.txt" || ok=0
+    timeout 300 "$B/filler" gate $sk > "$B/gate-$tag.txt" 2>> "$O/errors.txt" || ok=0
     python3 $D/gate.py < "$B/gate-$tag.txt" >> "$O/gate.jsonl" 2>> "$O/errors.txt" || ok=0
     gzip -c "$B/gate-$tag.txt" > "$O/gate-$tag.txt.gz"
   done
   if [ $ok != 1 ]; then echo "gate failed: not timed" >> "$O/errors.txt"; kill $smi; exit 6; fi
   echo "gate-ok $(date -u +%FT%TZ)" >> "$O/gpu.txt"; q >> "$O/gpu.txt"
-  "$B/filler" sweep "$ITERS" "$REPS" "$O/verify.txt" > "$O/sweep.jsonl" 2>> "$O/errors.txt" || echo "sweep rc $?" >> "$O/errors.txt"
+  timeout 1200 "$B/filler" sweep "$ITERS" "$REPS" "$O/verify.txt" > "$O/sweep.jsonl" 2>> "$O/errors.txt" \
+    || echo "sweep rc $?" >> "$O/errors.txt"
   echo "sweep-done $(date -u +%FT%TZ)" >> "$O/gpu.txt"; q >> "$O/gpu.txt"
   M=smsp__inst_executed.sum,smsp__inst_issued.sum,smsp__cycles_active.sum,smsp__issue_active.avg.pct_of_peak_sustained_active
   M=$M,sm__inst_executed_pipe_alu.sum,sm__inst_executed_pipe_fma.sum,sm__inst_executed_pipe_fmaheavy.sum,sm__inst_executed_pipe_fmalite.sum

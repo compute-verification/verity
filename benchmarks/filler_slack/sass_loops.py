@@ -1,8 +1,10 @@
-"""Opcode counts of every `fk` kernel in `cuobjdump -sass` output: the whole function and each loop (a backward BRA).
+"""Opcode counts of every `fk` and `pk` kernel in `cuobjdump -sass` output: the whole function and each loop (a backward
+BRA).
 
     python3 sass_loops.py filler.sass > sass-loops.json
 
-Keys are "pop,xop,x,unr,pb" from the mangled template arguments (filler.cu's Op numbering).
+Keys are "pop,xop,x,unr,pb" for `fk` and "pk:pop,pb" for `pk`, from the mangled template arguments (filler.cu's Op
+numbering).
 """
 
 import json
@@ -13,6 +15,7 @@ from collections import Counter
 FUNC = re.compile(r"Function : (\S+)")
 INST = re.compile(r"/\*([0-9a-f]{4,})\*/\s+(.*?)\s*;")
 ARGS = re.compile(r"_Z2fkILi(\d+)ELi(\d+)ELi(\d+)ELi(\d+)ELi(\d+)EE")
+PARGS = re.compile(r"_Z2pkILi(\d+)ELi(\d+)EE")
 
 
 def main() -> int:
@@ -32,8 +35,8 @@ def main() -> int:
                 cur.append((int(m.group(1), 16), toks[0], " ".join(toks[1:])))
     out = {}
     for name, insts in funcs.items():
-        a = ARGS.search(name)
-        key = ",".join(a.groups()) if a else name
+        a, p = ARGS.search(name), PARGS.search(name)
+        key = ",".join(a.groups()) if a else "pk:" + ",".join(p.groups()) if p else name
         loops = []
         for addr, op, rest in insts:
             if op == "BRA":

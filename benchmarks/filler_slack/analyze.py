@@ -4,13 +4,15 @@
 warp-instruction a cycle). Rates are warp-MMAs per SM-clock (peak 0.25: one m16n8k32 per SMSP every 16 cycles).
 
 - (a) probe: a probe point's ν is its warp-instructions per SM-clock over 4, scaled by the probe loop's SASS count over its
-  256 ops (the loop's own counter, flag load and branch). Per rep, ν(thr) is the largest ν among points whose filler rate
-  is within thr of the filler-alone launch run just before it.
+  PB ops (the loop's own counter, flag load and branch). Per rep, ν(thr) is the largest ν among points whose filler rate
+  is within thr of a reference (method_a: the same filler code alone, the plain filler, or the probes resident but
+  idle), for probe warps in the filler's kernel and for a probe kernel on a second stream beside the plain filler.
 - (b) in-loop: a point's ν is k extra instructions per MMA times the filler's MMAs per SMSP-cycle. Per rep, ν(thr) is the
   largest such ν whose filler rate is within thr of its adjacent base.
 - (c) ncu: 1 − smsp__issue_active, and the per-pipe idle fractions, over the NCU_REPS profiles of the filler alone.
 
-Error bars: mean ± sample standard deviation over reps (and min/max).
+Error bars: mean ± sample standard deviation over reps (and min/max); a frontier also carries its grid bracket (the largest
+passing point and the smallest failing point above it), which is wider than the rep-to-rep spread.
 """
 
 from __future__ import annotations
@@ -62,10 +64,15 @@ def probe_overhead(sass: dict) -> dict[str, float]:
     backward branch to the kernel's exit path spans the filler's loop and the probe's)."""
     out = {}
     for key, v in sass.items():
-        f = key.split(",")
         loops = [lp for lp in v["loops"] if "NANOSLEEP" in lp["ops"]]
-        if len(f) == 5 and f[0] != "0" and loops:
-            out[f"p-{OPS[int(f[0])]}-b{f[4]}"] = min(loops, key=lambda lp: lp["n"])["n"] / int(f[4])
+        if not loops:
+            continue
+        n = min(loops, key=lambda lp: lp["n"])["n"]
+        if key.startswith("pk:"):
+            pop, pb = key[3:].split(",")
+            out[f"s-{OPS[int(pop)]}-b{pb}"] = n / int(pb)
+        elif len(f := key.split(",")) == 5 and f[0] != "0":
+            out[f"p-{OPS[int(f[0])]}-b{f[4]}"] = n / int(f[4])
     return out
 
 
@@ -75,56 +82,72 @@ def frontier(points: list[tuple[int, float, float]], thr: float) -> list[float]:
     return [max([nu for r, nu, rel in points if r == rep and rel >= 1 - thr] + [0.0]) for rep in reps]
 
 
+def bracket(points: list[tuple[int, float, float]], thr: float) -> dict:
+    """The frontier's grid bracket: per rep, the largest passing nu (lo) and the smallest failing nu above it (hi; None
+    if every larger point passes), as mean ± sd over reps."""
+    los, his = [], []
+    for rep in sorted({p[0] for p in points}):
+        pts = [(nu, rel) for r, nu, rel in points if r == rep]
+        lo = max([nu for nu, rel in pts if rel >= 1 - thr] + [0.0])
+        hi = [nu for nu, rel in pts if rel < 1 - thr and nu > lo]
+        los.append(lo)
+        his.append(min(hi) if hi else None)
+    return {"lo": ms(los), "hi": ms(his)}
+
+
+FAMILY = {"probe": ("probe-base", "in-kernel"), "ss-probe": ("ss-base", "second-stream")}
+IDLE_NS = 1000000
+
+
 def method_a(rows: list[dict], over: dict[str, float]) -> dict:
-    """rel: the filler's rate over the same kernel's with no probe warps (the co-resident effect alone); rel_plain: over
-    the plain filler (base-u1) launched at the start of the kernel's group (what the probe kernel costs in all). For the
-    IMMA probe, nu is instead the covert MMAs' share of the tensor peak."""
-    pts: dict[tuple, list] = defaultdict(list)
-    pts_plain: dict[tuple, list] = defaultdict(list)
+    """Per probe point, three references for the filler's rate:
+    rel        the filler alone launched just before it with the same filler code (in-kernel: the same kernel with no
+               probe warps, since ptxas compiles the filler loop differently once a probe path is in the kernel;
+               second stream: base-u1 at the second-stream shared memory size)
+    rel_plain  the plain filler (base-u1 at 16 warps, one block an SM) of the same rep: what the probe costs in all
+    rel_idle   the same kernel and probe warps sleeping 1 ms between bodies (probes resident but nearly idle)
+    nu: probe warp-instructions per SM-clock over 4 schedulers, scaled by the loop's SASS count over its PB ops; for the
+    IMMA probes instead the covert MMAs' share of the tensor peak."""
+    plain = {r["rep"]: r["mma_per_sm_clk_med"] for r in rows if r["phase"] == "occupancy" and r["kernel"] == "base-u1"
+             and r["fw"] == 16}
+    idle = {(r["phase"], r["kernel"], r["pw"], r["rep"]): r["mma_per_sm_clk_med"] for r in rows
+            if r["phase"] in FAMILY and r["sleep_ns"] == IDLE_NS}
+    pts: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
     detail: dict[tuple, list] = defaultdict(list)
-    base_noise = defaultdict(list)
-    plain, base = None, None
+    base = None
     for r in rows:
-        if r["phase"] == "probe-plain":
-            plain = r
-        elif r["phase"] == "probe-base":
+        if r["phase"] in ("probe-base", "ss-base"):
             base = r
-        elif r["phase"] == "probe" and base and plain and base["kernel"] == r["kernel"] and base["rep"] == r["rep"]:
-            rel = r["mma_per_sm_clk_med"] / base["mma_per_sm_clk_med"]
-            rel_plain = r["mma_per_sm_clk_med"] / plain["mma_per_sm_clk_med"]
-            if r["pop"] == "imma":
-                nu = r["probe_inst_per_sm_clk_med"] / PEAK
-            else:
-                nu = r["probe_inst_per_sm_clk_med"] / 4 * over.get(r["kernel"], 1.0)
-            fam = "covert-imma" if r["pop"] == "imma" else "any-int"
-            for key in ((r["kernel"],), (fam,)):
-                pts[key].append((r["rep"], nu, rel))
-                pts_plain[key].append((r["rep"], nu, rel_plain))
-            detail[(r["kernel"], r["pw"], r["sleep_ns"])].append((nu, rel, rel_plain, r["mma_per_sm_clk_med"]))
-    bases = [r for r in rows if r["phase"] in ("probe-base", "probe-plain")]
-    for k in {r["kernel"] for r in bases}:
-        for rep in {r["rep"] for r in bases}:
-            v = [r["mma_per_sm_clk_med"] for r in bases if r["kernel"] == k and r["rep"] == rep]
-            if len(v) > 1:
-                m = st.fmean(v)
-                base_noise[k].extend(x / m - 1 for x in v)
-    plain_vs = defaultdict(list)
+            continue
+        if r["phase"] not in FAMILY or base is None or base["phase"] != FAMILY[r["phase"]][0] or base["rep"] != r["rep"]:
+            continue
+        fam = FAMILY[r["phase"]][1]
+        rate = r["mma_per_sm_clk_med"]
+        rels = {"rel": rate / base["mma_per_sm_clk_med"], "rel_plain": rate / plain[r["rep"]],
+                "rel_idle": rate / idle[(r["phase"], r["kernel"], r["pw"], r["rep"])]}
+        imma = r["pop"] == "imma"
+        nu = r["probe_inst_per_sm_clk_med"] / PEAK if imma else r["probe_inst_per_sm_clk_med"] / 4 * over.get(r["kernel"], 1.0)
+        groups = (f"{fam}/{r['kernel']}", f"{fam}/{'covert-imma' if imma else 'any-int'}")
+        if r["sleep_ns"] != IDLE_NS:
+            for ref, rel in rels.items():
+                for g in groups:
+                    pts[ref][g].append((r["rep"], nu, rel))
+        detail[(fam, r["kernel"], r["pw"], r["sleep_ns"])].append(
+            (nu, rels["rel"], rels["rel_plain"], rels["rel_idle"], rate / PEAK, r.get("paired_sms"), r.get("probe_distinct_sms")))
+    bases = defaultdict(list)
     for r in rows:
-        if r["phase"] == "probe-base":
-            p = [x for x in rows if x["phase"] == "probe-plain" and x["rep"] == r["rep"]]
-            if p:
-                plain_vs[r["kernel"]].append(r["mma_per_sm_clk_med"] / st.fmean(x["mma_per_sm_clk_med"] for x in p))
-    out = {"frontier": {}, "frontier_vs_plain": {}, "points": {},
-           "base_noise_sd": {k: st.pstdev(v) for k, v in base_noise.items()},
-           "probe_kernel_alone_vs_plain": {k: ms(v) for k, v in plain_vs.items()}}
-    for key, p in sorted(pts.items(), key=str):
-        out["frontier"]["/".join(map(str, key))] = {f"{t:g}": ms(frontier(p, t)) for t in THR}
-    for key, p in sorted(pts_plain.items(), key=str):
-        out["frontier_vs_plain"]["/".join(map(str, key))] = {f"{t:g}": ms(frontier(p, t)) for t in THR}
+        if r["phase"] in ("probe-base", "ss-base") and r["rep"] in plain:
+            bases[f"{r['phase']}/{r['kernel']}"].append(r["mma_per_sm_clk_med"] / plain[r["rep"]])
+    out = {"frontier": {}, "points": {}, "base_vs_plain": {k: ms(v) for k, v in sorted(bases.items())}}
+    for ref, groups in pts.items():
+        out["frontier"][ref] = {g: {f"{t:g}": {"nu": ms(frontier(p, t)), **bracket(p, t)} for t in THR}
+                                for g, p in sorted(groups.items())}
     for key, v in sorted(detail.items(), key=str):
-        out["points"][f"{key[0]}/pw{key[1]}/s{key[2]}"] = {
+        out["points"][f"{key[0]}/{key[1]}/pw{key[2]}/s{key[3]}"] = {
             "nu": ms([x[0] for x in v]), "rel": ms([x[1] for x in v]), "rel_plain": ms([x[2] for x in v]),
-            "filler_share": ms([x[3] / PEAK for x in v])}
+            "rel_idle": ms([x[3] for x in v]), "filler_share": ms([x[4] for x in v]),
+            "paired_sms": sorted({x[5] for x in v if x[5] is not None}),
+            "probe_distinct_sms": sorted({x[6] for x in v if x[6] is not None})}
     return out
 
 
@@ -147,7 +170,7 @@ def method_b(rows: list[dict]) -> dict:
         detail[(r["xop"], r["unr"], r["x"], r["fw"])].append((r["k"], nu, rel, rel_own, cost))
     out = {"frontier": {}, "points": {}}
     for key, p in sorted(pts.items(), key=str):
-        out["frontier"][f"{key[0]}/fw{key[1]}"] = {f"{t:g}": ms(frontier(p, t)) for t in THR}
+        out["frontier"][f"{key[0]}/fw{key[1]}"] = {f"{t:g}": {"nu": ms(frontier(p, t)), **bracket(p, t)} for t in THR}
     for key, v in sorted(detail.items(), key=str):
         out["points"][f"{key[0]}/u{key[1]}/x{key[2]}/fw{key[3]}"] = {
             "k": v[0][0], "nu": ms([x[1] for x in v]), "rel": ms([x[2] for x in v]), "rel_own": ms([x[3] for x in v]),
