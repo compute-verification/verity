@@ -142,14 +142,16 @@ def upper95(p: float, n: int) -> float:
 
 def live_max(sigma: float, pools: Pools, draws: int, rng: random.Random) -> dict:
     """The largest point mass of a live entry (|alpha*x| < 8 rho*alpha) at rho*alpha = sigma: a scan of v over
-    [0, 8 sigma) in steps of sigma/8 (the law is symmetric in v's sign), then the three best v again at 8x the draws."""
+    [0, top) in 64 steps (the law is symmetric in v's sign), then the three best v again at 8x the draws.  top is
+    min(8 sigma, 448 - 4 sigma): at rho*alpha = sigma a row's largest |alpha*x| is alpha*s = 448 - 4 sigma."""
     beta = beta_for(sigma)
-    scan = [(v, summary(law(v, beta, pools, draws, rng))["p_max"]) for v in (i * sigma / 8 for i in range(64))]
+    top = min(8 * sigma, 448 - 4 * sigma)
+    scan = [(v, summary(law(v, beta, pools, draws, rng))["p_max"]) for v in (i * top / 64 for i in range(64))]
     best = sorted(scan, key=lambda t: -t[1])[:3]
     fine = []
     for v0, _ in best:
-        for v in (v0 + d * sigma / 64 for d in range(-4, 5)):
-            if 0 <= v < 8 * sigma:
+        for v in (v0 + d * top / 512 for d in range(-4, 5)):
+            if 0 <= v < top:
                 fine.append((v, summary(law(v, beta, pools, draws * 8, rng))["p_max"]))
     v, p = max(fine, key=lambda t: t[1])
     return {"rho_alpha": sigma, "worst_v": round(v, 4), "p_max": p, "p_max_upper95": upper95(p, draws * 8),
@@ -157,7 +159,7 @@ def live_max(sigma: float, pools: Pools, draws: int, rng: random.Random) -> dict
 
 
 def sigma_scan(pools: Pools, draws: int, rng: random.Random) -> list[dict]:
-    return [live_max(s, pools, draws, rng) for s in (1.0, 1.25, 1.5, 2.0, 3.0, 4.0, 8.0, 16.0, 56.0)]
+    return [live_max(s, pools, draws, rng) for s in (1.0, 1.25, 1.5, 2.0, 3.0, 4.0, 8.0, 16.0, 32.0, 56.0)]
 
 
 def spike_scan(pools: Pools, draws: int, rng: random.Random) -> list[dict]:
@@ -170,6 +172,23 @@ def spike_scan(pools: Pools, draws: int, rng: random.Random) -> list[dict]:
         s = summary(law(v, beta_for(sigma), pools, draws, rng))
         out.append({"s_over_rho": r, "rho_alpha": round(sigma, 4), "alpha_s": round(v, 3), **s,
                     "p_max_upper95": upper95(s["p_max"], draws)})
+    return out
+
+
+def row_worst(pools: Pools, draws: int, rng: random.Random) -> list[dict]:
+    """The worst entry of a row whose largest entry is s = r rho with r <= 8 (every entry live): rho*alpha = 448/(r + 4),
+    and v = alpha*x ranges over [0, 448 r/(r + 4)]; a 33-point scan, then the two best v again at 4x the draws."""
+    out = []
+    for r in (3.0, 4.0, 4.5, 5.0, 6.0, 7.0, 8.0):
+        sigma, top = 448 / (r + 4), 448 * r / (r + 4)
+        beta = beta_for(sigma)
+        scan = [(v, summary(law(v, beta, pools, draws, rng))["p_max"]) for v in (i * top / 32 for i in range(33))]
+        fine = [(v, summary(law(v, beta, pools, 4 * draws, rng))["p_max"])
+                for v0, _ in sorted(scan, key=lambda t: -t[1])[:2]
+                for v in (v0 + d * top / 128 for d in range(-2, 3)) if 0 <= v <= top]
+        v, p = max(fine, key=lambda t: t[1])
+        out.append({"s_over_rho": r, "rho_alpha": round(sigma, 3), "alpha_s": round(top, 2), "worst_v": round(v, 3),
+                    "p_max": p, "p_max_upper95": upper95(p, 4 * draws)})
     return out
 
 
@@ -349,6 +368,7 @@ def main(argv: list[str]) -> int:
     res["noise_bound"] = noise_bound(pools, rng)
     res["honest_gaussian_row"] = honest_profile(pools, draws, rng)
     res["live_point_mass_by_sigma"] = sigma_scan(pools, draws // 4, rng)
+    res["worst_entry_by_s_over_rho_live_rows"] = row_worst(pools, draws // 4, rng)
     res["largest_entry_by_s_over_rho"] = spike_scan(pools, draws, rng)
     k = 8192
     honest = (gauss_row(k, rng), [P.f32_bits(rng.gauss(0, 0.02)) for _ in range(k)])
