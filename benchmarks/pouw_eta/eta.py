@@ -123,10 +123,18 @@ def runnable(pipe: R.Pipeline) -> list:
     return [(nm, ph, fn) for nm, ph, fn in pipe.steps() if pipe.bm == R.BM or ph not in PLAIN_PHASES]
 
 
+#: gemm_pearlc pinned to N persistent CTAs (one an SM), leaving the other SMs to the side lane: `deferred-g<N>`
+PINNED_GRIDS = (140, 160)
+
+
 def steps_of(pipe: R.Pipeline) -> dict:
     d, b = pipe.dev, pipe.b
     r32 = {"rowdig_a_32": lambda: d.launch("s512_rows", pipe.m_real, 32, p=(b["xa"], b["rowdig_a"]), i=(pipe.m_real, pipe.k))}
-    return {**{nm: fn for nm, _, fn in runnable(pipe)}, **pipe.extra(), **r32}
+    tile = "_d" if pipe.bm == R.BM_D else ""
+    peel = {"pa": b["pa_t"], "pb": b["pb_t"], "rs": b["ia_a"], "cs": b["ia_b"]}
+    pinned = {f"gemm_pearlc_g{g}": (lambda g=g: pipe.gemm(f"gemm_pearlc{tile}{pipe.suffix}", "at", "bt", pipe.m, pipe.n, grid=g,
+                                                          out=("c", "u", "y"), **peel)) for g in PINNED_GRIDS}
+    return {**{nm: fn for nm, _, fn in runnable(pipe)}, **pipe.extra(), **r32, **pinned}
 
 
 def enqueue(lanes: Lanes, pipes: list, fns: list[dict], sched: str, calls: int) -> None:
@@ -160,15 +168,19 @@ def enqueue(lanes: Lanes, pipes: list, fns: list[dict], sched: str, calls: int) 
             run(["gemm_pearlc" if sched == "gemm" else "gemm_ct"])
         elif sched == "plain":
             run(["gemm_fast"])
-        elif sched in ("main-a", "main-a-nf"):
+        elif sched in ("hashonly", "hashall"):
+            run(["rowdig_a", "hash_leaf"] if sched == "hashonly" else [nm for nm in SERVED if nm in HASH])
+        elif sched in ("main-a", "main-a-nf", "main-a-nf-ct"):
             keep = [nm for nm in SERVED if nm not in HASH or nm in FLOOR or nm == "lines_ea"]
-            run([nm for nm in keep if not (sched == "main-a-nf" and nm in FORMING)])
-        elif sched == "deferred":
+            keep = [nm for nm in keep if not (sched != "main-a" and nm in FORMING)]
+            run(["gemm_ct" if sched == "main-a-nf-ct" and nm == "gemm_pearlc" else nm for nm in keep])
+        elif sched == "deferred" or sched.startswith("deferred-g"):
+            gemm = "gemm_pearlc" if sched == "deferred" else f"gemm_pearlc_g{sched[10:]}"
             run([nm for nm in SERVED if nm not in ("af", "pa", "gemm_pearlc", "hash_leaf")])
             run(["af", "pa"])
             if j in pending:
                 lanes.wait(main, pending.pop(j))
-            run(["gemm_pearlc"])
+            run([gemm])
             lanes.wait(side, lanes.record(main))
             run(["hash_leaf"], side)
             pending[j] = lanes.record(side)
@@ -483,6 +495,127 @@ def sha_mode(dev: R.Dev, lanes: Lanes) -> None:
         release(dev, pipes, own)
 
 
+#: what the row digests and tile leaves feed: every committed buffer downstream of them (the call's, then the epoch's B side)
+COMMITTED = ("rowdig_a", "tree_a", "seed_a", "line_a", "seeds_a", "lkeys_a", "leaves", "tree_t", "rowdig_b", "tree_b")
+
+
+def digest(dev: R.Dev, pipe: R.Pipeline, name: str) -> str:
+    return hashlib.sha256(dev.read(pipe.b[name], pipe.size[name])).hexdigest()
+
+
+def same_mode(dev: R.Dev, lanes: Lanes) -> None:
+    """The gate for hash_fast.cuh: per shape, every step with sha = "ref" (s512_rows, s512_tile_leaves), the committed buffers'
+    bytes recorded; then those buffers poisoned (0xA5) and every step again with sha = "fast", and poisoned once more and the
+    served call (`serial+tt`, its tile tree too) captured and launched as a graph with sha = "fast": each buffer's bytes must
+    equal the reference's both times."""
+    for spec in os.environ.get("ETA_SHAPES", "32x8192x8192 80x8192x8192 176x8192x8192 128x8192x8192 112x384x1024 "
+                               "8192x8192x8192").split():
+        shape = R.parse_shape(spec)
+        pipes, own = make(dev, shape, 1, None, 101)
+        p = pipes[0]
+        p.sha = "ref"
+        for _, _, fn in runnable(p):
+            fn()
+        dev.sync()
+        want = {nm: digest(dev, p, nm) for nm in COMMITTED}
+        row = {"kind": "same", "shape": list(shape), "m_padded": p.m, "tiles": p.tiles}
+        p.sha = "fast"
+        for stage in ("steps", "graph"):
+            names = COMMITTED if stage == "steps" else COMMITTED[:8]
+            for nm in names:
+                dev.ck("cuMemsetD8_v2", R.u64(p.b[nm]), 0xA5, p.size[nm])
+            dev.sync()
+            if stage == "steps":
+                for _, _, fn in runnable(p):
+                    fn()
+            else:
+                fns = steps_of(p)
+                if "pad_t" in fns:   # the tile tree's pads: the unit's, not the call's
+                    fns["pad_t"]()
+                g = Graph(lanes, lambda: enqueue(lanes, [p], [fns], "serial+tt", 1))
+                g.launch()
+                dev.ck("cuStreamSynchronize", lanes.main)
+                g.close()
+            dev.sync()
+            row[stage] = {nm: digest(dev, p, nm) == want[nm] for nm in names}
+        row["identical"] = all(all(v.values()) for v in (row["steps"], row["graph"]))
+        row["sha256"] = {nm: want[nm][:16] for nm in ("rowdig_a", "leaves", "tree_a", "tree_t")}
+        emit(row)
+        release(dev, pipes, own)
+
+
+def sha2_mode(dev: R.Dev, lanes: Lanes) -> None:
+    """hash_fast.cuh's kernels per launch-bound variant (ETA_PROBES: probe cubins built from hash_probe.cu, NAME=PATH each),
+    then the ship's own, and the reference kernels, over each shape's A rows and its C~ and U: their time, digests against
+    the reference's, and the compressions a second (the format's, 10 s + 2 + s / 2 a row or tile, and those executed with the
+    headers precomputed, 9 s + 1 + s / 2)."""
+    reps = int(os.environ.get("ETA_REPS", "15"))
+    probes = [x.split("=", 1) for x in os.environ.get("ETA_PROBES", "").split()]
+    mods = []
+    for name, path in probes:
+        pd = R.Dev(open(path, "rb").read())
+        pd.open()
+        pd.launch("s512_heads", R.cdiv(R.RS_MAX_SEGS * (R.RS_MAX_SEGS + 1) // 2 + R.RS_MAX_SEGS + 1, 128), 128)
+        pd.sync()
+        mods.append((name, pd, int(name.split("x")[0])))
+    for spec in os.environ.get("ETA_SHAPES", "32x8192x8192 128x8192x8192 8192x8192x8192").split():
+        shape = R.parse_shape(spec)
+        pipes, own = make(dev, shape, 1, None, 101)
+        p, b = pipes[0], pipes[0].b
+        mr, n, k = p.m_real, p.n, p.k
+        s = k // 256
+        full, last = mr // R.TILE * (n // R.TILE), mr % R.TILE // 2
+        units = {"rows": (mr, mr * s), "tiles": (p.tiles, 32 * full + n // R.TILE * last)}
+        fmt = {"rows": mr * (10 * s + 2 + s // 2), "tiles": full * 338 + n // R.TILE * (10 * last + 2 + last // 2)}
+        execd = {"rows": mr * (9 * s + 1 + s // 2), "tiles": full * 305 + n // R.TILE * (9 * last + 1 + last // 2)}
+        p.sha = "ref"
+        f = steps_of(p)
+        f["rowdig_a"]()
+        f["hash_leaf"]()
+        dev.sync()
+        want = {"rows": dev.read(b["rowdig_a"], 64 * mr), "tiles": dev.read(b["leaves"], 64 * p.tiles)}
+        out = {"rows": b["rowdig_a"], "tiles": b["leaves"]}
+
+        def variants():
+            yield "ref", None, None
+            yield "ship", None, None
+            for nm, pd, nt in mods:
+                yield nm, pd, nt
+
+        for name, pd, nt in variants():
+            for kind in ("rows", "tiles"):
+                count, segs = units[kind]
+                if pd is None:
+                    p.sha = "fast" if name == "ship" else "ref"
+                    both = f["rowdig_a"] if kind == "rows" else f["hash_leaf"]
+                    parts = {"both": both}
+                else:
+                    seg = (lambda pd=pd, nt=nt: pd.launch("s512_row_segs", R.cdiv(segs, nt), nt, p=(b["xa"], b["segdig_a"]),
+                                                          i=(mr, k), stream=lanes.main)) if kind == "rows" else \
+                          (lambda pd=pd, nt=nt: pd.launch("s512_tile_segs", R.cdiv(segs, nt), nt, p=(b["c"], b["u"], b["segdig_t"]),
+                                                          i=(mr, n), stream=lanes.main))
+                    fold = (lambda pd=pd: pd.launch("s512_folds", R.cdiv(mr, 32), 32, p=(b["segdig_a"], b["rowdig_a"]),
+                                                    i=(mr, s, mr, s), stream=lanes.main)) if kind == "rows" else \
+                           (lambda pd=pd: pd.launch("s512_folds", R.cdiv(p.tiles, 32), 32, p=(b["segdig_t"], b["leaves"]),
+                                                    i=(p.tiles, 32, full, last), stream=lanes.main))
+                    parts = {"both": lambda seg=seg, fold=fold: (seg(), fold()), "segs": seg, "folds": fold}
+                dev.ck("cuMemsetD8_v2", R.u64(out[kind]), 0xA5, len(want[kind]))
+                lanes.on(lanes.main, parts["both"])
+                dev.ck("cuStreamSynchronize", lanes.main)
+                row = {"kind": "sha2", "variant": name, "unit": kind, "shape": list(shape), "units": count, "segments": segs,
+                       "same": dev.read(out[kind], len(want[kind])) == want[kind], "compressions_format": fmt[kind],
+                       "compressions_executed": execd[kind] if name != "ref" else fmt[kind]}
+                for part, fn in parts.items():
+                    g = Graph(lanes, lambda fn=fn: [lanes.on(lanes.main, fn) for _ in range(10)])
+                    ms = statistics.median(timed(lanes, g.launch, reps)) / 10
+                    g.close()
+                    row[f"{part}_ms"] = round(ms, 5)
+                sec = max(row["both_ms"], 1e-9) * 1e-3
+                row["format_per_s"], row["executed_per_s"] = fmt[kind] / sec, row["compressions_executed"] / sec
+                emit(row)
+        release(dev, pipes, own)
+
+
 #: FP8 E4M3 codes with the NaNs (0x7F, 0xFF) moved to the largest finite magnitudes
 FINITE = bytes(v - 1 if v & 0x7F == 0x7F else v for v in range(256))
 
@@ -567,7 +700,8 @@ def main() -> int:
     mode = os.environ.get("ETA_MODE", "time")
     {"time": lambda: time_mode(dev, nv, lanes), "profile": lambda: profile_mode(dev, lanes),
      "clock": lambda: clock_mode(dev, nv, lanes), "power": lambda: power_mode(dev, nv, lanes),
-     "sha": lambda: sha_mode(dev, lanes), "data": lambda: data_mode(dev, nv, lanes)}[mode]()
+     "sha": lambda: sha_mode(dev, lanes), "data": lambda: data_mode(dev, nv, lanes), "same": lambda: same_mode(dev, lanes),
+     "sha2": lambda: sha2_mode(dev, lanes)}[mode]()
     return 0
 
 
