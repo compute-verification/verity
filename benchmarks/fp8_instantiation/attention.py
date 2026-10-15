@@ -55,7 +55,7 @@ GRIDS = {"int8": (127, S32_EXACT), "e4m3": (16, FP32_EXACT)}
 #: a method's grid token -> (Q K^T's grid, P V's grid)
 GRID_PAIRS = {"int8": ("int8", "int8"), "e4m3": ("e4m3", "e4m3"), "e4m3qk": ("e4m3", "int8")}
 ALPHABETS = {"none": [0], "pm1": [-1, 1], "pm13": [-3, -1, 1, 3], "pm57": [-7, -5, 5, 7],
-             **{f"u{k}": list(range(-k, k + 1)) for k in (1, 2, 4, 8, 16)}}
+             **{f"u{k}": list(range(-k, k + 1)) for k in (1, 2, 4, 8, 16, 32, 64)}}
 OPERANDS = "qkpv"
 
 ORIG = modeling_llama.eager_attention_forward

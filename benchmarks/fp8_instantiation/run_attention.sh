@@ -4,7 +4,7 @@
 # WikiText-2's test window 0 that must begin with those 2048).  Clocks are read, never set.
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd clone --custody-ttl 12h \
-#     --env GPU_LEASE_WHO=... --env D4A_CTX=2048 --env D4A_PLAN=grid|frontier|limbs|limbs2|limbsall|seeds|longseeds|both [--env D4A_TAG=SUBDIR] [--env D4A_METHODS="..."] \
+#     --env GPU_LEASE_WHO=... --env D4A_CTX=2048 --env D4A_PLAN=grid|frontier|limbs|limbs2|limbsall|seeds|longseeds|wide|both [--env D4A_TAG=SUBDIR] [--env D4A_METHODS="..."] \
 #     [--env D4A_IDS=ids8192.npy --send ids8192.npy] --send benchmarks/fp8_instantiation/run_attention.sh \
 #     -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/run_attention.sh"'
 set -uo pipefail
@@ -71,6 +71,10 @@ seeds_plan() {
   for s in s0 ${SEEDS:-s1 s2}; do for x in $new; do m+=" $x-$s"; done; done
   echo "$m"
 }
+# Every operand on two limbs with alphabets past the brief's {-16..16}, to find where 10% is.
+wide_plan() {
+  for a in u32 u64; do echo -n " int8-prow2-vchan2-qk2-$a int8-prow2-vchan2-qk2-$a-rot"; done
+}
 # The frontier points of the frontier and limbsall plans at the longer context, at seeds S (s1 s2: s0 ran there), with
 # the rotated grids they are measured against.
 long_seeds_plan() {
@@ -81,7 +85,7 @@ long_seeds_plan() {
     int8-prow2-vchan2-u1-rot int8-prow2-vchan2-u2-rot int8-prow2-vchan2-u4-rot int8-prow2-vchan2-u8-rot
     int8-prow2-vchan2-qk2-u4-rot int8-prow2-vchan2-qk2-u8-rot int8-prow2-vchan2-qk2-u16-rot
     int8-prow2-qk=u2-v=u1-p=u16-rot int8-prow2-qk=u4-v=u1-p=u16-rot"
-  new="int8-prow2-qk=u4-v=u2-p=u16-rot"
+  new="int8-prow2-qk=u4-v=u2-p=u16-rot $(wide_plan)"
   m="bf16"
   for s in ${SEEDS:-s1 s2}; do for x in $old; do m+=" $x-$s"; done; done
   for s in s0 ${SEEDS:-s1 s2}; do for x in $new; do m+=" $x-$s"; done; done
@@ -89,6 +93,7 @@ long_seeds_plan() {
 }
 case "${D4A_PLAN:-}" in
   longseeds) D4A_METHODS=$(long_seeds_plan) ;;
+  wide) D4A_METHODS="bf16 int8-prow2-vchan2-qk2-none-rot"; for s in s0 s1 s2; do for x in $(wide_plan); do D4A_METHODS+=" $x-$s"; done; done ;;
   limbs2) D4A_METHODS=$(limbs2_plan) ;;
   seeds) D4A_METHODS="$(seeds_plan) $(SEEDS="s0 s1 s2" limbs2_plan)" ;;
   grid) D4A_METHODS=$(grid_plan) ;;
