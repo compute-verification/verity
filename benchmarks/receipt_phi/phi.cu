@@ -32,7 +32,7 @@
   } while (0)
 
 constexpr int NKEY = 32;
-__constant__ uint32_t KA[NKEY], KB[NKEY], KK[NKEY];
+__constant__ uint32_t KA[NKEY], KB[NKEY], KK[NKEY], KC[NKEY];
 
 __host__ __device__ __forceinline__ uint32_t lowbias32(uint32_t x) {
   x ^= x >> 16;
@@ -50,18 +50,31 @@ __host__ __device__ __forceinline__ uint32_t gen(uint32_t seed, uint32_t a, uint
 __device__ __forceinline__ uint32_t rotl(uint32_t x, int r) { return __funnelshift_l(x, x, r); }
 __host__ __device__ constexpr int rot_of(int t) { return ((t * 7 + 5) % 31) + 1; }
 
-enum Kind { MAD = 0, RA, RAM, XMA, AR, MUM, XSM, XSM4, MXM, CHI, XSM2, DUO, NK };
-static const char* KIND_NAME[NK] = {"mad", "ra",  "ram", "xma", "ar",   "mum",
-                                    "xsm", "xsm4", "mxm", "chi", "xsm2", "duo"};
-__host__ __device__ constexpr bool wide(int k) { return k == MUM || k == DUO; }
+// DUO2's rotation tables, as twins.py's R1 and R2 (which says why these).
+__host__ __device__ constexpr int rot1(int t) {
+  constexpr int R[31] = {15, 18, 20, 5, 29, 25, 4, 9, 1, 6, 12, 28, 8, 7, 31, 19,
+                         10, 17, 3, 11, 27, 14, 2, 26, 16, 30, 13, 23, 21, 24, 22};
+  return R[t % 31];
+}
+__host__ __device__ constexpr int rot2(int t) {
+  constexpr int R[29] = {6, 23, 7, 19, 4, 14, 10, 12, 9, 28, 11, 20, 26, 2, 22,
+                         17, 5, 16, 15, 3, 25, 8, 13, 29, 30, 27, 21, 24, 18};
+  return R[t % 29];
+}
+
+enum Kind { MAD = 0, RA, RAM, XMA, AR, MUM, XSM, XSM4, MXM, CHI, XSM2, DUO, DUO2, NK };
+static const char* KIND_NAME[NK] = {"mad", "ra",  "ram", "xma", "ar",   "mum", "xsm",
+                                    "xsm4", "mxm", "chi", "xsm2", "duo", "duo2"};
+__host__ __device__ constexpr bool wide(int k) { return k == MUM || k == DUO || k == DUO2; }
 __host__ __device__ constexpr bool paired(int k) { return k == RAM || k == XMA; }
 
 struct St {
-  uint32_t y, z;
+  uint32_t y, z, y2, z2;
 };
 
 // Absorb N words p[0..N-1] at key positions T0..T0+N-1 (paired kinds take them two at a time, keyed by the first).
-// MUM keeps a 64-bit state S = (y = hi, z = lo) and DUO two words (y, z); every other candidate keeps one word y.
+// MUM keeps a 64-bit state S = (y = hi, z = lo), DUO two words (y, z) and DUO2 two DUO lanes (y, z) and (y2, z2), the
+// second keyed by KB/KC with its own rotations; every other candidate keeps one word y.
 template <int K, int N, int T0>
 __device__ __forceinline__ void absorb(St& s, const uint32_t* p) {
   if constexpr (paired(K)) static_assert(N % 2 == 0, "pairs");
@@ -102,6 +115,13 @@ __device__ __forceinline__ void absorb(St& s, const uint32_t* p) {
       const uint32_t u = s.y ^ p[i] ^ KK[t];
       s.y = u * KA[t] + s.z;
       s.z = rotl(u, rot_of(t)) + s.y;
+    } else if constexpr (K == DUO2) {
+      const uint32_t u = s.y ^ p[i] ^ KK[t];
+      s.y = u * KA[t] + s.z;
+      s.z = rotl(u, rot1(t)) + s.y;
+      const uint32_t v = s.y2 ^ p[i] ^ KC[t];
+      s.y2 = v * KB[t] + s.z2;
+      s.z2 = rotl(v, rot2(t)) + s.y2;
     }
   }
 }
@@ -110,6 +130,7 @@ __device__ __forceinline__ void absorb(St& s, const uint32_t* p) {
 // above all) only through carries: its fold rotates z instead.
 template <int K>
 __device__ __forceinline__ uint32_t finish(const St& s) {
+  if constexpr (K == DUO2) return s.y ^ rotl(s.z, 16) ^ rotl(s.y2 ^ rotl(s.z2, 16), 8);
   return K == MUM ? (s.y ^ s.z) : K == DUO ? (s.y ^ rotl(s.z, 16)) : s.y;
 }
 
@@ -127,6 +148,10 @@ __global__ void __launch_bounds__(TPB) pure_k(uint32_t* out, int iters, uint32_t
   for (int u = 0; u < PU; ++u) {
     s[u].y = gen(seed, tid, u, 100);
     s[u].z = gen(seed, tid, u, 101);
+    if constexpr (K == DUO2) {
+      s[u].y2 = gen(seed, tid, u, 102);
+      s[u].z2 = gen(seed, tid, u, 103);
+    }
   }
   __syncthreads();
   const long long t0 = clock64();
@@ -351,7 +376,7 @@ __device__ __forceinline__ uint32_t il_word(St (&s)[FT], uint32_t (&xw)[FT][4], 
     if constexpr (!paired(K)) {
       const uint32_t wd[1] = {bits(acc[j][r])};
       absorb<K, 1, 4 * j + r>(s[j], wd);
-      return K == DUO ? s[j].z : s[j].y;
+      return K == DUO ? s[j].z : K == DUO2 ? s[j].z2 : s[j].y;
     } else if constexpr ((W & 1) != 0) {
       const uint32_t wd[2] = {bits(acc[j][r - 1]), bits(acc[j][r])};
       absorb<K, 2, 4 * j + r - 1>(s[j], wd);
@@ -412,6 +437,10 @@ __global__ void __launch_bounds__(TPB) fused_k(uint32_t* out, int iters, uint32_
   for (int j = 0; j < FT; ++j) {
     s[j].y = gen(seed, tid, j, 100);
     s[j].z = gen(seed, tid, j, 101);
+    if constexpr (K == DUO2) {
+      s[j].y2 = gen(seed, tid, j, 103);
+      s[j].z2 = gen(seed, tid, j, 104);
+    }
     ff[j] = __uint_as_float(0x3f800000u | (gen(seed, tid, j, 102) & 0x7fffffu));
 #pragma unroll
     for (int r = 0; r < 4; ++r) {
@@ -428,6 +457,7 @@ __global__ void __launch_bounds__(TPB) fused_k(uint32_t* out, int iters, uint32_
 #pragma unroll
   for (int j = 0; j < FT; ++j) {
     asm volatile("" : "+r"(s[j].y), "+r"(s[j].z), "+f"(ff[j]));
+    if constexpr (K == DUO2) asm volatile("" : "+r"(s[j].y2), "+r"(s[j].z2));
     asm volatile("" : "+r"(xw[j][0]), "+r"(xw[j][1]), "+r"(xw[j][2]), "+r"(xw[j][3]));
   }
   __syncthreads();
@@ -495,8 +525,8 @@ __global__ void __launch_bounds__(TPB) fused_k(uint32_t* out, int iters, uint32_
 // ---------------------------------------------------------------------------------------------------------------- host
 using KFn = void (*)(uint32_t*, int, uint32_t, long long*);
 
-static KFn PURE[NK] = {pure_k<0>, pure_k<1>, pure_k<2>, pure_k<3>, pure_k<4>, pure_k<5>,
-                       pure_k<6>, pure_k<7>, pure_k<8>, pure_k<9>, pure_k<10>, pure_k<11>};
+static KFn PURE[NK] = {pure_k<0>, pure_k<1>, pure_k<2>,  pure_k<3>,  pure_k<4>,  pure_k<5>, pure_k<6>,
+                       pure_k<7>, pure_k<8>, pure_k<9>, pure_k<10>, pure_k<11>, pure_k<12>};
 static KFn PROBE[NP] = {probe_k<0>,  probe_k<1>,  probe_k<2>,  probe_k<3>,  probe_k<4>,  probe_k<5>,
                         probe_k<6>,  probe_k<7>,  probe_k<8>,  probe_k<9>,  probe_k<10>, probe_k<11>,
                         probe_k<12>, probe_k<13>, probe_k<14>, probe_k<15>, probe_k<16>, probe_k<17>};
@@ -507,22 +537,24 @@ static const int CS[NC] = {1, 2, 4, 8, 16, 32};
 #define FMODE(M)                                                                                               \
   {FROW(-1, M), FROW(0, M), FROW(1, M), FROW(2, M),  FROW(3, M),  FROW(4, M),  FROW(5, M),  FROW(6, M), \
    FROW(7, M),  FROW(8, M), FROW(9, M), FROW(10, M), FROW(11, M), FROW(12, M), FROW(13, M), FROW(14, M),  \
-   FROW(15, M)}
-static_assert(NF == 16, "FMODE lists every fused kind");
+   FROW(15, M), FROW(16, M)}
+static_assert(NF == 17, "FMODE lists every fused kind");
 static KFn FUSED[NM][NF + 1][NC] = {FMODE(0), FMODE(1), FMODE(2), FMODE(3), FMODE(5), FMODE(7), FMODE(10), FMODE(11)};
 
 static const char* fused_name(int k) { return k < 0 ? "none" : k < NK ? KIND_NAME[k] : CONTROL_NAME[k - NK]; }
 
 static void set_keys(uint32_t kseed) {
-  uint32_t ka[NKEY], kb[NKEY], kk[NKEY];
+  uint32_t ka[NKEY], kb[NKEY], kk[NKEY], kc[NKEY];
   for (int i = 0; i < NKEY; ++i) {
     ka[i] = gen(kseed, 1, i, 0) | 1u;
     kb[i] = gen(kseed, 2, i, 0) | 1u;
     kk[i] = gen(kseed, 3, i, 0);
+    kc[i] = gen(kseed, 4, i, 0);
   }
   CK(cudaMemcpyToSymbol(KA, ka, sizeof ka));
   CK(cudaMemcpyToSymbol(KB, kb, sizeof kb));
   CK(cudaMemcpyToSymbol(KK, kk, sizeof kk));
+  CK(cudaMemcpyToSymbol(KC, kc, sizeof kc));
 }
 
 struct Timing {

@@ -23,7 +23,7 @@ def sample(n: int = 64, seed: int = 7):
     return [rng.integers(0, 1 << 32, size=n, dtype=np.uint64) for _ in range(4)]
 
 
-@pytest.mark.parametrize("kind", twins.KINDS)
+@pytest.mark.parametrize("kind", attacks.KINDS)
 def test_steps_are_the_twins(kind: str) -> None:
     y, z, p0, p1 = sample()
     a, b = attacks.step(kind, y, z, p0, 4)
@@ -37,7 +37,7 @@ def test_steps_are_the_twins(kind: str) -> None:
         assert want[0] == int(a[i]) and (kind not in twins.WIDE or want[1] == int(b[i]))
 
 
-@pytest.mark.parametrize("kind", [k for k in twins.KINDS if k != "chi"])
+@pytest.mark.parametrize("kind", [k for k in attacks.KINDS if k != "chi"])
 @pytest.mark.parametrize("t", [4, 5])
 def test_invert_inverts(kind: str, t: int) -> None:
     y, z, p, _ = sample()
@@ -100,7 +100,7 @@ def test_duo_fold_sees_a_shift_of_both_halves() -> None:
     b = attacks.step("duo", *attacks.step("duo", y, z, p0 ^ top, 254), p1 ^ top, 255)
     assert np.mean((a[0] ^ a[1]) == (b[0] ^ b[1])) > 0.25
     assert not (attacks.fold("duo", *a) == attacks.fold("duo", *b)).any()
-    assert all(attacks.fold(k, y, z)[0] == twins.finish(k, (int(y[0]), int(z[0]))) for k in twins.KINDS)
+    assert all(attacks.fold(k, y, z)[0] == twins.finish(k, (int(y[0]), int(z[0]))) for k in attacks.KINDS)
 
 
 def test_decay_keeps_mad_bit0_linear_and_raises_duo() -> None:
