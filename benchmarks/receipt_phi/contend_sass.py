@@ -64,10 +64,13 @@ def main():
             continue
         t, c, f = TYPES[int(m.group(1))], int(m.group(2)), int(m.group(3))
         bodies = loops(ins)
-        with_mma = sorted((b for b in bodies if nmma(b)), key=len)
+        ops = OPCODE.get(CLASSES[c] if f else "none", ())
+        nops = lambda b: sum(counts(b)[o] for o in ops)
+        # the fused loop has the most fillers; with F = 0, it is the shorter MMA loop (the split one adds a WARPSYNC)
+        with_mma = sorted((b for b in bodies if nmma(b)), key=lambda b: (-nops(b), len(b)))
         no_mma = sorted((b for b in bodies if not nmma(b)), key=len)
         k = {"type": t, "cls": CLASSES[c] if f else "none", "F": f, "function": fn,
-             "body": with_mma[-1] if with_mma else [], "mma_only": with_mma[0] if len(with_mma) > 1 else None,
+             "body": with_mma[0] if with_mma else [], "mma_only": with_mma[-1] if len(with_mma) > 1 else None,
              "fill_only": no_mma[-1] if no_mma else None}
         kernels.append(k)
         if f == 0:
