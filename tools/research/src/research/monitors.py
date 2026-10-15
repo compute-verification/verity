@@ -1952,7 +1952,7 @@ def slack_post(dry: bool) -> Callable[[dict, dict | None], dict]:
     def post(ev: dict, thread: dict | None) -> dict:
         """Post `ev`, recording each message in `thread` as soon as Slack has it, so a retry posts only what is still missing."""
         th = {} if thread is None else thread
-        ev = {**ev, "owners": list(dict.fromkeys([*ev["owners"], *sender_handles(reg, ev["text"])]))}
+        ev = {**ev, "owners": list(dict.fromkeys([*ev["owners"], *sender_handles(slack.with_routes(reg, routes), ev["text"])]))}
         if ev["event"] == "clear":
             done = th.setdefault("cleared", [])
             for k, ch in (("ts", alerts), ("pointer", front)):
