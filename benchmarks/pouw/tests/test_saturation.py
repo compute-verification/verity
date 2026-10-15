@@ -25,6 +25,7 @@ V = _load("vllm_split")
 N = _load("ncu_summary")
 W = _load("windows_eps")
 D = _load("drift_tau")
+T = _load("r3_table")
 
 
 def test_categories_keep_fp8_gemms_and_kv_writes_apart():
@@ -119,3 +120,13 @@ def test_honest_tau_reads_the_slow_tail_over_the_fastest_launches():
     assert D.quantile(ms, 0.001) == 1.0 and D.quantile(ms, 0.999) == 1.03
     assert D.tau(D.quantile(ms, 0.999), D.quantile(ms, 0.001)) == pytest.approx(1.03)
     assert D.reasons(0x4 | 0x20) == ["sw power cap", "sw thermal"] and D.reasons(0) == ["none"]
+
+
+def test_held_reading_reproduces_w6b_held_alu():
+    """pouw-core.lean §10's `held_alu` at p2048 (η_w 0.51004, κ 4): 1.32 / 3.23 / 6.17 / 15.82 / 54.64 / 65.84%, to
+    its integer rounding, from three of its classes (the null sets every value but the last two)."""
+    rows = [{"design": "k", "phase": "p", "slowdown": s, "added": a}
+            for s, a in ((1.004060, 0.011435), (1.170120, 0.209250), (1.137126, 0.121307))]
+    got = [T.held(rows, "k", "p", 0.51004, t) for t in (1.0035, 1.01, 1.02, 1.0528, 1.1848, 1.2229)]
+    want = [0.0132, 0.0323, 0.0617, 0.1582, 0.5464, 0.6584]
+    assert all(abs(g - w) < 0.0002 for g, w in zip(got, want))
