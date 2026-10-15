@@ -5,6 +5,9 @@
 //   NS 2, S = {-8..8}: blocks j = 8 p + r, r = 0, 1, ...; their 64-bit words (big-endian digest words) in order, each
 //         word w < 6 17^15 accepted and read as 15 base-17 digits of w mod 17^15, least significant first; entry e is
 //         the e-th digit of the accepted words, noise digit - 8 (about 5 bits an entry, 15 digits a 64-bit word)
+//   NS 3, S = {-8..8} from 32-bit words: blocks j = 8 p + r as NS 2; their 32-bit words (big-endian digest words) in
+//         order, each word w < 10 17^7 accepted and read as 7 base-17 digits of w mod 17^7, least significant first
+//         (about 4.8 bits an entry, no 64-bit division)
 // tag = 2 (NS - 1) + side (0 for A, 1 for B). The generator hands its patch's noise to apply(c, n) a 16-byte chunk at a
 // time, c = 0..31 (row c / 8 of the patch, column chunk c % 8), n its 16 noise values as 4 words of int8 bytes.
 #pragma once
@@ -22,6 +25,7 @@ DEV void sha_block(const uint64_t* sg, uint64_t ctr, uint64_t* st) {
 // 4 bits to 4 int8 bytes, 1 - 2 bit
 DEV uint32_t pm1_word(uint32_t nib) { return 0x01010101u | (((nib * 0x00204081u) & 0x01010101u) * 0xFEu); }
 constexpr uint64_t P17_7 = 410338673ull, P17_15 = 2862423051509815793ull, U17_LIM = 6 * P17_15;
+constexpr uint32_t U17W_LIM = 10u * 410338673u;
 
 template <int NS, class F> DEV void sha_patch(const uint64_t* sg, uint32_t tag, uint32_t p, F&& apply) {
   if constexpr (NS == 1) {
@@ -53,24 +57,33 @@ template <int NS, class F> DEV void sha_patch(const uint64_t* sg, uint32_t tag, 
 #pragma unroll
       for (int i = 0; i < 7; i++) { const uint32_t q = v / 17u; put(v - 17u * q); v = q; }
     };
+    constexpr int WPB = NS == 2 ? 8 : 16;   // words a block
+    wi = WPB;
     while (c < 32) {
-      if (wi == 8) {
-        if (r == 8) break;   // 64 words without 35 accepted: never in practice; the gate would see the zero noise
+      if (wi == WPB) {
+        if (r == 8) break;   // 8 blocks without enough accepted words: never in practice; the gate would see zero noise
         sha_block(sg, (uint64_t)tag << 56 | ((uint64_t)p * 8 + r), st);
         r++; wi = 0;
       }
       uint64_t w = st[0];
 #pragma unroll
-      for (int i = 1; i < 8; i++) if (wi == i) w = st[i];
-      wi++;
-      if (w >= U17_LIM) continue;
-      w %= P17_15;
-      const uint64_t q1 = w / P17_7, a = q1 / P17_7;
-      put7((uint32_t)(w - q1 * P17_7));
-      if (c >= 32) break;
-      put7((uint32_t)(q1 - a * P17_7));
-      if (c >= 32) break;
-      put((uint32_t)a);
+      for (int i = 1; i < 8; i++) if ((NS == 2 ? wi : wi >> 1) == i) w = st[i];
+      if constexpr (NS == 3) {
+        const uint32_t w32 = wi & 1 ? (uint32_t)w : (uint32_t)(w >> 32);
+        wi++;
+        if (w32 >= U17W_LIM) continue;
+        put7(w32 % (uint32_t)P17_7);
+      } else {
+        wi++;
+        if (w >= U17_LIM) continue;
+        w %= P17_15;
+        const uint64_t q1 = w / P17_7, a = q1 / P17_7;
+        put7((uint32_t)(w - q1 * P17_7));
+        if (c >= 32) break;
+        put7((uint32_t)(q1 - a * P17_7));
+        if (c >= 32) break;
+        put((uint32_t)a);
+      }
     }
   }
 }

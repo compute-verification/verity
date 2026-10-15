@@ -5,7 +5,8 @@ python3 sref.py DIR [--no-receipts] prints one JSON line of checks and exits 0 o
 
 Recomputed independently of the device, from the dumped A and B (stacked over the batch) and the seed alone: sigma
 (splitmix64 from the seed), the noise of every patch (4 rows x 128 columns) with hashlib's SHA-512 in counter mode, as
-sha_noise.cuh states it, for both alphabets (pm1: 1 - 2 bit; u17: base-17 digits of the accepted 64-bit words, minus 8),
+sha_noise.cuh states it, for each alphabet (pm1: 1 - 2 bit; u17: base-17 digits of the accepted 64-bit words, minus 8;
+u17w: of the accepted 32-bit words),
 A' = A + E_A and B' = B + E_B within the format's exact range, each batch's A B^T and A' B'^T, the duo receipts at L = 32,
 and the generation-only kernel's folded words.
 """
@@ -22,10 +23,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "floored_gemm"))
 from mref import decode, duo_receipts, words  # noqa: E402
 
 FMTS = ["i8", "e4"]
-ALS = {"pm1": 1, "u17": 2}
+ALS = {"pm1": 1, "u17": 2, "u17w": 3}
 M64 = (1 << 64) - 1
 P17_15 = 17**15
 U17_LIM = 6 * P17_15
+U17W_LIM = 10 * 17**7
 
 
 def sigma(seed, inst=0):
@@ -50,12 +52,13 @@ def patch_noise(key, ns, side, p):
         assert r < 8, f"patch {p} exhausted 8 blocks"
         d = hashlib.sha512(key + struct.pack(">Q", tag << 56 | (8 * p + r))).digest()
         r += 1
-        for i in range(8):
-            w = int.from_bytes(d[8 * i : 8 * i + 8], "big")
-            if w >= U17_LIM:
+        wb = 8 if ns == 2 else 4
+        for i in range(64 // wb):
+            w = int.from_bytes(d[wb * i : wb * i + wb], "big")
+            if w >= (U17_LIM if ns == 2 else U17W_LIM):
                 continue
-            v = w % P17_15
-            for _ in range(15):
+            v = w % (P17_15 if ns == 2 else 17**7)
+            for _ in range(15 if ns == 2 else 7):
                 digits.append(v % 17)
                 v //= 17
             if len(digits) >= 512:
@@ -150,7 +153,7 @@ def main(d: Path, receipts: bool) -> int:
                 checks[f"XA_{name}"] = gA is not None and bool((gA == Ae).all())
                 checks[f"XB_{name}"] = gB is not None and bool((gB == Be).all())
             arms_f = [f"slt_{al}_{f}", f"sduo_{al}_{f}"]
-            if f == "i8":
+            if f == "i8" and al != "u17w":
                 arms_f += [f"fus_{al}_i8", f"fusd_{al}_i8", f"fov_{al}_i8", f"fovd_{al}_i8"]
             for a in arms_f:
                 check_product(a, f, AeBe)

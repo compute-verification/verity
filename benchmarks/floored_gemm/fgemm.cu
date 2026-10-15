@@ -228,6 +228,7 @@ struct Args {
   int batch;         // problems stacked in rows: A (batch M x K), B (batch N x K), U (batch x M x N); 0 is 1
   uint32_t nzA, nzB; // the fused edit's noise keys (ML's NZ)
   uint64_t sg[4];    // sigma, the SHA-512 noise's key (ML's NS), big-endian words
+  const uint8_t* eb; // NS < 0: A's noise, an M x K int8 buffer shared by the batch (row mod M)
 };
 
 // the edit's noise (benchmarks/masked_gemm/egemm.cu): 16 bytes of a row from one hash h, element j's index into
@@ -281,7 +282,9 @@ template <int TM, int BN, int WM, int STAGES, bool F8 = false, int NZ = 0, int N
   bool issuer;
   // the fused edit: this tile's first rows of the stacked A and B, and the keys
   uint32_t nz_rowA = 0, nz_rowB = 0, nz_keyA = 0, nz_keyB = 0;
-  const uint64_t* sg = nullptr;   // NS != 0: the noise from SHA-512 (sha_noise.cuh) instead of nz_hash
+  const uint64_t* sg = nullptr;   // NS > 0: the noise from SHA-512 (sha_noise.cuh) instead of nz_hash
+  const uint8_t* eb = nullptr;    // NS < 0: A's noise from this buffer (Args::eb), B unedited here; tiles heads-innermost
+  int eM = 0;
 
   DEV ML(uint8_t* smem, const Maps* m, int M, int N, int K, int grp, bool tail, int nb = 1)
       : maps(m), tiles_m(M / TM), tiles_n(N / BN), KT(K / BK), steps(K / BK + tail), group(grp), pt(blockIdx.x),
@@ -302,13 +305,19 @@ template <int TM, int BN, int WM, int STAGES, bool F8 = false, int NZ = 0, int N
     }
     __syncthreads();
   }
+  // tile t's problem and place: problems outermost, or (NS < 0) innermost, so a batch's CTAs read a shared noise tile together
+  DEV void tile_of(int t, int& b, int& tm, int& tn) const {
+    const int per = tiles_m * tiles_n;
+    int r;
+    if constexpr (NS < 0) { b = t % batch; r = t / batch; } else { b = t / per; r = t % per; }
+    raster(r, tiles_m, tiles_n, group, tm, tn);
+  }
   // the issuer's next load, once every thread has released its slot
   DEV void issue() {
     const int per = tiles_m * tiles_n;
     if (pt >= per * batch) return;
-    int tm, tn;
-    const int b = pt / per;
-    raster(pt % per, tiles_m, tiles_n, group, tm, tn);
+    int tm, tn, b;
+    tile_of(pt, b, tm, tn);
     tm += b * tiles_m; tn += b * tiles_n;
     mbar_wait(empty(ps), pph ^ 1);
     mbar_expect_tx(full(ps), STAGE);
@@ -449,11 +458,18 @@ template <int TM, int BN, int WM, int STAGES, bool F8 = false, int NZ = 0, int N
     const int c = threadIdx.x + i * NCT;
     const bool isA = c < (int)(A_BYTES / 16);
     const int cc = isA ? c : c - (int)(A_BYTES / 16), row = cc >> 3, lc = (cc & 7) ^ (row & 7);
-    const uint32_t h = nz_hash(isA ? nz_keyA : nz_keyB, (isA ? nz_rowA : nz_rowB) + row, KT * (BK / 16), kt * (BK / 16) + lc);
     const uint32_t addr = sb + c * 16;
     uint32_t v0, v1, v2, v3;
-    asm volatile("ld.shared.v4.u32 {%0, %1, %2, %3}, [%4];" : "=r"(v0), "=r"(v1), "=r"(v2), "=r"(v3) : "r"(addr));
-    v0 = nz_add<F8>(v0, h, 0); v1 = nz_add<F8>(v1, h, 1); v2 = nz_add<F8>(v2, h, 2); v3 = nz_add<F8>(v3, h, 3);
+    if constexpr (NS < 0) {
+      if (!isA) return;
+      const uint4 e = __ldg(reinterpret_cast<const uint4*>(eb + (size_t)((nz_rowA + row) % eM) * (KT * BK) + kt * BK + lc * 16));
+      asm volatile("ld.shared.v4.u32 {%0, %1, %2, %3}, [%4];" : "=r"(v0), "=r"(v1), "=r"(v2), "=r"(v3) : "r"(addr));
+      v0 = add_noise<F8>(v0, e.x); v1 = add_noise<F8>(v1, e.y); v2 = add_noise<F8>(v2, e.z); v3 = add_noise<F8>(v3, e.w);
+    } else {
+      const uint32_t h = nz_hash(isA ? nz_keyA : nz_keyB, (isA ? nz_rowA : nz_rowB) + row, KT * (BK / 16), kt * (BK / 16) + lc);
+      asm volatile("ld.shared.v4.u32 {%0, %1, %2, %3}, [%4];" : "=r"(v0), "=r"(v1), "=r"(v2), "=r"(v3) : "r"(addr));
+      v0 = nz_add<F8>(v0, h, 0); v1 = nz_add<F8>(v1, h, 1); v2 = nz_add<F8>(v2, h, 2); v3 = nz_add<F8>(v3, h, 3);
+    }
     asm volatile("st.shared.v4.u32 [%0], {%1, %2, %3, %4};" :: "r"(addr), "r"(v0), "r"(v1), "r"(v2), "r"(v3));
   }
   DEV static void edit_meet() {
@@ -476,7 +492,7 @@ template <int TM, int BN, int WM, int STAGES, bool F8 = false, int NZ = 0, int N
   }
   DEV void edit(int kt) const {
     if constexpr (NZ != 0) {
-      if constexpr (NS == 0) {
+      if constexpr (NS <= 0) {
 #pragma unroll
         for (int i = 0; i < NZC; i++) edit_chunk(stage(s), kt, i);
       } else if (threadIdx.x < 64) {
@@ -489,7 +505,7 @@ template <int TM, int BN, int WM, int STAGES, bool F8 = false, int NZ = 0, int N
   DEV void stage_body(int (&acc)[MI][NI][4], St (&ch)[NCH<KIND>], const uint32_t (&kr)[NK<KIND>], uint32_t (&fa)[2][MI][4],
                       uint32_t (&fb)[2][NI][2], int kt = 0) {
     constexpr bool OV = NZ == 2 && !LAST;
-    static_assert(NZ != 2 || NS != 0 || NZC == 4, "two chunks after each of atoms 0 and 1");
+    static_assert(NZ != 2 || NS > 0 || NZC == 4, "two chunks after each of atoms 0 and 1");
     const uint32_t sb = stage(s), done = empty(s);
     const int sn = s + 1 == STAGES ? 0 : s + 1;
     load(fa[1], fb[1], sb, 1);
@@ -497,7 +513,7 @@ template <int TM, int BN, int WM, int STAGES, bool F8 = false, int NZ = 0, int N
     load(fa[0], fb[0], sb, 2);
     if constexpr (OV) {
       mbar_wait_warp(full(sn), s + 1 == STAGES ? ph ^ 1 : ph);
-      if constexpr (NS == 0) {
+      if constexpr (NS <= 0) {
         edit_chunk(stage(sn), kt + 1, 0);
         edit_chunk(stage(sn), kt + 1, 1);
       } else if (threadIdx.x < 64) {
@@ -587,7 +603,7 @@ DEV void gemm_body(const Args& a) {
   extern __shared__ __align__(1024) uint8_t smem[];
   const int nb = a.batch > 0 ? a.batch : 1;
   L ml(smem, a.maps, a.M, a.N, a.K, a.group, TAIL, nb);
-  ml.nz_keyA = a.nzA; ml.nz_keyB = a.nzB; ml.sg = a.sg;
+  ml.nz_keyA = a.nzA; ml.nz_keyB = a.nzB; ml.sg = a.sg; ml.eb = a.eb; ml.eM = a.M;
   ml.init(threadIdx.x);
   const int warp = threadIdx.x / 32, lane = threadIdx.x % 32;
   ml.prologue();
@@ -597,9 +613,8 @@ DEV void gemm_body(const Args& a) {
   uint32_t kr[L::template NK<KIND>];
   L::template keys<KIND>(kr, lane);
   for (int t = blockIdx.x; t < tiles_m * tiles_n * nb; t += gridDim.x) {
-    int tm, tn;
-    const int bi = t / (tiles_m * tiles_n);
-    raster(t % (tiles_m * tiles_n), tiles_m, tiles_n, a.group, tm, tn);
+    int tm, tn, bi;
+    ml.tile_of(t, bi, tm, tn);
     const uint32_t tile_id = bi * tiles_m * tiles_n + tm * tiles_n + tn;
     ml.nz_rowA = (bi * tiles_m + tm) * TM; ml.nz_rowB = (bi * tiles_n + tn) * BN;
     St ch[NCH<KIND>];

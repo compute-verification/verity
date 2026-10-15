@@ -1,6 +1,7 @@
 // The edited GEMM with its noise expanded from sigma by SHA-512 in counter mode (RS-D1b,
 // note:20261015T1815Z-draft-rs-d1b-independent; the generator is sha_noise.cuh), at the minimum bits an entry for two
-// alphabets: pm1, S = {+1, -1} (1 bit an entry), and u17, uniform {-8..8} (base-17 digits, about 4.6 bits an entry).
+// alphabets: pm1, S = {+1, -1} (1 bit an entry), and u17, uniform {-8..8} (base-17 digits, about 4.6 bits an entry),
+// with u17w the same alphabet from 32-bit words (7 digits a word, no 64-bit division; separate passes only).
 // Fresh sigma for every instance. int8 operands are kept in [-119, 119] and E4M3's in [-8, 8], so A' and B' can't
 // saturate and every sum is exact. gamma_gen is the generation alone; the edit methods:
 //   sform: the generation and the edit as one separate pass (one thread a patch of 4 rows x 128 columns)
@@ -14,59 +15,7 @@
 #define MG_LIB
 #include "mgemm.cu"
 
-struct Sig { uint64_t w[4]; };
-static uint64_t splitmix64(uint64_t& x) {
-  uint64_t z = (x += 0x9E3779B97F4A7C15ull);
-  z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ull;
-  z = (z ^ (z >> 27)) * 0x94D049BB133111EBull;
-  return z ^ (z >> 31);
-}
-// instance i's sigma, from the seed
-static Sig sigma(uint32_t seed, uint32_t inst) {
-  uint64_t x = (uint64_t)seed << 32 | inst;
-  Sig s;
-  for (auto& w : s.w) w = splitmix64(x);
-  return s;
-}
-
-template <int FMT> __global__ void __launch_bounds__(256) sfill(uint8_t* X, size_t count, uint32_t seed) {
-  for (size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x; i < count; i += (size_t)gridDim.x * blockDim.x) {
-    const uint32_t h = mix32(seed ^ mix32((uint32_t)i) ^ mix32((uint32_t)(i >> 32) + 0x51u));
-    X[i] = (uint8_t)enc<FMT>(FMT == I8 ? (int)(h % 239) - 119 : (int)(h % 17) - 8);
-  }
-}
-
-// the separate pass over both operands in one grid: thread p < pa is A's patch p, the rest B's; each chunk of the patch
-// loaded, its noise added, stored to the edited copy
-template <int NS, bool F8>
-__global__ void __launch_bounds__(256) sha_edit(const uint8_t* __restrict__ A, uint8_t* __restrict__ XA, const uint8_t* __restrict__ B,
-                                                uint8_t* __restrict__ XB, uint32_t pa, uint32_t pb, uint32_t KB,
-                                                const __grid_constant__ Sig sg) {
-  const uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i >= pa + pb) return;
-  const bool isA = i < pa;
-  const uint32_t p = isA ? i : i - pa;
-  const uint8_t* X = isA ? A : B;
-  uint8_t* Xp = isA ? XA : XB;
-  const size_t k = (size_t)KB * 128, base = (size_t)(p / KB) * 4 * k + (size_t)(p % KB) * 128;
-  sha_patch<NS>(sg.w, 2 * (NS - 1) + (isA ? 0 : 1), p, [&](int c, const uint32_t(&n)[4]) {
-    const size_t off = base + (size_t)(c / 8) * k + (c % 8) * 16;
-    const uint4 x = *reinterpret_cast<const uint4*>(X + off);
-    *reinterpret_cast<uint4*>(Xp + off) =
-        make_uint4(add_noise<F8>(x.x, n[0]), add_noise<F8>(x.y, n[1]), add_noise<F8>(x.z, n[2]), add_noise<F8>(x.w, n[3]));
-  });
-}
-// the generation alone: each patch's noise folded to one word, G[p] = xor over chunks c of rotl(n0 ^ n1 ^ n2 ^ n3, c)
-template <int NS>
-__global__ void __launch_bounds__(256) sha_gen(uint32_t* __restrict__ G, uint32_t pa, uint32_t pb, const __grid_constant__ Sig sg) {
-  const uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i >= pa + pb) return;
-  const bool isA = i < pa;
-  uint32_t x = 0;
-  sha_patch<NS>(sg.w, 2 * (NS - 1) + (isA ? 0 : 1), isA ? i : i - pa,
-                [&](int c, const uint32_t(&n)[4]) { x ^= __funnelshift_l(n[0] ^ n[1] ^ n[2] ^ n[3], n[0] ^ n[1] ^ n[2] ^ n[3], c); });
-  G[i] = x;
-}
+#include "sha_pass.cuh"
 
 #define GEMMS(NAME, RS, KIND, NZ, NS)                                                                                   \
   __global__ void __launch_bounds__(ML<128, 128, 32, 3, false, NZ, NS>::NT, 1) NAME(const __grid_constant__ Args a) {  \
@@ -83,7 +32,7 @@ GEMMS(o2_duo32, 32, DUO, 2, 2)
 // [alphabet][overlapped][duo 32]
 static Kern SK[2][2][2] = {{{s1_plain, s1_duo32}, {o1_plain, o1_duo32}}, {{s2_plain, s2_duo32}, {o2_plain, o2_duo32}}};
 static_assert(ML<128, 128, 32, 3, false, 2, 2>::SMEM == CSMEM, "one shared-memory size");
-static const char* ALN[2] = {"pm1", "u17"};
+static const char* ALN[3] = {"pm1", "u17", "u17w"};
 
 struct SProb {
   int m, n, k, batch, grid;
@@ -146,7 +95,7 @@ struct SArm { std::string name; int kind, al, fmt, duo; };
 static std::vector<SArm> sall() {
   std::vector<SArm> v;
   for (int f = 0; f < 2; f++) v.push_back({std::string("plain_") + FMTN[f], S_PLAIN, 0, f, 0});
-  for (int al = 0; al < 2; al++) {
+  for (int al = 0; al < 3; al++) {
     const std::string A = ALN[al];
     v.push_back({"gen_" + A, S_GEN, al, 0, 0});
     for (int f = 0; f < 2; f++) {
@@ -155,6 +104,7 @@ static std::vector<SArm> sall() {
       v.push_back({"slt_" + A + F, S_LT, al, f, 0});
       v.push_back({"sduo_" + A + F, S_DUO, al, f, 1});
     }
+    if (al == 2) continue;
     v.push_back({"fus_" + A + "_i8", S_FUS, al, 0, 0});
     v.push_back({"fusd_" + A + "_i8", S_FUS, al, 0, 1});
     v.push_back({"fov_" + A + "_i8", S_FOV, al, 0, 0});
@@ -173,6 +123,8 @@ static void sform(SProb& P, int al, int f, const Sig& s) {
   if (al == 0 && f == E4) sha_edit<1, true><<<g, 256, 0, P.st>>>(P.A[f], P.XA, P.B[f], P.XB, P.pa, P.pb, P.KB, s);
   if (al == 1 && f == I8) sha_edit<2, false><<<g, 256, 0, P.st>>>(P.A[f], P.XA, P.B[f], P.XB, P.pa, P.pb, P.KB, s);
   if (al == 1 && f == E4) sha_edit<2, true><<<g, 256, 0, P.st>>>(P.A[f], P.XA, P.B[f], P.XB, P.pa, P.pb, P.KB, s);
+  if (al == 2 && f == I8) sha_edit<3, false><<<g, 256, 0, P.st>>>(P.A[f], P.XA, P.B[f], P.XB, P.pa, P.pb, P.KB, s);
+  if (al == 2 && f == E4) sha_edit<3, true><<<g, 256, 0, P.st>>>(P.A[f], P.XA, P.B[f], P.XB, P.pa, P.pb, P.KB, s);
 }
 static void scg(SProb& P, Kern kern, const Maps* maps, const Sig& s) {
   Args a{maps, P.U, P.R, P.m, P.n, P.k, 8, P.seed, 0, P.batch, 0, 0, {s.w[0], s.w[1], s.w[2], s.w[3]}};
@@ -186,7 +138,8 @@ static void srun(SProb& P, const SArm& a) {
     case S_PLAIN: ltg_run(P.plain[f], P.st); break;
     case S_GEN:
       if (a.al == 0) sha_gen<1><<<g, 256, 0, P.st>>>(P.G, P.pa, P.pb, s);
-      else sha_gen<2><<<g, 256, 0, P.st>>>(P.G, P.pa, P.pb, s);
+      else if (a.al == 1) sha_gen<2><<<g, 256, 0, P.st>>>(P.G, P.pa, P.pb, s);
+      else sha_gen<3><<<g, 256, 0, P.st>>>(P.G, P.pa, P.pb, s);
       break;
     case S_FORM: sform(P, a.al, f, s); break;
     case S_LT: sform(P, a.al, f, s); ltg_run(P.sep[f], P.st); break;

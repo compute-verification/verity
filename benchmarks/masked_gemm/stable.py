@@ -10,7 +10,7 @@ import math
 import re
 import sys
 
-ALS = ["pm1", "u17"]
+ALS = ["pm1", "u17", "u17w"]
 NONE = ["slt_{a}_i8", "slt_{a}_e4", "fus_{a}_i8", "fov_{a}_i8"]
 DUO = ["sduo_{a}_i8", "sduo_{a}_e4", "fusd_{a}_i8", "fovd_{a}_i8"]
 GROUPS = {"Llama linears": ["qkv", "o", "gate_up", "down"], "4096^3": ["sq4096"],
@@ -67,9 +67,9 @@ def main(bench, gate):
                + ("every timed arm passed" if all(v == "pass" for v in verdict.values())
                   else ", ".join(f"{a} {v}" for a, v in verdict.items() if v != "pass")) + ".")
     for base, bname in [("plain_i8", "cuBLASLt int8 (s8 -> s32)"), ("plain_e4", "cuBLASLt E4M3 (-> f32)")]:
-        out += ["", f"## Against {bname}", "",
-                "| shape | plain ms | gamma_gen pm1 | gamma_gen u17 | gen + edit pass pm1 / u17 | cheapest, no receipts, pm1 | u17 "
-                "| cheapest, duo 32, pm1 | u17 |", "|---|---|---|---|---|---|---|---|---|"]
+        al = ", ".join(ALS)
+        out += ["", f"## Against {bname} (alphabets {al} in each cell)", "",
+                "| shape | plain ms | gamma_gen | gen + edit pass | cheapest, no receipts | cheapest, duo 32 |", "|---|---|---|---|---|---|"]
         acc = {}
         for j in rows:
             arms = j["arms"]
@@ -80,23 +80,28 @@ def main(bench, gate):
             f = [arms[f"sform_{a}_i8"]["ms"] / b if f"sform_{a}_i8" in arms else float("nan") for a in ALS]
             cells = []
             for pats in (NONE, DUO):
+                cs = []
                 for a in ALS:
                     c = cheapest(arms, pats, a, base, verdict)
-                    cells.append(f"{c[0]:.2f} ({c[1]})" if c else "–")
+                    cs.append(f"{c[0]:.2f} ({c[1]})" if c else "–")
                     if c:
                         acc.setdefault((tuple(pats), a), {})[j["shape"]] = c[0]
+                cells.append(" / ".join(cs))
             for i, a in enumerate(ALS):
                 acc.setdefault(("gen", a), {})[j["shape"]] = g[i]
-            out.append(f"| {j['shape']} | {b:.4f} | {g[0]:.3f} | {g[1]:.3f} | {f[0]:.3f} / {f[1]:.3f} | " + " | ".join(cells) + " |")
-        out += ["", "Geomeans by group (gamma_gen pm1, u17; cheapest no receipts pm1, u17; cheapest duo 32 pm1, u17):", ""]
+            out.append(f"| {j['shape']} | {b:.4f} | {' / '.join(f'{x:.3f}' for x in g)} | {' / '.join(f'{x:.3f}' for x in f)} | "
+                       + " | ".join(cells) + " |")
+        out += ["", f"Geomeans by group (gamma_gen; cheapest no receipts; cheapest duo 32; each {al}):", ""]
         for group, shapes in GROUPS.items():
-            vals = []
-            for key in [("gen", "pm1"), ("gen", "u17"), (tuple(NONE), "pm1"), (tuple(NONE), "u17"), (tuple(DUO), "pm1"), (tuple(DUO), "u17")]:
-                d = acc.get(key, {})
-                xs = [d[s] for s in shapes if s in d]
-                vals.append(geo(xs) if len(xs) == len(shapes) else float("nan"))
-            out.append(f"- {group}: gamma_gen {vals[0]:.3f}, {vals[1]:.3f}; no receipts {vals[2]:.2f}, {vals[3]:.2f}; "
-                       f"duo 32 {vals[4]:.2f}, {vals[5]:.2f}")
+            parts = []
+            for kind in ["gen", tuple(NONE), tuple(DUO)]:
+                vals = []
+                for a in ALS:
+                    d = acc.get((kind, a), {})
+                    xs = [d[s] for s in shapes if s in d]
+                    vals.append(geo(xs) if len(xs) == len(shapes) else float("nan"))
+                parts.append(", ".join(f"{v:.3f}" for v in vals))
+            out.append(f"- {group}: gamma_gen {parts[0]}; no receipts {parts[1]}; duo 32 {parts[2]}")
     out += ["", "## Every arm, ms (median of interleaved repetitions) and 1 + gamma against int8 / E4M3 cuBLASLt", "",
             "| shape | m | n | k | batch | arm | ms | / i8 | / e4 | MHz | gate |", "|---|---|---|---|---|---|---|---|---|---|---|"]
     for j in rows:
