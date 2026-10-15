@@ -79,7 +79,8 @@ static void *run(void *arg) {
   syscall(SYS_getcpu, &cpu, &node, NULL);
   w->node = (int)node;
   const size_t bytes = elems * 8;
-  double *a = alloc(bytes), *b = alloc(bytes), *c = alloc(bytes);
+  const int narr = kernel == K_READ ? 1 : 3;  // the read touches a alone
+  double *a = alloc(bytes), *b = narr > 1 ? alloc(bytes) : a, *c = narr > 1 ? alloc(bytes) : a;
   if (!a || !b || !c) {
     fprintf(stderr, "alloc failed on cpu %d\n", w->cpu);
     exit(5);
@@ -87,7 +88,7 @@ static void *run(void *arg) {
   for (size_t i = 0; i < elems; ++i) a[i] = 1.0, b[i] = 2.0, c[i] = 0.5 + (double)(i & 7);
   const int want = strcmp(node_arg, "local") == 0 ? (int)node : atoi(node_arg);
   double *arrs[3] = {a, b, c};
-  for (int k = 0; k < 3; ++k)
+  for (int k = 0; k < narr; ++k)
     if (page_node(arrs[k]) != want || page_node(arrs[k] + elems - 1) != want) w->misplaced = 1;
   const size_t chunk = (1u << 20) / 8, nchunks = elems / chunk;
   const __m512d s = _mm512_set1_pd(3.0);

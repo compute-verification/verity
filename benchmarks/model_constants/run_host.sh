@@ -10,7 +10,9 @@
 #
 # A run in the user slice gets CPUs 0-119 (NUMA 0 = 0-95, NUMA 1 = 96-191; SMT siblings 2c, 2c + 1), so socket 1 has 12
 # of its 48 cores here; the per-socket rows say what each socket's cores read. Env: SECONDS_EACH (2), REPS (2), MIB (per
-# array per thread, 64), GPU=0 skips the lease.
+# array per thread, 64; the read's one array a thread then totals 2.3x a socket's 336 MiB of L3 at 12 threads, so the
+# read's rows want 512),
+# KERNELS (read copy triad copy_nt triad_nt), GPU=0 skips the lease.
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 MC=$PWD/benchmarks/model_constants HT=$PWD/benchmarks/host_tier
@@ -33,13 +35,16 @@ st() {  # label cpus kernel [extra flags]: one JSON line, with how busy every ot
   echo "${line%\}}, \"load\": $load}" | tee -a "$O/stream.jsonl"
 }
 export -f st
+KERNELS=${KERNELS:-read copy triad copy_nt triad_nt}
 for r in $(seq "$R"); do
-  for k in read copy triad copy_nt triad_nt; do
+  for k in $KERNELS; do
     st socket0-core "$S0C" $k; st socket0-all "$S0A" $k; st socket1-core "$S1C" $k; st socket1-all "$S1A" $k
     st both-core "$BOTHC" $k
   done
   for n in 12 24; do  # socket 0 at socket 1's core count and twice it
-    st socket0-cores$n "$(evens 0 $((2 * n - 2)))" triad; st socket0-cores$n "$(evens 0 $((2 * n - 2)))" read
+    for k in triad read; do
+      [[ " $KERNELS " == *" $k "* ]] && st socket0-cores$n "$(evens 0 $((2 * n - 2)))" $k
+    done
   done
 done
 [ "${GPU:-1}" = 0 ] && exit 0
