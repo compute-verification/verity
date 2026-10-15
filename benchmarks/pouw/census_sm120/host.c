@@ -2,7 +2,7 @@
 //   host stream THREADS [TAG]  STREAM-like copy/scale/add/triad over three 512 MiB double arrays (OpenMP), best of 10
 //   host amx THREADS SECONDS   AMX tile throughput: TDPBSSD (int8 -> int32, 16x16x64 a tile op) and TDPBF16PS
 //                              (bf16 -> fp32, 16x16x32) on four accumulators with operands held in tiles, per thread
-//   host disk PATH MIB         write PATH (MIB MiB, fsync), then read it back with O_DIRECT, 4 MiB requests, 1 and 4 readers
+//   host disk PATH MIB [TAG]   write PATH (MIB MiB, fsync), then read it back with O_DIRECT, 4 MiB requests, 1 and 4 readers
 // One JSON line a constant (constant, value, unit, method). host.sh runs it under nice 19 with at most 16 threads.
 #define _GNU_SOURCE
 #include <fcntl.h>
@@ -57,7 +57,7 @@ static int stream(int threads, const char* tag) {
   for (int k = 0; k < 4; k++) {
     snprintf(key, sizeof key, "host.stream_%s.t%d%s.bytes_per_s", names[k], threads, tag);
     snprintf(meth, sizeof meth, "host.c STREAM-like %s, 3 x 512 MiB double arrays, %d OpenMP threads (host.sh pins them), best of 10, "
-             "STREAM byte counting (no write-allocate)%s", names[k], threads, *tag ? "; threads split over both sockets" : "");
+             "STREAM byte counting (no write-allocate)%s", names[k], threads, tag);
     emit(key, bytes[k] / best[k], "B/s", meth);
   }
   int bad = a[1] == 0.0;
@@ -163,7 +163,7 @@ static void* reader(void* p) {
   return 0;
 }
 
-static int disk(const char* path, long mib) {
+static int disk(const char* path, long mib, const char* tag) {
   int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (fd < 0) return perror("open"), 1;
   char* buf;
@@ -182,7 +182,8 @@ static int disk(const char* path, long mib) {
   close(fd);
   char key[128], meth[512];
   snprintf(meth, sizeof meth, "host.c: %ld MiB of xorshift data written with write(2) 4 MiB at a time, then fsync, to %s", mib, path);
-  emit("host.disk.write_fsync.bytes_per_s", mib * 1048576.0 / tw, "B/s", meth);
+  snprintf(key, sizeof key, "host.disk%s.write_fsync.bytes_per_s", tag);
+  emit(key, mib * 1048576.0 / tw, "B/s", meth);
   for (int nr = 1; nr <= 4; nr *= 4) {
     fd = open(path, O_RDONLY | O_DIRECT);
     if (fd < 0) return perror("open O_DIRECT"), 1;
@@ -204,7 +205,7 @@ static int disk(const char* path, long mib) {
     }
     double tr = now() - t0;
     close(fd);
-    snprintf(key, sizeof key, "host.disk.read_odirect.r%d.bytes_per_s", nr);
+    snprintf(key, sizeof key, "host.disk%s.read_odirect.r%d.bytes_per_s", tag, nr);
     snprintf(meth, sizeof meth, "host.c: O_DIRECT pread 4 MiB requests, %d reader thread(s) over disjoint ranges, of the %ld MiB file "
              "just written to %s%s", nr, mib, path, bad ? " (short read)" : "");
     emit(key, mib * 1048576.0 / tr, "B/s", meth);
@@ -216,7 +217,7 @@ static int disk(const char* path, long mib) {
 int main(int argc, char** argv) {
   if (argc >= 3 && !strcmp(argv[1], "stream")) return stream(atoi(argv[2]), argc > 3 ? argv[3] : "");
   if (argc >= 4 && !strcmp(argv[1], "amx")) return amx(atoi(argv[2]), atof(argv[3]));
-  if (argc >= 4 && !strcmp(argv[1], "disk")) return disk(argv[2], atol(argv[3]));
+  if (argc >= 4 && !strcmp(argv[1], "disk")) return disk(argv[2], atol(argv[3]), argc > 4 ? argv[4] : "");
   fprintf(stderr, "usage: host stream THREADS | amx THREADS SECONDS | disk PATH MIB\n");
   return 2;
 }
