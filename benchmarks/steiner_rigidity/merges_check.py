@@ -24,6 +24,8 @@ Part 9: the label certificate past the shared labels: rank-1 labels from a quadr
 instance where row-, column- and pool-shared labels fall short.
 Part 10: mixed products charged by junk: on a segment between special nodes, #products >= rank(bilinear part) - j/2,
 with j the smaller junk rank of the segment's net change (0 when its ends share a junk-free side); Winograd is tight.
+Part 11: recursive Strassen inside one block saves L - L^(log2 7 - 2) per merge-built word, so Theorem C's charge of
+L per distinct word is asymptotically tight.
 """
 
 import random
@@ -1168,6 +1170,73 @@ def part10(rng):
           "carrying -Xi - H at L = 2, 4, 6: #products = L - L/2 (tight)")
 
 
+def recursive_strassen(L, p=10007):
+    """Strassen applied recursively to an L x L group of positions inside one block (L = 2^k): 7^k tensor-core
+    products of pure operands (CUDA-prepared combinations of x's and of y's), merged into one word per position.
+    Returns (number of products, number of words); asserts every word equals its target D_(i,j) exactly."""
+    nX = nY = L * L
+    products = []
+
+    def mul(A, B):
+        s = len(A)
+        if s == 1:
+            products.append((A[0][0] % p, B[0][0] % p))
+            out = np.zeros(4 ** 8, dtype=np.int64)
+            out[len(products) - 1] = 1
+            return [[out]]
+        h = s // 2
+        blk = lambda M, r, c: [row[c * h:(c + 1) * h] for row in M[r * h:(r + 1) * h]]
+        add = lambda P, Q, sgn=1: [[P[i][j] + sgn * Q[i][j] for j in range(h)] for i in range(h)]
+        A11, A12, A21, A22 = blk(A, 0, 0), blk(A, 0, 1), blk(A, 1, 0), blk(A, 1, 1)
+        B11, B12, B21, B22 = blk(B, 0, 0), blk(B, 0, 1), blk(B, 1, 0), blk(B, 1, 1)
+        M1 = mul(add(A11, A22), add(B11, B22))
+        M2 = mul(add(A21, A22), B11)
+        M3 = mul(A11, add(B12, B22, -1))
+        M4 = mul(A22, add(B21, B11, -1))
+        M5 = mul(add(A11, A12), B22)
+        M6 = mul(add(A21, A11, -1), add(B11, B12))
+        M7 = mul(add(A12, A22, -1), add(B21, B22))
+        C11 = add(add(M1, M4), add(M7, M5, -1))
+        C12 = add(M3, M5)
+        C21 = add(M2, M4)
+        C22 = add(add(M1, M2, -1), add(M3, M6))
+        return [C11[i] + C12[i] for i in range(h)] + [C21[i] + C22[i] for i in range(h)]
+
+    eX, eY = np.eye(nX, dtype=np.int64), np.eye(nY, dtype=np.int64)
+    A = [[eX[i * L + k] for k in range(L)] for i in range(L)]
+    B = [[eY[j * L + k] for j in range(L)] for k in range(L)]
+    C = mul(A, B)
+    for i in range(L):
+        for j in range(L):
+            word = np.zeros((nX, nY), dtype=np.int64)
+            for m, c in enumerate(C[i][j][:len(products)]):
+                if c % p:
+                    word = (word + c * np.outer(*products[m])) % p
+            D = np.zeros((nX, nY), dtype=np.int64)
+            for k in range(L):
+                D[i * L + k, j * L + k] = 1
+            assert np.array_equal(word, D), "recursive Strassen word differs from its target"
+    return len(products), L * L
+
+
+def part11(rng):
+    """The per-word charge L of Theorem C is asymptotically tight: recursive Strassen on an L x L group of positions
+    inside one block uses 7^k products of pure operands for L^2 targets of rank L (L = 2^k), with one merge-built word
+    per target, each added to an empty running sum (H' = 0, W' = L^2): it saves (8^k - 7^k)/4^k = L - L^(log2 7 - 2)
+    per distinct word, against the L that Theorem C allows."""
+    rows = []
+    for L in (2, 4, 8):
+        n_products, words = recursive_strassen(L)
+        k = L.bit_length() - 1
+        targets, H_prime, W_prime = words, 0, words
+        assert n_products == 7 ** k and n_products >= L * (targets - H_prime - W_prime), "Theorem C fails"
+        saved = L * targets - n_products
+        assert saved * 4 ** k == (8 ** k - 7 ** k) * words
+        rows.append(f"L={L}: {n_products} products for {words} targets, {saved / words:.3f} = L - L^0.807 saved per word")
+    print("[per-word charge] recursive Strassen in one block, every word checked exactly: " + "; ".join(rows)
+          + "; so Theorem C's charge of L per distinct word is asymptotically tight")
+
+
 def part4(rng):
     count = 0
     for (P, Q, m, L, trials) in ((2, 2, 4, 2, 60), (2, 3, 4, 4, 30), (2, 2, 6, 3, 30)):
@@ -1186,7 +1255,7 @@ def part4(rng):
 
 if __name__ == "__main__":
     rng = random.Random(20261015)
-    parts = sys.argv[1:] or ["1", "3", "4", "5", "6", "7", "8", "9", "10"]
+    parts = sys.argv[1:] or ["1", "3", "4", "5", "6", "7", "8", "9", "10", "11"]
     if "1" in parts:
         part1_2(rng)
     if "3" in parts:
@@ -1205,3 +1274,5 @@ if __name__ == "__main__":
         part9(rng)
     if "10" in parts:
         part10(rng)
+    if "11" in parts:
+        part11(rng)
