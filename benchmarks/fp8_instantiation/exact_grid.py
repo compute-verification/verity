@@ -27,9 +27,16 @@ Suffixes: `_rot` multiplies x and W by one orthogonal Q per k before quantizing 
 a Sylvester Hadamard, Kronecker a random 7 x 7 orthogonal for k = 14,336 (QuaRot's randomized Hadamard).  `_wclip`
 picks each weight row's clip ratio in {1, 0.95, ..., 0.5} by squared error.
 
+Unpeeled edits (note:20261015T1826Z-draft-d4-perplexity), `GRID[_rot]@EDIT:ALPHABET[:sSEED]` with GRID int8 or e4m3i16:
+EDIT `w` adds one draw from ALPHABET (in LSBs) to each weight integer, fresh per matrix; `a` to each activation integer,
+fresh per token and per linear; `wa` both; `GRID@-` is the grid unedited.  An edited side is quantized to top M - max|e|,
+so every edited integer stays on the grid (|q| <= 127, or <= 16).  The integer product is torch._int_mm (s8 x s8 -> s32,
+exact); x, W and the rotation are fp32.  ALPHABETS lists the alphabets, each drawn uniformly.
+
     python exact_grid.py MODEL_SNAPSHOT IDS.npy OUT_DIR METHOD...
     python exact_grid.py --selftest
     python exact_grid.py --table RESULTS.jsonl...
+    python exact_grid.py --edit-table RESULTS.jsonl...
 """
 from __future__ import annotations
 
@@ -37,6 +44,7 @@ import json
 import math
 import sys
 import time
+import zlib
 from pathlib import Path
 
 import numpy as np
@@ -244,6 +252,70 @@ def product(method: str, x: torch.Tensor, w: torch.Tensor, wcache: dict) -> tupl
     raise KeyError(method)
 
 
+ALPHABETS = {"pm1": [-1, 1], "pm13": [-3, -1, 1, 3], "pm57": [-7, -5, 5, 7],
+             **{f"u{k}": list(range(-k, k + 1)) for k in (1, 2, 4, 8, 16)}}
+EDIT_GRIDS = {"int8": (127, S32_EXACT), "e4m3i16": (16, FP32_EXACT)}
+_ROT32: dict[int, torch.Tensor] = {}
+
+
+def parse_edit(method: str) -> dict:
+    head, _, spec = method.partition("@")
+    grid_name, rot = head.split("_rot")[0], head.endswith("_rot")
+    parts = spec.split(":")
+    edit = parts[0]
+    if grid_name not in EDIT_GRIDS or edit not in ("-", "w", "a", "wa") or (edit == "-") != (len(parts) == 1):
+        raise KeyError(method)
+    alphabet = ALPHABETS[parts[1]] if edit != "-" else [0]
+    seed = int(parts[2].removeprefix("s")) if len(parts) > 2 else 0
+    top = EDIT_GRIDS[grid_name][0]
+    room = top - max(abs(v) for v in alphabet)
+    if room < 1:
+        raise ValueError(f"{method}: alphabet does not fit on {grid_name} (|q| <= {top})")
+    return {"grid": grid_name, "rot": rot, "edit": edit, "alphabet": parts[1] if edit != "-" else "-", "values": alphabet,
+            "seed": seed, "top_w": room if "w" in edit else top, "top_a": room if "a" in edit else top,
+            "acc": EDIT_GRIDS[grid_name][1], "bits": math.log2(len(alphabet))}
+
+
+def draw(shape: tuple[int, int], values: list[int], tag: str, device) -> torch.Tensor:
+    g = torch.Generator(device=device)
+    g.manual_seed(zlib.crc32(tag.encode()))
+    v = torch.tensor(values, dtype=torch.float32, device=device)
+    return v[torch.randint(len(values), shape, generator=g, device=device)]
+
+
+def int_product(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+    """a b^T of integer-valued fp32 operands in [-127, 127], exactly, as int64."""
+    return torch._int_mm(a.to(torch.int8), b.to(torch.int8).T).long()
+
+
+def edited_product(method: str, x: torch.Tensor, w: torch.Tensor, wcache: dict, tag: str) -> tuple[torch.Tensor, dict]:
+    """The edited grid's y for fp32 x (m x k) and W (n x k); `tag` names the linear, so each matrix draws its own noise."""
+    e = parse_edit(method)
+    k = x.shape[1]
+    if e["rot"]:
+        if k not in _ROT32:
+            _ROT32[k] = rotation(k, x.device).float()
+        x = x @ _ROT32[k]
+    if "w" not in wcache:
+        wq = w @ _ROT32[k] if e["rot"] else w
+        bi, sb = quant_rows(wq, torch.arange(e["top_w"] + 1, dtype=torch.float32, device=x.device), False)
+        if "w" in e["edit"]:
+            bi = bi + draw(tuple(bi.shape), e["values"], f"{e['seed']}/{tag}/w", x.device)
+        wcache["w"] = bi, sb
+    bi, sb = wcache["w"]
+    ai, sa = quant_rows(x, torch.arange(e["top_a"] + 1, dtype=torch.float32, device=x.device), False)
+    if "a" in e["edit"]:
+        ai = ai + draw(tuple(ai.shape), e["values"], f"{e['seed']}/{tag}/a", x.device)
+    top = EDIT_GRIDS[e["grid"]][0]
+    assert float(ai.abs().max()) <= top and float(bi.abs().max()) <= top
+    s = int_product(ai, bi)
+    bound = float(int_product(ai.abs(), bi.abs()).max())
+    a_priori = k * float(top) * float(top)
+    y = s.double() * sa.double()[:, None] * sb.double()[None, :]
+    return y, {"bound": bound, "acc": e["acc"], "top": [float(top), float(top)], "a_priori": a_priori,
+               "exact": bound <= e["acc"], "guaranteed": a_priori <= e["acc"]}
+
+
 def attach(model, method: str, log: list) -> list:
     hooks = []
     for i, layer in enumerate(model.model.layers):
@@ -252,10 +324,14 @@ def attach(model, method: str, log: list) -> list:
             wcache: dict = {}
 
             def fn(mod, inp, out, i=i, name=name, wcache=wcache):
-                x = inp[0].reshape(-1, inp[0].shape[-1]).double()
-                w = mod.weight.double()
-                y, rec = product(method, x, w, wcache)
-                ref = x @ w.T
+                x = inp[0].reshape(-1, inp[0].shape[-1])
+                if "@" in method:
+                    x, w = x.float(), mod.weight.float()
+                    y, rec = edited_product(method, x, w, wcache, f"{i}/{name}")
+                else:
+                    x, w = x.double(), mod.weight.double()
+                    y, rec = product(method, x, w, wcache)
+                ref = (x @ w.T).to(y.dtype)
                 rec.update(layer=i, linear=name, k=x.shape[1],
                            rel_err=float(torch.linalg.norm(y - ref) / torch.linalg.norm(ref)))
                 log.append(rec)
@@ -279,6 +355,7 @@ def evaluate(model, ids: torch.Tensor, method: str) -> dict:
     exact = [r for r in log if "bound" in r]
     return {"method": method, "tokens": int(ids.shape[1]), "nll": float(nll.mean()), "ppl": float(torch.exp(nll.mean())),
             "seconds": round(time.time() - t0, 1), "worst_linear": worst,
+            "mean_rel_err": float(np.mean([r["rel_err"] for r in log])) if log else None,
             "exact_all": all(r["exact"] for r in log) if log else None,
             "guaranteed_all": all(r.get("guaranteed", False) for r in log) if log else None,
             "max_bound_over_acc": max((r["bound"] / r["acc"] for r in exact), default=None),
@@ -310,6 +387,26 @@ def selftest() -> dict:
         y, rec = product(m, x, w, {})
         out[m] = {"rel_err": float(torch.linalg.norm(y - x @ w.T) / torch.linalg.norm(x @ w.T)), **rec}
     assert out["int8"]["rel_err"] < out["e4m3i16"]["rel_err"] < out["e2m1i"]["rel_err"]
+    xf, wf = x.float(), w.float()
+    for m in ("int8", "int8_rot", "e4m3i16", "e4m3i16_rot"):
+        y0, y1 = edited_product(m + "@-", xf, wf, {}, "t")[0], product(m, x, w, {})[0]
+        assert float(torch.linalg.norm(y0 - y1) / torch.linalg.norm(y1)) < 1e-3, m
+    ai, sa = quant_rows(xf, torch.arange(128 - 16, dtype=torch.float32, device=dev), False)
+    bi, sb = quant_rows(wf, torch.arange(128, dtype=torch.float32, device=dev), False)
+    ya, _ = edited_product("int8@a:u16", xf, wf, {}, "t")
+    noise = draw(tuple(ai.shape), ALPHABETS["u16"], "0/t/a", dev)
+    assert set(noise.unique().tolist()) == set(range(-16, 17))
+    assert torch.equal(ya, (((ai + noise).double() @ bi.double().T) * sa.double()[:, None] * sb.double()[None, :]))
+    assert not torch.equal(noise, draw(tuple(ai.shape), ALPHABETS["u16"], "1/t/a", dev))
+    for m in ("int8@w:pm1", "int8@a:pm13", "int8_rot@wa:pm57:s2", "e4m3i16@wa:u8", "e4m3i16_rot@w:u4"):
+        y, rec = edited_product(m, xf, wf, {}, "t")
+        out[m] = {"rel_err": float(torch.linalg.norm(y - xf.double() @ wf.double().T) / torch.linalg.norm(x @ w.T)), **rec}
+        assert rec["guaranteed"] and rec["exact"]
+    try:
+        parse_edit("e4m3i16@w:u16")
+        raise AssertionError("u16 fits e4m3i16")
+    except ValueError:
+        pass
     L = transformers.models.llama.modeling_llama
     torch.manual_seed(0)
     cfg = L.LlamaConfig(vocab_size=512, hidden_size=256, intermediate_size=512, num_hidden_layers=2, num_attention_heads=8,
@@ -317,7 +414,8 @@ def selftest() -> dict:
     model = L.LlamaForCausalLM(cfg).to(torch.bfloat16).to(dev).eval()
     ids = torch.randint(0, 512, (1, 64), device=dev)
     out["tiny"] = {m: {k: v for k, v in evaluate(model, ids, m).items() if k not in ("per_linear", "worst_linear")}
-                   for m in ("bf16", "int8", "e2m1i_rot", "nvfp4", "fp8_block")}
+                   for m in ("bf16", "int8", "e2m1i_rot", "nvfp4", "fp8_block", "int8@-", "int8_rot@wa:u2:s1")}
+    assert abs(out["tiny"]["int8@-"]["ppl"] - out["tiny"]["int8"]["ppl"]) < 1e-3 * out["tiny"]["int8"]["ppl"]
     return out
 
 
@@ -345,13 +443,48 @@ def table(results: list[dict]) -> str:
     return "\n".join(rows)
 
 
+def edit_table(results: list[dict]) -> str:
+    """The unpeeled-edit table: perplexity (mean, and min-max over seeds when there are several) with its change against
+    the unedited int8 grid and bf16, and whether it is under 1% and 10% of each."""
+    ppl = {r["method"]: r for r in results}
+    base = {"bf16": ppl["bf16"]["ppl"], "int8": (ppl.get("int8@-") or ppl["int8"])["ppl"]}
+    groups: dict[str, dict[int, dict]] = {}
+    for m, r in ppl.items():
+        if "@" in m:
+            e = parse_edit(m)
+            groups.setdefault(m.split(":s")[0] if e["edit"] != "-" else m, {})[e["seed"]] = r
+    order = {g: i for i, g in enumerate(("int8", "int8_rot", "e4m3i16", "e4m3i16_rot"))}
+
+    def key(g: str):
+        e = parse_edit(g)
+        return order[g.split("@")[0]], ("-", "w", "a", "wa").index(e["edit"]), e["bits"], max(e["values"])
+
+    def under(d: float) -> str:
+        return "<1%" if d < 1 else "<10%" if d < 10 else "-"
+
+    rows = ["| grid | edit | alphabet | max abs e | entropy, bits/entry | e std, LSB | mean linear rel. error | perplexity | seeds "
+            "| Δ% vs int8 | Δ% vs bf16 | under (int8 / bf16) |", "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|"]
+    for g in sorted(groups, key=key):
+        e, runs = parse_edit(g), groups[g]
+        p = [r["ppl"] for r in runs.values()]
+        mean = float(np.mean(p))
+        spread = f" ({min(p):.3f}-{max(p):.3f})" if len(p) > 1 else ""
+        di, db = 100 * (mean / base["int8"] - 1), 100 * (mean / base["bf16"] - 1)
+        std = math.sqrt(float(np.mean(np.square(e["values"]))))
+        rel = float(np.mean([r["mean_rel_err"] for r in runs.values()]))
+        rows.append(f"| {g.split('@')[0]} | {e['edit']} | {e['alphabet']} | {max(e['values'])} | {e['bits']:.2f} | {std:.2f} "
+                    f"| {rel:.4f} | {mean:.3f}{spread} | {len(p)} | {di:+.2f} | {db:+.2f} | {under(di)} / {under(db)} |")
+    return "\n".join(rows)
+
+
 def main(argv: list[str]) -> int:
     torch.backends.cuda.matmul.allow_tf32 = False
     if argv[0] == "--selftest":
         print(json.dumps(selftest(), indent=1))
         return 0
-    if argv[0] == "--table":
-        print(table([json.loads(line) for p in argv[1:] for line in Path(p).read_text().splitlines() if line.startswith("{")]))
+    if argv[0] in ("--table", "--edit-table"):
+        rows = [json.loads(line) for p in argv[1:] for line in Path(p).read_text().splitlines() if line.startswith("{")]
+        print((table if argv[0] == "--table" else edit_table)(rows))
         return 0
     snapshot, ids, out = argv[0], torch.from_numpy(np.load(argv[1]))[None].cuda(), Path(argv[2])
     out.mkdir(parents=True, exist_ok=True)
