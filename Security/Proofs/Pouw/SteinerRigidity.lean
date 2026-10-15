@@ -261,4 +261,195 @@ theorem sum_rank_le_length_of_rowSpace_indep {ι : Type*} (T : SteinerTree F m n
 
 end MergeProof
 
+section Block
+
+variable {F : Type*} [Field F] {m n : Type*} [Fintype m] [Fintype n]
+
+/-- **Theorem 1 (block rigidity).** Split the row coordinates as a direct sum `R 0 ⊕ … ⊕ R (p-1)` (independent
+subspaces of the column vectors) and the column coordinates as `C 0 ⊕ … ⊕ C (q-1)`. Put one target in each cell
+`t = (r, c)` of a set `P`, with column space in `R r` and row space in `C c`. Then every Steiner tree spanning `0`
+and the targets has length at least `∑ t ∈ P, rank (M t)`. -/
+def BlockRigidity (F : Type*) [Field F] (m n : Type*) [Fintype m] [Fintype n] : Prop :=
+  ∀ (p q : ℕ) (R : Fin p → Submodule F (m → F)) (C : Fin q → Submodule F (n → F)),
+    iSupIndep R → iSupIndep C →
+    ∀ (P : Finset (Fin p × Fin q)) (M : Fin p × Fin q → Matrix m n F),
+      (∀ t ∈ P, colSpace (M t) ≤ R t.1 ∧ rowSpace (M t) ≤ C t.2) →
+      ∀ T : SteinerTree F m n, T.Reaches 0 → (∀ t ∈ P, T.Reaches (M t)) →
+        ∑ t ∈ P, (M t).rank ≤ T.length
+
+/-- Theorem 1 when the cells of `P` lie in distinct rows of the grid. -/
+theorem blockRigidity_of_injOn_fst {p q : ℕ} {R : Fin p → Submodule F (m → F)} (hR : iSupIndep R)
+    {P : Finset (Fin p × Fin q)} {M : Fin p × Fin q → Matrix m n F}
+    (hcol : ∀ t ∈ P, colSpace (M t) ≤ R t.1) (hP : Set.InjOn Prod.fst (P : Set (Fin p × Fin q)))
+    (T : SteinerTree F m n) (h0 : T.Reaches 0) (hM : ∀ t ∈ P, T.Reaches (M t)) :
+    ∑ t ∈ P, (M t).rank ≤ T.length := by
+  have hind : iSupIndep fun t : P => colSpace (M t) :=
+    (hR.comp (f := fun t : P => t.1.1) fun a b h =>
+      Subtype.ext (hP (Finset.mem_coe.mpr a.2) (Finset.mem_coe.mpr b.2) h)).mono
+      fun t => hcol t t.2
+  have h := sum_rank_le_length_of_colSpace_indep T (fun t : P => M t) Finset.univ hind h0
+    fun t _ => hM t t.2
+  rwa [Finset.sum_coe_sort P (fun t => (M t).rank)] at h
+
+/-- Theorem 1 when the cells of `P` lie in distinct columns of the grid. -/
+theorem blockRigidity_of_injOn_snd {p q : ℕ} {C : Fin q → Submodule F (n → F)} (hC : iSupIndep C)
+    {P : Finset (Fin p × Fin q)} {M : Fin p × Fin q → Matrix m n F}
+    (hrow : ∀ t ∈ P, rowSpace (M t) ≤ C t.2) (hP : Set.InjOn Prod.snd (P : Set (Fin p × Fin q)))
+    (T : SteinerTree F m n) (h0 : T.Reaches 0) (hM : ∀ t ∈ P, T.Reaches (M t)) :
+    ∑ t ∈ P, (M t).rank ≤ T.length := by
+  have hind : iSupIndep fun t : P => rowSpace (M t) :=
+    (hC.comp (f := fun t : P => t.1.2) fun a b h =>
+      Subtype.ext (hP (Finset.mem_coe.mpr a.2) (Finset.mem_coe.mpr b.2) h)).mono
+      fun t => hrow t t.2
+  have h := sum_rank_le_length_of_rowSpace_indep T (fun t : P => M t) Finset.univ hind h0
+    fun t _ => hM t t.2
+  rwa [Finset.sum_coe_sort P (fun t => (M t).rank)] at h
+
+/-- **Two targets in distinct cells.** In the block setting, a Steiner tree spanning `0` and the targets of two
+distinct cells has length at least the sum of their ranks. -/
+theorem rank_add_rank_le_length {p q : ℕ} {R : Fin p → Submodule F (m → F)}
+    {C : Fin q → Submodule F (n → F)} (hR : iSupIndep R) (hC : iSupIndep C)
+    {t₁ t₂ : Fin p × Fin q} (hne : t₁ ≠ t₂) {M : Fin p × Fin q → Matrix m n F}
+    (hM : ∀ t ∈ ({t₁, t₂} : Finset (Fin p × Fin q)), colSpace (M t) ≤ R t.1 ∧ rowSpace (M t) ≤ C t.2)
+    (T : SteinerTree F m n) (h0 : T.Reaches 0) (h₁ : T.Reaches (M t₁)) (h₂ : T.Reaches (M t₂)) :
+    (M t₁).rank + (M t₂).rank ≤ T.length := by
+  rw [← Finset.sum_pair (f := fun t => (M t).rank) hne]
+  have hreach : ∀ t ∈ ({t₁, t₂} : Finset (Fin p × Fin q)), T.Reaches (M t) := by
+    intro t ht
+    rcases Finset.mem_insert.mp ht with rfl | ht
+    · exact h₁
+    · rw [Finset.mem_singleton.mp ht]; exact h₂
+  have hinj : ∀ f : Fin p × Fin q → Fin p ⊕ Fin q, f t₁ ≠ f t₂ →
+      Set.InjOn f (({t₁, t₂} : Finset (Fin p × Fin q)) : Set (Fin p × Fin q)) := by
+    intro f hf x hx y hy hxy
+    simp only [Finset.coe_insert, Finset.coe_singleton, Set.mem_insert_iff,
+      Set.mem_singleton_iff] at hx hy
+    rcases hx with rfl | rfl <;> rcases hy with rfl | rfl
+    · rfl
+    · exact absurd hxy hf
+    · exact absurd hxy.symm hf
+    · rfl
+  by_cases hr : t₁.1 = t₂.1
+  · have hc : t₁.2 ≠ t₂.2 := fun hc => hne (Prod.ext hr hc)
+    have h := hinj (fun t => Sum.inr t.2) (fun h => hc (Sum.inr_injective h))
+    exact blockRigidity_of_injOn_snd hC (fun t ht => (hM t ht).2)
+      (fun x hx y hy hxy => h hx hy (congrArg Sum.inr hxy)) T h0 hreach
+  · have h := hinj (fun t => Sum.inl t.1) (fun h => hr (Sum.inl_injective h))
+    exact blockRigidity_of_injOn_fst hR (fun t ht => (hM t ht).1)
+      (fun x hx y hy hxy => h hx hy (congrArg Sum.inl hxy)) T h0 hreach
+
+end Block
+
+section ConjectureA
+
+variable {F : Type*} [Field F]
+
+/-- The coordinate subspace of the vectors supported on the coordinates `i` with `blk i = k`. -/
+def blockSubspace (F : Type*) [Field F] {ι κ : Type*} (blk : ι → κ) (k : κ) : Submodule F (ι → F) where
+  carrier := {v | ∀ i, blk i ≠ k → v i = 0}
+  add_mem' := by
+    intro a b ha hb i hi
+    simp [ha i hi, hb i hi]
+  zero_mem' := fun _ _ => rfl
+  smul_mem' := by
+    intro c v hv i hi
+    simp [hv i hi]
+
+/-- The coordinate blocks of a partition of the coordinates are independent. -/
+theorem iSupIndep_blockSubspace {ι κ : Type*} (blk : ι → κ) : iSupIndep (blockSubspace F blk) := by
+  refine iSupIndep_def.mpr fun k => ?_
+  let S : Submodule F (ι → F) :=
+    { carrier := {v | ∀ i, blk i = k → v i = 0}
+      add_mem' := by
+        intro a b ha hb i hi
+        simp [ha i hi, hb i hi]
+      zero_mem' := fun _ _ => rfl
+      smul_mem' := by
+        intro c v hv i hi
+        simp [hv i hi] }
+  have hS : (⨆ (j) (_ : j ≠ k), blockSubspace F blk j) ≤ S :=
+    iSup₂_le fun j hj v hv i hi => hv i (by rw [hi]; exact hj.symm)
+  refine Submodule.disjoint_def.mpr fun v hv₁ hv₂ => funext fun i => ?_
+  by_cases h : blk i = k
+  · exact hS hv₂ i h
+  · exact hv₁ i h
+
+/-- The prefix target `T_{(r,c),s}` of `N × N × N` matrix multiplication with chunk `L`: the bilinear form
+`∑_{k < s L} x_{r k} y_{k c}`, as a matrix whose rows are the `x_{i k}`, indexed `(i, k)`, and whose columns are the
+`y_{k j}`, indexed `(j, k)`. In block form it is `E_{r c} ⊗ diag(1, …, 1, 0, …, 0)` with `s L` ones; at `s L = N` it
+is the full output `E_{r c} ⊗ I_N`. -/
+def prefixTarget (F : Type*) [Field F] (N L : ℕ) (r c : Fin N) (s : ℕ) :
+    Matrix (Fin N × Fin N) (Fin N × Fin N) F :=
+  fun i j => if i.1 = r ∧ j.1 = c ∧ i.2 = j.2 ∧ (i.2 : ℕ) < s * L then 1 else 0
+
+/-- **Conjecture A (Steiner rigidity).** For `N × N × N` matrix multiplication and every chunk `L ∣ N`, the minimum
+Steiner tree in the rank metric spanning `0` and every prefix target `T_{π,s}` (`π ∈ [N]²`, `1 ≤ s ≤ N / L`) has
+length exactly `N³`: every such tree has length at least `N³`, and one has length `N³`. -/
+def ConjectureA (F : Type*) [Field F] : Prop :=
+  ∀ N L : ℕ, 0 < L → L ∣ N →
+    (∀ T : SteinerTree F (Fin N × Fin N) (Fin N × Fin N), T.Reaches 0 →
+      (∀ r c : Fin N, ∀ s ∈ Finset.Icc 1 (N / L), T.Reaches (prefixTarget F N L r c s)) →
+        N ^ 3 ≤ T.length) ∧
+    (∃ T : SteinerTree F (Fin N × Fin N) (Fin N × Fin N), T.Reaches 0 ∧
+      (∀ r c : Fin N, ∀ s ∈ Finset.Icc 1 (N / L), T.Reaches (prefixTarget F N L r c s)) ∧
+        T.length = N ^ 3)
+
+variable {N L : ℕ}
+
+theorem colSpace_prefixTarget_le (r c : Fin N) (s : ℕ) :
+    colSpace (prefixTarget F N L r c s) ≤ blockSubspace F (fun i : Fin N × Fin N => i.1) r := by
+  rintro _ ⟨y, rfl⟩ i hi
+  simp [Matrix.mulVec, dotProduct, prefixTarget, hi]
+
+theorem rowSpace_prefixTarget_le (r c : Fin N) (s : ℕ) :
+    rowSpace (prefixTarget F N L r c s) ≤ blockSubspace F (fun j : Fin N × Fin N => j.1) c := by
+  rintro _ ⟨x, rfl⟩ j hj
+  simp only at hj
+  simp [Matrix.vecMul, dotProduct, prefixTarget, hj]
+
+/-- A prefix target that covers the whole inner dimension has rank at least `N`. -/
+theorem le_rank_prefixTarget (r c : Fin N) {s : ℕ} (hs : N ≤ s * L) :
+    N ≤ (prefixTarget F N L r c s).rank := by
+  classical
+  let A : Matrix (Fin N) (Fin N × Fin N) F := Matrix.of fun k i => if i = (r, k) then 1 else 0
+  let B : Matrix (Fin N × Fin N) (Fin N) F := Matrix.of fun j k => if j = (c, k) then 1 else 0
+  have hAMB : A * prefixTarget F N L r c s * B = 1 := by
+    ext k k'
+    have hk : (k : ℕ) < s * L := lt_of_lt_of_le k.2 hs
+    simp_rw [Matrix.mul_apply]
+    simp only [A, B, Matrix.of_apply, mul_ite, mul_one, mul_zero, Finset.sum_ite_eq',
+      Finset.mem_univ, ite_true, ite_mul, one_mul, zero_mul, Matrix.one_apply]
+    by_cases hkk : k = k'
+    · subst hkk
+      simp [prefixTarget, hk]
+    · simp [prefixTarget, hkk]
+  calc N = (1 : Matrix (Fin N) (Fin N) F).rank := by simp
+    _ = (A * prefixTarget F N L r c s * B).rank := by rw [hAMB]
+    _ ≤ (A * prefixTarget F N L r c s).rank := rank_mul_le_left _ _
+    _ ≤ (prefixTarget F N L r c s).rank := rank_mul_le_right _ _
+
+/-- **Conjecture A's lower bound from Theorem 1.** Theorem 1 on the `N × N` grid of row blocks `x_{r ·}` and column
+blocks `y_{· c}`, applied to the full outputs (the prefix targets with `s = N / L`), gives `N³`. -/
+theorem conjectureA_lower_of_blockRigidity (h1 : BlockRigidity F (Fin N × Fin N) (Fin N × Fin N))
+    (hL : 0 < L) (hLN : L ∣ N) (T : SteinerTree F (Fin N × Fin N) (Fin N × Fin N)) (h0 : T.Reaches 0)
+    (hT : ∀ r c : Fin N, ∀ s ∈ Finset.Icc 1 (N / L), T.Reaches (prefixTarget F N L r c s)) :
+    N ^ 3 ≤ T.length := by
+  rcases Nat.eq_zero_or_pos N with hN | hN
+  · simp [hN]
+  have hsL : N / L * L = N := Nat.div_mul_cancel hLN
+  have hs : N / L ∈ Finset.Icc 1 (N / L) :=
+    Finset.mem_Icc.mpr ⟨Nat.div_pos (Nat.le_of_dvd hN hLN) hL, le_rfl⟩
+  have key := h1 N N (blockSubspace F fun i : Fin N × Fin N => i.1)
+    (blockSubspace F fun j : Fin N × Fin N => j.1) (iSupIndep_blockSubspace _)
+    (iSupIndep_blockSubspace _) Finset.univ (fun t => prefixTarget F N L t.1 t.2 (N / L))
+    (fun t _ => ⟨colSpace_prefixTarget_le t.1 t.2 _, rowSpace_prefixTarget_le t.1 t.2 _⟩) T h0
+    (fun t _ => hT t.1 t.2 _ hs)
+  calc N ^ 3 = ∑ _t : Fin N × Fin N, N := by
+        simp [Finset.card_univ, Fintype.card_prod, Fintype.card_fin]; ring
+    _ ≤ ∑ t : Fin N × Fin N, (prefixTarget F N L t.1 t.2 (N / L)).rank :=
+        Finset.sum_le_sum fun t _ => le_rank_prefixTarget t.1 t.2 hsL.ge
+    _ ≤ T.length := key
+
+end ConjectureA
+
 end Pouw.SteinerRigidity
