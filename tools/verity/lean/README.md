@@ -1,10 +1,10 @@
 # tools/verity/lean: the Lean audit
 
 One audit for every Lake package (`python tools/verity/lean/check.py --all --build`), which `check` runs on the packages whose inputs
-changed (`audit.py --build PKG...`). Lean's jobs in `check` are here too: `lean_audit.py` (the lean-audit step: which
+changed (`check.py --build PKG...`). Lean's jobs in `check` are here too: `lean_audit.py` (the lean-audit step: which
 packages miss, their scratch tree, warm dependencies), `lean_changed.py` (the lean-changed step, and a lane's fast path to its
 records) and `lean-deps.json` (the pinned dependency bundles). The audit needs the standard library, `lake` and the
-toolchain's `lean`; nothing here imports Verity, so another repository can copy the auditor (`audit.py`, `Facts.lean`,
+toolchain's `lean`; nothing here imports Verity, so another repository can copy the auditor (`check.py`, `Facts.lean`,
 `Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `sandbox.sh`, `setup.sh`, `cache.py`, `tests/`) and point it at its
 own packages. The two jobs use `check`'s helpers (`tools/verity/check/common.py`, `lean_slot.py`), so they stay with this repository.
 `check` reuses a package's pass while the content of everything its audit reads is unchanged, not its path: each file under its
@@ -89,7 +89,7 @@ The audit says when it had to build without one; the `compile-time` check then s
 
 `--fresh` also runs `leanchecker --fresh` on each root: the root's whole import closure, Mathlib and core included,
 through the kernel into an empty environment. It needs one module per root and a lot of memory, so it is not part of
-every run: the steward runs `audit.py --all --build --fresh` nightly on `main`, and `upstream.py --fetch` against
+every run: the steward runs `check.py --all --build --fresh` nightly on `main`, and `upstream.py --fetch` against
 ArkLib's head weekly, each as a recorded run on a pod (`tool.py`; `[[run]]` in `tools/research/README.md`).
 
 `--all` first runs the controls (`--no-controls` skips them; `check`'s audit does, and the `tools/verity/lean` suite runs them, only
@@ -247,7 +247,7 @@ lists a lifted guarantee as changed.
 audit fails on any other guarantee under a listed root. A package's owner adds its root once every guarantee there is
 lifted, or no longer a guarantee.
 
-`audit.py --lift LIFTS.json PKG` writes lifts into the four-name form: `def G : Prop` with the theorem's doc comment,
+`check.py --lift LIFTS.json PKG` writes lifts into the four-name form: `def G : Prop` with the theorem's doc comment,
 binders and type as its source writes them, after the `variable`s in scope that Lean includes in the theorem (those the
 statement mentions, and the instances over them), in the theorem's namespace with its file's `open`s (less the namespaces
 only proof modules declare) and the `open … in` right above it, so that its names resolve as they did, and
@@ -307,7 +307,7 @@ checks (layers, scans, escapes, its replay) run as before. It fails when:
   holds. For the same reason, and because a library whose root is `Pkg` claims every `Pkg.*` module, an umbrella module
   `Pkg` cannot move into the proofs package.
 
-The proofs package's own audit replays its declarations through the kernel, so `audit.py SPEC` audits each package
+The proofs package's own audit replays its declarations through the kernel, so `check.py SPEC` audits each package
 `proved_in` names in the same run, without `--update` unless it is named too, and the spec's reading waits for its build.
 `check`'s key for a spec covers the files of the packages it names, so the two miss and are audited together.
 
@@ -402,8 +402,8 @@ module docstring has the layout and the rules. In short:
 ## Using it from another repository
 
 Copy this directory at a commit of Verity's `main` and record the commit beside it. Write a `lean-audit.json` for each
-package (`audit.py` prints a template when one is missing), run `check.py --update` once on the trusted statements,
-review and commit the records, and run `audit.py --all --build` wherever the repository runs its checks.
+package (`check.py` prints a template when one is missing), run `check.py --update` once on the trusted statements,
+review and commit the records, and run `check.py --all --build` wherever the repository runs its checks.
 
 These records suit statements that are merged and reviewed. An external, untrusted submission still needs its theorem checked by
 `isDefEq` against a trusted `Prop` taken from the trusted commit, never from the submission's tree, and the submission
