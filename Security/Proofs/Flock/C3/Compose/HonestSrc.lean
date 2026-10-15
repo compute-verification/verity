@@ -77,10 +77,11 @@ theorem sched_of_holoRounds {ish : RecVStar.Inner} {rr : Array RecVStar.SchedRou
     (hrep : holoRounds ish.m ish.kLog ish.claims = some rr) :
     ∃ rep, (if ish.holo then RecVStar.holoRepRounds else RecVStar.repRounds) ish.m ish.kLog ish.claims = some rep := by
   have h := (Flock.Guarantees.HoloRepCoins.holoRepRounds_eq _ _ _).trans hrep
-  by_cases hh : ish.holo = true
-  · exact ⟨rr, by rw [if_pos hh]; exact h⟩
-  · obtain ⟨out, hout, -⟩ := FlockC3.Reps.repRounds_zp h
-    exact ⟨out, by rw [if_neg hh]; exact hout⟩
+  cases ish.holo with
+  | true => exact ⟨rr, h⟩
+  | false =>
+    obtain ⟨out, hout, -⟩ := FlockC3.Reps.repRounds_zp h
+    exact ⟨out, hout⟩
 
 /-- **(step 8) The guarantee's `_hbr` at the honest source**: `hbr_honest_reg` at the checked family and the fixed
 decoder over `srcOK_holo_family_hist`'s source at `stp := sparseOf stp0 sw sc`, which is `repsReadOff_held`'s at
@@ -119,7 +120,7 @@ theorem hbr_honest_src {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Arr
     {rng : Flock.Range} {sI : Fin (vstarCount ish)} {shS : Flock.RecSparse.Shape} {hR : ℕ}
     (hzs : zs = Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind
       rows zr hCust h)
-    (hown : own = fun j => FlockC3.PubRows.ownAt ss j)
+    (hown : own = fun j : Fin (vstarCount ish) => FlockC3.PubRows.ownAt ss j)
     (hsel : sel = (Flock.Guarantees.holoMap st hp Cm ish tbl bcM).sel)
     (hdec : dec = c3DecOf zs dg N k Rw
       (tiedSrc (normSrc (repsOfVals (FlockC3.Sparse.sparseOf (histPts ish tbl bcM stp0) sw sc) sh rep vals))) own sel)
@@ -308,14 +309,14 @@ theorem hbr_honest_src {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Arr
       (tiedSrc (normSrc (repsOfVals (FlockC3.Sparse.sparseOf (histPts ish tbl bcM stp0) sw sc) sh rep vals)))
       xR.cap := fun R ω t R₂ τ o hA' => levelTie_normOs (hlt R ω t R₂ τ o hA')
   -- the public rows' premises and R's registered top
-  have hownI : OwnIn (C3Family.checked (T := Flock.Guarantees.holoTys st hp) (CT := holoCTs st hp) (xR := xR) ish hss
-      bind hob zr hCust h coins rows own sel bc dec wr reg) own := by
+  have hownI : FlockC3.PubRows.OwnIn (C3Family.checked (T := Flock.Guarantees.holoTys st hp) (CT := holoCTs st hp)
+      (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) own := by
     subst hown
     exact FlockC3.PubRows.ownIn_checked
-  have hheldI : HeldIs (C3Family.checked (T := Flock.Guarantees.holoTys st hp) (CT := holoCTs st hp) (xR := xR) ish
-      hss bind hob zr hCust h coins rows own sel bc dec wr reg) own sel bc := by
+  have hheldI : FlockC3.PubRows.HeldIs (C3Family.checked (T := Flock.Guarantees.holoTys st hp) (CT := holoCTs st hp)
+      (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg) own sel bc := by
     subst hsel
-    exact heldIs_of_custody _ own bc wr reg _ (fun _ _ _ => rfl) hIC hbc
+    exact heldIs_of_custody _ own bc wr reg (Flock.Guarantees.holoMap st hp Cm ish tbl bcM) (fun _ _ _ => rfl) hIC hbc
   have htop : ∃ lv salt, StackedTopAt lv st reg xR.cap salt bcs' := ⟨_, salt, by rw [hcap]; exact hstk⟩
   clear hzsF
   subst hdec
