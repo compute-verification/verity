@@ -51,6 +51,11 @@ def test_mad_sketch_reproduces_every_receipt() -> None:
     assert r["receipts_equal"] and r["blocks"] == 32
 
 
+def test_ra_carry_free_blocks_are_the_linear_form() -> None:
+    r = attacks.carries("int26", 64)
+    assert r["blocks_with_none"] > 0 and r["of_carry_free_blocks"] == 1.0
+
+
 def test_degree2_passes_mad_and_fails_mum() -> None:
     r = attacks.degree2("u32", 8)
     assert r["mad"]["add"]["exact"] == 1.0 and r["mum"]["add"]["exact"] == 0.0 and r["mum"]["xor"]["exact"] == 0.0

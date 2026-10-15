@@ -396,11 +396,19 @@ def carries(dist: str, trials: int, seed: int = 3) -> dict:
     P = words(dist, rng, (trials, B2))
     y = rng.integers(0, 1 << 32, size=trials, dtype=np.uint64)
     n = np.zeros(trials, dtype=np.int64)
+    m1 = (1 << 32) - 1
+    lin = [int(v) % m1 for v in y]
     for t in range(B2):
-        s = rotl(y, twins.rot_of(t)) + P[:, t]
+        r = twins.rot_of(t)
+        s = rotl(y, r) + P[:, t]
         n += (s >> U(32)).astype(np.int64)
         y = s & M32
-    return {"mean_carries_per_block": float(n.mean()), "blocks_with_none": float(np.mean(n == 0))}
+        lin = [(v * (1 << r) + int(p)) % m1 for v, p in zip(lin, P[:, t])]
+    none = n == 0
+    hit = np.array([int(v) % m1 == w for v, w in zip(y, lin)])
+    return {"mean_carries_per_block": float(n.mean()), "blocks_with_none": float(np.mean(none)),
+            "receipt_is_the_linear_form_mod_2^32-1": float(np.mean(hit)),
+            "of_carry_free_blocks": float(np.mean(hit[none])) if none.any() else None}
 
 
 # ------------------------------------------------------------------------------------------------- 8-bit analogues
