@@ -468,17 +468,15 @@ def l_bot(w: int) -> PrimitiveDefinition:
 
 
 def _gather_key(w: int, N: int, oor_payload: int) -> tuple[int, ...]:
-    """A lifted gather's identity: `(w, N)` when its extension is that of the width's id-only family (`_gather_families`, the
-    one the codec resolves `LGatherRow<w>x<N>_v1` to), else `(w, N, extension)`, whose id then names the extension
-    (`LGatherRow32x16offffffff`, `LGatherRow8x3o7f`), so originals of one width and size never depend on which was lifted first."""
+    """`(w, N)` at the extension of the width's id-only family (`_gather_families`), else `(w, N, extension)`, named in the id
+    (`LGatherRow32x16offffffff`): originals of one width and size never depend on which was lifted first."""
     fam = _gather_families().get(w)
     return (w, N) if fam is not None and registered_oor_extension(fam(N)) == oor_payload else (w, N, oor_payload)
 
 
 def l_gather_row_of(original: PrimitiveDefinition) -> PrimitiveDefinition:
     """The lifted gather of a registered original gather family: `(w, N)` from its shape, the out-of-range extension read from
-    the original itself (`registered_oor_extension`); an extension other than the id-only family's is part of the id
-    (`_gather_key`)."""
+    the original itself (`registered_oor_extension`), part of the id unless it is the id-only family's (`_gather_key`)."""
     shape = _gather_shape(original)
     if shape is None:
         raise TypeError(f"{original.id} is not a registered gather family")
