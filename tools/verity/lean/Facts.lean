@@ -414,6 +414,17 @@ def shapeInfo (env : Environment) (meaning : Array Name) (moduleOf : Name → Op
     return toJson (← (conjuncts stmt).mapM (shapeOf env meaning moduleOf))
   catch e => return Json.mkObj [("error", toJson (← e.toMessageData.toString))]
 
+/-- A premise's head constant: past its binders, after reducible unfolding, again past the binders an abbrev unfolds to
+(`Premises.P x := ∀ y, Assumptions.P x y`), at most `n` times; an assumptions module's constant is the head as it
+stands, never unfolded. -/
+partial def premiseHead (moduleOf : Name → Option Name) (n : Nat) (t : Expr) : MetaM (Option Name) :=
+  forallTelescope t fun _ b => do
+    let head (e : Expr) : Option Name := match e.getAppFn with | .const h _ => some h | _ => none
+    if let some h := head b then
+      if ((moduleOf h).map (·.components.contains `Assumptions)).getD false then return some h
+    let b ← whnfR b
+    if b.isForall && n > 0 then premiseHead moduleOf (n - 1) b else return head b
+
 /-- The premises a statement takes: the `Prop` hypotheses of each conjunct, also under the statement definitions (a
 `Guarantees` namespace's) its conjuncts apply, unfolded at most `depth` deep, each named by its head after reducible
 unfolding, so a `Premises` abbrev names the assumption it stands for. A conclusion is never unfolded. -/
@@ -425,8 +436,7 @@ partial def premisesOf (env : Environment) (moduleOf : Name → Option Name) (de
       for x in xs do
         let t ← inferType x
         unless ← isProp t do continue
-        let head ← forallTelescope t fun _ b => do
-          return match (← whnfR b).getAppFn with | .const h _ => some h | _ => none
+        let head ← premiseHead moduleOf 4 t
         if let some h := head then
           ps := ps.push <| Json.mkObj [("binder", toJson (← x.fvarId!.getDecl).userName.toString),
             ("head", toJson h.toString), ("module", toJson ((moduleOf h).map toString))]
