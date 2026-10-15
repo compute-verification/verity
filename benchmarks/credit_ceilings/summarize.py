@@ -61,7 +61,7 @@ def main(out: Path) -> None:
                 f"| {r['ops']} | {r['mix']} | {r['warp_instr_per_sm_clk']:.3f} | {r['dp4a']:.3f} | {r['imad']:.3f} | "
                 f"{r['ffma']:.3f} | {r['lop3']:.3f} | {r['ffma2']:.3f} | {r['mac_equiv_per_sm_clk']:.1f} | {r['sm_mhz']:.0f} |"
             )
-    print("\n| split warps (even: dp4a, odd: FFMA/FFMA2) | mix (dp4a, ffma, ffma2) | dp4a | ffma | ffma2 | dp4a cycles | fma cycles | block cycles | MAC-equivalent/SM/clk |")
+    print("\n| split warps (4 of each role a sub-partition) | mix (dp4a, ffma, ffma2) | dp4a | ffma | ffma2 | dp4a cycles | fma cycles | block cycles | MAC-equivalent/SM/clk |")
     print("|---|---|---|---|---|---|---|---|---|")
     for r in rows:
         if r.get("kind") == "split":

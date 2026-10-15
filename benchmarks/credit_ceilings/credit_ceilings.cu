@@ -466,8 +466,10 @@ __global__ void __launch_bounds__(1024) k_probe(int* out, int iters, BlockClk* r
 }
 
 
-// Split warps: even warps run ND dp4a a chain step, odd warps NF FFMA and NF2 FFMA2, so the warp schedulers interleave
-// the two routes at run time and no static SASS order decides the mix. Each warp records its own loop cycles.
+// Split warps: warps with bit 2 of their id clear run ND dp4a a chain step, the others NF FFMA and NF2 FFMA2, so the
+// warp schedulers interleave the two routes at run time and no static SASS order decides the mix. Warps go to the SM's
+// four sub-partitions by id mod 4, so every sub-partition holds four warps of each role (an even/odd split would put the
+// roles on different sub-partitions). Each warp records its own loop cycles.
 template <int ND, int NF, int NF2>
 __global__ void __launch_bounds__(1024) k_split(int* out, int iters, long long* wcyc, BlockClk* rec) {
   int d[8];
@@ -483,7 +485,7 @@ __global__ void __launch_bounds__(1024) k_split(int* out, int iters, long long* 
   __syncthreads();
   CLK_BEGIN
   const long long c0 = clock64();
-  if ((warp & 1) == 0) {
+  if ((warp & 4) == 0) {
     for (int it = 0; it < iters; it++)
 #pragma unroll
       for (int r = 0; r < 8; r++)
@@ -906,7 +908,7 @@ static void run_split(const char* name, int iters) {
   std::vector<double> td, tf;
   for (int b = 0; b < g_nsm; b++) {
     long long a = 0, c = 0;
-    for (int w = 0; w < 32; w++) (w & 1 ? c : a) = std::max(w & 1 ? c : a, h[b * 32 + w]);
+    for (int w = 0; w < 32; w++) (w & 4 ? c : a) = std::max(w & 4 ? c : a, h[b * 32 + w]);
     td.push_back((double)a), tf.push_back((double)c);
   }
   std::sort(td.begin(), td.end());
