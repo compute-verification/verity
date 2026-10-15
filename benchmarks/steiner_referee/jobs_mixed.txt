@@ -1,0 +1,42 @@
+# Claim P / Claim R sweep (referee round 2, CMP-8). One job per line, run by run_jobs.sh from this directory.
+python3 mixed.py single --shape 2,2,2 --primes 2,3,5 --count 400000 --seed 0
+python3 mixed.py single --shape 2,2,3 --primes 2,3 --count 400000 --seed 1
+python3 mixed.py r --n 64 --seed 0
+python3 mixed.py r --n 128 --seed 1
+python3 mixed.py search --shape 2,2,2 --L 1 --primes 2,3 --count 50 --lifted 4 --seed 100
+python3 mixed.py search --shape 2,2,2 --L 1 --primes 2,3 --count 300 --climb 150 --seed 0
+python3 mixed.py search --shape 2,2,2 --L 1 --primes 2,3 --count 300 --climb 150 --seed 1
+python3 mixed.py search --shape 2,2,2 --L 1 --primes 2,3 --count 300 --climb 150 --seed 2
+python3 mixed.py search --shape 2,2,2 --L 1 --primes 2,3 --count 300 --climb 150 --seed 3
+python3 mixed.py search --shape 2,2,2 --L 1 --primes 2,3 --count 300 --climb 150 --seed 4
+python3 mixed.py search --shape 2,2,2 --L 1 --primes 2,3 --count 300 --climb 150 --seed 5
+python3 mixed.py search --shape 2,2,2 --L 2 --primes 2,3 --count 300 --climb 150 --seed 0
+python3 mixed.py search --shape 2,2,2 --L 2 --primes 2,3 --count 300 --climb 150 --seed 1
+python3 mixed.py search --shape 2,2,2 --L 2 --primes 2,3 --count 300 --climb 150 --seed 2
+python3 mixed.py search --shape 2,2,2 --L 2 --primes 2,3 --count 300 --climb 150 --seed 3
+python3 mixed.py search --shape 2,2,2 --L 2 --primes 2,3 --count 300 --climb 150 --seed 4
+python3 mixed.py search --shape 2,2,2 --L 2 --primes 2,3 --count 300 --climb 150 --seed 5
+python3 mixed.py search --shape 2,2,3 --L 1 --primes 2,3 --count 300 --climb 150 --seed 0
+python3 mixed.py search --shape 2,2,3 --L 1 --primes 2,3 --count 300 --climb 150 --seed 1
+python3 mixed.py search --shape 2,2,3 --L 1 --primes 2,3 --count 300 --climb 150 --seed 2
+python3 mixed.py search --shape 2,2,3 --L 1 --primes 2,3 --count 300 --climb 150 --seed 3
+python3 mixed.py search --shape 2,2,3 --L 1 --primes 2,3 --count 300 --climb 150 --seed 4
+python3 mixed.py search --shape 2,2,3 --L 1 --primes 2,3 --count 300 --climb 150 --seed 5
+python3 mixed.py search --shape 2,2,3 --L 2 --primes 2,3 --count 300 --climb 150 --seed 0
+python3 mixed.py search --shape 2,2,3 --L 2 --primes 2,3 --count 300 --climb 150 --seed 1
+python3 mixed.py search --shape 2,2,3 --L 2 --primes 2,3 --count 300 --climb 150 --seed 2
+python3 mixed.py search --shape 2,2,3 --L 2 --primes 2,3 --count 300 --climb 150 --seed 3
+python3 mixed.py search --shape 2,2,3 --L 2 --primes 2,3 --count 300 --climb 150 --seed 4
+python3 mixed.py search --shape 2,2,3 --L 2 --primes 2,3 --count 300 --climb 150 --seed 5
+python3 mixed.py search --shape 2,4,2 --L 1 --primes 2,3,5 --count 150 --climb 100 --seed 0
+python3 mixed.py search --shape 2,4,2 --L 1 --primes 2,3,5 --count 150 --climb 100 --seed 1
+python3 mixed.py search --shape 2,4,2 --L 2 --primes 2,3,5 --count 150 --climb 100 --seed 0
+python3 mixed.py search --shape 2,4,2 --L 2 --primes 2,3,5 --count 150 --climb 100 --seed 1
+python3 mixed.py search --shape 2,4,2 --L 4 --primes 2,3,5 --count 150 --climb 100 --seed 0
+python3 mixed.py search --shape 3,3,3 --L 1 --primes 2,3,5 --count 100 --climb 80 --seed 0
+python3 mixed.py search --shape 3,3,3 --L 1 --primes 2,3,5 --count 100 --climb 80 --seed 1
+python3 mixed.py search --shape 3,3,3 --L 3 --primes 2,3,5 --count 100 --climb 80 --seed 0
+python3 mixed.py search --shape 2,3,4 --L 1 --primes 2,3 --count 100 --climb 80 --seed 0
+python3 mixed.py search --shape 2,3,4 --L 3 --primes 2,3 --count 100 --climb 80 --seed 0
+python3 mixed.py search --shape 2,2,2 --L 2 --primes 2,3 --count 200 --seed 7 --mixed-weight 1; [ $? -eq 1 ]
+python3 mixed.py search --shape 2,2,3 --L 2 --primes 2,3 --count 200 --seed 7 --mixed-weight 1; [ $? -eq 1 ]
