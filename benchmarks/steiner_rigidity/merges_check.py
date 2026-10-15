@@ -1593,7 +1593,9 @@ def part14(rng):
     2L - save_lam. (b) Kronecker: over the p + 1 directions, sum (rho - rank Z_lam) <= rho for any pencil. (c) On two
     D-rows: if rho = 2L the savings total <= 2L; with three helped directions some one, p, has its box off the other
     two's lines, and save_p <= rank Z_q|box + rank Z_r|box <= 2L - save_q - save_r, unless the three lie on one D-row
-    and one D-column (a cross, part 13)."""
+    and one D-column (a cross, part 13). (d) Kronecker on p's box pencil, generic rank rho_p: each q whose line misses
+    p's box drops by at least save_q - L + rho_p there (Lemma J), so the sum of those over q is at most rank Z_p|box,
+    as is save_p; with rho_p = L and every other direction off the box, the total is at most 2L."""
     stats = {"J": 0, "J tight": 0, "box tight": 0, "pencils": 0, "pencil tight": 0}
     for (P, Q, L, p, trials) in ((2, 3, 2, 5, 120), (2, 4, 2, 7, 80), (3, 3, 2, 5, 60), (2, 3, 3, 7, 40)):
         shape = Shape(P, Q, L, L)
@@ -1660,7 +1662,9 @@ def part14(rng):
                 Z1, Z2, cur = A, B, new
         return Z1, Z2
 
-    kinds = {"full rank": 0, "<= 2 directions": 0, "3 directions": 0, "cross": 0, "open (rho < 2L, 4+)": 0}
+    kinds = {"full rank": 0, "<= 2 directions": 0, "3 directions": 0, "cross": 0, "box of full rank": 0,
+             "open (rho < 2L, 4+)": 0}
+    box_stats = {"checked": 0, "tight": 0, "offset used": 0, "meets box": 0}
     tight, top_open = 0, 0
     for (Q, L, p, trials, climbs) in ((3, 2, 2, 100, 0), (3, 2, 7, 120, 6), (4, 2, 7, 80, 3), (3, 3, 7, 40, 2)):
         shape = Shape(2, Q, L, L)
@@ -1680,6 +1684,24 @@ def part14(rng):
                 assert lines[n], "a direction's cells are not a star"
                 assert any(save[n] <= L - r_off for _, r_off, _ in lines[n]), "Lemma J fails on a direction"
                 assert per[n][1] <= 2 * L - save[n], "rank Z_lam > 2L - save_lam"
+            full_box = False
+            assert p + 1 > L, "a star's box has a side of L, so p + 1 > L directions read its generic rank"
+            for n in used:
+                hrows = sorted({c[0] for c, (_, m) in best.items() if m == n})
+                hcols = sorted({c[1] for c, (_, m) in best.items() if m == n})
+                box = np.ix_(blocks(shape, hrows), blocks(shape, hcols))
+                rho_box = max(rank(Zl[box], p) for Zl, _, _ in per)
+                r_p = rank(per[n][0][box], p)
+                off = [m for m in used if m != n and any((side == "row" and R not in hrows) or
+                                                         (side == "col" and R not in hcols)
+                                                         for (side, R), _, _ in lines[m])]
+                excess = sum(max(0, save[m] - (L - rho_box)) for m in off)
+                assert save[n] <= r_p and excess <= r_p, "Kronecker bound on a box pencil fails"
+                box_stats["checked"] += 1
+                box_stats["tight"] += excess == r_p > 0
+                box_stats["offset used"] += sum(save[m] for m in off) > r_p
+                box_stats["meets box"] += sum(save[m] for m in used if m != n) - sum(save[m] for m in off) > r_p
+                full_box |= rho_box == L and len(off) == len(used) - 1
             if rho == 2 * L:
                 assert total <= sum(rho - r for _, r, _ in per) <= rho, "pencil bound fails at full generic rank"
                 kinds["full rank"] += 1
@@ -1709,6 +1731,9 @@ def part14(rng):
                 assert ok or cross, "three directions, no box off the other two lines, and not a cross"
                 kinds["3 directions" if ok else "cross"] += 1
                 assert total <= 2 * L
+            elif full_box:
+                assert total <= 2 * L, "a box of full rank off every other line, yet total > 2L"
+                kinds["box of full rank"] += 1
             elif rho is not None and rho < 2 * L:
                 kinds["open (rho < 2L, 4+)"] += 1
                 top_open = max(top_open, total)
@@ -1719,7 +1744,8 @@ def part14(rng):
           f"pencils: sum of rank drops <= rho: ok ({stats['pencil tight']} tight); {triples} triples of disjoint "
           f"stars on a 2 x 5 grid: some box is off the other two lines, or the three form a cross ({crosses}): ok; "
           f"pairs on 2 x Q (L = 2, 3; GF(2) and GF(7)): rank Z_lam <= 2L - save_lam per direction, total <= 2L: ok "
-          f"({tight} at 2L) by case {kinds}, best open {top_open}")
+          f"({tight} at 2L) by case {kinds}, best open {top_open}; Kronecker on box pencils, save_p and "
+          f"sum_(q off p's box) (save_q - L + rho_p)_+ each <= rank Z_p|box: ok {box_stats}")
 
 
 def part4(rng):
