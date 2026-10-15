@@ -355,55 +355,67 @@ class _Builder:
         params, param_pidx = self._params, self._param_pidx
         n = c.n
         seen: set = set()
+
+        def node(idx: int, lo: int, hi: int) -> None:
+            if idx >= n:
+                raise _OutOfOrder(f"Call {n} reads Call {idx}, not yet read")
+            s = spec_idx[idx]
+            pidx = spec_pidx[s]
+            if len(pidx) == 1:
+                if idx not in seen:
+                    seen.add(idx)
+                    rc.append(idx); rp.append(pidx[0])
+                return
+            hit = False
+            for p, pi in zip(port_tables[s], pidx):
+                if p.lo < hi and lo < p.hi:
+                    hit = True
+                    if (idx, pi) not in seen:
+                        seen.add((idx, pi))
+                        rc.append(idx); rp.append(pi)
+            if not hit and forms[c.form_idx[idx]] == "batch":  # a batch member beyond the single-instance signature: one port
+                pi = pidx[0]
+                if (idx, pi) not in seen:
+                    seen.add((idx, pi))
+                    rc.append(idx); rp.append(pi)
+
+        def param(idx: int, lo: int, hi: int, step: int = 0, count: int = 1) -> None:
+            """The ports of `count` runs `[lo + k*step, hi + k*step)` of parameter `idx`, in first-touch order (ascending for a
+            disjoint ascending table and step > 0, the order the runs one by one give)."""
+            pv, pidx, los = params[idx], param_pidx[idx], self._param_lo[idx]
+            if len(pidx) == 1:
+                sel = pidx
+            elif los is None:
+                sel = [pi for p, pi in zip(pv.port_table, pidx) if p.lo < hi and lo < p.hi]
+            else:                       # a weights struct has thousands of ports: the overlapping ones by bisection
+                table, k, sel, end = pv.port_table, max(bisect.bisect_right(los, lo) - 1, 0), [], hi + (count - 1) * step
+                while k < len(los) and los[k] < end:
+                    j = 0 if count == 1 else max(0, (los[k] - hi) // step + 1)   # the first run ending past the port's start
+                    if j < count and lo + j * step < table[k].hi:
+                        sel.append(pidx[k])
+                    k += 1
+            for pi in sel:
+                if (pv.id, pi) not in seen:
+                    seen.add((pv.id, pi))
+                    rc.append(pv.id); rp.append(pi)
+                    prc.append(pv.id); prp.append(pi)
+
         for operand in args:
             for run in operand:
-                space, idx = run[0], int(run[1])
-                if space == "n":
-                    if idx >= n:
-                        raise _OutOfOrder(f"Call {n} reads Call {idx}, not yet read")
-                    s = spec_idx[idx]
-                    pidx = spec_pidx[s]
-                    if len(pidx) == 1:
-                        if idx not in seen:
-                            seen.add(idx)
-                            rc.append(idx); rp.append(pidx[0])
+                space = run[0]
+                if len(run) == 8 and space in ("N", "P"):                 # a stored progression, resolved without its runs
+                    _, idx, lo, hi, dI, dL, dH, cnt = (int(x) if k else x for k, x in enumerate(run))
+                    if space == "P" and dI == 0 and dL == dH and (dL > 0 or cnt == 1) and \
+                            (len(param_pidx[idx]) == 1 or self._param_lo[idx] is not None):
+                        param(idx, lo, hi, dL, cnt)
                         continue
-                    lo, hi = int(run[2]), int(run[3])
-                    table = port_tables[s]
-                    hit = False
-                    for p, pi in zip(table, pidx):
-                        if p.lo < hi and lo < p.hi:
-                            hit = True
-                            if (idx, pi) not in seen:
-                                seen.add((idx, pi))
-                                rc.append(idx); rp.append(pi)
-                    if not hit and forms[c.form_idx[idx]] == "batch":  # a batch member beyond the single-instance signature: one port
-                        pi = pidx[0]
-                        if (idx, pi) not in seen:
-                            seen.add((idx, pi))
-                            rc.append(idx); rp.append(pi)
+                    one = node if space == "N" else param
+                    for k in range(cnt):
+                        one(idx + k * dI, lo + k * dL, hi + k * dH)
+                elif space == "n":
+                    node(int(run[1]), int(run[2]), int(run[3]))
                 elif space == "p":
-                    pv = params[idx]
-                    pid = pv.id
-                    pidx = param_pidx[idx]
-                    if len(pidx) == 1:
-                        sel = pidx
-                    else:
-                        lo, hi = int(run[2]), int(run[3])
-                        los = self._param_lo[idx]
-                        if los is None:
-                            sel = [pi for p, pi in zip(pv.port_table, pidx) if p.lo < hi and lo < p.hi]
-                        else:                       # a weights struct has thousands of ports: the overlapping ones by bisection
-                            table, k, sel = pv.port_table, max(bisect.bisect_right(los, lo) - 1, 0), []
-                            while k < len(los) and los[k] < hi:
-                                if lo < table[k].hi:
-                                    sel.append(pidx[k])
-                                k += 1
-                    for pi in sel:
-                        if (pid, pi) not in seen:
-                            seen.add((pid, pi))
-                            rc.append(pid); rp.append(pi)
-                            prc.append(pid); prp.append(pi)
+                    param(int(run[1]), int(run[2]), int(run[3]))
 
     def outputs(self, runs_: Iterable[Sequence[Any]]) -> tuple[ValueRef, ...]:
         """The Values a `ret` reference sequence names (the body's outputs), by the same resolution."""
@@ -649,7 +661,7 @@ def _read_instance_header(path: str) -> dict[str, Any]:
     return json.loads(buf[:k].rstrip().rstrip(",") + "}")
 
 
-def iter_instance_rows(path: str) -> Iterator[dict[str, Any]]:
+def iter_instance_rows(path: str, *, expand: bool = True) -> Iterator[dict[str, Any]]:
     """The objects of the top-level `"rows": [...]` array of an instance-sequence file, one at a time (the array is never built).
     The document's key order (`schema`, `digest`, `params`, `rows`) is the writer's (`derive_step._instance_sequence`).  A v2 row's
     stored argument progressions are expanded to the v1 per-leaf run lists, bit-identically (`compact.expanded_file_args`), so every
@@ -693,13 +705,13 @@ def iter_instance_rows(path: str) -> Iterator[dict[str, Any]]:
                     obj, end = dec.raw_decode(buf, pos)
                     break
                 except json.JSONDecodeError:
-                    more = f.read(_CHUNK)
+                    more = f.read(max(_CHUNK, len(buf) - pos))     # a row longer than a chunk: double, so it is parsed O(1) times
                     if not more:
                         raise
                     buf = buf[pos:] + more
                     pos = 0
             a = obj.get("args")
-            if a:
+            if a and expand:
                 obj["args"] = expanded_file_args(a)
             yield obj
             pos = end
@@ -708,13 +720,12 @@ def iter_instance_rows(path: str) -> Iterator[dict[str, Any]]:
 
 
 def _instances_columns(params: tuple[InputView, ...], rows: Iterable[dict[str, Any]]) -> _Builder:
-    """Body order in, columns out; `_OutOfOrder` when the rows are not body positions in order.  A v2 document's stored argument
-    progressions are expanded to the per-leaf run lists (a no-op on rows `iter_instance_rows` already expanded)."""
-    from verity_vllm.program.compact import expanded_file_args
+    """Body order in, columns out; `_OutOfOrder` when the rows are not body positions in order.  A v2 row's stored argument
+    progressions are resolved as progressions (`_Builder._resolve`): the same Values, in the same order, as their per-leaf runs."""
     b = _Builder(params)
     for r in rows:
         spec = r["spec"]
-        b.add(int(r["i"]), spec, str(r.get("form") or "call"), str(r.get("name") or ""), definition_ports(spec), expanded_file_args(r.get("args") or ()))
+        b.add(int(r["i"]), spec, str(r.get("form") or "call"), str(r.get("name") or ""), definition_ports(spec), r.get("args") or ())
     return b
 
 
@@ -729,7 +740,7 @@ def from_instances(path_or_doc: str | dict[str, Any]) -> ProgramView:
         hdr = _read_instance_header(path_or_doc)
         params = _params_view(hdr.get("params") or [])
         try:
-            b = _instances_columns(params, iter_instance_rows(path_or_doc))
+            b = _instances_columns(params, iter_instance_rows(path_or_doc, expand=False))
         except _OutOfOrder:
             with _open_text(path_or_doc) as f:
                 doc = json.load(f)
