@@ -201,6 +201,11 @@ installs it first, so a machine without elan works), must pass clean and fail on
   entry that exempts no read outside the spec fails, and no entry covers a spec module outside `meaning`.
   The report also lists, without failing, the spec definitions that no guarantee reads, its own or a dependent
   package's (`unread_spec` in `report.json`).
+- **Heartbeat overrides are listed, never refused** (Daniel, 2026-10-09). Each `set_option maxHeartbeats N` (and
+  `synthInstance.maxHeartbeats`) in a package's sources is in its report (`heartbeats` in `report.json`, and printed
+  under its `AUDIT` line, so the nightly lists them): its file and line, its value, the reason beside it (a `--` comment
+  ending its line, else the `--` comments just above), and the build time of its module in the audit's own build. Write
+  the reason beside the override.
 - **The hashes are SHA-256.** They are taken over a canonical form of the kernel term (`Facts.lean`'s `canonText`),
   which keeps what Lean's `Expr.hash` keeps (constant names, universe levels, bound variable indices, projections,
   literals) and drops what it drops (binder names and binder info, `let` names, metadata). A renamed hypothesis is

@@ -97,6 +97,13 @@ While proving, check one file at a time, and leave the whole package and the Lea
   example (a b : Nat) : a + b = b + a := by exact?
   ~~~
 
+  Probe what you build on, not only what you wrote: a section-level `variable` whose type goes through a local
+  notation can elaborate to `sorry` with no error or warning, and the silent `sorryAx` then shows up as opaque
+  timeouts in proofs that use the binder (proofs' worker, 14 Oct: five failed pod runs before a `#print axioms`
+  probe caught it). A theorem reading such variables can also be dropped silently — no error, no `sorry`, the
+  declaration simply absent from the built module, so a probe failing with "unknown constant" on a theorem you
+  wrote is this, not a typo (same night: a theorem vanished through two runs before a bisect found it; #1923's
+  audit hardening fails the package on both). Put such binders on the theorem itself, not in a section `variable`.
 - **See a goal** by putting `trace_state` before a `sorry`: the goal prints with the file's output. The editor's language
   server shows it too.
 - **Search before you prove:** `exact?` or `apply?` on a scratch `example` (both work without Mathlib), then `rg` for the
@@ -108,7 +115,8 @@ While proving, check one file at a time, and leave the whole package and the Lea
     used.
 
   Then fix the proof: use `simp only [...]` outside terminal calls, split out a lemma, or shrink a `decide`. If an override
-  stays, give its reason beside it. Keep files to a few hundred declarations, so that Lake builds them in parallel and an
+  stays, give its reason in a `--` comment ending its line or just above it; the audit lists every override with its
+  reason and its module's build time (`heartbeats` in its report) and refuses none. Keep files to a few hundred declarations, so that Lake builds them in parallel and an
   edit re-elaborates little.
 - **Push after every commit.** Work that lives only in a VM's worktree is lost when the VM is suspended.
 

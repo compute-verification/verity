@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
     "extra == 'extra-11-verity-vllm-torch' and extra != 'extra-6-verity-torch-cpu'",
@@ -29,10 +29,12 @@ members = [
     "pous-check",
     "research",
     "verity",
+    "verity-bench",
     "verity-check",
     "verity-circuit-check",
     "verity-cli",
     "verity-commitments-benchmarks",
+    "verity-config",
     "verity-core-composition",
     "verity-core-evaluate",
     "verity-core-firewall",
@@ -1572,8 +1574,10 @@ dev = [
     { name = "pyyaml" },
     { name = "research" },
     { name = "verity" },
+    { name = "verity-bench" },
     { name = "verity-circuit-check" },
     { name = "verity-cli" },
+    { name = "verity-config" },
     { name = "verity-difftest" },
     { name = "verity-flock" },
     { name = "verity-numerical" },
@@ -1600,13 +1604,30 @@ dev = [
     { name = "pyyaml", specifier = ">=6" },
     { name = "research", editable = "tools/research" },
     { name = "verity", editable = "." },
+    { name = "verity-bench", editable = "benchmarks/harness" },
     { name = "verity-circuit-check", editable = "tools/verity/circuit_check" },
     { name = "verity-cli", editable = "tools/verity/cli" },
+    { name = "verity-config", editable = "tools/config" },
     { name = "verity-difftest", editable = "verity/core/difftest" },
     { name = "verity-flock", editable = "verity/ml/flock" },
     { name = "verity-numerical", editable = "benchmarks/numerical" },
     { name = "verity-ops", editable = "infra/ops" },
     { name = "verity-sp1", editable = "archive/sp1" },
+    { name = "verity-vllm", editable = "integrations/vllm" },
+]
+
+[[package]]
+name = "verity-bench"
+version = "0.1.0"
+source = { editable = "benchmarks/harness" }
+dependencies = [
+    { name = "verity-config" },
+    { name = "verity-vllm" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "verity-config", editable = "tools/config" },
     { name = "verity-vllm", editable = "integrations/vllm" },
 ]
 
@@ -1669,6 +1690,11 @@ requires-dist = [
     { name = "verity-numerical", editable = "benchmarks/numerical" },
     { name = "verity-vllm", editable = "integrations/vllm" },
 ]
+
+[[package]]
+name = "verity-config"
+version = "0.1.0"
+source = { editable = "tools/config" }
 
 [[package]]
 name = "verity-core-composition"
