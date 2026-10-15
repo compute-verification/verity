@@ -34,9 +34,9 @@ if [ "${A4_BASE:-}" = 1 ]; then
   cp $CAPS/llama8b-w0/ids.npy $CAPS/llama8b-w0/tokens.json "$CAP/"
   cp "$RESEARCH_RUN_DIR/inputs/pearlc_capture.py" "$O/pearlc_capture.py"
   sed -i 's/^    from datasets import load_dataset$/    try:\n        from datasets import load_dataset\n    except ImportError:\n        load_dataset = None/' "$O/pearlc_capture.py"
-  HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 $PY "$O/pearlc_capture.py" --model unsloth/Llama-3.1-8B \
-    --revision 3f0d51f8e5640f98f1a96ea9044a0e55c0a83814 --every 4 --threads 32 --out "$CAP" > "$O/capture_base.txt" 2>&1
-  rc=$?
+  rc=0
+  [ -f "$CAP/manifest.json" ] || { HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 $PY "$O/pearlc_capture.py" --model unsloth/Llama-3.1-8B \
+    --revision 3f0d51f8e5640f98f1a96ea9044a0e55c0a83814 --every 4 --threads 32 --out "$CAP" > "$O/capture_base.txt" 2>&1; rc=$?; }
   echo "capture_base $rc" | tee -a "$O/status.txt"
   cp "$CAP/manifest.json" "$O/base_manifest.json" 2>/dev/null
   [ $rc = 0 ] && layers "$CAP" base

@@ -95,13 +95,29 @@ def served(x: np.ndarray, w: np.ndarray, seed_a: bytes, seed_b: bytes, fix: bool
 
 def quantized(x: np.ndarray, w: np.ndarray, how: str) -> np.ndarray:
     """Noise-free baselines: `fp8` = e4m3(alpha x) with v1's alpha (the model's quantizer with PoUW off), `fp8fix` with the
-    fix's alpha; `int8` per row to [-127, 127], `int8n32` to [-95, 95] (room for a +-32 integer noise)."""
+    fix's alpha; `int8` per row to [-127, 127], `int8n32` to [-95, 95] (room for a +-32 integer noise), `int8n6` to
+    [-121, 121] (room for the grid design's +-6), `grid16n3` to [-13, 13] (E4M3's exact integers |x| <= 16 less +-3 of
+    noise); the `_chunk` forms scale per row and per chunk of L = 170 columns, each chunk's exact integer sum unscaled
+    on its own."""
     if how.startswith("fp8"):
         fix = how == "fp8fix"
         aa, ab = stats(x, fix)[2], stats(w, fix)[2]
         return (e4m3(aa[:, None] * x) @ e4m3(ab[:, None] * w).T) / aa[:, None] / ab[None, :]
-    top = {"int8": 127, "int8n32": 95}[how]
-    sx, sw = top / np.abs(x).max(axis=1), top / np.abs(w).max(axis=1)
+    if how.endswith("_chunk"):
+        top, y = {"int8n6_chunk": 121, "grid16n3_chunk": 13}[how], 0.0
+        for s in range(0, x.shape[1], CHUNK_L):
+            y = y + quantized_rows(x[:, s:s + CHUNK_L], w[:, s:s + CHUNK_L], top)
+        return y
+    return quantized_rows(x, w, {"int8": 127, "int8n32": 95, "int8n6": 121, "grid16n3": 13}[how])
+
+
+CHUNK_L = 170
+
+
+def quantized_rows(x: np.ndarray, w: np.ndarray, top: int) -> np.ndarray:
+    """Per-row symmetric rounding to [-top, top], the exact integer product, unscaled."""
+    sx = top / np.maximum(np.abs(x).max(axis=1), 1e-300)
+    sw = top / np.maximum(np.abs(w).max(axis=1), 1e-300)
     return (np.rint(sx[:, None] * x) @ np.rint(sw[:, None] * w).T) / sx[:, None] / sw[None, :]
 
 
@@ -264,7 +280,7 @@ def one_linear(x_all: np.ndarray, snapshot: Path, name: str, rows, cols, split: 
                    "w_s_over_rho": {"median": float(np.median(r_b)), "max": float(r_b.max()), "frac_gt_4": float((r_b > 4).mean())},
                    "w_admissible_v1": float(((448.0 / (r_b + 4) >= 1) & live(wu)).mean())}
     errs = {}
-    for how in ("fp8", "fp8fix", "int8", "int8n32"):
+    for how in ("fp8", "fp8fix", "int8", "int8n32", "int8n6", "int8n6_chunk", "grid16n3", "grid16n3_chunk"):
         errs[how] = row_err(quantized(xu, wu, how) + exact_part, ref)
     for fix in (False, True):
         y, _ = served(xu, wu, seed_a, seed_b, fix, rows, cols)
@@ -279,6 +295,8 @@ def one_linear(x_all: np.ndarray, snapshot: Path, name: str, rows, cols, split: 
                                             for h in errs}}
     if 0 in list(rows):
         res["bos_row"] = {h: float(errs[h][list(rows).index(0)]) for h in errs}
+        norm = np.linalg.norm(ref, axis=1)
+        res["bos_row_norm_over_median"] = float(norm[list(rows).index(0)] / np.median(norm))
     res["ratio_fix_over_v1_median"] = float(np.median(errs["pearl_fix"] / errs["pearl_v1"]))
     drng = np.random.default_rng(seed)
     sides = (("x", xu), ("w", wu)) if x_detect else (("w", wu),)
@@ -316,9 +334,62 @@ def run(capture: Path, n_rows: int, n_cols: int, layers: list[int], draws: int, 
     return out
 
 
+def table(files: list[Path]) -> dict:
+    """Per role (over the layers in `files`, `run`'s outputs) and split: the served y's row relative error per method
+    (median of the linears' medians, the largest p99 and max, the mean share of rows above 5% and 10%), fix over v1, the
+    BOS row, the worst s/rho class, and the residual detection of the X and W rows."""
+    role_of = {m: r for r, ms in ROLES.items() for m in ms}
+    acc: dict = {}
+    for f in files:
+        for name, lin in json.loads(Path(f).read_text())["linears"].items():
+            role = role_of[name.split(".", 3)[3]]
+            for split in ("split=False", "split=True"):
+                acc.setdefault((role, split), []).append(lin[split])
+    out = {}
+    for (role, split), lins in sorted(acc.items()):
+        e = {h: {"median": float(np.median([x["row_rel_err"][h]["median"] for x in lins])),
+                 "p99_max": max(x["row_rel_err"][h]["p99"] for x in lins), "max": max(x["row_rel_err"][h]["max"] for x in lins),
+                 "frac_gt_0.05": float(np.mean([x["row_rel_err"][h]["frac_gt_0.05"] for x in lins])),
+                 "frac_gt_0.1": float(np.mean([x["row_rel_err"][h]["frac_gt_0.1"] for x in lins]))}
+             for h in lins[0]["row_rel_err"]}
+        det = {}
+        for key in ("x_v1", "x_fix", "w_v1", "w_fix"):
+            ds = [x["detection"][key] for x in lins if key in x["detection"]]
+            det[key] = {"p_max_median": float(np.median([d["p_max_row"]["median"] for d in ds])),
+                        "p_max_max": max(d["p_max_row"]["max"] for d in ds),
+                        "frac_rows_p_gt_1/6": float(np.mean([d["frac_rows_p_gt_1/6"] for d in ds])),
+                        "frac_rows_top_deterministic": float(np.mean([d["frac_rows_top_entry_deterministic"] for d in ds])),
+                        "spike_hit_rate": float(np.mean([d["spike_hit_rate_top_entry"] for d in ds])),
+                        "admissible": float(np.mean([d["admissible"] for d in ds]))}
+        classes: dict = {}
+        for x in lins:
+            for c, v in x["by_s_over_rho"].items():
+                cl = classes.setdefault(c, {"rows": 0, "pearl_v1_max": 0.0, "pearl_fix_max": 0.0, "fix_median": [], "v1_median": []})
+                cl["rows"] += v["rows"]
+                cl["pearl_v1_max"] = max(cl["pearl_v1_max"], v["pearl_v1"]["max"])
+                cl["pearl_fix_max"] = max(cl["pearl_fix_max"], v["pearl_fix"]["max"])
+                cl["fix_median"].append(v["pearl_fix"]["median"])
+                cl["v1_median"].append(v["pearl_v1"]["median"])
+        for cl in classes.values():
+            cl["fix_median"], cl["v1_median"] = float(np.median(cl["fix_median"])), float(np.median(cl["v1_median"]))
+        out[f"{role} {split}"] = {
+            "linears": len(lins), "s_over_rho_median": float(np.median([x["rows"]["s_over_rho"]["median"] for x in lins])),
+            "frac_rows_gt_4": float(np.mean([x["rows"]["s_over_rho"]["frac_gt_4"] for x in lins])),
+            "w_s_over_rho_median": float(np.median([x["rows"]["w_s_over_rho"]["median"] for x in lins])),
+            "err": e, "fix_over_v1_median": float(np.median([x["ratio_fix_over_v1_median"] for x in lins])),
+            "bos": {h: max(x["bos_row"][h] for x in lins) for h in lins[0]["bos_row"]},
+            "bos_abs": {h: max(x["bos_row"][h] * x.get("bos_row_norm_over_median", math.nan) for x in lins)
+                        for h in lins[0]["bos_row"]},
+            "by_s_over_rho": classes, "detection": det}
+    return out
+
+
 def main(argv: list[str]) -> int:
     if argv[0] == "check":
         print(json.dumps(check(), indent=1))
+        return 0
+    if argv[0] == "table":
+        print(json.dumps(table([Path(a) for a in argv[1:]]), indent=1))
         return 0
     capture = Path(argv[1])
     opt = lambda f, d: argv[argv.index(f) + 1] if f in argv else d  # noqa: E731
