@@ -8,7 +8,10 @@
 #   grid      2x3 block grids of invertible 2x2 blocks (2^24 states each)
 #   exact     more exact F2 shapes ($EXACT, "a,b,c,L" items)
 #   subspace  task 3: subspace-restricted DW, for each "a,b,c,L,samples,budget_s,batch_k" item in $SUB (default <2,4,2>/L=2,
-#             then <2,3,2> with L=3 and L=1), subspaces of dimension at most $SUB_MAX_K (24)
+#             then <2,3,2> with L=3 and L=1), subspaces of dimension at most $SUB_MAX_K (24), families $SUB_ONLY
+#             (default "a b c d"), $SUB_EXTRA extra forms in (b) and (c) (default "2 4 6 8")
+#   jointsub  task 4 on larger matrices: jointly independent families in subspaces of dimension $JS_K (16) spanned by
+#             their chains' pieces and cross pieces, after a calibration on dependent ones against the whole space
 #   sa        annealing over Steiner points on the whole space: calibration against exact DW, then $SA_SHAPES
 #   full      exact <a,b,c> with L=b for each "a,b,c" in $FULL_SHAPES (default <2,2,4>: 2^32 states, 19 arrays of 4 GiB;
 #             <2,3,2>: 2^36, 3 arrays of 64 GiB) by dw_full, after its relaxation, orbit and dw_f2 cross-checks
@@ -51,8 +54,15 @@ for phase in ${PHASES:-f3 general grid exact}; do
         for c in ${SUB:-2,4,2,2,400,4500,18 2,3,2,3,200,900,18 2,3,2,1,100,900,16}; do
             IFS=, read -r a b cc L samples budget bk <<<"$c"
             python3 steiner.py --out "$OUT/subspace_$a$b${cc}_L$L.jsonl" subspace --a "$a" --b "$b" --c "$cc" --L "$L" \
-                --samples "$samples" --budget-s "$budget" --batch-k "$bk" --max-k "${SUB_MAX_K:-24}"
+                --samples "$samples" --budget-s "$budget" --batch-k "$bk" --max-k "${SUB_MAX_K:-24}" \
+                --only ${SUB_ONLY:-a b c d} --extra ${SUB_EXTRA:-2 4 6 8}
         done ;;
+    jointsub)
+        python3 steiner.py --out "$OUT/jointsub_calibrate.jsonl" jointsub --calibrate --seed "${SEED:-1}" \
+            --families "${CAL_FAMILIES:-200}" --sizes ${CAL_SIZES:-2x6 3x5 4x4} --k "${JS_K:-16}"
+        python3 steiner.py --out "$OUT/jointsub.jsonl" jointsub --seed "${SEED:-1}" --families "${FAMILIES:-200}" \
+            --sizes ${SIZES:-4x8 5x6 6x6} --k "${JS_K:-16}" --subspaces "${JS_SUB:-4}" --max-positions "${MAX_POS:-6}" \
+            --max-terminals "${MAX_TERMS:-8}" --max-rank "${MAX_RANK:-3}" ;;
     full)
         gcc -O3 -march=native -fopenmp -o "$d/dw_full" dw_full.c
         python3 steiner.py --out "$OUT/full.jsonl" full --shapes ${FULL_SHAPES:-2,2,4 2,3,2} ;;

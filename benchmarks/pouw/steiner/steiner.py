@@ -508,6 +508,32 @@ def independence(terms: list[dict], R: int, C: int) -> dict:
     return res
 
 
+def jointly_independent(terms: list[dict], R: int, C: int) -> bool:
+    ind = independence(terms, R, C)
+    return ind["rows"] is None and ind["cols"] is None
+
+
+def draw_family(rng: random.Random, R: int, C: int, max_positions: int, max_rank: int) -> tuple[list[dict], dict]:
+    """3..max_positions positions, each a geodesic chain (its full form and, half the time, one prefix) in random bases,
+    kept only while the family has distinct terminals and (i); (ii) holds by construction. Returns the terminals and
+    each placed chain's factors (a, b), the form being sum a_i b_i^T."""
+    npos = rng.randint(3, max_positions)
+    terms: list[dict] = []
+    factors: dict[str, tuple[list[int], list[int]]] = {}
+    for p in range(npos):
+        for _ in range(50):
+            top = rng.randint(1, min(R, C, max_rank))
+            cuts = sorted(set([top] + ([rng.randint(1, top - 1)] if top > 1 and rng.random() < 0.5 else [])))
+            a, b = random_independent(rng, R, top), random_independent(rng, C, top)
+            cand = terms + chain_terms(f"p{p}", a, b, cuts, R, C)
+            ms = [t["m"] for t in cand]
+            if len(set(ms)) == len(ms) and condition_i(cand, R, C):
+                terms = cand
+                factors[f"p{p}"] = (a, b)
+                break
+    return terms, factors
+
+
 def hub_example() -> tuple[int, int, list[dict]]:
     """Three rank-2 forms on X = F2^2, Y = F2^4, with pairwise trivially intersecting row spaces, each at distance 1 from
     the hub m = e1 f1^T + e2 f2^T: the tree 0 -> m -> each has length 5, under the sum 6."""
@@ -605,23 +631,10 @@ def cmd_general(args, out) -> None:
     for R, C in [tuple(map(int, s.split("x"))) for s in args.sizes]:
         probs = []
         while len(probs) < args.families:
-            npos = rng.randint(3, args.max_positions)
-            terms: list[dict] = []
-            for p in range(npos):
-                for _ in range(50):
-                    top = rng.randint(1, min(R, C, args.max_rank))
-                    cuts = sorted(set([top] + ([rng.randint(1, top - 1)] if top > 1 and rng.random() < 0.5 else [])))
-                    a, b = random_independent(rng, R, top), random_independent(rng, C, top)
-                    cand = terms + chain_terms(f"p{p}", a, b, cuts, R, C)
-                    ms = [t["m"] for t in cand]
-                    if len(set(ms)) == len(ms) and condition_i(cand, R, C):
-                        terms = cand
-                        break
-            if len(terms) <= args.max_terminals and len({t["chain"] for t in terms}) >= 3:
-                if args.joint_only:
-                    ind = independence(terms, R, C)
-                    if ind["rows"] is not None or ind["cols"] is not None:
-                        continue
+            terms, factors = draw_family(rng, R, C, args.max_positions, args.max_rank)
+            if len(terms) <= args.max_terminals and len(factors) >= 3:
+                if args.joint_only and not jointly_independent(terms, R, C):
+                    continue
                 probs.append((f"rand_{R}x{C}_{len(probs)}", R, C, terms, {}))
         solve_batch(probs, out, f"random_{R}x{C}" + ("_joint" if args.joint_only else ""), batch=R * C <= 20)
     if args.joint_only:
@@ -642,6 +655,67 @@ def cmd_general(args, out) -> None:
         R, C, terms = grid_terms({}, [2, 2], [2, 2], chains)
         probs.append((f"gridch22_{i}", R, C, terms, {}))
     solve_batch(probs, out, "grid2x2_blocks2x2_chains")
+
+
+def cmd_jointsub(args, out) -> None:
+    """Task 4 past the whole space's reach: random jointly independent (i)+(ii) families on larger R x C, each solved by
+    DW inside subspaces spanned by its chains' rank-1 pieces a_i b_i^T plus random cross pieces a_i b'_j^T (an X factor
+    of one position times a Y factor of another or the same, the shape of the hub's saving). A tree found in a subspace
+    is valid in the whole space, so a length under the chains' sum is a counterexample; none found proves nothing.
+    --calibrate draws families without joint independence instead, on sizes small enough for the whole space too, and
+    counts how many of the whole space's savings the subspaces find."""
+    rng = random.Random(args.seed)
+    for R, C in [tuple(map(int, s.split("x"))) for s in args.sizes]:
+        fams = []
+        while len(fams) < args.families:
+            terms, factors = draw_family(rng, R, C, args.max_positions, args.max_rank)
+            if len(terms) <= args.max_terminals and len(factors) >= 3 and \
+                    jointly_independent(terms, R, C) != args.calibrate:
+                fams.append((terms, factors))
+        probs = []
+        for f, (terms, factors) in enumerate(fams):
+            own = [outer(x, y, R, C) for a, b in factors.values() for x, y in zip(a, b)]
+            xs = [x for a, _ in factors.values() for x in a]
+            ys = [y for _, b in factors.values() for y in b]
+            cross = list({outer(x, y, R, C) for x in xs for y in ys} - set(own))
+            for s in range(args.subspaces):
+                rng.shuffle(cross)
+                basis = reduce_basis([t["m"] for t in terms] + own)
+                for g in cross:
+                    if len(basis) >= args.k:
+                        break
+                    basis = reduce_basis(basis + [g])
+                probs.append((f"js_{R}x{C}_{f}_{s}", f, len(basis),
+                              spec_problem(f"js_{R}x{C}_{f}_{s}", R, C, terms, basis)))
+        t0 = time.time()
+        found: dict[int, dict] = {}
+        for i in range(0, len(probs), 256):
+            chunk = probs[i:i + 256]
+            info = {p[0]: p for p in chunk}
+            for r in run_solver("".join(p[3] for p in chunk), batch=True):
+                _, f, k, _ = info[r["name"]]
+                terms = fams[f][0]
+                naive = naive_by_mask(terms)
+                below = [S for S in range(1, 1 << len(terms)) if r["root_dp"][S] < naive[S]]
+                if below and f not in found:
+                    best = min(below, key=lambda S: (r["root_dp"][S] - naive[S], bin(S).count("1")))
+                    found[f] = {"case": r["name"], "k": k, "answer": r["answer"], "naive": naive[-1],
+                                "best_subset": [best, r["root_dp"][best], naive[best]],
+                                "terms": [[hex(t["m"]), t["label"]] for t in terms], "tree": r["tree"],
+                                "tree_check": verify_tree_f2(r, R, C)}
+        kind = f"jointsub_{R}x{C}" + ("_calibrate" if args.calibrate else "")
+        for f, rec in sorted(found.items()):
+            emit(out, {"kind": kind, **rec, "independence": independence(fams[f][0], R, C)})
+        summary = {"kind": kind, "summary": True, "families": len(fams), "subspaces": len(probs),
+                   "k_min": min(p[2] for p in probs), "k_max": max(p[2] for p in probs),
+                   "subspace_below": len(found), "wall_s": round(time.time() - t0, 2)}
+        if args.calibrate:
+            whole = run_solver("".join(spec_problem(f"w{f}", R, C, t) for f, (t, _) in enumerate(fams)), batch=True)
+            wb = {int(r["name"][1:]) for r in whole
+                  if any(r["root_dp"][S] < m for S, m in enumerate(naive_by_mask(fams[int(r["name"][1:])][0])) if S)}
+            assert set(found) <= wb, "a subspace tree beat the whole space's minimum"
+            summary.update({"whole_below": len(wb), "found_of_whole_below": len(set(found) & wb)})
+        emit(out, summary)
 
 
 def cmd_aligned(args, out) -> None:
@@ -862,39 +936,46 @@ def cmd_subspace(args, out) -> None:
         return g
 
     # (a) Strassen schemes (36 over F2) on the 2x2x2 blocks of the inner indices: all pairs, k = 14 for <2,4,2>
-    for pi, pairing in enumerate(pairings):
+    for pi, pairing in enumerate(pairings if "a" in args.only else []):
         if len(pairing) == 2:
             items = [(f"a_p{pi}_{i}_{j}", scheme_on(s0, pairing[0]) + scheme_on(s1, pairing[1]))
                      for i, s0 in enumerate(orbit) for j, s1 in enumerate(orbit)]
         else:
             items = [(f"a_p{pi}_{i}", scheme_on(s0, pairing[0])) for i, s0 in enumerate(orbit)]
         run_family(f"a_strassen_pairing{pi}", items)
-    # the standard pieces x_rk y_kc (so the naive tree is inside S) plus one scheme on one block, every one
-    items = [(f"a1_p{pi}_h{h}_{i}", std + scheme_on(s0, pairing[h]))
-             for pi, pairing in enumerate(pairings) for h in range(len(pairing)) for i, s0 in enumerate(orbit)]
-    run_family("a_std_plus_one_scheme", items)
-    # the standard pieces plus a scheme on each block, sampled
-    if b == 4:
-        items = [(f"a2_{t}", std + random_scheme_gens(2)) for t in range(n_for(len(std) + 6))]
-        run_family("a_std_plus_two_schemes", items)
-    # one scheme per block plus m cross products (the X factor of one product times the Y factor of another)
-    for m in (2, 4, 6):
-        items = []
-        for t in range(n_for(14 + m)):
-            g = random_scheme_gens(2)
-            cross = [outer(x_factor(p, R, C), y_factor(q, R, C), R, C) for p, q in (rng.sample(g, 2) for _ in range(m))]
-            items.append((f"a3_m{m}_{t}", g + cross))
-        run_family(f"a_schemes_plus_cross_m{m}", items)
+    if "a" in args.only:
+        # the standard pieces x_rk y_kc (so the naive tree is inside S) plus one scheme on one block, every one
+        items = [(f"a1_p{pi}_h{h}_{i}", std + scheme_on(s0, pairing[h]))
+                 for pi, pairing in enumerate(pairings) for h in range(len(pairing)) for i, s0 in enumerate(orbit)]
+        run_family("a_std_plus_one_scheme", items)
+        # the standard pieces plus a scheme on each block, sampled
+        if b == 4:
+            items = [(f"a2_{t}", std + random_scheme_gens(2)) for t in range(n_for(len(std) + 6))]
+            run_family("a_std_plus_two_schemes", items)
+        # one scheme per block plus m cross products (the X factor of one product times the Y factor of another)
+        for m in (2, 4, 6):
+            items = []
+            for t in range(n_for(14 + m)):
+                g = random_scheme_gens(2)
+                cross = [outer(x_factor(p, R, C), y_factor(q, R, C), R, C)
+                         for p, q in (rng.sample(g, 2) for _ in range(m))]
+                items.append((f"a3_m{m}_{t}", g + cross))
+            run_family(f"a_schemes_plus_cross_m{m}", items)
     # (b) the standard pieces plus m random dense rank-1 forms; (c) plus m aligned ones: u in one row's X block and v
     #     in one column's Y block, or only u aligned, or only v
     for m in args.extra:
         for how, fam in (("dense", "b_random_dense"), ("aligned", "c_aligned"), ("row", "c_row_aligned"),
                          ("col", "c_col_aligned")):
+            if fam[0] not in args.only:
+                continue
             items = [(f"{fam}{m}_{t}", std + [random_rank1(rng, R, C, a, b, c, how) for _ in range(m)])
                      for t in range(n_for(len(std) + m))]
             run_family(f"{fam}_m{m}", items)
-    # (d) greedy growth from the best tree found: add rank-1 forms built from its edges' factors
-    for rnd in range(args.greedy_rounds):
+    # (d) greedy growth from the best tree found (with (d) alone, the naive tree in the standard pieces' span): add
+    #     rank-1 forms built from its edges' factors
+    if "d" in args.only and not best.get("tree"):
+        run_family("d_seed_standard_pieces", [("d_seed", std)])
+    for rnd in range(args.greedy_rounds if "d" in args.only else 0):
         if not best.get("tree") or time.time() > deadline:
             break
         gens = [int(g, 16) for g in best["gens"]]
@@ -1112,6 +1193,17 @@ def main() -> None:
     p.add_argument("--joint-only", action="store_true",
                    help="keep only random families whose pairwise-trivial row and column spaces are jointly independent "
                         "(the refined general version), and skip the grids")
+    p = sub.add_parser("jointsub")
+    p.add_argument("--seed", type=int, default=1)
+    p.add_argument("--sizes", nargs="+", default=["4x8", "5x6", "6x6"])
+    p.add_argument("--families", type=int, default=200)
+    p.add_argument("--subspaces", type=int, default=4, help="subspaces per family")
+    p.add_argument("--k", type=int, default=18, help="each subspace's dimension (fewer when the pieces span less)")
+    p.add_argument("--max-positions", type=int, default=6)
+    p.add_argument("--max-terminals", type=int, default=8)
+    p.add_argument("--max-rank", type=int, default=3)
+    p.add_argument("--calibrate", action="store_true",
+                   help="families without joint independence, also solved on the whole space")
     p = sub.add_parser("aligned")
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--sizes", nargs="+", default=["4x4", "3x5", "2x6"])
@@ -1132,6 +1224,8 @@ def main() -> None:
                    help="solve subspaces up to this dimension in parallel, one each; above it, sample counts halve per dim")
     p.add_argument("--greedy-rounds", type=int, default=5)
     p.add_argument("--budget-s", type=float, default=3600)
+    p.add_argument("--only", nargs="+", default=["a", "b", "c", "d"], choices=["a", "b", "c", "d"],
+                   help="the families to run: (a) Strassen schemes, (b) random dense, (c) aligned, (d) greedy")
     p = sub.add_parser("sa")
     for k in ("a", "b", "c", "L"):
         p.add_argument(f"--{k}", type=int, required=True)
@@ -1153,7 +1247,7 @@ def main() -> None:
     out = open(args.out, "a") if args.out else None
     cmds = {"validate": cmd_validate, "selftest": cmd_selftest, "selftest3": cmd_selftest3, "matmul": cmd_matmul,
             "matmul3": cmd_matmul3, "general": cmd_general, "grid": cmd_grid, "subspace": cmd_subspace, "sa": cmd_sa,
-            "sa-calibrate": cmd_sa_calibrate, "aligned": cmd_aligned, "full": cmd_full}
+            "sa-calibrate": cmd_sa_calibrate, "aligned": cmd_aligned, "jointsub": cmd_jointsub, "full": cmd_full}
     cmds[args.cmd](args, out)
 
 
