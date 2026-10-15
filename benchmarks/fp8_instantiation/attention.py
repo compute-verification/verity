@@ -8,7 +8,8 @@ partial sum stays below 2^24 here):
 
     Q, K       one scale per (head, token): the row of head_dim entries the k-sum of S runs over
     P          after the softmax, one scale per query row (`prow`), or the fixed 1/M (`pfix`); `prow2` is P per row on two
-               int8 limbs, P = B P_hi + P_lo with B = 128 - max|n|, its noise on P_lo (P V costs two int8 matmuls)
+               int8 limbs, P = B P_hi + P_lo with B = 128 - max|n|, its noise on P_lo (P V costs two int8 matmuls);
+               `vchan2` is V per channel on two signed limbs the same way, and `qk2` puts Q and K on two limbs each
     V          one scale per KV head (`vhead`) or per (KV head, channel) (`vchan`); the k-sum of O runs over tokens
 
 Noise is drawn per instance: a fresh draw for every entry of every query head's Q, K, P and V in every layer (K and V are
@@ -21,7 +22,7 @@ after, which preserves S = (Q R)(K R)^T and O = P V exactly before the edit.
 Method names are '-'-joined tokens:
 
     grid       `int8` (both matmuls), `e4m3` (both on E4M3's integers <= 16), `e4m3qk` (Q K^T on E4M3's integers, P V on int8)
-    P, V       `prow`/`pfix`/`prow2`, `vhead`/`vchan`
+    P, V, QK   `prow`/`pfix`/`prow2`, `vhead`/`vchan`/`vchan2`, `qk2`
     noise      an alphabet for all four operands: `none`, `pm1` {+-1}, `pm13` {+-1, +-3}, `pm57` {+-5, +-7}, `u1` ... `u16`
                uniform {-k..k}, `dE` sparse (+-1 each with probability 2^-E / 2, else 0); `qk`/`pv` limits it to that
                matmul's operands; `X=ALPHABET` sets operand X (`q`, `k`, `p`, `v`, `qk`, `pv`) alone
@@ -76,19 +77,21 @@ def alphabet_info(name: str) -> dict:
 
 
 def parse(method: str) -> dict:
-    spec = {"method": method, "grid": None, "p": "prow", "v": "vchan", "rot": False, "seed": 0}
+    spec = {"method": method, "grid": None, "p": "prow", "v": "vchan", "qk2": False, "rot": False, "seed": 0}
     default, where, over = "none", "both", {}
     for t in method.split("-"):
         if t in GRID_PAIRS or t in ("bf16", "ref"):
             spec["grid"] = t
         elif t in ("prow", "pfix", "prow2"):
             spec["p"] = t
-        elif t in ("vhead", "vchan"):
+        elif t in ("vhead", "vchan", "vchan2"):
             spec["v"] = t
         elif is_alphabet(t):
             default = t
         elif t == "rot":
             spec["rot"] = True
+        elif t == "qk2":
+            spec["qk2"] = True
         elif t in ("qk", "pv", "both"):
             where = t
         elif "=" in t and t.split("=")[0] in ("q", "k", "p", "v", "qk", "pv") and is_alphabet(t.split("=")[1]):
@@ -163,6 +166,31 @@ def edit_p(p: torch.Tensor, mode: str, alphabet: str, top: int, causal: torch.Te
     return limbs, sp
 
 
+def signed_limbs(x: torch.Tensor, top: int, dims, two: bool) -> tuple[list, torch.Tensor]:
+    """x's int8 limbs [(limb, weight)] and its scale (absmax over `dims`): one limb |q| <= top, or two, x ~ (B q_hi + q_lo) s
+    with B = top + 1, q_hi in -128..127 and q_lo in 0..B-1 (so q_lo plus noise up to 127 - top stays within int8)."""
+    if not two:
+        q, s = quant(x, top, dims)
+        return [(q, 1)], s
+    base = top + 1
+    q, s = quant(x, 128 * base - 1, dims)
+    hi = torch.floor(q / base)
+    return [(hi, base), (q - base * hi, 1)], s
+
+
+def add_noise(limbs: list, alphabet: str, gen, device) -> list:
+    """Noise on the last (lowest) limb."""
+    if alphabet == "none":
+        return limbs
+    last, w = limbs[-1]
+    return limbs[:-1] + [(last + draw(alphabet, last.shape, gen, device), w)]
+
+
+def limb_product(al: list, bl: list, term: int) -> torch.Tensor:
+    """The exact integer (sum_a w_a A_a)(sum_b u_b B_b), one exact int8 product per pair of limbs, combined in float64."""
+    return sum(w * u * exact_mm(a, b, term) for a, w in al for b, u in bl)
+
+
 def edited_attention(module, query, key, value, attention_mask, scaling=None, dropout=0.0, **kwargs):
     spec = STATE["spec"]
     if spec is None or spec["grid"] == "bf16":
@@ -184,12 +212,11 @@ def edited_attention(module, query, key, value, attention_mask, scaling=None, dr
         m = {x: (gqk if x in "qk" else gpv)[0] - nmax[x] for x in OPERANDS}
         if min(m.values()) < 1:
             raise ValueError(f"{spec['method']}: its noise does not fit the grid ({m})")
-        plimb = 127 if spec["p"] == "prow2" else m["p"] + nmax["p"]
-        STATE["record"] = {"tops": m, "acc_qk": gqk[1], "acc_pv": gpv[1],
-                           "bound_qk": d * (m["q"] + nmax["q"]) * (m["k"] + nmax["k"]),
-                           "bound_pv": s * plimb * (m["v"] + nmax["v"])}
-        if spec["p"] == "prow2":
-            STATE["record"]["p_top"] = 128 * (m["p"] + 1) - 1
+        two = {"q": spec["qk2"], "k": spec["qk2"], "p": spec["p"] == "prow2", "v": spec["v"] == "vchan2"}
+        lmax = {x: (128 if x != "p" else 127) if two[x] else m[x] + nmax[x] for x in OPERANDS}
+        STATE["record"] = {"tops": m, "acc_qk": gqk[1], "acc_pv": gpv[1], "bound_qk": d * lmax["q"] * lmax["k"],
+                           "bound_pv": s * lmax["p"] * lmax["v"],
+                           "int8_products": {"qk": (1 + two["q"]) * (1 + two["k"]), "pv": (1 + two["p"]) * (1 + two["v"])}}
     out = torch.empty(b, s, H, d, dtype=query.dtype, device=dev)
     for g in range(G):
         qg = query[0, g * rep:(g + 1) * rep].float()
@@ -201,25 +228,20 @@ def edited_attention(module, query, key, value, attention_mask, scaling=None, dr
         if R is not None:
             qg, kg, vg = qg @ R, kg @ R, vg @ R
         if quantized:
-            qi, sq = quant(qg, m["q"], -1)
-            ki, sk = quant(kg, m["k"], -1)
-            ki = ki.expand(rep, s, d)
-            if n["q"] != "none":
-                qi = qi + draw(n["q"], qi.shape, gen, dev)
-            if n["k"] != "none":
-                ki = ki + draw(n["k"], ki.shape, gen, dev)
-            scores = (qi @ ki.transpose(1, 2)) * (sq * sk.T[None]) * scaling
+            ql, sq = signed_limbs(qg, m["q"], -1, two["q"])
+            kl, sk = signed_limbs(kg, m["k"], -1, two["k"])
+            kl = [(x.expand(rep, s, d), w) for x, w in kl]
+            ql, kl = add_noise(ql, n["q"], gen, dev), add_noise(kl, n["k"], gen, dev)
+            sint = limb_product(ql, [(x.transpose(1, 2), w) for x, w in kl], lmax["q"] * lmax["k"]).float()
+            scores = sint * (sq * sk.T[None]) * scaling
         else:
             scores = (qg @ kg.T) * scaling
         p = torch.softmax(scores.masked_fill(~causal, float("-inf")), dim=-1)
         if quantized:
-            limbs, sp = edit_p(p, spec["p"], n["p"], m["p"], causal, gen, dev)
-            vi, sv = quant(vg, m["v"], (0, 1) if spec["v"] == "vhead" else 0)
-            vi = vi.expand(rep, s, d)
-            if n["v"] != "none":
-                vi = vi + draw(n["v"], vi.shape, gen, dev)
-            oi = sum(w * exact_mm(limb, vi, plimb * (m["v"] + nmax["v"])) for limb, w in limbs)
-            o = (oi * sp.double() * sv.double()).float()
+            pl, sp = edit_p(p, spec["p"], n["p"], m["p"], causal, gen, dev)
+            vl, sv = signed_limbs(vg, m["v"], (0, 1) if spec["v"] == "vhead" else 0, two["v"])
+            vl = add_noise([(x.expand(rep, s, d), w) for x, w in vl], n["v"], gen, dev)
+            o = (limb_product(pl, vl, lmax["p"] * lmax["v"]) * sp.double() * sv.double()).float()
         else:
             o = p @ vg
         if R is not None:
@@ -290,6 +312,12 @@ def selftest() -> dict:
     assert torch.allclose((base * hi + lo) * sp, p, atol=float(sp.max()) / 2 + 1e-12)
     [(hi, base), (lo, _)], _ = edit_p(p, "prow2", "u16", 111, causal, gen, dev)
     assert float(lo.min()) >= -16 and float(lo.max()) <= 127 and bool((lo.triu(1) == 0).all())
+    v = torch.randn(300, 32, device=dev)
+    [(hi, base), (lo, _)], sv = signed_limbs(v, 111, 0, True)
+    assert base == 112 and float(hi.min()) >= -128 and float(hi.max()) <= 127 and 0 <= float(lo.min()) <= float(lo.max()) <= 111
+    assert float((base * hi + lo).abs().max()) == 128 * 112 - 1 and torch.allclose((base * hi + lo) * sv, v, atol=float(sv.max()))
+    noisy = add_noise([(hi, base), (lo, 1)], "u16", gen, dev)
+    assert torch.equal(noisy[0][0], hi) and -16 <= float(noisy[1][0].min()) and float(noisy[1][0].max()) <= 127
     L = transformers.models.llama.modeling_llama
     torch.manual_seed(0)
     cfg = L.LlamaConfig(vocab_size=512, hidden_size=256, intermediate_size=512, num_hidden_layers=2, num_attention_heads=8,
@@ -300,7 +328,8 @@ def selftest() -> dict:
     runs = {m: evaluate(model, ids, m) for m in ("bf16", "ref", "ref-rot", "int8-none", "int8-pfix-vhead-none",
                                                  "int8-u16", "int8-rot-u16", "e4m3-none", "e4m3-pm57-rot", "int8-u4-qk",
                                                  "int8-u4-pv-s2", "e4m3qk-qk=u4-v=u2-p=d6-rot", "int8-p=d2",
-                                                 "int8-prow2-none", "int8-prow2-p=u16-rot")}
+                                                 "int8-prow2-none", "int8-prow2-p=u16-rot", "int8-prow2-vchan2-qk2-none",
+                                                 "int8-prow2-vchan2-qk2-u16-rot", "int8-vchan2-v=u8")}
     out["tiny"] = {m: {k: r[k] for k in ("ppl", "attn_rel_err", "exact") if k in r} for m, r in runs.items()}
     assert abs(runs["ref"]["ppl"] / runs["bf16"]["ppl"] - 1) < 1e-2, out
     assert abs(runs["ref-rot"]["ppl"] / runs["ref"]["ppl"] - 1) < 1e-3, out
@@ -308,7 +337,11 @@ def selftest() -> dict:
     assert runs["int8-none"]["attn_rel_err"] < runs["e4m3-none"]["attn_rel_err"], out
     assert runs["e4m3qk-qk=u4-v=u2-p=d6-rot"]["tops"] == {"q": 12, "k": 12, "p": 126, "v": 125}
     assert runs["int8-prow2-none"]["attn_rel_err"] <= runs["int8-none"]["attn_rel_err"], out
-    assert runs["int8-prow2-p=u16-rot"]["p_top"] == 14335 and runs["int8-prow2-p=u16-rot"]["exact"]
+    assert runs["int8-prow2-p=u16-rot"]["exact"] and runs["int8-prow2-p=u16-rot"]["int8_products"] == {"qk": 1, "pv": 2}
+    full = runs["int8-prow2-vchan2-qk2-u16-rot"]
+    assert full["exact"] and full["int8_products"] == {"qk": 4, "pv": 4}, full
+    assert full["attn_rel_err"] < runs["int8-u16"]["attn_rel_err"] / 10, out
+    assert runs["int8-prow2-vchan2-qk2-none"]["attn_rel_err"] < runs["int8-none"]["attn_rel_err"] / 10, out
     try:
         evaluate(model, ids, "e4m3-u16")
         raise AssertionError("e4m3-u16 must not fit")
@@ -327,7 +360,7 @@ def operand_noise(r: dict) -> dict:
 
 def _key(r: dict, clean: bool = False) -> tuple:
     n = {x: "none" for x in OPERANDS} if clean else operand_noise(r)
-    return (r["grid"], r["p"], r["v"], r["rot"], n["q"], n["k"], n["p"], n["v"], r["ctx"])
+    return (r["grid"], r["p"], r["v"], r.get("qk2", False), r["rot"], n["q"], n["k"], n["p"], n["v"], r["ctx"])
 
 
 def noise_label(n: dict) -> str:
@@ -344,8 +377,11 @@ def rows(results: list[dict]) -> list[dict]:
     """One row per (edit, context): perplexity (mean over seeds, with the range), and its change against the same edit
     without noise (seed 0) and against bf16 at the same context."""
     groups: dict = {}
+    seen = set()
     for r in results:
-        groups.setdefault(_key(r), []).append(r)
+        if (_key(r), r["seed"]) not in seen:
+            seen.add((_key(r), r["seed"]))
+            groups.setdefault(_key(r), []).append(r)
     bf16 = {r["ctx"]: r["ppl"] for r in results if r["grid"] == "bf16"}
     out = []
     for key, rs in groups.items():
@@ -354,12 +390,13 @@ def rows(results: list[dict]) -> list[dict]:
         ppl = sum(ppls) / len(ppls)
         base = groups.get(_key(r, clean=True))
         info = {x: alphabet_info(n[x]) for x in OPERANDS}
-        out.append({"ctx": r["ctx"], "grid": r["grid"], "p": r["p"], "v": r["v"], "rot": r["rot"], "n": n,
+        out.append({"ctx": r["ctx"], "grid": r["grid"], "p": r["p"], "v": r["v"], "qk2": r.get("qk2", False), "rot": r["rot"], "n": n,
+                    "products": r.get("int8_products"),
                     "label": noise_label(n), "info": info, "seeds": len(rs), "ppl": ppl, "min": min(ppls), "max": max(ppls),
                     "d_grid": 100 * (ppl / base[0]["ppl"] - 1) if base and any(v != "none" for v in n.values()) else None,
                     "d_bf16": 100 * (ppl / bf16[r["ctx"]] - 1) if r["ctx"] in bf16 else None,
                     "err": r.get("attn_rel_err")})
-    out.sort(key=lambda x: (x["ctx"], x["grid"] not in GRID_PAIRS, x["grid"], x["p"], x["v"], x["rot"],
+    out.sort(key=lambda x: (x["ctx"], x["grid"] not in GRID_PAIRS, x["grid"], x["p"], x["v"], x["qk2"], x["rot"],
                             tuple(x["info"][o]["bits"] for o in "qpv"), tuple(x["info"][o]["rms"] for o in "qpv")))
     return out
 
@@ -379,7 +416,7 @@ def table(results: list[dict]) -> str:
         dg = f"{x['d_grid']:+.2f}" if x["d_grid"] is not None else "-"
         db = f"{x['d_bf16']:+.2f}" if x["d_bf16"] is not None else "-"
         err = f"{x['err']:.4f}" if x["err"] is not None else "-"
-        lines.append(f"| {x['ctx']} | {x['grid']} | {x['p'] if q else '-'} | {x['v'] if q else '-'} | "
+        lines.append(f"| {x['ctx']} | {x['grid']}{' qk2' if x['qk2'] else ''} | {x['p'] if q else '-'} | {x['v'] if q else '-'} | "
                      f"{'yes' if x['rot'] else 'no'} | {x['label']} | {mag} | {bits} | {x['seeds']} | {x['ppl']:.3f}{spread} | "
                      f"{dg} | {db} | {mark(x['d_grid'])} / {mark(x['d_bf16'])} | {err} |")
     return "\n".join(lines)

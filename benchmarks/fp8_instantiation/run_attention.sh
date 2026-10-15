@@ -4,7 +4,7 @@
 # WikiText-2's test window 0 that must begin with those 2048).  Clocks are read, never set.
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd clone --custody-ttl 12h \
-#     --env GPU_LEASE_WHO=... --env D4A_CTX=2048 --env D4A_PLAN=grid|frontier|limbs|both [--env D4A_METHODS="..."] \
+#     --env GPU_LEASE_WHO=... --env D4A_CTX=2048 --env D4A_PLAN=grid|frontier|limbs|limbs2|seeds|both [--env D4A_METHODS="..."] \
 #     [--env D4A_IDS=ids8192.npy --send ids8192.npy] --send benchmarks/fp8_instantiation/run_attention.sh \
 #     -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/run_attention.sh"'
 set -uo pipefail
@@ -48,7 +48,32 @@ limbs_plan() {
   for q in u1 u2 u4 u8; do for v in u1 u4 u16; do for p in u4 u16; do m+=" int8-prow2-qk=$q-v=$v-p=$p-rot"; done; done; done
   echo "$m"
 }
+# Every operand on two limbs (P, V; then Q and K too), the same alphabet on all four low limbs; seeds S.
+limbs2_plan() {
+  m="int8-prow2-vchan2-none int8-prow2-vchan2-none-rot int8-prow2-vchan2-qk2-none int8-prow2-vchan2-qk2-none-rot"
+  for s in ${SEEDS:-s0}; do for a in pm1 pm13 pm57 u1 u2 u4 u8 u16; do
+    m+=" int8-prow2-vchan2-$a-rot-$s int8-prow2-vchan2-qk2-$a-$s int8-prow2-vchan2-qk2-$a-rot-$s"; done; done
+  echo "$m"
+}
+# The frontier points of the frontier and limbs plans at seeds S (s1 s2: s0 ran there), and mixed points at s0 too.
+seeds_plan() {
+  old="int8-qk=u1-rot int8-qk=u2-rot int8-qk=u4-rot int8-qk=pm13-rot int8-qk=u8-rot int8-qk=pm1 int8-qk=u2 int8-qk=u4
+    int8-v=u1 int8-v=pm1 int8-v=u2 int8-v=pm1-rot int8-v=u2-rot int8-p=d8 int8-p=d6 int8-p=d4
+    int8-qk=u1-v=u1-p=d14-rot int8-qk=u4-v=u1-p=d8-rot int8-qk=u4-v=u1-p=d6-rot int8-qk=u2-v=u1-p=d10-rot
+    int8-prow2-p=u16 int8-prow2-p=u8 int8-prow2-pm1-rot int8-prow2-u1 int8-prow2-u1-rot int8-prow2-u2-rot int8-prow2-pm13-rot
+    int8-prow2-qk=u1-v=u1-p=u4-rot int8-prow2-qk=u2-v=u1-p=u16-rot int8-prow2-qk=u4-v=u1-p=u4-rot int8-prow2-qk=u4-v=u1-p=u16-rot"
+  new="int8-qk=u1-v=u1-p=d8 int8-qk=pm1-v=u1-p=d8 int8-qk=u2-v=u1-p=d8 int8-qk=u1-v=u1-p=d10 int8-qk=u1-v=pm1-p=d8
+    int8-qk=u2-v=pm1-p=d6 int8-qk=u2-v=u1-p=d6 int8-qk=u4-v=u2-p=d4-rot int8-qk=u2-v=u2-p=d6-rot
+    int8-prow2-qk=u1-v=u1-p=u16 int8-prow2-qk=pm1-v=u1-p=u16 int8-prow2-qk=u2-v=u1-p=u16 int8-prow2-qk=u2-v=pm1-p=u16
+    int8-prow2-qk=u2-v=u2-p=u16-rot int8-prow2-qk=u4-v=u2-p=u16-rot"
+  m=""
+  for s in ${SEEDS:-s1 s2}; do for x in $old; do m+=" $x-$s"; done; done
+  for s in s0 ${SEEDS:-s1 s2}; do for x in $new; do m+=" $x-$s"; done; done
+  echo "$m"
+}
 case "${D4A_PLAN:-}" in
+  limbs2) D4A_METHODS=$(limbs2_plan) ;;
+  seeds) D4A_METHODS="$(seeds_plan) $(SEEDS="s0 s1 s2" limbs2_plan)" ;;
   grid) D4A_METHODS=$(grid_plan) ;;
   frontier) D4A_METHODS=$(frontier_plan) ;;
   limbs) D4A_METHODS=$(limbs_plan) ;;
