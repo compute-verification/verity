@@ -10,6 +10,7 @@ best fused lookup hybrid over the same kernel's tensor-only form (own_mma).
 --detail adds, from the full output (start, gate, control, prepass and summary lines, in program order): the gates and
 controls, the standalone lookup rates in MACs/SM/clk at the SM clock read during their timing, the fused α sweeps
 (pre-pass times over own_mma's) and the two-stream hybrids' overlap."""
+
 import json
 import re
 import sys
@@ -22,9 +23,9 @@ ORDER = {"k2": 0, "k4": 1, "k6": 2, "k8": 3, "u6": 4}
 def kind(route):
     if route in TENSOR or route == "fused_fr_a0":
         return "tensor"
-    if route.endswith("_tensor_part") or route.endswith("_lookup_part"):
+    if route.endswith(("_tensor_part", "_lookup_part")):
         return "part"
-    if route.startswith("fused_dp4a") or route.startswith("fused_mix"):
+    if route.startswith(("fused_dp4a", "fused_mix")):
         return "fixed"
     return "lookup"  # fr_b*, fr_l1_b*, prmt*, shfl*, hyb_a*, fused_fr_b*
 
@@ -33,13 +34,18 @@ def read(srcs):
     """Every event, with (prog, n, alphabet) carried from the last start line onto the lines that lack them."""
     events, ctx = [], {}
     for src in srcs or ["-"]:
-        for line in open(src) if src != "-" else sys.stdin:
+        text = sys.stdin.read() if src == "-" else open(src).read()  # noqa: SIM115
+        for line in text.splitlines():
             line = line.strip()
             if not line.startswith("{"):
                 continue
             e = json.loads(line)
             if e.get("event") == "start":
-                ctx = {"prog": e.get("prog", "lookup_coissue"), "n": e["n"], "alphabet": e["alphabet"]}
+                ctx = {
+                    "prog": e.get("prog", "lookup_coissue"),
+                    "n": e["n"],
+                    "alphabet": e["alphabet"],
+                }
             for k, v in ctx.items():
                 e.setdefault(k, v)
             events.append(e)
@@ -70,13 +76,17 @@ def table(rows):
         prev = by[key].get(r["route"])
         if prev is None or r["median_ms"] < prev["median_ms"]:
             by[key][r["route"]] = r
-    print("| n | S | T_int8 ms (each program) | T_tensor/T_int8 (route) | best route | α | b | T_best/T_tensor | η̂ | "
-          "best lookup / own_mma | η̂_note | SM clock MHz |")
+    print(
+        "| n | S | T_int8 ms (each program) | T_tensor/T_int8 (route) | best route | α | b | T_best/T_tensor | η̂ | "
+        "best lookup / own_mma | η̂_note | SM clock MHz |"
+    )
     print("|---|---|---|---|---|---|---|---|---|---|---|---|")
-    for (n, a) in sorted(by, key=keyorder):
+    for n, a in sorted(by, key=keyorder):
         d = by[(n, a)]
         full = {k: v for k, v in d.items() if kind(k) != "part"}
-        tens = min((v for k, v in full.items() if k in TENSOR), key=lambda v: v["median_ms"])
+        tens = min(
+            (v for k, v in full.items() if k in TENSOR), key=lambda v: v["median_ms"]
+        )
         best = min(full.values(), key=lambda v: v["median_ms"])
         fixed = [v for k, v in full.items() if kind(k) in ("tensor", "fixed")]
         look = [v for k, v in full.items() if kind(k) == "lookup"]
@@ -84,13 +94,22 @@ def table(rows):
         tlook = min(v["median_ms"] for v in look) if look else float("nan")
         fused_look = [v for k, v in full.items() if k.startswith("fused_fr_b")]
         own = d.get("own_mma")
-        inkernel = (min(v["median_ms"] for v in fused_look) / own["median_ms"]) if fused_look and own else float("nan")
-        clk = (min(v["clk_min"] for v in full.values()), max(v["clk_max"] for v in full.values()))
+        inkernel = (
+            (min(v["median_ms"] for v in fused_look) / own["median_ms"])
+            if fused_look and own
+            else float("nan")
+        )
+        clk = (
+            min(v["clk_min"] for v in full.values()),
+            max(v["clk_max"] for v in full.values()),
+        )
         t8 = "/".join(f"{t:.3f}" for t in sorted(t8ms[(n, a)]))
-        print(f"| {n} | {a} | {t8} | {tens['median_ms']:.4f} ({tens['route']}) | {best['route']} | "
-              f"{best['alpha']:.4f} | {best['b']} | {best['median_ms'] / tens['median_ms']:.4f} | "
-              f"{1 - best['median_ms'] / tens['median_ms']:+.4f} | {inkernel:.4f} | {1 - tlook / tfix:+.4f} | "
-              f"{clk[0]}–{clk[1]} |")
+        print(
+            f"| {n} | {a} | {t8} | {tens['median_ms']:.4f} ({tens['route']}) | {best['route']} | "
+            f"{best['alpha']:.4f} | {best['b']} | {best['median_ms'] / tens['median_ms']:.4f} | "
+            f"{1 - best['median_ms'] / tens['median_ms']:+.4f} | {inkernel:.4f} | {1 - tlook / tfix:+.4f} | "
+            f"{clk[0]}–{clk[1]} |"
+        )
 
 
 def detail(events):
@@ -110,30 +129,48 @@ def detail(events):
     print("|---|---|---|---|---|")
     for key in sorted(set(gates) | set(controls), key=keyorder):
         g = gates[key]
-        print(f"| {key[0]} | {key[1]} | {g[0] - g[1]}/{g[0]} | {' '.join(g[2]) or '-'} | {' '.join(controls[key])} |")
+        print(
+            f"| {key[0]} | {key[1]} | {g[0] - g[1]}/{g[0]} | {' '.join(g[2]) or '-'} | {' '.join(controls[key])} |"
+        )
 
     summ = [e for e in events if e["event"] == "summary"]
-    fams = [("smem FR", r"fr_b\d+$"), ("L1 FR", r"fr_l1_b\d+$"), ("PRMT", r"prmt_"), ("SHFL", r"shfl_")]
+    fams = [
+        ("smem FR", r"fr_b\d+$"),
+        ("L1 FR", r"fr_l1_b\d+$"),
+        ("PRMT", r"prmt_"),
+        ("SHFL", r"shfl_"),
+    ]
     by = defaultdict(dict)
     for r in summ:
         by[(r["n"], r["alphabet"])].setdefault(r["prog"], {})[r["route"]] = r
-    print("\nStandalone lookups, MACs/SM/clk at the measured SM clock (int8 = cuBLASLt in the same program); "
-          "every width timed, best marked *:\n")
+    print(
+        "\nStandalone lookups, MACs/SM/clk at the measured SM clock (int8 = cuBLASLt in the same program); "
+        "every width timed, best marked *:\n"
+    )
     print("| n | S | int8 | " + " | ".join(f for f, _ in fams) + " |")
     print("|---|---|---|" + "---|" * len(fams))
     for key in sorted(by, key=keyorder):
         cells, i8 = [], []
-        for prog, d in by[key].items():
+        for d in by[key].values():
             if "int8" in d:
                 i8.append(f"{rate(d['int8']):.0f}")
         for _, pat in fams:
-            got = [(rate(r), name) for d in by[key].values() for name, r in d.items() if re.match(pat, name)]
+            got = [
+                (rate(r), name)
+                for d in by[key].values()
+                for name, r in d.items()
+                if re.match(pat, name)
+            ]
             if not got:
                 cells.append("-")
                 continue
             top = max(got)[1]
-            cells.append(" ".join(f"{'*' if name == top else ''}{name[name.index('_b') + 1:]}:{v:.0f}"
-                                  for v, name in sorted(got, key=lambda x: x[1])))
+            cells.append(
+                " ".join(
+                    f"{'*' if name == top else ''}{name[name.index('_b') + 1 :]}:{v:.0f}"
+                    for v, name in sorted(got, key=lambda x: x[1])
+                )
+            )
         print(f"| {key[0]} | {key[1]} | {'/'.join(i8)} | " + " | ".join(cells) + " |")
 
     pre = defaultdict(dict)
@@ -141,8 +178,10 @@ def detail(events):
         if e["event"] == "prepass" and e["prog"] == "fused_coissue":
             pre[(e["n"], e["alphabet"])][e["route"]] = e
     if pre:
-        print("\nFused co-issue α sweep: pre-pass time / own_mma's pre-pass, best b per α (interleaved best in the main "
-              "table):\n")
+        print(
+            "\nFused co-issue α sweep: pre-pass time / own_mma's pre-pass, best b per α (interleaved best in the main "
+            "table):\n"
+        )
         print("| n | S | role | α·64 : T/T_own_mma |")
         print("|---|---|---|---|")
         for key in sorted(pre, key=keyorder):
@@ -150,8 +189,11 @@ def detail(events):
             own = d.get("own_mma")
             if not own:
                 continue
-            for role, pat in (("FR", r"fused_fr_b(\d+)_a(\d+)$"), ("DP4A", r"fused_dp4a_a(\d+)$"),
-                              ("DP4A+HFMA2", r"fused_mix_a(\d+)$")):
+            for role, pat in (
+                ("FR", r"fused_fr_b(\d+)_a(\d+)$"),
+                ("DP4A", r"fused_dp4a_a(\d+)$"),
+                ("DP4A+HFMA2", r"fused_mix_a(\d+)$"),
+            ):
                 curve = {}
                 for name, e in d.items():
                     m = re.match(pat, name)
@@ -162,9 +204,14 @@ def detail(events):
                     if j not in curve or t < curve[j][0]:
                         curve[j] = (t, e["b"])
                 if curve:
-                    print(f"| {key[0]} | {key[1]} | {role} | " + " ".join(
-                        f"{j}:{t:.3f}" + (f"(b{b})" if role == "FR" else "") for j, (t, b) in sorted(curve.items()))
-                        + " |")
+                    print(
+                        f"| {key[0]} | {key[1]} | {role} | "
+                        + " ".join(
+                            f"{j}:{t:.3f}" + (f"(b{b})" if role == "FR" else "")
+                            for j, (t, b) in sorted(curve.items())
+                        )
+                        + " |"
+                    )
 
     hyb = defaultdict(dict)
     for r in summ:
@@ -172,15 +219,23 @@ def detail(events):
         if m:
             hyb[(r["n"], r["alphabet"], m.group(1))][m.group(2) or ""] = r["median_ms"]
     if hyb:
-        print("\nTwo-stream hybrid (cuBLASLt on 1 − α beside the smem FR kernel on α, separate streams): overlap = "
-              "(T_tensor_part + T_lookup_part − T_hybrid)/min(parts); 1 hides the smaller part, 0 serializes:\n")
-        print("| n | S | hybrid | T_hybrid ms | T_tensor_part | T_lookup_part | overlap |")
+        print(
+            "\nTwo-stream hybrid (cuBLASLt on 1 − α beside the smem FR kernel on α, separate streams): overlap = "
+            "(T_tensor_part + T_lookup_part − T_hybrid)/min(parts); 1 hides the smaller part, 0 serializes:\n"
+        )
+        print(
+            "| n | S | hybrid | T_hybrid ms | T_tensor_part | T_lookup_part | overlap |"
+        )
         print("|---|---|---|---|---|---|---|")
-        for (n, a, h) in sorted(hyb, key=lambda k: (k[0], ORDER.get(k[1], 9), int(k[2][5:]))):
+        for n, a, h in sorted(
+            hyb, key=lambda k: (k[0], ORDER.get(k[1], 9), int(k[2][5:]))
+        ):
             d = hyb[(n, a, h)]
             if {"", "_tensor_part", "_lookup_part"} <= set(d):
                 tp, lp, th = d["_tensor_part"], d["_lookup_part"], d[""]
-                print(f"| {n} | {a} | {h} | {th:.4f} | {tp:.4f} | {lp:.4f} | {(tp + lp - th) / min(tp, lp):+.2f} |")
+                print(
+                    f"| {n} | {a} | {h} | {th:.4f} | {tp:.4f} | {lp:.4f} | {(tp + lp - th) / min(tp, lp):+.2f} |"
+                )
 
 
 def main():
