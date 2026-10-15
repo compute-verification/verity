@@ -34,8 +34,14 @@ namespace Claims
 
 /-! ## Messages, the hash, commitments -/
 
-/-- `Msg = {0,1}^*`. -/
-abbrev Msg := List Bool
+/-- `Msg = {0,1}^*` in whole bytes, as the deployed SHA-512 reads them: a padding convention for other lengths would
+make collisions that are not SHA-512's. -/
+abbrev Msg := List UInt8
+
+/-- Bits packed into bytes, low bit first, the last byte padded with zeros: injective on bit strings of one length. -/
+def packBits (bs : List Bool) : Msg :=
+  (List.range ((bs.length + 7) / 8)).map fun i =>
+    UInt8.ofNat ((List.range 8).foldl (fun acc j => acc + if bs.getD (8 * i + j) false then 2 ^ j else 0) 0)
 
 /-- A collision of `H`. -/
 def Collision (H : Msg → Msg) (u v : Msg) : Prop := u ≠ v ∧ H u = H v
@@ -291,11 +297,11 @@ noncomputable def PrB {Ω Coin : Type} [Fintype Ω] [Nonempty Ω] [Fintype Coin]
   if hk : 0 < V.k x then (B H V P x hk).Pr H else 0
 
 /-- **Assumption: hiding**, at one commitment: for messages of one length, `commit(u; s)` and `commit(u′; s)` at a
-uniform salt of `saltLen` bits differ by at most `δ` on every event. -/
+uniform salt of `saltLen` bytes differ by at most `δ` on every event. -/
 def CommitHides (H : Msg → Msg) (saltLen : ℕ) (δ : ℝ) : Prop :=
   ∀ u u' : Msg, u.length = u'.length → ∀ Ev : Msg → Prop,
-    |Pr (fun s : Fin saltLen → Bool => Ev (commit H u (List.ofFn s))) -
-      Pr (fun s : Fin saltLen → Bool => Ev (commit H u' (List.ofFn s)))| ≤ δ
+    |Pr (fun s : Fin saltLen → UInt8 => Ev (commit H u (List.ofFn s))) -
+      Pr (fun s : Fin saltLen → UInt8 => Ev (commit H u' (List.ofFn s)))| ≤ δ
 
 /-- **The trusted base**: what the claims rest on that no Lean statement here can say. -/
 def trustedBase : List String :=
@@ -491,7 +497,7 @@ def val (s : Stmt) (w : Wit) : Src → Bool
 block. -/
 def RelS (H : Msg → Msg) (s : Stmt) (w : Wit) : Prop :=
   (∀ c < s.cs.length,
-    commit H ((s.grp c).map fun i => w.hid.getD i false) (w.salts.getD c []) = s.cs.getD c []) ∧
+    commit H (packBits ((s.grp c).map fun i => w.hid.getD i false)) (w.salts.getD c []) = s.cs.getD c []) ∧
   ∀ b < s.nBlocks, s.C.eval ((s.inp b).map (val s w)) = (s.out b).map (val s w)
 
 instance (H : Msg → Msg) (s : Stmt) (w : Wit) : Decidable (RelS H s w) := by
