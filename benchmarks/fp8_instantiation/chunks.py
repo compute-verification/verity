@@ -15,6 +15,7 @@ Designs: `perm` (one signed entry per row of F) and `pair` (two, grid.signed_pai
 F_B = F_A ("shared").  Only full chunks of L columns are read.
 
     python chunks.py [--quick] [--peel] [--procs N] [--json FILE]      (--peel: only the peel's range and the cost)
+    python chunks.py --L 128[,...] --procs N [--json FILE]              intervals, pencils, peel range and total at those L
 """
 from __future__ import annotations
 
@@ -264,6 +265,28 @@ def cost(L: int) -> dict:
             "llama8b_mac_weighted": round(sum(per[x] * w[x] for x in per) / sum(w.values()), 5)}
 
 
+#: duo fused into the INT8 mma.sync loop, serial accumulators (note:20261015T0432Z-draft-receipt-phi): the loop's MMA rate
+#: over the bare loop's, measured at each stride, and the cost in slots of tensor time a word (the median over L = 128-1024,
+#: 1.68 with ping-pong accumulators; 0.4 is the Merkle term, the receipt page's B200 figure, unmeasured on sm_120)
+DUO_RATE = {32: 0.686, 64: 0.797, 128: 0.923, 256: 0.960, 512: 0.980, 1024: 0.989}
+DUO_H, DUO_H_PINGPONG, MERKLE_H = 1.33, 1.68, 0.4
+
+
+def total(L: int) -> dict:
+    """Extra tensor time per useful MAC at stride L: the peel (`cost`) plus the receipts, 1/rate - 1 for duo's measured rate
+    at L (one receipt word per L MACs, so 8h/L for h slots a word at 1024 MACs over 128 slots), with the 8h/L model at the
+    median and ping-pong h and the Merkle term beside it.  ``break_even_h`` is the h above which L beats L/2 on that linear."""
+    peel = cost(L)
+    receipts = 1 / DUO_RATE[L] - 1
+    lines = dict(peel["per_linear"], square_4096=peel["square_4096"], llama8b_mac_weighted=peel["llama8b_mac_weighted"])
+    shapes = dict(LLAMA, square_4096=(4096, 4096))
+    return {"L": L, "receipts_measured": round(receipts, 5), "receipts_model": round(8 * DUO_H / L, 5),
+            "receipts_model_pingpong": round(8 * DUO_H_PINGPONG / L, 5), "merkle_unmeasured": round(8 * MERKLE_H / L, 5),
+            "peel": lines, "total": {x: round(p + receipts, 5) for x, p in lines.items()},
+            "total_with_merkle": {x: round(p + receipts + 8 * MERKLE_H / L, 5) for x, p in lines.items()},
+            "break_even_h": {x: round(L * L * (4 / k + 1 / n) / 16, 4) for x, (k, n) in shapes.items()}}
+
+
 def job(args: tuple) -> dict:
     kind, *rest = args
     return {"intervals": intervals, "pencils": pencils}[kind](*rest)
@@ -272,9 +295,24 @@ def job(args: tuple) -> dict:
 def main(argv: list[str]) -> int:
     quick = "--quick" in argv
     procs = int(argv[argv.index("--procs") + 1]) if "--procs" in argv else 1
-    peels = [peel_range(L, k, sh) for sh in (False, True) for L in (32, 64) for k in ((1024,) if quick else (4096, 14336))]
+    strides = [int(x) for x in argv[argv.index("--L") + 1].split(",")] if "--L" in argv else None
+    peels = [peel_range(L, k, sh) for sh in (False, True) for L in strides or (32, 64)
+             for k in ((1024,) if quick else (4096, 14336))]
+    if strides:
+        jobs = [(kind, d, sh, k, L, 3) for kind in ("intervals", "pencils") for d in DESIGNS for sh in (False, True)
+                for L in strides for k in ((256,) if quick else (4096, 14336))]
+        with multiprocessing.Pool(procs) as pool:
+            done = pool.map(job, jobs, chunksize=1)
+        text = json.dumps({"intervals": [d for j, d in zip(jobs, done) if j[0] == "intervals"],
+                           "pencils": [d for j, d in zip(jobs, done) if j[0] == "pencils"], "peel_range": peels,
+                           "total": [total(L) for L in strides if L in DUO_RATE]}, indent=1)
+        if "--json" in argv:
+            open(argv[argv.index("--json") + 1], "w").write(text)
+        print(text)
+        return 0
     if "--peel" in argv:
-        text = json.dumps({"peel_range": peels, "cost": [cost(L) for L in (32, 64, 170)]}, indent=1)
+        text = json.dumps({"peel_range": peels, "cost": [cost(L) for L in (32, 64, 170)],
+                           "total": [total(L) for L in (32, 64, 128, 256)]}, indent=1)
         if "--json" in argv:
             open(argv[argv.index("--json") + 1], "w").write(text)
         print(text)
