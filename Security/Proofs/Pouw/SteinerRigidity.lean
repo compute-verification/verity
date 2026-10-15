@@ -1070,7 +1070,84 @@ theorem handle_node_false {l r : Hier κ} (hd : Disjoint l.cells r.cells) {r₀ 
     rw [← e₂]
     exact Submodule.add_mem_sup hv'' (restrict_mem_blockSubspace hf)
 
+/-- The hierarchy's shape: every type set to `false`. -/
+def untype : Hier κ → Hier κ
+  | leaf t => leaf t
+  | node _ l r => node false l.untype r.untype
+
 end Hier
+
+section Typing
+
+variable {F : Type*} [Field F] {p q : ℕ}
+
+open Hier
+
+/-- **Claim 4 (a handle pair pins a cell).** If `r ∈ ρ(S)` and `c ∈ γ(S)`, the cell `(r, c)` is below `S`. -/
+theorem Hier.mem_cells_of_handles :
+    ∀ h : Hier (Fin p × Fin q), h.WF → ∀ {r : Fin p} {c : Fin q},
+      r ∈ handle F Prod.fst h → c ∈ handle F Prod.snd h.flip → (r, c) ∈ h.cells
+  | leaf t, _, r, c, hr, hc => by
+    have h₁ : t.1 = r := handle_leaf hr
+    have h₂ : t.2 = c := handle_leaf (t := t) hc
+    subst h₁ h₂
+    simp [cells]
+  | node true l r', hwf, r, c, hr, hc => by
+    obtain ⟨hl, hr', hd⟩ := hwf
+    have hc₀ : c ∈ handle F Prod.snd (node false l.flip r'.flip) := hc
+    have hc' := handle_node_false (by rwa [cells_flip, cells_flip]) hc₀
+    rcases handle_node_true hd hr with h | h
+    · exact Finset.mem_union_left _ (mem_cells_of_handles l hl h hc'.1)
+    · exact Finset.mem_union_right _ (mem_cells_of_handles r' hr' h hc'.2)
+  | node false l r', hwf, r, c, hr, hc => by
+    obtain ⟨hl, hr', hd⟩ := hwf
+    have hc₀ : c ∈ handle F Prod.snd (node true l.flip r'.flip) := hc
+    have hr₂ := handle_node_false hd hr
+    rcases handle_node_true (by rwa [cells_flip, cells_flip]) hc₀ with h | h
+    · exact Finset.mem_union_left _ (mem_cells_of_handles l hl hr₂.1 h)
+    · exact Finset.mem_union_right _ (mem_cells_of_handles r' hr' hr₂.2 h)
+
+open Classical in
+/-- **The typing rule**: bottom-up, a node is an x-node when its children's row handles are disjoint, and a y-node
+otherwise. -/
+noncomputable def Hier.retype (F : Type*) [Field F] : Hier (Fin p × Fin q) → Hier (Fin p × Fin q)
+  | leaf t => leaf t
+  | node _ l r =>
+    node (if Disjoint (handle F Prod.fst (retype F l)) (handle F Prod.fst (retype F r)) then true
+      else false) (retype F l) (retype F r)
+
+/-- **Lemma 3's induction.** The typing rule never gets stuck: on a hierarchy with disjoint siblings it gives a
+typing of the same shape that is valid on both sides (`V_x ∩ F^row r = 0` and `V_y ∩ F^col c = 0` for all `r, c`). -/
+theorem Hier.retype_spec : ∀ h : Hier (Fin p × Fin q), h.WF →
+    (retype F h).untype = h.untype ∧ (retype F h).cells = h.cells ∧ (retype F h).WF ∧
+      SideValid F Prod.fst (retype F h) ∧ SideValid F Prod.snd (retype F h).flip
+  | leaf t, _ => ⟨rfl, rfl, trivial, fun _ => disjoint_bot_left, fun _ => disjoint_bot_left⟩
+  | node b l r, hwf => by
+    obtain ⟨hl, hr, hd⟩ := hwf
+    obtain ⟨ul, cl, wl, vl, vl'⟩ := retype_spec l hl
+    obtain ⟨ur, cr, wr, vr, vr'⟩ := retype_spec r hr
+    have hd' : Disjoint (retype F l).cells (retype F r).cells := by rwa [cl, cr]
+    have hdf : Disjoint (retype F l).flip.cells (retype F r).flip.cells := by
+      rwa [cells_flip, cells_flip]
+    by_cases hdis : Disjoint (handle F Prod.fst (retype F l)) (handle F Prod.fst (retype F r))
+    · have e : retype F (node b l r) = node true (retype F l) (retype F r) := by
+        simp [retype, hdis]
+      rw [e]
+      refine ⟨by simp [untype, ul, ur], by simp [cells, cl, cr], ⟨wl, wr, hd'⟩,
+        sideValid_node_true hd' vl vr fun r₀ h₁ h₂ => Set.disjoint_left.mp hdis h₁ h₂, ?_⟩
+      exact sideValid_node_false (l := (retype F l).flip) (r := (retype F r).flip) hdf vl' vr'
+    · have e : retype F (node b l r) = node false (retype F l) (retype F r) := by
+        simp [retype, hdis]
+      rw [e]
+      obtain ⟨r₀, h₁, h₂⟩ := Set.not_disjoint_iff.mp hdis
+      refine ⟨by simp [untype, ul, ur], by simp [cells, cl, cr], ⟨wl, wr, hd'⟩,
+        sideValid_node_false hd' vl vr, ?_⟩
+      refine sideValid_node_true (l := (retype F l).flip) (r := (retype F r).flip) hdf vl' vr'
+        fun c hc₁ hc₂ => ?_
+      exact Finset.disjoint_left.mp hd' (mem_cells_of_handles (retype F l) wl h₁ hc₁)
+        (mem_cells_of_handles (retype F r) wr h₂ hc₂)
+
+end Typing
 
 end Hierarchy
 
