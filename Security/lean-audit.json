@@ -18,6 +18,15 @@
    "owner": "@memory-accounting",
    "digest": "9191da3bbab04e2c655d21d45cd15f7b317e9cc5cfe9b93627e1b050b7203aec"
   },
+  "Claims.CommitHides": {
+   "owner": "@proofs"
+  },
+  "Claims.ExpectedCR": {
+   "owner": "@proofs"
+  },
+  "Claims.StrictBirthday": {
+   "owner": "@proofs"
+  },
   "Flock.Assumptions.RegistrantCovers": {
    "owner": "@proofs",
    "digest": "c9624861b2572dfa4fe1887a5972b0d62070ac779fbebd0f5f6a0782ee367024"
@@ -251,6 +260,7 @@
   "Definitions.NetworkCertifier",
   "Models.NetworkCertifier.Assumptions",
   "Models.NetworkCertifier.Guarantees",
+  "Definitions.Claims",
   "Models.Flock.Guarantees",
   "Proofs.Flock.Verifier",
   "Flock",
@@ -423,6 +433,11 @@
    "except": [],
    "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof"
   },
+  "Definitions.Claims": {
+   "imports": ["Mathlib", "Definitions.Claims"],
+   "except": [],
+   "why": "the claims and the definitions they read are trusted text: they import no assumption, guarantee or proof"
+  },
   "Models.NetworkCertifier.Assumptions": {
    "imports": ["Mathlib", "Definitions.NetworkCertifier", "Models.NetworkCertifier.Assumptions"],
    "except": [],
@@ -439,7 +454,7 @@
    "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof"
   },
   "Models.Flock.Guarantees": {
-   "imports": ["Mathlib", "Models.Flock.Guarantees"],
+   "imports": ["Mathlib", "Definitions.Claims", "Models.Flock.Guarantees"],
    "except": [],
    "why": "a guarantee is a Prop over Mathlib, never over a proof"
   },
@@ -1382,6 +1397,9 @@
    "signature": ["Bandwidth.SecurityProofs.MbwCapacity.{u_1, u_2} : Bandwidth.Guarantees.MbwCapacity"],
    "assumptions": [],
    "type_hash": "14543c855bb73081fb225a17c7df7478387af02155c806d46e19367db0d5f2f6"
+  },
+  "Flock.SecurityProofs.ClaimsStated": {
+   "owner": "@proofs"
   },
   "Flock.SecurityProofs.EndToEnd": {
    "owner": "@proofs",
@@ -5105,7 +5123,8 @@
    "Accounting.SecurityProofs.SketchRankFiber": "frozen (premise): Like Accounting.SecurityProofs.SketchBinds, it is a property of Accounting.RateSketch.sketch under a hypothesis on the window's signs (every sector's block has rank at least r over Q), which is neither an acceptance of the sketch nor a premise under shape.premises; Accounting.SecurityProofs.RateAuditTensorSketchRank prices the hypothesis as Pr_sigma[exists u, rank < r].",
    "Flock.SecurityProofs.RecursiveAuditC3": "restatable: PublicAudit at candidate 3's table (holoInnerAt); (i), a probability statement whose event is its acceptance, takes beside its premises (_hCust, _hIC, _hA3, _hbr) the recursive model's input fields Vs.hU, Vs.hscope, zr.hDraw, zr.hTags and zr.hown, the count curve's _hk, _hRw, _hM, _hρ and _hr, the obligations _hob (VStarParses, over the verifier's own list) and _hF (TagsFound), and R's registration, its cap and the record's stacked entry (_hstk), none a premise; it fits once the recursive model's inputs and count curve, those two obligations and the registration are restated as premises (constants of Proofs.Flock.Recursive.Premises). Its hidden statement is the word the prover's runs open at R's level 0 against the cap (regStmt), no registrant's openings taken. V*'s list at candidate 3's inner shape is circuits' gap 2's eleven statements (#1847). It says nothing about a private inner session: at a private inner shape (ish.holo) RecVStar.statements refuses (statements_holo), so no run the verifier accepts has one until V*'s holo parts land (#1896).",
    "Accounting.SecurityProofs.RemoteSessionConservationSketch": "frozen (no-function,hash): It composes the verbatim-sector tensor-sketch rank bound at every candidate pass with a causal session's pooled draws; the one shared store and every device read, link sector, rebuild and correct receipt are explicit, but the random-oracle game is not the rate audit's code.",
-   "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservationSketch at the deployed 16-row, 4 KiB-tile and draw parameters, with the two draw terms bounded by 2^-40; its q/2^96 query term remains explicit."
+   "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservationSketch at the deployed 16-row, 4 KiB-tile and draw parameters, with the two draw terms bounded by 2^-40; its q/2^96 query term remains explicit.",
+   "Flock.SecurityProofs.ClaimsStated": "frozen (no-function): It states no property of the verifier: it reads each claim of Security/Definitions/Claims.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed verifier."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
