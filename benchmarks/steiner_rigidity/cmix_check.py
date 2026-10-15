@@ -19,6 +19,9 @@ Parts:
      no two cells share a D-column (or a D-row), for trees of any depth and for DAGs with merges.
   6  The L-shape at L = 2, exactly over GF(3): the proved inequalities leave five cost-11 rank profiles for the open
      topology, each pins its Steiner points to rank summands, and enumerating them finds no tree below 12.
+  7  The L-shape at every L: the gate lemma (a nearby rank summand), the exact case (both Steiner points on their
+     gates gives rank(V - U) >= 2L) step by step, and the surgery that moves a tree onto its gates without raising
+     its cost, on random trees.
 
 Run: python cmix_check.py [part ...] [--big]   (--big adds the 5-dimensional GF(3) instances, about 14 M states)
 """
@@ -759,13 +762,13 @@ def subspaces(r, g, p):
             yield S
 
 
-def summands(N, g, p):
-    """Every symmetric A with rank A = g and rank(N - A) = rank N - g. Rank additivity makes every g-inverse of N one
-    of A, so A = N Y (Y^T N Y)^-1 Y^T N with col A = col NY: one A for each g-dimensional subspace of col N on which
-    Y^T N Y is invertible (any field)."""
+def summand_factors(N, g, p):
+    """The rank-g summands of N as pairs (NY, (Y^T N Y)^-1), one per g-dimensional subspace of col N on which
+    Y^T N Y is invertible."""
     n = N.shape[0]
     if g == 0:
-        return [np.zeros((n, n), dtype=np.int64)]
+        yield np.zeros((n, 0), dtype=np.int64), np.zeros((0, 0), dtype=np.int64)
+        return
     basis, C = nullspace(N, p), []
     for i in range(n):
         e = np.eye(n, dtype=np.int64)[i]
@@ -773,13 +776,18 @@ def summands(N, g, p):
             basis.append(e)
             C.append(e)
     C = np.array(C, dtype=np.int64).T
-    out = []
     for S in subspaces(C.shape[1], g, p):
         NY = N @ (C @ S.T) % p
         A, r = rref(np.hstack([NY.T @ C @ S.T % p, np.eye(g, dtype=np.int64)]), p)
         if (A[:, :g] == np.eye(g, dtype=np.int64)).all():
-            out.append(NY @ A[:, g:] @ NY.T % p)
-    return out
+            yield NY, A[:, g:]
+
+
+def summands(N, g, p):
+    """Every symmetric A with rank A = g and rank(N - A) = rank N - g. Rank additivity makes every g-inverse of N one
+    of A, so A = N Y (Y^T N Y)^-1 Y^T N with col A = col NY: one A for each g-dimensional subspace of col N on which
+    Y^T N Y is invertible (any field)."""
+    return [NY @ H @ NY.T % p for NY, H in summand_factors(N, g, p)]
 
 
 def lshape_profiles(L):
@@ -889,7 +897,222 @@ def part6(rng, p=3, procs=1):
           f"realized ({'; '.join(report)}); summands match brute force; planted tree found")
 
 
-PARTS = {"1": part1, "2": part2, "3": part3, "4": part4, "5": part5, "6": part6}
+# ---------------------------------------------------------------------------------------------------------------
+# Part 7: the L-shape at every L. Gate lemma: a symmetric A has a rank summand A0 of N with rank(A - A0) <= alpha =
+# rank A + rank(N - A) - rank N. Exact case: U a summand of S_a and V - S_b one of S_c - S_b give rank(V - U) >= 2L.
+# Surgery: moving U and V to their gates doesn't raise the cost, which is then 4L + rank(V0 - U0) >= 6L.
+
+
+def inverse(M, p):
+    g = M.shape[0]
+    A, _ = rref(np.hstack([M % p, np.eye(g, dtype=np.int64)]), p)
+    assert (A[:, :g] == np.eye(g, dtype=np.int64)).all(), "singular"
+    return A[:, g:]
+
+
+def gate(N, A, p, rng, broken=False):
+    """A summand A0 of N with rank(A - A0) <= alpha, by the gate lemma's steps. Each step takes w = A x = B y in
+    col A and col B (B = N - A; alpha > 0 forces one) and changes A by a matrix of rank r that lowers alpha by >= r:
+    (1) x^T A x != 0: A - w w^T / x^T A x; (2) y^T B y != 0: A + w w^T / y^T B y; (3) both 0: the rank-2 reduction
+    of A along (x, e_k), w_k != 0, which keeps rank(B + E) <= rank B. `broken` drops a term of (3). Returns (A0,
+    options used)."""
+    n, rN = N.shape[0], rank(N, p)
+    A0 = A % p
+    alpha0 = alpha = rank(A0, p) + rank((N - A0) % p, p) - rN
+    used = []
+    while alpha:
+        B = (N - A0) % p
+        ker = nullspace(np.hstack([A0, (-B) % p]), p)
+        assert any((A0 @ z[:n] % p).any() for z in ker), "alpha > 0 but col A meets col B only in 0"
+        while True:
+            v = sum(rng.randrange(p) * z for z in ker) % p
+            x, y = v[:n], v[n:]
+            w = A0 @ x % p
+            if w.any():
+                break
+        cA, cB = int(x @ A0 @ x % p), int(y @ B @ y % p)
+        if cA:
+            E, opt = np.outer(w, w) * pow(cA, p - 2, p) % p, 1
+        elif cB:
+            E, opt = -np.outer(w, w) * pow(cB, p - 2, p) % p, 2
+        else:
+            k = next(i for i in range(n) if w[i])
+            gi, w2, d = pow(int(w[k]), p - 2, p), A0[:, k], int(A0[k, k])
+            c = 0 if broken else -d * gi * gi % p
+            E = (c * np.outer(w, w) % p + gi * ((np.outer(w, w2) + np.outer(w2, w)) % p)) % p
+            opt = 3 if d else 4
+        A1 = (A0 - E) % p
+        r = rank(E, p)
+        a1 = rank(A1, p) + rank((N - A1) % p, p) - rN
+        assert r >= 1 and a1 <= alpha - r, f"gate option {min(opt, 3)}: a change of rank {r} took alpha {alpha} to {a1}"
+        A0, alpha = A1, a1
+        used.append(opt)
+    assert rank((A - A0) % p, p) <= alpha0
+    return A0, used
+
+
+def rsym(n, r, rng, p):
+    M = np.zeros((n, n), dtype=np.int64)
+    for _ in range(r):
+        z = np.array([rng.randrange(p) for _ in range(n)])
+        M = (M + rng.randrange(1, p) * np.outer(z, z)) % p
+    return M
+
+
+def random_summand(N, g, rng, p):
+    """A random rank-g summand of N, as (NY, (Y^T N Y)^-1)."""
+    n = N.shape[0]
+    if g == 0:
+        return np.zeros((n, 0), dtype=np.int64), np.zeros((0, 0), dtype=np.int64)
+    while True:
+        Y = np.array([[rng.randrange(p) for _ in range(g)] for _ in range(n)], dtype=np.int64)
+        if rank(Y.T @ N @ Y % p, p) == g:
+            return N @ Y % p, inverse(Y.T @ N @ Y % p, p)
+
+
+def lshape_z(L, p):
+    """The L-shape in coordinates (x0, x1, y0, z = y1 - y0): S_a = x1.y0, S_b = x0.y0, S_c - S_b = x0.z."""
+    G = Grid(2, 2, L)
+    T = np.eye(G.n, dtype=np.int64)
+    for k in range(L):
+        T[G.y(k, 1), G.y(k, 0)] = 1
+    mats = [T.T @ G.target(r, c, 1) @ T % p for r, c in ((1, 0), (0, 0), (0, 1))]
+    blocks = {"x0": [G.x(0, k) for k in range(L)], "x1": [G.x(1, k) for k in range(L)],
+              "y0": [G.y(k, 0) for k in range(L)], "z": [G.y(k, 1) for k in range(L)]}
+    return G, mats, blocks
+
+
+def uv_steps(L, p, mats, blocks, mu, K, be, Gm):
+    """The exact case's proof on U = mu K mu^T (a summand of S_a) and V = S_b + be Gm be^T (S_b plus a summand of
+    S_c - S_b), step by step. Returns rank(V - U)."""
+    Sa, Sb, Sc = mats
+    n, pp, d = Sa.shape[0], mu.shape[1], be.shape[1]
+    U, V = mu @ K % p @ mu.T % p, (Sb + be @ Gm % p @ be.T) % p
+    assert rank(U, p) == pp and rank((Sa - U) % p, p) == 2 * L - pp, "U is not a summand of S_a"
+    assert rank((V - Sb) % p, p) == d and rank((Sc - V) % p, p) == 2 * L - d, "V - S_b is not a summand"
+    s = rank((V - U) % p, p)
+    P = np.hstack([be, mu])
+    Dinv = np.zeros((d + pp, d + pp), dtype=np.int64)
+    Dinv[:d, :d], Dinv[d:, d:] = inverse(Gm, p), -inverse(K, p) % p
+    Big = np.block([[Sb, P], [P.T, -Dinv % p]]) % p
+    assert s == rank(Big, p) - (d + pp), "Schur complement of -D^-1"
+    xy = blocks["x0"] + blocks["y0"]
+    top = blocks["x1"] + blocks["z"]
+    rest = top + list(range(n, n + d + pp))
+    R = (Big[np.ix_(rest, rest)] - Big[np.ix_(rest, xy)] @ inverse(Big[np.ix_(xy, xy)], p) % p
+         @ Big[np.ix_(xy, rest)]) % p
+    assert rank(Big, p) == 2 * L + rank(R, p), "eliminating the (x0, y0) block"
+    t = len(top)
+    assert not R[:t, :t].any(), "R's (x1, z) block is 0"
+    Phi, Psi = R[:t, t:], R[t:, t:]
+    ker = nullspace(Phi, p)
+    Kb = np.array(ker, dtype=np.int64).T if ker else np.zeros((d + pp, 0), dtype=np.int64)
+    assert rank(R, p) == 2 * rank(Phi, p) + rank(Kb.T @ Psi @ Kb % p, p), "rank of [[0, Phi], [Phi^T, Psi]]"
+    bz, ux1 = be[blocks["z"]], mu[blocks["x1"]]
+    assert rank(Phi, p) == rank(bz, p) + rank(ux1, p)
+    assert 2 * rank(bz, p) >= d and 2 * rank(ux1, p) >= pp, "ker b_z, ker u_x1 totally isotropic"
+    assert s >= 2 * L, f"exact case: rank(V - U) = {s} < 2L"
+    return s
+
+
+def part7(rng):
+    """The L-shape at every L (odd characteristic). Checks the gate lemma on random pairs (all three options, and
+    the bound attained), the exact case step by step (exhaustively at L = 1, at random for L = 2..4) and the surgery
+    on random trees of the open topology. Mutations: option (3) without its w w^T term; alpha - 1 on a tight
+    instance; 2L + 1 in the exact case on U = 0, V = S_b; 6L + 1 on the star."""
+    opts, gates, tight_gate = {1: 0, 2: 0, 3: 0, 4: 0}, 0, 0
+    for p in (3, 5, 10007):
+        for _ in range(400):
+            n = rng.choice([3, 4, 6, 8])
+            N = rsym(n, rng.randrange(0, n + 1), rng, p)
+            if rng.random() < 0.4:
+                A = rsym(n, rng.randrange(0, n + 1), rng, p)
+            else:
+                NY, H = random_summand(N, rng.randrange(rank(N, p) + 1), rng, p)
+                A = (NY @ H % p @ NY.T + rsym(n, rng.randrange(1, 3), rng, p)) % p
+            A0, used = gate(N, A, p, rng)
+            alpha = rank(A % p, p) + rank((N - A) % p, p) - rank(N, p)
+            tight_gate += alpha > 0 and rank((A - A0) % p, p) == alpha
+            for o in used:
+                opts[o] += 1
+            gates += 1
+    assert opts[1] and opts[2] and opts[3], f"gate options not all exercised: {opts}"
+    N, A = np.diag([1, 0, 0]), np.diag([2, 0, 0])
+    alpha = rank(A, 3) + rank((N - A) % 3, 3) - rank(N, 3)
+    assert alpha == 1 and min(rank((A - S) % 3, 3) for g in range(2) for S in summands(N, g, 3)) == alpha, \
+        "mutation not caught: the gate bound alpha - 1"
+    caught = 0
+    for _ in range(200):
+        n = rng.choice([4, 6])
+        N = rsym(n, rng.randrange(1, n + 1), rng, 3)
+        try:
+            gate(N, rsym(n, rng.randrange(1, n + 1), rng, 3), 3, rng, broken=True)
+        except AssertionError:
+            caught += 1
+    assert caught, "mutation not caught: option (3) without its w w^T term"
+
+    exact, least = 0, {}
+    for p in (3, 5):
+        G, mats, blocks = lshape_z(1, p)
+        for pp in range(3):
+            for mu, K in summand_factors(mats[0], pp, p):
+                for d in range(3):
+                    for be, Gm in summand_factors((mats[2] - mats[1]) % p, d, p):
+                        s = uv_steps(1, p, mats, blocks, mu, K, be, Gm)
+                        least[1] = min(least.get(1, s), s)
+                        exact += 1
+    for L, p, trials in ((2, 3, 400), (2, 5, 300), (3, 3, 300), (3, 10007, 100), (4, 3, 200)):
+        G, mats, blocks = lshape_z(L, p)
+        for _ in range(trials):
+            mu, K = random_summand(mats[0], rng.randrange(2 * L + 1), rng, p)
+            be, Gm = random_summand((mats[2] - mats[1]) % p, rng.randrange(2 * L + 1), rng, p)
+            s = uv_steps(L, p, mats, blocks, mu, K, be, Gm)
+            least[L] = min(least.get(L, s), s)
+            exact += 1
+    G, mats, blocks = lshape_z(2, 3)
+    s = uv_steps(2, 3, mats, blocks, *next(summand_factors(mats[0], 0, 3)),
+                 *next(summand_factors((mats[2] - mats[1]) % 3, 0, 3)))
+    assert s == 4 and not s >= 5, "mutation not caught: 2L + 1 in the exact case at U = 0, V = S_b"
+
+    trees, tight = 0, 0
+    for p in (3, 5, 10007):
+        for _ in range(300):
+            L = rng.choice([1, 2, 3])
+            G = Grid(2, 2, L)
+            a, b, c = (1, 0), (0, 0), (0, 1)
+            Sa, Sb, Sc = (G.target(*t, 1) for t in (a, b, c))
+            kind = rng.randrange(3)
+            if kind == 0:
+                U = random_point(G, [a, b, c], rng, p)
+                V = (U + random_point(G, [b, c], rng, p)) % p if rng.random() < 0.5 else random_point(G, [b, c], rng, p)
+            else:
+                mu, K = random_summand(Sa, rng.randrange(2 * L + 1), rng, p)
+                be, Gm = random_summand((Sc - Sb) % p, rng.randrange(2 * L + 1), rng, p)
+                U = (mu @ K @ mu.T + (kind == 1) * rsym(G.n, rng.randrange(1, 3), rng, p)) % p
+                V = (Sb + be @ Gm @ be.T + rsym(G.n, rng.randrange(0, 3), rng, p)) % p
+            rk = lambda M: rank(M % p, p)
+            pp, q, s, d, e = rk(U), rk(Sa - U), rk(V - U), rk(Sb - V), rk(Sc - V)
+            cost = pp + q + s + d + e
+            U0, _ = gate(Sa, U, p, rng)
+            A0, _ = gate((Sc - Sb) % p, (V - Sb) % p, p, rng)
+            V0 = (Sb + A0) % p
+            assert rk(U - U0) <= pp + q - 2 * L and rk(V - V0) <= d + e - 2 * L, "gate bound"
+            assert rk(U0) + rk(Sa - U0) == 2 * L and rk(Sb - V0) + rk(Sc - V0) == 2 * L, "gates are geodesic"
+            new = rk(U0) + rk(Sa - U0) + rk(V0 - U0) + rk(Sb - V0) + rk(Sc - V0)
+            assert new <= cost, f"surgery raised the cost: {cost} -> {new}"
+            assert new >= 6 * L and cost >= 6 * L, f"L-shape tree of cost {cost} < 6L"
+            trees += 1
+            tight += cost == 6 * L
+    G = Grid(2, 2, 2)
+    star = sum(rank(G.target(*t, 1), 3) for t in ((1, 0), (0, 0), (0, 1)))
+    assert star == 12 and not star >= 13, "mutation not caught: 6L + 1 on the star"
+    print(f"  part 7: gate lemma on {gates} pairs (options {opts[1]}, {opts[2]}, {opts[3] + opts[4]}; bound attained "
+          f"{tight_gate} times); exact case on {exact} summand pairs (least rank(V - U): "
+          f"{', '.join(f'L={L}: {v}' for L, v in sorted(least.items()))}); surgery on {trees} trees ({tight} at 6L); "
+          f"{caught} broken-gate runs caught; mutations caught")
+
+
+PARTS = {"1": part1, "2": part2, "3": part3, "4": part4, "5": part5, "6": part6, "7": part7}
 
 
 def main(argv):
