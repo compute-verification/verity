@@ -337,18 +337,33 @@ static void fill_methods(const char* only) {
   cudaEvent_t e0, e1;
   CK(cudaEventCreate(&e0));
   CK(cudaEventCreate(&e1));
-  for (int trial = 0; trial < 2; trial++)
-    for (int m = 0; m < 7; m++) {
+  // then, once each: one pattern of dram_patterns written before the zeros (which pattern makes it stick), and every
+  // pattern followed by cudaMemset (does a memset clear it)
+  for (int trial = 0; trial < 2 + NPAT + 1; trial++)
+    for (int m = 0; m < (trial < 2 ? 7 : 1); m++) {
+      int one = trial >= 2 && trial < 2 + NPAT ? trial - 2 : -1;
+      bool reset = trial == 2 + NPAT;
+      char name[64];
+      snprintf(name, sizeof name, "%s", trial < 2 ? names[m] : reset ? "after_patterns_then_memset" : "");
+      if (one >= 0) snprintf(name, sizeof name, "after_%s", PATTERNS[one]);
       Alloc plain;
       if (m == 5) plain = alloc_plain(B);
       Alloc g = alloc_generic(B);
       uint32_t* p = (uint32_t*)g.p;
-      if (m == 6)
+      if (one >= 0) {
+        k_write<<<g_sms * 4, 512>>>((uint4*)p, B / 16, one);
+        k_fill<<<g_sms * 4, 512>>>(p, B / 4, 1);
+      } else if (reset) {
         for (int pat = 0; pat < NPAT; pat++) k_write<<<g_sms * 4, 512>>>((uint4*)p, B / 16, pat);
-      if (m == 3 || m == 4) k_fill<<<g_sms * 4, 512>>>(p, B / 4, 0);
-      if (m == 0 || m == 3) CK(cudaMemset(p, 0, B));
-      if (m == 1 || m == 4 || m >= 5) k_fill<<<g_sms * 4, 512>>>(p, B / 4, 1);
-      if (m == 2) k_write<<<g_sms * 4, 512>>>((uint4*)p, B / 16, 1);
+        CK(cudaMemset(p, 0, B));
+      } else {
+        if (m == 6)
+          for (int pat = 0; pat < NPAT; pat++) k_write<<<g_sms * 4, 512>>>((uint4*)p, B / 16, pat);
+        if (m == 3 || m == 4) k_fill<<<g_sms * 4, 512>>>(p, B / 4, 0);
+        if (m == 0 || m == 3) CK(cudaMemset(p, 0, B));
+        if (m == 1 || m == 4 || m >= 5) k_fill<<<g_sms * 4, 512>>>(p, B / 4, 1);
+        if (m == 2) k_write<<<g_sms * 4, 512>>>((uint4*)p, B / 16, 1);
+      }
       CK(cudaDeviceSynchronize());
       double r[6], best = 0;
       for (int rep = 0; rep < 6; rep++) {
@@ -365,7 +380,7 @@ static void fill_methods(const char* only) {
       double cg = read_path_bw<0>(p, B, 1, 4);
       printf("{\"probe\":\"fill_method\",\"method\":\"%s\",\"trial\":%d,\"bytes\":%zu,\"m5_reads_bytes_per_s\":[%.4e,%.4e,"
              "%.4e,%.4e,%.4e,%.4e],\"m5_best_after_first\":%.4e,\"cg_b4_read_bytes_per_s\":%.4e}\n",
-             names[m], trial, B, r[0], r[1], r[2], r[3], r[4], r[5], best, cg);
+             name, trial < 2 ? trial : 0, B, r[0], r[1], r[2], r[3], r[4], r[5], best, cg);
       fflush(stdout);
       free_generic(g);
       if (plain.p) CK(cudaFree(plain.p));
