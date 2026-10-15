@@ -8,6 +8,11 @@ A kernel's CUDA-core budget is 128 lane slots per SM per elapsed cycle (one FP32
 MACs), over every SM, so ``slot_share`` = thread instructions executed / (128 · SMs · elapsed SM cycles): the share of the
 model's word-gate slots the kernel used. Beside it, ncu's own utilizations (percent of peak over elapsed cycles) of the FMA,
 ALU and XU pipes, of issue slots, and of DRAM bandwidth. Categories are `vllm_split.category`'s; shares are time-weighted.
+
+sm_120's integer ALU runs at half rate (64 lanes/SM/clk, `phi_probe.cu`), so an ALU instruction costs 2 slots of the same
+128. ncu's ALU peak is 128 lanes/SM/clk, twice the real rate (φ alone, ALU-bound, reads 49%), so ``alu_pct`` is half the
+pipe's real utilization. ``slot_share_alu2`` counts each ALU thread instruction twice, inferring their number from
+``alu_pct`` against ncu's peak (full warps assumed, so it stays an upper bound).
 """
 from __future__ import annotations
 
@@ -22,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from vllm_split import category  # noqa: E402
 
 LANES = 128
+NCU_ALU_PEAK_LANES = 128
 PCTS = {"fma_pct": "sm__inst_executed_pipe_fma.avg.pct_of_peak_sustained_elapsed",
         "alu_pct": "sm__inst_executed_pipe_alu.avg.pct_of_peak_sustained_elapsed",
         "xu_pct": "sm__inst_executed_pipe_xu.avg.pct_of_peak_sustained_elapsed",
@@ -80,6 +86,8 @@ def summarize(path: Path, sms: int) -> dict:
              "lane_ops": lanes, "sm_cycles": cyc * sms}
         for key, metric in PCTS.items():
             k[key] = num(r.get(metric, ""))
+        k["alu_lane_ops"] = (k["alu_pct"] or 0.0) / 100 * NCU_ALU_PEAK_LANES * cyc * sms
+        k["slot_share_alu2"] = ((lanes + k["alu_lane_ops"]) / (LANES * sms * cyc)) if lanes is not None else None
         kernels.append(k)
     agg: dict = defaultdict(lambda: defaultdict(float))
     for k in kernels:
@@ -88,6 +96,7 @@ def summarize(path: Path, sms: int) -> dict:
             a["us"] += k["us"]
             a["n"] += 1
             a["lane_ops"] += k["lane_ops"] or 0.0
+            a["alu_lane_ops"] += k["alu_lane_ops"]
             a["sm_cycles"] += k["sm_cycles"]
             for key in PCTS:
                 if k[key] is not None:
@@ -96,7 +105,8 @@ def summarize(path: Path, sms: int) -> dict:
     out = {}
     for group, a in sorted(agg.items()):
         o = {"kernels": int(a["n"]), "us": round(a["us"], 2), "lane_ops": a["lane_ops"],
-             "slot_share": a["lane_ops"] / (LANES * a["sm_cycles"]) if a["sm_cycles"] else None}
+             "slot_share": a["lane_ops"] / (LANES * a["sm_cycles"]) if a["sm_cycles"] else None,
+             "slot_share_alu2": (a["lane_ops"] + a["alu_lane_ops"]) / (LANES * a["sm_cycles"]) if a["sm_cycles"] else None}
         for key in PCTS:
             if a[f"{key}_us"]:
                 o[key] = round(a[f"{key}_x_us"] / a[f"{key}_us"], 3)
@@ -115,7 +125,8 @@ def main() -> int:
     args = ap.parse_args()
     doc = summarize(args.raw, args.sms)
     args.out.write_text(json.dumps(doc, indent=1) + "\n")
-    print(json.dumps({g: {k: v for k, v in o.items() if k in ("us", "slot_share", "fma_pct", "alu_pct", "issue_pct")}
+    print(json.dumps({g: {k: v for k, v in o.items()
+                          if k in ("us", "slot_share", "slot_share_alu2", "fma_pct", "alu_pct", "issue_pct")}
                       for g, o in doc["by_group"].items()}))
     return 0
 

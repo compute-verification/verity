@@ -77,6 +77,21 @@ def test_slot_share_is_lane_ops_over_128_per_sm_cycle(tmp_path):
     assert doc["by_group"]["step"]["fma_pct"] == (5 * 2 + 1 * 8) / 10
 
 
+def test_alu_instructions_cost_two_slots(tmp_path):
+    head = ["ID", "Kernel Name", "gpu__time_duration.sum", "sm__cycles_elapsed.avg", "smsp__thread_inst_executed.sum",
+            "sm__inst_executed_pipe_alu.avg.pct_of_peak_sustained_elapsed"]
+    lines = [",".join(f'"{h}"' for h in head), '"","","us","cycle","inst","%"',
+             '"0","void vllm::rotary_embedding_kernel<c10::BFloat16, true>","1","1000","3840000","10"',
+             '"1","nvjet_gemm","1","1000","1280000",""']
+    path = tmp_path / "raw.csv"
+    path.write_text("\n".join(lines) + "\n")
+    doc = N.summarize(path, sms=100)["by_group"]
+    assert doc["rope"]["slot_share"] == pytest.approx(0.3)
+    assert doc["rope"]["slot_share_alu2"] == pytest.approx(0.3 + 0.1)
+    assert doc["gemm"]["slot_share_alu2"] == doc["gemm"]["slot_share"] == pytest.approx(0.1)
+    assert doc["step"]["slot_share_alu2"] == pytest.approx((3_840_000 + 1_280_000 + 1_280_000) / (128 * 100 * 2000))
+
+
 def test_ncu_units_that_are_not_the_metrics_refuse(tmp_path):
     head = ["ID", "Kernel Name", "gpu__time_duration.sum", "sm__cycles_elapsed.avg", "smsp__thread_inst_executed.sum"]
     path = tmp_path / "raw.csv"
