@@ -20,7 +20,9 @@ window's CUDA capacity (ν_w, the share a cheater can use for unclaimed work) in
 ν = ν_w L / (h ρ η_w), so κνh/L = κ ν_w / (ρ η_w), ρ = 8 (FP8 MACs per CUDA slot), η_w = the GEMM's η × rate kept. SMs
 that hold no CTA are tensor room as well: as served, a cheater's own GEMM in the measured idle SM-time adds
 0.9 ν_idle / η_w (0.9: the best FP8 GEMM's share of peak, Pearl-C); with a tail filler that owns those SMs, what is left
-is the CUDA slack ν_f. δ is taken as 0.
+is the CUDA slack ν_f. δ is taken as 0. "Within the timing tolerance" takes ν_f over the cheaters within cheat_slack's
+--tolerance of the design's time only; a slower cheater trades tensor rate for CUDA work, which pays only above the
+trading threshold.
 """
 from __future__ import annotations
 
@@ -62,6 +64,7 @@ DESIGNS = [  # name, prefill kernel, decode kernel
 SCENARIOS = [  # name, measured idle SM-time as served?, ν_f (CUDA slack a fused cheater uses; None: measured)
     ("as served (measured idle and ν_f)", True, None),
     ("tails filled, measured ν_f", False, None),
+    ("tails filled, ν_f within the timing tolerance", False, "tolerance"),
     ("tails filled, ν_f 0.01", False, 0.01),
     ("tails filled, ν_f 0", False, 0.0),
 ]
@@ -139,11 +142,14 @@ def main():
     ap.add_argument("--json")
     a = ap.parse_args()
     idle = measured_idle(json.load(open(a.corun)))
-    cheat = None
+    cheat, cheat_tol = None, {}
     for c in a.cheat:
-        for key_, v in json.load(open(c))["nu_f"].items():
+        cj = json.load(open(c))
+        for key_, v in cj["nu_f"].items():
             cheat = cheat or {}
             cheat[key_] = max(cheat.get(key_, 0.0), v)
+        for key_, v in cj.get("nu_f_tolerance", {}).items():
+            cheat_tol[key_] = max(cheat_tol.get(key_, 0.0), v)
     tab = json.load(open(a.table))
     for t in map(lambda p: json.load(open(p)), a.more):
         have = {r["kernel"] for r in tab["rows"]}
@@ -205,17 +211,21 @@ def main():
             src = "section 1" if nu_f is None else "cheat run"
             nu_f = frontier_slack(tab, k, ph) if nu_f is None else nu_f
             k_star = trade_threshold(tab, k, ph)
-            eps = [f_terms + mult * (nu_f if nf is None else nf) + (BEST_ETA * nu_idle / eta_w if served else 0.0)
+            nu_tol = cheat_tol.get(f"{k}@{ph}", nu_f)
+            pick = lambda nf: nu_f if nf is None else nu_tol if nf == "tolerance" else nf
+            eps = [f_terms + mult * pick(nf) + (BEST_ETA * nu_idle / eta_w if served else 0.0)
                    for _, served, nf in SCENARIOS]
             page = f_terms + mult * max(0.0, 1 - share)
             kappa_m = max(MEASURED_CREDIT, L / 3)
             eps_m = F + kappa_m * F * h / L + kappa_m / (RHO * eta_w) * nu_f
+            eps_m_tol = F + kappa_m * F * h / L + kappa_m / (RHO * eta_w) * nu_tol
             cov = res["coverage"][ph]["macs"]
             e2e = [1 - cov * (1 - min(1.0, e)) for e in eps]
             res["designs"].append({"design": name, "kernel": k, "phase": ph, "L": L, "rounds": rounds, "var": var,
                                    "rate_kept": kp, "phi_share": share, "overhead": over, "kappa": kappa, "h": h,
                                    "eta_w": eta_w, "nu_multiplier": mult, "f_terms": f_terms, "idle": nu_idle,
-                                   "nu_f": nu_f, "nu_f_source": src,
+                                   "nu_f": nu_f, "nu_f_source": src, "nu_f_tolerance": nu_tol,
+                                   "eps_in_measured_credit_tolerance": eps_m_tol,
                                    "trade_threshold": k_star, "kappa_measured_credit": kappa_m, "eps_in_measured_credit": eps_m,
                                    "eps_in": dict(zip([s[0] for s in SCENARIOS], eps)), "eps_page": page,
                                    "eps_end_to_end": dict(zip([s[0] for s in SCENARIOS], e2e))})
