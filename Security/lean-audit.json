@@ -18,6 +18,10 @@
    "owner": "@memory-accounting",
    "digest": "9191da3bbab04e2c655d21d45cd15f7b317e9cc5cfe9b93627e1b050b7203aec"
   },
+  "Flock.Assumptions.RegistrantCovers": {
+   "owner": "@proofs",
+   "digest": "c9624861b2572dfa4fe1887a5972b0d62070ac779fbebd0f5f6a0782ee367024"
+  },
   "Flock.Assumptions.VBridge": {
    "owner": "@proofs",
    "digest": "928812a52c621ba8f1c48148872bf2c21c58388a45335bf64fc92e571ac56ef1"
