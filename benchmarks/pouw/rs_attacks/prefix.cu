@@ -5,12 +5,13 @@
 //   imad : T += sum_a g_a z_a                    (r IMADs a word, exact mod 2^32)
 //   ffma : T += bits(magic + sum_a g_a z_a) - magic_bits   (r FFMAs and one IADD3 a word)
 //   mix  : the honest kernel's 8 tiles and dp4a's 16 words in one warp (do the tensor and integer pipes overlap?)
+//   t16, t8816 : the int8 MMAs with K = 16 (m16n8k16, m8n8k16), the tensor route's shortest inner dimension
 // where g is the row's G_s = U D_s (changed every block) and z the word's column of Z (fixed). The integer kernels
 // change g by an xor with the block index, so the compiler can't close the loop's sum into a formula. One CTA a SM
 // (60 KB of dynamic shared memory pins it), clock64 around the block loop; each attack's words are checked bit for bit
 // against the host's replay of the same arithmetic.
 //
-//   prefix <kind> <r> <warps> <blocks>     kind: honest | dp4a | imad | ffma | mix
+//   prefix <kind> <r> <warps> <blocks>     kind: honest | t16 | t8816 | dp4a | imad | ffma | mix
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -51,6 +52,60 @@ __global__ void k_honest(int blocks, int* out, long long* cyc) {
   int x = 0;
 #pragma unroll
   for (int t = 0; t < NT; t++) x ^= acc[t][0] ^ acc[t][1] ^ acc[t][2] ^ acc[t][3];
+  out[tid] = x;
+  if (threadIdx.x == 0) cyc[blockIdx.x] = t1 - t0;
+}
+
+// The tensor route's shorter-K int8 shapes: does an MMA with K = 16 hold the pipe less than the 16 SMSP cycles of K = 32?
+// t16 is m16n8k16 (4 words a lane a tile), t8816 is m8n8k16 (2 words a lane a tile).
+__global__ void k_t16(int blocks, int* out, long long* cyc) {
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  uint32_t s = lane_seed(tid);
+  uint32_t a0 = s, a1 = s * 3u, b0 = s * 11u;
+  int acc[NT][4];
+#pragma unroll
+  for (int t = 0; t < NT; t++) acc[t][0] = acc[t][1] = acc[t][2] = acc[t][3] = 0;
+  __syncthreads();
+  long long t0 = clock64();
+  for (int j = 0; j < blocks; j++) {
+#pragma unroll
+    for (int t = 0; t < NT; t++)
+      asm volatile("mma.sync.aligned.m16n8k16.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5}, {%6}, {%0,%1,%2,%3};"
+                   : "+r"(acc[t][0]), "+r"(acc[t][1]), "+r"(acc[t][2]), "+r"(acc[t][3])
+                   : "r"(a0), "r"(a1), "r"(b0));
+    a0 += 0x01010101u;
+  }
+  __syncthreads();
+  long long t1 = clock64();
+  int x = 0;
+#pragma unroll
+  for (int t = 0; t < NT; t++) x ^= acc[t][0] ^ acc[t][1] ^ acc[t][2] ^ acc[t][3];
+  out[tid] = x;
+  if (threadIdx.x == 0) cyc[blockIdx.x] = t1 - t0;
+}
+
+__global__ void k_t8816(int blocks, int* out, long long* cyc) {
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  uint32_t s = lane_seed(tid);
+  uint32_t a0 = s, b0 = s * 11u;
+  int acc[NT][2];
+#pragma unroll
+  for (int t = 0; t < NT; t++) acc[t][0] = acc[t][1] = 0;
+  __syncthreads();
+  long long t0 = clock64();
+  for (int j = 0; j < blocks; j++) {
+#pragma unroll
+    for (int t = 0; t < NT; t++)
+      asm volatile("mma.sync.aligned.m8n8k16.row.col.s32.s8.s8.s32 {%0,%1}, {%2}, {%3}, {%0,%1};"
+                   : "+r"(acc[t][0]), "+r"(acc[t][1])
+                   : "r"(a0), "r"(b0));
+    a0 += 0x01010101u;
+  }
+  __syncthreads();
+  long long t1 = clock64();
+  int x = 0;
+#pragma unroll
+  for (int t = 0; t < NT; t++) x ^= acc[t][0] ^ acc[t][1];
   out[tid] = x;
   if (threadIdx.x == 0) cyc[blockIdx.x] = t1 - t0;
 }
@@ -248,7 +303,7 @@ static int check(const char* kind, int r, int lanes, int blocks, const std::vect
 }
 
 int main(int argc, char** argv) {
-  if (argc < 5) { fprintf(stderr, "usage: prefix honest|dp4a|imad|ffma|mix r warps blocks\n"); return 2; }
+  if (argc < 5) { fprintf(stderr, "usage: prefix honest|t16|t8816|dp4a|imad|ffma|mix r warps blocks\n"); return 2; }
   const char* kind = argv[1];
   int r = atoi(argv[2]), warps = atoi(argv[3]), blocks = atoi(argv[4]);
   int sms; CK(cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, 0));
@@ -262,6 +317,14 @@ int main(int argc, char** argv) {
     if (!strcmp(kind, "honest")) {
       CK(cudaFuncSetAttribute(k_honest, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)smem));
       k_honest<<<sms, threads, smem>>>(nb, d_out, d_cyc);
+    }
+    else if (!strcmp(kind, "t16")) {
+      CK(cudaFuncSetAttribute(k_t16, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)smem));
+      k_t16<<<sms, threads, smem>>>(nb, d_out, d_cyc);
+    }
+    else if (!strcmp(kind, "t8816")) {
+      CK(cudaFuncSetAttribute(k_t8816, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)smem));
+      k_t8816<<<sms, threads, smem>>>(nb, d_out, d_cyc);
     }
     else if (!strcmp(kind, "mix") && r <= 4) {
       CK(cudaFuncSetAttribute(k_mix, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)smem));
@@ -283,9 +346,10 @@ int main(int argc, char** argv) {
     CK(cudaGetLastError());
     CK(cudaDeviceSynchronize());
   };
-  int wpl = !strcmp(kind, "honest") ? 4 * NT : !strcmp(kind, "mix") ? 4 * NT + W : W;
+  bool tensor = !strcmp(kind, "honest") || !strcmp(kind, "t16") || !strcmp(kind, "t8816");
+  int wpl = !strcmp(kind, "t8816") ? 2 * NT : tensor ? 4 * NT : !strcmp(kind, "mix") ? 4 * NT + W : W;
   int bad = -1;
-  if (strcmp(kind, "honest")) {
+  if (!tensor) {
     int nb = 64;                    // check: a short run replayed on the host (FP32 stays below 2^22)
     launch(nb);
     std::vector<int> got((size_t)lanes * W);
