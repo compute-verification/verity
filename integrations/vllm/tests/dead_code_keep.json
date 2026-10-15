@@ -5,6 +5,7 @@
   "verity_vllm.program.frontend.serve_families": "which Serve family and attention geometry an instance pins, read by tests/program/test_composition.py ahead of a production caller (LIVE registry.b1)",
   "verity_vllm.program.kernels.ref_prims_twins": "numpy twins of registry.ref_prims, checked against the registered bodies by tests/program/test_ref_prims.py (LIVE registry.ref_prims)",
   "verity_vllm.program.kernels.mhc_twin": "numpy twins of registry.mhc and the TF32 GEMM's split schedule, run against the GPU by tests/properties/dsv4_mhc_capture_gpu.py and checked against the registered bodies by tests/program/test_mhc.py (LIVE registry.mhc)",
+  "verity_vllm.program.kernels.marlin_moe_rows": "the Marlin W4A16 MoE expert GEMM's twin, checked against its Definitions by tests/program/test_marlin_moe.py (LIVE registry.marlin_moe) and run by the capture tests/properties/dsv4_marlin_capture_gpu.py; live once a replay row binds MarlinMoeExpertGemm(W)_v1",
   "verity_vllm.program.lifting.lifted_compose": "the lifted fixed workload Program (GP-01's compose over lifted components) of tests/program/test_lifted_mixed.py / test_lifted_r17.py (LIVE registry.lifted)",
   "verity_vllm.program.frontend.derive_examples": "source modules of the derivation tests (LIVE frontend.derive)",
   "verity_vllm.program.frontend.examples": "authored examples of the torch-frontend tests (LIVE frontend.torch_frontend / correspond)",
