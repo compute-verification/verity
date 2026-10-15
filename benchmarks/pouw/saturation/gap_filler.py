@@ -239,32 +239,33 @@ def main() -> int:
     rate_cache: dict[str, float] = {}
 
     def grid_for(kind: str, ms: float) -> int:
-        return min(2**31 - 1, int(rate_cache[kind] * ms * 3) + 4 * sms * 16)
+        # Enough programs to outlast a sequence slowed 30x; the ones dispatched after stop exit at once.
+        return min(2**31 - 1, int(rate_cache[kind] * ms * 30) + 4 * sms * 16)
 
     def filler_alone(kind: str, ms_target: float) -> float:
-        # Rate on the whole GPU with nothing beside it: programs completed between go and stop, ms_target apart.
-        # Control kernels go on the high-priority stream: at equal priority they would queue behind the filler's grid.
+        # Rate on the whole GPU with nothing beside it: a grid's programs over the grid's own time, go already set,
+        # the grid grown until it lasts at least ms_target.
+        def timed(n: int) -> float:
+            flags.zero_()
+            go.fill_(1)
+            torch.cuda.synchronize()
+            e0.record(lo)
+            launch_filler(kind, n)
+            e1.record(lo)
+            torch.cuda.synchronize()
+            assert done.item() == n, (kind, n, done.item())
+            return e0.elapsed_time(e1)
+
         if kind not in rate_cache:
             launch_filler(kind, 64)  # compile
             torch.cuda.synchronize()
-            rate_cache[kind] = 2e5 if kind == "pump" else 2e4
-        rates = []
-        for _ in range(3):
-            flags.zero_()
-            torch.cuda.synchronize()
-            launch_filler(kind, grid_for(kind, ms_target + 4))
-            with torch.cuda.stream(hi):
-                torch.cuda._sleep(int(2e6))
-                go.fill_(1)
-                e0.record(hi)
-                torch.cuda._sleep(int(ms_target * 1.9e6))
-                e1.record(hi)
-                stop.fill_(1)
-            torch.cuda.synchronize()
-            ms = e0.elapsed_time(e1)
-            rates.append(done.item() / ms)
-            rate_cache[kind] = max(rates)
-        return statistics.median(rates)
+        n = 4 * sms * 16
+        target = max(ms_target, 5.0)
+        while (ms := timed(n)) < target and n < 2**30:
+            n = min(2**30, int(n * max(2.0, 1.2 * target / max(ms, 1e-3))))
+        rates = [n / timed(n) for _ in range(3)]
+        rate_cache[kind] = statistics.median(rates)
+        return rate_cache[kind]
 
     out = {"schema": "verity-pouw/saturation-gap-filler/v1", "device": torch.cuda.get_device_name(0), "sms": sms,
            "priority_range": [least, greatest], "pump": {"iters": PUMP_ITERS, "block": PUMP_BLOCK, "chains": PUMP_CHAINS},
@@ -294,7 +295,7 @@ def main() -> int:
                 flags.zero_()
                 torch.cuda.synchronize()
                 if kind:
-                    launch_filler(kind, grid_for(kind, (3 if kind == "pump" else 6) * row["ms_alone"] + 4))
+                    launch_filler(kind, grid_for(kind, row["ms_alone"]))
                 with torch.cuda.stream(hi):
                     e0.record(hi)
                     g.replay()
@@ -314,6 +315,7 @@ def main() -> int:
                 row[kind] = {
                     "ms_with": ms,
                     "slowdown": ms / row["ms_alone"],
+                    "grid": grid_for(kind, row["ms_alone"]),
                     "programs": progs,
                     "alone_programs_per_ms": rate,
                     "soak": progs / (rate * ms) if rate > 0 else None,
