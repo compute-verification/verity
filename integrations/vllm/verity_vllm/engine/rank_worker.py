@@ -36,6 +36,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from verity_vllm.collectives.collective_sites import MOE_COLLECTIVE_CLASSES, MOE_COLLECTIVE_MODULES
+from verity_vllm.collectives import fused_norm as FN
 from verity_vllm.engine import hooks, sparse_mla  # noqa: F401  (arms the serving switches before vLLM builds this rank's model)
 
 
@@ -488,11 +489,7 @@ class TP2CaptureWorkerExtension:
             def w(x: Any, *a: Any, **k: Any) -> Any:
                 y = orig(x, *a, **k)
                 torch.cuda.synchronize()
-                rec = observer_rec()
-                was = rec.active if rec is not None else None
-                if rec is not None:
-                    rec.active = False
-                try:
+                with FN.silenced(observer_rec()):
                     xc, yc = x.detach().to("cpu", copy=True), y.detach().to("cpu", copy=True)
                     cur = st["cur"] or {}
                     st["records"].append({"rank": rank, "step": st["step"], "k": st["k"], "kind": kind, "module": cur.get("name"), "module_class": cur.get("cls"),
@@ -501,9 +498,6 @@ class TP2CaptureWorkerExtension:
                     if st["step"] < st["store_steps"]:
                         st["values"]["part"].append(xc)
                         st["values"]["out"].append(yc)
-                finally:
-                    if rec is not None:
-                        rec.active = was
                 st["k"] += 1
                 return y
             return w
@@ -530,6 +524,8 @@ class TP2CaptureWorkerExtension:
             if hasattr(mod, attr) and (mod.__name__, attr) not in wrapped:
                 wrapped.add((mod.__name__, attr))
                 st["hooks"].wrap(mod, attr, lambda orig, kind=kind: coll_wrap(orig, kind))
+        for mod, attr in FN.targets(model):      # [VLLM-12] DeepSeek-V3.2's layers reduce in the norm after them (collectives.fused_norm)
+            st["hooks"].wrap(mod, attr, lambda orig: FN.recording(orig, model, st, coll_wrap, lambda: FN.silenced(observer_rec())))
 
         # [R15 rev-cb T6-1, mirrored on the Match side] `cur` is a stack: a collective issued by an outer module after a nested hooked module
         # returned is attributed to the OUTER module; a fused-MoE runner nested under a hooked fused-MoE wrapper is NOT hooked, so the
