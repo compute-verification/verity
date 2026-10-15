@@ -20,6 +20,7 @@ NSYS=${NSYS:-$(command -v nsys || echo "$CUDA/bin/nsys")}
 D=$(mktemp -d /tmp/joint-util.XXXXXX); trap 'rm -rf "$D"' EXIT
 export OUT J CUDA PY NSYS D
 export PHASES=${PHASES:-pouw32,pouw128,audit,joint32,joint128,procs128,nsys:pouw32,nsys:pouw128,nsys:audit,nsys:joint32,nsys:joint128,ncu:pouw32,ncu:pouw128,ncu:audit}
+# a phase's _h9 suffix runs the audit at h0 = 9 (the pass's unfused tree path), _p0 with its side stream at priority 0
 export SECONDS_RATE=${SECONDS_RATE:-20} SECONDS_NSYS=${SECONDS_NSYS:-8} WEIGHTS=${WEIGHTS:-4} GIB=${GIB:-16}
 export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
 export METRICS=gpu__time_duration.sum,sm__cycles_elapsed.avg,sm__cycles_elapsed.avg.per_second,lts__cycles_elapsed.avg,\
@@ -58,38 +59,44 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
   nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,power.draw,temperature.gpu,memory.used,memory.total \
     --format=csv,noheader -i "$GPU_LEASE_UUID" > "$OUT/gpu.txt" 2>&1
   L=("$PY" "$J/loop.py" --ship "$D/ship" --lib "$D/session.so" --weights "$WEIGHTS" --gib "$GIB")
-  args() {  # a phase body (pouw32, audit, joint128, ...): loop.py arguments
-    case $1 in
-      pouw*) echo --mode pouw --shape "${1#pouw}x8192x8192" ;;
-      joint*) echo --mode joint --shape "${1#joint}x8192x8192" ;;
-      audit) echo --mode audit ;;
+  args() {  # a phase body (pouw32, audit, joint128, audit_h9, joint128_p0, ...): loop.py arguments
+    local b=$1 x=
+    case $b in *_h9*) x="--kept-from 9" ;; esac
+    case $b in *_p0*) x="$x --side-priority 0" ;; esac
+    b=${b%%_*}
+    case $b in
+      pouw*) echo --mode pouw --shape "${b#pouw}x8192x8192" $x ;;
+      joint*) echo --mode joint --shape "${b#joint}x8192x8192" $x ;;
+      audit) echo --mode audit $x ;;
     esac
   }
+  T=(timeout -k 10)
   for ph in ${PHASES//,/ }; do
     name=${ph//:/_}; body=${ph#*:}; t0=$(date +%s)
     case $ph in
-      ncu:pouw*|ncu:audit)
-        units=$([ "${body}" = audit ] && echo 2 || echo 4)
-        "$CUDA/bin/ncu" --profile-from-start off --clock-control none --cache-control none --replay-mode kernel \
+      ncu:pouw*|ncu:audit*)
+        units=$([ "${body%%_*}" = audit ] && echo 2 || echo 4)
+        "${T[@]}" 900 "$CUDA/bin/ncu" --profile-from-start off --clock-control none --cache-control none --replay-mode kernel \
           --metrics "$METRICS" -f -o "$D/$name" "${L[@]}" $(args "$body") --no-graph --count "$units" --out "$OUT/$name.json" \
           > "$OUT/$name.log" 2>&1
         rc=$?; echo "$units" > "$D/$name.units" ;;
       nsys:*)
-        "$NSYS" profile --capture-range=cudaProfilerApi --capture-range-end=stop --gpu-metrics-devices=cuda-visible \
-          --gpu-metrics-set=gb20x --gpu-metrics-frequency=10000 --trace=cuda --sample=none --cpuctxsw=none \
-          --force-overwrite=true -o "$D/$name" "${L[@]}" $(args "$body") --seconds "$SECONDS_NSYS" --out "$OUT/$name.json" \
-          > "$OUT/$name.log" 2>&1
+        "${T[@]}" $((SECONDS_NSYS + 240)) "$NSYS" profile --capture-range=cudaProfilerApi --capture-range-end=stop \
+          --gpu-metrics-devices=cuda-visible --gpu-metrics-set=gb20x --gpu-metrics-frequency=10000 --trace=cuda --sample=none \
+          --cpuctxsw=none --force-overwrite=true -o "$D/$name" "${L[@]}" $(args "$body") --seconds "$SECONDS_NSYS" \
+          --watchdog 40 --out "$OUT/$name.json" > "$OUT/$name.log" 2>&1
         rc=$? ;;
       procs*)
-        m=${ph#procs}; rm -f "$D"/r1 "$D"/r2 "$D"/go
-        "${L[@]}" --mode pouw --shape "${m}x8192x8192" --seconds "$SECONDS_RATE" --ready "$D/r1" --go "$D/go" \
-          --out "$OUT/${name}_pouw.json" > "$OUT/${name}_pouw.log" 2>&1 & p1=$!
-        "${L[@]}" --mode audit --seconds "$SECONDS_RATE" --ready "$D/r2" --go "$D/go" \
-          --out "$OUT/${name}_audit.json" > "$OUT/${name}_audit.log" 2>&1 & p2=$!
+        m=${body#procs}; sfx=${m#"${m%%_*}"}; m=${m%%_*}; rm -f "$D"/r1 "$D"/r2 "$D"/go
+        "${T[@]}" $((SECONDS_RATE + 180)) "${L[@]}" --mode pouw --shape "${m}x8192x8192" --seconds "$SECONDS_RATE" \
+          --watchdog 40 --ready "$D/r1" --go "$D/go" --out "$OUT/${name}_pouw.json" > "$OUT/${name}_pouw.log" 2>&1 & p1=$!
+        "${T[@]}" $((SECONDS_RATE + 180)) "${L[@]}" $(args "audit$sfx") --seconds "$SECONDS_RATE" --watchdog 40 \
+          --ready "$D/r2" --go "$D/go" --out "$OUT/${name}_audit.json" > "$OUT/${name}_audit.log" 2>&1 & p2=$!
         while { [ ! -e "$D/r1" ] || [ ! -e "$D/r2" ]; } && kill -0 $p1 2> /dev/null && kill -0 $p2 2> /dev/null; do sleep 0.2; done
         touch "$D/go"; wait $p1; r1=$?; wait $p2; rc=$((r1 | $?)) ;;
       *)
-        "${L[@]}" $(args "$ph") --seconds "$SECONDS_RATE" --out "$OUT/$name.json" > "$OUT/$name.log" 2>&1
+        "${T[@]}" $((SECONDS_RATE + 180)) "${L[@]}" $(args "$ph") --seconds "$SECONDS_RATE" --watchdog 40 \
+          --out "$OUT/$name.json" > "$OUT/$name.log" 2>&1
         rc=$? ;;
     esac
     echo "$ph rc=$rc $(( $(date +%s) - t0 ))s" | tee -a "$OUT/phases.txt"

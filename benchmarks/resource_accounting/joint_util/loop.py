@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes as C
+import faulthandler
 import gc
 import hashlib
 import json
@@ -152,6 +153,7 @@ class Pouw:
         for _ in range(3):
             self.step()
         dev.ck("cuStreamSynchronize", stream)
+        self.done = 0
 
     def issue(self, calls: int) -> None:
         for j in range(calls):
@@ -178,6 +180,7 @@ class Pouw:
             dev.ck("cuEventRecord", ring[i % 2], self.stream)
             if i:
                 dev.ck("cuEventSynchronize", ring[(i - 1) % 2])
+                self.done = calls - self.graph_calls
             i += 1
         dev.ck("cuEventRecord", ev[1], self.stream)
         dev.ck("cuEventSynchronize", ev[1])
@@ -195,7 +198,8 @@ class Pouw:
 class Audit:
     """The bandwidth audit's chained prover passes on one stream of its own (and its side stream)."""
 
-    def __init__(self, lib_path: str, gib: float, ctas: int, chunk_log2: int, kept_from: int, log):
+    def __init__(self, lib_path: str, gib: float, ctas: int, chunk_log2: int, kept_from: int, side_priority: int | None,
+                 log):
         import torch
 
         sys.path.insert(0, str(RS))
@@ -215,12 +219,16 @@ class Audit:
             g.manual_seed(1)
             self.store = s = device.DeviceStore(torch, lib, lib_open, None, blocks, b"k" * 32, g, chunk=1 << chunk_log2,
                                                 kept_from=kept_from, sketch_ctas=ctas)
+            if side_priority is not None:
+                s.side = torch.cuda.Stream(priority=side_priority)
             seed = rb.seed(b"\1" * 32, 0, bytes(64))
             root, _ = s.run_pass(seed)
             plain = s.plain_root(seed)
         torch.cuda.synchronize()
         self.gate = {"pass_root_vs_plain": root == plain, "blocks": blocks, "bytes": blocks * device.BLOCK,
-                     "chunk_log2": chunk_log2, "h0": s.h0, "sketch_ctas": ctas}
+                     "chunk_log2": chunk_log2, "h0": s.h0, "sketch_ctas": ctas, "fused_consumer": s.h0 <= 8,
+                     "side_priority": side_priority if side_priority is not None else -1}
+        self.done = 0
         log(f"audit: gate {self.gate}")
         if not self.gate["pass_root_vs_plain"]:
             raise SystemExit("the pipelined pass's root is not the plain pass's")
@@ -242,6 +250,7 @@ class Audit:
             while (i < count) if count else (time.perf_counter() - t0 < seconds):
                 s.run_chain(i)
                 i += 1
+                self.done = i
             wall = time.perf_counter() - t0
         gpu = sorted(s.pass_gpu_ms[-i:])
         host = sorted(x[2] for x in s.chain_host_phases[-i:])
@@ -268,7 +277,10 @@ def main() -> int:
     ap.add_argument("--gib", type=float, default=16.0)
     ap.add_argument("--sketch-ctas", type=int, default=128)
     ap.add_argument("--chunk-log2", type=int, default=18)
-    ap.add_argument("--kept-from", type=int, default=6)
+    ap.add_argument("--kept-from", type=int, default=6, help="h0; above 8 the pass's tree takes the unfused path")
+    ap.add_argument("--side-priority", type=int, help="the pass's side stream's priority (device.py's: -1)")
+    ap.add_argument("--watchdog", type=float, default=0.0,
+                    help="seconds past the window after which every thread's stack is dumped and the process exits")
     ap.add_argument("--seconds", type=float, default=20.0)
     ap.add_argument("--count", type=int, default=0, help="calls or passes instead of --seconds")
     ap.add_argument("--ready")
@@ -284,7 +296,7 @@ def main() -> int:
         import torch
 
         torch.cuda.init()
-        audit = Audit(a.lib, a.gib, a.sketch_ctas, a.chunk_log2, a.kept_from, log)
+        audit = Audit(a.lib, a.gib, a.sketch_ctas, a.chunk_log2, a.kept_from, a.side_priority, log)
         out["audit_gate"] = audit.gate
     if a.mode in ("pouw", "joint"):
         pouw = Pouw(pc, a.ship, pc.parse_shape(a.shape), a.weights, a.graph_calls, not a.no_graph, log)
@@ -294,6 +306,16 @@ def main() -> int:
     gc.disable()
     wait_go(a)
     prof = pouw or audit
+    if a.watchdog:
+        faulthandler.dump_traceback_later(a.seconds + a.watchdog, exit=True)
+    stop = threading.Event()
+
+    def progress() -> None:
+        t0 = time.perf_counter()
+        while not stop.wait(1.0):
+            log(json.dumps({"t": round(time.perf_counter() - t0, 1), "calls": getattr(pouw, "done", None),
+                            "passes": getattr(audit, "done", None)}))
+    threading.Thread(target=progress, daemon=True).start()
     with Sampler(pc, os.environ.get("GPU_LEASE_UUID") or os.environ.get("PEARLC_EXPECT_UUID") or "") as smp:
         prof.profiler(True)
         if a.mode == "joint":
@@ -308,6 +330,8 @@ def main() -> int:
         else:
             out["audit"] = audit.loop(a.seconds, a.count, None)
         prof.profiler(False)
+    stop.set()
+    faulthandler.cancel_dump_traceback_later()
     gc.enable()
     out["nvml"] = smp.summary()
     out["utc_end"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
