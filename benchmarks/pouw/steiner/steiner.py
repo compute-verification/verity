@@ -607,7 +607,7 @@ def cmd_general(args, out) -> None:
                         break
             if len(terms) <= args.max_terminals and len({t["chain"] for t in terms}) >= 3:
                 probs.append((f"rand_{R}x{C}_{len(probs)}", R, C, terms, {}))
-        solve_batch(probs, out, f"random_{R}x{C}")
+        solve_batch(probs, out, f"random_{R}x{C}", batch=R * C <= 20)
     # block grids: matmul's direct-sum structure with arbitrary block contents (2x2 grid of 2x2 blocks, exhaustive)
     inv = [m for m in itertools.product((0, 1), repeat=4) if (m[0] * m[3] + m[1] * m[2]) % 2]
     probs = []
@@ -718,117 +718,135 @@ def subspace_problem(name: str, R: int, C: int, terms: list[dict], gens: list[in
 
 
 def cmd_subspace(args, out) -> None:
+    """Exact DW inside many subspaces S containing the targets: each tree found is valid in the whole space, so a length
+    under naive anywhere is a counterexample. A counterexample of length l lies in the span of its l rank-1 edges."""
     a, b, c, L = args.a, args.b, args.c, args.L
     R, C, terms = matmul_targets(a, b, c, L)
-    naive = a * b * c
+    naive_mask = naive_by_mask(terms)
+    naive = naive_mask[-1]
     rng = random.Random(args.seed)
     std = standard_pieces(a, b, c)
     orbit = strassen_orbit()
+    threads = int(os.environ.get("OMP_NUM_THREADS", "1"))
     emit(out, {"kind": "strassen_orbit", "schemes": len(orbit)})
-    pairings = [((0, 1), (2, 3)), ((0, 2), (1, 3)), ((0, 3), (1, 2))] if b == 4 else [((0, 1),)]
+    if b == 4:
+        pairings = [((0, 1), (2, 3)), ((0, 2), (1, 3)), ((0, 3), (1, 2))]
+    elif b == 2:
+        pairings = [((0, 1),)]
+    else:
+        pairings = [((0, 1),), ((0, 2),), ((1, 2),)]
+    rowpairs = list(itertools.combinations(range(a), 2))
+    colpairs = list(itertools.combinations(range(c), 2))
     deadline = time.time() + args.budget_s
-    best = {"answer": 999}
+    best: dict = {"answer": 999}
     stats: dict[str, dict] = {}
 
-    def run_family(family: str, items: list[tuple[str, list[int]]], batch: bool) -> None:
+    def n_for(k: int) -> int:
+        return max(4, int(args.samples * 2 ** min(0, args.batch_k - k)))
+
+    def run_family(family: str, items: list[tuple[str, list[int]]]) -> None:
         nonlocal best
-        specs, ks = [], {}
+        probs = []
         for nm, gens in items:
             sp, k = subspace_problem(nm, R, C, terms, gens)
-            if k > args.max_k:
-                continue
-            specs.append(sp)
-            ks[nm] = (k, gens)
-        if not specs:
-            return
-        t0 = time.time()
-        res = run_solver("".join(specs), batch=batch)
-        st = stats.setdefault(family, {"family": family, "subspaces": 0, "best": 999, "unreachable": 0, "k_max": 0,
-                                       "wall_s": 0.0, "hist": {}})
-        st["wall_s"] = round(st["wall_s"] + time.time() - t0, 1)
-        for r in res:
-            k, gens = ks[r["name"]]
-            st["subspaces"] += 1
-            st["k_max"] = max(st["k_max"], k)
-            ans = r["answer"]
-            st["unreachable"] += ans >= 120
-            st["hist"][str(ans)] = st["hist"].get(str(ans), 0) + 1
-            st["best"] = min(st["best"], ans)
-            if ans < best["answer"] or (ans < naive):
-                v = verify_tree_f2(r, R, C)
-                rec = {"kind": "subspace_best", "family": family, "case": r["name"], "k": k, "answer": ans,
-                       "naive": naive, "beats_naive": ans < naive, "tree_check": v, "tree": r["tree"],
-                       "gens": [hex(g) for g in gens]}
-                if ans < best["answer"]:
-                    best = {**rec}
-                emit(out, rec)
+            if k <= args.max_k:
+                probs.append((nm, sp, k, gens))
+        st = stats.setdefault(family, {"family": family, "subspaces": 0, "best": 999, "unreachable": 0, "k_min": 99,
+                                       "k_max": 0, "wall_s": 0.0, "hist": {}, "subset_counterexamples": 0})
+        small = [p for p in probs if p[2] <= args.batch_k]
+        large = [p for p in probs if p[2] > args.batch_k]
+        chunks = [(small[i:i + 4 * threads], True) for i in range(0, len(small), 4 * threads)]
+        chunks += [(large[i:i + 2], False) for i in range(0, len(large), 2)]
+        for chunk, batch in chunks:
+            if time.time() > deadline:
+                st["cut_by_deadline"] = True
+                break
+            t0 = time.time()
+            res = run_solver("".join(p[1] for p in chunk), batch=batch)
+            st["wall_s"] = round(st["wall_s"] + time.time() - t0, 1)
+            info = {p[0]: p for p in chunk}
+            for r in res:
+                _, _, k, gens = info[r["name"]]
+                st["subspaces"] += 1
+                st["k_min"], st["k_max"] = min(st["k_min"], k), max(st["k_max"], k)
+                ans = r["answer"]
+                st["unreachable"] += ans >= 120
+                st["hist"][str(ans)] = st["hist"].get(str(ans), 0) + 1
+                st["best"] = min(st["best"], ans)
+                below = [S for S in range(1, 1 << len(terms)) if r["root_dp"][S] < naive_mask[S]]
+                st["subset_counterexamples"] += bool(below)
+                if ans < best["answer"] or ans < naive or below:
+                    rec = {"kind": "subspace_best", "family": family, "case": r["name"], "k": k, "answer": ans,
+                           "naive": naive, "beats_naive": ans < naive, "tree_check": verify_tree_f2(r, R, C),
+                           "subsets_below": [[S, r["root_dp"][S], naive_mask[S]] for S in below][:20],
+                           "tree": r["tree"], "gens": [hex(g) for g in gens]}
+                    if ans < best["answer"]:
+                        best = rec
+                    emit(out, rec)
         emit(out, {"kind": "subspace_family", **st})
 
-    # (a) a Strassen scheme on each half of every pairing of the inner indices (all pairs of schemes), with and
-    #     without the standard pieces x_rk y_kc; then with random cross products between the halves
+    def scheme_on(scheme, ks, rows=(0, 1), cols=(0, 1)) -> list[int]:
+        return block_products(scheme, a, b, c, rows, ks, cols)
+
+    def random_scheme_gens(nblocks: int) -> list[int]:
+        pairing = rng.choice(pairings)
+        g = []
+        for ks in pairing[:nblocks]:
+            g += scheme_on(rng.choice(orbit), ks, rng.choice(rowpairs), rng.choice(colpairs))
+        return g
+
+    # (a) Strassen schemes (36 over F2) on the 2x2x2 blocks of the inner indices: all pairs, k = 14 for <2,4,2>
     for pi, pairing in enumerate(pairings):
-        if b == 4:
-            h0, h1 = pairing
-            items = [(f"a_p{pi}_{i}_{j}", block_products(s0, a, b, c, (0, 1), h0, (0, 1))
-                      + block_products(s1, a, b, c, (0, 1), h1, (0, 1)))
+        if len(pairing) == 2:
+            items = [(f"a_p{pi}_{i}_{j}", scheme_on(s0, pairing[0]) + scheme_on(s1, pairing[1]))
                      for i, s0 in enumerate(orbit) for j, s1 in enumerate(orbit)]
         else:
-            items = [(f"a_p{pi}_{i}", block_products(s0, a, b, c, (0, 1), pairing[0], (0, 1))) for i, s0 in enumerate(orbit)]
-        run_family(f"a_strassen_pairing{pi}", items, batch=True)
-        if time.time() > deadline:
-            break
-        items = [(nm + "_std", gens + std) for nm, gens in rng.sample(items, min(len(items), args.samples))]
-        run_family(f"a_strassen_std_pairing{pi}", items, batch=True)
+            items = [(f"a_p{pi}_{i}", scheme_on(s0, pairing[0])) for i, s0 in enumerate(orbit)]
+        run_family(f"a_strassen_pairing{pi}", items)
+    # the standard pieces x_rk y_kc (so the naive tree is inside S) plus one scheme on one block, every one
+    items = [(f"a1_p{pi}_h{h}_{i}", std + scheme_on(s0, pairing[h]))
+             for pi, pairing in enumerate(pairings) for h in range(len(pairing)) for i, s0 in enumerate(orbit)]
+    run_family("a_std_plus_one_scheme", items)
+    # the standard pieces plus a scheme on each block, sampled
+    if b == 4:
+        items = [(f"a2_{t}", std + random_scheme_gens(2)) for t in range(n_for(len(std) + 6))]
+        run_family("a_std_plus_two_schemes", items)
+    # one scheme per block plus m cross products (the X factor of one product times the Y factor of another)
     for m in (2, 4, 6):
-        if time.time() > deadline:
-            break
         items = []
-        for t in range(args.samples):
-            pairing = rng.choice(pairings)
-            if b == 4:
-                g = (block_products(rng.choice(orbit), a, b, c, (0, 1), pairing[0], (0, 1))
-                     + block_products(rng.choice(orbit), a, b, c, (0, 1), pairing[1], (0, 1)))
-            else:
-                g = block_products(rng.choice(orbit), a, b, c, (0, 1), pairing[0], (0, 1))
-            cross = []
-            for _ in range(m):
-                p, q = rng.sample(g, 2)
-                # the X factor of one product times the Y factor of another
-                cross.append(outer(x_factor(p, R, C), y_factor(q, R, C), R, C))
-            items.append((f"a_cross{m}_{t}", g + std + cross))
-        run_family(f"a_strassen_std_cross{m}", items, batch=True)
-    # (b) the standard pieces plus m random dense rank-1 forms; (c) plus m position-aligned ones (u in a row's X block,
-    #     v in a column's Y block), or row- or column-aligned ones
-    for how, fam in (("dense", "b_random_dense"), ("aligned", "c_aligned"), ("row", "c_row_aligned"),
-                     ("col", "c_col_aligned")):
-        for m in args.extra:
-            if time.time() > deadline:
-                break
+        for t in range(n_for(14 + m)):
+            g = random_scheme_gens(2)
+            cross = [outer(x_factor(p, R, C), y_factor(q, R, C), R, C) for p, q in (rng.sample(g, 2) for _ in range(m))]
+            items.append((f"a3_m{m}_{t}", g + cross))
+        run_family(f"a_schemes_plus_cross_m{m}", items)
+    # (b) the standard pieces plus m random dense rank-1 forms; (c) plus m aligned ones: u in one row's X block and v
+    #     in one column's Y block, or only u aligned, or only v
+    for m in args.extra:
+        for how, fam in (("dense", "b_random_dense"), ("aligned", "c_aligned"), ("row", "c_row_aligned"),
+                         ("col", "c_col_aligned")):
             items = [(f"{fam}{m}_{t}", std + [random_rank1(rng, R, C, a, b, c, how) for _ in range(m)])
-                     for t in range(args.samples)]
-            run_family(f"{fam}_m{m}", items, batch=len(std) + m <= args.batch_k)
-    # (d) greedy growth: keep the best subspace found (fewest edges, then most states reachable below naive) and add
-    #     rank-1 forms built from the factors of its tree's edges
-    if best.get("tree") and time.time() < deadline:
+                     for t in range(n_for(len(std) + m))]
+            run_family(f"{fam}_m{m}", items)
+    # (d) greedy growth from the best tree found: add rank-1 forms built from its edges' factors
+    for rnd in range(args.greedy_rounds):
+        if not best.get("tree") or time.time() > deadline:
+            break
         gens = [int(g, 16) for g in best["gens"]]
-        for rnd in range(args.greedy_rounds):
-            if time.time() > deadline:
-                break
-            edges = [int(x, 16) ^ int(y, 16) for x, y in best["tree"]]
-            us = [x_factor(e, R, C) for e in edges]
-            vs = [y_factor(e, R, C) for e in edges]
-            items = []
-            for t in range(args.samples):
-                extra = []
-                for _ in range(rng.randint(1, 4)):
-                    u = rng.choice(us) ^ (rng.choice(us) if rng.random() < 0.5 else 0)
-                    v = rng.choice(vs) ^ (rng.choice(vs) if rng.random() < 0.5 else 0)
-                    if u and v:
-                        extra.append(outer(u, v, R, C))
-                items.append((f"d_greedy{rnd}_{t}", gens + extra))
-            run_family(f"d_greedy_round{rnd}", items, batch=True)
+        edges = [int(x, 16) ^ int(y, 16) for x, y in best["tree"]]
+        us = [x_factor(e, R, C) for e in edges]
+        vs = [y_factor(e, R, C) for e in edges]
+        items = []
+        for t in range(n_for(len(reduce_basis(gens + [x["m"] for x in terms])) + 2)):
+            extra = []
+            for _ in range(rng.randint(1, 4)):
+                u = rng.choice(us) ^ (rng.choice(us) if rng.random() < 0.5 else 0)
+                v = rng.choice(vs) ^ (rng.choice(vs) if rng.random() < 0.5 else 0)
+                if u and v:
+                    extra.append(outer(u, v, R, C))
+            items.append((f"d_greedy{rnd}_{t}", gens + extra))
+        run_family(f"d_greedy_round{rnd}", items)
     emit(out, {"kind": "subspace_summary", "shape": [a, b, c], "L": L, "naive": naive, "best": best.get("answer"),
-               "families": list(stats.values())})
+               "subspaces": sum(s["subspaces"] for s in stats.values()), "families": list(stats.values())})
 
 
 def cmd_matmul(args, out) -> None:
@@ -871,9 +889,10 @@ def main() -> None:
         p.add_argument(f"--{k}", type=int, default=v)
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--samples", type=int, default=200, help="subspaces per sampled family")
-    p.add_argument("--extra", type=int, nargs="+", default=[4, 6, 8, 10])
-    p.add_argument("--max-k", type=int, default=26)
-    p.add_argument("--batch-k", type=int, default=20, help="solve subspaces up to this dimension in parallel, one each")
+    p.add_argument("--extra", type=int, nargs="+", default=[2, 4, 6, 8])
+    p.add_argument("--max-k", type=int, default=24)
+    p.add_argument("--batch-k", type=int, default=18,
+                   help="solve subspaces up to this dimension in parallel, one each; above it, sample counts halve per dim")
     p.add_argument("--greedy-rounds", type=int, default=5)
     p.add_argument("--budget-s", type=float, default=3600)
     args = ap.parse_args()
