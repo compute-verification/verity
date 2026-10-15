@@ -33,6 +33,9 @@ lam cancel both words and reach rank P >= k - rank B, unless each side adds one 
 Part 14: d*L for two words on two D-rows when the pencil has generic rank 2L or at most three directions help: Lemma J
 (a star helped by one word Z saves <= L - rank of Z off its line, and <= rank of Z on its box), the Kronecker bound on a
 pencil's rank drops, and the case split for three directions.
+Part 15: the exhaustive GF(3) search for the rest of d = 2 (merges_gf3_search.py): its symmetries permute the D-cells
+and fix (0, 0), the first words' orbits are all of cell (0, 0)'s helpful words, the helpful set agrees with ranks,
+and on 2 x 2 at L = 2 every space in which all four directions help saves <= 2L, with totals re-checked by ranks.
 """
 
 import random
@@ -1735,9 +1738,63 @@ def part4(rng):
           f"{n_products} products = {rank_phi} - {nu_total}/2 (tight)")
 
 
+def part15(rng):
+    import itertools
+
+    import merges_gf3_search as g
+
+    for P, Q in ((2, 2), (2, 3)):
+        cells = [(i, j) for i in range(P) for j in range(Q)]
+        Ds = np.array([g.unit(P, Q, t) for t in cells])
+        R1 = g.rank_le1(2 * P, 2 * Q)
+        W = (g.unit(P, Q, (0, 0)) + R1) % 3
+        words = set(zip(*(x.tolist() for x in g.planes(W))))
+        a1s, a2s = g.canonical_first(P, Q)
+        reps = np.array([g.decode(a, b, P, Q) for a, b in zip(a1s, a2s)])
+        orbit = set()
+        for (G, Gi), rp, cp in itertools.product(g.gl2(), itertools.permutations(range(1, P)),
+                                                 itertools.permutations(range(1, Q))):
+            rp, cp = (0,) + rp, (0,) + cp
+            img = g.act(Ds, G, Gi, rp, cp, P, Q)
+            for t, M in zip(cells, img):
+                assert (M == g.unit(P, Q, (rp.index(t[0]), cp.index(t[1])))).all(), "a symmetry moves the D-cells"
+            orbit |= set(zip(*(x.tolist() for x in g.planes(g.act(reps, G, Gi, rp, cp, P, Q)))))
+        assert orbit == words, "the first words' orbits are not cell (0, 0)'s helpful words"
+        H = g.Helpful(P, Q)
+        n_help = 0
+        for _ in range(300):
+            t = rng.choice(cells)
+            R = sum(np.outer([rng.randrange(3) for _ in range(2 * P)], [rng.randrange(3) for _ in range(2 * Q)])
+                    for _ in range(rng.choice([1, 1, 2])))
+            w = (g.unit(P, Q, t) + R) % 3 if rng.random() < 0.8 else np.array(
+                [[rng.randrange(3) for _ in range(2 * Q)] for _ in range(2 * P)])
+            j = H.find(*(x for x in g.planes(w[None])))[0]
+            sav = [max(0, 2 - rank((w - D) % 3, 3)) for D in Ds]
+            assert (j >= 0) == any(sav) and (j < 0 or list(H.sav[j]) == sav), "helpful set disagrees with ranks"
+            n_help += j >= 0
+        assert 0 < n_help < 300
+        print(f"[gf3] {P}x{Q}: symmetries permute the D-cells, {len(a1s)} first words cover {len(words)}, helpful set "
+              f"({len(H.h)} words) agrees with ranks on {n_help} helpful and {300 - n_help} other words: ok")
+    res = g.search(2, 2, verify=80, log=lambda s: None)
+    assert res["max_total"] <= 4 and res["verified_by_ranks"] == 80 and res["four_direction_pairs"] > 0
+    H, hist = g.Helpful(2, 2), {}
+    Bs = np.array([g.decode(x, y, 2, 2) for x, y in zip(H.p1, H.p2)])
+    for a1, a2 in zip(*g.canonical_first(2, 2)):
+        A = g.decode(a1, a2, 2, 2)
+        els = [A + 0 * Bs, -A + 0 * Bs, Bs, -Bs, A + Bs, -A - Bs, A - Bs, Bs - A]
+        idx = np.stack([H.find(*g.planes(E % 3)) for E in els], axis=1)
+        new = ~((Bs == A).all(axis=(1, 2)) | ((Bs + A) % 3 == 0).all(axis=(1, 2)))
+        four = new & (idx[:, 4:6] >= 0).any(axis=1) & (idx[:, 6:8] >= 0).any(axis=1)
+        for v, c in zip(*np.unique(g.total_of(H, idx[four]), return_counts=True)):
+            hist[int(v)] = hist.get(int(v), 0) + int(c)
+    assert hist == res["histogram"], f"integer arithmetic gives {hist}, the bit-plane search {res['histogram']}"
+    print(f"[gf3] 2x2: {res['four_direction_pairs']} four-direction spaces, largest total {res['max_total']} <= 2L = 4, "
+          f"80 totals re-checked by ranks, the histogram reproduced in integer arithmetic: ok")
+
+
 if __name__ == "__main__":
     rng = random.Random(20261015)
-    parts = sys.argv[1:] or ["1", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14"]
+    parts = sys.argv[1:] or ["1", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"]
     if "1" in parts:
         part1_2(rng)
     if "3" in parts:
@@ -1764,3 +1821,5 @@ if __name__ == "__main__":
         part13(rng)
     if "14" in parts:
         part14(rng)
+    if "15" in parts:
+        part15(rng)
