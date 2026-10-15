@@ -178,3 +178,47 @@ class CutlassScaledMmFp8Block:
         return Compute(T.scaled_mm_fp8_block_spec(tp, K, N, G), M, (PerRow(xq), PerRow(xs), Shared(w), Shared(ws)), (PerRow(out),),
                        (node.id,), hint=hint_of(node, wname), kernels=("cutlass_3x_gemm_fp8_blockwise", "sm90_fp8_blockwise"),
                        attribution=attribution_for(ctx, M, node.phase), pattern=self.name, roots=(None, None, wname, sname))
+
+
+@dataclass
+class DynamicDeepGemmFp8Linear:
+    """`vllm.dynamic_flashinfer_deepgemm_blockscale_gemm(x[M,K] bf16, weight[N,K] e4m3, weight_scale[cdiv(N,128),K/128] f32, 128,
+    True)`: vLLM's default Hopper block-FP8 linear (GLM-5.3's attention and dense projections), one custom op whose kernels the
+    observer never sees.  Below 32 rows it is FlashInfer's (`deepgemm.FlashInferFp8Linear_v1{K,N}`, y), from 32 DeepGEMM's
+    (`deepgemm.DeepGemmFp8Linear_v1{K,N}`, (q, s, y), only y in memory): the Build's `DynamicDeepGemmFp8LinearRule`, row for row.
+    The weight and its scale are the op's own parameters (load-time ue8m0 requantised), named per operand."""
+
+    name: str = "fp8.dynamic_deepgemm_linear"
+
+    def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
+        if node.is_triton or op_name(node.op) != "dynamic_flashinfer_deepgemm_blockscale_gemm":
+            return None
+        from verity_vllm.program.registry import deepgemm
+
+        a = bound_args(node)
+        x, w, ws = _arg(a, "input", pos=0), _arg(a, "weight", pos=1), _arg(a, "weight_scale", pos=2)
+        group, ue8m0 = _arg(a, "group_size", pos=3), _arg(a, "use_deep_gemm_e8m0", pos=4)
+        outs = node.output_views()
+        if not all(isinstance(v, ViewDesc) for v in (x, w, ws)) or len(outs) != 1:
+            return unsupported(node, "dynamic FP8 linear arguments not bound as expected", args={k: _fmt(v) for k, v in a.items()})
+        out = outs[0]
+        if group != 128 or ue8m0 is not True:
+            return unsupported(node, "the Build's rule is group_size 128 with use_deep_gemm_e8m0", group_size=group, use_deep_gemm_e8m0=ue8m0)
+        if x.rank != 2 or not is_row_major(x) or out.rank != 2 or not is_row_major(out) or w.rank != 2 or not is_row_major(w):
+            return unsupported(node, "input / weight / output are not row-major matrices", x=repr(x), w=repr(w), out=repr(out))
+        M, K = x.shape
+        N = w.shape[0]
+        if w.shape != (N, K) or out.shape != (M, N) or K % 128 or ws.shape != (fp8.weight_blocks(N, 128), K // 128) or not is_row_major(ws):
+            return unsupported(node, "shapes are not [M,K] x [N,K] -> [M,N] with [cdiv(N,128), K/128] scales", x=repr(x), w=repr(w), ws=repr(ws), out=repr(out))
+        if not (x.dtype == "bfloat16" and w.dtype == E4M3 and ws.dtype == "float32" and out.dtype == "bfloat16"):
+            return unsupported(node, "the dynamic FP8 linear is (bf16, e4m3, f32 scales) -> bf16", dtypes=[x.dtype, w.dtype, ws.dtype, out.dtype])
+        wroots, sroots = ctx.roots_of(w), ctx.roots_of(ws)
+        if not any(r.role == "weight" for r in wroots) or not any(r.role == "weight" for r in sroots):
+            return unsupported(node, "weight / weight_scale are not checkpoint parameters (weight Roots)", w=repr(w), ws=repr(ws))
+        wname, sname = wroots[0].name, sroots[0].name
+        if M < 32:
+            spec, outputs, kernels = bind(deepgemm.FlashInferFp8Linear, K=K, N=N), (PerRow(out),), ("fp8_blockscale", "trtllm", "swapAB")
+        else:
+            spec, outputs, kernels = bind(deepgemm.DeepGemmFp8Linear, K=K, N=N), (None, None, PerRow(out)), ("per_token_group_quant", "fp8_gemm")
+        return Compute(spec, M, (PerRow(x), Shared(w), Shared(ws)), outputs, tuple(sorted(node.ids())), hint=hint_of(node, wname),
+                       kernels=kernels, attribution=attribution_for(ctx, M, node.phase), pattern=self.name, roots=(None, wname, sname))
