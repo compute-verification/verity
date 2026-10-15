@@ -14,7 +14,8 @@ First it reproduces Lean's `epsS32_values` and `epsP1mu_values` exactly (exit 1 
 - The window alone: the receipted call fills the window by itself at its measured eta (no filler beside it), its receipts
   its only forced work: s = eta_cap cap steps, N = s / 256 blocks, Rmin = r_u s Nmin / N.
 
-Each shape's arms at their faster tile config (table.best). Usage: eps.py BENCH.jsonl [nu ...]   (nu as fractions of all issue; default 0 0.005 0.04 and W11's 0.0005 0.0025)
+Each shape's arms at their faster tile config (table.best). Usage: eps.py BENCH.jsonl [nu ...]   (nu as fractions of all issue; default 0 0.005 0.04 and W11's upper ends,
+0.00065 at delta = 0.1%, 0.00268 at 0.5% and 0.00534 at 1%: note:20261015T0713Z-draft-filler-issue-slack)
 """
 
 import json
@@ -101,7 +102,7 @@ def main():
     rows = [{"name": r["label"], "m": r["m"], "n": r["n"], "k": r["k"],
              "eta": {a: v["eta"] for a, v in r["arms"].items() if v["eta"] > 0}}
             for r in best([json.loads(x) for x in open(sys.argv[1]) if x.strip()])]
-    nus = [float(x) for x in sys.argv[2:]] or [0, 0.005, 0.04, 0.0005, 0.0025]
+    nus = [float(x) for x in sys.argv[2:]] or [0, 0.005, 0.04, 0.00065, 0.00268, 0.00534]
     pts = [(r["name"], r["eta"]) for r in rows]
     for m in sorted({r["m"] for r in rows if r["m"] != r["n"] or r["n"] != r["k"]}, reverse=True):
         pts.append((f"served m={m} (MAC-weighted)", {a: served_eta(rows, a, m) for a in rows[0]["eta"]}))
