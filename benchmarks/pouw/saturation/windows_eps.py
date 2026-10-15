@@ -48,6 +48,10 @@ DESIGNS = [  # name, prefill kernel, decode kernel
     ("1× alu, L = 64", "p_alu_g2", None),
     ("1× alu, L = 32", "p_alu_g4", "d_alu_g4"),
     ("1× alu, L = 32, 1 forced step", "p_alu_g4_f1", None),
+    ("1× alu, L = 32, 64 forced FFMAs", "p_alu_g4_ff64", None),
+    ("1× alu, L = 32, 128 forced FFMAs", "p_alu_g4_ff128", None),
+    ("1× alu, L = 32, 192 forced FFMAs", "p_alu_g4_ff192", None),
+    ("1× alu, L = 32, 256 forced FFMAs", "p_alu_g4_ff256", None),
     ("3× alu, L = 128, spread (crossover)", "p_alu3_p1s", "d_alu16_p1"),
 ]
 SCENARIOS = [  # name, measured idle SM-time as served?, ν_f (CUDA slack a fused cheater uses; None: measured)
@@ -138,7 +142,7 @@ def main():
     tab = json.load(open(a.table))
     for t in map(lambda p: json.load(open(p)), a.more):
         have = {r["kernel"] for r in tab["rows"]}
-        new = lambda k: k not in have and not re.search(r"_x\d+$", k)
+        new = lambda k: k not in have and not re.search(r"_x[if]?\d+$", k)
         tab["rows"] += [r for r in t["rows"] if new(r["kernel"])]
         tab["phases"] += [p for p in t["phases"] if new(p["kernel"])]
     kept = {(p["kernel"], p["phase"]): p["rate_kept"] for p in tab["phases"]}
@@ -182,7 +186,10 @@ def main():
             step, g, _ = SPLIT[ph]
             over = g / step * (1 / kp - 1)
             kappa = max(16.0, L / 3)
-            h = rounds * H_PHI[var] + H_TREE
+            # CR_FORCED's steps are folded into the receipt words, so they are honest slots a word as well: F a thread
+            # a 32-deep k-block, an alu φ1 at H_PHI[0] slots or an FFMA at one, over the tile's 128·128·32/L words
+            forced = m.get("forced", 0) * m.get("threads", 256) * (1 if m.get("fvar") == 2 else H_PHI[0]) * L / (128 * 128 * 32)
+            h = rounds * H_PHI[var] + forced + H_TREE
             eta_w = ETA_GEMM[ph] * kp
             mult = kappa / (RHO * eta_w)
             f_terms = F + kappa * F * h / L
