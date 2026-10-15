@@ -17,7 +17,8 @@ pass       on each GPU, its seed, signs and constants derived from the previous 
            the leader (GPU 0) the levels above hc from every GPU's over P2P, the root written to every GPU's ring
            (`rs_top`). Each pass is queued on every GPU behind the leader's event for the root it chains from, while
            the pass before it runs, so the passes follow one another on the devices with no host step between them.
-           A pass keeps its packed signs (8 KiB), each shard's levels h0 … hc and the levels above, nothing per block
+           A pass keeps its packed signs (8 KiB), each shard's levels h0 … hc and the levels above, nothing per block,
+           in rings allocated with the store and copied to host memory as its part ends, so a pass allocates nothing
 opening    a window's draws at once, shard by shard on each GPU's opening stream: each drawn leaf's subtree of 2^h0
            leaves recomputed from the shard under its pass's constants by a second copy of the library
            (`rs_subtrees`), then its receipts and its path below hc gathered from those subtrees and the shard's kept
@@ -301,39 +302,35 @@ class Gpu:
         self.sms = torch.cuda.get_device_properties(index).multi_processor_count
 
 
-@dataclass(slots=True)
-class Ticket:
-    """A queued pass: its slot in the root rings, and what its openings keep (the leader's seed and packed signs, each
-    shard's levels h0 … hc and the levels above hc)."""
-
-    slot: int
-    seed: object
-    pk: object
-    kept: list
-    top: object
-
-    @property
-    def handle(self) -> tuple:
-        return self.seed, self.pk, self.kept, self.top
-
-
 class OffloadedHandle:
-    """A pass handle whose device-to-host copy finishes on the backend's offloader."""
+    """A pass's handle, (seed, packed signs, each shard's levels h0 … hc, the levels above hc) in host memory, once the
+    store's offloader has copied it out of the pinned ring (`DeviceStore.ready`)."""
 
-    __slots__ = ("value",)
+    __slots__ = ("value", "done")
 
     def __init__(self) -> None:
-        self.value = None
+        self.value, self.done = None, threading.Event()
+
+
+@dataclass(slots=True)
+class Ticket:
+    """A queued pass: its slot in the rings, and its handle."""
+
+    slot: int
+    handle: OffloadedHandle
 
 
 class DeviceStore:
     """N blocks in shards across `gpus` (the current GPU if none), their payload tree on the CPU, then the encoded store
     and the passes over it. `generator` seeds each shard's blocks: an int (GPU g's from seed + g), or for one GPU a
-    torch generator on it."""
+    torch generator on it.
+
+    What a pass keeps goes to a ring of SLOTS on each GPU and from there, on each GPU's offload stream as its part ends,
+    to a pinned host ring, both allocated with the store's shape (`shape`); the store's offloader copies each slot into
+    the pass's handle in ordinary host memory and frees it for the pass SLOTS later. So no pass allocates."""
 
     def __init__(self, torch, lib: Lib, lib_open: Lib, kv: Kv, blocks: int, key: bytes, generator, *, gpus=None,
-                 chunk: int = 1 << 18, kept_from: int = 6, sketch_ctas: int = 128, payload_kept_from: int = 6,
-                 offload_handles: bool = False) -> None:
+                 chunk: int = 1 << 18, kept_from: int = 6, sketch_ctas: int = 128, payload_kept_from: int = 6) -> None:
         gpus = gpus or [Gpu(torch, torch.cuda.current_device(), own=False)]
         G = len(gpus)
         if blocks % PER_LEAF or blocks % chunk or blocks // chunk < G or G > 16:
@@ -348,7 +345,6 @@ class DeviceStore:
         self.H = (blocks // PER_LEAF - 1).bit_length()
         self.tree_leaves = 1 << self.H
         self.payload_h0 = max(1, min(payload_kept_from, chunk.bit_length() - 1))
-        self.offload_handles = offload_handles
         self.data_g = []
         for g, gpu in enumerate(gpus):
             dev = torch.device("cuda", gpu.index)
@@ -386,8 +382,15 @@ class DeviceStore:
         self.root_ready = [torch.cuda.Event() for _ in range(SLOTS)]
         self.began = [[torch.cuda.Event(enable_timing=True) for _ in range(SLOTS)] for _ in gpus]
         self.ended = [[torch.cuda.Event(enable_timing=True) for _ in range(SLOTS)] for _ in gpus]
+        self.copied = [[torch.cuda.Event() for _ in range(SLOTS)] for _ in gpus]
+        self.free = [threading.Event() for _ in range(SLOTS)]
+        for f in self.free:
+            f.set()
         self.trace: list | None = None
         self._launch_trace: dict = {}
+        self.offload_ns: list[int] = []
+        self.offload_jobs: queue.Queue = queue.Queue()
+        threading.Thread(target=self._offload, daemon=True).start()
         self.ring = None
         self.shape(chunk, kept_from, sketch_ctas)
 
@@ -439,20 +442,30 @@ class DeviceStore:
         counts = [pads // G + (g < pads % G) for g in range(G)]
         self.pads = [(real + sum(counts[:g]), counts[g]) for g in range(G)]
         ready_blocks = min(chunk, 1 << 13)
+        self.offload_jobs.join()
         self.ring = None
         ring = []
         for g, gpu in enumerate(self.gpus):
             dev, n, pad_n = torch.device("cuda", gpu.index), self.n[g], self.pads[g][1] * lc
             with self.on(gpu):
-                ring.append({"ctr": torch.empty(3 + n // ready_blocks + n // chunk, dtype=torch.int32, device=dev),
-                             "ys": torch.empty((n, 8), dtype=torch.int64, device=dev),
-                             "dig": torch.empty((2 * lc, 8), dtype=torch.int64, device=dev),
-                             "up": torch.empty((2 * lc, 8), dtype=torch.int64, device=dev),
-                             "pad": torch.empty((max(2 * pad_n, 1), 8), dtype=torch.int64, device=dev),
-                             "pad_out": torch.empty((max(self.pads[g][1], 1), 8), dtype=torch.int64, device=dev),
-                             "seed": torch.empty(rb.DIGEST_BYTES, dtype=torch.uint8, device=dev),
-                             "pk": torch.empty(PACK16_WORDS, dtype=torch.int32, device=dev),
-                             "roots": torch.zeros((SLOTS + 1, 8), dtype=torch.int64, device=dev)})
+                r = {"ctr": torch.empty(3 + n // ready_blocks + n // chunk, dtype=torch.int32, device=dev),
+                     "ys": torch.empty((n, 8), dtype=torch.int64, device=dev),
+                     "dig": torch.empty((2 * lc, 8), dtype=torch.int64, device=dev),
+                     "up": torch.empty((2 * lc, 8), dtype=torch.int64, device=dev),
+                     "pad": torch.empty((max(2 * pad_n, 1), 8), dtype=torch.int64, device=dev),
+                     "pad_out": torch.empty((max(self.pads[g][1], 1), 8), dtype=torch.int64, device=dev),
+                     "seed": torch.empty(rb.DIGEST_BYTES, dtype=torch.uint8, device=dev),
+                     "pk": torch.empty(PACK16_WORDS, dtype=torch.int32, device=dev),
+                     "roots": torch.zeros((SLOTS + 1, 8), dtype=torch.int64, device=dev),
+                     "kept": torch.empty((SLOTS, self.kept_at[g][hc + 1], 8), dtype=torch.int64, device=dev)}
+                parts = ["kept"]
+                if g == 0:
+                    r["seeds"] = torch.empty((SLOTS, rb.DIGEST_BYTES), dtype=torch.uint8, device=dev)
+                    r["pks"] = torch.empty((SLOTS, PACK16_WORDS), dtype=torch.int32, device=dev)
+                    r["top"] = torch.empty((SLOTS, self.top_at[H + 1], 8), dtype=torch.int64, device=dev)
+                    parts += ["seeds", "pks", "top"]
+                r["host"] = {k: torch.empty(r[k].shape, dtype=r[k].dtype, pin_memory=True) for k in parts}
+                ring.append(r)
         self.ring = ring
         self.sync()
 
@@ -547,25 +560,28 @@ class DeviceStore:
         """Queue pass i chained from `after`'s root (None: the window's previous root, `start_chain`) on every GPU,
         each behind the leader's event for that root, or with `seed` an unchained pass under that seed's constants
         from the host; its ticket at once (`wait`)."""
-        torch, so, G, hc = self.torch, self.lib.so, len(self.gpus), self.hc
+        so, G, hc = self.lib.so, len(self.gpus), self.hc
         tr = None if self.trace is None else [time.perf_counter_ns(), time.thread_time_ns(), *_faults()]
         slot = self.launched % SLOTS
         self.launched += 1
+        # The offloader has copied this slot's last pass out of the pinned ring, so its copies on every GPU are done.
+        self.free[slot].wait()
+        self.free[slot].clear()
         prev = SLOTS if after is None else after.slot
         head = stream_head(seed) if seed is not None else None
         lc = self.chunk // PER_LEAF
-        kept, lead = [], None
+        kept = []
         for g, gpu in enumerate(self.gpus):
-            ring, dev = self.ring[g], self.data_g[g].device
+            ring = self.ring[g]
             with self.on(gpu) as s:
                 if after is not None:
                     s.wait_event(self.top_done[after.slot])
                 if g == 0:
                     self.started[slot].record(s)
                 self.began[g][slot].record(s)
-                sd = torch.empty(rb.DIGEST_BYTES, dtype=torch.uint8, device=dev) if g == 0 else ring["seed"]
-                pk = torch.empty(PACK16_WORDS, dtype=torch.int32, device=dev) if g == 0 else ring["pk"]
-                kp = torch.empty((self.kept_at[g][hc + 1], 8), dtype=torch.int64, device=dev)
+                sd = ring["seeds"][slot] if g == 0 else ring["seed"]
+                pk = ring["pks"][slot] if g == 0 else ring["pk"]
+                kp = ring["kept"][slot]
                 if tr is not None:
                     tr.append(time.perf_counter_ns())
                 if seed is None:
@@ -586,8 +602,6 @@ class DeviceStore:
                 if tr is not None:
                     tr.append(time.perf_counter_ns())
                 kept.append(kp)
-                if g == 0:
-                    lead = sd, pk
         leader = self.gpus[0]
         segs = [kp.data_ptr() + 64 * self.kept_at[g][hc] for g, kp in enumerate(kept)]
         counts = [n // self.chunk for n in self.n]
@@ -599,7 +613,7 @@ class DeviceStore:
         with self.on(leader) as s:
             for g in range(1, G):
                 s.wait_event(self.ended[g][slot])
-            top = torch.empty((self.top_at[self.H + 1], 8), dtype=torch.int64, device=self.data_g[0].device)
+            top = self.ring[0]["top"][slot]
             if tr is not None:
                 tr.append(time.perf_counter_ns())
             rc = so.rs_top(u64s(segs), u64s(counts), len(segs), top.data_ptr(), hc, self.H, u64s(roots), G,
@@ -611,12 +625,60 @@ class DeviceStore:
             c.wait_event(self.top_done[slot])
             self.root_host[slot].copy_(self.ring[0]["roots"][slot], non_blocking=True)
             self.root_ready[slot].record(c)
+        for g, gpu in enumerate(self.gpus):
+            ring = self.ring[g]
+            with self.on(gpu, gpu.offload) as c:
+                c.wait_event(self.top_done[slot] if g == 0 else self.ended[g][slot])
+                for k, host in ring["host"].items():
+                    host[slot].copy_(ring[k][slot], non_blocking=True)
+                self.copied[g][slot].record(c)
+        handle = OffloadedHandle()
+        self.offload_jobs.put((slot, seed, handle))
         if tr is not None:
             self._launch_trace[slot] = tr + [time.perf_counter_ns(), time.thread_time_ns(), *_faults()]
-        return Ticket(slot, lead[0] if seed is None else seed, lead[1], kept, top)
+        return Ticket(slot, handle)
+
+    def _offload(self) -> None:
+        """Each launched pass's handle out of the pinned ring once its copies are done, then its slot freed."""
+        while True:
+            job = self.offload_jobs.get()
+            if job is None:
+                self.offload_jobs.task_done()
+                return
+            slot, seed, handle = job
+            t0 = time.perf_counter_ns()
+            try:
+                for g in range(len(self.gpus)):
+                    self.copied[g][slot].synchronize()
+                host = self.ring[0]["host"]
+                handle.value = (seed if seed is not None else bytes(host["seeds"][slot].numpy()),
+                                host["pks"][slot].clone(), [r["host"]["kept"][slot].clone() for r in self.ring],
+                                host["top"][slot].clone())
+            except BaseException as error:
+                handle.value = error
+            finally:
+                self.free[slot].set()
+                handle.done.set()
+                self.offload_ns.append(time.perf_counter_ns() - t0)
+                self.offload_jobs.task_done()
+
+    def close(self) -> None:
+        """Stop the offloader once it has every launched pass's handle."""
+        self.offload_jobs.join()
+        self.offload_jobs.put(None)
+
+    @staticmethod
+    def ready(handle) -> tuple:
+        """A pass's handle once the offloader has it: (seed, packed signs, each shard's kept levels, the top levels)."""
+        if not isinstance(handle, OffloadedHandle):
+            return handle
+        handle.done.wait()
+        if isinstance(handle.value, BaseException):
+            raise RuntimeError("a pass handle's offload failed") from handle.value
+        return handle.value
 
     def wait(self, ticket: Ticket):
-        """A queued pass's root once the host has it, and its handle."""
+        """A queued pass's root once the host has it, and its handle (`ready`)."""
         w0 = time.perf_counter_ns()
         self.root_ready[ticket.slot].synchronize()
         w1 = time.perf_counter_ns()
@@ -680,17 +742,6 @@ class DeviceStore:
             i, ticket = inflight.popleft()
             root, handle = self.wait(ticket)
             yield i, root, handle, time.perf_counter_ns()
-
-    def warm(self, passes: int) -> None:
-        """What `passes` passes keep, allocated once on every GPU and freed, so the allocator holds them before
-        anything is timed."""
-        torch = self.torch
-        held = []
-        for g, gpu in enumerate(self.gpus):
-            with self.on(gpu):
-                held += [torch.empty((self.kept_at[g][self.hc + 1], 8), dtype=torch.int64, device=self.data_g[g].device)
-                         for _ in range(passes)]
-        del held
 
     def warmup(self, ns: int) -> dict:
         """Chained passes on a throwaway challenge for at least `ns` nanoseconds, keeping nothing, to bring the GPUs to
@@ -865,6 +916,7 @@ class DeviceStore:
         payload salt, payload path), shard by shard (`_open_shard`, OPEN_BATCH passes a time), the path above hc
         from each pass's top levels and the payload paths from the CPU-resident payload tree."""
         hc, H = self.hc, self.H
+        items = [(self.ready(handle), positions) for handle, positions in items]
         seeds = [seed if isinstance(seed, bytes) else bytes(seed.cpu().numpy()) for (seed, *_), _ in items]
         tops = [(top.cpu().numpy() if hasattr(top, "cpu") else np.asarray(top)).view(np.uint64)
                 for (*_, top), _ in items]
@@ -922,13 +974,13 @@ class Device:
                  gate_chunk: int = 2048, gate_chunks: int = 3, gate_samples: int = 256,
                  calibration_passes: int = 4000, warm_openings: int = 2773, warm_passes: int = 64,
                  chunk: int = 1 << 18, kept_from: int = 6, sketch_ctas: int = 128, payload_kept_from: int = 6,
-                 offload_handles: bool = False, trace_allocator: bool = False) -> None:
+                 trace_allocator: bool = False) -> None:
         self.torch, self.log, self.blocks, self.warm_openings = torch, log, blocks, warm_openings
         self.trace_allocator, self.calibration_trace = trace_allocator, None
         self.gate_chunk, self.gate_chunks, self.gate_samples = gate_chunk, gate_chunks, gate_samples
         self.calibration_passes, self.warm_passes = calibration_passes, warm_passes
         self.shape = {"chunk": chunk, "kept_from": kept_from, "sketch_ctas": sketch_ctas,
-                      "payload_kept_from": payload_kept_from, "offload_handles": offload_handles}
+                      "payload_kept_from": payload_kept_from}
         self.lib = Lib(lib_path, torch)
         self._open_copy = tempfile.NamedTemporaryFile(suffix=".so")
         shutil.copyfile(lib_path, self._open_copy.name)
@@ -950,9 +1002,6 @@ class Device:
         self.gpus = [Gpu(torch, g) for g in range(count)]
         self.rng = np.random.default_rng(seed)
         self.salt_key = self.rng.bytes(32)
-        self.offload_jobs: queue.Queue = queue.Queue()
-        threading.Thread(target=self._offload, daemon=True).start()
-        self.offload_ns: list[int] = []
         self.gates: dict = {}
         self.store = DeviceStore(torch, self.lib, self.lib_open, self.kv, blocks, self.salt_key, seed, gpus=self.gpus,
                                  **self.shape)
@@ -994,9 +1043,7 @@ class Device:
             s.sync()
             reads.append((time.perf_counter_ns() - t0) / 1e6)
         challenge, prev = self.rng.bytes(32), bytes(64)
-        # Timed as a session runs: what the passes keep allocated once beforehand (the allocator growing under a
-        # timed pass stalls it for tens of ms) and no collector.
-        s.warm(4)
+        # Timed as a session runs, with no collector.
         gc.collect()
         gc.freeze()
         gc.disable()
@@ -1024,7 +1071,8 @@ class Device:
                                               [{k: b[k] - a[k] for k in a} for a, b in zip(stats0, stats1)])
         gpu = s.pass_gpu_ms[g0:]
         seed, chained_root, chained = first
-        self.gates["device_seed"] = bytes(chained[0].cpu().numpy()) == seed
+        chained = s.ready(chained)
+        self.gates["device_seed"] = chained[0] == seed
         plain_root = s.plain_root(seed, chained)
         self.gates["plain_root"] = plain_root == chained_root
         self.gates["plain_levels"] = s.plain_level_matches
@@ -1064,12 +1112,12 @@ class Device:
     def arm(self, dropped) -> None:
         self.store.arm(dropped)
         self.store.pass_gpu_ms.clear()
-        self.offload_ns.clear()
+        self.store.offload_ns.clear()
 
     def warmup(self, ns: int) -> dict:
         """Untimed passes before a session's first window (`DeviceStore.warmup`)."""
         out = self.store.warmup(ns)
-        self.offload_ns.clear()
+        self.store.offload_ns.clear()
         return out
 
     def begin_window(self, challenge: bytes, previous: bytes | None) -> None:
@@ -1079,60 +1127,17 @@ class Device:
         return self.store.launch(i, after)
 
     def wait(self, ticket: Ticket):
-        root, handle = self.store.wait(ticket)
-        if not self.store.offload_handles:
-            return root, handle
-        out = OffloadedHandle()
-        self.offload_jobs.put((handle, out))
-        return root, out
+        return self.store.wait(ticket)
 
     def open_window(self, items: list[tuple[object, list[int]]]) -> list[list[tuple]]:
-        self.offload_jobs.join()
-        return self.store.open_window([(self._ready(handle), positions) for handle, positions in items])
-
-    def _offload(self) -> None:
-        torch, staging = self.torch, {}
-        while True:
-            (seed, pk, kept, top), out = self.offload_jobs.get()
-            t0 = time.perf_counter_ns()
-            try:
-                parts = [pk, top, *kept] + ([] if isinstance(seed, bytes) else [seed])
-                for k, x in enumerate(parts):
-                    st = staging.get(k)
-                    if st is None or st.shape != x.shape:
-                        st = staging[k] = torch.empty(x.shape, dtype=x.dtype, device="cpu", pin_memory=True)
-                    gpu = self.gpus[x.device.index]
-                    with torch.cuda.stream(gpu.offload):
-                        st.copy_(x, non_blocking=True)
-                for gpu in self.gpus:
-                    gpu.offload.synchronize()
-                # The pinned buffers are a one-handle staging ring. Persist each handle in ordinary host memory so a
-                # session's thousands of passes do not pin tens of GiB.
-                host = [staging[k].clone() for k in range(len(parts))]
-                out.value = (seed if isinstance(seed, bytes) else bytes(host[-1].numpy()), host[0],
-                             host[2:2 + len(kept)], host[1])
-            except BaseException as error:
-                out.value = error
-            finally:
-                self.offload_ns.append(time.perf_counter_ns() - t0)
-                self.offload_jobs.task_done()
-
-    @staticmethod
-    def _ready(handle):
-        if not isinstance(handle, OffloadedHandle):
-            return handle
-        if isinstance(handle.value, BaseException):
-            raise RuntimeError("pass-handle offload failed") from handle.value
-        if handle.value is None:
-            raise RuntimeError("pass-handle offload is not ready")
-        return handle.value
+        return self.store.open_window(items)
 
     def session_stats(self) -> dict:
-        gpu = self.store.pass_gpu_ms
+        gpu, offload = self.store.pass_gpu_ms, self.store.offload_ns
         return {"passes": len(gpu), "pass_gpu_ms_sum": sum(gpu), "pass_gpu_ms_median":
                 sorted(gpu)[len(gpu) // 2] if gpu else None, "pass_gpu_ms_max": max(gpu) if gpu else None,
-                "offload_ns_median": sorted(self.offload_ns)[len(self.offload_ns) // 2] if self.offload_ns else None,
-                "offload_ns_max": max(self.offload_ns) if self.offload_ns else None}
+                "offload_ns_median": sorted(offload)[len(offload) // 2] if offload else None,
+                "offload_ns_max": max(offload) if offload else None}
 
     def gate(self, registration: audit.Registration) -> dict:
         torch, key, out = self.torch, registration.key, {}
@@ -1171,6 +1176,7 @@ class Device:
             with self.store.on(gpu):
                 self.lib.set_chain(self.store.plan, self.salt_key)
                 self.lib_open.set_chain(self.store.plan, self.salt_key)
+        small.close()
         del small
         torch.cuda.empty_cache()
         return out
@@ -1234,8 +1240,6 @@ def add_arguments(ap) -> None:
     ap.add_argument("--payload-kept-from", type=int, default=6,
                     help="h0: the payload tree's levels kept; lower paths are recomputed for openings")
     ap.add_argument("--sketch-ctas", type=int, default=128, help="the receipts grid's CTAs (0: one an SM)")
-    ap.add_argument("--offload-handles", action="store_true",
-                    help="archive pass handles through a dedicated pinned copy stream (automatic above 64 GiB)")
     ap.add_argument("--trace-allocator", action="store_true",
                     help="record the caching allocator's events during calibration, against its slow passes")
 
@@ -1248,5 +1252,4 @@ def from_arguments(a, log=print) -> Device:
     return Device(torch, a.lib, a.kv, blocks, seed=a.seed, log=log, gpus=a.gpus or None, gate_chunk=a.gate_chunk,
                   gate_samples=a.gate_samples, calibration_passes=a.calibration_passes, warm_openings=a.warm_openings,
                   chunk=a.chunk_blocks, kept_from=a.kept_from, sketch_ctas=a.sketch_ctas,
-                  payload_kept_from=a.payload_kept_from, offload_handles=a.offload_handles or a.gib > 64,
-                  trace_allocator=a.trace_allocator)
+                  payload_kept_from=a.payload_kept_from, trace_allocator=a.trace_allocator)
