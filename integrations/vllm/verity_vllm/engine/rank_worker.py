@@ -622,7 +622,7 @@ class TP2CaptureWorkerExtension:
         try:
             from verity_vllm.acquire.sources.moe_source import MoeBlockSource
 
-            msrc = MoeBlockSource(com, model)
+            msrc = MoeBlockSource(com, model, world=int((facts.get("tp") or {}).get("world_size") or 1))
             if msrc.layers:
                 com.attach_source(msrc)
                 res["moe_source"] = {"layers": len(msrc.layers), "tensors_per_layer": msrc.stats.get("tensors_per_layer"),

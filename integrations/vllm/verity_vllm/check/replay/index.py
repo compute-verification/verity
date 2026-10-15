@@ -154,12 +154,23 @@ class ProgramIndex:
         # p = t*TOPK + k).  `describe` addresses these rows at their PLANE (op_path `moe/L<k>`, member = the plane).
         self._moe_geo: list[dict[str, dict[str, Any]]] = [RM.moe_geometry(self.rows[lo: hi + 1]) for lo, hi in self.segs]
         self._moe_ord: dict[int, int] = {}
+        self._moe_kind: dict[int, str] = {}
+        self._moe_fused: set[int] = set()                  # act_quant rows of the fused SiLU quant: they read the up row, not an act row
         mcounts: dict[tuple, int] = {}
         for r in self.rows:
             mod0 = RM.split_name(r.get("name") or "")[0]
             kind = moe_plane_kind(RM.spec_family(r["spec"]), mod0)
+            if kind == "quant":
+                # the activation's group quant reads an `act` row of its runner; the input's reads the block's input
+                first = ((r.get("args") or [[]])[0] or [None])[0]
+                src = self.by_i.get(int(first[1])) if first and first[0] == "n" else None
+                prod = RM.split_name(src.get("name") or "")[0] if src else None
+                kind = "act_quant" if prod == mod0 and moe_plane_kind(RM.spec_family(src["spec"]), prod) == "act" else "in_quant"
+            elif kind == "act_quant":
+                self._moe_fused.add(int(r["i"]))
             if kind is not None:
                 key = (mod0, kind, self.step_of(int(r["i"])))
+                self._moe_kind[int(r["i"])] = kind
                 self._moe_ord[int(r["i"])] = mcounts.get(key, 0)
                 mcounts[key] = self._moe_ord[int(r["i"])] + 1
         self._ordinal: dict[int, int] = {}
@@ -222,7 +233,7 @@ class ProgramIndex:
         st = RM.spec_statics(r["spec"])
         mod, node, hint, row = RM.split_name(r.get("name") or "")
         d: dict | None
-        kind = moe_plane_kind(fam, mod)
+        kind = self._moe_kind.get(i)
         # [F-r19-int-24] FusedMoE.forward returns the MoeSum: a boundary Value (`<experts>/out`) beside its plane copy (MOE-TP-02 below)
         tp_sum = kind == "sum" and bool(self._v2.get(i))
         if tp_sum:
@@ -261,7 +272,8 @@ class ProgramIndex:
     def _describe_plane(self, i: int, fam: str, st: dict[str, Any], mod: str, hint: str, name_row: int | None, kind: str) -> dict:
         """[MAN-06f v3] a fused-MoE block row -> its `moe_block_stream` PLANE address: op_path `moe/L<layer>`, members = the plane(s) the row
         produces (router: `router_w` f32[TOPK] + `router_ids` i32[TOPK] per token; up: `up` bf16[N_up] per pair; act (the SiluMul under the
-        MoE runner): `act` bf16[I] per pair; down: `down` bf16[H] per pair; sum: `sum` bf16[H] per token), row = the row's token / pair
+        MoE runner): `act` bf16[I] per pair; in_quant: `in_q` e4m3[H] + `in_scale` f32[H/G] per token; act_quant: `act_q` e4m3[I] +
+        `act_scale` f32[I/G] per pair; down: `down` bf16[H] per pair; sum: `sum` bf16[H] per token), row = the row's token / pair
         ordinal in Program order (pair-major p = t*TOPK + k: MOE-03 source order, `moe_geometry` docstring).  The plane's request-local
         element range is the binding's per-request split of the batched plane (binding.py: rows == tokens -> the request's token rows, x
         TOPK for `act`), so `store.words(rid, step, "moe/L<k>", plane, row*width + lo, ...)` reads exactly this row's words.  The mapping
@@ -290,6 +302,11 @@ class ProgramIndex:
         elif kind == "act":
             mem = [("act", int(st.get("I", g.get("I", 0))), "bf16")]
             n_rows = M * TOPK
+        elif kind in ("in_quant", "act_quant"):
+            K, G = int(st.get("K", st.get("I", 0))), int(st.get("G", 0) or 1)
+            pre = "in" if kind == "in_quant" else "act"
+            mem = [(f"{pre}_q", K, "w8"), (f"{pre}_scale", K // G, "f32")]
+            n_rows = M if kind == "in_quant" else M * TOPK
         elif kind == "down":
             mem = [("down", int(st.get("N", g.get("H", 0))), "bf16")]
             n_rows = M * TOPK
@@ -303,7 +320,7 @@ class ProgramIndex:
         if err is None and any(int(m[1]) <= 0 for m in mem):
             err = f"{fam} {kind} plane width 0 ({mod!r} step {s}: statics {st}, geometry {g})"
         if err is None:
-            err = self._plane_dataflow_error(i, kind, ord_, TOPK, mod)
+            err = self._plane_dataflow_error(i, kind, ord_, TOPK, mod, fp8=bool(g.get("fp8")))
         # `plane` = the plane the row PRODUCES: the first member's name (the router row produces two: router_w + router_ids)
         d = {"family": fam, "statics": st, "module": mod, "op_path": f"moe/L{layer}", "hint": hint, "row": ord_, "name_row": name_row,
              "members": ([] if err else mem), "step": s, "plane": mem[0][0], "plane_kind": kind, "moe_module": mod}
@@ -311,16 +328,19 @@ class ProgramIndex:
             d["plane_error"] = err
         return d
 
-    def _plane_dataflow_error(self, i: int, kind: str, p: int, TOPK: int, mod: str) -> str | None:
+    def _plane_dataflow_error(self, i: int, kind: str, p: int, TOPK: int, mod: str, fp8: bool = False) -> str | None:
         """The pair-major reading of a plane row's ordinal (p = t*TOPK + k) cross-checked against the Program's OWN dataflow: the up row p
         reads router row t's id slot k (`['n', router, TOPK + k, TOPK + k + 1]`), the act row p reads up row p, the down row p reads act
-        row p + router row t's id slot k + weight slot k, the sum row t reads down rows t*TOPK .. t*TOPK + TOPK - 1 in slot order.  A Program
-        whose MoE rows are not in that order (or not of that shape) is named here -- the replay never reads a plane word of another pair.
+        row p + router row t's id slot k + weight slot k, the sum row t reads down rows t*TOPK .. t*TOPK + TOPK - 1 in slot order.  Block-FP8
+        expert GEMMs read a group quant first, (xq, sx): the up row p reads the input quant row t (when the runner quantizes its input) and
+        the id slot as its third operand, the down row p reads the activation quant row p and the id and weight slots as its third and fourth;
+        the activation quant row p reads act row p (up row p when fused with the SiLU).  A Program whose MoE rows are not in that order (or not
+        of that shape) is named here -- the replay never reads a plane word of another pair.
         (Measured on the OLMoE B1 256/32 request Program: 119,392 MoE rows, 0 inconsistencies.)"""
         r = self.by_i[i]
         args = r.get("args") or []
 
-        def prod(gi: int, si: int = 0) -> tuple[str | None, int, int, int] | None:
+        def prod(gi: int, si: int = 0) -> tuple[str | None, int, int, int, int] | None:
             if gi >= len(args) or si >= len(args[gi]) or args[gi][si][0] != "n":
                 return None
             j, lo, hi = int(args[gi][si][1]), int(args[gi][si][2]), int(args[gi][si][3])
@@ -328,21 +348,38 @@ class ProgramIndex:
             if pr is None:
                 return None
             pm = RM.split_name(pr.get("name") or "")[0]
-            pk = moe_plane_kind(RM.spec_family(pr["spec"]), pm) if pm == mod else None
-            return pk, int(self._moe_ord.get(j, -1)), lo, hi
+            return (self._moe_kind.get(j) if pm == mod else None), int(self._moe_ord.get(j, -1)), lo, hi, j
+
+        def quant_pair(qkind: str, row: int) -> str | None:
+            q, s = prod(0), prod(1)
+            st = RM.spec_statics(self.by_i[q[4]]["spec"]) if q else {}
+            width = int(st.get("K", st.get("I", -1)))
+            if q is None or q[0] != qkind or q[1] != row or q[2] != 0 or s is None or s[4] != q[4] or s[2] != width:
+                return f"{kind} row {p} does not read {qkind} row {row}'s (q, scale) (Program dataflow {q}, {s}): not pair-major"
+            return None
 
         t, k = (p // TOPK, p % TOPK) if TOPK > 0 else (p, 0)
         if kind == "up":
-            e = prod(1)
+            x = prod(0)
+            if fp8 and x is not None and x[0] is not None and (err := quant_pair("in_quant", t)):
+                return err
+            e = prod(2 if fp8 else 1)
             if e is None or e[0] != "router" or e[1] != t or (e[2], e[3]) != (TOPK + k, TOPK + k + 1):
                 return f"up row {p} does not read router row {t} id slot {k} (Program dataflow {e}): not pair-major"
         elif kind == "act":
             u = prod(0)
             if u is None or u[0] != "up" or u[1] != p or u[2] != 0:
                 return f"act row {p} does not read up row {p} (Program dataflow {u}): not pair-major"
+        elif kind == "act_quant":
+            u = prod(0)
+            want = "up" if i in self._moe_fused else "act"
+            if u is None or u[0] != want or u[1] != p or u[2] != 0:
+                return f"act_quant row {p} does not read {want} row {p} (Program dataflow {u}): not pair-major"
         elif kind == "down":
-            a, e, g = prod(0), prod(1), prod(2)
-            if a is None or a[0] != "act" or a[1] != p or a[2] != 0:
+            if fp8 and (err := quant_pair("act_quant", p)):
+                return err
+            a, e, g = (None, prod(2), prod(3)) if fp8 else (prod(0), prod(1), prod(2))
+            if not fp8 and (a is None or a[0] != "act" or a[1] != p or a[2] != 0):
                 return f"down row {p} does not read act row {p} (Program dataflow {a}): not pair-major"
             if e is None or e[0] != "router" or e[1] != t or (e[2], e[3]) != (TOPK + k, TOPK + k + 1):
                 return f"down row {p} does not read router row {t} id slot {k} (Program dataflow {e}): not pair-major"

@@ -234,61 +234,97 @@ def promoted_observation(manifest: dict[str, Any]) -> dict[str, Any]:
 MOE_LEAF = "experts"                    # vLLM FusedMoE module leaf (`model.layers.k.mlp.experts`); its interior is the MoE block stream
 
 MOE_PLANES = ("router_w", "router_ids", "up", "act", "down", "sum")
+#: block-FP8 experts (GLM-5.3's `TritonExperts` with DeepGEMM's ue8m0 quant): the w13 launch reads the input's e4m3 group quant
+#: (`in_q`, `in_scale`), the w2 launch the activation's (`act_q`, `act_scale`), each a `_C.per_token_group_fp8_quant` under the runner
+MOE_FP8_PLANES = ("router_w", "router_ids", "in_q", "in_scale", "up", "act", "act_q", "act_scale", "down", "sum")
+#: Definition family prefix -> the MoE plane kind of its rows, first match wins (a `W` launch before its prefix, the fused SiLU quant
+#: before SiluMul).  The kinds in `_RUNNER_KINDS` are plane rows only under the MoE runner module (`MOE_LEAF`).
+MOE_PLANE_FAMILIES = (("MoeRouterTopK", "router"), ("MoeRouterSigmoidBias", "router"), ("MoeExpertGemmW", "down"),
+                      ("MoeExpertFp8GemmW", "down"), ("MoeExpertGemm", "up"), ("MoeExpertFp8Gemm", "up"), ("MoeSum", "sum"),
+                      ("SiluMulFp8BlockQuant", "act_quant"), ("SiluMul", "act"), ("Fp8GroupQuant", "quant"))
+_RUNNER_KINDS = frozenset({"act_quant", "act", "quant"})
+
+
+def _on_runner(module: str) -> bool:
+    return module.rsplit(".", 1)[-1] == MOE_LEAF
+
+
+def _group_static(g: dict[str, Any], st: dict[str, Any]) -> None:
+    """An expert GEMM with a group `G` static reads block-FP8 operands (xq, sx)."""
+    if "G" in st:
+        g["fp8"], g["G"] = True, int(st["G"])
 
 
 def moe_geometry(seg_rows: Iterable[dict]) -> dict[str, dict[str, Any]]:
-    """[R14 moe] per MoE module of one step: M (tokens routed = MoeRouterTopK instances), TOPK, H, I, N_up from the Program's MoE instances.
+    """[R14 moe] per MoE module of one step: M (tokens routed = router instances), TOPK, H, I, N_up from the Program's MoE instances.
     The block's values are produced INSIDE one module forward (`MoERunner`), so they are not module outputs: the query opens on them through
-    the `moe_block_stream` family (MOE-03 source, names `moe/L<k>/<plane>`), six planes per MoE layer per step whatever the routing chose
-    (pair-major rows p = t*TOPK + k -- the sorted block schedule never enters the values)."""
+    the `moe_block_stream` family (MOE-03 source, names `moe/L<k>/<plane>`), one set of planes per MoE layer per step whatever the routing
+    chose (pair-major rows p = t*TOPK + k -- the sorted block schedule never enters the values).  Expert GEMMs with a group `G` static
+    (block FP8) set `fp8` and `G`; the runner's group-quant rows are counted by their row width: K = H the input's (`in_quant_rows`), else
+    the activation's (`act_quant_rows`, with the fused SiLU quant's), and its SiluMul rows as `act_rows`."""
     geo: dict[str, dict[str, Any]] = {}
+    quant_k: dict[str, list[int]] = {}
     for r in seg_rows:
-        fam = spec_family(r["spec"])
-        if not fam.startswith(("MoeRouterTopK", "MoeExpertGemm", "MoeSum")):
-            continue
         mod = split_name(r.get("name") or "")[0]
+        kind = moe_plane_kind(spec_family(r["spec"]), mod)
+        if kind is None:
+            continue
         st = spec_statics(r["spec"])
-        g = geo.setdefault(mod, {"M": 0, "TOPK": 0, "E": 0, "H": 0, "I": 0, "N_up": 0, "expert_gemm_rows": 0})
-        if fam.startswith("MoeRouterTopK"):
+        g = geo.setdefault(mod, {"M": 0, "TOPK": 0, "E": 0, "H": 0, "I": 0, "N_up": 0, "expert_gemm_rows": 0, "act_rows": 0,
+                                 "fused_act_quant_rows": 0})
+        if kind == "router":
             g["M"] += 1
             g["TOPK"] = int(st.get("TOPK", g["TOPK"]))
             g["E"] = int(st.get("E", g["E"]))
-        elif fam.startswith("MoeExpertGemmW"):
+        elif kind == "down":
             g["H"] = int(st.get("N", g["H"]))
             g["I"] = int(st.get("K", g["I"]))
-        elif fam.startswith("MoeExpertGemm"):
+            _group_static(g, st)
+        elif kind == "up":
             g["N_up"] = int(st.get("N", g["N_up"]))
             g["expert_gemm_rows"] += 1
-        elif fam.startswith("MoeSum"):
+            _group_static(g, st)
+        elif kind == "sum":
             g["H"] = int(st.get("H", g["H"]))
             g["TOPK"] = int(st.get("TOPK", g["TOPK"]))
+        elif kind == "act_quant":
+            g["fused_act_quant_rows"] += 1
+        elif kind == "act":
+            g["act_rows"] += 1
+        else:
+            quant_k.setdefault(mod, []).append(int(st.get("K", 0)))
+    for mod, g in geo.items():
+        ks = quant_k.get(mod, [])
+        n_in = sum(1 for k in ks if k == g["H"]) if g["H"] != g["I"] else min(len(ks), g["M"])
+        g["in_quant_rows"], g["act_quant_rows"] = n_in, len(ks) - n_in + g.pop("fused_act_quant_rows")
     return geo
 
 
 def moe_plane_kind(family: str, module: str) -> str | None:
-    """[MAN-06f v3] the fused-MoE block row kinds whose values the collector commits as `moe_block_stream` PLANES (MOE-03: six planes per
-    MoE layer per step, pair-major) rather than as module outputs: `router` (MoeRouterTopK / MoeRouterTopKNorm: router_w + router_ids
-    per token), `up` (MoeExpertGemm: the w13 launch per pair), `act` (the SiluMul rows under the MoE runner module `...experts`: the
-    silu_and_mul per pair), `down` (MoeExpertGemmW: the w2 launch per pair), `sum` (MoeSum per token).  None for every other row.  From the
-    Program's spec family + module name alone."""
-    if family.startswith("MoeRouterTopK"):
-        return "router"
-    if family.startswith("MoeExpertGemmW"):
-        return "down"
-    if family.startswith("MoeExpertGemm"):
-        return "up"
-    if family.startswith("MoeSum"):
-        return "sum"
-    if family.startswith("SiluMul") and module.rsplit(".", 1)[-1] == MOE_LEAF:
-        return "act"
+    """[MAN-06f v3] the fused-MoE block row kinds whose values the collector commits as `moe_block_stream` PLANES (MOE-03: pair-major
+    planes per MoE layer per step) rather than as module outputs (`MOE_PLANE_FAMILIES`): `router` (router_w + router_ids per token),
+    `up` (the w13 launch per pair), `down` (the w2 launch per pair), `sum` (per token) and, under the MoE runner module `...experts`
+    only, `act` (the SiluMul per pair), `quant` (a group quant: the input's per token or the activation's per pair -- `ProgramIndex`
+    tells them apart by what they read) and `act_quant` (the activation's quant fused with the SiLU).  None for every other row.  From
+    the Program's spec family + module name alone."""
+    for prefix, kind in MOE_PLANE_FAMILIES:
+        if family.startswith(prefix):
+            return kind if kind not in _RUNNER_KINDS or _on_runner(module) else None
     return None
 
 
 def moe_identities(g: dict[str, Any]) -> list[tuple[str, int, str]]:
-    """(plane, elements, dtype) of the six block-stream tensors for one MoE layer in one step."""
+    """(plane, elements, dtype) of the block-stream tensors for one MoE layer in one step: `MOE_PLANES`, or under block-FP8 experts the
+    `MOE_FP8_PLANES` the module's rows produce (a quant or SiluMul the Program has no rows for is no plane)."""
     M, K, H, I, N = g["M"], g["TOPK"], g["H"], g["I"], g["N_up"]
-    return [("router_w", M * K, "f32"), ("router_ids", M * K, "i32"), ("up", M * K * N, "bf16"), ("act", M * K * I, "bf16"),
-            ("down", M * K * H, "bf16"), ("sum", M * H, "bf16")]
+    route = [("router_w", M * K, "f32"), ("router_ids", M * K, "i32")]
+    tail = [("down", M * K * H, "bf16"), ("sum", M * H, "bf16")]
+    if not g.get("fp8"):
+        return route + [("up", M * K * N, "bf16"), ("act", M * K * I, "bf16")] + tail
+    G = int(g.get("G") or 1)
+    return (route + ([("in_q", M * H, "w8"), ("in_scale", M * H // G, "f32")] if g.get("in_quant_rows") else [])
+            + [("up", M * K * N, "bf16")] + ([("act", M * K * I, "bf16")] if g.get("act_rows") else [])
+            + ([("act_q", M * K * I, "w8"), ("act_scale", M * K * I // G, "f32")] if g.get("act_quant_rows") else []) + tail)
 
 
 def fa2_geometry(T_max: int, rows: int, NH: int, KVH: int, D: int, n_seq: int, windowed: bool = False) -> tuple[int, int, int, int, str]:

@@ -32,6 +32,7 @@ from collections import Counter
 from typing import Any, Iterable, Iterator
 
 from verity_vllm.commit import challenge as CH
+from verity_vllm.query.manifest.format import MOE_PLANES
 from verity_vllm.query.manifest.format import PROMOTED_DTYPE_BYTES  # noqa: F401  -- re-exported (R19 int-20)
 from verity_vllm.query.manifest.format import PROMOTED_OBSERVATION_RULE as PROMOTED_INPUT_RULE  # noqa: F401  -- re-exported
 from verity_vllm.query.manifest.format import promoted_observation as promoted_input_acquisition  # noqa: F401  -- re-exported
@@ -282,7 +283,7 @@ def structure_of(committer, *, stochastic: bool = False, derived_splits: bool = 
     moe_src = next((s for s in committer.sources if getattr(s, "short_name", "") == "moe"), None)
     moe_layers = sorted(set(moe_src.layers.values())) if moe_src is not None else []
     return {"modules": mods, "attention_layers": sorted(attn_layers), "hidden": hidden, "moe_layers": moe_layers,
-            "moe_planes": ["router_w", "router_ids", "up", "act", "down", "sum"] if moe_layers else [],
+            "moe_planes": list(getattr(moe_src, "planes", MOE_PLANES)) if moe_layers else [],
             "weights_registered": bool(getattr(committer, "weights", None))}
 
 
