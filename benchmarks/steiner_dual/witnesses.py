@@ -47,7 +47,29 @@ def strassen_mod2():
     return len(M)
 
 
-def strassen_sets_any_field(p):
+def strassen_products_any_field():
+    """[(R_i, S_i)]: the 7 integer rank-1 forms and their 0/1 output sets of strassen_sets_any_field."""
+    out = []
+    strassen_sets_any_field(0, out)
+    return out
+
+
+def strassen_blocks_any_field():
+    """[(a, b, S_i)]: product i is (sum_rk a[r,k] X_rk)(sum_kj b[k,j] Y_kj), integer 2x2 coefficient arrays with the
+    scalar absorbed into a, feeding the output cells S_i with coefficient 1. Block form of
+    strassen_products_any_field (its R_i is outer(a.ravel(), b.ravel()))."""
+    out = []
+    for R, S in strassen_products_any_field():
+        rows = [i for i in range(4) if R[i].any()]
+        cols = [j for j in range(4) if R[:, j].any()]
+        b = R[rows[0]] // np.gcd.reduce(R[rows[0]][R[rows[0]] != 0])
+        a = R[:, cols[0]] // b[cols[0]]
+        assert np.array_equal(np.outer(a, b), R)
+        out.append((a.reshape(2, 2), b.reshape(2, 2), S))
+    return out
+
+
+def strassen_sets_any_field(p, out=None):
     """Strassen transformed by W -> W R (R = [[1,0],[1,1]]) on the output side: every output pattern is a scalar
     multiple of a 0/1 set, so <2,2,2> = sum_i R_i (x) 1_{S_i} with 7 rank-1 R_i over every field (checked over the
     integers mod p, p = 0 meaning exact integers). The sets are not laminar ({11,21} and {21,22})."""
@@ -79,6 +101,8 @@ def strassen_sets_any_field(p):
         S = {(r, c) for r in range(2) for c in range(2) if wp[r, c]}
         sets.append(sorted(S))
         Rk = lam * np.outer(u, v)
+        if out is not None:
+            out.append((Rk, S))
         for pos in S:
             total[pos] = total[pos] + Rk
     for pos in T:
