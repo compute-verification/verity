@@ -307,4 +307,154 @@ theorem sat8_breaks_peel : sat8 (sat8 (100 + 100) - 100) ≠ 100 := by
 
 end Exactness
 
+section Reduction
+
+namespace Machine
+
+variable (Mc : Machine)
+
+/-- **The reduction** `M' = M ++ Q`: run the extractor `E` (M's own program on the masked instance; its proof and the
+blocks read off its wires), keep the proof, and run the peel and then the correction on the blocks. -/
+def reduction {I Pf Bl Mid O : Type} (E : Mc.Alg I (Pf × Bl)) (peel : Mc.Alg Bl Mid) (corr : Mc.Alg Mid O) :
+    Mc.Alg I (Pf × O) :=
+  Mc.seq E (Mc.pair Mc.fst (Mc.seq Mc.snd (Mc.seq peel corr)))
+
+theorem eval_reduction {I Pf Bl Mid O : Type} (E : Mc.Alg I (Pf × Bl)) (peel : Mc.Alg Bl Mid)
+    (corr : Mc.Alg Mid O) (x : I) :
+    Mc.eval (Mc.reduction E peel corr) x = ((Mc.eval E x).1, Mc.eval corr (Mc.eval peel (Mc.eval E x).2)) := by
+  simp only [reduction, Mc.eval_seq, Mc.eval_pair, Mc.eval_fst, Mc.eval_snd]
+
+/-- The reduction costs at most the extractor, the peel and the correction. -/
+theorem time_reduction_le {I Pf Bl Mid O : Type} (E : Mc.Alg I (Pf × Bl)) (peel : Mc.Alg Bl Mid)
+    (corr : Mc.Alg Mid O) : Mc.time (Mc.reduction E peel corr) ≤ Mc.time E + Mc.time peel + Mc.time corr := by
+  have h1 := Mc.time_seq_le E (Mc.pair Mc.fst (Mc.seq Mc.snd (Mc.seq peel corr)))
+  have h2 := Mc.time_pair_le (Mc.fst (I := Pf) (J := Bl)) (Mc.seq Mc.snd (Mc.seq peel corr))
+  have h3 := Mc.time_seq_le (Mc.snd (I := Pf) (J := Bl)) (Mc.seq peel corr)
+  have h4 := Mc.time_seq_le peel corr
+  have h5 := Mc.time_fst (I := Pf) (J := Bl)
+  have h6 := Mc.time_snd (I := Pf) (J := Bl)
+  unfold reduction
+  linarith
+
+/-- **The cost inequality**: with an extractor that costs at most `M`,
+`time M' ≤ time M + time peel + time correction`. -/
+theorem time_reduction_le_of_le {I Pf Bl Mid O J : Type} {E : Mc.Alg I (Pf × Bl)} {M : Mc.Alg J Pf}
+    (hE : Mc.time E ≤ Mc.time M) (peel : Mc.Alg Bl Mid) (corr : Mc.Alg Mid O) :
+    Mc.time (Mc.reduction E peel corr) ≤ Mc.time M + Mc.time peel + Mc.time corr := by
+  linarith [Mc.time_reduction_le E peel corr]
+
+end Machine
+
+variable {Mc : Machine} {Inst Out : Type}
+
+/-- **Extraction** (a named hypothesis, RS-EXT's): from an adversary `M`, an extractor `E` that costs at most `M` (it
+runs M's own program on the masked instance and reads blocks off its wires) and, for every instance `x`, with
+probability at least `1 - η` over σ and its coins, outputs a proof that verifies and blocks valid for `x`. -/
+def Extraction (P : Protocol Mc Inst Out) {Bl : Type} (valid : Inst → Bl → Prop) {Ω : Type} [Fintype Ω]
+    (M : Mc.Alg (P.Seed × Ω) P.Proof) (η : ℝ) : Prop :=
+  ∃ (Ω' : Type) (_ : Fintype Ω') (E : Mc.Alg (P.Seed × Inst × Ω') (P.Proof × Bl)),
+    Mc.time E ≤ Mc.time M ∧ ∀ x, 1 - η ≤ prob fun ω : P.Seed × Ω' =>
+      valid x (Mc.eval E (ω.1, x, ω.2)).2 ∧ P.verify ω.1 (Mc.eval E (ω.1, x, ω.2)).1 = true
+
+/-- **The floor** (a named hypothesis, the floor agenda's: Conjecture A, Theorem W): every algorithm that answers every
+instance correctly with probability at least `1 - η` over its coins costs at least `T` (`T_mm(n)` for matmul). -/
+def Floor (Mc : Machine) {Inst Out : Type} (correct : Inst → Out → Prop) (T η : ℝ) : Prop :=
+  ∀ (Ω : Type) [Fintype Ω] (N : Mc.Alg (Inst × Ω) Out),
+    (∀ x, 1 - η ≤ prob fun ω : Ω => correct x (Mc.eval N (x, ω))) → T ≤ Mc.time N
+
+/-- An algorithm that solves every instance (with a proof) is above the floor: drop σ into its coins and forget
+the proof, which routing does for free. -/
+theorem Floor.le_time (P : Protocol Mc Inst Out) {T η : ℝ} (h : Floor Mc P.correct T η) {Ω : Type} [Fintype Ω]
+    {M' : Mc.Alg (P.Seed × Inst × Ω) (P.Proof × Out)} (hM' : SolvesAll P M' η) : T ≤ Mc.time M' := by
+  let route : Mc.Alg (Inst × P.Seed × Ω) (P.Seed × Inst × Ω) :=
+    Mc.pair (Mc.seq Mc.snd Mc.fst) (Mc.pair Mc.fst (Mc.seq Mc.snd Mc.snd))
+  have hroute : ∀ y, Mc.eval route y = (y.2.1, y.1, y.2.2) := fun y => by
+    simp only [route, Mc.eval_seq, Mc.eval_pair, Mc.eval_fst, Mc.eval_snd]
+  have hT := h (P.Seed × Ω) (Mc.seq (Mc.seq route M') Mc.snd) fun x => (hM' x).trans (prob_mono fun ω hω => by
+    rw [Mc.eval_seq, Mc.eval_seq, hroute, Mc.eval_snd]
+    exact hω.1)
+  have r1 := Mc.time_seq_le (Mc.seq route M') (Mc.snd (I := P.Proof) (J := Out))
+  have r2 := Mc.time_seq_le route M'
+  have r3 := Mc.time_pair_le (Mc.seq (Mc.snd (I := Inst) (J := P.Seed × Ω)) Mc.fst)
+    (Mc.pair Mc.fst (Mc.seq (Mc.snd (I := Inst) (J := P.Seed × Ω)) Mc.snd))
+  have r4 := Mc.time_pair_le (Mc.fst (I := Inst) (J := P.Seed × Ω))
+    (Mc.seq (Mc.snd (I := Inst) (J := P.Seed × Ω)) Mc.snd)
+  have r5 := Mc.time_seq_le (Mc.snd (I := Inst) (J := P.Seed × Ω)) (Mc.fst (I := P.Seed) (J := Ω))
+  have r6 := Mc.time_seq_le (Mc.snd (I := Inst) (J := P.Seed × Ω)) (Mc.snd (I := P.Seed) (J := Ω))
+  have z1 := Mc.time_fst (I := Inst) (J := P.Seed × Ω)
+  have z2 := Mc.time_snd (I := Inst) (J := P.Seed × Ω)
+  have z3 := Mc.time_fst (I := P.Seed) (J := Ω)
+  have z4 := Mc.time_snd (I := P.Seed) (J := Ω)
+  have z5 := Mc.time_snd (I := P.Proof) (J := Out)
+  linarith
+
+/-- With extraction, the reduction solves every instance and costs at most `time M + time peel + time corr`, when the
+peel and the correction answer `x` from blocks valid for `x`. -/
+theorem exists_reduction (P : Protocol Mc Inst Out) {Bl Mid : Type} {valid : Inst → Bl → Prop}
+    (peel : Mc.Alg Bl Mid) (corr : Mc.Alg Mid Out)
+    (hpeel : ∀ x b, valid x b → P.correct x (Mc.eval corr (Mc.eval peel b))) {η : ℝ} {Ω : Type} [Fintype Ω]
+    {M : Mc.Alg (P.Seed × Ω) P.Proof} (hext : Extraction P valid M η) :
+    ∃ (Ω' : Type) (_ : Fintype Ω') (M' : Mc.Alg (P.Seed × Inst × Ω') (P.Proof × Out)),
+      Mc.time M' ≤ Mc.time M + Mc.time peel + Mc.time corr ∧ SolvesAll P M' η := by
+  obtain ⟨Ω', _, E, hE, hsucc⟩ := hext
+  refine ⟨Ω', inferInstance, Mc.reduction E peel corr, Mc.time_reduction_le_of_le hE peel corr,
+    fun x => (hsucc x).trans (prob_mono fun ω hω => ?_)⟩
+  rw [Mc.eval_reduction]
+  exact ⟨hpeel x _ hω.1, hω.2⟩
+
+/-- **Security from extraction**, given that the peel and the correction cost at most `ε time M` for every adversary
+`M` accepted with probability at least `δ`. -/
+theorem secure_of_extraction (P : Protocol Mc Inst Out) {Bl Mid : Type} {valid : Inst → Bl → Prop}
+    (peel : Mc.Alg Bl Mid) (corr : Mc.Alg Mid Out)
+    (hpeel : ∀ x b, valid x b → P.correct x (Mc.eval corr (Mc.eval peel b))) {ε δ η : ℝ}
+    (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), δ ≤ acceptance P M →
+      Extraction P valid M η)
+    (hcost : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), δ ≤ acceptance P M →
+      Mc.time peel + Mc.time corr ≤ ε * Mc.time M) :
+    Secure P ε δ η := by
+  intro Ω _ M hM
+  obtain ⟨Ω', _, M', ht, hs⟩ := exists_reduction P peel corr hpeel (hext Ω M hM)
+  exact ⟨Ω', inferInstance, M', by linarith [hcost Ω M hM], hs⟩
+
+/-- **Security from extraction and the floor**: if the peel and the correction cost at most `q < T`, where `T` is the
+floor, then `ε = q / (T - q)`. (`M'` solves every instance, so `T ≤ time M' ≤ time M + q`.) -/
+theorem secure_of_extraction_floor (P : Protocol Mc Inst Out) {Bl Mid : Type} {valid : Inst → Bl → Prop}
+    (peel : Mc.Alg Bl Mid) (corr : Mc.Alg Mid Out)
+    (hpeel : ∀ x b, valid x b → P.correct x (Mc.eval corr (Mc.eval peel b))) {δ η T q : ℝ}
+    (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), δ ≤ acceptance P M →
+      Extraction P valid M η)
+    (hfloor : Floor Mc P.correct T η) (hq : Mc.time peel + Mc.time corr ≤ q) (hqT : q < T) :
+    Secure P (q / (T - q)) δ η := by
+  intro Ω _ M hM
+  obtain ⟨Ω', _, M', ht, hs⟩ := exists_reduction P peel corr hpeel (hext Ω M hM)
+  refine ⟨Ω', inferInstance, M', ?_, hs⟩
+  have hTM := hfloor.le_time P hs
+  have hTq : 0 < T - q := sub_pos.2 hqT
+  have hq0 : 0 ≤ q := (add_nonneg (Mc.time_nonneg _) (Mc.time_nonneg _)).trans hq
+  set ε := q / (T - q) with hε
+  have hε0 : 0 ≤ ε := div_nonneg hq0 hTq.le
+  have hεq : ε * (T - q) = q := div_mul_cancel₀ q hTq.ne'
+  have hM : ε * (T - q) ≤ ε * Mc.time M := mul_le_mul_of_nonneg_left (by linarith) hε0
+  linarith
+
+/-- **Security is a relative floor** (RS-DEF's finding (i)), one direction: if some algorithm `M₀` solves every
+instance and costs at most `(1 + ε) time M` for every adversary `M` accepted with probability at least `δ`, the
+protocol is secure. No reduction from `M` is needed. -/
+theorem secure_of_solver (P : Protocol Mc Inst Out) {ε δ η : ℝ} {Ω₀ : Type} [Fintype Ω₀]
+    {M₀ : Mc.Alg (P.Seed × Inst × Ω₀) (P.Proof × Out)} (hM₀ : SolvesAll P M₀ η)
+    (hcost : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), δ ≤ acceptance P M →
+      Mc.time M₀ ≤ (1 + ε) * Mc.time M) :
+    Secure P ε δ η :=
+  fun Ω _ M hM => ⟨Ω₀, inferInstance, M₀, hcost Ω M hM, hM₀⟩
+
+/-- **Security is a relative floor**, the other direction: under security, every adversary accepted with probability
+at least `δ` costs at least `T / (1 + ε)`, for `T` the floor. -/
+theorem floor_le_of_secure (P : Protocol Mc Inst Out) {ε δ η T : ℝ} (h : Secure P ε δ η)
+    (hfloor : Floor Mc P.correct T η) {Ω : Type} [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof)
+    (hM : δ ≤ acceptance P M) : T ≤ (1 + ε) * Mc.time M := by
+  obtain ⟨Ω', _, M', ht, hs⟩ := h Ω M hM
+  exact (hfloor.le_time P hs).trans ht
+
+end Reduction
+
 end Pouw.RelativeSecurity
