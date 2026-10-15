@@ -205,23 +205,33 @@ def _stage(d: Path, **kw) -> dict:
                    pts=json.loads((SET / "points-honest.json").read_text()), salts=SET / "acc-salts.bin", **kw)
 
 
-def test_a_dirs_registered_one_bit_off_is_refused_at_its_opening(forged, shape, tmp_path):
+@pytest.fixture(scope="module")
+def dirs_forged(built, once) -> Path:
+    """Level 3 staged with rep 0's opening 0 `dirs` registered one bit off (bit 0 of its first word), the opening's climb
+    aside."""
+    honest = S.R.dirs_words
+
+    def make(d):
+        first = []
+
+        def dirs_words(pos, H):
+            w = honest(pos, H)
+            if not first:
+                first.append(pos)
+                w = [w[0] ^ 1, *w[1:]]
+            return w
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(S.R, "dirs_words", dirs_words)
+            _stage(d, levels=[LEVEL], algebra=False)
+
+    return once("rec-coins-dirs", make, _KEY) / f"L{LEVEL}"
+
+
+def test_a_dirs_registered_one_bit_off_is_refused_at_its_opening(dirs_forged, shape, tmp_path):
     """`HDirCols`' check (`RecCoins.checkOpen`'s `dirs`): level 3 staged with rep 0's opening 0 `dirs` registered one bit
     off, the opening's climb aside, is refused at that opening by the position the verifier's coins give."""
-    honest = S.R.dirs_words
-    first = []
-
-    def dirs_words(pos, H):
-        w = honest(pos, H)
-        if not first:
-            first.append(pos)
-            w = [w[0] ^ 1, *w[1:]]
-        return w
-
-    with pytest.MonkeyPatch.context() as mp:
-        mp.setattr(S.R, "dirs_words", dirs_words)
-        _stage(tmp_path, levels=[LEVEL], algebra=False)
-    out = tmp_path / f"L{LEVEL}"
+    out = dirs_forged
     v = _verify(out, out / "pub.bin", out / "registered.json", shape, "inner-honest", rows=_acc_rows(tmp_path / "rows.json", out))
     assert v["why"] == (f"setup: rec-coins: {UNIT}: level {LEVEL} rep 0 opening 0: the statement's dirs row is not the "
                         "verifier's rec-dirs row 0"), v["why"]
