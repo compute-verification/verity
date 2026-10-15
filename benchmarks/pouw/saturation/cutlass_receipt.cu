@@ -398,8 +398,10 @@ static double quant(std::vector<double>& v, double q) {  // v sorted
 // --drift SECONDS: the honest kernels' times as the clock drifts, clocks read and never set. Plain and every receipt
 // kernel --only names are made at every selected shape; then rounds run back to back until SECONDS have passed. Each
 // round runs, kernel by kernel, every selected shape in order, BLOCK launches each behind an untimed one, every launch
-// between its own events, and reads NVML (SM clock, temperature, power, clock-event reasons) after each block. The CSV gets a row a
-// block; stdout gets each (kernel, shape)'s launch-time quantiles over the whole run.
+// between its own events, and reads NVML (SM clock, temperature, power, clock-event reasons) after each block. Each
+// (kernel, shape) runs twice a round: its launches from the host (graph 0) and the same block captured once as a CUDA
+// graph and replayed (graph 1), which has no host gaps between launches. The CSV gets a row a block; stdout gets each
+// (kernel, shape, graph)'s launch-time quantiles over the whole run.
 static int drift(double seconds, const char* csv, int block, const std::vector<const cr_kernel*>& ks,
                  const std::vector<std::string>& shapes_sel, const std::vector<std::string>& only, const cudaDeviceProp& prop,
                  const Clock& clock) {
@@ -408,11 +410,13 @@ static int drift(double seconds, const char* csv, int block, const std::vector<c
         fprintf(stderr, "drift: can't write %s\n", csv);
         return 2;
     }
-    fprintf(out, "round,t_s,kernel,shape,launches,ms_med,ms_min,ms_max,sm_mhz,temp_c,power_w,reasons\n");
+    fprintf(out, "round,t_s,kernel,shape,graph,launches,ms_med,ms_min,ms_max,sm_mhz,temp_c,power_w,reasons\n");
     struct Live {
         const cr_kernel* k;
         const Shape* s;
         std::vector<cr_impl*> impl;
+        bool graph = false;
+        cudaGraphExec_t exec = nullptr;
         std::vector<double> ms, block_med, mhz;
         int tmin = 1000, tmax = 0;
         double pmax = 0;
@@ -445,7 +449,7 @@ static int drift(double seconds, const char* csv, int block, const std::vector<c
             if (k->cfg != (s->m >= 128 ? 0 : 1)) continue;
             const size_t ab = (size_t)s->m * s->k + (size_t)s->n * s->k;
             const int sets = (int)std::min<size_t>(16, std::max<size_t>(1, (2 * L2 + ab - 1) / ab));
-            Live l{k, s, {}, {}, {}, {}};
+            Live l{k, s, {}};
             for (int t = 0; t < sets; t++) {
                 int err = 0;
                 cr_impl* g = k->make(args_of(*s, b, t, b.D), &err);
@@ -455,9 +459,14 @@ static int drift(double seconds, const char* csv, int block, const std::vector<c
                 }
                 l.impl.push_back(g);
             }
+            Live lg = l;
+            lg.graph = true;
             live.push_back(std::move(l));
+            live.push_back(std::move(lg));
         }
     }
+    cudaStream_t st;
+    CK(cudaStreamCreateWithFlags(&st, cudaStreamNonBlocking));
     std::vector<cudaEvent_t> ev(block + 1);
     for (auto& e : ev) CK(cudaEventCreate(&e));
     const auto t0 = std::chrono::steady_clock::now();
@@ -465,19 +474,30 @@ static int drift(double seconds, const char* csv, int block, const std::vector<c
     long rounds = 0;
     for (; since() < seconds; ++rounds)
         for (auto& l : live) {
-            // an untimed lead launch, so the first timed one starts behind a kernel rather than behind the host
-            if (l.impl.back()->launch(nullptr) != 0) {
-                fprintf(stderr, "drift: %s at %s: launch failed\n", l.k->name, l.s->name);
-                return 2;
-            }
-            for (int i = 0; i < block; i++) {
-                CK(cudaEventRecord(ev[i]));
-                if (l.impl[i % l.impl.size()]->launch(nullptr) != 0) {
+            const bool capture = l.graph && !l.exec;
+            if (capture) CK(cudaStreamBeginCapture(st, cudaStreamCaptureModeRelaxed));
+            if (!l.graph || capture) {
+                // an untimed lead launch, so the first timed one starts behind a kernel rather than behind the host
+                if (l.impl.back()->launch(st) != 0) {
                     fprintf(stderr, "drift: %s at %s: launch failed\n", l.k->name, l.s->name);
                     return 2;
                 }
+                // External: inside a capture, a plain record only orders the capture; this makes a timed event node
+                for (int i = 0; i < block; i++) {
+                    CK(cudaEventRecordWithFlags(ev[i], st, cudaEventRecordExternal));
+                    if (l.impl[i % l.impl.size()]->launch(st) != 0) {
+                        fprintf(stderr, "drift: %s at %s: launch failed\n", l.k->name, l.s->name);
+                        return 2;
+                    }
+                }
+                CK(cudaEventRecordWithFlags(ev[block], st, cudaEventRecordExternal));
             }
-            CK(cudaEventRecord(ev[block]));
+            if (capture) {
+                cudaGraph_t g;
+                CK(cudaStreamEndCapture(st, &g));
+                CK(cudaGraphInstantiate(&l.exec, g, 0));
+            }
+            if (l.graph) CK(cudaGraphLaunch(l.exec, st));
             CK(cudaEventSynchronize(ev[block]));
             const auto [mhz, tc, pw, rs] = clock.read();
             std::vector<double> b(block);
@@ -491,7 +511,7 @@ static int drift(double seconds, const char* csv, int block, const std::vector<c
             l.block_med.push_back(b[block / 2]);
             l.mhz.push_back(mhz);
             l.tmin = std::min(l.tmin, tc), l.tmax = std::max(l.tmax, tc), l.pmax = std::max(l.pmax, pw), l.reasons |= rs;
-            fprintf(out, "%ld,%.3f,%s,%s,%d,%.5f,%.5f,%.5f,%.0f,%d,%.1f,%llu\n", rounds, since(), l.k->name, l.s->name, block,
+            fprintf(out, "%ld,%.3f,%s,%s,%d,%d,%.5f,%.5f,%.5f,%.0f,%d,%.1f,%llu\n", rounds, since(), l.k->name, l.s->name, (int)l.graph, block,
                     b[block / 2], b[0], b[block - 1], mhz, tc, pw, rs);
         }
     fclose(out);
@@ -501,12 +521,12 @@ static int drift(double seconds, const char* csv, int block, const std::vector<c
         std::sort(l.ms.begin(), l.ms.end());
         std::sort(l.block_med.begin(), l.block_med.end());
         std::sort(l.mhz.begin(), l.mhz.end());
-        printf("    {\"kernel\": \"%s\", \"shape\": \"%s\", \"var\": %d, \"L\": %d, \"mode\": %d, \"launches\": %zu, "
+        printf("    {\"kernel\": \"%s\", \"shape\": \"%s\", \"graph\": %d, \"var\": %d, \"L\": %d, \"mode\": %d, \"launches\": %zu, "
                "\"ms_min\": %.5f, \"ms_q0001\": %.5f, \"ms_q001\": %.5f, \"ms_med\": %.5f, \"ms_q099\": %.5f, \"ms_q0999\": %.5f, "
                "\"ms_max\": %.5f, \"block_med_min\": %.5f, \"block_med_q0001\": %.5f, \"block_med_med\": %.5f, "
                "\"block_med_q0999\": %.5f, \"block_med_max\": %.5f, \"mhz_min\": %.0f, \"mhz_q001\": %.0f, \"mhz_med\": %.0f, "
                "\"mhz_max\": %.0f, \"temp_c\": [%d, %d], \"power_w_max\": %.1f, \"reasons_any\": %llu}%s\n",
-               l.k->name, l.s->name, l.k->var, 128 * l.k->p / l.k->grain, l.k->mode, l.ms.size(), l.ms.front(),
+               l.k->name, l.s->name, (int)l.graph, l.k->var, 128 * l.k->p / l.k->grain, l.k->mode, l.ms.size(), l.ms.front(),
                quant(l.ms, 0.001), quant(l.ms, 0.01), quant(l.ms, 0.5), quant(l.ms, 0.99), quant(l.ms, 0.999), l.ms.back(),
                l.block_med.front(), quant(l.block_med, 0.001), quant(l.block_med, 0.5), quant(l.block_med, 0.999),
                l.block_med.back(), l.mhz.front(), quant(l.mhz, 0.01), quant(l.mhz, 0.5), l.mhz.back(), l.tmin, l.tmax, l.pmax,

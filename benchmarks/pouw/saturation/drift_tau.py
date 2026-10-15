@@ -11,7 +11,8 @@ needs, for a window of one GEMM launch to pass with probability q, is its launch
 
 The CSV's blocks (16 launches back to back, NVML read after each) also give the slow drift: the run cut into --slices
 equal spans of time, each span's median block time, and their spread, against the clock, temperature and power NVML
-read (read only; nothing set them).
+read (read only; nothing set them). Each (kernel, shape) is read twice: launched from the host, and as a CUDA graph
+replayed, whose launches have no host gaps between them; a run before the graph mode has host rows only.
 """
 from __future__ import annotations
 
@@ -53,14 +54,15 @@ def main():
     span = max(float(r["t_s"]) for r in rows)
     out = {"seconds": d["drift"]["seconds"], "rounds": d["drift"]["rounds"], "block": d["drift"]["block"], "kernels": []}
     print(f"{d['drift']['rounds']} rounds over {d['drift']['seconds']:.0f} s, {d['drift']['block']} launches a block\n")
-    print("| kernel | shape | launches | median ms | t_0.001 | t_0.999 | max | τ_99.9 (over t_0.001) | τ_99 | "
+    print("| kernel | shape | launched | launches | median ms | t_0.001 | t_0.999 | max | τ_99.9 (over t_0.001) | τ_99 | "
           "τ_99.9 over the median | 16-launch window τ_99.9 | slice medians' spread | SM MHz min / median / max |")
-    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     by = defaultdict(list)
     for r in rows:
-        by[(r["kernel"], r["shape"])].append(r)
+        by[(r["kernel"], r["shape"], int(r.get("graph", 0)))].append(r)
     for k in d["rows"]:
-        bl = by[(k["kernel"], k["shape"])]
+        k.setdefault("graph", 0)
+        bl = by[(k["kernel"], k["shape"], k["graph"])]
         sl = defaultdict(list)
         for r in bl:
             sl[min(a.slices - 1, int(float(r["t_s"]) / span * a.slices))].append(float(r["ms_med"]))
@@ -73,7 +75,7 @@ def main():
              "slice_medians": meds, "slice_spread": spread,
              "temp_c": k["temp_c"], "reasons": reasons(k["reasons_any"])}
         out["kernels"].append(e)
-        print(f"| {k['kernel']} | {k['shape']} | {k['launches']} | {k['ms_med']:.4f} | {k['ms_q0001']:.4f} | "
+        print(f"| {k['kernel']} | {k['shape']} | {'graph' if k['graph'] else 'host'} | {k['launches']} | {k['ms_med']:.4f} | {k['ms_q0001']:.4f} | "
               f"{k['ms_q0999']:.4f} | {k['ms_max']:.4f} | {e['tau_999']:.4f} | {e['tau_99']:.4f} | "
               f"{e['tau_999_over_median']:.4f} | {e['tau_999_block']:.4f} | {spread:.4f} | "
               f"{k['mhz_min']:.0f} / {k['mhz_med']:.0f} / {k['mhz_max']:.0f} |")
@@ -86,12 +88,18 @@ def main():
     out["reasons"] = reasons(mask)
     print(f"\ntemperature {min(temps)}–{max(temps)} C, power ≤ {out['power_w_max']:.0f} W, clock-event reasons seen: "
           f"{', '.join(out['reasons'])}")
+    out["phases"] = []
     for ph in sorted({e["shape"].split("_")[0] for e in out["kernels"]}):
         for kn in sorted({e["kernel"] for e in out["kernels"]}):
-            es = [e for e in out["kernels"] if e["kernel"] == kn and e["shape"].startswith(ph + "_")]
-            if es:
-                print(f"{kn} {ph}: τ_99.9 worst linear {max(e['tau_999'] for e in es):.4f}, "
-                      f"time-weighted {sum(e['tau_999'] * e['ms_med'] for e in es) / sum(e['ms_med'] for e in es):.4f}")
+            for g in (0, 1):
+                es = [e for e in out["kernels"]
+                      if e["kernel"] == kn and e["graph"] == g and e["shape"].startswith(ph + "_")]
+                if es:
+                    w = {"phase": ph, "kernel": kn, "graph": g, "tau_999_worst": max(e["tau_999"] for e in es),
+                         "tau_999_weighted": sum(e["tau_999"] * e["ms_med"] for e in es) / sum(e["ms_med"] for e in es)}
+                    out["phases"].append(w)
+                    print(f"{kn} {ph} {'graph' if g else 'host'}: τ_99.9 worst linear {w['tau_999_worst']:.4f}, "
+                          f"time-weighted {w['tau_999_weighted']:.4f}")
     if a.json:
         json.dump(out, open(a.json, "w"), indent=1)
 
