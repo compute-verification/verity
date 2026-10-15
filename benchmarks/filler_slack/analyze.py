@@ -57,7 +57,7 @@ def paired(rows: list[dict], phase: str, base_phase: str) -> list[tuple[dict, di
     return out
 
 
-OPS = ("none", "iadd3", "lop3", "imad", "prmt", "mix", "imma")
+OPS = ("none", "iadd3", "lop3", "imad", "prmt", "mix", "imma", "merge", "reuse", "unif", "cbank", "lop3x")
 
 
 def probe_overhead(sass: dict) -> dict[str, float]:

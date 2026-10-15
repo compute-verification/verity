@@ -7,6 +7,7 @@ for word, so a twin change that drifts from the kernel fails here rather than on
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -116,3 +117,26 @@ def test_probe_overhead_reads_the_probe_body():
             "pk:6,32": {"loops": [wait, {"n": 72, "ops": {"IMMA.16832.S8.S8": 32, "NANOSLEEP": 1}}]},
             "0,0,0,1,1": {"loops": [{"n": 30, "ops": {"IMMA.16832.S8.S8": 4}}]}}
     assert analyze.probe_overhead(sass) == {"p-imad-b16": 19 / 16, "s-iadd3-b16": 23 / 16, "s-imma-b32": 72 / 32}
+
+
+def test_ops_follow_filler_enum():
+    """analyze.OPS names filler.cu's Op values in order (sass_loops keys carry the numbers, run rows the names)."""
+    src = (HERE.parent / "filler.cu").read_text()
+    names = re.search(r"OP_NAME\[NOPS\] = \{(.*?)\};", src, re.S).group(1)
+    assert tuple(re.findall(r'"(\w+)"', names)) == analyze.OPS
+
+
+def test_sass_loops_counts_register_reads(tmp_path):
+    """A loop's vector reads skip RZ, the destination and reuse-cache hits; UR and c[..][..] sources count apart; a
+    backward `BRA.U` closes a loop (the filler's own loop)."""
+    body = [
+        "IADD3 R9, PT, PT, R22.reuse, R9, RZ", "IADD3 R8, PT, PT, R22.reuse, R8, RZ", "IADD3 R7, PT, PT, R22, R7, RZ",
+        "IADD3 R6, PT, PT, R6, UR4, RZ", "IADD3 R5, PT, PT, R5, c[0x3][0x10], RZ", "BRA.U UP0, 0x0000",
+    ]
+    lines = ["Function : _Z2pkILi8ELi16EE"] + [f"/*{16 * i:04x}*/ {t} ;" for i, t in enumerate(body)]
+    (tmp_path / "f.sass").write_text("\n".join(lines) + "\n")
+    out = json.loads(subprocess.run([sys.executable, str(HERE.parent / "sass_loops.py"), str(tmp_path / "f.sass")],
+                                    check=True, capture_output=True, text=True).stdout)
+    (lp,) = out["pk:8,16"]["loops"]
+    assert (lp["n"], lp["vreads"], lp["reuse_hits"], lp["ureads"], lp["creads"]) == (6, 6, 2, 1, 1)
+    assert lp["shapes"]["IADD3 R, PT, PT, R.reuse, R, RZ"] == 2 and lp["shapes"]["IADD3 R, PT, PT, R, c[0x3][.], RZ"] == 1

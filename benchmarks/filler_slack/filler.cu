@@ -89,19 +89,54 @@ __device__ __forceinline__ void mma_s8(uint32_t (&d)[4], const uint32_t (&a)[4],
 // ops fold into one. MIX alternates IADD3 and IMAD, one ALU-pipe and one FMA-pipe op.
 // IMMA (probes only) is a covert m16n8k32 s8 MMA into one of eight accumulators the probe warp holds: not issue slack
 // but the tensor time the filler leaves idle, P1's falsifier.
-enum Op { O_NONE = 0, O_IADD3, O_LOP3, O_IMAD, O_PRMT, O_MIX, O_IMMA, NOPS };
-static const char* OP_NAME[NOPS] = {"none", "iadd3", "lop3", "imad", "prmt", "mix", "imma"};
+// Round 1's probes (IADD3/LOP3/IMAD) read three vector registers each (SASS `IADD3 Rd, PT, PT, Ra, Rb, Rc`). Round 2
+// adds the cheapest merge-capable forms, a form that folds one computed word (an addend) into a running sum (an
+// accumulator), with as few vector-register reads as possible, since W10 (note:20261015T0704Z-draft-credit-ceilings)
+// found the read count, not the instruction class, sets tensor-pipe contention. An immediate is not an addend.
+//   MERGE  y[u] += y[v]                 IADD3 Rd, Rd, Rv, RZ          two vector reads
+//   REUSE  y[u] += y[7] (y[7] fixed)    IADD3 Rd, Rd, R7.reuse, RZ    one fresh vector read (the addend from the reuse cache)
+//   UNIF   y[u] += a warp-uniform word  IADD3 Rd, Rd, UR,  RZ         one vector read (addend in a uniform register)
+//   CBANK  y[u] += KK[imm]              IADD3 Rd, Rd, c[0x3][..], RZ  one vector read (addend from the constant bank)
+//   LOP3X  y[u] = byte-merge(y[u],y[v]) LOP3 Rd, Rd, Rv, imm, lut     two vector reads (a byte-packing merge)
+// PRMT (Round 1's `__byte_perm(y[u], y[v], imm)`, SASS `PRMT Rd, Ra, imm, Rb`) is already a two-register byte-packing
+// merge, so Round 2 reuses it. UNIF and CBANK read only one vector register, but a uniform/constant addend is identical
+// across a warp's 32 lanes, so the note argues what such a merge can and cannot combine.
+enum Op { O_NONE = 0, O_IADD3, O_LOP3, O_IMAD, O_PRMT, O_MIX, O_IMMA, O_MERGE, O_REUSE, O_UNIF, O_CBANK, O_LOP3X, NOPS };
+static const char* OP_NAME[NOPS] = {"none",  "iadd3", "lop3", "imad",  "prmt",  "mix",
+                                    "imma", "merge", "reuse", "unif", "cbank", "lop3x"};
 
 __device__ __forceinline__ uint32_t maj3(uint32_t a, uint32_t b, uint32_t c) { return (a & b) | (a & c) | (b & c); }
 
-template <int OP>
-__device__ __forceinline__ void xop(uint32_t (&y)[8], const uint32_t (&c)[4], int e) {
-  const int u = e & 7, v = (e + 3) & 7;
+// A warp-uniform addend: derived only from %ctaid.x (the same for every lane of the warp), so ptxas keeps it in a
+// uniform register and the add reads one vector register.
+__device__ __forceinline__ uint32_t unif_addend() {
+  uint32_t b;
+  asm("mov.u32 %0, %%ctaid.x;" : "=r"(b));
+  return b ^ 0x9E3779B1u;
+}
+
+// NY (a power of two) accumulators. A body of PB ops touches each accumulator at most once when PB <= NY, so no two of
+// its ops fold (the probe uses NY = 16 at PB = 16; the filler's in-loop extras use NY = 8 at X <= 8). The addend of a
+// merge is a computed word: MERGE adds another accumulator, REUSE one fixed computed word c[0] (served from the reuse
+// cache after the first op), LOP3X/PRMT byte-merge two accumulators. UNIF and CBANK add a warp-uniform word and a
+// constant: one vector read each, but identical across the warp's lanes.
+template <int OP, int NY>
+__device__ __forceinline__ void xop(uint32_t (&y)[NY], const uint32_t (&c)[4], int e) {
+  const int u = e & (NY - 1), v = (e + 3) & (NY - 1);
   const int op = OP == O_MIX ? ((e & 1) ? O_IMAD : O_IADD3) : OP;
   if (op == O_IADD3) y[u] = y[u] + y[v] + c[e & 3];
   if (op == O_LOP3) y[u] = maj3(y[u], y[v], c[e & 3]);
   if (op == O_IMAD) y[u] = y[u] * c[e & 3] + y[v];
   if (op == O_PRMT) y[u] = __byte_perm(y[u], y[v], 0x5140);
+  if (op == O_MERGE) y[u] = y[u] + y[v];
+  if (op == O_REUSE) y[u] = y[u] + c[0];
+  if (op == O_UNIF) y[u] = y[u] + unif_addend();
+  if (op == O_CBANK) y[u] = y[u] + KK[e & (NKEY - 1)];
+  if (op == O_LOP3X) {
+    uint32_t r;
+    asm("lop3.b32 %0, %1, %2, 0x00ff00ff, 0xe4;" : "=r"(r) : "r"(y[u]), "r"(y[v]));
+    y[u] = r;
+  }
 }
 
 constexpr int FT = 4, OUTW = 24, MAXW = 32, NSMID = 1024;
@@ -121,14 +156,14 @@ __device__ __forceinline__ void trip(uint32_t (&acc)[FT][4], St (&s)[FT], const 
     duo4<12>(s[3], acc[3]);
     if constexpr (X > 0) {
 #pragma unroll
-      for (int e = q * X / UNR; e < (q + 1) * X / UNR; ++e) xop<XOP>(y, c, e);
+      for (int e = q * X / UNR; e < (q + 1) * X / UNR; ++e) xop<XOP, 8>(y, c, e);
     }
   }
 }
 
-// A probe warp: a dependent-free stream of POP in bodies of PB ops, with an optional __nanosleep between bodies, until
-// *vd reaches target. pinfo slot blockIdx.x · MAXW + warp: bodies, t0, t1, fold.
-template <int POP, int PB>
+// A probe warp: a dependent-free stream of POP in bodies of PB ops over NY accumulators, with an optional __nanosleep
+// between bodies, until *vd reaches target. pinfo slot blockIdx.x · MAXW + warp: bodies, t0, t1, fold.
+template <int POP, int PB, int NY>
 __device__ __forceinline__ void probe(long long* pinfo, const volatile int* vd, int target, int sleep_ns, uint32_t seed,
                                       int warp, int lane) {
   {
@@ -164,25 +199,25 @@ __device__ __forceinline__ void probe(long long* pinfo, const volatile int* vd, 
 #pragma unroll
         for (int r = 0; r < 4; ++r) fold ^= pacc[e][r];
     } else {
-      uint32_t y[8], c[4];
+      uint32_t y[NY], c[4];
 #pragma unroll
-      for (int u = 0; u < 8; ++u) y[u] = gen(seed, ptid, 20 + u, 0);
+      for (int u = 0; u < NY; ++u) y[u] = gen(seed, ptid, 20 + u, 0);
 #pragma unroll
       for (int r = 0; r < 4; ++r) c[r] = gen(seed, ptid, 30 + r, 0) | 1u;
 #pragma unroll
-      for (int u = 0; u < 8; ++u) asm volatile("" : "+r"(y[u]));
+      for (int u = 0; u < NY; ++u) asm volatile("" : "+r"(y[u]));
 #pragma unroll
       for (int r = 0; r < 4; ++r) asm volatile("" : "+r"(c[r]));
       t0 = clock64();
       while (*vd < fw) {
 #pragma unroll
-        for (int e = 0; e < PB; ++e) xop<POP>(y, c, e);
+        for (int e = 0; e < PB; ++e) xop<POP, NY>(y, c, e);
         ++n;
         if (sleep_ns > 0) __nanosleep(sleep_ns);
       }
       t1 = clock64();
 #pragma unroll
-      for (int u = 0; u < 8; ++u) fold ^= y[u];
+      for (int u = 0; u < NY; ++u) fold ^= y[u];
     }
     if (lane == 0) {
       long long* p = pinfo + 4 * (blockIdx.x * MAXW + warp);
@@ -270,7 +305,7 @@ __global__ void __launch_bounds__(1024, 1)
       atomicAdd(gdone + id, 1);
     }
   } else if constexpr (POP != O_NONE) {
-    probe<POP, PB>(pinfo, &done, fw, sleep_ns, seed, warp, lane);
+    probe<POP, PB, 8>(pinfo, &done, fw, sleep_ns, seed, warp, lane);
   }
 }
 
@@ -287,7 +322,7 @@ __global__ void __launch_bounds__(1024, 1)
   if (threadIdx.x == 0) smid[blockIdx.x] = id;
   if (first)
     while (*(const volatile int*)(gdone + NSMID + id) == 0) __nanosleep(256);
-  probe<POP, PB>(pinfo, (const volatile int*)(gdone + id), fw, sleep_ns, seed, warp, lane);
+  probe<POP, PB, 16>(pinfo, (const volatile int*)(gdone + id), fw, sleep_ns, seed, warp, lane);
 }
 
 // ---------------------------------------------------------------------------------------------------------------- host
@@ -303,6 +338,7 @@ struct Kern {
 #define XK(OP, X, U) {std::string("x-") + OP_NAME[OP] + "-u" #U "-x" #X, O_NONE, OP, X, U, 0, fk<O_NONE, OP, X, U, 1>}
 #define XROW1(OP) XK(OP, 1, 1), XK(OP, 2, 1), XK(OP, 3, 1), XK(OP, 4, 1), XK(OP, 6, 1), XK(OP, 8, 1), XK(OP, 12, 1), XK(OP, 16, 1)
 #define XROW4(OP) XK(OP, 1, 4), XK(OP, 2, 4), XK(OP, 4, 4)
+#define XROW2(OP) XK(OP, 1, 1), XK(OP, 2, 1), XK(OP, 4, 1), XK(OP, 8, 1)
 #define PK(OP, PB) {std::string("p-") + OP_NAME[OP] + "-b" #PB, OP, O_NONE, 0, 1, PB, fk<OP, O_NONE, 0, 1, PB>}
 
 // Second-stream probes (pk), beside base-u1.
@@ -312,13 +348,16 @@ struct SKern {
   PFn fn;
 };
 #define SK(OP, PB) {std::string("s-") + OP_NAME[OP] + "-b" #PB, OP, PB, pk<OP, PB>}
-static std::vector<SKern> skernels() { return {SK(O_IADD3, 16), SK(O_IMAD, 16), SK(O_MIX, 16), SK(O_IMMA, 32)}; }
+static std::vector<SKern> skernels() {
+  return {SK(O_IADD3, 16), SK(O_IMAD, 16), SK(O_MIX, 16),  SK(O_IMMA, 32),  SK(O_MERGE, 16), SK(O_REUSE, 16),
+          SK(O_UNIF, 16),  SK(O_CBANK, 16), SK(O_PRMT, 16), SK(O_LOP3X, 16)};
+}
 
 static std::vector<Kern> kernels() {
   return {BASE(1),          BASE(4),          XROW1(O_IADD3),   XROW1(O_LOP3),   XROW1(O_IMAD),  XROW1(O_PRMT),
           XROW1(O_MIX),     XROW4(O_IADD3),   XROW4(O_IMAD),    XROW4(O_MIX),    PK(O_IADD3, 256), PK(O_LOP3, 256),
           PK(O_IMAD, 256),  PK(O_PRMT, 256),  PK(O_MIX, 256),   PK(O_IMMA, 32),  PK(O_IADD3, 16), PK(O_IMAD, 16),
-          PK(O_MIX, 16)};
+          PK(O_MIX, 16),    XROW2(O_MERGE),   XROW2(O_REUSE),   XROW2(O_UNIF),   XROW2(O_CBANK),  XROW2(O_LOP3X)};
 }
 
 static void set_keys(uint32_t kseed) {
@@ -654,9 +693,10 @@ int main(int argc, char** argv) {
           if (pw == 4 && sl == 0) emit_v(d, pkn, seed, kseed0, iters, vf);
         }
     }
-    // The same with the probe kernel resident first (its warps the older ones), for the IMMA and IADD3 probes.
+    // The same with the probe kernel resident first (its warps the older ones), for the IMMA and IADD3 probes and the
+    // Round 2 merge-capable forms.
     for (const SKern& p : skernels()) {
-      if (p.pop != O_IMMA && p.pop != O_IADD3) continue;
+      if (p.pop != O_IMMA && p.pop != O_IADD3 && p.pop != O_PRMT && p.pop < O_MERGE) continue;
       const int fw = 16;
       const Kern pkn{p.name, p.pop, O_NONE, 0, 1, p.pb, b1.fn};
       for (int pw : {4, 8, 16})
