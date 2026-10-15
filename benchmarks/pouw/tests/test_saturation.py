@@ -24,6 +24,7 @@ def _load(name: str):
 V = _load("vllm_split")
 N = _load("ncu_summary")
 W = _load("windows_eps")
+D = _load("drift_tau")
 
 
 def test_categories_keep_fp8_gemms_and_kv_writes_apart():
@@ -111,3 +112,10 @@ def test_timed_window_keeps_all_the_work_of_a_cheater_that_fits():
     assert W.timed(rows, "k", "p2048", 0.5, 1.01, 16.0) == pytest.approx(16 * 0.02 / 8 / 0.5)
     assert W.timed(rows, "k", "p2048", 0.5, 1.05, 16.0) == pytest.approx((16 * 0.02 / 8 + 0.9 * 0.039) / 0.5)
     assert W.timed([], "k", "p2048", 0.5, 1.05, 16.0) == pytest.approx(0.9 * 0.05 / 0.5)
+
+
+def test_honest_tau_reads_the_slow_tail_over_the_fastest_launches():
+    ms = [1.0] * 10 + [1.01] * 979 + [1.03] * 10 + [1.5]
+    assert D.quantile(ms, 0.001) == 1.0 and D.quantile(ms, 0.999) == 1.03
+    assert D.tau(D.quantile(ms, 0.999), D.quantile(ms, 0.001)) == pytest.approx(1.03)
+    assert D.reasons(0x4 | 0x20) == ["sw power cap", "sw thermal"] and D.reasons(0) == ["none"]
