@@ -569,22 +569,26 @@ def solve_batch(problems: list[tuple[str, int, int, list[dict], dict]], out, kin
     spec = "".join(spec_problem(name, R, C, terms) for name, R, C, terms, _ in problems)
     t0 = time.time()
     results = {r["name"]: r for r in run_solver(spec, batch=batch)}
-    below = 0
+    below = joint = joint_below = 0
     for name, R, C, terms, meta in problems:
         r = results[name]
         naive = naive_by_mask(terms)
         sub_below = [S for S in range(1, 1 << len(terms)) if r["root_dp"][S] < naive[S]]
+        ind = independence(terms, R, C)
+        ji = ind["rows"] is None and ind["cols"] is None
+        joint += ji
         if r["answer"] < naive[-1] or sub_below:
             below += 1
+            joint_below += ji
             best = min(sub_below, key=lambda S: (r["root_dp"][S] - naive[S], bin(S).count("1")))
             emit(out, {"kind": kind, "case": name, "R": R, "C": C, "naive": naive[-1], "answer": r["answer"],
                        "subsets_below": len(sub_below),
                        "prefix_closed_below": sum(prefix_closed(S, terms) for S in sub_below),
                        "best_subset": [best, r["root_dp"][best], naive[best]],
                        "terms": [[hex(t["m"]), t["label"]] for t in terms],
-                       "tree": r["tree"], "tree_check": verify_tree_f2(r, R, C), **meta,
-                       "independence": independence(terms, R, C)})
+                       "tree": r["tree"], "tree_check": verify_tree_f2(r, R, C), **meta, "independence": ind})
     summary = {"kind": kind, "summary": True, "families": len(problems), "below_naive": below,
+               "jointly_independent": joint, "jointly_independent_below": joint_below,
                "wall_s": round(time.time() - t0, 2), "states": 1 << (problems[0][1] * problems[0][2])}
     emit(out, summary)
     return summary
