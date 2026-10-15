@@ -14,6 +14,7 @@ import numpy as np
 
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.query.manifest.format import moe_plane_kind
+from verity_vllm.program.compact import expanded_file_args, p_item_indices, runs_from_file_items
 from verity_vllm.program.kernels.rows import SAMPLED_MEMBER
 
 
@@ -24,6 +25,17 @@ VALUES_PARAM = "values"                 # a `registered_values` Program's regist
 _RUN_PARAM = re.compile(r"^run(_\d+)?$")  # its run values, one parameter per request (the sampler's temperature and top_p, a Philox position)
 
 _CONST_ROW = re.compile(r"^Const(32|64)\[0x([0-9a-fA-F]+)\]_v\d+$")
+
+
+def row_args(r: dict | None) -> list:
+    """A row's operands as per-leaf run lists, whether its args are as `format.load_program` expands them or as the file stores them
+    (a v2 row's "N"/"P" progressions, `load_program(expand=False)`): how the replay reads every argument it evaluates."""
+    return expanded_file_args((r or {}).get("args") or [])
+
+
+def node_runs(group) -> list[tuple]:
+    """The node-space runs `("n", producer, lo, hi)` of one operand (stored or expanded), in order; its parameter reads are not expanded."""
+    return runs_from_file_items(it for it in group if it and it[0] in ("n", "N"))
 
 
 def const_word(row: dict | None) -> np.ndarray | None:
@@ -211,7 +223,7 @@ class ProgramIndex:
             self._embed_op = None
             ids = self.ids_params()
             for r in self.rows:
-                if any(sl and sl[0] == "p" and int(sl[1]) in ids for g in (r.get("args") or []) for sl in g):
+                if any(i in ids for g in (r.get("args") or []) for sl in g if sl for i in p_item_indices(sl)):
                     d = self.describe(r)
                     self._embed_op = d["op_path"] if d else None
                     break
@@ -337,13 +349,18 @@ class ProgramIndex:
         the activation quant row p reads act row p (up row p when fused with the SiLU).  A Program whose MoE rows are not in that order (or not
         of that shape) is named here -- the replay never reads a plane word of another pair.
         (Measured on the OLMoE B1 256/32 request Program: 119,392 MoE rows, 0 inconsistencies.)"""
-        r = self.by_i[i]
-        args = r.get("args") or []
+        ops = self.by_i[i].get("args") or []
+        args: dict[int, list] = {}
+
+        def arg(gi: int) -> list:                                     # an operand's runs, expanded only when read (not the weight reads)
+            if gi not in args:
+                args[gi] = expanded_file_args([ops[gi]])[0]
+            return args[gi]
 
         def prod(gi: int, si: int = 0) -> tuple[str | None, int, int, int, int] | None:
-            if gi >= len(args) or si >= len(args[gi]) or args[gi][si][0] != "n":
+            if gi >= len(ops) or si >= len(arg(gi)) or arg(gi)[si][0] != "n":
                 return None
-            j, lo, hi = int(args[gi][si][1]), int(args[gi][si][2]), int(args[gi][si][3])
+            j, lo, hi = int(arg(gi)[si][1]), int(arg(gi)[si][2]), int(arg(gi)[si][3])
             pr = self.by_i.get(j)
             if pr is None:
                 return None
@@ -386,7 +403,7 @@ class ProgramIndex:
             if g is None or g[0] != "router" or g[1] != t or (g[2], g[3]) != (k, k + 1):
                 return f"down row {p} does not read router row {t} weight slot {k} (Program dataflow {g}): not pair-major"
         elif kind == "sum":
-            sl = args[0] if args else []
+            sl = arg(0) if ops else []
             if len(sl) != TOPK:
                 return f"sum row {p} reads {len(sl)} slices, not TOPK = {TOPK}"
             for kk in range(TOPK):

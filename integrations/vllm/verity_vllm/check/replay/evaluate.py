@@ -12,7 +12,7 @@ from verity_vllm.check.replay.replay_dump import dump_row_words
 from verity_vllm.commit.opened import OpeningNotVerified, opened_check
 from verity_vllm.program.kernels.kernel_registry import Declined
 from verity_vllm.program.kernels.rows import EVALUATORS, ROWS
-from verity_vllm.check.replay.index import IDS_MEMBER, SAMPLER_OP, SEED_PARAM, ProgramIndex, const_word
+from verity_vllm.check.replay.index import IDS_MEMBER, SAMPLER_OP, SEED_PARAM, ProgramIndex, const_word, row_args
 from verity_vllm.check.replay.opening import _ITEMSIZE, CommittedStore
 from verity_vllm.check.replay.compare import _interior_slice, _tp_member_alias, lifted_compare, padded_slot_enable
 from verity_vllm.check.replay.delegate import DELEGATES, Place
@@ -88,7 +88,7 @@ def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[st
     inputs: list[list[np.ndarray]] = []
     wslices: list[np.ndarray | None] = []
     wrefs: list[dict[str, Any] | None] = []
-    for group in r.get("args") or []:
+    for group in row_args(r):
         words: list[np.ndarray] = []
         wsl = None
         wref = None
