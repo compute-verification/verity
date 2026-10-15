@@ -8,7 +8,8 @@
 //
 // Each thread reads its CPU and node with getcpu once pinned, and the node of its arrays' first and last pages with
 // move_pages; `misplaced` counts threads whose arrays aren't all on the node asked for. --start-at: a CLOCK_REALTIME second
-// at which to start timing, so that another process's timed phase (benchmarks/host_tier/pcie.cu) coincides.
+// at which to start timing, so that another process's timed phase (benchmarks/host_tier/pcie.cu) coincides; the line's
+// t0_unix and t1_unix are the timed window, and start_late_s how far past T the arrays became ready.
 #define _GNU_SOURCE
 #include <immintrin.h>
 #include <pthread.h>
@@ -43,6 +44,12 @@ typedef struct {
 static double now(void) {
   struct timespec t;
   clock_gettime(CLOCK_MONOTONIC, &t);
+  return t.tv_sec + 1e-9 * t.tv_nsec;
+}
+
+static double unix_now(void) {
+  struct timespec t;
+  clock_gettime(CLOCK_REALTIME, &t);
   return t.tv_sec + 1e-9 * t.tv_nsec;
 }
 
@@ -178,17 +185,16 @@ int main(int argc, char **argv) {
     pthread_create(&t[i], NULL, run, &w[i]);
   }
   pthread_barrier_wait(&ready);
+  double late = 0;
   if (start_at > 0) {
-    struct timespec r;
-    clock_gettime(CLOCK_REALTIME, &r);
-    const double wait = start_at - (r.tv_sec + 1e-9 * r.tv_nsec);
-    if (wait < 0) fprintf(stderr, "start-at passed %.3f s before the arrays were ready\n", -wait);
+    const double wait = start_at - unix_now();
+    if (wait < 0) late = -wait, fprintf(stderr, "start-at passed %.3f s before the arrays were ready\n", late);
     else {
       struct timespec d = {(time_t)wait, (long)((wait - (time_t)wait) * 1e9)};
       nanosleep(&d, NULL);
     }
   }
-  const double t0 = now();
+  const double t0 = now(), u0 = unix_now();
   pthread_barrier_wait(&go);
   struct timespec d = {(time_t)seconds, (long)((seconds - (time_t)seconds) * 1e9)};
   nanosleep(&d, NULL);
@@ -210,8 +216,8 @@ int main(int argc, char **argv) {
                     node_threads[k], node_elems[k] * STREAM_B[kernel] / el / 1e9);
   printf("{\"label\": \"%s\", \"cpus\": \"%s\", \"threads\": %d, \"node\": \"%s\", \"kernel\": \"%s\", \"mib_per_array\": %.0f, "
          "\"seconds\": %.3f, \"gb_per_s\": %.2f, \"dram_gb_per_s\": %.2f, \"by_cpu_node\": {%s}, \"misplaced\": %d, "
-         "\"fold\": %.6e}\n",
+         "\"fold\": %.6e, \"t0_unix\": %.3f, \"t1_unix\": %.3f, \"start_late_s\": %.3f}\n",
          label, cpulist, n, node_arg, KNAMES[kernel], mib, el, total * STREAM_B[kernel] / el / 1e9,
-         total * DRAM_B[kernel] / el / 1e9, per, misplaced, fold);
+         total * DRAM_B[kernel] / el / 1e9, per, misplaced, fold, u0, u0 + el, late);
   return misplaced ? 6 : 0;
 }

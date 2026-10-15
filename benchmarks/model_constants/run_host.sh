@@ -13,7 +13,8 @@
 # of its 48 cores here; the per-socket rows say what each socket's cores read. Env: SECONDS_EACH (2), REPS (2), MIB (per
 # array per thread, 64; the read's one array a thread then totals 2.3x a socket's 336 MiB of L3 at 12 threads, so the
 # read's rows want 512),
-# KERNELS (read copy triad copy_nt triad_nt), GPU=0 skips the lease.
+# KERNELS (read copy triad copy_nt triad_nt), GPU=0 skips the lease; REPS=0 skips the CPU phase; READERS, PAIRS and
+# QUIET_MAX shape the lease's rows (below).
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 MC=$PWD/benchmarks/model_constants HT=$PWD/benchmarks/host_tier
@@ -50,23 +51,32 @@ for r in $(seq "$R"); do
 done
 [ "${GPU:-1}" = 0 ] && exit 0
 
+# QUIET_MAX: before the lease, wait (up to QUIET_WAIT_MIN, 30) until CPUs 0-119 are at most that busy and no GPU is held;
+# quiet.jsonl records that wait and a sample inside the lease.
+if [ -n "${QUIET_MAX:-}" ]; then
+  python3 "$MC/quiet.py" --max "$QUIET_MAX" --wait-min "${QUIET_WAIT_MIN:-30}" | sed 's/^{/{"label": "before", /' >> "$O/quiet.jsonl"
+fi
+
 # Under the lease: pcie's driver threads on CPUs 0-3 and 96-99 (as ra-host-tier's whole-node window), the CPUs' STREAM on
-# one thread a core of the rest.
-export PC=0-3,96-99 RC="$(evens 4 94),$(evens 100 118)"
+# one thread a core of the rest. READERS and PAIRS (KERNEL:MODE) name the rows; KERNEL@MIB sets that row's MIB.
+export PC=0-3,96-99 RC="$(evens 4 94),$(evens 100 118)" MC
+export READERS=${READERS:-read triad copy_nt} PAIRS=${PAIRS:-read:h2d triad:h2d copy_nt:h2d read:zcr}
 # shellcheck disable=SC2016
 gpu-lease 8 --wait --max-min "${MAXMIN:-10}" -- bash -c '
   nvidia-smi --query-gpu=index,uuid,name,pci.bus_id,pcie.link.gen.current,pcie.link.width.current,clocks.sm,clocks.mem \
     --format=csv > "$O/gpu.txt" 2>&1
   date -u +%FT%TZ >> "$O/gpu.txt"
+  python3 "$MC/quiet.py" | sed "s/^{/{\"label\": \"in-lease\", /" >> "$O/quiet.jsonl"
   P() { taskset -c "$PC" "$B/pcie" --seconds 3 --mib 1024 --host-node local "$@"; }
   tag() { sed "s/^{/{\"label\": \"$1\", /" | tee -a "$O/pcie.jsonl"; }
+  mib() { [[ $1 == *@* ]] && echo "--mib ${1#*@}"; }
   P --modes h2d --seconds 0.5 | tag gates; [ "${PIPESTATUS[0]}" = 0 ] || { echo "pcie gates failed"; exit 3; }
   P --modes h2d,zcr,d2h | tag alone
-  for k in read triad copy_nt; do st readers-alone "$RC" $k; done
-  for pair in read:h2d triad:h2d copy_nt:h2d read:zcr; do
+  for k in $READERS; do st readers-alone "$RC" ${k%@*} $(mib $k); done
+  for pair in $PAIRS; do
     k=${pair%:*} m=${pair#*:}
     t=$(python3 -c "import time; print(time.time() + 10)")
-    st "readers-with-$m" "$RC" "$k" --start-at "$t" > "$B/s.json" &
+    st "readers-with-$m" "$RC" ${k%@*} $(mib $k) --start-at "$t" > "$B/s.json" &
     P --modes "$m" --seconds "$S" --start-at "$t" | tag "with-$k"
     wait; cat "$B/s.json"
   done
