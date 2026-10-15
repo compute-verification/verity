@@ -138,6 +138,7 @@
         "Security/Models/Nci/",
         "Security/Proofs/Nci/",
         "benchmarks/pouw/",
+        "benchmarks/pouw_eta/",
         "benchmarks/numerical/",
         ".agents/skills/kernel-engineering/",
         "integrations/vllm/verity_vllm/protocol_options/pouw.py",
