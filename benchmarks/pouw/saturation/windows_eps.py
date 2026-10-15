@@ -37,7 +37,7 @@ import re
 F = 0.001
 RHO = 8
 BEST_ETA = 0.9
-H_PHI = {0: 6.0, 1: 4.8}
+H_PHI = {0: 6.0, 1: 4.8, 2: 8.03}  # duo2: A5a's slots a word alone (r20261015-101159-4673)
 H_TREE = 0.4
 SPLIT = {  # ms per step: all kernels, the FP8 linears, the BF16 lm_head (r20261015-042637-c9be)
     "p2048": (57.29, 44.00, 0.0),
@@ -52,6 +52,7 @@ DESIGNS = [  # name, prefill kernel, decode kernel
     ("1× imad, L = 128, spread", "p_imad_p1s", "d_alu_p1"),
     ("1× alu, L = 64", "p_alu_g2", None),
     ("1× alu, L = 32", "p_alu_g4", "d_alu_g4"),
+    ("duo2, L = 32", "p_duo2_g4", None),
     ("1× alu, L = 32, 1 forced step", "p_alu_g4_f1", None),
     ("1× alu, L = 32, 64 forced FFMAs", "p_alu_g4_ff64", None),
     ("1× alu, L = 32, 128 forced FFMAs", "p_alu_g4_ff128", None),

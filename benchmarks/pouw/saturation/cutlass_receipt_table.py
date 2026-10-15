@@ -7,6 +7,8 @@ Rate kept is the receipt-free kernel's time over the receipted kernel's, per SM 
 round). A phase's rate kept weights its four linears by the receipt-free kernel's time, as one layer runs each once. φ share
 is φ steps per SM clock over φ alone's rate (`phi_probe.cu`: 21.2 alu, 26.6 imad, `r20261015-052731-4476`). The slot
 model's load is T_φ/T_mma = h_φ · rounds / L × (receipt-free MACs/SM/clk) / 128, with h_φ 6.0 (alu) and 4.8 (imad) slots.
+duo2 (var 2) counts a word as a step, at A5a's 8.03 slots a word alone (`note:20261015T0937Z-draft-receipt-phi-r3`,
+`r20261015-101159-4673`).
 """
 from __future__ import annotations
 
@@ -15,9 +17,9 @@ import json
 import re
 from collections import defaultdict
 
-PHI_ALONE = {0: 21.2, 1: 26.6}
-H_PHI = {0: 6.0, 1: 4.8}
-VAR = {0: "alu", 1: "imad"}
+PHI_ALONE = {0: 21.2, 1: 26.6, 2: 128 / 8.03}
+H_PHI = {0: 6.0, 1: 4.8, 2: 8.03}
+VAR = {0: "alu", 1: "imad", 2: "duo2"}
 
 
 def load(path):
