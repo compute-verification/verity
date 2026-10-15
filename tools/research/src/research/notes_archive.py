@@ -1,9 +1,9 @@
 """`research notes archive`: a lane's older notes into month (or day) folders, so the lane's folder stays its working set.
 
-    research notes archive LANE [--older-days 3] [--by month|day] [--apply] [--root DIR]
+    research notes archive LANE [--older-days 3] [--bucket month|day] [--apply] [--root DIR]
 
 A lane's folder keeps every note it wrote or was sent; `lanes/coordinator/` takes 150-280 a day.  `archive` moves each note whose
-file name is stamped (`YYYYMMDDTHHMMZ-...`) more than `--older-days` days ago into `lanes/<lane>/<YYYY-MM>/` (`--by day`:
+file name is stamped (`YYYYMMDDTHHMMZ-...`) more than `--older-days` days ago into `lanes/<lane>/<YYYY-MM>/` (`--bucket day`:
 `<YYYY-MM>/<DD>/`), in one commit that `research notes sync` then pushes; without `--apply` it only prints the plan.  It never
 moves a report (readers take a lane's newest `*report*` from its folder), a name without a stamp (STATE.md, binding.json), a
 dotfile, a directory, a file git does not track or that changed since the last commit, mail (`*handoff*`, `*asks*`, `*reply*`)
@@ -99,17 +99,20 @@ def main(argv: list[str], default_root: Path) -> int:
     ap = argparse.ArgumentParser(prog="research notes archive", description=__doc__.split("\n\n")[0])
     ap.add_argument("lane")
     ap.add_argument("--older-days", type=float, default=3, help="move notes stamped more than this many days ago (default 3)")
-    ap.add_argument("--by", choices=("month", "day"), default="month", help="<YYYY-MM>/ folders, or <YYYY-MM>/<DD>/ (a busy lane)")
+    ap.add_argument("--bucket", choices=("month", "day"), default="month", help="<YYYY-MM>/ folders, or <YYYY-MM>/<DD>/ (a busy lane)")
     ap.add_argument("--apply", action="store_true", help="move them, in one commit (default: print the plan)")
     ap.add_argument("--root", type=Path, default=None)
+    if old := [a for a in argv if a == "--by" or a.startswith("--by=")]:
+        print("research notes archive: --by is --bucket now; use --bucket", file=sys.stderr)
+        argv = [a.replace("--by", "--bucket", 1) if a in old else a for a in argv]
     ns = ap.parse_args(argv)
     root = (ns.root or default_root).expanduser()
     if not (root / "lanes" / ns.lane).is_dir():
         print(f"research notes archive: no lane {ns.lane!r} under {root / 'lanes'}", file=sys.stderr)
         return 2
     now = _utcnow()
-    moves, kept = plan(root, ns.lane, now, ns.older_days, ns.by)
-    where = "<YYYY-MM>/" if ns.by == "month" else "<YYYY-MM>/<DD>/"
+    moves, kept = plan(root, ns.lane, now, ns.older_days, ns.bucket)
+    where = "<YYYY-MM>/" if ns.bucket == "month" else "<YYYY-MM>/<DD>/"
     left = ", ".join(f"{len(v)} {k}" for k, v in kept.items() if v) or "nothing"
     cut = f"{now - dt.timedelta(days=ns.older_days):%Y-%m-%dT%H:%MZ}"
     if kept["unseen mail"] and notes._seen(root, ns.lane) is None:
