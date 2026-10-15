@@ -1152,4 +1152,193 @@ end MatMachine
 
 end EditedInstances
 
+section ModelB
+
+/-! ## The Model B bridge (RS-MODEL: note:20261015T1814Z-draft-rs-machine-model, `gpu-model/rs-model.lean`)
+
+Model B prices a straight-line gate program by the sum of its gates' prices (`timeB`, additive) and never reads its
+wiring (`timeB_rewire`). A Model B algorithm `I → O` is a typed circuit (`Circ`) of gates and routing: its semantics
+is gate evaluation and its time is `timeB` of its gate list. `machine` is the `Machine`; `matMachine` is the
+`MatMachine` over ℤ given circuits for the products, sums and differences at their prices (`MatGates`), which a gate
+family with one GEMM kind per shape provides (`gemmGates`). On sm_120 (`price120`) one worst-case constant is used,
+`κ = 16` u per product (s32 operands as 4 × 4 int8 limb products) and `κadd = 1` u per entry. -/
+
+namespace ModelB
+
+/-- RS-MODEL's gate kind: arity, outputs, the operand range on which it is well-formed (`ok`), and its exact semantics
+there. -/
+structure Kind where
+  arity : ℕ
+  outs : ℕ
+  ok : (Fin arity → ℤ) → Bool
+  sem : (Fin arity → ℤ) → Fin outs → ℤ
+
+/-- RS-MODEL's gate: a kind, the wires it reads, its round. -/
+structure Gate (K : Type) where
+  kind : K
+  args : List ℕ
+  round : ℕ := 0
+
+/-- RS-MODEL's straight-line program. -/
+abbrev Prog (K : Type) : Type := List (Gate K)
+
+variable {K : Type}
+
+/-- RS-MODEL's `time_B`: the sum of the gates' prices (on sm_120 in u = 1/R* SMSP-cycles). -/
+def timeB (price : K → ℕ) (P : Prog K) : ℕ := (P.map fun g => price g.kind).sum
+
+theorem timeB_append (price : K → ℕ) (P Q : Prog K) : timeB price (P ++ Q) = timeB price P + timeB price Q := by
+  simp [timeB]
+
+/-- RS-MODEL's `timeB_rewire`: rewiring never changes time. -/
+theorem timeB_rewire (price : K → ℕ) (P : Prog K) (f : Gate K → List ℕ) :
+    timeB price (P.map fun g => { g with args := f g }) = timeB price P := by
+  simp [timeB, Function.comp_def]
+
+/-- The program of a gate list, with its wiring left out (Model B's time doesn't read it, `timeB_rewire`). -/
+def progOf (l : List K) : Prog K := l.map fun k => { kind := k, args := [] }
+
+theorem timeB_progOf_append (price : K → ℕ) (l m : List K) :
+    timeB price (progOf (l ++ m)) = timeB price (progOf l) + timeB price (progOf m) := by
+  rw [progOf, List.map_append, timeB_append]
+  rfl
+
+variable (kd : K → Kind)
+
+/-- A typed Model B circuit. `gate k` is one gate of kind `k` (off its range `ok` it outputs 0, which only adds
+programs); the rest is routing, which moves wires and computes nothing: `reindex` (read wires in any order, with
+fan-out), `curry` and `uncurry` (reshape a block), `join` (two bundles side by side), and the combinators. -/
+inductive Circ : Type → Type → Type 1 where
+  | gate (k : K) : Circ (Fin (kd k).arity → ℤ) (Fin (kd k).outs → ℤ)
+  | reindex {α β V : Type} (f : β → α) : Circ (α → V) (β → V)
+  | curry {α β V : Type} : Circ (α × β → V) (α → β → V)
+  | uncurry {α β V : Type} : Circ (α → β → V) (α × β → V)
+  | join {α β V : Type} : Circ ((α → V) × (β → V)) (α ⊕ β → V)
+  | seq {I J O : Type} : Circ I J → Circ J O → Circ I O
+  | pair {I J O : Type} : Circ I J → Circ I O → Circ I (J × O)
+  | fst {I J : Type} : Circ (I × J) I
+  | snd {I J : Type} : Circ (I × J) J
+
+variable {kd}
+
+/-- What a circuit computes. -/
+def Circ.eval : {I O : Type} → Circ kd I O → I → O
+  | _, _, .gate k, w => fun o => if (kd k).ok w then (kd k).sem w o else 0
+  | _, _, .reindex f, w => w ∘ f
+  | _, _, .curry, w => fun a b => w (a, b)
+  | _, _, .uncurry, w => fun p => w p.1 p.2
+  | _, _, .join, w => Sum.elim w.1 w.2
+  | _, _, .seq f g, x => g.eval (f.eval x)
+  | _, _, .pair f g, x => (f.eval x, g.eval x)
+  | _, _, .fst, x => x.1
+  | _, _, .snd, x => x.2
+
+/-- Its gates, in order. -/
+def Circ.gates : {I O : Type} → Circ kd I O → List K
+  | _, _, .gate k => [k]
+  | _, _, .reindex _ => []
+  | _, _, .curry => []
+  | _, _, .uncurry => []
+  | _, _, .join => []
+  | _, _, .seq f g => f.gates ++ g.gates
+  | _, _, .pair f g => f.gates ++ g.gates
+  | _, _, .fst => []
+  | _, _, .snd => []
+
+/-- Its Model B program (wiring left out). -/
+def Circ.prog {I O : Type} (c : Circ kd I O) : Prog K := progOf c.gates
+
+variable (kd) in
+/-- A Model B algorithm `I → O`: what it computes and its gate list, as some circuit's. (A subtype, so that
+algorithms are small types; the circuit itself lives in `Type 1`.) -/
+def Alg (I O : Type) : Type := {p : (I → O) × List K // ∃ c : Circ kd I O, c.eval = p.1 ∧ c.gates = p.2}
+
+/-- A circuit's algorithm. -/
+def Circ.alg {I O : Type} (c : Circ kd I O) : Alg kd I O := ⟨(c.eval, c.gates), c, rfl, rfl⟩
+
+variable (kd) in
+/-- **Model B as a `Machine`**: time is `timeB` of the gate list and a run costs its time (Model B is oblivious);
+composition concatenates gate lists, so time is additive (RS-DEF's T1, `timeB_append`), and routing is free. -/
+def machine (price : K → ℕ) : Machine where
+  Alg := Alg kd
+  eval f := f.1.1
+  time f := (timeB price (progOf f.1.2) : ℝ)
+  cost f _ := (timeB price (progOf f.1.2) : ℝ)
+  seq f g := ⟨(g.1.1 ∘ f.1.1, f.1.2 ++ g.1.2), by
+    obtain ⟨c, hc, hc'⟩ := f.2
+    obtain ⟨d, hd, hd'⟩ := g.2
+    exact ⟨.seq c d, by rw [← hc, ← hd]; rfl, by rw [← hc', ← hd']; rfl⟩⟩
+  pair f g := ⟨(fun x => (f.1.1 x, g.1.1 x), f.1.2 ++ g.1.2), by
+    obtain ⟨c, hc, hc'⟩ := f.2
+    obtain ⟨d, hd, hd'⟩ := g.2
+    exact ⟨.pair c d, by rw [← hc, ← hd]; rfl, by rw [← hc', ← hd']; rfl⟩⟩
+  fst := Circ.fst.alg
+  snd := Circ.snd.alg
+  eval_seq _ _ _ := rfl
+  eval_pair _ _ _ := rfl
+  eval_fst _ := rfl
+  eval_snd _ := rfl
+  time_nonneg _ := Nat.cast_nonneg _
+  cost_le_time _ _ := le_rfl
+  time_seq_le f g := by
+    show ((timeB price (progOf (f.1.2 ++ g.1.2)) : ℕ) : ℝ) ≤ _
+    rw [timeB_progOf_append, Nat.cast_add]
+  le_time_seq f g := by
+    show _ ≤ ((timeB price (progOf (f.1.2 ++ g.1.2)) : ℕ) : ℝ)
+    rw [timeB_progOf_append, Nat.cast_add]
+    linarith [Nat.cast_nonneg (α := ℝ) (timeB price (progOf g.1.2))]
+  time_pair_le f g := by
+    show ((timeB price (progOf (f.1.2 ++ g.1.2)) : ℕ) : ℝ) ≤ _
+    rw [timeB_progOf_append, Nat.cast_add]
+  le_time_pair_left f g := by
+    show _ ≤ ((timeB price (progOf (f.1.2 ++ g.1.2)) : ℕ) : ℝ)
+    rw [timeB_progOf_append, Nat.cast_add]
+    linarith [Nat.cast_nonneg (α := ℝ) (timeB price (progOf g.1.2))]
+  le_time_pair_right f g := by
+    show _ ≤ ((timeB price (progOf (f.1.2 ++ g.1.2)) : ℕ) : ℝ)
+    rw [timeB_progOf_append, Nat.cast_add]
+    linarith [Nat.cast_nonneg (α := ℝ) (timeB price (progOf f.1.2))]
+  time_fst := by simp [Circ.alg, Circ.gates, progOf, timeB]
+  time_snd := by simp [Circ.alg, Circ.gates, progOf, timeB]
+
+/-- A circuit's time in `machine` is RS-MODEL's `time_B` of its program. -/
+theorem time_alg (price : K → ℕ) {I O : Type} (c : Circ kd I O) :
+    (machine kd price).time c.alg = (timeB price c.prog : ℝ) := rfl
+
+theorem eval_alg (price : K → ℕ) {I O : Type} (c : Circ kd I O) :
+    (machine kd price).eval c.alg = c.eval := rfl
+
+variable (kd) in
+/-- Circuits for the matrix operations over ℤ at their prices: an `a × b` by `b × c` product at `κ` per
+multiply-accumulate, an entrywise sum or difference at `κadd` per entry. -/
+structure MatGates (price : K → ℕ) (κ κadd : ℝ) where
+  mul : ∀ a b c : ℕ, Circ kd (Mat ℤ a b × Mat ℤ b c) (Mat ℤ a c)
+  add : ∀ a b : ℕ, Circ kd (Mat ℤ a b × Mat ℤ a b) (Mat ℤ a b)
+  sub : ∀ a b : ℕ, Circ kd (Mat ℤ a b × Mat ℤ a b) (Mat ℤ a b)
+  eval_mul : ∀ (a b c : ℕ) (x : Mat ℤ a b × Mat ℤ b c), (mul a b c).eval x = x.1 * x.2
+  eval_add : ∀ (a b : ℕ) (x : Mat ℤ a b × Mat ℤ a b), (add a b).eval x = x.1 + x.2
+  eval_sub : ∀ (a b : ℕ) (x : Mat ℤ a b × Mat ℤ a b), (sub a b).eval x = x.1 - x.2
+  time_mul_le : ∀ a b c : ℕ, (timeB price (mul a b c).prog : ℝ) ≤ κ * ((a : ℝ) * b * c)
+  time_add_le : ∀ a b : ℕ, (timeB price (add a b).prog : ℝ) ≤ κadd * ((a : ℝ) * b)
+  time_sub_le : ∀ a b : ℕ, (timeB price (sub a b).prog : ℝ) ≤ κadd * ((a : ℝ) * b)
+
+/-- **Model B as a `MatMachine`** over ℤ, from circuits for the matrix operations. -/
+def matMachine {price : K → ℕ} {κ κadd : ℝ} (G : MatGates kd price κ κadd) : MatMachine ℤ where
+  toMachine := machine kd price
+  κ := κ
+  κadd := κadd
+  mul a b c := (G.mul a b c).alg
+  add a b := (G.add a b).alg
+  sub a b := (G.sub a b).alg
+  eval_mul := G.eval_mul
+  eval_add := G.eval_add
+  eval_sub := G.eval_sub
+  time_mul_le := G.time_mul_le
+  time_add_le := G.time_add_le
+  time_sub_le := G.time_sub_le
+
+end ModelB
+
+end ModelB
+
 end Pouw.RelativeSecurity
