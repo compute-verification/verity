@@ -266,9 +266,11 @@ def main():
             top = max(top, saved)
         if tot > rB:
             found = label_search(links, betas, a.p, len(links) - rB, rng, 3000)
-            over.append({"links": links, "betas": [list(b) for b in betas], "gap": tot, "labels_reach": bool(found)})
+            pair = best_coupled(links, betas, a.p, rB, 0)[0]
+            over.append({"links": links, "betas": [list(b) for b in betas], "rank_B": rB, "gap": tot,
+                         "labels_reach": bool(found), "coupled_pair": pair})
             print("total gap above rank B:", links, betas, tot, "general labels reach k - rank B:", bool(found),
-                  flush=True)
+                  "coupled pair:", pair, flush=True)
         if tested % 20 == 0:
             print(f"  {tested} tested, histogram (rank B: best gap) {hist}", flush=True)
     res = {"P": a.P, "Q": a.Q, "d": a.d, "p": a.p, "realized_L": a.realized, "tested": tested, "histogram": hist,
@@ -277,8 +279,9 @@ def main():
     Path(a.out).mkdir(parents=True, exist_ok=True)
     (Path(a.out) / f"{tag}.json").write_text(json.dumps(res, indent=1))
     unresolved = sum(not o["labels_reach"] for o in over)
+    unpaired = sum(o["coupled_pair"] > o["rank_B"] for o in over)
     print(f"{tag}: {tested} tested, histogram (rank B: best gap) {hist}, {len(over)} above rank B "
-          f"({unresolved} not reached by general labels either), top saving {top}")
+          f"({unresolved} not reached by general labels either, {unpaired} not by a coupled pair), top saving {top}")
 
 
 if __name__ == "__main__":
