@@ -483,6 +483,72 @@ def sha_mode(dev: R.Dev, lanes: Lanes) -> None:
         release(dev, pipes, own)
 
 
+#: FP8 E4M3 codes with the NaNs (0x7F, 0xFF) moved to the largest finite magnitudes
+FINITE = bytes(v - 1 if v & 0x7F == 0x7F else v for v in range(256))
+
+
+def pattern(name: str, n: int, honest: bytes) -> bytes:
+    """n FP8 E4M3 operand bytes of a data pattern: `honest` is plainq's codes of gen_f32's rows (the served data)."""
+    if name == "honest":
+        return honest
+    if name == "zeros":
+        return bytes(n)
+    if name == "ones":
+        return b"\x38" * n
+    if name == "alt_sign":
+        return b"\x38\xb8" * (n // 2)
+    rnd = os.urandom(n)
+    if name == "uniform":
+        return rnd.translate(FINITE)
+    if name == "ternary":
+        return rnd.translate(bytes((0x00, 0x38, 0xB8)[v % 3] for v in range(256)))
+    if name == "onebit":
+        return rnd.translate(bytes(1 << (v & 7) for v in range(256)))
+    if name == "sparse8":
+        return rnd.translate(bytes(FINITE[(37 * v + 11) & 0xFF] if v < 32 else 0 for v in range(256)))
+    if name == "pow2":
+        return rnd.translate(bytes(v & 0xF8 for v in range(256)))
+    raise ValueError(name)
+
+
+def data_mode(dev: R.Dev, nv: R.Nvml, lanes: Lanes) -> None:
+    """gemm_fast (the plain dense FP8 GEMM) at ETA_DATA_SHAPE held ETA_HOLD_S per operand pattern (ETA_PATTERNS; `a_zero`
+    zeros A alone), with NVML sampled every 20 ms: the SM clock the GPU picks for itself on that data, its power and throttle
+    reasons, and the MAC rate.  An idle hold first (the board at the lock with nothing running).  Read-only: nothing here sets
+    a clock or a power limit."""
+    hold = float(os.environ.get("ETA_HOLD_S", "3"))
+    shape = R.parse_shape(os.environ.get("ETA_DATA_SHAPE", "8192x8192x8192"))
+    names = os.environ.get("ETA_PATTERNS", "honest zeros ones alt_sign ternary onebit pow2 sparse8 a_zero uniform honest").split()
+    pipes, own = make(dev, shape, 1, None, 101)
+    p, f = pipes[0], steps_of(pipes[0])
+    m, n, k = shape
+    info = limits(nv)
+    idle = threading.Event()
+    _, st = sampled(nv, lambda: (idle.wait(hold), 0.0)[1])
+    emit({"kind": "data", "pattern": "idle", "shape": list(shape), **info, **st})
+    qa, qb = dev.read(p.b["qa"], m * k), dev.read(p.b["qb"], n * k)
+    for name in names:
+        a = bytes(m * k) if name == "a_zero" else pattern(name, m * k, qa)
+        b = qb if name == "a_zero" else pattern(name, n * k, qb)
+        for buf, data in ((p.b["qa"], a), (p.b["qb"], b)):
+            dev.ck("cuMemcpyHtoD_v2", R.u64(buf), C.c_char_p(data), len(data))
+        dev.sync()
+        t = timed(lanes, lambda: lanes.on(lanes.main, f["gemm_fast"]), 3)
+        n_launch = max(1, int(hold * 1e3 / statistics.median(t)))
+        ms, st = sampled(nv, lambda: timed(lanes, lambda: [lanes.on(lanes.main, f["gemm_fast"]) for _ in range(n_launch)], 1)[0])
+        per = ms / n_launch
+        macs = m * n * k / (per * 1e-3)
+        row = {"kind": "data", "pattern": name, "shape": list(shape), "kernel": "gemm_fast", "launches": n_launch,
+               "per_launch_ms": round(per, 5), "macs_per_s": macs, "tflops": 2 * macs / 1e12,
+               "byte_hist_a": len(set(a[:1 << 16])), "nonzero_a": round(1 - a[:1 << 16].count(0) / (1 << 16), 4), **info, **st}
+        if st["sm_mhz_median"]:
+            row["eta_at_clock"] = round(macs / peak_macs(st["sm_mhz_median"], dev.sms), 5)
+            row["macs_over_cap_peak"] = round(macs / peak_macs(CAP_MHZ, dev.sms), 5)
+            row["energy_pj_per_mac"] = round(st["power_w_median"] / macs * 1e12, 4)
+        emit(row)
+    release(dev, pipes, own)
+
+
 def main() -> int:
     image = open(os.path.join(SHIP, "pearl_c_sm120.cubin"), "rb").read()
     dev = R.Dev(image)
@@ -501,7 +567,7 @@ def main() -> int:
     mode = os.environ.get("ETA_MODE", "time")
     {"time": lambda: time_mode(dev, nv, lanes), "profile": lambda: profile_mode(dev, lanes),
      "clock": lambda: clock_mode(dev, nv, lanes), "power": lambda: power_mode(dev, nv, lanes),
-     "sha": lambda: sha_mode(dev, lanes)}[mode]()
+     "sha": lambda: sha_mode(dev, lanes), "data": lambda: data_mode(dev, nv, lanes)}[mode]()
     return 0
 
 

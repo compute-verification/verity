@@ -13,6 +13,8 @@ cp "$d/ship/toolchain.txt" "$d/ship/source.txt" "$d/ship/sass.json" "$d/ship/MAN
 cp benchmarks/pouw_eta/eta.py "$d/ship/"
 git rev-parse HEAD > "$OUT/eta_commit.txt"
 export SHIP="$d/ship" NCU=/usr/local/cuda-13.0/bin/ncu
+nvidia-smi --query-gpu=index,uuid,clocks.sm,clocks.max.sm,clocks.applications.graphics,clocks.default_applications.graphics,power.draw,power.limit,power.max_limit,clocks_event_reasons.active,utilization.gpu \
+  --format=csv > "$OUT/smi_all.csv" 2>&1 || true
 gpu-lease 1 --wait --max-min 25 -- bash "benchmarks/pouw_eta/${ETA_LEASE:-lease_pearlc.sh}"
 for r in ncu_kernels ncu_graphs; do
   [ -f "$OUT/$r.ncu-rep" ] && "$NCU" --import "$OUT/$r.ncu-rep" --csv --page raw > "$OUT/$r.csv" || echo "no $r report" >&2
