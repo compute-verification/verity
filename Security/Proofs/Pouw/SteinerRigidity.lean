@@ -1610,4 +1610,137 @@ theorem conjectureA_lower {N L : ℕ} (hL : 0 < L) (hLN : L ∣ N)
 
 end TreeDecomposition
 
+section ChangeOfBasis
+
+variable {F : Type*} [Field F]
+
+theorem iSupIndep_option_elim {M : Type*} [AddCommGroup M] [Module F M] {ι : Type*}
+    {R : ι → Submodule F M} (hR : iSupIndep R) {W : Submodule F M} (hW : Disjoint W (⨆ i, R i)) :
+    iSupIndep fun o : Option ι => o.elim W R := by
+  rw [iSupIndep_def]
+  rintro (_ | i)
+  · refine hW.mono_right (iSup₂_le fun j hj => ?_)
+    cases j with
+    | none => exact absurd rfl hj
+    | some j => exact le_iSup R j
+  · have hle : (⨆ (j : Option ι) (_ : j ≠ some i), j.elim W R) ≤ W ⊔ ⨆ (k) (_ : k ≠ i), R k := by
+      refine iSup₂_le fun j hj => ?_
+      cases j with
+      | none => exact le_sup_left
+      | some k => exact le_sup_of_le_right (le_iSup₂_of_le k (fun h => hj (congrArg some h)) le_rfl)
+    have hX : (⨆ (k) (_ : k ≠ i), R k) ≤ ⨆ k, R k := iSup₂_le fun k _ => le_iSup R k
+    refine Disjoint.mono_right hle ?_
+    rw [Submodule.disjoint_def]
+    intro v hv hvs
+    obtain ⟨w, hw, x, hx, rfl⟩ := Submodule.mem_sup.1 hvs
+    have hwR : w ∈ ⨆ k, R k := by
+      have hw' : w = (w + x) - x := by abel
+      rw [hw']
+      exact Submodule.sub_mem _ (le_iSup R i hv) (hX hx)
+    have hw0 : w = 0 := Submodule.disjoint_def.1 hW w hw hwR
+    subst hw0
+    rw [zero_add] at hv ⊢
+    exact Submodule.disjoint_def.1 (iSupIndep_def.1 hR i) x hv hx
+
+variable {m : Type*} [Fintype m] [DecidableEq m]
+
+/-- Independent subspaces of `m → F` lie in coordinate blocks after an invertible change of coordinates. -/
+theorem exists_blockCoords {p : ℕ} (hp : 0 < p) (R : Fin p → Submodule F (m → F)) (hR : iSupIndep R) :
+    ∃ (A : Matrix m m F) (blk : m → Fin p), IsUnit A.det ∧
+      ∀ r, ∀ v ∈ R r, A *ᵥ v ∈ blockSubspace F blk r := by
+  obtain ⟨W, hW⟩ := Submodule.exists_isCompl (⨆ r, R r)
+  let R' : Option (Fin p) → Submodule F (m → F) := fun o => o.elim W R
+  have hind : iSupIndep R' := iSupIndep_option_elim hR hW.symm.disjoint
+  have htop : iSup R' = ⊤ := by
+    change (⨆ o : Option (Fin p), o.elim W R) = ⊤
+    rw [iSup_option_elim, sup_comm]
+    exact hW.sup_eq_top
+  have hint := DirectSum.isInternal_submodule_of_iSupIndep_of_iSup_eq_top hind htop
+  let b := hint.collectedBasis fun o => Module.finBasis F (R' o)
+  have hcard : Fintype.card (Σ o, Fin (finrank F (R' o))) = Fintype.card m := by
+    rw [← Module.finrank_eq_card_basis b, Module.finrank_fintype_fun_eq_card]
+  let e := Fintype.equivOfCardEq hcard
+  let b' := b.reindex e
+  refine ⟨LinearMap.toMatrix' (b'.equivFun : (m → F) →ₗ[F] m → F),
+    fun x => (e.symm x).1.elim ⟨0, hp⟩ id, ?_, ?_⟩
+  · rw [LinearMap.det_toMatrix']
+    exact b'.equivFun.isUnit_det'
+  · intro r v hv x hx
+    rw [LinearMap.toMatrix'_mulVec]
+    simp only [LinearEquiv.coe_coe, Basis.equivFun_apply, b', Basis.repr_reindex_apply]
+    change (e.symm x).1.elim ⟨0, hp⟩ id ≠ r at hx
+    generalize e.symm x = y at hx ⊢
+    obtain ⟨o, a⟩ := y
+    refine hint.collectedBasis_repr_of_mem_ne _ (i := some r) ?_ hv
+    rintro rfl
+    exact hx rfl
+
+omit [DecidableEq m] in
+theorem entry_eq_zero_of_colSpace_le {n' k : Type*} [Fintype n'] [DecidableEq n'] {p : ℕ}
+    {A : Matrix m m F} {blk : m → Fin p} {r : Fin p} {R : Submodule F (m → F)}
+    (hA : ∀ v ∈ R, A *ᵥ v ∈ blockSubspace F blk r) {X : Matrix m n' F} (hX : colSpace X ≤ R)
+    (Y : Matrix n' k F) {x : m} (hx : blk x ≠ r) (y : k) : (A * X * Y) x y = 0 := by
+  have hcol : ∀ j, (A * X) x j = 0 := by
+    intro j
+    have h1 : X *ᵥ Pi.single j 1 ∈ R := hX (LinearMap.mem_range_self X.mulVecLin _)
+    have h2 := hA _ h1 x hx
+    rw [Matrix.mulVec_mulVec, Matrix.mulVec_single_one] at h2
+    exact h2
+  simp [Matrix.mul_apply, hcol]
+
+variable {n : Type*} [Fintype n] [DecidableEq n]
+
+/-- The same tree with every label `X` replaced by `A * X * B`. -/
+def SteinerTree.conj (T : SteinerTree F m n) (A : Matrix m m F) (B : Matrix n n F) :
+    SteinerTree F m n where
+  V := T.V
+  G := T.G
+  isTree := T.isTree
+  label v := A * T.label v * B
+
+theorem SteinerTree.length_conj (T : SteinerTree F m n) {A : Matrix m m F} {B : Matrix n n F}
+    (hA : IsUnit A.det) (hB : IsUnit B.det) : (T.conj A B).length = T.length := by
+  refine Finset.sum_congr rfl fun e _ => ?_
+  induction e using Sym2.ind with
+  | _ u v =>
+    change rankDist (A * T.label u * B) (A * T.label v * B) = rankDist (T.label u) (T.label v)
+    rw [rankDist, rankDist, ← Matrix.sub_mul, ← Matrix.mul_sub,
+      Matrix.rank_mul_eq_left_of_isUnit_det _ _ hB, Matrix.rank_mul_eq_right_of_isUnit_det _ _ hA]
+
+/-- **Theorem 1, proved** (block rigidity as stated: independent row subspaces `R_r`, independent column subspaces
+`C_c`, targets in distinct cells): every Steiner tree spanning `0` and the targets has length at least the sum of
+their ranks. -/
+theorem blockRigidity : BlockRigidity F m n := by
+  intro p q R C hR hC P M hM T h0 hT
+  rcases Nat.eq_zero_or_pos p with rfl | hp
+  · rw [Finset.eq_empty_of_isEmpty P, Finset.sum_empty]
+    exact Nat.zero_le _
+  rcases Nat.eq_zero_or_pos q with rfl | hq
+  · rw [Finset.eq_empty_of_isEmpty P, Finset.sum_empty]
+    exact Nat.zero_le _
+  obtain ⟨A, rowBlk, hA, hAR⟩ := exists_blockCoords hp R hR
+  obtain ⟨B, colBlk, hB, hBC⟩ := exists_blockCoords hq C hC
+  have hBt : IsUnit Bᵀ.det := by rwa [Matrix.det_transpose]
+  have hrank : ∀ X : Matrix m n F, (A * X * Bᵀ).rank = X.rank := fun X => by
+    rw [Matrix.rank_mul_eq_left_of_isUnit_det _ _ hBt, Matrix.rank_mul_eq_right_of_isUnit_det _ _ hA]
+  have hcells : InCells rowBlk colBlk P fun t => A * M t * Bᵀ := by
+    intro t ht x y hxy
+    have hxy' : (A * M t * Bᵀ) x y ≠ 0 := hxy
+    constructor
+    · by_contra hx
+      exact hxy' (entry_eq_zero_of_colSpace_le (hAR t.1) (hM t ht).1 Bᵀ hx y)
+    · by_contra hy
+      apply hxy'
+      have h := entry_eq_zero_of_colSpace_le (hBC t.2) (hM t ht).2 Aᵀ hy x
+      rw [← Matrix.transpose_apply (A * M t * Bᵀ) y x, Matrix.transpose_mul, Matrix.transpose_mul,
+        Matrix.transpose_transpose, ← Matrix.mul_assoc]
+      exact h
+  have h := blockRigidityCoord p q rowBlk colBlk P (fun t => A * M t * Bᵀ) hcells (T.conj A Bᵀ)
+    (by obtain ⟨v, hv⟩ := h0; exact ⟨v, by simp [SteinerTree.conj, hv]⟩)
+    (fun t ht => by obtain ⟨v, hv⟩ := hT t ht; exact ⟨v, by simp [SteinerTree.conj, hv]⟩)
+  rw [SteinerTree.length_conj T hA hBt] at h
+  simpa only [hrank] using h
+
+end ChangeOfBasis
+
 end Pouw.SteinerRigidity
