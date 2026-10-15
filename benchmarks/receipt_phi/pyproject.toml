@@ -1,0 +1,6 @@
+# Receipt φ candidates: their cost on sm_120 (`phi.cu`, run on a node by `phi.sh` through `research run`) and the attacks
+# on them (`attacks.py`). The CPU twins and the attacks' identities run here as a suite
+# (`uv run tools/verity/check/suites.py benchmarks/receipt_phi`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
