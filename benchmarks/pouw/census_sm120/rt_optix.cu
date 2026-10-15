@@ -6,8 +6,9 @@
 // and outside every triangle, so each ray costs K triangle tests and the BVH's box tests and ends in the miss program;
 // in hit mode they start inside the triangles and stop at the nearest. One TRACE instruction a ray (a warp instruction
 // for 32 rays) starts the work, so K sets the tests a traced instruction drives. Prints one JSON line a (scene, build,
-// mode, K): best of 5 launches by CUDA events. Two builds (fast trace, fast build) of each scene.
-// Usage: rt DEVICE_PROGRAMS.optixir
+// mode, K): best of 5 launches by CUDA events. Two builds (fast trace, fast build) of each scene. With "clas", the
+// stack scene is built as cluster acceleration structures instead (build_clas), on a pipeline that allows them.
+// Usage: rt DEVICE_PROGRAMS.optixir [tri|clas]
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <optix.h>
@@ -15,6 +16,7 @@
 #include <optix_stubs.h>
 #include <optix_stack_size.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -102,11 +104,118 @@ static Gas build(OptixDeviceContext ctx, int k, unsigned int build_flags, bool d
   return g;
 }
 
+// The stack scene as cluster acceleration structures (Blackwell's cluster intersection engine): clusters of at most
+// 85 triangles (255 unshared vertices; a cluster holds 256), then one GAS over the clusters.
+static Gas build_clas(OptixDeviceContext ctx, int k, unsigned int cluster_flags) {
+  const int per = 85, nc = (k + per - 1) / per;
+  std::vector<float3> v;
+  for (int i = 0; i < k; i++) {
+    const float z = 1.f + i;
+    v.push_back(make_float3(-1.f, -1.f, z));
+    v.push_back(make_float3(1.f, -1.f, z));
+    v.push_back(make_float3(-1.f, 1.f, z));
+  }
+  std::vector<unsigned int> idx(3 * per);
+  for (int i = 0; i < 3 * per; i++) idx[i] = i;
+  float3* dv;
+  unsigned int* di;
+  CK(cudaMalloc(&dv, v.size() * sizeof(float3)));
+  CK(cudaMemcpy(dv, v.data(), v.size() * sizeof(float3), cudaMemcpyHostToDevice));
+  CK(cudaMalloc(&di, idx.size() * sizeof(unsigned int)));
+  CK(cudaMemcpy(di, idx.data(), idx.size() * sizeof(unsigned int), cudaMemcpyHostToDevice));
+  std::vector<OptixClusterAccelBuildInputTrianglesArgs> args(nc);
+  for (int c = 0; c < nc; c++) {
+    const int n = std::min(per, k - c * per);
+    OptixClusterAccelBuildInputTrianglesArgs a = {};
+    a.clusterId = c;
+    a.triangleCount = n;
+    a.vertexCount = 3 * n;
+    a.indexFormat = OPTIX_CLUSTER_ACCEL_INDICES_FORMAT_32BIT;
+    a.basePrimitiveInfo.primitiveFlags = OPTIX_CLUSTER_ACCEL_PRIMITIVE_FLAG_DISABLE_ANYHIT;
+    a.indexBuffer = (CUdeviceptr)di;
+    a.vertexBuffer = (CUdeviceptr)(dv + 3 * per * c);
+    args[c] = a;
+  }
+  void* dargs;
+  CK(cudaMalloc(&dargs, nc * sizeof(args[0])));
+  CK(cudaMemcpy(dargs, args.data(), nc * sizeof(args[0]), cudaMemcpyHostToDevice));
+  OptixClusterAccelBuildInput in = {};
+  in.type = OPTIX_CLUSTER_ACCEL_BUILD_TYPE_CLUSTERS_FROM_TRIANGLES;
+  in.triangles.flags = (OptixClusterAccelBuildFlags)cluster_flags;
+  in.triangles.maxArgCount = nc;
+  in.triangles.vertexFormat = OPTIX_VERTEX_FORMAT_FLOAT3;
+  in.triangles.maxUniqueSbtIndexCountPerArg = 1;
+  in.triangles.maxTriangleCountPerArg = per;
+  in.triangles.maxVertexCountPerArg = 3 * per;
+  in.triangles.maxTotalTriangleCount = k;
+  in.triangles.maxTotalVertexCount = 3 * k;
+  OptixAccelBufferSizes sz;
+  OX(optixClusterAccelComputeMemoryUsage(ctx, OPTIX_CLUSTER_ACCEL_BUILD_MODE_IMPLICIT_DESTINATIONS, &in, &sz));
+  void *clas, *tmp, *handles;
+  CK(cudaMalloc(&clas, sz.outputSizeInBytes));
+  CK(cudaMalloc(&tmp, sz.tempSizeInBytes));
+  CK(cudaMalloc(&handles, nc * sizeof(CUdeviceptr)));
+  OptixClusterAccelBuildModeDesc md = {};
+  md.mode = OPTIX_CLUSTER_ACCEL_BUILD_MODE_IMPLICIT_DESTINATIONS;
+  md.implicitDest.outputBuffer = (CUdeviceptr)clas;
+  md.implicitDest.outputBufferSizeInBytes = sz.outputSizeInBytes;
+  md.implicitDest.tempBuffer = (CUdeviceptr)tmp;
+  md.implicitDest.tempBufferSizeInBytes = sz.tempSizeInBytes;
+  md.implicitDest.outputHandlesBuffer = (CUdeviceptr)handles;
+  md.implicitDest.outputHandlesStrideInBytes = sizeof(CUdeviceptr);
+  OX(optixClusterAccelBuild(ctx, 0, &md, &in, (CUdeviceptr)dargs, 0, 0));
+  CK(cudaDeviceSynchronize());
+  CK(cudaFree(tmp));
+  const size_t clas_bytes = sz.outputSizeInBytes;
+
+  OptixClusterAccelBuildInputClustersArgs ga = {};
+  ga.clusterHandlesCount = nc;
+  ga.clusterHandlesBufferStrideInBytes = sizeof(CUdeviceptr);
+  ga.clusterHandlesBuffer = (CUdeviceptr)handles;
+  void* dga;
+  CK(cudaMalloc(&dga, sizeof ga));
+  CK(cudaMemcpy(dga, &ga, sizeof ga, cudaMemcpyHostToDevice));
+  OptixClusterAccelBuildInput gin = {};
+  gin.type = OPTIX_CLUSTER_ACCEL_BUILD_TYPE_GASES_FROM_CLUSTERS;
+  gin.clusters.flags = (OptixClusterAccelBuildFlags)cluster_flags;
+  gin.clusters.maxArgCount = 1;
+  gin.clusters.maxTotalClusterCount = nc;
+  gin.clusters.maxClusterCountPerArg = nc;
+  OX(optixClusterAccelComputeMemoryUsage(ctx, OPTIX_CLUSTER_ACCEL_BUILD_MODE_IMPLICIT_DESTINATIONS, &gin, &sz));
+  void *gas, *ghandle;
+  CK(cudaMalloc(&gas, sz.outputSizeInBytes));
+  CK(cudaMalloc(&tmp, sz.tempSizeInBytes));
+  CK(cudaMalloc(&ghandle, sizeof(OptixTraversableHandle)));
+  md = {};
+  md.mode = OPTIX_CLUSTER_ACCEL_BUILD_MODE_IMPLICIT_DESTINATIONS;
+  md.implicitDest.outputBuffer = (CUdeviceptr)gas;
+  md.implicitDest.outputBufferSizeInBytes = sz.outputSizeInBytes;
+  md.implicitDest.tempBuffer = (CUdeviceptr)tmp;
+  md.implicitDest.tempBufferSizeInBytes = sz.tempSizeInBytes;
+  md.implicitDest.outputHandlesBuffer = (CUdeviceptr)ghandle;
+  md.implicitDest.outputHandlesStrideInBytes = sizeof(OptixTraversableHandle);
+  OX(optixClusterAccelBuild(ctx, 0, &md, &gin, (CUdeviceptr)dga, 0, 0));
+  CK(cudaDeviceSynchronize());
+  Gas g;
+  CK(cudaMemcpy(&g.handle, ghandle, sizeof g.handle, cudaMemcpyDeviceToHost));
+  CK(cudaFree(tmp));
+  CK(cudaFree(ghandle));
+  CK(cudaFree(dga));
+  CK(cudaFree(dargs));
+  CK(cudaFree(di));
+  CK(cudaFree(dv));
+  // The GAS references the clusters, so both stay allocated for the process's life.
+  g.buf = gas;
+  g.bytes = clas_bytes + sz.outputSizeInBytes;
+  return g;
+}
+
 int main(int argc, char** argv) {
   if (argc < 2) {
-    fprintf(stderr, "usage: rt DEVICE_PROGRAMS.optixir\n");
+    fprintf(stderr, "usage: rt DEVICE_PROGRAMS.optixir [tri|clas]\n");
     return 2;
   }
+  const bool clas = argc > 2 && std::string(argv[2]) == "clas";
   std::ifstream f(argv[1], std::ios::binary);
   std::string ir((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
   if (ir.empty()) {
@@ -132,6 +241,7 @@ int main(int argc, char** argv) {
   pco.exceptionFlags = OPTIX_EXCEPTION_FLAG_NONE;
   pco.pipelineLaunchParamsVariableName = "params";
   pco.usesPrimitiveTypeFlags = (unsigned int)OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE;
+  pco.allowClusteredGeometry = clas;
   OptixModule mod;
   g_logn = sizeof g_log;
   OX(optixModuleCreate(ctx, &mco, &pco, ir.data(), ir.size(), g_log, &g_logn, &mod));
@@ -190,12 +300,16 @@ int main(int argc, char** argv) {
   // doesn't split, so agreement between the two says the K tests a ray happen.
   const struct {
     const char* name;
-    unsigned int flags;
-  } builds[] = {{"fast_trace", OPTIX_BUILD_FLAG_PREFER_FAST_TRACE}, {"fast_build", OPTIX_BUILD_FLAG_PREFER_FAST_BUILD}};
-  for (const char* scene : {"stack", "dup"})
+    unsigned int flags, cluster_flags;
+  } builds[] = {{"fast_trace", OPTIX_BUILD_FLAG_PREFER_FAST_TRACE, OPTIX_CLUSTER_ACCEL_BUILD_FLAG_PREFER_FAST_TRACE},
+                {"fast_build", OPTIX_BUILD_FLAG_PREFER_FAST_BUILD, OPTIX_CLUSTER_ACCEL_BUILD_FLAG_PREFER_FAST_BUILD}};
+  const std::vector<std::string> scenes = clas ? std::vector<std::string>{"clas"}
+                                               : std::vector<std::string>{"stack", "dup"};
+  for (const std::string& scene_s : scenes)
   for (const auto& b : builds)
   for (int k : ks) {
-    Gas g = build(ctx, k, b.flags, scene[0] == 'd');
+    const char* scene = scene_s.c_str();
+    Gas g = clas ? build_clas(ctx, k, b.cluster_flags) : build(ctx, k, b.flags, scene_s == "dup");
     for (unsigned int mode = 0; mode <= 1; mode++) {
       Params p{g.handle, derr, W, H, mode};
       CK(cudaMemcpy(dpar, &p, sizeof p, cudaMemcpyHostToDevice));

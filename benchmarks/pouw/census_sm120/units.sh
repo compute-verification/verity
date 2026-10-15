@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Round 3 of the census: the GPU's units outside the formal model's capacity table. Inside a research run, cwd the clone:
-#   bash benchmarks/pouw/census_sm120/units.sh tex|rt...
+#   bash benchmarks/pouw/census_sm120/units.sh tex|rt|rtclas...
 # tex: tex.cu (texture filtering throughput and weight resolution) and its SASS. rt: rt_optix.cu (RT-core triangle tests,
-# OptiX from the driver, headers fetched at OPTIX_TAG). Each builds outside the lease, then runs under one
+# OptiX from the driver, headers fetched at OPTIX_TAG); rtclas: the same scene as cluster acceleration structures.
+# Each builds outside the lease, then runs under one
 # `gpu-lease 1 --wait --max-min 20`, with the GPU's clocks and throttle reasons read (never set) before and after.
 # Writes $OUT/<part>.jsonl, <part>.sass, <part>-smi-*.csv, build-<part>.log.
 set -uo pipefail
@@ -35,6 +36,18 @@ EOF2
   echo "$(date -u +%H:%M:%SZ) $part: lease exit $?" | tee -a "$OUT/timeline.log"
 }
 
+build_rt() { # once a run: the OptiX headers, the device programs and the host program
+  [ -x "$W/rt" ] && return 0
+  local tag=${OPTIX_TAG:-v9.0.0}
+  git clone -q --depth 1 --branch "$tag" https://github.com/NVIDIA/optix-dev "$W/optix" >>"$OUT/build-rt.log" 2>&1 \
+    || { echo "optix headers ($tag) not fetched"; return 1; }
+  (cd "$W/optix" && git log -1 --format='optix-dev %H %s') >>"$OUT/build-rt.log"
+  $NVCC -O3 -arch=sm_120a -optix-ir -I"$W/optix/include" -o "$W/rt_dev.optixir" "$SRC/rt_optix_dev.cu" \
+    >>"$OUT/build-rt.log" 2>&1 || { echo "rt device build failed"; return 1; }
+  $NVCC -O3 -arch=sm_120a -I"$W/optix/include" -o "$W/rt" "$SRC/rt_optix.cu" -ldl >>"$OUT/build-rt.log" 2>&1 \
+    || { echo "rt host build failed"; return 1; }
+}
+
 for part in "$@"; do
   echo "$(date -u +%H:%M:%SZ) $part" | tee -a "$OUT/timeline.log"
   case $part in
@@ -44,15 +57,10 @@ for part in "$@"; do
       leased tex "$W/tex" 20000
       ;;
     rt)
-      tag=${OPTIX_TAG:-v9.0.0}
-      git clone -q --depth 1 --branch "$tag" https://github.com/NVIDIA/optix-dev "$W/optix" >"$OUT/build-rt.log" 2>&1 \
-        || { echo "optix headers ($tag) not fetched"; continue; }
-      (cd "$W/optix" && git log -1 --format='optix-dev %H %s') >>"$OUT/build-rt.log"
-      $NVCC -O3 -arch=sm_120a -optix-ir -I"$W/optix/include" -o "$W/rt_dev.optixir" "$SRC/rt_optix_dev.cu" \
-        >>"$OUT/build-rt.log" 2>&1 || { echo "rt device build failed"; continue; }
-      $NVCC -O3 -arch=sm_120a -I"$W/optix/include" -o "$W/rt" "$SRC/rt_optix.cu" -ldl >>"$OUT/build-rt.log" 2>&1 \
-        || { echo "rt host build failed"; continue; }
-      leased rt "$W/rt" "$W/rt_dev.optixir"
+      build_rt && leased rt "$W/rt" "$W/rt_dev.optixir"
+      ;;
+    rtclas)
+      build_rt && leased rtclas "$W/rt" "$W/rt_dev.optixir" clas
       ;;
   esac
 done
