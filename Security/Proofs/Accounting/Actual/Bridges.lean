@@ -361,4 +361,11 @@ theorem B4 : Guarantees.B4 := by
       rw [← Nat.cast_mul, ← pow_mul, ← pow_add, show jitter * (cert.card * K.card) = jitter * K.card * cert.card by
         ring]
 
+/-- **B4 at a covered location**: `B4` with `Covered` rewriting the uncertified term to zero. -/
+theorem B4Covered : Guarantees.B4Covered := by
+  intro L E Ω _ _ _ S ℓ ends β link 𝒱 cert X spec record bucket jitter a b hcs hdl hT hsec hcov
+  have h := B4 S ℓ ends β link 𝒱 cert X spec record bucket jitter a b hcs hdl hT hsec
+  have hc0 : Accounting.uncertifiedCapacity ends β cert X = 0 := hcov
+  rwa [hc0, Nat.zero_mul, Nat.add_zero] at h
+
 end Accounting.SecurityProofs

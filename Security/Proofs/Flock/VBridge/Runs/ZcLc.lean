@@ -110,18 +110,19 @@ theorem rows_coins {sh : Shape} {rounds : Array (Array F128)} {extras : Array Cl
       info.lc.fold.beta = (t.rounds[t.k + 3 + (sh.m - 6) + 1]!).coins.getD 0 0 ∧
       info.lc.fold.lw = skipWeights info.zc.z ∧ info.lc.fold.rhoIn = info.zc.rho.extract 0 (sh.kLog - 6) ∧
       info.lc.fold.ts = tsOf t (t.k + 3 + (sh.m - 6)) sh.kLog ∧
-      info.lc.rPrime = (t.rounds[t.k + 3 + (sh.m - 6) + 2 + (sh.kLog - 6)]!).coins.getD 0 0 := by
+      info.lc.rPrime = (t.rounds[t.k + 3 + (sh.m - 6) + 2 + (sh.kLog - 6)]!).coins.getD 0 0 ∧
+      info.lc.rIn = info.lc.fold.ts.reverse := by
   subst hd
   obtain ⟨lins, k, hrun⟩ := run_of_rows hrows
   obtain ⟨-, _, _, _, _, k1, _, _, h0, h1, -, -, -⟩ := run_stages hrun
   obtain ⟨c₀, c₁, c₂, -, hc₁, hc₂, hr, hz, hrs, hk1, hrho⟩ := zerocheck_coins hm h0
-  obtain ⟨cα, cβ, cr, hcα, hcβ, hcr, hα, hβ, hrp, hlw, hrin, -, -, htsz, -, hts⟩ := lincheck_coins h1
+  obtain ⟨cα, cβ, cr, hcα, hcβ, hcr, hα, hβ, hrp, hlw, hrin, hrIn, -, htsz, -, hts⟩ := lincheck_coins h1
   have hzs : (symbolic sh).zc.size = sh.m - 6 := by simp [symbolic]
   have hls : (symbolic sh).lc.size = sh.kLog - 6 := by simp [symbolic]
   rw [hzs] at hrs hk1 hrho
   rw [hls] at hcr htsz hts
   subst hk1
-  refine ⟨?_, ?_, ?_, ?_, ?_, hlw, hrin, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, hlw, hrin, ?_, ?_, hrIn⟩
   · rw [hr, coins_at hne (k' := t.k + 1) hc₁ (by omega)]
   · rw [hz, coin_one hne (k' := t.k + 2) hc₂ (by omega)]
   · apply Array.ext

@@ -98,13 +98,19 @@ def forwards_from_schedule(computed: list[dict[str, int]]) -> tuple[list[bool], 
 def run_requests_arrivals(llm: Any, requests: list[Any], params_for: Callable[[Any], Any], *,
                           on_step: Callable[[list[Any]], None] | None = None, scheduler: Any | None = None,
                           clock: Callable[[], float] = time.perf_counter,
-                          request_timing: bool = False) -> tuple[dict[str, Any], dict]:
+                          request_timing: bool = False, step_timing: bool = False) -> tuple[dict[str, Any], dict]:
     """Drive a step-indexed schedule and report throughput and per-request latency.
 
     ``clock`` is injectable so callers and tests can measure the same admission,
     first-token and completion boundaries without depending on wall-clock time.
     ``request_timing`` adds those durations to each request record; it is off by
     default so existing deterministic schedule records remain unchanged.
+    ``step_timing`` adds ``timing["steps"]``, one entry per ``step()`` iteration:
+    ``{"iter", "s" (the clock's duration of that ``step()`` call), "outputs"
+    (request outputs it returned), "forward" (whether it ran a forward, by the
+    rule below), "forward_index" (that forward's index, else None)}``.  A
+    duration is host time around ``step()``; it includes the device work only
+    where vLLM synchronizes inside the step, as it does to return sampled tokens.
     """
     eng = llm.llm_engine
     sched = scheduler if scheduler is not None else scheduler_of(llm)
@@ -123,6 +129,8 @@ def run_requests_arrivals(llm: Any, requests: list[Any], params_for: Callable[[A
     finish_iter: dict[str, int] = {}
     admit_at: dict[str, float] = {}
     first_at: dict[str, float] = {}
+    step_s: list[float] = []       # per iteration (step_timing): the clock's duration of step()
+    step_outs: list[int] = []
 
     def _admit(i: int) -> None:
         nonlocal t_add
@@ -139,7 +147,11 @@ def run_requests_arrivals(llm: Any, requests: list[Any], params_for: Callable[[A
         if not eng.has_unfinished_requests():
             _admit(pending.pop(0))                 # idle gap: bring the next arrival forward (recorded as its realized step)
             continue
+        ts = clock() if step_timing else 0.0
         outs = eng.step()
+        if step_timing:
+            step_s.append(clock() - ts)
+            step_outs.append(len(outs))
         nonempty.append(bool(outs))
         if sched is not None:
             snap = _snapshot_computed(sched)
@@ -206,6 +218,9 @@ def run_requests_arrivals(llm: Any, requests: list[Any], params_for: Callable[[A
               "generated_tokens": gen, "prompt_tokens": prompt,
               "generated_tokens_per_s": gen / dt if dt else None, "total_tokens_per_s": (gen + prompt) / dt if dt else None,
               "arrivals": True, "requests": rec}
+    if step_timing:
+        timing["steps"] = [{"iter": j, "s": step_s[j], "outputs": step_outs[j], "forward": bool(ran[j]),
+                            "forward_index": fwd_index[j] if ran[j] else None} for j in range(n_it)]
     return finished, timing
 
 

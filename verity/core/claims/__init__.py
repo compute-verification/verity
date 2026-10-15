@@ -104,6 +104,15 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("rs-proximity-johnson", "assumption", "Reed–Solomon proximity gaps up to the Johnson bound", "RS proximity · Johnson", "proven"),
     Entry("logup", "assumption", "LogUp fractional-sum soundness", "LogUp", "proven"),
     Entry("live-verifier", "model", "Live verifier: the verifier's coins arrive online during the proof", "Live verifier"),
+    # `Flock.Assumptions.RegistrantCovers` (Security/Proofs/Flock/Soundness/Assumptions/Registrant.lean), a premise of the
+    # recursive audit (Flock.Guarantees.RecursiveAuditC3At's _hRC) on the provers it covers; and the salt binder of
+    # `TopOf` and `StackedTopAt` (Security/Proofs/Flock/Recursive/HoloExec.lean) and of Flock.Guarantees.RecursiveAuditC3At,
+    # the salts the prover's workers committed R's level-0 top rows under, at which the guarantee is applied
+    Entry("registrant-holds-openings", "model",
+          "Registrant holds its openings: the prover holds a row and salt under every leaf it registered at a row the "
+          "verifier's reads file names, and its own workers behind the firewall hold the salts they committed R's level-0 "
+          "top rows under; a prover that registers a hash it can't open is outside the guarantee",
+          "Registrant holds openings"),
     Entry("fiat-shamir", "model", "Fiat–Shamir (non-interactive) in the random-oracle model", "Fiat–Shamir"),
     Entry("common-reference-string", "model",
           "Common reference string: a public parameter treated as a uniform draw fixed before use, such as the pinned keys of "
@@ -192,6 +201,12 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "An auditor-trusted device (a network certifier, the memory challenger) is the auditor's hardware on a machine "
           "its host provider runs and the prover doesn't control; it runs its stated code on its Nebius host, and its host "
           "never restores an earlier copy of the state the device keeps there", "Trusted Nebius host", "standard"),
+    # `Accounting.Covered` (Security/Definitions/Accounting/Physical.lean) is its Lean form: every boundary link of the
+    # location is certified (uncertifiedCapacity = 0). The auditor's placement in the onsite protocol; nothing proves it
+    Entry("certifier-coverage", "assumption",
+          "Every uplink of the spatial unit passes through a network certifier the auditor trusts, with its parameters "
+          "fixed before the run: every boundary link is certified, and nothing leaves the unit another way",
+          "Certifier coverage", "standard"),
     Entry("transparent-setup", "guarantee", "Transparent setup (no trusted setup)", "Transparent setup"),
     # `Pous.EndToEnd.EndToEndRing`'s steps to the deployed system (Security/Properties/Pous/EndToEnd.lean), beside
     # prf/sha-512 for the memory challenger's index streams: the model, the numbers and the instantiation.  Its one

@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.12"
 resolution-markers = [
     "extra == 'extra-11-verity-vllm-torch' and extra != 'extra-6-verity-torch-cpu'",
@@ -1996,6 +1996,7 @@ dependencies = [
     { name = "numpy" },
     { name = "research" },
     { name = "verity" },
+    { name = "verity-config" },
 ]
 
 [package.optional-dependencies]
@@ -2009,6 +2010,7 @@ requires-dist = [
     { name = "research", editable = "tools/research" },
     { name = "torch", marker = "extra == 'torch'", specifier = ">=2.4" },
     { name = "verity", editable = "." },
+    { name = "verity-config", editable = "tools/config" },
 ]
 provides-extras = ["torch"]
 

@@ -134,6 +134,7 @@ def test_generate_returns_the_outputs_and_records_the_call(built):
     with pytest.raises(TypeError, match="lora_request"):
         llm.generate(["a"], lora_request=object())
     assert llm.get_tokenizer() == "tok"
+    assert llm.vllm is llm._engine.llm
 
 
 def test_without_protocols_nothing_is_installed(built):
@@ -186,6 +187,7 @@ def test_protocols_install_on_the_built_model_and_close_uninstalls_them(built, m
     monkeypatch.setattr(va, "build_engine", lambda *a, **kw: SimpleNamespace(**vars(real(*a, **kw)), model=model))
     llm = L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pous:band-chain/d12/v1", protocols_config={"pous": {"cpu": 3}})
     assert seen == [("band-chain/d12/v1", model, "serve", {"cpu": 3})] and model.decoded is True
+    assert llm.model is model
     assert llm.engine_record["protocols"]["protocols"] == [{"entry": "pous:band-chain/d12/v1", "commitment": {"storage_root": "c"}}]
     llm.close()
     assert not hasattr(model, "decoded")
