@@ -375,7 +375,9 @@ def main() -> int:
                    log=lambda m: print(m, flush=True))
     cal = p.register()
     print(f"prover: registered, calibration {json.dumps(cal)}", flush=True)
-    (a.out / "prover.json").write_text(json.dumps({"calibration": cal, "gates": backend.gates}, indent=1))
+    stalls = getattr(backend, "calibration_trace", None)
+    (a.out / "prover.json").write_text(json.dumps({"calibration": cal, "gates": backend.gates,
+                                                   "calibration_trace": stalls}, indent=1))
     results = []
     for mode, fraction in p.plan:
         try:
@@ -396,7 +398,8 @@ def main() -> int:
         print(f"prover: session {r['k']} ({mode}:{fraction}): accepted={r['accepted']} passes={r['passes']}", flush=True)
         (a.out / "prover.json").write_text(json.dumps(
             {"schema": "verity/remote-session/prover/v0", "registration": wire.registration_json(p.registration),
-             "calibration": cal, "gates": backend.gates, "sessions": results, "wire": conn.totals()}, indent=1))
+             "calibration": cal, "gates": backend.gates, "calibration_trace": stalls, "sessions": results,
+             "wire": conn.totals()}, indent=1))
     return 0
 
 

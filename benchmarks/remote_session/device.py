@@ -41,6 +41,7 @@ import ctypes
 import gc
 import hashlib
 import queue
+import resource
 import shutil
 import struct
 import sys
@@ -102,6 +103,89 @@ def percentiles(xs: list[int]) -> dict:
 
 def u64s(values) -> ctypes.Array:
     return (ctypes.c_uint64 * len(values))(*values)
+
+
+ALLOCATOR_STATS = ("num_alloc_retries", "num_ooms", "num_sync_all_streams", "num_device_alloc", "num_device_free",
+                   "segment.all.allocated", "segment.all.freed", "reserved_bytes.all.allocated",
+                   "reserved_bytes.all.freed", "allocation.all.allocated")
+"""The caching allocator's counters a calibration reports the change in, per GPU (`torch.cuda.memory_stats`)."""
+STALL = 1.1
+"""A calibration pass is slow above this times the median interval."""
+
+
+def allocator_stats(torch, index: int) -> dict:
+    s = torch.cuda.memory_stats(index)
+    return {k: s.get(k, 0) for k in ALLOCATOR_STATS}
+
+
+def allocator_history(torch, start: bool):
+    """Start the caching allocator's event history on every GPU (no stacks), or stop it and return its segment
+    events, OOMs and allocation counts: (device, action, size, time_us) for every event but a plain allocation or
+    free, and per device the (time_us) of each allocation."""
+    mem = torch.cuda.memory
+    if start:
+        try:
+            mem._record_memory_history(enabled="all", context=None, stacks="python", max_entries=1 << 20)
+        except (TypeError, RuntimeError):
+            return False
+        return True
+    snap = mem._snapshot()
+    mem._record_memory_history(enabled=None)
+    events, allocs = [], {}
+    for d, entries in enumerate(snap.get("device_traces", [])):
+        for e in entries:
+            a = e.get("action")
+            if a == "alloc":
+                allocs.setdefault(d, []).append(e.get("time_us"))
+            elif a not in ("free_requested", "free_completed"):
+                events.append((d, a, e.get("size"), e.get("time_us")))
+    return {"events": events, "allocs": allocs}
+
+
+def stall_report(observed: list, trace: list, history, clock0: tuple, stats: list) -> dict:
+    """Each calibration pass slower than STALL times the median interval, with what explains it: its launch's host
+    phases (each GPU's allocations and submission, the top's), the host's wait for its root, every GPU's own part
+    (its first to its last event), its leader's span, the launching thread's CPU time, faults and context switches
+    over its launch, and the allocator events between its launch and its root. Times in ms from the pass's
+    launch."""
+    wall0, perf0 = clock0
+    iv = [b - a for a, b in zip(observed, observed[1:])]
+    med = sorted(iv)[len(iv) // 2] if iv else 0
+    slow = [i + 1 for i, x in enumerate(iv) if x > STALL * med]
+    ev = history["events"] if history else []
+    allocs = history["allocs"] if history else {}
+    rows = []
+    for i in slow[:64]:
+        t = trace[i]
+        la = t["launch"]
+        if la is None:
+            continue
+        t0, n = la[0], len(la)
+        G = (n - 13) // 2
+        ms = lambda x: round((x - t0) / 1e6, 3)
+        lo_us, hi_us = (wall0 + (t0 - perf0)) / 1e3, (wall0 + (observed[i] - perf0)) / 1e3
+        rows.append({"pass": i, "interval_ms": iv[i - 1] / 1e6, "gpu_ms": round(t["gpu_ms"], 3),
+                     "part_ms": [round(x, 3) for x in t["part_ms"]],
+                     "alloc_done_ms": [ms(la[6 + 2 * g]) for g in range(G)],
+                     "submitted_ms": [ms(la[7 + 2 * g]) for g in range(G)], "top_alloc_ms": ms(la[6 + 2 * G]),
+                     "launch_ms": ms(la[7 + 2 * G]), "launch_cpu_ms": (la[8 + 2 * G] - la[1]) / 1e6,
+                     "faults": [b - a for a, b in zip(la[2:6], la[9 + 2 * G:13 + 2 * G])],
+                     "wait_ms": [ms(x) for x in t["wait"]], "root_ms": ms(observed[i]),
+                     "allocator": [(d, a, sz, round(tu / 1e3 - lo_us / 1e3, 3)) for d, a, sz, tu in ev
+                                   if tu is not None and lo_us <= tu <= hi_us],
+                     "allocs_in_window": sum(lo_us <= tu <= hi_us for xs in allocs.values() for tu in xs if tu)})
+    over = sorted(iv)
+    return {"passes": len(iv), "median_ns": med, "max_ns": over[-1] if over else 0, "slow": len(slow),
+            "slow_passes": slow[:256], "max_over_median": over[-1] / med if med else None, "stalls": rows,
+            "allocator_stats": stats, "allocator_events": len(ev),
+            "allocator_event_kinds": sorted({a for _, a, _, _ in ev}),
+            "intervals_ns": iv}
+
+
+def _faults() -> tuple:
+    """This thread's page faults and context switches so far: minor, major, voluntary, involuntary."""
+    r = resource.getrusage(resource.RUSAGE_THREAD)
+    return r.ru_minflt, r.ru_majflt, r.ru_nvcsw, r.ru_nivcsw
 
 
 class Lib:
@@ -300,7 +384,10 @@ class DeviceStore:
         self.started = [torch.cuda.Event(enable_timing=True) for _ in range(SLOTS)]
         self.top_done = [torch.cuda.Event(enable_timing=True) for _ in range(SLOTS)]
         self.root_ready = [torch.cuda.Event() for _ in range(SLOTS)]
-        self.ended = [torch.cuda.Event() for _ in gpus]
+        self.began = [[torch.cuda.Event(enable_timing=True) for _ in range(SLOTS)] for _ in gpus]
+        self.ended = [[torch.cuda.Event(enable_timing=True) for _ in range(SLOTS)] for _ in gpus]
+        self.trace: list | None = None
+        self._launch_trace: dict = {}
         self.ring = None
         self.shape(chunk, kept_from, sketch_ctas)
 
@@ -461,6 +548,7 @@ class DeviceStore:
         each behind the leader's event for that root, or with `seed` an unchained pass under that seed's constants
         from the host; its ticket at once (`wait`)."""
         torch, so, G, hc = self.torch, self.lib.so, len(self.gpus), self.hc
+        tr = None if self.trace is None else [time.perf_counter_ns(), time.thread_time_ns(), *_faults()]
         slot = self.launched % SLOTS
         self.launched += 1
         prev = SLOTS if after is None else after.slot
@@ -474,9 +562,12 @@ class DeviceStore:
                     s.wait_event(self.top_done[after.slot])
                 if g == 0:
                     self.started[slot].record(s)
+                self.began[g][slot].record(s)
                 sd = torch.empty(rb.DIGEST_BYTES, dtype=torch.uint8, device=dev) if g == 0 else ring["seed"]
                 pk = torch.empty(PACK16_WORDS, dtype=torch.int32, device=dev) if g == 0 else ring["pk"]
                 kp = torch.empty((self.kept_at[g][hc + 1], 8), dtype=torch.int64, device=dev)
+                if tr is not None:
+                    tr.append(time.perf_counter_ns())
                 if seed is None:
                     rc = so.rs_chain_prepare(i, ring["roots"].data_ptr() + 64 * prev, sd.data_ptr(), pk.data_ptr(),
                                              s.cuda_stream)
@@ -491,7 +582,9 @@ class DeviceStore:
                                       s.cuda_stream, gpu.side.cuda_stream)
                 if rc:
                     raise RuntimeError(f"rs_pass on GPU {gpu.index}: {rc}")
-                self.ended[g].record(s)
+                self.ended[g][slot].record(s)
+                if tr is not None:
+                    tr.append(time.perf_counter_ns())
                 kept.append(kp)
                 if g == 0:
                     lead = sd, pk
@@ -505,8 +598,10 @@ class DeviceStore:
         roots = [r["roots"].data_ptr() + 64 * slot for r in self.ring]
         with self.on(leader) as s:
             for g in range(1, G):
-                s.wait_event(self.ended[g])
+                s.wait_event(self.ended[g][slot])
             top = torch.empty((self.top_at[self.H + 1], 8), dtype=torch.int64, device=self.data_g[0].device)
+            if tr is not None:
+                tr.append(time.perf_counter_ns())
             rc = so.rs_top(u64s(segs), u64s(counts), len(segs), top.data_ptr(), hc, self.H, u64s(roots), G,
                            s.cuda_stream)
             if rc:
@@ -516,13 +611,21 @@ class DeviceStore:
             c.wait_event(self.top_done[slot])
             self.root_host[slot].copy_(self.ring[0]["roots"][slot], non_blocking=True)
             self.root_ready[slot].record(c)
+        if tr is not None:
+            self._launch_trace[slot] = tr + [time.perf_counter_ns(), time.thread_time_ns(), *_faults()]
         return Ticket(slot, lead[0] if seed is None else seed, lead[1], kept, top)
 
     def wait(self, ticket: Ticket):
         """A queued pass's root once the host has it, and its handle."""
+        w0 = time.perf_counter_ns()
         self.root_ready[ticket.slot].synchronize()
+        w1 = time.perf_counter_ns()
         root = self.root_host[ticket.slot].numpy().astype(np.uint64).astype(">u8").tobytes()
-        self.pass_gpu_ms.append(self.started[ticket.slot].elapsed_time(self.top_done[ticket.slot]))
+        k = ticket.slot
+        self.pass_gpu_ms.append(self.started[k].elapsed_time(self.top_done[k]))
+        if self.trace is not None:
+            self.trace.append({"launch": self._launch_trace.pop(k, None), "wait": [w0, w1], "gpu_ms": self.pass_gpu_ms[-1],
+                               "part_ms": [self.began[g][k].elapsed_time(self.ended[g][k]) for g in range(len(self.gpus))]})
         return root, ticket.handle
 
     def run_pass(self, seed: bytes):
@@ -819,8 +922,9 @@ class Device:
                  gate_chunk: int = 2048, gate_chunks: int = 3, gate_samples: int = 256,
                  calibration_passes: int = 4000, warm_openings: int = 2773, warm_passes: int = 64,
                  chunk: int = 1 << 18, kept_from: int = 6, sketch_ctas: int = 128, payload_kept_from: int = 6,
-                 offload_handles: bool = False) -> None:
+                 offload_handles: bool = False, trace_allocator: bool = False) -> None:
         self.torch, self.log, self.blocks, self.warm_openings = torch, log, blocks, warm_openings
+        self.trace_allocator, self.calibration_trace = trace_allocator, None
         self.gate_chunk, self.gate_chunks, self.gate_samples = gate_chunk, gate_chunks, gate_samples
         self.calibration_passes, self.warm_passes = calibration_passes, warm_passes
         self.shape = {"chunk": chunk, "kept_from": kept_from, "sketch_ctas": sketch_ctas,
@@ -896,6 +1000,10 @@ class Device:
         gc.collect()
         gc.freeze()
         gc.disable()
+        stats0 = [allocator_stats(torch, gpu.index) for gpu in self.gpus]
+        history = self.trace_allocator and allocator_history(torch, True)
+        clock0 = (time.time_ns(), time.perf_counter_ns())
+        s.trace = []
         s.start_chain(challenge, prev)
         observed, gaps, kept, first = [], [], [], None
         g0 = len(s.pass_gpu_ms)
@@ -906,9 +1014,14 @@ class Device:
                 kept.append(handle)
             observed.append(at)
             gaps.append(time.perf_counter_ns() - at)
+        trace, s.trace = s.trace, None
         gc.enable()
         gc.unfreeze()
         s.sync()
+        events = allocator_history(torch, False) if history else None
+        stats1 = [allocator_stats(torch, gpu.index) for gpu in self.gpus]
+        self.calibration_trace = stall_report(observed, trace, events, clock0,
+                                              [{k: b[k] - a[k] for k in a} for a, b in zip(stats0, stats1)])
         gpu = s.pass_gpu_ms[g0:]
         seed, chained_root, chained = first
         self.gates["device_seed"] = bytes(chained[0].cpu().numpy()) == seed
@@ -941,6 +1054,8 @@ class Device:
                 "gap_ns": percentiles(gaps), "passes": len(intervals), "pass_gpu_ms_median": gpu[len(gpu) // 2],
                 "pass_gpu_ms": percentiles(gpu), "read_ms": read_ms, "read_bytes_per_s": s.blocks * BLOCK / (read_ms / 1e3),
                 "tau": intervals[len(intervals) // 2] / 1e6 / read_ms, "tau_gpu": gpu[len(gpu) // 2] / read_ms,
+                "slow_passes": self.calibration_trace["slow"],
+                "max_over_median": intervals[-1] / intervals[len(intervals) // 2],
                 "warm_openings": len(draws), "warm_open_ns": open_ns,
                 "shape": {**self.shape, "h0": s.h0, "hc": s.hc, "gpus": len(self.gpus), "shard_blocks": s.n,
                           "pads": s.pads},
@@ -1121,6 +1236,8 @@ def add_arguments(ap) -> None:
     ap.add_argument("--sketch-ctas", type=int, default=128, help="the receipts grid's CTAs (0: one an SM)")
     ap.add_argument("--offload-handles", action="store_true",
                     help="archive pass handles through a dedicated pinned copy stream (automatic above 64 GiB)")
+    ap.add_argument("--trace-allocator", action="store_true",
+                    help="record the caching allocator's events during calibration, against its slow passes")
 
 
 def from_arguments(a, log=print) -> Device:
@@ -1131,4 +1248,5 @@ def from_arguments(a, log=print) -> Device:
     return Device(torch, a.lib, a.kv, blocks, seed=a.seed, log=log, gpus=a.gpus or None, gate_chunk=a.gate_chunk,
                   gate_samples=a.gate_samples, calibration_passes=a.calibration_passes, warm_openings=a.warm_openings,
                   chunk=a.chunk_blocks, kept_from=a.kept_from, sketch_ctas=a.sketch_ctas,
-                  payload_kept_from=a.payload_kept_from, offload_handles=a.offload_handles or a.gib > 64)
+                  payload_kept_from=a.payload_kept_from, offload_handles=a.offload_handles or a.gib > 64,
+                  trace_allocator=a.trace_allocator)
