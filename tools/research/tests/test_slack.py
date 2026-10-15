@@ -188,7 +188,7 @@ def test_the_repository_registry_loads_and_seeds_every_handle_and_channel():
     reg = slack.load_registry(REAL_REGISTRY)
     assert [h["handle"] for h in reg["handles"]] == HANDLES
     assert set(reg["channels"]) == {"agent-coordination", "agent-alerts", "ask-daniel"}
-    assert slack.subscribers(reg, "agent-coordination") == ["old-accounting", "old-circuits-and-proofs", "console"]
+    assert slack.subscribers(reg, "agent-coordination") == ["old-accounting", "old-circuits-and-proofs"]
     assert slack.subscribers(reg, "agent-alerts") == slack.subscribers(reg, "ask-daniel") == ["infra"]
     assert reg["channels"]["ask-daniel"]["id"] == "C0C5UCA0S0Z" and slack.resolve_key(reg, "approvals") == "ask-daniel"
 
@@ -1185,9 +1185,14 @@ def argparse_ns(**kw):
     return argparse.Namespace(dry_run=False, registry=None, channel=None, channel_id=None, **kw)
 
 
-def test_a_handle_without_an_inbox_is_left_to_top_level_and_an_unknown_name_is_refused(fake, registry, routes_dirs, capsys):
+def test_a_handle_without_an_inbox_is_reached_through_linear_or_top_level_and_an_unknown_name_is_refused(fake, registry, routes_dirs, capsys):
     rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@proofs", "--text", "x")
-    assert rc == 0 and "route @proofs: no inbox (top-level forwards it)" in err
+    assert rc == 0 and "route @proofs: no Slack inbox; reach it through its Linear team PRF" in err
+    add_route(routes_dirs[0], "console", "1700000900.000300", closed="2026-10-14T22:45Z")
+    rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@console", "--text", "x")
+    assert rc == 0 and "route @console: no Slack inbox; reach it through its Linear team CON" in err
+    rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@old-accounting", "--text", "x")
+    assert rc == 0 and "route @old-accounting: no inbox (top-level forwards it)" in err
     rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@nobody-here", "--text", "x")
     assert rc == 2 and "neither a registry handle nor a name with an inbox" in err and "names open --as nobody-here" in err
 
@@ -1198,7 +1203,7 @@ def test_a_worker_with_a_published_inbox_can_post_and_be_addressed(fake, registr
     assert rc == 0 and "route @vllm-epoch-run: rang" in err
     assert bells(fake, box)[0]["text"].startswith(f"from circuits (URGENT), thread {fake.messages[COORD][1]['ts']}: @vllm-epoch-run stop using node 2")
     rc, out, err = run(capsys, "reply", "--as", "vllm-epoch-run", "--thread", fake.messages[COORD][1]["ts"], "--text", "stopped")
-    assert rc == 0 and "route @circuits: no inbox" in err
+    assert rc == 0 and "route @circuits: no Slack inbox; reach it through its Linear team CIR" in err
 
 
 def test_a_reply_rings_the_root_poster_and_a_quiet_one_rings_no_one(fake, registry, routes_dirs, capsys):
