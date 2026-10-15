@@ -17,8 +17,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     blk = {"D": S["D"], "BN": S["BN"], "DOT": S["DOT"], "SCALE": S["SCALE"]}
     return [
         ("FlashMlaGatherRow_v1", lambda: bind(P.FlashMlaGatherRow, **P.FLASHMLA_GATHER_DSV4)),
-        ("FlashMlaPrefillPair_v1", lambda: bind(P.FlashMlaPrefillPair, FIRST=True, **blk)),
-        ("FlashMlaPrefillPair_v1", lambda: bind(P.FlashMlaPrefillPair, FIRST=False, **blk)),
+        ("FlashMlaPrefillPair_v1:1", lambda: bind(P.FlashMlaPrefillPair, FIRST=True, **blk)),
+        ("FlashMlaPrefillPair_v1:2", lambda: bind(P.FlashMlaPrefillPair, FIRST=False, **blk)),
         ("FlashMlaPrefillHead_v1", lambda: bind(P.FlashMlaPrefillHead, NP=2, **blk)),
         ("FlashMlaPrefill_v1", lambda: bind(P.FlashMlaPrefill, NH=1, NP=1, **blk)),
     ]

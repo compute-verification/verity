@@ -18,10 +18,10 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     blk = {"D": D, "BN": S["BN"], "DOT": S["DOT"], "SCALE": S["SCALE"]}
     return [
         ("FlashMlaKvRow_v1", lambda: bind(F.FlashMlaKvRow, DN=S["DN"], DR=S["DR"], QT=S["QT"])),
-        ("FlashMlaBlock_v1", lambda: bind(F.FlashMlaBlock, FIRST=True, **blk)),
-        ("FlashMlaBlock_v1", lambda: bind(F.FlashMlaBlock, FIRST=False, **blk)),
-        ("FlashMlaSplit_v1", lambda: bind(F.FlashMlaSplit, NB=2, PARTIAL=False, **blk)),
-        ("FlashMlaSplit_v1", lambda: bind(F.FlashMlaSplit, NB=1, PARTIAL=True, **blk)),
+        ("FlashMlaBlock_v1:1", lambda: bind(F.FlashMlaBlock, FIRST=True, **blk)),
+        ("FlashMlaBlock_v1:2", lambda: bind(F.FlashMlaBlock, FIRST=False, **blk)),
+        ("FlashMlaSplit_v1:1", lambda: bind(F.FlashMlaSplit, NB=2, PARTIAL=False, **blk)),
+        ("FlashMlaSplit_v1:2", lambda: bind(F.FlashMlaSplit, NB=1, PARTIAL=True, **blk)),
         ("FlashMlaCombine_v1", lambda: bind(F.FlashMlaCombine, NS=10, D=D)),
         ("FlashMlaDecodeHead_v1", lambda: bind(F.FlashMlaDecodeHead, SPLITS=(0, 1, 3), **blk)),
         ("FlashMlaDecode_v1", lambda: bind(F.FlashMlaDecode, **{**S, "NH": 1, "SPLITS": (0, 1), "NW": 64})),
