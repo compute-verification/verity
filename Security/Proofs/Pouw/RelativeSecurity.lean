@@ -2058,6 +2058,103 @@ theorem relativelySecure_edited120θ (kd : K120 → Kind) (G : MatGates kd (.ofN
   convert h using 2
   ring
 
+/-! ### Model A (RS-MODEL §3, over ℚ) and `B_θ ≤ A` -/
+
+section ModelA
+
+variable {Res : Type} (rs : List Res) (cost : K → Res → ℚ)
+
+/-- RS-MODEL's `use`: per resource, the sum of a gate list's cost vectors. -/
+def useA (l : List K) (r : Res) : ℚ := (l.map fun k => cost k r).sum
+
+/-- RS-MODEL's `dot`: a row's load on a use vector, over the resources `rs`. -/
+def dotA (row u : Res → ℚ) : ℚ := (rs.map fun r => row r * u r).sum
+
+/-- RS-MODEL's `time_A`: the largest certified row (rows are normalized: a real run of length `T` has
+`dot row (use P) ≤ T`). -/
+def timeA (rows : List (Res → ℚ)) (l : List K) : ℚ := rows.foldr (fun row m => max (dotA rs row (useA cost l)) m) 0
+
+theorem timeA_nonneg (rows : List (Res → ℚ)) (l : List K) : 0 ≤ timeA rs cost rows l := by
+  induction rows with
+  | nil => exact le_refl 0
+  | cons a rows ih =>
+    simp only [timeA, List.foldr_cons] at *
+    exact le_max_of_le_right ih
+
+theorem dotA_le_timeA {rows : List (Res → ℚ)} {row : Res → ℚ} (h : row ∈ rows) (l : List K) :
+    dotA rs row (useA cost l) ≤ timeA rs cost rows l := by
+  induction rows with
+  | nil => cases h
+  | cons a rows ih =>
+    simp only [timeA, List.foldr_cons] at *
+    rcases List.mem_cons.mp h with rfl | h
+    · exact le_max_left _ _
+    · exact (ih h).trans (le_max_right _ _)
+
+/-- **RS-MODEL's `timeB_le_timeA`** (B as a dual combination of A's rows), over ℚ and for a price bounded by the
+combination: if `price k ≤ Σ_p y_p (row_p · cost k)` with weights `y_p ≥ 0` on rows of A, then
+`Σ price ≤ (Σ y) · time_A`. -/
+theorem sum_le_timeA (rows : List (Res → ℚ)) (ys : List (ℚ × (Res → ℚ))) (hys : ∀ p ∈ ys, 0 ≤ p.1 ∧ p.2 ∈ rows)
+    (price : K → ℚ) (hprice : ∀ k, price k ≤ (ys.map fun p => p.1 * dotA rs p.2 (cost k)).sum) (l : List K) :
+    (l.map price).sum ≤ (ys.map Prod.fst).sum * timeA rs cost rows l := by
+  have key : (l.map price).sum ≤ (ys.map fun p => p.1 * dotA rs p.2 (useA cost l)).sum := by
+    induction l with
+    | nil => simp [useA, dotA]
+    | cons k l ih =>
+      have e : ∀ p : ℚ × (Res → ℚ), p.1 * dotA rs p.2 (useA cost (k :: l)) =
+          p.1 * dotA rs p.2 (cost k) + p.1 * dotA rs p.2 (useA cost l) := by
+        intro p
+        rw [← mul_add]
+        congr 1
+        simp [dotA, useA, mul_add, List.sum_map_add]
+      rw [List.map_cons, List.sum_cons, List.map_congr_left (fun p _ => e p), List.sum_map_add]
+      linarith [hprice k]
+  calc _ ≤ _ := key
+    _ ≤ (ys.map fun p => p.1 * timeA rs cost rows l).sum :=
+        List.sum_le_sum fun p hp => mul_le_mul_of_nonneg_left (dotA_le_timeA rs cost (hys p hp).2 l) (hys p hp).1
+    _ = _ := List.sum_map_mul_right _ _ _
+
+end ModelA
+
+/-- **`B_θ ≤ A`** (RS-MODEL §6.2's lemma, as an instance of `timeB_le_timeA`): if B's prices are a dual combination of
+A's rows with total weight at most 1 (`hB`, `hsum`) and R6 is a row of A that prices each word at `W` (`hW`), then
+`B_θ = (4/5)·B + (1/5)·R6` is the combination `(4/5)·ys + (1/5)·R6`, of total weight at most 1, so B_θ's time of
+every gate list is at most A's. -/
+theorem timeθ_le_timeA {Res : Type} (rs : List Res) (cost : Instr120 → Res → ℚ) (rows : List (Res → ℚ))
+    (ys : List (ℚ × (Res → ℚ))) (hys : ∀ p ∈ ys, 0 ≤ p.1 ∧ p.2 ∈ rows) (hsum : (ys.map Prod.fst).sum ≤ 1)
+    (hB : ∀ i, (price120 i.kind : ℚ) ≤ (ys.map fun p => p.1 * dotA rs p.2 (cost i)).sum)
+    {R6 : Res → ℚ} (hR6 : R6 ∈ rows) (hW : ∀ i : Instr120, wordPrice * i.words ≤ dotA rs R6 (cost i))
+    (l : List Instr120) : (l.map price120θ).sum ≤ timeA rs cost rows l := by
+  have h := sum_le_timeA rs cost rows (ys.map (fun p : ℚ × (Res → ℚ) => (4 / 5 * p.1, p.2)) ++ [(1 / 5, R6)]) ?_ price120θ ?_ l
+  · have hs : ((ys.map (fun p : ℚ × (Res → ℚ) => (4 / 5 * p.1, p.2)) ++ [(1 / 5, R6)]).map Prod.fst).sum =
+        4 / 5 * (ys.map Prod.fst).sum + 1 / 5 := by
+      simp only [List.map_append, List.map_map, List.sum_append, List.map_cons, List.map_nil, List.sum_cons,
+        List.sum_nil, add_zero]
+      rw [← List.sum_map_mul_left]
+      rfl
+    rw [hs] at h
+    have hA := timeA_nonneg rs cost rows l
+    nlinarith
+  · intro p hp
+    rcases List.mem_append.mp hp with hp | hp
+    · obtain ⟨q, hq, rfl⟩ := List.mem_map.mp hp
+      have := (hys q hq).1
+      exact ⟨by positivity, (hys q hq).2⟩
+    · rw [List.mem_singleton] at hp
+      subst hp
+      exact ⟨by norm_num, hR6⟩
+  · intro i
+    have e : ((ys.map (fun p : ℚ × (Res → ℚ) => (4 / 5 * p.1, p.2)) ++ [(1 / 5, R6)]).map fun p : ℚ × (Res → ℚ) => p.1 * dotA rs p.2 (cost i)).sum =
+        4 / 5 * (ys.map fun p => p.1 * dotA rs p.2 (cost i)).sum + 1 / 5 * dotA rs R6 (cost i) := by
+      simp only [List.map_append, List.map_map, List.sum_append, List.map_cons, List.map_nil, List.sum_cons,
+        List.sum_nil, add_zero]
+      rw [← List.sum_map_mul_left]
+      congr 2
+      exact List.map_congr_left fun p _ => by simp [mul_assoc]
+    rw [e]
+    unfold price120θ
+    linarith [hB i, hW i]
+
 end ModelB
 
 end ModelB
