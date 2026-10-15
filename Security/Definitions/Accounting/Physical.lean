@@ -170,6 +170,12 @@ open Classical in
 noncomputable def uncertifiedCapacity (ends : E → L × L) (β : E → ℕ) (cert X : Finset L) : ℕ :=
   ∑ e ∈ (boundary ends X).filter (fun e => (ends e).1 ∉ cert ∧ (ends e).2 ∉ cert), β e
 
+/-- **Coverage** (the listed claim `certifier-coverage`): every boundary link of `X` is certified, `β°_X = 0`
+(`uncertifiedCapacity`), so nothing leaves `X` but through a certifier. One physical premise, the auditor's placement
+in the onsite protocol; `Hardware.SpatialUnit` is it at a `Hardware`'s parameters. -/
+def Covered (ends : E → L × L) (β : E → ℕ) (cert X : Finset L) : Prop :=
+  uncertifiedCapacity ends β cert X = 0
+
 end Links
 
 /-- The hardware a run's physical assumptions are about: the tree's locations `units`, the latencies, each location's

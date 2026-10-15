@@ -192,6 +192,12 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "An auditor-trusted device (a network certifier, the memory challenger) is the auditor's hardware on a machine "
           "its host provider runs and the prover doesn't control; it runs its stated code on its Nebius host, and its host "
           "never restores an earlier copy of the state the device keeps there", "Trusted Nebius host", "standard"),
+    # `Accounting.Covered` (Security/Definitions/Accounting/Physical.lean) is its Lean form: every boundary link of the
+    # location is certified (uncertifiedCapacity = 0). The auditor's placement in the onsite protocol; nothing proves it
+    Entry("certifier-coverage", "assumption",
+          "Every uplink of the spatial unit passes through a network certifier the auditor trusts, with its parameters "
+          "fixed before the run: every boundary link is certified, and nothing leaves the unit another way",
+          "Certifier coverage", "standard"),
     Entry("transparent-setup", "guarantee", "Transparent setup (no trusted setup)", "Transparent setup"),
     # `Pous.EndToEnd.EndToEndRing`'s steps to the deployed system (Security/Properties/Pous/EndToEnd.lean), beside
     # prf/sha-512 for the memory challenger's index streams: the model, the numbers and the instantiation.  Its one

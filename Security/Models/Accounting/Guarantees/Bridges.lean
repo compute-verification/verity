@@ -86,4 +86,19 @@ def B4 : Prop :=
         ((2 ^ (jitter * ((Finset.Ico a b).image bucket).card * cert.card +
           uncertifiedCapacity ends β cert X * (b - a)) : ℕ) : ℕ∞)
 
+/-- **B4 at a covered location** (`B4` with the listed claim `certifier-coverage`): under the same premises and
+`Covered` — every boundary link of `X` certified, `β°_X = 0` — the uncertified term drops, and what the outside does
+during `I = [a, b)` takes at most (the number of records placed in `I`) × `2^{jitter · (buckets of I) · #cert}`
+values. The deployed unit's form: a spatial unit is a covered location. -/
+def B4Covered : Prop :=
+  ∀ {L E Ω : Type*} [LinearOrder L] [Fintype L] [Fintype E] (S : Ω → Actual.Run L) (ℓ : L → L → ℕ) (ends : E → L × L)
+    (β : E → ℕ) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → E) (𝒱 cert X : Finset L) (spec : ∀ r, (S r).A.Spec)
+    (record : L → Set ℕ) (bucket : ℕ → ℕ) (jitter a b : ℕ),
+    CausalStrategy S ℓ → DeclaredLinks S ends β link →
+    TrustedUnits S 𝒱 cert spec record bucket jitter → Secrets S cert X a → Covered ends β cert X →
+    (Set.range fun r => (S r).acts (X ∪ cert)ᶜ (Set.Ico a b)).encard ≤
+      (Set.range fun r =>
+        (S r).seen '' ↑(((S r).record cert record).filter fun g => a ≤ (S r).A.t g ∧ (S r).A.t g < b)).encard *
+        ((2 ^ (jitter * ((Finset.Ico a b).image bucket).card * cert.card) : ℕ) : ℕ∞)
+
 end Accounting.Guarantees
