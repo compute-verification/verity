@@ -64,8 +64,17 @@ class FakeLinear:
             return {"data": {"issue": {"subscribers": {"nodes": [{"name": n} for n in self.subscribers[v["id"]]]}}}}
         if "states" in q:
             return {"data": {"issue": {"id": "I1", "team": {"states": {"nodes": [{"id": "S1", "name": "Todo", "type": "unstarted"},
+                                                                    {"id": "S2", "name": "In Review", "type": "started"},
+                                                                    {"id": "S3", "name": "In Progress", "type": "started"},
                                                                     {"id": "S5", "name": "Done", "type": "completed"},
                                                                     {"id": "S9", "name": "Canceled", "type": "canceled"}]}}}}}
+        if "issues(filter" in q:
+            self.listed = v["f"]
+            return {"data": {"issues": {"nodes": [
+                {"identifier": "INF-2", "title": "later", "createdAt": "2026-10-14T02:00Z", "state": {"name": "In Progress"}},
+                {"identifier": "INF-1", "title": "first", "createdAt": "2026-10-14T01:00Z", "state": {"name": "Backlog"}}]}}}
+        if "issue(id: $id) { id }" in q:
+            return {"data": {"issue": {"id": "I1"}}}
         if "issueUpdate" in q:
             self.moved.append((v["id"], v["s"]))
             return {"data": {"issueUpdate": {"success": True}}}
@@ -194,6 +203,34 @@ def test_closing_or_declining_an_ask_moves_its_issue_to_done_or_canceled(fake, r
     assert rc == 0 and "INF-1 stays open on Linear" in err
     n = len(lin.calls)
     assert run(capsys, "close", "--as", "infra", "--thread", plain["ts"])[0] == 0 and len(lin.calls) == n
+
+
+def test_a_state_is_matched_by_name_before_type_so_in_progress_is_never_the_first_started_state(tmp_path):
+    fake = FakeLinear()
+    lin = linear.Linear(KEY, fake, cache=tmp_path / "t")
+    assert lin.move("INF-1", "in progress") == "In Progress" and fake.moved[-1] == ("I1", "S3")   # not In Review, the first started
+    assert lin.move("INF-1", "completed") == "Done" and fake.moved[-1] == ("I1", "S5")            # a type still works
+    with pytest.raises(linear.LinearError, match="no state 'Doing': its states are Todo, In Review, In Progress, Done, Canceled"):
+        lin.move("INF-1", "Doing")
+
+
+def test_the_state_comment_and_list_verbs(fake, registry, capsys, lin):
+    lin.subscribers["I1"] = []                                                                 # an issue filed earlier
+    rc, out, _ = run(capsys, "linear", "state", "INF-1", "In Progress")
+    assert rc == 0 and out.strip() == "INF-1 In Progress" and lin.moved == [("I1", "S3")]
+    rc, out, _ = run(capsys, "linear", "comment", "INF-1", "picked up", "--as", "infra")
+    assert rc == 0 and out.strip() == "INF-1 commented"
+    (_, v, _), = lin.sent("commentCreate")
+    assert v["i"] == {"issueId": "I1", "body": "@infra: picked up"}
+    rc, _, err = run(capsys, "linear", "comment", "INF-1", "no sender")
+    assert rc != 0 and "--as HANDLE" in err
+    rc, out, _ = run(capsys, "linear", "list", "infra")
+    assert rc == 0 and out.splitlines() == ["INF-1  Backlog  first", "INF-2  In Progress  later"]   # oldest first
+    assert lin.listed == {"team": {"id": {"eq": "T-infra"}}, "state": {"type": {"nin": ["completed", "canceled"]}}}
+    assert run(capsys, "linear", "list", "INF", "--state", "In Progress")[0] == 0
+    assert lin.listed["state"] == {"name": {"eqIgnoreCase": "In Progress"}}
+    rc, _, err = run(capsys, "linear", "state", "INF-1")
+    assert rc != 0 and "give the STATE" in err
 
 
 def test_subscriptions_name_the_leads_linear_team_and_the_registry_refuses_a_shared_key(registry, capsys):
