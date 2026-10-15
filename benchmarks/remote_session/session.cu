@@ -361,6 +361,8 @@ __global__ void wait_kernel(const unsigned *flag, unsigned want) {
 
 // One full receipt-tree leaf from its 16 receipts. All pass leaves are full because the harness's store length is a
 // multiple of PER_LEAF. This is reader.cu's leaves_kernel specialized to that case, followed by the same hm96 leaf.
+// Y is read through the non-coherent cache: the consumer reads a group's receipts only once the group is counted, and
+// a tile's receipts are whole cache lines, so no line of them is cached before it is written.
 __device__ __forceinline__ void pass_leaf(const u64 *__restrict__ Y, u64 c, u64 (&d)[8]) {
   u64 x[8], w[16];
 #pragma unroll
@@ -370,7 +372,7 @@ __device__ __forceinline__ void pass_leaf(const u64 *__restrict__ Y, u64 c, u64 
 #pragma unroll
     for (int i = 0; i < 16; ++i) {
       const int q = 16 * blk + i;
-      w[i] = q < 8 * PER_LEAF ? Y[q] : q == 8 * PER_LEAF ? 0x80ULL << 56 : 0;
+      w[i] = q < 8 * PER_LEAF ? __ldg(Y + q) : q == 8 * PER_LEAF ? 0x80ULL << 56 : 0;
     }
     if (blk == 8) w[15] = (u64)(128 + 64 * PER_LEAF) * 8;
     sha512_compress(x, w);
