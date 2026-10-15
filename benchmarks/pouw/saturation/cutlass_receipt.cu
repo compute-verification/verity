@@ -14,8 +14,10 @@
 // zero. Times: operands rotate over sets past twice the L2; --reps rounds, each timing every kernel in turn (so each round
 // pairs each kernel with plain at nearly the same clocks), with NVML's SM clock after each batch.
 //
-//   ./cutlass_receipt [--shapes NAME,...] [--reps 9] [--only KERNEL,...] [--profile]
+//   ./cutlass_receipt [--shapes NAME,...] [--reps 9] [--only KERNEL,...] [--profile | --corun]
 //   --profile: no gates, one launch of each selected kernel at the first selected shape (for ncu)
+//   --corun: the gates, then at each shape each kernel's batch on a high-priority stream, alone and beside a phi pump on a
+//            low-priority one (rows of ms_alone, ms_with and the pump's free share of the batch's time)
 #include <cuda_bf16.h>
 #include <cuda_runtime.h>
 #include <dlfcn.h>
@@ -53,6 +55,29 @@ __global__ void gen(uint8_t* p, size_t n, uint32_t salt) {
         p[i] = (uint8_t)((h & 0x80u) | ((4u + (h >> 8) % 7u) << 3) | ((h >> 16) & 7u));
     }
 }
+// --corun's cheater: gap_filler.py's pump (8 independent 1x alu phi chains a lane, 48 steps, 128 lanes a block), counted
+// in flags[2] when a block ends between go (flags[0]) and stop (flags[1]); blocks dispatched after stop exit at once
+__global__ void pump(uint32_t* out, int* flags, uint32_t seed) {
+    volatile int* vf = flags;
+    if (vf[1]) return;
+    const uint32_t lane = blockIdx.x * blockDim.x + threadIdx.x, k = lane * 0x9e3779b9u + seed;
+    uint32_t y[8];
+#pragma unroll
+    for (int c = 0; c < 8; c++) y[c] = lane ^ (uint32_t)(c + 1);
+#pragma unroll 4
+    for (int i = 0; i < 48; i++) {
+        const uint32_t w = (uint32_t)i * 0x7f4a7c15u + seed;
+#pragma unroll
+        for (int c = 0; c < 8; c++) y[c] = phi1<0>(y[c], w, 0u, k);
+    }
+    uint32_t f = 0;
+#pragma unroll
+    for (int c = 0; c < 8; c++) f = rotl13(f) ^ y[c];
+    out[(blockIdx.x % 65536u) * blockDim.x + threadIdx.x] = f;
+    __syncthreads();
+    if (threadIdx.x == 0 && vf[0] && !vf[1]) atomicAdd(&flags[2], 1);
+}
+__global__ void set_flag(int* flags, int i, int v) { flags[i] = v; }
 __global__ void diff(const uint32_t* a, const uint32_t* b, size_t n, unsigned long long* count) {
     unsigned long long c = 0;
     for (size_t i = blockIdx.x * (size_t)blockDim.x + threadIdx.x; i < n; i += (size_t)gridDim.x * blockDim.x) c += a[i] != b[i];
@@ -300,15 +325,16 @@ static void gate_cfg(int cfg, const std::vector<const cr_kernel*>& ks, unsigned 
 int main(int argc, char** argv) {
     std::vector<std::string> shapes_sel, only;
     int reps = 9;
-    bool profile = false;
+    bool profile = false, corun = false;
     for (int i = 1; i < argc; i++) {
         const std::string a = argv[i];
         if (a == "--shapes" && i + 1 < argc) shapes_sel = split(argv[++i]);
         else if (a == "--reps" && i + 1 < argc) reps = atoi(argv[++i]);
         else if (a == "--only" && i + 1 < argc) only = split(argv[++i]);
         else if (a == "--profile") profile = true;
+        else if (a == "--corun") corun = true;
         else {
-            fprintf(stderr, "usage: %s [--shapes NAME,...] [--reps N] [--only KERNEL,...] [--profile]\n", argv[0]);
+            fprintf(stderr, "usage: %s [--shapes NAME,...] [--reps N] [--only KERNEL,...] [--profile | --corun]\n", argv[0]);
             return 2;
         }
     }
@@ -431,19 +457,99 @@ int main(int argc, char** argv) {
         };
         const double pilot = batch(0, sets);
         const int launches = std::max(sets, (int)std::ceil(25.0 / std::max(pilot, 1e-3) / sets) * sets);
-        for (size_t j = 0; j < sk.size(); j++) batch(j, launches);
+        if (corun) {
+            // Each kernel's batch on a high-priority stream, alone and beside the pump on a low-priority one. The pump's
+            // free share of the batch's time is (alone + the pump's work at its solo rate - together) / alone: the idle
+            // SMs of the batch's waves plus whatever CUDA slack the kernel leaves beside its own CTAs.
+            int lo_pri = 0, hi_pri = 0;
+            CK(cudaDeviceGetStreamPriorityRange(&lo_pri, &hi_pri));
+            cudaStream_t hi, lo;
+            CK(cudaStreamCreateWithPriority(&hi, cudaStreamNonBlocking, hi_pri));
+            CK(cudaStreamCreateWithPriority(&lo, cudaStreamNonBlocking, lo_pri));
+            int* flags;
+            uint32_t* sink;
+            CK(cudaMalloc(&flags, 16));
+            CK(cudaMalloc(&sink, (size_t)65536 * 128 * 4));
+            auto timed = [&](cudaStream_t st, auto&& body) {
+                CK(cudaEventRecord(e0, st));
+                body();
+                CK(cudaEventRecord(e1, st));
+                CK(cudaDeviceSynchronize());
+                float t = 0;
+                CK(cudaEventElapsedTime(&t, e0, e1));
+                return (double)t;
+            };
+            auto pump_alone = [&](long n) {
+                CK(cudaMemset(flags, 0, 16));
+                set_flag<<<1, 1>>>(flags, 0, 1);
+                CK(cudaDeviceSynchronize());
+                const double t = timed(lo, [&] { pump<<<(unsigned)n, 128, 0, lo>>>(sink, flags, 12345u); });
+                int done = 0;
+                CK(cudaMemcpy(&done, flags + 2, 4, cudaMemcpyDeviceToHost));
+                if (done != n) { fprintf(stderr, "pump alone: %d of %ld blocks counted\n", done, n); exit(2); }
+                return t;
+            };
+            long n = (long)prop.multiProcessorCount * 64;
+            for (double t; (t = pump_alone(n)) < 20.0;) n = std::min(1L << 30, (long)(n * std::max(2.0, 24.0 / std::max(t, 1e-3))));
+            std::vector<double> rr;
+            for (int r = 0; r < 3; r++) rr.push_back(n / pump_alone(n));
+            const double rate = med(rr);  // pump blocks per ms, alone
+            auto batch_hi = [&](size_t j) {
+                for (int t = 0; t < launches; t++)
+                    if (impl[j][t % sets]->launch(hi) != 0) { fprintf(stderr, "%s: launch failed\n", sk[j]->name); exit(2); }
+            };
+            for (size_t j = 0; j < sk.size(); j++) {
+                auto* k = sk[j];
+                std::vector<double> ta, tw, dn;
+                for (int r = 0; r < reps; r++) {
+                    ta.push_back(timed(hi, [&] { batch_hi(j); }));
+                    CK(cudaMemset(flags, 0, 16));
+                    CK(cudaDeviceSynchronize());
+                    const long grid = std::min(2147483647L, (long)(rate * ta.back() * 30) + 64L * prop.multiProcessorCount);
+                    pump<<<(unsigned)grid, 128, 0, lo>>>(sink, flags, 12345u);
+                    set_flag<<<1, 1, 0, hi>>>(flags, 0, 1);
+                    CK(cudaEventRecord(e0, hi));
+                    batch_hi(j);
+                    CK(cudaEventRecord(e1, hi));
+                    set_flag<<<1, 1, 0, hi>>>(flags, 1, 1);
+                    CK(cudaDeviceSynchronize());
+                    float t = 0;
+                    CK(cudaEventElapsedTime(&t, e0, e1));
+                    tw.push_back(t);
+                    int done = 0;
+                    CK(cudaMemcpy(&done, flags + 2, 4, cudaMemcpyDeviceToHost));
+                    dn.push_back(done);
+                }
+                const double a_ = med(ta), w_ = med(tw), solo = med(dn) / rate;
+                const int ctas = (s.m / k->tile_m) * (s.n / k->tile_n);
+                printf("%s    {\"shape\": \"%s\", \"m\": %d, \"n\": %d, \"k\": %d, \"kernel\": \"%s\", \"var\": %d, \"rounds\": %d, "
+                       "\"L\": %d, \"spread\": %d, \"grain\": %d, \"mode\": %d, \"launches\": %d, \"reps\": %d, \"ctas\": %d, "
+                       "\"ms_alone\": %.4f, \"ms_with\": %.4f, \"slowdown\": %.4f, \"pump_blocks\": %.0f, "
+                       "\"pump_blocks_per_ms_alone\": %.1f, \"free_capacity\": %.4f}",
+                       first_row ? "" : ",\n", s.name, s.m, s.n, s.k, k->name, k->var, k->rounds, 128 * k->p / k->grain,
+                       k->spread, k->grain, k->mode, launches, reps, ctas, a_, w_, w_ / a_, med(dn), rate,
+                       (a_ + solo - w_) / a_);
+                first_row = false;
+                fflush(stdout);
+            }
+            CK(cudaFree(flags));
+            CK(cudaFree(sink));
+            CK(cudaStreamDestroy(hi));
+            CK(cudaStreamDestroy(lo));
+        }
+        for (size_t j = 0; j < sk.size() && !corun; j++) batch(j, launches);
         std::vector<std::vector<double>> ms(sk.size()), mhz(sk.size()), wall(sk.size()), cyc(sk.size());
-        for (int r = 0; r < reps; r++)
+        for (int r = 0; r < reps && !corun; r++)
             for (size_t j = 0; j < sk.size(); j++) {
                 ms[j].push_back(batch(j, launches));
                 mhz[j].push_back(clock.mhz());
             }
-        for (int r = 0; r < reps; r++)
+        for (int r = 0; r < reps && !corun; r++)
             for (size_t j = 0; j < sk.size(); j++) {
                 wall[j].push_back(ms[j][r] / ms[0][r]);
                 cyc[j].push_back(ms[j][r] * mhz[j][r] / std::max(ms[0][r] * mhz[0][r], 1e-30));
             }
-        for (size_t j = 0; j < sk.size(); j++) {
+        for (size_t j = 0; j < sk.size() && !corun; j++) {
             auto* k = sk[j];
             const double t = med(ms[j]), f = med(mhz[j]);
             const double words = k->mode == 1 ? (double)s.m * s.n * (s.k * k->grain / (128.0 * k->p)) : 0.0;

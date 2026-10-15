@@ -25,6 +25,8 @@
 #          shapes; vllm_gemm_ref.py times vLLM's own cutlass_scaled_mm at the same shapes; ncu over eight of the kernels.
 #          Built before the lease, one nvcc a kernel, against the harness's CUTLASS v4.8.0 checkout on node 2 (cloned if
 #          absent)
+#   corun  (not default) lease 1: cutlass_receipt --corun, each served kernel (plain and receipted) alone and beside a
+#          low-priority phi pump: the free CUDA capacity a cheater finds beside it (built as for cgemm)
 #   gap    (not default) lease 1: gap_filler.py, forced work (φ pump, or a tag-like read of a 1 GiB store) on a
 #          low-priority stream beside vLLM's FP8 layer stack (its own ops), graph-replayed at high priority
 # Timeouts run in the foreground so `research cancel` reaches the GPU process.
@@ -93,7 +95,7 @@ cgemm_build() {  # cutlass_receipt in $d with one object a line of cutlass_recei
   gzip -c "$d/cutlass_receipt-sass.txt" > "$OUT/cutlass_receipt-sass.txt.gz"
   stamp "build cutlass_receipt ok"
 }
-[[ " $STAGES " == *" cgemm "* ]] && { cgemm_build || STAGES=${STAGES/cgemm/}; }
+[[ " $STAGES " == *" cgemm "* || " $STAGES " == *" corun "* ]] && { cgemm_build || STAGES=${STAGES/cgemm/} STAGES=${STAGES/corun/}; }
 
 split() {
   for cfg in "$@"; do
@@ -233,6 +235,17 @@ cgemm() {
   done
 }
 
+corun() {
+  stamp "cutlass corun"
+  if timeout --foreground 900 "$d/cutlass_receipt" --corun --reps ${CG_REPS:-5} --shapes ${CORUN_SHAPES:-p2048_qkv,p2048_o,p2048_gateup,p2048_down,p8192_qkv,p8192_o,p8192_gateup,p8192_down,d32_qkv,d32_o,d32_gateup,d32_down} \
+      --only ${CORUN_ONLY:-p_imad_p1s,p_alu_g2,p_alu_g4,p_alu3_p1s,d_alu_p1,d_alu_g4,d_alu16_p1} > "$OUT/cutlass-corun.json" \
+      2> "$OUT/cutlass-corun.err"; then
+    stamp "cutlass corun ok"
+  else
+    stamp "cutlass corun FAILED rc=$?"
+  fi
+}
+
 gap() {
   stamp "gap filler"
   if timeout --foreground 1500 "$PY" "$S/gap_filler.py" ${GAP_ARGS:-} > "$OUT/gap-filler.json" 2> "$OUT/gap-filler.err"; then
@@ -244,7 +257,7 @@ gap() {
 
 leased() {
   stamp "lease for: $*"
-  gpu-lease 1 --wait --max-min 30 -- bash -c "$(declare -f stamp split micro ncu_stage phi isa rgemm cgemm gap); $(declare -p OUT d S PY MODEL REV NCU METRICS); $*" \
+  gpu-lease 1 --wait --max-min 30 -- bash -c "$(declare -f stamp split micro ncu_stage phi isa rgemm cgemm corun gap); $(declare -p OUT d S PY MODEL REV NCU METRICS); $*" \
     || stamp "lease for '$*' FAILED rc=$?"
 }
 [[ " $STAGES " == *" split "* ]] && leased split "'bf16 eager'" "'fp8 eager'" "'bf16 graphs'" "'fp8 graphs'"
@@ -257,6 +270,7 @@ leased() {
 [[ " $STAGES " == *" isa "* ]] && leased isa
 [[ " $STAGES " == *" rgemm "* ]] && leased rgemm
 [[ " $STAGES " == *" cgemm "* ]] && leased cgemm
+[[ " $STAGES " == *" corun "* ]] && leased corun
 [[ " $STAGES " == *" gap "* ]] && leased gap
 
 for rep in "$d"/ncu-*.ncu-rep; do
