@@ -122,7 +122,7 @@ theorem vbridge_checked {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Typ
     Flock.Premises.VBridge (Flock.Guarantees.checkedC3 ish cs coins bind rows zr hC h) dg N k Rw x wmsg Sk cmt
       msg := by
   obtain ⟨hoff, hcm, hdec, hfull⟩ := hb
-  refine ⟨fun R ω t R₂ hbad τ o ho => hoff R ω t R₂ hbad τ o fun j =>
+  refine ⟨fun R ω t R₂ hbad τ o hout ho => hoff R ω t R₂ hbad τ o hout fun j =>
       ⟨acceptsZKR_of_keepOwn (z := Flock.Guarantees.custodied zr hC h R ω t R₂ j)
         (P := fun J own tr => I.r ≤ t.length ∧ Flock.Guarantees.ChecksC3 ish (cs t) (coins t) j (bind j) rows J own tr)
         (ho j).1, (ho j).2⟩,
@@ -147,7 +147,7 @@ theorem vbridgeC_checked {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Ty
     Flock.Premises.VBridgeC (Flock.Guarantees.checkedC3 ish cs coins bind rows zr hC h) dg N k Rw x wmsg Sk cmt
       msg := by
   obtain ⟨hoff, hcm, hdec, hfull⟩ := hb
-  refine ⟨fun R ω t R₂ hbad τ o ho => hoff R ω t R₂ hbad τ o fun j =>
+  refine ⟨fun R ω t R₂ hbad τ o hout ho => hoff R ω t R₂ hbad τ o hout fun j =>
       ⟨acceptsZKR_of_keepOwn (z := Flock.Guarantees.custodied zr hC h R ω t R₂ j)
         (P := fun J own tr => I.r ≤ t.length ∧ Flock.Guarantees.ChecksC3 ish (cs t) (coins t) j (bind j) rows J own tr)
         (ho j).1, (ho j).2⟩,

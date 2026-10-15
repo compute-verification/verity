@@ -25,8 +25,9 @@ for the drawn units and the public coins, accepts.
   (`pickOn`), the acceptance counted only where its transcript does. It implies `InnerSoundFork`
   (`InnerSoundForkOn.plain`, at `G := True`).
 * `Game.Outcome`, `StrictCR.FindsColl`, `StrictCR.Finder.Finds`: an outcome a strategy reaches, and a run that finds a
-  collision of `H` at one; `contF` and `forkG`: the rest of a run of `rounds` from a node, and two of them from the node
-  where round `k`'s message is sent.
+  collision of `H` at one; `Outcome.of_bind`, `Outcome.of_map`: an outcome of a sequenced game, decomposed;
+  `prob_mono_outcome`: `prob_mono` with the implication needed only at outcomes the strategy reaches; `contF` and
+  `forkG`: the rest of a run of `rounds` from a node, and two of them from the node where round `k`'s message is sent.
 * `recGame`: the recursive audit: the registration, the draw, the `r` committed rounds, and the outer session, whose game
   is a parameter (`V*`'s live session in the Flock instance).
 * `leafAvg`, `expAt`, `probAt`: averages over the round coins of quantities at the outer session's start, which may read
@@ -46,6 +47,40 @@ def Outcome : (g : Game α) → Strategy g → α → Prop
   | .ret b, _, a => b = a
   | .send _ k, s, a => Outcome (k s.1) s.2 a
   | @Game.coin _ _ _ _ k, s, a => ∃ c, Outcome (k c) (s c) a
+
+/-- **An outcome of a sequenced game, decomposed**: it passes through an outcome of `g` against the induced strategy,
+from which some strategy of the continuation reaches it. -/
+theorem Outcome.of_bind {β : Type} : ∀ (g : Game α) (f : α → Game β) (s : Strategy (g.bind f)) {b : β},
+    Outcome (g.bind f) s b → ∃ a, Outcome g (Strategy.ofBind f g s) a ∧ ∃ u : Strategy (f a), Outcome (f a) u b
+  | .ret a, _, s, _, h => ⟨a, rfl, s, h⟩
+  | .send _ k, f, s, _, h => Outcome.of_bind (k s.1) f s.2 h
+  | @Game.coin _ _ _ _ k, f, s, _, h => by
+      obtain ⟨c, hc⟩ := h
+      obtain ⟨a, ha, u, hu⟩ := Outcome.of_bind (k c) f (s c) hc
+      exact ⟨a, ⟨c, ha⟩, u, hu⟩
+
+/-- **An outcome of a relabelled game is the relabelling** of an outcome of `g` against the induced strategy. -/
+theorem Outcome.of_map {β : Type} (f : α → β) : ∀ (g : Game α) (s : Strategy (g.map f)) {b : β},
+    Outcome (g.map f) s b → ∃ a, Outcome g (Strategy.ofMap f g s) a ∧ f a = b
+  | .ret a, _, _, h => ⟨a, rfl, h⟩
+  | .send _ k, s, _, h => Outcome.of_map f (k s.1) s.2 h
+  | @Game.coin _ _ _ _ k, s, _, h => by
+      obtain ⟨c, hc⟩ := h
+      obtain ⟨a, ha, hb⟩ := Outcome.of_map f (k c) (s c) hc
+      exact ⟨a, ⟨c, ha⟩, hb⟩
+
+/-- **`prob_mono` at the reached outcomes**: the implication is needed only at outcomes `s` reaches. -/
+theorem prob_mono_outcome {p q : α → Prop} :
+    ∀ (g : Game α) (s : Strategy g), (∀ a, Outcome g s a → p a → q a) → prob p g s ≤ prob q g s
+  | .ret a, _, h => by
+      classical
+      simp only [prob]
+      by_cases hp : p a
+      · simp [hp, h a rfl hp]
+      · simp [hp]
+  | .send _ k, s, h => prob_mono_outcome (k s.1) s.2 h
+  | @Game.coin _ C _ _ k, s, h =>
+      Finset.sum_le_sum fun c _ => mul_le_mul_right (prob_mono_outcome (k c) (s c) fun a ha => h a ⟨c, ha⟩) _
 
 end FlockSoundness.Game
 

@@ -17553,10 +17553,10 @@
    "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Recursive.Registrants": {
-   "digest": "785942e2aa7ffa66328856efd171640f575893b54865b23a659d187bccdf0be0",
+   "digest": "51b08c0999ad65175ec8d44de1893a115d73b3e467563bafd9a05fe5ba9593f4",
    "definitions": {
     "FlockSoundness.Discharge.Recursion.RegColl": "c2ebe6b2d51a7200f6baf26cdc4a952cdef70ed2a357faadef224de69f8c8398",
-    "FlockSoundness.Discharge.Recursion.VBridgeOff": "8bba2ab497bf4588e92d32b1358a3f1c299bec9dd02750295972e86b839ef0a4",
+    "FlockSoundness.Discharge.Recursion.VBridgeOff": "a8bbc3610c3b94ccb7388f0e3fd261baaa84d778d8c8683c9f21ec4903dc0d9a",
     "FlockSoundness.Discharge.Recursion.regFinder": "a3757e97a296d9ea0502f63f2a6331483a103eb06ac0af447328d3d2c0a5a131",
     "FlockSoundness.Registered.ReadsX.Clash": "8c5ac6cbb1687060392af542dd4ef8bf8af75c0ef59e8f681288394597e5b665"
    },
