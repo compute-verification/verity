@@ -96,7 +96,7 @@ a = snap(); time.sleep(1); b = snap()
 print(round(sum(1 - (b[k][1] - a[k][1]) / max(1, b[k][0] - a[k][0]) for k in b), 2))
 PY
 }
-others() { gpu-lease status 2>/dev/null | grep -E '^[0-9] held' | grep -v "run=${RESEARCH_RUN_ID:-none} " | cut -c1-110; }
+others() { gpu-lease status 2>/dev/null | grep -E '^[0-9] held' | grep -v "run=${RESEARCH_RUN_ID:-none} " | cut -c1-110 || true; }
 # Before each AMX run: wait, from a budget of GATE_S seconds for the whole run, while another GPU lease is held or more
 # than BUSY_MAX CPUs are busy; echoes the busy reading the run starts at.
 echo "$GATE_S" >"$W/gate_left"
