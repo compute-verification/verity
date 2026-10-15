@@ -1,4 +1,4 @@
-# /etc/systemd/system/vy-store-evict-research.timer on vy-nebius-cpu-1 (`research deploy` installs it): every 30 minutes.
+# /etc/systemd/system/vy-store-evict-research.timer on every node: every 30 minutes (source trees pile up fastest where checks run).
 [Unit]
 Description=research store eviction every 30 minutes
 

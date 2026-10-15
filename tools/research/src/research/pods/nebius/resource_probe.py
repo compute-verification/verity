@@ -307,8 +307,9 @@ def evaluate(r: dict[str, Any], prev: dict[str, Any] | None, lim: dict[str, floa
     if m["avail_pct"] < lim["mem_avail_pct"]:
         b.append(f"RAM available {m['avail_pct']:.1f}% < {lim['mem_avail_pct']:.0f}%")
     rq = r.get("replay_queue") or {}
-    avail_gb = m["avail_b"] / GB - (r.get("ramlock") or {}).get("reserved_gb", 0.0)
-    if rq.get("gb", 0) > lim["replay_share"] * avail_gb:
+    # a reservation whose run already holds its memory is out of MemAvailable too, so this can go below 0: an empty queue still fits
+    avail_gb = max(m["avail_b"] / GB - (r.get("ramlock") or {}).get("reserved_gb", 0.0), 0.0)
+    if rq.get("gb", 0) > 0 and rq["gb"] > lim["replay_share"] * avail_gb:
         b.append(f"queued replay {rq['gb']:.0f} GB ({rq['queued']} Commits) > half of available RAM "
                  f"{avail_gb:.0f} GB (after ramlock reservations)")
     for g in r.get("idle_gpus") or []:
