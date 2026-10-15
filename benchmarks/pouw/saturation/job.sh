@@ -28,7 +28,8 @@
 #   corun  (not default) lease 1: cutlass_receipt --corun, each served kernel (plain and receipted) alone and beside a
 #          low-priority phi pump: the free CUDA capacity a cheater finds beside it (built as for cgemm)
 #   cheat  (not default) lease 1: cutlass_receipt over the prefill shapes for the kernels CG_BUILD names, each design
-#          beside its CR_EXTRA variants (a cheater's own CUDA work fused into the GEMM); CG_BUILD also limits the build
+#          beside its CR_EXTRA variants (a cheater's own CUDA work fused into the GEMM); CG_BUILD also limits the build;
+#          CG_SHUFFLE=1 times each round in a fresh order
 #   gap    (not default) lease 1: gap_filler.py, forced work (φ pump, or a tag-like read of a 1 GiB store) on a
 #          low-priority stream beside vLLM's FP8 layer stack (its own ops), graph-replayed at high priority
 # Timeouts run in the foreground so `research cancel` reaches the GPU process.
@@ -254,7 +255,7 @@ corun() {
 
 cheat() {  # each design beside its cheater variants (CR_EXTRA), every prefill shape, paired with the plain kernel each round
   stamp "cutlass cheat"
-  if timeout --foreground 900 "$d/cutlass_receipt" --reps ${CG_REPS:-9} \
+  if timeout --foreground 900 "$d/cutlass_receipt" --reps ${CG_REPS:-9} ${CG_SHUFFLE:+--shuffle} \
       --shapes ${CHEAT_SHAPES:-p2048_qkv,p2048_o,p2048_gateup,p2048_down,p8192_qkv,p8192_o,p8192_gateup,p8192_down} \
       ${CG_BUILD:+--only $CG_BUILD} > "$OUT/cutlass-cheat.json" 2> "$OUT/cutlass-cheat.err"; then
     stamp "cutlass cheat ok"

@@ -12,9 +12,11 @@
 //   - every receipt kernel's receipt words equal the host's phi chains over the dump's prefix sums.
 // At every timed shape: every kernel's output equals plain's, two launches agree on the receipt words, and they aren't all
 // zero. Times: operands rotate over sets past twice the L2; --reps rounds, each timing every kernel in turn (so each round
-// pairs each kernel with plain at nearly the same clocks), with NVML's SM clock after each batch.
+// pairs each kernel with plain at nearly the same clocks), with NVML's SM clock after each batch. In a fixed order each
+// kernel always follows the same one, which biases it by up to ~2% (identical SASS read 0.994-1.021x); --shuffle times
+// each round in a fresh seeded order.
 //
-//   ./cutlass_receipt [--shapes NAME,...] [--reps 9] [--only KERNEL,...] [--profile | --corun]
+//   ./cutlass_receipt [--shapes NAME,...] [--reps 9] [--only KERNEL,...] [--shuffle] [--profile | --corun]
 //   --profile: no gates, one launch of each selected kernel at the first selected shape (for ncu)
 //   --corun: the gates, then at each shape each kernel's batch on a high-priority stream, alone and beside a phi pump on a
 //            low-priority one (rows of ms_alone, ms_with and the pump's free share of the batch's time)
@@ -28,6 +30,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <numeric>
+#include <random>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -334,7 +338,7 @@ static void gate_cfg(int cfg, const std::vector<const cr_kernel*>& ks, unsigned 
 int main(int argc, char** argv) {
     std::vector<std::string> shapes_sel, only;
     int reps = 9;
-    bool profile = false, corun = false;
+    bool profile = false, corun = false, shuffle = false;
     for (int i = 1; i < argc; i++) {
         const std::string a = argv[i];
         if (a == "--shapes" && i + 1 < argc) shapes_sel = split(argv[++i]);
@@ -342,8 +346,10 @@ int main(int argc, char** argv) {
         else if (a == "--only" && i + 1 < argc) only = split(argv[++i]);
         else if (a == "--profile") profile = true;
         else if (a == "--corun") corun = true;
+        else if (a == "--shuffle") shuffle = true;
         else {
-            fprintf(stderr, "usage: %s [--shapes NAME,...] [--reps N] [--only KERNEL,...] [--profile | --corun]\n", argv[0]);
+            fprintf(stderr, "usage: %s [--shapes NAME,...] [--reps N] [--only KERNEL,...] [--shuffle] [--profile | --corun]\n",
+                    argv[0]);
             return 2;
         }
     }
@@ -357,8 +363,8 @@ int main(int argc, char** argv) {
     unsigned long long* dc;
     CK(cudaMalloc(&dc, 8));
 
-    printf("{\"schema\": \"verity-pouw/saturation-cutlass-receipt/v1\", \"device\": \"%s\", \"sms\": %d, \"l2_bytes\": %d,\n",
-           prop.name, prop.multiProcessorCount, prop.l2CacheSize);
+    printf("{\"schema\": \"verity-pouw/saturation-cutlass-receipt/v1\", \"device\": \"%s\", \"sms\": %d, \"l2_bytes\": %d, \"shuffle\": %d,\n",
+           prop.name, prop.multiProcessorCount, prop.l2CacheSize, (int)shuffle);
     printf("  \"kernels\": [\n");
     for (size_t i = 0; i < ks.size(); i++) {
         auto* k = ks[i];
@@ -549,11 +555,16 @@ int main(int argc, char** argv) {
         }
         for (size_t j = 0; j < sk.size() && !corun; j++) batch(j, launches);
         std::vector<std::vector<double>> ms(sk.size()), mhz(sk.size()), wall(sk.size()), cyc(sk.size());
-        for (int r = 0; r < reps && !corun; r++)
-            for (size_t j = 0; j < sk.size(); j++) {
+        std::vector<size_t> order(sk.size());
+        std::iota(order.begin(), order.end(), 0);
+        std::mt19937 rng(12345u);
+        for (int r = 0; r < reps && !corun; r++) {
+            if (shuffle) std::shuffle(order.begin(), order.end(), rng);
+            for (size_t j : order) {
                 ms[j].push_back(batch(j, launches));
                 mhz[j].push_back(clock.mhz());
             }
+        }
         for (int r = 0; r < reps && !corun; r++)
             for (size_t j = 0; j < sk.size(); j++) {
                 wall[j].push_back(ms[j][r] / ms[0][r]);

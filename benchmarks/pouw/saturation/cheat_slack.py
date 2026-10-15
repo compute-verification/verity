@@ -17,6 +17,9 @@ phase (the four linears weighted by the design's time, as one layer runs each on
 - ν_f: the most free capacity any variant shows, added work − the time it added, as a share of the window's CUDA
   capacity at the design's time (the lemma's ν: what the cheater gains for free);
 - ν_f at no rate loss: the most added share among variants within NOISE of the design's time.
+
+An `_x0` variant is the design itself under another name (identical SASS): its slowdown is the method's null, printed
+and kept out of ν_f.
 """
 from __future__ import annotations
 
@@ -65,7 +68,7 @@ def main():
             clocks = sum(rows[(v, s)]["ms"] * 1e-3 * rows[(v, s)]["sm_mhz"] * 1e6 for s in shapes) * sms
             added = steps / clocks / PHI_SOLO[xvar[v]]
             added_base_units = added * slow
-            free = (added_base_units - (slow - 1)) / added_base_units
+            free = (added_base_units - (slow - 1)) / added_base_units if x else float("nan")
             kept = tp / tv
             net = added_base_units - (slow - 1)
             out.append({"design": base, "extra": x, "xvar": xvar[v], "phase": ph, "added": added, "slowdown": slow, "free": free,
@@ -74,16 +77,21 @@ def main():
                   f"{100 * kept:.1f}% |")
     nu, net = {}, {}
     for o in out:
+        if o["extra"] == 0:
+            continue
         k = (o["design"], o["phase"])
         net[k] = max(net.get(k, 0.0), o["net"])
         if o["slowdown"] <= 1 + NOISE:
             k = (o["design"], o["phase"])
             nu[k] = max(nu.get(k, 0.0), o["added"])
+    null = {f"{o['design']}@{o['phase']}": round(o["slowdown"], 4) for o in out if o["extra"] == 0}
+    if null:
+        print("\nnull (x0, identical SASS) slowdown:", json.dumps(null))
     print("\nν_f (most free capacity):", json.dumps({f"{k}@{p}": round(v, 4) for (k, p), v in sorted(net.items())}))
     print("ν_f at no rate loss (within", f"{100 * NOISE:.1f}%):",
           json.dumps({f"{k}@{p}": round(v, 4) for (k, p), v in sorted(nu.items())}))
     if a.json:
-        json.dump({"rows": out, "nu_f": {f"{k}@{p}": v for (k, p), v in net.items()},
+        json.dump({"rows": out, "null_slowdown": null, "nu_f": {f"{k}@{p}": v for (k, p), v in net.items()},
                    "nu_f_no_rate_loss": {f"{k}@{p}": v for (k, p), v in nu.items()}}, open(a.json, "w"), indent=1)
 
 
