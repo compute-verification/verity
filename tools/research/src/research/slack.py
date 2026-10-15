@@ -1210,14 +1210,13 @@ def cmd_subscriptions(ns: argparse.Namespace, reg: dict) -> int:
                   f"expiresInSeconds={EXPIRES_S})   # #{key}")
     if key := h.get("linear"):
         print(f'subscribe_linear_issue(options={{"scope": "team", "teamId": "{key}"}}, expiresInSeconds={EXPIRES_S})   '
-              f"# an issue filed into or changing state in @{h['handle']}'s Linear team: the work item is its own doorbell")
-        print(f'subscribe_linear_comment(options={{"scope": "team", "teamId": "{key}"}}, expiresInSeconds={EXPIRES_S})   '
-              f"# a comment on an issue in @{h['handle']}'s Linear team")
-    print(f"# and subscribe_slack_thread(channelId, threadTs, expiresInSeconds={EXPIRES_S}) for each thread @{h['handle']} "
-          f"starts, replies in or picks up (not for a status line alone); renew on every wake")
-    print("# but not an announcement's thread (the merge thread is one): there the doorbell rings for a post that names "
-          f"@{h['handle']} at its start, or, naming no one, one of its PRs or a run it named beside one of its PRs; "
-          "unsubscribe from any you hold")
+              f"# an issue filed into or changing state in @{h['handle']}'s Linear team, a human's included")
+        print(f"# but no comment subscription on {key}: nearly every comment there is @{h['handle']}'s own, and it would wake "
+              "it for each (every handle writes as one app; COMM-23)")
+    print(f"# and subscribe_slack_thread(channelId, threadTs, expiresInSeconds={EXPIRES_S}) only for a thread a human may "
+          f"answer in (@{h['handle']}'s #ask-daniel card, a thread a named human posted in); renew on every wake")
+    print(f"# not for a thread between handles: the inbox already rings @{h['handle']} for each reply addressed to it, and "
+          "never for its own posts, while a thread subscription also wakes it for each of its own replies (COMM-23)")
     return 2 if missing else 0
 
 
@@ -2119,8 +2118,10 @@ def permalink(reg: dict, ch: str, ts: str) -> str:
 
 def no_such_card(verb: str, cid: str) -> str:
     """The route answers 404 only for an ID with no card: a pending card's status is 200."""
-    return (f"ask-daniel {verb} {cid}: HTTP 404: no card has that ID. It is the UUID `ask-daniel` printed first when it posted "
-            "the card, not the card's Slack ts; for a card posted any other way, record Daniel's thread reply as a ruling")
+    short = " The route takes the whole ID and looks up no prefix." if re.fullmatch(r"[0-9a-f]{4,12}", cid) else ""
+    return (f"ask-daniel {verb} {cid}: HTTP 404: no card has that ID.{short} It is the UUID `ask-daniel` printed first when "
+            "it posted the card, which its mention in the card's thread also ends with (`research msg read --channel ask-daniel "
+            "--thread TS`), not the card's Slack ts; for a card posted any other way, record Daniel's thread reply as a ruling")
 
 
 def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
@@ -2179,7 +2180,8 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
     when = pacific(datetime.fromisoformat(body["deadline"]))
     rec = next((o["label"] for o in body["options"] if o.get("recommended")), "")
     ping = (f"{deciders} a decision for you: {body['question']} I recommend: {rec}. "
-            + (f"`{body['default']}` applies at {when} unless you choose." if body["kind"] == "default" else f"Blocking: nothing happens until you choose (by {when})."))
+            + (f"`{body['default']}` applies at {when} unless you choose." if body["kind"] == "default" else f"Blocking: nothing happens until you choose (by {when}).")
+            + f" (card `{cid}`)")
     try:                                                             # the card alone notifies nobody; a mention does
         client(ns).call("chat.postMessage", channel=ch, thread_ts=ts, username=body["requested_by"], text=ping, unfurl_links="false")
     except SlackError as e:

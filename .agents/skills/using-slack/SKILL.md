@@ -96,24 +96,27 @@ research msg subscriptions --as <your handle>    # prints the subscribe calls to
   that still take the channel top level as well (the `old-*` advisors). A doorbell for a
   post that turns out not to be for you ends the turn silently. On timer wakes, still run `match` over the channel to catch
   anything missed.
-- **A holder also subscribes to its own Linear team**, both kinds (`subscribe_linear_issue` for creations and state
-  changes, `subscribe_linear_comment` for comments), since work items are Linear-first (below): an issue filed into your
-  team is its own doorbell. The `subscriptions` command prints both calls.
+- **A holder also subscribes to its Linear team's issue events** (`subscribe_linear_issue`: creations and state
+  changes), so an issue a human files straight into Linear reaches you; it rings no inbox. **Don't subscribe to its
+  comments.** The sender never rings its own inbox, but every handle posts through one Slack bot and writes to Linear
+  as the one Verity Asks app, and Cursor's subscriptions can't filter by actor. So any other subscription wakes you for
+  your own writes too. On 14 Oct, 258 of 266 comments in five leads' teams were the team's own handle's (COMM-23).
+  Anything another handle must read about your issue comes on Slack, naming you, and rings your inbox.
 - `@infra` subscribes to `#agent-alerts` and `#ask-daniel`. Every channel subscription is `topLevelOnly: true`.
-- Subscribe to a thread (`subscribe_slack_thread`) when you post the root, reply in it or pick it up; not for a status line
-  alone. So an ask's asker and owner hear each other, and a big announcement doesn't wake everyone for each reply.
-- Never subscribe to an announcement's thread (the merge thread is one), and unsubscribe from any you hold: there the
-  doorbell rings you for a post that names you at its start, or, naming no one, one of your PRs or a run you named beside
-  one of your PRs.
+- **Subscribe to a thread (`subscribe_slack_thread`) only where a human may answer**: your own `#ask-daniel` card, or a
+  thread a named human posted in. Between handles your inbox already carries every reply addressed to you: one that names
+  no one rings the root's poster, or the root's addressees when the poster replies, and a third party is named at the
+  start. The sender never rings its own inbox, so the inbox carries no echo of your own posts. A thread subscription
+  does: every handle posts through one bot, so it wakes you for each of your own replies too. Unsubscribe from any thread
+  between handles you still hold, an announcement's above all (the merge thread is one).
 - Ask for 30 days (`expiresInSeconds: 2592000`); "On every wake" below says when to renew.
 
 ~~~text
 subscribe_slack_channel(channelId=<#agent-coordination id>, topLevelOnly=true, expiresInSeconds=2592000)  # the old-* holders only
 subscribe_slack_channel(channelId=<#agent-alerts id>, topLevelOnly=true, expiresInSeconds=2592000)       # @infra only
 subscribe_slack_channel(channelId=<#ask-daniel id>, topLevelOnly=true, expiresInSeconds=2592000)         # @infra only
-subscribe_slack_thread(channelId=<channel id>, threadTs=<the root's ts>, expiresInSeconds=2592000)
+subscribe_slack_thread(channelId=<channel id>, threadTs=<the root's ts>, expiresInSeconds=2592000)          # a thread a human may answer in
 subscribe_linear_issue(options={"scope": "team", "teamId": <your registry `linear` key>}, expiresInSeconds=2592000)
-subscribe_linear_comment(options={"scope": "team", "teamId": <your registry `linear` key>}, expiresInSeconds=2592000)
 ~~~
 
 ## On every wake
@@ -121,8 +124,9 @@ subscribe_linear_comment(options={"scope": "team", "teamId": <your registry `lin
 1. **Renew.** Run `list_subscriptions` and read each `expiresAt`. Nothing warns you when one lapses: it simply stops
    waking you. For each subscription or timer you still need that is missing or expires within 24 h:
    - a Slack subscription: call the same subscribe again. It renews in place (same id, new `expiresAt`).
-   - a timer: it lapses 7 days after it was made, and subscribing again under the same name doesn't renew it. Create it
-     under a new name, then `unsubscribe` the old id, so there's no gap.
+   - a timer: it lapses 7 days after it was made. Subscribing again under the same name changes nothing: it answers
+     `created: false` and keeps the old prompt and schedule. So a timer's name carries a version (`...-v7`). To renew it or
+     change its prompt, create `...-v8` first, then `unsubscribe` the old id, so there's no gap and no double fire.
 
    Unsubscribe from threads that are finished.
 2. **Filter.** Save the event as delivered to a file. If it arrives as prose, write its `channel`, `ts`, `thread_ts`, `text`,
@@ -148,18 +152,17 @@ subscribe_linear_comment(options={"scope": "team", "teamId": <your registry `lin
    - a named human.
 
    All handles share one bot, so this proves the post is one of ours, not which handle wrote it.
-4. **Act** (below). Subscribe to the thread if you are now in it, and relay to your workers what they need.
+4. **Act** (below), and relay to your workers what they need. Subscribe to the thread only if a human may answer there.
 
 ## Asking and answering
 
 ~~~bash
 # ask: one thread per request with the ask, the deadline, and links to the content
 research msg send --as compute-accounting --to @infra --text 'can node 2 take a 4-GPU job for 6 h by 20:00Z? spec: https://github.com/.../pull/123'
-# -> prints "<ts> <permalink>"; then subscribe_slack_thread(channelId, threadTs=<ts>)
+# -> prints "<ts> <permalink>"; the owner's replies ring your inbox
 
-# the owner, on an ask that matched
+# the owner, on an ask that matched; the asker's replies ring your inbox
 research msg pickup --thread <ts>                                              # 👀
-subscribe_slack_thread(channelId, threadTs=<ts>)
 research msg send --as infra --thread <ts> --text '...'                        # only when the asker must act or decide
 research msg close --as infra --thread <ts> --link <PR, file or art: id>       # ✅ and the link
 research msg close --as infra --thread <ts> --declined 'past the budget line: Daniel'  # ❌ and why
@@ -175,11 +178,12 @@ An alert in `#agent-alerts` takes the same `pickup` and `close` from `@infra`, w
 
 **Work items are Linear-first** (Daniel, 14 Oct, top's announcement 1792006806.178789). The full brief — context, the
 done-condition, pointers — goes in the issue itself, filed into the owning team at creation; no brief-in-Slack with a
-link. The issue is its own doorbell: every holder subscribes to its team (Subscriptions above), so filing it wakes the
-owner without a separate Slack ping. Taking an issue is a workflow-state change out of the backlog — that change is the
-guarantee the work was seen, and the watcher flags issues that sit untouched. Slack carries what it is good at:
-conversation in threads, broadcasts, alerts and `#ask-daniel`; pairing threads and ready marks are unchanged. The
-`research msg ask` flow above still rings its Slack doorbell beside the issue it files.
+link. The issue is its own doorbell: every holder subscribes to its team's issue events (Subscriptions above), so
+filing it wakes the owner. `research msg ask --as ME --to @OWNER --file BRIEF.md` files it and rings the owner's inbox
+too. Taking an issue is a workflow-state change out of the backlog — that change is the guarantee the work was seen,
+and the watcher flags issues that sit untouched. Comments on an issue wake no one (no holder subscribes to comments), so
+they are records. Anything the owner must read goes to Slack, naming it at the start. Slack carries what it is good at:
+conversation in threads, broadcasts, alerts and `#ask-daniel`; pairing threads and ready marks are unchanged.
 
 ## Announcing
 
