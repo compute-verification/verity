@@ -11,7 +11,7 @@ mkdir -p "$OUT"
 cd "$here"
 export OUT
 nl -ba -nrz -w3 "$jobs" | grep -v -E '^\S+\s+(#|$)' | \
-  xargs -P "$par" -L 1 bash -c 'n=$0; shift; cmd="$*"; bash -c "$cmd" > "$OUT/$n.json" 2> "$OUT/$n.err"; echo "$n rc=$? $cmd" >> "$OUT/summary.txt"'
+  xargs -P "$par" -L 1 bash -c 'n=$0; cmd="$*"; bash -c "$cmd" > "$OUT/$n.json" 2> "$OUT/$n.err"; echo "$n rc=$? $cmd" >> "$OUT/summary.txt"'
 sort -o "$OUT/summary.txt" "$OUT/summary.txt"
 fails=$(grep -c -v ' rc=0 ' "$OUT/summary.txt")
 echo "jobs: $(wc -l < "$OUT/summary.txt"), nonzero: $fails"
