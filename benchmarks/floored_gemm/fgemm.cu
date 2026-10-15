@@ -227,6 +227,7 @@ struct Args {
   int KR;            // receipts over the first KR columns only (0: all K)
   int batch;         // problems stacked in rows: A (batch M x K), B (batch N x K), U (batch x M x N); 0 is 1
   uint32_t nzA, nzB; // the fused edit's noise keys (ML's NZ)
+  uint64_t sg[4];    // sigma, the SHA-512 noise's key (ML's NS), big-endian words
 };
 
 // the edit's noise (benchmarks/masked_gemm/egemm.cu): 16 bytes of a row from one hash h, element j's index into
@@ -253,11 +254,12 @@ template <bool F8> DEV uint32_t nz_add(uint32_t x, uint32_t h, int w) {
 __host__ __device__ inline uint32_t nz_hash(uint32_t key, uint32_t row, uint32_t k16, uint32_t c16) {
   return mix32(key ^ mix32(row * k16 + c16));
 }
+#include "../masked_gemm/sha_noise.cuh"
 
 // TM x BN tile, 8 warps of WM x 32 (MI = WM / 16 row blocks of 16, NI = 4 column blocks of 8); thread 0 also issues
 // every TMA, refilling each slot as the CTA releases it; STAGES stages of 128 bytes of depth (4 atoms); the tail
 // stage holds the peel rows.
-template <int TM, int BN, int WM, int STAGES, bool F8 = false, int NZ = 0> struct ML {
+template <int TM, int BN, int WM, int STAGES, bool F8 = false, int NZ = 0, int NS = 0> struct ML {
   static constexpr int BK = 128, WN = 32, WARPS_M = TM / WM, WARPS_N = BN / WN, NCW = WARPS_M * WARPS_N, NCT = NCW * 32,
                        MI = WM / 16, NI = WN / 8;
   static_assert(NCW == 8 || NCW == 16, "8 or 16 warps");
@@ -279,6 +281,7 @@ template <int TM, int BN, int WM, int STAGES, bool F8 = false, int NZ = 0> struc
   bool issuer;
   // the fused edit: this tile's first rows of the stacked A and B, and the keys
   uint32_t nz_rowA = 0, nz_rowB = 0, nz_keyA = 0, nz_keyB = 0;
+  const uint64_t* sg = nullptr;   // NS != 0: the noise from SHA-512 (sha_noise.cuh) instead of nz_hash
 
   DEV ML(uint8_t* smem, const Maps* m, int M, int N, int K, int grp, bool tail, int nb = 1)
       : maps(m), tiles_m(M / TM), tiles_n(N / BN), KT(K / BK), steps(K / BK + tail), group(grp), pt(blockIdx.x),
@@ -457,10 +460,28 @@ template <int TM, int BN, int WM, int STAGES, bool F8 = false, int NZ = 0> struc
     asm volatile("fence.proxy.async.shared::cta;" ::: "memory");
     __syncthreads();
   }
+  // NS != 0: threads 0..63 each generate one patch of the stage (A's 32, then B's) and add it in place
+  DEV void sha_stage(uint32_t sb, int kt) const {
+    const int t = threadIdx.x & 31;
+    const bool isA = threadIdx.x < 32;
+    const uint32_t region = sb + (isA ? 0u : A_BYTES), p = ((isA ? nz_rowA : nz_rowB) / 4 + t) * KT + kt;
+    sha_patch<NS>(sg, 2 * (NS - 1) + (isA ? 0 : 1), p, [&](int c, const uint32_t(&n)[4]) {
+      const int r = 4 * t + c / 8;
+      const uint32_t addr = region + r * BK + (((c % 8) ^ (r & 7)) << 4);
+      uint32_t v0, v1, v2, v3;
+      asm volatile("ld.shared.v4.u32 {%0, %1, %2, %3}, [%4];" : "=r"(v0), "=r"(v1), "=r"(v2), "=r"(v3) : "r"(addr));
+      v0 = add_noise<F8>(v0, n[0]); v1 = add_noise<F8>(v1, n[1]); v2 = add_noise<F8>(v2, n[2]); v3 = add_noise<F8>(v3, n[3]);
+      asm volatile("st.shared.v4.u32 [%0], {%1, %2, %3, %4};" :: "r"(addr), "r"(v0), "r"(v1), "r"(v2), "r"(v3));
+    });
+  }
   DEV void edit(int kt) const {
     if constexpr (NZ != 0) {
+      if constexpr (NS == 0) {
 #pragma unroll
-      for (int i = 0; i < NZC; i++) edit_chunk(stage(s), kt, i);
+        for (int i = 0; i < NZC; i++) edit_chunk(stage(s), kt, i);
+      } else if (threadIdx.x < 64) {
+        sha_stage(stage(s), kt);
+      }
       edit_meet();
     }
   }
@@ -468,7 +489,7 @@ template <int TM, int BN, int WM, int STAGES, bool F8 = false, int NZ = 0> struc
   DEV void stage_body(int (&acc)[MI][NI][4], St (&ch)[NCH<KIND>], const uint32_t (&kr)[NK<KIND>], uint32_t (&fa)[2][MI][4],
                       uint32_t (&fb)[2][NI][2], int kt = 0) {
     constexpr bool OV = NZ == 2 && !LAST;
-    static_assert(NZ != 2 || NZC == 4, "two chunks after each of atoms 0 and 1");
+    static_assert(NZ != 2 || NS != 0 || NZC == 4, "two chunks after each of atoms 0 and 1");
     const uint32_t sb = stage(s), done = empty(s);
     const int sn = s + 1 == STAGES ? 0 : s + 1;
     load(fa[1], fb[1], sb, 1);
@@ -476,12 +497,16 @@ template <int TM, int BN, int WM, int STAGES, bool F8 = false, int NZ = 0> struc
     load(fa[0], fb[0], sb, 2);
     if constexpr (OV) {
       mbar_wait_warp(full(sn), s + 1 == STAGES ? ph ^ 1 : ph);
-      edit_chunk(stage(sn), kt + 1, 0);
-      edit_chunk(stage(sn), kt + 1, 1);
+      if constexpr (NS == 0) {
+        edit_chunk(stage(sn), kt + 1, 0);
+        edit_chunk(stage(sn), kt + 1, 1);
+      } else if (threadIdx.x < 64) {
+        sha_stage(stage(sn), kt + 1);
+      }
     }
     mma<false, absorbs(RS, 1), KIND>(acc, ch, kr, fa[1], fb[1]);
     load(fa[1], fb[1], sb, 3);
-    if constexpr (OV) {
+    if constexpr (OV && NS == 0) {
       edit_chunk(stage(sn), kt + 1, 2);
       edit_chunk(stage(sn), kt + 1, 3);
     }
@@ -555,14 +580,14 @@ template <int TM, int BN, int WM, int STAGES, bool F8 = false, int NZ = 0> struc
   }
 };
 
-template <int TM, int BN, int WM, int STAGES, bool TAIL, int RS, int KIND, bool F8 = false, int NZ = 0>
+template <int TM, int BN, int WM, int STAGES, bool TAIL, int RS, int KIND, bool F8 = false, int NZ = 0, int NS = 0>
 DEV void gemm_body(const Args& a) {
-  using L = ML<TM, BN, WM, STAGES, F8, NZ>;
+  using L = ML<TM, BN, WM, STAGES, F8, NZ, NS>;
   constexpr int MI = L::MI, NI = L::NI;
   extern __shared__ __align__(1024) uint8_t smem[];
   const int nb = a.batch > 0 ? a.batch : 1;
   L ml(smem, a.maps, a.M, a.N, a.K, a.group, TAIL, nb);
-  ml.nz_keyA = a.nzA; ml.nz_keyB = a.nzB;
+  ml.nz_keyA = a.nzA; ml.nz_keyB = a.nzB; ml.sg = a.sg;
   ml.init(threadIdx.x);
   const int warp = threadIdx.x / 32, lane = threadIdx.x % 32;
   ml.prologue();
