@@ -27,10 +27,11 @@ Suffixes: `_rot` multiplies x and W by one orthogonal Q per k before quantizing 
 a Sylvester Hadamard, Kronecker a random 7 x 7 orthogonal for k = 14,336 (QuaRot's randomized Hadamard).  `_wclip`
 picks each weight row's clip ratio in {1, 0.95, ..., 0.5} by squared error.
 
-Unpeeled edits (note:20261015T1826Z-draft-d4-perplexity), `GRID[_rot]@EDIT:ALPHABET[:sSEED]` with GRID int8 or e4m3i16:
+Unpeeled edits (note:20261015T1826Z-draft-d4-perplexity), `GRID[_rot]@EDIT:ALPHABET[:f][:sSEED]`, GRID int8 or e4m3i16:
 EDIT `w` adds one draw from ALPHABET (in LSBs) to each weight integer, fresh per matrix; `a` to each activation integer,
-fresh per token and per linear; `wa` both; `GRID@-` is the grid unedited.  An edited side is quantized to top M - max|e|,
-so every edited integer stays on the grid (|q| <= 127, or <= 16).  The integer product is torch._int_mm (s8 x s8 -> s32,
+fresh per token and per linear (`:f`: per fused input, q/k/v and gate/up sharing one draw); `wa` both; `GRID@-` is the
+grid unedited.  An edited side is quantized to top M - max|e|, so every edited integer stays on the grid (|q| <= 127, or
+<= 16).  The integer product is torch._int_mm (s8 x s8 -> s32,
 exact); x, W and the rotation are fp32 (EXACT_GRID_EDIT_DTYPE=float64: float64).  ALPHABETS lists the alphabets, drawn
 uniformly.
 
@@ -254,9 +255,13 @@ def product(method: str, x: torch.Tensor, w: torch.Tensor, wcache: dict) -> tupl
     raise KeyError(method)
 
 
-ALPHABETS = {"pm1": [-1, 1], "pm13": [-3, -1, 1, 3], "pm57": [-7, -5, 5, 7],
+ALPHABETS = {"pm1": [-1, 1], "pm12": [-2, -1, 1, 2], "pm13": [-3, -1, 1, 3], "pm45": [-5, -4, 4, 5],
+             "pm57": [-7, -5, 5, 7],
              **{f"u{k}": list(range(-k, k + 1)) for k in (1, 2, 3, 4, 5, 6, 8, 16)}}
 EDIT_GRIDS = {"int8": (127, S32_EXACT), "e4m3i16": (16, FP32_EXACT)}
+#: `:f`: one activation draw per fused GEMM input (q, k, v share the attention input; gate, up the MLP's)
+FUSED = {"self_attn.q_proj": "qkv", "self_attn.k_proj": "qkv", "self_attn.v_proj": "qkv",
+         "mlp.gate_proj": "gate_up", "mlp.up_proj": "gate_up"}
 EDIT_DTYPE = getattr(torch, os.environ.get("EXACT_GRID_EDIT_DTYPE", "float32"))
 _ROT32: dict[int, torch.Tensor] = {}
 
@@ -269,12 +274,14 @@ def parse_edit(method: str) -> dict:
     if grid_name not in EDIT_GRIDS or edit not in ("-", "w", "a", "wa") or (edit == "-") != (len(parts) == 1):
         raise KeyError(method)
     alphabet = ALPHABETS[parts[1]] if edit != "-" else [0]
-    seed = int(parts[2].removeprefix("s")) if len(parts) > 2 else 0
+    seed = next((int(p[1:]) for p in parts[2:] if p.startswith("s")), 0)
+    fused = "f" in parts[2:]
     top = EDIT_GRIDS[grid_name][0]
     room = top - max(abs(v) for v in alphabet)
     if room < 1:
         raise ValueError(f"{method}: alphabet does not fit on {grid_name} (|q| <= {top})")
-    return {"grid": grid_name, "rot": rot, "edit": edit, "alphabet": parts[1] if edit != "-" else "-", "values": alphabet,
+    return {"grid": grid_name, "rot": rot, "edit": edit, "values": alphabet, "fused": fused,
+            "alphabet": (parts[1] + (" fused" if fused else "")) if edit != "-" else "-",
             "seed": seed, "top_w": room if "w" in edit else top, "top_a": room if "a" in edit else top,
             "acc": EDIT_GRIDS[grid_name][1], "bits": math.log2(len(alphabet))}
 
@@ -291,7 +298,8 @@ def int_product(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     return torch._int_mm(a.to(torch.int8), b.to(torch.int8).T).long()
 
 
-def edited_product(method: str, x: torch.Tensor, w: torch.Tensor, wcache: dict, tag: str) -> tuple[torch.Tensor, dict]:
+def edited_product(method: str, x: torch.Tensor, w: torch.Tensor, wcache: dict, tag: str,
+                   atag: str | None = None) -> tuple[torch.Tensor, dict]:
     """The edited grid's y for x (m x k) and W (n x k), both EDIT_DTYPE; `tag` names the linear, so each matrix draws its
     own noise."""
     e = parse_edit(method)
@@ -309,7 +317,7 @@ def edited_product(method: str, x: torch.Tensor, w: torch.Tensor, wcache: dict, 
     bi, sb = wcache["w"]
     ai, sa = quant_rows(x, torch.arange(e["top_a"] + 1, dtype=dt, device=x.device), False)
     if "a" in e["edit"]:
-        ai = ai + draw(tuple(ai.shape), e["values"], f"{e['seed']}/{tag}/a", x.device, dt)
+        ai = ai + draw(tuple(ai.shape), e["values"], f"{e['seed']}/{atag or tag}/a", x.device, dt)
     top = EDIT_GRIDS[e["grid"]][0]
     assert float(ai.abs().max()) <= top and float(bi.abs().max()) <= top
     s = int_product(ai, bi)
@@ -333,7 +341,9 @@ def attach(model, method: str, log: list) -> list:
                     x, w = x.to(EDIT_DTYPE), mod.weight.to(EDIT_DTYPE)
                     c = wcache.get("calls", 0)
                     wcache["calls"] = c + 1
-                    y, rec = edited_product(method, x, w, wcache, f"{i}/{name}" + (f"#{c}" if c else ""))
+                    sfx = f"#{c}" if c else ""
+                    shared = FUSED.get(name, name) if parse_edit(method)["fused"] else name
+                    y, rec = edited_product(method, x, w, wcache, f"{i}/{name}{sfx}", f"{i}/{shared}{sfx}")
                 else:
                     x, w = x.double(), mod.weight.double()
                     y, rec = product(method, x, w, wcache)
@@ -428,6 +438,7 @@ def selftest() -> dict:
                    for m in ("bf16", "int8", "e2m1i_rot", "nvfp4", "fp8_block", "int8@-", "int8_rot@wa:u2:s1")}
     assert evaluate(model, torch.cat([ids, ids]), "int8@-")["windows"] == 2
     lin, xin = model.model.layers[0].self_attn.q_proj, torch.randn(1, 64, 256, device=dev).to(torch.bfloat16)
+    assert parse_edit("int8_rot@wa:pm1:f:s2")["fused"] and parse_edit("int8_rot@wa:pm1:f:s2")["seed"] == 2
     for m, same in (("int8@-", True), ("int8@w:u2", True), ("int8@a:u2", False)):
         hooks = attach(model, m, [])
         with torch.no_grad():
