@@ -16,7 +16,7 @@
 // (mi, ni) order, at key position t = mi NI + ni. The key schedule (16 positions) is a cost stand-in for the reviewed one.
 //
 // Kernels: form (A~ or B~ and the tail rows P_A = [E_A | V_hi | E_A | V_lo], P_B = [W_hi | E_B | W_lo | E_B], one warp a row),
-// and the GEMM (a TMA producer warp and 8 consumer warps, mainloop_sm120.cuh's schedule with s32 accumulators).
+// and the GEMM (8 warps of s32 accumulators over a TMA ring; thread 0 issues each load as its slot is released).
 // cuBLASLt's int8 GEMM (s32 out) is the baseline. Modes:
 //   fgemm gate DIR M N K GRID SEED P|D  every arm on one small shape at tile config P or D, inputs and outputs to DIR for ref.py
 //   fgemm bench REPS SHAPE...           interleaved timing, one JSON line a shape (SHAPE = name:m:n:k)
@@ -138,14 +138,16 @@ struct Args {
   uint32_t seed;
 };
 
-// TM x BN tile, 8 consumer warps of WM x 32 (MI = WM / 16 row blocks of 16, NI = 4 column blocks of 8), one producer
-// warp whose first lane issues every TMA; STAGES stages of 128 bytes of depth (4 atoms); TAIL: the peel rows' stage.
+// TM x BN tile, 8 warps of WM x 32 (MI = WM / 16 row blocks of 16, NI = 4 column blocks of 8); thread 0 also issues
+// every TMA, refilling each slot as the CTA releases it; STAGES stages of 128 bytes of depth (4 atoms); the tail
+// stage holds the peel rows.
 template <int TM, int BN, int WM, int STAGES> struct ML {
   static constexpr int BK = 128, WN = 32, WARPS_M = TM / WM, WARPS_N = BN / WN, NCW = WARPS_M * WARPS_N, NCT = NCW * 32,
                        MI = WM / 16, NI = WN / 8;
-  static_assert(NCW == 8, "8 consumer warps");
-  // one producer warp: 288 threads leave ptxas 224 registers a thread (setmaxnreg doesn't lift ptxas's launch cap)
-  static constexpr int NT = NCT + 32;
+  static_assert(NCW == 8, "8 warps");
+  // no producer warp: a ninth warp puts three warps on one of the SM's four 16,384-register partitions, capping every
+  // thread at 168 registers, and the receipt kernels spill there
+  static constexpr int NT = NCT;
   static constexpr uint32_t A_BYTES = TM * BK, STAGE = (TM + BN) * BK;
   static constexpr int SMEM = STAGES * STAGE + 16 * STAGES + 1024;
   static_assert(STAGE % 1024 == 0 && A_BYTES % 1024 == 0, "boxes 1,024-byte aligned for SWIZZLE_128B");
@@ -154,8 +156,15 @@ template <int TM, int BN, int WM, int STAGES> struct ML {
   int s = 0;
   uint32_t ph = 0;
   uint32_t a_off[4], b_off[4];
+  // the issuer's place in this CTA's load sequence: tile pt, step pkt of KT (+1 for the tail), slot ps, phase pph
+  const Maps* maps;
+  int tiles_m, tiles_n, KT, steps, group, pt, pkt = 0, ps = 0;
+  uint32_t pph = 0;
+  bool issuer;
 
-  DEV explicit ML(uint8_t* smem) {
+  DEV ML(uint8_t* smem, const Maps* m, int M, int N, int K, int grp, bool tail)
+      : maps(m), tiles_m(M / TM), tiles_n(N / BN), KT(K / BK), steps(K / BK + tail), group(grp), pt(blockIdx.x),
+        issuer(threadIdx.x == 0) {
     base = (smem_u32(smem) + 1023) & ~1023u;
     bars = base + STAGES * STAGE;
   }
@@ -172,28 +181,36 @@ template <int TM, int BN, int WM, int STAGES> struct ML {
     }
     __syncthreads();
   }
-  template <bool TAIL> DEV void produce(const Maps* maps, int M, int N, int K, int group) {
-    const int tiles_m = M / TM, tiles_n = N / BN, KT = K / BK;
-    tma_acquire(&maps->a); tma_acquire(&maps->b);
-    if (TAIL) { tma_acquire(&maps->pa); tma_acquire(&maps->pb); }
-    for (int t = blockIdx.x; t < tiles_m * tiles_n; t += gridDim.x) {
-      int tm, tn;
-      raster(t, tiles_m, tiles_n, group, tm, tn);
-      for (int kt = 0; kt < KT; kt++) {
-        mbar_wait(empty(s), ph ^ 1);
-        mbar_expect_tx(full(s), STAGE);
-        tma_load(stage(s), &maps->a, full(s), kt * BK, tm * TM);
-        tma_load(stage(s) + A_BYTES, &maps->b, full(s), kt * BK, tn * BN);
-        advance();
-      }
-      if (TAIL) {
-        mbar_wait(empty(s), ph ^ 1);
-        mbar_expect_tx(full(s), STAGE);
-        tma_load(stage(s), &maps->pa, full(s), 0, tm * TM);
-        tma_load(stage(s) + A_BYTES, &maps->pb, full(s), 0, tn * BN);
-        advance();
-      }
+  // the issuer's next load, once every thread has released its slot
+  DEV void issue() {
+    if (pt >= tiles_m * tiles_n) return;
+    int tm, tn;
+    raster(pt, tiles_m, tiles_n, group, tm, tn);
+    mbar_wait(empty(ps), pph ^ 1);
+    mbar_expect_tx(full(ps), STAGE);
+    if (pkt < KT) {
+      tma_load(stage(ps), &maps->a, full(ps), pkt * BK, tm * TM);
+      tma_load(stage(ps) + A_BYTES, &maps->b, full(ps), pkt * BK, tn * BN);
+    } else {
+      tma_load(stage(ps), &maps->pa, full(ps), 0, tm * TM);
+      tma_load(stage(ps) + A_BYTES, &maps->pb, full(ps), 0, tn * BN);
     }
+    if (++pkt == steps) { pkt = 0; pt += gridDim.x; }
+    if (++ps == STAGES) { ps = 0; pph ^= 1; }
+  }
+  DEV void prologue() {
+    if (issuer) {
+      tma_acquire(&maps->a); tma_acquire(&maps->b);
+      if (steps > KT) { tma_acquire(&maps->pa); tma_acquire(&maps->pb); }
+      for (int i = 0; i < STAGES; i++) issue();
+    }
+    __syncwarp();
+  }
+  // release this thread's slot; the issuer refills it STAGES loads ahead
+  DEV void release(uint32_t done) {
+    mbar_release(done);
+    if (issuer) issue();
+    __syncwarp();
   }
   DEV void consumer_init(int warp, int lane) {
     const int wm = warp / WARPS_N, wn = warp % WARPS_N, x = lane & 7;
@@ -265,7 +282,7 @@ template <int TM, int BN, int WM, int STAGES> struct ML {
       load(fa[0], fb[0], stage(s), 0);
     }
     mma<false, absorbs(RS, FIRST, 3), KIND>(acc, ch, fa[1], fb[1]);
-    mbar_release(done);
+    release(done);
   }
   template <int RS, int KIND> DEV void tile(int K, int (&acc)[MI][NI][4], St (&ch)[NCH<KIND>]) {
     const int KT = K / BK;
@@ -302,7 +319,7 @@ template <int TM, int BN, int WM, int STAGES> struct ML {
           acc[mi][ni][e] = (int)((uint32_t)acc[mi][ni][e] - ((uint32_t)t1[e] << 8) - (uint32_t)t2[e]);
       }
     }
-    mbar_release(empty(s));
+    release(empty(s));
     advance();
   }
 };
@@ -311,13 +328,10 @@ template <int TM, int BN, int WM, int STAGES, bool TAIL, int RS, int KIND> DEV v
   using L = ML<TM, BN, WM, STAGES>;
   constexpr int MI = L::MI, NI = L::NI;
   extern __shared__ __align__(1024) uint8_t smem[];
-  L ml(smem);
+  L ml(smem, a.maps, a.M, a.N, a.K, a.group, TAIL);
   ml.init(threadIdx.x);
   const int warp = threadIdx.x / 32, lane = threadIdx.x % 32;
-  if (warp >= L::NCW) {
-    if (lane == 0) ml.template produce<TAIL>(a.maps, a.M, a.N, a.K, a.group);
-    asm volatile("exit;");
-  }
+  ml.prologue();
   ml.consumer_init(warp, lane);
   const int tiles_m = a.M / TM, tiles_n = a.N / BN;
   const int wm = warp / L::WARPS_N, wn = warp % L::WARPS_N, g = lane >> 2, q = lane & 3, ctid = threadIdx.x;
@@ -354,7 +368,7 @@ template <int TM, int BN, int WM, int STAGES, bool TAIL, int RS, int KIND> DEV v
 // ---------------------------------------------------------------- the kernels
 // configurations: P (prefill) 128 x 128 tiles, warps 64 x 32, 3 stages; D (decode) 128 x 32, warps 16 x 32, 4 stages
 #define GEMM(NAME, TM, BN, WM, ST, TAIL, RS, KIND)                                                               \
-  __global__ void __launch_bounds__(288, 1) NAME(const Args a) { gemm_body<TM, BN, WM, ST, TAIL, RS, KIND>(a); }
+  __global__ void __launch_bounds__(256, 1) NAME(const Args a) { gemm_body<TM, BN, WM, ST, TAIL, RS, KIND>(a); }
 GEMM(p_plain, 128, 128, 64, 3, false, 0, NONE)
 GEMM(p_g0, 128, 128, 64, 3, true, 0, NONE)
 GEMM(p_duo32, 128, 128, 64, 3, true, 32, DUO)
@@ -636,7 +650,7 @@ static void form(Prob& P, int i) {
 }
 static void gemm(Prob& P, int kind, int i) {
   Args a{kind == 0 ? P.maps_plain[i] : P.maps_noised[i], P.U, P.R, P.m, P.n, P.k, P.group, P.seed};
-  P.cfg.k[kind]<<<P.grid, 288, P.cfg.smem, P.st>>>(a);
+  P.cfg.k[kind]<<<P.grid, 256, P.cfg.smem, P.st>>>(a);
 }
 // the arms: lt (a), plain (my mainloop on Q(A), Q(B)), form, g0 (the noised GEMM and peel alone), and the whole noised call
 // form + GEMM: b (no receipts), c (duo, stride 32), d (duo, 64), c2 / d2 (duo2)
