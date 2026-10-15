@@ -259,7 +259,8 @@ theorem sparseSessionAt_of_zero (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂
   · exact absurd hcoll hnc
 
 /-- **The inner-session record decodes at an accepted candidate-3 proof**: the sparse statement's check 5 loads its
-source; the guarantee's source condition identifies it with the files of this record, and `Inner.load` decodes it. -/
+source; `hfiles` identifies it with the files of this record (the verifier's setup gives that form at an accepted
+candidate-3 session, `FlockC3.VStarList.hcoins_of_acceptsC3`), and `Inner.load` decodes it. -/
 theorem record_decodes_of_accepted (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
     {rows : Option (Array Flock.Registered.Port)}
     {wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String} {reg : Lean.Json}

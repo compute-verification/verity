@@ -281,8 +281,7 @@ at the law of the registration's draws
 as the prover supplies them (`ZkOuterR`), their records' custody `_hCust`, their registrants' records covering the
 rows their reads files name `_hRC`, the table's prefix `tbl` and the `b ‖ c`
 `bc` at which the map `im` says where each round's commitment and coins go in the inner session's records, and those
-records' custody `_hIC` at `im`; check 5's source at each record is that record's inner-session files (`_hcoins`), the
-verifier of record's own inputs (V*'s bindings
+records' custody `_hIC` at `im`, the verifier of record's own inputs (V*'s bindings
 `bind` and the shared rows `rows`; session `j` runs as V*'s statement `j`), at which V*'s statements' files, where they
 parse into scope as the verifier's acceptance parses them, parse to `Vs` (`VStarParsesScoped`), every session's inputs
 carrying the tags their name names (`TagsFound`), the messages V*'s layers hold and the rounds' commitments (`wmsg`,
@@ -309,7 +308,13 @@ is at most the checked sessions' expected statistical errors under the full draw
 slack, and candidate 3's error.
 
 At a private inner shape (`ish.holo`), `RecVStar.statements` refuses (`statements_holo`), so no run the verifier accepts
-has a private inner session, and the guarantee says nothing about one until V*'s holo parts land (#1896). -/
+has a private inner session, and the guarantee says nothing about one until V*'s holo parts land (#1896).
+
+Check 5's source `coins` is any: `--rec-inner-coins` is inside the guarantee. The verifier never accepts one at candidate
+3 anyway: the event's `AcceptsC3` names a RecSparse shape (`FlockC3.VStarList.sparse_of_acceptsC3`), where the
+verifier's setup refuses every source but the inner statement's files (`RecCoins.checkAtC3`), so check 5's source at
+an accepted session is the files of the record it holds the inner transcript against
+(`FlockC3.VStarList.hcoins_of_acceptsC3`). -/
 def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
     (CT : (st : Flock.Stmt) → (hp : HoloParams) → Fin (r st hp) → Type) [∀ st hp k, Fintype (CT st hp k)]
     [∀ st hp k, Inhabited (CT st hp k)]
@@ -353,7 +358,6 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
     -- the reps' streams are named past the sparse phases' and R's
     (_htbl : ∀ i : Fin 2, (((HoloStream.rep i).name tbl).startsWith s!"{RecVStar.SPARSE}/" ||
       ((HoloStream.rep i).name tbl).startsWith s!"{RecVStar.STACKED}/") = false)
-    (_hcoins : ∀ r src, coins r = some src → ∃ f, src = .files f ∧ f.record = r)
     -- the verifier of record's own inputs: V*'s bindings for each statement and the shared rows
     (bind : Fin (vstarCount ish) → VStar.Bindings) (rows : Option (Array Flock.Registered.Port))
     -- obligation (gap 4(c)): where V*'s statement `j`'s file under `bind j` parses into scope, as the verifier's
