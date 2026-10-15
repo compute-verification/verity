@@ -20,11 +20,13 @@ Modes (one JSON line each; exit 1 when any step of P or any bound fails):
           chained products paired into mixed ones, junk cancelled in the chain, left in, or mixed; Winograd pairs with
           junk in the chain, shared through merges, or left in; inner-lifted Strassen paired; then products dropped
           and operands perturbed at random.
+  prop5   A7's Proposition 5 family (7 products on the 2 x 2 block): P's count is the floor plus one per column pair.
   r       Claim R: the s8 range of integer linear operands, and one-slot mixed products (the wrapping cast, 7-bit
           halves, FP4 bit sums) checked exactly on random salted s8 matrices.
 
     python3 mixed.py single --shape 2,2,3 --primes 2,3 --count 200000 --seed 0
     python3 mixed.py search --shape 2,2,3 --L 1 --primes 2,3 --count 400 --seed 0
+    python3 mixed.py prop5 --primes 2,3,5 --pmax 4
     python3 mixed.py r --n 64 --seed 0
 """
 from __future__ import annotations
@@ -428,6 +430,35 @@ def winograd(shape, L, p, rng, junk):
     return f
 
 
+def prop5(P: int, Q: int, p: int) -> Full:
+    """note:20261015T0822Z-draft-conjecture-c-mix's Proposition 5 on a P x Q block at L = 2, per column pair (c, c'):
+    W = y_0c' y_1c, V_r = W - (x_r0 - y_1c)(x_r1 - y_0c'), t_rc = V_r + x_r0 (y_0c + x_r1 - y_0c'),
+    t_rc' = V_r + x_r1 (y_1c' + x_r0 - y_1c)."""
+    f = Full((P, 2, Q), p)
+    for c in range(0, Q, 2):
+        c2 = c + 1
+        w = f.prod(0, f.yvec(0, c2), f.yvec(1, c))
+        for r in range(P):
+            v = f.prod(w, f.xvec(r, 0) - f.yvec(1, c), -(f.xvec(r, 1) - f.yvec(0, c2)))
+            f.commit((r, c), 1, f.prod(v, f.xvec(r, 0), f.yvec(0, c) + f.xvec(r, 1) - f.yvec(0, c2)))
+            f.commit((r, c2), 1, f.prod(v, f.xvec(r, 1), f.yvec(1, c2) + f.xvec(r, 0) - f.yvec(1, c)))
+    return f
+
+
+def mode_prop5(args):
+    rows, fails = [], 0
+    for p in args.primes:
+        for P in range(1, args.pmax + 1):
+            for Q in (2, 4, 6):
+                res = check(prop5(P, Q, p), 2)
+                want_slack = Q // 2 if MIXED_WEIGHT == 2 else Q // 2 - (P * Q) // 2
+                ok = res["right_full"] == P * Q and res["slack"] == want_slack
+                fails += bool(res["failures"]) or not ok
+                rows.append({"p": p, "P": P, "Q": Q, "products": res["mixed"] + res["unmixed"], **res})
+    return {"mode": "prop5", "mixed_weight": MIXED_WEIGHT, "primes": args.primes, "computations": len(rows),
+            "failures": fails, "rows": rows}
+
+
 def mode_search(args):
     shape = tuple(args.shape)
     rng = random.Random(args.seed)
@@ -623,12 +654,13 @@ def mode_r(args):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("mode", choices=["single", "search", "r"])
+    ap.add_argument("mode", choices=["single", "search", "prop5", "r"])
     ap.add_argument("--shape", type=lambda s: [int(x) for x in s.split(",")], default=[2, 2, 2])
     ap.add_argument("--L", type=int, default=1)
     ap.add_argument("--primes", type=lambda s: [int(x) for x in s.split(",")], default=[2, 3])
     ap.add_argument("--count", type=int, default=100)
     ap.add_argument("--lifted", type=int, default=0, help="also inner-lifted Strassen, m = 1..LIFTED, paired")
+    ap.add_argument("--pmax", type=int, default=4)
     ap.add_argument("--climb", type=int, default=0, help="local-search steps from each computation")
     ap.add_argument("--mixed-weight", type=int, choices=[1, 2], default=2,
                     help="1 is the claim without P's factor 2, which Winograd's pairs must break (a self-test)")
@@ -637,7 +669,7 @@ def main():
     args = ap.parse_args()
     global MIXED_WEIGHT
     MIXED_WEIGHT = args.mixed_weight
-    out = {"single": mode_single, "search": mode_search, "r": mode_r}[args.mode](args)
+    out = {"single": mode_single, "search": mode_search, "prop5": mode_prop5, "r": mode_r}[args.mode](args)
     print(json.dumps(out))
     return 1 if out["failures"] else 0
 

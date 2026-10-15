@@ -1,0 +1,3 @@
+# A7's Proposition 5 family under Claim P (referee round 2). Run by run_jobs.sh from this directory.
+python3 mixed.py prop5 --primes 2,3,5,1000003 --pmax 6
+python3 mixed.py prop5 --primes 2,3,5 --pmax 6 --mixed-weight 1; [ $? -eq 1 ]
