@@ -16,12 +16,6 @@ theorem leafWith_std (x salt : ByteArray) : Hm96.Default512.leafWith std x salt 
 
 theorem monadLift_TMW_pure {α : Type} (x : α) : (monadLift (pure x : V α) : TMW V α) = pure x := rfl
 
-theorem named_hm96 : MerkleScheme.hm96Sha512.Named := by
-  intro s h
-  have e : MerkleScheme.find? MerkleScheme.hm96Sha512.id = some MerkleScheme.hm96Sha512 := rfl
-  rw [e] at h
-  exact (Option.some.inj h).symm
-
 theorem zk_replayWith_std (st : Setup) (lay : Zk.PadLayout) (p : Proof) (root : ByteArray) :
     Zk.replayWith std st lay p root = Zk.replay st lay p root := by
   unfold Zk.replayWith Zk.replay
@@ -35,7 +29,7 @@ theorem zk_verifyInnerWith_std (lay : Zk.PadLayout) (pr : Zk.InnerProof) (finalC
     Zk.verifyInnerWith std lay pr finalC cons = Zk.verifyInner lay pr finalC cons := by
   unfold Zk.verifyInnerWith Zk.verifyInner
   simp only [liftTM_V, sampleWith_std, sampleVecWith_std, zk_tauCommitmentWith_std, std_sha512, leafWith_std,
-    opsWith_std _ named_hm96, ofScheme_climb, monadLift_TMW_pure, pure_bind]
+    hm96With_std, ofScheme_climb, monadLift_TMW_pure, pure_bind]
 
 theorem zk_queryLevel0With_std (ms : MerkleScheme) (h : ms.Named) (p : LigeritoProof) (lv : Level) (cap : Array ByteArray)
     (fold : Array F256) : Zk.queryLevel0With std ms p lv cap fold = Zk.queryLevel0 ms p lv cap fold := by

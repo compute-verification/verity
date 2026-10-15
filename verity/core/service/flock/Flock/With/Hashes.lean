@@ -7,7 +7,7 @@ records each call they give the verifier's log of hash calls. The one hashing th
 once from the key label with SHA-512 itself.
 
 Here: the oracle, and §14's Merkle checks over it. A registered scheme's node and leaf go through the oracle
-(`MerkleScheme.opsWith`); a scheme the registry doesn't name keeps its own closures.
+(`MerkleScheme.opsWith`, by the registry's ids alone); a scheme the registry doesn't name keeps its own closures.
 -/
 import Flock.Merkle
 
@@ -44,15 +44,32 @@ def Hm96.Default512.leafWith (hs : Hashes M) (x salt : ByteArray) : M ByteArray 
   let c ← hs.sha512 (saltPrefix ++ salt)
   hs.sha512 (leafPrefix ++ (b ++ c))
 
-/-- The registry's scheme of `ms`'s id, its node and leaf through the oracle, by its `merkle_hash` index; `ms`'s own
-closures for an id the registry doesn't name. -/
+/-- The registry's ids (`MerkleScheme.all`) with their `merkle_hash` indices and none of their closures, in its order
+(`Flock.With.oracleIds_eq`). -/
+def MerkleScheme.oracleIds : List (String × UInt32) :=
+  [("flock-leaf/sha256-unsalted/v0", 0), ("flock-leaf/sha256-unsalted", 0), ("flock-leaf/sha512-unsalted", 2),
+    ("hm96-sha512/v1", 3)]
+
+/-- `MerkleScheme.sha256`'s node and leaf through the oracle. -/
+def MerkleOps.sha256With (hs : Hashes M) : MerkleOps M :=
+  ⟨fun l r => hs.sha256 (l ++ r), fun row _ => hs.sha256 (MerkleScheme.rowBytes row)⟩
+
+/-- `MerkleScheme.sha512`'s node and leaf through the oracle. -/
+def MerkleOps.sha512With (hs : Hashes M) : MerkleOps M :=
+  ⟨fun l r => hs.sha512 (l ++ r), fun row _ => hs.sha512 (MerkleScheme.rowBytes row)⟩
+
+/-- `MerkleScheme.hm96Sha512`'s node and leaf through the oracle. -/
+def MerkleOps.hm96With (hs : Hashes M) : MerkleOps M :=
+  ⟨fun l r => hs.sha512 (l ++ r), fun row salt => do Hm96.Default512.leafWith hs (← hs.sha512 (MerkleScheme.rowBytes row)) salt⟩
+
+/-- The registry's scheme of `ms`'s id through the oracle, by its `merkle_hash` index; `ms`'s own closures for an id the
+registry doesn't name. -/
 def MerkleScheme.opsWith (hs : Hashes M) (ms : MerkleScheme) : MerkleOps M :=
-  match MerkleScheme.find? ms.id with
-  | some s =>
-    if s.pcsIndex = 0 then ⟨fun l r => hs.sha256 (l ++ r), fun row _ => hs.sha256 (rowBytes row)⟩
-    else if s.pcsIndex = 2 then ⟨fun l r => hs.sha512 (l ++ r), fun row _ => hs.sha512 (rowBytes row)⟩
-    else if s.pcsIndex = 3 then
-      ⟨fun l r => hs.sha512 (l ++ r), fun row salt => do Hm96.Default512.leafWith hs (← hs.sha512 (rowBytes row)) salt⟩
+  match MerkleScheme.oracleIds.lookup ms.id with
+  | some i =>
+    if i = 0 then MerkleOps.sha256With hs
+    else if i = 2 then MerkleOps.sha512With hs
+    else if i = 3 then MerkleOps.hm96With hs
     else MerkleOps.ofScheme ms
   | none => MerkleOps.ofScheme ms
 

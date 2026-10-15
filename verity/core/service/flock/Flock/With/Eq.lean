@@ -53,8 +53,25 @@ theorem named_default : MerkleScheme.Named default := by
   rw [e] at h
   cases h
 
+theorem oracleIds_eq : MerkleScheme.oracleIds = MerkleScheme.all.map fun s => (s.id, s.pcsIndex) := rfl
+
+theorem lookup_map_find (l : List MerkleScheme) (id : String) :
+    (l.map fun s => (s.id, s.pcsIndex)).lookup id = (l.find? (·.id == id)).map (·.pcsIndex) := by
+  induction l with
+  | nil => rfl
+  | cons s rest ih =>
+    rw [List.map_cons, List.lookup_cons, List.find?_cons]
+    by_cases h : s.id = id
+    · rw [h, beq_self_eq_true]; rfl
+    · rw [beq_false_of_ne h, beq_false_of_ne (Ne.symm h)]; exact ih
+
+theorem oracleIds_lookup (id : String) :
+    MerkleScheme.oracleIds.lookup id = (MerkleScheme.find? id).map (·.pcsIndex) := by
+  rw [oracleIds_eq]; exact lookup_map_find _ _
+
 theorem opsWith_std (ms : MerkleScheme) (h : ms.Named) : ms.opsWith std = MerkleOps.ofScheme ms := by
   unfold MerkleScheme.opsWith
+  rw [oracleIds_lookup]
   cases hf : MerkleScheme.find? ms.id with
   | none => rfl
   | some s =>
@@ -62,6 +79,8 @@ theorem opsWith_std (ms : MerkleScheme) (h : ms.Named) : ms.opsWith std = Merkle
     have hm := List.mem_of_find?_eq_some hf
     simp only [MerkleScheme.all, List.mem_cons, List.not_mem_nil, or_false] at hm
     rcases hm with rfl | rfl | rfl | rfl <;> rfl
+
+theorem hm96With_std : MerkleOps.hm96With std = MerkleOps.ofScheme MerkleScheme.hm96Sha512 := rfl
 
 theorem std_sha512 (b : ByteArray) : std.sha512 b = pure (Sha512.hash b) := rfl
 

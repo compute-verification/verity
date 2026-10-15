@@ -120,7 +120,7 @@ def verifyInnerWith (hs : Hashes M) (lay : PadLayout) (pr : InnerProof) (finalC 
     liftTM (check (path.size == depth) "zk inner: a path of the wrong depth")
     let x ← hs.sha512 (a.toBytes ++ b.toBytes)
     let leaf ← (Hm96.Default512.leafWith hs x pr.salts[k]! : M ByteArray)
-    let top ← (climbWith (MerkleScheme.hm96Sha512.opsWith hs) leaf j path.toList : M ByteArray)
+    let top ← (climbWith (MerkleOps.hm96With hs) leaf j path.toList : M ByteArray)
     liftTM (check (top == pr.root) s!"zk inner: column {j}'s path does not reach the pads' root")
 
 /-- `queryLevel0` with the oracle's coins and Merkle hashes. -/
