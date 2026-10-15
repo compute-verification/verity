@@ -6,6 +6,7 @@
 
 #include <cuda.h>
 #include <cstring>
+#include <string>
 
 #define CKD(x)                                                                              \
   do {                                                                                      \
@@ -323,48 +324,55 @@ static void dram_patterns(const char* only) {
   free_generic(gen);
 }
 
-// Does how zeros were written change how fast COMP_GENERIC reads them? A fresh 4 GiB allocation each case, zeros written
-// by cudaMemset, 4-byte kernel stores or 16-byte kernel stores, onto fresh memory or over random data; then read six times
-// the way M5's compress probe does (r20261015-043430-0a05: one __ldg a lane, 8 blocks of 512 a SM), and once with
-// ld.global.cg at 4 blocks a SM (this census's dram rows).
+// How fast COMP_GENERIC zeros read depending on how they were written and what the memory held before. Each case is a
+// fresh 4 GiB allocation and a sequence of writes ending in zeros; then six reads the way M5's compress probe does
+// (r20261015-043430-0a05: one __ldg a lane, 8 blocks of 512 a SM), and one with ld.global.cg at 4 blocks a SM (this
+// census's dram rows).
+constexpr int W_MEMSET = -1, W_ZEROS32 = -2, W_RANDOM32 = -3, W_REALLOC = -4;  // else a PATTERNS index, 16-byte stores
 static void fill_methods(const char* only) {
   if (only && !strstr("fill", only)) return;
   const size_t B = 4ull << 30;
-  // 5: beside a 4 GiB plain allocation made first (as dram_patterns and M5 do); 6: zeros after every pattern of
-  // dram_patterns has been written to the allocation once (as read_paths sees it)
-  const char* names[] = {"memset", "kfill32", "kwrite128", "random_then_memset", "random_then_kfill32", "beside_plain",
-                         "after_patterns"};
+  struct Case { std::string name; std::vector<int> writes; int trials; bool beside_plain; };
+  std::vector<int> all;
+  for (int pat = 0; pat < NPAT; pat++) all.push_back(pat);
+  std::vector<Case> cases = {
+      {"memset", {W_MEMSET}, 2, false}, {"kfill32", {W_ZEROS32}, 2, false}, {"kwrite128", {1}, 2, false},
+      {"random_then_memset", {W_RANDOM32, W_MEMSET}, 2, false},
+      {"random_then_kfill32", {W_RANDOM32, W_ZEROS32}, 2, false},
+      {"beside_plain", {W_ZEROS32}, 2, true},  // a 4 GiB plain allocation made first, as dram_patterns and M5 do
+  };
+  auto then = [](std::vector<int> w, std::vector<int> tail) { w.insert(w.end(), tail.begin(), tail.end()); return w; };
+  cases.push_back({"after_patterns", then(all, {W_ZEROS32}), 2, false});  // as read_paths sees the allocation
+  for (int pat = 0; pat < NPAT; pat++) cases.push_back({std::string("after_") + PATTERNS[pat], {pat, W_ZEROS32}, 1, false});
+  cases.push_back({"after_patterns_then_memset", then(all, {W_MEMSET}), 1, false});
+  cases.push_back({"after_12x_random", then(std::vector<int>(12, 0), {W_ZEROS32}), 1, false});
+  cases.push_back({"after_12x_zeros", then(std::vector<int>(12, 1), {W_ZEROS32}), 1, false});
+  cases.push_back({"after_compressible", {2, 6, 9, 11, W_ZEROS32}, 1, false});
+  cases.push_back({"after_incompressible", {0, 3, 4, 5, 7, 8, 10, W_ZEROS32}, 1, false});
+  cases.push_back({"after_patterns_freed_then_fresh", then(all, {W_REALLOC, W_ZEROS32}), 1, false});
   cudaEvent_t e0, e1;
   CK(cudaEventCreate(&e0));
   CK(cudaEventCreate(&e1));
-  // then, once each: one pattern of dram_patterns written before the zeros (which pattern makes it stick), and every
-  // pattern followed by cudaMemset (does a memset clear it)
-  for (int trial = 0; trial < 2 + NPAT + 1; trial++)
-    for (int m = 0; m < (trial < 2 ? 7 : 1); m++) {
-      int one = trial >= 2 && trial < 2 + NPAT ? trial - 2 : -1;
-      bool reset = trial == 2 + NPAT;
-      char name[64];
-      snprintf(name, sizeof name, "%s", trial < 2 ? names[m] : reset ? "after_patterns_then_memset" : "");
-      if (one >= 0) snprintf(name, sizeof name, "after_%s", PATTERNS[one]);
+  for (int trial = 0; trial < 2; trial++)
+    for (auto& c : cases) {
+      if (trial >= c.trials) continue;
       Alloc plain;
-      if (m == 5) plain = alloc_plain(B);
+      if (c.beside_plain) plain = alloc_plain(B);
       Alloc g = alloc_generic(B);
       uint32_t* p = (uint32_t*)g.p;
-      if (one >= 0) {
-        k_write<<<g_sms * 4, 512>>>((uint4*)p, B / 16, one);
-        k_fill<<<g_sms * 4, 512>>>(p, B / 4, 1);
-      } else if (reset) {
-        for (int pat = 0; pat < NPAT; pat++) k_write<<<g_sms * 4, 512>>>((uint4*)p, B / 16, pat);
-        CK(cudaMemset(p, 0, B));
-      } else {
-        if (m == 6)
-          for (int pat = 0; pat < NPAT; pat++) k_write<<<g_sms * 4, 512>>>((uint4*)p, B / 16, pat);
-        if (m == 3 || m == 4) k_fill<<<g_sms * 4, 512>>>(p, B / 4, 0);
-        if (m == 0 || m == 3) CK(cudaMemset(p, 0, B));
-        if (m == 1 || m == 4 || m >= 5) k_fill<<<g_sms * 4, 512>>>(p, B / 4, 1);
-        if (m == 2) k_write<<<g_sms * 4, 512>>>((uint4*)p, B / 16, 1);
+      for (int w : c.writes) {
+        if (w == W_MEMSET) CK(cudaMemset(p, 0, B));
+        else if (w == W_ZEROS32) k_fill<<<g_sms * 4, 512>>>(p, B / 4, 1);
+        else if (w == W_RANDOM32) k_fill<<<g_sms * 4, 512>>>(p, B / 4, 0);
+        else if (w == W_REALLOC) {
+          CK(cudaDeviceSynchronize());
+          free_generic(g);
+          g = alloc_generic(B);
+          p = (uint32_t*)g.p;
+        } else k_write<<<g_sms * 4, 512>>>((uint4*)p, B / 16, w);
       }
       CK(cudaDeviceSynchronize());
+      const char* name = c.name.c_str();
       double r[6], best = 0;
       for (int rep = 0; rep < 6; rep++) {
         CK(cudaEventRecord(e0));
@@ -380,7 +388,7 @@ static void fill_methods(const char* only) {
       double cg = read_path_bw<0>(p, B, 1, 4);
       printf("{\"probe\":\"fill_method\",\"method\":\"%s\",\"trial\":%d,\"bytes\":%zu,\"m5_reads_bytes_per_s\":[%.4e,%.4e,"
              "%.4e,%.4e,%.4e,%.4e],\"m5_best_after_first\":%.4e,\"cg_b4_read_bytes_per_s\":%.4e}\n",
-             name, trial < 2 ? trial : 0, B, r[0], r[1], r[2], r[3], r[4], r[5], best, cg);
+             name, trial, B, r[0], r[1], r[2], r[3], r[4], r[5], best, cg);
       fflush(stdout);
       free_generic(g);
       if (plain.p) CK(cudaFree(plain.p));
