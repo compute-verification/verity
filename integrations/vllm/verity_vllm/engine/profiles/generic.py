@@ -287,8 +287,9 @@ _MLA_INDEXER_FIELDS = {
     "self_attn.indexer.k_norm.weight": "k_norm_w",
     "self_attn.indexer.k_norm.bias": "k_norm_b",
 }
-#: `MLAAttention`'s absorbed up-projections: views of `kv_b_proj.weight`'s own storage (W_UK_T = the k_nope rows transposed, W_UV the v
-#: rows), so they are no Record field; and its kv/q scale placeholders (`kv_cache_dtype=auto`: never read by a modelled kernel)
+#: `MLAAttention`'s absorbed up-projections: in a bf16 checkpoint views of `kv_b_proj.weight`'s own storage (W_UK_T = the k_nope rows
+#: transposed, W_UV the v rows), so no Record field; in a block-FP8 one vLLM dequantises kv_b into a bf16 storage of their own, which
+#: the Record carries as `w_uk_t` / `w_uv` (`_mla_weight_field`); and its kv/q scale placeholders (`kv_cache_dtype=auto`: never read)
 MLA_KV_B_VIEWS = re.compile(r"^model\.layers\.(\d+)\.self_attn\.(?:mla_attn\.mla_attn\.)?(W_UK_T|W_UV)$")
 _MLA_SCALES = re.compile(rf"^model\.layers\.\d+\.self_attn\.(?:mla_attn\.mla_attn\.)?{_ATTN_SCALES}$")
 
@@ -314,6 +315,9 @@ def _mla_weight_field(C: dict[str, Any]) -> Callable[[str], tuple[str | int, ...
             return ("cos_sin",) if layer == 0 else None
         if rest in _MLA_INDEXER_FIELDS:
             return ("indexers", indexers[layer], _MLA_INDEXER_FIELDS[rest]) if layer in indexers else None
+        if (v := MLA_KV_B_VIEWS.match(name)) is not None:
+            return (("dense_layers", layer) if layer < FD else ("layers", layer - FD)) + ({"W_UK_T": "w_uk_t", "W_UV": "w_uv"}[v.group(2)],) \
+                if C.get("FP8_BLOCK") else None
         f = _MLA_LAYER_FIELDS.get(rest) or (_MLA_DENSE_FIELDS if layer < FD else _MLA_MOE_FIELDS).get(rest)
         if f is None:
             return None

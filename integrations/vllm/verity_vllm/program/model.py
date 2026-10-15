@@ -325,6 +325,8 @@ def mla_layer_weights_type(C: dict[str, Any], *, dense: bool) -> Record:
     fields += linear("q_b_w", NH * (DN + DR), QL)
     fields += [("kv_a_ln", Array(L, BF16))]
     fields += linear("kv_b_w", NH * (DN + DV), L)
+    if G:   # vLLM's MLAAttention dequantises kv_b into its own bf16 storage at load: W_UK_T [NH][DN][L], W_UV [NH][L][DV] (VLLM-14)
+        fields += [("w_uk_t", Array(NH, mat(DN, L))), ("w_uv", Array(NH, mat(L, DV)))]
     fields += linear("o_w", H, NH * DV)
     fields += [("ln2", Array(H, BF16))]
     if dense:
