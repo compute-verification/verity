@@ -21,8 +21,9 @@ In (i), as in `PublicAudit`'s:
   salts, else `saltFinder`), here at
   the checked sessions (`checkedC3`), whose games are the typed sessions', so the transported prover plays them;
 * the typing `_hbr`'s existential carries is consumed here by `obtain` — never reified into the statement's inputs:
-  gap 2 runs at `hpτ hp τv`, whose class, regions and schedules are `hp`'s, and the event's "no hidden types" conjunct
-  (`HoloSatSome`) refutes `holds` at `τv` (`holoSatSome_of_holds`);
+  gap 2 runs at `holoAtτ st hp τv` (`zk_sessions_recursive_fork_regVτ`), whose class, regions and schedules are
+  `holoAt st hp`'s own terms, and the event's "no hidden types" conjunct (`HoloSatSome`) refutes `holds` at `τv`
+  (`holoSatSome_of_holds`);
 * the hidden statement is the word the transported prover's runs open at R's level 0 against `cap` at each draw
   (`regStmt`), and the raw event is bounded by the typed sessions' at the transported prover (`prob_recT_le`,
   `verifies_zsOf`), where the event's checks at candidate 3 (`ChecksVR`) keep every session's own list at the whole
@@ -160,14 +161,18 @@ statement never takes it. -/
 theorem holoSatSome_of_holds {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)]
     [∀ k, Nonempty (CT k)] {st : Flock.Stmt} {hp : HoloParams} {τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog)}
     {x : HoloReg FlockLevel3.GF128 Refine.Dig}
-    (h : (holoInnerAt T CT st (Flock.Guarantees.hpτ hp τv)).holds x) :
+    (h : (holoInnerAtτ T CT st hp τv).holds x) :
     Flock.Guarantees.HoloSatSome st hp x := by
-  have h' : ∃ R : RegTable (holoAt st (Flock.Guarantees.hpτ hp τv)).cls,
-      (holoAt st (Flock.Guarantees.hpτ hp τv)).rsch.Close execArith x.w R ∧
-        ∃ z, (R.toStatement (holoAt st (Flock.Guarantees.hpτ hp τv)).τ
-          (holoAt st (Flock.Guarantees.hpτ hp τv)).regs).Satisfies z := h
+  have h' : ∃ R : RegTable (holoAtτ st hp τv).cls,
+      (holoAtτ st hp τv).rsch.Close execArith x.w R ∧
+        ∃ z, (R.toStatement (holoAtτ st hp τv).τ (holoAtτ st hp τv).regs).Satisfies z := h
   obtain ⟨R, hcl, z, hz⟩ := h'
   exact ⟨τv, R, hcl, z, hz⟩
+
+/- As in `AuditC3.lean`: past `holoSatSome_of_holds` (which does project `holoAt`'s fields), everything runs at one
+typing's protocol or against the statement's literals, so `holoAt` never needs unfolding, and keeping it applied makes
+any accidental two-typings crossing (which would delta-unfold `holoTableCL`'s body) fail fast. -/
+attribute [local irreducible] holoAt
 
 /-- **The recursive audit at candidate 3's soundness half, at every coin types `CT` and record map `im`.** -/
 theorem recursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
@@ -184,7 +189,8 @@ theorem recursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
   · left
     simp only [Typed, not_forall, not_exists] at hT
     obtain ⟨j₀, hj₀⟩ := hT
-    refine prob_recGame_zero _ σ fun ω t s => ?_
+    refine prob_recGame_zero (I := holoInnerAt (Flock.Guarantees.holoTys st hp) (CT st hp) st hp) _ σ
+      fun ω t s => ?_
     rw [prob_outerVR]
     exact prob_sessionsR_untypable hob (zr σ.1 ω t s.1) (fun j => (hCust σ.1 ω t s.1 j).1) (hF σ.1 ω t s.1) j₀
       (hj₀ (σ.1, ω, t, s.1)) _ (fun b hb => hb.2.1) _
@@ -204,14 +210,14 @@ theorem recursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
       exact hr R ω t R₂ j _ _ hx'.y₀ S' R'
     · rw [zsOf_neg zr _ hT R ω t R₂ j hx']
       exact hr _ _ _ _ j _ _ _ S' R'
-  rcases zk_sessions_recursive_fork_regV (Flock.Guarantees.holoTys st hp) (CT st hp) (Flock.Guarantees.hpτ hp τv)
+  rcases zk_sessions_recursive_fork_regVτ (Flock.Guarantees.holoTys st hp) (CT st hp) hp τv
     (classOk_of_accepts hacc.acceptsStmt) hA3
-    (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr hCust
-      hT)
+    (Flock.Guarantees.checkedC3 (I := holoInnerAtτ (Flock.Guarantees.holoTys st hp) (CT st hp) st hp τv) ish
+      (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr hCust hT)
     (valueSrcAll (fun t => coins (wr t).2) fun t => Flock.Guarantees.c3Of ish (Flock.Guarantees.innerHeld wr st reg t))
-    dg N hk hRw hM hρ hr'
-    (Flock.Guarantees.checkedT ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr hCust
-      hT σ)
+    ((holoAt st hp).rsch.sch.level₀) dg N hk hRw hM hρ hr'
+    (Flock.Guarantees.checkedT (I := holoInnerAtτ (Flock.Guarantees.holoTys st hp) (CT st hp) st hp τv) ish
+      (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr hCust hT σ)
     wmsg Sk cmt msg cap salt hbrv
     with hf | hf | hf | hf | hf | hf | hf | hb
   · exact Or.inr (Or.inr (Or.inl hf))
@@ -221,18 +227,22 @@ theorem recursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
   · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl hf)))))
   · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl hf))))))
   · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl hf)))))))
-  · refine Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (le_trans (prob_recT_le hob zr
+  · refine Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (le_trans (prob_recT_le
+      (I := holoInnerAtτ (Flock.Guarantees.holoTys st hp) (CT st hp) st hp τv) hob zr
       (fun R ω t R₂ j => And.left (hCust R ω t R₂ j)) hT hF σ _
-      (fun o => AcceptsV (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg)
+      (fun o => AcceptsV (Flock.Guarantees.checkedC3
+          (I := holoInnerAtτ (Flock.Guarantees.holoTys st hp) (CT st hp) st hp τv) ish
+          (Flock.Guarantees.innerHeld wr st reg)
           (fun t => coins (wr t).2) bind rows zr hCust hT o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
-        ¬ (holoInnerAt (Flock.Guarantees.holoTys st hp) (CT st hp) st (Flock.Guarantees.hpτ hp τv)).holds
-          (Flock.Guarantees.regStmt (Flock.Guarantees.holoTys st hp) (CT st hp) st (Flock.Guarantees.hpτ hp τv)
-          (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr
-            hCust hT) dg N k Rw wmsg
-          (Flock.Guarantees.checkedT ish (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr
-            hCust hT σ) cap o.1 o.2.1))
+        ¬ (holoInnerAtτ (Flock.Guarantees.holoTys st hp) (CT st hp) st hp τv).holds
+          (Flock.Guarantees.regStmtτ (Flock.Guarantees.holoTys st hp) (CT st hp) st hp τv
+          (Flock.Guarantees.checkedC3 (I := holoInnerAtτ (Flock.Guarantees.holoTys st hp) (CT st hp) st hp τv) ish
+            (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr hCust hT) dg N k Rw wmsg
+          (Flock.Guarantees.checkedT (I := holoInnerAtτ (Flock.Guarantees.holoTys st hp) (CT st hp) st hp τv) ish
+            (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr hCust hT σ) cap o.1 o.2.1))
       (fun o ho => ho.2.1) (fun o hlen hall ho =>
-        ⟨acceptsV_checked (cs := Flock.Guarantees.innerHeld wr st reg) (coins := fun t => coins (wr t).2) hlen.ge hall
+        ⟨acceptsV_checked (I := holoInnerAtτ (Flock.Guarantees.holoTys st hp) (CT st hp) st hp τv)
+          (cs := Flock.Guarantees.innerHeld wr st reg) (coins := fun t => coins (wr t).2) hlen.ge hall
           (verifies_zsOf zr _ hT o.1 o.2.1 o.2.2.1 o.2.2.2 hall (acceptsVR_of_V ho.2.1.1) ho.2.1.2).1 ho.2.2.1,
           fun hh => ho.2.2.2 (holoSatSome_of_holds hh)⟩)) hb))))))))
 
