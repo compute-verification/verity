@@ -38,6 +38,7 @@ class Count:
         self.mul = 0
         self.add = 0
         self.lookup = 0
+        self.dp4a = 0
 
 
 def mm(X, Y, c):
@@ -134,6 +135,29 @@ def attack_strassen(U, V, W, Z, L, c):
     return out
 
 
+def attack_dp4a_split(U, V, W, Z, L, c, bits=8):
+    """A = 0: G_s = lo_s + 2^bits·hi_s with lo_s in one signed bits-bit slice and hi_s sparse, and
+    T_s = T_{s-1} + lo_s Zᵀ + 2^bits·(hi_s Zᵀ). lo_s Zᵀ is ceil(r/4) IDP.4A a word (or the int8 tensor route's
+    MMAs); hi_s Zᵀ is one IDP.4A a word for each group of 4 columns of the row's hi_s that holds a nonzero (a warp's
+    words share a row, so the count is warp-uniform), and one shift-add into T_s for a row with any."""
+    n, r = U.shape
+    half = 1 << (bits - 1)
+    groups = -(-r // 4)
+    T = np.zeros((n, n), dtype=np.int64)
+    out = []
+    for s in range(n // L):
+        Ds = mm(V[s * L:(s + 1) * L].T, W[s * L:(s + 1) * L], c)
+        Gs = mm(U, Ds, c)
+        lo = (Gs + half) % (2 * half) - half
+        hi = (Gs - lo) // (2 * half)
+        T = T + lo @ Z.T + ((hi @ Z.T) << bits)
+        hot = np.pad(hi != 0, ((0, 0), (0, 4 * groups - r))).reshape(n, groups, 4).any(axis=2).sum(axis=1)
+        c.dp4a += n * n * groups + n * int(hot.sum())
+        c.add += n * int((hot > 0).sum())
+        out.append(T.copy())
+    return out
+
+
 def attack_four_russians(U, V, W, Z, L, c, t):
     """Z ∈ {±1}: P_s[i, k] = Σ_g LUT_{s,i,g}[pattern_g(Z[k])], one lookup a group of t columns of G_s."""
     n, r = U.shape
@@ -192,15 +216,21 @@ def check():
         t = min(r, 8)
         res[f"four russians t={t}"] = (all(np.array_equal(x, y) for x, y in
                                             zip(attack_four_russians(U, V, W, Z, L, c, t), honest0)), c)
+        for bits in (8, 3):
+            c = Count()
+            res[f"idp4a lo+hi, {bits}-bit lo"] = (all(np.array_equal(x, y) for x, y in
+                                                      zip(attack_dp4a_split(U, V, W, Z, L, c, bits), honest0)), c)
         for name, (ok, cnt) in res.items():
             words = n * n * (n // L)
             rows.append(dict(r=r, route=name, exact=bool(ok), mul_per_word=cnt.mul / words,
-                             add_per_word=cnt.add / words, lookup_per_word=cnt.lookup / words))
-    print(f"n = {n}, L = {L}, factors ±1, counts a committed word a block (honest: {L} MACs)")
-    print(f"{'r':>3} {'route':<22} {'exact':<6} {'mul/word':>9} {'add/word':>9} {'lookup/word':>11}")
+                             add_per_word=cnt.add / words, lookup_per_word=cnt.lookup / words,
+                             dp4a_per_word=cnt.dp4a / words))
+    print(f"n = {n}, L = {L}, factors ±1, counts a committed word a block (honest: {L} MACs); mul/add count the")
+    print("matrix products (the IDP.4A route's G_s and D_s only), dp4a the IDP.4A ops of its main term")
+    print(f"{'r':>3} {'route':<22} {'exact':<6} {'mul/word':>9} {'add/word':>9} {'lookup/word':>11} {'dp4a/word':>9}")
     for row in rows:
         print(f"{row['r']:>3} {row['route']:<22} {str(row['exact']):<6} {row['mul_per_word']:>9.2f} "
-              f"{row['add_per_word']:>9.2f} {row['lookup_per_word']:>11.2f}")
+              f"{row['add_per_word']:>9.2f} {row['lookup_per_word']:>11.2f} {row['dp4a_per_word']:>9.2f}")
     bad = [row for row in rows if not row["exact"]]
     if bad:
         sys.exit(f"inexact routes: {bad}")
@@ -219,10 +249,17 @@ PRICES = {
 }
 
 
-def overflow_rows(r, L, cap=127):
-    """Fraction of G_s rows (r entries, each about N(0, r L) for ±1 factors) with an entry beyond cap."""
+def overflow(r, L, cap=127):
+    """attack_dp4a_split's high slice, expected a word a block: the IDP.4A ops (groups of 4 with an entry of G_s
+    beyond cap) and the shift-adds (rows with any). An entry of G_s is about N(0, r L) for ±1 factors."""
     p = math.erfc((cap + 0.5) / math.sqrt(2 * r * L))
-    return 1 - (1 - p) ** r
+    hot = sum(1 - (1 - p) ** min(4, r - 4 * g) for g in range(math.ceil(r / 4)))
+    return hot, 1 - (1 - p) ** r
+
+
+def typical_max(r, L, sigmas=8):
+    """|G_s| that no entry of an n = 8192 instance reaches in practice (8 standard deviations: P < 2^-49 an entry)."""
+    return sigmas * math.sqrt(r * L)
 
 
 def bits_signed(v):
@@ -237,22 +274,26 @@ def routes(r, L, n, price, beta=1):
     out = {}
     out["honest-shaped (E_s F_s, tensor)"] = L
     sig8 = math.ceil(bits_signed(g_max) / 8)
-    out["tensor int8 (K = 32 or 16: both hold the pipe 16 cycles)"] = 32 * math.ceil(r / 32)
-    if g_max <= 2048:
-        out["tensor FP16 (k16), FP32 accumulate"] = 32 * math.ceil(r / 16)
     conv = p["iop"]                     # magic-number FP32 -> s32 fold into the running word: one IADD3
     lower = (r * r / n + r * r * L / (n * n)) * p["fma"]   # U D_s and D_s, spread over the block's n^2 words
+    # |G_s| is about sqrt(r L), far below its bound r L: one int8 slice, and a sparse high slice on IDP.4A for the
+    # entries beyond 127 (attack_dp4a_split). That needs |G_s| < 2^15; beyond it, sig8 dense slices
+    split = beta == 1 and g_max < 2 ** 15
+    hot, q = overflow(r, L) if split else (0.0, 0.0)
+    hi = hot * p["dp4a_op"] + q * p["iop"]
+    if split:
+        out["tensor int8 lo (K = 32 or 16 hold the pipe alike) + sparse hi on IDP.4A"] = 32 * math.ceil(r / 32) + hi
+        out["CUDA IDP.4A, G_s = int8 lo + sparse hi"] = math.ceil(r / 4) * p["dp4a_op"] + hi + lower
+    else:
+        out[f"tensor int8, G_s in {sig8} slices"] = 32 * math.ceil(r * sig8 / 32)
+        out[f"CUDA IDP.4A, G_s in {sig8} int8 slices"] = math.ceil(r * sig8 / 4) * p["dp4a_op"] + p["iop"] + lower
+    if (typical_max(r, L) if beta == 1 else g_max) <= 2048:
+        out["tensor FP16 (k16), FP32 accumulate, magic fold"] = 32 * math.ceil(r / 16) + conv
     if p_max < 2 ** 22:
         out["CUDA FP32 FMA, r a word"] = r * p["fma"] + conv + lower
         if r >= 2 and r % 2 == 0:
             out["CUDA FP32, Strassen 1 level on r"] = 7 * r / 8 * p["fma"] + 2 * p["add"] + conv + lower
     out["CUDA IMAD (exact mod 2^32)"] = r * p["imad"] + lower
-    # one int8 slice of G_s for the rows that fit (|G| is about sqrt(r L), far below its bound r L); the rest take
-    # sig8 slices, a second accumulator and one op to merge them
-    q = overflow_rows(r, L) if beta == 1 else 1.0
-    one = math.ceil(r / 4) * p["dp4a_op"]
-    out["CUDA IDP.4A, G_s in one int8 slice (rare rows in two)"] = (
-        (1 - q) * one + q * (math.ceil(r * sig8 / 4) * p["dp4a_op"] + p["iop"]) + lower)
     if g_max < 2 ** 15:
         out["CUDA IDP.2A (16-bit G_s × 8-bit Z)"] = math.ceil(r / 2) * p["dp4a_op"] + lower
     # RS-D2F's rank-metric Steiner trees (note:20261015T1816Z-draft-rs-d2-lowrank-floor): their Steiner points are
@@ -338,20 +379,33 @@ MIX = (0.861, 0.67)
 DP4A_TIME = 16.6
 
 
+def best_split(t_ten, i_ten, i_dp, fm, fi):
+    """Most words a unit with x words on the tensor route (t_ten tensor units and i_ten integer units each) and y on
+    the IDP.4A route (i_dp integer units each), the tensor pipe at most fm busy and the integer pipe at most fi."""
+    x = min(fm / t_ten, fi / i_ten if i_ten else math.inf)
+    return max(x + (fi - x * i_ten) / i_dp, fi / i_dp)
+
+
 def time_overlap(r, L):
-    """Units a word a block with both pipes busy at MIX: the tensor route beside the one-slice IDP.4A route, for the
-    attack (inner dimension r) and for the honest prover (inner dimension L), and their ratio."""
+    """Units a word a block with both pipes busy at MIX: the attack (inner dimension r) splits its words between the
+    int8 tensor route, whose sparse high slice runs on IDP.4A, and the IDP.4A route; the honest prover (inner
+    dimension L) between its tensor kernel and IDP.4A. Returns both costs and their ratio."""
     fm, fi = MIX
-    att = 1 / (fm / (32 * math.ceil(r / 32)) + fi / (DP4A_TIME * math.ceil(r / 4)))
-    hon = 1 / max(1 / L, fm / L + fi / (DP4A_TIME * L / 4))
+    hot, q = overflow(r, L)
+    i_dp = DP4A_TIME * (math.ceil(r / 4) + hot + q)
+    tensor = [(32 * math.ceil(r / 32), DP4A_TIME * (hot + q))]
+    if typical_max(r, L) <= 2048:
+        tensor.append((32 * math.ceil(r / 16), PRICES["time"]["iop"]))   # FP16 k16, one IADD3 a word to fold
+    att = min([i_dp] + [min(t + i, 1 / best_split(t, i, i_dp, fm, fi)) for t, i in tensor])
+    hon = min(L, 1 / best_split(L, 0.0, DP4A_TIME * L / 4, fm, fi))
     return att, hon, min(att, hon) / hon
 
 
 def time_overlap_threshold(L, eps):
-    r = 1
-    while time_overlap(r, L)[2] < 1 - eps:
-        r += 1
-    return r
+    for r in range(4 * L, 0, -1):
+        if time_overlap(r, L)[2] < 1 - eps:
+            return r + 1
+    return 1
 
 
 def threshold(L, n, price, eps, rho, beta=1, rmax=4096, lookups=True):
@@ -410,8 +464,8 @@ def table(json_out=None):
     print("\n== time with the tensor and integer pipes overlapped at the measured mix point "
           f"(tensor {MIX[0]}, IDP.4A {MIX[1]})")
     res["time_overlap"] = []
-    for L in (32, 64):
-        for r in (1, 4, 8, 16, 24, 28, 32, 48, 64):
+    for L in (32, 64, 128):
+        for r in (1, 4, 8, 16, 24, 28, 32, 40, 48, 56, 64, 96):
             att, hon, ratio = time_overlap(r, L)
             res["time_overlap"].append(dict(L=L, r=r, attack=att, honest=hon, ratio=ratio))
             print(f"   L={L:>3} r={r:>3}  attack {att:6.2f}  honest {hon:6.2f}  ratio {ratio:5.2f}")
