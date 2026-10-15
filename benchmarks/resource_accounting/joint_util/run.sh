@@ -13,6 +13,7 @@
 # h0 = 9 (the pass's unfused tree path), _p0 its side stream at priority 0, _q Pearl-C's stream at the greatest priority,
 # _bf16 the GEMM in BF16. SECONDS_RATE, SECONDS_NSYS: each window; WEIGHTS: Pearl-C's distinct weights; GIB: the store.
 set -uo pipefail
+ulimit -c 0
 OUT=${OUT:-${RESEARCH_RUN_DIR:?}/out}; mkdir -p "$OUT"
 J=benchmarks/resource_accounting/joint_util
 CUDA=/usr/local/cuda-13.0

@@ -430,4 +430,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    rc = main()
+    sys.stdout.flush()
+    sys.stderr.flush()
+    # the interpreter's teardown of a joint run aborts ("terminate called without an active exception") after the JSON is out
+    os._exit(rc)
