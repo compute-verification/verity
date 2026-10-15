@@ -11,7 +11,8 @@
 #
 # PLAN is the prover's sessions (honest, skip:F; comma-separated, one session each); GIB the store across every GPU
 # (whole 1 GiB chunks); WINDOWS, WINDOW_MS, SAMPLES, JITTER_MS the sessions'; VERIFIER_CPUS and PROVER_CPUS the cores
-# each process is pinned to; MAXMIN the lease's minutes.
+# each process is pinned to; MAXMIN the lease's minutes; PY the Python (default the fill's torch venv; a verifier needs
+# only numpy, so on a CPU node any venv with it).
 #
 # With PROVER_SLICE the prover runs at nice 0 in a scope of that top-level slice (root's systemd-run, then this user
 # again), on PROVER_CPUS and in at most PROVER_MEM_GB. Node 2's user slice holds only 0-119, where nice 19 doesn't make
