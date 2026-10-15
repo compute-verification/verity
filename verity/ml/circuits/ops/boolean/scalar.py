@@ -5,6 +5,8 @@ operations of the served FP8 linear, around its tensor-core steps, and of NVFP4 
     Bf16GtStrict_v2   (a, b: Array<16, Value<1>>) -> Value<1>                            word view: Bf16GtStrict_v1
     SelectBf16_v2     (c: Value<1>, a, b: Array<16, Value<1>>) -> Array<16, Value<1>>    word view: SelectBf16_v1
     SelectI32_v2      (c: Value<1>, a, b: Array<32, Value<1>>) -> Array<32, Value<1>>    word view: SelectI32_v1
+    SelectF32_v2      (c: Value<1>, a, b: Array<32, Value<1>>) -> Array<32, Value<1>>    word view: SelectF32_v1
+    F32Eq_v2          (a, b: Array<32, Value<1>>) -> Value<1>                            word view: F32Eq_v1
     BitAnd_v2         (a, b: Value<1>) -> Value<1>                                      word view: BitAnd_v1
     F32Add_v3, F32Mul_v3, F32Div_v3    (a, b: Array<32, Value<1>>) -> Array<32, Value<1>>      word view: their _v1
     F32Fma_v3                          (a, b, c: Array<32, Value<1>>) -> Array<32, Value<1>>   word view: F32Fma_v1
@@ -39,9 +41,9 @@ from verity.ml.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce
 from .softmax import _eq_const, _is_nan, f32_gt
 from verity.ml.circuits.boolean.trace import definition
 
-__all__ = ["BitAnd", "Bf16GtStrict", "Bf16ToF32", "E4m3ToF32", "F32Add", "F32Div", "F32Fabs", "F32Fma", "F32Fmaxf", "F32Fminf",
-           "F32Mul", "F32ToE2m1Sat", "F32ToE4m3Sat", "SelectBf16", "SelectI32", "bf16_gt_strict", "bf16_key", "e4m3_to_f32",
-           "f32_key", "f32_to_e2m1_sat", "gt_u", "select"]
+__all__ = ["BitAnd", "Bf16GtStrict", "Bf16ToF32", "E4m3ToF32", "F32Add", "F32Div", "F32Eq", "F32Fabs", "F32Fma", "F32Fmaxf",
+           "F32Fminf", "F32Mul", "F32ToE2m1Sat", "F32ToE4m3Sat", "SelectBf16", "SelectF32", "SelectI32", "bf16_gt_strict", "bf16_key",
+           "e4m3_to_f32", "f32_eq", "f32_key", "f32_to_e2m1_sat", "gt_u", "select"]
 
 BIT = BL.BIT
 BF16 = Array(16, BIT)
@@ -88,6 +90,13 @@ def bf16_gt_strict(C, a, b):
 def select(C, c, a, b):
     """``c ? a : b`` bitwise, ``c`` one bit (one AND per bit)."""
     return mux(C, c, a, b)
+
+
+def f32_eq(C, a, b):
+    """``F32Eq_v1``: IEEE a == b, neither a NaN and the encodings equal or both zeros (+0 == -0)."""
+    same = and_reduce(C, [NOT(x ^ y) for x, y in zip(a, b)])
+    zeros = NOT(OR(C, or_reduce(C, a[:31]), or_reduce(C, b[:31])))
+    return C.AND(C.AND(NOT(_is_nan(C, a)), NOT(_is_nan(C, b))), OR(C, same, zeros))
 
 
 def _ult_const(C, w, k: int):
@@ -187,6 +196,10 @@ SelectBf16 = definition("SelectBf16", 2, lambda C, c, a, b: select(C, c[0], a, b
                         word=S.SelectBf16, doc="c ? a : b on bf16 bits: SelectBf16_v1")
 SelectI32 = definition("SelectI32", 2, lambda C, c, a, b: select(C, c[0], a, b), (("c", BIT), ("a", I32), ("b", I32)), I32,
                        word=S.SelectI32, doc="c ? a : b on i32 bits: SelectI32_v1")
+SelectF32 = definition("SelectF32", 2, lambda C, c, a, b: select(C, c[0], a, b), (("c", BIT), ("a", F32), ("b", F32)), F32,
+                       word=S.SelectF32, doc="c ? a : b on f32 bits: SelectF32_v1")
+F32Eq = definition("F32Eq", 2, lambda C, a, b: [f32_eq(C, a, b)], _AB, BIT, word=S.F32Eq,
+                   doc="a == b on f32 bits: F32Eq_v1 (NaN unequal to everything, +0 == -0)")
 F32Fabs = definition("F32Fabs", 2, lambda C, x: list(x[:31]) + [ZERO], (("x", F32),), F32, word=S.F32Fabs,
                      doc="fabsf on bits: F32Fabs_v1, the sign bit cleared")
 F32Fmaxf = definition("F32Fmaxf", 2, lambda C, a, b: fmaxmin(C, a, b, True), _AB, F32, word=S.F32Fmaxf,

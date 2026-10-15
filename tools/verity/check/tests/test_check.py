@@ -470,6 +470,22 @@ def test_a_recorded_run_refuses_to_skip_the_store(monkeypatch):
     monkeypatch.setenv("VERITY_SKIP_STORE", "1")
     assert CHECK.main([]) == 2
 
+def test_circuit_check_has_the_whole_slot_only_when_neither_pytest_nor_lean_runs_beside_it(tmp_path, monkeypatch):
+    """12 Oct 17:41Z: an unsharded check (r20261012-155204-6475) gave circuit-check the slot's whole 560 GiB while pytest and
+    lean-audit held 160 to 350 GiB beside it, and the kernel OOM-killed a 141 GiB circuit-check worker."""
+    monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
+    monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
+    monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
+
+    def mem(only):
+        [cc] = [s for g in CHECK.groups(tmp_path, 16, only=only) for s in g if s[0] == "circuit-check"]
+        return cc[1][cc[1].index("--mem-gb") + 1]
+
+    assert mem(None) == mem(["circuit-check", "pytest"]) == mem(["circuit-check", "lean-build"]) == "210"
+    assert mem(["flock-circuit-build", "circuit-check", "flock-rust-tests"]) == "560"
+    assert CHECK.cc_mem_gb(400, True) == 100 and CHECK.cc_mem_gb(100, True) == 25
+
+
 def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
     monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
@@ -477,7 +493,7 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     assert "--mem-gb" not in CHECK.groups(tmp_path, 16)[1][1][1]
     monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
     (pt,), (build, cc, rust), (lean,) = CHECK.groups(tmp_path, 16)
-    assert cc[1][cc[1].index("--mem-gb") + 1] == "560", "a slot's mem= caps circuit-check's own budget"
+    assert cc[1][cc[1].index("--mem-gb") + 1] == "210", "a slot's mem=, less what pytest and Lean hold beside it, caps circuit-check"
     assert build[0] == "flock-circuit-build" and build[1][-1].endswith("verity/ml/flock/check_build.sh")
     assert rust[0] == "flock-rust-tests" and rust[1][-2:] == [build[1][-1], "test"] and "CARGO_BUILD_JOBS=8" in rust[1]
     assert pt[1][1].endswith("tools/verity/check/suites.py") and pt[1][pt[1].index("--jobs") + 1] == "8" and "--fresh" not in pt[1]
@@ -724,6 +740,47 @@ def test_a_build_that_fails_without_compiling_does_not_halt(tmp_path, monkeypatc
     _fake_run(monkeypatch, [[("flock-circuit-build", build, tmp_path)]])
     passed, (rec,) = CHECK.run(tmp_path, 1, keep_going=True)
     assert not passed and rec["status"] == "failed" and "halts" not in rec
+
+
+def test_a_cancelled_recorded_check_still_publishes_the_passes_its_steps_stored(tmp_path, monkeypatch):
+    """`research cancel`'s SIGTERM while `slow` runs (the FIFO): `slow` is stopped, `after-slow` never starts, and the run still
+    writes its result, `not_run`, with the pack of the pass `passes` stored before it, and exits 143.  Before, the signal killed
+    check.py, and a cancelled check's passes (6f10's 26 minutes, 12 Oct) were run again."""
+    import json
+    import os
+    import signal
+    import tarfile
+    import threading
+
+    gate, marker = _gate(tmp_path, monkeypatch), tmp_path / "never-ran"
+    run_dir, cache = tmp_path / "run", tmp_path / "tests-cache"
+    run_dir.mkdir()
+    for k, v in (("RESEARCH_RUN_DIR", run_dir), ("RESEARCH_RUN_ID", "r20261012-000000-abcd"), ("VERITY_TEST_CACHE", cache),
+                 ("CHECK_CACHE", tmp_path / "check-cache")):
+        monkeypatch.setenv(k, str(v))
+    monkeypatch.setattr(CHECK.SUITES, "foreign", lambda members, env: None)
+    passes = _py("import pathlib, sys\np = pathlib.Path(sys.argv[1])\np.parent.mkdir(parents=True)\np.write_text('{}')",
+                 cache / "pkg" / "k1.json")
+    slow = _py("import signal, sys\nwith open(sys.argv[1], 'w') as f:\n    f.write('x')\nsignal.pause()", gate)
+    _fake_run(monkeypatch, [[("passes", passes, tmp_path), ("slow", slow, tmp_path),
+                             ("after-slow", _py("open(__import__('sys').argv[1], 'w')", marker), tmp_path)]])
+
+    def cancel():
+        with open(gate) as f:
+            f.read(1)
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    threading.Thread(target=cancel, daemon=True).start()
+    assert CHECK.main([]) == 143
+    assert signal.getsignal(signal.SIGTERM) is not CHECK._terminated
+    doc = json.loads((run_dir / "result.json").read_text())
+    by = {s["step"]: s for s in doc["steps"]}
+    assert by["passes"]["status"] == "passed" and by["slow"]["status"] == "stopped"
+    assert by["slow"]["detail"] == "stopped: check got SIGTERM" and "after-slow" not in by and not marker.exists()
+    assert doc["validation"]["status"] == "not_run" and doc["validation"]["detail"].startswith("stopped by SIGTERM: ")
+    assert "verdicts.tar.gz" in doc["artifacts"] and doc["verdicts"]["out"]["entries"] == 1
+    with tarfile.open(run_dir / "verdicts.tar.gz") as tar:
+        assert tar.getnames() == ["tests/pkg/k1.json"]
 
 
 def test_under_keep_going_only_a_halting_step_stops_the_run_and_it_is_named(tmp_path):
@@ -992,6 +1049,23 @@ def test_a_change_to_the_lean_verifier_alone_needs_its_gates_and_misses_the_agre
     assert CHECK.agreement_closure(changed) == changed
 
 
+def test_every_file_the_agreement_reads_needs_the_agreement_to_merge():
+    """The rule `check.py --record` sends the upstream build by, and the gate refuses by, covers each tracked file the agreement
+    reads (`agreement_closure`: its scripts and the Lean package `flock-verify` is built from) but the docs, so a change to any
+    of them can't land on a check that skipped it (13 Oct: the rule was read as covering verity/ml/flock/ alone)."""
+    from research.merge import rule_touches
+
+    spec2 = importlib.util.spec_from_file_location("check_tool_reads", ROOT / "tools" / "verity" / "check" / "tool.py")
+    tool = importlib.util.module_from_spec(spec2)
+    spec2.loader.exec_module(tool)
+    rule = list(tool.CHECK.merge_requires["lean-agreement"])
+    reads = CHECK.agreement_closure(CHECK.tracked_files(ROOT))
+    lean = CHECK.FLOCK_LEAN.relative_to(ROOT).as_posix() + "/"
+    assert any(f.startswith(lean) and f.endswith(".lean") for f in reads)
+    # the rule leaves out the docs only, which the agreement never reads (`test_the_agreement_is_not_required_for_docs_alone`)
+    assert {f.rsplit("/", 1)[-1] for f in reads if not rule_touches(rule, [f])} <= {"README.md", "PROTOCOL.md"}
+
+
 def test_a_check_reports_per_step_what_it_reused_and_what_forced_each_rerun(tmp_path, monkeypatch, capsys):
     """`reuse`, at the top of result.json and printed in the log: a flag or input that turns reuse off shows as a low rate there,
     with each suite run again and the inputs that forced it."""
@@ -1005,7 +1079,7 @@ def test_a_check_reports_per_step_what_it_reused_and_what_forced_each_rerun(tmp_
     (tmp_path / "lean-audit").mkdir()
     (tmp_path / "lean-audit" / "audit.json").write_text(json.dumps({"cached": {"P": "k"}, "packages": [{"package": "P"}, {"package": "Q"}]}))
     done = [{"step": "pytest", "status": "passed"},
-            {"step": "circuit-check", "status": "passed", "cache": {"hits": 7, "stored": 2, "untraced": [{}], "errors": [], "changed": ["t"]}},
+            {"step": "circuit-check", "status": "passed", "cache": {"hits": 7, "stored": 2, "untraced": 1, "errors": 0, "changed": 1}},
             {"step": "flock-rust-tests", "status": "passed", "cache": {"hit": "k"}},
             {"step": "lean-agreement", "status": "passed", "cache": {"stored": "k"}},
             {"step": "lean-audit", "status": "passed"}, {"step": "lean-build", "status": "passed"}]
@@ -1026,6 +1100,20 @@ def test_a_check_reports_per_step_what_it_reused_and_what_forced_each_rerun(tmp_
     CHECK.write_result(tmp_path, True, [{**s, "seconds": 1.0} for s in done])
     doc = json.loads((tmp_path / "result.json").read_text())
     assert list(doc)[:4] == ["schema", "kind", "run_id", "reuse"] and doc["reuse"] == r
+
+
+def test_the_circuit_check_step_records_its_cache_as_counts(tmp_path):
+    """result.json's steps are its attempt's meta, which the store caps at 256 KiB: a circuit-check cache listing every target
+    it could not store (each one, once its workers forked) made a passing check's attempt unpublishable. The step keeps counts;
+    the lists stay in circuit-check.json, an artifact."""
+    import json
+
+    cache = {"hits": 0, "stored": 3, "untraced": [{"target": f"T{i}", "because": ["os.fork "] * 3} for i in range(4000)],
+             "errors": [{"target": "E"}], "changed": []}
+    (tmp_path / "circuit-check.json").write_text(json.dumps({"cache": cache}))
+    rec = CHECK._step("circuit-check", _py("pass"), tmp_path, tmp_path, False, CHECK.Steps(tmp_path, keep_going=True))
+    assert rec["status"] == "passed" and rec["cache"] == {"hits": 0, "stored": 3, "untraced": 4000, "errors": 1, "changed": 0}
+    assert CHECK.reuse(tmp_path, [rec])["steps"]["circuit-check"]["not_stored"] == {"untraced": 4000, "errors": 1, "changed": 0}
 
 
 def test_train_sh_refuses_every_flag_but_agreement(tmp_path):

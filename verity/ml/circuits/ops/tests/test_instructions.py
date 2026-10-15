@@ -33,6 +33,7 @@ EXPECTED_IDS = {
     "sm89.mma.m16n8k32.e5m2",
     "sm90.wgmma.m64n8k32.e4m3",
     "sm90.wgmma.m64n8k32.e5m2",
+    "sm90.wgmma.m64n8k8.tf32",
     "sm90.mma.m16n8k32.e4m3",
     "sm120.mma.m16n8k16.bf16",
     "sm120.mma.m16n8k32.e4m3",

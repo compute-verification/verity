@@ -54,7 +54,9 @@ _ACTIVE = bool(os.environ.get("VERITY_SUITE_ROOT") and os.environ.get("VERITY_SU
 
 _root = os.path.realpath(os.environ.get("VERITY_SUITE_ROOT", ""))
 _watch = frozenset(os.path.normpath(os.path.join(_root, p)) for p in json.loads(os.environ.get("VERITY_SUITE_WATCH", "[]")))
-_outside: set[str] = set()
+#: file read outside the inputs (a cached module as its source) -> the test module reading when it was first opened ("*": a
+#: conftest or session fixture), so a failure names what was read and by whom, and drive can attribute it to a PR
+_outside: dict[str, str] = {}
 _watched: set[str] = set()
 _tried: set[str] = set()
 _record: dict[str, set] = {"distributions": set(), "missing": set()}      # from workers, in the controller
@@ -65,7 +67,11 @@ _suite = os.path.join(os.path.realpath(os.getcwd()), "")         # suites.py run
 _current = "*"                                                   # the test module being collected or run
 _test = ""                                                       # the node id of the test running, if one is
 _reads: dict[str, set[str]] = {}                                 # test module (or "*") -> other test modules it opened
-_outcomes: dict[str, float | None] = {}                          # node id -> call seconds, None once a phase did not pass
+#: node id -> seconds of its setup and call, None once a phase did not pass. Setup counts: a module-scoped fixture's setup goes
+#: to the first test that needs it, and ordering by call alone started those late (test_lean_witness, 12 Oct: 138 s of calls
+#: behind 1,270-1,475 s of `f1` setup per worker). A test enters only once its call passed: one stopped mid-call never counts
+_outcomes: dict[str, float | None] = {}
+_setup_s: dict[str, float] = {}                                  # node id -> seconds of its passed setup, until its call reports
 _failed: set[str] = set()
 _traced: set[str] = set()                                        # "F<tab>file" / "L<tab>directory" this process read
 _untraced: dict[str, set[str]] = {}                              # test module (or "*") -> programs no tracer sees into
@@ -78,11 +84,12 @@ def _child_reads():
                                                                                      "verity_suite_reads.py"))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    return mod.Reads()
+    return mod
 
 
-_forked = _child_reads() if _ACTIVE and os.environ.get("VERITY_SUITE_READS") else None
-_tracer = _child_reads() if _ACTIVE else None
+_reads_mod = _child_reads() if _ACTIVE else None
+_forked = _reads_mod.Reads() if _reads_mod is not None and os.environ.get("VERITY_SUITE_READS") else None
+_tracer = _reads_mod.Reads() if _reads_mod is not None else None
 
 
 def _audit(event: str, args: tuple) -> None:
@@ -91,14 +98,16 @@ def _audit(event: str, args: tuple) -> None:
             _forked.seen(event, args, _current, _test)
         return
     try:
-        hit = _tracer.trace(event, args) if _tracer is not None else None
+        hits = _tracer.trace(event, args) if _tracer is not None else []
     except (TypeError, ValueError):
-        hit = None
-    if hit is not None:
-        if hit[0] == "X":
-            _untraced.setdefault(_current, set()).add(hit[1])
+        hits = []
+    for kind, rel in hits:
+        if kind == "X":
+            _untraced.setdefault(_current, set()).add(rel)
+        elif kind == "O":
+            _outside.setdefault(rel, _current)
         else:
-            _traced.add(f"{hit[0]}\t{hit[1]}")
+            _traced.add(f"{kind}\t{rel}")
     if event == "import":
         if args and isinstance(args[0], str):
             _tried.add(args[0].partition(".")[0])
@@ -113,7 +122,7 @@ def _audit(event: str, args: tuple) -> None:
     if path in _watch:
         _watched.add(os.path.relpath(path, _root))
     if _tracer.outside(path):
-        _outside.add(os.path.relpath(path, _root))
+        _outside.setdefault(os.path.relpath(_reads_mod._source(path), _root), _current)
     name = os.path.basename(path)
     if path.startswith(_suite) and name.startswith("test_") and name.endswith(".py"):
         rel = os.path.relpath(path, _root)
@@ -287,8 +296,10 @@ def pytest_runtest_logreport(report) -> None:
         _outcomes[report.nodeid] = None
         if report.outcome == "failed":
             _failed.add(report.nodeid)
+    elif report.when == "setup":
+        _setup_s[report.nodeid] = report.duration
     elif report.when == "call" and _outcomes.get(report.nodeid, 0.0) is not None:
-        _outcomes[report.nodeid] = report.duration
+        _outcomes[report.nodeid] = _setup_s.pop(report.nodeid, 0.0) + report.duration
     if report.when == "call":
         _counts[report.outcome] += 1
         if report.duration > SLOW_S and "slow" not in report.keywords:
@@ -307,7 +318,8 @@ def pytest_testnodedown(node, error) -> None:
     if record is None:
         _unguarded.append(node.gateway.id)
     else:
-        _outside.update(record["outside"])
+        for p, m in record["outside"].items():
+            _outside.setdefault(p, m)
         _watched.update(record["watched"])
         for k in _record:
             _record[k].update(record[k])
@@ -326,13 +338,13 @@ def pytest_sessionfinish(session, exitstatus) -> None:
     used = _used()
     reads = {m: sorted(files) for m, files in sorted(_reads.items())}
     if hasattr(config, "workerinput"):
-        config.workeroutput[_KEY] = {"outside": sorted(_outside), "watched": sorted(_watched), "reads": reads, **used,
+        config.workeroutput[_KEY] = {"outside": dict(sorted(_outside.items())), "watched": sorted(_watched), "reads": reads, **used,
                                      "traced": sorted(_traced), "untraced": {m: sorted(v) for m, v in sorted(_untraced.items())}}
         return
     used = {k: sorted(set(v) | _record[k]) for k, v in used.items()}
     passed = {n: round(s, 3) for n, s in sorted(_outcomes.items()) if s is not None}
     untraced = _untraced if _workers_untraced is None else _workers_untraced     # a controller's own programs are its workers
-    payload = json.dumps({"counts": _counts, "outside": sorted(_outside), "unguarded": _unguarded, "unmarked_slow": _slow,
+    payload = json.dumps({"counts": _counts, "outside": dict(sorted(_outside.items())), "unguarded": _unguarded, "unmarked_slow": _slow,
                           "watched": sorted(_watched), "passed": passed, "failed": sorted(_failed), "reads": reads, **used,
                           "traced": sorted(_traced), "untraced": {m: sorted(v) for m, v in sorted(untraced.items())}},
                          indent=1)

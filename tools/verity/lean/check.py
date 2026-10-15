@@ -11,6 +11,14 @@ environment extension loaded, so none of the package's code runs), and replays t
 
     axioms       a declaration of an audited module uses an axiom outside `axioms` (default propext, Classical.choice,
                  Quot.sound): `sorryAx` is a sorry, `Lean.ofReduceBool` or `Lean.trustCompiler` a native_decide
+    unreported   a declaration of an audited module, or of a package `proved_in` names, holds a `sorry` the elaborator
+                 made for an error it did not report (`sorryAx _ true`): its module built with a warning only, and the
+                 proofs it stands for never ran. `lean_changed.py --records` on a spec package audits no proving package
+                 but reads each one's facts, so this fails its fast path as well, where `axioms` does not
+    dropped      a top-level declaration in an audited module's source (or a proving package's) is in no declaration
+                 range its `.olean` holds: Lean elaborated nothing there and reported nothing (a `variable` whose
+                 binders use a local notation over section variables can make it drop the declarations after it; so
+                 does `#exit`), so the build passed without them
     declared     an audited module declares an `axiom` (assumptions are named `Prop`s, taken as hypotheses)
     escapes      a declaration a proof cannot unfold (`opaque`, which a `partial def` is, `unsafe`, `@[implemented_by]`,
                  `@[extern]`) is not listed in `escapes` with a reason, or a listed one no longer is one
@@ -228,13 +236,22 @@ def cores() -> int:
     return n
 
 
+#: `--artifacts`: the node's Lake artifact cache, which only a passing audit writes (`lean_audit.LakeArtifacts`)
+ARTIFACTS: Path | None = None
+
+
 def lake_env() -> dict[str, str]:
-    """The environment of every `lake` and `setup.sh` the audit runs. The audit builds from source: Lake neither reads nor
-    writes its local artifact cache, and `setup.sh` restores nothing from the build cache (`cache.py`)."""
+    """The environment of every `lake` and `setup.sh` the audit runs. `setup.sh` restores nothing from the build cache
+    (`cache.py`). Lake builds from source, or with `--artifacts` restores a module whose input hash it finds there: with
+    `LAKE_ARTIFACT_CACHE` unset, a package that configures no cache reads it and never writes it."""
     env = dict(os.environ)
     env["PATH"] = f"{Path.home() / '.elan' / 'bin'}{os.pathsep}{env.get('PATH', '')}"
     env.setdefault("LEAN_NUM_THREADS", str(cores()))
-    env["LAKE_ARTIFACT_CACHE"] = "false"
+    if ARTIFACTS:
+        env.pop("LAKE_ARTIFACT_CACHE", None)
+        env["LAKE_CACHE_DIR"] = str(ARTIFACTS)
+    else:
+        env["LAKE_ARTIFACT_CACHE"] = "false"
     env["LEAN_CACHE"] = "off"
     return env
 
@@ -420,6 +437,42 @@ def scans(pkg: Path, files: dict[str, str], policy: dict) -> list[str]:
                             f"({hit.group(1) or hit.group(2)}), which can write anywhere the build can; list {m} under "
                             f"`compile_time` with the reason if it must")
     return hits
+
+
+#: an override of a heartbeat limit (`maxHeartbeats`, `synthInstance.maxHeartbeats`), in comment-stripped source
+HEARTBEATS = re.compile(r"\bset_option[ \t]+((?:[\w.]+\.)?maxHeartbeats)[ \t]+(\d+)")
+#: a module `lake build` built, and how long it took (`✔ [3/118] Built Flock.Field (456ms)`; `:c.o` and the like are not modules)
+BUILT = re.compile(r"\bBuilt ([^\s:]+) \((?:(\d+)m ?)?([\d.]+)(ms|s)\)")
+
+
+def build_seconds(logs: list[Path]) -> dict[str, float]:
+    """{module: seconds} from ``logs`` of `lake build`: each module it built (not one it replayed), its own time."""
+    out = {}
+    for log in logs:
+        for m, mins, n, unit in BUILT.findall(log.read_text(errors="replace") if log.is_file() else ""):
+            out[m] = round(int(mins or 0) * 60 + float(n) / (1000 if unit == "ms" else 1), 1)
+    return out
+
+
+def heartbeats(pkg: Path, files: dict[str, str], seconds: dict[str, float]) -> list[dict]:
+    """Each override of a heartbeat limit in the package's sources: its file and line, the option, its value (0: no limit),
+    the reason beside it (a `--` comment ending its line, else the `--` comments just above it; None when there is none),
+    and its module's build time in this audit's build (``seconds``, `build_seconds`; None when this audit didn't build it).
+    Listed in the report, never refused."""
+    out = []
+    for m, rel in sorted(files.items()):
+        raw = (pkg / rel).read_text(errors="replace")
+        lines, code = raw.splitlines(), strip_comments(raw).splitlines()
+        for i, line in enumerate(code):
+            for hit in HEARTBEATS.finditer(line):
+                why = [lines[i][len(line.rstrip()):].strip().removeprefix("--").strip()]
+                j = i
+                while not why[-1] and j > 0 and lines[j - 1].lstrip().startswith("--"):
+                    j -= 1
+                    why.insert(0, lines[j].lstrip().removeprefix("--").strip())
+                out.append({"file": rel, "line": i + 1, "option": hit.group(1), "value": int(hit.group(2)),
+                            "reason": " ".join(w for w in why if w) or None, "module_seconds": seconds.get(m)})
+    return out
 
 
 def anonymous_instances(pkg: Path, files: dict[str, str], facts: dict) -> list[dict]:
@@ -857,6 +910,41 @@ def definitions(record: dict) -> dict:
     return d if isinstance(d, dict) else dict.fromkeys(d)
 
 
+def unreported(facts: dict, where: str = "") -> list[str]:
+    """The `unreported` failures of ``facts``' declarations holding a `sorry` the elaborator made for an error it did not
+    report (`unreported_errors`): their modules built, with only warnings, on proofs that never ran."""
+    names = sorted(e["name"] for e in facts.get("unreported_errors", []))
+    if not names:
+        return []
+    more = f" and {len(names) - 8} more" if len(names) > 8 else ""
+    return [f"unreported: {where}{', '.join(names[:8])}{more} hold a `sorry` Lean made for an elaboration error it did not "
+            f"report (`sorryAx _ true`), so the build passed on proofs that never ran (a `variable` whose binders use a local "
+            f"notation or macro over section variables is one way; Lean warns only `declaration uses 'sorry'`)"]
+
+
+DECLARES = re.compile(r"(?:(?:@\[[^\]]*\]|private|protected|public|noncomputable|nonrec|partial|unsafe|meta)\s+)*"
+                      r"(theorem|lemma|def|abbrev|instance|opaque|axiom|structure|class|inductive)(?![\w'!?.])")
+
+
+def dropped(pkg: Path, files: dict[str, str], facts: dict, where: str = "") -> list[str]:
+    """The `dropped` failure of ``pkg``'s sources (``files``) against ``facts``' `spans`: each line of an audited module
+    that starts a declaration (`DECLARES`, at the first column) inside none of the declaration ranges its `.olean`
+    holds."""
+    spans, found = facts.get("spans", {}), []
+    for m, rel in sorted(files.items()):
+        if (held := spans.get(m)) is None or not (pkg / rel).is_file():
+            continue
+        for i, line in enumerate(strip_comments((pkg / rel).read_text(errors="replace")).split("\n"), 1):
+            if (k := DECLARES.match(line)) and not any(s <= i <= e for s, e in held):
+                found.append(f"{rel}:{i} ({k.group(1)})")
+    if not found:
+        return []
+    more = f" and {len(found) - 8} more" if len(found) > 8 else ""
+    return [f"dropped: {where}{', '.join(found[:8])}{more} start a declaration its module's `.olean` does not hold: Lean "
+            f"elaborated nothing there and reported nothing, so the build passed without it (a `variable` whose binders use "
+            f"a local notation over section variables can make Lean drop every declaration after it; so does `#exit`)"]
+
+
 def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False, owner: str | None = None
           ) -> tuple[list[str], dict]:
     """(failures, the policy with guarantees and reads as the build has them).  A pure function of the facts: the tests run
@@ -873,6 +961,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         names = sorted(n for n in names if n != a)
         more = f" and {len(names) - 8} more" if len(names) > 8 else ""
         fails.append(f"{what}: {a} is used by {', '.join(names[:8])}{more}")
+    fails += unreported(facts)
     for d in facts["declared_axioms"]:
         if not native(d["name"]):
             fails.append(f"declared: `axiom {d['name']}` in {d['module']}; state an assumption as a named Prop, taken as a "
@@ -1456,6 +1545,7 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
                     hit := sorted({p["module"], *(r["module"] for r in p.get("reads", []))} & set(listed))):
                 fails.append(f"compile-time: {entry} lists {', '.join(hit)} under `compile_time`, where {n} is declared or "
                              f"read; move the compile-time code or the declarations to another module")
+        fails += unreported(qf, f"{entry}'s ") + dropped(q, files, qf, f"{entry}'s ")
         sources.append((entry, qf, files))
         conflicts += qf.get("moved_conflicts", [])
     pins, more, by = assign(policy.get("guarantees", {}), sources)
@@ -1672,9 +1762,10 @@ def writable(pkg: Path) -> list[Path]:
 
 
 def in_sandbox(pkg: Path, argv: list[str]) -> list[str]:
-    """``argv`` inside the build sandbox, writable only in the package's `writable` directories (``argv`` as is where there
-    is no sandbox)."""
-    return [*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), *map(str, writable(pkg)), "--", *argv] if sandboxed() else argv
+    """``argv`` inside the build sandbox, writable only in the package's `writable` directories, and `ARTIFACTS` readable
+    (``argv`` as is where there is no sandbox)."""
+    ro = ["--ro", str(ARTIFACTS)] if ARTIFACTS else []
+    return [*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), *ro, *map(str, writable(pkg)), "--", *argv] if sandboxed() else argv
 
 
 #: the `.lake` directories a Lake build running now may write, under the condition notified when one ends
@@ -1968,12 +2059,14 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             rep["failures"].append(f"lift: {e}")
         return rep
     fails, new = judge(current, facts, files, update, owner)
-    fails = cross + fails + spec_reads(current, facts, reads_home(pkg, current)) + shape(current, facts)
+    fails = cross + fails + dropped(pkg, files, facts) + spec_reads(current, facts, reads_home(pkg, current)) + \
+        shape(current, facts)
     rep["unread_spec"] = unread_spec(facts, read_by_dependents(pkg, repo))
     s = time.monotonic()
     missed, rep["dependency_sources"] = dependency_scans(pkg, facts["oleans"], policy)
     rep["seconds"]["dependency-sources"] = round(time.monotonic() - s, 1)
     fails = scans(pkg, files, policy) + missed + fails
+    rep["heartbeats"] = heartbeats(pkg, files, build_seconds([work / "build.log", work / "build-roots.log"] if build else []))
     anonymous = anonymous_instances(pkg, files, facts)
     if name and anonymous:
         name_instances(pkg, anonymous)
@@ -2173,7 +2266,7 @@ def tampered(seals: dict[str, str], watch: list[Path]) -> list[str]:
 
 
 def main(argv: list[str]) -> int:
-    global TOOL
+    global TOOL, ARTIFACTS
     ap = argparse.ArgumentParser(prog="check.py", description=__doc__.split("\n\n")[0])
     ap.add_argument("package", nargs="*", type=Path, help="a Lake package directory with a lean-audit.json")
     ap.add_argument("--all", action="store_true", help="the controls, then every package under --root")
@@ -2194,6 +2287,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--replay-cache", type=Path, metavar="DIR", help="reuse the replay of each module that passed it with the "
                     "same .olean files, its imports' included, on the same toolchain (`replay_keys`), and store each one "
                     "checked here")
+    ap.add_argument("--artifacts", type=Path, metavar="DIR", help="Lake's artifact cache, which the builds read and never write "
+                    "(`lake_env`)")
     ap.add_argument("--fresh", action="store_true", help="also `leanchecker --fresh` each root: its whole closure, Mathlib and core "
                     "included, through the kernel (slow: see README)")
     ap.add_argument("--no-runs", action="store_true", help="skip the packages' tests (`runs`)")
@@ -2216,6 +2311,7 @@ def main(argv: list[str]) -> int:
             ap.error(f"{a.moved}: a JSON object of old names to new names")
         if errs := move_errors(moved):
             ap.error(f"{a.moved}: " + "; ".join(errs))
+    ARTIFACTS = a.artifacts.resolve() if a.artifacts else None
     lifts = None
     if a.lift:
         if a.update or a.all or a.name_instances or len(pkgs) != 1:
@@ -2305,6 +2401,13 @@ def main(argv: list[str]) -> int:
                 print("  " + f.replace("\n", "\n    "), flush=True)
             for n in rep.get("notes", []):
                 print(f"  note: {n}", flush=True)
+            if hb := rep.get("heartbeats"):
+                print(f"  heartbeats: {len(hb)} overrides, {sum(h['reason'] is None for h in hb)} without a reason "
+                      f"(value; its module's build time; reason):", flush=True)
+                for h in hb:
+                    took = "not built here" if h["module_seconds"] is None else f"{h['module_seconds']}s"
+                    print(f"    {h['file']}:{h['line']} {h['option']} {h['value'] or 'unlimited'}; {took}; "
+                          f"{h['reason'] or 'no reason given'}", flush=True)
 
     with ThreadPoolExecutor(max_workers=len(pkgs) + 1) as ex:
         jobs = ([ex.submit(check_controls)] if a.all and not a.no_controls else []) + [ex.submit(one, p) for p in pkgs]

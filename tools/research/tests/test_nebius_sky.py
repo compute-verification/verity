@@ -812,14 +812,15 @@ def test_a_quiet_commit_is_stopped_and_a_progressing_one_is_not(tmp_path):
 
 
 def test_the_store_eviction_drops_only_preserved_copies_hourly_as_ubuntu_and_fails_on_a_tool_error(tmp_path):
-    """vy-store-evict: cluster_up.sh installs it hourly as ubuntu (the job store's owner); it runs `research data evict --runs`
+    """vy-store-evict: cluster_up.sh and `research deploy` install it hourly as ubuntu (the job store's owner, store_evict.service); it runs `research data evict --runs`
     against the job store and runs dir toward its free-space mark, logs one line, treats a mark it can't reach as done (nothing
     more is preserved), and fails only when the tool's output isn't its JSON."""
     import subprocess
     up = (SKY / "cluster_up.sh").read_text()
-    assert "store_evict.sh\" /usr/local/bin/vy-store-evict" in up and "User=ubuntu" in up and "OnUnitActiveSec=1h" in up
-    assert "vy-store-evict-research.timer" in up and "User=research" in up
-    assert "VY_EVICT_STORE=/workspace/research/store VY_EVICT_RUNS=/workspace/research/runs" in up
+    assert "store_evict.sh\" /usr/local/bin/vy-store-evict" in up and "vy-store-evict-research.timer" in up
+    assert "User=ubuntu" in (SKY / "store_evict.service").read_text() and "OnUnitActiveSec=1h" in (SKY / "store_evict.timer").read_text()
+    research = (SKY / "store_evict_research.service").read_text()
+    assert "User=research" in research and "VY_EVICT_STORE=/workspace/research/store VY_EVICT_RUNS=/workspace/research/runs" in research
     tool, bin_dir = tmp_path / "tool", tmp_path / "bin"
     (tool / "research").mkdir(parents=True)
     bin_dir.mkdir()
@@ -863,7 +864,15 @@ def test_researchs_store_eviction_also_deletes_unused_source_trees_and_says_what
     dest = "/etc/systemd/system/vy-store-evict-research.service.d/src.conf"
     assert f'"$SRC/store_evict_src.conf" {dest}' in (SKY / "cluster_up.sh").read_text()
     deploy = (SKY.parent / "deploy.toml").read_text()
-    assert f'path = "{dest}"\nsrc = "tools/research/src/research/pods/nebius/sky/store_evict_src.conf"\nnodes = ["vy-nebius-1"]' in deploy
+    assert f'path = "{dest}"\nsrc = "tools/research/src/research/pods/nebius/sky/store_evict_src.conf"\nnodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]' in deploy
+    for u in ("store_evict.service", "store_evict.timer", "store_evict_research.service", "store_evict_research.timer"):
+        assert f'"$SRC/$u"' in (SKY / "cluster_up.sh").read_text() and f'src = "tools/research/src/research/pods/nebius/sky/{u}"' in deploy
+    assert 'ExecCondition=/bin/grep -qs "timed False" /workspace/pouw/fill/status.txt' in (SKY / "store_evict_timed.conf").read_text()
+    assert deploy.count('path = "/usr/local/bin/vy-store-evict"\nsrc = "tools/research/src/research/pods/nebius/sky/store_evict.sh"\nmode = "755"\n') == 2, \
+        "a fresh install gets the repository's mode (644): systemd's 203/EXEC on cpu-1, 15 Oct"
+    unit = (SKY / "store_evict_research.service").read_text()   # cpu-1's copy of the unit cluster_up.sh writes on node 1
+    assert "User=research\n" in unit and "VY_EVICT_STORE=/workspace/research/store VY_EVICT_RUNS=/workspace/research/runs" in unit
+    assert "ExecStart=/usr/local/bin/vy-store-evict\n" in unit and "OnUnitActiveSec=30min\n" in (SKY / "store_evict_research.timer").read_text()
     tool, bin_dir = tmp_path / "tool", tmp_path / "bin"
     (tool / "research").mkdir(parents=True)
     bin_dir.mkdir()
@@ -874,7 +883,8 @@ def test_researchs_store_eviction_also_deletes_unused_source_trees_and_says_what
         "import json, os, sys\n"
         "open(os.environ['FAKE_ARGV'], 'w').write(json.dumps(sys.argv[1:]))\n"
         "open(os.environ['FAKE_ARGV'] + '.cwd', 'w').write(os.getcwd())\n"
-        "src = {'deleted': [{'tree': 'a'}, {'tree': 'b'}], 'deleted_bytes': 31e9, 'deleted_inodes': 812345, 'kept': [{'tree': 'c'}] * 3,\n"
+        "kept = json.loads(os.environ.get('FAKE_KEPT') or json.dumps([{'tree': 'c'}] * 3))\n"
+        "src = {'deleted': [{'tree': 'a'}, {'tree': 'b'}], 'deleted_bytes': 31e9, 'deleted_inodes': 812345, 'kept': kept,\n"
         "       'kept_by': {'1': 1, '2': 2}, 'error': os.environ.get('FAKE_ERROR')}\n"
         "print(json.dumps({'store': {'evicted_bytes': 0, 'reached_target': False}, 'runs': {'evicted_bytes': 0}, 'src': src}))\n"
         "sys.exit(1)\n")
@@ -889,6 +899,10 @@ def test_researchs_store_eviction_also_deletes_unused_source_trees_and_says_what
                                                                  "/workspace/research/runs", "--src-dir", "/workspace/research/src", "--min-mb", "1e12",
                                                                  "--json"]
     assert "target reached: False; src trees: deleted 2 (31.0 GB, 812345 inodes), kept 3 (1:1 2:2); no store blob" in r.stdout
+    # node 1's 13:49Z and 14:49Z passes on 9 Oct kept 110 trees under condition 2 and the line couldn't say which process named them
+    kept = [{"tree": t, "why": ["2: process 7 (du) uses it", *(["2: process 9 (lake) uses it"] if t == "c" else [])]} for t in "cde"]
+    r = subprocess.run(["bash", str(SKY / "store_evict.sh")], env={**env, "FAKE_KEPT": json.dumps(kept)}, capture_output=True, text=True)
+    assert "kept 3 (1:1 2:2); trees a process names: 7 (du) 3, 9 (lake) 1; no store blob" in r.stdout
     r = subprocess.run(["bash", str(SKY / "store_evict.sh")], env={**env, "VY_EVICT_ORIGIN": "/workspace/research/git/verity.git",
                                                                      "FAKE_ERROR": "2: /proc/1 is unreadable"}, capture_output=True, text=True)
     assert json.loads((tmp_path / "argv.json").read_text())[-5:-2] == ["--src-origin", "/workspace/research/git/verity.git", "--min-mb"]

@@ -26,6 +26,7 @@ from __future__ import annotations
 import glob
 import json
 import os
+import re
 import sys
 import time
 from contextlib import contextmanager
@@ -101,8 +102,10 @@ def word_record(r: dict[str, Any], *, strict: bool, max_gates: str | None = None
 
 def recorded_program_digest(program_dir: str, res: dict[str, Any]) -> str | None:
     """The Program's digest (`verity.ml.circuits.codec.program_digest`): the Build's record (`result.json` program.digest), else
-    recomputed from its `descriptor.json.gz`; None when the Build has neither."""
-    s = (res.get("program") or {}).get("digest")
+    recomputed from its `descriptor.json.gz`; None when the Build has neither.  A Build recorded before the SHA-512 re-baseline
+    (ad58900df) names its Program by SHA-256 under `digest` and by today's digest under `sha512`; its `digest` is not read."""
+    prog = res.get("program") or {}
+    s = prog.get("sha512") or (prog.get("digest") if re.fullmatch(r"[0-9a-f]{128}", str(prog.get("digest"))) else None)
     if s:
         return s
     p = os.path.join(program_dir, "descriptor.json.gz")

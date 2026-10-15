@@ -64,14 +64,49 @@ def test_inode_growth_rate_uses_the_previous_reading():
     assert not b[0].startswith("HARD")                                                     # 80% of 20M is 52 h away
     assert P.evaluate(reading(iused=7_060_000, t=T0 + 300), prev, lim("n1")) == []           # a 5-min burst is not a rate
     prev = reading(iused=14_000_000, t=T0)
-    b = P.evaluate(reading(iused=14_400_000, t=T0 + 1200), prev, lim("n1"))                 # 1.2M/h, 1.6M left: 1.3 h
-    assert b[0].startswith("HARD /workspace gaining 1,200,000 inodes/h: 80% of inodes in 1.3 h")
+    b = P.evaluate(reading(iused=15_000_000, t=T0 + 3000), prev, lim("n1"))                 # 1.2M/h over 50 min, 1M left
+    assert b[0].startswith("HARD /workspace gaining 1,200,000 inodes/h over 50 min: 80% of inodes in 0.8 h")
+
+
+def test_an_inode_rate_over_a_young_base_warns_and_pages_only_once_it_holds():
+    prev = [reading(iused=14_000_000, t=T0)]
+    b = P.evaluate(reading(iused=14_400_000, t=T0 + 1200), prev, lim("n1"))                 # 1.2M/h over 20 min
+    assert len(b) == 1 and not b[0].startswith("HARD") and "pages once it holds for 45 min" in b[0]
+    base = None
+    for i, iused in enumerate((7_000_000, 7_010_000, 7_020_000, 7_030_000, 7_040_000, 7_400_000)):
+        r = reading(iused=iused, t=T0 + 600 * i)                                            # a burst in the last 10 min
+        b = P.evaluate(r, base, lim("n1"))
+        base = P.next_base(r, base, lim("n1"))
+    assert b == ["/workspace gaining 480,000 inodes/h > 100,000"]                            # over the oldest base: 50 min
+    assert [x["t"] for x in base] == [T0 + 600 * i for i in range(6)]
+    assert [x["t"] for x in P.next_base(reading(t=T0 + 3800), base, lim("n1"))][0] == T0 + 600
+
+
+def test_the_inode_line_names_the_directories_that_grew_most(tmp_path):
+    ws = "/workspace"
+    (tmp_path / "inode-dirs.prev.txt").write_text(f"10\t{ws}/a/x\n5\t{ws}/a/y\n15\t{ws}/a\n7\t{ws}/b\n40\t{ws}\n")
+    (tmp_path / "inode-dirs.txt").write_text(f"10\t{ws}/a/x\n905\t{ws}/a/y\n915\t{ws}/a\n507\t{ws}/b\n9\t{ws}/c/new\n"
+                                             f"9\t{ws}/c\n1440\t{ws}\n")
+    for f, age in (("inode-dirs.prev.txt", 3700), ("inode-dirs.txt", 100)):
+        os.utime(tmp_path / f, (T0 - age, T0 - age))
+    g = P.inode_dirs(tmp_path, ws, T0, 3600, walk=False)
+    assert g == {"over_s": 3600, "top": [{"dir": "a/y", "gained": 900}, {"dir": "b", "gained": 500},
+                                         {"dir": "c/new", "gained": 9}]}
+    r = reading(iused=15_000_000, t=T0 + 3000)
+    r["inode_dirs"] = g
+    line = P.evaluate(r, reading(iused=14_000_000, t=T0), lim("n1"))[0]
+    assert line.endswith("(growing a/y +900, b +500, c/new +9 in 60 min)")
+    assert P.inode_dirs(tmp_path / "none", ws, T0, 3600, walk=False) is None
 
 
 def test_replay_queue_against_half_of_available_ram_after_reservations():
     # 1800 GB * 40% = 720 GB available; half is 360
     assert P.evaluate(reading(avail_pct=40.0, replay_gb=350), None, lim("n1")) == []
     assert "queued replay" in P.evaluate(reading(avail_pct=40.0, replay_gb=350, reserved_gb=100), None, lim("n1"))[0]
+    # reservations past MemAvailable (node 1, 9 Oct 10:29Z: "0 GB > half of available RAM -95 GB"): no queue, no breach
+    assert P.evaluate(reading(avail_pct=10.0, reserved_gb=275), None, lim("n1")) == []
+    b = P.evaluate(reading(avail_pct=10.0, replay_gb=90, reserved_gb=275), None, lim("n1"))
+    assert "half of available RAM 0 GB" in b[-1]
 
 
 def test_replay_queue_kueue_counts_pending_replays_at_a_floor():

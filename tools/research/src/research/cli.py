@@ -56,7 +56,7 @@
   research env --source TREE [--rev REV] [--json]  # `export PYTHONPATH=...` from TREE's [tool.uv.workspace] members (research.pythonpath)
   research doctor [--role lane|coordinator|infra] [--json]   # can this VM do its job: secrets by name, tokens by status-only probes,
                                                  # ssh, the venv against uv.lock, notes pushes, disk, clock; exit 1 on a finding (research/doctor.py)
-  research deploy drift [--node N ...] [--json] | install NODE --by WHO [--ref REF] [PATH ...] [--apply]   # what runs on the Nebius
+  research deploy drift [--on N ...] [--json] | install NODE --by WHO [--ref REF] [PATH ...] [--apply]   # what runs on the Nebius
                                                  # nodes (pods/nebius/deploy.toml) against main; installs from a pushed commit, restarting its units (`ops deploy`, verity_ops/deploy.py)
   research monitors list|check|run|relay ...     # invariants with an owner, a threshold and an action: node 1's service writes each
                                                  # incident once and its clear once; the relay posts them (research/monitors.py)
@@ -1264,6 +1264,8 @@ def cmd_status(argv: list[str]) -> int:
                                                           "active one's memory on its machine (research.scopemem)")
     ap.add_argument("--balance", action="store_true", help="show the provider's account ledger (balance, spend limit, current $/h) with its observation time")
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--also", action="append", default=[], metavar="FILE",
+                    help="with RUN: fetch this file of its run dir with its records (repeatable): a workload's own progress file")
     ns = ap.parse_args(argv)
     root = R.runs_root(ns.runs_dir)
     ledger = None
@@ -1285,9 +1287,9 @@ def cmd_status(argv: list[str]) -> int:
             return 1
     if ns.refresh or one:
         for s in [R.summarize(one)] if one else R.list_runs(root):
-            if s.get("remote_rec") and s["state"] not in R.TERMINAL and (s["remote_rec"].get("remote_run_dir")):
+            if s.get("remote_rec") and (s["state"] not in R.TERMINAL or (one and ns.also)) and (s["remote_rec"].get("remote_run_dir")):
                 try:
-                    remote.fetch(Path(s["dir"]))
+                    remote.fetch(Path(s["dir"]), also=tuple(ns.also) if one else ())
                 except remote.Refused as e:
                     print(f"research status: {s['id']}: {e}", file=sys.stderr)
     rows = [R.summarize(one)] if one else R.list_runs(root)

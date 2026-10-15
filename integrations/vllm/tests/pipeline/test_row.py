@@ -644,7 +644,7 @@ def test_a_dense_tp1_row_attaches_the_norm_tap_only(tmp_path):
 def _tp_row(tmp_path: Path, row: str, *argv: str, **kw):
     from verity_vllm.pipeline.row_tp import TpRow
     o = _opts(tmp_path, *argv, row=row, **kw)
-    t = TpRow(row=o.row, role=o.role, repo=o.repo, rev=o.rev, stages=o.stages, env=o.env, world=2, gpu_util=None, nccl_p2p_disable="1",
+    t = TpRow(row=o.row, role=o.role, repo=o.repo, rev=o.rev, stages=o.stages, env=o.env, world=2, gpu_util=None,
               build=o.build, match=o.match, commit=o.commit)
     t.hidden_so, t.B, t.engine, t.ck, t.fold_profile = t.hidden_build(), 2, [], "/ck", ""
     t.bdir, t.M = f"{t.d}/build", f"{t.d}/match"
@@ -667,6 +667,75 @@ def test_a_tp_row_runs_the_guarded_build_and_every_tap_its_manifest_names(tmp_pa
     dense = _tp_row(tmp_path, TP_DENSE)
     cmd = dense.commit_cmd(R.applicable_taps(_tap_manifest(tmp_path / "dense.json", "norm_scales", "vocab_range"), dense.ck_))
     assert "--norm-tap-so" in cmd and "--vocab-range" in cmd and "--router-tap-so" not in cmd
+
+
+@pytest.mark.parametrize("row, p2p", [
+    ("glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager", None),   # an H box: its env_required names none
+    (TP_DENSE, "1"),                                                          # an L40S row's env_required names it
+    (TP_MOE, "1"),                  # an L40S workload written before env_required: the generator's rule for its target
+])
+def test_a_tp_rows_stages_have_nccl_p2p_disable_only_when_its_workload_requires_it(tmp_path, monkeypatch, row, p2p):
+    """The caller's NCCL_P2P_DISABLE=1 (an L40S operator's shell) reaches the stages only when the row's workload requires it."""
+    t = _tp_row(tmp_path, row, environ={"NCCL_P2P_DISABLE": "1"})
+
+    def precheck_reached() -> str:
+        raise Stop(99)
+    monkeypatch.setattr(t, "hidden_build", precheck_reached)
+    with pytest.raises(Stop) as e:
+        t.prepare()
+    assert e.value.rc == 99 and t.nccl == p2p
+    os.makedirs(t.d, exist_ok=True)
+    stage = [sys.executable, "-c", "import os; print('NCCL_P2P_DISABLE=' + os.environ.get('NCCL_P2P_DISABLE', 'unset'))"]
+    assert t.run_to(0, f"{t.d}/stage.log", stage) == 0
+    assert open(f"{t.d}/stage.log").read().splitlines()[-1] == f"NCCL_P2P_DISABLE={p2p or 'unset'}"
+
+
+GLM53 = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
+
+
+def _engines_custom_all_reduce_off(t, monkeypatch) -> tuple[object, object]:
+    """``disable_custom_all_reduce`` as tp-capture's and tp-commit's engines parse it from the row's command lines."""
+    from verity_vllm.pipeline.tp.capture import parse_engine_args
+    t.MML, t.MNBT = 1024, 256
+    t.engine = t.engine_args()
+    seen: list[list[str]] = []
+
+    def capture_leg(stage, to, log, cmd, **kw):
+        seen.append(cmd)
+        raise Stop(98)
+    monkeypatch.setattr(R, "derived_ok", lambda p: True)
+    monkeypatch.setattr(t, "run_gpu", capture_leg)
+    with pytest.raises(Stop):
+        t.match()
+
+    def parsed(cmd: list[str]) -> object:
+        return parse_engine_args([cmd[i + 1] for i, a in enumerate(cmd) if a == "--engine-arg"])["disable_custom_all_reduce"]
+    return parsed(seen[0]), parsed(t.commit_cmd([]))
+
+
+@pytest.mark.parametrize("row, off", [
+    (GLM53, False),                                  # an H box: vLLM's default, the custom all-reduce on
+    (TP_DENSE, True),                                # L40S, a workload with env_required
+    (TP_MOE, True),                                  # L40S, one written before env_required
+    ("llama32-1b__bf16__rtxpro6000__tp2__b1__i256__o32__mixed__greedy__bi-eager", True),
+    ("qwen3-235b-a22b-fp8__fp8__rtxpro6000__tp8__b1__i256__o32__mixed__greedy__bi-eager", True),
+])
+def test_a_tp_rows_engines_take_disable_custom_all_reduce_from_its_workload(tmp_path, monkeypatch, row, off):
+    t = _tp_row(tmp_path, row)
+    assert t.custom_all_reduce_off() is off
+    assert _engines_custom_all_reduce_off(t, monkeypatch) == (off, off)
+
+
+def test_a_tp_workload_without_disable_custom_all_reduce_keeps_it_off(tmp_path, monkeypatch):
+    """Not the generator's value for the target (an H200 row's would be False): what every TP row's engines ran before the field."""
+    t = _tp_row(tmp_path, GLM53)
+    doc = json.loads(Path(t.path(t.wl)).read_text())
+    del doc["engine_args_required"]["disable_custom_all_reduce"]
+    t.tree = str(tmp_path / "tree")
+    Path(t.path(t.wl)).parent.mkdir(parents=True)
+    Path(t.path(t.wl)).write_text(json.dumps(doc))
+    assert t.custom_all_reduce_off() is True
+    assert _engines_custom_all_reduce_off(t, monkeypatch) == (True, True)
 
 
 # ---------------------------------------------------------------------------------------------------------------- Match summary
@@ -852,3 +921,15 @@ def test_the_admission_plan_survives_a_broken_planner_input(tmp_path):
     r.admission()
     log = (Path(r.d) / "row.log").read_text()
     assert "ADMISSION advisory unavailable" in log and "WARN" not in log
+
+
+def test_a_tp_rows_gpu_budget_is_the_option_else_the_workloads_else_tp_util(tmp_path, monkeypatch):
+    from verity_vllm.pipeline import row_tp
+    assert _tp_row(tmp_path, TP_DENSE).gpu_util == row_tp.TP_UTIL
+    monkeypatch.setattr(R, "load_json", lambda path: {"gpu_memory_utilization": 0.9} if path.endswith(f"{TP_DENSE}.json") else None)
+    t = _tp_row(tmp_path, TP_DENSE)
+    assert (t.gpu_util, t.commit_util) == ("0.9", "0.9")
+    o = _opts(tmp_path, row=TP_DENSE)
+    explicit = row_tp.TpRow(row=o.row, role=o.role, repo=o.repo, rev=o.rev, stages=o.stages, env=o.env, world=2, gpu_util="0.7",
+                            build=o.build, match=o.match, commit=o.commit)
+    assert explicit.gpu_util == "0.7"

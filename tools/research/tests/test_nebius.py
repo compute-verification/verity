@@ -473,6 +473,39 @@ def test_gpu_lease_leaves_the_gpus_to_an_older_waiter_and_forgets_a_dead_one(tmp
 
 
 @needs_flock
+def test_a_waiter_pinned_with_on_holds_back_only_its_own_gpus(tmp_path):
+    """ra-host-tier (12 Oct 19:35Z): a waiting `gpu-lease N --on LIST` deferred every later request, so its waiter kept free GPUs
+    outside LIST from seven lanes. A later request may take a GPU outside every older waiter's list (by index or UUID), and an
+    unpinned waiter still holds back all of them."""
+    env = {**gpu_env(tmp_path, count=4), "GPU_LEASE_UUID_TABLE": "GPU-a0,GPU-b1,GPU-c2,GPU-d3"}
+    gl = tmp_path / "gl"
+    gl.mkdir()
+    show = 'echo "$CUDA_VISIBLE_DEVICES"'
+
+    def hold(name: str, line: str) -> subprocess.Popen:
+        p = subprocess.Popen(["bash", "-c", f'exec 9>"{gl / name}"; flock -x 9; echo "{line}" >&9; echo ready; read x'],
+                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+        assert p.stdout.readline().strip() == "ready"
+        return p
+
+    waiters = [hold("wait.0000000000000000001.1", "pid=1 n=2 on=1,GPU-c2 who=pinned")]
+    try:
+        r = subprocess.run(["bash", str(GPU_LEASE), "2", "--", "sh", "-c", show], env=env, capture_output=True, text=True)
+        assert r.returncode == 0 and r.stdout.strip() == "0,3", r.stderr
+        r = subprocess.run(["bash", str(GPU_LEASE), "1", "--on", "1,2", "--", "true"], env=env, capture_output=True, text=True)
+        assert r.returncode == 75 and "who=pinned" in r.stderr
+        r = subprocess.run(["bash", str(GPU_LEASE), "3", "--", "true"], env=env, capture_output=True, text=True)
+        assert r.returncode == 75 and "who=pinned" in r.stderr
+        waiters.append(hold("wait.0000000000000000002.2", "pid=2 n=1 who=whole"))
+        r = subprocess.run(["bash", str(GPU_LEASE), "1", "--on", "0", "--", "true"], env=env, capture_output=True, text=True)
+        assert r.returncode == 75 and "who=pinned" in r.stderr
+    finally:
+        for p in waiters:
+            p.stdin.close()
+            p.wait()
+
+
+@needs_flock
 def test_gpu_lease_backfills_a_short_request_ahead_of_a_waiter_that_cannot_start_yet(tmp_path):
     """A 3-GPU waiter can't start before GPU 0's lease (no until=, so its start plus 30 min) ends: a 10-minute request may use
     the two free GPUs meanwhile, a 40-minute one may not, and a backfilled lease records when it ends."""
@@ -695,11 +728,10 @@ def test_launch_refuses_to_spend_without_yes_and_a_lease():
     assert r.returncode == 1 and "NEBIUS_SA_ID is not set" in r.stderr
 
 
-def test_nebius_auth_reads_the_key_from_one_line_of_base64_and_refuses_the_multi_line_secret(tmp_path):
+def _auth_harness(tmp_path):
     fake = tmp_path / "nebius"
     fake.write_text('#!/bin/bash\nwhile [ $# -gt 0 ]; do [ "$1" = --private-key-file-path ] && cp "$2" "$OUT"; shift; done\n')
     fake.chmod(0o755)
-    body = "dummy line one\ndummy line two\n"
 
     def auth(**env: str) -> tuple[subprocess.CompletedProcess, str]:
         out = tmp_path / "key.out"
@@ -708,6 +740,14 @@ def test_nebius_auth_reads_the_key_from_one_line_of_base64_and_refuses_the_multi
                            env={"PATH": os.environ["PATH"], "NEBIUS_BIN": str(fake), "OUT": str(out), "XDG_RUNTIME_DIR": str(tmp_path),
                                 "NEBIUS_SA_ID": "sa-dummy", "NEBIUS_SA_PUBLIC_KEY_ID": "pk-dummy", **env})
         return r, out.read_text() if out.exists() else ""
+
+    return auth
+
+
+def test_nebius_auth_reads_the_key_from_one_line_of_base64_and_refuses_the_multi_line_secret(tmp_path):
+    auth = _auth_harness(tmp_path)
+    # adjacent literals, so no secret scanner (tests/test_repository.py among them) reads the dummy PEM as a credential
+    body = "-----BEGIN PRIVATE" " KEY-----\ndummy line one\ndummy line two\n-----END PRIVATE" " KEY-----\n"
 
     r, key = auth(NEBIUS_SA_PRIVATE_KEY_B64=base64.b64encode(body.encode()).decode())
     assert r.returncode == 0 and key == body and r.stdout == r.stderr == ""
@@ -722,6 +762,26 @@ def test_nebius_auth_reads_the_key_from_one_line_of_base64_and_refuses_the_multi
     assert r.returncode == 1 and "NEBIUS_SA_PRIVATE_KEY_B64 is not set" in r.stderr
     r, _ = auth(CLOUD_AGENT_INJECTED_SECRET_NAMES="NEBIUS_SA_ID,NEBIUS_SA_PRIVATE_KEY_B64")    # injected, but lost from this shell
     assert r.returncode == 1 and "the Nebius key is not in this shell though this VM injects it" in r.stderr
+
+
+def test_nebius_auth_reads_a_der_key_whose_base64_fits_the_cursor_secret_cap(tmp_path):
+    """An RSA-4096 key's PEM is ~3272 bytes, whose base64 (~4364) exceeds Cursor's 4096-byte secret cap, so the secret may
+    hold base64 of the DER (~3132 chars) instead; nebius_auth converts it back to PEM through openssl.  A throwaway
+    RSA-2048 key generated here keeps the test fast; the size arithmetic scales, and the decode path is identical."""
+    auth = _auth_harness(tmp_path)
+    pem = subprocess.run(["openssl", "genpkey", "-algorithm", "RSA", "-pkeyopt", "rsa_keygen_bits:2048"],
+                         capture_output=True, check=True).stdout
+    der = subprocess.run(["openssl", "pkey", "-outform", "DER"], input=pem, capture_output=True, check=True).stdout
+    assert not der.startswith(b"-----") and der[0] == 0x30    # the two formats are told apart by their first bytes
+
+    r, key = auth(NEBIUS_SA_PRIVATE_KEY_B64=base64.b64encode(der).decode())
+    assert r.returncode == 0, r.stderr
+    assert key.startswith("-----BEGIN PRIVATE" " KEY-----")
+    pub = lambda k: subprocess.run(["openssl", "pkey", "-pubout"], input=k, capture_output=True, check=True).stdout  # noqa: E731
+    assert pub(key.encode()) == pub(pem)                      # the same key came out
+
+    r, key = auth(NEBIUS_SA_PRIVATE_KEY_B64=base64.b64encode(b"\x30\x82 not a real DER key").decode())
+    assert r.returncode == 1 and key == "" and "neither a PEM file nor a DER private key" in r.stderr
 
 
 # ---- the weight list -----------------------------------------------------------------------------------------------------------------------
@@ -2275,7 +2335,7 @@ def test_n2_commit_records_the_queues_placement_and_keeps_a_refused_row_on_node_
     (src / "src" / "cluster" / "__init__.py").write_text("")
     (src / "src" / "cluster" / "__main__.py").write_text(
         "import json, sys\na = sys.argv[1:]\nv = lambda k: a[a.index(k) + 1]\n"
-        "assert a[0] == 'submit' and a[1].endswith('descriptions/nebius.toml') and v('--node') == 'vy-nebius-2'\n"
+        "assert a[0] == 'submit' and a[1].endswith('descriptions/nebius.toml') and v('--on') == 'vy-nebius-2'\n"
         "if int(v('--gpus')) > 8:\n    print(json.dumps({'refused': 'vy-nebius-2 has 8 GPUs'}))\n    sys.exit(3)\n"
         "print(json.dumps({'node': 'vy-nebius-2', 'why': 'starts now', 'question': v('--question'), 'max_s': int(v('--max-s'))}))\n")
 

@@ -62,7 +62,11 @@ except after a failed preflight, which starts no group, or a step in `HALTS`: a 
 record is stale, fails the audit too, so nothing still running is worth the slot; likewise a Rust crate that doesn't compile
 (`HALTS_ON`: flock-circuit-build's log says `could not compile`) fails flock-rust-tests.
 The steps stay in this process's group, which a runner's timeout and a manual stop signal as a whole. Each step's record is
-appended to `steps.jsonl` in the output directory as the step ends, so a failure shows while the rest still run.
+appended to `steps.jsonl` in the output directory as the step ends, so a failure shows while the rest still run, and mirrored
+as a trace/v1 span line in `spans.jsonl` (`spans.py`: the run opens a root span, each step is a completed child, the run's end
+completes the root), the frozen shape the observability watcher reads.  A SIGTERM
+(`research cancel`, a runner's timeout) stops the steps the same way, and a recorded run still writes its result, validation
+`not_run`, and the pack of the passes its steps stored before it, then exits 143: a cancelled check's passes are reused.
 
 Then the independent groups run at once, the cores split between the first two (`--cores N`, default the CPUs this process may
 use). Which group a step is in, its order there, a step in another group it waits on, and whether its failure halts the run
@@ -77,7 +81,7 @@ doesn't name:
                     cached under $FLOCK_CHECKOUT), so a merge that breaks the Rust build ends the run in minutes; then
                     `circuit-check --all --jobs` the other half, whose workers start only while their measured peaks
                     (`circuit_check/heavy.json`) fit the memory the run has, at most its check slot's mem= (`--mem-gb`, from
-                    slot.py's CHECK_SLOT_MEM_GB): every registered Definition and template
+                    slot.py's CHECK_SLOT_MEM_GB) less `SIBLINGS_GB` when pytest or Lean runs beside it: every registered Definition and template
                     (`tools/verity/circuit_check`),
                     its report beside the run's result; then flock-rust-tests, `check_build.sh test` on that checkout:
                     `cargo test --release` of flock-live's unit tests and of the five upstream crates the patches change
@@ -125,7 +129,8 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
 
 Inside a recorded run it writes `$RESEARCH_RUN_DIR/result.json` (kind `check/v1`): each step's status, seconds and cache use,
 with each step's log beside it, and `verdicts.tar.gz`: the passes this run stored, which another machine imports with
-`--verdicts-in`.  `--record` without `--no-cache` sends one pack of the newest recorded checks' packs (`gather_verdicts`), with a
+`--verdicts-in`.  `--record` without `--no-cache` sends one pack of the newest recorded checks' packs, failed and cancelled
+ones' too, since a pack holds only passes (`gather_verdicts`), with a
 `--verdicts-in` pack added to them, never in their place, so every machine reuses every pass a recorded check earned; the pack
 imported is named in the result's `verdicts`.
 
@@ -159,6 +164,7 @@ import sys
 import tempfile
 import threading
 import time
+import weakref
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -208,6 +214,8 @@ JOBS = DECLARATION.load()
 VERDICTS = _load("verdicts")
 #: the helpers `lean_audit.py` shares (`common.py`), kept out of this file so that its audit key doesn't cover this file
 COMMON = _load("common")
+#: trace/v1 spans over the run (`spans.py`): `spans.jsonl` beside `steps.jsonl`, the frozen shape the watcher reads
+SPANS = _load("spans")
 #: the test runner (`suites.py`), for where the steps' Python imports this tree's packages from
 SUITES = _load("suites")
 cache_dir = COMMON.cache_dir
@@ -584,8 +592,8 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None) -> list[
             return [("lean", f"the verifier is on this tree but its Lean package is not at {lean}", ROOT)]
         return [("lean", "skipped: verity/core/service/flock is not on this tree", ROOT)]
     verify = lean / ".lake" / "build" / "bin" / "flock-verify"
-    agreement: list[str] | str = ("skipped: the pinned upstream build was not sent (a merge changing verity/ml/flock/ requires "
-                                  "this step: `check.py --record` sends it)")
+    agreement: list[str] | str = ("skipped: the pinned upstream build was not sent (a merge changing verity/ml/flock/ or "
+                                  "verity/core/service/flock/ requires this step: `check.py --record` sends it)")
     if UPSTREAM_PIN.exists():
         got = agreement_files(out)
         if len(got) == 2:
@@ -855,7 +863,10 @@ def record(argv: list[str]) -> int:
     d = Path(tempfile.mkdtemp(prefix="check-lean-deps-"))
     audits = not combining and (parts is None or any(p.startswith("lean-audit:") for p in parts))
     if audits and (urls := lean_deps_url_file(d)):
-        print(f"check: sending presigned URLs for {len(json.loads(urls.read_text()))} pinned Lean dependency bundle(s)")
+        sent = json.loads(urls.read_text())
+        shared = sum(k.startswith("lean-artifacts/") for k in sent)
+        print(f"check: sending presigned URLs for {len(sent) - shared} pinned Lean dependency bundle(s) and {shared} Lean artifact "
+              f"bundle(s) of recent checks")
         if on:
             cmd += ["--send", str(urls)]
         else:
@@ -897,7 +908,8 @@ GATHER = 12
 def gather_verdicts(d: Path, store=None, limit: int = GATHER, given: Path | None = None) -> Path | None:
     """One pack (`verdicts.py combine`) of the verdicts the newest ``limit`` recorded checks stored, for `--record` to send with
     `--verdicts-in`: a suite whose key one of them earned is reused on any machine, and names the run that earned it.  Only
-    recorded runs' packs are taken.  A pack ``given`` (`--record --verdicts-in`) is added to them, never in their place, so no
+    recorded runs' packs are taken, a failed or cancelled run's too: its pack holds only the passes its steps stored, each
+    under a key of everything it read.  A pack ``given`` (`--record --verdicts-in`) is added to them, never in their place, so no
     flag turns reuse off but `--no-cache`.  A recorded run's pack that `combine` would refuse is passed over by name, so its
     verdicts are recomputed, never reused; a refused pack given is an error.  None when there is no pack at all (the check then
     runs on its own cache)."""
@@ -912,7 +924,7 @@ def gather_verdicts(d: Path, store=None, limit: int = GATHER, given: Path | None
         store = store or LocalStore()
         if store.remote is not None:
             store.refresh(attempts_only=True)
-        rows = store.index.sql("SELECT id FROM attempts WHERE tool = 'check' AND state = 'done' ORDER BY start_utc DESC LIMIT ?",
+        rows = store.index.sql("SELECT id FROM attempts WHERE tool = 'check' AND state IN ('done', 'failed', 'cancelled') ORDER BY start_utc DESC LIMIT ?",
                                (4 * limit,))
         for (rid,) in rows:
             art = ((store.get_attempt(rid) or {}).get("outputs") or {}).get("run_files")
@@ -954,6 +966,17 @@ def verdicts_in(pack: Path, run_dir: Path | None) -> dict:
 AFTER_LEAN = SUITES.AFTER_LEAN
 
 
+#: what pytest and the Lean steps hold beside circuit-check in one run, in GiB: in r20261012-155204-6475, pytest and lean-audit
+#: held 160 to 350 between them, and circuit-check, given the slot's whole mem=, took the run's scope to its cap (an OOM kill)
+SIBLINGS_GB = 350
+
+
+def cc_mem_gb(slot_gb: int, beside: bool) -> int:
+    """circuit-check's --mem-gb in a slot of ``slot_gb``: all of it alone (a shard without pytest or Lean), else what
+    `SIBLINGS_GB` leaves, but never under a quarter of the slot."""
+    return max(slot_gb - SIBLINGS_GB, slot_gb // 4) if beside else slot_gb
+
+
 def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
            only: list[str] | None = None) -> list[list[tuple[str, list[str] | str, Path]]]:
     """The independent groups, each a sequence of (name, argv or the reason it is skipped / cannot run, cwd); with ``only``, a
@@ -965,6 +988,7 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     if only is not None:
         names = {p.partition(":")[0] for p in only}
         a, b = (n if not names & {"flock-circuit-build", "circuit-check", "flock-rust-tests"} else a), (n if "pytest" not in names else b)
+    beside = only is None or any(x == "pytest" or x.startswith("lean") for x in names)
     suites = [py, str(ROOT / "tools" / "verity" / "check" / "suites.py")]
     tail = ["--jobs", str(a), *([] if cache else ["--fresh"]),
             *(["--run", os.environ["RESEARCH_RUN_ID"]] if os.environ.get("RESEARCH_RUN_ID") else [])]
@@ -977,7 +1001,7 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     pytest = [*suites, "--json", str(out / "suites.json"), "--logs", str(out / "suites"), *after_lean, *tail]
     cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
           *(["--cache", str(cache_dir() / "circuit-check")] if cache else []),
-          *(["--mem-gb", m] if (m := os.environ.get(SLOT.SLOT_MEM_ENV, "")).isdigit() else [])]
+          *(["--mem-gb", str(cc_mem_gb(int(m), beside))] if (m := os.environ.get(SLOT.SLOT_MEM_ENV, "")).isdigit() else [])]
     build = ["bash", str(ROOT / "verity" / "ml" / "flock" / "check_build.sh")]
     rust = ["env", f"CARGO_BUILD_JOBS={b}", f"RUST_TEST_THREADS={b}", *build, "test"]
     built = {"pytest": ("pytest", pytest, ROOT), "flock-circuit-build": ("flock-circuit-build", build, ROOT),
@@ -1123,9 +1147,10 @@ def _env_key(e: dict[str, str]) -> dict[str, str]:
 
 
 def agreement_key(e: dict[str, str]) -> str | None:
-    """What the agreement job reads: the tracked files under verity/ml/flock/verifier/ (the Lean sources and toolchain pin, `ci.py`
-    and the scripts it runs, which import only the standard library and each other, `upstream.json` pinning the upstream build,
-    the inputs and the job's settings), the interpreter and the platform.  None when the tree's files cannot be listed."""
+    """What the agreement job reads: the tracked files `agreement_closure` names (verity/ml/flock/verifier/: `ci.py` and the scripts
+    it runs, which import only the standard library and each other, `upstream.json` pinning the upstream build,
+    the inputs and the job's settings; and the Lean package `flock-verify` is built from, verity/core/service/flock/, its sources and
+    toolchain pin), the interpreter and the platform.  None when the tree's files cannot be listed."""
     files = tracked_files()
     if files is None:
         return None
@@ -1333,6 +1358,19 @@ HALTS_ON = {j.name: j.halts_on for j in JOBS if j.halts_on}
 AFTER = {j.name: j.after for j in JOBS if j.after}
 
 
+#: the signal that stopped this check (`_terminated`), and the runs' steps it stops
+TERMINATED: list[str] = []
+_LIVE: "weakref.WeakSet[Steps]" = weakref.WeakSet()
+
+
+def _terminated(signum: int, _frame) -> None:
+    """SIGTERM's handler: stop every run's steps from a thread of its own (one may hold their lock), so the run ends as stopped
+    and `main` still writes its result and its passes' pack."""
+    TERMINATED.append(name := signal.Signals(signum).name)
+    for steps in list(_LIVE):
+        threading.Thread(target=steps.stop, args=(f"check got {name}", signal.SIGTERM), daemon=True).start()
+
+
 class Steps:
     """The steps of one run: their processes while they run, so that the first failure stops the others (unless ``keep_going``,
     and a step in `HALTS`, or one `HALTS_ON` marks `halts`, stops them even then), and each step's record appended to `STEPS_LOG`
@@ -1340,15 +1378,29 @@ class Steps:
 
     def __init__(self, out: Path, keep_going: bool = False):
         self.log, self.keep_going = out / STEPS_LOG, keep_going
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
         self.running: dict[str, subprocess.Popen] = {}
         self.stopped: set[str] = set()
         self.halted: str | None = None
+        self.why: str | None = None
         self.log.unlink(missing_ok=True)
+        self.spans = SPANS.SpanLog(out)
+        _LIVE.add(self)
+        if TERMINATED:
+            self.stop(f"check got {TERMINATED[0]}")
 
     @property
     def stopping(self) -> bool:
-        return self.halted is not None
+        return self.why is not None
+
+    def stop(self, why: str, sig: int = signal.SIGINT) -> None:
+        """Start nothing more, and stop each running step: ``sig`` to its processes, SIGKILL to what is left after the grace."""
+        with self.lock:
+            self.why = self.why or why
+            for name, p in self.running.items():
+                self.stopped.add(name)
+                _signal_tree(p.pid, sig)
+                threading.Thread(target=_kill_after_grace, args=(p,), daemon=True).start()
 
     def start(self, name: str, argv: list[str], cwd: Path, env: dict[str, str], log) -> subprocess.Popen | None:
         """The step's process; None, and nothing started, once a failure has stopped the run."""
@@ -1362,16 +1414,14 @@ class Steps:
         with self.lock:
             self.running.pop(rec["step"], None)
             if rec["step"] in self.stopped and rec["status"] != "passed":
-                rec.update(status="stopped", detail=f"stopped: {self.halted} failed")
+                rec.update(status="stopped", detail=f"stopped: {self.why}")
             rec["ended_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
             with open(self.log, "a") as f:
                 f.write(json.dumps(rec) + "\n")
-            if rec["status"] == "failed" and self.halted is None and (not self.keep_going or rec["step"] in HALTS or rec.get("halts")):
+            self.spans.step(rec)
+            if rec["status"] == "failed" and not self.stopping and (not self.keep_going or rec["step"] in HALTS or rec.get("halts")):
                 self.halted = rec["step"]
-                for name, p in self.running.items():
-                    self.stopped.add(name)
-                    _signal_tree(p.pid, signal.SIGINT)
-                    threading.Thread(target=_kill_after_grace, args=(p,), daemon=True).start()
+                self.stop(f"{rec['step']} failed")
         return rec
 
 
@@ -1396,7 +1446,7 @@ def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool, s
             p = steps.start(name, argv, cwd, e, f)
             rc = p.wait() if p is not None else None
         if rc is None:
-            rec = {"step": name, "status": "stopped", "detail": f"not started: {steps.halted} failed"}
+            rec = {"step": name, "status": "stopped", "detail": f"not started: {steps.why}"}
         elif rc == 0 and name == "lean-audit" and (why := lean_fast(out)):
             print(f"check: {name}: {why}", flush=True)
             rec = {"step": name, "status": "failed", "rc": rc, "log": log.name, "detail": why}
@@ -1409,7 +1459,9 @@ def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool, s
             entry.write_text(json.dumps({"key": key, "argv": argv, "passed_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}))
             rec["cache"] = {"stored": key}
         if name == "circuit-check" and (out / "circuit-check.json").exists():
-            rec["cache"] = json.loads((out / "circuit-check.json").read_text()).get("cache")
+            c = json.loads((out / "circuit-check.json").read_text()).get("cache")
+            # counts only: result.json's steps are its attempt's meta, capped at 256 KiB, and a list per target outgrows it
+            rec["cache"] = {k: len(v) if isinstance(v, list) else v for k, v in c.items()} if isinstance(c, dict) else c
     rec["seconds"] = round(time.monotonic() - t0, 1)
     rec = steps.end(rec)
     if rec["status"] == "failed" and log.exists():
@@ -1465,7 +1517,9 @@ def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = 
     finally:
         if urls and urls.name.startswith("lean-deps-urls-"):
             urls.unlink(missing_ok=True)
-    return not any(r["status"] in ("failed", "stopped") for r in results), results
+    ok = not any(r["status"] in ("failed", "stopped") for r in results)
+    steps.spans.close("ok" if ok else ("cancelled" if TERMINATED else "failed"))
+    return ok, results
 
 
 def agreement_verdicts(run_dir: Path) -> list[str]:
@@ -1505,8 +1559,7 @@ def reuse(out: Path, done: list[dict]) -> dict:
     for s in done:
         c = s.get("cache") or {}
         if s["step"] == "circuit-check" and "hits" in c:
-            misses = {"untraced": len(c.get("untraced") or []), "errors": len(c.get("errors") or []),
-                      "changed": len(c.get("changed") or [])}
+            misses = {k: c.get(k) or 0 for k in ("untraced", "errors", "changed")}
             got["circuit-check"] = {"of": "targets", "reused": c["hits"], "rerun": c.get("stored", 0) + sum(misses.values()),
                                     "not_stored": misses}
         elif s["step"] in STEP_KEYS and s["status"] in ("passed", "failed"):
@@ -1538,20 +1591,22 @@ def reuse_lines(r: dict) -> list[str]:
 
 
 def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | None = None, contradicted: list[dict] = (),
-                 nondeterministic: list[dict] = (), shard: dict | None = None) -> None:
+                 nondeterministic: list[dict] = (), shard: dict | None = None, stopped_by: str | None = None) -> None:
     """``result.json``: `check/v1`; for a shard (``shard``, from `shard`), `SHARD_KIND`, with the shard's plan, commit and
-    config (the tree of `tools/verity/check/` at HEAD) and each of its steps' parts (the plan's names that step ran)."""
+    config (the tree of `tools/verity/check/` at HEAD) and each of its steps' parts (the plan's names that step ran).  A run
+    ``stopped_by`` a signal is `not_run`: no verdict, so a job queue runs it again."""
     if shard is not None:
         done = [{**s, "parts": got} if (got := [p for p in shard["parts"] if p.partition(":")[0] == s["step"]]) else s
                 for s in done]
         shard = {**shard, "commit": _rev("HEAD"), "config": _rev("HEAD:tools/verity/check")}
     doc = {"schema": "research/result/v0.1", "kind": SHARD_KIND if shard else "check/v1", "run_id": os.environ["RESEARCH_RUN_ID"],
            "reuse": reuse(run_dir, done), "workload_fingerprint": {"steps": [s["step"] for s in done]},
-           "validation": {"status": "passed" if ok else "failed", "checker": "tools/verity/check/check.py",
-                          "detail": "; ".join(f"{s['step']} {s['status']}" for s in done)},
+           "validation": {"status": "not_run" if stopped_by else "passed" if ok else "failed", "checker": "tools/verity/check/check.py",
+                          "detail": (f"stopped by {stopped_by}: " if stopped_by else "")
+                                    + "; ".join(f"{s['step']} {s['status']}" for s in done)},
            "measurements": [{"name": f"{s['step']}_wall", "value": s["seconds"], "unit": "s"} for s in done],
            "steps": done, "artifacts": [p for p in ("suites.json", "suites-lean.json", "suites/", "circuit-check.json", "lean-audit/",
-                                                    "verdicts.tar.gz", STEPS_LOG,
+                                                    "verdicts.tar.gz", STEPS_LOG, SPANS.SPANS_LOG,
                                                     *(s.get("log") for s in done), *agreement_verdicts(run_dir))
                                         if p and (run_dir / p).exists()]}
     if shard:
@@ -1646,7 +1701,17 @@ def main(argv: list[str]) -> int:
     verdicts = {"in": verdicts_in(pack, run_dir)} if pack and cache else {}
     before = VERDICTS.snapshot() if run_dir is not None and cache else None
     t0 = time.monotonic()
-    ok, done = run(out, n, cache, keep_going, sharded["parts"] if sharded else None)
+    TERMINATED.clear()
+    main_thread = threading.current_thread() is threading.main_thread()
+    prior = signal.signal(signal.SIGTERM, _terminated) if main_thread else None
+    try:
+        ok, done = run(out, n, cache, keep_going, sharded["parts"] if sharded else None)
+    finally:
+        if main_thread:
+            signal.signal(signal.SIGTERM, prior)
+        stopped_by = TERMINATED[0] if TERMINATED else None
+        TERMINATED.clear()
+    ok = ok and not stopped_by
     bad, flaky = contradictions(out), contradictions(out, "nondeterministic")
     for c in bad:
         print(f"check: CACHE CONTRADICTED in {c['suite']}: {', '.join(c['contradicts'][:5])} failed fresh, and a cached pass answers for it",
@@ -1657,8 +1722,12 @@ def main(argv: list[str]) -> int:
     if run_dir is not None:
         if before is not None:
             verdicts["out"] = {"file": "verdicts.tar.gz", "entries": VERDICTS.export(run_dir / "verdicts.tar.gz", before)}
-        write_result(run_dir, ok, done, verdicts, bad, flaky, sharded)
+        write_result(run_dir, ok, done, verdicts, bad, flaky, sharded, stopped_by)
     print("\n".join(reuse_lines(reuse(out, done))), flush=True)
+    if stopped_by:
+        print(f"check: stopped by {stopped_by} in {time.monotonic() - t0:.1f} s"
+              f"{', its passes kept in verdicts.tar.gz' if verdicts.get('out') else ''}; outputs in {out}", flush=True)
+        return 128 + signal.Signals[stopped_by].value
     print(f"check: {'passed' if ok else 'FAILED'} in {time.monotonic() - t0:.1f} s ({', '.join(s['step'] + ' ' + s['status'] for s in done)});"
           f" outputs in {out}")
     return 0 if ok else 1

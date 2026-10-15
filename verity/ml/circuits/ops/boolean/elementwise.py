@@ -3,6 +3,8 @@ on bits.
 
     F32Add_v3, F32Mul_v3, F32Div_v3   (a, b: Array<32, Value<1>>) -> Array<32, Value<1>>        word view: their _v1
     F32Fma_v3                         (a, b, c: Array<32, Value<1>>) -> Array<32, Value<1>>     word view: F32Fma_v1
+    F32Add_v4, F32Mul_v4, F32Div_v4   (a, b: Array<32, Value<1>>) -> Array<32, Value<1>>        word view: their _v2
+    F32Fma_v4                         (a, b, c: Array<32, Value<1>>) -> Array<32, Value<1>>     word view: F32Fma_v2
     Bf16Add_v2, Bf16AddF2fp_v2        (a, b: Array<16, Value<1>>) -> Array<16, Value<1>>        word view: their _v1
     Bf16MulBf16_v2                    (a, b: Array<16, Value<1>>) -> Array<16, Value<1>>        word view: Bf16MulBf16_v1
     Bf16MulF32_v2                     (a: Array<16, Value<1>>, s: Array<32, Value<1>>) -> Array<16, Value<1>>
@@ -11,6 +13,7 @@ on bits.
 
 Each is traced from the builder C-Flock's lowering runs for its word primitive (`trace.definition`), so its And gates are that
 builder's live ANDs: `fp.f32_add` / `f32_mul` / `f32_div` with the IR's NaN words (numpy float32 on x86-64), `fp.f32_fma`, the
+same four with every NaN the GPU's 0x7FFFFFFF for the `_v4`s (the `_v2` words, as C-Flock's `tail_pieces` lowers them), the
 f32 add or multiply of the widened operands rounded by `fp.f32_to_bf16` to the word's NaN (0x7FC0 for `Bf16Add_v1`, F2FP's
 0x7FFF for the others), and `forms.add` at 32 bits. None is flushed: a
 subnormal operand or result is kept, as the `_v1` words keep it. `F32Div_v3` is the IEEE divider (`div.rn.f32`, which
@@ -42,8 +45,8 @@ from verity.ml.circuits.silicon import fp
 from verity.ml.circuits.boolean.forms import NOT, ZERO, add, and_reduce
 from verity.ml.circuits.boolean.trace import Traced, definition, emit, trace, word_of
 
-__all__ = ["Bf16Add", "Bf16AddF2fp", "Bf16MulBf16", "Bf16MulF32", "F32Add", "F32Div", "F32Fma", "F32Mul", "I32Add", "bf16_band",
-           "on_bits", "shared_operand", "specialized"]
+__all__ = ["Bf16Add", "Bf16AddF2fp", "Bf16MulBf16", "Bf16MulF32", "F32Add", "F32AddV4", "F32Div", "F32DivV4", "F32Fma", "F32FmaV4",
+           "F32Mul", "F32MulV4", "I32Add", "bf16_band", "on_bits", "shared_operand", "specialized"]
 
 F32 = I32 = Array(32, BL.BIT)
 BF16 = Array(16, BL.BIT)
@@ -217,6 +220,15 @@ F32Fma = definition("F32Fma", 3, fp.f32_fma, (("a", F32), ("b", F32), ("c", F32)
                     doc="FFMA on bits: F32Fma_v1, RN(a * b + c) with one rounding, subnormals kept, every NaN 0x7FC00000")
 F32Div = definition("F32Div", 3, lambda C, a, b: fp.f32_div(C, a, b, ir_nan=True), _AB, F32, word=W.F32Div,
                     doc="div.rn.f32 on bits: F32Div_v1, RN(a / b), subnormals kept, numpy float32's NaN words")
+F32AddV4 = definition("F32Add", 4, lambda C, a, b: fp.f32_add(C, a, b, nan_word=fp.F32_NAN_PTX), _AB, F32, word=W.F32AddV2,
+                      doc="FADD on bits: F32Add_v2, RN(a + b), subnormals kept, every NaN 0x7FFFFFFF")
+F32MulV4 = definition("F32Mul", 4, lambda C, a, b: fp.f32_mul(C, a, b, nan_word=fp.F32_NAN_PTX), _AB, F32, word=W.F32MulV2,
+                      doc="FMUL on bits: F32Mul_v2, RN(a * b), subnormals kept, every NaN 0x7FFFFFFF")
+F32FmaV4 = definition("F32Fma", 4, lambda C, a, b, c: fp.f32_fma(C, a, b, c, nan_word=fp.F32_NAN_PTX),
+                      (("a", F32), ("b", F32), ("c", F32)), F32, word=W.F32FmaV2,
+                      doc="FFMA on bits: F32Fma_v2, RN(a * b + c) with one rounding, subnormals kept, every NaN 0x7FFFFFFF")
+F32DivV4 = definition("F32Div", 4, lambda C, a, b: fp.f32_div(C, a, b, nan_word=fp.F32_NAN_PTX), _AB, F32, word=W.F32DivV2,
+                      doc="div.rn.f32 on bits: F32Div_v2, RN(a / b), subnormals kept, every NaN 0x7FFFFFFF")
 Bf16AddF2fp = definition("Bf16AddF2fp", 2, bf16_add_f2fp, (("a", BF16), ("b", BF16)), BF16, word=W.Bf16AddF2fp,
                          doc="the fused_add_rms_norm residual add on bits: Bf16AddF2fp_v1, bf16_rn(f32(a) + f32(b)), NaN 0x7FFF")
 Bf16Add = definition("Bf16Add", 2, bf16_add, (("a", BF16), ("b", BF16)), BF16, word=W.Bf16Add,

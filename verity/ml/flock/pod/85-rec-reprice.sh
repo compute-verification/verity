@@ -106,7 +106,7 @@ LEAN_BIN=$L/lean-$LSHA/flock-verify
 UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1; UV=$HOME/.local/bin/uv; }
 [ -x $W/py/bin/python ] || { $UV venv -q --python 3.12 $W/py && $UV pip install -q --python $W/py/bin/python numpy blake3; } || exit 1
-export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/catalog:$REPO/kernels:$REPO/experimental:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src
+export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src
 export FC_COINS=os FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
 # the lease command: GPU_LEASE, else the queue's own for this node (infra/cluster's submit.wrappers: node 1's pool where its tool
 # and pool file are, else gpu-lease's default)
@@ -657,8 +657,8 @@ lean)
   REC_INNER="--rec-inner-circuit $DD/stage/circuit.txt --rec-inner-public $DD/stage/pub-$N.bin --rec-inner-partition $DD/stage/partition.json --rec-inner-session $INNER/session"
   # V*'s own inputs (RecVStar.checkStmt; without them every V* statement is refused at setup): the inner shape (rec-inner
   # of the inner statement), each statement's index in rec-statements' list and its bindings (rec_bindings of its
-  # partition object and program), the shared rows (the honest algebra's row ports but v and out; without the algebra,
-  # the level's acc as acc0), and the inner transcript for a statement that reads a rec-c<k> (RecVStar.checkPubRows)
+  # partition object and program), the shared rows (rec_vstage.shared_rows: the honest algebra's row ports but v and out,
+  # and R's levels' tops; without the algebra, the level's acc as acc0), and the inner transcript for a statement that reads a rec-c<k> (RecVStar.checkPubRows)
   if [ -d $DD/v-sess ]; then
     $LEAN_BIN rec-inner --circuit $DD/stage/circuit.txt --public $DD/stage/pub-$N.bin --partition $DD/stage/partition.json \
       --program $DD/stage/program.json > $O/lean/rec-inner.json 2> $O/lean/rec-inner.err || { tail -5 $O/lean/rec-inner.err; exit 1; }
@@ -667,14 +667,14 @@ lean)
 import json, re, sys
 from pathlib import Path
 from verity_flock import rec_bindings as RB
+from verity_flock import rec_vstage as VS
 o, v, vs, transcript = map(Path, sys.argv[1:])
 (line,) = [json.loads(ln[9:]) for ln in (o / "rec-statements.txt").read_text().splitlines() if ln.startswith("RECVSTAR ")]
 names = [s[0] for s in line["statements"]]
-shared = {}
-for f in sorted(v.glob("alg/*/registered.json")):
-    for nm, e in json.loads(f.read_text())["ports"].items():
-        if nm not in ("v", "out") and shared.setdefault(nm, e) != e:
-            sys.exit(f"{f}: its row port {nm} is not the other parts'")
+try:
+    shared = VS.shared_rows(sorted(v.glob("alg/*")), sorted(v.glob("stacked/L*")))["ports"]
+except ValueError as e:
+    sys.exit(str(e))
 for s in sorted(p for p in vs.iterdir() if p.is_dir()):
     c = Path((vs / f"{s.name}.stmt").read_text().strip())
     with (c / "circuit.txt").open() as f:
@@ -682,7 +682,7 @@ for s in sorted(p for p in vs.iterdir() if p.is_dir()):
     ports = json.loads((c / "registered.json").read_text())["ports"]
     rows = o / f"rows-{s.name}.json"
     rows.write_text(json.dumps({"format": "verity/registered-reads/v0",
-                                "ports": shared or ({"acc0": ports["acc"]} if "acc" in ports else {})}))
+                                "ports": shared | ({"acc0": ports["acc"]} if "acc0" not in shared and "acc" in ports else {})}))
     flags = ["--rec-inner", str(o / "rec-inner.json"), "--rec-rows", str(rows)]
     if unit in names:
         flags += ["--rec-part", str(names.index(unit))]

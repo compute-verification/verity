@@ -5,6 +5,7 @@ import Proofs.Core
 import Proofs.Nci.Chain
 import Proofs.Nci.Throttling
 import Proofs.Nci.Support
+import Proofs.Nci.Reads
 
 /-!
 # Proofs of NCI's guarantees

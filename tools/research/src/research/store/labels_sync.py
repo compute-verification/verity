@@ -174,12 +174,17 @@ def push_targets(store: LocalStore, targets: list[str], *, jobs: int = SYNC_JOBS
     return rep
 
 
-def pull_targets(store: LocalStore, targets: list[str]) -> dict:
-    """Fetch the assertions about `targets` that the remote has and this store lacks (one listing per target), the reverse of
-    `push_targets`.  A remote file whose content doesn't hash to its name or doesn't validate is left alone and reported in `bad`.
+def pull_targets(store: LocalStore, targets: list[str], *, jobs: int = 1) -> dict:
+    """Fetch the assertions about `targets` that the remote has and this store lacks (one listing per target, `jobs` at once), the
+    reverse of `push_targets`.  A remote file whose content doesn't hash to its name or doesn't validate is left alone and
+    reported in `bad`.
         {"pulled": [content hash, ...], "bad": ["<key>: <why>", ...]}"""
     r = store._require_remote()  # noqa: SLF001
-    return _pull(store, r, ((t, remote_labels_for(r, t)) for t in dict.fromkeys(targets)))
+    todo = list(dict.fromkeys(targets))
+    if jobs > 1 and len(todo) > 1:
+        with ThreadPoolExecutor(max_workers=min(jobs, len(todo))) as ex:
+            return _pull(store, r, list(zip(todo, ex.map(lambda t: remote_labels_for(r, t), todo))))
+    return _pull(store, r, ((t, remote_labels_for(r, t)) for t in todo))
 
 
 def pull_prefix(store: LocalStore, prefix: str) -> dict:

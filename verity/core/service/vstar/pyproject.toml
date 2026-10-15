@@ -13,3 +13,6 @@ inputs = ["verity/ml/flock/python", "verity/ml/circuits", "verity/ml/commitments
           "verity/core/protocols/sampled_proofs/__init__.py",
           "verity/core/protocols/sampled_proofs/one_stage/__init__.py",
           "verity/core/protocols/sampled_proofs/one_stage/partition.py"]
+# Each test builds what it runs (`verity_difftest.build`, one at a time across processes) and opens its own server, so the
+# 2100 s of tests (the longest 440 s) spread over workers.
+parallel = true

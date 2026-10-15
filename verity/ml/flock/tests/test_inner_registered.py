@@ -43,18 +43,20 @@ def staged(tmp_path_factory):
     rng = np.random.default_rng(20261009)
     return SimpleNamespace(dir=d, text=text, x=rng.integers(0, 1 << 16, (N, 64)), desc=rng.integers(0, 1 << 16, (1, 64)),
                            other=rng.integers(0, 1 << 16, (1, 64)), x_salts=[hm96.SHA512.fresh_salt() for _ in range(N)],
-                           out_salts=[hm96.SHA512.fresh_salt() for _ in range(N)], meta=json.loads(text.split("\n", 2)[1][5:]))
+                           out_salts=[hm96.SHA512.fresh_salt() for _ in range(N)], meta=json.loads(text.split("\n", 2)[1][5:]),
+                           template=s.subcircuit.definition(**FC.set_statics(s)))
 
 
-def stage(s, name: str, cs=None, refs=None, salts=None) -> Path:
+def stage(s, name: str, cs=None, refs=None, salts=None, text: str | None = None) -> Path:
     """The statement in ``s.dir/name``: the description table ``cs`` (default the description row), each instance's ref into
-    it (default row 0), under ``salts`` (default fresh)."""
+    it (default row 0), under ``salts`` (default fresh); ``text`` the circuit, if not the staged one."""
     d = s.dir / name
     d.mkdir()
-    shutil.copy(s.dir / "circuit.txt", d / "circuit.txt")
+    text = text or s.text
+    (d / "circuit.txt").write_text(text)
     cs = s.desc if cs is None else np.asarray(cs)
     inputs = SimpleNamespace(name="inner-registered", subcircuit=SimpleNamespace(id=s.meta.get("subcircuit", "rope-head/d64/neox-bf16")))
-    FC.write(s.text, inputs, 0, N, d / f"inst-{N}.bin", d / f"pub-{N}.bin", None, list(range(N)), share_rows=True,
+    FC.write(text, inputs, 0, N, d / f"inst-{N}.bin", d / f"pub-{N}.bin", None, list(range(N)), share_rows=True,
              outs={"out": np.zeros((N, 64), np.uint16)}, tables={"x": s.x, "cs": cs}, refs={"x": list(range(N)), "cs": refs or [0] * N},
              salts={"x": s.x_salts, "cs": salts or [hm96.SHA512.fresh_salt() for _ in cs], "out": s.out_salts})
     return d
@@ -62,6 +64,18 @@ def stage(s, name: str, cs=None, refs=None, salts=None) -> Path:
 
 def head(d: Path, f: str = "pub") -> dict:
     return json.loads((d / f"{f}-{N}.bin").read_bytes().split(b"\n", 1)[0])
+
+
+def partitioned(s):
+    """The circuit with META naming the statement's program (`population_program` of the template at N) and its
+    ``verity/partition/v1`` object, as `rec_inner.stage` binds it; the program and the object."""
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+
+    program = P.population_program(s.template, N)
+    part = P.partition(program, P.template_instance_query(s.template))
+    head_, line, rest = s.text.split("\n", 2)
+    meta = dict(s.meta, program_sha512=part["program"], partition={"rule": P.FORMAT, "digest": P.digest(part)})
+    return head_ + "\nMETA " + json.dumps(meta, sort_keys=True, separators=(",", ":")) + "\n" + rest, program, part
 
 
 def test_register_commits_the_description_table_as_its_registration(staged):
@@ -99,6 +113,35 @@ def test_extra_rows_are_registered_past_the_table(staged):
     assert got["cs"]["leaves"] == 2 and e["positions"] == [0] and len(bytes.fromhex(e["paths"][0])) == 64
 
 
+def test_register_with_the_statements_partition_binds_the_circuit_registration(staged):
+    """Given the statement's program and partition object, `register`'s entries join the circuit registration
+    (`inner_registered.bind`): one-stage's ``verity/registration/v2`` record over the partition object META names, written
+    beside the circuit, its digest META's ``registration`` and both files' headers the rewritten circuit's (its SHA-512 and
+    class); the rows, salts and roots are the staged ones. A partition object META doesn't name, or a program without its
+    partition object, is refused."""
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
+
+    text, program, part = partitioned(staged)
+    d = stage(staged, "bound", text=text)
+    before = head(d)
+    got = IR.register(d, program=program, partition=part)
+    rec, now = IR.bound(d), (d / "circuit.txt").read_text()
+    meta = IR.meta(d)
+    assert meta[IR.REGISTRATION_KEY] == R.digest(rec) and {k: v for k, v in meta.items() if k != IR.REGISTRATION_KEY} == \
+        json.loads(text.split("\n", 2)[1][5:])
+    assert rec == IR.registration_record(program, part, rec["registered"]) and rec["format"] == R.FORMAT_V2
+    assert [(e["value"], e["root"]) for e in rec["registered"]] == [(IR.VALUE, got["cs"]["root"])]
+    h = head(d)
+    assert h == dict(head(d, "inst"), rows=False) and h["frame_v3"] == before["frame_v3"]
+    assert h["circuit_sha512"] == FC.digest(now) and h["units"]["classes"] == [FC.class_digest(now)] * N
+    other = stage(staged, "bound-other", text=text)
+    with pytest.raises(ValueError, match="META binds program"):
+        smaller = P.population_program(staged.template, N - 1)
+        IR.register(other, program=smaller, partition=P.partition(smaller, P.template_instance_query(staged.template)))
+    with pytest.raises(ValueError, match="program and its partition object together"):
+        IR.register(other, program=program)
+
+
 def test_claim_writes_another_description_with_the_registered_paths(staged):
     honest, other = stage(staged, "claimed-honest"), stage(staged, "claimed-other", cs=staged.other)
     IR.register(honest)
@@ -119,9 +162,10 @@ def verifier():
     return BIN
 
 
-def statement(d: Path, own: Path | None) -> tuple[int, str]:
+def statement(d: Path, own: Path | None, partition: Path | None = None) -> tuple[int, str]:
     args = [str(BIN), "statement", "--statement", STATEMENT, "--circuit", str(d / "circuit.txt"), "--public", str(d / f"pub-{N}.bin")]
-    p = subprocess.run(args + (["--registered", str(own)] if own else []), capture_output=True, text=True, check=False)
+    args += ["--registered", str(own)] if own else []
+    p = subprocess.run(args + (["--partition", str(partition)] if partition else []), capture_output=True, text=True, check=False)
     return p.returncode, (p.stdout + p.stderr).strip()
 
 
@@ -135,6 +179,18 @@ def test_an_honest_inner_statement_reads_its_description_from_the_registration(s
     assert json.loads(line["identity"])["leaf_scheme"] == FC.LEAF_SCHEME_PLAIN
     code, out = statement(d, None)
     assert code == 1 and "the verifier holds no registered roots" in out, out
+
+
+def test_a_statement_whose_meta_binds_its_circuit_registration_is_set_up(staged, verifier):
+    """META's ``registration`` is not a binding key: the Lean verifier sets up the statement whose circuit carries it, and
+    the statement's identity holds the rewritten circuit's SHA-512."""
+    text, program, part = partitioned(staged)
+    d = stage(staged, "lean-bound", text=text)
+    IR.register(d, program=program, partition=part)
+    (d / "partition.json").write_text(json.dumps(part))
+    code, out = statement(d, d / IR.OWN, d / "partition.json")
+    assert code == 0, out
+    assert FC.digest((d / "circuit.txt").read_text()) in out
 
 
 def test_an_inner_statement_naming_no_registered_rows_is_refused(staged, verifier):

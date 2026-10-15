@@ -180,6 +180,19 @@ theorem openingsOf_vb :
     openingsOf execArith ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZHJ zo.dj zo.y₀)
       (tabZHJ zo.dj zo.y₀) zo.vb = obK c hU nv := rfl
 
+/-- **A transcript V*'s session writes at the registration `R'`**: `wr`'s at some draw of the law and some output of
+the live session, the transcript of every outcome of its game at `R'` (`prob_auditLive_liveOfZJ_mono`). -/
+def Writes (R' : Reg') (tr : Exec.Transcript) : Prop := ∃ ω x, tr = zo.wr (Lv.draw ω) R' x
+
+/-- **A session that accepts no transcript it writes at the registration the prover sends accepts with probability
+`0`**: every outcome of its game is one it writes there (`prob_auditLive_liveOfZJ_mono`). -/
+theorem prob_unwritten {τ : Strategy (zo.game dg N)} {p : Reg' × Finset (Fin nv) × Exec.Transcript → Prop}
+    (hp : ∀ o, p o → LiveAcceptsZKR zo.I zo.own o) (h : ¬ ∃ tr, zo.Writes τ.1 tr ∧ AcceptsZKR zo.I zo.own tr) :
+    prob p (zo.game dg N) τ = 0 :=
+  le_antisymm (le_trans (prob_auditLive_liveOfZJ_mono dg N zo.wr τ (p := p) (q := fun _ => False)
+    fun ω o' ho => h ⟨zo.wr (Lv.draw ω) τ.1 o', ⟨ω, o', rfl⟩, hp (τ.1, Lv.draw ω, zo.wr (Lv.draw ω) τ.1 o') ho⟩)
+    (prob_false _ _).le) (zero_le ..)
+
 /-- **The trial for commit string `pos`** of V*'s session at the strategy `τ`, as a finder of `obK`'s openings. -/
 noncomputable def trial (k Rw : ℕ) (τ : Strategy (zo.game dg N)) (pos : PosK c hU nv) :
     Finder (Finset (obK c hU nv).Op) :=
@@ -394,7 +407,9 @@ theorem trialS_le (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → B
 strings `Sk j` satisfies `Q`, the sessions accept with `Q` failing at most the sessions' expected `slackIf` plus, at
 each session's commit string, its weight times the chance its trial opens the session's registered digest `cs j pos`
 off `wv j pos` (`ZkOuter.candTransfer` at each session, `prob_seqC_exists_le`). Every wire of `Sk j` is a unit's, so it
-is read at every draw (`hfull`, `vCovers_full`). -/
+is read at every draw (`hfull`, `vCovers_full`). The registered digest is `cs j pos` at the registrations where the
+session accepts a transcript it writes (`hcs`): at any other the session accepts with probability `0`
+(`ZkOuter.prob_unwritten`). -/
 theorem sessions_stage_le
     (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -403,7 +418,8 @@ theorem sessions_stage_le
     (hfull : ∀ j g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk j →
       ∃ u, g ∈ ((keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u)
     (cs : (j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
-    (hcs : ∀ j, (∃ tr, AcceptsZKR (zs j).I (zs j).own tr) → ∀ pos ∈ Sk j, ∀ R' : Reg', (zs j).vb.cs R' pos = cs j pos)
+    (hcs : ∀ j R' tr, (zs j).Writes R' tr → AcceptsZKR (zs j).I (zs j).own tr → ∀ pos ∈ Sk j,
+      (zs j).vb.cs R' pos = cs j pos)
     (Q : ((j : Fin S) → (Vs j).Bits) → Prop)
     (wv : (j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c)
     (hQ : ∀ Xt : (j : Fin S) → (Vs j).Bits, (∀ j g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk j →
@@ -437,9 +453,11 @@ theorem sessions_stage_le
             ((zs j).trial dg N k Rw ((zs j).ofBase dg N τ₀) pos).g
             ((zs j).trial dg N k Rw ((zs j).ofBase dg N τ₀) pos).s := by
     intro j τ₀
-    by_cases hj : ∃ tr, AcceptsZKR (zs j).I (zs j).own tr
+    by_cases hj : ∃ tr, (zs j).Writes ((zs j).ofBase dg N τ₀).1 tr ∧ AcceptsZKR (zs j).I (zs j).own tr
     swap
-    · exact ((prob_mono (fun a ha => (hj ⟨a.2.2, ha.1⟩).elim) _ _).trans (prob_false _ _).le).trans (zero_le ..)
+    · refine le_trans (le_of_eq ((zs j).prob_unwritten dg N ?_ hj)) (zero_le ..)
+      exact fun _ ha => ha.1
+    obtain ⟨tr₀, hw, hacc₀⟩ := hj
     unfold ZkOuter.slackIf
     split_ifs with hc
     · refine le_trans (prob_auditLive_mono _ _ ?_)
@@ -452,7 +470,7 @@ theorem sessions_stage_le
         rw [ZkOuter.vb_pos, ZkOuter.vb_bit]
         exact ⟨hg, hne⟩
       · by_cases hp : pos ∈ Sk j
-        · rw [hcs j hj pos hp]
+        · rw [ZkOuter.reg_sim, hcs j _ tr₀ hw hacc₀ pos hp]
         · simp [candWeightK, hp]
     · exact (prob_le_one _ _ _).trans le_self_add
   refine ((prob_mono hmono _ _).trans (prob_seqC_exists_le S _ _
@@ -480,7 +498,7 @@ noncomputable def trialV (zs : Reg₂ → (j : Fin S) → (Vs j).Outer Reg') (dg
   trialS (zs s.1) dg N k Rw (sessOf zs dg N s) pos
 
 /-- **A stage's transfer at V*'s outer proof**: `sessions_stage_le` at the registration the prover sends, the session's
-registered digests at `Sk j` being `cs j` at every registration where it accepts some transcript. -/
+registered digests at `Sk j` being `cs j` at every registration where it accepts a transcript it writes there. -/
 theorem outerV_stage_le
     (zs : Reg₂ → (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -489,7 +507,7 @@ theorem outerV_stage_le
     (hfull : ∀ j g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk j →
       ∃ u, g ∈ ((keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u)
     (cs : (j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
-    (hcs : ∀ R₂ j, (∃ tr, AcceptsZKR (zs R₂ j).I (zs R₂ j).own tr) → ∀ pos ∈ Sk j, ∀ R' : Reg',
+    (hcs : ∀ R₂ j R' tr, (zs R₂ j).Writes R' tr → AcceptsZKR (zs R₂ j).I (zs R₂ j).own tr → ∀ pos ∈ Sk j,
       (zs R₂ j).vb.cs R' pos = cs j pos)
     (Q : ((j : Fin S) → (Vs j).Bits) → Prop)
     (wv : (j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c)
@@ -511,14 +529,16 @@ theorem outerV_stage_le
 variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type}
 
 /-- **V*'s public files register the stages' commitments**: at every history `t` and registration `R₂`, where `t`'s
-stage-`i` commitment is `e.1` and session `j` accepts some transcript, the digest session `j`'s value binding registers
-at each commit string of `Sk i j` (`cs`, the public file's leaf there) is `cmt j e.1`'s. A session that accepts nothing
-may be another history's, registering that history's commitments; the transfer reads only accepting sessions. -/
+stage-`i` commitment is `e.1` and session `j` accepts a transcript it writes at a registration `R'` (`ZkOuter.Writes`,
+an outcome its game reaches), the digest session `j`'s value binding registers there at each commit string of
+`Sk i j` (`cs`, the public file's leaf there) is `cmt j e.1`'s. A session that accepts nothing it writes may be another
+history's, registering that history's commitments; the transfer reads only the registrations where a session accepts
+an outcome of its game. -/
 def VCommits (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
     (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg) : Prop :=
-  ∀ i R ω t (e : Cm × I.Coin), t[i]? = some e → ∀ R₂ j, (∃ tr, AcceptsZKR (zs R ω t R₂ j).I (zs R ω t R₂ j).own tr) →
-    ∀ pos ∈ Sk i j, ∀ R' : Reg', (zs R ω t R₂ j).vb.cs R' pos = cmt j e.1 pos
+  ∀ i R ω t (e : Cm × I.Coin), t[i]? = some e → ∀ R₂ j R' tr, (zs R ω t R₂ j).Writes R' tr →
+    AcceptsZKR (zs R ω t R₂ j).I (zs R ω t R₂ j).own tr → ∀ pos ∈ Sk i j, (zs R ω t R₂ j).vb.cs R' pos = cmt j e.1 pos
 
 /-- **V*'s circuits decode each stage's message from its commit strings**: layers whose bits on the wires of each
 `Sk i j` are those of the values `v j` hold a round-`i` message the inner verifier reads as `msg i v`, at any coins. -/
@@ -612,7 +632,7 @@ theorem zk_sessions_recursive_full
     (fun _ R ω t s => sumV (zs R ω t) dg N (fun R₂ j τ => (zs R ω t R₂ j).slackIf dg N k Rw M ρ t' qF qS τ) s)
     (weightS Vs Sk ρ) q (fun i hi ω => AllLeaves.of_forall (fun t s' v e he => ?_) _) hCR hin
   refine (outerV_stage_le (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht' qF qS (Sk i) (hfull i hi)
-    (fun j pos => cmt j e.1 pos) (fun R₂ j hj pos hp R' => hcmt i σ.1 ω t e he R₂ j hj pos hp R')
+    (fun j pos => cmt j e.1 pos) (fun R₂ j R' tr hw hj pos hp => hcmt i σ.1 ω t e he R₂ j R' tr hw hj pos hp)
     (fun Xs => Option.Rel (same i (t.map Prod.snd)) (wmsg Xs)[i]? (some (msgS msg i v)))
     (fun j p => projV j (v ⟨j, p⟩)) (fun Xt hXt => hdec i hi _ Xt (fun j p => projV j (v ⟨j, p⟩)) hXt) _).trans
     (add_le_add le_rfl ?_)

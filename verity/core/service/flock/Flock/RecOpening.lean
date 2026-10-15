@@ -189,16 +189,55 @@ def part (sh : Shape) (j : Nat) : Except String (RecOpen.GfS × List Nat × Nat)
   let some (R, P, V) := gs[j]? | throw s!"part {j} of {gs.size}"
   pure (← RecResiduals.partS S sizes R P V, P.toList.map (sizes[·]!), V.size)
 
-/-- A unit named `rec-opening/…` is the verifier's part at the `m`, claims and part its name gives, equal in every field;
-any other unit passes. The claims are bounded by the file's unit before the structure is computed, and the part's input
-and output bits are compared before its net is built. Irreducible, so that no unification against it builds the net. -/
+/-- Part `j`'s w: the opening's w slots of its row ports' elements, in order (`RecResiduals.partS`' `wIdx`). -/
+def partW (sh : Shape) (j : Nat) : Except String (Array Nat) := do
+  let sizes := portSizes sh
+  let gs ← RecResiduals.groups (← structureOf sh) sizes
+  let some (_, P, _) := gs[j]? | throw s!"part {j} of {gs.size}"
+  let st := RecResiduals.starts sizes
+  pure (P.flatMap fun p => (Array.range sizes[p]!).map (st[p]! + ·))
+
+/-- Whether each running sum of Ligerito's final check (`.acc0 r`, `.acc1 r`, `r < 2`) is an element of some part's w
+(`partW`) when `S` is the shape's S: false where its parts are refused. -/
+def accHeld (sh : Shape) (S : GfS) : Bool :=
+  match RecResiduals.groups S (portSizes sh) with
+  | .error _ => false
+  | .ok gs => (List.range 2).all fun r => [Key.acc0 r, .acc1 r].all fun k => match wi sh k with
+    | some e => gs.any fun g => (g.2.1.flatMap fun p =>
+        (Array.range (portSizes sh)[p]!).map ((RecResiduals.starts (portSizes sh))[p]! + ·)).contains e
+    | none => false
+
+/-- The first element of a part's w (`W`, its slots in the opening's w) that is a claim's ring switch's (`.rs k u`) or
+a running sum's of Ligerito's final check (`.acc0 r`, `.acc1 r`) and not read in all 128 bits, with how many are. -/
+def rsUnread (sh : Shape) (W : Array Nat) (rd : Array Bool) (ns : List Nat) : Option (Nat × Nat) :=
+  ((List.range W.size).filterMap fun q => match ((wNames sh)[W[q]!]? : Option Key) with
+    | some (.rs _ _) | some (.acc0 _) | some (.acc1 _) =>
+      let n := RecResiduals.readBits rd ns q; if n != 128 then some (q, n) else none
+    | _ => none).head?
+
+/-- The row port `rec_residuals.spec` names for a part's element `a` (`W`, its slots in the opening's w) that is claim
+`i`'s ring switch's (`.rs i u`): round `i`'s, `m<i>`; none for any other. -/
+def rsName (sh : Shape) (W : Array Nat) (a : Nat) : List String :=
+  match ((wNames sh)[W[a]!]? : Option Key) with
+  | some (.rs i _) => [s!"m{i}"]
+  | _ => []
+
+/-- A unit named `rec-opening/…` is the verifier's part at the `m`, claims and part its name gives, equal in every
+field, at one unit per VU (each part is one copy of its unit), its computed rows read each element of a claim's ring
+switch or of a running sum it holds in all 128 bits (`rsUnread`) and each other element it holds in all 128 bits or none
+(`RecResiduals.partlyRead`), and each bit of claim `i`'s ring switch's elements is keyed by a circuit port named `m<i>`
+where a port keys it (`RecResiduals.misnamed`, `rsName`); any other unit passes. The claims are bounded by the file's
+unit before the structure is computed, and the part's input and output bits are compared before its net is built.
+Irreducible, so that no unification against it builds the net. -/
 @[irreducible] def check (c : Circuit) : V Unit :=
   match params c.unit.name with
   | some (m, cl, j) =>
     match shape? m cl with
     | none => throw s!"circuit {c.name}: rec-opening's m has a fast100 schedule, claims at least 1"
     | some sh =>
-      if cl > RecOpen.inBits c.unit then
+      if c.upv != 1 then
+        throw s!"circuit {c.name}: unit {c.unit.name} has {c.upv} units per VU, not 1"
+      else if cl > RecOpen.inBits c.unit then
         throw s!"circuit {c.name}: unit {c.unit.name}'s claims exceed its {RecOpen.inBits c.unit} input bits"
       else match part sh j with
         | .error e => throw s!"circuit {c.name}: unit {c.unit.name}: {e}"
@@ -210,17 +249,34 @@ and output bits are compared before its net is built. Irreducible, so that no un
           else match netOf (unitName m cl j) (RecResiduals.unitLaid S ns nv) with
             | .error e => throw e
             | .ok g =>
-              if c.unit = g then pure ()
+              if c.unit = g then
+                match partW sh j with
+                | .error e => throw s!"circuit {c.name}: unit {c.unit.name}: {e}"
+                | .ok W => match rsUnread sh W (RecResiduals.readIns g) ns with
+                  | none => match RecResiduals.partlyRead (RecResiduals.readIns g) ns with
+                    | none => match RecResiduals.misnamed c ns W.size (rsName sh W) with
+                      | none => pure ()
+                      | some (k, a, b, q) =>
+                        throw (s!"circuit {c.name}: unit {c.unit.name}'s copy {k} keys bit {b} of ring-switch element " ++
+                          s!"{a} by port {c.ports[q]!.name}, not {rsName sh W a}")
+                    | some (q, n) =>
+                      throw s!"circuit {c.name}: unit {c.unit.name} reads {n} of row-port element {q}'s 128 bits"
+                  | some (q, n) =>
+                    throw (s!"circuit {c.name}: unit {c.unit.name} reads {n} of ring-switch or running-sum element " ++
+                      s!"{q}'s 128 bits")
               else throw s!"circuit {c.name}: not the verifier's {c.unit.name} ({firstDiff c.unit g})"
   | none =>
     if c.unit.name.startsWith "rec-opening/" then
       throw s!"circuit {c.name}: unit {c.unit.name} is not rec-opening/m<m>-c<claims>-p<j>"
     else pure ()
 
-/-- `check` reads a circuit's name and unit only. -/
-theorem check_congr {c c' : Circuit} (hn : c.name = c'.name) (hu : c.unit = c'.unit) : check c = check c' := by
+/-- `check` reads a circuit's name, unit, units per VU, ports and leaves only (the last three by `rfl` where the two
+share them). -/
+theorem check_congr {c c' : Circuit} (hn : c.name = c'.name) (hu : c.unit = c'.unit) (hv : c.upv = c'.upv := by rfl)
+    (hp : c.ports = c'.ports := by rfl) (hl : c.leavesIn = c'.leavesIn := by rfl) :
+    check c = check c' := by
   unfold check
-  rw [hn, hu]
+  rw [hn, hu, hv, RecResiduals.misnamed_congr hu hp hl hv, hp]
 
 end RecOpening
 end Flock

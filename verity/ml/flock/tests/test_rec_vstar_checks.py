@@ -8,13 +8,15 @@ byte the one V* writes for its statement by the byte it differs at. V*'s parts a
 inner shape's claims are two and two per region, and the verifier's registered reads hold exactly the statement's
 message-round ports. A session is the statement the verifier names (`--rec-part J`), and META binds the verifier's own
 bindings (`--rec-bindings F`, which `verity_flock.rec_bindings` computes from the partition object and program) exactly,
-`program_digests` by value. The honest sessions themselves are replayed on the pod: their statements are
+`program_digests` by value. Candidate 3's session adds RecSparse, R's levels under names of their own
+(`rec-open-stacked/l<LANES>-h<H>`) and R's opening at META's shape, each needed. The honest sessions themselves are replayed on the pod: their statements are
 hundreds of MB. Each `rec-statements` builds the algebra's parts at its shape, about 5 s, so every test is slow."""
 from __future__ import annotations
 
 import json
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -30,11 +32,14 @@ pytestmark = [pytest.mark.slow,
 SHAPES = [(25, 22, 8), (27, 22, 8)]
 
 
-def _inner(path: Path, m: int, k: int, c: int, regions: int | None = None, holo=None) -> Path:
+def _inner(path: Path, m: int, k: int, c: int, regions: int | None = None, holo=None, sparse=None, stacked=None) -> Path:
     """`rec-inner`'s line at a shape, of `(c - 2) / 2` regions unless given: an extra claim per region at two link points;
-    ``holo``, when given, its `holo` key (`rec-inner --hide`)."""
+    ``holo``, when given, its `holo` key (`rec-inner --hide`); ``sparse``, the bucket's RecSparse shape (`rec-inner
+    --sparse`), and ``stacked``, R's `(m, claims)` (the inner circuit's META's), candidate 3's."""
     path.write_text(json.dumps({"format": "verity/rec-inner/v1", "m": m, "k_log": k, "claims": c,
-                                "regions": (c - 2) // 2 if regions is None else regions, **({"holo": holo} if holo is not None else {})}))
+                                "regions": (c - 2) // 2 if regions is None else regions, **({"holo": holo} if holo is not None else {}),
+                                **({"sparse": list(sparse)} if sparse is not None else {}),
+                                **({"stacked": {"m": stacked[0], "claims": stacked[1]}} if stacked is not None else {})}))
     return path
 
 
@@ -226,7 +231,7 @@ def test_the_registered_reads_message_round_ports_are_the_statements(tmp_path):
 
 
 @pytest.fixture(scope="module")
-def l16_h1(tmp_path_factory) -> tuple[bytes, Path]:
+def l16_h1(once) -> tuple[bytes, Path]:
     """`rec-open/l16-h1` (V*'s statement 2 at m = 23, its last level, over 142 openings) as `compose` writes it under its
     population program's partition, and the verifier's own bindings of it, from that partition object and program."""
     from verity.ml.circuits.codec import canonical_json, encode_program
@@ -235,15 +240,18 @@ def l16_h1(tmp_path_factory) -> tuple[bytes, Path]:
     from verity_flock import rec_open as R
     from verity_flock import rec_outer as O
 
-    tmp_path = tmp_path_factory.mktemp("l16-h1")
-    defn = R.definition(16, 1)
-    program = P.population_program(defn, 142)
-    part = P.partition(program, P.template_instance_query(defn))
-    honest = FC.compose(O.lowering(16, 1), O.subcircuit(16, 1), partition=P.digest(part),
-                        program=P.program_sha512(program)).encode()
-    (tmp_path / "partition.json").write_text(json.dumps(part))
-    (tmp_path / "program.json").write_bytes(canonical_json(encode_program(program)))
-    return honest, _bindings(tmp_path, tmp_path / "bindings.json")
+    def make(d):
+        defn = R.definition(16, 1)
+        program = P.population_program(defn, 142)
+        part = P.partition(program, P.template_instance_query(defn))
+        (d / "circuit.txt").write_bytes(FC.compose(O.lowering(16, 1), O.subcircuit(16, 1), partition=P.digest(part),
+                                                   program=P.program_sha512(program)).encode())
+        (d / "partition.json").write_text(json.dumps(part))
+        (d / "program.json").write_bytes(canonical_json(encode_program(program)))
+        _bindings(d, d / "bindings.json")
+
+    d = once("vstar-l16-h1", make)
+    return (d / "circuit.txt").read_bytes(), d / "bindings.json"
 
 
 def test_a_v_star_circuit_file_is_the_one_v_star_writes_byte_for_byte(l16_h1, tmp_path):
@@ -371,6 +379,24 @@ def test_verify_refuses_a_v_star_statement_without_the_session_index_or_the_veri
         f'{{"{tid}":"{other}"}}'), p.stdout
 
 
+def test_the_verifiers_bindings_are_its_own_partition_objects(staged, tmp_path):  # noqa: F811
+    """`RecVStar.checkOwnBindings`: bindings whose partition digest is not the verifier's partition object's are refused by
+    that digest, before META is compared with them (which would refuse the same file by META's digest instead)."""
+    d = staged[0]
+    inner = _inner(tmp_path / "inner.json", 25, 22, 8)
+    mine = json.loads(_bindings(d, tmp_path / "bindings.json").read_text())
+    other = ("0" if mine["partition"][0] != "0" else "1") + mine["partition"][1:]
+    (tmp_path / "theirs.json").write_text(json.dumps({**mine, "partition": other}))
+    files = ["--statement", "verity/flock-circuit", "--circuit", str(d / "circuit.txt"), "--public", str(d / "pub.bin"),
+             "--partition", str(d / "partition.json"), "--program", str(d / "program.json"),
+             "--registered", str(d / "registered.json"), "--rec-inner", str(inner), "--rec-part", "0"]
+    p = subprocess.run([str(BIN), "statement", *files, "--rec-bindings", str(tmp_path / "theirs.json")],
+                       capture_output=True, text=True)
+    assert p.returncode == 1 and p.stdout.strip() == (
+        f"setup: rec-open/l8-h1: the verifier's bindings' partition digest {other}, its partition object's "
+        f"{mine['partition']}"), p.stdout
+
+
 PRIVATE = "the inner session's circuits are private (rec-inner holo): V*'s circuit writer does not write holo parts yet"
 
 
@@ -408,3 +434,205 @@ def test_a_private_inner_session_is_refused_and_the_verdict_says_whether_the_cir
     p = subprocess.run([str(BIN), "rec-statements", "--rec-inner", str(_inner(tmp_path / "bad.json", 25, 22, 8, holo=1))],
                        capture_output=True, text=True)
     assert p.returncode == 2 and p.stderr.strip() == "rec-inner: holo is not a boolean", p.stderr
+
+
+# candidate 3's session (`3f97`'s e2e): the circuit table's shape, the bucket's RecSparse shape and R at `table_m` of it
+C3 = (25, 22, 8)
+SPARSE = (18, 13, 6, 0)
+R_SHAPE = (23, 2)
+
+
+def _c3(m: int, k: int, c: int, sparse: tuple, r: tuple) -> list[list]:
+    """Candidate 3's V* list, as `rec_vstage.stage --sparse` names its units: V*'s, then RecSparse over the two reps, R's levels
+    over its one stream's openings (`rec_vstage.stage_stacked`), and the parts of R's opening (`rec_residuals.stage_opening`)."""
+    from verity_flock import rec_outer as O
+    from verity_flock import rec_sparse as SP
+
+    sh = A.Shape(r[0], 6, r[1], salt_len=0, opening_only=True)
+    return (_v_star(m, k, c) + [[SP.unit_name(SP.Shape(*sparse)), 2]]
+            + [[O.stacked_name(1 << lv.lanes, lv.d - lv.cap), lv.q] for lv in sh.sched.levels]
+            + [[f"rec-opening/m{r[0]}-c{r[1]}-p{j}", 1] for j in range(len(RR.parts(RR.spec(sh))))])
+
+
+def test_candidate_3s_statements_are_the_ones_v_star_stages_and_each_is_needed(tmp_path):
+    """At candidate 3's inner shape the verifier's list is `_c3`'s, in order: V*'s, RecSparse, R's levels under names of their
+    own (`rec-open-stacked/…`) and R's opening at META's shape; an R level passes under its own name. Refused by name: an R
+    level under the circuit table's name (`rec-open/l16-h1`, which no level of the table has, and `rec-open/l16-h3` at R's
+    count, which the table's has at another), an opening at another shape, a RecSparse at another, R named without the
+    sparse phase whose claims it opens, the sparse phase without R, which opens them, and R at another m than the bucket's
+    `table_m`."""
+    inner = _inner(tmp_path / "c3.json", *C3, sparse=SPARSE, stacked=R_SHAPE)
+    rc, line = _statements(inner)
+    want = _c3(*C3, SPARSE, R_SHAPE)
+    assert rc == 0 and line["statements"] == want, line
+    assert [s[0] for s in want[6:]] == ["rec-sparse/n18-e13-s6-t0", "rec-open-stacked/l64-h4", "rec-open-stacked/l16-h3",
+                                        "rec-open-stacked/l16-h1", "rec-opening/m23-c2-p0"], want
+    rc, line = _statements(inner, "--unit", "rec-open-stacked/l16-h1", "--instances", "71")
+    assert rc == 0 and line["checked"] == ["rec-open-stacked/l16-h1", 71], line
+    cases = [
+        ("rec-open/l16-h1", 71, "rec-open/l16-h1: R's level stacked/L2 is rec-open-stacked/l16-h1, never under the circuit "
+         "table's name rec-open/…; rec-open/l16-h1: not one of V*'s statements"),
+        ("rec-open/l16-h3", 106, "rec-open/l16-h3: R's level stacked/L1 is rec-open-stacked/l16-h3, never under the circuit "
+         "table's name rec-open/…; rec-open/l16-h3: instances 106, statement says 142"),
+        ("rec-opening/m24-c2-p0", 1, "rec-opening/m24-c2-p0: opens R at (m 24, claims 2), not at R's shape (m 23, claims 2, "
+         "the inner circuit's META's stacked)"),
+        ("rec-sparse/n18-e13-s6-t1", 2, "rec-sparse/n18-e13-s6-t1: a RecSparse unit, and the bucket's is "
+         "rec-sparse/n18-e13-s6-t0 (rec-inner --sparse)"),
+    ]
+    for name, n, why in cases:
+        rc, line = _statements(inner, "--unit", name, "--instances", str(n))
+        assert rc == 1 and line["error"].startswith(why), (name, line)
+    for f, why in (
+            (_inner(tmp_path / "no-sparse.json", *C3, stacked=R_SHAPE),
+             "candidate 3's V* list: the inner shape names R's shape (m 23, claims 2) and no RecSparse shape (rec-inner "
+             "--sparse): R opens the sparse phase's claims, so RecSparse is missing"),
+            (_inner(tmp_path / "no-r.json", *C3, sparse=SPARSE),
+             "candidate 3's V* list: the inner shape names RecSparse (rec-sparse/n18-e13-s6-t0) and no R's shape (stacked): "
+             "R opens the sparse phases' claims, so R is missing"),
+            (_inner(tmp_path / "r24.json", *C3, sparse=SPARSE, stacked=(24, 2)),
+             "candidate 3's V* list: R's m 24 is not rec-sparse/n18-e13-s6-t0's table_m 23")):
+        rc, line = _statements(f)
+        assert rc == 1 and line["error"] == why, line
+
+
+def test_a_rec_sparse_reads_file_holds_every_message_port(tmp_path):
+    """RecSparse's reads file holds `h` and `claim` (`ownPorts`) and every other message port `<p>` under `rec-sparse-<p>`
+    at rows 0 and 1 (`sparseMsgs`, as `rec_vstage.sparse_messages` registers them), beside its `v`; one of those missing,
+    read at other rows or under another value is refused by name (`checkOwn`'s third loop), so no message column the unit
+    reads is left unregistered."""
+    from verity_flock import rec_sparse as SP
+
+    inner = _inner(tmp_path / "c3.json", *C3, sparse=SPARSE, stacked=R_SHAPE)
+    unit = ["--unit", SP.unit_name(SP.Shape(*SPARSE)), "--instances", "2"]
+    rc, line = _statements(inner, *unit)
+    own = line["own"]
+    assert rc == 0 and [p[0] for p in own] == ["h", "claim"], line
+    msgs = [[nm, f"rec-sparse-{nm}", [0, 1]] for nm, _ in SP.message_ports(SP.Shape(*SPARSE))[1:-1]]
+    assert [m[0] for m in msgs[:2]] == ["pre0", "pre1"] and msgs[-1][0] == "u", msgs
+    other = [["v", "rec-sparse-v", [0, 1]]]
+    rc, line = _statements(inner, *unit, "--registered", str(_reads(tmp_path / "honest.json", other + own + msgs[::-1])))
+    assert rc == 0 and line["checked"] == [unit[1], 2], line
+    missing = lambda q: f"{unit[1]}: the statement's message port {q} under rec-sparse-{q} reading [0, 1] is not in the registered reads"  # noqa: E731
+    for k, (ports, q) in enumerate([(msgs[1:], "pre0"), (msgs[:-1], "u"), ([[*msgs[0][:2], [1, 0]]] + msgs[1:], "pre0"),
+                                    (msgs[:-1] + [["u", "rec-sparse-vt", [0, 1]]], "u")]):
+        rc, line = _statements(inner, *unit, "--registered", str(_reads(tmp_path / f"t{k}.json", other + own + ports)))
+        assert rc == 1 and line["error"] == missing(q), (k, line)
+
+
+def _staged(d: Path, text: str, part: dict, program) -> Path:
+    from verity.ml.circuits.codec import canonical_json, encode_program
+
+    d.mkdir()
+    (d / "circuit.txt").write_text(text)
+    (d / "partition.json").write_text(json.dumps(part))
+    (d / "program.json").write_bytes(canonical_json(encode_program(program)))
+    return _bindings(d, d / "bindings.json")
+
+
+def test_r_levels_circuit_file_is_v_stars_under_its_own_name(l16_h1, tmp_path):
+    """R's last level at m 23 (`rec-open-stacked/l16-h1` over 71 openings) as `rec_outer.stage` writes it with
+    `stacked_name` is V*'s file byte for byte, as candidate 3's statement 9; the circuit table's `rec-open/l16-h1` file is
+    refused at candidate 3's shape as R's level under the table's name."""
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity_flock import circuit as FC
+    from verity_flock import rec_open as R
+    from verity_flock import rec_outer as O
+
+    name = O.stacked_name(16, 1)
+    defn = R.definition(16, 1)
+    program = P.population_program(defn, 71)
+    part = P.partition(program, P.template_instance_query(defn))
+    text = FC.compose(O.lowering(16, 1, name), O.subcircuit(16, 1, name), partition=P.digest(part),
+                      program=P.program_sha512(program))
+    own = _staged(tmp_path / "level", text, part, program)
+    inner = _inner(tmp_path / "c3.json", *C3, sparse=SPARSE, stacked=R_SHAPE)
+    assert _c3(*C3, SPARSE, R_SHAPE)[9] == [name, 71]
+    rc, line = _statements(inner, "--circuit", str(tmp_path / "level" / "circuit.txt"), "--instances", "71", "--rec-part",
+                           "9", "--rec-bindings", str(own))
+    assert rc == 0 and line["checked"] == [name, 71] and line["own"] == [], line
+    honest, table_own = l16_h1
+    (tmp_path / "table.txt").write_bytes(honest)
+    rc, line = _statements(inner, "--circuit", str(tmp_path / "table.txt"), "--instances", "142", "--rec-part", "9",
+                           "--rec-bindings", str(table_own))
+    assert rc == 1 and line["error"].startswith(
+        "rec-open/l16-h1: R's level stacked/L2 is rec-open-stacked/l16-h1, never under the circuit table's name rec-open/…"), line
+
+
+def test_rec_sparses_circuit_file_is_v_stars(tmp_path):
+    """RecSparse at a small shape (NU 1, ELL 6, S_LOG 1), as `rec_sparse.statement` writes it over the two reps, is V*'s file
+    byte for byte as candidate 3's statement after V*'s (its bindings `rec_bindings`' alone, which registers
+    RecSparse itself), and its own port is `h` under the table's h round
+    (`rec-c38` at m 25, k_log 22) at both reps' rows; at an inner shape naming another RecSparse it is refused by the shape."""
+    from verity_flock import rec_sparse as SP
+
+    st = SP.statement(SP.Shape(1, 6, 1, 0), 2)
+    own = _staged(tmp_path / "sparse", st.text, st.part, st.program)
+    fresh = subprocess.run([sys.executable, "-c", "import json, sys; from verity_flock import rec_bindings as RB; "
+                            "print(json.dumps(RB.bindings(*(json.load(open(f)) for f in sys.argv[1:]))))",
+                            str(tmp_path / "sparse" / "partition.json"), str(tmp_path / "sparse" / "program.json")],
+                           capture_output=True, text=True)
+    assert fresh.returncode == 0 and json.loads(fresh.stdout) == json.loads(own.read_text()), fresh.stderr
+    j = len(_v_star(*C3))
+    flags = ["--circuit", str(tmp_path / "sparse" / "circuit.txt"), "--instances", "2", "--rec-part", str(j),
+             "--rec-bindings", str(own)]
+    r22 = (SP.table_m(SP.Shape(1, 6, 1, 0)), 2)
+    rc, line = _statements(_inner(tmp_path / "s.json", *C3, sparse=(1, 6, 1, 0), stacked=r22), *flags)
+    assert rc == 0 and line["checked"] == ["rec-sparse/n1-e6-s1-t0", 2], line
+    assert line["own"] == [["h", "rec-c38", [0, 1]], ["claim", "rec-claim", [0, 1]]], line
+    assert line["statements"] == _c3(*C3, (1, 6, 1, 0), r22), line
+    rc, line = _statements(_inner(tmp_path / "s2.json", *C3, sparse=(1, 6, 2, 0), stacked=r22), *flags)
+    assert rc == 1 and line["error"] == (
+        "rec-sparse/n1-e6-s1-t0: a RecSparse unit, and the bucket's is rec-sparse/n1-e6-s2-t0 (rec-inner --sparse)"), line
+
+
+def test_r_openings_circuit_file_is_v_stars(tmp_path):
+    """R's opening at m 23 (`rec-opening/m23-c2-p0`, one part), as `rec_residuals.stage_opening` writes it, is V*'s file byte
+    for byte as candidate 3's statement 10, its own ports each `m<i>` under `rec-opening-c<i>` at R's one row. About two
+    minutes and 2.2 GB (each side builds the opening's unit): no cheaper test writes Lean's opening unit, so none
+    other catches its bytes drifting from the one the prover commits and the Lean verifier recomputes."""
+    sh = A.Shape(R_SHAPE[0], 6, R_SHAPE[1], salt_len=0, opening_only=True)
+    [p] = RR.parts(RR.spec(sh))
+    st = RR.statement(p.S, "rec-opening/m23-c2-p0", 1)
+    own = _staged(tmp_path / "open", st.text, st.part, st.program)
+    rc, line = _statements(_inner(tmp_path / "c3.json", *C3, sparse=SPARSE, stacked=R_SHAPE), "--circuit",
+                           str(tmp_path / "open" / "circuit.txt"), "--instances", "1", "--rec-part", "10",
+                           "--rec-bindings", str(own))
+    nr = len([nm for nm, _ in p.S["ports"] if nm.startswith("m")])
+    assert rc == 0 and line["checked"] == ["rec-opening/m23-c2-p0", 1], line
+    assert line["own"] == ([[f"m{i}", f"rec-opening-c{i}", [0]] for i in range(nr)]
+                           + [[f"claim{k}", "rec-claim", [k]] for k in range(R_SHAPE[1])]), line
+
+
+def test_a_claim_port_reads_its_own_reps_row_of_rec_claim(tmp_path):
+    """`checkOwn` holds which row each claim port reads: RecSparse's `claim` reads `rec-claim` at rep r's row in instance r
+    (`rec_sparse.reads`), and R's opening's `claim<k>` at row k (`rec_residuals.stage_opening`). `checkPubRows` holds the
+    rows a claim port opens to `rec-claim`'s, not which of them it opens, so a reads file swapping or repeating the reps'
+    claims is refused here, by the port compared. RecSparse's file also holds its other message ports, each `<p>` under
+    `rec-sparse-<p>` at both reps' rows (`rec_vstage.sparse_messages`), and one missing them is refused by the first."""
+    from verity_flock import rec_sparse as SP
+
+    inner = _inner(tmp_path / "c3.json", *C3, sparse=SPARSE, stacked=R_SHAPE)
+    msgs = [[nm, f"rec-sparse-{nm}", [0, 1]] for nm, _ in SP.message_ports(SP.Shape(*SPARSE))[1:-1]]
+    for unit, n, other, honest, bad in (
+            ("rec-sparse/n18-e13-s6-t0", 2, [["v", "rec-sparse-v", [0, 1]]] + msgs, [["claim", "rec-claim", [0, 1]]],
+             [["claim", "rec-claim", [1, 0]]]),
+            ("rec-opening/m23-c2-p0", 1, [], [["claim0", "rec-claim", [0]], ["claim1", "rec-claim", [1]]],
+             [["claim0", "rec-claim", [1]], ["claim1", "rec-claim", [1]]])):
+        check = ["--unit", unit, "--instances", str(n)]
+        rc, line = _statements(inner, *check)
+        own = line["own"]
+        claims = [p for p in own if p[1] == "rec-claim"]
+        rest = [p for p in own if p[1] != "rec-claim"]
+        assert rc == 0 and claims == honest, line
+        rc, line = _statements(inner, *check, "--registered", str(_reads(tmp_path / "honest.json", other + own)))
+        assert rc == 0 and line["checked"] == [unit, n], line
+        if msgs[0] in other:
+            short = [p for p in other if p != msgs[0]] + own
+            rc, line = _statements(inner, *check, "--registered", str(_reads(tmp_path / "short.json", short)))
+            (nm, v, rd) = msgs[0]
+            assert rc == 1 and line["error"] == (f"{unit}: the statement's message port {nm} under {v} reading {rd} is not in "
+                                                 "the registered reads"), line
+        rc, line = _statements(inner, *check, "--registered", str(_reads(tmp_path / "bad.json", other + rest + bad)))
+        (nm, _, rd), (_, _, want) = bad[0], claims[0]
+        assert rc == 1 and line["error"] == (f"{unit}: the registered reads' port {nm} under rec-claim reading {rd} is not "
+                                             f"the statement's: the statement's is {nm} under rec-claim reading {want}"), line
