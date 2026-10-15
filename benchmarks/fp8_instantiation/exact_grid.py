@@ -31,7 +31,8 @@ Unpeeled edits (note:20261015T1826Z-draft-d4-perplexity), `GRID[_rot]@EDIT:ALPHA
 EDIT `w` adds one draw from ALPHABET (in LSBs) to each weight integer, fresh per matrix; `a` to each activation integer,
 fresh per token and per linear; `wa` both; `GRID@-` is the grid unedited.  An edited side is quantized to top M - max|e|,
 so every edited integer stays on the grid (|q| <= 127, or <= 16).  The integer product is torch._int_mm (s8 x s8 -> s32,
-exact); x, W and the rotation are fp32.  ALPHABETS lists the alphabets, each drawn uniformly.
+exact); x, W and the rotation are fp32 (EXACT_GRID_EDIT_DTYPE=float64: float64).  ALPHABETS lists the alphabets, drawn
+uniformly.
 
     python exact_grid.py MODEL_SNAPSHOT IDS.npy OUT_DIR METHOD...
     python exact_grid.py --selftest
@@ -42,6 +43,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import sys
 import time
 import zlib
@@ -255,6 +257,7 @@ def product(method: str, x: torch.Tensor, w: torch.Tensor, wcache: dict) -> tupl
 ALPHABETS = {"pm1": [-1, 1], "pm13": [-3, -1, 1, 3], "pm57": [-7, -5, 5, 7],
              **{f"u{k}": list(range(-k, k + 1)) for k in (1, 2, 4, 8, 16)}}
 EDIT_GRIDS = {"int8": (127, S32_EXACT), "e4m3i16": (16, FP32_EXACT)}
+EDIT_DTYPE = getattr(torch, os.environ.get("EXACT_GRID_EDIT_DTYPE", "float32"))
 _ROT32: dict[int, torch.Tensor] = {}
 
 
@@ -276,36 +279,37 @@ def parse_edit(method: str) -> dict:
             "acc": EDIT_GRIDS[grid_name][1], "bits": math.log2(len(alphabet))}
 
 
-def draw(shape: tuple[int, int], values: list[int], tag: str, device) -> torch.Tensor:
+def draw(shape: tuple[int, int], values: list[int], tag: str, device, dtype=torch.float32) -> torch.Tensor:
     g = torch.Generator(device=device)
     g.manual_seed(zlib.crc32(tag.encode()))
-    v = torch.tensor(values, dtype=torch.float32, device=device)
+    v = torch.tensor(values, dtype=dtype, device=device)
     return v[torch.randint(len(values), shape, generator=g, device=device)]
 
 
 def int_product(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
-    """a b^T of integer-valued fp32 operands in [-127, 127], exactly, as int64."""
+    """a b^T of integer-valued float operands in [-127, 127], exactly, as int64."""
     return torch._int_mm(a.to(torch.int8), b.to(torch.int8).T).long()
 
 
 def edited_product(method: str, x: torch.Tensor, w: torch.Tensor, wcache: dict, tag: str) -> tuple[torch.Tensor, dict]:
-    """The edited grid's y for fp32 x (m x k) and W (n x k); `tag` names the linear, so each matrix draws its own noise."""
+    """The edited grid's y for x (m x k) and W (n x k), both EDIT_DTYPE; `tag` names the linear, so each matrix draws its
+    own noise."""
     e = parse_edit(method)
-    k = x.shape[1]
+    k, dt = x.shape[1], x.dtype
     if e["rot"]:
-        if k not in _ROT32:
-            _ROT32[k] = rotation(k, x.device).float()
-        x = x @ _ROT32[k]
+        if (k, dt) not in _ROT32:
+            _ROT32[k, dt] = rotation(k, x.device).to(dt)
+        x = x @ _ROT32[k, dt]
     if "w" not in wcache:
-        wq = w @ _ROT32[k] if e["rot"] else w
-        bi, sb = quant_rows(wq, torch.arange(e["top_w"] + 1, dtype=torch.float32, device=x.device), False)
+        wq = w @ _ROT32[k, dt] if e["rot"] else w
+        bi, sb = quant_rows(wq, torch.arange(e["top_w"] + 1, dtype=dt, device=x.device), False)
         if "w" in e["edit"]:
-            bi = bi + draw(tuple(bi.shape), e["values"], f"{e['seed']}/{tag}/w", x.device)
+            bi = bi + draw(tuple(bi.shape), e["values"], f"{e['seed']}/{tag}/w", x.device, dt)
         wcache["w"] = bi, sb
     bi, sb = wcache["w"]
-    ai, sa = quant_rows(x, torch.arange(e["top_a"] + 1, dtype=torch.float32, device=x.device), False)
+    ai, sa = quant_rows(x, torch.arange(e["top_a"] + 1, dtype=dt, device=x.device), False)
     if "a" in e["edit"]:
-        ai = ai + draw(tuple(ai.shape), e["values"], f"{e['seed']}/{tag}/a", x.device)
+        ai = ai + draw(tuple(ai.shape), e["values"], f"{e['seed']}/{tag}/a", x.device, dt)
     top = EDIT_GRIDS[e["grid"]][0]
     assert float(ai.abs().max()) <= top and float(bi.abs().max()) <= top
     s = int_product(ai, bi)
@@ -326,7 +330,7 @@ def attach(model, method: str, log: list) -> list:
             def fn(mod, inp, out, i=i, name=name, wcache=wcache):
                 x = inp[0].reshape(-1, inp[0].shape[-1])
                 if "@" in method:
-                    x, w = x.float(), mod.weight.float()
+                    x, w = x.to(EDIT_DTYPE), mod.weight.to(EDIT_DTYPE)
                     y, rec = edited_product(method, x, w, wcache, f"{i}/{name}")
                 else:
                     x, w = x.double(), mod.weight.double()
