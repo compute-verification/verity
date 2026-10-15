@@ -25,6 +25,7 @@ import argparse
 import gc
 import hashlib
 import json
+import os
 import queue
 import random
 import sys
@@ -400,7 +401,11 @@ def main() -> int:
             {"schema": "verity/remote-session/prover/v0", "registration": wire.registration_json(p.registration),
              "calibration": cal, "gates": backend.gates, "calibration_trace": stalls, "sessions": results,
              "wire": conn.totals()}, indent=1))
-    return 0
+    # Tearing down a whole-node store (every pass handle in host memory, every GPU's mapped segments) kept the process
+    # alive 12 minutes past its last output, to the end of its GPU lease (r20261015-171223-cc99).
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(0)
 
 
 if __name__ == "__main__":
