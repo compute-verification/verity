@@ -34,6 +34,7 @@
 #          p8192 qkv
 #   drift  (not default) lease 1: cutlass_receipt --drift, the honest kernels CG_BUILD names and plain back to back for
 #          DRIFT_S seconds (720) at the prefill shapes, every launch timed, NVML's clocks read and never set
+#   smi    (not default) lease 1: the leased GPU's clock and power policy (nvidia-smi, read only)
 #   gap    (not default) lease 1: gap_filler.py, forced work (φ pump, or a tag-like read of a 1 GiB store) on a
 #          low-priority stream beside vLLM's FP8 layer stack (its own ops), graph-replayed at high priority
 # Timeouts run in the foreground so `research cancel` reaches the GPU process.
@@ -285,6 +286,14 @@ drift() {  # the honest kernels CG_BUILD names, back to back for DRIFT_S seconds
   nvidia-smi -i "$GPU_LEASE_UUID" -q -d CLOCK,PERFORMANCE > "$OUT/nvidia-smi-after.txt" 2>&1 || true
 }
 
+smi() {  # the leased GPU's clock and power policy, read only
+  stamp "smi"
+  nvidia-smi -i "$GPU_LEASE_UUID" -q -d CLOCK,POWER,PERFORMANCE > "$OUT/nvidia-smi-policy.txt" 2>&1 || true
+  nvidia-smi -i "$GPU_LEASE_UUID" --format=csv --query-gpu=name,clocks.sm,clocks.max.sm,clocks.applications.graphics,\
+clocks.default_applications.graphics,power.draw,power.limit,power.default_limit,power.min_limit,power.max_limit,\
+enforced.power.limit,persistence_mode >> "$OUT/nvidia-smi-policy.txt" 2>&1 || true
+}
+
 gap() {
   stamp "gap filler"
   if timeout --foreground 1500 "$PY" "$S/gap_filler.py" ${GAP_ARGS:-} > "$OUT/gap-filler.json" 2> "$OUT/gap-filler.err"; then
@@ -296,7 +305,7 @@ gap() {
 
 leased() {
   stamp "lease for: $*"
-  gpu-lease 1 --wait --max-min 30 -- bash -c "$(declare -f stamp split micro ncu_stage phi isa rgemm cgemm cg_ncu cgncu corun cheat drift gap); $(declare -p OUT d S PY MODEL REV NCU METRICS); $*" \
+  gpu-lease 1 --wait --max-min 30 -- bash -c "$(declare -f stamp split micro ncu_stage phi isa rgemm cgemm cg_ncu cgncu corun cheat drift smi gap); $(declare -p OUT d S PY MODEL REV NCU METRICS); $*" \
     || stamp "lease for '$*' FAILED rc=$?"
 }
 [[ " $STAGES " == *" split "* ]] && leased split "'bf16 eager'" "'fp8 eager'" "'bf16 graphs'" "'fp8 graphs'"
@@ -313,6 +322,7 @@ leased() {
 [[ " $STAGES " == *" cheat "* ]] && leased cheat
 [[ " $STAGES " == *" drift "* ]] && leased drift
 [[ " $STAGES " == *" cgncu "* ]] && leased cgncu
+[[ " $STAGES " == *" smi "* ]] && leased smi
 [[ " $STAGES " == *" gap "* ]] && leased gap
 
 for rep in "$d"/ncu-*.ncu-rep; do
