@@ -230,6 +230,8 @@ static int amx(int threads, double seconds, const char* tag, const char* variant
       }
       printf("],\"cpus\":[");
       for (int i = 0; i < nt; i++) printf("%s%d", i ? "," : "", cpu[i]);
+      printf("],\"per_thread_macs_per_s_by_cpu\":[");
+      for (int i = 0; i < nt; i++) printf("%s%.4g", i ? "," : "", ops[i] * mpo / seconds);
       printf("]}\n");
       fflush(stdout);
     }

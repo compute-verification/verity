@@ -2,8 +2,9 @@
 # Round 2 of the census: host AMX (int8, bf16) on every physical core this run's cgroup allows, per core against 1 and
 # 16 cores, alone and beside dense FP8 GEMMs (gemm_fp8.cu) on the GPUs of one `gpu-lease 2`, and as a share of the
 # node's FP8 tensor capacity (census.py --amx). Every host process runs under nice 19, one AMX thread a physical core
-# (the lowest CPU of each), each run a few seconds; before the full-load runs the script waits (up to GATE_S) for other
-# GPU leases to end, and records the ones it could not wait out. Inside a research run:
+# (the lowest CPU of each), each run a few seconds; before each run outside the lease the script waits (from a budget of
+# GATE_S seconds) while another GPU lease is held or more than BUSY_MAX CPUs are busy, and records what it could not
+# wait out. PHASES (default "A B C") picks alone, beside the GEMMs, and alone again. Inside a research run:
 #   bash benchmarks/pouw/census_sm120/host_amx.sh
 # writes $OUT/amx.jsonl (host.c amx), freq.jsonl (host.c freq), gemm-<i>.jsonl, smi.csv, timeline.log, amx-summary.json,
 # amx.md and the cgroup, topology and lease records.
@@ -13,6 +14,8 @@ mkdir -p "$OUT"
 SRC=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 SEC=${SEC:-4}
 GATE_S=${GATE_S:-900}
+BUSY_MAX=${BUSY_MAX:-4}
+PHASES=${PHASES:-A B C}
 W=$(mktemp -d)
 trap 'rm -rf "$W"' EXIT
 J="$OUT/amx.jsonl"
@@ -94,17 +97,25 @@ print(round(sum(1 - (b[k][1] - a[k][1]) / max(1, b[k][0] - a[k][0]) for k in b),
 PY
 }
 others() { gpu-lease status 2>/dev/null | grep -E '^[0-9] held' | grep -v "run=${RESEARCH_RUN_ID:-none} " | cut -c1-110; }
-gate() {
-  local t=0 o
-  while o=$(others) && [ -n "$o" ] && [ "$t" -lt "$GATE_S" ]; do
-    [ "$t" -eq 0 ] && log "gate: waiting for other leases: $(tr '\n' ';' <<<"$o")"
-    sleep 15
-    t=$((t + 15))
+# Before each AMX run: wait, from a budget of GATE_S seconds for the whole run, while another GPU lease is held or more
+# than BUSY_MAX CPUs are busy; echoes the busy reading the run starts at.
+echo "$GATE_S" >"$W/gate_left"
+quiet() {
+  local b o t=0 left
+  left=$(cat "$W/gate_left")
+  [ -n "${NOGATE:-}" ] && left=0
+  while b=$(busy) && o=$(others | tr '\n' ';') && { [ -n "$o" ] || awk "BEGIN {exit !($b > $BUSY_MAX)}"; } \
+    && [ "$left" -gt 0 ]; do
+    [ "$t" -eq 0 ] && echo "$(date -u +%H:%M:%S.%3NZ) gate: waiting (busy=$b, other leases: $o)" >>"$OUT/timeline.log"
+    sleep 14
+    t=$((t + 15)) left=$((left - 15))
   done
-  log "gate: after ${t}s, other leases: $(others | tr '\n' ';') busy=$(busy)"
+  [ -z "${NOGATE:-}" ] && echo "$left" >"$W/gate_left"
+  [ "$t" -gt 0 ] && echo "$(date -u +%H:%M:%S.%3NZ) gate: waited ${t}s, ${left}s left; other leases: $o" >>"$OUT/timeline.log"
+  echo "$b"
 }
 amx() { # CPUS TAG VARIANTS [SECONDS]
-  log "amx $2 $3 cpus=$(n "$1") busy=$(busy)"
+  log "amx $2 $3 cpus=$(n "$1") busy=$(quiet)"
   nice -n 19 taskset -c "$1" env OMP_NUM_THREADS="$(n "$1")" OMP_PROC_BIND=close OMP_PLACES=threads \
     "$H" amx "$(n "$1")" "${4:-$SEC}" "$2" "$3" >>"$J" 2>>"$OUT/host.err"
 }
@@ -132,11 +143,11 @@ phase_host() { # PREFIX: every core set alone, every variant (the PREFIX'd runs 
 }
 
 others >"$OUT/leases-start.txt"
+if [[ " $PHASES " == *" A "* ]]; then
 log "phase A: alone, cpus all=$(n "$ALL") s0=$(n "$S0") s1=$(n "$S1")"
 freq "$ONE" 2 ".1core.scalar"
 amx "$ONE" ".1core" resident,l1,l2
 amx "$SIXTEEN" ".16core" resident,l1,l2
-gate
 amx "$S0" ".s0" resident,l1,l2
 [ -n "$S1" ] && amx "$S1" ".s1" resident,l1,l2
 amx "$ALL" ".all" resident,l1,l2
@@ -145,8 +156,11 @@ freq "$ALL" 2 ".all.scalar"
 amx_sib "$ONE" ".1core.sibfreq" "$SIB0"
 amx_sib "$ALL" ".all.sibfreq" "$SIB0${SIB1:+,$SIB1}"
 amx "$ALL" ".all.sustained" resident 20
+fi
 
-if [ -n "$GEMM" ]; then
+if [[ " $PHASES " != *" B "* ]]; then
+  :
+elif [ -n "$GEMM" ]; then
   log "phase B: waiting for gpu-lease 2"
   cat >"$W/leased.sh" <<'EOF'
 set -uo pipefail
@@ -171,6 +185,7 @@ done
 log "gemms started on ${#devs[@]} GPUs; alone for 15 s"
 sleep 15
 . "$W/funcs.sh"
+NOGATE=1
 phase_host ".gpu2" resident,l2
 amx_sib "$ALL" ".gpu2.all.sibfreq" "$SIB0${SIB1:+,$SIB1}"
 amx "$ALL" ".gpu2.all.sustained" resident 20
@@ -181,8 +196,8 @@ wait "${pids[@]}"
 kill "$smi"
 log "phase B done"
 EOF
-  declare -f log busy n amx freq amx_sib phase_host >"$W/funcs.sh"
-  echo "H=$H J=$J F=$F SEC=$SEC ONE=$ONE SIXTEEN=$SIXTEEN S0=$S0 S1=$S1 ALL=$ALL SIB0=$SIB0 SIB1=$SIB1" >>"$W/funcs.sh"
+  declare -f log busy others quiet n amx freq amx_sib phase_host >"$W/funcs.sh"
+  echo "H=$H J=$J F=$F SEC=$SEC BUSY_MAX=$BUSY_MAX ONE=$ONE SIXTEEN=$SIXTEEN S0=$S0 S1=$S1 ALL=$ALL SIB0=$SIB0 SIB1=$SIB1" >>"$W/funcs.sh"
   OUT="$OUT" W="$W" GEMM="$GEMM" gpu-lease 2 --wait --max-min 20 -- bash "$W/leased.sh" >"$OUT/lease.log" 2>&1
   log "lease exit $?"
 else
@@ -190,8 +205,10 @@ else
 fi
 
 others >"$OUT/leases-end.txt"
-log "phase C: alone again"
-amx "$ALL" ".post.all" resident
-amx "$ONE" ".post.1core" resident
+if [[ " $PHASES " == *" C "* ]]; then
+  log "phase C: alone again"
+  amx "$ALL" ".post.all" resident
+  amx "$ONE" ".post.1core" resident
+fi
 python3 "$SRC/census.py" --amx "$OUT"
 log "done"
