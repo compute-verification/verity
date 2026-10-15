@@ -301,7 +301,7 @@ def test_no_token_and_no_cursor_identity_is_an_error_and_dry_run_sends_nothing(f
 DRY_RUNS = [
     ["ask", "--as", "memory-accounting", "--to", "infra", "--text", "x"], ["announce", "--as", "infra", "--text", "x"],
     ["reply", "--as", "memory-accounting", "--thread", "1.0", "--text", "x"], ["pickup", "--thread", "1.0"],
-    ["done", "--as", "memory-accounting", "--thread", "1.0", "--link", "https://x"], ["decline", "--as", "memory-accounting", "--thread", "1.0", "--why", "no"],
+    ["close", "--as", "memory-accounting", "--thread", "1.0", "--declined", "no"],
     ["roster", "--thread", "1.0"], ["read", "--since", "1.0"],
     ["match", "--as", "memory-accounting", "--event", '{"text":"x","ts":"2.0","thread_ts":"1.0","channel":"CCOORD"}'],
     ["verify-author", "--event", '{"ts":"1.0","channel":"CCOORD"}'], ["groups", "sync", "--apply"],
@@ -407,7 +407,7 @@ def test_without_a_token_every_call_goes_through_the_broker(broker, registry, ca
     assert [r[1]["method"] for r in broker.requests] == ["chat.postMessage", "chat.getPermalink"]
     assert OIDC not in out + err and TOKEN not in json.dumps([r[1:] for r in broker.requests])
     t = broker.state.messages[COORD][0]["ts"]
-    assert run(capsys, "done", "--as", "infra", "--thread", t, "--link", "https://x/pull/1")[0] == 0
+    assert run(capsys, "close", "--as", "infra", "--thread", t, "--link", "https://x/pull/1")[0] == 0
     assert (COORD, t, "white_check_mark") in broker.state.reactions
     assert run(capsys, "verify-author", "--event", json.dumps({"ts": t, "channel": COORD}))[0] == 0
 
@@ -635,20 +635,20 @@ def test_the_ask_lifecycle_pickup_reply_done_and_decline(fake, registry, capsys)
     root = fake.add(COORD, text="<!subteam^SINFRA|@infra> need a pod", user="UDANIEL")
     assert run(capsys, "pickup", "--thread", root["ts"])[0] == 0
     assert run(capsys, "reply", "--as", "infra", "--thread", root["ts"], "--text", "buying one needs your OK: $3/h for 6 h")[0] == 0
-    assert run(capsys, "done", "--as", "infra", "--thread", root["ts"], "--link", "https://github.com/x/pull/1")[0] == 0
+    assert run(capsys, "close", "--as", "infra", "--thread", root["ts"], "--link", "https://github.com/x/pull/1")[0] == 0
     assert fake.reactions == [(COORD, root["ts"], "eyes"), (COORD, root["ts"], "white_check_mark")]
     assert fake.messages[COORD][-1]["text"].startswith(":white_check_mark: done \u2014 https://github.com/x/pull/1")
     other = fake.add(COORD, text="<!subteam^SINFRA|@infra> delete node 1", username="compute-accounting", bot_id=BOT)
-    assert run(capsys, "decline", "--as", "infra", "--thread", other["ts"], "--why", "a node change needs Daniel")[0] == 0
+    assert run(capsys, "close", "--as", "infra", "--thread", other["ts"], "--declined", "a node change needs Daniel")[0] == 0
     assert (COORD, other["ts"], "x") in fake.reactions
 
 
 def test_an_announcements_status_lines_and_roster(fake, registry, capsys):
     run(capsys, "announce", "--as", "infra", "--to", "@compute-accounting", "@circuits", "@proofs", "--text", "node 2 reboots at 22:00Z")
     t = fake.messages[COORD][-1]["ts"]
-    assert run(capsys, "done", "--as", "compute-accounting", "--thread", t)[0] == 0
-    assert run(capsys, "decline", "--as", "circuits", "--thread", t, "--why", "a job runs until 7 Oct 23:00Z")[0] == 0
-    assert run(capsys, "done", "--as", "memory-accounting", "--thread", t)[0] == 0         # not addressed: not counted
+    assert run(capsys, "close", "--as", "compute-accounting", "--thread", t)[0] == 0
+    assert run(capsys, "close", "--as", "circuits", "--thread", t, "--declined", "a job runs until 7 Oct 23:00Z")[0] == 0
+    assert run(capsys, "close", "--as", "memory-accounting", "--thread", t)[0] == 0         # not addressed: not counted
     assert not [r for r in fake.reactions if r[1] == t]                                    # one bot can't carry many agents' reactions
     fake.add(COORD, text=f"{slack.DONE} done", user="UINTRUDER", thread_ts=t)              # a human's line is no status of a handle
     rc, out, _ = run(capsys, "roster", "--thread", t, "--json")
@@ -658,8 +658,8 @@ def test_an_announcements_status_lines_and_roster(fake, registry, capsys):
     assert rows["compute-accounting"]["status"] == "done" and rows["circuits"]["status"] == "declined"
     assert detail.startswith("a job runs until ") and detail.endswith(" (23:00Z)") and "<!date" not in detail
     assert rows["proofs"]["status"] == "missing"
-    run(capsys, "done", "--as", "circuits", "--thread", t)
-    run(capsys, "done", "--as", "proofs", "--thread", t)
+    run(capsys, "close", "--as", "circuits", "--thread", t)
+    run(capsys, "close", "--as", "proofs", "--thread", t)
     assert run(capsys, "roster", "--thread", t)[0] == 0
     ask = fake.add(COORD, text="<!subteam^SINFRA|@infra> x", username="compute-accounting", bot_id=BOT)
     assert run(capsys, "roster", "--thread", ask["ts"])[0] == 2
@@ -1220,7 +1220,7 @@ def test_a_reply_rings_the_root_poster_and_a_quiet_one_rings_no_one(fake, regist
     assert len(bells(fake, circuits)) == 1
     assert run(capsys, "reply", "--as", "infra", "--thread", root["ts"], "--quiet", "--text", "@circuits started, no reply needed")[0] == 0
     assert len(bells(fake, circuits)) == 2                                             # a quiet post still reaches the names it starts with
-    assert run(capsys, "done", "--as", "infra", "--thread", root["ts"], "--link", "https://x/pr/1")[0] == 0
+    assert run(capsys, "close", "--as", "infra", "--thread", root["ts"], "--link", "https://x/pr/1")[0] == 0
     assert len(bells(fake, circuits)) == 3                                             # a status line reaches the root's poster
 
 
@@ -1441,21 +1441,21 @@ def test_inbox_open_posts_the_root_publishes_the_route_and_guards_it(fake, regis
     monkeypatch.setenv("RESEARCH_NOTES_CITE_CHECK", "0")
     rc, _, err = run(capsys, "names", "open", "--as", "vllm-epoch-run", "--holder", "bc-11111111")
     assert rc == 2 and "only leads get names" in err and not (clone / slack.ROUTES_DIR / "vllm-epoch-run.json").exists()
-    rc, out, err = run(capsys, "inbox", "open", "--as", "circuits", "--holder", "bc-11111111", "--remit", "the  vLLM epoch run")
+    rc, out, err = run(capsys, "names", "open", "--as", "circuits", "--holder", "bc-11111111", "--remit", "the  vLLM epoch run")
     assert rc == 0, err
     r = json.loads((clone / slack.ROUTES_DIR / "circuits.json").read_text())
     root = fake.messages[COORD][-1]
     assert r["remit"] == "the vLLM epoch run" and "\n  the vLLM epoch run" in run(capsys, "names", "list")[1]
     assert r["holder"] == "bc-11111111" and r["inbox_ts"] == root["ts"] and root["text"].startswith("Inbox for @circuits.")
     assert "pushed" in out and f'threadTs="{root["ts"]}"' in out
-    assert run(capsys, "inbox", "open", "--as", "circuits", "--holder", "bc-11111111")[1].startswith("@circuits is open already")
-    rc, _, err = run(capsys, "inbox", "open", "--as", "circuits", "--holder", "bc-22222222")
+    assert run(capsys, "names", "open", "--as", "circuits", "--holder", "bc-11111111")[1].startswith("@circuits is open already")
+    rc, _, err = run(capsys, "names", "open", "--as", "circuits", "--holder", "bc-22222222")
     assert rc == 2 and "held by bc-11111111; a successor passes --succeeds" in err
-    assert run(capsys, "inbox", "open", "--as", "circuits", "--holder", "bc-22222222", "--succeeds")[0] == 0
+    assert run(capsys, "names", "open", "--as", "circuits", "--holder", "bc-22222222", "--succeeds")[0] == 0
     r = json.loads((clone / slack.ROUTES_DIR / "circuits.json").read_text())
     assert (r["holder"], r["inbox_ts"], r["succeeds"], r["remit"]) == ("bc-22222222", root["ts"], "bc-11111111", "the vLLM epoch run")
     assert sum(m["text"].startswith("Inbox for") for m in fake.messages[COORD]) == 1
-    assert run(capsys, "inbox", "close", "--as", "circuits", "--forward-to", "@circuits")[0] == 0
+    assert run(capsys, "names", "close", "--as", "circuits", "--forward-to", "@circuits")[0] == 0
     assert json.loads((clone / slack.ROUTES_DIR / "circuits.json").read_text())["forward_to"] == "circuits"
 
 
@@ -1463,11 +1463,11 @@ def test_inbox_read_shows_unread_doorbells_urgent_first_and_marks_them_read(fake
     box = inbox(fake, routes_dirs, "vllm-epoch-run")
     run(capsys, "ask", "--as", "circuits", "--to", "@vllm-epoch-run", "--text", "next tree")
     run(capsys, "ask", "--as", "circuits", "--to", "@vllm-epoch-run", "--urgent", "--text", "stop node 2")
-    rc, out, _ = run(capsys, "inbox", "read", "--as", "vllm-epoch-run", "--urgent", "--peek")
+    rc, out, _ = run(capsys, "names", "read", "--as", "vllm-epoch-run", "--urgent", "--peek")
     lines = out.splitlines()
     assert rc == 0 and lines[0].startswith("SLACK @vllm-epoch-run: 2 new") and "(URGENT)" in lines[1] and "next tree" in lines[2]
-    assert run(capsys, "inbox", "read", "--as", "vllm-epoch-run")[0] == 0
-    rc, out, _ = run(capsys, "inbox", "read", "--as", "vllm-epoch-run", "--urgent")
+    assert run(capsys, "names", "read", "--as", "vllm-epoch-run")[0] == 0
+    rc, out, _ = run(capsys, "names", "read", "--as", "vllm-epoch-run", "--urgent")
     assert rc == 1 and out.strip() == "SLACK @vllm-epoch-run: nothing new"
     assert box
 
@@ -1602,7 +1602,7 @@ def test_send_starts_a_thread_or_replies_and_its_footer_carries_the_kind(fake, r
         assert rc == 2 and says in err, argv
 
 
-def test_close_posts_a_status_line_and_reacts_and_list_shows_the_state(fake, registry, routes_dirs, capsys, monkeypatch):
+def test_close_posts_a_status_line_and_reacts(fake, registry, routes_dirs, capsys, monkeypatch):
     monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000500, timezone.utc))
     inbox(fake, routes_dirs, "circuits")
     first = posted(fake, run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "can node 2 take a job?")[1])["ts"]
@@ -1613,14 +1613,6 @@ def test_close_posts_a_status_line_and_reacts_and_list_shows_the_state(fake, reg
     assert (COORD, first, "white_check_mark") in fake.reactions and (COORD, second, "x") in fake.reactions
     lines = [m["text"] for m in fake.messages[COORD] if m.get("thread_ts") in (first, second)]
     assert lines[0].startswith(":white_check_mark: done") and lines[1].startswith(":x: declined \u2014 not mine")
-    for m in fake.messages[COORD]:                                                     # what Slack's history adds to a root
-        m["reply_count"] = sum(x.get("thread_ts") == m["ts"] and x["ts"] != m["ts"] for x in fake.messages[COORD])
-        m["reactions"] = [{"name": n} for c, t, n in fake.reactions if t == m["ts"]]
-    rc, out, _ = run(capsys, "list", "--as", "circuits", "--json")
-    rows = json.loads(out)
-    assert rc == 0 and [(r["ts"], r["kind"], r["from"], r["to"], r["state"]) for r in rows] == [
-        (second, "ask", "proofs", ["circuits"], "declined"), (first, "ask", "infra", ["circuits"], "done")]
-    assert len(json.loads(run(capsys, "list", "--json")[1])) == 3 and json.loads(run(capsys, "list", "--open", "--json")[1])[0]["to"] == ["infra"]
 
 
 def test_research_msg_is_the_front_door(registry, capsys):

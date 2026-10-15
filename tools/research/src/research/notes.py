@@ -11,7 +11,7 @@
                                                             #   in the notes clone: lanes/LANE/ -> the notes' main (`sync`)
   research notes branches [--fetch] [--all] [--lane GLOB] [--json]   # lane branches vs origin; exit 1 if an open lane's work is not there
   research notes sync [--path P]... [-m MSG] | scan          # notes_sync.py: commit, rebase, push with retries | history audit
-  research notes archive LANE [--older-days 3] [--by month|day] [--apply]   # notes_archive.py: older notes into month folders
+  research notes archive LANE [--older-days 3] [--bucket month|day] [--apply]   # notes_archive.py: older notes into month folders
   research notes status|watch --liveness git [--fetch] ...   # steward.py: notes commit times and origin's lane/* tips, not mtimes
   research notes watch --lease [store|PATH] [--standby] ...   # steward.py: only the steward lease's holder acts
   research notes service systemd|launchd [...] [-- WATCH ARGS] # steward.py: the steward's service definition

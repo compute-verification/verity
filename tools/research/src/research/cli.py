@@ -71,8 +71,8 @@
   research notes watch [--every 10] [--pods]     # a line each time a lane goes STALE or comes back
   research launch-request <request.json>         # machine side: claim the run dir, start the detached runner (idempotent per id)
   research mem [--ramlock DIR] [--json]           # machine side: cgroup limit, in use, live reservations, available (research.mem)
-  research msg send|close|list|read|names|subscribe|traffic|ask-daniel|... [--dry-run]
-                                                 # messages between agents, on Slack (`research slack` too; research/slack.py; skill using-slack)
+  research msg send|close|read|names|traffic|ask-daniel|... [--dry-run]
+                                                 # messages between agents, on Slack (research/slack.py; skill using-slack)
 
 `run` allocates a run id, writes the v0.2 job record, gives the workload RESEARCH_RUN_ID / RESEARCH_RUN_DIR, and hands execution
 to the telemetry harness (timeout, sampler, cancel evidence, classifier, tee'd logs).  The workload's cwd is its run dir, locally and
@@ -1601,7 +1601,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd in ("msg", "slack"):
         from .slack import main as slack_main
 
-        return slack_main(rest, prog=f"research {cmd}")
+        if cmd == "slack":
+            print("research: `research slack` is `research msg`; use `research msg`", file=sys.stderr)
+        return slack_main(rest, prog="research msg")
     if cmd == "usage":
         return cmd_usage(rest)
     age = checkout_age()

@@ -49,7 +49,6 @@ KNOWN = {
     ("tools/research/src/research/cli.py", "--by"): 1,
     ("tools/research/src/research/monitors.py", "--by"): 2,
     ("tools/research/src/research/monitors.py", "--machine"): 2,
-    ("tools/research/src/research/notes_archive.py", "--by"): 1,
     ("tools/research/src/research/pods/nebius/dispatch.py", "--by"): 1,
     ("tools/research/src/research/pods/nebius/keeper.py", "--by"): 1,
     ("tools/research/src/research/pods/nebius/lean_sandbox.py", "--by"): 1,
