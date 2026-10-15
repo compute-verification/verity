@@ -4,11 +4,11 @@
 # WikiText-2's test window 0 that must begin with those 2048).  Clocks are read, never set.
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd clone --custody-ttl 12h \
-#     --env GPU_LEASE_WHO=... --env D4A_CTX=2048 --env D4A_PLAN=grid|frontier|limbs|limbs2|seeds|both [--env D4A_METHODS="..."] \
+#     --env GPU_LEASE_WHO=... --env D4A_CTX=2048 --env D4A_PLAN=grid|frontier|limbs|limbs2|limbsall|seeds|both [--env D4A_TAG=SUBDIR] [--env D4A_METHODS="..."] \
 #     [--env D4A_IDS=ids8192.npy --send ids8192.npy] --send benchmarks/fp8_instantiation/run_attention.sh \
 #     -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/run_attention.sh"'
 set -uo pipefail
-export O=${RESEARCH_RUN_DIR:?}/out
+export O=${RESEARCH_RUN_DIR:?}/out${D4A_TAG:+/$D4A_TAG}
 mkdir -p "$O"
 export PY=/workspace/jobs/venv312/bin/python
 export SNAP=/workspace/hf/hub/models--unsloth--Llama-3.1-8B/snapshots/3f0d51f8e5640f98f1a96ea9044a0e55c0a83814
@@ -77,6 +77,7 @@ case "${D4A_PLAN:-}" in
   grid) D4A_METHODS=$(grid_plan) ;;
   frontier) D4A_METHODS=$(frontier_plan) ;;
   limbs) D4A_METHODS=$(limbs_plan) ;;
+  limbsall) D4A_METHODS="$(limbs_plan) $(limbs2_plan)" ;;
   both) D4A_METHODS="$(frontier_plan) $(grid_plan | sed 's/bf16 ref ref-rot//')" ;;
 esac
 [ -n "${D4A_METHODS:-}" ] || { echo "set D4A_PLAN or D4A_METHODS" >&2; exit 2; }
