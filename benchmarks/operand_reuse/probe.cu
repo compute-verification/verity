@@ -6,6 +6,7 @@
 //   t3_tf32copy  TF32 HMMA k8; its f32 D registers are the A operand of the next TF32 HMMA
 //   t4_s8copy    IMMA k32 s8->s32; its s32 D registers are the A operand (four s8 digits each) of the next IMMA
 //   t5_rawbits   QMMA f32 D registers fed as E4M3x4 A registers to the next QMMA (raw float bits as FP8 codes)
+//   t6_bf16copy  QMMA f32 D registers fed as BF16x2 A registers to an HMMA k16 (high half = D truncated to BF16)
 //
 // One warp per kernel.  Fragment layouts are PTX ISA 9.4's (g = lane>>2, t = lane&3):
 //   8-bit A (k32) reg r: row g+8(r&1), cols 4t+16(r>>1)+j     8-bit B (k32) reg r: k 4t+16r+j, n g
@@ -226,6 +227,34 @@ extern "C" __global__ void __launch_bounds__(32) t5_rawbits(const uint8_t* __res
     store_d(Dout, d, g, t);
 }
 
+__device__ __forceinline__ void hmma_bf16_k16(float d[4], const uint32_t a[4], const uint32_t b[2], const float c[4]) {
+    asm volatile("mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, "
+                 "{%10,%11,%12,%13};\n"
+                 : "=f"(d[0]), "=f"(d[1]), "=f"(d[2]), "=f"(d[3])
+                 : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]), "f"(c[0]), "f"(c[1]),
+                   "f"(c[2]), "f"(c[3]));
+}
+
+// A 16x32 e4m3, B1t 8x32 e4m3, B2t 8x16 bf16 bits (n-major).  Dmid = A*B1 (f32), Dout = bf16x2(bits(perm(Dmid)))*B2:
+// each FP32 word is two BF16 codes, its low half (mantissa tail) and its high half (the value truncated to BF16).
+extern "C" __global__ void __launch_bounds__(32) t6_bf16copy(const uint8_t* __restrict__ A, const uint8_t* __restrict__ B1t,
+                                                             const uint16_t* __restrict__ B2t, float* __restrict__ Dmid,
+                                                             float* __restrict__ Dout) {
+    const int lane = threadIdx.x, g = lane >> 2, t = lane & 3;
+    uint32_t a[4], b[2], b2[2];
+    load_a8(a, A, g, t);
+    load_b8(b, B1t, g, t);
+    for (int r = 0; r < 2; ++r) b2[r] = *reinterpret_cast<const uint32_t*>(B2t + g * 16 + 2 * t + 8 * r);
+    const float z[4] = {0.f, 0.f, 0.f, 0.f};
+    float d1[4];
+    qmma_f32(d1, a, b, z);
+    const uint32_t a2[4] = {__float_as_uint(d1[0]), __float_as_uint(d1[1]), __float_as_uint(d1[2]), __float_as_uint(d1[3])};
+    float d[4];
+    hmma_bf16_k16(d, a2, b2, z);
+    store_d(Dmid, d1, g, t);
+    store_d(Dout, d, g, t);
+}
+
 // ---------------------------------------------------------------------------------------------------------------- host
 
 static float e4m3_decode(uint8_t c) {
@@ -242,10 +271,10 @@ static uint8_t e4m3_encode_exact(float v) {
     return 0;
 }
 
-// Index into a row-major 16x8 D of the entry c_r of lane (g, t), r = (row>=8) + 2(k>=K/2): the D entry that sits in
-// A' entry (row, k) when D's registers are fed as A's.
-static int d_index_for_a(int row, int k, int K) {
-    const int r = (row >= 8) + 2 * (k >= K / 2), g = row % 8, t = K == 8 ? k % 4 : (k % 16) / 4;
+// Index into a row-major 16x8 D of the entry c_r of lane (g, t), r = (row>=8) + 2(k>=K/2), t = (k % (K/2)) / E for E
+// elements a register: the D entry that sits in A' entry (row, k) when D's registers are fed as A's.
+static int d_index_for_a(int row, int k, int K, int E) {
+    const int r = (row >= 8) + 2 * (k >= K / 2), g = row % 8, t = (k % (K / 2)) / E;
     return (g + 8 * (r >> 1)) * 8 + 2 * t + (r & 1);
 }
 
@@ -411,7 +440,7 @@ int main() {
             for (int j = 0; j < 8; ++j) {
                 double st = 0, sr = 0;
                 for (int k = 0; k < 8; ++k) {
-                    const float dv = M[d_index_for_a(i, k, 8)];
+                    const float dv = M[d_index_for_a(i, k, 8, 1)];
                     st += (double)tf32_trunc(dv) * B2t[j * 8 + k];
                     sr += (double)tf32_rne(dv) * B2t[j * 8 + k];
                 }
@@ -455,7 +484,7 @@ int main() {
             for (int j = 0; j < 8; ++j) {
                 long s = 0;
                 for (int k = 0; k < 32; ++k) {
-                    const uint32_t w = (uint32_t)M[d_index_for_a(i, k, 32)];
+                    const uint32_t w = (uint32_t)M[d_index_for_a(i, k, 32, 4)];
                     s += (long)(int8_t)(w >> (8 * (k % 4))) * (int8_t)B2t[j * 32 + k];
                 }
                 ow[i * 8 + j] = (double)s;
@@ -496,13 +525,68 @@ int main() {
                 double s = 0;
                 for (int k = 0; k < 32; ++k) {
                     uint32_t w;
-                    memcpy(&w, &M[d_index_for_a(i, k, 32)], 4);
+                    memcpy(&w, &M[d_index_for_a(i, k, 32, 4)], 4);
                     s += (double)e4m3_decode((uint8_t)(w >> (8 * (k % 4)))) * B2v[j * 32 + k];
                 }
                 ow[i * 8 + j] = s;
             }
         res.push_back(compare("t5_rawbits.mid", mg, mw));
         res.push_back(compare("t5_rawbits.out", og, ow));
+        cudaFree(dA);
+        cudaFree(dB1);
+        cudaFree(dB2);
+        cudaFree(dM);
+        cudaFree(dO);
+    }
+
+    // t6: A in [-4,4], B1 in [-2,2] (|D| <= 256: integers this small are exact in BF16, with a zero low half), B2 in
+    // [-3,3].
+    {
+        std::vector<uint8_t> A(16 * 32), B1t(256);
+        std::vector<float> Av(16 * 32), B1v(256), B2v(8 * 16);
+        std::vector<uint16_t> B2t(8 * 16);
+        for (int i = 0; i < 16 * 32; ++i) A[i] = e4m3_encode_exact(Av[i] = (float)rnd(-4, 4));
+        for (int i = 0; i < 256; ++i) B1t[i] = e4m3_encode_exact(B1v[i] = (float)rnd(-2, 2));
+        for (int i = 0; i < 8 * 16; ++i) {
+            const float v = B2v[i] = (float)rnd(-3, 3);
+            uint32_t u;
+            memcpy(&u, &v, 4);
+            B2t[i] = (uint16_t)(u >> 16);
+        }
+        uint8_t *dA = dev(A), *dB1 = dev(B1t);
+        uint16_t* dB2 = dev(B2t);
+        float *dM, *dO;
+        CK(cudaMalloc(&dM, 128 * sizeof(float)));
+        CK(cudaMalloc(&dO, 128 * sizeof(float)));
+        t6_bf16copy<<<1, 32>>>(dA, dB1, dB2, dM, dO);
+        CK(cudaDeviceSynchronize());
+        auto M = back(dM, 128);
+        auto O = back(dO, 128);
+        std::vector<double> mg(M.begin(), M.end()), mw(128), og(O.begin(), O.end()), ow(128), copy(128);
+        for (int i = 0; i < 16; ++i)
+            for (int j = 0; j < 8; ++j) {
+                double s = 0;
+                for (int k = 0; k < 32; ++k) s += (double)Av[i * 32 + k] * B1v[j * 32 + k];
+                mw[i * 8 + j] = s;
+            }
+        auto bf16 = [](uint32_t h) {
+            const uint32_t u = h << 16;
+            float f;
+            memcpy(&f, &u, 4);
+            return (double)f;
+        };
+        for (int i = 0; i < 16; ++i)
+            for (int j = 0; j < 8; ++j) {
+                double s = 0;
+                for (int k = 0; k < 16; ++k) {
+                    uint32_t w;
+                    memcpy(&w, &M[d_index_for_a(i, k, 16, 2)], 4);
+                    s += bf16(k % 2 ? w >> 16 : w & 0xffffu) * B2v[j * 16 + k];
+                }
+                ow[i * 8 + j] = s;
+            }
+        res.push_back(compare("t6_bf16copy.mid", mg, mw));
+        res.push_back(compare("t6_bf16copy.out", og, ow));
         cudaFree(dA);
         cudaFree(dB1);
         cudaFree(dB2);
