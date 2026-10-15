@@ -39,22 +39,43 @@ def num(s: str) -> float | None:
         return None
 
 
-def rows(path: Path) -> list[dict]:
+SCALE = {"": 1.0, "K": 1e3, "M": 1e6, "G": 1e9}
+TIME_US = {"ns": 1e-3, "nsecond": 1e-3, "us": 1.0, "usecond": 1.0, "ms": 1e3, "msecond": 1e3, "s": 1e6, "second": 1e6}
+
+
+def rows(path: Path) -> tuple[list[dict], dict]:
+    """The kernel rows of ``ncu --csv --page raw`` and its units row (ncu scales each column's unit to its values)."""
     with path.open(newline="") as f:
         lines = [ln for ln in f if not ln.startswith("==")]
     r = list(csv.DictReader(lines))
-    return [x for x in r if x.get("ID", "").strip().isdigit()]
+    units = next((x for x in r if not x.get("ID", "").strip()), {})
+    return [x for x in r if x.get("ID", "").strip().isdigit()], units
+
+
+def scaled(r: dict, units: dict, metric: str, base: str) -> float | None:
+    v, u = num(r.get(metric, "")), (units.get(metric) or "").strip()
+    if v is None:
+        return None
+    if base == "us":
+        if u not in TIME_US:
+            raise SystemExit(f"{metric}: unit {u!r} is not a time unit")
+        return v * TIME_US[u]
+    prefix = u[: -len(base)] if u.endswith(base) else None
+    if prefix not in SCALE:
+        raise SystemExit(f"{metric}: unit {u!r} is not a multiple of {base!r}")
+    return v * SCALE[prefix]
 
 
 def summarize(path: Path, sms: int) -> dict:
     kernels = []
-    for r in rows(path):
-        dur = num(r.get("gpu__time_duration.sum", ""))
-        cyc = num(r.get("sm__cycles_elapsed.avg", ""))
-        lanes = num(r.get("smsp__thread_inst_executed.sum", ""))
+    table, units = rows(path)
+    for r in table:
+        dur = scaled(r, units, "gpu__time_duration.sum", "us")
+        cyc = scaled(r, units, "sm__cycles_elapsed.avg", "cycle")
+        lanes = scaled(r, units, "smsp__thread_inst_executed.sum", "inst")
         if not dur or not cyc:
             continue
-        k = {"kernel": r["Kernel Name"], "category": category(r["Kernel Name"]), "us": dur / 1e3,
+        k = {"kernel": r["Kernel Name"], "category": category(r["Kernel Name"]), "us": dur,
              "slot_share": lanes / (LANES * sms * cyc) if lanes is not None else None,
              "lane_ops": lanes, "sm_cycles": cyc * sms}
         for key, metric in PCTS.items():

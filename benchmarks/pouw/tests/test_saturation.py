@@ -7,6 +7,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 HERE = Path(__file__).parents[1] / "saturation"
 sys.path.insert(0, str(HERE))
 
@@ -63,12 +65,22 @@ def test_kernels_follow_their_launch_into_the_step(tmp_path):
 def test_slot_share_is_lane_ops_over_128_per_sm_cycle(tmp_path):
     head = ["ID", "Kernel Name", "gpu__time_duration.sum", "sm__cycles_elapsed.avg", "smsp__thread_inst_executed.sum",
             "sm__inst_executed_pipe_fma.avg.pct_of_peak_sustained_elapsed"]
-    lines = [",".join(f'"{h}"' for h in head), ",".join('""' for _ in head),
-             '"0","void vllm::rms_norm_kernel<c10::BFloat16>","2,000","1,000","1,280,000","5"',
-             '"1","nvjet_gemm","8,000","4,000","2,560,000","1"']
+    lines = [",".join(f'"{h}"' for h in head), '"","","ms","Kcycle","Minst","%"',
+             '"0","void vllm::rms_norm_kernel<c10::BFloat16>","2","1","1.28","5"',
+             '"1","nvjet_gemm","8","4","2,560","1"']
     path = tmp_path / "raw.csv"
     path.write_text("\n".join(lines) + "\n")
     doc = N.summarize(path, sms=100)
-    assert doc["by_group"]["norm"]["slot_share"] == 1_280_000 / (128 * 100 * 1000)
-    assert doc["by_group"]["step"]["slot_share"] == 3_840_000 / (128 * 100 * 5000)
+    assert doc["by_group"]["norm"]["slot_share"] == pytest.approx(1_280_000 / (128 * 100 * 1000))
+    assert doc["by_group"]["step"]["slot_share"] == pytest.approx(2_561_280_000 / (128 * 100 * 5000))
+    assert doc["by_group"]["step"]["us"] == 10_000
     assert doc["by_group"]["step"]["fma_pct"] == (5 * 2 + 1 * 8) / 10
+
+
+def test_ncu_units_that_are_not_the_metrics_refuse(tmp_path):
+    head = ["ID", "Kernel Name", "gpu__time_duration.sum", "sm__cycles_elapsed.avg", "smsp__thread_inst_executed.sum"]
+    path = tmp_path / "raw.csv"
+    path.write_text("\n".join([",".join(f'"{h}"' for h in head), '"","","cycle","cycle","inst"',
+                               '"0","k","1","1","1"']) + "\n")
+    with pytest.raises(SystemExit, match="not a time unit"):
+        N.summarize(path, sms=1)
