@@ -374,18 +374,65 @@ EXACT = HARNESS.replace("sys.path.insert(0, str(root))",
 
 
 def test_a_package_an_exact_editable_install_serves_is_held_like_one_on_the_path(tmp_path):
-    """Its modules are the tree's, held by name, the redirect is in the key, and an edit to one a target resolved reruns that
-    target (held by none, as before this, every target would be reused after any edit to core)."""
+    """Its modules are the tree's, held by name and resolved through the redirect at lookup, and an edit to one a target
+    resolved reruns that target (held by none, as before this, every target would be reused after any edit to core)."""
     assert EXACT != HARNESS
     root = _tree(tmp_path)
     assert _run(root, EXACT)["hits"] == []
     assert _run(root, EXACT)["hits"] == ["SynOther_v1", "SynTop_v1"]
     top = _entry(root, "SynTop_v1")
     assert {"syn.top", "syn.sub", "syn.prims", "syn.check", "syn.h"} <= set(top["reads"]["modules"])
-    assert "<redirect>syn=<tree>/syn/__init__.py" in top["key"]["path"]
+    assert "path" not in top["key"] and "distributions" not in top["key"]
     _edit(root, "syn/sub.py", "B.call(SynAdd, a, b)", "B.call(SynAdd, b, a)")
     out = _run(root, EXACT)
     assert out["hits"] == ["SynOther_v1"] and out["stats"]["stored"] == 1
+
+
+#: the harness with one more `sys.path` entry, holding a package no check imports: a new workspace member, as #2001 added
+EXTRA_PATH = HARNESS.replace("sys.path.insert(0, str(root))", "sys.path.insert(0, str(root))\nsys.path.append(str(root / 'extra'))")
+#: the harness with every installed distribution at another version
+BUMPED = HARNESS.replace("from circuit_check import cache", "import importlib.metadata as _md\n_md.version = lambda d: '0.0.0-bumped'\nfrom circuit_check import cache")
+
+
+def test_a_new_path_entry_or_package_no_check_imports_reuses_every_target(tmp_path):
+    """14 Oct: one new workspace member (`tools/config`, #2001) put a distribution and a `sys.path` entry into the environment,
+    and every one of ~4,600 targets ran again, since the key held both whole. A target now holds only what it loaded."""
+    root = _tree(tmp_path)
+    (root / "extra" / "unrelated_pkg").mkdir(parents=True)
+    (root / "extra" / "unrelated_pkg" / "__init__.py").write_text("X = 1\n")
+    _run(root)
+    assert _run(root, EXTRA_PATH)["hits"] == ["SynOther_v1", "SynTop_v1"]
+
+
+def test_another_version_of_a_distribution_a_check_loaded_reruns_it(tmp_path):
+    """Modules from outside the tree aren't followed file by file: each top-level one the process loaded is held by the
+    versions of the distributions that provide it."""
+    root = _tree(tmp_path)
+    _run(root)
+    assert _entry(root, "SynTop_v1")["reads"]["dists"], "the checks load numpy at least"
+    assert _run(root, BUMPED)["hits"] == []
+
+
+def test_a_package_in_the_tree_that_shadows_a_loaded_distribution_reruns_what_holds_it(tmp_path):
+    """A name a check loaded from an installed distribution counts as ``tree`` once a file in the tree resolves it, so the
+    entry no longer matches."""
+    root = _tree(tmp_path)
+    _run(root)
+    held = _entry(root, "SynTop_v1")["reads"]["dists"]
+    top = next(n for n in sorted(held) if n != "verity")       # the harness's checker and `verity` come from the repository
+    assert held[top] not in (None, "tree")
+    (root / top).mkdir()
+    (root / top / "__init__.py").write_text("")
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+    import sys
+
+    from circuit_check import cache as CC
+
+    sys.path.insert(0, str(root))
+    try:
+        assert CC._dist(root, top) == "tree"
+    finally:
+        sys.path.remove(str(root))
 
 
 def test_editing_a_registry_module_no_target_resolves_reuses_every_target(tmp_path):
