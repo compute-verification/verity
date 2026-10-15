@@ -793,23 +793,16 @@ def lshape_profiles(L):
             if sum(r) < 6 * L and all(np.dot(c, r) >= h for c, h in cons)]
 
 
-def lshape_search(mats, prof, p):
-    """Every tree of profile `prof` (exact ranks): pin U or V as rank summands, pair them, check the rest. Returns
-    (pairs tried, least cost among them, trees within the profile)."""
+def lshape_pairs(mats, prof, p, item, strategy, Vs):
     Sa, Sb, Sc = mats
     pp, q, s, d, e = prof
     rk = lambda M: rank(M % p, p)
-    Us = summands(Sa, pp, p) if pp + q == rk(Sa) else None
-    Vs = [(Sb + A) % p for A in summands((Sc - Sb) % p, d, p)] if d + e == rk(Sc - Sb) else None
-    tight = q + s + e == rk(Sa - Sc)
-    if Us is not None and Vs is not None:
-        pairs = itertools.product(Us, Vs)
-    elif Us is not None and tight:
-        pairs = ((U, (U + A) % p) for U in Us if rk(Sc - U) == s + e for A in summands((Sc - U) % p, s, p))
-    elif Vs is not None and tight:
-        pairs = (((Sa - A) % p, V) for V in Vs if rk(Sa - V) == q + s for A in summands((Sa - V) % p, q, p))
+    if strategy == "UV":
+        pairs = ((item, V) for V in Vs)
+    elif strategy == "U":
+        pairs = ((item, (item + A) % p) for A in (summands((Sc - item) % p, s, p) if rk(Sc - item) == s + e else []))
     else:
-        raise AssertionError(f"no summand strategy for profile {prof}")
+        pairs = (((Sa - A) % p, item) for A in (summands((Sa - item) % p, q, p) if rk(Sa - item) == q + s else []))
     tried, best, found = 0, None, []
     for U, V in pairs:
         r = (rk(U), rk(Sa - U), rk(V - U), rk(Sb - V), rk(Sc - V))
@@ -820,7 +813,39 @@ def lshape_search(mats, prof, p):
     return tried, best, found
 
 
-def part6(rng, p=3):
+def lshape_pairs_star(args):
+    return lshape_pairs(*args)
+
+
+def lshape_search(mats, prof, p, procs=1):
+    """Every tree of profile `prof` (exact ranks): pin U or V as rank summands, pair them, check the rest. Returns
+    (pairs tried, least cost among them, trees within the profile)."""
+    Sa, Sb, Sc = mats
+    pp, q, s, d, e = prof
+    rk = lambda M: rank(M % p, p)
+    Us = summands(Sa, pp, p) if pp + q == rk(Sa) else None
+    Vs = [(Sb + A) % p for A in summands((Sc - Sb) % p, d, p)] if d + e == rk(Sc - Sb) else None
+    tight = q + s + e == rk(Sa - Sc)
+    if Us is not None and Vs is not None:
+        outer, strategy = Us, "UV"
+    elif Us is not None and tight:
+        outer, strategy = Us, "U"
+    elif Vs is not None and tight:
+        outer, strategy = Vs, "V"
+    else:
+        raise AssertionError(f"no summand strategy for profile {prof}")
+    jobs = [(mats, prof, p, item, strategy, Vs) for item in outer]
+    if procs > 1:
+        import multiprocessing
+        with multiprocessing.Pool(procs) as pool:
+            parts = pool.map(lshape_pairs_star, jobs, chunksize=1)
+    else:
+        parts = [lshape_pairs(*job) for job in jobs]
+    bests = [b for _, b, _ in parts if b is not None]
+    return (sum(t for t, _, _ in parts), min(bests) if bests else None, [f for _, _, fs in parts for f in fs])
+
+
+def part6(rng, p=3, procs=1):
     """The L-shape at L = 2 over GF(p): no tree costs less than 2Lk = 12. Checks `summands` against brute force at
     n = 3 and 4; mutation: a planted cost-11 tree (b moved next to V) is found."""
     for n, trials in ((3, 6), (4, 2)):
@@ -845,7 +870,7 @@ def part6(rng, p=3):
     assert profs and all(sum(r) == 6 * L - 1 for r in profs), profs
     report = []
     for prof in profs:
-        tried, best, found = lshape_search(mats, prof, p)
+        tried, best, found = lshape_search(mats, prof, p, procs)
         assert not found, f"a tree of cost {sum(prof)} < 12 on the L-shape: profile {prof}"
         assert best >= 6 * L
         report.append(f"{prof}: {tried} pairs, least {best}")
@@ -876,6 +901,7 @@ def main(argv):
     ap.add_argument("--procs", type=int, default=os.cpu_count())
     ap.add_argument("--steps", type=int, default=6000)
     ap.add_argument("--out", default=None, help="part 4's JSON lines")
+    ap.add_argument("--field", type=int, default=3, help="part 6's prime")
     args = ap.parse_args(argv)
     rng = random.Random(20261015)
     for name in args.parts or list(PARTS):
@@ -885,6 +911,8 @@ def main(argv):
         elif name == "4":
             a, b = (int(s) for s in args.seeds.split(":"))
             part4(rng, range(a, b), args.procs, args.out, args.steps)
+        elif name == "6":
+            part6(rng, args.field, args.procs)
         else:
             PARTS[name](rng)
     print("ok")
