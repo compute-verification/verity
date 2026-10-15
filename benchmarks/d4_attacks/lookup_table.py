@@ -104,7 +104,7 @@ def table(rows):
         # and epilogue, so the ratio is what co-issue itself gains or loses
         a0 = d.get("fused_fr_a0")
 
-        def inkernel(prefixes):
+        def inkernel(prefixes, full=full, a0=a0):
             h = [v["median_ms"] for k, v in full.items() if k.startswith(prefixes)]
             return min(h) / a0["median_ms"] if h and a0 else float("nan")
 
