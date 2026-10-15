@@ -28,15 +28,20 @@ proof workers' results land here as theorems or as named hypotheses.
   product algorithm `m`), `edited_complete` its completeness, `honestEdit` costs `time m + 2κadd n²` beyond the proof
   layer and the noise expansion, and `relativelySecure_of_editFloor` gives relative security from the named hypothesis
   `EditFloor` (RS-D1E's floor), with `m` the worst-case product (`_wide`) or a grid product (`GridMatMachine`, `_grid`). The bit-pair projection's algebra
-  (`bitPair_coefficient`) and the abstract core of RS-D1E's homogenization for one word (`bitProj_rank_le`,
-  `products_ge_half_rank`, and `editedEntry_products_ge`: an edited prefix-sum entry with `r` live terms needs at least
-  `r / 2` plain products, whatever the committed instance) are proved.
+  (`bitPair_coefficient`) and the abstract core of RS-D1E's homogenization (`bitProj_rank_le`, `products_ge_half_rank`;
+  `editedEntry_products_ge`: an edited prefix-sum entry with `r` live terms needs at least `r / 2` plain products,
+  whatever the committed instance; `editedEntries_products_ge`: entries at distinct rows and columns, sharing their
+  products, add up, Theorem B's accounting without merges) are proved.
 * The Model B bridge (RS-MODEL): typed circuits of priced gates with free routing; `ModelB.machine` is a `Machine`
   whose time is `timeB`, `ModelB.matMachine` a `MatMachine` from priced circuits (`MatGates`, realized by a GEMM gate
   family), `matMachine120` the sm_120 instance at `price120` with the worst-case `κ = 16` u (circuits named `Gemm120`),
   and `gridMatMachine120` its width-typed refinement, the int8 tile GEMM at `κ = 1` u on `G_op = int8` (circuits named
   `Int8Gemm120`). `relativelySecure_edited120` is route (c) on the int8 grid at 1 u, `relativelySecure_edited120_wide`
-  on unrestricted operands at 16 u.
+  on unrestricted operands at 16 u. Machines take any additive `Price`.
+* B_θ (RS-MODEL §6.2, θ = 1/5): `price120θ` over instructions with their shared-memory words; B's circuits lift at
+  `4/5` and every B_θ adversary has a B shadow, so B's floor carries at `4/5` (`serviceFloor_θ`), and
+  `relativelySecure_edited120θ` is route (c) there at `N = 0.8 n³` u with `ε = γ`. Model A (RS-MODEL §3) is ported over
+  ℚ, and `timeθ_le_timeA` is `B_θ ≤ A` as the combination `(4/5)·ys + (1/5)·R6` of A's rows.
 -/
 
 namespace Pouw.RelativeSecurity
@@ -1021,8 +1026,8 @@ RS-D1E's mixed second difference, `P(f)[x, y] = f(e_x + e_y) − f(e_x) − f(e_
 words, and sends a product of two affine (plain) operands to two rank-one terms; so a word computed with `m` plain
 products and linear steps projects to rank at most `2m`, and a word whose projection has rank `r` needs at least
 `r / 2` products: the products needed for a word are at least half the rank of its degree-(1, 1) part. Over
-`Z/2³²` the rank is too coarse and Theorem W's `r_k` replaces it; the accounting over many target words is Theorem
-B's (`F(G)`), still on paper. -/
+`Z/2³²` the rank is too coarse and Theorem W's `r_k` replaces it. Many target words add up when their live terms are
+disjoint (`editedEntries_products_ge`); Theorem B's accounting with merges (`F(G)`) is still on paper. -/
 
 /-- An affine (plain) operand in the noise bits: `c + Σ α_x z_x + Σ γ_y z_y`. -/
 structure Aff (X Y K : Type) where
@@ -1141,7 +1146,7 @@ theorem bitProj_editedEntry {K : Type} [CommRing K] {a b c : ℕ} (C D : Mat K a
 
 /-- **RS-D1E's Lemma 2, counted** (over a field): a word computed with `m` plain products that agrees with an
 edited prefix-sum entry at every bit pair's four points has `m ≥ #{k : d_ik p_k d′_kl ≠ 0} / 2`, whatever the
-committed constants. (One entry; the floor's sum over all entries is Theorem B's accounting.) -/
+committed constants. (One entry; entries with disjoint live terms add up, `editedEntries_products_ge`.) -/
 theorem editedEntry_products_ge {K : Type} [Field K] [DecidableEq K] {a b c m : ℕ} (C D : Mat K a b)
     (C' D' : Mat K b c) (p : Fin b → K) (i : Fin a) (l : Fin c)
     (u v : Fin m → Aff (Fin a × Fin b) (Fin b × Fin c) K) (r : Aff (Fin a × Fin b) (Fin b × Fin c) K)
