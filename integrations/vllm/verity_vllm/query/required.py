@@ -531,19 +531,28 @@ def _profile(res: Mapping[str, Any], profile: str | None) -> tuple[str, int | No
     return profile, fa, attn_obs
 
 
-def query_header(profile: str, hidden_family: str, *, return_slots: bool, query: str = QUERY_OF_RECORD,
+def hidden_family_of(P: ProgramView, profile: str) -> str | None:
+    """The attention hidden-stream family the Program's flash-attention launches put in the manifest under `profile`; None when it has
+    none (MLA / DSA sparse MLA: no `varlen_fwd`, so no hidden tap fires)."""
+    if not any(c.family in FLASH_ATTENTION_LAUNCHES for c in P.calls):
+        return None
+    return "fa3_hidden_m1_stream" if profile == "hopper" else "fa2_hidden_m1_stream"
+
+
+def query_header(profile: str, hidden_family: str | None, *, return_slots: bool, query: str = QUERY_OF_RECORD,
                  partition: Mapping[str, Any] | None = None, call_boundaries: bool = False) -> dict[str, Any]:
     """The manifest's query header; under Q_word, `partition` (`partition_of`) is the Program's `verity/partition/v1` object and digest,
     and `call_boundaries` says the manifest requires Values two Calls of one module body exchange."""
     word = query == Q_WORD_ID
     text = (Q_WORD_TEXT if word else Q_MODULE_BODY_TEXT) + f"; policy: prescribed = record-typed inputs (weights); protocol = sampling-event outputs" + \
         (" + recorded return slots + returned tensors (every Value of an fx node's output at a step once any of them crosses the module body boundary)"
-         if return_slots else "") + f"; hidden = {hidden_family}; profile = {profile}"
+         if return_slots else "") + f"; hidden = {hidden_family or 'none'}; profile = {profile}"
     return {"query_id": query, "query_id_digest": hashlib.sha256(text.encode()).hexdigest(), "query_text": text,
             **({"partition": dict(partition)} if word and partition else {}),
             "engine": "q-word" if word else "v2-query", "boundary": "call" if word else "module-body", "profile": profile,
             "attention_hidden_family": hidden_family,
-            "required_families": ["input_token_ids", "instance_outputs", "sampled_token_ids", "weights", hidden_family] + (["call_boundaries"] if call_boundaries else []),
+            "required_families": ["input_token_ids", "instance_outputs", "sampled_token_ids", "weights"] + ([hidden_family] if hidden_family else []) +
+                                 (["call_boundaries"] if call_boundaries else []),
             "policy": {"prescribed_inputs": "every field of the Program's record-typed parameters",
                        "protocol_required": ["sampling-event outputs"] +
                        (["recorded return slots (RETURN-SLOT)", "returned tensors: all rows / ports of an fx node's output once one crosses (TENSOR-RETURN)"]
@@ -557,7 +566,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     """The v1-shaped manifest of ONE request Program (B=1 component) under `query` (+ `norm_scales`, + `taps`: `query.router_softmax` / `vocab_range` POLICY; + its partition given `program_digest`)."""
     pdig = (artifact or {}).get("program_digest") or res["program"]["digest"]
     profile, fa, attn_obs = _profile(res, profile)
-    hidden_family = "fa3_hidden_m1_stream" if profile == "hopper" else "fa2_hidden_m1_stream"
+    hidden_family = hidden_family_of(P, profile)
     tpinfo = res.get("tp") if isinstance(res.get("tp"), dict) else {}
     prog_world, prog_rank = int(tpinfo.get("world") or 1), int(tpinfo.get("rank") or 0)
     if (prog_world > 1 or ranks > 1) and (int(ranks) != prog_world or int(rank) != prog_rank):
@@ -677,7 +686,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
             a = attn.setdefault((step_of(c.id), m), {"rows": 0, "T_max": 0, "NH": int(st.get("NH", 0)), "KVH": int(st.get("KVH", st.get("NH", 0))), "D": int(st.get("D", 0))})
             a["rows"] += 1
             a["T_max"] = max(a["T_max"], int(st.get("T", 0)))
-    tap = "fa3.m1" if hidden_family[:3] == "fa3" else "fa2.m1"
+    tap = "fa3.m1" if (hidden_family or "")[:3] == "fa3" else "fa2.m1"
     for (step, mod), a in sorted(attn.items(), key=lambda kv: (kv[0][0], attn_bodies.index(kv[0][1]))):
         layer = attn_bodies.index(mod)
         if hidden_family[:3] == "fa3":
