@@ -330,17 +330,24 @@ static void dram_patterns(const char* only) {
 static void fill_methods(const char* only) {
   if (only && !strstr("fill", only)) return;
   const size_t B = 4ull << 30;
-  const char* names[] = {"memset", "kfill32", "kwrite128", "random_then_memset", "random_then_kfill32"};
+  // 5: beside a 4 GiB plain allocation made first (as dram_patterns and M5 do); 6: zeros after every pattern of
+  // dram_patterns has been written to the allocation once (as read_paths sees it)
+  const char* names[] = {"memset", "kfill32", "kwrite128", "random_then_memset", "random_then_kfill32", "beside_plain",
+                         "after_patterns"};
   cudaEvent_t e0, e1;
   CK(cudaEventCreate(&e0));
   CK(cudaEventCreate(&e1));
   for (int trial = 0; trial < 2; trial++)
-    for (int m = 0; m < 5; m++) {
+    for (int m = 0; m < 7; m++) {
+      Alloc plain;
+      if (m == 5) plain = alloc_plain(B);
       Alloc g = alloc_generic(B);
       uint32_t* p = (uint32_t*)g.p;
-      if (m >= 3) k_fill<<<g_sms * 4, 512>>>(p, B / 4, 0);
+      if (m == 6)
+        for (int pat = 0; pat < NPAT; pat++) k_write<<<g_sms * 4, 512>>>((uint4*)p, B / 16, pat);
+      if (m == 3 || m == 4) k_fill<<<g_sms * 4, 512>>>(p, B / 4, 0);
       if (m == 0 || m == 3) CK(cudaMemset(p, 0, B));
-      if (m == 1 || m == 4) k_fill<<<g_sms * 4, 512>>>(p, B / 4, 1);
+      if (m == 1 || m == 4 || m >= 5) k_fill<<<g_sms * 4, 512>>>(p, B / 4, 1);
       if (m == 2) k_write<<<g_sms * 4, 512>>>((uint4*)p, B / 16, 1);
       CK(cudaDeviceSynchronize());
       double r[6], best = 0;
@@ -361,6 +368,7 @@ static void fill_methods(const char* only) {
              names[m], trial, B, r[0], r[1], r[2], r[3], r[4], r[5], best, cg);
       fflush(stdout);
       free_generic(g);
+      if (plain.p) CK(cudaFree(plain.p));
     }
   CK(cudaEventDestroy(e0));
   CK(cudaEventDestroy(e1));
