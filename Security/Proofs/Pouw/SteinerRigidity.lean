@@ -452,4 +452,191 @@ theorem conjectureA_lower_of_blockRigidity (h1 : BlockRigidity F (Fin N × Fin N
 
 end ConjectureA
 
+section Flattening
+
+variable {F : Type*} [Field F] {m n : Type*} [Fintype m] [Fintype n]
+
+/-- Rank is subadditive over finite sums. -/
+theorem rank_sum_le {ι : Type*} (s : Finset ι) (A : ι → Matrix m n F) :
+    (∑ i ∈ s, A i).rank ≤ ∑ i ∈ s, (A i).rank := by
+  classical
+  induction s using Finset.induction_on with
+  | empty => simp
+  | insert a s ha ih =>
+    rw [Finset.sum_insert ha, Finset.sum_insert ha]
+    exact (rank_add_le _ _).trans (Nat.add_le_add_left ih _)
+
+/-- `Λ ⊗ W` for a label matrix `Λ`, entrywise: `((i, x), (j, y)) ↦ Λ i j * W x y`. -/
+def kron {α β : Type*} (Λ : Matrix α β F) (W : Matrix m n F) : Matrix (α × m) (β × n) F :=
+  fun i j => Λ i.1 j.1 * W i.2 j.2
+
+omit [Fintype m] [Fintype n] in
+theorem kron_sum_right {α β ι : Type*} (Λ : Matrix α β F) (s : Finset ι) (W : ι → Matrix m n F) :
+    kron Λ (∑ k ∈ s, W k) = ∑ k ∈ s, kron Λ (W k) := by
+  ext i j
+  simp [kron, Matrix.sum_apply, Finset.mul_sum]
+
+omit [Fintype m] [Fintype n] in
+theorem kron_sum_left {α β ι : Type*} (s : Finset ι) (Λ : ι → Matrix α β F) (W : Matrix m n F) :
+    kron (∑ k ∈ s, Λ k) W = ∑ k ∈ s, kron (Λ k) W := by
+  ext i j
+  simp [kron, Matrix.sum_apply, Finset.sum_mul]
+
+/-- `rank ((u vᵀ) ⊗ W) ≤ rank W`. -/
+theorem rank_kron_vecMulVec_le {α β : Type*} [Fintype α] [Fintype β] [DecidableEq m] [DecidableEq n]
+    (u : α → F) (v : β → F) (W : Matrix m n F) : (kron (vecMulVec u v) W).rank ≤ W.rank := by
+  let U : Matrix (α × m) m F := Matrix.of fun i x => if i.2 = x then u i.1 else 0
+  let V : Matrix n (β × n) F := Matrix.of fun y j => if y = j.2 then v j.1 else 0
+  have h : kron (vecMulVec u v) W = U * W * V := by
+    ext i j
+    simp_rw [Matrix.mul_apply]
+    simp only [U, V, Matrix.of_apply, ite_mul, zero_mul, Finset.sum_ite_eq, Finset.mem_univ,
+      ite_true, mul_ite, mul_zero, Finset.sum_ite_eq', kron, vecMulVec_apply]
+    ring
+  rw [h]
+  exact (rank_mul_le_left _ _).trans (rank_mul_le_right _ _)
+
+/-- The flattening `Φ = ∑ t ∈ P, (a t (b t)ᵀ) ⊗ M t` of Lemma 2. -/
+def flattening {κ α β : Type*} (P : Finset κ) (a : κ → α → F) (b : κ → β → F)
+    (M : κ → Matrix m n F) : Matrix (α × m) (β × n) F :=
+  ∑ t ∈ P, kron (vecMulVec (a t) (b t)) (M t)
+
+/-- A family of finite sets is laminar: any two of its sets are nested or disjoint. -/
+def Laminar {κ : Type*} (𝓕 : Finset (Finset κ)) : Prop :=
+  ∀ S ∈ 𝓕, ∀ S' ∈ 𝓕, S ⊆ S' ∨ S' ⊆ S ∨ Disjoint S S'
+
+omit [Fintype m] [Fintype n] in
+/-- The flattening of a decomposition `M t = ∑ S ∈ 𝓕, S ∋ t, W S` regroups by the sets of `𝓕`. -/
+theorem flattening_eq_sum {κ α β : Type*} [DecidableEq κ] (P : Finset κ) (a : κ → α → F)
+    (b : κ → β → F) (M : κ → Matrix m n F) (𝓕 : Finset (Finset κ)) (W : Finset κ → Matrix m n F)
+    (hsub : ∀ S ∈ 𝓕, S ⊆ P) (hdec : ∀ t ∈ P, ∑ S ∈ 𝓕.filter (t ∈ ·), W S = M t) :
+    flattening P a b M = ∑ S ∈ 𝓕, kron (∑ t ∈ S, vecMulVec (a t) (b t)) (W S) := by
+  calc flattening P a b M
+      = ∑ t ∈ P, ∑ S ∈ 𝓕, if t ∈ S then kron (vecMulVec (a t) (b t)) (W S) else 0 := by
+        refine Finset.sum_congr rfl fun t ht => ?_
+        rw [← hdec t ht, kron_sum_right, Finset.sum_filter]
+    _ = ∑ S ∈ 𝓕, ∑ t ∈ P, if t ∈ S then kron (vecMulVec (a t) (b t)) (W S) else 0 :=
+        Finset.sum_comm
+    _ = ∑ S ∈ 𝓕, kron (∑ t ∈ S, vecMulVec (a t) (b t)) (W S) := by
+        refine Finset.sum_congr rfl fun S hS => ?_
+        rw [← Finset.sum_filter, kron_sum_left, Finset.filter_mem_eq_inter,
+          Finset.inter_eq_right.mpr (hsub S hS)]
+
+/-- **Lemma 2(a).** If every `Λ(S) = ∑ t ∈ S, a t (b t)ᵀ` (`S ∈ 𝓕`) is a rank-one product, the flattening of a
+decomposition over `𝓕` has rank at most `∑ S ∈ 𝓕, rank (W S)`. -/
+theorem rank_flattening_le {κ α β : Type*} [DecidableEq κ] [Fintype α] [Fintype β] [DecidableEq m]
+    [DecidableEq n] (P : Finset κ) (a : κ → α → F) (b : κ → β → F) (M : κ → Matrix m n F)
+    (𝓕 : Finset (Finset κ)) (W : Finset κ → Matrix m n F) (hsub : ∀ S ∈ 𝓕, S ⊆ P)
+    (hdec : ∀ t ∈ P, ∑ S ∈ 𝓕.filter (t ∈ ·), W S = M t)
+    (hL : ∀ S ∈ 𝓕, ∃ u v, ∑ t ∈ S, vecMulVec (a t) (b t) = vecMulVec u v) :
+    (flattening P a b M).rank ≤ ∑ S ∈ 𝓕, (W S).rank := by
+  rw [flattening_eq_sum P a b M 𝓕 W hsub hdec]
+  refine (rank_sum_le _ _).trans (Finset.sum_le_sum fun S hS => ?_)
+  obtain ⟨u, v, huv⟩ := hL S hS
+  rw [huv]
+  exact rank_kron_vecMulVec_le u v (W S)
+
+/-- The coordinate block setting: target `M t` has its nonzero entries in rows of block `t.1` and columns of block
+`t.2`. -/
+def InCells {p q : ℕ} (rowBlk : m → Fin p) (colBlk : n → Fin q) (P : Finset (Fin p × Fin q))
+    (M : Fin p × Fin q → Matrix m n F) : Prop :=
+  ∀ t ∈ P, ∀ x y, M t x y ≠ 0 → rowBlk x = t.1 ∧ colBlk y = t.2
+
+/-- **Lemma 2(b).** In the coordinate block setting, if the labels `a t` of each grid row are linearly independent
+and the labels `b t` of each grid column are, the flattening has rank at least `∑ t ∈ P, rank (M t)`. -/
+def FlatteningLowerBound (F : Type*) [Field F] (m n : Type*) [Fintype m] [Fintype n] : Prop :=
+  ∀ (p q α β : ℕ) (rowBlk : m → Fin p) (colBlk : n → Fin q) (P : Finset (Fin p × Fin q))
+    (M : Fin p × Fin q → Matrix m n F) (a : Fin p × Fin q → Fin α → F) (b : Fin p × Fin q → Fin β → F),
+    InCells rowBlk colBlk P M →
+    (∀ r, LinearIndepOn F a ↑(P.filter (·.1 = r))) → (∀ c, LinearIndepOn F b ↑(P.filter (·.2 = c))) →
+      ∑ t ∈ P, (M t).rank ≤ (flattening P a b M).rank
+
+/-- **Lemma 3 (labels for a laminar family).** For one target per cell of a set `P` and a laminar family `𝓕` of
+subsets of `P`, there are labels with (L) every `Λ(S)`, `S ∈ 𝓕`, a rank-one product, and (I) the `a t` of each grid
+row linearly independent and the `b t` of each grid column linearly independent. -/
+def LabelLemma (F : Type*) [Field F] : Prop :=
+  ∀ (p q : ℕ) (P : Finset (Fin p × Fin q)) (𝓕 : Finset (Finset (Fin p × Fin q))),
+    Laminar 𝓕 → (∀ S ∈ 𝓕, S ⊆ P) →
+      ∃ (α β : ℕ) (a : Fin p × Fin q → Fin α → F) (b : Fin p × Fin q → Fin β → F),
+        (∀ S ∈ 𝓕, ∃ u v, ∑ t ∈ S, vecMulVec (a t) (b t) = vecMulVec u v) ∧
+        (∀ r, LinearIndepOn F a ↑(P.filter (·.1 = r))) ∧ (∀ c, LinearIndepOn F b ↑(P.filter (·.2 = c)))
+
+/-- **Theorem 1 for laminar decompositions** (Lemma 1(d)'s side): in the coordinate block setting, any
+decomposition `M t = ∑ S ∈ 𝓕, S ∋ t, W S` over a laminar family of subsets of `P` has
+`∑ S ∈ 𝓕, rank (W S) ≥ ∑ t ∈ P, rank (M t)`. -/
+def LaminarBound (F : Type*) [Field F] (m n : Type*) [Fintype m] [Fintype n] : Prop :=
+  ∀ (p q : ℕ) (rowBlk : m → Fin p) (colBlk : n → Fin q) (P : Finset (Fin p × Fin q))
+    (M : Fin p × Fin q → Matrix m n F), InCells rowBlk colBlk P M →
+    ∀ (𝓕 : Finset (Finset (Fin p × Fin q))) (W : Finset (Fin p × Fin q) → Matrix m n F),
+      Laminar 𝓕 → (∀ S ∈ 𝓕, S ⊆ P) → (∀ t ∈ P, ∑ S ∈ 𝓕.filter (t ∈ ·), W S = M t) →
+        ∑ t ∈ P, (M t).rank ≤ ∑ S ∈ 𝓕, (W S).rank
+
+/-- Lemmas 2 and 3 give Theorem 1 for laminar decompositions. -/
+theorem laminarBound_of_labelLemma [DecidableEq m] [DecidableEq n] (h3 : LabelLemma F)
+    (h2 : FlatteningLowerBound F m n) : LaminarBound F m n := by
+  intro p q rowBlk colBlk P M hM 𝓕 W hlam hsub hdec
+  obtain ⟨α, β, a, b, hL, hIa, hIb⟩ := h3 p q P 𝓕 hlam hsub
+  exact (h2 p q α β rowBlk colBlk P M a b hM hIa hIb).trans
+    (rank_flattening_le P a b M 𝓕 W hsub hdec hL)
+
+/-- **Lemma 1(a, b)**: a Steiner tree spanning `0` and the targets gives a laminar decomposition no longer than the
+tree: a laminar family `𝓕` of subsets of `P` and matrices `W S` with `M t = ∑ S ∈ 𝓕, S ∋ t, W S` and
+`∑ S ∈ 𝓕, rank (W S) ≤ length`. (`S` is the set of targets below an edge, `W S` the sum of the steps of the edges
+with that set.) -/
+def TreeLaminarDecomposition (F : Type*) [Field F] (m n : Type*) [Fintype m] [Fintype n] : Prop :=
+  ∀ (κ : Type) [DecidableEq κ] (P : Finset κ) (M : κ → Matrix m n F) (T : SteinerTree F m n),
+    T.Reaches 0 → (∀ t ∈ P, T.Reaches (M t)) →
+      ∃ (𝓕 : Finset (Finset κ)) (W : Finset κ → Matrix m n F), Laminar 𝓕 ∧ (∀ S ∈ 𝓕, S ⊆ P) ∧
+        (∀ t ∈ P, ∑ S ∈ 𝓕.filter (t ∈ ·), W S = M t) ∧ ∑ S ∈ 𝓕, (W S).rank ≤ T.length
+
+/-- **Theorem 1 in coordinates**: the row and column coordinates split into blocks, one target per cell. -/
+def BlockRigidityCoord (F : Type*) [Field F] (m n : Type*) [Fintype m] [Fintype n] : Prop :=
+  ∀ (p q : ℕ) (rowBlk : m → Fin p) (colBlk : n → Fin q) (P : Finset (Fin p × Fin q))
+    (M : Fin p × Fin q → Matrix m n F), InCells rowBlk colBlk P M →
+    ∀ T : SteinerTree F m n, T.Reaches 0 → (∀ t ∈ P, T.Reaches (M t)) →
+      ∑ t ∈ P, (M t).rank ≤ T.length
+
+/-- Lemma 1 and Theorem 1 for laminar decompositions give Theorem 1 in coordinates. -/
+theorem blockRigidityCoord_of_laminarBound (h1 : TreeLaminarDecomposition F m n)
+    (hlam : LaminarBound F m n) : BlockRigidityCoord F m n := by
+  intro p q rowBlk colBlk P M hM T h0 hT
+  obtain ⟨𝓕, W, hl, hsub, hdec, hlen⟩ := h1 (Fin p × Fin q) P M T h0 hT
+  exact (hlam p q rowBlk colBlk P M hM 𝓕 W hl hsub hdec).trans hlen
+
+/-- **Conjecture A's lower bound from Theorem 1 in coordinates.** -/
+theorem conjectureA_lower_of_blockRigidityCoord {N L : ℕ}
+    (h1 : BlockRigidityCoord F (Fin N × Fin N) (Fin N × Fin N)) (hL : 0 < L) (hLN : L ∣ N)
+    (T : SteinerTree F (Fin N × Fin N) (Fin N × Fin N)) (h0 : T.Reaches 0)
+    (hT : ∀ r c : Fin N, ∀ s ∈ Finset.Icc 1 (N / L), T.Reaches (prefixTarget F N L r c s)) :
+    N ^ 3 ≤ T.length := by
+  rcases Nat.eq_zero_or_pos N with hN | hN
+  · simp [hN]
+  have hsL : N / L * L = N := Nat.div_mul_cancel hLN
+  have hs : N / L ∈ Finset.Icc 1 (N / L) :=
+    Finset.mem_Icc.mpr ⟨Nat.div_pos (Nat.le_of_dvd hN hLN) hL, le_rfl⟩
+  have hcells : InCells (fun i : Fin N × Fin N => i.1) (fun j : Fin N × Fin N => j.1) Finset.univ
+      (fun t => prefixTarget F N L t.1 t.2 (N / L)) := by
+    intro t _ x y hxy
+    simp only [prefixTarget, ne_eq, ite_eq_right_iff, one_ne_zero, imp_false, not_not] at hxy
+    exact ⟨hxy.1, hxy.2.1⟩
+  have key := h1 N N (fun i => i.1) (fun j => j.1) Finset.univ
+    (fun t => prefixTarget F N L t.1 t.2 (N / L)) hcells T h0 (fun t _ => hT t.1 t.2 _ hs)
+  calc N ^ 3 = ∑ _t : Fin N × Fin N, N := by
+        simp [Finset.card_univ, Fintype.card_prod, Fintype.card_fin]; ring
+    _ ≤ ∑ t : Fin N × Fin N, (prefixTarget F N L t.1 t.2 (N / L)).rank :=
+        Finset.sum_le_sum fun t _ => le_rank_prefixTarget t.1 t.2 hsL.ge
+    _ ≤ T.length := key
+
+/-- **Conjecture A's lower bound from Lemmas 1, 2(b) and 3.** -/
+theorem conjectureA_lower_of_lemmas {N L : ℕ}
+    (h1 : TreeLaminarDecomposition F (Fin N × Fin N) (Fin N × Fin N))
+    (h2 : FlatteningLowerBound F (Fin N × Fin N) (Fin N × Fin N)) (h3 : LabelLemma F)
+    (hL : 0 < L) (hLN : L ∣ N) (T : SteinerTree F (Fin N × Fin N) (Fin N × Fin N)) (h0 : T.Reaches 0)
+    (hT : ∀ r c : Fin N, ∀ s ∈ Finset.Icc 1 (N / L), T.Reaches (prefixTarget F N L r c s)) :
+    N ^ 3 ≤ T.length :=
+  conjectureA_lower_of_blockRigidityCoord
+    (blockRigidityCoord_of_laminarBound h1 (laminarBound_of_labelLemma h3 h2)) hL hLN T h0 hT
+
+end Flattening
+
 end Pouw.SteinerRigidity
