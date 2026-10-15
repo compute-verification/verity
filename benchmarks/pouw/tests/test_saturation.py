@@ -1,4 +1,5 @@
-"""The saturation budget's tools: vLLM kernel categories, step attribution through graph launches, and ncu's slot share."""
+"""The saturation budget's tools: vLLM kernel categories, step attribution through graph launches, ncu's slot share, and
+the timed-window reading of a GEMM window's ε."""
 
 from __future__ import annotations
 
@@ -22,6 +23,7 @@ def _load(name: str):
 
 V = _load("vllm_split")
 N = _load("ncu_summary")
+W = _load("windows_eps")
 
 
 def test_categories_keep_fp8_gemms_and_kv_writes_apart():
@@ -99,3 +101,13 @@ def test_ncu_units_that_are_not_the_metrics_refuse(tmp_path):
                                '"0","k","1","1","1"']) + "\n")
     with pytest.raises(SystemExit, match="not a time unit"):
         N.summarize(path, sms=1)
+
+
+def test_timed_window_keeps_all_the_work_of_a_cheater_that_fits():
+    rows = [{"design": "k", "phase": "p2048", "added": 0.02, "slowdown": 1.011},
+            {"design": "k", "phase": "p2048", "added": 0.30, "slowdown": 1.5},
+            {"design": "other", "phase": "p2048", "added": 0.5, "slowdown": 1.0}]
+    assert W.timed(rows, "k", "p2048", 0.5, 1.0, 16.0) == 0.0
+    assert W.timed(rows, "k", "p2048", 0.5, 1.01, 16.0) == pytest.approx(16 * 0.02 / 8 / 0.5)
+    assert W.timed(rows, "k", "p2048", 0.5, 1.05, 16.0) == pytest.approx((16 * 0.02 / 8 + 0.9 * 0.039) / 0.5)
+    assert W.timed([], "k", "p2048", 0.5, 1.05, 16.0) == pytest.approx(0.9 * 0.05 / 0.5)
