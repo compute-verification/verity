@@ -12,7 +12,8 @@ warp-instruction a cycle). Rates are warp-MMAs per SM-clock (peak 0.25: one m16n
 - (c) ncu: 1 − smsp__issue_active, and the per-pipe idle fractions, over the NCU_REPS profiles of the filler alone.
 
 Error bars: mean ± sample standard deviation over reps (and min/max); a frontier also carries its grid bracket (the largest
-passing point and the smallest failing point above it), which is wider than the rep-to-rep spread.
+passing point and the smallest failing point above it), which is wider than the rep-to-rep spread, and the bracket's
+linear interpolation to the threshold.
 """
 
 from __future__ import annotations
@@ -60,19 +61,21 @@ OPS = ("none", "iadd3", "lop3", "imad", "prmt", "mix", "imma")
 
 
 def probe_overhead(sass: dict) -> dict[str, float]:
-    """Instructions per probe body over its PB ops, keyed by kernel name: the smallest loop holding a NANOSLEEP (a
-    backward branch to the kernel's exit path spans the filler's loop and the probe's)."""
+    """Instructions per probe body over its PB ops, keyed by kernel name: the smallest loop holding a NANOSLEEP and at
+    least PB instructions (a backward branch to the kernel's exit path spans the filler's loop and the probe's, and the
+    probe-first kernel's start-flag wait is a NANOSLEEP loop of its own)."""
     out = {}
     for key, v in sass.items():
-        loops = [lp for lp in v["loops"] if "NANOSLEEP" in lp["ops"]]
-        if not loops:
-            continue
-        n = min(loops, key=lambda lp: lp["n"])["n"]
         if key.startswith("pk:"):
             pop, pb = key[3:].split(",")
-            out[f"s-{OPS[int(pop)]}-b{pb}"] = n / int(pb)
+            name = f"s-{OPS[int(pop)]}-b{pb}"
         elif len(f := key.split(",")) == 5 and f[0] != "0":
-            out[f"p-{OPS[int(f[0])]}-b{f[4]}"] = n / int(f[4])
+            pop, pb, name = f[0], f[4], f"p-{OPS[int(f[0])]}-b{f[4]}"
+        else:
+            continue
+        loops = [lp["n"] for lp in v["loops"] if "NANOSLEEP" in lp["ops"] and lp["n"] >= int(pb)]
+        if loops:
+            out[name] = min(loops) / int(pb)
     return out
 
 
@@ -84,15 +87,19 @@ def frontier(points: list[tuple[int, float, float]], thr: float) -> list[float]:
 
 def bracket(points: list[tuple[int, float, float]], thr: float) -> dict:
     """The frontier's grid bracket: per rep, the largest passing nu (lo) and the smallest failing nu above it (hi; None
-    if every larger point passes), as mean ± sd over reps."""
-    los, his = [], []
+    if every larger point passes), and the nu at which the loss reaches thr on the line between them (interp; None
+    without a failing point), each as mean ± sd over reps."""
+    los, his, interps = [], [], []
     for rep in sorted({p[0] for p in points}):
         pts = [(nu, rel) for r, nu, rel in points if r == rep]
-        lo = max([nu for nu, rel in pts if rel >= 1 - thr] + [0.0])
-        hi = [nu for nu, rel in pts if rel < 1 - thr and nu > lo]
-        los.append(lo)
-        his.append(min(hi) if hi else None)
-    return {"lo": ms(los), "hi": ms(his)}
+        lo = max([(nu, rel) for nu, rel in pts if rel >= 1 - thr] + [(0.0, 1.0)])
+        hi = min([(nu, rel) for nu, rel in pts if rel < 1 - thr and nu > lo[0]], default=None)
+        los.append(lo[0])
+        his.append(hi[0] if hi else None)
+        if hi:
+            f = (lo[1] - (1 - thr)) / (lo[1] - hi[1])
+            interps.append(lo[0] + (hi[0] - lo[0]) * min(max(f, 0.0), 1.0))
+    return {"lo": ms(los), "hi": ms(his), "interp": ms(interps)}
 
 
 FAMILY = {"probe": ("probe-base", "in-kernel"), "ss-probe": ("ss-base", "second-stream"),

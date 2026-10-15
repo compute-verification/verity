@@ -99,11 +99,20 @@ def test_bracket_spans_largest_pass_and_next_failure():
     assert b["lo"]["min"] == 0.002 and b["lo"]["max"] == 0.004
     assert b["hi"]["min"] == 0.004 and b["hi"]["max"] == 0.008
     top = analyze.bracket(POINTS, 0.5)
-    assert top["hi"]["n"] == 0 and top["lo"]["max"] == 0.016
+    assert top["hi"]["n"] == 0 and top["lo"]["max"] == 0.016 and top["interp"]["n"] == 0
 
 
-def test_probe_overhead_reads_the_sleep_loop():
-    sass = {"3,0,0,1,16": {"loops": [{"n": 40, "ops": ["NANOSLEEP", "BRA"]}, {"n": 19, "ops": ["NANOSLEEP"]}]},
-            "pk:1,16": {"loops": [{"n": 20, "ops": ["NANOSLEEP"]}]},
-            "0,0,0,1,1": {"loops": [{"n": 30, "ops": ["IMMA"]}]}}
-    assert analyze.probe_overhead(sass) == {"p-imad-b16": 19 / 16, "s-iadd3-b16": 20 / 16}
+def test_bracket_interpolates_the_loss_line():
+    b = analyze.bracket([(0, 0.002, 0.9995), (0, 0.004, 0.9975), (1, 0.001, 1.0), (1, 0.003, 0.996)], 0.001)
+    assert b["interp"]["min"] == pytest.approx(0.0015) and b["interp"]["max"] == pytest.approx(0.0025)
+
+
+def test_probe_overhead_reads_the_probe_body():
+    """The body is the smallest sleeping loop that holds the PB ops: not the span through the filler's loop, nor the
+    probe-first kernel's 4-instruction start-flag wait (run r20261015-080548-a359's sass-loops.json)."""
+    wait = {"n": 4, "ops": {"NANOSLEEP": 1, "LDG.E.STRONG.SYS": 1, "ISETP.NE.AND": 1, "BRA": 1}}
+    sass = {"3,0,0,1,16": {"loops": [{"n": 40, "ops": {"NANOSLEEP": 1, "BRA": 1}}, {"n": 19, "ops": {"NANOSLEEP": 1}}]},
+            "pk:1,16": {"loops": [wait, {"n": 23, "ops": {"IADD3": 16, "NANOSLEEP": 1}}]},
+            "pk:6,32": {"loops": [wait, {"n": 72, "ops": {"IMMA.16832.S8.S8": 32, "NANOSLEEP": 1}}]},
+            "0,0,0,1,1": {"loops": [{"n": 30, "ops": {"IMMA.16832.S8.S8": 4}}]}}
+    assert analyze.probe_overhead(sass) == {"p-imad-b16": 19 / 16, "s-iadd3-b16": 23 / 16, "s-imma-b32": 72 / 32}
