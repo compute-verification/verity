@@ -1279,7 +1279,13 @@ def sym_star_bounds(L, k, Z, gammas, p):
     assert sum_B >= k * L - w - dim_UK, "certificate on ker Z_YY fails"
     assert sum_C >= (k - 1) * L - dim_KQ, "certificate modulo col Z_YY fails"
     assert total >= 2 * L * (k - 1) + (k - 2) * w, "symmetric Lemma C fails on a row star"
-    return total, w
+    a = rank(Z[:L, L:] @ U % p, p) if U.shape[1] else 0
+    b = rank_mod(Z[L:, :L], Dyy, p)
+    rZ = rank(Z, p)
+    assert rZ >= w + a + b, "rank Z >= rank Z_YY + a + b fails"
+    assert sum_B >= k * L - w - a and sum_C >= k * L - w - b, "independent-label certificates fail"
+    assert total >= 2 * k * L - rZ + (k - 1) * w, "per-word cap fails on a row star"
+    return total, w, rZ
 
 
 def star_word(L, k, gammas, rng, p, sym):
@@ -1321,12 +1327,15 @@ def part12(rng):
     junk Z carries. Path changes are quadratic forms R_t = M(D_t) - beta_t M(Z), every product has symmetric rank
     <= 2, so it suffices that sum_t rank R_t >= 2L(k - 1). Disjoint pairs give 4L; on a row star, for any Z,
     sum_t rank(gamma_t D-hat_t - Z) >= 2L(k - 1) + (k - 2) rank Z_YY, by a block-triangular split on ker Z_YY and
-    one label certificate on each side. Each step is checked on star words with junk, random words and the local
-    search's minimisers; then random cell patterns in a P x Q block, where the links the word helps form a star."""
-    count, tight, tight_w = 0, 0, 0
+    one label certificate on each side. With independent labels instead, the same split gives the per-word cap
+    sum_t rank >= 2kL - rank Z + (k - 1) rank Z_YY, since rank Z >= rank Z_YY + a + b (a, b: the word's two
+    off-diagonal blocks on ker Z_YY and modulo col Z_YY). Each step is checked on star words with junk, random
+    words and the local search's minimisers; then random cell patterns in a P x Q block, where the links the word
+    helps form a star."""
+    count, tight, tight_w, tight_cap = 0, 0, 0, 0
     for p in (3, 5, 10007):
         for _ in range(250):
-            L, k = rng.randint(1, 4), rng.randint(2, 4)
+            L, k = rng.randint(1, 4), rng.randint(1, 4)
             gammas = [rng.randrange(1, p) for _ in range(k)]
             sym = rng.random() < 0.7
             if rng.random() < 0.8:
@@ -1335,9 +1344,10 @@ def part12(rng):
                 n = L * (k + 1)
                 Z = np.array([[rng.randrange(p) for _ in range(n)] for _ in range(n)], dtype=np.int64)
                 Z = (np.triu(Z) + np.triu(Z, 1).T) % p if sym else Z
-            total, w = sym_star_bounds(L, k, Z, gammas, p)
+            total, w, rZ = sym_star_bounds(L, k, Z, gammas, p)
             tight += total == 2 * L * (k - 1)
             tight_w += w > 0 and total == 2 * L * (k - 1) + (k - 2) * w
+            tight_cap += rZ < 2 * L and total == 2 * k * L - rZ
             count += 1
     for L, k in ((2, 3), (2, 4), (3, 3)):
         p = 3
@@ -1353,7 +1363,7 @@ def part12(rng):
                 s = sum(rank((g * D - Z2) % p, p) for g, D in zip(gammas, Ds))
                 if s <= best:
                     Z, best = Z2, s
-            total, _ = sym_star_bounds(L, k, Z, gammas, p)
+            total, _, _ = sym_star_bounds(L, k, Z, gammas, p)
             tight += total == 2 * L * (k - 1)
             count += 1
     patterns = 0
@@ -1378,14 +1388,16 @@ def part12(rng):
                 Z = (Z + np.outer(a, a)) % p
             ranks = [rank((D - b * Z) % p, p) for D, b in zip(Dh, betas)]
             assert sum(ranks) >= 2 * L * (len(cells) - 1), "symmetric Lemma C fails on a cell pattern"
+            assert sum(ranks) >= 2 * L * len(cells) - rank(Z, p), "per-word cap fails on a cell pattern"
             helped = [c for c, r in zip(cells, ranks) if r < 2 * L]
             assert len({r for r, _ in helped}) <= 1 or len({c for _, c in helped}) <= 1, "helped links not a star"
             patterns += 1
     print(f"[sym Lemma C] {count} row stars (L <= 4, k <= 4; star words with XX, YY and Winograd-style junk, random "
           "words, local-search minimisers; GF(3), GF(5), GF(10007)): block-triangular split, both certificates, "
           f"sum rank >= 2L(k-1) + (k-2) rank Z_YY: ok ({tight} at 2L(k-1), {tight_w} tight with Z_YY != 0); "
-          f"{patterns} cell patterns: "
-          "sum rank >= 2L(k-1), helped links form a star: ok")
+          f"rank Z >= rank Z_YY + a + b and sum rank >= 2kL - rank Z + (k-1) rank Z_YY: ok ({tight_cap} tight with "
+          f"rank Z < 2L); {patterns} cell patterns: sum rank >= max(2L(k-1), 2Lk - rank Z), helped links form a "
+          "star: ok")
 
 
 def part4(rng):
