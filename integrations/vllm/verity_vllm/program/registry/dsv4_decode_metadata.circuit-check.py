@@ -15,10 +15,10 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
 
     S = X.DSV4_DECODE_METADATA
     return [
-        ("Dsv4SwaIndices_v1", lambda: bind(X.Dsv4SwaIndices, **S["swa"])),
-        ("Dsv4SwaIndices_v1", lambda: bind(X.Dsv4SwaIndices, **S["swa-4096"])),
-        ("Dsv4SwaIndices_v1", lambda: bind(X.Dsv4SwaIndices, SW=8, BS=4, NB=8)),
-        ("Dsv4C128aGlobalTopk_v1", lambda: bind(X.Dsv4C128aGlobalTopk, **S["c128"])),
-        ("Dsv4C128aGlobalTopk_v1", lambda: bind(X.Dsv4C128aGlobalTopk, **S["c128-4096"])),
-        ("Dsv4C128aGlobalTopk_v1", lambda: bind(X.Dsv4C128aGlobalTopk, W=16, R=4, BS=2, NB=8)),
+        ("Dsv4SwaIndices_v1:1", lambda: bind(X.Dsv4SwaIndices, **S["swa"])),
+        ("Dsv4SwaIndices_v1:2", lambda: bind(X.Dsv4SwaIndices, **S["swa-4096"])),
+        ("Dsv4SwaIndices_v1:3", lambda: bind(X.Dsv4SwaIndices, SW=8, BS=4, NB=8)),
+        ("Dsv4C128aGlobalTopk_v1:1", lambda: bind(X.Dsv4C128aGlobalTopk, **S["c128"])),
+        ("Dsv4C128aGlobalTopk_v1:2", lambda: bind(X.Dsv4C128aGlobalTopk, **S["c128-4096"])),
+        ("Dsv4C128aGlobalTopk_v1:3", lambda: bind(X.Dsv4C128aGlobalTopk, W=16, R=4, BS=2, NB=8)),
     ]

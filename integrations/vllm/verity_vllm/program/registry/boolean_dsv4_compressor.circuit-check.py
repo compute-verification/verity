@@ -17,12 +17,12 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     return [
         ("Dsv4MlaC4Column_v2", lambda: bind(BC.Dsv4MlaC4ColumnV2, ROWS=4)),
         ("Dsv4MlaC128Column_v2", lambda: bind(BC.Dsv4MlaC128ColumnV2, W=2, R=2)),
-        ("Dsv4MlaRmsNorm_v2", lambda: bind(BC.Dsv4MlaRmsNormV2, RATIO=4, **row)),
-        ("Dsv4MlaRmsNorm_v2", lambda: bind(BC.Dsv4MlaRmsNormV2, RATIO=128, **row)),
+        ("Dsv4MlaRmsNorm_v2:1", lambda: bind(BC.Dsv4MlaRmsNormV2, RATIO=4, **row)),
+        ("Dsv4MlaRmsNorm_v2:2", lambda: bind(BC.Dsv4MlaRmsNormV2, RATIO=128, **row)),
         ("Dsv4MlaQuantGroup_v2", lambda: bind(BC.Dsv4MlaQuantGroupV2, QB=8)),
         ("Dsv4MlaRope_v2", lambda: bind(BC.Dsv4MlaRopeV2, ROPE=4)),
-        ("Dsv4MlaNormRopeQuant_v2", lambda: bind(BC.Dsv4MlaNormRopeQuantV2, RATIO=4, **row)),
-        ("Dsv4MlaNormRopeQuant_v2", lambda: bind(BC.Dsv4MlaNormRopeQuantV2, RATIO=128, **row)),
+        ("Dsv4MlaNormRopeQuant_v2:1", lambda: bind(BC.Dsv4MlaNormRopeQuantV2, RATIO=4, **row)),
+        ("Dsv4MlaNormRopeQuant_v2:2", lambda: bind(BC.Dsv4MlaNormRopeQuantV2, RATIO=128, **row)),
         ("Dsv4MlaCompressC4_v2", lambda: bind(BC.Dsv4MlaCompressC4V2, ROWS=4, **row)),
         ("Dsv4MlaCompressC128_v2", lambda: bind(BC.Dsv4MlaCompressC128V2, W=2, R=2, **row)),
     ]

@@ -14,8 +14,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     from verity_vllm.program.registry import boolean_dsv4_decode_indices as BX
 
     return [
-        ("Dsv4GlobalTopk_v2", lambda: bind(BX.Dsv4GlobalTopkV2, TOPK=16, BS=64, NB=16)),
-        ("Dsv4GlobalTopk_v2", lambda: bind(BX.Dsv4GlobalTopkV2, TOPK=8, BS=4, NB=8)),
+        ("Dsv4GlobalTopk_v2:1", lambda: bind(BX.Dsv4GlobalTopkV2, TOPK=16, BS=64, NB=16)),
+        ("Dsv4GlobalTopk_v2:2", lambda: bind(BX.Dsv4GlobalTopkV2, TOPK=8, BS=4, NB=8)),
         ("Dsv4GlobalTopkSlot_v2", lambda: bind(BX.Dsv4GlobalTopkSlotV2, BS=64, NB=4096)),
         ("Dsv4GlobalTopkLen_v2", lambda: bind(BX.Dsv4GlobalTopkLenV2, TOPK=1024)),
     ]

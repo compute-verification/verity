@@ -15,12 +15,12 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     from verity_vllm.program.registry import boolean_dsv4_decode_metadata as BX
 
     return [
-        ("Dsv4SwaIndices_v2", lambda: bind(BX.Dsv4SwaIndicesV2, SW=128, BS=64, NB=64)),
-        ("Dsv4SwaIndices_v2", lambda: bind(BX.Dsv4SwaIndicesV2, SW=8, BS=4, NB=8)),
-        ("Dsv4SwaIndices_v2", lambda: bind(BX.Dsv4SwaIndicesV2, SW=5, BS=2, NB=3)),
+        ("Dsv4SwaIndices_v2:1", lambda: bind(BX.Dsv4SwaIndicesV2, SW=128, BS=64, NB=64)),
+        ("Dsv4SwaIndices_v2:2", lambda: bind(BX.Dsv4SwaIndicesV2, SW=8, BS=4, NB=8)),
+        ("Dsv4SwaIndices_v2:3", lambda: bind(BX.Dsv4SwaIndicesV2, SW=5, BS=2, NB=3)),
         ("Dsv4SwaWindow_v2", lambda: bind(BX.Dsv4SwaWindowV2, SW=128, BS=64, NB=16384)),
-        ("Dsv4C128aGlobalTopk_v2", lambda: bind(BX.Dsv4C128aGlobalTopkV2, W=128, R=128, BS=2, NB=16)),
-        ("Dsv4C128aGlobalTopk_v2", lambda: bind(BX.Dsv4C128aGlobalTopkV2, W=16, R=4, BS=2, NB=8)),
-        ("Dsv4C128aGlobalTopk_v2", lambda: bind(BX.Dsv4C128aGlobalTopkV2, W=12, R=3, BS=2, NB=4)),
+        ("Dsv4C128aGlobalTopk_v2:1", lambda: bind(BX.Dsv4C128aGlobalTopkV2, W=128, R=128, BS=2, NB=16)),
+        ("Dsv4C128aGlobalTopk_v2:2", lambda: bind(BX.Dsv4C128aGlobalTopkV2, W=16, R=4, BS=2, NB=8)),
+        ("Dsv4C128aGlobalTopk_v2:3", lambda: bind(BX.Dsv4C128aGlobalTopkV2, W=12, R=3, BS=2, NB=4)),
         ("Dsv4C128aLen_v2", lambda: bind(BX.Dsv4C128aLenV2, W=8192)),
     ]

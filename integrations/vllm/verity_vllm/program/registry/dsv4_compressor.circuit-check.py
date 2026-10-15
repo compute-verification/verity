@@ -15,16 +15,16 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     S = C.DSV4_COMPRESSOR
     row = {"D": S["D"], "QB": S["QB"], "EPS": S["EPS"]}
     return [
-        ("Dsv4MlaC4Column_v1", lambda: bind(C.Dsv4MlaC4Column, ROWS=S["ROWS"])),
-        ("Dsv4MlaC4Column_v1", lambda: bind(C.Dsv4MlaC4Column, ROWS=4)),
+        ("Dsv4MlaC4Column_v1:1", lambda: bind(C.Dsv4MlaC4Column, ROWS=S["ROWS"])),
+        ("Dsv4MlaC4Column_v1:2", lambda: bind(C.Dsv4MlaC4Column, ROWS=4)),
         ("Dsv4MlaC128Column_v1", lambda: bind(C.Dsv4MlaC128Column, W=S["W"], R=S["R"])),
-        ("Dsv4MlaRmsNorm_v1", lambda: bind(C.Dsv4MlaRmsNorm, RATIO=4, **row)),
-        ("Dsv4MlaRmsNorm_v1", lambda: bind(C.Dsv4MlaRmsNorm, RATIO=128, **row)),
+        ("Dsv4MlaRmsNorm_v1:1", lambda: bind(C.Dsv4MlaRmsNorm, RATIO=4, **row)),
+        ("Dsv4MlaRmsNorm_v1:2", lambda: bind(C.Dsv4MlaRmsNorm, RATIO=128, **row)),
         ("Dsv4MlaQuantGroup_v1", lambda: bind(C.Dsv4MlaQuantGroup, QB=S["QB"])),
         ("Dsv4MlaRope_v1", lambda: bind(C.Dsv4MlaRope, ROPE=S["QB"])),
-        ("Dsv4MlaNormRopeQuant_v1", lambda: bind(C.Dsv4MlaNormRopeQuant, RATIO=4, **row)),
-        ("Dsv4MlaNormRopeQuant_v1", lambda: bind(C.Dsv4MlaNormRopeQuant, RATIO=128, **row)),
-        ("Dsv4MlaCompressC4_v1", lambda: bind(C.Dsv4MlaCompressC4, ROWS=S["ROWS"], **row)),
-        ("Dsv4MlaCompressC4_v1", lambda: bind(C.Dsv4MlaCompressC4, ROWS=4, **row)),
+        ("Dsv4MlaNormRopeQuant_v1:1", lambda: bind(C.Dsv4MlaNormRopeQuant, RATIO=4, **row)),
+        ("Dsv4MlaNormRopeQuant_v1:2", lambda: bind(C.Dsv4MlaNormRopeQuant, RATIO=128, **row)),
+        ("Dsv4MlaCompressC4_v1:1", lambda: bind(C.Dsv4MlaCompressC4, ROWS=S["ROWS"], **row)),
+        ("Dsv4MlaCompressC4_v1:2", lambda: bind(C.Dsv4MlaCompressC4, ROWS=4, **row)),
         ("Dsv4MlaCompressC128_v1", lambda: bind(C.Dsv4MlaCompressC128, W=S["W"], R=S["R"], **row)),
     ]

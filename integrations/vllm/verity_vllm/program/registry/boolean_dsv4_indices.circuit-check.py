@@ -13,6 +13,6 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     from verity_vllm.program.registry import boolean_dsv4_indices as BX
 
     return [
-        ("Dsv4CombineTopkSwa_v2", lambda: bind(BX.Dsv4CombineTopkSwaV2, TOPK=128, RATIO=128, WINDOW=128, WIDTH=256)),
-        ("Dsv4CombineTopkSwa_v2", lambda: bind(BX.Dsv4CombineTopkSwaV2, TOPK=8, RATIO=4, WINDOW=4, WIDTH=16)),
+        ("Dsv4CombineTopkSwa_v2:1", lambda: bind(BX.Dsv4CombineTopkSwaV2, TOPK=128, RATIO=128, WINDOW=128, WIDTH=256)),
+        ("Dsv4CombineTopkSwa_v2:2", lambda: bind(BX.Dsv4CombineTopkSwaV2, TOPK=8, RATIO=4, WINDOW=4, WIDTH=16)),
     ]

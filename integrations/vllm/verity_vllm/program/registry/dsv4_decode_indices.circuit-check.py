@@ -14,7 +14,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
 
     S = X.DSV4_DECODE_INDICES
     return [
-        ("Dsv4GlobalTopk_v1", lambda: bind(X.Dsv4GlobalTopk, **S["c4"])),
-        ("Dsv4GlobalTopk_v1", lambda: bind(X.Dsv4GlobalTopk, **S["c4-4096"])),
-        ("Dsv4GlobalTopk_v1", lambda: bind(X.Dsv4GlobalTopk, TOPK=8, BS=4, NB=8)),
+        ("Dsv4GlobalTopk_v1:1", lambda: bind(X.Dsv4GlobalTopk, **S["c4"])),
+        ("Dsv4GlobalTopk_v1:2", lambda: bind(X.Dsv4GlobalTopk, **S["c4-4096"])),
+        ("Dsv4GlobalTopk_v1:3", lambda: bind(X.Dsv4GlobalTopk, TOPK=8, BS=4, NB=8)),
     ]

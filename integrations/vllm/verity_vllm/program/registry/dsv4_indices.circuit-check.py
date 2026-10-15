@@ -13,6 +13,6 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
 
     S = X.DSV4_INDICES
     return [
-        ("Dsv4CombineTopkSwa_v1", lambda: bind(X.Dsv4CombineTopkSwa, **S["c4"])),
-        ("Dsv4CombineTopkSwa_v1", lambda: bind(X.Dsv4CombineTopkSwa, **S["c128"])),
+        ("Dsv4CombineTopkSwa_v1:1", lambda: bind(X.Dsv4CombineTopkSwa, **S["c4"])),
+        ("Dsv4CombineTopkSwa_v1:2", lambda: bind(X.Dsv4CombineTopkSwa, **S["c128"])),
     ]
