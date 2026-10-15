@@ -14,7 +14,7 @@ from verity_vllm.program.registry import value_inputs as VI
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_row_major
-from verity_vllm.observe.fold.patterns.ops import as_float, bound_args, first, op_name, triton_name
+from verity_vllm.observe.fold.patterns.ops import as_float, base_op, bound_args, first, op_name, triton_name
 from verity_vllm.observe.fold.patterns.resolutions import _check_pins, _fmt, attribution_for, hint_of, unsupported
 from verity_vllm.observe.fold.patterns.target import _targets, target_of
 from verity_vllm.observe.fold.resolver import Compute, PerRow, Resolution, Shared, StepContext, Supplied
@@ -114,3 +114,65 @@ class FusedAddRMSNorm:
         return Compute(spec, M, operands, (PerRow(x), PerRow(res)), (node.id,),
                        hint=hint_of(node, roots[0].name if roots else "fused_add_rms_norm"), kernels=("fused_add_rms_norm_kernel",),
                        attribution=attribution_for(ctx, M, node.phase), pattern=self.name)
+
+
+def _cuda_norm_args(node: TreeNode, names: tuple[str, ...]) -> tuple | None:
+    a = bound_args(node)
+    vals = tuple(a.get(n, a.get(f"arg{i}")) for i, n in enumerate(names))
+    return vals if all(isinstance(v, ViewDesc) for v in vals[:-1]) and isinstance(vals[-1], float) else None
+
+
+@dataclass
+class CudaRmsNorm:
+    """`_C.rms_norm(out! [M,N], x [M,N], weight [N], eps)` off batch invariance (vLLM's default `rms_norm_kernel<bf16, 8, 2, true>`) ->
+    `Compute(RMSNormCudaVector8_v1{N,EPS,BLOCK}, rows=M, (PerRow(x), Shared(weight)), (PerRow(out),))`, BLOCK
+    `cuda_rmsnorm.launch_block(M, N, fused=False)`: the Build's `CudaRmsNormRule`.  A batch-invariant target is another pattern's."""
+
+    name: str = "norm.rms_norm_cuda"
+
+    def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
+        if node.is_triton or base_op(node.op) != "_C.rms_norm" or target_of(ctx)[0].batch_invariant:
+            return None
+        from verity_vllm.program.registry import cuda_rmsnorm as C
+
+        got = _cuda_norm_args(node, ("result", "input", "weight", "epsilon"))
+        if got is None:
+            return unsupported(node, "rms_norm arguments not bound as (out, input, weight, eps)")
+        out, x, w, eps = got
+        if not _rows_ok((out, x)) or out.shape != x.shape or w.shape != (x.shape[1],) or w.dtype != "bfloat16":
+            return unsupported(node, "rms_norm off batch invariance takes row-major bf16 [M,N] out / x and a [N] bf16 weight", out=repr(out), x=repr(x), w=repr(w))
+        M, N = x.shape
+        spec = bind(C.RMSNormCudaVector8, N=N, EPS=eps, BLOCK=C.launch_block(M, N, fused=False))
+        return Compute(spec, M, (PerRow(x), Shared(w)), (PerRow(out),), tuple(sorted(node.ids())), hint=hint_of(node, "rms_norm"),
+                       kernels=("rms_norm_kernel",), attribution=attribution_for(ctx, M, node.phase), pattern=self.name)
+
+
+@dataclass
+class CudaFusedAddRmsNorm:
+    """`_C.fused_add_rms_norm(x! [M,N], residual! [M,N], weight [N], eps)` off batch invariance (`fused_add_rms_norm_kernel<bf16, 8>`) ->
+    `Compute(RMSNormFusedCudaVector8_v1{N,EPS,BLOCK}, rows=M, (PerRow(x), PerRow(residual), Shared(weight)), (PerRow(x),
+    PerRow(residual)))` in place, BLOCK `cuda_rmsnorm.launch_block(M, N, fused=True)`: the Build's `CudaFusedAddRmsNormRule`."""
+
+    name: str = "norm.fused_add_rms_norm_cuda"
+
+    def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
+        if node.is_triton or base_op(node.op) != "_C.fused_add_rms_norm" or target_of(ctx)[0].batch_invariant:
+            return None
+        from verity_vllm.program.registry import cuda_rmsnorm as C
+
+        got = _cuda_norm_args(node, ("input", "residual", "weight", "epsilon"))
+        if got is None:
+            return unsupported(node, "fused_add_rms_norm arguments not bound as (input, residual, weight, eps)")
+        x, res, w, eps = got
+        if not _rows_ok((x, res)) or x.shape != res.shape or x.alloc == res.alloc or w.shape != (x.shape[1],) or w.dtype != "bfloat16":
+            return unsupported(node, "fused_add_rms_norm off batch invariance takes distinct row-major bf16 [M,N] x / residual and a [N] bf16 weight",
+                               x=repr(x), residual=repr(res), w=repr(w))
+        M, N = x.shape
+        spec = bind(C.RMSNormFusedCudaVector8, N=N, EPS=eps, BLOCK=C.launch_block(M, N, fused=True))
+        return Compute(spec, M, (PerRow(x), PerRow(res), Shared(w)), (PerRow(x), PerRow(res)), tuple(sorted(node.ids())),
+                       hint=hint_of(node, "fused_add_rms_norm"), kernels=("fused_add_rms_norm_kernel",),
+                       attribution=attribution_for(ctx, M, node.phase), pattern=self.name)
+
+
+def _rows_ok(views: tuple) -> bool:
+    return all(v.rank == 2 and v.dtype == "bfloat16" and is_row_major(v) for v in views)
