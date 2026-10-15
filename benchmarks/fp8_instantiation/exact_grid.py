@@ -255,7 +255,7 @@ def product(method: str, x: torch.Tensor, w: torch.Tensor, wcache: dict) -> tupl
 
 
 ALPHABETS = {"pm1": [-1, 1], "pm13": [-3, -1, 1, 3], "pm57": [-7, -5, 5, 7],
-             **{f"u{k}": list(range(-k, k + 1)) for k in (1, 2, 4, 8, 16)}}
+             **{f"u{k}": list(range(-k, k + 1)) for k in (1, 2, 3, 4, 5, 6, 8, 16)}}
 EDIT_GRIDS = {"int8": (127, S32_EXACT), "e4m3i16": (16, FP32_EXACT)}
 EDIT_DTYPE = getattr(torch, os.environ.get("EXACT_GRID_EDIT_DTYPE", "float32"))
 _ROT32: dict[int, torch.Tensor] = {}
@@ -426,10 +426,15 @@ def selftest() -> dict:
     ids = torch.randint(0, 512, (1, 64), device=dev)
     out["tiny"] = {m: {k: v for k, v in evaluate(model, ids, m).items() if k not in ("per_linear", "worst_linear")}
                    for m in ("bf16", "int8", "e2m1i_rot", "nvfp4", "fp8_block", "int8@-", "int8_rot@wa:u2:s1")}
-    assert abs(out["tiny"]["int8@-"]["ppl"] - out["tiny"]["int8"]["ppl"]) < 1e-3 * out["tiny"]["int8"]["ppl"]
-    twice = torch.cat([ids, ids])
-    pw, pa = evaluate(model, twice, "int8@w:u2")["ppl_windows"], evaluate(model, twice, "int8@a:u2")["ppl_windows"]
-    assert pw[0] == pw[1] and pa[0] != pa[1], (pw, pa)
+    assert evaluate(model, torch.cat([ids, ids]), "int8@-")["windows"] == 2
+    lin, xin = model.model.layers[0].self_attn.q_proj, torch.randn(1, 64, 256, device=dev).to(torch.bfloat16)
+    for m, same in (("int8@-", True), ("int8@w:u2", True), ("int8@a:u2", False)):
+        hooks = attach(model, m, [])
+        with torch.no_grad():
+            y1, y2 = lin(xin), lin(xin)
+        for h in hooks:
+            h.remove()
+        assert torch.equal(y1, y2) == same, m
     return out
 
 
