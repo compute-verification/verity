@@ -186,6 +186,8 @@ using Cluster = Shape<_1, _1, _1>;
 using Tile = cute::conditional_t<CR_CFG == 0, Shape<_128, _128, _128>, Shape<_32, _64, _128>>;
 using Schedule = cute::conditional_t<CR_CFG == 0, cutlass::gemm::KernelTmaWarpSpecializedCooperative,
                                      cutlass::gemm::KernelTmaWarpSpecializedPingpong>;
+// vLLM's served instantiations name these epilogue tiles (64x32 cooperative, 32x32 ping-pong).
+using EpiTile = cute::conditional_t<CR_CFG == 0, Shape<_64, _32>, Shape<_32, _32>>;
 
 namespace F = cutlass::epilogue::fusion;
 using ScaleA = F::Sm90ColBroadcast<0, Tile, float, float, Stride<_1, _0, _0>>;
@@ -197,7 +199,7 @@ using EVT = F::Sm90EVT<Compute1, ScaleA, EVT0>;
 
 constexpr int AlignD = 128 / cutlass::sizeof_bits<BF16>::value;
 using Epilogue = typename cutlass::epilogue::collective::CollectiveBuilder<
-    cutlass::arch::Sm120, cutlass::arch::OpClassTensorOp, Tile, Cluster, cutlass::epilogue::collective::EpilogueTileAuto,
+    cutlass::arch::Sm120, cutlass::arch::OpClassTensorOp, Tile, Cluster, EpiTile,
     float, float, void, cutlass::layout::RowMajor, AlignD, BF16, cutlass::layout::RowMajor, AlignD,
     cutlass::epilogue::collective::EpilogueScheduleAuto, EVT>::CollectiveOp;
 using BaseMainloop = typename cutlass::gemm::collective::CollectiveBuilder<
