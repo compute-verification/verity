@@ -63,10 +63,25 @@ def category(name: str) -> str:
 def install_ranges(state: dict) -> None:
     """Wrap the model runner's step methods (before the engine is built) in profiler ranges, and in ncu mode put one decode
     step in the NVTX range ``ncu_step``."""
-    import torch
-    from vllm.v1.worker.gpu_model_runner import GPUModelRunner
+    import importlib
 
-    execute, sample = GPUModelRunner.execute_model, getattr(GPUModelRunner, "sample_tokens", None)
+    runners = []
+    for module in ("vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner"):
+        try:
+            runners.append(importlib.import_module(module).GPUModelRunner)
+        except (ImportError, AttributeError):
+            pass
+    if not runners:
+        raise SystemExit("no GPUModelRunner to wrap in this vLLM")
+    for runner in runners:
+        _wrap_runner(runner, state)
+
+
+def _wrap_runner(runner, state: dict) -> None:
+    import torch
+
+    execute, sample = runner.execute_model, getattr(runner, "sample_tokens", None)
+    state.setdefault("wrapped", {})[f"{runner.__module__}.{runner.__qualname__}"] = 0
 
     def close_nvtx() -> None:
         if state.get("nvtx_open"):
@@ -75,6 +90,7 @@ def install_ranges(state: dict) -> None:
             state["nvtx_open"] = False
 
     def execute_model(self, scheduler_output, *a, **kw):
+        state["wrapped"][f"{runner.__module__}.{runner.__qualname__}"] += 1
         n = int(scheduler_output.total_num_scheduled_tokens)
         r = len(scheduler_output.num_scheduled_tokens)
         kind = "decode" if r and n == r else ("prefill" if n else "idle")
@@ -97,9 +113,9 @@ def install_ranges(state: dict) -> None:
         close_nvtx()
         return out
 
-    GPUModelRunner.execute_model = execute_model
+    runner.execute_model = execute_model
     if sample is not None:
-        GPUModelRunner.sample_tokens = sample_tokens
+        runner.sample_tokens = sample_tokens
 
 
 def parse_trace(path: Path) -> dict:
@@ -249,7 +265,8 @@ def main() -> int:
         state["nvtx_arm"] = 4
         llm.generate([toks(args.context) for _ in range(args.batch)], greedy(1 + 8), use_tqdm=False)
         torch.cuda.synchronize()
-        doc["ncu_step"] = {"armed_step": 4, "closed": not state.get("nvtx_open", False)}
+        doc["ncu_step"] = {"armed_step": 4, "closed": not state.get("nvtx_open", False),
+                           "opened": state.get("nvtx_arm") == 0, "wrapped_runner_calls": state["wrapped"]}
         args.out.write_text(json.dumps(doc, indent=1))
         print(json.dumps(doc["ncu_step"]))
         return 0
@@ -272,6 +289,7 @@ def main() -> int:
         doc["phases"][name] = summary
         trace.unlink()
         print(json.dumps({name: {k: summary.get(k) for k in ("selected", "kernel_ms", "span_ms", "gemm_share")}}), flush=True)
+    doc["wrapped_runner_calls"] = state["wrapped"]
     args.out.write_text(json.dumps(doc, indent=1))
     return 0
 
