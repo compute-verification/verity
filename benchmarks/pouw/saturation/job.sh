@@ -18,7 +18,7 @@
 #   rgemm  (not default) lease 1: receipt_gemm.cu, Pearl-C's 128 x 128 TMA mainloop with the phi receipt over every total
 #          word at L = 128, 256, 512 (receipts after the window's FADDs, or spread across its MMAs) against its receipt-free
 #          twin, n = 8,192 and 16,384 (gated); its ptxas report, SASS and opcode counts; ncu's pipe, scheduler and warp-state
-#          sections over seven of its kernels at 8,192
+#          sections over eight of its kernels at 8,192
 # Timeouts run in the foreground so `research cancel` reaches the GPU process.
 # Untimed diagnostic (tier 2a): one leased GPU, the fill queue keeps running beside it.
 set -euo pipefail
@@ -155,7 +155,7 @@ rgemm() {
   if timeout --foreground 600 "$NCU" --clock-control none --kernel-name regex:rgemm --section LaunchStats \
       --section WarpStateStats --section SchedulerStats --section ComputeWorkloadAnalysis --section SpeedOfLight \
       --metrics "$METRICS" --export "$d/rgemm-ncu" --force-overwrite \
-      "$d/receipt_gemm" --sizes 8192 --profile --only alu_p1,alu_p1s,alu_p4,imad_p1,alu2_p1,alu2_p1s > "$d/rgemm-ncu.log" 2>&1; then
+      "$d/receipt_gemm" --sizes 8192 --profile --only alu_p1,alu_p1s,alu_p4,imad_p1,alu2_p1,alu2_p1s,alu4_p1 > "$d/rgemm-ncu.log" 2>&1; then
     "$NCU" --import "$d/rgemm-ncu.ncu-rep" --csv --page details > "$OUT/rgemm-ncu-details.csv"
     "$NCU" --import "$d/rgemm-ncu.ncu-rep" --csv --page raw | gzip -c > "$OUT/rgemm-ncu-raw.csv.gz"
     stamp "receipt gemm ncu ok"

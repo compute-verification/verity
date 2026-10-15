@@ -6,7 +6,7 @@
 // L = 128 P; each thread chains the 4 words of each of its 16 accumulator tiles (one chain a tile), and the epilogue folds its
 // 16 chains into one word a tile.
 //   plain             no receipt: gemm_plain's mainloop (its scales aside), bf16 out
-//   alu_pP, imad_pP   phi1 alu or imad at L = 128 P;  alu2_pP  two alu rounds a word
+//   alu_pP, imad_pP   phi1 alu or imad at L = 128 P;  aluR_pP  R alu rounds a word
 //   ..._pPs           spread: a receipting stage's words one after each of its 64 MMAs (row block a's after atom a's), the
 //                     same chains, against the unspread form's 4 words after each of the first atom's FADDs
 // Gates (exit 3, before any time is printed): every kernel's FP32 totals equal plain's bit for bit and so do its bf16 outputs,
@@ -215,6 +215,7 @@ static const Kernel KERNELS[] = {
     {"alu_p4", "alu", 1, 4, false, rgemm<0, 1, 4>},       {"imad_p1", "imad", 1, 1, false, rgemm<1, 1, 1>},
     {"imad_p2", "imad", 1, 2, false, rgemm<1, 1, 2>},     {"imad_p4", "imad", 1, 4, false, rgemm<1, 1, 4>},
     {"alu2_p1", "alu", 2, 1, false, rgemm<0, 2, 1>},      {"alu2_p2", "alu", 2, 2, false, rgemm<0, 2, 2>},
+    {"alu3_p1", "alu", 3, 1, false, rgemm<0, 3, 1>},      {"alu4_p1", "alu", 4, 1, false, rgemm<0, 4, 1>},
     {"alu_p1s", "alu", 1, 1, true, rgemm<0, 1, 1, true>}, {"alu_p2s", "alu", 1, 2, true, rgemm<0, 1, 2, true>},
     {"imad_p1s", "imad", 1, 1, true, rgemm<1, 1, 1, true>}, {"alu2_p1s", "alu", 2, 1, true, rgemm<0, 2, 1, true>},
     {"alu2_p2s", "alu", 2, 2, true, rgemm<0, 2, 2, true>},
