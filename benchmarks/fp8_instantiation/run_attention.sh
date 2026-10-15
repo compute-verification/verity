@@ -4,7 +4,7 @@
 # WikiText-2's test window 0 that must begin with those 2048).  Clocks are read, never set.
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd clone --custody-ttl 12h \
-#     --env GPU_LEASE_WHO=... --env D4A_CTX=2048 --env D4A_PLAN=grid|frontier|limbs|limbs2|limbsall|seeds|both [--env D4A_TAG=SUBDIR] [--env D4A_METHODS="..."] \
+#     --env GPU_LEASE_WHO=... --env D4A_CTX=2048 --env D4A_PLAN=grid|frontier|limbs|limbs2|limbsall|seeds|longseeds|both [--env D4A_TAG=SUBDIR] [--env D4A_METHODS="..."] \
 #     [--env D4A_IDS=ids8192.npy --send ids8192.npy] --send benchmarks/fp8_instantiation/run_attention.sh \
 #     -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/run_attention.sh"'
 set -uo pipefail
@@ -71,7 +71,24 @@ seeds_plan() {
   for s in s0 ${SEEDS:-s1 s2}; do for x in $new; do m+=" $x-$s"; done; done
   echo "$m"
 }
+# The frontier points of the frontier and limbsall plans at the longer context, at seeds S (s1 s2: s0 ran there), with
+# the rotated grids they are measured against.
+long_seeds_plan() {
+  old="int8-none-rot int8-qk=u2-rot int8-qk=u4-rot int8-qk=u8-rot int8-v=u1 int8-v=u2 int8-v=u1-rot int8-v=u2-rot
+    int8-p=d10 int8-p=d8 int8-p=d6 int8-p=d4
+    int8-qk=u1-v=u1-p=d14-rot int8-qk=u1-v=u1-p=d8-rot int8-qk=u2-v=u1-p=d10-rot int8-qk=u4-v=u1-p=d8-rot int8-qk=u4-v=u1-p=d6-rot
+    int8-prow2-none-rot int8-prow2-vchan2-none-rot int8-prow2-vchan2-qk2-none-rot int8-prow2-p=u8 int8-prow2-p=u16
+    int8-prow2-vchan2-u1-rot int8-prow2-vchan2-u2-rot int8-prow2-vchan2-u4-rot int8-prow2-vchan2-u8-rot
+    int8-prow2-vchan2-qk2-u4-rot int8-prow2-vchan2-qk2-u8-rot int8-prow2-vchan2-qk2-u16-rot
+    int8-prow2-qk=u2-v=u1-p=u16-rot int8-prow2-qk=u4-v=u1-p=u16-rot"
+  new="int8-prow2-qk=u4-v=u2-p=u16-rot"
+  m="bf16"
+  for s in ${SEEDS:-s1 s2}; do for x in $old; do m+=" $x-$s"; done; done
+  for s in s0 ${SEEDS:-s1 s2}; do for x in $new; do m+=" $x-$s"; done; done
+  echo "$m"
+}
 case "${D4A_PLAN:-}" in
+  longseeds) D4A_METHODS=$(long_seeds_plan) ;;
   limbs2) D4A_METHODS=$(limbs2_plan) ;;
   seeds) D4A_METHODS="$(seeds_plan) $(SEEDS="s0 s1 s2" limbs2_plan)" ;;
   grid) D4A_METHODS=$(grid_plan) ;;

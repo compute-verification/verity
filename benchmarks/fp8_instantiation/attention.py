@@ -380,7 +380,7 @@ def noise_label(n: dict) -> str:
 
 def rows(results: list[dict]) -> list[dict]:
     """One row per (edit, context): perplexity (mean over seeds, with the range), and its change against the same edit
-    without noise (seed 0) and against bf16 at the same context."""
+    without noise (mean over the seeds it ran at) and against bf16 at the same context."""
     groups: dict = {}
     seen = set()
     for r in results:
@@ -398,7 +398,8 @@ def rows(results: list[dict]) -> list[dict]:
         out.append({"ctx": r["ctx"], "grid": r["grid"], "p": r["p"], "v": r["v"], "qk2": r.get("qk2", False), "rot": r["rot"], "n": n,
                     "products": r.get("int8_products"),
                     "label": noise_label(n), "info": info, "seeds": len(rs), "ppl": ppl, "min": min(ppls), "max": max(ppls),
-                    "d_grid": 100 * (ppl / base[0]["ppl"] - 1) if base and any(v != "none" for v in n.values()) else None,
+                    "d_grid": 100 * (ppl / (sum(b["ppl"] for b in base) / len(base)) - 1)
+                    if base and any(v != "none" for v in n.values()) else None,
                     "d_bf16": 100 * (ppl / bf16[r["ctx"]] - 1) if r["ctx"] in bf16 else None,
                     "err": r.get("attn_rel_err")})
     out.sort(key=lambda x: (x["ctx"], x["grid"] not in GRID_PAIRS, x["grid"], x["p"], x["v"], x["qk2"], x["rot"],
