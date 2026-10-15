@@ -95,6 +95,7 @@ theorem commitRounds_of_check {i : Inner} {cs : InnerCommits} {rep : Array Sched
     | rw [hf] at h
     | simp only [hf] at h
     try simp only at h
+    obtain ⟨_, -, h⟩ := checkBind_ok h
     rcases hs : cs.stream? s!"{STACKED}/rep0" with _ | st₀
     · first
       | rw [hs] at h

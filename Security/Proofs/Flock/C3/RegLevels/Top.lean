@@ -30,5 +30,3 @@ theorem stackedTop_of_innerCommits {tr : Lean.Json} {record : String} {st : Floc
   exact ⟨prog, e, hreg, hfields, hcap⟩
 
 end FlockC3.RegLevels
-
-#print axioms FlockC3.RegLevels.stackedTop_of_innerCommits

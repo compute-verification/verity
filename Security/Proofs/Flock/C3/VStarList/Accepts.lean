@@ -18,7 +18,7 @@ covers check (`RecVStar.checkCovers`). So:
 * `c3_of_checks`: where they pass at a candidate-3 shape (`ish.sparse`) and the inner statement `st` sets up from the
   inner files' circuit and public file, `AcceptsC3` holds at `st`, check 5's verdict included (`sparseRangeOk_of_check`
   at `st`: one circuit and public file set up one `c`, `m` and regions, whatever the partition and program,
-  `setupHidden_same`), and the inner shape is candidate 3's at `st` (`checkInnerStmt`).
+  `setupHidden_same`), its inner shape `checkInnerStmt` among them.
 * `acceptsC3_of_verify`: `AcceptsC3`, at `verify`'s setup (`Exec.setupOf`).
 * Every candidate-3 session either setup accepts is one these read: the verifier holds the inner files
   (`files_of_checkInner`), the inner transcript (`commits_of_checks`) and R's registration, both JSON
@@ -203,7 +203,7 @@ theorem checkInnerRange_congr {st' : Stmt} (hc : st.c = st'.c) (hm : st.m = st'.
 (`RecSetup.checkInner`), it holds the inner transcript `tt` against R's registration `rt` (`RecSetup.commits`, at their
 parses `tr` and `reg`) to `cs`, and its checks of a session's statements `sts` pass there (`RecSetup.checks`), then at
 the inner statement `st` set up from the files' circuit and public file, as `AcceptsStmt` sets it up, `AcceptsC3`
-holds, check 5's verdict included, and the inner shape is candidate 3's at `st`. -/
+holds, check 5's verdict included (its sparse refusals and its inner shape). -/
 theorem c3_of_checks (hsp : ish.sparse.isSome = true)
     (hpub : Stmt.setupTables RecVStar.innerTags f.circuit f.pub Coins.os 1 (partition := obj) (program := prog) =
       .ok (spec, #[st])) (hzk : ∃ p, Zk.schedule st.m = .ok p)
@@ -212,7 +212,7 @@ theorem c3_of_checks (hsp : ish.sparse.isSome = true)
     (hin : RecSetup.checkInner (some ish) (some (.files f)) bound = .ok ())
     (hck : RecSetup.checks (some ish) (some cs) tags tables sts circuitB partition program registered part bindings
       rows = .ok ()) (hsts : 0 < sts.size) :
-    AcceptsC3 ish st tr record reg ∧ (RecVStar.checkInnerStmt ish st).isOk = true := by
+    AcceptsC3 ish st tr record reg := by
   obtain ⟨hst, hcov⟩ := checks_ok hck
   obtain ⟨_, st', hst', hr, hm⟩ := checkInner_ok hsp hin
   obtain ⟨c, hc, hmb⟩ := checkMeta_ok hm
@@ -230,10 +230,9 @@ theorem c3_of_checks (hsp : ish.sparse.isSome = true)
       exact hic
     obtain ⟨hsr, hshape⟩ := sparseRangeOk_of_check (classOk_of_accepts ⟨⟨_, _, _, _, _, hpub⟩, hzk⟩)
       ((checkInnerRange_congr hcc hmm hrr).trans hr)
-    refine ⟨?_, hshape⟩
     unfold AcceptsC3
     refine ⟨statements_of_checkStmt (ZkExec.array_forM_ok hst 0 hsts), by simp [hat, Except.isOk, Except.toBool],
-      fun cs' h => ?_, hsr⟩
+      fun cs' h => ?_, hsr, hshape⟩
     rw [hat] at h
     cases h
     simp [hcov, Except.isOk, Except.toBool]
@@ -251,6 +250,6 @@ theorem acceptsC3_of_verify {I : Exec.Inputs} {r : String} {spec' : SessionSpec}
     (hck : RecSetup.checks (some ish) (some cs) tags tables sts circuitB partition program registered part bindings
       rows = .ok ()) :
     AcceptsC3 ish st tr record reg :=
-  (c3_of_checks hsp hpub hzk htr hreg hcs hin hck (HiddenExec.setupTables_setupOne hset).1).1
+  c3_of_checks hsp hpub hzk htr hreg hcs hin hck (HiddenExec.setupTables_setupOne hset).1
 
 end FlockC3.VStarList

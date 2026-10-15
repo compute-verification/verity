@@ -2,3 +2,4 @@
 # machine: its name, then ssh's options and destination. slot.py --twin claims a pair on its HOME machine through this.
 vy-nebius-1 -i /home/research/.ssh/vy-cluster -o IdentitiesOnly=yes research@10.80.0.18
 vy-nebius-2 -i /home/research/.ssh/vy-cluster -o IdentitiesOnly=yes research@10.80.0.42
+vy-nebius-cpu-1 -i /home/research/.ssh/vy-cluster -o IdentitiesOnly=yes research@10.80.0.89

@@ -379,6 +379,24 @@ def test_verify_refuses_a_v_star_statement_without_the_session_index_or_the_veri
         f'{{"{tid}":"{other}"}}'), p.stdout
 
 
+def test_the_verifiers_bindings_are_its_own_partition_objects(staged, tmp_path):  # noqa: F811
+    """`RecVStar.checkOwnBindings`: bindings whose partition digest is not the verifier's partition object's are refused by
+    that digest, before META is compared with them (which would refuse the same file by META's digest instead)."""
+    d = staged[0]
+    inner = _inner(tmp_path / "inner.json", 25, 22, 8)
+    mine = json.loads(_bindings(d, tmp_path / "bindings.json").read_text())
+    other = ("0" if mine["partition"][0] != "0" else "1") + mine["partition"][1:]
+    (tmp_path / "theirs.json").write_text(json.dumps({**mine, "partition": other}))
+    files = ["--statement", "verity/flock-circuit", "--circuit", str(d / "circuit.txt"), "--public", str(d / "pub.bin"),
+             "--partition", str(d / "partition.json"), "--program", str(d / "program.json"),
+             "--registered", str(d / "registered.json"), "--rec-inner", str(inner), "--rec-part", "0"]
+    p = subprocess.run([str(BIN), "statement", *files, "--rec-bindings", str(tmp_path / "theirs.json")],
+                       capture_output=True, text=True)
+    assert p.returncode == 1 and p.stdout.strip() == (
+        f"setup: rec-open/l8-h1: the verifier's bindings' partition digest {other}, its partition object's "
+        f"{mine['partition']}"), p.stdout
+
+
 PRIVATE = "the inner session's circuits are private (rec-inner holo): V*'s circuit writer does not write holo parts yet"
 
 
@@ -475,6 +493,30 @@ def test_candidate_3s_statements_are_the_ones_v_star_stages_and_each_is_needed(t
              "candidate 3's V* list: R's m 24 is not rec-sparse/n18-e13-s6-t0's table_m 23")):
         rc, line = _statements(f)
         assert rc == 1 and line["error"] == why, line
+
+
+def test_a_rec_sparse_reads_file_holds_every_message_port(tmp_path):
+    """RecSparse's reads file holds `h` and `claim` (`ownPorts`) and every other message port `<p>` under `rec-sparse-<p>`
+    at rows 0 and 1 (`sparseMsgs`, as `rec_vstage.sparse_messages` registers them), beside its `v`; one of those missing,
+    read at other rows or under another value is refused by name (`checkOwn`'s third loop), so no message column the unit
+    reads is left unregistered."""
+    from verity_flock import rec_sparse as SP
+
+    inner = _inner(tmp_path / "c3.json", *C3, sparse=SPARSE, stacked=R_SHAPE)
+    unit = ["--unit", SP.unit_name(SP.Shape(*SPARSE)), "--instances", "2"]
+    rc, line = _statements(inner, *unit)
+    own = line["own"]
+    assert rc == 0 and [p[0] for p in own] == ["h", "claim"], line
+    msgs = [[nm, f"rec-sparse-{nm}", [0, 1]] for nm, _ in SP.message_ports(SP.Shape(*SPARSE))[1:-1]]
+    assert [m[0] for m in msgs[:2]] == ["pre0", "pre1"] and msgs[-1][0] == "u", msgs
+    other = [["v", "rec-sparse-v", [0, 1]]]
+    rc, line = _statements(inner, *unit, "--registered", str(_reads(tmp_path / "honest.json", other + own + msgs[::-1])))
+    assert rc == 0 and line["checked"] == [unit[1], 2], line
+    missing = lambda q: f"{unit[1]}: the statement's message port {q} under rec-sparse-{q} reading [0, 1] is not in the registered reads"  # noqa: E731
+    for k, (ports, q) in enumerate([(msgs[1:], "pre0"), (msgs[:-1], "u"), ([[*msgs[0][:2], [1, 0]]] + msgs[1:], "pre0"),
+                                    (msgs[:-1] + [["u", "rec-sparse-vt", [0, 1]]], "u")]):
+        rc, line = _statements(inner, *unit, "--registered", str(_reads(tmp_path / f"t{k}.json", other + own + ports)))
+        assert rc == 1 and line["error"] == missing(q), (k, line)
 
 
 def _staged(d: Path, text: str, part: dict, program) -> Path:

@@ -45,6 +45,11 @@ from checks import Checks  # noqa: E402
 
 SPEC_BYTES_PER_S = 1597e9
 """The RTX PRO 6000 Server Edition's datasheet memory bandwidth (`benchmarks/census/hardware.json`)."""
+MEASURED_BYTES_PER_S = 1539e9
+"""The fastest bare read of an encoded store measured on that GPU: 1,539.26 GB/s in the honest session of 14 Oct
+(prover r20261014-193057-8fec), rounded down. The "measured" ledger's capacity is the verifier's, never lower than this:
+the prover's calibration can only raise it, since a prover that reported a slower read would otherwise shrink every
+γ term (MEM-24: 0.066 read as 0.0057 at the least calibration still accepted)."""
 S_CHIP_BYTES = timing.CHIP_BYTES
 
 
@@ -316,9 +321,11 @@ class Verifier:
 
     def ledgers(self, record: audit.Record) -> dict:
         cal = self.calibration
-        measured = float(cal["read_bytes_per_s"])
+        reported = float(cal["read_bytes_per_s"])
+        measured = max(MEASURED_BYTES_PER_S, reported)
         rebuild = audit.Rebuild(record.codec, timing.SQUARINGS_PER_S[record.codec.field.name])
         out = {"inputs": {"spec_bytes_per_s": SPEC_BYTES_PER_S, "measured_read_bytes_per_s": measured,
+                          "reported_read_bytes_per_s": reported,
                           "chip_bytes": S_CHIP_BYTES, "encode_bytes_per_s": cal["encode_bytes_per_s"],
                           "squarings_per_s": rebuild.squarings_per_s, "rows": record.rows,
                           "span_ns": record.span_ns, "receipts": record.receipts, "passes": record.passes,

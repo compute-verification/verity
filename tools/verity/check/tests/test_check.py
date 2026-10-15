@@ -1079,7 +1079,7 @@ def test_a_check_reports_per_step_what_it_reused_and_what_forced_each_rerun(tmp_
     (tmp_path / "lean-audit").mkdir()
     (tmp_path / "lean-audit" / "audit.json").write_text(json.dumps({"cached": {"P": "k"}, "packages": [{"package": "P"}, {"package": "Q"}]}))
     done = [{"step": "pytest", "status": "passed"},
-            {"step": "circuit-check", "status": "passed", "cache": {"hits": 7, "stored": 2, "untraced": [{}], "errors": [], "changed": ["t"]}},
+            {"step": "circuit-check", "status": "passed", "cache": {"hits": 7, "stored": 2, "untraced": 1, "errors": 0, "changed": 1}},
             {"step": "flock-rust-tests", "status": "passed", "cache": {"hit": "k"}},
             {"step": "lean-agreement", "status": "passed", "cache": {"stored": "k"}},
             {"step": "lean-audit", "status": "passed"}, {"step": "lean-build", "status": "passed"}]
@@ -1100,6 +1100,20 @@ def test_a_check_reports_per_step_what_it_reused_and_what_forced_each_rerun(tmp_
     CHECK.write_result(tmp_path, True, [{**s, "seconds": 1.0} for s in done])
     doc = json.loads((tmp_path / "result.json").read_text())
     assert list(doc)[:4] == ["schema", "kind", "run_id", "reuse"] and doc["reuse"] == r
+
+
+def test_the_circuit_check_step_records_its_cache_as_counts(tmp_path):
+    """result.json's steps are its attempt's meta, which the store caps at 256 KiB: a circuit-check cache listing every target
+    it could not store (each one, once its workers forked) made a passing check's attempt unpublishable. The step keeps counts;
+    the lists stay in circuit-check.json, an artifact."""
+    import json
+
+    cache = {"hits": 0, "stored": 3, "untraced": [{"target": f"T{i}", "because": ["os.fork "] * 3} for i in range(4000)],
+             "errors": [{"target": "E"}], "changed": []}
+    (tmp_path / "circuit-check.json").write_text(json.dumps({"cache": cache}))
+    rec = CHECK._step("circuit-check", _py("pass"), tmp_path, tmp_path, False, CHECK.Steps(tmp_path, keep_going=True))
+    assert rec["status"] == "passed" and rec["cache"] == {"hits": 0, "stored": 3, "untraced": 4000, "errors": 1, "changed": 0}
+    assert CHECK.reuse(tmp_path, [rec])["steps"]["circuit-check"]["not_stored"] == {"untraced": 4000, "errors": 1, "changed": 0}
 
 
 def test_train_sh_refuses_every_flag_but_agreement(tmp_path):

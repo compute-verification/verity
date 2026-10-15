@@ -273,7 +273,8 @@ refuses any set at TP > 1.  The planned shape is the same seam: one `install` pe
 
 - `timing["requests"][rid]` carries `arrival_s`, `first_output_s` and `time_to_first_token_s`;
 - `timing["steps"]` holds one entry per `step()` call: `iter`, `s` (the clock's duration of that call), `outputs`, `forward`
-  and `forward_index`, so a step that only drained a finish isn't counted as a forward;
+  and `forward_index`, so a step that only drained a finish isn't counted as a forward.  It also has `prefill_tokens` and
+  `decode_tokens`, what that step's schedule computed, read from the in-process scheduler (None when it isn't reachable);
 - `wall_s`, `engine_steps` and the token rates are the whole run's;
 - `on_step(outputs)` is called after every step, for a caller's own per-step reads;
 - the protocol options' own counters are `llm.protocols.info()`.

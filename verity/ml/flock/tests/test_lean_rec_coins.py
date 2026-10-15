@@ -294,14 +294,8 @@ def level_major(built, once) -> Path:
 
 
 def _rec_rows(dst: Path, parts: list[Path]) -> Path:
-    """The verifier's record of V*'s shared rows (`--rec-rows`) from staged parts: each row port's entry (every port but `v`
-    and `out`), which every part that has the port must agree on."""
-    ports: dict = {}
-    for d in parts:
-        for nm, e in json.loads((d / "registered.json").read_text())["ports"].items():
-            if nm not in ("v", "out"):
-                assert ports.setdefault(nm, e) == e, (d, nm)
-    dst.write_text(json.dumps({"format": "verity/registered-reads/v0", "ports": ports}))
+    """The verifier's record of V*'s shared rows (`--rec-rows`) from staged parts (`rec_vstage.shared_rows`)."""
+    dst.write_text(json.dumps(S.shared_rows(parts)))
     return dst
 
 
@@ -350,6 +344,24 @@ def test_a_parts_out_registered_under_another_zero_salt_is_refused_at_its_zero_r
                   str(SET / "inner-honest" / "public.json"), session=undrawn, rows=rows)["why"]
     assert why == (f"setup: rec-coins: {_unit(p)}: rep 0's zero outputs: the statement's out row is not the verifier's "
                    "rec-residuals-zero row 0"), why
+
+
+#: `Test/RecCoins.lean`'s root of R's opening part's one zero row at program "p" (`RecCoins.checkOpening`'s `checkZero`)
+OPENING_ZERO_ROOT = ("af8c0fa801627686aad3af3cc4c63840162705a903222f507a84c01e9f1414742bb6985e4eee425f0dd1539277a0b71fcb6d895abd7"
+                     "bad14ce4f03dc487265b9")
+
+
+def test_r_openings_zero_row_is_the_one_check_5_computes_and_another_salt_is_not():
+    """`RecCoins.checkOpening`'s `checkZero` at `rec-residuals-zero`, one row: the root `rec_residuals.stage_opening`
+    registers for R's opening part's `out` is the one the Lean verifier computes (its `#guard`), and the same zero row under
+    salt 0 one bit off has another root, which check 5's root comparison refuses. No staged session reaches check 5 at R's
+    opening here: its honest sessions are replayed on the pod."""
+    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
+
+    ss = S.RR.zero_salts(S.RR.ZERO_VALUE, 1)
+    commit = lambda salts: RG.Registered.commit("p", S.RR.ZERO_VALUE, [[0] * S.RR.OUT_WORDS], salts=salts).root.hex()
+    assert commit(ss) == OPENING_ZERO_ROOT
+    assert commit([bytes([ss[0][0] ^ 1]) + ss[0][1:]]) != OPENING_ZERO_ROOT
 
 
 def _transcript(dst: Path, change) -> Path:
@@ -463,6 +475,26 @@ def test_a_part_staged_under_another_salt_is_refused_at_the_verifiers_shared_row
                                      f"root {root(b / 'registered.json')}, against {root(rows)}"), other.result()["why"]
 
 
+def test_the_registered_reads_hold_no_message_round_port_the_statement_lacks(algebra, shape, undrawn, rows, tmp_path):
+    """`RecVStar.checkOwn`: a part's reads file with one null read (a unit outside the population, which the registered
+    reads' own check accepts) appended to one message-round port is refused by that port against the statement's, with the
+    verifier's shared rows unedited; `checkRows` would refuse the same file by the shared row, so the exact refusal pins
+    `checkOwn`. One verify sets the part's statement up over its whole population, about 9 minutes."""
+    ports = lambda p: json.loads((p / "registered.json").read_text())["ports"]
+    a = next(p for p in sorted(algebra.iterdir()) if any(re.fullmatch(r"m\d+", k) for k in ports(p)))
+    d = shutil.copytree(a, tmp_path / "extra")
+    r = json.loads((d / "registered.json").read_text())
+    port = next(k for k in r["ports"] if re.fullmatch(r"m\d+", k))
+    value, honest = r["ports"][port]["value"], r["ports"][port]["reads"]
+    r["ports"][port]["reads"] = [*honest, None]
+    (d / "registered.json").write_text(json.dumps(r))
+    show = lambda rd: "[" + ", ".join("null" if x is None else str(x) for x in rd) + "]"
+    v = _verify(d, d / "pub.bin", d / "registered.json", shape, "inner-honest", "--rec-inner-transcript",
+                str(SET / "inner-honest" / "public.json"), session=undrawn, rows=rows)
+    assert v["why"] == (f"setup: {_unit(d)}: the registered reads' port {port} under {value} reading {show([*honest, None])} "
+                        f"is not the statement's: the statement's is {port} under {value} reading {show(honest)}"), v["why"]
+
+
 def test_a_sessions_rec_acc_reads_are_the_verifiers_one_registration(forged, shape, rows, tmp_path):
     """`EndKeysS` and `OpenKeysS`'s one registration (`RecVStar.checkAcc`): the recorded level 3 reads `rec-acc` as `acc` and
     `acc_out`, at the registration of the honest algebra's `acc0` and `acc1`, and passes setup at those shared rows
@@ -476,6 +508,22 @@ def test_a_sessions_rec_acc_reads_are_the_verifiers_one_registration(forged, sha
     v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest")
     assert v["why"] == (f"setup: {UNIT}: it reads rec-acc; pass the verifier's record of V*'s shared rows (--rec-rows F), whose "
                         "rec-acc registration it must be"), v["why"]
+
+
+def test_a_value_the_shared_rows_register_is_read_at_that_registration(forged, shape, tmp_path):
+    """`SharedOwnRoot`'s check (`RecVStar.checkShared`): a session's port reading a value the verifier's shared rows
+    (`--rec-rows`) register must be that registration, but in reads. Shared rows that register level 3's `rec-coef` under
+    another root refuse the recorded level by its `coef`, which passes setup without that entry
+    (`test_the_honest_level_passes_setup_at_the_honest_inner_session`). R's tops, which need an entry, are
+    `Flock.Test.SharedRows`'."""
+    ports = json.loads((SET / "L3" / "registered.json").read_text())["ports"]
+    coef = ports["coef"]
+    other = {**coef, "root": coef["root"][:-1] + ("1" if coef["root"][-1] == "0" else "0")}
+    rows = tmp_path / "rows.json"
+    rows.write_text(json.dumps({"format": "verity/registered-reads/v0", "ports": {"acc0": ports["acc"], "x-coef": other}}))
+    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, "inner-honest", rows=rows)
+    assert v["why"] == (f"setup: {UNIT}: its port coef reads {coef['value']}, which the verifier's shared rows (--rec-rows) "
+                        f"register as x-coef: root {coef['root']}, against {other['root']}"), v["why"]
 
 
 def test_a_session_staged_under_another_salt_reads_rec_acc_as_another_registration(salted, forged, shape, rows, tmp_path):

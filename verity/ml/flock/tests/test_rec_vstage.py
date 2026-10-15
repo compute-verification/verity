@@ -195,6 +195,32 @@ def test_stagings_with_one_salts_file_read_one_chain(inner, tmp_path):
         S.acc_salts(p, a["chain_rows"] + 1)
 
 
+def test_the_shared_rows_list_the_algebras_row_ports_and_rs_tops_and_refuse_two_registrations(tmp_path):
+    """`shared_rows` (`--rec-rows`, which `RecVStar.checkShared` reads by value): the algebra's row ports but `v` and `out`, and
+    each of R's levels' `out` under its value `rec-top-stacked-L<l>`. Two parts registering one port differently, two entries
+    of one value at two roots, and an R level whose `out` is not one of R's tops are refused."""
+    def e(value, root="aa", reads=(0,)):
+        return {"value": value, "root": root, "leaves": 4, "words": 64, "word_bits": 16, "domain": "dd", "reads": list(reads)}
+
+    def staged(name, ports):
+        (tmp_path / name).mkdir(parents=True)
+        (tmp_path / name / "registered.json").write_text(json.dumps({"format": "verity/registered-reads/v0", "ports": ports}))
+        return tmp_path / name
+
+    p0 = staged("p0", {"m0": e("rec-c0"), "acc0": e(O.ACC_VALUE, "bb"), "v": e("rec-v"), "out": e("rec-zero")})
+    p1 = staged("p1", {"m0": e("rec-c0"), "acc1": e(O.ACC_VALUE, "bb", (1,)), "v": e("rec-v", "cc")})
+    top = staged("L0", {"out": e("rec-top-stacked-L0", "ee"), "acc": e(O.ACC_VALUE, "bb", (5,))})
+    assert S.shared_rows([p0, p1], [top])["ports"] == {"m0": e("rec-c0"), "acc0": e(O.ACC_VALUE, "bb"),
+                                                       "acc1": e(O.ACC_VALUE, "bb", (1,)),
+                                                       "rec-top-stacked-L0": e("rec-top-stacked-L0", "ee")}
+    with pytest.raises(ValueError, match="its port m0 is not the other statements' m0"):
+        S.shared_rows([p0, staged("p2", {"m0": e("rec-c0", "ab")})])
+    with pytest.raises(ValueError, match="register rec-acc twice"):
+        S.shared_rows([p0, staged("p3", {"acc1": e(O.ACC_VALUE, "ab", (1,))})])
+    with pytest.raises(ValueError, match="its out reads rec-top-L0"):
+        S.shared_rows([p0], [staged("L0x", {"out": e("rec-top-L0")})])
+
+
 @pytest.mark.slow
 def test_the_forged_message_changes_one_bit_of_the_provers_row_alone(tmp_path):
     """`forge_row` on a two-instance statement's ``inst.bin``: one bit of the named row moves, its header, its other rows, its

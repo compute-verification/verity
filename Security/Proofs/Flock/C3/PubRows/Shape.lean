@@ -18,8 +18,9 @@ injective, and candidate 3's statements after RecSparse are R's levels and openi
 * `ChecksAccepted`: where a session accepts, a transcript it accepts passes `checkPubRows` and `checkLabels`
   (`PubRowsChecked`) and
   `checkStmt` (`StmtsChecked`, `AcceptsZKV`'s second conjunct), n1b's checks; the checked family meets it
-  (`checksAccepted_checked`, by `checks_of_keepOwn`). `ChecksReached` is it at the transcripts a session writes, and
-  `hPubRows_of_checked` is `hPubRows_of_check'` with it, `rowsHeld` and `SparseAtShapeChecked`.
+  (`checksAccepted_checked`, by `checks_of_keepOwn`). `ChecksReached` is it at the transcripts a session writes, which
+  the checked family meets too (`checksReached_checked`), and `hPubRows_of_checked` is `hPubRows_of_check'` with it,
+  `rowsHeld` and `SparseAtShapeChecked`.
 * `ownIn_of_checks`: where `ChecksAccepted` holds, the accepted sessions' reads hold the verifier's message-round ports
   of their statement (`OwnIn` at `ownAt`), by `checkOwn`'s second and third loops (`checkOwn_ok`,
   `ownIn_of_checkStmt`); `ownIn_checked` is it at the checked family.
@@ -209,6 +210,37 @@ theorem checkOwn_ok {s : VStar.Stmt} {own : Array Flock.Registered.Port} (h : Re
             | some q' => exact absurd hf (hnone' q')
           simpa using List.find?_eq_none.1 hfind q hq
 
+/-- **`checkOwn` accepting, its second loop, at the reads file's ports**: each of the statement's message-round ports is
+a port of the reads file, by name, value and reads. -/
+theorem own_of_checkOwn {s : VStar.Stmt} {own : Array Flock.Registered.Port} (h : RecVStar.checkOwn s own = .ok ()) :
+    ∀ q ∈ RecVStar.ownPorts s, ∃ p ∈ own, (p.name, p.value, p.reads) = q := by
+  intro q hq
+  obtain ⟨p, hp, rfl⟩ := List.mem_map.1 ((checkOwn_ok h).1 q hq)
+  exact ⟨p, Array.mem_toList_iff.1 (List.mem_filter.1 hp).1, rfl⟩
+
+/-- **A RecSparse statement's reads file names every one of its message ports** (`RecSparse.messagePorts`): `h` and
+`claim` by `checkOwn`'s second loop (`ownPorts`), the others by its third (`sparseMsgs`, `checkOwn_ok`). -/
+theorem sparseOwnNames_of_checkOwn {sh : RecSparse.Shape} {hr : ℕ} {own : Array Flock.Registered.Port}
+    (h : RecVStar.checkOwn (.sparse sh hr) own = .ok ()) :
+    ∀ nm ∈ (RecSparse.messagePorts sh).map (·.1), ∃ p ∈ own, p.name = nm := by
+  obtain ⟨rest, hY⟩ : ∃ rest, RecSparse.messagePorts sh = ("h", RecSparse.SKIP) :: (rest ++ [("claim", 1)]) :=
+    ⟨_, rfl⟩
+  have hown := own_of_checkOwn h
+  have h3 := (checkOwn_ok h).2
+  simp only [RecVStar.sparseMsgs, hY, List.drop_succ_cons, List.drop_zero, List.dropLast_concat] at h3
+  intro nm hnm
+  rw [hY] at hnm
+  simp only [List.map_cons, List.map_append, List.map_nil, List.mem_cons, List.mem_append, List.not_mem_nil,
+    or_false] at hnm
+  rcases hnm with rfl | hnm | rfl
+  · obtain ⟨p, hp, he⟩ := hown ("h", s!"rec-c{hr}", #[some 0, some 1]) (by simp [RecVStar.ownPorts])
+    exact ⟨p, hp, (Prod.mk.inj he).1⟩
+  · obtain ⟨⟨a, b⟩, hx, rfl⟩ := List.mem_map.1 hnm
+    obtain ⟨p, hp, he⟩ := List.mem_map.1 (h3 _ (List.mem_map.2 ⟨(a, b), hx, rfl⟩))
+    exact ⟨p, Array.mem_toList_iff.1 hp, (Prod.mk.inj he).1⟩
+  · obtain ⟨p, hp, he⟩ := hown ("claim", RecVStar.CLAIM_VALUE, #[some 0, some 1]) (by simp [RecVStar.ownPorts])
+    exact ⟨p, hp, (Prod.mk.inj he).1⟩
+
 /-- **A statement the verifier checked as V*'s statement `j` has its message ports in the reads file**: each port of
 `ownAt ss j` is one of `own`'s by name, value and reads (`checkStmt_ok`'s `checkOwn`, its second and third loops). -/
 theorem ownIn_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
@@ -273,19 +305,20 @@ theorem stmt_of_session {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU 
     exact (Except.ok.inj h1).symm
   exact ⟨_, hcst, array_forM_ok hfm _ hjs⟩
 
-/-- **A kept session that accepts kept its own list** (`Flock.Guarantees.keepOwn`), so some transcript it accepts
-passes the keep's predicate `P`, and so any `Pc` that `P` implies. -/
+/-- **A kept session that accepts kept its own list** (`Flock.Guarantees.keepOwn`), so some transcript it writes and
+accepts passes the keep's predicate `P`, and so any `Pc` that `P` implies. -/
 theorem checks_of_keepOwn {Q : VStmt} {Reg' : Type} {z : Q.Outer Reg'} {P Pc : Inputs → Array Flock.Registered.Port →
     Exec.Transcript → Prop} (hP : ∀ J o t, P J o t → Pc J o t)
     (h : ∃ t, AcceptsZKR (Flock.Guarantees.keepOwn z P).I (Flock.Guarantees.keepOwn z P).own t) :
-    ∃ t, AcceptsZKR (Flock.Guarantees.keepOwn z P).I (Flock.Guarantees.keepOwn z P).own t ∧
+    ∃ R' t, (Flock.Guarantees.keepOwn z P).Writes R' t ∧
+      AcceptsZKR (Flock.Guarantees.keepOwn z P).I (Flock.Guarantees.keepOwn z P).own t ∧
       Pc (Flock.Guarantees.keepOwn z P).I (Flock.Guarantees.keepOwn z P).own t := by
   obtain ⟨t, ht⟩ := h
-  by_cases hp : ∃ t, AcceptsZKR z.I z.own t ∧ P z.I z.own t
+  by_cases hp : ∃ R' t, z.Writes R' t ∧ AcceptsZKR z.I z.own t ∧ P z.I z.own t
   · have ho : (Flock.Guarantees.keepOwn z P).own = z.own := ite_eq_left hp
-    obtain ⟨t', ha, hpt⟩ := hp
+    obtain ⟨R', t', hw, ha, hpt⟩ := hp
     rw [ho]
-    exact ⟨t', ha, hP _ _ _ hpt⟩
+    exact ⟨R', t', hw, ha, hP _ _ _ hpt⟩
   · have hf : (Flock.Guarantees.keepOwn z P).own = freshOwn Q.c := ite_eq_right hp
     rw [hf] at ht
     exact (not_acceptsZKR_fresh z.I z.ht z.hTags z.hcH t ht).elim
@@ -398,10 +431,9 @@ def ChecksAccepted (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (rows : Opt
 
 /-- **(n1b) Where a session accepts a transcript it writes, a transcript it writes and accepts passes the verifier's
 checks** of its public rows (`PubRowsChecked`) and statements (`StmtsChecked`): `ChecksAccepted` at the outcomes the
-session's game reaches (`ZkOuter.Writes`), the transcripts whose records the custody reads (`rowsHeld`). The verifier
-checks the transcript it is sent; the checked family keeps a session's list where some transcript it accepts passes
-the checks, written or not (`Flock.Guarantees.keepOwn`), so it gives `ChecksAccepted` (`checksAccepted_checked`) and not
-this. -/
+session's game reaches (`ZkOuter.Writes`), the transcripts whose records the custody reads (`rowsHeld`). The checked
+family keeps a session's list where some transcript it writes and accepts passes the checks
+(`Flock.Guarantees.keepOwn`), so it gives this (`checksReached_checked`). -/
 def ChecksReached (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (rows : Option (Array Flock.Registered.Port))
     (wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String) (reg : Lean.Json) : Prop :=
   ∀ R ω t R₂ j, (∃ R' tr', (F.zs R ω t R₂ j).Writes R' tr' ∧ AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr') →
@@ -430,15 +462,35 @@ theorem checksAccepted_checked {coins : String → Option Flock.RecCoins.Source}
     ChecksAccepted (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg)
       rows wr reg := by
   intro R ω t R₂ j hex
-  refine checks_of_keepOwn (z := Flock.Guarantees.custodied zr hCust h R ω t R₂ j)
+  obtain ⟨-, tr', -, hc⟩ := checks_of_keepOwn (z := Flock.Guarantees.custodied zr hCust h R ω t R₂ j)
     (P := fun J o tr' => (holoInnerAt T CT st hp).r ≤ t.length ∧
       Flock.Guarantees.ChecksC3 ish (innerCommitsAt (wr t).1 (wr t).2 st reg).toOption (coins (wr t).2) j (bind j)
         rows J o tr')
     (Pc := fun J o tr' => PubRowsChecked (innerCommitsAt (wr t).1 (wr t).2 st reg).toOption ish.sparse J o tr' ∧
-      StmtsChecked ish j (bind j) rows J o tr') ?_ hex
-  intro J o tr' hp
-  obtain ⟨-, spec, sts, hs, hst, -, hpr, hlb, -⟩ := hp
-  exact ⟨⟨spec, sts, hs, hpr, hlb⟩, spec, sts, hs, hst⟩
+      StmtsChecked ish j (bind j) rows J o tr') (fun J o tr' hp => by
+        obtain ⟨-, spec, sts, hs, hst, -, hpr, hlb, -⟩ := hp
+        exact ⟨⟨spec, sts, hs, hpr, hlb⟩, spec, sts, hs, hst⟩) hex
+  exact ⟨tr', hc⟩
+
+/-- **(n1b) The checked family passes the verifier's checks where a session accepts a transcript it writes**, at one it
+writes: the checked session keeps its own list only where a transcript it writes and accepts passes `ChecksC3`
+(`Flock.Guarantees.keepOwn`, `checks_of_keepOwn`). `Compose.hbr_honest` reads it at `hPubRows_of_checked`. -/
+theorem checksReached_checked {coins : String → Option Flock.RecCoins.Source}
+    {rows : Option (Array Flock.Registered.Port)}
+    {zr : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin (vstarCount ish)) →
+      (Vs j).OuterR Reg'}
+    {hCust : Flock.Premises.RecordCustody zr} {h : Typed zr} :
+    ChecksReached (C3Family.checked (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg)
+      rows wr reg := by
+  rintro R ω t R₂ j ⟨-, tr', -, hacc⟩
+  exact checks_of_keepOwn (z := Flock.Guarantees.custodied zr hCust h R ω t R₂ j)
+    (P := fun J o tr' => (holoInnerAt T CT st hp).r ≤ t.length ∧
+      Flock.Guarantees.ChecksC3 ish (innerCommitsAt (wr t).1 (wr t).2 st reg).toOption (coins (wr t).2) j (bind j)
+        rows J o tr')
+    (Pc := fun J o tr' => PubRowsChecked (innerCommitsAt (wr t).1 (wr t).2 st reg).toOption ish.sparse J o tr' ∧
+      StmtsChecked ish j (bind j) rows J o tr') (fun J o tr' hp => by
+        obtain ⟨-, spec, sts, hs, hst, -, hpr, hlb, -⟩ := hp
+        exact ⟨⟨spec, sts, hs, hpr, hlb⟩, spec, sts, hs, hst⟩) ⟨tr', hacc⟩
 
 /-- **(n1b) The accepted sessions' reads hold the verifier's message-round ports** (`OwnIn` at `ownAt`) where a
 transcript they accept passes the statement check (`ChecksAccepted`): the check of the session's first statement

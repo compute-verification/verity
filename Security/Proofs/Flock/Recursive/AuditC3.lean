@@ -54,8 +54,9 @@ What it takes, against `PublicAudit`:
   the formula `outerStatementsAt st`; the event adds the verifier's checks at candidate 3 of its own inputs
   (`AcceptsC3`): its list builds, it holds the inner transcript against `reg`, the covers check passes there (all of
   `RecVStar.checkCovers`: the sparse-presence, stacked-presence and stacked-shape refusals and each stream's rounds),
-  and check 5's sparse refusals pass, so `ℓ` is in `[6, k_log]` and the unit range's slots are inside the block
-  (`SparseRangeOk`). These are not the whole compiled acceptance (`AcceptsPublic` and `ChecksVR` carry the rest). The
+  check 5's sparse refusals pass, so `ℓ` is in `[6, k_log]` and the unit range's slots are inside the block
+  (`SparseRangeOk`), and check 5's inner shape is the inner statement's `m`, `k_log` and region count
+  (`RecVStar.checkInnerStmt`). These are not the whole compiled acceptance (`AcceptsPublic` and `ChecksVR` carry the rest). The
   verifier's acceptance gives all of `AcceptsC3` (`FlockC3.VStarList.acceptsC3_of_verify`);
 * R's `m`: Lean's verifier never compares META's `stacked.m` with the bucket's `table_m`; it holds R's stream and each
   `rec-opening` unit to META's shape, and the unit names come from the outer program it compiles (the list). The model
@@ -138,26 +139,27 @@ def ChecksVR {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} (ish : RecVSt
   ∀ j : Fin S, ChecksC3 ish cs coins j (bind j) rows (zr o.1 j).I (zr o.1 j).own (o.2 j).2.2.2
 
 open Classical in
-/-- **A session kept where an accepted transcript passes `P`**: `z` where some transcript `z` accepts passes `P` at its
-inputs and own list, and elsewhere `z` with the own list `freshOwn`, which accepts nothing (`ZkOuter.refuse`'s pattern,
-`not_acceptsZKR_fresh`). Its game is `z`'s. -/
+/-- **A session kept where a written, accepted transcript passes `P`**: `z` where some transcript `z` writes at some
+registration (`ZkOuter.Writes`, an outcome of its game) and accepts passes `P` at its inputs and own list, and elsewhere
+`z` with the own list `freshOwn`, which accepts nothing (`ZkOuter.refuse`'s pattern, `not_acceptsZKR_fresh`). Its game
+is `z`'s. -/
 noncomputable def keepOwn {Q : VStmt} {Reg' : Type} (z : Q.Outer Reg')
     (P : FlockSoundness.Discharge.Exec.Inputs → Array Flock.Registered.Port →
       FlockSoundness.Discharge.Exec.Transcript → Prop) : Q.Outer Reg' :=
   { z with
-    own := if ∃ t, AcceptsZKR z.I z.own t ∧ P z.I z.own t then z.own else freshOwn Q.c
+    own := if ∃ R' t, z.Writes R' t ∧ AcceptsZKR z.I z.own t ∧ P z.I z.own t then z.own else freshOwn Q.c
     hown := fun ω R' o h => by
-      by_cases hp : ∃ t, AcceptsZKR z.I z.own t ∧ P z.I z.own t
+      by_cases hp : ∃ R' t, z.Writes R' t ∧ AcceptsZKR z.I z.own t ∧ P z.I z.own t
       · rw [ite_eq_left hp] at h ⊢
         exact z.hown ω R' o h
       · rw [ite_eq_right hp] at h
         exact (not_acceptsZKR_fresh z.I z.ht z.hTags z.hcH _ h).elim }
 
 /-- **V*'s checked sessions**: the typed sessions (`custodied`), each kept at a whole history `t` (a coin for each of the
-inner protocol's rounds, the only histories `recGame` plays) where an accepted transcript passes the verifier's checks
-at candidate 3 as V*'s statement of its index (`ChecksC3`) at its hold of the inner transcript and check 5's source at
-`t` (`cs t`, `coins t`), and refusing everything elsewhere (`keepOwn`). Their games are the typed sessions', so the
-transported prover plays them (`checkedT`). -/
+inner protocol's rounds, the only histories `recGame` plays) where a written, accepted transcript passes the verifier's
+checks at candidate 3 as V*'s statement of its index (`ChecksC3`) at its hold of the inner transcript and check 5's
+source at `t` (`cs t`, `coins t`), and refusing everything elsewhere (`keepOwn`). Their games are the typed sessions',
+so the transported prover plays them (`checkedT`). -/
 noncomputable abbrev checkedC3 {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B D : Type} {I : Inner} {Cm : Type}
     (ish : RecVStar.Inner) (cs : List (Cm × I.Coin) → Option Flock.RecVStar.InnerCommits)
     (coins : List (Cm × I.Coin) → Option Flock.RecCoins.Source)
@@ -260,7 +262,8 @@ at the law of the registration's draws
 as the prover supplies them (`ZkOuterR`), their records' custody `_hCust`, their registrants' records covering the
 rows their reads files name `_hRC`, the table's prefix `tbl` and the `b ‖ c`
 `bc` at which the map `im` says where each round's commitment and coins go in the inner session's records, and those
-records' custody `_hIC` at `im`, the verifier of record's own inputs (V*'s bindings
+records' custody `_hIC` at `im`; check 5's source at each record is that record's inner-session files (`_hcoins`), the
+verifier of record's own inputs (V*'s bindings
 `bind` and the shared rows `rows`; session `j` runs as V*'s statement `j`), at which V*'s statements' files, where they
 parse into scope as the verifier's acceptance parses them, parse to `Vs` (`VStarParsesScoped`), every session's inputs
 carrying the tags their name names (`TagsFound`), the messages V*'s layers hold and the rounds' commitments (`wmsg`,
@@ -329,6 +332,7 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
     -- the reps' streams are named past the sparse phases' and R's
     (_htbl : ∀ i : Fin 2, (((HoloStream.rep i).name tbl).startsWith s!"{RecVStar.SPARSE}/" ||
       ((HoloStream.rep i).name tbl).startsWith s!"{RecVStar.STACKED}/") = false)
+    (_hcoins : ∀ r src, coins r = some src → ∃ f, src = .files f ∧ f.record = r)
     -- the verifier of record's own inputs: V*'s bindings for each statement and the shared rows
     (bind : Fin (vstarCount ish) → VStar.Bindings) (rows : Option (Array Flock.Registered.Port))
     -- obligation (gap 4(c)): where V*'s statement `j`'s file under `bind j` parses into scope, as the verifier's

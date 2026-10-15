@@ -263,7 +263,7 @@
     },
     {
       "handle": "comms",
-      "holder": "the comms coordinator (bc-9e9cd438-d8ff-537a-9545-7fff2c9038e0)",
+      "holder": "the comms coordinator (bc-e6e381a1-2be0-5d80-819c-c2bf4d318fee)",
       "remit": "Agent-to-agent messages: research msg, the names directory, routing, and its traffic.",
       "charter": "Daniel, 2026-10-01 9:12 AM PDT",
       "usergroup": "S0C8PTRMVV5",
@@ -275,7 +275,9 @@
         "tools/research/tests/slack_routing_vectors.json"
       ],
       "branch_suffixes": [
-        "b252"
+        "b252",
+        "38e0",
+        "e34f"
       ]
     },
     {

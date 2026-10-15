@@ -1210,14 +1210,13 @@ def cmd_subscriptions(ns: argparse.Namespace, reg: dict) -> int:
                   f"expiresInSeconds={EXPIRES_S})   # #{key}")
     if key := h.get("linear"):
         print(f'subscribe_linear_issue(options={{"scope": "team", "teamId": "{key}"}}, expiresInSeconds={EXPIRES_S})   '
-              f"# an issue filed into or changing state in @{h['handle']}'s Linear team: the work item is its own doorbell")
-        print(f'subscribe_linear_comment(options={{"scope": "team", "teamId": "{key}"}}, expiresInSeconds={EXPIRES_S})   '
-              f"# a comment on an issue in @{h['handle']}'s Linear team")
-    print(f"# and subscribe_slack_thread(channelId, threadTs, expiresInSeconds={EXPIRES_S}) for each thread @{h['handle']} "
-          f"starts, replies in or picks up (not for a status line alone); renew on every wake")
-    print("# but not an announcement's thread (the merge thread is one): there the doorbell rings for a post that names "
-          f"@{h['handle']} at its start, or, naming no one, one of its PRs or a run it named beside one of its PRs; "
-          "unsubscribe from any you hold")
+              f"# an issue filed into or changing state in @{h['handle']}'s Linear team, a human's included")
+        print(f"# but no comment subscription on {key}: nearly every comment there is @{h['handle']}'s own, and it would wake "
+              "it for each (every handle writes as one app; COMM-23)")
+    print(f"# and subscribe_slack_thread(channelId, threadTs, expiresInSeconds={EXPIRES_S}) only for a thread a human may "
+          f"answer in (@{h['handle']}'s #ask-daniel card, a thread a named human posted in); renew on every wake")
+    print(f"# not for a thread between handles: the inbox already rings @{h['handle']} for each reply addressed to it, and "
+          "never for its own posts, while a thread subscription also wakes it for each of its own replies (COMM-23)")
     return 2 if missing else 0
 
 
@@ -1299,26 +1298,50 @@ def linear_ask(ns: argparse.Namespace, owner: dict, sender: str, body: str) -> s
 
 
 def linear_close(text: str, state_type: str) -> None:
-    """Move the Linear issue an ask's root links (`linear_ask`) to its team's first `state_type` state."""
+    """Move the Linear issue an ask's root links (`linear_ask`) to its team's `state_type` state (`Linear.move`)."""
     if not (m := LINEAR_LINK_RE.search(text or "")):
         return
     from . import linear  # noqa: PLC0415
 
     try:
-        print(f"linear: {m[1]} {linear.Linear().close(m[1], state_type)}")
+        print(f"linear: {m[1]} {linear.Linear().move(m[1], state_type)}")
     except (linear.LinearError, OSError, ValueError) as e:
         print(f"research msg: {m[1]} stays open on Linear ({e}); the status line stands", file=sys.stderr)
 
 
+LINEAR_STATES = ("Backlog = filed, Todo = accepted, In Progress = someone is on it now, In Review = a PR is up, "
+                 "Done = landed or answered")                    # what each state means for us (top, workflow thread, 15 Oct)
+
+
 def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
+    """`check` (what the credentials reach), `state ISSUE STATE`, `comment ISSUE TEXT --as HANDLE`, `list TEAM [--state S]`."""
     from . import linear  # noqa: PLC0415
 
+    def need(value: str | None, what: str) -> str:
+        if not value:
+            raise SlackError(f"linear {ns.verb}: give {what}")
+        return value
     try:
-        lines, ok = linear.Linear().check(ns.write, name_entry(ns, reg, ns.handle)["handle"])
+        lin = linear.Linear()
+        if ns.verb == "check":
+            lines, ok = lin.check(ns.write, name_entry(ns, reg, ns.handle or "comms")["handle"])
+            print("\n".join(lines))
+            return 0 if ok else 1
+        if ns.verb == "list":
+            for i in lin.issues(need(ns.target, "the TEAM (a handle or its key)"), ns.state):
+                print(f"{i['identifier']}  {i['state']['name']}  {i['title']}")
+            print(f"states: {LINEAR_STATES}")
+            return 0
+        issue = need(ns.target, "the ISSUE (e.g. INF-12)")
+        if ns.verb == "state":
+            print(f"{issue} {lin.move(issue, need(ns.value, 'the STATE by name (e.g. In Progress)'))}")
+            return 0
+        lin.comment(lin.issue_id(issue), name_entry(ns, reg, need(ns.handle, "--as HANDLE, the comment's sender"))["handle"],
+                    need(ns.value, "the TEXT"))
+        print(f"{issue} commented")
+        return 0
     except linear.LinearError as e:
         raise SlackError(str(e)) from None
-    print("\n".join(lines))
-    return 0 if ok else 1
 
 
 def announcement(h: dict, to: list[dict], body: str, verify: str | None, ships: list[str]) -> str:
@@ -2119,8 +2142,10 @@ def permalink(reg: dict, ch: str, ts: str) -> str:
 
 def no_such_card(verb: str, cid: str) -> str:
     """The route answers 404 only for an ID with no card: a pending card's status is 200."""
-    return (f"ask-daniel {verb} {cid}: HTTP 404: no card has that ID. It is the UUID `ask-daniel` printed first when it posted "
-            "the card, not the card's Slack ts; for a card posted any other way, record Daniel's thread reply as a ruling")
+    short = " The route takes the whole ID and looks up no prefix." if re.fullmatch(r"[0-9a-f]{4,12}", cid) else ""
+    return (f"ask-daniel {verb} {cid}: HTTP 404: no card has that ID.{short} It is the UUID `ask-daniel` printed first when "
+            "it posted the card, which its mention in the card's thread also ends with (`research msg read --channel ask-daniel "
+            "--thread TS`), not the card's Slack ts; for a card posted any other way, record Daniel's thread reply as a ruling")
 
 
 def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
@@ -2179,7 +2204,8 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
     when = pacific(datetime.fromisoformat(body["deadline"]))
     rec = next((o["label"] for o in body["options"] if o.get("recommended")), "")
     ping = (f"{deciders} a decision for you: {body['question']} I recommend: {rec}. "
-            + (f"`{body['default']}` applies at {when} unless you choose." if body["kind"] == "default" else f"Blocking: nothing happens until you choose (by {when})."))
+            + (f"`{body['default']}` applies at {when} unless you choose." if body["kind"] == "default" else f"Blocking: nothing happens until you choose (by {when}).")
+            + f" (card `{cid}`)")
     try:                                                             # the card alone notifies nobody; a mention does
         client(ns).call("chat.postMessage", channel=ch, thread_ts=ts, username=body["requested_by"], text=ping, unfurl_links="false")
     except SlackError as e:
@@ -2254,10 +2280,15 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--to", required=True, metavar="@OWNER")
     p.add_argument("--urgent", action="store_true", help="the doorbell says URGENT")
     p.add_argument("--linear", action="store_true", help="also file it as an issue in the owner's Linear team, linked from the post")
-    p = cmd("linear", "the Linear asks trial: `check` shows what the credentials reach, and is fit for asks (exit 0)")
-    p.add_argument("verb", choices=("check",))
-    p.add_argument("--write", default=None, metavar="TEAM", help="also file, comment on and cancel a test issue in TEAM (a handle)")
-    p.add_argument("--as", dest="handle", default="comms", metavar="HANDLE", help="the test issue's sender (default comms)")
+    p = cmd("linear", "Linear issues: `check` (what the credentials reach; exit 0 when fit for asks), `state ISSUE STATE` "
+                      "(by name; " + LINEAR_STATES + "), `comment ISSUE TEXT --as HANDLE`, `list TEAM [--state S]` (open by default)")
+    p.add_argument("verb", choices=("check", "state", "comment", "list"))
+    p.add_argument("target", nargs="?", help="state, comment: the issue (INF-12); list: the team (a handle or its key)")
+    p.add_argument("value", nargs="?", help="state: the state's name; comment: the text")
+    p.add_argument("--state", default=None, metavar="NAME", help="list: only issues in this state (default: every open one)")
+    p.add_argument("--write", default=None, metavar="TEAM", help="check: also file, comment on and cancel a test issue in TEAM")
+    p.add_argument("--as", dest="handle", default=None, metavar="HANDLE",
+                   help="comment: its sender (required); check: the test issue's sender (default comms)")
     p = cmd("announce", "1:some or 1:all in #agent-coordination", as_=True, body=True, url=True)
     p.add_argument("--to", nargs="+", action="extend", default=[], metavar="@HANDLE", help="the handles or names it's for (default: every handle)")
     p.add_argument("--verify", default=None, metavar="CMD", help="a required action: the command that shows it took")

@@ -34,6 +34,9 @@ structure CheckFacts (c : Circuit) : Prop where
   cuts : ∀ e ∈ c.leafCuts.toList, e.1 < c.upv ∧ e.2.1 < (portCols c.unit.inGroups).size
   leaves : c.leavesIn.size = c.upv ∧
     ∀ u < c.upv, (c.leavesIn[u]!).size = (c.unit.inGroups.getD 0 default).bits.size
+  /-- where the unit returns the outputs, each unit's output leaves are its output group's ports -/
+  leavesOut : c.leavesOut.size = c.upv ∧ ∀ u < c.upv, c.outNet = c.unitNet →
+    (c.leavesOut[u]!).size = (c.unit.outGroups.getD 0 default).bits.size
   /-- no wire reaches a unit's leaf port -/
   wire_leaf : ∀ w ∈ c.wires.toList, w.dst.1 = c.unitNet → (c.unit.inGroups.getD 0 default).bits.size ≤ w.dst.2.2
   /-- a leaf cut reaches a cut port, past the leaf ports -/
@@ -379,6 +382,15 @@ theorem check_facts {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed =
       refine ⟨⟨_, rfl⟩, ?_⟩
       simp only [Bool.or_eq_true, not_or, bne_iff_ne, ne_eq, not_not] at hc
       exact hc.1.1) hseen
+  have leavesOut := forIn_range_forall
+    (P := fun u => c.outNet = c.unitNet → (c.leavesOut[u]!).size = (c.unit.outGroups.getD 0 default).bits.size)
+    (fun u _ _ s t hs => by
+      obtain ⟨hc, hs⟩ := ite_throw_ok' hs
+      obtain ⟨s', -, hs⟩ := except_bind_ok hs
+      cases hs
+      refine ⟨⟨_, rfl⟩, fun ho => ?_⟩
+      simp only [Bool.or_eq_true, not_or] at hc
+      simpa [ho] using hc.2) hseen
   have hpv' : ¬(c.perVu.getD c.shaNet 0 != (HmRow.rowSlots c.ports).1 ||
       c.perVu.getD c.hmNet 0 != nextPow2 c.ports.size) = true := hpv
   simp only [Bool.or_eq_true, not_or, bne_iff_ne, ne_eq, not_not] at hpv' hur hlv
@@ -401,6 +413,7 @@ theorem check_facts {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed =
     wires := wires
     cuts := cuts
     leaves := ⟨hlv.1, fun u hu => leaves u (Nat.zero_le _) hu⟩
+    leavesOut := ⟨hlv.2, fun u hu => leavesOut u (Nat.zero_le _) hu⟩
     wire_leaf := wire_leaf
     cut_leaf := cut_leaf
     wired := fun n hn h1 h2 i hi p hp1 hp2 => by

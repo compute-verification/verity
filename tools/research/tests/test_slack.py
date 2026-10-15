@@ -216,8 +216,8 @@ def test_handles_and_subscriptions(registry, capsys):
     assert rc == 0 and "@infra" in out and "SINFRA" in out and "#agent-alerts" in out
     rc, out, _ = run(capsys, "subscriptions", "--as", "infra")
     assert rc == 0 and f'channelId="{ALERTS}", topLevelOnly=true' in out and COORD not in out
-    assert 'subscribe_linear_issue(options={"scope": "team", "teamId": "INF"}' in out   # Linear-first: the issue is the doorbell
-    assert 'subscribe_linear_comment(options={"scope": "team", "teamId": "INF"}' in out
+    assert 'subscribe_linear_issue(options={"scope": "team", "teamId": "INF"}' in out        # a human's filing rings no inbox
+    assert "subscribe_linear_comment" not in out and "no comment subscription on INF" in out  # nearly all are its own echoes
     rc, out, _ = run(capsys, "subscriptions", "--as", "old-accounting")
     assert rc == 0 and f'channelId="{COORD}", topLevelOnly=true' in out and ALERTS not in out
 
@@ -883,7 +883,7 @@ def test_ask_daniel_mentions_him_on_the_card_so_slack_notifies_him(route, fake, 
     human = json.loads(registry.read_text())["humans"][0]["slack_user"]
     (ping,) = [m for m in fake.messages.get(ASK, []) if m.get("thread_ts") == "1790800000.000100"]
     assert rc == 0 and ping["username"] == "infra" and ping["text"].startswith(f"<@{human}> a decision for you: Test: does the")
-    assert "I recommend: Looks right. `yes` applies at 3:00 PM PDT" in ping["text"]
+    assert "I recommend: Looks right. `yes` applies at 3:00 PM PDT" in ping["text"] and ping["text"].endswith("(card `42`)")
 
 
 def test_send_to_daniel_mentions_him_and_nobody_posts_as_him(fake, registry, capsys):
@@ -1002,7 +1002,9 @@ def test_status_reads_the_decision_and_exits_0_only_once_decided(route, registry
 def test_status_404_says_no_card_has_that_id(route, registry, capsys):
     route.answer = (404, {"error": "not_found"})
     rc, _, err = run(capsys, "ask-daniel", "status", "1790800000.000100")
-    assert rc == 2 and "HTTP 404: no card has that ID" in err and "not the card's Slack ts" in err
+    assert rc == 2 and "HTTP 404: no card has that ID" in err and "not the card's Slack ts" in err and "prefix" not in err
+    rc, _, err = run(capsys, "ask-daniel", "status", "81f010d2")
+    assert rc == 2 and "looks up no prefix" in err and "its mention in the card's thread also ends with" in err
 
 
 def test_resolve_records_a_thread_answer_and_says_clearly_when_there_is_no_such_card(route, registry, capsys):

@@ -709,12 +709,23 @@ class Queue:
             if m.pr in entries and entries[m.pr].pr.head == m.head:
                 entries[m.pr].state, entries[m.pr].position, entries[m.pr].commit = "queued", i, m.commit
         conflicts = state.get("conflicts", {})
+        main = _out(self.workdir, "rev-parse", "refs/remotes/origin/main")
         for n, e in entries.items():
             if e.state == "ready" and (c := conflicts.get(str(n))) and c["head"] == e.pr.head:
                 e.state, e.why = "refused", f"{c['why']} (at the last sync)"
+            elif e.state == "ready" and (files := conflicting_files(self.workdir, main, e.pr.head)):
+                e.state, e.why = "refused", (f"conflicts with `main` in {', '.join(files)}: merge `main` into the branch and "
+                                             f"re-mark it")
             elif e.state == "ready":
                 e.why = f"admitted: the next sync merges it onto `{self.branch}`, and drive checks and lands it in a train"
         return entries
+
+
+def conflicting_files(repo: Path, base: str, head: str) -> list[str]:
+    """The files a merge of ``head`` onto ``base`` would leave conflicted, from `git merge-tree` (no worktree touched), so
+    `status` names a conflict on any VM, not only on the one whose last sync recorded it; [] when it merges cleanly."""
+    r = _git(repo, "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head, check=False)
+    return sorted({f for f in r.stdout.splitlines()[1:] if f}) if r.returncode == 1 else []
 
 
 class _Refreshed:

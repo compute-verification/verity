@@ -153,17 +153,31 @@ class Linear:
         self.gql("mutation($i: CommentCreateInput!) { commentCreate(input: $i) { success } }", {"i": i})
         self._quiet(issue_id)
 
-    def close(self, issue_id: str, state_type: str) -> str:
-        """Move the issue (its id, or an identifier such as `INF-12`) to its team's first state of `state_type` (`completed`,
-        `canceled`); that state's name."""
+    def move(self, issue_id: str, state: str) -> str:
+        """Move the issue (its id, or an identifier such as `INF-12`) to its team's state named `state` (any case), else to the
+        team's first state of that type (`completed`, `canceled`); that state's name. By name, `In Progress` is never the
+        `started` state that happens to come first (In Review)."""
         issue = self.gql("query($id: String!) { issue(id: $id) { id team { states { nodes { id name type } } } } }",
                          {"id": issue_id})["issue"]
-        state = next((s for s in issue["team"]["states"]["nodes"] if s["type"] == state_type), None)
-        if state is None:
-            raise LinearError(f"the issue's team has no {state_type} state")
+        nodes = issue["team"]["states"]["nodes"]
+        to = (next((s for s in nodes if s["name"].lower() == state.lower()), None)
+              or next((s for s in nodes if s["type"] == state), None))
+        if to is None:
+            raise LinearError(f"the issue's team has no state {state!r}: its states are {', '.join(s['name'] for s in nodes)}")
         self.gql("mutation($id: String!, $s: String!) { issueUpdate(id: $id, input: {stateId: $s}) { success } }",
-                 {"id": issue["id"], "s": state["id"]})
-        return state["name"]
+                 {"id": issue["id"], "s": to["id"]})
+        return to["name"]
+
+    def issue_id(self, issue: str) -> str:
+        """The id of the issue an identifier such as `INF-12` names."""
+        return self.gql("query($id: String!) { issue(id: $id) { id } }", {"id": issue})["issue"]["id"]
+
+    def issues(self, team: str, state: str | None = None) -> list[dict]:
+        """The team's open issues, or those in the state named `state`, oldest first: {identifier, title, state: {name}}."""
+        f = {"team": {"id": {"eq": self.team(team)["id"]}},
+             "state": {"name": {"eqIgnoreCase": state}} if state else {"type": {"nin": ["completed", "canceled"]}}}
+        q = "query($f: IssueFilter!) { issues(filter: $f, first: 250) { nodes { identifier title createdAt state { name } } } }"
+        return sorted(self.gql(q, {"f": f})["issues"]["nodes"], key=lambda i: i["createdAt"])
 
     def subscribers(self, issue_id: str) -> list[str]:
         q = "query($id: String!) { issue(id: $id) { subscribers { nodes { name } } } }"
@@ -202,7 +216,7 @@ class Linear:
             by, comments_by = self.authors(issue["id"])
             lines += [f"filed {issue['identifier']} {issue['url']} as {by} (subscribers: {', '.join(subs) or 'none'})",
                       f"commented as {', '.join(comments_by) or '?'} (subscribers: {', '.join(subs_after) or 'none'})",
-                      f"moved to {self.close(issue['id'], 'canceled')}"]
+                      f"moved to {self.move(issue['id'], 'canceled')}"]
         return lines, ok
 
 

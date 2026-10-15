@@ -312,12 +312,7 @@ def f1(f1_gate, f1_inner, once):
 
     def inputs(d):
         (d / "inner.json").write_text(json.dumps(f1_inner["accepts_stmt"]["shape"]))
-        ports: dict = {}
-        for part in F1_PARTS[4:]:
-            for nm, e in json.loads((g / "v" / part / "registered.json").read_text())["ports"].items():
-                if nm not in ("v", "out"):
-                    assert ports.setdefault(nm, e) == e, (part, nm)
-        (d / "rows.json").write_text(json.dumps({"format": "verity/registered-reads/v0", "ports": ports}))
+        (d / "rows.json").write_text(json.dumps(S.shared_rows([g / "v" / part for part in F1_PARTS[4:]])))
         _f1_cheat(g, d)
         for part in F1_PARTS:
             v = g / "v" / part

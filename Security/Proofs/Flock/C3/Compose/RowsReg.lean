@@ -44,7 +44,7 @@ theorem coversAt_keepOwn {Q : VStmt} {Reg' : Type} {z : Q.Outer Reg'}
       FlockSoundness.Discharge.Exec.Transcript → Prop} (hz : CoversAt z) :
     CoversAt (Flock.Guarantees.keepOwn z P) := by
   intro u q ⟨pt, hpt, hn⟩
-  by_cases hp : ∃ t, AcceptsZKR z.I z.own t ∧ P z.I z.own t
+  by_cases hp : ∃ R' t, z.Writes R' t ∧ AcceptsZKR z.I z.own t ∧ P z.I z.own t
   · have ho : (Flock.Guarantees.keepOwn z P).own = z.own := ite_eq_left hp
     rw [ho] at hpt
     exact hz u q ⟨pt, hpt, hn⟩
