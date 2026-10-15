@@ -1174,6 +1174,14 @@ structure Service where
 
 attribute [instance] Service.instSeed Service.instCoins
 
+/-- **The service's adversary floor** in a machine: every adversary that commits first has its accepted runs below `F`
+with probability at most `κ`. It reads only the service, so it is `AdvFloor` of every protocol over the service
+(`MatMachine.editFloor_iff`). -/
+def ServiceFloor (Mc : Machine) (S : Service) (F κ : ℝ) : Prop :=
+  ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)),
+    (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) →
+    prob (fun ω : S.Seed × Ω => S.verify (Mc.eval M ω).1 ω.1 (Mc.eval M ω).2 = true ∧ Mc.cost M ω < F) ≤ κ
+
 namespace MatMachine
 
 variable {R : Type} [Ring R] (Mc : MatMachine R)
@@ -1296,6 +1304,13 @@ def EditFloor (S : Service) {n : ℕ} (E : Mc.Edit S.Seed n) (m : Mc.Alg (Mat R 
     (prove : Mc.Alg ((S.Seed × (Mat R n n × Mat R n n) × S.Coins) × Mat R n n) (S.Com × S.Ans))
     (use : Mat R n n × Mat R n n → Prop) (F κ : ℝ) : Prop :=
   AdvFloor (Mc.edited S E m prove use) F κ
+
+/-- The edit floor reads only the service: it is the service's floor in the machine. -/
+theorem editFloor_iff (S : Service) {n : ℕ} (E : Mc.Edit S.Seed n) (m : Mc.Alg (Mat R n n × Mat R n n) (Mat R n n))
+    (prove : Mc.Alg ((S.Seed × (Mat R n n × Mat R n n) × S.Coins) × Mat R n n) (S.Com × S.Ans))
+    (use : Mat R n n × Mat R n n → Prop) (F κ : ℝ) :
+    Mc.EditFloor S E m prove use F κ ↔ ServiceFloor Mc.toMachine S F κ :=
+  Iff.rfl
 
 /-- **Relative security of edited instances** (route (c), end to end, for a product `m` at `κm` per
 multiply-accumulate on the promised instances): with the edited protocol complete (`hm`, `hcom`, `hacc`) and the edit
@@ -1842,6 +1857,206 @@ theorem relativelySecure_edited120_wide (kd : K120 → Kind) (G : MatGates kd (.
     (by rw [matMachine120_κ, matMachine120_κadd, mul_one]; exact hFU)
     (by rw [matMachine120_κ]; exact mul_pos (by norm_num) (pow_pos (Nat.cast_pos.mpr hn) 3))
   rwa [matMachine120_κ, matMachine120_κadd, mul_one] at h
+
+/-! ### B_θ (RS-MODEL §6.2): Model B with shared memory's row mixed in
+
+`B_θ = (1 − θ)·B + θ·R6`, with R6 the shared-memory data path (bytes / 128 per SM per cycle), at θ = 1/5. An instruction
+carries its kind and the 4-byte words it moves through shared memory or L1; a gate reading its wires freely moves none,
+so a B circuit is a B_θ circuit at `4/5` of its B time (`Circ.liftθ`, `MatGates.liftθ`), and every B_θ adversary has a
+B shadow at most `5/4` of its B_θ time (`Circ.projθ`), which carries B's floor to `4/5` of it (`serviceFloor_θ`). -/
+
+/-- An sm_120 warp instruction for `B_θ`: its kind and the 4-byte words it moves through shared memory or L1 (a gather
+or a scatter is an `ldst`). -/
+structure Instr120 where
+  kind : K120
+  words : ℕ
+
+/-- One 4-byte word on the shared-memory row R6 alone: `W = R*/8 = 37.51` u (`R* = 300.08`, `gpu-model/rs-gather.py`). -/
+def wordPrice : ℚ := 3751 / 100
+
+/-- **RS-MODEL §6.2's `B_θ` at θ = 1/5**, `(1 − θ)·price120 + θ·R6`: MMA 3276.8 u, IMAD and DP4A 102.4, HFMA2 51.2,
+every lane or ld/st instruction 25.6, plus `θ W = 7.502` u per word through shared memory or L1. -/
+def price120θ (i : Instr120) : ℚ := 4 / 5 * price120 i.kind + 1 / 5 * wordPrice * i.words
+
+theorem price120θ_nonneg (i : Instr120) : 0 ≤ price120θ i := by
+  unfold price120θ wordPrice
+  positivity
+
+/-- `B_θ` as an additive price. -/
+def priceθ : Price Instr120 := .ofRat price120θ price120θ_nonneg
+
+/-- An instruction's semantics is its kind's (the words it moves are routing). -/
+abbrev kdθ (kd : K120 → Kind) : Instr120 → Kind := fun i => kd i.kind
+
+/-- B_θ prices a list at least `4/5` of B's price of its kinds. -/
+theorem timeB_le_priceθ (l : List Instr120) :
+    4 / 5 * (timeB price120 (progOf (l.map Instr120.kind)) : ℝ) ≤ priceθ.t l := by
+  show _ ≤ (((l.map price120θ).sum : ℚ) : ℝ)
+  rw [timeB_progOf, List.map_map, Nat.cast_list_sum, Rat.cast_list_sum, List.map_map, List.map_map,
+    ← List.sum_map_mul_left]
+  refine List.sum_le_sum fun i _ => ?_
+  simp only [Function.comp_apply, price120θ, wordPrice]
+  push_cast
+  have : (0 : ℝ) ≤ 1 / 5 * (3751 / 100) * i.words := by positivity
+  linarith
+
+/-- A B gate list read in B_θ, each gate moving no words, costs `4/5` of its B time. -/
+theorem priceθ_map_lift (l : List K120) :
+    priceθ.t (l.map fun k => (⟨k, 0⟩ : Instr120)) = 4 / 5 * (timeB price120 (progOf l) : ℝ) := by
+  show (((l.map fun k => (⟨k, 0⟩ : Instr120)).map price120θ).sum : ℝ) = _
+  have h : (l.map fun k => (⟨k, 0⟩ : Instr120)).map price120θ = l.map fun k => (4 / 5 : ℚ) * price120 k := by
+    simp [price120θ, Function.comp_def]
+  rw [h, List.sum_map_mul_left, timeB_progOf]
+  push_cast
+  simp [Function.comp_def]
+
+/-- A B circuit as a B_θ circuit: its gates read their wires freely, so they move no words. -/
+def Circ.liftθ {kd : K120 → Kind} : {I O : Type} → Circ kd I O → Circ (kdθ kd) I O
+  | _, _, .gate k => Circ.gate (kd := kdθ kd) ⟨k, 0⟩
+  | _, _, .reindex f => .reindex f
+  | _, _, .curry => .curry
+  | _, _, .uncurry => .uncurry
+  | _, _, .join => .join
+  | _, _, .ofBits => .ofBits
+  | _, _, .seq f g => .seq f.liftθ g.liftθ
+  | _, _, .pair f g => .pair f.liftθ g.liftθ
+  | _, _, .fst => .fst
+  | _, _, .snd => .snd
+
+/-- A B_θ circuit's B shadow: each instruction as its kind. -/
+def Circ.projθ {kd : K120 → Kind} : {I O : Type} → Circ (kdθ kd) I O → Circ kd I O
+  | _, _, .gate i => Circ.gate (kd := kd) i.kind
+  | _, _, .reindex f => .reindex f
+  | _, _, .curry => .curry
+  | _, _, .uncurry => .uncurry
+  | _, _, .join => .join
+  | _, _, .ofBits => .ofBits
+  | _, _, .seq f g => .seq f.projθ g.projθ
+  | _, _, .pair f g => .pair f.projθ g.projθ
+  | _, _, .fst => .fst
+  | _, _, .snd => .snd
+
+theorem Circ.eval_liftθ {kd : K120 → Kind} {I O : Type} (c : Circ kd I O) : c.liftθ.eval = c.eval := by
+  induction c with
+  | seq f g ihf ihg => funext x; simp only [Circ.liftθ, Circ.eval, ihf, ihg]
+  | pair f g ihf ihg => funext x; simp only [Circ.liftθ, Circ.eval, ihf, ihg]
+  | _ => rfl
+
+theorem Circ.gates_liftθ {kd : K120 → Kind} {I O : Type} (c : Circ kd I O) :
+    c.liftθ.gates = c.gates.map fun k => (⟨k, 0⟩ : Instr120) := by
+  induction c with
+  | seq f g ihf ihg => simp only [Circ.liftθ, Circ.gates, ihf, ihg, List.map_append]
+  | pair f g ihf ihg => simp only [Circ.liftθ, Circ.gates, ihf, ihg, List.map_append]
+  | _ => rfl
+
+theorem Circ.eval_projθ {kd : K120 → Kind} {I O : Type} (c : Circ (kdθ kd) I O) : c.projθ.eval = c.eval := by
+  induction c with
+  | seq f g ihf ihg => funext x; simp only [Circ.projθ, Circ.eval, ihf, ihg]
+  | pair f g ihf ihg => funext x; simp only [Circ.projθ, Circ.eval, ihf, ihg]
+  | _ => rfl
+
+theorem Circ.gates_projθ {kd : K120 → Kind} {I O : Type} (c : Circ (kdθ kd) I O) :
+    c.projθ.gates = c.gates.map Instr120.kind := by
+  induction c with
+  | seq f g ihf ihg => simp only [Circ.projθ, Circ.gates, ihf, ihg, List.map_append]
+  | pair f g ihf ihg => simp only [Circ.projθ, Circ.gates, ihf, ihg, List.map_append]
+  | _ => rfl
+
+/-- A B_θ algorithm's B shadow: the same function, each instruction as its kind. -/
+def Alg.projθ {kd : K120 → Kind} {I O : Type} (f : Alg (kdθ kd) I O) : Alg kd I O :=
+  ⟨(f.1.1, f.1.2.map Instr120.kind), by
+    obtain ⟨c, hc, hc'⟩ := f.2
+    exact ⟨c.projθ, by rw [Circ.eval_projθ, hc], by rw [Circ.gates_projθ, hc']⟩⟩
+
+/-- **B's floor carries to B_θ at `1 − θ = 4/5` of it**: an adversary's B shadow computes the same messages, and B_θ
+prices it at least `4/5` of its B time (`timeB_le_priceθ`). -/
+theorem serviceFloor_θ (kd : K120 → Kind) (S : Service) {F κ : ℝ}
+    (h : ServiceFloor (machine kd (.ofNat price120)) S F κ) : ServiceFloor (machine (kdθ kd) priceθ) S (4 / 5 * F) κ := by
+  intro Ω _ M hc
+  refine (prob_mono fun ω hω => ⟨hω.1, ?_⟩).trans (h Ω M.projθ hc)
+  have h1 := timeB_le_priceθ M.1.2
+  have h2 : priceθ.t M.1.2 < 4 / 5 * F := hω.2
+  change (timeB price120 (progOf (M.1.2.map Instr120.kind)) : ℝ) < F
+  linarith
+
+/-- B's matrix circuits in B_θ, at `4/5` of their prices. -/
+noncomputable def MatGates.liftθ {kd : K120 → Kind} {κ κadd : ℝ} (G : MatGates kd (.ofNat price120) κ κadd) :
+    MatGates (kdθ kd) priceθ (4 / 5 * κ) (4 / 5 * κadd) where
+  mul a b c := (G.mul a b c).liftθ
+  add a b := (G.add a b).liftθ
+  sub a b := (G.sub a b).liftθ
+  eval_mul a b c x := by rw [Circ.eval_liftθ]; exact G.eval_mul a b c x
+  eval_add a b x := by rw [Circ.eval_liftθ]; exact G.eval_add a b x
+  eval_sub a b x := by rw [Circ.eval_liftθ]; exact G.eval_sub a b x
+  time_mul_le a b c := by
+    rw [Circ.gates_liftθ, priceθ_map_lift, mul_assoc]
+    exact mul_le_mul_of_nonneg_left (G.time_mul_le a b c) (by norm_num)
+  time_add_le a b := by
+    rw [Circ.gates_liftθ, priceθ_map_lift, mul_assoc]
+    exact mul_le_mul_of_nonneg_left (G.time_add_le a b) (by norm_num)
+  time_sub_le a b := by
+    rw [Circ.gates_liftθ, priceθ_map_lift, mul_assoc]
+    exact mul_le_mul_of_nonneg_left (G.time_sub_le a b) (by norm_num)
+
+/-- B's grid circuits in B_θ, at `4/5` of their price. -/
+noncomputable def GridGates.liftθ {kd : K120 → Kind} {Gr : ℤ → Prop} {shape : ℕ → ℕ → ℕ → Prop} {κG : ℝ}
+    (I : GridGates kd (.ofNat price120) Gr shape κG) : GridGates (kdθ kd) priceθ Gr shape (4 / 5 * κG) where
+  mul a b c := (I.mul a b c).liftθ
+  eval_mul a b c x hs hx hy := by rw [Circ.eval_liftθ]; exact I.eval_mul a b c x hs hx hy
+  time_mul_le a b c hs := by
+    rw [Circ.gates_liftθ, priceθ_map_lift, mul_assoc]
+    exact mul_le_mul_of_nonneg_left (I.time_mul_le a b c hs) (by norm_num)
+
+/-- **Model B_θ on sm_120 with the operand grid typed**: B's circuits read in B_θ, the int8 tile GEMM at
+`κG = 4/5` u per multiply-accumulate (the in-model `0.8 n³`, gates reading their wires freely), sums at `κadd = 4/5`
+u per entry, and the worst case at `κ = 64/5` u. -/
+noncomputable def gridMatMachine120θ (kd : K120 → Kind) (G : MatGates kd (.ofNat price120) 16 1) (I : Int8Gates120 kd) :
+    GridMatMachine ℤ :=
+  gridMatMachine G.liftθ I.liftθ
+
+theorem gridMatMachine120θ_κG (kd : K120 → Kind) (G : MatGates kd (.ofNat price120) 16 1) (I : Int8Gates120 kd) :
+    (gridMatMachine120θ kd G I).κG = 4 / 5 := mul_one _
+
+theorem gridMatMachine120θ_κadd (kd : K120 → Kind) (G : MatGates kd (.ofNat price120) 16 1) (I : Int8Gates120 kd) :
+    (gridMatMachine120θ kd G I).κadd = 4 / 5 := mul_one _
+
+/-- **Route (c) on sm_120 in B_θ, on the int8 grid**: B's floor `n³` u (Conjecture A's `c = 1`, a named hypothesis on
+the service, `ServiceFloor`) carries to `0.8 n³` u in B_θ (`serviceFloor_θ`), and the edited protocol served by the
+int8 tile GEMM at `0.8 n³` u is relatively secure against `N = 0.8 n³` u with `ε = γ`,
+`γ = (1.6 n² + time gen + time prove) / (0.8 n³)`. -/
+theorem relativelySecure_edited120θ (kd : K120 → Kind) (G : MatGates kd (.ofNat price120) 16 1) (I : Int8Gates120 kd)
+    (S : Service) {n : ℕ} (hn : 0 < n) (h32 : 32 ∣ n) (h17 : n ≤ 2 ^ 17)
+    (E : (gridMatMachine120θ kd G I).Edit S.Seed n)
+    (prove : (gridMatMachine120θ kd G I).Alg ((S.Seed × (Mat ℤ n n × Mat ℤ n n) × S.Coins) × Mat ℤ n n)
+      (S.Com × S.Ans))
+    (use : Mat ℤ n n × Mat ℤ n n → Prop) {κf δ η : ℝ}
+    (hgrid : ∀ σ x, use x → (∀ i k, Int8 ((E.edit σ x).1 i k)) ∧ ∀ k j, Int8 ((E.edit σ x).2 k j))
+    (hcom : ∀ (σ σ' : S.Seed) (y : (Mat ℤ n n × Mat ℤ n n) × S.Coins) (C C' : Mat ℤ n n),
+      ((gridMatMachine120θ kd G I).eval prove ((σ, y), C)).1 =
+        ((gridMatMachine120θ kd G I).eval prove ((σ', y), C')).1)
+    (hacc : ∀ x : Mat ℤ n n × Mat ℤ n n, 1 - η ≤ prob fun ω : S.Seed × S.Coins =>
+      S.verify ((gridMatMachine120θ kd G I).eval prove
+          ((ω.1, x, ω.2), (gridMatMachine120θ kd G I).eval ((gridMatMachine120θ kd G I).mulG n n n)
+            (E.edit ω.1 x))).1
+        ω.1 ((gridMatMachine120θ kd G I).eval prove
+          ((ω.1, x, ω.2), (gridMatMachine120θ kd G I).eval ((gridMatMachine120θ kd G I).mulG n n n)
+            (E.edit ω.1 x))).2 = true)
+    (hfloorB : ServiceFloor (machine kd (.ofNat price120)) S ((n : ℝ) ^ 3) κf) (hκδ : κf < δ) :
+    RelativelySecure ((gridMatMachine120θ kd G I).edited S E ((gridMatMachine120θ kd G I).mulG n n n) prove use)
+      ((2 * (4 / 5) * (n : ℝ) ^ 2 + (gridMatMachine120θ kd G I).time E.gen + (gridMatMachine120θ kd G I).time prove) /
+        (4 / 5 * (n : ℝ) ^ 3)) δ
+      ((2 * (4 / 5) * (n : ℝ) ^ 2 + (gridMatMachine120θ kd G I).time E.gen + (gridMatMachine120θ kd G I).time prove) /
+        (4 / 5 * (n : ℝ) ^ 3)) η 0 (4 / 5 * (n : ℝ) ^ 3) := by
+  have hN : (0 : ℝ) < 4 / 5 * (n : ℝ) ^ 3 := mul_pos (by norm_num) (pow_pos (Nat.cast_pos.mpr hn) 3)
+  have hg := (gridMatMachine120θ kd G I).time_nonneg E.gen
+  have hp := (gridMatMachine120θ kd G I).time_nonneg prove
+  have h := (gridMatMachine120θ kd G I).relativelySecure_of_editFloor_grid S E prove use (tile120_square h32 h17)
+    hgrid hcom hacc (serviceFloor_θ kd S hfloorB) hκδ hN
+    (by rw [gridMatMachine120θ_κG, gridMatMachine120θ_κadd]; nlinarith [sq_nonneg (n : ℝ)])
+    (by rw [gridMatMachine120θ_κG]; exact hN)
+  rw [gridMatMachine120θ_κG, gridMatMachine120θ_κadd, div_sub_one hN.ne'] at h
+  convert h using 2
+  ring
 
 end ModelB
 
