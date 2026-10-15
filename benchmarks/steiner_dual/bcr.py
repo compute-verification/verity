@@ -9,10 +9,14 @@ Arcs: M -> M + u v^T for every rank-1 u v^T. Root 0, terminals the full outputs 
 Symmetry reduction (exact): G = <inner GL_k, row permutations of X, column permutations of Y, transpose if n = m>
 acts on nodes and arcs and permutes the terminals transitively. An optimal x is G-invariant and then a flow to one
 terminal t0 suffices, which may be taken Stab(t0)-invariant. Variables: x per G-orbit of arcs, f per Stab-orbit.
-Usage: bcr.py n k m [ucr]
+With K, only the nodes within detour K of a geodesic 0 -> terminal (rank M + min_t rank(C_t - M) <= rank C_t + K)
+and the steps among them: a G-invariant subgraph, so the value is an upper bound on the full one, exactly computed.
+Usage: bcr.py n k m [ucr|bcr] [K]
 """
 
 import itertools
+import json
+import os
 import sys
 import time
 
@@ -24,6 +28,7 @@ from scipy.optimize import linprog
 def main():
     n, k, m = (int(a) for a in sys.argv[1:4])
     mode = sys.argv[4] if len(sys.argv) > 4 else "bcr"
+    detour_max = int(sys.argv[5]) if len(sys.argv) > 5 else None
     R, C = n * k, k * m
     nb = R * C
     N = 1 << nb
@@ -117,11 +122,37 @@ def main():
     print(f"<{n},{k},{m}> nodes {N} rank-1 steps {ng} |G| {len(group)} |Stab| {len(stab)}", flush=True)
 
     nodes = np.arange(N, dtype=np.int64)
-    arc_v = np.repeat(nodes, ng)
-    arc_r = np.tile(np.arange(ng, dtype=np.int64), N)
-    A = N * ng
     gpos = np.full(1 << nb, -1, dtype=np.int64) if nb <= 24 else None
     gpos[gens] = np.arange(ng)
+    if detour_max is None:
+        keep_node = np.ones(N, dtype=bool)
+        arc_v = np.repeat(nodes, ng)
+        arc_r = np.tile(np.arange(ng, dtype=np.int64), N)
+        aid = None
+    else:
+        # nodes within detour K of a geodesic 0 -> terminal; G-invariant, so the reduction stays exact for the subgraph
+        def rank_all(masks):
+            rk = np.zeros(len(masks), dtype=np.int64)
+            rows = [(masks >> (row * C)) & ((1 << C) - 1) for row in range(R)]
+            basis = []
+            for r_ in rows:
+                x = r_.copy()
+                for b_ in basis:
+                    x = np.minimum(x, x ^ b_)
+                rk += x != 0
+                basis.append(x)
+            return rk
+        rk = rank_all(nodes)
+        trank = int(rank_all(np.array([terms[0]]))[0])
+        detour = rk + np.min(np.stack([rank_all(nodes ^ t) for t in terms]), axis=0) - trank
+        keep_node = detour <= detour_max
+        kv = np.flatnonzero(keep_node)
+        arc_v = np.repeat(kv, ng)
+        arc_r = np.tile(np.arange(ng, dtype=np.int64), len(kv))
+        ok = keep_node[arc_v ^ gens[arc_r]]
+        arc_v, arc_r = arc_v[ok], arc_r[ok]
+        aid = arc_v * ng + arc_r
+    A = len(arc_v)
 
     def arc_orbits(elems):
         rep = np.arange(A, dtype=np.int64)
@@ -129,6 +160,8 @@ def main():
             gv = apply(g, nodes)
             gr = gpos[apply(g, gens)]
             img = gv[arc_v] * ng + gr[arc_r]
+            if aid is not None:
+                img = np.searchsorted(aid, img)
             np.minimum(rep, img, out=rep)
         return rep
 
@@ -138,9 +171,12 @@ def main():
             np.minimum(rep, apply(g, nodes), out=rep)
         return rep
 
+    def pos(ids):
+        return ids if aid is None else np.searchsorted(aid, ids)
+
     repG = arc_orbits(group)
     if mode == "ucr":
-        rev = (arc_v ^ gens[arc_r]) * ng + arc_r
+        rev = pos((arc_v ^ gens[arc_r]) * ng + arc_r)
         # merge the orbit of a with the orbit of reverse(a): label = min of the two orbit reps
         repG = np.minimum(repG, repG[rev])
         # the merged relation is an equivalence: a and rev(a) share a class, orbits are closed under rev up to G
@@ -154,14 +190,16 @@ def main():
     print(f"arcs {A}  G-classes {nO}  Stab-orbits {nS}  ({time.time() - t0:.1f}s)", flush=True)
 
     nrep = node_orbits(stab)
-    reps = np.unique(nrep)
+    reps = np.unique(nrep[keep_node])
     rowid = np.full(N, -1, dtype=np.int64)
     rowid[reps] = np.arange(len(reps))
     # conservation at each representative node v: sum_in f - sum_out f = [v = t0] - [v = 0]
     rr = np.repeat(reps, ng)
     gg = np.tile(np.arange(ng, dtype=np.int64), len(reps))
-    out_arc = rr * ng + gg
-    in_arc = (rr ^ gens[gg]) * ng + gg
+    ex = keep_node[rr ^ gens[gg]]
+    rr, gg = rr[ex], gg[ex]
+    out_arc = pos(rr * ng + gg)
+    in_arc = pos((rr ^ gens[gg]) * ng + gg)
     rows = np.concatenate([rowid[rr], rowid[rr]])
     cols = np.concatenate([Scls[in_arc], Scls[out_arc]])
     vals = np.concatenate([np.ones(len(rr)), -np.ones(len(rr))])
@@ -186,6 +224,16 @@ def main():
     uv, cnt = np.unique(vals_used, return_counts=True)
     print("x values on used classes (value: number of classes):",
           dict(zip(uv.tolist(), cnt.tolist())), " arcs used:", int(Osize[used].sum()))
+    dump = os.environ.get("BCR_SUPPORT")
+    if dump:
+        xa = x[Ocls]
+        sel = xa > 1e-9
+        tails, heads = arc_v[sel], arc_v[sel] ^ gens[arc_r[sel]]
+        with open(dump, "w") as fh:
+            json.dump({"instance": [n, k, m], "mode": mode, "detour_max": detour_max, "value": res.fun,
+                       "terminals": [int(t) for t in terms],
+                       "arcs": [[int(a), int(b), float(v)] for a, b, v in zip(tails, heads, xa[sel])]}, fh)
+        print("support written to", dump)
 
 
 if __name__ == "__main__":
