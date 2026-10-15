@@ -15,7 +15,12 @@ export SNAP=/workspace/hf/hub/models--unsloth--Llama-3.1-8B/snapshots/3f0d51f8e5
 export IDS=/workspace/pouw/fp8-security/llama8b-w0/ids.npy
 if [ -n "${D4_WINDOWS:-}" ]; then
   WT=/workspace/hf/datasets/Salesforce___wikitext/wikitext-2-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3/wikitext-test.arrow
-  "$PY" benchmarks/fp8_instantiation/windows.py "$SNAP" "$WT" "$IDS" "$D4_WINDOWS" "$O/windows.npy" > "$O/windows.json" || exit 4
+  PA=$(mktemp -d)
+  trap 'rm -rf "$PA"' EXIT
+  "$PY" -c "import pyarrow" 2>/dev/null || "$PY" -m pip install -q --target "$PA" pyarrow > "$O/pip.txt" 2>&1 \
+    || uv pip install --python "$PY" --target "$PA" pyarrow >> "$O/pip.txt" 2>&1 || exit 4
+  PYTHONPATH=$PA "$PY" benchmarks/fp8_instantiation/windows.py "$SNAP" "$WT" "$IDS" "$D4_WINDOWS" "$O/windows.npy" \
+    > "$O/windows.json" 2>> "$O/pip.txt" || exit 4
   export IDS=$O/windows.npy
 fi
 export METHODS=${Q1_METHODS:-bf16 int8 e4m3i16 e4m3ik e2m1i fp8_tensor fp8_token fp8_block nvfp4 e4m3i16_rot e4m3ik_rot e2m1i_rot e4m3i448 e2m1i_rot_wclip int8_rot}
