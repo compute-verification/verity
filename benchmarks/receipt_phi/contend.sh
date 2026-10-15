@@ -29,6 +29,7 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-30}" -- bash -c '
     "$B/contend" sweep "$ITERS" "$REPS" $g > "$O/sweep-$pass.jsonl" 2>> "$O/errors.txt" \
       || echo "sweep $pass rc $?" >> "$O/errors.txt"
   done
+  "$B/contend" split "$ITERS" "$REPS" > "$O/split.jsonl" 2>> "$O/errors.txt" || echo "split rc $?" >> "$O/errors.txt"
   nvidia-smi --query-gpu=clocks.sm,power.draw --format=csv,noheader -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1
   M0=smsp__inst_executed.sum,sm__inst_executed_pipe_alu.sum,sm__inst_executed_pipe_fma.sum,sm__inst_executed_pipe_fmaheavy.sum,sm__inst_executed_pipe_fmalite.sum,sm__inst_executed_pipe_tensor.sum,sm__inst_executed_pipe_uniform.sum,smsp__issue_active.avg.pct_of_peak_sustained_active,sm__pipe_alu_cycles_active.avg.pct_of_peak_sustained_active,sm__pipe_fma_cycles_active.avg.pct_of_peak_sustained_active,sm__pipe_fmaheavy_cycles_active.avg.pct_of_peak_sustained_active,sm__pipe_fmalite_cycles_active.avg.pct_of_peak_sustained_active,sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_active,sm__cycles_elapsed.avg
   M=$M0,smsp__inst_issued.sum,sm__inst_executed_pipe_lsu.sum
@@ -41,7 +42,7 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-30}" -- bash -c '
   }
   for t in 0 1; do
     for w in 1 2 4 8; do prof "$O/ncu-$t-none-0-$w.csv" $t -1 0 $w $((2048 / w)) 1; done
-    for c in $(seq 0 9); do
+    for c in $(seq 0 15); do
       for f in 16 64; do prof "$O/ncu-$t-$c-$f-2.csv" $t $c $f 2 1024 1; done
     done
   done'
