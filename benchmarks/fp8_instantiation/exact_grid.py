@@ -306,7 +306,7 @@ def table(results: list[dict]) -> str:
         m = r["method"]
         base = m.split("_rot")[0].split("_wclip")[0]
         w = r.get("worst_linear")
-        if r.get("guaranteed_all") is None:
+        if r.get("max_bound_over_acc") is None:
             ex = "n/a" if m == "bf16" else "no"
         else:
             ex = f"{'yes' if r['guaranteed_all'] else 'no'}; {r['max_bound_over_acc']:.3f}"
