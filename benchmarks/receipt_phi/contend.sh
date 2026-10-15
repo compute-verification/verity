@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# contend.cu on one GPU (cwd = the source tree): the exact SASS counts of every kernel's timed loop, then the sweep
-# (FP8 and INT8 × 10 filler classes × F = 0..256 per 16 MMAs × W = 1, 2, 4, 8 warps per scheduler) twice on one SM and
-# once on every SM, and ncu's issue, pipe and warp-state counts for the F = 0 loops and every class at F = 16 and 64.
-# Results in $OUT.
+# contend.cu on one GPU (cwd = the source tree): the exact SASS counts of every kernel's timed loops, then the sweep
+# (FP8 and INT8 × 16 filler classes × F = 0..256 per 16 MMAs × W = 1, 2, 4, 8 warps per scheduler) twice on one SM and
+# once on every SM, the split sweep (fillers in their own warps) on one SM, and ncu's issue, pipe and warp-state counts
+# for the F = 0 loops and every class at F = 16 and 64. Results in $OUT.
 #
 #   research run --on vy-nebius-2 --project verity --campaign pouw --source . --cwd clone \
 #     --env GPU_LEASE_WHO=... --send benchmarks/receipt_phi/contend.sh \
