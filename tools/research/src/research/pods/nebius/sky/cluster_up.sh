@@ -253,27 +253,10 @@ run sudo systemctl daemon-reload
 run sudo systemctl enable --now vy-disk-guard.timer
 # the store eviction: hourly, as ubuntu (the job store's owner), drop only local copies the remote store holds until 2500 GB are free
 run sudo install -m 755 "$SRC/store_evict.sh" /usr/local/bin/vy-store-evict
-if [ ! -f /etc/systemd/system/vy-store-evict.timer ]; then
-  if [ "$mode" = --apply ]; then
-    printf '[Unit]\nDescription=store eviction: drop local copies the remote store holds\n\n[Service]\nType=oneshot\nUser=ubuntu\nNice=19\nIOSchedulingClass=idle\nExecStart=/usr/local/bin/vy-store-evict\n' \
-      | sudo tee /etc/systemd/system/vy-store-evict.service > /dev/null
-    printf '[Unit]\nDescription=store eviction every hour\n\n[Timer]\nOnBootSec=10min\nOnUnitActiveSec=1h\n\n[Install]\nWantedBy=timers.target\n' \
-      | sudo tee /etc/systemd/system/vy-store-evict.timer > /dev/null
-  else
-    echo "   would write vy-store-evict.service and vy-store-evict.timer (every hour, as ubuntu)"
-  fi
-fi
 # and the same for research's own store and check runs (/workspace/research/{store,runs}), as research, their owner
-if [ ! -f /etc/systemd/system/vy-store-evict-research.timer ]; then
-  if [ "$mode" = --apply ]; then
-    printf '[Unit]\nDescription=store eviction: drop local copies of research runs the remote store holds\n\n[Service]\nType=oneshot\nUser=research\nNice=19\nIOSchedulingClass=idle\nEnvironment=VY_EVICT_STORE=/workspace/research/store VY_EVICT_RUNS=/workspace/research/runs\nExecStart=/usr/local/bin/vy-store-evict\n' \
-      | sudo tee /etc/systemd/system/vy-store-evict-research.service > /dev/null
-    printf '[Unit]\nDescription=research store eviction every hour\n\n[Timer]\nOnBootSec=15min\nOnUnitActiveSec=1h\n\n[Install]\nWantedBy=timers.target\n' \
-      | sudo tee /etc/systemd/system/vy-store-evict-research.timer > /dev/null
-  else
-    echo "   would write vy-store-evict-research.service and vy-store-evict-research.timer (every hour, as research)"
-  fi
-fi
+for u in store_evict.service store_evict.timer store_evict_research.service store_evict_research.timer; do
+  run sudo install -m 644 "$SRC/$u" "/etc/systemd/system/vy-$(printf %s "$u" | sed 's/_/-/g')"
+done
 # research's pass also deletes the unused source trees of /workspace/research/src that are on origin (the file says how)
 run sudo install -D -m 644 "$SRC/store_evict_src.conf" /etc/systemd/system/vy-store-evict-research.service.d/src.conf
 run sudo systemctl daemon-reload

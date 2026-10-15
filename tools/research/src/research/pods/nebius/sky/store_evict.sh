@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# vy-store-evict (vy-nebius-1, hourly as ubuntu, vy-store-evict.timer from cluster_up.sh): free /workspace by evicting only local
+# vy-store-evict (vy-nebius-1 and -2, hourly as ubuntu, vy-store-evict.timer: store_evict.{service,timer}): free /workspace by evicting only local
 # copies the remote store holds. `research data evict --runs` drops blobs of $VY_EVICT_STORE (/workspace/jobs/store, the job
 # pods' store, owned by ubuntu) whose artifacts are PRESERVED on the remote, and the preserved big files of finished run dirs
 # under $VY_EVICT_RUNS (/workspace/jobs/runs), oldest first, until $VY_EVICT_FREE_GB (2500, keeping the disk near 54% or under)
@@ -7,8 +7,8 @@
 # output that isn't the tool's JSON is. One line per run goes to the journal (journalctl -u vy-store-evict).
 # With $VY_EVICT_SRC (research's unit, store_evict_src.conf: /workspace/research/src) it also deletes the `research run` source
 # trees there recoverable on the node (a ref of $VY_EVICT_ORIGIN, default <root>/git/verity.git) that nothing uses, every hour whatever the mark
-# (`--src-dir`, store/evict.py `evict_src`); the line says how many went and why the rest stayed. vy-nebius-cpu-1 runs only
-# research's unit, every 30 minutes (store_evict_research.{service,timer}).
+# (`--src-dir`, store/evict.py `evict_src`); the line says how many went and why the rest stayed. Research's unit runs on
+# every node every 30 minutes (store_evict_research.{service,timer}); vy-nebius-cpu-1 runs only that one.
 # A tool too old for --src-dir still evicts the rest, and the line says so. Python runs from / so nothing in a writable cwd imports.
 # The node's runs have no private remote, so a fixture whose blob is gone fails its suite whenever the public export lacks it
 # (rec-coins, 11 Oct). Every artifact in `fixtures/artifacts.json` at the $VY_EVICT_KEEP_REFS newest `refs/research/src/*` commits
@@ -104,6 +104,13 @@ if c is not None:
     gone, kept = c.get("deleted") or [], c.get("kept") or []
     line += "; src trees: deleted %d (%.1f GB, %d inodes), kept %d (%s)" % (len(gone), c.get("deleted_bytes", 0) / 1e9, c.get("deleted_inodes", 0),
         len(kept), " ".join("%s:%d" % kv for kv in sorted((c.get("kept_by") or {}).items())) or "none")
+    procs = {}
+    for k in kept:
+        for w in k.get("why") or []:
+            if w.startswith("2: process "):
+                procs.setdefault(w[len("2: process "):].split(" uses ")[0], set()).add(k.get("tree"))
+    if procs:
+        line += "; trees a process names: " + ", ".join("%s %d" % (p, len(t)) for p, t in sorted(procs.items(), key=lambda x: -len(x[1]))[:3])
     if c.get("error"):
         line += ", nothing more deleted: " + c["error"]
 print(line)
