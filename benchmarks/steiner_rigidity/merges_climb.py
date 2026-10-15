@@ -6,7 +6,8 @@ sum_t (L - min_{w in V, w != 0} rank(D_t - w))_+, and writes the largest total a
 `climb_<p>_<R>x<C>_L<L>_d<D>[_open].json` in DIR (default $OUT). With --open (d = 2) the objective also charges every direction where the word has full row rank, which steers the climb into generic rank
 below R*L (half the restarts start from S K T for a Kronecker canonical pencil K with a left minimal index, already
 there): for R = 2 that is the case merges_check.py part 14 leaves open. Each restart also records the best total
-among states with generic rank < R*L, and among those with four or more winning directions.
+among states with generic rank < R*L, and among those that also have four or more winning directions and a D-column
+with two helped cells (the open case).
 """
 
 import itertools
@@ -77,7 +78,8 @@ class Scorer:
         mn = rk.min(axis=0)
         total = int(np.maximum(0, self.L - mn).sum())
         win = {int(self.dir_of[np.argmin(rk[:, t])]) for t in range(len(Ds)) if mn[t] < self.L}
-        return total, mn, win
+        cols = [j for (i, j), m in zip(self.cells, mn) if m < self.L]
+        return total, mn, win, len(cols) > len(set(cols))
 
     def full_directions(self, Zs):
         """Number of directions of the span where the word has full row rank."""
@@ -135,7 +137,7 @@ def climb(sc, rng, steps, open_mode, R, C):
     """One restart of annealing. Moves change one entry of a word, add to one or all diagonal entries of a cell, add a
     rank-1 matrix, or redraw the word. With open_mode the objective charges each direction of the pencil where Z_lam
     has full row rank, which steers the climb into generic rank below R*L and keeps it there, and pays for up to
-    four winning directions, which steers it into the open case."""
+    four winning directions and for a D-column with two helped cells (else part 8 applies): the open case."""
     p, L, d = sc.p, sc.L, sc.d
     nr, nc = R * L, C * L
     if open_mode and rng.random() < 0.5:
@@ -147,10 +149,10 @@ def climb(sc, rng, steps, open_mode, R, C):
         Zs = seed(sc, rng, nr, nc)
 
     def value(Z):
-        total, mn, win = sc(Z)
+        total, mn, win, shared = sc(Z)
         nfull = sc.full_directions(Z) if open_mode else 0
-        bonus = 1500 * min(len(win), 4) if open_mode else 0
-        return 1000 * total - int(mn.sum()) - 2000 * nfull + bonus, total, win
+        bonus = 1500 * (min(len(win), 4) + shared) if open_mode else 0
+        return 1000 * total - int(mn.sum()) - 2000 * nfull + bonus, total, (win, shared)
 
     obj, total, win = value(Zs)
     best, best_low, best_open, best_Z = total, -1, -1, Zs.copy()
@@ -174,9 +176,10 @@ def climb(sc, rng, steps, open_mode, R, C):
             Zs, obj, total, win = Z2, o2, t2, w2
             if total > best:
                 best, best_Z = total, Zs.copy()
-            if d == 2 and total > min(best_low, best_open if len(win) >= 4 else total) and sc.generic_rank(Zs) < nr:
+            is_open = len(win[0]) >= 4 and win[1]
+            if d == 2 and total > min(best_low, best_open if is_open else total) and sc.generic_rank(Zs) < nr:
                 best_low = max(best_low, total)
-                if len(win) >= 4:
+                if is_open:
                     best_open = max(best_open, total)
     return best, best_low, best_open, best_Z
 
@@ -204,7 +207,7 @@ def main():
                 _, bp = pencil_profile(Shape(R, C, L, L), Z[0], Z[1], p)
                 assert sum(s for s, _ in bp.values()) == best, "climb total disagrees with merges_check ranks"
             examples.append({"total": best, "words": Z.tolist()})
-        print(f"  restart {n}: best {best}, rank < RL {best_low}, and 4+ directions {best_open}, top {top}, "
+        print(f"  restart {n}: best {best}, rank < RL {best_low}, open case {best_open}, top {top}, "
               f"{time.time() - t0:.0f} s", flush=True)
     res = {"p": p, "grid": [R, C], "L": L, "d": d, "open": open_mode, "restarts": restarts, "steps": steps,
            "histogram": {str(k): v for k, v in sorted(hist.items())},
