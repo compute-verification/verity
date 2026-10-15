@@ -103,6 +103,18 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "On the capture's GPU, MUFU ex2 / rcp are core's tables on every input, and vLLM's fused sigmoid noaux_tc router "
              "(_moe_C.grouped_topk, 256 experts, top-8, renormalized, x2.5) returns through its block and its warp kernel exactly the "
              "ids and weights of MoeRouterSigmoidBias_v1 for that kernel on every captured row and every logit whose sigmoid reads MUFU."),
+    Property("dsv4_flashmla_capture", "verity-vllm/dsv4-flashmla-capture/v1",
+             "On the capture's Hopper GPU, vLLM selects the FlashMLA sparse decode and prefill it vendors from FlashMLA 6bc49418 "
+             "and the CuTe K-cache gather for the DSV4 row's MLA, its planner's metadata is get_mla_metadata_kernel's, and at the "
+             "row's TP8 statics (16 heads padded to 64, the 128-token window, compress-ratio 4 and 128 rows, the sink) every "
+             "output word of every decode launch equals FlashMlaDecode_v1 at the token's SPLITS, every gathered workspace row "
+             "FlashMlaGatherRow_v1, and every output word of every prefill launch FlashMlaPrefill_v1 at the token's NP, bit for bit."),
+    Property("dsv4_qnorm_insert_capture", "verity-vllm/dsv4-qnorm-insert-capture/v1",
+             "On the capture's cc 9.0 GPU (132 SMs), vLLM d9105ea80 selects the fp8_ds_mla SWA cache for the hidden-7168 row's "
+             "attention, and at its TP8 statics (16 query heads of 512 padded to 64, the 64-token page, 64 indexer heads of 128) "
+             "every word of the q that the fused q-norm/RoPE/KV-quant insert op returns and every byte it writes to the cache (and "
+             "none other) equal Dsv4QNormRopeKvInsert_v1, each written row is the input FlashMlaKvRow_v1 dequantises, and every "
+             "byte of q_fp8 and word of weights_out the CuTe IndexerQFp8Kernel returns equal Dsv4IndexerQ_v1, bit for bit."),
     Property("dsv4_moe_capture", "verity-vllm/dsv4-moe-capture/v1",
              "On the capture's GPU, MUFU lg2 is MufuLg2Mantissa_v1 on every 1.m, MUFU ex2 / rcp / sqrt are core's tables, and "
              "the Triton router dsv4_topk (384 experts, top-6, renormalized, x2.5), the hash router "
