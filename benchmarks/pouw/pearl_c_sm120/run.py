@@ -274,6 +274,8 @@ NB = 64
 RS_MAX_SEGS = 128
 #: hash_fast.cuh's blocks: the segment kernels' (RS_FAST_NT, as built) and s512_folds' (RS_FOLD_NT)
 RS_FAST_NT, RS_FOLD_NT = int(os.environ.get("PEARLC_RS_FAST_NT", "128")), 32
+#: their scratch, the segment digests of A's rows, B's and the tiles'
+SEGDIG = ("segdig_a", "segdig_b", "segdig_t")
 #: the hm96 salt nonces (`audit.HM96_WEIGHTS`, `audit.HM96_TRANSCRIPT`; an activation tree's is its unit index) and the widest
 #: level s512_tree_small (64 threads) takes
 HM96_WEIGHTS, HM96_TRANSCRIPT, S512_SMALL = 1 << 62, 1 << 63, 128
@@ -325,7 +327,8 @@ class Pipeline:
     (s512_tile_leaves, `pearl_c.leaf`) in an HM96 tree under the transcript's nonce.  `sha` (default PEARLC_SHA, else
     "fast") picks how the row digests and tile leaves run: "fast", hash_fast.cuh's two launches each (a thread a segment over
     every row or tile, then a thread a row or tile for the fold; scratch `segdig_<tree>`), or "ref", s512_rows (a CTA a row)
-    and s512_tile_leaves (a CTA a tile).  Both write the same bytes.
+    and s512_tile_leaves (a CTA a tile).  Both write the same bytes.  A caller that owns the buffers gets the fast kernels
+    for the trees whose `segdig_<tree>` it gives (`sizes` has them) and the reference kernels for the rest.
 
     `keys` are device pointers: `line_b` (E_B's and the F lines' key), the 64-byte domain ids `dom_a`, `dom_b`, `dom_t`,
     `unit` (the unit's 104 bytes that s512_seeds reads: salt ‖ root_B's 64 bytes ‖ u64 index), `salt_key` (the prover's hm96
@@ -362,13 +365,7 @@ class Pipeline:
         self.allocated: list[str] = []
         self.b["xa"], self.b["xb"] = xa, xb
         self.size["xa"], self.size["xb"] = m * self.row_bytes, n * self.row_bytes
-        segs = k // 256
-        for name, size in (("segdig_a", 64 * segs * self.m_real), ("segdig_b", 64 * segs * n), ("segdig_t", 64 * 32 * self.tiles)):
-            self.size[name] = size
-            if name not in self.b:
-                self.b[name] = dev.alloc(size)
-                self.allocated.append(name)
-        if not getattr(dev, "rs_heads", False):
+        if self.sha == "fast" and any(x in self.b for x in SEGDIG) and not getattr(dev, "rs_heads", False):
             dev.launch("s512_heads", cdiv(RS_MAX_SEGS * (RS_MAX_SEGS + 1) // 2 + RS_MAX_SEGS + 1, 128), 128)
             dev.sync()
             dev.rs_heads = True
@@ -406,6 +403,7 @@ class Pipeline:
             **{f"tree_{t}": NB * (2 * pow2(count) - 1) for t, count in (("a", m_real), ("b", n), ("t", tiles))},
             "qa": m * k, "qb": n * k, "sa": 4 * m, "sb": 4 * n, "y_plain": m * n * 2, "y_fast": m * n * 2,
             "qa_s5": m * k, "qb_s5": n * k, "y_adopt": m * n * 2, "diff": 8,
+            "segdig_a": 64 * (k // 256) * m_real, "segdig_b": 64 * (k // 256) * n, "segdig_t": 64 * 32 * tiles,
         }
 
     def root(self, tag: str) -> int:
@@ -438,24 +436,25 @@ class Pipeline:
         d, b = self.dev, self.b
         nonce = (0, 0) if tag == "a" else nonce_args(HM96_WEIGHTS + self.weight)
         block = self.keys["unit"] + 96 if tag == "a" else 0
-        return [(f"rowdig_{tag}", lambda: self.row_digests(b[x], b[f"rowdig_{tag}"], b[f"segdig_{tag}"], count)),
+        return [(f"rowdig_{tag}", lambda: self.row_digests(b[x], b[f"rowdig_{tag}"], b.get(f"segdig_{tag}", 0), count)),
                 (f"hash_rows_{tag}", lambda: Pipeline.hm_level0(self, tag, b[f"rowdig_{tag}"], count, dom, block, nonce)),
                 (f"tree_{tag}", lambda: self.levels(tag, count, dom))]
 
     def row_digests(self, x: int, out: int, scratch: int, count: int) -> None:
-        """The sha512/row-seg/v1 digests of `count` FP32 rows at x into out: s512_rows, or s512_row_segs then s512_folds."""
+        """The sha512/row-seg/v1 digests of `count` FP32 rows at x into out: s512_rows, or with a scratch buffer
+        s512_row_segs then s512_folds."""
         d, segs = self.dev, self.k // 256
-        if self.sha == "ref":
+        if self.sha == "ref" or not scratch:
             d.launch("s512_rows", count, 128, p=(x, out), i=(count, self.k))
             return
         d.launch("s512_row_segs", cdiv(count * segs, RS_FAST_NT), RS_FAST_NT, p=(x, scratch), i=(count, self.k))
         d.launch("s512_folds", cdiv(count, RS_FOLD_NT), RS_FOLD_NT, p=(scratch, out), i=(count, segs, count, segs))
 
     def tile_leaves(self) -> None:
-        """The tile leaves over C~ and U into `leaves`: s512_tile_leaves, or s512_tile_segs then s512_folds (the full row
-        blocks' tiles at 32 segments, the last block's at its rows / 2)."""
+        """The tile leaves over C~ and U into `leaves`: s512_tile_leaves, or with `segdig_t` s512_tile_segs then s512_folds
+        (the full row blocks' tiles at 32 segments, the last block's at its rows / 2)."""
         d, b, mr, n = self.dev, self.b, self.m_real, self.n
-        if self.sha == "ref":
+        if self.sha == "ref" or not b.get("segdig_t"):
             d.launch("s512_tile_leaves", self.tiles, 32, p=(b["c"], b["u"], b["leaves"]), i=(mr, n))
             return
         full, last = mr // TILE * (n // TILE), mr % TILE // 2
