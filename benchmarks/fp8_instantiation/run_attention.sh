@@ -88,7 +88,7 @@ long_seeds_plan() {
   new="int8-prow2-qk=u4-v=u2-p=u16-rot $(wide_plan)"
   m="bf16"
   for s in ${SEEDS:-s1 s2}; do for x in $old; do m+=" $x-$s"; done; done
-  for s in s0 ${SEEDS:-s1 s2}; do for x in $new; do m+=" $x-$s"; done; done
+  for s in ${NEW_SEEDS:-s0 ${SEEDS:-s1 s2}}; do for x in $new; do m+=" $x-$s"; done; done
   echo "$m"
 }
 case "${D4A_PLAN:-}" in
