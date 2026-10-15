@@ -1,15 +1,21 @@
 #!/usr/bin/env bash
-# Remote bandwidth sessions on one GPU (cwd = the source tree): the verifier's process on cores of its own, the prover's
-# on the GPU, over TCP. Everything runs under one gpu-lease 1 --wait: build session.cu and kv.cu (p1024, masked), start
-# the verifier, then the prover, which gates its device against the driver before anything is timed. Results go to
-# $RESEARCH_RUN_DIR/out (verifier.json, prover.json and their logs).
+# Remote bandwidth sessions (cwd = the source tree): the verifier's process on cores of its own, the prover's on GPUS
+# GPUs (default 1) whose HBM holds one store, a contiguous shard each, over TCP. Everything runs under one
+# gpu-lease $GPUS --wait (with TIMED=1, --timed: the fill queue pauses, for a whole-node session): build session.cu and
+# kv.cu (p1024, masked), start the verifier, then the prover, which gates its devices against the driver before
+# anything is timed. Results go to $RESEARCH_RUN_DIR/out (verifier.json, prover.json and their logs).
 #
 #   research run --on vy-nebius-2 --project verity --source . --cwd source --mem-gb 96 \
 #     --campaign resource-accounting --declared-output 'out/*' --env GPU_LEASE_WHO=ra-first-session \
 #     --env PLAN=honest --env GIB=16 -- taskset -c 48-95 bash benchmarks/remote_session/run.sh
 #
-# PLAN is the prover's sessions (honest, skip:F; comma-separated, one session each); GIB the store; WINDOWS, WINDOW_MS,
-# SAMPLES, JITTER_MS the sessions'; VERIFIER_CPUS and PROVER_CPUS the cores each process is pinned to.
+# PLAN is the prover's sessions (honest, skip:F; comma-separated, one session each); GIB the store across every GPU
+# (whole 1 GiB chunks); WINDOWS, WINDOW_MS, SAMPLES, JITTER_MS the sessions'; VERIFIER_CPUS and PROVER_CPUS the cores
+# each process is pinned to; MAXMIN the lease's minutes.
+#
+# The whole node's HBM (752 GB, 700 GiB on eight GPUs; its pass handles go to host memory, so --mem-gb 400):
+#
+#   research run --on vy-nebius-2 ... --mem-gb 400 --env GPUS=8 --env TIMED=1 --env GIB=700 --env ROLE=prover ...
 #
 # On two machines, two runs with the same PORT and SESSIONS: ROLE=verifier on the verifier's machine (no GPU), which
 # opens `ssh -R PORT` to PEER (the prover's machine, a name in /etc/vy/peers) and listens behind it, so the prover's
@@ -52,7 +58,7 @@ if [ "$ROLE" = verifier ]; then
   exit $W
 fi
 export VERIFY_ARGS="${VERIFY[*]}"
-LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-30}" --)
+LEASE=(gpu-lease "${GPUS:-1}" --wait ${GPU:+--on "$GPU"} ${TIMED:+--timed} --max-min "${MAXMIN:-30}" --)
 [ -n "${GPU_LEASE_UUID:-}" ] && LEASE=()
 # shellcheck disable=SC2016
 "${LEASE[@]}" bash -c '
