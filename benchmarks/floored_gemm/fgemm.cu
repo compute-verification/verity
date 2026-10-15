@@ -16,7 +16,7 @@
 // (mi, ni) order, at key position t = mi NI + ni. The key schedule (16 positions) is a cost stand-in for the reviewed one.
 //
 // Kernels: form (A~ or B~ and the tail rows P_A = [E_A | V_hi | E_A | V_lo], P_B = [W_hi | E_B | W_lo | E_B], one warp a row),
-// and the GEMM (a TMA producer warpgroup and 8 consumer warps, mainloop_sm120.cuh's schedule with s32 accumulators).
+// and the GEMM (a TMA producer warp and 8 consumer warps, mainloop_sm120.cuh's schedule with s32 accumulators).
 // cuBLASLt's int8 GEMM (s32 out) is the baseline. Modes:
 //   fgemm gate DIR M N K GRID SEED P|D  every arm on one small shape at tile config P or D, inputs and outputs to DIR for ref.py
 //   fgemm bench REPS SHAPE...           interleaved timing, one JSON line a shape (SHAPE = name:m:n:k)
@@ -104,8 +104,6 @@ DEV void tma_load(uint32_t dst, const void* map, uint32_t bar, int c0, int c1) {
                "l"(map), "r"(bar), "r"(c0), "r"(c1)
                : "memory");
 }
-template <int R> DEV void regs_dec() { asm volatile("setmaxnreg.dec.sync.aligned.u32 %0;" ::"n"(R)); }
-template <int R> DEV void regs_inc() { asm volatile("setmaxnreg.inc.sync.aligned.u32 %0;" ::"n"(R)); }
 DEV void ldsm4(uint32_t* r, uint32_t addr) {
   asm volatile("ldmatrix.sync.aligned.m8n8.x4.shared.b16 {%0, %1, %2, %3}, [%4];"
                : "=r"(r[0]), "=r"(r[1]), "=r"(r[2]), "=r"(r[3])
@@ -141,13 +139,13 @@ struct Args {
 };
 
 // TM x BN tile, 8 consumer warps of WM x 32 (MI = WM / 16 row blocks of 16, NI = 4 column blocks of 8), one producer
-// warpgroup whose first lane issues every TMA; STAGES stages of 128 bytes of depth (4 atoms); TAIL: the peel rows' stage.
-template <int TM, int BN, int WM, int STAGES, int RP = 40> struct ML {
+// warp whose first lane issues every TMA; STAGES stages of 128 bytes of depth (4 atoms); TAIL: the peel rows' stage.
+template <int TM, int BN, int WM, int STAGES> struct ML {
   static constexpr int BK = 128, WN = 32, WARPS_M = TM / WM, WARPS_N = BN / WN, NCW = WARPS_M * WARPS_N, NCT = NCW * 32,
                        MI = WM / 16, NI = WN / 8;
   static_assert(NCW == 8, "8 consumer warps");
-  static constexpr int NT = NCT + 128, REGS_P = RP, REGS_LAUNCH = 65536 / NT / 8 * 8,
-                       REGS_FIT = (NT * REGS_LAUNCH - 128 * REGS_P) / NCT / 8 * 8, REGS_C = REGS_FIT < 256 ? REGS_FIT : 256;
+  // one producer warp: 288 threads leave ptxas 224 registers a thread (setmaxnreg doesn't lift ptxas's launch cap)
+  static constexpr int NT = NCT + 32;
   static constexpr uint32_t A_BYTES = TM * BK, STAGE = (TM + BN) * BK;
   static constexpr int SMEM = STAGES * STAGE + 16 * STAGES + 1024;
   static_assert(STAGE % 1024 == 0 && A_BYTES % 1024 == 0, "boxes 1,024-byte aligned for SWIZZLE_128B");
@@ -317,11 +315,9 @@ template <int TM, int BN, int WM, int STAGES, bool TAIL, int RS, int KIND> DEV v
   ml.init(threadIdx.x);
   const int warp = threadIdx.x / 32, lane = threadIdx.x % 32;
   if (warp >= L::NCW) {
-    regs_dec<L::REGS_P>();
-    if (warp == L::NCW && lane == 0) ml.template produce<TAIL>(a.maps, a.M, a.N, a.K, a.group);
+    if (lane == 0) ml.template produce<TAIL>(a.maps, a.M, a.N, a.K, a.group);
     asm volatile("exit;");
   }
-  regs_inc<L::REGS_C>();
   ml.consumer_init(warp, lane);
   const int tiles_m = a.M / TM, tiles_n = a.N / BN;
   const int wm = warp / L::WARPS_N, wn = warp % L::WARPS_N, g = lane >> 2, q = lane & 3, ctid = threadIdx.x;
@@ -358,7 +354,7 @@ template <int TM, int BN, int WM, int STAGES, bool TAIL, int RS, int KIND> DEV v
 // ---------------------------------------------------------------- the kernels
 // configurations: P (prefill) 128 x 128 tiles, warps 64 x 32, 3 stages; D (decode) 128 x 32, warps 16 x 32, 4 stages
 #define GEMM(NAME, TM, BN, WM, ST, TAIL, RS, KIND)                                                               \
-  __global__ void __launch_bounds__(384, 1) NAME(const Args a) { gemm_body<TM, BN, WM, ST, TAIL, RS, KIND>(a); }
+  __global__ void __launch_bounds__(288, 1) NAME(const Args a) { gemm_body<TM, BN, WM, ST, TAIL, RS, KIND>(a); }
 GEMM(p_plain, 128, 128, 64, 3, false, 0, NONE)
 GEMM(p_g0, 128, 128, 64, 3, true, 0, NONE)
 GEMM(p_duo32, 128, 128, 64, 3, true, 32, DUO)
@@ -640,7 +636,7 @@ static void form(Prob& P, int i) {
 }
 static void gemm(Prob& P, int kind, int i) {
   Args a{kind == 0 ? P.maps_plain[i] : P.maps_noised[i], P.U, P.R, P.m, P.n, P.k, P.group, P.seed};
-  P.cfg.k[kind]<<<P.grid, 384, P.cfg.smem, P.st>>>(a);
+  P.cfg.k[kind]<<<P.grid, 288, P.cfg.smem, P.st>>>(a);
 }
 // the arms: lt (a), plain (my mainloop on Q(A), Q(B)), form, g0 (the noised GEMM and peel alone), and the whole noised call
 // form + GEMM: b (no receipts), c (duo, stride 32), d (duo, 64), c2 / d2 (duo2)
