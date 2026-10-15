@@ -6,11 +6,11 @@ measured line wP1mS), at the measured eta of bench.jsonl's arms.
 
 First it reproduces Lean's `epsS32_values` and `epsP1mu_values` exactly (exit 1 if not). Then, at each arm's eta:
 
-- Lean's accounting (§7.3): the honest point is the filler's measured point (s_h steps, u_h q, Rmin as Lean's), the
-  useful call taking su = eta_cap cap of its steps. Unreceipted, the useful steps leave the floor (`epsNum_drop`);
-  receipted at L = 32 they stay in it, so eps is Lean's receipted row at any eta. That needs the useful call's forced CUDA
-  work a step to match the filler's 24 q (`sat`): duo2 (6 ops a word, 24 q a step at L = 32) does; duo (3 ops, 12 q) leaves
-  12 su q of the honest point's issue unforced, so Rmin falls by 12 su Nmin / N.
+- Lean's accounting (§7.3): the honest point is the filler's measured point (s_h steps), the useful call taking
+  su = eta_cap cap of its steps, and Rmin as Lean's (the window's CUDA work stays forced). Unreceipted, the useful steps
+  leave the floor (`epsNum_drop`); receipted at L = 32 they stay in it, so eps is Lean's receipted row at any eta.
+- Forced work = receipts only: the same window, but Rmin is what the honest point's receipts force (`sat`): the filler's
+  alu phi 24 q a step, duo 12 (3 ops a word at L = 32), duo2 24 (6 ops), an unreceipted call 0.
 - The window alone: the receipted call fills the window by itself at its measured eta (no filler beside it), its receipts
   its only forced work: s = eta_cap cap steps, N = s / 256 blocks, Rmin = r_u s Nmin / N.
 
@@ -68,24 +68,22 @@ def reproduce():
     return bad
 
 
-def lean_unreceipted(eta, nu):
-    su = math.ceil(eta * F_REF / F_MAX * CAP)
-    _, nmin = blocks(S_H - su)
-    return eps(nu, nmin, RMIN_H)
-
-
-def lean_receipted(eta, nu, ru):
-    """The useful steps stay in the floor; with ru < 24 q a step, Rmin falls by (24 - ru) su Nmin / N."""
+def window(eta, ru, keep_rmin):
+    """The honest point at the filler's line point (s_h steps), su = eta_cap cap of them the useful call's. ru: the useful
+    call's receipt work in q a step (None: unreceipted, its steps outside the floor). keep_rmin: Rmin as Lean's (the
+    window's CUDA work stays forced, §7.3); else Rmin is the honest point's receipts, u = 24 (s_h - su) + ru su."""
     su = min(S_H, math.ceil(eta * F_REF / F_MAX * CAP))
-    n, nmin = blocks(S_H)
-    rmin = (U_H - (24 - ru) * su) * nmin // n
-    return eps(nu, nmin, min(RMIN_H, rmin))
+    n, nmin = blocks(S_H if ru is not None else S_H - su)
+    if keep_rmin:
+        return lambda nu: eps(nu, nmin, RMIN_H)
+    u = 24 * (S_H - su) + (ru or 0) * su
+    return lambda nu: eps(nu, nmin, u * nmin // max(n, 1))
 
 
-def alone(eta, nu, ru):
+def alone(eta, ru):
     s = math.ceil(eta * F_REF / F_MAX * CAP)
     n, nmin = blocks(s)
-    return eps(nu, nmin, ru * s * nmin // max(n, 1))
+    return lambda nu: eps(nu, nmin, ru * s * nmin // max(n, 1))
 
 
 def served_eta(rows, arm, m):
@@ -107,23 +105,27 @@ def main():
     pts = [(r["name"], r["eta"]) for r in rows]
     for m in sorted({r["m"] for r in rows if r["m"] != r["n"] or r["n"] != r["k"]}, reverse=True):
         pts.append((f"served m={m} (MAC-weighted)", {a: served_eta(rows, a, m) for a in rows[0]["eta"]}))
-    hdr = " | ".join(f"nu={x:g}" for x in nus)
-    print("\nLean's accounting (§7.3; the combined point on the filler's line). eps by nu:\n")
-    print(f"| point | eta (a) | eta (b) | eta (c) | eta duo2/32 | (b) unreceipted: {hdr} | (c) duo receipted: {hdr} | "
-          f"duo2/32 receipted: {hdr} |")
-    print("|" + "---|" * (5 + 3 * len(nus)))
-    for name, e in pts:
-        ub = " | ".join(f"{lean_unreceipted(e['b'], x):.4f}" for x in nus)
-        rc = " | ".join(f"{lean_receipted(e['c'], x, 12):.4f}" for x in nus)
-        r2 = " | ".join(f"{lean_receipted(e['c2'], x, 24):.4f}" for x in nus)
-        print(f"| {name} | {e['lt']:.3f} | {e['b']:.3f} | {e['c']:.3f} | {e['c2']:.3f} | {ub} | {rc} | {r2} |")
-    print("\nThe receipted call alone in the window (its receipts its only forced work). eps by nu:\n")
-    print(f"| point | (c) duo at eta (c): {hdr} | duo2/32 at its eta: {hdr} |")
+    hdr = " | ".join(f"ν={x:g}" for x in nus)
+    arms = [("b", None, "(b) unreceipted"), ("c", 12, "(c) duo /32"), ("c2", 24, "duo2 /32")]
+    for keep, title in [(True, "Lean's accounting (§7.3): the useful steps inside the filler's honest point, Rmin as Lean's"),
+                        (False, "Forced work = receipts only: the same window, Rmin the honest point's receipts "
+                                "(filler 24 q a step, duo 12, duo2 24, unreceipted 0)")]:
+        print(f"\n{title}. ε by ν:\n")
+        print("| point | " + " | ".join(f"η {a}" for a, _, _ in arms) + " | " +
+              " | ".join(f"{t}: {hdr}" for _, _, t in arms) + " |")
+        print("|" + "---|" * (1 + len(arms) + len(arms) * len(nus)))
+        for name, e in pts:
+            cells = [f"{e[a]:.3f}" for a, _, _ in arms]
+            for a, ru, _ in arms:
+                f = window(e[a], ru, keep)
+                cells += [f"{f(x):.4f}" for x in nus]
+            print(f"| {name} | " + " | ".join(cells) + " |")
+    print("\nThe receipted call alone in the window (no filler; its receipts its only forced work). ε by ν:\n")
+    print(f"| point | (c) duo /32: {hdr} | duo2 /32: {hdr} |")
     print("|" + "---|" * (1 + 2 * len(nus)))
     for name, e in pts:
-        rc = " | ".join(f"{alone(e['c'], x, 12):.3f}" for x in nus)
-        r2 = " | ".join(f"{alone(e['c2'], x, 24):.3f}" for x in nus)
-        print(f"| {name} | {rc} | {r2} |")
+        print(f"| {name} | " + " | ".join(f"{alone(e['c'], 12)(x):.3f}" for x in nus) + " | " +
+              " | ".join(f"{alone(e['c2'], 24)(x):.3f}" for x in nus) + " |")
     return 0
 
 
