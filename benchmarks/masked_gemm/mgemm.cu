@@ -665,9 +665,7 @@ static int mbench(int reps, const std::vector<std::string>& shapes) {
     fflush(stdout);
     CK(cudaEventDestroy(e0)); CK(cudaEventDestroy(e1));
     CK(cudaDeviceSynchronize());
-    CK(cudaDeviceReset());
-    CL(cublasLtCreate(&g_lt));
-    CK(cudaMalloc(&g_ws, g_wsz));
+    for (void* p : {(void*)P.XA, (void*)P.XB, (void*)P.U, (void*)P.R, P.DA, P.DB, P.YA, P.YB}) CK(cudaFree(p));
   }
   return 0;
 }

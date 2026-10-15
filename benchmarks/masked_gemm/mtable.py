@@ -74,7 +74,7 @@ def main(bench, gate):
         fi = 0 if fmt == "i8" else 1
         digits = "-"
         if r != "-":
-            digits = "/".join(str(by[s]["low"][r]["L"][fi]) for s in shapes if s in ("o", "down"))
+            digits = "/".join(str(by[s]["low"][r]["L"][fi]) for s in ("o", "down") if s in by)
         print(f"| {cons} | {fmt} | {r} | {digits} | {receipt} | {forming} | {gemm} | "
               + " | ".join(f"{x:.3f}" for x in ratios) + f" | {geo:.3f} | {arm_gate(name, checks)} |")
     print()
@@ -83,7 +83,7 @@ def main(bench, gate):
         for s in shapes if "plain_i8" in by[s]["arms"] and "plain_e4" in by[s]["arms"]))
     print("SM MHz (median, plain_i8): " + ", ".join(f"{s} {by[s]['arms']['plain_i8']['mhz']:.0f}" for s in shapes if "plain_i8" in by[s]["arms"]))
     print("digits l, per r, [i8, e4] at k = 4096 and 14336: " + json.dumps(
-        {r: [by[s]["low"][r]["L"] for s in shapes if s in ("o", "down")] for r in low}))
+        {r: [by[s]["low"][r]["L"] for s in ("o", "down") if s in by] for r in low}))
     return 0
 
 

@@ -216,7 +216,12 @@ def main(d: Path, receipts: bool) -> int:
                 XA[:, k + (L + l) * r : k + (L + l + 1) * r] = -dQ[l]
                 XB[:, k + l * r : k + (l + 1) * r] = dP[l]
                 XB[:, k + (L + l) * r : k + (L + l + 1) * r] = wts[l] * W
-            checks[f"low{r}_{fmt}_grid"] = bool(max(np.abs(XA).max(), np.abs(XB).max()) <= lim)
+            # the masked operands within the grid's bound; the tail's digits within it too, its weights exact in the format
+            tail = np.concatenate([XA[:, k:], XB[:, k:]], axis=0)
+            exact = np.abs(tail) <= lim
+            if fmt == "e4":
+                exact |= np.isin(np.abs(tail), [w for w in wts if w > lim])
+            checks[f"low{r}_{fmt}_grid"] = bool(max(np.abs(At).max(), np.abs(Bt).max()) <= lim and exact.all())
             checks[f"low{r}_{fmt}_peel"] = bool((XA @ XB.T == AB).all())
             for form in [f for f in ["lowform", "lowtcform"] if f"{f}{r}_{fmt}" not in skipped]:
                 gA = decode(fmt, ld(f"XA_{form}{r}_{fmt}.bin", np.uint8, (m, Kc)))
