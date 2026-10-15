@@ -100,7 +100,7 @@ def f(x, nd=3):
 
 
 def second(pc: Path) -> None:
-    """lease_pearlc2.sh's tables: the SHA-512 probe, par<c>, the power holds."""
+    """lease_pearlc2.sh's and lease_pearlc3.sh's tables: the SHA-512 probe, par<c>, serial-r32, the power holds."""
     sha = [r for r in jsonl(pc / "eta_sha.jsonl") if r["kind"] == "sha"]
     if sha:
         print("## the SHA-512 probe (CUDA graphs of 10 launches; compressions/s)\n")
@@ -109,9 +109,11 @@ def second(pc: Path) -> None:
         for r in sha:
             print(f"| {r['kernel']} | {r['shape'][0] if 'shape' in r else r['rows']} | {r['block']} | {f(r['ms'], 4)} | "
                   f"{r['compressions']} | {r['compressions_per_s']:.3g} | {r.get('same_digests', '')} |")
-    par = [r for r in jsonl(pc / "eta_par.jsonl") if r["kind"] == "eta"]
-    if par:
-        print("\n## c independent calls at once (W = 8)\n")
+    for name, title in (("eta_par.jsonl", "c independent calls at once"), ("eta_r32.jsonl", "s512_rows at 32 threads a CTA")):
+        par = [r for r in jsonl(pc / name) if r["kind"] == "eta"]
+        if not par:
+            continue
+        print(f"\n## {title} (W = {par[0]['w']})\n")
         print("| m | schedule | ms/call | MHz | η | η_cap |")
         print("|---|---|---|---|---|---|")
         for r in par:
@@ -119,7 +121,7 @@ def second(pc: Path) -> None:
                   f"{f(r.get('eta'), 4)} | {f(r.get('eta_cap'), 4)} |")
     pw = [r for r in jsonl(pc / "eta_power.jsonl") if r["kind"] == "power"]
     if pw:
-        print("\n## each schedule held 2 s under NVML (W = 4; the middle half's medians)\n")
+        print(f"\n## each schedule held 2 s under NVML (W = {pw[0]['w']}; the middle half's medians)\n")
         print("| m | schedule | ms/call | SM MHz | power W | throttle | mJ a call | η | η_cap |")
         print("|---|---|---|---|---|---|---|---|---|")
         for r in pw:

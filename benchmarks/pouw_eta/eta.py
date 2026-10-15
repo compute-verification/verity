@@ -9,6 +9,7 @@ timed back to back.  The schedules, over the served call's steps (`SERVED`, pouw
 
   serial      every step on the main lane, in order
   serial+tt   serial plus a per-call tile tree (run.py's tree_leaves_t, tree_t): the pass tree's cost, amortized, bounded above
+  serial-r32  serial with s512_rows launched at 32 threads a CTA instead of 128 (the same digests: `sha` mode checks them)
   deferred    the served `deferred`: hash_leaf on the side lane behind the GEMM, c/u rotated over the W pipelines
   deferred-a  what-if (not servable under -h3, card 448a9d2d): A's hm96 tree and seed_A on the side lane too; the padding
               rows' line key is stale, so its bytes are wrong, and only its time means anything
@@ -54,6 +55,7 @@ A_TREE = ("hash_rows_a", "tree_a", "seed_a")
 FORMING = frozenset({"lines_ea", "stats_a", "eprime_a", "form_a"})
 TILE_TREE = ("tree_leaves_t", "tree_t")
 SCHEDULES = ("serial", "serial+tt", "deferred", "deferred-a", "main-a", "main-a-nf", "nohash", "gemm", "gemm_ct", "plain")
+#: also: serial-r32 and par<c>, run when ETA_SCHEDULES names them
 MACS_PER_SM_CLOCK, CAP_MHZ = 1024, 2430
 CAPTURE_RELAXED, STREAM_NON_BLOCKING, EVENT_NO_TIMING = 2, 1, 2
 
@@ -122,7 +124,9 @@ def runnable(pipe: R.Pipeline) -> list:
 
 
 def steps_of(pipe: R.Pipeline) -> dict:
-    return {**{nm: fn for nm, _, fn in runnable(pipe)}, **pipe.extra()}
+    d, b = pipe.dev, pipe.b
+    r32 = {"rowdig_a_32": lambda: d.launch("s512_rows", pipe.m_real, 32, p=(b["xa"], b["rowdig_a"]), i=(pipe.m_real, pipe.k))}
+    return {**{nm: fn for nm, _, fn in runnable(pipe)}, **pipe.extra(), **r32}
 
 
 def enqueue(lanes: Lanes, pipes: list, fns: list[dict], sched: str, calls: int) -> None:
@@ -147,8 +151,9 @@ def enqueue(lanes: Lanes, pipes: list, fns: list[dict], sched: str, calls: int) 
         j = i % len(pipes)
         f = fns[j]
         run = lambda names, s=main: [lanes.on(s, f[nm]) for nm in names if nm in f]  # noqa: E731
-        if sched in ("serial", "serial+tt"):
-            run(SERVED + (TILE_TREE if sched == "serial+tt" else ()))
+        if sched in ("serial", "serial+tt", "serial-r32"):
+            names = SERVED + (TILE_TREE if sched == "serial+tt" else ())
+            run(["rowdig_a_32" if sched == "serial-r32" and nm == "rowdig_a" else nm for nm in names])
         elif sched == "nohash":
             run([nm for nm in SERVED if nm not in HASH])
         elif sched in ("gemm", "gemm_ct"):

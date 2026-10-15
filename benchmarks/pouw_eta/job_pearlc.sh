@@ -3,7 +3,8 @@
 # A: build.sh's ship (nvcc 13.0, SASS-gated, fixture) off the lease.  B, in one lease: run.py's fixture check on the card (the
 # gate: nothing below runs unless it passes), run.py's split, eta.py's schedules and batch curve, the clock hold, then ncu
 # (--clock-control none: the node's lock stays as it is) kernel by kernel and graph by graph.  CSVs from the reports after.
-# ETA_LEASE names B's script instead (lease_pearlc2.sh: the SHA-512 probe, par<c>, the power holds).
+# ETA_LEASE names B's script instead (lease_pearlc2.sh: the SHA-512 probe, par<c>, the power holds; lease_pearlc3.sh:
+# serial-r32).
 # Run from a clone of the pushed commit: research run ... --cwd clone --send job_pearlc.sh -- bash "$RESEARCH_RUN_DIR/inputs/job_pearlc.sh"
 set -euo pipefail
 d=$(mktemp -d); trap 'rm -rf "$d"' EXIT
