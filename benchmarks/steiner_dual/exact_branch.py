@@ -13,7 +13,7 @@ coordinate of 1/c vanishes on it (no coefficients, over any extension field, mak
 
     python exact_branch.py LOG           (for each unrescued (S, H) in LOG: the (I, J) no typing rescues, if any)
     python exact_branch.py --sample SEED TRIALS (the same on 3-sets unrescued on fresh hierarchies of 3×3 and 3×4)
-    python exact_branch.py --rank LOG N TRIALS (Theorem 6.7's bound against direct ranks, rank-1..5 branches, q = 3)
+    python exact_branch.py --rank LOG N TRIALS (Theorem 6.7's bound ⌊w r⌋ per typing against direct ranks)
     python exact_branch.py --climb LOG Q STEPS RESTARTS (hill-climbs branches toward the largest drop every typing allows)
     python exact_branch.py --construct LOG Q (fact (c) at rank ρ <= Q against direct ranks, on built branches)
     python exact_branch.py --check LOG N (compares with rank Φ − rank(Φ − Λ ⊗ uvᵀ) for every rank-1 uvᵀ, q = 2, F2,
@@ -223,42 +223,45 @@ def direct_drops(cells, a, b, S, q, p):
 
 
 def main_rank(path, n, trials):
-    """Theorem 6.7 directly: under a typing with one row i0 and one column j0 holding S's labels, branches B of rank
-    r = 1..5 (q = 3, F2), part of their x-side in row i0 and part of their y-side in column j0, against ⌊17r/7⌋."""
+    """Theorem 6.7 directly, per typing of the first N configurations over F2, against ⌊w r⌋ with w that typing's
+    `certificate`: every rank-1 branch at q = 2, then branches of rank r = 1..5 at q = 3 with part of their x-side
+    on the rows R holding S's labels and part of their y-side on the columns C."""
     q, done = 3, 0
     rng = np.random.default_rng(1)
     for p, S, cells, nodes, root, Si in configs(path):
         if p != 2 or done >= n:
             continue
-        lab = next(((a, b) for a, b in all_typings(cells, nodes, root, p)
-                    if len(coords(cells, a, Si, 0, p)) == 1 and len(coords(cells, b, Si, 1, p)) == 1), None)
-        if lab is None:
-            continue
         done += 1
-        a, b = lab
-        (i0,), (j0,) = coords(cells, a, Si, 0, p), coords(cells, b, Si, 1, p)
         nr, nc = max(c[0] for c in cells) + 1, max(c[1] for c in cells) + 1
         T = fq.matmul_targets(nr, nc, q)
-        Phi = sum(np.kron(np.outer(a[t], b[t]), T[c]) for t, c in enumerate(cells)) % p
-        Lam = sum(np.outer(a[s], b[s]) for s in Si) % p
-        r0 = int(fq.rank(Phi, p)[0])
-        worst = {}
-        for r in range(1, 6):
-            Bs = []
-            while len(Bs) < trials:
-                k, k2 = rng.integers(0, min(r, q) + 1, 2)
-                U = rng.integers(0, 2, (nr * q, r))
-                V = rng.integers(0, 2, (q * nc, r))
-                U[:, :k] *= np.array([[i // q == i0] for i in range(nr * q)])
-                V[:, :k2] *= np.array([[i % nc == j0] for i in range(q * nc)])
-                B = U @ V[:, rng.permutation(r)].T % p
-                if int(fq.rank(B, p)[0]) == r:
-                    Bs.append(B)
-            drops = r0 - fq.rank(np.array([(Phi - np.kron(Lam, B)) % p for B in Bs]), p)
-            worst[r] = int(drops.max())
-            assert worst[r] <= 17 * r // 7, (S, r, worst[r])
-        print(f"p={p} S={S}: largest drop at rank r (bound ⌊17r/7⌋): "
-              f"{ {r: (d, 17 * r // 7) for r, d in worst.items()} }", flush=True)
+        for a, b in all_typings(cells, nodes, root, p):
+            G, H = coords(cells, a, Si, 0, p), coords(cells, b, Si, 1, p)
+            w = certificate(cells, a, b, Si, p)
+            bound = {r: int(w * r + 1e-9) for r in range(1, 6)}
+            one = max(direct_drops(cells, a, b, Si, 2, p).values())
+            assert one <= bound[1], (S, one, w)
+            Phi = sum(np.kron(np.outer(a[t], b[t]), T[c]) for t, c in enumerate(cells)) % p
+            Lam = sum(np.outer(a[s], b[s]) for s in Si) % p
+            r0 = int(fq.rank(Phi, p)[0])
+            on_rows = np.array([[i // q in G] for i in range(nr * q)])
+            on_cols = np.array([[i % nc in H] for i in range(q * nc)])
+            worst = {}
+            for r in range(1, 6):
+                Bs = []
+                while len(Bs) < trials:
+                    k, k2 = rng.integers(0, r + 1, 2)
+                    U = rng.integers(0, 2, (nr * q, r))
+                    V = rng.integers(0, 2, (q * nc, r))
+                    U[:, :k] *= on_rows
+                    V[:, :k2] *= on_cols
+                    B = U @ V[:, rng.permutation(r)].T % p
+                    if int(fq.rank(B, p)[0]) == r:
+                        Bs.append(B)
+                drops = r0 - fq.rank(np.array([(Phi - np.kron(Lam, B)) % p for B in Bs]), p)
+                worst[r] = int(drops.max())
+                assert worst[r] <= bound[r], (S, r, worst[r], w)
+            print(f"p={p} S={S} w={w:.4f}: largest rank-1 drop {one} (q = 2, every branch); largest drop at rank r "
+                  f"(bound ⌊w r⌋): { {r: (d, bound[r]) for r, d in worst.items()} }", flush=True)
 
 
 def main_climb(path, q, steps, restarts):
