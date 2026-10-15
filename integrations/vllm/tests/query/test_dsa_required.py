@@ -139,3 +139,15 @@ def test_each_attention_value_is_spelt_as_the_capture_map_commits_it(glm):
         names = CM.committer_names(CMAP, ENV, routes=routes, rank=0)
         committed |= {committed_identity(n) for n, (tap, _i) in names.items() if tap["commit"]["binder"] == "attention"}
     assert want <= committed, sorted(want - committed)
+
+
+def test_the_wrapper_prefix_of_glm53_rows_is_determined_from_the_attention_paths_parent():
+    """GLM-5.3's MLA rows sit under `inner.model.model.layers.N.self_attn` while the implementation is `model.layers.N.self_attn.attn`
+    (result.json): the prefix is `inner.model.`, not the `model.` default; a Llama-style Attention row keeps its answer."""
+    from verity_vllm.query.manifest import format as MF
+    glm = [{"spec": "EmbeddingShard_v1{V=8,H=4}", "name": "inner.model.model.embed_tokens/embedding[0]"},
+           {"spec": "RoPEHeadGptJ_v2{D=64}", "name": "inner.model.model.layers.0.self_attn/dsa_norm_rope/k_pe[0]"}]
+    assert MF.wrapper_prefix_of(glm, ["model.layers.0.self_attn.attn"]) == "inner.model."
+    llama = [{"spec": "Attention_v3{T=1,NH=2,KVH=1,D=4,BN=16}", "name": "model.model.layers.0.self_attn.attn/attn[t=0]"}]
+    assert MF.wrapper_prefix_of(llama, ["model.layers.0.self_attn.attn"]) == "model."
+    assert MF.wrapper_prefix_of(llama, []) == "model." and MF.wrapper_prefix_of([], ["model.layers.0.self_attn.attn"]) == "model."

@@ -474,14 +474,13 @@ def weights_of_record(program: dict[str, Any], ck: CheckpointIndex, *, prefix: s
     fields = program_weight_fields(inst)
     if prefix is None:
         from verity_vllm.query.manifest import format as MF
-        prefix = MF.wrapper_prefix_of(inst.get("rows", []), res.get("attention_impls_observed") or [])
-        if not prefix:
-            # no attention row to determine the wrapper from (e.g. a weights-only check): the prefix under which the most fields are
-            # checkpoint tensors 1:1 -- determined from the checkpoint, not assumed
-            def hits(p: str) -> int:
-                return sum(1 for f, _s, _b in fields if ck.has(strip_prefix(f, p)))
-            cands = sorted({f.split(".")[0] + "." for f, _s, _b in fields if "." in f} | {""})
-            prefix = max(cands, key=lambda p: (hits(p), -len(p)))
+        named = MF.wrapper_prefix_of(inst.get("rows", []), res.get("attention_impls_observed") or [])
+        # the rows' answer when it is the checkpoint's, else the prefix (up to two segments: GLM-5.3's `inner.model.`) under which the
+        # most fields are checkpoint tensors 1:1 -- determined from the checkpoint, not assumed
+        def hits(p: str) -> int:
+            return sum(1 for f, _s, _b in fields if ck.has(strip_prefix(f, p)))
+        cands = sorted({".".join(f.split(".")[:k]) + "." for f, _s, _b in fields for k in (1, 2) if f.count(".") >= k} | {"", named})
+        prefix = max(cands, key=lambda p: (hits(p), p == named, -len(p)))
     out_fields: list[dict[str, Any]] = []
     unpinned: list[str] = []
     unresolved: list[dict[str, str]] = []

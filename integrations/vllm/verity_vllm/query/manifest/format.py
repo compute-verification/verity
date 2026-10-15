@@ -104,14 +104,16 @@ def collector_path(program_module: str, wrapper_prefix: str) -> str:
 
 def wrapper_prefix_of(rows: Iterable[dict], attention_paths: Iterable[str]) -> str:
     """The export wrapper's attribute prefix: the Program names `model.model.layers.0.self_attn.attn`, the implementation
-    `model.layers.0.self_attn.attn` (result.json `attention_impls_observed`).  Determined, not assumed."""
-    attn = set(attention_paths or ())
+    `model.layers.0.self_attn.attn` (result.json `attention_impls_observed`).  Determined, not assumed.  A row under the attention path
+    or one of its parents down to the layer (GLM-5.3's MLA rows are named `inner.model.model.layers.0.self_attn/...`, the implementation
+    `model.layers.0.self_attn.attn`: prefix `inner.model.`) determines it; else the first `Attention*` row's convention."""
+    tails = {".".join(a.split(".")[:k]) for a in (attention_paths or ()) for k in range(len(a.split(".")), 2, -1)}
     for r in rows:
         mod, _n, _h, _row = split_name(r.get("name") or "")
+        for t in tails:
+            if mod.endswith("." + t):
+                return mod[: len(mod) - len(t)]
         if mod and spec_family(r["spec"]).startswith("Attention"):
-            for a in attn:
-                if mod.endswith(a) and len(mod) > len(a):
-                    return mod[: len(mod) - len(a)]
             return "model." if mod.startswith("model.model.") else ""
     return "model."
 
