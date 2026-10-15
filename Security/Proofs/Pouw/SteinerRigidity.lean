@@ -1259,7 +1259,189 @@ theorem Hier.sets_untype : ∀ h : Hier κ, h.untype.sets = h.sets
   | node _ l r => by
     simp only [untype, sets, sets_untype l, sets_untype r, cells_untype l, cells_untype r]
 
+/-- **Claim 1 at every node**: (L) for every node set of the hierarchy. -/
+theorem claim1_sets {α β : Type*} (a : κ → α → F) (b : κ → β → F) {V V' : Submodule F (κ → F)}
+    (ha : ∀ φ ∈ V, ev a φ = 0) (hb : ∀ φ ∈ V', ev b φ = 0) :
+    ∀ h : Hier κ, h.WF → h.Vx F ≤ V → h.flip.Vx F ≤ V' →
+      ∀ S ∈ h.sets, ∃ u v, ∑ t ∈ S, vecMulVec (a t) (b t) = vecMulVec u v
+  | leaf t, hwf, hV, hV', S, hS => by
+    simp only [sets, Finset.mem_singleton] at hS
+    subst hS
+    exact ⟨_, _, claim1 a b ha hb (leaf t) hwf hV hV'⟩
+  | node bb l r, hwf, hV, hV', S, hS => by
+    rcases Finset.mem_insert.mp hS with rfl | hS
+    · exact ⟨_, _, claim1 a b ha hb (node bb l r) hwf hV hV'⟩
+    · obtain ⟨hl, hr, _⟩ := hwf
+      have hVl := Vx_children_le (F := F) (b := bb) (l := l) (r := r)
+      have hVf := Vx_children_le (F := F) (b := !bb) (l := l.flip) (r := r.flip)
+      rcases Finset.mem_union.mp hS with hS | hS
+      · exact claim1_sets a b ha hb l hl (hVl.1.trans hV) (hVf.1.trans hV') S hS
+      · exact claim1_sets a b ha hb r hr (hVl.2.trans hV) (hVf.2.trans hV') S hS
+
+/-- **Claim 2 (independence).** If `ev a φ = 0` only for `φ ∈ V`, and `V` meets no block of `blk`, the labels of each
+block are linearly independent. -/
+theorem claim2 {α ι : Type*} [DecidableEq ι] (a : κ → α → F) (V : Submodule F (κ → F))
+    (ha : ∀ φ, ev a φ = 0 → φ ∈ V) (blk : κ → ι) (r : ι) (hV : Disjoint V (blockSubspace F blk r))
+    (s : Finset κ) : LinearIndepOn F a ↑(s.filter (blk · = r)) := by
+  rw [linearIndepOn_finset_iff]
+  intro g hg t ht
+  let φ : κ → F := fun u => if u ∈ s.filter (blk · = r) then g u else 0
+  have hφ : ev a φ = 0 := by
+    rw [← hg]
+    simp only [ev, φ, ite_smul, zero_smul]
+    rw [Finset.sum_ite_mem, Finset.univ_inter]
+  have hmem : φ ∈ blockSubspace F blk r := by
+    intro u hu
+    simp only [φ, Finset.mem_filter]
+    rw [ite_eq_right_iff]
+    exact fun h => absurd h.2 hu
+  have h0 := congrFun (Submodule.disjoint_def.mp hV φ (ha φ hφ) hmem) t
+  simp only [φ, ht, ↓reduceIte, Pi.zero_apply] at h0
+  exact h0
+
+/-- **Lemma 3 for a binary hierarchy**: labels with (L) at every node and (I) in every row and column. -/
+theorem labels_of_hier {p q : ℕ} (h : Hier (Fin p × Fin q)) (hwf : h.WF) :
+    ∃ (α β : ℕ) (a : Fin p × Fin q → Fin α → F) (b : Fin p × Fin q → Fin β → F),
+      (∀ S ∈ h.sets, ∃ u v, ∑ t ∈ S, vecMulVec (a t) (b t) = vecMulVec u v) ∧
+      (∀ r, LinearIndepOn F a ↑(h.cells.filter (·.1 = r))) ∧
+      (∀ c, LinearIndepOn F b ↑(h.cells.filter (·.2 = c))) := by
+  obtain ⟨hu, hc, hw, hvr, hvc⟩ := retype_spec (F := F) h hwf
+  obtain ⟨α, a, ha⟩ := exists_labels ((retype F h).Vx F)
+  obtain ⟨β, b, hb⟩ := exists_labels ((retype F h).flip.Vx F)
+  refine ⟨α, β, a, b, fun S hS => ?_, fun r => ?_, fun c => ?_⟩
+  · rw [← sets_untype, ← hu, sets_untype] at hS
+    exact claim1_sets a b (fun φ hφ => (ha φ).mpr hφ) (fun φ hφ => (hb φ).mpr hφ) (retype F h) hw
+      le_rfl le_rfl S hS
+  · rw [← hc]
+    exact claim2 a _ (fun φ hφ => (ha φ).mp hφ) Prod.fst r (hvr r) _
+  · rw [← hc]
+    exact claim2 b _ (fun φ hφ => (hb φ).mp hφ) Prod.snd c (hvc c) _
+
+/-- **Binary refinement** (the note's reduction to full binary hierarchies): the nonempty sets of a laminar family
+of subsets of a nonempty `P` are node sets of a hierarchy on `P` with disjoint siblings. -/
+def BinaryRefinement (κ : Type*) [DecidableEq κ] : Prop :=
+  ∀ (P : Finset κ) (𝓕 : Finset (Finset κ)), P.Nonempty → Laminar 𝓕 → (∀ S ∈ 𝓕, S ⊆ P) →
+    ∃ h : Hier κ, h.WF ∧ h.cells = P ∧ ∀ S ∈ 𝓕, S.Nonempty → S ∈ h.sets
+
+/-- **Lemma 3 from binary refinement.** -/
+theorem labelLemma_of_binaryRefinement (href : ∀ p q : ℕ, BinaryRefinement (Fin p × Fin q)) :
+    LabelLemma F := by
+  intro p q P 𝓕 hlam hsub
+  rcases P.eq_empty_or_nonempty with hP | hP
+  · subst hP
+    refine ⟨0, 0, fun _ => 0, fun _ => 0, fun S hS => ⟨0, 0, ?_⟩, fun r => ?_, fun c => ?_⟩
+    · rw [Finset.subset_empty.mp (hsub S hS)]
+      ext i
+      exact i.elim0
+    · simp
+    · simp
+  · obtain ⟨h, hwf, hcells, hsets⟩ := href p q P 𝓕 hP hlam hsub
+    obtain ⟨α, β, a, b, hL, hIa, hIb⟩ := labels_of_hier (F := F) h hwf
+    refine ⟨α, β, a, b, fun S hS => ?_, hcells ▸ hIa, hcells ▸ hIb⟩
+    rcases S.eq_empty_or_nonempty with hS0 | hS0
+    · refine ⟨0, 0, ?_⟩
+      rw [hS0, Finset.sum_empty]
+      ext i j
+      simp [vecMulVec_apply]
+    · exact hL S (hsets S hS hS0)
+
+omit [Fintype κ] [DecidableEq κ] in
+theorem laminar_filter {𝓕 : Finset (Finset κ)} (h : Laminar 𝓕) (p : Finset κ → Prop) [DecidablePred p] :
+    Laminar (𝓕.filter p) := fun S hS S' hS' =>
+  h S (Finset.mem_filter.mp hS).1 S' (Finset.mem_filter.mp hS').1
+
+omit [Fintype κ] in
+/-- A laminar family on `P` with `|P| ≥ 2` leaves a proper nonempty `A ⊆ P` that every other set of the family
+lies in or misses: a largest proper nonempty set of the family, or a singleton if there is none. -/
+theorem exists_split {P : Finset κ} {𝓕 : Finset (Finset κ)} (hP : P.Nonempty) (h1 : P.card ≠ 1)
+    (hlam : Laminar 𝓕) (hsub : ∀ S ∈ 𝓕, S ⊆ P) :
+    ∃ A ⊆ P, A.Nonempty ∧ A ≠ P ∧ ∀ S ∈ 𝓕, S ≠ P → S ⊆ A ∨ Disjoint S A := by
+  classical
+  let 𝓕' := 𝓕.filter fun S => S.Nonempty ∧ S ≠ P
+  rcases 𝓕'.eq_empty_or_nonempty with h0 | hne
+  · obtain ⟨t, ht⟩ := hP
+    refine ⟨{t}, Finset.singleton_subset_iff.mpr ht, Finset.singleton_nonempty t, fun h => h1 ?_,
+      fun S hS hSP => Or.inl ?_⟩
+    · rw [← h, Finset.card_singleton]
+    · rcases S.eq_empty_or_nonempty with hS0 | hS0
+      · rw [hS0]
+        exact Finset.empty_subset _
+      · exact absurd (Finset.mem_filter.mpr ⟨hS, hS0, hSP⟩) (h0 ▸ Finset.notMem_empty S)
+  · obtain ⟨M, hM, hmax⟩ := Finset.exists_max_image 𝓕' Finset.card hne
+    obtain ⟨hM𝓕, hMne, hMP⟩ := Finset.mem_filter.mp hM
+    refine ⟨M, hsub M hM𝓕, hMne, hMP, fun S hS hSP => ?_⟩
+    rcases hlam M hM𝓕 S hS with h | h | h
+    · rcases S.eq_empty_or_nonempty with hS0 | hS0
+      · rw [hS0]
+        exact Or.inl (Finset.empty_subset _)
+      · have hcard := hmax S (Finset.mem_filter.mpr ⟨hS, hS0, hSP⟩)
+        exact Or.inl (Finset.eq_of_subset_of_card_le h hcard).symm.subset
+    · exact Or.inl h
+    · exact Or.inr h.symm
+
+omit [Fintype κ] in
+/-- **Binary refinement, proved.** -/
+theorem binaryRefinement : BinaryRefinement κ := by
+  intro P
+  induction P using Finset.strongInduction with
+  | H P ih =>
+    intro 𝓕 hP hlam hsub
+    by_cases h1 : P.card = 1
+    · obtain ⟨t, rfl⟩ := Finset.card_eq_one.mp h1
+      refine ⟨leaf t, trivial, rfl, fun S hS hne => ?_⟩
+      rcases Finset.subset_singleton_iff.mp (hsub S hS) with h | h
+      · exact absurd h hne.ne_empty
+      · rw [h]
+        exact Finset.mem_singleton_self _
+    · obtain ⟨A, hAP, hAne, hAneP, hsplit⟩ := exists_split hP h1 hlam hsub
+      have hBne : (P \ A).Nonempty := by
+        rw [Finset.sdiff_nonempty]
+        exact fun h => hAneP (Finset.Subset.antisymm hAP h)
+      obtain ⟨hA, wA, cA, sA⟩ := ih A (Finset.ssubset_iff_subset_ne.mpr ⟨hAP, hAneP⟩)
+        (𝓕.filter (· ⊆ A)) hAne (laminar_filter hlam _) fun S hS => (Finset.mem_filter.mp hS).2
+      obtain ⟨hB, wB, cB, sB⟩ := ih (P \ A) (Finset.sdiff_ssubset hAP hAne)
+        (𝓕.filter (· ⊆ P \ A)) hBne (laminar_filter hlam _) fun S hS => (Finset.mem_filter.mp hS).2
+      have hcells : (node false hA hB).cells = P := by
+        simp only [cells, cA, cB, Finset.union_sdiff_of_subset hAP]
+      refine ⟨node false hA hB, ⟨wA, wB, by rw [cA, cB]; exact Finset.disjoint_sdiff⟩, hcells,
+        fun S hS hne => ?_⟩
+      by_cases hSP : S = P
+      · rw [hSP, ← hcells]
+        exact Finset.mem_insert_self _ _
+      · refine Finset.mem_insert_of_mem (Finset.mem_union.mpr ?_)
+        rcases hsplit S hS hSP with h | h
+        · exact Or.inl (sA S (Finset.mem_filter.mpr ⟨hS, h⟩) hne)
+        · exact Or.inr (sB S (Finset.mem_filter.mpr ⟨hS, Finset.subset_sdiff.mpr ⟨hsub S hS, h⟩⟩) hne)
+
+/-- **Lemma 3 (labels for a laminar family), proved.** -/
+theorem labelLemma : LabelLemma F :=
+  labelLemma_of_binaryRefinement fun _ _ => binaryRefinement
+
 end Labels
+
+section Assembly
+
+variable {F : Type*} [Field F] {m n : Type*} [Fintype m] [Fintype n] [DecidableEq m] [DecidableEq n]
+
+/-- **Theorem 1 for laminar decompositions, proved.** -/
+theorem laminarBound : LaminarBound F m n :=
+  laminarBound_of_labelLemma labelLemma
+
+/-- **Theorem 1 in coordinates from Lemma 1.** -/
+theorem blockRigidityCoord_of_treeLaminarDecomposition (h1 : TreeLaminarDecomposition F m n) :
+    BlockRigidityCoord F m n :=
+  blockRigidityCoord_of_laminarBound h1 laminarBound
+
+/-- **Conjecture A's lower bound from Lemma 1.** -/
+theorem conjectureA_lower_of_treeLaminarDecomposition {N L : ℕ}
+    (h1 : TreeLaminarDecomposition F (Fin N × Fin N) (Fin N × Fin N)) (hL : 0 < L) (hLN : L ∣ N)
+    (T : SteinerTree F (Fin N × Fin N) (Fin N × Fin N)) (h0 : T.Reaches 0)
+    (hT : ∀ r c : Fin N, ∀ s ∈ Finset.Icc 1 (N / L), T.Reaches (prefixTarget F N L r c s)) :
+    N ^ 3 ≤ T.length :=
+  conjectureA_lower_of_blockRigidityCoord (blockRigidityCoord_of_treeLaminarDecomposition h1)
+    hL hLN T h0 hT
+
+end Assembly
 
 end Hierarchy
 
