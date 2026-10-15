@@ -7,17 +7,27 @@ used only by the wide kinds, mum (a 64-bit state, y = hi, z = lo) and duo (two w
 addend KC and its own rotations. The paired kinds (ram, xma) take words two at a time, keyed by the first word's
 position.
 
+lut's nonlinearity is three keyed tables in shared memory (`lut_tables(kseed)`): the word's bits 0-10, 11-21 and 22-31
+index T0 (2048 entries), T1 (2048) and T2 (1024), and their XOR enters a 128-bit state (y, z, y2, z2) through one word,
+mixed by one rotation and two XORs. The word reaches the state only through the tables. Its receipt runs `LUT_BLANK`
+rounds that feed the state's own y ^ y2 through the tables, then folds the four words.
+
 ``OPS`` is the SASS each candidate should compile to per absorbed word; `sass_mix.py` counts what it does compile to.
 """
 
 from __future__ import annotations
 
+import functools
+
 M32 = 0xFFFFFFFF
 M64 = (1 << 64) - 1
 NKEY = 32
-KINDS = ("mad", "ra", "ram", "xma", "ar", "mum", "xsm", "xsm4", "mxm", "chi", "xsm2", "duo", "duo2")
+KINDS = ("mad", "ra", "ram", "xma", "ar", "mum", "xsm", "xsm4", "mxm", "chi", "xsm2", "duo", "duo2", "lut")
 PAIRED = ("ram", "xma")
-WIDE = ("mum", "duo", "duo2")
+WIDE = ("mum", "duo", "duo2", "lut")
+FOUR = ("duo2", "lut")
+LUT_SIZES = (2048, 2048, 1024)
+LUT_BLANK = 8
 OPS = {
     "mad": "IMAD (y*a_t + p)",
     "ra": "LEA.HI or SHF.L.W+IADD (rotl(y, r_t) + p)",
@@ -32,6 +42,7 @@ OPS = {
     "xsm2": "SHF, LOP3, IMAD, SHF, LOP3, IMAD",
     "duo": "LOP3 (y^p^k_t), IMAD (u*a_t + z), LEA.HI or SHF.L.W+IADD (rotl(u, r_t) + y')",
     "duo2": "duo twice: lane 1 (a_t, k_t, R1), lane 2 (b_t, c_t, R2) on the same word",
+    "lut": "3 field extracts (LOP3, SHF+LOP3, SHF), 3 LDS, LOP3 (T0^T1^T2), SHF.L.W (rot R1), LOP3 (z^x^u), LOP3 (y2^u)",
 }
 
 # duo2's rotations: lane 1 a permutation of 1..31 (period 31), lane 2 of 2..30 (period 29), so the two lanes repeat a
@@ -66,20 +77,37 @@ def rot_of(t: int) -> int:
 
 
 class Keys:
-    def __init__(self, ka, kb, kk, kc=None):
+    def __init__(self, ka, kb, kk, kc=None, lt=None):
         self.ka, self.kb, self.kk = list(ka), list(kb), list(kk)
         self.kc = list(kc) if kc is not None else [0] * len(self.ka)
+        self.lt = list(lt) if lt is not None else [0] * sum(LUT_SIZES)
 
 
+def lut_tables(kseed: int) -> list[int]:
+    """lut's T0, T1, T2 back to back, as `phi.cu`'s `set_keys` fills them (a window's key would expand them by SHA-512)."""
+    return [gen(kseed, 5 + j, i, 0) for j, n in enumerate(LUT_SIZES) for i in range(n)]
+
+
+@functools.lru_cache(maxsize=8)
 def keys(kseed: int) -> Keys:
     ka = [gen(kseed, 1, i, 0) | 1 for i in range(NKEY)]
     kb = [gen(kseed, 2, i, 0) | 1 for i in range(NKEY)]
     kk = [gen(kseed, 3, i, 0) for i in range(NKEY)]
     kc = [gen(kseed, 4, i, 0) for i in range(NKEY)]
-    return Keys(ka, kb, kk, kc)
+    return Keys(ka, kb, kk, kc, lut_tables(kseed))
+
+
+def lut_word(lt: list[int], w: int) -> int:
+    return lt[w & 0x7FF] ^ lt[2048 + ((w >> 11) & 0x7FF)] ^ lt[4096 + (w >> 22)]
 
 
 def absorb(kind: str, st: tuple[int, ...], p: list[int], t0: int, k: Keys) -> tuple[int, ...]:
+    if kind == "lut":
+        y, z, y2, z2 = st
+        for i, w in enumerate(p):
+            u = rotl(y, R1[(t0 + i) % 31])
+            y, z, y2, z2 = z ^ lut_word(k.lt, w) ^ u, y2 ^ u, z2, y
+        return y, z, y2, z2
     if kind == "duo2":
         y, z, y2, z2 = st
         for i, w in enumerate(p):
@@ -136,9 +164,15 @@ def absorb(kind: str, st: tuple[int, ...], p: list[int], t0: int, k: Keys) -> tu
     return y, z
 
 
-def finish(kind: str, st: tuple[int, ...]) -> int:
+def finish(kind: str, st: tuple[int, ...], k: Keys | None = None) -> int:
     """The block's receipt: mum's hi ^ lo, duo's y ^ rotl(z, 16), duo2's lanes so folded with lane 2 rotated by 8,
-    every other kind's y."""
+    lut's four words so folded after `LUT_BLANK` rounds on y ^ y2 (which need the key's tables), every other kind's y."""
+    if kind == "lut":
+        assert k is not None, "lut's receipt reads the tables"
+        for r in range(LUT_BLANK):
+            st = absorb("lut", st, [st[0] ^ st[2]], r, k)
+        y, z, y2, z2 = st
+        return y ^ rotl(z, 8) ^ rotl(y2, 16) ^ rotl(z2, 24)
     if kind == "duo2":
         y, z, y2, z2 = st
         return y ^ rotl(z, 16) ^ rotl(y2 ^ rotl(z2, 16), 8)
@@ -152,11 +186,11 @@ PU, PW = 4, 8
 def pure_chains(kind: str, iters: int, seed: int, kseed: int, tid: int) -> list[int]:
     """`pure_k<kind>`'s PU output words for thread `tid`: chain u absorbs chain u+1's state (and u+2's, for a pair)."""
     k = keys(kseed)
-    n = 4 if kind == "duo2" else 2
+    n = 4 if kind in FOUR else 2
     st = [tuple(gen(seed, tid, u, 100 + j) for j in range(n)) for u in range(PU)]
     step = 2 if kind in PAIRED else 1
     for _ in range(iters):
         for r in range(0, PW, step):
             w = [[st[(u + 1) % PU][0], st[(u + 2) % PU][0]][:step] for u in range(PU)]
             st = [absorb(kind, st[u], w[u], r, k) for u in range(PU)]
-    return [finish(kind, s) for s in st]
+    return [finish(kind, s, k) for s in st]

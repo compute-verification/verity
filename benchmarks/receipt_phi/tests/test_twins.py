@@ -28,12 +28,12 @@ def test_absorb_is_a_bijection_of_the_last_word(kind: str) -> None:
     rng = random.Random(1)
     n = 2 if kind in twins.PAIRED else 1
     for _ in range(200):
-        st = tuple(rng.getrandbits(32) for _ in range(4 if kind == "duo2" else 2))
+        st = tuple(rng.getrandbits(32) for _ in range(4 if kind in twins.FOUR else 2))
         p = [rng.getrandbits(32) for _ in range(n)]
         q = list(p)
         q[-1] ^= 1 << rng.randrange(32)
         a, b = twins.absorb(kind, st, p, 0, K), twins.absorb(kind, st, q, 0, K)
-        assert twins.finish(kind, a) != twins.finish(kind, b) or kind == "chi"
+        assert twins.finish(kind, a, K) != twins.finish(kind, b, K) or kind == "chi"
 
 
 def test_mad_is_affine() -> None:
@@ -61,6 +61,21 @@ def test_duo2_is_two_duo_lanes_with_their_own_keys_and_rotations() -> None:
             lanes[lane] = [y, (twins.rotl(u, r) + y) & twins.M32]
     assert twins.absorb("duo2", st, p, 0, K) == (*lanes[0], *lanes[1])
     assert len(set(K.kc)) == twins.NKEY and K.kc != K.kk
+
+
+def test_lut_word_enters_only_through_the_tables_and_the_step_is_invertible() -> None:
+    """lut's step is (y, z, y2, z2) -> (z ^ X ^ u, y2 ^ u, z2, y) with u = rotl(y, R1[t]) and X the XOR of the three
+    table entries the word's fields index: the word reaches the state only through X, and the step inverts."""
+    rng = random.Random(4)
+    assert len(K.lt) == sum(twins.LUT_SIZES) and len(set(K.lt)) == len(K.lt)
+    for t in range(64):
+        st = tuple(rng.getrandbits(32) for _ in range(4))
+        w = rng.getrandbits(32)
+        x = K.lt[w & 0x7FF] ^ K.lt[2048 + ((w >> 11) & 0x7FF)] ^ K.lt[4096 + (w >> 22)]
+        y, z, y2, z2 = twins.absorb("lut", st, [w], t, K)
+        a = z2
+        u = twins.rotl(a, twins.R1[t % 31])
+        assert (a, y ^ x ^ u, z ^ u, y2) == st
 
 
 def test_duo2_rotation_tables() -> None:

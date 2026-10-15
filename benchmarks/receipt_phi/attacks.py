@@ -50,8 +50,8 @@ import twins  # noqa: E402
 M32 = np.uint64(0xFFFFFFFF)
 U = np.uint64
 B2 = 256
-#: the kinds with a one- or two-word state; duo2's four words are `trails.py`'s
-KINDS = tuple(k for k in twins.KINDS if k != "duo2")
+#: the kinds with a one- or two-word state; duo2's and lut's four words are `trails.py`'s and `lut_trails.py`'s
+KINDS = tuple(k for k in twins.KINDS if k not in twins.FOUR)
 PAIRED = twins.PAIRED
 
 

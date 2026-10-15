@@ -33,6 +33,11 @@
 
 constexpr int NKEY = 32;
 __constant__ uint32_t KA[NKEY], KB[NKEY], KK[NKEY], KC[NKEY];
+// LUT's tables T0 (2048 entries), T1 (2048), T2 (1024), as twins.lut_tables: the constant bank holds them, and each
+// block copies them into shared memory before its loop (20 KB).
+constexpr int NLT = 5120;
+__constant__ uint32_t LT[NLT];
+__shared__ uint32_t LTS[NLT];
 
 __host__ __device__ __forceinline__ uint32_t lowbias32(uint32_t x) {
   x ^= x >> 16;
@@ -62,10 +67,11 @@ __host__ __device__ constexpr int rot2(int t) {
   return R[t % 29];
 }
 
-enum Kind { MAD = 0, RA, RAM, XMA, AR, MUM, XSM, XSM4, MXM, CHI, XSM2, DUO, DUO2, NK };
+enum Kind { MAD = 0, RA, RAM, XMA, AR, MUM, XSM, XSM4, MXM, CHI, XSM2, DUO, DUO2, LUT, NK };
 static const char* KIND_NAME[NK] = {"mad", "ra",  "ram", "xma", "ar",   "mum", "xsm",
-                                    "xsm4", "mxm", "chi", "xsm2", "duo", "duo2"};
-__host__ __device__ constexpr bool wide(int k) { return k == MUM || k == DUO || k == DUO2; }
+                                    "xsm4", "mxm", "chi", "xsm2", "duo", "duo2", "lut"};
+__host__ __device__ constexpr bool wide(int k) { return k == MUM || k == DUO || k == DUO2 || k == LUT; }
+__host__ __device__ constexpr bool four(int k) { return k == DUO2 || k == LUT; }
 __host__ __device__ constexpr bool paired(int k) { return k == RAM || k == XMA; }
 
 struct St {
@@ -122,7 +128,25 @@ __device__ __forceinline__ void absorb(St& s, const uint32_t* p) {
       const uint32_t v = s.y2 ^ p[i] ^ KC[t];
       s.y2 = v * KB[t] + s.z2;
       s.z2 = rotl(v, rot2(t)) + s.y2;
+    } else if constexpr (K == LUT) {
+      const uint32_t w = p[i];
+      const uint32_t x = LTS[w & 0x7FFu] ^ LTS[2048 + ((w >> 11) & 0x7FFu)] ^ LTS[4096 + (w >> 22)];
+      const uint32_t a = s.y, u = rotl(a, rot1(t));
+      s.y = s.z ^ x ^ u;
+      s.z = s.y2 ^ u;
+      s.y2 = s.z2;
+      s.z2 = a;
     }
+  }
+}
+
+// LUT's receipt runs R blank rounds that feed the state's own y ^ y2 through the tables (twins.LUT_BLANK = 8).
+template <int R>
+__device__ __forceinline__ void lut_blank(St& s) {
+  if constexpr (R > 0) {
+    lut_blank<R - 1>(s);
+    const uint32_t w[1] = {s.y ^ s.y2};
+    absorb<LUT, 1, R - 1>(s, w);
   }
 }
 
@@ -130,6 +154,11 @@ __device__ __forceinline__ void absorb(St& s, const uint32_t* p) {
 // above all) only through carries: its fold rotates z instead.
 template <int K>
 __device__ __forceinline__ uint32_t finish(const St& s) {
+  if constexpr (K == LUT) {
+    St q = s;
+    lut_blank<8>(q);
+    return q.y ^ rotl(q.z, 8) ^ rotl(q.y2, 16) ^ rotl(q.z2, 24);
+  }
   if constexpr (K == DUO2) return s.y ^ rotl(s.z, 16) ^ rotl(s.y2 ^ rotl(s.z2, 16), 8);
   return K == MUM ? (s.y ^ s.z) : K == DUO ? (s.y ^ rotl(s.z, 16)) : s.y;
 }
@@ -148,11 +177,13 @@ __global__ void __launch_bounds__(TPB) pure_k(uint32_t* out, int iters, uint32_t
   for (int u = 0; u < PU; ++u) {
     s[u].y = gen(seed, tid, u, 100);
     s[u].z = gen(seed, tid, u, 101);
-    if constexpr (K == DUO2) {
+    if constexpr (four(K)) {
       s[u].y2 = gen(seed, tid, u, 102);
       s[u].z2 = gen(seed, tid, u, 103);
     }
   }
+  if constexpr (K == LUT)
+    for (int i = threadIdx.x; i < NLT; i += blockDim.x) LTS[i] = LT[i];
   __syncthreads();
   const long long t0 = clock64();
 #pragma unroll 1
@@ -437,7 +468,7 @@ __global__ void __launch_bounds__(TPB) fused_k(uint32_t* out, int iters, uint32_
   for (int j = 0; j < FT; ++j) {
     s[j].y = gen(seed, tid, j, 100);
     s[j].z = gen(seed, tid, j, 101);
-    if constexpr (K == DUO2) {
+    if constexpr (four(K)) {
       s[j].y2 = gen(seed, tid, j, 103);
       s[j].z2 = gen(seed, tid, j, 104);
     }
@@ -457,9 +488,11 @@ __global__ void __launch_bounds__(TPB) fused_k(uint32_t* out, int iters, uint32_
 #pragma unroll
   for (int j = 0; j < FT; ++j) {
     asm volatile("" : "+r"(s[j].y), "+r"(s[j].z), "+f"(ff[j]));
-    if constexpr (K == DUO2) asm volatile("" : "+r"(s[j].y2), "+r"(s[j].z2));
+    if constexpr (four(K)) asm volatile("" : "+r"(s[j].y2), "+r"(s[j].z2));
     asm volatile("" : "+r"(xw[j][0]), "+r"(xw[j][1]), "+r"(xw[j][2]), "+r"(xw[j][3]));
   }
+  if constexpr (K == LUT)
+    for (int i = threadIdx.x; i < NLT; i += blockDim.x) LTS[i] = LT[i];
   __syncthreads();
   if constexpr ((MODE & 8) != 0) {
     uint32_t slot;
@@ -526,7 +559,7 @@ __global__ void __launch_bounds__(TPB) fused_k(uint32_t* out, int iters, uint32_
 using KFn = void (*)(uint32_t*, int, uint32_t, long long*);
 
 static KFn PURE[NK] = {pure_k<0>, pure_k<1>, pure_k<2>,  pure_k<3>,  pure_k<4>,  pure_k<5>, pure_k<6>,
-                       pure_k<7>, pure_k<8>, pure_k<9>, pure_k<10>, pure_k<11>, pure_k<12>};
+                       pure_k<7>, pure_k<8>, pure_k<9>, pure_k<10>, pure_k<11>, pure_k<12>, pure_k<13>};
 static KFn PROBE[NP] = {probe_k<0>,  probe_k<1>,  probe_k<2>,  probe_k<3>,  probe_k<4>,  probe_k<5>,
                         probe_k<6>,  probe_k<7>,  probe_k<8>,  probe_k<9>,  probe_k<10>, probe_k<11>,
                         probe_k<12>, probe_k<13>, probe_k<14>, probe_k<15>, probe_k<16>, probe_k<17>};
@@ -537,8 +570,8 @@ static const int CS[NC] = {1, 2, 4, 8, 16, 32};
 #define FMODE(M)                                                                                               \
   {FROW(-1, M), FROW(0, M), FROW(1, M), FROW(2, M),  FROW(3, M),  FROW(4, M),  FROW(5, M),  FROW(6, M), \
    FROW(7, M),  FROW(8, M), FROW(9, M), FROW(10, M), FROW(11, M), FROW(12, M), FROW(13, M), FROW(14, M),  \
-   FROW(15, M), FROW(16, M)}
-static_assert(NF == 17, "FMODE lists every fused kind");
+   FROW(15, M), FROW(16, M), FROW(17, M)}
+static_assert(NF == 18, "FMODE lists every fused kind");
 static KFn FUSED[NM][NF + 1][NC] = {FMODE(0), FMODE(1), FMODE(2), FMODE(3), FMODE(5), FMODE(7), FMODE(10), FMODE(11)};
 
 static const char* fused_name(int k) { return k < 0 ? "none" : k < NK ? KIND_NAME[k] : CONTROL_NAME[k - NK]; }
@@ -555,6 +588,27 @@ static void set_keys(uint32_t kseed) {
   CK(cudaMemcpyToSymbol(KB, kb, sizeof kb));
   CK(cudaMemcpyToSymbol(KK, kk, sizeof kk));
   CK(cudaMemcpyToSymbol(KC, kc, sizeof kc));
+  static uint32_t lt[NLT];
+  const int sizes[3] = {2048, 2048, 1024};
+  for (int j = 0, i = 0; j < 3; ++j)
+    for (int e = 0; e < sizes[j]; ++e) lt[i++] = gen(kseed, 5 + j, e, 0);
+  CK(cudaMemcpyToSymbol(LT, lt, sizeof lt));
+}
+
+// PHI_KINDS / PHI_MODES (comma lists of KIND_NAME / CONTROL_NAME and MODE_NAME entries, "none" for the bare loop)
+// restrict `fused` to those rows; unset means every row.
+static bool listed(const char* env, const char* name) {
+  const char* l = getenv(env);
+  if (!l || !*l) return true;
+  const size_t n = strlen(name);
+  for (const char* p = l; *p;) {
+    const char* e = strchr(p, ',');
+    const size_t m = e ? (size_t)(e - p) : strlen(p);
+    if (m == n && !strncmp(p, name, n)) return true;
+    if (!e) break;
+    p = e + 1;
+  }
+  return false;
 }
 
 struct Timing {
@@ -681,6 +735,7 @@ int main(int argc, char** argv) {
     for (int m = 0; m < NM; ++m)
       for (int k = -1; k < NF; ++k)
         for (int ci = 0; ci < NC; ++ci) {
+          if (!listed("PHI_MODES", MODE_NAME[m]) || !listed("PHI_KINDS", fused_name(k))) continue;
           const int c = CS[ci];
           const int it = (iters / c) & ~1;
           emit(MODE_NAME[m], fused_name(k), c, it, time_kernel(FUSED[m][k + 1][ci], it, reps, seed, occ), c * FT,
