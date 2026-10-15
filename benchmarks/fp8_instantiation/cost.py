@@ -80,10 +80,28 @@ def form(x: np.ndarray, e: np.ndarray, f: np.ndarray, fix: bool):
     return e4m3(alpha[:, None] * x + ep @ f.T), ep, alpha, rho * alpha
 
 
+def lines_fast(rng: np.random.Generator, n: int, norm: float) -> np.ndarray:
+    """n lines by `pearl_c.sample_line`'s rule from numpy's random bytes in place of SHA-512's (`check` compares them)."""
+    return line_values(rng.integers(0, 256, (n, R), dtype=np.uint8), norm)
+
+
+def line_values(raw: np.ndarray, norm: float) -> np.ndarray:
+    xs = np.where(raw >> 7, -1.0, 1.0) * ((raw & 0x7F).astype(np.float64) + 1)
+    ss = (xs * xs).sum(axis=1) * 1024
+    r = np.floor(np.sqrt(ss))
+    r = np.where(r * r > ss, r - 1, np.where((r + 1) ** 2 <= ss, r + 1, r))
+    scale = bf16(bf16(np.full(len(r), norm * 32)) / bf16(r))
+    return e4m3(bf16(xs * scale[:, None]))
+
+
 def served(x: np.ndarray, w: np.ndarray, seed_a: bytes, seed_b: bytes, fix: bool, rows_idx, cols_idx):
     k = x.shape[1]
     fa, fb = lines(seed_b, 0, 1, range(k), 16.0), lines(seed_b, 1, 1, range(k), 16.0)
     ea, eb = lines(seed_a, 0, 0, rows_idx, 256.0), lines(seed_b, 1, 0, cols_idx, 256.0)
+    return serve(x, w, fa, fb, ea, eb, fix)
+
+
+def serve(x: np.ndarray, w: np.ndarray, fa: np.ndarray, fb: np.ndarray, ea: np.ndarray, eb: np.ndarray, fix: bool):
     a, epa, alpha_a, sa = form(x, ea, fa, fix)
     b, epb, alpha_b, sb = form(w, eb, fb, fix)
     g = (fb.T @ fa).astype(np.float32).astype(np.float64)
@@ -207,6 +225,10 @@ def check(k: int = 256, m: int = 4, n: int = 4) -> dict:
            "max_rel_diff_emulation_vs_bit_exact": float(np.abs(emu - exact).max() / np.abs(ref).max()),
            "err_bit_exact": float(np.abs(exact - ref).max() / np.abs(ref).max()),
            "err_emulation": float(np.abs(emu - ref).max() / np.abs(ref).max()), "law": []}
+    sb = PC.S512Seed(seed_b)
+    raw = np.array([list(PC.s512("line", PC._s512_line_key(sb) + bytes([1, 1]) + t.to_bytes(4, "little"))[:R])
+                    for t in range(2000)], dtype=np.uint8)
+    out["lines_fast_equal"] = float((line_values(raw, 16.0) == lines(seed_b, 1, 1, range(2000), 16.0)).mean())
     from detection import Pools, beta_for
     pools, lp = Pools(400, 7), LinePools(400, 7)
     for v, sig in ((200.0, 56.0), (224.0, 56.0), (7.91, 1.0), (0.0, 1.25)):
