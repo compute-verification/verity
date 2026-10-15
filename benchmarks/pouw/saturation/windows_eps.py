@@ -42,11 +42,11 @@ DESIGNS = [  # name, prefill kernel, decode kernel
     ("1× alu, L = 32", "p_alu_g4", "d_alu_g4"),
     ("3× alu, L = 128, spread (crossover)", "p_alu3_p1s", "d_alu16_p1"),
 ]
-SCENARIOS = [  # name, measured idle SM-time as served?, ν_f (CUDA slack left once a tail filler owns the idle SMs)
-    ("as served (measured idle, ν_f 0)", True, 0.0),
-    ("tail filler, ν_f 0.04", False, 0.04),
+SCENARIOS = [  # name, measured idle SM-time as served?, ν_f (CUDA slack a fused cheater uses; None: section 1's)
+    ("as served (measured idle, ν_f from section 1)", True, None),
+    ("tail filler, ν_f 0.04 (round 1's probe bound)", False, 0.04),
     ("tail filler, ν_f 0.01", False, 0.01),
-    ("tail filler, ν_f 0", False, 0.0),
+    ("tail filler, ν_f from section 1", False, None),
 ]
 
 
@@ -92,6 +92,24 @@ def measured_idle(co):
     return {k: {"idle": b / a, "tail": c / a, "residue": (b - c) / a} for k, (a, b, c) in acc.items()}
 
 
+def frontier_slack(tab, k, ph):
+    """CUDA capacity a fused cheater adds beside kernel k without losing tensor rate, per unit of the window's CUDA
+    capacity: the largest φ-share gain over k among the phase's measured kernels that keep at least k's rate. A
+    cheater that trades tensor rate for CUDA work instead is the κ question (see the note), not this term."""
+    pts = [(p["phi_share"], p["rate_kept"]) for p in tab["phases"] if p["phase"] == ph]
+    p0, r0 = next((p["phi_share"], p["rate_kept"]) for p in tab["phases"] if p["kernel"] == k and p["phase"] == ph)
+    return max([0.0] + [p1 - p0 for p1, r1 in pts if r1 >= r0])
+
+
+def trade_threshold(tab, k, ph):
+    """The MAC credit per CUDA slot above which trading tensor rate for CUDA work pays a cheater beside kernel k: moving
+    to a measured point (p1, r1) with more φ and less rate fakes K·128(p1 − p0) MACs an SM-clock and loses
+    1,024·η(r0 − r1) real ones, so it pays when K > ρη(r0 − r1)/(p1 − p0). φ alone (p 1, r 0) is a point."""
+    pts = [(p["phi_share"], p["rate_kept"]) for p in tab["phases"] if p["phase"] == ph] + [(1.0, 0.0)]
+    p0, r0 = next((p["phi_share"], p["rate_kept"]) for p in tab["phases"] if p["kernel"] == k and p["phase"] == ph)
+    return min(RHO * ETA_GEMM[ph] * (r0 - r1) / (p1 - p0) for p1, r1 in pts if p1 > p0 and r1 < r0)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("table")
@@ -129,7 +147,7 @@ def main():
     print("\n| design | phase | rate kept | honest overhead (step) | κ | η_w | ×ν | f terms | idle (corun) | "
           + " | ".join(f"ε_in: {s[0]}" for s in SCENARIOS) + " | page's reading (ν_w = 1 − φ share) | "
           + " | ".join(f"ε end to end: {s[0]}" for s in SCENARIOS) + " |")
-    print("|---|---|---|---|---|---|---|---|---|" + "---|" * len(SCENARIOS) + "---|" + "---|" * len(SCENARIOS))
+    print("|---|---|---|---|---|---|---|---|---|---|---|" + "---|" * len(SCENARIOS) + "---|" + "---|" * len(SCENARIOS))
     for name, pk, dk in DESIGNS:
         for ph in PHASES:
             k = dk if ph == "d32" else pk
@@ -147,18 +165,21 @@ def main():
             mult = kappa / (RHO * eta_w)
             f_terms = F + kappa * F * h / L
             nu_idle = max(0.0, idle[(k, ph)]["idle"]) if (k, ph) in idle else nu_tail[ph]
-            eps = [f_terms + mult * nf + (BEST_ETA * nu_idle / eta_w if served else 0.0) for _, served, nf in SCENARIOS]
+            nu_f = frontier_slack(tab, k, ph)
+            k_star = trade_threshold(tab, k, ph)
+            eps = [f_terms + mult * (nu_f if nf is None else nf) + (BEST_ETA * nu_idle / eta_w if served else 0.0)
+                   for _, served, nf in SCENARIOS]
             page = f_terms + mult * max(0.0, 1 - share)
             cov = res["coverage"][ph]["macs"]
             e2e = [1 - cov * (1 - min(1.0, e)) for e in eps]
             res["designs"].append({"design": name, "kernel": k, "phase": ph, "L": L, "rounds": rounds, "var": var,
                                    "rate_kept": kp, "phi_share": share, "overhead": over, "kappa": kappa, "h": h,
-                                   "eta_w": eta_w, "nu_multiplier": mult, "f_terms": f_terms, "idle": nu_idle,
+                                   "eta_w": eta_w, "nu_multiplier": mult, "f_terms": f_terms, "idle": nu_idle, "nu_f_frontier": nu_f, "trade_threshold": k_star,
                                    "eps_in": dict(zip([s[0] for s in SCENARIOS], eps)), "eps_page": page,
                                    "eps_end_to_end": dict(zip([s[0] for s in SCENARIOS], e2e))})
             fmt = lambda e: f"{100 * e:.1f}%" if e < 1 else "vacuous"
             print(f"| {name} | {ph} | {100 * kp:.1f}% | {100 * over:.1f}% | {kappa:.1f} | {eta_w:.3f} | {mult:.2f} | "
-                  f"{100 * f_terms:.2f}% | {100 * nu_idle:.1f}% | " + " | ".join(fmt(e) for e in eps)
+                  f"{100 * f_terms:.2f}% | {100 * nu_idle:.1f}% | {100 * nu_f:.1f}% | {k_star:.1f} | " + " | ".join(fmt(e) for e in eps)
                   + f" | {fmt(page)} | " + " | ".join(fmt(e) for e in e2e) + " |")
 
     print("\n| phase | sequence | alone ms | filler | slowdown | filler's share of its solo rate | free share of its work "
