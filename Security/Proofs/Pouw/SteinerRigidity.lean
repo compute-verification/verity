@@ -785,4 +785,293 @@ theorem conjectureA_lower_of_lemmas {N L : ℕ}
 
 end Flattening
 
+/-!
+## Lemma 3's induction, on binary hierarchies
+
+A full binary hierarchy on the cells, each internal node typed x (`true`) or y (`false`). `xi h` is the
+functional `ξ_S` (the indicator of `D(S)`), `Vx h` is `V_x(S)`; the column side's `η_S` and `V_y(S)` are `xi` and
+`Vx` of the hierarchy with every type flipped. A side is valid when `Vx` meets no row block (`V_x ∩ F^row r = 0`);
+its handles are `ρ(S) = {r | ξ_S ∈ V_x(S) + F^row r}`. Claims 3, 4 and 5 of the note and the typing rule are proved
+below: every hierarchy with disjoint siblings has a typing valid on both sides.
+-/
+
+section Hierarchy
+
+/-- A binary hierarchy on cells; an internal node's flag is its type, `true` for x and `false` for y. -/
+inductive Hier (κ : Type*) where
+  | leaf (t : κ)
+  | node (x : Bool) (l r : Hier κ)
+
+namespace Hier
+
+variable {κ : Type*}
+
+/-- The cells below a node. -/
+def cells [DecidableEq κ] : Hier κ → Finset κ
+  | leaf t => {t}
+  | node _ l r => l.cells ∪ r.cells
+
+/-- Siblings are disjoint at every node. -/
+def WF [DecidableEq κ] : Hier κ → Prop
+  | leaf _ => True
+  | node _ l r => l.WF ∧ r.WF ∧ Disjoint l.cells r.cells
+
+/-- Swap every node's type. -/
+def flip : Hier κ → Hier κ
+  | leaf t => leaf t
+  | node x l r => node (!x) l.flip r.flip
+
+theorem cells_flip [DecidableEq κ] : ∀ h : Hier κ, h.flip.cells = h.cells
+  | leaf _ => rfl
+  | node _ l r => by simp only [flip, cells, cells_flip l, cells_flip r]
+
+theorem wf_flip [DecidableEq κ] : ∀ h : Hier κ, h.flip.WF ↔ h.WF
+  | leaf _ => Iff.rfl
+  | node _ l r => by simp only [flip, WF, wf_flip l, wf_flip r, cells_flip]
+
+theorem flip_flip : ∀ h : Hier κ, h.flip.flip = h
+  | leaf _ => rfl
+  | node x l r => by simp only [flip, Bool.not_not, flip_flip l, flip_flip r]
+
+variable (F : Type*) [Field F] [DecidableEq κ]
+
+/-- `ξ_S`: at an x-node the first child's, at a y-node the sum of the children's. -/
+def xi : Hier κ → κ → F
+  | leaf t => Pi.single t 1
+  | node true l _ => l.xi
+  | node false l r => l.xi + r.xi
+
+/-- `V_x(S)`: the span of `ξ_{U'} - ξ_{U''}` over the x-nodes `U` below. -/
+def Vx : Hier κ → Submodule F (κ → F)
+  | leaf _ => ⊥
+  | node true l r => l.Vx ⊔ r.Vx ⊔ Submodule.span F {l.xi F - r.xi F}
+  | node false l r => l.Vx ⊔ r.Vx
+
+/-- The vectors supported on `S`. -/
+def supp (S : Finset κ) : Submodule F (κ → F) where
+  carrier := {v | ∀ t ∉ S, v t = 0}
+  add_mem' := by
+    intro a b ha hb t ht
+    simp [ha t ht, hb t ht]
+  zero_mem' := fun _ _ => rfl
+  smul_mem' := by
+    intro c v hv t ht
+    simp [hv t ht]
+
+/-- Restriction to `S`: zero outside `S`. -/
+def restrict (S : Finset κ) : (κ → F) →ₗ[F] (κ → F) where
+  toFun v t := if t ∈ S then v t else 0
+  map_add' v w := by
+    ext t
+    by_cases h : t ∈ S <;> simp [h]
+  map_smul' c v := by
+    ext t
+    by_cases h : t ∈ S <;> simp [h]
+
+/-- The handles `{r | ξ_S ∈ V_x(S) + F^row r}`, for the block map `blk`. -/
+def handle {ι : Type*} (blk : κ → ι) (h : Hier κ) : Set ι :=
+  {r | h.xi F ∈ h.Vx F ⊔ blockSubspace F blk r}
+
+/-- One side of validity: `V_x(S)` meets no block of `blk`. -/
+def SideValid {ι : Type*} (blk : κ → ι) (h : Hier κ) : Prop :=
+  ∀ r, Disjoint (h.Vx F) (blockSubspace F blk r)
+
+variable {F}
+
+omit [DecidableEq κ] in
+theorem supp_mono {S S' : Finset κ} (h : S ⊆ S') : supp F S ≤ supp F S' :=
+  fun _ hv t ht => hv t fun h' => ht (h h')
+
+theorem xi_mem_supp : ∀ h : Hier κ, h.xi F ∈ supp F h.cells
+  | leaf t => by
+    intro u hu
+    simp only [cells, Finset.mem_singleton] at hu
+    simp [xi, hu]
+  | node true l r => supp_mono Finset.subset_union_left (xi_mem_supp l)
+  | node false l r => Submodule.add_mem _ (supp_mono Finset.subset_union_left (xi_mem_supp l))
+      (supp_mono Finset.subset_union_right (xi_mem_supp r))
+
+theorem Vx_le_supp : ∀ h : Hier κ, h.Vx F ≤ supp F h.cells
+  | leaf _ => bot_le
+  | node true l r => sup_le (sup_le ((Vx_le_supp l).trans (supp_mono Finset.subset_union_left))
+      ((Vx_le_supp r).trans (supp_mono Finset.subset_union_right)))
+      ((Submodule.span_le).mpr (Set.singleton_subset_iff.mpr (Submodule.sub_mem _
+        (supp_mono Finset.subset_union_left (xi_mem_supp l))
+        (supp_mono Finset.subset_union_right (xi_mem_supp r)))))
+  | node false l r => sup_le ((Vx_le_supp l).trans (supp_mono Finset.subset_union_left))
+      ((Vx_le_supp r).trans (supp_mono Finset.subset_union_right))
+
+theorem restrict_of_mem_supp {S : Finset κ} {v : κ → F} (hv : v ∈ supp F S) : restrict F S v = v := by
+  ext t
+  change (if t ∈ S then v t else 0) = v t
+  split_ifs with h
+  · rfl
+  · exact (hv t h).symm
+
+theorem restrict_of_mem_supp_disjoint {S S' : Finset κ} {v : κ → F} (hv : v ∈ supp F S')
+    (hd : Disjoint S S') : restrict F S v = 0 := by
+  ext t
+  change (if t ∈ S then v t else 0) = 0
+  split_ifs with h
+  · exact hv t (Finset.disjoint_left.mp hd h)
+  · rfl
+
+theorem restrict_mem_blockSubspace {ι : Type*} {blk : κ → ι} {r : ι} {S : Finset κ} {v : κ → F}
+    (hv : v ∈ blockSubspace F blk r) : restrict F S v ∈ blockSubspace F blk r := by
+  intro t ht
+  change (if t ∈ S then v t else 0) = 0
+  split_ifs
+  · exact hv t ht
+  · rfl
+
+variable {ι : Type*} {blk : κ → ι}
+
+/-- **Claim 5, the other type's side**: at a node whose `V_x` is the sum of the children's. -/
+theorem sideValid_node_false {l r : Hier κ} (hd : Disjoint l.cells r.cells)
+    (hl : SideValid F blk l) (hr : SideValid F blk r) : SideValid F blk (node false l r) := by
+  intro r₀
+  rw [Submodule.disjoint_def]
+  intro w hw hw₀
+  obtain ⟨v', hv', v'', hv'', rfl⟩ := Submodule.mem_sup.mp hw
+  have e₁ : restrict F l.cells (v' + v'') = v' := by
+    rw [map_add, restrict_of_mem_supp (Vx_le_supp l hv'),
+      restrict_of_mem_supp_disjoint (Vx_le_supp r hv'') hd, add_zero]
+  have e₂ : restrict F r.cells (v' + v'') = v'' := by
+    rw [map_add, restrict_of_mem_supp (Vx_le_supp r hv''),
+      restrict_of_mem_supp_disjoint (Vx_le_supp l hv') hd.symm, zero_add]
+  have h₁ : v' = 0 := Submodule.disjoint_def.mp (hl r₀) v' hv'
+    (e₁ ▸ restrict_mem_blockSubspace hw₀)
+  have h₂ : v'' = 0 := Submodule.disjoint_def.mp (hr r₀) v'' hv''
+    (e₂ ▸ restrict_mem_blockSubspace hw₀)
+  rw [h₁, h₂, add_zero]
+
+/-- A node's `V_x` at an x-node, as a sum. -/
+theorem mem_Vx_node_true {l r : Hier κ} {w : κ → F} (hw : w ∈ (node true l r).Vx F) :
+    ∃ v' ∈ l.Vx F, ∃ v'' ∈ r.Vx F, ∃ μ : F, w = v' + v'' + μ • (l.xi F - r.xi F) := by
+  obtain ⟨u, hu, s, hs, rfl⟩ := Submodule.mem_sup.mp hw
+  obtain ⟨v', hv', v'', hv'', rfl⟩ := Submodule.mem_sup.mp hu
+  obtain ⟨μ, rfl⟩ := Submodule.mem_span_singleton.mp hs
+  exact ⟨v', hv', v'', hv'', μ, rfl⟩
+
+/-- **Claim 5, the node's own side**: at an x-node whose children have no handle in common. -/
+theorem sideValid_node_true {l r : Hier κ} (hd : Disjoint l.cells r.cells)
+    (hl : SideValid F blk l) (hr : SideValid F blk r)
+    (hρ : ∀ r₀, r₀ ∈ handle F blk l → r₀ ∈ handle F blk r → False) :
+    SideValid F blk (node true l r) := by
+  intro r₀
+  rw [Submodule.disjoint_def]
+  intro w hw hw₀
+  obtain ⟨v', hv', v'', hv'', μ, rfl⟩ := mem_Vx_node_true hw
+  have hl' := xi_mem_supp (F := F) l
+  have hr' := xi_mem_supp (F := F) r
+  have e₁ : restrict F l.cells (v' + v'' + μ • (l.xi F - r.xi F)) = v' + μ • l.xi F := by
+    rw [map_add, map_add, map_smul, map_sub, restrict_of_mem_supp (Vx_le_supp l hv'),
+      restrict_of_mem_supp_disjoint (Vx_le_supp r hv'') hd, restrict_of_mem_supp hl',
+      restrict_of_mem_supp_disjoint hr' hd, add_zero, sub_zero]
+  have e₂ : restrict F r.cells (v' + v'' + μ • (l.xi F - r.xi F)) = v'' - μ • r.xi F := by
+    rw [map_add, map_add, map_smul, map_sub, restrict_of_mem_supp (Vx_le_supp r hv''),
+      restrict_of_mem_supp_disjoint (Vx_le_supp l hv') hd.symm, restrict_of_mem_supp hr',
+      restrict_of_mem_supp_disjoint hl' hd.symm, zero_add, zero_sub, smul_neg, sub_eq_add_neg]
+  have m₁ := e₁ ▸ restrict_mem_blockSubspace (S := l.cells) hw₀
+  have m₂ := e₂ ▸ restrict_mem_blockSubspace (S := r.cells) hw₀
+  by_cases hμ : μ = 0
+  · subst hμ
+    simp only [zero_smul, add_zero, sub_zero] at m₁ m₂ ⊢
+    rw [Submodule.disjoint_def.mp (hl r₀) v' hv' m₁, Submodule.disjoint_def.mp (hr r₀) v'' hv'' m₂,
+      add_zero]
+  · exfalso
+    refine hρ r₀ ?_ ?_
+    · have : l.xi F = -(μ⁻¹ • v') + μ⁻¹ • (v' + μ • l.xi F) := by
+        rw [smul_add, smul_smul, inv_mul_cancel₀ hμ, one_smul]
+        abel
+      change l.xi F ∈ l.Vx F ⊔ blockSubspace F blk r₀
+      rw [this]
+      exact Submodule.add_mem_sup (Submodule.neg_mem _ (Submodule.smul_mem _ _ hv'))
+        (Submodule.smul_mem _ _ m₁)
+    · have : r.xi F = μ⁻¹ • v'' + -(μ⁻¹ • (v'' - μ • r.xi F)) := by
+        rw [smul_sub, smul_smul, inv_mul_cancel₀ hμ, one_smul]
+        abel
+      change r.xi F ∈ r.Vx F ⊔ blockSubspace F blk r₀
+      rw [this]
+      exact Submodule.add_mem_sup (Submodule.smul_mem _ _ hv'')
+        (Submodule.neg_mem _ (Submodule.smul_mem _ _ m₂))
+
+/-- **Claim 3, at a leaf**: `ρ(t) ⊆ {r_t}`. -/
+theorem handle_leaf {t : κ} {r₀ : ι} (h : r₀ ∈ handle F blk (leaf t)) : blk t = r₀ := by
+  change Pi.single t 1 ∈ (⊥ : Submodule F (κ → F)) ⊔ blockSubspace F blk r₀ at h
+  rw [bot_sup_eq] at h
+  by_contra hne
+  have := h t hne
+  simp at this
+
+/-- **Claim 3, the node's own side**: `ρ(S) ⊆ ρ(S') ∪ ρ(S'')` at an x-node. -/
+theorem handle_node_true {l r : Hier κ} (hd : Disjoint l.cells r.cells) {r₀ : ι}
+    (h : r₀ ∈ handle F blk (node true l r)) : r₀ ∈ handle F blk l ∨ r₀ ∈ handle F blk r := by
+  change l.xi F ∈ (node true l r).Vx F ⊔ blockSubspace F blk r₀ at h
+  obtain ⟨w, hw, f, hf, hsum⟩ := Submodule.mem_sup.mp h
+  obtain ⟨v', hv', v'', hv'', μ, rfl⟩ := mem_Vx_node_true hw
+  have hl' := xi_mem_supp (F := F) l
+  have hr' := xi_mem_supp (F := F) r
+  have e₁ := congrArg (restrict F l.cells) hsum
+  have e₂ := congrArg (restrict F r.cells) hsum
+  rw [map_add, map_add, map_add, map_smul, map_sub, restrict_of_mem_supp (Vx_le_supp l hv'),
+    restrict_of_mem_supp_disjoint (Vx_le_supp r hv'') hd, restrict_of_mem_supp hl',
+    restrict_of_mem_supp_disjoint hr' hd, add_zero, sub_zero] at e₁
+  rw [map_add, map_add, map_add, map_smul, map_sub, restrict_of_mem_supp (Vx_le_supp r hv''),
+    restrict_of_mem_supp_disjoint (Vx_le_supp l hv') hd.symm, restrict_of_mem_supp hr',
+    restrict_of_mem_supp_disjoint hl' hd.symm, zero_add, zero_sub] at e₂
+  have mf₁ : restrict F l.cells f ∈ blockSubspace F blk r₀ := restrict_mem_blockSubspace hf
+  have mf₂ : restrict F r.cells f ∈ blockSubspace F blk r₀ := restrict_mem_blockSubspace hf
+  by_cases hμ : μ = 1
+  · subst hμ
+    right
+    change r.xi F ∈ r.Vx F ⊔ blockSubspace F blk r₀
+    have : r.xi F = v'' + restrict F r.cells f := by
+      rw [one_smul] at e₂
+      calc r.xi F = r.xi F + (v'' + -r.xi F + restrict F r.cells f) := by rw [e₂, add_zero]
+        _ = v'' + restrict F r.cells f := by abel
+    rw [this]
+    exact Submodule.add_mem_sup hv'' mf₂
+  · left
+    change l.xi F ∈ l.Vx F ⊔ blockSubspace F blk r₀
+    have hμ' : (1 - μ) ≠ 0 := sub_ne_zero.mpr (Ne.symm hμ)
+    have : l.xi F = (1 - μ)⁻¹ • v' + (1 - μ)⁻¹ • restrict F l.cells f := by
+      rw [← smul_add]
+      apply smul_right_injective (κ → F) hμ'
+      simp only
+      rw [smul_smul, mul_inv_cancel₀ hμ', one_smul, sub_smul, one_smul]
+      calc l.xi F - μ • l.xi F = (v' + μ • l.xi F + restrict F l.cells f) - μ • l.xi F := by
+            rw [e₁]
+        _ = v' + restrict F l.cells f := by abel
+    rw [this]
+    exact Submodule.add_mem_sup (Submodule.smul_mem _ _ hv') (Submodule.smul_mem _ _ mf₁)
+
+/-- **Claim 3, the other type's side**: `γ(S) ⊆ γ(S') ∩ γ(S'')` at a node whose `V` is the children's sum. -/
+theorem handle_node_false {l r : Hier κ} (hd : Disjoint l.cells r.cells) {r₀ : ι}
+    (h : r₀ ∈ handle F blk (node false l r)) : r₀ ∈ handle F blk l ∧ r₀ ∈ handle F blk r := by
+  change l.xi F + r.xi F ∈ (l.Vx F ⊔ r.Vx F) ⊔ blockSubspace F blk r₀ at h
+  obtain ⟨w, hw, f, hf, hsum⟩ := Submodule.mem_sup.mp h
+  obtain ⟨v', hv', v'', hv'', rfl⟩ := Submodule.mem_sup.mp hw
+  have hl' := xi_mem_supp (F := F) l
+  have hr' := xi_mem_supp (F := F) r
+  have e₁ := congrArg (restrict F l.cells) hsum
+  have e₂ := congrArg (restrict F r.cells) hsum
+  rw [map_add, map_add, map_add, restrict_of_mem_supp (Vx_le_supp l hv'),
+    restrict_of_mem_supp_disjoint (Vx_le_supp r hv'') hd, restrict_of_mem_supp hl',
+    restrict_of_mem_supp_disjoint hr' hd, add_zero, add_zero] at e₁
+  rw [map_add, map_add, map_add, restrict_of_mem_supp (Vx_le_supp r hv''),
+    restrict_of_mem_supp_disjoint (Vx_le_supp l hv') hd.symm, restrict_of_mem_supp hr',
+    restrict_of_mem_supp_disjoint hl' hd.symm, zero_add, zero_add] at e₂
+  refine ⟨?_, ?_⟩
+  · change l.xi F ∈ l.Vx F ⊔ blockSubspace F blk r₀
+    rw [← e₁]
+    exact Submodule.add_mem_sup hv' (restrict_mem_blockSubspace hf)
+  · change r.xi F ∈ r.Vx F ⊔ blockSubspace F blk r₀
+    rw [← e₂]
+    exact Submodule.add_mem_sup hv'' (restrict_mem_blockSubspace hf)
+
+end Hier
+
+end Hierarchy
+
 end Pouw.SteinerRigidity
