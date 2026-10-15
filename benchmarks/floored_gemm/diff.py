@@ -196,6 +196,51 @@ def check_sim():
         assert (got == want[:, :4]).all(), kind
 
 
+def persistent_pair_search(rng, NP=2000, top=3, NC=1000):
+    """Two words reaching one R row, each off by its own δ over the last Sw checkpoints of k = 4,096 (S = 128): the best
+    P[R unchanged | a read byte changed] over δ pairs from ±2^k, ±(2^k + 1) and ±a b, for each unchained kind (the
+    per-row linear model); then its `top` pairs again on whole warp tiles (sim) for that kind and its chained twin."""
+    cand = sorted({1 << k for k in range(32)} | {(1 << k) + 1 for k in range(1, 31)} | {15, 143, 4200, 10961, 14641, 15367})
+    cand = cand + [-x for x in cand]
+    S = 128
+    tr = np.stack([trajectory(rng, NP, S), trajectory(rng, NP, S)], axis=1)   # [NP, 2, S]
+    twin = {5: 8, 7: 9, 10: 12, 11: 13, 6: None}
+    res = {}
+    for vname, kind in VARIANTS.items():
+        keys = {t: tb_key(kind, t) for t in range(MI * NI)}
+        r2, c2 = same_row_partner(kind, 5, 3)
+        ws = [(0, 1, 5, 3), (0, 1, r2, c2)]
+        found = []
+        for Sw in (1, 2, 4, 16):
+            T = tr[:, :, S - Sw :]
+            for d1 in cand:
+                for d2 in cand:
+                    if abs(d2) < abs(d1) or (abs(d2) == abs(d1) and d2 < d1):
+                        continue
+                    _, c, ch = unchanged(kind, keys, ws, T, [d1, d2])
+                    if ch > 0:
+                        found.append((c, Sw, d1, d2))
+        found.sort(reverse=True)
+        best = found[:top]
+        row = {"pairs_tried": len(found), "best": [{"cancel_given_change": c, "window": Sw, "deltas": [d1, d2]}
+                                                    for c, Sw, d1, d2 in best]}
+        TT = tile_trajectory(rng, NC, 16)
+        for kk in (kind, twin[kind]):
+            if kk is None:
+                continue
+            R0 = sim(kk, TT)
+            got = []
+            for c, Sw, d1, d2 in best:
+                T1 = TT.copy()
+                T1[:, 16 - Sw :, 5, 8 + 3] += d1
+                T1[:, 16 - Sw :, r2, 8 + c2] += d2
+                got.append(float((sim(kk, T1) == R0).all(axis=(1, 2)).mean()))
+            row[f"tile_sim kind {kk}"] = got
+        res[vname] = row
+        print(vname, json.dumps(row), file=sys.stderr, flush=True)
+    return res
+
+
 def main() -> int:
     check_slots()
     check_sim()
@@ -203,8 +248,15 @@ def main() -> int:
     ap.add_argument("--trials", type=int, default=200_000)
     ap.add_argument("--seed", type=int, default=12)
     ap.add_argument("--json")
+    ap.add_argument("--only", choices=["pair-search"])
     args = ap.parse_args()
     rng = np.random.default_rng(args.seed)
+    if args.only == "pair-search":
+        txt = json.dumps({"seed": args.seed, "persistent_pair_search": persistent_pair_search(rng)}, indent=1)
+        if args.json:
+            open(args.json, "w").write(txt)
+        print(txt)
+        return 0
     N = args.trials
     out = {"trials": N, "seed": args.seed, "single": {}, "persistent": {}, "pairs": {}, "pair_search": {}}
     deltas = fixed_deltas()
