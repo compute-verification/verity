@@ -2,6 +2,8 @@
 //   same kernel: each loop iteration issues 8 independent MMAs (FP8 QMMA, NVFP4 OMMA or BF16 HMMA) and R CUDA ops of
 //                one kind (FFMA, FFMA with immediate operands, LOP3, F2FP E4M3 pack, IMAD) on registers the MMAs don't touch. Each (MMA, op, R) is
 //                timed with both, with the MMAs only and with the CUDA ops only, one block a SM of W warps.
+//   split warps: one block a SM whose first W_m warps issue only MMAs and the next W_x only one CUDA op; each role timed
+//                alone and together by its own warps' clock64, and the rate each kept while both ran.
 //   two kernels: a QMMA kernel and a CUDA-op kernel launched on two streams, each one 4-warp block a SM (40 KB of
 //                shared memory each, so one of each fits a SM), timed alone and together; %smid and %globaltimer
 //                confirm they shared the SMs and overlapped.
@@ -29,14 +31,30 @@ __device__ __forceinline__ void x_ffma_c(uint32_t& x, uint32_t, uint32_t) {
   asm volatile("fma.rn.f32 %0, %0, 0f3F7FFFFE, 0f3F000000;" : "+f"(t));
   x = __float_as_uint(t);
 }
-enum { X_FFMA, X_LOP3, X_IMAD, X_F2FP, X_FFMA_C };
-static const char* X_NAME[] = {"ffma", "lop3", "imad", "f2fp_e4m3x2", "ffma_c"};
+__device__ __forceinline__ void x_fadd(uint32_t& x, uint32_t y, uint32_t) {
+  float t = F(x);
+  asm volatile("add.rn.f32 %0, %0, %1;" : "+f"(t) : "f"(F(y)));
+  x = __float_as_uint(t);
+}
+__device__ __forceinline__ void x_hfma2(uint32_t& x, uint32_t y, uint32_t z) {
+  asm volatile("fma.rn.f16x2 %0, %0, %1, %2;" : "+r"(x) : "r"(y), "r"(z));
+}
+__device__ __forceinline__ void x_mufu(uint32_t& x, uint32_t y, uint32_t) {
+  float t;
+  asm volatile("ex2.approx.ftz.f32 %0, %1;" : "=f"(t) : "f"(F(y)));
+  x ^= __float_as_uint(t);
+}
+enum { X_FFMA, X_LOP3, X_IMAD, X_F2FP, X_FFMA_C, X_FADD, X_HFMA2, X_MUFU };
+static const char* X_NAME[] = {"ffma", "lop3", "imad", "f2fp_e4m3x2", "ffma_c", "fadd", "hfma2", "mufu_ex2"};
 template <int X>
 __device__ __forceinline__ void xop(uint32_t& x, uint32_t y, uint32_t z) {
   if (X == X_FFMA) x_ffma(x, y, z);
   else if (X == X_LOP3) x_lop3(x, y, z);
   else if (X == X_IMAD) x_imad(x, y, z);
   else if (X == X_FFMA_C) x_ffma_c(x, y, z);
+  else if (X == X_FADD) x_fadd(x, y, z);
+  else if (X == X_HFMA2) x_hfma2(x, y, z);
+  else if (X == X_MUFU) x_mufu(x, y, z);
   else x_f2fp(x, y, z);
 }
 
@@ -91,6 +109,44 @@ __global__ void __launch_bounds__(512) k_co(int iters, uint32_t* sink, BlockClk*
 #pragma unroll
   for (int c = 0; c < 8; c++) x ^= __float_as_uint(d[c][0] + d[c][1] + d[c][2] + d[c][3]);
   sink[blockIdx.x * blockDim.x + threadIdx.x] = x;
+}
+
+// Warp-specialised: warps [0, wm) issue only MMAs (8 accumulators), warps [wm, wm + wx) only CUDA ops (64 an iteration
+// in the same 8-register rotation); each warp records its own clock64 span.
+struct WarpClk { long long t0, t1; };
+template <int M, int X>
+__global__ void __launch_bounds__(1024) k_split(int wm, int im, int ix, uint32_t* sink, WarpClk* rec) {
+  extern __shared__ uint32_t pad[];
+  const uint32_t lane = threadIdx.x & 31, warp = threadIdx.x >> 5;
+  uint32_t acc = 0;
+  __syncthreads();
+  long long t0 = clock64();
+  if ((int)warp < wm) {
+    uint32_t a[4] = {0x38383838u ^ lane, 0x30303030u, 0x38303830u, 0x30383038u}, b[2] = {0x38383838u, 0x30303030u ^ lane};
+    if (M == M_HMMA) { a[0] = 0x3f803f80u ^ (lane & 0x7f); a[1] = a[2] = a[3] = 0x3f803f80u; b[0] = b[1] = 0x3f803f80u; }
+    float d[8][4] = {};
+#pragma unroll 1
+    for (int it = 0; it < im; it++) {
+#pragma unroll
+      for (int c = 0; c < 8; c++) mma<M>(d[c], a, b);
+    }
+#pragma unroll
+    for (int c = 0; c < 8; c++) acc ^= __float_as_uint(d[c][0] + d[c][1] + d[c][2] + d[c][3]);
+  } else {
+    uint32_t r[8];
+#pragma unroll
+    for (int i = 0; i < 8; i++) r[i] = (threadIdx.x * 0x9e3779b9u + i * 0x85ebca6bu) & 0x3FFFFFFFu;
+#pragma unroll 1
+    for (int it = 0; it < ix; it++) {
+#pragma unroll
+      for (int q = 0; q < 64; q++) xop<X>(r[q & 7], r[(q + 1) & 7], r[(q + 2) & 7]);
+    }
+#pragma unroll
+    for (int i = 0; i < 8; i++) acc += r[i];
+  }
+  long long t1 = clock64();
+  if (lane == 0) rec[blockIdx.x * 32 + warp] = {t0, t1};
+  if (acc == 0x12345678u) sink[0] = acc;
 }
 
 static uint32_t* g_sink;
@@ -192,6 +248,73 @@ static void two_kernels(const char* only) {
   CK(cudaStreamDestroy(s2));
 }
 
+struct Spans { double a, b, total; };
+static Spans split_spans(int wm, int wx) {  // medians over blocks of each role's span and of the whole block's
+  std::vector<WarpClk> h((size_t)g_sms * 32);
+  CK(cudaMemcpy(h.data(), g_rec, h.size() * sizeof(WarpClk), cudaMemcpyDeviceToHost));
+  std::vector<double> sa, sb, st;
+  for (int blk = 0; blk < g_sms; blk++) {
+    long long a0 = LLONG_MAX, a1 = 0, b0 = LLONG_MAX, b1 = 0;
+    for (int w = 0; w < wm + wx; w++) {
+      WarpClk c = h[blk * 32 + w];
+      if (w < wm) { a0 = std::min(a0, c.t0); a1 = std::max(a1, c.t1); }
+      else { b0 = std::min(b0, c.t0); b1 = std::max(b1, c.t1); }
+    }
+    if (wm) sa.push_back((double)(a1 - a0));
+    if (wx) sb.push_back((double)(b1 - b0));
+    st.push_back((double)(std::max(wm ? a1 : 0, wx ? b1 : 0) - std::min(wm ? a0 : LLONG_MAX, wx ? b0 : LLONG_MAX)));
+  }
+  auto med = [](std::vector<double>& v) { if (v.empty()) return 0.0; std::sort(v.begin(), v.end()); return v[v.size() / 2]; };
+  return {med(sa), med(sb), med(st)};
+}
+
+template <int M, int X>
+static void split_case(int wm, int wx, const char* only) {
+  char label[96];
+  snprintf(label, sizeof label, "split:%s:%s", M_NAME[M], X_NAME[X]);
+  if (only && !strstr(label, only)) return;
+  auto kern = k_split<M, X>;
+  CK(cudaFuncSetAttribute(kern, cudaFuncAttributeMaxDynamicSharedMemorySize, ONE_BLOCK_SMEM));
+  auto go = [&](int m, int x, int im, int ix) {
+    kern<<<g_sms, (m + x) * 32, ONE_BLOCK_SMEM>>>(m, im, ix, g_sink, (WarpClk*)g_rec);  // warm-up
+    CK(cudaDeviceSynchronize());
+    Spans best{1e300, 1e300, 1e300};
+    for (int rep = 0; rep < 3; rep++) {
+      kern<<<g_sms, (m + x) * 32, ONE_BLOCK_SMEM>>>(m, im, ix, g_sink, (WarpClk*)g_rec);
+      CK(cudaDeviceSynchronize());
+      Spans s = split_spans(m, x);
+      if (s.total < best.total) best = s;
+    }
+    return best;
+  };
+  Spans ca = go(wm, 0, 256, 0), cb = go(0, wx, 0, 256);
+  int im = std::max(256, (int)(1e7 / (ca.a / 256))), ix = std::max(256, (int)(1e7 / (cb.b / 256)));
+  Spans a = go(wm, 0, im, 0), b = go(0, wx, 0, ix), both = go(wm, wx, im, ix);
+  double wa = (double)wm * im * 8 * M_MACS[M], wb = (double)wx * ix * 64;  // MACs, PTX warp ops; a SM
+  double ra = wa / a.a, rb = wb / b.b;  // alone, per SM clock
+  // the role that finishes first ran beside the other for its whole span; the other's rate over that overlap is its
+  // work less what it did alone afterwards (at its alone rate), over the overlap
+  double fa, fb;
+  if (both.b <= both.a) { fb = (wb / both.b) / rb; fa = std::max(0.0, wa - ra * (both.a - both.b)) / both.b / ra; }
+  else { fa = (wa / both.a) / ra; fb = std::max(0.0, wb - rb * (both.b - both.a)) / both.a / rb; }
+  printf("{\"probe\":\"coissue\",\"mode\":\"split_warps\",\"mma\":\"%s\",\"xop\":\"%s\",\"mma_warps\":%d,\"x_warps\":%d,"
+         "\"im\":%d,\"ix\":%d,\"cyc_mma_alone\":%.0f,\"cyc_x_alone\":%.0f,\"cyc_mma_both\":%.0f,\"cyc_x_both\":%.0f,"
+         "\"cyc_total_both\":%.0f,\"mma_macs_per_sm_per_clk_alone\":%.2f,\"x_warp_ops_per_sm_per_clk_alone\":%.4f,"
+         "\"mma_fraction_during_overlap\":%.4f,\"x_fraction_during_overlap\":%.4f,\"both_over_sum\":%.4f}\n",
+         M_NAME[M], X_NAME[X], wm, wx, im, ix, a.a, b.b, both.a, both.b, both.total, ra, rb, fa, fb,
+         both.total / (a.a + b.b));
+  fflush(stdout);
+}
+
+template <int X>
+static void split_sweep(const char* only) {
+  split_case<M_QMMA, X>(8, 1, only);
+  split_case<M_QMMA, X>(8, 2, only);
+  split_case<M_QMMA, X>(8, 4, only);
+  split_case<M_QMMA, X>(8, 8, only);
+  split_case<M_QMMA, X>(16, 16, only);
+}
+
 int main(int argc, char** argv) {
   const char* only = argc > 1 ? argv[1] : nullptr;
   g_sms = num_sms();
@@ -212,6 +335,18 @@ int main(int argc, char** argv) {
   two_kernels<X_LOP3>(only);
   two_kernels<X_F2FP>(only);
   two_kernels<X_IMAD>(only);
+  split_sweep<X_FFMA_C>(only);
+  split_sweep<X_FFMA>(only);
+  split_sweep<X_FADD>(only);
+  split_sweep<X_HFMA2>(only);
+  split_sweep<X_IMAD>(only);
+  split_sweep<X_LOP3>(only);
+  split_sweep<X_F2FP>(only);
+  split_sweep<X_MUFU>(only);
+  split_case<M_OMMA, X_FFMA_C>(8, 8, only);
+  split_case<M_HMMA, X_FFMA_C>(8, 8, only);
+  split_case<M_OMMA, X_LOP3>(8, 8, only);
+  split_case<M_HMMA, X_LOP3>(8, 8, only);
   printf("{\"probe\":\"coissue\",\"done\":true}\n");
   return 0;
 }

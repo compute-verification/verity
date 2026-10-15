@@ -197,6 +197,16 @@ def main():
                 f"{r['xop']} alone {r['x_warp_ops_per_sm_per_clk_alone']:.3f} -> both {r['x_warp_ops_per_sm_per_clk_both']:.3f}"
                 f" PTX warp ops/SM/clk; both/(sum of alone) {r['both_over_sum']:.3f}", "coissue",
                 x_slowdown=round(r["x_slowdown"], 4), both_over_sum=round(r["both_over_sum"], 4))
+        elif r.get("mode") == "split_warps":
+            row(f"coissue.split.{r['mma']}+{r['xop']}.m{r['mma_warps']}x{r['x_warps']}.both_over_sum",
+                round(r["both_over_sum"], 4), "time both / (time MMA alone + time op alone)",
+                f"coissue.cu k_split: one block a SM, {r['mma_warps']} warps only MMAs + {r['x_warps']} warps only "
+                f"{r['xop']}; alone {r['mma_macs_per_sm_per_clk_alone']:.1f} MAC/SM/clk and "
+                f"{r['x_warp_ops_per_sm_per_clk_alone']:.3f} PTX warp ops/SM/clk; while both ran the MMAs kept "
+                f"{r['mma_fraction_during_overlap']:.3f} and the {r['xop']} warps {r['x_fraction_during_overlap']:.3f} "
+                f"of their alone rates", "coissue",
+                mma_fraction_during_overlap=round(r["mma_fraction_during_overlap"], 4),
+                x_fraction_during_overlap=round(r["x_fraction_during_overlap"], 4))
         elif r.get("mode") == "two_kernels":
             row(f"coissue.two_kernels.{r['mma']}+{r['xop']}.mma_rate_together", round(r["mma_macs_per_sm_per_clk_together"], 2),
                 "MAC/SM/clk", f"coissue.cu two streams, one 4-warp block of each a SM: MMA alone "
@@ -268,6 +278,12 @@ def main():
             row(f"smem.{r['op']}.bytes_per_sm_per_clk", round(r["bytes_per_sm_per_clk"], 3), "B/SM/clk",
                 f"memory.cu k_smem: conflict-free {r['op']}, 32 warps, one block a SM, clock64; device "
                 f"{r['device_bytes_per_s']:.4g} B/s at {r['mhz']:.0f} MHz", "memory")
+        elif p == "read_path":
+            where = "l2" if r["footprint_bytes"] <= 64 << 20 else "dram"
+            row(f"read_path.{r['data']}.{where}.p{r['path_id']}.b{r['blocks_per_sm']}.bytes_per_s",
+                float(f"{r['read_bytes_per_s']:.4g}"), "B/s",
+                f"memory.cu k_read_path: {r['path']}, {r['blocks_per_sm']} x 512-thread blocks a SM (grid-stride), "
+                f"{r['data']} over {r['footprint_bytes'] >> 20} MiB", "memory")
         elif p == "gather":
             row(f"gather.{r['target']}.row{r['row_bytes']}.bytes_per_s", float(f"{r['bytes_per_s']:.4g}"), "B/s",
                 f"memory.cu k_gather: random rows of {r['row_bytes']} B from a {'4 GiB' if r['target'] == 'dram' else '32 MiB'}"

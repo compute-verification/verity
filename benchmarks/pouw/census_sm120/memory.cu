@@ -75,6 +75,31 @@ __global__ void k_read(const uint4* __restrict__ p, uint64_t n16, int reps, uint
   if (acc == 0x9e3779b9u) sink[0] = acc;
 }
 
+// The same streaming read through each load path: 0 ld.global.cg (L2 only), 1 ld.global.nc (__ldg, the
+// read-only/texture path through L1), 2 ld.global (default caching), 3 one ld.global.nc in flight a lane (M5's k_read).
+template <int PATH>
+__device__ __forceinline__ uint4 ld_path(const uint4* p) {
+  if (PATH == 0) return __ldcg(p);
+  if (PATH == 1 || PATH == 3) return __ldg(p);
+  return *p;
+}
+template <int PATH>
+__global__ void k_read_path(const uint4* __restrict__ p, uint64_t n16, int reps, uint32_t* sink) {
+  uint64_t t = blockIdx.x * (uint64_t)blockDim.x + threadIdx.x, nt = (uint64_t)gridDim.x * blockDim.x;
+  uint32_t acc = 0;
+  for (int r = 0; r < reps; r++) {
+    uint64_t i = t;
+    if (PATH != 3)
+      for (; i + 3 * nt < n16; i += 4 * nt) {
+        uint4 a = ld_path<PATH>(p + i), b = ld_path<PATH>(p + i + nt), c = ld_path<PATH>(p + i + 2 * nt),
+              d = ld_path<PATH>(p + i + 3 * nt);
+        acc ^= a.x ^ a.y ^ a.z ^ a.w ^ b.x ^ b.y ^ b.z ^ b.w ^ c.x ^ c.y ^ c.z ^ c.w ^ d.x ^ d.y ^ d.z ^ d.w;
+      }
+    for (; i < n16; i += nt) { uint4 a = ld_path<PATH>(p + i); acc ^= a.x ^ a.y ^ a.z ^ a.w; }
+  }
+  if (acc == 0x9e3779b9u) sink[0] = acc;
+}
+
 // Random-row gather: groups of `row/16` lanes (or the whole warp, `row/512` times) read one random row of `row` bytes.
 __global__ void k_gather(const uint4* __restrict__ p, uint64_t rows, int row, int iters, uint32_t* sink) {
   const uint32_t lane = threadIdx.x & 31;
@@ -211,6 +236,39 @@ static void props() {
   fflush(stdout);
 }
 
+static const char* PATH_NAME[] = {"ld.global.cg x4", "ld.global.nc x4", "ld.global x4", "ld.global.nc x1 (M5 k_read)"};
+template <int PATH>
+static double read_path_bw(const void* p, size_t bytes, int reps, int blocks_per_sm) {
+  double ms = best_ms([&] { k_read_path<PATH><<<g_sms * blocks_per_sm, 512>>>((const uint4*)p, bytes / 16, reps, g_sink); }, 4);
+  return (double)bytes * reps / (ms * 1e-3);
+}
+
+// Which load path reads compressed data fastest: every path on plain random, COMP_GENERIC zeros / 0xA5 / random, as a
+// 4 GiB (DRAM-resident) and a 32 MiB (L2-resident) footprint.
+static void read_paths(Alloc& plain, Alloc& gen, size_t B, const char* only) {
+  if (only && !strstr("paths", only)) return;
+  struct Case { const char* name; Alloc* a; int pat; };
+  Case cases[] = {{"plain_random", &plain, 0}, {"generic_zeros", &gen, 1}, {"generic_const_a5", &gen, 2},
+                  {"generic_random", &gen, 0}};
+  for (auto& c : cases) {
+    k_fill<<<g_sms * 4, 512>>>((uint32_t*)c.a->p, B / 4, c.pat);
+    CK(cudaDeviceSynchronize());
+    for (int l2 = 0; l2 < 2; l2++) {
+      size_t bytes = l2 ? (32ull << 20) : B;
+      int reps = l2 ? 128 : 1;
+      for (int bps : {4, 8}) {
+        double r[4] = {read_path_bw<0>(c.a->p, bytes, reps, bps), read_path_bw<1>(c.a->p, bytes, reps, bps),
+                       read_path_bw<2>(c.a->p, bytes, reps, bps), read_path_bw<3>(c.a->p, bytes, reps, bps)};
+        for (int k = 0; k < 4; k++)
+          printf("{\"probe\":\"read_path\",\"data\":\"%s\",\"footprint_bytes\":%zu,\"path\":\"%s\",\"path_id\":%d,"
+                 "\"blocks_per_sm\":%d,\"threads\":512,\"read_bytes_per_s\":%.4e}\n",
+                 c.name, bytes, PATH_NAME[k], k, bps, r[k]);
+        fflush(stdout);
+      }
+    }
+  }
+}
+
 static void dram_patterns(const char* only) {
   const size_t B = 4ull << 30;
   Alloc plain = alloc_plain(B);
@@ -242,6 +300,7 @@ static void dram_patterns(const char* only) {
     fflush(stdout);
     CK(cudaFree(dst.p));
   }
+  read_paths(plain, gen, B, only);
   // L2 sweep on compressible zeros: does compressed data take less L2?
   if (!only || strstr("l2gen", only)) {
     k_fill<<<g_sms * 4, 512>>>((uint32_t*)gen.p, B / 4, 1);
