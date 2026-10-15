@@ -8,7 +8,11 @@ tree in F_q^{r x r} (rank metric) spanning 0 and G_1..G_S is an attack: each edg
 S * rank(H). This computes the minimum exactly by Dreyfus-Wagner on the Cayley graph of F_q^{r x r} whose generators
 are the nonzero rank-1 matrices (its graph metric is the rank metric).
 
-Usage: lowrank_cell.py R Q RHO S TRIALS SEED   (prints one JSON line per instance and a summary line)
+With `generic`, every instance has the generic prefix distances, rank(G_b - G_a) = min(r, (b - a) rho) (each step is
+redrawn until it keeps them, so these instances are not uniform among generic ones); small fields otherwise give
+non-additive consecutive steps, which is where most savings come from.
+
+Usage: lowrank_cell.py R Q RHO S TRIALS SEED [generic]   (prints one JSON line per instance and a summary line)
 """
 
 import itertools
@@ -92,25 +96,47 @@ def random_rank(r, q, rho, rng, pw, rank):
             return m
 
 
+def generic_prefixes(r, q, rho, s, rng, pw, rank):
+    """G_1..G_S with rank(G_b - G_a) = min(r, (b - a) rho) for all a < b (G_0 = 0), drawn one step at a time."""
+    while True:
+        gs = [np.zeros((r, r), dtype=np.int64)]
+        for t in range(1, s + 1):
+            for _ in range(100000):
+                g = (gs[-1] + random_rank(r, q, rho, rng, pw, rank)) % q
+                if all(int(rank[int((((g - gs[a]) % q).reshape(-1) * pw).sum())]) == min(r, (t - a) * rho)
+                       for a in range(t - 1)):
+                    gs.append(g)
+                    break
+            else:
+                break
+        if len(gs) == s + 1:
+            return np.array(gs[1:])
+
+
 def main():
     r, q, rho, s, trials, seed = (int(x) for x in sys.argv[1:7])
+    generic = sys.argv[7:] == ["generic"]
     digits, pw, nb, rank = setup(r, q)
     rng = np.random.default_rng(seed)
     results = []
     while len(results) < trials:
-        hs = [random_rank(r, q, rho, rng, pw, rank) for _ in range(s)]
-        gs = np.cumsum(np.array(hs), axis=0) % q
+        if generic:
+            gs = generic_prefixes(r, q, rho, s, rng, pw, rank)
+        else:
+            hs = [random_rank(r, q, rho, rng, pw, rank) for _ in range(s)]
+            gs = np.cumsum(np.array(hs), axis=0) % q
         codes = [int((g.reshape(-1) * pw).sum()) for g in gs]
         if 0 in codes or len(set(codes)) < s:
             continue
         st = steiner(codes, digits, pw, nb, rank, q)
         star = int(sum(int(rank[c]) for c in codes))
-        rec = {"r": r, "q": q, "rho": rho, "S": s, "steiner": st, "chain": s * rho, "star": star,
+        rec = {"r": r, "q": q, "rho": rho, "S": s, "generic": generic, "steiner": st, "chain": s * rho, "star": star,
                "per_target": st / s, "G": [g.tolist() for g in gs]}
         results.append(rec)
         print(json.dumps(rec), flush=True)
     sts = [x["steiner"] for x in results]
-    print(json.dumps({"summary": True, "r": r, "q": q, "rho": rho, "S": s, "trials": trials, "chain": s * rho,
+    print(json.dumps({"summary": True, "r": r, "q": q, "rho": rho, "S": s, "generic": generic, "trials": trials,
+                      "chain": s * rho,
                       "steiner_min": min(sts), "steiner_mean": sum(sts) / len(sts), "steiner_max": max(sts),
                       "below_chain": sum(1 for x in sts if x < s * rho)}), flush=True)
 

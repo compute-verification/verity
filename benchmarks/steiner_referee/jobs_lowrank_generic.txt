@@ -1,0 +1,18 @@
+# Exact per-cell Steiner lengths on generic instances, rank(G_b - G_a) = min(r, (b - a) rho) (RS-D2F, CMP-13):
+# lowrank_cell.py R Q RHO S TRIALS SEED generic, RHO = min(r, L).
+# r = 2L: chain (rho a target) or below?
+python3 lowrank_cell.py 4 2 2 3 12 111 generic
+python3 lowrank_cell.py 4 2 2 4 12 112 generic
+python3 lowrank_cell.py 4 2 2 5 8 113 generic
+python3 lowrank_cell.py 4 2 2 6 4 114 generic
+# L < r < 2L (median attack: 2.5 a target at r = 4, L = 3; none at r = 3, L = 2)
+python3 lowrank_cell.py 4 2 3 3 12 211 generic
+python3 lowrank_cell.py 4 2 3 4 12 212 generic
+python3 lowrank_cell.py 3 3 2 3 12 213 generic
+python3 lowrank_cell.py 3 3 2 4 8 214 generic
+# r = L (median attack 3r/4 a target, dimension count r^2/(2r-1))
+python3 lowrank_cell.py 4 2 4 3 12 311 generic
+python3 lowrank_cell.py 4 2 4 4 8 312 generic
+python3 lowrank_cell.py 2 11 2 4 12 313 generic
+python3 lowrank_cell.py 2 11 2 6 8 314 generic
+python3 lowrank_cell.py 3 2 3 4 12 315 generic
