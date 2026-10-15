@@ -15,7 +15,9 @@ proof workers' results land here as theorems or as named hypotheses.
 * The definition (`Protocol`, with a commitment before the live coins, `CommitsFirst`; `Complete`; `Secure`, Neekon's
   `∃ M'` form; `SecureInf`, RS-DEF's frozen form against `Tuse`; `Core`, the per-run proof target; `Efficient`;
   `RelativelySecure`) with `ε`, `δ`, `γ`, `η`, `α`, `κ`. Probabilities are uniform counts over the finite σ and coins
-  (`prob`). `secureInf_of_core` (Core ⇒ Security for `δ > κ`) and `core_of_floor` (RS-DEF's Lemma R) are proved.
+  (`prob`, `expect`). Core, the floors and Lemma R charge a run the program's size and its cost,
+  `max(|M|, cost)` (`Machine.charge`, RS-DEF v2 after RS-RT's V1). `secureInf_of_core` (Core ⇒ Security for `δ > κ`),
+  `rate_of_core` (RS-DEF's rate form) and `core_of_floor` (RS-DEF's Lemma R) are proved.
 * The masking algebra, proved over any ring (`mask_peel`, `lowRank_peel`), exact over `ZMod (2^32)` and over any
   field, and recovering the integer product from its s32 residue when the entries are below `2^31`
   (`int8_product_exact`); a saturating int8 accumulator breaks the peel (`sat8_breaks_peel`).
@@ -74,6 +76,35 @@ theorem prob_mono {Ω : Type*} [Fintype Ω] {p q : Ω → Prop} (h : ∀ ω, p �
     simp only [mem_filter, mem_univ, true_and] at hω ⊢
     exact h ω hω
 
+theorem mem_filter_univ_iff {Ω : Type*} [Fintype Ω] {p : Ω → Prop} (inst : DecidablePred p) (ω : Ω) :
+    ω ∈ @Finset.filter _ p inst univ ↔ p ω := by simp
+
+theorem prob_or_le {Ω : Type*} [Fintype Ω] (p q : Ω → Prop) : prob (fun ω => p ω ∨ q ω) ≤ prob p + prob q := by
+  classical
+  unfold prob
+  rw [← add_div]
+  apply div_le_div_of_nonneg_right _ (by positivity)
+  have key : ∀ s t u : Finset Ω, (∀ ω ∈ s, ω ∈ t ∨ ω ∈ u) → (s.card : ℝ) ≤ t.card + u.card := fun s t u h => by
+    exact_mod_cast (card_le_card fun ω hω => mem_union.mpr (h ω hω)).trans (card_union_le t u)
+  exact key _ _ _ fun ω hω => ((mem_filter_univ_iff _ ω).mp hω).imp ((mem_filter_univ_iff _ ω).mpr)
+    ((mem_filter_univ_iff _ ω).mpr)
+
+/-- The expectation of a real function under the uniform distribution on a finite type. -/
+noncomputable def expect {Ω : Type*} [Fintype Ω] (f : Ω → ℝ) : ℝ := (∑ ω, f ω) / (Fintype.card Ω : ℝ)
+
+/-- Markov's inequality for a nonnegative function. -/
+theorem markov {Ω : Type*} [Fintype Ω] {f : Ω → ℝ} (hf : ∀ ω, 0 ≤ f ω) (X : ℝ) :
+    X * prob (fun ω => X ≤ f ω) ≤ expect f := by
+  classical
+  unfold prob expect
+  rw [mul_div_assoc']
+  apply div_le_div_of_nonneg_right _ (by positivity)
+  have key : ∀ s : Finset Ω, (∀ ω ∈ s, X ≤ f ω) → X * (s.card : ℝ) ≤ ∑ ω, f ω := fun s hs => by
+    calc X * (s.card : ℝ) = ∑ _ω ∈ s, X := by rw [sum_const, nsmul_eq_mul, mul_comm]
+      _ ≤ ∑ ω ∈ s, f ω := sum_le_sum hs
+      _ ≤ ∑ ω, f ω := sum_le_sum_of_subset_of_nonneg (subset_univ _) fun ω _ _ => hf ω
+  exact key _ fun ω hω => (mem_filter_univ_iff _ ω).mp hω
+
 end Probability
 
 section Machine
@@ -89,6 +120,8 @@ structure Machine where
   time : ∀ {I O : Type}, Alg I O → ℝ
   /-- One run's cost (RS-DEF §1.2's `cost_P(x; σ, ρ)`), which `time` bounds. -/
   cost : ∀ {I O : Type}, Alg I O → I → ℝ
+  /-- The program's size `|M|` (RS-DEF's T4), charged with every run (`charge`, RS-RT's V1). -/
+  size : ∀ {I O : Type}, Alg I O → ℝ
   /-- Run `f`, then `g` on its output. -/
   seq : ∀ {I O P : Type}, Alg I O → Alg O P → Alg I P
   /-- Run `f` and `g` on the same input. -/
@@ -104,6 +137,9 @@ structure Machine where
   time_nonneg : ∀ {I O : Type} (f : Alg I O), 0 ≤ time f
   /-- `time` is the worst case: every run costs at most `time`. -/
   cost_le_time : ∀ {I O : Type} (f : Alg I O) (x : I), cost f x ≤ time f
+  /-- T4: a program's time is at least its size. -/
+  size_le_time : ∀ {I O : Type} (f : Alg I O), size f ≤ time f
+  size_nonneg : ∀ {I O : Type} (f : Alg I O), 0 ≤ size f
   /-- Subadditivity of sequential composition. -/
   time_seq_le : ∀ {I O P : Type} (f : Alg I O) (g : Alg O P), time (seq f g) ≤ time f + time g
   /-- Monotonicity: running `f` first costs at least `f`. (Not `g`: `g`'s worst case may lie outside `f`'s range.) -/
@@ -171,6 +207,18 @@ theorem time_fst_le {I J : Type} : Mc.time (Mc.fst (I := I) (J := J)) ≤ 0 := M
 
 theorem time_snd_le {I J : Type} : Mc.time (Mc.snd (I := I) (J := J)) ≤ 0 := Mc.time_snd.le
 
+/-- **A run's charge** (RS-DEF v2's `max(|M|, cost_M(σ, ρ))`, RS-RT's V1): the program's size and the run's cost.
+Charging the run alone lets a coin-indexed table of accepted answers pass at `O(λ)` per run. -/
+def charge {I O : Type} (f : Mc.Alg I O) (x : I) : ℝ := max (Mc.size f) (Mc.cost f x)
+
+theorem charge_le_time {I O : Type} (f : Mc.Alg I O) (x : I) : Mc.charge f x ≤ Mc.time f :=
+  max_le (Mc.size_le_time f) (Mc.cost_le_time f x)
+
+theorem charge_nonneg {I O : Type} (f : Mc.Alg I O) (x : I) : 0 ≤ Mc.charge f x :=
+  le_max_of_le_left (Mc.size_nonneg f)
+
+theorem size_le_charge {I O : Type} (f : Mc.Alg I O) (x : I) : Mc.size f ≤ Mc.charge f x := le_max_left _ _
+
 end Machine
 
 /-- The axioms are satisfiable with nontrivial prices: algorithms are functions annotated with a cost, composition
@@ -181,6 +229,7 @@ def costed : Machine where
   eval f := f.1
   time f := f.2
   cost f _ := f.2
+  size f := f.2
   seq f g := (g.1 ∘ f.1, f.2 + g.2)
   pair f g := (fun x => (f.1 x, g.1 x), f.2 + g.2)
   fst := (Prod.fst, 0)
@@ -191,6 +240,8 @@ def costed : Machine where
   eval_snd _ := rfl
   time_nonneg _ := Nat.cast_nonneg _
   cost_le_time _ _ := le_rfl
+  size_le_time _ := le_rfl
+  size_nonneg _ := Nat.cast_nonneg _
   time_seq_le _ _ := by push_cast; rfl
   le_time_seq _ g := by push_cast; linarith [Nat.cast_nonneg (α := ℝ) g.2]
   time_pair_le _ _ := by push_cast; rfl
@@ -308,12 +359,12 @@ theorem secureInf_of_secure (P : Protocol Mc Inst Out) {ε δ η α : ℝ} (h : 
   obtain ⟨_, _, M', ht, hu⟩ := h Ω M hc hM
   exact (tuse_le P hu).trans ht
 
-/-- **The per-run core** (RS-DEF §1.6, the proof target): for every adversary that commits first, the runs that are
-accepted and cost less than `(T_use(η) − α)/(1 + ε)` have probability at most `κ`. -/
+/-- **The per-run core** (RS-DEF v2 §1.6, the proof target): for every adversary that commits first, the runs that
+are accepted and whose charge `max(|M|, cost)` is below `(T_use(η) − α)/(1 + ε)` have probability at most `κ`. -/
 def Core (P : Protocol Mc Inst Out) (ε κ η α : ℝ) : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
     prob (fun ω : P.Seed × Ω => P.accepts ω.1 (Mc.eval M ω) = true ∧
-      Mc.cost M ω < (Tuse P η - α) / (1 + ε)) ≤ κ
+      Mc.charge M ω < (Tuse P η - α) / (1 + ε)) ≤ κ
 
 /-- **Core ⇒ Security** for every `δ > κ`: some accepted run costs at least the bound, and `time` bounds every run. -/
 theorem secureInf_of_core (P : Protocol Mc Inst Out) {ε κ δ η α : ℝ} (h : Core P ε κ η α) (hκδ : κ < δ)
@@ -325,17 +376,36 @@ theorem secureInf_of_core (P : Protocol Mc Inst Out) {ε κ δ η α : ℝ} (h :
     rw [lt_div_iff₀ hε]
     linarith
   have hsub := prob_mono (Ω := P.Seed × Ω) (p := fun ω => P.accepts ω.1 (Mc.eval M ω) = true)
-    (q := fun ω => P.accepts ω.1 (Mc.eval M ω) = true ∧ Mc.cost M ω < (Tuse P η - α) / (1 + ε))
-    fun ω hω => ⟨hω, (Mc.cost_le_time M ω).trans_lt hbound⟩
+    (q := fun ω => P.accepts ω.1 (Mc.eval M ω) = true ∧ Mc.charge M ω < (Tuse P η - α) / (1 + ε))
+    fun ω hω => ⟨hω, (Mc.charge_le_time M ω).trans_lt hbound⟩
   have := h Ω M hc
   unfold acceptance at hM
   linarith
 
+/-- **The rate form** (RS-DEF v2 §1.6): under Core, an adversary that commits first is charged in expectation at least
+`(p(M) − κ) (T_use(η) − α)/(1 + ε)` per run (Markov on the charge). -/
+theorem rate_of_core (P : Protocol Mc Inst Out) {ε κ η α : ℝ} (h : Core P ε κ η α)
+    (hX : 0 ≤ (Tuse P η - α) / (1 + ε)) {Ω : Type} [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof)
+    (hc : CommitsFirst P (Mc.eval M)) :
+    (acceptance P M - κ) * ((Tuse P η - α) / (1 + ε)) ≤ expect (Mc.charge M) := by
+  have hcore := h Ω M hc
+  set X := (Tuse P η - α) / (1 + ε)
+  have hsplit : acceptance P M ≤ prob (fun ω : P.Seed × Ω => P.accepts ω.1 (Mc.eval M ω) = true ∧
+      Mc.charge M ω < X) + prob fun ω => X ≤ Mc.charge M ω := by
+    unfold acceptance
+    exact (prob_mono fun ω hω => (lt_or_ge (Mc.charge M ω) X).imp (fun hl => ⟨hω, hl⟩) id).trans
+      (prob_or_le _ _)
+  calc (acceptance P M - κ) * X ≤ prob (fun ω => X ≤ Mc.charge M ω) * X :=
+        mul_le_mul_of_nonneg_right (by linarith) hX
+    _ = X * prob (fun ω => X ≤ Mc.charge M ω) := mul_comm _ _
+    _ ≤ expect (Mc.charge M) := markov (fun ω => Mc.charge_nonneg M ω) X
+
 /-- **The adversary floor** (a named hypothesis, the lane's floor results with Theorem F's luck term in `κ`): for every
-adversary that commits first, the runs that are accepted and cost less than `F` have probability at most `κ`. -/
+adversary that commits first, the runs that are accepted and whose charge `max(|M|, cost)` is below `F` have
+probability at most `κ` (RS-DEF v2's Lemma R premise). -/
 def AdvFloor (P : Protocol Mc Inst Out) (F κ : ℝ) : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
-    prob (fun ω : P.Seed × Ω => P.accepts ω.1 (Mc.eval M ω) = true ∧ Mc.cost M ω < F) ≤ κ
+    prob (fun ω : P.Seed × Ω => P.accepts ω.1 (Mc.eval M ω) = true ∧ Mc.charge M ω < F) ≤ κ
 
 /-- **Lemma R** (RS-DEF §1.6: a floor plus an honest upper bound give the core): under the adversary floor `F`, if some
 useful prover costs at most `U`, then Core holds with `1 + ε = U / F` and `α = 0`. -/
@@ -1259,13 +1329,13 @@ structure Service where
 
 attribute [instance] Service.instSeed Service.instCoins
 
-/-- **The service's adversary floor** in a machine: every adversary that commits first has its accepted runs below `F`
-with probability at most `κ`. It reads only the service, so it is `AdvFloor` of every protocol over the service
+/-- **The service's adversary floor** in a machine: every adversary that commits first has its accepted runs charged
+(`max(|M|, cost)`) below `F` with probability at most `κ`. It reads only the service, so it is `AdvFloor` of every protocol over the service
 (`MatMachine.editFloor_iff`). -/
 def ServiceFloor (Mc : Machine) (S : Service) (F κ : ℝ) : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)),
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) →
-    prob (fun ω : S.Seed × Ω => S.verify (Mc.eval M ω).1 ω.1 (Mc.eval M ω).2 = true ∧ Mc.cost M ω < F) ≤ κ
+    prob (fun ω : S.Seed × Ω => S.verify (Mc.eval M ω).1 ω.1 (Mc.eval M ω).2 = true ∧ Mc.charge M ω < F) ≤ κ
 
 namespace MatMachine
 
@@ -1651,6 +1721,7 @@ def machine (p : Price K) : Machine where
   eval f := f.1.1
   time f := p.t f.1.2
   cost f _ := p.t f.1.2
+  size f := p.t f.1.2
   seq f g := ⟨(g.1.1 ∘ f.1.1, f.1.2 ++ g.1.2), by
     obtain ⟨c, hc, hc'⟩ := f.2
     obtain ⟨d, hd, hd'⟩ := g.2
@@ -1667,6 +1738,8 @@ def machine (p : Price K) : Machine where
   eval_snd _ := rfl
   time_nonneg f := p.nonneg f.1.2
   cost_le_time _ _ := le_rfl
+  size_le_time _ := le_rfl
+  size_nonneg f := p.nonneg f.1.2
   time_seq_le f g := (p.append f.1.2 g.1.2).le
   le_time_seq f g := by
     show _ ≤ p.t (f.1.2 ++ g.1.2)
@@ -2060,9 +2133,9 @@ theorem serviceFloor_θ (kd : K120 → Kind) (S : Service) {F κ : ℝ}
   intro Ω _ M hc
   refine (prob_mono fun ω hω => ⟨hω.1, ?_⟩).trans (h Ω M.projθ hc)
   have h1 := timeB_le_priceθ M.1.2
-  have h2 : priceθ.t M.1.2 < 4 / 5 * F := hω.2
-  change (timeB price120 (progOf (M.1.2.map Instr120.kind)) : ℝ) < F
-  linarith
+  have h2 : priceθ.t M.1.2 < 4 / 5 * F := (max_lt_iff.mp hω.2).1
+  have h3 : (timeB price120 (progOf (M.1.2.map Instr120.kind)) : ℝ) < F := by linarith
+  exact max_lt h3 h3
 
 /-- B's matrix circuits in B_θ, at `4/5` of their prices. -/
 noncomputable def MatGates.liftθ {kd : K120 → Kind} {κ κadd : ℝ} (G : MatGates kd (.ofNat price120) κ κadd) :
