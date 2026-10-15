@@ -21,6 +21,7 @@ import Proofs.Flock.C3.Compose.LaterHeldW
 import Proofs.Flock.C3.Compose.LaterHolo
 import Proofs.Flock.C3.Compose.AtHoloHeld
 import Proofs.Flock.C3.Compose.HeldHyps
+import Proofs.Flock.C3.Compose.RepsHeld
 import Proofs.Flock.C3.Compose.SparseEndsAt
 import Proofs.Flock.C3.Compose.LaterFamily
 import Proofs.Flock.C3.Compose.SrcOKFamily
