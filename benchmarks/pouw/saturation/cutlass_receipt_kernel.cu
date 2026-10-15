@@ -241,8 +241,10 @@ struct ReceiptMma : Base {
             const int tile = int(get<0>(blk_crd)) * g_out.tiles_n + int(get<1>(blk_crd));
             g_out.R[(size_t)tile * NT + thread_idx] = f;
         }
+        // Both tests read z[0]: with EXTRA = 1, z[1] stays ~thread_idx, and nvcc drops the whole chain behind a test
+        // on it that it can prove false.
         if constexpr ((MODE == 1 || MODE == 3) && EXTRA > 0)
-            if (z[0] == 0x6a09e667u && z[1] == 0xbb67ae85u) g_out.R[0] = 0;
+            if ((z[0] ^ z[1]) == 0x6a09e667u && (z[0] + z[1]) == 0xbb67ae85u) g_out.R[0] = 0;
     }
 };
 

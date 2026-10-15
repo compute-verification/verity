@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """The CUDA slack a cheater's fused kernel finds beside each served receipt design (CMP-8 round 2, section 2), derived.
 
-  python cheat_slack.py cutlass-cheat.json [--json OUT]
+  python cheat_slack.py cutlass-cheat.json [--drop X ...] [--json OUT]
+
+--drop X skips the X-step variants: runs before the cheater's store test read z[0] have x1 kernels whose chain nvcc
+removed (their SASS equals the design's), so their X = 1 rows measure nothing.
 
 Input: `cutlass_receipt`'s JSON from job.sh's cheat stage, where each design kernel runs beside its `_xX` variants: the
 same kernel plus X alu phi1 steps a thread after every 32-deep k-block on chains that never read the accumulators. Per
@@ -28,6 +31,7 @@ KB = 4
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("cheat")
+    ap.add_argument("--drop", type=int, action="append", default=[])
     ap.add_argument("--json")
     a = ap.parse_args()
     d = json.load(open(a.cheat))
@@ -43,6 +47,8 @@ def main():
     for v in variants:
         base, x = v.rsplit("_x", 1)
         x = int(x)
+        if x in a.drop:
+            continue
         for ph in phases:
             shapes = [s for (k, s) in rows if k == base and s.startswith(ph + "_")]
             if not shapes:
