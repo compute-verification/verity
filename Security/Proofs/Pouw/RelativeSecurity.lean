@@ -216,8 +216,9 @@ structure Protocol (Mc : Machine) (Inst Out : Type) where
   /-- Solve's coins `ρ`. -/
   Coins : Type
   [instCoins : Fintype Coins]
-  /-- `C` answers `x` (for matmul: `A · B = C` on the exact grid). -/
-  correct : Inst → Out → Prop
+  /-- `C` answers `x` against σ (for matmul: `A · B = C` on the exact grid; for an edited instance, route (c), the
+  edited product `(A + E_A(σ)) (B + E_B(σ)) = C`). -/
+  correct : Seed → Inst → Out → Prop
   /-- `Solve(x; ρ)` against σ: `((c, a), C)`. -/
   solve : Mc.Alg (Seed × Inst × Coins) ((Com × Ans) × Out)
   /-- `V(c, σ, a) → b`, deterministic and not priced. -/
@@ -243,7 +244,7 @@ def CommitsFirst (P : Protocol Mc Inst Out) {X : Type} (f : P.Seed × X → P.Pr
 def SolvesAll (P : Protocol Mc Inst Out) {Ω : Type} [Fintype Ω] (M' : Mc.Alg (P.Seed × Inst × Ω) (P.Proof × Out))
     (η : ℝ) : Prop :=
   ∀ x : Inst, 1 - η ≤ prob fun ω : P.Seed × Ω =>
-    P.correct x (Mc.eval M' (ω.1, x, ω.2)).2 ∧ P.accepts ω.1 (Mc.eval M' (ω.1, x, ω.2)).1 = true
+    P.correct ω.1 x (Mc.eval M' (ω.1, x, ω.2)).2 ∧ P.accepts ω.1 (Mc.eval M' (ω.1, x, ω.2)).1 = true
 
 /-- A useful prover: it commits first and solves every instance. -/
 def Useful (P : Protocol Mc Inst Out) {Ω : Type} [Fintype Ω] (M' : Mc.Alg (P.Seed × Inst × Ω) (P.Proof × Out))
@@ -352,7 +353,7 @@ theorem relativelySecure_of_advFloor (P : Protocol Mc Inst Out) {κ δ γ η F N
 grid `G_use` as a subtype): `x` is answered by `C = A · B` for `(A, B) = emb x`. -/
 def IsMatmulOn {R : Type} [Ring R] {n : ℕ} {Mc : Machine} {Inst : Type} (P : Protocol Mc Inst (Mat R n n))
     (emb : Inst → Mat R n n × Mat R n n) : Prop :=
-  ∀ x C, P.correct x C ↔ (emb x).1 * (emb x).2 = C
+  ∀ σ x C, P.correct σ x C ↔ (emb x).1 * (emb x).2 = C
 
 /-- The matmul problem on all pairs of `n × n` matrices over `R`. -/
 def IsMatmul {R : Type} [Ring R] {n : ℕ} {Mc : Machine} (P : Protocol Mc (Mat R n n × Mat R n n) (Mat R n n)) :
@@ -590,9 +591,11 @@ def Floor (Mc : Machine) {Inst Out : Type} (correct : Inst → Out → Prop) (T 
   ∀ (Ω : Type) [Fintype Ω] (N : Mc.Alg (Inst × Ω) Out),
     (∀ x, 1 - η ≤ prob fun ω : Ω => correct x (Mc.eval N (x, ω))) → T ≤ Mc.time N
 
-/-- An algorithm that solves every instance (with a proof) is above the floor: drop σ into its coins and forget
-the proof, which routing does for free. -/
-theorem Floor.le_time (P : Protocol Mc Inst Out) {T η : ℝ} (h : Floor Mc P.correct T η) {Ω : Type} [Fintype Ω]
+/-- An algorithm that solves every instance (with a proof) is above the floor of any problem its answers solve
+(`hcorr`; for an unedited protocol, its own): drop σ into its coins and forget the proof, which routing does for
+free. -/
+theorem Floor.le_time (P : Protocol Mc Inst Out) {correct : Inst → Out → Prop} {T η : ℝ} (h : Floor Mc correct T η)
+    (hcorr : ∀ σ x C, P.correct σ x C → correct x C) {Ω : Type} [Fintype Ω]
     {M' : Mc.Alg (P.Seed × Inst × Ω) (P.Proof × Out)} (hM' : SolvesAll P M' η) : T ≤ Mc.time M' := by
   let route : Mc.Alg (Inst × P.Seed × Ω) (P.Seed × Inst × Ω) :=
     Mc.pair (Mc.seq Mc.snd Mc.fst) (Mc.pair Mc.fst (Mc.seq Mc.snd Mc.snd))
@@ -600,7 +603,7 @@ theorem Floor.le_time (P : Protocol Mc Inst Out) {T η : ℝ} (h : Floor Mc P.co
     simp only [route, Mc.eval_seq, Mc.eval_pair, Mc.eval_fst, Mc.eval_snd]
   have hT := h (P.Seed × Ω) (Mc.seq (Mc.seq route M') Mc.snd) fun x => (hM' x).trans (prob_mono fun ω hω => by
     rw [Mc.eval_seq, Mc.eval_seq, hroute, Mc.eval_snd]
-    exact hω.1)
+    exact hcorr _ _ _ hω.1)
   have hr : Mc.time route ≤ 0 := by
     apply le_trans
     · apply_rules [Machine.time_pair_le_of, Machine.time_seq_le_of, Machine.time_fst_le, Machine.time_snd_le]
@@ -610,17 +613,18 @@ theorem Floor.le_time (P : Protocol Mc Inst Out) {T η : ℝ} (h : Floor Mc P.co
   have z := Mc.time_snd (I := P.Proof) (J := Out)
   linarith
 
-theorem Floor.le_tuse (P : Protocol Mc Inst Out) {T η : ℝ} (h : Floor Mc P.correct T η)
+theorem Floor.le_tuse (P : Protocol Mc Inst Out) {correct : Inst → Out → Prop} {T η : ℝ} (h : Floor Mc correct T η)
+    (hcorr : ∀ σ x C, P.correct σ x C → correct x C)
     (hne : ∃ (Ω' : Type) (_ : Fintype Ω') (M' : Mc.Alg (P.Seed × Inst × Ω') (P.Proof × Out)), Useful P M' η) :
     T ≤ Tuse P η := by
   obtain ⟨Ω', _, M', hu⟩ := hne
-  exact le_csInf ⟨_, Ω', inferInstance, M', hu, rfl⟩ fun _ ⟨_, _, _, hu', ht⟩ => ht ▸ h.le_time P hu'.2
+  exact le_csInf ⟨_, Ω', inferInstance, M', hu, rfl⟩ fun _ ⟨_, _, _, hu', ht⟩ => ht ▸ h.le_time P hcorr hu'.2
 
 /-- With extraction, the reduction is useful and costs at most `(1 + εext) time M + time peel + time corr`, when the
 peel and the correction answer `x` from blocks valid for `x`. -/
 theorem exists_reduction (P : Protocol Mc Inst Out) {Bl Mid : Type} {valid : Inst → Bl → Prop}
     (peel : Mc.Alg Bl Mid) (corr : Mc.Alg Mid Out)
-    (hpeel : ∀ x b, valid x b → P.correct x (Mc.eval corr (Mc.eval peel b))) {εext η : ℝ} {Ω : Type} [Fintype Ω]
+    (hpeel : ∀ σ x b, valid x b → P.correct σ x (Mc.eval corr (Mc.eval peel b))) {εext η : ℝ} {Ω : Type} [Fintype Ω]
     {M : Mc.Alg (P.Seed × Ω) P.Proof} (hext : Extraction P valid εext M η) :
     ∃ (Ω' : Type) (_ : Fintype Ω') (M' : Mc.Alg (P.Seed × Inst × Ω') (P.Proof × Out)),
       Mc.time M' ≤ (1 + εext) * Mc.time M + Mc.time peel + Mc.time corr ∧ Useful P M' η := by
@@ -630,13 +634,13 @@ theorem exists_reduction (P : Protocol Mc Inst Out) {Bl Mid : Type} {valid : Ins
   · simp only [Mc.eval_reduction]
     exact hc σ σ' y
   · rw [Mc.eval_reduction]
-    exact ⟨hpeel x _ hω.1, hω.2⟩
+    exact ⟨hpeel _ x _ hω.1, hω.2⟩
 
 /-- **Security from extraction**, given that the peel and the correction cost at most `ε time M` for every adversary
 `M` accepted with probability at least `δ` (extraction overhead `εext`). -/
 theorem secure_of_extraction (P : Protocol Mc Inst Out) {Bl Mid : Type} {valid : Inst → Bl → Prop}
     (peel : Mc.Alg Bl Mid) (corr : Mc.Alg Mid Out)
-    (hpeel : ∀ x b, valid x b → P.correct x (Mc.eval corr (Mc.eval peel b))) {εext ε δ η : ℝ}
+    (hpeel : ∀ σ x b, valid x b → P.correct σ x (Mc.eval corr (Mc.eval peel b))) {εext ε δ η : ℝ}
     (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
       δ ≤ acceptance P M → Extraction P valid εext M η)
     (hcost : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
@@ -651,15 +655,16 @@ floor, then `ε = εext + (1 + εext) q / (T − q)`; with `εext = 0` this is R
 (`M'` is useful, so `T ≤ time M' ≤ (1 + εext) time M + q`.) -/
 theorem secure_of_extraction_floor (P : Protocol Mc Inst Out) {Bl Mid : Type} {valid : Inst → Bl → Prop}
     (peel : Mc.Alg Bl Mid) (corr : Mc.Alg Mid Out)
-    (hpeel : ∀ x b, valid x b → P.correct x (Mc.eval corr (Mc.eval peel b))) {εext δ η T q : ℝ}
+    (hpeel : ∀ σ x b, valid x b → P.correct σ x (Mc.eval corr (Mc.eval peel b))) {εext δ η T q : ℝ}
     (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
-      δ ≤ acceptance P M → Extraction P valid εext M η)
-    (hfloor : Floor Mc P.correct T η) (hq : Mc.time peel + Mc.time corr ≤ q) (hqT : q < T) :
+      δ ≤ acceptance P M → Extraction P valid εext M η) {correct : Inst → Out → Prop}
+    (hfloor : Floor Mc correct T η) (hcorr : ∀ σ x C, P.correct σ x C → correct x C)
+    (hq : Mc.time peel + Mc.time corr ≤ q) (hqT : q < T) :
     Secure P (εext + (1 + εext) * (q / (T - q))) δ η 0 := by
   intro Ω _ M hc hM
   obtain ⟨Ω', _, M', ht, hu⟩ := exists_reduction P peel corr hpeel (hext Ω M hc hM)
   refine ⟨Ω', inferInstance, M', ?_, hu⟩
-  have hTM := hfloor.le_time P hu.2
+  have hTM := hfloor.le_time P hcorr hu.2
   have hTq : 0 < T - q := sub_pos.2 hqT
   have hq0 : 0 ≤ q := (add_nonneg (Mc.time_nonneg _) (Mc.time_nonneg _)).trans hq
   set θ := q / (T - q) with hθ
@@ -673,7 +678,7 @@ theorem secure_of_extraction_floor (P : Protocol Mc Inst Out) {Bl Mid : Type} {v
 floor on M's committed targets) and the peel and the correction cost at most `q`, then `ε = εext + q / F`. -/
 theorem secure_of_extraction_advTime (P : Protocol Mc Inst Out) {Bl Mid : Type} {valid : Inst → Bl → Prop}
     (peel : Mc.Alg Bl Mid) (corr : Mc.Alg Mid Out)
-    (hpeel : ∀ x b, valid x b → P.correct x (Mc.eval corr (Mc.eval peel b))) {εext δ η F q : ℝ}
+    (hpeel : ∀ σ x b, valid x b → P.correct σ x (Mc.eval corr (Mc.eval peel b))) {εext δ η F q : ℝ}
     (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
       δ ≤ acceptance P M → Extraction P valid εext M η)
     (hM : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
@@ -697,10 +702,11 @@ theorem secure_of_solver (P : Protocol Mc Inst Out) {ε δ η α : ℝ} {Ω₀ :
 /-- **Security is a relative floor**, the other direction: under security, every adversary accepted with probability
 at least `δ` has `T ≤ (1 + ε) time M + α`, for `T` the floor. -/
 theorem floor_le_of_secure (P : Protocol Mc Inst Out) {ε δ η α T : ℝ} (h : Secure P ε δ η α)
-    (hfloor : Floor Mc P.correct T η) {Ω : Type} [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof)
+    {correct : Inst → Out → Prop} (hfloor : Floor Mc correct T η) (hcorr : ∀ σ x C, P.correct σ x C → correct x C)
+    {Ω : Type} [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof)
     (hc : CommitsFirst P (Mc.eval M)) (hM : δ ≤ acceptance P M) : T ≤ (1 + ε) * Mc.time M + α := by
   obtain ⟨Ω', _, M', ht, hu⟩ := h Ω M hc hM
-  exact (hfloor.le_time P hu.2).trans ht
+  exact (hfloor.le_time P hcorr hu.2).trans ht
 
 end Reduction
 
@@ -914,11 +920,12 @@ variable {n : ℕ} {Inst : Type} {P : Protocol Mc.toMachine Inst (Mat R n n)} {e
 theorem secure_fullRank (hmat : IsMatmulOn P emb) {εext δ η T : ℝ}
     (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
       δ ≤ acceptance P M → Extraction P (fun x => ValidFull (emb x)) εext M η)
-    (hfloor : Floor Mc.toMachine P.correct T η) (hT : 2 * Mc.κ * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2 < T) :
+    (hfloor : Floor Mc.toMachine (fun x C => (emb x).1 * (emb x).2 = C) T η) (hT : 2 * Mc.κ * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2 < T) :
     Secure P (εext + (1 + εext) * ((2 * Mc.κ * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2) /
       (T - (2 * Mc.κ * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2)))) δ η 0 :=
   secure_of_extraction_floor P (Mc.peelFull n) (Mc.corr n)
-    (fun x b hb => (hmat x _).2 (Mc.peelFull_correct (emb x) b hb)) hext hfloor
+    (fun σ x b hb => (hmat σ x _).2 (Mc.peelFull_correct (emb x) b hb)) hext hfloor
+    (fun σ x C h => (hmat σ x C).1 h)
     (by linarith [Mc.time_peelFull_le n, Mc.time_corr_le n]) hT
 
 /-- **Relative security of matmul PoUW with rank-`r` masks**, from extraction and the floor above
@@ -928,12 +935,13 @@ security comes from the floor itself, `core_of_floor`.) -/
 theorem secure_lowRank (hmat : IsMatmulOn P emb) (r : ℕ) {εext δ η T : ℝ}
     (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
       δ ≤ acceptance P M → Extraction P (fun x => ValidLow (r := r) (emb x)) εext M η)
-    (hfloor : Floor Mc.toMachine P.correct T η)
+    (hfloor : Floor Mc.toMachine (fun x C => (emb x).1 * (emb x).2 = C) T η)
     (hT : 4 * Mc.κ * (n : ℝ) ^ 2 * r + 2 * Mc.κadd * (n : ℝ) ^ 2 < T) :
     Secure P (εext + (1 + εext) * ((4 * Mc.κ * (n : ℝ) ^ 2 * r + 2 * Mc.κadd * (n : ℝ) ^ 2) /
       (T - (4 * Mc.κ * (n : ℝ) ^ 2 * r + 2 * Mc.κadd * (n : ℝ) ^ 2)))) δ η 0 :=
   secure_of_extraction_floor P (Mc.peelLow n r) (Mc.corr n)
-    (fun x b hb => (hmat x _).2 (Mc.peelLow_correct (emb x) b hb)) hext hfloor
+    (fun σ x b hb => (hmat σ x _).2 (Mc.peelLow_correct (emb x) b hb)) hext hfloor
+    (fun σ x C h => (hmat σ x C).1 h)
     (by linarith [Mc.time_peelLow_le n r, Mc.time_corr_le n]) hT
 
 /-- **Full-rank masks by route 2**: with every accepted adversary costing at least `F`,
@@ -945,7 +953,7 @@ theorem secure_fullRank_advTime (hmat : IsMatmulOn P emb) {εext δ η F : ℝ}
       δ ≤ acceptance P M → F ≤ Mc.time M) (hF : 0 < F) :
     Secure P (εext + (2 * Mc.κ * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2) / F) δ η 0 :=
   secure_of_extraction_advTime P (Mc.peelFull n) (Mc.corr n)
-    (fun x b hb => (hmat x _).2 (Mc.peelFull_correct (emb x) b hb)) hext hM hF
+    (fun σ x b hb => (hmat σ x _).2 (Mc.peelFull_correct (emb x) b hb)) hext hM hF
     (by linarith [Mc.time_peelFull_le n, Mc.time_corr_le n])
 
 /-- **Rank-`r` masks by route 2**: with every accepted adversary costing at least `F`,
@@ -958,7 +966,7 @@ theorem secure_lowRank_advTime (hmat : IsMatmulOn P emb) (r : ℕ) {εext δ η 
       δ ≤ acceptance P M → F ≤ Mc.time M) (hF : 0 < F) :
     Secure P (εext + (4 * Mc.κ * (n : ℝ) ^ 2 * r + 2 * Mc.κadd * (n : ℝ) ^ 2) / F) δ η 0 :=
   secure_of_extraction_advTime P (Mc.peelLow n r) (Mc.corr n)
-    (fun x b hb => (hmat x _).2 (Mc.peelLow_correct (emb x) b hb)) hext hM hF
+    (fun σ x b hb => (hmat σ x _).2 (Mc.peelLow_correct (emb x) b hb)) hext hM hF
     (by linarith [Mc.time_peelLow_le n r, Mc.time_corr_le n])
 
 end MatMachine
