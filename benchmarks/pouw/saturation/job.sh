@@ -24,6 +24,8 @@
 #          (cutlass_receipt.kernels), gated, timed at Llama-3.1-8B's linear shapes; vllm_gemm_ref.py times vLLM's own
 #          cutlass_scaled_mm at the same shapes; ncu over six of the kernels. Built before the lease, one nvcc a kernel,
 #          against the harness's CUTLASS v4.8.0 checkout on node 2 (cloned if absent)
+#   gap    (not default) lease 1: gap_filler.py, forced work (φ pump, or a tag-like read of a 1 GiB store) on a
+#          low-priority stream beside vLLM's FP8 layer stack (its own ops), graph-replayed at high priority
 # Timeouts run in the foreground so `research cancel` reaches the GPU process.
 # Untimed diagnostic (tier 2a): one leased GPU, the fill queue keeps running beside it.
 set -euo pipefail
@@ -230,9 +232,18 @@ cgemm() {
   done
 }
 
+gap() {
+  stamp "gap filler"
+  if timeout --foreground 1500 "$PY" "$S/gap_filler.py" ${GAP_ARGS:-} > "$OUT/gap-filler.json" 2> "$OUT/gap-filler.err"; then
+    stamp "gap filler ok"
+  else
+    stamp "gap filler FAILED rc=$?"
+  fi
+}
+
 leased() {
   stamp "lease for: $*"
-  gpu-lease 1 --wait --max-min 30 -- bash -c "$(declare -f stamp split micro ncu_stage phi isa rgemm cgemm); $(declare -p OUT d S PY MODEL REV NCU METRICS); $*" \
+  gpu-lease 1 --wait --max-min 30 -- bash -c "$(declare -f stamp split micro ncu_stage phi isa rgemm cgemm gap); $(declare -p OUT d S PY MODEL REV NCU METRICS); $*" \
     || stamp "lease for '$*' FAILED rc=$?"
 }
 [[ " $STAGES " == *" split "* ]] && leased split "'bf16 eager'" "'fp8 eager'" "'bf16 graphs'" "'fp8 graphs'"
@@ -245,6 +256,7 @@ leased() {
 [[ " $STAGES " == *" isa "* ]] && leased isa
 [[ " $STAGES " == *" rgemm "* ]] && leased rgemm
 [[ " $STAGES " == *" cgemm "* ]] && leased cgemm
+[[ " $STAGES " == *" gap "* ]] && leased gap
 
 for rep in "$d"/ncu-*.ncu-rep; do
   [ -f "$rep" ] || continue
