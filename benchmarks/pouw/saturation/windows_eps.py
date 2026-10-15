@@ -20,9 +20,12 @@ window's CUDA capacity (ν_w, the share a cheater can use for unclaimed work) in
 ν = ν_w L / (h ρ η_w), so κνh/L = κ ν_w / (ρ η_w), ρ = 8 (FP8 MACs per CUDA slot), η_w = the GEMM's η × rate kept. SMs
 that hold no CTA are tensor room as well: as served, a cheater's own GEMM in the measured idle SM-time adds
 0.9 ν_idle / η_w (0.9: the best FP8 GEMM's share of peak, Pearl-C); with a tail filler that owns those SMs, what is left
-is the CUDA slack ν_f. δ is taken as 0. "Within the timing tolerance" takes ν_f over the cheaters within cheat_slack's
---tolerance of the design's time only; a slower cheater trades tensor rate for CUDA work, which pays only above the
-trading threshold.
+is the CUDA slack ν_f. δ is taken as 0.
+
+The timed table reads the window as the verifier times it, T = τ × the design's time, tails filled: a cheater that fits
+(slowdown s ≤ τ, within the A/A controls' resolution) keeps all the CUDA work it added, and may use what is left,
+τ − s, as tensor room. Its unclaimed work over the claim is (κ·added/ρ + 0.9(τ − s)) / η_w, maximized over every cheat
+row of the design and the null cheater (added 0, s 1), at the page's κ and at κ = max(2, L/3).
 """
 from __future__ import annotations
 
@@ -64,11 +67,21 @@ DESIGNS = [  # name, prefill kernel, decode kernel
 SCENARIOS = [  # name, measured idle SM-time as served?, ν_f (CUDA slack a fused cheater uses; None: measured)
     ("as served (measured idle and ν_f)", True, None),
     ("tails filled, measured ν_f", False, None),
-    ("tails filled, ν_f within the timing tolerance", False, "tolerance"),
     ("tails filled, ν_f 0.01", False, 0.01),
     ("tails filled, ν_f 0", False, 0.0),
 ]
 MEASURED_CREDIT = 2  # round 1 #10: at most ~1 MAC a CUDA slot through FP8, 2.1 through INT8
+TAUS = (1.0, 1.01, 1.02, 1.05)  # the verifier's window over the honest kernel's time
+RESOLUTION = 0.002  # the shuffled A/A controls (`_x0`) read 0.9996–1.0005× of their designs
+
+
+def timed(rows, k, ph, eta_w, tau, kappa):
+    """The most unclaimed work, over the claim, a cheater fits in a window τ times the design's time (module doc)."""
+    best = BEST_ETA * (tau - 1)
+    for r in rows:
+        if r["design"] == k and r["phase"] == ph and r["slowdown"] <= tau + RESOLUTION:
+            best = max(best, kappa * r["added"] / RHO + BEST_ETA * max(0.0, tau - r["slowdown"]))
+    return best / eta_w
 
 
 def coverage(ph):
@@ -142,14 +155,13 @@ def main():
     ap.add_argument("--json")
     a = ap.parse_args()
     idle = measured_idle(json.load(open(a.corun)))
-    cheat, cheat_tol = None, {}
+    cheat, cheat_rows = None, []
     for c in a.cheat:
         cj = json.load(open(c))
+        cheat_rows += [r for r in cj["rows"] if r["extra"]]
         for key_, v in cj["nu_f"].items():
             cheat = cheat or {}
             cheat[key_] = max(cheat.get(key_, 0.0), v)
-        for key_, v in cj.get("nu_f_tolerance", {}).items():
-            cheat_tol[key_] = max(cheat_tol.get(key_, 0.0), v)
     tab = json.load(open(a.table))
     for t in map(lambda p: json.load(open(p)), a.more):
         have = {r["kernel"] for r in tab["rows"]}
@@ -211,29 +223,41 @@ def main():
             src = "section 1" if nu_f is None else "cheat run"
             nu_f = frontier_slack(tab, k, ph) if nu_f is None else nu_f
             k_star = trade_threshold(tab, k, ph)
-            nu_tol = cheat_tol.get(f"{k}@{ph}", nu_f)
-            pick = lambda nf: nu_f if nf is None else nu_tol if nf == "tolerance" else nf
-            eps = [f_terms + mult * pick(nf) + (BEST_ETA * nu_idle / eta_w if served else 0.0)
+            eps = [f_terms + mult * (nu_f if nf is None else nf) + (BEST_ETA * nu_idle / eta_w if served else 0.0)
                    for _, served, nf in SCENARIOS]
             page = f_terms + mult * max(0.0, 1 - share)
             kappa_m = max(MEASURED_CREDIT, L / 3)
             eps_m = F + kappa_m * F * h / L + kappa_m / (RHO * eta_w) * nu_f
-            eps_m_tol = F + kappa_m * F * h / L + kappa_m / (RHO * eta_w) * nu_tol
+            eps_t = {tau: {"kappa": f_terms + timed(cheat_rows, k, ph, eta_w, tau, kappa),
+                           "measured_credit": F + kappa_m * F * h / L + timed(cheat_rows, k, ph, eta_w, tau, kappa_m)}
+                     for tau in TAUS} if any(r["design"] == k and r["phase"] == ph for r in cheat_rows) else None
             cov = res["coverage"][ph]["macs"]
             e2e = [1 - cov * (1 - min(1.0, e)) for e in eps]
             res["designs"].append({"design": name, "kernel": k, "phase": ph, "L": L, "rounds": rounds, "var": var,
                                    "rate_kept": kp, "phi_share": share, "overhead": over, "kappa": kappa, "h": h,
                                    "eta_w": eta_w, "nu_multiplier": mult, "f_terms": f_terms, "idle": nu_idle,
-                                   "nu_f": nu_f, "nu_f_source": src, "nu_f_tolerance": nu_tol,
-                                   "eps_in_measured_credit_tolerance": eps_m_tol,
+                                   "nu_f": nu_f, "nu_f_source": src,
                                    "trade_threshold": k_star, "kappa_measured_credit": kappa_m, "eps_in_measured_credit": eps_m,
                                    "eps_in": dict(zip([s[0] for s in SCENARIOS], eps)), "eps_page": page,
-                                   "eps_end_to_end": dict(zip([s[0] for s in SCENARIOS], e2e))})
+                                   "eps_end_to_end": dict(zip([s[0] for s in SCENARIOS], e2e)),
+                                   "eps_in_timed": eps_t,
+                                   "eps_end_to_end_timed": eps_t and {t: 1 - cov * (1 - min(1.0, e["kappa"]))
+                                                                      for t, e in eps_t.items()}})
             fmt = lambda e: f"{100 * e:.1f}%" if e < 1 else "vacuous"
             print(f"| {name} | {ph} | {100 * kp:.1f}% | {100 * over:.1f}% | {kappa:.1f} | {eta_w:.3f} | {mult:.2f} | "
                   f"{100 * f_terms:.2f}% | {100 * nu_idle:.1f}% | {100 * nu_f:.1f}% | {k_star:.1f} | "
                   + " | ".join(fmt(e) for e in eps)
                   + f" | {fmt(page)} | " + " | ".join(fmt(e) for e in e2e) + f" | {fmt(eps_m)} |")
+
+    print("\n| design | phase | rate kept | " + " | ".join(f"ε_in, window {t}× (κ / κ = max(2, L/3))" for t in TAUS)
+          + f" | ε end to end, window {TAUS[1]}× |")
+    print("|---|---|---|" + "---|" * (len(TAUS) + 1))
+    for d in res["designs"]:
+        if d["eps_in_timed"]:
+            fmt = lambda e: f"{100 * e:.1f}%" if e < 1 else "vacuous"
+            print(f"| {d['design']} | {d['phase']} | {100 * d['rate_kept']:.1f}% | "
+                  + " | ".join(f"{fmt(e['kappa'])} / {fmt(e['measured_credit'])}" for e in d["eps_in_timed"].values())
+                  + f" | {fmt(d['eps_end_to_end_timed'][TAUS[1]])} |")
 
     print("\n| phase | sequence | alone ms | filler | slowdown | filler's share of its solo rate | free share of its work "
           "| covert TFLOPS (mma) |")

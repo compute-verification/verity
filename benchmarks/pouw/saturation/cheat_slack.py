@@ -19,10 +19,7 @@ phase (the four linears weighted by the design's time, as one layer runs each on
 - free share: (added work at φ's solo rate − the time it added) / added work, both in units of the design's time;
 - ν_f: the most free capacity any variant shows, added work − the time it added, as a share of the window's CUDA
   capacity at the design's time (the lemma's ν: what the cheater gains for free);
-- ν_f at no rate loss: the most added share among variants within NOISE of the design's time;
-- ν_f within the tolerance: the most free capacity among variants at most --tolerance (1.05) times the design's time,
-  the cheaters a verifier timing the window can't tell from clock variation. A slower variant trades tensor rate for
-  CUDA work, which pays only above a credit a slot (windows_eps.py's trading threshold).
+- ν_f at no rate loss: the most added share among variants within NOISE of the design's time.
 
 An `_x0` variant is the design itself under another name (identical SASS): its slowdown is the method's null, printed
 and kept out of ν_f.
@@ -45,7 +42,6 @@ def main():
     ap.add_argument("cheat")
     ap.add_argument("--drop", type=int, action="append", default=[])
     ap.add_argument("--xvar")
-    ap.add_argument("--tolerance", type=float, default=1.05)
     ap.add_argument("--json")
     a = ap.parse_args()
     d = json.load(open(a.cheat))
@@ -84,14 +80,12 @@ def main():
                         "net": net, "rate_kept_vs_plain": kept})
             print(f"| {base} | {x}{XVAR[xvar[v]]} | {ph} | {100 * added:.1f}% | {slow:.4f}× | {100 * free:.0f}% | {100 * net:.1f}% | "
                   f"{100 * kept:.1f}% |")
-    nu, net, tol = {}, {}, {}
+    nu, net = {}, {}
     for o in out:
         if o["extra"] == 0:
             continue
         k = (o["design"], o["phase"])
         net[k] = max(net.get(k, 0.0), o["net"])
-        if o["slowdown"] <= a.tolerance:
-            tol[k] = max(tol.get(k, 0.0), o["net"])
         if o["slowdown"] <= 1 + NOISE:
             k = (o["design"], o["phase"])
             nu[k] = max(nu.get(k, 0.0), o["added"])
@@ -101,13 +95,9 @@ def main():
     print("\nν_f (most free capacity):", json.dumps({f"{k}@{p}": round(v, 4) for (k, p), v in sorted(net.items())}))
     print("ν_f at no rate loss (within", f"{100 * NOISE:.1f}%):",
           json.dumps({f"{k}@{p}": round(v, 4) for (k, p), v in sorted(nu.items())}))
-    print(f"ν_f within {a.tolerance}× of the design's time:",
-          json.dumps({f"{k}@{p}": round(v, 4) for (k, p), v in sorted(tol.items())}))
     if a.json:
         json.dump({"rows": out, "null_slowdown": null, "nu_f": {f"{k}@{p}": v for (k, p), v in net.items()},
-                   "nu_f_no_rate_loss": {f"{k}@{p}": v for (k, p), v in nu.items()},
-                   "tolerance": a.tolerance, "nu_f_tolerance": {f"{k}@{p}": v for (k, p), v in tol.items()}},
-                  open(a.json, "w"), indent=1)
+                   "nu_f_no_rate_loss": {f"{k}@{p}": v for (k, p), v in nu.items()}}, open(a.json, "w"), indent=1)
 
 
 if __name__ == "__main__":

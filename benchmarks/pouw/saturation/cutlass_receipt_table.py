@@ -62,6 +62,10 @@ def main():
         kept = 1 / r["cycles_vs_plain"]
         share = r["phi1_per_sm_clk"] / PHI_ALONE[r["var"]]
         kn = kernels.get(r["kernel"], {})
+        if kn.get("honest"):
+            # CR_HONEST's extra round on H of a thread's 128·128/threads chain words at each receipt point
+            share += (r["phi1_per_sm_clk"] * kn["honest"] * kn.get("threads", 256) / (128 * 128 * r["rounds"])
+                      / PHI_ALONE[r["var"]])
         if kn.get("forced"):
             # CR_FORCED's steps, F a thread after every 32-deep k-block, on top of the receipt's φ: alu φ1 at φ's solo
             # rate, or FFMAs (fvar 2) at the FMA pipe's 128 an SM-clock, both as shares of the SM's CUDA slots
