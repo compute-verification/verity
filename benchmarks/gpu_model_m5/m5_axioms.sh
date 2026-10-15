@@ -11,9 +11,10 @@ OUT=${OUT:?run under research run}
 NVCC=/usr/local/cuda-13.0/bin/nvcc
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
-for p in m5_reinterp m5_l2red m5_dram m5_compress; do
+PROBES=${M5_PROBES:-m5_compress m5_reinterp m5_l2red m5_dram}
+for p in $PROBES; do
   extra=""
-  [ "$p" = m5_compress ] && extra="-lcuda"
+  case "$p" in m5_compress*) extra="-lcuda";; esac
   if "$NVCC" -O3 -std=c++17 -arch=sm_120a "$SRC/$p.cu" -o "$WORK/$p" $extra >"$OUT/build-$p.log" 2>&1; then
     /usr/local/cuda-13.0/bin/cuobjdump -sass "$WORK/$p" >"$OUT/sass-$p.txt" 2>&1 || true
   else
@@ -30,7 +31,7 @@ set -uo pipefail
 nvidia-smi --id="\$GPU_LEASE_UUID" --query-gpu=name,uuid,clocks.sm,clocks.max.sm,clocks.mem,clocks.max.mem,power.limit,power.max_limit,pcie.link.gen.max,pcie.link.width.max --format=csv >"$OUT/smi.csv" 2>&1
 nvidia-smi --id="\$GPU_LEASE_UUID" --query-gpu=clocks.sm,power.draw,clocks_event_reasons.active --format=csv -lms 250 >"$OUT/clocks.csv" 2>&1 &
 SMI=\$!
-for p in m5_compress m5_reinterp m5_l2red m5_dram; do
+for p in $PROBES; do
   [ -x "$WORK/\$p" ] || continue
   "$WORK/\$p" >>"$OUT/summary.jsonl" 2>>"$OUT/stderr-\$p.log" || echo "{\"probe\":\"\$p\",\"run\":\"failed\",\"exit\":\$?}" >>"$OUT/summary.jsonl"
 done
