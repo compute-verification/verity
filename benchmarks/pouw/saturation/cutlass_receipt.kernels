@@ -1,0 +1,23 @@
+# cutlass_receipt's kernels, one cutlass_receipt_kernel.cu object each (job.sh's cgemm stage):
+# name cfg var rounds p mode   (cfg 0 prefill, 1 decode; var 0 alu, 1 imad; L = 128 p; mode 0 plain, 1 receipt, 2 dump)
+p_plain    0 0 1 1 0
+p_dump     0 0 1 1 2
+p_alu_p1   0 0 1 1 1
+p_alu_p2   0 0 1 2 1
+p_alu_p4   0 0 1 4 1
+p_imad_p1  0 1 1 1 1
+p_imad_p2  0 1 1 2 1
+p_imad_p4  0 1 1 4 1
+p_alu2_p1  0 0 2 1 1
+p_alu2_p2  0 0 2 2 1
+p_alu3_p1  0 0 3 1 1
+p_alu4_p1  0 0 4 1 1
+d_plain    1 0 1 1 0
+d_dump     1 0 1 1 2
+d_alu_p1   1 0 1 1 1
+d_alu_p2   1 0 1 2 1
+d_alu_p4   1 0 1 4 1
+d_alu4_p1  1 0 4 1 1
+d_alu8_p1  1 0 8 1 1
+d_alu16_p1 1 0 16 1 1
+d_alu32_p1 1 0 32 1 1

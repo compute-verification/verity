@@ -19,6 +19,11 @@
 #          word at L = 128, 256, 512 (receipts after the window's FADDs, or spread across its MMAs) against its receipt-free
 #          twin, n = 8,192 and 16,384 (gated); its ptxas report, SASS and opcode counts; ncu's pipe, scheduler and warp-state
 #          sections over eight of its kernels at 8,192
+#   cgemm  (not default) lease 1: cutlass_receipt.cu, the CUTLASS sm_120 FP8 GEMMs vLLM serves (prefill: cooperative
+#          128 x 128 x 128; decode: ping-pong 32 x 64 x 128), unmodified and with the phi receipt after every P-th k-tile
+#          (cutlass_receipt.kernels), gated, timed at Llama-3.1-8B's linear shapes; vllm_gemm_ref.py times vLLM's own
+#          cutlass_scaled_mm at the same shapes; ncu over six of the kernels. Built before the lease, one nvcc a kernel,
+#          against the harness's CUTLASS v4.8.0 checkout on node 2 (cloned if absent)
 # Timeouts run in the foreground so `research cancel` reaches the GPU process.
 # Untimed diagnostic (tier 2a): one leased GPU, the fill queue keeps running beside it.
 set -euo pipefail
@@ -59,6 +64,33 @@ probe_build() {  # NAME SOURCE [NVCC FLAGS]: the binary in $d, its SASS and the 
 [[ " $STAGES " == *" phi "* ]] && probe_build phi_probe phi_probe.cu
 [[ " $STAGES " == *" isa "* ]] && probe_build isa_rates isa_rates.cu
 [[ " $STAGES " == *" rgemm "* ]] && probe_build receipt_gemm receipt_gemm.cu -Xptxas -v
+cgemm_build() {  # cutlass_receipt in $d with one object a line of cutlass_receipt.kernels, compiled in parallel
+  local C=/workspace/pouw/harness/build/cutlass-v4.8.0 b="$d/cg" pids=() bad=0 name cfg var rounds p mode
+  if [[ ! -d $C/include/cutlass ]]; then
+    C=$d/cutlass
+    git clone -q --depth 1 --branch v4.8.0 https://github.com/NVIDIA/cutlass "$C"
+  fi
+  [[ "$(git -C "$C" rev-parse HEAD)" == 098de2a652cf8f00fd70b2df54051c7eccbb855a ]] || { stamp "cutlass: wrong commit"; return 1; }
+  mkdir -p "$b"
+  local fl=(-O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a --expt-relaxed-constexpr -I"$C/include"
+            -I"$C/tools/util/include" -I"$S" -DCUTLASS_ENABLE_TENSOR_CORE_MMA=1)
+  stamp "build cutlass_receipt kernels"
+  while read -r name cfg var rounds p mode; do
+    [[ -z $name || $name == \#* ]] && continue
+    nice -n 19 "$CUDA/bin/nvcc" "${fl[@]}" -Xptxas -v -DCR_NAME=$name -DCR_CFG=$cfg -DCR_VAR=$var -DCR_ROUNDS=$rounds \
+      -DCR_P=$p -DCR_MODE=$mode -c "$S/cutlass_receipt_kernel.cu" -o "$b/$name.o" 2> "$OUT/nvcc-cg-$name.txt" &
+    pids+=($!)
+  done < "$S/cutlass_receipt.kernels"
+  for pid in "${pids[@]}"; do wait "$pid" || bad=1; done
+  (( bad == 0 )) || { stamp "build cutlass_receipt kernels FAILED"; return 1; }
+  stamp "link cutlass_receipt"
+  "$CUDA/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -I"$S" -o "$d/cutlass_receipt" \
+    "$S/cutlass_receipt.cu" "$b"/*.o -ldl 2> "$OUT/nvcc-cg-main.txt" || { stamp "link FAILED"; return 1; }
+  "$CUDA/bin/cuobjdump" -sass "$d/cutlass_receipt" > "$d/cutlass_receipt-sass.txt"
+  gzip -c "$d/cutlass_receipt-sass.txt" > "$OUT/cutlass_receipt-sass.txt.gz"
+  stamp "build cutlass_receipt ok"
+}
+[[ " $STAGES " == *" cgemm "* ]] && { cgemm_build || STAGES=${STAGES/cgemm/}; }
 
 split() {
   for cfg in "$@"; do
@@ -165,9 +197,42 @@ rgemm() {
   grep -v "^\s*$" "$d/rgemm-ncu.log" | tail -40 > "$OUT/rgemm-ncu.log.tail"
 }
 
+cgemm() {
+  stamp "cutlass receipt"
+  if timeout --foreground 900 "$d/cutlass_receipt" --reps ${CG_REPS:-9} > "$OUT/cutlass-receipt.json" \
+      2> "$OUT/cutlass-receipt.err"; then
+    stamp "cutlass receipt ok"
+  else
+    stamp "cutlass receipt FAILED rc=$?"
+  fi
+  stamp "vllm gemm ref"
+  if timeout --foreground 600 "$PY" "$S/vllm_gemm_ref.py" --reps ${CG_REPS:-9} > "$OUT/vllm-gemm-ref.json" \
+      2> "$OUT/vllm-gemm-ref.err"; then
+    stamp "vllm gemm ref ok"
+  else
+    stamp "vllm gemm ref FAILED rc=$?"
+  fi
+  local run
+  for run in "p8192_qkv p_alu_p1,p_alu_p4,p_alu3_p1" "d32_gateup d_alu_p1,d_alu8_p1,d_alu32_p1"; do
+    set -- $run
+    stamp "cutlass receipt ncu $1"
+    if timeout --foreground 600 "$NCU" --clock-control none --kernel-name regex:device_kernel --section LaunchStats \
+        --section WarpStateStats --section SchedulerStats --section ComputeWorkloadAnalysis --section SpeedOfLight \
+        --metrics "$METRICS" --export "$d/cg-ncu-$1" --force-overwrite \
+        "$d/cutlass_receipt" --shapes $1 --profile --only $2 > "$d/cg-ncu-$1.log" 2>&1; then
+      "$NCU" --import "$d/cg-ncu-$1.ncu-rep" --csv --page details > "$OUT/cg-ncu-$1-details.csv"
+      "$NCU" --import "$d/cg-ncu-$1.ncu-rep" --csv --page raw | gzip -c > "$OUT/cg-ncu-$1-raw.csv.gz"
+      stamp "cutlass receipt ncu $1 ok"
+    else
+      stamp "cutlass receipt ncu $1 FAILED rc=$?"
+    fi
+    grep -v "^\s*$" "$d/cg-ncu-$1.log" | tail -40 > "$OUT/cg-ncu-$1.log.tail"
+  done
+}
+
 leased() {
   stamp "lease for: $*"
-  gpu-lease 1 --wait --max-min 30 -- bash -c "$(declare -f stamp split micro ncu_stage phi isa rgemm); $(declare -p OUT d S PY MODEL REV NCU METRICS); $*" \
+  gpu-lease 1 --wait --max-min 30 -- bash -c "$(declare -f stamp split micro ncu_stage phi isa rgemm cgemm); $(declare -p OUT d S PY MODEL REV NCU METRICS); $*" \
     || stamp "lease for '$*' FAILED rc=$?"
 }
 [[ " $STAGES " == *" split "* ]] && leased split "'bf16 eager'" "'fp8 eager'" "'bf16 graphs'" "'fp8 graphs'"
@@ -179,6 +244,7 @@ leased() {
 [[ " $STAGES " == *" phi "* ]] && leased phi
 [[ " $STAGES " == *" isa "* ]] && leased isa
 [[ " $STAGES " == *" rgemm "* ]] && leased rgemm
+[[ " $STAGES " == *" cgemm "* ]] && leased cgemm
 
 for rep in "$d"/ncu-*.ncu-rep; do
   [ -f "$rep" ] || continue
