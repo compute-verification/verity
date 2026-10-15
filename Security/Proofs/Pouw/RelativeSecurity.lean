@@ -1000,6 +1000,106 @@ theorem bitPair_coefficient {R : Type} [CommRing R] {a b c : ℕ} (A : Mat R a b
       Matrix.single i l (d * p k * d') := by
   rw [edit_mixed_difference, Matrix.single_mul_mul_single, Matrix.diagonal_apply_eq]
 
+/-! ### The abstract core of RS-D1E's homogenization (Lemma 3 and linearity, for one word)
+
+Words are functions of the noise bits `z : X ⊕ Y → K` (x-bits and y-bits). The bit-pair projection of a word `f` is
+RS-D1E's mixed second difference, `P(f)[x, y] = f(e_x + e_y) − f(e_x) − f(e_y) + f(0)`. It is linear, kills affine
+words, and sends a product of two affine (plain) operands to two rank-one terms; so a word computed with `m` plain
+products and linear steps projects to rank at most `2m`, and a word whose projection has rank `r` needs at least
+`r / 2` products: the products needed for a word are at least half the rank of its degree-(1, 1) part. Over
+`Z/2³²` the rank is too coarse and Theorem W's `r_k` replaces it; the accounting over many target words is Theorem
+B's (`F(G)`), still on paper. -/
+
+/-- An affine (plain) operand in the noise bits: `c + Σ α_x z_x + Σ γ_y z_y`. -/
+structure Aff (X Y K : Type) where
+  c : K
+  α : X → K
+  γ : Y → K
+
+/-- Its value at the noise `z`. -/
+def Aff.eval {X Y K : Type} [Fintype X] [Fintype Y] [CommRing K] (u : Aff X Y K) (z : X ⊕ Y → K) : K :=
+  u.c + ∑ x, u.α x * z (.inl x) + ∑ y, u.γ y * z (.inr y)
+
+/-- The noise `s e_x + t e_y`. -/
+def bitPt {X Y K : Type} [DecidableEq X] [DecidableEq Y] [CommRing K] (x : X) (y : Y) (s t : K) : X ⊕ Y → K :=
+  Pi.single (.inl x) s + Pi.single (.inr y) t
+
+/-- **The bit-pair projection** (RS-D1E): `P(f)[x, y] = f(e_x + e_y) − f(e_x) − f(e_y) + f(0)`. -/
+def bitProj {X Y K : Type} [DecidableEq X] [DecidableEq Y] [CommRing K] (f : (X ⊕ Y → K) → K) : Matrix X Y K :=
+  fun x y => f (bitPt x y 1 1) - f (bitPt x y 1 0) - f (bitPt x y 0 1) + f (bitPt x y 0 0)
+
+theorem Aff.eval_bitPt {X Y K : Type} [Fintype X] [Fintype Y] [DecidableEq X] [DecidableEq Y] [CommRing K]
+    (u : Aff X Y K) (x : X) (y : Y) (s t : K) : u.eval (bitPt x y s t) = u.c + u.α x * s + u.γ y * t := by
+  simp [Aff.eval, bitPt, Pi.single_apply]
+
+/-- **RS-D1E's Lemma 3** over a commutative ring: a product of two plain operands projects to `α_u γ_vᵀ + α_v γ_uᵀ`,
+and its constants (the instance, the pair offsets, anything computed before the coins) cancel. -/
+theorem bitProj_mul {X Y K : Type} [Fintype X] [Fintype Y] [DecidableEq X] [DecidableEq Y] [CommRing K]
+    (u v : Aff X Y K) :
+    bitProj (fun z => u.eval z * v.eval z) = Matrix.vecMulVec u.α v.γ + Matrix.vecMulVec v.α u.γ := by
+  ext x y
+  simp only [bitProj, Aff.eval_bitPt, Matrix.add_apply, Matrix.vecMulVec_apply]
+  ring
+
+/-- Plain words project to 0. -/
+theorem bitProj_aff {X Y K : Type} [Fintype X] [Fintype Y] [DecidableEq X] [DecidableEq Y] [CommRing K]
+    (u : Aff X Y K) : bitProj (fun z => u.eval z) = 0 := by
+  ext x y
+  simp only [bitProj, Aff.eval_bitPt, Matrix.zero_apply]
+  ring
+
+/-- The projection is additive. -/
+theorem bitProj_add {X Y K : Type} [DecidableEq X] [DecidableEq Y] [CommRing K] (f g : (X ⊕ Y → K) → K) :
+    bitProj (fun z => f z + g z) = bitProj f + bitProj g := by
+  ext x y
+  simp only [bitProj, Matrix.add_apply]
+  ring
+
+theorem bitProj_sum {X Y K : Type} [DecidableEq X] [DecidableEq Y] [CommRing K] {m : ℕ}
+    (f : Fin m → (X ⊕ Y → K) → K) : bitProj (fun z => ∑ j, f j z) = ∑ j, bitProj (f j) := by
+  ext x y
+  simp only [bitProj, Matrix.sum_apply, Finset.sum_sub_distrib, Finset.sum_add_distrib]
+
+/-- A sum of `m` pairs of rank-one terms has rank at most `2m`: it factors through `Fin m ⊕ Fin m`. -/
+theorem rank_sum_vecMulVec_le {X Y K : Type} [Fintype X] [Fintype Y] [CommRing K] [StrongRankCondition K] {m : ℕ}
+    (a c : Fin m → X → K) (b d : Fin m → Y → K) :
+    (∑ j, (Matrix.vecMulVec (a j) (b j) + Matrix.vecMulVec (c j) (d j))).rank ≤ 2 * m := by
+  let U : Matrix X (Fin m ⊕ Fin m) K := fun x s => Sum.elim (fun j => a j x) (fun j => c j x) s
+  let V : Matrix (Fin m ⊕ Fin m) Y K := fun s y => Sum.elim (fun j => b j y) (fun j => d j y) s
+  have hUV : ∑ j, (Matrix.vecMulVec (a j) (b j) + Matrix.vecMulVec (c j) (d j)) = U * V := by
+    ext x y
+    rw [Matrix.mul_apply, Fintype.sum_sum_type]
+    simp only [Matrix.sum_apply, Matrix.add_apply, Matrix.vecMulVec_apply, Finset.sum_add_distrib, U, V,
+      Sum.elim_inl, Sum.elim_inr]
+  rw [hUV]
+  refine (Matrix.rank_mul_le_left U V).trans ((Matrix.rank_le_card_width U).trans ?_)
+  simp [two_mul]
+
+/-- **The core of RS-D1E's homogenization, for one word**: a word computed with `m` products of plain operands and
+linear steps (`Σ_j u_j v_j + r`, scalars absorbed into the operands) projects to rank at most `2m`. -/
+theorem bitProj_rank_le {X Y K : Type} [Fintype X] [Fintype Y] [DecidableEq X] [DecidableEq Y] [CommRing K]
+    [StrongRankCondition K] {m : ℕ} (u v : Fin m → Aff X Y K) (r : Aff X Y K) :
+    (bitProj fun z => ∑ j, (u j).eval z * (v j).eval z + r.eval z).rank ≤ 2 * m := by
+  rw [bitProj_add (fun z => ∑ j, (u j).eval z * (v j).eval z) (fun z => r.eval z), bitProj_aff, add_zero,
+    bitProj_sum (fun j z => (u j).eval z * (v j).eval z)]
+  simp only [bitProj_mul]
+  exact rank_sum_vecMulVec_le _ _ _ _
+
+/-- **Products needed ≥ half the rank of the degree-(1, 1) part**: if a word computed with `m` plain products agrees
+with a target `T` at the four points of every bit pair, then `rank P(T) ≤ 2m`. -/
+theorem products_ge_half_rank {X Y K : Type} [Fintype X] [Fintype Y] [DecidableEq X] [DecidableEq Y] [CommRing K]
+    [StrongRankCondition K] {m : ℕ} (u v : Fin m → Aff X Y K) (r : Aff X Y K) (T : (X ⊕ Y → K) → K)
+    (hT : ∀ x y s t, (s = 0 ∨ s = 1) → (t = 0 ∨ t = 1) →
+      T (bitPt x y s t) = ∑ j, (u j).eval (bitPt x y s t) * (v j).eval (bitPt x y s t) + r.eval (bitPt x y s t)) :
+    (bitProj T).rank ≤ 2 * m := by
+  have h : bitProj T = bitProj fun z => ∑ j, (u j).eval z * (v j).eval z + r.eval z := by
+    ext x y
+    simp only [bitProj]
+    rw [hT x y 1 1 (.inr rfl) (.inr rfl), hT x y 1 0 (.inr rfl) (.inl rfl), hT x y 0 1 (.inl rfl) (.inr rfl),
+      hT x y 0 0 (.inl rfl) (.inl rfl)]
+  rw [h]
+  exact bitProj_rank_le u v r
+
 /-- The proof service's layer of a protocol (AGENTS.md's one proof service): live coins, messages and the verifier.
 A protocol is a service with a problem (`correct`) and an honest Solve. -/
 structure Service where
