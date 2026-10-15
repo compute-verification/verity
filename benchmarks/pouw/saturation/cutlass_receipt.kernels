@@ -4,7 +4,8 @@
 # or 4 receipts every chain after every second or every 32-deep k-block; extra X adds a cheater's X alu phi1 steps a thread
 # after every 32-deep k-block, on chains of its own; honest H gives the first H chain words of each receipt point one more
 # round; forced F adds F phi1 steps after every 32-deep k-block on receipt chains that read no accumulator; xvar 1 makes
-# the cheater's steps imad phi1 (`_xiX` in the name), xvar 2 FFMAs (`_xfX`); fvar 2 makes the forced steps FFMAs, `_ffF`)
+# the cheater's steps imad phi1 (`_xiX` in the name), xvar 2 FFMAs (`_xfX`), xvar 3 an alu phi1 and six FFMAs each
+# (`_xmX`); fvar 2 makes the forced steps FFMAs, `_ffF`)
 p_plain    0 0 1 1 0
 p_dump     0 0 1 1 2
 p_alu_p1   0 0 1 1 1
@@ -244,3 +245,49 @@ p_alu_g4_h4_ff256_x32 0 0 1 1 1 0 4 32 4 256 0 2
 p_alu_g4_h4_ff256_xi4 0 0 1 1 1 0 4 4 4 256 1 2
 p_alu_g4_h4_ff256_xf16 0 0 1 1 1 0 4 16 4 256 2 2
 p_alu_g4_h4_ff256_xf64 0 0 1 1 1 0 4 64 4 256 2 2
+p_alu_g4_h4_ff192_x3 0 0 1 1 1 0 4 3 4 192 0 2
+p_alu_g4_h4_ff192_x6 0 0 1 1 1 0 4 6 4 192 0 2
+p_alu_g4_h4_ff192_x12 0 0 1 1 1 0 4 12 4 192 0 2
+p_alu_g4_h4_ff192_x24 0 0 1 1 1 0 4 24 4 192 0 2
+p_alu_g4_h4_ff192_x48 0 0 1 1 1 0 4 48 4 192 0 2
+p_alu_g4_h4_ff192_x64 0 0 1 1 1 0 4 64 4 192 0 2
+p_alu_g4_h4_ff192_xi2 0 0 1 1 1 0 4 2 4 192 1 2
+p_alu_g4_h4_ff192_xi16 0 0 1 1 1 0 4 16 4 192 1 2
+p_alu_g4_h4_ff192_xf256 0 0 1 1 1 0 4 256 4 192 2 2
+p_alu_g4_h4_ff192_xm1 0 0 1 1 1 0 4 1 4 192 3 2
+p_alu_g4_h4_ff192_xm2 0 0 1 1 1 0 4 2 4 192 3 2
+p_alu_g4_h4_ff192_xm4 0 0 1 1 1 0 4 4 4 192 3 2
+p_alu_g4_h4_ff192_xm8 0 0 1 1 1 0 4 8 4 192 3 2
+p_alu_g4_h4_ff192_xm16 0 0 1 1 1 0 4 16 4 192 3 2
+p_alu_g4_h4_ff192_xm32 0 0 1 1 1 0 4 32 4 192 3 2
+p_alu_g4_h8_ff192 0 0 1 1 1 0 4 0 8 192 0 2
+p_alu_g4_h8_ff192_x0 0 0 1 1 1 0 4 0 8 192 0 2
+p_alu_g4_h8_ff192_x4 0 0 1 1 1 0 4 4 8 192 0 2
+p_alu_g4_h8_ff192_x8 0 0 1 1 1 0 4 8 8 192 0 2
+p_alu_g4_h8_ff192_x16 0 0 1 1 1 0 4 16 8 192 0 2
+p_alu_g4_h8_ff192_x32 0 0 1 1 1 0 4 32 8 192 0 2
+p_alu_g4_h8_ff192_xi4 0 0 1 1 1 0 4 4 8 192 1 2
+p_alu_g4_h8_ff192_xf32 0 0 1 1 1 0 4 32 8 192 2 2
+p_alu_g4_h8_ff192_xf64 0 0 1 1 1 0 4 64 8 192 2 2
+p_alu_g4_h8_ff192_xm2 0 0 1 1 1 0 4 2 8 192 3 2
+p_alu_g4_h8_ff192_xm4 0 0 1 1 1 0 4 4 8 192 3 2
+p_alu_g4_h8_ff192_xm8 0 0 1 1 1 0 4 8 8 192 3 2
+p_alu_g4_h8_ff192_xm16 0 0 1 1 1 0 4 16 8 192 3 2
+p_alu_g4_h4_ff224 0 0 1 1 1 0 4 0 4 224 0 2
+p_alu_g4_h4_ff224_x0 0 0 1 1 1 0 4 0 4 224 0 2
+p_alu_g4_h4_ff224_x4 0 0 1 1 1 0 4 4 4 224 0 2
+p_alu_g4_h4_ff224_x8 0 0 1 1 1 0 4 8 4 224 0 2
+p_alu_g4_h4_ff224_x16 0 0 1 1 1 0 4 16 4 224 0 2
+p_alu_g4_h4_ff224_x32 0 0 1 1 1 0 4 32 4 224 0 2
+p_alu_g4_h4_ff224_xi4 0 0 1 1 1 0 4 4 4 224 1 2
+p_alu_g4_h4_ff224_xf32 0 0 1 1 1 0 4 32 4 224 2 2
+p_alu_g4_h4_ff224_xf64 0 0 1 1 1 0 4 64 4 224 2 2
+p_alu_g4_h4_ff224_xm2 0 0 1 1 1 0 4 2 4 224 3 2
+p_alu_g4_h4_ff224_xm4 0 0 1 1 1 0 4 4 4 224 3 2
+p_alu_g4_h4_ff224_xm8 0 0 1 1 1 0 4 8 4 224 3 2
+p_alu_g4_h4_ff224_xm16 0 0 1 1 1 0 4 16 4 224 3 2
+p_alu_g4_xm2 0 0 1 1 1 0 4 2 0 0 3 0
+p_alu_g4_xm4 0 0 1 1 1 0 4 4 0 0 3 0
+p_alu_g4_xm8 0 0 1 1 1 0 4 8 0 0 3 0
+p_alu_g4_xm16 0 0 1 1 1 0 4 16 0 0 3 0
+p_alu_g4_xm32 0 0 1 1 1 0 4 32 0 0 3 0

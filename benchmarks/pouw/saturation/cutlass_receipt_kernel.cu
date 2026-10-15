@@ -26,7 +26,8 @@
 //              fires on a 64-bit coincidence, so the outputs and receipts the gates check are the design's.
 //   CR_FVAR V  the forced steps: 0 alu phi1, 2 one FFMA each (the FMA pipe alone; chains seeded as floats in [1, 2))
 //   CR_XVAR V  the cheater's step: 0 alu phi1, 1 imad phi1 (IMAD on the FMA pipe, its LOP3 and SHF on the ALU), 2 one
-//              FFMA (the FMA pipe alone), on chains seeded as floats in [1, 2)
+//              FFMA (the FMA pipe alone), on chains seeded as floats in [1, 2), 3 both pipes: an alu phi1 on the first
+//              chain and six FFMAs on the second (equal CUDA slots)
 // Compiled once per kernel: -DCR_NAME=name -DCR_CFG -DCR_VAR -DCR_ROUNDS -DCR_P -DCR_MODE -DCR_SPREAD -DCR_GRAIN
 // -DCR_EXTRA -DCR_HONEST -DCR_FORCED -DCR_XVAR -DCR_FVAR
 // (job.sh's cgemm).
@@ -116,7 +117,7 @@ struct ReceiptMma : Base {
         CUTLASS_PRAGMA_UNROLL
         for (int c = 0; c < CH; ++c) y[c] = 0;
         uint32_t z[2] = {CR_XVAR == 2 ? 0x3f800000u | (uint32_t)thread_idx : (uint32_t)thread_idx,
-                         CR_XVAR == 2 ? 0x3f800000u | ((uint32_t)thread_idx << 8) : ~(uint32_t)thread_idx};
+                         CR_XVAR >= 2 ? 0x3f800000u | ((uint32_t)thread_idx << 8) : ~(uint32_t)thread_idx};
         uint32_t zf[2] = {CR_FVAR == 2 ? 0x3f800000u | (uint32_t)thread_idx : (uint32_t)thread_idx ^ 0x243f6a88u,
                           CR_FVAR == 2 ? 0x3f800000u | ((uint32_t)thread_idx << 8) : ~(uint32_t)thread_idx ^ 0x243f6a88u};
 
@@ -201,7 +202,13 @@ struct ReceiptMma : Base {
                 const uint32_t p = (uint32_t)(kt * KB + b);
                 CUTLASS_PRAGMA_UNROLL
                 for (int j = 0; j < EXTRA; ++j)
-                    if constexpr (CR_XVAR == 2)
+                    if constexpr (CR_XVAR == 3) {
+                        z[0] = phi1<0>(z[0], p, 0x7f4a7c15u, key(j, b));
+                        CUTLASS_PRAGMA_UNROLL
+                        for (int i = 0; i < 6; ++i)
+                            z[1] = __float_as_uint(fmaf(__uint_as_float(z[1]), 0.99999994f,
+                                                        __uint_as_float(0x3f800000u | (key(6 * j + i, b) >> 9))));
+                    } else if constexpr (CR_XVAR == 2)
                         z[j & 1] = __float_as_uint(fmaf(__uint_as_float(z[j & 1]), 0.99999994f,
                                                         __uint_as_float(0x3f800000u | (key(j, b) >> 9))));
                     else
