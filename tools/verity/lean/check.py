@@ -1006,7 +1006,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     if prefixes and not update:
         fails.append(f"assumptions: the policy lists assumption modules ({', '.join(prefixes)}); list the assumptions by "
                      f"name instead, each with its record: `audit.py --update` converts the list")
-    kept = {}
+    kept, premised = {}, {}
     for name, rec in sorted(policy.get("guarantees", {}).items()):
         who = (rec or {}).get("owner") or owner
         if not who:
@@ -1024,6 +1024,9 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
             continue
         if not set(f["axioms"]) <= allowed:
             fails.append(f"guarantees: {name} uses {', '.join(sorted(set(f['axioms']) - allowed))}")
+        for pr in f.get("premises") or []:
+            if "Assumptions" in (pr.get("module") or "").split("."):
+                premised.setdefault(pr["head"], set()).add(name)
         named = []
         for h in f["hypotheses"]:
             if not h["closed"]:
@@ -1074,7 +1077,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
             elif a.get("digest") != b["digest"]:
                 fails.append(f"guarantees: the digest recorded for {m} is not the SHA-256 of its definitions; "
                              f"`python tools/verity/lean/merge.py --normalize` recomputes it")
-    records, why = assumption_records(policy, now_reads, update, owner)
+    records, why = assumption_records(policy, now_reads, update, owner, premised)
     fails += why
     out = dict(policy)
     if kept:
@@ -1084,12 +1087,16 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     return fails, out
 
 
-def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str | None) -> tuple[dict, list[str]]:
+def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str | None,
+                       premised: dict | None = None) -> tuple[dict, list[str]]:
     """The `assumptions` records as the build has them, and the failures: each named assumption (a definition of the spec,
     stated as a `Prop` and taken as a hypothesis or read inside a guarantee's statement) has an `owner` and the digest its
     `reads` record holds, so a changed assumption shows as its own record, and an entry no guarantee reads fails.  An
     update writes the digests, drops an entry no guarantee reads, and converts a list of assumption modules into the
-    definitions the guarantees read there, each owned by the one owner of the guarantees that read it (or ``owner``)."""
+    definitions the guarantees read there, each owned by the one owner of the guarantees that read it (or ``owner``).
+    ``premised`` ({definition: the guarantees whose statements take it}, from `Facts.lean`'s `premises`) names the premises
+    a statement takes in an assumptions module, its `Guarantees` definitions unfolded and a `Premises` abbrev seen through:
+    one the lock doesn't list fails, and an update adds it the same way, so an entry lost in a merge is never silent."""
     assumed, fails, out = policy.get("assumptions", {}), [], {}
     read = {d: (m, h, g["guarantees"]) for m, g in now_reads.items() for d, h in g["definitions"].items()}
     owners = {n: (r or {}).get("owner") for n, r in policy.get("guarantees", {}).items()}
@@ -1121,6 +1128,17 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
         elif rec["digest"] != h:
             fails.append(f"assumptions: {a}'s definition in {m} changed; run `audit.py --update` and commit the record "
                          f"(Daniel's DM shows the change when it lands)")
+    for d, by in sorted((premised or {}).items()):
+        if d in assumed:
+            continue
+        if update:
+            who = {owners.get(g) for g in by} - {None}
+            mine = who.pop() if len(who) == 1 else owner
+            out[d] = ({"owner": mine} if mine else {}) | ({"digest": read[d][1]} if d in read else {})
+        else:
+            fails.append(f"assumptions: {d} is a premise of {', '.join(sorted(by))}, an assumption the lock doesn't list; "
+                         f"run `check.py --update` to add it with its guarantees' owner and commit the record (Daniel's DM "
+                         f"shows it when it lands)")
     return out, fails
 
 
