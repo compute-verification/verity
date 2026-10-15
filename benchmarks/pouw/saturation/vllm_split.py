@@ -224,6 +224,8 @@ def main() -> int:
     ap.add_argument("--context", type=int, default=1024)
     ap.add_argument("--decode-steps", type=int, default=24)
     ap.add_argument("--gpu-mem", type=float, default=0.85)
+    ap.add_argument("--kv-cache-gib", type=float, default=0.0,
+                    help="fixed KV cache size instead of --gpu-mem's (ncu's kernel replay backs up device memory)")
     ap.add_argument("--ncu-step", action="store_true", help="no profiler: decode step 4 inside NVTX range ncu_step")
     ap.add_argument("--ncu-prefill", type=int, default=0, metavar="P",
                     help="no profiler: the second prefill step of P tokens inside NVTX range ncu_step")
@@ -241,6 +243,8 @@ def main() -> int:
     engine = dict(model=args.model, revision=args.revision, gpu_memory_utilization=args.gpu_mem, max_model_len=max_len,
                   max_num_batched_tokens=max_len, max_num_seqs=max(64, args.batch), enable_prefix_caching=False, seed=0,
                   enforce_eager=args.mode == "eager")
+    if args.kv_cache_gib:
+        engine["kv_cache_memory_bytes"] = int(args.kv_cache_gib * 2**30)
     if args.precision == "fp8":
         engine["quantization"] = "fp8"
     if args.mode == "graphs":

@@ -5,8 +5,11 @@
 #          at decode batch 32 (context 1,024) and prefills of 2,048 and 8,192 tokens
 #   micro  lease 2: fresh_operand.py gemm (torch._scaled_mm E4M3 n^3) and commit (hm96-sha512 rows of a fresh n x n E4M3
 #          operand, gated against Python), n = 4,096 / 8,192 / 16,384
-#   ncu    lease 2: one eager decode step (batch 32) per precision under ncu (pipe counts), summarized by ncu_summary.py
+#   ncu    lease 2: one eager decode step (batch 32) per precision under ncu (pipe counts), summarized by ncu_summary.py;
+#          its first 200 kernels (every kernel kind, ~13 layers), with a 6 GiB KV cache so kernel replay's memory backup
+#          stays on the device (at 0.85 it goes to host memory, ~40 s a kernel: r20261015-042637-c9be)
 #   ncu_prefill (not default): the same for one eager 2,048-token prefill step
+# Timeouts run in the foreground so `research cancel` reaches the GPU process.
 # Untimed diagnostic (tier 2a): one leased GPU, the fill queue keeps running beside it.
 set -euo pipefail
 : "${OUT:?}"
@@ -37,7 +40,7 @@ split() {
   for cfg in "$@"; do
     set -- $cfg
     stamp "split $1 $2"
-    if timeout 600 "$PY" "$S/vllm_split.py" --model "$MODEL" --revision "$REV" --precision "$1" --mode "$2" \
+    if timeout --foreground 600 "$PY" "$S/vllm_split.py" --model "$MODEL" --revision "$REV" --precision "$1" --mode "$2" \
         --scratch "$d" --out "$OUT/split-$1-$2.json" > "$d/split-$1-$2.log" 2>&1; then
       stamp "split $1 $2 ok"
     else
@@ -55,11 +58,9 @@ micro() {
     --out "$OUT/fresh-commit.json" > "$OUT/fresh-commit.log" 2>&1 || stamp "micro commit FAILED rc=$?"
 }
 
-METRICS=gpu__time_duration.sum,sm__cycles_elapsed.avg,smsp__thread_inst_executed.sum,sm__inst_executed.sum
-METRICS+=,sm__inst_executed_pipe_fma.sum,sm__inst_executed_pipe_alu.sum,sm__inst_executed_pipe_xu.sum
-METRICS+=,sm__inst_executed_pipe_lsu.sum,sm__inst_executed_pipe_tensor.sum,sm__inst_executed_pipe_uniform.sum
-for p in sm__inst_executed_pipe_fma sm__inst_executed_pipe_alu sm__inst_executed_pipe_xu sm__pipe_fma_cycles_active \
-         sm__pipe_alu_cycles_active sm__inst_issued sm__inst_executed_pipe_tensor dram__throughput sm__throughput; do
+METRICS=gpu__time_duration.sum,sm__cycles_elapsed.avg,smsp__thread_inst_executed.sum
+for p in sm__inst_executed_pipe_fma sm__inst_executed_pipe_alu sm__pipe_fma_cycles_active sm__pipe_alu_cycles_active \
+         sm__inst_issued sm__inst_executed_pipe_tensor dram__throughput; do
   METRICS+=,$p.avg.pct_of_peak_sustained_elapsed
 done
 
@@ -69,10 +70,10 @@ ncu_stage() {
     local prec=$1 phase=$2 name=ncu-$1-$2 step=--ncu-step
     [[ $phase == prefill* ]] && step="--ncu-prefill ${phase#prefill}"
     stamp "ncu $prec $phase"
-    if timeout 720 "$NCU" --target-processes all --nvtx --nvtx-include "ncu_step/" --clock-control none \
-        --metrics "$METRICS" --export "$d/$name" --force-overwrite \
+    if timeout --foreground 840 "$NCU" --target-processes all --nvtx --nvtx-include "ncu_step/" --clock-control none \
+        --launch-count 200 --metrics "$METRICS" --export "$d/$name" --force-overwrite \
         "$PY" "$S/vllm_split.py" --model "$MODEL" --revision "$REV" --precision "$prec" --mode eager $step \
-        --out "$OUT/$name-run.json" > "$d/$name.log" 2>&1; then
+        --kv-cache-gib 6 --out "$OUT/$name-run.json" > "$d/$name.log" 2>&1; then
       stamp "ncu $prec $phase ok"
     else
       stamp "ncu $prec $phase FAILED rc=$?"
