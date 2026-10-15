@@ -86,7 +86,8 @@ Explicitly unresolved (not part of the target)
   non-NaN word, and NaN is outside the finite domain anyway, so the choice is immaterial for this target.
 * **Total semantics.** :mod:`verity.ml.circuits.silicon.total` (and the guest's ``tc_total.rs``) define the step on every
   encoding -- NaN, infinities, saturation -- as measured on A100/RTX 4090; no registered gate family binds them
-  (``veritor.tensor-core.ampere_bf16_m16n8k16@3`` is the intended name).  Declaring the total relation is a
+  (no name is reserved: the ``veritor.*`` prefix is frozen, so the total relation takes a fresh id when it is
+  declared).  Declaring the total relation is a
   protocol decision, not a backend optimisation.
 * **Hopper.** ``wgmma`` on the H100 is one group of sixteen, a 26-bit adder, floor ``-133``
   (:data:`verity.ml.circuits.silicon.silicon.HOPPER_BF16_M16N8K16`); a different pipeline, a different target.
@@ -192,6 +193,9 @@ __all__ = [
 ]
 
 #: The tensor-core gate families' names and versions (the frozen SP1 backend's ``verity_sp1.proofs.families`` builds them).
+#: The ``veritor.*`` ids below are grandfathered and the prefix is FROZEN (CIR-12, circuits, 14 Oct 2026): each spelling is
+#: baked into a ``*_FAMILY_DIGEST`` pin, fixtures and recorded runs, so it stays; no new family is created under
+#: ``veritor.*`` — a new family takes a fresh id, and ``tests/test_targets_frozen_families.py`` fails on any other.
 TC_AMPERE_BF16_NAME = "veritor.tc-ampere-bf16"
 #: ``veritor.tc-bf16.<pipeline>@1``: the same vocabulary on another BF16 pipeline.
 TC_BF16_NAME_PREFIX = "veritor.tc-bf16."

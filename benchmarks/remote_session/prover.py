@@ -100,9 +100,9 @@ class CpuBackend:
 
 class ProverSide:
     def __init__(self, conn: wire.Conn, backend, node: bytes, plan: list[tuple[str, float]], *, seed: int = 0,
-                 defer_openings: bool = True, log=print) -> None:
+                 defer_openings: bool = True, warmup_ns: int = 0, log=print) -> None:
         self.conn, self.backend, self.node, self.plan, self.log = conn, backend, node, plan, log
-        self.defer_openings = defer_openings
+        self.defer_openings, self.warmup_ns = defer_openings, warmup_ns
         self.rng = random.Random(seed)
         self.inbox: queue.Queue = queue.Queue()
         self.jobs: queue.Queue = queue.Queue()
@@ -197,6 +197,11 @@ class ProverSide:
         N = self.backend.blocks
         dropped = set(self.rng.sample(range(N), round(fraction * N))) if mode == "skip" else set()
         self.backend.arm(dropped)
+        # Untimed passes bring the GPU to its boost clocks and warm its caches before the window clock starts: the
+        # window's released_ns is the verifier's when it sends the first coin, after this `armed`, so the first
+        # window does not pay the first passes' ramp (`device.DeviceStore.warmup`).
+        warmup = getattr(self.backend, "warmup", None)
+        self.warmup = warmup(self.warmup_ns) if warmup is not None and self.warmup_ns else None
         self.dropped, self.opened = dropped, []
         if self.defer_openings:
             self.open_enabled.clear()
@@ -265,7 +270,7 @@ class ProverSide:
         return {"k": k, "mode": mode, "fraction": fraction, "dropped": sorted(dropped), "accepted": ended["accepted"],
                 "failure": ended["failure"], "passes": [per_window[tt] for tt in range(W)],
                 "pass_host_ns": host_ns, "gap_host_ns": gaps, "opened": self.opened,
-                "device": device}
+                "warmup": self.warmup, "device": device}
 
 
 def main() -> int:
@@ -277,6 +282,9 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=20261013)
     ap.add_argument("--overlap-openings", action="store_true",
                     help="benchmark the old behavior: prepare each window's openings while later timed passes run")
+    ap.add_argument("--warmup-ms", type=float, default=2500.0,
+                    help="untimed passes before each session's first window, to reach boost clocks before the window "
+                         "clock starts (0: none; the CPU reference backend ignores it)")
     import device
 
     device.add_arguments(ap)
@@ -287,7 +295,8 @@ def main() -> int:
     host, port = a.connect.rsplit(":", 1)
     conn = wire.connect(host, int(port))
     p = ProverSide(conn, backend, a.node.encode(), parse_plan(a.plan), seed=a.seed,
-                   defer_openings=not a.overlap_openings, log=lambda m: print(m, flush=True))
+                   defer_openings=not a.overlap_openings, warmup_ns=round(a.warmup_ms * 1e6),
+                   log=lambda m: print(m, flush=True))
     cal = p.register()
     print(f"prover: registered, calibration {json.dumps(cal)}", flush=True)
     (a.out / "prover.json").write_text(json.dumps({"calibration": cal, "gates": backend.gates}, indent=1))

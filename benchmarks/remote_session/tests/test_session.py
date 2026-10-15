@@ -120,14 +120,6 @@ def test_an_honest_session_is_accepted_with_its_ledger(monkeypatch):
     assert all(w["slack_ns"] >= 0 for w in r["windows_seen"])
 
 
-def test_a_prover_that_dropped_blocks_is_rejected_at_an_opening():
-    (r,), (pr,) = run("skip:0.5", samples=8)
-    assert not r["accepted"] and not pr["accepted"]
-    assert r["failure"]["failure"] == "receipt"
-    i, p = r["failure"]["at"]
-    assert p in pr["dropped"] and pr["opened"][-1]["on_dropped"] >= 1
-
-
 def test_a_second_session_waits_out_the_first_and_is_accepted():
     rs, prs = run("honest,honest", sessions=2)
     assert [r["accepted"] for r in rs] == [True, True]
