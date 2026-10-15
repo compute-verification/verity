@@ -24,16 +24,19 @@ proof workers' results land here as theorems or as named hypotheses.
   `secure_of_extraction_floor` gives security from two named hypotheses, `Extraction` (RS-EXT's) and `Floor` (the floor
   agenda's), and `secure_fullRank` and `secure_lowRank` instantiate it with the explicit peels of `MatMachine`.
 * Route (c), edited instances (Daniel's rulings of 18:20Z and 18:28Z): correctness reads σ, an `Edit` adds σ-indexed
-  noise to both operands, unpeeled; `edited` is the protocol, `edited_complete` its completeness, `honestEdit` costs
-  `κ n³ + 2κadd n²` beyond the proof layer and the noise expansion, and `relativelySecure_of_editFloor` gives relative
-  security from the named hypothesis `EditFloor` (RS-D1E's floor). The bit-pair projection's algebra
+  noise to both operands, unpeeled; `edited` is the protocol (a promise problem on the instances `use`, served by a
+  product algorithm `m`), `edited_complete` its completeness, `honestEdit` costs `time m + 2κadd n²` beyond the proof
+  layer and the noise expansion, and `relativelySecure_of_editFloor` gives relative security from the named hypothesis
+  `EditFloor` (RS-D1E's floor), with `m` the worst-case product (`_wide`) or a grid product (`GridMatMachine`, `_grid`). The bit-pair projection's algebra
   (`bitPair_coefficient`) and the abstract core of RS-D1E's homogenization for one word (`bitProj_rank_le`,
   `products_ge_half_rank`, and `editedEntry_products_ge`: an edited prefix-sum entry with `r` live terms needs at least
   `r / 2` plain products, whatever the committed instance) are proved.
 * The Model B bridge (RS-MODEL): typed circuits of priced gates with free routing; `ModelB.machine` is a `Machine`
   whose time is `timeB`, `ModelB.matMachine` a `MatMachine` from priced circuits (`MatGates`, realized by a GEMM gate
-  family), and `matMachine120` the sm_120 instance at `price120` with the worst-case `κ = 16` u (circuits named
-  `Gemm120`; the width-typed refinement `Int8Gemm120` is the open item); `relativelySecure_edited120` is route (c) there.
+  family), `matMachine120` the sm_120 instance at `price120` with the worst-case `κ = 16` u (circuits named `Gemm120`),
+  and `gridMatMachine120` its width-typed refinement, the int8 tile GEMM at `κ = 1` u on `G_op = int8` (circuits named
+  `Int8Gemm120`). `relativelySecure_edited120` is route (c) on the int8 grid at 1 u, `relativelySecure_edited120_wide`
+  on unrestricted operands at 16 u.
 -/
 
 namespace Pouw.RelativeSecurity
@@ -1184,60 +1187,73 @@ structure Edit (Seed : Type) (n : ℕ) where
   eval_gen : ∀ σ, Mc.eval gen σ = (EA σ, EB σ)
 
 variable {Mc} in
+/-- The edited instance `(A + E_A(σ), B + E_B(σ))`. -/
+def Edit.edit {Seed : Type} {n : ℕ} (E : Mc.Edit Seed n) (σ : Seed) (x : Mat R n n × Mat R n n) :
+    Mat R n n × Mat R n n :=
+  (x.1 + E.EA σ, x.2 + E.EB σ)
+
+variable {Mc} in
 /-- The edited product `(A + E_A(σ)) (B + E_B(σ))`, the useful output on the instance `(A, B)`. -/
 def Edit.product {Seed : Type} {n : ℕ} (E : Mc.Edit Seed n) (σ : Seed) (x : Mat R n n × Mat R n n) : Mat R n n :=
   (x.1 + E.EA σ) * (x.2 + E.EB σ)
 
-/-- The edited product as an algorithm, `(σ, (A, B)) ↦ (A + E_A σ)(B + E_B σ)`: expand σ once, two additions, one
-product, and no peel. -/
-def editMul {Seed : Type} {n : ℕ} (E : Mc.Edit Seed n) : Mc.Alg (Seed × (Mat R n n × Mat R n n)) (Mat R n n) :=
+/-- The edited product as an algorithm, with the product computed by `m`, `(σ, (A, B)) ↦ m (A + E_A σ, B + E_B σ)`:
+expand σ once, two additions, one run of `m`, and no peel. `m` is the worst-case `mul n n n` on unrestricted
+operands, or a cheaper product on a grid the edited operands stay on (`GridMatMachine`). -/
+def editMul {Seed : Type} {n : ℕ} (E : Mc.Edit Seed n) (m : Mc.Alg (Mat R n n × Mat R n n) (Mat R n n)) :
+    Mc.Alg (Seed × (Mat R n n × Mat R n n)) (Mat R n n) :=
   Mc.seq (Mc.pair Mc.snd (Mc.seq Mc.fst E.gen))
-    (Mc.mul₂ (Mc.add₂ (Mc.seq Mc.fst Mc.fst) (Mc.seq Mc.snd Mc.fst))
-      (Mc.add₂ (Mc.seq Mc.fst Mc.snd) (Mc.seq Mc.snd Mc.snd)))
+    (Mc.lift2 (Mc.add₂ (Mc.seq Mc.fst Mc.fst) (Mc.seq Mc.snd Mc.fst))
+      (Mc.add₂ (Mc.seq Mc.fst Mc.snd) (Mc.seq Mc.snd Mc.snd)) m)
 
-theorem eval_editMul {Seed : Type} {n : ℕ} (E : Mc.Edit Seed n) (y : Seed × (Mat R n n × Mat R n n)) :
-    Mc.eval (Mc.editMul E) y = E.product y.1 y.2 := by
-  simp only [editMul, eval_mul₂, eval_add₂, Mc.eval_seq, Mc.eval_pair, Mc.eval_fst, Mc.eval_snd, E.eval_gen,
-    Edit.product]
+theorem eval_editMul {Seed : Type} {n : ℕ} (E : Mc.Edit Seed n) (m : Mc.Alg (Mat R n n × Mat R n n) (Mat R n n))
+    (y : Seed × (Mat R n n × Mat R n n)) : Mc.eval (Mc.editMul E m) y = Mc.eval m (E.edit y.1 y.2) := by
+  simp only [editMul, Machine.eval_lift2, eval_add₂, Mc.eval_seq, Mc.eval_pair, Mc.eval_fst, Mc.eval_snd,
+    E.eval_gen, Edit.edit]
 
-theorem time_editMul_le {Seed : Type} {n : ℕ} (E : Mc.Edit Seed n) :
-    Mc.time (Mc.editMul E) ≤ Mc.time E.gen + Mc.κ * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2 := by
+theorem time_editMul_le {Seed : Type} {n : ℕ} (E : Mc.Edit Seed n) (m : Mc.Alg (Mat R n n × Mat R n n) (Mat R n n)) :
+    Mc.time (Mc.editMul E m) ≤ Mc.time E.gen + Mc.time m + 2 * Mc.κadd * (n : ℝ) ^ 2 := by
   apply le_trans
-  · unfold editMul
-    apply_rules [time_mul₂_le_of, time_add₂_le_of, Machine.time_pair_le_of, Machine.time_seq_le_of,
-      Machine.time_fst_le, Machine.time_snd_le, le_refl]
+  · unfold editMul Machine.lift2
+    apply_rules [time_add₂_le_of, Machine.time_pair_le_of, Machine.time_seq_le_of, Machine.time_fst_le,
+      Machine.time_snd_le, le_refl]
   · linarith
 
-/-- **Honest Solve on edited instances** (`honestEdit`): compute the edited product, then run the proof layer
+/-- **Honest Solve on edited instances** (`honestEdit`): compute the edited product with `m`, then run the proof layer
 `prove` on the transcript's inputs and the served product; the useful output is the edited product, unpeeled. -/
-def honestEdit {Seed Coins Pf : Type} {n : ℕ} (E : Mc.Edit Seed n)
+def honestEdit {Seed Coins Pf : Type} {n : ℕ} (E : Mc.Edit Seed n) (m : Mc.Alg (Mat R n n × Mat R n n) (Mat R n n))
     (prove : Mc.Alg ((Seed × (Mat R n n × Mat R n n) × Coins) × Mat R n n) Pf) :
     Mc.Alg (Seed × (Mat R n n × Mat R n n) × Coins) (Pf × Mat R n n) :=
-  Mc.seq (Mc.pair (Mc.pair Mc.fst Mc.snd) (Mc.seq (Mc.pair Mc.fst (Mc.seq Mc.snd Mc.fst)) (Mc.editMul E)))
+  Mc.seq (Mc.pair (Mc.pair Mc.fst Mc.snd) (Mc.seq (Mc.pair Mc.fst (Mc.seq Mc.snd Mc.fst)) (Mc.editMul E m)))
     (Mc.pair prove Mc.snd)
 
 theorem eval_honestEdit {Seed Coins Pf : Type} {n : ℕ} (E : Mc.Edit Seed n)
+    (m : Mc.Alg (Mat R n n × Mat R n n) (Mat R n n))
     (prove : Mc.Alg ((Seed × (Mat R n n × Mat R n n) × Coins) × Mat R n n) Pf)
     (y : Seed × (Mat R n n × Mat R n n) × Coins) :
-    Mc.eval (Mc.honestEdit E prove) y = (Mc.eval prove (y, E.product y.1 y.2.1), E.product y.1 y.2.1) := by
+    Mc.eval (Mc.honestEdit E m prove) y =
+      (Mc.eval prove (y, Mc.eval m (E.edit y.1 y.2.1)), Mc.eval m (E.edit y.1 y.2.1)) := by
   simp only [honestEdit, Mc.eval_seq, Mc.eval_pair, Mc.eval_fst, Mc.eval_snd, eval_editMul, Prod.mk.eta]
 
-/-- `honestEdit` costs one `n × n × n` product and two additions beyond the proof layer and the noise expansion:
-`time ≤ κ n³ + 2 κadd n² + time gen + time prove`, with no peel. -/
+/-- `honestEdit` costs one run of `m` and two additions beyond the proof layer and the noise expansion:
+`time ≤ time m + 2 κadd n² + time gen + time prove`, with no peel. -/
 theorem time_honestEdit_le {Seed Coins Pf : Type} {n : ℕ} (E : Mc.Edit Seed n)
+    (m : Mc.Alg (Mat R n n × Mat R n n) (Mat R n n))
     (prove : Mc.Alg ((Seed × (Mat R n n × Mat R n n) × Coins) × Mat R n n) Pf) :
-    Mc.time (Mc.honestEdit E prove) ≤
-      Mc.κ * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2 + Mc.time E.gen + Mc.time prove := by
+    Mc.time (Mc.honestEdit E m prove) ≤
+      Mc.time m + 2 * Mc.κadd * (n : ℝ) ^ 2 + Mc.time E.gen + Mc.time prove := by
   apply le_trans
   · unfold honestEdit
     apply_rules [Machine.time_pair_le_of, Machine.time_seq_le_of, Machine.time_fst_le, Machine.time_snd_le,
       time_editMul_le, le_refl]
-  · linarith [Mc.time_mul_le n n n, Mc.time_add_le n n]
+  · linarith [Mc.time_add_le n n]
 
-/-- **The edited protocol** on the instance `(A, B)` (both operands adversarial, both edited): the service's coins,
-messages and verifier, the edited product as the problem, and `honestEdit` as Solve. -/
-def edited (S : Service) {n : ℕ} (E : Mc.Edit S.Seed n)
-    (prove : Mc.Alg ((S.Seed × (Mat R n n × Mat R n n) × S.Coins) × Mat R n n) (S.Com × S.Ans)) :
+/-- **The edited protocol** on the instance `(A, B)` (both operands adversarial, both edited), a promise problem on
+the instances `use` (all of them, or those whose edits stay on a grid): the service's coins, messages and verifier,
+the edited product as the answer on every promised instance, and `honestEdit` with the product `m` as Solve. -/
+def edited (S : Service) {n : ℕ} (E : Mc.Edit S.Seed n) (m : Mc.Alg (Mat R n n × Mat R n n) (Mat R n n))
+    (prove : Mc.Alg ((S.Seed × (Mat R n n × Mat R n n) × S.Coins) × Mat R n n) (S.Com × S.Ans))
+    (use : Mat R n n × Mat R n n → Prop) :
     Protocol Mc.toMachine (Mat R n n × Mat R n n) (Mat R n n) where
   Seed := S.Seed
   lam := S.lam
@@ -1245,66 +1261,145 @@ def edited (S : Service) {n : ℕ} (E : Mc.Edit S.Seed n)
   Com := S.Com
   Ans := S.Ans
   Coins := S.Coins
-  correct σ x C := E.product σ x = C
-  solve := Mc.honestEdit E prove
+  correct σ x C := use x → E.product σ x = C
+  solve := Mc.honestEdit E m prove
   verify := S.verify
 
-/-- **Completeness of the edited protocol**: if the proof layer's commitment reads neither σ nor the product
-(`hcom`, commit-first) and the verifier accepts its proof of the served product with probability at least `1 − η`
-on every instance (`hacc`), the edited protocol is complete; its answer is the edited product on every run. -/
+/-- **Completeness of the edited protocol**: if `m` computes the edited product on every promised instance (`hm`), the
+proof layer's commitment reads neither σ nor the product (`hcom`, commit-first) and the verifier accepts its proof of
+the served product with probability at least `1 − η` on every instance (`hacc`), the edited protocol is complete. -/
 theorem edited_complete (S : Service) {n : ℕ} (E : Mc.Edit S.Seed n)
-    (prove : Mc.Alg ((S.Seed × (Mat R n n × Mat R n n) × S.Coins) × Mat R n n) (S.Com × S.Ans)) {η : ℝ}
+    (m : Mc.Alg (Mat R n n × Mat R n n) (Mat R n n))
+    (prove : Mc.Alg ((S.Seed × (Mat R n n × Mat R n n) × S.Coins) × Mat R n n) (S.Com × S.Ans))
+    (use : Mat R n n × Mat R n n → Prop) {η : ℝ}
+    (hm : ∀ σ x, use x → Mc.eval m (E.edit σ x) = E.product σ x)
     (hcom : ∀ (σ σ' : S.Seed) (y : (Mat R n n × Mat R n n) × S.Coins) (C C' : Mat R n n),
       (Mc.eval prove ((σ, y), C)).1 = (Mc.eval prove ((σ', y), C')).1)
     (hacc : ∀ x : Mat R n n × Mat R n n, 1 - η ≤ prob fun ω : S.Seed × S.Coins =>
-      S.verify (Mc.eval prove ((ω.1, x, ω.2), E.product ω.1 x)).1 ω.1
-        (Mc.eval prove ((ω.1, x, ω.2), E.product ω.1 x)).2 = true) :
-    Complete (Mc.edited S E prove) η := by
+      S.verify (Mc.eval prove ((ω.1, x, ω.2), Mc.eval m (E.edit ω.1 x))).1 ω.1
+        (Mc.eval prove ((ω.1, x, ω.2), Mc.eval m (E.edit ω.1 x))).2 = true) :
+    Complete (Mc.edited S E m prove use) η := by
   refine ⟨fun σ σ' y => ?_, fun x => (hacc x).trans (prob_mono fun ω hω => ?_)⟩
-  · change ((Mc.eval (Mc.honestEdit E prove) (σ, y)).1).1 = ((Mc.eval (Mc.honestEdit E prove) (σ', y)).1).1
+  · change ((Mc.eval (Mc.honestEdit E m prove) (σ, y)).1).1 = ((Mc.eval (Mc.honestEdit E m prove) (σ', y)).1).1
     rw [eval_honestEdit, eval_honestEdit]
     exact hcom σ σ' y _ _
-  · change E.product ω.1 x = (Mc.eval (Mc.honestEdit E prove) (ω.1, x, ω.2)).2 ∧
-      S.verify (Mc.eval (Mc.honestEdit E prove) (ω.1, x, ω.2)).1.1 ω.1
-        (Mc.eval (Mc.honestEdit E prove) (ω.1, x, ω.2)).1.2 = true
+  · change (use x → E.product ω.1 x = (Mc.eval (Mc.honestEdit E m prove) (ω.1, x, ω.2)).2) ∧
+      S.verify (Mc.eval (Mc.honestEdit E m prove) (ω.1, x, ω.2)).1.1 ω.1
+        (Mc.eval (Mc.honestEdit E m prove) (ω.1, x, ω.2)).1.2 = true
     rw [eval_honestEdit]
-    exact ⟨rfl, hω⟩
+    exact ⟨fun hx => (hm ω.1 x hx).symm, hω⟩
 
 /-- **The edit floor** (a named hypothesis; RS-D1E proves it on paper by the bit-pair projection, `bitPair_coefficient`,
 with `F = c n³` per MAC slot, `c = ½` unconditional through Theorem W and `c = 1` under Conjecture A): on the edited
 protocol, every adversary that commits first has its accepted runs below `F` with probability at most `κ`. -/
-def EditFloor (S : Service) {n : ℕ} (E : Mc.Edit S.Seed n)
-    (prove : Mc.Alg ((S.Seed × (Mat R n n × Mat R n n) × S.Coins) × Mat R n n) (S.Com × S.Ans)) (F κ : ℝ) : Prop :=
-  AdvFloor (Mc.edited S E prove) F κ
+def EditFloor (S : Service) {n : ℕ} (E : Mc.Edit S.Seed n) (m : Mc.Alg (Mat R n n × Mat R n n) (Mat R n n))
+    (prove : Mc.Alg ((S.Seed × (Mat R n n × Mat R n n) × S.Coins) × Mat R n n) (S.Com × S.Ans))
+    (use : Mat R n n × Mat R n n → Prop) (F κ : ℝ) : Prop :=
+  AdvFloor (Mc.edited S E m prove use) F κ
 
-/-- **Relative security of edited instances** (route (c), end to end): with the edited protocol complete
-(`hcom`, `hacc`) and the edit floor `F` (named hypothesis `EditFloor`, with `κf < δ`), the edited protocol is relatively
-secure against the reference `N = κ n³` with `ε = U / F − 1`, `U = κ n³ + 2κadd n² + time gen + time prove`, and
-`γ = (2κadd n² + time gen + time prove) / (κ n³)`: the proof layer, the noise expansion and two additions, no peel. -/
+/-- **Relative security of edited instances** (route (c), end to end, for a product `m` at `κm` per
+multiply-accumulate on the promised instances): with the edited protocol complete (`hm`, `hcom`, `hacc`) and the edit
+floor `F` (named hypothesis `EditFloor`, with `κf < δ`), the edited protocol is relatively secure against the reference
+`N = κm n³` with `ε = U / F − 1`, `U = κm n³ + 2κadd n² + time gen + time prove`, and
+`γ = (2κadd n² + time gen + time prove) / (κm n³)`: the proof layer, the noise expansion and two additions, no peel. -/
 theorem relativelySecure_of_editFloor (S : Service) {n : ℕ} (E : Mc.Edit S.Seed n)
+    (m : Mc.Alg (Mat R n n × Mat R n n) (Mat R n n))
+    (prove : Mc.Alg ((S.Seed × (Mat R n n × Mat R n n) × S.Coins) × Mat R n n) (S.Com × S.Ans))
+    (use : Mat R n n × Mat R n n → Prop) {κm κf δ η F : ℝ}
+    (hm : ∀ σ x, use x → Mc.eval m (E.edit σ x) = E.product σ x) (hmt : Mc.time m ≤ κm * (n : ℝ) ^ 3)
+    (hcom : ∀ (σ σ' : S.Seed) (y : (Mat R n n × Mat R n n) × S.Coins) (C C' : Mat R n n),
+      (Mc.eval prove ((σ, y), C)).1 = (Mc.eval prove ((σ', y), C')).1)
+    (hacc : ∀ x : Mat R n n × Mat R n n, 1 - η ≤ prob fun ω : S.Seed × S.Coins =>
+      S.verify (Mc.eval prove ((ω.1, x, ω.2), Mc.eval m (E.edit ω.1 x))).1 ω.1
+        (Mc.eval prove ((ω.1, x, ω.2), Mc.eval m (E.edit ω.1 x))).2 = true)
+    (hfloor : Mc.EditFloor S E m prove use F κf) (hκδ : κf < δ) (hF : 0 < F)
+    (hFU : F ≤ κm * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2 + Mc.time E.gen + Mc.time prove)
+    (hN : 0 < κm * (n : ℝ) ^ 3) :
+    RelativelySecure (Mc.edited S E m prove use)
+      ((κm * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2 + Mc.time E.gen + Mc.time prove) / F - 1) δ
+      ((2 * Mc.κadd * (n : ℝ) ^ 2 + Mc.time E.gen + Mc.time prove) / (κm * (n : ℝ) ^ 3)) η 0
+      (κm * (n : ℝ) ^ 3) := by
+  have hc := Mc.edited_complete S E m prove use hm hcom hacc
+  have hU : Mc.time (Mc.honestEdit E m prove) ≤
+      κm * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2 + Mc.time E.gen + Mc.time prove := by
+    linarith [Mc.time_honestEdit_le E m prove]
+  refine ⟨hc, secureInf_of_core _ (core_of_floor _ hF hFU hfloor hc hU) hκδ ?_, ?_⟩
+  · rw [add_sub_cancel]
+    exact div_pos (hF.trans_le hFU) hF
+  · change Mc.time (Mc.honestEdit E m prove) ≤ _
+    rw [add_mul, one_mul, div_mul_cancel₀ _ hN.ne', add_zero]
+    linarith
+
+/-- The worst-case product computes the edited product on every instance. -/
+theorem eval_mul_edit {Seed : Type} {n : ℕ} (E : Mc.Edit Seed n) (σ : Seed) (x : Mat R n n × Mat R n n) :
+    Mc.eval (Mc.mul n n n) (E.edit σ x) = E.product σ x :=
+  Mc.eval_mul n n n _
+
+/-- **Route (c) on unrestricted operands** (`relativelySecure_of_editFloor` with the worst-case product `mul n n n`
+at `κ`, and every instance promised): reference `N = κ n³`. -/
+theorem relativelySecure_of_editFloor_wide (S : Service) {n : ℕ} (E : Mc.Edit S.Seed n)
     (prove : Mc.Alg ((S.Seed × (Mat R n n × Mat R n n) × S.Coins) × Mat R n n) (S.Com × S.Ans)) {κf δ η F : ℝ}
     (hcom : ∀ (σ σ' : S.Seed) (y : (Mat R n n × Mat R n n) × S.Coins) (C C' : Mat R n n),
       (Mc.eval prove ((σ, y), C)).1 = (Mc.eval prove ((σ', y), C')).1)
     (hacc : ∀ x : Mat R n n × Mat R n n, 1 - η ≤ prob fun ω : S.Seed × S.Coins =>
       S.verify (Mc.eval prove ((ω.1, x, ω.2), E.product ω.1 x)).1 ω.1
         (Mc.eval prove ((ω.1, x, ω.2), E.product ω.1 x)).2 = true)
-    (hfloor : Mc.EditFloor S E prove F κf) (hκδ : κf < δ) (hF : 0 < F)
+    (hfloor : Mc.EditFloor S E (Mc.mul n n n) prove (fun _ => True) F κf) (hκδ : κf < δ) (hF : 0 < F)
     (hFU : F ≤ Mc.κ * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2 + Mc.time E.gen + Mc.time prove)
     (hN : 0 < Mc.κ * (n : ℝ) ^ 3) :
-    RelativelySecure (Mc.edited S E prove)
+    RelativelySecure (Mc.edited S E (Mc.mul n n n) prove fun _ => True)
       ((Mc.κ * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2 + Mc.time E.gen + Mc.time prove) / F - 1) δ
       ((2 * Mc.κadd * (n : ℝ) ^ 2 + Mc.time E.gen + Mc.time prove) / (Mc.κ * (n : ℝ) ^ 3)) η 0
-      (Mc.κ * (n : ℝ) ^ 3) := by
-  have hc := Mc.edited_complete S E prove hcom hacc
-  have hU := Mc.time_honestEdit_le E prove
-  refine ⟨hc, secureInf_of_core _ (core_of_floor _ hF hFU hfloor hc hU) hκδ ?_, ?_⟩
-  · rw [add_sub_cancel]
-    exact div_pos (hF.trans_le hFU) hF
-  · change Mc.time (Mc.honestEdit E prove) ≤ _
-    rw [add_mul, one_mul, div_mul_cancel₀ _ hN.ne', add_zero]
-    linarith
+      (Mc.κ * (n : ℝ) ^ 3) :=
+  Mc.relativelySecure_of_editFloor S E _ prove _ (fun σ x _ => Mc.eval_mul_edit E σ x)
+    ((Mc.time_mul_le n n n).trans_eq (by ring)) hcom (fun x => by simpa only [Mc.eval_mul_edit] using hacc x)
+    hfloor hκδ hF hFU hN
 
 end MatMachine
+
+/-- **A matrix machine with a grid product** (the width-typed refinement): on the shapes `shape` and on operands
+whose entries lie in the grid `G`, `mulG` computes the product at `κG` per multiply-accumulate; off the grid it may
+compute anything. `mul` stays the worst-case product on all operands. -/
+structure GridMatMachine (R : Type) [Ring R] extends MatMachine R where
+  G : R → Prop
+  shape : ℕ → ℕ → ℕ → Prop
+  κG : ℝ
+  mulG : ∀ a b c : ℕ, Alg (Mat R a b × Mat R b c) (Mat R a c)
+  eval_mulG : ∀ (a b c : ℕ) (x : Mat R a b × Mat R b c), shape a b c → (∀ i k, G (x.1 i k)) → (∀ k j, G (x.2 k j)) →
+    eval (mulG a b c) x = x.1 * x.2
+  time_mulG_le : ∀ a b c : ℕ, shape a b c → time (mulG a b c) ≤ κG * ((a : ℝ) * b * c)
+
+namespace GridMatMachine
+
+variable {R : Type} [Ring R] (Mc : GridMatMachine R)
+
+/-- Both operands lie on the grid. -/
+def OnGrid {n : ℕ} (x : Mat R n n × Mat R n n) : Prop := (∀ i k, Mc.G (x.1 i k)) ∧ ∀ k j, Mc.G (x.2 k j)
+
+/-- **Route (c) on the grid**: when every promised instance's edits stay on the grid (`hgrid`) and the shape is one
+the grid product takes, the edited protocol with `mulG` is relatively secure against the grid reference
+`N = κG n³`, with `U = κG n³ + 2κadd n² + time gen + time prove`. -/
+theorem relativelySecure_of_editFloor_grid (S : Service) {n : ℕ} (E : Mc.Edit S.Seed n)
+    (prove : Mc.Alg ((S.Seed × (Mat R n n × Mat R n n) × S.Coins) × Mat R n n) (S.Com × S.Ans))
+    (use : Mat R n n × Mat R n n → Prop) {κf δ η F : ℝ} (hshape : Mc.shape n n n)
+    (hgrid : ∀ σ x, use x → Mc.OnGrid (E.edit σ x))
+    (hcom : ∀ (σ σ' : S.Seed) (y : (Mat R n n × Mat R n n) × S.Coins) (C C' : Mat R n n),
+      (Mc.eval prove ((σ, y), C)).1 = (Mc.eval prove ((σ', y), C')).1)
+    (hacc : ∀ x : Mat R n n × Mat R n n, 1 - η ≤ prob fun ω : S.Seed × S.Coins =>
+      S.verify (Mc.eval prove ((ω.1, x, ω.2), Mc.eval (Mc.mulG n n n) (E.edit ω.1 x))).1 ω.1
+        (Mc.eval prove ((ω.1, x, ω.2), Mc.eval (Mc.mulG n n n) (E.edit ω.1 x))).2 = true)
+    (hfloor : Mc.EditFloor S E (Mc.mulG n n n) prove use F κf) (hκδ : κf < δ) (hF : 0 < F)
+    (hFU : F ≤ Mc.κG * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2 + Mc.time E.gen + Mc.time prove)
+    (hN : 0 < Mc.κG * (n : ℝ) ^ 3) :
+    RelativelySecure (Mc.edited S E (Mc.mulG n n n) prove use)
+      ((Mc.κG * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2 + Mc.time E.gen + Mc.time prove) / F - 1) δ
+      ((2 * Mc.κadd * (n : ℝ) ^ 2 + Mc.time E.gen + Mc.time prove) / (Mc.κG * (n : ℝ) ^ 3)) η 0
+      (Mc.κG * (n : ℝ) ^ 3) :=
+  Mc.relativelySecure_of_editFloor S E _ prove use
+    (fun σ x hx => Mc.eval_mulG n n n _ hshape (hgrid σ x hx).1 (hgrid σ x hx).2)
+    ((Mc.time_mulG_le n n n hshape).trans_eq (by ring)) hcom hacc hfloor hκδ hF hFU hN
+
+end GridMatMachine
 
 end EditedInstances
 
@@ -1316,8 +1411,9 @@ Model B prices a straight-line gate program by the sum of its gates' prices (`ti
 wiring (`timeB_rewire`). A Model B algorithm `I → O` is a typed circuit (`Circ`) of gates and routing: its semantics
 is gate evaluation and its time is `timeB` of its gate list. `machine` is the `Machine`; `matMachine` is the
 `MatMachine` over ℤ given circuits for the products, sums and differences at their prices (`MatGates`), which a gate
-family with one GEMM kind per shape provides (`gemmGates`). On sm_120 (`price120`) one worst-case constant is used,
-`κ = 16` u per product (s32 operands as 4 × 4 int8 limb products) and `κadd = 1` u per entry. -/
+family with one GEMM kind per shape provides (`gemmGates`). On sm_120 (`price120`) the worst case is `κ = 16` u per
+product (s32 operands as 4 × 4 int8 limb products) and `κadd = 1` u per entry; on the int8 grid and the tile shapes the
+product is `κG = 1` u (`gridMatMachine120`). -/
 
 namespace ModelB
 
@@ -1611,19 +1707,84 @@ matrix operations over ℤ at 16 u per product and 1 u per entry. RS-MODEL price
 semantics, so this is where `mma`'s exact semantics and the limb decomposition enter. -/
 def Gemm120 (kd : K120 → Kind) : Prop := Nonempty (MatGates kd price120 16 1)
 
-/-- **The width-typed refinement** (the open item): on the int8 grid a product costs 1 u, not the worst case's 16
-(RS-MODEL's `gemm120`: `n³` u for the `m16n8k32` tile GEMM), so the edited product on the grid would be priced `n³` u.
-Stated for int8 operands on tile-multiple shapes, with the s32 accumulator exact (`b ≤ 2^17`). Using it needs
-`MatMachine.mul` typed by operand grid, so that `κ` can depend on the operands' widths. -/
-def Int8Gemm120 (kd : K120 → Kind) : Prop :=
-  ∀ a b c : ℕ, 16 ∣ a → 32 ∣ b → 8 ∣ c → b ≤ 2 ^ 17 → ∃ m : Circ kd (Mat ℤ a b × Mat ℤ b c) (Mat ℤ a c),
-    (∀ x : Mat ℤ a b × Mat ℤ b c, (∀ i k, -128 ≤ x.1 i k ∧ x.1 i k ≤ 127) → (∀ k j, -128 ≤ x.2 k j ∧ x.2 k j ≤ 127) →
-      m.eval x = x.1 * x.2) ∧ timeB price120 m.prog ≤ a * b * c
+/-- The int8 grid, `G_op`. -/
+def Int8 (z : ℤ) : Prop := -128 ≤ z ∧ z ≤ 127
 
-/-- **Route (c) on sm_120**: `relativelySecure_of_editFloor` in Model B at sm_120's prices and the worst-case
-constant: reference `N = 16 n³` u, `ε = U / F − 1` with `U = 16 n³ + 2 n² + time gen + time prove`, and
-`γ = (2 n² + time gen + time prove) / (16 n³)`. -/
-theorem relativelySecure_edited120 (kd : K120 → Kind) (G : MatGates kd price120 16 1) (S : Service) {n : ℕ}
+/-- The `m16n8k32` tile shapes, with the s32 accumulator exact (`b ≤ 2^17`, `int8_product_exact`). -/
+def Tile120 (a b c : ℕ) : Prop := 16 ∣ a ∧ 32 ∣ b ∧ 8 ∣ c ∧ b ≤ 2 ^ 17
+
+theorem tile120_square {n : ℕ} (h32 : 32 ∣ n) (h17 : n ≤ 2 ^ 17) : Tile120 n n n :=
+  ⟨(by norm_num : (16 : ℕ) ∣ 32).trans h32, h32, (by norm_num : (8 : ℕ) ∣ 32).trans h32, h17⟩
+
+variable (kd) in
+/-- Circuits for the int8 product on sm_120's tile shapes: exact on int8 operands at 1 u per multiply-accumulate
+(RS-MODEL's `gemm120`: `a b c` u for the `m16n8k32` tile GEMM). Off the grid or the tile shapes they may compute
+anything. -/
+structure Int8Gates120 (kd : K120 → Kind) where
+  mul : ∀ a b c : ℕ, Circ kd (Mat ℤ a b × Mat ℤ b c) (Mat ℤ a c)
+  eval_mul : ∀ (a b c : ℕ) (x : Mat ℤ a b × Mat ℤ b c), Tile120 a b c → (∀ i k, Int8 (x.1 i k)) →
+    (∀ k j, Int8 (x.2 k j)) → (mul a b c).eval x = x.1 * x.2
+  time_mul_le : ∀ a b c : ℕ, Tile120 a b c → (timeB price120 (mul a b c).prog : ℝ) ≤ (a : ℝ) * b * c
+
+/-- **The int8 circuits** (a named hypothesis, the width-typed refinement): over the kinds' silicon semantics `kd`,
+exact int8 × int8 products on tile-multiple shapes at 1 u per multiply-accumulate, s32 exact. -/
+def Int8Gemm120 (kd : K120 → Kind) : Prop := Nonempty (Int8Gates120 kd)
+
+/-- **Model B on sm_120 with the operand grid typed**: the worst-case `matMachine120` (16 u per product on all
+operands, 1 u per entry for sums) with the int8 product at `κG = 1` u on `G_op = int8` and the tile shapes. -/
+def gridMatMachine120 (kd : K120 → Kind) (G : MatGates kd price120 16 1) (I : Int8Gates120 kd) :
+    GridMatMachine ℤ where
+  toMatMachine := matMachine120 kd G
+  G := Int8
+  shape := Tile120
+  κG := 1
+  mulG a b c := (I.mul a b c).alg
+  eval_mulG := I.eval_mul
+  time_mulG_le a b c h := (I.time_mul_le a b c h).trans_eq (one_mul _).symm
+
+theorem gridMatMachine120_κG (kd : K120 → Kind) (G : MatGates kd price120 16 1) (I : Int8Gates120 kd) :
+    (gridMatMachine120 kd G I).κG = 1 := rfl
+
+theorem gridMatMachine120_κadd (kd : K120 → Kind) (G : MatGates kd price120 16 1) (I : Int8Gates120 kd) :
+    (gridMatMachine120 kd G I).κadd = 1 := rfl
+
+/-- **Route (c) on sm_120, on the int8 grid** (`κ = 1` u on `G_op = int8`): when every promised instance's edits stay
+int8 (`hgrid`) and `32 ∣ n ≤ 2^17`, the edited protocol served by the int8 tile GEMM is relatively secure against
+`N = n³` u, with `ε = U / F − 1`, `U = n³ + 2 n² + time gen + time prove`, and
+`γ = (2 n² + time gen + time prove) / n³`. -/
+theorem relativelySecure_edited120 (kd : K120 → Kind) (G : MatGates kd price120 16 1) (I : Int8Gates120 kd)
+    (S : Service) {n : ℕ} (hn : 0 < n) (h32 : 32 ∣ n) (h17 : n ≤ 2 ^ 17)
+    (E : (gridMatMachine120 kd G I).Edit S.Seed n)
+    (prove : (gridMatMachine120 kd G I).Alg ((S.Seed × (Mat ℤ n n × Mat ℤ n n) × S.Coins) × Mat ℤ n n)
+      (S.Com × S.Ans))
+    (use : Mat ℤ n n × Mat ℤ n n → Prop) {κf δ η F : ℝ}
+    (hgrid : ∀ σ x, use x → (∀ i k, Int8 ((E.edit σ x).1 i k)) ∧ ∀ k j, Int8 ((E.edit σ x).2 k j))
+    (hcom : ∀ (σ σ' : S.Seed) (y : (Mat ℤ n n × Mat ℤ n n) × S.Coins) (C C' : Mat ℤ n n),
+      ((gridMatMachine120 kd G I).eval prove ((σ, y), C)).1 = ((gridMatMachine120 kd G I).eval prove ((σ', y), C')).1)
+    (hacc : ∀ x : Mat ℤ n n × Mat ℤ n n, 1 - η ≤ prob fun ω : S.Seed × S.Coins =>
+      S.verify ((gridMatMachine120 kd G I).eval prove
+          ((ω.1, x, ω.2), (gridMatMachine120 kd G I).eval ((gridMatMachine120 kd G I).mulG n n n) (E.edit ω.1 x))).1
+        ω.1 ((gridMatMachine120 kd G I).eval prove
+          ((ω.1, x, ω.2), (gridMatMachine120 kd G I).eval ((gridMatMachine120 kd G I).mulG n n n)
+            (E.edit ω.1 x))).2 = true)
+    (hfloor : (gridMatMachine120 kd G I).EditFloor S E ((gridMatMachine120 kd G I).mulG n n n) prove use F κf)
+    (hκδ : κf < δ) (hF : 0 < F)
+    (hFU : F ≤ (n : ℝ) ^ 3 + 2 * (n : ℝ) ^ 2 + (gridMatMachine120 kd G I).time E.gen +
+      (gridMatMachine120 kd G I).time prove) :
+    RelativelySecure ((gridMatMachine120 kd G I).edited S E ((gridMatMachine120 kd G I).mulG n n n) prove use)
+      (((n : ℝ) ^ 3 + 2 * (n : ℝ) ^ 2 + (gridMatMachine120 kd G I).time E.gen +
+        (gridMatMachine120 kd G I).time prove) / F - 1) δ
+      ((2 * (n : ℝ) ^ 2 + (gridMatMachine120 kd G I).time E.gen + (gridMatMachine120 kd G I).time prove) /
+        (n : ℝ) ^ 3) η 0 ((n : ℝ) ^ 3) := by
+  have h := (gridMatMachine120 kd G I).relativelySecure_of_editFloor_grid S E prove use (tile120_square h32 h17)
+    hgrid hcom hacc hfloor hκδ hF
+    (by rw [gridMatMachine120_κG, gridMatMachine120_κadd, one_mul, mul_one]; exact hFU)
+    (by rw [gridMatMachine120_κG, one_mul]; exact pow_pos (Nat.cast_pos.mpr hn) 3)
+  rwa [gridMatMachine120_κG, gridMatMachine120_κadd, one_mul, mul_one] at h
+
+/-- **Route (c) on sm_120, unrestricted operands** (the worst case, `κ = 16` u): reference `N = 16 n³` u, `ε = U / F − 1`
+with `U = 16 n³ + 2 n² + time gen + time prove`, and `γ = (2 n² + time gen + time prove) / (16 n³)`. -/
+theorem relativelySecure_edited120_wide (kd : K120 → Kind) (G : MatGates kd price120 16 1) (S : Service) {n : ℕ}
     (hn : 0 < n) (E : (matMachine120 kd G).Edit S.Seed n)
     (prove : (matMachine120 kd G).Alg ((S.Seed × (Mat ℤ n n × Mat ℤ n n) × S.Coins) × Mat ℤ n n) (S.Com × S.Ans))
     {κf δ η F : ℝ}
@@ -1632,15 +1793,16 @@ theorem relativelySecure_edited120 (kd : K120 → Kind) (G : MatGates kd price12
     (hacc : ∀ x : Mat ℤ n n × Mat ℤ n n, 1 - η ≤ prob fun ω : S.Seed × S.Coins =>
       S.verify ((matMachine120 kd G).eval prove ((ω.1, x, ω.2), E.product ω.1 x)).1 ω.1
         ((matMachine120 kd G).eval prove ((ω.1, x, ω.2), E.product ω.1 x)).2 = true)
-    (hfloor : (matMachine120 kd G).EditFloor S E prove F κf) (hκδ : κf < δ) (hF : 0 < F)
+    (hfloor : (matMachine120 kd G).EditFloor S E ((matMachine120 kd G).mul n n n) prove (fun _ => True) F κf)
+    (hκδ : κf < δ) (hF : 0 < F)
     (hFU : F ≤ 16 * (n : ℝ) ^ 3 + 2 * (n : ℝ) ^ 2 + (matMachine120 kd G).time E.gen +
       (matMachine120 kd G).time prove) :
-    RelativelySecure ((matMachine120 kd G).edited S E prove)
+    RelativelySecure ((matMachine120 kd G).edited S E ((matMachine120 kd G).mul n n n) prove fun _ => True)
       ((16 * (n : ℝ) ^ 3 + 2 * (n : ℝ) ^ 2 + (matMachine120 kd G).time E.gen + (matMachine120 kd G).time prove) / F -
         1) δ
       ((2 * (n : ℝ) ^ 2 + (matMachine120 kd G).time E.gen + (matMachine120 kd G).time prove) / (16 * (n : ℝ) ^ 3)) η 0
       (16 * (n : ℝ) ^ 3) := by
-  have h := (matMachine120 kd G).relativelySecure_of_editFloor S E prove hcom hacc hfloor hκδ hF
+  have h := (matMachine120 kd G).relativelySecure_of_editFloor_wide S E prove hcom hacc hfloor hκδ hF
     (by rw [matMachine120_κ, matMachine120_κadd, mul_one]; exact hFU)
     (by rw [matMachine120_κ]; exact mul_pos (by norm_num) (pow_pos (Nat.cast_pos.mpr hn) 3))
   rwa [matMachine120_κ, matMachine120_κadd, mul_one] at h
