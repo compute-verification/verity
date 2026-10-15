@@ -29,7 +29,7 @@
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1426},
     {"file": "verity_vllm/observe/capture_v1.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 2102},
     {"file": "verity_vllm/observe/chunks.py", "kind": "function", "symbol": "attribute", "detail": "lines", "count": 193},
-    {"file": "verity_vllm/observe/fold/fold.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1276},
+    {"file": "verity_vllm/observe/fold/fold.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1273},
     {"file": "verity_vllm/pipeline/admission_planner.py", "kind": "function", "symbol": "plan", "detail": "lines", "count": 180},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "function", "symbol": "binding_record", "detail": "lines", "count": 199},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "function", "symbol": "main", "detail": "lines", "count": 1431},

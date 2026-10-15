@@ -90,11 +90,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from verity.ml.circuits.codec import encode_program, program_digest
-from verity.ml.circuits.defs import (
-    Builder,
-    CompositeDefinition,
-    bind,
-)
+from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, Refs, concat, runs, tuple_of
 from verity_vllm.program import sampling_event as SE
@@ -123,6 +119,7 @@ from verity_vllm.observe.events import (
 )
 from verity_vllm.observe.log import split_steps
 from verity_vllm.observe.fold.memory import MemoryModel, Unresolved
+from verity_vllm.observe.fold.patterns.collectives import FUSED_KIND as FUSED_COLLECTIVE_KIND, KINDS as COLLECTIVE_KINDS
 from verity_vllm.observe.fold.patterns.target import GEMM_TARGET_SCRATCH_KEY, X01_SCRATCH_KEY, WeightOnlyCalls
 from verity_vllm.observe.fold.resolver import (
     Collective,
@@ -808,7 +805,7 @@ class _Fold:
         own = op.own
         if own.rank != 2 or tuple(own.shape) != (c.rows, N) or own.dtype != "bfloat16" or tuple(own.strides) != (N, 1):
             raise FoldError(f"{what}: own partial must be a row-major bf16 [{c.rows}, {N}] view, got {own!r}")
-        if op.kind not in ("all_reduce", "all_gather", "fused_allreduce_rms_norm"):
+        if op.kind not in (*COLLECTIVE_KINDS.values(), FUSED_COLLECTIVE_KIND):
             raise FoldError(f"{what}: unknown collective kind {op.kind!r}")
         if not op.site:
             raise FoldError(f"{what}: collective without an issuing module (site); refused (fail closed)")
