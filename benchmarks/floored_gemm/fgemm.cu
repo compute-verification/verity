@@ -70,7 +70,9 @@ __host__ __device__ constexpr uint32_t mix32(uint32_t x) {
 // TB4, TB2 and TB1 are the tensor-core receipts (note:20261015T1625Z-draft-tensor-byte-receipt): at each boundary the
 // warp folds every accumulator tile's bytes into one m16n8 s32 receipt accumulator R with a keyed IMMA, R += bytes(C) K_t,
 // bytes as u8 and keys as s8. TB4: all 4 bytes of each word, the accumulator's 4 registers read as an m16n8k32 A fragment
-// as they are (rows g, g + 8; word (r, 2q) at k 4q.., word (r, 2q + 1) at k 16 + 4q..), one m16n8k32 a tile. TB2: the two
+// in their own order, so with no instruction (A row g: word (g, 2q) at k 4q.., word (g + 8, 2q) at 16 + 4q..; A row g + 8:
+// words (g, 2q + 1) and (g + 8, 2q + 1); the order {d0, d2, d1, d3} that keeps C's rows costs 4 MOVs an IMMA), one
+// m16n8k32 a tile. TB2: the two
 // low bytes of each word, PRMT-packed into an m16n8k16 A fragment (word (r, 2q) at k 4q, 4q + 1, word (r, 2q + 1) at
 // 4q + 2, 4q + 3), one m16n8k16 a tile. TB1: byte 1 of each word, PRMT-packed from tiles (mi, 2j) and (mi, 2j + 1) into one
 // m16n8k16 A fragment (k 4q + c for word column 2q + c of tile 2j, 4q + 2 + c of tile 2j + 1), one m16n8k16 a pair.
@@ -313,7 +315,7 @@ template <int TM, int BN, int WM, int STAGES> struct ML {
     constexpr int mi = IDX / NI, ni = IDX % NI;
     const int(&w)[4] = acc[mi][ni];
     if constexpr (KIND == TB4) {
-      rimma32(ch, (uint32_t)w[0], (uint32_t)w[2], (uint32_t)w[1], (uint32_t)w[3], kr[2 * IDX], kr[2 * IDX + 1]);
+      rimma32(ch, (uint32_t)w[0], (uint32_t)w[1], (uint32_t)w[2], (uint32_t)w[3], kr[2 * IDX], kr[2 * IDX + 1]);
     } else if constexpr (KIND == TB2) {
       rimma16(ch, __byte_perm((uint32_t)w[0], (uint32_t)w[1], 0x5410), __byte_perm((uint32_t)w[2], (uint32_t)w[3], 0x5410), kr[IDX]);
     } else if constexpr (KIND == TB1 && ni % 2 == 1) {

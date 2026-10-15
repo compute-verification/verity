@@ -1,10 +1,10 @@
 """First differential check of the tensor-core receipts TB4, TB2, TB1 (fgemm.cu's header), on the CPU, with the kernels' keys.
 
 For a fixed key and random honest states, apply fixed value differences δ to one or two accumulator words and measure how
-often the receipt accumulator R is unchanged. A word w at position t (TB1: the pair's index), row r and column c of its
-tile feeds R's row r through rows κ(w, j) of K_t, one for each byte j the variant reads, so
+often the receipt accumulator R is unchanged. A word w at position t (TB1: the pair's index) feeds one row ρ(w) of R
+(slot(): the receipt IMMA's A row) through rows κ(w, j) of K_t, one for each byte j the variant reads, so
 
-    ΔR[r, :] = Σ_w Σ_j (b_j(T_w + δ_w) − b_j(T_w)) K_t[κ(w, j), :]     (bytes u8, keys s8, exact in Z^8)
+    ΔR[ρ, :] = Σ_{w: ρ(w) = ρ} Σ_j (b_j(T_w + δ_w) − b_j(T_w)) K_t[κ(w, j), :]     (bytes u8, keys s8, exact in Z^8)
 
 and R is unchanged iff that is 0 in every row. Honest states are running sums of 32 s products of uniform codes on
 [−127, 127] (Ã B̃ᵀ's words at checkpoint s). Two modes:
@@ -22,25 +22,30 @@ import sys
 
 import numpy as np
 
-from ref import tb_key
+from ref import tb_key, tb_operand
 
 VARIANTS = {"tb4": 5, "tb2": 6, "tb1": 7}
 BYTES = {5: (0, 1, 2, 3), 6: (0, 1), 7: (1,)}
 MI, NI = 2, 4   # the W tile config's warp tile (32 x 32): 8 positions, TB1 4 pairs
 
 
-def kappa(kind, ni, c, j):
-    """The key row of byte j of the word in column c of tile ni (TB1: of pair ni // 2), as tb_operand lays it out."""
+def slot(kind, ni, r, c, j):
+    """(A row, k) of byte j of the word at row r, column c of tile ni (TB1: of pair ni // 2), as tb_operand lays it out."""
     if kind == 5:
-        return 16 * (c % 2) + 4 * (c // 2) + j
+        return (r % 8) + 8 * (c % 2), 16 * (r // 8) + 4 * (c // 2) + j
     if kind == 6:
-        return 2 * c + j
-    return 4 * (c // 2) + 2 * (ni % 2) + (c % 2)
+        return r, 2 * c + j
+    return r, 4 * (c // 2) + 2 * (ni % 2) + (c % 2)
 
 
-def keyrow(kind, keys, mi, ni, c, j):
+def keyrow(kind, keys, mi, ni, r, c, j):
     t = mi * NI + ni
-    return keys[t // 2 if kind == 7 else t][kappa(kind, ni, c, j)]
+    return keys[t // 2 if kind == 7 else t][slot(kind, ni, r, c, j)[1]]
+
+
+def same_row_partner(kind, r, c):
+    """Another word of the same tile whose bytes reach the same row of R."""
+    return (r + 8) % 16 if kind == 5 else r, c if kind == 5 else (c + 3) % 8
 
 
 def honest(rng, n, s):
@@ -76,8 +81,9 @@ def unchanged(kind, keys, words, T, deltas):
         db = dbytes(T[:, i], deltas[i], js)                    # [N, (S,) nb]
         if db.ndim == 3:
             db = db.sum(axis=1)
-        K = np.stack([keyrow(kind, keys, mi, ni, c, j) for j in js])   # [nb, 8]
-        rows[r] = rows.get(r, 0) + db @ K
+        K = np.stack([keyrow(kind, keys, mi, ni, r, c, j) for j in js])   # [nb, 8]
+        ar = slot(kind, ni, r, c, 0)[0]
+        rows[ar] = rows.get(ar, 0) + db @ K
         ch = (db != 0).any(axis=1)
         any_change = ch if any_change is None else any_change | ch
     zero = np.ones(T.shape[0], dtype=bool)
@@ -95,13 +101,32 @@ def product_deltas():
 
 def fixed_deltas():
     d = {"+1": 1, "-1": -1, "+2": 2, "-2": -2}
-    for k in (4, 7, 8, 12, 15, 16, 20, 23, 24, 28, 31):
+    for k in (4, 7, 8, 12, 15, 16, 20, 23, 24, 28, 30, 31):
         d[f"+2^{k}"] = 1 << k
         d[f"-2^{k}"] = -(1 << k)
     return d | product_deltas()
 
 
+def check_slots():
+    """slot() against ref.py's tb_operand, the layout the gate checks on the device: every read byte where slot() puts it."""
+    rng = np.random.default_rng(0)
+    blk = rng.integers(0, 256, size=(32, 32, 4))
+    for kind in VARIANTS.values():
+        for mi in range(MI):
+            for ni in range(NI):
+                if kind == 7 and ni % 2 == 0:
+                    continue
+                A = tb_operand(kind, blk, mi, ni)
+                for nj in ((ni - 1, ni) if kind == 7 else (ni,)):
+                    for r in range(16):
+                        for c in range(8):
+                            for j in BYTES[kind]:
+                                ar, k = slot(kind, nj, r, c, j)
+                                assert A[ar, k] == blk[16 * mi + r, 8 * nj + c, j], (kind, mi, nj, r, c, j)
+
+
 def main() -> int:
+    check_slots()
     ap = argparse.ArgumentParser()
     ap.add_argument("--trials", type=int, default=200_000)
     ap.add_argument("--seed", type=int, default=12)
@@ -131,7 +156,7 @@ def main() -> int:
             dv = -(a * b)
             js = BYTES[kind]
             db = dbytes(T[:, 0], dv, js)
-            K = np.stack([keyrow(kind, keys, 0, 1, 3, j) for j in js])
+            K = np.stack([keyrow(kind, keys, 0, 1, 5, 3, j) for j in js])
             z = ((db @ K) == 0).all(axis=1)
             row["-a*b random"] = float(z.mean())
             out["single"][vname][f"s={s}"] = row
@@ -142,26 +167,31 @@ def main() -> int:
     for vname, kind in VARIANTS.items():
         keys = {t: tb_key(kind, t) for t in range(MI * NI)}
         out["persistent"][vname] = {}
-        for s0 in (1, 64, 120, 128):
+        # s0 = 113 and 127 leave 16 and 2 checkpoints: a byte that gains d each checkpoint and wraps W times sums to
+        # S d − 256 W, which is 0 when W = S d / 256 (δ = 2^12 over 16, δ = ±2^15 over 2)
+        for s0 in (1, 64, 113, 120, 127, 128):
             row = {}
-            for dn in ("+1", "-1", "+2^4", "-3*5", "-11*13", "-121*121", "+2^8", "+2^16", "+2^24"):
+            for dn in ("+1", "-1", "+2^4", "-3*5", "-11*13", "-121*121", "+2^8", "+2^12", "+2^15", "-2^15", "+2^16",
+                       "+2^24", "+2^31"):
                 T = traj[:, None, s0 - 1 :]
                 p, _, _ = unchanged(kind, keys, w1, T, [deltas[dn]])
                 row[dn] = p
             out["persistent"][vname][f"s0={s0}"] = row
 
     # two words, one checkpoint, in the three geometries that can share R's row
-    geoms = {"same tile, same row": [(0, 1, 5, 3), (0, 1, 5, 6)],
-             "same row, other position": [(0, 1, 5, 3), (1, 2, 5, 3)],
-             "same row, the pair's other tile (TB1's operand)": [(0, 0, 5, 3), (0, 1, 5, 3)],
-             "other rows": [(0, 1, 5, 3), (0, 1, 6, 3)]}
+    def geoms(kind):
+        r2, c2 = same_row_partner(kind, 5, 3)
+        return {"same tile, same R row": [(0, 1, 5, 3), (0, 1, r2, c2)],
+                "same R row, other position": [(0, 1, 5, 3), (1, 2, 5, 3)],
+                "same R row, the pair's other tile": [(0, 0, 5, 3), (0, 1, 5, 3)],
+                "other R rows": [(0, 1, 5, 3), (0, 1, 6, 3)]}
     pair_d = {"(+1, -1)": (1, -1), "(+2^8, -2^8)": (256, -256), "(-a*b, +a*b), a*b = 143": (-143, 143),
               "(+2^16, -2^16)": (1 << 16, -(1 << 16)), "(+1, +2^8)": (1, 256)}
     T2 = states[16]
     for vname, kind in VARIANTS.items():
         keys = {t: tb_key(kind, t) for t in range(MI * NI)}
         out["pairs"][vname] = {}
-        for gn, ws in geoms.items():
+        for gn, ws in geoms(kind).items():
             out["pairs"][vname][gn] = {}
             for dn, (d1, d2) in pair_d.items():
                 p, c, ch = unchanged(kind, keys, ws, T2, [d1, d2])
@@ -183,8 +213,10 @@ def main() -> int:
             for ni in range(NI):
                 blk = (slice(None), slice(16 * mi, 16 * mi + 16), slice(8 * ni, 8 * ni + 8))
                 db = dbytes(Tt[blk], dT[blk], js)                          # [NT, 16, 8, nb]
-                K = np.stack([np.stack([keyrow(kind, keys, mi, ni, c, j) for j in js]) for c in range(8)])   # [8, nb, 8]
-                dR += np.einsum("trcj,cjn->trn", db, K)
+                for r in range(16):
+                    for c in range(8):
+                        K = np.stack([keyrow(kind, keys, mi, ni, r, c, j) for j in js])   # [nb, 8]
+                        dR[:, slot(kind, ni, r, c, 0)[0]] += db[:, r, c] @ K
         out["rank1_skip"][vname] = {"unchanged": float((dR == 0).all(axis=(1, 2)).mean()),
                                     "row_unchanged": float((dR == 0).all(axis=2).mean()), "tiles": NT}
 
@@ -196,12 +228,14 @@ def main() -> int:
     Ts = honest(rng, 2 * NS, 16).reshape(NS, 2)
     for vname, kind in VARIANTS.items():
         keys = {t: tb_key(kind, t) for t in range(MI * NI)}
-        slots = [(mi, ni, 0, c) for mi in range(MI) for ni in range(NI) for c in range(8)]
+        # every word whose bytes reach R's row 0 (64 of them on the W config)
+        slots = [(mi, ni, r, c) for mi in range(MI) for ni in range(NI) for r in range(16) for c in range(8)
+                 if slot(kind, ni, r, c, 0)[0] == 0]
         # the key rows' rank decides whether any pair can cancel: check it over every pair of slots first
         js = BYTES[kind]
         min_rank, worst = 99, None
         for w1_, w2_ in itertools.combinations(slots, 2):
-            M = np.stack([keyrow(kind, keys, *w1_[:2], w1_[3], j) for j in js] + [keyrow(kind, keys, *w2_[:2], w2_[3], j) for j in js])
+            M = np.stack([keyrow(kind, keys, *w1_, j) for j in js] + [keyrow(kind, keys, *w2_, j) for j in js])
             rk = int(np.linalg.matrix_rank(M.astype(float)))
             if rk < min_rank:
                 min_rank, worst = rk, (w1_, w2_)
@@ -211,7 +245,7 @@ def main() -> int:
                 p, c, ch = unchanged(kind, keys, list(worst), Ts, [d1, d2])
                 if ch > 0 and c > best[0]:
                     best = (c, (d1, d2))
-        out["pair_search"][vname] = {"read_rows": 2 * len(js), "min_rank_over_slot_pairs": min_rank,
+        out["pair_search"][vname] = {"read_rows": 2 * len(js), "slots": len(slots), "min_rank_over_slot_pairs": min_rank,
                                      "worst_pair": [list(worst[0]), list(worst[1])], "best_cancel_given_change": best[0],
                                      "best_deltas": best[1], "deltas_tried": len(cand[:: max(1, len(cand) // 40)]) ** 2,
                                      "states": NS}

@@ -74,8 +74,10 @@ def tb_key(kind, t):
 def tb_operand(kind, blk, mi, ni):
     """The receipt IMMA's A operand (16 x k, u8) for accumulator tile (mi, ni) of a warp tile's bytes blk [WM, 32, 4]."""
     b = blk[16 * mi : 16 * mi + 16, 8 * ni : 8 * ni + 8]
-    if kind == 5:   # word (r, 2q) at k 4q.., (r, 2q + 1) at 16 + 4q..
-        return np.concatenate([b[:, 0::2, :].reshape(16, 16), b[:, 1::2, :].reshape(16, 16)], axis=1)
+    if kind == 5:   # A row g: words (g, 2q) at k 4q.., (g + 8, 2q) at 16 + 4q..; A row g + 8: the same for column 2q + 1
+        top = np.concatenate([b[:8, 0::2, :].reshape(8, 16), b[8:, 0::2, :].reshape(8, 16)], axis=1)
+        bot = np.concatenate([b[:8, 1::2, :].reshape(8, 16), b[8:, 1::2, :].reshape(8, 16)], axis=1)
+        return np.concatenate([top, bot], axis=0)
     if kind == 6:   # word (r, c) bytes 0, 1 at k 2c, 2c + 1
         return b[:, :, :2].reshape(16, 16)
     x = blk[16 * mi : 16 * mi + 16, 8 * (ni - 1) : 8 * ni, 1].reshape(16, 4, 2)
