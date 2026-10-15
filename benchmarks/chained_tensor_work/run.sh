@@ -63,7 +63,8 @@ gpu-lease 1 --wait --max-min 30 -- bash -c '
 cat "$O/rc.txt"
 head -c 3000 "$O/bench.jsonl" | cut -c1-400
 
-for v in ${VERIFY:-"8192:8192 4096:4096"}; do
+VERIFY=${VERIFY:-8192:8192 4096:4096 4096:16384}
+for v in $VERIFY; do
   [ "$v" = none ] && continue
   IFS=: read -r vm vk <<< "$v"
   python3 $D/verify.py "$vm" "$vk" 1 8 64 128 >> "$O/verify.jsonl" 2>> "$O/verify.err" || echo "verify $v rc $?" >> "$O/rc.txt"
