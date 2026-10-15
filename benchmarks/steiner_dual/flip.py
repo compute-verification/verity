@@ -101,15 +101,16 @@ def walk(p, q, r, target, rng, plateau=20000, every=500, max_flips=10 ** 8):
 
 
 def _plus(terms, rng):
-    """a⊗b⊗c + a'⊗b'⊗c' = (a+a')⊗b⊗c + a'⊗b⊗c + a'⊗b'⊗c': one more term, with a shared factor."""
+    """a⊗b⊗c + a'⊗b'⊗c' = (a−a')⊗b⊗c + a'⊗(b−b')⊗c + a'⊗b'⊗(c+c') (Kauers–Moosbauer): one more term, and no two
+    of the three agree in two factors, so no reduction undoes it at once."""
     n = len(terms)
     x, y = rng.sample(range(n), 2)
-    a, b, c = terms[x]
-    a2, _, _ = terms[y]
-    if a == a2:
+    (a, b, c), (a2, b2, c2) = terms[x], terms[y]
+    if a == a2 or b == b2 or c == c2:
         return
     terms[x] = (a ^ a2, b, c)
-    terms.append((a2, b, c))
+    terms[y] = (a2, b ^ b2, c)
+    terms.append((a2, b2, c ^ c2))
 
 
 def main():
