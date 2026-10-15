@@ -388,7 +388,7 @@ class _DirectLLM:
         from verity_vllm.engine.engine_profile import get_model_runner
 
         runner = get_model_runner(llm)
-        self._engine = SimpleNamespace(llm=llm, model=runner.get_model())
+        self.vllm, self.model = llm, runner.get_model()
         self.engine_record = {"engine_overrides": dict(engine_overrides)}
         self.protocols = None
 
@@ -402,7 +402,7 @@ def _kv_cache_tokens(llm: Any) -> int | None:
     """The engine's actual KV pool in tokens (in-process V1 engine), None when the engine does not expose it."""
 
     try:
-        cache = llm._engine.llm.llm_engine.vllm_config.cache_config
+        cache = llm.vllm.llm_engine.vllm_config.cache_config
         blocks, block_size = cache.num_gpu_blocks, cache.block_size
     except AttributeError:
         return None
@@ -490,7 +490,7 @@ class _VllmEngine:
             if arm.protocols:
                 engine["protocols"] = ",".join(arm.protocols)
             self.llm = LLM(preset.model, revision=preset.revision, **engine)
-        self.target.engine, self.target.model = self.llm, self.llm._engine.model
+        self.target.engine, self.target.model = self.llm, self.llm.model
         ready = getattr(self.installed, "ready", None)
         if callable(ready):
             ready(self.target)
@@ -509,7 +509,7 @@ class _VllmEngine:
         }
 
     def _requests(self, point: SweepPoint) -> list[Any]:
-        vocab = int(self.llm._engine.llm.llm_engine.vllm_config.model_config.hf_config.vocab_size)
+        vocab = int(self.llm.vllm.llm_engine.vllm_config.model_config.hf_config.vocab_size)
         seed = int.from_bytes(hashlib.sha256(point.id.encode()).digest()[:8], "big")
         return [
             SimpleNamespace(
@@ -546,7 +546,7 @@ class _VllmEngine:
             torch.cuda.reset_peak_memory_stats()
         start = time.perf_counter()
         finished, timing = run_requests_arrivals(
-            self.llm._engine.llm,
+            self.llm.vllm,
             requests,
             params,
             request_timing=True,
