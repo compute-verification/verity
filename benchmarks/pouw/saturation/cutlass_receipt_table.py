@@ -63,9 +63,10 @@ def main():
         share = r["phi1_per_sm_clk"] / PHI_ALONE[r["var"]]
         kn = kernels.get(r["kernel"], {})
         if kn.get("forced"):
-            # CR_FORCED's alu φ1 steps, F a thread after every 32-deep k-block, on top of the receipt's φ
+            # CR_FORCED's steps, F a thread after every 32-deep k-block, on top of the receipt's φ: alu φ1 at φ's solo
+            # rate, or FFMAs (fvar 2) at the FMA pipe's 128 an SM-clock, both as shares of the SM's CUDA slots
             steps = r["m"] // 128 * (r["n"] // 128) * kn["threads"] * r["k"] // 32 * kn["forced"]
-            share += steps / (r["ms"] * 1e3 * r["sm_mhz"] * d["sms"]) / PHI_ALONE[0]
+            share += steps / (r["ms"] * 1e3 * r["sm_mhz"] * d["sms"]) / (128.0 if kn.get("fvar") == 2 else PHI_ALONE[0])
         out.append({**r, "slot_load": load_, "rate_kept": kept, "phi_share": share, "plain_ms": p["ms"]})
         print(f"| {r['kernel']} | {r['rounds']}× {VAR[r['var']]} | {r['L']} | {r['shape']} | {load_:.2f} | "
               f"{100 * kept:.1f}% | {100 * share:.0f}% |")

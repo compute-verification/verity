@@ -102,6 +102,11 @@ static uint32_t f2u(float f) {
     memcpy(&u, &f, 4);
     return u;
 }
+static float u2f(uint32_t u) {
+    float f;
+    memcpy(&f, &u, 4);
+    return f;
+}
 static uint32_t phi_host(int var, int rounds, uint32_t y, uint32_t p, uint32_t s, uint32_t k) {
     auto one = [&](uint32_t y_, uint32_t p_, uint32_t k_) { return var == 0 ? phi1<0>(y_, p_, s, k_) : phi1<1>(y_, p_, s, k_); };
     y = one(y, p, k);
@@ -320,10 +325,13 @@ static void gate_cfg(int cfg, const std::vector<const cr_kernel*>& ks, unsigned 
                         f = rotl13(f) ^ y;
                     }
                     if (k->forced > 0) {
-                        uint32_t zf[2] = {(uint32_t)t ^ 0x243f6a88u, ~(uint32_t)t ^ 0x243f6a88u};
+                        const bool ffma = k->fvar == 2;
+                        uint32_t zf[2] = {ffma ? 0x3f800000u | (uint32_t)t : (uint32_t)t ^ 0x243f6a88u,
+                                          ffma ? 0x3f800000u | ((uint32_t)t << 8) : ~(uint32_t)t ^ 0x243f6a88u};
                         for (int kb = 0; kb < KT * KB; kb++)
                             for (int j = 0; j < k->forced; j++)
-                                zf[j & 1] = phi1<0>(zf[j & 1], (uint32_t)kb, 0x7f4a7c15u, key(j + 64, kb % KB));
+                                zf[j & 1] = ffma ? f2u(std::fma(u2f(zf[j & 1]), 0.99999994f, u2f(0x3f800000u | (key(j + 64, kb % KB) >> 9))))
+                                                 : phi1<0>(zf[j & 1], (uint32_t)kb, 0x7f4a7c15u, key(j + 64, kb % KB));
                         f = rotl13(rotl13(f) ^ zf[0]) ^ zf[1];
                     }
                     bad += R[((size_t)tm * (s.n / TN) + tn) * NT + t] != f;
@@ -368,8 +376,8 @@ int main(int argc, char** argv) {
     for (size_t i = 0; i < ks.size(); i++) {
         auto* k = ks[i];
         printf("    {\"name\": \"%s\", \"cfg\": %d, \"var\": %d, \"rounds\": %d, \"p\": %d, \"L\": %d, \"mode\": %d, \"spread\": %d, "
-               "\"grain\": %d, \"extra\": %d, \"honest\": %d, \"forced\": %d, \"xvar\": %d, \"tile\": [%d, %d], \"threads\": %d, \"chains\": %d, \"stages\": %d, \"smem_bytes\": %d}%s\n",
-               k->name, k->cfg, k->var, k->rounds, k->p, 128 * k->p / k->grain, k->mode, k->spread, k->grain, k->extra, k->honest, k->forced, k->xvar, k->tile_m,
+               "\"grain\": %d, \"extra\": %d, \"honest\": %d, \"forced\": %d, \"xvar\": %d, \"fvar\": %d, \"tile\": [%d, %d], \"threads\": %d, \"chains\": %d, \"stages\": %d, \"smem_bytes\": %d}%s\n",
+               k->name, k->cfg, k->var, k->rounds, k->p, 128 * k->p / k->grain, k->mode, k->spread, k->grain, k->extra, k->honest, k->forced, k->xvar, k->fvar, k->tile_m,
                k->tile_n, k->threads,
                k->chains, k->stages, k->smem_bytes, i + 1 < ks.size() ? "," : "");
     }

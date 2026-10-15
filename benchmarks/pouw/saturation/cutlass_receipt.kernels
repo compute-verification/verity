@@ -1,10 +1,10 @@
 # cutlass_receipt's kernels, one cutlass_receipt_kernel.cu object each (job.sh's cgemm stage):
-# name cfg var rounds p mode [spread [grain [extra [honest [forced [xvar]]]]]]   (cfg 0 prefill, 1 decode; var 0 alu, 1 imad; L = 128 p / grain;
+# name cfg var rounds p mode [spread [grain [extra [honest [forced [xvar [fvar]]]]]]]   (cfg 0 prefill, 1 decode; var 0 alu, 1 imad; L = 128 p / grain;
 # mode 0 plain, 1 receipt, 2 dump, 3 extra only; spread 1 interleaves the receipt over the k-tile's four k-blocks; grain 2
 # or 4 receipts every chain after every second or every 32-deep k-block; extra X adds a cheater's X alu phi1 steps a thread
 # after every 32-deep k-block, on chains of its own; honest H gives the first H chain words of each receipt point one more
 # round; forced F adds F phi1 steps after every 32-deep k-block on receipt chains that read no accumulator; xvar 1 makes
-# the cheater's steps imad phi1 (`_xiX` in the name), xvar 2 FFMAs (`_xfX`))
+# the cheater's steps imad phi1 (`_xiX` in the name), xvar 2 FFMAs (`_xfX`); fvar 2 makes the forced steps FFMAs, `_ffF`)
 p_plain    0 0 1 1 0
 p_dump     0 0 1 1 2
 p_alu_p1   0 0 1 1 1
@@ -137,3 +137,21 @@ p_alu_g4_xf128 0 0 1 1 1 0 4 128 0 0 2
 p_alu_g4_f1_xf128 0 0 1 1 1 0 4 128 0 1 2
 p_alu_g4_xf256 0 0 1 1 1 0 4 256 0 0 2
 p_alu_g4_f1_xf256 0 0 1 1 1 0 4 256 0 1 2
+p_alu_g4_ff64 0 0 1 1 1 0 4 0 0 64 0 2
+p_alu_g4_ff64_x0 0 0 1 1 1 0 4 0 0 64 0 2
+p_alu_g4_ff64_x3 0 0 1 1 1 0 4 3 0 64 0 2
+p_alu_g4_ff64_xi2 0 0 1 1 1 0 4 2 0 64 1 2
+p_alu_g4_ff64_xf32 0 0 1 1 1 0 4 32 0 64 2 2
+p_alu_g4_ff64_xf128 0 0 1 1 1 0 4 128 0 64 2 2
+p_alu_g4_ff128 0 0 1 1 1 0 4 0 0 128 0 2
+p_alu_g4_ff128_x0 0 0 1 1 1 0 4 0 0 128 0 2
+p_alu_g4_ff128_x3 0 0 1 1 1 0 4 3 0 128 0 2
+p_alu_g4_ff128_xi2 0 0 1 1 1 0 4 2 0 128 1 2
+p_alu_g4_ff128_xf32 0 0 1 1 1 0 4 32 0 128 2 2
+p_alu_g4_ff128_xf128 0 0 1 1 1 0 4 128 0 128 2 2
+p_alu_g4_ff256 0 0 1 1 1 0 4 0 0 256 0 2
+p_alu_g4_ff256_x0 0 0 1 1 1 0 4 0 0 256 0 2
+p_alu_g4_ff256_x3 0 0 1 1 1 0 4 3 0 256 0 2
+p_alu_g4_ff256_xi2 0 0 1 1 1 0 4 2 0 256 1 2
+p_alu_g4_ff256_xf32 0 0 1 1 1 0 4 32 0 256 2 2
+p_alu_g4_ff256_xf128 0 0 1 1 1 0 4 128 0 256 2 2
