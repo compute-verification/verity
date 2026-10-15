@@ -9,7 +9,7 @@
 #   exact     more exact F2 shapes ($EXACT, "a,b,c,L" items)
 #   subspace  task 3: subspace-restricted DW, for each "a,b,c,L,samples,budget_s,batch_k" item in $SUB (default <2,4,2>/L=2,
 #             then <2,3,2> with L=3 and L=1), subspaces of dimension at most $SUB_MAX_K (24), families $SUB_ONLY
-#             (default "a b c d"), $SUB_EXTRA extra forms in (b) and (c) (default "2 4 6 8")
+#             (default "a b c d"), $SUB_EXTRA extra forms in (b) and (c) (default "2 4 6 8"), $SUB_GREEDY rounds of (d) (5)
 #   jointsub  task 4 on larger matrices: jointly independent families in subspaces of dimension $JS_K (16) spanned by
 #             their chains' pieces and cross pieces, after a calibration on dependent ones against the whole space
 #   sa        annealing over Steiner points on the whole space: calibration against exact DW, then $SA_SHAPES
