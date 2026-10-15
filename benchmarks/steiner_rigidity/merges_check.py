@@ -8,6 +8,9 @@ and single D-cells above it.
 Part 2: Lemma 2(b) for those systems: rank of the flattening equals the sum of the targets' ranks.
 Part 3: the chain-form bound on random valid chain-form computations: the flattening identity holds edge by edge,
 every edge's label sum has rank <= 1, and #products >= L * (sum of sigma + #kept links).
+Part 4: products of two mixed operands, each split into two pieces charged to the word giving the Y-factor: the
+pieces of a word w have rank nu_w <= #distinct label sets of its uses, and #products >= rank - 1/2 sum_w nu_w (bilinear
+count). Winograd's pairs meet it with equality.
 """
 
 import random
@@ -316,10 +319,174 @@ def part3(rng):
           f"rank <= 1 per edge, rank = sum of ranks, #products >= L*(sum sigma + #kept): ok ({tight} tight)")
 
 
+def mixed_chain_form(shape, rng, p, winograd_only=False):
+    """Chain form with products of two mixed operands (words w = w_X + w_Y). Checks the charge of 1/2 per
+    (word, label set) pair: #products >= rank Phi - 1/2 sum_w nu_w, with nu_w <= #distinct label sets of w's uses."""
+    Xd, Yd = shape.P * shape.m, shape.Q * shape.m
+    zero = np.zeros((Xd, Yd), dtype=np.int64)
+    words = []  # (wX, wY)
+    products = []  # dict(where=("F", node) or ("local", link), beta, pieces=[(word, matrix)])
+
+    def new_word(wX, wY):
+        words.append((np.array(wX, dtype=np.int64) % p, np.array(wY, dtype=np.int64) % p))
+        return len(words) - 1
+
+    def mixed(g, h):
+        gX, gY = words[g]
+        hX, hY = words[h]
+        pieces = [(h, np.outer(gX, hY) % p), (g, np.outer(hX, gY) % p)]
+        return (pieces[0][1] + pieces[1][1]) % p, pieces
+
+    def xv(i, k):
+        v = np.zeros(Xd, dtype=np.int64)
+        v[i * shape.m + k] = 1
+        return v
+
+    def yv(j, k):
+        v = np.zeros(Yd, dtype=np.int64)
+        v[j * shape.m + k] = 1
+        return v
+
+    dense = [new_word([rng.randrange(p) for _ in range(Xd)], [rng.randrange(p) for _ in range(Yd)])
+             for _ in range(0 if winograd_only else 3)]
+    F_val, F_par = [zero], [None]
+    if not winograd_only:
+        for _ in range(rng.randint(2, 6)):
+            parent = rng.randrange(len(F_val))
+            if rng.random() < 0.5:
+                g, h = rng.choice(dense), rng.choice(dense)
+                beta, pieces = mixed(g, h)
+            else:
+                beta = np.outer([rng.randrange(p) for _ in range(Xd)], [rng.randrange(p) for _ in range(Yd)]) % p
+                pieces = None
+            F_val.append((F_val[parent] + beta) % p)
+            F_par.append(parent)
+            products.append(dict(where=("F", len(F_val) - 1), beta=beta, pieces=pieces))
+
+    positions = [(i, j) for i in range(shape.P) for j in range(shape.Q)]
+    links = []
+    for (i, j) in positions:
+        for s in range(shape.S):
+            D = shape.D((i, j), s)
+            kind = "none" if winograd_only else rng.choice(["none", "one", "two"])
+            Z = rng.randrange(1, len(F_val)) if kind != "none" and len(F_val) > 1 else None
+            kind = kind if Z is not None else "none"
+            beta_t = rng.randint(1, p - 1) if kind == "one" else 1
+            rest = (D - beta_t * F_val[Z]) % p if kind == "one" else D.copy()
+            if kind == "two":
+                rest = (rest - F_val[rng.randrange(1, len(F_val))]) % p
+            t = len(links)
+            local = []
+            ks = list(range(s * shape.L, (s + 1) * shape.L))
+            for a in range(0, len(ks) - 1, 2):  # Winograd pairs on this cell, two fresh words per product
+                if winograd_only or rng.random() < 0.5:
+                    k1, k2 = ks[a], ks[a + 1]
+                    g, h = new_word(xv(i, k1), yv(j, k2)), new_word(xv(i, k2), yv(j, k1))
+                    beta, pieces = mixed(g, h)
+                    rest = (rest - beta) % p
+                    local.append(dict(where=("local", t), beta=beta, pieces=pieces))
+            if not winograd_only:
+                uses = [rng.choice(dense)] if rng.random() < 0.5 else []
+                g = new_word(xv(i, ks[0]), yv(j, ks[-1]))
+                uses += [g] * rng.randint(0, 3)
+                for g in uses:  # a link-specific or dense word reused against fresh partners
+                    h = new_word([rng.randrange(p) for _ in range(Xd)], [rng.randrange(p) for _ in range(Yd)])
+                    beta, pieces = mixed(g, h)
+                    rest = (rest - beta) % p
+                    local.append(dict(where=("local", t), beta=beta, pieces=pieces))
+            for R in rank_one_terms(rest, p):
+                local.append(dict(where=("local", t), beta=R, pieces=None))
+            links.append(dict(pos=(i, j), s=s, kind=kind, Z=Z, beta=beta_t, local=local))
+            products.extend(local)
+
+    kept = [t for t, l in enumerate(links) if l["kind"] != "two"]
+    if len(kept) < 2:
+        return None
+    k = len(kept)
+    idx = {t: n for n, t in enumerate(kept)}
+    rows_of = [frozenset([(links[t]["pos"][0], links[t]["s"])]) for t in kept]
+    cols_of = [frozenset([(links[t]["pos"][1], links[t]["s"])]) for t in kept]
+
+    def ancestors(node):
+        out = set()
+        while node:
+            out.add(node)
+            node = F_par[node]
+        return out
+
+    below = {node: set() for node in range(1, len(F_val))}
+    for t in kept:
+        if links[t]["Z"] is not None:
+            for node in ancestors(links[t]["Z"]):
+                below[node].add(idx[t])
+    tree = binary_hierarchy([frozenset(S) for S in below.values()], range(k))
+    a1, b, _ = set_labels(tree, k, rows_of, cols_of, p)
+    inv = [pow(int(links[t]["beta"]), p - 2, p) for t in kept]
+    a = (a1 * np.array(inv, dtype=np.int64)[None, :]) % p
+
+    def label_set(where):
+        kind, x = where
+        if kind == "F":
+            return frozenset(below[x])
+        return frozenset([idx[x]]) if x in idx else frozenset()
+
+    def Lam(S):
+        out = np.zeros((a.shape[0], b.shape[0]), dtype=np.int64)
+        for n in S:
+            out = out + links[kept[n]]["beta"] * np.outer(a[:, n], b[:, n])
+        return out % p
+
+    lhs = flatten(a, b, {n: shape.D(links[t]["pos"], links[t]["s"]) for n, t in enumerate(kept)}, {}, p)
+    rhs = np.zeros_like(lhs)
+    other, by_word = 0, {}
+    for e in products:
+        S = label_set(e["where"])
+        if not S:
+            continue
+        La = Lam(S) if e["where"][0] == "F" else np.outer(a[:, next(iter(S))], b[:, next(iter(S))]) % p
+        assert rank(La, p) <= 1
+        rhs = rhs + np.kron(La, e["beta"])
+        if e["pieces"] is None:
+            other += 1
+        else:
+            for w, piece in e["pieces"]:
+                by_word.setdefault(w, []).append((S, np.kron(La, piece)))
+    assert np.array_equal(lhs % p, rhs % p), "flattening identity fails"
+    rank_phi = rank(lhs, p)
+    assert rank_phi == shape.L * k
+    nu_total = 0
+    for w, items in by_word.items():
+        nu = rank(sum(m for _, m in items) % p, p)
+        assert nu <= len({S for S, _ in items}), "nu_w exceeds the number of label sets"
+        nu_total += nu
+    assert rank_phi <= other + nu_total, "rank bound fails"
+    n_products = len(products)
+    assert 2 * n_products >= 2 * rank_phi - nu_total, "mixed charge fails"
+    return n_products, rank_phi, nu_total
+
+
+def part4(rng):
+    count = 0
+    for (P, Q, m, L, trials) in ((2, 2, 4, 2, 60), (2, 3, 4, 4, 30), (2, 2, 6, 3, 30)):
+        shape = Shape(P, Q, m, L)
+        for _ in range(trials):
+            for p in (3, 10007):
+                if mixed_chain_form(shape, rng, p) is not None:
+                    count += 1
+    shape = Shape(2, 2, 4, 4)
+    n_products, rank_phi, nu_total = mixed_chain_form(shape, rng, 10007, winograd_only=True)
+    assert 2 * n_products == 2 * rank_phi - nu_total == shape.P * shape.Q * shape.m
+    print(f"[mixed] {count} random chain-form computations with reused mixed words, GF(3) and GF(10007): identity, "
+          "nu_w <= #label sets, #products >= rank - nu/2: ok; Winograd on 2x2x4, L=4: "
+          f"{n_products} products = {rank_phi} - {nu_total}/2 (tight)")
+
+
 if __name__ == "__main__":
     rng = random.Random(20261015)
-    parts = sys.argv[1:] or ["1", "3"]
+    parts = sys.argv[1:] or ["1", "3", "4"]
     if "1" in parts:
         part1_2(rng)
     if "3" in parts:
         part3(rng)
+    if "4" in parts:
+        part4(rng)
