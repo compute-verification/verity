@@ -1,0 +1,51 @@
+# Theorem B / Corollary 7 / Lemma C sweep (referee, CMP-8). One job per line, run by run_jobs.sh from this directory.
+python3 merges.py lift --mmax 6 --primes 2,3,5,1000003
+python3 steiner_exact.py
+python3 merges.py cover --positions 2 --levels 3 --heads 3
+python3 merges.py cover --positions 2 --levels 3 --heads 3 --mutate; [ $? -eq 1 ]
+python3 merges.py cover --positions 3 --levels 3 --heads 3 --shard 0 --shards 4
+python3 merges.py cover --positions 3 --levels 3 --heads 3 --shard 1 --shards 4
+python3 merges.py cover --positions 3 --levels 3 --heads 3 --shard 2 --shards 4
+python3 merges.py cover --positions 3 --levels 3 --heads 3 --shard 3 --shards 4
+python3 merges.py cover --positions 2 --levels 4 --heads 4 --shard 0 --shards 4
+python3 merges.py cover --positions 2 --levels 4 --heads 4 --shard 1 --shards 4
+python3 merges.py cover --positions 2 --levels 4 --heads 4 --shard 2 --shards 4
+python3 merges.py cover --positions 2 --levels 4 --heads 4 --shard 3 --shards 4
+python3 merges.py cover --positions 4 --levels 3 --heads 2 --shard 0 --shards 8
+python3 merges.py cover --positions 4 --levels 3 --heads 2 --shard 1 --shards 8
+python3 merges.py cover --positions 4 --levels 3 --heads 2 --shard 2 --shards 8
+python3 merges.py cover --positions 4 --levels 3 --heads 2 --shard 3 --shards 8
+python3 merges.py cover --positions 4 --levels 3 --heads 2 --shard 4 --shards 8
+python3 merges.py cover --positions 4 --levels 3 --heads 2 --shard 5 --shards 8
+python3 merges.py cover --positions 4 --levels 3 --heads 2 --shard 6 --shards 8
+python3 merges.py cover --positions 4 --levels 3 --heads 2 --shard 7 --shards 8
+python3 merges.py random --n 3 --L 1 --primes 2,3,5 --count 2000 --seed 0
+python3 merges.py random --n 3 --L 1 --primes 2,3,5 --count 2000 --seed 1
+python3 merges.py random --n 3 --L 1 --primes 2,3,5 --count 2000 --seed 2
+python3 merges.py random --n 3 --L 1 --primes 2,3,5 --count 2000 --seed 3
+python3 merges.py random --n 3 --L 3 --primes 2,3,5 --count 4000 --seed 10
+python3 merges.py random --n 3 --L 3 --primes 2,3,5 --count 4000 --seed 11
+python3 merges.py random --n 3 --L 3 --primes 2,3,5 --count 4000 --seed 12
+python3 merges.py random --n 3 --L 3 --primes 2,3,5 --count 4000 --seed 13
+python3 merges.py random --n 4 --L 1 --primes 2,3,5 --count 300 --seed 20
+python3 merges.py random --n 4 --L 1 --primes 2,3,5 --count 300 --seed 21
+python3 merges.py random --n 4 --L 1 --primes 2,3,5 --count 300 --seed 22
+python3 merges.py random --n 4 --L 1 --primes 2,3,5 --count 300 --seed 23
+python3 merges.py random --n 4 --L 1 --primes 2,3,5 --count 300 --seed 24
+python3 merges.py random --n 4 --L 1 --primes 2,3,5 --count 300 --seed 25
+python3 merges.py random --n 4 --L 1 --primes 2,3,5 --count 300 --seed 26
+python3 merges.py random --n 4 --L 1 --primes 2,3,5 --count 300 --seed 27
+python3 merges.py random --n 4 --L 2 --primes 2,3,5 --count 800 --seed 30
+python3 merges.py random --n 4 --L 2 --primes 2,3,5 --count 800 --seed 31
+python3 merges.py random --n 4 --L 2 --primes 2,3,5 --count 800 --seed 32
+python3 merges.py random --n 4 --L 2 --primes 2,3,5 --count 800 --seed 33
+python3 merges.py random --n 4 --L 4 --primes 2,3,5 --count 1500 --seed 40
+python3 merges.py random --n 4 --L 4 --primes 2,3,5 --count 1500 --seed 41
+python3 merges.py random --n 4 --L 4 --primes 2,3,5 --count 1500 --seed 42
+python3 merges.py random --n 4 --L 4 --primes 2,3,5 --count 1500 --seed 43
+python3 merges.py lemmac --primes 2,3,5 --count 1500 --search 40 --seed 50
+python3 merges.py lemmac --primes 2,3,5 --count 1500 --search 40 --seed 51
+python3 merges.py lemmac --primes 2,3,5 --count 1500 --search 40 --seed 52
+python3 merges.py lemmac --primes 2,3,5 --count 1500 --search 40 --seed 53
+python3 merges.py lemmac --primes 2 --count 3000 --search 40 --seed 54
+python3 merges.py lemmac --primes 2 --count 3000 --search 40 --seed 55
