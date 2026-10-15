@@ -35,7 +35,7 @@
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
-export PY=$ENV_DIR/gpu312-torch2.14.0-cu130/bin/python
+export PY=${PY:-$ENV_DIR/gpu312-torch2.14.0-cu130/bin/python}
 [ -x "$PY" ] || { echo "no torch venv at $PY"; exit 3; }
 export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0} PATH=/usr/local/cuda-13.0/bin:$(dirname "$PY"):$PATH
