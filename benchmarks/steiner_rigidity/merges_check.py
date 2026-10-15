@@ -30,6 +30,9 @@ Part 12: symmetric Lemma C: links adding one word save at most L in total with m
 junk the word carries (on a row star, sum_t rank >= 2L(k-1) + (k-2) rank Z_YY for any word, step by step).
 Part 13: d*L for two words on a cross (a D-row and a D-column): labels on the two sides coupled through one direction
 lam cancel both words and reach rank P >= k - rank B, unless each side adds one word.
+Part 14: d*L for two words on two D-rows when the pencil has generic rank 2L or at most three directions help: Lemma J
+(a star helped by one word Z saves <= L - rank of Z off its line, and <= rank of Z on its box), the Kronecker bound on a
+pencil's rank drops, and the case split for three directions.
 """
 
 import random
@@ -1488,6 +1491,234 @@ def part13(rng):
           f"against random words ({psi}): ok")
 
 
+def blocks(shape, idx):
+    return [i * shape.m + k for i in idx for k in range(shape.m)]
+
+
+def star_lines(shape, Z, helped, p):
+    """For the cells helped by one word Z (a star): per line the star lies on (its D-row, its D-column, or both for one
+    cell), the rank of Z off the line (on X_{-R}, or on Y_{-C}) and on the star's box (its rows by its columns)."""
+    rows, cols = sorted({r for r, _ in helped}), sorted({c for _, c in helped})
+    out = []
+    if len(rows) == 1:
+        off = Z[blocks(shape, [i for i in range(shape.P) if i != rows[0]]), :]
+        out.append((("row", rows[0]), rank(off, p), rank(Z[np.ix_(blocks(shape, rows), blocks(shape, cols))], p)))
+    if len(cols) == 1:
+        off = Z[:, blocks(shape, [j for j in range(shape.Q) if j != cols[0]])]
+        out.append((("col", cols[0]), rank(off, p), rank(Z[np.ix_(blocks(shape, rows), blocks(shape, cols))], p)))
+    return out
+
+
+def pencil_profile(shape, Z1, Z2, p):
+    """Every direction lam of the pencil Z1, Z2 (p + 1 of them): (Z_lam, rank Z_lam, the cells' savings with multiples
+    of Z_lam); and per cell the best saving over the whole span with a direction that reaches it."""
+    lams = [(1, a) for a in range(p)] + [(0, 1)]
+    cells = [(i, j) for i in range(shape.P) for j in range(shape.Q)]
+    per = []
+    for lam in lams:
+        Z = (lam[0] * Z1 + lam[1] * Z2) % p
+        sv = {}
+        for c in cells:
+            r = min(rank((shape.D(c, 0) - b * Z) % p, p) for b in range(1, p))
+            if r < shape.L:
+                sv[c] = shape.L - r
+        per.append((Z, rank(Z, p), sv))
+    best = {}
+    for c in cells:
+        s, n = max((per[n][2].get(c, 0), n) for n in range(len(lams)))
+        if s:
+            best[c] = (s, n)
+    return per, best
+
+
+def two_row_pair(shape, rng, p):
+    """Two words aimed at a two-D-row grid: structured words, or sums of partial cells with random coefficient
+    vectors (each partial then shows in every direction but one), or a planted pair of whole cells; maybe noise."""
+    cells = [((i, j), 0) for i in range(shape.P) for j in range(shape.Q)]
+    kind = rng.choice(["words", "partials", "partials", "whole", "triple", "triple"])
+    if kind == "words":
+        return random_word(shape, cells, rng, p), random_word(shape, cells, rng, p)
+    Zs = [np.zeros((shape.P * shape.m, shape.Q * shape.m), dtype=np.int64) for _ in range(2)]
+
+    def partial(pos):
+        P = np.zeros_like(Zs[0])
+        for k in rng.sample(range(shape.m), rng.randint(1, shape.m)):
+            P[pos[0] * shape.m + k, pos[1] * shape.m + k] = 1
+        return P
+    if kind == "whole":
+        a, b = rng.sample(cells, 2)
+        Zs = [shape.D(*a), shape.D(*b)]
+    elif kind == "triple":
+        (a, _), (b, _), (c, _) = rng.sample(cells, 3)
+        Pc = partial(c)
+        Zs = [partial(a) + rng.randrange(1, p) * Pc, partial(b) + rng.randrange(1, p) * Pc]
+    else:
+        for _ in range(rng.randint(2, 6)):
+            (i, j), _ = rng.choice(cells)
+            P = np.zeros_like(Zs[0])
+            for k in range(shape.m):
+                if rng.random() < 0.6:
+                    P[i * shape.m + k, j * shape.m + k] = 1
+            v = (rng.randrange(p), rng.randrange(p))
+            Zs = [Zs[0] + v[0] * P, Zs[1] + v[1] * P]
+    if rng.random() < 0.3:
+        n = rng.randrange(2)
+        Zs[n] = Zs[n] + np.outer([rng.randrange(p) for _ in range(len(Zs[n]))],
+                                 [rng.randrange(p) for _ in range(len(Zs[n][0]))])
+    return Zs[0] % p, Zs[1] % p
+
+
+def kronecker_pencil(shape, rng, p):
+    """A pencil with planted rank drops: G diag(a_i Z1-part, b_i Z2-part) H with points (a_i, b_i) of P^1, so the
+    pencil drops by one at each (b_i, -a_i), plus maybe a random rank-1 term on either word."""
+    X, Y = shape.P * shape.m, shape.Q * shape.m
+    n = rng.randint(1, min(X, Y))
+    pts = [rng.choice([(1, rng.randrange(p)), (0, 1)]) for _ in range(n)]
+    G = np.array([[rng.randrange(p) for _ in range(n)] for _ in range(X)])
+    H = np.array([[rng.randrange(p) for _ in range(Y)] for _ in range(n)])
+    Z1 = G @ np.diag([a for a, _ in pts]) @ H % p
+    Z2 = G @ np.diag([b for _, b in pts]) @ H % p
+    if rng.random() < 0.3:
+        Z1 = (Z1 + np.outer([rng.randrange(p) for _ in range(X)], [rng.randrange(p) for _ in range(Y)])) % p
+    return Z1, Z2
+
+
+def part14(rng):
+    """d*L for two words on two D-rows (any cells in them) when the pencil has generic rank 2L or at most three
+    directions help. (a) Lemma J and the box bound: the cells one word Z helps (a star) save at most L - rank of Z off
+    their line (X_{-R} for a D-row, Y_{-C} for a D-column) and at most rank of Z on their box; so rank Z_lam <=
+    2L - save_lam. (b) Kronecker: over the p + 1 directions, sum (rho - rank Z_lam) <= rho for any pencil. (c) On two
+    D-rows: if rho = 2L the savings total <= 2L; with three helped directions some one, p, has its box off the other
+    two's lines, and save_p <= rank Z_q|box + rank Z_r|box <= 2L - save_q - save_r, unless the three lie on one D-row
+    and one D-column (a cross, part 13)."""
+    stats = {"J": 0, "J tight": 0, "box tight": 0, "pencils": 0, "pencil tight": 0}
+    for (P, Q, L, p, trials) in ((2, 3, 2, 5, 120), (2, 4, 2, 7, 80), (3, 3, 2, 5, 60), (2, 3, 3, 7, 40)):
+        shape = Shape(P, Q, L, L)
+        cells = [((i, j), 0) for i in range(P) for j in range(Q)]
+        for _ in range(trials):
+            Z = random_word(shape, cells, rng, p)
+            sv = {}
+            for (c, _) in cells:
+                r = min(rank((shape.D(c, 0) - b * Z) % p, p) for b in range(1, p))
+                if r < L:
+                    sv[c] = L - r
+            if not sv:
+                continue
+            save = sum(sv.values())
+            for _, r_off, r_box in star_lines(shape, Z, sv, p):
+                assert save <= L - r_off, "Lemma J fails"
+                assert save <= r_box, "box bound fails"
+                stats["J tight"] += save == L - r_off and r_off > 0
+                stats["box tight"] += save == r_box and r_box < L
+            stats["J"] += 1
+    for (P, Q, L, p, trials) in ((2, 3, 2, 7, 150), (2, 4, 3, 7, 100), (3, 3, 2, 11, 60)):
+        shape = Shape(P, Q, L, L)
+        for _ in range(trials):
+            Z1, Z2 = kronecker_pencil(shape, rng, p)
+            ranks = [rank((a * Z1 + b * Z2) % p, p) for a, b in [(1, x) for x in range(p)] + [(0, 1)]]
+            rho = max(ranks)
+            assert p + 1 > min(Z1.shape), "too few directions to read the generic rank"
+            drops = sum(rho - r for r in ranks)
+            assert drops <= rho, "Kronecker drop bound fails"
+            stats["pencils"] += 1
+            stats["pencil tight"] += drops == rho and rho > 0
+    import itertools
+    Q = 5
+    stars = [frozenset((r, c) for c in cs) for r in range(2) for n in range(1, Q + 1)
+             for cs in itertools.combinations(range(Q), n)] + [frozenset({(0, c), (1, c)}) for c in range(Q)]
+
+    def lines_of(s):
+        return ([("row", next(iter(s))[0])] if len({r for r, _ in s}) == 1 else []) + \
+               ([("col", next(iter(s))[1])] if len({c for _, c in s}) == 1 else [])
+    triples = crosses = 0
+    for a, b, c in itertools.combinations(stars, 3):
+        if a & b or a & c or b & c:
+            continue
+        triples += 1
+        ok = any(all(any((side == "row" and R not in {r for r, _ in s})
+                         or (side == "col" and R not in {c for _, c in s}) for side, R in lines_of(o)) for o in (x, y))
+                 for s, x, y in ((a, b, c), (b, a, c), (c, a, b)))
+        cross = any(all(r == R or col == C for r, col in a | b | c) for R in range(2) for C in range(Q))
+        assert ok or cross, "a triple of stars with no box off the other two lines that is not a cross"
+        crosses += not ok
+
+    def climb(shape, Z1, Z2, p, steps):
+        """Single-entry changes kept when (number of helped directions, total saving) does not drop."""
+        def score(A, B):
+            _, best = pencil_profile(shape, A, B, p)
+            return (len({n for _, n in best.values()}), sum(s for s, _ in best.values()))
+        cur = score(Z1, Z2)
+        for _ in range(steps):
+            A, B = Z1.copy(), Z2.copy()
+            M = A if rng.random() < 0.5 else B
+            M[rng.randrange(M.shape[0]), rng.randrange(M.shape[1])] = rng.randrange(p)
+            new = score(A, B)
+            if new >= cur:
+                Z1, Z2, cur = A, B, new
+        return Z1, Z2
+
+    kinds = {"full rank": 0, "<= 2 directions": 0, "3 directions": 0, "cross": 0, "open (rho < 2L, 4+)": 0}
+    tight, top_open = 0, 0
+    for (Q, L, p, trials, climbs) in ((3, 2, 2, 100, 0), (3, 2, 7, 120, 6), (4, 2, 7, 80, 3), (3, 3, 7, 40, 2)):
+        shape = Shape(2, Q, L, L)
+        for trial in range(trials):
+            Z1, Z2 = two_row_pair(shape, rng, p)
+            if trial < climbs:
+                Z1, Z2 = climb(shape, Z1, Z2, p, 60)
+            per, best = pencil_profile(shape, Z1, Z2, p)
+            total = sum(s for s, _ in best.values())
+            used = sorted({n for _, n in best.values()})
+            rho = max(r for _, r, _ in per) if p + 1 > 2 * L else None  # the generic rank, read off p + 1 directions
+            save = {n: sum(s for c, (s, m) in best.items() if m == n) for n in used}
+            lines = {}
+            for n in used:
+                helped = [c for c, (_, m) in best.items() if m == n]
+                lines[n] = star_lines(shape, per[n][0], helped, p)
+                assert lines[n], "a direction's cells are not a star"
+                assert any(save[n] <= L - r_off for _, r_off, _ in lines[n]), "Lemma J fails on a direction"
+                assert per[n][1] <= 2 * L - save[n], "rank Z_lam > 2L - save_lam"
+            if rho == 2 * L:
+                assert total <= sum(rho - r for _, r, _ in per) <= rho, "pencil bound fails at full generic rank"
+                kinds["full rank"] += 1
+            if len(used) <= 2:
+                assert all(s <= L for s in save.values()) and total <= 2 * L, "Lemma C per direction fails"
+                kinds["<= 2 directions"] += 1
+            elif len(used) == 3:
+                rows = {c[0] for c in best}
+                cols = {c[1] for c in best}
+                cross = any(all(c[0] == R or c[1] == C for c in best) for R in rows for C in cols)
+                ok = False
+                for n in used:
+                    q, r = [m for m in used if m != n]
+                    hrows = sorted({c[0] for c, (_, m) in best.items() if m == n})
+                    hcols = sorted({c[1] for c, (_, m) in best.items() if m == n})
+                    box = np.ix_(blocks(shape, hrows), blocks(shape, hcols))
+                    r_box = rank(per[n][0][box], p)
+                    for lq in lines[q]:
+                        for lr in lines[r]:
+                            if not all((side == "row" and R not in hrows) or (side == "col" and R not in hcols)
+                                       for (side, R), _, _ in (lq, lr)):
+                                continue
+                            bq, br = rank(per[q][0][box], p), rank(per[r][0][box], p)
+                            assert save[n] <= r_box <= bq + br <= lq[1] + lr[1], "triple chain fails"
+                            assert lq[1] <= L - save[q] and lr[1] <= L - save[r], "Lemma J fails in the triple"
+                            ok = True
+                assert ok or cross, "three directions, no box off the other two lines, and not a cross"
+                kinds["3 directions" if ok else "cross"] += 1
+                assert total <= 2 * L
+            elif rho is not None and rho < 2 * L:
+                kinds["open (rho < 2L, 4+)"] += 1
+                top_open = max(top_open, total)
+                assert total <= 2 * L, "d*L fails: a counterexample"
+            tight += total == 2 * L
+    print(f"[two D-rows, d = 2] {stats['J']} words: Lemma J (save <= L - rank off the line) and the box bound: ok "
+          f"({stats['J tight']} tight with junk, {stats['box tight']} box-tight below L); {stats['pencils']} planted "
+          f"pencils: sum of rank drops <= rho: ok ({stats['pencil tight']} tight); {triples} triples of disjoint "
+          f"stars on a 2 x 5 grid: some box is off the other two lines, or the three form a cross ({crosses}): ok; "
+          f"pairs on 2 x Q (L = 2, 3; GF(2) and GF(7)): rank Z_lam <= 2L - save_lam per direction, total <= 2L: ok "
+          f"({tight} at 2L) by case {kinds}, best open {top_open}")
+
+
 def part4(rng):
     count = 0
     for (P, Q, m, L, trials) in ((2, 2, 4, 2, 60), (2, 3, 4, 4, 30), (2, 2, 6, 3, 30)):
@@ -1506,7 +1737,7 @@ def part4(rng):
 
 if __name__ == "__main__":
     rng = random.Random(20261015)
-    parts = sys.argv[1:] or ["1", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"]
+    parts = sys.argv[1:] or ["1", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14"]
     if "1" in parts:
         part1_2(rng)
     if "3" in parts:
@@ -1531,3 +1762,5 @@ if __name__ == "__main__":
         part12(rng)
     if "13" in parts:
         part13(rng)
+    if "14" in parts:
+        part14(rng)
