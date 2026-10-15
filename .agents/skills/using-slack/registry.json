@@ -114,6 +114,7 @@
         "Security/Proofs/Nci/",
         "benchmarks/pouw/",
         "benchmarks/numerical/",
+        "benchmarks/steiner_referee/",
         ".agents/skills/kernel-engineering/"
       ]
     },
