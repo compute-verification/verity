@@ -14,7 +14,8 @@ proof workers' results land here as theorems or as named hypotheses.
   the axioms are satisfiable with nontrivial prices.
 * The definition (`Protocol`, with a commitment before the live coins, `CommitsFirst`; `Complete`; `Secure`, Neekon's
   `∃ M'` form; `SecureInf`, RS-DEF's frozen form against `Tuse`; `Core`, the per-run proof target; `Efficient`;
-  `RelativelySecure`) with `ε`, `δ`, `γ`, `η`, `α`, `κ`. Probabilities are uniform counts over the finite σ and coins
+  `RelativelySecure`) with `ε`, `δ`, `γ`, `η`, `α`, `κ`; usefulness, completeness and the floors quantify over the
+  protocol's `promise` (RS-DEF v2 §1.4, `A, B ∈ G_use`). Probabilities are uniform counts over the finite σ and coins
   (`prob`, `expect`). Core, the floors and Lemma R charge a run the program's size and its cost,
   `max(|M|, cost)` (`Machine.charge`, RS-DEF v2 after RS-RT's V1). `secureInf_of_core` (Core ⇒ Security for `δ > κ`),
   `rate_of_core` (RS-DEF's rate form) and `core_of_floor` (RS-DEF's Lemma R) are proved.
@@ -26,7 +27,7 @@ proof workers' results land here as theorems or as named hypotheses.
   `secure_of_extraction_floor` gives security from two named hypotheses, `Extraction` (RS-EXT's) and `Floor` (the floor
   agenda's), and `secure_fullRank` and `secure_lowRank` instantiate it with the explicit peels of `MatMachine`.
 * Route (c), edited instances (Daniel's rulings of 18:20Z and 18:28Z): correctness reads σ, an `Edit` adds σ-indexed
-  noise to both operands, unpeeled; `edited` is the protocol (a promise problem on the instances `use`, served by a
+  noise to both operands, unpeeled; `edited` is the protocol (promised on the instances `use`, served by a
   product algorithm `m`), `edited_complete` its completeness, `honestEdit` costs `time m + 2κadd n²` beyond the proof
   layer and the noise expansion, and `relativelySecure_of_editFloor` gives relative security from the named hypothesis
   `EditFloor` (RS-D1E's floor), with `m` the worst-case product (`_wide`) or a grid product (`GridMatMachine`, `_grid`). The bit-pair projection's algebra
@@ -39,10 +40,15 @@ proof workers' results land here as theorems or as named hypotheses.
   family), `matMachine120` the sm_120 instance at `price120` with the worst-case `κ = 16` u (circuits named `Gemm120`),
   and `gridMatMachine120` its width-typed refinement, the int8 tile GEMM at `κ = 1` u on `G_op = int8` (circuits named
   `Int8Gemm120`). `relativelySecure_edited120` is route (c) on the int8 grid at 1 u, `relativelySecure_edited120_wide`
-  on unrestricted operands at 16 u. Machines take any additive `Price`.
+  on unrestricted operands at 16 u. Machines take any additive `Price`. The service range-checks the committed instance
+  into `G_use = [−(127 − s), 127 − s]` (`GridService`, RS-RT's V6), and with noise bounded by `s` the edits are int8
+  (`edit_int8`, `GridService.accepted_edit_int8`).
 * B_θ (RS-MODEL §6.2, θ = 1/5): `price120θ` over instructions with their shared-memory words; B's circuits lift at
-  `4/5` and every B_θ adversary has a B shadow, so B's floor carries at `4/5` (`serviceFloor_θ`), and
-  `relativelySecure_edited120θ` is route (c) there at `N = 0.8 n³` u with `ε = γ`. Model A (RS-MODEL §3) is ported over
+  `4/5` and every B_θ adversary has a B shadow, so B's floor carries at `4/5` (`serviceFloor_θ`). Route (c) there at
+  `N = 0.8 n³` u takes any B floor `F_B ≤ n³` (`relativelySecure_edited120θ_of_floor`, `ε = U / (0.8 F_B) − 1`):
+  Conjecture A's `n³` (`ε = γ`), Theorem E's form `(c / m_max)(φ n³ − sl)` over ℚ (`_rat`) and its proved case
+  `c = ½`, `m_max = 2` (`_half`). The certified fraction (`certifiedFraction120θ`, `_half`): accepted runs are charged at
+  least `(c φ / m_max) N` less the slack, except with probability `κ`. Model A (RS-MODEL §3) is ported over
   ℚ, and `timeθ_le_timeA` is `B_θ ≤ A` as the combination `(4/5)·ys + (1/5)·R6` of A's rows.
 -/
 
@@ -289,6 +295,9 @@ structure Protocol (Mc : Machine) (Inst Out : Type) where
   /-- `C` answers `x` against σ (for matmul: `A · B = C` on the exact grid; for an edited instance, route (c), the
   edited product `(A + E_A(σ)) (B + E_B(σ)) = C`). -/
   correct : Seed → Inst → Out → Prop
+  /-- The promise (RS-DEF v2 §1.4, `A, B ∈ G_use`): usefulness and completeness quantify over the promised instances
+  only, so a verifier may range-check what is committed. -/
+  promise : Inst → Prop := fun _ => True
   /-- `Solve(x; ρ)` against σ: `((c, a), C)`. -/
   solve : Mc.Alg (Seed × Inst × Coins) ((Com × Ans) × Out)
   /-- `V(c, σ, a) → b`, deterministic and not priced. -/
@@ -310,10 +319,10 @@ def CommitsFirst (P : Protocol Mc Inst Out) {X : Type} (f : P.Seed × X → P.Pr
   ∀ σ σ' x, (f (σ, x)).1 = (f (σ', x)).1
 
 /-- A useful prover `M'(x; r)` against σ answers `x` correctly and is accepted, with probability at least `1 - η` over
-σ and its coins, for every instance (RS-DEF §1.4's event `b = 1 ∧ C = AB`). -/
+σ and its coins, for every promised instance (RS-DEF §1.4's event `b = 1 ∧ C = AB`). -/
 def SolvesAll (P : Protocol Mc Inst Out) {Ω : Type} [Fintype Ω] (M' : Mc.Alg (P.Seed × Inst × Ω) (P.Proof × Out))
     (η : ℝ) : Prop :=
-  ∀ x : Inst, 1 - η ≤ prob fun ω : P.Seed × Ω =>
+  ∀ x : Inst, P.promise x → 1 - η ≤ prob fun ω : P.Seed × Ω =>
     P.correct ω.1 x (Mc.eval M' (ω.1, x, ω.2)).2 ∧ P.accepts ω.1 (Mc.eval M' (ω.1, x, ω.2)).1 = true
 
 /-- A useful prover: it commits first and solves every instance. -/
@@ -457,12 +466,12 @@ theorem secure_mono (P : Protocol Mc Inst Out) {ε ε' δ δ' η η' α α' : �
     (hδ : δ ≤ δ') (hη : η ≤ η') (hα : α ≤ α') : Secure P ε' δ' η' α' := by
   intro Ω _ M hc hM
   obtain ⟨Ω', _, M', ht, hc', hs⟩ := h Ω M hc (hδ.trans hM)
-  refine ⟨Ω', inferInstance, M', ht.trans ?_, hc', fun x => le_trans (by linarith) (hs x)⟩
+  refine ⟨Ω', inferInstance, M', ht.trans ?_, hc', fun x hx => le_trans (by linarith) (hs x hx)⟩
   have := mul_le_mul_of_nonneg_right (show 1 + ε ≤ 1 + ε' by linarith) (Mc.time_nonneg M)
   linarith
 
 theorem complete_mono (P : Protocol Mc Inst Out) {η η' : ℝ} (h : Complete P η) (hη : η ≤ η') : Complete P η' :=
-  ⟨h.1, fun x => le_trans (by linarith) (h.2 x)⟩
+  ⟨h.1, fun x hx => le_trans (by linarith) (h.2 x hx)⟩
 
 end Definition
 
@@ -663,34 +672,35 @@ variable {Mc : Machine} {Inst Out : Type}
 
 /-- **Extraction** (a named hypothesis, RS-EXT's Lemma E and Theorem R): from an adversary `M`, an extractor `E` that
 commits first, costs at most `(1 + εext) time M` (one straight-line run of M on the planted instance, reading M's
-committed blocks off its hash log, plus the check, the fixes and its own proof), and, for every instance `x`, with
-probability at least `1 - η` over σ and its coins, outputs prover messages that are accepted and blocks valid for
-`x`. -/
+committed blocks off its hash log, plus the check, the fixes and its own proof), and, for every promised instance
+`x`, with probability at least `1 - η` over σ and its coins, outputs prover messages that are accepted and blocks
+valid for `x`. -/
 def Extraction (P : Protocol Mc Inst Out) {Bl : Type} (valid : Inst → Bl → Prop) (εext : ℝ) {Ω : Type} [Fintype Ω]
     (M : Mc.Alg (P.Seed × Ω) P.Proof) (η : ℝ) : Prop :=
   ∃ (Ω' : Type) (_ : Fintype Ω') (E : Mc.Alg (P.Seed × Inst × Ω') (P.Proof × Bl)),
     CommitsFirst P (fun y => (Mc.eval E y).1) ∧ Mc.time E ≤ (1 + εext) * Mc.time M ∧
-    ∀ x, 1 - η ≤ prob fun ω : P.Seed × Ω' =>
+    ∀ x, P.promise x → 1 - η ≤ prob fun ω : P.Seed × Ω' =>
       valid x (Mc.eval E (ω.1, x, ω.2)).2 ∧ P.accepts ω.1 (Mc.eval E (ω.1, x, ω.2)).1 = true
 
 /-- **The floor** (a named hypothesis, the floor agenda's: Conjecture A, Theorems B/C/W/F): every algorithm that
-answers every instance correctly with probability at least `1 - η` over its coins costs at least `T` (`T*_mm(n)` for
-matmul, RS-DEF §1.7; no proof is asked for, so `T_use(η) ≥ T`). -/
-def Floor (Mc : Machine) {Inst Out : Type} (correct : Inst → Out → Prop) (T η : ℝ) : Prop :=
+answers every promised instance correctly with probability at least `1 - η` over its coins costs at least `T`
+(`T*_mm(n)` for matmul, RS-DEF §1.7; no proof is asked for, so `T_use(η) ≥ T`). -/
+def Floor (Mc : Machine) {Inst Out : Type} (promise : Inst → Prop) (correct : Inst → Out → Prop) (T η : ℝ) : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (N : Mc.Alg (Inst × Ω) Out),
-    (∀ x, 1 - η ≤ prob fun ω : Ω => correct x (Mc.eval N (x, ω))) → T ≤ Mc.time N
+    (∀ x, promise x → 1 - η ≤ prob fun ω : Ω => correct x (Mc.eval N (x, ω))) → T ≤ Mc.time N
 
 /-- An algorithm that solves every instance (with a proof) is above the floor of any problem its answers solve
 (`hcorr`; for an unedited protocol, its own): drop σ into its coins and forget the proof, which routing does for
 free. -/
-theorem Floor.le_time (P : Protocol Mc Inst Out) {correct : Inst → Out → Prop} {T η : ℝ} (h : Floor Mc correct T η)
+theorem Floor.le_time (P : Protocol Mc Inst Out) {correct : Inst → Out → Prop} {T η : ℝ}
+    (h : Floor Mc P.promise correct T η)
     (hcorr : ∀ σ x C, P.correct σ x C → correct x C) {Ω : Type} [Fintype Ω]
     {M' : Mc.Alg (P.Seed × Inst × Ω) (P.Proof × Out)} (hM' : SolvesAll P M' η) : T ≤ Mc.time M' := by
   let route : Mc.Alg (Inst × P.Seed × Ω) (P.Seed × Inst × Ω) :=
     Mc.pair (Mc.seq Mc.snd Mc.fst) (Mc.pair Mc.fst (Mc.seq Mc.snd Mc.snd))
   have hroute : ∀ y, Mc.eval route y = (y.2.1, y.1, y.2.2) := fun y => by
     simp only [route, Mc.eval_seq, Mc.eval_pair, Mc.eval_fst, Mc.eval_snd]
-  have hT := h (P.Seed × Ω) (Mc.seq (Mc.seq route M') Mc.snd) fun x => (hM' x).trans (prob_mono fun ω hω => by
+  have hT := h (P.Seed × Ω) (Mc.seq (Mc.seq route M') Mc.snd) fun x hx => (hM' x hx).trans (prob_mono fun ω hω => by
     rw [Mc.eval_seq, Mc.eval_seq, hroute, Mc.eval_snd]
     exact hcorr _ _ _ hω.1)
   have hr : Mc.time route ≤ 0 := by
@@ -702,7 +712,8 @@ theorem Floor.le_time (P : Protocol Mc Inst Out) {correct : Inst → Out → Pro
   have z := Mc.time_snd (I := P.Proof) (J := Out)
   linarith
 
-theorem Floor.le_tuse (P : Protocol Mc Inst Out) {correct : Inst → Out → Prop} {T η : ℝ} (h : Floor Mc correct T η)
+theorem Floor.le_tuse (P : Protocol Mc Inst Out) {correct : Inst → Out → Prop} {T η : ℝ}
+    (h : Floor Mc P.promise correct T η)
     (hcorr : ∀ σ x C, P.correct σ x C → correct x C)
     (hne : ∃ (Ω' : Type) (_ : Fintype Ω') (M' : Mc.Alg (P.Seed × Inst × Ω') (P.Proof × Out)), Useful P M' η) :
     T ≤ Tuse P η := by
@@ -719,7 +730,7 @@ theorem exists_reduction (P : Protocol Mc Inst Out) {Bl Mid : Type} {valid : Ins
       Mc.time M' ≤ (1 + εext) * Mc.time M + Mc.time peel + Mc.time corr ∧ Useful P M' η := by
   obtain ⟨Ω', _, E, hc, hE, hsucc⟩ := hext
   refine ⟨Ω', inferInstance, Mc.reduction E peel corr, (Mc.time_reduction_le E peel corr).trans (by linarith),
-    fun σ σ' y => ?_, fun x => (hsucc x).trans (prob_mono fun ω hω => ?_)⟩
+    fun σ σ' y => ?_, fun x hx => (hsucc x hx).trans (prob_mono fun ω hω => ?_)⟩
   · simp only [Mc.eval_reduction]
     exact hc σ σ' y
   · rw [Mc.eval_reduction]
@@ -747,7 +758,7 @@ theorem secure_of_extraction_floor (P : Protocol Mc Inst Out) {Bl Mid : Type} {v
     (hpeel : ∀ σ x b, valid x b → P.correct σ x (Mc.eval corr (Mc.eval peel b))) {εext δ η T q : ℝ}
     (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
       δ ≤ acceptance P M → Extraction P valid εext M η) {correct : Inst → Out → Prop}
-    (hfloor : Floor Mc correct T η) (hcorr : ∀ σ x C, P.correct σ x C → correct x C)
+    (hfloor : Floor Mc P.promise correct T η) (hcorr : ∀ σ x C, P.correct σ x C → correct x C)
     (hq : Mc.time peel + Mc.time corr ≤ q) (hqT : q < T) :
     Secure P (εext + (1 + εext) * (q / (T - q))) δ η 0 := by
   intro Ω _ M hc hM
@@ -791,7 +802,7 @@ theorem secure_of_solver (P : Protocol Mc Inst Out) {ε δ η α : ℝ} {Ω₀ :
 /-- **Security is a relative floor**, the other direction: under security, every adversary accepted with probability
 at least `δ` has `T ≤ (1 + ε) time M + α`, for `T` the floor. -/
 theorem floor_le_of_secure (P : Protocol Mc Inst Out) {ε δ η α T : ℝ} (h : Secure P ε δ η α)
-    {correct : Inst → Out → Prop} (hfloor : Floor Mc correct T η) (hcorr : ∀ σ x C, P.correct σ x C → correct x C)
+    {correct : Inst → Out → Prop} (hfloor : Floor Mc P.promise correct T η) (hcorr : ∀ σ x C, P.correct σ x C → correct x C)
     {Ω : Type} [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof)
     (hc : CommitsFirst P (Mc.eval M)) (hM : δ ≤ acceptance P M) : T ≤ (1 + ε) * Mc.time M + α := by
   obtain ⟨Ω', _, M', ht, hu⟩ := h Ω M hc hM
@@ -1009,7 +1020,7 @@ variable {n : ℕ} {Inst : Type} {P : Protocol Mc.toMachine Inst (Mat R n n)} {e
 theorem secure_fullRank (hmat : IsMatmulOn P emb) {εext δ η T : ℝ}
     (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
       δ ≤ acceptance P M → Extraction P (fun x => ValidFull (emb x)) εext M η)
-    (hfloor : Floor Mc.toMachine (fun x C => (emb x).1 * (emb x).2 = C) T η) (hT : 2 * Mc.κ * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2 < T) :
+    (hfloor : Floor Mc.toMachine P.promise (fun x C => (emb x).1 * (emb x).2 = C) T η) (hT : 2 * Mc.κ * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2 < T) :
     Secure P (εext + (1 + εext) * ((2 * Mc.κ * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2) /
       (T - (2 * Mc.κ * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2)))) δ η 0 :=
   secure_of_extraction_floor P (Mc.peelFull n) (Mc.corr n)
@@ -1024,7 +1035,7 @@ security comes from the floor itself, `core_of_floor`.) -/
 theorem secure_lowRank (hmat : IsMatmulOn P emb) (r : ℕ) {εext δ η T : ℝ}
     (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
       δ ≤ acceptance P M → Extraction P (fun x => ValidLow (r := r) (emb x)) εext M η)
-    (hfloor : Floor Mc.toMachine (fun x C => (emb x).1 * (emb x).2 = C) T η)
+    (hfloor : Floor Mc.toMachine P.promise (fun x C => (emb x).1 * (emb x).2 = C) T η)
     (hT : 4 * Mc.κ * (n : ℝ) ^ 2 * r + 2 * Mc.κadd * (n : ℝ) ^ 2 < T) :
     Secure P (εext + (1 + εext) * ((4 * Mc.κ * (n : ℝ) ^ 2 * r + 2 * Mc.κadd * (n : ℝ) ^ 2) /
       (T - (4 * Mc.κ * (n : ℝ) ^ 2 * r + 2 * Mc.κadd * (n : ℝ) ^ 2)))) δ η 0 :=
@@ -1337,6 +1348,16 @@ def ServiceFloor (Mc : Machine) (S : Service) (F κ : ℝ) : Prop :=
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) →
     prob (fun ω : S.Seed × Ω => S.verify (Mc.eval M ω).1 ω.1 (Mc.eval M ω).2 = true ∧ Mc.charge M ω < F) ≤ κ
 
+/-- Both operands lie in `G_use = [−g, g]` (RS-DEF v2 §1.10). -/
+def InGrid {n : ℕ} (g : ℤ) (x : Mat ℤ n n × Mat ℤ n n) : Prop := ∀ i j, |x.1 i j| ≤ g ∧ |x.2 i j| ≤ g
+
+/-- **A range-checking service** (RS-DEF v2 §1.10 after RS-RT's V6): the commitment binds the instance `(A_M, B_M)`
+(`committed`), and the verifier's relation includes the range check `A_M, B_M ∈ G_use = [−g, g]`, proved inside the
+zero-knowledge proof, so an accepted transcript's committed instance is in `G_use`. -/
+structure GridService (n : ℕ) (g : ℤ) extends Service where
+  committed : Com → Mat ℤ n n × Mat ℤ n n
+  range_check : ∀ c σ a, verify c σ a = true → InGrid g (committed c)
+
 namespace MatMachine
 
 variable {R : Type} [Ring R] (Mc : MatMachine R)
@@ -1359,6 +1380,10 @@ variable {Mc} in
 /-- The edited product `(A + E_A(σ)) (B + E_B(σ))`, the useful output on the instance `(A, B)`. -/
 def Edit.product {Seed : Type} {n : ℕ} (E : Mc.Edit Seed n) (σ : Seed) (x : Mat R n n × Mat R n n) : Mat R n n :=
   (x.1 + E.EA σ) * (x.2 + E.EB σ)
+
+/-- The noise is bounded by `s` (`|E| ≤ max|S|`, RS-DEF v2 §1.10). -/
+def Edit.Bounded {Mc : MatMachine ℤ} {Seed : Type} {n : ℕ} (E : Mc.Edit Seed n) (s : ℤ) : Prop :=
+  ∀ σ i j, |E.EA σ i j| ≤ s ∧ |E.EB σ i j| ≤ s
 
 /-- The edited product as an algorithm, with the product computed by `m`, `(σ, (A, B)) ↦ m (A + E_A σ, B + E_B σ)`:
 expand σ once, two additions, one run of `m`, and no peel. `m` is the worst-case `mul n n n` on unrestricted
@@ -1424,13 +1449,15 @@ def edited (S : Service) {n : ℕ} (E : Mc.Edit S.Seed n) (m : Mc.Alg (Mat R n n
   Com := S.Com
   Ans := S.Ans
   Coins := S.Coins
-  correct σ x C := use x → E.product σ x = C
+  correct σ x C := E.product σ x = C
+  promise := use
   solve := Mc.honestEdit E m prove
   verify := S.verify
 
 /-- **Completeness of the edited protocol**: if `m` computes the edited product on every promised instance (`hm`), the
 proof layer's commitment reads neither σ nor the product (`hcom`, commit-first) and the verifier accepts its proof of
-the served product with probability at least `1 − η` on every instance (`hacc`), the edited protocol is complete. -/
+the served product with probability at least `1 − η` on every promised instance (`hacc`), the edited protocol is
+complete. -/
 theorem edited_complete (S : Service) {n : ℕ} (E : Mc.Edit S.Seed n)
     (m : Mc.Alg (Mat R n n × Mat R n n) (Mat R n n))
     (prove : Mc.Alg ((S.Seed × (Mat R n n × Mat R n n) × S.Coins) × Mat R n n) (S.Com × S.Ans))
@@ -1438,19 +1465,19 @@ theorem edited_complete (S : Service) {n : ℕ} (E : Mc.Edit S.Seed n)
     (hm : ∀ σ x, use x → Mc.eval m (E.edit σ x) = E.product σ x)
     (hcom : ∀ (σ σ' : S.Seed) (y : (Mat R n n × Mat R n n) × S.Coins) (C C' : Mat R n n),
       (Mc.eval prove ((σ, y), C)).1 = (Mc.eval prove ((σ', y), C')).1)
-    (hacc : ∀ x : Mat R n n × Mat R n n, 1 - η ≤ prob fun ω : S.Seed × S.Coins =>
+    (hacc : ∀ x : Mat R n n × Mat R n n, use x → 1 - η ≤ prob fun ω : S.Seed × S.Coins =>
       S.verify (Mc.eval prove ((ω.1, x, ω.2), Mc.eval m (E.edit ω.1 x))).1 ω.1
         (Mc.eval prove ((ω.1, x, ω.2), Mc.eval m (E.edit ω.1 x))).2 = true) :
     Complete (Mc.edited S E m prove use) η := by
-  refine ⟨fun σ σ' y => ?_, fun x => (hacc x).trans (prob_mono fun ω hω => ?_)⟩
+  refine ⟨fun σ σ' y => ?_, fun x hx => (hacc x hx).trans (prob_mono fun ω hω => ?_)⟩
   · change ((Mc.eval (Mc.honestEdit E m prove) (σ, y)).1).1 = ((Mc.eval (Mc.honestEdit E m prove) (σ', y)).1).1
     rw [eval_honestEdit, eval_honestEdit]
     exact hcom σ σ' y _ _
-  · change (use x → E.product ω.1 x = (Mc.eval (Mc.honestEdit E m prove) (ω.1, x, ω.2)).2) ∧
+  · change E.product ω.1 x = (Mc.eval (Mc.honestEdit E m prove) (ω.1, x, ω.2)).2 ∧
       S.verify (Mc.eval (Mc.honestEdit E m prove) (ω.1, x, ω.2)).1.1 ω.1
         (Mc.eval (Mc.honestEdit E m prove) (ω.1, x, ω.2)).1.2 = true
     rw [eval_honestEdit]
-    exact ⟨fun hx => (hm ω.1 x hx).symm, hω⟩
+    exact ⟨(hm ω.1 x hx).symm, hω⟩
 
 /-- **The edit floor** (a named hypothesis; RS-D1E proves it on paper by the bit-pair projection, `bitPair_coefficient`,
 with `F = c n³` per MAC slot, `c = ½` unconditional through Theorem W and `c = 1` under Conjecture A): on the edited
@@ -1479,7 +1506,7 @@ theorem relativelySecure_of_editFloor (S : Service) {n : ℕ} (E : Mc.Edit S.See
     (hm : ∀ σ x, use x → Mc.eval m (E.edit σ x) = E.product σ x) (hmt : Mc.time m ≤ κm * (n : ℝ) ^ 3)
     (hcom : ∀ (σ σ' : S.Seed) (y : (Mat R n n × Mat R n n) × S.Coins) (C C' : Mat R n n),
       (Mc.eval prove ((σ, y), C)).1 = (Mc.eval prove ((σ', y), C')).1)
-    (hacc : ∀ x : Mat R n n × Mat R n n, 1 - η ≤ prob fun ω : S.Seed × S.Coins =>
+    (hacc : ∀ x : Mat R n n × Mat R n n, use x → 1 - η ≤ prob fun ω : S.Seed × S.Coins =>
       S.verify (Mc.eval prove ((ω.1, x, ω.2), Mc.eval m (E.edit ω.1 x))).1 ω.1
         (Mc.eval prove ((ω.1, x, ω.2), Mc.eval m (E.edit ω.1 x))).2 = true)
     (hfloor : Mc.EditFloor S E m prove use F κf) (hκδ : κf < δ) (hF : 0 < F)
@@ -1522,7 +1549,7 @@ theorem relativelySecure_of_editFloor_wide (S : Service) {n : ℕ} (E : Mc.Edit 
       ((2 * Mc.κadd * (n : ℝ) ^ 2 + Mc.time E.gen + Mc.time prove) / (Mc.κ * (n : ℝ) ^ 3)) η 0
       (Mc.κ * (n : ℝ) ^ 3) :=
   Mc.relativelySecure_of_editFloor S E _ prove _ (fun σ x _ => Mc.eval_mul_edit E σ x)
-    ((Mc.time_mul_le n n n).trans_eq (by ring)) hcom (fun x => by simpa only [Mc.eval_mul_edit] using hacc x)
+    ((Mc.time_mul_le n n n).trans_eq (by ring)) hcom (fun x _ => by simpa only [Mc.eval_mul_edit] using hacc x)
     hfloor hκδ hF hFU hN
 
 end MatMachine
@@ -1555,7 +1582,7 @@ theorem relativelySecure_of_editFloor_grid (S : Service) {n : ℕ} (E : Mc.Edit 
     (hgrid : ∀ σ x, use x → Mc.OnGrid (E.edit σ x))
     (hcom : ∀ (σ σ' : S.Seed) (y : (Mat R n n × Mat R n n) × S.Coins) (C C' : Mat R n n),
       (Mc.eval prove ((σ, y), C)).1 = (Mc.eval prove ((σ', y), C')).1)
-    (hacc : ∀ x : Mat R n n × Mat R n n, 1 - η ≤ prob fun ω : S.Seed × S.Coins =>
+    (hacc : ∀ x : Mat R n n × Mat R n n, use x → 1 - η ≤ prob fun ω : S.Seed × S.Coins =>
       S.verify (Mc.eval prove ((ω.1, x, ω.2), Mc.eval (Mc.mulG n n n) (E.edit ω.1 x))).1 ω.1
         (Mc.eval prove ((ω.1, x, ω.2), Mc.eval (Mc.mulG n n n) (E.edit ω.1 x))).2 = true)
     (hfloor : Mc.EditFloor S E (Mc.mulG n n n) prove use F κf) (hκδ : κf < δ) (hF : 0 < F)
@@ -1937,6 +1964,25 @@ def Tile120 (a b c : ℕ) : Prop := 16 ∣ a ∧ 32 ∣ b ∧ 8 ∣ c ∧ b ≤ 
 theorem tile120_square {n : ℕ} (h32 : 32 ∣ n) (h17 : n ≤ 2 ^ 17) : Tile120 n n n :=
   ⟨(by norm_num : (16 : ℕ) ∣ 32).trans h32, h32, (by norm_num : (8 : ℕ) ∣ 32).trans h32, h17⟩
 
+theorem int8_of_abs_le {a e s : ℤ} (ha : |a| ≤ 127 - s) (he : |e| ≤ s) : Int8 (a + e) := by
+  have h := abs_le.mp ((abs_add_le a e).trans (by linarith : |a| + |e| ≤ 127))
+  exact ⟨by linarith [h.1], h.2⟩
+
+/-- **The edited operands are int8** (RS-RT's V6): an instance in `G_use = [−(127 − s), 127 − s]` edited by noise
+bounded by `s` stays in int8. -/
+theorem edit_int8 {Mc : MatMachine ℤ} {Seed : Type} {n : ℕ} {E : Mc.Edit Seed n} {s : ℤ} (hE : E.Bounded s)
+    (σ : Seed) {x : Mat ℤ n n × Mat ℤ n n} (hx : InGrid (127 - s) x) :
+    (∀ i k, Int8 ((E.edit σ x).1 i k)) ∧ ∀ k j, Int8 ((E.edit σ x).2 k j) :=
+  ⟨fun i k => int8_of_abs_le (hx i k).1 (hE σ i k).1, fun k j => int8_of_abs_le (hx k j).2 (hE σ k j).2⟩
+
+/-- **An accepted transcript's edited instance is int8**: the range check puts the committed instance in `G_use`, so
+under every σ its edits are int8 operands, the grid the edit floor prices at 1 u. -/
+theorem GridService.accepted_edit_int8 {Mc : MatMachine ℤ} {n : ℕ} {s : ℤ} (S : GridService n (127 - s))
+    {E : Mc.Edit S.Seed n} (hE : E.Bounded s) {c : S.Com} {σ : S.Seed} {a : S.Ans} (h : S.verify c σ a = true)
+    (σ' : S.Seed) :
+    (∀ i k, Int8 ((E.edit σ' (S.committed c)).1 i k)) ∧ ∀ k j, Int8 ((E.edit σ' (S.committed c)).2 k j) :=
+  edit_int8 hE σ' (S.range_check c σ a h)
+
 /-- Circuits for the int8 product on sm_120's tile shapes: exact on int8 operands at 1 u per multiply-accumulate
 (RS-MODEL's `gemm120`: `a b c` u for the `m16n8k32` tile GEMM). -/
 abbrev Int8Gates120 (kd : K120 → Kind) : Type 1 := GridGates kd (.ofNat price120) Int8 Tile120 1
@@ -1957,36 +2003,36 @@ theorem gridMatMachine120_κG (kd : K120 → Kind) (G : MatGates kd (.ofNat pric
 theorem gridMatMachine120_κadd (kd : K120 → Kind) (G : MatGates kd (.ofNat price120) 16 1) (I : Int8Gates120 kd) :
     (gridMatMachine120 kd G I).κadd = 1 := rfl
 
-/-- **Route (c) on sm_120, on the int8 grid** (`κ = 1` u on `G_op = int8`): when every promised instance's edits stay
-int8 (`hgrid`) and `32 ∣ n ≤ 2^17`, the edited protocol served by the int8 tile GEMM is relatively secure against
-`N = n³` u, with `ε = U / F − 1`, `U = n³ + 2 n² + time gen + time prove`, and
-`γ = (2 n² + time gen + time prove) / n³`. -/
+/-- **Route (c) on sm_120, on the int8 grid** (`κ = 1` u on `G_op = int8`): on a range-checking service with
+`G_use = [−(127 − s), 127 − s]` (the promise), noise bounded by `s` and `32 ∣ n ≤ 2^17`, the edited protocol served by
+the int8 tile GEMM is relatively secure against `N = n³` u, with `ε = U / F − 1`, `U = n³ + 2 n² + time gen +
+time prove`, and `γ = (2 n² + time gen + time prove) / n³`. The edits stay int8 by `edit_int8`. -/
 theorem relativelySecure_edited120 (kd : K120 → Kind) (G : MatGates kd (.ofNat price120) 16 1) (I : Int8Gates120 kd)
-    (S : Service) {n : ℕ} (hn : 0 < n) (h32 : 32 ∣ n) (h17 : n ≤ 2 ^ 17)
-    (E : (gridMatMachine120 kd G I).Edit S.Seed n)
+    {n : ℕ} {s : ℤ} (S : GridService n (127 - s)) (hn : 0 < n) (h32 : 32 ∣ n) (h17 : n ≤ 2 ^ 17)
+    (E : (gridMatMachine120 kd G I).Edit S.Seed n) (hE : E.Bounded s)
     (prove : (gridMatMachine120 kd G I).Alg ((S.Seed × (Mat ℤ n n × Mat ℤ n n) × S.Coins) × Mat ℤ n n)
-      (S.Com × S.Ans))
-    (use : Mat ℤ n n × Mat ℤ n n → Prop) {κf δ η F : ℝ}
-    (hgrid : ∀ σ x, use x → (∀ i k, Int8 ((E.edit σ x).1 i k)) ∧ ∀ k j, Int8 ((E.edit σ x).2 k j))
+      (S.Com × S.Ans)) {κf δ η F : ℝ}
     (hcom : ∀ (σ σ' : S.Seed) (y : (Mat ℤ n n × Mat ℤ n n) × S.Coins) (C C' : Mat ℤ n n),
       ((gridMatMachine120 kd G I).eval prove ((σ, y), C)).1 = ((gridMatMachine120 kd G I).eval prove ((σ', y), C')).1)
-    (hacc : ∀ x : Mat ℤ n n × Mat ℤ n n, 1 - η ≤ prob fun ω : S.Seed × S.Coins =>
+    (hacc : ∀ x : Mat ℤ n n × Mat ℤ n n, InGrid (127 - s) x → 1 - η ≤ prob fun ω : S.Seed × S.Coins =>
       S.verify ((gridMatMachine120 kd G I).eval prove
           ((ω.1, x, ω.2), (gridMatMachine120 kd G I).eval ((gridMatMachine120 kd G I).mulG n n n) (E.edit ω.1 x))).1
         ω.1 ((gridMatMachine120 kd G I).eval prove
           ((ω.1, x, ω.2), (gridMatMachine120 kd G I).eval ((gridMatMachine120 kd G I).mulG n n n)
             (E.edit ω.1 x))).2 = true)
-    (hfloor : (gridMatMachine120 kd G I).EditFloor S E ((gridMatMachine120 kd G I).mulG n n n) prove use F κf)
+    (hfloor : (gridMatMachine120 kd G I).EditFloor S.toService E ((gridMatMachine120 kd G I).mulG n n n) prove
+      (InGrid (127 - s)) F κf)
     (hκδ : κf < δ) (hF : 0 < F)
     (hFU : F ≤ (n : ℝ) ^ 3 + 2 * (n : ℝ) ^ 2 + (gridMatMachine120 kd G I).time E.gen +
       (gridMatMachine120 kd G I).time prove) :
-    RelativelySecure ((gridMatMachine120 kd G I).edited S E ((gridMatMachine120 kd G I).mulG n n n) prove use)
+    RelativelySecure ((gridMatMachine120 kd G I).edited S.toService E ((gridMatMachine120 kd G I).mulG n n n) prove
+      (InGrid (127 - s)))
       (((n : ℝ) ^ 3 + 2 * (n : ℝ) ^ 2 + (gridMatMachine120 kd G I).time E.gen +
         (gridMatMachine120 kd G I).time prove) / F - 1) δ
       ((2 * (n : ℝ) ^ 2 + (gridMatMachine120 kd G I).time E.gen + (gridMatMachine120 kd G I).time prove) /
         (n : ℝ) ^ 3) η 0 ((n : ℝ) ^ 3) := by
-  have h := (gridMatMachine120 kd G I).relativelySecure_of_editFloor_grid S E prove use (tile120_square h32 h17)
-    hgrid hcom hacc hfloor hκδ hF
+  have h := (gridMatMachine120 kd G I).relativelySecure_of_editFloor_grid S.toService E prove (InGrid (127 - s))
+    (tile120_square h32 h17) (fun σ _ hx => edit_int8 hE σ hx) hcom hacc hfloor hκδ hF
     (by rw [gridMatMachine120_κG, gridMatMachine120_κadd, one_mul, mul_one]; exact hFU)
     (by rw [gridMatMachine120_κG, one_mul]; exact pow_pos (Nat.cast_pos.mpr hn) 3)
   rwa [gridMatMachine120_κG, gridMatMachine120_κadd, one_mul, mul_one] at h
@@ -2178,42 +2224,158 @@ theorem gridMatMachine120θ_κG (kd : K120 → Kind) (G : MatGates kd (.ofNat pr
 theorem gridMatMachine120θ_κadd (kd : K120 → Kind) (G : MatGates kd (.ofNat price120) 16 1) (I : Int8Gates120 kd) :
     (gridMatMachine120θ kd G I).κadd = 4 / 5 := mul_one _
 
-/-- **Route (c) on sm_120 in B_θ, on the int8 grid**: B's floor `n³` u (Conjecture A's `c = 1`, a named hypothesis on
-the service, `ServiceFloor`) carries to `0.8 n³` u in B_θ (`serviceFloor_θ`), and the edited protocol served by the
-int8 tile GEMM at `0.8 n³` u is relatively secure against `N = 0.8 n³` u with `ε = γ`,
+/-- **Route (c) on sm_120 in B_θ, on the int8 grid, from any B floor**: B's service floor `F_B ≤ n³` u (a named
+hypothesis, `ServiceFloor`) carries to `0.8 F_B` u in B_θ (`serviceFloor_θ`), and on a range-checking service with
+`G_use = [−(127 − s), 127 − s]` and noise bounded by `s` (so the edits stay int8, `edit_int8`) the edited protocol served
+by the int8 tile GEMM is relatively secure against `N = 0.8 n³` u with `ε = U / (0.8 F_B) − 1`,
+`U = 0.8 n³ + 1.6 n² + time gen + time prove` (no commitment cost credited), and
 `γ = (1.6 n² + time gen + time prove) / (0.8 n³)`. -/
-theorem relativelySecure_edited120θ (kd : K120 → Kind) (G : MatGates kd (.ofNat price120) 16 1) (I : Int8Gates120 kd)
-    (S : Service) {n : ℕ} (hn : 0 < n) (h32 : 32 ∣ n) (h17 : n ≤ 2 ^ 17)
-    (E : (gridMatMachine120θ kd G I).Edit S.Seed n)
+theorem relativelySecure_edited120θ_of_floor (kd : K120 → Kind) (G : MatGates kd (.ofNat price120) 16 1) (I : Int8Gates120 kd)
+    {n : ℕ} {s : ℤ} (S : GridService n (127 - s)) (hn : 0 < n) (h32 : 32 ∣ n) (h17 : n ≤ 2 ^ 17)
+    (E : (gridMatMachine120θ kd G I).Edit S.Seed n) (hE : E.Bounded s)
     (prove : (gridMatMachine120θ kd G I).Alg ((S.Seed × (Mat ℤ n n × Mat ℤ n n) × S.Coins) × Mat ℤ n n)
-      (S.Com × S.Ans))
-    (use : Mat ℤ n n × Mat ℤ n n → Prop) {κf δ η : ℝ}
-    (hgrid : ∀ σ x, use x → (∀ i k, Int8 ((E.edit σ x).1 i k)) ∧ ∀ k j, Int8 ((E.edit σ x).2 k j))
+      (S.Com × S.Ans)) {κf δ η : ℝ}
     (hcom : ∀ (σ σ' : S.Seed) (y : (Mat ℤ n n × Mat ℤ n n) × S.Coins) (C C' : Mat ℤ n n),
       ((gridMatMachine120θ kd G I).eval prove ((σ, y), C)).1 =
         ((gridMatMachine120θ kd G I).eval prove ((σ', y), C')).1)
-    (hacc : ∀ x : Mat ℤ n n × Mat ℤ n n, 1 - η ≤ prob fun ω : S.Seed × S.Coins =>
+    (hacc : ∀ x : Mat ℤ n n × Mat ℤ n n, InGrid (127 - s) x → 1 - η ≤ prob fun ω : S.Seed × S.Coins =>
       S.verify ((gridMatMachine120θ kd G I).eval prove
           ((ω.1, x, ω.2), (gridMatMachine120θ kd G I).eval ((gridMatMachine120θ kd G I).mulG n n n)
             (E.edit ω.1 x))).1
         ω.1 ((gridMatMachine120θ kd G I).eval prove
           ((ω.1, x, ω.2), (gridMatMachine120θ kd G I).eval ((gridMatMachine120θ kd G I).mulG n n n)
             (E.edit ω.1 x))).2 = true)
-    (hfloorB : ServiceFloor (machine kd (.ofNat price120)) S ((n : ℝ) ^ 3) κf) (hκδ : κf < δ) :
-    RelativelySecure ((gridMatMachine120θ kd G I).edited S E ((gridMatMachine120θ kd G I).mulG n n n) prove use)
-      ((2 * (4 / 5) * (n : ℝ) ^ 2 + (gridMatMachine120θ kd G I).time E.gen + (gridMatMachine120θ kd G I).time prove) /
-        (4 / 5 * (n : ℝ) ^ 3)) δ
+    {FB : ℝ} (hfloorB : ServiceFloor (machine kd (.ofNat price120)) S.toService FB κf) (hκδ : κf < δ) (hFB : 0 < FB)
+    (hFBn : FB ≤ (n : ℝ) ^ 3) :
+    RelativelySecure ((gridMatMachine120θ kd G I).edited S.toService E ((gridMatMachine120θ kd G I).mulG n n n) prove (InGrid (127 - s)))
+      ((4 / 5 * (n : ℝ) ^ 3 + 2 * (4 / 5) * (n : ℝ) ^ 2 + (gridMatMachine120θ kd G I).time E.gen + (gridMatMachine120θ kd G I).time prove) / (4 / 5 * FB) - 1) δ
       ((2 * (4 / 5) * (n : ℝ) ^ 2 + (gridMatMachine120θ kd G I).time E.gen + (gridMatMachine120θ kd G I).time prove) /
         (4 / 5 * (n : ℝ) ^ 3)) η 0 (4 / 5 * (n : ℝ) ^ 3) := by
   have hN : (0 : ℝ) < 4 / 5 * (n : ℝ) ^ 3 := mul_pos (by norm_num) (pow_pos (Nat.cast_pos.mpr hn) 3)
   have hg := (gridMatMachine120θ kd G I).time_nonneg E.gen
   have hp := (gridMatMachine120θ kd G I).time_nonneg prove
-  have h := (gridMatMachine120θ kd G I).relativelySecure_of_editFloor_grid S E prove use (tile120_square h32 h17)
-    hgrid hcom hacc (serviceFloor_θ kd S hfloorB) hκδ hN
-    (by rw [gridMatMachine120θ_κG, gridMatMachine120θ_κadd]; nlinarith [sq_nonneg (n : ℝ)])
+  have h := (gridMatMachine120θ kd G I).relativelySecure_of_editFloor_grid S.toService E prove (InGrid (127 - s))
+    (tile120_square h32 h17) (fun σ _ hx => edit_int8 hE σ hx) hcom hacc (serviceFloor_θ kd S.toService hfloorB) hκδ
+    (by positivity) (by rw [gridMatMachine120θ_κG, gridMatMachine120θ_κadd]; nlinarith [sq_nonneg (n : ℝ)])
     (by rw [gridMatMachine120θ_κG]; exact hN)
-  rw [gridMatMachine120θ_κG, gridMatMachine120θ_κadd, div_sub_one hN.ne'] at h
+  rwa [gridMatMachine120θ_κG, gridMatMachine120θ_κadd] at h
+
+/-- **Route (c) in B_θ at Conjecture A's floor** (`c = 1`, `F_B = n³` u, open): `ε = γ`. -/
+theorem relativelySecure_edited120θ (kd : K120 → Kind) (G : MatGates kd (.ofNat price120) 16 1) (I : Int8Gates120 kd)
+    {n : ℕ} {s : ℤ} (S : GridService n (127 - s)) (hn : 0 < n) (h32 : 32 ∣ n) (h17 : n ≤ 2 ^ 17)
+    (E : (gridMatMachine120θ kd G I).Edit S.Seed n) (hE : E.Bounded s)
+    (prove : (gridMatMachine120θ kd G I).Alg ((S.Seed × (Mat ℤ n n × Mat ℤ n n) × S.Coins) × Mat ℤ n n)
+      (S.Com × S.Ans)) {κf δ η : ℝ}
+    (hcom : ∀ (σ σ' : S.Seed) (y : (Mat ℤ n n × Mat ℤ n n) × S.Coins) (C C' : Mat ℤ n n),
+      ((gridMatMachine120θ kd G I).eval prove ((σ, y), C)).1 =
+        ((gridMatMachine120θ kd G I).eval prove ((σ', y), C')).1)
+    (hacc : ∀ x : Mat ℤ n n × Mat ℤ n n, InGrid (127 - s) x → 1 - η ≤ prob fun ω : S.Seed × S.Coins =>
+      S.verify ((gridMatMachine120θ kd G I).eval prove
+          ((ω.1, x, ω.2), (gridMatMachine120θ kd G I).eval ((gridMatMachine120θ kd G I).mulG n n n)
+            (E.edit ω.1 x))).1
+        ω.1 ((gridMatMachine120θ kd G I).eval prove
+          ((ω.1, x, ω.2), (gridMatMachine120θ kd G I).eval ((gridMatMachine120θ kd G I).mulG n n n)
+            (E.edit ω.1 x))).2 = true)
+    (hfloorB : ServiceFloor (machine kd (.ofNat price120)) S.toService ((n : ℝ) ^ 3) κf) (hκδ : κf < δ) :
+    RelativelySecure ((gridMatMachine120θ kd G I).edited S.toService E ((gridMatMachine120θ kd G I).mulG n n n) prove (InGrid (127 - s)))
+      ((2 * (4 / 5) * (n : ℝ) ^ 2 + (gridMatMachine120θ kd G I).time E.gen + (gridMatMachine120θ kd G I).time prove) /
+        (4 / 5 * (n : ℝ) ^ 3)) δ
+      ((2 * (4 / 5) * (n : ℝ) ^ 2 + (gridMatMachine120θ kd G I).time E.gen + (gridMatMachine120θ kd G I).time prove) /
+        (4 / 5 * (n : ℝ) ^ 3)) η 0 (4 / 5 * (n : ℝ) ^ 3) := by
+  have hN : (0 : ℝ) < 4 / 5 * (n : ℝ) ^ 3 := mul_pos (by norm_num) (pow_pos (Nat.cast_pos.mpr hn) 3)
+  have h := relativelySecure_edited120θ_of_floor kd G I S hn h32 h17 E hE prove hcom hacc hfloorB hκδ
+    (pow_pos (Nat.cast_pos.mpr hn) 3) le_rfl
+  rw [div_sub_one hN.ne'] at h
   convert h using 2
+  ring
+
+/-- **Route (c) in B_θ at a floor of Theorem E's form** (RS-D1E): B's floor `F_B = (c / m_max) (φ n³ − sl)` u for
+rationals `0 < c ≤ m_max` and `φ ≤ 1` and a slack `0 ≤ sl < φ n³` (`L (M + K)`, and RS-W′'s excess while it stands), so
+`ε = U / (0.8 F_B) − 1`. -/
+theorem relativelySecure_edited120θ_rat (kd : K120 → Kind) (G : MatGates kd (.ofNat price120) 16 1) (I : Int8Gates120 kd)
+    {n : ℕ} {s : ℤ} (S : GridService n (127 - s)) (hn : 0 < n) (h32 : 32 ∣ n) (h17 : n ≤ 2 ^ 17)
+    (E : (gridMatMachine120θ kd G I).Edit S.Seed n) (hE : E.Bounded s)
+    (prove : (gridMatMachine120θ kd G I).Alg ((S.Seed × (Mat ℤ n n × Mat ℤ n n) × S.Coins) × Mat ℤ n n)
+      (S.Com × S.Ans)) {κf δ η : ℝ}
+    (hcom : ∀ (σ σ' : S.Seed) (y : (Mat ℤ n n × Mat ℤ n n) × S.Coins) (C C' : Mat ℤ n n),
+      ((gridMatMachine120θ kd G I).eval prove ((σ, y), C)).1 =
+        ((gridMatMachine120θ kd G I).eval prove ((σ', y), C')).1)
+    (hacc : ∀ x : Mat ℤ n n × Mat ℤ n n, InGrid (127 - s) x → 1 - η ≤ prob fun ω : S.Seed × S.Coins =>
+      S.verify ((gridMatMachine120θ kd G I).eval prove
+          ((ω.1, x, ω.2), (gridMatMachine120θ kd G I).eval ((gridMatMachine120θ kd G I).mulG n n n)
+            (E.edit ω.1 x))).1
+        ω.1 ((gridMatMachine120θ kd G I).eval prove
+          ((ω.1, x, ω.2), (gridMatMachine120θ kd G I).eval ((gridMatMachine120θ kd G I).mulG n n n)
+            (E.edit ω.1 x))).2 = true)
+    (c mmax φ : ℚ) {sl : ℝ} (hc : 0 < c) (hcm : c ≤ mmax) (hφ : φ ≤ 1) (hsl : 0 ≤ sl) (hslφ : sl < φ * (n : ℝ) ^ 3)
+    (hfloorB : ServiceFloor (machine kd (.ofNat price120)) S.toService
+      (((c / mmax : ℚ) : ℝ) * ((φ : ℝ) * (n : ℝ) ^ 3 - sl)) κf) (hκδ : κf < δ) :
+    RelativelySecure ((gridMatMachine120θ kd G I).edited S.toService E ((gridMatMachine120θ kd G I).mulG n n n) prove (InGrid (127 - s)))
+      ((4 / 5 * (n : ℝ) ^ 3 + 2 * (4 / 5) * (n : ℝ) ^ 2 + (gridMatMachine120θ kd G I).time E.gen + (gridMatMachine120θ kd G I).time prove) / (4 / 5 * (((c / mmax : ℚ) : ℝ) * ((φ : ℝ) * (n : ℝ) ^ 3 - sl))) - 1) δ
+      ((2 * (4 / 5) * (n : ℝ) ^ 2 + (gridMatMachine120θ kd G I).time E.gen + (gridMatMachine120θ kd G I).time prove) /
+        (4 / 5 * (n : ℝ) ^ 3)) η 0 (4 / 5 * (n : ℝ) ^ 3) := by
+  have hq0 : (0 : ℝ) < ((c / mmax : ℚ) : ℝ) := by exact_mod_cast div_pos hc (hc.trans_le hcm)
+  have hq1 : ((c / mmax : ℚ) : ℝ) ≤ 1 := by exact_mod_cast (div_le_one (hc.trans_le hcm)).mpr hcm
+  have hφ' : (φ : ℝ) ≤ 1 := by exact_mod_cast hφ
+  have hn3 : (0 : ℝ) ≤ (n : ℝ) ^ 3 := by positivity
+  have hφn : (φ : ℝ) * (n : ℝ) ^ 3 ≤ (n : ℝ) ^ 3 := by nlinarith
+  refine relativelySecure_edited120θ_of_floor kd G I S hn h32 h17 E hE prove hcom hacc hfloorB hκδ
+    (mul_pos hq0 (by linarith)) ?_
+  calc ((c / mmax : ℚ) : ℝ) * ((φ : ℝ) * (n : ℝ) ^ 3 - sl) ≤ 1 * ((φ : ℝ) * (n : ℝ) ^ 3 - sl) :=
+        mul_le_mul_of_nonneg_right hq1 (by linarith)
+    _ ≤ (n : ℝ) ^ 3 := by linarith
+
+/-- Theorem E's `φ = 1 − f − m / N_B` (RS-D1E). -/
+def phiE (f m NB : ℚ) : ℚ := 1 - f - m / NB
+
+/-- **Route (c) in B_θ at Theorem E's proved floor** (`c = ½`, `m_max = 2`, `φ = 1 − f − m / N_B`): B's floor
+`F_B = (φ n³ − sl) / 4` u gives `ε = U / ((φ n³ − sl) / 5) − 1`, about `4 / φ − 1` for large `n`. -/
+theorem relativelySecure_edited120θ_half (kd : K120 → Kind) (G : MatGates kd (.ofNat price120) 16 1) (I : Int8Gates120 kd)
+    {n : ℕ} {s : ℤ} (S : GridService n (127 - s)) (hn : 0 < n) (h32 : 32 ∣ n) (h17 : n ≤ 2 ^ 17)
+    (E : (gridMatMachine120θ kd G I).Edit S.Seed n) (hE : E.Bounded s)
+    (prove : (gridMatMachine120θ kd G I).Alg ((S.Seed × (Mat ℤ n n × Mat ℤ n n) × S.Coins) × Mat ℤ n n)
+      (S.Com × S.Ans)) {κf δ η : ℝ}
+    (hcom : ∀ (σ σ' : S.Seed) (y : (Mat ℤ n n × Mat ℤ n n) × S.Coins) (C C' : Mat ℤ n n),
+      ((gridMatMachine120θ kd G I).eval prove ((σ, y), C)).1 =
+        ((gridMatMachine120θ kd G I).eval prove ((σ', y), C')).1)
+    (hacc : ∀ x : Mat ℤ n n × Mat ℤ n n, InGrid (127 - s) x → 1 - η ≤ prob fun ω : S.Seed × S.Coins =>
+      S.verify ((gridMatMachine120θ kd G I).eval prove
+          ((ω.1, x, ω.2), (gridMatMachine120θ kd G I).eval ((gridMatMachine120θ kd G I).mulG n n n)
+            (E.edit ω.1 x))).1
+        ω.1 ((gridMatMachine120θ kd G I).eval prove
+          ((ω.1, x, ω.2), (gridMatMachine120θ kd G I).eval ((gridMatMachine120θ kd G I).mulG n n n)
+            (E.edit ω.1 x))).2 = true)
+    (f m NB : ℚ) {sl : ℝ} (hf : 0 ≤ f) (hm : 0 ≤ m / NB) (hsl : 0 ≤ sl)
+    (hslφ : sl < (phiE f m NB : ℝ) * (n : ℝ) ^ 3)
+    (hfloorB : ServiceFloor (machine kd (.ofNat price120)) S.toService
+      (1 / 4 * ((phiE f m NB : ℝ) * (n : ℝ) ^ 3 - sl)) κf) (hκδ : κf < δ) :
+    RelativelySecure ((gridMatMachine120θ kd G I).edited S.toService E ((gridMatMachine120θ kd G I).mulG n n n) prove (InGrid (127 - s)))
+      ((4 / 5 * (n : ℝ) ^ 3 + 2 * (4 / 5) * (n : ℝ) ^ 2 + (gridMatMachine120θ kd G I).time E.gen + (gridMatMachine120θ kd G I).time prove) / (4 / 5 * (1 / 4 * ((phiE f m NB : ℝ) * (n : ℝ) ^ 3 - sl))) - 1) δ
+      ((2 * (4 / 5) * (n : ℝ) ^ 2 + (gridMatMachine120θ kd G I).time E.gen + (gridMatMachine120θ kd G I).time prove) /
+        (4 / 5 * (n : ℝ) ^ 3)) η 0 (4 / 5 * (n : ℝ) ^ 3) := by
+  have hq : ((1 / 2 / 2 : ℚ) : ℝ) = 1 / 4 := by norm_num
+  have h := relativelySecure_edited120θ_rat kd G I S hn h32 h17 E hE prove hcom hacc (1 / 2) 2 (phiE f m NB)
+    (by norm_num) (by norm_num) (by unfold phiE; linarith) hsl hslφ (by rw [hq]; exact hfloorB) hκδ
+  rwa [hq] at h
+
+/-- **The certified fraction** (the headline): from B's floor of Theorem E's form, every adversary in B_θ that commits
+first has its accepted runs charged (`max(|M|, cost)`, the program included) below `(c φ / m_max) N − 0.8 (c / m_max) sl`
+with probability at most `κ`, for `N = 0.8 n³` u the reference matmul. No commitment cost is credited. -/
+theorem certifiedFraction120θ (kd : K120 → Kind) (S : Service) (n : ℕ) (c mmax φ : ℚ) {sl κf : ℝ}
+    (hfloorB : ServiceFloor (machine kd (.ofNat price120)) S (((c / mmax : ℚ) : ℝ) * ((φ : ℝ) * (n : ℝ) ^ 3 - sl)) κf) :
+    ServiceFloor (machine (kdθ kd) priceθ) S
+      (((c * φ / mmax : ℚ) : ℝ) * (4 / 5 * (n : ℝ) ^ 3) - 4 / 5 * ((c / mmax : ℚ) : ℝ) * sl) κf := by
+  convert serviceFloor_θ kd S hfloorB using 1
+  push_cast
+  ring
+
+/-- **The certified fraction at Theorem E's proved floor** (`c = ½`, `m_max = 2`): accepted runs are charged at least
+`(φ / 4) N − sl / 5` except with probability `κ`, `N = 0.8 n³` u. -/
+theorem certifiedFraction120θ_half (kd : K120 → Kind) (S : Service) (n : ℕ) (f m NB : ℚ) {sl κf : ℝ}
+    (hfloorB : ServiceFloor (machine kd (.ofNat price120)) S (1 / 4 * ((phiE f m NB : ℝ) * (n : ℝ) ^ 3 - sl)) κf) :
+    ServiceFloor (machine (kdθ kd) priceθ) S
+      ((phiE f m NB : ℝ) / 4 * (4 / 5 * (n : ℝ) ^ 3) - sl / 5) κf := by
+  convert serviceFloor_θ kd S hfloorB using 1
   ring
 
 /-! ### Model A (RS-MODEL §3, over ℚ) and `B_θ ≤ A` -/
