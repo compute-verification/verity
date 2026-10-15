@@ -286,10 +286,11 @@ static void gate_cfg(int cfg, const std::vector<const cr_kernel*>& ks, unsigned 
            cfg, s.m, s.n, s.k, worst, bad_prefix, bad_d);
 
     for (auto* k : ks) {
-        if (k->cfg != cfg || k->mode != 1) continue;
+        if (k->cfg != cfg || (k->mode != 1 && k->mode != 3)) continue;
         CK(cudaMemset(b.R, 0, (size_t)tiles * NT * 4));
         if (!run(k, D1)) continue;
         gate("output differs from plain's", k->name, count_diff(D0, D1, dbytes / 4, dc) != 0);
+        if (k->mode == 3) continue;
         std::vector<uint32_t> R((size_t)tiles * NT);
         CK(cudaMemcpy(R.data(), b.R, R.size() * 4, cudaMemcpyDeviceToHost));
         long bad = 0;
@@ -354,8 +355,8 @@ int main(int argc, char** argv) {
     for (size_t i = 0; i < ks.size(); i++) {
         auto* k = ks[i];
         printf("    {\"name\": \"%s\", \"cfg\": %d, \"var\": %d, \"rounds\": %d, \"p\": %d, \"L\": %d, \"mode\": %d, \"spread\": %d, "
-               "\"grain\": %d, \"tile\": [%d, %d], \"threads\": %d, \"chains\": %d, \"stages\": %d, \"smem_bytes\": %d}%s\n",
-               k->name, k->cfg, k->var, k->rounds, k->p, 128 * k->p / k->grain, k->mode, k->spread, k->grain, k->tile_m,
+               "\"grain\": %d, \"extra\": %d, \"tile\": [%d, %d], \"threads\": %d, \"chains\": %d, \"stages\": %d, \"smem_bytes\": %d}%s\n",
+               k->name, k->cfg, k->var, k->rounds, k->p, 128 * k->p / k->grain, k->mode, k->spread, k->grain, k->extra, k->tile_m,
                k->tile_n, k->threads,
                k->chains, k->stages, k->smem_bytes, i + 1 < ks.size() ? "," : "");
     }
@@ -431,6 +432,7 @@ int main(int argc, char** argv) {
             launch(j, 0);
             CK(cudaDeviceSynchronize());
             gate("output differs from plain's at a timed shape", sk[j]->name, count_diff(D0, D, dbytes / 4, dc) != 0);
+            if (sk[j]->mode != 1) continue;
             CK(cudaMemcpy(r0.data(), b.R, r0.size() * 4, cudaMemcpyDeviceToHost));
             CK(cudaMemset(b.R, 0, r0.size() * 4));
             launch(j, 0);
@@ -523,11 +525,11 @@ int main(int argc, char** argv) {
                 const double a_ = med(ta), w_ = med(tw), solo = med(dn) / rate;
                 const int ctas = (s.m / k->tile_m) * (s.n / k->tile_n);
                 printf("%s    {\"shape\": \"%s\", \"m\": %d, \"n\": %d, \"k\": %d, \"kernel\": \"%s\", \"var\": %d, \"rounds\": %d, "
-                       "\"L\": %d, \"spread\": %d, \"grain\": %d, \"mode\": %d, \"launches\": %d, \"reps\": %d, \"ctas\": %d, "
+                       "\"L\": %d, \"spread\": %d, \"grain\": %d, \"extra\": %d, \"mode\": %d, \"launches\": %d, \"reps\": %d, \"ctas\": %d, "
                        "\"ms_alone\": %.4f, \"ms_with\": %.4f, \"slowdown\": %.4f, \"pump_blocks\": %.0f, "
                        "\"pump_blocks_per_ms_alone\": %.1f, \"free_capacity\": %.4f}",
                        first_row ? "" : ",\n", s.name, s.m, s.n, s.k, k->name, k->var, k->rounds, 128 * k->p / k->grain,
-                       k->spread, k->grain, k->mode, launches, reps, ctas, a_, w_, w_ / a_, med(dn), rate,
+                       k->spread, k->grain, k->extra, k->mode, launches, reps, ctas, a_, w_, w_ / a_, med(dn), rate,
                        (a_ + solo - w_) / a_);
                 first_row = false;
                 fflush(stdout);
@@ -554,12 +556,12 @@ int main(int argc, char** argv) {
             const double t = med(ms[j]), f = med(mhz[j]);
             const double words = k->mode == 1 ? (double)s.m * s.n * (s.k * k->grain / (128.0 * k->p)) : 0.0;
             printf("%s    {\"shape\": \"%s\", \"m\": %d, \"n\": %d, \"k\": %d, \"kernel\": \"%s\", \"cfg\": %d, \"var\": %d, "
-                   "\"rounds\": %d, \"p\": %d, \"L\": %d, \"spread\": %d, \"grain\": %d, \"sets\": %d, \"launches\": %d, "
+                   "\"rounds\": %d, \"p\": %d, \"L\": %d, \"spread\": %d, \"grain\": %d, \"extra\": %d, \"mode\": %d, \"sets\": %d, \"launches\": %d, "
                    "\"reps\": %d, \"ms\": %.5f, "
                    "\"ms_min\": %.5f, \"tflops\": %.1f, \"sm_mhz\": %.0f, \"macs_per_sm_clk\": %.1f, \"receipt_words\": %.0f, "
                    "\"phi1_per_sm_clk\": %.3f, \"wall_vs_plain\": %.4f, \"cycles_vs_plain\": %.4f}",
                    first_row ? "" : ",\n", s.name, s.m, s.n, s.k, k->name, k->cfg, k->var, k->rounds, k->p,
-                   128 * k->p / k->grain, k->spread, k->grain, sets,
+                   128 * k->p / k->grain, k->spread, k->grain, k->extra, k->mode, sets,
                    launches, reps, t, *std::min_element(ms[j].begin(), ms[j].end()), 2.0 * s.m * s.n * (double)s.k / (t * 1e9), f,
                    f > 0 ? (double)s.m * s.n * s.k / (t * 1e-3 * f * 1e6 * prop.multiProcessorCount) : 0.0, words,
                    f > 0 ? words * k->rounds / (t * 1e-3 * f * 1e6 * prop.multiProcessorCount) : 0.0, med(wall[j]),

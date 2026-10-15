@@ -27,6 +27,8 @@
 #          absent)
 #   corun  (not default) lease 1: cutlass_receipt --corun, each served kernel (plain and receipted) alone and beside a
 #          low-priority phi pump: the free CUDA capacity a cheater finds beside it (built as for cgemm)
+#   cheat  (not default) lease 1: cutlass_receipt over the prefill shapes for the kernels CG_BUILD names, each design
+#          beside its CR_EXTRA variants (a cheater's own CUDA work fused into the GEMM); CG_BUILD also limits the build
 #   gap    (not default) lease 1: gap_filler.py, forced work (φ pump, or a tag-like read of a 1 GiB store) on a
 #          low-priority stream beside vLLM's FP8 layer stack (its own ops), graph-replayed at high priority
 # Timeouts run in the foreground so `research cancel` reaches the GPU process.
@@ -70,7 +72,7 @@ probe_build() {  # NAME SOURCE [NVCC FLAGS]: the binary in $d, its SASS and the 
 [[ " $STAGES " == *" isa "* ]] && probe_build isa_rates isa_rates.cu
 [[ " $STAGES " == *" rgemm "* ]] && probe_build receipt_gemm receipt_gemm.cu -Xptxas -v
 cgemm_build() {  # cutlass_receipt in $d with one object a line of cutlass_receipt.kernels, compiled in parallel
-  local C=/workspace/pouw/harness/build/cutlass-v4.8.0 b="$d/cg" pids=() bad=0 name cfg var rounds p mode spread grain
+  local C=/workspace/pouw/harness/build/cutlass-v4.8.0 b="$d/cg" pids=() bad=0 name cfg var rounds p mode spread grain extra
   if [[ ! -d $C/include/cutlass ]]; then
     C=$d/cutlass
     git clone -q --depth 1 --branch v4.8.0 https://github.com/NVIDIA/cutlass "$C"
@@ -80,10 +82,13 @@ cgemm_build() {  # cutlass_receipt in $d with one object a line of cutlass_recei
   local fl=(-O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a --expt-relaxed-constexpr -I"$C/include"
             -I"$C/tools/util/include" -I"$S" -DCUTLASS_ENABLE_TENSOR_CORE_MMA=1)
   stamp "build cutlass_receipt kernels"
-  while read -r name cfg var rounds p mode spread grain; do
+  while read -r name cfg var rounds p mode spread grain extra; do
     [[ -z $name || $name == \#* ]] && continue
+    # CG_BUILD (comma list): only those kernels, with every configuration's plain and dump kernels for the gates
+    [[ -n ${CG_BUILD:-} && $mode != 0 && $mode != 2 && ",$CG_BUILD," != *",$name,"* ]] && continue
     nice -n 19 "$CUDA/bin/nvcc" "${fl[@]}" -Xptxas -v -DCR_NAME=$name -DCR_CFG=$cfg -DCR_VAR=$var -DCR_ROUNDS=$rounds \
-      -DCR_P=$p -DCR_MODE=$mode -DCR_SPREAD=${spread:-0} -DCR_GRAIN=${grain:-1} -c "$S/cutlass_receipt_kernel.cu" -o "$b/$name.o" 2> "$OUT/nvcc-cg-$name.txt" &
+      -DCR_P=$p -DCR_MODE=$mode -DCR_SPREAD=${spread:-0} -DCR_GRAIN=${grain:-1} -DCR_EXTRA=${extra:-0} \
+      -c "$S/cutlass_receipt_kernel.cu" -o "$b/$name.o" 2> "$OUT/nvcc-cg-$name.txt" &
     pids+=($!)
   done < "$S/cutlass_receipt.kernels"
   for pid in "${pids[@]}"; do wait "$pid" || bad=1; done
@@ -95,7 +100,8 @@ cgemm_build() {  # cutlass_receipt in $d with one object a line of cutlass_recei
   gzip -c "$d/cutlass_receipt-sass.txt" > "$OUT/cutlass_receipt-sass.txt.gz"
   stamp "build cutlass_receipt ok"
 }
-[[ " $STAGES " == *" cgemm "* || " $STAGES " == *" corun "* ]] && { cgemm_build || STAGES=${STAGES/cgemm/} STAGES=${STAGES/corun/}; }
+[[ " $STAGES " == *" cgemm "* || " $STAGES " == *" corun "* || " $STAGES " == *" cheat "* ]] \
+  && { cgemm_build || STAGES=${STAGES/cgemm/} STAGES=${STAGES/corun/} STAGES=${STAGES/cheat/}; }
 
 split() {
   for cfg in "$@"; do
@@ -246,6 +252,17 @@ corun() {
   fi
 }
 
+cheat() {  # each design beside its cheater variants (CR_EXTRA), every prefill shape, paired with the plain kernel each round
+  stamp "cutlass cheat"
+  if timeout --foreground 900 "$d/cutlass_receipt" --reps ${CG_REPS:-9} \
+      --shapes ${CHEAT_SHAPES:-p2048_qkv,p2048_o,p2048_gateup,p2048_down,p8192_qkv,p8192_o,p8192_gateup,p8192_down} \
+      ${CG_BUILD:+--only $CG_BUILD} > "$OUT/cutlass-cheat.json" 2> "$OUT/cutlass-cheat.err"; then
+    stamp "cutlass cheat ok"
+  else
+    stamp "cutlass cheat FAILED rc=$?"
+  fi
+}
+
 gap() {
   stamp "gap filler"
   if timeout --foreground 1500 "$PY" "$S/gap_filler.py" ${GAP_ARGS:-} > "$OUT/gap-filler.json" 2> "$OUT/gap-filler.err"; then
@@ -257,7 +274,7 @@ gap() {
 
 leased() {
   stamp "lease for: $*"
-  gpu-lease 1 --wait --max-min 30 -- bash -c "$(declare -f stamp split micro ncu_stage phi isa rgemm cgemm corun gap); $(declare -p OUT d S PY MODEL REV NCU METRICS); $*" \
+  gpu-lease 1 --wait --max-min 30 -- bash -c "$(declare -f stamp split micro ncu_stage phi isa rgemm cgemm corun cheat gap); $(declare -p OUT d S PY MODEL REV NCU METRICS); $*" \
     || stamp "lease for '$*' FAILED rc=$?"
 }
 [[ " $STAGES " == *" split "* ]] && leased split "'bf16 eager'" "'fp8 eager'" "'bf16 graphs'" "'fp8 graphs'"
@@ -271,6 +288,7 @@ leased() {
 [[ " $STAGES " == *" rgemm "* ]] && leased rgemm
 [[ " $STAGES " == *" cgemm "* ]] && leased cgemm
 [[ " $STAGES " == *" corun "* ]] && leased corun
+[[ " $STAGES " == *" cheat "* ]] && leased cheat
 [[ " $STAGES " == *" gap "* ]] && leased gap
 
 for rep in "$d"/ncu-*.ncu-rep; do

@@ -1,7 +1,8 @@
 # cutlass_receipt's kernels, one cutlass_receipt_kernel.cu object each (job.sh's cgemm stage):
-# name cfg var rounds p mode [spread [grain]]   (cfg 0 prefill, 1 decode; var 0 alu, 1 imad; L = 128 p / grain; mode 0
-# plain, 1 receipt, 2 dump; spread 1 interleaves the receipt over the k-tile's four k-blocks; grain 2 or 4 receipts every
-# chain after every second or every 32-deep k-block)
+# name cfg var rounds p mode [spread [grain [extra]]]   (cfg 0 prefill, 1 decode; var 0 alu, 1 imad; L = 128 p / grain;
+# mode 0 plain, 1 receipt, 2 dump, 3 extra only; spread 1 interleaves the receipt over the k-tile's four k-blocks; grain 2
+# or 4 receipts every chain after every second or every 32-deep k-block; extra X adds a cheater's X alu phi1 steps a thread
+# after every 32-deep k-block, on chains of its own)
 p_plain    0 0 1 1 0
 p_dump     0 0 1 1 2
 p_alu_p1   0 0 1 1 1
@@ -45,3 +46,17 @@ d_alu32_p1s 1 0 32 1 1 1
 d_alu_g4   1 0 1 1 1 0 4
 d_alu4_g4  1 0 4 1 1 0 4
 d_alu8_g4  1 0 8 1 1 0 4
+p_plain_x4    0 0 1 1 3 0 1 4
+p_plain_x8    0 0 1 1 3 0 1 8
+p_plain_x16   0 0 1 1 3 0 1 16
+p_imad_p1s_x2 0 1 1 1 1 1 1 2
+p_imad_p1s_x4 0 1 1 1 1 1 1 4
+p_imad_p1s_x8 0 1 1 1 1 1 1 8
+p_alu_g2_x2   0 0 1 1 1 0 2 2
+p_alu_g2_x4   0 0 1 1 1 0 2 4
+p_alu_g2_x8   0 0 1 1 1 0 2 8
+p_alu_g4_x1   0 0 1 1 1 0 4 1
+p_alu_g4_x2   0 0 1 1 1 0 4 2
+p_alu_g4_x4   0 0 1 1 1 0 4 4
+p_alu3_p1s_x2 0 0 3 1 1 1 1 2
+p_alu3_p1s_x4 0 0 3 1 1 1 1 4
