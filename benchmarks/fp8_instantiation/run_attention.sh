@@ -4,7 +4,7 @@
 # WikiText-2's test window 0 that must begin with those 2048).  Clocks are read, never set.
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd clone --custody-ttl 12h \
-#     --env GPU_LEASE_WHO=... --env D4A_CTX=2048 --env D4A_PLAN=grid|frontier|both [--env D4A_METHODS="..."] \
+#     --env GPU_LEASE_WHO=... --env D4A_CTX=2048 --env D4A_PLAN=grid|frontier|limbs|both [--env D4A_METHODS="..."] \
 #     [--env D4A_IDS=ids8192.npy --send ids8192.npy] --send benchmarks/fp8_instantiation/run_attention.sh \
 #     -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/run_attention.sh"'
 set -uo pipefail
@@ -41,9 +41,17 @@ frontier_plan() {
   for q in u1 u2 u4 u8; do for v in u1 u4 u16; do for p in d6 d8 d10 d12 d14; do m+=" int8-qk=$q-v=$v-p=$p-rot"; done; done; done
   echo "$m"
 }
+# P on two int8 limbs (`prow2`), its noise on the low limb: P alone, all four operands alike, and mixed alphabets.
+limbs_plan() {
+  m="bf16 ref int8-none-rot int8-prow2-none int8-prow2-none-rot"
+  for a in pm1 pm13 pm57 u1 u2 u4 u8 u16; do m+=" int8-prow2-p=$a"; for r in "" -rot; do m+=" int8-prow2-$a$r"; done; done
+  for q in u1 u2 u4 u8; do for v in u1 u4 u16; do for p in u4 u16; do m+=" int8-prow2-qk=$q-v=$v-p=$p-rot"; done; done; done
+  echo "$m"
+}
 case "${D4A_PLAN:-}" in
   grid) D4A_METHODS=$(grid_plan) ;;
   frontier) D4A_METHODS=$(frontier_plan) ;;
+  limbs) D4A_METHODS=$(limbs_plan) ;;
   both) D4A_METHODS="$(frontier_plan) $(grid_plan | sed 's/bf16 ref ref-rot//')" ;;
 esac
 [ -n "${D4A_METHODS:-}" ] || { echo "set D4A_PLAN or D4A_METHODS" >&2; exit 2; }

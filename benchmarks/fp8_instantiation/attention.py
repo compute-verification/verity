@@ -7,7 +7,8 @@ the tensor core returns (IMMA s8 x s8 -> s32 for int8; QMMA e4m3 with FP32 accum
 partial sum stays below 2^24 here):
 
     Q, K       one scale per (head, token): the row of head_dim entries the k-sum of S runs over
-    P          after the softmax, one scale per query row (`prow`), or the fixed 1/M (`pfix`)
+    P          after the softmax, one scale per query row (`prow`), or the fixed 1/M (`pfix`); `prow2` is P per row on two
+               int8 limbs, P = B P_hi + P_lo with B = 128 - max|n|, its noise on P_lo (P V costs two int8 matmuls)
     V          one scale per KV head (`vhead`) or per (KV head, channel) (`vchan`); the k-sum of O runs over tokens
 
 Noise is drawn per instance: a fresh draw for every entry of every query head's Q, K, P and V in every layer (K and V are
@@ -20,7 +21,7 @@ after, which preserves S = (Q R)(K R)^T and O = P V exactly before the edit.
 Method names are '-'-joined tokens:
 
     grid       `int8` (both matmuls), `e4m3` (both on E4M3's integers <= 16), `e4m3qk` (Q K^T on E4M3's integers, P V on int8)
-    P, V       `prow`/`pfix`, `vhead`/`vchan`
+    P, V       `prow`/`pfix`/`prow2`, `vhead`/`vchan`
     noise      an alphabet for all four operands: `none`, `pm1` {+-1}, `pm13` {+-1, +-3}, `pm57` {+-5, +-7}, `u1` ... `u16`
                uniform {-k..k}, `dE` sparse (+-1 each with probability 2^-E / 2, else 0); `qk`/`pv` limits it to that
                matmul's operands; `X=ALPHABET` sets operand X (`q`, `k`, `p`, `v`, `qk`, `pv`) alone
@@ -80,7 +81,7 @@ def parse(method: str) -> dict:
     for t in method.split("-"):
         if t in GRID_PAIRS or t in ("bf16", "ref"):
             spec["grid"] = t
-        elif t in ("prow", "pfix"):
+        elif t in ("prow", "pfix", "prow2"):
             spec["p"] = t
         elif t in ("vhead", "vchan"):
             spec["v"] = t
@@ -143,15 +144,23 @@ def exact_mm(a: torch.Tensor, b: torch.Tensor, term: int) -> torch.Tensor:
 
 
 def edit_p(p: torch.Tensor, mode: str, alphabet: str, top: int, causal: torch.Tensor, gen, device):
-    """P's integers (noise only where key <= query) and its scale."""
+    """P's int8 limbs with their weights, [(limb, weight)], and its scale; noise (only where key <= query) on the last
+    limb.  `prow2` splits P = B P_hi + P_lo with B = top + 1, P_hi in 0..127 and P_lo in 0..B-1, so P's grid has top
+    128 B - 1 and P_lo plus noise stays within int8."""
     if mode == "pfix":
         sp = torch.full_like(p[..., :1], 1.0 / top)
     else:
-        sp = p.amax(dim=-1, keepdim=True).clamp(min=1e-30) / top
-    pi = torch.round(p / sp).clamp(0, top)
+        sp = p.amax(dim=-1, keepdim=True).clamp(min=1e-30) / (128 * (top + 1) - 1 if mode == "prow2" else top)
+    if mode == "prow2":
+        pi = torch.round(p / sp).clamp(0, 128 * (top + 1) - 1)
+        hi = torch.floor(pi / (top + 1))
+        limbs = [(hi, top + 1), (pi - (top + 1) * hi, 1)]
+    else:
+        limbs = [(torch.round(p / sp).clamp(0, top), 1)]
     if alphabet != "none":
-        pi = pi + draw(alphabet, pi.shape, gen, device) * causal
-    return pi, sp
+        last = limbs[-1][0] + draw(alphabet, p.shape, gen, device) * causal
+        limbs[-1] = (last, 1)
+    return limbs, sp
 
 
 def edited_attention(module, query, key, value, attention_mask, scaling=None, dropout=0.0, **kwargs):
@@ -175,9 +184,12 @@ def edited_attention(module, query, key, value, attention_mask, scaling=None, dr
         m = {x: (gqk if x in "qk" else gpv)[0] - nmax[x] for x in OPERANDS}
         if min(m.values()) < 1:
             raise ValueError(f"{spec['method']}: its noise does not fit the grid ({m})")
+        plimb = 127 if spec["p"] == "prow2" else m["p"] + nmax["p"]
         STATE["record"] = {"tops": m, "acc_qk": gqk[1], "acc_pv": gpv[1],
                            "bound_qk": d * (m["q"] + nmax["q"]) * (m["k"] + nmax["k"]),
-                           "bound_pv": s * (m["p"] + nmax["p"]) * (m["v"] + nmax["v"])}
+                           "bound_pv": s * plimb * (m["v"] + nmax["v"])}
+        if spec["p"] == "prow2":
+            STATE["record"]["p_top"] = 128 * (m["p"] + 1) - 1
     out = torch.empty(b, s, H, d, dtype=query.dtype, device=dev)
     for g in range(G):
         qg = query[0, g * rep:(g + 1) * rep].float()
@@ -201,12 +213,13 @@ def edited_attention(module, query, key, value, attention_mask, scaling=None, dr
             scores = (qg @ kg.T) * scaling
         p = torch.softmax(scores.masked_fill(~causal, float("-inf")), dim=-1)
         if quantized:
-            pi, sp = edit_p(p, spec["p"], n["p"], m["p"], causal, gen, dev)
+            limbs, sp = edit_p(p, spec["p"], n["p"], m["p"], causal, gen, dev)
             vi, sv = quant(vg, m["v"], (0, 1) if spec["v"] == "vhead" else 0)
             vi = vi.expand(rep, s, d)
             if n["v"] != "none":
                 vi = vi + draw(n["v"], vi.shape, gen, dev)
-            o = (exact_mm(pi, vi, (m["p"] + nmax["p"]) * (m["v"] + nmax["v"])) * sp.double() * sv.double()).float()
+            oi = sum(w * exact_mm(limb, vi, plimb * (m["v"] + nmax["v"])) for limb, w in limbs)
+            o = (oi * sp.double() * sv.double()).float()
         else:
             o = p @ vg
         if R is not None:
@@ -270,8 +283,13 @@ def selftest() -> dict:
     assert parse("int8-qk=u4-p=d8-v=pm1")["n"] == {"q": "u4", "k": "u4", "p": "d8", "v": "pm1"}
     causal = torch.ones(50, 50, dtype=torch.bool, device=dev).tril()
     p = torch.softmax(torch.randn(2, 50, 50, device=dev).masked_fill(~causal, float("-inf")), -1)
-    pi, _ = edit_p(p, "prow", "u16", 111, causal, gen, dev)
+    [(pi, _)], _ = edit_p(p, "prow", "u16", 111, causal, gen, dev)
     assert bool((pi.triu(1) == 0).all()) and bool((pi.tril() != torch.round(p / (p.amax(-1, keepdim=True) / 111))).any())
+    [(hi, base), (lo, _)], sp = edit_p(p, "prow2", "none", 111, causal, gen, dev)
+    assert base == 112 and float(hi.max()) == 127 and 0 <= float(lo.min()) and float(lo.max()) <= 111
+    assert torch.allclose((base * hi + lo) * sp, p, atol=float(sp.max()) / 2 + 1e-12)
+    [(hi, base), (lo, _)], _ = edit_p(p, "prow2", "u16", 111, causal, gen, dev)
+    assert float(lo.min()) >= -16 and float(lo.max()) <= 127 and bool((lo.triu(1) == 0).all())
     L = transformers.models.llama.modeling_llama
     torch.manual_seed(0)
     cfg = L.LlamaConfig(vocab_size=512, hidden_size=256, intermediate_size=512, num_hidden_layers=2, num_attention_heads=8,
@@ -281,13 +299,16 @@ def selftest() -> dict:
     ids = torch.randint(0, 512, (1, 96), device=dev)
     runs = {m: evaluate(model, ids, m) for m in ("bf16", "ref", "ref-rot", "int8-none", "int8-pfix-vhead-none",
                                                  "int8-u16", "int8-rot-u16", "e4m3-none", "e4m3-pm57-rot", "int8-u4-qk",
-                                                 "int8-u4-pv-s2", "e4m3qk-qk=u4-v=u2-p=d6-rot", "int8-p=d2")}
+                                                 "int8-u4-pv-s2", "e4m3qk-qk=u4-v=u2-p=d6-rot", "int8-p=d2",
+                                                 "int8-prow2-none", "int8-prow2-p=u16-rot")}
     out["tiny"] = {m: {k: r[k] for k in ("ppl", "attn_rel_err", "exact") if k in r} for m, r in runs.items()}
     assert abs(runs["ref"]["ppl"] / runs["bf16"]["ppl"] - 1) < 1e-2, out
     assert abs(runs["ref-rot"]["ppl"] / runs["ref"]["ppl"] - 1) < 1e-3, out
     assert runs["int8-none"]["attn_rel_err"] < runs["int8-u16"]["attn_rel_err"], out
     assert runs["int8-none"]["attn_rel_err"] < runs["e4m3-none"]["attn_rel_err"], out
     assert runs["e4m3qk-qk=u4-v=u2-p=d6-rot"]["tops"] == {"q": 12, "k": 12, "p": 126, "v": 125}
+    assert runs["int8-prow2-none"]["attn_rel_err"] <= runs["int8-none"]["attn_rel_err"], out
+    assert runs["int8-prow2-p=u16-rot"]["p_top"] == 14335 and runs["int8-prow2-p=u16-rot"]["exact"]
     try:
         evaluate(model, ids, "e4m3-u16")
         raise AssertionError("e4m3-u16 must not fit")
