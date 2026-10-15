@@ -360,6 +360,18 @@ def simulate(s: Schedule, diffs: list[tuple[int, int]], samples: int, seed: int,
     return {"samples": samples, "hits": hit, "log2p": math.log2(hit / samples) if hit else None}
 
 
+def schedule_lines(kind: str, kseed: int, n: int = B2) -> list[str]:
+    """`trails.c`'s schedule, one line "a1 r1 a2 r2" per position: duo (lane 2 a copy of lane 1), duo2's two lanes, or
+    one duo2 lane alone as lane 1 (duo2-lane1, duo2-lane2)."""
+    ka = [twins.gen(kseed, 1, i, 0) | 1 for i in range(n)]
+    kb = [twins.gen(kseed, 2, i, 0) | 1 for i in range(n)]
+    r1 = [twins.R1[i % 31] for i in range(n)]
+    r2 = [twins.R2[i % 29] for i in range(n)]
+    lanes = {"duo": (ka, [twins.rot_of(i) for i in range(n)]) * 2, "duo2": (ka, r1, kb, r2),
+             "duo2-lane1": (ka, r1) * 2, "duo2-lane2": (kb, r2) * 2}[kind]
+    return [" ".join(str(c[i]) for c in lanes) for i in range(n)]
+
+
 def parse_starts(spec: str) -> list[int]:
     out = []
     for part in spec.split(","):
@@ -379,7 +391,13 @@ def main() -> int:
     a.add_argument("--starts", default="0-255")
     a.add_argument("--kseed", type=lambda x: int(x, 0), default=0xC0FFEE11)
     a.add_argument("--no-fold", action="store_true")
+    b = sub.add_parser("schedule")
+    b.add_argument("--kind", choices=("duo", "duo2", "duo2-lane1", "duo2-lane2"), default="duo")
+    b.add_argument("--kseed", type=lambda x: int(x, 0), default=0xC0FFEE11)
     args = ap.parse_args()
+    if args.cmd == "schedule":
+        print("\n".join(schedule_lines(args.kind, args.kseed)))
+        return 0
     s = Schedule(args.kseed)
     trail, stats = search(s, parse_starts(args.starts), args.bound, args.key, args.k1, args.k2, not args.no_fold)
     print(json.dumps({"key": args.key, "k1": args.k1, "k2": args.k2, "bound": args.bound, "starts": args.starts,
