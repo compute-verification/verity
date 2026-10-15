@@ -7,7 +7,7 @@ import Proofs.Flock.Claims.Prob
 accepted reruns; it returns the first assembled candidate that `check` accepts.
 
 * **Worst case** (`ERep_runs_le`): at most `1 + m·K` reruns, on every prover, tape and coin (the first half of
-  `ERepCost`).
+  `ERepCost`; the expected half, and `ERepCost` itself, are in `ERepCost`).
 * **The bad event factors** (`ERep_bad_le`): when `check` is sound for `R`, `E^rep` fails on an accepted run only if
   every wait fails, and the waits are independent given the tape, so
   `Pr[acc ∧ ¬R(x, E^rep)] ≤ 𝔼_ω[ε_ω · f_ω^m]`, with `ε_ω` the acceptance probability at tape `ω` and `f_ω` one wait's
