@@ -868,6 +868,8 @@ def test_researchs_store_eviction_also_deletes_unused_source_trees_and_says_what
     for u in ("store_evict.service", "store_evict.timer", "store_evict_research.service", "store_evict_research.timer"):
         assert f'"$SRC/$u"' in (SKY / "cluster_up.sh").read_text() and f'src = "tools/research/src/research/pods/nebius/sky/{u}"' in deploy
     assert 'ExecCondition=/bin/grep -qs "timed False" /workspace/pouw/fill/status.txt' in (SKY / "store_evict_timed.conf").read_text()
+    assert deploy.count('path = "/usr/local/bin/vy-store-evict"\nsrc = "tools/research/src/research/pods/nebius/sky/store_evict.sh"\nmode = "755"\n') == 2, \
+        "a fresh install gets the repository's mode (644): systemd's 203/EXEC on cpu-1, 15 Oct"
     unit = (SKY / "store_evict_research.service").read_text()   # cpu-1's copy of the unit cluster_up.sh writes on node 1
     assert "User=research\n" in unit and "VY_EVICT_STORE=/workspace/research/store VY_EVICT_RUNS=/workspace/research/runs" in unit
     assert "ExecStart=/usr/local/bin/vy-store-evict\n" in unit and "OnUnitActiveSec=30min\n" in (SKY / "store_evict_research.timer").read_text()

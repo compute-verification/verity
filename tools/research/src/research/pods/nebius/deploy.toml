@@ -321,6 +321,7 @@ owner = "infra"
 [[file]]
 path = "/usr/local/bin/vy-store-evict"
 src = "tools/research/src/research/pods/nebius/sky/store_evict.sh"
+mode = "755"
 nodes = ["vy-nebius-1", "vy-nebius-2"]
 run = ["systemd:vy-store-evict.timer", "systemd:vy-store-evict-research.timer"]
 owner = "infra"
@@ -328,6 +329,7 @@ owner = "infra"
 [[file]]  # cpu-1 runs only research's pass (no job-pod store there)
 path = "/usr/local/bin/vy-store-evict"
 src = "tools/research/src/research/pods/nebius/sky/store_evict.sh"
+mode = "755"
 nodes = ["vy-nebius-cpu-1"]
 run = ["systemd:vy-store-evict-research.timer"]
 owner = "infra"
