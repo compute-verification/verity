@@ -43,10 +43,7 @@ SYNONYMS = {
 #: (file, flag): how many definitions existed when this test landed (14 Oct 2026); shrink it, never grow it
 KNOWN = {
     ("infra/cluster/src/cluster/cli.py", "--by"): 1,
-    ("infra/cluster/src/cluster/cli.py", "--node"): 3,
-    ("infra/cluster/src/cluster/usage.py", "--node"): 1,
     ("infra/ops/verity_ops/deploy.py", "--by"): 2,
-    ("infra/ops/verity_ops/deploy.py", "--node"): 1,
     ("infra/ops/verity_ops/keeper.py", "--by"): 1,
     ("tools/research/src/research/approaches.py", "--by"): 1,
     ("tools/research/src/research/cli.py", "--by"): 1,

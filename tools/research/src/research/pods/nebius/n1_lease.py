@@ -46,7 +46,7 @@ LocalQueue they are submitted to. Circuits' holders use `deployments-gpu-pool`, 
 **Blocked.** While `$GPU_LEASE_DIR/blocked` exists (gpu_stray.py writes it when a process of the pool's pods runs on a GPU it
 holds no lease for; a person removes it once that's cleared), the pool grants nothing new: leases already held go on, every
 other pool GPU is fenced and its holder deleted, and pending holders are cancelled.
-**The brain.** With `$VY_LEASE_BRAIN` set (a command, e.g. `ssh vy-cluster cluster grant --node vy-nebius-1`), each tick sends
+**The brain.** With `$VY_LEASE_BRAIN` set (a command, e.g. `ssh vy-cluster cluster grant --on vy-nebius-1`), each tick sends
 it the state as JSON on stdin and reads `{"grants": {"<pid>": [index, ...]}, "pool_target": N}`. While it answers, this controller
 holds `agent.lock`, so every request queues for a grant (gpu-lease agent mode); after `BRAIN_MISSES` failures in a row it drops the
 lock and the requests fall back to gpu-lease's local rules in place.

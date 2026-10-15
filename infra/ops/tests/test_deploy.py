@@ -334,8 +334,9 @@ def test_drift_is_clean_once_everything_is_mains_and_nothing_strays(world, capsy
     assert deploy.main(["drift", "--json", "--no-fetch"], run=local, manifest=world["manifest"], repo=world["repo"]) == 0
     assert json.loads(capsys.readouterr().out)["n"]["entries"]
     assert deploy.main(["drift", "--node", "zz", "--node", "n", "--no-fetch"], run=local, manifest=world["manifest"],
-                       repo=world["repo"]) == 2                                   # a repeated --node adds, never replaces
-    assert "no node 'zz'" in capsys.readouterr().err
+                       repo=world["repo"]) == 2                                   # a repeated --on adds, never replaces
+    err = capsys.readouterr().err                                                  # --node: the old spelling, a hidden alias
+    assert "no node 'zz'" in err and err.count("research deploy: --node is now --on") == 1
 
 
 def test_an_entry_whose_source_the_ref_lacks_is_absent_and_a_ref_deploys_its_own_manifest(world):
