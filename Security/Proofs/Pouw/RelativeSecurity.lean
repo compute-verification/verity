@@ -1424,6 +1424,66 @@ def gemmGates (κ₀ κa : ℕ) : MatGates gemmKind (gemmPrice κ₀ κa) κ₀ 
   time_sub_le a b := by
     simp [gemmSub, Circ.prog, Circ.gates, flatPair, unflat, progOf, timeB, gemmPrice]
 
+/-! ### sm_120 (RS-MODEL §4) -/
+
+/-- RS-MODEL's sm_120 gate kinds, per warp instruction. -/
+inductive K120
+  | mma | mmaTf32 | imad | dp4a | hfma2 | ffma | alu | ldst
+
+/-- RS-MODEL's `price120`, the LP dual of Model A's census rows, in u per warp instruction. -/
+def price120 : K120 → ℕ
+  | .mma => 4096 | .mmaTf32 => 4096 | .imad => 128 | .dp4a => 128 | .hfma2 => 64 | .ffma => 32 | .alu => 32
+  | .ldst => 32
+
+/-- **Model B on sm_120 as a `MatMachine`**, with one worst-case constant: `κ = 16` u per product (an s32 product as
+4 × 4 int8 limb products on the tensor pipe at 1 u each) and `κadd = 1` u per entry (one ALU lane). It reads the
+kinds' silicon semantics `kd` and the circuits `G` over them (named hypothesis `Gemm120`). -/
+def matMachine120 (kd : K120 → Kind) (G : MatGates kd price120 16 1) : MatMachine ℤ := matMachine G
+
+theorem matMachine120_κ (kd : K120 → Kind) (G : MatGates kd price120 16 1) : (matMachine120 kd G).κ = 16 := rfl
+
+theorem matMachine120_κadd (kd : K120 → Kind) (G : MatGates kd price120 16 1) : (matMachine120 kd G).κadd = 1 :=
+  rfl
+
+/-- **The sm_120 circuits** (a named hypothesis): over the kinds' silicon semantics `kd`, exact circuits for the
+matrix operations over ℤ at 16 u per product and 1 u per entry. RS-MODEL prices sm_120's kinds and gives them no
+semantics, so this is where `mma`'s exact semantics and the limb decomposition enter. -/
+def Gemm120 (kd : K120 → Kind) : Prop := Nonempty (MatGates kd price120 16 1)
+
+/-- **The width-typed refinement** (the open item): on the int8 grid a product costs 1 u, not the worst case's 16
+(RS-MODEL's `gemm120`: `n³` u for the `m16n8k32` tile GEMM), so the edited product on the grid would be priced `n³` u.
+Stated for int8 operands on tile-multiple shapes, with the s32 accumulator exact (`b ≤ 2^17`). Using it needs
+`MatMachine.mul` typed by operand grid, so that `κ` can depend on the operands' widths. -/
+def Int8Gemm120 (kd : K120 → Kind) : Prop :=
+  ∀ a b c : ℕ, 16 ∣ a → 32 ∣ b → 8 ∣ c → b ≤ 2 ^ 17 → ∃ m : Circ kd (Mat ℤ a b × Mat ℤ b c) (Mat ℤ a c),
+    (∀ x : Mat ℤ a b × Mat ℤ b c, (∀ i k, -128 ≤ x.1 i k ∧ x.1 i k ≤ 127) → (∀ k j, -128 ≤ x.2 k j ∧ x.2 k j ≤ 127) →
+      m.eval x = x.1 * x.2) ∧ timeB price120 m.prog ≤ a * b * c
+
+/-- **Route (c) on sm_120**: `relativelySecure_of_editFloor` in Model B at sm_120's prices and the worst-case
+constant: reference `N = 16 n³` u, `ε = U / F − 1` with `U = 16 n³ + 2 n² + time gen + time prove`, and
+`γ = (2 n² + time gen + time prove) / (16 n³)`. -/
+theorem relativelySecure_edited120 (kd : K120 → Kind) (G : MatGates kd price120 16 1) (S : Service) {n : ℕ}
+    (hn : 0 < n) (E : (matMachine120 kd G).Edit S.Seed n)
+    (prove : (matMachine120 kd G).Alg ((S.Seed × (Mat ℤ n n × Mat ℤ n n) × S.Coins) × Mat ℤ n n) (S.Com × S.Ans))
+    {κf δ η F : ℝ}
+    (hcom : ∀ (σ σ' : S.Seed) (y : (Mat ℤ n n × Mat ℤ n n) × S.Coins) (C C' : Mat ℤ n n),
+      ((matMachine120 kd G).eval prove ((σ, y), C)).1 = ((matMachine120 kd G).eval prove ((σ', y), C')).1)
+    (hacc : ∀ x : Mat ℤ n n × Mat ℤ n n, 1 - η ≤ prob fun ω : S.Seed × S.Coins =>
+      S.verify ((matMachine120 kd G).eval prove ((ω.1, x, ω.2), E.product ω.1 x)).1 ω.1
+        ((matMachine120 kd G).eval prove ((ω.1, x, ω.2), E.product ω.1 x)).2 = true)
+    (hfloor : (matMachine120 kd G).EditFloor S E prove F κf) (hκδ : κf < δ) (hF : 0 < F)
+    (hFU : F ≤ 16 * (n : ℝ) ^ 3 + 2 * (n : ℝ) ^ 2 + (matMachine120 kd G).time E.gen +
+      (matMachine120 kd G).time prove) :
+    RelativelySecure ((matMachine120 kd G).edited S E prove)
+      ((16 * (n : ℝ) ^ 3 + 2 * (n : ℝ) ^ 2 + (matMachine120 kd G).time E.gen + (matMachine120 kd G).time prove) / F -
+        1) δ
+      ((2 * (n : ℝ) ^ 2 + (matMachine120 kd G).time E.gen + (matMachine120 kd G).time prove) / (16 * (n : ℝ) ^ 3)) η 0
+      (16 * (n : ℝ) ^ 3) := by
+  have h := (matMachine120 kd G).relativelySecure_of_editFloor S E prove hcom hacc hfloor hκδ hF
+    (by rw [matMachine120_κ, matMachine120_κadd, mul_one]; exact hFU)
+    (by rw [matMachine120_κ]; exact mul_pos (by norm_num) (pow_pos (Nat.cast_pos.mpr hn) 3))
+  rwa [matMachine120_κ, matMachine120_κadd, mul_one] at h
+
 end ModelB
 
 end ModelB
