@@ -60,3 +60,16 @@ p_alu_g4_x2   0 0 1 1 1 0 4 2
 p_alu_g4_x4   0 0 1 1 1 0 4 4
 p_alu3_p1s_x2 0 0 3 1 1 1 1 2
 p_alu3_p1s_x4 0 0 3 1 1 1 1 4
+p_plain_x32   0 0 1 1 3 0 1 32
+p_plain_x64   0 0 1 1 3 0 1 64
+p_imad_p1s_x16 0 1 1 1 1 1 1 16
+p_imad_p1s_x32 0 1 1 1 1 1 1 32
+p_alu_g2_x1   0 0 1 1 1 0 2 1
+p_alu_g2_x3   0 0 1 1 1 0 2 3
+p_alu_g2_x6   0 0 1 1 1 0 2 6
+p_alu_g2_x12  0 0 1 1 1 0 2 12
+p_alu_g4_x3   0 0 1 1 1 0 4 3
+p_alu_g4_x6   0 0 1 1 1 0 4 6
+p_alu_g4_x8   0 0 1 1 1 0 4 8
+p_alu3_p1s_x1 0 0 3 1 1 1 1 1
+p_alu3_p1s_x8 0 0 3 1 1 1 1 8
