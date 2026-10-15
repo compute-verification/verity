@@ -82,7 +82,17 @@ which is the headline, and against the measured one beside it. The figures above
 TB/s. The RTX PRO 6000 Server Edition is specified at 1.597 TB/s, which no measured kernel reaches, so at spec every
 reading also carries that gap: \(\gamma_{\text{spec}} = 1 - (1 - \gamma_{\text{meas}})\,R_{\text{meas}}/R_{\text{spec}}\),
 about 7.5% for the worst stated window. The 1% per window holds at the measured \(R\) only. The two-machine sessions
-(#1948) read 0.118 at spec and 0.085 at their own measured 1.5395 TB/s.
+over an 85 GiB store read 0.0997 and 0.0999 at spec and 0.0659 and 0.0661 at the measured read rate, both
+honest sessions accepted and a prover dropping 1/16 of its blocks rejected in its first window (#2005, #2028;
+verifier r20261014-193042-3d4f, prover r20261014-193057-8fec). Either reading's \(R\) is the verifier's, never the
+prover's: a node's own calibration can only raise it, because every term but the timing term is a fixed byte count
+over \(R\Sigma\), and a prover reporting a slower read would shrink them all with no more bytes read (MEM-24: 0.066 read as
+0.0057 at the slowest calibration still accepted). The measured reading takes the fastest read the verifier has seen on
+the GPU, 1,539 GB/s (`benchmarks/remote_session/verifier.py`'s `MEASURED_BYTES_PER_S`). \(R\) is the rate of plain, incompressible reads,
+which the store's encoded blocks are: the GPU's compression engine reads a compressible buffer faster
+(7.55 TB/s against 1.536 TB/s plain, r20261015-043430-0a05), but the encoded store reads at 1.515 TB/s under a
+compressible allocation, since the hardware compresses 128-byte units, one codec word, and no encoded word is constant
+(the red team's runs r20261015-062054-6945 and r20261015-062750-5541). Other work's reads are bounded in bus time, not in logical bytes (MEM-22).
 
 What the record says is conservation: correct receipts, at least \((1-\gamma)\) of the declared capacity. The prover
 is one undifferentiated resource of capacity \(R\) (Daniel, 12 Oct, #1884): the guarantee is over whatever reads the

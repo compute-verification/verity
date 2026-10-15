@@ -79,11 +79,12 @@ class TickingBackend(prover.CpuBackend):
         return out
 
 
-def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sessions: int = 1, checks=None):
+def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sessions: int = 1, checks=None,
+        read_bytes_per_s: float = 1e20):
     clock = PassClock()
     a, b = socket.socketpair()
     vconn, pconn = wire.Conn(a, clock=clock.now), wire.Conn(b)
-    backend = TickingBackend(clock, blocks, random.Random(7), read_bytes_per_s=1e20)
+    backend = TickingBackend(clock, blocks, random.Random(7), read_bytes_per_s=read_bytes_per_s)
     p = prover.ProverSide(pconn, backend, b"test-node", prover.parse_plan(plan), seed=11, log=lambda m: None)
     results = []
 
@@ -118,6 +119,17 @@ def test_an_honest_session_is_accepted_with_its_ledger(monkeypatch):
     assert set(lg["terms"]) == set(audit.LEDGER_SOURCES) and lg["gamma"] > 0
     assert all(len(d) == 6 for d in r["draws"].values())
     assert all(w["slack_ns"] >= 0 for w in r["windows_seen"])
+
+
+def test_a_prover_reporting_a_slow_read_cannot_lower_either_ledgers_capacity(monkeypatch):
+    """MEM-24: the capacity is the verifier's, and the prover's calibration can only raise it."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    (slow,), _ = run("honest", read_bytes_per_s=1.0)
+    (fast,), _ = run("honest", read_bytes_per_s=1e20)
+    assert slow["ledger"]["inputs"]["reported_read_bytes_per_s"] == 1.0
+    assert slow["ledger"]["measured"]["capacity_bytes_per_s"] == verifier.MEASURED_BYTES_PER_S
+    assert slow["ledger"]["spec"]["capacity_bytes_per_s"] == verifier.SPEC_BYTES_PER_S
+    assert fast["ledger"]["measured"]["capacity_bytes_per_s"] == fast["ledger"]["spec"]["capacity_bytes_per_s"] == 1e20
 
 
 def test_a_second_session_waits_out_the_first_and_is_accepted():
