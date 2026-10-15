@@ -79,6 +79,7 @@ struct Chain {
   cudaStream_t st, st2, sg, sh;   // st and st2 the default priority, sg and sh the greatest
   std::vector<cudaEvent_t> ev_out, ev_hash;
   std::vector<bool> hash_pending;
+  uint8_t* roots = nullptr;   // the gate's: X_j's root copied to roots + 64 j after its commitment
 };
 
 static void setup(Chain& C, Keys* keys, int m, int k, int S, int nbuf, uint64_t seed) {
@@ -177,6 +178,7 @@ static void commit(Chain& C, int b, int j, cudaStream_t st, int parts = 7) {
     }
     if (width > 1) s512_tree_small<<<1, 64, 0, st>>>(args({tree + 64ull * off, dom}, {width, level}));
   }
+  if (C.roots && parts == 7) CK(cudaMemcpyAsync(C.roots + 64ull * j, C.tree + 64ull * (2 * m - 2), 64, cudaMemcpyDeviceToDevice, st));
 }
 static uint8_t* root(Chain& C) { return C.tree + 64ull * (2 * C.m - 2); }
 
@@ -243,7 +245,10 @@ static void dump(const std::string& path, const void* p, size_t bytes) {
 }
 
 // every arm's X_1 .. X_S (each buffer filled with 0xA5 first), and the lt arm's row digests and roots of X_1 .. X_S; the
-// control arm "none" skips step 0's GEMM, so its X_1 stays poisoned and ref.py must reject it
+// control arm "none" skips step 0's GEMM, so its X_1 stays poisoned and ref.py must reject it. Then the timed overlapped
+// arms on two buffers, so that a step overwrites a buffer whose commitment is in flight: their roots (poisoned first) and
+// X_S, which ref.py compares with the serial ones
+static const char* OVERLAP[] = {"lt/1h", "lt/1o", "lt/1g", "kP/1h", "kW/1h", "kW/2h"};
 static int cmd_gate(const std::string& dir, const std::string& kdir, int m, int k, int S, uint64_t seed) {
   Keys keys(kdir, m);
   Chain C;
@@ -269,9 +274,28 @@ static int cmd_gate(const std::string& dir, const std::string& kdir, int m, int 
     CK(cudaGetLastError());
     for (int s = 1; s <= S; s++) dump(dir + "/" + names[g] + "_X" + std::to_string(s) + ".bin", C.X[s], (size_t)m * k);
   }
+  std::string ov;
+  for (const char* name : OVERLAP) {
+    Chain O;
+    setup(O, &keys, m, k, S, 2, seed);
+    CK(cudaMalloc(&O.roots, 64ull * (S + 1)));
+    CK(cudaMemset(O.roots, 0xA5, 64ull * (S + 1)));
+    for (int b = 1; b < O.nbuf; b++) CK(cudaMemset(O.X[b], 0xA5, (size_t)m * k));
+    CK(cudaDeviceSynchronize());
+    const Arm a = parse_arm(name);
+    run_chain(O, a);
+    CK(cudaStreamSynchronize(gemm_stream(O, a)));
+    CK(cudaDeviceSynchronize());
+    CK(cudaGetLastError());
+    std::string tag = name;
+    std::replace(tag.begin(), tag.end(), '/', '_');
+    dump(dir + "/ovl_" + tag + "_roots.bin", O.roots, 64ull * (S + 1));
+    dump(dir + "/ovl_" + tag + "_XS.bin", O.X[S % O.nbuf], (size_t)m * k);
+    ov += std::string(ov.empty() ? "" : ", ") + "\"" + tag + "\"";
+  }
   FILE* f = fopen((dir + "/meta.json").c_str(), "w");
-  fprintf(f, "{\"m\": %d, \"k\": %d, \"S\": %d, \"seed\": %llu, \"arms\": [\"lt\", \"kP\", \"kW\"], \"control\": \"none\"}\n", m, k, S,
-          (unsigned long long)seed);
+  fprintf(f, "{\"m\": %d, \"k\": %d, \"S\": %d, \"seed\": %llu, \"arms\": [\"lt\", \"kP\", \"kW\"], \"control\": \"none\", \"overlap\": [%s]}\n",
+          m, k, S, (unsigned long long)seed, ov.c_str());
   fclose(f);
   printf("gate dumped m %d k %d S %d to %s\n", m, k, S, dir.c_str());
   return 0;
@@ -349,7 +373,7 @@ int main(int argc, char** argv) {
     std::vector<std::string> shapes;
     for (int i = 4; i < argc; i++) shapes.push_back(argv[i]);
     const char* env = getenv("ARMS");
-    std::string s = env && *env ? env : "lt/0 kP/0 kW/0 lt/1 lt/2 lt/4 lt/1o kW/1 kW/1o hash rowdig leaves tree";
+    std::string s = env && *env ? env : "lt/0 kP/0 kW/0 lt/1 lt/2 lt/4 lt/1h lt/2h lt/4h kW/1h kW/2h kW/4h hash rowdig leaves tree";
     std::vector<std::string> arms;
     for (size_t p = 0; p < s.size();) {
       size_t q = s.find(' ', p);

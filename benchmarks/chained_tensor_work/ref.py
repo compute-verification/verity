@@ -1,6 +1,7 @@
 """The gate on a `chain gate` dump: every arm's X_1 .. X_S bit for bit against the CPU chain, the lt arm's row digests and
-roots against `rowleaf.sha512_row_seg_digest` and `audit.commit_rows` (HM96, gen.py's salt key and domains), and the
-control arm (step 0's GEMM skipped, its output left poisoned) rejected. One JSON line; exit 1 on any failure.
+roots against `rowleaf.sha512_row_seg_digest` and `audit.commit_rows` (HM96, gen.py's salt key and domains), the control
+arm (step 0's GEMM skipped, its output left poisoned) rejected, and each overlapped arm's roots and X_S (two buffers, so its
+steps overwrite buffers under commitment) equal to the serial ones. One JSON line; exit 1 on any failure.
 
 The CPU chain: C_s = X_s W_s in float64, exact because |C| <= k 128^2 <= 2^27 < 2^53, then C_s's s32 words little-endian as
 X_{s+1}'s bytes.
@@ -72,6 +73,13 @@ def main(d: Path) -> int:
     res["rowdig_mismatches"] = int(dig_bad)
     res["roots_match"] = roots_ok
     ok &= dig_bad == 0 and all(roots_ok)
+    for tag in meta.get("overlap", []):
+        c = int(tag.split("_")[1].rstrip("ohg"))
+        roots = (d / f"ovl_{tag}_roots.bin").read_bytes()
+        same = [roots[64 * j: 64 * j + 64] == (d / f"root{j}.bin").read_bytes() for j in range(c, steps + 1, c)]
+        xs_bad = int((np.fromfile(d / f"ovl_{tag}_XS.bin", np.int8).reshape(m, k) != ref[-1]).sum())
+        res[f"ovl_{tag}"] = {"roots_match": same, "xs_mismatches": xs_bad}
+        ok &= bool(same) and all(same) and xs_bad == 0
     res["max_abs_c_log2"] = round(float(np.log2(np.abs(ref[-1].view("<i4").astype(np.int64)).max() + 1)), 2)
     res["x_last_bytes"] = byte_stats(ref[-1])
     res["pass"] = bool(ok)

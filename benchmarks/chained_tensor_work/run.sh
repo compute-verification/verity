@@ -8,7 +8,7 @@
 #   research run --on vy-nebius-2 --project verity --campaign cmp-12 --source . --cwd clone --env GPU_LEASE_WHO=T2 \
 #     --send benchmarks/chained_tensor_work/run.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/run.sh"'
 # STAGE=build|gate|all (default all); REPS (default 25); SHAPES (name:m:k:S ...); ARMS (chain.cu's); NCU (default 1);
-# VERIFY (M:K ..., or none)
+# VERIFY (M:K ..., or none). Exit 1 if any part's rc (rc.txt) is not 0.
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -26,7 +26,7 @@ python3 $D/sass_epilogue.py "$B/chain.sass" > "$O/sass-epilogue.json"; echo "sas
 cat "$O/sass-epilogue.json"
 grep -A400 "Function : .*p_plain" "$B/chain.sass" | gzip -c > "$O/p_plain.sass.gz"
 grep -A400 "Function : .*w_plain" "$B/chain.sass" | gzip -c > "$O/w_plain.sass.gz"
-export SHAPES=${SHAPES:-"big:8192:8192:32 mid:8192:4096:48 small:4096:4096:64"}
+export SHAPES=${SHAPES:-"big:8192:8192:32 mid:8192:4096:48 wide:4096:16384:12 small:4096:4096:64"}
 python3 $D/gen.py "$B/keys" 64 128 256 512 4096 8192 || { echo "gen failed"; exit 4; }
 [ "$STAGE" = build ] && exit 0
 
@@ -58,15 +58,18 @@ gpu-lease 1 --wait --max-min 30 -- bash -c '
   [ "$NCU" = 1 ] && for arm in lt/0 kP/0 kW/0 hash; do
     a=${arm//\//_}
     ncu --clock-control none --profile-from-start off --launch-count 12 --metrics $M --csv "$B/chain" one "$B/keys" $arm 8192 8192 4 \
-      > "$O/ncu-big-$a.csv" 2>&1 || echo "ncu big $arm rc $?" >> "$O/rc.txt"
-  done' > "$O/lease-bench.txt" 2>&1
-cat "$O/rc.txt"
+      > "$O/ncu-big-$a.csv" 2>&1; echo "ncu big $arm rc $?" >> "$O/rc.txt"
+  done
+  true' > "$O/lease-bench.txt" 2>&1 || echo "bench lease rc $?" >> "$O/rc.txt"
 head -c 3000 "$O/bench.jsonl" | cut -c1-400
 
 VERIFY=${VERIFY:-8192:8192 4096:4096 4096:16384}
 for v in $VERIFY; do
   [ "$v" = none ] && continue
   IFS=: read -r vm vk <<< "$v"
-  python3 $D/verify.py "$vm" "$vk" 1 8 64 128 >> "$O/verify.jsonl" 2>> "$O/verify.err" || echo "verify $v rc $?" >> "$O/rc.txt"
+  python3 $D/verify.py "$vm" "$vk" 1 8 64 128 >> "$O/verify.jsonl" 2>> "$O/verify.err"
+  echo "verify $v rc $?" >> "$O/rc.txt"
 done
-cat "$O/verify.jsonl"
+[ -f "$O/verify.jsonl" ] && cat "$O/verify.jsonl"
+cat "$O/rc.txt"
+! grep -qv ' rc 0$' "$O/rc.txt"

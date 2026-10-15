@@ -2,7 +2,8 @@
 kernel of a `cuobjdump -sass` dump, a forward pass from the last IMMA over the rest of the function, tracking the registers
 an IMMA wrote until another instruction overwrites them, and counting by opcode every instruction that reads one. Zero
 readers other than stores means X_{s+1}'s bytes are the raw s32 words, with no conversion between the tensor core and
-memory. One JSON object; exit 1 if any reader is not a store.
+memory. One JSON object over every plain kernel; exit 1 if a reader of one the chain launches (CHAIN) is not a store. The
+other plain kernels' counts include their loop's address and barrier registers, which the pass can't tell from accumulators.
 
     python3 sass_epilogue.py DUMP
 """
@@ -18,6 +19,7 @@ FUNC = re.compile(r"Function : (\S+)")
 INSN = re.compile(r"/\*[0-9a-f]{4,}\*/\s+(?:@!?U?P\w+\s+)?([A-Z][A-Z0-9_.]*)\s*([^;]*);")
 REG = re.compile(r"\bR(\d+)\b")
 STORES = ("STG", "STS", "ST", "STL")
+CHAIN = ("p_plain", "w_plain")
 
 
 def regs(operand: str, width: int = 1) -> set[int]:
@@ -76,7 +78,8 @@ def main(path: str) -> int:
             funcs[cur].append((i.group(1), i.group(2)))
     res = {name: analyse(body) for name, body in funcs.items() if "plain" in name}
     print(json.dumps(res, indent=1, sort_keys=True))
-    return 0 if res and all(r.get("non_store_readers", 1) == 0 for r in res.values()) else 1
+    chain = [r for name, r in res.items() if any(c in name for c in CHAIN)]
+    return 0 if len(chain) == len(CHAIN) and all(r.get("non_store_readers", 1) == 0 for r in chain) else 1
 
 
 if __name__ == "__main__":
