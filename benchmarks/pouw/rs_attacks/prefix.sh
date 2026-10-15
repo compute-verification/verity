@@ -37,7 +37,8 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-15}" -- bash -c '
     for r in 1 4 8; do run dp4a $r $w $BLOCKS; done
     for r in 1 2 4; do run imad $r $w $BLOCKS; done
     for r in 1 2 3 4 8; do run ffma $r $w $BLOCKS; done
-    for r in 1 4; do run mix $r $w $BLOCKS; done
+    for r in 1 2 4 8; do run ffma2 $r $w $BLOCKS; done
+    for m in 16 32 48; do run mix$m 1 $w $BLOCKS; done
   done
   q
 '
