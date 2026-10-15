@@ -8,6 +8,8 @@
 //
 //   merge check N_DIGITS TILES SEED LO HI BIAS   one JSON line: words checked, mismatches, units a word
 //   merge time  N_DIGITS ITERS BLOCKS_PER_SM     one JSON line: MMAs a SM a cycle on merge operands
+//   merge f16 TILES SEED LO HI BIAS Z1SPAN       the FP16 merge (two 11-bit digits, weights 1 and 2^11), checked
+//   merge timef16 ITERS BLOCKS_PER_SM            its rate, in units a word (one unit = 1/256 SMSP tensor cycle)
 //
 // Fragment layout as benchmarks/tc_probe/mma_tiles.cu (PTX "mma.m16n8k32" 8-bit figure), g = lane>>2, t = lane&3:
 // A reg i holds row g (+8 for odd i), k = 4t..4t+3 (+16 for i >= 2); B reg i holds column g, the same k range;
@@ -18,6 +20,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <algorithm>
+#include <cmath>
+#include <cstdlib>
 #include <random>
 #include <vector>
 
@@ -95,6 +100,73 @@ __global__ void time_merge(uint64_t iters, uint32_t wreg0, uint32_t wreg1, unsig
   for (int k = 0; k < CH; ++k) acc ^= c[k][0] ^ c[k][1] ^ c[k][2] ^ c[k][3];
   if (threadIdx.x == 0) cycles[blockIdx.x] = t1 - t0;
   if (acc == 0x9e3779b9u) sink[blockIdx.x] = acc;
+}
+
+// FP16 merge: `mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32`. FP16 holds power-of-two weights, so two 11-bit
+// digits (lo weight 1, hi weight 2048 = 2^11) cover a 22-bit word where int8's 255 cap needs nine. Group g of column j
+// sits at k-slot g*8 + j (s = 8, all 8 columns). C/D are FP32 holding the integer words; exact while |D| < 2^24.
+// Layout as tc_probe's m16n8k16 (E = 2 halves a register, K = 16): A reg i holds row g (+8 odd i), k = 2t, 2t+1 (+8 for
+// i >= 2); B reg i holds column g, the same k range.
+constexpr int KH = 16;
+constexpr int UNITS_PER_MMA_F16 = 2 * M * N * KH;  // FP16 at half int8's MAC rate: 2 units a MAC
+
+__device__ __forceinline__ void mma_f16(float d[4], const uint32_t a[4], const uint32_t b[2], const float c[4]) {
+  asm volatile(
+      "mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%10,%11,%12,%13};\n"
+      : "=f"(d[0]), "=f"(d[1]), "=f"(d[2]), "=f"(d[3])
+      : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]), "f"(c[0]), "f"(c[1]), "f"(c[2]), "f"(c[3]));
+}
+
+__global__ void merge_tiles_f16(const uint16_t* __restrict__ A, const uint16_t* __restrict__ Bt,
+                                const float* __restrict__ C, float* __restrict__ D, int ntiles) {
+  const int warp = (blockIdx.x * blockDim.x + threadIdx.x) >> 5;
+  if (warp >= ntiles) return;
+  const int lane = threadIdx.x & 31, g = lane >> 2, t = lane & 3;
+  const uint16_t* a = A + (size_t)warp * M * KH;
+  const uint16_t* b = Bt + (size_t)warp * N * KH;
+  const float* c = C + (size_t)warp * M * N;
+  float* d = D + (size_t)warp * M * N;
+  uint32_t af[4], bf[2];
+  af[0] = *reinterpret_cast<const uint32_t*>(a + g * KH + 2 * t);
+  af[1] = *reinterpret_cast<const uint32_t*>(a + (g + 8) * KH + 2 * t);
+  af[2] = *reinterpret_cast<const uint32_t*>(a + g * KH + 2 * t + 8);
+  af[3] = *reinterpret_cast<const uint32_t*>(a + (g + 8) * KH + 2 * t + 8);
+  bf[0] = *reinterpret_cast<const uint32_t*>(b + g * KH + 2 * t);
+  bf[1] = *reinterpret_cast<const uint32_t*>(b + g * KH + 2 * t + 8);
+  float cf[4] = {c[g * N + 2 * t], c[g * N + 2 * t + 1], c[(g + 8) * N + 2 * t], c[(g + 8) * N + 2 * t + 1]};
+  float df[4];
+  mma_f16(df, af, bf, cf);
+  d[g * N + 2 * t] = df[0];
+  d[g * N + 2 * t + 1] = df[1];
+  d[(g + 8) * N + 2 * t] = df[2];
+  d[(g + 8) * N + 2 * t + 1] = df[3];
+}
+
+template <int CH>
+__global__ void time_merge_f16(uint64_t iters, uint32_t wreg0, uint32_t wreg1, unsigned long long* cycles,
+                               uint32_t* sink) {
+  const int lane = threadIdx.x & 31;
+  // FP16 digit pairs (small exact integers); 0x3C00 = 1.0, 0x6800 = 2048.0
+  uint32_t a[4] = {0x3C003C00u ^ (lane & 1), 0x40004000u, 0x3C004000u, 0x42004200u};
+  uint32_t b[2] = {wreg0, wreg1};
+  float c[CH][4];
+#pragma unroll
+  for (int k = 0; k < CH; ++k)
+#pragma unroll
+    for (int i = 0; i < 4; ++i) c[k][i] = (float)(k * 4 + i);
+  __syncthreads();
+  const unsigned long long t0 = clock64();
+  for (uint64_t it = 0; it < iters; ++it) {
+#pragma unroll
+    for (int k = 0; k < CH; ++k) mma_f16(c[k], a, b, c[k]);
+  }
+  __syncthreads();
+  const unsigned long long t1 = clock64();
+  float acc = 0;
+#pragma unroll
+  for (int k = 0; k < CH; ++k) acc += c[k][0] + c[k][1] + c[k][2] + c[k][3];
+  if (threadIdx.x == 0) cycles[blockIdx.x] = t1 - t0;
+  if (acc == 1.2345f) sink[blockIdx.x] = 1;
 }
 
 int64_t vmax(int n) { return 254 + (int64_t)(n - 1) * 255 * 255; }
@@ -246,6 +318,136 @@ int run_time(int n, uint64_t iters, int bpsm) {
   return 0;
 }
 
+// binary16 bits of a non-negative integer exactly representable in FP16 (every value here is <= 2048).
+uint16_t half_bits(int v) {
+  if (v == 0) return 0;
+  const float f = (float)v;
+  uint32_t x;
+  memcpy(&x, &f, 4);
+  const int e = (int)((x >> 23) & 0xFF) - 127 + 15;
+  const uint32_t mant = x & 0x7FFFFF;
+  if (e <= 0 || e >= 31 || (mant & 0x1FFF)) {
+    fprintf(stderr, "%d not exact in fp16\n", v);
+    exit(5);
+  }
+  return (uint16_t)((e << 10) | (mant >> 13));
+}
+
+uint32_t fbits(float f) {
+  uint32_t x;
+  memcpy(&x, &f, 4);
+  return x;
+}
+
+int run_check_f16(int ntiles, uint32_t seed, int64_t lo, int64_t hi, int64_t bias, int64_t z1span, int perturb) {
+  constexpr int NB = 2, BITS = 11, S = 8;
+  if (lo + bias < 0 || hi + bias >= (1LL << (NB * BITS))) {
+    fprintf(stderr, "domain [%lld,%lld]+%lld outside [0,2^22)\n", (long long)lo, (long long)hi, (long long)bias);
+    return 2;
+  }
+  if (z1span + hi + bias >= (1LL << 24) || z1span - lo - bias >= (1LL << 24)) {
+    fprintf(stderr, "|Z1 + Z2| may reach 2^24, past FP32's exact integers\n");
+    return 2;
+  }
+  std::mt19937_64 rng(seed);
+  std::uniform_int_distribution<int64_t> z2d(lo, hi), z1d(-z1span, z1span);
+  std::vector<uint16_t> A((size_t)ntiles * M * KH, 0), Bt((size_t)ntiles * N * KH, 0);
+  std::vector<float> C((size_t)ntiles * M * N), D((size_t)ntiles * M * N);
+  std::vector<int64_t> want((size_t)ntiles * M * N);
+  const int w[NB] = {1, perturb ? 2047 : 1 << BITS};
+  int64_t maxabs = 0;
+  for (int tile = 0; tile < ntiles; ++tile) {
+    uint16_t* a = &A[(size_t)tile * M * KH];
+    uint16_t* bt = &Bt[(size_t)tile * N * KH];
+    for (int gi = 0; gi < NB; ++gi)
+      for (int j = 0; j < S; ++j) bt[j * KH + gi * S + j] = half_bits(w[gi]);
+    for (int i = 0; i < M; ++i)
+      for (int j = 0; j < N; ++j) {
+        const size_t o = (size_t)tile * M * N + i * N + j;
+        int64_t z1 = z1d(rng), v = z2d(rng);
+        if (tile == 0) {  // the four corners of (Z1, Z2) in the first tile
+          v = (i + j) & 1 ? hi : lo;
+          z1 = (i >> 1) & 1 ? z1span : -z1span;
+        }
+        C[o] = (float)z1;
+        const int64_t u = v + bias;
+        a[i * KH + 0 * S + j] = half_bits((int)(u & ((1 << BITS) - 1)));
+        a[i * KH + 1 * S + j] = half_bits((int)(u >> BITS));
+        want[o] = z1 + u;
+        maxabs = std::max<int64_t>(maxabs, std::llabs(want[o]));
+      }
+  }
+  uint16_t *dA, *dB;
+  float *dC, *dD;
+  CK(cudaMalloc(&dA, A.size() * 2));
+  CK(cudaMalloc(&dB, Bt.size() * 2));
+  CK(cudaMalloc(&dC, C.size() * 4));
+  CK(cudaMalloc(&dD, D.size() * 4));
+  CK(cudaMemcpy(dA, A.data(), A.size() * 2, cudaMemcpyHostToDevice));
+  CK(cudaMemcpy(dB, Bt.data(), Bt.size() * 2, cudaMemcpyHostToDevice));
+  CK(cudaMemcpy(dC, C.data(), C.size() * 4, cudaMemcpyHostToDevice));
+  CK(cudaMemset(dD, 0xA5, D.size() * 4));
+  constexpr int WPB = 4;
+  merge_tiles_f16<<<(ntiles + WPB - 1) / WPB, 32 * WPB>>>(dA, dB, dC, dD, ntiles);
+  CK(cudaGetLastError());
+  CK(cudaDeviceSynchronize());
+  CK(cudaMemcpy(D.data(), dD, D.size() * 4, cudaMemcpyDeviceToHost));
+  long long merged = 0, bad = 0;
+  for (size_t o = 0; o < D.size(); ++o) {
+    ++merged;
+    if (fbits(D[o]) != fbits((float)want[o])) {
+      if (bad < 5) fprintf(stderr, "mismatch word %zu: got %.1f want %lld\n", o, (double)D[o], (long long)want[o]);
+      ++bad;
+    }
+  }
+  CK(cudaFree(dA));
+  CK(cudaFree(dB));
+  CK(cudaFree(dC));
+  CK(cudaFree(dD));
+  printf(
+      "{\"mode\":\"check_f16\",\"n_digits\":%d,\"digit_bits\":%d,\"cols\":%d,\"words_per_mma\":%d,"
+      "\"units_per_word\":%.4f,\"lo\":%lld,\"hi\":%lld,\"bias\":%lld,\"z1span\":%lld,\"max_abs_result\":%lld,"
+      "\"perturb\":%d,\"tiles\":%d,\"seed\":%u,\"merged_words\":%lld,\"mismatches\":%lld}\n",
+      NB, BITS, S, M * S, (double)UNITS_PER_MMA_F16 / (M * S), (long long)lo, (long long)hi, (long long)bias,
+      (long long)z1span, (long long)maxabs, perturb, ntiles, seed, merged, bad);
+  return bad ? 1 : 0;
+}
+
+int run_time_f16(uint64_t iters, int bpsm) {
+  cudaDeviceProp p;
+  CK(cudaGetDeviceProperties(&p, 0));
+  const uint32_t w = 0x68003C00u;  // halves (1.0, 2048.0): the radix weights
+  constexpr int CH = 8, WARPS = 4;
+  const int blocks = p.multiProcessorCount * bpsm;
+  unsigned long long* dcyc;
+  uint32_t* dsink;
+  CK(cudaMalloc(&dcyc, blocks * sizeof(unsigned long long)));
+  CK(cudaMalloc(&dsink, blocks * 4));
+  time_merge_f16<CH><<<blocks, 32 * WARPS>>>(iters / 8 + 1, w, w, dcyc, dsink);
+  CK(cudaDeviceSynchronize());
+  time_merge_f16<CH><<<blocks, 32 * WARPS>>>(iters, w, w, dcyc, dsink);
+  CK(cudaDeviceSynchronize());
+  std::vector<unsigned long long> cyc(blocks);
+  CK(cudaMemcpy(cyc.data(), dcyc, blocks * sizeof(unsigned long long), cudaMemcpyDeviceToHost));
+  double mean_cyc = 0;
+  for (auto c : cyc) mean_cyc += (double)c;
+  mean_cyc /= blocks;
+  const double mma_per_sm_cycle = (double)iters * CH * WARPS * bpsm / mean_cyc;
+  const double cyc_per_mma_smsp = 4.0 / mma_per_sm_cycle;
+  // one unit = one int8 MAC slot = 1/256 of an SMSP tensor cycle (m16n8k32 u8 holds the pipe 16 cycles)
+  const double units_per_word = cyc_per_mma_smsp * 256.0 / (M * N);
+  printf(
+      "{\"mode\":\"time_f16\",\"iters\":%llu,\"blocks\":%d,\"bpsm\":%d,\"warps\":%d,\"chains\":%d,"
+      "\"mean_block_cycles\":%.0f,\"mma_per_sm_cycle\":%.5f,\"f16_macs_per_sm_clk\":%.2f,"
+      "\"cycles_per_mma_smsp\":%.4f,\"units_per_word_measured\":%.4f,\"units_per_word_predicted\":%.4f,\"sms\":%d}\n",
+      (unsigned long long)iters, blocks, bpsm, WARPS, CH, mean_cyc, mma_per_sm_cycle,
+      mma_per_sm_cycle * M * N * KH, cyc_per_mma_smsp, units_per_word, (double)UNITS_PER_MMA_F16 / (M * N),
+      p.multiProcessorCount);
+  CK(cudaFree(dcyc));
+  CK(cudaFree(dsink));
+  return 0;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -253,6 +455,12 @@ int main(int argc, char** argv) {
     return run_check(atoi(argv[2]), atoi(argv[3]), (uint32_t)strtoul(argv[4], 0, 0), atoll(argv[5]), atoll(argv[6]),
                      atoll(argv[7]), argc >= 9 ? atoi(argv[8]) : 0);
   if (argc >= 5 && !strcmp(argv[1], "time")) return run_time(atoi(argv[2]), strtoull(argv[3], 0, 0), atoi(argv[4]));
-  fprintf(stderr, "usage: merge check N TILES SEED LO HI BIAS [PERTURB] | merge time N ITERS BLOCKS_PER_SM\n");
+  if (argc >= 8 && !strcmp(argv[1], "f16"))
+    return run_check_f16(atoi(argv[2]), (uint32_t)strtoul(argv[3], 0, 0), atoll(argv[4]), atoll(argv[5]),
+                         atoll(argv[6]), atoll(argv[7]), argc >= 9 ? atoi(argv[8]) : 0);
+  if (argc >= 4 && !strcmp(argv[1], "timef16")) return run_time_f16(strtoull(argv[2], 0, 0), atoi(argv[3]));
+  fprintf(stderr,
+          "usage: merge check N TILES SEED LO HI BIAS [PERTURB] | merge time N ITERS BLOCKS_PER_SM\n"
+          "       merge f16 TILES SEED LO HI BIAS Z1SPAN [PERTURB] | merge timef16 ITERS BLOCKS_PER_SM\n");
   return 2;
 }
