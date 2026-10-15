@@ -229,7 +229,8 @@ def bounds(models: list) -> list:
          side_by_side((ONE_MERGE_222, [0, 1], [0, 1]), (n2, [0, 1], [2, 3]))),
         ("<2,2,4> two one-merge <2,2,2>", (2, 2, 4, 2), 3,
          side_by_side((ONE_MERGE_222, [0, 1], [0, 1]), (ONE_MERGE_222, [0, 1], [2, 3]))),
-        ("<2,2,4> 2-summand <2,2,2> + naive", (2, 2, 4, 2), 2, side_by_side((m2, [0, 1], [0, 1]), (n2, [0, 1], [2, 3]))),
+        ("<2,2,4> 2-summand <2,2,2> + naive", (2, 2, 4, 2), 2,
+         side_by_side((m2, [0, 1], [0, 1]), (n2, [0, 1], [2, 3]))),
         ("<2,2,4> two 2-summand <2,2,2>", (2, 2, 4, 2), 2, side_by_side((m2, [0, 1], [0, 1]), (m2, [0, 1], [2, 3]))),
         ("<3,2,3> one-merge <2,2,3> + naive row", (3, 2, 3, 2), 3,
          side_by_side((m3, [0, 1], [0, 1, 2]), (naive(1, 2, 3), [2], [0, 1, 2]))),
@@ -250,7 +251,8 @@ def main() -> None:
     p.add_argument("--levels", default="1,2,3,4")
     p.add_argument("--m", default="1,2,4,8")
     p = sub.add_parser("bounds", help="side-by-side upper bounds for <2,2,4> and <3,2,3> at L = 2")
-    p.add_argument("file", help="merges_sat lines holding the <2,2,2> (E=7, M=2, arity 2) and <2,2,3> (E=11, M=1) models")
+    p.add_argument("file",
+                   help="merges_sat lines holding the <2,2,2> (E=7, M=2, arity 2) and <2,2,3> (E=11, M=1) models")
     args = ap.parse_args()
     if args.cmd == "bounds":
         for name, (a, b, c, L), arity, steps in bounds([json.loads(line) for line in open(args.file)]):
