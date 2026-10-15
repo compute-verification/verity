@@ -155,4 +155,50 @@ theorem zk_sessions_recursive_fork_regV {nT r : ℕ} (T : Fin nT → Type) (CT :
     _hk _hRw _hM _hρ _hr σ _ wmsg Sk cmt msg _hbr Refine.H512 _
     (Nat.succ_pos r) (innerAtLeavesL_reg T CT hp _hcls zs dg N k Rw σ wmsg cap)
 
+/-- **`zk_sessions_recursive_fork_regV` at the typing `τv`**: everything at `τv`'s protocol
+(`holoInnerAtτ`, `regStmtτ`, `clashPickHL` at `holoAtτ`), the salts' level a free parameter `lv` (the audit reads it
+at `(holoAt st hp).rsch.sch.level₀`, which no typing changes), the held top's collision `TopColl` off the bridge as in
+`zk_sessions_recursive_fork_regV`, and the error `holoAt st hp`'s own (`innerAtLeavesL_regτ`). `RecursiveAuditC3`
+consumes it inside its existential over `τv`. -/
+theorem zk_sessions_recursive_fork_regVτ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
+    [∀ k, Nonempty (CT k)] {st : Flock.Stmt} (hp : HoloParams) (τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog))
+    (_hcls : ClassOk (shapeOf st))
+    (_hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
+    (zs : Reg → L.Ω → List (Cm × (holoInnerAtτ T CT st hp τv).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (vsrc : ValueSrc L Reg Cm Reg₂ (holoInnerAtτ T CT st hp τv) Vs) (lv : FlockSoundness.Accounting.Level)
+    (dg : ByteArray → ByteArray) (N : ℕ)
+    {k Rw M : ℕ} (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) {ρ : ℝ} (_hρ : ρ < 1)
+    (_hr : ∀ R ω t R₂ j S' R' i,
+      rateZ (ZkHidden.planZHJ (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
+    (σ : Strategy (recGame L Reg (holoInnerAtτ T CT st hp τv) Cm fun R ω t => outerV (zs R ω t) dg N))
+    (wmsg : ((j : Fin S) → (Vs j).Bits) → List (holoInnerAtτ T CT st hp τv).Msg)
+    (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
+    (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
+    (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → (holoInnerAtτ T CT st hp τv).Msg)
+    (cap : Cap Refine.Dig) (salt : ℕ → ByteArray)
+    (wr : List (Cm × (holoInnerAtτ T CT st hp τv).Coin) → Lean.Json × String) (reg : Lean.Json) (bcs' : Array ByteArray)
+    (hstk : StackedTopAt lv st reg cap salt bcs')
+    (_hbr : Flock.Assumptions.VBridgeCOff (fun R ω t R₂ => ValueColl zs vsrc R ω t R₂ ∨ LeafColl zs R ω t R₂ ∨
+      SaltColl lv cap salt zs R ω t R₂ ∨ TopColl wr st reg bcs' t) zs dg N k Rw
+      (Flock.Guarantees.regStmtτ T CT st hp τv zs dg N k Rw wmsg σ cap) wmsg Sk cmt msg) :
+    (valueFinder zs vsrc dg N σ).Finds Refine.H512 ∨ (leafFinder zs dg N σ).Finds Refine.H512 ∨
+      (saltFinder lv cap salt zs σ).Finds Refine.H512 ∨
+      (topFinder wr st reg bcs' lv cap salt hstk zs σ).Finds Refine.H512 ∨
+      (regFinder zs dg N σ).Finds Refine.H512 ∨
+      RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
+      InnerForkRec zs dg N k Rw σ (Flock.Guarantees.regStmtτ T CT st hp τv zs dg N k Rw wmsg σ cap) wmsg Refine.H512
+        (clashPickHL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (holoAtτ st hp τv)) ∨
+      prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
+          ¬ (holoInnerAtτ T CT st hp τv).holds
+            (Flock.Guarantees.regStmtτ T CT st hp τv zs dg N k Rw wmsg σ cap o.1 o.2.1))
+          (recGame L Reg (holoInnerAtτ T CT st hp τv) Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
+        expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
+            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
+          ((holoInnerAtτ T CT st hp τv).r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
+            (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) +
+          ENNReal.ofReal (holoError (holoAt st hp)) :=
+  zk_sessions_recursive_fork_innerLV _hA3 zs vsrc lv cap salt wr st reg bcs' hstk dg N _hk _hRw _hM _hρ _hr σ _
+    wmsg Sk cmt msg _hbr Refine.H512 _
+    (Nat.succ_pos r) (innerAtLeavesL_regτ T CT hp τv _hcls zs dg N k Rw σ wmsg cap)
+
 end FlockSoundness.Discharge.Recursion
