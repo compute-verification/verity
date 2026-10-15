@@ -13,6 +13,7 @@ coordinate of 1/c vanishes on it (no coefficients, over any extension field, mak
 
     python exact_branch.py LOG           (for each unrescued (S, H) in LOG: the (I, J) no typing rescues, if any)
     python exact_branch.py --sample SEED TRIALS (the same on 3-sets unrescued on fresh hierarchies of 3×3 and 3×4)
+    python exact_branch.py --rank LOG N TRIALS (Theorem 6.7's bound against direct ranks, rank-1..5 branches, q = 3)
     python exact_branch.py --check LOG N (compares with rank Φ − rank(Φ − Λ ⊗ uvᵀ) for every rank-1 uvᵀ, q = 2, F2,
                                           on the first N configurations of LOG over F2, with c = 1)
 """
@@ -62,14 +63,33 @@ def bad_system(cells, G, H, S, I, J, p):
     return unknowns, rows
 
 
+def hypothesis(cells, G, H, S, p):
+    """Theorem 6.7's hypothesis for one typing: the cells of R × C (R, C the lines holding S's labels) are at most
+    one, or two whose matrix K(c)_{tt'} = Σ_s g_s(t) c_s h_s(t') no c with all c_s ≠ 0 (over any extension field)
+    makes diagonal and invertible."""
+    ts = [t for t, c in enumerate(cells) if c[0] in G and c[1] in H]
+    if len(ts) <= 1:
+        return True
+    if len(ts) > 2:
+        return False
+    g = {t: G[cells[t][0]][t] for t in ts}
+    h = {t: H[cells[t][1]][t] for t in ts}
+    C0 = nullspace([[g[t][s] * h[u][s] % p for s in range(len(S))] for t, u in itertools.permutations(ts, 2)],
+                   p, len(S))
+    forms = [np.eye(len(S), dtype=np.int64)[s] for s in range(len(S))]
+    forms += [np.array([g[t][s] * h[t][s] % p for s in range(len(S))]) for t in ts]
+    return any(not (C0 @ f % p).any() for f in forms)
+
+
 def lines(keys):
     return [set(x) for k in range(1, len(keys) + 1) for x in itertools.combinations(keys, k)]
 
 
 def exact(cells, nodes, root, S, p):
-    """The (I, J) for which some coefficients make every typing's drop 3, with the number of (I, J) where every
-    typing passes the containments."""
+    """The (I, J) for which some coefficients make every typing's drop 3, the number of (I, J) where every typing
+    passes the containments, the number of typings, and the number of typings meeting Theorem 6.7's hypothesis."""
     typings = [(coords(cells, a, S, 0, p), coords(cells, b, S, 1, p)) for a, b in all_typings(cells, nodes, root, p)]
+    one = sum(hypothesis(cells, G, H, S, p) for G, H in typings)
     out, contained = [], 0
     for I in lines(sorted({c[0] for c in cells})):
         for J in lines(sorted({c[1] for c in cells})):
@@ -86,19 +106,21 @@ def exact(cells, nodes, root, S, p):
                 basis = nullspace(stacked, p, n)
                 if all(basis[:, len(unknowns) + s].any() for s in range(len(S))):
                     out.append((I, J))
-    return out, contained, len(typings)
+    return out, contained, len(typings), one
 
 
 def main_exact(path):
-    total = bad = 0
+    total = bad = ones = 0
     for p, S, cells, nodes, root, Si in configs(path):
-        hits, contained, ntyp = exact(cells, nodes, root, Si, p)
+        hits, contained, ntyp, one = exact(cells, nodes, root, Si, p)
         total += 1
         bad += bool(hits)
-        print(f"p={p} S={S}: {ntyp} typings; (I, J) where every typing passes the containments: {contained}; "
-              f"where some coefficients make every typing's drop 3: {len(hits)}"
+        ones += bool(one)
+        print(f"p={p} S={S}: {ntyp} typings ({one} meeting Theorem 6.7's hypothesis); (I, J) where every typing "
+              f"passes the containments: {contained}; where some coefficients make every typing's drop 3: {len(hits)}"
               + (f", e.g. I={sorted(hits[0][0])} J={sorted(hits[0][1])}" if hits else ""), flush=True)
-    print(f"{bad} of {total} configurations have a rank-1 branch that every typing charges 3", flush=True)
+    print(f"{bad} of {total} configurations have a rank-1 branch that every typing charges 3; "
+          f"{ones} have a typing meeting Theorem 6.7's hypothesis", flush=True)
 
 
 def main_sample(seed, trials):
@@ -107,7 +129,7 @@ def main_sample(seed, trials):
     for p in (2, 10007):
         for shape in ((3, 3), (3, 4)):
             cells = [(r, c) for r in range(shape[0]) for c in range(shape[1])]
-            count = bad = 0
+            count = bad = ones = 0
             for trial in range(trials):
                 nodes, root = random_hierarchy(cells, rng, "random" if trial % 2 else "spread")
                 a, b, _, _, _ = label(cells, nodes, root, p)
@@ -120,13 +142,17 @@ def main_sample(seed, trials):
                     if any(reachable(cells, a2, b2, S, p) for a2, b2 in typings):
                         continue
                     count += 1
-                    hits = exact(cells, nodes, root, S, p)[0]
+                    hits, _, _, one = exact(cells, nodes, root, S, p)
                     bad += bool(hits)
-                    if hits:
+                    ones += bool(one)
+                    if hits or not one:
                         print(f"p={p} S={tuple(cells[t] for t in S)}: drop 3 under every typing for "
-                              f"{[(sorted(I), sorted(J)) for I, J in hits]}; H={_nest(nodes, root, cells)}", flush=True)
+                              f"{[(sorted(I), sorted(J)) for I, J in hits]}; typings meeting Theorem 6.7's "
+                              f"hypothesis: {one}; "
+                              f"H={_nest(nodes, root, cells)}", flush=True)
             print(f"p={p} grid={shape[0]}x{shape[1]} seed={seed}: {count} 3-sets unrescued by labels, {bad} of them "
-                  f"with a rank-1 branch every typing charges 3", flush=True)
+                  f"with a rank-1 branch every typing charges 3, {ones} with a typing meeting Theorem 6.7's "
+                  f"hypothesis", flush=True)
 
 
 def direct_drops(cells, a, b, S, q, p):
@@ -144,6 +170,45 @@ def direct_drops(cells, a, b, S, q, p):
         for v, r in zip(vs, fq.rank(batch, p)):
             out[(tuple(u), tuple(v))] = r0 - int(r)
     return out
+
+
+def main_rank(path, n, trials):
+    """Theorem 6.7 directly: under a typing with one row i0 and one column j0 holding S's labels, branches B of rank
+    r = 1..5 (q = 3, F2), part of their x-side in row i0 and part of their y-side in column j0, against ⌊17r/7⌋."""
+    q, done = 3, 0
+    rng = np.random.default_rng(1)
+    for p, S, cells, nodes, root, Si in configs(path):
+        if p != 2 or done >= n:
+            continue
+        lab = next(((a, b) for a, b in all_typings(cells, nodes, root, p)
+                    if len(coords(cells, a, Si, 0, p)) == 1 and len(coords(cells, b, Si, 1, p)) == 1), None)
+        if lab is None:
+            continue
+        done += 1
+        a, b = lab
+        (i0,), (j0,) = coords(cells, a, Si, 0, p), coords(cells, b, Si, 1, p)
+        nr, nc = max(c[0] for c in cells) + 1, max(c[1] for c in cells) + 1
+        T = fq.matmul_targets(nr, nc, q)
+        Phi = sum(np.kron(np.outer(a[t], b[t]), T[c]) for t, c in enumerate(cells)) % p
+        Lam = sum(np.outer(a[s], b[s]) for s in Si) % p
+        r0 = int(fq.rank(Phi, p)[0])
+        worst = {}
+        for r in range(1, 6):
+            Bs = []
+            while len(Bs) < trials:
+                k, k2 = rng.integers(0, min(r, q) + 1, 2)
+                U = rng.integers(0, 2, (nr * q, r))
+                V = rng.integers(0, 2, (q * nc, r))
+                U[:, :k] *= np.array([[i // q == i0] for i in range(nr * q)])
+                V[:, :k2] *= np.array([[i % nc == j0] for i in range(q * nc)])
+                B = U @ V[:, rng.permutation(r)].T % p
+                if int(fq.rank(B, p)[0]) == r:
+                    Bs.append(B)
+            drops = r0 - fq.rank(np.array([(Phi - np.kron(Lam, B)) % p for B in Bs]), p)
+            worst[r] = int(drops.max())
+            assert worst[r] <= 17 * r // 7, (S, r, worst[r])
+        print(f"p={p} S={S}: largest drop at rank r (bound ⌊17r/7⌋): "
+              f"{ {r: (d, 17 * r // 7) for r, d in worst.items()} }", flush=True)
 
 
 def width3(cells, rng, p):
@@ -194,5 +259,7 @@ if __name__ == "__main__":
         main_check(sys.argv[2], int(sys.argv[3]))
     elif sys.argv[1] == "--sample":
         main_sample(int(sys.argv[2]), int(sys.argv[3]))
+    elif sys.argv[1] == "--rank":
+        main_rank(sys.argv[2], int(sys.argv[3]), int(sys.argv[4]))
     else:
         main_exact(sys.argv[1])
