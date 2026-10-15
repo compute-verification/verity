@@ -146,12 +146,12 @@ def detail(events):
     summ = [e for e in events if e["event"] == "summary"]
     fams = [  # (column, route pattern whose group 1 labels the width)
         ("smem FR (k_fr)", r"fr_(b\d+)$"),
-        ("smem FR (fused kernel, α = 1)", r"fused_fr_(b\d+)_a64$"),
+        ("smem FR (fused kernel, α = 63/64)", r"fused_fr_(b\d+)_a63$"),
         ("L1 FR", r"fr_l1_(b\d+)$"),
         ("PRMT", r"prmt_(b.*)$"),
         ("SHFL", r"shfl_(b.*)$"),
-        ("DP4A (fused, α = 1)", r"fused_(dp4a)_a64$"),
-        ("DP4A+HFMA2 (fused, α = 1)", r"fused_(mix)_a64$"),
+        ("DP4A (fused, α = 63/64)", r"fused_(dp4a)_a63$"),
+        ("DP4A+HFMA2 (fused, α = 63/64)", r"fused_(mix)_a63$"),
     ]
     by = defaultdict(dict)
     for r in summ:
