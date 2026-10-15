@@ -118,6 +118,13 @@ def prefix_closed(S: int, terms: list[dict]) -> bool:
     return True
 
 
+def naive_full(terms: list[dict]) -> int:
+    best: dict[str, int] = {}
+    for t in terms:
+        best[t["chain"]] = max(best.get(t["chain"], 0), t["len"])
+    return sum(best.values())
+
+
 def naive_by_mask(terms: list[dict]) -> list[int]:
     """Length of the naive tree for {0} + subset: per chain, the length to its deepest member in the subset."""
     n = len(terms)
@@ -849,6 +856,114 @@ def cmd_subspace(args, out) -> None:
                "subspaces": sum(s["subspaces"] for s in stats.values()), "families": list(stats.values())})
 
 
+# ---------------------------------------------------------------- annealing over Steiner points (sa.c), whole space
+
+
+def geodesic_path(A: int, B: int, R: int, C: int) -> list[int]:
+    """Nodes A = P0, ..., Pr = B with every step rank 1 (a rank decomposition of B - A from row echelon form)."""
+    D = A ^ B
+    rows = rows_of(D, R, C)
+    basis: list[int] = []  # fully reduced, pivot = lowest bit
+    for x in rows:
+        for v in basis:
+            if x & v & -v:
+                x ^= v
+        if x:
+            p = x & -x
+            basis = [v ^ x if v & p else v for v in basis] + [x]
+    path, cur = [A], A
+    for v in basis:
+        p = v & -v
+        u = sum(1 << i for i, x in enumerate(rows) if x & p)
+        cur ^= outer(u, v, R, C)
+        path.append(cur)
+    assert cur == B, "rank decomposition failed"
+    return path
+
+
+def sa_tree(points: list[int], terms: list[int], R: int, C: int) -> list[tuple[int, int]]:
+    nodes = [0] + terms + points
+    inside, best = {0}, {i: (rank_f2(nodes[i], R, C), 0) for i in range(1, len(nodes))}
+    edges = []
+    while best:
+        i = min(best, key=lambda j: best[j][0])
+        _, j = best.pop(i)
+        inside.add(i)
+        p = geodesic_path(nodes[j], nodes[i], R, C)
+        edges += list(zip(p, p[1:]))
+        for q in best:
+            d = rank_f2(nodes[i] ^ nodes[q], R, C)
+            if d < best[q][0]:
+                best[q] = (d, i)
+    return edges
+
+
+def run_sa(R: int, C: int, terms: list[int], naive: int, iters: int, restarts: int, seed: int) -> dict:
+    exe = build("sa")
+    lines = [f"{R} {C} {len(terms)} {naive} {iters} {restarts} {seed}"]
+    lines += [" ".join(f"{x:x}" for x in rows_of(t, R, C)) for t in terms]
+    res = json.loads(subprocess.run([exe], input="\n".join(lines) + "\n", check=True, stdout=subprocess.PIPE,
+                                    text=True).stdout)
+    pts = [sum(int(x, 16) << (i * C) for i, x in enumerate(p)) for p in res.pop("points")]
+    if res["best"] < naive:
+        edges = sa_tree(pts, terms, R, C)
+        uniq = {tuple(sorted(e)) for e in edges}
+        fake = {"tree": [[f"{a:x}", f"{b:x}"] for a, b in uniq], "terminals": [[f"{t:x}", ""] for t in terms],
+                "tree_err": 0, "answer": len(uniq)}
+        res["tree_check"] = verify_tree_f2(fake, R, C)
+        res["tree"] = fake["tree"]
+    res["steiner_points"] = [f"{p:x}" for p in pts]
+    return res
+
+
+def cmd_sa(args, out) -> None:
+    R, C, ts = matmul_targets(args.a, args.b, args.c, args.L)
+    if args.positions:
+        keep = set(args.positions.split(","))
+        ts = [t for t in ts if t["chain"] in keep]
+    naive = naive_full(ts)
+    res = run_sa(R, C, [t["m"] for t in ts], naive, args.iters, args.restarts, args.seed)
+    emit(out, {"kind": "sa", "shape": [args.a, args.b, args.c], "L": args.L, "terminals": len(ts),
+               "positions": args.positions or "all", "beats_naive": res["best"] < naive, **res})
+
+
+def cmd_sa_calibrate(args, out) -> None:
+    """The annealer against exact DW on families that do beat their naive sum (general-version counterexamples):
+    how often it finds the exact optimum, at the iteration budget used on matmul."""
+    rng = random.Random(args.seed)
+    found = []
+    R, C, terms = hub_example()
+    found.append(("hub_example", R, C, [t["m"] for t in terms], 5, 6))
+    for R, C in ((2, 6), (3, 5), (4, 4), (3, 6)):
+        tries = 0
+        while sum(1 for f in found if f[1:3] == (R, C)) < args.per_size and tries < 400:
+            tries += 1
+            terms = []
+            for p in range(rng.randint(3, 6)):
+                for _ in range(50):
+                    top = rng.randint(1, min(R, C, 3))
+                    a, b = random_independent(rng, R, top), random_independent(rng, C, top)
+                    cand = terms + chain_terms(f"p{p}", a, b, [top], R, C)
+                    if len({t["m"] for t in cand}) == len(cand) and condition_i(cand, R, C):
+                        terms = cand
+                        break
+            if len(terms) < 3:
+                continue
+            (r,) = run_solver(spec_problem(f"cal{tries}", R, C, terms))
+            naive = naive_by_mask(terms)[-1]
+            if r["answer"] < naive:
+                found.append((f"cal_{R}x{C}_{tries}", R, C, [t["m"] for t in terms], r["answer"], naive))
+    hits = 0
+    for name, R, C, ts, opt, naive in found:
+        res = run_sa(R, C, ts, naive, args.iters, args.restarts, args.seed)
+        hit = res["best"] == opt
+        hits += hit
+        emit(out, {"kind": "sa_calibrate", "case": name, "R": R, "C": C, "terminals": len(ts), "naive": naive,
+                   "exact": opt, "sa_best": res["best"], "hit": hit, "hist": res["hist"], "wall_s": res["wall_s"],
+                   "tree_check": res.get("tree_check")})
+    emit(out, {"kind": "sa_calibrate_summary", "instances": len(found), "hits": hits})
+
+
 def cmd_matmul(args, out) -> None:
     R, C, terms = matmul_targets(args.a, args.b, args.c, args.L)
     name = f"mm{args.a}{args.b}{args.c}_L{args.L}_F2"
@@ -895,10 +1010,23 @@ def main() -> None:
                    help="solve subspaces up to this dimension in parallel, one each; above it, sample counts halve per dim")
     p.add_argument("--greedy-rounds", type=int, default=5)
     p.add_argument("--budget-s", type=float, default=3600)
+    p = sub.add_parser("sa")
+    for k in ("a", "b", "c", "L"):
+        p.add_argument(f"--{k}", type=int, required=True)
+    p.add_argument("--positions", help="comma-separated chains to keep, e.g. r0c0,r0c1,r1c0")
+    p.add_argument("--iters", type=int, default=200000)
+    p.add_argument("--restarts", type=int, default=256)
+    p.add_argument("--seed", type=int, default=1)
+    p = sub.add_parser("sa-calibrate")
+    p.add_argument("--per-size", type=int, default=5)
+    p.add_argument("--iters", type=int, default=200000)
+    p.add_argument("--restarts", type=int, default=64)
+    p.add_argument("--seed", type=int, default=1)
     args = ap.parse_args()
     out = open(args.out, "a") if args.out else None
     cmds = {"validate": cmd_validate, "selftest": cmd_selftest, "selftest3": cmd_selftest3, "matmul": cmd_matmul,
-            "matmul3": cmd_matmul3, "general": cmd_general, "grid": cmd_grid, "subspace": cmd_subspace}
+            "matmul3": cmd_matmul3, "general": cmd_general, "grid": cmd_grid, "subspace": cmd_subspace, "sa": cmd_sa,
+            "sa-calibrate": cmd_sa_calibrate}
     cmds[args.cmd](args, out)
 
 

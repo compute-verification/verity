@@ -5,6 +5,7 @@
 #   grid      2x3 block grids of invertible 2x2 blocks (2^24 states each)
 #   exact     more exact F2 shapes ($EXACT, "a,b,c,L" items)
 #   subspace  task 3: subspace-restricted DW for <2,4,2>/L=2, then <2,3,2> with L=3 and L=1 ($SUB_BUDGET_S each)
+#   sa        annealing over Steiner points on the whole space: calibration against exact DW, then $SA_SHAPES
 # Run from the clone's root; results in $OUT.
 set -euo pipefail
 d=$(mktemp -d)
@@ -35,6 +36,15 @@ for phase in ${PHASES:-f3 general grid exact}; do
             --budget-s "${SUB232_BUDGET_S:-900}"
         python3 steiner.py --out "$OUT/subspace_232_L1.jsonl" subspace --a 2 --b 3 --c 2 --L 1 --samples 100 \
             --budget-s "${SUB232_BUDGET_S:-900}" --batch-k 16 ;;
+    sa)
+        gcc -O3 -march=native -fopenmp -o "$d/sa" sa.c -lm
+        python3 steiner.py --out "$OUT/sa_calibrate.jsonl" sa-calibrate --per-size 10 --iters 200000 --restarts 46
+        for c in ${SA_SHAPES:-2,2,2,1 2,2,3,1 2,3,2,1 2,3,2,3 2,4,2,1 2,4,2,2 2,4,2,4 3,2,3,1 3,2,3,2 2,3,3,1 2,3,3,3 \
+            3,3,3,1 3,3,3,3 4,2,4,1 4,2,4,2 3,4,3,2 4,4,4,2 4,4,4,4}; do
+            IFS=, read -r a b cc L <<<"$c"
+            python3 steiner.py --out "$OUT/sa.jsonl" sa --a "$a" --b "$b" --c "$cc" --L "$L" \
+                --iters "${SA_ITERS:-1000000}" --restarts "${SA_RESTARTS:-920}"
+        done ;;
     esac
     echo "phase $phase end $(date -u +%FT%TZ)" >&2
 done
