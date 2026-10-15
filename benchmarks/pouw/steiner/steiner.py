@@ -105,6 +105,19 @@ def matmul_targets(a: int, b: int, c: int, L: int) -> tuple[int, int, list[dict]
     return R, C, out
 
 
+def prefix_closed(S: int, terms: list[dict]) -> bool:
+    """Whether S holds, for each chain, its shallowest members only (listed shallow to deep): then a tree for S extends
+    along the chains to every terminal at exactly the naive extra cost, so beating naive on S beats it on all."""
+    seen_gap: dict[str, bool] = {}
+    for i, t in enumerate(terms):
+        inside = bool((S >> i) & 1)
+        if inside and seen_gap.get(t["chain"]):
+            return False
+        if not inside:
+            seen_gap[t["chain"]] = True
+    return True
+
+
 def naive_by_mask(terms: list[dict]) -> list[int]:
     """Length of the naive tree for {0} + subset: per chain, the length to its deepest member in the subset."""
     n = len(terms)
@@ -146,7 +159,7 @@ def run_solver(spec: str, batch: bool = False, binary: str = "dw_f2") -> list[di
         path = f.name
     try:
         args = [exe, path] + (["--batch"] if batch else [])
-        out = subprocess.run(args, check=True, capture_output=True, text=True)
+        out = subprocess.run(args, check=True, stdout=subprocess.PIPE, text=True)
     finally:
         os.unlink(path)
     return [json.loads(line) for line in out.stdout.splitlines() if line.strip()]
@@ -185,7 +198,9 @@ def analyze(res: dict, terms: list[dict], R: int, C: int) -> dict:
         "naive": naive[-1],
         "answer": res["answer"],
         "beats_naive": res["answer"] < naive[-1],
-        "subsets_below_naive": [[S, res["root_dp"][S], naive[S]] for S in below],
+        "subsets_checked": (1 << n) - 1,
+        "prefix_closed_subsets": sum(prefix_closed(S, terms) for S in range(1, 1 << n)),
+        "subsets_below_naive": [[S, res["root_dp"][S], naive[S], prefix_closed(S, terms)] for S in below],
         "min_excess_by_size": {k: min(v) for k, v in sorted(by_size.items())},
         "tree_check": v,
     }
@@ -304,6 +319,518 @@ def cmd_selftest(args, out) -> None:
     emit(out, {"case": "selftest", "cases": args.cases, "finite": finite, "fails": fails, "pass": fails == 0})
 
 
+# ---------------------------------------------------------------- F3 (matrices as tuples of trits, entry (i,j) at i*C+j)
+
+
+def rank_f3(t: tuple[int, ...], R: int, C: int) -> int:
+    rows = [[t[i * C + j] % 3 for j in range(C)] for i in range(R)]
+    rank, col = 0, 0
+    for col in range(C):
+        piv = next((r for r in range(rank, R) if rows[r][col]), None)
+        if piv is None:
+            continue
+        rows[rank], rows[piv] = rows[piv], rows[rank]
+        inv = rows[rank][col]  # 1 and 2 are their own inverses mod 3
+        rows[rank] = [(x * inv) % 3 for x in rows[rank]]
+        for r in range(R):
+            if r != rank and rows[r][col]:
+                f = rows[r][col]
+                rows[r] = [(x - f * y) % 3 for x, y in zip(rows[r], rows[rank])]
+        rank += 1
+    return rank
+
+
+def tsub(a: str, b: str) -> tuple[int, ...]:
+    return tuple((int(x) - int(y)) % 3 for x, y in zip(a, b))
+
+
+def matmul_targets_f3(a: int, b: int, c: int, L: int) -> tuple[int, int, list[dict]]:
+    R, C, terms = matmul_targets(a, b, c, L)
+    for t in terms:
+        t["t"] = "".join("1" if (t["m"] >> p) & 1 else "0" for p in range(R * C))
+    return R, C, terms
+
+
+def spec_problem_f3(name: str, R: int, C: int, terms: list[dict]) -> str:
+    return f"P {name} {R} {C} {len(terms)}\n" + "".join(f"T {t['t']} {t['label']}\n" for t in terms)
+
+
+def verify_tree_f3(res: dict, R: int, C: int) -> dict:
+    edges = {tuple(sorted(e)) for e in res["tree"]}
+    bad = [e for e in edges if rank_f3(tsub(e[0], e[1]), R, C) != 1]
+    adj: dict[str, list[str]] = {}
+    for a, b in edges:
+        adj.setdefault(a, []).append(b)
+        adj.setdefault(b, []).append(a)
+    zero = "0" * (R * C)
+    seen, todo = {zero}, [zero]
+    while todo:
+        v = todo.pop()
+        for w in adj.get(v, []):
+            if w not in seen:
+                seen.add(w)
+                todo.append(w)
+    missing = [t[0] for t in res["terminals"] if t[0] not in seen]
+    ok = not bad and not missing and res["tree_err"] == 0 and len(edges) == res["answer"]
+    return {"ok": ok, "edges": len(edges), "bad_edges": len(bad), "missing": missing, "nodes": len(seen)}
+
+
+def brute_steiner_f3(R: int, C: int, terms: list[str]) -> int:
+    n = R * C
+    states = ["".join(str((x // 3**p) % 3) for p in range(n)) for x in range(3**n)]
+    dist = {}
+
+    def d(a: str, b: str) -> int:
+        key = (a, b) if a < b else (b, a)
+        if key not in dist:
+            dist[key] = rank_f3(tsub(a, b), R, C)
+        return dist[key]
+
+    nodes = ["0" * n] + terms
+
+    def mst(pts: list[str]) -> int:
+        best, total = {p: d(pts[0], p) for p in pts[1:]}, 0
+        while best:
+            p = min(best, key=best.get)
+            total += best.pop(p)
+            for q in best:
+                best[q] = min(best[q], d(p, q))
+        return total
+
+    others = [s for s in states if s not in nodes]
+    best = mst(nodes)
+    for k in range(1, len(nodes) - 1):
+        for P in itertools.combinations(others, k):
+            best = min(best, mst(nodes + list(P)))
+    return best
+
+
+def cmd_selftest3(args, out) -> None:
+    rng = random.Random(args.seed)
+    fails = 0
+    for i in range(args.cases):
+        R, C = rng.choice([(2, 2), (2, 2), (1, 3), (2, 3)])
+        n = rng.randint(2, 3 if R * C == 6 else 4)
+        pool = ["".join(str((x // 3**p) % 3) for p in range(R * C)) for x in range(1, 3 ** (R * C))]
+        terms = rng.sample(pool, n)
+        (r,) = run_solver(spec_problem_f3(f"s3_{i}", R, C, [{"t": t, "label": f"t{j}"} for j, t in enumerate(terms)]),
+                          binary="dw_f3")
+        want = brute_steiner_f3(R, C, terms)
+        v = verify_tree_f3(r, R, C)
+        ok = r["answer"] == want and v["ok"]
+        fails += not ok
+        if not ok:
+            emit(out, {"case": f"s3_{i}", "R": R, "C": C, "terms": terms, "dw": r["answer"], "brute": want, "tree": v})
+    emit(out, {"case": "selftest3", "cases": args.cases, "fails": fails, "pass": fails == 0})
+
+
+def cmd_matmul3(args, out) -> None:
+    R, C, terms = matmul_targets_f3(args.a, args.b, args.c, args.L)
+    name = f"mm{args.a}{args.b}{args.c}_L{args.L}_F3"
+    (res,) = run_solver(spec_problem_f3(name, R, C, terms), binary="dw_f3")
+    naive = naive_by_mask(terms)
+    n = len(terms)
+    below = [[S, res["root_dp"][S], naive[S]] for S in range(1, 1 << n) if res["root_dp"][S] < naive[S]]
+    res_small = {k: v for k, v in res.items() if k != "root_dp"}
+    emit(out, {"case": name, "shape": [args.a, args.b, args.c], "L": args.L, "naive": naive[-1], "answer": res["answer"],
+               "beats_naive": res["answer"] < naive[-1], "subsets_below_naive": below,
+               "tree_check": verify_tree_f3(res, R, C), "solver": res_small, "root_dp": res["root_dp"],
+               "labels": [t["label"] for t in terms]})
+
+
+# ---------------------------------------------------------------- task 4: the general version
+
+
+def random_independent(rng: random.Random, dim: int, r: int, within: list[int] | None = None) -> list[int]:
+    """r random independent vectors of F2^dim, inside span(within) when given."""
+    while True:
+        if within:
+            vs = [0] * r
+            for i in range(r):
+                for w in within:
+                    if rng.getrandbits(1):
+                        vs[i] ^= w
+        else:
+            vs = [rng.randrange(1, 1 << dim) for _ in range(r)]
+        if len(reduce_basis(vs)) == r:
+            return vs
+
+
+def chain_terms(name: str, a: list[int], b: list[int], cuts: list[int], R: int, C: int) -> list[dict]:
+    """Geodesic chain sum_{i < cut} a_i b_i^T for each cut (a, b independent, so each step adds rank exactly)."""
+    out, m, i = [], 0, 0
+    for s, cut in enumerate(cuts):
+        while i < cut:
+            m ^= outer(a[i], b[i], R, C)
+            i += 1
+        out.append({"m": m, "label": f"{name}s{s + 1}", "chain": name, "len": cut})
+    return out
+
+
+def condition_i(terms: list[dict], R: int, C: int) -> bool:
+    last: dict[str, int] = {}
+    for t in terms:
+        last[t["chain"]] = t["m"]  # chains are listed shallow to deep
+    ms = list(last.values())
+    for p, q in itertools.combinations(ms, 2):
+        if not (trivially_intersect(col_space(p, R, C), col_space(q, R, C))
+                or trivially_intersect(row_space(p, R, C), row_space(q, R, C))):
+            return False
+    return True
+
+
+def independence(terms: list[dict], R: int, C: int) -> dict:
+    """Matmul's extra structure: positions whose row (column) spaces meet trivially have independent ones jointly."""
+    last: dict[str, int] = {}
+    for t in terms:
+        last[t["chain"]] = t["m"]
+    ms = list(last.values())
+    res = {}
+    for side, sp in (("rows", row_space), ("cols", col_space)):
+        spaces = [sp(m, R, C) for m in ms]
+        worst = None
+        for k in range(3, len(ms) + 1):
+            for Q in itertools.combinations(range(len(ms)), k):
+                if all(trivially_intersect(spaces[i], spaces[j]) for i, j in itertools.combinations(Q, 2)):
+                    tot = sum(len(spaces[i]) for i in Q)
+                    got = len(reduce_basis([v for i in Q for v in spaces[i]]))
+                    if got < tot and worst is None:
+                        worst = {"positions": list(Q), "dim_sum": got, "sum_dims": tot}
+        res[side] = worst
+    return res
+
+
+def hub_example() -> tuple[int, int, list[dict]]:
+    """Three rank-2 forms on X = F2^2, Y = F2^4, with pairwise trivially intersecting row spaces, each at distance 1 from
+    the hub m = e1 f1^T + e2 f2^T: the tree 0 -> m -> each has length 5, under the sum 6."""
+    R, C = 2, 4
+    f = [1, 2, 4, 8]
+
+    def form(r0: int, r1: int) -> int:
+        return r0 | (r1 << C)
+
+    T = [form(f[0] ^ f[2], f[1]), form(f[0], f[1] ^ f[3]), form(f[0] ^ f[2] ^ f[3], f[1] ^ f[2] ^ f[3])]
+    return R, C, [{"m": m, "label": f"p{i}", "chain": f"p{i}", "len": 2} for i, m in enumerate(T)]
+
+
+def inv2(M: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
+    a, b, c, d = M
+    assert (a * d + b * c) % 2 == 1
+    return (d, b, c, a)
+
+
+def mul2(M, N):
+    a, b, c, d = M
+    e, f, g, h = N
+    return ((a * e + b * g) % 2, (a * f + b * h) % 2, (c * e + d * g) % 2, (c * f + d * h) % 2)
+
+
+def holonomy_class(blocks: dict) -> str:
+    """Conjugacy class in GL2(F2) of T00^-1 T01 T11^-1 T10, the invariant of a 2x2 grid of invertible 2x2 blocks."""
+    H = mul2(mul2(inv2(blocks[0, 0]), blocks[0, 1]), mul2(inv2(blocks[1, 1]), blocks[1, 0]))
+    if H == (1, 0, 0, 1):
+        return "identity"
+    return "order2" if mul2(H, H) == (1, 0, 0, 1) else "order3"
+
+
+def grid_terms(blocks: dict, rdims: list[int], cdims: list[int], chains: dict | None = None) -> tuple[int, int, list[dict]]:
+    """Positions (r, c) of a grid X = (+) X_r, Y = (+) Y_c (coordinate blocks); block (r, c) holds a geodesic chain inside
+    X_r (x) Y_c, given as (a vectors, b vectors, cuts) in block coordinates, or one full-rank form (2x2 tuple)."""
+    R, C = sum(rdims), sum(cdims)
+    roff = [sum(rdims[:i]) for i in range(len(rdims))]
+    coff = [sum(cdims[:i]) for i in range(len(cdims))]
+    terms = []
+    for (r, c), spec in sorted((chains or blocks).items()):
+        if chains:
+            a, b, cuts = spec
+            a = [x << roff[r] for x in a]
+            b = [y << coff[c] for y in b]
+            terms += chain_terms(f"r{r}c{c}", a, b, cuts, R, C)
+        else:
+            m = 0
+            for i in range(2):
+                for j in range(2):
+                    if spec[2 * i + j]:
+                        m |= 1 << ((roff[r] + i) * C + coff[c] + j)
+            terms.append({"m": m, "label": f"r{r}c{c}", "chain": f"r{r}c{c}", "len": 2})
+    return R, C, terms
+
+
+def solve_batch(problems: list[tuple[str, int, int, list[dict], dict]], out, kind: str, batch: bool = True) -> dict:
+    """Solve every (name, R, C, terms, meta) on the whole space; emit each one below its chains' sum, and a summary."""
+    spec = "".join(spec_problem(name, R, C, terms) for name, R, C, terms, _ in problems)
+    t0 = time.time()
+    results = {r["name"]: r for r in run_solver(spec, batch=batch)}
+    below = 0
+    for name, R, C, terms, meta in problems:
+        r = results[name]
+        naive = naive_by_mask(terms)
+        sub_below = [S for S in range(1, 1 << len(terms)) if r["root_dp"][S] < naive[S]]
+        if r["answer"] < naive[-1] or sub_below:
+            below += 1
+            best = min(sub_below, key=lambda S: (r["root_dp"][S] - naive[S], bin(S).count("1")))
+            emit(out, {"kind": kind, "case": name, "R": R, "C": C, "naive": naive[-1], "answer": r["answer"],
+                       "subsets_below": len(sub_below),
+                       "prefix_closed_below": sum(prefix_closed(S, terms) for S in sub_below),
+                       "best_subset": [best, r["root_dp"][best], naive[best]],
+                       "terms": [[hex(t["m"]), t["label"]] for t in terms],
+                       "tree": r["tree"], "tree_check": verify_tree_f2(r, R, C), **meta,
+                       "independence": independence(terms, R, C)})
+    summary = {"kind": kind, "summary": True, "families": len(problems), "below_naive": below,
+               "wall_s": round(time.time() - t0, 2), "states": 1 << (problems[0][1] * problems[0][2])}
+    emit(out, summary)
+    return summary
+
+
+def cmd_general(args, out) -> None:
+    rng = random.Random(args.seed)
+    # the hand-built family: refutes the general version with three terminals
+    R, C, terms = hub_example()
+    assert condition_i(terms, R, C)
+    solve_batch([("hub_example", R, C, terms, {"note": "three rank-2 forms at distance 1 from a rank-2 hub"})], out,
+                "hub_example")
+    # random families with (i) and (ii)
+    for R, C in [tuple(map(int, s.split("x"))) for s in args.sizes]:
+        probs = []
+        while len(probs) < args.families:
+            npos = rng.randint(3, args.max_positions)
+            terms: list[dict] = []
+            for p in range(npos):
+                for _ in range(50):
+                    top = rng.randint(1, min(R, C, 3))
+                    cuts = sorted(set([top] + ([rng.randint(1, top - 1)] if top > 1 and rng.random() < 0.5 else [])))
+                    a, b = random_independent(rng, R, top), random_independent(rng, C, top)
+                    cand = terms + chain_terms(f"p{p}", a, b, cuts, R, C)
+                    ms = [t["m"] for t in cand]
+                    if len(set(ms)) == len(ms) and condition_i(cand, R, C):
+                        terms = cand
+                        break
+            if len(terms) <= args.max_terminals and len({t["chain"] for t in terms}) >= 3:
+                probs.append((f"rand_{R}x{C}_{len(probs)}", R, C, terms, {}))
+        solve_batch(probs, out, f"random_{R}x{C}")
+    # block grids: matmul's direct-sum structure with arbitrary block contents (2x2 grid of 2x2 blocks, exhaustive)
+    inv = [m for m in itertools.product((0, 1), repeat=4) if (m[0] * m[3] + m[1] * m[2]) % 2]
+    probs = []
+    for combo in itertools.product(inv, repeat=4):
+        blocks = dict(zip([(0, 0), (0, 1), (1, 0), (1, 1)], combo))
+        R, C, terms = grid_terms(blocks, [2, 2], [2, 2])
+        probs.append((f"grid22_{len(probs)}", R, C, terms, {"holonomy": holonomy_class(blocks)}))
+    s = solve_batch(probs, out, "grid2x2_blocks2x2_full")
+    # block grids with chains (rank 1 then 2 in each 2x2 block), sampled
+    probs = []
+    bases = [(a1, a2) for a1 in (1, 2, 3) for a2 in (1, 2, 3) if a1 != a2]
+    for i in range(args.grid_chains):
+        chains = {(r, c): (list(rng.choice(bases)), list(rng.choice(bases)), [1, 2]) for r in (0, 1) for c in (0, 1)}
+        R, C, terms = grid_terms({}, [2, 2], [2, 2], chains)
+        probs.append((f"gridch22_{i}", R, C, terms, {}))
+    solve_batch(probs, out, "grid2x2_blocks2x2_chains")
+
+
+def cmd_grid(args, out) -> None:
+    """Block grids too large for the local machine: 2x3 grids of 2x2 blocks (R=4, C=6), sampled."""
+    rng = random.Random(args.seed)
+    inv = [m for m in itertools.product((0, 1), repeat=4) if (m[0] * m[3] + m[1] * m[2]) % 2]
+    probs = []
+    seen = set()
+    for i in range(args.families):
+        blocks = {(r, c): rng.choice(inv) for r in (0, 1) for c in (0, 1, 2)}
+        if i == 0:
+            blocks = {k: (1, 0, 0, 1) for k in blocks}  # matmul <2,2,3> itself
+        key = tuple(sorted(blocks.items()))
+        if key in seen:
+            continue
+        seen.add(key)
+        R, C, terms = grid_terms(blocks, [2, 2], [2, 2, 2])
+        hol = [holonomy_class({(0, 0): blocks[0, a], (0, 1): blocks[0, b], (1, 0): blocks[1, a], (1, 1): blocks[1, b]})
+               for a, b in ((0, 1), (0, 2), (1, 2))]
+        probs.append((f"grid23_{i}", R, C, terms, {"holonomies": hol}))
+    solve_batch(probs, out, "grid2x3_blocks2x2_full", batch=False)
+
+
+# ---------------------------------------------------------------- task 3: subspace-restricted search on <a,b,c> with stride L
+
+STRASSEN = [  # (U, V) over 2x2 A and B as (11, 12, 21, 22); over F2 every sign is +
+    ((1, 0, 0, 1), (1, 0, 0, 1)), ((0, 0, 1, 1), (1, 0, 0, 0)), ((1, 0, 0, 0), (0, 1, 0, 1)), ((0, 0, 0, 1), (1, 0, 1, 0)),
+    ((1, 1, 0, 0), (0, 0, 0, 1)), ((1, 0, 1, 0), (1, 1, 0, 0)), ((0, 1, 0, 1), (0, 0, 1, 1)),
+]
+GL2 = [m for m in itertools.product((0, 1), repeat=4) if (m[0] * m[3] + m[1] * m[2]) % 2]
+
+
+def tr2(M):
+    return (M[0], M[2], M[1], M[3])
+
+
+def strassen_orbit() -> list[list[tuple]]:
+    """Strassen's products under (A, B, C) in GL2(F2)^3 (X -> AXB, Y -> B^-1 Y C): each a rank-7 scheme for <2,2,2>."""
+    seen, out = set(), []
+    for A in GL2:
+        for B in GL2:
+            for Cm in GL2:
+                Bi = inv2(B)
+                prods = frozenset((mul2(mul2(tr2(A), U), tr2(B)), mul2(mul2(tr2(Bi), V), tr2(Cm))) for U, V in STRASSEN)
+                if prods not in seen:
+                    seen.add(prods)
+                    out.append(sorted(prods))
+    return out
+
+
+def block_products(scheme, a: int, b: int, c: int, rows: tuple, ks: tuple, cols: tuple) -> list[int]:
+    """A <2,2,2> scheme on rows (r0, r1) of X, inner indices (k0, k1) and columns (c0, c1) of Y, as R x C forms."""
+    R, C = a * b, b * c
+    ms = []
+    for U, V in scheme:
+        u = sum(1 << (rows[i] * b + ks[j]) for i in range(2) for j in range(2) if U[2 * i + j])
+        v = sum(1 << (ks[i] * c + cols[j]) for i in range(2) for j in range(2) if V[2 * i + j])
+        ms.append(outer(u, v, R, C))
+    return ms
+
+
+def x_factor(m: int, R: int, C: int) -> int:
+    """u of a rank-1 form u v^T over F2 (the rows where it is nonzero)."""
+    return sum(1 << i for i, x in enumerate(rows_of(m, R, C)) if x)
+
+
+def y_factor(m: int, R: int, C: int) -> int:
+    return next(x for x in rows_of(m, R, C) if x)
+
+
+def standard_pieces(a: int, b: int, c: int) -> list[int]:
+    R, C = a * b, b * c
+    return [1 << ((r * b + k) * C + (k * c + j)) for r in range(a) for j in range(c) for k in range(b)]
+
+
+def random_rank1(rng: random.Random, R: int, C: int, a: int, b: int, c: int, how: str) -> int:
+    if how == "dense":
+        return outer(rng.randrange(1, 1 << R), rng.randrange(1, 1 << C), R, C)
+    r, j = rng.randrange(a), rng.randrange(c)
+    rowmask = sum(1 << (r * b + k) for k in range(b))
+    colmask = sum(1 << (k * c + j) for k in range(b))
+    while True:
+        u = rng.randrange(1, 1 << R) & (rowmask if how in ("aligned", "row") else (1 << R) - 1)
+        v = rng.randrange(1, 1 << C) & (colmask if how in ("aligned", "col") else (1 << C) - 1)
+        if u and v:
+            return outer(u, v, R, C)
+
+
+def subspace_problem(name: str, R: int, C: int, terms: list[dict], gens: list[int]) -> tuple[str, int] | None:
+    basis = reduce_basis([t["m"] for t in terms] + gens)
+    return spec_problem(name, R, C, terms, basis), len(basis)
+
+
+def cmd_subspace(args, out) -> None:
+    a, b, c, L = args.a, args.b, args.c, args.L
+    R, C, terms = matmul_targets(a, b, c, L)
+    naive = a * b * c
+    rng = random.Random(args.seed)
+    std = standard_pieces(a, b, c)
+    orbit = strassen_orbit()
+    emit(out, {"kind": "strassen_orbit", "schemes": len(orbit)})
+    pairings = [((0, 1), (2, 3)), ((0, 2), (1, 3)), ((0, 3), (1, 2))] if b == 4 else [((0, 1),)]
+    deadline = time.time() + args.budget_s
+    best = {"answer": 999}
+    stats: dict[str, dict] = {}
+
+    def run_family(family: str, items: list[tuple[str, list[int]]], batch: bool) -> None:
+        nonlocal best
+        specs, ks = [], {}
+        for nm, gens in items:
+            sp, k = subspace_problem(nm, R, C, terms, gens)
+            if k > args.max_k:
+                continue
+            specs.append(sp)
+            ks[nm] = (k, gens)
+        if not specs:
+            return
+        t0 = time.time()
+        res = run_solver("".join(specs), batch=batch)
+        st = stats.setdefault(family, {"family": family, "subspaces": 0, "best": 999, "unreachable": 0, "k_max": 0,
+                                       "wall_s": 0.0, "hist": {}})
+        st["wall_s"] = round(st["wall_s"] + time.time() - t0, 1)
+        for r in res:
+            k, gens = ks[r["name"]]
+            st["subspaces"] += 1
+            st["k_max"] = max(st["k_max"], k)
+            ans = r["answer"]
+            st["unreachable"] += ans >= 120
+            st["hist"][str(ans)] = st["hist"].get(str(ans), 0) + 1
+            st["best"] = min(st["best"], ans)
+            if ans < best["answer"] or (ans < naive):
+                v = verify_tree_f2(r, R, C)
+                rec = {"kind": "subspace_best", "family": family, "case": r["name"], "k": k, "answer": ans,
+                       "naive": naive, "beats_naive": ans < naive, "tree_check": v, "tree": r["tree"],
+                       "gens": [hex(g) for g in gens]}
+                if ans < best["answer"]:
+                    best = {**rec}
+                emit(out, rec)
+        emit(out, {"kind": "subspace_family", **st})
+
+    # (a) a Strassen scheme on each half of every pairing of the inner indices (all pairs of schemes), with and
+    #     without the standard pieces x_rk y_kc; then with random cross products between the halves
+    for pi, pairing in enumerate(pairings):
+        if b == 4:
+            h0, h1 = pairing
+            items = [(f"a_p{pi}_{i}_{j}", block_products(s0, a, b, c, (0, 1), h0, (0, 1))
+                      + block_products(s1, a, b, c, (0, 1), h1, (0, 1)))
+                     for i, s0 in enumerate(orbit) for j, s1 in enumerate(orbit)]
+        else:
+            items = [(f"a_p{pi}_{i}", block_products(s0, a, b, c, (0, 1), pairing[0], (0, 1))) for i, s0 in enumerate(orbit)]
+        run_family(f"a_strassen_pairing{pi}", items, batch=True)
+        if time.time() > deadline:
+            break
+        items = [(nm + "_std", gens + std) for nm, gens in rng.sample(items, min(len(items), args.samples))]
+        run_family(f"a_strassen_std_pairing{pi}", items, batch=True)
+    for m in (2, 4, 6):
+        if time.time() > deadline:
+            break
+        items = []
+        for t in range(args.samples):
+            pairing = rng.choice(pairings)
+            if b == 4:
+                g = (block_products(rng.choice(orbit), a, b, c, (0, 1), pairing[0], (0, 1))
+                     + block_products(rng.choice(orbit), a, b, c, (0, 1), pairing[1], (0, 1)))
+            else:
+                g = block_products(rng.choice(orbit), a, b, c, (0, 1), pairing[0], (0, 1))
+            cross = []
+            for _ in range(m):
+                p, q = rng.sample(g, 2)
+                # the X factor of one product times the Y factor of another
+                cross.append(outer(x_factor(p, R, C), y_factor(q, R, C), R, C))
+            items.append((f"a_cross{m}_{t}", g + std + cross))
+        run_family(f"a_strassen_std_cross{m}", items, batch=True)
+    # (b) the standard pieces plus m random dense rank-1 forms; (c) plus m position-aligned ones (u in a row's X block,
+    #     v in a column's Y block), or row- or column-aligned ones
+    for how, fam in (("dense", "b_random_dense"), ("aligned", "c_aligned"), ("row", "c_row_aligned"),
+                     ("col", "c_col_aligned")):
+        for m in args.extra:
+            if time.time() > deadline:
+                break
+            items = [(f"{fam}{m}_{t}", std + [random_rank1(rng, R, C, a, b, c, how) for _ in range(m)])
+                     for t in range(args.samples)]
+            run_family(f"{fam}_m{m}", items, batch=len(std) + m <= args.batch_k)
+    # (d) greedy growth: keep the best subspace found (fewest edges, then most states reachable below naive) and add
+    #     rank-1 forms built from the factors of its tree's edges
+    if best.get("tree") and time.time() < deadline:
+        gens = [int(g, 16) for g in best["gens"]]
+        for rnd in range(args.greedy_rounds):
+            if time.time() > deadline:
+                break
+            edges = [int(x, 16) ^ int(y, 16) for x, y in best["tree"]]
+            us = [x_factor(e, R, C) for e in edges]
+            vs = [y_factor(e, R, C) for e in edges]
+            items = []
+            for t in range(args.samples):
+                extra = []
+                for _ in range(rng.randint(1, 4)):
+                    u = rng.choice(us) ^ (rng.choice(us) if rng.random() < 0.5 else 0)
+                    v = rng.choice(vs) ^ (rng.choice(vs) if rng.random() < 0.5 else 0)
+                    if u and v:
+                        extra.append(outer(u, v, R, C))
+                items.append((f"d_greedy{rnd}_{t}", gens + extra))
+            run_family(f"d_greedy_round{rnd}", items, batch=True)
+    emit(out, {"kind": "subspace_summary", "shape": [a, b, c], "L": L, "naive": naive, "best": best.get("answer"),
+               "families": list(stats.values())})
+
+
 def cmd_matmul(args, out) -> None:
     R, C, terms = matmul_targets(args.a, args.b, args.c, args.L)
     name = f"mm{args.a}{args.b}{args.c}_L{args.L}_F2"
@@ -322,12 +849,38 @@ def main() -> None:
     p = sub.add_parser("selftest")
     p.add_argument("--cases", type=int, default=40)
     p.add_argument("--seed", type=int, default=1)
-    p = sub.add_parser("matmul")
-    for k in ("a", "b", "c", "L"):
-        p.add_argument(f"--{k}", type=int, required=True)
+    p = sub.add_parser("selftest3")
+    p.add_argument("--cases", type=int, default=12)
+    p.add_argument("--seed", type=int, default=1)
+    for name in ("matmul", "matmul3"):
+        p = sub.add_parser(name)
+        for k in ("a", "b", "c", "L"):
+            p.add_argument(f"--{k}", type=int, required=True)
+    p = sub.add_parser("general")
+    p.add_argument("--seed", type=int, default=1)
+    p.add_argument("--sizes", nargs="+", default=["4x4", "3x5", "2x6"])
+    p.add_argument("--families", type=int, default=300)
+    p.add_argument("--max-positions", type=int, default=5)
+    p.add_argument("--max-terminals", type=int, default=8)
+    p.add_argument("--grid-chains", type=int, default=300)
+    p = sub.add_parser("grid")
+    p.add_argument("--seed", type=int, default=1)
+    p.add_argument("--families", type=int, default=40)
+    p = sub.add_parser("subspace")
+    for k, v in (("a", 2), ("b", 4), ("c", 2), ("L", 2)):
+        p.add_argument(f"--{k}", type=int, default=v)
+    p.add_argument("--seed", type=int, default=1)
+    p.add_argument("--samples", type=int, default=200, help="subspaces per sampled family")
+    p.add_argument("--extra", type=int, nargs="+", default=[4, 6, 8, 10])
+    p.add_argument("--max-k", type=int, default=26)
+    p.add_argument("--batch-k", type=int, default=20, help="solve subspaces up to this dimension in parallel, one each")
+    p.add_argument("--greedy-rounds", type=int, default=5)
+    p.add_argument("--budget-s", type=float, default=3600)
     args = ap.parse_args()
     out = open(args.out, "a") if args.out else None
-    {"validate": cmd_validate, "selftest": cmd_selftest, "matmul": cmd_matmul}[args.cmd](args, out)
+    cmds = {"validate": cmd_validate, "selftest": cmd_selftest, "selftest3": cmd_selftest3, "matmul": cmd_matmul,
+            "matmul3": cmd_matmul3, "general": cmd_general, "grid": cmd_grid, "subspace": cmd_subspace}
+    cmds[args.cmd](args, out)
 
 
 if __name__ == "__main__":
