@@ -54,6 +54,8 @@ DESIGNS = [  # name, prefill kernel, decode kernel
     ("1× alu, L = 32, 256 forced FFMAs", "p_alu_g4_ff256", None),
     ("1× alu, L = 32, 192 forced FFMAs, H = 2", "p_alu_g4_h2_ff192", None),
     ("1× alu, L = 32, 192 forced FFMAs, H = 4", "p_alu_g4_h4_ff192", None),
+    ("1× alu, L = 32, 192 forced FFMAs, H = 8", "p_alu_g4_h8_ff192", None),
+    ("1× alu, L = 32, 224 forced FFMAs, H = 4", "p_alu_g4_h4_ff224", None),
     ("1× alu, L = 32, 256 forced FFMAs, H = 4", "p_alu_g4_h4_ff256", None),
     ("3× alu, L = 128, spread (crossover)", "p_alu3_p1s", "d_alu16_p1"),
 ]
