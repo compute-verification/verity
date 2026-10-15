@@ -2,7 +2,7 @@
 
     python3 sass_loops.py filler.sass > sass-loops.json
 
-Keys are "pop,xop,x,unr" from the mangled template arguments (filler.cu's Op numbering).
+Keys are "pop,xop,x,unr,pb" from the mangled template arguments (filler.cu's Op numbering).
 """
 
 import json
@@ -12,7 +12,7 @@ from collections import Counter
 
 FUNC = re.compile(r"Function : (\S+)")
 INST = re.compile(r"/\*([0-9a-f]{4,})\*/\s+(.*?)\s*;")
-ARGS = re.compile(r"_Z2fkILi(\d+)ELi(\d+)ELi(\d+)ELi(\d+)EE")
+ARGS = re.compile(r"_Z2fkILi(\d+)ELi(\d+)ELi(\d+)ELi(\d+)ELi(\d+)EE")
 
 
 def main() -> int:

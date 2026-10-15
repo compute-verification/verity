@@ -7,8 +7,9 @@
 //
 //   XOP, X, UNR   X extra integer instructions of class XOP per loop trip of UNR rounds (4·UNR MMAs) inside the
 //                 filler's own loop, reading no accumulator (method b: k = X / (4·UNR) per MMA)
-//   POP           warps FW..FW+PW-1 of every block run a dependent-free stream of class POP, 256 a body, with an optional
-//                 __nanosleep between bodies, until the block's filler warps finish (method a, co-resident probe)
+//   POP, PB       warps FW..FW+PW-1 of every block run a dependent-free stream of class POP, PB a body, with an optional
+//                 __nanosleep between bodies, until the block's filler warps finish (method a, co-resident probe); POP =
+//                 IMMA runs covert MMAs instead (the tensor time the filler leaves idle)
 //
 // One block per SM (it reserves the SM's shared memory). Filler warps are 0..FW-1, so with FW and PW multiples of 4
 // every SMSP holds FW/4 filler and PW/4 probe warps. Modes:
@@ -84,8 +85,10 @@ __device__ __forceinline__ void mma_s8(uint32_t (&d)[4], const uint32_t (&a)[4],
 // The extra (method b) and probe (method a) instruction classes. Each op updates register u = e mod 8 from itself and
 // register e + 3 mod 8, last written five ops earlier, so a run of ops is dependency-free at the ALU's latency and no two
 // ops fold into one. MIX alternates IADD3 and IMAD, one ALU-pipe and one FMA-pipe op.
-enum Op { O_NONE = 0, O_IADD3, O_LOP3, O_IMAD, O_PRMT, O_MIX, NOPS };
-static const char* OP_NAME[NOPS] = {"none", "iadd3", "lop3", "imad", "prmt", "mix"};
+// IMMA (probes only) is a covert m16n8k32 s8 MMA into one of eight accumulators the probe warp holds: not issue slack
+// but the tensor time the filler leaves idle, P1's falsifier.
+enum Op { O_NONE = 0, O_IADD3, O_LOP3, O_IMAD, O_PRMT, O_MIX, O_IMMA, NOPS };
+static const char* OP_NAME[NOPS] = {"none", "iadd3", "lop3", "imad", "prmt", "mix", "imma"};
 
 __device__ __forceinline__ uint32_t maj3(uint32_t a, uint32_t b, uint32_t c) { return (a & b) | (a & c) | (b & c); }
 
@@ -99,7 +102,7 @@ __device__ __forceinline__ void xop(uint32_t (&y)[8], const uint32_t (&c)[4], in
   if (op == O_PRMT) y[u] = __byte_perm(y[u], y[v], 0x5140);
 }
 
-constexpr int FT = 4, OUTW = 24, PBODY = 256, MAXW = 32;
+constexpr int FT = 4, OUTW = 24, MAXW = 32;
 
 // One loop trip: UNR rounds of FT MMAs, each followed by the four chains' absorbs, with the trip's X extras spread
 // over the rounds (round q gets extras [q·X/UNR, (q+1)·X/UNR)).
@@ -122,8 +125,8 @@ __device__ __forceinline__ void trip(uint32_t (&acc)[FT][4], St (&s)[FT], const 
 }
 
 // out: OUTW words per filler thread (4 receipts, 16 accumulator words, the extras' fold). fclk: t0, t1 per filler warp
-// slot (block · MAXW + warp). pinfo: bodies, t0, t1, fold per probe warp slot. smid: per block.
-template <int POP, int XOP, int X, int UNR>
+// slot (block · MAXW + warp). pinfo: bodies, t0, t1, fold per probe warp slot. smid: per block. A probe body is PB ops.
+template <int POP, int XOP, int X, int UNR, int PB>
 __global__ void __launch_bounds__(1024, 1)
     fk(uint32_t* out, long long* fclk, long long* pinfo, uint32_t* smid, int iters, int fw, int sleep_ns, uint32_t seed) {
   __shared__ int done;
@@ -189,28 +192,57 @@ __global__ void __launch_bounds__(1024, 1)
     if (lane == 0) atomicAdd(&done, 1);
   } else if constexpr (POP != O_NONE) {
     const uint32_t ptid = 0x100000u + blockIdx.x * 1024 + threadIdx.x;
-    uint32_t y[8], c[4];
-#pragma unroll
-    for (int u = 0; u < 8; ++u) y[u] = gen(seed, ptid, 20 + u, 0);
-#pragma unroll
-    for (int r = 0; r < 4; ++r) c[r] = gen(seed, ptid, 30 + r, 0) | 1u;
-#pragma unroll
-    for (int u = 0; u < 8; ++u) asm volatile("" : "+r"(y[u]));
-#pragma unroll
-    for (int r = 0; r < 4; ++r) asm volatile("" : "+r"(c[r]));
     const volatile int* vd = &done;
-    long long n = 0;
-    const long long t0 = clock64();
-    while (*vd < fw) {
-#pragma unroll
-      for (int e = 0; e < PBODY; ++e) xop<POP>(y, c, e);
-      ++n;
-      if (sleep_ns > 0) __nanosleep(sleep_ns);
-    }
-    const long long t1 = clock64();
+    long long n = 0, t0 = 0, t1 = 0;
     uint32_t fold = 0;
+    if constexpr (POP == O_IMMA) {
+      uint32_t pa[4], pb[2][2], pacc[8][4];
 #pragma unroll
-    for (int u = 0; u < 8; ++u) fold ^= y[u];
+      for (int i = 0; i < 4; ++i) pa[i] = gen(seed, ptid, 7, i);
+#pragma unroll
+      for (int i = 0; i < 2; ++i)
+#pragma unroll
+        for (int k = 0; k < 2; ++k) pb[i][k] = gen(seed, ptid, 8 + i, k);
+#pragma unroll
+      for (int e = 0; e < 8; ++e)
+#pragma unroll
+        for (int r = 0; r < 4; ++r) pacc[e][r] = 0;
+#pragma unroll
+      for (int i = 0; i < 4; ++i) asm volatile("" : "+r"(pa[i]));
+      asm volatile("" : "+r"(pb[0][0]), "+r"(pb[0][1]), "+r"(pb[1][0]), "+r"(pb[1][1]));
+      t0 = clock64();
+      while (*vd < fw) {
+#pragma unroll
+        for (int e = 0; e < PB; ++e) mma_s8(pacc[e & 7], pa, pb[e & 1]);
+        ++n;
+        if (sleep_ns > 0) __nanosleep(sleep_ns);
+      }
+      t1 = clock64();
+#pragma unroll
+      for (int e = 0; e < 8; ++e)
+#pragma unroll
+        for (int r = 0; r < 4; ++r) fold ^= pacc[e][r];
+    } else {
+      uint32_t y[8], c[4];
+#pragma unroll
+      for (int u = 0; u < 8; ++u) y[u] = gen(seed, ptid, 20 + u, 0);
+#pragma unroll
+      for (int r = 0; r < 4; ++r) c[r] = gen(seed, ptid, 30 + r, 0) | 1u;
+#pragma unroll
+      for (int u = 0; u < 8; ++u) asm volatile("" : "+r"(y[u]));
+#pragma unroll
+      for (int r = 0; r < 4; ++r) asm volatile("" : "+r"(c[r]));
+      t0 = clock64();
+      while (*vd < fw) {
+#pragma unroll
+        for (int e = 0; e < PB; ++e) xop<POP>(y, c, e);
+        ++n;
+        if (sleep_ns > 0) __nanosleep(sleep_ns);
+      }
+      t1 = clock64();
+#pragma unroll
+      for (int u = 0; u < 8; ++u) fold ^= y[u];
+    }
     if (lane == 0) {
       long long* p = pinfo + 4 * (blockIdx.x * MAXW + warp);
       p[0] = n;
@@ -225,20 +257,21 @@ __global__ void __launch_bounds__(1024, 1)
 using KFn = void (*)(uint32_t*, long long*, long long*, uint32_t*, int, int, int, uint32_t);
 struct Kern {
   std::string name;
-  int pop, xop, x, unr;
+  int pop, xop, x, unr, pb;
   KFn fn;
 };
 
-#define BASE(U) {"base-u" #U, O_NONE, O_NONE, 0, U, fk<O_NONE, O_NONE, 0, U>}
-#define XK(OP, X, U) {std::string("x-") + OP_NAME[OP] + "-u" #U "-x" #X, O_NONE, OP, X, U, fk<O_NONE, OP, X, U>}
+#define BASE(U) {"base-u" #U, O_NONE, O_NONE, 0, U, 0, fk<O_NONE, O_NONE, 0, U, 1>}
+#define XK(OP, X, U) {std::string("x-") + OP_NAME[OP] + "-u" #U "-x" #X, O_NONE, OP, X, U, 0, fk<O_NONE, OP, X, U, 1>}
 #define XROW1(OP) XK(OP, 1, 1), XK(OP, 2, 1), XK(OP, 3, 1), XK(OP, 4, 1), XK(OP, 6, 1), XK(OP, 8, 1), XK(OP, 12, 1), XK(OP, 16, 1)
 #define XROW4(OP) XK(OP, 1, 4), XK(OP, 2, 4), XK(OP, 4, 4)
-#define PK(OP) {std::string("p-") + OP_NAME[OP], OP, O_NONE, 0, 1, fk<OP, O_NONE, 0, 1>}
+#define PK(OP, PB) {std::string("p-") + OP_NAME[OP] + "-b" #PB, OP, O_NONE, 0, 1, PB, fk<OP, O_NONE, 0, 1, PB>}
 
 static std::vector<Kern> kernels() {
-  return {BASE(1),      BASE(4),      XROW1(O_IADD3), XROW1(O_LOP3), XROW1(O_IMAD), XROW1(O_PRMT),
-          XROW1(O_MIX), XROW4(O_IADD3), XROW4(O_IMAD), XROW4(O_MIX), PK(O_IADD3),   PK(O_LOP3),
-          PK(O_IMAD),   PK(O_PRMT),   PK(O_MIX)};
+  return {BASE(1),          BASE(4),          XROW1(O_IADD3),   XROW1(O_LOP3),   XROW1(O_IMAD),  XROW1(O_PRMT),
+          XROW1(O_MIX),     XROW4(O_IADD3),   XROW4(O_IMAD),    XROW4(O_MIX),    PK(O_IADD3, 256), PK(O_LOP3, 256),
+          PK(O_IMAD, 256),  PK(O_PRMT, 256),  PK(O_MIX, 256),   PK(O_IMMA, 32),  PK(O_IADD3, 16), PK(O_IMAD, 16),
+          PK(O_MIX, 16)};
 }
 
 static void set_keys(uint32_t kseed) {
@@ -326,7 +359,7 @@ static Result launch(Dev& d, const Kern& k, int blocks, int fw, int pw, int slee
     span.push_back(sp);
     rate.push_back((double)fw * iters * FT / sp);
     double ops = 0;
-    for (int w = fw; w < fw + pw; ++w) ops += (double)pi[4 * (bl * MAXW + w)] * PBODY;
+    for (int w = fw; w < fw + pw; ++w) ops += (double)pi[4 * (bl * MAXW + w)] * k.pb;
     probe.push_back(ops / sp);
   }
   std::vector<uint32_t> u(sm);
@@ -350,11 +383,11 @@ static const Kern& find(const std::vector<Kern>& ks, const std::string& name) {
 
 static void emit(const char* phase, const Kern& k, int fw, int pw, int sleep_ns, int iters, int rep, uint32_t seed,
                  const Result& r) {
-  printf("{\"phase\":\"%s\",\"kernel\":\"%s\",\"pop\":\"%s\",\"xop\":\"%s\",\"x\":%d,\"unr\":%d,\"k\":%.4f,\"fw\":%d,"
-         "\"pw\":%d,\"sleep_ns\":%d,\"iters\":%d,\"rep\":%d,\"seed\":%u,\"blocks\":%d,\"distinct_sms\":%d,\"ms\":%.5f,"
-         "\"cycles_med\":%.0f,\"mhz\":%.2f,\"mma_per_sm_clk_med\":%.7f,\"mma_per_sm_clk_min\":%.7f,"
+  printf("{\"phase\":\"%s\",\"kernel\":\"%s\",\"pop\":\"%s\",\"pb\":%d,\"xop\":\"%s\",\"x\":%d,\"unr\":%d,\"k\":%.4f,"
+         "\"fw\":%d,\"pw\":%d,\"sleep_ns\":%d,\"iters\":%d,\"rep\":%d,\"seed\":%u,\"blocks\":%d,\"distinct_sms\":%d,"
+         "\"ms\":%.5f,\"cycles_med\":%.0f,\"mhz\":%.2f,\"mma_per_sm_clk_med\":%.7f,\"mma_per_sm_clk_min\":%.7f,"
          "\"probe_inst_per_sm_clk_med\":%.6f,\"probe_inst_per_sm_clk_min\":%.6f}\n",
-         phase, k.name.c_str(), OP_NAME[k.pop], OP_NAME[k.xop], k.x, k.unr, (double)k.x / (FT * k.unr), fw, pw,
+         phase, k.name.c_str(), OP_NAME[k.pop], k.pb, OP_NAME[k.xop], k.x, k.unr, (double)k.x / (FT * k.unr), fw, pw,
          sleep_ns, iters, rep, seed, r.blocks, r.distinct, r.ms, r.cyc_med, r.mhz, r.rate_med, r.rate_min, r.probe_med,
          r.probe_min);
   fflush(stdout);
@@ -437,20 +470,21 @@ int main(int argc, char** argv) {
         emit("inloop", k, fw, 0, 0, iters, rep, seed, r);
         if (fw == 16) emit_v(d, k, seed, kseed0, iters, vf);
       }
-    // Method a: probe warps beside the filler, each beside a filler-alone base.
-    for (int fw : {8, 16})
-      for (const Kern& k : ks) {
-        if (k.pop == O_NONE) continue;
-        for (int pw : {4, 8, 16}) {
-          if (fw + pw > MAXW) continue;
-          for (int sl : {0, 100, 400, 1600, 6400, 25600, 102400}) {
-            emit("probe-base", b1, fw, 0, 0, iters, rep, seed, launch(d, b1, d.sms, fw, 0, 0, iters, seed));
-            Result r = launch(d, k, d.sms, fw, pw, sl, iters, seed);
-            emit("probe", k, fw, pw, sl, iters, rep, seed, r);
-            if (fw == 16 && pw == 4 && sl == 0) emit_v(d, k, seed, kseed0, iters, vf);
-          }
+    // Method a: probe warps beside the filler at its full-rate occupancy (4 filler warps per SMSP). Each probe launch
+    // follows the same kernel with no probe warps (the same filler code: ptxas compiles the filler loop differently once
+    // a probe path is in the kernel), and each kernel's group starts with the plain filler (base-u1).
+    for (const Kern& k : ks) {
+      if (k.pop == O_NONE) continue;
+      const int fw = 16;
+      emit("probe-plain", b1, fw, 0, 0, iters, rep, seed, launch(d, b1, d.sms, fw, 0, 0, iters, seed));
+      for (int pw : {4, 8, 16})
+        for (int sl : {0, 400, 1600, 6400, 25600, 102400, 409600, 1000000}) {
+          emit("probe-base", k, fw, 0, 0, iters, rep, seed, launch(d, k, d.sms, fw, 0, 0, iters, seed));
+          Result r = launch(d, k, d.sms, fw, pw, sl, iters, seed);
+          emit("probe", k, fw, pw, sl, iters, rep, seed, r);
+          if (pw == 4 && sl == 0) emit_v(d, k, seed, kseed0, iters, vf);
         }
-      }
+    }
   }
   fclose(vf);
   return 0;

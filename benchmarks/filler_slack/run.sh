@@ -20,7 +20,7 @@ git rev-parse HEAD > "$O/commit.txt" 2>&1 || true
 cuobjdump -sass "$B/filler" > "$B/filler.sass" 2>&1
 python3 $D/sass_loops.py "$B/filler.sass" > "$O/sass-loops.json"
 gzip -c "$B/filler.sass" > "$O/filler.sass.gz"
-export ITERS=${ITERS:-32000} REPS=${REPS:-7} NCU_REPS=${NCU_REPS:-5} NCU_ITERS=${NCU_ITERS:-8000}
+export ITERS=${ITERS:-64000} REPS=${REPS:-7} NCU_REPS=${NCU_REPS:-5} NCU_ITERS=${NCU_ITERS:-8000}
 mkdir -p "$O/ncu"
 # shellcheck disable=SC2016
 gpu-lease 1 --wait --max-min "${MAXMIN:-30}" -- bash -c '
@@ -51,8 +51,9 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-30}" -- bash -c '
   M=$M,sm__pipe_fmalite_cycles_active.avg.pct_of_peak_sustained_active,sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_active
   M=$M,sm__cycles_elapsed.avg
   for r in $(seq 1 "$NCU_REPS"); do
-    for cfg in "base-u1 16 0 0" "base-u1 8 0 0" "base-u4 16 0 0" "x-iadd3-u1-x4 16 0 0" "x-imad-u1-x4 16 0 0" \
-               "p-iadd3 16 4 0" "p-imad 16 4 0" "p-iadd3 16 4 1600"; do
+    for cfg in "base-u1 16 0 0" "p-iadd3-b256 16 0 0" "base-u1 8 0 0" "base-u4 16 0 0" "x-iadd3-u1-x4 16 0 0" \
+               "x-imad-u1-x4 16 0 0" "p-iadd3-b256 16 4 0" "p-imad-b256 16 4 0" "p-imad-b256 16 4 102400" \
+               "p-imma-b32 16 4 0"; do
       set -- $cfg
       ncu --clock-control none --metrics "$M" --csv -k regex:fk -c 1 "$B/filler" one "$1" "$2" "$3" "$4" "$NCU_ITERS" \
         > "$O/ncu/m-$1-fw$2-pw$3-s$4-r$r.csv" 2>&1 || echo "ncu $cfg r$r rc $?" >> "$O/errors.txt"
