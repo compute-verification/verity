@@ -42,7 +42,7 @@ proof workers' results land here as theorems or as named hypotheses.
   `Int8Gemm120`). `relativelySecure_edited120` is route (c) on the int8 grid at 1 u, `relativelySecure_edited120_wide`
   on unrestricted operands at 16 u. Machines take any additive `Price`. The service range-checks the committed instance
   into `G_use = [−(127 − s), 127 − s]` (`GridService`, RS-RT's V6), and with noise bounded by `s` the edits are int8
-  (`edit_int8`, `accepted_edit_int8`).
+  (`edit_int8`; on the entries σ opens, `accepted_edit_int8`).
 * B_θ (RS-MODEL §6.2, θ = 1/5): `price120θ` over instructions with their shared-memory words; B's circuits lift at
   `4/5` and every B_θ adversary has a B shadow, so B's floor carries at `4/5` (`serviceFloor_θ`). Route (c) there at
   `N = 0.8 n³` u takes any B floor `F_B ≤ n³` (`relativelySecure_edited120θ_of_floor`, `ε = U / (0.8 F_B) − 1`):
@@ -1351,12 +1351,19 @@ def ServiceFloor (Mc : Machine) (S : Service) (F κ : ℝ) : Prop :=
 /-- Both operands lie in `G_use = [−g, g]` (RS-DEF v2 §1.10). -/
 def InGrid {n : ℕ} (g : ℤ) (x : Mat ℤ n n × Mat ℤ n n) : Prop := ∀ i j, |x.1 i j| ≤ g ∧ |x.2 i j| ≤ g
 
-/-- **A range-checking service** (RS-DEF v2 §1.10 after RS-RT's V6): the commitment binds the instance `(A_M, B_M)`
-(`committed`), and the verifier's relation includes the range check `A_M, B_M ∈ G_use = [−g, g]`, proved inside the
-zero-knowledge proof, so an accepted transcript's committed instance is in `G_use`. -/
+/-- **A range-checking service** (RS-DEF v2 §1.3 after RS-RT's V6): the commitment binds the instance `(A_M, B_M)`
+(`committed`), and for each block σ opens (`opened`; every entry for a full check) the verifier's relation includes
+the range check `A_M, B_M ∈ G_use = [−g, g]`, proved inside the zero-knowledge proof. -/
 structure GridService (n : ℕ) (g : ℤ) extends Service where
   committed : Com → Mat ℤ n n × Mat ℤ n n
-  range_check : ∀ c σ a, verify c σ a = true → InGrid g (committed c)
+  opened : Seed → Fin n → Fin n → Prop
+  range_check : ∀ c σ a, verify c σ a = true → ∀ i j, opened σ i j →
+    |(committed c).1 i j| ≤ g ∧ |(committed c).2 i j| ≤ g
+
+/-- With every entry opened, an accepted transcript's committed instance is in `G_use`. -/
+theorem GridService.inGrid_of_accepts {n : ℕ} {g : ℤ} (S : GridService n g) (hall : ∀ σ i j, S.opened σ i j)
+    {c : S.Com} {σ : S.Seed} {a : S.Ans} (h : S.verify c σ a = true) : InGrid g (S.committed c) :=
+  fun i j => S.range_check c σ a h i j (hall σ i j)
 
 namespace MatMachine
 
@@ -1975,13 +1982,21 @@ theorem edit_int8 {Mc : MatMachine ℤ} {Seed : Type} {n : ℕ} {E : Mc.Edit See
     (∀ i k, Int8 ((E.edit σ x).1 i k)) ∧ ∀ k j, Int8 ((E.edit σ x).2 k j) :=
   ⟨fun i k => int8_of_abs_le (hx i k).1 (hE σ i k).1, fun k j => int8_of_abs_le (hx k j).2 (hE σ k j).2⟩
 
-/-- **An accepted transcript's edited instance is int8**: the range check puts the committed instance in `G_use`, so
-under every σ its edits are int8 operands, the grid the edit floor prices at 1 u. -/
+/-- **An accepted transcript's opened edited entries are int8**: the range check puts the committed instance's opened
+entries in `G_use`, so under every σ' their edits are int8 operands, the grid the edit floor prices at 1 u. -/
 theorem accepted_edit_int8 {Mc : MatMachine ℤ} {n : ℕ} {s : ℤ} (S : GridService n (127 - s))
     {E : Mc.Edit S.Seed n} (hE : E.Bounded s) {c : S.Com} {σ : S.Seed} {a : S.Ans} (h : S.verify c σ a = true)
-    (σ' : S.Seed) :
+    (σ' : S.Seed) {i j : Fin n} (hij : S.opened σ i j) :
+    Int8 ((E.edit σ' (S.committed c)).1 i j) ∧ Int8 ((E.edit σ' (S.committed c)).2 i j) :=
+  ⟨int8_of_abs_le (S.range_check c σ a h i j hij).1 (hE σ' i j).1,
+    int8_of_abs_le (S.range_check c σ a h i j hij).2 (hE σ' i j).2⟩
+
+/-- With every entry opened, an accepted transcript's whole edited instance is int8. -/
+theorem accepted_edit_int8_all {Mc : MatMachine ℤ} {n : ℕ} {s : ℤ} (S : GridService n (127 - s))
+    (hall : ∀ σ i j, S.opened σ i j) {E : Mc.Edit S.Seed n} (hE : E.Bounded s) {c : S.Com} {σ : S.Seed}
+    {a : S.Ans} (h : S.verify c σ a = true) (σ' : S.Seed) :
     (∀ i k, Int8 ((E.edit σ' (S.committed c)).1 i k)) ∧ ∀ k j, Int8 ((E.edit σ' (S.committed c)).2 k j) :=
-  edit_int8 hE σ' (S.range_check c σ a h)
+  edit_int8 hE σ' (S.inGrid_of_accepts hall h)
 
 /-- Circuits for the int8 product on sm_120's tile shapes: exact on int8 operands at 1 u per multiply-accumulate
 (RS-MODEL's `gemm120`: `a b c` u for the `m16n8k32` tile GEMM). -/
