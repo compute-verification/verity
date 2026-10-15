@@ -257,7 +257,7 @@ __host__ __device__ inline uint32_t nz_hash(uint32_t key, uint32_t row, uint32_t
 // TM x BN tile, 8 warps of WM x 32 (MI = WM / 16 row blocks of 16, NI = 4 column blocks of 8); thread 0 also issues
 // every TMA, refilling each slot as the CTA releases it; STAGES stages of 128 bytes of depth (4 atoms); the tail
 // stage holds the peel rows.
-template <int TM, int BN, int WM, int STAGES, bool F8 = false, bool NZ = false> struct ML {
+template <int TM, int BN, int WM, int STAGES, bool F8 = false, int NZ = 0> struct ML {
   static constexpr int BK = 128, WN = 32, WARPS_M = TM / WM, WARPS_N = BN / WN, NCW = WARPS_M * WARPS_N, NCT = NCW * 32,
                        MI = WM / 16, NI = WN / 8;
   static_assert(NCW == 8 || NCW == 16, "8 or 16 warps");
@@ -438,41 +438,62 @@ template <int TM, int BN, int WM, int STAGES, bool F8 = false, bool NZ = false> 
   }
   // atom j of a stage absorbs when a receipt boundary falls just after it
   __host__ __device__ static constexpr bool absorbs(int rs, int j) { return rs != 0 && (rs == 32 || j % 2 == 1); }
-  // the fused edit of slot s, step kt: every thread adds the noise to its 16-byte chunks of the stage (TMA's 128-byte
-  // swizzle: physical chunk c of row r holds logical chunk c ^ (r % 8)), then the CTA meets before any ldmatrix
+  // the fused edit (NZ 1: serialized, NZ 2: the next stage's edit interleaved with this stage's atoms): every thread adds
+  // the noise to its 16-byte chunks of a stage (TMA's 128-byte swizzle: physical chunk c of row r holds logical chunk
+  // c ^ (r % 8)), then the CTA meets before any ldmatrix
+  static constexpr int NZC = (int)(STAGE / 16) / NCT;
+  DEV void edit_chunk(uint32_t sb, int kt, int i) const {
+    const int c = threadIdx.x + i * NCT;
+    const bool isA = c < (int)(A_BYTES / 16);
+    const int cc = isA ? c : c - (int)(A_BYTES / 16), row = cc >> 3, lc = (cc & 7) ^ (row & 7);
+    const uint32_t h = nz_hash(isA ? nz_keyA : nz_keyB, (isA ? nz_rowA : nz_rowB) + row, KT * (BK / 16), kt * (BK / 16) + lc);
+    const uint32_t addr = sb + c * 16;
+    uint32_t v0, v1, v2, v3;
+    asm volatile("ld.shared.v4.u32 {%0, %1, %2, %3}, [%4];" : "=r"(v0), "=r"(v1), "=r"(v2), "=r"(v3) : "r"(addr));
+    v0 = nz_add<F8>(v0, h, 0); v1 = nz_add<F8>(v1, h, 1); v2 = nz_add<F8>(v2, h, 2); v3 = nz_add<F8>(v3, h, 3);
+    asm volatile("st.shared.v4.u32 [%0], {%1, %2, %3, %4};" :: "r"(addr), "r"(v0), "r"(v1), "r"(v2), "r"(v3));
+  }
+  DEV static void edit_meet() {
+    asm volatile("fence.proxy.async.shared::cta;" ::: "memory");
+    __syncthreads();
+  }
   DEV void edit(int kt) const {
-    if constexpr (NZ) {
-      const uint32_t sb = stage(s), k16 = KT * (BK / 16);
+    if constexpr (NZ != 0) {
 #pragma unroll
-      for (int i = 0; i < (int)(STAGE / 16) / NCT; i++) {
-        const int c = threadIdx.x + i * NCT;
-        const bool isA = c < (int)(A_BYTES / 16);
-        const int cc = isA ? c : c - (int)(A_BYTES / 16), row = cc >> 3, lc = (cc & 7) ^ (row & 7);
-        const uint32_t h = nz_hash(isA ? nz_keyA : nz_keyB, (isA ? nz_rowA : nz_rowB) + row, k16, kt * (BK / 16) + lc);
-        const uint32_t addr = sb + c * 16;
-        uint32_t v0, v1, v2, v3;
-        asm volatile("ld.shared.v4.u32 {%0, %1, %2, %3}, [%4];" : "=r"(v0), "=r"(v1), "=r"(v2), "=r"(v3) : "r"(addr));
-        v0 = nz_add<F8>(v0, h, 0); v1 = nz_add<F8>(v1, h, 1); v2 = nz_add<F8>(v2, h, 2); v3 = nz_add<F8>(v3, h, 3);
-        asm volatile("st.shared.v4.u32 [%0], {%1, %2, %3, %4};" :: "r"(addr), "r"(v0), "r"(v1), "r"(v2), "r"(v3));
-      }
-      asm volatile("fence.proxy.async.shared::cta;" ::: "memory");
-      __syncthreads();
+      for (int i = 0; i < NZC; i++) edit_chunk(stage(s), kt, i);
+      edit_meet();
     }
   }
   template <int RS, int KIND, bool FIRST, bool LAST>
   DEV void stage_body(int (&acc)[MI][NI][4], St (&ch)[NCH<KIND>], const uint32_t (&kr)[NK<KIND>], uint32_t (&fa)[2][MI][4],
                       uint32_t (&fb)[2][NI][2], int kt = 0) {
+    constexpr bool OV = NZ == 2 && !LAST;
+    static_assert(NZ != 2 || NZC == 4, "two chunks after each of atoms 0 and 1");
     const uint32_t sb = stage(s), done = empty(s);
+    const int sn = s + 1 == STAGES ? 0 : s + 1;
     load(fa[1], fb[1], sb, 1);
     mma<FIRST, absorbs(RS, 0), KIND>(acc, ch, kr, fa[0], fb[0]);
     load(fa[0], fb[0], sb, 2);
+    if constexpr (OV) {
+      mbar_wait_warp(full(sn), s + 1 == STAGES ? ph ^ 1 : ph);
+      edit_chunk(stage(sn), kt + 1, 0);
+      edit_chunk(stage(sn), kt + 1, 1);
+    }
     mma<false, absorbs(RS, 1), KIND>(acc, ch, kr, fa[1], fb[1]);
     load(fa[1], fb[1], sb, 3);
+    if constexpr (OV) {
+      edit_chunk(stage(sn), kt + 1, 2);
+      edit_chunk(stage(sn), kt + 1, 3);
+    }
     mma<false, absorbs(RS, 2), KIND>(acc, ch, kr, fa[0], fb[0]);
     advance();
     if (!LAST) {
-      mbar_wait_warp(full(s), ph);
-      edit(kt + 1);
+      if constexpr (OV) {
+        edit_meet();
+      } else {
+        mbar_wait_warp(full(s), ph);
+        edit(kt + 1);
+      }
       load(fa[0], fb[0], stage(s), 0);
     }
     mma<false, absorbs(RS, 3), KIND>(acc, ch, kr, fa[1], fb[1]);
@@ -534,7 +555,7 @@ template <int TM, int BN, int WM, int STAGES, bool F8 = false, bool NZ = false> 
   }
 };
 
-template <int TM, int BN, int WM, int STAGES, bool TAIL, int RS, int KIND, bool F8 = false, bool NZ = false>
+template <int TM, int BN, int WM, int STAGES, bool TAIL, int RS, int KIND, bool F8 = false, int NZ = 0>
 DEV void gemm_body(const Args& a) {
   using L = ML<TM, BN, WM, STAGES, F8, NZ>;
   constexpr int MI = L::MI, NI = L::NI;

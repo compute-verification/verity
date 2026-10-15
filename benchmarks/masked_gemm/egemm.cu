@@ -6,6 +6,7 @@
 // saturate and every sum is exact (s32, or f32 below 2^24).
 //   sep:  the edit as a separate memory pass (edit_form), then the GEMM on A' and B' (cuBLASLt, or fgemm.cu's mainloop)
 //   fus:  the edit fused into the mainloop: each stage edited in shared memory after its TMA lands (ML's NZ), no extra pass
+//   fov:  fused, with the next stage's edit interleaved with the current stage's atoms (one CTA barrier a stage either way)
 // Receipts on the custom mainloop: duo at L = 32 and 64, TB4C at 32, over all of K. Problems batch: A (batch m x k),
 // B (batch n x k), U (batch x m x n), the attention products batched over heads.
 //   egemm gate DIR M N K BATCH SEED GRID   every arm at one small shape (GRID CTAs), inputs and outputs to DIR for eref.py
@@ -30,21 +31,30 @@ template <int FMT> __global__ void __launch_bounds__(256) efill(uint8_t* X, size
   }
 }
 
-#define GEMMZ(NAME, RS, KIND, F8)                                                                                   \
-  __global__ void __launch_bounds__(ML<128, 128, 32, 3, F8, true>::NT, 1) NAME(const Args a) {                     \
-    gemm_body<128, 128, 32, 3, false, RS, KIND, F8, true>(a);                                                       \
+#define GEMMZ(NAME, RS, KIND, F8, NZ)                                                                               \
+  __global__ void __launch_bounds__(ML<128, 128, 32, 3, F8, NZ>::NT, 1) NAME(const Args a) {                       \
+    gemm_body<128, 128, 32, 3, false, RS, KIND, F8, NZ>(a);                                                         \
   }
-GEMMZ(zi_plain, 0, NONE, false)
-GEMMZ(zi_duo32, 32, DUO, false)
-GEMMZ(zi_duo64, 64, DUO, false)
-GEMMZ(zi_t4c32, 32, TB4C, false)
-GEMMZ(zf_plain, 0, NONE, true)
-GEMMZ(zf_duo32, 32, DUO, true)
-GEMMZ(zf_duo64, 64, DUO, true)
-GEMMZ(zf_t4c32, 32, TB4C, true)
+GEMMZ(zi_plain, 0, NONE, false, 1)
+GEMMZ(zi_duo32, 32, DUO, false, 1)
+GEMMZ(zi_duo64, 64, DUO, false, 1)
+GEMMZ(zi_t4c32, 32, TB4C, false, 1)
+GEMMZ(zf_plain, 0, NONE, true, 1)
+GEMMZ(zf_duo32, 32, DUO, true, 1)
+GEMMZ(zf_duo64, 64, DUO, true, 1)
+GEMMZ(zf_t4c32, 32, TB4C, true, 1)
+GEMMZ(oi_plain, 0, NONE, false, 2)
+GEMMZ(oi_duo32, 32, DUO, false, 2)
+GEMMZ(oi_duo64, 64, DUO, false, 2)
+GEMMZ(oi_t4c32, 32, TB4C, false, 2)
+GEMMZ(of_plain, 0, NONE, true, 2)
+GEMMZ(of_duo32, 32, DUO, true, 2)
+GEMMZ(of_duo64, 64, DUO, true, 2)
+GEMMZ(of_t4c32, 32, TB4C, true, 2)
 constexpr int NE = 4;   // cg, cduo32, cduo64, ct4c32: RCK's first four
 static Kern ZK[2][NE] = {{zi_plain, zi_duo32, zi_duo64, zi_t4c32}, {zf_plain, zf_duo32, zf_duo64, zf_t4c32}};
-static_assert(ML<128, 128, 32, 3, true, true>::SMEM == CSMEM, "one shared-memory size");
+static Kern OK_[2][NE] = {{oi_plain, oi_duo32, oi_duo64, oi_t4c32}, {of_plain, of_duo32, of_duo64, of_t4c32}};
+static_assert(ML<128, 128, 32, 3, true, 2>::SMEM == CSMEM, "one shared-memory size");
 
 struct EProb {
   int m, n, k, batch, grid;
@@ -95,6 +105,7 @@ static void esetup(EProb& P, int m, int n, int k, int batch, uint32_t seed, int 
     for (int j = 0; j < NE; j++) {
       CK(cudaFuncSetAttribute(RCK[f][j], cudaFuncAttributeMaxDynamicSharedMemorySize, CSMEM));
       CK(cudaFuncSetAttribute(ZK[f][j], cudaFuncAttributeMaxDynamicSharedMemorySize, CSMEM));
+      CK(cudaFuncSetAttribute(OK_[f][j], cudaFuncAttributeMaxDynamicSharedMemorySize, CSMEM));
     }
 }
 static void efree(EProb& P) {
@@ -106,8 +117,9 @@ static void efree(EProb& P) {
 }
 
 // an arm: plain (cuBLASLt on A, B), sepform (the edit pass alone), sep_lt (the edit pass + cuBLASLt on A', B'); on the
-// custom mainloop <rc> (A, B, no edit), sep_<rc> (the edit pass + the mainloop on A', B'), fus_<rc> (the fused edit)
-enum { E_PLAIN, E_SEPFORM, E_SEPLT, E_C, E_SEPC, E_FUS };
+// custom mainloop <rc> (A, B, no edit), sep_<rc> (the edit pass + the mainloop on A', B'), fus_<rc> (the fused edit,
+// serialized), fov_<rc> (the fused edit overlapped with the previous stage's atoms)
+enum { E_PLAIN, E_SEPFORM, E_SEPLT, E_C, E_SEPC, E_FUS, E_FOV };
 struct EArm { std::string name; int fmt, kind, rc; };
 static std::vector<EArm> eall() {
   std::vector<EArm> v;
@@ -120,6 +132,7 @@ static std::vector<EArm> eall() {
       v.push_back({std::string(RCN[j]) + F, f, E_C, j});
       v.push_back({"sep_" + std::string(RCN[j]) + F, f, E_SEPC, j});
       v.push_back({"fus_" + std::string(RCN[j]) + F, f, E_FUS, j});
+      v.push_back({"fov_" + std::string(RCN[j]) + F, f, E_FOV, j});
     }
   }
   return v;
@@ -154,6 +167,7 @@ static void erun(EProb& P, const EArm& a) {
     case E_C: ecg(P, RCK[f][a.rc], P.mab[f], 0, 0); break;
     case E_SEPC: eform(P, f, ka, kb); ecg(P, RCK[f][a.rc], P.mx, 0, 0); break;
     case E_FUS: ecg(P, ZK[f][a.rc], P.mab[f], ka, kb); break;
+    case E_FOV: ecg(P, OK_[f][a.rc], P.mab[f], ka, kb); break;
   }
 }
 
@@ -179,7 +193,7 @@ static int egate(const std::string& dir, int m, int n, int k, int batch, uint32_
       dump(dir, ("XB_" + a.name + ".bin").c_str(), P.XB, nb, true);
     } else {
       dump(dir, ("U_" + a.name + ".bin").c_str(), P.U, P.ub, true);
-      if ((a.kind == E_C || a.kind == E_SEPC || a.kind == E_FUS) && a.rc != 0)
+      if ((a.kind == E_C || a.kind == E_SEPC || a.kind == E_FUS || a.kind == E_FOV) && a.rc != 0)
         dump(dir, ("R_" + a.name + ".bin").c_str(), P.R, P.rb, true);
     }
     arms_json += (arms_json.empty() ? "\"" : ", \"") + a.name + "\"";

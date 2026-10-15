@@ -18,7 +18,7 @@ git rev-parse HEAD > "$O/commit.txt" 2>&1
 nvcc --version | tail -2 > "$O/nvcc.txt"
 nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/egemm" $D/egemm.cu -lcuda -lcublasLt -lnvidia-ml \
   > "$O/build.log" 2>&1 || { grep -E "error|warning" "$O/build.log" | head -60; tail -30 "$O/build.log"; exit 4; }
-grep -A1 -E "Compiling entry function '_Z[0-9]+(mi|mf|zi|zf)_" "$O/build.log" | grep -E "entry|spill" | head -40
+grep -A1 -E "Compiling entry function '_Z[0-9]+(mi|mf|zi|zf|oi|of)_" "$O/build.log" | grep -E "entry|spill" | head -40
 grep -E "spill|Used" "$O/build.log" > "$O/regs.txt"
 [ "$STAGE" = build ] && exit 0
 

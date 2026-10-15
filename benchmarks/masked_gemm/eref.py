@@ -6,7 +6,7 @@ Recomputed independently of the device, per format (int8, E4M3's integer grid), 
 batch) and the seed alone: the noise keys, the noise E (each 16-byte chunk of a stacked row from
 mix32(key ^ mix32(row k/16 + chunk)), element j's index into S = {5, 7, -5, -7} the 2 bits at 4 (j % 8) + 2 (j / 8)),
 A' = A + E_A and B' = B + E_B within the format's exact range, each batch's A B^T (the unedited arms) and A' B'^T (the
-edited ones, separate pass and fused), and the receipts (duo at 32 and 64, TB4C at 32) over the running sums of all of K.
+edited ones: separate pass, fused, fused and overlapped), and the receipts (duo at 32 and 64, TB4C at 32) over the running sums of all of K.
 """
 
 import json
@@ -113,9 +113,10 @@ def main(d: Path, receipts: bool) -> int:
             check_product(f"{rc}_{fmt}", fmt, AB)
             check_product(f"sep_{rc}_{fmt}", fmt, AeBe)
             check_product(f"fus_{rc}_{fmt}", fmt, AeBe)
+            check_product(f"fov_{rc}_{fmt}", fmt, AeBe)
         check_receipts("", fmt, A, B)
-        check_receipts("sep_", fmt, Ae, Be)
-        check_receipts("fus_", fmt, Ae, Be)
+        for prefix in ["sep_", "fus_", "fov_"]:
+            check_receipts(prefix, fmt, Ae, Be)
 
     missing = sorted(arms - seen)
     checks["every_arm_checked"] = not missing

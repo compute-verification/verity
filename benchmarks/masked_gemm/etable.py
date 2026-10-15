@@ -13,7 +13,8 @@ import sys
 GROUPS = {"Llama linears": ["qkv", "o", "gate_up", "down"], "4096^3": ["sq4096"],
           "attention QK^T": ["qk2k", "qk8k"], "attention PV": ["pv2k", "pv8k"]}
 RCS = [("cg", "none"), ("cduo32", "duo 32"), ("cduo64", "duo 64"), ("ct4c32", "TB4C 32")]
-ROWS = [("no edit, custom mainloop", "{rc}"), ("edit, separate pass", "sep_{rc}"), ("edit, fused", "fus_{rc}")]
+ROWS = [("no edit, custom mainloop", "{rc}"), ("edit, separate pass", "sep_{rc}"), ("edit, fused, serialized", "fus_{rc}"),
+        ("edit, fused, overlapped", "fov_{rc}")]
 
 
 def gate_verdicts(path):
@@ -30,7 +31,7 @@ def arm_gate(name, checks):
     keys = [key for key in checks if re.fullmatch(rf"(U|R|XA|XB)_{re.escape(name)}(_nonzero)?", key)]
     if not keys:
         return "unchecked"
-    if name.startswith("sep") or name.startswith("fus"):
+    if name.startswith(("sep", "fus", "fov")):
         keys += ["noise_keys", "noise_uniform_on_S", f"AeBe_{fmt}_range", f"AeBe_{fmt}_exact_range"]
     keys += [f"AB_{fmt}_range", "every_arm_checked"]
     return "pass" if all(key in checks and all(checks[key]) for key in keys) else "FAIL"
