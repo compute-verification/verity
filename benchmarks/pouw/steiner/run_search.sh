@@ -5,7 +5,8 @@
 #   aligned   task 4: (i)+(ii) families whose column and row spaces are coordinate subspaces
 #   grid      2x3 block grids of invertible 2x2 blocks (2^24 states each)
 #   exact     more exact F2 shapes ($EXACT, "a,b,c,L" items)
-#   subspace  task 3: subspace-restricted DW for <2,4,2>/L=2, then <2,3,2> with L=3 and L=1 ($SUB_BUDGET_S each)
+#   subspace  task 3: subspace-restricted DW, for each "a,b,c,L,samples,budget_s,batch_k" item in $SUB (default <2,4,2>/L=2,
+#             then <2,3,2> with L=3 and L=1), subspaces of dimension at most $SUB_MAX_K (24)
 #   sa        annealing over Steiner points on the whole space: calibration against exact DW, then $SA_SHAPES
 # $THREADS overrides the thread count (default nproc, at most 64); $FAMILIES, $SIZES and $SEED the families'
 # count, sizes and seed.
@@ -39,12 +40,11 @@ for phase in ${PHASES:-f3 general grid exact}; do
             python3 steiner.py --out "$OUT/exact_f2.jsonl" matmul --a "$a" --b "$b" --c "$cc" --L "$L"
         done ;;
     subspace)
-        python3 steiner.py --out "$OUT/subspace_242_L2.jsonl" subspace --a 2 --b 4 --c 2 --L 2 --samples 400 \
-            --budget-s "${SUB_BUDGET_S:-4500}"
-        python3 steiner.py --out "$OUT/subspace_232_L3.jsonl" subspace --a 2 --b 3 --c 2 --L 3 --samples 200 \
-            --budget-s "${SUB232_BUDGET_S:-900}"
-        python3 steiner.py --out "$OUT/subspace_232_L1.jsonl" subspace --a 2 --b 3 --c 2 --L 1 --samples 100 \
-            --budget-s "${SUB232_BUDGET_S:-900}" --batch-k 16 ;;
+        for c in ${SUB:-2,4,2,2,400,4500,18 2,3,2,3,200,900,18 2,3,2,1,100,900,16}; do
+            IFS=, read -r a b cc L samples budget bk <<<"$c"
+            python3 steiner.py --out "$OUT/subspace_$a$b${cc}_L$L.jsonl" subspace --a "$a" --b "$b" --c "$cc" --L "$L" \
+                --samples "$samples" --budget-s "$budget" --batch-k "$bk" --max-k "${SUB_MAX_K:-24}"
+        done ;;
     sa)
         gcc -O3 -march=native -fopenmp -o "$d/sa" sa.c -lm
         python3 steiner.py --out "$OUT/sa_calibrate.jsonl" sa-calibrate --per-size 10 --iters 200000 --restarts 46
