@@ -808,7 +808,7 @@ class _Fold:
         own = op.own
         if own.rank != 2 or tuple(own.shape) != (c.rows, N) or own.dtype != "bfloat16" or tuple(own.strides) != (N, 1):
             raise FoldError(f"{what}: own partial must be a row-major bf16 [{c.rows}, {N}] view, got {own!r}")
-        if op.kind not in ("all_reduce", "all_gather"):
+        if op.kind not in ("all_reduce", "all_gather", "fused_allreduce_rms_norm"):
             raise FoldError(f"{what}: unknown collective kind {op.kind!r}")
         if not op.site:
             raise FoldError(f"{what}: collective without an issuing module (site); refused (fail closed)")

@@ -483,9 +483,11 @@ class DsaSparseMla:
 def dsa_patterns() -> list:
     """Patterns in dependency order, before generic transparent handlers; with them vLLM's default Hopper block-FP8 linear op
     (`fp8.DynamicDeepGemmFp8Linear`), which GLM-5.3's attention and dense projections run."""
+    from verity_vllm.observe.fold.patterns.collectives import TpFusedAllReduceRmsNorm
     from verity_vllm.observe.fold.patterns.fp8 import DynamicDeepGemmFp8Linear
 
-    return [DsaNormRope(), DsaQ(), DsaMqaGather(), DsaMqaAllocation(), DsaTopK(), DsaIndexShare(), DsaSparseMla(), DynamicDeepGemmFp8Linear()]
+    return [DsaNormRope(), DsaQ(), DsaMqaGather(), DsaMqaAllocation(), DsaTopK(), DsaIndexShare(), DsaSparseMla(), DynamicDeepGemmFp8Linear(),
+            TpFusedAllReduceRmsNorm(world=8)]
 
 
 __all__ = [
