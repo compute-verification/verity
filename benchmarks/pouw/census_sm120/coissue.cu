@@ -151,6 +151,7 @@ __global__ void __launch_bounds__(1024) k_split(int wm, int im, int ix, uint32_t
 
 static uint32_t* g_sink;
 static BlockClk *g_rec, *g_rec2;
+static WarpClk* g_wrec;  // 32 a block
 static int g_sms;
 
 template <int M, int X, int R, bool DO_MMA>
@@ -251,7 +252,7 @@ static void two_kernels(const char* only) {
 struct Spans { double a, b, total; };
 static Spans split_spans(int wm, int wx) {  // medians over blocks of each role's span and of the whole block's
   std::vector<WarpClk> h((size_t)g_sms * 32);
-  CK(cudaMemcpy(h.data(), g_rec, h.size() * sizeof(WarpClk), cudaMemcpyDeviceToHost));
+  CK(cudaMemcpy(h.data(), g_wrec, h.size() * sizeof(WarpClk), cudaMemcpyDeviceToHost));
   std::vector<double> sa, sb, st;
   for (int blk = 0; blk < g_sms; blk++) {
     long long a0 = LLONG_MAX, a1 = 0, b0 = LLONG_MAX, b1 = 0;
@@ -276,11 +277,11 @@ static void split_case(int wm, int wx, const char* only) {
   auto kern = k_split<M, X>;
   CK(cudaFuncSetAttribute(kern, cudaFuncAttributeMaxDynamicSharedMemorySize, ONE_BLOCK_SMEM));
   auto go = [&](int m, int x, int im, int ix) {
-    kern<<<g_sms, (m + x) * 32, ONE_BLOCK_SMEM>>>(m, im, ix, g_sink, (WarpClk*)g_rec);  // warm-up
+    kern<<<g_sms, (m + x) * 32, ONE_BLOCK_SMEM>>>(m, im, ix, g_sink, g_wrec);  // warm-up
     CK(cudaDeviceSynchronize());
     Spans best{1e300, 1e300, 1e300};
     for (int rep = 0; rep < 3; rep++) {
-      kern<<<g_sms, (m + x) * 32, ONE_BLOCK_SMEM>>>(m, im, ix, g_sink, (WarpClk*)g_rec);
+      kern<<<g_sms, (m + x) * 32, ONE_BLOCK_SMEM>>>(m, im, ix, g_sink, g_wrec);
       CK(cudaDeviceSynchronize());
       Spans s = split_spans(m, x);
       if (s.total < best.total) best = s;
@@ -321,6 +322,7 @@ int main(int argc, char** argv) {
   CK(cudaMalloc(&g_sink, (size_t)g_sms * 1024 * 4));
   CK(cudaMalloc(&g_rec, (size_t)g_sms * sizeof(BlockClk)));
   CK(cudaMalloc(&g_rec2, (size_t)g_sms * sizeof(BlockClk)));
+  CK(cudaMalloc(&g_wrec, (size_t)g_sms * 32 * sizeof(WarpClk)));
   for (int warps : {8, 16}) {
     co_sweep<M_QMMA, X_FFMA>(warps, only);
     co_sweep<M_QMMA, X_FFMA_C>(warps, only);
