@@ -129,6 +129,20 @@ theorem time_seq_eq_zero {I O P : Type} {f : Mc.Alg I O} {g : Mc.Alg O P} (hf : 
     (hg : Mc.time g = 0) : Mc.time (Mc.seq f g) = 0 :=
   le_antisymm ((Mc.time_seq_le f g).trans (by rw [hf, hg, add_zero])) (Mc.time_nonneg _)
 
+/-! Cost bounds in goal-directed form, for `apply_rules`. -/
+
+theorem time_seq_le_of {I O P : Type} {f : Mc.Alg I O} {g : Mc.Alg O P} {a b : ℝ} (hf : Mc.time f ≤ a)
+    (hg : Mc.time g ≤ b) : Mc.time (Mc.seq f g) ≤ a + b :=
+  (Mc.time_seq_le f g).trans (add_le_add hf hg)
+
+theorem time_pair_le_of {I O P : Type} {f : Mc.Alg I O} {g : Mc.Alg I P} {a b : ℝ} (hf : Mc.time f ≤ a)
+    (hg : Mc.time g ≤ b) : Mc.time (Mc.pair f g) ≤ a + b :=
+  (Mc.time_pair_le f g).trans (add_le_add hf hg)
+
+theorem time_fst_le {I J : Type} : Mc.time (Mc.fst (I := I) (J := J)) ≤ 0 := Mc.time_fst.le
+
+theorem time_snd_le {I J : Type} : Mc.time (Mc.snd (I := I) (J := J)) ≤ 0 := Mc.time_snd.le
+
 end Machine
 
 end Machine
@@ -456,5 +470,166 @@ theorem floor_le_of_secure (P : Protocol Mc Inst Out) {ε δ η T : ℝ} (h : Se
   exact (hfloor.le_time P hs).trans ht
 
 end Reduction
+
+section MatmulPeel
+
+namespace MatMachine
+
+variable {R : Type} [Ring R] (Mc : MatMachine R)
+
+/-- Multiply the outputs of `f` and `g`. -/
+def mul₂ {I : Type} {a b c : ℕ} (f : Mc.Alg I (Mat R a b)) (g : Mc.Alg I (Mat R b c)) : Mc.Alg I (Mat R a c) :=
+  Mc.lift2 f g (Mc.mul a b c)
+
+/-- Subtract the output of `g` from that of `f`. -/
+def sub₂ {I : Type} {a b : ℕ} (f g : Mc.Alg I (Mat R a b)) : Mc.Alg I (Mat R a b) :=
+  Mc.lift2 f g (Mc.sub a b)
+
+theorem eval_mul₂ {I : Type} {a b c : ℕ} (f : Mc.Alg I (Mat R a b)) (g : Mc.Alg I (Mat R b c)) (x : I) :
+    Mc.eval (Mc.mul₂ f g) x = Mc.eval f x * Mc.eval g x := by
+  rw [mul₂, Machine.eval_lift2, Mc.eval_mul]
+
+theorem eval_sub₂ {I : Type} {a b : ℕ} (f g : Mc.Alg I (Mat R a b)) (x : I) :
+    Mc.eval (Mc.sub₂ f g) x = Mc.eval f x - Mc.eval g x := by
+  rw [sub₂, Machine.eval_lift2, Mc.eval_sub]
+
+theorem time_mul₂_le_of {I : Type} {a b c : ℕ} {f : Mc.Alg I (Mat R a b)} {g : Mc.Alg I (Mat R b c)} {u v : ℝ}
+    (hf : Mc.time f ≤ u) (hg : Mc.time g ≤ v) :
+    Mc.time (Mc.mul₂ f g) ≤ u + v + Mc.κ * ((a : ℝ) * b * c) :=
+  (Machine.time_lift2_le _ _ _ _).trans (by linarith [Mc.time_mul_le a b c])
+
+theorem time_sub₂_le_of {I : Type} {a b : ℕ} {f g : Mc.Alg I (Mat R a b)} {u v : ℝ} (hf : Mc.time f ≤ u)
+    (hg : Mc.time g ≤ v) : Mc.time (Mc.sub₂ f g) ≤ u + v + Mc.κadd * ((a : ℝ) * b) :=
+  (Machine.time_lift2_le _ _ _ _).trans (by linarith [Mc.time_sub_le a b])
+
+/-- The correction `(C', X, Y) ↦ C' − X − Y`. -/
+def corr (n : ℕ) : Mc.Alg (Mat R n n × Mat R n n × Mat R n n) (Mat R n n) :=
+  Mc.sub₂ (Mc.sub₂ Mc.fst (Mc.seq Mc.snd Mc.fst)) (Mc.seq Mc.snd Mc.snd)
+
+theorem eval_corr (n : ℕ) (b : Mat R n n × Mat R n n × Mat R n n) :
+    Mc.eval (Mc.corr n) b = b.1 - b.2.1 - b.2.2 := by
+  simp only [corr, eval_sub₂, Mc.eval_seq, Mc.eval_fst, Mc.eval_snd]
+
+/-- The correction costs two subtractions. -/
+theorem time_corr_le (n : ℕ) : Mc.time (Mc.corr n) ≤ 2 * Mc.κadd * (n : ℝ) ^ 2 := by
+  apply le_trans
+  · unfold corr
+    apply_rules [time_mul₂_le_of, time_sub₂_le_of, Machine.time_pair_le_of, Machine.time_seq_le_of,
+      Machine.time_fst_le, Machine.time_snd_le]
+  · linarith
+
+/-- The full-rank peel's blocks `(C', A, Y, R, S)`: the committed product, the instance's `A`, M's masked
+`Y = B + S`, and the masks. -/
+abbrev FullBlocks (R : Type) (n : ℕ) : Type := Mat R n n × Mat R n n × Mat R n n × Mat R n n × Mat R n n
+
+/-- Blocks valid for the instance `(A, B)`: `A` is the instance's, `Y = B + S`, and `C' = (A + R) Y`. -/
+def ValidFull {n : ℕ} (x : Mat R n n × Mat R n n) (b : FullBlocks R n) : Prop :=
+  b.2.1 = x.1 ∧ b.2.2.1 = x.2 + b.2.2.2.2 ∧ b.1 = (x.1 + b.2.2.2.1) * b.2.2.1
+
+/-- **The full-rank peel**: `(C', A, Y, R, S) ↦ (C', R Y, A S)`, two `n × n × n` products. -/
+def peelFull (n : ℕ) : Mc.Alg (FullBlocks R n) (Mat R n n × Mat R n n × Mat R n n) :=
+  Mc.pair Mc.fst
+    (Mc.pair (Mc.mul₂ (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd Mc.fst))) (Mc.seq Mc.snd (Mc.seq Mc.snd Mc.fst)))
+      (Mc.mul₂ (Mc.seq Mc.snd Mc.fst) (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd Mc.snd)))))
+
+theorem eval_peelFull (n : ℕ) (b : FullBlocks R n) :
+    Mc.eval (Mc.peelFull n) b = (b.1, b.2.2.2.1 * b.2.2.1, b.2.1 * b.2.2.2.2) := by
+  simp only [peelFull, eval_mul₂, Mc.eval_pair, Mc.eval_seq, Mc.eval_fst, Mc.eval_snd]
+
+/-- The full-rank peel and correction answer the instance from valid blocks: `C' − R Y − A S = A B`. -/
+theorem peelFull_correct {n : ℕ} (x : Mat R n n × Mat R n n) (b : FullBlocks R n) (hb : ValidFull x b) :
+    x.1 * x.2 = Mc.eval (Mc.corr n) (Mc.eval (Mc.peelFull n) b) := by
+  obtain ⟨C', A, Y, Rm, S⟩ := b
+  obtain ⟨hA, hY, hC⟩ := hb
+  dsimp only at hA hY hC
+  subst hA hY hC
+  rw [eval_peelFull, eval_corr]
+  exact mask_peel x.1 Rm x.2 S
+
+/-- The full-rank peel costs two `n × n × n` products. -/
+theorem time_peelFull_le (n : ℕ) : Mc.time (Mc.peelFull n) ≤ 2 * Mc.κ * (n : ℝ) ^ 3 := by
+  apply le_trans
+  · unfold peelFull
+    apply_rules [time_mul₂_le_of, time_sub₂_le_of, Machine.time_pair_le_of, Machine.time_seq_le_of,
+      Machine.time_fst_le, Machine.time_snd_le]
+  · linarith
+
+/-- The low-rank peel's blocks `(C', A, Y, U, Vᵀ, W, Zᵀ)`: the committed product, the instance's `A`, M's masked
+`Y = B + W Zᵀ`, and the factors of the rank-`r` masks `U Vᵀ` and `W Zᵀ`. -/
+abbrev LowBlocks (R : Type) (n r : ℕ) : Type :=
+  Mat R n n × Mat R n n × Mat R n n × Mat R n r × Mat R r n × Mat R n r × Mat R r n
+
+/-- Blocks valid for the instance `(A, B)`: `A` is the instance's, `Y = B + W Zᵀ`, and `C' = (A + U Vᵀ) Y`. -/
+def ValidLow {n r : ℕ} (x : Mat R n n × Mat R n n) (b : LowBlocks R n r) : Prop :=
+  b.2.1 = x.1 ∧ b.2.2.1 = x.2 + b.2.2.2.2.2.1 * b.2.2.2.2.2.2 ∧ b.1 = (x.1 + b.2.2.2.1 * b.2.2.2.2.1) * b.2.2.1
+
+/-- **The low-rank peel**: `(C', A, Y, U, Vᵀ, W, Zᵀ) ↦ (C', U (Vᵀ Y), (A W) Zᵀ)`, four products through the inner
+dimension `r`. -/
+def peelLow (n r : ℕ) : Mc.Alg (LowBlocks R n r) (Mat R n n × Mat R n n × Mat R n n) :=
+  Mc.pair Mc.fst
+    (Mc.pair
+      (Mc.mul₂ (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd Mc.fst)))
+        (Mc.mul₂ (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd Mc.fst))))
+          (Mc.seq Mc.snd (Mc.seq Mc.snd Mc.fst))))
+      (Mc.mul₂
+        (Mc.mul₂ (Mc.seq Mc.snd Mc.fst)
+          (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd Mc.fst))))))
+        (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd Mc.snd)))))))
+
+theorem eval_peelLow (n r : ℕ) (b : LowBlocks R n r) :
+    Mc.eval (Mc.peelLow n r) b =
+      (b.1, b.2.2.2.1 * (b.2.2.2.2.1 * b.2.2.1), (b.2.1 * b.2.2.2.2.2.1) * b.2.2.2.2.2.2) := by
+  simp only [peelLow, eval_mul₂, Mc.eval_pair, Mc.eval_seq, Mc.eval_fst, Mc.eval_snd]
+
+/-- The low-rank peel and correction answer the instance from valid blocks:
+`C' − U (Vᵀ Y) − (A W) Zᵀ = A B`. -/
+theorem peelLow_correct {n r : ℕ} (x : Mat R n n × Mat R n n) (b : LowBlocks R n r) (hb : ValidLow x b) :
+    x.1 * x.2 = Mc.eval (Mc.corr n) (Mc.eval (Mc.peelLow n r) b) := by
+  obtain ⟨C', A, Y, U, Vt, W, Zt⟩ := b
+  obtain ⟨hA, hY, hC⟩ := hb
+  dsimp only at hA hY hC
+  subst hA hY hC
+  rw [eval_peelLow, eval_corr]
+  exact (lowRank_peel x.1 x.2 U Vt W Zt).symm
+
+/-- The low-rank peel costs four products through the inner dimension `r`: `4 κ n² r`. -/
+theorem time_peelLow_le (n r : ℕ) : Mc.time (Mc.peelLow n r) ≤ 4 * Mc.κ * (n : ℝ) ^ 2 * r := by
+  apply le_trans
+  · unfold peelLow
+    apply_rules (maxDepth := 200) [time_mul₂_le_of, time_sub₂_le_of, Machine.time_pair_le_of, Machine.time_seq_le_of,
+      Machine.time_fst_le, Machine.time_snd_le]
+  · linarith
+
+variable {n : ℕ} {P : Protocol Mc.toMachine (Mat R n n × Mat R n n) (Mat R n n)}
+
+/-- **Relative security of matmul PoUW with full-rank masks**, from extraction (named hypothesis `Extraction`) and
+the floor (named hypothesis `Floor`) above the peel's and the correction's cost `q = 2κ n³ + 2κadd n²`:
+`ε = q / (T − q)`. -/
+theorem secure_fullRank (hmat : IsMatmul P) {δ η T : ℝ}
+    (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), δ ≤ acceptance P M →
+      Extraction P ValidFull M η)
+    (hfloor : Floor Mc.toMachine P.correct T η) (hT : 2 * Mc.κ * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2 < T) :
+    Secure P ((2 * Mc.κ * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2) /
+      (T - (2 * Mc.κ * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2))) δ η :=
+  secure_of_extraction_floor P (Mc.peelFull n) (Mc.corr n)
+    (fun x b hb => (hmat x _).2 (Mc.peelFull_correct x b hb)) hext hfloor
+    (by linarith [Mc.time_peelFull_le n, Mc.time_corr_le n]) hT
+
+/-- **Relative security of matmul PoUW with rank-`r` masks**, from extraction and the floor above
+`q = 4κ n² r + 2κadd n²`: `ε = q / (T − q)`, which is `O(r / n)` against a floor of order `n³`. -/
+theorem secure_lowRank (hmat : IsMatmul P) (r : ℕ) {δ η T : ℝ}
+    (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), δ ≤ acceptance P M →
+      Extraction P (ValidLow (r := r)) M η)
+    (hfloor : Floor Mc.toMachine P.correct T η)
+    (hT : 4 * Mc.κ * (n : ℝ) ^ 2 * r + 2 * Mc.κadd * (n : ℝ) ^ 2 < T) :
+    Secure P ((4 * Mc.κ * (n : ℝ) ^ 2 * r + 2 * Mc.κadd * (n : ℝ) ^ 2) /
+      (T - (4 * Mc.κ * (n : ℝ) ^ 2 * r + 2 * Mc.κadd * (n : ℝ) ^ 2))) δ η :=
+  secure_of_extraction_floor P (Mc.peelLow n r) (Mc.corr n)
+    (fun x b hb => (hmat x _).2 (Mc.peelLow_correct x b hb)) hext hfloor
+    (by linarith [Mc.time_peelLow_le n r, Mc.time_corr_le n]) hT
+
+end MatMachine
+
+end MatmulPeel
 
 end Pouw.RelativeSecurity
