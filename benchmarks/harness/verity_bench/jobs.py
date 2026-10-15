@@ -148,11 +148,29 @@ def _relative_spec(source: str | Path, root: Path) -> str:
         raise ValueError("a recorded benchmark spec must be inside the source tree") from None
 
 
+QUEUE_KINDS = {1: "vllm-bench-1gpu", 8: "vllm-bench-8gpu"}
+
+
+def queue_kind(gpu_count: int) -> str:
+    """The queue kind (infra/cluster/kinds/benchmarks.toml) whose shape gives a point's job its CPUs and memory."""
+
+    try:
+        return QUEUE_KINDS[gpu_count]
+    except KeyError:
+        raise ValueError(
+            f"no queue kind for a {gpu_count}-GPU spec: register one in infra/cluster/kinds/benchmarks.toml "
+            "and name it in verity_bench.jobs.QUEUE_KINDS"
+        ) from None
+
+
 def research_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Path) -> list[str]:
     spec = plan.spec
     command = [
         "research", "run",
         "--queue",
+        "--kind", queue_kind(spec.preset.gpu_count),
+        # A guest's GPU job must be; a stopped point reruns whole when requeued, and resume skips only passing points.
+        "--preemptible",
         "--source", str(root),
         "--project", "verity",
         "--campaign", "vllm-bench",
@@ -164,9 +182,11 @@ def research_command(plan: Plan, source: str | Path, item: PlannedPoint, root: P
     ]
     if spec.admission.max_minutes is not None:
         command += ["--max-min", str(spec.admission.max_minutes)]
+    if os.environ.get("VERITY_BENCH_VENV"):
+        command += ["--env", f"VERITY_BENCH_VENV={os.environ['VERITY_BENCH_VENV']}"]
     command += [
         "--",
-        "python", "-m", "verity_bench", "_vllm-point",
+        "bash", "benchmarks/harness/run_point.sh",
         "--spec", _relative_spec(source, root),
         "--point", item.point.id,
         "--identity", item.identity,

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import subprocess
 import sys
+import tomllib
 from dataclasses import replace
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
@@ -154,10 +156,67 @@ def test_plan_marks_passing_points_and_dispatches_one_recorded_run_for_each_miss
     [(command, cwd)] = commands
     assert cwd == root
     assert command[:3] == ["research", "run", "--queue"]
+    assert command[command.index("--kind") + 1] == "vllm-bench-1gpu"
+    assert "--preemptible" in command[:command.index("--")]
     assert command[command.index("--gpus") + 1] == "1"
     assert command[command.index("--gpu-model") + 1] == "rtx-pro-6000"
-    assert command[command.index("--") + 1:][:4] == ["python", "-m", "verity_bench", "_vllm-point"]
+    assert command[command.index("--") + 1:][:2] == ["bash", "benchmarks/harness/run_point.sh"]
+    assert (root / "benchmarks/harness/run_point.sh").is_file()
     assert command[command.index("--point") + 1] == "b32-p512-mixed"
+
+
+def test_dispatch_forwards_the_point_venv_and_the_launcher_runs_the_point_in_it(tmp_path, monkeypatch):
+    root = Path(__file__).resolve().parents[3]
+    plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lambda identity, commit: None)
+    monkeypatch.setenv("VERITY_BENCH_VENV", str(tmp_path / "venv"))
+    command = jobs.research_command(plan, "llama31-8b-fp8-1gpu", plan.points[0], root)
+    assert f"VERITY_BENCH_VENV={tmp_path / 'venv'}" == command[command.index("--env") + 1]
+
+    launcher = root / "benchmarks/harness/run_point.sh"
+    env = {"PATH": "/usr/bin:/bin", "WORK": str(tmp_path), "CUDA_HOME": str(tmp_path)}
+    missing = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
+    assert missing.returncode == 2 and "pod_bootstrap.sh" in missing.stderr
+    python = tmp_path / "venv312" / "bin" / "python"
+    python.parent.mkdir(parents=True)
+    python.write_text('#!/bin/sh\necho "$PYTHONPATH"\necho "$@"\n')
+    python.chmod(0o755)
+    ran = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
+    assert ran.returncode == 0, ran.stderr
+    pythonpath, argv = ran.stdout.splitlines()
+    assert pythonpath.split(":")[:2] == [f"{root}/benchmarks/harness", f"{root}/integrations/vllm"]
+    assert argv == "-m verity_bench _vllm-point --point p"
+
+
+def test_a_queued_point_records_its_identity_as_the_key_param_resume_matches():
+    from verity_bench.tool import VLLM_BENCH_POINT
+
+    root = Path(__file__).resolve().parents[3]
+    plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lambda identity, commit: None)
+    item = plan.points[0]
+    workload = jobs.research_command(plan, "llama31-8b-fp8-1gpu", item, root)
+    workload = workload[workload.index("--") + 1:]
+    wrapped = ["/workspace/pouw/infra/bin/gpu-lease", "1", "--wait", "--max-min", "120", "--mem-gb", "64", "--", *workload]
+    for argv in (workload, wrapped):
+        params, key = VLLM_BENCH_POINT.resolve_params(argv, root)
+        assert key == {"identity": item.identity}
+        assert params["point"] == item.point.id and params["spec"] == "benchmarks/specs/llama31-8b-fp8-1gpu.toml"
+
+
+def test_every_spec_dispatches_as_a_registered_queue_kind_that_fits_it():
+    """The queue refuses an unregistered kind's job without --mem-gb, so each spec's points need a kind whose shape has
+    the spec's GPUs and whose wall time covers its admission."""
+
+    kinds_toml = Path(__file__).resolve().parents[3] / "infra" / "cluster" / "kinds" / "benchmarks.toml"
+    kinds = tomllib.loads(kinds_toml.read_text())["kinds"]
+    phase_gpus = {"gpu1": 1, "gpu8-timed": 8}
+    specs = [load_spec(p) for p in sorted(SPEC_ROOT.glob("*.toml")) if "vllm-spec/v0" in p.read_text().splitlines()[0]]
+    assert specs
+    for spec in specs:
+        kind = kinds[jobs.queue_kind(spec.preset.gpu_count)]
+        assert phase_gpus[kind["phase"]] == spec.preset.gpu_count, spec.id
+        assert spec.admission.max_minutes is None or spec.admission.max_minutes <= kind["max_wall_min"], spec.id
+    with pytest.raises(ValueError, match="register one in infra/cluster/kinds/benchmarks.toml"):
+        jobs.queue_kind(4)
 
 
 def test_plan_run_check_and_compare_are_top_level_commands(tmp_path):
