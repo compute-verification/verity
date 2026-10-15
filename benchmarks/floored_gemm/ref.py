@@ -49,7 +49,19 @@ def rotl(x, r):
     return (x << np.uint32(r)) | (x >> np.uint32(32 - r))
 
 
-TB = {"tb4_32": 5, "tb2_32": 6, "tb1_32": 7}
+TB = {"tb4_32": 5, "tb2_32": 6, "tb1_32": 7, "tb2w_32": 10, "tb1w_32": 11}
+TBC = {"tb4c_32": 8, "tb1c_32": 9, "tb2wc_32": 12, "tb1wc_32": 13}
+BASE = {5: 5, 6: 6, 7: 7, 8: 5, 9: 7, 10: 10, 11: 11, 12: 10, 13: 11}
+CHAINED = set(TBC.values())
+
+
+def emit_key(base, mi, ni, NI=4):
+    """The key position of the receipt IMMA issued after tile (mi, ni)'s MMA, or None when none is."""
+    if base in (5, 6):
+        return mi * NI + ni
+    if base in (7, 10):
+        return (mi * NI + ni) // 2 if ni % 2 == 1 else None
+    return mi if ni == NI - 1 else None
 
 
 def key_tb(kind, t, lane, j):
@@ -58,8 +70,9 @@ def key_tb(kind, t, lane, j):
 
 
 def tb_key(kind, t):
-    """K_t as an s8 matrix (k x 8): B fragment register j of lane 4 n + q holds K[16 j + 4 q + i, n] as byte i."""
-    kb = 2 if kind == 5 else 1
+    """K_t as an s8 matrix (k x 8): B fragment register j of lane 4 n + q holds K[16 j + 4 q + i, n] as byte i. A chained
+    kind's K_R is t = 63 (k = 32)."""
+    kb = 2 if BASE[kind] in (5, 10, 11) or t == 63 else 1
     K = np.zeros((16 * kb, 8), dtype=np.int64)
     for n in range(8):
         for qq in range(4):
@@ -73,6 +86,7 @@ def tb_key(kind, t):
 
 def tb_operand(kind, blk, mi, ni):
     """The receipt IMMA's A operand (16 x k, u8) for accumulator tile (mi, ni) of a warp tile's bytes blk [WM, 32, 4]."""
+    kind = BASE[kind]
     b = blk[16 * mi : 16 * mi + 16, 8 * ni : 8 * ni + 8]
     if kind == 5:   # A row g: words (g, 2q) at k 4q.., (g + 8, 2q) at 16 + 4q..; A row g + 8: the same for column 2q + 1
         top = np.concatenate([b[:8, 0::2, :].reshape(8, 16), b[8:, 0::2, :].reshape(8, 16)], axis=1)
@@ -80,6 +94,10 @@ def tb_operand(kind, blk, mi, ni):
         return np.concatenate([top, bot], axis=0)
     if kind == 6:   # word (r, c) bytes 0, 1 at k 2c, 2c + 1
         return b[:, :, :2].reshape(16, 16)
+    if kind == 10:   # TB2's operand of tile ni − 1 at k 0..15, of tile ni at 16..31
+        return np.concatenate([tb_operand(6, blk, mi, ni - 1), tb_operand(6, blk, mi, ni)], axis=1)
+    if kind == 11:   # TB1's operands of pairs (0, 1) and (2, 3) side by side
+        return np.concatenate([tb_operand(7, blk, mi, 1), tb_operand(7, blk, mi, 3)], axis=1)
     x = blk[16 * mi : 16 * mi + 16, 8 * (ni - 1) : 8 * ni, 1].reshape(16, 4, 2)
     y = b[:, :, 1].reshape(16, 4, 2)
     return np.stack([x, y], axis=2).reshape(16, 16)   # k 4q + c: tile ni - 1's word (r, 2q + c); 4q + 2 + c: tile ni's
@@ -101,10 +119,47 @@ def tb_receipts(kind, SB, TM, BN, WM, NCT, tiles_m, tiles_n):
             R = np.zeros((16, 8), dtype=np.int64)
             for mi in range(MI):
                 for ni in range(NI):
-                    if kind == 7 and ni % 2 == 0:
-                        continue
-                    t = mi * NI + ni
-                    R += tb_operand(kind, blk, mi, ni) @ keys[t // 2 if kind == 7 else t]
+                    t = emit_key(BASE[kind], mi, ni)
+                    if t is not None:
+                        R += tb_operand(kind, blk, mi, ni) @ keys[t]
+            R = (R & 0xFFFFFFFF).astype(np.uint32)
+            s = slice(32 * w, 32 * w + 32)
+            out[ti, s, 0], out[ti, s, 1] = R[g, 2 * q], R[g, 2 * q + 1]
+            out[ti, s, 2], out[ti, s, 3] = R[g + 8, 2 * q], R[g + 8, 2 * q + 1]
+    return out
+
+
+def u8bytes(x):
+    """The 4 u8 bytes of s32/u32 words, [..., 4] int64."""
+    u = np.asarray(x, dtype=np.int64) & 0xFFFFFFFF
+    return np.stack([(u >> (8 * j)) & 0xFF for j in range(4)], axis=-1)
+
+
+def tbc_receipts(kind, Ts, TM, BN, WM, NCT, tiles_m, tiles_n):
+    """The chained kinds: at each checkpoint R = bytes(R) K_R (R's 16 x 8 in TB4's operand layout), then
+    R += sum over positions of A_t K_t on that checkpoint's words; R wraps mod 2^32."""
+    MI, NI, warps_n = WM // 16, 4, BN // 32
+    base = BASE[kind]
+    keys = {t: tb_key(kind, t) for t in range(MI * NI)}
+    KR = tb_key(kind, 63)
+    out = np.zeros((tiles_m * tiles_n, NCT, 8), dtype=np.uint32)
+    lane = np.arange(32)
+    g, q = lane >> 2, lane & 3
+    Bs = [u8bytes(Tw) for Tw in Ts]
+    for ti in range(tiles_m * tiles_n):
+        tm, tn = ti // tiles_n, ti % tiles_n
+        for w in range(NCT // 32):
+            r0, c0 = tm * TM + (w // warps_n) * WM, tn * BN + (w % warps_n) * 32
+            R = np.zeros((16, 8), dtype=np.int64)
+            for B in Bs:
+                blk = B[r0 : r0 + WM, c0 : c0 + 32]
+                R = tb_operand(5, u8bytes(R), 0, 0) @ KR
+                for mi in range(MI):
+                    for ni in range(NI):
+                        t = emit_key(base, mi, ni)
+                        if t is not None:
+                            R += tb_operand(kind, blk, mi, ni) @ keys[t]
+                R = ((R + 2**31) & 0xFFFFFFFF) - 2**31
             R = (R & 0xFFFFFFFF).astype(np.uint32)
             s = slice(32 * w, 32 * w + 32)
             out[ti, s, 0], out[ti, s, 1] = R[g, 2 * q], R[g, 2 * q + 1]
@@ -169,7 +224,7 @@ def main(d: Path) -> int:
     peel = XA @ XB.T - EA @ W.T - V @ EB.T
     checks["peel_identity"] = bool((peel == U).all())
     U32 = U.astype(np.int32)
-    for name in ["lt", "plain", "g0", "duo32", "duo64", "duo2_32", "duo2_64", "add3_32", "mul2_32", *TB]:
+    for name in ["lt", "plain", "g0", "duo32", "duo64", "duo2_32", "duo2_64", "add3_32", "mul2_32", *TB, *TBC]:
         checks[f"U_{name}"] = bool((ld(f"U_{name}.bin", np.int32, (m, n)) == U32).all())
 
     # running sums at every 32 columns, as the kernel's s32 words
@@ -224,6 +279,11 @@ def main(d: Path) -> int:
         SB += np.stack([(Tw >> np.uint32(8 * j)) & np.uint32(0xFF) for j in range(4)], axis=-1).astype(np.int64)
     for name, kind in TB.items():
         want = tb_receipts(kind, SB, TM, BN, WM, NCT, tiles_m, tiles_n)
+        got = np.fromfile(d / f"R_{name}.bin", dtype=np.uint32).reshape(want.shape)
+        checks[f"R_{name}"] = bool((got == want).all())
+        checks[f"R_{name}_nonzero"] = bool((want[:, :, :4] != 0).mean() > 0.99)
+    for name, kind in TBC.items():
+        want = tbc_receipts(kind, Ts, TM, BN, WM, NCT, tiles_m, tiles_n)
         got = np.fromfile(d / f"R_{name}.bin", dtype=np.uint32).reshape(want.shape)
         checks[f"R_{name}"] = bool((got == want).all())
         checks[f"R_{name}_nonzero"] = bool((want[:, :, :4] != 0).mean() > 0.99)

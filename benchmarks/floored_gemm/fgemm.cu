@@ -78,8 +78,21 @@ __host__ __device__ constexpr uint32_t mix32(uint32_t x) {
 // m16n8k16 A fragment (k 4q + c for word column 2q + c of tile 2j, 4q + 2 + c of tile 2j + 1), one m16n8k16 a pair.
 // K_t's B fragments are fixed functions of (kind, position, lane) (key_tb; ref.py has the same), computed once a kernel
 // and held in registers: no CUDA-core op touches a receipt in the mainloop.
-enum Kind { NONE = 0, DUO = 1, DUO2 = 2, ADD3 = 3, MUL2 = 4, TB4 = 5, TB2 = 6, TB1 = 7 };
+// TB4C and TB1C chain R through its own bytes: at each boundary, before its tiles' receipts, R = bytes(R) K_R with R's four
+// registers read as an m16n8k32 A fragment in their own order (TB4's layout on R), one more m16n8k32 a warp a boundary.
+// Unchained, R is a sum over the boundaries of the same keyed bytes, so a byte that gains d at each of S boundaries and
+// wraps W times cancels when S d = 256 W; chained, a difference at one boundary reaches every later one through bytes(R).
+// An m16n8k16 IMMA costs sm_120 as much tensor time as an m16n8k32 (r20261015-164105-3962: TB2 runs at TB4's speed), so
+// TB2W and TB1W pack the same bytes into m16n8k32 operands: TB2W the two low bytes of tiles (mi, 2j) and (mi, 2j + 1)
+// (k 2c + i of tile 2j's word column c, 16 + 2c + i of tile 2j + 1's), one m16n8k32 a pair; TB1W byte 1 of the four tiles
+// (mi, 0..3), TB1's two pair operands side by side in k, one m16n8k32 a row block. TB2WC and TB1WC are them chained.
+enum Kind { NONE = 0, DUO = 1, DUO2 = 2, ADD3 = 3, MUL2 = 4, TB4 = 5, TB2 = 6, TB1 = 7, TB4C = 8, TB1C = 9, TB2W = 10, TB1W = 11,
+            TB2WC = 12, TB1WC = 13 };
 __host__ __device__ constexpr bool is_tb(int k) { return k >= TB4; }
+__host__ __device__ constexpr bool tb_chained(int k) { return k == TB4C || k == TB1C || k == TB2WC || k == TB1WC; }
+__host__ __device__ constexpr int tb_base(int k) {
+  return k == TB4C ? TB4 : k == TB1C ? TB1 : k == TB2WC ? TB2W : k == TB1WC ? TB1W : k;
+}
 __host__ __device__ constexpr uint32_t key_tb(int kind, int t, int lane, int j) {
   return mix32(0xC0000000u + (uint32_t)(((kind * 64 + t) * 32 + lane) * 2 + j));
 }
@@ -169,6 +182,12 @@ DEV void rimma32(St (&r)[2], uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3,
   asm("mma.sync.aligned.m16n8k32.row.col.s32.u8.s8.s32 {%0, %1, %2, %3}, {%4, %5, %6, %7}, {%8, %9}, {%0, %1, %2, %3};"
       : "+r"(r[0].y), "+r"(r[0].z), "+r"(r[1].y), "+r"(r[1].z)
       : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(b0), "r"(b1));
+}
+// R = bytes(R) K_R: R's registers are the A operand and the result, with a zero C
+DEV void rchain(St (&r)[2], uint32_t b0, uint32_t b1) {
+  asm("mma.sync.aligned.m16n8k32.row.col.s32.u8.s8.s32 {%0, %1, %2, %3}, {%0, %1, %2, %3}, {%4, %5}, {%6, %6, %6, %6};"
+      : "+r"(r[0].y), "+r"(r[0].z), "+r"(r[1].y), "+r"(r[1].z)
+      : "r"(b0), "r"(b1), "r"(0));
 }
 DEV void rimma16(St (&r)[2], uint32_t a0, uint32_t a1, uint32_t b0) {
   asm("mma.sync.aligned.m16n8k16.row.col.s32.u8.s8.s32 {%0, %1, %2, %3}, {%4, %5}, {%6}, {%0, %1, %2, %3};"
@@ -300,29 +319,51 @@ template <int TM, int BN, int WM, int STAGES> struct ML {
   template <int KIND, int IDX> DEV static void absorb_at(St (&ch)[NCH<KIND>], const int (&w)[4]) {
     absorb<KIND, IDX / NI, IDX % NI>(ch, w);
   }
-  // key registers a thread: TB4 two a tile, TB2 one a tile, TB1 one a pair of tiles; key t's registers start at KB * t
-  template <int KIND> static constexpr int KB = KIND == TB4 ? 2 : 1;
-  template <int KIND> static constexpr int NK = KIND == TB4 ? 2 * MI * NI : KIND == TB2 ? MI * NI : KIND == TB1 ? MI * NI / 2 : 1;
+  // key registers a thread: TB4 two a tile, TB2 one a tile, TB1 one a pair of tiles; key t's registers start at KB * t;
+  // a chained kind's K_R (position 63) is its last two
+  template <int KIND> static constexpr int KB = tb_base(KIND) == TB4 || tb_base(KIND) >= TB2W ? 2 : 1;
+  template <int KIND> static constexpr int NKP = tb_base(KIND) == TB4 ? 2 * MI * NI : tb_base(KIND) == TB2 ? MI * NI
+                                                : tb_base(KIND) == TB1 ? MI * NI / 2 : tb_base(KIND) == TB2W ? MI * NI
+                                                : tb_base(KIND) == TB1W ? 2 * MI : 1;
+  template <int KIND> static constexpr int NK = NKP<KIND> + (tb_chained(KIND) ? 2 : 0);
   template <int KIND> DEV static void keys(uint32_t (&kr)[NK<KIND>], int lane) {
     if constexpr (is_tb(KIND)) {
 #pragma unroll
-      for (int i = 0; i < NK<KIND>; i++) kr[i] = key_tb(KIND, i / KB<KIND>, lane, i % KB<KIND>);
+      for (int i = 0; i < NKP<KIND>; i++) kr[i] = key_tb(KIND, i / KB<KIND>, lane, i % KB<KIND>);
+      if constexpr (tb_chained(KIND)) {
+        kr[NKP<KIND>] = key_tb(KIND, 63, lane, 0);
+        kr[NKP<KIND> + 1] = key_tb(KIND, 63, lane, 1);
+      }
     }
   }
   // the tensor-core receipt of tile IDX = mi NI + ni, right after its MMA (TB1: after the odd tile of the pair)
   template <int KIND, int IDX>
   DEV static void tb_at(St (&ch)[NCH<KIND>], const uint32_t (&kr)[NK<KIND>], const int (&acc)[MI][NI][4]) {
-    constexpr int mi = IDX / NI, ni = IDX % NI;
+    constexpr int mi = IDX / NI, ni = IDX % NI, BASE = tb_base(KIND);
     const int(&w)[4] = acc[mi][ni];
-    if constexpr (KIND == TB4) {
+    if constexpr (tb_chained(KIND) && IDX == 0) rchain(ch, kr[NKP<KIND>], kr[NKP<KIND> + 1]);
+    if constexpr (BASE == TB4) {
       rimma32(ch, (uint32_t)w[0], (uint32_t)w[1], (uint32_t)w[2], (uint32_t)w[3], kr[2 * IDX], kr[2 * IDX + 1]);
-    } else if constexpr (KIND == TB2) {
+    } else if constexpr (BASE == TB2) {
       rimma16(ch, __byte_perm((uint32_t)w[0], (uint32_t)w[1], 0x5410), __byte_perm((uint32_t)w[2], (uint32_t)w[3], 0x5410), kr[IDX]);
-    } else if constexpr (KIND == TB1 && ni % 2 == 1) {
+    } else if constexpr (BASE == TB1 && ni % 2 == 1) {
       const int(&x)[4] = acc[mi][ni - 1];
       const uint32_t a0 = __byte_perm(__byte_perm((uint32_t)x[0], (uint32_t)x[1], 0x0051), __byte_perm((uint32_t)w[0], (uint32_t)w[1], 0x5100), 0x7610);
       const uint32_t a1 = __byte_perm(__byte_perm((uint32_t)x[2], (uint32_t)x[3], 0x0051), __byte_perm((uint32_t)w[2], (uint32_t)w[3], 0x5100), 0x7610);
       rimma16(ch, a0, a1, kr[IDX / 2]);
+    } else if constexpr (BASE == TB2W && ni % 2 == 1) {
+      const int(&x)[4] = acc[mi][ni - 1];
+      rimma32(ch, __byte_perm((uint32_t)x[0], (uint32_t)x[1], 0x5410), __byte_perm((uint32_t)x[2], (uint32_t)x[3], 0x5410),
+              __byte_perm((uint32_t)w[0], (uint32_t)w[1], 0x5410), __byte_perm((uint32_t)w[2], (uint32_t)w[3], 0x5410),
+              kr[2 * (IDX / 2)], kr[2 * (IDX / 2) + 1]);
+    } else if constexpr (BASE == TB1W && ni == 3) {
+      const int(&x0)[4] = acc[mi][0];
+      const int(&x1)[4] = acc[mi][1];
+      const int(&x2)[4] = acc[mi][2];
+      auto b1 = [](const int(&p)[4], const int(&q)[4], int h) {
+        return __byte_perm(__byte_perm((uint32_t)p[h], (uint32_t)p[h + 1], 0x0051), __byte_perm((uint32_t)q[h], (uint32_t)q[h + 1], 0x5100), 0x7610);
+      };
+      rimma32(ch, b1(x0, x1, 0), b1(x0, x1, 2), b1(x2, w, 0), b1(x2, w, 2), kr[2 * mi], kr[2 * mi + 1]);
     }
   }
   // one atom: ABS, absorb each accumulator's running sum right after its MMA. Reading the MMA's own result keeps ptxas
@@ -465,6 +506,12 @@ GEMM(p_mul2_32, 128, 128, 64, 3, true, 32, MUL2)
 GEMM(p_tb4_32, 128, 128, 64, 3, true, 32, TB4)
 GEMM(p_tb2_32, 128, 128, 64, 3, true, 32, TB2)
 GEMM(p_tb1_32, 128, 128, 64, 3, true, 32, TB1)
+GEMM(p_tb4c_32, 128, 128, 64, 3, true, 32, TB4C)
+GEMM(p_tb1c_32, 128, 128, 64, 3, true, 32, TB1C)
+GEMM(p_tb2w_32, 128, 128, 64, 3, true, 32, TB2W)
+GEMM(p_tb1w_32, 128, 128, 64, 3, true, 32, TB1W)
+GEMM(p_tb2wc_32, 128, 128, 64, 3, true, 32, TB2WC)
+GEMM(p_tb1wc_32, 128, 128, 64, 3, true, 32, TB1WC)
 GEMM(d_plain, 128, 32, 16, 4, false, 0, NONE)
 GEMM(d_g0, 128, 32, 16, 4, true, 0, NONE)
 GEMM(d_duo32, 128, 32, 16, 4, true, 32, DUO)
@@ -476,6 +523,12 @@ GEMM(d_mul2_32, 128, 32, 16, 4, true, 32, MUL2)
 GEMM(d_tb4_32, 128, 32, 16, 4, true, 32, TB4)
 GEMM(d_tb2_32, 128, 32, 16, 4, true, 32, TB2)
 GEMM(d_tb1_32, 128, 32, 16, 4, true, 32, TB1)
+GEMM(d_tb4c_32, 128, 32, 16, 4, true, 32, TB4C)
+GEMM(d_tb1c_32, 128, 32, 16, 4, true, 32, TB1C)
+GEMM(d_tb2w_32, 128, 32, 16, 4, true, 32, TB2W)
+GEMM(d_tb1w_32, 128, 32, 16, 4, true, 32, TB1W)
+GEMM(d_tb2wc_32, 128, 32, 16, 4, true, 32, TB2WC)
+GEMM(d_tb1wc_32, 128, 32, 16, 4, true, 32, TB1WC)
 GEMM(q_plain, 128, 64, 32, 4, false, 0, NONE)
 GEMM(q_g0, 128, 64, 32, 4, true, 0, NONE)
 GEMM(q_duo32, 128, 64, 32, 4, true, 32, DUO)
@@ -487,6 +540,12 @@ GEMM(q_mul2_32, 128, 64, 32, 4, true, 32, MUL2)
 GEMM(q_tb4_32, 128, 64, 32, 4, true, 32, TB4)
 GEMM(q_tb2_32, 128, 64, 32, 4, true, 32, TB2)
 GEMM(q_tb1_32, 128, 64, 32, 4, true, 32, TB1)
+GEMM(q_tb4c_32, 128, 64, 32, 4, true, 32, TB4C)
+GEMM(q_tb1c_32, 128, 64, 32, 4, true, 32, TB1C)
+GEMM(q_tb2w_32, 128, 64, 32, 4, true, 32, TB2W)
+GEMM(q_tb1w_32, 128, 64, 32, 4, true, 32, TB1W)
+GEMM(q_tb2wc_32, 128, 64, 32, 4, true, 32, TB2WC)
+GEMM(q_tb1wc_32, 128, 64, 32, 4, true, 32, TB1WC)
 GEMM(w_plain, 128, 128, 32, 3, false, 0, NONE)
 GEMM(w_g0, 128, 128, 32, 3, true, 0, NONE)
 GEMM(w_duo32, 128, 128, 32, 3, true, 32, DUO)
@@ -498,6 +557,12 @@ GEMM(w_mul2_32, 128, 128, 32, 3, true, 32, MUL2)
 GEMM(w_tb4_32, 128, 128, 32, 3, true, 32, TB4)
 GEMM(w_tb2_32, 128, 128, 32, 3, true, 32, TB2)
 GEMM(w_tb1_32, 128, 128, 32, 3, true, 32, TB1)
+GEMM(w_tb4c_32, 128, 128, 32, 3, true, 32, TB4C)
+GEMM(w_tb1c_32, 128, 128, 32, 3, true, 32, TB1C)
+GEMM(w_tb2w_32, 128, 128, 32, 3, true, 32, TB2W)
+GEMM(w_tb1w_32, 128, 128, 32, 3, true, 32, TB1W)
+GEMM(w_tb2wc_32, 128, 128, 32, 3, true, 32, TB2WC)
+GEMM(w_tb1wc_32, 128, 128, 32, 3, true, 32, TB1WC)
 
 // Forming, one warp a row. own[col] = pi1 | pi2 << 8 | s1 << 16 | s2 << 17: the noise at column col of chunk s is
 // (-1)^s1 E[r, pi1] + (-1)^s2 E[r, pi2] (F_own's row col). inv[s 32 + j] = c1 | c2 << 8 | s1 << 16 | s2 << 17 for the other
@@ -605,18 +670,20 @@ static CUtensorMap tmap(const void* p, int depth, int rows, int box_rows) {
 }
 
 typedef void (*Kern)(const Args);
-constexpr int NG = 11;
-// plain, g0, duo32, duo64, duo2_32, duo2_64, add3_32, mul2_32, tb4_32, tb2_32, tb1_32
+constexpr int NG = 17;
+// plain, g0, duo32, duo64, duo2_32, duo2_64, add3_32, mul2_32, tb4_32, tb2_32, tb1_32, tb4c_32, tb1c_32, tb2w_32, tb1w_32,
+// tb2wc_32, tb1wc_32
 struct Cfg { char name; int TM, BN, WM, NCT, smem; Kern k[NG]; };
-static Cfg cfg_p() { return {'P', 128, 128, 64, 256, ML<128, 128, 64, 3>::SMEM, {p_plain, p_g0, p_duo32, p_duo64, p_duo2_32, p_duo2_64, p_add3_32, p_mul2_32, p_tb4_32, p_tb2_32, p_tb1_32}}; }
-static Cfg cfg_d() { return {'D', 128, 32, 16, 256, ML<128, 32, 16, 4>::SMEM, {d_plain, d_g0, d_duo32, d_duo64, d_duo2_32, d_duo2_64, d_add3_32, d_mul2_32, d_tb4_32, d_tb2_32, d_tb1_32}}; }
+static Cfg cfg_p() { return {'P', 128, 128, 64, 256, ML<128, 128, 64, 3>::SMEM, {p_plain, p_g0, p_duo32, p_duo64, p_duo2_32, p_duo2_64, p_add3_32, p_mul2_32, p_tb4_32, p_tb2_32, p_tb1_32, p_tb4c_32, p_tb1c_32, p_tb2w_32, p_tb1w_32, p_tb2wc_32, p_tb1wc_32}}; }
+static Cfg cfg_d() { return {'D', 128, 32, 16, 256, ML<128, 32, 16, 4>::SMEM, {d_plain, d_g0, d_duo32, d_duo64, d_duo2_32, d_duo2_64, d_add3_32, d_mul2_32, d_tb4_32, d_tb2_32, d_tb1_32, d_tb4c_32, d_tb1c_32, d_tb2w_32, d_tb1w_32, d_tb2wc_32, d_tb1wc_32}}; }
 // Q: 128 x 64 tiles of 32 x 32 warps (32 accumulators a thread, against P's 64), for the receipt kernels' registers
-static Cfg cfg_q() { return {'Q', 128, 64, 32, 256, ML<128, 64, 32, 4>::SMEM, {q_plain, q_g0, q_duo32, q_duo64, q_duo2_32, q_duo2_64, q_add3_32, q_mul2_32, q_tb4_32, q_tb2_32, q_tb1_32}}; }
+static Cfg cfg_q() { return {'Q', 128, 64, 32, 256, ML<128, 64, 32, 4>::SMEM, {q_plain, q_g0, q_duo32, q_duo64, q_duo2_32, q_duo2_64, q_add3_32, q_mul2_32, q_tb4_32, q_tb2_32, q_tb1_32, q_tb4c_32, q_tb1c_32, q_tb2w_32, q_tb1w_32, q_tb2wc_32, q_tb1wc_32}}; }
 // W: 128 x 128 tiles of 16 warps of 32 x 32 (four warps an SMSP, 128 registers a thread), so one warp's receipt chains
 // can issue while another waits on its own
-static Cfg cfg_w() { return {'W', 128, 128, 32, 512, ML<128, 128, 32, 3>::SMEM, {w_plain, w_g0, w_duo32, w_duo64, w_duo2_32, w_duo2_64, w_add3_32, w_mul2_32, w_tb4_32, w_tb2_32, w_tb1_32}}; }
-static const char* GNAME[NG] = {"plain", "g0", "duo32", "duo64", "duo2_32", "duo2_64", "add3_32", "mul2_32", "tb4_32", "tb2_32", "tb1_32"};
-static const int GRS[NG] = {0, 0, 32, 64, 32, 64, 32, 32, 32, 32, 32};
+static Cfg cfg_w() { return {'W', 128, 128, 32, 512, ML<128, 128, 32, 3>::SMEM, {w_plain, w_g0, w_duo32, w_duo64, w_duo2_32, w_duo2_64, w_add3_32, w_mul2_32, w_tb4_32, w_tb2_32, w_tb1_32, w_tb4c_32, w_tb1c_32, w_tb2w_32, w_tb1w_32, w_tb2wc_32, w_tb1wc_32}}; }
+static const char* GNAME[NG] = {"plain", "g0", "duo32", "duo64", "duo2_32", "duo2_64", "add3_32", "mul2_32", "tb4_32", "tb2_32", "tb1_32", "tb4c_32", "tb1c_32",
+                                 "tb2w_32", "tb1w_32", "tb2wc_32", "tb1wc_32"};
+static const int GRS[NG] = {0, 0, 32, 64, 32, 64, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32};
 
 struct Lt {
   cublasLtHandle_t h;
@@ -778,10 +845,12 @@ static void gemm(Prob& P, int kind, int i) {
 // the arms: lt (a), plain (my mainloop on Q(A), Q(B)), form, g0 (the noised GEMM and peel alone), and the whole noised call
 // form + GEMM: b (no receipts), c (duo, stride 32), d (duo, 64), c2 / d2 (duo2); and with B~ formed once per challenge
 // (only A~ per call): formA, bA, cA, c2A; c3 and c4 the ADD3 and MUL2 probes at stride 32; t4, t2, t1 the tensor-core
-// receipts TB4, TB2, TB1 at stride 32 (form + GEMM), and t4g, t2g, t1g their GEMMs alone (beside g0)
+// receipts TB4, TB2, TB1 at stride 32 (form + GEMM), and t4g, t2g, t1g their GEMMs alone (beside g0); t4c, t1c and
+// t4cg, t1cg the same for the chained TB4C and TB1C; t2w, t1w, t2wc, t1wc and their GEMMs alone (…g) the k32 packings
 static const char* ARMS[] = {"lt", "plain", "form", "g0", "b", "c", "d", "c2", "d2", "formA", "bA", "cA", "c2A", "c3", "c4",
-                             "t4", "t2", "t1", "t4g", "t2g", "t1g"};
-constexpr int NARM = 21;
+                             "t4", "t2", "t1", "t4g", "t2g", "t1g", "t4c", "t1c", "t4cg", "t1cg",
+                             "t2w", "t1w", "t2wc", "t1wc", "t2wg", "t1wg", "t2wcg", "t1wcg"};
+constexpr int NARM = 33;
 constexpr bool form_only(int a) { return a == 2 || a == 9; }
 static void run_arm(Prob& P, int arm, int i) {
   switch (arm) {
@@ -806,6 +875,12 @@ static void run_arm(Prob& P, int arm, int i) {
     case 18: gemm(P, 8, i); break;
     case 19: gemm(P, 9, i); break;
     case 20: gemm(P, 10, i); break;
+    case 21: form(P, i); gemm(P, 11, i); break;
+    case 22: form(P, i); gemm(P, 12, i); break;
+    case 23: gemm(P, 11, i); break;
+    case 24: gemm(P, 12, i); break;
+    case 25: case 26: case 27: case 28: form(P, i); gemm(P, 13 + arm - 25, i); break;
+    case 29: case 30: case 31: case 32: gemm(P, 13 + arm - 29, i); break;
   }
 }
 

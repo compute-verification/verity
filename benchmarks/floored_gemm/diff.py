@@ -22,10 +22,11 @@ import sys
 
 import numpy as np
 
-from ref import tb_key, tb_operand
+from ref import BASE, CHAINED, emit_key, tb_key, tb_operand, u8bytes
 
-VARIANTS = {"tb4": 5, "tb2": 6, "tb1": 7}
-BYTES = {5: (0, 1, 2, 3), 6: (0, 1), 7: (1,)}
+VARIANTS = {"tb4": 5, "tb2": 6, "tb1": 7, "tb2w": 10, "tb1w": 11}
+CHAINS = {"tb4c": 8, "tb1c": 9, "tb2wc": 12, "tb1wc": 13}
+BYTES = {5: (0, 1, 2, 3), 6: (0, 1), 7: (1,), 10: (0, 1), 11: (1,)}
 MI, NI = 2, 4   # the W tile config's warp tile (32 x 32): 8 positions, TB1 4 pairs
 
 
@@ -35,12 +36,20 @@ def slot(kind, ni, r, c, j):
         return (r % 8) + 8 * (c % 2), 16 * (r // 8) + 4 * (c // 2) + j
     if kind == 6:
         return r, 2 * c + j
+    if kind == 10:
+        return r, 16 * (ni % 2) + 2 * c + j
+    if kind == 11:
+        return r, 16 * (ni // 2) + 4 * (c // 2) + 2 * (ni % 2) + (c % 2)
     return r, 4 * (c // 2) + 2 * (ni % 2) + (c % 2)
 
 
+def word_key(base, mi, ni):
+    """The key position whose receipt IMMA reads tile (mi, ni)'s words."""
+    return mi if base == 11 else (mi * NI + ni) // 2 if base in (7, 10) else mi * NI + ni
+
+
 def keyrow(kind, keys, mi, ni, r, c, j):
-    t = mi * NI + ni
-    return keys[t // 2 if kind == 7 else t][slot(kind, ni, r, c, j)[1]]
+    return keys[word_key(kind, mi, ni)][slot(kind, ni, r, c, j)[1]]
 
 
 def same_row_partner(kind, r, c):
@@ -107,6 +116,51 @@ def fixed_deltas():
     return d | product_deltas()
 
 
+def op_maps(base):
+    """For each key position t, the warp-tile source (row, column, byte) of every A slot [16, k] of its receipt IMMA."""
+    kdim = 32 if base in (5, 10, 11) else 16
+    maps = {}
+    for mi in range(MI):
+        for ni in range(NI):
+            t = word_key(base, mi, ni)
+            m = maps.setdefault(t, np.full((3, 16, kdim), -1, dtype=np.int64))
+            for r in range(16):
+                for c in range(8):
+                    for j in BYTES[base]:
+                        ar, k = slot(base, ni, r, c, j)
+                        m[:, ar, k] = (16 * mi + r, 8 * ni + c, j)
+    assert all((m >= 0).all() for m in maps.values())
+    return maps
+
+
+R_MAP = op_maps(5)[0] % np.array([16, 8, 4])[:, None, None]   # TB4's layout on one 16 x 8 tile: R's own bytes
+
+
+def sim(kind, T):
+    """Every trial's R [N, 16, 8] over a warp tile's trajectory T [N, S, 32, 32], as fgemm.cu folds it (chained or not)."""
+    base, chained = BASE[kind], kind in CHAINED
+    maps = op_maps(base)
+    keys = {t: tb_key(kind, t) for t in maps}
+    KR = tb_key(kind, 63)
+    R = np.zeros((T.shape[0], 16, 8), dtype=np.int64)
+    for s in range(T.shape[1]):
+        B = u8bytes(T[:, s])
+        if chained:
+            RB = u8bytes(R)
+            R = np.einsum("nrk,kc->nrc", RB[:, R_MAP[0], R_MAP[1], R_MAP[2]], KR)
+        for t, m in maps.items():
+            R = R + np.einsum("nrk,kc->nrc", B[:, m[0], m[1], m[2]], keys[t])
+        R = ((R + 2**31) & 0xFFFFFFFF) - 2**31
+    return R
+
+
+def tile_trajectory(rng, n, S):
+    """n warp-tile trajectories [n, S, 32, 32]: each checkpoint adds 32 products of uniform codes on [−127, 127], drawn as
+    the rounded normal of the same variance."""
+    sd = (127 * 128 / 3) * np.sqrt(32)
+    return np.cumsum(np.rint(rng.normal(0, sd, size=(n, S, 32, 32))).astype(np.int64), axis=1)
+
+
 def check_slots():
     """slot() against ref.py's tb_operand, the layout the gate checks on the device: every read byte where slot() puts it."""
     rng = np.random.default_rng(0)
@@ -114,10 +168,10 @@ def check_slots():
     for kind in VARIANTS.values():
         for mi in range(MI):
             for ni in range(NI):
-                if kind == 7 and ni % 2 == 0:
+                if emit_key(kind, mi, ni) is None:
                     continue
                 A = tb_operand(kind, blk, mi, ni)
-                for nj in ((ni - 1, ni) if kind == 7 else (ni,)):
+                for nj in ((ni - 1, ni) if kind in (7, 10) else (0, 1, 2, 3) if kind == 11 else (ni,)):
                     for r in range(16):
                         for c in range(8):
                             for j in BYTES[kind]:
@@ -125,8 +179,26 @@ def check_slots():
                                 assert A[ar, k] == blk[16 * mi + r, 8 * nj + c, j], (kind, mi, nj, r, c, j)
 
 
+def check_sim():
+    """sim() against ref.py's tb_receipts and tbc_receipts (what the gate checks the device against) on one warp tile."""
+    from ref import TB, TBC, tb_receipts, tbc_receipts
+
+    rng = np.random.default_rng(1)
+    T = tile_trajectory(rng, 1, 6)
+    Ts = [(T[0, s] & 0xFFFFFFFF).astype(np.uint32) for s in range(6)]
+    SB = sum(u8bytes(Tw) for Tw in Ts)
+    lane = np.arange(32)
+    g, q = lane >> 2, lane & 3
+    for kind in list(TB.values()) + list(TBC.values()):
+        want = (tbc_receipts(kind, Ts, 32, 32, 32, 32, 1, 1) if kind in CHAINED else tb_receipts(kind, SB, 32, 32, 32, 32, 1, 1))[0]
+        R = (sim(kind, T)[0] & 0xFFFFFFFF).astype(np.uint32)
+        got = np.stack([R[g, 2 * q], R[g, 2 * q + 1], R[g + 8, 2 * q], R[g + 8, 2 * q + 1]], axis=1)
+        assert (got == want[:, :4]).all(), kind
+
+
 def main() -> int:
     check_slots()
+    check_sim()
     ap = argparse.ArgumentParser()
     ap.add_argument("--trials", type=int, default=200_000)
     ap.add_argument("--seed", type=int, default=12)
@@ -249,6 +321,28 @@ def main() -> int:
                                      "worst_pair": [list(worst[0]), list(worst[1])], "best_cancel_given_change": best[0],
                                      "best_deltas": best[1], "deltas_tried": len(cand[:: max(1, len(cand) // 40)]) ** 2,
                                      "states": NS}
+    # every kind, chained or not, on whole warp-tile trajectories (S = 16 checkpoints, k = 512): one word (or two in one R
+    # row) off by δ from checkpoint s0 to the last, R compared with the honest R over the whole tile
+    NC, SC = max(1000, min(4000, N // 50)), 16
+    TT = tile_trajectory(rng, NC, SC)
+    out["tile_sim"] = {"trials": NC, "checkpoints": SC}
+    cases = [("+1", 1, 1), ("-3*5", -15, 1), ("+2^4", 16, 1), ("+2^12", 1 << 12, 1), ("+2^15", 1 << 15, 15),
+             ("-2^15", -(1 << 15), 15), ("+2^16", 1 << 16, 15), ("+2^31", 1 << 31, 15), ("+1", 1, 16), ("-3*5", -15, 16),
+             ("-11*13", -143, 16), ("+2^8", 256, 16)]
+    for vname, kind in list(VARIANTS.items()) + list(CHAINS.items()):
+        R0 = sim(kind, TT)
+        res = {}
+        for dn, d, s0 in cases:
+            T1 = TT.copy()
+            T1[:, s0 - 1 :, 5, 11] += d
+            res[f"{dn} from s0={s0}"] = float((sim(kind, T1) == R0).all(axis=(1, 2)).mean())
+        # two words reaching one R row, (+2^15, −2^15) over the last two checkpoints
+        r2, c2 = same_row_partner(BASE[kind], 5, 3)
+        T1 = TT.copy()
+        T1[:, SC - 2 :, 5, 8 + 3] += 1 << 15
+        T1[:, SC - 2 :, r2, 8 + c2] -= 1 << 15
+        res["pair (+2^15, -2^15) from s0=15"] = float((sim(kind, T1) == R0).all(axis=(1, 2)).mean())
+        out["tile_sim"][vname] = res
     txt = json.dumps(out, indent=1)
     if args.json:
         open(args.json, "w").write(txt)

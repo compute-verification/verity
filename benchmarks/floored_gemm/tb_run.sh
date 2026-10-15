@@ -40,7 +40,8 @@ cat "$O/gate.jsonl"
 [ "$STAGE" = gate ] && exit 0
 
 export REPS=${REPS:-15}
-export FG_ARMS=${FG_ARMS:-"lt,plain,form,g0,b,c,c2,t4,t2,t1,t4g,t2g,t1g"}
+export FG_ARMS=${FG_ARMS:-"lt,g0,b,c,c2,t4,t1,t2w,t1w,t4c,t2wc,t1wc,t4g,t1g,t2wg,t1wg,t4cg,t2wcg,t1wcg"}
+export NCU_ARMS=${NCU_ARMS:-"lt g0 t4g t1g t2wg t1wg t4cg t2wcg t1wcg"}
 export SHAPES=${SHAPES:-"w_qkv:8192:6144:4096:W w_o:8192:4096:4096:W w_gate_up:8192:28672:4096:W w_down:8192:4096:14336:W wsq4096:4096:4096:4096:W q_qkv:8192:6144:4096:Q q_o:8192:4096:4096:Q q_gate_up:8192:28672:4096:Q q_down:8192:4096:14336:Q qsq4096:4096:4096:4096:Q d_qkv:128:6144:4096:D d_o:128:4096:4096:D d_gate_up:128:28672:4096:D d_down:128:4096:14336:D"}
 export NCU_SHAPES=${NCU_SHAPES:-"w_o:8192:4096:4096:W q_o:8192:4096:4096:Q d_o:128:4096:4096:D"}
 # shellcheck disable=SC2016
@@ -56,7 +57,7 @@ gpu-lease 1 --wait --max-min 30 -- bash -c '
   M=gpu__time_duration.sum,sm__cycles_elapsed.avg,sm__inst_executed_pipe_tensor.sum,sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_elapsed,sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_active,sm__pipe_alu_cycles_active.avg.pct_of_peak_sustained_active,sm__pipe_fma_cycles_active.avg.pct_of_peak_sustained_active,smsp__issue_active.avg.pct_of_peak_sustained_active,dram__throughput.avg.pct_of_peak_sustained_elapsed
   for s in $NCU_SHAPES; do
     IFS=: read -r nm m n k c <<< "$s"
-    for arm in lt g0 t4g t2g t1g; do
+    for arm in $NCU_ARMS; do
       ncu --clock-control none --profile-from-start off --metrics $M --csv "$B/fgemm" one $arm $m $n $k $c \
         > "$O/ncu-$nm-$arm.csv" 2>&1 || echo "ncu $nm $arm rc $?" >> "$O/rc.txt"
     done
