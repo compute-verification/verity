@@ -18,6 +18,8 @@ Part 6: one word added to the running sums of single-level links saves at most L
 it helps lie in one D-row or one D-column.
 Part 7: Theorem C end to end on random computations that reuse accumulators and merge-built words across positions,
 and Strassen inside one block, which shows the per-word charge W' cannot be dropped.
+Part 8: links adding combinations of d words: the one-sided certificate and the d*L bound when no D-column holds two
+links, and the d^2*L bound on any set of cells.
 """
 
 import random
@@ -929,6 +931,50 @@ def part7(rng):
               f"< L*|G_T| = {full}, so W' cannot be dropped; Theorem C holds")
 
 
+def part8(rng):
+    """Links adding totals from the span of d words (best combination per cell). With at most one link per D-column
+    the one-sided certificate (labels a basis of ker B on the X side) gives rank Psi >= L*(k - rank B), hence
+    sum_t rank(D_t - W_t) >= L*(k - rank B); on any set of cells, sum_t rank(D_t - W_t) >= L*(k - d^2)."""
+    import itertools
+    count, saved_total, general = 0, 0, 0
+    for (P, Q, m, L, p, trials) in ((2, 2, 4, 2, 3, 60), (3, 2, 4, 2, 3, 60), (3, 3, 2, 2, 3, 40), (2, 3, 4, 4, 3, 30)):
+        shape = Shape(P, Q, m, L)
+        cells = [((i, j), s) for i in range(P) for j in range(Q) for s in range(shape.S)]
+        for _ in range(trials):
+            d = rng.choice([2, 3])
+            Zs = [random_word(shape, cells, rng, p) for _ in range(d)]
+            combos = [bs for bs in itertools.product(range(p), repeat=d) if any(bs)]
+
+            def best(cell):
+                D = shape.D(*cell)
+                return min(((rank((D - sum(b * Z for b, Z in zip(bs, Zs))) % p, p), bs) for bs in combos))
+
+            chosen = {}
+            for cell in rng.sample(cells, len(cells)):
+                col = (cell[0][1], cell[1])
+                if col not in chosen:
+                    chosen[col] = cell
+            links = list(chosen.values())
+            res = [best(c) for c in links]
+            B = np.array([bs for _, bs in res], dtype=np.int64).T % p
+            k, rB = len(links), rank(B, p)
+            U = nullspace(B, k, p)  # rows: a basis of ker B; u_t = U[:, t]
+            Ws = [sum(b * Z for b, Z in zip(bs, Zs)) % p for _, bs in res]
+            Psi_D = sum(np.kron(U[:, t][:, None], shape.D(*links[t])) for t in range(k)) % p
+            Psi_DW = sum(np.kron(U[:, t][:, None], (shape.D(*links[t]) - Ws[t]) % p) for t in range(k)) % p
+            assert np.array_equal(Psi_D, Psi_DW), "W-terms do not cancel"
+            assert rank(Psi_D, p) >= L * (k - rB), "one-sided certificate too weak"
+            assert sum(r for r, _ in res) >= L * (k - rB), "d*L bound fails (one link per D-column)"
+            saved_total += sum(max(0, L - r) for r, _ in res)
+            res_all = [best(c) for c in cells]
+            assert sum(r for r, _ in res_all) >= L * (len(cells) - d * d), "d^2*L bound fails"
+            general = max(general, sum(max(0, L - r) for r, _ in res_all) / (d * L))
+            count += 1
+    print(f"[d words] {count} spans of 2-3 words against cell sets with <= 1 link per D-column (best combination per "
+          "cell): W-terms cancel in the one-sided certificate, rank Psi >= L*(k - rank B), savings <= L*rank B: ok "
+          f"({saved_total} products saved in total); on all cells savings <= d^2*L: ok (max seen {general:.2f}*d*L)")
+
+
 def part4(rng):
     count = 0
     for (P, Q, m, L, trials) in ((2, 2, 4, 2, 60), (2, 3, 4, 4, 30), (2, 2, 6, 3, 30)):
@@ -947,7 +993,7 @@ def part4(rng):
 
 if __name__ == "__main__":
     rng = random.Random(20261015)
-    parts = sys.argv[1:] or ["1", "3", "4", "5", "6", "7"]
+    parts = sys.argv[1:] or ["1", "3", "4", "5", "6", "7", "8"]
     if "1" in parts:
         part1_2(rng)
     if "3" in parts:
@@ -960,3 +1006,5 @@ if __name__ == "__main__":
         part6(rng)
     if "7" in parts:
         part7(rng)
+    if "8" in parts:
+        part8(rng)
