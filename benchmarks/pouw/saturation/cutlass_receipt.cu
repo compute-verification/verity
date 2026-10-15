@@ -12,9 +12,8 @@
 //   - every receipt kernel's receipt words equal the host's phi chains over the dump's prefix sums.
 // At every timed shape: every kernel's output equals plain's, two launches agree on the receipt words, and they aren't all
 // zero. Times: operands rotate over sets past twice the L2; --reps rounds, each timing every kernel in turn (so each round
-// pairs each kernel with plain at nearly the same clocks), with NVML's SM clock after each batch. In a fixed order each
-// kernel always follows the same one, which biases it by up to ~2% (identical SASS read 0.994-1.021x); --shuffle times
-// each round in a fresh seeded order.
+// pairs each kernel with plain at nearly the same clocks), with NVML's SM clock after each batch; --shuffle times each
+// round in a fresh seeded order.
 //
 //   ./cutlass_receipt [--shapes NAME,...] [--reps 9] [--only KERNEL,...] [--shuffle] [--profile | --corun]
 //   --profile: no gates, one launch of each selected kernel at the first selected shape (for ncu)

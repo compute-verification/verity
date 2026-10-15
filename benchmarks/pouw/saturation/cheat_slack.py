@@ -4,7 +4,7 @@
   python cheat_slack.py cutlass-cheat.json [--drop X ...] [--json OUT]
 
 --drop X skips the X-step variants: runs before the cheater's store test read z[0] have x1 kernels whose chain nvcc
-removed (their SASS equals the design's), so their X = 1 rows measure nothing.
+removed (no cheater instructions; at most a different register allocation), so their X = 1 rows measure no work.
 
 Input: `cutlass_receipt`'s JSON from job.sh's cheat stage, where each design kernel runs beside its `_xX` variants: the
 same kernel plus X alu phi1 steps a thread after every 32-deep k-block on chains that never read the accumulators
