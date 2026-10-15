@@ -18,7 +18,7 @@
 // equal a host recomputation.
 //
 //   nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -o phi_probe phi_probe.cu
-//   ./phi_probe [--ms 60] [--reps 5] [--blocks 2]
+//   ./phi_probe [--ms 60] [--reps 5] [--blocks 2] [--only KERNEL,KERNEL]
 #include <cuda_runtime.h>
 
 #include <algorithm>
@@ -179,6 +179,7 @@ static const Kernel KERNELS[] = {
     K(3, 1, 1, 1), K(3, 2, 1, 1), K(3, 4, 1, 1), K(3, 8, 1, 1),
     K(3, 1, 2, 0), K(3, 2, 2, 0), K(3, 4, 2, 0), K(3, 8, 2, 0),
     K(3, 1, 2, 1), K(3, 2, 2, 1), K(3, 4, 2, 1), K(3, 8, 2, 1),
+    K(2, 3, 1, 0), K(2, 3, 2, 0), K(2, 3, 2, 1), K(3, 3, 1, 0), K(3, 3, 2, 0), K(3, 3, 2, 1),
 };
 
 struct Launch {
@@ -224,8 +225,10 @@ static bool same_c(const std::vector<uint32_t>& x, const std::vector<uint32_t>& 
 int main(int argc, char** argv) {
     double target_ms = 60;
     int reps = 5, blocks = 2;
+    std::string only;
     for (int i = 1; i + 1 < argc; i += 2) {
         if (!strcmp(argv[i], "--ms")) target_ms = atof(argv[i + 1]);
+        else if (!strcmp(argv[i], "--only")) only = "," + std::string(argv[i + 1]) + ",";
         else if (!strcmp(argv[i], "--reps")) reps = atoi(argv[i + 1]);
         else if (!strcmp(argv[i], "--blocks")) blocks = atoi(argv[i + 1]);
     }
@@ -253,6 +256,7 @@ int main(int argc, char** argv) {
     std::vector<uint32_t> mode0_out;
     int mode0_rounds = 0, mode0_grid = 0;
     for (const Kernel& k : KERNELS) {
+        if (!only.empty() && only.find("," + k.name + ",") == std::string::npos) continue;
         int bps = 0;
         CK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&bps, k.fn, THREADS, 0));
         cudaFuncAttributes attr;

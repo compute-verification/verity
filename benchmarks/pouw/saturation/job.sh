@@ -10,7 +10,8 @@
 #          stays on the device (at 0.85 it goes to host memory, ~40 s a kernel: r20261015-042637-c9be)
 #   ncu_prefill (not default): the same for one eager 2,048-token prefill step
 #   phi    (not default) lease 1: phi_probe.cu, a keyed ARX receipt step over register-resident E4M3 mma.sync accumulators
-#          at commit strides L = 32 / 64 / 128 / 256 (gated); with its SASS and an opcode count per kernel
+#          at commit strides L = 32 ... 256 (gated), at 2 and 4 blocks an SM; its SASS and an opcode count per kernel; ncu's
+#          warp-state, scheduler and pipe sections over five of its kernels
 # Timeouts run in the foreground so `research cancel` reaches the GPU process.
 # Untimed diagnostic (tier 2a): one leased GPU, the fill queue keeps running beside it.
 set -euo pipefail
@@ -105,6 +106,18 @@ phi() {
       stamp "phi probe b$blocks FAILED rc=$?"
     fi
   done
+  local pick=mode0_per1_r1_alu,mode1_per1_r1_alu,mode2_per1_r1_alu,mode2_per2_r1_alu,mode2_per3_r2_alu
+  stamp "phi ncu"
+  if timeout --foreground 600 "$NCU" --clock-control none --section LaunchStats --section WarpStateStats \
+      --section SchedulerStats --section ComputeWorkloadAnalysis --export "$d/phi-ncu" --force-overwrite \
+      "$d/phi_probe" --ms 5 --reps 1 --only $pick > "$d/phi-ncu.log" 2>&1; then
+    "$NCU" --import "$d/phi-ncu.ncu-rep" --csv --page details > "$OUT/phi-ncu-details.csv"
+    "$NCU" --import "$d/phi-ncu.ncu-rep" --csv --page raw | gzip -c > "$OUT/phi-ncu-raw.csv.gz"
+    stamp "phi ncu ok"
+  else
+    stamp "phi ncu FAILED rc=$?"
+  fi
+  grep -v "^\s*$" "$d/phi-ncu.log" | tail -40 > "$OUT/phi-ncu.log.tail"
 }
 
 leased() {
