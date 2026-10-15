@@ -310,7 +310,7 @@ def verifyWithM (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup) (recor
     if c0 != c1 then throw s!"S18/R1: {spec.tables[i]!}: the reps' caps differ"
 
 /-- The verifier with SHA-512 replaced by `h`, every other hash the deployed one; `verifyWith Sha512.hash` is `verify`
-(`Flock.With.verify_eq_verifyWith`). -/
+(`Flock.verify_eq_verifyWith`). -/
 def verifyWith (h : ByteArray → ByteArray) (spec : SessionSpec) (tabs : Array Setup) (record : String)
     (proofs : Array ByteArray) : V Unit :=
   verifyWithM (Hashes.ofSha512 h) spec tabs record proofs

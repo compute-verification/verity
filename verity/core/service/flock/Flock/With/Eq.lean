@@ -174,13 +174,14 @@ theorem named_getElem! (tabs : Array Setup) (hN : ∀ st ∈ tabs, st.merkle.Nam
   · rw [getElem!_pos tabs i hi]; exact hN _ (Array.getElem_mem hi)
   · rw [getElem!_neg tabs i hi]; exact named_default
 
+end With
+
+/-- `verify` is `verifyWith Sha512.hash` when every table's Merkle scheme is the registry's of its id. -/
 theorem verify_eq_verifyWith (spec : SessionSpec) (tabs : Array Setup) (record : String) (proofs : Array ByteArray)
     (hN : ∀ st ∈ tabs, st.merkle.Named) : verify spec tabs record proofs = verifyWith Sha512.hash spec tabs record proofs := by
-  have hN' := named_getElem! tabs hN
+  have hN' := With.named_getElem! tabs hN
   unfold verifyWith verifyWithM verify
-  simp only [monadLift_self, decodeWith_std, dgWith_std, pure_bind, verifyRepWith_std _ _ (hN' _)]
+  simp only [monadLift_self, With.decodeWith_std, With.dgWith_std, pure_bind, With.verifyRepWith_std _ _ (hN' _)]
   rfl
-
-end With
 
 end Flock
