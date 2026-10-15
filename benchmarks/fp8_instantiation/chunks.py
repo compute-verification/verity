@@ -14,7 +14,7 @@ bound on the rank over Q, and a prime can divide a determinant: det(I - 2P) for 
 Designs: `perm` (one signed entry per row of F) and `pair` (two, grid.signed_pairs), each with F_A, F_B independent or
 F_B = F_A ("shared").  Only full chunks of L columns are read.
 
-    python chunks.py [--quick] [--procs N] [--json FILE]
+    python chunks.py [--quick] [--peel] [--procs N] [--json FILE]      (--peel: only the peel's range and the cost)
 """
 from __future__ import annotations
 
@@ -237,19 +237,19 @@ def rank_cheat(m: int = 128, n: int = 128, L: int = 32, c: int = 8, seed: int = 
     return out
 
 
-def peel_range(L: int, k: int, m: int = 64, seed: int = 17) -> dict:
-    """The pair design with F_A = F_B: the peel's wide operands on Gaussian int8 rows, their worst case over all int8
-    inputs, and U = Q(A) Q(B)^T exactly."""
+def peel_range(L: int, k: int, shared: bool = True, m: int = 64, seed: int = 17) -> dict:
+    """The pair design: the peel's wide operands on Gaussian int8 rows, their worst case over all int8 inputs, and
+    U = Q(A) Q(B)^T exactly."""
     rng = np.random.default_rng(seed)
-    f = DESIGNS["pair"](k, L, rng)
+    fa, fb = noise_f("pair", shared, k, L, rng)
     qa, qb = (np.clip(np.rint(rng.standard_normal((m, k)) * 30), -121, 121).astype(np.int64) for _ in range(2))
     ea, eb = rng.integers(-U, U + 1, (m, L)), rng.integers(-U, U + 1, (m, L))
-    at, bt = qa + ea @ f.T, qb + eb @ f.T
-    g = f.T @ f
-    pa, qq = at @ f, bt @ f - eb @ g.T
+    at, bt = qa + ea @ fa.T, qb + eb @ fb.T
+    g = fb.T @ fa
+    pa, qq = at @ fb, bt @ fa - eb @ g
     u_ = at @ bt.T - pa @ eb.T - ea @ qq.T
-    worst = 127 * int(np.abs(f).sum(axis=0).max()) + U * int(np.abs(g).sum(axis=1).max())
-    return {"L": L, "k": k, "U_exact": bool((u_ == qa @ qb.T).all()), "max_abs_operand": int(max(np.abs(pa).max(),
+    worst = 127 * int(max(np.abs(fa).sum(axis=0).max(), np.abs(fb).sum(axis=0).max())) + U * int(np.abs(g).sum(axis=0).max())
+    return {"L": L, "k": k, "shared_F": shared, "U_exact": bool((u_ == qa @ qb.T).all()), "max_abs_operand": int(max(np.abs(pa).max(),
             np.abs(qq).max())), "worst_case_operand": worst, "two_limbs_hold": 32767,
             "limbs_measured": 1 + int(max(np.abs(pa).max(), np.abs(qq).max()) > 127) + int(
                 max(np.abs(pa).max(), np.abs(qq).max()) > 32767), "limbs_worst": 1 + int(worst > 127) + int(worst > 32767)}
@@ -272,6 +272,13 @@ def job(args: tuple) -> dict:
 def main(argv: list[str]) -> int:
     quick = "--quick" in argv
     procs = int(argv[argv.index("--procs") + 1]) if "--procs" in argv else 1
+    peels = [peel_range(L, k, sh) for sh in (False, True) for L in (32, 64) for k in ((1024,) if quick else (4096, 14336))]
+    if "--peel" in argv:
+        text = json.dumps({"peel_range": peels, "cost": [cost(L) for L in (32, 64, 170)]}, indent=1)
+        if "--json" in argv:
+            open(argv[argv.index("--json") + 1], "w").write(text)
+        print(text)
+        return 0
     ls, ks = ((32,), (256,)) if quick else ((32, 64, 170), (4096, 14336))
     jobs = [(kind, d, sh, k, L, 3) for kind in ("intervals", "pencils") for d in DESIGNS for sh in (False, True)
             for L in ls for k in ks]
@@ -285,7 +292,7 @@ def main(argv: list[str]) -> int:
            "pencils": [d for j, d in zip(jobs, done) if j[0] == "pencils"],
            "committed": [committed(d, sh, m=48 if quick else 96, c=4 if quick else 10) for d in DESIGNS
                          for sh in (False, True)],
-           "peel_range": [peel_range(L, k) for L in (32, 64) for k in ((1024,) if quick else (4096, 14336))],
+           "peel_range": peels,
            "cost": [cost(L) for L in (32, 64, 170)]}
     text = json.dumps(res, indent=1)
     if "--json" in argv:
