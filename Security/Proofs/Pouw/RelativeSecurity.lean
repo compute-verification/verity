@@ -23,6 +23,16 @@ proof workers' results land here as theorems or as named hypotheses.
   prover messages, peel and correct; `time_reduction_le` is `time M' ≤ time E + time peel + time correction`.
   `secure_of_extraction_floor` gives security from two named hypotheses, `Extraction` (RS-EXT's) and `Floor` (the floor
   agenda's), and `secure_fullRank` and `secure_lowRank` instantiate it with the explicit peels of `MatMachine`.
+* Route (c), edited instances (Daniel's rulings of 18:20Z and 18:28Z): correctness reads σ, an `Edit` adds σ-indexed
+  noise to both operands, unpeeled; `edited` is the protocol, `edited_complete` its completeness, `honestEdit` costs
+  `κ n³ + 2κadd n²` beyond the proof layer and the noise expansion, and `relativelySecure_of_editFloor` gives relative
+  security from the named hypothesis `EditFloor` (RS-D1E's floor). The bit-pair projection's algebra
+  (`bitPair_coefficient`) and the abstract core of RS-D1E's homogenization for one word (`bitProj_rank_le`,
+  `products_ge_half_rank`) are proved.
+* The Model B bridge (RS-MODEL): typed circuits of priced gates with free routing; `ModelB.machine` is a `Machine`
+  whose time is `timeB`, `ModelB.matMachine` a `MatMachine` from priced circuits (`MatGates`, realized by a GEMM gate
+  family), and `matMachine120` the sm_120 instance at `price120` with the worst-case `κ = 16` u (circuits named
+  `Gemm120`; the width-typed refinement `Int8Gemm120` is the open item); `relativelySecure_edited120` is route (c) there.
 -/
 
 namespace Pouw.RelativeSecurity
