@@ -95,7 +95,8 @@ def _wrap_runner(runner, state: dict) -> None:
         r = len(scheduler_output.num_scheduled_tokens)
         kind = "decode" if r and n == r else ("prefill" if n else "idle")
         state["label"] = f"{kind}|{n}|{r}"
-        if state.get("nvtx_arm") and kind == "decode" and r == state["batch"]:
+        want = state.get("nvtx_match", ("decode", state["batch"]))
+        if state.get("nvtx_arm") and kind == want[0] and (r if kind == "decode" else n) == want[1]:
             state["nvtx_seen"] = state.get("nvtx_seen", 0) + 1
             if state["nvtx_seen"] == state["nvtx_arm"]:
                 torch.cuda.synchronize()
@@ -224,6 +225,8 @@ def main() -> int:
     ap.add_argument("--decode-steps", type=int, default=24)
     ap.add_argument("--gpu-mem", type=float, default=0.85)
     ap.add_argument("--ncu-step", action="store_true", help="no profiler: decode step 4 inside NVTX range ncu_step")
+    ap.add_argument("--ncu-prefill", type=int, default=0, metavar="P",
+                    help="no profiler: the second prefill step of P tokens inside NVTX range ncu_step")
     ap.add_argument("--scratch", type=Path, default=None)
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args()
@@ -261,11 +264,17 @@ def main() -> int:
     llm.generate([toks(args.context) for _ in range(args.batch)], greedy(4), use_tqdm=False)
     torch.cuda.synchronize()
 
-    if args.ncu_step:
-        state["nvtx_arm"] = 4
-        llm.generate([toks(args.context) for _ in range(args.batch)], greedy(1 + 8), use_tqdm=False)
+    if args.ncu_step or args.ncu_prefill:
+        if args.ncu_prefill:
+            state["nvtx_match"], state["nvtx_arm"] = ("prefill", args.ncu_prefill), 2
+            for _ in range(2):
+                llm.generate([toks(args.ncu_prefill)], greedy(1), use_tqdm=False)
+        else:
+            state["nvtx_arm"] = 4
+            llm.generate([toks(args.context) for _ in range(args.batch)], greedy(1 + 8), use_tqdm=False)
         torch.cuda.synchronize()
-        doc["ncu_step"] = {"armed_step": 4, "closed": not state.get("nvtx_open", False),
+        doc["ncu_step"] = {"match": list(state.get("nvtx_match", ("decode", args.batch))), "armed_step": state.get("nvtx_seen"),
+                           "closed": not state.get("nvtx_open", False),
                            "opened": state.get("nvtx_arm") == 0, "wrapped_runner_calls": state["wrapped"]}
         args.out.write_text(json.dumps(doc, indent=1))
         print(json.dumps(doc["ncu_step"]))

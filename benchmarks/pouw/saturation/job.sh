@@ -6,6 +6,7 @@
 #   micro  lease 2: fresh_operand.py gemm (torch._scaled_mm E4M3 n^3) and commit (hm96-sha512 rows of a fresh n x n E4M3
 #          operand, gated against Python), n = 4,096 / 8,192 / 16,384
 #   ncu    lease 2: one eager decode step (batch 32) per precision under ncu (pipe counts), summarized by ncu_summary.py
+#   ncu_prefill (not default): the same for one eager 2,048-token prefill step
 # Untimed diagnostic (tier 2a): one leased GPU, the fill queue keeps running beside it.
 set -euo pipefail
 : "${OUT:?}"
@@ -63,17 +64,20 @@ for p in sm__inst_executed_pipe_fma sm__inst_executed_pipe_alu sm__inst_executed
 done
 
 ncu_stage() {
-  for prec in bf16 fp8; do
-    stamp "ncu $prec"
+  for cfg in "$@"; do
+    set -- $cfg
+    local prec=$1 phase=$2 name=ncu-$1-$2 step=--ncu-step
+    [[ $phase == prefill* ]] && step="--ncu-prefill ${phase#prefill}"
+    stamp "ncu $prec $phase"
     if timeout 720 "$NCU" --target-processes all --nvtx --nvtx-include "ncu_step/" --clock-control none \
-        --metrics "$METRICS" --export "$d/ncu-$prec" --force-overwrite \
-        "$PY" "$S/vllm_split.py" --model "$MODEL" --revision "$REV" --precision "$prec" --mode eager --ncu-step \
-        --out "$OUT/ncu-$prec-run.json" > "$d/ncu-$prec.log" 2>&1; then
-      stamp "ncu $prec ok"
+        --metrics "$METRICS" --export "$d/$name" --force-overwrite \
+        "$PY" "$S/vllm_split.py" --model "$MODEL" --revision "$REV" --precision "$prec" --mode eager $step \
+        --out "$OUT/$name-run.json" > "$d/$name.log" 2>&1; then
+      stamp "ncu $prec $phase ok"
     else
-      stamp "ncu $prec FAILED rc=$?"
+      stamp "ncu $prec $phase FAILED rc=$?"
     fi
-    grep -v "^\s*$" "$d/ncu-$prec.log" | tail -40 > "$OUT/ncu-$prec.log.tail"
+    grep -v "^\s*$" "$d/$name.log" | tail -40 > "$OUT/$name.log.tail"
   done
 }
 
@@ -85,14 +89,15 @@ leased() {
 [[ " $STAGES " == *" split "* ]] && leased split "'bf16 eager'" "'fp8 eager'" "'bf16 graphs'" "'fp8 graphs'"
 [[ " $STAGES " == *" split "* ]] && leased split "'fp8 compiled'" "'bf16 compiled'"
 [[ " $STAGES " == *" micro "* ]] && leased micro
-[[ " $STAGES " == *" ncu "* ]] && leased ncu_stage
+[[ " $STAGES " == *" ncu "* ]] && leased ncu_stage "'bf16 decode'" "'fp8 decode'"
+[[ " $STAGES " == *" ncu_prefill "* ]] && leased ncu_stage "'fp8 prefill2048'" "'bf16 prefill2048'"
 
-for prec in bf16 fp8; do
-  if [ -f "$d/ncu-$prec.ncu-rep" ]; then
-    "$NCU" --import "$d/ncu-$prec.ncu-rep" --csv --page raw > "$d/ncu-$prec-raw.csv"
-    gzip -c "$d/ncu-$prec-raw.csv" > "$OUT/ncu-$prec-raw.csv.gz"
-    "$PY" "$S/ncu_summary.py" "$d/ncu-$prec-raw.csv" --out "$OUT/ncu-$prec-summary.json" > "$OUT/ncu-$prec-summary.log" 2>&1 \
-      || stamp "ncu_summary $prec FAILED"
-  fi
+for rep in "$d"/ncu-*.ncu-rep; do
+  [ -f "$rep" ] || continue
+  name=$(basename "$rep" .ncu-rep)
+  "$NCU" --import "$rep" --csv --page raw > "$d/$name-raw.csv"
+  gzip -c "$d/$name-raw.csv" > "$OUT/$name-raw.csv.gz"
+  "$PY" "$S/ncu_summary.py" "$d/$name-raw.csv" --out "$OUT/$name-summary.json" > "$OUT/$name-summary.log" 2>&1 \
+    || stamp "ncu_summary $name FAILED"
 done
 stamp "done"
