@@ -51,6 +51,11 @@ def test_mad_sketch_reproduces_every_receipt() -> None:
     assert r["receipts_equal"] and r["blocks"] == 32
 
 
+def test_degree2_passes_mad_and_fails_mum() -> None:
+    r = attacks.degree2("u32", 8)
+    assert r["mad"]["add"]["exact"] == 1.0 and r["mum"]["add"]["exact"] == 0.0 and r["mum"]["xor"]["exact"] == 0.0
+
+
 def test_xsm_top_bit_cancels() -> None:
     y, z, p0, p1 = sample()
     a, _ = attacks.step("xsm", *attacks.step("xsm", y, z, p0, 4), p1, 5)

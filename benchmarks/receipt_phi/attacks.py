@@ -16,6 +16,7 @@ random-operand work's words).
   the bits a prover pays to reach them through the XOR of the state's halves.
 - ``linearity``: the block receipt f(P) over b² = 256 words, tested for f(P ∘ Q) = f(P) ∘ f(Q) ∘ f(0)⁻¹ over
   Z/2^32, GF(2)^32 and Z/(2^32 − 1), with the share of exact hits and of output bits that are linear.
+- ``degree2``: the receipt's third derivative over Z/2^32 and GF(2)^32, which vanishes for degree ≤ 2 (Σp²'s class).
 - ``carries``: ra's chain is linear mod 2^32 − 1 except for one carry per wrapped addition; the number of carries per
   block, and the share of blocks with none, whose receipt the linear form gives exactly.
 - ``anf`` and ``walsh``: the 8-bit analogue of two absorbed words (16 input bits, 8 output bits): the ANF degree of
@@ -365,6 +366,31 @@ def linearity(dist: str, trials: int, seed: int = 2) -> dict:
     return out
 
 
+def degree2(dist: str, trials: int, seed: int = 8) -> dict:
+    """The third derivative of the block receipt, Σ_{S ⊆ {P,Q,R}} (−1)^|S| f(ΣS), over Z/2^32 and GF(2)^32: zero for
+    every degree-2 f, which is the class the Gram-matrix shortcut on Σp² batches."""
+    rng = np.random.default_rng(seed)
+    out = {}
+    for kind in KINDS:
+        y0 = np.full(trials, 0x12345678, dtype=np.uint64)
+        P, Q, R = (words(dist, rng, (trials, B2)) for _ in range(3))
+        r = {}
+        for ring, op in (("add", lambda a, b: (a + b) & M32), ("xor", lambda a, b: a ^ b)):
+            acc = np.zeros(trials, dtype=np.uint64)
+            for mask in range(8):
+                S = np.zeros_like(P)
+                for i, M in enumerate((P, Q, R)):
+                    if mask >> i & 1:
+                        S = op(S, M)
+                f = receipts(kind, S, y0)
+                odd = bin(mask).count("1") % 2
+                acc = (acc - f) & M32 if (odd and ring == "add") else (acc + f) & M32 if ring == "add" else acc ^ f
+            r[ring] = {"exact": float(np.mean(acc == 0)),
+                       "bits_zero": sum(float(np.mean((acc >> U(i)) & U(1) == 0)) > 0.9 for i in range(32))}
+        out[kind] = r
+    return out
+
+
 def carries(dist: str, trials: int, seed: int = 3) -> dict:
     rng = np.random.default_rng(seed)
     P = words(dist, rng, (trials, B2))
@@ -556,8 +582,8 @@ def main() -> int:
     ns, nt = (1 << 12, 1 << 9) if args.quick else (1 << 16, 1 << 12)
     if args.samples_log2:
         ns = 1 << args.samples_log2
-    todo = args.only.split(",") if args.only else ["differential", "three_word", "linearity", "carries", "small",
-                                                    "mum_lattice", "mad_sketch"]
+    todo = args.only.split(",") if args.only else ["differential", "three_word", "linearity", "degree2", "carries",
+                                                    "small", "mum_lattice", "mad_sketch"]
     res = {}
     for dist in args.dist.split(","):
         if "differential" in todo:
@@ -566,6 +592,8 @@ def main() -> int:
             res.setdefault("three_word", {})[dist] = three_word(dist, ns >> 2)
         if "linearity" in todo:
             res.setdefault("linearity", {})[dist] = linearity(dist, nt)
+        if "degree2" in todo:
+            res.setdefault("degree2", {})[dist] = degree2(dist, nt >> 3)
         if "carries" in todo:
             res.setdefault("carries_ra", {})[dist] = carries(dist, nt)
     if "small" in todo:
