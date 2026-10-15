@@ -223,6 +223,17 @@ def test_a_conflicting_pr_is_left_out_with_the_queued_pr_that_touched_the_file_a
     assert q.status()[2].why == "conflicts with `next` in a.txt (touched by #1) (at the last sync)"
 
 
+def test_status_names_a_ready_pr_that_conflicts_with_main_without_a_sync_here(world):
+    """14 Oct: status on circuits' VM called #1959/#1961/#1969 'admitted' for about 80 min while each conflicted with `main`,
+    because only the drive VM's last sync had recorded the conflict."""
+    world.gh.put(1, world.change({"a.txt": "pr\n"}))
+    world.gh.put(2, world.change({"b.txt": "fine\n"}))
+    _git(world.dev, "push", "-q", "origin", f"{world.change({'a.txt': 'main moved\n'})}:refs/heads/main")
+    got = world.queue().status()
+    assert got[1].state == "refused" and got[1].why.startswith("conflicts with `main` in a.txt")
+    assert got[2].state == "ready" and got[2].why.startswith("admitted")
+
+
 def test_a_pr_containing_another_goes_in_after_it_and_waits_while_it_waits(world):
     parent = world.change({"x.txt": "x = 1\n"})
     world.gh.put(5, parent, ready=False)
