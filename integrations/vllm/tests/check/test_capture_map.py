@@ -192,11 +192,11 @@ def test_the_runbook_counts():
 
     every = CM.counts(CMAP, ENV)
     assert (every["module_entries"], every["module_types"], every["tap_templates_by_status"]) == (
-        40, 29, {"exists": 17, "tonight": 0, "port": 32, "copy": 2, "committed-only": 0})
+        40, 29, {"exists": 18, "tonight": 0, "port": 34, "copy": 2, "committed-only": 0})
     assert brief(CM.counts(CMAP, ENV, ("dense-mha",))) == (
-        47, 2347, {"exists": 721, "tonight": 0, "port": 1547, "copy": 79, "committed-only": 0}, 63)
+        50, 2572, {"exists": 796, "tonight": 0, "port": 1697, "copy": 79, "committed-only": 0}, 63)
     assert brief(CM.counts(CMAP, ENV, ("sparse-mqa",))) == (
-        49, 2389, {"exists": 643, "tonight": 0, "port": 1667, "copy": 79, "committed-only": 0}, 183)
+        52, 2614, {"exists": 718, "tonight": 0, "port": 1817, "copy": 79, "committed-only": 0}, 183)
 
 
 def test_the_bound_tap_counts():
@@ -205,10 +205,10 @@ def test_the_bound_tap_counts():
         c = CM.counts(CMAP, ENV, routes)
         return c["bound_taps_per_step"], c["bound_taps_per_step_by_binder"]
 
-    common = {"allreduce_norm": 468, "moe": 525, "sampler": 1, "tp_partial": 2}
-    assert bound(("dense-mha",)) == (2272, {**common, "attention": 609, "module_hook": 667})
-    assert bound(("sparse-mqa",)) == (2293, {**common, "attention": 708, "module_hook": 589})
-    assert bound(("dense-mha", "sparse-mqa")) == (2449, {**common, "attention": 786, "module_hook": 667}), \
+    common = {"allreduce_norm": 468, "moe": 825, "sampler": 1, "tp_partial": 2}
+    assert bound(("dense-mha",)) == (2572, {**common, "attention": 609, "module_hook": 667})
+    assert bound(("sparse-mqa",)) == (2593, {**common, "attention": 708, "module_hook": 589})
+    assert bound(("dense-mha", "sparse-mqa")) == (2749, {**common, "attention": 786, "module_hook": 667}), \
         "a mixed step binds both routes' attention taps, each over its own rows"
 
 
@@ -244,11 +244,14 @@ def test_a_tap_bound_by_an_unknown_binder_fails():
     assert any("commit binder 'nobody'" in p for p in _check(cmap))
 
 
-def test_moe_source_binds_its_seven_tensors_on_every_moe_layer():
+def test_moe_source_binds_its_ten_block_fp8_planes_and_the_unreduced_output_on_every_moe_layer():
+    from verity_vllm.query.manifest.format import MOE_FP8_PLANES
+
     sourced = [t for t in CMAP["taps"] if t.get("source", "").startswith("moe/")]
-    assert len(sourced) == moe_source.TENSORS_PER_LAYER + 1                     # act_scale: block-FP8 experts
-    assert {t["source"].rsplit("/", 1)[1] for t in sourced} == {"router_w", "router_ids", "up", "act", "act_scale", "down", "sum"}
+    assert [t["source"].rsplit("/", 1)[1] for t in sourced] == list(MOE_FP8_PLANES)
     assert all(t["commit"] == {"name": t["source"], "binder": "moe"} for t in sourced)
+    out = next(t for t in CMAP["taps"] if t["id"] == "moe.out")
+    assert out["commit"] == {"name": "model.layers.{i}.mlp.experts/out", "binder": "moe"} and out["layers"] == "moe"
     assert {t["layers"] for t in sourced} == {"moe"} and {t["manifest_family"] for t in sourced} == {"moe_block_stream"}
     runner = next(g for g in RANK0["groups"] if g["pattern"] == "model.layers.{i}.mlp.experts")
     assert runner["type"] in moe_source.MOE_MODULE_CLASSES and sorted(runner["layers"]) == CM.layer_set(CMAP, "moe", ENV)

@@ -175,7 +175,8 @@
     "SiluMulFp8BlockQuant_v1",
     "SiluMulFp8BlockQuant_v2"
    ],
-   "note": "ops.silu_and_mul_per_block_quant(intermediate_cache1, group_size=128, e4m3) (csrc fused_silu_mul_block_quant.cu), which TritonExperts.apply launches in place of silu_and_mul + the w2 input's group quant for SiLU with 128x128 block FP8, no LoRA and no DeepGEMM e8m0: per element f32 silu(gate) * up kept in registers (never rounded to bf16), per 128-group max |y|, scale = max / 448 floored by the kernel's minimum, then e4m3 RN of y / scale. fp8_moe.SiluMulFp8BlockQuant_v1{I, G} (Boolean _v2); its two outputs are the w2 Program's xq and sx; tests/properties/glm53_block_fp8_capture_gpu.py compares the served w2 input against it on the H200"
+   "note": "ops.silu_and_mul_per_block_quant(intermediate_cache1, group_size=128, e4m3) (csrc fused_silu_mul_block_quant.cu), which TritonExperts.apply launches in place of silu_and_mul + the w2 input's group quant for SiLU with 128x128 block FP8, no LoRA and no DeepGEMM e8m0: per element f32 silu(gate) * up kept in registers (never rounded to bf16), per 128-group max |y|, scale = max / 448 floored by the kernel's minimum, then e4m3 RN of y / scale. fp8_moe.SiluMulFp8BlockQuant_v1{I, G} (Boolean _v2); its two outputs are the w2 Program's xq and sx; tests/properties/glm53_block_fp8_capture_gpu.py compares the served w2 input against it on the H200. Not the served path: with DeepGEMM's ue8m0 quant on (vLLM's sm_90 default) TritonExperts.apply runs silu_and_mul (silu-mul) and the ue8m0 group quant (fp8-moe-triton) instead",
+   "alternative_to": "silu-mul"
   },
   "bf16-add": {
    "status": "exists",
@@ -227,12 +228,12 @@
     "Fp8GroupQuant_v2",
     "Fp8GroupQuantUe8m0_v1",
     "Fp8GroupQuantUe8m0_v2",
-    "MoeExpertFp8BlockGemm_v1",
-    "MoeExpertFp8BlockGemm_v2",
-    "MoeExpertFp8BlockGemmW_v1",
-    "MoeExpertFp8BlockGemmW_v2"
+    "MoeExpertFp8Gemm_v1",
+    "MoeExpertFp8Gemm_v2",
+    "MoeExpertFp8GemmW_v1",
+    "MoeExpertFp8GemmW_v2"
    ],
-   "note": "Triton fused_moe with 128x128 block FP8 (Fp8MoeBackend.TRITON): the cc 9.0 oracle moves Triton to the front for dynamic-128 activations, static 128-block weights and no expert parallelism even when DeepGEMM is enabled by default. The expert input quant is per_token_group_quant_fp8 with use_ue8m0 = is_deep_gemm_e8m0_used(): True at vLLM's sm_90 defaults (DeepGEMM on), binding deepgemm.Fp8GroupQuantUe8m0_v1; False binding fp8.Fp8GroupQuant_v1. Registered (fp8_moe.MoeExpertFp8BlockGemm(W)_v1, Booleans _v2); tests/properties/glm53_block_fp8_capture_gpu.py pins the launches' statics and compares both quants on the H200"
+   "note": "Triton fused_moe with 128x128 block FP8 (Fp8MoeBackend.TRITON): the cc 9.0 oracle moves Triton to the front for dynamic-128 activations, static 128-block weights and no expert parallelism even when DeepGEMM is enabled by default. The expert input quant is per_token_group_quant_fp8 with use_ue8m0 = is_deep_gemm_e8m0_used(): True at vLLM's sm_90 defaults (DeepGEMM on), binding deepgemm.Fp8GroupQuantUe8m0_v1; False binding fp8.Fp8GroupQuant_v1. Both quants (the input's before the w13 launch, the activation's before the w2 launch) are this group quant; the launches are fp8_moe_experts.MoeExpertFp8Gemm(W)_v1{E, K, N, G, KB, SWAP, DOT} per (token, slot) pair, Booleans _v2; tests/properties/glm53_block_fp8_capture_gpu.py pins the launches' statics and compares both quants on the H200"
   },
   "fused-rmsnorm-triton": {
    "status": "port",
@@ -378,7 +379,7 @@
   "module_hook": "the committer's forward hooks on the modules of its acquired classes whose forward runs (commit/committer/native_host.py _make_hook, _make_pre_hook): <module> for a tensor output, <module>/<k> for tuple element k, <module>/in for an acquired input",
   "sampler": "the committer's runner.sample wrap: runner.sampler/sampled_token_ids",
   "tp_partial": "TPPartialSource (acquire/sources/partial_source.py): a collective's rank-local input, <site>/part_rank<r> or <site>/shard_rank<r>",
-  "moe": "MoeBlockSource (acquire/sources/moe_source.py): moe/L<i>/<plane>, snapshotted after each kernel of the fused-MoE block",
+  "moe": "MoeBlockSource (acquire/sources/moe_source.py): moe/L<i>/<plane>, snapshotted after each kernel of the fused-MoE block, and on a TP rank <module>/out of a MoE module that does not all-reduce its output",
   "allreduce_norm": "TPPartialSource's fused_allreduce_rms_norm wrap (acquire/sources/allreduce_norm.py): on every call the partial as <norm>/part_rank<r>, copied before the call; on the FlashInfer path, where the norm module never runs, the returns as <norm>/0 and <norm>/1. On the all-reduce + RMSNorm path the norm module runs and the module hook binds those two names, so a step commits the same names on either path",
   "attention": "AttentionSource (acquire/sources/attention_source.py), on every attention layer: _sparse_indexer_and_attn's arguments before it runs (fused_norm_rope's q_c, kv_c_out and k_pe_out, the W_UK_T product, fused_q's outputs) and the layer's cache rows at the step's slot mapping, read from the caches fused_norm_rope was given; after it returns, the rows of output that forward_mqa's rows were up-projected into and topk_indices_buffer[:M, :TOPK]; impl.forward_mqa's return; impl.forward_mha's output argument after it returns (not bound with a chunked context). <attn>/<value> for the layer's values, <indexer>/<value> and <k_cache>/rows for the indexer's"
  },
@@ -1699,6 +1700,60 @@
    }
   },
   {
+   "id": "moe.in_q",
+   "op": "layers.{i}.mlp.experts.moe_in_quant",
+   "port": 0,
+   "layers": "moe",
+   "module": "model.layers.{i}.mlp.experts.routed_experts",
+   "site": {
+    "kind": "launch_wrap",
+    "target": "vllm/model_executor/layers/fused_moe/fused_moe.py:invoke_fused_moe_triton_kernel",
+    "detail": "the w13 launch's A: qhidden_states, the e4m3 output of moe_kernel_quantize_input's per_token_group_fp8_quant(hidden_states, 128, use_ue8m0=True)"
+   },
+   "dtype": "float8_e4m3fn",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "fp8-moe-triton",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "moe_block_stream",
+   "source": "moe/L{i}/in_q",
+   "commit": {
+    "name": "moe/L{i}/in_q",
+    "binder": "moe"
+   }
+  },
+  {
+   "id": "moe.in_scale",
+   "op": "layers.{i}.mlp.experts.moe_in_quant",
+   "port": 1,
+   "layers": "moe",
+   "module": "model.layers.{i}.mlp.experts.routed_experts",
+   "site": {
+    "kind": "launch_wrap",
+    "target": "vllm/model_executor/layers/fused_moe/fused_moe.py:invoke_fused_moe_triton_kernel",
+    "detail": "the w13 launch's A_scale: a1q_scale, one power-of-two f32 scale per 128 elements of each token row"
+   },
+   "dtype": "float32",
+   "shape": [
+    "M",
+    "=H // B"
+   ],
+   "program": "fp8-moe-triton",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "moe_block_stream",
+   "source": "moe/L{i}/in_scale",
+   "commit": {
+    "name": "moe/L{i}/in_scale",
+    "binder": "moe"
+   }
+  },
+  {
    "id": "moe.up",
    "op": "layers.{i}.mlp.experts.moe_up",
    "port": 0,
@@ -1741,43 +1796,70 @@
    "module": "model.layers.{i}.mlp.experts.routed_experts",
    "site": {
     "kind": "launch_wrap",
-    "target": "vllm/model_executor/layers/fused_moe/fused_moe.py:invoke_fused_moe_triton_kernel",
-    "detail": "the w2 launch's A: qintermediate_cache2, the e4m3 output of ops.silu_and_mul_per_block_quant (triton_moe.py TritonExperts.apply)"
+    "target": "torch.ops._C.per_token_group_fp8_quant (csrc per_token_group_quant.cu)",
+    "detail": "the input of the activation's group quant whose e4m3 output is the w2 launch's A: intermediate_cache2, torch.ops._C.silu_and_mul's output (apply_moe_activation)"
    },
-   "dtype": "float8_e4m3fn",
+   "dtype": "bfloat16",
    "shape": [
     "=M * K",
     "MIL"
    ],
-   "program": "silu-mul-block-quant",
+   "program": "silu-mul",
    "tp": "column",
    "rank_identical": false,
    "target_only": false,
    "manifest_family": "moe_block_stream",
    "source": "moe/L{i}/act",
-   "note": "no bf16 activation exists on this path: with SiLU, 128x128 block FP8, no LoRA and no DeepGEMM e8m0 TritonExperts.apply fuses silu_and_mul and the w2 input's group quant into one kernel, so apply_moe_activation never runs. Likewise the w13 launch reads qhidden_states, the group quant of post_attention_layernorm's output, which fp8-moe-triton recomputes",
+   "note": "on the served path (DeepGEMM's ue8m0 quant on) TritonExperts.apply runs silu_and_mul into this bf16 activation and quantizes it as it does the input (moe.act_q, moe.act_scale). Without ue8m0 vLLM fuses the SiLU and the quant (silu-mul-block-quant) and no bf16 activation exists: the source then binds no act",
    "commit": {
     "name": "moe/L{i}/act",
     "binder": "moe"
    }
   },
   {
+   "id": "moe.act_q",
+   "op": "layers.{i}.mlp.experts.moe_act_quant",
+   "port": 0,
+   "layers": "moe",
+   "module": "model.layers.{i}.mlp.experts.routed_experts",
+   "site": {
+    "kind": "launch_wrap",
+    "target": "vllm/model_executor/layers/fused_moe/fused_moe.py:invoke_fused_moe_triton_kernel",
+    "detail": "the w2 launch's A: qintermediate_cache2, the e4m3 output of per_token_group_fp8_quant(intermediate_cache2, 128, use_ue8m0=True)"
+   },
+   "dtype": "float8_e4m3fn",
+   "shape": [
+    "=M * K",
+    "MIL"
+   ],
+   "program": "fp8-moe-triton",
+   "tp": "column",
+   "rank_identical": false,
+   "target_only": false,
+   "manifest_family": "moe_block_stream",
+   "source": "moe/L{i}/act_q",
+   "commit": {
+    "name": "moe/L{i}/act_q",
+    "binder": "moe"
+   }
+  },
+  {
    "id": "moe.act_scale",
-   "op": "layers.{i}.mlp.experts.moe_act",
+   "op": "layers.{i}.mlp.experts.moe_act_quant",
    "port": 1,
    "layers": "moe",
    "module": "model.layers.{i}.mlp.experts.routed_experts",
    "site": {
     "kind": "launch_wrap",
     "target": "vllm/model_executor/layers/fused_moe/fused_moe.py:invoke_fused_moe_triton_kernel",
-    "detail": "the w2 launch's A_scale: a2q_scale, one f32 scale per 128 elements of each act row"
+    "detail": "the w2 launch's A_scale: a2q_scale, one power-of-two f32 scale per 128 elements of each act row"
    },
    "dtype": "float32",
    "shape": [
     "=M * K",
     "=MIL // B"
    ],
-   "program": "silu-mul-block-quant",
+   "program": "fp8-moe-triton",
    "tp": "column",
    "rank_identical": false,
    "target_only": false,
@@ -1964,7 +2046,11 @@
    "rank_identical": false,
    "target_only": false,
    "manifest_family": "tp_rank_partials",
-   "note": "MoERunner.forward: shared_output + fused_output (routed scale already in the router weights; reduce_results=False). Not committed under its own name: its words are committed as the next layer's input_layernorm.partial (the last layer's as norm.partial)"
+   "note": "MoERunner.forward: shared_output + fused_output (routed scale already in the router weights; reduce_results=False). The moe source binds it after the forward on every TP rank, since no all-reduce of the module reads it; its words are also the next layer's input_layernorm.partial (the last layer's norm.partial)",
+   "commit": {
+    "name": "model.layers.{i}.mlp.experts/out",
+    "binder": "moe"
+   }
   }
  ],
  "modules": [
@@ -2272,8 +2358,11 @@
    "type": "RoutedExperts",
    "disposition": "taps",
    "taps": [
+    "moe.in_q",
+    "moe.in_scale",
     "moe.up",
     "moe.act",
+    "moe.act_q",
     "moe.act_scale",
     "moe.down",
     "moe.sum"
@@ -2682,12 +2771,12 @@
   {
    "item": 1,
    "work": "moe_source: add vllm._custom_ops.grouped_topk as the router launch site (it wraps topk_softmax today: router_w = topk_values, router_ids = topk_indices) and accept the FP8 block launches of invoke_fused_moe_triton_kernel (A_scale, B_scale, block_shape)",
-   "done": "moe source: grouped_topk_router.grouped_topk bound as router_w / router_ids (the custom op is reached inside that function's torch.compile region, so the wrapper sits at the call-time global _compute_routing reads), with the kernel per step; the block-FP8 launches bound unchanged"
+   "done": "moe source: grouped_topk_router.grouped_topk bound as router_w / router_ids (the custom op is reached inside that function's torch.compile region, so the wrapper sits at the call-time global _compute_routing reads), with the kernel per step; the block-FP8 launches' (A, A_scale) bound as in_q / in_scale (w13) and act_q / act_scale (w2)"
   },
   {
    "item": 2,
    "work": "moe_source: bind act at fused_moe.apply_moe_activation's output argument (bf16) rather than A of the MUL_ROUTED_WEIGHT launch, which is FP8 e4m3 under block quant; the six-tensors-per-MoE-layer-per-step check is unchanged",
-   "done": "moe source: no bf16 activation exists on this path (TritonExperts.apply fuses SiLU and the w2 quant into silu_and_mul_per_block_quant); act is the w2 launch's e4m3 A and act_scale its A_scale, seven tensors per MoE layer"
+   "done": "moe source: on the served path (DeepGEMM's ue8m0 quant on) silu_and_mul writes a bf16 activation that per_token_group_fp8_quant quantizes; act is the input of the quant whose output is the w2 launch's A (torch.ops._C.per_token_group_fp8_quant wrapped), ten tensors per MoE layer; nine when vLLM fuses the SiLU and the quant (silu_and_mul_per_block_quant)"
   },
   {
    "item": 3,

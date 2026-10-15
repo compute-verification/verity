@@ -1956,9 +1956,9 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         # [R14 TP-03] the TP partial source binds exactly ONE rank-local collective input per hooked site per step (install-time site set)
         tp_src = next((s for s in self.sources if getattr(s, "short_name", "") == "tp_partial"), None)
         # [R15 tp TP-06, manbind M-0350 C3] the TP source is also the ONE binder of the fused-MoE block's RECEIVED all-reduce output
-        # (`model.layers.<L>.mlp.experts/out`; MoERunner is not an ACQUIRE_CLASSES module): those sites are expected modules of every step
-        if tp_src is not None and hasattr(tp_src, "received_site_names"):
-            modules += [s for s in tp_src.received_site_names() if s not in modules]
+        # (`model.layers.<L>.mlp.experts/out`; MoERunner is not an ACQUIRE_CLASSES module), the MoE source of a module that does not reduce it
+        for sites in (getattr(tp_src, "received_site_names", None), getattr(moe_src, "out_site_names", None)):
+            modules += [s for s in (sites() if sites is not None else ()) if s not in modules]
         return {"modules": modules, "attention_layers": attn_layers, "fa2_hidden_per_layer": 1 if fa2 else 0, "sampler_ids": 1 if any(n == "runner.sampler" for n in modules) else 0,
                 "moe_layers": moe_layers, "moe_tensors_per_layer": (getattr(moe_src, "stats", {}).get("tensors_per_layer", 6) if moe_src is not None else 0),
                 "router_softmax_layers": sorted(int(k) for k in rs_src.layers) if rs_src is not None else [], "tp_sites": sorted(tp_src.site_names()) if tp_src is not None else [], "tp_rank": (tp_src.rank if tp_src is not None else None),
