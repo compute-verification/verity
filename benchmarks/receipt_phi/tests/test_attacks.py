@@ -86,6 +86,18 @@ def test_duo_cancels_exactly_through_g_partners() -> None:
     assert hit > 0
 
 
+def test_duo_fold_sees_a_shift_of_both_halves() -> None:
+    """Top-bit flips in the last two words shift duo's y and z by the same D (2^31 among others); y ^ z would miss
+    D = 2^31 always, and the receipt's rotated fold misses none of the sampled ones."""
+    y, z, p0, p1 = sample(4096)
+    top = U(1 << 31)
+    a = attacks.step("duo", *attacks.step("duo", y, z, p0, 254), p1, 255)
+    b = attacks.step("duo", *attacks.step("duo", y, z, p0 ^ top, 254), p1 ^ top, 255)
+    assert np.mean((a[0] ^ a[1]) == (b[0] ^ b[1])) > 0.25
+    assert not (attacks.fold("duo", *a) == attacks.fold("duo", *b)).any()
+    assert all(attacks.fold(k, y, z)[0] == twins.finish(k, (int(y[0]), int(z[0]))) for k in twins.KINDS)
+
+
 def test_mum_lattice_patterns_cancel() -> None:
     for m, r in attacks.mum_lattice().items():
         d, n = r["deltas"], len(r["deltas"])

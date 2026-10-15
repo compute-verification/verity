@@ -106,9 +106,11 @@ __device__ __forceinline__ void absorb(St& s, const uint32_t* p) {
   }
 }
 
+// The receipt, once per block. DUO's z is y + rotl(u, r), so y ^ z would see an additive shift of both halves (2^31
+// above all) only through carries: its fold rotates z instead.
 template <int K>
 __device__ __forceinline__ uint32_t finish(const St& s) {
-  return wide(K) ? (s.y ^ s.z) : s.y;
+  return K == MUM ? (s.y ^ s.z) : K == DUO ? (s.y ^ rotl(s.z, 16)) : s.y;
 }
 
 // ---------------------------------------------------------------------------------------------------------------- pure

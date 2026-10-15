@@ -1,9 +1,9 @@
-"""The receipt φ candidates of `phi.cu`, word for word in Python (no numpy, so `gate.py` runs on the node's bare Python).
+"""The receipt φ candidates of `phi.cu`, word for word in Python (no numpy, so `gate.py` runs on a node's bare Python).
 
 Each candidate absorbs committed words p into a chain value, keyed by position t (KA/KB odd, KK addends, all from
 `keys(kseed)` exactly as `phi.cu`'s `set_keys`). `absorb(kind, state, words, t0, keys)` takes the state as (y, z): z is
-used only by the wide kinds, mum (a 64-bit state, y = hi, z = lo) and duo (two words), whose receipt is y ^ z. The
-paired kinds (ram, xma) take words two at a time, keyed by the first word's position.
+used only by the wide kinds, mum (a 64-bit state, y = hi, z = lo) and duo (two words), which `finish` folds into the
+32-bit receipt. The paired kinds (ram, xma) take words two at a time, keyed by the first word's position.
 
 ``OPS`` is the SASS each candidate should compile to per absorbed word; `sass_mix.py` counts what it does compile to.
 """
@@ -115,7 +115,9 @@ def absorb(kind: str, st: tuple[int, int], p: list[int], t0: int, k: Keys) -> tu
 
 
 def finish(kind: str, st: tuple[int, int]) -> int:
-    return st[0] ^ st[1] if kind in WIDE else st[0]
+    """The block's receipt: mum's hi ^ lo, duo's y ^ rotl(z, 16), every other kind's y."""
+    y, z = st
+    return y ^ z if kind == "mum" else y ^ rotl(z, 16) if kind == "duo" else y
 
 
 PU, PW = 4, 8

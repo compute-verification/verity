@@ -12,6 +12,8 @@ random-operand work's words).
   cancels, and the most frequent p'' ⊕ p or p'' − p is the best Δ2 for that Δ1. Its frequency is the probability that
   the pair (Δ1, Δ2) leaves the receipt unchanged.
 - ``three_word``: the same search one word further, for the kinds without a high-probability two-word canceller.
+- ``chain_end``: fixed differences in the block's last word and last two words, read through the receipt (the wide
+  kinds' fold of their 64-bit state to 32 bits), by direct sampling.
 - ``mum_lattice``: mum's state-independent additive cancellations Σ δ_t a_t ≡ 0 mod 2^64 for the real keys, with
   the bits a prover pays to reach them through the XOR of the state's halves.
 - ``linearity``: the block receipt f(P) over b² = 256 words, tested for f(P ∘ Q) = f(P) ∘ f(Q) ∘ f(0)⁻¹ over
@@ -118,6 +120,11 @@ def step(kind: str, y, z, p, t: int):
     raise ValueError(kind)
 
 
+def fold(kind: str, y, z):
+    """`twins.finish`: the block's receipt from the chain's final state."""
+    return y ^ z if kind == "mum" else y ^ rotl(z, 16) if kind == "duo" else y
+
+
 def unxs(w, s: int):
     """The inverse of v -> v ^ (v >> s) on 32 bits."""
     v = w.copy()
@@ -221,6 +228,62 @@ def differential(dist: str, samples: int, seed: int = 1) -> dict:
         best["log2p"] = float(np.log2(best["p"])) if best["p"] > 0 else None
         best["resolution_log2"] = -float(np.log2(samples))
         out[kind] = best
+    return out
+
+
+DELTAS = [("xor", 1 << j) for j in range(32)] + [("add", 1 << j) for j in range(32)] + \
+         [("add", (1 << 32) - (1 << j)) for j in range(32)]
+
+
+def apply_delta(op: str, d: int, p):
+    return p ^ U(d) if op == "xor" else (p + U(d)) & M32
+
+
+def chain_end(dist: str, samples: int, seed: int = 11) -> dict:
+    """Fixed differences at the end of the block, read through the receipt rather than the state: Δ in the last word
+    alone, and (Δ1, Δ2) in the last two, by direct sampling over every pair. A wide kind's state carries 64 bits to the
+    end, where its fold keeps 32: a fold that loses a difference there (duo's first fold, y ⊕ z with z = y + rotl(u, r),
+    under +2^31 in both halves) is a cancellation no in-chain test sees."""
+    rng = np.random.default_rng(seed)
+    out = {}
+    for kind in KINDS:
+        t0 = B2 - (4 if kind in PAIRED else 2)
+        y = rng.integers(0, 1 << 32, size=samples, dtype=np.uint64)
+        z = rng.integers(0, 1 << 32, size=samples, dtype=np.uint64)
+        P = [words(dist, rng, samples) for _ in range(B2 - t0)]
+
+        def receipt(q, start, s):
+            a, b = s
+            for i in range(start, B2 - t0):
+                a, b = step(kind, a, b, q[i], t0 + i)
+            return fold(kind, a, b)
+
+        r0 = receipt(P, 0, (y, z))
+        last = len(P) - (2 if kind in PAIRED else 1)
+        one, two = {"p": 0.0}, {"p": 0.0}
+        for op, d in DELTAS:
+            Q = list(P)
+            Q[last] = apply_delta(op, d, P[last])
+            share = float(np.mean(receipt(Q, 0, (y, z)) == r0))
+            if share > one["p"]:
+                one = {"p": share, "d": f"{op} {d:#010x}"}
+        prev = last - (2 if kind in PAIRED else 1)
+        for op1, d1 in DELTAS:
+            Q = list(P)
+            Q[prev] = apply_delta(op1, d1, P[prev])
+            s = (y, z)
+            for i in range(last):
+                s = step(kind, *s, Q[i], t0 + i)
+            for op2, d2 in DELTAS:
+                Q2 = list(Q)
+                Q2[last] = apply_delta(op2, d2, P[last])
+                share = float(np.mean(receipt(Q2, last, s) == r0))
+                if share > two["p"]:
+                    two = {"p": share, "d1": f"{op1} {d1:#010x}", "d2": f"{op2} {d2:#010x}"}
+        for r in (one, two):
+            r["log2p"] = float(np.log2(r["p"])) if r["p"] > 0 else None
+            r["resolution_log2"] = -float(np.log2(samples))
+        out[kind] = {"last_word": one, "last_two_words": two}
     return out
 
 
@@ -342,11 +405,11 @@ def mum_lattice(t: int = 4) -> dict:
 
 
 def receipts(kind: str, P: np.ndarray, y0: np.ndarray) -> np.ndarray:
-    """Block receipts: P is (trials, 256) words, y0 the chain's start (z starts at y0 ^ 0x9E3779B9 for the wide kinds)."""
+    """Block receipts: P is (trials, 256) words, y0 the chain's start (z starts at y0 ^ 0x9E3779B9 for wide kinds)."""
     y, z = y0.copy(), y0 ^ U(0x9E3779B9)
     for t in range(P.shape[1]):
         y, z = step(kind, y, z, P[:, t], t)
-    return y ^ z if kind in twins.WIDE else y
+    return fold(kind, y, z)
 
 
 def linearity(dist: str, trials: int, seed: int = 2) -> dict:
@@ -474,7 +537,7 @@ def two_word_table(kind: str, y: int, z: int, k8) -> np.ndarray:
     yy, zz = np.full_like(x, y), np.full_like(x, z)
     yy, zz = step8(kind, yy, zz, x & M8, 4, k8)
     yy, zz = step8(kind, yy, zz, x >> 8, 5, k8)
-    return (yy ^ zz) if kind in twins.WIDE else yy
+    return (yy ^ zz) if kind == "mum" else (yy ^ (((zz << 4) | (zz >> 4)) & M8)) if kind == "duo" else yy
 
 
 def anf_degrees(tab: np.ndarray, nbits: int = 16) -> list[int]:
@@ -661,12 +724,14 @@ def main() -> int:
     ns, nt = (1 << 12, 1 << 9) if args.quick else (1 << 16, 1 << 12)
     if args.samples_log2:
         ns = 1 << args.samples_log2
-    todo = args.only.split(",") if args.only else ["differential", "three_word", "linearity", "degree2", "carries",
-                                                    "small", "mum_lattice", "mad_sketch", "duo_g"]
+    todo = args.only.split(",") if args.only else ["differential", "chain_end", "three_word", "linearity", "degree2",
+                                                    "carries", "small", "mum_lattice", "mad_sketch", "duo_g"]
     res = {}
     for dist in args.dist.split(","):
         if "differential" in todo:
             res.setdefault("differential", {})[dist] = differential(dist, ns)
+        if "chain_end" in todo:
+            res.setdefault("chain_end", {})[dist] = chain_end(dist, ns >> 2)
         if "three_word" in todo:
             three = [k for k in ("mum", "xsm4", "xsm2", "duo") if k in KINDS]
             res.setdefault("three_word", {})[dist] = three_word(dist, ns >> 2, kinds=three)
