@@ -592,21 +592,24 @@ def test_redundant_ands_are_counted():
 def test_the_cli_writes_a_report_and_fails_by_name(tmp_path, capsys):
     from circuit_check import cli
 
+    # Every target here is a Call of a served Program (`targets.call_families`), so `--as-call` is the default it would resolve;
+    # passing it skips building the whole catalog in each run's worker (~10 min each).
+    call = ["--as-call", "-q"]
     out = tmp_path / "r.json"
-    assert cli.main(["Bf16ToF32_v1", "RoPEHead_v1{D=8}", "--out", str(out), "-q"]) == 0
+    assert cli.main(["RoPEHead_v1{D=8}", BOOL_RECOMPUTE, "--out", str(out), *call]) == 0
     r = json.loads(out.read_text())
-    assert r["schema"] == CK.SCHEMA and [t["target"] for t in r["targets"]] == ["Bf16ToF32_v1", "RoPEHead_v1{D=8}"]
+    assert r["schema"] == CK.SCHEMA and [t["target"] for t in r["targets"]] == ["RoPEHead_v1{D=8}", BOOL_RECOMPUTE]
     assert r["summary"]["ok"] and all(t["kind"] == "definition" for t in r["targets"])
-    assert cli.main(["RoPEHead_v1{D=8}", "--lower-max-ands", "1", "--out", str(out), "-q"]) == 0
+    assert cli.main(["RoPEHead_v1{D=8}", "--lower-max-ands", "1", "--out", str(out), *call]) == 0
     [real] = json.loads(out.read_text())["targets"][0]["correspondence"]["realizations"]
     assert not real["lowered"] and real["reason"].endswith("over the whole-Definition budget (1)")
     capsys.readouterr()
     fp8 = "ScaledMmFp8Block_v1{K=128,N=128,G=128}"
-    assert cli.main([fp8, "-q"]) == 0                                            # a known failure: named, not failing
+    assert cli.main([fp8, *call]) == 0                                           # a known failure: named, not failing
     assert f"known partition/gate-recomputed {fp8}" in capsys.readouterr().out
-    assert cli.main([fp8, "-q", "--strict"]) == 1
+    assert cli.main([fp8, *call, "--strict"]) == 1
     capsys.readouterr()
-    assert cli.main([BOOL_RECOMPUTE, "-q"]) == 0
+    assert cli.main([BOOL_RECOMPUTE, *call]) == 0
     assert "1 Boolean Call(s) recomputing 1120 gate(s) across units (Q_word v2)" in capsys.readouterr().out
 
 
