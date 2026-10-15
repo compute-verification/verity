@@ -150,6 +150,18 @@ def completed (A : PIDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : O
 def work (A : PIDevice N b h ρ S L q) (cost : ℕ → ℕ) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
   (A.chip (A.state E)).work cost (A.world E R O) []
 
+/-- **A pass's completion work split across the node's concurrent compute devices.** `rate i` is device `i`'s
+measured completion-work rate in the unit of `cost`, and `duration` is the pass's duration in the same time unit.
+`workAt` assigns every unit of the pass device's completion work to exactly one device; each device gets at most its
+rate times the pass duration.
+
+The index covers every processor that can complete blocks, GPUs and host CPUs included. Thus the node's ceiling is
+`(∑ i, rate i) * duration`, rather than a rate with time left implicit. -/
+structure TimeBudget (A : PIDevice N b h ρ S L q) (cost : ℕ → ℕ) (k duration : ℕ) (rate : Fin k → ℕ) where
+  workAt : Bits S → IWorld N b h ρ → Fin k → ℕ
+  work_eq : ∀ st w, (A.chip st).work cost w [] = ∑ i, workAt st w i
+  workAt_le : ∀ st w i, workAt st w i ≤ rate i * duration
+
 /-- The words whose committed receipt is the oracle's under the stream, however the device came by it. -/
 def correct (A : PIDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : Finset (Fin N) :=
   Finset.univ.filter (fun j => A.tags E R O j = O (R, j, E j))

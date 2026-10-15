@@ -43,9 +43,9 @@ ask:
 
 - one stand-alone question to the owner of what the change touches, or to your coordinator when owners disagree or you
   can't tell who owns it (a handle holder: on Slack, `research msg send --to @HANDLE`; a worker: its report or reply to
-  the coordinator that launched it). The coordinator decides, and says what it decided. Only money (spend past a
-  `budgets.toml` line), keys (access, a credential, a node's root) and claims (what a guarantee says or rests on) go on to
-  Daniel, as written;
+  the coordinator that launched it). The coordinator decides, and says what it decided. Only keys (access, a credential,
+  a node's root) and claims (what a guarantee says or rests on) go on to Daniel, as written; spend is its lead's call
+  (13 Oct), with pods still bounding themselves under a `budgets.toml` line;
 - the case, the change, and your recommendation, in a few lines;
 - meanwhile, prepare the change on your branch, and mark it ready only after the answer.
 
@@ -101,10 +101,33 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-14 (12:53 PM PDT): hard switches, one abstraction per job. The moves we've made are total: the new repository,
+  one cloud agent per lead talking horizontally, and Linear as the work-item layer (the brief colocated in the issue,
+  filed into the owning team; pickup is the issue's state change; Slack narrows to conversation, broadcasts, alerts and
+  Daniel's cards). No second path stays alive beside any of these, and every bridge kept for the transition names its
+  end state. Old agents that still hold context stay reachable for a while as read-only context sources — they hold no
+  handle and do no work — then are archived. The admin enforces all of it: audits for splits, assigns each a fate, and
+  tells Daniel when an abstraction fails, is abused or turns into red tape.
+- 2026-10-14 (11:34 AM PDT, broadening his 10:14 AM ruling): every coordinator and worker opens and edits its own PRs
+  with no approval step, through Cursor's PR tool or gh through the broker, whichever works (for a branch other than
+  the agent's own run branch, which the PR tool refuses: `research queue open --head BRANCH --title T --body-file F`,
+  which goes through the broker and refuses a duplicate or a moved head). Waiting on dashboard
+  clicks cost about six hours across fourteen finished PRs overnight on 14 Oct; the launcher no longer pins PR
+  creation off per run. A cloud agent whose launch-time run rules still gate both paths registers the request and
+  posts the exact payload where it registered it, so a capable hand opens it without a duplicate; the ruling reaches
+  such an agent at its next launch.
+- 2026-10-13 (11:01 PM PDT, cards 2e0ff59b and 54bd993d): a guarantee's checked family may fold in a check the compiled
+  verifier already runs, and a new fail-closed refusal modelled the same way: the statement moves toward what the
+  verifier refuses, and the landing DM shows the moved records. The same night: a free statement parameter whose
+  adversarial values break a proof is closed by a side condition decidable at any literal instantiation, discharged by
+  computation at use (never a listed assumption), keeping the general form.
 - 2026-10-13 (about 2:24 PM PDT, relayed by top): no Cursor Projects, and no agent state kept only in a Cursor store.
   Each coordinator is a plain Cursor cloud agent that owns a vertical slice and runs its own subagents; coordinators
   talk to each other through Slack and Linear; one admin agent holds `@top` in place of the Project's top-level agent;
   and a successor takes over each lead: the handle stays, and its holder changes.
+- 2026-10-13 (2:22 PM PDT): leads decide open questions themselves, spend included; Daniel's explicit rulings stand until
+  he reverses them. Of 8 Oct's "money, keys and claims", spend is now its lead's own call (pods still bound themselves
+  under a `budgets.toml` line, and a budget line named in a standing ruling stands); keys and claims still go to Daniel.
 - 2026-10-13 (1:33 PM PDT, relayed by top): the recursive audit (`Flock.Guarantees.RecursiveAuditC3`) may rest on the
   model claim `registrant-holds-openings` (`verity/core/claims`): the prover holds a row and a salt under every leaf it
   registered, R's level-0 staging salts included. Those salts are held by the prover's own workers behind the firewall.

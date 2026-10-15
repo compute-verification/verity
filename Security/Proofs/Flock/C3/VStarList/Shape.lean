@@ -5,13 +5,15 @@ import Proofs.Flock.VBridge.Family.Structure
 # Piece (h): the list's R at `mReg`, and `hp` as the inner shape's `sparse` entry
 
 The verifier's list (`RecVStar.statements`) is V*'s statements (`VStar.statements`, `rec-open` and `rec-residuals`),
-then candidate 3's (`candidate3Statements`): RecSparse at the inner shape's `sparse` entry, and where META names R's
-shape (`stacked`), R's levels and the parts of R's opening. `checkCandidate3` refuses a list with an opening off R's
-shape, and `candidate3Statements` an R off the two claims or off the bucket's `table_m`. So:
+then candidate 3's (`candidate3Statements`): RecSparse at the inner shape's `sparse` entry, then R's levels and the
+parts of R's opening at META's `stacked`. `checkCandidate3` refuses a list with an opening off R's shape, and
+`candidate3Statements` RecSparse without R and an R off the two claims or off the bucket's `table_m`. So:
 
 * `SparseIs ish hp`: `hp` is the verifier's own, the inner shape's `sparse` entry (`[NU, ELL, S_LOG, T_LOG]`).
 * `sparse_of_list`: the list holds RecSparse at that entry; `stacked_of_list`: with R, it holds each of R's levels at
-  `fast100(m)` (`recOpenStacked`).
+  `fast100(m)` (`recOpenStacked`); `stacked_of_candidate3`: and the inner shape names R at `(table_m, STACKED_CLAIMS)`.
+* `checkInnerStmt_ok`: where check 5 passes `checkInnerStmt`, the inner shape names a sparse entry and its `m`,
+  `k_log` and region count are the inner statement's.
 * `mReg_of_list`: each of the list's `rec-opening` statements is at `m = mReg` and `STACKED_CLAIMS` claims, where
   `mReg` is the model's (`(holoAt st hp).cls.shape.mReg`, padded to `PAD_TO` as the verifier's `tableM` is) and `ℓ` is
   in the class's range.
@@ -48,8 +50,8 @@ theorem statements_ok {i : Flock.RecVStar.Inner} {ss : Array VStar.Stmt} (h : Fl
   cases h
   exact ⟨_, A, C, hA, hC, rfl, hu⟩
 
-/-- **Candidate 3's statements**: none without a `sparse` entry; with one, RecSparse at it first, then nothing more
-without R, and with R, R at the two claims and the bucket's `table_m`. -/
+/-- **Candidate 3's statements**: none without a `sparse` entry; with one, RecSparse at it first, and R at the two
+claims and the bucket's `table_m` (which a `sparse` entry needs, `stacked_of_candidate3`). -/
 theorem candidate3_ok {i : Flock.RecVStar.Inner} {C : Array VStar.Stmt}
     (h : Flock.RecVStar.candidate3Statements i = .ok C) :
     (i.sparse = none → C = #[]) ∧ ∀ sp, i.sparse = some sp →
@@ -71,7 +73,6 @@ theorem candidate3_ok {i : Flock.RecVStar.Inner} {C : Array VStar.Stmt}
     | none =>
       rw [hr] at h
       cases h
-      exact ⟨#[], Array.append_empty.symm, fun _ => rfl, fun r hr' => by cases hr'⟩
     | some r =>
       rw [hr] at h
       dsimp only at h
@@ -89,6 +90,46 @@ theorem candidate3_ok {i : Flock.RecVStar.Inner} {C : Array VStar.Stmt}
       refine ⟨_, Array.append_assoc, (fun hn => nomatch hn), fun r' hr' => ?_⟩
       cases hr'
       exact ⟨by simpa using hc, by simpa using hm⟩
+
+/-- **A `sparse` entry comes with R**: `candidate3Statements` refuses RecSparse without R's shape, and R off the two
+claims or the bucket's `table_m`, so where it passes R is META's `stacked` entry `(table_m, STACKED_CLAIMS)`. -/
+theorem stacked_of_candidate3 {i : Flock.RecVStar.Inner} {C : Array VStar.Stmt}
+    (h : Flock.RecVStar.candidate3Statements i = .ok C) {sp : Flock.RecSparse.Shape} (hsp : i.sparse = some sp) :
+    i.stacked = some ⟨Flock.RecVStar.tableM sp, Flock.RecVStar.STACKED_CLAIMS⟩ := by
+  cases hr : i.stacked with
+  | none =>
+    unfold Flock.RecVStar.candidate3Statements at h
+    rw [hsp] at h
+    dsimp only at h
+    split at h
+    · cases h
+    rw [hr] at h
+    cases h
+  | some r =>
+    obtain ⟨-, -, -, hst⟩ := (candidate3_ok h).2 sp hsp
+    obtain ⟨e1, e2⟩ := hst r hr
+    obtain ⟨rm, rc⟩ := r
+    simp only at e1 e2
+    subst e1 e2
+    rfl
+
+/-- **The inner shape is the inner statement's** where `checkInnerStmt` passes (check 5 at candidate 3's session,
+`RecCoins.Inner.load`): it names a RecSparse shape, and its `m`, `k_log` and region count are the statement's. -/
+theorem checkInnerStmt_ok {i : Flock.RecVStar.Inner} {st : Flock.Stmt}
+    (h : Flock.RecVStar.checkInnerStmt i st = .ok ()) :
+    i.sparse.isSome = true ∧ i.m = st.m ∧ i.kLog = st.c.kLog ∧ i.regions = st.regions.size := by
+  unfold Flock.RecVStar.checkInnerStmt Flock.RecVStar.checkInnerShape at h
+  by_cases h1 : i.sparse.isNone = true
+  · simp only [h1, ↓reduceIte] at h
+    cases h
+  by_cases h2 : (i.m != st.m || i.kLog != st.c.kLog || i.regions != st.regions.size) = true
+  · simp only [h1, h2, Bool.false_eq_true, ↓reduceIte] at h
+    cases h
+  simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, Decidable.not_not] at h2
+  refine ⟨?_, h2.1.1, h2.1.2, h2.2⟩
+  cases hs : i.sparse with
+  | none => rw [hs] at h1; exact absurd rfl h1
+  | some _ => rfl
 
 /-- **A loop that runs through passes each element**: where each step that succeeds continues and holds `P` of its
 element, a loop that succeeds holds `P` of every element. -/

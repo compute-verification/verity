@@ -80,7 +80,7 @@ UNQUANTIZED = ("bfloat16", "float16", "float32")
 QUANT_PARAMS = ("weight_scale", "weight_scale_inv", "input_scale", "weight_zero_point", "weight_packed")
 #: The pinned int7 quantizer of the FP8 lane's reference (docs/pouw-fp8/reference.md), applied without a basis rotation.
 QUANTIZER = "verity.pouw.symmetric-int7-rowmax-rne-f32/v1"
-KEYS = ("coins", "retain_steps", "transcript_dir", "draws", "tamper", "device", "kernel", "cubin", "schedule")
+KEYS = ("coins", "retain_steps", "transcript_dir", "draws", "tamper", "device", "kernel", "cubin", "schedule", "start_forward")
 #: ``ncp-v2``'s negative controls (`Settings.tamper`): a prover that commits and opens one value wrong
 TAMPERS = ("tile", "bias")
 #: where the Commit computes `ncp-v2`'s values: the host (`pouw_native`, the default) or ``cuda``, the serving kernel
@@ -130,6 +130,10 @@ class Settings:
     cubin: str | None = None
     #: Pearl-C on sm_120: the schedule each pass runs under (`verity.core.protocols.pouw.serving.SCHEDULES`), serial by default
     schedule: str = "serial"
+    #: ``ncp-v2``: the anchored forward index the install's first pass takes.  A salt's first window starts at 0; a second
+    #: served window under the same salt starts at the verifier's `anchors.SaltWindows.next_forward`, so no call index
+    #: repeats across the salt's windows (a repeat would reuse a noise key, and `SaltWindows.open` refuses it)
+    start_forward: int = 0
 
     @classmethod
     def of(cls, raw: Mapping[str, Any]) -> Settings:
@@ -163,7 +167,10 @@ class Settings:
         schedule = raw.get("schedule", "serial")
         if schedule not in SCHEDULES:
             raise ValueError(f"pouw setting 'schedule' is one of {', '.join(SCHEDULES)}")
-        return cls(coins, retain, tdir, draws, tamper, device, *paths, schedule)
+        start = raw.get("start_forward", 0)
+        if not isinstance(start, int) or isinstance(start, bool) or start < 0:
+            raise ValueError("pouw setting 'start_forward' is a non-negative integer (the salt's SaltWindows.next_forward)")
+        return cls(coins, retain, tdir, draws, tamper, device, *paths, schedule, start)
 
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
@@ -188,6 +195,9 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
                 out.append(str(e))
         elif settings.schedule != "serial":
             out.append(f"{scheme}: the pouw setting 'schedule' is Pearl-C's; this executor runs serially")
+        if settings.start_forward and scheme not in pouw_circuit.SCHEMES:
+            out.append(f"{scheme}: the pouw setting 'start_forward' anchors the circuit-backed executor's forward indices "
+                       f"({', '.join(pouw_circuit.SCHEMES)}); this executor counts its own from 0")
     return tuple(out)
 
 
@@ -416,10 +426,10 @@ class _CircuitRun:
         self.records: list[PC.CallRecord] = []
         self.sides: dict[int, PC.WeightRecord] = {}     # each weight's side, committed at the run's first call on it
         self.seconds: list[float] = []                  # each call's executor wall time: quantize, commit, dequantize
-        self.forward, self.row_base, self.rows_seen = -1, 0, 0
+        self.forward, self.row_base, self.rows_seen = settings.start_forward - 1, 0, 0
         self.commits: dict[str, Any] = {
             "scheme": scheme, "salt": salt.hex(), "weights_root": weights_root(weight_roots).hex(), "quantizer": QUANTIZER,
-            "calls_root": None, "calls": 0}
+            "calls_root": None, "calls": 0, "start_forward": settings.start_forward}
         self.details: dict[str, Any] = {
             "scheme": scheme, "quantizer": QUANTIZER, "basis": "none", "layers": len(weight_roots),
             "circuit": "verity.core.protocols.pouw.circuit: each weight's side is its own NcpWeight_v1 Program call, once per run, and each "
@@ -431,7 +441,8 @@ class _CircuitRun:
             "placeholder": list(PLACEHOLDER)}
 
     def gemm(self, w: int, x: Any, weight: Any, bias: Any) -> Any:
-        """The call's anchored fields: the forward index counts the passes (a pass starts at linear 0), the position is
+        """The call's anchored fields: the forward index counts the passes from ``start_forward`` (a pass starts at linear
+        0; a salt's second window starts where `anchors.SaltWindows.next_forward` says), the position is
         ``w << 32``, the weight id is ``w``, a pass's rows get global ids from the rows served before it, and the weight's
         rows are its columns 0 … n − 1."""
         t0 = time.monotonic()

@@ -1,6 +1,7 @@
 import Proofs.Flock.C3.Fork.Sound
 import Proofs.Flock.C3.Fork.Extract
 import Proofs.Flock.C3.Compose.Bridge
+import Proofs.Flock.C3.Compose.BridgeOff
 import Proofs.Flock.C3.Compose.Discharge
 import Proofs.Flock.C3.Compose.Decoder
 import Proofs.Flock.C3.Compose.SrcClauses
@@ -15,8 +16,15 @@ import Proofs.Flock.C3.Compose.Custody
 import Proofs.Flock.C3.Compose.DecodeFix
 import Proofs.Flock.C3.Compose.HoloStageCoins
 import Proofs.Flock.C3.Compose.LaterHeld
+import Proofs.Flock.C3.Compose.LaterHeldW
+import Proofs.Flock.C3.Compose.LaterHolo
+import Proofs.Flock.C3.Compose.AtHoloHeld
 import Proofs.Flock.C3.Compose.HoloCoinTys
 import Proofs.Flock.C3.Compose.HoloEncoded
+import Proofs.Flock.C3.Compose.RowsReg
+import Proofs.Flock.C3.Compose.HoloStreamSizes
+import Proofs.Flock.C3.Compose.HoloSparseRounds
+import Proofs.Flock.C3.Compose.HoloSparseWords
 import Proofs.Flock.Soundness.Refine.HoloRepConverse
 import Proofs.Flock.C3.Sparse.Read
 import Proofs.Flock.C3.Sparse.Src
@@ -25,10 +33,17 @@ import Proofs.Flock.C3.Sparse.SrcLayer
 import Proofs.Flock.C3.Sparse.SessionAt
 import Proofs.Flock.C3.Sparse.SrcEnd
 import Proofs.Flock.C3.Sparse.MsgsRead
+import Proofs.Flock.C3.Sparse.SrcSessions
 import Proofs.Flock.C3.Sparse.MsgsLayers
+import Proofs.Flock.C3.Sparse.PubTie
+import Proofs.Flock.C3.Sparse.PubLift
+import Proofs.Flock.C3.Sparse.HeldStages
+import Proofs.Flock.C3.Sparse.ClaimSparseOf
+import Proofs.Flock.C3.Sparse.PubChecked
 import Proofs.Flock.C3.VStarList.Statements
 import Proofs.Flock.C3.VStarList.Shape
 import Proofs.Flock.C3.VStarList.Range
+import Proofs.Flock.C3.VStarList.Accepts
 import Proofs.Flock.C3.RegLevels.Top
 import Proofs.Flock.C3.Opening.Read
 import Proofs.Flock.C3.RegLevels.Read
@@ -57,8 +72,23 @@ import Proofs.Flock.C3.Reps.ReadRow
 import Proofs.Flock.C3.Reps.ReadSib
 import Proofs.Flock.C3.Reps.ResRead
 import Proofs.Flock.C3.Reps.SentKeys
+import Proofs.Flock.C3.Reps.RepsCounted
+import Proofs.Flock.C3.Reps.RepsDrawnAt
+import Proofs.Flock.C3.Reps.DrawnRounds
 import Proofs.Flock.C3.Reps.WRead
+import Proofs.Flock.C3.Reps.ReadWhole
+import Proofs.Flock.C3.Reps.PortNames
+import Proofs.Flock.C3.Reps.RoundReads
+import Proofs.Flock.C3.Reps.RoundSel
+import Proofs.Flock.C3.Reps.ReadWholeAt
 import Proofs.Flock.C3.Reps.WithReads
+import Proofs.Flock.C3.Reps.KeysInW
+import Proofs.Flock.C3.Reps.LigNames
+import Proofs.Flock.C3.Reps.LigKeys
+import Proofs.Flock.C3.Opening.SessionPartsL
+import Proofs.Flock.C3.Reps.WReadO
+import Proofs.Flock.C3.Reps.RoundLinks
+import Proofs.Flock.C3.Reps.WReadOReg
 import Proofs.Flock.C3.Opening.Session
 import Proofs.Flock.C3.Opening.SrcOpening
 import Proofs.Flock.C3.Opening.ClaimTie
@@ -73,11 +103,24 @@ import Proofs.Flock.C3.RegLevels.SrcOpenRel
 import Proofs.Flock.C3.RegLevels.RsT
 import Proofs.Flock.C3.RegLevels.Kappa
 import Proofs.Flock.C3.RegLevels.StackedReg
+import Proofs.Flock.C3.RegLevels.OpensRegs
+import Proofs.Flock.C3.RegLevels.VRows
+import Proofs.Flock.C3.RegLevels.AccReads
+import Proofs.Flock.C3.RegLevels.ValueTie
+import Proofs.Flock.C3.RegLevels.OutRegs
+import Proofs.Flock.C3.RegLevels.TopTie
+import Proofs.Flock.C3.RegLevels.TopLeaf
+import Proofs.Flock.C3.RegLevels.AccOut
 import Proofs.Flock.C3.RegLevels.LigWhole
 import Proofs.Flock.C3.RegLevels.Maps
 import Proofs.Flock.C3.RegLevels.ROpens
 import Proofs.Flock.C3.RegLevels.ROpensPR
+import Proofs.Flock.C3.RegLevels.LevelsChecked
+import Proofs.Flock.C3.RegLevels.TopRead
 import Proofs.Flock.C3.RegLevels.SrcMaps
+import Proofs.Flock.C3.RegLevels.LgCoins
+import Proofs.Flock.C3.RegLevels.RRounds
+import Proofs.Flock.C3.RegLevels.LgHeld
 
 /-!
 # Candidate 3's recursive guarantee: its open pieces
@@ -109,6 +152,7 @@ discharge what it takes besides: VBridge at candidate 3's table (`_hbr`) and V*'
 * (g) `C3/PubRows/`, `FlockC3.PubRows`: the public rows per value prefix (`HPubRows`) and the tape (`HTape`), at the
   honest family from the verifier's check (n1), and the commitments there (`hCommits_honest`).
 * (h) `C3/VStarList/`, `FlockC3.VStarList`: V*'s statements over the verifier's list (`vstarParsesScoped_of_list`), R's
-  shape from the verifier's checks (`stacked_of_openingShape`, `claims_of_stackedShape`), and R's `ℓ` and the slots'
-  units from check 5 (`ellOk_of_sparseRange`, `units_of_sparseRange`).
+  shape from the verifier's checks (`stacked_of_openingShape`, `claims_of_stackedShape`), R's `ℓ` and the slots'
+  units from check 5 (`ellOk_of_sparseRange`, `units_of_sparseRange`), and the event's `AcceptsC3` from the
+  verifier's acceptance (`acceptsC3_of_verify`).
 -/

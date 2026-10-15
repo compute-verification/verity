@@ -13,6 +13,8 @@
 # each with SERVE_ARGS (default one gate-sized point), into $O/arm-<arm>[-<i>].json, and stack_compare.py over them.
 # DISCARD=N leaves each arm's first N repeats out of the points (a warm-up round). MODE=wgate is serve (ARMS
 # "pstack stack": the stack's configs and its gate) and then stack_write_gate.py at the stack arm's configs.
+# MODE=capture serves the stack arm once and captures its KV-cache append against its CPU references
+# (tests/properties/encoded_kv_append_capture_gpu.py; ARGS passes through).
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python
@@ -43,12 +45,18 @@ case ${MODE:-paged} in
   splits)
     # shellcheck disable=SC2086
     "${LEASE[@]}" "$PY" $VE/paged_splits.py --lib "p$F=$B/paged.so" --out "$O" ${ARGS:-} ;;
-  serve|wgate)
+  serve|wgate|capture)
     MODEL=${MODEL:-$WORK/models/llama-3.1-8b-instruct}
     export PATH=$PATH FLASHINFER_CUDA_ARCH_LIST=12.0f HF_HOME=${HF_HOME:-/workspace/hf}
     . benchmarks/pouw/pearl_c_vllm/flashinfer_env.sh
     export PYTHONPATH=$PWD:$PWD/integrations/vllm CUDA_DEVICE_ORDER=PCI_BUS_ID VLLM_ENABLE_V1_MULTIPROCESSING=0
     LIBS=(--wt-lib "$B/wt.so" --reader-lib "$B/reader.so" --paged-lib "$B/paged.so")
+    if [ "$MODE" = capture ]; then
+      # shellcheck disable=SC2086
+      "${LEASE[@]}" "$PY" $VE/tests/properties/encoded_kv_append_capture_gpu.py --k "${K:-3}" "${LIBS[@]}" \
+        --model "$MODEL" --out "$O" ${ARGS:-} > "$O/capture.log" 2>&1
+      rc=$?; tail -5 "$O/capture.log"; cat "$O/result.json" 2>/dev/null; exit $rc
+    fi
     declare -A SEEN=()
     rc=0
     for arm in ${ARMS:-stock pstack stack}; do

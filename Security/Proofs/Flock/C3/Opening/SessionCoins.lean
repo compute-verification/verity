@@ -141,6 +141,8 @@ theorem opening_ok {c3 : RecCoins.C3} {unit : String} {o : RecCoins.Opening} (h 
         split at h
         · cases h
         · rename_i hS
+          split at h
+          · cases h
           cases h
           obtain ⟨k₁, hx⟩ := run'_ok hrun
           exact ⟨r, a, b, _, lins, k₁, res, bs, rfl, hcl ▸ hsh, ha, hb,

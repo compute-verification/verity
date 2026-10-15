@@ -262,8 +262,9 @@ Glossary, the skills, READMEs, docstrings and CLI help. When code has to change 
 owner and the PR, and the docs change with that PR. A stale statement found later is fixed on sight, by whoever finds
 it. `tests/test_doc_paths.py` fails on a maintained doc that names a repository path that no longer exists.
 
-Make every decision yourself except money, keys and claims (Daniel, 8 Oct). Spend past a budget line, access and keys,
-and what a guarantee says or rests on go to Daniel through your coordinator, with your recommendation. A change that
+Make every decision yourself except keys and claims (Daniel, 8 Oct; spend became its lead's call 13 Oct). Access and
+keys, and what a guarantee says or rests on, go to Daniel through your coordinator, with your recommendation; pods
+still bound themselves under a `budgets.toml` line, and a budget line named in a standing ruling stands. A change that
 crosses owners goes to the other owner, and the coordinator settles a disagreement. When a tool, rule or step gets in
 your way, fix it at the source if the fix is clearly yours. Record each ruling you get. The friction skill,
 `.agents/skills/friction/SKILL.md`, has the rulings so far and the friction notes.
@@ -285,6 +286,9 @@ Never print a secret's value.
 
 ## Where writing goes
 
+- **Work items** are Linear issues (Daniel, 14 Oct). The full brief — context, done-condition, pointers — lives in the
+  issue, filed into the owning team at creation; each lead's subscription to its own team is the wake path, and pickup
+  is the issue's state change. Slack carries conversation, broadcasts, alerts and Daniel's cards, never the brief.
 - **This repo** holds code, tests, small fixtures, and maintained current-truth docs only: `README.md`, `AGENTS.md`,
   `DESIGN.md`, `DISCREPANCIES.md`, `SKILL.md`, `CHANGELOG.md`, `*.template.md`, and `PROTOCOL.md`.
   - A protocol keeps a `PROTOCOL.md` only while it is experimental. Lean is the source of truth for a mature protocol,
@@ -340,7 +344,8 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
   its check fails.
 - **Slack is for handle holders** (coordinators and service agents) and named humans only, at computeverification.slack.com.
   A worker asks its own coordinator. The coordination API is `research msg`: the using-slack skill,
-  `.agents/skills/using-slack/SKILL.md`.
+  `.agents/skills/using-slack/SKILL.md`. Work for another lead goes in as a Linear issue into its team (Where writing
+  goes); Slack is the conversation around it, not the brief.
 
 ## Skills
 

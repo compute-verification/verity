@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.12"
 resolution-markers = [
     "extra == 'extra-11-verity-vllm-torch' and extra != 'extra-6-verity-torch-cpu'",
@@ -34,6 +34,7 @@ members = [
     "verity-circuit-check",
     "verity-cli",
     "verity-commitments-benchmarks",
+    "verity-config",
     "verity-core-composition",
     "verity-core-evaluate",
     "verity-core-firewall",
@@ -1576,6 +1577,7 @@ dev = [
     { name = "verity-bench" },
     { name = "verity-circuit-check" },
     { name = "verity-cli" },
+    { name = "verity-config" },
     { name = "verity-difftest" },
     { name = "verity-flock" },
     { name = "verity-numerical" },
@@ -1605,6 +1607,7 @@ dev = [
     { name = "verity-bench", editable = "benchmarks/harness" },
     { name = "verity-circuit-check", editable = "tools/verity/circuit_check" },
     { name = "verity-cli", editable = "tools/verity/cli" },
+    { name = "verity-config", editable = "tools/config" },
     { name = "verity-difftest", editable = "verity/core/difftest" },
     { name = "verity-flock", editable = "verity/ml/flock" },
     { name = "verity-numerical", editable = "benchmarks/numerical" },
@@ -1618,11 +1621,15 @@ name = "verity-bench"
 version = "0.1.0"
 source = { editable = "benchmarks/harness" }
 dependencies = [
+    { name = "verity-config" },
     { name = "verity-vllm" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "verity-vllm", editable = "integrations/vllm" }]
+requires-dist = [
+    { name = "verity-config", editable = "tools/config" },
+    { name = "verity-vllm", editable = "integrations/vllm" },
+]
 
 [[package]]
 name = "verity-check"
@@ -1683,6 +1690,11 @@ requires-dist = [
     { name = "verity-numerical", editable = "benchmarks/numerical" },
     { name = "verity-vllm", editable = "integrations/vllm" },
 ]
+
+[[package]]
+name = "verity-config"
+version = "0.1.0"
+source = { editable = "tools/config" }
 
 [[package]]
 name = "verity-core-composition"
@@ -1984,6 +1996,7 @@ dependencies = [
     { name = "numpy" },
     { name = "research" },
     { name = "verity" },
+    { name = "verity-config" },
 ]
 
 [package.optional-dependencies]
@@ -1997,6 +2010,7 @@ requires-dist = [
     { name = "research", editable = "tools/research" },
     { name = "torch", marker = "extra == 'torch'", specifier = ">=2.4" },
     { name = "verity", editable = "." },
+    { name = "verity-config", editable = "tools/config" },
 ]
 provides-extras = ["torch"]
 

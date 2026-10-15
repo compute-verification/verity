@@ -71,7 +71,7 @@ theorem openingReadAt_of_sessionAt
     (w := w) (v := bs.vVals) hw hvs.symm
     fun p hp => by
       obtain ⟨_, S', hS', w', v', col, base, hw', hv', hcols, h0⟩ :=
-        FlockVBridge.OfVStar.partCols_of_openingZeroAt (zs R ω t R₂ (sess p)) (hacc.1 (sess p)).2 hS hg
+        FlockVBridge.OfVStar.partCols_of_openingZeroAtL (zs R ω t R₂ (sess p)) (hacc.1 (sess p)).2 hS hg
           (hparts p hp)
       rw [hv] at hv'
       exact ⟨S', hS', w', v', col, base, hw', hv', hcols, h0⟩
