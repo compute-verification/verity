@@ -90,3 +90,13 @@ def test_device_backed_reads_the_runtimes_pointer_type(monkeypatch, rc, kind, wa
 def test_device_backed_is_false_without_cuda(monkeypatch):
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
     assert pinned.device_backed(torch.zeros(2)) is False
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="needs CUDA")
+def test_device_backed_on_cuda_tells_a_cpu_label_over_device_memory_from_host_memory():
+    x = torch.arange(1 << 20, dtype=torch.uint8, device="cuda")
+    storage = torch._C._construct_storage_from_data_pointer(x.data_ptr(), torch.device("cpu"), x.numel())
+    over_device = torch.empty(0, dtype=torch.uint8).set_(storage, 0, (x.numel(),), (1,))
+    assert over_device.device.type == "cpu" and pinned.device_backed(over_device)
+    assert not pinned.device_backed(torch.zeros(16)) and not pinned.device_backed(torch.zeros(16).pin_memory())
+    assert not pinned.device_backed(x)
