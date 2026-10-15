@@ -26,7 +26,9 @@ Inputs come in two distributions:
 | `smem_lut8` | as `smem_lut`, 8 k's a stage in 64 KB of dynamic shared memory, double buffered | 2 LDS.128 |
 
 `corun_dp4a_ffma` runs the dp4a and FFMA GEMMs at once on two streams, one block of each a SM, with the dp4a GEMM's K
-calibrated so both end together. `k_probe` measures instruction mixes of dp4a, IMAD, FFMA, LOP3, packed FFMA2
+calibrated so both end together. `fused_dp4a_ffma` runs both in one inner loop: a 128 x 128 dp4a tile over K = 4 KW
+and a 128 x 16 TNF FFMA tile over K = KW, each checked against its own reference. `k_probe1` is the first build's
+probe, kept because ptxas alternated IDP.4A and FFMA one by one in it. `k_probe` measures instruction mixes of dp4a, IMAD, FFMA, LOP3, packed FFMA2
 (`fma.rn.f32x2`) and IMAD.WIDE in warp instructions a SM a clock, to say which pipes the routes share; `k_split` runs
 the dp4a and FFMA chains in different warps of each sub-partition, so the warp schedulers, not the SASS order, pick
 the mix. Raw pipe caps are the census's
