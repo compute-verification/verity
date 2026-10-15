@@ -12,6 +12,8 @@
    targets when the product lies on H's path to B. Its 7 output sets must be the output side of a rank-7
    decomposition. Two independent ways of knowing those: the orbit of Strassen under the symmetries of <2,2,2>
    (de Groote: that is all of them), and a direct solve, for each candidate output side, for 7 rank-1 forms.
+   one_merge_search_fp(3): the same over F3 with merge coefficients N = alpha A + beta B, against Strassen's orbit
+   only (2304 decompositions; complete by de Groote, not checked independently).
 """
 
 import itertools
@@ -235,8 +237,10 @@ def rooted_trees(n):
     return list(reps.values())
 
 
-def structures():
-    """Yield (parent, N, B, targets, lambdas) for every DAG with 7 product steps and one merge N = A + B."""
+def structures(coef=None):
+    """Yield (parent, N, B, targets, lambdas) for every DAG with 7 product steps and one merge N = A + B.
+    With coef = (p, alpha, beta) the merge is N = alpha A + beta B over F_p and each lambda is a tuple over the 4
+    target slots (a product off N's subtree reaches N's targets with weight alpha [above A] + beta [above B])."""
     n = 9
     for par in rooted_trees(n):
         kids = [[] for _ in range(n)]
@@ -261,6 +265,21 @@ def structures():
                     if not leaves - {B} <= set(tg):
                         continue
                     slot = {v: i for i, v in enumerate(tg)}
+                    if coef is not None:
+                        p, al, be = coef
+                        lam = []
+                        for h in range(1, n):
+                            if h == N:
+                                continue
+                            vec = [0] * 4
+                            for x, i in slot.items():
+                                if h in desc[N] or x not in desc[N]:
+                                    vec[i] = int(x in desc[h])
+                                else:
+                                    vec[i] = (al * (A in desc[h]) + be * (h in onpath)) % p
+                            lam.append(tuple(vec))
+                        yield par, N, B, tg, lam
+                        continue
                     sub = [sum(1 << slot[x] for x in desc[v] if x in slot) for v in range(n)]
                     lam = []
                     for h in range(1, n):
@@ -299,6 +318,29 @@ def check_formula(trials, seed=1):
                     want ^= R[h]
             assert val[node] == want, (par, N, B, tg)
     return trials
+
+
+def check_formula_fp(p, trials, seed=2):
+    """structures((p, alpha, beta)) against propagated node values: random rank-1 forms over F_p, N = alpha A + beta B."""
+    rng = np.random.default_rng(seed)
+    done = 0
+    for al in range(1, p):
+        for be in range(1, p):
+            allst = list(structures((p, al, be)))
+            for i in rng.choice(len(allst), size=trials, replace=False):
+                par, N, B, tg, lam = allst[i]
+                n = len(par)
+                heads = [h for h in range(1, n) if h != N]
+                R = {h: np.outer(rng.integers(0, p, 4), rng.integers(0, p, 4)) % p for h in heads}
+                dn = desc_of(par, N)
+                val = [np.zeros((4, 4), dtype=np.int64) for _ in range(n)]
+                for v in sorted(range(1, n), key=lambda v: (v in dn, v)):
+                    val[v] = (al * val[par[v]] + be * val[B]) % p if v == N else (val[par[v]] + R[v]) % p
+                for t, node in enumerate(tg):
+                    want = sum(lam[j][t] * R[h] for j, h in enumerate(heads)) % p
+                    assert np.array_equal(val[node], want), (par, N, B, tg)
+                done += 1
+    return done
 
 
 def desc_of(par, v):
@@ -367,6 +409,110 @@ def solvable(lam):
     return False
 
 
+def _pn(vec, p):
+    """Projective normal form: first nonzero entry 1."""
+    vec = [x % p for x in vec]
+    f = next(x for x in vec if x)
+    inv = pow(f, p - 2, p)
+    return tuple(x * inv % p for x in vec)
+
+
+def orbit_fp(p):
+    """Strassen's orbit over F_p under (P,Q,R) in GL2^3, transpose and the cyclic symmetry. A product is
+    (u, v, W) as flat 2x2 tuples, u over X_rk, v over Y_kc, W over cells, up to (au, bv, W/(ab))."""
+    def mat(t):
+        return np.array(t, dtype=np.int64).reshape(2, 2)
+
+    def flat(a):
+        return tuple(int(x) for x in (np.asarray(a) % p).ravel())
+
+    def inv(a):
+        d = int(a[0, 0] * a[1, 1] - a[0, 1] * a[1, 0]) % p
+        di = pow(d, p - 2, p)
+        return np.array([[a[1, 1], -a[0, 1]], [-a[1, 0], a[0, 0]]], dtype=np.int64) * di % p
+
+    def norm(t):
+        u, v, w = t
+        su, sv = next(x for x in u if x), next(x for x in v if x)
+        iu, iv = pow(su, p - 2, p), pow(sv, p - 2, p)
+        return (tuple(x * iu % p for x in u), tuple(x * iv % p for x in v), tuple(x * su * sv % p for x in w))
+
+    def valid_fp(dec):
+        acc = [np.zeros((4, 4), dtype=np.int64) for _ in range(4)]
+        for (u, v, w) in dec:
+            pm = np.outer(u, v)
+            for t in range(4):
+                acc[t] = (acc[t] + w[t] * pm) % p
+        T = fq.matmul_targets(2)
+        return all(np.array_equal(acc[t], T[CELLS[t]] % p) for t in range(4))
+
+    I = np.eye(2, dtype=np.int64)
+    hs = [np.array([[1, 1], [0, 1]]), np.array([[0, 1], [1, 0]]), np.array([[p - 1, 0], [0, 1]])]
+    gens = []
+    for h in hs:
+        for (P, Q, R) in ((h, I, I), (I, h, I), (I, I, h)):
+            Pit, Qit, Ri = inv(P).T, inv(Q).T, inv(R)
+            gens.append(lambda t, P=P, Q=Q, Pit=Pit, Qit=Qit, R=R, Ri=Ri: (
+                flat(Pit @ mat(t[0]) @ Q.T), flat(Qit @ mat(t[1]) @ R.T), flat(P @ mat(t[2]) @ Ri)))
+    gens.append(lambda t: (flat(mat(t[1]).T), flat(mat(t[0]).T), flat(mat(t[2]).T)))
+    gens.append(lambda t: (t[1], flat(mat(t[2]).T), flat(mat(t[0]).T)))
+    A = {(0, 0): 0, (0, 1): 1, (1, 0): 2, (1, 1): 3}
+    s = [([((0, 0), 1), ((1, 1), 1)], [((0, 0), 1), ((1, 1), 1)], [((0, 0), 1), ((1, 1), 1)]),
+         ([((1, 0), 1), ((1, 1), 1)], [((0, 0), 1)], [((1, 0), 1), ((1, 1), -1)]),
+         ([((0, 0), 1)], [((0, 1), 1), ((1, 1), -1)], [((0, 1), 1), ((1, 1), 1)]),
+         ([((1, 1), 1)], [((1, 0), 1), ((0, 0), -1)], [((0, 0), 1), ((1, 0), 1)]),
+         ([((0, 0), 1), ((0, 1), 1)], [((1, 1), 1)], [((0, 0), -1), ((0, 1), 1)]),
+         ([((1, 0), 1), ((0, 0), -1)], [((0, 0), 1), ((0, 1), 1)], [((1, 1), 1)]),
+         ([((0, 1), 1), ((1, 1), -1)], [((1, 0), 1), ((1, 1), 1)], [((0, 0), 1)])]
+    start = []
+    for us, vs, ws in s:
+        t = []
+        for part in (us, vs, ws):
+            vec = [0] * 4
+            for pos, c in part:
+                vec[A[pos]] = c % p
+            t.append(tuple(vec))
+        start.append(norm(tuple(t)))
+    start = frozenset(start)
+    assert valid_fp(start)
+    seen = {start}
+    todo = [start]
+    while todo:
+        d = todo.pop()
+        for f in gens:
+            e = frozenset(norm(f(t)) for t in d)
+            if e not in seen:
+                assert valid_fp(e)
+                seen.add(e)
+                todo.append(e)
+    return seen
+
+
+def one_merge_search_fp(p):
+    """One merge N = alpha A + beta B over F_p, output sides looked up in Strassen's orbit (complete by de Groote)."""
+    orb = orbit_fp(p)
+    perms = list(itertools.permutations(range(4)))
+    outs = set()
+    for d in orb:
+        ws = [w for (_, _, w) in d]
+        for s in perms:
+            outs.add(tuple(sorted(_pn([w[s.index(t)] for t in range(4)], p) for w in ws)))
+    hits = []
+    count = 0
+    for al in range(1, p):
+        for be in range(1, p):
+            for par, N, B, tg, lam in structures((p, al, be)):
+                count += 1
+                if any(not any(x) for x in lam):
+                    continue
+                key = tuple(sorted(_pn(x, p) for x in lam))
+                if key in outs:
+                    hits.append((al, be, par, N, B, tg, lam))
+    print(f"F{p}: Strassen's orbit has {len(orb)} decompositions; {count} one-merge DAGs with coefficients; "
+          f"realising one: {len(hits)}")
+    return hits
+
+
 def one_merge_search(check_complete):
     orb = orbit()
     outputs = {tuple(sorted(w for (_, _, w) in d)) for d in orb}
@@ -416,3 +562,7 @@ if __name__ == "__main__":
     hits = one_merge_search("--complete" in sys.argv)
     assert not hits
     print("no DAG with 7 products and one merge computes <2,2,2> over F2")
+    print("coefficient formula matches propagated node values on", check_formula_fp(3, 500), "random F3 DAGs")
+    assert len(orbit_fp(2)) == len(orbit())
+    assert not one_merge_search_fp(3)
+    print("no DAG with 7 products and one merge N = aA + bB computes <2,2,2> over F3 (given de Groote)")
