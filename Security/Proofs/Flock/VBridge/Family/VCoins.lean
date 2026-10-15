@@ -1,4 +1,6 @@
 import Proofs.Flock.VBridge.Family.Registered
+import Proofs.Flock.VBridge.Family.OutCols
+import Flock.RecCoins
 
 /-!
 # VBridge G at V*'s family: the parts' `v` and `out` columns (`HVCoins`, `HZeroL`)
@@ -10,12 +12,13 @@ what the part sessions' reads files and registrants hold there:
 * `PartVCols`, `OwnNamesV`: each `v` column is keyed by its bit of the part's `v` port (the parse of the parts'
   circuits), and each part's reads file names `v` (`FlockC3.RegLevels.own_of_checkValue` at check 5's `checkValue`);
 * `VRowsAre`: the registrant's bits at a part's `v` read are `vOf`'s at the rep (`Recursion.vRows_tie`: `value_tie_coll`
-  at check 5's `rec-residuals` rows, off `ValueColl`);
+  at check 5's `rec-residuals` rows, off `ValueColl`, its `hone` and `hpos` by `readOne_of`), where check 5's inner
+  session is the family's rep (`InnerIsRep`, its `hrep`);
 * `hVCoins_of`: `HVCoins` from those and `RowsRegistered`;
 * `outCol_committed`, `outColAt_stackCol`: a copy's gate at a returned output's column is committed (it is an output of
   the program's circuit, `Layout.outsOf`), the committed conjunct of `RegOut`;
-* `PartOutCols`, `ZeroReads`: each part's `out` columns are its leaf's returned output (the parse), and the gates there
-  are registered reads whose registrant's bit is 0 (`rec-residuals-zero`, `Recursion.zero_tie` off `ValueColl`);
+* `PartOutCols`, `ZeroReads`: each part's `out` columns are its leaf's returned output (`partOutCols`), and the gates there
+  are registered reads whose registrant's bit is 0 (`rec-residuals-zero`, `Recursion.zero_regOut` off `ValueColl`);
 * `hZeroL_of`: `HZeroL` from those (`copyVal_regOut` in the accepted `Good` layer).
 -/
 
@@ -154,6 +157,20 @@ def VRowsAre : Prop :=
               (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).extras
               (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).comb)) b
 
+/-- Obligation: discharged by the family's construction of `rep₀` (its rounds, extra claims and comb; the lane that
+proves `HFiles`). **Check 5's inner session is the family's rep.** At every accepted outer proof, where check 5's
+source `coins t` loads the inner session `inn` at part `p`'s unit, `inn`'s algebra is the verifier's shape at rep
+`r`'s extra claims, and the rep check 5 computes at rep `r`'s unit has rep `r`'s rounds and, where part `p`'s elements
+reach the comb, rep `r`'s comb: `Recursion.vRows_tie`'s `halg` and `hrep`, at which its conclusion is `VRowsAre`'s. -/
+def InnerIsRep (coins : List (Cm × (ℐ).Coin) → Option Flock.RecCoins.Source) : Prop :=
+  ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r p, p < (partsOf F.sh).size →
+    ∀ (f : Flock.RecCoins.Source) (inn : Flock.RecCoins.Inner), coins t = some f → f.load (F.Vs (F.sess p)).c.unit.name = .ok inn →
+      inn.algebra = .ok (F.sh, (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).extras) ∧
+      ∀ rep, inn.rep F.sh (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).extras (F.un p r).val = .ok rep →
+        rep.rounds = (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).rounds ∧
+        ((partsOf F.sh)[p]!.2.2.any (· ≥ rep.v.size - 64) = true →
+          inn.comb (F.un p r).val rep = .ok (F.rep R ω t (layers F.zs dg N k Rw R ω t R₂ τ) r).comb)
+
 /-- **`HVCoins` from the parts' circuits, reads files and registrants** (`PartVCols`, `OwnNamesV`, `VRowsAre`, at the
 part's statement `HCover` gives; the columns inputs by `vColOf_lt`): the column's key names the `v` port, a registered
 read (`RowsRegistered`), and its bit is the registrant's. -/
@@ -173,8 +190,7 @@ theorem hVCoins_of {GS : Flock.RecAlgebra.GfS} {gs : Array (Array ℕ × Array �
 
 /-! ## `out` -/
 
-/-- Obligation: discharged by the parse of the part's circuit (`parse_circuitFile`, the lane that proves `HUnitName`)
-and its layout (`inWords_unitLaid`, `inRows_le_outStart`, as `partCols_of_resZeroAt`'s `hbase`). **A part's `out`
+/-- Proved by `partOutCols` (`Family/OutCols.lean`'s `partOutCols_of`, from the verifier's checks). **A part's `out`
 columns are its leaf's returned output.** In the circuit of part `p`'s statement, at every copy, column
 `partBase + e` (`e < 16 · RES_OUT_WORDS`) is a computed column, `outCol (e / 16) (e % 16)` of the copy's leaf's output
 `e / 16`. -/
@@ -186,9 +202,13 @@ def PartOutCols : Prop :=
           e / 16 < ((F.Vs j).c.leavesOut.getD cpy #[]).size ∧ (Rows.ofNet (F.Vs j).hU).nIn ≤ partBase S ns nv ∧
           partBase S ns nv + e < (Rows.ofNet (F.Vs j).hU).nIn + (Rows.ofNet (F.Vs j).hU).nComp
 
+/-- **`PartOutCols`**, at any family with a history (`partOutCols_of`). -/
+theorem partOutCols (hne : Nonempty (Reg × L.Ω × Reg₂)) : F.PartOutCols := F.partOutCols_of hne
+
 /-- Obligation: discharged, off `ValueColl`, by check 5's `checkZero` (`checkResiduals` holds the part's `out` to the
 zero rows `rec-residuals-zero` under `zeroSalt`, `rec_residuals.zero_salts`): `Recursion.zero_tie` gives the
-registrant's bits at the `out` read `(u, q)` as 0, and the read is the gate's at its position (`rowOfH`, open).
+registrant's bits at the `out` read `(u, q)` as 0, and `Recursion.zero_regOut` the gate at each `out` column as that
+read's bit (`rowOfH`, at V*'s part output layout `Recursion.PartOutsLaid`, a fact of the parse as `PartOutCols`).
 **A part's `out` gates are registered reads of zero bits.** At an accepted outer proof, the gate of rep `r`'s copy of
 part `p` at each `out` column is at a registered read, and the registrant's bit there is 0. -/
 def ZeroReads : Prop :=

@@ -215,10 +215,10 @@ variable {mPts nU J : ℕ} {Reg' : Type} {cc : Flock.Circuit} {hU : FlockSoundne
 /-- **(B)'s tie at V*'s layer**: `SparseTie`'s message words `w` and coins `c`, with the unit copy `j` of unit `un` of
 V*'s layer `zo` at `bits`: its circuit passes `RecSparse.check` at the session's shape, the copy's message columns some
 computed row reads are registered bits of `w`, `v`'s of the verifier row at `c` and with `T > 1` `tau`'s of the slots'
-types, and its residuals' output columns are 0 in the layer. -/
-def SparseTieL (bits : Fin (FlockSoundness.Discharge.Layout.keyN cc hU nU) → Bool) (e : ExecHolo) (u : C3Run e)
-    (i : Fin 2) : Prop :=
-  ∃ (w : Array Flock.F128) (c : SCoins) (un : Fin nU) (j : ℕ) (hj : j < cc.upv),
+types, and its residuals' output columns are 0 in the layer (`SparseTieLAt`, at those `w` and `c`). -/
+abbrev SparseTieLAt (bits : Fin (FlockSoundness.Discharge.Layout.keyN cc hU nU) → Bool) (e : ExecHolo) (u : C3Run e)
+    (i : Fin 2) (w : Array Flock.F128) (c : SCoins) : Prop :=
+  ∃ (un : Fin nU) (j : ℕ) (hj : j < cc.upv),
     w.size = nw e.cls.shape ∧ nc e.cls.shape ≤ c.cs.size ∧
     FlockVBridge.Sparse.pubOf e.cls.shape c =
       holoPub (e.cls.pubStatement e.regs) e.cls.shape e.cls.units (u.rep i).1 (u.rep i).2 ∧
@@ -237,11 +237,17 @@ def SparseTieL (bits : Fin (FlockSoundness.Discharge.Layout.keyN cc hU nU) → B
       copyVal (keyInst hU nU (FlockSoundness.Discharge.Layout.outsOf cc hU nU) un) bits hj
         (sparseBase (unitShape e) + t) = false
 
-/-- **The tie at a good layer is the tie** (`decode_sparseR`): `w` and the verifier row are 0 past their sizes, which
-the message ports and `v`'s port cover (`nw_le_msum`, `nv_le`). -/
-theorem sparseTie_of_layer {bits : Fin (FlockSoundness.Discharge.Layout.keyN cc hU nU) → Bool} (hG : zo.Good bits)
-    {e : ExecHolo} {u : C3Run e} {i : Fin 2} (h : SparseTieL zo bits e u i) : SparseTie e u i := by
-  obtain ⟨w, c, un, j, hj, hw, hc, hpub, hh, hs, hck, hpar, hone, hu, hrw, hrv, hrt, h0⟩ := h
+@[inherit_doc SparseTieLAt]
+def SparseTieL (bits : Fin (FlockSoundness.Discharge.Layout.keyN cc hU nU) → Bool) (e : ExecHolo) (u : C3Run e)
+    (i : Fin 2) : Prop :=
+  ∃ (w : Array Flock.F128) (c : SCoins), SparseTieLAt zo bits e u i w c
+
+/-- **The tie at a good layer is the tie**, at the same `w` and `c` (`decode_sparseR`): `w` and the verifier row are 0
+past their sizes, which the message ports and `v`'s port cover (`nw_le_msum`, `nv_le`). -/
+theorem sparseTieAt_of_layer {bits : Fin (FlockSoundness.Discharge.Layout.keyN cc hU nU) → Bool} (hG : zo.Good bits)
+    {e : ExecHolo} {u : C3Run e} {i : Fin 2} {w : Array Flock.F128} {c : SCoins} (h : SparseTieLAt zo bits e u i w c) :
+    SparseTieAt e u i w c := by
+  obtain ⟨un, j, hj, hw, hc, hpub, hh, hs, hck, hpar, hone, hu, hrw, hrv, hrt, h0⟩ := h
   obtain ⟨-, -, -, hn⟩ := check_sparse hck hpar
   have hnw : nw e.cls.shape ≤ ((Flock.RecSparse.messagePorts (unitShape e)).map (·.2)).sum :=
     nw_le_msum (unitShape e)
@@ -253,7 +259,12 @@ theorem sparseTie_of_layer {bits : Fin (FlockSoundness.Discharge.Layout.keyN cc 
     fun k hk => (getElem!_neg (verifierRow e.cls.shape c) k (by omega)).trans rfl
   obtain ⟨v, hL, hin, hout⟩ := decode_sparseR zo hG.2 un hj hone (unitShape e) hn hu
     (w := (w[·]!)) (vv := ((verifierRow e.cls.shape c)[·]!)) (τ := ((tauArr e)[·]!)) hrw hrv hrt hw0 hv0
-  exact ⟨w, c, cc, v, hw, hc, hpub, hh, hs, hck, hpar, hL, hin, fun t ht => (hout t).trans (h0 t ht)⟩
+  exact ⟨cc, v, hw, hc, hpub, hh, hs, hck, hpar, hL, hin, fun t ht => (hout t).trans (h0 t ht)⟩
+
+/-- `sparseTieAt_of_layer` at the layer's witnesses. -/
+theorem sparseTie_of_layer {bits : Fin (FlockSoundness.Discharge.Layout.keyN cc hU nU) → Bool} (hG : zo.Good bits)
+    {e : ExecHolo} {u : C3Run e} {i : Fin 2} (h : SparseTieL zo bits e u i) : SparseTie e u i :=
+  h.elim fun w h => h.elim fun c h => ⟨w, c, sparseTieAt_of_layer zo hG h⟩
 
 end Layer
 

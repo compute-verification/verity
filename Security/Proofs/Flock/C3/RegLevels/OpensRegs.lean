@@ -512,15 +512,15 @@ theorem acc_of_checkAcc {s : VStar.Stmt} {own : Array Flock.Registered.Port}
     exact ⟨p, Array.mem_of_find?_eq_some hf, by simpa using Array.find?_some hf⟩
   · cases h
 
-/-- **`checkStmt` ran `checkAcc` and `checkAccReads` on V*'s statement `j`** at the verifier's own reads
-(`checkStmt_ok`'s walk). -/
-theorem checkAcc_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
+/-- **`checkStmt` ran `checkAcc`, `checkAccReads` and `checkShared` on V*'s statement `j`** at the verifier's own
+reads (`checkStmt_ok`'s walk). -/
+theorem regs_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
     {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
     {own : Array Flock.Registered.Port} {j : ℕ} {f : VStar.Bindings} {rows : Option (Array Flock.Registered.Port)}
     (h : RecVStar.checkStmt (some i) tags tables st circuitB partition program (some own) (some j) (some f) rows =
       .ok ()) :
     ∃ ss s, RecVStar.statements i = .ok ss ∧ ss[j]? = some s ∧ RecVStar.checkAcc s own rows = .ok () ∧
-      RecVStar.checkAccReads i s own = .ok () := by
+      RecVStar.checkAccReads i s own = .ok () ∧ RecVStar.checkShared s own rows = .ok () := by
   unfold RecVStar.checkStmt at h
   dsimp only at h
   split at h
@@ -540,8 +540,20 @@ theorem checkAcc_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables :
         obtain ⟨⟨⟩, -, h⟩ := FlockSoundness.Refine.ebind_ok h
         obtain ⟨⟨⟩, -, h⟩ := FlockSoundness.Refine.ebind_ok h
         obtain ⟨⟨⟩, hacc, h⟩ := FlockSoundness.Refine.ebind_ok h
-        exact ⟨ss, s, hss, hj, hacc, h⟩
+        obtain ⟨⟨⟩, hrd, h⟩ := FlockSoundness.Refine.ebind_ok h
+        exact ⟨ss, s, hss, hj, hacc, hrd, h⟩
       · cases h
+
+/-- **`checkStmt` ran `checkAcc` and `checkAccReads` on V*'s statement `j`** (`regs_of_checkStmt`). -/
+theorem checkAcc_of_checkStmt {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
+    {st : Flock.Stmt} {circuitB : ByteArray} {partition : Option Lean.Json} {program : Option ByteArray}
+    {own : Array Flock.Registered.Port} {j : ℕ} {f : VStar.Bindings} {rows : Option (Array Flock.Registered.Port)}
+    (h : RecVStar.checkStmt (some i) tags tables st circuitB partition program (some own) (some j) (some f) rows =
+      .ok ()) :
+    ∃ ss s, RecVStar.statements i = .ok ss ∧ ss[j]? = some s ∧ RecVStar.checkAcc s own rows = .ok () ∧
+      RecVStar.checkAccReads i s own = .ok () :=
+  let ⟨ss, s, hss, hj, hacc, hrd, _⟩ := regs_of_checkStmt h
+  ⟨ss, s, hss, hj, hacc, hrd⟩
 
 /-- **An R level's checked session has `acc` in its reads file**: where V*'s statement `j` is R's level `l`
 (`hj`), `checkStmt` ran `checkAcc` on it (`checkAcc_of_checkStmt`), whose `rec-acc` ports are `acc` and `acc_out`. -/

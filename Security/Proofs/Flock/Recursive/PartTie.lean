@@ -1,5 +1,6 @@
 import Proofs.Flock.Recursive.ValueChecked
 import Proofs.Flock.C3.RegLevels.VRows
+import Proofs.Flock.C3.RegLevels.OutRegs
 
 /-!
 # The value tie at a part's `v` and `out`: `VRowsAre`, `ZeroReads` and `OwnNamesV` at one read
@@ -12,11 +13,15 @@ verifier's rows (`valueSrcAll`), the obligations of `Family/VCoins.lean` at one 
   `residualRowsOf`'s rows), `VRowsAre`'s bit;
 * `zero_tie`: the registrant's bits at an `out` read are 0 (`checkZero` at `rec-residuals-zero`, `value_tie_collR` at
   the zero rows), `ZeroReads`' bit at the read `(u, q)`;
-* `own_v_out`: the part's reads file names `v` and `out` (`own_of_checkValue`, `own_of_checkRows`), `OwnNamesV`.
+* `own_v_out`: the part's reads file names `v` and `out` (`own_of_checkValue`, `own_of_checkRows`), `OwnNamesV`;
+* `PartOutsLaid`, `outBitRow_part`, `zeroOut_of_laid`, `zero_regOut`: at V*'s part output layout (one output row `out` of
+  128 words), copy `j`'s output bit `e` is bit `e` of the `out` row (`HiddenExec.outBitRow`), so the gate at its column
+  is at the `out` read (`rowOfH`, `FlockC3.RegLevels.regOut_of_outBitRow`) and `zero_tie`'s 0 is its bit there:
+  `RegOut … false`, `ZeroReads` at one column.
 
 The family's obligations hold these at every accepted outer proof; there they need `¬ ValueColl` threaded (the
-guarantee's disjunct, `VBridgeCOff`), the rep's rounds and comb as the family's (`HFiles`), and for `ZeroReads` the read
-`(u, q)` as the gate's position (`rowOfH`).
+guarantee's disjunct, `VBridgeCOff`), the rep's rounds and comb as the family's (`Family.InnerIsRep`), and `hone`,
+`hpos` from the family's reads (`Family.readOne_of`).
 -/
 
 namespace FlockSoundness.Discharge.Recursion
@@ -139,5 +144,98 @@ theorem own_v_out {own : Array Flock.Registered.Port}
   obtain ⟨inn, -, hck'⟩ := residualsCheck_of_check hck hso hop hsp ho hres
   obtain ⟨_, _, _, hcv, hz⟩ := residualsBoth_of_check hck'
   exact ⟨FlockC3.RegLevels.own_of_checkValue hcv, FlockC3.RegLevels.own_of_checkRows hz⟩
+
+/-! ## A part's `out` gates on its `out` row -/
+
+/-- **V*'s output layout at copy `j` of a part's unit** (`rec_residuals.lowering`, `out0 … out127`): one output port `out`
+of 128 words, copy `j` returning words `0..127` in order, its one output row the first past the input rows, without
+segments. A fact of V*'s circuit file (the parse, as `PartOutCols`), which check 5 does not read. -/
+def PartOutsLaid (c : Flock.Circuit) (j : ℕ) : Prop :=
+  c.outPorts = #[("out", 128)] ∧ c.leavesOut.getD j #[] = Array.range 128 ∧
+    ∃ hq : Flock.HmOut.nIn c < c.ports.size, (c.ports[Flock.HmOut.nIn c]'hq).name = "out" ∧
+      (c.ports[Flock.HmOut.nIn c]'hq).words = 128 ∧ (c.ports[Flock.HmOut.nIn c]'hq).segs = none
+
+/-- **Bit `e` of a part's output is bit `e` of its `out` row** (`PartOutsLaid`): copy `j`'s output word `e / 16` is word
+`e / 16` of output port 0. -/
+theorem outBitRow_part {c : Flock.Circuit} {j : ℕ} (h : PartOutsLaid c j) {n : ℕ} (u : Fin n) {e : ℕ} (he : e < 2048) :
+    ∃ hq : Flock.HmOut.nIn c < c.ports.size, ∃ hk : e < Layout.portRowW c ⟨_, hq⟩,
+      HiddenExec.outBitRow c u (j, e / 16, e % 16) = some (u, ⟨⟨_, hq⟩, ⟨e, hk⟩⟩) := by
+  obtain ⟨hop, hlo, hq, -, hw, -⟩ := h
+  have hW : HiddenExec.outWordOf c (j, e / 16, e % 16) = e / 16 := by
+    show (c.leavesOut.getD j #[])[e / 16]! = e / 16
+    rw [hlo, getElem!_pos (Array.range 128) (e / 16) (by rw [Array.size_range]; omega)]
+    simp
+  have hs : c.outPorts.size = 1 := by rw [hop] <;> rfl
+  have hN : c.outWords = 128 := by
+    rw [← HiddenExec.outAt_size c, hs]
+    unfold Hidden.outAt
+    rw [hop] <;> rfl
+  have hP : HiddenExec.outPortOf c (e / 16) = 0 := by
+    have := (HiddenExec.outPortOf_spec c (o := e / 16) (by rw [hN]; omega)).1
+    rw [hs] at this
+    omega
+  have hk : e < Layout.portRowW c ⟨_, hq⟩ := by
+    show e < 16 * (c.ports[Flock.HmOut.nIn c]'hq).words
+    rw [hw]
+    omega
+  refine ⟨hq, hk, FlockC3.RegLevels.outBitRow_eq u hq (by rw [hW, hP, Nat.add_zero]) ?_ hk⟩
+  rw [hW, hP]
+  show 16 * (e / 16 - Hidden.outAt c 0) + e % 16 = e
+  rw [show Hidden.outAt c 0 = 0 by simp [Hidden.outAt]]
+  omega
+
+/-- **A part's `out` column on a registered zero bit is a registered 0** (`RegOut … false`): copy `j`'s column
+`base + e`, its output `e / 16`'s bit `e % 16` (`hoc`, the parse's `PartOutCols`), is bit `e` of the `out` row
+(`outBitRow_part`), so its gate's commit string is the `out` read (`rowOfH`, `FlockC3.RegLevels.regOut_of_outBitRow`),
+whose registrant holds 0 at bit `e` (`hzero`). -/
+theorem zeroOut_of_laid {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
+    {hscope : Layout.scopeOk c = true} {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv) {u : Fin nv}
+    {cpy : ℕ} (hcp : cpy < c.upv) (hlaid : PartOutsLaid c cpy) {base e : ℕ} (he : e < 2048)
+    (hoc : base + e = Layout.outCol c (e / 16) (e % 16)) (h1 : (Rows.ofNet hU).nIn ≤ base + e)
+    (h2 : base + e < (Rows.ofNet hU).nIn + (Rows.ofNet hU).nComp)
+    (hread : ∀ hq : Flock.HmOut.nIn c < c.ports.size, FlockVBridge.Decode.regRead zo (.inl (u, ⟨_, hq⟩)))
+    (hzero : ∀ (hq : Flock.HmOut.nIn c < c.ports.size) (hk : e < Layout.portRowW c ⟨_, hq⟩),
+      (FlockVBridge.Decode.regVal zo (.inl (u, ⟨_, hq⟩))).2
+        ⟨e, lt_of_lt_of_le hk ((Finset.le_sup (Finset.mem_univ (⟨_, hq⟩ : Fin c.ports.size))).trans (Nat.le_succ _))⟩ =
+        false) :
+    FlockVBridge.AccChain.RegOut zo u hcp (base + e) false := by
+  obtain ⟨hq, hk, hrow⟩ := outBitRow_part hlaid u he
+  have hj' : e / 16 < (c.leavesOut.getD cpy #[]).size := by
+    rw [hlaid.2.1, Array.size_range]
+    omega
+  obtain ⟨hcol, hm, hr, hb⟩ := FlockC3.RegLevels.regOut_of_outBitRow zo hcp (j' := e / 16) (t' := e % 16) hj'
+    (Nat.mod_lt _ (by decide)) (by rw [← hoc]; exact h1) (by rw [← hoc]; exact h2) hrow (hread hq)
+  rw [hoc]
+  exact ⟨hcol, hm, hr, hb.trans (hzero hq hk)⟩
+
+/-- **A part's `out` column is a registered 0, or `ValueColl`** (`ZeroReads` at one column, the read position with its
+bit): where check 5 accepted the `rec-residuals` unit of part `i` and V*'s part output layout holds at copy `cpy`,
+`zero_tie` at unit `u`'s `out` read gives the registrant's bits there as 0, and `zeroOut_of_laid` the gate at column
+`base + e` as that read's bit `e`. -/
+theorem zero_regOut (hc : sj.c = (Vs j).c)
+    (hck : Flock.RecCoins.check sj (some (zs R ω t R₂ j).own) (some f) (c3 t) = .ok ()) (hf : src t = some f)
+    (hso : Flock.RecCoins.stackedParams (Vs j).c.unit.name = none)
+    (hop : Flock.RecOpening.params (Vs j).c.unit.name = none) (hsp : Flock.RecSparse.params (Vs j).c.unit.name = none)
+    (ho : Flock.RecOpen.params (Vs j).c.unit.name = none) {m k cl i : ℕ}
+    (hres : Flock.RecResiduals.params (Vs j).c.unit.name = some (m, k, cl, i))
+    (hprog : (Vs j).c.metaJ.getObjValAs? String "program_sha512" = .ok prog)
+    {cpy : ℕ} (hcp : cpy < (Vs j).c.upv) (hlaid : PartOutsLaid (Vs j).c cpy)
+    (hp : ∀ hq : Flock.HmOut.nIn (Vs j).c < (Vs j).c.ports.size, (zs R ω t R₂ j).rd.isRead (.inl (u, ⟨_, hq⟩)))
+    (hone : ∀ hq : Flock.HmOut.nIn (Vs j).c < (Vs j).c.ports.size, ∀ reg ∈ (zs R ω t R₂ j).own, reg.name = "out" →
+      reg = (zs R ω t R₂ j).rd.port (.inl (u, ⟨_, hq⟩)))
+    (hpos : ∀ hq : Flock.HmOut.nIn (Vs j).c < (Vs j).c.ports.size,
+      ((zs R ω t R₂ j).rd.port (.inl (u, ⟨_, hq⟩))).reads[u.val]? =
+        some (some ((zs R ω t R₂ j).rd.readAt (.inl (u, ⟨_, hq⟩)))))
+    {base e : ℕ} (he : e < 2048) (hoc : base + e = Layout.outCol (Vs j).c (e / 16) (e % 16))
+    (h1 : (Rows.ofNet (Vs j).hU).nIn ≤ base + e)
+    (h2 : base + e < (Rows.ofNet (Vs j).hU).nIn + (Rows.ofNet (Vs j).hU).nComp) :
+    FlockVBridge.AccChain.RegOut (zs R ω t R₂ j) u hcp (base + e) false ∨
+      ValueColl zs (valueSrcAll src c3) R ω t R₂ := by
+  obtain ⟨hq, hnm, -, hseg⟩ := hlaid.2.2
+  obtain ⟨-, hor⟩ := zero_tie (q := ⟨_, hq⟩) hc hck hf hso hop hsp ho hres
+    (by simp only [getElem!_pos (Vs j).c.ports (Flock.HmOut.nIn (Vs j).c) hq, hnm]) hprog (hp hq)
+    (fun reg hr hr' => hone hq reg hr (hr'.trans (by simp only [getElem!_pos (Vs j).c.ports (Flock.HmOut.nIn (Vs j).c) hq, hnm]))) (hpos hq)
+    (by simp only [getElem!_pos (Vs j).c.ports (Flock.HmOut.nIn (Vs j).c) hq, hseg])
+  exact hor.imp (fun hz => zeroOut_of_laid (zs R ω t R₂ j) hcp hlaid he hoc h1 h2 hp fun _ hk => hz e hk) id
 
 end FlockSoundness.Discharge.Recursion

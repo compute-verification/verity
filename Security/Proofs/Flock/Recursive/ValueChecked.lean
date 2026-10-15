@@ -90,7 +90,7 @@ theorem value_tie_opening (hc : sj.c = (Vs j).c)
             ⟨b, lt_of_lt_of_le hb ((Finset.le_sup (Finset.mem_univ q)).trans (Nat.le_succ _))⟩ =
           (rows[u.val]!)[b / 16]!.testBit (b % 16)) ∨
       ValueColl zs (valueSrcAll src c3) R ω t R₂) := by
-  obtain ⟨o, rows, what, hop, hrows, hcv⟩ :=
+  obtain ⟨o, rows, what, hop, hrows, hcv, -⟩ :=
     opening_of_check (openingCheck_of_check hck (by rw [hc]; exact hso) (by rw [hc]; exact hpar))
   rw [hc] at hop hcv
   have hv : valueRowsAll (src t) (c3 t) (Vs j).c ((Vs j).c.ports[q.val]!).name =

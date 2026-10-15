@@ -299,6 +299,29 @@ def test_the_lean_verifier_reads_rs_level_under_its_own_name_as_the_opening(stag
     assert p.returncode == 1 and f"not the verifier's {name} (row {row} differs)" in p.stdout, p.stdout + p.stderr
 
 
+@pytest.mark.slow
+@pytest.mark.skipif(not BIN.exists() or shutil.which("lake") is None, reason="the Lean verifier is not built")
+def test_the_lean_verifier_refuses_outputs_not_laid_as_vstars(staged, tmp_path):
+    """`RecOpen.check` holds a `rec-open/` unit's outputs to V*'s layout (`Flock.RecOpen.outsOk`): `out` then `acc_out`,
+    64 words each, one output row each, every copy returning words 0..127 in order. The staged level with one copy's
+    `leaves_out` permuted passes the rows' and input leaves' checks and is refused there, before the net is built."""
+    d = tmp_path / "s"
+    shutil.copytree(staged[0], d)
+    lines = (d / "circuit.txt").read_text().split("\n")
+    meta = json.loads(lines[1][5:])
+    meta["leaves_out"][0][0], meta["leaves_out"][0][1] = meta["leaves_out"][0][1], meta["leaves_out"][0][0]
+    lines[1] = "META " + json.dumps(meta)
+    text = "\n".join(lines)
+    (d / "circuit.txt").write_text(text)
+    head, rest = (staged[0] / "pub.bin").read_bytes().split(b"\n", 1)
+    head = json.loads(head)
+    head["circuit_sha512"] = FC.digest(text)
+    head["units"]["classes"] = [FC.class_digest(text)] * len(head["units"]["classes"])
+    (d / "pub.bin").write_bytes(json.dumps(head).encode() + b"\n" + rest)
+    p = _verify(d)
+    assert p.returncode == 1 and "outputs are not out then acc_out" in p.stdout, p.stdout + p.stderr
+
+
 def _sparse(H: int, c: int, positions: list[int], seed: int):
     """A tree of plain leaves, `H` levels below a top of `2^c` nodes, known at `positions` and random elsewhere: the rows
     there, each one's siblings bottom up, and the top's nodes."""

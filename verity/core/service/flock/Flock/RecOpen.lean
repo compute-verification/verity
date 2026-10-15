@@ -4,7 +4,9 @@ whose unit is named `rec-open/l<LANES>-h<H>` is refused unless its unit is this 
 as `ir_lower.layout` lays M0's unit out (one 16-bit port per word), as `HmNets.check` refuses `sha512x3` and `hm96`
 sections that are not the verifier's; so is one named `rec-open-stacked/l<LANES>-h<H>` (one of R's levels) unless its
 unit is that net under its own name. Either is refused unless every copy of the unit reads the statement's `row`, `aux`,
-`acc`, `coef` and `dirs` rows word by word, in that order. The builder is `rec_open._steps` over `rec_open._Forms`, operation for operation:
+`acc`, `coef` and `dirs` rows word by word, in that order, and unless its outputs are V*'s layout (`outsOk`): `out`
+then `acc_out`, 64 words each, one output row each right past the input rows, every copy returning words `0..127` in
+order. The builder is `rec_open._steps` over `rec_open._Forms`, operation for operation:
 the consistency term is `rec_residuals.residual_forms` at `cons_structure(LANES)`, the climb SHA-512 of the row from the
 IV, then of each level's ordered pair. What its rows force is proved in the soundness package (`FlockVBridge`).
 -/
@@ -318,10 +320,19 @@ reads its opening's `row`, `aux`, `acc`, `coef` and `dirs`, in that order. -/
 def leavesOk (c : Circuit) (LANES H : Nat) : Bool :=
   c.leavesIn.all fun l => decide (l = (Array.range ((ports LANES H).bits.foldl (· + ·) 0 / 16)).map Int.ofNat)
 
-/-- The unit is the net of `unitLaid` at `LANES` and `H` under `name`, equal in every field, and the statement's rows are
-its inputs, every copy reading them in order (`rowsOk`, `leavesOk`). Its input and output bits, rows and leaves are
-compared first, so the net is built only at a `LANES` the file's own rows bound (a parsed net's input bits are below its
-constant row). -/
+/-- V*'s output layout (`rec_outer.lowering`, `OutsLaid` in the soundness package): the circuit's outputs are `out` then
+`acc_out`, 64 words each; its output rows are those two ports, one row each, right past the input rows (`HmOut.nIn`,
+written out since `HmRow` imports this file); and every copy returns words `0..127` in order. -/
+def outsOk (c : Circuit) : Bool :=
+  decide (c.outPorts = #[("out", 64), ("acc_out", 64)]) &&
+  c.leavesOut.all (fun l => decide (l = Array.range 128)) &&
+  decide ((c.ports.extract (c.ports.size - c.outRowPorts.size) (c.ports.size - c.outRowPorts.size + 2)).map
+    (fun q => (q.name, q.words)) = #[("out", 64), ("acc_out", 64)])
+
+/-- The unit is the net of `unitLaid` at `LANES` and `H` under `name`, equal in every field, the statement's rows are
+its inputs, every copy reading them in order (`rowsOk`, `leavesOk`), and its outputs are laid out as V* lays them
+(`outsOk`). Its input and output bits, rows, leaves and output layout are compared first, so the net is built only at a
+`LANES` the file's own rows bound (a parsed net's input bits are below its constant row). -/
 @[irreducible] def checkAt (c : Circuit) (name : String) (L H : Nat) : V Unit :=
   if !valid L H then throw s!"circuit {c.name}: rec-open's LANES is a positive multiple of 8 and H is 0 to 32"
   else if inBits c.unit != (ports L H).bits.foldl (· + ·) 0 || outBits c.unit != 2048 then
@@ -331,6 +342,9 @@ constant row). -/
     throw s!"circuit {c.name}: {c.unit.name}'s first five rows are not row, aux, acc, coef and dirs at its widths"
   else if !leavesOk c L H then
     throw s!"circuit {c.name}: a copy of {c.unit.name} does not read its rows' words in order"
+  else if !outsOk c then
+    throw (s!"circuit {c.name}: {c.unit.name}'s outputs are not out then acc_out, 64 words each, one output row " ++
+      "each, every copy returning words 0..127")
   else match netOf name (unitLaid L H) with
     | .error e => throw e
     | .ok g =>
@@ -353,9 +367,10 @@ it builds the net. -/
           throw s!"circuit {c.name}: unit {c.unit.name} is not rec-open-stacked/l<LANES>-h<H>"
         else pure ()
 
-/-- `check` reads a circuit's name, unit, rows and input leaves only. -/
+/-- `check` reads a circuit's name, unit, rows, leaves and output layout only. -/
 theorem check_congr {c c' : Circuit} (hn : c.name = c'.name) (hu : c.unit = c'.unit) (hp : c.ports = c'.ports)
-    (hl : c.leavesIn = c'.leavesIn) : check c = check c' := by
+    (hl : c.leavesIn = c'.leavesIn) (ho : c.outPorts = c'.outPorts) (hor : c.outRowPorts = c'.outRowPorts)
+    (hlo : c.leavesOut = c'.leavesOut) : check c = check c' := by
   have hr : rowsOk c = rowsOk c' := by
     funext L H
     unfold rowsOk
@@ -364,10 +379,13 @@ theorem check_congr {c c' : Circuit} (hn : c.name = c'.name) (hu : c.unit = c'.u
     funext L H
     unfold leavesOk
     rw [hl]
+  have hx : outsOk c = outsOk c' := by
+    unfold outsOk
+    rw [hp, ho, hor, hlo]
   have : checkAt c = checkAt c' := by
     funext name L H
     unfold checkAt
-    rw [hn, hu, hr, hv]
+    rw [hn, hu, hr, hv, hx]
   unfold check
   rw [hn, hu, this]
 
@@ -386,11 +404,30 @@ theorem checkAt_ok {c : Circuit} {name : String} {L H : Nat} (h : checkAt c name
         · cases h
         · split at h
           · cases h
-          · rename_i g hg
-            split at h
-            · rename_i hcg
-              exact ⟨by simpa using hv, by rw [hcg]; exact hg⟩
+          · split at h
             · cases h
+            · rename_i g hg
+              split at h
+              · rename_i hcg
+                exact ⟨by simpa using hv, by rw [hcg]; exact hg⟩
+              · cases h
+
+/-- `checkAt` accepts no circuit without V*'s output layout (`outsOk`). -/
+theorem outsOk_of_checkAt {c : Circuit} {name : String} {L H : Nat} (h : checkAt c name L H = .ok ()) :
+    outsOk c = true := by
+  unfold checkAt at h
+  split at h
+  · cases h
+  · split at h
+    · cases h
+    · split at h
+      · cases h
+      · split at h
+        · cases h
+        · split at h
+          · cases h
+          · rename_i hout
+            simpa using hout
 
 /-- **What `check` accepted**: a unit named `rec-open/l<L>-h<H>` has a valid `L` and `H`, and it is the net the verifier
 builds at them. -/
@@ -399,6 +436,13 @@ theorem check_ok {c : Circuit} (h : check c = .ok ()) {L H : Nat} (hp : params c
   unfold check at h
   rw [hp] at h
   exact checkAt_ok h
+
+/-- **`check` accepts no `rec-open/…` unit without V*'s output layout** (`outsOk`). -/
+theorem outsOk_of_check {c : Circuit} (h : check c = .ok ()) {L H : Nat}
+    (hp : params c.unit.name = some (L, H)) : outsOk c = true := by
+  unfold check at h
+  rw [hp] at h
+  exact outsOk_of_checkAt h
 
 theorem unitName_of_params {name : String} {L H : Nat} (h : params name = some (L, H)) : unitName L H = name := by
   unfold params at h
@@ -460,6 +504,15 @@ theorem check_ok_stacked {c : Circuit} (h : check c = .ok ()) {L H : Nat}
   dsimp only at h
   rw [← stackedName_of_params hp, startsWith_stackedName, stackedName_of_params hp, hp] at h
   exact checkAt_ok h
+
+/-- **`check` accepts none of R's levels without V*'s output layout** (`outsOk`). -/
+theorem outsOk_of_check_stacked {c : Circuit} (h : check c = .ok ()) {L H : Nat}
+    (hp : stackedParams c.unit.name = some (L, H)) : outsOk c = true := by
+  unfold check at h
+  rw [params_stacked hp] at h
+  dsimp only at h
+  rw [← stackedName_of_params hp, startsWith_stackedName, stackedName_of_params hp, hp] at h
+  exact outsOk_of_checkAt h
 
 theorem foldl_add_replicate (n a b : Nat) : (List.replicate n a).foldl (· + ·) b = b + n * a := by
   induction n generalizing b with
