@@ -192,6 +192,8 @@ def main() -> None:
     p = sub.add_parser("lift")
     p.add_argument("file")
     p.add_argument("--m", default="2,3,4")
+    p.add_argument("--copies", action="store_true",
+                   help="every 2-summand merge becomes a copy (a paid u + w), on lines whose merges all have 2 summands")
     p = sub.add_parser("prefix")
     p.add_argument("--levels", default="1,2,3,4")
     p.add_argument("--m", default="1,2,4,8")
@@ -213,6 +215,11 @@ def main() -> None:
         if args.cmd == "check":
             print(tag, json.dumps(check(a, b, c, L, steps, res["arity"])))
         else:
+            if args.copies:
+                if any(st["type"] == "merge" and len(st["of"]) != 2 for st in steps):
+                    continue
+                steps = [dict(st, type="copy") if st["type"] == "merge" else st for st in steps]
+                tag += " as copies"
             for m in [int(x) for x in args.m.split(",")]:
                 r = check(a, b * m, c, L * m, lift(steps, m), res["arity"])
                 print(f"{tag} lifted x{m} -> <{a},{b * m},{c}> L={L * m}", json.dumps(r))
