@@ -24,6 +24,8 @@ random-operand work's words).
   block, and the share of blocks with none, whose receipt the linear form gives exactly.
 - ``anf`` and ``walsh``: the 8-bit analogue of two absorbed words (16 input bits, 8 output bits): the ANF degree of
   each output bit and the largest linear correlation, against a random function's.
+- ``decay``: the same analogue over 1, 2 and 3 words (up to 24 input bits), with single-bit correlations: whether
+  the structure of one step fades as words chain in.
 - ``mad_sketch``: mad's receipts of every block of a small INT8 matmul, from the honest chain and from the cross-block
   linear sketch U = Xᵀ C in int8 digits, with both MAC counts.
 - ``duo_g``: duo's two-word cancellations are exactly the collisions of g_t(u) = rotl(u, r_t) + a_t·u (word t+1
@@ -550,18 +552,31 @@ def step8(kind: str, y, z, p, t: int, k8):
     raise ValueError(kind)
 
 
-def two_word_table(kind: str, y: int, z: int, k8) -> np.ndarray:
-    """The 8-bit output of absorbing words (p_4, p_5) from state (y, z), for all 2^16 inputs (p_4 in the low byte)."""
-    x = np.arange(1 << 16, dtype=np.int64)
+def words_table(kind: str, k: int, y: int, z: int, k8) -> np.ndarray:
+    """The 8-bit receipt of absorbing words p_4 .. p_{3+k} from state (y, z), for all 2^(8k) inputs (p_4 in the low
+    byte)."""
+    x = np.arange(1 << (8 * k), dtype=np.uint32)
     yy, zz = np.full_like(x, y), np.full_like(x, z)
-    yy, zz = step8(kind, yy, zz, x & M8, 4, k8)
-    yy, zz = step8(kind, yy, zz, x >> 8, 5, k8)
+    k8 = {key: [int(v) for v in vals] for key, vals in k8.items()}
+    for i in range(k):
+        yy, zz = step8(kind, yy, zz, (x >> np.uint32(8 * i)) & M8, 4 + i, k8)
     return (yy ^ zz) if kind == "mum" else (yy ^ (((zz << 4) | (zz >> 4)) & M8)) if kind == "duo" else yy
+
+
+def two_word_table(kind: str, y: int, z: int, k8) -> np.ndarray:
+    return words_table(kind, 2, y, z, k8)
+
+
+def popcounts(nbits: int) -> np.ndarray:
+    pop = np.zeros(1 << nbits, dtype=np.uint8)
+    for i in range(nbits):
+        pop[1 << i: 2 << i] = pop[: 1 << i] + 1
+    return pop
 
 
 def anf_degrees(tab: np.ndarray, nbits: int = 16) -> list[int]:
     deg = []
-    pop = np.array([bin(i).count("1") for i in range(1 << nbits)])
+    pop = popcounts(nbits)
     for bit in range(8):
         f = ((tab >> bit) & 1).astype(np.uint8)
         for i in range(nbits):
@@ -605,6 +620,43 @@ def small(seed: int = 4, states: int = 4) -> dict:
                      "anf_degree_max": int(d.max()), "walsh_max_corr": max(wal)}
     tab = rng.integers(0, 256, size=1 << 16)
     out["random"] = {"anf_degree_per_bit_min_over_states": anf_degrees(tab), "walsh_max_corr": walsh_max(tab)}
+    return out
+
+
+def walsh_bits_max(tab: np.ndarray, nbits: int) -> float:
+    """max over the 8 single output bits and input masks α ≠ 0 of |corr(F_i(x), α·x)|, one bit at a time (2^24
+    inputs fit where `walsh_max`'s 255 output masks don't)."""
+    best = 0
+    for bit in range(8):
+        f = (1 - 2 * ((tab >> bit) & 1).astype(np.int32)).astype(np.int32)
+        for i in range(nbits):
+            f = f.reshape(-1, 2, 1 << i)
+            lo = f[:, 0, :].copy()
+            f[:, 0, :] += f[:, 1, :]
+            f[:, 1, :] = lo - f[:, 1, :]
+        f = f.reshape(-1)
+        f[0] = 0
+        best = max(best, int(np.abs(f).max()))
+    return best / (1 << nbits)
+
+
+def decay(seed: int = 5, kinds=("duo", "mum", "mad"), words=(1, 2, 3)) -> dict:
+    """The 8-bit analogue over k = 1, 2, 3 absorbed words from a fixed state: each output bit's ANF degree (of 8k) and
+    the largest single-bit linear correlation, against a random function of as many bits. A φ whose structure the
+    chain dilutes approaches the random column as k grows; one whose low bits stay low-degree (mad's bit 0 is linear in
+    every word) doesn't."""
+    rng = np.random.default_rng(seed)
+    k8 = {"a": rng.integers(0, 128, size=16) * 2 + 1, "b": rng.integers(0, 128, size=16) * 2 + 1,
+          "c": rng.integers(0, 256, size=16)}
+    y, z = int(rng.integers(0, 256)), int(rng.integers(0, 256))
+    out = {}
+    for kind in list(kinds) + ["random"]:
+        out[kind] = {}
+        for k in words:
+            tab = (rng.integers(0, 256, size=1 << (8 * k)).astype(np.uint32) if kind == "random"
+                   else words_table(kind, k, y, z, k8))
+            out[kind][f"k={k}"] = {"anf_degree_per_bit": anf_degrees(tab, 8 * k),
+                                   "walsh_bits_max_corr": walsh_bits_max(tab, 8 * k)}
     return out
 
 
@@ -744,7 +796,7 @@ def main() -> int:
     if args.samples_log2:
         ns = 1 << args.samples_log2
     every = ["differential", "chain_end", "three_word", "linearity", "degree2", "low_bits", "carries", "small",
-             "mum_lattice", "mad_sketch", "duo_g"]
+             "mum_lattice", "mad_sketch", "duo_g", "decay"]
     todo = args.only.split(",") if args.only else every
     res = {}
     for dist in args.dist.split(","):
@@ -773,6 +825,8 @@ def main() -> int:
     if "duo_g" in todo:
         res["duo_g_image"] = duo_g_image()
         res["duo_adaptive"] = duo_adaptive(ns >> 4)
+    if "decay" in todo:
+        res["decay_8bit"] = decay(words=(1, 2) if args.quick else (1, 2, 3))
     print(json.dumps(res, indent=1))
     return 0
 

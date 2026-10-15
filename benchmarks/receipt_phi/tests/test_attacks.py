@@ -103,6 +103,20 @@ def test_duo_fold_sees_a_shift_of_both_halves() -> None:
     assert all(attacks.fold(k, y, z)[0] == twins.finish(k, (int(y[0]), int(z[0]))) for k in twins.KINDS)
 
 
+def test_decay_keeps_mad_bit0_linear_and_raises_duo() -> None:
+    """mad's bit 0 is y_0 ^ p_0 at every word (a T-function), so its degree stays 1 however many words chain in;
+    duo's every bit gains degree with the second word. The k-word table at k = 2 is the two-word table `small`
+    reads."""
+    r = attacks.decay(kinds=("mad", "duo"), words=(1, 2))
+    assert r["mad"]["k=1"]["anf_degree_per_bit"][0] == 1 and r["mad"]["k=2"]["anf_degree_per_bit"][0] == 1
+    assert all(b > a for a, b in zip(r["duo"]["k=1"]["anf_degree_per_bit"], r["duo"]["k=2"]["anf_degree_per_bit"]))
+    k8 = {"a": [3] * 16, "b": [5] * 16, "c": list(range(16))}
+    x = np.arange(1 << 16, dtype=np.int64)
+    yy, zz = attacks.step8("duo", *attacks.step8("duo", np.full_like(x, 9), np.full_like(x, 4), x & 0xFF, 4, k8),
+                           x >> 8, 5, k8)
+    assert (attacks.two_word_table("duo", 9, 4, k8) == (yy ^ (((zz << 4) | (zz >> 4)) & 0xFF))).all()
+
+
 def test_mum_lattice_patterns_cancel() -> None:
     for m, r in attacks.mum_lattice().items():
         d, n = r["deltas"], len(r["deltas"])
