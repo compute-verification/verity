@@ -77,7 +77,7 @@ __host__ __device__ constexpr uint32_t mix32(uint32_t x) {
 // K_t's B fragments are fixed functions of (kind, position, lane) (key_tb; ref.py has the same), computed once a kernel
 // and held in registers: no CUDA-core op touches a receipt in the mainloop.
 enum Kind { NONE = 0, DUO = 1, DUO2 = 2, ADD3 = 3, MUL2 = 4, TB4 = 5, TB2 = 6, TB1 = 7 };
-constexpr bool is_tb(int k) { return k >= TB4; }
+__host__ __device__ constexpr bool is_tb(int k) { return k >= TB4; }
 __host__ __device__ constexpr uint32_t key_tb(int kind, int t, int lane, int j) {
   return mix32(0xC0000000u + (uint32_t)(((kind * 64 + t) * 32 + lane) * 2 + j));
 }
