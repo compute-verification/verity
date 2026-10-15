@@ -18,11 +18,16 @@ timed back to back.  The schedules, over the served call's steps (`SERVED`, pouw
   gemm        gemm_pearlc alone (C~, U and y), back to back
   gemm_ct     the chain alone (C~), back to back
   plain       this build's own plain FP8 GEMM (gemm_fast, the faster of run.py's two), at m a multiple of 128
+  par<c>      c independent served calls at once, each serial on a stream of its own (W a multiple of c): batching calls
+              by concurrency rather than by rows
 
 Modes (ETA_MODE): `time` (default) prints one JSON line per (shape, W, schedule); `profile` runs each shape's steps once
 under cuProfilerStart/Stop for ncu (`--profile-from-start off`): one serial call kernel by kernel, then (ETA_GRAPHS=1, for
 `--graph-profiling graph`) each schedule's graph once, in the order its `profile` line lists; `clock` holds gemm_pearlc at
-the largest shape for ETA_HOLD_S seconds with NVML sampled every 20 ms (read-only: nothing here sets a clock).
+the largest shape for ETA_HOLD_S seconds with NVML sampled every 20 ms (read-only: nothing here sets a clock); `power`
+holds each schedule's graph the same way (its clock, power and throttle reasons, so its energy a call); `sha` times
+s512_rows at 128 (served), 64 and 32 threads a CTA, checking the digests are the served ones, and s512_seeds over 2^20
+independent rows (one thread each: this SHA-512 code's compression rate when nothing serializes it).
 
   SHIP=<build.sh output> PEARLC_EXPECT_UUID=... ETA_SHAPES="32x8192x8192 8192x8192x8192" python3 eta.py
 """
@@ -76,6 +81,15 @@ class Lanes:
         self.main, self.side = vp(), vp()
         dev.ck("cuStreamCreateWithPriority", C.byref(self.main), STREAM_NON_BLOCKING, hi.value)
         dev.ck("cuStreamCreateWithPriority", C.byref(self.side), STREAM_NON_BLOCKING, lo.value)
+        self.par: list = []
+
+    def streams(self, c: int) -> list:
+        """c streams at the main lane's priority, made once."""
+        while len(self.par) < c:
+            s = vp()
+            self.dev.ck("cuStreamCreateWithPriority", C.byref(s), STREAM_NON_BLOCKING, self.prio[1])
+            self.par.append(s)
+        return self.par[:c]
 
     def event(self, timing: bool = False) -> vp:
         e = vp()
@@ -114,6 +128,20 @@ def steps_of(pipe: R.Pipeline) -> dict:
 def enqueue(lanes: Lanes, pipes: list, fns: list[dict], sched: str, calls: int) -> None:
     """`calls` calls of `sched` over the pipelines in rotation, on lanes.main and lanes.side, the side joined at the end."""
     main, side = lanes.main, lanes.side
+    if sched.startswith("par"):
+        c = int(sched[3:])
+        if len(pipes) % c:
+            raise ValueError(f"{sched} takes W a multiple of {c}, not {len(pipes)}")
+        fork = lanes.record(main)
+        for s_i, s in enumerate(lanes.streams(c)):
+            lanes.wait(s, fork)
+            for i in range(s_i, calls, c):
+                f = fns[i % len(pipes)]
+                for nm in SERVED:
+                    if nm in f:
+                        lanes.on(s, f[nm])
+            lanes.wait(main, lanes.record(s))
+        return
     pending: dict[int, vp] = {}
     for i in range(calls):
         j = i % len(pipes)
@@ -247,7 +275,7 @@ def time_mode(dev: R.Dev, nv: R.Nvml, lanes: Lanes) -> None:
             base = shape_row(shape, w, bm, pipes)
             calls = 2 * w if w > 1 else 2
             for sched in scheds:
-                if sched == "plain" and "gemm_fast" not in fns[0]:
+                if sched == "plain" and "gemm_fast" not in fns[0] or sched.startswith("par") and w % int(sched[3:]):
                     continue
                 row = {"kind": "eta", **base, "schedule": sched, "calls_per_graph": calls}
                 try:
@@ -317,15 +345,34 @@ def profile_mode(dev: R.Dev, lanes: Lanes) -> None:
         release(dev, pipes, own)
 
 
-def clock_mode(dev: R.Dev, nv: R.Nvml, lanes: Lanes) -> None:
-    """gemm_pearlc (and gemm_fast) held for ETA_HOLD_S each, with NVML sampled every 20 ms from a thread (ctypes drops the GIL
-    in foreign calls): the clock, power and throttle reasons a sustained GEMM sees under the node's lock."""
-    hold = float(os.environ.get("ETA_HOLD_S", "4"))
-    shape = R.parse_shape(os.environ.get("ETA_CLOCK_SHAPE", "8192x8192x8192"))
-    pipes, own = make(dev, shape, 1, None, 101)
-    f = steps_of(pipes[0])
-    lib = nv.lib
-    info = {}
+def sampled(nv: R.Nvml, body) -> tuple[float, dict]:
+    """body() (returning its ms) with NVML sampled every 20 ms from a thread (ctypes drops the GIL in foreign calls): its ms
+    and the middle half's clock, power and throttle reasons."""
+    samples, stop = [], threading.Event()
+
+    def sample():
+        while not stop.is_set():
+            samples.append({"t": time.monotonic(), **nv.read()})
+            stop.wait(0.02)
+    th = threading.Thread(target=sample)
+    th.start()
+    try:
+        ms = body()
+    finally:
+        stop.set()
+        th.join()
+    mid = samples[len(samples) // 4: 3 * len(samples) // 4] or samples
+    has = bool(mid) and "sm_mhz" in mid[0]
+    return ms, {"samples": len(samples),
+                "sm_mhz_median": statistics.median(s["sm_mhz"] for s in mid) if has else None,
+                "power_w_median": statistics.median(s["power_w"] for s in mid) if has else None,
+                "power_w_max": max(s["power_w"] for s in mid) if has else None,
+                "throttle_seen": sorted({s.get("throttle") for s in mid}), "temp_c_max": max(s.get("temp_c", 0) for s in mid),
+                "trace": [{k: s.get(k) for k in ("sm_mhz", "power_w", "throttle", "temp_c")} for s in samples[::5]]}
+
+
+def limits(nv: R.Nvml) -> dict:
+    lib, info = nv.lib, {}
     if lib:
         R.bind(lib, NVML_EXTRA)
         for nm, t in (("max_sm_mhz", 1), ("max_mem_mhz", 2)):
@@ -335,33 +382,100 @@ def clock_mode(dev: R.Dev, nv: R.Nvml, lanes: Lanes) -> None:
         info["enforced_power_limit_w"] = v.value / 1000 if lib.nvmlDeviceGetEnforcedPowerLimit(nv.h, C.byref(v)) == 0 else None
         v = u()
         info["applications_sm_mhz"] = v.value if lib.nvmlDeviceGetApplicationsClock(nv.h, 1, C.byref(v)) == 0 else None
+    return info
+
+
+def clock_mode(dev: R.Dev, nv: R.Nvml, lanes: Lanes) -> None:
+    """gemm_pearlc (and gemm_fast) held for ETA_HOLD_S each: the clock, power and throttle reasons a sustained GEMM sees
+    under the node's lock."""
+    hold = float(os.environ.get("ETA_HOLD_S", "4"))
+    shape = R.parse_shape(os.environ.get("ETA_CLOCK_SHAPE", "8192x8192x8192"))
+    pipes, own = make(dev, shape, 1, None, 101)
+    f = steps_of(pipes[0])
+    info = limits(nv)
     for nm in ("gemm_pearlc", "gemm_fast", "gemm_ct"):
         if nm not in f:
             continue
         t = timed(lanes, lambda: lanes.on(lanes.main, f[nm]), 3)
         n_launch = max(1, int(hold * 1e3 / statistics.median(t)))
-        samples, stop = [], threading.Event()
-
-        def sample():
-            while not stop.is_set():
-                samples.append({"t": time.monotonic(), **nv.read()})
-                stop.wait(0.02)
-        th = threading.Thread(target=sample)
-        th.start()
-        ms = timed(lanes, lambda: [lanes.on(lanes.main, f[nm]) for _ in range(n_launch)], 1)
-        stop.set()
-        th.join()
-        mid = samples[len(samples) // 4: 3 * len(samples) // 4] or samples
-        row = {"kind": "clock", "shape": list(shape), "kernel": nm, "launches": n_launch, "ms": ms[0],
-               "per_launch_ms": ms[0] / n_launch, "samples": len(samples), **info,
-               "sm_mhz_median": statistics.median(s["sm_mhz"] for s in mid) if mid and "sm_mhz" in mid[0] else None,
-               "power_w_median": statistics.median(s["power_w"] for s in mid) if mid and "power_w" in mid[0] else None,
-               "power_w_max": max(s["power_w"] for s in mid) if mid and "power_w" in mid[0] else None,
-               "throttle_seen": sorted({s.get("throttle") for s in mid}), "temp_c_max": max(s.get("temp_c", 0) for s in mid),
-               "trace": [{k: s.get(k) for k in ("sm_mhz", "power_w", "throttle", "temp_c")} for s in samples[::5]]}
+        ms, st = sampled(nv, lambda: timed(lanes, lambda: [lanes.on(lanes.main, f[nm]) for _ in range(n_launch)], 1)[0])
+        row = {"kind": "clock", "shape": list(shape), "kernel": nm, "launches": n_launch, "ms": ms,
+               "per_launch_ms": ms / n_launch, **info, **st}
         row["tflops"] = 2 * shape[0] * shape[1] * shape[2] / (row["per_launch_ms"] * 1e-3) / 1e12
         emit(row)
     release(dev, pipes, own)
+
+
+def power_mode(dev: R.Dev, nv: R.Nvml, lanes: Lanes) -> None:
+    """Each schedule's graph (W = ETA_W) held for ETA_HOLD_S: per-call time under the hold, the clock it settles at, its power
+    and so its energy a call, and η at that clock."""
+    hold = float(os.environ.get("ETA_HOLD_S", "2"))
+    w = int(os.environ.get("ETA_W", "3"))
+    scheds = os.environ.get("ETA_SCHEDULES", "serial nohash gemm gemm_ct plain").split()
+    info = limits(nv)
+    for spec in os.environ.get("ETA_SHAPES", "32x8192x8192 128x8192x8192 8192x8192x8192").split():
+        shape = R.parse_shape(spec)
+        pipes, own = make(dev, shape, w, None, 101)
+        fns = [steps_of(p) for p in pipes]
+        base, calls = shape_row(shape, w, None, pipes), 2 * w
+        for sched in scheds:
+            if sched == "plain" and "gemm_fast" not in fns[0] or sched.startswith("par") and w % int(sched[3:]):
+                continue
+            g = Graph(lanes, lambda: enqueue(lanes, pipes, fns, sched, calls))
+            n = max(1, int(hold * 1e3 / statistics.median(timed(lanes, g.launch, 3))))
+            ms, st = sampled(nv, lambda: timed(lanes, lambda: [g.launch() for _ in range(n)], 1)[0])
+            g.close()
+            per_call = ms / (n * calls)
+            row = {"kind": "power", **base, "schedule": sched, "calls_per_graph": calls, "graphs": n,
+                   "per_call_ms": round(per_call, 5), **info, **st}
+            if st["sm_mhz_median"]:
+                useful = base["macs_useful"] / (per_call * 1e-3)
+                row.update({"eta": round(useful / peak_macs(st["sm_mhz_median"], dev.sms), 5),
+                            "eta_cap": round(useful / peak_macs(CAP_MHZ, dev.sms), 5),
+                            "energy_mj_per_call": round(st["power_w_median"] * per_call, 4)})
+            emit(row)
+        release(dev, pipes, own)
+
+
+def sha_mode(dev: R.Dev, lanes: Lanes) -> None:
+    """s512_rows at 128 (the served launch), 64 and 32 threads a CTA over each shape's real rows of A, its digests compared
+    with the served ones; then s512_seeds over 2^20 rows, one thread a row (5 compressions each)."""
+    reps = int(os.environ.get("ETA_REPS", "15"))
+    for n_spec, spec in enumerate(os.environ.get("ETA_SHAPES", "32x8192x8192 128x8192x8192 8192x8192x8192").split()):
+        shape = R.parse_shape(spec)
+        m_real, _, k = shape
+        pipes, own = make(dev, shape, 1, None, 101)
+        p = pipes[0]
+        segs = k // 256
+        per_row = 10 * segs + 2 + segs // 2   # a segment: header, 8 blocks, pad; the fold: Q, digest pairs, pad
+        want, out = dev.read(p.b["rowdig_a"], 64 * m_real), dev.alloc(64 * m_real)
+        for block in (128, 64, 32):
+            launch = lambda: dev.launch("s512_rows", m_real, block, p=(p.b["xa"], out), i=(m_real, k), stream=lanes.main)  # noqa: E731
+            dev.ck("cuMemsetD8_v2", out, 0, 64 * m_real)
+            launch()
+            dev.ck("cuStreamSynchronize", lanes.main)
+            same = dev.read(out, 64 * m_real) == want
+            g = Graph(lanes, lambda: [launch() for _ in range(10)])
+            ms = statistics.median(timed(lanes, g.launch, reps)) / 10
+            g.close()
+            emit({"kind": "sha", "kernel": "s512_rows", "shape": list(shape), "block": block, "ms": round(ms, 5),
+                  "same_digests": same, "compressions": m_real * per_row,
+                  "compressions_per_s": m_real * per_row / (ms * 1e-3)})
+        dev.free(out)
+        if n_spec == 0:
+            rows = 1 << 20
+            x, seeds, lk = dev.alloc(64 * rows), dev.alloc(32 * rows), dev.alloc(32 * rows)
+            dev.ck("cuMemsetD8_v2", x, 7, 64 * rows)
+            launch = lambda: dev.launch("s512_seeds", R.cdiv(rows, 128), 128, p=(x, seeds, lk, p.keys["unit"]),  # noqa: E731
+                                        i=(rows, 0, 1), stream=lanes.main)
+            g = Graph(lanes, lambda: [launch() for _ in range(5)])
+            ms = statistics.median(timed(lanes, g.launch, reps)) / 5
+            g.close()
+            emit({"kind": "sha", "kernel": "s512_seeds", "rows": rows, "block": 128, "ms": round(ms, 5),
+                  "compressions": 5 * rows, "compressions_per_s": 5 * rows / (ms * 1e-3)})
+            for b in (x, seeds, lk):
+                dev.free(b)
+        release(dev, pipes, own)
 
 
 def main() -> int:
@@ -381,7 +495,8 @@ def main() -> int:
     emit({"kind": "lanes", "priority_least_greatest": list(lanes.prio)})
     mode = os.environ.get("ETA_MODE", "time")
     {"time": lambda: time_mode(dev, nv, lanes), "profile": lambda: profile_mode(dev, lanes),
-     "clock": lambda: clock_mode(dev, nv, lanes)}[mode]()
+     "clock": lambda: clock_mode(dev, nv, lanes), "power": lambda: power_mode(dev, nv, lanes),
+     "sha": lambda: sha_mode(dev, lanes)}[mode]()
     return 0
 
 
