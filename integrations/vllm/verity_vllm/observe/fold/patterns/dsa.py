@@ -485,9 +485,10 @@ def dsa_patterns() -> list:
     (`fp8.DynamicDeepGemmFp8Linear`), which GLM-5.3's attention and dense projections run."""
     from verity_vllm.observe.fold.patterns.collectives import TpFusedAllReduceRmsNorm
     from verity_vllm.observe.fold.patterns.fp8 import DynamicDeepGemmFp8Linear
+    from verity_vllm.observe.fold.patterns.norms import CudaFusedAddRmsNorm, CudaRmsNorm
 
     return [DsaNormRope(), DsaQ(), DsaMqaGather(), DsaMqaAllocation(), DsaTopK(), DsaIndexShare(), DsaSparseMla(), DynamicDeepGemmFp8Linear(),
-            TpFusedAllReduceRmsNorm(world=8)]
+            TpFusedAllReduceRmsNorm(world=8), CudaRmsNorm(), CudaFusedAddRmsNorm()]
 
 
 __all__ = [
