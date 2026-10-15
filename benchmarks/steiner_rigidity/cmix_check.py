@@ -1251,7 +1251,8 @@ def part8(rng, exhaustive=False, procs=1):
     except AssertionError:
         pass
     print("  part 8: the merge-free tree computes every target exactly over the integers (" + "; ".join(report)
-          + "); on the 2 x 2 block at L = 2 its symmetric cost is 14 < 16 over GF(3), GF(5), GF(10007); mutation caught")
+          + "); on the 2 x 2 block at L = 2 its symmetric cost is 14 < 16 over GF(3), GF(5), GF(10007); "
+          "mutation caught")
     if exhaustive:
         best, searched, pairs = balanced_exhaustive(2, 3, procs)
         assert best == 14, f"least balanced normal-form cost {best}, expected 14"
