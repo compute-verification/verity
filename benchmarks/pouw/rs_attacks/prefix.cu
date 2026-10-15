@@ -4,14 +4,15 @@
 //   dp4a : T += dp4a(g, z)                       (r <= 4, G_s in one int8 slice; ceil(r/4) IDP.4A a word)
 //   imad : T += sum_a g_a z_a                    (r IMADs a word, exact mod 2^32)
 //   ffma : T += bits(magic + sum_a g_a z_a) - magic_bits   (r FFMAs and one IADD3 a word)
-//   mix  : the honest kernel's 8 tiles and dp4a's 16 words in one warp (do the tensor and integer pipes overlap?)
+//   ffma2: the same with two words a packed FMA             (r/2 FFMA2 and one IADD3 a word)
+//   mixWM: the honest kernel's 8 tiles and WM dp4a words in one warp (do the tensor and integer pipes overlap?)
 //   t16, t8816 : the int8 MMAs with K = 16 (m16n8k16, m8n8k16), the tensor route's shortest inner dimension
 // where g is the row's G_s = U D_s (changed every block) and z the word's column of Z (fixed). The integer kernels
 // change g by an xor with the block index, so the compiler can't close the loop's sum into a formula. One CTA a SM
 // (60 KB of dynamic shared memory pins it), clock64 around the block loop; each attack's words are checked bit for bit
 // against the host's replay of the same arithmetic.
 //
-//   prefix <kind> <r> <warps> <blocks>     kind: honest | t16 | t8816 | dp4a | imad | ffma | mix
+//   prefix <kind> <r> <warps> <blocks>     kind: honest | t16 | t8816 | dp4a | imad | ffma | ffma2 | mix16|32|48
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -120,6 +121,14 @@ __host__ __device__ inline uint32_t pack4(int v0, int v1, int v2, int v3) {
   return (uint32_t)(v0 & 255) | ((uint32_t)(v1 & 255) << 8) | ((uint32_t)(v2 & 255) << 16) | ((uint32_t)(v3 & 255) << 24);
 }
 
+// The kernels read g_0 and z from memory the host fills: computed in the kernel, z = ±1 is visible to the compiler,
+// which then replaces each product by a conditional negation (SEL on a predicate from a packed sign mask, ~3 ops).
+constexpr int WMAX = 48, RMAX = 8;
+__device__ const int* d_G0;         // [lane][a]
+__device__ const int* d_Z0;         // [lane][word][a]
+__device__ __forceinline__ int g0_ld(int tid, int a) { return d_G0[tid * RMAX + a]; }
+__device__ __forceinline__ int z_ld(int tid, int w, int a) { return d_Z0[(tid * WMAX + w) * RMAX + a]; }
+
 template <int R4>
 __global__ void k_dp4a(int r, int blocks, int* out, long long* cyc) {
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -127,12 +136,12 @@ __global__ void k_dp4a(int r, int blocks, int* out, long long* cyc) {
 #pragma unroll
   for (int q = 0; q < R4; q++) {
     int v[4];
-    for (int b = 0; b < 4; b++) v[b] = (4 * q + b < r) ? g0_of(tid, 4 * q + b) : 0;
+    for (int b = 0; b < 4; b++) v[b] = (4 * q + b < r) ? g0_ld(tid, 4 * q + b) : 0;
     g[q] = pack4(v[0], v[1], v[2], v[3]);
 #pragma unroll
     for (int w = 0; w < W; w++) {
       int u[4];
-      for (int b = 0; b < 4; b++) u[b] = (4 * q + b < r) ? z_of(tid, w, 4 * q + b) : 0;
+      for (int b = 0; b < 4; b++) u[b] = (4 * q + b < r) ? z_ld(tid, w, 4 * q + b) : 0;
       z[w][q] = pack4(u[0], u[1], u[2], u[3]);
     }
   }
@@ -162,9 +171,9 @@ __global__ void k_imad(int blocks, int* out, long long* cyc) {
   uint32_t g[R], z[W][R];
 #pragma unroll
   for (int a = 0; a < R; a++) {
-    g[a] = (uint32_t)g0_of(tid, a);
+    g[a] = (uint32_t)g0_ld(tid, a);
 #pragma unroll
-    for (int w = 0; w < W; w++) z[w][a] = (uint32_t)z_of(tid, w, a);
+    for (int w = 0; w < W; w++) z[w][a] = (uint32_t)z_ld(tid, w, a);
   }
   uint32_t T[W];
 #pragma unroll
@@ -186,7 +195,8 @@ __global__ void k_imad(int blocks, int* out, long long* cyc) {
   if (threadIdx.x == 0) cyc[blockIdx.x] = t1 - t0;
 }
 
-// The honest kernel's NT tiles (the attack's tensor share, k padded to 32) beside k_dp4a<1>'s W words, one warp.
+// The honest kernel's NT tiles (the attack's tensor share, k padded to 32) beside WM words of k_dp4a<1>, one warp.
+template <int WM>
 __global__ void k_mix(int r, int blocks, int* out, int* out_t, long long* cyc) {
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
   uint32_t s = lane_seed(tid);
@@ -194,21 +204,21 @@ __global__ void k_mix(int r, int blocks, int* out, int* out_t, long long* cyc) {
   int acc[NT][4];
 #pragma unroll
   for (int t = 0; t < NT; t++) acc[t][0] = acc[t][1] = acc[t][2] = acc[t][3] = 0;
-  uint32_t g, z[W];
+  uint32_t g, z[WM];
   {
     int v[4];
-    for (int b = 0; b < 4; b++) v[b] = (b < r) ? g0_of(tid, b) : 0;
+    for (int b = 0; b < 4; b++) v[b] = (b < r) ? g0_ld(tid, b) : 0;
     g = pack4(v[0], v[1], v[2], v[3]);
 #pragma unroll
-    for (int w = 0; w < W; w++) {
+    for (int w = 0; w < WM; w++) {
       int u[4];
-      for (int b = 0; b < 4; b++) u[b] = (b < r) ? z_of(tid, w, b) : 0;
+      for (int b = 0; b < 4; b++) u[b] = (b < r) ? z_ld(tid, w, b) : 0;
       z[w] = pack4(u[0], u[1], u[2], u[3]);
     }
   }
-  int T[W];
+  int T[WM];
 #pragma unroll
-  for (int w = 0; w < W; w++) T[w] = 0;
+  for (int w = 0; w < WM; w++) T[w] = 0;
   __syncthreads();
   long long t0 = clock64();
   for (int j = 0; j < blocks; j++) {
@@ -220,7 +230,7 @@ __global__ void k_mix(int r, int blocks, int* out, int* out_t, long long* cyc) {
                    : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(b0), "r"(b1));
     a0 += 0x01010101u;
 #pragma unroll
-    for (int w = 0; w < W; w++) T[w] = __dp4a((int)g, (int)z[w], T[w]);
+    for (int w = 0; w < WM; w++) T[w] = __dp4a((int)g, (int)z[w], T[w]);
     g ^= (uint32_t)(j + 1);
   }
   __syncthreads();
@@ -230,7 +240,7 @@ __global__ void k_mix(int r, int blocks, int* out, int* out_t, long long* cyc) {
   for (int t = 0; t < NT; t++) x ^= acc[t][0] ^ acc[t][1] ^ acc[t][2] ^ acc[t][3];
   out_t[tid] = x;
 #pragma unroll
-  for (int w = 0; w < W; w++) out[tid * W + w] = T[w];
+  for (int w = 0; w < WM; w++) out[tid * WM + w] = T[w];
   if (threadIdx.x == 0) cyc[blockIdx.x] = t1 - t0;
 }
 
@@ -240,9 +250,9 @@ __global__ void k_ffma(int blocks, int* out, long long* cyc) {
   float g[R], z[W][R];
 #pragma unroll
   for (int a = 0; a < R; a++) {
-    g[a] = (float)g0_of(tid, a);
+    g[a] = (float)g0_ld(tid, a);
 #pragma unroll
-    for (int w = 0; w < W; w++) z[w][a] = (float)z_of(tid, w, a);
+    for (int w = 0; w < W; w++) z[w][a] = (float)z_ld(tid, w, a);
   }
   int T[W];
 #pragma unroll
@@ -267,17 +277,61 @@ __global__ void k_ffma(int blocks, int* out, long long* cyc) {
   if (threadIdx.x == 0) cyc[blockIdx.x] = t1 - t0;
 }
 
-static int check(const char* kind, int r, int lanes, int blocks, const std::vector<int>& got) {
+// k_ffma with two words a packed FMA (fma.rn.f32x2, SASS FFMA2): r FFMA2 and two IADD3 a word pair.
+__device__ __forceinline__ unsigned long long pk2(float lo, float hi) {
+  return (unsigned long long)__float_as_uint(lo) | ((unsigned long long)__float_as_uint(hi) << 32);
+}
+
+template <int R>
+__global__ void k_ffma2(int blocks, int* out, long long* cyc) {
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  float g[R];
+  unsigned long long z2[W / 2][R];
+#pragma unroll
+  for (int a = 0; a < R; a++) {
+    g[a] = (float)g0_ld(tid, a);
+#pragma unroll
+    for (int w = 0; w < W; w += 2) z2[w / 2][a] = pk2((float)z_ld(tid, w, a), (float)z_ld(tid, w + 1, a));
+  }
+  int T[W];
+#pragma unroll
+  for (int w = 0; w < W; w++) T[w] = 0;
+  const unsigned long long m2 = pk2(MAGIC, MAGIC);
+  __syncthreads();
+  long long t0 = clock64();
+  for (int j = 0; j < blocks; j++) {
+    unsigned long long g2[R];
+#pragma unroll
+    for (int a = 0; a < R; a++) g2[a] = pk2(g[a], g[a]);
+#pragma unroll
+    for (int w = 0; w < W; w += 2) {
+      unsigned long long acc = m2;
+#pragma unroll
+      for (int a = 0; a < R; a++) asm("fma.rn.f32x2 %0, %1, %2, %0;" : "+l"(acc) : "l"(g2[a]), "l"(z2[w / 2][a]));
+      T[w] += (int)(uint32_t)acc - MAGIC_BITS;
+      T[w + 1] += (int)(uint32_t)(acc >> 32) - MAGIC_BITS;
+    }
+#pragma unroll
+    for (int a = 0; a < R; a++) g[a] += 1.0f;
+  }
+  __syncthreads();
+  long long t1 = clock64();
+#pragma unroll
+  for (int w = 0; w < W; w++) out[tid * W + w] = T[w];
+  if (threadIdx.x == 0) cyc[blockIdx.x] = t1 - t0;
+}
+
+static int check(const char* kind, int r, int lanes, int nw, int blocks, const std::vector<int>& got) {
   int bad = 0;
   for (int tid = 0; tid < lanes; tid++) {
-    for (int w = 0; w < W; w++) {
+    for (int w = 0; w < nw; w++) {
       uint32_t T = 0;
       int R4 = (r + 3) / 4, zv[4 * 4], gv[4 * 4];
       for (int a = 0; a < 4 * R4; a++) {
         zv[a] = a < r ? z_of(tid, w, a) : 0;
         gv[a] = a < r ? g0_of(tid, a) : 0;
       }
-      if (!strcmp(kind, "dp4a") || !strcmp(kind, "mix")) {
+      if (!strcmp(kind, "dp4a") || !strncmp(kind, "mix", 3)) {
         std::vector<uint32_t> g(R4);
         for (int q = 0; q < R4; q++) g[q] = pack4(gv[4 * q], gv[4 * q + 1], gv[4 * q + 2], gv[4 * q + 3]);
         for (int j = 0; j < blocks; j++) {
@@ -296,23 +350,43 @@ static int check(const char* kind, int r, int lanes, int blocks, const std::vect
         for (int j = 0; j < blocks; j++)
           for (int a = 0; a < r; a++) T += (uint32_t)((gv[a] + j) * zv[a]);
       }
-      if ((int)T != got[(size_t)tid * W + w]) bad++;
+      if ((int)T != got[(size_t)tid * nw + w]) bad++;
     }
   }
   return bad;
 }
 
 int main(int argc, char** argv) {
-  if (argc < 5) { fprintf(stderr, "usage: prefix honest|t16|t8816|dp4a|imad|ffma|mix r warps blocks\n"); return 2; }
+  if (argc < 5) {
+    fprintf(stderr, "usage: prefix honest|t16|t8816|dp4a|imad|ffma|ffma2|mix16|mix32|mix48 r warps blocks\n");
+    return 2;
+  }
   const char* kind = argv[1];
   int r = atoi(argv[2]), warps = atoi(argv[3]), blocks = atoi(argv[4]);
+  if (r < 0 || r > RMAX) { fprintf(stderr, "r must be in 0..%d\n", RMAX); return 2; }
   int sms; CK(cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, 0));
   int threads = warps * 32, lanes = sms * threads;
   size_t smem = 60 * 1024;
-  int *d_out, *d_out_t; long long* d_cyc;
-  CK(cudaMalloc(&d_out, (size_t)lanes * W * sizeof(int)));
+  int *d_out, *d_out_t, *d_g0, *d_z0; long long* d_cyc;
+  CK(cudaMalloc(&d_out, (size_t)lanes * WMAX * sizeof(int)));
   CK(cudaMalloc(&d_out_t, (size_t)lanes * sizeof(int)));
   CK(cudaMalloc(&d_cyc, sms * sizeof(long long)));
+  {
+    std::vector<int> g0((size_t)lanes * RMAX), z0((size_t)lanes * WMAX * RMAX);
+    for (int tid = 0; tid < lanes; tid++)
+      for (int a = 0; a < RMAX; a++) {
+        g0[(size_t)tid * RMAX + a] = g0_of(tid, a);
+        for (int w = 0; w < WMAX; w++) z0[((size_t)tid * WMAX + w) * RMAX + a] = z_of(tid, w, a);
+      }
+    CK(cudaMalloc(&d_g0, g0.size() * sizeof(int)));
+    CK(cudaMalloc(&d_z0, z0.size() * sizeof(int)));
+    CK(cudaMemcpy(d_g0, g0.data(), g0.size() * sizeof(int), cudaMemcpyHostToDevice));
+    CK(cudaMemcpy(d_z0, z0.data(), z0.size() * sizeof(int), cudaMemcpyHostToDevice));
+    const int* pg = d_g0;
+    const int* pz = d_z0;
+    CK(cudaMemcpyToSymbol(d_G0, &pg, sizeof(pg)));
+    CK(cudaMemcpyToSymbol(d_Z0, &pz, sizeof(pz)));
+  }
   auto launch = [&](int nb) {
     if (!strcmp(kind, "honest")) {
       CK(cudaFuncSetAttribute(k_honest, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)smem));
@@ -326,10 +400,10 @@ int main(int argc, char** argv) {
       CK(cudaFuncSetAttribute(k_t8816, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)smem));
       k_t8816<<<sms, threads, smem>>>(nb, d_out, d_cyc);
     }
-    else if (!strcmp(kind, "mix") && r <= 4) {
-      CK(cudaFuncSetAttribute(k_mix, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)smem));
-      k_mix<<<sms, threads, smem>>>(r, nb, d_out, d_out_t, d_cyc);
-    }
+#define MX(WM) else if (!strcmp(kind, "mix" #WM) && r <= 4) { \
+      CK(cudaFuncSetAttribute(k_mix<WM>, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)smem)); \
+      k_mix<WM><<<sms, threads, smem>>>(r, nb, d_out, d_out_t, d_cyc); }
+    MX(16) MX(32) MX(48)
 #define DP(R4) else if (!strcmp(kind, "dp4a") && (r + 3) / 4 == R4) { \
       CK(cudaFuncSetAttribute(k_dp4a<R4>, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)smem)); \
       k_dp4a<R4><<<sms, threads, smem>>>(r, nb, d_out, d_cyc); }
@@ -342,19 +416,25 @@ int main(int argc, char** argv) {
       CK(cudaFuncSetAttribute(k_ffma<R>, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)smem)); \
       k_ffma<R><<<sms, threads, smem>>>(nb, d_out, d_cyc); }
     FF(1) FF(2) FF(3) FF(4) FF(8)
+#define F2(R) else if (!strcmp(kind, "ffma2") && r == R) { \
+      CK(cudaFuncSetAttribute(k_ffma2<R>, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)smem)); \
+      k_ffma2<R><<<sms, threads, smem>>>(nb, d_out, d_cyc); }
+    F2(1) F2(2) F2(4) F2(8)
     else { fprintf(stderr, "no kernel for %s r=%d\n", kind, r); exit(2); }
     CK(cudaGetLastError());
     CK(cudaDeviceSynchronize());
   };
   bool tensor = !strcmp(kind, "honest") || !strcmp(kind, "t16") || !strcmp(kind, "t8816");
-  int wpl = !strcmp(kind, "t8816") ? 2 * NT : tensor ? 4 * NT : !strcmp(kind, "mix") ? 4 * NT + W : W;
+  int wm = !strncmp(kind, "mix", 3) ? atoi(kind + 3) : 0;
+  int nw = wm ? wm : W;             // attack words a lane
+  int wpl = !strcmp(kind, "t8816") ? 2 * NT : tensor ? 4 * NT : wm ? 4 * NT + wm : W;
   int bad = -1;
   if (!tensor) {
     int nb = 64;                    // check: a short run replayed on the host (FP32 stays below 2^22)
     launch(nb);
-    std::vector<int> got((size_t)lanes * W);
+    std::vector<int> got((size_t)lanes * nw);
     CK(cudaMemcpy(got.data(), d_out, got.size() * sizeof(int), cudaMemcpyDeviceToHost));
-    bad = check(kind, r, lanes, nb, got);
+    bad = check(kind, r, lanes, nw, nb, got);
   }
   launch(blocks);                   // warm
   double best = 1e30, sum = 0;
