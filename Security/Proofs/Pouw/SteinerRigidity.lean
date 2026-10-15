@@ -1149,6 +1149,118 @@ theorem Hier.retype_spec : ∀ h : Hier (Fin p × Fin q), h.WF →
 
 end Typing
 
+section Labels
+
+variable {F : Type*} [Field F] {κ : Type*} [Fintype κ] [DecidableEq κ]
+
+open Hier
+
+/-- A functional `φ` applied to vector labels: `∑ t, φ t • a t` (the note's `ξ_S(a)` for `φ = ξ_S`). -/
+def ev {α : Type*} (a : κ → α → F) (φ : κ → F) : α → F :=
+  ∑ t, φ t • a t
+
+omit [DecidableEq κ] in
+theorem ev_add {α : Type*} (a : κ → α → F) (φ ψ : κ → F) : ev a (φ + ψ) = ev a φ + ev a ψ := by
+  simp [ev, add_smul, Finset.sum_add_distrib]
+
+omit [DecidableEq κ] in
+theorem ev_sub {α : Type*} (a : κ → α → F) (φ ψ : κ → F) : ev a (φ - ψ) = ev a φ - ev a ψ := by
+  simp [ev, sub_smul, Finset.sum_sub_distrib]
+
+theorem ev_single {α : Type*} (a : κ → α → F) (t : κ) : ev a (Pi.single t 1) = a t := by
+  simp [ev, Pi.single_apply]
+
+/-- Labels whose coordinates span the annihilator of `V`: `ev a φ = 0` exactly when `φ ∈ V`. -/
+theorem exists_labels (V : Submodule F (κ → F)) :
+    ∃ (α : ℕ) (a : κ → Fin α → F), ∀ φ, ev a φ = 0 ↔ φ ∈ V := by
+  let W := V.dualAnnihilator
+  have : Module.Free F W := Module.Free.of_divisionRing F W
+  let B := Module.finBasis F W
+  refine ⟨Module.finrank F W, fun t i => (B i : Module.Dual F (κ → F)) (Pi.single t 1), fun φ => ?_⟩
+  have hev : ev (fun t i => (B i : Module.Dual F (κ → F)) (Pi.single t 1)) φ =
+      fun i => (B i : Module.Dual F (κ → F)) φ := by
+    funext i
+    conv_rhs => rw [← Finset.univ_sum_single φ]
+    simp only [ev, Finset.sum_apply, Pi.smul_apply, smul_eq_mul, map_sum]
+    refine Finset.sum_congr rfl fun t _ => ?_
+    rw [← smul_eq_mul, ← map_smul]
+    congr 1
+    funext u
+    by_cases hu : u = t
+    · subst hu
+      simp
+    · simp [hu]
+  rw [hev]
+  constructor
+  · intro h0
+    rw [← Subspace.dualAnnihilator_dualCoannihilator_eq (W := V), Submodule.mem_dualCoannihilator]
+    intro ψ hψ
+    let f : W →ₗ[F] F := (Module.Dual.eval F (κ → F) φ).comp W.subtype
+    have hf : f = 0 := B.ext fun i => by
+      simpa [f] using congrFun h0 i
+    simpa [f] using LinearMap.congr_fun hf ⟨ψ, hψ⟩
+  · intro hφ
+    funext i
+    exact (Submodule.mem_dualAnnihilator _).mp (B i).2 φ hφ
+
+omit [Fintype κ] in
+theorem Vx_children_le {b : Bool} {l r : Hier κ} :
+    l.Vx F ≤ (node b l r).Vx F ∧ r.Vx F ≤ (node b l r).Vx F := by
+  cases b
+  · exact ⟨le_sup_left, le_sup_right⟩
+  · exact ⟨le_sup_left.trans le_sup_left, le_sup_right.trans le_sup_left⟩
+
+/-- **Claim 1 (rank one).** If the labels annihilate `V ⊇ V_x(S)` and `V' ⊇ V_y(S)`, then
+`Λ(S) = ξ_S(a) η_S(b)ᵀ`. -/
+theorem claim1 {α β : Type*} (a : κ → α → F) (b : κ → β → F) {V V' : Submodule F (κ → F)}
+    (ha : ∀ φ ∈ V, ev a φ = 0) (hb : ∀ φ ∈ V', ev b φ = 0) :
+    ∀ h : Hier κ, h.WF → h.Vx F ≤ V → h.flip.Vx F ≤ V' →
+      ∑ t ∈ h.cells, vecMulVec (a t) (b t) = vecMulVec (ev a (h.xi F)) (ev b (h.flip.xi F))
+  | leaf t, _, _, _ => by simp [cells, xi, Hier.flip, ev_single]
+  | node true l r, hwf, hV, hV' => by
+    obtain ⟨hl, hr, hd⟩ := hwf
+    have hV₀ : l.Vx F ⊔ r.Vx F ⊔ Submodule.span F {l.xi F - r.xi F} ≤ V := hV
+    have hV₀' : l.flip.Vx F ⊔ r.flip.Vx F ≤ V' := hV'
+    have hlr : ev a (l.xi F) = ev a (r.xi F) := sub_eq_zero.mp <| by
+      rw [← ev_sub]
+      exact ha _ (hV₀ (le_sup_right (a := l.Vx F ⊔ r.Vx F) (Submodule.mem_span_singleton_self _)))
+    rw [cells, Finset.sum_union hd, claim1 a b ha hb l hl (le_sup_left.trans (le_sup_left.trans hV₀))
+      (le_sup_left.trans hV₀'), claim1 a b ha hb r hr (le_sup_right.trans (le_sup_left.trans hV₀))
+      (le_sup_right.trans hV₀'), ← hlr]
+    change _ = vecMulVec (ev a (l.xi F)) (ev b (l.flip.xi F + r.flip.xi F))
+    rw [ev_add, vecMulVec_add]
+  | node false l r, hwf, hV, hV' => by
+    obtain ⟨hl, hr, hd⟩ := hwf
+    have hV₀ : l.Vx F ⊔ r.Vx F ≤ V := hV
+    have hV₀' : l.flip.Vx F ⊔ r.flip.Vx F ⊔ Submodule.span F {l.flip.xi F - r.flip.xi F} ≤ V' := hV'
+    have hlr : ev b (l.flip.xi F) = ev b (r.flip.xi F) := sub_eq_zero.mp <| by
+      rw [← ev_sub]
+      exact hb _ (hV₀' (le_sup_right (a := l.flip.Vx F ⊔ r.flip.Vx F)
+        (Submodule.mem_span_singleton_self _)))
+    rw [cells, Finset.sum_union hd, claim1 a b ha hb l hl (le_sup_left.trans hV₀)
+      (le_sup_left.trans (le_sup_left.trans hV₀')), claim1 a b ha hb r hr (le_sup_right.trans hV₀)
+      (le_sup_right.trans (le_sup_left.trans hV₀')), ← hlr]
+    change _ = vecMulVec (ev a (l.xi F + r.xi F)) (ev b (l.flip.xi F))
+    rw [ev_add, add_vecMulVec]
+
+/-- The cell sets of a hierarchy's nodes. -/
+def Hier.sets : Hier κ → Finset (Finset κ)
+  | leaf t => {{t}}
+  | node _ l r => insert (l.cells ∪ r.cells) (l.sets ∪ r.sets)
+
+omit [Fintype κ] in
+theorem Hier.cells_untype : ∀ h : Hier κ, h.untype.cells = h.cells
+  | leaf _ => rfl
+  | node _ l r => by simp only [untype, cells, cells_untype l, cells_untype r]
+
+omit [Fintype κ] in
+theorem Hier.sets_untype : ∀ h : Hier κ, h.untype.sets = h.sets
+  | leaf _ => rfl
+  | node _ l r => by
+    simp only [untype, sets, sets_untype l, sets_untype r, cells_untype l, cells_untype r]
+
+end Labels
+
 end Hierarchy
 
 end Pouw.SteinerRigidity
