@@ -88,12 +88,12 @@ def unchanged(kind, keys, words, T, deltas):
     any_change = None
     for i, (mi, ni, r, c) in enumerate(words):
         db = dbytes(T[:, i], deltas[i], js)                    # [N, (S,) nb]
+        ch = (db != 0).reshape(db.shape[0], -1).any(axis=1)    # changed at some checkpoint, before the sum can cancel it
         if db.ndim == 3:
             db = db.sum(axis=1)
         K = np.stack([keyrow(kind, keys, mi, ni, r, c, j) for j in js])   # [nb, 8]
         ar = slot(kind, ni, r, c, 0)[0]
         rows[ar] = rows.get(ar, 0) + db @ K
-        ch = (db != 0).any(axis=1)
         any_change = ch if any_change is None else any_change | ch
     zero = np.ones(T.shape[0], dtype=bool)
     for v in rows.values():
@@ -217,20 +217,20 @@ def persistent_pair_search(rng, NP=2000, top=3, NC=1000):
                 for d2 in cand:
                     if abs(d2) < abs(d1) or (abs(d2) == abs(d1) and d2 < d1):
                         continue
-                    _, c, ch = unchanged(kind, keys, ws, T, [d1, d2])
+                    p, c, ch = unchanged(kind, keys, ws, T, [d1, d2])
                     if ch > 0:
-                        found.append((c, Sw, d1, d2))
-        found.sort(reverse=True)
+                        found.append((c, p, ch, Sw, d1, d2))
+        found.sort(key=lambda f: -f[0])
         best = found[:top]
-        row = {"pairs_tried": len(found), "best": [{"cancel_given_change": c, "window": Sw, "deltas": [d1, d2]}
-                                                    for c, Sw, d1, d2 in best]}
+        row = {"pairs_tried": len(found), "best": [{"cancel_given_change": c, "unchanged": p, "read_bytes_changed": ch,
+                                                     "window": Sw, "deltas": [d1, d2]} for c, p, ch, Sw, d1, d2 in best]}
         TT = tile_trajectory(rng, NC, 16)
         for kk in (kind, twin[kind]):
             if kk is None:
                 continue
             R0 = sim(kk, TT)
             got = []
-            for c, Sw, d1, d2 in best:
+            for _, _, _, Sw, d1, d2 in best:
                 T1 = TT.copy()
                 T1[:, 16 - Sw :, 5, 8 + 3] += d1
                 T1[:, 16 - Sw :, r2, 8 + c2] += d2
