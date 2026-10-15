@@ -117,7 +117,7 @@ __device__ __forceinline__ void filler(float (&z)[8]) {
     for (int m = 0; m < 16 * FIL; m++) z[m % 8] = fmaf(z[m % 8], 0.5f, 1.0f);
 }
 
-constexpr int base_mode(int mode) { return mode == 6 ? 3 : mode == 7 ? 0 : mode == 8 ? 1 : mode; }
+__host__ __device__ constexpr int base_mode(int mode) { return mode == 6 ? 3 : mode == 7 ? 0 : mode == 8 ? 1 : mode; }
 
 template <int MODE_, int PER, int ROUNDS, int VAR, int FIL = 0>
 __global__ void __launch_bounds__(THREADS, 2)
