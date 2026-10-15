@@ -609,7 +609,7 @@ def cmd_general(args, out) -> None:
             terms: list[dict] = []
             for p in range(npos):
                 for _ in range(50):
-                    top = rng.randint(1, min(R, C, 3))
+                    top = rng.randint(1, min(R, C, args.max_rank))
                     cuts = sorted(set([top] + ([rng.randint(1, top - 1)] if top > 1 and rng.random() < 0.5 else [])))
                     a, b = random_independent(rng, R, top), random_independent(rng, C, top)
                     cand = terms + chain_terms(f"p{p}", a, b, cuts, R, C)
@@ -1108,6 +1108,7 @@ def main() -> None:
     p.add_argument("--max-positions", type=int, default=5)
     p.add_argument("--max-terminals", type=int, default=8)
     p.add_argument("--grid-chains", type=int, default=300)
+    p.add_argument("--max-rank", type=int, default=3, help="the largest rank of a position's chain")
     p.add_argument("--joint-only", action="store_true",
                    help="keep only random families whose pairwise-trivial row and column spaces are jointly independent "
                         "(the refined general version), and skip the grids")
