@@ -658,6 +658,22 @@ theorem secure_of_extraction_floor (P : Protocol Mc Inst Out) {Bl Mid : Type} {v
   have hM : θ * (T - q) ≤ θ * ((1 + εext) * Mc.time M) := mul_le_mul_of_nonneg_left (by linarith) hθ0
   nlinarith
 
+/-- **Security from extraction and M's own floor** (RS-MODEL's route 2, `ε ≤ time(Q) / (c F_M)`, which needs no
+`T_mm`): if every adversary accepted with probability at least `δ` costs at least `F > 0` (a named hypothesis, the
+floor on M's committed targets) and the peel and the correction cost at most `q`, then `ε = εext + q / F`. -/
+theorem secure_of_extraction_advTime (P : Protocol Mc Inst Out) {Bl Mid : Type} {valid : Inst → Bl → Prop}
+    (peel : Mc.Alg Bl Mid) (corr : Mc.Alg Mid Out)
+    (hpeel : ∀ x b, valid x b → P.correct x (Mc.eval corr (Mc.eval peel b))) {εext δ η F q : ℝ}
+    (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
+      δ ≤ acceptance P M → Extraction P valid εext M η)
+    (hM : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
+      δ ≤ acceptance P M → F ≤ Mc.time M)
+    (hF : 0 < F) (hq : Mc.time peel + Mc.time corr ≤ q) : Secure P (εext + q / F) δ η 0 := by
+  refine secure_of_extraction P peel corr hpeel hext fun Ω _ M hc hδ => hq.trans ?_
+  have hq0 : 0 ≤ q := (add_nonneg (Mc.time_nonneg _) (Mc.time_nonneg _)).trans hq
+  calc q = q / F * F := (div_mul_cancel₀ q hF.ne').symm
+    _ ≤ q / F * Mc.time M := mul_le_mul_of_nonneg_left (hM Ω M hc hδ) (div_nonneg hq0 hF.le)
+
 /-- **Security is a relative floor** (RS-DEF §1.5), one direction: if some useful `M₀` costs at most
 `(1 + ε) time M + α` for every adversary `M` accepted with probability at least `δ`, the protocol is secure. No
 reduction from `M` is needed. -/
@@ -909,6 +925,31 @@ theorem secure_lowRank (hmat : IsMatmul P) (r : ℕ) {εext δ η T : ℝ}
   secure_of_extraction_floor P (Mc.peelLow n r) (Mc.corr n)
     (fun x b hb => (hmat x _).2 (Mc.peelLow_correct x b hb)) hext hfloor
     (by linarith [Mc.time_peelLow_le n r, Mc.time_corr_le n]) hT
+
+/-- **Full-rank masks by route 2**: with every accepted adversary costing at least `F`,
+`ε = εext + (2κ n³ + 2κadd n²) / F`, about `2/c` for `F = c n³` (RS-MODEL §5: says nothing useful). -/
+theorem secure_fullRank_advTime (hmat : IsMatmul P) {εext δ η F : ℝ}
+    (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
+      δ ≤ acceptance P M → Extraction P ValidFull εext M η)
+    (hM : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
+      δ ≤ acceptance P M → F ≤ Mc.time M) (hF : 0 < F) :
+    Secure P (εext + (2 * Mc.κ * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2) / F) δ η 0 :=
+  secure_of_extraction_advTime P (Mc.peelFull n) (Mc.corr n)
+    (fun x b hb => (hmat x _).2 (Mc.peelFull_correct x b hb)) hext hM hF
+    (by linarith [Mc.time_peelFull_le n, Mc.time_corr_le n])
+
+/-- **Rank-`r` masks by route 2**: with every accepted adversary costing at least `F`,
+`ε = εext + (4κ n² r + 2κadd n²) / F`, i.e. `(4κ r + 2κadd) / (c n)` for `F = c n³` (RS-MODEL §5's table, operands on
+the grid). -/
+theorem secure_lowRank_advTime (hmat : IsMatmul P) (r : ℕ) {εext δ η F : ℝ}
+    (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
+      δ ≤ acceptance P M → Extraction P (ValidLow (r := r)) εext M η)
+    (hM : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
+      δ ≤ acceptance P M → F ≤ Mc.time M) (hF : 0 < F) :
+    Secure P (εext + (4 * Mc.κ * (n : ℝ) ^ 2 * r + 2 * Mc.κadd * (n : ℝ) ^ 2) / F) δ η 0 :=
+  secure_of_extraction_advTime P (Mc.peelLow n r) (Mc.corr n)
+    (fun x b hb => (hmat x _).2 (Mc.peelLow_correct x b hb)) hext hM hF
+    (by linarith [Mc.time_peelLow_le n r, Mc.time_corr_le n])
 
 end MatMachine
 
