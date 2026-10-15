@@ -467,21 +467,18 @@ def l_bot(w: int) -> PrimitiveDefinition:
     return p
 
 
-_GATHER_ORIGINALS: dict[tuple[int, ...], str] = {}  # `_gather_key` → the original id whose extension the lifted gather carries
-
-
 def _gather_key(w: int, N: int, oor_payload: int) -> tuple[int, ...]:
-    """A lifted gather's identity: `(w, N)` at a width the codec resolves by id alone (`_gather_families`), where the
-    extension is the id-only family's; `(w, N, extension)` at any other width, whose id then names it (`LGatherRow8x3o7f`,
-    `LGatherRow8x3off`), so two originals of one width and size never depend on which was lifted first."""
-    return (w, N) if w in _gather_families() else (w, N, oor_payload)
+    """A lifted gather's identity: `(w, N)` when its extension is that of the width's id-only family (`_gather_families`, the
+    one the codec resolves `LGatherRow<w>x<N>_v1` to), else `(w, N, extension)`, whose id then names the extension
+    (`LGatherRow32x16offffffff`, `LGatherRow8x3o7f`), so originals of one width and size never depend on which was lifted first."""
+    fam = _gather_families().get(w)
+    return (w, N) if fam is not None and registered_oor_extension(fam(N)) == oor_payload else (w, N, oor_payload)
 
 
 def l_gather_row_of(original: PrimitiveDefinition) -> PrimitiveDefinition:
     """The lifted gather of a registered original gather family: `(w, N)` from its shape, the out-of-range extension read from
-    the original itself (`registered_oor_extension`).  At an id-only width two originals of the same `(w, N)` with different
-    extensions cannot share the id `LGatherRow<w>x<N>_v1`: the second is refused by name; at any other width the extension is
-    part of the id (`_gather_key`)."""
+    the original itself (`registered_oor_extension`); an extension other than the id-only family's is part of the id
+    (`_gather_key`)."""
     shape = _gather_shape(original)
     if shape is None:
         raise TypeError(f"{original.id} is not a registered gather family")
@@ -514,9 +511,6 @@ def _l_gather_row(w: int, N: int, oor_payload: int, original_id: str) -> Primiti
     key = _gather_key(w, N, oor_payload)
     name = f"LGatherRow{w}x{N}" if len(key) == 2 else f"LGatherRow{w}x{N}o{oor_payload:x}"
     p = _GATHERS.get(key)
-    if p is not None and p.oor_payload != oor_payload:  # type: ignore[attr-defined]
-        raise TypeError(f"LGatherRow{w}x{N}: {original_id}'s out-of-range extension {oor_payload:#x} differs from "
-                        f"{_GATHER_ORIGINALS[key]}'s {p.oor_payload:#x} already lifted under this id — refused (a distinct lifted id is needed)")  # type: ignore[attr-defined]
     if p is None:
         bot_w, inv_w = enc_bot(w), inv(w)
         mask32 = (1 << 32) - 1
@@ -553,7 +547,6 @@ def _l_gather_row(w: int, N: int, oor_payload: int, original_id: str) -> Primiti
         p.evaluate_lazy = ev_lazy  # type: ignore[attr-defined]
         p.oor_payload = oor_payload  # type: ignore[attr-defined]
         p.lifted_from_id = original_id  # type: ignore[attr-defined]
-        _GATHER_ORIGINALS[key] = original_id
         _GATHERS[key] = _register_specified(p, "indexing: an inactive index yields ⊥; an inactive unselected row does not poison the read")
     return p
 
