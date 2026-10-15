@@ -2,7 +2,7 @@
 """PoUW windows restricted to the served FP8 GEMMs (CMP-8 round 2, section 2 of the saturation follow-up), derived.
 
   python windows_eps.py receipt-table.json gap-filler.json cutlass-receipt.json cutlass-corun.json [--cheat C ...]
-      [--more T ...] [--json OUT]
+      [--more T ...] [--tau T ...] [--json OUT]
 
 --more adds the designs a later run measured (`cutlass_receipt_table.py --json` over a cheat run, such as CR_FORCED's)
 that the first table lacks, at their own run's rate kept; its cheater variants are left out.
@@ -52,7 +52,8 @@ DESIGNS = [  # name, prefill kernel, decode kernel
     ("1× imad, L = 128, spread", "p_imad_p1s", "d_alu_p1"),
     ("1× alu, L = 64", "p_alu_g2", None),
     ("1× alu, L = 32", "p_alu_g4", "d_alu_g4"),
-    ("duo2, L = 32", "p_duo2_g4", None),
+    ("duo2, L = 32, 2 states", "p_duo2c2_g4", None),
+    ("duo2, L = 32, 4 states", "p_duo2_g4", None),
     ("1× alu, L = 32, 1 forced step", "p_alu_g4_f1", None),
     ("1× alu, L = 32, 64 forced FFMAs", "p_alu_g4_ff64", None),
     ("1× alu, L = 32, 128 forced FFMAs", "p_alu_g4_ff128", None),
@@ -153,8 +154,10 @@ def main():
     ap.add_argument("corun")
     ap.add_argument("--cheat", action="append", default=[])
     ap.add_argument("--more", action="append", default=[])
+    ap.add_argument("--tau", type=float, action="append", default=[], help="another window τ to read (e.g. drift's)")
     ap.add_argument("--json")
     a = ap.parse_args()
+    taus = tuple(sorted(set(TAUS) | set(a.tau)))
     idle = measured_idle(json.load(open(a.corun)))
     cheat, cheat_rows = None, []
     for c in a.cheat:
@@ -231,7 +234,7 @@ def main():
             eps_m = F + kappa_m * F * h / L + kappa_m / (RHO * eta_w) * nu_f
             eps_t = {tau: {"kappa": f_terms + timed(cheat_rows, k, ph, eta_w, tau, kappa),
                            "measured_credit": F + kappa_m * F * h / L + timed(cheat_rows, k, ph, eta_w, tau, kappa_m)}
-                     for tau in TAUS} if any(r["design"] == k and r["phase"] == ph for r in cheat_rows) else None
+                     for tau in taus} if any(r["design"] == k and r["phase"] == ph for r in cheat_rows) else None
             cov = res["coverage"][ph]["macs"]
             e2e = [1 - cov * (1 - min(1.0, e)) for e in eps]
             res["designs"].append({"design": name, "kernel": k, "phase": ph, "L": L, "rounds": rounds, "var": var,
@@ -250,9 +253,9 @@ def main():
                   + " | ".join(fmt(e) for e in eps)
                   + f" | {fmt(page)} | " + " | ".join(fmt(e) for e in e2e) + f" | {fmt(eps_m)} |")
 
-    print("\n| design | phase | rate kept | " + " | ".join(f"ε_in, window {t}× (κ / κ = max(2, L/3))" for t in TAUS)
+    print("\n| design | phase | rate kept | " + " | ".join(f"ε_in, window {t}× (κ / κ = max(2, L/3))" for t in taus)
           + f" | ε end to end, window {TAUS[1]}× |")
-    print("|---|---|---|" + "---|" * (len(TAUS) + 1))
+    print("|---|---|---|" + "---|" * (len(taus) + 1))
     for d in res["designs"]:
         if d["eps_in_timed"]:
             fmt = lambda e: f"{100 * e:.1f}%" if e < 1 else "vacuous"

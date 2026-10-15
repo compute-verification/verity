@@ -482,15 +482,17 @@ static int drift(double seconds, const char* csv, int block, const std::vector<c
                     fprintf(stderr, "drift: %s at %s: launch failed\n", l.k->name, l.s->name);
                     return 2;
                 }
-                // External: inside a capture, a plain record only orders the capture; this makes a timed event node
+                // inside a capture a plain record only orders the capture, and External makes it a timed event node;
+                // outside one, External is refused
+                const unsigned fl = capture ? cudaEventRecordExternal : cudaEventRecordDefault;
                 for (int i = 0; i < block; i++) {
-                    CK(cudaEventRecordWithFlags(ev[i], st, cudaEventRecordExternal));
+                    CK(cudaEventRecordWithFlags(ev[i], st, fl));
                     if (l.impl[i % l.impl.size()]->launch(st) != 0) {
                         fprintf(stderr, "drift: %s at %s: launch failed\n", l.k->name, l.s->name);
                         return 2;
                     }
                 }
-                CK(cudaEventRecordWithFlags(ev[block], st, cudaEventRecordExternal));
+                CK(cudaEventRecordWithFlags(ev[block], st, fl));
             }
             if (capture) {
                 cudaGraph_t g;
