@@ -8,10 +8,15 @@ below R*L (half the restarts start from S K T for a Kronecker canonical pencil K
 there): for R = 2 that is the case merges_check.py part 14 leaves open. Each restart also records the best total
 among states with generic rank < R*L, and among those that also have four or more winning directions and a D-column
 with two helped cells (the open case).
+
+`python merges_climb.py --fixed SRC [--restarts N] [--steps N] [--seed S] [--out DIR]` instead takes every split
+miss in SRC/split_*.json (from merges_split_search.py) that no coupled pair closes, and anneals its words for the
+fixed B at L = 2 and 3, writing the best totals against L * rank B to `fixed_climb.json`.
 """
 
 import itertools
 import json
+import math
 import os
 import random
 import sys
@@ -184,7 +189,85 @@ def climb(sc, rng, steps, open_mode, R, C):
     return best, best_low, best_open, best_Z
 
 
+def fixed_score(Zs, Ds, B, L, p):
+    """sum_t (L - rank(D_t - sum_j B_tj Z_j))_+ for one fixed B (rows = links)."""
+    return int(np.maximum(0, L - brank((Ds - np.einsum("tj,jrc->trc", B, Zs)) % p, p)).sum())
+
+
+def basis_seed(Ds, B, p, rng):
+    """Words with W_t = D_t on d random links whose rows of B are independent (a start at saving d*L)."""
+    from check import rank
+    k, d = B.shape
+    for _ in range(200):
+        S = rng.sample(range(k), d)
+        if rank(B[S], p) < d:
+            continue
+        A = np.concatenate([B[S], np.eye(d, dtype=np.int64)], axis=1) % p
+        for c in range(d):
+            piv = next(r for r in range(c, d) if A[r, c])
+            A[[c, piv]] = A[[piv, c]]
+            A[c] = A[c] * pow(int(A[c, c]), p - 2, p) % p
+            for r in range(d):
+                if r != c and A[r, c]:
+                    A[r] = (A[r] - A[r, c] * A[c]) % p
+        return np.einsum("jt,trc->jrc", A[:, d:], Ds[S]) % p
+    return None
+
+
+def fixed_climb(links, betas, p, L, restarts, steps, rng):
+    """Anneal the words for a fixed cell pattern and B (half the restarts from basis_seed): the best total."""
+    nR, nC = 1 + max(r for r, _ in links), 1 + max(c for _, c in links)
+    B, d = np.array(betas, dtype=np.int64) % p, len(betas[0])
+    Ds = np.zeros((len(links), nR * L, nC * L), dtype=np.int64)
+    for t, (r, c) in enumerate(links):
+        for i in range(L):
+            Ds[t, r * L + i, c * L + i] = 1
+    top = 0
+    for n in range(restarts):
+        Zs = basis_seed(Ds, B, p, rng) if n % 2 == 0 else None
+        if Zs is None:
+            Zs = np.array([[[rng.randrange(p) for _ in range(nC * L)] for _ in range(nR * L)] for _ in range(d)])
+        f = fixed_score(Zs, Ds, B, L, p)
+        top = max(top, f)
+        for s in range(steps):
+            j, r, c = rng.randrange(d), rng.randrange(nR * L), rng.randrange(nC * L)
+            old = Zs[j, r, c]
+            Zs[j, r, c] = rng.randrange(p)
+            g = fixed_score(Zs, Ds, B, L, p)
+            if g >= f or rng.random() < math.exp((g - f) / max(0.05, 1 - s / steps)):
+                f, top = g, max(top, g)
+            else:
+                Zs[j, r, c] = old
+    return top
+
+
+def fixed_main(src, out, restarts, steps, rng):
+    """The split misses in src/split_*.json that no coupled pair closes: anneal their words at L = 2, 3."""
+    res = []
+    for f in sorted(Path(src).glob("split_*.json")):
+        j = json.loads(f.read_text())
+        for o in j["over_rank"]:
+            if o["coupled_pair"] <= o["rank_B"]:
+                continue
+            links = [tuple(x) for x in o["links"]]
+            for L in (2, 3):
+                top = fixed_climb(links, o["betas"], j["p"], L, restarts, steps, rng)
+                res.append({"file": f.name, "links": links, "betas": o["betas"], "labels_reach": o["labels_reach"],
+                            "L": L, "max_total": top, "bound": o["rank_B"] * L})
+                print(f.name, len(links), "L", L, "best total", top, "rank B * L", o["rank_B"] * L, flush=True)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "fixed_climb.json").write_text(json.dumps(res, indent=1))
+    print(f"{len(res)} climbs on split misses no coupled pair closes: "
+          f"{sum(r['max_total'] > r['bound'] for r in res)} above rank B * L")
+
+
 def main():
+    if "--fixed" in sys.argv:
+        opt = {a: sys.argv[sys.argv.index(a) + 1] for a in ("--fixed", "--restarts", "--steps", "--seed", "--out")
+               if a in sys.argv}
+        return fixed_main(opt["--fixed"], Path(opt.get("--out", os.environ.get("OUT", "."))),
+                          int(opt.get("--restarts", 12)), int(opt.get("--steps", 6000)),
+                          random.Random(int(opt.get("--seed", 20261015))))
     p, (R, C), L, d = int(sys.argv[1]), map(int, sys.argv[2].split("x")), int(sys.argv[3]), int(sys.argv[4])
     opt = {a: sys.argv[sys.argv.index(a) + 1] for a in ("--restarts", "--steps", "--seed", "--out") if a in sys.argv}
     open_mode = "--open" in sys.argv
