@@ -348,10 +348,20 @@ theorem relativelySecure_of_advFloor (P : Protocol Mc Inst Out) {κ δ γ η F N
   rw [add_sub_cancel]
   exact div_pos (hF.trans_le hFS) hF
 
-/-- The matmul problem: instances `(A, B)` of `n × n` matrices over `R`, answered by `C = A · B`. -/
+/-- The matmul problem on instances that embed into pairs of `n × n` matrices over `R` (for example RS-DEF's useful
+grid `G_use` as a subtype): `x` is answered by `C = A · B` for `(A, B) = emb x`. -/
+def IsMatmulOn {R : Type} [Ring R] {n : ℕ} {Mc : Machine} {Inst : Type} (P : Protocol Mc Inst (Mat R n n))
+    (emb : Inst → Mat R n n × Mat R n n) : Prop :=
+  ∀ x C, P.correct x C ↔ (emb x).1 * (emb x).2 = C
+
+/-- The matmul problem on all pairs of `n × n` matrices over `R`. -/
 def IsMatmul {R : Type} [Ring R] {n : ℕ} {Mc : Machine} (P : Protocol Mc (Mat R n n × Mat R n n) (Mat R n n)) :
     Prop :=
-  ∀ x C, P.correct x C ↔ x.1 * x.2 = C
+  IsMatmulOn P id
+
+/-- Under completeness, `T_use(η)` is at most Solve's time. -/
+theorem tuse_le_solve (P : Protocol Mc Inst Out) {η : ℝ} (h : Complete P η) : Tuse P η ≤ Mc.time P.solve :=
+  tuse_le P h
 
 theorem secure_mono (P : Protocol Mc Inst Out) {ε ε' δ δ' η η' α α' : ℝ} (h : Secure P ε δ η α) (hε : ε ≤ ε')
     (hδ : δ ≤ δ') (hη : η ≤ η') (hα : α ≤ α') : Secure P ε' δ' η' α' := by
@@ -896,59 +906,59 @@ theorem time_honestLow_le (n r : ℕ) :
       Machine.time_seq_le_of, Machine.time_fst_le, Machine.time_snd_le]
   · linarith
 
-variable {n : ℕ} {P : Protocol Mc.toMachine (Mat R n n × Mat R n n) (Mat R n n)}
+variable {n : ℕ} {Inst : Type} {P : Protocol Mc.toMachine Inst (Mat R n n)} {emb : Inst → Mat R n n × Mat R n n}
 
 /-- **Relative security of matmul PoUW with full-rank masks**, from extraction (named hypothesis `Extraction`, overhead
 `εext`) and the floor (named hypothesis `Floor`) above the peel's and the correction's cost
 `q = 2κ n³ + 2κadd n²`: `ε = εext + (1 + εext) q / (T − q)`. -/
-theorem secure_fullRank (hmat : IsMatmul P) {εext δ η T : ℝ}
+theorem secure_fullRank (hmat : IsMatmulOn P emb) {εext δ η T : ℝ}
     (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
-      δ ≤ acceptance P M → Extraction P ValidFull εext M η)
+      δ ≤ acceptance P M → Extraction P (fun x => ValidFull (emb x)) εext M η)
     (hfloor : Floor Mc.toMachine P.correct T η) (hT : 2 * Mc.κ * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2 < T) :
     Secure P (εext + (1 + εext) * ((2 * Mc.κ * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2) /
       (T - (2 * Mc.κ * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2)))) δ η 0 :=
   secure_of_extraction_floor P (Mc.peelFull n) (Mc.corr n)
-    (fun x b hb => (hmat x _).2 (Mc.peelFull_correct x b hb)) hext hfloor
+    (fun x b hb => (hmat x _).2 (Mc.peelFull_correct (emb x) b hb)) hext hfloor
     (by linarith [Mc.time_peelFull_le n, Mc.time_corr_le n]) hT
 
 /-- **Relative security of matmul PoUW with rank-`r` masks**, from extraction and the floor above
 `q = 4κ n² r + 2κadd n²`: `ε = εext + (1 + εext) q / (T − q)`, and `q / (T − q)` is `O(r / n)` against a floor of order
 `n³`. (RS-EXT's Lemma U: planting rank-`r` masks is detectable, so for RS-D2 this `Extraction` is expected to fail and
 security comes from the floor itself, `core_of_floor`.) -/
-theorem secure_lowRank (hmat : IsMatmul P) (r : ℕ) {εext δ η T : ℝ}
+theorem secure_lowRank (hmat : IsMatmulOn P emb) (r : ℕ) {εext δ η T : ℝ}
     (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
-      δ ≤ acceptance P M → Extraction P (ValidLow (r := r)) εext M η)
+      δ ≤ acceptance P M → Extraction P (fun x => ValidLow (r := r) (emb x)) εext M η)
     (hfloor : Floor Mc.toMachine P.correct T η)
     (hT : 4 * Mc.κ * (n : ℝ) ^ 2 * r + 2 * Mc.κadd * (n : ℝ) ^ 2 < T) :
     Secure P (εext + (1 + εext) * ((4 * Mc.κ * (n : ℝ) ^ 2 * r + 2 * Mc.κadd * (n : ℝ) ^ 2) /
       (T - (4 * Mc.κ * (n : ℝ) ^ 2 * r + 2 * Mc.κadd * (n : ℝ) ^ 2)))) δ η 0 :=
   secure_of_extraction_floor P (Mc.peelLow n r) (Mc.corr n)
-    (fun x b hb => (hmat x _).2 (Mc.peelLow_correct x b hb)) hext hfloor
+    (fun x b hb => (hmat x _).2 (Mc.peelLow_correct (emb x) b hb)) hext hfloor
     (by linarith [Mc.time_peelLow_le n r, Mc.time_corr_le n]) hT
 
 /-- **Full-rank masks by route 2**: with every accepted adversary costing at least `F`,
 `ε = εext + (2κ n³ + 2κadd n²) / F`, about `2/c` for `F = c n³` (RS-MODEL §5: says nothing useful). -/
-theorem secure_fullRank_advTime (hmat : IsMatmul P) {εext δ η F : ℝ}
+theorem secure_fullRank_advTime (hmat : IsMatmulOn P emb) {εext δ η F : ℝ}
     (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
-      δ ≤ acceptance P M → Extraction P ValidFull εext M η)
+      δ ≤ acceptance P M → Extraction P (fun x => ValidFull (emb x)) εext M η)
     (hM : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
       δ ≤ acceptance P M → F ≤ Mc.time M) (hF : 0 < F) :
     Secure P (εext + (2 * Mc.κ * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2) / F) δ η 0 :=
   secure_of_extraction_advTime P (Mc.peelFull n) (Mc.corr n)
-    (fun x b hb => (hmat x _).2 (Mc.peelFull_correct x b hb)) hext hM hF
+    (fun x b hb => (hmat x _).2 (Mc.peelFull_correct (emb x) b hb)) hext hM hF
     (by linarith [Mc.time_peelFull_le n, Mc.time_corr_le n])
 
 /-- **Rank-`r` masks by route 2**: with every accepted adversary costing at least `F`,
 `ε = εext + (4κ n² r + 2κadd n²) / F`, i.e. `(4κ r + 2κadd) / (c n)` for `F = c n³` (RS-MODEL §5's table, operands on
 the grid). -/
-theorem secure_lowRank_advTime (hmat : IsMatmul P) (r : ℕ) {εext δ η F : ℝ}
+theorem secure_lowRank_advTime (hmat : IsMatmulOn P emb) (r : ℕ) {εext δ η F : ℝ}
     (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
-      δ ≤ acceptance P M → Extraction P (ValidLow (r := r)) εext M η)
+      δ ≤ acceptance P M → Extraction P (fun x => ValidLow (r := r) (emb x)) εext M η)
     (hM : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
       δ ≤ acceptance P M → F ≤ Mc.time M) (hF : 0 < F) :
     Secure P (εext + (4 * Mc.κ * (n : ℝ) ^ 2 * r + 2 * Mc.κadd * (n : ℝ) ^ 2) / F) δ η 0 :=
   secure_of_extraction_advTime P (Mc.peelLow n r) (Mc.corr n)
-    (fun x b hb => (hmat x _).2 (Mc.peelLow_correct x b hb)) hext hM hF
+    (fun x b hb => (hmat x _).2 (Mc.peelLow_correct (emb x) b hb)) hext hM hF
     (by linarith [Mc.time_peelLow_le n r, Mc.time_corr_le n])
 
 end MatMachine
