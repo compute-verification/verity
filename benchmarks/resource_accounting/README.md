@@ -52,6 +52,12 @@ certifies beside what it did.
   every leg prepared first over one scratch, the lease taken at the booking's start (`AT`), the legs run in order on GPU 4
   with host threads under `taskset -c 128-159`, each only with its minutes left, the booking's windows-file line deleted
   once the lease ends (`RELEASE`), then the retained passes verified. The rehearsal is the same run on one GPU.
+- `joint_util/`: each GPU resource's utilization under Pearl-C's call loop (`benchmarks/pouw/pearl_c_sm120`'s ship) alone,
+  the remote bandwidth audit's prover passes (`benchmarks/remote_session/device.py`) alone and both in one process on two
+  streams, with each one's slowdown beside the other, and a plain FP8 or BF16 GEMM (at a duty) alone and beside the audit.
+  `loop.py` is the driver, `run.sh` the recorded run (phases under one `gpu-lease 1`: bare rates, nsys's GPU metrics,
+  ncu's per-kernel counters), and `summarize.py OUT --variant _h9` renders the tables from its outputs (`nsys_summary.py`,
+  `ncu_summary.py`).
 - `render.py`: the table, from a run's `art:` id (or a local `chain.json`), on demand, with the PoUS section when the run
   had that arm, the rounds' (the responder's isolation, the chain's time in each, (d), (e) and (f)) when it hosted the
   harness, and the probe's. No table is stored.
