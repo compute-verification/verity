@@ -595,7 +595,7 @@ class TP2CaptureWorkerExtension:
                         weights_pin: dict | None = None, flip_weight: dict | None = None, tp_partials_flip_site: dict | None = None,
                         serve_shard_from: dict | None = None, tap_sources: Any = None) -> dict[str, Any]:
         """Construct THIS rank's committer (`commit_delta.make_committer` on a per-rank engine shim: this worker's model runner + model,
-        the rank's loaded weight SHARDS), attach the FA2 hidden source, size the arena from the workload envelope, register the rank's
+        the rank's loaded weight SHARDS), attach the FA hidden source (none for MLA), size the arena from the workload envelope, register the rank's
         weights.  The rank's root binds its own values (its shards' roots, its partial GEMMs, its FA2 hidden stream for its heads); the
         driver (`pipeline/tp/commit.py`) combines the ranks' roots deterministically and fails closed on a missing rank."""
         from types import SimpleNamespace
@@ -609,9 +609,9 @@ class TP2CaptureWorkerExtension:
         args = SimpleNamespace(arena_mb=arena_mb, chunk=None, hash_threads=None, profile_hooks=False, fast_copy=True, gpu_tree=True)
         com = make_committer(kind, eng, args, f"{run_id}/rank{rank}")
         res: dict[str, Any] = {"rank": rank, "committer": com.name}
-        if hidden_so:
-            from verity_vllm.acquire.sources.hidden_source import HiddenM1Source, make_hidden_source
-            man = json.loads(Path(required_manifest).read_text()) if required_manifest else None      # its ROW word 3 / MS class must be the build's
+        from verity_vllm.acquire.sources.hidden_source import HiddenM1Source, attention_hidden, make_hidden_source
+        man = json.loads(Path(required_manifest).read_text()) if required_manifest else None      # its ROW word 3 / MS class must be the build's
+        if (res.setdefault("attention_hidden", attention_hidden(man, model))["family"] and hidden_so):   # MLA / DSA: no hidden class, no FA2 source
             com.attach_source(make_hidden_source(com, hidden_so, ns=(hidden_ns or Path(hidden_so).stem), manifest=man,
                                                  fa2_cls=getattr(com, "hidden_source_cls", HiddenM1Source), fa3_cls=getattr(com, "hidden_source_cls_fa3", None)))
             res["hidden_source"] = hidden_so
@@ -656,7 +656,7 @@ class TP2CaptureWorkerExtension:
         else:
             res["tp_partial_source"] = None      # negative: collective outputs only (the R13 state) -- must fail the required classes
         if hasattr(com, "size_arena") and getattr(com, "arena", None) is not None:
-            res["arena_sizing"] = _jsonable(com.size_arena(envelope, hidden_m1=bool(hidden_so)))
+            res["arena_sizing"] = _jsonable(com.size_arena(envelope, hidden_m1="hidden_source" in res))
             if getattr(com, "windowed", False):
                 # [R13 tp / P0-01 parity] windowed staging (VERITY_WINDOW_MB > 0): the ring replaces the per-step blocks -- the same call
                 # commit_delta makes after size_arena; without it every windowed step fails closed (`win_log2_chunks` unset -> 0 tensors).

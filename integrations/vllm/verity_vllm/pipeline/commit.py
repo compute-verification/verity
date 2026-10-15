@@ -61,7 +61,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm import protocol_options as PO
-from verity_vllm.acquire.sources import taps as TAPS
+from verity_vllm.acquire.sources import hidden_source as HS, taps as TAPS
 from verity_vllm.config import group, option
 from verity_vllm.engine import engine_profile as prof  # noqa: F401
 
@@ -1214,7 +1214,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     # R13 hopper: the attention implementation the engine executes (FA2 / FA3) -- selects the hidden class the verdict requires and the tap class
     fa_version = va.observed_flash_attn_version(eng.model)
     if not required_classes_cli:
-        required_classes = required_classes_default(fa_version)
+        required_classes = HS.with_hidden_class(required_classes_default(fa_version), hidden_family := HS.attention_hidden(required_manifest, eng.model)["family"])
         if compiled_kernels is not None:
             # [R15 compiled S3] the execution's leaf class is P_compiled's kernel buffers, not the eager module outputs (never fired: not wrapped)
             required_classes = tuple("compiled_kernel_buffers" if c == "instance_outputs_native" else c for c in required_classes)
@@ -1313,7 +1313,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 raise SystemExit(f"--compiled-taps on needs the native_collect committer (got {kind})")
             compiled_src.attach(com)                         # sets com.external_acquisition: the committer does not wrap the compiled forwards
             print(f"[delta] compiled source attached -> committer {com.name}", flush=True)
-        if args.hidden_so:
+        if args.hidden_so and (required_classes_cli or hidden_family):     # MLA / DSA sparse MLA: no hidden class, no FA2 source
             from verity_vllm.acquire.sources.hidden_source import HiddenM1Source, make_hidden_source
             # R11 collector-meas: the op namespace defaults to the .so stem (verity_fa2_matReq | verity_fa2_matAll), as e2e_commit_run.py does.
             # R13 hopper: the source class follows the tap build (FA2 v7/v8 -> HiddenM1Source, FA3 v9 -> HiddenM1SourceFA3) and must agree with
