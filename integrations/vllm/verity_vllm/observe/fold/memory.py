@@ -136,6 +136,24 @@ def geometry_refs(space: str, idx: int, base: int, shape: tuple[int, ...], strid
     return Concat([geometry_refs(space, idx, base + i * s0, shape[1:], strides[1:]) for i in range(n0)])
 
 
+
+def address_ordered(view: ViewDesc, refs: Refs) -> tuple[ViewDesc, Refs]:
+    """`view` written with `refs` (one producer's leaves base..base+numel in the view's row-major order) as the same element-to-leaf
+    map with the axes in decreasing storage stride, so the write covers contiguous address runs: a transposed parameter view
+    (GLM-5.3's absorbed W_UK_T, VLLM-14) writes one run per inner row, not one per element.  Other refs, and a view already in
+    address order, pass through."""
+    if not isinstance(refs, Affine) or len(view.shape) < 2:
+        return view, refs
+    order = sorted(range(len(view.shape)), key=lambda d: -view.strides[d])
+    if order == list(range(len(view.shape))):
+        return view, refs
+    leaf, acc = [0] * len(view.shape), 1
+    for d in reversed(range(len(view.shape))):
+        leaf[d], acc = acc, acc * view.shape[d]
+    pv = ViewDesc(view.alloc, view.offset, tuple(view.shape[d] for d in order), tuple(view.strides[d] for d in order), view.dtype, view.device)
+    return pv, geometry_refs(refs.space, refs.idx, refs.base, pv.shape, tuple(leaf[d] for d in order))
+
+
 def _merge_affine(parts: list[Refs]) -> list[Refs]:
     out: list[Refs] = []
     for p in parts:
