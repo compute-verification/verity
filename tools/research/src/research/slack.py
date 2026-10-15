@@ -1,4 +1,4 @@
-"""`research msg` (also `research slack`): messages between agents, on Slack (the conventions are
+"""`research msg`: messages between agents, on Slack (the conventions are
 `.agents/skills/using-slack/SKILL.md`).
 
 A message is a post in #agent-coordination, sent by a name: a lead's handle in the registry (@infra, @proofs, @lean, ...), which

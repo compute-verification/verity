@@ -49,7 +49,7 @@ tell() {
   if [ "$rc" -ne 0 ]; then
     { echo "train: ${sha:-$commit} on $machine${against:+ --against $against} registered no run (exit $rc):"
       tail -n 5 "$why"; [ -z "$log" ] || { echo "$log:"; tail -n 12 "$log" 2>/dev/null; }; } > "$why.post"
-    uv run -q research slack reply --as "${TRAIN_AS:-old-circuits-and-proofs}" --thread "${MERGE_THREAD:-1790957906.278529}" \
+    uv run -q research msg reply --as "${TRAIN_AS:-old-circuits-and-proofs}" --thread "${MERGE_THREAD:-1790957906.278529}" \
       --file "$why.post" > /dev/null 2>&1 || echo "train: and could not post that to the merge thread" >&2
   fi
   rm -f "$why" "$why.post"
