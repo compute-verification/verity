@@ -146,6 +146,11 @@ def exact_mm(a: torch.Tensor, b: torch.Tensor, term: int) -> torch.Tensor:
     return out
 
 
+def floor_div(q: torch.Tensor, base: int) -> torch.Tensor:
+    """floor(q / base) for integer-valued q, in integer arithmetic (a float quotient can round across an integer)."""
+    return torch.div(q.to(torch.int32), base, rounding_mode="floor").to(q.dtype)
+
+
 def edit_p(p: torch.Tensor, mode: str, alphabet: str, top: int, causal: torch.Tensor, gen, device):
     """P's int8 limbs with their weights, [(limb, weight)], and its scale; noise (only where key <= query) on the last
     limb.  `prow2` splits P = B P_hi + P_lo with B = top + 1, P_hi in 0..127 and P_lo in 0..B-1, so P's grid has top
@@ -156,7 +161,7 @@ def edit_p(p: torch.Tensor, mode: str, alphabet: str, top: int, causal: torch.Te
         sp = p.amax(dim=-1, keepdim=True).clamp(min=1e-30) / (128 * (top + 1) - 1 if mode == "prow2" else top)
     if mode == "prow2":
         pi = torch.round(p / sp).clamp(0, 128 * (top + 1) - 1)
-        hi = torch.floor(pi / (top + 1))
+        hi = floor_div(pi, top + 1)
         limbs = [(hi, top + 1), (pi - (top + 1) * hi, 1)]
     else:
         limbs = [(torch.round(p / sp).clamp(0, top), 1)]
@@ -174,7 +179,7 @@ def signed_limbs(x: torch.Tensor, top: int, dims, two: bool) -> tuple[list, torc
         return [(q, 1)], s
     base = top + 1
     q, s = quant(x, 128 * base - 1, dims)
-    hi = torch.floor(q / base)
+    hi = floor_div(q, base)
     return [(hi, base), (q - base * hi, 1)], s
 
 
