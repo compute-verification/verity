@@ -633,6 +633,54 @@ def cmd_general(args, out) -> None:
     solve_batch(probs, out, "grid2x2_blocks2x2_chains")
 
 
+def cmd_aligned(args, out) -> None:
+    """Families with (i) and (ii) whose positions' column and row spaces are coordinate subspaces (spanned by sets of
+    X- and Y-coordinates; the chain inside uses random bases of them). Then column (row) spaces that meet pairwise
+    trivially are jointly independent, as in matmul, but the supports need not form a grid."""
+    rng = random.Random(args.seed)
+    for R, C in [tuple(map(int, s.split("x"))) for s in args.sizes]:
+        probs = []
+        tries = 0
+        while len(probs) < args.families and tries < 100 * args.families:
+            tries += 1
+            npos = rng.randint(3, args.max_positions)
+            terms: list[dict] = []
+            supports = []
+            for p in range(npos):
+                for _ in range(50):
+                    top = rng.randint(1, min(R, C, 3))
+                    S = rng.sample(range(R), top)
+                    T = rng.sample(range(C), top)
+                    a = random_independent(rng, R, top, [1 << i for i in S])
+                    b = random_independent(rng, C, top, [1 << j for j in T])
+                    cuts = sorted(set([top] + ([rng.randint(1, top - 1)] if top > 1 and rng.random() < 0.5 else [])))
+                    cand = terms + chain_terms(f"p{p}", a, b, cuts, R, C)
+                    last = cand[-1]["m"]
+                    cs, rs = col_space(last, R, C), row_space(last, R, C)
+                    sup_c = {i for v in cs for i in range(R) if v >> i & 1}
+                    sup_r = {j for v in rs for j in range(C) if v >> j & 1}
+                    ok = all(not (sup_c & qc) or not (sup_r & qr) for qc, qr in supports)
+                    if ok and len({t["m"] for t in cand}) == len(cand):
+                        terms = cand
+                        supports.append((sup_c, sup_r))
+                        break
+            if len(terms) <= args.max_terminals and len({t["chain"] for t in terms}) >= 3:
+                grid = is_grid(supports)
+                probs.append((f"al_{R}x{C}_{len(probs)}", R, C, terms, {"grid": grid}))
+        s = solve_batch(probs, out, f"aligned_{R}x{C}", batch=R * C <= 20)
+        emit(out, {"kind": f"aligned_{R}x{C}", "grid_families": sum(p[4]["grid"] for p in probs)})
+
+
+def is_grid(supports: list[tuple[set, set]]) -> bool:
+    """Whether the X supports are pairwise equal or disjoint, and the Y supports too (positions on a grid)."""
+    for i, j in itertools.combinations(range(len(supports)), 2):
+        for side in (0, 1):
+            A, B = supports[i][side], supports[j][side]
+            if A & B and A != B:
+                return False
+    return True
+
+
 def cmd_grid(args, out) -> None:
     """Block grids too large for the local machine: 2x3 grids of 2x2 blocks (R=4, C=6), sampled."""
     rng = random.Random(args.seed)
@@ -996,6 +1044,12 @@ def main() -> None:
     p.add_argument("--max-positions", type=int, default=5)
     p.add_argument("--max-terminals", type=int, default=8)
     p.add_argument("--grid-chains", type=int, default=300)
+    p = sub.add_parser("aligned")
+    p.add_argument("--seed", type=int, default=1)
+    p.add_argument("--sizes", nargs="+", default=["4x4", "3x5", "2x6"])
+    p.add_argument("--families", type=int, default=300)
+    p.add_argument("--max-positions", type=int, default=5)
+    p.add_argument("--max-terminals", type=int, default=8)
     p = sub.add_parser("grid")
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--families", type=int, default=40)
@@ -1026,7 +1080,7 @@ def main() -> None:
     out = open(args.out, "a") if args.out else None
     cmds = {"validate": cmd_validate, "selftest": cmd_selftest, "selftest3": cmd_selftest3, "matmul": cmd_matmul,
             "matmul3": cmd_matmul3, "general": cmd_general, "grid": cmd_grid, "subspace": cmd_subspace, "sa": cmd_sa,
-            "sa-calibrate": cmd_sa_calibrate}
+            "sa-calibrate": cmd_sa_calibrate, "aligned": cmd_aligned}
     cmds[args.cmd](args, out)
 
 
