@@ -34,7 +34,7 @@ so every edited integer stays on the grid (|q| <= 127, or <= 16).  The integer p
 exact); x, W and the rotation are fp32 (EXACT_GRID_EDIT_DTYPE=float64: float64).  ALPHABETS lists the alphabets, drawn
 uniformly.
 
-    python exact_grid.py MODEL_SNAPSHOT IDS.npy OUT_DIR METHOD...
+    python exact_grid.py MODEL_SNAPSHOT IDS.npy OUT_DIR METHOD...    # IDS: one window (T,) or several (N, T), `windows.py`
     python exact_grid.py --selftest
     python exact_grid.py --table RESULTS.jsonl...
     python exact_grid.py --edit-table RESULTS.jsonl...
@@ -331,7 +331,9 @@ def attach(model, method: str, log: list) -> list:
                 x = inp[0].reshape(-1, inp[0].shape[-1])
                 if "@" in method:
                     x, w = x.to(EDIT_DTYPE), mod.weight.to(EDIT_DTYPE)
-                    y, rec = edited_product(method, x, w, wcache, f"{i}/{name}")
+                    c = wcache.get("calls", 0)
+                    wcache["calls"] = c + 1
+                    y, rec = edited_product(method, x, w, wcache, f"{i}/{name}" + (f"#{c}" if c else ""))
                 else:
                     x, w = x.double(), mod.weight.double()
                     y, rec = product(method, x, w, wcache)
@@ -348,16 +350,21 @@ def evaluate(model, ids: torch.Tensor, method: str) -> dict:
     log: list = []
     hooks = attach(model, method, log) if method != "bf16" else []
     t0 = time.time()
+    nlls = []
     try:
         with torch.no_grad():
-            logits = model(ids).logits[0].float()
+            for row in ids:
+                logits = model(row[None]).logits[0].float()
+                nlls.append(torch.nn.functional.cross_entropy(logits[:-1], row[1:], reduction="none"))
     finally:
         for h in hooks:
             h.remove()
-    nll = torch.nn.functional.cross_entropy(logits[:-1], ids[0, 1:], reduction="none")
+    nll = torch.cat(nlls)
     worst = max(log, key=lambda r: r["rel_err"]) if log else None
     exact = [r for r in log if "bound" in r]
-    return {"method": method, "tokens": int(ids.shape[1]), "nll": float(nll.mean()), "ppl": float(torch.exp(nll.mean())),
+    return {"method": method, "tokens": int(ids.shape[1]), "windows": int(ids.shape[0]),
+            "ppl_windows": [float(torch.exp(n.mean())) for n in nlls],
+            "nll": float(nll.mean()), "ppl": float(torch.exp(nll.mean())),
             "seconds": round(time.time() - t0, 1), "worst_linear": worst,
             "mean_rel_err": float(np.mean([r["rel_err"] for r in log])) if log else None,
             "exact_all": all(r["exact"] for r in log) if log else None,
@@ -420,6 +427,9 @@ def selftest() -> dict:
     out["tiny"] = {m: {k: v for k, v in evaluate(model, ids, m).items() if k not in ("per_linear", "worst_linear")}
                    for m in ("bf16", "int8", "e2m1i_rot", "nvfp4", "fp8_block", "int8@-", "int8_rot@wa:u2:s1")}
     assert abs(out["tiny"]["int8@-"]["ppl"] - out["tiny"]["int8"]["ppl"]) < 1e-3 * out["tiny"]["int8"]["ppl"]
+    twice = torch.cat([ids, ids])
+    pw, pa = evaluate(model, twice, "int8@w:u2")["ppl_windows"], evaluate(model, twice, "int8@a:u2")["ppl_windows"]
+    assert pw[0] == pw[1] and pa[0] != pa[1], (pw, pa)
     return out
 
 
@@ -463,6 +473,9 @@ def edit_table(results: list[dict]) -> str:
         e = parse_edit(g)
         return order[g.split("@")[0]], ("-", "w", "a", "wa").index(e["edit"]), e["bits"], max(e["values"])
 
+    def pct(d: float) -> str:
+        return f"{d:+.2f}" if abs(d) < 1000 else f"x{1 + d / 100:,.0f}"
+
     def under(d: float) -> str:
         return "<1%" if d < 1 else "<10%" if d < 10 else "-"
 
@@ -477,7 +490,7 @@ def edit_table(results: list[dict]) -> str:
         std = math.sqrt(float(np.mean(np.square(e["values"]))))
         rel = float(np.mean([r["mean_rel_err"] for r in runs.values()]))
         rows.append(f"| {g.split('@')[0]} | {e['edit']} | {e['alphabet']} | {max(e['values'])} | {e['bits']:.2f} | {std:.2f} "
-                    f"| {rel:.4f} | {mean:.3f}{spread} | {len(p)} | {di:+.2f} | {db:+.2f} | {under(di)} / {under(db)} |")
+                    f"| {rel:.4f} | {mean:.4g}{spread} | {len(p)} | {pct(di)} | {pct(db)} | {under(di)} / {under(db)} |")
     return "\n".join(rows)
 
 
@@ -490,7 +503,8 @@ def main(argv: list[str]) -> int:
         rows = [json.loads(line) for p in argv[1:] for line in Path(p).read_text().splitlines() if line.startswith("{")]
         print((table if argv[0] == "--table" else edit_table)(rows))
         return 0
-    snapshot, ids, out = argv[0], torch.from_numpy(np.load(argv[1]))[None].cuda(), Path(argv[2])
+    arr = np.load(argv[1])
+    snapshot, ids, out = argv[0], torch.from_numpy(arr[None] if arr.ndim == 1 else arr).cuda(), Path(argv[2])
     out.mkdir(parents=True, exist_ok=True)
     model = load(snapshot)
     for method in argv[3:]:
