@@ -57,7 +57,7 @@ from verity_vllm.observe import triton_adapter
 
 from verity_vllm.engine import hooks
 from verity_vllm.engine.build import Engine
-from verity_vllm.engine.pinned import PinnedArena, spanned_bytes, storage_bytes_view
+from verity_vllm.engine.pinned import DEVICE_BACKED, IDENTITY_ALIAS_OPS, PinnedArena, device_backed, spanned_bytes, storage_bytes_view
 from verity_vllm.engine.run_facts import model_config_subset, profile_manifest
 
 
@@ -632,6 +632,8 @@ class Capture:
         st = self._cur
         if st is None or st.step not in self.cfg.snapshot_steps:
             return
+        if op in IDENTITY_ALIAS_OPS:      # no new value: its tensors are snapshotted where they are produced or read
+            return
         try:
             from torch.utils._python_dispatch import _disable_current_modes
 
@@ -676,7 +678,8 @@ class Capture:
         if cap is None:
             cap = full
         off, nbytes = spanned_bytes(t)
-        if nbytes > cap:
+        why = DEVICE_BACKED if device_backed(t) else None
+        if why is None and nbytes > cap:
             nb = self._kv_num_blocks
             bdim = next((d for d, s in enumerate(t.shape) if nb and s == nb), None)
             if bdim is not None and sub is None:
@@ -694,6 +697,7 @@ class Capture:
             why = f"spanned bytes {nbytes} > snapshot_max_bytes {cap}"
             if cap != full:
                 why += f" (snapshot_max_bytes_op: dispatcher-call event; Triton launch events keep {full})"
+        if why is not None:
             self._snap_index.append({"event": eid, "path": path, "view": view.to_json(), "dtype": view.dtype, "shape": list(view.shape),
                                      "skipped": why})
             return
