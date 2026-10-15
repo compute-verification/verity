@@ -338,6 +338,27 @@ def encode(R: int, C: int, terms: list[int], E: int, M: int, K: int, arity: int,
                         cl.append([-x, -ed[t], -z(t, i), z(s, i)])
                         cl.append([-x, ed[t], -z(t, i), -z(s, i)])
             cl.append([-V("A", t, 0), -ed[t], z(t, 0)])
+    if blocks and M + K:
+        # an edge node p = par + g that is not a terminal, has no edge child and is read by one head h only can be
+        # moved: h' = h - p + par (one operand fewer when par = 0), then the edge h' + g = h in h's block; same
+        # cost, no more heads. So every such node is a terminal, has an edge child, or is read by two heads.
+        for t in range(1, S + 1):
+            ecs, twos, obs = [], [], []
+            for t2 in range(t + 1, S + 1):
+                ec = V("ec", t2, t)
+                cl.append([-ec, ed[t2]])
+                cl.append([-ec, V("A", t2, t)])
+                ecs.append(ec)
+                hr = V("hr", t2, t)
+                cl.append([-hr, -ed[t2]])
+                cl.append([-hr, V("A", t2, t), V("B", t2, t), V("C", t2, t)])
+                if obs:
+                    two = V("two", t2, t)
+                    cl.append([-two, hr])
+                    cl.append([-two] + obs)
+                    twos.append(two)
+                obs.append(hr)
+            cl.append([-ed[t]] + [h[j, t] for j in range(len(terms))] + ecs + twos)
     if first_forbid:
         # the problem's symmetry group maps any computation to one whose first edge (the least root edge) is the least
         # of its orbit: forbid the rank-1 values that are not
