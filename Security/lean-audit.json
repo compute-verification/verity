@@ -233,6 +233,42 @@
   "Pouw.PearlC.pearlCTilesDevChainCap": {
    "owner": "@compute-accounting",
    "digest": "2170dd5823cfd9a6272b9ce11cf29f7de11dce337c0926e307ab60d0f8dd34b6"
+  },
+  "Flock.Assumptions.VBridgeC": {
+   "owner": "@proofs",
+   "digest": "f9e7fd3761957e71e935cba01ba6a70c706967e1ede8fe1a55d33e6d9f50d997"
+  },
+  "Flock.Assumptions.VBridgeCOff": {
+   "owner": "@proofs",
+   "digest": "1fc8f000f79cf07496eaedb4efe80b80d2d54748ba31451c82377e28a17e7591"
+  },
+  "NetTiming.FramesReadNoTimingAdvice": {
+   "owner": "@network-accounting",
+   "digest": "fd7a18966dce0b0e94501f13840cbe1a5cd700e5872d74b49775862e57fdcd3f"
+  },
+  "NetTiming.OccupancyReadsOwnBlock": {
+   "owner": "@network-accounting",
+   "digest": "3e0f6592aa67809f7000885433abc0a57646746fa961c9ceb71d982c21bfe373"
+  },
+  "Pouw.PearlC.CodeSeedNoise": {
+   "owner": "@compute-accounting",
+   "digest": "f9ab26e6d4dd33af4ded83eab6b937847d746e41ca534f195aaf1a9ca80cc644"
+  },
+  "Pouw.PearlC.CostModel.RelabelClosed": {
+   "owner": "@compute-accounting",
+   "digest": "b52e8fbb4d7625dd73c0cedee733d387c31182fb93335e760a0d8e2f210ed0e2"
+  },
+  "Pouw.PearlC.CostModel.SplitClosed": {
+   "owner": "@compute-accounting",
+   "digest": "353aa6d0f5fed29774fd1a91d648f6af80abe49bd07e307d3d8bd0fad9c37e26"
+  },
+  "Pouw.PearlC.PearlCDevice.RowLocal": {
+   "owner": "@compute-accounting",
+   "digest": "bf7cc876bbcb229a31876a51e3995da1528c00cd5fec8d9037a7c95982d9157e"
+  },
+  "Pouw.PearlC.RowSeedNoise": {
+   "owner": "@compute-accounting",
+   "digest": "9be706a50086a718e23dc64ac89ed8b810905d3abb907a91cb52c4c4bc35045b"
   }
  },
  "meaning": [
