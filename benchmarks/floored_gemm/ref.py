@@ -18,15 +18,31 @@ M32 = np.uint32(0xFFFFFFFF)
 
 def mix32(x):
     x = np.asarray(x, dtype=np.uint32)
-    x = x ^ (x >> np.uint32(16))
-    x = x * np.uint32(0x7FEB352D)
-    x = x ^ (x >> np.uint32(15))
-    x = x * np.uint32(0x846CA68B)
-    return x ^ (x >> np.uint32(16))
+    with np.errstate(over="ignore"):
+        x = x ^ (x >> np.uint32(16))
+        x = x * np.uint32(0x7FEB352D)
+        x = x ^ (x >> np.uint32(15))
+        x = x * np.uint32(0x846CA68B)
+        return x ^ (x >> np.uint32(16))
 
 
-def rot_of(lane, t):
-    return ((t * 7 + 5) % 31) + 1 if lane == 0 else ((t * 11 + 3) % 29) + 1
+R1 = [15, 18, 20, 5, 29, 25, 4, 9, 1, 6, 12, 28, 8, 7, 31, 19, 10, 17, 3, 11, 27, 14, 2, 26, 16, 30, 13, 23, 21, 24, 22]
+R2 = [6, 23, 7, 19, 4, 14, 10, 12, 9, 28, 11, 20, 26, 2, 22, 17, 5, 16, 15, 3, 25, 8, 13, 29, 30, 27, 21, 24, 18]
+
+
+def rot_of(duo2, lane, t):
+    """fgemm.cu's rot_of: duo's rotation, else duo2's R1 (lane 0) and R2 (lane 1)."""
+    if not duo2:
+        return ((t * 7 + 5) % 31) + 1
+    return R1[t % 31] if lane == 0 else R2[t % 29]
+
+
+def key_mul(lane, t):
+    return int(mix32(np.uint32(0xA0000000 + 2 * (lane * 16 + t)))) | 1
+
+
+def key_xor(lane, t):
+    return int(mix32(np.uint32(0xB0000000 + 2 * (lane * 16 + t) + 1)))
 
 
 def rotl(x, r):
@@ -65,8 +81,8 @@ def main(d: Path) -> int:
     EB = ld("EB.bin", np.int8, (n, 32)).astype(np.int64)
     ownA = np.fromfile(d / "ownA.bin", dtype=np.uint32).astype(np.int64)
     ownB = np.fromfile(d / "ownB.bin", dtype=np.uint32).astype(np.int64)
-    KA = np.fromfile(d / "KA.bin", dtype=np.uint32).reshape(2, 16)
-    KK = np.fromfile(d / "KK.bin", dtype=np.uint32).reshape(2, 16)
+    KA = np.array([[key_mul(ln, t) for t in range(16)] for ln in range(2)], dtype=np.uint32)
+    KK = np.array([[key_xor(ln, t) for t in range(16)] for ln in range(2)], dtype=np.uint32)
     FA, FB = f_matrix(ownA, k), f_matrix(ownB, k)
     G = FA.T @ FB
     XA = QA + EA @ FA.T
@@ -130,8 +146,10 @@ def main(d: Path) -> int:
                             sl = slice(4 * ln, 4 * ln + 4)
                             u = y[:, :, sl] ^ p ^ KK[ln, t]
                             y[:, :, sl] = u * KA[ln, t] + z[:, :, sl]
-                            z[:, :, sl] = rotl(u, rot_of(ln, t)) + y[:, :, sl]
-            fin = y ^ rotl(z, 16)
+                            z[:, :, sl] = rotl(u, rot_of(nch == 8, ln, t)) + y[:, :, sl]
+            fin = y[:, :, :4] ^ rotl(z[:, :, :4], 16)
+            if nch == 8:
+                fin = fin ^ rotl(y[:, :, 4:] ^ rotl(z[:, :, 4:], 16), 8)
         got = np.fromfile(d / f"R_{name}.bin", dtype=np.uint32).reshape(fin.shape)
         checks[f"R_{name}"] = bool((got == fin).all())
         checks[f"R_{name}_words"] = int(fin.size)

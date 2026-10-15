@@ -11,9 +11,12 @@
 // Receipts (Pi_L): every RS = 32 or 64 steps of k, each accumulator word T_s (the running sum C over the first s columns)
 // is absorbed into a per-thread chain; the chains' finishes are the tile's receipts. phi = duo (3 SASS ops a word,
 // note:20261015T0432Z-draft-receipt-phi: u = y ^ p ^ k_t; y = u a_t + z; z = rotl(u, r_t) + y; receipt y ^ rotl(z, 16)) or
-// duo2 (two duo lanes a word with their own keys and rotations, note:20261015T0711Z-draft-receipt-phi-followup, about 6 ops).
-// Chain e of consumer thread (warp w, lane) absorbs, at each receipt boundary in ascending k, the words acc[mi][ni][e] in
-// (mi, ni) order, at key position t = mi NI + ni. The key schedule (16 positions) is a cost stand-in for the reviewed one.
+// duo2, the follow-up's margin variant (note:20261015T0711Z-draft-receipt-phi-followup; receipt_phi/phi.cu's DUO2): two duo
+// lanes on each word, keys (a, k) and (b, c), rotations R1 and R2, receipt y ^ rotl(z, 16) ^ rotl(y2 ^ rotl(z2, 16), 8);
+// 6 ops a word. Chain e of a thread absorbs, at each receipt boundary in ascending k, the words acc[mi][ni][e] in (mi, ni)
+// order, at key position t = mi NI + ni. The keys are compile-time constants, standing for constant-bank operands (same op
+// count, no registers; a deployment loads them per challenge): held in registers, they push the 128 x 128 kernels into
+// spills. The key schedule (16 positions) is a cost stand-in for the reviewed one.
 //
 // Kernels: form (A~ or B~ and the tail rows P_A = [E_A | V_hi | E_A | V_lo], P_B = [W_hi | E_B | W_lo | E_B], one warp a row),
 // and the GEMM (8 warps of s32 accumulators over a TMA ring; thread 0 issues each load as its slot is released).
@@ -54,7 +57,7 @@
   } while (0)
 #define DEV __device__ __forceinline__
 
-__host__ __device__ inline uint32_t mix32(uint32_t x) {
+__host__ __device__ constexpr uint32_t mix32(uint32_t x) {
   x ^= x >> 16; x *= 0x7FEB352Du; x ^= x >> 15; x *= 0x846CA68Bu; x ^= x >> 16;
   return x;
 }
@@ -62,16 +65,31 @@ __host__ __device__ inline uint32_t mix32(uint32_t x) {
 // ---------------------------------------------------------------- receipts
 enum Kind { NONE = 0, DUO = 1, DUO2 = 2 };
 constexpr int NPOS = 16;
-__constant__ uint32_t KA[2][NPOS], KK[2][NPOS];
-__host__ __device__ constexpr int rot_of(int lane, int t) { return lane == 0 ? ((t * 7 + 5) % 31) + 1 : ((t * 11 + 3) % 29) + 1; }
+// lane 0's multiplier and xor key at position t, then lane 1's (duo2's b and c); ref.py has the same formulas
+__host__ __device__ constexpr uint32_t key_mul(int lane, int t) { return mix32(0xA0000000u + 2u * (lane * NPOS + t)) | 1u; }
+__host__ __device__ constexpr uint32_t key_xor(int lane, int t) { return mix32(0xB0000000u + 2u * (lane * NPOS + t) + 1u); }
+// duo's rotations, and duo2's R1 and R2 (phi.cu's rot1, rot2)
+__host__ __device__ constexpr int rot_of(int kind, int lane, int t) {
+  constexpr int R1[31] = {15, 18, 20, 5, 29, 25, 4, 9, 1, 6, 12, 28, 8, 7, 31, 19, 10, 17, 3, 11, 27, 14, 2, 26, 16, 30, 13, 23, 21, 24, 22};
+  constexpr int R2[29] = {6, 23, 7, 19, 4, 14, 10, 12, 9, 28, 11, 20, 26, 2, 22, 17, 5, 16, 15, 3, 25, 8, 13, 29, 30, 27, 21, 24, 18};
+  return kind == DUO ? ((t * 7 + 5) % 31) + 1 : lane == 0 ? R1[t % 31] : R2[t % 29];
+}
 struct St { uint32_t y, z; };
 DEV uint32_t rotl(uint32_t x, int r) { return __funnelshift_l(x, x, r); }
-template <int LANE, int T> DEV void duo(St& s, uint32_t p) {
-  const uint32_t u = s.y ^ p ^ KK[LANE][T];
-  s.y = u * KA[LANE][T] + s.z;
-  s.z = rotl(u, rot_of(LANE, T)) + s.y;
+template <int KIND, int LANE, int T> DEV void duo(St& s, uint32_t p) {
+  constexpr uint32_t a = key_mul(LANE, T), kx = key_xor(LANE, T);
+  constexpr int r = rot_of(KIND, LANE, T);
+  const uint32_t u = s.y ^ p ^ kx;
+  s.y = u * a + s.z;
+  s.z = rotl(u, r) + s.y;
 }
 template <int KIND> constexpr int NCH = KIND == DUO2 ? 8 : 4;
+// the receipt of chain e (and, for duo2, its second lane 4 + e)
+template <int KIND> DEV uint32_t finish(const St (&ch)[NCH<KIND>], int e) {
+  const uint32_t r = ch[e].y ^ rotl(ch[e].z, 16);
+  if constexpr (KIND == DUO2) return r ^ rotl(ch[4 + e].y ^ rotl(ch[4 + e].z, 16), 8);
+  return r;
+}
 
 // ---------------------------------------------------------------- TMA, mbarrier, ldmatrix, mma.sync
 DEV uint32_t smem_u32(const void* p) { return (uint32_t)__cvta_generic_to_shared(p); }
@@ -241,8 +259,8 @@ template <int TM, int BN, int WM, int STAGES> struct ML {
     constexpr int T = MI_ * NI + NI_;
 #pragma unroll
     for (int e = 0; e < 4; e++) {
-      duo<0, T>(ch[e], (uint32_t)w[e]);
-      if constexpr (KIND == DUO2) duo<1, T>(ch[4 + e], (uint32_t)w[e]);
+      duo<KIND, 0, T>(ch[e], (uint32_t)w[e]);
+      if constexpr (KIND == DUO2) duo<KIND, 1, T>(ch[4 + e], (uint32_t)w[e]);
     }
   }
   template <int KIND, int IDX> DEV static void absorb_at(St (&ch)[NCH<KIND>], const int (&w)[4]) {
@@ -358,9 +376,9 @@ template <int TM, int BN, int WM, int STAGES, bool TAIL, int RS, int KIND> DEV v
         *reinterpret_cast<int2*>(p + (size_t)8 * a.N) = make_int2(acc[mi][ni][2], acc[mi][ni][3]);
       }
     if constexpr (RS != 0) {
-      uint32_t* r = a.R + ((size_t)tile_id * L::NCT + ctid) * NCH<KIND>;
-#pragma unroll
-      for (int e = 0; e < NCH<KIND>; e++) r[e] = ch[e].y ^ rotl(ch[e].z, 16);
+      uint4 r;
+      r.x = finish<KIND>(ch, 0); r.y = finish<KIND>(ch, 1); r.z = finish<KIND>(ch, 2); r.w = finish<KIND>(ch, 3);
+      reinterpret_cast<uint4*>(a.R)[(size_t)tile_id * L::NCT + ctid] = r;
     }
   }
 }
@@ -492,7 +510,7 @@ struct Cfg { int TM, BN, NCT, smem; Kern k[6]; };   // plain, g0, duo32, duo64, 
 static Cfg cfg_p() { return {128, 128, 256, ML<128, 128, 64, 3>::SMEM, {p_plain, p_g0, p_duo32, p_duo64, p_duo2_32, p_duo2_64}}; }
 static Cfg cfg_d() { return {128, 32, 256, ML<128, 32, 16, 4>::SMEM, {d_plain, d_g0, d_duo32, d_duo64, d_duo2_32, d_duo2_64}}; }
 static const char* GNAME[6] = {"plain", "g0", "duo32", "duo64", "duo2_32", "duo2_64"};
-static const int GRS[6] = {0, 0, 32, 64, 32, 64}, GNCH[6] = {0, 0, 4, 4, 8, 8};
+static const int GRS[6] = {0, 0, 32, 64, 32, 64};
 
 struct Lt {
   cublasLtHandle_t h;
@@ -635,10 +653,6 @@ static void setup(Prob& P, int m, int n, int k, int grid_cap, uint32_t seed, Hos
   CK(cudaMalloc(&P.R, (size_t)tiles * P.cfg.NCT * 8 * 4));
   CK(cudaMalloc(&P.flag, 4));
   CK(cudaMemset(P.flag, 0, 4));
-  std::vector<uint32_t> ka(2 * NPOS), kk(2 * NPOS);
-  for (int i = 0; i < 2 * NPOS; i++) { ka[i] = mix32(seed ^ (0xA0000000u + 2 * i)) | 1u; kk[i] = mix32(seed ^ (0xB0000000u + 2 * i + 1)); }
-  CK(cudaMemcpyToSymbol(KA, ka.data(), ka.size() * 4));
-  CK(cudaMemcpyToSymbol(KK, kk.data(), kk.size() * 4));
   for (int i = 0; i < 6; i++) CK(cudaFuncSetAttribute(P.cfg.k[i], cudaFuncAttributeMaxDynamicSharedMemorySize, P.cfg.smem));
   lt_setup(P.lt, m, n, k, P.QA, P.QB[0], P.U, P.st);
   if (keep) { h.fa = fa; h.fb = fb; *keep = h; } else { delete fa; delete fb; }
@@ -690,11 +704,6 @@ static int cmd_gate(const std::string& dir, int m, int n, int k, int grid, uint3
   dump(dir, "EB.bin", h.EB.data(), h.EB.size(), false);
   dump(dir, "ownA.bin", h.fa->own.data(), k * 4, false);
   dump(dir, "ownB.bin", h.fb->own.data(), k * 4, false);
-  std::vector<uint32_t> ka(2 * NPOS), kk(2 * NPOS);
-  CK(cudaMemcpyFromSymbol(ka.data(), KA, ka.size() * 4));
-  CK(cudaMemcpyFromSymbol(kk.data(), KK, kk.size() * 4));
-  dump(dir, "KA.bin", ka.data(), ka.size() * 4, false);
-  dump(dir, "KK.bin", kk.data(), kk.size() * 4, false);
   // poison every output before each arm, so a stale buffer can't pass
   const size_t ub = (size_t)m * n * 4, rb = (size_t)tiles * P.cfg.NCT * 8 * 4;
   CK(cudaMemset(P.U, 0xA5, ub));
@@ -715,7 +724,7 @@ static int cmd_gate(const std::string& dir, int m, int n, int k, int grid, uint3
     CK(cudaStreamSynchronize(P.st));
     CK(cudaGetLastError());
     dump(dir, (std::string("U_") + GNAME[g] + ".bin").c_str(), P.U, ub, true);
-    if (GRS[g]) dump(dir, (std::string("R_") + GNAME[g] + ".bin").c_str(), P.R, (size_t)tiles * P.cfg.NCT * GNCH[g] * 4, true);
+    if (GRS[g]) dump(dir, (std::string("R_") + GNAME[g] + ".bin").c_str(), P.R, (size_t)tiles * P.cfg.NCT * 4 * 4, true);
   }
   int flag;
   CK(cudaMemcpy(&flag, P.flag, 4, cudaMemcpyDeviceToHost));
