@@ -190,12 +190,12 @@ theorem sparseOwnNames_of_checkOwn {sh : Flock.RecSparse.Shape} {hr : ℕ}
       (if sh.stacked then [("vt", sh.T)] else []), ?_⟩
     simp [Flock.RecSparse.messagePorts, Flock.RecSparse.SKIP]
   have hdrop : ((Flock.RecSparse.messagePorts sh).drop 1).dropLast = M := by
-    rw [hmp, List.drop_one, List.tail_cons, ← List.concat_eq_append, List.dropLast_concat]
+    rw [hmp, List.drop_one, List.tail_cons, List.dropLast_concat]
   intro nm hnm
   rw [hmp] at hnm
-  simp only [List.map_cons, List.map_append, List.mem_cons, List.mem_append, List.map_nil,
-    List.mem_singleton] at hnm
-  rcases hnm with rfl | hnm | rfl
+  simp only [List.map_cons, List.map_append, List.mem_cons, List.mem_append,
+    List.map_nil] at hnm
+  rcases hnm with rfl | hnm | rfl | hnm
   · have hq := hown ("h", s!"rec-c{hr}", #[some 0, some 1]) (by simp [Flock.RecVStar.ownPorts])
     simp only [Flock.RecVStar.msgPorts, List.mem_map] at hq
     obtain ⟨p, hp, hpe⟩ := hq
@@ -214,6 +214,7 @@ theorem sparseOwnNames_of_checkOwn {sh : Flock.RecSparse.Shape} {hr : ℕ}
     simp only [Flock.RecVStar.msgPorts, List.mem_map] at hq
     obtain ⟨p, hp, hpe⟩ := hq
     exact ⟨p, Array.mem_toList_iff.1 (List.mem_of_mem_filter hp), congrArg (·.1) hpe⟩
+  · cases hnm
 
 /-! ## The composition -/
 
