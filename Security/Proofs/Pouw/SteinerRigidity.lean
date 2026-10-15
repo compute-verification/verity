@@ -1445,4 +1445,169 @@ end Assembly
 
 end Hierarchy
 
+section TreeDecomposition
+
+variable {F : Type*} [Field F] {m n : Type*}
+
+namespace SteinerTree
+
+/-- The tree's path from `u` to `x`. -/
+noncomputable def path (T : SteinerTree F m n) (u x : T.V) : T.G.Walk u x :=
+  (T.isTree.existsUnique_path u x).exists.choose
+
+theorem path_isPath (T : SteinerTree F m n) (u x : T.V) : (T.path u x).IsPath :=
+  (T.isTree.existsUnique_path u x).exists.choose_spec
+
+theorem eq_path (T : SteinerTree F m n) {u x : T.V} {p : T.G.Walk u x} (hp : p.IsPath) :
+    p = T.path u x :=
+  (T.isTree.existsUnique_path u x).unique hp (T.path_isPath u x)
+
+/-- Every dart of a path from `u` is the last dart of the tree's path from `u` to its head; that path is a prefix,
+and the head is one step further from `u` than the tail. -/
+theorem path_darts (T : SteinerTree F m n) {u x : T.V} (p : T.G.Walk u x) (hp : p.IsPath) :
+    ∀ d ∈ p.darts, d ∈ (T.path u d.snd).darts ∧ (T.path u d.snd).darts <+: p.darts ∧
+      (T.path u d.snd).length = (T.path u d.fst).length + 1 := by
+  induction p using SimpleGraph.Walk.concatRec with
+  | Hnil => simp
+  | @Hconcat u v w p h ih =>
+    have hp' : p.IsPath := by
+      rw [SimpleGraph.Walk.concat_eq_append] at hp
+      exact hp.of_append_left
+    intro d hd
+    rw [SimpleGraph.Walk.darts_concat, List.concat_eq_append, List.mem_append, List.mem_singleton] at hd
+    rcases hd with hd | rfl
+    · obtain ⟨h1, h2, h3⟩ := ih hp' d hd
+      refine ⟨h1, h2.trans ?_, h3⟩
+      rw [SimpleGraph.Walk.darts_concat, List.concat_eq_append]
+      exact List.prefix_append _ _
+    · change _ ∈ (T.path u w).darts ∧ (T.path u w).darts <+: _ ∧
+        (T.path u w).length = (T.path u v).length + 1
+      rw [← T.eq_path hp, ← T.eq_path hp']
+      exact ⟨by simp, List.prefix_refl _, by simp⟩
+
+end SteinerTree
+
+theorem sum_darts_sub {V : Type} {G : SimpleGraph V} (label : V → Matrix m n F) {u x : V}
+    (p : G.Walk u x) : (p.darts.map fun d => label d.snd - label d.fst).sum = label x - label u := by
+  induction p with
+  | nil => simp
+  | cons h p ih =>
+    simp only [SimpleGraph.Walk.darts_cons, List.map_cons, List.sum_cons, ih]
+    abel
+
+variable [Fintype m] [Fintype n]
+
+/-- **Lemma 1, proved.** Root the tree at a vertex labelled `0`; each dart gets the set of targets whose root path
+uses it, and each set of the family gets the sum of the steps of the darts with that set. -/
+theorem treeLaminarDecomposition : TreeLaminarDecomposition F m n := by
+  classical
+  intro κ _ P M T h0 hP
+  obtain ⟨v₀, hv₀⟩ := h0
+  have : Nonempty T.V := ⟨v₀⟩
+  have hP' : ∀ t ∈ P, ∃ v, T.label v = M t := hP
+  choose! vt hvt using hP'
+  let pt : κ → List T.G.Dart := fun t => (T.path v₀ (vt t)).darts
+  let S : T.G.Dart → Finset κ := fun d => P.filter fun t => d ∈ pt t
+  let U : Finset T.G.Dart := Finset.univ.filter fun d => (S d).Nonempty
+  let D : T.G.Dart → Matrix m n F := fun d => T.label d.snd - T.label d.fst
+  have hpd : ∀ t, ∀ d ∈ pt t, d ∈ (T.path v₀ d.snd).darts ∧ (T.path v₀ d.snd).darts <+: pt t ∧
+      (T.path v₀ d.snd).length = (T.path v₀ d.fst).length + 1 := fun t =>
+    T.path_darts _ (T.path_isPath _ _)
+  refine ⟨U.image S, fun A => ∑ d ∈ U.filter (S · = A), D d, ?_, ?_, ?_, ?_⟩
+  · intro A hA A' hA'
+    obtain ⟨d, -, rfl⟩ := Finset.mem_image.1 hA
+    obtain ⟨d', -, rfl⟩ := Finset.mem_image.1 hA'
+    by_cases hdis : Disjoint (S d) (S d')
+    · exact Or.inr (Or.inr hdis)
+    obtain ⟨t, htd, htd'⟩ := Finset.not_disjoint_iff.1 hdis
+    simp only [S, Finset.mem_filter] at htd htd'
+    obtain ⟨h1, h2, -⟩ := hpd t d htd.2
+    obtain ⟨h1', h2', -⟩ := hpd t d' htd'.2
+    have key : ∀ {d d' : T.G.Dart}, d ∈ (T.path v₀ d.snd).darts →
+        (T.path v₀ d.snd).darts <+: (T.path v₀ d'.snd).darts → S d' ⊆ S d := by
+      intro d d' hd hpre t' ht'
+      simp only [S, Finset.mem_filter] at ht' ⊢
+      exact ⟨ht'.1, (hpre.trans (hpd t' d' ht'.2).2.1).subset hd⟩
+    rcases le_total (T.path v₀ d.snd).darts.length (T.path v₀ d'.snd).darts.length with hle | hle
+    · exact Or.inr (Or.inl (key h1 (List.prefix_of_prefix_length_le h2 h2' hle)))
+    · exact Or.inl (key h1' (List.prefix_of_prefix_length_le h2' h2 hle))
+  · intro A hA
+    obtain ⟨d, -, rfl⟩ := Finset.mem_image.1 hA
+    exact Finset.filter_subset _ _
+  · intro t ht
+    have hfib : ∑ A ∈ (U.image S).filter (t ∈ ·), ∑ d ∈ U.filter (S · = A), D d =
+        ∑ d ∈ U.filter (t ∈ S ·), D d := by
+      rw [← Finset.sum_fiberwise_of_maps_to (s := U.filter (t ∈ S ·)) (t := (U.image S).filter (t ∈ ·))
+        (g := S)]
+      · refine Finset.sum_congr rfl fun A hA => Finset.sum_congr ?_ fun _ _ => rfl
+        ext d
+        simp only [Finset.mem_filter] at hA ⊢
+        constructor
+        · rintro ⟨hd, rfl⟩
+          exact ⟨⟨hd, hA.2⟩, rfl⟩
+        · rintro ⟨⟨hd, -⟩, rfl⟩
+          exact ⟨hd, rfl⟩
+      · intro d hd
+        simp only [Finset.mem_filter, Finset.mem_image] at hd ⊢
+        exact ⟨⟨d, hd.1, rfl⟩, hd.2⟩
+    rw [hfib]
+    have hset : U.filter (t ∈ S ·) = (pt t).toFinset := by
+      ext d
+      simp only [U, S, Finset.mem_filter, Finset.mem_univ, true_and, List.mem_toFinset]
+      constructor
+      · rintro ⟨-, -, h⟩
+        exact h
+      · intro h
+        exact ⟨⟨t, Finset.mem_filter.2 ⟨ht, h⟩⟩, ht, h⟩
+    rw [hset, List.sum_toFinset _
+      (SimpleGraph.Walk.darts_nodup_of_support_nodup (T.path_isPath _ _).support_nodup)]
+    rw [sum_darts_sub, hvt t ht, hv₀, sub_zero]
+  · have hlen : ∀ d ∈ U, (T.path v₀ d.snd).length = (T.path v₀ d.fst).length + 1 := by
+      intro d hd
+      simp only [U, Finset.mem_filter, Finset.mem_univ, true_and] at hd
+      obtain ⟨t, ht⟩ := hd
+      simp only [S, Finset.mem_filter] at ht
+      exact (hpd t d ht.2).2.2
+    calc ∑ A ∈ U.image S, (∑ d ∈ U.filter (S · = A), D d).rank
+        ≤ ∑ A ∈ U.image S, ∑ d ∈ U.filter (S · = A), (D d).rank :=
+          Finset.sum_le_sum fun A _ => rank_sum_le _ _
+      _ = ∑ d ∈ U, (D d).rank :=
+          Finset.sum_fiberwise_of_maps_to (fun d hd => Finset.mem_image_of_mem S hd) _
+      _ = ∑ e ∈ U.image SimpleGraph.Dart.edge, SteinerTree.edgeLength T.label e := by
+          rw [Finset.sum_image]
+          · refine Finset.sum_congr rfl fun d _ => ?_
+            obtain ⟨⟨a, b⟩, hab⟩ := d
+            change rankDist (T.label b) (T.label a) = rankDist (T.label a) (T.label b)
+            exact rankDist_comm _ _
+          · intro d hd d' hd' he
+            rcases (SimpleGraph.dart_edge_eq_iff d d').1 he with h | h
+            · exact h
+            · exfalso
+              subst h
+              have h1 := hlen _ hd
+              have h2 := hlen _ hd'
+              change (T.path v₀ d'.fst).length = (T.path v₀ d'.snd).length + 1 at h1
+              omega
+      _ ≤ T.length := by
+          refine Finset.sum_le_sum_of_subset fun e he => ?_
+          obtain ⟨d, -, rfl⟩ := Finset.mem_image.1 he
+          exact SimpleGraph.mem_edgeFinset.2 d.edge_mem
+
+variable [DecidableEq m] [DecidableEq n]
+
+/-- **Theorem 1 in coordinates, proved**: rows and columns split into coordinate blocks, targets in distinct cells;
+every Steiner tree spanning `0` and the targets has length at least the sum of their ranks. -/
+theorem blockRigidityCoord : BlockRigidityCoord F m n :=
+  blockRigidityCoord_of_treeLaminarDecomposition treeLaminarDecomposition
+
+/-- **Conjecture A's lower bound, proved**: a Steiner tree spanning `0` and every prefix target
+`E_rc ⊗ I_{sL}` has length at least `N³`. -/
+theorem conjectureA_lower {N L : ℕ} (hL : 0 < L) (hLN : L ∣ N)
+    (T : SteinerTree F (Fin N × Fin N) (Fin N × Fin N)) (h0 : T.Reaches 0)
+    (hT : ∀ r c : Fin N, ∀ s ∈ Finset.Icc 1 (N / L), T.Reaches (prefixTarget F N L r c s)) :
+    N ^ 3 ≤ T.length :=
+  conjectureA_lower_of_treeLaminarDecomposition treeLaminarDecomposition hL hLN T h0 hT
+
+end TreeDecomposition
+
 end Pouw.SteinerRigidity
