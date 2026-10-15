@@ -230,6 +230,7 @@ struct LtG {
   const void *A, *B;
   void* D;
   int fmt, beta, algo_id = -1;
+  float ms = 0;   // the chosen algorithm's time a call at setup
 };
 static cublasLtHandle_t g_lt;
 static void* g_ws;
@@ -295,6 +296,7 @@ static LtG ltg(int fmt, int m, int n, int kk, int lda, int ldb, int ldd, const v
     return L;
   }
   L.algo = res[bi].algo;
+  L.ms = best / 3;
   size_t w;
   cublasLtMatmulAlgoConfigGetAttribute(&L.algo, CUBLASLT_ALGO_CONFIG_ID, &L.algo_id, sizeof L.algo_id, &w);
   CL(cublasLtMatmulPreferenceDestroy(pref));
@@ -336,7 +338,7 @@ struct Fac {
   }
 };
 struct Low {   // one rank's masks and buffers
-  int r, rp, L[2], Kc[2], Klt[2];
+  int r, rp, L[2], Kc[2], Klt[2], Kmain[2];   // Kmain: the stacked GEMM's depth on cuBLASLt, Klt or Kc, the faster
   int8_t *UA, *UB;               // mask factors U (m x r), W (n x r), values
   uint32_t *ownV, *invV, *ownZ, *invZ;
   int* G;
@@ -434,9 +436,17 @@ static void msetup(MProb& P, int m, int n, int k, uint32_t seed, bool gate) {
       lw.tV[f] = upload_dense(f, lw.V->dense, k, r, lw.rp, false); lw.tZ[f] = upload_dense(f, lw.Z->dense, k, r, lw.rp, false);
       lw.tVt[f] = upload_dense(f, lw.V->dense, k, r, lw.rp, true); lw.tZt[f] = upload_dense(f, lw.Z->dense, k, r, lw.rp, true);
       const int Kp = lw.Kc[f];
+      // the padding up to Kc is zero, so the stacked GEMM may run to Klt or Kc: cuBLASLt's speed depends on which
+      auto faster = [](LtG a, LtG b) { return a.algo_id == -2 || (b.algo_id != -2 && b.ms < a.ms) ? b : a; };
       lw.main_[f] = ltg(f, m, n, lw.Klt[f], Kp, Kp, n, P.XA, P.XB, P.U, 0, P.st);
-      lw.sepk[f] = ltg(f, m, n, k, Kp, Kp, n, P.XA, P.XB, P.U, 0, P.st);
       lw.sepp[f] = ltg(f, m, n, lw.Klt[f] - k, Kp, Kp, n, P.XA + k, P.XB + k, P.U, 1, P.st);
+      lw.Kmain[f] = lw.Klt[f];
+      if (Kp != lw.Klt[f]) {
+        const LtG alt = ltg(f, m, n, Kp, Kp, Kp, n, P.XA, P.XB, P.U, 0, P.st);
+        if (alt.algo_id != -2 && (lw.main_[f].algo_id == -2 || alt.ms < lw.main_[f].ms)) { lw.main_[f] = alt; lw.Kmain[f] = Kp; }
+        lw.sepp[f] = faster(lw.sepp[f], ltg(f, m, n, Kp - k, Kp, Kp, n, P.XA + k, P.XB + k, P.U, 1, P.st));
+      }
+      lw.sepk[f] = ltg(f, m, n, k, Kp, Kp, n, P.XA, P.XB, P.U, 0, P.st);
       lw.uv[f] = ltg(f, m, k, lw.rp, lw.rp, lw.rp, k, lw.tUA[f], lw.tV[f], P.DA, 0, P.st);
       lw.wz[f] = ltg(f, n, k, lw.rp, lw.rp, lw.rp, k, lw.tUB[f], lw.tZ[f], P.DB, 0, P.st);
       lw.az[f] = ltg(f, m, lw.rp, k, Kp, k, lw.rp, P.XA, lw.tZt[f], P.YA, 0, P.st);
@@ -588,8 +598,8 @@ static int mgate(const std::string& dir, int m, int n, int k, uint32_t seed) {
               "\"digit_overflow\": %d, \"low\": {", m, n, k, seed, P.grid, CNT, flag);
   for (int i = 0; i < NR; i++) {
     const Low& lw = P.low[i];
-    fprintf(fp, "%s\"%d\": {\"L\": [%d, %d], \"Kc\": [%d, %d], \"Klt\": [%d, %d]}", i ? ", " : "", lw.r, lw.L[0], lw.L[1],
-            lw.Kc[0], lw.Kc[1], lw.Klt[0], lw.Klt[1]);
+    fprintf(fp, "%s\"%d\": {\"L\": [%d, %d], \"Kc\": [%d, %d], \"Klt\": [%d, %d], \"Kmain\": [%d, %d]}", i ? ", " : "", lw.r,
+            lw.L[0], lw.L[1], lw.Kc[0], lw.Kc[1], lw.Klt[0], lw.Klt[1], lw.Kmain[0], lw.Kmain[1]);
   }
   fprintf(fp, "}, \"arms\": [%s], \"skipped\": [%s]}\n", arms_json.c_str(), skipped.c_str());
   fclose(fp);
@@ -649,8 +659,8 @@ static int mbench(int reps, const std::vector<std::string>& shapes) {
            name, m, n, k, nsm, prop.name, P.grid, flag);
     for (int i = 0; i < NR; i++) {
       const Low& lw = P.low[i];
-      fprintf(stdout, "%s\"%d\": {\"L\": [%d, %d], \"Kc\": [%d, %d], \"Klt\": [%d, %d]}", i ? ", " : "", lw.r, lw.L[0], lw.L[1],
-              lw.Kc[0], lw.Kc[1], lw.Klt[0], lw.Klt[1]);
+      fprintf(stdout, "%s\"%d\": {\"L\": [%d, %d], \"Kc\": [%d, %d], \"Klt\": [%d, %d], \"Kmain\": [%d, %d]}", i ? ", " : "",
+              lw.r, lw.L[0], lw.L[1], lw.Kc[0], lw.Kc[1], lw.Klt[0], lw.Klt[1], lw.Kmain[0], lw.Kmain[1]);
     }
     std::string skipped;
     for (const Arm& a : all) if (!arm_ok(P, a)) skipped += (skipped.empty() ? "\"" : ", \"") + a.name + "\"";
