@@ -11,6 +11,9 @@ every edge's label sum has rank <= 1, and #products >= L * (sum of sigma + #kept
 Part 4: products of two mixed operands, each split into two pieces charged to the word giving the Y-factor: the
 pieces of a word w have rank nu_w <= #distinct label sets of its uses, and #products >= rank - 1/2 sum_w nu_w (bilinear
 count). Winograd's pairs meet it with equality.
+Part 5: Theorem B in general. The covering lemma exhaustively (per-tree bounds L*(sum hi - min lo), or L*sum hi for
+the tree at 0, sum to at least L*(|G_T| - H)); then random computations with merges split into merge-free trees, each
+tree re-rooted at 0 through its lowest correct target and checked with A1a's flattening on its top targets.
 """
 
 import random
@@ -465,6 +468,183 @@ def mixed_chain_form(shape, rng, p, winograd_only=False):
     return n_products, rank_phi, nu_total
 
 
+def tree_bounds(trees, L):
+    """trees: {tree: {pos: [correct levels]}}, tree 0 rooted at 0. The per-tree bounds of Theorem B."""
+    out = {}
+    for tau, levels in trees.items():
+        hi = sum(max(c) for c in levels.values())
+        lo = min((min(c) for c in levels.values()), default=0)
+        out[tau] = L * hi if tau == 0 else L * (hi - lo)
+    return out
+
+
+def covering_holds(trees, L):
+    G = sum(len(c) for levels in trees.values() for c in levels.values())
+    H = sum(1 for tau, levels in trees.items() if tau != 0 and levels)
+    return sum(tree_bounds(trees, L).values()) >= L * (G - H), sum(tree_bounds(trees, L).values()) == L * (G - H)
+
+
+def part5a():
+    """The covering lemma, exhaustively: every assignment of every set of correct targets (2 positions, 3 levels) to
+    tau_0 and up to 3 head trees."""
+    import itertools
+    count, tight = 0, 0
+    slots = [(pos, c) for pos in range(2) for c in range(1, 4)]
+    for mask in range(1, 1 << len(slots)):
+        G = [slots[i] for i in range(len(slots)) if mask >> i & 1]
+        for assign in itertools.product(range(4), repeat=len(G)):
+            trees = {}
+            for (pos, c), tau in zip(G, assign):
+                trees.setdefault(tau, {}).setdefault(pos, []).append(c)
+            ok, eq = covering_holds(trees, 1)
+            assert ok, f"covering lemma fails: {trees}"
+            count += 1
+            tight += eq
+    print(f"[covering] {count} assignments of correct targets to trees (2 positions x 3 levels, tau_0 + 3 heads): "
+          f"sum of per-tree bounds >= L*(|G_T| - H): ok ({tight} tight)")
+
+
+def merge_dag(shape, rng, p):
+    """A random computation of prefix targets with merges: continued and restarted running sums, cheap merges of
+    the running sum with a partial accumulator, heads shared by several positions, wrong commits. Splits it into
+    merge-free trees and checks each tree's bound through A1a's flattening on the tree re-rooted at 0 via its lowest
+    correct target, then Theorem B's total."""
+    Xd, Yd = shape.P * shape.m, shape.Q * shape.m
+    zero = np.zeros((Xd, Yd), dtype=np.int64)
+    val, par, step = [zero], [None], [None]  # par None: root (node 0) or a merge (head)
+
+    def prod_path(node, target):
+        for R in rank_one_terms(target - val[node], p):
+            val.append((val[node] + R) % p)
+            par.append(node)
+            step.append(R)
+            node = len(val) - 1
+        return node
+
+    def merge(a, b, alpha=None, beta=None):
+        alpha = alpha or rng.randint(1, p - 1)
+        beta = beta or rng.randint(1, p - 1)
+        val.append((alpha * val[a] + beta * val[b]) % p)
+        par.append(None)
+        step.append(None)
+        return len(val) - 1
+
+    def partial_cell(pos, s):
+        keep = [k for k in range(s * shape.L, (s + 1) * shape.L) if rng.random() < 0.6]
+        mask = np.zeros(shape.m, dtype=np.int64)
+        mask[keep] = 1
+        return shape.D(pos, s) * np.tile(mask, shape.P)[:, None]
+
+    positions = [(i, j) for i in range(shape.P) for j in range(shape.Q)]
+    for _ in range(rng.randint(1, 3)):
+        piece = sum((partial_cell(pos, rng.randrange(shape.S)) for pos in rng.sample(positions, 2)), zero)
+        prod_path(rng.randrange(len(val)), piece % p)
+    heads, committed, cur = [], {}, {pos: 0 for pos in positions}
+    for c in range(1, shape.S + 1):
+        for pos in rng.sample(positions, len(positions)):
+            target, correct = shape.T(pos, c), True
+            action = rng.choice(["continue", "restart", "merge", "cheap", "cheap", "host", "wrong"])
+            if action == "host" and not heads:
+                action = "merge"
+            if action == "continue":
+                start = cur[pos]
+            elif action == "restart":
+                start = rng.randrange(len(val))
+            elif action == "merge":
+                start = merge(rng.randrange(len(val)), rng.randrange(len(val)))
+                heads.append(start)
+            elif action == "cheap":
+                Z = prod_path(rng.randrange(len(val)), partial_cell(pos, c - 1))
+                start = merge(cur[pos], Z, 1, 1)
+                heads.append(start)
+            elif action == "host":
+                start = rng.choice(heads)
+            else:
+                start, correct = cur[pos], False
+                R = np.outer([rng.randrange(p) for _ in range(Xd)], [rng.randrange(p) for _ in range(Yd)])
+                target = (target + R) % p
+            node = prod_path(start, target)
+            committed[(pos, c)] = (node, correct and np.array_equal(val[node] % p, shape.T(pos, c) % p))
+            cur[pos] = node
+
+    def root_of(x):
+        while par[x] is not None:
+            x = par[x]
+        return x
+
+    def chain(x):
+        out = []
+        while par[x] is not None:
+            out.append(x)
+            x = par[x]
+        return out
+
+    trees = {}
+    for (pos, c), (node, ok) in committed.items():
+        if ok:
+            trees.setdefault(root_of(node), {}).setdefault(pos, []).append((c, node))
+    n_products = {}
+    for x in range(1, len(val)):
+        if par[x] is not None:
+            n_products[root_of(x)] = n_products.get(root_of(x), 0) + 1
+    bounds = tree_bounds({tau: {pos: [c for c, _ in cs] for pos, cs in lv.items()} for tau, lv in trees.items()},
+                         shape.L)
+    for tau, levels in trees.items():
+        tops = [(pos, *max(cs)) for pos, cs in levels.items()]  # (pos, hi, node)
+        k = len(tops)
+        star = None if tau == 0 else min(((c, node) for cs in levels.values() for c, node in cs))
+        virtual = [] if star is None else rank_one_terms(val[star[1]], p)
+        rev = set() if star is None else set(chain(star[1]))
+        edges = [(frozenset(range(k)), R) for R in virtual]
+        for x in range(1, len(val)):
+            if par[x] is None or root_of(x) != tau:
+                continue
+            below = frozenset(t for t, (_, _, node) in enumerate(tops) if x in chain(node))
+            edges.append((frozenset(range(k)) - below, -step[x]) if x in rev else (below, step[x]))
+        assert len(edges) == n_products.get(tau, 0) + len(virtual)
+        rows_of = [frozenset((pos[0], s) for s in range(hi)) for pos, hi, _ in tops]
+        cols_of = [frozenset((pos[1], s) for s in range(hi)) for pos, hi, _ in tops]
+        if k == 1:
+            a = b = np.ones((1, 1), dtype=np.int64)
+        else:
+            a, b, _ = set_labels(binary_hierarchy([S for S, _ in edges], range(k)), k, rows_of, cols_of, p)
+        lhs = flatten(a, b, {t: shape.T(pos, hi) for t, (pos, hi, _) in enumerate(tops)}, {}, p)
+        rhs = np.zeros_like(lhs)
+        for S, R in edges:
+            Lam = sum((np.outer(a[:, t], b[:, t]) for t in S), np.zeros((a.shape[0], b.shape[0]), dtype=np.int64)) % p
+            assert rank(Lam, p) <= 1, "edge label sum has rank > 1"
+            rhs = rhs + np.kron(Lam, R)
+        assert np.array_equal(lhs % p, rhs % p), "flattening identity fails on the re-rooted tree"
+        assert rank(lhs, p) == shape.L * sum(hi for _, hi, _ in tops), "Lemma 2(b) fails"
+        assert n_products.get(tau, 0) >= bounds[tau], "per-tree bound fails"
+    G = sum(len(cs) for lv in trees.values() for cs in lv.values())
+    H = sum(1 for tau in trees if tau != 0)
+    M = sum(1 for x in range(1, len(val)) if par[x] is None)
+    assert H <= M
+    assert sum(bounds.values()) >= shape.L * (G - H), "covering fails"
+    total = sum(n_products.values())
+    assert total >= shape.L * (G - H), "Theorem B fails"
+    multi = sum(1 for tau, lv in trees.items() if tau != 0 and len(lv) >= 2)
+    return total, shape.L * (G - H), multi
+
+
+def part5(rng):
+    part5a()
+    count, tight, multi = 0, 0, 0
+    for (P, Q, m, L, trials) in ((2, 2, 4, 2, 60), (2, 3, 4, 2, 30), (2, 2, 6, 3, 30), (3, 3, 2, 1, 20)):
+        shape = Shape(P, Q, m, L)
+        for _ in range(trials):
+            for p in (3, 10007):
+                total, bound, n_multi = merge_dag(shape, rng, p)
+                count += 1
+                tight += total == bound
+                multi += n_multi
+    print(f"[merges] {count} random computations with continued and restarted running sums, cheap merges, shared "
+          "heads and wrong commits, GF(3) and GF(10007): per-tree flattening on the re-rooted tree, per-tree bound "
+          f"L*(sum hi - min lo), #products >= L*(|G_T| - H): ok ({tight} tight, {multi} head trees hosting "
+          "2+ positions)")
+
+
 def part4(rng):
     count = 0
     for (P, Q, m, L, trials) in ((2, 2, 4, 2, 60), (2, 3, 4, 4, 30), (2, 2, 6, 3, 30)):
@@ -483,10 +663,12 @@ def part4(rng):
 
 if __name__ == "__main__":
     rng = random.Random(20261015)
-    parts = sys.argv[1:] or ["1", "3", "4"]
+    parts = sys.argv[1:] or ["1", "3", "4", "5"]
     if "1" in parts:
         part1_2(rng)
     if "3" in parts:
         part3(rng)
     if "4" in parts:
         part4(rng)
+    if "5" in parts:
+        part5(rng)
