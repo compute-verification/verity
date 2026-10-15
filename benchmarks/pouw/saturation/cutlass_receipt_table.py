@@ -68,7 +68,8 @@ def main():
             steps = r["m"] // 128 * (r["n"] // 128) * kn["threads"] * r["k"] // 32 * kn["forced"]
             share += steps / (r["ms"] * 1e3 * r["sm_mhz"] * d["sms"]) / (128.0 if kn.get("fvar") == 2 else PHI_ALONE[0])
         out.append({**r, "slot_load": load_, "rate_kept": kept, "phi_share": share, "plain_ms": p["ms"],
-                    "forced": kn.get("forced", 0), "fvar": kn.get("fvar", 0), "threads": kn.get("threads", 256)})
+                    "forced": kn.get("forced", 0), "fvar": kn.get("fvar", 0), "honest": kn.get("honest", 0),
+                    "threads": kn.get("threads", 256)})
         print(f"| {r['kernel']} | {r['rounds']}× {VAR[r['var']]} | {r['L']} | {r['shape']} | {load_:.2f} | "
               f"{100 * kept:.1f}% | {100 * share:.0f}% |")
 

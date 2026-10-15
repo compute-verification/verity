@@ -52,6 +52,9 @@ DESIGNS = [  # name, prefill kernel, decode kernel
     ("1× alu, L = 32, 128 forced FFMAs", "p_alu_g4_ff128", None),
     ("1× alu, L = 32, 192 forced FFMAs", "p_alu_g4_ff192", None),
     ("1× alu, L = 32, 256 forced FFMAs", "p_alu_g4_ff256", None),
+    ("1× alu, L = 32, 192 forced FFMAs, H = 2", "p_alu_g4_h2_ff192", None),
+    ("1× alu, L = 32, 192 forced FFMAs, H = 4", "p_alu_g4_h4_ff192", None),
+    ("1× alu, L = 32, 256 forced FFMAs, H = 4", "p_alu_g4_h4_ff256", None),
     ("3× alu, L = 128, spread (crossover)", "p_alu3_p1s", "d_alu16_p1"),
 ]
 SCENARIOS = [  # name, measured idle SM-time as served?, ν_f (CUDA slack a fused cheater uses; None: measured)
@@ -186,10 +189,12 @@ def main():
             step, g, _ = SPLIT[ph]
             over = g / step * (1 / kp - 1)
             kappa = max(16.0, L / 3)
-            # CR_FORCED's steps are folded into the receipt words, so they are honest slots a word as well: F a thread
-            # a 32-deep k-block, an alu φ1 at H_PHI[0] slots or an FFMA at one, over the tile's 128·128·32/L words
-            forced = m.get("forced", 0) * m.get("threads", 256) * (1 if m.get("fvar") == 2 else H_PHI[0]) * L / (128 * 128 * 32)
-            h = rounds * H_PHI[var] + forced + H_TREE
+            # CR_FORCED's steps and CR_HONEST's extra rounds are folded into the receipt words, so they are honest
+            # slots a word as well: a thread's F (or H) a 32-deep k-block, an alu φ1 at H_PHI[0] slots or an FFMA at
+            # one, over the tile's 128·128·32/L words
+            per_word = m.get("threads", 256) * L / (128 * 128 * 32)
+            forced = m.get("forced", 0) * (1 if m.get("fvar") == 2 else H_PHI[0]) * per_word
+            h = rounds * H_PHI[var] + forced + m.get("honest", 0) * H_PHI[var] * per_word + H_TREE
             eta_w = ETA_GEMM[ph] * kp
             mult = kappa / (RHO * eta_w)
             f_terms = F + kappa * F * h / L
