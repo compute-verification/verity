@@ -7,7 +7,7 @@ trap 'rm -rf "$d"' EXIT
 cd benchmarks/pouw/steiner
 gcc -O3 -march=native -fopenmp -o "$d/dw_f2" dw_f2.c
 n=$(nproc)
-export STEINER_BIN="$d" OMP_NUM_THREADS=$((n < 64 ? n : 64))
+export STEINER_BIN="$d" OMP_NUM_THREADS=${THREADS:-$((n < 64 ? n : 64))}
 echo "threads $OMP_NUM_THREADS on $(taskset -pc $$)" >"$OUT/threads.txt"
 python3 steiner.py --out "$OUT/validate.jsonl" validate
 python3 steiner.py --out "$OUT/selftest.jsonl" selftest --cases 300 --seed 11
