@@ -1210,14 +1210,13 @@ def cmd_subscriptions(ns: argparse.Namespace, reg: dict) -> int:
                   f"expiresInSeconds={EXPIRES_S})   # #{key}")
     if key := h.get("linear"):
         print(f'subscribe_linear_issue(options={{"scope": "team", "teamId": "{key}"}}, expiresInSeconds={EXPIRES_S})   '
-              f"# an issue filed into or changing state in @{h['handle']}'s Linear team: the work item is its own doorbell")
-        print(f'subscribe_linear_comment(options={{"scope": "team", "teamId": "{key}"}}, expiresInSeconds={EXPIRES_S})   '
-              f"# a comment on an issue in @{h['handle']}'s Linear team")
-    print(f"# and subscribe_slack_thread(channelId, threadTs, expiresInSeconds={EXPIRES_S}) for each thread @{h['handle']} "
-          f"starts, replies in or picks up (not for a status line alone); renew on every wake")
-    print("# but not an announcement's thread (the merge thread is one): there the doorbell rings for a post that names "
-          f"@{h['handle']} at its start, or, naming no one, one of its PRs or a run it named beside one of its PRs; "
-          "unsubscribe from any you hold")
+              f"# an issue filed into or changing state in @{h['handle']}'s Linear team, a human's included")
+        print(f"# but no comment subscription on {key}: nearly every comment there is @{h['handle']}'s own, and it would wake "
+              "it for each (every handle writes as one app; COMM-23)")
+    print(f"# and subscribe_slack_thread(channelId, threadTs, expiresInSeconds={EXPIRES_S}) only for a thread a human may "
+          f"answer in (@{h['handle']}'s #ask-daniel card, a thread a named human posted in); renew on every wake")
+    print(f"# not for a thread between handles: the inbox already rings @{h['handle']} for each reply addressed to it, and "
+          "never for its own posts, while a thread subscription also wakes it for each of its own replies (COMM-23)")
     return 2 if missing else 0
 
 

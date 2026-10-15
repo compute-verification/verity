@@ -198,7 +198,8 @@ def test_closing_or_declining_an_ask_moves_its_issue_to_done_or_canceled(fake, r
 
 def test_subscriptions_name_the_leads_linear_team_and_the_registry_refuses_a_shared_key(registry, capsys):
     rc, out, _ = run(capsys, "subscriptions", "--as", "comms")
-    assert rc == 0 and 'subscribe_linear_comment(options={"scope": "team", "teamId": "COMM"}' in out
+    assert rc == 0 and 'subscribe_linear_issue(options={"scope": "team", "teamId": "COMM"}' in out
+    assert "subscribe_linear_comment" not in out
     assert "subscribe_linear" not in run(capsys, "subscriptions", "--as", "old-accounting")[1]
     reg = json.loads(registry.read_text())
     next(h for h in reg["handles"] if h["handle"] == "ci")["linear"] = "COMM"
