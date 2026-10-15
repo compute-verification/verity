@@ -7,9 +7,12 @@
 // 16 chains into one word a tile.
 //   plain             no receipt: gemm_plain's mainloop (its scales aside), bf16 out
 //   alu_pP, imad_pP   phi1 alu or imad at L = 128 P;  alu2_pP  two alu rounds a word
+//   ..._pPs           spread: a receipting stage's words one after each of its 64 MMAs (row block a's after atom a's), the
+//                     same chains, against the unspread form's 4 words after each of the first atom's FADDs
 // Gates (exit 3, before any time is printed): every kernel's FP32 totals equal plain's bit for bit and so do its bf16 outputs,
-// two launches of each agree (totals and receipt words), a receipted kernel's receipt words are not all zero, and 64 sampled
-// totals are within 1e-4 of the sum of |products| of a double host sum (the mma's own rounding aside).  Times: --reps rounds,
+// two launches of each agree (totals and receipt words), a receipted kernel's receipt words are not all zero, a spread
+// kernel's receipt words equal its unspread twin's, and 64 sampled totals are within 1e-4 of the sum of |products| of a
+// double host sum (the mma's own rounding aside).  Times: --reps rounds,
 // each kernel in turn within a round (so each round pairs every kernel with plain at the same clocks), bf16 out.
 //
 //   nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o receipt_gemm receipt_gemm.cu
@@ -44,14 +47,15 @@ constexpr int RASTER = 8;  // run.py's tile-row group
 using L = ml::Mainloop<128, 128, 4, 3, false, 1, 24>;
 constexpr int MI = L::MI, NI = L::NI;
 
-template <int VAR, int ROUNDS, int P> struct Receipted : L {
+template <int VAR, int ROUNDS, int P, bool SPREAD> struct Receipted : L {
     ML_DEV explicit Receipted(uint8_t* smem) : L(smem) {}
     ML_DEV static void receipt(uint32_t& y, const float (&t)[4], uint32_t w, int j) {
 #pragma unroll
         for (int e = 0; e < 4; e++) y = phi<ROUNDS, VAR>(y, __float_as_uint(t[e]), w, key(j, e));
     }
-    // L::mma, with each tile's receipt (RCPT) right after its FADD, among the window's first MMAs
-    template <bool FROM0, bool FADD, bool RCPT>
+    // L::mma, with each tile's receipt (RCPT) right after its FADD, among the window's first MMAs; or (RB >= 0) row block
+    // RB's 16 words one after each of the atom's 16 MMAs, in the same chain order
+    template <bool FROM0, bool FADD, bool RCPT, int RB = -1>
     ML_DEV static void mma_r(float (&acc)[MI][NI][4], float (&total)[MI][NI][4], uint32_t (&y)[MI][NI], uint32_t w,
                              const uint32_t (&fa)[MI][4], const uint32_t (&fb)[NI][2]) {
 #pragma unroll
@@ -65,25 +69,30 @@ template <int VAR, int ROUNDS, int P> struct Receipted : L {
                 if (RCPT) receipt(y[mi][ni], total[mi][ni], w, mi * NI + ni);
                 if (FROM0) ml::qmma0(acc[mi][ni], fa[mi], fb[ni]);
                 else ml::qmma(acc[mi][ni], fa[mi], fb[ni], acc[mi][ni]);
+                if (RB >= 0) {  // after MMA q, word q % 4 of tile q / 4
+                    const int q = mi * NI + ni, tj = q / 4, te = q % 4;
+                    y[RB][tj] = phi<ROUNDS, VAR>(y[RB][tj], __float_as_uint(total[RB][tj][te]), w, key(RB * NI + tj, te));
+                }
             }
     }
-    // L::stage_body<FIRST, LAST, true>
+    // L::stage_body<FIRST, LAST, true>; SPREAD moves a receipting stage's receipts to row block a after atom a's MMAs
     template <bool FIRST, bool LAST, bool RCPT>
     ML_DEV void stage_r(float (&acc)[MI][NI][4], float (&total)[MI][NI][4], uint32_t (&y)[MI][NI], uint32_t kt,
                         uint32_t (&fa)[2][MI][4], uint32_t (&fb)[2][NI][2]) {
+        constexpr bool S = RCPT && SPREAD;
         const uint32_t sb = stage(s), done = empty(s);
         load(fa[1], fb[1], sb, 1);
-        mma_r<true, !FIRST, RCPT>(acc, total, y, kt, fa[0], fb[0]);
+        mma_r<true, !FIRST, RCPT && !SPREAD, S ? 0 : -1>(acc, total, y, kt, fa[0], fb[0]);
         load(fa[0], fb[0], sb, 2);
-        mma_r<false, false, false>(acc, total, y, kt, fa[1], fb[1]);
+        mma_r<false, false, false, S ? 1 : -1>(acc, total, y, kt, fa[1], fb[1]);
         load(fa[1], fb[1], sb, 3);
-        mma_r<false, false, false>(acc, total, y, kt, fa[0], fb[0]);
+        mma_r<false, false, false, S ? 2 : -1>(acc, total, y, kt, fa[0], fb[0]);
         advance();
         if (!LAST) {
             ml::mbar_wait_warp(full(s), ph);
             load(fa[0], fb[0], stage(s), 0);
         }
-        mma_r<false, false, false>(acc, total, y, kt, fa[1], fb[1]);
+        mma_r<false, false, false, S ? 3 : -1>(acc, total, y, kt, fa[1], fb[1]);
         ml::mbar_release(done);
     }
     // L::tile<1, true>: stage kt's FADD closes the prefix at k = 128 kt, receipted when P divides kt, and so is the final
@@ -131,12 +140,12 @@ __device__ __forceinline__ long long globaltimer() {
 
 // A (M x K) and B (N x K) row-major E4M3 through maps; out C (FP32 totals, fp32 != 0) or Yb (their bf16); R a word a consumer
 // thread a tile, its 16 receipt chains folded; clk 4 words a block (clock64 and globaltimer at its first tile and after its last)
-template <int VAR, int ROUNDS, int P>
+template <int VAR, int ROUNDS, int P, bool SPREAD = false>
 __global__ void __launch_bounds__(L::NT, 1)
     rgemm(const ml::Maps* maps, float* C, uint16_t* Yb, uint32_t* R, long long* clk, int M, int N, int K, int fp32) {
     extern __shared__ __align__(1024) uint8_t smem[];
     const int tiles_m = M / 128, tiles_n = N / 128;
-    Receipted<VAR, ROUNDS, P> loop(smem);
+    Receipted<VAR, ROUNDS, P, SPREAD> loop(smem);
     loop.roles(maps, M, N, K, RASTER);
     const long long c0 = clock64(), g0 = globaltimer();
     for (int t = blockIdx.x; t < tiles_m * tiles_n; t += gridDim.x) {
@@ -197,14 +206,18 @@ struct Kernel {
     const char* name;
     const char* var;
     int rounds, p;
+    bool spread;
     Fn fn;
 };
 static const Kernel KERNELS[] = {
-    {"plain", "none", 0, 0, rgemm<0, 1, 0>},
-    {"alu_p1", "alu", 1, 1, rgemm<0, 1, 1>},   {"alu_p2", "alu", 1, 2, rgemm<0, 1, 2>},
-    {"alu_p4", "alu", 1, 4, rgemm<0, 1, 4>},   {"imad_p1", "imad", 1, 1, rgemm<1, 1, 1>},
-    {"imad_p2", "imad", 1, 2, rgemm<1, 1, 2>}, {"imad_p4", "imad", 1, 4, rgemm<1, 1, 4>},
-    {"alu2_p1", "alu", 2, 1, rgemm<0, 2, 1>},  {"alu2_p2", "alu", 2, 2, rgemm<0, 2, 2>},
+    {"plain", "none", 0, 0, false, rgemm<0, 1, 0>},
+    {"alu_p1", "alu", 1, 1, false, rgemm<0, 1, 1>},       {"alu_p2", "alu", 1, 2, false, rgemm<0, 1, 2>},
+    {"alu_p4", "alu", 1, 4, false, rgemm<0, 1, 4>},       {"imad_p1", "imad", 1, 1, false, rgemm<1, 1, 1>},
+    {"imad_p2", "imad", 1, 2, false, rgemm<1, 1, 2>},     {"imad_p4", "imad", 1, 4, false, rgemm<1, 1, 4>},
+    {"alu2_p1", "alu", 2, 1, false, rgemm<0, 2, 1>},      {"alu2_p2", "alu", 2, 2, false, rgemm<0, 2, 2>},
+    {"alu_p1s", "alu", 1, 1, true, rgemm<0, 1, 1, true>}, {"alu_p2s", "alu", 1, 2, true, rgemm<0, 1, 2, true>},
+    {"imad_p1s", "imad", 1, 1, true, rgemm<1, 1, 1, true>}, {"alu2_p1s", "alu", 2, 1, true, rgemm<0, 2, 1, true>},
+    {"alu2_p2s", "alu", 2, 2, true, rgemm<0, 2, 2, true>},
 };
 
 using EncodeTiled = CUresult (*)(CUtensorMap*, CUtensorMapDataType, cuuint32_t, void*, const cuuint64_t*, const cuuint64_t*,
@@ -366,6 +379,13 @@ int main(int argc, char** argv) {
                 run(*k, nullptr, Yt, 0);
                 gate(k->name, "bf16 outputs differ from plain's", differ(Yref, Yt, nn / 2));
                 if (k->p > 0) gate(k->name, "every receipt word is zero", std::all_of(r0.begin(), r0.end(), [](uint32_t w) { return w == 0; }));
+                if (k->spread) {
+                    const Kernel* twin = nullptr;
+                    for (const Kernel& t : KERNELS)
+                        if (!t.spread && t.p == k->p && t.rounds == k->rounds && !strcmp(t.var, k->var)) twin = &t;
+                    run(*twin, Ct, Yt, 1);
+                    gate(k->name, "receipt words differ from its unspread twin's", receipts() != r0);
+                }
             }
         }
 
@@ -398,11 +418,12 @@ int main(int argc, char** argv) {
                 mac.push_back((double)nn * n / cycles);
                 phis.push_back(k.p ? (double)nn * (n / (128 * k.p)) * k.rounds / cycles : 0);
             }
-            printf("%s {\"n\": %d, \"kernel\": \"%s\", \"var\": \"%s\", \"rounds\": %d, \"P\": %d, \"L\": %d, \"regs_launch\": %d, "
-                   "\"local_bytes\": %zu, \"grid\": %d, \"launches\": %d, \"reps\": %zu, \"ms\": %.4f, \"ms_min\": %.4f, "
-                   "\"tflops\": %.1f, \"sm_mhz\": %.1f, \"macs_per_sm_clk\": %.1f, \"phi_rounds_per_sm_clk\": %.2f, "
+            printf("%s {\"n\": %d, \"kernel\": \"%s\", \"var\": \"%s\", \"rounds\": %d, \"P\": %d, \"L\": %d, \"spread\": %s, "
+                   "\"regs_launch\": %d, \"local_bytes\": %zu, \"grid\": %d, \"launches\": %d, \"reps\": %zu, \"ms\": %.4f, "
+                   "\"ms_min\": %.4f, \"tflops\": %.1f, \"sm_mhz\": %.1f, \"macs_per_sm_clk\": %.1f, \"phi_rounds_per_sm_clk\": %.2f, "
                    "\"ms_vs_plain\": %.4f, \"host_err\": %.2e, \"gate\": \"%s\"}",
-                   first ? "" : ",\n", n, k.name, k.var, k.rounds, k.p, 128 * k.p, attrs[j].numRegs, attrs[j].localSizeBytes,
+                   first ? "" : ",\n", n, k.name, k.var, k.rounds, k.p, 128 * k.p, k.spread ? "true" : "false", attrs[j].numRegs,
+                   attrs[j].localSizeBytes,
                    grid, launches, ms[j].size(), med(ms[j]), *std::min_element(ms[j].begin(), ms[j].end()),
                    2.0 * nn * n / (med(ms[j]) * 1e9), med(mhz[j]), med(mac), med(phis), med(ratio), host_err,
                    profile ? "none" : "ok");
