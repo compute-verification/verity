@@ -437,7 +437,7 @@ def test_lmoe_ffn_returns_y_only_takes_the_enable_last_and_the_specified_class_i
     # nothing new in pad's specified class: the block uses LSelect32, LBot32, LFixedSelect4x16, LEnable (their enabled _v2 forms) and
     # strict / constant lifts only
     import re
-    allowed = re.compile(r"^(LSelect\d+|LIsActive\d+|LBot\d+|LGatherRow\d+x\d+|LStepLive\d+|LSplitsForSMS\d+|LFixedSelect\d+x\d+|LEnable|LIsEOS\S*|LEmitNext\S*)_v1$")
+    allowed = re.compile(r"^(LSelect\d+|LIsActive\d+|LBot\d+|LGatherRow\d+x\d+(?:o[0-9a-f]+)?|LStepLive\d+|LSplitsForSMS\d+|LFixedSelect\d+x\d+|LEnable|LIsEOS\S*|LEmitNext\S*)_v1$")
     for fid in L.specified_ids():
         assert allowed.match(fid), fid
     # ids read without pad G1's `ORD=<mask>` static (`Lifted[MoeSum_v1]_v2{TOPK=2,H=16,ORD=0}` under G1 5261740d7; no static at v0.7)
