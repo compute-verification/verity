@@ -421,9 +421,10 @@ static KFn PURE[NK] = {pure_k<0>, pure_k<1>, pure_k<2>, pure_k<3>, pure_k<4>, pu
 static KFn PROBE[NP] = {probe_k<0>,  probe_k<1>,  probe_k<2>,  probe_k<3>,  probe_k<4>,  probe_k<5>,
                         probe_k<6>,  probe_k<7>,  probe_k<8>,  probe_k<9>,  probe_k<10>, probe_k<11>,
                         probe_k<12>, probe_k<13>, probe_k<14>, probe_k<15>, probe_k<16>, probe_k<17>};
-constexpr int NC = 4;
-static const int CS[NC] = {1, 2, 4, 8};
-#define FROW(K, M) {fused_k<K, 1, M>, fused_k<K, 2, M>, fused_k<K, 4, M>, fused_k<K, 8, M>}
+constexpr int NC = 6;  // phi.sh's ncu loop indexes FUSED rows by it
+static const int CS[NC] = {1, 2, 4, 8, 16, 32};
+#define FROW(K, M) \
+  {fused_k<K, 1, M>, fused_k<K, 2, M>, fused_k<K, 4, M>, fused_k<K, 8, M>, fused_k<K, 16, M>, fused_k<K, 32, M>}
 #define FMODE(M)                                                                                               \
   {FROW(-1, M), FROW(0, M), FROW(1, M), FROW(2, M),  FROW(3, M),  FROW(4, M),  FROW(5, M),  FROW(6, M), \
    FROW(7, M),  FROW(8, M), FROW(9, M), FROW(10, M), FROW(11, M), FROW(12, M), FROW(13, M), FROW(14, M)}
