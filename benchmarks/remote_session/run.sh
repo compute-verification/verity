@@ -13,16 +13,23 @@
 # (whole 1 GiB chunks); WINDOWS, WINDOW_MS, SAMPLES, JITTER_MS the sessions'; VERIFIER_CPUS and PROVER_CPUS the cores
 # each process is pinned to; MAXMIN the lease's minutes.
 #
-# The whole node's HBM (752 GB, 700 GiB on eight GPUs; its pass handles go to host memory, so --mem-gb 400):
+# With PROVER_SLICE the prover runs at nice 0 in a scope of that top-level slice (root's systemd-run, then this user
+# again), on PROVER_CPUS and in at most PROVER_MEM_GB. Node 2's user slice holds only 0-119, where nice 19 doesn't make
+# another session's CPU jobs yield to the prover (cgroups share CPU by weight, a session's as much as every lease's
+# together): on 48-95 beside them its host saw roots up to 35 ms late, 1.34x the median pass (r20261015-185416-ac65).
+# vy-timing.slice's CPUs 128-191 are fill's timing jobs', each of which holds a GPU, so none runs in a whole-node lease.
 #
-#   research run --on vy-nebius-2 ... --mem-gb 400 --env GPUS=8 --env TIMED=1 --env GIB=700 --env ROLE=prover ...
+# The whole node's HBM (752 GB, 700 GiB on eight GPUs; its pass handles go to host memory, so --mem-gb 260):
+#
+#   research run --on vy-nebius-2 ... --mem-gb 260 --env GPUS=8 --env TIMED=1 --env GIB=700 --env ROLE=prover \
+#     --env PROVER_SLICE=vy-timing.slice --env PROVER_CPUS=128-191 ...
 #
 # On two machines, two runs with the same PORT and SESSIONS: ROLE=verifier on the verifier's machine (no GPU), which
 # opens `ssh -R PORT` to PEER (the prover's machine, a name in /etc/vy/peers) and listens behind it, so the prover's
 # connections to its own 127.0.0.1:PORT cross the network; then ROLE=prover on PEER, which connects there.
 #
 #   research run --on vy-nebius-1 ... --env ROLE=verifier --env PEER=vy-nebius-2 --env PORT=7791 --env SESSIONS=2 \
-#     -- taskset -c 64-127 bash benchmarks/remote_session/run.sh
+#     -- taskset -c 96-127 bash benchmarks/remote_session/run.sh
 #   research run --on vy-nebius-2 ... --env ROLE=prover --env PORT=7791 --env PLAN=honest,skip:0.0625 \
 #     -- taskset -c 48-95 bash benchmarks/remote_session/run.sh
 set -uxo pipefail
@@ -75,7 +82,15 @@ LEASE=(gpu-lease "${GPUS:-1}" --wait ${GPU:+--on "$GPU"} ${TIMED:+--timed} --max
     # shellcheck disable=SC2086
     taskset -c "$VERIFIER_CPUS" "$PY" $RS/verifier.py $VERIFY_ARGS > "$O/verifier.log" 2>&1 & V=$!
   fi
-  taskset -c "$PROVER_CPUS" "$PY" $RS/prover.py --connect "127.0.0.1:$PORT" --out "$O" --plan "$PLAN" \
+  PIN=(taskset -c "$PROVER_CPUS")
+  if [ -n "${PROVER_SLICE:-}" ]; then
+    # sudo drops PATH, PYTHONPATH and LD_*, so they are set again
+    PIN=(sudo -n --preserve-env env "PATH=$PATH" "PYTHONPATH=${PYTHONPATH:-}" "LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}"
+      "HOME=$HOME" "USER=$(id -un)" "LOGNAME=$(id -un)" systemd-run --quiet --scope --collect --slice="$PROVER_SLICE"
+      --nice=0 -p AllowedCPUs="$PROVER_CPUS" -p MemoryMax="${PROVER_MEM_GB:-300}G" -p MemorySwapMax=0 --
+      setpriv --reuid="$(id -u)" --regid="$(id -g)" --init-groups -- "${PIN[@]}")
+  fi
+  "${PIN[@]}" "$PY" $RS/prover.py --connect "127.0.0.1:$PORT" --out "$O" --plan "$PLAN" \
     --lib "$B/session.so" --kv "$B/kv.so" --gib "$GIB" ${PROVER_ARGS:-} > "$O/prover.log" 2>&1
   P=$?
   W=0
