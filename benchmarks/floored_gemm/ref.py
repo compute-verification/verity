@@ -49,6 +49,67 @@ def rotl(x, r):
     return (x << np.uint32(r)) | (x >> np.uint32(32 - r))
 
 
+TB = {"tb4_32": 5, "tb2_32": 6, "tb1_32": 7}
+
+
+def key_tb(kind, t, lane, j):
+    """fgemm.cu's key_tb: register j of key t's B fragment in lane `lane`."""
+    return int(mix32(np.uint32((0xC0000000 + ((kind * 64 + t) * 32 + lane) * 2 + j) & 0xFFFFFFFF)))
+
+
+def tb_key(kind, t):
+    """K_t as an s8 matrix (k x 8): B fragment register j of lane 4 n + q holds K[16 j + 4 q + i, n] as byte i."""
+    kb = 2 if kind == 5 else 1
+    K = np.zeros((16 * kb, 8), dtype=np.int64)
+    for n in range(8):
+        for qq in range(4):
+            for jr in range(kb):
+                w = key_tb(kind, t, 4 * n + qq, jr)
+                for i in range(4):
+                    b = (w >> (8 * i)) & 0xFF
+                    K[16 * jr + 4 * qq + i, n] = b - 256 if b >= 128 else b
+    return K
+
+
+def tb_operand(kind, blk, mi, ni):
+    """The receipt IMMA's A operand (16 x k, u8) for accumulator tile (mi, ni) of a warp tile's bytes blk [WM, 32, 4]."""
+    b = blk[16 * mi : 16 * mi + 16, 8 * ni : 8 * ni + 8]
+    if kind == 5:   # word (r, 2q) at k 4q.., (r, 2q + 1) at 16 + 4q..
+        return np.concatenate([b[:, 0::2, :].reshape(16, 16), b[:, 1::2, :].reshape(16, 16)], axis=1)
+    if kind == 6:   # word (r, c) bytes 0, 1 at k 2c, 2c + 1
+        return b[:, :, :2].reshape(16, 16)
+    x = blk[16 * mi : 16 * mi + 16, 8 * (ni - 1) : 8 * ni, 1].reshape(16, 4, 2)
+    y = b[:, :, 1].reshape(16, 4, 2)
+    return np.stack([x, y], axis=2).reshape(16, 16)   # k 4q + c: tile ni - 1's word (r, 2q + c); 4q + 2 + c: tile ni's
+
+
+def tb_receipts(kind, SB, TM, BN, WM, NCT, tiles_m, tiles_n):
+    """Every thread's R fragment, [tile, ctid, 8] (R0..R3, then four zeros), from SB = the bytes of every word summed over
+    the checkpoints: R = sum over checkpoints and positions t of A_t K_t, and K_t doesn't depend on the checkpoint."""
+    MI, NI, warps_n = WM // 16, 4, BN // 32
+    keys = {t: tb_key(kind, t) for t in range(MI * NI)}
+    out = np.zeros((tiles_m * tiles_n, NCT, 8), dtype=np.uint32)
+    lane = np.arange(32)
+    g, q = lane >> 2, lane & 3
+    for ti in range(tiles_m * tiles_n):
+        tm, tn = ti // tiles_n, ti % tiles_n
+        for w in range(NCT // 32):
+            r0, c0 = tm * TM + (w // warps_n) * WM, tn * BN + (w % warps_n) * 32
+            blk = SB[r0 : r0 + WM, c0 : c0 + 32]
+            R = np.zeros((16, 8), dtype=np.int64)
+            for mi in range(MI):
+                for ni in range(NI):
+                    if kind == 7 and ni % 2 == 0:
+                        continue
+                    t = mi * NI + ni
+                    R += tb_operand(kind, blk, mi, ni) @ keys[t // 2 if kind == 7 else t]
+            R = (R & 0xFFFFFFFF).astype(np.uint32)
+            s = slice(32 * w, 32 * w + 32)
+            out[ti, s, 0], out[ti, s, 1] = R[g, 2 * q], R[g, 2 * q + 1]
+            out[ti, s, 2], out[ti, s, 3] = R[g + 8, 2 * q], R[g + 8, 2 * q + 1]
+    return out
+
+
 def f_matrix(own, k):
     """F (k x 32) from the own-side descriptors."""
     f = np.zeros((k, 32), dtype=np.int64)
@@ -106,7 +167,7 @@ def main(d: Path) -> int:
     peel = XA @ XB.T - EA @ W.T - V @ EB.T
     checks["peel_identity"] = bool((peel == U).all())
     U32 = U.astype(np.int32)
-    for name in ["lt", "plain", "g0", "duo32", "duo64", "duo2_32", "duo2_64", "add3_32", "mul2_32"]:
+    for name in ["lt", "plain", "g0", "duo32", "duo64", "duo2_32", "duo2_64", "add3_32", "mul2_32", *TB]:
         checks[f"U_{name}"] = bool((ld(f"U_{name}.bin", np.int32, (m, n)) == U32).all())
 
     # running sums at every 32 columns, as the kernel's s32 words
@@ -156,6 +217,14 @@ def main(d: Path) -> int:
         got = np.fromfile(d / f"R_{name}.bin", dtype=np.uint32).reshape(fin.shape)
         checks[f"R_{name}"] = bool((got == fin).all())
         checks[f"R_{name}_words"] = int(fin.size)
+    SB = np.zeros((m, n, 4), dtype=np.int64)
+    for Tw in Ts:
+        SB += np.stack([(Tw >> np.uint32(8 * j)) & np.uint32(0xFF) for j in range(4)], axis=-1).astype(np.int64)
+    for name, kind in TB.items():
+        want = tb_receipts(kind, SB, TM, BN, WM, NCT, tiles_m, tiles_n)
+        got = np.fromfile(d / f"R_{name}.bin", dtype=np.uint32).reshape(want.shape)
+        checks[f"R_{name}"] = bool((got == want).all())
+        checks[f"R_{name}_nonzero"] = bool((want[:, :, :4] != 0).mean() > 0.99)
     ok = all(v for v in checks.values() if isinstance(v, bool))
     print(json.dumps({"dir": d.name, "m": m, "n": n, "k": k, "TM": TM, "BN": BN, "grid": meta["grid"], "ok": ok, **checks}))
     return 0 if ok else 1

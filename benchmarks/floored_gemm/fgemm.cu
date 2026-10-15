@@ -67,7 +67,20 @@ __host__ __device__ constexpr uint32_t mix32(uint32_t x) {
 // ADD3 and MUL2 are cost probes, not receipts: duo with its multiply replaced by a three-input add (y = u + a + z; all
 // three ops on the ALU pipe), and duo with its rotate-add replaced by a second multiply-add (z = u b + y; two of three on
 // the FMA pipe)
-enum Kind { NONE = 0, DUO = 1, DUO2 = 2, ADD3 = 3, MUL2 = 4 };
+// TB4, TB2 and TB1 are the tensor-core receipts (note:20261015T1625Z-draft-tensor-byte-receipt): at each boundary the
+// warp folds every accumulator tile's bytes into one m16n8 s32 receipt accumulator R with a keyed IMMA, R += bytes(C) K_t,
+// bytes as u8 and keys as s8. TB4: all 4 bytes of each word, the accumulator's 4 registers read as an m16n8k32 A fragment
+// as they are (rows g, g + 8; word (r, 2q) at k 4q.., word (r, 2q + 1) at k 16 + 4q..), one m16n8k32 a tile. TB2: the two
+// low bytes of each word, PRMT-packed into an m16n8k16 A fragment (word (r, 2q) at k 4q, 4q + 1, word (r, 2q + 1) at
+// 4q + 2, 4q + 3), one m16n8k16 a tile. TB1: byte 1 of each word, PRMT-packed from tiles (mi, 2j) and (mi, 2j + 1) into one
+// m16n8k16 A fragment (k 4q + c for word column 2q + c of tile 2j, 4q + 2 + c of tile 2j + 1), one m16n8k16 a pair.
+// K_t's B fragments are fixed functions of (kind, position, lane) (key_tb; ref.py has the same), computed once a kernel
+// and held in registers: no CUDA-core op touches a receipt in the mainloop.
+enum Kind { NONE = 0, DUO = 1, DUO2 = 2, ADD3 = 3, MUL2 = 4, TB4 = 5, TB2 = 6, TB1 = 7 };
+constexpr bool is_tb(int k) { return k >= TB4; }
+__host__ __device__ constexpr uint32_t key_tb(int kind, int t, int lane, int j) {
+  return mix32(0xC0000000u + (uint32_t)(((kind * 64 + t) * 32 + lane) * 2 + j));
+}
 constexpr int NPOS = 16;
 // lane 0's multiplier and xor key at position t, then lane 1's (duo2's b and c); ref.py has the same formulas
 __host__ __device__ constexpr uint32_t key_mul(int lane, int t) { return mix32(0xA0000000u + 2u * (lane * NPOS + t)) | 1u; }
@@ -90,7 +103,8 @@ template <int KIND, int LANE, int T> DEV void duo(St& s, uint32_t p) {
 }
 // chains a thread: word e at position t goes to chain 4 (t % 2) + e (lane 0), and duo2's second lane to 8 + that, so
 // each chain absorbs 8 of a boundary's 16 words and a thread runs 8 (16) independent chains
-template <int KIND> constexpr int NCH = KIND == DUO2 ? 16 : 8;
+// (a tensor-core receipt's R, the m16n8 fragment R0..R3, is ch[0].y, ch[0].z, ch[1].y, ch[1].z)
+template <int KIND> constexpr int NCH = KIND == DUO2 ? 16 : is_tb(KIND) ? 2 : 8;
 // receipt word j (j = 4 (t % 2) + e) of a thread: duo's fold of chain j, and for duo2 the fold of both lanes
 template <int KIND> DEV uint32_t finish(const St (&ch)[NCH<KIND>], int j) {
   const uint32_t r = ch[j].y ^ rotl(ch[j].z, 16);
@@ -147,6 +161,17 @@ DEV void imma0(int* d, const uint32_t* a, const uint32_t* b) {
       "{%10, %10, %10, %10};"
       : "=r"(d[0]), "=r"(d[1]), "=r"(d[2]), "=r"(d[3])
       : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]), "r"(0));
+}
+// the receipt IMMAs: R += A B, A u8 (the accumulator's bytes), B s8 (the key), no saturation (|R| stays far below 2^31)
+DEV void rimma32(St (&r)[2], uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t b0, uint32_t b1) {
+  asm("mma.sync.aligned.m16n8k32.row.col.s32.u8.s8.s32 {%0, %1, %2, %3}, {%4, %5, %6, %7}, {%8, %9}, {%0, %1, %2, %3};"
+      : "+r"(r[0].y), "+r"(r[0].z), "+r"(r[1].y), "+r"(r[1].z)
+      : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(b0), "r"(b1));
+}
+DEV void rimma16(St (&r)[2], uint32_t a0, uint32_t a1, uint32_t b0) {
+  asm("mma.sync.aligned.m16n8k16.row.col.s32.u8.s8.s32 {%0, %1, %2, %3}, {%4, %5}, {%6}, {%0, %1, %2, %3};"
+      : "+r"(r[0].y), "+r"(r[0].z), "+r"(r[1].y), "+r"(r[1].z)
+      : "r"(a0), "r"(a1), "r"(b0));
 }
 DEV void raster(int t, int tiles_m, int tiles_n, int group, int& tm, int& tn) {
   const int per = group * tiles_n, first = (t / per) * group, size = min(tiles_m - first, group), r = t % per;
@@ -273,47 +298,75 @@ template <int TM, int BN, int WM, int STAGES> struct ML {
   template <int KIND, int IDX> DEV static void absorb_at(St (&ch)[NCH<KIND>], const int (&w)[4]) {
     absorb<KIND, IDX / NI, IDX % NI>(ch, w);
   }
+  // key registers a thread: TB4 two a tile, TB2 one a tile, TB1 one a pair of tiles; key t's registers start at KB * t
+  template <int KIND> static constexpr int KB = KIND == TB4 ? 2 : 1;
+  template <int KIND> static constexpr int NK = KIND == TB4 ? 2 * MI * NI : KIND == TB2 ? MI * NI : KIND == TB1 ? MI * NI / 2 : 1;
+  template <int KIND> DEV static void keys(uint32_t (&kr)[NK<KIND>], int lane) {
+    if constexpr (is_tb(KIND)) {
+#pragma unroll
+      for (int i = 0; i < NK<KIND>; i++) kr[i] = key_tb(KIND, i / KB<KIND>, lane, i % KB<KIND>);
+    }
+  }
+  // the tensor-core receipt of tile IDX = mi NI + ni, right after its MMA (TB1: after the odd tile of the pair)
+  template <int KIND, int IDX>
+  DEV static void tb_at(St (&ch)[NCH<KIND>], const uint32_t (&kr)[NK<KIND>], const int (&acc)[MI][NI][4]) {
+    constexpr int mi = IDX / NI, ni = IDX % NI;
+    const int(&w)[4] = acc[mi][ni];
+    if constexpr (KIND == TB4) {
+      rimma32(ch, (uint32_t)w[0], (uint32_t)w[2], (uint32_t)w[1], (uint32_t)w[3], kr[2 * IDX], kr[2 * IDX + 1]);
+    } else if constexpr (KIND == TB2) {
+      rimma16(ch, __byte_perm((uint32_t)w[0], (uint32_t)w[1], 0x5410), __byte_perm((uint32_t)w[2], (uint32_t)w[3], 0x5410), kr[IDX]);
+    } else if constexpr (KIND == TB1 && ni % 2 == 1) {
+      const int(&x)[4] = acc[mi][ni - 1];
+      const uint32_t a0 = __byte_perm(__byte_perm((uint32_t)x[0], (uint32_t)x[1], 0x0051), __byte_perm((uint32_t)w[0], (uint32_t)w[1], 0x5100), 0x7610);
+      const uint32_t a1 = __byte_perm(__byte_perm((uint32_t)x[2], (uint32_t)x[3], 0x0051), __byte_perm((uint32_t)w[2], (uint32_t)w[3], 0x5100), 0x7610);
+      rimma16(ch, a0, a1, kr[IDX / 2]);
+    }
+  }
   // one atom: ABS, absorb each accumulator's running sum right after its MMA. Reading the MMA's own result keeps ptxas
   // from hoisting the absorbs above the atom's MMAs (absorbing the previous atom's result before each MMA, it moved all
   // of them ahead of the atom's first MMA, and the two warps on an SMSP then ran MMAs and absorbs in phase)
   template <bool FROM0, bool ABS, int KIND, int IDX = 0>
-  DEV static void mma(int (&acc)[MI][NI][4], St (&ch)[NCH<KIND>], const uint32_t (&fa)[MI][4], const uint32_t (&fb)[NI][2]) {
+  DEV static void mma(int (&acc)[MI][NI][4], St (&ch)[NCH<KIND>], const uint32_t (&kr)[NK<KIND>], const uint32_t (&fa)[MI][4],
+                      const uint32_t (&fb)[NI][2]) {
     if constexpr (IDX < MI * NI) {
       constexpr int mi = IDX / NI, ni = IDX % NI;
       if (FROM0) imma0(acc[mi][ni], fa[mi], fb[ni]);
       else imma(acc[mi][ni], fa[mi], fb[ni]);
-      if constexpr (ABS) absorb_at<KIND, IDX>(ch, acc[mi][ni]);
-      mma<FROM0, ABS, KIND, IDX + 1>(acc, ch, fa, fb);
+      if constexpr (ABS && is_tb(KIND)) tb_at<KIND, IDX>(ch, kr, acc);
+      else if constexpr (ABS) absorb_at<KIND, IDX>(ch, acc[mi][ni]);
+      mma<FROM0, ABS, KIND, IDX + 1>(acc, ch, kr, fa, fb);
     }
   }
   // atom j of a stage absorbs when a receipt boundary falls just after it
   __host__ __device__ static constexpr bool absorbs(int rs, int j) { return rs != 0 && (rs == 32 || j % 2 == 1); }
   template <int RS, int KIND, bool FIRST, bool LAST>
-  DEV void stage_body(int (&acc)[MI][NI][4], St (&ch)[NCH<KIND>], uint32_t (&fa)[2][MI][4], uint32_t (&fb)[2][NI][2]) {
+  DEV void stage_body(int (&acc)[MI][NI][4], St (&ch)[NCH<KIND>], const uint32_t (&kr)[NK<KIND>], uint32_t (&fa)[2][MI][4],
+                      uint32_t (&fb)[2][NI][2]) {
     const uint32_t sb = stage(s), done = empty(s);
     load(fa[1], fb[1], sb, 1);
-    mma<FIRST, absorbs(RS, 0), KIND>(acc, ch, fa[0], fb[0]);
+    mma<FIRST, absorbs(RS, 0), KIND>(acc, ch, kr, fa[0], fb[0]);
     load(fa[0], fb[0], sb, 2);
-    mma<false, absorbs(RS, 1), KIND>(acc, ch, fa[1], fb[1]);
+    mma<false, absorbs(RS, 1), KIND>(acc, ch, kr, fa[1], fb[1]);
     load(fa[1], fb[1], sb, 3);
-    mma<false, absorbs(RS, 2), KIND>(acc, ch, fa[0], fb[0]);
+    mma<false, absorbs(RS, 2), KIND>(acc, ch, kr, fa[0], fb[0]);
     advance();
     if (!LAST) {
       mbar_wait_warp(full(s), ph);
       load(fa[0], fb[0], stage(s), 0);
     }
-    mma<false, absorbs(RS, 3), KIND>(acc, ch, fa[1], fb[1]);
+    mma<false, absorbs(RS, 3), KIND>(acc, ch, kr, fa[1], fb[1]);
     release(done);
   }
-  template <int RS, int KIND> DEV void tile(int K, int (&acc)[MI][NI][4], St (&ch)[NCH<KIND>]) {
+  template <int RS, int KIND> DEV void tile(int K, int (&acc)[MI][NI][4], St (&ch)[NCH<KIND>], const uint32_t (&kr)[NK<KIND>]) {
     const int KT = K / BK;
     uint32_t fa[2][MI][4], fb[2][NI][2];
     mbar_wait_warp(full(s), ph);
     load(fa[0], fb[0], stage(s), 0);
-    stage_body<RS, KIND, true, false>(acc, ch, fa, fb);
+    stage_body<RS, KIND, true, false>(acc, ch, kr, fa, fb);
 #pragma unroll 1
-    for (int kt = 1; kt < KT - 1; kt++) stage_body<RS, KIND, false, false>(acc, ch, fa, fb);
-    stage_body<RS, KIND, false, true>(acc, ch, fa, fb);
+    for (int kt = 1; kt < KT - 1; kt++) stage_body<RS, KIND, false, false>(acc, ch, kr, fa, fb);
+    stage_body<RS, KIND, false, true>(acc, ch, kr, fa, fb);
   }
   // the peel: U = C - 256 (E_A W_hi^T + V_hi E_B^T) - (E_A W_lo^T + V_lo E_B^T), the tail stage's four atoms
   DEV void peel(int (&acc)[MI][NI][4]) {
@@ -355,6 +408,8 @@ template <int TM, int BN, int WM, int STAGES, bool TAIL, int RS, int KIND> DEV v
   ml.consumer_init(warp, lane);
   const int tiles_m = a.M / TM, tiles_n = a.N / BN;
   const int wm = warp / L::WARPS_N, wn = warp % L::WARPS_N, g = lane >> 2, q = lane & 3, ctid = threadIdx.x;
+  uint32_t kr[L::template NK<KIND>];
+  L::template keys<KIND>(kr, lane);
   for (int t = blockIdx.x; t < tiles_m * tiles_n; t += gridDim.x) {
     int tm, tn;
     raster(t, tiles_m, tiles_n, a.group, tm, tn);
@@ -362,11 +417,15 @@ template <int TM, int BN, int WM, int STAGES, bool TAIL, int RS, int KIND> DEV v
     St ch[NCH<KIND>];
 #pragma unroll
     for (int e = 0; e < NCH<KIND>; e++) {
-      ch[e].y = mix32(a.seed ^ mix32((tile_id * L::NCT + ctid) * NCH<KIND> + e));
-      ch[e].z = mix32(ch[e].y + 0x9E3779B9u);
+      if constexpr (is_tb(KIND)) {
+        ch[e].y = ch[e].z = 0;
+      } else {
+        ch[e].y = mix32(a.seed ^ mix32((tile_id * L::NCT + ctid) * NCH<KIND> + e));
+        ch[e].z = mix32(ch[e].y + 0x9E3779B9u);
+      }
     }
     int acc[MI][NI][4];
-    ml.template tile<RS, KIND>(a.K, acc, ch);
+    ml.template tile<RS, KIND>(a.K, acc, ch, kr);
     if constexpr (TAIL) ml.peel(acc);
     const int row0 = tm * TM + wm * WM + g, col0 = tn * BN + wn * L::WN + 2 * q;
 #pragma unroll
@@ -377,7 +436,11 @@ template <int TM, int BN, int WM, int STAGES, bool TAIL, int RS, int KIND> DEV v
         *reinterpret_cast<int2*>(p) = make_int2(acc[mi][ni][0], acc[mi][ni][1]);
         *reinterpret_cast<int2*>(p + (size_t)8 * a.N) = make_int2(acc[mi][ni][2], acc[mi][ni][3]);
       }
-    if constexpr (RS != 0) {
+    if constexpr (is_tb(KIND)) {
+      uint4* r = reinterpret_cast<uint4*>(a.R) + ((size_t)tile_id * L::NCT + ctid) * 2;
+      r[0] = make_uint4(ch[0].y, ch[0].z, ch[1].y, ch[1].z);
+      r[1] = make_uint4(0, 0, 0, 0);
+    } else if constexpr (RS != 0) {
       uint4* r = reinterpret_cast<uint4*>(a.R) + ((size_t)tile_id * L::NCT + ctid) * 2;
       r[0] = make_uint4(finish<KIND>(ch, 0), finish<KIND>(ch, 1), finish<KIND>(ch, 2), finish<KIND>(ch, 3));
       r[1] = make_uint4(finish<KIND>(ch, 4), finish<KIND>(ch, 5), finish<KIND>(ch, 6), finish<KIND>(ch, 7));
@@ -397,6 +460,9 @@ GEMM(p_duo2_32, 128, 128, 64, 3, true, 32, DUO2)
 GEMM(p_duo2_64, 128, 128, 64, 3, true, 64, DUO2)
 GEMM(p_add3_32, 128, 128, 64, 3, true, 32, ADD3)
 GEMM(p_mul2_32, 128, 128, 64, 3, true, 32, MUL2)
+GEMM(p_tb4_32, 128, 128, 64, 3, true, 32, TB4)
+GEMM(p_tb2_32, 128, 128, 64, 3, true, 32, TB2)
+GEMM(p_tb1_32, 128, 128, 64, 3, true, 32, TB1)
 GEMM(d_plain, 128, 32, 16, 4, false, 0, NONE)
 GEMM(d_g0, 128, 32, 16, 4, true, 0, NONE)
 GEMM(d_duo32, 128, 32, 16, 4, true, 32, DUO)
@@ -405,6 +471,9 @@ GEMM(d_duo2_32, 128, 32, 16, 4, true, 32, DUO2)
 GEMM(d_duo2_64, 128, 32, 16, 4, true, 64, DUO2)
 GEMM(d_add3_32, 128, 32, 16, 4, true, 32, ADD3)
 GEMM(d_mul2_32, 128, 32, 16, 4, true, 32, MUL2)
+GEMM(d_tb4_32, 128, 32, 16, 4, true, 32, TB4)
+GEMM(d_tb2_32, 128, 32, 16, 4, true, 32, TB2)
+GEMM(d_tb1_32, 128, 32, 16, 4, true, 32, TB1)
 GEMM(q_plain, 128, 64, 32, 4, false, 0, NONE)
 GEMM(q_g0, 128, 64, 32, 4, true, 0, NONE)
 GEMM(q_duo32, 128, 64, 32, 4, true, 32, DUO)
@@ -413,6 +482,9 @@ GEMM(q_duo2_32, 128, 64, 32, 4, true, 32, DUO2)
 GEMM(q_duo2_64, 128, 64, 32, 4, true, 64, DUO2)
 GEMM(q_add3_32, 128, 64, 32, 4, true, 32, ADD3)
 GEMM(q_mul2_32, 128, 64, 32, 4, true, 32, MUL2)
+GEMM(q_tb4_32, 128, 64, 32, 4, true, 32, TB4)
+GEMM(q_tb2_32, 128, 64, 32, 4, true, 32, TB2)
+GEMM(q_tb1_32, 128, 64, 32, 4, true, 32, TB1)
 GEMM(w_plain, 128, 128, 32, 3, false, 0, NONE)
 GEMM(w_g0, 128, 128, 32, 3, true, 0, NONE)
 GEMM(w_duo32, 128, 128, 32, 3, true, 32, DUO)
@@ -421,6 +493,9 @@ GEMM(w_duo2_32, 128, 128, 32, 3, true, 32, DUO2)
 GEMM(w_duo2_64, 128, 128, 32, 3, true, 64, DUO2)
 GEMM(w_add3_32, 128, 128, 32, 3, true, 32, ADD3)
 GEMM(w_mul2_32, 128, 128, 32, 3, true, 32, MUL2)
+GEMM(w_tb4_32, 128, 128, 32, 3, true, 32, TB4)
+GEMM(w_tb2_32, 128, 128, 32, 3, true, 32, TB2)
+GEMM(w_tb1_32, 128, 128, 32, 3, true, 32, TB1)
 
 // Forming, one warp a row. own[col] = pi1 | pi2 << 8 | s1 << 16 | s2 << 17: the noise at column col of chunk s is
 // (-1)^s1 E[r, pi1] + (-1)^s2 E[r, pi2] (F_own's row col). inv[s 32 + j] = c1 | c2 << 8 | s1 << 16 | s2 << 17 for the other
@@ -528,16 +603,18 @@ static CUtensorMap tmap(const void* p, int depth, int rows, int box_rows) {
 }
 
 typedef void (*Kern)(const Args);
-struct Cfg { char name; int TM, BN, WM, NCT, smem; Kern k[8]; };   // plain, g0, duo32, duo64, duo2_32, duo2_64, add3_32, mul2_32
-static Cfg cfg_p() { return {'P', 128, 128, 64, 256, ML<128, 128, 64, 3>::SMEM, {p_plain, p_g0, p_duo32, p_duo64, p_duo2_32, p_duo2_64, p_add3_32, p_mul2_32}}; }
-static Cfg cfg_d() { return {'D', 128, 32, 16, 256, ML<128, 32, 16, 4>::SMEM, {d_plain, d_g0, d_duo32, d_duo64, d_duo2_32, d_duo2_64, d_add3_32, d_mul2_32}}; }
+constexpr int NG = 11;
+// plain, g0, duo32, duo64, duo2_32, duo2_64, add3_32, mul2_32, tb4_32, tb2_32, tb1_32
+struct Cfg { char name; int TM, BN, WM, NCT, smem; Kern k[NG]; };
+static Cfg cfg_p() { return {'P', 128, 128, 64, 256, ML<128, 128, 64, 3>::SMEM, {p_plain, p_g0, p_duo32, p_duo64, p_duo2_32, p_duo2_64, p_add3_32, p_mul2_32, p_tb4_32, p_tb2_32, p_tb1_32}}; }
+static Cfg cfg_d() { return {'D', 128, 32, 16, 256, ML<128, 32, 16, 4>::SMEM, {d_plain, d_g0, d_duo32, d_duo64, d_duo2_32, d_duo2_64, d_add3_32, d_mul2_32, d_tb4_32, d_tb2_32, d_tb1_32}}; }
 // Q: 128 x 64 tiles of 32 x 32 warps (32 accumulators a thread, against P's 64), for the receipt kernels' registers
-static Cfg cfg_q() { return {'Q', 128, 64, 32, 256, ML<128, 64, 32, 4>::SMEM, {q_plain, q_g0, q_duo32, q_duo64, q_duo2_32, q_duo2_64, q_add3_32, q_mul2_32}}; }
+static Cfg cfg_q() { return {'Q', 128, 64, 32, 256, ML<128, 64, 32, 4>::SMEM, {q_plain, q_g0, q_duo32, q_duo64, q_duo2_32, q_duo2_64, q_add3_32, q_mul2_32, q_tb4_32, q_tb2_32, q_tb1_32}}; }
 // W: 128 x 128 tiles of 16 warps of 32 x 32 (four warps an SMSP, 128 registers a thread), so one warp's receipt chains
 // can issue while another waits on its own
-static Cfg cfg_w() { return {'W', 128, 128, 32, 512, ML<128, 128, 32, 3>::SMEM, {w_plain, w_g0, w_duo32, w_duo64, w_duo2_32, w_duo2_64, w_add3_32, w_mul2_32}}; }
-static const char* GNAME[8] = {"plain", "g0", "duo32", "duo64", "duo2_32", "duo2_64", "add3_32", "mul2_32"};
-static const int GRS[8] = {0, 0, 32, 64, 32, 64, 32, 32};
+static Cfg cfg_w() { return {'W', 128, 128, 32, 512, ML<128, 128, 32, 3>::SMEM, {w_plain, w_g0, w_duo32, w_duo64, w_duo2_32, w_duo2_64, w_add3_32, w_mul2_32, w_tb4_32, w_tb2_32, w_tb1_32}}; }
+static const char* GNAME[NG] = {"plain", "g0", "duo32", "duo64", "duo2_32", "duo2_64", "add3_32", "mul2_32", "tb4_32", "tb2_32", "tb1_32"};
+static const int GRS[NG] = {0, 0, 32, 64, 32, 64, 32, 32, 32, 32, 32};
 
 struct Lt {
   cublasLtHandle_t h;
@@ -680,7 +757,7 @@ static void setup(Prob& P, int m, int n, int k, int grid_cap, uint32_t seed, Hos
   CK(cudaMalloc(&P.R, (size_t)tiles * P.cfg.NCT * 8 * 4));
   CK(cudaMalloc(&P.flag, 4));
   CK(cudaMemset(P.flag, 0, 4));
-  for (int i = 0; i < 8; i++) CK(cudaFuncSetAttribute(P.cfg.k[i], cudaFuncAttributeMaxDynamicSharedMemorySize, P.cfg.smem));
+  for (int i = 0; i < NG; i++) CK(cudaFuncSetAttribute(P.cfg.k[i], cudaFuncAttributeMaxDynamicSharedMemorySize, P.cfg.smem));
   lt_setup(P.lt, m, n, k, P.QA, P.QB[0], P.U, P.st);
   if (keep) { h.fa = fa; h.fb = fb; *keep = h; } else { delete fa; delete fb; }
 }
@@ -698,9 +775,11 @@ static void gemm(Prob& P, int kind, int i) {
 }
 // the arms: lt (a), plain (my mainloop on Q(A), Q(B)), form, g0 (the noised GEMM and peel alone), and the whole noised call
 // form + GEMM: b (no receipts), c (duo, stride 32), d (duo, 64), c2 / d2 (duo2); and with B~ formed once per challenge
-// (only A~ per call): formA, bA, cA, c2A; c3 and c4 the ADD3 and MUL2 probes at stride 32
-static const char* ARMS[] = {"lt", "plain", "form", "g0", "b", "c", "d", "c2", "d2", "formA", "bA", "cA", "c2A", "c3", "c4"};
-constexpr int NARM = 15;
+// (only A~ per call): formA, bA, cA, c2A; c3 and c4 the ADD3 and MUL2 probes at stride 32; t4, t2, t1 the tensor-core
+// receipts TB4, TB2, TB1 at stride 32 (form + GEMM), and t4g, t2g, t1g their GEMMs alone (beside g0)
+static const char* ARMS[] = {"lt", "plain", "form", "g0", "b", "c", "d", "c2", "d2", "formA", "bA", "cA", "c2A", "c3", "c4",
+                             "t4", "t2", "t1", "t4g", "t2g", "t1g"};
+constexpr int NARM = 21;
 constexpr bool form_only(int a) { return a == 2 || a == 9; }
 static void run_arm(Prob& P, int arm, int i) {
   switch (arm) {
@@ -719,6 +798,12 @@ static void run_arm(Prob& P, int arm, int i) {
     case 12: form_a(P); gemm(P, 4, i); break;
     case 13: form(P, i); gemm(P, 6, i); break;
     case 14: form(P, i); gemm(P, 7, i); break;
+    case 15: form(P, i); gemm(P, 8, i); break;
+    case 16: form(P, i); gemm(P, 9, i); break;
+    case 17: form(P, i); gemm(P, 10, i); break;
+    case 18: gemm(P, 8, i); break;
+    case 19: gemm(P, 9, i); break;
+    case 20: gemm(P, 10, i); break;
   }
 }
 
@@ -756,7 +841,7 @@ static int cmd_gate(const std::string& dir, int m, int n, int k, int grid, uint3
   dump(dir, "XB.bin", P.XB[0], (size_t)n * k, true);
   dump(dir, "PA.bin", P.PA, (size_t)m * 128, true);
   dump(dir, "PB.bin", P.PB[0], (size_t)n * 128, true);
-  for (int g = 0; g < 8; g++) {
+  for (int g = 0; g < NG; g++) {
     CK(cudaMemset(P.U, 0xA5, ub)); CK(cudaMemset(P.R, 0xA5, rb));
     gemm(P, g, 0);
     CK(cudaStreamSynchronize(P.st));
@@ -802,6 +887,14 @@ static int cmd_bench(int reps, const std::vector<std::string>& shapes) {
   CK(cudaDeviceGetAttribute(&nsm, cudaDevAttrMultiProcessorCount, 0));
   cudaDeviceProp prop;
   CK(cudaGetDeviceProperties(&prop, 0));
+  // FG_ARMS=a,b,...: time only these arms (default every arm)
+  std::vector<int> sel;
+  const char* fa = getenv("FG_ARMS");
+  for (int a = 0; a < NARM; a++) {
+    const std::string want = fa ? std::string(",") + fa + "," : "";
+    if (!fa || want.find(std::string(",") + ARMS[a] + ",") != std::string::npos) sel.push_back(a);
+  }
+  const int NS = (int)sel.size();
   for (const auto& sh : shapes) {
     char name[64];
     int m, n, k;
@@ -822,7 +915,7 @@ static int cmd_bench(int reps, const std::vector<std::string>& shapes) {
       return (double)ms / calls;
     };
     int calls[NARM];
-    for (int a = 0; a < NARM; a++) {
+    for (int a : sel) {
       time_arm(a, 2);
       const double t = time_arm(a, 3);
       calls[a] = std::max(2, std::min(400, (int)(3.0 / std::max(t, 1e-4))));
@@ -830,8 +923,8 @@ static int cmd_bench(int reps, const std::vector<std::string>& shapes) {
     CK(cudaGetLastError());
     std::vector<double> ms[NARM], mhz[NARM];
     for (int r = 0; r < reps; r++)
-      for (int j = 0; j < NARM; j++) {
-        const int a = (j + r) % NARM;
+      for (int j = 0; j < NS; j++) {
+        const int a = sel[(j + r) % NS];
         ms[a].push_back(time_arm(a, calls[a]));
         mhz[a].push_back(nv.sm());
       }
@@ -843,10 +936,11 @@ static int cmd_bench(int reps, const std::vector<std::string>& shapes) {
            "\"candidates\": %d}, \"arms\": {",
            name, m, n, k, nsm, prop.name, P.grid, P.cfg.TM, P.cfg.BN, P.cfg.NCT / 32, P.nb, flag, P.lt.algo_id, P.lt.tile, P.lt.stages,
            P.lt.splitk, P.lt.ncand);
-    for (int a = 0; a < NARM; a++) {
+    for (int ai = 0; ai < NS; ai++) {
+      const int a = sel[ai];
       const double t = median(ms[a]), f = median(mhz[a]);
       const double eta = form_only(a) ? 0 : macs / (t * 1e-3) / (1024.0 * nsm * f * 1e6);
-      printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f, \"eta\": %.4f, \"calls\": %d, \"ms_all\": [", a ? ", " : "", ARMS[a], t, f,
+      printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f, \"eta\": %.4f, \"calls\": %d, \"ms_all\": [", ai ? ", " : "", ARMS[a], t, f,
              eta, calls[a]);
       for (size_t i = 0; i < ms[a].size(); i++) printf("%s%.6f", i ? ", " : "", ms[a][i]);
       printf("], \"mhz_all\": [");
