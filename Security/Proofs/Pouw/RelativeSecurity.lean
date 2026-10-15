@@ -1120,6 +1120,25 @@ def editedEntry {K : Type} [CommRing K] {a b c : ℕ} (C D : Mat K a b) (C' D' :
     (i : Fin a) (l : Fin c) (z : (Fin a × Fin b) ⊕ (Fin b × Fin c) → K) : K :=
   ∑ k, (C i k + D i k * z (.inl (i, k))) * p k * (C' k l + D' k l * z (.inr (k, l)))
 
+/-- The bit-pair projection of an edited prefix-sum entry: `Σ_k e_(i,k) e_(k,l)ᵀ · d_ik p_k d′_kl`, the committed
+constants gone. -/
+theorem bitProj_editedEntry {K : Type} [CommRing K] {a b c : ℕ} (C D : Mat K a b) (C' D' : Mat K b c) (p : Fin b → K)
+    (i : Fin a) (l : Fin c) :
+    bitProj (editedEntry C D C' D' p i l) =
+      ∑ k, Matrix.vecMulVec (Pi.single (i, k) (D i k * p k)) (Pi.single (k, l) (D' k l)) := by
+  let U : Fin b → Aff (Fin a × Fin b) (Fin b × Fin c) K := fun k => ⟨C i k * p k, Pi.single (i, k) (D i k * p k), 0⟩
+  let V : Fin b → Aff (Fin a × Fin b) (Fin b × Fin c) K := fun k => ⟨C' k l, 0, Pi.single (k, l) (D' k l)⟩
+  have hw : editedEntry C D C' D' p i l =
+      fun z => ∑ k, (U k).eval z * (V k).eval z + (⟨0, 0, 0⟩ : Aff _ _ K).eval z := by
+    funext z
+    simp only [editedEntry, Aff.eval, U, V, Pi.single_apply, Pi.zero_apply, zero_mul, Finset.sum_const_zero,
+      add_zero, ite_mul, Finset.sum_ite_eq', Finset.mem_univ, ite_true]
+    refine Finset.sum_congr rfl fun k _ => ?_
+    ring
+  rw [hw, bitProj_add (fun z => ∑ k, (U k).eval z * (V k).eval z), bitProj_aff, add_zero,
+    bitProj_sum (fun k z => (U k).eval z * (V k).eval z)]
+  simp only [bitProj_mul, U, V, Matrix.zero_vecMulVec, add_zero]
+
 /-- **RS-D1E's Lemma 2, counted** (over a field): a word computed with `m` plain products that agrees with an
 edited prefix-sum entry at every bit pair's four points has `m ≥ #{k : d_ik p_k d′_kl ≠ 0} / 2`, whatever the
 committed constants. (One entry; the floor's sum over all entries is Theorem B's accounting.) -/
@@ -1130,20 +1149,7 @@ theorem editedEntry_products_ge {K : Type} [Field K] [DecidableEq K] {a b c m : 
       editedEntry C D C' D' p i l (bitPt x y s t) =
         ∑ j, (u j).eval (bitPt x y s t) * (v j).eval (bitPt x y s t) + r.eval (bitPt x y s t)) :
     Fintype.card {k // D i k * p k * D' k l ≠ 0} ≤ 2 * m := by
-  let U : Fin b → Aff (Fin a × Fin b) (Fin b × Fin c) K := fun k => ⟨C i k * p k, Pi.single (i, k) (D i k * p k), 0⟩
-  let V : Fin b → Aff (Fin a × Fin b) (Fin b × Fin c) K := fun k => ⟨C' k l, 0, Pi.single (k, l) (D' k l)⟩
-  have hw : editedEntry C D C' D' p i l =
-      fun z => ∑ k, (U k).eval z * (V k).eval z + (⟨0, 0, 0⟩ : Aff _ _ K).eval z := by
-    funext z
-    simp only [editedEntry, Aff.eval, U, V, Pi.single_apply, Pi.zero_apply, zero_mul, Finset.sum_const_zero,
-      add_zero, ite_mul, Finset.sum_ite_eq', Finset.mem_univ, ite_true]
-    refine Finset.sum_congr rfl fun k _ => ?_
-    ring
-  have hproj : bitProj (editedEntry C D C' D' p i l) =
-      ∑ k, Matrix.vecMulVec (Pi.single (i, k) (D i k * p k)) (Pi.single (k, l) (D' k l)) := by
-    rw [hw, bitProj_add (fun z => ∑ k, (U k).eval z * (V k).eval z), bitProj_aff, add_zero,
-      bitProj_sum (fun k z => (U k).eval z * (V k).eval z)]
-    simp only [bitProj_mul, U, V, Matrix.zero_vecMulVec, add_zero]
+  have hproj := bitProj_editedEntry C D C' D' p i l
   have hdiag : (bitProj (editedEntry C D C' D' p i l)).submatrix (fun k => (i, k)) (fun k => (k, l)) =
       Matrix.diagonal fun k => D i k * p k * D' k l := by
     rw [hproj]
@@ -1158,6 +1164,80 @@ theorem editedEntry_products_ge {K : Type} [Field K] [DecidableEq K] {a b c m : 
       = (Matrix.diagonal fun k => D i k * p k * D' k l).rank := (Matrix.rank_diagonal _).symm
     _ ≤ (bitProj (editedEntry C D C' D' p i l)).rank := hdiag ▸ Matrix.rank_submatrix_le _ _ _
     _ ≤ 2 * m := products_ge_half_rank u v r _ hT
+
+/-- A scalar multiple of a plain operand. -/
+def Aff.smul {X Y K : Type} [CommRing K] (s : K) (u : Aff X Y K) : Aff X Y K :=
+  ⟨s * u.c, fun x => s * u.α x, fun y => s * u.γ y⟩
+
+theorem Aff.eval_smul {X Y K : Type} [Fintype X] [Fintype Y] [CommRing K] (s : K) (u : Aff X Y K)
+    (z : X ⊕ Y → K) : (u.smul s).eval z = s * u.eval z := by
+  simp only [Aff.smul, Aff.eval, mul_add, Finset.mul_sum, mul_assoc]
+
+/-- The sum of plain operands. -/
+def Aff.sum {X Y K : Type} [CommRing K] {q : ℕ} (r : Fin q → Aff X Y K) : Aff X Y K :=
+  ⟨∑ e, (r e).c, fun x => ∑ e, (r e).α x, fun y => ∑ e, (r e).γ y⟩
+
+theorem Aff.eval_sum {X Y K : Type} [Fintype X] [Fintype Y] [CommRing K] {q : ℕ} (r : Fin q → Aff X Y K)
+    (z : X ⊕ Y → K) : (Aff.sum r).eval z = ∑ e, (r e).eval z := by
+  simp only [Aff.sum, Aff.eval, Finset.sum_add_distrib, Finset.sum_mul]
+  rw [Finset.sum_comm (s := (Finset.univ : Finset X)), Finset.sum_comm (s := (Finset.univ : Finset Y))]
+
+/-- **Entries with disjoint live terms add up** (RS-D1E's Theorem B accounting without merges, over a field): if `m`
+plain products, shared, compute `q` edited prefix-sum entries `(i_e, l_e)` at distinct rows and distinct columns (each
+entry's word a linear combination of the products plus a plain word, agreeing at every bit pair's four points), then
+`2m ≥ Σ_e #{k : d_(i_e k) p_k d′_(k l_e) ≠ 0}`, whatever the committed constants. -/
+theorem editedEntries_products_ge {K : Type} [Field K] [DecidableEq K] {a b c m q : ℕ} (C D : Mat K a b)
+    (C' D' : Mat K b c) (p : Fin b → K) (ent : Fin q → Fin a × Fin c)
+    (hrow : Function.Injective fun e => (ent e).1) (hcol : Function.Injective fun e => (ent e).2)
+    (lam : Fin q → Fin m → K) (u v : Fin m → Aff (Fin a × Fin b) (Fin b × Fin c) K)
+    (r : Fin q → Aff (Fin a × Fin b) (Fin b × Fin c) K)
+    (hT : ∀ e x y s t, (s = 0 ∨ s = 1) → (t = 0 ∨ t = 1) →
+      editedEntry C D C' D' p (ent e).1 (ent e).2 (bitPt x y s t) =
+        ∑ j, lam e j * ((u j).eval (bitPt x y s t) * (v j).eval (bitPt x y s t)) + (r e).eval (bitPt x y s t)) :
+    ∑ e, Fintype.card {k // D (ent e).1 k * p k * D' k (ent e).2 ≠ 0} ≤ 2 * m := by
+  have hr : ∀ e e', (ent e).1 = (ent e').1 ↔ e = e' := fun _ _ => hrow.eq_iff
+  have hc : ∀ e e', (ent e).2 = (ent e').2 ↔ e = e' := fun _ _ => hcol.eq_iff
+  let W : ((Fin a × Fin b) ⊕ (Fin b × Fin c) → K) → K := fun z => ∑ e, editedEntry C D C' D' p (ent e).1 (ent e).2 z
+  have hW : (bitProj W).rank ≤ 2 * m := by
+    refine products_ge_half_rank (fun j => (u j).smul (∑ e, lam e j)) v (Aff.sum r) W fun x y s t hs ht => ?_
+    simp only [W, Aff.eval_smul, Aff.eval_sum]
+    rw [Finset.sum_congr rfl fun e _ => hT e x y s t hs ht, Finset.sum_add_distrib]
+    congr 1
+    rw [Finset.sum_comm]
+    refine Finset.sum_congr rfl fun j _ => ?_
+    rw [Finset.sum_mul, Finset.sum_mul]
+    refine Finset.sum_congr rfl fun e _ => ?_
+    ring
+  have hproj : bitProj W = ∑ e, ∑ k,
+      Matrix.vecMulVec (Pi.single ((ent e).1, k) (D (ent e).1 k * p k)) (Pi.single (k, (ent e).2) (D' k (ent e).2)) := by
+    rw [bitProj_sum (fun e => editedEntry C D C' D' p (ent e).1 (ent e).2)]
+    exact Finset.sum_congr rfl fun e _ => bitProj_editedEntry C D C' D' p _ _
+  have hdiag : (bitProj W).submatrix (fun ek : Fin q × Fin b => ((ent ek.1).1, ek.2))
+      (fun ek : Fin q × Fin b => (ek.2, (ent ek.1).2)) =
+      Matrix.diagonal fun ek : Fin q × Fin b => D (ent ek.1).1 ek.2 * p ek.2 * D' ek.2 (ent ek.1).2 := by
+    rw [hproj]
+    ext ⟨e, k⟩ ⟨e', k'⟩
+    simp only [Matrix.submatrix_apply, Matrix.sum_apply, Matrix.vecMulVec_apply, Pi.single_apply, Prod.mk.injEq,
+      hr, hc, Matrix.diagonal_apply]
+    by_cases h : e = e' ∧ k = k'
+    · obtain ⟨rfl, rfl⟩ := h
+      simp [ite_and, mul_assoc]
+    · simp only [h, ↓reduceIte]
+      refine Finset.sum_eq_zero fun e'' _ => Finset.sum_eq_zero fun k'' _ => ?_
+      by_cases h1 : e = e'' ∧ k = k''
+      · have h2 : ¬(k' = k'' ∧ e' = e'') := fun h2 => h ⟨h1.1.trans h2.2.symm, h1.2.trans h2.1.symm⟩
+        simp only [h2, ↓reduceIte, mul_zero]
+      · simp only [h1, ↓reduceIte, zero_mul]
+  have hcard : ∑ e, Fintype.card {k // D (ent e).1 k * p k * D' k (ent e).2 ≠ 0} =
+      Fintype.card {ek : Fin q × Fin b // D (ent ek.1).1 ek.2 * p ek.2 * D' ek.2 (ent ek.1).2 ≠ 0} := by
+    simp only [Fintype.card_subtype, Finset.card_filter]
+    rw [Fintype.sum_prod_type]
+  rw [hcard]
+  calc Fintype.card {ek : Fin q × Fin b // D (ent ek.1).1 ek.2 * p ek.2 * D' ek.2 (ent ek.1).2 ≠ 0}
+      = (Matrix.diagonal fun ek : Fin q × Fin b => D (ent ek.1).1 ek.2 * p ek.2 * D' ek.2 (ent ek.1).2).rank :=
+        (Matrix.rank_diagonal _).symm
+    _ ≤ (bitProj W).rank := hdiag ▸ Matrix.rank_submatrix_le _ _ _
+    _ ≤ 2 * m := hW
 
 /-- The proof service's layer of a protocol (AGENTS.md's one proof service): live coins, messages and the verifier.
 A protocol is a service with a problem (`correct`) and an honest Solve. -/
