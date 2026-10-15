@@ -104,6 +104,10 @@ __device__ __forceinline__ void mma_s8(uint32_t (&d)[4], const uint32_t (&a)[4],
 //   FADDM  y[u] = f32(y[u]) + f32(y[v]) FADD Rd, Rd, Rv                two vector reads on the FP32 pipe; exact integer
 //                                                                     addition for words below 2^24 (a 16-bit output)
 //   MIXF   MERGE and FADDM alternating; MIX3  MERGE, IMADM, FADDM in turn: merges spread over two and three pipes
+//   HADDM  y[u] = f16x2(y[u]) + f16x2(y[v])  HADD2 Rd, Rd, Rv          two 11-bit integer words a lane
+//   FFMAM  y[u] = f32(y[v])·c1 + f32(y[u])   FFMA Rd, Rv, Rc1.reuse, Rd
+//   IDPM   y[u] += bytesum(y[v])             IDP.4A Rd, Rv, imm, Rd    W10's dp4a with a computed second word
+//   MIXFI  FADDM and IDPM alternating
 // (An immediate scale, `IMAD Rd, Rv, imm, Rd`, would read the same two registers, but ptxas 13.0 drops that loop-carried
 // IMAD from the probe and filler loops and folds the values from before the loop.)
 // PRMT (Round 1's `__byte_perm(y[u], y[v], imm)`, SASS `PRMT Rd, Ra, imm, Rb`) is already a two-register byte-packing
@@ -111,11 +115,12 @@ __device__ __forceinline__ void mma_s8(uint32_t (&d)[4], const uint32_t (&a)[4],
 // across a warp's 32 lanes, so the note argues what such a merge can and cannot combine.
 enum Op {
   O_NONE = 0, O_IADD3, O_LOP3, O_IMAD, O_PRMT, O_MIX, O_IMMA, O_MERGE, O_REUSE, O_UNIF, O_CBANK, O_LOP3X, O_IMADM, O_MIXM,
-  O_FADDM, O_MIXF, O_MIX3,
+  O_FADDM, O_MIXF, O_MIX3, O_HADDM, O_FFMAM, O_IDPM, O_MIXFI,
   NOPS
 };
-static const char* OP_NAME[NOPS] = {"none",  "iadd3", "lop3",  "imad",  "prmt", "mix",  "imma",  "merge", "reuse",
-                                    "unif",  "cbank", "lop3x", "imadm", "mixm", "faddm", "mixf", "mix3"};
+static const char* OP_NAME[NOPS] = {"none",  "iadd3", "lop3",  "imad",  "prmt",  "mix",   "imma",  "merge",
+                                    "reuse", "unif",  "cbank", "lop3x", "imadm", "mixm",  "faddm", "mixf",
+                                    "mix3",  "haddm", "ffmam", "idpm",  "mixfi"};
 
 __device__ __forceinline__ uint32_t maj3(uint32_t a, uint32_t b, uint32_t c) { return (a & b) | (a & c) | (b & c); }
 
@@ -138,8 +143,9 @@ __device__ __forceinline__ void xop(uint32_t (&y)[NY], const uint32_t (&c)[4], i
   const int op = OP == O_MIX    ? ((e & 1) ? O_IMAD : O_IADD3)
                  : OP == O_MIXM ? ((e & 1) ? O_IMADM : O_MERGE)
                  : OP == O_MIXF ? ((e & 1) ? O_FADDM : O_MERGE)
-                 : OP == O_MIX3 ? (e % 3 == 0 ? O_MERGE : e % 3 == 1 ? O_IMADM : O_FADDM)
-                                : OP;
+                 : OP == O_MIX3  ? (e % 3 == 0 ? O_MERGE : e % 3 == 1 ? O_IMADM : O_FADDM)
+                 : OP == O_MIXFI ? ((e & 1) ? O_IDPM : O_FADDM)
+                                 : OP;
   if (op == O_IADD3) y[u] = y[u] + y[v] + c[e & 3];
   if (op == O_LOP3) y[u] = maj3(y[u], y[v], c[e & 3]);
   if (op == O_IMAD) y[u] = y[u] * c[e & 3] + y[v];
@@ -147,6 +153,14 @@ __device__ __forceinline__ void xop(uint32_t (&y)[NY], const uint32_t (&c)[4], i
   if (op == O_MERGE) y[u] = y[u] + y[v];
   if (op == O_IMADM) y[u] = y[v] * c[1] + y[u];
   if (op == O_FADDM) y[u] = __float_as_uint(__fadd_rn(__uint_as_float(y[u]), __uint_as_float(y[v])));
+  if (op == O_FFMAM)
+    y[u] = __float_as_uint(__fmaf_rn(__uint_as_float(y[v]), __uint_as_float(c[1]), __uint_as_float(y[u])));
+  if (op == O_IDPM) y[u] = __dp4a(y[v], 0x01010101u, y[u]);
+  if (op == O_HADDM) {
+    uint32_t r;
+    asm("add.rn.f16x2 %0, %1, %2;" : "=r"(r) : "r"(y[u]), "r"(y[v]));
+    y[u] = r;
+  }
   if (op == O_REUSE) y[u] = y[u] + c[0];
   if (op == O_UNIF) y[u] = y[u] + unif_addend();
   if (op == O_CBANK) y[u] = y[u] + KK[e & (NKEY - 1)];
@@ -369,7 +383,8 @@ struct SKern {
 static std::vector<SKern> skernels() {
   return {SK(O_IADD3, 16), SK(O_IMAD, 16), SK(O_MIX, 16),  SK(O_IMMA, 32),  SK(O_MERGE, 16), SK(O_REUSE, 16),
           SK(O_UNIF, 16),  SK(O_CBANK, 16), SK(O_PRMT, 16), SK(O_LOP3X, 16), SK(O_IMADM, 16), SK(O_MIXM, 16),
-          SK(O_FADDM, 16), SK(O_MIXF, 16),  SK(O_MIX3, 16)};
+          SK(O_FADDM, 16), SK(O_MIXF, 16),  SK(O_MIX3, 16),  SK(O_HADDM, 16), SK(O_FFMAM, 16), SK(O_IDPM, 16),
+          SK(O_MIXFI, 16)};
 }
 
 static std::vector<Kern> kernels() {
