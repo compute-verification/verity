@@ -311,14 +311,17 @@ theorem secureInf_of_core (P : Protocol Mc Inst Out) {ε κ δ η α : ℝ} (h :
   unfold acceptance at hM
   linarith
 
-/-- **Lemma R** (RS-DEF §1.6: a floor plus an honest upper bound give the core): if every adversary's accepted runs
-below `F` have probability at most `κ`, and some useful prover costs at most `U`, then Core holds with
-`1 + ε = U / F` and `α = 0`. -/
+/-- **The adversary floor** (a named hypothesis, the lane's floor results with Theorem F's luck term in `κ`): for every
+adversary that commits first, the runs that are accepted and cost less than `F` have probability at most `κ`. -/
+def AdvFloor (P : Protocol Mc Inst Out) (F κ : ℝ) : Prop :=
+  ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
+    prob (fun ω : P.Seed × Ω => P.accepts ω.1 (Mc.eval M ω) = true ∧ Mc.cost M ω < F) ≤ κ
+
+/-- **Lemma R** (RS-DEF §1.6: a floor plus an honest upper bound give the core): under the adversary floor `F`, if some
+useful prover costs at most `U`, then Core holds with `1 + ε = U / F` and `α = 0`. -/
 theorem core_of_floor (P : Protocol Mc Inst Out) {κ η F U : ℝ} (hF : 0 < F) (hFU : F ≤ U)
-    (hfloor : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
-      prob (fun ω : P.Seed × Ω => P.accepts ω.1 (Mc.eval M ω) = true ∧ Mc.cost M ω < F) ≤ κ)
-    {Ω₀ : Type} [Fintype Ω₀] {M₀ : Mc.Alg (P.Seed × Inst × Ω₀) (P.Proof × Out)} (hM₀ : Useful P M₀ η)
-    (hU : Mc.time M₀ ≤ U) : Core P (U / F - 1) κ η 0 := by
+    (hfloor : AdvFloor P F κ) {Ω₀ : Type} [Fintype Ω₀] {M₀ : Mc.Alg (P.Seed × Inst × Ω₀) (P.Proof × Out)}
+    (hM₀ : Useful P M₀ η) (hU : Mc.time M₀ ≤ U) : Core P (U / F - 1) κ η 0 := by
   intro Ω _ M hc
   have hU0 : 0 < U := hF.trans_le hFU
   have hb : (Tuse P η - 0) / (1 + (U / F - 1)) ≤ F := by
@@ -334,6 +337,16 @@ def Efficient (P : Protocol Mc Inst Out) (γ N α : ℝ) : Prop :=
 /-- **Relative security** with parameters `ε, δ, γ, η, α` against the reference time `N` (RS-DEF's frozen form). -/
 def RelativelySecure (P : Protocol Mc Inst Out) (ε δ γ η α N : ℝ) : Prop :=
   Complete P η ∧ SecureInf P ε δ η α ∧ Efficient P γ N α
+
+/-- **Relative security from the adversary floor** (RS-DEF's route (a), end to end in the frozen definition): if Solve
+is complete, costs at least the floor `F > 0` and is efficient, and every adversary's accepted runs below `F` have
+probability at most `κ < δ`, the protocol is relatively secure with `ε = time(Solve) / F − 1` and `α = 0`. -/
+theorem relativelySecure_of_advFloor (P : Protocol Mc Inst Out) {κ δ γ η F N : ℝ} (hc : Complete P η) (hF : 0 < F)
+    (hFS : F ≤ Mc.time P.solve) (hfloor : AdvFloor P F κ) (hκδ : κ < δ) (heff : Efficient P γ N 0) :
+    RelativelySecure P (Mc.time P.solve / F - 1) δ γ η 0 N := by
+  refine ⟨hc, secureInf_of_core P (core_of_floor P hF hFS hfloor hc le_rfl) hκδ ?_, heff⟩
+  rw [add_sub_cancel]
+  exact div_pos (hF.trans_le hFS) hF
 
 /-- The matmul problem: instances `(A, B)` of `n × n` matrices over `R`, answered by `C = A · B`. -/
 def IsMatmul {R : Type} [Ring R] {n : ℕ} {Mc : Machine} (P : Protocol Mc (Mat R n n × Mat R n n) (Mat R n n)) :
