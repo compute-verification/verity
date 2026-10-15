@@ -17,12 +17,19 @@ so its noised integers stay on the grid (|x| <= 127 for int8, <= 16 for E4M3's i
 one random Hadamard R of the head dimension (random signs times Sylvester's H_128) before quantizing and the output by R^T
 after, which preserves S = (Q R)(K R)^T and O = P V exactly before the edit.
 
-Method names are '-'-joined tokens: a grid (`int8`, `e4m3`), `prow`/`pfix`, `vhead`/`vchan`, an alphabet (`none`,
-`pm1` {+-1}, `pm13` {+-1, +-3}, `pm57` {+-5, +-7}, `u1` ... `u16` uniform {-k..k}), optional `rot`, optional `qk`/`pv`
-(noise on that matmul's operands only), optional `sN` (noise seed).  `bf16` is the model's own eager attention and `ref`
-this file's attention in FP32 with no edit (`ref-rot` checks the rotation).
+Method names are '-'-joined tokens:
 
-    python attention.py MODEL_SNAPSHOT IDS.npy OUT_DIR --ctx N METHOD...
+    grid       `int8` (both matmuls), `e4m3` (both on E4M3's integers <= 16), `e4m3qk` (Q K^T on E4M3's integers, P V on int8)
+    P, V       `prow`/`pfix`, `vhead`/`vchan`
+    noise      an alphabet for all four operands: `none`, `pm1` {+-1}, `pm13` {+-1, +-3}, `pm57` {+-5, +-7}, `u1` ... `u16`
+               uniform {-k..k}, `dE` sparse (+-1 each with probability 2^-E / 2, else 0); `qk`/`pv` limits it to that
+               matmul's operands; `X=ALPHABET` sets operand X (`q`, `k`, `p`, `v`, `qk`, `pv`) alone
+    `rot`, `sN` (noise seed)
+
+`bf16` is the model's own eager attention and `ref` this file's attention in FP32 with no edit (`ref-rot` checks the
+rotation).
+
+    python attention.py MODEL_SNAPSHOT IDS.npy OUT_DIR --ctx N [--prefix IDS2.npy] METHOD...
     python attention.py --selftest
     python attention.py --table RESULTS.jsonl...
 """
@@ -43,46 +50,57 @@ FP32_EXACT = 2 ** 24
 S32_EXACT = 2 ** 31 - 1
 #: grid -> (top integer, the accumulator's exact range)
 GRIDS = {"int8": (127, S32_EXACT), "e4m3": (16, FP32_EXACT)}
+#: a method's grid token -> (Q K^T's grid, P V's grid)
+GRID_PAIRS = {"int8": ("int8", "int8"), "e4m3": ("e4m3", "e4m3"), "e4m3qk": ("e4m3", "int8")}
 ALPHABETS = {"none": [0], "pm1": [-1, 1], "pm13": [-3, -1, 1, 3], "pm57": [-7, -5, 5, 7],
              **{f"u{k}": list(range(-k, k + 1)) for k in (1, 2, 4, 8, 16)}}
-#: WikiText-2 (raw) test split at the revision cached on node 2 (`benchmarks/pouw/pearl_c_vllm/e2e.py`)
-WIKITEXT = ("Salesforce/wikitext", "b08601e04326c79dfdd32d625aee71d232d685c3", "wikitext-2-raw-v1/test-00000-of-00001.parquet")
+OPERANDS = "qkpv"
 
 ORIG = modeling_llama.eager_attention_forward
 STATE: dict = {"spec": None}
 
 
-def entropy_bits(alphabet: str) -> float:
-    return math.log2(len(ALPHABETS[alphabet]))
+def is_alphabet(name: str) -> bool:
+    return name in ALPHABETS or (name[:1] == "d" and name[1:].isdigit())
 
 
-def rms(alphabet: str) -> float:
-    a = ALPHABETS[alphabet]
-    return math.sqrt(sum(v * v for v in a) / len(a))
+def alphabet_info(name: str) -> dict:
+    """Entropy (bits per entry), RMS and max magnitude (LSBs) of one entry's noise."""
+    if name in ALPHABETS:
+        a = ALPHABETS[name]
+        return {"bits": math.log2(len(a)) if len(a) > 1 else 0.0, "rms": math.sqrt(sum(v * v for v in a) / len(a)),
+                "max": max(abs(v) for v in a)}
+    rho = 2.0 ** -int(name[1:])
+    return {"bits": -(1 - rho) * math.log2(1 - rho) - rho * math.log2(rho / 2), "rms": math.sqrt(rho), "max": 1}
 
 
 def parse(method: str) -> dict:
-    spec = {"method": method, "grid": None, "p": "prow", "v": "vchan", "noise": "none", "rot": False, "where": "both",
-            "seed": 0}
+    spec = {"method": method, "grid": None, "p": "prow", "v": "vchan", "rot": False, "seed": 0}
+    default, where, over = "none", "both", {}
     for t in method.split("-"):
-        if t in GRIDS or t in ("bf16", "ref"):
+        if t in GRID_PAIRS or t in ("bf16", "ref"):
             spec["grid"] = t
         elif t in ("prow", "pfix"):
             spec["p"] = t
         elif t in ("vhead", "vchan"):
             spec["v"] = t
-        elif t in ALPHABETS:
-            spec["noise"] = t
+        elif is_alphabet(t):
+            default = t
         elif t == "rot":
             spec["rot"] = True
         elif t in ("qk", "pv", "both"):
-            spec["where"] = t
+            where = t
+        elif "=" in t and t.split("=")[0] in ("q", "k", "p", "v", "qk", "pv") and is_alphabet(t.split("=")[1]):
+            ops, a = t.split("=")
+            over.update({x: a for x in ops})
         elif t[0] == "s" and t[1:].isdigit():
             spec["seed"] = int(t[1:])
         else:
             raise ValueError(f"{method}: unknown token {t!r}")
     if spec["grid"] is None:
         raise ValueError(f"{method}: no grid")
+    on = {"both": OPERANDS, "qk": "qk", "pv": "pv"}[where]
+    spec["n"] = {x: over.get(x, default if x in on else "none") for x in OPERANDS}
     return spec
 
 
@@ -102,8 +120,12 @@ def quant(x: torch.Tensor, top: int, dims) -> tuple[torch.Tensor, torch.Tensor]:
 
 
 def draw(alphabet: str, shape, gen: torch.Generator, device) -> torch.Tensor:
-    table = torch.tensor(ALPHABETS[alphabet], dtype=torch.float32, device=device)
-    return table[torch.randint(0, len(table), shape, generator=gen, device=device)]
+    if alphabet in ALPHABETS:
+        table = torch.tensor(ALPHABETS[alphabet], dtype=torch.float32, device=device)
+        return table[torch.randint(0, len(table), shape, generator=gen, device=device)]
+    rho = 2.0 ** -int(alphabet[1:])
+    u = torch.rand(shape, generator=gen, device=device)
+    return (u < rho / 2).float() * -1 + ((u >= rho / 2) & (u < rho)).float()
 
 
 def exact_mm(a: torch.Tensor, b: torch.Tensor, term: int) -> torch.Tensor:
@@ -120,15 +142,15 @@ def exact_mm(a: torch.Tensor, b: torch.Tensor, term: int) -> torch.Tensor:
     return out
 
 
-def edit_p(p: torch.Tensor, spec: dict, top: int, causal: torch.Tensor, noisy: bool, gen, device):
+def edit_p(p: torch.Tensor, mode: str, alphabet: str, top: int, causal: torch.Tensor, gen, device):
     """P's integers (noise only where key <= query) and its scale."""
-    if spec["p"] == "pfix":
+    if mode == "pfix":
         sp = torch.full_like(p[..., :1], 1.0 / top)
     else:
         sp = p.amax(dim=-1, keepdim=True).clamp(min=1e-30) / top
     pi = torch.round(p / sp).clamp(0, top)
-    if noisy:
-        pi = pi + draw(spec["noise"], pi.shape, gen, device) * causal
+    if alphabet != "none":
+        pi = pi + draw(alphabet, pi.shape, gen, device) * causal
     return pi, sp
 
 
@@ -142,20 +164,20 @@ def edited_attention(module, query, key, value, attention_mask, scaling=None, dr
     rep = H // G
     assert b == 1, "one unpadded sequence"
     dev, layer = query.device, module.layer_idx
-    quantized = spec["grid"] in GRIDS
+    quantized = spec["grid"] in GRID_PAIRS
     gen = torch.Generator(device=dev).manual_seed((spec["seed"] + 1) * 1_000_003 + layer)
     R = hadamard_rotation(d, 7919 * (spec["seed"] + 1) + layer, dev) if spec["rot"] else None
     causal = torch.ones(s, s, dtype=torch.bool, device=dev).tril()
     if quantized:
-        top, acc = GRIDS[spec["grid"]]
-        nmax = max(abs(v) for v in ALPHABETS[spec["noise"]])
-        nqk = spec["noise"] != "none" and spec["where"] in ("both", "qk")
-        npv = spec["noise"] != "none" and spec["where"] in ("both", "pv")
-        m_qk, m_pv = top - (nmax if nqk else 0), top - (nmax if npv else 0)
-        if min(m_qk, m_pv) < 1:
-            raise ValueError(f"{spec['method']}: noise {spec['noise']} does not fit the {spec['grid']} grid")
-        STATE["record"] = {"top_qk": m_qk, "top_pv": m_pv, "acc": acc,
-                           "bound_qk": d * (m_qk + nmax * nqk) ** 2, "bound_pv": s * (m_pv + nmax * npv) ** 2}
+        n = spec["n"]
+        gqk, gpv = (GRIDS[g] for g in GRID_PAIRS[spec["grid"]])
+        nmax = {x: alphabet_info(n[x])["max"] for x in OPERANDS}
+        m = {x: (gqk if x in "qk" else gpv)[0] - nmax[x] for x in OPERANDS}
+        if min(m.values()) < 1:
+            raise ValueError(f"{spec['method']}: its noise does not fit the grid ({m})")
+        STATE["record"] = {"tops": m, "acc_qk": gqk[1], "acc_pv": gpv[1],
+                           "bound_qk": d * (m["q"] + nmax["q"]) * (m["k"] + nmax["k"]),
+                           "bound_pv": s * (m["p"] + nmax["p"]) * (m["v"] + nmax["v"])}
     out = torch.empty(b, s, H, d, dtype=query.dtype, device=dev)
     for g in range(G):
         qg = query[0, g * rep:(g + 1) * rep].float()
@@ -167,23 +189,24 @@ def edited_attention(module, query, key, value, attention_mask, scaling=None, dr
         if R is not None:
             qg, kg, vg = qg @ R, kg @ R, vg @ R
         if quantized:
-            qi, sq = quant(qg, m_qk, -1)
-            ki, sk = quant(kg, m_qk, -1)
+            qi, sq = quant(qg, m["q"], -1)
+            ki, sk = quant(kg, m["k"], -1)
             ki = ki.expand(rep, s, d)
-            if nqk:
-                qi = qi + draw(spec["noise"], qi.shape, gen, dev)
-                ki = ki + draw(spec["noise"], ki.shape, gen, dev)
+            if n["q"] != "none":
+                qi = qi + draw(n["q"], qi.shape, gen, dev)
+            if n["k"] != "none":
+                ki = ki + draw(n["k"], ki.shape, gen, dev)
             scores = (qi @ ki.transpose(1, 2)) * (sq * sk.T[None]) * scaling
         else:
             scores = (qg @ kg.T) * scaling
         p = torch.softmax(scores.masked_fill(~causal, float("-inf")), dim=-1)
         if quantized:
-            pi, sp = edit_p(p, spec, m_pv, causal, npv, gen, dev)
-            vi, sv = quant(vg, m_pv, (0, 1) if spec["v"] == "vhead" else 0)
+            pi, sp = edit_p(p, spec["p"], n["p"], m["p"], causal, gen, dev)
+            vi, sv = quant(vg, m["v"], (0, 1) if spec["v"] == "vhead" else 0)
             vi = vi.expand(rep, s, d)
-            if npv:
-                vi = vi + draw(spec["noise"], vi.shape, gen, dev)
-            o = (exact_mm(pi, vi, (m_pv + nmax * npv) ** 2) * sp.double() * sv.double()).float()
+            if n["v"] != "none":
+                vi = vi + draw(n["v"], vi.shape, gen, dev)
+            o = (exact_mm(pi, vi, (m["p"] + nmax["p"]) * (m["v"] + nmax["v"])) * sp.double() * sv.double()).float()
         else:
             o = p @ vg
         if R is not None:
@@ -214,28 +237,16 @@ def evaluate(model, ids: torch.Tensor, method: str) -> dict:
     rec = STATE["record"]
     res = {"method": method, **{k: v for k, v in spec.items() if k != "method"}, "ctx": int(ids.shape[1]),
            "nll": float(nll.mean()), "ppl": float(torch.exp(nll.mean())), "seconds": round(time.time() - t0, 1),
-           "entropy_bits": entropy_bits(spec["noise"]) if spec["noise"] != "none" else 0.0,
-           "noise_rms_lsb": rms(spec["noise"]), "noise_max_lsb": max(abs(v) for v in ALPHABETS[spec["noise"]]),
+           "noise_info": {x: alphabet_info(spec["n"][x]) for x in OPERANDS},
            "attn_rel_err": math.sqrt(STATE["err"][0] / STATE["err"][1]) if STATE["err"][1] else None, **rec}
     if rec:
-        res["exact"] = max(rec["bound_qk"], rec["bound_pv"]) <= rec["acc"]
+        res["exact"] = rec["bound_qk"] <= rec["acc_qk"] and rec["bound_pv"] <= rec["acc_pv"]
     return res
 
 
 def load(snapshot: str):
     model = transformers.AutoModelForCausalLM.from_pretrained(snapshot, dtype=torch.bfloat16, attn_implementation="eager")
     return model.cuda().eval()
-
-
-def wikitext_ids(snapshot: str, n: int) -> np.ndarray:
-    """BOS and the first n - 1 tokens of WikiText-2's test split joined with blank lines (window 0 at length n)."""
-    import pyarrow.parquet as pq
-    from huggingface_hub import hf_hub_download
-    repo, rev, name = WIKITEXT
-    text = "\n\n".join(pq.read_table(hf_hub_download(repo, name, repo_type="dataset", revision=rev)).column("text").to_pylist())
-    tok = transformers.AutoTokenizer.from_pretrained(snapshot)
-    ids = tok(text, add_special_tokens=False)["input_ids"]
-    return np.array([tok.bos_token_id] + ids[:n - 1], dtype=np.int64)
 
 
 def selftest() -> dict:
@@ -250,10 +261,16 @@ def selftest() -> dict:
     for name, vals in ALPHABETS.items():
         x = draw(name, (200_000,), gen, dev)
         assert set(x.unique().tolist()) == set(float(v) for v in vals), name
-    assert abs(entropy_bits("u16") - math.log2(33)) < 1e-12 and rms("pm13") == math.sqrt(5)
+    x = draw("d4", (1_000_000,), gen, dev)
+    assert set(x.unique().tolist()) == {-1.0, 0.0, 1.0} and abs(float((x != 0).float().mean()) - 1 / 16) < 2e-3
+    assert abs(float(x.mean())) < 2e-3
+    assert abs(alphabet_info("u16")["bits"] - math.log2(33)) < 1e-12 and alphabet_info("pm13")["rms"] == math.sqrt(5)
+    assert abs(alphabet_info("d1")["bits"] - 1.5) < 1e-12 and alphabet_info("none")["bits"] == 0.0
+    assert parse("int8-u4-qk")["n"] == {"q": "u4", "k": "u4", "p": "none", "v": "none"}
+    assert parse("int8-qk=u4-p=d8-v=pm1")["n"] == {"q": "u4", "k": "u4", "p": "d8", "v": "pm1"}
     causal = torch.ones(50, 50, dtype=torch.bool, device=dev).tril()
     p = torch.softmax(torch.randn(2, 50, 50, device=dev).masked_fill(~causal, float("-inf")), -1)
-    pi, _ = edit_p(p, parse("int8-u16"), 111, causal, True, gen, dev)
+    pi, _ = edit_p(p, "prow", "u16", 111, causal, gen, dev)
     assert bool((pi.triu(1) == 0).all()) and bool((pi.tril() != torch.round(p / (p.amax(-1, keepdim=True) / 111))).any())
     L = transformers.models.llama.modeling_llama
     torch.manual_seed(0)
@@ -264,12 +281,13 @@ def selftest() -> dict:
     ids = torch.randint(0, 512, (1, 96), device=dev)
     runs = {m: evaluate(model, ids, m) for m in ("bf16", "ref", "ref-rot", "int8-none", "int8-pfix-vhead-none",
                                                  "int8-u16", "int8-rot-u16", "e4m3-none", "e4m3-pm57-rot", "int8-u4-qk",
-                                                 "int8-u4-pv-s2")}
-    out["tiny"] = {m: {k: r[k] for k in ("ppl", "attn_rel_err", "exact")  if k in r} for m, r in runs.items()}
+                                                 "int8-u4-pv-s2", "e4m3qk-qk=u4-v=u2-p=d6-rot", "int8-p=d2")}
+    out["tiny"] = {m: {k: r[k] for k in ("ppl", "attn_rel_err", "exact") if k in r} for m, r in runs.items()}
     assert abs(runs["ref"]["ppl"] / runs["bf16"]["ppl"] - 1) < 1e-2, out
     assert abs(runs["ref-rot"]["ppl"] / runs["ref"]["ppl"] - 1) < 1e-3, out
     assert runs["int8-none"]["attn_rel_err"] < runs["int8-u16"]["attn_rel_err"], out
     assert runs["int8-none"]["attn_rel_err"] < runs["e4m3-none"]["attn_rel_err"], out
+    assert runs["e4m3qk-qk=u4-v=u2-p=d6-rot"]["tops"] == {"q": 12, "k": 12, "p": 126, "v": 125}
     try:
         evaluate(model, ids, "e4m3-u16")
         raise AssertionError("e4m3-u16 must not fit")
@@ -278,38 +296,72 @@ def selftest() -> dict:
     return out
 
 
-def _key(r: dict, **over) -> tuple:
-    q = {**r, **over}
-    return (q["grid"], q["p"], q["v"], q["noise"], q["rot"], q["where"], q["ctx"])
+def operand_noise(r: dict) -> dict:
+    """Per-operand alphabets of a record (records from before per-operand noise carry `noise` and `where`)."""
+    if "n" in r:
+        return r["n"]
+    on = {"both": OPERANDS, "qk": "qk", "pv": "pv"}[r["where"]]
+    return {x: r["noise"] if x in on else "none" for x in OPERANDS}
 
 
-def table(results: list[dict]) -> str:
-    """One row per (edit, alphabet, context): perplexity (mean over seeds, with the range), and its change against the
-    same edit without noise (seed 0) and against bf16 at the same context.  Marks against bf16: ** < 1%, * < 10%."""
+def _key(r: dict, clean: bool = False) -> tuple:
+    n = {x: "none" for x in OPERANDS} if clean else operand_noise(r)
+    return (r["grid"], r["p"], r["v"], r["rot"], n["q"], n["k"], n["p"], n["v"], r["ctx"])
+
+
+def noise_label(n: dict) -> str:
+    if len(set(n.values())) == 1:
+        return n["q"]
+    parts = []
+    for ops in ("qk", "p", "v") if n["q"] == n["k"] else ("q", "k", "p", "v"):
+        if n[ops[0]] != "none":
+            parts.append(f"{ops.upper()}:{n[ops[0]]}")
+    return ", ".join(parts)
+
+
+def rows(results: list[dict]) -> list[dict]:
+    """One row per (edit, context): perplexity (mean over seeds, with the range), and its change against the same edit
+    without noise (seed 0) and against bf16 at the same context."""
     groups: dict = {}
     for r in results:
         groups.setdefault(_key(r), []).append(r)
     bf16 = {r["ctx"]: r["ppl"] for r in results if r["grid"] == "bf16"}
-    rows = ["| ctx | grid | P | V | rot | noise on | alphabet | rms / max (LSB) | entropy (bits/entry) | seeds | perplexity "
-            "| Δ% vs grid | Δ% vs bf16 | mark | attn rel. err |", "|---:|---|---|---|---|---|---|---|---:|---:|---:|---:|---:|---|---:|"]
-    for key in sorted(groups, key=lambda k: (k[6], k[0] not in GRIDS, k[0], k[4], k[1], k[2], k[5], groups[k][0]["entropy_bits"],
-                                             groups[k][0]["noise_rms_lsb"])):
-        rs = groups[key]
-        r = rs[0]
+    out = []
+    for key, rs in groups.items():
+        r, n = rs[0], operand_noise(rs[0])
         ppls = [x["ppl"] for x in rs]
         ppl = sum(ppls) / len(ppls)
-        base = groups.get(_key(r, noise="none", where="both"))
-        dg = f"{100 * (ppl / base[0]['ppl'] - 1):+.2f}" if base and r["noise"] != "none" else "-"
-        db = 100 * (ppl / bf16[r["ctx"]] - 1) if r["ctx"] in bf16 else None
-        mark = "" if db is None else ("**" if db < 1 else "*" if db < 10 else "")
-        spread = f" ({min(ppls):.3f}-{max(ppls):.3f})" if len(ppls) > 1 else ""
-        err = f"{r['attn_rel_err']:.4f}" if r.get("attn_rel_err") is not None else "-"
-        quant = r["grid"] in GRIDS
-        rows.append(f"| {r['ctx']} | {r['grid']} | {r['p'] if quant else '-'} | {r['v'] if quant else '-'} | "
-                    f"{'yes' if r['rot'] else 'no'} | {r['where'] if r['noise'] != 'none' else '-'} | {r['noise']} | "
-                    f"{r['noise_rms_lsb']:.2f} / {r['noise_max_lsb']} | {r['entropy_bits']:.3f} | {len(rs)} | "
-                    f"{ppl:.3f}{spread} | {dg} | {'-' if db is None else f'{db:+.2f}'} | {mark} | {err} |")
-    return "\n".join(rows)
+        base = groups.get(_key(r, clean=True))
+        info = {x: alphabet_info(n[x]) for x in OPERANDS}
+        out.append({"ctx": r["ctx"], "grid": r["grid"], "p": r["p"], "v": r["v"], "rot": r["rot"], "n": n,
+                    "label": noise_label(n), "info": info, "seeds": len(rs), "ppl": ppl, "min": min(ppls), "max": max(ppls),
+                    "d_grid": 100 * (ppl / base[0]["ppl"] - 1) if base and any(v != "none" for v in n.values()) else None,
+                    "d_bf16": 100 * (ppl / bf16[r["ctx"]] - 1) if r["ctx"] in bf16 else None,
+                    "err": r.get("attn_rel_err")})
+    out.sort(key=lambda x: (x["ctx"], x["grid"] not in GRID_PAIRS, x["grid"], x["p"], x["v"], x["rot"],
+                            tuple(x["info"][o]["bits"] for o in "qpv"), tuple(x["info"][o]["rms"] for o in "qpv")))
+    return out
+
+
+def table(results: list[dict]) -> str:
+    """Marks: ** within 1%, * within 10% (of the grid baseline; the bf16 column has its own)."""
+    lines = ["| ctx | grid | P | V | rot | noise (operand: alphabet) | rms / max, LSB (Q,K; P; V) | bits/entry (Q,K; P; V) "
+             "| seeds | perplexity | Δ% vs grid | Δ% vs bf16 | mark (grid / bf16) | attn rel. err |",
+             "|---:|---|---|---|---|---|---|---|---:|---:|---:|---:|---|---:|"]
+    for x in rows(results):
+        i = x["info"]
+        q = x["grid"] in GRID_PAIRS
+        mag = "; ".join(f"{i[o]['rms']:.2f} / {i[o]['max']}" for o in "qpv")
+        bits = "; ".join(f"{i[o]['bits']:.3f}" for o in "qpv")
+        mark = lambda d: "" if d is None else ("**" if d < 1 else "*" if d < 10 else "-")  # noqa: E731
+        spread = f" ({x['min']:.3f}-{x['max']:.3f})" if x["seeds"] > 1 else ""
+        dg = f"{x['d_grid']:+.2f}" if x["d_grid"] is not None else "-"
+        db = f"{x['d_bf16']:+.2f}" if x["d_bf16"] is not None else "-"
+        err = f"{x['err']:.4f}" if x["err"] is not None else "-"
+        lines.append(f"| {x['ctx']} | {x['grid']} | {x['p'] if q else '-'} | {x['v'] if q else '-'} | "
+                     f"{'yes' if x['rot'] else 'no'} | {x['label']} | {mag} | {bits} | {x['seeds']} | {x['ppl']:.3f}{spread} | "
+                     f"{dg} | {db} | {mark(x['d_grid'])} / {mark(x['d_bf16'])} | {err} |")
+    return "\n".join(lines)
 
 
 def main(argv: list[str]) -> int:
@@ -322,19 +374,23 @@ def main(argv: list[str]) -> int:
         print(table([json.loads(line) for p in argv[1:] for line in Path(p).read_text().splitlines() if line.startswith("{")]))
         return 0
     snapshot, ids_path, out = argv[0], argv[1], Path(argv[2])
-    assert argv[3] == "--ctx"
-    ctx, methods = int(argv[4]), argv[5:]
+    rest = argv[3:]
+    assert rest[0] == "--ctx"
+    ctx, rest = int(rest[1]), rest[2:]
+    prefix = None
+    if rest and rest[0] == "--prefix":
+        prefix, rest = np.load(rest[1]), rest[2:]
     out.mkdir(parents=True, exist_ok=True)
     ids = np.load(ids_path)
-    if ctx != len(ids):
-        long = wikitext_ids(snapshot, ctx)
-        info = {"ctx": ctx, "prefix_matches_ids": bool(np.array_equal(long[:len(ids)], ids)), "ids_len": len(ids)}
+    assert len(ids) >= ctx, (len(ids), ctx)
+    ids = ids[:ctx]
+    if prefix is not None:
+        info = {"ctx": ctx, "prefix_len": len(prefix), "prefix_matches": bool(np.array_equal(ids[:len(prefix)], prefix))}
         (out / f"ids_{ctx}.json").write_text(json.dumps(info))
         print(json.dumps(info), file=sys.stderr, flush=True)
-        ids = long
     ids_t = torch.from_numpy(ids)[None].cuda()
     model = load(snapshot)
-    for method in methods:
+    for method in rest:
         res = evaluate(model, ids_t, method)
         print(json.dumps(res), flush=True)
     return 0
