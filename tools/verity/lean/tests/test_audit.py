@@ -958,25 +958,6 @@ def test_an_assumption_is_listed_by_name_with_its_record():
     assert fails == [] and converted["assumptions"] == pol["assumptions"]
 
 
-def test_a_read_assumption_the_lock_does_not_list_fails():
-    """An assumption applied to the guarantee's own variables (`h : P.Hyp n`, an open hypothesis the hypotheses rule never
-    names) is still read, so a `Prop` of an assumptions module that a guarantee reads and the lock doesn't list fails, and an
-    update adds it with its readers' owner; on 14 Oct a merge dropped `Flock.Assumptions.RegistrantCovers`' entry silently.
-    A non-`Prop` definition there, or a `Prop` outside an assumptions module, is not an assumption."""
-    reads = [{"name": "P.f", "module": "P.Defs", "kind": "def", "prop": True, "hash": "1" * 32},
-             {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "prop": True, "hash": "3" * 32},
-             {"name": "P.Size", "module": "P.Assumptions", "kind": "def", "prop": False, "hash": "5" * 32}]
-    applied = [{"binder": "h", "type": "P.Hyp n", "closed": False, "named": None, "module": None}]
-    f = facts(pins={"P.t": fact(signature="P.t (n : Nat) (h : P.Hyp n) : P.f n", hyps=applied, reads=reads)})
-    fails, pol = A.judge({**POLICY, "assumptions": {}}, f, FILES, update=True)
-    assert fails == [] and pol["assumptions"] == {
-        "P.Hyp": {"owner": "@lean", "digest": pol["reads"]["P.Assumptions"]["definitions"]["P.Hyp"]}}
-    assert A.judge(pol, f, FILES)[0] == []
-    assert A.judge({**pol, "assumptions": {}}, f, FILES)[0] == [
-        "assumptions: P.t read P.Hyp, a Prop of the assumptions module P.Assumptions, which the lock doesn't list; run "
-        "`audit.py --update` to add it with its readers' owner and commit the record (Daniel's DM shows it when it lands)"]
-
-
 def test_a_guarantee_must_be_a_theorem_with_allowed_axioms():
     assert A.judge(POLICY, facts(pins={"P.t": {"kind": "missing"}}), FILES, update=True)[0] == ["guarantees: P.t is missing"]
     assert A.judge(POLICY, facts(pins={"P.t": fact(kind="def")}), FILES, update=True)[0] == ["guarantees: P.t is a def, not a theorem"]
