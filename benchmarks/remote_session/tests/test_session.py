@@ -115,6 +115,7 @@ def test_an_honest_session_is_accepted_with_its_ledger(monkeypatch):
     (r,), (pr,) = run("honest")
     assert r["accepted"] and pr["accepted"] and r["failure"] is None
     assert [w["passes"] for w in r["windows_seen"]] == pr["passes"] and min(pr["passes"]) >= 1
+    assert pr["discarded"] >= r["windows"]
     lg = r["ledger"]["spec"]
     assert set(lg["terms"]) == set(audit.LEDGER_SOURCES) and lg["gamma"] > 0
     assert all(len(d) == 6 for d in r["draws"].values())
