@@ -45,7 +45,7 @@ def model(*impls) -> torch.nn.Module:
 
 
 def test_a_glm_manifest_on_the_glm_model_names_no_hidden_family():
-    assert attention_hidden({"identities": GLM_ROWS}, glm_model()) == {"family": None, "why": "no FlashAttention impl in the model (MLA)"}
+    assert attention_hidden({"identities": GLM_ROWS}, glm_model()) == {"family": None, "why": "no attention impl carries vllm_flash_attn_version (MLA)"}
 
 
 def test_a_hopper_flash_attention_manifest_names_fa3_and_the_manifest_decides_the_family():
@@ -106,7 +106,7 @@ def test_ranks_that_report_nothing_keep_the_classes():
 
 
 def test_the_glm_stand_in_names_no_hidden_family():
-    assert attention_hidden(None, glm_model()) == {"family": None, "why": "no FlashAttention impl in the model (MLA)"}
+    assert attention_hidden(None, glm_model()) == {"family": None, "why": "no attention impl carries vllm_flash_attn_version (MLA)"}
 
 
 def _glm_committer(sources):

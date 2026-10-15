@@ -438,15 +438,13 @@ class HiddenM1SourceFA3(HiddenM1Source):
                               f"64x192 / 128x128 / 64x128): verity_vllm.properties.fa_tap_exactness")}]
 
 
+HIDDEN_STREAM_BY_FA = {2: "fa2_hidden_m1_stream", 3: "fa3_hidden_m1_stream"}
+
+
 def hidden_class_for(flash_attn_version: int | None) -> str:
     """The attention hidden-value class the run's TargetProfile (`effective_flash_attn_version`) requires: FA2 -> fa2_hidden_m1_stream,
     FA3 -> fa3_hidden_m1_stream.  ONE source: the same fact selects the Bet A attention Definition, the Match resolver's pattern and this."""
-    if flash_attn_version == 3:
-        return "fa3_hidden_m1_stream"
-    return "fa2_hidden_m1_stream"
-
-
-HIDDEN_FAMILIES = ("fa2_hidden_m1_stream", "fa3_hidden_m1_stream")
+    return HIDDEN_STREAM_BY_FA[3 if flash_attn_version == 3 else 2]
 
 
 def attention_hidden(manifest: Any, model: Any) -> dict[str, Any]:
@@ -457,19 +455,20 @@ def attention_hidden(manifest: Any, model: Any) -> dict[str, Any]:
 
     vs = flash_attn_versions(model)
     if not vs:
-        return {"family": None, "why": "no FlashAttention impl in the model (MLA)"}
-    fams = sorted({r.get("family") for r in (manifest or {}).get("identities") or ()} & set(HIDDEN_FAMILIES))
+        return {"family": None, "why": "no attention impl carries vllm_flash_attn_version (MLA)"}
+    fams = sorted({r.get("family") for r in (manifest or {}).get("identities") or ()} & set(HIDDEN_STREAM_BY_FA.values()))
     if len(fams) > 1:
         raise ValueError(f"required manifest names two attention hidden families {fams}")
     if fams:
         return {"family": fams[0], "why": "required manifest identities"}
     return {"family": hidden_class_for(int(next(iter(vs))) if len(vs) == 1 and None not in vs else None),
-            "why": f"model FlashAttention impls {sorted(vs, key=str)}"}
+            "why": f"the attention impls' vllm_flash_attn_version {sorted(vs, key=str)}"}
 
 
 def with_hidden_class(classes: tuple[str, ...], family: str | None) -> tuple[str, ...]:
     """`classes` with its attention hidden class replaced by `family` in place, or dropped when `family` is None."""
-    return tuple(family if c in HIDDEN_FAMILIES else c for c in classes if family or c not in HIDDEN_FAMILIES)
+    hidden = set(HIDDEN_STREAM_BY_FA.values())
+    return tuple(family if c in hidden else c for c in classes if family or c not in hidden)
 
 
 def require_hidden_on_every_rank(made: list[dict[str, Any]], required_classes: tuple[str, ...], versions: dict[str, Any], *,
