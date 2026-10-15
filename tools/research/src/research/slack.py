@@ -1310,6 +1310,10 @@ def linear_close(text: str, state_type: str) -> None:
         print(f"research msg: {m[1]} stays open on Linear ({e}); the status line stands", file=sys.stderr)
 
 
+LINEAR_STATES = ("Backlog = filed, Todo = accepted, In Progress = someone is on it now, In Review = a PR is up, "
+                 "Done = landed or answered")                    # what each state means for us (top, workflow thread, 15 Oct)
+
+
 def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
     """`check` (what the credentials reach), `state ISSUE STATE`, `comment ISSUE TEXT --as HANDLE`, `list TEAM [--state S]`."""
     from . import linear  # noqa: PLC0415
@@ -1327,6 +1331,7 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
         if ns.verb == "list":
             for i in lin.issues(need(ns.target, "the TEAM (a handle or its key)"), ns.state):
                 print(f"{i['identifier']}  {i['state']['name']}  {i['title']}")
+            print(f"states: {LINEAR_STATES}")
             return 0
         issue = need(ns.target, "the ISSUE (e.g. INF-12)")
         if ns.verb == "state":
@@ -2274,7 +2279,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--urgent", action="store_true", help="the doorbell says URGENT")
     p.add_argument("--linear", action="store_true", help="also file it as an issue in the owner's Linear team, linked from the post")
     p = cmd("linear", "Linear issues: `check` (what the credentials reach; exit 0 when fit for asks), `state ISSUE STATE` "
-                      "(by name: In Progress, Done), `comment ISSUE TEXT --as HANDLE`, `list TEAM [--state S]` (open by default)")
+                      "(by name; " + LINEAR_STATES + "), `comment ISSUE TEXT --as HANDLE`, `list TEAM [--state S]` (open by default)")
     p.add_argument("verb", choices=("check", "state", "comment", "list"))
     p.add_argument("target", nargs="?", help="state, comment: the issue (INF-12); list: the team (a handle or its key)")
     p.add_argument("value", nargs="?", help="state: the state's name; comment: the text")

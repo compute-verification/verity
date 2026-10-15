@@ -225,7 +225,8 @@ def test_the_state_comment_and_list_verbs(fake, registry, capsys, lin):
     rc, _, err = run(capsys, "linear", "comment", "INF-1", "no sender")
     assert rc != 0 and "--as HANDLE" in err
     rc, out, _ = run(capsys, "linear", "list", "infra")
-    assert rc == 0 and out.splitlines() == ["INF-1  Backlog  first", "INF-2  In Progress  later"]   # oldest first
+    assert rc == 0 and out.splitlines()[:2] == ["INF-1  Backlog  first", "INF-2  In Progress  later"]   # oldest first
+    assert out.splitlines()[2] == f"states: {slack.LINEAR_STATES}" and "In Progress = someone is on it now" in slack.LINEAR_STATES
     assert lin.listed == {"team": {"id": {"eq": "T-infra"}}, "state": {"type": {"nin": ["completed", "canceled"]}}}
     assert run(capsys, "linear", "list", "INF", "--state", "In Progress")[0] == 0
     assert lin.listed["state"] == {"name": {"eqIgnoreCase": "In Progress"}}
