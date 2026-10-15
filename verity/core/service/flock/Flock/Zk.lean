@@ -134,7 +134,6 @@ def replay (st : Setup) (lay : PadLayout) (p : Proof) (root : ByteArray) : TM Re
   label "flock-r1cs-v0"
   absorbBytes st.digest
   absorbBytes (p.cap.foldl (· ++ ·) ByteArray.empty)
-  check (m ≥ 13) "zerocheck: m < 13"
   label "flock-zerocheck-v0"
   label LABEL_PADS
   absorbBytes root
@@ -366,12 +365,15 @@ def maskLogOf (circuit : ByteArray) : Nat :=
 private def s (x : String) : Json := Json.str x
 
 /-- The identity's `hooks` for a `--zk` statement (upstream's `zk_identity`): what is masked, and how; `tables` for a session
-of several tables. -/
-def hooks (maskLog : Nat) (tables : Bool) : Json :=
+of several tables; `os` when the prover's every random value is the OS's bytes (`Tags.osMasks`), else its pads and every
+table's draws are ChaCha20 streams of its seed. -/
+def hooks (maskLog : Nat) (tables : Bool) (os : Bool := false) : Json :=
+  let pads := if os then "os bytes, getrandom" else "prover ChaCha20 stream 4"
+  let draws := if os then "os bytes of its own (getrandom)" else "ChaCha20 streams at purpose | j << 32"
   let base := [("zk", Json.bool true), ("stage", s "m2-prototype (committed verifier coins, CPU)"),
     ("compiler", s "veil (ePrint 2026/683 §4.1, Remark 4.4) over gf(2^128)"),
     ("verifier_coins", s s!"committed before the prover's first message ({CoinTree.SCHEME}): the prover's fresh nonce in hello; the root and the verifier's session key in its answer; every coin opened against them, or the prover stops"),
-    ("pads", s "zerocheck and lincheck: every sent value + a pad (prover ChaCha20 stream 4); pads committed before the zerocheck's first coin"),
+    ("pads", s s!"zerocheck and lincheck: every sent value + a pad ({pads}); pads committed before the zerocheck's first coin"),
     ("pads_commitment", s s!"rs over gf(2^128), {K_PAD} padding symbols, rate 1/{2 ^ INNER_LOG_INV_RATE}, {Q} queries, hm96-sha512/v1 leaves, sha512 nodes"),
     ("product", s "h_ab = h_a h_b committed; sacrificed against a committed triple (x, y, x y)"),
     ("inner_proof", s "one batched <c, h> = t by a masked dot product (tau = <c, mu> committed by an hm96 leaf, opened after the last coin; Y = h + beta mu)"),
@@ -381,12 +383,12 @@ def hooks (maskLog : Nat) (tables : Bool) : Json :=
     ("refused_coins", Json.arr #[s "beta = 0", s "mask-slot weights of rank < 128 k over the claims so far", s "rho_0, rho_1 dependent over F128",
       s "a zerocheck outer coin r_j = 1"]),
     ("not_yet_masked", Json.arr #[])]
-  Json.mkObj (if tables then base ++ [("tables", s "per table: ChaCha20 streams at purpose | j << 32 and hm96 salt trees from id j << 32 (table 0's are a one-table session's); a rank check per table; every table's level-0 root in one commit; every proof after the last coin of every stream (the barrier)")] else base)
+  Json.mkObj (if tables then base ++ [("tables", s s!"per table: {draws} and hm96 salt trees from id j << 32 (table 0's are a one-table session's); a rank check per table; every table's level-0 root in one commit; every proof after the last coin of every stream (the barrier)")] else base)
 
-/-- A statement's tags under `--zk` in a session of `count` tables: the identity's `hooks` are `hooks`; its `proof_class`
-stays upstream's (`NON_ZK_PROOF`). -/
+/-- A statement's tags under `--zk` in a session of `count` tables: the identity's `hooks` are `hooks` (naming the prover's
+randomness as `t.osMasks` says); its `proof_class` stays upstream's (`NON_ZK_PROOF`). -/
 def tags (t : Tags) (maskLog count : Nat) : Tags :=
-  { t with identity := t.identity.setObjVal! "hooks" (hooks maskLog (count > 1)) }
+  { t with identity := t.identity.setObjVal! "hooks" (hooks maskLog (count > 1) t.osMasks) }
 
 /-- M2's committed coin schedule for a session's tables (upstream's `coin_spec_of`): the session's stream, then every table's
 two reps, 256 rounds of at most 512 coins each. -/

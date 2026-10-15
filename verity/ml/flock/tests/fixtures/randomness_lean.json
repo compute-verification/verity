@@ -1208,7 +1208,7 @@
    ]
   ]
  },
- "source": "backends/flock/tests/lean/RandomnessVectors.lean via tests/lean/generate.sh",
+ "source": "verity/ml/flock/tests/lean/RandomnessVectors.lean via tests/lean/generate.sh",
  "window": [
   {
    "calls": [
@@ -1330,11 +1330,11 @@
   }
  ],
  "inputs": {
-  "verity/ml/flock/tests/lean/RandomnessVectors.lean": "e2b580d0974ba529271df9b2d09b6571e0c2d484bfd32d2142411f72a5f22b79",
+  "verity/ml/flock/tests/lean/RandomnessVectors.lean": "b9329b680abae3d3c68f779538b356e7d5dad45f0e36d1d96dfd88ab06439b54",
   "verity/ml/randomness/tests/vectors.json": "ddf31f7f92ac4e022bd9cbe26f2df3a3b66b529825c5d57efda665454eea1b63",
   "verity/core/primitives/randomness/Randomness.lean": "4e1d2377135b9f044236fb6cb03681f0db505c8de783674cd18b7d27040bfd53",
   "Security/Proofs/Flock/Soundness/PlanDraw.lean": "c43af291e915dd33fe3111010ad61179e4422f0ff3fd145488f79d149d9c4478",
-  "Security/Proofs/lake-manifest.json": "5a04aebed99745b7c9b203f06f6e135f71c622e38fedb915f10f27cf83d04537",
+  "Security/Proofs/lake-manifest.json": "83d20180009e0590a3385aa9c19912cc65e2771cbd3c889ef3321a256f79e9e7",
   "Security/Proofs/lean-toolchain": "8733782dc070a99b312039cda424f601b80f3be6f6f512627da5ba25adc27632",
   "verity/core/service/flock/Flock/Hash.lean": "21fc9913ecb9aa3ef0e463c94b7b810b9bc9e832c5c8862472c8376e39662885",
   "verity/core/service/flock/Flock/Draw.lean": "9ca895edc41bfd9ae48444d85c403fd4120baf51789885ac7e22e3bec9f55886"

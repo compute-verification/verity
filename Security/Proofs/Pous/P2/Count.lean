@@ -14,7 +14,7 @@ import Mathlib.Tactic.Linarith
 import Mathlib.Tactic.NormNum
 import Definitions.Pous
 import Models.Pous.Assumptions
-import Models.Pous.Guarantees
+import Proofs.Pous.Statements
 import Proofs.Pous.Sanity
 import Proofs.Pous.Accounting.Numbers
 

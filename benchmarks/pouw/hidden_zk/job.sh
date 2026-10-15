@@ -6,7 +6,8 @@
 #   1. builds flock-circuit twice from Flock b684b12 and verity/ml/flock's patches (the proving build: sha512, glue; the
 #      selftest build: + seed-injection), the Lean flock-verify, and a venv with numpy and blake3
 #   2. per config ROLE:K in HZ_CONFIGS (ROLE row_a, row_b or tile, stage.py's): stage N instances, one loopback --zk session
-#      (HZ_WARM warm + HZ_RUNS timed proofs) with the proving build, the selftest build's recorded controls, and the Lean
+#      drawing all N (subset:N; HZ_WARM warm + HZ_RUNS timed proofs) with the proving build, the selftest build's recorded
+#      controls, drawn the same way, and the Lean
 #      verifier on all of them:
 #        honest-own     the honest session, the verifier's own anchors file                         ACCEPT
 #        honest-wrong   the honest session, one bit of one anchor wrong in the verifier's file      REJECT
@@ -14,8 +15,9 @@
 #        st-<case>      the selftest build's records under verity/flock-circuit+seed-injection: honest ACCEPT;
 #                       output_row_committed_false (a tampered output row), output_claim_false, unit_internal_bit_flipped
 #                       and public_input_claim_false (a false anchor claim, the verifier's file agreeing with it) REJECT
-#      until T4 the verifier refuses --public-inputs (#1179), so summarize.py expects each row-unit check REFUSED; it refuses
-#      a tile's rows (row-seg/v1, row/v2) too, once every check has passed, so a tile's honest checks are REFUSED
+#      until T4 the verifier refuses --public-inputs (#1179), so summarize.py expects each row-unit check REFUSED; once every
+#      check has passed it refuses a plain tile's output row of two output ports, so a plain tile's honest checks are
+#      REFUSED, and a hiding tile's, whose rows (row-seg/v1, row/v2) are covered, ACCEPT
 #      A tile has no public input, so it runs honest-own without --public-inputs and none of the anchor controls.
 #   3. summarize.py: out/<role>-k<K>/summary.json and out/summary.json
 # A staged config is kept under $HZ_CACHE/stage, keyed by its role, K, N, HZ_STAGE, the venv and every source stage.py
@@ -118,11 +120,11 @@ setup() {
 # ---- 2. one config ---------------------------------------------------------------------------------------------------------
 free_port() { "$PY" -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }
 
-session() {   # session D O: one loopback --zk session with the proving build, the verifier serving its own public file
-  local D=$1 O=$2 port pin srv rc
+session() {   # session D O: one loopback --zk session with the proving build, the verifier serving its own public file and
+  local D=$1 O=$2 port pin srv rc   # drawing all N instances (subset:N), as every soundness claim is about a drawn session
   pin=$(cat "$D/pin.txt"); port=$(free_port)
   $TIME "$O/serve.time" bash -c "$(vlimit $SERVE_GB) exec $BIN serve --zk --listen 127.0.0.1:$port --out $D/sessions \
-    --instances $D/pub.bin --circuit $D/circuit.txt --pin $pin --operator loopback" > "$O/serve.log" 2>&1 &
+    --instances $D/pub.bin --circuit $D/circuit.txt --pin $pin --operator loopback --draw subset:$N" > "$O/serve.log" 2>&1 &
   srv=$!
   until grep -q '^SERVING ' "$O/serve.log" 2>/dev/null; do
     kill -0 $srv 2>/dev/null || { log "  serve exited before SERVING: $(tail -2 "$O/serve.log")"; return 1; }
@@ -136,13 +138,13 @@ session() {   # session D O: one loopback --zk session with the proving build, t
   return $rc
 }
 
-controls() {  # controls D O ROLE: the selftest build's cases, recorded for the Lean verifier
+controls() {  # controls D O ROLE: the selftest build's cases, recorded for the Lean verifier, drawn as session's are
   local D=$1 O=$2 role=$3 c rc
   mkdir -p "$D/rec"
   for c in $CASES; do
     [[ $role == tile* || $role == hidden* ]] && [ "$c" = public_input_claim_false ] && continue
     $TIME "$O/selftest-$c.time" bash -c "$(vlimit $PROVE_GB) exec $SBIN selftest --zk --instances $D/inst.bin \
-      --circuit $D/circuit.txt --only $c --record-dir $D/rec" > "$O/selftest-$c.out" 2> "$O/selftest-$c.err"
+      --circuit $D/circuit.txt --only $c --record-dir $D/rec --draw subset:$N" > "$O/selftest-$c.out" 2> "$O/selftest-$c.err"
     rc=$?
     log "  selftest $c exit $rc: $(grep -E '^NEG' "$O/selftest-$c.out" | cut -c1-200)"
   done
@@ -153,8 +155,8 @@ lean_jobs() {   # lean_jobs D O ROLE: every Lean check of one config, as many at
   local D=$1 O=$2 role=$3 each par cap c tag args s case pub own
   each=$(( $(stat -L -c %s "$D/circuit.txt") * 6 / 1024 / 1024 / 1024 + 4 ))       # GB: its peak is about 5x the circuit text at K=256
   par=$(( STAGE_GB / each )); [ $par -lt 1 ] && par=1; [ $par -gt 8 ] && par=8
-  cap=$(( STAGE_GB / par ))
   local base="verify --zk --circuit $D/circuit.txt"
+  [ -e "$D/partition.json" ] && base+=" --partition $D/partition.json"   # the verifier's own copy of the partition the circuit binds
   local cmds=()
   s=$(ls -d "$D"/sessions/*/ 2>/dev/null | tail -1)
   if [ -n "$s" ]; then
@@ -186,6 +188,10 @@ open(sys.argv[3], 'wb').write(h + b'\n' + p[len(p) - len(b):])" "$D/public-input
     for g in "${globs[@]}"; do [[ $tag == $g || $cfg/$tag == $g ]] && { keep+=("$c"); break; }; done
   done
   cmds=("${keep[@]}")
+  # the checks that run at once split the whole budget: `ulimit -v` bounds address space, which runs well past the resident
+  # peak (a 2.6 GB circuit's check, 10.8 GB resident, ran out under an 18 GB cap)
+  [ ${#cmds[@]} -gt 0 ] && [ $par -gt ${#cmds[@]} ] && par=${#cmds[@]}
+  cap=$(( STAGE_GB / par ))
   log "  lean: ${#cmds[@]} checks ($LEAN_ONLY), $par at a time, cap $cap GB each"
   for c in "${cmds[@]}"; do
     tag=${c%%|*} args=${c#*|}

@@ -62,6 +62,8 @@ def test_table_free_classes_compose_and_prove(units, tmp_path: Path):
         assert all(w % CS.BLOCK_WORDS == 0 for w in st["ports"])          # the output row: one per instance, never shared
         if (s, cl) == gather:
             assert st["shared_rows"] == {"p0": 1, "p1": 8, "out": 8}        # one table row shared by every instance; a row per index
+            (template,) = json.loads(text.split("\n", 2)[1][5:])["program_digests"]
+            assert template.startswith("unit-class/")                       # a primitive has no Program, so the class names itself
         if binary and Path(binary).exists():
             live = CS.prove(binary, d, st["n"], 7690 + i)
             assert live["accepted"] is True and live["proof_bytes"]
@@ -234,6 +236,47 @@ def test_core_rows_are_core_bit_rows_and_decode_as_the_default_layout(dtype):
     word = sum(out[:, h] << np.uint64(16 * h) for h in range(CS._words(w_out)))
     checked = [j for j, r in enumerate(ref) if r is not None and ok >> j & 1]
     assert len(checked) >= 24 and all(int(word[j]) == ref[j][0] for j in checked)
+
+
+def test_a_class_of_whole_activations_names_its_definition_as_the_circuits_template(monkeypatch, tmp_path: Path):
+    """An unwired class whose unit is one whole activation of its flat Definition (an FP GEMM coordinate) names that Definition
+    in META ``program_digests``, by core's descriptor id with its Program's digest, so that a verifier given the program finds
+    each unit an activation of the circuit's template (f05d's refusal named ``unit-class/…``). The name is a binding: the class
+    digest is the one the class has naming itself, and only the circuit's pin moves."""
+    from verity.ml.circuits.codec import descriptor_id, program_digest
+
+    units, s, cl, act, uc, _groups = _fp_class("e4m3", 128)
+    assert uc.computing == act.graph.n
+    lanes, key = _lanes(units, cl), hashlib.sha256(b"test").digest()
+    meta = lambda d: json.loads((tmp_path / d / "circuit.txt").read_text().split("\n", 2)[1][5:])  # noqa: E731
+    named = CS.stage(units, "q-word", s, cl, lanes, tmp_path / "named", key)
+    assert meta("named")["program_digests"] == {descriptor_id(act.fn): program_digest(Program(act.fn))}
+    shims = CS._shims
+    monkeypatch.setattr(CS, "_shims", lambda name, content, ports=1, definition=None: shims(name, content, ports))
+    own = CS.stage(units, "q-word", s, cl, lanes, tmp_path / "own", key)
+    (template,) = meta("own")["program_digests"]
+    assert template.startswith("unit-class/") and meta("own")["program_sha512"] == meta("named")["program_sha512"]
+    assert own["class_sha512"] == named["class_sha512"] and own["circuit_sha512"] != named["circuit_sha512"]
+
+
+def test_a_class_staged_without_shared_rows_opens_every_instances_own_rows_under_the_same_circuit(tmp_path: Path):
+    """``share_rows=False``: the same circuit, and public and prover files without ``shared_rows`` (the form Lean's
+    ``ProvedScope.sharedRowsOk`` covers without registered reads), every instance's rows its own, one per port, so the prover's
+    file is the shared one's with every table as long as the instances; a wired class keeps its link rows shared."""
+    units, s, cl, _act, _uc, _groups = _fp_class("e4m3", 128)
+    lanes, key = _lanes(units, cl), hashlib.sha256(b"test").digest()
+    shared = CS.stage(units, "q-word", s, cl, lanes, tmp_path / "shared", key)
+    own = CS.stage(units, "q-word", s, cl, lanes, tmp_path / "own", key, share_rows=False)
+    head = lambda d, f: json.loads((tmp_path / d / f"{f}-{own['n']}.bin").read_bytes().split(b"\n", 1)[0])  # noqa: E731
+    assert own["circuit_sha512"] == shared["circuit_sha512"] and own["shared_rows"] is None
+    assert "shared_rows" in head("shared", "pub") and "shared_rows" in head("shared", "inst")
+    assert "shared_rows" not in head("own", "pub") and "shared_rows" not in head("own", "inst")
+    meta = json.loads((tmp_path / "own" / "circuit.txt").read_text().split("\n", 2)[1][5:])
+    n, words = own["n"], sum(w for _p, w, _c in meta["ports"])
+    body = (tmp_path / "own" / f"inst-{n}.bin").read_bytes().split(b"\n", 1)[1]
+    assert len(body) == n * (2 * words + (192 + 128) * len(meta["ports"]))
+    with pytest.raises(ValueError, match="share_rows"):
+        CS.stage(units, "q-word", s, cl, lanes, tmp_path / "wired", key, wiring=SimpleNamespace(), share_rows=False)
 
 
 def test_core_rows_stage_and_each_row_recomputes_from_the_prover_file_with_core_alone(tmp_path: Path):

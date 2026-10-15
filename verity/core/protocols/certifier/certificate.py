@@ -25,17 +25,25 @@ the order `grid.fill` places them, each of B bytes:
 has the fixed depth D = ⌈log2(T·r)⌉: leaf k is frame k for k < N and E_0 after, so a padding slot never enters it.
 Opening one frame (`open_frame`, `verify_frame`) costs D siblings, the same at every occupancy.
 
-**The certificate** signs a 64-byte message that binds the record digest to the key and the link-window, so a
-certificate can't be replayed onto another window, link, direction or key. It is LMS's network-certificate role digest
-(`verity.ml.crypto.lms.certificate_message`), each field but I prefixed with its length as a u64be:
+**The certificate** signs a 64-byte message that binds the record digest to the key, the certifier session and the
+link-window, so a certificate can't be replayed onto another window, link, direction, key or session. It is LMS's
+network-certificate role digest (`verity.ml.crypto.lms.certificate_message`), each field but I and the window prefixed
+with its length as a u64be:
 
-    message = SHA-512( [tag] ‖ I ‖ [ [link] ‖ [direction] ‖ u64be window ] ‖ [record digest] ),
-              tag = "verity/network-certificate/v1", direction "egress" or "ingress", [x] = u64be len(x) ‖ x
+    message = SHA-512( [tag] ‖ I ‖ [ [session] ‖ [link] ‖ [direction] ‖ u64be window ] ‖ [record digest] ),
+              tag = "verity/network-certificate-message/v2", direction "egress" or "ingress", [x] = u64be len(x) ‖ x
+
+`session` is the certifier session's id, 32 bytes (`lms.SESSION_BYTES`) that the challenger draws for the session and
+issues to the certifier; the audit takes it from its parameters, as it takes the key, so the record head and the
+certificate's encoding don't carry it. The tag is the message's own, distinct from the ids of the checks that read it
+(`verity/network-certificate/v3`, `verity/network-records/v2`).
 
 The scheme is LMS over SHA-512 (`lms.DEPLOYED`: n = 64, w = 1, h = 20, the whole SHA-512 output, not truncated), whose
 unforgeability is ``euf-cma/lms-sha512-n64``. The certifier's signing step (`Issuer`) is handed it as a `Signer`
 (`LmsSigner`), and the audit as a `PublicKey` (`LmsKey`). A signer whose leaf state is missing, behind or held by another
-signer refuses (`SignerRefused`), and then the link-window has no certificate: it fails closed, as a `no-verdict`.
+signer refuses (`SignerRefused`), and then the link-window has no certificate: it fails closed, as a `no-verdict`. So
+does a signer asked to start a session its state has already started (`Signer.start`): the issuer starts its session
+before its first signature, and a refused start leaves every link-window of the run without a certificate.
 """
 
 from __future__ import annotations
@@ -240,23 +248,28 @@ def record_head(link: str, direction: Direction, window: int, grid: Grid, status
                       frames_root(frames, params))
 
 
-def certificate_message(key_id: bytes, link: str, direction: Direction, window: int, digest: bytes) -> bytes:
+def certificate_message(key_id: bytes, session: bytes, link: str, direction: Direction, window: int,
+                        digest: bytes) -> bytes:
     if len(digest) != DIGEST_BYTES:
         raise ValueError("a record digest is 64 bytes")
-    return lms.certificate_message(key_id, link, direction.value, window, digest)
+    return lms.certificate_message(key_id, session, link, direction.value, window, digest)
 
 
 class SignerRefused(Exception):
     """The signer's one-time-key state is missing, behind or held by another signer, so it signs nothing rather than risk
-    reusing a key."""
+    reusing a key; or the session it is asked to start is already started."""
 
 
 class Signer(Protocol):
-    """A stateful hash-based signer. `sign` uses a fresh one-time key and records it as used before returning, and
-    raises `SignerRefused` when its state is missing or behind."""
+    """A stateful hash-based signer. `start` records a session id as started before returning, and raises
+    `SignerRefused` when its state has started it already or this signer has started another. `sign` uses a fresh
+    one-time key and records it as used before returning, and raises `SignerRefused` when its state is missing or
+    behind."""
 
     @property
     def key_id(self) -> bytes: ...
+
+    def start(self, session: bytes) -> None: ...
 
     def sign(self, message: bytes) -> bytes: ...
 
@@ -308,11 +321,20 @@ class LmsSigner:
     def public_key(self) -> LmsKey:
         return LmsKey(self.key.params, lms.public_key(self.key))
 
+    def _state(self) -> lms.LeafState:
+        if self._leaves is None:
+            self._leaves = lms.LeafState(self.state, lms.public_key(self.key), self.key.params.H, floor=self.floor)
+        return self._leaves
+
+    def start(self, session: bytes) -> None:
+        try:
+            self._state().start(session)
+        except lms.StateError as e:
+            raise SignerRefused(str(e)) from None
+
     def sign(self, message: bytes) -> bytes:
         try:
-            if self._leaves is None:
-                self._leaves = lms.LeafState(self.state, lms.public_key(self.key), self.key.params.H, floor=self.floor)
-            return lms.sign(self.key, self._leaves, message).encode()
+            return lms.sign(self.key, self._state(), message).encode()
         except lms.StateError as e:
             raise SignerRefused(str(e)) from None
 
@@ -331,9 +353,9 @@ class Certificate:
     digest: bytes
     signature: bytes
 
-    @property
-    def message(self) -> bytes:
-        return certificate_message(self.key_id, self.link, self.direction, self.window, self.digest)
+    def message(self, session: bytes) -> bytes:
+        """The message the certificate signs in certifier session ``session``."""
+        return certificate_message(self.key_id, session, self.link, self.direction, self.window, self.digest)
 
 
 @dataclass(frozen=True, slots=True)
@@ -359,20 +381,32 @@ class CertifiedRecord:
     def status(self) -> Status:
         return self.head.status
 
-    def verify(self, key: PublicKey) -> bool:
-        """The certificate is signed by `key`, names the head's link-window and signs the head's digest."""
+    def verify(self, key: PublicKey, session: bytes) -> bool:
+        """The certificate is signed by `key` in certifier session `session`, names the head's link-window and signs the
+        head's digest."""
         c, h = self.certificate, self.head
-        return (c.key_id == key.key_id and (c.link, c.direction, c.window) == (h.link, h.direction, h.window)
-                and c.digest == h.digest() and key.verify(c.message, c.signature))
+        if not (c.key_id == key.key_id and (c.link, c.direction, c.window) == (h.link, h.direction, h.window)
+                and c.digest == h.digest()):
+            return False
+        try:
+            message = c.message(session)
+        except ValueError:
+            return False
+        return key.verify(message, c.signature)
 
 
 @dataclass
 class Issuer:
-    """The network certifier's signing step, beside its grid (`grid.Certifier`): one certificate per closed link-window.
-    A refusal leaves the link-window without a certificate (fail-closed) and is listed in `refused`."""
+    """The network certifier's signing step, beside its grid (`grid.Certifier`): one certificate per closed link-window,
+    in certifier session `session`. Before its first signature it starts the session on its signer, which refuses a
+    session its state has already started. A refusal, of the start or of a leaf, leaves the link-window without a
+    certificate (fail-closed) and is listed in `refused`; a refused start is asked again at the next link-window, and
+    refused again."""
 
     signer: Signer
+    session: bytes
     refused: list[tuple[str, Direction, int]] = field(default_factory=list)
+    started: bool = False
 
     def certify(self, record: Record, direction: Direction, params: GridParams, parameters: bytes, *,
                 deadline: bool = True) -> CertifiedRecord | None:
@@ -380,8 +414,12 @@ class Issuer:
                            deadline=deadline)
         digest = head.digest()
         key_id = self.signer.key_id
+        message = certificate_message(key_id, self.session, record.link, direction, record.window, digest)
         try:
-            signature = self.signer.sign(certificate_message(key_id, record.link, direction, record.window, digest))
+            if not self.started:
+                self.signer.start(self.session)
+                self.started = True
+            signature = self.signer.sign(message)
         except SignerRefused:
             self.refused.append((record.link, direction, record.window))
             return None

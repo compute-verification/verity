@@ -92,9 +92,13 @@ The first `hab` pads mask sent values, and the last four are committed auxiliari
 `Layout::absorbed()`: the rows above in order, minus `fc` (the inner proof's, §5). The algebraic phase is masked between
 the zerocheck label and the opening's label. Level 0 is masked between `verity-flock-zk-l0-open-v0` and `-close-v0`.
 
-**Randomness.** Everything comes from `ProverRng`, which is ChaCha20 keyed by the session's `ProverSeed` (a fresh
-`getrandom` draw). `f128s(stream, index, n)` reads `16n` bytes from byte offset `32·index` of the stream. With
-`base = rep << 32`:
+**Randomness.** Everything comes from `ProverRng`, and in a proving build every draw is the OS's own bytes (`getrandom`),
+read where it is drawn (Daniel, 9 Oct, decision 4). `f128s(stream, index, n)` reads `16n` fresh bytes, whatever its
+address, so each value below is drawn once and kept where it is used again: level 0's hiding for the table's session (the
+device's commit and the firewall's recheck take the same), each rep's pads in the rep's state, and each block's mask words
+with the table's witness. The addresses matter only under a test harness's injected seed (feature `seed-injection`), where
+`ProverRng` is ChaCha20 keyed by that seed and `f128s` reads `16n` bytes from byte offset `32·index` of stream `stream`, so
+the harness's proofs repeat. With `base = rep << 32`:
 
 ~~~text
 per rep r:
@@ -114,10 +118,11 @@ padding belongs to one rep (§7).
 
 Streams 1–3 belong to M0: mask, padding, and the injected-seed salt tape. None of this is derived from the transcript.
 
-**Several tables** (`--session-tables J`, the CPU prover). Table `j` reads every stream above at ChaCha20 stream
-`purpose | j << 32` (`ProverRng::for_table`). Its salt trees are ids `j << 32` (its level-0 tree) and up, below the next
-table's (`LeafSalts::table`, every tree's salts read from the OS). So no two tables share a pad, a mask word, a padding coefficient or
-a salt. Table 0's addresses are a one-table session's, and a one-table session's bytes are unchanged.
+**Several tables** (`--session-tables J`, the CPU prover). Every table's draws are OS reads of its own
+(`ProverRng::for_table`; under an injected seed, table `j` reads every stream above at ChaCha20 stream `purpose | j << 32`).
+Its salt trees are ids `j << 32` (its level-0 tree) and up, below the next table's (`LeafSalts::table`, every tree's salts
+read from the OS). So no two tables share a pad, a mask word, a padding coefficient or a salt. Table 0's addresses are a
+one-table session's.
 
 ## 3. The pads commitment
 
@@ -306,12 +311,10 @@ is the minimum.
 - **So M1 is statistical special honest-verifier zero knowledge for one session**, in the common-reference-string model,
   with distance about `N·2^-192`. The claim ids are `statistical-hiding`, `common-reference-string` and `hash-derived-key`.
   No random oracle is involved.
-- **The one caveat is the randomness source.** Every pad, mask, padding coefficient and extra lane is ChaCha20 output
-  under the session's 32-byte seed from the OS (`ProverRng`). The claim is statistical when that output is treated as
-  uniform, as hm96 §3 treats such streams; otherwise it is computational, under ChaCha20 as a PRG. The leaf salts carry no
-  such premise: they are the OS's own bytes (`LeafSalts`; Daniel, 9 Oct, decision 4(a)), so hm96's hiding rests on the OS
-  generator alone. (A test harness's injected seed expands its salts with ChaCha20, so its proofs repeat; a proving build
-  has no injected seed.)
+- **No premise on a stream generator.** Every pad, mask, padding coefficient and extra lane (`ProverRng`) and every leaf
+  salt (`LeafSalts`) is the OS's own bytes (Daniel, 9 Oct, decisions 4 and 4(a)), so the claim is statistical with the OS
+  generator's output as the uniform prover randomness it assumes, and nothing rests on ChaCha20 as a PRG. (A test
+  harness's injected seed expands all of them with ChaCha20, so its proofs repeat; a proving build has no injected seed.)
 - **Collision resistance** (`cr/sha-512`) enters only soundness (binding of the prover's trees) and M2's binding of the
   verifier's coin commitment (§9), not M1's hiding.
 - **Refused coins.** The prover's refusals are exactly the ones the argument uses: `β = 0` (the inner proof),
@@ -501,7 +504,7 @@ goes out).
 - **C1's level-0 root check** stays: both reps prove one witness, level 0's randomness is drawn once per session and
   belongs to its one tree, and the pads trees take `next_id() ≥ 1`.
 - **GPU.** `--zk` is CPU-only. The mask slot fill, §7's padding and extra lanes, and `commit_zk` belong on the device,
-  expanded from `ProverRng`'s ChaCha20 streams (the hm96 salts are the host's OS reads, handed to the device tree by tree).
+  taking the host's OS reads as the hm96 salts are taken, tree by tree.
 - **Several tables per session** (the public-circuit ZK proof's §2.3 and gap 1) are on the CPU prover, `--session-tables J`:
   - the draw's units split into J equal tables `circuit-00`, `circuit-01`, ... (`session_tables`), under Σ over every
     table's Σ. The server refuses at configuration a Bernoulli sampling design (its count is random), a count J does not

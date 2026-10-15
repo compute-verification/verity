@@ -15,14 +15,18 @@ Soundness rests on three: SHA-512's collision resistance in two forms, each a hy
 verifier's randomness. `SHA512CRStrict` (`cr/sha-512`) bounds a finder by its worst-case number of evaluations: the
 compiled and knowledge terms' collision finders and `δ_tree`'s. `SHA512CRExpected` (`ecr/sha-512`, Assumption 2) bounds
 a finder by its expected number: the link term's. Assumption 3 is a hypothesis about the byte source the verifier draws its
-units from. The round coins' uniformity (A6, `uniform/flock-coin-server`) is not a `Prop` here: the session game draws its
-coins itself, so the model embodies it (`ASSUMPTIONS.md`).
+units from, the operating system's, which is also the source of the commitments' salts. The round coins' uniformity (A6,
+`uniform/flock-coin-server`) is not a `Prop` here: the session game draws its coins itself, so the model embodies it
+(`ASSUMPTIONS.md`).
 
 The rest are not soundness's hardness assumptions. Assumption 4 is a hypothesis about one test of `verity.randomness`'s
 keyed streams, for the PoUW window draw, and Assumption 5 one about the window's secret. `HmRowComputes` is not
 cryptographic: it says the circuit's row-hashing slots compute SHA-512, a fact about the circuit that is still to prove
 (phase 2i), named here so that the value binding's theorems take it as a hypothesis. Zero knowledge's are hm96 leaf hiding
-(T1, `Hm96Hiding`) and `X_L + κ ≠ 0` on the level-0 domain (`PadNonvanishing`).
+(T1, `Hm96Hiding`) and `X_L + κ ≠ 0` on the level-0 domain (`PadNonvanishing`), with A3 for the salts' bytes. None of
+them is a computational property of SHA-512: hm96's hiding is statistical (`CROnly.hm96Hiding_gap`), and the one premise
+left on it, `hash-derived-key`, is a fact about one fixed key and salt hash (the common-reference-string step), not a
+hardness property.
 
 Assumption 1, BCHKS25's mutual correlated agreement up to the Johnson bound, is proved (`mcaError_le_bchks25`, from DKT26).
 Merkle binding is proved too (VCVio's binding theorem, `Merkle`): a conflict of two verifying openings is a collision, which
@@ -79,8 +83,8 @@ def SHA512CRExpected {D β : Type} (H : List UInt8 → D) (g : Game β) (s : Str
   (prob (fun b => ∃ x y, out b = some (x, y) ∧ x ≠ y ∧ H x = H y) g s).toReal ≤
     expect cost g s / 2 ^ (256 : ℝ)
 
-/-- **Assumption 3 (`uniform/io-getrandombytes`): the verifier's operating-system randomness is independent uniform
-bytes**, for the unit draw.
+/-- **Assumption 3 (`uniform/io-getrandombytes`): the operating system's randomness is independent uniform bytes**, for
+the verifier's unit draw and the salts of the prover's, the firewall's and a registrant's commitments.
 
 The verifier draws the units it audits from `IO.getRandomBytes`: `Flock.Draw.drawOS` is `Flock.Draw.drawWith` with every
 stream's bytes from it. To Lean's logic an `IO` action is a function of the world, and `IO.getRandomBytes` an opaque
@@ -93,7 +97,16 @@ probability it has for independent uniform bytes.
 What A3 assumes of the operating system is that the running verifier's calls to `IO.getRandomBytes` are such a source,
 every call's bytes independent of every earlier call's, for every `L`. The step from `IO` to the model rests on
 `drawWith` being generic in its monad, together with A3: the theorems read `drawWith` on a model byte source, and
-`drawOS` runs the same `drawWith` on `IO.getRandomBytes` (`drawOS_def`). -/
+`drawOS` runs the same `drawWith` on `IO.getRandomBytes` (`drawOS_def`).
+
+A3 is also the salts' source (Daniel, 9 Oct, decisions 4(a) and 4(c)). C-Flock's prover reads every hm96 leaf salt, 192
+bytes a leaf, from the operating system (`getrandom`, the kernel's `getrandom(2)`, the source `/dev/urandom` reads), and so
+do the recursive audit's firewall and a registrant (`os.urandom`) for their commitments' salts. What A3 assumes there is
+that those reads, too, are independent uniform bytes; `Discharge.ZkView.OsSalts` reads 192 of them as one salt
+(`ZkView.saltEquiv`) and takes the hiding theorems, stated at uniform salts, to them (`hm96Hiding_os`,
+`ideal_leaves_swap_os`, `hides_os`, `Flock.SecurityProofs.recursiveZK_os_gap`). With it no premise on a stream generator is
+left on the salts. The prover's masks and Reed–Solomon padding are still a ChaCha20 expansion of an OS seed
+(`ProverRng`), which the zero-knowledge theorems draw uniformly: that step is not A3's. -/
 def UniformRandomBytes {Ω : Type} [Fintype Ω] {m : ℕ} (L : Fin m → ℕ) (t : Ω → (i : Fin m) → Fin (L i) → Fin 256) :
     Prop :=
   ∀ E : ((i : Fin m) → Fin (L i) → Fin 256) → Prop, prCoin (fun ω => E (t ω)) = prCoin E
@@ -176,6 +189,11 @@ with advantage above `δ₁`. hm96 §3 proves `E_K[δ₁(K)] ≤ 2^-257` by the 
 all but `2^-64` of keys; that the pinned key is one of them is the common-reference-string step (`hash-derived-key`),
 which a per-session key would remove. It is statistical: no random oracle.
 
+It is a statement about uniform salts, and it needs no computational property of SHA-512. At `δ₁ = hidingGap My c`, the
+statistical distance itself, it holds with no premise (`CROnly.hm96Hiding_gap`); hm96 §3's leftover hash lemma
+(`CROnly.sum_hidingGap_le`) reads of `c(y) = H(sp ‖ y)` only that it takes at most `2^512` values. The salts are the
+operating system's bytes, which A3 (`UniformRandomBytes`) makes uniform (`Discharge.ZkView.hm96Hiding_os`).
+
 It is a predicate on one pair of functions, `M(K*)·` and `H(sp ‖ ·)`. `Table.view` takes the leaves the final message
 doesn't open as ideal (world `W₁`); this assumption, through §4.1's T1, is what moves the real prover there, at `δ₁` per
 leaf, and so gives Lemma B's bound, `2·|Hid|·δ₁`, at most the paper's `2·δ₁·N_hid`. -/
@@ -185,7 +203,17 @@ def Hm96Hiding {Y B C : Type} [Fintype Y] [Fintype B] (My : Y → B) (c : Y → 
 /-- **`hash-derived-key`: the pinned hm96 key hides at `2^-193`** (ruling F). `Hm96Hiding My c (2^-193)` for the keyed
 hash `My` of the pinned key `K*` and the salt hash `c`: hm96 §3 shows it fails for at most `2^-64` of the keys
 (`hm96_sha512_bad_keys`), and that the pinned key is not among them is the assumption. It is instantiated at
-hm96-sha512's `ZkView.My` and `ZkView.saltHash`. -/
+hm96-sha512's `ZkView.My` and `ZkView.saltHash`.
+
+It is the common-reference-string step (`common-reference-string`), not a hardness assumption, and no reduction takes it
+to a property of SHA-512: `K*` is one public constant, so there is no secret and no adversary to reduce, and a bad key
+is not a set an algorithm is asked to find. Where a theorem's bound is stated at `hidingGap My saltHash` instead
+(`CROnly.hm96Hiding_gap`), it takes no premise at all: so are `Flock.Guarantees.RecursiveZK`,
+`Flock.Guarantees.RecursiveCircuitPrivate`, `Flock.Guarantees.RecursiveCircuitIndist`,
+`Flock.Guarantees.RecursiveCircuitPrivateLeaves`, `Flock.Guarantees.ZeroKnowledgeHidden` and
+`FailClosed.flock_verify_sound`'s zero-knowledge views. A key drawn per session
+from the operating system (A3) would replace it by the average over keys, `2^-257` (`CROnly.hm96_sha512_sum`), as the
+committed coins' bound at a fresh uniform key already is (`ZkCoins.CommittedLeHm96`). -/
 def HashDerivedKey {Y B C : Type} [Fintype Y] [Fintype B] (My : Y → B) (c : Y → C) : Prop :=
   Hm96Hiding My c ((2 : ℝ≥0∞) ^ (-193 : ℤ))
 

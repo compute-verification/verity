@@ -29,6 +29,7 @@ import random
 import numpy as np
 import pytest
 import torch
+from verity.core.protocols.pouw.circuit import anchors as CA
 from verity.core.protocols.pouw.circuit import plan as CPL
 from verity.core.protocols.pouw.circuit import reference as CR
 from verity.core.protocols.pouw.coins import Challenger
@@ -356,6 +357,36 @@ def test_the_honest_run_is_accepted(world):
     assert pw["weights"] == 1 and pw["draw"]["domain"] == CPL.DRAW_DOMAIN and len(bytes.fromhex(pw["draw"]["source"])) == 32
 
 
+@pytest.mark.slow
+def test_a_second_window_of_the_salt_continues_its_forwards(world):
+    """A salt's windows share no call index (`CA.SaltWindows`): the run's calls, replayed as a second window of its salt,
+    are refused, since that window's forwards start after the first window's last one."""
+    windows = CA.SaltWindows(bytes.fromhex(world.commitment["salt"]))
+    first = RC.replay(world.records, world.commitment, 1, windows)
+    assert first["result"] is True and windows.next_forward == 1 + max(r.call.forward for r in world.records), first["why"]
+    second = RC.replay(world.records, world.commitment, 1, windows)
+    assert second["result"] is False and any("anchored forward is not the verifier's" in w for w in second["why"]), second["why"]
+
+
+@pytest.mark.slow
+def test_a_second_window_served_at_the_salts_next_forward_is_accepted(world, tmp_path_factory):
+    """The pouw setting ``start_forward``: a run served at the verifier's `SaltWindows.next_forward` anchors its forwards
+    there, so the salt's second window shares no call index with its first and both windows open.  What a repeat would
+    reuse (one noise key for two calls) is what `SaltWindows.open` refuses in the test above."""
+    windows = CA.SaltWindows(bytes.fromhex(world.commitment["salt"]))
+    first = RC.replay(world.records, world.commitment, 1, windows)
+    assert first["result"] is True, first["why"]
+    with pytest.MonkeyPatch.context() as mp:
+        w2 = Run(world.inst, world.woff, world.weights, world.prompts, tmp_path_factory.mktemp("pouw-w2"), mp,
+                 settings={"start_forward": windows.next_forward})
+    assert w2.commitment["salt"] == world.commitment["salt"]
+    assert w2.commitment["start_forward"] == windows.next_forward
+    assert min(r.call.forward for r in w2.records) == windows.next_forward
+    rep = RC.replay(w2.records, w2.commitment, 1, windows)
+    assert rep["result"] is True, rep["why"]
+    assert windows.next_forward == 1 + max(r.call.forward for r in w2.records)
+
+
 def test_without_the_delegate_the_pouw_rows_are_named_unreplayable_never_evaluated(world):
     bmap, committed = world.bmap_and_reader()
     rep = SR.sampled_replay({rid: world.inst for rid in world.prompts}, bmap, committed, world.weights_reader(), per_stratum=2, seed=3, workers=0)
@@ -556,6 +587,13 @@ def test_the_tamper_setting_is_one_of_the_controls():
     assert pouw.Settings.of({"tamper": "tile"}).tamper == "tile" and pouw.Settings.of({}).tamper is None
     with pytest.raises(ValueError, match="tamper"):
         pouw.Settings.of({"tamper": "weights"})
+
+
+def test_the_start_forward_setting_is_a_non_negative_integer_for_the_circuit_executor():
+    assert pouw.Settings.of({"start_forward": 3}).start_forward == 3 and pouw.Settings.of({}).start_forward == 0
+    for bad in (-1, True, "2"):
+        with pytest.raises(ValueError, match="start_forward"):
+            pouw.Settings.of({"start_forward": bad})
 
 
 @pytest.mark.parametrize("which", ["world", "fused_world"])

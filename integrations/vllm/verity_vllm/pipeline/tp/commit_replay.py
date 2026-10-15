@@ -23,6 +23,7 @@ large for this host's memory).
 """
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import os
@@ -30,6 +31,7 @@ import resource
 import socket
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -117,16 +119,22 @@ def _manifest(o: Options, ctx: dict[str, Any]) -> dict | None:
     return json.loads(Path(p).read_text())
 
 
+def checkpoint_index(o: Options) -> Any:
+    from verity_vllm.check import weights_of_record as WR
+
+    return WR.CheckpointIndex(o.checkpoint_dir, checkpoints_manifest=o.checkpoints_manifest, model=o.model, revision=o.revision)
+
+
 def _peak_rss() -> int:
     return max(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss, resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss) * 1024
 
 
-def replay_rank(o: Options, out: Path, dd: dict[str, Any], pair: int, rank: int) -> dict[str, Any]:
-    """The rank's C2 from its bundle (module docstring), its record written to `sampled_replay_p<pair>_rank<r>.json`."""
+def replay_rank(o: Options, out: Path, dd: dict[str, Any], pair: int, rank: int, ck: Callable[[], Any] | None = None) -> dict[str, Any]:
+    """The rank's C2 from its bundle (module docstring), its record written to `sampled_replay_p<pair>_rank<r>.json`.  ``ck``: the
+    checkpoint's index, shared by the ranks one process replays, since building it reads every shard whole for its sha256."""
     import traceback
 
     from verity_vllm.check import oracle_compare as OC
-    from verity_vllm.check import weights_of_record as WR
     from verity_vllm.check.replay.driver import PoolDoesNotFit
     from verity_vllm.pipeline import cpu_replay as CPU
     from verity_vllm.pipeline.tp import rank_replay as RR
@@ -148,8 +156,8 @@ def replay_rank(o: Options, out: Path, dd: dict[str, Any], pair: int, rank: int)
     wc, attest = None, None
     try:
         p = RR.load(cfg, rank, int(dd["world"]))
-        ck = WR.CheckpointIndex(o.checkpoint_dir, checkpoints_manifest=o.checkpoints_manifest, model=o.model, revision=o.revision)
-        words, wc = CPU.open_weights(bdir, tree, (c.get("weight_registration") or {}).get("root"), ck, threads=o.threads,
+        index = ck() if ck else checkpoint_index(o)
+        words, wc = CPU.open_weights(bdir, tree, (c.get("weight_registration") or {}).get("root"), index, threads=o.threads,
                                      tp={"world": int(dd["world"]), "rank": rank})
         # the bytes the relations consume are the checkpoint's, opened against the run's committed weights root: self-consistency
         # with the run as in the rank's process, from the checkpoint's bytes; the pin of record stays the Commit's weights pin
@@ -286,8 +294,9 @@ def main(o: Options) -> int:
                 if (want is None or int(b["rank"]) in want) and not result_path(out, b["pair"], b["rank"]).is_file()]
         if todo and not o.fold_only:
             warm_vml()
+            ck = functools.cache(lambda: checkpoint_index(o))
             for pair, rank in todo:
-                replay_rank(o, out, dd, pair, rank)
+                replay_rank(o, out, dd, pair, rank, ck)
         ok = fold(out)
     except (Refused, PoolDoesNotFit) as e:
         print(f"[tp-replay] REFUSED: {e}", flush=True)

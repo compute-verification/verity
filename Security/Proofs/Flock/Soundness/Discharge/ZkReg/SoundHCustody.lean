@@ -26,7 +26,7 @@ theorem zk_session_soundHR_custody
     -- the session's circuit and public file
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
-    (hscope : Layout.scopeOk c = true)
+    (hscope : Layout.scopeOkH c = true)
     -- the law and A3
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
@@ -46,32 +46,32 @@ theorem zk_session_soundHR_custody
     {qF qS : ℝ}
     (hCR : ∀ ω j, TableCRZ execArith hs512 (planAtZKH dj y₀
         ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω)
-        (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I ht hc (Layout.scopeOk_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hCust.1
+        (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hCust.1
           (fun ω => drawOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ))) j
       (zcStrat execArith hs512 (planAtZKH dj y₀)
-        (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I ht hc (Layout.scopeOk_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hCust.1
+        (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hCust.1
           (fun ω => drawOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ) ω)) qF qS) :
     prob (fun o => LiveAcceptsZKR I own o ∧
         K₀ ≤ (((keyProg c hU n).partition (Layout.outsOf c hU n)).wrong
           (XplurZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planAtZKH dj y₀) (tabAtZKH dj y₀)
             ((rsZHS dj y₀ ht hc hscope hU hpub).bindingZ (rsZHS_computes dj y₀ ht hc hscope hU hpub))
-            (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I ht hc (Layout.scopeOk_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hCust.1
+            (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hCust.1
           (fun ω => drawOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ))
-            (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I ht hc (Layout.scopeOk_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hCust.1
+            (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hCust.1
           (fun ω => drawOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ)) k Rw)).card)
         (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg (mPtsOf c.g (∑ s, ks s)) N wr)) τ ≤
       (Law.stratified σs ks hks).miss K₀ +
         ksAvgStrictZ (planAtZKH dj y₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
-          (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I ht hc (Layout.scopeOk_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hCust.1
+          (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hCust.1
           (fun ω => drawOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ)) +
         linkBoundZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planAtZKH dj y₀) (tabAtZKH dj y₀)
           ((rsZHS dj y₀ ht hc hscope hU hpub).bindingZ (rsZHS_computes dj y₀ ht hc hscope hU hpub))
-          k Rw M ρ t' (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I ht hc (Layout.scopeOk_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hCust.1
+          k Rw M ρ t' (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hCust.1
           (fun ω => drawOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ))
-          (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I ht hc (Layout.scopeOk_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hCust.1
+          (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hCust.1
           (fun ω => drawOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ)) ∧
     ∀ o : Reg × Finset (Fin n) × Exec.Transcript, LiveAcceptsZKR I own o →
-      ∀ rd : FlockSoundness.Registered.Reads (layShH (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
+      ∀ rd : FlockSoundness.Registered.ReadsX (layShH (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
           (rsShHS dj y₀ ht hc hscope hU hpub),
         OwnReadsH own c pub o.2.2 rd.isRead rd.port rd.readAt → rd.Checked o.1 (regPathsH c pub o.2.2 rd.port) :=
   zk_session_soundHR I ht own dj y₀ wr dg N hc hU hpub hscope σs ks hks St hS Kd pop Lb src hA3

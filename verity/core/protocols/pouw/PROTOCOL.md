@@ -97,6 +97,32 @@ asked for, that is malformed, that does not open against the epoch's root, or wh
 verifier's: an outcome convinces the auditor, who trusts its own challenger, and no third party (claim `live-verifier`).
 Vectors: `tests/vectors/epoch_coins_v1.json`.
 
+## Registered weights (`registration`)
+
+One rule for every construction that serves a checkpoint: Pearl-C4 (`PearlC4.check_registration`) and served FP8's Pearl-C
+(`PearlC.check_registration`) both call `check_registration`. No Lean statement reads a registration.
+
+- **The keyed 8-block rotation (rung 3) is the rule** (Daniel, 1:36 PM PDT on 30 Sep, for Pearl-C4; compute-accounting,
+  8 Oct, for served FP8). An unrotated checkpoint registers only from the curated list, the fallback.
+- **The keyed V/O rotation plus the keyed head interleave are adopted inside it, applied after it** (Daniel,
+  5:52 PM PDT). The V/O rotation acts on each KV head's v_proj rows and o_proj columns, and the interleave on o_proj's
+  heads. They are never applied on an unrotated checkpoint, curated or not.
+- A registration declares its transforms in order, and only the two stacks pass: the rotation alone, or the rotation,
+  V/O and the interleave. V/O without the interleave, the interleave without V/O, and any other order are refused,
+  because the two were measured only together, after the rotation.
+- **A checkpoint that needs γ folded registers only with it**, as Llama-3.1-70B does under Pearl-C4: the cast moves its
+  layer 0's update by 158% with the RMSNorm scales unfolded, and by under 4% with them folded. The rotation folds γ, so
+  its stacks pass as they are. An unrotated, curated checkpoint declares `gamma-fold` (every RMSNorm scale folded into
+  the linears it feeds), and takes no V/O or interleave.
+- **The keyed transforms are keyed after the weights' root is recorded**, by `rotation_key`:
+  `derive(salt, "verity/pouw/rotation-key/v1", {"weights": weights_root}).stream("key", 32)`, over the salt of an epoch
+  started from the challenger's salt coin (`Epoch.start`). It refuses any other salt: an `Epoch.unverified` one, a
+  beacon's or a fixed seed's. The rule reads what a registration declares; applying the transforms is the
+  registration's own.
+- **Served FP8 applies no rotation yet.** The vLLM option's executor (`pouw.SERVED_TRANSFORMS`) applies none and reads no
+  curated list, so its commitment's `registration` (`pouw.weights_claim`) says it claims nothing about which weights were
+  served, and names the refusal. Its salt is still the live coin, so what the draw establishes of the work is unchanged.
+
 ## The proof's identifier (v1) (`identifier`)
 
 Where a drawn tile is checked by a C-Flock proof rather than recomputed, the proof is bound to the oracle, the salt and the
@@ -447,7 +473,8 @@ weight are committed a leaf per row, so a proved unit opens exactly the rows it 
 
   The verifier builds these inputs itself (`Traced.call_args`, `Traced.weight_args`) or refuses a prover's that differ
   (`Anchors.check_call`), and a window's `Ledger` refuses a repeated call index (forward, position), A11's
-  `UniqueCallIndices`.
+  `UniqueCallIndices`. `SaltWindows` refuses one across every window of a salt, whose forwards continue from its
+  `next_forward`.
 - **Every primitive returns at most 32 bits.** SHA-512 words are carried as (hi, lo) halves and Keccak lanes as
   (lo, hi).
 
@@ -1007,21 +1034,8 @@ useful    U/(α_A·α_B), glue
     the noise atom 64, the block scale about 1, the cast 32.8), so W_ref − creditOf = 19·mk (the noisy amax, 17, and
     ρ's accumulate, 2);
   - the weight side is `job_cost`.
-- **Registered weights (`check_registration`):**
-  - **The keyed 8-block rotation (rung 3) is the rule** (Daniel, 1:36 PM PDT on 30 Sep). An unrotated checkpoint
-    registers only from the curated list, the fallback.
-  - **The keyed V/O rotation plus the keyed head interleave are adopted inside it, applied after it** (Daniel,
-    5:52 PM PDT). The V/O rotation acts on each KV head's v_proj rows and o_proj columns, and the interleave on o_proj's
-    heads. They are never applied on an unrotated checkpoint, curated or not.
-  - A registration declares its transforms in order, and only the two stacks pass: the rotation alone, or the rotation,
-    V/O and the interleave. V/O without the interleave, the interleave without V/O, and any other order are refused,
-    because the two were measured only together, after the rotation.
-  - **A checkpoint that needs γ folded registers only with it**, as Llama-3.1-70B does: the cast moves its layer 0's
-    update by 158% with the RMSNorm scales unfolded, and by under 4% with them folded. The rotation folds γ, so its
-    stacks pass as they are. An unrotated, curated checkpoint declares `gamma-fold` (every RMSNorm scale folded into
-    the linears it feeds), and takes no V/O or interleave.
-  - The rule reads what a registration declares. Applying the transforms and drawing their keys are the
-    registration's own.
+- **Registered weights** are the shared rule ("Registered weights (`registration`)"), through
+  `PearlC4.check_registration`.
 - **The work sampling design** is `pearl_c_work`'s. The scheme brings its own row parser, per-row rules and tile debit.
 - **The reference replay (`pearl_c4_replay`)** checks a device run's own transcript under that sampling design's rules,
   which every measured row needs:
@@ -1132,11 +1146,9 @@ useful    U/(α_A·α_B), glue
     one SHA-512 block at k ≤ 2^14, so a segment's chain is the row's, and v2 hashes them in fewer blocks. The chunk
     digests and the strip row are v2 rows padded with zero words to 64, one whole block: C-Flock's composer refuses a
     unit none of whose rows hashes a block before its last, and without a whole block the strip, a row digest, the tile
-    and the tally would read and write only one-block v2 rows. They are not row-seg rows because C-Flock's widened
-    proved scope takes a v2 row whose bytes are whole blocks or end in its first block, and a row-seg row only of whole
-    blocks; padded, each costs two compressions, as its short row-seg row did, where a row-seg row padded to a block
-    would cost three. A row digest and the strip write the zero words as constants, and the tile and the tally leave
-    them unread. Every other row is a v2 row, the registered rows (role W) included, in the registered tree and in every
+    and the tally would read and write only one-block v2 rows. They are not row-seg rows: padded, each costs two
+    compressions, as its short row-seg row did, where a row-seg row padded to a block would cost three. A row digest and
+    the strip write the zero words as constants, and the tile and the tally leave them unread. Every other row is a v2 row, the registered rows (role W) included, in the registered tree and in every
     statement that reads or writes them, so each (row, role) has one leaf schema wherever it appears and no row is
     `sha512/row/v1` (Daniel's ruling, Slack 1790973124.259289). A v2 row costs what a v1 row of the same words would, a
     128-byte prefix block and the row, and is any length; the role byte v2 drops is bound by the registration domain.

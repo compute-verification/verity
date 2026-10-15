@@ -27,8 +27,8 @@ ACTING_AS = slack.acting_as
 TOKEN = "dummy-verity-bot"
 BOT = "B0VERITY"
 COORD, ALERTS = "CCOORD", "CALERTS"
-HANDLES = ["infra", "proofs", "circuits", "compute-accounting", "memory-accounting", "network-accounting",
-           "ci", "lean", "comms", "top", "old-accounting", "old-circuits-and-proofs"]
+HANDLES = ["infra", "proofs", "circuits", "compute-accounting", "memory-accounting", "network-accounting", "console",
+           "ci", "lean", "comms", "top", "vllm", "benchmarks", "old-accounting", "old-circuits-and-proofs"]
 
 
 class FakeSlack:
@@ -96,9 +96,10 @@ class FakeSlack:
             g = {"id": f"S{len(self.groups) + 1:04d}", "name": p["name"], "handle": p["handle"], "description": p.get("description", ""), "date_delete": 0}
             self.groups.append(g)
             return {"ok": True, "usergroup": g}
-        if method in ("usergroups.update", "usergroups.enable"):
+        if method in ("usergroups.update", "usergroups.enable", "usergroups.disable"):
             g = next(g for g in self.groups if g["id"] == p["usergroup"])
-            g.update({k: p[k] for k in ("name", "handle", "description") if k in p}, **({"date_delete": 0} if method.endswith("enable") else {}))
+            g.update({k: p[k] for k in ("name", "handle", "description") if k in p}, **({"date_delete": 0} if method.endswith("enable") else {}),
+                     **({"date_delete": 1700000000} if method.endswith("disable") else {}))
             return {"ok": True, "usergroup": g}
         return {"ok": False, "error": "unknown_method"}
 
@@ -215,6 +216,8 @@ def test_handles_and_subscriptions(registry, capsys):
     assert rc == 0 and "@infra" in out and "SINFRA" in out and "#agent-alerts" in out
     rc, out, _ = run(capsys, "subscriptions", "--as", "infra")
     assert rc == 0 and f'channelId="{ALERTS}", topLevelOnly=true' in out and COORD not in out
+    assert 'subscribe_linear_issue(options={"scope": "team", "teamId": "INF"}' in out        # a human's filing rings no inbox
+    assert "subscribe_linear_comment" not in out and "no comment subscription on INF" in out  # nearly all are its own echoes
     rc, out, _ = run(capsys, "subscriptions", "--as", "old-accounting")
     assert rc == 0 and f'channelId="{COORD}", topLevelOnly=true' in out and ALERTS not in out
 
@@ -472,7 +475,7 @@ def test_the_client_refuses_what_the_broker_would(broker, registry, capsys):
 def test_broker_methods_are_the_methods_this_module_calls_but_the_user_group_writes():
     src = Path(slack.__file__).read_text()
     called = set(re.findall(r"\.(?:call|paged)\(\s*\"([a-z]+\.[A-Za-z]+)\"", src))
-    assert set(slack.DIRECT_ONLY) == {"chat.update", "usergroups.create", "usergroups.enable", "usergroups.update"}
+    assert set(slack.DIRECT_ONLY) == {"chat.update", "usergroups.create", "usergroups.disable", "usergroups.enable", "usergroups.update"}
     assert called == set(slack.BROKER_METHODS) | set(slack.DIRECT_ONLY) and not set(slack.BROKER_METHODS) & set(slack.DIRECT_ONLY)
     assert len(slack.BROKER_METHODS) == len(set(slack.BROKER_METHODS))
 
@@ -545,11 +548,12 @@ def test_oidc_token_asks_again_when_the_socket_drops_the_connection(identity_soc
     with pytest.raises(slack.SlackError, match="identity socket the Slack broker needs is unavailable"):
         slack.oidc_token(slack.BROKER, sleep=waits.append)
     assert len(identity_socket["seen"]) == 1 and identity_socket["drop"] == 0
-    monkeypatch.setenv("CURSOR_AGENT_SOCKET", str(tmp_path / "absent.sock"))
-    waits.clear()
-    with pytest.raises(slack.SlackError, match="not a Cursor agent"):
-        slack.oidc_token(slack.BROKER, sleep=waits.append)
-    assert not waits
+    for absent in (tmp_path / "absent.sock", tmp_path / ("x" * 120) / "api.sock"):   # past AF_UNIX's ~108 bytes too
+        monkeypatch.setenv("CURSOR_AGENT_SOCKET", str(absent))
+        waits.clear()
+        with pytest.raises(slack.SlackError, match="not a Cursor agent"):
+            slack.oidc_token(slack.BROKER, sleep=waits.append)
+        assert not waits
 
 
 def test_announce_to_all_or_some_with_verify_and_pins(fake, registry, capsys):
@@ -695,6 +699,21 @@ def test_read_thread_since_reads_only_the_replies_after_ts(fake, registry, capsy
     assert rc == 0 and [m["text"] for m in json.loads(out)] == ["second answer", "third answer"]
 
 
+def test_read_since_takes_an_iso_time_as_its_ts_and_refuses_anything_else(fake, registry, capsys):
+    """Slack answers a date passed as `oldest` with no messages, so a sweep reading `--since 2026-…Z` saw a quiet channel."""
+    root = fake.add(COORD, text="before", user="U1", ts="1793525400.000100")                  # 2026-11-01T09:30:00Z
+    fake.add(COORD, text="after", user="U2", ts="1793525460.000100")
+    fake.add(COORD, text="reply after", user="U3", ts="1793525470.000100", thread_ts=root["ts"])
+    rc, out, _ = run(capsys, "read", "--since", "2026-11-01T09:30:30Z")
+    assert rc == 0 and [line.split(": ", 1)[1] for line in out.splitlines()] == ["after"]
+    rc, out, _ = run(capsys, "read", "--thread", root["ts"], "--since", "2026-11-01T01:30:30-08:00")
+    assert rc == 0 and [line.split(": ", 1)[1] for line in out.splitlines()] == ["reply after"]
+    for bad in ("2026-11-01T09:30:30", "yesterday"):
+        with pytest.raises(SystemExit) as e:
+            run(capsys, "read", "--since", bad)
+        assert e.value.code == 2 and "an ISO time with its zone" in capsys.readouterr().err
+
+
 def test_a_post_carries_slack_date_tokens_and_read_shows_both_zones(fake, registry, capsys):
     text = "freeze 2026-11-01T09:30Z, see note:20260930T2020Z-handoff-infra and `--since 2026-11-01T09:30Z`"
     assert run(capsys, "ask", "--as", "infra", "--to", "@memory-accounting", "--text", text)[0] == 0
@@ -754,6 +773,19 @@ def test_groups_sync_plans_by_default_then_creates_updates_enables_and_records_i
     assert all(not g["date_delete"] for g in fake.groups)
     rc, out, _ = run(capsys, "groups", "sync", "--apply")
     assert out.count("ok      @") == len(HANDLES) and "record" not in out and "wrote" not in out
+
+
+def test_groups_sync_disables_a_retired_names_group_and_leaves_other_groups_alone(fake, registry, routes_dirs, capsys):
+    add_route(routes_dirs[0], "pr-captain", "1.0", closed="2026-10-09T01:11Z", forward_to="top")
+    fake.groups = [{"id": "SPRCAPTAIN", "name": "pr-captain", "handle": "pr-captain", "description": "", "date_delete": 0},
+                   {"id": "SOTHER", "name": "design", "handle": "design", "description": "", "date_delete": 0}]
+    rc, out, _ = run(capsys, "groups", "sync")
+    assert rc == 0 and "disable @pr-captain (SPRCAPTAIN): retired, its inbox closed 2026-10-09T01:11Z and forwards to @top" in out
+    assert "design" not in out and all(not g["date_delete"] for g in fake.groups)
+    assert run(capsys, "groups", "sync", "--apply")[0] == 0
+    assert {g["handle"]: bool(g["date_delete"]) for g in fake.groups if g["id"] in ("SPRCAPTAIN", "SOTHER")} == {"pr-captain": True, "design": False}
+    rc, out, _ = run(capsys, "groups", "sync")
+    assert "disable" not in out
 
 
 def test_research_slack_is_a_cli_subcommand(registry, capsys):
@@ -851,7 +883,7 @@ def test_ask_daniel_mentions_him_on_the_card_so_slack_notifies_him(route, fake, 
     human = json.loads(registry.read_text())["humans"][0]["slack_user"]
     (ping,) = [m for m in fake.messages.get(ASK, []) if m.get("thread_ts") == "1790800000.000100"]
     assert rc == 0 and ping["username"] == "infra" and ping["text"].startswith(f"<@{human}> a decision for you: Test: does the")
-    assert "I recommend: Looks right. `yes` applies at 3:00 PM PDT" in ping["text"]
+    assert "I recommend: Looks right. `yes` applies at 3:00 PM PDT" in ping["text"] and ping["text"].endswith("(card `42`)")
 
 
 def test_send_to_daniel_mentions_him_and_nobody_posts_as_him(fake, registry, capsys):
@@ -970,7 +1002,9 @@ def test_status_reads_the_decision_and_exits_0_only_once_decided(route, registry
 def test_status_404_says_no_card_has_that_id(route, registry, capsys):
     route.answer = (404, {"error": "not_found"})
     rc, _, err = run(capsys, "ask-daniel", "status", "1790800000.000100")
-    assert rc == 2 and "HTTP 404: no card has that ID" in err and "not the card's Slack ts" in err
+    assert rc == 2 and "HTTP 404: no card has that ID" in err and "not the card's Slack ts" in err and "prefix" not in err
+    rc, _, err = run(capsys, "ask-daniel", "status", "81f010d2")
+    assert rc == 2 and "looks up no prefix" in err and "its mention in the card's thread also ends with" in err
 
 
 def test_resolve_records_a_thread_answer_and_says_clearly_when_there_is_no_such_card(route, registry, capsys):
@@ -1115,7 +1149,7 @@ def test_as_takes_only_a_name_this_agent_holds(fake, registry, routes_dirs, caps
     assert run(capsys, "send", "--as", "infra", "--text", "node 2 is free")[0] == 0
     before = len(fake.messages[COORD])
     rc, _, err = run(capsys, "send", "--as", "ci", "--thread", fake.messages[COORD][0]["ts"], "--text", "x")
-    assert rc == 2 and f"@ci is held by {held['ci'][0]}, and this agent is {held['infra'][0]}" in err
+    assert rc == 2 and f"@ci is held by {', '.join(held['ci'])}, and this agent is {held['infra'][0]}" in err
     rc, _, err = run(capsys, "close", "--as", "ci", "--thread", fake.messages[COORD][0]["ts"])
     assert rc == 2 and "post as your own handle" in err and len(fake.messages[COORD]) == before
     lander = next(a for a in held["old-circuits-and-proofs"] if len(a) > 11)
@@ -1153,9 +1187,14 @@ def argparse_ns(**kw):
     return argparse.Namespace(dry_run=False, registry=None, channel=None, channel_id=None, **kw)
 
 
-def test_a_handle_without_an_inbox_is_left_to_top_level_and_an_unknown_name_is_refused(fake, registry, routes_dirs, capsys):
+def test_a_handle_without_an_inbox_is_reached_through_linear_or_top_level_and_an_unknown_name_is_refused(fake, registry, routes_dirs, capsys):
     rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@proofs", "--text", "x")
-    assert rc == 0 and "route @proofs: no inbox (top-level forwards it)" in err
+    assert rc == 0 and "route @proofs: no Slack inbox; reach it through its Linear team PRF" in err
+    add_route(routes_dirs[0], "console", "1700000900.000300", closed="2026-10-14T22:45Z")
+    rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@console", "--text", "x")
+    assert rc == 0 and "route @console: no Slack inbox; reach it through its Linear team CON" in err
+    rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@old-accounting", "--text", "x")
+    assert rc == 0 and "route @old-accounting: no inbox (top-level forwards it)" in err
     rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@nobody-here", "--text", "x")
     assert rc == 2 and "neither a registry handle nor a name with an inbox" in err and "names open --as nobody-here" in err
 
@@ -1166,7 +1205,7 @@ def test_a_worker_with_a_published_inbox_can_post_and_be_addressed(fake, registr
     assert rc == 0 and "route @vllm-epoch-run: rang" in err
     assert bells(fake, box)[0]["text"].startswith(f"from circuits (URGENT), thread {fake.messages[COORD][1]['ts']}: @vllm-epoch-run stop using node 2")
     rc, out, err = run(capsys, "reply", "--as", "vllm-epoch-run", "--thread", fake.messages[COORD][1]["ts"], "--text", "stopped")
-    assert rc == 0 and "route @circuits: no inbox" in err
+    assert rc == 0 and "route @circuits: no Slack inbox; reach it through its Linear team CIR" in err
 
 
 def test_a_reply_rings_the_root_poster_and_a_quiet_one_rings_no_one(fake, registry, routes_dirs, capsys):
@@ -1262,6 +1301,27 @@ def test_one_author_rings_one_inbox_from_a_thread_at_most_cap_times_an_hour_then
     assert sum(m["text"].startswith("from ") and "paused" not in m["text"] for m in bells(fake, box)) == slack.CAP_PER_HOUR + 7
 
 
+def test_a_long_multi_line_merge_thread_reply_rings_only_the_names_it_starts_with(fake, registry, routes_dirs, capsys, monkeypatch):
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
+    infra, proofs, lean = (inbox(fake, routes_dirs, n) for n in ("infra", "proofs", "lean"))
+    root = fake.add(COORD, text=f"{slack.ANNOUNCE} *Announcement* from @top to every handle\nmerge thread: land outcomes go here",
+                    username="top", bot_id=BOT)
+    fake.add(COORD, text="#1590 rides r20261009-035518-dd21; 6350 is its suites run", username="proofs", bot_id=BOT, thread_ts=root["ts"])
+    fake.add(COORD, text="lean: #1601 waits on dd21 too", username="lean", bot_id=BOT, thread_ts=root["ts"])
+    fake.add(COORD, text="vy-nebius-1: the OOM killer took python of the run for #1600", username="vy-monitors", bot_id=BOT,
+             thread_ts=root["ts"])
+    body = ("@infra circuits, on your placement: yes, r20261011-044421-6350 is ours, launched before it reached us.\n"
+            "\u2022 Delete its scratch the moment 6350's pytest exits; nothing of ours needs it.\n"
+            "\u2022 Its next suites run goes on vy-cpu-2 after dd21, beside #1590, #1600 and #1601, with --basetemp under scratch.\n"
+            "\u2022 The tree is main + #1590, pushed as `cursor/sweep-2-tree-95d4`.\n\n"
+            "Nothing else changes; the rest is in the run's notes.")
+    rc, _, err = run(capsys, "reply", "--as", "circuits", "--thread", root["ts"], "--text", body)
+    assert rc == 0 and "route @infra: rang" in err and "vy-monitors" not in err
+    assert len(bells(fake, infra)) == 1 and bells(fake, proofs) == [] and bells(fake, lean) == []
+    rc, _, err = run(capsys, "reply", "--as", "circuits", "--thread", root["ts"], "--text", "#1600 and #1601 are on the next train")
+    assert rc == 0 and len(bells(fake, lean)) == 1 and "vy-monitors" not in err   # naming no one, a PR's namer is rung
+
+
 def test_a_finished_name_forwards_and_the_server_router_switches_the_cli_off(fake, registry, routes_dirs, capsys):
     box = inbox(fake, routes_dirs, "circuits")
     add_route(routes_dirs[0], "old-worker", "1.0", closed="2026-10-01T18:00Z", forward_to="circuits")
@@ -1277,6 +1337,92 @@ def test_a_finished_name_forwards_and_the_server_router_switches_the_cli_off(fak
     (routes_dirs[0] / "router.json").write_text(json.dumps(router))
     rc, _, err = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "and again")
     assert rc == 0 and "rang" not in err and len(bells(fake, box)) == 1
+    (routes_dirs[1] / "router.json").write_text(json.dumps({**router, "mode": "cli"}))   # switched back; the clone not pulled
+    rc, _, err = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "once more")
+    assert rc == 0 and "route @circuits: rang" in err and len(bells(fake, box)) == 2
+
+
+def test_a_long_lived_routes_reads_the_routers_switch_back_to_cli(tmp_path, monkeypatch):
+    clock = [1700000000.0]
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(clock[0], timezone.utc))
+    router = {"schema": slack.ROUTE_SCHEMA, "name": "router", "mode": "server", "since": "2026-10-01T20:14Z"}
+    routes = slack.Routes(root=tmp_path, base="https://example.invalid/routes.d",
+                          get=lambda url: json.dumps(router).encode() if url.endswith("/router.json") else None)
+    assert routes.server_delivers()
+    router["mode"] = "cli"
+    clock[0] += slack.ROUTER_RECHECK_S - 1
+    assert routes.server_delivers()
+    clock[0] += 1
+    assert not routes.server_delivers(), "a relay that started in server mode would otherwise ring no one for good"
+
+
+def test_a_server_router_whose_route_stops_answering_falls_back_to_the_sender_and_alerts_its_owner(fake, registry, routes_dirs, capsys, monkeypatch):
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
+    status = [405]
+
+    class Route(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(status[0])
+            self.end_headers()
+
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Route)
+    threading.Thread(target=srv.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True).start()
+    box, top = inbox(fake, routes_dirs, "circuits"), inbox(fake, routes_dirs, "top")
+    router = {"schema": slack.ROUTE_SCHEMA, "name": "router", "mode": "server", "since": "2026-10-01T20:14Z",
+              "url": f"http://127.0.0.1:{srv.server_address[1]}/api/agent-slack/events", "owner": "top"}
+    for d in routes_dirs[:2]:
+        (d / "router.json").write_text(json.dumps(router))
+    rc, _, err = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "answered")
+    assert rc == 0 and "route: the router rings @circuits" in err and bells(fake, box) == [] and bells(fake, top) == []
+    status[0] = 404
+    rc, _, err = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "not answered")
+    assert rc == 0 and "route @circuits: rang" in err and "route @top: alerted, the router's events route doesn't answer (HTTP 404)" in err
+    alert = bells(fake, top)
+    assert len(bells(fake, box)) == 1 and len(alert) == 1 and alert[0]["text"].startswith("from router (URGENT), thread ")
+    assert router["url"] in alert[0]["text"] and "routes.d/router.json" in alert[0]["text"]
+    status[0] = 503
+    rc, _, err = run(capsys, "send", "--as", "proofs", "--to", "@circuits", "--text", "still down")
+    assert rc == 0 and "route @top: the router's events route doesn't answer (HTTP 503), so this sender rang; already alerted" in err
+    assert len(bells(fake, box)) == 2 and len(bells(fake, top)) == 1
+    rc, _, err = run(capsys, "send", "--as", "top", "--to", "@circuits", "--text", "from its owner")
+    assert rc == 0 and "route @top: the router's events route doesn't answer (HTTP 503), so this sender rang" in err
+    assert len(bells(fake, box)) == 3 and len(bells(fake, top)) == 1
+    srv.shutdown()
+
+
+def test_names_list_shows_a_handles_published_route_that_the_clone_lacks(fake, registry, routes_dirs, capsys):
+    add_route(routes_dirs[1], "circuits", "1.0", holder="bc-11111111")
+    rc, out, _ = run(capsys, "names", "list")
+    assert rc == 0 and out.startswith("@circuits") and "bc-11111111" in out and "open" in out
+
+
+def test_http_get_reads_the_private_notes_raw_files_with_the_notes_token(monkeypatch):
+    """The notes repository is private: its raw files answer 404 without a token, so the published-route fallback (and
+    `names list` on a clone that lacks the route) only works when the request carries RESEARCH_NOTES_TOKEN."""
+    seen = []
+
+    class Reply(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return None
+
+    def urlopen(req, timeout):
+        seen.append((req.full_url, req.get_header("Authorization")))
+        return Reply(b'{"name": "x"}')
+
+    monkeypatch.setattr(slack.urllib.request, "urlopen", urlopen)
+    monkeypatch.setenv("RESEARCH_NOTES_TOKEN", "t0k")
+    assert slack.http_get(f"{slack.ROUTES_RAW}x.json") == b'{"name": "x"}'
+    assert slack.http_get("https://example.invalid/routes.d/x.json") == b'{"name": "x"}'
+    monkeypatch.delenv("RESEARCH_NOTES_TOKEN")
+    assert slack.http_get(f"{slack.ROUTES_RAW}x.json") == b'{"name": "x"}'
+    assert seen == [(f"{slack.ROUTES_RAW}x.json", "Bearer t0k"), ("https://example.invalid/routes.d/x.json", None),
+                    (f"{slack.ROUTES_RAW}x.json", None)]
 
 
 def notes_clone(tmp_path) -> Path:
@@ -1355,12 +1501,50 @@ def test_traffic_counts_doorbells_and_reports_dropped_names_and_unanswered_asks(
     fyi = fake.add(COORD, text="@proofs ancient fyi (quiet)", username="infra", bot_id=BOT, ts="1600000000.000002")
     bare = fake.add(COORD, text="@proofs an older client's fyi\n\n_fyi_", username="infra", bot_id=BOT, ts="1600000000.000003")
     fake.add(COORD, text="@no-such-lane hello", username="infra", bot_id=BOT)
+    retired = fake.add(COORD, text="<!subteam^SRETIRED> how does Daniel like reports?", username="top", bot_id=BOT,
+                       ts="1600000000.000004")                     # a retired name's group, tagged by its id alone
     rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--json")
     rep = json.loads(out)
     assert rc == 0 and [x for x in rep["inboxes"] if x["doorbells"]] == [{"name": "circuits", "doorbells": 1, "peak_per_hour": 1, "paused": 0}]
-    assert [d["name"] for d in rep["dropped"]] == ["no-such-lane"]
+    assert {d["name"] for d in rep["dropped"]} == {"no-such-lane", "subteam^SRETIRED"}
+    assert {"ts": retired["ts"], "by": "top", "to": []} in rep["unanswered"]
+    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000")
+    assert f"UNANSWERED {retired['ts']} by @top to no one it can ring" in out
     stale = [s["ts"] for s in rep["unanswered"]]
     assert old["ts"] in stale and fyi["ts"] not in stale and bare["ts"] not in stale
+
+
+def test_traffic_asks_origin_main_before_dropping_an_unknown_group(fake, registry, routes_dirs, capsys, monkeypatch):
+    """A stale analysis checkout must not report a fresher sender's group mentions as dropped (14 Oct: three false
+    DROPPED lines for groups created that morning); a group origin/main doesn't know either still drops."""
+    inbox(fake, routes_dirs, "circuits")
+    fake.add(COORD, text="<!subteam^SNEWGROUP> teams exist", username="comms", bot_id=BOT, ts="1600000000.000001")
+    fake.add(COORD, text="<!subteam^SNOWHERE> hello", username="comms", bot_id=BOT, ts="1600000000.000002")
+    monkeypatch.setattr(slack, "origin_groups", lambda path: {"SNEWGROUP"})
+    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--json")
+    assert rc == 0 and {d["name"] for d in json.loads(out)["dropped"]} == {"subteam^SNOWHERE"}
+
+
+def test_origin_groups_reads_the_registry_as_origin_main_has_it(tmp_path):
+    """`origin_groups` fetches, then reads origin/main's registry, so it sees a group the clone's checkout predates; where
+    git can't answer it returns empty, keeping traffic's old behavior."""
+    import subprocess
+    git = lambda cwd, *a: subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *a],  # noqa: E731
+                                         cwd=cwd, check=True, capture_output=True)
+    upstream = tmp_path / "upstream"
+    upstream.mkdir()
+    git(upstream, "init", "-q", "-b", "main")
+    (upstream / "registry.json").write_text(json.dumps({"handles": [{"handle": "a", "usergroup": "SOLD"}]}))
+    git(upstream, "add", "-A")
+    git(upstream, "commit", "-qm", "one")
+    clone = tmp_path / "clone"
+    git(tmp_path, "clone", "-q", str(upstream), str(clone))
+    (upstream / "registry.json").write_text(json.dumps({"handles": [{"handle": "a", "usergroup": "SOLD"},
+                                                                    {"handle": "b", "usergroup": "SNEW"}]}))
+    git(upstream, "add", "-A")
+    git(upstream, "commit", "-qm", "two")                            # the clone's checkout predates this
+    assert slack.origin_groups(clone / "registry.json") == {"SOLD", "SNEW"}
+    assert slack.origin_groups(tmp_path / "nowhere" / "registry.json") == set()
 
 
 def test_verify_author_accepts_a_routed_workers_name_and_the_router(fake, registry, routes_dirs, capsys):

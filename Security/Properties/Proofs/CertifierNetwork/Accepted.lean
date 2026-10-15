@@ -1,7 +1,7 @@
 import Properties.Proofs.CertifierNetwork.Records
 import Properties.Proofs.CertifierNetwork.Frames
 import Properties.Proofs.CertifierNetwork.Certify
-import Properties.Proofs.CertifierDevice.Trace
+import Properties.Proofs.CertifierDevice.Complete
 import Properties.Proofs.CertifierDevice.Lms
 import Properties.Proofs.NetworkCertifier.Outcomes
 
@@ -20,8 +20,9 @@ namespace Properties.CertifierNetwork.Proofs
 
 open _root_.CertifierDevice
 open _root_.NetworkCertifier (LogicalFrame ClockSync)
-open Properties.CertifierDevice (outputs after EgressAt ValidKey)
-open Properties.CertifierDevice.Proofs (records_proof completeRows_proof)
+open Properties.CertifierDevice (outputs after EgressAt ValidKey egressActions)
+open Properties.CertifierDevice.Proofs (records_proof completeRows_honest pre prefix_good egressAt_of_lt egress_acts
+  statusOf rowOf)
 
 theorem mem_published {c : Config} {tr : List Event} {r : Record} (h : r ∈ published c tr) :
     ∃ (n : Nat) (acts : List Action) (p : Params), (outputs (init c) tr)[n]? = some acts ∧ Action.publish r p ∈ acts := by
@@ -56,15 +57,15 @@ theorem window_lt {P : List Record} {l : String} {W : Nat} (h : windowsOn l P = 
 
 /-- **An egress record's grid is the Program's**: row by row, slot by slot, the bytes of `expectedRow` of the handed
 frames under the declared syncs. -/
-theorem grid_eq {c : Config} {tr : List Event} (key : Lms.PrivateKey) (hT : Ticking c) (hd : Distinct c)
+theorem grid_eq {c : Config} {tr : List Event} (key : Lms.PrivateKey) (session : ByteArray) (hT : Ticking c) (hd : Distinct c)
     (hc : Closed c tr) (ht : HonestTiming c tr) (hnf : NoFault c tr) (hsd : (declaredSyncs c tr).size = c.windows)
     {r : Record}
     (hr : r ∈ published c tr) (hl : r.link = c.egressLink) (hw : r.window < c.windows) :
-    r.grid = Properties.NetworkCertifier.programGrid (unitParams c key) (syncsFn (declaredSyncs c tr) c.windows hsd)
+    r.grid = Properties.NetworkCertifier.programGrid (unitParams c key session) (syncsFn (declaredSyncs c tr) c.windows hsd)
       (openedFrames c tr) r.window := by
   obtain ⟨n, acts, p, hn, hm⟩ := mem_published hr
   obtain ⟨k, b, hE⟩ := egress_at hd hn hm hl
-  have hcr := completeRows_proof c tr ht n k b acts r p hE hn hm (hnf r hr)
+  have hcr := completeRows_honest c tr ht n k b acts r p hE hn hm (hnf r hr)
     (by show r.window < (declaredSyncs c tr).size; rw [hsd]; exact hw)
   have hcr' : ∀ j < c.egress.buckets, ∀ (s : Nat) (hs : s < c.egress.allocation),
       _root_.NetworkCertifier.expectedRow c.egress.allocation c.egress.buckets c.windows
@@ -125,9 +126,55 @@ theorem recordsOf_one {c : Config} {i : Issuer} {rs : List Record} {crs : List C
   rw [List.toList_toArray, List.filter_map]
   exact congrArg (List.map certified) hcrs
 
+/-- **Honest timing on a closed run with no fault**: every window closed complete, so no frame was handed late. -/
+theorem honestTiming_of {c : Config} {tr : List Event} (hT : Ticking c) (hc : Closed c tr) (hnf : NoFault c tr) :
+    HonestTiming c tr := by
+  have hlen : (pre c tr tr.length).shaper.t ≥ c.windows * c.egress.buckets := by
+    have hg := (prefix_good c tr tr.length).1
+    unfold Closed State.done State.ticks at hc
+    simp only [pre, List.take_length] at hg ⊢
+    rw [hg.config] at hc
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at hc
+    exact hc.1
+  have hT0 := hT.1
+  have hall : ∀ m t b', EgressAt c tr m t b' → ∃ n k b, EgressAt c tr n k b ∧ (k + 1) % c.egress.buckets = 0 ∧
+      t / c.egress.buckets = k / c.egress.buckets ∧ statusOf c tr (k / c.egress.buckets) = .complete := by
+    intro m t b' hEm
+    have ht : t < c.windows * c.egress.buckets := hEm.2.2
+    have hw : t / c.egress.buckets < c.windows := (Nat.div_lt_iff_lt_mul hT0).2 ht
+    have hk1 : t / c.egress.buckets * c.egress.buckets + (c.egress.buckets - 1) + 1 =
+        (t / c.egress.buckets + 1) * c.egress.buckets := by rw [Nat.succ_mul]; omega
+    have hkw : t / c.egress.buckets * c.egress.buckets + (c.egress.buckets - 1) < c.windows * c.egress.buckets := by
+      have := Nat.mul_le_mul_right c.egress.buckets (show t / c.egress.buckets + 1 ≤ c.windows from hw)
+      omega
+    obtain ⟨n, b, -, hE⟩ := egressAt_of_lt (N := tr.length) le_rfl (lt_of_lt_of_le hkw hlen)
+    have hc' : (t / c.egress.buckets * c.egress.buckets + (c.egress.buckets - 1) + 1) % c.egress.buckets = 0 := by
+      rw [hk1, Nat.mul_mod_left]
+    have hdiv : (t / c.egress.buckets * c.egress.buckets + (c.egress.buckets - 1)) / c.egress.buckets =
+        t / c.egress.buckets := by
+      rw [Nat.add_comm, Nat.add_mul_div_right _ _ hT0, Nat.div_eq_of_lt (by omega), Nat.zero_add]
+    refine ⟨n, _, b, hE, hc', hdiv.symm, ?_⟩
+    have hacts := egress_acts hE
+    have hmem : Action.publish ⟨c.egressLink, t / c.egress.buckets,
+        Array.ofFn fun j : Fin c.egress.buckets => rowOf c tr (t / c.egress.buckets * c.egress.buckets + j),
+        statusOf c tr (t / c.egress.buckets)⟩ c.egress ∈
+        egressActions c (rowOf c tr) (statusOf c tr) (t / c.egress.buckets * c.egress.buckets + (c.egress.buckets - 1))
+          b := by
+      unfold egressActions
+      simp only [hc', hdiv, ↓reduceIte]
+      simp
+    rw [hdiv]
+    have hr := hnf _ (List.mem_flatMap.2 ⟨_, List.mem_of_getElem? hacts,
+      List.mem_filterMap.2 ⟨_, hmem, rfl⟩⟩)
+    exact hr
+  have h := Properties.CertifierDevice.Proofs.hands_honest hall tr.length le_rfl
+  simp only [pre, List.take_length] at h
+  exact (List.forall₂_eq_eq_eq ▸ h).symm
+
 /-- **`DeviceOutputAccepted`.** -/
 theorem deviceOutputAccepted_proof : DeviceOutputAccepted := by
-  intro c tr i next hT he hd hdg hk hc ht hnf hsd hsa hleft
+  intro c tr i next hT he hd hdg hk hsf hc hnf hsd hsa hleft
+  have ht := honestTiming_of hT hc hnf
   replace hsd : (declaredSyncs c tr).size = c.windows := hsd
   obtain ⟨heW, hiW, hof⟩ := closed_records hT hd hc
   obtain ⟨⟨eg, heg⟩, ig, hig⟩ := hdg
@@ -148,18 +195,19 @@ theorem deviceOutputAccepted_proof : DeviceOutputAccepted := by
       have hgr : gridOf c r = c.egress := by simp [gridOf, hl]
       have hss : syncSetOf c r = some c.syncSet := by simp [syncSetOf, hl]
       rw [hgr, hss]
-      exact ⟨eg, heg, prepare_of hI hs hp (parameters_size heg) (hl ▸ hel) (lt_of_lt_of_le hw hW64) hge.1 hge.2.1
+      exact ⟨eg, heg, prepare_of hI hsf hs hp (parameters_size heg) (hl ▸ hel) (lt_of_lt_of_le hw hW64) hge.1 hge.2.1
         hge.2.2.1 hge.2.2.2 (hnf r hr)⟩
     · have hw := window_lt hiW hr hl
       have hgr : gridOf c r = c.ingress := by simp [gridOf, hl, hdi]
       have hss : syncSetOf c r = none := by simp [syncSetOf, hl, hdi]
       rw [hgr, hss]
-      exact ⟨ig, hig, prepare_of hI hs hp (parameters_size hig) (hl ▸ hil) (lt_of_lt_of_le hw hW64) hgi.1 hgi.2.1
+      exact ⟨ig, hig, prepare_of hI hsf hs hp (parameters_size hig) (hl ▸ hil) (lt_of_lt_of_le hw hW64) hgi.1 hgi.2.1
         hgi.2.2.1 hgi.2.2.2 (hnf r hr)⟩
   obtain ⟨crs, hcrs, hall⟩ := certifyAll_ok hk (published c tr) next hleft hprep
   refine ⟨i, crs, hcrs, fun bytes => ?_⟩
   have hws : ∀ w < c.windows, w < (declaredSyncs c tr).size := fun w hw => hsd ▸ hw
-  apply Properties.NetworkCertifier.honestAccepted (unitParams c i.key) (commitment crs bytes) (evidence c tr) eg ig
+  apply Properties.NetworkCertifier.honestAccepted (unitParams c i.key i.session) (commitment crs bytes) (evidence c tr)
+    eg ig
   · refine ⟨rfl, ?_, ?_⟩
     · intro link hl
       simp only [evidence, List.mem_singleton, List.toList_toArray] at hl
@@ -195,7 +243,7 @@ theorem deviceOutputAccepted_proof : DeviceOutputAccepted := by
       have hss : syncSetOf c r = some c.syncSet := by simp [syncSetOf, hl]
       rw [hgr, hss, heg] at hpd
       cases hpd
-      rw [hgr, hdir, grid_eq i.key hT hd hc ht hnf hsd hr hl (hrw ▸ hw), hl, hrw] at hh
+      rw [hgr, hdir, grid_eq i.key i.session hT hd hc ht hnf hsd hr hl (hrw ▸ hw), hl, hrw] at hh
       exact hh
     · rw [hrec]
       unfold certified Properties.NetworkCertifier.honestRecord

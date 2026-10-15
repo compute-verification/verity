@@ -30,6 +30,9 @@ markers = [
 [tool.verity.tests]
 # its passes on vy-nebius-1 took up to an hour (3,634 s, 7 Oct), past suites.py's SUITE_TIMEOUT_S
 timeout_s = 7200
+# its tests are independent (122 passed under 12 xdist workers, r20261015-040240-480b); serially the suite was the check's
+# critical path, 3,916-4,445 s on 14 Oct
+parallel = true
 # In place of its dependencies' directories (`inputs_only`; `verity`'s brings the root's dev group, the whole workspace): the
 # packages that define Definitions and templates, with their sidecars (`sidecars.discover` searches every package root, so a
 # sidecar anywhere else is read outside these and fails the guard), and the modules they import. Test-only:
@@ -39,7 +42,8 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/kernels", "verity/ml/private_circuits",
           "verity/ml/randomness", "verity/ml/flock/python/verity_flock",
           "verity/core/protocols/pouw/__init__.py", "verity/core/protocols/pouw/audit.py", "verity/core/protocols/pouw/protocol.py",
-          "verity/core/protocols/pouw/serving.py", "verity/core/protocols/pouw/circuit", "verity/core/protocols/pouw/schemes",
+          "verity/core/protocols/pouw/serving.py", "verity/core/protocols/pouw/registration.py", "verity/core/protocols/pouw/coins.py",
+          "verity/core/protocols/pouw/circuit", "verity/core/protocols/pouw/schemes",
           "verity/core/protocols/pous/__init__.py", "verity/core/protocols/pous/circuit.py",
           "verity/core/protocols/pous/circuit.circuit-check.py", "verity/core/protocols/pous/circuit.circuit-check.json",
           "verity/core/protocols/pous/answer_circuit.py", "verity/core/protocols/pous/answer_circuit.circuit-check.py",

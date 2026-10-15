@@ -390,6 +390,46 @@ def test_the_v3_arm_serves_v3s_blocks_and_audits_them_through_protocol_memory_ch
     assert body["profile"]["scheme"] == "p2-128/v4" and not body["profile"]["certified"]
 
 
+def test_a_joint_runs_store_is_set_up_under_the_bandwidth_salt_of_its_device(tmp_path, monkeypatch):
+    """`--bandwidth-salt GPU` sets `C` up under `bandwidth.audit.draw_salt` for the GPU's id as the challenger reads it, and
+    P2's audit runs over that `C`, so the bandwidth verifier accepts the store P2 audits; a plain run's salt is PoUS's own
+    (the test above), and the switch refuses the frozen spec's framing."""
+    from verity.core.protocols.bandwidth import audit
+    from verity.core.protocols.pous import protocol, schemes
+    from verity.core.protocols.pous.verifier import VerifierKey, leaf_hash
+
+    _, harness, _ = _p2()
+    device = bytes(range(16))
+    asked: list[str] = []
+    monkeypatch.setattr(audit, "read_device", lambda gpu: asked.append(gpu) or device)
+    gpu = "GPU-00010203-0405-0607-0809-0a0b0c0d0e0f"
+    body = _bench().P2V3Gpu().run(_args(tmp_path, k=105, seed=SEED, bandwidth_salt=gpu), WS, tmp_path, backend=_backend(),
+                                  params=_small(), research=True)
+    assert asked == [gpu] and body["gates"]["timed_audit"]["passed"] and body["gates"]["codec"]["passed"]
+    params = schemes.P2Params(128, 173, 64, 3)
+    w = b"".join(_bench()._w_segment(WS["id"], s, params.segment_bytes, WS["bytes"]) for s in range(3))
+    commitment = protocol.commit(schemes.P2(params), w)
+    salt = audit.draw_salt(harness.SETUP_SOURCE, commitment, device)
+    setup = body["setup"]
+    assert (setup["salt"], setup["salt_from"], setup["device"]) == (salt.hex(), "bandwidth", device.hex())
+    assert salt != protocol.draw_salt(harness.SETUP_SOURCE, commitment)
+    encoded = protocol.encode(schemes.P2(params), w, salt)
+    leaves = [leaf_hash(params, salt, s * 64 + j, b) for s, seg in enumerate(encoded) for j, b in enumerate(seg)]
+    assert (tmp_path / "leaves-p2.bin").read_bytes() == b"".join(leaves)
+    vk = VerifierKey.from_leaves(params, salt, leaves)
+    (tmp_path / "state").mkdir()
+    audit.ChallengerState.create(tmp_path / "state", vk)
+    with audit.ChallengerState(tmp_path / "state", vk) as state:
+        audit.Verifier(vk, audit.Params("ro-blake3/v1", audit.SAMPLES, 1_200_000), b"secret", state, device=device,
+                       commitment=commitment, salt_source=harness.SETUP_SOURCE)
+        with pytest.raises(ValueError, match="not draw_salt's for this device"):
+            audit.Verifier(vk, audit.Params("ro-blake3/v1", audit.SAMPLES, 1_200_000), b"secret", state,
+                           device=bytes(16), commitment=commitment, salt_source=harness.SETUP_SOURCE)
+    with pytest.raises(SystemExit, match="registered P2 store"):
+        _bench().P2V1Gpu().run(_args(tmp_path / "v1", bandwidth_salt=gpu), WS, tmp_path / "v1", backend=_backend(),
+                               params=_small())
+
+
 def test_the_v3_arm_is_strict_by_default_so_an_uncovered_audit_is_refused_and_fails(tmp_path):
     body = _bench().P2V3Gpu().run(_args(tmp_path, k=105, seed=SEED), WS, tmp_path, backend=_backend(), params=_small())
     gates, honest = body["gates"], body["metrics"]["audit"]
@@ -576,13 +616,20 @@ def _mc_at_the_p2_point(limit_ns: int, tamper: frozenset[int] = frozenset(), aud
 
 def test_the_memory_challenger_audits_p2_v3_at_the_rtt_cap_and_refuses_one_us_past_it():
     """`Δ + 354 µs` is inside `P2SlackFamilyUncond`'s certificate: 105 rounds a session run, the test-signed sessions pass
-    under the test signer's mapping and the real verdict rejects them; `Δ + 355 µs` is refused before any round."""
+    under the test signer's mapping and the real verdict rejects them; `Δ + 355 µs` is refused before any round.  Every
+    session is bound to the root the setup publishes for the responder's `C*`."""
+    from verity.core.protocols.pous import schemes
     from verity.core.protocols.pous.schemes import p2
+    from verity.core.protocols.pous.verifier import VerifierKey, leaf_hash
 
     doc, answered = _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS)
     assert doc["strict"] and "refused" not in doc and answered == 2 * 105 and doc["k"] == 105
     assert doc["audits"] == doc["audits_accepted_under_signer"] == 2 and doc["audits_accepted"] == 0
     assert doc["late"] == doc["wrong"] == 0 and doc["profile"] is None
+    params, salt = schemes.get("p2-16448/v4").params, b"s" * 24
+    blocks = [i.to_bytes(8, "big") * (params.block_bytes // 8) for i in range(params.blocks)]
+    root = VerifierKey.from_leaves(params, salt, [leaf_hash(params, salt, i, b) for i, b in enumerate(blocks)]).root.hex()
+    assert doc["setup_root"] == root and all(rec["public"]["commitment"]["binding"] == root for rec in doc["records"])
     rec = doc["records"][0]
     assert rec["witness"]["expected"] == {str(a["index"]): rec["witness"]["signed"]["rounds"][j]["digest"]
                                           for j, a in enumerate(rec["answers"])}
@@ -704,8 +751,8 @@ def test_a_lean_verdict_that_cannot_load_stops_the_audit_before_any_signer_opens
     monkeypatch.setattr(live, "lms_signer", lambda *_a, **_k: pytest.fail("the signer was opened"))
     with pytest.raises(ModuleNotFoundError, match="verity_difftest"):
         _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS, audits=1, signer="lms", lms_key=tmp_path / "key",
-                            sessions_out=tmp_path / "sessions.json")
-    assert not (tmp_path / "key").exists() and not (tmp_path / "sessions.json").exists()
+                            sessions_out=tmp_path / "sessions.json", session_log_path=tmp_path / "session-log")
+    assert not any((tmp_path / f).exists() for f in ("key", "sessions.json", "session-log"))
 
 
 def test_the_memory_challengers_lms_key_is_made_once_and_its_leaves_never_reused(tmp_path, monkeypatch):
@@ -725,7 +772,8 @@ def test_the_memory_challengers_lms_key_is_made_once_and_its_leaves_never_reused
     assert (a.q, lms.Signature.decode(small, again.sign(b"s" * 32, b"r")).q) == (0, 1)
     again.state.close()
     tree = tmp_path / "key" / "tree.bin"
-    tree.write_bytes(tree.read_bytes()[:-1] + b"\0")
+    raw = tree.read_bytes()
+    tree.write_bytes(raw[:-1] + bytes([raw[-1] ^ 0xFF]))
     with pytest.raises(ValueError, match="is not the tree of"):
         live.lms_signer(tmp_path / "key", params=small)
 
@@ -745,21 +793,31 @@ class _SparseTree:
         return self.root if r == 1 else hashlib.sha512(b"sibling%d" % r).digest()
 
 
-def test_an_lms_signed_session_at_the_p2_point_is_accepted_and_issues_the_profile(tmp_path, monkeypatch):
-    """With `--signer lms` the verdict is `memory_challenger.SCHEMES`'s and it accepts the honest session: the profile is
-    issued under the certificate; the bad-signature control rejects it flipped or edited under the same mapping."""
+def _deployed_signer(tmp_path):
+    """An S1 signer at `lms.DEPLOYED` over `_SparseTree`, its leaf state in `tmp_path`, for one session."""
     from verity.ml.crypto import lms
     from verity.core.protocols.pous import memory_challenger as mc
-    from verity.core.protocols.pous.schemes import p2
 
-    live = _live()
     I, seed = hashlib.sha512(b"I").digest()[:16], hashlib.sha512(b"seed").digest()[:lms.DEPLOYED.N]
     key = lms.PrivateKey(lms.DEPLOYED, I, seed, _SparseTree(I, seed))
     lms.LeafState.create(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H)
-    signer = mc.LmsSigner(key, lms.LeafState(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H))
+    return mc.LmsSigner(key, lms.LeafState(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H))
+
+
+def test_an_lms_signed_session_at_the_p2_point_is_accepted_and_issues_the_profile(tmp_path, monkeypatch):
+    """With `--signer lms` the verdict is `memory_challenger.SCHEMES`'s and it accepts the honest session: the profile is
+    issued under the certificate; the bad-signature control rejects it flipped or edited under the same mapping.  The
+    session's id is in the session log, made with the new key."""
+    from verity.core.protocols.pous import memory_challenger as mc
+    from verity.core.protocols.pous.schemes import p2
+
+    live, signer = _live(), _deployed_signer(tmp_path)
     monkeypatch.setattr(live, "lms_signer", lambda d, workers=1: signer)
-    doc, answered = _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS, audits=1, signer="lms", lms_key=tmp_path)
+    doc, answered = _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS, audits=1, signer="lms",
+                                        lms_key=tmp_path / "key", session_log_path=tmp_path / "session-log")
     assert answered == 105 and doc["signer"]["scheme"] == mc.LMS and doc["signer"]["test"] is False
+    session = bytes.fromhex(doc["records"][0]["public"]["commitment"]["session"])
+    assert doc["signer"]["session_log"] == str(tmp_path / "session-log") and session in mc.SessionLog(tmp_path / "session-log")
     assert doc["audits"] == doc["audits_accepted"] == doc["audits_accepted_under_signer"] == 1
     assert doc["records"][0]["public"]["verdict"] == {"accepted": True} and doc["profile"] is not None
     from verity.core.protocols.pous import schemes
@@ -769,6 +827,33 @@ def test_an_lms_signed_session_at_the_p2_point_is_accepted_and_issues_the_profil
     assert ctl == {"sessions": 1, "unedited_accepted": 1, "flipped_rejected": 1, "edited_rejected": 1, "passed": True}
     with pytest.raises(ValueError, match="'lms' with a key directory"):
         _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS, audits=1, signer="lms")
+
+
+def test_an_lms_signed_audit_takes_a_session_log_of_its_own_and_an_existing_key_needs_its_log(tmp_path, monkeypatch):
+    """`--session-log FILE`: an LMS-signed audit refuses to start without one or with one inside `--lms-key`, and for a
+    key that exists (its `seed` there) it refuses a missing log before any session, with no leaf spent and no log made."""
+    from verity.core.protocols.pous import memory_challenger as mc
+    from verity.core.protocols.pous import schemes
+    from verity.core.protocols.pous.schemes import p2
+
+    live, signer = _live(), _deployed_signer(tmp_path)
+    monkeypatch.setattr(live, "lms_signer", lambda d, workers=1: signer)
+    scheme, key, log = schemes.get("p2-16448/v4"), tmp_path / "key", tmp_path / "session-log"
+
+    def audit(**kw):
+        return live.audit("127.0.0.1", 0, scheme, b"s" * 24, bytes(64 * scheme.params.blocks), audits=1, pings=1,
+                          limit_ns=500_000 + p2.RTT_ALLOWANCE_CAP_NS, clock=live.LogicalClock(), signer="lms", lms_key=key,
+                          **kw)
+
+    with pytest.raises(ValueError, match="takes the memory challenger's session log"):
+        audit()
+    with pytest.raises(ValueError, match="inside the key's directory"):
+        audit(session_log_path=key / "sessions")
+    key.mkdir()
+    (key / "seed").write_bytes(bytes(64))
+    with pytest.raises(mc.SessionLogError, match="missing"):
+        audit(session_log_path=log)
+    assert not log.exists() and json.loads((tmp_path / "state").read_text())["next"] == 0
 
 
 def test_decode_bench_result_names_device_rate_setup_and_keys_agreement(tmp_path):

@@ -5,6 +5,7 @@
 //!   flock-circuit prove    --verifier ADDR --instances INST --circuit FILE [--gpu] [--runs N] [--warm W] [--dump DIR] [--session-tables J]
 //!   flock-circuit selftest --instances INST --circuit FILE [--gpu] [--only CASE]
 //!   flock-circuit statement --instances PUB --circuit FILE    (the statement the verifier builds, its digest; nothing proved)
+//!   flock-circuit stacked  --table R.bin (--root-out ROOT.json | --points P.json --statement-digest HEX --verifier ADDR [--dump F])   (`stacked`)
 //!
 //! The verifier loads only its own public file (`verity_flock.circuit.stage(..., public_only=True)`: roots and each row's
 //! `b || c`, the output rows' too; no row, no salt, no output word) and the pinned circuit, from which it derives Δ, the regions and their values; it checks the
@@ -173,8 +174,8 @@ fn zk_shape_ok(st: &Stmt) -> Result<(), String> {
 }
 
 /// Ligerito level 0's hiding randomness for a session (both reps open the one level-0 codeword): every lane's padding, and
-/// the four uniform lanes (a pair per rep), from the prover's ChaCha20 streams 6 and 7; for rep 0 (a rep's copy sets `rep`).
-/// `zero`: M1's control (all zero). Lane `i` of stream `s` is `rng.f128s(s, i << 32, n)`, the lanes drawn in parallel.
+/// the four uniform lanes (a pair per rep), read from the OS (an injected seed's ChaCha20 streams 6 and 7); for rep 0 (a rep's
+/// copy sets `rep`). `zero`: M1's control (all zero). The lanes are drawn in parallel (`ProverRng::f128s_lanes`).
 fn level0_zk(st: &Stmt, rng: &mut flock_live::zk_hooks::ProverRng, zero: bool, tamper: u8) -> flock_core::pcs::ligerito::zk::Level0Zk {
     use flock_core::pcs::ligerito::zk::{EXTRA_LANES, Level0Zk};
     let tr = Instant::now();
@@ -202,7 +203,7 @@ fn zk_identity(c: &Composite) -> Value {
            "verifier_coins": format!("committed before the prover's first message ({}): the prover's fresh nonce in hello; the root and the \
                                       verifier's session key in its answer; every coin opened against them, or the prover stops",
                                      flock_live::coin_tree::SCHEME),
-           "pads": "zerocheck and lincheck: every sent value + a pad (prover ChaCha20 stream 4); pads committed before the zerocheck's first coin",
+           "pads": "zerocheck and lincheck: every sent value + a pad (os bytes, getrandom); pads committed before the zerocheck's first coin",
            "pads_commitment": format!("rs over gf(2^128), {} padding symbols, rate 1/{}, {} queries, hm96-sha512/v1 leaves, sha512 nodes",
                                       zkv::K_PAD, 1 << zkv::INNER_LOG_INV_RATE, zkv::Q),
            "product": "h_ab = h_a h_b committed; sacrificed against a committed triple (x, y, x y)",
@@ -356,7 +357,7 @@ fn session_tables(st: &Arc<Stmt>, inst: &Arc<Instances>, draw: Option<&Value>, c
         id["session"] = json!({"tables": count, "table": j,
                                "units": "the draw's units (without a draw, the population's) in equal consecutive parts; table j proves part j as a subset draw of the population"});
         if is_zk(st) {
-            id["hooks"]["tables"] = json!("per table: ChaCha20 streams at purpose | j << 32 and hm96 salt trees from id j << 32 (table 0's are a \
+            id["hooks"]["tables"] = json!("per table: os bytes of its own (getrandom) and hm96 salt trees from id j << 32 (table 0's are a \
                                            one-table session's); a rank check per table; every table's level-0 root in one commit; every proof \
                                            after the last coin of every stream (the barrier)");
         }
@@ -2712,12 +2713,17 @@ fn wit(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, zero: bool, seed: Pro
         w
     });
     let mask_words = 1usize << (st.c.meta["mask_log"].as_u64().unwrap_or(14) as usize - 7);
-    // M1: the mask slot's words are uniform (they hide the non-region claims' ring-switch s_hat_v)
+    // M1: the mask slot's words are uniform (they hide the non-region claims' ring-switch s_hat_v). A block's are drawn once and
+    // kept: a proving build's are OS reads, and every build of this witness (rep 1's own, the device's) commits one level 0
     let random = plan.mask_random || (is_zk(st) && !plan.zk_zero_pads);
     let hooks = Arc::new(Mutex::new(NoMask::for_table(seed, table as u64)));
+    let drawn: Arc<Vec<std::sync::OnceLock<Vec<F128>>>> = Arc::new((0..if random { st.blocks() } else { 0 }).map(|_| Default::default()).collect());
     let mask: Arc<dyn Fn(usize) -> Vec<F128> + Sync + Send> = Arc::new(move |b| {
-        let mut h = hooks.lock().unwrap_or_else(PoisonError::into_inner);
-        if random { h.rng.f128s(flock_live::zk_hooks::STREAM_MASK, (b * mask_words) as u64, mask_words) } else { h.mask_fill(b, mask_words) }
+        let draw = || {
+            let mut h = hooks.lock().unwrap_or_else(PoisonError::into_inner);
+            if random { h.rng.f128s(flock_live::zk_hooks::STREAM_MASK, (b * mask_words) as u64, mask_words) } else { h.mask_fill(b, mask_words) }
+        };
+        if random { drawn[b].get_or_init(draw).clone() } else { draw() }
     });
     let ur = st.c.unit_range();
     let unit = st.c.unit();
@@ -3985,7 +3991,10 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         }
         _ => (st.clone(), inst.clone(), inst.clone()),
     };
-    let s = Arc::new(Mutex::new(Server::new(config(st, &vinst), Box::new(CircuitVerifier::one(st, &vinst)))));
+    // drawn (`--draw`) only when the verifier's file is the prover's: a drawn statement's digest reads the file, so R7 would
+    // refuse a case whose files differ before the check it is for
+    let s = Arc::new(Mutex::new(if Arc::ptr_eq(&pinst, &vinst) { server(st, &vinst) }
+                                else { Server::new(config(st, &vinst), Box::new(CircuitVerifier::one(st, &vinst))) }));
     let (v, proofs) = session(&pst, &pinst, shared(InProc(s.clone())), &plan, ProverSeed::from_os());
     let acc = v["accepted"].as_bool().unwrap_or(false);
     let rec = s.lock().unwrap_or_else(PoisonError::into_inner).record_json();
@@ -4169,12 +4178,33 @@ fn barrier_holds(order: &[String]) -> bool {
 
 /// The public-circuit ZK proof's gap 1, at the session's own draws: two tables' level-0 hiding (every lane's padding, the extra
 /// lanes), both reps' pads (h, μ, the pads' padding, τ's salt), the mask slot, and the salts of their level-0 and later trees
-/// share no 16-byte word. The per-rep indexing alone (the second table at the first's addresses) gives the second table every
-/// word of the first, which would reveal the difference of their masked values.
+/// share no 16-byte word. A proving build reads every one from the OS, so the second table drawn at the first's addresses (the
+/// control) shares none either. Under an injected seed (the test harness's) the control repeats every word: the per-rep
+/// indexing alone would give the second table every word of the first, which would reveal the difference of their masked values.
 fn tables_randomness_case(tabs: &Tables) -> Value {
-    let seed = ProverSeed::from_os();
+    let os = tables_draws(tabs, ProverSeed::from_os());
+    let pass = |d: &Value, control: bool| {
+        let n = |k: &str| d[k].as_u64().unwrap_or(u64::MAX);
+        let (a, b) = (&d["words"][0], &d["words"][1]);
+        a.as_u64().is_some_and(|x| x > 0) && a == b && n("shared_words") == 0
+            && if control { n("control_words_equal") == n("stream_words") && n("control_salt_words_shared") == n("salt_words") }
+               else { n("control_words_equal") == 0 && n("control_salt_words_shared") == 0 }
+    };
+    #[cfg(feature = "seed-injection")]
+    let injected = tables_draws(tabs, ProverSeed::injected([3; 32]));
+    #[cfg(not(feature = "seed-injection"))]
+    let injected = json!({"skipped": "built without the test harness's seed-injection feature"});
+    let injected_ok = injected.get("skipped").is_some() || pass(&injected, true);
+    json!({"case": "zk_tables_share_no_randomness",
+           "expect": "no word in common across the tables, nor at one table's addresses; an injected seed's control repeats at them",
+           "os": os, "injected": injected, "pass": pass(&os, false) && injected_ok})
+}
+
+/// [`tables_randomness_case`]'s draws under `seed`: the words the two tables share, and those the second table drawn at the first's
+/// addresses (the control) shares with the first.
+fn tables_draws(tabs: &Tables, seed: ProverSeed) -> Value {
     let salts = flock_live::zk_hooks::LeafSalts::for_seed(&seed);
-    // (the prover's stream words, the leaf salts): the salts are the OS's, so even at one table's addresses they are new
+    // (the prover's stream words, the leaf salts)
     let draws = |tb: &Table, at: u64| -> (Vec<[u8; 16]>, Vec<[u8; 16]>) {
         let (st, lay) = (&tb.st, zk_layout(&tb.st));
         let mut prng = flock_live::zk_hooks::ProverRng::for_table(seed, at);
@@ -4204,12 +4234,9 @@ fn tables_randomness_case(tabs: &Tables) -> Value {
     let shared = b.iter().chain(&sb).filter(|x| first.contains(x)).count();
     let control_equal = a.iter().zip(&control).filter(|(x, y)| x == y).count();
     let control_salts_shared = sc.iter().filter(|x| first.contains(x)).count();
-    json!({"case": "zk_tables_share_no_randomness",
-           "expect": "no word in common across the tables; all of the stream's at one table's addresses, none of the salts",
-           "words": [a.len() + sa.len(), b.len() + sb.len()], "shared_words": shared, "control_words_equal": control_equal,
-           "control_salt_words_shared": control_salts_shared,
-           "pass": !a.is_empty() && !sa.is_empty() && a.len() == b.len() && sa.len() == sb.len() && shared == 0 && control.len() == a.len()
-                   && control_equal == a.len() && sc.len() == sa.len() && control_salts_shared == 0})
+    let same_shape = !sa.is_empty() && a.len() == b.len() && sa.len() == sb.len() && control.len() == a.len() && sc.len() == sa.len();
+    json!({"words": [a.len() + sa.len(), if same_shape { b.len() + sb.len() } else { 0 }], "stream_words": a.len(), "salt_words": sa.len(),
+           "shared_words": shared, "control_words_equal": control_equal, "control_salt_words_shared": control_salts_shared})
 }
 
 #[cfg(not(feature = "seed-injection"))]
@@ -4652,6 +4679,108 @@ fn refuse(why: String) -> ! {
     std::process::exit(2);
 }
 
+const STACKED_TABLE: &str = "stacked";
+const STACKED_DOMAIN: &str = "flock-circuit/stacked/fast100/rep0";
+
+/// R, the stacked table (`--table`): 2^m cells, cell i at byte i >> 3, bit i & 7, packed 128 cells an element.
+fn stacked_table(path: &str) -> (usize, Vec<u8>, Vec<F128>) {
+    let b = std::fs::read(path).unwrap_or_else(|e| refuse(format!("--table {path}: {e}")));
+    let m = (b.len() * 8).trailing_zeros() as usize;
+    if !b.len().is_power_of_two() || !(22..=35).contains(&m) {
+        refuse(format!("--table {path}: {} bytes, not 2^m cells with 22 <= m <= 35 (fast100)", b.len()));
+    }
+    let word = |c: &[u8]| u64::from_le_bytes(c.try_into().unwrap());
+    let z = b.chunks_exact(16).map(|c| F128::new(word(&c[..8]), word(&c[8..]))).collect();
+    (m, b, z)
+}
+
+/// `--points`: `{"x": [x_0, x_1, ...]}`, claim k's x = its point[6:] (`rec_sparse.RegisteredClaim.x`), each coordinate an
+/// `f128_hex`.
+fn stacked_points(m: usize) -> Vec<Vec<F128>> {
+    let path = arg("--points", "points.json");
+    let v: Value = std::fs::read_to_string(&path).map_err(|e| e.to_string()).and_then(|s| serde_json::from_str(&s).map_err(|e| e.to_string()))
+        .unwrap_or_else(|e| refuse(format!("--points {path}: {e}")));
+    let xs = v["x"].as_array().filter(|a| !a.is_empty()).unwrap_or_else(|| refuse(format!("--points {path}: no claim points")));
+    xs.iter().map(|x| {
+        let x: Vec<F128> = x.as_array().into_iter().flatten().map(|h| {
+            let u = h.as_str().filter(|s| s.len() == 32).and_then(|s| u128::from_str_radix(s, 16).ok())
+                .unwrap_or_else(|| refuse(format!("--points {path}: {h} is not an f128_hex")));
+            F128::new(u as u64, (u >> 64) as u64)
+        }).collect();
+        if x.len() != m - 6 {
+            refuse(format!("--points {path}: a point's x of {} coordinates, R's wants m - 6 = {}", x.len(), m - 6));
+        }
+        x
+    }).collect()
+}
+
+/// `stacked`: candidate 3's registered opening, `rec_algebra.Shape(m, 6, claims, salt_len=0, opening_only=True)`. R is committed
+/// under plain SHA-512 leaves at fast100(m) and opened at the relay's claim points by upstream's batch opening, on the live stream
+/// `stacked/rep0`, bound as a rep is (`bind_statement`'s label, the inner statement's digest, R's cap): the circuit reps' own
+/// statement digest (`--statement-digest`, which the firewall holds to theirs), so the stream's first coin follows the
+/// statement's META and the circuit registration it binds; no zerocheck or lincheck precedes it.
+///
+///   flock-circuit stacked --table R.bin --root-out ROOT.json                         R's registered root, at staging
+///   flock-circuit stacked --table R.bin --points P.json --statement-digest HEX --verifier ADDR [--dump F]   the opening
+///
+/// `ROOT.json` is `{m, cap, digest}` in hex, the cap table `stacked`'s Commit root. The opening commits R again (plain leaves
+/// take no salt, so to the same cap), sends only `Open`, its rounds, `Proof` and `Finish`, and its proof is bincode((Commitment,
+/// R1csProofLigerito)) with an empty zerocheck and lincheck: a circuit rep's container, as V* decodes it.
+fn stacked() {
+    use flock_transcript::challenger::Challenger;
+    let (m, raw, z) = stacked_table(&arg("--table", "R.bin"));
+    let pcs = PcsParams { merkle_hash: HashKind::Sha512, ..params(m, LigeritoProfile::Fast100) };
+    let t0 = Instant::now();
+    let (cm, pd) = flock_core::pcs::commit::commit(&z, &pcs);
+    let root = merkle_digest_bytes(&cm.cap).to_vec();
+    let digest = Sha512::digest(&raw)[..32].to_vec();
+    let mut out = json!({"m": m, "digest": hex(&digest), "t.commit": t0.elapsed().as_secs_f64()});
+    let root_out = arg("--root-out", "");
+    if !root_out.is_empty() {
+        std::fs::write(&root_out, json!({"m": m, "cap": hex(&root), "digest": hex(&digest)}).to_string()).expect("--root-out");
+        println!("STACKED\t{out}");
+        return;
+    }
+    let xs = stacked_points(m);
+    let sd = arg("--statement-digest", "");
+    let statement_digest: Vec<u8> = (sd.len() == 64 && sd.bytes().all(|b| b.is_ascii_hexdigit()))
+        .then(|| (0..32).map(|i| u8::from_str_radix(&sd[2 * i..2 * i + 2], 16).unwrap()).collect())
+        .unwrap_or_else(|| refuse(format!("--statement-digest {sd:?}: the inner statement's 32-byte digest, 64 hex digits")));
+    let addr = arg("--verifier", "127.0.0.1:7500");
+    let t = shared(TcpTransport::connect(&addr).unwrap_or_else(|e| refuse(format!("the challenger at {addr}: {e}"))));
+    let mut ch = LiveChallenger::new(t.clone(), STACKED_TABLE, 0, STACKED_DOMAIN.as_bytes()).unwrap_or_else(|e| refuse(format!("Open: {e}")));
+    ch.observe_label(b"flock-r1cs-v0");
+    ch.observe_bytes(&statement_digest);
+    ch.observe_bytes(&root);
+    let lc = pcs.ligerito_prover_config().unwrap_or_else(|e| refuse(e));
+    let refs: Vec<&[F128]> = xs.iter().map(Vec::as_slice).collect();
+    let pre: Vec<Option<&[F128]>> = vec![None; refs.len()];
+    let tp = Instant::now();
+    let pcs_open = flock_core::pcs::open_batch_mixed_ligerito_with_precomputed_s_hat_v_and_grinding(
+        z, &pd, &cm, &refs, &pre, &[], &flock_core::zerocheck::PaddingSpec::dense(m), &lc, pcs.opening_grinding(), &mut ch);
+    let zerocheck = flock_core::zerocheck::ZerocheckProof { round1_ab: vec![], round1_c: vec![], multilinear_rounds: vec![],
+        final_a_eval: F128::ZERO, final_b_eval: F128::ZERO, final_c_eval: F128::ZERO, grinding_nonces: vec![] };
+    let lincheck = flock_core::lincheck::LincheckProof { rounds: vec![], z_partial: vec![], matrix_evals: vec![], grinding_nonces: vec![],
+        comb_partial: vec![] };
+    let bytes = bincode::serialize(&(&cm, &R1csProofLigerito { zerocheck, lincheck, pcs_open })).unwrap();
+    out["t.open"] = json!(tp.elapsed().as_secs_f64());
+    out["proof_bytes"] = json!(bytes.len());
+    let dump = arg("--dump", "");
+    if !dump.is_empty() {
+        std::fs::write(&dump, &bytes).expect("--dump");
+    }
+    match call(&t, Req::Proof { table: STACKED_TABLE.into(), rep: 0, bytes }) {
+        Ok(Resp::Ok) => {}
+        other => refuse(format!("Proof: {other:?}")),
+    }
+    out["verdict"] = match call(&t, Req::Finish) {
+        Ok(Resp::Verdict(v)) => serde_json::from_str(&v).unwrap_or(Value::String(v)),
+        Ok(Resp::Ok) => Value::Null,
+        other => refuse(format!("Finish: {other:?}")),
+    };
+    println!("STACKED\t{out}");
+}
+
 fn main() {
     let cmd = std::env::args().nth(1).unwrap_or_default();
     if cmd == "replay-coins" {
@@ -4661,6 +4790,9 @@ fn main() {
             Err(e) => { println!("COINS\t{}", json!({"replayed": false, "why": e})); std::process::exit(1) }
         }
         return;
+    }
+    if cmd == "stacked" {
+        return stacked();
     }
     let tb = Instant::now();
     let c = load_composite(&arg("--circuit", "circuit.txt"));
@@ -4763,6 +4895,6 @@ fn main() {
                 println!("LIVE\t{v}");
             });
         }
-        _ => eprintln!("usage: flock-circuit serve|prove|selftest|statement|replay --instances FILE --circuit FILE [--pin SHA256] ..."),
+        _ => eprintln!("usage: flock-circuit serve|prove|selftest|statement|replay --instances FILE --circuit FILE [--pin SHA256] ... | stacked --table R.bin ..."),
     }
 }

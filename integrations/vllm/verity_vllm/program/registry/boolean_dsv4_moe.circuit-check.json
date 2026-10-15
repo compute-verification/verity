@@ -1,0 +1,58 @@
+{
+ "definitions": {
+  "Dsv4HashWeightIn_v1": {
+   "and": 2394
+  },
+  "Dsv4HashWeightMid_v1": {
+   "and": 2729
+  },
+  "Dsv4HashWeightOut_v1": {
+   "and": 4394
+  },
+  "Dsv4HashWeight_v2": {
+   "and": 11571
+  },
+  "Dsv4SqrtSoftplusIn_v1": {
+   "and": 2330
+  },
+  "Dsv4SqrtSoftplusMid_v1": {
+   "and": 2782
+  },
+  "Dsv4SqrtSoftplusSelect_v1": {
+   "and": 32
+  },
+  "Dsv4SqrtSoftplus_v2": {
+   "and": 50376
+  },
+  "Ex2ApproxIn_v1": {
+   "and": 774
+  },
+  "Ex2ApproxOut_v1": {
+   "and": 2010
+  },
+  "Ex2Approx_v2": {
+   "and": 3857
+  },
+  "MoeRouterHashNorm_v1{SCALE=2.5}": {
+   "and": 22435
+  },
+  "MoeRouterHashPick_v1{E=8}": {
+   "and": 1704
+  },
+  "MoeRouterSqrtSoftplusTopK_v1{E=8,SCALE=2.5}": {
+   "and": 32862
+  },
+  "MufuLg2Mantissa_v2": {
+   "and": 986
+  },
+  "SiluMulClampBf16_v2{LIMIT=10.0}": {
+   "and": 1489
+  },
+  "SiluMulClampIn_v1{LIMIT=10.0}": {
+   "and": 109
+  },
+  "SiluMulClamp_v2{I=4,LIMIT=10.0}": {
+   "and": 5956
+  }
+ }
+}

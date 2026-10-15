@@ -34,6 +34,11 @@ consistency terms, and V*'s algebra (`verity_flock.rec_residuals`) reads a rep's
 the verifier's (`coefficients`: the final check's κ at the rep's coins times the level's eq(α)[j],
 `verity_flock.rec_algebra.verifier_rows`).
 
+**The claims** (`note:proofs/20261010T1820Z-draft-c3-claim-layout`). Beside ``rec-acc``, under the same program string and its
+own salts, the prover registers each rep's `rec_sparse.RecSparse` claim as the value ``rec-claim`` (`CLAIM_VALUE`), row r rep
+r's (one element, 64 words): RecSparse's instance r reads row r, and the registered opening (`rec_residuals.stage_opening`)
+reads row 0 as ``claim0`` and row 1 as ``claim1``, so the two statements open one root's cells.
+
 With ``link_rows``, the opened rows are not fresh: the prover registers them first, as the value ``rec-rows-L<level>`` under
 its own salts (what it would send before the outer coins), and the statement's ``row`` port reads row ``i`` of that value in
 instance ``i``. The verifier then checks every opened row against that root, which is how another statement can read the
@@ -67,6 +72,7 @@ from .class_statement import ClassDefinition
 
 SESSION_TAG = b"verity/rec-v0/v-star/v0\0"
 ACC_VALUE = "rec-acc"
+CLAIM_VALUE = "rec-claim"
 COEF_VALUE = "rec-coef"
 DIRS_VALUE = "rec-dirs"
 
@@ -77,10 +83,22 @@ def session_program(record: bytes) -> str:
     return hashlib.sha512(SESSION_TAG + hashlib.sha512(record).digest()).hexdigest()
 
 
-def lowering(LANES: int, H: int) -> IL.Lowering:
-    """`rec_open.unit_circuit` as M0's unit: ports ``row``, ``aux``, ``acc``, ``coef`` and ``dirs`` (u16 words), and ``out``
-    and ``acc_out`` (one row each)."""
-    name = f"rec-open/l{LANES}-h{H}"
+def unit_name(LANES: int, H: int) -> str:
+    """A level of the circuit table's openings: ``rec-open/l<LANES>-h<H>``."""
+    return f"rec-open/l{LANES}-h{H}"
+
+
+def stacked_name(LANES: int, H: int) -> str:
+    """A level of the stacked table R's openings (`rec_vstage.stage_stacked`): ``rec-open-stacked/l<LANES>-h<H>``, never a
+    name of the circuit table's levels, which can share R's shape over another instance count (``Flock/RecVStar.lean``'s
+    ``recOpenStackedName``)."""
+    return f"rec-open-stacked/l{LANES}-h{H}"
+
+
+def lowering(LANES: int, H: int, name: str | None = None) -> IL.Lowering:
+    """`rec_open.unit_circuit` as M0's unit named ``name`` (default `unit_name`): ports ``row``, ``aux``, ``acc``, ``coef``
+    and ``dirs`` (u16 words), and ``out`` and ``acc_out`` (one row each)."""
+    name = name or unit_name(LANES, H)
     C, ins, outs = R.unit_circuit(LANES, H)
     w_in, w_out = len(ins), len(outs)
     units = IL.Units(target=None, in_widths=[16] * w_in, out_widths=[16] * w_out, in_src=[[("leaf", p) for p in range(w_in)]],
@@ -89,12 +107,13 @@ def lowering(LANES: int, H: int) -> IL.Lowering:
     return IL.Lowering(name, defn, units, C, IL.layout(C, ins, outs))
 
 
-def subcircuit(LANES: int, H: int) -> SimpleNamespace:
-    """What `circuit.compose` and `circuit.write` read of a subcircuit: its ports and its Definition, ``RecOpen{LANES, H}``."""
+def subcircuit(LANES: int, H: int, name: str | None = None) -> SimpleNamespace:
+    """What `circuit.compose` and `circuit.write` read of a subcircuit: its ports and its Definition, ``RecOpen{LANES, H}``,
+    under the unit's name ``name`` (default `unit_name`)."""
     port = lambda nm: SimpleNamespace(name=nm, dtype="u16")
     defn = R.definition(LANES, H)
     digest = program_digest(Program(defn))
-    return SimpleNamespace(id=f"rec-open/l{LANES}-h{H}", template=SimpleNamespace(id="rec-open"),
+    return SimpleNamespace(id=name or unit_name(LANES, H), template=SimpleNamespace(id="rec-open"),
                            inputs=[port(nm) for nm in R.PORTS], outputs=[port("out"), port("acc_out")],
                            definition=lambda **_: defn, program_digests=lambda statics: {defn.id: digest})
 
@@ -128,9 +147,10 @@ class TopValue:
     first: dict[int, int]
 
     @classmethod
-    def build(cls, program: str, level: int, tops: dict[int, V.Top]) -> "TopValue":
+    def build(cls, program: str, level: int, tops: dict[int, V.Top], value: str | None = None) -> "TopValue":
         """``tops``: each rep's top at the level (`rec_vstar.tops`); a top two reps share (level 0's ``root_B``) is one run of
-        rows. Refused when the prover's registration is not the value the recorded ``b || c`` commit."""
+        rows. Refused when the prover's registration is not the value the recorded ``b || c`` commit. ``value``: another
+        table's name for it (default `top_value_name`)."""
         from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
         runs: list[V.Top] = []
@@ -139,7 +159,7 @@ class TopValue:
             if t not in runs:
                 runs.append(t)
             first[rep] = sum(len(u.nodes) for u in runs[:runs.index(t)])
-        value = top_value_name(level)
+        value = value or top_value_name(level)
         rows = [r for t in runs for r in RL.top_rows(b"".join(t.nodes))]
         reg = G.Registered.commit(program, value, rows, [s for t in runs for s in t.salts])
         own = RR.commits_entry(program, value, R.OUT_WORDS, [b for t in runs for b in t.bcs])
@@ -191,11 +211,11 @@ class Chain:
 
 
 def stage(level: dict, out_dir: Path, chain: Chain, coefs: dict[tuple[int, int, int], list[int]], tops: TopValue,
-          link_rows: bool = False) -> dict:
+          link_rows: bool = False, name: str | None = None) -> dict:
     """One level's statement, the verifier's own files beside the prover's (``out_dir``), and what it costs. ``chain``: the
-    prover's running sums; ``coefs``: each opening's ``coef`` words (the verifier's); ``tops``: the level's committed tops. The
-    openings' positions are the ones the verifier's query coins give (`rec_vstage.coefficients` checks them), so ``dirs`` is
-    the verifier's too."""
+    prover's running sums; ``coefs``: each opening's ``coef`` words (the verifier's); ``tops``: the level's committed tops;
+    ``name``: its unit's name (default `unit_name`; R's levels `stacked_name`). The openings' positions are the ones the
+    verifier's query coins give (`rec_vstage.coefficients` checks them), so ``dirs`` is the verifier's too."""
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
     from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
@@ -225,12 +245,12 @@ def stage(level: dict, out_dir: Path, chain: Chain, coefs: dict[tuple[int, int, 
     out_rows, out_salts, entry = tops.reg.statement(tops_at)
     if [list(r) for r in out_rows] != [R.expected(q.cap_node) for q in qs]:
         raise ValueError(f"level {level['level']}: an opening's top node is not its row of the level's tops")
-    low = lowering(LANES, H)
+    low = lowering(LANES, H, name)
     flat = np.concatenate([rows, aux, np.array(acc_rows, np.uint16), coef, dirs], axis=1).astype(np.uint64)
     got, _cut, ok = low.evaluate(flat)
     opened = [bool((int(ok) >> i) & 1) and got[i, :R.OUT_WORDS].astype(np.uint16).tolist() == list(out_rows[i]) for i in range(n)]
     summed = [bool((int(ok) >> i) & 1) and got[i, R.OUT_WORDS:].astype(np.uint16).tolist() == list(out_acc[i]) for i in range(n)]
-    sub = subcircuit(LANES, H)
+    sub = subcircuit(LANES, H, name)
     text = FC.compose(low, sub, partition=P.digest(part), program=prog)
     read = lambda e, reads: {**e, "word_bits": 16, "reads": list(reads)}
     own = {"format": G.READS, "ports": {"out": read(tops.own, tops_at), "acc": read(chain.reg.entry(), at),

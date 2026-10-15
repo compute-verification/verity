@@ -1,4 +1,4 @@
-import Models.Pous.Guarantees
+import Proofs.Pous.Statements
 import Proofs.Pous.Thm1.Theorem1iTimed
 import Proofs.Pous.Thm1.Theorem1iiSeq
 import Proofs.Pous.Thm1.Theorem1iiiTimed

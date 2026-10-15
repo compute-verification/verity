@@ -4,6 +4,7 @@ import PousCheck.Commit
 import PousCheck.Merkle
 import PousCheck.Challenge
 import PousCheck.Wire.Codec
+import PousCheck.Prim.PyJson
 
 /-!
 # `p2-audit-wire/v4`: a setup and one timed audit, verified to its `FINAL` frame
@@ -145,14 +146,16 @@ def payloadBits (profile : String) (width : Nat) : W Nat := do
 def FIELDS : Array String := #["blocks_per_segment", "c0", "profile", "scheme", "segments", "w"]
 
 /-- The store a SETUP_COMMIT's manifest names (`_canonical_json`, `_params`): UTF-8 JSON that is its own canonical form
-(sorted keys, no whitespace, integers only), an object of exactly `FIELDS` with `scheme = "p2"`, the four numbers
-integers in range, a known payload profile, and `p = 2^w − c0 ≡ 3 mod 4` with `w` a multiple of 32. Every refusal is
-malformed. -/
+(sorted keys, no whitespace, integers only; a float is read as Python reads it, `Prim.PyJson.scan`), an object of exactly `FIELDS` with `scheme = "p2"`, the four numbers
+integers in range, a known payload profile, `p = 2^w − c0 ≡ 3 mod 4` with `w` a multiple of 32, and every payload below
+`p` (`reference.Params`). Every refusal is malformed. -/
 def manifestParams (data : ByteArray) : W Params := do
   let bad {α : Type} (m : String) : W α := fault MALFORMED m
   let some text := String.fromUTF8? data | bad "manifest is not canonical UTF-8 JSON"
+  let (text, unwritable) := Prim.PyJson.scan text
   let .ok j := Json.parse text | bad "manifest is not canonical UTF-8 JSON"
   let .ok kvs := j.getObj? | bad "manifest is not an object"
+  if unwritable then bad "manifest holds a value canonical JSON cannot"
   match Flock.canon j with
   | .ok c => if c.toUTF8 != data then bad "manifest is not canonical JSON"
   | .error _ => bad "manifest is not canonical JSON"
@@ -167,9 +170,11 @@ def manifestParams (data : ByteArray) : W Params := do
     bad "manifest geometry is out of range"
   let bits ← payloadBits profile w.toNat
   let q : Params := ⟨w.toNat, c0, bps.toNat, segments.toNat, profile, bits⟩
-  if w < 8 || w % 32 != 0 || c0 < 1 || c0 % 4 != 1 || q.p % 4 != 3 then bad "no P2 prime: w, c0"
+  if w < 8 || w % 32 != 0 || c0 < 1 || c0 % 4 != 1 || q.p % 4 != 3 then
+    bad "no P2 prime: P2 needs w a multiple of 32 bits and c0 = 1 mod 4 with p = 2^w - c0 = 3 mod 4"
   let payloadBytes := max 1 (bits / 8)
-  if !(0 < payloadBytes && payloadBytes < q.widthBytes) then bad "no P2 prime: payload"
+  if !(0 < payloadBytes && payloadBytes < q.widthBytes) then bad "no P2 prime: a payload is fewer bytes than a block"
+  if q.p ≤ 2 ^ (8 * payloadBytes) then bad "no P2 prime: every payload is below p"
   pure q
 
 /-! ## Setup -/
@@ -353,8 +358,8 @@ def parseResponse (f : ByteArray) (blockBytes : Nat) :
     (Array.range count).map fun x => body.extract (stop + 2 + D * x) (stop + 2 + D * (x + 1)))
 
 /-- A round's record: `u16 round ‖ u64 index ‖ u64 elapsed ‖ flags ‖ SHA512(challenge) ‖ SHA512(response)`. An elapsed
-time outside u64 is refused before (`verifyAudit`); an index past u64 (a store of more than `2^64` blocks) is truncated
-here, where the Python raises (`to_bytes`). -/
+time outside u64 is refused before (`verifyAudit`). Every index recorded is below `B`, and `B` is below `2^64`: `parseSetup`
+binds the manifest's `B` to SETUP_ROOT's u64 block count (code 2 otherwise), and `rounds` runs only on a parsed setup. -/
 def record (j index elapsed flags : Nat) (challengeHash responseHash : ByteArray) : ByteArray :=
   be j 2 ++ be index 8 ++ be elapsed 8 ++ ⟨#[flags.toUInt8]⟩ ++ challengeHash ++ responseHash
 
@@ -366,8 +371,8 @@ def final (o : Open) (code : Nat) (transcript records : Array ByteArray) : ByteA
   envelope FINAL (o.epoch ++ o.audit ++ ⟨#[if code == SUCCESS then 1 else 0, code.toUInt8]⟩ ++ r ++ be o.delta 8
     ++ be o.rtt 8 ++ th ++ r ++ records.foldl (· ++ ·) .empty)
 
-/-- What the verifier holds besides the frames: its secret, round `j`'s beacon value in mode 1, every `(epoch, audit id)`
-pair it has used, the root it built from `W` itself (which a private setup's declared root must be), and the `W` it holds
+/-- What the verifier holds besides the frames: its secret, round `j`'s beacon value in mode 1 (the last pair for `j`, as
+the Python's dict of the pairs holds it), every `(epoch, audit id)` pair it has used, the root it built from `W` itself (which a private setup's declared root must be), and the `W` it holds
 (which flag bit 1 compares each decoded payload with). -/
 structure Verifier where
   source : Option ByteArray
@@ -401,7 +406,7 @@ def rounds (setup : Setup) (o : Open) (frames : Array ByteArray) (cursor : Nat) 
     match key with
     | some k => expected := ((Challenge.index k q.blocks j).getD 0, Challenge.nonce k j)
     | none =>
-      match (v.beacons.getD #[]).find? (·.1 == j) with
+      match (v.beacons.getD #[]).findRev? (·.1 == j) with
       | some (_, beacon) =>
         if beacon.size != S then return final o IDENTITY transcript records
         expected := ((Challenge.index (Challenge.roundKey beacon o.audit o.epoch setup.root j) q.blocks j).getD 0, beacon)

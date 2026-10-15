@@ -78,7 +78,6 @@ theorem ligerito_cap (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (cap 
     cap.size = 2 ^ (sch.levels.getD 0 default).cap ∧ ∀ b ∈ cap.toList, b.size = ms.digestLen := by
   unfold Flock.ligerito at h
   obtain ⟨_, h⟩ := check_bind h
-  obtain ⟨_, h⟩ := check_bind h
   obtain ⟨_, _, h⟩ := label_bind h
   obtain ⟨_, _, h⟩ := absorbF_bind h
   obtain ⟨_, _, h⟩ := absorbBytes_bind h

@@ -10,6 +10,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 HERE = Path(__file__).resolve().parents[1]
 
 
@@ -228,7 +230,8 @@ def _keys(S) -> dict[str, str]:
     out = {}
     for s in S.discover():
         paths = S.inputs_of(s, pkgs)
-        out[s.name] = S.key(s, S.object_ids(tree, sorted(set(paths) | set(S.RUNNER))), env, [], S.resolved(S.roots(s, pkgs), lock, s.path))
+        out[s.name] = S.key(s, S.input_ids(tree, sorted(set(paths) | set(S.RUNNER)), S.markdown(s)), env, [],
+                            S.resolved(S.roots(s, pkgs), lock, s.path))
     return out
 
 
@@ -325,6 +328,37 @@ def test_changed_selects_the_suites_a_change_touches_by_path_runner_or_lock(tmp_
     assert touched() == [] and _keys(S) == keys                     # check's own code decides no other suite's verdict
     (tmp_path / "tools" / "verity" / "check" / "suites.py").write_text("# the runner\n")
     assert touched() == ["a", "b"] and all(_keys(S)[n] != keys[n] for n in keys)
+
+
+def test_markdown_rekeys_and_selects_only_the_suites_that_list_markdown(tmp_path, monkeypatch):
+    """#1594's 13 `.md` files picked 35 suites. A directory keys without its `*.md` unless its suite lists a `.md`, whose guard
+    then lets it read Markdown (test_guard.py holds the others to reading none)."""
+    _workspace(tmp_path)
+    (tmp_path / "a" / "README.md").write_text("prose\n")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "base")
+    S = _suites(monkeypatch, tmp_path)
+    pkgs, base = S.members(), _git(tmp_path, "rev-parse", "HEAD")
+
+    def touched():
+        return [s.name for s in S.touched(S.discover(), pkgs, base, S.worktree(), S.locked())]
+
+    keys = _keys(S)
+    (tmp_path / "a" / "README.md").write_text("other prose\n")
+    (tmp_path / "a" / "GUIDE.md").write_text("new prose\n")
+    assert touched() == [] and _keys(S) == keys
+    (tmp_path / "a" / "data.txt").write_text("not prose\n")
+    assert touched() == ["a"] and _keys(S)["a"] != keys["a"]
+    (tmp_path / "a" / "data.txt").unlink()
+    (tmp_path / "b" / "pyproject.toml").write_text((tmp_path / "b" / "pyproject.toml").read_text()
+                                                   + '\n[tool.verity.tests]\ninputs = ["a/README.md"]\n')
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "b reads a's README")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+    keys = _keys(S)
+    (tmp_path / "a" / "README.md").write_text("third prose\n")
+    assert touched() == ["b"]                                       # b reads a's README: its edit reaches b alone
+    assert _keys(S)["a"] == keys["a"] and _keys(S)["b"] != keys["b"]
 
 
 def test_changed_selects_the_suite_a_file_is_moved_out_of(tmp_path, monkeypatch):
@@ -824,6 +858,24 @@ def test_a_fresh_run_that_fails_what_a_kept_pass_answers_for_says_so(tmp_path):
     assert p.returncode == 0 and "tests/test_sibling.py::test_sibling" not in _reused(tmp_path), p.stdout
 
 
+def test_each_failed_suite_is_written_beside_the_json_as_it_fails(tmp_path):
+    """12 Oct: check cc39's repository suite had failed by 20:25Z, but under `--keep-going` the check ran to 20:55Z, and drive
+    knew only then; `suites.failed.json`, rewritten as each suite fails, is what drive reads of a check still running."""
+    import json
+
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    out = tmp_path / "suites.json"
+    p = _run_suite(root, tmp_path, "--json", str(out))
+    assert p.returncode == 1, p.stdout
+    (doc,) = json.loads((tmp_path / "suites.failed.json").read_text())
+    assert (doc["name"], doc["log"]) == ("pkg", "pkg.log") and any("test_sibling" in t for t in doc["failed_tests"]), doc
+    (tests / "test_sibling.py").write_text("def test_sibling():\n    pass\n")
+    _git(root, "commit", "-qam", "fixed")
+    p = _run_suite(root, tmp_path, "--json", str(out))
+    assert p.returncode == 0 and not (tmp_path / "suites.failed.json").exists(), p.stdout
+
+
 def test_a_suite_that_is_not_parallel_records_outcomes_but_reuses_none(tmp_path):
     root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
     _per_test_workspace(root)
@@ -915,8 +967,10 @@ def _until_written_or_exited(fifo: Path, p: subprocess.Popen) -> tuple[bool, byt
         os.close(fd)
 
 
-def test_an_interrupted_run_keeps_what_finished(tmp_path):
-    """A stop (check.py's SIGINT to the step's processes) mid-suite: the tests that passed before it are kept."""
+@pytest.mark.parametrize("stop", ["SIGINT", "SIGTERM"])
+def test_an_interrupted_run_keeps_what_finished(tmp_path, stop):
+    """A stop mid-suite (check.py's SIGINT to the step's processes, or `research cancel`'s SIGTERM to the run's group): the
+    tests that passed before it are kept, and the suite's `--basetemp` is gone."""
     import signal
 
     root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
@@ -928,14 +982,17 @@ def test_an_interrupted_run_keeps_what_finished(tmp_path):
     (tests / "test_z_block.py").write_text(f"import signal\n\ndef test_block():\n    with open({str(gate)!r}, 'w') as f:\n"
                                            "        f.write('x')\n    signal.pause()\n")
     env = {k: v for k, v in os.environ.items() if not k.startswith(("R2_", "AWS_", "RESEARCH_", "VERITY_"))}
-    env.update(VERITY_TEST_CACHE=str(tmp_path / "cache"), PYTHONDONTWRITEBYTECODE="1")
+    (tmp := tmp_path / "tmp").mkdir()
+    env.update(VERITY_TEST_CACHE=str(tmp_path / "cache"), PYTHONDONTWRITEBYTECODE="1", TMPDIR=str(tmp))
     p = subprocess.Popen([sys.executable, str(root / "tools" / "verity" / "check" / "suites.py"), "--jobs", "1", "--logs", str(tmp_path / "logs")],
                          cwd=root, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True)
     written, before = _until_written_or_exited(gate, p)    # test_heavy's two tests have passed; test_block is running
     assert written, f"the runner ended before test_block ran:\n{before.decode(errors='replace')}"
-    os.killpg(p.pid, signal.SIGINT)
+    assert len(list(tmp.glob("verity-suite-[0-9]*"))) == 1
+    os.killpg(p.pid, getattr(signal, stop))
     out = (before + p.communicate()[0]).decode(errors="replace")
     assert p.returncode != 0 and "2 per-test passes kept" in out, out
+    assert list(tmp.glob("verity-suite-[0-9]*")) == [], out
     assert len(list((tmp_path / "cache" / "per-test" / "pkg").glob("tests~test_heavy.py--*.json"))) == 1
 
 
@@ -1131,6 +1188,42 @@ def test_a_traced_pass_is_reused_until_a_file_its_run_read_changes(tmp_path):
     assert p.returncode == 0 and "4 passed in" in p.stdout, p.stdout
 
 
+def test_a_suite_that_is_not_parallel_reuses_its_whole_traced_pass_until_a_file_its_run_read_changes(tmp_path):
+    """Its tests may depend on their order, so it reuses no test's pass, but a run of all of them that the guard traced answers
+    for the suite while every read holds; a run in which a test started a program no tracer sees into keeps no such pass."""
+    import json
+
+    root, lib, tests = tmp_path / "tree", tmp_path / "tree" / "lib", tmp_path / "tree" / "pkg" / "tests"
+    _traced_workspace(root)
+    pyproject = root / "pkg" / "pyproject.toml"
+    pyproject.write_text(pyproject.read_text().replace("parallel = true", "parallel = false"))
+    spawn = (tests / "test_spawn.py").read_text()
+    (tests / "test_spawn.py").unlink()
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "3 passed in" in p.stdout, p.stdout
+    [whole] = (tmp_path / "cache" / "per-test" / "pkg").glob("(suite)--*.json")
+    reads = json.loads((whole.parent / "traced" / f"{json.loads(whole.read_text())['traced']}.json").read_text())["reads"]
+    assert "F\tlib/used.py" in reads and "F\tlib/unused.py" not in reads, sorted(reads)
+
+    (lib / "unused.py").write_text("OTHER = 3\n")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "cached  pkg" in p.stdout and "traced: every file its run read" in p.stdout, p.stdout
+    assert "pkg: cached: a traced pass of the whole suite" in _run_suite(root, tmp_path, "--explain", "pkg").stdout
+
+    (lib / "used.py").write_text("VALUE = 1  # read by test_a\n")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "3 passed in" in p.stdout and _reused(tmp_path) == [], p.stdout
+    (tests / "test_b.py").write_text("def test_b():\n    assert True\n")          # a test module: in the key, read or not
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "3 passed in" in p.stdout, p.stdout
+
+    (tests / "test_spawn.py").write_text(spawn)
+    assert _run_suite(root, tmp_path).returncode == 0
+    (lib / "unused.py").write_text("OTHER = 4\n")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "4 passed in" in p.stdout, p.stdout
+
+
 def test_the_tracer_names_what_a_key_narrowed_to_the_tests_reads_must_hold(tmp_path, monkeypatch):
     spec = importlib.util.spec_from_file_location("reads_under_test", HERE / "guard" / "child" / "verity_suite_reads.py")
     R = importlib.util.module_from_spec(spec)
@@ -1149,17 +1242,49 @@ def test_the_tracer_names_what_a_key_narrowed_to_the_tests_reads_must_hold(tmp_p
     assert r.classify(str(tmp_path / "lib" / "__pycache__" / "other.cpython-314.pyc")) == ("O", "lib/__pycache__/other.cpython-314.pyc")
     assert r.traced(str(tmp_path / "lib" / "data.json")) == "lib/data.json" and r.traced("/elsewhere/x") is None
     assert r.traced(str(Path(child) / "sitecustomize.py")) is None
-    assert r.trace("open", (str(tmp_path / "lib" / "a.py"), "r", 0)) == ("F", "lib/a.py")
-    assert r.trace("os.scandir", (str(tmp_path / "lib"),)) == ("L", "lib")
-    assert r.trace("subprocess.Popen", (None, [sys.executable, "-c", "pass"], None, None)) is None
-    assert r.trace("subprocess.Popen", (None, [sys.executable, "-I", "-c", "pass"], None, None)) == ("X", sys.executable)
-    assert r.trace("subprocess.Popen", (None, [sys.executable, "-c", "pass"], None, {"PATH": "/bin"}), ) == ("X", sys.executable)
-    assert r.trace("subprocess.Popen", (None, ["git", "status"], None, None)) == ("X", "git")
-    assert r.trace("subprocess.Popen", (None, ["uv", "run", "python"], None, None)) == ("X", "uv")
-    assert r.trace("os.system", ("ls",)) == ("X", "os.system")
-    assert r.trace("subprocess.Popen", (None, ["uname", "-p"], None, None)) is None       # a machine probe reads no repository file
+    assert r.trace("open", (str(tmp_path / "lib" / "a.py"), "r", 0)) == [("F", "lib/a.py")]
+    assert r.trace("os.scandir", (str(tmp_path / "lib"),)) == [("L", "lib")]
+    assert r.trace("subprocess.Popen", (None, [sys.executable, "-c", "pass"], None, None)) == []
+    assert r.trace("subprocess.Popen", (None, [sys.executable, "-I", "-c", "pass"], None, None)) == [("X", sys.executable)]
+    assert r.trace("subprocess.Popen", (None, [sys.executable, "-c", "pass"], None, {"PATH": "/bin"}), ) == [("X", sys.executable)]
+    assert r.trace("subprocess.Popen", (None, ["git", "status"], None, None)) == [("X", "git")]
+    assert r.trace("subprocess.Popen", (None, ["uv", "run", "python"], None, None)) == [("X", "uv")]
+    assert r.trace("os.system", ("ls",)) == [("X", "os.system")]
+    assert r.trace("subprocess.Popen", (None, ["uname", "-p"], None, None)) == []       # a machine probe reads no repository file
     monkeypatch.delenv("VERITY_SUITE_MODULE")                  # outside a test module sitecustomize doesn't trace
-    assert r.trace("subprocess.Popen", (None, [sys.executable, "-c", "pass"], None, None)) == ("X", sys.executable)
+    assert r.trace("subprocess.Popen", (None, [sys.executable, "-c", "pass"], None, None)) == [("X", sys.executable)]
+
+
+def test_a_declared_build_output_is_traced_by_the_repository_paths_it_is_given(tmp_path, monkeypatch):
+    """A Lean executable the suite declares under `artifacts` reads what its arguments name, so the tests that start it keep
+    traced per-test keys: its run is the files it was given (a file with those beside it, a directory whole), outside the inputs
+    a failure; `lake build` of declared outputs reads nothing the key doesn't hold. Any other program is still untraced."""
+    spec = importlib.util.spec_from_file_location("reads_under_test", HERE / "guard" / "child" / "verity_suite_reads.py")
+    R = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(R)
+    pkg, bin_ = tmp_path / "lean", tmp_path / "lean" / ".lake" / "build" / "bin"
+    bin_.mkdir(parents=True)
+    (bin_ / "verify").write_text("")
+    (bin_ / "other").write_text("")
+    for f in ("fx/a.bin", "fx/b.bin", "fx/sub/c.json", "out/x.bin"):
+        (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / f).write_text("")
+    monkeypatch.setenv("VERITY_SUITE_ROOT", str(tmp_path))
+    monkeypatch.setenv("VERITY_SUITE_ALLOW", '["fx"]')
+    monkeypatch.setenv("VERITY_SUITE_PROGRAMS", '["lean/.lake/build/bin/verify"]')
+    r = R.Reads()
+    exe = str(bin_ / "verify")
+    pop = lambda argv, cwd=None: r.trace("subprocess.Popen", (None, argv, cwd, None))     # noqa: E731
+    assert pop([exe, "check", "--circuit", str(tmp_path / "fx" / "a.bin"), "/elsewhere/tmp/p.bin"]) == [("F", "fx/a.bin"), ("F", "fx/b.bin")]
+    assert pop([exe, "--dir=fx/sub"], cwd=tmp_path) == [("F", "fx/sub/c.json")]
+    assert pop([exe, "out/x.bin"], cwd=tmp_path) == [("F", "out/x.bin"), ("O", "out/x.bin")]
+    monkeypatch.chdir(tmp_path)
+    assert r.trace("os.posix_spawn", (exe, [exe, "fx"], None)) == [("F", "fx/a.bin"), ("F", "fx/b.bin"), ("F", "fx/sub/c.json")]
+    assert pop(["lake", "build", "verify"], cwd=pkg) == []
+    assert pop(["lake", "build", "verify", "other"], cwd=pkg) == [("X", "lake")]
+    assert pop(["lake", "env", "lean", "x.lean"], cwd=pkg) == [("X", "lake")]
+    assert pop([str(bin_ / "other"), "fx"]) == [("X", str(bin_ / "other"))]
+    assert pop(["verify", "fx"], cwd=bin_) == [("X", "verify")]                         # found on PATH: not the declared one
 
 
 def _guard(monkeypatch):
@@ -1169,6 +1294,20 @@ def _guard(monkeypatch):
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
+
+
+def test_a_passed_test_s_seconds_hold_its_setup_so_a_module_fixture_s_first_test_counts_as_heavy(monkeypatch):
+    """Ordering by call alone started `test_lean_witness`'s tests late behind 1,270-1,475 s of their `f1` setup per worker
+    (proofs, 12 Oct); the teardown is not counted, and a failed phase still drops the test."""
+    from types import SimpleNamespace as R
+
+    G = _guard(monkeypatch)
+    for node, phases in (("t::fixture_first", [("setup", "passed", 1200.0), ("call", "passed", 1.5), ("teardown", "passed", 9.0)]),
+                         ("t::plain", [("setup", "passed", 0.25), ("call", "passed", 3.0), ("teardown", "passed", 0.0)]),
+                         ("t::bad", [("setup", "passed", 5.0), ("call", "failed", 1.0), ("teardown", "passed", 0.0)])):
+        for when, outcome, s in phases:
+            G.pytest_runtest_logreport(R(nodeid=node, when=when, outcome=outcome, duration=s, keywords={"slow": 1}))
+    assert G._outcomes == {"t::fixture_first": 1201.5, "t::plain": 3.25, "t::bad": None}
 
 
 def test_each_heavy_test_heads_its_own_worker_s_share_under_worksteal(monkeypatch):

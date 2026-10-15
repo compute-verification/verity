@@ -1,14 +1,9 @@
 {
- "roots": ["VStar", "VStarDifftest"],
+ "roots": ["VStarDifftest"],
  "exempt": {
-  "VStarMain": "the vstar executable's entry point, one line; its command is VStar.Cli.cmd, audited under VStar"
+  "VStarMain": "the vstar executable's entry point, one line; its command is VStar.Cli.cmd, audited under the verifier's package (verity/core/service/flock)"
  },
  "layers": {
-  "VStar": {
-   "imports": ["Lean", "Std", "Flock", "VStar"],
-   "except": [],
-   "why": "V*'s circuit is code: Lean core and its Std, and C-Flock's verifier (its builder, layout, rows and hashes), no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
-  },
   "VStarDifftest": {
    "imports": ["Lean", "Flock", "Difftest", "VStar"],
    "except": [],

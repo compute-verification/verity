@@ -1,12 +1,14 @@
 import Properties.NetworkCertifier
+import Properties.Proofs.Identity
+import Mathlib.Data.Set.Card
 
 /-!
 # The record's encodings are injective
 
 Each string the check hashes determines what it encodes: a record head's encoding its head (`encode_inj`), a tagged
-input its payload (`taggedInput_inj`), a certificate message's input its key identifier, link-window and digest
-(`messageInput_inj`), a leaf's input its frame (`leafInput_inj`), a node's input its two children (`nodeInput_inj`);
-and a payload's bytes its bits, for whole bytes of bits (`bitsOfBytes_bytesOfBits`). Byte strings are read as their
+input its payload (`taggedInput_inj`), a certificate message's input its key identifier, session, link-window and
+digest (`messageInput_inj`), a leaf's input its frame (`leafInput_inj`), a node's input its two children
+(`nodeInput_inj`); and a payload's bytes its bits, for whole bytes of bits (`bitsOfBytes_bytesOfBits`). Byte strings are read as their
 lists of bytes (`bs`), and an encoding is parsed field by field, each of a width it fixes.
 -/
 
@@ -278,6 +280,20 @@ theorem encode_link {h : RecordHead} {x : ByteArray} (he : h.encode = .ok x) : h
   obtain ⟨-, -, -, ⟨lk, -, -, -, -, -, -, -, -, -, -, hlk, -⟩⟩ := encode_view he
   exact text_short hlk
 
+theorem encode_size {h : RecordHead} {x : ByteArray} (he : h.encode = .ok x) : x.size < 2 ^ 64 := by
+  obtain ⟨hc, hpa, hro, ⟨lk, dir, win, bk, al, fb, bm, sc, st, dl, rest, hlk, hdir, hwin, hbk, hal, hfb, hbm, hsc,
+    hst, hdl, hrest, hx⟩⟩ := encode_view he
+  obtain ⟨m, lb, hlb, hlk'⟩ := text_ok hlk
+  have h1 := congrArg List.length hx
+  have h2 := congrArg List.length hlk'
+  simp only [List.length_append, bs_length, countsEnc_length hrest, Array.length_toList] at h1 h2
+  rw [uBE_size hdir, uBE_size hwin, uBE_size hbk, uBE_size hal, uBE_size hfb, uBE_size hbm, uBE_size hst,
+    uBE_size hdl, hpa, hro] at h1
+  rw [uBE_size hlb] at h2
+  have h3 := text_short hlk
+  have h4 : (h.counts.size : Int) < 4294967296 := by rw [hc]; exact (uBE_ok hbk).2.1
+  omega
+
 theorem encode_inj {h h' : RecordHead} {x : ByteArray} (he : h.encode = .ok x) (he' : h'.encode = .ok x) :
     h = h' := by
   obtain ⟨hc, hpa, hro, ⟨lk, dir, win, bk, al, fb, bm, sc, st, dl, rest, hlk, hdir, hwin, hbk, hal, hfb, hbm, hsc,
@@ -312,19 +328,22 @@ theorem encode_inj {h h' : RecordHead} {x : ByteArray} (he : h.encode = .ok x) (
 
 /-! ## The SHA-512 inputs -/
 
-theorem taggedInput_inj {tag : String} {a b : ByteArray} (h : taggedInput tag a = taggedInput tag b) : a = b := by
-  have h' := congrArg bs h
-  simp only [taggedInput, bs_append, List.append_assoc] at h'
+theorem taggedInput_inj {tag : String} {a b x : ByteArray} (h : Properties.Identity.taggedInput tag a = .ok x)
+    (h' : Properties.Identity.taggedInput tag b = .ok x) : a = b := by
+  obtain ⟨-, rfl⟩ := Properties.Identity.taggedInput_ok.mp h
+  obtain ⟨-, e⟩ := Properties.Identity.taggedInput_ok.mp h'
+  have h' := congrArg bs e
+  simp only [bs_append, List.append_assoc] at h'
   have h'' := List.append_cancel_left (List.append_cancel_left (List.append_cancel_left h'))
   exact (split_bytes h'' (by rw [be64_size, be64_size])).2 |> bs_inj
 
 theorem field_bs (b : ByteArray) : bs (field b) = bs (be64 b.size.toUInt64) ++ bs b := bs_append _ _
 
-theorem messageInput_ok {k : ByteArray} {l : String} {d : Direction} {w : Int} {g x : ByteArray}
-    (h : messageInput k l d w g = .ok x) :
-    g.size = 64 ∧ k.size = 16 ∧ ∃ wb, uBE 8 w "window" = .ok wb ∧
-      x = field "verity/network-certificate/v1".toUTF8 ++ k ++
-        field (field l.toUTF8 ++ field d.value.toUTF8 ++ wb) ++ field g := by
+theorem messageInput_ok {k s : ByteArray} {l : String} {d : Direction} {w : Int} {g x : ByteArray}
+    (h : messageInput k s l d w g = .ok x) :
+    g.size = 64 ∧ s.size = 32 ∧ k.size = 16 ∧ ∃ wb, uBE 8 w "window" = .ok wb ∧
+      x = field messageTag.toUTF8 ++ k ++
+        field (field s ++ field l.toUTF8 ++ field d.value.toUTF8 ++ wb) ++ field g := by
   unfold messageInput at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   split at h
@@ -335,26 +354,31 @@ theorem messageInput_ok {k : ByteArray} {l : String} {d : Direction} {w : Int} {
   rename_i wb hwb
   split at h
   · simp [throw, throwThe, MonadExceptOf.throw] at h
+  rename_i hs
+  split at h
+  · simp [throw, throwThe, MonadExceptOf.throw] at h
   rename_i hk
   simp only [Except.ok.injEq] at h
-  exact ⟨by simpa [digestBytes] using hg, by simpa using hk, wb, hwb, h.symm⟩
+  exact ⟨by simpa [digestBytes] using hg, by simpa [sessionBytes] using hs, by simpa using hk, wb, hwb, h.symm⟩
 
 theorem value_inj {d d' : Direction} (h : d.value.toUTF8 = d'.value.toUTF8) : d = d' := by
   cases d <;> cases d' <;> first | rfl | (exfalso; revert h; decide)
 
-/-- A certificate message's input determines its key identifier, link (of fewer than `2^16` bytes, as every encodable
-head's is), direction, window and digest. -/
-theorem messageInput_inj {k k' : ByteArray} {l l' : String} {d d' : Direction} {w w' : Int} {g g' x : ByteArray}
-    (h : messageInput k l d w g = .ok x) (h' : messageInput k' l' d' w' g' = .ok x)
+/-- A certificate message's input determines its key identifier, certifier session, link (of fewer than `2^16` bytes, as
+every encodable head's is), direction, window and digest. -/
+theorem messageInput_inj {k k' s s' : ByteArray} {l l' : String} {d d' : Direction} {w w' : Int}
+    {g g' x : ByteArray} (h : messageInput k s l d w g = .ok x) (h' : messageInput k' s' l' d' w' g' = .ok x)
     (hl : l.toUTF8.size < 2 ^ 16) (hl' : l'.toUTF8.size < 2 ^ 16) :
-    k = k' ∧ l = l' ∧ d = d' ∧ w = w' ∧ g = g' := by
-  obtain ⟨hg, hk, wb, hwb, rfl⟩ := messageInput_ok h
-  obtain ⟨hg', hk', wb', hwb', hx⟩ := messageInput_ok h'
+    k = k' ∧ s = s' ∧ l = l' ∧ d = d' ∧ w = w' ∧ g = g' := by
+  obtain ⟨hg, hs, hk, wb, hwb, rfl⟩ := messageInput_ok h
+  obtain ⟨hg', hs', hk', wb', hwb', hx⟩ := messageInput_ok h'
   have e := congrArg bs hx
   simp only [bs_append, field_bs, List.append_assoc] at e
   have e := List.append_cancel_left (List.append_cancel_left e)
   obtain ⟨ek, e⟩ := split_bytes e (by rw [hk, hk'])
   obtain ⟨-, e⟩ := split_bytes e (by rw [be64_size, be64_size])
+  obtain ⟨-, e⟩ := split_bytes e (by rw [be64_size, be64_size])
+  obtain ⟨es, e⟩ := split_bytes e (by rw [hs, hs'])
   obtain ⟨el, e⟩ := split_bytes e (by rw [be64_size, be64_size])
   have hsz := be64_size_inj (by omega) (by omega) el
   obtain ⟨els, e2⟩ := split_bytes e hsz
@@ -363,7 +387,7 @@ theorem messageInput_inj {k k' : ByteArray} {l l' : String} {d d' : Direction} {
   obtain ⟨edv, e2⟩ := split_bytes e2 hdsz
   obtain ⟨ew, e2⟩ := uBE_split hwb hwb' e2
   obtain ⟨-, e2⟩ := split_bytes e2 (by rw [be64_size, be64_size])
-  exact ⟨ek, String.toByteArray_inj.mp els, value_inj edv, ew, bs_inj e2⟩
+  exact ⟨ek, es, String.toByteArray_inj.mp els, value_inj edv, ew, bs_inj e2⟩
 
 theorem block_ok {x b : ByteArray} (h : block x = .ok b) : bs b = bs x ++ List.replicate (128 - x.size) 0 := by
   unfold block at h

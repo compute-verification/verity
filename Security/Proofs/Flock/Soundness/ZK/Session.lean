@@ -7,7 +7,9 @@ The paper's Lemmas A and B are per session, with `J` tables (`docs/zk-proof-publ
 `SHVZK` and `RealLeaves` are per table. The step between them is a product:
 
 * the session's tables use disjoint randomness (§2.2: table `j` reads its own ranges of the session's two ChaCha20 streams,
-  `purpose | j << 32`, and its own salt trees), which the PRG step makes independent uniform draws per table;
+  `purpose | j << 32`, and its own salt trees), which the PRG step makes independent uniform draws per table. The salts
+  are not a stream's: every leaf's salt is the operating system's bytes, uniform under A3
+  (`Assumptions.UniformRandomBytes`; `Discharge.ZkView.OsSalts`), so the PRG step is the masks' and padding's only;
 * no claim or message reads two tables' witnesses or masks, so at fixed coins the session's view is the tuple of its
   tables' views, each a function of its own table's randomness. The tables' witnesses may overlap (two drawn units in
   different tables can read one row); they are fixed.

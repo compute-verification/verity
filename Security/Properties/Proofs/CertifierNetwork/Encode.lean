@@ -1,4 +1,4 @@
-import Properties.CertifierNetwork
+import Properties.Proofs.CertifierNetwork.Defs
 import Properties.Proofs.CertifierDevice.Issuer
 import Properties.Proofs.CertifierDevice.Basic
 import Properties.Proofs.NetworkCertifier.Grid
@@ -255,28 +255,30 @@ theorem recordHead_fields {l : String} {d : Direction} {w : Int} {grid : Array S
 /-! ## The digest, the message and `prepare` -/
 
 theorem digest_of {h : RecordHead} {x : ByteArray} (he : h.encode = .ok x) :
-    h.digest = .ok (NetworkCheck.taggedSha512 NetworkCheck.recordTag x) := by
+    ∃ dg, h.digest = .ok dg ∧ dg.size = 64 := by
+  obtain ⟨y, -, hy⟩ := Properties.Identity.taggedSha512_of (tag := NetworkCheck.recordTag) (payload := x) (by decide)
+    (by decide) (encode_size he)
+  refine ⟨Flock.Sha512.hash y, ?_, hash_size _⟩
   unfold RecordHead.digest
   rw [he]
-  rfl
+  exact hy
 
-theorem taggedSha512_size (t : String) (x : ByteArray) : (NetworkCheck.taggedSha512 t x).size = 64 := hash_size _
-
-theorem messageInput_of {k : ByteArray} {l : String} {d : Direction} {w : Int} {g : ByteArray} (hg : g.size = 64)
-    (hk : k.size = 16) (hw : 0 ≤ w ∧ w < 2 ^ (8 * 8)) : ∃ x, messageInput k l d w g = .ok x := by
+theorem messageInput_of {k s : ByteArray} {l : String} {d : Direction} {w : Int} {g : ByteArray} (hg : g.size = 64)
+    (hs : s.size = 32) (hk : k.size = 16) (hw : 0 ≤ w ∧ w < 2 ^ (8 * 8)) : ∃ x, messageInput k s l d w g = .ok x := by
   refine ok_of fun e he => ?_
   obtain ⟨wb, hwb, -⟩ := uBE_of "window" hw.1 hw.2
   unfold messageInput at he
   simp only [bind, Except.bind, pure, Except.pure] at he
   rw [ite_eq_right (by simp [NetworkCheck.digestBytes, hg])] at he
   simp only [hwb] at he
+  rw [ite_eq_right (by simp [NetworkCheck.sessionBytes, hs])] at he
   rw [ite_eq_right (by simp [hk])] at he
   cases he
 
-theorem certificateMessage_of {k : ByteArray} {l : String} {d : Direction} {w : Int} {g : ByteArray}
-    (hg : g.size = 64) (hk : k.size = 16) (hw : 0 ≤ w ∧ w < 2 ^ (8 * 8)) :
-    ∃ m, certificateMessage k l d w g = .ok m := by
-  obtain ⟨x, hx⟩ := messageInput_of (l := l) (d := d) hg hk hw
+theorem certificateMessage_of {k s : ByteArray} {l : String} {d : Direction} {w : Int} {g : ByteArray}
+    (hg : g.size = 64) (hs : s.size = 32) (hk : k.size = 16) (hw : 0 ≤ w ∧ w < 2 ^ (8 * 8)) :
+    ∃ m, certificateMessage k s l d w g = .ok m := by
+  obtain ⟨x, hx⟩ := messageInput_of (l := l) (d := d) hg hs hk hw
   refine ⟨Flock.Sha512.hash x, ?_⟩
   unfold certificateMessage
   rw [hx]
@@ -289,22 +291,22 @@ theorem parameters_size {g : Params} {ss : Option _root_.NetworkCertifier.SyncSe
   | error e => rw [hc] at h; cases h
   | ok j =>
     rw [hc] at h
-    simp only [bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
-    rw [← h]
-    exact taggedSha512_size _ _
+    have h' : Identity.taggedSha512 NetworkCheck.parametersTag j.toUTF8 = .ok pd := h
+    obtain ⟨x, -, rfl⟩ := Properties.Identity.taggedSha512_ok.mp h'
+    exact hash_size _
 
 theorem prepare_eq {i : Issuer} {r : Record} {d : Direction} {g : Params} {pd : ByteArray} {dl : Bool}
     {head : RecordHead} {dg m : ByteArray}
     (hh : recordHead r.link d r.window r.grid ((Status.reason? r.status).map reasonValue) g pd dl = .ok head)
-    (hdg : head.digest = .ok dg) (hm : certificateMessage i.key.I r.link d r.window dg = .ok m) :
+    (hdg : head.digest = .ok dg) (hm : certificateMessage i.key.I i.session r.link d r.window dg = .ok m) :
     i.prepare r d g pd dl = .ok (head, dg, m) := by
   unfold Issuer.prepare
   simp only [hh, hdg, hm, bind, Except.bind, pure, Except.pure]
 
 /-- A record whose grid is `T` packed rows, complete, of a link and window that fit their fields, under a 64-byte
-parameters digest, has a head, digest and message under `prepare` (with a 16-byte key identifier): the head
-`record_head` makes of its grid. -/
-theorem prepare_of {i : Issuer} (hk : i.key.I.size = 16) {r : Record} {d : Direction} {g : Params} {pd : ByteArray}
+parameters digest, has a head, digest and message under `prepare` (with a 16-byte key identifier and a 32-byte
+session id): the head `record_head` makes of its grid. -/
+theorem prepare_of {i : Issuer} (hk : i.key.I.size = 16) (hss : i.session.size = 32) {r : Record} {d : Direction} {g : Params} {pd : ByteArray}
     (hs : r.grid.size = g.buckets) (hp : ∀ row ∈ r.grid, Packed g row) (hpd : pd.size = 64)
     (hl : r.link.toUTF8.size < 2 ^ 16) (hw : r.window < 2 ^ 64) (hT : g.buckets < 2 ^ 32) (hr : g.allocation < 2 ^ 32)
     (hB : g.frameBytes < 2 ^ 32) (hτ : g.bucketMs < 2 ^ 32) (hst : r.status = .complete) :
@@ -325,10 +327,10 @@ theorem prepare_of {i : Issuer} (hk : i.key.I.size = 16) {r : Record} {d : Direc
     (hl' ▸ hl) (by rw [hw']; exact ⟨by omega, cast_lt (w := 8) hw⟩) (by rw [hT']; exact ⟨by omega, cast_lt (w := 4) hT⟩)
     (by rw [hr']; exact ⟨by omega, cast_lt (w := 4) hr⟩) (by rw [hB']; exact ⟨by omega, cast_lt (w := 4) hB⟩)
     (by rw [hτ']; exact ⟨by omega, cast_lt (w := 4) hτ⟩) hst'
-  have hdg := digest_of hx
-  obtain ⟨m, hm⟩ := certificateMessage_of (l := r.link) (d := d) (w := r.window) (taggedSha512_size NetworkCheck.recordTag x) hk
+  obtain ⟨dg, hdg, hdgs⟩ := digest_of hx
+  obtain ⟨m, hm⟩ := certificateMessage_of (l := r.link) (d := d) (w := r.window) hdgs hss hk
     ⟨by omega, cast_lt (w := 8) hw⟩
-  refine ⟨head, NetworkCheck.taggedSha512 NetworkCheck.recordTag x, m, hh, ?_⟩
+  refine ⟨head, dg, m, hh, ?_⟩
   have hn : (Status.reason? r.status).map reasonValue = none := by rw [hst]; rfl
   exact prepare_eq (by rw [hn]; exact hh) hdg hm
 

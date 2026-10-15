@@ -7,20 +7,20 @@
  },
  "runs": {
   "CertifierDevice.DifftestMain": {
-   "why": "1,500 traces on which step, replayed from init, does what the checkout's active.Proxy does driven event by event: every link write, server connection, server write and its drain, and published record with its grid's parameters, in order, and at the end the declared syncs, the shaper's hand times, the egress frames read and both counts; honest traces accepted with egress grids equal to NetworkCertifier.expectedRow's, and every fault reason (late ticks and stalls, backlogs, refused and late forwards, overflow on either grid, a duplicate while the queue holds exactly Q, advice outside Σ_sync, the malformed inputs), the online prover choosing each window's sync at lags of 1 to T − 1 buckets, with frames read before the choosing tick but ready after it, and its refusal of a frame ready before its anchor, which faults the declaring egress window monitor-unavailable",
+   "why": "1,500 traces on which step, replayed from init, does what the checkout's active.Proxy does driven event by event: every link write, server connection, server write and its drain, and published record with its grid's parameters, in order, and at the end the declared syncs, the shaper's hand times, the egress frames read and both counts; honest traces accepted with egress grids equal to NetworkCertifier.expectedRow's, and every fault reason (late ticks and stalls, backlogs, refused and late forwards, overflow on either grid, a duplicate while the queue holds exactly Q, advice outside Σ_sync, frames handed after their h(k), which fault the window they are handed in coverage-never-established, the malformed inputs), the online prover choosing each window's sync at lags of 1 to T − 1 buckets, with frames read before the choosing tick but ready after it, and its refusal of a frame ready before its anchor, which faults the declaring egress window monitor-unavailable",
    "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "1500"],
    "data": {
     "difftest/instances.jsonl": "7f3dc54a64c7032250fa91ce05592d9240b54cc06fb60ab6f934003e70ef396c",
-    "difftest/python.jsonl": "501f8559bac422fc80593551760deeef491631ed14ae91ddb3c51f6a5f439f10"
+    "difftest/python.jsonl": "9d657249b942362ae3f50b7e06ca428cd0353ed953e861a801d7e725dec6b3ef"
    },
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
   },
   "CertifierDevice.IssuerDifftestMain": {
-   "why": "160 LMS keys (N = 64, W = 1 at height 1, and the toy N at W = 1, 2, 4) and calls to one issuer on each, on which Issuer.certify, threaded through the calls, does what the checkout's certificate.Issuer does, its signer at the host's leaf: each parameters digest, the record head's encoding and digest, the certificate's fields and signature, verify under the key and after each tamper (a changed signature, field, deadline bit or public key, and a changed link-window or key identifier signed again), the records it refuses (no head, a leaf past 2^H) and the reservations the host refuses, listed in refused",
+   "why": "160 LMS keys (N = 64, W = 1 at height 1, and the toy N at W = 1, 2, 4) and calls to one issuer on each, in a certifier session of 32 bytes or of 31 or 33, on which Issuer.certify, threaded through the calls, does what the checkout's certificate.Issuer does, its signer at the host's leaf: each parameters digest, the record head's encoding and digest, the certificate's fields and signature, verify under the key and after each tamper (a changed signature, field, deadline bit, public key or session, and a changed link-window or key identifier signed again), the records it refuses (no head, a leaf past 2^H, a session id not 32 bytes) and the reservations the host refuses, listed in refused",
    "args": ["{issuer/instances.jsonl}", "{issuer/python.jsonl}", "160"],
    "data": {
-    "issuer/instances.jsonl": "cac50a90c834fc8bbd666424822bf5c7e32314235f7af3f7488a29b9e5a50df6",
-    "issuer/python.jsonl": "08dc6b07c89db3f160b598778f3110392dbc14fe0b5c7a57e364fa6d2f130ad1"
+    "issuer/instances.jsonl": "b4574a82f0fc8d2be3ef5a2f9377e7302bcef5bc5ee4433717346ebf0d021b4a",
+    "issuer/python.jsonl": "62219be879c69c5f8ee53ad335bfaacd23cdc72352c94c65c41a43935fa66769"
    },
    "generate": ["python3", "scripts/issuer_vectors.py", "{repo}", "--out", "{out}"]
   }

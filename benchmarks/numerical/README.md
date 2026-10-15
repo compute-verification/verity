@@ -1,13 +1,31 @@
 # benchmarks/numerical
 
 Frozen: kept, still in the tables, not developed. The exception is the bench spine `verity_numerical.bench` (the result
-contract, workloads, lowerings, the tables and their views), which C-Flock, `circuit-check` and the table renderers read.
+contract, workloads, lowerings, the tables and their views), which C-Flock, `circuit-check` and the table renderers read,
+and `bench.unit_costs`, the per-unit-type cost inventory (gates, nonzeros, sampled units, work weight) over the census
+workloads.
 What the merge gate runs here: `../../archive/README.md`.
 
 Campaign-side numerical work for `verity.ml.circuits.targets.target.FIRST` (rules: `archive/AGENTS.md`). `verity_numerical.reference`
 is lane WP1 (independent numerical references); `verity_numerical.checker` is lane WP2. `security` is the soundness
 calculator for A-GKR and B-Ligero (`accounting`, `census`), `gkr_export` A-GKR's circuit exporter, `explore` cost-model
 explorations and `redteam` the red team's forgeries against the checkers.
+
+## The subcircuit catalog
+
+`bench.subcircuit_catalog` builds `verity/subcircuit-catalog/v1`, one artifact per build: every census subcircuit's Boolean
+export (one payload file each), descriptor id, program digests per variant, and gate, AND and unit-row counts cited from a
+`circuit-check-report/v1` artifact, never recomputed. An entry with no export, digest or record stays in, with a `missing`
+reason. The module docstring holds the meta schema. A build checks the census first, then builds:
+
+~~~text
+circuit-check $(python -c 'from verity_numerical.bench import subcircuit_catalog as S; print(*S.census_ids())') --out cc.json
+python -m verity_numerical.bench.subcircuit_catalog --records cc.json --out DIR --put [--preserve]
+~~~
+
+A `research run` workload holds no store credentials. There, `--put` goes into a scratch store (`RESEARCH_STORE` and
+`RESEARCH_STORE_CONFIG` under its scratch), and `DIR/catalog.json` records the ids. Afterwards, `research data put` of the
+run's `cc.json` (same name) and `DIR/tree` with `--meta @DIR/meta.json --ref circuit_check=ART --preserve` gives the same ids.
 
 ## WP1: independence audit of the existing columns
 

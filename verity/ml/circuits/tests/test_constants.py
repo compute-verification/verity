@@ -170,8 +170,9 @@ def test_registered_inputs_round_trip_and_bind_the_digest(new):
 
 def test_registered_ids():
     for fid, ok in [("RegisteredInput32_v1", True), ("RegisteredInput1_v1", True), ("RegisteredInput032_v1", False),
-                    ("RegisteredInput0_v1", False), ("RegisteredInput32_v2", False), ("Input32_v1", False)]:
-        assert bool(REGISTERED_ID.match(fid)) is ok, fid
+                    ("RegisteredInput0_v1", False), ("RegisteredInput32_v2", False), ("Input32_v1", False),
+                    ("RegisteredInput32_v1\n", False)]:
+        assert bool(REGISTERED_ID.fullmatch(fid)) is ok, fid
     assert is_registered(input_prim(16, K.REGISTRATION)) and not is_registered(input_prim(16))
     assert is_input(input_prim(16, K.REGISTRATION)) and input_prim(16, K.REGISTRATION).binding == K.REGISTRATION
     assert is_boolean(input_prim(1, K.REGISTRATION)) and not is_boolean(input_prim(2, K.REGISTRATION))

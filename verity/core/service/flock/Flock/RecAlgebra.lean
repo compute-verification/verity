@@ -35,12 +35,14 @@ structure Coins where
   round : Nat → Nat → Except String (Array F128)
   drawnAll : Nat → Bool
 
-/-- A session record's coins by round (`Coins(rounds)`, rec_algebra.py:232–242). -/
-def Coins.ofRounds (rounds : Array (Array F128)) : Coins where
-  round k n := match rounds[k]? with
-    | some r => if r.size = n then .ok r else .error s!"round {k}: {n} coins drawn, the record has {r.size}"
-    | none => .error s!"round {k}: {n} coins drawn, the record has no round"
-  drawnAll k := k == rounds.size
+/-- A session record's coins by round (`Coins(rounds)`, rec_algebra.py:232–242). A recorded round of no coins is no
+draw (§6.2), so it is skipped (`Coins.__init__`): z_partial's round in a holo session absorbs elements and draws none. -/
+def Coins.ofRounds (recorded : Array (Array F128)) : Coins :=
+  let rounds := recorded.filter (·.size ≠ 0)
+  { round := fun k n => match rounds[k]? with
+      | some r => if r.size = n then .ok r else .error s!"round {k}: {n} coins drawn, the record has {r.size}"
+      | none => .error s!"round {k}: {n} coins drawn, the record has no round"
+    drawnAll := fun k => k == rounds.size }
 
 /-- Coins in whatever rounds the verifier draws, all zero (`_dummy_coins`, rec_algebra.py:884–901, whose coins are
 random: the structure depends on the rounds, not on the coins). -/
@@ -74,9 +76,10 @@ def coinK2 : CM F256 := do
 /-! ## Values -/
 
 /-- A message element's name (`rec_algebra.rounds`, `symbolic`, `ACC_NAMES`; rec_algebra.py:743–809): zerocheck's
-`round1_ab`, `round1_c`, rounds and `v_A, v_B`; lincheck's rounds and `z_partial`; each claim's ring switch; Ligerito's
-`T`, OOD values, messages `(u0, u2)` and `yr`; the running sums before and after the rep's openings; and the symbolic
-values w does not hold: each ring switch's transpose, the comb and the levels' consistency sums. -/
+`round1_ab`, `round1_c`, rounds and `v_A, v_B`; lincheck's rounds and `z_partial`; a holo shape's `h`; each claim's ring
+switch; Ligerito's `T`, OOD values, messages `(u0, u2)` and `yr`; the running sums before and after the rep's openings; and
+the symbolic values w does not hold: each ring switch's transpose, the comb (in a holo shape, the operand `comb[l] + h[l]`,
+Python's `("combh", l)`) and the levels' consistency sums. -/
 inductive Key where
   | ab (i : Nat)
   | c (i : Nat)
@@ -87,6 +90,7 @@ inductive Key where
   | q1 (j : Nat)
   | qinf (j : Nat)
   | zp (l : Nat)
+  | h (l : Nat)
   | rs (k v : Nat)
   | T
   | ood (i : Nat)
@@ -197,7 +201,7 @@ def kofF (y : α) : KV α := (y, zero)
 
 /-- One rep's message elements as values (`rec_algebra.Messages`, rec_algebra.py:555–576). `rsT[k][u]` is claim `k`'s
 ring switch's transpose `t[u]`; `cons level ea` the level's consistency sums `Σ_j ea[j] · row_j[l]`; `comb` the circuit
-fold; `tAtom` Ligerito's `T` as the prover absorbed it (`none`: the verifier's own, the batched sum). -/
+fold (in a holo shape, the public part's fold plus `h`, as `run` folds them); `tAtom` Ligerito's `T` as the prover absorbed it (`none`: the verifier's own, the batched sum). -/
 structure Messages (α : Type) where
   ab : Array α
   c : Array α
@@ -585,12 +589,15 @@ def ligRounds (sch : Schedule) : Array (Array Key) := Id.run do
       mi := mi + 1
   return out
 
+/-- A holo shape's round of `h`, absorbed after `z_partial` and before `r′` is drawn (`H_ROUND`). -/
+def hRound (sh : Shape) : Array (Array Key) := if sh.holo then #[(Array.range 64).map .h] else #[]
+
 /-- The rep's message elements by the round that absorbs them, in protocol order (`rec_algebra.rounds`,
-rec_algebra.py:748–772); rounds that absorb no element are not listed. -/
+rec_algebra.py:748–772, and `H_ROUND`); rounds that absorb no element are not listed. -/
 def rounds (sh : Shape) : Array (Array Key) :=
   #[(Array.range 64).map .ab ++ (Array.range 64).map .c] ++
     (Array.range (sh.m - 6)).map (fun i => #[.g1 i, .ginf i]) ++ #[#[.fa, .fb]] ++
-    (Array.range (sh.kLog - 6)).map (fun j => #[.q1 j, .qinf j]) ++ #[(Array.range 64).map .zp] ++
+    (Array.range (sh.kLog - 6)).map (fun j => #[.q1 j, .qinf j]) ++ #[(Array.range 64).map .zp] ++ hRound sh ++
     (Array.range sh.claims).map (fun k => (Array.range 128).map (.rs k)) ++ ligRounds sh.sched
 
 /-- The running sums' elements w reads (`ACC_NAMES`, rec_algebra.py:745). -/
@@ -688,6 +695,16 @@ def liftB {A : Type} : Except String A → StateT BSt (Except String) A
   | .ok a => pure a
   | .error e => throw e
 
+/-- A message element's operand (`var_op`, rec_algebra.py:847, and its `combh`): its term, and in a holo shape the
+comb's `h[l]` after the comb's slot (`[["v", comb0 + l], ["w", wi[("h", l)]]]`). -/
+def atomOp (sh : Shape) (comb0 : Nat) (k : Key) : Except String (Array Term) := do
+  let t ← atomTerm sh comb0 k
+  match k, sh.holo with
+  | .comb l, true => match wi sh (.h l) with
+    | some i => .ok #[t, .w i]
+    | none => .error "build: no h"
+  | _, _ => .ok #[t]
+
 /-- `var_op` (rec_algebra.py:843–848): the operand of a message element, made when first needed. Python places the
 comb's slots after every coefficient's by patching their operands at the end; here `comb0`, the number of coefficient
 slots, is counted first. -/
@@ -696,8 +713,8 @@ def varOp (sh : Shape) (comb0 : Nat) (k : Key) : StateT BSt (Except String) Nat 
   match st.opOf.lookup k with
   | some i => return i
   | none =>
-    let term ← liftB (atomTerm sh comb0 k)
-    set { st with opOf := st.opOf ++ [(k, st.ops.size)], ops := st.ops.push #[term] }
+    let op ← liftB (atomOp sh comb0 k)
+    set { st with opOf := st.opOf ++ [(k, st.ops.size)], ops := st.ops.push op }
     return st.ops.size
 
 /-- The sort key of a term (`order.__getitem__`). -/

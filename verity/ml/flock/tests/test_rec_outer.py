@@ -8,6 +8,7 @@ program, partition and registered rows (the verifier's ``coef`` and ``dirs``, th
 opening that does not climb to its top node found before anything is proved."""
 from __future__ import annotations
 
+import hashlib
 import json
 import random
 import shutil
@@ -211,6 +212,26 @@ def test_a_forged_coef_or_dirs_row_does_not_open_the_verifiers_registration(stag
         assert RL.commit_rows([[row[0] ^ 1, *row[1:]]], [salt]) != [pub[at:at + 128]]
 
 
+@pytest.mark.slow
+def test_a_level_without_a_climb_reads_its_leaves_as_its_tops(tmp_path):
+    """H = 0 (a level whose cap is its leaves, as m = 23's level 2): ``aux`` is one row the unit does not read, and each
+    opening's ``out`` is its leaf, read against the registered top at its position. Three honest openings and one whose row
+    is another leaf's."""
+    rows, layers = _tree(1, 8)
+    q = lambda rep, j, p, row: V.Query(rep, 0, j, p, 1, 1, layers[0][p], row, None, [])
+    qs = [q(0, 0, 0, rows[0]), q(0, 1, 1, rows[1]), q(1, 0, 1, rows[1]), q(1, 1, 0, rows[1])]
+    (level,) = O.levels(qs)
+    coefs = _coefs(qs)
+    shared = _top(layers[0], 5)
+    tops = O.TopValue.build(PROGRAM, 0, {0: shared, 1: shared})
+    assert [tops.position(x) for x in qs] == [0, 1, 1, 0]
+    s = O.stage(level, tmp_path, O.Chain.build(PROGRAM, qs, coefs), coefs, tops)
+    assert s["template"] == "RecOpen_v4{LANES=8,H=0}" and s["instances"] == 4 and s["compressions"] == 2
+    assert s["opened"] == 3 and s["not_opened"] == [(1, 1)] and s["summed"] == 4
+    meta = json.loads((tmp_path / "circuit.txt").read_text().split("\n", 2)[1][5:])
+    assert [p[:2] for p in meta["ports"]][:5] == [["row", 64], ["aux", 64], ["acc", 64], ["coef", 128], ["dirs", 64]]
+
+
 def test_a_level_of_salted_leaves_is_refused(tmp_path):
     qs, layers = _queries()
     qs = [V.Query(**{**qs[0].__dict__, "salt": bytes(V.SALT)}), *qs[1:]]
@@ -220,16 +241,117 @@ def test_a_level_of_salted_leaves_is_refused(tmp_path):
         O.stage(level, tmp_path, O.Chain.build(PROGRAM, qs, _coefs(qs)), _coefs(qs), tops)
 
 
+def _verify(d: Path) -> subprocess.CompletedProcess:
+    return subprocess.run([str(BIN), "statement", "--statement", "verity/flock-circuit", "--circuit", str(d / "circuit.txt"),
+                           "--public", str(d / "pub.bin"), "--partition", str(d / "partition.json"), "--program",
+                           str(d / "program.json"), "--registered", str(d / "registered.json")],
+                          capture_output=True, text=True, check=False)
+
+
+def _statement(d: Path) -> dict:
+    """The Lean verifier's `statement` on a staged level under the verifier's own files: its first line."""
+    p = _verify(d)
+    assert p.returncode == 0, p.stdout + p.stderr
+    line = json.loads(p.stdout.splitlines()[0])
+    assert line["partition_check"]["units"] == "derived"
+    return line
+
+
 @pytest.mark.slow
 @pytest.mark.skipif(not BIN.exists() or shutil.which("lake") is None, reason="the Lean verifier is not built")
 def test_the_lean_verifier_reads_the_statement_under_the_verifiers_own_files(staged):
     d = staged[0]
-    p = subprocess.run([str(BIN), "statement", "--statement", "verity/flock-circuit", "--circuit", str(d / "circuit.txt"),
-                        "--public", str(d / "pub.bin"), "--partition", str(d / "partition.json"), "--program", str(d / "program.json"),
-                        "--registered", str(d / "registered.json")],
-                       capture_output=True, text=True, check=False)
-    assert p.returncode == 0, p.stdout + p.stderr
-    line = json.loads(p.stdout.splitlines()[0])
-    assert line["partition_check"]["units"] == "derived"
+    line = _statement(d)
     own = json.loads((d / "registered.json").read_text())["ports"]
     assert line["registered"] == {k: {"value": v["value"], "root": v["root"]} for k, v in own.items()}
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not BIN.exists() or shutil.which("lake") is None, reason="the Lean verifier is not built")
+def test_the_lean_verifier_reads_rs_level_under_its_own_name_as_the_opening(staged, tmp_path):
+    """One of R's levels names the opening unit `rec-open-stacked/l<LANES>-h<H>` (V*'s `recOpenStackedName`), and the Lean
+    verifier holds it to the opening's net under that name (`Flock.RecOpen.check`), as it holds a `rec-open/` unit. The
+    staged level with its unit renamed (its public file pinning the renamed file) is read under the verifier's own files;
+    with the unit's first AND row changed as well, it is refused, naming the row."""
+    d, name = tmp_path / "s", "rec-open-stacked/l8-h1"
+    shutil.copytree(staged[0], d)
+    lines = (d / "circuit.txt").read_text().split("\n")
+    at = next(k for k, line in enumerate(lines) if line.startswith("CIRCUIT unit ")) + 1
+    fields = lines[at].split(" ")
+    assert fields[1] == "rec-open/l8-h1", fields[:2]
+    lines[at] = " ".join([fields[0], name, *fields[2:]])
+    head, rest = (staged[0] / "pub.bin").read_bytes().split(b"\n", 1)
+    head = json.loads(head)
+
+    def write():
+        text = "\n".join(lines)
+        (d / "circuit.txt").write_text(text)
+        head["circuit_sha512"] = FC.digest(text)
+        head["units"]["classes"] = [FC.class_digest(text)] * len(head["units"]["classes"])
+        (d / "pub.bin").write_bytes(json.dumps(head).encode() + b"\n" + rest)
+
+    write()
+    _statement(d)
+    row = next(q for q, line in enumerate(lines[at + 1:]) if line not in (f"1 {q} 1 {q}", "0 0"))
+    lines[at + 1 + row] = "1 0 1 1"
+    write()
+    p = _verify(d)
+    assert p.returncode == 1 and f"not the verifier's {name} (row {row} differs)" in p.stdout, p.stdout + p.stderr
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not BIN.exists() or shutil.which("lake") is None, reason="the Lean verifier is not built")
+def test_the_lean_verifier_refuses_outputs_not_laid_as_vstars(staged, tmp_path):
+    """`RecOpen.check` holds a `rec-open/` unit's outputs to V*'s layout (`Flock.RecOpen.outsOk`): `out` then `acc_out`,
+    64 words each, one output row each, every copy returning words 0..127 in order. The staged level with one copy's
+    `leaves_out` permuted passes the rows' and input leaves' checks and is refused there, before the net is built."""
+    d = tmp_path / "s"
+    shutil.copytree(staged[0], d)
+    lines = (d / "circuit.txt").read_text().split("\n")
+    meta = json.loads(lines[1][5:])
+    meta["leaves_out"][0][0], meta["leaves_out"][0][1] = meta["leaves_out"][0][1], meta["leaves_out"][0][0]
+    lines[1] = "META " + json.dumps(meta)
+    text = "\n".join(lines)
+    (d / "circuit.txt").write_text(text)
+    head, rest = (staged[0] / "pub.bin").read_bytes().split(b"\n", 1)
+    head = json.loads(head)
+    head["circuit_sha512"] = FC.digest(text)
+    head["units"]["classes"] = [FC.class_digest(text)] * len(head["units"]["classes"])
+    (d / "pub.bin").write_bytes(json.dumps(head).encode() + b"\n" + rest)
+    p = _verify(d)
+    assert p.returncode == 1 and "outputs are not out then acc_out" in p.stdout, p.stdout + p.stderr
+
+
+def _sparse(H: int, c: int, positions: list[int], seed: int):
+    """A tree of plain leaves, `H` levels below a top of `2^c` nodes, known at `positions` and random elsewhere: the rows
+    there, each one's siblings bottom up, and the top's nodes."""
+    g = random.Random(seed)
+    rows = {p: [g.getrandbits(128) for _ in range(8)] for p in set(positions)}
+    nodes, sibs = {p: V.leaf(r) for p, r in rows.items()}, {p: [] for p in rows}
+    node = lambda i: nodes.setdefault(i, g.randbytes(64))
+    for h in range(H):
+        for p in sorted(rows):
+            sibs[p].append(node((p >> h) ^ 1))
+        nodes = {i >> 1: hashlib.sha512(node(i & ~1) + node(i | 1)).digest() for i in sorted(nodes)}
+    return rows, sibs, [node(i) for i in range(1 << c)]
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not BIN.exists() or shutil.which("lake") is None, reason="the Lean verifier is not built")
+@pytest.mark.parametrize("H, positions", [(0, [0, 1, 1, 0]), (17, [5, 1 << 16 | 3, 3 << 16 | 1 << 9, 1 << 17 | 6])])
+def test_the_lean_verifier_reads_a_level_at_either_edge_of_the_climb(H, positions, tmp_path):
+    """`RecOpen_v4` climbs 0 to 32 levels, and the Lean verifier takes a `rec-open/` unit only as its own net and layout at
+    the unit's height (`Flock.RecOpen`). A level staged at H = 0 (``aux`` one row the unit does not read) and at 17 (the
+    first height whose side bits are ``dirs``' word 1, set at two of its four positions) is read under the verifier's own
+    files. Staging H = 17 takes about two minutes; no cheaper test compares the verifier's net with ``rec_open``'s past
+    16 or at 0."""
+    rows, sibs, top = _sparse(H, 1, positions, H)
+    keys = [(0, 0), (0, 1), (1, 0), (1, 1)]
+    qs = [V.Query(rep, 0, j, p, H + 1, 1, top[p >> H], rows[p], None, sibs[p]) for (rep, j), p in zip(keys, positions)]
+    (level,) = O.levels(qs)
+    coefs = _coefs(qs)
+    shared = _top(top, 5)
+    s = O.stage(level, tmp_path, O.Chain.build(PROGRAM, qs, coefs), coefs,
+                O.TopValue.build(PROGRAM, 0, {0: shared, 1: shared}))
+    assert s["template"] == f"RecOpen_v4{{LANES=8,H={H}}}" and s["opened"] == s["summed"] == 4
+    _statement(tmp_path)

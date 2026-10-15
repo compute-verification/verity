@@ -57,22 +57,19 @@ def inner(tmp_path_factory) -> Path:
 
     coins = lambda hexes: b"".join(RL.f128_bytes(int(c, 16)) for c in hexes)
     schedule = RL.schedule_for({"dense_m": 25, "k_log": 22, "nbl": 3, "regions": 3})
-    lk = rec["link"]
-    # the challenger commits to every coin before the session, in the schedule's order
-    recorded = {(st["stream"], k): rd["coins"] for st in rec["streams"] for k, rd in enumerate(st["rounds"])}
-    pending += coins(x for p in lk["points"] for x in p)
-    pending += coins(c for r in schedule["rounds"] for c in recorded[(r["stream"], r["k"])])
-    challenger = RL.CoinServer(rand)
-    proxy = RL.Proxy(challenger, lambda: g.randbytes(192), schedule=schedule, commitments=challenger.commit_coins(schedule))
+    proxy = RL.Proxy(RL.CoinServer(rand), lambda: g.randbytes(192), schedule=schedule)
     send = lambda *req: RL.decode_resp(proxy.handle(RL.encode_req(*req)))
     hello = json.loads(rec["hello"])
     del hello["coins"]
+    lk = rec["link"]
+    pending += coins(x for p in lk["points"] for x in p)
     assert send(RL.REQ_HELLO, json.dumps(hello))[0] == RL.RESP_OK
     assert send(RL.REQ_COMMIT, bytes.fromhex(lk["root_f"]), [(t, bytes.fromhex(v)) for t, v in lk["root_b"].items()], [])[0] == RL.RESP_COINS
     assert send(RL.REQ_LINK, coins(lk["y"]))[0] == RL.RESP_OK
     for st in rec["streams"]:
         assert send(RL.REQ_OPEN, st["stream"], st["parent"] or "", st["label"].encode(), st["at"])[0] == RL.RESP_OK
         for rd in st["rounds"]:
+            pending += coins(rd["coins"])
             assert send(RL.REQ_ROUND, st["stream"], bytes.fromhex(rd["msg"]), rd["n"]) == (RL.RESP_COINS, [int(c, 16) for c in rd["coins"]])
     for r in (0, 1):
         assert send(RL.REQ_PROOF, "circuit", r, (SET / "records-cpu" / f"honest.rep{r}.proof").read_bytes())[0] == RL.RESP_OK
@@ -196,6 +193,32 @@ def test_stagings_with_one_salts_file_read_one_chain(inner, tmp_path):
     assert a["acc_root"] == b["acc_root"] and p.stat().st_size == a["chain_rows"] * hm96.SHA512.salt_bytes
     with pytest.raises(ValueError, match="salts"):
         S.acc_salts(p, a["chain_rows"] + 1)
+
+
+def test_the_shared_rows_list_the_algebras_row_ports_and_rs_tops_and_refuse_two_registrations(tmp_path):
+    """`shared_rows` (`--rec-rows`, which `RecVStar.checkShared` reads by value): the algebra's row ports but `v` and `out`, and
+    each of R's levels' `out` under its value `rec-top-stacked-L<l>`. Two parts registering one port differently, two entries
+    of one value at two roots, and an R level whose `out` is not one of R's tops are refused."""
+    def e(value, root="aa", reads=(0,)):
+        return {"value": value, "root": root, "leaves": 4, "words": 64, "word_bits": 16, "domain": "dd", "reads": list(reads)}
+
+    def staged(name, ports):
+        (tmp_path / name).mkdir(parents=True)
+        (tmp_path / name / "registered.json").write_text(json.dumps({"format": "verity/registered-reads/v0", "ports": ports}))
+        return tmp_path / name
+
+    p0 = staged("p0", {"m0": e("rec-c0"), "acc0": e(O.ACC_VALUE, "bb"), "v": e("rec-v"), "out": e("rec-zero")})
+    p1 = staged("p1", {"m0": e("rec-c0"), "acc1": e(O.ACC_VALUE, "bb", (1,)), "v": e("rec-v", "cc")})
+    top = staged("L0", {"out": e("rec-top-stacked-L0", "ee"), "acc": e(O.ACC_VALUE, "bb", (5,))})
+    assert S.shared_rows([p0, p1], [top])["ports"] == {"m0": e("rec-c0"), "acc0": e(O.ACC_VALUE, "bb"),
+                                                       "acc1": e(O.ACC_VALUE, "bb", (1,)),
+                                                       "rec-top-stacked-L0": e("rec-top-stacked-L0", "ee")}
+    with pytest.raises(ValueError, match="its port m0 is not the other statements' m0"):
+        S.shared_rows([p0, staged("p2", {"m0": e("rec-c0", "ab")})])
+    with pytest.raises(ValueError, match="register rec-acc twice"):
+        S.shared_rows([p0, staged("p3", {"acc1": e(O.ACC_VALUE, "ab", (1,))})])
+    with pytest.raises(ValueError, match="its out reads rec-top-L0"):
+        S.shared_rows([p0], [staged("L0x", {"out": e("rec-top-L0")})])
 
 
 @pytest.mark.slow

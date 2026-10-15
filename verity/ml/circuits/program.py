@@ -34,18 +34,18 @@ REGISTRATION = "registration"
 
 def is_registered(fn: Any) -> bool:
     """A registered input: `RegisteredInput<w>_v1`, bound at registration."""
-    return isinstance(fn, PrimitiveDefinition) and REGISTERED_ID.match(fn.id) is not None
+    return isinstance(fn, PrimitiveDefinition) and REGISTERED_ID.fullmatch(fn.id) is not None
 
 
 def is_input(fn: Any) -> bool:
     """An input gate's primitive: `Input<w>_v1` (bound per run) or `RegisteredInput<w>_v1` (bound at registration)."""
-    return isinstance(fn, PrimitiveDefinition) and (INPUT_ID.match(fn.id) is not None or REGISTERED_ID.match(fn.id) is not None)
+    return isinstance(fn, PrimitiveDefinition) and (INPUT_ID.fullmatch(fn.id) is not None or REGISTERED_ID.fullmatch(fn.id) is not None)
 
 
 def input_id(fid: str) -> tuple[str, int] | None:
     """(binding time, width) of an input id, or None for any other id."""
     for when, rx in ((RUN, INPUT_ID), (REGISTRATION, REGISTERED_ID)):
-        m = rx.match(fid)
+        m = rx.fullmatch(fid)
         if m is not None:
             return when, int(m[1])
     return None

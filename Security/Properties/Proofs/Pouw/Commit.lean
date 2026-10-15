@@ -501,11 +501,27 @@ theorem frameBytes_inj (tag tag' : String) (parts parts' : List ByteArray) (ht :
   have htag : tag = tag' := String.toByteArray_inj.1 (ByteArray.ext (Array.toList_inj.1 htag))
   exact ⟨htag, framed_inj parts parts' hb hb' h⟩
 
+/-- A frame `frameHash?` accepts has its tag's and parts' lengths in their fields, and its digest is `frameHash`'s. -/
+theorem frameHash?_ok {h : PouwCommit.Hash} {tag : String} {parts : List ByteArray} {d : ByteArray}
+    (hok : frameHash? h tag parts = .ok d) :
+    tag.toUTF8.size < 2 ^ 32 ∧ (∀ p ∈ parts, p.size < 2 ^ 64) ∧ frameHash h tag parts = d := by
+  unfold frameHash? at hok
+  split at hok
+  · simp [throw, throwThe, MonadExceptOf.throw] at hok
+  split at hok
+  · simp [throw, throwThe, MonadExceptOf.throw] at hok
+  rename_i ht hp
+  refine ⟨by omega, fun p hm => ?_, Except.ok.inj hok⟩
+  have := mt (fun hc : 2 ^ 64 ≤ p.size => List.any_eq_true.2 ⟨p, hm, decide_eq_true hc⟩) hp
+  omega
+
 theorem frameInjective : FrameInjective := by
-  intro h tag tag' parts parts' ht ht' hb hb' hf
+  intro h tag tag' parts parts' d hd hd'
+  obtain ⟨ht, hb, hf⟩ := frameHash?_ok hd
+  obtain ⟨ht', hb', hf'⟩ := frameHash?_ok hd'
   by_cases he : frameBytes tag parts = frameBytes tag' parts'
   · exact .inl (frameBytes_inj tag tag' parts parts' ht ht' hb hb' he)
-  · exact .inr ⟨he, hf⟩
+  · exact .inr ⟨he, hf.trans hf'.symm⟩
 
 /-- Two lists of messages hash two different messages, one from each, to one SHA-512 digest. -/
 def Break (L L' : List ByteArray) : Prop := ∃ x ∈ L, ∃ y ∈ L', x ≠ y ∧ Sha512.hash x = Sha512.hash y

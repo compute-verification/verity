@@ -4,7 +4,7 @@ These are not assumptions of the theorem, but the verdict still depends on them.
 
 - **Lean's kernel.**
   - **Mitigation:** the Lean audit sends every declaration to the kernel again (`tools/verity/lean/Replay.lean`), and
-    `audit.py --fresh` re-checks each root's whole import closure, Mathlib and ArkLib included (`leanchecker --fresh`).
+    `check.py --fresh` re-checks each root's whole import closure, Mathlib and ArkLib included (`leanchecker --fresh`).
     Both use Lean's own kernel; an independent one (nanoda, lean4lean) would remove this trust.
   - Numeric checks use `decide +kernel`, which is kernel evaluation. The development never uses `native_decide`.
 - **Lean's compiler, runtime and the C compiler, for the running binary.** Only the Lean verifier runs in production;
@@ -34,7 +34,7 @@ These are not assumptions of the theorem, but the verdict still depends on them.
   - `reads`: per module, the definitions those statements depend on (followed through the `meaning` modules,
     `FlockSoundness` and `FlockLevel3`), and which pins read them. Some are in proof files (`LinkSound.lean`,
     `CompiledSound.lean`, `CompiledLock.lean`).
-  - The audit fails when a signature or a definition it reads changes, until `audit.py --update` rewrites the record.
+  - The audit fails when a signature or a definition it reads changes, until `check.py --update` rewrites the record.
     When a rewritten record lands on `main`, Daniel gets a DM showing it, and that is the check: a statement reviewer
     is optional, and nothing waits on one. A theorem cited but not pinned (`../ASSUMPTIONS.md` names them) is read in
     its source.

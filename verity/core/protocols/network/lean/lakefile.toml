@@ -1,5 +1,5 @@
 name = "network_check"
-defaultTargets = ["NetworkCheck", "network-check-difftest", "network-check"]
+defaultTargets = ["NetworkCheck", "network-check-difftest", "network-check", "network-records"]
 
 [leanOptions]
 autoImplicit = false
@@ -23,6 +23,11 @@ path = "../../certifier/lean"
 name = "lms"
 path = "../../../primitives/lms/lean"
 
+# `tagged_sha512` is core's identity hash.
+[[require]]
+name = "core_identity"
+path = "../../../primitives/identity"
+
 [[lean_lib]]
 name = "NetworkCheck"
 
@@ -33,3 +38,7 @@ root = "NetworkCheck.DifftestMain"
 [[lean_exe]]
 name = "network-check"
 root = "NetworkCheck.Main"
+
+[[lean_exe]]
+name = "network-records"
+root = "NetworkCheck.RecordsMain"

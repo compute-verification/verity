@@ -46,7 +46,7 @@ theorem flock_headline_hidden {N' : ℕ} (p : FlockSoundness.Prog N' n) (outs : 
     (zeros : Finset (Fin N')) (hZero : (p.partition outs).ZeroCols (planAtH dj x₀) (tabAtH dj x₀) pp.derived.place zeros)
     (lay : Binding.Layout (p.partition outs) (planAtH dj x₀) (tabAtH dj x₀)
       ((p.partition outs).placeDecoder (planAtH dj x₀) (tabAtH dj x₀) pp.derived.place))
-    (rs : Binding.HmRows lay) (hHm : rs.Computes)
+    (rs : Binding.HmRowsX lay) (hHm : rs.Computes)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (planAtH (Reg := Reg) dj x₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
     (K : ℕ) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
@@ -78,7 +78,7 @@ theorem flock_headline_hidden {N' : ℕ} (p : FlockSoundness.Prog N' n) (outs : 
           (reg (simAuditOn H512 enc512 leaf512 (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ)) +
         (p.partition outs).linkBoundE (L := Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop)
           (planAtH dj x₀) (tabAtH dj x₀) (rs.binding hHm) k Rw M ρ t' :=
-  p.flock_headline_live_on outs σs ks hks St hS Kd pop Lb src hA3 (tablesAtH dj x₀) (tabAtH dj x₀) pp ones hConst
+  p.flock_headline_live_onX outs σs ks hks St hS Kd pop Lb src hA3 (tablesAtH dj x₀) (tabAtH dj x₀) pp ones hConst
     zeros hZero lay rs hHm hk hRw hM hρ hr ht' K I wr opn dg dec one fin capOf N hdec τ hCR hKS
 
 end FlockSoundness.Discharge.HiddenExec

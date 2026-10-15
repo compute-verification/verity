@@ -15,8 +15,8 @@ depend on round `j`'s leaf (through the root) and on everything else it has seen
 already opened; the prover's own randomness), the probability of any event `bad` of the message and the coin exceeds
 that of the coin drawn fresh after a worst-case message by at most `δ₁`, hm96's hiding distance
 (`Assumptions.Hm96Hiding`). It is T1 (`ZK.ideal_leaf_swap`): with an ideal leaf the message is independent of the coin.
-`coin_fresh_key`: the same at a uniform key, with `δ₁` averaged over the key. `coinLeaf_fresh`: the coin tree's own
-leaf (`ZK.coinLeaf`), for a block of `n` coins.
+`coin_fresh_key`: the same at a uniform key drawn first, with the leaf hash and the event chosen after it and `δ₁`
+averaged over the key. `coinLeaf_fresh`: the coin tree's own leaf (`ZK.coinLeaf`), for a block of `n` coins.
 
 So each round of a session whose verifier commits its coins costs its fresh-coin bound plus `δ₁`. `Hm96Hiding` is the
 assumption as main states it; worker zk-lean-cr-only proves it for every salt map (`hm96Hiding_gap`, at the distance
@@ -55,22 +55,23 @@ theorem coin_fresh {Ω C Y B Cs D M : Type} [Fintype Ω] [Nonempty Ω] [Fintype 
     _ = _ := by
         exact avg_const _
 
-/-- **At a uniform key** (`coin_fresh` averaged): the key `κ` is uniform and independent of the rest, the hiding
-distance `δ κ` may depend on it, and so may the digest and the prover's message. The loss is the mean of `δ`. -/
+/-- **At a uniform key** (`coin_fresh` averaged): the key `κ` is uniform, drawn first and independent of the rest; the
+hiding distance `δ κ` may depend on it, and so may the leaf hash `H κ`, the digest, the prover's message and the event
+`bad κ`. The bound is each key's fresh-coin worst case and `δ`, both averaged over the key. -/
 theorem coin_fresh_key {Kk Ω C Y B Cs D M : Type} [Fintype Kk] [Nonempty Kk] [Fintype Ω] [Nonempty Ω] [Fintype C]
     [Nonempty C] [Fintype Y] [Nonempty Y] [AddCommGroup B] [Fintype B] (My : Kk → Y → B) (cs : Y → Cs) (δ : Kk → ℝ≥0∞)
-    (hT1 : ∀ κ, Assumptions.Hm96Hiding (My κ) cs (δ κ)) (H : B × Cs → D) (x : Kk → Ω → C → B)
-    (σ : Kk → Ω → D → M) (bad : Ω → M → C → Prop) :
+    (hT1 : ∀ κ, Assumptions.Hm96Hiding (My κ) cs (δ κ)) (H : Kk → B × Cs → D) (x : Kk → Ω → C → B)
+    (σ : Kk → Ω → D → M) (bad : Kk → Ω → M → C → Prop) :
     prCoin (fun p : Kk × ((Ω × C) × Y) =>
-        bad p.2.1.1 (σ p.1 p.2.1.1 (H (x p.1 p.2.1.1 p.2.1.2 + My p.1 p.2.2, cs p.2.2))) p.2.1.2) ≤
-      (⨆ (ω : Ω) (m : M), prCoin (bad ω m)) + avg δ := by
+        bad p.1 p.2.1.1 (σ p.1 p.2.1.1 (H p.1 (x p.1 p.2.1.1 p.2.1.2 + My p.1 p.2.2, cs p.2.2))) p.2.1.2) ≤
+      avg (fun κ => ⨆ (ω : Ω) (m : M), prCoin (bad κ ω m)) + avg δ := by
   rw [prCoin_prod_split (fun (κ : Kk) (q : (Ω × C) × Y) =>
-    bad q.1.1 (σ κ q.1.1 (H (x κ q.1.1 q.1.2 + My κ q.2, cs q.2))) q.1.2)]
+    bad κ q.1.1 (σ κ q.1.1 (H κ (x κ q.1.1 q.1.2 + My κ q.2, cs q.2))) q.1.2)]
   calc avg (fun κ => prCoin fun q : (Ω × C) × Y =>
-          bad q.1.1 (σ κ q.1.1 (H (x κ q.1.1 q.1.2 + My κ q.2, cs q.2))) q.1.2)
-      ≤ avg (fun κ => (⨆ (ω : Ω) (m : M), prCoin (bad ω m)) + δ κ) :=
-        avg_mono fun κ => coin_fresh (My κ) cs (hT1 κ) H (x κ) (σ κ) bad
-    _ = _ := by rw [avg_add, avg_const]
+          bad κ q.1.1 (σ κ q.1.1 (H κ (x κ q.1.1 q.1.2 + My κ q.2, cs q.2))) q.1.2)
+      ≤ avg (fun κ => (⨆ (ω : Ω) (m : M), prCoin (bad κ ω m)) + δ κ) :=
+        avg_mono fun κ => coin_fresh (My κ) cs (hT1 κ) (H κ) (x κ) (σ κ) (bad κ)
+    _ = _ := by rw [avg_add]
 
 /-- **The coin tree's leaf** (`ZK.coinLeaf`, `coin-tree/hm96-sha512/v1`): round `pos`'s block of `n` coins, chained from
 `T_n`, under hm96's mix `x ⊕ M·y` (written `x + M·y`, the digests' group). Whatever the prover sends before the opening,

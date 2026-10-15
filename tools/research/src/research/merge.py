@@ -8,6 +8,7 @@ in a ref's history that dropped them would make it (`reverted`), but for the pat
 `research merge --mirror [SHA]`: push SHA (default main's tip) to node 1's bare repository's main, as --push does (`push_mirror`).
 `research merge --canary [--tool check] [--json]`: the gates' self-test, run daily: attempts the merge gate, the push guard and the
 train gate must refuse and a control they must admit, in scratch stores (`canary`).
+`research merge --label-landed [REV]`: write the `landed` label on each run the landings after REV name (`label_landed`).
 
 Run in the checkout of the target branch.  It merges the commit REF names (`git merge --no-ff`) only if the evidence store holds
 a passing attempt of the tool (default `check`) for that exact commit: `state` done, rc 0, source commit REF's, tree clean, as
@@ -43,7 +44,8 @@ and then it is swept; without it the sweep runs before anyone pushes, finds noth
 same commit goes to vy-nebius-1's bare repository, whose main node 1's builds check out (`vy-lean-sandbox checkout`): a plain
 push over the ssh `research run --on` uses, bounded by MIRROR_TIMEOUT_S. One that fails is a line with the command that reruns
 it, and the merge stands; $RESEARCH_MERGE_MIRROR names another machine, and empty skips it.
-These after-landing steps (the spec DM, the mirror, `after_land`) follow the remote's main, not the push: AFTER_LAND_REF on the
+These after-landing steps (the spec DM, the mirror, `after_land`, and one line per landing in the merge thread: what it merged
+and its `Checked:` run, `report_landings`; a `landed` label on each run a landing's trailer names, `label_landed`) follow the remote's main, not the push: AFTER_LAND_REF on the
 remote is the main they last ran for, and every `research merge` that can change something (all but --dry-run, --mirror,
 --canary and --guard-push) catches them up, once, for whatever landed past it since, however it was pushed (`caught_up`).
 
@@ -74,6 +76,7 @@ import sys
 import tempfile
 import time
 from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .gates import FINDING, OK, REFUSED, git_env, refuse
@@ -1023,8 +1026,15 @@ def train(repo: Path, refs: list[str], into: str, store, tool: str, command: lis
         _git(repo, "branch", "-D", branch, check=False)
 
 
+#: gh has no timeout of its own: a call on a dead connection held a drive tick for 5 min (14 Oct 00:46Z)
+GH_TIMEOUT_S = 120
+
+
 def _gh_cli(repo: Path, *args: str) -> str:
-    r = subprocess.run(["gh", *args], cwd=repo, capture_output=True, text=True)
+    try:
+        r = subprocess.run(["gh", *args], cwd=repo, capture_output=True, text=True, timeout=GH_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        raise Refused(f"gh {' '.join(args[:2])}: no answer in {GH_TIMEOUT_S} s") from None
     if r.returncode:
         raise Refused(f"gh {' '.join(args[:2])}: {(r.stderr or r.stdout).strip()[-300:]}")
     return r.stdout
@@ -1158,10 +1168,28 @@ def push_mirror(repo: Path, sha: str, name: str, target=None, run=subprocess.run
     return True
 
 
+#: `sh -c` around the after-landing command: run it (``$2``...) in its worktree ``$0``, then remove that from ``$1``'s repository
+AFTER_LAND_THEN_REMOVE = 'r=$1; shift; "$@"; s=$?; cd / && git -C "$r" worktree remove --force "$0"; exit $s'
+
+
+def _own_tree(repo: Path, commit: str) -> Path | None:
+    """A detached worktree of ``commit`` for the after-landing command alone, since the caller's checkout moves on under it
+    (12 Oct: drive's queue clone is reset and cleaned every tick, and d779760ce's `post_train.py` lost its `.venv` mid-run).
+    None when ``repo`` can't make one."""
+    import shutil
+
+    tree = Path(tempfile.mkdtemp(prefix=f"research-after-land-{commit[:12]}-"))
+    if _git(repo, "worktree", "add", "-q", "--detach", str(tree), commit, check=False).returncode:
+        shutil.rmtree(tree, ignore_errors=True)
+        return None
+    return tree
+
+
 def after_land(repo: Path, tool: str, commit: str, log=print, spawn=subprocess.Popen) -> list[str] | None:
     """Start what the target's own declaration of ``tool`` runs after a landing (`Tool.after_land`, read from the checkout as
     `required_steps` reads `merge_requires`) on ``commit``, in a session of its own, so it outlives this process and nothing it
-    does changes the merge's result.  Returns the argv started, None when the declaration names none."""
+    does changes the merge's result, and in a worktree of ``commit`` of its own (`_own_tree`) that goes when it ends.  Returns
+    the argv started, None when the declaration names none."""
     from .store import tools_registry
 
     try:
@@ -1172,13 +1200,17 @@ def after_land(repo: Path, tool: str, commit: str, log=print, spawn=subprocess.P
         return None
     argv.append(commit)
     out = Path(tempfile.gettempdir()) / f"research-after-land-{commit[:12]}.log"
+    tree = _own_tree(repo, commit)
+    run = argv if tree is None else ["sh", "-c", AFTER_LAND_THEN_REMOVE, str(tree), str(repo), *argv]
     try:
         with open(out, "ab") as f:
-            spawn(argv, cwd=repo, stdin=subprocess.DEVNULL, stdout=f, stderr=subprocess.STDOUT, start_new_session=True)
+            spawn(run, cwd=tree or repo, stdin=subprocess.DEVNULL, stdout=f, stderr=subprocess.STDOUT, start_new_session=True)
     except OSError as e:
+        if tree is not None:
+            _git(repo, "worktree", "remove", "--force", str(tree), check=False)
         log(f"research merge: after the landing, `{shlex.join(argv)}` did not start ({e}); run it by hand")
         return argv
-    log(f"research merge: after the landing, started `{shlex.join(argv)}` (log {out})")
+    log(f"research merge: after the landing, started `{shlex.join(argv)}` in {tree or repo} (log {out})")
     return argv
 
 
@@ -1203,10 +1235,12 @@ def _move(repo: Path, remote: str, ref: str, was: str, tip: str, log=print) -> b
     return not p.returncode
 
 
-def caught_up(repo: Path, remote: str, tool: str = "check", since: str = "", log=print) -> str | None:
+def caught_up(repo: Path, remote: str, tool: str = "check", since: str = "", log=print,
+              runs: dict[str, str] | None = None) -> str | None:
     """Run the after-landing steps once for what landed on ``remote``'s main since AFTER_LAND_REF there (or ``since``, main before
     the caller's own push, when the remote has no marker yet): push main's tip to node 1's mirror, start ``tool``'s `after_land`
-    on the tip (a later landing's `post_train.py` tests the ones before it too), then move the marker to the tip.  The spec DM
+    on the tip (a later landing's `post_train.py` tests the ones before it too), post each landing to the merge thread
+    (`report_landings`) and label the runs each one names (`label_landed`), then move the marker to the tip.  The spec DM
     (`spec_alert`) goes over SPEC_ALERTED_REF..tip (AFTER_LAND_REF's start when that marker is new) and moves its marker only
     when it was sent, so a failed DM is retried by every later run until it goes.  Without a marker or ``since`` it only sets
     the markers.  Nothing raises, since a landing that happened stands.  Returns the tip the steps ran for."""
@@ -1253,10 +1287,152 @@ def caught_up(repo: Path, remote: str, tool: str = "check", since: str = "", log
         if remote == "origin" and (name := mirror_name()):
             push_mirror(repo, tip, name)
         after_land(repo, tool, tip, log=log)
+        if remote == "origin":
+            report_landings(repo, start, tip, log=log, runs=runs)
+            label_landed(repo, start, tip, log=log, runs=runs)
     if _move(repo, remote, AFTER_LAND_REF, mark, tip, log) and not start:
         log(f"research merge: {remote} had no {AFTER_LAND_REF}; set it to main ({tip[:12]}): the steps after a landing are "
             "caught up from here, and nothing before it was looked at")
     return tip if start else None
+
+
+#: what a landing merged, in its own subject or its train's (`prepare`): a pull request, a branch of origin, or a commit
+MERGED_REF = re.compile(r"Merge (#\d+|origin/\S+|[0-9a-f]{12,40}) \([0-9a-f]{7,40}\)|^Queue: (#\d+) ")
+CHECK_TRAILER = re.compile(r"^Check(?:ed)?: (.*)$", re.M)
+#: a run id, or the lander's `r20261010-*-9827` for one whose launch time it didn't copy
+RUN_ID = re.compile(r"r20\d{6}-(?:\d{6}|\*)-[0-9a-f]{4}")
+
+
+def _merged_name(ref: str, prs: dict[str, int]) -> str:
+    if ref.startswith("#"):
+        return ref
+    if (branch := ref.removeprefix("origin/")) != ref:
+        return f"#{prs[branch]}" if branch in prs else branch
+    sha = next((k for k in prs if len(k) == 40 and k.startswith(ref)), None)
+    return f"#{prs[sha]}" if sha else ref[:12]
+
+
+def landing_lines(repo: Path, start: str, tip: str, prs: dict[str, int] | None = None,
+                  runs: dict[str, str] | None = None) -> list[str]:
+    """One line per commit on ``tip``'s first-parent line after ``start``: what it merged (pull requests, or the branches and
+    commits ``prs``, head branch or head sha to number, doesn't map to one) and the runs its `Check:` or `Checked:` trailer
+    names, else the run ``runs`` gives for it (a queue commit `research queue drive` fast-forwarded has no trailer).  Read from main's log, since a pull request's state can't stand in: a stacked member such as #1706 reads closed on
+    GitHub without having landed on its own."""
+    prs = prs or {}
+    lines = []
+    for c in _git(repo, "rev-list", "--first-parent", "--reverse", f"{start}..{tip}").stdout.split():
+        parents = _git(repo, "rev-list", "--parents", "-n", "1", c).stdout.split()[1:]
+        subject, body = _git(repo, "log", "-1", "--format=%s%x00%b", c).stdout.split("\0", 1)
+        subjects = [subject]
+        if len(parents) == 2:
+            subjects += _git(repo, "log", "--first-parent", "--format=%s", f"{parents[0]}..{parents[1]}").stdout.splitlines()
+        merged = []
+        for s in subjects:
+            for m in MERGED_REF.finditer(s):
+                if m[2] is None and len(parents) == 2 and parents[1].startswith(m[1]):
+                    continue                            # the train's own tip, whose merges name what it holds
+                if (ref := _merged_name(m[1] or m[2], prs)) not in merged:
+                    merged.append(ref)
+        what = " + ".join(reversed(merged)) if merged else f"“{subject}”"
+        found = [r for t in CHECK_TRAILER.findall(body) for r in RUN_ID.findall(t)] or RUN_ID.findall((runs or {}).get(c, ""))
+        lines.append(f"landed on main: {c[:12]} {what}; checked by {', '.join(dict.fromkeys(found)) or 'no run (no Check: trailer)'}")
+    return lines
+
+
+#: who writes the `landed` labels (`label_landed`)
+LANDED_BY = "research-merge"
+
+
+def landed_runs(repo: Path, start: str, tip: str, runs: dict[str, str] | None = None) -> list[tuple[str, str, str]]:
+    """(run, commit, commit time as UTC `...Z`) for each run the `Check:` or `Checked:` trailer of a commit on ``tip``'s first-parent
+    line after ``start`` (the whole line when ``start`` is empty) names, else the run ``runs`` gives for it (as `landing_lines`),
+    oldest first; the lander's `*` ids as written."""
+    out = []
+    for c in _git(repo, "rev-list", "--first-parent", "--reverse", f"{start}..{tip}" if start else tip).stdout.split():
+        body, ct = _git(repo, "log", "-1", "--format=%b%x00%ct", c).stdout.rsplit("\0", 1)
+        ts = datetime.fromtimestamp(int(ct), timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        found = [r for t in CHECK_TRAILER.findall(body) for r in RUN_ID.findall(t)] or RUN_ID.findall((runs or {}).get(c, ""))
+        out += [(r, c, ts) for r in dict.fromkeys(found)]
+    return out
+
+
+def _resolve_run(remote, run: str) -> str | None:
+    """The one run on ``remote`` a lander's `r<date>-*-<suffix>` id can name, or None (no remote, none, or several)."""
+    if "*" not in run:
+        return run
+    if remote is None:
+        return None
+    date, _, suffix = run.split("-")
+    hits = [k.rsplit("/", 1)[-1].removesuffix(".json") for k in remote.list(f"attempts/{date}-") if k.endswith(f"-{suffix}.json")]
+    return hits[0] if len(hits) == 1 else None
+
+
+def label_landed(repo: Path, start: str, tip: str, *, store=None, log=print, runs: dict[str, str] | None = None) -> bool:
+    """Write a `landed` label on each check run a landing over ``start``..``tip`` names (`landed_runs`): its value main's merge
+    commit, its ts the later of the commit's time and the run's start (its id's), by LANDED_BY, so a rerun anywhere writes the
+    same assertions (the store README's landed merge train); then push them.  True when every label reached the remote; nothing raises, since the landings stand."""
+    try:
+        from .store import labels_sync as LS
+        from .store.local import LocalStore
+
+        found = landed_runs(repo, start, tip, runs)
+        if not found:
+            return True
+        st = store if store is not None else LocalStore(None)
+        done, unresolved = [], []
+        for run, commit, ts in found:
+            if (rid := _resolve_run(st.remote, run)) is None:
+                unresolved.append(run)
+                continue
+            d = rid[1:16]
+            ts = max(ts, f"{d[:4]}-{d[4:6]}-{d[6:8]}T{d[9:11]}:{d[11:13]}:{d[13:15]}Z")    # the lander's commits carry a fixed date
+            if not any(lab.key == "landed" and lab.value == commit and lab.by == LANDED_BY for lab in st.labels(rid)):
+                st.add_label(rid, "landed", commit, LANDED_BY, ts=ts)
+            done.append(rid)
+        if unresolved:
+            log(f"research merge: no `landed` label on {', '.join(unresolved)}: the id names no single run on the remote")
+        if st.remote is None:
+            log(f"research merge: {len(done)} `landed` label(s) stay in {st.root} (no remote): `research data push --pending` uploads them")
+            return False
+        failed = LS.push_targets(st, sorted(set(done)))["failed"] if done else []
+        log(f"research merge: {len(done)} `landed` label(s) on the check runs of {start[:12] or 'the root'}..{tip[:12]}"
+            + (f"; {len(failed)} not pushed: {failed[0]}" if failed else ""))
+        return not failed and not unresolved
+    except Exception as e:                              # noqa: BLE001: a label that fails leaves the landings as they are
+        print(f"research merge: the `landed` labels over {start[:12]}..{tip[:12]} weren't written: {type(e).__name__}: {e}",
+              file=sys.stderr)
+        return False
+
+
+def report_landings(repo: Path, start: str, tip: str, *, api=None, reg: dict | None = None, gh=None, log=print,
+                    runs: dict[str, str] | None = None) -> bool:
+    """Post `landing_lines` over ``start``..``tip`` to the merge thread, one line per landing, so every landing is reported
+    whoever pushed it (two of 10 Oct's were missing from the lander's own reports).  True when posted or there was nothing to
+    post; a failure is printed and returns False, and nothing raises, since the landings stand."""
+    from .monitors import MERGE_THREAD
+    from .slack import FRONT_DOOR, QUIET, Slack, _footer, load_registry, registry_path
+
+    try:
+        gh = gh or (lambda *a: _gh_cli(repo, *a))
+        try:
+            prs = {k: p["number"] for p in sorted(json.loads(gh("pr", "list", "--state", "all", "--limit", "300", "--json",
+                                                                 "number,headRefName,headRefOid")), key=lambda p: p["number"])
+                   for k in (p["headRefName"], p["headRefOid"])}
+        except Exception:                               # noqa: BLE001: without GitHub a branch is named by its branch
+            prs = {}
+        lines = landing_lines(repo, start, tip, prs, runs)
+        if not lines:
+            return True
+        reg = reg if reg is not None else load_registry(registry_path())
+        api = api if api is not None else Slack(os.environ.get("SLACK_BOT_TOKEN"))
+        api.call("chat.postMessage", channel=reg["channels"][FRONT_DOOR]["id"], thread_ts=MERGE_THREAD,
+                 text="\n".join(lines) + _footer((QUIET,)), username="research merge", unfurl_links=False)
+        log(f"research merge: posted {len(lines)} landing(s) to the merge thread")
+        return True
+    except Exception as e:                              # noqa: BLE001: a report that fails leaves the landings as they are
+        print(f"research merge: the landings {start[:12]}..{tip[:12]} weren't posted to the merge thread: {type(e).__name__}: {e}",
+              file=sys.stderr)
+        return False
 
 
 def spec_alert_lag(repo: Path, remote: str) -> str:
@@ -1323,6 +1499,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("-m", "--message", default=None, help="the merge commit's message (default `Merge REF (sha)`)")
     ap.add_argument("--mirror", action="store_true", help=f"merge nothing: push REF (default --into's tip) to the main of "
                     f"${MIRROR_ENV}'s bare repository (default {MIRROR}'s), as --push does after the remote")
+    ap.add_argument("--label-landed", action="store_true", help="merge nothing: write and push the `landed` label on each run a "
+                    "Check: or Checked: trailer on --into's first-parent line names, after REF (default the whole line); a rerun "
+                    "writes nothing new")
     ap.add_argument("--dry-run", action="store_true", help="check the gate, merge nothing")
     ap.add_argument("--store", default=None, help="evidence store root (default $RESEARCH_STORE or ~/.research/store)")
     ap.add_argument("--guard-push", action="store_true", help="the pre-push hook `research merge` installs: read git's pre-push "
@@ -1364,6 +1543,11 @@ def main(argv: list[str]) -> int:
             refuse(PROG, f"the push: {c[:12]} would reach {a.into} with no passing `{a.tool}` attempt of its tree; land it with "
                          "`research merge` (the hook fails closed: `git push --no-verify` only with root's yes)")
         return REFUSED if bad else OK
+    if a.label_landed:
+        if len(a.ref) > 1 or a.train or a.sweep or a.mirror:
+            ap.error("--label-landed takes at most one ref and no other mode")
+        tip = _git(repo, "rev-parse", "--verify", f"refs/heads/{a.into}^{{commit}}").stdout.strip()
+        return 0 if label_landed(repo, a.ref[0] if a.ref else "", tip, store=LocalStore(a.store)) else 1
     if not a.sweep and not a.dry_run and (hook := install_push_guard(repo, a.into, a.tool)):
         print(f"research merge: installed the push guard {hook}", file=sys.stderr)
     if a.mirror:

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """The Lean build cache: main's compiled modules, which integration publishes on merge and development machines restore,
-every file checked against its sha256 first. Standard library only, with `git` and `lake`.
+every file checked against its sha256 first. Standard library only, with `git` and `lake`. `setup.sh` runs it with the
+machine's own `python3`, which may be older than the workspace's 3.12, so it keeps to syntax Python 3.10 parses.
 
     python tools/verity/lean/cache.py get [PKG...]       restore main's cached build of each package (default: every package with
                                                   a `lean-audit.json`) into Lake's local cache; `lake build` then unpacks
@@ -33,7 +34,8 @@ The publisher signs its uploads directly with the bucket-scoped key, as root, ou
 broader credential sits on the machine to mint a shorter-lived one. Every write is conditional (`If-None-Match: *`). A
 412 or 409 means the object exists: a blob then must be stored with its MD5 as ETag (blobs go up in one part, so it is),
 and a record must be byte-identical, or the package isn't published. The record goes last, so every blob it names exists.
-Integration's own builds never read the cache: `audit.py` runs Lake with `LAKE_ARTIFACT_CACHE=false` and `LEAN_CACHE=off`.
+Integration's own builds never read the cache: `audit.py` runs Lake with `LEAN_CACHE=off`, and with `LAKE_ARTIFACT_CACHE=false`
+or, in check's audit, a local Lake cache that only a passing audit on that node writes (`lean_audit.LakeArtifacts`).
 """
 from __future__ import annotations
 
@@ -447,8 +449,9 @@ def restore(root: Path, pkg: str, s3: S3, revs: list[str], q: list[str], log=pri
                 return False
     got = sum(f["bytes"] for _, f in todo)
     arts = sum(not mapping(n) for n in rec["files"])
+    with_deps = f", with {len(deps)} dependencies ({', '.join(deps)})" if deps else ""
     log(f"lean-cache: {pkg}: main's build at {rev[:12]} restored ({arts} artifacts"
-        f"{f', with {len(deps)} dependencies ({', '.join(deps)})' if deps else ''}; {got >> 20} MiB in {len(todo)} files "
+        f"{with_deps}; {got >> 20} MiB in {len(todo)} files "
         f"fetched and checked in {time.monotonic() - t0:.0f} s, {len(rec['files']) - len(todo)} already here); "
         f"`lake build` unpacks them")
     return True

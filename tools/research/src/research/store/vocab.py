@@ -93,6 +93,7 @@ OUTCOME = "outcome"
 COMMIT_MAP = "commit_map"                             # on a commit-map/v1 artifact: whether the history rewrite it records applies
 CUSTODY = "custody"                                   # on a run id: whether `research data custody --triage` needs more of it
 CUSTODY_VALUES = ("waived", "never-ran", "needed")
+SOURCE_LOST = "source-lost"                             # on a run id: its exact source (commit + dirty bytes) is gone
 
 # ---- evidence labels: probe captures and input sets --------------------------------------------------------------------------------
 
@@ -124,6 +125,7 @@ OWNER = "owner"
 APPROACH_STATUS = "approach_status"
 REASON = "reason"
 CITES = "cites"
+UNCITES = "uncites"
 
 # ---- closed value sets -------------------------------------------------------------------------------------------------------------------
 
@@ -170,20 +172,24 @@ MEASUREMENT_KEYS = ("l", "n", "subbatches", "per_proof_vus", "R_proved", "thread
 NOTE_REF_RE = re.compile(r"^note:(?:(?![\d-]+/)[A-Za-z0-9][\w.-]*/){1,2}(?![\w.-]*\.md$)[\w.-]+$")
 #: Keys whose label is only read with its ref: the form that ref must take, and what it names.
 REF_FORMS: dict[str, tuple[re.Pattern[str], str]] = {
-    ABANDONED: (NOTE_REF_RE, "the note that says why (note:<lane>/<file name without .md>, or note:<campaign>/<lane>/<name>)")}
+    ABANDONED: (NOTE_REF_RE, "the note that says why (note:<lane>/<file name without .md>, or note:<campaign>/<lane>/<name>)"),
+    SOURCE_LOST: (NOTE_REF_RE, "the note that says how it was lost (note:<lane>/<file name without .md>, or note:<campaign>/<lane>/<name>)")}
 #: Label keys that name evidence / findings written by code today (trust dossiers, the ledger's red-team assertions).
 FINDING = "finding"
 LEVEL = "level"
 ANCHOR = "anchor"
-#: A reviewer's grant on a pull request at one head (`pr:<n>@<sha>`), which the merge queue's admission rules require.
+#: A reviewer's grant on a pull request at one head (`pr:<n>@<sha>`): a record of who reviewed it, which nothing waits on
+#: (no change waits on a per-head grant, Daniel 8 Oct).
 GRANT = "grant"
 GRANT_ROLES = ("red-team", "statement-reviewer", "vllm-coordinator", "review")
 #: The owner's word that a pull request is ready at one head (`research queue ready`), which the queue's admission of a single PR
 #: asks for; a train member needs none, since the train's own check is the gate (Daniel, Q14, 6 Oct).
 READY = "ready"
-#: A `check.py --update` report (its audit.json) on a pull request at one head, which stands in for a statement reviewer's grant
-#: where it printed the head's whole lean-audit.json change as the same statements (`research.queue.reviewed`).
+#: A `check.py --update` report (its audit.json) on a pull request at one head: a record of what its lean-audit.json change printed
+#: as. No merge needs a statement reviewer (Daniel, 8 Oct); the DM of a changed record is the check.
 LEAN_REVIEW = "lean_review"
+#: On a run a landing's `Check:` or `Checked:` trailer names: main's commit that landed what it checked (`research merge`).
+LANDED = "landed"
 
 
 def canonical_key(name: str) -> str:
@@ -313,14 +319,19 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "triage believes only while the run dir shows no sign of a start: no pid in status.json, no started, span_start or sampler_start "
        "event, no sampler reading, no output; needed: triage reads its records again, which withdraws an earlier waived or never-ran); "
        "the latest label wins", CUSTODY_VALUES),
+    _k(SOURCE_LOST, GROUP_VERIFICATION, BOOL, "on a run id: the exact source it ran is gone (its tree held a dirty source that no record "
+       "kept, and it was deleted), so the run cannot be re-run or audited from its source; the ref is the note that says how"),
     _k(BELOW_BAR, GROUP_VERIFICATION, BOOL, "the verified proof's whole-proof bound is below the tables' 2^-128 bar: shown in the below-bar drill-down, never a Table 2 cell"),
     _k(OUTCOME, GROUP_VERIFICATION, TEXT, "an Attempt's failure class as judged (CGROUP_OOM, UNKNOWN_EXIT, ...), restating or correcting the classifier's"),
-    _k(GRANT, GROUP_VERIFICATION, ENUM, "a reviewer's grant on pr:<n>@<head>: the role that reviewed that exact head (the merge queue admits on it)",
+    _k(GRANT, GROUP_VERIFICATION, ENUM, "a reviewer's grant on pr:<n>@<head>: the role that reviewed that exact head; a record only, which no merge waits on (Daniel, 8 Oct)",
        GRANT_ROLES),
     _k(READY, GROUP_VERIFICATION, BOOL, "the owner's word that pr:<n>@<head> is ready for the merge queue (`research queue ready`); a new head needs it "
        "again; a train member needs none (Q14)"),
-    _k(LEAN_REVIEW, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>: the art: id of an `audit.py --update` report (its audit.json); a lean-audit.json "
-       "change it printed whole as the same statements (moved under --moved, printed differently, rehashed) needs no statement-reviewer grant"),
+    _k(LEAN_REVIEW, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>: the art: id of a `tools/verity/lean/check.py --update` report (its audit.json); a lean-audit.json "
+       "change it printed whole as the same statements (moved under --moved, printed differently, rehashed); a record only, since no merge "
+       "needs a statement reviewer (Daniel, 8 Oct)"),
+    _k(LANDED, GROUP_VERIFICATION, TEXT, "on a run (a check, or a part of one), by research-merge: main's commit whose Check: or "
+       "Checked: trailer names it (`research merge`; `--label-landed` for past landings)", pattern=r"[0-9a-f]{40}"),
     # evidence
     _k(INSTRUCTION, GROUP_EVIDENCE, TEXT, "the tensor-core instruction probed, as the registry names it (sm89.mma.m16n8k32.e4m3)"),
     _k(MODEL, GROUP_EVIDENCE, TEXT, "the silicon model the capture was compared with"),
@@ -350,7 +361,8 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(APPROACH_STATUS, GROUP_APPROACH, ENUM, "the approach's own line of work: worked on now, open to anyone, cannot work, replaced, done and adopted",
        APPROACH_STATUSES),
     _k(REASON, GROUP_APPROACH, TEXT, "why the approach's status changed, one line (required unless live)"),
-    _k(CITES, GROUP_APPROACH, TEXT, "one evidence token the approach cites: a run id, art:, note:, <repo>#<n>, <repo>@<sha>, store:<project>/<path>, https://..."),
+    _k(CITES, GROUP_APPROACH, TEXT, "one evidence token the approach cites: a run id, art:, note:, <repo>#<n>, <repo>@<sha>, https://..."),
+    _k(UNCITES, GROUP_APPROACH, TEXT, "one evidence token the approach no longer cites: replaced, or where nobody else can read it"),
 )}
 
 KEYS = tuple(VOCAB)

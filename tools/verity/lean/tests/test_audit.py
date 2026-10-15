@@ -232,6 +232,36 @@ def test_sorry_native_decide_and_other_axioms_are_named():
         "declared: `axiom P.magic` in P.Defs; state an assumption as a named Prop, taken as a hypothesis"]
 
 
+def test_a_sorry_for_an_unreported_error_is_named_apart_from_a_written_one():
+    """A build that passes on a `sorryAx _ true` (the `unreported` control's local-notation binder) never ran its proofs; a
+    spec package's fast path audits no proving package, so `proved` names those of each one it reads."""
+    off = [{"name": "P.stub", "module": "P.Thms", "axioms": ["sorryAx"]}, {"name": "P.unrun", "module": "P.Thms", "axioms": ["sorryAx"]}]
+    fails = A.judge(recorded(), facts(offenders=off, unreported_errors=[{"name": "P.unrun", "module": "P.Thms"}]), FILES)[0]
+    assert "sorry: sorryAx is used by P.stub, P.unrun" in fails
+    (u,) = [f for f in fails if f.startswith("unreported:")]
+    assert u.startswith("unreported: P.unrun hold a `sorry` Lean made for an elaboration error it did not report")
+    assert A.unreported(facts(), "../Proofs's ") == []
+    assert A.unreported(facts(unreported_errors=[{"name": "Q.x", "module": "Q"}]), "../Proofs's ")[0].startswith(
+        "unreported: ../Proofs's Q.x hold")
+
+
+def test_a_declaration_the_olean_does_not_hold_is_dropped(tmp_path):
+    """Lean can drop a declaration with no error (PartRead at a1b479d26: the theorems after a `variable` using a local
+    notation are in no `.olean`), so no axiom shows it: the source's declaration lines are matched to the module's spans.
+    Keywords in comments, docstrings and strings, indented ones and `example` start none."""
+    (tmp_path / "P").mkdir()
+    (tmp_path / "P" / "Thms.lean").write_text(
+        "/-- A doc.\ntheorem in_doc : True := trivial -/\n@[simp] theorem kept : True :=\n  trivial\n"
+        "-- def in_comment\nexample : True := trivial\nprivate noncomputable def gone := 1\n"
+        "structure S where\n  def_like : Nat\ninstance : Inhabited S := ⟨⟨0⟩⟩\n")
+    files = {"P.Thms": "P/Thms.lean"}
+    held = {"P.Thms": [[1, 4], [8, 9]]}
+    (d,) = A.dropped(tmp_path, files, {"spans": held}, "../Proofs's ")
+    assert d.startswith("dropped: ../Proofs's P/Thms.lean:7 (def), P/Thms.lean:10 (instance) start a declaration")
+    assert A.dropped(tmp_path, files, {"spans": held | {"P.Thms": [[1, 4], [7, 7], [8, 10]]}}) == []
+    assert A.dropped(tmp_path, files, {}) == []
+
+
 def test_escapes_must_be_listed_and_listed_ones_must_exist():
     esc = [{"name": "P.loop", "module": "P.Defs", "why": ["opaque"]}]
     fails = A.judge(recorded(), facts(escapes=esc), FILES)[0]
@@ -266,6 +296,32 @@ def test_a_changed_statement_or_meaning_fails_until_updated():
     assert A.judge(pol, facts(pins={"P.t": grown}), FILES)[0] == ["guarantees: they now read definitions in P.More (P.t)"]
 
 
+def test_only_record_differences_are_regenerated_and_the_regenerated_record_passes():
+    pol = recorded()
+    group = pol["reads"]["P.Defs"]
+    hyp = [{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "1" * 32},
+           {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "8" * 32}]
+    for policy, now in [
+            (pol, facts(pins={"P.t": fact(signature="P.t (h : P.Hyp) (n : Nat) : P.f n ≤ n", h="00000000000000bb")})),
+            (pol, facts(pins={"P.t": fact(reads=fact()["reads"] + [{"name": "P.g", "module": "P.More", "kind": "def",
+                                                                    "hash": "4" * 32}])})),
+            (pol, facts(pins={"P.t": fact(reads=hyp)})),
+            (pol | {"reads": pol["reads"] | {"P.Defs": group | {"digest": "0" * 64, "guarantees": ["P.t", "P.u"]}}}, facts())]:
+        fails = A.judge(policy, now, FILES)[0]
+        assert fails and all(A.RECORD_DIFFERENCE.match(f) for f in fails), fails
+        regen = A.regenerated(policy, now, FILES, fails)
+        assert regen == A.judge(policy, now, FILES, update=True)[1] and A.judge(regen, now, FILES)[0] == []
+    assert A.judge(pol, facts(pins={"P.t": fact(reads=hyp)}), FILES)[0][-1].startswith(
+        "assumptions: P.Hyp's definition in P.Assumptions changed;")
+    signed = facts(pins={"P.t": fact(signature="P.t (h : P.Hyp) (n : Nat) : P.f n ≤ n", h="00000000000000bb")})
+    for policy, now, files in [(pol, facts(), FILES),                                      # passes
+                               (POLICY, facts(), FILES),                                   # no record yet
+                               (pol, facts(pins={}), FILES),                               # renamed or gone: `--moved`
+                               (pol | {"guarantees": {"P.t": pol["guarantees"]["P.t"] | {"owner": "lean"}}}, facts(), FILES),
+                               (pol, signed, FILES | {"Scratch": "Scratch.lean"})]:        # a difference beside an orphan
+        assert A.regenerated(policy, now, files, A.judge(policy, now, files)[0]) is None
+
+
 def test_a_32_bit_record_is_checked_as_it_is_and_rehashed_by_update():
     new = recorded()
     old = new | {"guarantees": {"P.t": new["guarantees"]["P.t"] | {"type_hash": "00000000000000aa"}},
@@ -285,6 +341,14 @@ def test_a_32_bit_record_is_checked_as_it_is_and_rehashed_by_update():
     assert text == [f"guarantee P.t: {A.REHASHED}", "definition P.f (P.Defs), read by P.t: changed", f"reads: 1 {A.REGROUPED}"]
 
 
+def test_facts_names_a_module_without_listing_every_module():
+    """`EnvironmentHeader.moduleNames` maps over every imported module on each call. Indexed once per constant a
+    guarantee's reads reach, it was 1,471 s of `Security`'s 1,504 s audit (check r20261012-005706-568f)."""
+    for tool in ("Facts.lean", "Upstream.lean"):
+        assert "moduleNames[" not in (HERE.parent / tool).read_text(), \
+            f"{tool}: name a module by `env.header.modules[i].module` (`moduleName env i`), not `env.header.moduleNames[i]`"
+
+
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_the_sha256_hash_is_expr_hash_s_equivalence(tmp_path):
     pkg = tmp_path / "control"
@@ -297,6 +361,65 @@ def test_the_sha256_hash_is_expr_hash_s_equivalence(tmp_path):
     f = A.facts_of(pkg, {"roots": ["Control"], "guarantees": {f"Control.{n}": {"owner": "@lean"} for n in "abcd"}}, tmp_path)
     got = {n: f["pins"][f"Control.{n}"]["type_sha256"] for n in "abcd"}
     assert got["a"] == got["b"] == got["c"] != got["d"] and len(got["a"]) == 64 and not (tmp_path / "canon.jsonl").exists()
+
+
+SHAPE_SPEC = """namespace Control
+def verify (x : Nat) : Bool := x % 2 == 0
+structure Sess where
+  x : Nat
+  hown : verify x = true
+abbrev Outer (_ : Nat) := Sess
+structure Stmt where
+  c : Nat
+  hscope : c < 100
+structure World where
+  Ω : Type
+  nonempty : Nonempty Ω
+def Accepts (s : Sess) : Prop := verify s.x = true
+def reads (s : Sess) : Nat := s.x + 1
+def prob (_ : Nat → Prop) (n : Nat) : Nat := n
+end Control
+"""
+SHAPE_THMS = """import Control.ShapeSpec
+import Control.ShapePrem
+namespace Control
+theorem guarded (s : Sess) (_hacc : Accepts s) (_hop : Accepts s → reads s > 0) : reads s > 0 := by unfold reads; omega
+theorem mentions (s : Sess) (_hacc : Accepts s) (_hm : reads s = s.x + 1) : True := trivial
+theorem underForall (s : Sess) (_hacc : Accepts s) (_hA : ∀ j, Uniform j) : True := trivial
+theorem family (_Vs : Fin 3 → Stmt) (zs : Fin 3 → Outer 0) (_hacc : ∀ j, Accepts (zs j)) : True := trivial
+theorem world (_W : World) (s : Sess) (_hacc : Accepts s) : True := trivial
+theorem event (zs : Nat → Sess) (_hA : ∀ j, Uniform j) (_hq : reads (zs 0) > 0) :
+    prob (fun o => Accepts (zs o) ∧ reads (zs o) = 0) 1 ≤ 1 ∨ ∃ k : Nat, prob (fun o => Accepts (zs (o + k)) ∧ True) k ≤ k :=
+  Or.inl (Nat.le_refl 1)
+theorem eventLate (zs : Nat → Sess) : prob (fun o => reads (zs o) = 0 ∧ Accepts (zs o)) 1 ≤ 1 := Nat.le_refl 1
+end Control
+"""
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_the_shape_reads_what_a_hypothesis_applies_through_binders_and_families(tmp_path):
+    """`Facts.lean`'s shape on real statements (the friction note `proofs/20261009T1340Z-friction-shape-check-session-
+    mentions-pass`): mentioning a session whose structure names the function (`hown`) is no acceptance, nor is an
+    implication whose consequent isn't one (`_hop`); a premise under `∀` is read by its head; a family of structures
+    (`Vs : Fin 3 → Stmt`, an `abbrev` of one) holds its fields; a structure's own `Nonempty` is a hypothesis
+    too, since a field `Nonempty {x // Bad x}` is an existence claim. A probability's events are read under the
+    conclusion's binders (`∨ ∃ k, prob …`), and a family's field that applies the function is refused beside them."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    (pkg / "Control" / "ShapeSpec.lean").write_text(SHAPE_SPEC)
+    (pkg / "Control" / "ShapePrem.lean").write_text("namespace Control\ndef Uniform (j : Nat) : Prop := j = j\nend Control\n")
+    (pkg / "Control" / "ShapeThms.lean").write_text(SHAPE_THMS)
+    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.ShapeThms\n")
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    names = ["guarded", "mentions", "underForall", "family", "world", "event", "eventLate"]
+    f = A.facts_of(pkg, {"roots": ["Control"], "guarantees": {f"Control.{n}": {} for n in names}}, tmp_path)
+    entry = {"function": "Control.verify", "outcome": "accept"}
+    got = {n: [w.split(" : ")[0].split(" whose")[0] for w in A.refusals(entry, f["pins"][f"Control.{n}"]["shape"],
+                                                                        ["Control.ShapePrem"], events=["Control.prob"])]
+           for n in names}
+    assert got == {"guarded": ["takes _hop"], "mentions": ["takes _hm"], "underForall": [], "family": ["takes _Vs.hscope"],
+                   "world": ["takes _W.nonempty"], "event": ["takes zs.hown", "takes _hq"],
+                   "eventLate": ["bounds an event of Control.prob"]}, got
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -853,6 +976,28 @@ def test_the_source_scan_refuses_kernel_bypasses_but_not_prose(tmp_path):
     assert [h.split(" names ")[0] for h in hits] == ["unchecked: P/A.lean:2", "unchecked: lakefile.toml:3"]
 
 
+def test_each_heartbeat_override_is_listed_with_its_value_reason_and_module_build_time_and_none_is_refused(tmp_path):
+    """`heartbeats` (Daniel, 2026-10-09: not banned, listed): an override with its reason ending its line, one with the
+    comments just above as its reason, one with none, `synthInstance`'s, and one in a comment, which is not an override;
+    each with its module's time from the audit's build log (`build_seconds`, which skips a non-module like `:c.o`), or
+    None for a module the build didn't build."""
+    (tmp_path / "P").mkdir()
+    (tmp_path / "P" / "A.lean").write_text(
+        "set_option maxHeartbeats 400000 in -- the `omega` over 40 cases\ntheorem a : True := trivial\n\n"
+        "-- unfolding `step` twice;\n-- measured 9 s\nset_option maxHeartbeats 0 in\ntheorem b : True := trivial\n")
+    (tmp_path / "P" / "B.lean").write_text("theorem c : True := trivial\nset_option synthInstance.maxHeartbeats 100000\n"
+                                           "/- set_option maxHeartbeats 1 in -/\n")
+    log = tmp_path / "build.log"
+    log.write_text("✔ [1/3] Built P.A (1m 2.5s)\n✔ [2/3] Built P.A:c.o (900ms)\n✔ [3/3] Built P.C (250ms)\n")
+    assert A.build_seconds([log, tmp_path / "missing.log"]) == {"P.A": 62.5, "P.C": 0.2}
+    got = A.heartbeats(tmp_path, A.lean_modules(tmp_path), A.build_seconds([log]))
+    assert [(h["file"], h["line"], h["option"], h["value"], h["reason"], h["module_seconds"]) for h in got] == [
+        ("P/A.lean", 1, "maxHeartbeats", 400000, "the `omega` over 40 cases", 62.5),
+        ("P/A.lean", 6, "maxHeartbeats", 0, "unfolding `step` twice; measured 9 s", 62.5),
+        ("P/B.lean", 2, "synthInstance.maxHeartbeats", 100000, None, None)]
+    assert A.scans(tmp_path, A.lean_modules(tmp_path), {}) == []
+
+
 def test_the_dependency_scan_reads_what_the_build_takes_from_fetched_packages(tmp_path):
     dep, other = tmp_path / ".lake" / "packages" / "dep", tmp_path / ".lake" / "packages" / "other"
     lib = dep / ".lake" / "build" / "lib" / "lean"
@@ -1378,17 +1523,26 @@ def test_the_controls(tmp_path):
 
 def test_a_step_records_the_peak_memory_of_every_process_it_waited_for(tmp_path):
     """`run` reaps with `os.wait4`, so a step's `peak_gib` covers the grandchildren a `lake` runs, not only `lake` itself;
-    the output and exit code are what `subprocess.run` gave."""
+    the output and exit code are what `subprocess.run` gave.  It runs in an interpreter of its own: a child's `ru_maxrss`
+    counts the resident set it was forked with, so in a test worker grown past 0.3 GiB even `true` peaked there (8577, 12 Oct)."""
     child = "import sys; b = bytearray(300 << 20); b[::4096] = b'x' * len(b[::4096]); print('out'); sys.exit(3)"
-    rep = {"seconds": {}}
-    A._peak.bytes = 0
-    rc, text = A.run(["bash", "-c", f"{sys.executable} -c \"{child}\"; exit $?"], tmp_path, tmp_path / "step.log")
-    assert (rc, text) == (3, "out\n") and (tmp_path / "step.log").read_text() == "out\n"
-    A.took(rep, "replay", 0.0)
-    assert rep["peak_gib"]["replay"] >= 0.3
-    A.run(["true"], tmp_path)
-    A.took(rep, "fresh", 0.0)
-    assert rep["peak_gib"]["fresh"] < 0.3                                   # each step's own peak, not the run's so far
+    script = f"""import importlib.util, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("lean_audit", {str(HERE.parent / "check.py")!r})
+A = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(A)
+tmp = Path({str(tmp_path)!r})
+rep = {{"seconds": {{}}}}
+rc, text = A.run(["bash", "-c", sys.executable + " -c " + repr({child!r}) + "; exit $?"], tmp, tmp / "step.log")
+assert (rc, text) == (3, "out\\n") and (tmp / "step.log").read_text() == "out\\n", (rc, text)
+A.took(rep, "replay", 0.0)
+assert rep["peak_gib"]["replay"] >= 0.3, rep
+A.run(["true"], tmp)
+A.took(rep, "fresh", 0.0)
+assert rep["peak_gib"]["fresh"] < 0.3, rep                              # each step's own peak, not the run's so far
+"""
+    r = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
 
 
 def hyp(name, at, reaches, module=None, source="binder"):
@@ -1418,6 +1572,12 @@ def test_a_property_takes_one_acceptance_its_inputs_and_premises_and_concludes_w
     assert A.refusals(entry, [twice], []) == [], "two acceptances are one, of the pair (a binding property)"
     field = part([hyp("s.hscope", 0, ["P.Scope"], source="field"), ACCEPTS], inputs=[("s", 0)])
     assert "a field of an input it ranges over" in A.refusals(entry, [field], [])[0]
+    nonempty = part([hyp("W.nonempty", 0, ["Nonempty"], source="field") | {"head": "Nonempty"}, ACCEPTS], inputs=[("W", 0)])
+    assert "a field of an input it ranges over" in A.refusals(entry, [nonempty], [])[0], "`Nonempty` is a hypothesis too"
+    implied = part([ACCEPTS, hyp("hop", 2, ["P.check", "P.Q"]) | {"guarded": True, "applies": ["P.Q"]}], inputs=[("x", 0)])
+    assert "under a hypothesis of its own" in A.refusals(entry, [implied], [])[0]
+    named = part([hyp("hm", 1, ["P.check", "P.S"]) | {"applies": ["P.S"]}], inputs=[("x", 0)])
+    assert A.refusals(entry, [named], [])[0].startswith("takes no hypothesis"), "mentioning is not applying"
     assert "takes no hypothesis that its function returned accept" in A.refusals(entry, [part(inputs=[("x", 0)])], [])[0]
     assert A.refusals({"function": "P.check", "outcome": "reject"}, [fits], [])[0].startswith("takes no hypothesis")
     assert A.refusals({"function": "P.check", "outcome": "reject"},
@@ -1434,6 +1594,49 @@ def test_a_function_that_always_returns_takes_no_acceptance_and_each_conjunct_mu
     assert out == ["(conjunct 2) says nothing about P.step or P.LIMIT, the function its entry names"]
     assert A.reaches("P.protocol.check", {"P.protocol", "P.Protocol.check"})
     assert not A.reaches("P.protocol.check", {"P.protocol"})
+
+
+def test_an_entry_may_name_each_conjuncts_own_function_and_outcome():
+    """`conjuncts` in an entry: soundness of a check and simulation of a server, one statement, each conjunct held to its
+    own function and outcome, so the second needs no acceptance of the first's function; the list has one entry per
+    conjunct, each naming both, and replaces the entry's own function and outcome rather than joining them."""
+    sound = part([ACCEPTS], inputs=[("x", 0)], conclusion=["P.Good"])
+    sim = part(inputs=[("s", 0)], conclusion=["P.run"])
+    entry = {"conjuncts": [{"function": "P.check", "outcome": "accept"}, {"function": "P.run", "outcome": "none"}]}
+    assert A.refusals(entry, [sound, sim], []) == []
+    assert A.refusals({"function": "P.check", "outcome": "accept"}, [sound, sim], [])[0].startswith(
+        "(conjunct 2) takes no hypothesis that its function returned accept")
+    swapped = {"conjuncts": entry["conjuncts"][::-1]}
+    assert {w.split(")")[0] for w in A.refusals(swapped, [sound, sim], [])} == {"(conjunct 1", "(conjunct 2"}
+    for bad in ({"conjuncts": entry["conjuncts"][:1]}, {"conjuncts": [entry["conjuncts"][0], {"function": "P.run"}]},
+                {"conjuncts": "P.run"}):
+        assert A.refusals(bad, [sound, sim], [])[0].startswith("has 2 conjunct(s)"), bad
+    both = entry | {"function": "P.check"}
+    assert "both `conjuncts` and a function" in A.refusals(both, [sound, sim], [])[0]
+
+
+def test_a_probability_statement_has_its_acceptance_in_the_event():
+    """`shape.events`: a conjunct bounding `prob (fun o => accepts o ∧ … ∧ fails o)` takes premises only, so its
+    hypotheses, an acceptance outside the event among them, are each refused; an event of a constant not listed is not
+    read, and one with a conjunct before its last that isn't an acceptance (a hypothesis inside the event), one whose
+    acceptance holds under a hypothesis, or one with no conjunct after its acceptance, is refused."""
+    entry, prob = {"function": ["P.check", "P.verify"], "outcome": "accept"}, ["G.prob"]
+    c = lambda applies, guarded=False: {"applies": applies, "guarded": guarded}
+    event = lambda *cs, head="G.prob": {"head": head, "conjuncts": list(cs)}
+    held = part([hyp("hA3", 0, ["W.Uniform"], module="W.Premises"), hyp("hk", 2, ["LE.le"]),
+                 hyp("zr.hown", 1, ["P.check"], source="field"), ACCEPTS], inputs=[("zr", 1), ("k", 2)])
+    fits = held | {"events": [event(c(["P.check", "P.Accepts"]), c(["P.verify"]), c(["Not", "P.holds"])),
+                              event(c(["P.check"]), c(["P.check"])), event(c(["P.Q"]), head="Exists")]}
+    assert [w.split(" : ")[0] for w in A.refusals(entry, [fits], ["W.Premises"], events=prob)] == \
+        ["takes zr.hown", "takes h", "takes hk"]
+    assert "its event's first conjunct" in A.refusals(entry, [fits], ["W.Premises"], events=prob)[0]
+    assert A.refusals(entry, [part(inputs=[("x", 0)]) | {"events": fits["events"]}], [], events=prob) == []
+    assert A.refusals(entry, [fits], ["W.Premises"]) == [], "not listed: the old rule, which takes zr.hown as the acceptance"
+    for bad in ([event(c(["P.check"]), c(["P.Q"]), c(["P.holds"]))], [event(c(["P.check"], guarded=True), c(["P.holds"]))],
+                [event(c(["P.check"]))], [fits["events"][0], event(c(["P.Q"]), c(["P.holds"]))]):
+        got = A.refusals(entry, [part(inputs=[("x", 0)]) | {"events": bad}], [], events=prob)
+        assert [w.split(" whose")[0].split(" that")[0] for w in got] == ["bounds an event of G.prob", "takes no hypothesis"], bad
+        assert A.refusals(entry, [fits | {"events": bad}], ["W.Premises"], events=prob)[0].startswith("bounds an event")
 
 
 def test_the_frozen_list_exempts_a_guarantee_until_it_fits_and_then_must_shrink():

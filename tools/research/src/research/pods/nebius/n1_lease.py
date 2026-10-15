@@ -54,6 +54,7 @@ lock and the requests fall back to gpu-lease's local rules in place.
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
 import re
@@ -169,13 +170,31 @@ def lock_path(i: int) -> Path:
 
 def lock_holders() -> dict[int, list[int]]:
     """inode -> the pids /proc/locks names for its flocks: the process that took each lock, which for gpu-lease is a `flock`
-    helper long gone (the lock lives on in the lease's descriptors), so a lease is attributed by its owner line's pid instead."""
+    helper long gone (the lock lives on in the lease's descriptors), so a lease is attributed by its owner line's pid instead.
+    The kernel hands /proc/locks out a page per read, so with locks coming and going one read can miss a lock held throughout
+    (node 1: 182 lines, 3 pages): use it only where missing a lock costs a tick, and `locked` where it must not."""
     out: dict[int, list[int]] = {}
     for line in Path("/proc/locks").read_text().splitlines():
         f = line.split()
         if len(f) >= 6 and f[1] == "FLOCK":
             out.setdefault(int(f[5].split(":")[-1]), []).append(int(f[4]))
     return out
+
+
+def locked(path: Path) -> bool:
+    """Whether a process holds a flock on `path`: a non-blocking exclusive flock fails exactly then.  The file is opened without
+    following a link or waiting on a FIFO (the lease dir is 0777); one this can't open counts as not locked."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        return False
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return False
+    except BlockingIOError:
+        return True
+    finally:
+        os.close(fd)
 
 
 def cmdline(pid: int) -> list[str]:
@@ -272,12 +291,11 @@ def unborrowed(obs: dict, holders: set[str]) -> int | None:
 
 
 def waiters() -> list[dict]:
-    """gpu-lease's live wait files (a waiter holds a lock on its own), oldest first."""
-    held = lock_holders()
+    """gpu-lease's live wait files (a waiter locks its file before naming it `wait.*`, and holds it while it waits), oldest first."""
     out = []
     for f in sorted(DIR.glob("wait.*")):
         try:
-            if f.stat().st_ino not in held:
+            if not locked(f):
                 continue
             w = owner_fields(f.read_text().strip())
         except (OSError, ValueError):

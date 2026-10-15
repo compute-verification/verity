@@ -115,17 +115,17 @@ class _Program:
         defs = self.desc["definitions"]
         if d in defs:
             return [d]
-        return [k for k in defs if _stem(k) == d] if _STEM.match(d) else []
+        return [k for k in defs if _stem(k) == d] if _STEM.fullmatch(d) else []
 
     def resolve(self, key: str, entry: Mapping[str, Any] | None = None) -> tuple[str, Any]:
         """("ok" | "absent" | "error", detail) for a non-group key; ``entry`` supplies a ``call`` key's program."""
-        m = _KIND.match(key)
+        m = _KIND.fullmatch(key)
         if not m or m[1] == "group":
             return "error", {"code": "key", "key": key}
         kind, target = m[1], m[2]
         if kind == "call":
             program = (entry or {}).get("program")
-            if not isinstance(program, str) or not _SHA512.match(program):
+            if not isinstance(program, str) or not _SHA512.fullmatch(program):
                 return "error", {"code": "program", "key": key}
             if self.digest is None or program != self.digest:
                 return "ok", []                                          # another program's Call: checked against that program
@@ -140,7 +140,7 @@ class _Program:
             d, rest = t[1], t[2]
         specs = self.specs(d)
         if not specs:
-            return ("absent", key) if _STEM.match(d) or "{" in d else ("error", {"code": "key", "key": key})
+            return ("absent", key) if _STEM.fullmatch(d) or "{" in d else ("error", {"code": "key", "key": key})
         for fid in specs:
             why = _in_definition(self.desc, fid, kind, rest)
             if why:

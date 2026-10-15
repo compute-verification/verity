@@ -1,6 +1,7 @@
 import Flock.Hash
 import Flock.Bytes
 import Flock.Canon
+import Identity.Tagged
 
 /-!
 # The network certificate's encodings (record v2)
@@ -10,9 +11,9 @@ frame tree (`frameLeaf`, `node`, `empty`, `depth`, `framesRoot`, `openFrame`, `v
 (`realFrames`), the parameters digest (`parametersDigest`, canonical JSON through `Flock.canon`), the record head's
 encoding and digest (`RecordHead.encode`, `RecordHead.digest`, `recordHead`), and the message a certificate signs
 (`certificateMessage`, `verity.ml.crypto.lms.certificate_message`). A Python `ValueError` is an `Except.error` here.
-SHA-512 is `Flock.Sha512.hash`, and what each call hashes has a name of its own (`taggedInput`, `leafInput`, `nodeInput`,
-`emptyInput`, `messageInput`), as the properties (`Security/Properties/NetworkCertifier.lean`) name the strings a run
-hashes. The tree climbs by structural recursion (`pairs`, `climb`, `top`). `NetworkCheck.Difftest` holds these to the
+`tagged_sha512` is core's `Identity.taggedSha512`, which refuses what Python refuses. Every other SHA-512 is
+`Flock.Sha512.hash`, and what each such call hashes has a name of its own (`leafInput`, `nodeInput`, `emptyInput`,
+`messageInput`), as the properties (`Security/Properties/NetworkCertifier.lean`) name the strings a run hashes. The tree climbs by structural recursion (`pairs`, `climb`, `top`). `NetworkCheck.Difftest` holds these to the
 Python on generated inputs.
 -/
 
@@ -44,14 +45,6 @@ def digestBytes : Nat := 64
 def block (x : ByteArray) : E ByteArray :=
   if x.size ≤ 128 then pure (x ++ ⟨Array.replicate (128 - x.size) 0⟩)
   else throw "a tag block is one 128-byte SHA-512 block"
-
-/-- What `tagged_sha512` hashes: `"verity/tagged-sha512/v1\0" ‖ u32be len(tag) ‖ tag ‖ u64be len(payload) ‖ payload`. -/
-def taggedInput (tag : String) (payload : ByteArray) : ByteArray :=
-  let t := tag.toUTF8
-  "verity/tagged-sha512/v1\x00".toUTF8 ++ be32 t.size.toUInt32 ++ t ++ be64 payload.size.toUInt64 ++ payload
-
-/-- `tagged_sha512` (`verity/ml/commitments/identity.py`): SHA-512 of `taggedInput`. -/
-def taggedSha512 (tag : String) (payload : ByteArray) : ByteArray := Sha512.hash (taggedInput tag payload)
 
 /-- The grid parameters a record reads (`grid.GridParams`): T, r, B, τ_b and Q. -/
 structure Params where
@@ -182,7 +175,7 @@ def parametersManifest (p : Params) (ss : Option SyncSet) : Lean.Json :=
 
 /-- `parameters_digest`: `tagged_sha512(PARAMETERS_TAG, canonical_json_bytes(manifest))`. -/
 def parametersDigest (p : Params) (ss : Option SyncSet) : E ByteArray := do
-  pure (taggedSha512 parametersTag (← canon (parametersManifest p ss)).toUTF8)
+  Identity.taggedSha512 parametersTag (← canon (parametersManifest p ss)).toUTF8
 
 /-- `Direction`, by its value; its code is 0 for egress and 1 for ingress. -/
 inductive Direction where
@@ -244,7 +237,7 @@ def RecordHead.encode (h : RecordHead) : E ByteArray := do
   pure (out ++ h.root)
 
 /-- The record digest, `tagged_sha512(RECORD_TAG, R)`. -/
-def RecordHead.digest (h : RecordHead) : E ByteArray := do pure (taggedSha512 recordTag (← h.encode))
+def RecordHead.digest (h : RecordHead) : E ByteArray := do Identity.taggedSha512 recordTag (← h.encode)
 
 /-- `record_head`: the head of a window's grid, its counts the occupancy and its root over the real frames. -/
 def recordHead (link : String) (direction : Direction) (window : Int) (grid : Array (Array (Option ByteArray)))
@@ -258,21 +251,33 @@ def recordHead (link : String) (direction : Direction) (window : Int) (grid : Ar
 /-- `[x] = u64be len(x) ‖ x` (`lms._field`). -/
 def field (b : ByteArray) : ByteArray := be64 b.size.toUInt64 ++ b
 
-/-- What `certificate_message` hashes: `[tag] ‖ I ‖ [[link] ‖ [direction] ‖ u64be window] ‖ [record digest]`, refused
-unless the digest is 64 bytes, I is 16 and the window a u64. -/
-def messageInput (keyId : ByteArray) (link : String) (direction : Direction) (window : Int) (digest : ByteArray) :
-    E ByteArray := do
+/-- The message's domain-separation tag, LMS's network-certificate role tag (`lms.ROLES`): the message's own, distinct
+from the ids of the checks that read it (`verity/network-certificate/v3`, `verity/network-records/v2`). -/
+def messageTag : String := "verity/network-certificate-message/v2"
+
+/-- The length of a certifier session id (`lms.SESSION_BYTES`). -/
+def sessionBytes : Nat := 32
+
+/-- What `certificate_message` hashes:
+`[tag] ‖ I ‖ [[session] ‖ [link] ‖ [direction] ‖ u64be window] ‖ [record digest]`, the tag `messageTag`
+(`verity/network-certificate-message/v2`, LMS's network-certificate role tag, the message's own and distinct from the ids
+of the checks that read it, `verity/network-certificate/v3` and `verity/network-records/v2`); refused unless the digest
+is 64 bytes, the window a u64, the session 32 bytes and I 16. -/
+def messageInput (keyId session : ByteArray) (link : String) (direction : Direction) (window : Int)
+    (digest : ByteArray) : E ByteArray := do
   if digest.size ≠ digestBytes then throw "a record digest is 64 bytes"
   let w ← uBE 8 window "window"
+  if session.size ≠ sessionBytes then throw s!"a certifier session id is 32 bytes, not {session.size}"
   if keyId.size ≠ 16 then throw s!"an LMS identifier is 16 bytes, not {keyId.size}"
-  let context := field link.toUTF8 ++ field direction.value.toUTF8 ++ w
-  pure (field "verity/network-certificate/v1".toUTF8 ++ keyId ++ field context ++ field digest)
+  let context := field session ++ field link.toUTF8 ++ field direction.value.toUTF8 ++ w
+  pure (field messageTag.toUTF8 ++ keyId ++ field context ++ field digest)
 
-/-- `certificate_message` (`certificate.py` and `verity.ml.crypto.lms`): SHA-512 of
-`[tag] ‖ I ‖ [[link] ‖ [direction] ‖ u64be window] ‖ [record digest]`, the tag `verity/network-certificate/v1`; refused
-unless the digest is 64 bytes, I is 16 and the window a u64. -/
-def certificateMessage (keyId : ByteArray) (link : String) (direction : Direction) (window : Int) (digest : ByteArray) :
-    E ByteArray :=
-  Sha512.hash <$> messageInput keyId link direction window digest
+/-- `certificate_message` (`certificate.py` and `verity.ml.crypto.lms`): SHA-512 of `messageInput`,
+`[tag] ‖ I ‖ [[session] ‖ [link] ‖ [direction] ‖ u64be window] ‖ [record digest]` with the tag
+`verity/network-certificate-message/v2`; refused unless the digest is 64 bytes, the window a u64, the session 32 bytes
+and I 16. -/
+def certificateMessage (keyId session : ByteArray) (link : String) (direction : Direction) (window : Int)
+    (digest : ByteArray) : E ByteArray :=
+  Sha512.hash <$> messageInput keyId session link direction window digest
 
 end NetworkCheck

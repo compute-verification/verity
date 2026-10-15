@@ -10,7 +10,8 @@
 #               loopback M0 (M0=1) and --zk, WARM + RUNS sessions each, upstream's replay --zk of the last --zk session, and
 #               the seed-injection build's prover_is_deterministic --zk --gpu, every later build's transcript digest checked
 #               against the first's (equal: byte-identical proofs and transcripts)
-#   STEP=lean   (CPU) Lean's flock-verify verify --zk on each build's last --zk session of statement K
+#   STEP=lean   (CPU) Lean's flock-verify verify --zk on each build's last --zk session of statement K; the job fails
+#               unless every build's exited 0 with its VERDICT accepted (lean_verdicts.py), a build without one too
 # The prover runs on the job's first PCPUS cores, the verifier (serve, replay) on the rest. Every step writes out/summary-$STEP.json.
 # env: FLOCK_WORK=/workspace/jobs/zk-cpu-steps  STATEMENTS="4096:2048 14336:512" (build: K:N each)  K=4096 N=2048 (prove, lean)
 #      BUILDS= (prove, lean)  M0=1  WARM=1  RUNS=3  PCPUS=16  SM=120
@@ -48,7 +49,7 @@ LEAN_BIN=$L/lean-$LSHA/flock-verify; [ -x $LEAN_FROM/lean-$LSHA/flock-verify ] &
 UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1; UV=$HOME/.local/bin/uv; }
 [ -x $W/py/bin/python ] || { $UV venv -q --python 3.12 $W/py && $UV pip install -q --python $W/py/bin/python numpy blake3; } || exit 1
-export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/catalog:$REPO/kernels:$REPO/experimental:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src
+export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src
 export FC_COINS=os FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
 GI=${CUDA_VISIBLE_DEVICES:-0}; GI=${GI%%,*}
 
@@ -288,7 +289,8 @@ lean)
     [ -f $DD/sess/$b-zk/session.json ] || { echo "build $b: no --zk session of k$K (run STEP=prove first)"; continue; }
     echo "/usr/bin/time -v -o $O/lean/time-$b.txt $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $D/circuit.txt --public $D/pub-$N.bin --partition $D/partition.json --session $DD/sess/$b-zk > $O/lean/$b.log 2> $O/lean/$b.err; echo $b lean exit \$?"
   done | xargs -d '\n' -P ${JOBS:-2} -I{} sh -c "{}"
+  python3 verity/ml/flock/pod/lean_verdicts.py $O/lean $BUILDS; LEAN_RC=$?
   ;;
 esac
 summary
-true
+exit ${LEAN_RC:-0}

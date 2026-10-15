@@ -88,7 +88,7 @@ def gate_kind(fn: Any) -> tuple[str, int] | None:
     """``(kind, inputs)`` of a gate of the profile (``kind`` in `KINDS`), else None."""
     if fn is NOT:
         return ("not", 1)
-    m = _N_ARY_ID.match(fn.id) if isinstance(fn, PrimitiveDefinition) else None
+    m = _N_ARY_ID.fullmatch(fn.id) if isinstance(fn, PrimitiveDefinition) else None
     if m is None:
         return None
     key = (m[1].lower(), int(m[2]))
@@ -125,7 +125,7 @@ def is_gate(fn: Any) -> bool:
 
 
 def is_constant_bit(fn: Any) -> bool:
-    return isinstance(fn, PrimitiveDefinition) and _CONSTANT_ID.match(fn.id) is not None and not fn.params
+    return isinstance(fn, PrimitiveDefinition) and _CONSTANT_ID.fullmatch(fn.id) is not None and not fn.params
 
 
 def _is_boolean_primitive(fn: PrimitiveDefinition) -> bool:

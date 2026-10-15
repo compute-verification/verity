@@ -3609,9 +3609,86 @@
     "expect": "reject",
     "upstream_expect": "accept",
     "why": "\u00a716.10: not the verifier's rec-residuals/\u2026 (row r differs), D13"
+   },
+   {
+    "name": "rec_sparse_misnamed",
+    "mutation": "rename the CIRCUIT unit of a rec_sparse.stage statement's circuit file rec-sparse/n2-e6-s0 (no -t<T_LOG>, or a number with a leading zero)",
+    "expect": "reject",
+    "upstream_expect": "accept",
+    "why": "\u00a716.10: not rec-sparse/n<NU>-e<ELL>-s<S_LOG>-t<T_LOG>, D13"
+   },
+   {
+    "name": "rec_sparse_shape_invalid",
+    "mutation": "rename the CIRCUIT unit of a rec_sparse.stage statement's circuit file rec-sparse/n2-e5-s0-t1 (or NU 0, or T_LOG 17)",
+    "expect": "reject",
+    "upstream_expect": "accept",
+    "why": "\u00a716.10: NU is at least 1, ELL at least 6 and T_LOG at most 16, D13"
+   },
+   {
+    "name": "rec_sparse_shape_above_bits",
+    "mutation": "rename the CIRCUIT unit of a rec_sparse.stage statement's circuit file with NU 1000000000",
+    "expect": "reject",
+    "upstream_expect": "accept",
+    "why": "\u00a716.10: the shape exceeds the unit's input bits, refused before any of the shape's sizes is computed, D13"
+   },
+   {
+    "name": "rec_sparse_other_shape",
+    "mutation": "rename the CIRCUIT unit of a rec_sparse.stage statement's circuit file from rec-sparse/n2-e6-s0-t1 to rec-sparse/n2-e6-s1-t1",
+    "expect": "reject",
+    "upstream_expect": "accept",
+    "why": "\u00a716.10: its input and output bits are not the shape's, refused before the shape's net is built, D13"
+   },
+   {
+    "name": "rec_sparse_net_differs",
+    "mutation": "swap the operands of one AND row of the CIRCUIT unit of a rec_sparse.stage statement's circuit file",
+    "expect": "reject",
+    "upstream_expect": "accept",
+    "why": "\u00a716.10: not the verifier's rec-sparse/\u2026 (row r differs), D13"
+   },
+   {
+    "name": "rec_opening_misnamed",
+    "mutation": "rename the CIRCUIT unit of a rec_residuals.stage_opening statement's circuit file rec-opening/m22-c2 (no -p<j>, or a number with a leading zero)",
+    "expect": "reject",
+    "upstream_expect": "accept",
+    "why": "\u00a716.10: not rec-opening/m<m>-c<claims>-p<j>, D13"
+   },
+   {
+    "name": "rec_opening_unscheduled",
+    "mutation": "rename the CIRCUIT unit of a rec_residuals.stage_opening statement's circuit file rec-opening/m21-c2-p0 (or 0 claims)",
+    "expect": "reject",
+    "upstream_expect": "accept",
+    "why": "\u00a716.10: m has a fast100 schedule, claims at least 1, D13"
+   },
+   {
+    "name": "rec_opening_claims_above_bits",
+    "mutation": "rename the CIRCUIT unit of a rec_residuals.stage_opening statement's circuit file with claims 1000000000",
+    "expect": "reject",
+    "upstream_expect": "accept",
+    "why": "\u00a716.10: the claims exceed the unit's input bits, refused before the structure is computed, D13"
+   },
+   {
+    "name": "rec_opening_part_out_of_range",
+    "mutation": "rename the CIRCUIT unit of a rec_residuals.stage_opening statement's circuit file from rec-opening/m22-c2-p0 to rec-opening/m22-c2-p1 (m = 22 at 2 claims has one part)",
+    "expect": "reject",
+    "upstream_expect": "accept",
+    "why": "\u00a716.10: part 1 of 1, D13"
+   },
+   {
+    "name": "rec_opening_other_claims",
+    "mutation": "rename the CIRCUIT unit of a rec_residuals.stage_opening statement's circuit file from rec-opening/m22-c2-p0 to rec-opening/m22-c3-p0",
+    "expect": "reject",
+    "upstream_expect": "accept",
+    "why": "\u00a716.10: its input bits are not its part's, refused before the part's net is built, D13"
+   },
+   {
+    "name": "rec_opening_net_differs",
+    "mutation": "swap the two forms of one AND row of the CIRCUIT unit of a rec_residuals.stage_opening statement's circuit file",
+    "expect": "reject",
+    "upstream_expect": "accept",
+    "why": "\u00a716.10: not the verifier's rec-opening/\u2026 (row r differs), D13"
    }
   ],
-  "note": "The first 12 cases ran on two cells with the recorded outcomes; the remaining 8 are new record-level cases this spec adds (their outcome under upstream is recorded in phase 2; upstream_expect marks the two intended divergences D1, D2 of PROTOCOL.md \u00a717.1). The six rec_residuals_* cases (\u00a716.10, D13) refuse a rec-residuals/\u2026 unit that is not the verifier's part net; upstream takes the unit as the file gives it."
+  "note": "The first 12 cases ran on two cells with the recorded outcomes; the remaining 8 are new record-level cases this spec adds (their outcome under upstream is recorded in phase 2; upstream_expect marks the two intended divergences D1, D2 of PROTOCOL.md \u00a717.1). The six rec_residuals_* cases (\u00a716.10, D13) refuse a rec-residuals/\u2026 unit that is not the verifier's part net, the five rec_sparse_* cases a rec-sparse/\u2026 unit that is not the verifier's sparse-phase net, and the six rec_opening_* cases a rec-opening/\u2026 unit that is not the verifier's opening part net; upstream takes the unit as the file gives it."
  },
  "forgeries": {
   "note": "The red-team forgeries were run in-process against upstream's verifier or the live server; each run stored its harness and a verdict table, not the forged record and proof bytes. Phase 2 materialises them as replayable (record, proofs) pairs with the dump plan below.",
@@ -4496,7 +4573,7 @@
      "circuit_sha512": "5c33464ccf9279dcd362238a3529b140794d411ab85e53a2e0bce67ed4495f8a77f3c59c967ce260bd02ea678aacf1fc2006264c780d4b15ee74f813493926d6",
      "detail": "rope-head d64 neox-bf16, 4 instances: every output port an hm96 row hashed in the circuit; the public file holds roots, hiding leaves and structure only"
     },
-    "lean_statement": "verity/flock-circuit+seed-injection",
+    "lean_statement": "verity/flock-circuit@f5df3bbc+seed-injection",
     "selftest": [
      "art:50de1919/flat/rope-head/records"
     ],
@@ -4514,7 +4591,7 @@
      "circuit_sha512": "f88a445704e14a17ded1654ca99ce1b132c8965f1e3a19e19fb8a8322dca95691d5a0bbcc3e88f561ea82388bede7a92fced85a2fa9e1eda629d5aaa4b3f9985",
      "detail": "gemm-coordinate k64 sm80-mma-bf16, 4 instances: the one BF16 output an hm96 row (word 0 the value, the rest forced zero) hashed in the circuit; the public file holds roots, hiding leaves and structure only"
     },
-    "lean_statement": "verity/flock-circuit+seed-injection",
+    "lean_statement": "verity/flock-circuit@f5df3bbc+seed-injection",
     "selftest": [
      "art:50de1919/flat/gemm-coordinate/records"
     ],
@@ -4532,13 +4609,13 @@
      "circuit_sha512": "35f72614230500feee6f54ba75618965d77a554d9b6be78134b27323a236bafaf3bff0ce0f44d8f1f66d75b79acc9bb383c7f6d875459bb8fa5ccc5b3c021cb6",
      "detail": "rope-head d64 neox-bf16 typed, 4 instances: every output port an hm96 row hashed in the circuit; the public file holds roots, hiding leaves and structure only"
     },
-    "lean_statement": "verity/flock-circuit/types+seed-injection",
+    "lean_statement": "verity/flock-circuit/types@f5df3bbc+seed-injection",
     "selftest": [
      "art:50de1919/typed/rope-head/records"
     ],
     "selftest_note": "every selftest case that runs a session (20: 3 honest; the false statements each with its own pub.bin); upstream's verdicts are its live ones in each case.json",
     "agreement": "local ci.py --live --sets 4 (2026-10-02T00:38Z, Lean at ce0e60810): 20/20, 3 accepted",
-    "lean_refuses": "refused: verity/flock-circuit/types+seed-injection, a typed statement: a statement form the soundness proof does not cover"
+    "lean_refuses": "refused: verity/flock-circuit/types@f5df3bbc+seed-injection, a typed statement: a statement form the soundness proof does not cover"
    },
    {
     "tags": "verity/flock-circuit/types (hidden outputs, PROTOCOL.md §16.13): one BF16 GEMM coordinate as a template",
@@ -4550,13 +4627,13 @@
      "circuit_sha512": "8d28d280ab25dadcd7553b568eccc23e8ac36877653f6d1383edf70369249f87be81fd06811952097285b7a06927004508873d8222830604a80d58514ccd46f7",
      "detail": "gemm-coordinate k64 sm80-mma-bf16 typed, 4 instances: the one BF16 output an hm96 row hashed in the circuit; the public file holds roots, hiding leaves and structure only"
     },
-    "lean_statement": "verity/flock-circuit/types+seed-injection",
+    "lean_statement": "verity/flock-circuit/types@f5df3bbc+seed-injection",
     "selftest": [
      "art:50de1919/typed/gemm-coordinate/records"
     ],
     "selftest_note": "every selftest case that runs a session (21: 3 honest; the false statements each with its own pub.bin); the selftest's host_units_match_witness check fails here and on its base (a host-side unit evaluation, not a session), so all_pass is false; upstream's verdicts are its live ones in each case.json",
     "agreement": "local ci.py --live --sets 5 (2026-10-02T00:38Z, Lean at ce0e60810): 21/21, 3 accepted",
-    "lean_refuses": "refused: verity/flock-circuit/types+seed-injection, a typed statement: a statement form the soundness proof does not cover"
+    "lean_refuses": "refused: verity/flock-circuit/types@f5df3bbc+seed-injection, a typed statement: a statement form the soundness proof does not cover"
    }
   ]
  }

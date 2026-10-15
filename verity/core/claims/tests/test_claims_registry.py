@@ -48,8 +48,55 @@ def test_bare_ids_are_kebab_case_without_a_slash() -> None:
     assert all(re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", k) for k in (*PROPERTIES, *INSTANCES))
 
 
+def test_bandwidth_device_claims_are_measured_and_cited_separately() -> None:
+    device, inst = get("bandwidth-device"), get("bandwidth-instantiation")
+    assert (device.kind, device.standing) == ("model", None)
+    assert all((get(i).kind, get(i).standing) == ("assumption", "measured")
+               for i in ("bandwidth-s-chip", "bandwidth-side-cap", "bandwidth-regen-time"))
+    assert (inst.kind, inst.standing) == ("assumption", "conjectured") and "uniformly random blocks" in inst.name
+
+
+def test_rate_audit_claims_are_cited_separately() -> None:
+    device, work = get("rate-device"), get("rate-codec-work")
+    assert (device.kind, device.standing) == ("model", None) and "L - rho" in device.name and "non-adaptive" in device.name
+    assert (work.kind, work.standing) == ("assumption", "measured") and "x * c_enc / b" in work.name
+    assert "k >= 2 rounds" in work.name and "false when the payload is known" in work.name
+    assert "Incompressible(W)" in work.name
+    verbatim = get("rate-sketch-verbatim")
+    assert (verbatim.kind, verbatim.standing) == ("model", None) and "only as its blocks" in verbatim.name
+    assert "precomputed sketches" in verbatim.name
+
+
+def test_pous_end_to_end_rings_claims_are_cited_separately() -> None:
+    device, speed, inst = get("pous-ring-device"), get("pous-ring-speed"), get("pous-ring-instantiation")
+    assert (device.kind, device.standing) == ("model", None) and not any(c.isdigit() for c in device.name)
+    assert (speed.kind, speed.standing) == ("assumption", "measured") and "D = 16,446" in speed.name and "Q = 2^20" in speed.name and "L = 2^64" in speed.name
+    assert (inst.kind, inst.standing) == ("assumption", "conjectured") and "SHA-512-CTR" in inst.name
+    assert get("prf/sha-512").kind == "assumption"
+
+
+def test_pouw_gamma_per_coin_is_a_conjecture_at_w1_priced() -> None:
+    e = get("pouw-gamma-per-coin")
+    assert (e.kind, e.standing) == ("assumption", "conjectured") and "budget per coin" in e.name and "W1 priced" in e.name
+
+
 def test_the_sites_nine_assumptions_resolve_and_the_retired_ones_do_not() -> None:
     site = ("cr/sha-256", "cr/sha-512", "cr/blake3", "cr/blake2b", "cr/poseidon2-babybear", "cr/poseidon2-koalabear", "xof/shake-256",
             "random-oracle", "honest-verifier")
     assert all(get(i).id == i and get(i).kind == "assumption" for i in site)
     assert not [k for k in ENTRIES if any(r in k for r in ("beacon", "auditor", "challenger"))]
+
+
+def test_the_registrant_premise_is_a_model_of_the_provers_covered() -> None:
+    e = get("registrant-holds-openings")
+    assert (e.kind, e.standing, e.label) == ("model", None, "Registrant holds openings")
+    assert "a row and salt under every leaf it registered" in e.name and "outside the guarantee" in e.name
+    assert "its own workers behind the firewall hold the salts they committed R's level-0 top rows under" in e.name
+
+
+def test_the_trusted_host_keeps_the_devices_persistent_state() -> None:
+    e = get("trusted-nebius-host")
+    assert (e.kind, e.standing) == ("assumption", "standard")
+    assert e.name == ("An auditor-trusted device (a network certifier, the memory challenger) is the auditor's hardware "
+                      "on a machine its host provider runs and the prover doesn't control; it runs its stated code on its "
+                      "Nebius host, and its host never restores an earlier copy of the state the device keeps there")

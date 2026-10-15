@@ -61,7 +61,7 @@ def EndToEndRegistered : Prop :=
     (I : Inputs) (ht : I.tags.typed = false) (own : Array Flock.Registered.Port)
     (c : Flock.Circuit) (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     (pub : Public) (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
-    (hscope : Discharge.Layout.scopeOk c = true)
+    (hscope : Discharge.Layout.scopeOkH c = true)
     -- the law: a uniform `kd`-subset of the `n` units, split evenly over the session's tables
     (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     -- the record: the draw file at each draw, and the session at each draw and registration
@@ -88,7 +88,7 @@ def EndToEndRegistered : Prop :=
     let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
-        (runsZCJH_live I ht hc (Discharge.Layout.scopeOk_spec hU hscope).2.1 dj y₀ wr _ hTags hCust.1
+        (runsZCJH_live I ht hc (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hCust.1
           fun _ => Discharge.ZkReg.drawOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ
     -- cr/sha-512 for the knowledge finders of each table the prover's session runs
     (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ (L.draw ω) (reg σ)) j
@@ -105,7 +105,7 @@ def EndToEndRegistered : Prop :=
             (Fintype.card (ΩcZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb L p) : ℝ) / Fintype.card L.Ω) *
           (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ)) ∧
     ∀ o : Reg × Finset (Fin n) × Discharge.Exec.Transcript, LiveAcceptsZKR I own o →
-      ∀ rd : FlockSoundness.Registered.Reads (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
+      ∀ rd : FlockSoundness.Registered.ReadsX (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
           (rsShHJS dj y₀ ht hc hscope hU hpub),
         OwnReadsHJ I own c pub o.2.2 rd.isRead rd.port rd.readAt → rd.Checked o.1 (regPathsHJ I c pub o.2.2 rd.port)
 
@@ -134,7 +134,7 @@ def EndToEndRegisteredDrawn : Prop :=
     (I : Inputs) (ht : I.tags.typed = false) (own : Array Flock.Registered.Port)
     (c : Flock.Circuit) (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     (pub : Public) (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
-    (hscope : Discharge.Layout.scopeOk c = true)
+    (hscope : Discharge.Layout.scopeOkH c = true)
     -- the law: a `kd`-subset of the `n` units, split evenly over the session's tables
     (kd : ℕ) (hdiv : kd % nTab I = 0)
     -- the record: the draw file at each draw, and the session at each draw and registration
@@ -160,7 +160,7 @@ def EndToEndRegisteredDrawn : Prop :=
     let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
-        (runsZCJH_live I ht hc (Discharge.Layout.scopeOk_spec hU hscope).2.1 dj y₀ wr _ hTags hCust.1
+        (runsZCJH_live I ht hc (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hCust.1
           fun _ => Discharge.ZkReg.drawOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ
     -- cr/sha-512 for the knowledge finders of each table the prover's session runs
     (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ (L.draw ω) (reg σ)) j
@@ -176,7 +176,7 @@ def EndToEndRegisteredDrawn : Prop :=
             (Fintype.card (ΩcZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb L p) : ℝ) / Fintype.card L.Ω) *
           (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ)) ∧
     ∀ o : Reg × Finset (Fin n) × Discharge.Exec.Transcript, LiveAcceptsZKR I own o →
-      ∀ rd : FlockSoundness.Registered.Reads (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
+      ∀ rd : FlockSoundness.Registered.ReadsX (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
           (rsShHJS dj y₀ ht hc hscope hU hpub),
         OwnReadsHJ I own c pub o.2.2 rd.isRead rd.port rd.readAt → rd.Checked o.1 (regPathsHJ I c pub o.2.2 rd.port)
 

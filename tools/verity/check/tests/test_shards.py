@@ -148,7 +148,9 @@ def test_a_shard_runs_its_parts_alone_in_their_groups_order_and_lean_audit_on_it
 
 
 def test_a_shard_without_the_other_half_gets_every_core(tmp_path, monkeypatch):
-    monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
+    """circuit-check gets its cores whatever the memory: its own admission by measured peaks bounds the memory, and a flat 160 GB
+    per worker held a cold `--all` in a 560 GB slot to 5 workers for over 2 h (f7b5, 10 Oct)."""
+    monkeypatch.setattr(CHECK, "memory_gb", lambda: 160)
 
     def jobs(n, k):
         gs = CHECK.groups(tmp_path, 16, only=_resolved(n)[k - 1])

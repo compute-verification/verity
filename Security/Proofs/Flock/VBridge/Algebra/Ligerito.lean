@@ -22,9 +22,31 @@ Ligerito.lean:165–277) computes over `F256`: a K value `(c0, c1)` is the word 
   final check passes; `finalProg_of_finalOK` applies it to `FinalOK`.
 -/
 
-namespace FlockVBridge.Algebra
+namespace Flock.RecAlgebra
 
 open Flock FlockSoundness.Refine
+
+/-! ## A record's rounds of some coins -/
+
+/-- A record with no round of no coins, which `Coins.ofRounds` reads as recorded: it skips a round of no coins
+(RecAlgebra.lean, `Coins.ofRounds`), and a record whose rounds have `run`'s sizes has none (`verifierRows_schedule`). -/
+def NoEmpty (rounds : Array (Array F128)) : Prop := ∀ r ∈ rounds, r.size ≠ 0
+
+theorem filter_noEmpty {rounds : Array (Array F128)} (h : NoEmpty rounds) : rounds.filter (·.size ≠ 0) = rounds :=
+  Array.filter_eq_self.mpr fun r hr => decide_eq_true (h r hr)
+
+theorem noEmpty_filter (rounds : Array (Array F128)) : NoEmpty (rounds.filter (·.size ≠ 0)) := fun r hr => by
+  simpa using (Array.mem_filter.mp hr).2
+
+theorem noEmpty_of_sizes {rounds : Array (Array F128)} {ns : List Nat} (h : rounds.toList.map Array.size = ns)
+    (hn : ∀ n ∈ ns, n ≠ 0) : NoEmpty rounds := fun r hr => by
+  subst h
+  exact hn _ (List.mem_map_of_mem (Array.mem_toList_iff.mpr hr))
+
+theorem ofRounds_filter (rounds : Array (Array F128)) :
+    Coins.ofRounds (rounds.filter (·.size ≠ 0)) = Coins.ofRounds rounds := by
+  unfold Coins.ofRounds
+  rw [filter_noEmpty (noEmpty_filter rounds)]
 
 /-! ## K values as the verifier's words -/
 
@@ -440,4 +462,4 @@ theorem ligerito_of_residuals {sh : Shape} {w comb : Array F128} {cons : Nat →
     ligerito_checks h4 (fun x hx => hzero x (by rw [hrs]; simp [hx]))
   exact ⟨k3, ext, st, k, hl, hd, hm, ho, hlo, hlc, hf⟩
 
-end FlockVBridge.Algebra
+end Flock.RecAlgebra

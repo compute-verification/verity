@@ -51,8 +51,10 @@ import numpy as np
 
 from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.codec import program_digest
+from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Tuple, Value
 from verity.ml.circuits.cut import DefinitionCut
+from verity.ml.circuits.defs import PrimitiveDefinition
 from verity.ml.circuits.units import Activation, PartitionUnits, UnitCircuit
 
 from . import circuit as FC
@@ -374,11 +376,17 @@ def pack(uc: UnitCircuit, ins: Sequence[Sequence[int]], want: Sequence[Sequence[
     return rows, outs, per_port
 
 
-def _shims(name: str, content: bytes, ports: int = 1):
+def _shims(name: str, content: bytes, ports: int = 1, definition: Any = None):
+    """The subcircuit and input set `circuit.compose` and `circuit.write` read for a class. With ``definition`` (the flat
+    Definition the class's unit is one whole activation of), META ``program_digests`` names it as the circuit's template, as
+    `rec_outer`'s statements name theirs, so that a verifier given the program finds the statement's units to be activations
+    of the circuit's template; else the class itself (``unit-class/…``)."""
     port = lambda nm: SimpleNamespace(name=nm, dtype="u16")  # noqa: E731
+    named = {} if definition is None else {"definition": lambda **_: definition}
+    digests = ({f"unit-class/{name}": hashlib.sha256(content).hexdigest()} if definition is None else
+               {definition.id: program_digest(Program(definition))})
     sub = SimpleNamespace(id=f"unit-class/{name}", template=SimpleNamespace(id="unit-class"), inputs=[port(f"p{i}") for i in range(ports)],
-                          outputs=[port("out")],
-                          program_digests=lambda statics: {f"unit-class/{name}": hashlib.sha256(content).hexdigest()})
+                          outputs=[port("out")], program_digests=lambda statics: digests, **named)
     return sub, SimpleNamespace(subcircuit=sub, name=f"unit-class-{name}", content_digest=hashlib.sha256(content).hexdigest())
 
 
@@ -587,21 +595,30 @@ def class_lanes(units: PartitionUnits, cl, key, n: int, shared: dict[str, tuple[
 
 def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_dir: Path, salt_key: bytes,
           packed: bool | None = None, core_rows: bool | None = None, wiring: Wiring | None = None, seg_ports: frozenset = frozenset(),
-          seg_out_rows: tuple = (), v2_out_rows: tuple = (), pad: int | None = None) -> dict:
+          seg_out_rows: tuple = (), v2_out_rows: tuple = (), pad: int | None = None, share_rows: bool = True) -> dict:
     """``circuit.txt``, the prover's ``inst-n.bin`` and the verifier's ``pub-n.bin`` for one class: one row port per input source,
     and each source's row committed once, shared by every instance that reads it (``lanes_`` from `class_lanes`; lanes without
     source identities share equal rows; ``packed``: narrow words share leaves, default FLOCK_PACK_WORDS; ``core_rows``: an FP
     GEMM coordinate's rows are core's bit rows, packed, one port per row (`element_rows`), default FLOCK_CORE_ROWS).
     ``seg_ports``, ``seg_out_rows`` and ``v2_out_rows`` are `circuit.compose`'s, over the shims' port names (``p0``, …, ``out``).
+    Unwired, a class whose unit is one whole activation of its flat Definition names that Definition as the circuit's template
+    (META ``program_digests``, `_shims`); a class of part of an activation, or of a primitive (which has no Program), names
+    itself.
 
     ``wiring`` (a template-instance partition, lanes with source identities, the instances its ``indices``): META names the
-    template as the unit class's ``definition``, and every read of another unit's outputs is a link port (`link_ports`, META
-    ``links``): its row the writer's output row's words (one word per output, as ``out`` holds them, never packed), one table
-    row per reading instance, committed under the writer's ``out`` salt (and, ``strict``, checked here to be the writer's row).
+    template as the unit class's ``definition`` (the class names itself in ``program_digests``), and every read of another
+    unit's outputs is a link port (`link_ports`, META ``links``): its row the writer's output row's words (one word per output,
+    as ``out`` holds them, never packed), one table row per reading instance, committed under the writer's ``out`` salt (and,
+    ``strict``, checked here to be the writer's row).
 
     ``pad``: the statement padded to ``pad`` instances (a public cap, `rec_shape`), the lanes its first and the rest fillers:
     every input word zero, one source identity of their own per port (so the fillers open one committed row, zero, per port),
-    and the output the class lowering's own on them, checked as every lane's is (`stage_tiled`'s ``real``)."""
+    and the output the class lowering's own on them, checked as every lane's is (`stage_tiled`'s ``real``).
+
+    ``share_rows=False`` (an unwired class): every instance opens its own row per port, equal rows included, and the public file
+    has no shared-row tables, the form a verifier without its own registered reads covers (``ProvedScope.sharedRowsOk``)."""
+    if wiring is not None and not share_rows:
+        raise ValueError("a wired class's link rows are its writers' shared rows (share_rows)")
     core_rows = CORE_ROWS if core_rows is None else core_rows
     packed = True if core_rows else PACK_WORDS if packed is None else packed
     act = units.activation(cl.definition)
@@ -652,8 +669,9 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
                   for i, (o, s) in enumerate(zip(origin, spans))]
     links = [{"port": f"p{i}", "leaves": list(s)} for i, s in enumerate(spans) if s is not None]
     low = class_lowering(act, uc, f"unit-class/{name}", groups, packs, blocks=not core_rows)
+    whole = wiring is None and uc.computing == act.graph.n and not isinstance(act.fn, PrimitiveDefinition)
     sub, iset = _shims(name, uc.form.encode() + (b"/" + suffix[1:].encode() if suffix else b"") +
-                       (b"/links:" + json.dumps(links).encode() if links else b""), len(groups))
+                       (b"/links:" + json.dumps(links).encode() if links else b""), len(groups), act.fn if whole else None)
     rows, outs, per_port = pack(uc, ins, want, low.definition.w_in, low.definition.w_out, groups, low.definition.port_words, packs)
     got, _cut, ok = low.evaluate(rows.astype(np.uint64))
     if real is not None:
@@ -712,8 +730,10 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
                     raise AssertionError(f"class {name}: instance {k}'s link row p{i} is not instance {w}'s output row")
                 if wiring.writer_salts:
                     salts[f"p{i}"][r] = salts[out_name][w]
+    if not share_rows:
+        tables = refs = None
     head = FC.write(text, iset, 0, n, out_dir / f"inst-{n}.bin", out_dir / f"pub-{n}.bin", salt_key, rows=per_port, outs={"out": outs},
-                    share_rows=True, tables=tables, refs=refs, salts=salts, indices=list(wiring.indices) if wiring else None)
+                    share_rows=share_rows, tables=tables, refs=refs, salts=salts, indices=list(wiring.indices) if wiring else None)
     return ({} if real is None else {"real": real, "fillers": n - real}) | \
         {"n": n, "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"], "circuit_bytes": len(text), "w_in": low.definition.w_in,
             "w_out": low.definition.w_out, "unit_rows": low.layout.useful, "ports": list(low.definition.port_words),
@@ -901,7 +921,7 @@ def stage_unit(definition, name: str, in_rows: Sequence[tuple[str, str, int, Seq
     the salts are ``salts``' where given, else `circuit.stage_salts`'. ``public_inputs`` (``{param: {"seed", "derivation"}}``):
     parameters that are public input ports, not rows (`circuit.compose`; PoUW's anchors, which the verifier recomputes from
     public seeds), laid out as `unit_lowering`'s ``public``, ``rows[param]`` their words per instance. Writes ``circuit.txt``,
-    ``inst.bin`` and ``pub.bin``; returns META, the outputs per port and every row's salts."""
+    ``inst.bin`` and ``pub.bin``; returns META, the outputs per port, every row's salts, and the unit's ANDs and matrix entries."""
     from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG
     from verity.ml.circuits.evaluation import evaluate
 
@@ -970,7 +990,8 @@ def stage_unit(definition, name: str, in_rows: Sequence[tuple[str, str, int, Seq
     (out_dir / "circuit.txt").write_text(text)
     FC.write(text, iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin", salt_key, rows={r: np.asarray(rows[r], dtype=np.uint16) for r, *_ in in_rows},
              outs=outs, salts=salts, public_words={p: np.asarray(rows[p], dtype=np.uint16) for p in public_inputs})
-    return {"meta": meta, "outs": outs, "salts": salts, "ands": low.layout.counts["ands"], "circuit_sha512": FC.digest(text)}
+    return {"meta": meta, "outs": outs, "salts": salts, "ands": low.layout.counts["ands"],
+            "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"], "circuit_sha512": FC.digest(text)}
 
 
 def statement(binary: str, d: Path, n: int, timeout: int = 3600) -> dict:

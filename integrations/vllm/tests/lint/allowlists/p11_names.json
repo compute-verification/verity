@@ -411,7 +411,6 @@
     {"file": "verity_vllm/program/frontend/rules/vllm_moe.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N", "count": 4},
     {"file": "verity_vllm/program/frontend/rules/vllm_sampling.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "M-nnnn", "count": 3},
     {"file": "verity_vllm/program/frontend/rules/vllm_sampling.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N", "count": 3},
-    {"file": "verity_vllm/program/frontend/rules/vocab.py", "kind": "def-name", "symbol": "<module>", "detail": "_norm_v2"},
     {"file": "verity_vllm/program/frontend/rules/vocab.py", "kind": "doc-round", "symbol": "_moe_ffn_fixed", "detail": "R1N"},
     {"file": "verity_vllm/program/frontend/target_profile.py", "kind": "doc-board-id", "symbol": "TargetProfile", "detail": "M-nnnn", "count": 6},
     {"file": "verity_vllm/program/frontend/target_profile.py", "kind": "doc-board-id", "symbol": "TargetProfile.modelled_engine", "detail": "M-nnnn"},

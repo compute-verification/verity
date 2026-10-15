@@ -96,19 +96,6 @@ def frameV3 (pub : Public) : V Json := J.get pub.header "frame_v3" "public file"
 def fv3Bytes (pub : Public) (k port : String) : V ByteArray := do
   unhex (← J.str (← J.get (← pub.frameV3) k "public file") port s!"public file.frame_v3.{k}")
 
-/-- The output roots: every output port's words (u16 big-endian leaves, instance-major) against the header's root. -/
-def checkOutputs (c : Circuit) (pub : Public) : V Unit := do
-  let nOut := c.outWords
-  let mut at_ := 0
-  for (name, w) in c.outPorts do
-    let dom ← pub.fv3Bytes "domain_ids" name
-    let words := (Array.range pub.n).foldl (fun acc i => acc ++ (Array.range w).map fun k => pub.outputs.getD (i * nOut + at_ + k) 0) #[]
-    let leaves := (Array.range words.size).map fun r =>
-      FV3.leaf dom r "u16" (ByteArray.mk #[(words[r]! / 256).toUInt8, (words[r]! % 256).toUInt8])
-    if FV3.root dom leaves != (← pub.fv3Bytes "roots" name) then
-      throw s!"output port {name}: the output words do not hash to the header's frame-v3 root"
-    at_ := at_ + w
-
 end Public
 
 end Flock
