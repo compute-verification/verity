@@ -62,7 +62,9 @@ except after a failed preflight, which starts no group, or a step in `HALTS`: a 
 record is stale, fails the audit too, so nothing still running is worth the slot; likewise a Rust crate that doesn't compile
 (`HALTS_ON`: flock-circuit-build's log says `could not compile`) fails flock-rust-tests.
 The steps stay in this process's group, which a runner's timeout and a manual stop signal as a whole. Each step's record is
-appended to `steps.jsonl` in the output directory as the step ends, so a failure shows while the rest still run.  A SIGTERM
+appended to `steps.jsonl` in the output directory as the step ends, so a failure shows while the rest still run, and mirrored
+as a trace/v1 span line in `spans.jsonl` (`spans.py`: the run opens a root span, each step is a completed child, the run's end
+completes the root), the frozen shape the observability watcher reads.  A SIGTERM
 (`research cancel`, a runner's timeout) stops the steps the same way, and a recorded run still writes its result, validation
 `not_run`, and the pack of the passes its steps stored before it, then exits 143: a cancelled check's passes are reused.
 
@@ -212,6 +214,8 @@ JOBS = DECLARATION.load()
 VERDICTS = _load("verdicts")
 #: the helpers `lean_audit.py` shares (`common.py`), kept out of this file so that its audit key doesn't cover this file
 COMMON = _load("common")
+#: trace/v1 spans over the run (`spans.py`): `spans.jsonl` beside `steps.jsonl`, the frozen shape the watcher reads
+SPANS = _load("spans")
 #: the test runner (`suites.py`), for where the steps' Python imports this tree's packages from
 SUITES = _load("suites")
 cache_dir = COMMON.cache_dir
@@ -1380,6 +1384,7 @@ class Steps:
         self.halted: str | None = None
         self.why: str | None = None
         self.log.unlink(missing_ok=True)
+        self.spans = SPANS.SpanLog(out)
         _LIVE.add(self)
         if TERMINATED:
             self.stop(f"check got {TERMINATED[0]}")
@@ -1413,6 +1418,7 @@ class Steps:
             rec["ended_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
             with open(self.log, "a") as f:
                 f.write(json.dumps(rec) + "\n")
+            self.spans.step(rec)
             if rec["status"] == "failed" and not self.stopping and (not self.keep_going or rec["step"] in HALTS or rec.get("halts")):
                 self.halted = rec["step"]
                 self.stop(f"{rec['step']} failed")
@@ -1509,7 +1515,9 @@ def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = 
     finally:
         if urls and urls.name.startswith("lean-deps-urls-"):
             urls.unlink(missing_ok=True)
-    return not any(r["status"] in ("failed", "stopped") for r in results), results
+    ok = not any(r["status"] in ("failed", "stopped") for r in results)
+    steps.spans.close("ok" if ok else ("cancelled" if TERMINATED else "failed"))
+    return ok, results
 
 
 def agreement_verdicts(run_dir: Path) -> list[str]:
@@ -1597,7 +1605,7 @@ def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | Non
                                     + "; ".join(f"{s['step']} {s['status']}" for s in done)},
            "measurements": [{"name": f"{s['step']}_wall", "value": s["seconds"], "unit": "s"} for s in done],
            "steps": done, "artifacts": [p for p in ("suites.json", "suites-lean.json", "suites/", "circuit-check.json", "lean-audit/",
-                                                    "verdicts.tar.gz", STEPS_LOG,
+                                                    "verdicts.tar.gz", STEPS_LOG, SPANS.SPANS_LOG,
                                                     *(s.get("log") for s in done), *agreement_verdicts(run_dir))
                                         if p and (run_dir / p).exists()]}
     if shard:

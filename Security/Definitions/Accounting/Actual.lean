@@ -82,6 +82,20 @@ tick or later. -/
 def Forward (X : Finset L) : Prop :=
   ∀ g, ∀ a ∈ A.reads g, A.isInput a = false → A.x a ∈ X → A.x g ∈ X → A.t a ≤ A.t g
 
+/-- **Faithfulness**: each computed gate's value is its operation on the values `val` holds. A run's field
+(`Actual.Run.faithful`), named so a property over runs takes it as what it is, the physical fact that a gate computes
+its operation. -/
+def Faithful (val : A.Transcript) : Prop :=
+  ∀ g, A.isInput g = false → val g = A.op g val
+
+/-- **Holding** (v2.3): `held y t` is the gates the leaf `y` holds at the start of tick `t`. A held gate is `y`'s own
+and an input or placed before `t`; `y`'s inputs are held at tick 0; and a gate of `y` that `y` reads at a later tick is
+held at `y` at the start of every tick from the one after its placement (from 0 for an input) to the reading one. -/
+def Holding (held : L → ℕ → Finset (Fin A.N)) : Prop :=
+  (∀ y t, ∀ a ∈ held y t, A.x a = y ∧ (A.isInput a = true ∨ A.t a < t)) ∧
+  (∀ a, A.isInput a = true → a ∈ held (A.x a) 0) ∧
+  ∀ g, ∀ a ∈ A.reads g, A.x a = A.x g → ∀ s, (A.isInput a = true ∨ A.t a < s) → s ≤ A.t g → a ∈ held (A.x g) s
+
 open Classical in
 /-- **A set of gates as a circuit whose inputs are what it reads**: `A` with every gate outside `S` an input gate, which
 reads nothing, and the gates of `S` its outputs. -/

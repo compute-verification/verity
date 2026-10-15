@@ -43,20 +43,12 @@ namespace Accounting
 
 open Finset
 
-/-- **Holding** (v2.3): `held y t` is the gates the leaf `y` holds at the start of tick `t`. A held gate is `y`'s own
-and an input or placed before `t`; `y`'s inputs are held at tick 0; and a gate of `y` that `y` reads at a later tick is
-held at `y` at the start of every tick from the one after its placement (from 0 for an input) to the reading one. -/
-def Placed.Holding {L : Type*} (A : Placed L) (held : L → ℕ → Finset (Fin A.N)) : Prop :=
-  (∀ y t, ∀ a ∈ held y t, A.x a = y ∧ (A.isInput a = true ∨ A.t a < t)) ∧
-  (∀ a, A.isInput a = true → a ∈ held (A.x a) 0) ∧
-  ∀ g, ∀ a ∈ A.reads g, A.x a = A.x g → ∀ s, (A.isInput a = true ∨ A.t a < s) → s ≤ A.t g → a ∈ held (A.x g) s
-
-/-- **A run**: an actual circuit and its gates' values, each computed gate's its operation on what it reads, and what
-each leaf holds at the start of each tick. -/
+/-- **A run**: an actual circuit and its gates' values, each computed gate's its operation on what it reads
+(`Placed.Faithful`), and what each leaf holds at the start of each tick (`Placed.Holding`). -/
 structure Actual.Run (L : Type*) where
   A : Placed L
   val : A.Transcript
-  faithful : ∀ g, A.isInput g = false → val g = A.op g val
+  faithful : A.Faithful val
   held : L → ℕ → Finset (Fin A.N)
   holding : A.Holding held
 

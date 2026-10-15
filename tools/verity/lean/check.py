@@ -439,6 +439,42 @@ def scans(pkg: Path, files: dict[str, str], policy: dict) -> list[str]:
     return hits
 
 
+#: an override of a heartbeat limit (`maxHeartbeats`, `synthInstance.maxHeartbeats`), in comment-stripped source
+HEARTBEATS = re.compile(r"\bset_option[ \t]+((?:[\w.]+\.)?maxHeartbeats)[ \t]+(\d+)")
+#: a module `lake build` built, and how long it took (`✔ [3/118] Built Flock.Field (456ms)`; `:c.o` and the like are not modules)
+BUILT = re.compile(r"\bBuilt ([^\s:]+) \((?:(\d+)m ?)?([\d.]+)(ms|s)\)")
+
+
+def build_seconds(logs: list[Path]) -> dict[str, float]:
+    """{module: seconds} from ``logs`` of `lake build`: each module it built (not one it replayed), its own time."""
+    out = {}
+    for log in logs:
+        for m, mins, n, unit in BUILT.findall(log.read_text(errors="replace") if log.is_file() else ""):
+            out[m] = round(int(mins or 0) * 60 + float(n) / (1000 if unit == "ms" else 1), 1)
+    return out
+
+
+def heartbeats(pkg: Path, files: dict[str, str], seconds: dict[str, float]) -> list[dict]:
+    """Each override of a heartbeat limit in the package's sources: its file and line, the option, its value (0: no limit),
+    the reason beside it (a `--` comment ending its line, else the `--` comments just above it; None when there is none),
+    and its module's build time in this audit's build (``seconds``, `build_seconds`; None when this audit didn't build it).
+    Listed in the report, never refused."""
+    out = []
+    for m, rel in sorted(files.items()):
+        raw = (pkg / rel).read_text(errors="replace")
+        lines, code = raw.splitlines(), strip_comments(raw).splitlines()
+        for i, line in enumerate(code):
+            for hit in HEARTBEATS.finditer(line):
+                why = [lines[i][len(line.rstrip()):].strip().removeprefix("--").strip()]
+                j = i
+                while not why[-1] and j > 0 and lines[j - 1].lstrip().startswith("--"):
+                    j -= 1
+                    why.insert(0, lines[j].lstrip().removeprefix("--").strip())
+                out.append({"file": rel, "line": i + 1, "option": hit.group(1), "value": int(hit.group(2)),
+                            "reason": " ".join(w for w in why if w) or None, "module_seconds": seconds.get(m)})
+    return out
+
+
 def anonymous_instances(pkg: Path, files: dict[str, str], facts: dict) -> list[dict]:
     """The instances `Facts.lean` reports (`instances`) whose declaration names none: the keyword `instance` stands where
     the name would. Each with its file (`file`, relative to the package)."""
@@ -2030,6 +2066,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     missed, rep["dependency_sources"] = dependency_scans(pkg, facts["oleans"], policy)
     rep["seconds"]["dependency-sources"] = round(time.monotonic() - s, 1)
     fails = scans(pkg, files, policy) + missed + fails
+    rep["heartbeats"] = heartbeats(pkg, files, build_seconds([work / "build.log", work / "build-roots.log"] if build else []))
     anonymous = anonymous_instances(pkg, files, facts)
     if name and anonymous:
         name_instances(pkg, anonymous)
@@ -2364,6 +2401,13 @@ def main(argv: list[str]) -> int:
                 print("  " + f.replace("\n", "\n    "), flush=True)
             for n in rep.get("notes", []):
                 print(f"  note: {n}", flush=True)
+            if hb := rep.get("heartbeats"):
+                print(f"  heartbeats: {len(hb)} overrides, {sum(h['reason'] is None for h in hb)} without a reason "
+                      f"(value; its module's build time; reason):", flush=True)
+                for h in hb:
+                    took = "not built here" if h["module_seconds"] is None else f"{h['module_seconds']}s"
+                    print(f"    {h['file']}:{h['line']} {h['option']} {h['value'] or 'unlimited'}; {took}; "
+                          f"{h['reason'] or 'no reason given'}", flush=True)
 
     with ThreadPoolExecutor(max_workers=len(pkgs) + 1) as ex:
         jobs = ([ex.submit(check_controls)] if a.all and not a.no_controls else []) + [ex.submit(one, p) for p in pkgs]

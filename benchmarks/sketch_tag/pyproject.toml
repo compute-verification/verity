@@ -1,0 +1,12 @@
+# Sketch-then-hash's benchmark and its tests. Not a package: `sketch.cu` and `bench.py` run on a GPU node (`run.sh`), and
+# the byte-exact reference (`sketch.py`) runs here as a suite (`uv run tools/verity/check/suites.py benchmarks/sketch_tag`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# sketch.py imports the word codec's layout, the bandwidth audit's tags (the BLAKE3 reference, the framing) and the
+# randomness.
+inputs = ["benchmarks/word_codec/codec.py", "verity/__init__.py", "verity/core/__init__.py",
+          "verity/core/protocols/__init__.py", "verity/core/protocols/bandwidth", "verity/ml/__init__.py",
+          "verity/ml/crypto", "verity/ml/randomness"]
