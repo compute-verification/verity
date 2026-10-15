@@ -12,6 +12,17 @@ NVCC=/usr/local/cuda-13.0/bin/nvcc
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 PROBES=${M5_PROBES:-m5_compress m5_reinterp m5_l2red m5_dram}
+if [ -n "${M5_CPU:-}" ]; then
+  # Host-only probe: one core, no GPU, so no lease.
+  if gcc -O2 -mamx-tile -mamx-int8 -mamx-bf16 "$SRC/m5_amx.c" -o "$WORK/m5_amx" >"$OUT/build-m5_amx.log" 2>&1; then
+    lscpu >"$OUT/lscpu.txt" 2>&1
+    taskset -c 2 "$WORK/m5_amx" >>"$OUT/summary.jsonl" 2>>"$OUT/stderr-m5_amx.log" || echo "{\"probe\":\"m5_amx\",\"run\":\"failed\"}" >>"$OUT/summary.jsonl"
+  else
+    echo "{\"probe\":\"m5_amx\",\"build\":\"failed\"}" >>"$OUT/summary.jsonl"
+  fi
+  cat "$OUT/summary.jsonl"
+  exit 0
+fi
 for p in $PROBES; do
   extra=""
   case "$p" in m5_compress*) extra="-lcuda";; esac
