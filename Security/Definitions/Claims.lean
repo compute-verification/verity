@@ -1,7 +1,7 @@
 import Mathlib
 
 /-!
-# Claims: the shared definitions and Flock's claim statements (draft, frozen before any proof work)
+# Claims: the shared definitions and Flock's claim statements (frozen before any proof work)
 
 The definitions every protocol's claims read, and Flock's claims, in the condensed spec's names, with the rulings of
 15 Oct applied:
@@ -16,8 +16,9 @@ The definitions every protocol's claims read, and Flock's claims, in the condens
 * The scope is a hypothesis of completeness, in readable form (`Flock.InScope`), never part of `R`; `ScopeMatches`
   states that it is the verifier's own scope check. KS needs no scope: the verifier refuses what is out of scope.
 * Zero knowledge is against a malicious verifier (`ZKmal`), with a black-box simulator.
-* Efficiency is the structural cost claims (`ERepWorst`, `ERepExpected`: reruns of the prover, SHA-512 calls) and a
-  separate stated complexity claim for the decoder's pure computation (`DecoderComplexity`).
+* Efficiency is the structural cost claims (`ExtractRunsLe`, `ExtractRunsExpLe`, `ERepCost`: reruns of the prover;
+  `RP.eval` also counts SHA-512 calls) and a separate stated complexity claim for the decoder's pure computation
+  (`DecoderComplexity`).
 * Nontriviality is a recorded honest transcript that the verifier accepts (`Nontrivial`).
 
 Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed verifier, its parser and the hash:
@@ -26,8 +27,8 @@ binding them to the compiled verifier (`Flock.verifyWith Sha512.hash`, `Flock.Pr
 The named assumptions (each read once, in a claim's hypothesis): `StrictBirthday`, `ExpectedCR`, `CommitHides`. What the
 claims rest on and no Lean statement can say is `trustedBase`.
 
-Not imported by `Definitions.lean` and not in `lean-audit.json`: no build reads it and no lock records it until the
-claims are frozen.
+Frozen by `Flock.Guarantees.ClaimsStated` (`Models/Flock/Guarantees/Claims.lean`), whose statement reads every claim
+here: the lock records each one's text under `reads`, so a changed claim is a changed record.
 -/
 
 namespace Claims
@@ -253,13 +254,13 @@ attribute [instance] Finder.fin Finder.ne
 noncomputable def Finder.Pr (H : Msg → Msg) (F : Finder) : ℝ :=
   Claims.Pr fun s : F.S => ∃ u v, F.out s = some (u, v) ∧ Collision H u v
 
-/-- **Assumption: the strict birthday bound**, at one finder: if `F` makes at most `q` SHA-512 calls on every coin, it
-finds a collision with probability at most `q² / 2^513`. Read for `B` (extraction-free). -/
+/-- **`StrictBirthday` (`cr/sha-512`): the strict birthday bound**, at one finder: if `F` makes at most `q` SHA-512
+calls on every coin, it finds a collision with probability at most `q² / 2^513`. Read for `B` (extraction-free). -/
 def StrictBirthday (H : Msg → Msg) (F : Finder) : Prop :=
   ∀ q : ℝ, (∀ s, (F.cost s : ℝ) ≤ q) → F.Pr H ≤ q ^ 2 / 2 ^ (513 : ℝ)
 
-/-- **Assumption: the linear expected-time bound**, at one finder: `F` finds a collision with probability at most its
-expected SHA-512 calls over `2^256`. Read for extraction-based finders only. -/
+/-- **`ExpectedCR` (`ecr/sha-512`): the linear expected-time bound**, at one finder: `F` finds a collision with
+probability at most its expected SHA-512 calls over `2^256`. Read for extraction-based finders only. -/
 def ExpectedCR (H : Msg → Msg) (F : Finder) : Prop :=
   F.Pr H ≤ Ex (fun s => (F.cost s : ℝ)) / 2 ^ (256 : ℝ)
 
@@ -296,8 +297,8 @@ noncomputable def PrB {Ω Coin : Type} [Fintype Ω] [Nonempty Ω] [Fintype Coin]
     (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (x : Msg) : ℝ :=
   if hk : 0 < V.k x then (B H V P x hk).Pr H else 0
 
-/-- **Assumption: hiding**, at one commitment: for messages of one length, `commit(u; s)` and `commit(u′; s)` at a
-uniform salt of `saltLen` bytes differ by at most `δ` on every event. -/
+/-- **`CommitHides` (`statistical-hiding`): hiding**, at one commitment: for messages of one length, `commit(u; s)`
+and `commit(u′; s)` at a uniform salt of `saltLen` bytes differ by at most `δ` on every event. -/
 def CommitHides (H : Msg → Msg) (saltLen : ℕ) (δ : ℝ) : Prop :=
   ∀ u u' : Msg, u.length = u'.length → ∀ Ev : Msg → Prop,
     |Pr (fun s : Fin saltLen → UInt8 => Ev (commit H u (List.ofFn s))) -
@@ -423,8 +424,8 @@ def ERepCost {Op : Type} (H : Msg → Msg) (V : Verifier Coin) (m k K : Msg → 
 
 end Claims
 
-/-- **The decoder's complexity (a stated claim)**: `counted` computes what `decode` does, and the steps it reports are at
-most `p(size)`. The step count is the instrumented decoder's own: nothing here checks it against a machine model. -/
+/-- **The decoder's complexity (a stated claim)**: `counted` computes what `decode` does, and the steps it reports are
+at most `p(size)`. The step count is the instrumented decoder's own: nothing here checks it against a machine model. -/
 def DecoderComplexity {I T : Type} (decode : I → T) (counted : I → T × ℕ) (size : I → ℕ) (p : Polynomial ℕ) : Prop :=
   ∀ i, (counted i).1 = decode i ∧ (counted i).2 ≤ p.eval (size i)
 
@@ -469,8 +470,8 @@ structure Form where
   rowsV2OrSeg : Bool
 
 /-- **Flock's statement**: `2^m` trace bits in blocks of `2^kLog`, the block circuit `C`, the blocks' inputs and outputs
-(`inp b`, `out b`, reading the public or the hidden values), the public values, the commit strings (string `c` commits to
-the hidden values `grp c`), and the statement's form. -/
+(`inp b`, `out b`, reading the public or the hidden values), the public values, the commit strings (string `c` commits
+to the hidden values `grp c`), and the statement's form. -/
 structure Stmt where
   m : ℕ
   kLog : ℕ
@@ -500,7 +501,7 @@ def RelS (H : Msg → Msg) (s : Stmt) (w : Wit) : Prop :=
     commit H (packBits ((s.grp c).map fun i => w.hid.getD i false)) (w.salts.getD c []) = s.cs.getD c []) ∧
   ∀ b < s.nBlocks, s.C.eval ((s.inp b).map (val s w)) = (s.out b).map (val s w)
 
-instance (H : Msg → Msg) (s : Stmt) (w : Wit) : Decidable (RelS H s w) := by
+instance instDecidableRelS (H : Msg → Msg) (s : Stmt) (w : Wit) : Decidable (RelS H s w) := by
   unfold RelS; infer_instance
 
 /-- **Flock's relation** on the statement's bytes: it parses (`parse`, the verifier's own parser) and `RelS` holds. No
@@ -528,7 +529,8 @@ def InScope (zk : Bool) (s : Stmt) : Prop :=
 
 /-- **List decoding, the spec a decoder meets**: from opened columns at distinct positions, `decode` lists every trace
 whose encoding agrees with at least a fraction `agree` of them. -/
-def ListComplete {Col T : Type} [DecidableEq Col] (enc : T → ℕ → Col) (agree : ℝ) (decode : List (ℕ × Col) → List T) : Prop :=
+def ListComplete {Col T : Type} [DecidableEq Col] (enc : T → ℕ → Col) (agree : ℝ)
+    (decode : List (ℕ × Col) → List T) : Prop :=
   ∀ (os : List (ℕ × Col)) (M : T), (os.map Prod.fst).Nodup →
     agree * os.length ≤ (os.filter fun p => decide (enc M p.1 = p.2)).length → M ∈ decode os
 
