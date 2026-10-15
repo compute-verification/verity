@@ -1743,4 +1743,148 @@ theorem blockRigidity : BlockRigidity F m n := by
 
 end ChangeOfBasis
 
+section Spider
+
+variable {F : Type*} [Field F] {N L : ℕ}
+
+theorem prefixTarget_zero (r c : Fin N) : prefixTarget F N L r c 0 = 0 := by
+  ext i j
+  simp [prefixTarget]
+
+/-- Consecutive prefix targets are at rank distance at most `L`. -/
+theorem rank_prefixTarget_succ_sub_le (r c : Fin N) (k : ℕ) :
+    (prefixTarget F N L r c (k + 1) - prefixTarget F N L r c k).rank ≤ L := by
+  classical
+  let Q : Fin N × Fin N → Prop := fun j => j.1 = c ∧ k * L ≤ (j.2 : ℕ) ∧ (j.2 : ℕ) < (k + 1) * L
+  let w : Fin N × Fin N → F := fun j => if Q j then 1 else 0
+  have hD : prefixTarget F N L r c (k + 1) - prefixTarget F N L r c k =
+      (prefixTarget F N L r c (k + 1) - prefixTarget F N L r c k) * Matrix.diagonal w := by
+    ext i j
+    rw [Matrix.mul_diagonal]
+    by_cases hQ : Q j
+    · simp [w, hQ]
+    · have hw : w j = 0 := by simp [w, hQ]
+      rw [hw, mul_zero]
+      simp only [Matrix.sub_apply]
+      have hiff : (i.1 = r ∧ j.1 = c ∧ i.2 = j.2 ∧ (i.2 : ℕ) < (k + 1) * L) ↔
+          (i.1 = r ∧ j.1 = c ∧ i.2 = j.2 ∧ (i.2 : ℕ) < k * L) := by
+        constructor
+        · rintro ⟨h1, h2, h3, h4⟩
+          refine ⟨h1, h2, h3, ?_⟩
+          have h5 : (i.2 : ℕ) = j.2 := congrArg Fin.val h3
+          by_contra h6
+          exact hQ ⟨h2, by omega, by omega⟩
+        · rintro ⟨h1, h2, h3, h4⟩
+          exact ⟨h1, h2, h3, lt_of_lt_of_le h4 (Nat.mul_le_mul_right _ (Nat.le_succ k))⟩
+      exact (sub_eq_zero (G := F)).2 (if_congr hiff (rfl : (1 : F) = 1) (rfl : (0 : F) = 0))
+  have hQw : ∀ j, w j ≠ 0 → Q j := by
+    intro j hj
+    by_contra h
+    exact hj (by simp [w, h])
+  calc (prefixTarget F N L r c (k + 1) - prefixTarget F N L r c k).rank
+      = ((prefixTarget F N L r c (k + 1) - prefixTarget F N L r c k) * Matrix.diagonal w).rank := by
+        rw [← hD]
+    _ ≤ (Matrix.diagonal w).rank := Matrix.rank_mul_le_right _ _
+    _ = Fintype.card {j // w j ≠ 0} := Matrix.rank_diagonal w
+    _ ≤ (Finset.Ico (k * L) ((k + 1) * L)).card := by
+        rw [Fintype.card_subtype]
+        apply Finset.card_le_card_of_injOn (fun j : Fin N × Fin N => (j.2 : ℕ))
+        · intro j hj
+          have hQ := hQw j (by simpa using hj)
+          simp only [Finset.coe_Ico, Set.mem_Ico]
+          exact ⟨hQ.2.1, hQ.2.2⟩
+        · intro j hj j' hj' h
+          have hQ := hQw j (by simpa using hj)
+          have hQ' := hQw j' (by simpa using hj')
+          exact Prod.ext (hQ.1.trans hQ'.1.symm) (Fin.ext h)
+    _ = L := by rw [Nat.card_Ico, Nat.succ_mul, Nat.add_sub_cancel_left]
+
+/-- The spider's parent map: the root, and for each output cell `(r, c)` a chain of `K` vertices. -/
+def spiderParent {K : ℕ} : Option (Fin N × Fin N × Fin K) → Option (Fin N × Fin N × Fin K)
+  | none => none
+  | some (r, c, k) => if h : (k : ℕ) = 0 then none else some (r, c, ⟨k - 1, by omega⟩)
+
+/-- The spider: each vertex joined to its parent. -/
+def spiderGraph (K : ℕ) : SimpleGraph (Option (Fin N × Fin N × Fin K)) :=
+  SimpleGraph.fromRel fun u v => u = spiderParent v
+
+/-- The spider's labels: `0` at the root, the prefix target `T_{(r,c),k+1}` at `(r, c, k)`. -/
+def spiderLabel (F : Type*) [Field F] (N L K : ℕ) :
+    Option (Fin N × Fin N × Fin K) → Matrix (Fin N × Fin N) (Fin N × Fin N) F
+  | none => 0
+  | some (r, c, k) => prefixTarget F N L r c (k + 1)
+
+theorem rankDist_spiderParent_le {K : ℕ} (v : Option (Fin N × Fin N × Fin K)) :
+    rankDist (spiderLabel F N L K (spiderParent v)) (spiderLabel F N L K v) ≤ L := by
+  rcases v with _ | ⟨r, c, k⟩
+  · simp [spiderParent, spiderLabel, rankDist_self]
+  · have hp : spiderLabel F N L K (spiderParent (some (r, c, k))) = prefixTarget F N L r c k := by
+      by_cases hk : (k : ℕ) = 0
+      · simp [spiderParent, spiderLabel, hk, prefixTarget_zero]
+      · simp only [spiderParent, hk, ↓reduceDIte, spiderLabel]
+        rw [Nat.sub_add_cancel (Nat.one_le_iff_ne_zero.2 hk)]
+    rw [hp, rankDist_comm]
+    exact rank_prefixTarget_succ_sub_le r c k
+
+theorem spiderGraph_connected (K : ℕ) : (spiderGraph (N := N) K).Connected := by
+  have hroot : ∀ v, (spiderGraph (N := N) K).Reachable none v := by
+    rintro (_ | ⟨r, c, ⟨k, hk⟩⟩)
+    · rfl
+    · induction k with
+      | zero => exact SimpleGraph.Adj.reachable (by simp [spiderGraph, spiderParent])
+      | succ k ih =>
+        refine (ih (by omega)).trans (SimpleGraph.Adj.reachable ?_)
+        simp [spiderGraph, spiderParent]
+  exact ⟨fun u v => (hroot u).symm.trans (hroot v)⟩
+
+theorem spider_edgeLength_le {K : ℕ} {H : SimpleGraph (Option (Fin N × Fin N × Fin K))}
+    (hH : H ≤ spiderGraph K) {e : Sym2 (Option (Fin N × Fin N × Fin K))} (he : e ∈ H.edgeSet) :
+    SteinerTree.edgeLength (spiderLabel F N L K) e ≤ L := by
+  induction e using Sym2.ind with
+  | _ a b =>
+    have hab := hH ((SimpleGraph.mem_edgeSet _).1 he)
+    rw [spiderGraph, SimpleGraph.fromRel_adj] at hab
+    change rankDist (spiderLabel F N L K a) (spiderLabel F N L K b) ≤ L
+    rcases hab.2 with h | h
+    · subst h
+      exact rankDist_spiderParent_le b
+    · subst h
+      rw [rankDist_comm]
+      exact rankDist_spiderParent_le a
+
+/-- **Conjecture A's upper bound, proved**: a spanning tree of the spider (`0`, then for each output cell the chain
+of its prefix targets) has length `N³`. -/
+theorem conjectureA_upper (hL : 0 < L) (hLN : L ∣ N) :
+    ∃ T : SteinerTree F (Fin N × Fin N) (Fin N × Fin N), T.Reaches 0 ∧
+      (∀ r c : Fin N, ∀ s ∈ Finset.Icc 1 (N / L), T.Reaches (prefixTarget F N L r c s)) ∧
+        T.length = N ^ 3 := by
+  classical
+  obtain ⟨H, hHle, hH⟩ := (spiderGraph_connected (N := N) (N / L)).exists_isTree_le
+  let T : SteinerTree F (Fin N × Fin N) (Fin N × Fin N) :=
+    { V := Option (Fin N × Fin N × Fin (N / L)), G := H, isTree := hH, label := spiderLabel F N L (N / L) }
+  have h0 : T.Reaches 0 := ⟨none, rfl⟩
+  have hT : ∀ r c : Fin N, ∀ s ∈ Finset.Icc 1 (N / L), T.Reaches (prefixTarget F N L r c s) := by
+    intro r c s hs
+    rw [Finset.mem_Icc] at hs
+    refine ⟨some (r, c, ⟨s - 1, by omega⟩), ?_⟩
+    change prefixTarget F N L r c (s - 1 + 1) = _
+    rw [Nat.sub_add_cancel hs.1]
+  refine ⟨T, h0, hT, le_antisymm ?_ (conjectureA_lower hL hLN T h0 hT)⟩
+  have hcard := hH.card_edgeFinset
+  rw [Fintype.card_option, Fintype.card_prod, Fintype.card_prod, Fintype.card_fin,
+    Fintype.card_fin] at hcard
+  have hE : H.edgeFinset.card = N * (N * (N / L)) := Nat.add_right_cancel hcard
+  calc T.length ≤ ∑ _e ∈ H.edgeFinset, L :=
+        Finset.sum_le_sum fun e he => spider_edgeLength_le hHle (SimpleGraph.mem_edgeFinset.1 he)
+    _ = N ^ 3 := by
+        rw [Finset.sum_const, smul_eq_mul, hE, mul_assoc, mul_assoc, Nat.div_mul_cancel hLN]
+        ring
+
+/-- **Conjecture A, proved**: for `N × N × N` matrix multiplication and every chunk `L ∣ N`, every Steiner tree in
+the rank metric spanning `0` and every prefix target has length at least `N³`, and one has length `N³`. -/
+theorem conjectureA : ConjectureA F := fun _ _ hL hLN =>
+  ⟨fun T h0 hT => conjectureA_lower hL hLN T h0 hT, conjectureA_upper hL hLN⟩
+
+end Spider
+
 end Pouw.SteinerRigidity
