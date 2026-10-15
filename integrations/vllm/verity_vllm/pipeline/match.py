@@ -1142,8 +1142,8 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
                 for k, v in r.items():
                     if k == "view":
                         r2[k] = view(v) if v is not None else None
-                    elif k == "refs":
-                        r2[k] = run_items(v if isinstance(v, list) else runs(v)) if v is not None else None
+                    elif k == "refs":     # under `progressions` a Refs is stored compact too (a transposed weight read: ~1e6 runs)
+                        r2[k] = None if v is None else _file_items(v) if _form == "progressions" and not isinstance(v, list) else run_items(v if isinstance(v, list) else runs(v))
                     else:
                         r2[str(k)] = _jsonable(v)
                 f.write(_dumps(r2, separators=(",", ":")) + "\n")
