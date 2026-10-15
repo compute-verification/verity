@@ -8,7 +8,7 @@
 #   ncu    lease 2: one eager decode step (batch 32) per precision under ncu (pipe counts), summarized by ncu_summary.py;
 #          its first 200 kernels (every kernel kind, ~13 layers), with a 6 GiB KV cache so kernel replay's memory backup
 #          stays on the device (at 0.85 it goes to host memory, ~40 s a kernel: r20261015-042637-c9be)
-#   ncu_prefill (not default): the same for one eager 2,048-token prefill step
+#   ncu_prefill (not default): the same for one eager 2,048-token prefill step; ncu_prefill8k: FP8 at 8,192 tokens
 #   phi    (not default) lease 1: phi_probe.cu, a keyed ARX receipt step over register-resident E4M3 mma.sync accumulators
 #          at commit strides L = 32 ... 256 (gated), at 2 and 4 blocks an SM; its SASS and an opcode count per kernel; ncu's
 #          warp-state, scheduler and pipe sections over seven of its kernels
@@ -131,6 +131,7 @@ leased() {
 [[ " $STAGES " == *" micro "* ]] && leased micro
 [[ " $STAGES " == *" ncu "* ]] && leased ncu_stage "'bf16 decode'" "'fp8 decode'"
 [[ " $STAGES " == *" ncu_prefill "* ]] && leased ncu_stage "'fp8 prefill2048'" "'bf16 prefill2048'"
+[[ " $STAGES " == *" ncu_prefill8k "* ]] && leased ncu_stage "'fp8 prefill8192'"
 [[ " $STAGES " == *" phi "* ]] && leased phi
 
 for rep in "$d"/ncu-*.ncu-rep; do
