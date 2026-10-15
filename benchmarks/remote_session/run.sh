@@ -27,7 +27,8 @@
 #
 # On two machines, two runs with the same PORT and SESSIONS: ROLE=verifier on the verifier's machine (no GPU), which
 # opens `ssh -R PORT` to PEER (the prover's machine, a name in /etc/vy/peers) and listens behind it, so the prover's
-# connections to its own 127.0.0.1:PORT cross the network; then ROLE=prover on PEER, which connects there.
+# connections to its own 127.0.0.1:PORT cross the network; then ROLE=prover on PEER, which connects there, and which
+# takes its lease only once that tunnel listens (up to TUNNEL_WAIT_S, default 7200).
 #
 #   research run --on vy-nebius-1 ... --env ROLE=verifier --env PEER=vy-nebius-2 --env PORT=7791 --env SESSIONS=2 \
 #     -- taskset -c 96-127 bash benchmarks/remote_session/run.sh
@@ -66,6 +67,15 @@ if [ "$ROLE" = verifier ]; then
   exit $W
 fi
 export VERIFY_ARGS="${VERIFY[*]}"
+if [ "$ROLE" = prover ]; then
+  # Into the lease's queue only once the verifier's tunnel listens here: a prover that takes the node before its verifier
+  # is up stops retrying its connect a minute after building the store (`wire.connect`).
+  for ((k = 0; k < ${TUNNEL_WAIT_S:-7200} / 5; k++)); do
+    ss -Hltn "sport = :$PORT" | grep -q . && break
+    sleep 5
+  done
+  ss -Hltn "sport = :$PORT" | grep -q . || { echo "no verifier tunnel on 127.0.0.1:$PORT"; exit 3; }
+fi
 LEASE=(gpu-lease "${GPUS:-1}" --wait ${GPU:+--on "$GPU"} ${TIMED:+--timed} --max-min "${MAXMIN:-30}" --)
 [ -n "${GPU_LEASE_UUID:-}" ] && LEASE=()
 # shellcheck disable=SC2016
