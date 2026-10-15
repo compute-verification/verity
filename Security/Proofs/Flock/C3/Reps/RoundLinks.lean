@@ -64,18 +64,20 @@ theorem cIndex_opening (k : ℕ) : cIndex s!"rec-opening-c{k}" = none := by
 
 /-! ## The statement's port -/
 
-/-- **An accepted part port names an algebra message**: when the part name fixes its recursive shape and
-`checkMsgNames` accepts a circuit port named `m<i>`, `i` is below the algebra-message rounds. -/
+/-- **An accepted part port names one of its rep's message rounds**: when the part name fixes its recursive shape and
+`checkMsgNames` accepts a circuit port named `m<i>`, the shape has its rep's rounds `rs`, and `i` is below their message
+rounds. -/
 theorem inner_round_lt_of_checkMsgNames
     {p m kLog claims partNo i : ℕ} {name : String} {part : VStar.Part} {c : Flock.Circuit}
     (hp : RecResiduals.params name = some (m, kLog, claims, partNo))
     (h : checkMsgNames (.inner p name part) c = .ok ())
     {q : Fin c.ports.size} (hq : c.ports[q].name = s!"m{i}") :
-    i < m + kLog + claims - 8 := by
-  have hr : innerMsgRounds (.inner p name part) = some (m + kLog + claims - 8) := by
-    simp [innerMsgRounds, hp]
-  have hn : msgRoundOutOfRange (m + kLog + claims - 8) c = none := by
-    cases hx : msgRoundOutOfRange (m + kLog + claims - 8) c with
+    ∃ rs, repRounds m kLog claims = some rs ∧ i < (commitRounds rs).length := by
+  generalize hB : ((repRounds m kLog claims).map fun rs => (commitRounds rs).length).getD 0 = B
+  have hr : innerMsgRounds (.inner p name part) = some B := by
+    simp [innerMsgRounds, hp, hB]
+  have hn : msgRoundOutOfRange B c = none := by
+    cases hx : msgRoundOutOfRange B c with
     | none => rfl
     | some nm =>
       simp only [checkMsgNames] at h
@@ -88,11 +90,13 @@ theorem inner_round_lt_of_checkMsgNames
     List.mem_map.2 ⟨c.ports[q], Array.mem_toList_iff.2 (Array.getElem_mem q.isLt), hq⟩
   have hi := List.find?_eq_none.1 hn _ hmem
   rw [mIndex_m] at hi
-  have hi' : ¬ m + kLog + claims - 8 ≤ i := by
+  have hi' : ¬ B ≤ i := by
     intro hle
     apply hi
     simp [hle]
-  exact Nat.lt_of_not_ge hi'
+  cases hrs : repRounds m kLog claims with
+  | none => rw [hrs] at hB; simp at hB; omega
+  | some rs => rw [hrs] at hB; exact ⟨rs, rfl, by simp at hB; omega⟩
 
 /-- **`checkMsgNames` passing at a part or a part of R's opening**: each circuit port named `m<k>` is the name of one
 of the statement's message-round ports. -/
