@@ -25,12 +25,14 @@
 //              32-deep k-block, on two chains of its own that never read the accumulators. They feed only a store that
 //              fires on a 64-bit coincidence, so the outputs and receipts the gates check are the design's.
 //   CR_FVAR V  the forced steps: 0 alu phi1, 2 one FFMA each (the FMA pipe alone; chains seeded as floats in [1, 2))
+//   CR_VAR 2   (mode 1) phi.cuh's duo2 instead of phi1: CR_D2C four-word duo2 states a thread, tile c's words into state
+//              c % CR_D2C at positions t = (4 c + e) % D2_KEYS, keys in constant memory; each state folded at the end
 //   CR_XVAR V  the cheater's step: 0 alu phi1, 1 imad phi1 (IMAD on the FMA pipe, its LOP3 and SHF on the ALU), 2 one
 //              FFMA (the FMA pipe alone), on chains seeded as floats in [1, 2), 3 both pipes: an alu phi1 on the first
 //              chain and six FFMAs on the second (equal CUDA slots); 4 FFMAs and 5 alu phi1 steps round-robin over
 //              eight chains instead of two (more independent work for the scheduler)
 // Compiled once per kernel: -DCR_NAME=name -DCR_CFG -DCR_VAR -DCR_ROUNDS -DCR_P -DCR_MODE -DCR_SPREAD -DCR_GRAIN
-// -DCR_EXTRA -DCR_HONEST -DCR_FORCED -DCR_XVAR -DCR_FVAR
+// -DCR_EXTRA -DCR_HONEST -DCR_FORCED -DCR_XVAR -DCR_FVAR -DCR_D2C
 // (job.sh's cgemm).
 #include "cutlass_receipt.cuh"
 
@@ -70,6 +72,9 @@
 #ifndef CR_FVAR
 #define CR_FVAR 0
 #endif
+#ifndef CR_D2C
+#define CR_D2C 4
+#endif
 #define CR_STR2(x) #x
 #define CR_STR(x) CR_STR2(x)
 
@@ -84,6 +89,7 @@ struct Out {
     int tiles_n, m, n;
 };
 __device__ Out g_out;
+__constant__ uint32_t D2K[4][D2_KEYS];
 
 template <class Base, int VAR, int ROUNDS, int P, int MODE, int SPREAD, int GRAIN, int EXTRA, int HONEST, int FORCED>
 struct ReceiptMma : Base {
@@ -113,10 +119,14 @@ struct ReceiptMma : Base {
         constexpr int CH = MM * NN;
         static_assert(MW == 4, "an m16n8 FP32 accumulator tile is 4 words a thread");
 
+        static_assert(VAR != 2 || (HONEST == 0 && CH % CR_D2C == 0), "duo2: no heavier words, and its states share the tiles");
         clear(accum);
-        uint32_t y[CH];
+        uint32_t y[VAR == 2 ? 1 : CH];
         CUTLASS_PRAGMA_UNROLL
-        for (int c = 0; c < CH; ++c) y[c] = 0;
+        for (int c = 0; c < (VAR == 2 ? 1 : CH); ++c) y[c] = 0;
+        Duo2 d2[VAR == 2 ? CR_D2C : 1];
+        CUTLASS_PRAGMA_UNROLL
+        for (int j = 0; j < (VAR == 2 ? CR_D2C : 1); ++j) d2[j] = Duo2{0u, 0u, 0u, 0u};
         constexpr int XC = CR_XVAR >= 4 ? 8 : 2;
         uint32_t z[XC];
         if constexpr (XC == 8) {
@@ -166,7 +176,14 @@ struct ReceiptMma : Base {
         // quarter of them a k-block here.
         auto hook = [&](auto k_block, auto receipted) {
             constexpr int b = decltype(k_block)::value;
-            if constexpr (MODE == 1 && decltype(receipted)::value && (SPREAD || (b + 1) % GS == 0)) {
+            if constexpr (VAR == 2 && MODE == 1 && decltype(receipted)::value && (SPREAD || (b + 1) % GS == 0)) {
+                for_each(make_int_sequence<CH * MW>{}, [&](auto i) {
+                    constexpr int c = decltype(i)::value / MW, e = decltype(i)::value % MW, t = (c * MW + e) % D2_KEYS;
+                    if constexpr (!SPREAD || (c % NN) * KB / NN == b)
+                        duo2<t>(d2[c % CR_D2C], __float_as_uint(accum(e, c / NN, c % NN)), D2K[0][t], D2K[1][t],
+                                D2K[2][t], D2K[3][t]);
+                });
+            } else if constexpr (MODE == 1 && decltype(receipted)::value && (SPREAD || (b + 1) % GS == 0)) {
                 const uint32_t w = GRAIN > 1 ? (uint32_t)(kt * KB + b + 1) : (uint32_t)(kt + 1);
                 CUTLASS_PRAGMA_UNROLL
                 for (int mm = 0; mm < MM; ++mm)
@@ -272,8 +289,13 @@ struct ReceiptMma : Base {
 
         if constexpr (MODE == 1) {
             uint32_t f = 0;
-            CUTLASS_PRAGMA_UNROLL
-            for (int c = 0; c < CH; ++c) f = rotl13(f) ^ y[c];
+            if constexpr (VAR == 2) {
+                CUTLASS_PRAGMA_UNROLL
+                for (int j = 0; j < CR_D2C; ++j) f = rotl13(f) ^ duo2_fold(d2[j]);
+            } else {
+                CUTLASS_PRAGMA_UNROLL
+                for (int c = 0; c < CH; ++c) f = rotl13(f) ^ y[c];
+            }
             if constexpr (FORCED > 0) f = rotl13(rotl13(f) ^ zf[0]) ^ zf[1];
             constexpr int NT = decltype(size(TiledMma{}))::value;
             const int tile = int(get<0>(blk_crd)) * g_out.tiles_n + int(get<1>(blk_crd));
@@ -351,6 +373,13 @@ cr_impl* make(const cr_args& a, int* err) {
         *err = 2;
         return nullptr;
     }
+    uint32_t keys[4][D2_KEYS];
+    for (int j = 0; j < 4; j++)
+        for (int t = 0; t < D2_KEYS; t++) keys[j][t] = d2_key(j, t);
+    if (CR_VAR == 2 && cudaMemcpyToSymbol(D2K, keys, sizeof keys) != cudaSuccess) {
+        *err = 2;
+        return nullptr;
+    }
     auto* r = new Impl();
     const size_t need = Gemm::get_workspace_size(args);
     if (need && cudaMalloc(&r->ws, need) != cudaSuccess) {
@@ -383,6 +412,7 @@ const cr_kernel K{CR_STR(CR_NAME),
                   CR_FORCED,
                   CR_XVAR,
                   CR_FVAR,
+                  CR_D2C,
                   kTileM,
                   kTileN,
                   kThreads,

@@ -25,7 +25,7 @@ struct cr_impl {
 struct cr_kernel {
     const char* name;
     int cfg;                     // 0: vLLM's prefill kernel (cooperative 128x128x128), 1: its decode kernel (ping-pong 32x64x128)
-    int var, rounds, p, mode;    // phi.cuh's VAR and ROUNDS, L = 128 p; mode 0 plain, 1 receipt, 2 dump, 3 extra only
+    int var, rounds, p, mode;    // phi.cuh's VAR (0 alu, 1 imad, 2 duo2) and ROUNDS, L = 128 p; mode 0 plain, 1 receipt, 2 dump, 3 extra only
     // spread 0: every chain after the k-tile's last k-block. spread 1: chain (mm, nn) after k-block nn * kblocks / nn_max
     // of the k-tile, its prefix at that k-block's end. grain g > 1 (p 1, spread 0): every chain after k-blocks
     // kblocks / g - 1, 2 kblocks / g - 1, ..., with w the k-block's index from 1; L = 128 p / grain.
@@ -35,6 +35,7 @@ struct cr_kernel {
     int forced;                  // forced alu phi1 steps a thread after every 32-deep k-block that read no accumulator
     int xvar;                    // the cheater's step: 0 alu phi1, 1 imad phi1, 2 FFMA
     int fvar;                    // the forced steps: 0 alu phi1, 2 FFMA
+    int d2c;                     // var 2 (duo2): the four-word states a thread, tile c's words into state c % d2c
     int tile_m, tile_n, threads, chains, nn_max, kblocks, stages, smem_bytes;
     cr_impl* (*make)(const cr_args& a, int* err);
 };

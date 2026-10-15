@@ -15,15 +15,18 @@
 // pairs each kernel with plain at nearly the same clocks), with NVML's SM clock after each batch; --shuffle times each
 // round in a fresh seeded order.
 //
-//   ./cutlass_receipt [--shapes NAME,...] [--reps 9] [--only KERNEL,...] [--shuffle] [--profile | --corun]
+//   ./cutlass_receipt [--shapes NAME,...] [--reps 9] [--only KERNEL,...] [--shuffle] [--profile | --corun | --drift S]
 //   --profile: no gates, one launch of each selected kernel at the first selected shape (for ncu)
 //   --corun: the gates, then at each shape each kernel's batch on a high-priority stream, alone and beside a phi pump on a
 //            low-priority one (rows of ms_alone, ms_with and the pump's free share of the batch's time)
+//   --drift S [--drift-csv PATH] [--block 16]: the gates, then S seconds of back-to-back rounds of the --only receipt
+//            kernels and plain, every launch timed alone, NVML's clocks read and never set (drift() says how)
 #include <cuda_bf16.h>
 #include <cuda_runtime.h>
 #include <dlfcn.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -113,6 +116,15 @@ static uint32_t phi_host(int var, int rounds, uint32_t y, uint32_t p, uint32_t s
     for (int r = 1; r < rounds; r++) y = one(y, 0x7f4a7c15u, k ^ (0x5851f42du * (uint32_t)r));
     return y;
 }
+// phi.cuh's duo2 at a runtime position t, keyed as the kernels' constant bank
+static void duo2_host(Duo2& s, uint32_t p, int t) {
+    const uint32_t u = s.y ^ p ^ d2_key(0, t);
+    s.y = u * d2_key(1, t) + s.z;
+    s.z = rotlv(u, d2_rot1(t)) + s.y;
+    const uint32_t v = s.y2 ^ p ^ d2_key(2, t);
+    s.y2 = v * d2_key(3, t) + s.z2;
+    s.z2 = rotlv(v, d2_rot2(t)) + s.y2;
+}
 static double med(std::vector<double> v) {
     std::sort(v.begin(), v.end());
     return v[v.size() / 2];
@@ -123,13 +135,21 @@ struct Clock {
     using Init = int (*)();
     using ByUuid = int (*)(const char*, void**);
     using Info = int (*)(void*, int, unsigned*);
-    Info info = nullptr;
+    using Power = int (*)(void*, unsigned*);
+    using Reasons = int (*)(void*, unsigned long long*);
+    Info info = nullptr, temp = nullptr;
+    Power power = nullptr;
+    Reasons reasons = nullptr;
     void* dev = nullptr;
     explicit Clock(const cudaDeviceProp& p) {
         void* h = dlopen("libnvidia-ml.so.1", RTLD_NOW);
         if (!h) return;
         auto init = (Init)dlsym(h, "nvmlInit_v2");
         auto by = (ByUuid)dlsym(h, "nvmlDeviceGetHandleByUUID");
+        temp = (Info)dlsym(h, "nvmlDeviceGetTemperature");
+        power = (Power)dlsym(h, "nvmlDeviceGetPowerUsage");
+        reasons = (Reasons)dlsym(h, "nvmlDeviceGetCurrentClocksEventReasons");
+        if (!reasons) reasons = (Reasons)dlsym(h, "nvmlDeviceGetCurrentClocksThrottleReasons");
         info = (Info)dlsym(h, "nvmlDeviceGetClockInfo");
         if (!init || !by || !info || init() != 0) { info = nullptr; return; }
         const unsigned char* u = (const unsigned char*)p.uuid.bytes;
@@ -141,6 +161,16 @@ struct Clock {
     double mhz() const {
         unsigned v = 0;
         return info && info(dev, 1 /* NVML_CLOCK_SM */, &v) == 0 ? (double)v : 0.0;
+    }
+    // read only: the SM clock, the GPU's temperature (C), its power (W) and the active clock-event reasons
+    std::tuple<double, int, double, unsigned long long> read() const {
+        unsigned t = 0, mw = 0;
+        unsigned long long r = 0;
+        if (!info) return {0.0, 0, 0.0, 0ull};
+        if (temp) temp(dev, 0 /* NVML_TEMPERATURE_GPU */, &t);
+        if (power) power(dev, &mw);
+        if (reasons) reasons(dev, &r);
+        return {mhz(), (int)t, mw / 1000.0, r};
     }
 };
 
@@ -306,7 +336,26 @@ static void gate_cfg(int cfg, const std::vector<const cr_kernel*>& ks, unsigned 
             for (int tn = 0; tn < s.n / TN; tn++)
                 for (int t = 0; t < NT; t++) {
                     uint32_t f = 0;
-                    for (int ch = 0; ch < CH; ch++) {
+                    auto word = [&](size_t kb, int ch, int e) {
+                        const uint32_t w = map[((size_t)t * CH + ch) * 4 + e];
+                        const int r = tm * TM + (int)(w >> 16), c = tn * TN + (int)(w & 0xffff);
+                        return f2u(dump[(kb * s.m + r) * s.n + c]);
+                    };
+                    if (k->var == 2) {
+                        // the kernel's order: each receipt point's words in tile-major order, tile ch into state ch % d2c
+                        std::vector<Duo2> st(k->d2c, Duo2{0u, 0u, 0u, 0u});
+                        for (int kt = 0; kt < KT; kt++) {
+                            if ((kt + 1) % k->p) continue;
+                            for (int bk = 0; bk < KB; bk++)
+                                for (int ch = 0; ch < CH; ch++) {
+                                    const bool at = k->spread ? (ch % NN) * KB / NN == bk : (bk + 1) % (KB / k->grain) == 0;
+                                    for (int e = 0; at && e < 4; e++)
+                                        duo2_host(st[ch % k->d2c], word((size_t)kt * KB + bk, ch, e), (ch * 4 + e) % D2_KEYS);
+                                }
+                        }
+                        for (int j = 0; j < k->d2c; j++) f = rotl13(f) ^ duo2_fold(st[j]);
+                    }
+                    for (int ch = 0; ch < CH && k->var != 2; ch++) {
                         uint32_t y = 0;
                         for (int kt = 0; kt < KT; kt++) {
                             if ((kt + 1) % k->p) continue;
@@ -342,20 +391,145 @@ static void gate_cfg(int cfg, const std::vector<const cr_kernel*>& ks, unsigned 
         CK(cudaFree(p));
 }
 
+static double quant(std::vector<double>& v, double q) {  // v sorted
+    return v.empty() ? 0.0 : v[(size_t)std::floor(q * (double)(v.size() - 1))];
+}
+
+// --drift SECONDS: the honest kernels' times as the clock drifts, clocks read and never set. Plain and every receipt
+// kernel --only names are made at every selected shape; then rounds run back to back until SECONDS have passed. Each
+// round runs, kernel by kernel, every selected shape in order, BLOCK launches each, every launch between its own
+// events, and reads NVML (SM clock, temperature, power, clock-event reasons) after each block. The CSV gets a row a
+// block; stdout gets each (kernel, shape)'s launch-time quantiles over the whole run.
+static int drift(double seconds, const char* csv, int block, const std::vector<const cr_kernel*>& ks,
+                 const std::vector<std::string>& shapes_sel, const std::vector<std::string>& only, const cudaDeviceProp& prop,
+                 const Clock& clock) {
+    FILE* out = fopen(csv, "w");
+    if (!out) {
+        fprintf(stderr, "drift: can't write %s\n", csv);
+        return 2;
+    }
+    fprintf(out, "round,t_s,kernel,shape,launches,ms_med,ms_min,ms_max,sm_mhz,temp_c,power_w,reasons\n");
+    struct Live {
+        const cr_kernel* k;
+        const Shape* s;
+        std::vector<cr_impl*> impl;
+        std::vector<double> ms, block_med, mhz;
+        int tmin = 1000, tmax = 0;
+        double pmax = 0;
+        unsigned long long reasons = 0;
+    };
+    std::vector<Live> live;
+    std::vector<std::pair<const Shape*, Bufs>> bufs;
+    const size_t L2 = (size_t)prop.l2CacheSize;
+    for (const Shape& s : SHAPES) {
+        if (!shapes_sel.empty() && !in(shapes_sel, s.name)) continue;
+        const size_t ab = (size_t)s.m * s.k + (size_t)s.n * s.k;
+        const int sets = (int)std::min<size_t>(16, std::max<size_t>(1, (2 * L2 + ab - 1) / ab));
+        Bufs b;
+        CK(cudaMalloc(&b.A, (size_t)sets * s.m * s.k));
+        CK(cudaMalloc(&b.B, (size_t)sets * s.n * s.k));
+        gen<<<1024, 256>>>(b.A, (size_t)sets * s.m * s.k, 0xa0000000u + s.m);
+        gen<<<1024, 256>>>(b.B, (size_t)sets * s.n * s.k, 0xb0000000u + s.n + s.k);
+        std::vector<float> ones(std::max(s.m, s.n), 1.0f);
+        CK(cudaMalloc(&b.sa, s.m * 4));
+        CK(cudaMalloc(&b.sb, s.n * 4));
+        CK(cudaMemcpy(b.sa, ones.data(), s.m * 4, cudaMemcpyHostToDevice));
+        CK(cudaMemcpy(b.sb, ones.data(), s.n * 4, cudaMemcpyHostToDevice));
+        CK(cudaMalloc(&b.D, (size_t)s.m * s.n * 2));
+        CK(cudaMalloc(&b.R, (size_t)(s.m / 32) * (s.n / 64) * 256 * 4));
+        bufs.push_back({&s, b});
+    }
+    for (auto* k : ks) {
+        if (k->mode != 0 && !(k->mode == 1 && in(only, k->name))) continue;
+        for (auto& [s, b] : bufs) {
+            if (k->cfg != (s->m >= 128 ? 0 : 1)) continue;
+            const size_t ab = (size_t)s->m * s->k + (size_t)s->n * s->k;
+            const int sets = (int)std::min<size_t>(16, std::max<size_t>(1, (2 * L2 + ab - 1) / ab));
+            Live l{k, s, {}, {}, {}, {}};
+            for (int t = 0; t < sets; t++) {
+                int err = 0;
+                cr_impl* g = k->make(args_of(*s, b, t, b.D), &err);
+                if (!g) {
+                    fprintf(stderr, "drift: %s at %s: make error %d\n", k->name, s->name, err);
+                    return 2;
+                }
+                l.impl.push_back(g);
+            }
+            live.push_back(std::move(l));
+        }
+    }
+    std::vector<cudaEvent_t> ev(block + 1);
+    for (auto& e : ev) CK(cudaEventCreate(&e));
+    const auto t0 = std::chrono::steady_clock::now();
+    auto since = [&] { return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(); };
+    long rounds = 0;
+    for (; since() < seconds; ++rounds)
+        for (auto& l : live) {
+            for (int i = 0; i < block; i++) {
+                CK(cudaEventRecord(ev[i]));
+                if (l.impl[i % l.impl.size()]->launch(nullptr) != 0) {
+                    fprintf(stderr, "drift: %s at %s: launch failed\n", l.k->name, l.s->name);
+                    return 2;
+                }
+            }
+            CK(cudaEventRecord(ev[block]));
+            CK(cudaEventSynchronize(ev[block]));
+            const auto [mhz, tc, pw, rs] = clock.read();
+            std::vector<double> b(block);
+            for (int i = 0; i < block; i++) {
+                float ms = 0;
+                CK(cudaEventElapsedTime(&ms, ev[i], ev[i + 1]));
+                b[i] = ms;
+                l.ms.push_back(ms);
+            }
+            std::sort(b.begin(), b.end());
+            l.block_med.push_back(b[block / 2]);
+            l.mhz.push_back(mhz);
+            l.tmin = std::min(l.tmin, tc), l.tmax = std::max(l.tmax, tc), l.pmax = std::max(l.pmax, pw), l.reasons |= rs;
+            fprintf(out, "%ld,%.3f,%s,%s,%d,%.5f,%.5f,%.5f,%.0f,%d,%.1f,%llu\n", rounds, since(), l.k->name, l.s->name, block,
+                    b[block / 2], b[0], b[block - 1], mhz, tc, pw, rs);
+        }
+    fclose(out);
+    printf("  \"drift\": {\"seconds\": %.1f, \"rounds\": %ld, \"block\": %d},\n  \"rows\": [\n", since(), rounds, block);
+    for (size_t i = 0; i < live.size(); i++) {
+        auto& l = live[i];
+        std::sort(l.ms.begin(), l.ms.end());
+        std::sort(l.block_med.begin(), l.block_med.end());
+        std::sort(l.mhz.begin(), l.mhz.end());
+        printf("    {\"kernel\": \"%s\", \"shape\": \"%s\", \"var\": %d, \"L\": %d, \"mode\": %d, \"launches\": %zu, "
+               "\"ms_min\": %.5f, \"ms_q0001\": %.5f, \"ms_q001\": %.5f, \"ms_med\": %.5f, \"ms_q099\": %.5f, \"ms_q0999\": %.5f, "
+               "\"ms_max\": %.5f, \"block_med_min\": %.5f, \"block_med_q0001\": %.5f, \"block_med_med\": %.5f, "
+               "\"block_med_q0999\": %.5f, \"block_med_max\": %.5f, \"mhz_min\": %.0f, \"mhz_q001\": %.0f, \"mhz_med\": %.0f, "
+               "\"mhz_max\": %.0f, \"temp_c\": [%d, %d], \"power_w_max\": %.1f, \"reasons_any\": %llu}%s\n",
+               l.k->name, l.s->name, l.k->var, 128 * l.k->p / l.k->grain, l.k->mode, l.ms.size(), l.ms.front(),
+               quant(l.ms, 0.001), quant(l.ms, 0.01), quant(l.ms, 0.5), quant(l.ms, 0.99), quant(l.ms, 0.999), l.ms.back(),
+               l.block_med.front(), quant(l.block_med, 0.001), quant(l.block_med, 0.5), quant(l.block_med, 0.999),
+               l.block_med.back(), l.mhz.front(), quant(l.mhz, 0.01), quant(l.mhz, 0.5), l.mhz.back(), l.tmin, l.tmax, l.pmax,
+               l.reasons, i + 1 < live.size() ? "," : "");
+    }
+    printf("  ]\n}\n");
+    return 0;
+}
+
 int main(int argc, char** argv) {
     std::vector<std::string> shapes_sel, only;
-    int reps = 9;
+    int reps = 9, block = 16;
+    double drift_s = 0;
+    const char* drift_csv = "drift.csv";
     bool profile = false, corun = false, shuffle = false;
     for (int i = 1; i < argc; i++) {
         const std::string a = argv[i];
         if (a == "--shapes" && i + 1 < argc) shapes_sel = split(argv[++i]);
+        else if (a == "--drift" && i + 1 < argc) drift_s = atof(argv[++i]);
+        else if (a == "--drift-csv" && i + 1 < argc) drift_csv = argv[++i];
+        else if (a == "--block" && i + 1 < argc) block = atoi(argv[++i]);
         else if (a == "--reps" && i + 1 < argc) reps = atoi(argv[++i]);
         else if (a == "--only" && i + 1 < argc) only = split(argv[++i]);
         else if (a == "--profile") profile = true;
         else if (a == "--corun") corun = true;
         else if (a == "--shuffle") shuffle = true;
         else {
-            fprintf(stderr, "usage: %s [--shapes NAME,...] [--reps N] [--only KERNEL,...] [--shuffle] [--profile | --corun]\n",
+            fprintf(stderr, "usage: %s [--shapes NAME,...] [--reps N] [--only KERNEL,...] [--shuffle] [--profile | --corun | --drift SECONDS [--drift-csv PATH] [--block N]]\n",
                     argv[0]);
             return 2;
         }
@@ -376,8 +550,8 @@ int main(int argc, char** argv) {
     for (size_t i = 0; i < ks.size(); i++) {
         auto* k = ks[i];
         printf("    {\"name\": \"%s\", \"cfg\": %d, \"var\": %d, \"rounds\": %d, \"p\": %d, \"L\": %d, \"mode\": %d, \"spread\": %d, "
-               "\"grain\": %d, \"extra\": %d, \"honest\": %d, \"forced\": %d, \"xvar\": %d, \"fvar\": %d, \"tile\": [%d, %d], \"threads\": %d, \"chains\": %d, \"stages\": %d, \"smem_bytes\": %d}%s\n",
-               k->name, k->cfg, k->var, k->rounds, k->p, 128 * k->p / k->grain, k->mode, k->spread, k->grain, k->extra, k->honest, k->forced, k->xvar, k->fvar, k->tile_m,
+               "\"grain\": %d, \"extra\": %d, \"honest\": %d, \"forced\": %d, \"xvar\": %d, \"fvar\": %d, \"d2c\": %d, \"tile\": [%d, %d], \"threads\": %d, \"chains\": %d, \"stages\": %d, \"smem_bytes\": %d}%s\n",
+               k->name, k->cfg, k->var, k->rounds, k->p, 128 * k->p / k->grain, k->mode, k->spread, k->grain, k->extra, k->honest, k->forced, k->xvar, k->fvar, k->d2c, k->tile_m,
                k->tile_n, k->threads,
                k->chains, k->stages, k->smem_bytes, i + 1 < ks.size() ? "," : "");
     }
@@ -392,6 +566,7 @@ int main(int argc, char** argv) {
         printf("  \"failed\": %zu\n}\n", gates_failed.size());
         return 3;
     }
+    if (drift_s > 0) return drift(drift_s, drift_csv, block, ks, shapes_sel, only, prop, clock);
 
     const size_t L2 = (size_t)prop.l2CacheSize;
     printf("  \"rows\": [\n");

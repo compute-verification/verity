@@ -32,6 +32,8 @@
 #          CG_SHUFFLE=1 times each round in a fresh order
 #   cgncu  (not default) lease 1: ncu over the kernels CG_NCU names (comma list, built as for cheat with CG_BUILD) at
 #          p8192 qkv
+#   drift  (not default) lease 1: cutlass_receipt --drift, the honest kernels CG_BUILD names and plain back to back for
+#          DRIFT_S seconds (720) at the prefill shapes, every launch timed, NVML's clocks read and never set
 #   gap    (not default) lease 1: gap_filler.py, forced work (φ pump, or a tag-like read of a 1 GiB store) on a
 #          low-priority stream beside vLLM's FP8 layer stack (its own ops), graph-replayed at high priority
 # Timeouts run in the foreground so `research cancel` reaches the GPU process.
@@ -75,7 +77,7 @@ probe_build() {  # NAME SOURCE [NVCC FLAGS]: the binary in $d, its SASS and the 
 [[ " $STAGES " == *" isa "* ]] && probe_build isa_rates isa_rates.cu
 [[ " $STAGES " == *" rgemm "* ]] && probe_build receipt_gemm receipt_gemm.cu -Xptxas -v
 cgemm_build() {  # cutlass_receipt in $d with one object a line of cutlass_receipt.kernels, compiled in parallel
-  local C=/workspace/pouw/harness/build/cutlass-v4.8.0 b="$d/cg" pids=() bad=0 name cfg var rounds p mode spread grain extra honest forced xvar fvar
+  local C=/workspace/pouw/harness/build/cutlass-v4.8.0 b="$d/cg" pids=() bad=0 name cfg var rounds p mode spread grain extra honest forced xvar fvar d2c
   if [[ ! -d $C/include/cutlass ]]; then
     C=$d/cutlass
     git clone -q --depth 1 --branch v4.8.0 https://github.com/NVIDIA/cutlass "$C"
@@ -85,12 +87,12 @@ cgemm_build() {  # cutlass_receipt in $d with one object a line of cutlass_recei
   local fl=(-O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a --expt-relaxed-constexpr -I"$C/include"
             -I"$C/tools/util/include" -I"$S" -DCUTLASS_ENABLE_TENSOR_CORE_MMA=1)
   stamp "build cutlass_receipt kernels"
-  while read -r name cfg var rounds p mode spread grain extra honest forced xvar fvar; do
+  while read -r name cfg var rounds p mode spread grain extra honest forced xvar fvar d2c; do
     [[ -z $name || $name == \#* ]] && continue
     # CG_BUILD (comma list): only those kernels, with every configuration's plain and dump kernels for the gates
     [[ -n ${CG_BUILD:-} && $mode != 0 && $mode != 2 && ",$CG_BUILD," != *",$name,"* ]] && continue
     nice -n 19 "$CUDA/bin/nvcc" "${fl[@]}" -Xptxas -v -DCR_NAME=$name -DCR_CFG=$cfg -DCR_VAR=$var -DCR_ROUNDS=$rounds \
-      -DCR_P=$p -DCR_MODE=$mode -DCR_SPREAD=${spread:-0} -DCR_GRAIN=${grain:-1} -DCR_EXTRA=${extra:-0} -DCR_HONEST=${honest:-0} -DCR_FORCED=${forced:-0} -DCR_XVAR=${xvar:-0} -DCR_FVAR=${fvar:-0} \
+      -DCR_P=$p -DCR_MODE=$mode -DCR_SPREAD=${spread:-0} -DCR_GRAIN=${grain:-1} -DCR_EXTRA=${extra:-0} -DCR_HONEST=${honest:-0} -DCR_FORCED=${forced:-0} -DCR_XVAR=${xvar:-0} -DCR_FVAR=${fvar:-0} -DCR_D2C=${d2c:-4} \
       -c "$S/cutlass_receipt_kernel.cu" -o "$b/$name.o" 2> "$OUT/nvcc-cg-$name.txt" &
     pids+=($!)
   done < "$S/cutlass_receipt.kernels"
@@ -103,8 +105,8 @@ cgemm_build() {  # cutlass_receipt in $d with one object a line of cutlass_recei
   gzip -c "$d/cutlass_receipt-sass.txt" > "$OUT/cutlass_receipt-sass.txt.gz"
   stamp "build cutlass_receipt ok"
 }
-[[ " $STAGES " == *" cgemm "* || " $STAGES " == *" corun "* || " $STAGES " == *" cheat "* || " $STAGES " == *" cgncu "* ]] \
-  && { cgemm_build || STAGES=${STAGES/cgemm/} STAGES=${STAGES/corun/} STAGES=${STAGES/cheat/} STAGES=${STAGES/cgncu/}; }
+[[ " $STAGES " == *" cgemm "* || " $STAGES " == *" corun "* || " $STAGES " == *" cheat "* || " $STAGES " == *" cgncu "* || " $STAGES " == *" drift "* ]] \
+  && { cgemm_build || STAGES=${STAGES/cgemm/} STAGES=${STAGES/corun/} STAGES=${STAGES/cheat/} STAGES=${STAGES/cgncu/} STAGES=${STAGES/drift/}; }
 
 split() {
   for cfg in "$@"; do
@@ -260,13 +262,27 @@ corun() {
 
 cheat() {  # each design beside its cheater variants (CR_EXTRA), every prefill shape, paired with the plain kernel each round
   stamp "cutlass cheat"
-  if timeout --foreground 900 "$d/cutlass_receipt" --reps ${CG_REPS:-9} ${CG_SHUFFLE:+--shuffle} \
+  if timeout --foreground ${CHEAT_TIMEOUT:-900} "$d/cutlass_receipt" --reps ${CG_REPS:-9} ${CG_SHUFFLE:+--shuffle} \
       --shapes ${CHEAT_SHAPES:-p2048_qkv,p2048_o,p2048_gateup,p2048_down,p8192_qkv,p8192_o,p8192_gateup,p8192_down} \
       ${CG_BUILD:+--only $CG_BUILD} > "$OUT/cutlass-cheat.json" 2> "$OUT/cutlass-cheat.err"; then
     stamp "cutlass cheat ok"
   else
     stamp "cutlass cheat FAILED rc=$?"
   fi
+}
+
+drift() {  # the honest kernels CG_BUILD names, back to back for DRIFT_S seconds, every launch timed, clocks read only
+  stamp "cutlass drift"
+  nvidia-smi -i "$GPU_LEASE_UUID" -q -d CLOCK,PERFORMANCE > "$OUT/nvidia-smi-before.txt" 2>&1 || true
+  if timeout --foreground $(( ${DRIFT_S:-720} + 600 )) "$d/cutlass_receipt" --drift ${DRIFT_S:-720} --drift-csv "$d/drift.csv" \
+      --block ${DRIFT_BLOCK:-16} --shapes ${DRIFT_SHAPES:-p2048_qkv,p2048_o,p2048_gateup,p2048_down,p8192_qkv,p8192_o,p8192_gateup,p8192_down} \
+      ${CG_BUILD:+--only $CG_BUILD} > "$OUT/cutlass-drift.json" 2> "$OUT/cutlass-drift.err"; then
+    stamp "cutlass drift ok"
+  else
+    stamp "cutlass drift FAILED rc=$?"
+  fi
+  gzip -c "$d/drift.csv" > "$OUT/drift.csv.gz" 2>/dev/null || true
+  nvidia-smi -i "$GPU_LEASE_UUID" -q -d CLOCK,PERFORMANCE > "$OUT/nvidia-smi-after.txt" 2>&1 || true
 }
 
 gap() {
@@ -280,7 +296,7 @@ gap() {
 
 leased() {
   stamp "lease for: $*"
-  gpu-lease 1 --wait --max-min 30 -- bash -c "$(declare -f stamp split micro ncu_stage phi isa rgemm cgemm cg_ncu cgncu corun cheat gap); $(declare -p OUT d S PY MODEL REV NCU METRICS); $*" \
+  gpu-lease 1 --wait --max-min 30 -- bash -c "$(declare -f stamp split micro ncu_stage phi isa rgemm cgemm cg_ncu cgncu corun cheat drift gap); $(declare -p OUT d S PY MODEL REV NCU METRICS); $*" \
     || stamp "lease for '$*' FAILED rc=$?"
 }
 [[ " $STAGES " == *" split "* ]] && leased split "'bf16 eager'" "'fp8 eager'" "'bf16 graphs'" "'fp8 graphs'"
@@ -295,6 +311,7 @@ leased() {
 [[ " $STAGES " == *" cgemm "* ]] && leased cgemm
 [[ " $STAGES " == *" corun "* ]] && leased corun
 [[ " $STAGES " == *" cheat "* ]] && leased cheat
+[[ " $STAGES " == *" drift "* ]] && leased drift
 [[ " $STAGES " == *" cgncu "* ]] && leased cgncu
 [[ " $STAGES " == *" gap "* ]] && leased gap
 

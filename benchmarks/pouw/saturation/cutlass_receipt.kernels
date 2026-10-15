@@ -5,7 +5,8 @@
 # after every 32-deep k-block, on chains of its own; honest H gives the first H chain words of each receipt point one more
 # round; forced F adds F phi1 steps after every 32-deep k-block on receipt chains that read no accumulator; xvar 1 makes
 # the cheater's steps imad phi1 (`_xiX` in the name), xvar 2 FFMAs (`_xfX`), xvar 3 an alu phi1 and six FFMAs each
-# (`_xmX`), xvar 4 and 5 FFMAs and alu phi1 on eight chains (`_xgX`, `_xaX`); fvar 2 makes the forced steps FFMAs, `_ffF`)
+# (`_xmX`), xvar 4 and 5 FFMAs and alu phi1 on eight chains (`_xgX`, `_xaX`); fvar 2 makes the forced steps FFMAs, `_ffF`;
+# var 2 is duo2, whose last column d2c (default 4) is its four-word states a thread: `p_duo2cC_g4` for C other than 4)
 p_plain    0 0 1 1 0
 p_dump     0 0 1 1 2
 p_alu_p1   0 0 1 1 1
@@ -407,3 +408,72 @@ p_alu_g4_h4_ff192_xg24 0 0 1 1 1 0 4 24 4 192 4 2
 p_alu_g4_h4_ff192_xa1 0 0 1 1 1 0 4 1 4 192 5 2
 p_alu_g4_h4_ff192_xa2 0 0 1 1 1 0 4 2 4 192 5 2
 p_alu_g4_h4_ff192_xf4 0 0 1 1 1 0 4 4 4 192 2 2
+# round 3: duo2 at L = 32 (grain 4) with 2, 4, 8 and 16 states a thread; the 1x alu L = 32 sweep beside the 4-state design
+p_duo2c2_g4 0 2 1 1 1 0 4 0 0 0 0 0 2
+p_duo2_g4 0 2 1 1 1 0 4 0 0 0 0 0 4
+p_duo2c8_g4 0 2 1 1 1 0 4 0 0 0 0 0 8
+p_duo2c16_g4 0 2 1 1 1 0 4 0 0 0 0 0 16
+p_duo2_g4_x0 0 2 1 1 1 0 4 0 0 0 0 0 4
+p_duo2_g4_x1 0 2 1 1 1 0 4 1 0 0 0 0 4
+p_duo2_g4_x2 0 2 1 1 1 0 4 2 0 0 0 0 4
+p_duo2_g4_x3 0 2 1 1 1 0 4 3 0 0 0 0 4
+p_duo2_g4_x4 0 2 1 1 1 0 4 4 0 0 0 0 4
+p_duo2_g4_x5 0 2 1 1 1 0 4 5 0 0 0 0 4
+p_duo2_g4_x6 0 2 1 1 1 0 4 6 0 0 0 0 4
+p_duo2_g4_x8 0 2 1 1 1 0 4 8 0 0 0 0 4
+p_duo2_g4_x12 0 2 1 1 1 0 4 12 0 0 0 0 4
+p_duo2_g4_x16 0 2 1 1 1 0 4 16 0 0 0 0 4
+p_duo2_g4_x24 0 2 1 1 1 0 4 24 0 0 0 0 4
+p_duo2_g4_x32 0 2 1 1 1 0 4 32 0 0 0 0 4
+p_duo2_g4_x64 0 2 1 1 1 0 4 64 0 0 0 0 4
+p_duo2_g4_x128 0 2 1 1 1 0 4 128 0 0 0 0 4
+p_duo2_g4_x256 0 2 1 1 1 0 4 256 0 0 0 0 4
+p_duo2_g4_xi1 0 2 1 1 1 0 4 1 0 0 1 0 4
+p_duo2_g4_xi2 0 2 1 1 1 0 4 2 0 0 1 0 4
+p_duo2_g4_xi4 0 2 1 1 1 0 4 4 0 0 1 0 4
+p_duo2_g4_xi8 0 2 1 1 1 0 4 8 0 0 1 0 4
+p_duo2_g4_xi16 0 2 1 1 1 0 4 16 0 0 1 0 4
+p_duo2_g4_xf2 0 2 1 1 1 0 4 2 0 0 2 0 4
+p_duo2_g4_xf4 0 2 1 1 1 0 4 4 0 0 2 0 4
+p_duo2_g4_xf6 0 2 1 1 1 0 4 6 0 0 2 0 4
+p_duo2_g4_xf8 0 2 1 1 1 0 4 8 0 0 2 0 4
+p_duo2_g4_xf10 0 2 1 1 1 0 4 10 0 0 2 0 4
+p_duo2_g4_xf12 0 2 1 1 1 0 4 12 0 0 2 0 4
+p_duo2_g4_xf16 0 2 1 1 1 0 4 16 0 0 2 0 4
+p_duo2_g4_xf32 0 2 1 1 1 0 4 32 0 0 2 0 4
+p_duo2_g4_xf128 0 2 1 1 1 0 4 128 0 0 2 0 4
+p_duo2_g4_xf256 0 2 1 1 1 0 4 256 0 0 2 0 4
+p_duo2_g4_xf512 0 2 1 1 1 0 4 512 0 0 2 0 4
+p_duo2_g4_xf1024 0 2 1 1 1 0 4 1024 0 0 2 0 4
+p_duo2_g4_xm1 0 2 1 1 1 0 4 1 0 0 3 0 4
+p_duo2_g4_xm2 0 2 1 1 1 0 4 2 0 0 3 0 4
+p_duo2_g4_xm4 0 2 1 1 1 0 4 4 0 0 3 0 4
+p_duo2_g4_xm8 0 2 1 1 1 0 4 8 0 0 3 0 4
+p_duo2_g4_xm16 0 2 1 1 1 0 4 16 0 0 3 0 4
+p_duo2_g4_xm32 0 2 1 1 1 0 4 32 0 0 3 0 4
+p_duo2_g4_xm48 0 2 1 1 1 0 4 48 0 0 3 0 4
+p_duo2_g4_xm64 0 2 1 1 1 0 4 64 0 0 3 0 4
+p_duo2_g4_xm96 0 2 1 1 1 0 4 96 0 0 3 0 4
+p_duo2_g4_xm128 0 2 1 1 1 0 4 128 0 0 3 0 4
+p_duo2_g4_xg1 0 2 1 1 1 0 4 1 0 0 4 0 4
+p_duo2_g4_xg2 0 2 1 1 1 0 4 2 0 0 4 0 4
+p_duo2_g4_xg4 0 2 1 1 1 0 4 4 0 0 4 0 4
+p_duo2_g4_xg6 0 2 1 1 1 0 4 6 0 0 4 0 4
+p_duo2_g4_xg8 0 2 1 1 1 0 4 8 0 0 4 0 4
+p_duo2_g4_xg10 0 2 1 1 1 0 4 10 0 0 4 0 4
+p_duo2_g4_xg12 0 2 1 1 1 0 4 12 0 0 4 0 4
+p_duo2_g4_xg14 0 2 1 1 1 0 4 14 0 0 4 0 4
+p_duo2_g4_xg16 0 2 1 1 1 0 4 16 0 0 4 0 4
+p_duo2_g4_xg20 0 2 1 1 1 0 4 20 0 0 4 0 4
+p_duo2_g4_xg24 0 2 1 1 1 0 4 24 0 0 4 0 4
+p_duo2_g4_xg32 0 2 1 1 1 0 4 32 0 0 4 0 4
+p_duo2_g4_xg64 0 2 1 1 1 0 4 64 0 0 4 0 4
+p_duo2_g4_xg128 0 2 1 1 1 0 4 128 0 0 4 0 4
+p_duo2_g4_xg256 0 2 1 1 1 0 4 256 0 0 4 0 4
+p_duo2_g4_xa1 0 2 1 1 1 0 4 1 0 0 5 0 4
+p_duo2_g4_xa2 0 2 1 1 1 0 4 2 0 0 5 0 4
+p_duo2_g4_xa3 0 2 1 1 1 0 4 3 0 0 5 0 4
+p_duo2_g4_xa4 0 2 1 1 1 0 4 4 0 0 5 0 4
+p_duo2_g4_xa8 0 2 1 1 1 0 4 8 0 0 5 0 4
+p_duo2_g4_xa16 0 2 1 1 1 0 4 16 0 0 5 0 4
+p_duo2_g4_xa32 0 2 1 1 1 0 4 32 0 0 5 0 4
