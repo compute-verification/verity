@@ -21,11 +21,12 @@
 //   CR_FORCED F (mode 1) forced work that reads no accumulator: F alu phi1 steps a thread after every 32-deep k-block on
 //              two chains of the receipt's own (seeded by the thread; a live coin in a protocol), folded into the
 //              thread's receipt word
-//   CR_EXTRA X (modes 1 and 3) a cheater's own CUDA work fused beside the GEMM: X more alu phi1 steps a thread after every
+//   CR_EXTRA X (modes 1 and 3) a cheater's own CUDA work fused beside the GEMM: X more phi1 steps a thread after every
 //              32-deep k-block, on two chains of its own that never read the accumulators. They feed only a store that
 //              fires on a 64-bit coincidence, so the outputs and receipts the gates check are the design's.
+//   CR_XVAR V  the cheater's phi1: 0 alu, 1 imad (IMAD on the FMA pipe beside the receipt's ALU work)
 // Compiled once per kernel: -DCR_NAME=name -DCR_CFG -DCR_VAR -DCR_ROUNDS -DCR_P -DCR_MODE -DCR_SPREAD -DCR_GRAIN
-// -DCR_EXTRA -DCR_HONEST -DCR_FORCED
+// -DCR_EXTRA -DCR_HONEST -DCR_FORCED -DCR_XVAR
 // (job.sh's cgemm).
 #include "cutlass_receipt.cuh"
 
@@ -58,6 +59,9 @@
 #endif
 #ifndef CR_FORCED
 #define CR_FORCED 0
+#endif
+#ifndef CR_XVAR
+#define CR_XVAR 0
 #endif
 #define CR_STR2(x) #x
 #define CR_STR(x) CR_STR2(x)
@@ -184,7 +188,7 @@ struct ReceiptMma : Base {
             if constexpr ((MODE == 1 || MODE == 3) && EXTRA > 0) {
                 const uint32_t p = (uint32_t)(kt * KB + b);
                 CUTLASS_PRAGMA_UNROLL
-                for (int j = 0; j < EXTRA; ++j) z[j & 1] = phi1<0>(z[j & 1], p, 0x7f4a7c15u, key(j, b));
+                for (int j = 0; j < EXTRA; ++j) z[j & 1] = phi1<CR_XVAR>(z[j & 1], p, 0x7f4a7c15u, key(j, b));
             }
             if constexpr (b == KB - 1) ++kt;
         };
@@ -339,6 +343,7 @@ const cr_kernel K{CR_STR(CR_NAME),
                   CR_EXTRA,
                   CR_HONEST,
                   CR_FORCED,
+                  CR_XVAR,
                   kTileM,
                   kTileN,
                   kThreads,

@@ -72,7 +72,7 @@ probe_build() {  # NAME SOURCE [NVCC FLAGS]: the binary in $d, its SASS and the 
 [[ " $STAGES " == *" isa "* ]] && probe_build isa_rates isa_rates.cu
 [[ " $STAGES " == *" rgemm "* ]] && probe_build receipt_gemm receipt_gemm.cu -Xptxas -v
 cgemm_build() {  # cutlass_receipt in $d with one object a line of cutlass_receipt.kernels, compiled in parallel
-  local C=/workspace/pouw/harness/build/cutlass-v4.8.0 b="$d/cg" pids=() bad=0 name cfg var rounds p mode spread grain extra honest forced
+  local C=/workspace/pouw/harness/build/cutlass-v4.8.0 b="$d/cg" pids=() bad=0 name cfg var rounds p mode spread grain extra honest forced xvar
   if [[ ! -d $C/include/cutlass ]]; then
     C=$d/cutlass
     git clone -q --depth 1 --branch v4.8.0 https://github.com/NVIDIA/cutlass "$C"
@@ -82,12 +82,12 @@ cgemm_build() {  # cutlass_receipt in $d with one object a line of cutlass_recei
   local fl=(-O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a --expt-relaxed-constexpr -I"$C/include"
             -I"$C/tools/util/include" -I"$S" -DCUTLASS_ENABLE_TENSOR_CORE_MMA=1)
   stamp "build cutlass_receipt kernels"
-  while read -r name cfg var rounds p mode spread grain extra honest forced; do
+  while read -r name cfg var rounds p mode spread grain extra honest forced xvar; do
     [[ -z $name || $name == \#* ]] && continue
     # CG_BUILD (comma list): only those kernels, with every configuration's plain and dump kernels for the gates
     [[ -n ${CG_BUILD:-} && $mode != 0 && $mode != 2 && ",$CG_BUILD," != *",$name,"* ]] && continue
     nice -n 19 "$CUDA/bin/nvcc" "${fl[@]}" -Xptxas -v -DCR_NAME=$name -DCR_CFG=$cfg -DCR_VAR=$var -DCR_ROUNDS=$rounds \
-      -DCR_P=$p -DCR_MODE=$mode -DCR_SPREAD=${spread:-0} -DCR_GRAIN=${grain:-1} -DCR_EXTRA=${extra:-0} -DCR_HONEST=${honest:-0} -DCR_FORCED=${forced:-0} \
+      -DCR_P=$p -DCR_MODE=$mode -DCR_SPREAD=${spread:-0} -DCR_GRAIN=${grain:-1} -DCR_EXTRA=${extra:-0} -DCR_HONEST=${honest:-0} -DCR_FORCED=${forced:-0} -DCR_XVAR=${xvar:-0} \
       -c "$S/cutlass_receipt_kernel.cu" -o "$b/$name.o" 2> "$OUT/nvcc-cg-$name.txt" &
     pids+=($!)
   done < "$S/cutlass_receipt.kernels"

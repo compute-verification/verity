@@ -7,10 +7,11 @@
 removed (their SASS equals the design's), so their X = 1 rows measure nothing.
 
 Input: `cutlass_receipt`'s JSON from job.sh's cheat stage, where each design kernel runs beside its `_xX` variants: the
-same kernel plus X alu phi1 steps a thread after every 32-deep k-block on chains that never read the accumulators. Per
+same kernel plus X alu phi1 steps a thread after every 32-deep k-block on chains that never read the accumulators
+(`_xiX`: imad phi1 steps, whose IMAD issues to the FMA pipe). Per
 phase (the four linears weighted by the design's time, as one layer runs each once):
 
-- added: the cheater's steps per SM-clock over φ's solo rate (21.2 alu steps an SM-clock, round 1), at the variant's time;
+- added: the cheater's steps per SM-clock over φ's solo rate (21.2 alu, 26.6 imad steps an SM-clock), at the variant's time;
 - slowdown: the variant's time over the design's, from each kernel's median against the plain kernel in the same rounds;
 - free share: (added work at φ's solo rate − the time it added) / added work, both in units of the design's time;
 - ν_f: the most free capacity any variant shows, added work − the time it added, as a share of the window's CUDA
@@ -23,7 +24,8 @@ import argparse
 import json
 import re
 
-PHI_SOLO = 21.2
+PHI_SOLO = {0: 21.2, 1: 26.6}
+VARIANT = re.compile(r"_xi?(\d+)$")
 NOISE = 0.005
 KB = 4
 
@@ -37,16 +39,16 @@ def main():
     d = json.load(open(a.cheat))
     sms = d["sms"]
     threads = {k["name"]: k["threads"] for k in d["kernels"]}
+    xvar = {k["name"]: k.get("xvar", 0) for k in d["kernels"]}
     rows = {(r["kernel"], r["shape"]): r for r in d["rows"]}
     phases = sorted({r["shape"].split("_")[0] for r in d["rows"]})
     out = []
     print("| design | X | phase | added (share of φ solo) | slowdown | free share | free capacity | rate kept vs plain |")
     print("|---|---|---|---|---|---|---|---|")
-    variants = sorted({r["kernel"] for r in d["rows"] if re.search(r"_x\d+$", r["kernel"])},
-                      key=lambda k: (k.rsplit("_x", 1)[0], int(k.rsplit("_x", 1)[1])))
+    variants = sorted({r["kernel"] for r in d["rows"] if VARIANT.search(r["kernel"])},
+                      key=lambda k: (VARIANT.sub("", k), xvar[k], int(VARIANT.search(k)[1])))
     for v in variants:
-        base, x = v.rsplit("_x", 1)
-        x = int(x)
+        base, x = VARIANT.sub("", v), int(VARIANT.search(v)[1])
         if x in a.drop:
             continue
         for ph in phases:
@@ -61,14 +63,14 @@ def main():
             steps = sum(rows[(v, s)]["m"] // 128 * (rows[(v, s)]["n"] // 128) * threads[v] * rows[(v, s)]["k"] // 128
                         * KB * x for s in shapes)
             clocks = sum(rows[(v, s)]["ms"] * 1e-3 * rows[(v, s)]["sm_mhz"] * 1e6 for s in shapes) * sms
-            added = steps / clocks / PHI_SOLO
+            added = steps / clocks / PHI_SOLO[xvar[v]]
             added_base_units = added * slow
             free = (added_base_units - (slow - 1)) / added_base_units
             kept = tp / tv
             net = added_base_units - (slow - 1)
-            out.append({"design": base, "extra": x, "phase": ph, "added": added, "slowdown": slow, "free": free,
+            out.append({"design": base, "extra": x, "xvar": xvar[v], "phase": ph, "added": added, "slowdown": slow, "free": free,
                         "net": net, "rate_kept_vs_plain": kept})
-            print(f"| {base} | {x} | {ph} | {100 * added:.1f}% | {slow:.4f}× | {100 * free:.0f}% | {100 * net:.1f}% | "
+            print(f"| {base} | {x}{' imad' if xvar[v] else ''} | {ph} | {100 * added:.1f}% | {slow:.4f}× | {100 * free:.0f}% | {100 * net:.1f}% | "
                   f"{100 * kept:.1f}% |")
     nu, net = {}, {}
     for o in out:

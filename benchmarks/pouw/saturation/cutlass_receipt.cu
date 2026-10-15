@@ -363,8 +363,8 @@ int main(int argc, char** argv) {
     for (size_t i = 0; i < ks.size(); i++) {
         auto* k = ks[i];
         printf("    {\"name\": \"%s\", \"cfg\": %d, \"var\": %d, \"rounds\": %d, \"p\": %d, \"L\": %d, \"mode\": %d, \"spread\": %d, "
-               "\"grain\": %d, \"extra\": %d, \"honest\": %d, \"forced\": %d, \"tile\": [%d, %d], \"threads\": %d, \"chains\": %d, \"stages\": %d, \"smem_bytes\": %d}%s\n",
-               k->name, k->cfg, k->var, k->rounds, k->p, 128 * k->p / k->grain, k->mode, k->spread, k->grain, k->extra, k->honest, k->forced, k->tile_m,
+               "\"grain\": %d, \"extra\": %d, \"honest\": %d, \"forced\": %d, \"xvar\": %d, \"tile\": [%d, %d], \"threads\": %d, \"chains\": %d, \"stages\": %d, \"smem_bytes\": %d}%s\n",
+               k->name, k->cfg, k->var, k->rounds, k->p, 128 * k->p / k->grain, k->mode, k->spread, k->grain, k->extra, k->honest, k->forced, k->xvar, k->tile_m,
                k->tile_n, k->threads,
                k->chains, k->stages, k->smem_bytes, i + 1 < ks.size() ? "," : "");
     }
