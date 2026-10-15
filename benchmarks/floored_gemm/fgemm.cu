@@ -251,7 +251,7 @@ template <int TM, int BN, int WM, int STAGES, int RP = 40> struct ML {
     }
   }
   // atom j of a stage absorbs when a receipt boundary falls just before it (never before the tile's first atom)
-  static constexpr bool absorbs(int rs, bool first, int j) { return rs != 0 && !(first && j == 0) && (rs == 32 || j % 2 == 0); }
+  __host__ __device__ static constexpr bool absorbs(int rs, bool first, int j) { return rs != 0 && !(first && j == 0) && (rs == 32 || j % 2 == 0); }
   template <int RS, int KIND, bool FIRST, bool LAST>
   DEV void stage_body(int (&acc)[MI][NI][4], St (&ch)[NCH<KIND>], uint32_t (&fa)[2][MI][4], uint32_t (&fb)[2][NI][2]) {
     const uint32_t sb = stage(s), done = empty(s);
