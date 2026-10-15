@@ -121,8 +121,9 @@ subscribe_linear_comment(options={"scope": "team", "teamId": <your registry `lin
 1. **Renew.** Run `list_subscriptions` and read each `expiresAt`. Nothing warns you when one lapses: it simply stops
    waking you. For each subscription or timer you still need that is missing or expires within 24 h:
    - a Slack subscription: call the same subscribe again. It renews in place (same id, new `expiresAt`).
-   - a timer: it lapses 7 days after it was made, and subscribing again under the same name doesn't renew it. Create it
-     under a new name, then `unsubscribe` the old id, so there's no gap.
+   - a timer: it lapses 7 days after it was made. Subscribing again under the same name changes nothing: it answers
+     `created: false` and keeps the old prompt and schedule. So a timer's name carries a version (`...-v7`). To renew it or
+     change its prompt, create `...-v8` first, then `unsubscribe` the old id, so there's no gap and no double fire.
 
    Unsubscribe from threads that are finished.
 2. **Filter.** Save the event as delivered to a file. If it arrives as prose, write its `channel`, `ts`, `thread_ts`, `text`,
