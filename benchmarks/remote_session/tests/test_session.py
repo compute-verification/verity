@@ -17,7 +17,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parents[2]))
 
-from verity.core.protocols.remote_bandwidth import audit  # noqa: E402
+from verity.core.protocols.remote_bandwidth import audit, timing  # noqa: E402
 from verity.core.protocols.remote_bandwidth import codec as rcodec  # noqa: E402
 
 import prover  # noqa: E402
@@ -127,9 +127,26 @@ def test_a_prover_reporting_a_slow_read_cannot_lower_either_ledgers_capacity(mon
     (slow,), _ = run("honest", read_bytes_per_s=1.0)
     (fast,), _ = run("honest", read_bytes_per_s=1e20)
     assert slow["ledger"]["inputs"]["reported_read_bytes_per_s"] == 1.0
-    assert slow["ledger"]["measured"]["capacity_bytes_per_s"] == verifier.MEASURED_BYTES_PER_S
-    assert slow["ledger"]["spec"]["capacity_bytes_per_s"] == verifier.SPEC_BYTES_PER_S
+    assert slow["ledger"]["measured"]["capacity_bytes_per_s"] == timing.READ_BYTES_PER_S
+    assert slow["ledger"]["spec"]["capacity_bytes_per_s"] == timing.SPEC_BYTES_PER_S
     assert fast["ledger"]["measured"]["capacity_bytes_per_s"] == fast["ledger"]["spec"]["capacity_bytes_per_s"] == 1e20
+
+
+def test_the_ledgers_are_the_nodes_whatever_share_of_it_the_store_is_on(monkeypatch):
+    """MEM-26: R is every GPU's HBM and the host's DRAM, S_chip every GPU's chip and the host's caches, and the squaring
+    ceiling the node's, for a store on one GPU too: its calibration's one-GPU read lowers none of them, and its
+    certified bytes are the same at either R."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    (r,), _ = run("honest", read_bytes_per_s=timing.GPU_READ_BYTES_PER_S)
+    lg = r["ledger"]
+    node_read = timing.GPUS * timing.GPU_READ_BYTES_PER_S + timing.HOST_READ_BYTES_PER_S
+    node_spec = timing.GPUS * timing.GPU_SPEC_BYTES_PER_S + timing.HOST_SPEC_BYTES_PER_S
+    assert lg["inputs"]["reported_read_bytes_per_s"] == timing.GPU_READ_BYTES_PER_S
+    assert lg["measured"]["capacity_bytes_per_s"] == lg["inputs"]["measured_read_bytes_per_s"] == node_read
+    assert lg["spec"]["capacity_bytes_per_s"] == lg["inputs"]["spec_bytes_per_s"] == node_spec
+    assert lg["inputs"]["chip_bytes"] == timing.GPUS * timing.GPU_CHIP_BYTES + timing.HOST_CHIP_BYTES == 3_045_746_688
+    assert lg["inputs"]["squarings_per_s"] == timing.GPUS * timing.GPU_SQUARINGS_PER_S["p512"]
+    assert lg["spec"]["certified_bytes"] == pytest.approx(lg["measured"]["certified_bytes"], rel=1e-9)
 
 
 def test_a_second_session_waits_out_the_first_and_is_accepted():
