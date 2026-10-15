@@ -309,7 +309,8 @@ static void gate_cfg(int cfg, const std::vector<const cr_kernel*>& ks, unsigned 
                                 for (int e = 0; e < 4; e++) {
                                     const uint32_t w = map[((size_t)t * CH + ch) * 4 + e];
                                     const int r = tm * TM + (int)(w >> 16), c = tn * TN + (int)(w & 0xffff);
-                                    y = phi_host(k->var, k->rounds, y, f2u(dump[(kb * s.m + r) * s.n + c]), kw, key(ch, e));
+                                    y = phi_host(k->var, k->rounds + (ch * 4 + e < k->honest), y,
+                                                 f2u(dump[(kb * s.m + r) * s.n + c]), kw, key(ch, e));
                                 }
                             }
                         }
@@ -355,8 +356,8 @@ int main(int argc, char** argv) {
     for (size_t i = 0; i < ks.size(); i++) {
         auto* k = ks[i];
         printf("    {\"name\": \"%s\", \"cfg\": %d, \"var\": %d, \"rounds\": %d, \"p\": %d, \"L\": %d, \"mode\": %d, \"spread\": %d, "
-               "\"grain\": %d, \"extra\": %d, \"tile\": [%d, %d], \"threads\": %d, \"chains\": %d, \"stages\": %d, \"smem_bytes\": %d}%s\n",
-               k->name, k->cfg, k->var, k->rounds, k->p, 128 * k->p / k->grain, k->mode, k->spread, k->grain, k->extra, k->tile_m,
+               "\"grain\": %d, \"extra\": %d, \"honest\": %d, \"tile\": [%d, %d], \"threads\": %d, \"chains\": %d, \"stages\": %d, \"smem_bytes\": %d}%s\n",
+               k->name, k->cfg, k->var, k->rounds, k->p, 128 * k->p / k->grain, k->mode, k->spread, k->grain, k->extra, k->honest, k->tile_m,
                k->tile_n, k->threads,
                k->chains, k->stages, k->smem_bytes, i + 1 < ks.size() ? "," : "");
     }

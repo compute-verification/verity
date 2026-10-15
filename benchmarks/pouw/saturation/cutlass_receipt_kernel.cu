@@ -16,11 +16,13 @@
 //   CR_MODE 2  the dump: every k-block's prefix sums to global memory, and each thread's chain-word coordinates, so the
 //              host can recompute every receipt kernel's words
 //   CR_MODE 3  the builder's mainloop through the same copy, with no receipt (for CR_EXTRA alone)
+//   CR_HONEST H (mode 1) the receipt one step heavier per H words: at each receipt point the first H of a thread's chain
+//              words (chain-major, ch * 4 + e) get ROUNDS + 1 rounds
 //   CR_EXTRA X (modes 1 and 3) a cheater's own CUDA work fused beside the GEMM: X more alu phi1 steps a thread after every
 //              32-deep k-block, on two chains of its own that never read the accumulators. They feed only a store that
 //              fires on a 64-bit coincidence, so the outputs and receipts the gates check are the design's.
 // Compiled once per kernel: -DCR_NAME=name -DCR_CFG -DCR_VAR -DCR_ROUNDS -DCR_P -DCR_MODE -DCR_SPREAD -DCR_GRAIN
-// -DCR_EXTRA
+// -DCR_EXTRA -DCR_HONEST
 // (job.sh's cgemm).
 #include "cutlass_receipt.cuh"
 
@@ -48,6 +50,9 @@
 #ifndef CR_EXTRA
 #define CR_EXTRA 0
 #endif
+#ifndef CR_HONEST
+#define CR_HONEST 0
+#endif
 #define CR_STR2(x) #x
 #define CR_STR(x) CR_STR2(x)
 
@@ -63,7 +68,7 @@ struct Out {
 };
 __device__ Out g_out;
 
-template <class Base, int VAR, int ROUNDS, int P, int MODE, int SPREAD, int GRAIN, int EXTRA>
+template <class Base, int VAR, int ROUNDS, int P, int MODE, int SPREAD, int GRAIN, int EXTRA, int HONEST>
 struct ReceiptMma : Base {
     static_assert(GRAIN == 1 || (P == 1 && !SPREAD), "a grain above 1 receipts every k-tile, without spread");
     using MainloopPipeline = typename Base::MainloopPipeline;
@@ -140,9 +145,12 @@ struct ReceiptMma : Base {
                     for (int nn = 0; nn < NN; ++nn)
                         if (!SPREAD || nn * KB / NN == b) {
                             CUTLASS_PRAGMA_UNROLL
-                            for (int e = 0; e < MW; ++e)
-                                y[mm * NN + nn] = phi<ROUNDS, VAR>(y[mm * NN + nn], __float_as_uint(accum(e, mm, nn)), w,
-                                                                   key(mm * NN + nn, e));
+                            for (int e = 0; e < MW; ++e) {
+                                const int c = mm * NN + nn;
+                                const uint32_t x = __float_as_uint(accum(e, mm, nn));
+                                y[c] = c * MW + e < HONEST ? phi<ROUNDS + 1, VAR>(y[c], x, w, key(c, e))
+                                                           : phi<ROUNDS, VAR>(y[c], x, w, key(c, e));
+                            }
                         }
             } else if constexpr (MODE == 2) {
                 Tensor tCcC = thread_mma.partition_C(make_identity_tensor(take<0, 2>(TileShape{})));
@@ -252,7 +260,7 @@ using BaseMainloop = typename cutlass::gemm::collective::CollectiveBuilder<
     cutlass::layout::ColumnMajor, 16, float, Tile, Cluster,
     cutlass::gemm::collective::StageCountAutoCarveout<static_cast<int>(sizeof(typename Epilogue::SharedStorage))>,
     Schedule>::CollectiveOp;
-using Mainloop = cute::conditional_t<CR_MODE == 0, BaseMainloop, ReceiptMma<BaseMainloop, CR_VAR, CR_ROUNDS, CR_P, CR_MODE, CR_SPREAD, CR_GRAIN, CR_EXTRA>>;
+using Mainloop = cute::conditional_t<CR_MODE == 0, BaseMainloop, ReceiptMma<BaseMainloop, CR_VAR, CR_ROUNDS, CR_P, CR_MODE, CR_SPREAD, CR_GRAIN, CR_EXTRA, CR_HONEST>>;
 using GemmKernel = cutlass::gemm::kernel::GemmUniversal<Shape<int, int, int, int>, Mainloop, Epilogue, void>;
 using Gemm = cutlass::gemm::device::GemmUniversalAdapter<GemmKernel>;
 
@@ -314,6 +322,7 @@ const cr_kernel K{CR_STR(CR_NAME),
                   CR_SPREAD,
                   CR_GRAIN,
                   CR_EXTRA,
+                  CR_HONEST,
                   kTileM,
                   kTileN,
                   kThreads,
