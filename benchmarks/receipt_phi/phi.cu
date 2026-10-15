@@ -19,6 +19,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <type_traits>
 #include <vector>
 
 #define CK(x)                                                                                            \
@@ -256,62 +257,154 @@ __global__ void __launch_bounds__(TPB) probe_k(uint32_t* out, int iters, uint32_
 }
 
 // --------------------------------------------------------------------------------------------------------------- fused
+// Each warp runs FT m16n8k32 tiles; every C MMAs (commit stride L = 32 C) each lane absorbs its 4 accumulator words
+// of tile j into its own chain j at positions 4j..4j+3. MODE bit 0 (ping-pong): consecutive strides write alternate
+// accumulator sets (the stride's first MMA reads C from one and writes D to the other, as mma.sync allows), so the
+// next stride's MMAs never wait for the absorb to read the words; bit 1: INT8 IMMA (s8 x s8 into INT32), PoUW's
+// arithmetic, instead of FP8 E4M3 into FP32. K = -1 is the MMAs alone; K >= NK are controls with the absorb's
+// instruction count: FI_IMAD / FI_LOP3 / FI_FADD (4 per tile, chains that never read an accumulator) and ACC_LOP3
+// (one LOP3 per accumulator word into its own register, no chain).
 constexpr int FT = 4;
+enum Control { FI_IMAD = NK, FI_LOP3, FI_FADD, ACC_LOP3, NF };
+static const char* CONTROL_NAME[NF - NK] = {"fill-imad", "fill-lop3", "fill-fadd", "acc-lop3"};
+static const char* MODE_NAME[4] = {"fp8", "fp8pp", "s8", "s8pp"};
 
-__device__ __forceinline__ void mma_e4m3(float (&d)[4], const uint32_t (&a)[4], const uint32_t (&b)[2]) {
+__device__ __forceinline__ void mma_ip(float (&d)[4], const uint32_t (&a)[4], const uint32_t (&b)[2]) {
   asm volatile(
       "mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};\n"
       : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3])
       : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]));
 }
+__device__ __forceinline__ void mma_dc(float (&d)[4], const float (&c)[4], const uint32_t (&a)[4],
+                                       const uint32_t (&b)[2]) {
+  asm volatile(
+      "mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%10,%11,%12,%13};\n"
+      : "=f"(d[0]), "=f"(d[1]), "=f"(d[2]), "=f"(d[3])
+      : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]), "f"(c[0]), "f"(c[1]), "f"(c[2]), "f"(c[3]));
+}
+__device__ __forceinline__ void mma_ip(uint32_t (&d)[4], const uint32_t (&a)[4], const uint32_t (&b)[2]) {
+  asm volatile(
+      "mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};\n"
+      : "+r"(d[0]), "+r"(d[1]), "+r"(d[2]), "+r"(d[3])
+      : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]));
+}
+__device__ __forceinline__ void mma_dc(uint32_t (&d)[4], const uint32_t (&c)[4], const uint32_t (&a)[4],
+                                       const uint32_t (&b)[2]) {
+  asm volatile(
+      "mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%10,%11,%12,%13};\n"
+      : "=r"(d[0]), "=r"(d[1]), "=r"(d[2]), "=r"(d[3])
+      : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]), "r"(c[0]), "r"(c[1]), "r"(c[2]), "r"(c[3]));
+}
+__device__ __forceinline__ uint32_t bits(float x) { return __float_as_uint(x); }
+__device__ __forceinline__ uint32_t bits(uint32_t x) { return x; }
 
-// K = -1: the MMAs alone. Each lane chains its own words (FT chains, one per tile), positions 4j..4j+3.
-template <int K, int C>
+template <int K, typename T>
+__device__ __forceinline__ void work(St (&s)[FT], uint32_t (&xw)[FT][4], float (&ff)[FT], const T (&acc)[FT][4]) {
+  if constexpr (K >= 0 && K < NK) {
+#pragma unroll
+    for (int j = 0; j < FT; ++j) {
+      const uint32_t wd[4] = {bits(acc[j][0]), bits(acc[j][1]), bits(acc[j][2]), bits(acc[j][3])};
+      if (j == 0) absorb<K, 4, 0>(s[j], wd);
+      if (j == 1) absorb<K, 4, 4>(s[j], wd);
+      if (j == 2) absorb<K, 4, 8>(s[j], wd);
+      if (j == 3) absorb<K, 4, 12>(s[j], wd);
+    }
+  } else if constexpr (K == FI_IMAD || K == FI_LOP3 || K == FI_FADD) {
+#pragma unroll
+    for (int r = 0; r < 4; ++r)
+#pragma unroll
+      for (int j = 0; j < FT; ++j) {
+        if constexpr (K == FI_IMAD) s[j].y = s[j].y * KA[4 * j + r] + s[j ^ 1].y;
+        if constexpr (K == FI_LOP3) s[j].y = maj3(s[j].y, s[j ^ 1].y, KK[4 * j + r]);
+        if constexpr (K == FI_FADD) ff[j] = ff[j] + ff[j ^ 1];
+      }
+  } else if constexpr (K == ACC_LOP3) {
+#pragma unroll
+    for (int j = 0; j < FT; ++j)
+#pragma unroll
+      for (int r = 0; r < 4; ++r) xw[j][r] = maj3(xw[j][r], bits(acc[j][r]), KK[4 * j + r]);
+  }
+}
+
+template <int K, int C, int MODE>
 __global__ void __launch_bounds__(TPB) fused_k(uint32_t* out, int iters, uint32_t seed, long long* clk) {
+  using T = std::conditional_t<(MODE & 2) != 0, uint32_t, float>;
+  constexpr bool PP = (MODE & 1) != 0;
   const uint32_t tid = blockIdx.x * blockDim.x + threadIdx.x;
+  const uint32_t ma = (MODE & 2) ? 0x3F3F3F3Fu : 0x07070707u, oa = (MODE & 2) ? 0u : 0x38383838u,
+                 ob = (MODE & 2) ? 0u : 0x30303030u;
   uint32_t a[4], b[2][2];
 #pragma unroll
-  for (int i = 0; i < 4; ++i) a[i] = 0x38383838u | (gen(seed, tid, 7, i) & 0x07070707u);
+  for (int i = 0; i < 4; ++i) a[i] = oa | (gen(seed, tid, 7, i) & ma);
 #pragma unroll
   for (int i = 0; i < 2; ++i)
 #pragma unroll
-    for (int k = 0; k < 2; ++k) b[i][k] = 0x30303030u | (gen(seed, tid, 8 + i, k) & 0x07070707u);
-  float acc[FT][4];
+    for (int k = 0; k < 2; ++k) b[i][k] = ob | (gen(seed, tid, 8 + i, k) & ma);
+  T acc[2][FT][4];
   St s[FT];
+  uint32_t xw[FT][4];
+  float ff[FT];
 #pragma unroll
   for (int j = 0; j < FT; ++j) {
     s[j].y = gen(seed, tid, j, 100);
     s[j].z = gen(seed, tid, j, 101);
+    ff[j] = __uint_as_float(0x3f800000u | (gen(seed, tid, j, 102) & 0x7fffffu));
 #pragma unroll
-    for (int r = 0; r < 4; ++r) acc[j][r] = 0.f;
+    for (int r = 0; r < 4; ++r) {
+      xw[j][r] = gen(seed, tid, j, 110 + r);
+      acc[0][j][r] = T(0);
+      acc[1][j][r] = T(0);
+    }
+  }
+  // Opaque to ptxas, so it keeps the operands in registers instead of recomputing gen() inside the timed loop.
+#pragma unroll
+  for (int i = 0; i < 4; ++i) asm volatile("" : "+r"(a[i]));
+#pragma unroll
+  for (int i = 0; i < 2; ++i) asm volatile("" : "+r"(b[i][0]), "+r"(b[i][1]));
+#pragma unroll
+  for (int j = 0; j < FT; ++j) {
+    asm volatile("" : "+r"(s[j].y), "+r"(s[j].z), "+f"(ff[j]));
+    asm volatile("" : "+r"(xw[j][0]), "+r"(xw[j][1]), "+r"(xw[j][2]), "+r"(xw[j][3]));
   }
   __syncthreads();
   const long long t0 = clock64();
+  if constexpr (!PP) {
 #pragma unroll 1
-  for (int it = 0; it < iters; ++it) {
+    for (int it = 0; it < iters; ++it) {
 #pragma unroll
-    for (int c = 0; c < C; ++c)
+      for (int c = 0; c < C; ++c)
 #pragma unroll
-      for (int j = 0; j < FT; ++j) mma_e4m3(acc[j], a, b[j & 1]);
-    if constexpr (K >= 0) {
+        for (int j = 0; j < FT; ++j) mma_ip(acc[0][j], a, b[j & 1]);
+      work<K>(s, xw, ff, acc[0]);
+    }
+  } else {
+#pragma unroll 1
+    for (int it = 0; it < iters; it += 2) {
 #pragma unroll
-      for (int j = 0; j < FT; ++j) {
-        const uint32_t wd[4] = {__float_as_uint(acc[j][0]), __float_as_uint(acc[j][1]), __float_as_uint(acc[j][2]),
-                                __float_as_uint(acc[j][3])};
-        if (j == 0) absorb<K, 4, 0>(s[j], wd);
-        if (j == 1) absorb<K, 4, 4>(s[j], wd);
-        if (j == 2) absorb<K, 4, 8>(s[j], wd);
-        if (j == 3) absorb<K, 4, 12>(s[j], wd);
-      }
+      for (int c = 0; c < C; ++c)
+#pragma unroll
+        for (int j = 0; j < FT; ++j) {
+          if (c == 0) mma_dc(acc[1][j], acc[0][j], a, b[j & 1]);
+          else mma_ip(acc[1][j], a, b[j & 1]);
+        }
+      work<K>(s, xw, ff, acc[1]);
+#pragma unroll
+      for (int c = 0; c < C; ++c)
+#pragma unroll
+        for (int j = 0; j < FT; ++j) {
+          if (c == 0) mma_dc(acc[0][j], acc[1][j], a, b[j & 1]);
+          else mma_ip(acc[0][j], a, b[j & 1]);
+        }
+      work<K>(s, xw, ff, acc[0]);
     }
   }
   const long long t1 = clock64();
   uint32_t x = 0;
 #pragma unroll
   for (int j = 0; j < FT; ++j) {
-    x ^= (K >= 0 ? finish<(K >= 0 ? K : 0)>(s[j]) : 0u);
+    x ^= (K >= 0 && K < NK ? finish<(K >= 0 && K < NK ? K : 0)>(s[j]) : s[j].y) ^ __float_as_uint(ff[j]);
 #pragma unroll
-    for (int r = 0; r < 4; ++r) x ^= __float_as_uint(acc[j][r]);
+    for (int r = 0; r < 4; ++r) x ^= bits(acc[0][j][r]) ^ bits(acc[1][j][r]) ^ xw[j][r];
   }
   out[tid] = x;
   if (threadIdx.x == 0) {
@@ -330,9 +423,14 @@ static KFn PROBE[NP] = {probe_k<0>,  probe_k<1>,  probe_k<2>,  probe_k<3>,  prob
                         probe_k<12>, probe_k<13>, probe_k<14>, probe_k<15>, probe_k<16>, probe_k<17>};
 constexpr int NC = 4;
 static const int CS[NC] = {1, 2, 4, 8};
-#define FROW(K) {fused_k<K, 1>, fused_k<K, 2>, fused_k<K, 4>, fused_k<K, 8>}
-static KFn FUSED[NK + 1][NC] = {FROW(-1), FROW(0), FROW(1), FROW(2), FROW(3), FROW(4),
-                                FROW(5),  FROW(6), FROW(7), FROW(8), FROW(9), FROW(10)};
+#define FROW(K, M) {fused_k<K, 1, M>, fused_k<K, 2, M>, fused_k<K, 4, M>, fused_k<K, 8, M>}
+#define FMODE(M)                                                                                               \
+  {FROW(-1, M), FROW(0, M), FROW(1, M), FROW(2, M),  FROW(3, M),  FROW(4, M),  FROW(5, M),  FROW(6, M), \
+   FROW(7, M),  FROW(8, M), FROW(9, M), FROW(10, M), FROW(11, M), FROW(12, M), FROW(13, M), FROW(14, M)}
+static_assert(NF == 15, "FMODE lists every fused kind");
+static KFn FUSED[4][NF + 1][NC] = {FMODE(0), FMODE(1), FMODE(2), FMODE(3)};
+
+static const char* fused_name(int k) { return k < 0 ? "none" : k < NK ? KIND_NAME[k] : CONTROL_NAME[k - NK]; }
 
 static void set_keys(uint32_t kseed) {
   uint32_t ka[NKEY], kb[NKEY], kk[NKEY];
@@ -444,7 +542,8 @@ int main(int argc, char** argv) {
   if (!strcmp(mode, "one")) {
     const char* m = argv[2];
     const int idx = atoi(argv[3]), iters = atoi(argv[4]);
-    KFn fn = !strcmp(m, "pure") ? PURE[idx] : !strcmp(m, "probe") ? PROBE[idx] : FUSED[idx / NC][idx % NC];
+    const int fm = argc > 5 ? atoi(argv[5]) : 0;
+    KFn fn = !strcmp(m, "pure") ? PURE[idx] : !strcmp(m, "probe") ? PROBE[idx] : FUSED[fm][idx / NC][idx % NC];
     time_kernel(fn, iters, 1, seed);
     return 0;
   }
@@ -454,12 +553,13 @@ int main(int argc, char** argv) {
   } else if (!strcmp(mode, "probe")) {
     for (int p = 0; p < NP; ++p) emit("probe", PROBE_NAME[p], 0, iters, time_kernel(PROBE[p], iters, reps, seed), 8 * PU, "steps");
   } else if (!strcmp(mode, "fused")) {
-    for (int k = -1; k < NK; ++k)
-      for (int ci = 0; ci < NC; ++ci) {
-        const int c = CS[ci];
-        const int it = iters / c;
-        emit("fused", k < 0 ? "none" : KIND_NAME[k], c, it, time_kernel(FUSED[k + 1][ci], it, reps, seed), c * FT, "mmas");
-      }
+    for (int m = 0; m < 4; ++m)
+      for (int k = -1; k < NF; ++k)
+        for (int ci = 0; ci < NC; ++ci) {
+          const int c = CS[ci];
+          const int it = (iters / c) & ~1;
+          emit(MODE_NAME[m], fused_name(k), c, it, time_kernel(FUSED[m][k + 1][ci], it, reps, seed), c * FT, "mmas");
+        }
   } else {
     fprintf(stderr, "unknown mode %s\n", mode);
     return 2;

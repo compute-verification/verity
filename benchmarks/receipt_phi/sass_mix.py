@@ -16,7 +16,7 @@ FN = re.compile(r"Function : (\S+)|^\.text\.(\S+):")
 LABEL = re.compile(r"^(\.L_x_\d+):")
 INS = re.compile(r"^\s+/\*([0-9a-f]{4,})\*/\s+(?:@!?U?P\w+\s+)?([A-Z][A-Z0-9_]*)(\.[A-Z0-9_.]+)?(.*)$")
 BRA = re.compile(r"BRA(?:\.U)?\s+(?:!?U?P\w+,\s*)?(?:(0x[0-9a-f]+)|`\((\.L_x_\d+)\))")
-NAME = re.compile(r"_Z\d+(pure_k|probe_k|fused_k)ILi(n?\d+)E(?:Li(\d+)E)?")
+NAME = re.compile(r"_Z\d+(pure_k|probe_k|fused_k)ILi(n?\d+)E(?:Li(\d+)E)?(?:Li(\d+)E)?")
 
 
 def parse(path):
@@ -75,7 +75,8 @@ def ident(fn):
     if not m:
         return None
     first = int(m.group(2).replace("n", "-"))
-    return {"mode": m.group(1)[:-2], "index": first, "C": int(m.group(3)) if m.group(3) else None}
+    return {"mode": m.group(1)[:-2], "index": first, "C": int(m.group(3)) if m.group(3) else None,
+            "acc": int(m.group(4)) if m.group(4) else None}
 
 
 def main():
@@ -86,7 +87,7 @@ def main():
             continue
         body = loop_body(ins)
         out.append({**who, "function": fn, "loop_body": mix(body), "loop_text": [i[3].strip() for i in body]})
-    out.sort(key=lambda r: (r["mode"], r["index"], r["C"] or 0))
+    out.sort(key=lambda r: (r["mode"], r["acc"] or 0, r["index"], r["C"] or 0))
     print(json.dumps(out, indent=1))
 
 

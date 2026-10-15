@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # phi.cu on one GPU (cwd = the source tree): every receipt φ candidate gated against twins.py (two seed pairs) before
-# anything is timed, then the pipe probes, each candidate alone (pure), each fused into an FP8 mma.sync loop at
-# C = 1, 2, 4, 8 MMAs per absorb, the SASS opcode mix of every timed loop, and ncu's pipe counts for the probes and the
-# C = 1 fused loops. Results in $OUT.
+# anything is timed, then the pipe probes, each candidate alone (pure), each fused into an mma.sync loop at
+# C = 1, 2, 4, 8 MMAs per absorb (FP8 or INT8, serial or ping-pong accumulators, with the controls), the SASS opcode mix
+# of every timed loop, and ncu's pipe counts for the probes, the pure loops and the C = 1 fused loops. Results in $OUT.
 #
 #   research run --on vy-nebius-2 --project verity --campaign pouw --source . --cwd clone \
 #     --env GPU_LEASE_WHO=... --send benchmarks/receipt_phi/phi.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/phi.sh"'
@@ -42,7 +42,9 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-30}" -- bash -c '
     ncu --metrics $M --csv -k regex:pure_k --launch-skip 1 -c 1 "$B/phi" one pure $k 2000 > "$O/ncu-pure-$k.csv" 2>&1 \
       || echo "ncu pure $k rc $?" >> "$O/errors.txt"
   done
-  for k in $(seq 0 11); do
-    ncu --metrics $M --csv -k regex:fused_k --launch-skip 1 -c 1 "$B/phi" one fused $((4 * k)) 2000 > "$O/ncu-fused-$k.csv" 2>&1 \
-      || echo "ncu fused $k rc $?" >> "$O/errors.txt"
+  for m in 0 1 2 3; do
+    for k in $(seq 0 15); do
+      ncu --metrics $M --csv -k regex:fused_k --launch-skip 1 -c 1 "$B/phi" one fused $((4 * k)) 2000 $m \
+        > "$O/ncu-fused-$m-$k.csv" 2>&1 || echo "ncu fused $m $k rc $?" >> "$O/errors.txt"
+    done
   done'
