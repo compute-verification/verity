@@ -7,7 +7,9 @@ import Proofs.Flock.Claims.Finder
 bound gives `Pr[B] ≤ (2t)²/2^513`, and KS gives
 `Pr[acc ∧ ¬R] ≤ κ + t·√γ·2^{−255.5} ≤ t · 2 · max(κ, √γ·2^{−255.5}) ≤ t · 2^{−λ}` at
 `λ = min(log₂(1/κ), 255.5 − ½ log₂ γ) − 1` (`Bits_of_KS`). Flock's `Bits` follows from Flock's `KS`
-(`Flock.Bits_of_KS`). Soundness is a corollary of KS under `R(x, ⊥) := False` (`sound_of_KS`).
+(`Flock.Bits_of_KS`), and at bounds `κ ≤ 2^{−a}`, `γ ≤ 2^b` Flock has `min(a, 255.5 − b/2) − 1` bits (`lamOf_ge`,
+`Flock.Bits_ge`): the deployed parameters' numbers enter only there. Soundness is a corollary of KS under
+`R(x, ⊥) := False` (`sound_of_KS`).
 -/
 
 namespace Claims
@@ -69,9 +71,27 @@ theorem two_max_le {κ γ : ℝ} (hκ : 0 < κ) (hγ : 0 ≤ γ) :
     nth_rewrite 1 [hk]
     exact Real.rpow_le_rpow_of_exponent_le (by norm_num) (neg_le_neg (min_le_left _ _))
 
+/-- **The bits at bounds**: `κ ≤ 2^{−a}` and `γ ≤ 2^b` give `λ ≥ min(a, 255.5 − b/2) − 1`. -/
+theorem lamOf_ge {κ γ a b : ℝ} (hκ0 : 0 < κ) (hκ : κ ≤ 2 ^ (-a)) (hγ0 : 0 < γ) (hγ : γ ≤ 2 ^ b) :
+    min a (255.5 - b / 2) - 1 ≤ lamOf κ γ := by
+  unfold lamOf
+  have h1 : a ≤ Real.logb 2 (1 / κ) := by
+    rw [one_div, Real.logb_inv, le_neg]
+    exact (Real.logb_le_iff_le_rpow (by norm_num) hκ0).2 hκ
+  have h2 : Real.logb 2 γ ≤ b := (Real.logb_le_iff_le_rpow (by norm_num) hγ0).2 hγ
+  have := min_le_min h1 (show 255.5 - b / 2 ≤ 255.5 - Real.logb 2 γ / 2 by linarith)
+  linarith
+
 section KS
 
 variable {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
+
+/-- `Bits` weakens to fewer bits. -/
+theorem Bits_mono {H : Msg → Msg} {V : Verifier Coin} {R : Rel W} {E : Extractor Coin W V} {lam lam' : Msg → ℝ}
+    (h : Bits H V R E lam) (hle : ∀ x, lam' x ≤ lam x) : Bits H V R E lam' := by
+  intro x Ω _ _ P t ht hrun hSB
+  exact (h x Ω P t ht hrun hSB).trans (mul_le_mul_of_nonneg_left
+    (Real.rpow_le_rpow_of_exponent_le (by norm_num) (neg_le_neg (hle x))) (Nat.cast_nonneg t))
 
 /-- **Bits from KS**: KS with `κ > 0` and `γ ≥ 0`, and the strict birthday bound for `B`, give `λ = lamOf κ γ` bits. -/
 theorem Bits_of_KS {H : Msg → Msg} {V : Verifier Coin} {R : Rel W} {E : Extractor Coin W V} {κ γ : Msg → ℝ}
@@ -126,6 +146,15 @@ theorem γ_nonneg {Coin Col T : Type} (D : Deploy Coin Col T) (x : Msg) : 0 ≤ 
 theorem Bits_of_KS {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
     {H : Msg → Msg} {D : Deploy Coin Col T} (h : KS H D) (hε : ∀ x, 0 ≤ D.εtable x) : Bits H D :=
   fun decode hdec => Claims.Bits_of_KS (h decode hdec) (fun x => κ_pos D x (hε x)) (γ_nonneg D)
+
+/-- **Flock: bits at bounds**: Flock's KS, with `κ ≤ 2^{−a}` and `0 < γ ≤ 2^b`, gives `min(a, 255.5 − b/2) − 1` bits at
+every decoder that meets the spec. -/
+theorem Bits_ge {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
+    {H : Msg → Msg} {D : Deploy Coin Col T} (h : KS H D) (hε : ∀ x, 0 ≤ D.εtable x) {a b : Msg → ℝ}
+    (hκ : ∀ x, κ D x ≤ 2 ^ (-a x)) (hγ0 : ∀ x, 0 < γ D x) (hγ : ∀ x, γ D x ≤ 2 ^ b x) (decode : List (ℕ × Col) → List T)
+    (hdec : ListComplete D.enc D.agree decode) :
+    Claims.Bits H D.V (R H D.parse) (E H D decode) fun x => min (a x) (255.5 - b x / 2) - 1 :=
+  Claims.Bits_mono (Bits_of_KS h hε decode hdec) fun x => lamOf_ge (κ_pos D x (hε x)) (hκ x) (hγ0 x) (hγ x)
 
 end Flock
 
