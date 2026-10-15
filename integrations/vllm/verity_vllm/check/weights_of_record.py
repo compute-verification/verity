@@ -48,7 +48,7 @@ from typing import Any
 import numpy as np
 from dataclasses import dataclass
 
-from verity_vllm.check import fp8_moe_scales
+from verity_vllm.check import fp8_moe_scales, fp8_ue8m0
 from verity_vllm.config import UsageError, option
 from verity_vllm.check.tp_shards import replicated_qkv, shard_dim as _shard_dim, shard_dim0 as _shard_dim0
 
@@ -64,11 +64,9 @@ _ST_DTYPE = {"BF16": (np.uint16, 2), "F16": (np.float16, 2), "F32": (np.float32,
 #: fused (stacked along dim 0) fields of the served model <- the checkpoint's parts, in stacking order; `{s}` = the field suffix
 #: (`weight`, `bias`, `weight_scale_inv`, ...).  The rule applies only when the checkpoint has no tensor of the fused name itself
 #: (Phi-3 checkpoints store `qkv_proj` / `gate_up_proj` already fused).
-FUSED = {
-    "self_attn.qkv_proj": ("self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj"),
-    "mlp.gate_up_proj": ("mlp.gate_proj", "mlp.up_proj"),
-    "self_attn.wqkv": ("self_attn.wq", "self_attn.wk", "self_attn.wv"),
-}
+FUSED = {"self_attn.qkv_proj": ("self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj"), "mlp.gate_up_proj": ("mlp.gate_proj", "mlp.up_proj"),
+         "self_attn.wqkv": ("self_attn.wq", "self_attn.wk", "self_attn.wv"), "shared_experts.gate_up_proj": ("shared_experts.gate_proj", "shared_experts.up_proj"),
+         "self_attn.fused_qkv_a_proj": ("self_attn.q_a_proj", "self_attn.kv_a_proj_with_mqa"), "indexer.wk_weights_proj": ("indexer.wk", "indexer.weights_proj")}
 #: fused-MoE experts: `experts.w13_weight[e] = gate|up of expert e`, `experts.w2_weight[e] = down of expert e` (vLLM FusedMoE: RoutedExperts
 #: _load_w13 puts shard w1 = gate in the first half, w3 = up in the second; _load_w2 puts w2 = down).  The checkpoint's per-expert part
 #: names are HF's gate_proj|up_proj|down_proj (OLMoE, Qwen3-MoE, DeepSeek) or Mixtral's w1|w3|w2 (`ckpt_names=("w1","w2","w3")`):
@@ -100,7 +98,7 @@ EXPERTS_RE = re.compile(r"^(.*\.experts)(?:\.(routed_experts))?\.(w13|w2)_(\w+)$
 #: reports a placeholder field absent from the served model as `placeholders_deleted` (by name, counted, in the result), not as
 #: `missing` -- only for fields matching PLACEHOLDER_RE, only under the record's kv_cache_dtype=auto assumption, and only when the
 #: `_x_scale` the kernels do read is itself among the compared fields.  A placeholder that IS served is compared exactly as before.
-ENGINE_CONSTANT_RE = re.compile(r"(\.attn\._?(k|v|q|prob)_scale|\.rotary_emb\.cos_sin_cache)$")
+ENGINE_CONSTANT_RE = re.compile(r"([._]attn\._?(k|v|q|prob)_scale|\.rotary_emb\.cos_sin_cache)$")
 PLACEHOLDER_RE = re.compile(r"^(.*\.attn\.)(k|v|q|prob)_scale$")
 
 
@@ -350,7 +348,7 @@ def program_weight_fields(inst: dict[str, Any]) -> list[tuple[str, list[int], in
     return [(name, shape, bits) for name, _count, shape, bits in parse_struct(str(wparam))]
 
 
-ENGINE_KV_SCALE_RE = re.compile(r"\.attn\._(k|v|q|prob)_scale$")
+ENGINE_KV_SCALE_RE = re.compile(r"[._]attn\._(k|v|q|prob)_scale$")
 ENGINE_KV_PLACEHOLDER_RE = re.compile(r"\.attn\.(k|v|q|prob)_scale$")       # [F-fp8-PIN1] Fp8KVCacheMethod loader placeholders
 ENGINE_ROTARY_RE = re.compile(r"\.rotary_emb\.cos_sin_cache$")
 
@@ -540,6 +538,8 @@ def weights_of_record(program: dict[str, Any], ck: CheckpointIndex, *, prefix: s
     unresolved: list[dict[str, str]] = []
     n_bytes = 0
     analytic_fields: list[str] = []
+    dims = {f: (s, b) for f, s, b in fields}       # DeepGEMM linears and MLA's absorbed kv_b: vLLM's load-time ue8m0 rewrite (fp8_ue8m0)
+    rw = fp8_ue8m0.Rewrites(list(dims), fp8_ue8m0.build_roles(program.get("dir")), lambda f: compose(strip_prefix(f, prefix), *dims[f], ck, world=world, rank=rank), ck.config)
     for field, shape, bits in fields:
         live = strip_prefix(field, prefix)
         if ENGINE_CONSTANT_RE.search(field) and not ck.has(live):
@@ -559,7 +559,7 @@ def weights_of_record(program: dict[str, Any], ck: CheckpointIndex, *, prefix: s
                 out_fields.append(ent)
             continue
         try:
-            arr, note = compose(live, shape, bits, ck, world=world, rank=rank)
+            arr, note = rw.compose(field, shape) if rw.covers(field) else compose(live, shape, bits, ck, world=world, rank=rank)
         except (KeyError, ValueError) as e:
             unresolved.append({"field": field, "why": str(e)[:300]})
             out_fields.append({"field": field, "served_name": live, "shape": shape, "bits": bits, "digest": None, "pinned": False, "why": str(e)[:300]})
