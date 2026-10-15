@@ -200,6 +200,12 @@ static Alloc alloc_plain(size_t bytes) {
   return a;
 }
 
+static void free_generic(Alloc& a) {
+  CKD(cuMemUnmap((CUdeviceptr)a.p, a.bytes));
+  CKD(cuMemAddressFree((CUdeviceptr)a.p, a.bytes));
+  CKD(cuMemRelease(a.h));
+}
+
 static double read_bw(const void* p, size_t bytes, int reps_in_kernel = 1) {
   const int blocks = g_sms * 4, threads = 512;
   double ms = best_ms([&] { k_read<<<blocks, threads>>>((const uint4*)p, bytes / 16, reps_in_kernel, g_sink); }, 4);
@@ -314,9 +320,50 @@ static void dram_patterns(const char* only) {
     }
   }
   CK(cudaFree(plain.p));
-  CKD(cuMemUnmap((CUdeviceptr)gen.p, gen.bytes));
-  CKD(cuMemAddressFree((CUdeviceptr)gen.p, gen.bytes));
-  CKD(cuMemRelease(gen.h));
+  free_generic(gen);
+}
+
+// Does how zeros were written change how fast COMP_GENERIC reads them? A fresh 4 GiB allocation each case, zeros written
+// by cudaMemset, 4-byte kernel stores or 16-byte kernel stores, onto fresh memory or over random data; then read six times
+// the way M5's compress probe does (r20261015-043430-0a05: one __ldg a lane, 8 blocks of 512 a SM), and once with
+// ld.global.cg at 4 blocks a SM (this census's dram rows).
+static void fill_methods(const char* only) {
+  if (only && !strstr("fill", only)) return;
+  const size_t B = 4ull << 30;
+  const char* names[] = {"memset", "kfill32", "kwrite128", "random_then_memset", "random_then_kfill32"};
+  cudaEvent_t e0, e1;
+  CK(cudaEventCreate(&e0));
+  CK(cudaEventCreate(&e1));
+  for (int trial = 0; trial < 2; trial++)
+    for (int m = 0; m < 5; m++) {
+      Alloc g = alloc_generic(B);
+      uint32_t* p = (uint32_t*)g.p;
+      if (m >= 3) k_fill<<<g_sms * 4, 512>>>(p, B / 4, 0);
+      if (m == 0 || m == 3) CK(cudaMemset(p, 0, B));
+      if (m == 1 || m == 4) k_fill<<<g_sms * 4, 512>>>(p, B / 4, 1);
+      if (m == 2) k_write<<<g_sms * 4, 512>>>((uint4*)p, B / 16, 1);
+      CK(cudaDeviceSynchronize());
+      double r[6], best = 0;
+      for (int rep = 0; rep < 6; rep++) {
+        CK(cudaEventRecord(e0));
+        k_read_path<3><<<g_sms * 8, 512>>>((const uint4*)p, B / 16, 1, g_sink);
+        CK(cudaEventRecord(e1));
+        CK(cudaEventSynchronize(e1));
+        CK(cudaGetLastError());
+        float ms;
+        CK(cudaEventElapsedTime(&ms, e0, e1));
+        r[rep] = B / (ms * 1e-3);
+        if (rep > 0) best = std::max(best, r[rep]);
+      }
+      double cg = read_path_bw<0>(p, B, 1, 4);
+      printf("{\"probe\":\"fill_method\",\"method\":\"%s\",\"trial\":%d,\"bytes\":%zu,\"m5_reads_bytes_per_s\":[%.4e,%.4e,"
+             "%.4e,%.4e,%.4e,%.4e],\"m5_best_after_first\":%.4e,\"cg_b4_read_bytes_per_s\":%.4e}\n",
+             names[m], trial, B, r[0], r[1], r[2], r[3], r[4], r[5], best, cg);
+      fflush(stdout);
+      free_generic(g);
+    }
+  CK(cudaEventDestroy(e0));
+  CK(cudaEventDestroy(e1));
 }
 
 static void l2_sweep(const char* only) {
@@ -385,6 +432,7 @@ int main(int argc, char** argv) {
     smem_one<2>("sts128", 16);
   }
   l2_sweep(only);
+  fill_methods(only);
   dram_patterns(only);
   gather(only);
   printf("{\"probe\":\"memory\",\"done\":true}\n");
