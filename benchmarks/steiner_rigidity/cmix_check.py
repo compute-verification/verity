@@ -17,6 +17,8 @@ Parts:
   4  Local search for symmetric gains in deeper trees at L = 2.
   5  The span bound: every computation costs at least the tensor rank of T = sum_t S_t (x) e_t, and R(T) >= 2Lk when
      no two cells share a D-column (or a D-row), for trees of any depth and for DAGs with merges.
+  6  The L-shape at L = 2, exactly over GF(3): the proved inequalities leave five cost-11 rank profiles for the open
+     topology, each pins its Steiner points to rank summands, and enumerating them finds no tree below 12.
 
 Run: python cmix_check.py [part ...] [--big]   (--big adds the 5-dimensional GF(3) instances, about 14 M states)
 """
@@ -725,7 +727,144 @@ def part5(rng):
           f"with bound 8; exact GF(3), L = 1: row pair R = 4, L-shape R = 6 (> bound 5); mutations caught")
 
 
-PARTS = {"1": part1, "2": part2, "3": part3, "4": part4, "5": part5}
+# ---------------------------------------------------------------------------------------------------------------
+# Part 6: the L-shape at L = 2, exactly, over every tree. Cells a = (1, 0), b = (0, 0), c = (0, 1). With the line
+# pair {b, c} at v (the column pair is its transpose; a disjoint pair at v is Proposition 3), a tree is
+# 0 - U - {a, V - {b, c}} with edge ranks (p, q, s, d, e). Every proved inequality below cuts the cost-(6L - 1)
+# profiles down to a few, and in each the Steiner points are rank summands of known matrices.
+
+
+def nullspace(M, p):
+    A, r = rref(M, p)
+    pivots = [next(j for j in range(A.shape[1]) if A[i, j]) for i in range(r)]
+    out = []
+    for f in (j for j in range(A.shape[1]) if j not in pivots):
+        v = np.zeros(A.shape[1], dtype=np.int64)
+        v[f] = 1
+        for i, pc in enumerate(pivots):
+            v[pc] = -A[i, f] % p
+        out.append(v)
+    return out
+
+
+def subspaces(r, g, p):
+    """Every g-dimensional subspace of F_p^r, as a g x r matrix in reduced row echelon form."""
+    for piv in itertools.combinations(range(r), g):
+        free = [(i, j) for i in range(g) for j in range(piv[i] + 1, r) if j not in piv]
+        for vals in itertools.product(range(p), repeat=len(free)):
+            S = np.zeros((g, r), dtype=np.int64)
+            S[range(g), piv] = 1
+            for (i, j), v in zip(free, vals):
+                S[i, j] = v
+            yield S
+
+
+def summands(N, g, p):
+    """Every symmetric A with rank A = g and rank(N - A) = rank N - g. Rank additivity makes every g-inverse of N one
+    of A, so A = N Y (Y^T N Y)^-1 Y^T N with col A = col NY: one A for each g-dimensional subspace of col N on which
+    Y^T N Y is invertible (any field)."""
+    n = N.shape[0]
+    if g == 0:
+        return [np.zeros((n, n), dtype=np.int64)]
+    basis, C = nullspace(N, p), []
+    for i in range(n):
+        e = np.eye(n, dtype=np.int64)[i]
+        if rank(basis + [e], p) > len(basis):
+            basis.append(e)
+            C.append(e)
+    C = np.array(C, dtype=np.int64).T
+    out = []
+    for S in subspaces(C.shape[1], g, p):
+        NY = N @ (C @ S.T) % p
+        A, r = rref(np.hstack([NY.T @ C @ S.T % p, np.eye(g, dtype=np.int64)]), p)
+        if (A[:, :g] == np.eye(g, dtype=np.int64)).all():
+            out.append(NY @ A[:, g:] @ NY.T % p)
+    return out
+
+
+def lshape_profiles(L):
+    """Edge ranks (p, q, s, d, e) of 0 - U - {a, V - {b, c}} with cost < 6L that pass every proved inequality."""
+    cons = [((1, 1, 0, 0, 0), 2 * L), ((1, 0, 1, 1, 0), 2 * L), ((1, 0, 1, 0, 1), 2 * L),  # rank S_t
+            ((0, 0, 0, 1, 1), 2 * L), ((0, 1, 1, 1, 0), 2 * L), ((0, 1, 1, 0, 1), 4 * L),  # r(b,c), r(a,b), r(a,c)
+            ((1, 1, 1, 1, 0), 4 * L), ((1, 1, 1, 0, 1), 4 * L), ((1, 0, 1, 1, 1), 4 * L),  # pairs from 0: Theorem S
+            ((1, 1, 1, 1, 1), 5 * L),                                                      # Theorem S: 2L + R(T') = 5L
+            ((1, 1, 2, 1, 1), 6 * L)]                                                      # A3's cap at U
+    return [r for r in itertools.product(range(4 * L + 1), repeat=5)
+            if sum(r) < 6 * L and all(np.dot(c, r) >= h for c, h in cons)]
+
+
+def lshape_search(mats, prof, p):
+    """Every tree of profile `prof` (exact ranks): pin U or V as rank summands, pair them, check the rest. Returns
+    (pairs tried, least cost among them, trees within the profile)."""
+    Sa, Sb, Sc = mats
+    pp, q, s, d, e = prof
+    rk = lambda M: rank(M % p, p)
+    Us = summands(Sa, pp, p) if pp + q == rk(Sa) else None
+    Vs = [(Sb + A) % p for A in summands((Sc - Sb) % p, d, p)] if d + e == rk(Sc - Sb) else None
+    tight = q + s + e == rk(Sa - Sc)
+    if Us is not None and Vs is not None:
+        pairs = itertools.product(Us, Vs)
+    elif Us is not None and tight:
+        pairs = ((U, (U + A) % p) for U in Us if rk(Sc - U) == s + e for A in summands((Sc - U) % p, s, p))
+    elif Vs is not None and tight:
+        pairs = (((Sa - A) % p, V) for V in Vs if rk(Sa - V) == q + s for A in summands((Sa - V) % p, q, p))
+    else:
+        raise AssertionError(f"no summand strategy for profile {prof}")
+    tried, best, found = 0, None, []
+    for U, V in pairs:
+        r = (rk(U), rk(Sa - U), rk(V - U), rk(Sb - V), rk(Sc - V))
+        tried += 1
+        best = sum(r) if best is None else min(best, sum(r))
+        if all(x <= y for x, y in zip(r, prof)):
+            found.append((U, V))
+    return tried, best, found
+
+
+def part6(rng, p=3):
+    """The L-shape at L = 2 over GF(p): no tree costs less than 2Lk = 12. Checks `summands` against brute force at
+    n = 3 and 4; mutation: a planted cost-11 tree (b moved next to V) is found."""
+    for n, trials in ((3, 6), (4, 2)):
+        allsym = []
+        for vals in itertools.product(range(p), repeat=n * (n + 1) // 2):
+            A = np.zeros((n, n), dtype=np.int64)
+            A[np.triu_indices(n)] = vals
+            A = (A + np.triu(A, 1).T) % p
+            allsym.append((A, rank(A, p)))
+        for _ in range(trials):
+            N = sum(rng.choice([1, p - 1]) * np.outer(z, z) for z in
+                    (np.array([rng.randrange(p) for _ in range(n)]) for _ in range(rng.randrange(2, n + 1)))) % p
+            r = rank(N, p)
+            for g in range(1, r + 1):
+                brute = {A.tobytes() for A, ra in allsym if ra == g and rank((N - A) % p, p) == r - g}
+                got = {A.astype(np.int64).tobytes() for A in summands(N, g, p)}
+                assert got == brute, f"summands({g}) wrong at n = {n}"
+    L = 2
+    G = Grid(2, 2, L)
+    mats = [G.target(1, 0, 1), G.target(0, 0, 1), G.target(0, 1, 1)]
+    profs = lshape_profiles(L)
+    assert profs and all(sum(r) == 6 * L - 1 for r in profs), profs
+    report = []
+    for prof in profs:
+        tried, best, found = lshape_search(mats, prof, p)
+        assert not found, f"a tree of cost {sum(prof)} < 12 on the L-shape: profile {prof}"
+        assert best >= 6 * L
+        report.append(f"{prof}: {tried} pairs, least {best}")
+    prof = next(r for r in profs if r[0] + r[1] == 2 * L and r[1] + r[2] + r[4] == 4 * L)
+    pp, q, s, d, e = prof
+    U, V = next((U, V) for U in summands(mats[0], pp, p) for A in summands((mats[2] - U) % p, s, p)
+                for V in [(U + A) % p] if rank((mats[2] - V) % p, p) == e)
+    while True:
+        H = sum(rng.choice([1, p - 1]) * np.outer(z, z) for z in
+                (np.array([rng.randrange(p) for _ in range(G.n)]) for _ in range(d))) % p
+        if rank(H, p) == d:
+            break
+    planted = [mats[0], (V + H) % p, mats[2]]
+    assert lshape_search(planted, prof, p)[2], "mutation not caught: a planted cost-11 tree was missed"
+    print(f"  part 6: L-shape, L = 2, GF({p}): {len(profs)} profiles of cost 11 pass the inequalities; none is "
+          f"realized ({'; '.join(report)}); summands match brute force; planted tree found")
+
+
+PARTS = {"1": part1, "2": part2, "3": part3, "4": part4, "5": part5, "6": part6}
 
 
 def main(argv):
