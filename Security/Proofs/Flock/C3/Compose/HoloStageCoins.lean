@@ -12,9 +12,10 @@ import Proofs.Flock.Recursive.HoloCoins
 history's rounds as it has coins, at a run whose stages are tied. Each tied stage takes its whole shape: a rep
 `holoRepShape` (`repKinds_of_tie`), a sparse phase `sparseKinds` (`sparseKinds_of_tie`), R's opening `opShape` at two
 claims (`opening_exact`) and R's Ligerito `ligShape` (`ligeritoC_exact`). So the stages' coins add up to `holoKinds`',
-which `holoCTs` counts after the link points.
+which `holoCTs` counts after the link points (`coins_total_holo`, the bound `h5`'s rounds read).
 `stageCoins_holo`: `srcOK_holo`'s `hcoins` at `holoCTs` and the tied source of `repsOfVals`. The reps' two conjuncts
-come from custody's coins half (`repCoins_repsOfVals`), and the rest from `LaterCoins`.
+come from custody's coins half (`repCoins_repsOfVals`) at some of the map's draws (`custody_sel`), and the rest from
+`LaterCoins`.
 -/
 
 namespace FlockC3.Compose
@@ -53,8 +54,27 @@ def LaterCoins {r : ℕ} {CT : Fin r → Type} {e : ExecHolo} (cs : List ((k : F
     CoinsAt cs (1 + nCoins (u.ts 0) + nCoins (u.ts 1) + nCoins (u.sp 0) + nCoins (u.sp 1) + nCoins u.op)
       (nCoins u.lg) u.lg
 
+/-- **A tied run's stages take `holoKinds`' coins**, `holoCTs`' count after the link points: each tied stage takes its
+whole shape. It bounds the rounds `laterCoins_of_held`'s `h4`, `h5` read (`RegLevels.stagesHeld_of_run`'s `htot`). -/
+theorem coins_total_holo {st : Flock.Stmt} {hp : HoloParams} {u : C3Run (holoAt st hp)} {cap₀ : Cap Dig}
+    {sh : Flock.Shape} {w : Array F128} {ops : FlockVBridge.AccChain.Openings}
+    (hr : ∀ i, RepTie (holoAt st hp) u i) (hs : ∀ i, FlockC3.Sparse.SparseTie (holoAt st hp) u i)
+    (ho : FlockC3.Opening.OpenTie sh w ops u) (hor : OpeningReadAt (runSteps u) u)
+    (hl : FlockC3.RegLevels.LevelTie cap₀ (holoAt st hp) u) :
+    1 + nCoins (u.ts 0) + nCoins (u.ts 1) + nCoins (u.sp 0) + nCoins (u.sp 1) + nCoins u.op + nCoins u.lg =
+      1 + (Exec.kindCoinTys (holoKinds (holoAt st hp))).length := by
+  have hkr := fun i => repKinds_of_tie (hr i)
+  have hks := fun i => sparseKinds_of_tie (hs i)
+  obtain ⟨_, ha⟩ := opening_plays_of ho hor
+  have hko : u.op.map Exec.kindOf = Exec.opShape GF128 2 := Exec.Exact.kinds ha (Exec.opening_exact _ _ _)
+  obtain ⟨_, hpl⟩ := lig_plays_of_levelTie hl
+  have hkl : u.lg.map Exec.kindOf = Exec.ligShape GF128 GF256 Dig (holoAt st hp).rsch.sch :=
+    Exec.Exact.kinds hpl (FlockC3.RegLevels.ligeritoC_exact _ _ _ _)
+  simp only [nCoins, coins_eq_kindCoins, hkr, hks, hko, hkl, kindCoinTys_length, holoKinds, kindCoins_append]
+  omega
+
 /-- **`StageCoins` at `holoCTs`** at a run whose stages are tied: stage `i` takes its coins' number of rounds, and
-those add up to `holoKinds`' coins, `holoCTs`' count after the link points. -/
+those add up to `holoKinds`' coins, `holoCTs`' count after the link points (`coins_total_holo`). -/
 theorem stageCoins_holoCTs {st : Flock.Stmt} {hp : HoloParams} {u : C3Run (holoAt st hp)} {cap₀ : Cap Dig}
     {sh : Flock.Shape} {w : Array F128} {ops : FlockVBridge.AccChain.Openings}
     {cs : List ((k : Fin (1 + (Exec.kindCoinTys (holoKinds (holoAt st hp))).length)) → holoCTs st hp k)}
@@ -64,19 +84,8 @@ theorem stageCoins_holoCTs {st : Flock.Stmt} {hp : HoloParams} {u : C3Run (holoA
     (h0 : CoinsAt cs 1 (nCoins (u.ts 0)) (u.ts 0)) (h1 : CoinsAt cs (1 + nCoins (u.ts 0)) (nCoins (u.ts 1)) (u.ts 1))
     (hlater : LaterCoins cs u) : StageCoins (CT := holoCTs st hp) cs u := by
   obtain ⟨hpts, h2, h3, h4, h5⟩ := hlater
-  have hkr := fun i => repKinds_of_tie (hr i)
-  have hks := fun i => sparseKinds_of_tie (hs i)
-  obtain ⟨_, ha⟩ := opening_plays_of ho hor
-  have hko : u.op.map Exec.kindOf = Exec.opShape GF128 2 := Exec.Exact.kinds ha (Exec.opening_exact _ _ _)
-  obtain ⟨_, hpl⟩ := lig_plays_of_levelTie hl
-  have hkl : u.lg.map Exec.kindOf = Exec.ligShape GF128 GF256 Dig (holoAt st hp).rsch.sch :=
-    Exec.Exact.kinds hpl (FlockC3.RegLevels.ligeritoC_exact _ _ _ _)
-  refine ⟨![nCoins (u.ts 0), nCoins (u.ts 1), nCoins (u.sp 0), nCoins (u.sp 1), nCoins u.op, nCoins u.lg], ?_,
-    hpts, h0, h1, h2, h3, h4, h5⟩
-  show 1 + nCoins (u.ts 0) + nCoins (u.ts 1) + nCoins (u.sp 0) + nCoins (u.sp 1) + nCoins u.op + nCoins u.lg =
-    1 + (Exec.kindCoinTys (holoKinds (holoAt st hp))).length
-  simp only [nCoins, coins_eq_kindCoins, hkr, hks, hko, hkl, kindCoinTys_length, holoKinds, kindCoins_append]
-  omega
+  exact ⟨![nCoins (u.ts 0), nCoins (u.ts 1), nCoins (u.sp 0), nCoins (u.sp 1), nCoins u.op, nCoins u.lg],
+    coins_total_holo hr hs ho hor hl, hpts, h0, h1, h2, h3, h4, h5⟩
 
 section src
 
@@ -85,8 +94,19 @@ variable {nT : ℕ} {T : Fin nT → Type} {st : Flock.Stmt} {hp : HoloParams} {n
 
 local notation "ℐ" => holoInnerAt T (holoCTs st hp) st hp
 
+/-- **Custody at some of the map's draws**: custody's coins half at `m`'s draws holds at any `sel` among them. -/
+theorem custody_sel {Cm Coin : Type} {wr : List (Cm × Coin) → Lean.Json × String}
+    {held : Lean.Json × String → Except String Flock.RecVStar.InnerCommits} {sparse : Option Flock.RecSparse.Shape}
+    {m : FlockSoundness.Assumptions.InnerRecordMap Cm Coin} {sel : ℕ → String → ℕ → Prop}
+    (h : FlockSoundness.Assumptions.InnerRecordCustody wr held sparse m) (hsel : ∀ i s q, sel i s q → m.selC i s q) :
+    FlockSoundness.Assumptions.InnerRecordCustody wr held sparse { m with selC := sel } := fun t =>
+  ⟨fun i e he => ⟨((h t).1 i e he).1, fun _ _ hs => ((h t).1 i e he).2 _ _ (hsel _ _ _ hs)⟩, (h t).2⟩
+
 /-- **`srcOK_holo`'s `hcoins` at `holoCTs`**, at the tied source of `repsOfVals` whose stages are tied: the reps'
-coins from custody's coins half (`repCoins_repsOfVals`), the link points' and the later stages' from `LaterCoins`. -/
+coins from custody's coins half (`repCoins_repsOfVals` at the map's draws `sel`, `custody_sel`), the link points' and
+the later stages' from `LaterCoins`. The reps' rounds need be encoded (`henc`) and drawn (`hdr`) only at `sel`, some
+of the map's draws (`hsel`): at `holoMap`, its one-round draws (`holoSelOne`, `coinsEncoded_holoMap`), since a sparse
+phase's round of `n > 1` coins is not encoded as one. -/
 theorem stageCoins_holo {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
@@ -94,16 +114,16 @@ theorem stageCoins_holo {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg�
     {vals : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals}
     {wr : List (Cm × (ℐ).Coin) → Lean.Json × String}
     {held : Lean.Json × String → Except String Flock.RecVStar.InnerCommits} {sparse : Option Flock.RecSparse.Shape}
-    {m : FlockSoundness.Assumptions.InnerRecordMap Cm (ℐ).Coin} {s : Fin 2 → String} {ix : Fin 2 → ℕ → ℕ}
-    {cap₀ : Cap Dig} (hleaf : HLeafC3 zs dg N k Rw)
+    {m : FlockSoundness.Assumptions.InnerRecordMap Cm (ℐ).Coin} {sel : ℕ → String → ℕ → Prop} {s : Fin 2 → String}
+    {ix : Fin 2 → ℕ → ℕ} {cap₀ : Cap Dig} (hleaf : HLeafC3 zs dg N k Rw)
     (halg : AlgebraDecodes (I := ℐ) zs dg N k Rw sh rep) (hacc : AccChains (I := ℐ) zs dg N k Rw sh rep)
     (hpr : ProofOfVals zs dg N k Rw sh rep vals)
     (hsv : SetupOfVals zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) sh rep vals)
     (hf : FramesOfVals zs dg N k Rw sh rep vals)
     (hcus : FlockSoundness.Assumptions.InnerRecordCustody wr held sparse m)
     (hheld : RepRoundsHeld zs dg N k Rw sh rep wr held s ix)
-    (henc : CoinsEncoded (CT := holoCTs st hp) m.selC m.coin)
-    (hdr : RepsDrawn zs dg N k Rw sh rep vals m.selC s ix)
+    (henc : CoinsEncoded (CT := holoCTs st hp) sel m.coin) (hsel : ∀ i s q, sel i s q → m.selC i s q)
+    (hdr : RepsDrawn zs dg N k Rw sh rep vals sel s ix)
     (hrt : SrcRepTie zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)))
     (hst : FlockC3.Sparse.SrcSparseTie zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)))
     (hot : AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun _ u => ∃ sh w ops,
@@ -114,7 +134,8 @@ theorem stageCoins_holo {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg�
     AtSrc zs dg N k Rw (tiedSrc (repsOfVals stp sh rep vals)) fun t u =>
       StageCoins (CT := holoCTs st hp) (t.map Prod.snd) u := by
   intro R ω t R₂ τ o hA
-  obtain ⟨h0, h1⟩ := repCoins_repsOfVals hleaf halg hacc hpr hsv hf hcus hheld henc hdr R ω t R₂ τ o hA
+  obtain ⟨h0, h1⟩ := repCoins_repsOfVals (m := { m with selC := sel }) hleaf halg hacc hpr hsv hf
+    (custody_sel hcus hsel) hheld henc hdr R ω t R₂ τ o hA
   obtain ⟨_, _, _, ho, hor⟩ := hot R ω t R₂ τ o hA
   exact stageCoins_holoCTs (hrt R ω t R₂ τ o hA) (hst R ω t R₂ τ o hA) ho hor (hlt R ω t R₂ τ o hA) h0 h1
     (hlater R ω t R₂ τ o hA)

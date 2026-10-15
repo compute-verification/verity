@@ -16,7 +16,7 @@ from types import SimpleNamespace
 from typing import Any, Protocol
 
 from verity_bench.vllm import result as result_format
-from verity_bench.vllm.arms import Arm, Target, plugin
+from verity_bench.vllm.arms import Arm, Target, build_bound, plugin
 from verity_bench.vllm.presets import Preset, SweepPoint
 
 METRICS = ("time_per_output_token_s", "time_to_first_token_s", "tokens_per_s", "peak_gpu_memory_bytes")
@@ -88,16 +88,58 @@ def _gate_passed(value: Any) -> bool:
     return False
 
 
+def _first_divergence(
+    got: Mapping[str, tuple[int, ...]], control: Mapping[str, tuple[int, ...]]
+) -> dict[str, Any] | None:
+    """The earliest request (by id) whose greedy tokens differ from the control's, and where."""
+
+    for rid in sorted(set(got) | set(control)):
+        g, c = tuple(got.get(rid, ())), tuple(control.get(rid, ()))
+        if g == c:
+            continue
+        at = next((i for i, (x, y) in enumerate(zip(g, c, strict=False)) if x != y), min(len(g), len(c)))
+        return {
+            "request": rid,
+            "position": at,
+            "token": int(g[at]) if at < len(g) else None,
+            "control_token": int(c[at]) if at < len(c) else None,
+        }
+    return None
+
+
 def _evaluate_gates(
     arms: tuple[Arm, ...],
     points: tuple[SweepPoint, ...],
     tokens: Mapping[tuple[str, str], Mapping[str, tuple[int, ...]]],
     custom: Mapping[str, Mapping[str, Any]],
+    versions: Mapping[str, Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for arm in arms:
         c = custom[arm.id]
         out.append({"arm": arm.id, "kind": "arm", "passed": _gate_passed(c), "detail": dict(c)})
+        if arm.control:
+            # An arm gated token-for-token against a control must see the very scheduler decisions the control saw:
+            # vLLM admits and preempts by free KV blocks, and a step's batch composition reaches the numerics (attention
+            # split counts, chunked-prefill GEMM shapes). Equal pools and a deterministic scheduler give equal schedules.
+            mine = versions.get(arm.id, {}).get("kv_cache_tokens")
+            theirs = versions.get(arm.control, {}).get("kv_cache_tokens")
+            if mine is not None and theirs is not None:
+                gate = {
+                    "arm": arm.id,
+                    "control": arm.control,
+                    "kind": "kv-pool",
+                    "passed": mine == theirs,
+                    "tokens": mine,
+                    "control_tokens": theirs,
+                }
+                if mine != theirs:
+                    gate["detail"] = (
+                        f"KV cache pools differ ({mine} vs {theirs} tokens), so vLLM schedules the arms differently "
+                        "and their greedy tokens can diverge; pin block_kv_cache_memory_bytes in the preset's "
+                        "engine_settings so every arm gets the same pool"
+                    )
+                out.append(gate)
         for point in points:
             got = tokens[(arm.id, point.id)]
             control = tokens.get((arm.control, point.id)) if arm.control else None
@@ -111,6 +153,17 @@ def _evaluate_gates(
                 "tokens": sum(map(len, got.values())),
                 "digest": _token_digest(got),
                 **({"control_digest": _token_digest(control)} if control is not None else {}),
+                **(
+                    {
+                        "first_divergence": _first_divergence(got, control),
+                        "divergent_requests": sum(
+                            1 for rid in set(got) | set(control)
+                            if tuple(got.get(rid, ())) != tuple(control.get(rid, ()))
+                        ),
+                    }
+                    if not passed and control is not None
+                    else {}
+                ),
             })
     return out
 
@@ -202,6 +255,7 @@ def _identity(
     sweep: str,
     git_commit: str,
     versions: Mapping[str, Mapping[str, Any]],
+    config_identity: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     vllm_versions = {v.get("vllm_version") for v in versions.values()}
     if len(vllm_versions) != 1:
@@ -216,6 +270,7 @@ def _identity(
             **arm.to_json(),
             "kernel_digest": runtime.get("kernel_digest") or arm.kernel_digest,
             "engine_overrides": dict(runtime.get("engine_overrides") or {}),
+            "kv_cache_tokens": runtime.get("kv_cache_tokens"),
         })
     return {
         "preset": preset.to_json(),
@@ -224,6 +279,7 @@ def _identity(
         "arms": arm_docs,
         "git_commit": git_commit,
         "sweep": sweep,
+        **({"config": dict(config_identity)} if config_identity is not None else {}),
     }
 
 
@@ -236,6 +292,7 @@ def run_benchmark(
     reps: int,
     factory: EngineFactory,
     git_commit: str | None = None,
+    config_identity: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run every gate before any timing, then use resident interleaving or alternating blocks."""
 
@@ -261,7 +318,7 @@ def run_benchmark(
     if resident_failure is None:
         try:
             tokens, custom = _collect_gates(engines, arms, points)
-            gates = _evaluate_gates(arms, points, tokens, custom)
+            gates = _evaluate_gates(arms, points, tokens, custom, versions)
             if all(g["passed"] for g in gates):
                 for point in points:
                     for arm in arms:
@@ -285,7 +342,7 @@ def run_benchmark(
                 custom[arm.id] = engine.custom_gate()
             finally:
                 engine.close()
-        gates = _evaluate_gates(arms, points, tokens, custom)
+        gates = _evaluate_gates(arms, points, tokens, custom, versions)
         if all(g["passed"] for g in gates):
             # Two alternating engine-lifetime cycles; each rep belongs to one cycle.
             for cycle in range(min(2, reps)):
@@ -305,7 +362,7 @@ def run_benchmark(
                         engine.close()
         mode = "blocks"
 
-    identity = _identity(preset, arms, sweep, git_commit or _git_head(), versions)
+    identity = _identity(preset, arms, sweep, git_commit or _git_head(), versions, config_identity)
     doc = {
         "schema": result_format.SCHEMA,
         "identity": identity,
@@ -339,6 +396,19 @@ class _DirectLLM:
         # The worker process exits immediately after close and releases vLLM's
         # process-owned CUDA state.
         pass
+
+
+def _kv_cache_tokens(llm: Any) -> int | None:
+    """The engine's actual KV pool in tokens (in-process V1 engine), None when the engine does not expose it."""
+
+    try:
+        cache = llm._engine.llm.llm_engine.vllm_config.cache_config
+        blocks, block_size = cache.num_gpu_blocks, cache.block_size
+    except AttributeError:
+        return None
+    if blocks is None or block_size is None:
+        return None
+    return int(blocks) * int(block_size)
 
 
 class _VllmEngine:
@@ -393,9 +463,19 @@ class _VllmEngine:
                 "cudagraph_mode": "FULL_DECODE_ONLY",
                 "cudagraph_capture_sizes": list(settings["capture_sizes"]),
             }
+        overrides = _callback(self.obj, "engine_overrides", self.target, {}) if self.obj is not None else {}
+        engine.update(overrides or {})
+        # Isolated (block-mode) engines of one group must share one exact KV pool: vLLM schedules by free KV blocks,
+        # and an arm whose install leaves a different amount of free memory would otherwise get a different pool, a
+        # different schedule, and (through batch-composition-dependent kernels) different greedy tokens than its
+        # control. The pin reaches vllm.LLM directly; verity_vllm.LLM does not take it, and the kv-pool gate catches
+        # unequal pools on that path.
+        kv_pin = None if resident else settings.get("block_kv_cache_memory_bytes")
         if preset.model_digest is not None:
             if arm.protocols:
                 raise ValueError("a local checkpoint override supports stock and experimental arms, not protocol-option arms")
+            if kv_pin is not None:
+                engine["kv_cache_memory_bytes"] = int(kv_pin)
             self.llm = _DirectLLM(
                 vllm.LLM(
                     model=preset.model,
@@ -403,10 +483,12 @@ class _VllmEngine:
                     seed=0,
                     **engine,
                 ),
-                {k: engine[k] for k in ("dtype", "quantization", "compilation_config") if engine.get(k) is not None},
+                {k: engine[k] for k in ("dtype", "quantization", "compilation_config", "kv_cache_memory_bytes")
+                 if engine.get(k) is not None},
             )
         else:
-            engine["protocols"] = ",".join(arm.protocols) or None
+            if arm.protocols:
+                engine["protocols"] = ",".join(arm.protocols)
             self.llm = LLM(preset.model, revision=preset.revision, **engine)
         self.target.engine, self.target.model = self.llm, self.llm._engine.model
         ready = getattr(self.installed, "ready", None)
@@ -414,6 +496,7 @@ class _VllmEngine:
             ready(self.target)
         self.identity = {
             "vllm_version": vllm.__version__,
+            "kv_cache_tokens": _kv_cache_tokens(self.llm),
             "kernel_digest": (
                 _callback(self.obj, "kernel_digest", self.target, None)
                 if self.obj is not None and callable(
@@ -558,14 +641,30 @@ class _ProcessEngine:
     closed: bool = False
 
     def _ask(self, name: str, arg: Any = None) -> Any:
-        self.conn.send((name, arg))
         try:
+            self.conn.send((name, arg))
             response = self.conn.recv()
-        except EOFError:
-            raise RuntimeError(f"benchmark engine process exited with code {self.process.exitcode}") from None
+        except (EOFError, ConnectionResetError, BrokenPipeError):
+            raise RuntimeError(self._death_report(name)) from None
         if "error" in response:
             raise RuntimeError(response["error"] + "\n" + response.get("trace", ""))
         return response["value"]
+
+    def _death_report(self, doing: str) -> str:
+        """The engine process died under ``doing``: its own last error when it managed to send one, else its exit code,
+        so a kill during a gate surfaces as what it was instead of a connection error (re-baseline bug list, 14 Oct)."""
+        final = None
+        try:
+            if self.conn.poll(0):
+                final = self.conn.recv()
+        except (EOFError, ConnectionResetError, OSError):
+            pass
+        self.process.join()
+        if isinstance(final, dict) and "error" in final:
+            return f"benchmark engine process died during {doing}: " + final["error"] + "\n" + final.get("trace", "")
+        code = self.process.exitcode
+        hint = " (SIGKILL: likely out of memory; its own last error is on the job's stderr)" if code == -9 else ""
+        return f"benchmark engine process died during {doing} with exit code {code}{hint}"
 
     def gate(self, point: SweepPoint) -> Mapping[str, tuple[int, ...]]:
         return self._ask("gate", point)
@@ -599,6 +698,13 @@ class ProcessEngineFactory:
         self.context = mp.get_context("spawn")
 
     def create(self, arm: Arm, preset: Preset, *, resident: bool) -> BenchEngine:
+        if not self.eager:
+            bound = build_bound(arm, preset.gpu_count)
+            if bound:
+                raise ValueError(
+                    f"arm {arm.id!r} binds its served kernels to the row's Build ({', '.join(bound)}); CUDA graphs can "
+                    "change the served kernels so they no longer match it: run with --eager (or enforce_eager = true "
+                    "in the preset's engine settings)")
         if resident and not arm.resident:
             raise ResidentCapacityError(f"arm {arm.id!r} requires an isolated engine lifetime")
         parent, child = self.context.Pipe()
@@ -607,9 +713,11 @@ class ProcessEngineFactory:
         child.close()
         try:
             response = parent.recv()
-        except EOFError:
+        except (EOFError, ConnectionResetError):
             process.join()
-            raise RuntimeError(f"benchmark engine {arm.id!r} exited during startup with code {process.exitcode}") from None
+            code = process.exitcode
+            hint = " (SIGKILL: likely out of memory; its own last error is on the job's stderr)" if code == -9 else ""
+            raise RuntimeError(f"benchmark engine {arm.id!r} exited during startup with code {code}{hint}") from None
         if "error" in response:
             process.join()
             error = response["error"] + "\n" + response.get("trace", "")

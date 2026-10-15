@@ -8,6 +8,11 @@
   "Flock.Test.RecCoins",
   "Flock.Test.RecOpen",
   "Flock.Test.RecOpening",
+  "Flock.Test.RecOpenLeaves",
+  "Flock.Test.ReadWhole",
+  "Flock.Test.MsgNames",
+  "Flock.Test.TopReads",
+  "Flock.Test.Labels",
   "VStar"
  ],
  "exempt": {

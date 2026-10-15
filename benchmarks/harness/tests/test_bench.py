@@ -1,27 +1,44 @@
 from __future__ import annotations
 
+import subprocess
 import sys
+import tomllib
 from dataclasses import replace
+from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
 import pytest
 
+from verity_config import Admission
+
+from verity_bench import jobs
 from verity_bench.cli import _parser
 from verity_bench.vllm.arms import Arm, resolve_arms
 from verity_bench.vllm.cli import effective_eager
-from verity_bench.vllm.presets import GPUS, SweepPoint, expand_sweep, get_preset, local_checkpoint
+from verity_bench.vllm.presets import (
+    GPUS,
+    SPEC_ROOT,
+    SweepPoint,
+    expand_sweep,
+    get_preset,
+    load_spec,
+    load_sweep,
+    local_checkpoint,
+    resolve_spec,
+)
 from verity_bench.vllm.result import IdentityMismatch, judge, validate
 from verity_bench.vllm.runner import ResidentCapacityError, run_benchmark
 from verity_bench.vllm.table import render
 
 
 class FakeEngine:
-    def __init__(self, arm, events, *, gate_ok=True, bad_tokens=False):
+    def __init__(self, arm, events, *, gate_ok=True, bad_tokens=False, kv_tokens=None):
         self.arm, self.events, self.gate_ok, self.bad_tokens = arm, events, gate_ok, bad_tokens
         self.identity = {
             "vllm_version": "0.fake+gd9105ea80",
             "kernel_digest": f"digest-{arm.id}",
             "engine_overrides": {"quantization": "fp8"} if arm.id == "stock-fp8" else {},
+            **({"kv_cache_tokens": kv_tokens} if kv_tokens is not None else {}),
         }
 
     def gate(self, point):
@@ -56,12 +73,13 @@ class FakeEngine:
 
 
 class FakeFactory:
-    def __init__(self, *, resident_failure=None, gate_ok=True, bad_tokens=None):
+    def __init__(self, *, resident_failure=None, gate_ok=True, bad_tokens=None, kv_tokens=None):
         self.events = []
         self.resident_failure = resident_failure
         self.failed = False
         self.gate_ok = gate_ok
         self.bad_tokens = bad_tokens
+        self.kv_tokens = kv_tokens or {}
 
     def create(self, arm, preset, *, resident):
         self.events.append(("create", arm.id, resident))
@@ -69,7 +87,8 @@ class FakeFactory:
             self.failed = True
             raise ResidentCapacityError(f"{arm.id} does not fit")
         return FakeEngine(arm, self.events, gate_ok=self.gate_ok,
-                          bad_tokens=arm.id == self.bad_tokens)
+                          bad_tokens=arm.id == self.bad_tokens,
+                          kv_tokens=self.kv_tokens.get(arm.id))
 
 
 def inputs():
@@ -93,8 +112,119 @@ def test_cli_and_presets_use_the_benchmark_package_and_stable_gpu_ids(tmp_path):
         "vllm", "--preset", "llama31-8b-fp8-1gpu", "--arms", "stock,stock-fp8", "--out", str(tmp_path),
     ])
     assert args.command == "vllm"
-    assert get_preset(args.preset).gpu_id == "rtx-pro-6000"
+    preset = get_preset(args.preset)
+    assert preset.gpu_id == "rtx-pro-6000"
+    assert preset.engine_settings["resident_gpu_memory_utilization"] == 0.40
+    assert preset.engine_settings["block_gpu_memory_utilization"] == 0.80
     assert set(GPUS) == {"rtx-pro-6000", "h200"}
+
+
+def test_every_toml_spec_strictly_loads():
+    loaded = []
+    for path in sorted(SPEC_ROOT.glob("*.toml")):
+        first = path.read_text().splitlines()[0]
+        loaded.append(load_sweep(path.stem) if "vllm-sweep/v0" in first else load_spec(path))
+    assert len(loaded) == 5
+
+
+def test_plan_identity_binds_resolved_spec_commit_lock_pin_and_point_but_not_admission():
+    root = Path(__file__).resolve().parents[3]
+    spec = resolve_spec("llama31-8b-fp8-1gpu")
+    other = replace(spec, admission=Admission(999.0, "2099-01-01T00:00:00Z", 1))
+    assert spec.config_sha256 == other.config_sha256
+    pins = jobs.toolchain(root, spec, commit="a" * 40)
+    point = expand_sweep("quick")[0]
+    identity = jobs.point_identity(spec.config_sha256, pins, point)
+    assert identity != jobs.point_identity(spec.config_sha256, replace(pins, commit="b" * 40), point)
+    assert identity != jobs.point_identity(spec.config_sha256, replace(pins, uv_lock_sha256="c" * 64), point)
+    assert identity != jobs.point_identity(spec.config_sha256, pins, expand_sweep("quick")[1])
+
+
+def test_plan_marks_passing_points_and_dispatches_one_recorded_run_for_each_missing_point():
+    root = Path(__file__).resolve().parents[3]
+    seen = []
+
+    def lookup(identity, commit):
+        seen.append((identity, commit))
+        return "r-passed" if len(seen) == 1 else None
+
+    plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lookup)
+    assert [point.passing_run for point in plan.points] == ["r-passed", None]
+    commands = []
+    assert jobs.dispatch(plan, "llama31-8b-fp8-1gpu", root=root,
+                         execute=lambda command, cwd: commands.append((list(command), cwd)) or 0) == 0
+    [(command, cwd)] = commands
+    assert cwd == root
+    assert command[:3] == ["research", "run", "--queue"]
+    assert command[command.index("--kind") + 1] == "vllm-bench-1gpu"
+    assert "--preemptible" in command[:command.index("--")]
+    assert command[command.index("--gpus") + 1] == "1"
+    assert command[command.index("--gpu-model") + 1] == "rtx-pro-6000"
+    assert command[command.index("--") + 1:][:2] == ["bash", "benchmarks/harness/run_point.sh"]
+    assert (root / "benchmarks/harness/run_point.sh").is_file()
+    assert command[command.index("--point") + 1] == "b32-p512-mixed"
+
+
+def test_dispatch_forwards_the_point_venv_and_the_launcher_runs_the_point_in_it(tmp_path, monkeypatch):
+    root = Path(__file__).resolve().parents[3]
+    plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lambda identity, commit: None)
+    monkeypatch.setenv("VERITY_BENCH_VENV", str(tmp_path / "venv"))
+    command = jobs.research_command(plan, "llama31-8b-fp8-1gpu", plan.points[0], root)
+    assert f"VERITY_BENCH_VENV={tmp_path / 'venv'}" == command[command.index("--env") + 1]
+
+    launcher = root / "benchmarks/harness/run_point.sh"
+    env = {"PATH": "/usr/bin:/bin", "WORK": str(tmp_path), "CUDA_HOME": str(tmp_path)}
+    missing = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
+    assert missing.returncode == 2 and "pod_bootstrap.sh" in missing.stderr
+    python = tmp_path / "venv312" / "bin" / "python"
+    python.parent.mkdir(parents=True)
+    python.write_text('#!/bin/sh\necho "$PYTHONPATH"\necho "$@"\n')
+    python.chmod(0o755)
+    ran = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
+    assert ran.returncode == 0, ran.stderr
+    pythonpath, argv = ran.stdout.splitlines()
+    assert pythonpath.split(":")[:2] == [f"{root}/benchmarks/harness", f"{root}/integrations/vllm"]
+    assert argv == "-m verity_bench _vllm-point --point p"
+
+
+def test_a_queued_point_records_its_identity_as_the_key_param_resume_matches():
+    from verity_bench.tool import VLLM_BENCH_POINT
+
+    root = Path(__file__).resolve().parents[3]
+    plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lambda identity, commit: None)
+    item = plan.points[0]
+    workload = jobs.research_command(plan, "llama31-8b-fp8-1gpu", item, root)
+    workload = workload[workload.index("--") + 1:]
+    wrapped = ["/workspace/pouw/infra/bin/gpu-lease", "1", "--wait", "--max-min", "120", "--mem-gb", "64", "--", *workload]
+    for argv in (workload, wrapped):
+        params, key = VLLM_BENCH_POINT.resolve_params(argv, root)
+        assert key == {"identity": item.identity}
+        assert params["point"] == item.point.id and params["spec"] == "benchmarks/specs/llama31-8b-fp8-1gpu.toml"
+
+
+def test_every_spec_dispatches_as_a_registered_queue_kind_that_fits_it():
+    """The queue refuses an unregistered kind's job without --mem-gb, so each spec's points need a kind whose shape has
+    the spec's GPUs and whose wall time covers its admission."""
+
+    kinds_toml = Path(__file__).resolve().parents[3] / "infra" / "cluster" / "kinds" / "benchmarks.toml"
+    kinds = tomllib.loads(kinds_toml.read_text())["kinds"]
+    phase_gpus = {"gpu1": 1, "gpu8-timed": 8}
+    specs = [load_spec(p) for p in sorted(SPEC_ROOT.glob("*.toml")) if "vllm-spec/v0" in p.read_text().splitlines()[0]]
+    assert specs
+    for spec in specs:
+        kind = kinds[jobs.queue_kind(spec.preset.gpu_count)]
+        assert phase_gpus[kind["phase"]] == spec.preset.gpu_count, spec.id
+        assert spec.admission.max_minutes is None or spec.admission.max_minutes <= kind["max_wall_min"], spec.id
+    with pytest.raises(ValueError, match="register one in infra/cluster/kinds/benchmarks.toml"):
+        jobs.queue_kind(4)
+
+
+def test_plan_run_check_and_compare_are_top_level_commands(tmp_path):
+    parser = _parser()
+    assert parser.parse_args(["plan", "llama31-8b-fp8-1gpu"]).command == "plan"
+    assert parser.parse_args(["run", "llama31-8b-fp8-1gpu"]).command == "run"
+    assert parser.parse_args(["check", "llama31-8b-fp8-1gpu"]).command == "check"
+    assert parser.parse_args(["compare", str(tmp_path / "a"), str(tmp_path / "b")]).command == "compare"
 
 
 def test_glm53_keeps_the_verified_vllm_scheduler_default_and_runs_eager():
@@ -119,6 +249,48 @@ def test_experimental_arm_can_require_an_isolated_engine(monkeypatch):
     monkeypatch.setitem(sys.modules, module.__name__, module)
     arm, = resolve_arms("isolated", (f"{module.__name__}:ARM",))
     assert arm.experimental and not arm.resident
+
+
+def test_graphs_are_refused_for_arms_bound_to_the_build():
+    from verity_bench.vllm.arms import build_bound
+    from verity_bench.vllm.runner import ProcessEngineFactory
+
+    bound_arm, _control = resolve_arms("sampled-proofs:hm96,stock-fp8")
+    assert build_bound(bound_arm) == ("sampled-proofs:hm96",)
+    assert build_bound(resolve_arms("stock")[0]) == ()
+    with pytest.raises(ValueError, match="Build"):
+        ProcessEngineFactory(eager=False).create(bound_arm, get_preset("llama31-8b-fp8-1gpu"), resident=True)
+
+
+def test_a_dead_engine_process_reports_its_own_error_not_a_connection_reset():
+    from verity_bench.vllm.runner import _ProcessEngine
+
+    class DeadConn:
+        def __init__(self, final=None):
+            self.final = final
+
+        def send(self, _):
+            raise BrokenPipeError
+
+        def poll(self, _timeout):
+            return self.final is not None
+
+        def recv(self):
+            return self.final
+
+    class DeadProcess:
+        exitcode = -9
+
+        def join(self):
+            pass
+
+    point = SweepPoint(batch=8, prompt_tokens=512, traffic="mixed", output_tokens=64)
+    drained = _ProcessEngine(DeadProcess(), DeadConn({"error": "RuntimeError: CUDA out of memory", "trace": ""}), {})
+    with pytest.raises(RuntimeError, match="died during gate: RuntimeError: CUDA out of memory"):
+        drained.gate(point)
+    silent = _ProcessEngine(DeadProcess(), DeadConn(), {})
+    with pytest.raises(RuntimeError, match=r"exit code -9 \(SIGKILL: likely out of memory"):
+        silent.gate(point)
 
 
 def test_local_checkpoint_is_content_bound(tmp_path):
@@ -162,6 +334,52 @@ def test_a_failed_gate_records_the_failure_and_stops_before_timing(factory):
     assert doc["points"] == []
     assert not any(e[0] == "measure" for e in factory.events)
     validate(doc)
+
+
+def test_a_failed_greedy_gate_records_the_first_divergent_token():
+    preset, points, arms = inputs()
+    doc = run_benchmark(preset, arms, points, sweep="quick", reps=2,
+                        factory=FakeFactory(bad_tokens="candidate"), git_commit="abc")
+    failed, = [g for g in doc["gates"] if g["kind"] == "greedy-tokens" and not g["passed"]]
+    assert failed["first_divergence"] == {
+        "request": "b32-p512-mixed-0", "position": 0, "token": 8, "control_token": 7,
+    }
+    assert failed["divergent_requests"] == 1
+
+
+def test_unequal_kv_pools_fail_the_gate_and_name_the_pin():
+    """MEM-15: at b128-p8192 the audit arm's engine got a smaller KV pool than its plain twin's (its encoded store and
+    scratch shrink what vLLM's profiling leaves), vLLM scheduled the two arms differently once the point overran the
+    pool, and the greedy tokens diverged. Equal pools are a precondition of the token gate, so unequal pools must fail
+    loudly on their own, before any timing."""
+
+    preset, points, arms = inputs()
+    factory = FakeFactory(kv_tokens={"stock-fp8": 494_064, "candidate": 491_376})
+    doc = run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=factory, git_commit="abc")
+    gate, = [g for g in doc["gates"] if g["kind"] == "kv-pool"]
+    assert not gate["passed"]
+    assert (gate["tokens"], gate["control_tokens"]) == (491_376, 494_064)
+    assert "block_kv_cache_memory_bytes" in gate["detail"]
+    assert doc["points"] == []
+    assert not any(e[0] == "measure" for e in factory.events)
+    validate(doc)
+
+
+def test_equal_kv_pools_pass_and_are_recorded_in_the_identity():
+    preset, points, arms = inputs()
+    factory = FakeFactory(kv_tokens={"stock-fp8": 458_752, "candidate": 458_752})
+    doc = run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=factory, git_commit="abc")
+    gate, = [g for g in doc["gates"] if g["kind"] == "kv-pool"]
+    assert gate["passed"] and doc["points"]
+    assert {a["id"]: a["kv_cache_tokens"] for a in doc["identity"]["arms"]} == {
+        "stock-fp8": 458_752, "candidate": 458_752,
+    }
+
+
+def test_block_mode_pins_one_kv_pool_for_every_arm_of_the_llama_preset():
+    settings = get_preset("llama31-8b-fp8-1gpu").engine_settings
+    assert settings["block_kv_cache_memory_bytes"] == 56 * 2**30
+    assert "block_kv_cache_memory_bytes" not in get_preset("glm53-fp8-8gpu").engine_settings
 
 
 def test_result_schema_and_identity_strict_judge():

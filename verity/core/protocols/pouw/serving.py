@@ -117,8 +117,10 @@ def hash_format(scheme: str | SchemeId | Any) -> HashFormat:
     return HASH_FORMATS[hashing]
 
 
-#: a call's step groups, in the order the main lane runs them
-GROUPS = ("a_tree", "forming", "gemm", "cleanup", "tile_hash", "screen")
+#: a call's step groups, in the order the main lane runs them.  ``row_seeds`` is A's per-row keying (the pads, each row's
+#: digest and its seed), which forming reads, so it never leaves the main lane; ``a_tree`` is A's hm96 leaves, tree and
+#: unit seed, which may leave it where the format seeds forming per row (`schedule_refusals`)
+GROUPS = ("row_seeds", "a_tree", "forming", "gemm", "cleanup", "tile_hash", "screen")
 #: groups that nothing later in the call reads, so they may always leave the main lane
 MOVABLE = frozenset({"tile_hash", "screen"})
 MAIN_PRIORITIES = ("caller", "greatest")
@@ -144,7 +146,10 @@ SERIAL = Schedule("serial")
 DEFERRED = Schedule("deferred", frozenset({"tile_hash"}), ring=2, main_priority="greatest")
 #: the same placement with the caller's stream left at its own priority (#564's first cut), kept to time against DEFERRED
 DEFERRED_CALLER = Schedule("deferred-caller", frozenset({"tile_hash"}), ring=2)
-SCHEDULES = {s.name: s for s in (SERIAL, DEFERRED, DEFERRED_CALLER)}
+#: DEFERRED with A's tree beside the tile hashing: the main lane keeps only the per-row keying (`row_seeds`), about a fifth
+#: of a call's hashing (note:20261014T0219Z-report-pearlc-split-b).  Runs only where the format seeds forming per row (h3)
+DEFERRED_A = Schedule("deferred-a", frozenset({"a_tree", "tile_hash"}), ring=2, main_priority="greatest")
+SCHEDULES = {s.name: s for s in (SERIAL, DEFERRED, DEFERRED_CALLER, DEFERRED_A)}
 
 
 def schedule_refusals(fmt: HashFormat, s: Schedule) -> list[str]:
@@ -157,6 +162,7 @@ def schedule_refusals(fmt: HashFormat, s: Schedule) -> list[str]:
         if g == "a_tree" and fmt.seed_a == "row":
             continue
         why = ("forming reads seed_A from A's root" if g == "a_tree"
+               else "forming reads each row's digest and seed" if g == "row_seeds"
                else "a later step of the call reads what it writes")
         out.append(f"{s.name}: {g} can't leave the main lane under {fmt.name}: {why}")
     if s.ring < 1:
@@ -300,7 +306,7 @@ def variant_refusals(v: KernelVariant, scheme: str, schedule: str, shapes: Seque
     return out
 
 
-__all__ = ["DEFERRED", "DEFERRED_CALLER", "FP4_PRECISIONS", "FP8_DEVICES", "FP8_FORMINGS", "GROUPS", "HASH_FORMATS", "MAIN_PRIORITIES",
+__all__ = ["DEFERRED", "DEFERRED_A", "DEFERRED_CALLER", "FP4_PRECISIONS", "FP8_DEVICES", "FP8_FORMINGS", "GROUPS", "HASH_FORMATS", "MAIN_PRIORITIES",
            "MANIFEST_SCHEMA", "MANIFEST_SCHEMAS_READ", "MOVABLE", "SCHEDULES", "SERIAL", "SIDE_PRIORITIES", "GateRecord",
            "HashFormat", "KernelVariant", "PassCommitment", "Schedule", "SchemeId", "ShapeRule", "StepIO", "hash_format",
            "schedule_refusals", "variant_refusals"]

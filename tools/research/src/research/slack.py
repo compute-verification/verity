@@ -178,6 +178,20 @@ def registry_path(explicit: str | None = None) -> Path:
                      f"verity checkout after `git fetch origin main`, or pass --registry")
 
 
+def origin_groups(path: Path) -> set[str]:
+    """The user-group ids in origin/main's registry (a best-effort fetch, then `git show`): an analysis checkout older than
+    a sender's must not report the sender's group mentions as dropped (three false DROPPED lines on 14 Oct). Empty when git
+    can't answer (no clone, no remote, offline), which keeps `traffic`'s old behavior."""
+    try:
+        cwd = path.resolve().parent
+        subprocess.run(["git", "fetch", "origin", "main", "-q"], cwd=cwd, timeout=10, check=False, capture_output=True)
+        out = subprocess.run(["git", "show", f"origin/main:./{path.name}"], cwd=cwd, timeout=10,
+                             check=True, capture_output=True, text=True).stdout
+        return {h["usergroup"] for h in json.loads(out).get("handles", []) if h.get("usergroup")}
+    except (OSError, subprocess.SubprocessError, ValueError, TypeError):
+        return set()
+
+
 def load_registry(path: Path) -> dict:
     try:
         reg = json.loads(path.read_text())
@@ -1084,7 +1098,11 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, link: str
             continue
         to, r = routes.resolve(name)
         if not r or (r.get("closed") and not r.get("forward_to")):
-            known = any(h["handle"] == name for h in reg["handles"])
+            h = next((h for h in reg["handles"] if h["handle"] == name), None)
+            if h and h.get("linear"):
+                lines.append(f"@{name}: no Slack inbox; reach it through its Linear team {h['linear']} (an ask to it files there)")
+                continue
+            known = h is not None
             lines.append(f"@{name}: no inbox" + (" (top-level forwards it)" if known else
                          " -- nobody will see this; check the name (`research msg names list`)") if not r else
                          f"@{name}: finished, with no forward_to: message its coordinator instead")
@@ -1191,8 +1209,10 @@ def cmd_subscriptions(ns: argparse.Namespace, reg: dict) -> int:
             print(f'subscribe_slack_channel(channelId="{cid or "<#" + key + " id not recorded>"}", topLevelOnly=true, '
                   f"expiresInSeconds={EXPIRES_S})   # #{key}")
     if key := h.get("linear"):
+        print(f'subscribe_linear_issue(options={{"scope": "team", "teamId": "{key}"}}, expiresInSeconds={EXPIRES_S})   '
+              f"# an issue filed into or changing state in @{h['handle']}'s Linear team: the work item is its own doorbell")
         print(f'subscribe_linear_comment(options={{"scope": "team", "teamId": "{key}"}}, expiresInSeconds={EXPIRES_S})   '
-              f"# a comment on an issue in @{h['handle']}'s Linear team; the doorbell already carries each new ask")
+              f"# a comment on an issue in @{h['handle']}'s Linear team")
     print(f"# and subscribe_slack_thread(channelId, threadTs, expiresInSeconds={EXPIRES_S}) for each thread @{h['handle']} "
           f"starts, replies in or picks up (not for a status line alone); renew on every wake")
     print("# but not an announcement's thread (the merge thread is one): there the doorbell rings for a post that names "
@@ -1828,14 +1848,18 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
     posts = api.paged("conversations.history", "messages", channel=ch, oldest=f"{since:.6f}")
     handles = {h["handle"] for h in reg["handles"]} | {poster({"user": p.get("slack_user")}, reg) for p in reg.get("humans", [])}
     dropped, stale, groups = [], [], {h.get("usergroup") for h in reg["handles"]}
+    fresh: set[str] | None = None                                    # origin/main's group ids, fetched on the first unknown
     for m in posts:
         for n in lead_names(m.get("text") or "", reg):
             if not routes.get_route(n) and n not in handles:
                 dropped.append({"name": n, "ts": m["ts"], "by": poster(m, reg)})
         lead = LEAD_RE.match(m.get("text") or "")
         for _, gid, label in NAME_TOKEN_RE.findall(lead.group(1) if lead else ""):
-            if gid and not label and gid not in groups:              # a group no handle has: `lead_names` can't route it
-                dropped.append({"name": f"subteam^{gid}", "ts": m["ts"], "by": poster(m, reg)})
+            if gid and not label and gid not in groups:
+                if fresh is None:
+                    fresh = origin_groups(registry_path(ns.registry))   # this checkout's registry may predate the group
+                if gid not in fresh:                                 # a group no handle has: `lead_names` can't route it
+                    dropped.append({"name": f"subteam^{gid}", "ts": m["ts"], "by": poster(m, reg)})
         is_ask = m.get("bot_id") and LEAD_RE.match(m.get("text") or "") and not is_announcement(m) and \
             not is_quiet(m.get("text") or "") and kind_of(m) != "fyi"           # older clients tagged an fyi without (quiet)
         answered = m.get("reply_count") or any(x.get("name") in ("eyes", "white_check_mark", "x") for x in m.get("reactions", []))

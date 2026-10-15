@@ -6,7 +6,7 @@ import Proofs.Flock.C3.Compose.Family
 `HRegLevels`: at every accepted outcome, R's decoded Ligerito steps (`rec-top-stacked-L<l>` and R's levels, which the
 chain runs after both reps and R's opening) play `ligeritoC` on stream 2 at R's registered schedule to R's pending
 result, which the openings accept and whose level-0 paths verify against the registered cap (`xR.cap`, the record's
-`stacked` entry by `StackedTop`): R's tops and its binding round.
+`stacked` entry by `StackedTopAt`): R's tops and its binding round.
 -/
 
 namespace FlockC3.RegLevels

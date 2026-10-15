@@ -17,12 +17,12 @@ Section 8 of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.4). No
 * `pouwRow` (PoUW's row, from B1): the deadline theorem at `CM_A`. A prover whose work at `π` in the cost window is at
   most `T` at every oracle and salt is accepted while `T < (1 − γ)(1 − ε_s)·W` with probability at most
   `(1 − ε_s)^t + ε(q, N)`.
-* `B4` (egress factoring, reduced to the assumptions), across `X`'s secret inputs: over strategies that vary only them,
-  under causality, links as alphabets and the trusted devices across the strategy (v2.8: each certifier's sends during
-  `[a, b)` a function of its own record before `b`, its gates in declared record cells, and of its own jitter word),
-  what the outside does during `I` takes at most (the number of records placed in `I`) × `2^{res_out}` values,
-  `res_out` being `log₂ χ` bits a bucket and certifier plus `β°_X |I|`. Per run, a width bound misses when a send
-  leaves, which signals by its tick.
+* `B4` (egress factoring, reduced to the assumptions), across `X`'s secret inputs: under the named physical premises
+  `CausalStrategy`, `DeclaredLinks`, `TrustedUnits` and `Secrets` (v2.8: each certifier's sends during `[a, b)` a
+  function of its own record before `b`, its gates in declared record cells, and of its own jitter word; the strategy
+  varies only `X`'s secrets), what the outside does during `I` takes at most (the number of records placed in `I`) ×
+  `2^{res_out}` values, `res_out` being `log₂ χ` bits a bucket and certifier plus `β°_X |I|`. Per run, a width bound
+  misses when a send leaves, which signals by its tick.
 -/
 
 namespace Accounting.Guarantees
@@ -63,28 +63,42 @@ def pouwRow : Prop :=
           T < (1 - Pouw.reductionGamma γ₀ Ωmax) * (1 - εs) * Pouw.totalWref P U.layout)
         ≤ (1 - εs) ^ t + ε q U.layout.N
 
-/-- **B4.** For a strategy `S` causal from every tick that varies only the secret inputs of a location `X` apart
-from the certifiers `cert` (what the certifiers and the outside `O = (X ∪ cert)ᶜ` can tell at `a` doesn't depend on
-the coins; the certifiers' record placed before `a` is part of the former), whose runs meet causality and links, whose
-links are alphabets and whose trusted devices are trusted across it (record cells `record`, `TrustedUnits`): what `O`
-does during `I = [a, b)` takes at most (the number of records placed in `I`) × `2^{res_out}` values, with
-`res_out = jitter · (buckets of I) · #cert + β°_X (b − a)`, a jitter word per certifier (v2.8). A wire from `X` to a
-certifier runs on a certified link and one from `X` to `O` on an uncertified one, by `Links`. v2.8 ranges the secrets
+/-- **B4.** For a strategy `S` over a causal world (`CausalStrategy`: causal from every tick, each run causal at `ℓ`),
+on links as declared (`DeclaredLinks`: alphabets across the strategy, each run's wires on declared links within
+capacity), with the trusted devices trusted across it (`TrustedUnits`, record cells `record`), varying only the secret
+inputs of a location `X` apart from the certifiers `cert` (`Secrets`: what the certifiers and the outside
+`O = (X ∪ cert)ᶜ` can tell at `a` doesn't depend on the coins; the certifiers' record placed before `a` is part of the
+former): what `O` does during `I = [a, b)` takes at most (the number of records placed in `I`) × `2^{res_out}` values,
+with `res_out = jitter · (buckets of I) · #cert + β°_X (b − a)`, a jitter word per certifier (v2.8). A wire from `X` to
+a certifier runs on a certified link and one from `X` to `O` on an uncertified one, by `Links`. v2.8 ranges the secrets
 over those whose runs accept every window and meet integrity: that is `B4` at the strategy restricted to them (`Ω` a
-subtype), whose hypotheses restrict (`CausalFrom` by `Accounting.SecurityProofs.Actual.causalFrom_comp`, the others
+subtype), whose premises restrict (`CausalFrom` by `Accounting.SecurityProofs.Actual.causalFrom_comp`, the others
 pointwise or by shrinking a range), so it needs no statement of its own. -/
 def B4 : Prop :=
   ∀ {L E Ω : Type*} [LinearOrder L] [Fintype L] [Fintype E] (S : Ω → Actual.Run L) (ℓ : L → L → ℕ) (ends : E → L × L)
     (β : E → ℕ) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → E) (𝒱 cert X : Finset L) (spec : ∀ r, (S r).A.Spec)
     (record : L → Set ℕ) (bucket : ℕ → ℕ) (jitter a b : ℕ),
-    CausalFrom S → Alphabet S β link → TrustedUnits S 𝒱 cert spec record bucket jitter → Disjoint X cert →
-    (∀ r r', (S r).history cert a = (S r').history cert a ∧
-      (S r).history (X ∪ cert)ᶜ a = (S r').history (X ∪ cert)ᶜ a) →
-    (∀ r, (S r).A.Causal ℓ ∧ (S r).A.Links ends β (link r)) →
+    CausalStrategy S ℓ → DeclaredLinks S ends β link →
+    TrustedUnits S 𝒱 cert spec record bucket jitter → Secrets S cert X a →
     (Set.range fun r => (S r).acts (X ∪ cert)ᶜ (Set.Ico a b)).encard ≤
       (Set.range fun r =>
         (S r).seen '' ↑(((S r).record cert record).filter fun g => a ≤ (S r).A.t g ∧ (S r).A.t g < b)).encard *
         ((2 ^ (jitter * ((Finset.Ico a b).image bucket).card * cert.card +
           uncertifiedCapacity ends β cert X * (b - a)) : ℕ) : ℕ∞)
+
+/-- **B4 at a covered location** (`B4` with the listed claim `certifier-coverage`): under the same premises and
+`Covered` — every boundary link of `X` certified, `β°_X = 0` — the uncertified term drops, and what the outside does
+during `I = [a, b)` takes at most (the number of records placed in `I`) × `2^{jitter · (buckets of I) · #cert}`
+values. The deployed unit's form: a spatial unit is a covered location. -/
+def B4Covered : Prop :=
+  ∀ {L E Ω : Type*} [LinearOrder L] [Fintype L] [Fintype E] (S : Ω → Actual.Run L) (ℓ : L → L → ℕ) (ends : E → L × L)
+    (β : E → ℕ) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → E) (𝒱 cert X : Finset L) (spec : ∀ r, (S r).A.Spec)
+    (record : L → Set ℕ) (bucket : ℕ → ℕ) (jitter a b : ℕ),
+    CausalStrategy S ℓ → DeclaredLinks S ends β link →
+    TrustedUnits S 𝒱 cert spec record bucket jitter → Secrets S cert X a → Covered ends β cert X →
+    (Set.range fun r => (S r).acts (X ∪ cert)ᶜ (Set.Ico a b)).encard ≤
+      (Set.range fun r =>
+        (S r).seen '' ↑(((S r).record cert record).filter fun g => a ≤ (S r).A.t g ∧ (S r).A.t g < b)).encard *
+        ((2 ^ (jitter * ((Finset.Ico a b).image bucket).card * cert.card) : ℕ) : ℕ∞)
 
 end Accounting.Guarantees

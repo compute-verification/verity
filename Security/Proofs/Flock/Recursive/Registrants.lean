@@ -260,7 +260,7 @@ theorem zk_sessions_recursive_read_off
     (fun _ R ω t s => sumV (zs R ω t) dg N (fun R₂ j τ => (zs R ω t R₂ j).slackIf dg N k Rw M ρ t' qF qS τ) s)
     (weightS Vs Sk ρ) q (fun i hi ω => AllLeaves.of_forall (fun t s' v e he => ?_) _) hCR hin
   refine (outerV_stage_le_read (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht' qF qS (Sk i) (hfull i hi)
-    (fun j pos => cmt j e.1 pos) (fun R₂ j hj pos hp R' => hcmt i σ.1 ω t e he R₂ j hj pos hp R')
+    (fun j pos => cmt j e.1 pos) (fun R₂ j R' tr hw hj pos hp => hcmt i σ.1 ω t e he R₂ j R' tr hw hj pos hp)
     (fun Xs => Option.Rel (same i (t.map Prod.snd)) (wmsg Xs)[i]? (some (msgS msg i v)))
     (fun j p => projV j (v ⟨j, p⟩)) (fun Xt hXt => hdec i hi _ Xt (fun j p => projV j (v ⟨j, p⟩)) hXt) _).trans
     (add_le_add le_rfl ?_)

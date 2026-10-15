@@ -1519,11 +1519,14 @@ def test_the_device_path_commits_with_its_schemes_hashing_format(device_run):
 
 def test_a_schedule_this_path_or_the_format_cannot_run_is_refused():
     """-h3's row seeds come from A's rows, not its root, so its format lets A's tree leave the main lane; this path moves only
-    the tile hashing, which reads C~ and U, the buffers each shape rotates."""
+    the tile hashing, which reads C~ and U, the buffers each shape rotates.  A's tree stays refused here with its own reason:
+    the `lines` kernel keys filler rows on line_a from A's root (card 448a9d2d)."""
     from verity.core.protocols.pouw.serving import Schedule
     s = PPD.scheme_of(SCHEME)
-    with pytest.raises(ValueError, match="this path runs only tile_hash on a side lane, not a_tree$"):
+    with pytest.raises(ValueError, match="filler rows' lines on line_a from A's root"):
         PPD.schedule_of(Schedule("early-a", frozenset({"a_tree", "tile_hash"}), ring=2), s)
+    with pytest.raises(ValueError, match="filler rows' lines on line_a from A's root"):
+        PPD.schedule_of("deferred-a", s)
     with pytest.raises(ValueError, match="this path runs only tile_hash on a side lane, not screen"):
         PPD.schedule_of(Schedule("screen-aside", frozenset({"tile_hash", "screen"}), ring=2), s)
     with pytest.raises(ValueError, match="a side lane needs ring >= 2"):

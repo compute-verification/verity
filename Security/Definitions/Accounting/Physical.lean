@@ -27,6 +27,11 @@ leaves `ends e` with capacity `β_e` bits a tick each way. A link is *certified*
 (`Hardware.SpatialUnit`). `in_X(I), out_X(I) ≤ β_X |I|` is then a lemma (`Accounting.SecurityProofs.Actual.ingress_le`,
 `egress_le`). Compute `Φ_X` (`compute`) and memory `M_X` are numbers per location, in work and bits.
 
+`CausalStrategy`, `DeclaredLinks` and `Secrets` bundle, one named premise each, a constraint's strategy-level and
+per-run forms: causality (`CausalFrom` with each run's `Causal`), links (`Alphabet` with each run's `Links`), and a
+window whose coins reach it only through one location's secret inputs. A guarantee over strategies takes its physical
+hypotheses as these named premises (`shape.premises` in `lean-audit.json`), never as bare hypotheses.
+
 Four constraints read what the circuit doesn't carry, taken as parameters: which link each wire runs on (`link`), the
 location of the ring's multiplications modulo `p` (`ring`), the certifiers' leaves (`cert`) and record cells
 (`record`, v2.6: a certifier's record is its gates in them, `Actual.Run.record`), the trusted devices' leaves (`𝒱`) with
@@ -123,6 +128,29 @@ def TrustedUnits {Ω L : Type*} (S : Ω → Actual.Run L) (𝒱 cert : Finset L)
     (∀ t ∈ Set.Ico a b, J r y (bucket t) = J r' y (bucket t)) →
     (S r).sent {y} (Set.Ico a b) = (S r').sent {y} (Set.Ico a b)
 
+/-- **A causal strategy**: causal from every tick (`CausalFrom`, v2.4: what each location does during an interval is a
+function of its state's content at its start and of what it reads from outside meanwhile), and each run causal at the
+latencies `ℓ` (`Placed.Causal`, v2.1). One physical premise, that answers never precede their questions, across the
+coins and in every run. -/
+def CausalStrategy {Ω L : Type*} [LinearOrder L] (S : Ω → Actual.Run L) (ℓ : L → L → ℕ) : Prop :=
+  CausalFrom S ∧ ∀ r, (S r).A.Causal ℓ
+
+/-- **The links as declared**: across the strategy each link delivers one of at most `2^{β e}` signals a tick each way
+(`Alphabet`, v2.2), and in every run each wire between two leaves has a computed source and runs on a declared link
+joining them, within its capacity (`Placed.Links`, v2.7). One physical premise, that nothing crosses between locations
+but the declared links, at their capacities. -/
+def DeclaredLinks {Ω L E : Type*} (S : Ω → Actual.Run L) (ends : E → L × L) (β : E → ℕ)
+    (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → E) : Prop :=
+  Alphabet S β link ∧ ∀ r, (S r).A.Links ends β (link r)
+
+/-- **The strategy varies only `X`'s secrets** (v2.8): `X` is a location apart from the certifiers `cert`, and what the
+certifiers and the outside `(X ∪ cert)ᶜ` can tell at `a` (`history`: their inputs, their gates placed before `a` and
+what they read from outside before `a`) is fixed across the coins; the certifiers' record placed before `a` is part of
+the former. One physical premise, that the coins reach the window only through `X`'s secret inputs. -/
+def Secrets {Ω L : Type*} [LinearOrder L] [Fintype L] (S : Ω → Actual.Run L) (cert X : Finset L) (a : ℕ) : Prop :=
+  Disjoint X cert ∧ ∀ r r', (S r).history cert a = (S r').history cert a ∧
+    (S r).history (X ∪ cert)ᶜ a = (S r').history (X ∪ cert)ᶜ a
+
 section Links
 
 variable {L E : Type*} [Fintype E]
@@ -141,6 +169,12 @@ open Classical in
 (`cert`). -/
 noncomputable def uncertifiedCapacity (ends : E → L × L) (β : E → ℕ) (cert X : Finset L) : ℕ :=
   ∑ e ∈ (boundary ends X).filter (fun e => (ends e).1 ∉ cert ∧ (ends e).2 ∉ cert), β e
+
+/-- **Coverage** (the listed claim `certifier-coverage`): every boundary link of `X` is certified, `β°_X = 0`
+(`uncertifiedCapacity`), so nothing leaves `X` but through a certifier. One physical premise, the auditor's placement
+in the onsite protocol; `Hardware.SpatialUnit` is it at a `Hardware`'s parameters. -/
+def Covered (ends : E → L × L) (β : E → ℕ) (cert X : Finset L) : Prop :=
+  uncertifiedCapacity ends β cert X = 0
 
 end Links
 

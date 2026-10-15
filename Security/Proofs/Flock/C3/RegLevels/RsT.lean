@@ -112,7 +112,7 @@ theorem hR_of_run {e : ExecHolo} {u : C3Run e} {cl : ℕ} {sh : Flock.Shape}
 
 /-- **`levelTie_of_units`' (and `levelTie_of_reads`') `hR`** with its `OpenRel` from the run (`openRel_of_run`), at
 the messages w holds: their transposes are their ring switches' (`decodedO_rsT`) and `OpenTie` is the opening steps'
-messages. Left are the openings' `α`, their units and the Ligerito steps' coins (`hR'`), and the opening steps' coins
+messages. Left are the openings' `α`, their units and the Ligerito steps' weave (`hR'`), and the opening steps' coins
 from ring switching's first round (`hcoin`). -/
 theorem hR_of_units {nS : ℕ} {Vs : Fin nS → VStmt} {Reg' : Type} {zs : (s : Fin nS) → (Vs s).Outer Reg'}
     {Lb : (s : Fin nS) → (Vs s).Bits} {e : ExecHolo} {u : C3Run e} {sh : Flock.Shape} {w : Array Flock.F128}
@@ -136,7 +136,8 @@ theorem hR_of_units {nS : ℕ} {Vs : Fin nS → VStmt} {Reg' : Type} {zs : (s : 
       Flock.RecAlgebra.ligerito sh.sched (msgsO sh w ops) rs.T rs.sws k₂ (Flock.RecAlgebra.Coins.ofRounds c) =
         .ok ((lgr, lg), k₁) →
       (∀ ℓ < sh.sched.levels.size, ops.alpha ℓ = (lg.conss[ℓ]!).alpha) ∧ OpensUnits zs Lb sh ops sibs cap p lg ∧
-      u.lg.filterMap Sum.getRight? = ((List.range' k₂ (c.size - k₂)).map (fun i => c[i]!)).map (coinArr fOf)) :
+      u.lg = FlockSoundness.Discharge.Exec.weave (ligShape GF128 GF256 Dig e.rsch.sch) (ligMsgs p capDig sh.sched)
+        (((List.range' k₂ (c.size - k₂)).map (fun i => c[i]!)).map (coinArr fOf))) :
     ∀ (rsr : Array Flock.F128) (rs : Flock.RecAlgebra.RsPts Flock.F128) (k₂ : ℕ) (lgr : Array Flock.F128)
       (lg : Flock.RecAlgebra.LgPts),
       Flock.RecAlgebra.ringSwitch (msgsO sh w ops) a k₀ (Flock.RecAlgebra.Coins.ofRounds c) = .ok ((rsr, rs), k₂) →
@@ -144,7 +145,8 @@ theorem hR_of_units {nS : ℕ} {Vs : Fin nS → VStmt} {Reg' : Type} {zs : (s : 
         .ok ((lgr, lg), k₁) →
       (∀ ℓ < sh.sched.levels.size, ops.alpha ℓ = (lg.conss[ℓ]!).alpha) ∧ OpensUnits zs Lb sh ops sibs cap p lg ∧
       (∃ nc, OpenRel sh.sched.m nc rs.T rs.sws u.opened) ∧
-      u.lg.filterMap Sum.getRight? = ((List.range' k₂ (c.size - k₂)).map (fun i => c[i]!)).map (coinArr fOf) :=
+      u.lg = FlockSoundness.Discharge.Exec.weave (ligShape GF128 GF256 Dig e.rsch.sch) (ligMsgs p capDig sh.sched)
+        (((List.range' k₂ (c.size - k₂)).map (fun i => c[i]!)).map (coinArr fOf)) :=
   fun rsr rs k₂ lgr lg h₁ h₂ => ⟨(hR' rsr rs k₂ lgr lg h₁ h₂).1, (hR' rsr rs k₂ lgr lg h₁ h₂).2.1,
     openRel_of_run hsh hrun hz hne ha hshape
       (fun k hk => decodedO_rsT sh w _ (by rw [FlockC3.Opening.shape_claims hsh]; exact hk)) hcl hpl htie h₁
