@@ -1,11 +1,7 @@
 // What a receipt step costs on sm_120 beside E4M3 mma.sync (CMP-8, Daniel's #7 (b)): the ideal-phi model's phi_{sigma,beta,t}(y, p)
-// instantiated as the page's "keyed 32-bit ARX step", run over every accumulator word every PER mma rounds (commit stride
-// L = 32 * PER MACs per output entry), each thread chaining its own words (one chain per accumulator tile).
-//
-//   alu   phi1(y, p) = rotl(t, 13) + t + k_t, t = y ^ p ^ s   all on the integer ALU: ptxas emits LOP3, LEA, IADD3 (k_t an
-//                                                             immediate per word, s the readout)
-//   imad  phi1(y, p) = t * (k_t | 1) + rotl(t, 13)             LOP3, SHF.L.W on the ALU, IMAD on the FMA pipe beside it
-//   ROUNDS = 2 applies a second phi1 against a constant
+// instantiated as the page's "keyed 32-bit ARX step" (phi.cuh: alu, imad, ROUNDS 1 or 2), run over every accumulator word
+// every PER mma rounds (commit stride L = 32 * PER MACs per output entry), each thread chaining its own words (one chain per
+// accumulator tile).
 //
 // Kernels (one wave of --blocks blocks an SM, at most the occupancy's, 8 warps a block, every operand in registers):
 //   mode 0  NACC independent m16n8k32 E4M3 mma.sync per round (QMMA), no phi: the tensor-core peak
@@ -35,6 +31,8 @@
 #include <string>
 #include <vector>
 
+#include "phi.cuh"
+
 #define CK(x)                                                                              \
     do {                                                                                   \
         cudaError_t e_ = (x);                                                              \
@@ -45,28 +43,6 @@
     } while (0)
 
 constexpr int NACC = 8, THREADS = 256, IN_WORDS = 1024;
-
-__host__ __device__ __forceinline__ uint32_t rotl13(uint32_t t) {
-#ifdef __CUDA_ARCH__
-    return __funnelshift_l(t, t, 13);
-#else
-    return (t << 13) | (t >> 19);
-#endif
-}
-__host__ __device__ __forceinline__ uint32_t key(int j, int w) { return 0x9e3779b9u * (uint32_t)(j * 4 + w + 1); }
-
-template <int VAR>
-__host__ __device__ __forceinline__ uint32_t phi1(uint32_t y, uint32_t p, uint32_t s, uint32_t k) {
-    const uint32_t t = y ^ p ^ s;
-    return VAR == 0 ? rotl13(t) + t + k : t * (k | 1u) + rotl13(t);
-}
-
-template <int ROUNDS, int VAR>
-__host__ __device__ __forceinline__ uint32_t phi(uint32_t y, uint32_t p, uint32_t s, uint32_t k) {
-    y = phi1<VAR>(y, p, s, k);
-    if (ROUNDS > 1) y = phi1<VAR>(y, 0x7f4a7c15u, s, k ^ 0x5851f42du);
-    return y;
-}
 
 __device__ __forceinline__ void mma(float (&c)[4], const uint32_t (&a)[4], const uint32_t (&b)[2]) {
     asm volatile(
