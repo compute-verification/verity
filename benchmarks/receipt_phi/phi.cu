@@ -7,9 +7,9 @@
 //   phi gate SEED KSEED          every candidate's chain for a few words, for gate.py to recompute
 //   phi pure ITERS REPS          each candidate alone: PU chains of PW register words per thread, one wave of blocks
 //   phi probe ITERS REPS         one SASS opcode class (or a fixed mix) per kernel, for the pipe model
-//   phi fused ITERS REPS         FP8 m16n8k32 MMAs into FT tiles per warp, φ over every accumulator word every C MMAs
-//                                (commit stride L = 32 C), against the same loop with no φ
-//   phi one MODE INDEX ITERS     one launch of one kernel (for ncu)
+//   phi fused ITERS REPS [OCC]   FP8 m16n8k32 MMAs into FT tiles per warp, φ over every accumulator word every C MMAs
+//                                (commit stride L = 32 C), against the same loop with no φ; OCC pins blocks per SM
+//   phi one MODE INDEX ITERS [FM [OCC]]   one launch of one kernel (for ncu)
 //
 // Results are JSON lines on stdout. Build: nvcc -O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 phi.cu
 #include <cuda_runtime.h>
@@ -269,13 +269,15 @@ __global__ void __launch_bounds__(TPB) probe_k(uint32_t* out, int iters, uint32_
 // of tile j into its own chain j at positions 4j..4j+3. MODE bit 0 (ping-pong): consecutive strides write alternate
 // accumulator sets (the stride's first MMA reads C from one and writes D to the other, as mma.sync allows), so the
 // next stride's MMAs never wait for the absorb to read the words; bit 1: INT8 IMMA (s8 x s8 into INT32), PoUW's
-// arithmetic, instead of FP8 E4M3 into FP32. K = -1 is the MMAs alone; K >= NK are controls with the absorb's
+// arithmetic, instead of FP8 E4M3 into FP32; bit 2 (with bit 0): the absorb interleaved with the next stride's MMAs
+// (`il_stride`) instead of issued as one burst. K = -1 is the MMAs alone; K >= NK are controls with the absorb's
 // instruction count: FI_IMAD / FI_LOP3 / FI_FADD (4 per tile, chains that never read an accumulator) and ACC_LOP3
 // (one LOP3 per accumulator word into its own register, no chain).
 constexpr int FT = 4;
 enum Control { FI_IMAD = NK, FI_LOP3, FI_FADD, ACC_LOP3, NF };
 static const char* CONTROL_NAME[NF - NK] = {"fill-imad", "fill-lop3", "fill-fadd", "acc-lop3"};
-static const char* MODE_NAME[4] = {"fp8", "fp8pp", "s8", "s8pp"};
+constexpr int NM = 6;  // FUSED's mode index, over MODE = 0, 1, 2, 3, 5, 7
+static const char* MODE_NAME[NM] = {"fp8", "fp8pp", "s8", "s8pp", "fp8il", "s8il"};
 
 __device__ __forceinline__ void mma_ip(float (&d)[4], const uint32_t (&a)[4], const uint32_t (&b)[2]) {
   asm volatile(
@@ -334,10 +336,62 @@ __device__ __forceinline__ void work(St (&s)[FT], uint32_t (&xw)[FT][4], float (
   }
 }
 
+// MODE bit 2 (with ping-pong): one stride's MMAs into d, the first reading C from c0, with the previous stride's words
+// (c0's) absorbed a slice at a time between the MMAs instead of all at once after the last. Word W is tile (W/2) % FT's
+// word 2 (W/2/FT) + W%2, so a pair stays in one tile and the chains' words alternate. ptxas regroups independent
+// instructions into bursts, so each MMA's B operand reads the previous slice's last result (`dep`) through an opaque
+// zero (b ^ (dep & z0), one LOP3, which the bare loop's MMAs chain through too): the MMA can't issue before the slice.
+template <int K, int W, typename T>
+__device__ __forceinline__ uint32_t il_word(St (&s)[FT], uint32_t (&xw)[FT][4], float (&ff)[FT],
+                                            const T (&acc)[FT][4], uint32_t dep) {
+  constexpr int j = (W >> 1) % FT, r = 2 * ((W >> 1) / FT) + (W & 1);
+  if constexpr (K >= 0 && K < NK) {
+    if constexpr (!paired(K)) {
+      const uint32_t wd[1] = {bits(acc[j][r])};
+      absorb<K, 1, 4 * j + r>(s[j], wd);
+      return K == DUO ? s[j].z : s[j].y;
+    } else if constexpr ((W & 1) != 0) {
+      const uint32_t wd[2] = {bits(acc[j][r - 1]), bits(acc[j][r])};
+      absorb<K, 2, 4 * j + r - 1>(s[j], wd);
+      return s[j].y;
+    }
+  } else if constexpr (K == FI_IMAD) {
+    return s[j].y = s[j].y * KA[4 * j + r] + s[j ^ 1].y;
+  } else if constexpr (K == FI_LOP3) {
+    return s[j].y = maj3(s[j].y, s[j ^ 1].y, KK[4 * j + r]);
+  } else if constexpr (K == FI_FADD) {
+    ff[j] = ff[j] + ff[j ^ 1];
+    return __float_as_uint(ff[j]);
+  } else if constexpr (K == ACC_LOP3) {
+    return xw[j][r] = maj3(xw[j][r], bits(acc[j][r]), KK[4 * j + r]);
+  }
+  return dep;
+}
+template <int K, int LO, int HI, typename T>
+__device__ __forceinline__ uint32_t il_words(St (&s)[FT], uint32_t (&xw)[FT][4], float (&ff)[FT],
+                                             const T (&acc)[FT][4], uint32_t dep) {
+  if constexpr (LO < HI) return il_words<K, LO + 1, HI>(s, xw, ff, acc, il_word<K, LO>(s, xw, ff, acc, dep));
+  return dep;
+}
+template <int K, int C, int I, typename T>
+__device__ __forceinline__ void il_stride(T (&d)[FT][4], const T (&c0)[FT][4], const uint32_t (&a)[4],
+                                          const uint32_t (&b)[2][2], St (&s)[FT], uint32_t (&xw)[FT][4],
+                                          float (&ff)[FT], uint32_t& dep, uint32_t z0) {
+  if constexpr (I < C * FT) {
+    constexpr int j = I % FT, M = C * FT, NW = 4 * FT;
+    const uint32_t bb[2] = {b[j & 1][0] ^ (dep & z0), b[j & 1][1]};
+    if constexpr (I < FT) mma_dc(d[j], c0[j], a, bb);
+    else mma_ip(d[j], a, bb);
+    dep = il_words<K, I * NW / M, (I + 1) * NW / M>(s, xw, ff, c0, bb[0]);
+    il_stride<K, C, I + 1>(d, c0, a, b, s, xw, ff, dep, z0);
+  }
+}
+
 template <int K, int C, int MODE>
 __global__ void __launch_bounds__(TPB) fused_k(uint32_t* out, int iters, uint32_t seed, long long* clk) {
   using T = std::conditional_t<(MODE & 2) != 0, uint32_t, float>;
-  constexpr bool PP = (MODE & 1) != 0;
+  constexpr bool PP = (MODE & 1) != 0, IL = (MODE & 4) != 0;
+  static_assert(!IL || PP, "interleaving needs the ping-pong accumulators");
   const uint32_t tid = blockIdx.x * blockDim.x + threadIdx.x;
   const uint32_t ma = (MODE & 2) ? 0x3F3F3F3Fu : 0x07070707u, oa = (MODE & 2) ? 0u : 0x38383838u,
                  ob = (MODE & 2) ? 0u : 0x30303030u;
@@ -384,6 +438,14 @@ __global__ void __launch_bounds__(TPB) fused_k(uint32_t* out, int iters, uint32_
 #pragma unroll
         for (int j = 0; j < FT; ++j) mma_ip(acc[0][j], a, b[j & 1]);
       work<K>(s, xw, ff, acc[0]);
+    }
+  } else if constexpr (IL) {
+    uint32_t z0 = (uint32_t)iters >> 31, dep = 0;
+    asm volatile("" : "+r"(z0));
+#pragma unroll 1
+    for (int it = 0; it < iters; it += 2) {
+      il_stride<K, C, 0>(acc[1], acc[0], a, b, s, xw, ff, dep, z0);
+      il_stride<K, C, 0>(acc[0], acc[1], a, b, s, xw, ff, dep, z0);
     }
   } else {
 #pragma unroll 1
@@ -438,7 +500,7 @@ static const int CS[NC] = {1, 2, 4, 8, 16, 32};
    FROW(7, M),  FROW(8, M), FROW(9, M), FROW(10, M), FROW(11, M), FROW(12, M), FROW(13, M), FROW(14, M),  \
    FROW(15, M)}
 static_assert(NF == 16, "FMODE lists every fused kind");
-static KFn FUSED[4][NF + 1][NC] = {FMODE(0), FMODE(1), FMODE(2), FMODE(3)};
+static KFn FUSED[NM][NF + 1][NC] = {FMODE(0), FMODE(1), FMODE(2), FMODE(3), FMODE(5), FMODE(7)};
 
 static const char* fused_name(int k) { return k < 0 ? "none" : k < NK ? KIND_NAME[k] : CONTROL_NAME[k - NK]; }
 
@@ -459,13 +521,24 @@ struct Timing {
   int blocks, per_sm, sms;
 };
 
-static Timing time_kernel(KFn fn, int iters, int reps, uint32_t seed) {
-  int dev = 0, sms = 0, per_sm = 0;
+// occ > 0 pins occ blocks per SM: each block reserves 1/occ of the SM's shared memory, so kernels whose register counts
+// would give them different occupancies run with the same number of warps per SMSP.
+static Timing time_kernel(KFn fn, int iters, int reps, uint32_t seed, int occ = 0) {
+  int dev = 0, sms = 0, per_sm = 0, smem = 0;
   CK(cudaGetDevice(&dev));
   CK(cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev));
-  CK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per_sm, fn, TPB, 0));
-  if (per_sm < 1) {
-    fprintf(stderr, "kernel does not fit an SM\n");
+  if (occ > 0) {
+    int per_smp = 0, reserved = 0, optin = 0;
+    CK(cudaDeviceGetAttribute(&per_smp, cudaDevAttrMaxSharedMemoryPerMultiprocessor, dev));
+    CK(cudaDeviceGetAttribute(&reserved, cudaDevAttrReservedSharedMemoryPerBlock, dev));
+    CK(cudaDeviceGetAttribute(&optin, cudaDevAttrMaxSharedMemoryPerBlockOptin, dev));
+    smem = std::min(per_smp / occ - reserved, optin);
+    CK(cudaFuncSetAttribute(fn, cudaFuncAttributeMaxDynamicSharedMemorySize, smem));
+    CK(cudaFuncSetAttribute(fn, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
+  }
+  CK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per_sm, fn, TPB, smem));
+  if (per_sm < 1 || (occ > 0 && per_sm != occ)) {
+    fprintf(stderr, "kernel fits %d blocks per SM, not %d\n", per_sm, occ);
     exit(5);
   }
   const int blocks = sms * per_sm;
@@ -477,13 +550,13 @@ static Timing time_kernel(KFn fn, int iters, int reps, uint32_t seed) {
   cudaEvent_t e0, e1;
   CK(cudaEventCreate(&e0));
   CK(cudaEventCreate(&e1));
-  fn<<<blocks, TPB>>>(out, iters / 4 + 1, seed, clk);
+  fn<<<blocks, TPB, smem>>>(out, iters / 4 + 1, seed, clk);
   CK(cudaGetLastError());
   CK(cudaDeviceSynchronize());
   std::vector<double> ms, cyc;
   for (int r = 0; r < reps; ++r) {
     CK(cudaEventRecord(e0));
-    fn<<<blocks, TPB>>>(out, iters, seed + r, clk);
+    fn<<<blocks, TPB, smem>>>(out, iters, seed + r, clk);
     CK(cudaEventRecord(e1));
     CK(cudaEventSynchronize(e1));
     CK(cudaGetLastError());
@@ -552,23 +625,25 @@ int main(int argc, char** argv) {
   if (!strcmp(mode, "one")) {
     const char* m = argv[2];
     const int idx = atoi(argv[3]), iters = atoi(argv[4]);
-    const int fm = argc > 5 ? atoi(argv[5]) : 0;
+    const int fm = argc > 5 ? atoi(argv[5]) : 0, occ = argc > 6 ? atoi(argv[6]) : 0;
     KFn fn = !strcmp(m, "pure") ? PURE[idx] : !strcmp(m, "probe") ? PROBE[idx] : FUSED[fm][idx / NC][idx % NC];
-    time_kernel(fn, iters, 1, seed);
+    time_kernel(fn, iters, 1, seed, occ);
     return 0;
   }
-  const int iters = argc > 2 ? atoi(argv[2]) : 20000, reps = argc > 3 ? atoi(argv[3]) : 5;
+  const int iters = argc > 2 ? atoi(argv[2]) : 20000, reps = argc > 3 ? atoi(argv[3]) : 5,
+            occ = argc > 4 ? atoi(argv[4]) : 0;
   if (!strcmp(mode, "pure")) {
     for (int k = 0; k < NK; ++k) emit("pure", KIND_NAME[k], 0, iters, time_kernel(PURE[k], iters, reps, seed), PU * PW, "words");
   } else if (!strcmp(mode, "probe")) {
     for (int p = 0; p < NP; ++p) emit("probe", PROBE_NAME[p], 0, iters, time_kernel(PROBE[p], iters, reps, seed), 8 * PU, "steps");
   } else if (!strcmp(mode, "fused")) {
-    for (int m = 0; m < 4; ++m)
+    for (int m = 0; m < NM; ++m)
       for (int k = -1; k < NF; ++k)
         for (int ci = 0; ci < NC; ++ci) {
           const int c = CS[ci];
           const int it = (iters / c) & ~1;
-          emit(MODE_NAME[m], fused_name(k), c, it, time_kernel(FUSED[m][k + 1][ci], it, reps, seed), c * FT, "mmas");
+          emit(MODE_NAME[m], fused_name(k), c, it, time_kernel(FUSED[m][k + 1][ci], it, reps, seed, occ), c * FT,
+               "mmas");
         }
   } else {
     fprintf(stderr, "unknown mode %s\n", mode);
