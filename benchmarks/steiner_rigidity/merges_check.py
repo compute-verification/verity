@@ -39,6 +39,8 @@ and on 2 x 2 at L = 2 every space in which all four directions help saves <= 2L,
 Part 16: d*L for two words on two D-rows in every case: the links split into at most two groups whose common-label
 certificates (labels from ker B of the group) have gaps summing to <= 2, on every star-colored pattern up to 2 x 4 and
 on pencils, with the words cancelling in Psi.
+Part 17: d >= 3: group splits (merges_split_search.py) miss some patterns, where general rank-1 labels still reach
+k - rank B; one recorded 3 x 3 pattern is checked exactly, and realized three-word spans stay within the certificates.
 """
 
 import random
@@ -1998,9 +2000,68 @@ def part16(rng):
           f"savings <= L * (sum of gaps) <= 2L: ok (largest {saved_max})")
 
 
+def part17(rng):
+    """d >= 3: part 16's group splits are not enough, general labels still reach k - rank B. On random d = 3
+    patterns whose disjoint links are independent, a split into <= 3 groups with common labels reaches total gap
+    <= rank B, or else the alternating label search does. On one recorded 3 x 3 pattern (7 links, rank B = 3) every
+    split stops at gap 4, and labels with rank P = 4 = k - rank B exist; they are checked exactly, and against random
+    words at L = 2. On realized spans of three words, savings <= L * (best gap) <= L * rank B."""
+    import merges_split_search as ms
+    p = 5
+    misses = splits = 0
+    for _ in range(30):
+        while True:
+            links, betas = ms.random_pattern(rng, 3, 3, 3, p)
+            if len(links) > 3 and ms.disjoint_independent(links, betas, p, 3) and rank(np.array(betas), p) == 3:
+                break
+        tot, _ = ms.best_split(links, betas, p, 3, 3)
+        if tot <= 3:
+            splits += 1
+            continue
+        misses += 1
+        assert ms.label_search(links, betas, p, len(links) - 3, rng, 3000), "no label certificate reaches k - rank B"
+    links = [(0, 0), (0, 2), (1, 1), (1, 2), (2, 0), (2, 1), (2, 2)]
+    betas = [(3, 2, 3), (3, 4, 1), (1, 1, 1), (1, 3, 2), (2, 0, 4), (2, 2, 2), (3, 0, 1)]
+    tot, _ = ms.best_split(links, betas, p, 3, 0)
+    assert tot == 4, "the recorded pattern's best group split is not 4"
+    found = ms.label_search(links, betas, p, 4, random.Random(1), 3000)
+    assert found, "no label certificate on the recorded pattern"
+    g, h, Pm = found
+    B = np.array(betas, dtype=np.int64).T % p
+    Ms = [np.outer(g[t], h[t]) % p for t in range(len(links))]
+    assert all(rank(M, p) == 1 for M in Ms), "a label is not rank 1"
+    assert all(not (sum(B[j, t] * Ms[t] for t in range(len(links))) % p).any() for j in range(3)), "labels don't cancel"
+    assert rank(Pm, p) >= len(links) - 3
+    L = 2
+    shape = Shape(3, 3, L, L)
+    for _ in range(5):
+        Zs = [np.array([[rng.randrange(p) for _ in range(3 * L)] for _ in range(3 * L)]) for _ in range(3)]
+        Ds = [shape.D(c, 0) for c in links]
+        Ws = [sum(b * Z for b, Z in zip(bt, Zs)) % p for bt in betas]
+        Psi_DW = sum(np.kron(M, (D - W) % p) for M, D, W in zip(Ms, Ds, Ws)) % p
+        Psi_D = sum(np.kron(M, D) for M, D in zip(Ms, Ds)) % p
+        assert np.array_equal(Psi_DW, Psi_D), "the words do not cancel in Psi"
+        assert sum(rank((D - W) % p, p) for D, W in zip(Ds, Ws)) >= rank(Psi_D, p) == L * rank(Pm, p)
+    top = realized = 0
+    while realized < 20:
+        _, _, rl, rb, rr = ms.realized(rng, 2, 3, 2, 3, 3)
+        if len(rl) < 2 or rank(np.array(rb), 3) < 2:
+            continue
+        rB = rank(np.array(rb), 3)
+        tot, _ = ms.best_split(rl, rb, 3, rB, rB)
+        assert sum(2 - r for r in rr) <= 2 * tot and tot <= rB, "a realized span beats its certificate"
+        top = max(top, sum(2 - r for r in rr))
+        realized += 1
+    print(f"[d = 3 labels] 30 random 3 x 3 patterns over GF(5): group splits reach gap <= rank B on {splits}, general "
+          f"labels on the other {misses}: ok; the recorded 7-link pattern: every split into <= 3 groups has gap >= 4, "
+          f"rank-1 labels with rank P = {rank(Pm, p)} = k - rank B cancel the words, Psi identity at L = 2: ok; "
+          f"20 realized spans of three words on 2 x 3 (GF(3), L = 2): savings <= L * best gap <= L * rank B: ok "
+          f"(largest {top})")
+
+
 if __name__ == "__main__":
     rng = random.Random(20261015)
-    parts = sys.argv[1:] or ["1", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"]
+    parts = sys.argv[1:] or ["1", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17"]
     if "1" in parts:
         part1_2(rng)
     if "3" in parts:
@@ -2031,3 +2092,5 @@ if __name__ == "__main__":
         part15(rng)
     if "16" in parts:
         part16(rng)
+    if "17" in parts:
+        part17(rng)
