@@ -13,8 +13,8 @@
 // note:20261015T0432Z-draft-receipt-phi: u = y ^ p ^ k_t; y = u a_t + z; z = rotl(u, r_t) + y; receipt y ^ rotl(z, 16)) or
 // duo2, the follow-up's margin variant (note:20261015T0711Z-draft-receipt-phi-followup; receipt_phi/phi.cu's DUO2): two duo
 // lanes on each word, keys (a, k) and (b, c), rotations R1 and R2, receipt y ^ rotl(z, 16) ^ rotl(y2 ^ rotl(z2, 16), 8);
-// 6 ops a word. Chain e of a thread absorbs, at each receipt boundary in ascending k, the words acc[mi][ni][e] in (mi, ni)
-// order, at key position t = mi NI + ni. The keys are compile-time constants, standing for constant-bank operands (same op
+// 6 ops a word. At each receipt boundary in ascending k, a thread absorbs its words acc[mi][ni][e] in (mi, ni) order at
+// key position t = mi NI + ni, into chain 4 (t % 2) + e (two chains a word index, for latency). The keys are compile-time constants, standing for constant-bank operands (same op
 // count, no registers; a deployment loads them per challenge): held in registers, they push the 128 x 128 kernels into
 // spills. The key schedule (16 positions) is a cost stand-in for the reviewed one.
 //
@@ -83,11 +83,13 @@ template <int KIND, int LANE, int T> DEV void duo(St& s, uint32_t p) {
   s.y = u * a + s.z;
   s.z = rotl(u, r) + s.y;
 }
-template <int KIND> constexpr int NCH = KIND == DUO2 ? 8 : 4;
-// the receipt of chain e (and, for duo2, its second lane 4 + e)
-template <int KIND> DEV uint32_t finish(const St (&ch)[NCH<KIND>], int e) {
-  const uint32_t r = ch[e].y ^ rotl(ch[e].z, 16);
-  if constexpr (KIND == DUO2) return r ^ rotl(ch[4 + e].y ^ rotl(ch[4 + e].z, 16), 8);
+// chains a thread: word e at position t goes to chain 4 (t % 2) + e (lane 0), and duo2's second lane to 8 + that, so
+// each chain absorbs 8 of a boundary's 16 words and a thread runs 8 (16) independent chains
+template <int KIND> constexpr int NCH = KIND == DUO2 ? 16 : 8;
+// receipt word j (j = 4 (t % 2) + e) of a thread: duo's fold of chain j, and for duo2 the fold of both lanes
+template <int KIND> DEV uint32_t finish(const St (&ch)[NCH<KIND>], int j) {
+  const uint32_t r = ch[j].y ^ rotl(ch[j].z, 16);
+  if constexpr (KIND == DUO2) return r ^ rotl(ch[8 + j].y ^ rotl(ch[8 + j].z, 16), 8);
   return r;
 }
 
@@ -151,7 +153,7 @@ struct Maps { CUtensorMap a, b, pa, pb; };
 struct Args {
   const Maps* maps;
   int* U;            // m x n s32, row-major
-  uint32_t* R;       // receipts: [tile][consumer thread][NCH]
+  uint32_t* R;       // receipts: [tile][thread][8]
   int M, N, K, group;
   uint32_t seed;
 };
@@ -256,11 +258,11 @@ template <int TM, int BN, int WM, int STAGES> struct ML {
   }
   // absorb acc[mi][ni]'s four words into chains 0-3 (and the second lane's 4-7) at position mi NI + ni
   template <int KIND, int MI_, int NI_> DEV static void absorb(St (&ch)[NCH<KIND>], const int (&w)[4]) {
-    constexpr int T = MI_ * NI + NI_;
+    constexpr int T = MI_ * NI + NI_, H = 4 * (T % 2);
 #pragma unroll
     for (int e = 0; e < 4; e++) {
-      duo<KIND, 0, T>(ch[e], (uint32_t)w[e]);
-      if constexpr (KIND == DUO2) duo<KIND, 1, T>(ch[4 + e], (uint32_t)w[e]);
+      duo<KIND, 0, T>(ch[H + e], (uint32_t)w[e]);
+      if constexpr (KIND == DUO2) duo<KIND, 1, T>(ch[8 + H + e], (uint32_t)w[e]);
     }
   }
   template <int KIND, int IDX> DEV static void absorb_at(St (&ch)[NCH<KIND>], const int (&w)[4]) {
@@ -376,9 +378,9 @@ template <int TM, int BN, int WM, int STAGES, bool TAIL, int RS, int KIND> DEV v
         *reinterpret_cast<int2*>(p + (size_t)8 * a.N) = make_int2(acc[mi][ni][2], acc[mi][ni][3]);
       }
     if constexpr (RS != 0) {
-      uint4 r;
-      r.x = finish<KIND>(ch, 0); r.y = finish<KIND>(ch, 1); r.z = finish<KIND>(ch, 2); r.w = finish<KIND>(ch, 3);
-      reinterpret_cast<uint4*>(a.R)[(size_t)tile_id * L::NCT + ctid] = r;
+      uint4* r = reinterpret_cast<uint4*>(a.R) + ((size_t)tile_id * L::NCT + ctid) * 2;
+      r[0] = make_uint4(finish<KIND>(ch, 0), finish<KIND>(ch, 1), finish<KIND>(ch, 2), finish<KIND>(ch, 3));
+      r[1] = make_uint4(finish<KIND>(ch, 4), finish<KIND>(ch, 5), finish<KIND>(ch, 6), finish<KIND>(ch, 7));
     }
   }
 }
@@ -741,7 +743,7 @@ static int cmd_gate(const std::string& dir, int m, int n, int k, int grid, uint3
     CK(cudaStreamSynchronize(P.st));
     CK(cudaGetLastError());
     dump(dir, (std::string("U_") + GNAME[g] + ".bin").c_str(), P.U, ub, true);
-    if (GRS[g]) dump(dir, (std::string("R_") + GNAME[g] + ".bin").c_str(), P.R, (size_t)tiles * P.cfg.NCT * 4 * 4, true);
+    if (GRS[g]) dump(dir, (std::string("R_") + GNAME[g] + ".bin").c_str(), P.R, (size_t)tiles * P.cfg.NCT * 8 * 4, true);
   }
   int flag;
   CK(cudaMemcpy(&flag, P.flag, 4, cudaMemcpyDeviceToHost));

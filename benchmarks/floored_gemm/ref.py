@@ -130,7 +130,7 @@ def main(d: Path) -> int:
             + g[None, :, None, None] + 8 * (e >> 1)[None, None, :, None])
     cols = (tn[:, None, None, None] * BN + wn[None, :, None, None] * 32 + 8 * np.arange(NI)[None, None, None, :]
             + 2 * q[None, :, None, None] + (e & 1)[None, None, :, None])
-    for name, rs, nch in [("duo32", 32, 4), ("duo64", 64, 4), ("duo2_32", 32, 8), ("duo2_64", 64, 8)]:
+    for name, rs, nch in [("duo32", 32, 8), ("duo64", 64, 8), ("duo2_32", 32, 16), ("duo2_64", 64, 16)]:
         idx = ((tile[:, None, None] * NCT + ctid[None, :, None]) * nch + np.arange(nch)[None, None, :]).astype(np.uint32)
         y = mix32(np.uint32(seed) ^ mix32(idx))
         z = mix32(y + np.uint32(0x9E3779B9))
@@ -142,14 +142,14 @@ def main(d: Path) -> int:
                     for ni in range(NI):
                         t = mi * NI + ni
                         p = Tw[rows[:, :, :, mi], cols[:, :, :, ni]]   # [tile, ctid, e]
-                        for ln in range(nch // 4):
-                            sl = slice(4 * ln, 4 * ln + 4)
+                        for ln in range(nch // 8):
+                            sl = slice(8 * ln + 4 * (t % 2), 8 * ln + 4 * (t % 2) + 4)
                             u = y[:, :, sl] ^ p ^ KK[ln, t]
                             y[:, :, sl] = u * KA[ln, t] + z[:, :, sl]
-                            z[:, :, sl] = rotl(u, rot_of(nch == 8, ln, t)) + y[:, :, sl]
-            fin = y[:, :, :4] ^ rotl(z[:, :, :4], 16)
-            if nch == 8:
-                fin = fin ^ rotl(y[:, :, 4:] ^ rotl(z[:, :, 4:], 16), 8)
+                            z[:, :, sl] = rotl(u, rot_of(nch == 16, ln, t)) + y[:, :, sl]
+            fin = y[:, :, :8] ^ rotl(z[:, :, :8], 16)
+            if nch == 16:
+                fin = fin ^ rotl(y[:, :, 8:] ^ rotl(z[:, :, 8:], 16), 8)
         got = np.fromfile(d / f"R_{name}.bin", dtype=np.uint32).reshape(fin.shape)
         checks[f"R_{name}"] = bool((got == fin).all())
         checks[f"R_{name}_words"] = int(fin.size)
