@@ -11,6 +11,7 @@ bytes (`cost.lines_fast`), drawn per linear from one seed shared by every method
     pearl_v1, pearl_fix         Pearl-C's served y (v1, rho' = max(rho, s/4))
     pearl_v1_split, pearl_fix_split   the same with the floor(k/100) largest channels of the call's x exact
     int8n6, int8n6_chunk        int8 to [-121, 121] per row, or per row and chunk of 170 columns, exact products
+    int8n6_split                int8n6 with the split's channels exact
 
     python ppl.py CAPTURE_SCRIPT MODEL_SNAPSHOT IDS.npy METHOD [--layers N] [--json OUT]
     python ppl.py CAPTURE_SCRIPT --selftest
@@ -33,15 +34,16 @@ LINEARS = [m for ms in cost.ROLES.values() for m in ms]
 
 
 def method_y(method: str, x: np.ndarray, w: np.ndarray, rng: np.random.Generator) -> np.ndarray:
-    if method in ("fp8", "int8n6", "int8n6_chunk"):
-        return cost.quantized(x, w, method)
-    fix, split = "fix" in method, method.endswith("_split")
+    base, split = method.removesuffix("_split"), method.endswith("_split")
     exact = 0.0
     if split:
         out = cost.split_channels(x)
         keep = np.setdiff1d(np.arange(x.shape[1]), out)
         exact = x[:, out] @ w[:, out].T
         x, w = x[:, keep], w[:, keep]
+    if base in ("fp8", "int8n6", "int8n6_chunk"):
+        return cost.quantized(x, w, base) + exact
+    fix = "fix" in base
     pad = (-x.shape[1]) % 128
     if pad:
         x, w = np.pad(x, ((0, 0), (0, pad))), np.pad(w, ((0, 0), (0, pad)))
