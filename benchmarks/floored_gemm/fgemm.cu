@@ -21,9 +21,9 @@
 // Kernels: form (A~ or B~ and the tail rows P_A = [E_A | V_hi | E_A | V_lo], P_B = [W_hi | E_B | W_lo | E_B], one warp a row),
 // and the GEMM (8 warps of s32 accumulators over a TMA ring; thread 0 issues each load as its slot is released).
 // cuBLASLt's int8 GEMM (s32 out) is the baseline. Modes:
-//   fgemm gate DIR M N K GRID SEED P|D  every arm on one small shape at tile config P or D, inputs and outputs to DIR for ref.py
-//   fgemm bench REPS SHAPE...           interleaved timing, one JSON line a shape (SHAPE = name:m:n:k)
-//   fgemm one ARM M N K                 warm-up then one call of ARM (for ncu)
+//   fgemm gate DIR M N K GRID SEED C    every arm on one small shape at tile config C (P, D or Q), inputs and outputs to DIR for ref.py
+//   fgemm bench REPS SHAPE...           interleaved timing, one JSON line a shape (SHAPE = name:m:n:k[:P|D|Q])
+//   fgemm one ARM M N K [P|D|Q]         warm-up then one call of ARM (for ncu)
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a fgemm.cu -lcuda -lcublasLt -lnvidia-ml
 #include <cublasLt.h>
 #include <cuda.h>
@@ -399,6 +399,12 @@ GEMM(d_duo32, 128, 32, 16, 4, true, 32, DUO)
 GEMM(d_duo64, 128, 32, 16, 4, true, 64, DUO)
 GEMM(d_duo2_32, 128, 32, 16, 4, true, 32, DUO2)
 GEMM(d_duo2_64, 128, 32, 16, 4, true, 64, DUO2)
+GEMM(q_plain, 128, 64, 32, 4, false, 0, NONE)
+GEMM(q_g0, 128, 64, 32, 4, true, 0, NONE)
+GEMM(q_duo32, 128, 64, 32, 4, true, 32, DUO)
+GEMM(q_duo64, 128, 64, 32, 4, true, 64, DUO)
+GEMM(q_duo2_32, 128, 64, 32, 4, true, 32, DUO2)
+GEMM(q_duo2_64, 128, 64, 32, 4, true, 64, DUO2)
 
 // Forming, one warp a row. own[col] = pi1 | pi2 << 8 | s1 << 16 | s2 << 17: the noise at column col of chunk s is
 // (-1)^s1 E[r, pi1] + (-1)^s2 E[r, pi2] (F_own's row col). inv[s 32 + j] = c1 | c2 << 8 | s1 << 16 | s2 << 17 for the other
@@ -506,9 +512,11 @@ static CUtensorMap tmap(const void* p, int depth, int rows, int box_rows) {
 }
 
 typedef void (*Kern)(const Args);
-struct Cfg { int TM, BN, NCT, smem; Kern k[6]; };   // plain, g0, duo32, duo64, duo2_32, duo2_64
-static Cfg cfg_p() { return {128, 128, 256, ML<128, 128, 64, 3>::SMEM, {p_plain, p_g0, p_duo32, p_duo64, p_duo2_32, p_duo2_64}}; }
-static Cfg cfg_d() { return {128, 32, 256, ML<128, 32, 16, 4>::SMEM, {d_plain, d_g0, d_duo32, d_duo64, d_duo2_32, d_duo2_64}}; }
+struct Cfg { char name; int TM, BN, WM, NCT, smem; Kern k[6]; };   // plain, g0, duo32, duo64, duo2_32, duo2_64
+static Cfg cfg_p() { return {'P', 128, 128, 64, 256, ML<128, 128, 64, 3>::SMEM, {p_plain, p_g0, p_duo32, p_duo64, p_duo2_32, p_duo2_64}}; }
+static Cfg cfg_d() { return {'D', 128, 32, 16, 256, ML<128, 32, 16, 4>::SMEM, {d_plain, d_g0, d_duo32, d_duo64, d_duo2_32, d_duo2_64}}; }
+// Q: 128 x 64 tiles of 32 x 32 warps (32 accumulators a thread, against P's 64), for the receipt kernels' registers
+static Cfg cfg_q() { return {'Q', 128, 64, 32, 256, ML<128, 64, 32, 4>::SMEM, {q_plain, q_g0, q_duo32, q_duo64, q_duo2_32, q_duo2_64}}; }
 static const char* GNAME[6] = {"plain", "g0", "duo32", "duo64", "duo2_32", "duo2_64"};
 static const int GRS[6] = {0, 0, 32, 64, 32, 64};
 
@@ -617,7 +625,7 @@ struct Host {   // what the gate dumps
 
 static void setup(Prob& P, int m, int n, int k, int grid_cap, uint32_t seed, Host* keep, char force = 0) {
   P.m = m; P.n = n; P.k = k; P.seed = seed;
-  P.cfg = force == 'P' ? cfg_p() : force == 'D' ? cfg_d() : m >= 1024 ? cfg_p() : cfg_d();
+  P.cfg = force == 'P' ? cfg_p() : force == 'D' ? cfg_d() : force == 'Q' ? cfg_q() : m >= 1024 ? cfg_p() : cfg_d();
   if (m % P.cfg.TM || n % P.cfg.BN || k % 128 || k < 256) { fprintf(stderr, "shape %d %d %d not tiled\n", m, n, k); exit(2); }
   int nsm;
   CK(cudaDeviceGetAttribute(&nsm, cudaDevAttrMultiProcessorCount, 0));
@@ -658,8 +666,11 @@ static void setup(Prob& P, int m, int n, int k, int grid_cap, uint32_t seed, Hos
   if (keep) { h.fa = fa; h.fb = fb; *keep = h; } else { delete fa; delete fb; }
 }
 
-static void form(Prob& P, int i) {
+static void form_a(Prob& P) {
   form_k<true><<<(P.m + 7) / 8, 256, 0, P.st>>>(P.QA, P.EA, P.ownA, P.invA, P.G, P.XA, P.PA, P.m, P.k, P.flag);
+}
+static void form(Prob& P, int i) {
+  form_a(P);
   form_k<false><<<(P.n + 7) / 8, 256, 0, P.st>>>(P.QB[i], P.EB[i], P.ownB, P.invB, nullptr, P.XB[i], P.PB[i], P.n, P.k, P.flag);
 }
 static void gemm(Prob& P, int kind, int i) {
@@ -667,9 +678,11 @@ static void gemm(Prob& P, int kind, int i) {
   P.cfg.k[kind]<<<P.grid, 256, P.cfg.smem, P.st>>>(a);
 }
 // the arms: lt (a), plain (my mainloop on Q(A), Q(B)), form, g0 (the noised GEMM and peel alone), and the whole noised call
-// form + GEMM: b (no receipts), c (duo, stride 32), d (duo, 64), c2 / d2 (duo2)
-static const char* ARMS[] = {"lt", "plain", "form", "g0", "b", "c", "d", "c2", "d2"};
-constexpr int NARM = 9;
+// form + GEMM: b (no receipts), c (duo, stride 32), d (duo, 64), c2 / d2 (duo2); and with B~ formed once per challenge
+// (only A~ per call): formA, bA, cA, c2A
+static const char* ARMS[] = {"lt", "plain", "form", "g0", "b", "c", "d", "c2", "d2", "formA", "bA", "cA", "c2A"};
+constexpr int NARM = 13;
+constexpr bool form_only(int a) { return a == 2 || a == 9; }
 static void run_arm(Prob& P, int arm, int i) {
   switch (arm) {
     case 0: lt_run(P.lt, P.QA, P.QB[i], P.U, P.st); break;
@@ -681,6 +694,10 @@ static void run_arm(Prob& P, int arm, int i) {
     case 6: form(P, i); gemm(P, 3, i); break;
     case 7: form(P, i); gemm(P, 4, i); break;
     case 8: form(P, i); gemm(P, 5, i); break;
+    case 9: form_a(P); break;
+    case 10: form_a(P); gemm(P, 1, i); break;
+    case 11: form_a(P); gemm(P, 2, i); break;
+    case 12: form_a(P); gemm(P, 4, i); break;
   }
 }
 
@@ -732,7 +749,7 @@ static int cmd_gate(const std::string& dir, int m, int n, int k, int grid, uint3
   fprintf(f,
           "{\"m\": %d, \"n\": %d, \"k\": %d, \"seed\": %u, \"grid\": %d, \"TM\": %d, \"BN\": %d, \"WM\": %d, \"NCT\": %d, "
           "\"group\": %d, \"limb_overflow\": %d, \"kernels\": [\"plain\", \"g0\", \"duo32\", \"duo64\", \"duo2_32\", \"duo2_64\"]}\n",
-          m, n, k, seed, P.grid, P.cfg.TM, P.cfg.BN, P.cfg.BN == 128 ? 64 : 16, P.cfg.NCT, P.group, flag);
+          m, n, k, seed, P.grid, P.cfg.TM, P.cfg.BN, P.cfg.WM, P.cfg.NCT, P.group, flag);
   fclose(f);
   printf("gate dump %s: m %d n %d k %d grid %d tiles %d lt algo %d\n", dir.c_str(), m, n, k, P.grid, tiles, P.lt.algo_id);
   return 0;
@@ -767,9 +784,10 @@ static int cmd_bench(int reps, const std::vector<std::string>& shapes) {
   for (const auto& sh : shapes) {
     char name[64];
     int m, n, k;
-    if (sscanf(sh.c_str(), "%63[^:]:%d:%d:%d", name, &m, &n, &k) != 4) { fprintf(stderr, "bad shape %s\n", sh.c_str()); return 2; }
+    char cfg = 0;
+    if (sscanf(sh.c_str(), "%63[^:]:%d:%d:%d:%c", name, &m, &n, &k, &cfg) < 4) { fprintf(stderr, "bad shape %s\n", sh.c_str()); return 2; }
     Prob P;
-    setup(P, m, n, k, 0, 0x5EED0000u + m + n + k, nullptr);
+    setup(P, m, n, k, 0, 0x5EED0000u + m + n + k, nullptr, cfg);
     cudaEvent_t e0, e1;
     CK(cudaEventCreate(&e0)); CK(cudaEventCreate(&e1));
     int it = 0;
@@ -806,7 +824,7 @@ static int cmd_bench(int reps, const std::vector<std::string>& shapes) {
            P.lt.splitk, P.lt.ncand);
     for (int a = 0; a < NARM; a++) {
       const double t = median(ms[a]), f = median(mhz[a]);
-      const double eta = a == 2 ? 0 : macs / (t * 1e-3) / (1024.0 * nsm * f * 1e6);
+      const double eta = form_only(a) ? 0 : macs / (t * 1e-3) / (1024.0 * nsm * f * 1e6);
       printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f, \"eta\": %.4f, \"calls\": %d, \"ms_all\": [", a ? ", " : "", ARMS[a], t, f,
              eta, calls[a]);
       for (size_t i = 0; i < ms[a].size(); i++) printf("%s%.6f", i ? ", " : "", ms[a][i]);
@@ -823,14 +841,14 @@ static int cmd_bench(int reps, const std::vector<std::string>& shapes) {
   return 0;
 }
 
-static int cmd_one(const std::string& arm, int m, int n, int k) {
+static int cmd_one(const std::string& arm, int m, int n, int k, char cfg) {
   Prob P;
-  setup(P, m, n, k, 0, 0x5EED0000u + m + n + k, nullptr);
+  setup(P, m, n, k, 0, 0x5EED0000u + m + n + k, nullptr, cfg);
   int a = -1;
   for (int i = 0; i < NARM; i++)
     if (arm == ARMS[i]) a = i;
   if (a < 0) { fprintf(stderr, "no arm %s\n", arm.c_str()); return 2; }
-  if (a >= 3) form(P, 0);   // the GEMM-only profile reads formed operands
+  if (a >= 3) form(P, 0);   // a GEMM-only profile reads formed operands
   for (int w = 0; w < 3; w++) run_arm(P, a, 0);
   CK(cudaStreamSynchronize(P.st));
   CK(cudaProfilerStart());
@@ -849,7 +867,7 @@ int main(int argc, char** argv) {
     std::vector<std::string> s(argv + 3, argv + argc);
     return cmd_bench(atoi(argv[2]), s);
   }
-  if (argc >= 6 && !strcmp(argv[1], "one")) return cmd_one(argv[2], atoi(argv[3]), atoi(argv[4]), atoi(argv[5]));
-  fprintf(stderr, "usage: fgemm gate DIR M N K GRID SEED P|D | bench REPS name:m:n:k... | one ARM M N K\n");
+  if (argc >= 6 && !strcmp(argv[1], "one")) return cmd_one(argv[2], atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), argc > 6 ? argv[6][0] : 0);
+  fprintf(stderr, "usage: fgemm gate DIR M N K GRID SEED P|D|Q | bench REPS name:m:n:k[:C]... | one ARM M N K [C]\n");
   return 2;
 }

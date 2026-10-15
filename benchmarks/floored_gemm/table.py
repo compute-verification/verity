@@ -49,9 +49,40 @@ def ncu_tensor(path: Path):
             "gemm_dram_pct": gemm.get("dram__throughput.avg.pct_of_peak_sustained_elapsed", 0)}
 
 
+LINEAR = {(6144, 4096): "q/k/v", (4096, 4096): "o", (28672, 4096): "gate/up", (4096, 14336): "down"}
+
+
+def best(bench):
+    """One row per (m, n, k): each arm at its faster tile config (its ms, eta and config)."""
+    by = {}
+    for s in bench:
+        key = (s["m"], s["n"], s["k"])
+        row = by.setdefault(key, {"m": s["m"], "n": s["n"], "k": s["k"], "arms": {}})
+        row["label"] = ("4096³" if s["m"] == s["n"] == s["k"] else f"{LINEAR.get((s['n'], s['k']), s['shape'])} m={s['m']}")
+        for a, v in s["arms"].items():
+            if a not in row["arms"] or v["ms"] < row["arms"][a]["ms"]:
+                row["arms"][a] = dict(v, cfg=s["tile"])
+    return list(by.values())
+
+
+def print_best(bench):
+    rows = best(bench)
+    arms = [a for a in ("lt", "b", "c", "d", "c2", "d2", "bA", "cA", "c2A") if all(a in r["arms"] for r in rows)]
+    print("Each arm at its faster tile (128x128 or 128x64 for m >= 4096): η, and time over (a)'s")
+    print()
+    print("| shape | " + " | ".join(f"{a} η" for a in arms) + " | " + " | ".join(f"{a} vs (a)" for a in arms[1:]) + " |")
+    print("|" + "---|" * (1 + 2 * len(arms) - 1))
+    for r in rows:
+        a = r["arms"]
+        print(f"| {r['label']} | " + " | ".join(f"{a[x]['eta']:.3f}" for x in arms) + " | " +
+              " | ".join(f"{100 * (a[x]['ms'] / a['lt']['ms'] - 1):+.1f}%" for x in arms[1:]) + " |")
+    print()
+
+
 def main() -> int:
     bench = [json.loads(l) for l in open(sys.argv[1]) if l.strip().startswith("{")]
     out = Path(sys.argv[2]) if len(sys.argv) > 2 else None
+    print_best(bench)
     print("| shape | m n k | " + " | ".join(f"{t} η" for _, t in ARMS) + " | (b) vs (a) | (c) vs (a) | (d) vs (a) | duo2/32 vs (a) "
           "| duo2/64 vs (a) | (c) vs (b) | form share of (b) | MHz |")
     print("|" + "---|" * (2 + len(ARMS) + 8))
@@ -62,6 +93,18 @@ def main() -> int:
         print(f"| {s['shape']} | {s['m']} {s['n']} {s['k']} | " + " | ".join(f"{a[k]['eta']:.3f}" for k, _ in ARMS) +
               f" | {ov('b')} | {ov('c')} | {ov('d')} | {ov('c2')} | {ov('d2')} | {ov('c', 'b')} | "
               f"{100 * t['form'] / t['b']:.1f}% | {a['c']['mhz']:.0f} |")
+    if all("cA" in s["arms"] for s in bench):
+        print()
+        print("B~ formed once per challenge (A~ per call): η and time over (a)'s")
+        print()
+        print("| shape | (b) η | (c) duo /32 η | duo2 /32 η | (b) vs (a) | (c) vs (a) | duo2/32 vs (a) | (c) vs (b) |")
+        print("|---|---|---|---|---|---|---|---|")
+        for s in bench:
+            a = s["arms"]
+            t = {k: a[k]["ms"] for k in a}
+            ov = lambda x, y="lt": f"{100 * (t[x] / t[y] - 1):+.1f}%"
+            print(f"| {s['shape']} | {a['bA']['eta']:.3f} | {a['cA']['eta']:.3f} | {a['c2A']['eta']:.3f} | {ov('bA')} | "
+                  f"{ov('cA')} | {ov('c2A')} | {ov('cA', 'bA')} |")
     if out:
         print()
         print("ncu (--clock-control none), one call: tensor pipe active % of elapsed, duration-weighted over the call's kernels; "
