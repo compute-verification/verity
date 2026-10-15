@@ -7,7 +7,11 @@ Z2 = sum_g d_g * w_g of u8 digits d_g with u8 weights w = (1, 255, 255, ...). in
 With n digit-groups and s merged columns (n*s <= 32 k-slots, s <= 8), group g of column j sits at slot
 kappa = g*s + j, with B[kappa][j'] = w_g if j' == j else 0. Then D[i][j] = Z1[i][j] + Z2[i][j] for j < s.
 One MMA is 4,096 MAC slots and merges 16*s words, so a merge costs 4096 / (16*s) = 256/s units a word.
+
+The FP16 construction below (`build_tile_f16`) has no 255 cap: two digits, 32 units a word for any word in [-2^22, 2^22).
 """
+
+import struct
 
 K, M, N = 32, 16, 8
 UNITS_PER_MMA = M * N * K
@@ -66,4 +70,49 @@ def mma(a, bt, c):
         for j in range(N):
             acc = c[i][j] + sum(a[i][k] * bt[j][k] for k in range(K))
             d[i][j] = (acc + 2**31) % 2**32 - 2**31
+    return d
+
+
+# FP16 m16n8k16 with an FP32 accumulator. FP16 holds powers of two exactly up to 2^15, so the radix is (1, 2^11): a
+# word u in [-2^22, 2^22) is lo = u mod 2^11 in [0, 2047] and hi = floor(u / 2^11) in [-2048, 2047], both exact FP16.
+# Two digits fill k = 16 at s = 8, so one MMA (2,048 MACs at 2 units a MAC) merges all 128 words: 32 units a word.
+K16, F16_BITS = 16, 11
+UNITS_PER_MMA_F16 = 2 * M * N * K16
+
+
+def fp16_exact(x: int) -> bool:
+    try:
+        return float(struct.unpack("<e", struct.pack("<e", float(x)))[0]) == x
+    except OverflowError:
+        return False
+
+
+def fp32_exact(x: int) -> bool:
+    return float(struct.unpack("<f", struct.pack("<f", float(x)))[0]) == x
+
+
+def f16_digits(u: int) -> tuple[int, int]:
+    if not -(1 << 2 * F16_BITS) <= u < 1 << 2 * F16_BITS:
+        raise ValueError(f"{u} outside [-2^22, 2^22)")
+    return u & ((1 << F16_BITS) - 1), u >> F16_BITS
+
+
+def build_tile_f16(z2: list[list[int]]):
+    """A[16][16] and Bt[8][16] (integer-valued FP16) so that A·B equals z2 on all 8 columns."""
+    a = [[0] * K16 for _ in range(M)]
+    bt = [[0] * K16 for _ in range(N)]
+    for j in range(N):
+        bt[j][j], bt[j][N + j] = 1, 1 << F16_BITS
+    for i in range(M):
+        for j in range(N):
+            a[i][j], a[i][N + j] = f16_digits(z2[i][j])
+    return a, bt
+
+
+def mma_f16(a, bt, c):
+    """The m16n8k16 step on integer operands, over the integers: what an exact FP32 accumulation returns. Every operand
+    must be an exact FP16 and every result an exact FP32 (|D| <= 2^24); the GPU check is that silicon returns this."""
+    assert all(fp16_exact(x) for row in a + bt for x in row)
+    d = [[c[i][j] + sum(a[i][k] * bt[j][k] for k in range(K16)) for j in range(N)] for i in range(M)]
+    assert all(fp32_exact(x) for row in c + d for x in row)
     return d

@@ -98,7 +98,13 @@ __global__ void time_merge(uint64_t iters, uint32_t wreg0, uint32_t wreg1, unsig
   uint32_t acc = 0;
 #pragma unroll
   for (int k = 0; k < CH; ++k) acc ^= c[k][0] ^ c[k][1] ^ c[k][2] ^ c[k][3];
-  if (threadIdx.x == 0) cycles[blockIdx.x] = t1 - t0;
+  if (threadIdx.x == 0) {
+    unsigned smid;
+    asm volatile("mov.u32 %0, %%smid;" : "=r"(smid));
+    cycles[3 * blockIdx.x] = t0;
+    cycles[3 * blockIdx.x + 1] = t1;
+    cycles[3 * blockIdx.x + 2] = smid;
+  }
   if (acc == 0x9e3779b9u) sink[blockIdx.x] = acc;
 }
 
@@ -165,7 +171,13 @@ __global__ void time_merge_f16(uint64_t iters, uint32_t wreg0, uint32_t wreg1, u
   float acc = 0;
 #pragma unroll
   for (int k = 0; k < CH; ++k) acc += c[k][0] + c[k][1] + c[k][2] + c[k][3];
-  if (threadIdx.x == 0) cycles[blockIdx.x] = t1 - t0;
+  if (threadIdx.x == 0) {
+    unsigned smid;
+    asm volatile("mov.u32 %0, %%smid;" : "=r"(smid));
+    cycles[3 * blockIdx.x] = t0;
+    cycles[3 * blockIdx.x + 1] = t1;
+    cycles[3 * blockIdx.x + 2] = smid;
+  }
   if (acc == 1.2345f) sink[blockIdx.x] = 1;
 }
 
@@ -273,6 +285,31 @@ int run_check(int n, int ntiles, uint32_t seed, int64_t lo, int64_t hi, int64_t 
   return bad || badpass ? 1 : 0;
 }
 
+// MMAs an SM-cycle from each block's (t0, t1, smid): each SM's MMAs over its own busy window, first start to last end,
+// which stays right when an SM doesn't hold all its blocks at once. Also the mean span of one block.
+double sm_rate(const std::vector<unsigned long long>& cyc, int blocks, double mma_per_block, double* mean_block) {
+  constexpr int MAXSM = 1024;
+  std::vector<unsigned long long> first(MAXSM, ~0ULL), last(MAXSM, 0);
+  std::vector<int> nb(MAXSM, 0);
+  double sum = 0;
+  for (int b = 0; b < blocks; ++b) {
+    const unsigned long long t0 = cyc[3 * b], t1 = cyc[3 * b + 1];
+    const int sm = (int)cyc[3 * b + 2];
+    first[sm] = std::min(first[sm], t0);
+    last[sm] = std::max(last[sm], t1);
+    ++nb[sm];
+    sum += (double)(t1 - t0);
+  }
+  *mean_block = sum / blocks;
+  double mmas = 0, span = 0;
+  for (int sm = 0; sm < MAXSM; ++sm)
+    if (nb[sm]) {
+      mmas += nb[sm] * mma_per_block;
+      span += (double)(last[sm] - first[sm]);
+    }
+  return mmas / span;
+}
+
 int run_time(int n, uint64_t iters, int bpsm) {
   const int s = cols(n);
   cudaDeviceProp p;
@@ -283,7 +320,7 @@ int run_time(int n, uint64_t iters, int bpsm) {
   const int blocks = p.multiProcessorCount * bpsm;
   unsigned long long* dcyc;
   uint32_t* dsink;
-  CK(cudaMalloc(&dcyc, blocks * sizeof(unsigned long long)));
+  CK(cudaMalloc(&dcyc, 3 * blocks * sizeof(unsigned long long)));
   CK(cudaMalloc(&dsink, blocks * 4));
   time_merge<CH><<<blocks, 32 * WARPS>>>(iters / 8 + 1, w0, w1, dcyc, dsink);
   CK(cudaDeviceSynchronize());
@@ -296,13 +333,11 @@ int run_time(int n, uint64_t iters, int bpsm) {
   CK(cudaDeviceSynchronize());
   float ms = 0;
   CK(cudaEventElapsedTime(&ms, e0, e1));
-  std::vector<unsigned long long> cyc(blocks);
-  CK(cudaMemcpy(cyc.data(), dcyc, blocks * sizeof(unsigned long long), cudaMemcpyDeviceToHost));
-  double mean_cyc = 0;
-  for (auto c : cyc) mean_cyc += (double)c;
-  mean_cyc /= blocks;
+  std::vector<unsigned long long> cyc(3 * blocks);
+  CK(cudaMemcpy(cyc.data(), dcyc, 3 * blocks * sizeof(unsigned long long), cudaMemcpyDeviceToHost));
   const double mma_per_block = (double)iters * CH * WARPS;
-  const double mma_per_sm_cycle = mma_per_block * bpsm / mean_cyc;
+  double mean_cyc;
+  const double mma_per_sm_cycle = sm_rate(cyc, blocks, mma_per_block, &mean_cyc);
   const double macs_per_sm_clk = mma_per_sm_cycle * UNITS_PER_MMA;
   const double cyc_per_mma_smsp = 4.0 / mma_per_sm_cycle;
   const double units_per_word = (cyc_per_mma_smsp / 16.0) * UNITS_PER_MMA / (M * s);
@@ -339,10 +374,14 @@ uint32_t fbits(float f) {
   return x;
 }
 
+uint16_t half_bits_signed(int v) { return v < 0 ? (uint16_t)(0x8000 | half_bits(-v)) : half_bits(v); }
+
+// u = Z2 + bias splits as u = hi * 2^11 + lo with lo in [0, 2047] and hi = floor(u / 2^11) signed, so any
+// u in [-2^22, 2^22) is two exact FP16 digits.
 int run_check_f16(int ntiles, uint32_t seed, int64_t lo, int64_t hi, int64_t bias, int64_t z1span, int perturb) {
   constexpr int NB = 2, BITS = 11, S = 8;
-  if (lo + bias < 0 || hi + bias >= (1LL << (NB * BITS))) {
-    fprintf(stderr, "domain [%lld,%lld]+%lld outside [0,2^22)\n", (long long)lo, (long long)hi, (long long)bias);
+  if (lo + bias < -(1LL << (NB * BITS)) || hi + bias >= (1LL << (NB * BITS))) {
+    fprintf(stderr, "domain [%lld,%lld]+%lld outside [-2^22,2^22)\n", (long long)lo, (long long)hi, (long long)bias);
     return 2;
   }
   if (z1span + hi + bias >= (1LL << 24) || z1span - lo - bias >= (1LL << 24)) {
@@ -372,7 +411,7 @@ int run_check_f16(int ntiles, uint32_t seed, int64_t lo, int64_t hi, int64_t bia
         C[o] = (float)z1;
         const int64_t u = v + bias;
         a[i * KH + 0 * S + j] = half_bits((int)(u & ((1 << BITS) - 1)));
-        a[i * KH + 1 * S + j] = half_bits((int)(u >> BITS));
+        a[i * KH + 1 * S + j] = half_bits_signed((int)(u >> BITS));
         want[o] = z1 + u;
         maxabs = std::max<int64_t>(maxabs, std::llabs(want[o]));
       }
@@ -421,18 +460,16 @@ int run_time_f16(uint64_t iters, int bpsm) {
   const int blocks = p.multiProcessorCount * bpsm;
   unsigned long long* dcyc;
   uint32_t* dsink;
-  CK(cudaMalloc(&dcyc, blocks * sizeof(unsigned long long)));
+  CK(cudaMalloc(&dcyc, 3 * blocks * sizeof(unsigned long long)));
   CK(cudaMalloc(&dsink, blocks * 4));
   time_merge_f16<CH><<<blocks, 32 * WARPS>>>(iters / 8 + 1, w, w, dcyc, dsink);
   CK(cudaDeviceSynchronize());
   time_merge_f16<CH><<<blocks, 32 * WARPS>>>(iters, w, w, dcyc, dsink);
   CK(cudaDeviceSynchronize());
-  std::vector<unsigned long long> cyc(blocks);
-  CK(cudaMemcpy(cyc.data(), dcyc, blocks * sizeof(unsigned long long), cudaMemcpyDeviceToHost));
-  double mean_cyc = 0;
-  for (auto c : cyc) mean_cyc += (double)c;
-  mean_cyc /= blocks;
-  const double mma_per_sm_cycle = (double)iters * CH * WARPS * bpsm / mean_cyc;
+  std::vector<unsigned long long> cyc(3 * blocks);
+  CK(cudaMemcpy(cyc.data(), dcyc, 3 * blocks * sizeof(unsigned long long), cudaMemcpyDeviceToHost));
+  double mean_cyc;
+  const double mma_per_sm_cycle = sm_rate(cyc, blocks, (double)iters * CH * WARPS, &mean_cyc);
   const double cyc_per_mma_smsp = 4.0 / mma_per_sm_cycle;
   // one unit = one int8 MAC slot = 1/256 of an SMSP tensor cycle (m16n8k32 u8 holds the pipe 16 cycles)
   const double units_per_word = cyc_per_mma_smsp * 256.0 / (M * N);

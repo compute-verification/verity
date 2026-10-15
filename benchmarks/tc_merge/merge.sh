@@ -38,11 +38,14 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-20}" -- bash -c '
   fi
   if [ "$F16" = 1 ]; then
     # 8192 tiles x 128 words = 2^20 words. Signed filler biased by +516128 into a running accumulator |Z1| <= 2^21;
-    # every 22-bit word into |Z1| <= 2^23; and the top of FP32 exact integers, |Z1 + Z2| up to 2^24 - 2.
+    # every 22-bit word into |Z1| <= 2^23; the top of FP32 exact integers, |Z1 + Z2| up to 2^24 - 2; and the signed
+    # filler with a signed hi digit, no bias, at L = 64 (|v| <= 64*127^2) and L = 260 (|v| <= 260*127^2 < 2^22).
     for seed in 0x5EED1234 0xC0FFEE11; do
       "$B/merge" f16 8192 $seed -516128 516128 516128 2097152 >> "$O/check-f16.jsonl" 2>> "$O/errors.txt" || ok=0
       "$B/merge" f16 8192 $seed 0 4194303 0 8388608           >> "$O/check-f16.jsonl" 2>> "$O/errors.txt" || ok=0
       "$B/merge" f16 8192 $seed 0 4194303 0 12582911          >> "$O/check-f16.jsonl" 2>> "$O/errors.txt" || ok=0
+      "$B/merge" f16 8192 $seed -1032256 1032256 0 4194304    >> "$O/check-f16.jsonl" 2>> "$O/errors.txt" || ok=0
+      "$B/merge" f16 8192 $seed -4193540 4193540 0 8388608    >> "$O/check-f16.jsonl" 2>> "$O/errors.txt" || ok=0
     done
     # control: hi weight 2047 instead of 2048 must break the merge (rc 1 expected)
     "$B/merge" f16 4096 7 -516128 516128 516128 2097152 1 >> "$O/control-f16.jsonl" 2>> "$O/control-errors.txt"
@@ -55,8 +58,9 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-20}" -- bash -c '
     done
   fi
   if [ "$F16" = 1 ]; then
-    "$B/merge" time 4 200000 2 >> "$O/time.jsonl" 2>> "$O/errors.txt" || echo "time int8 ref rc $?" >> "$O/errors.txt"
-    for bpsm in 2 4; do
+    # the int8 merge beside it at each occupancy: one unit is 1/256 of an SMSP tensor cycle on both
+    for bpsm in 2 4 8; do
+      "$B/merge" time 4 200000 $bpsm >> "$O/time.jsonl" 2>> "$O/errors.txt" || echo "time rc $?" >> "$O/errors.txt"
       "$B/merge" timef16 200000 $bpsm >> "$O/time-f16.jsonl" 2>> "$O/errors.txt" || echo "timef16 rc $?" >> "$O/errors.txt"
     done
   fi
