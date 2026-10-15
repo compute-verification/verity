@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 ARMS = [("lt", "(a) cuBLASLt"), ("plain", "mine, plain"), ("b", "(b) noised"), ("c", "(c) duo /32"), ("d", "(d) duo /64"),
-        ("c2", "duo2 /32"), ("d2", "duo2 /64")]
+        ("c2", "duo2 /32"), ("d2", "duo2 /64"), ("c3", "probe: duo, IMAD -> IADD3 /32")]
 
 
 def ncu_tensor(path: Path):
@@ -67,7 +67,7 @@ def best(bench):
 
 def print_best(bench):
     rows = best(bench)
-    arms = [a for a in ("lt", "b", "c", "d", "c2", "d2", "bA", "cA", "c2A") if all(a in r["arms"] for r in rows)]
+    arms = [a for a in ("lt", "b", "c", "d", "c2", "d2", "c3", "bA", "cA", "c2A") if all(a in r["arms"] for r in rows)]
     print("Each arm at its fastest tile config: η, and time over (a)'s")
     print()
     print("| shape | " + " | ".join(f"{a} η" for a in arms) + " | " + " | ".join(f"{a} vs (a)" for a in arms[1:]) + " |")

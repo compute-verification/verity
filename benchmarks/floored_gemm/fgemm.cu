@@ -64,7 +64,9 @@ __host__ __device__ constexpr uint32_t mix32(uint32_t x) {
 }
 
 // ---------------------------------------------------------------- receipts
-enum Kind { NONE = 0, DUO = 1, DUO2 = 2 };
+// ADD3 is a cost probe, not a receipt: duo with its multiply replaced by a three-input add (y = u + a + z), so none of its
+// three ops runs on the FMA pipe
+enum Kind { NONE = 0, DUO = 1, DUO2 = 2, ADD3 = 3 };
 constexpr int NPOS = 16;
 // lane 0's multiplier and xor key at position t, then lane 1's (duo2's b and c); ref.py has the same formulas
 __host__ __device__ constexpr uint32_t key_mul(int lane, int t) { return mix32(0xA0000000u + 2u * (lane * NPOS + t)) | 1u; }
@@ -73,7 +75,7 @@ __host__ __device__ constexpr uint32_t key_xor(int lane, int t) { return mix32(0
 __host__ __device__ constexpr int rot_of(int kind, int lane, int t) {
   constexpr int R1[31] = {15, 18, 20, 5, 29, 25, 4, 9, 1, 6, 12, 28, 8, 7, 31, 19, 10, 17, 3, 11, 27, 14, 2, 26, 16, 30, 13, 23, 21, 24, 22};
   constexpr int R2[29] = {6, 23, 7, 19, 4, 14, 10, 12, 9, 28, 11, 20, 26, 2, 22, 17, 5, 16, 15, 3, 25, 8, 13, 29, 30, 27, 21, 24, 18};
-  return kind == DUO ? ((t * 7 + 5) % 31) + 1 : lane == 0 ? R1[t % 31] : R2[t % 29];
+  return kind != DUO2 ? ((t * 7 + 5) % 31) + 1 : lane == 0 ? R1[t % 31] : R2[t % 29];
 }
 struct St { uint32_t y, z; };
 DEV uint32_t rotl(uint32_t x, int r) { return __funnelshift_l(x, x, r); }
@@ -81,7 +83,7 @@ template <int KIND, int LANE, int T> DEV void duo(St& s, uint32_t p) {
   constexpr uint32_t a = key_mul(LANE, T), kx = key_xor(LANE, T);
   constexpr int r = rot_of(KIND, LANE, T);
   const uint32_t u = s.y ^ p ^ kx;
-  s.y = u * a + s.z;
+  s.y = KIND == ADD3 ? u + a + s.z : u * a + s.z;
   s.z = rotl(u, r) + s.y;
 }
 // chains a thread: word e at position t goes to chain 4 (t % 2) + e (lane 0), and duo2's second lane to 8 + that, so
@@ -391,24 +393,28 @@ GEMM(p_duo32, 128, 128, 64, 3, true, 32, DUO)
 GEMM(p_duo64, 128, 128, 64, 3, true, 64, DUO)
 GEMM(p_duo2_32, 128, 128, 64, 3, true, 32, DUO2)
 GEMM(p_duo2_64, 128, 128, 64, 3, true, 64, DUO2)
+GEMM(p_add3_32, 128, 128, 64, 3, true, 32, ADD3)
 GEMM(d_plain, 128, 32, 16, 4, false, 0, NONE)
 GEMM(d_g0, 128, 32, 16, 4, true, 0, NONE)
 GEMM(d_duo32, 128, 32, 16, 4, true, 32, DUO)
 GEMM(d_duo64, 128, 32, 16, 4, true, 64, DUO)
 GEMM(d_duo2_32, 128, 32, 16, 4, true, 32, DUO2)
 GEMM(d_duo2_64, 128, 32, 16, 4, true, 64, DUO2)
+GEMM(d_add3_32, 128, 32, 16, 4, true, 32, ADD3)
 GEMM(q_plain, 128, 64, 32, 4, false, 0, NONE)
 GEMM(q_g0, 128, 64, 32, 4, true, 0, NONE)
 GEMM(q_duo32, 128, 64, 32, 4, true, 32, DUO)
 GEMM(q_duo64, 128, 64, 32, 4, true, 64, DUO)
 GEMM(q_duo2_32, 128, 64, 32, 4, true, 32, DUO2)
 GEMM(q_duo2_64, 128, 64, 32, 4, true, 64, DUO2)
+GEMM(q_add3_32, 128, 64, 32, 4, true, 32, ADD3)
 GEMM(w_plain, 128, 128, 32, 3, false, 0, NONE)
 GEMM(w_g0, 128, 128, 32, 3, true, 0, NONE)
 GEMM(w_duo32, 128, 128, 32, 3, true, 32, DUO)
 GEMM(w_duo64, 128, 128, 32, 3, true, 64, DUO)
 GEMM(w_duo2_32, 128, 128, 32, 3, true, 32, DUO2)
 GEMM(w_duo2_64, 128, 128, 32, 3, true, 64, DUO2)
+GEMM(w_add3_32, 128, 128, 32, 3, true, 32, ADD3)
 
 // Forming, one warp a row. own[col] = pi1 | pi2 << 8 | s1 << 16 | s2 << 17: the noise at column col of chunk s is
 // (-1)^s1 E[r, pi1] + (-1)^s2 E[r, pi2] (F_own's row col). inv[s 32 + j] = c1 | c2 << 8 | s1 << 16 | s2 << 17 for the other
@@ -516,16 +522,16 @@ static CUtensorMap tmap(const void* p, int depth, int rows, int box_rows) {
 }
 
 typedef void (*Kern)(const Args);
-struct Cfg { char name; int TM, BN, WM, NCT, smem; Kern k[6]; };   // plain, g0, duo32, duo64, duo2_32, duo2_64
-static Cfg cfg_p() { return {'P', 128, 128, 64, 256, ML<128, 128, 64, 3>::SMEM, {p_plain, p_g0, p_duo32, p_duo64, p_duo2_32, p_duo2_64}}; }
-static Cfg cfg_d() { return {'D', 128, 32, 16, 256, ML<128, 32, 16, 4>::SMEM, {d_plain, d_g0, d_duo32, d_duo64, d_duo2_32, d_duo2_64}}; }
+struct Cfg { char name; int TM, BN, WM, NCT, smem; Kern k[7]; };   // plain, g0, duo32, duo64, duo2_32, duo2_64, add3_32
+static Cfg cfg_p() { return {'P', 128, 128, 64, 256, ML<128, 128, 64, 3>::SMEM, {p_plain, p_g0, p_duo32, p_duo64, p_duo2_32, p_duo2_64, p_add3_32}}; }
+static Cfg cfg_d() { return {'D', 128, 32, 16, 256, ML<128, 32, 16, 4>::SMEM, {d_plain, d_g0, d_duo32, d_duo64, d_duo2_32, d_duo2_64, d_add3_32}}; }
 // Q: 128 x 64 tiles of 32 x 32 warps (32 accumulators a thread, against P's 64), for the receipt kernels' registers
-static Cfg cfg_q() { return {'Q', 128, 64, 32, 256, ML<128, 64, 32, 4>::SMEM, {q_plain, q_g0, q_duo32, q_duo64, q_duo2_32, q_duo2_64}}; }
+static Cfg cfg_q() { return {'Q', 128, 64, 32, 256, ML<128, 64, 32, 4>::SMEM, {q_plain, q_g0, q_duo32, q_duo64, q_duo2_32, q_duo2_64, q_add3_32}}; }
 // W: 128 x 128 tiles of 16 warps of 32 x 32 (four warps an SMSP, 128 registers a thread), so one warp's receipt chains
 // can issue while another waits on its own
-static Cfg cfg_w() { return {'W', 128, 128, 32, 512, ML<128, 128, 32, 3>::SMEM, {w_plain, w_g0, w_duo32, w_duo64, w_duo2_32, w_duo2_64}}; }
-static const char* GNAME[6] = {"plain", "g0", "duo32", "duo64", "duo2_32", "duo2_64"};
-static const int GRS[6] = {0, 0, 32, 64, 32, 64};
+static Cfg cfg_w() { return {'W', 128, 128, 32, 512, ML<128, 128, 32, 3>::SMEM, {w_plain, w_g0, w_duo32, w_duo64, w_duo2_32, w_duo2_64, w_add3_32}}; }
+static const char* GNAME[7] = {"plain", "g0", "duo32", "duo64", "duo2_32", "duo2_64", "add3_32"};
+static const int GRS[7] = {0, 0, 32, 64, 32, 64, 32};
 
 struct Lt {
   cublasLtHandle_t h;
@@ -668,7 +674,7 @@ static void setup(Prob& P, int m, int n, int k, int grid_cap, uint32_t seed, Hos
   CK(cudaMalloc(&P.R, (size_t)tiles * P.cfg.NCT * 8 * 4));
   CK(cudaMalloc(&P.flag, 4));
   CK(cudaMemset(P.flag, 0, 4));
-  for (int i = 0; i < 6; i++) CK(cudaFuncSetAttribute(P.cfg.k[i], cudaFuncAttributeMaxDynamicSharedMemorySize, P.cfg.smem));
+  for (int i = 0; i < 7; i++) CK(cudaFuncSetAttribute(P.cfg.k[i], cudaFuncAttributeMaxDynamicSharedMemorySize, P.cfg.smem));
   lt_setup(P.lt, m, n, k, P.QA, P.QB[0], P.U, P.st);
   if (keep) { h.fa = fa; h.fb = fb; *keep = h; } else { delete fa; delete fb; }
 }
@@ -686,9 +692,9 @@ static void gemm(Prob& P, int kind, int i) {
 }
 // the arms: lt (a), plain (my mainloop on Q(A), Q(B)), form, g0 (the noised GEMM and peel alone), and the whole noised call
 // form + GEMM: b (no receipts), c (duo, stride 32), d (duo, 64), c2 / d2 (duo2); and with B~ formed once per challenge
-// (only A~ per call): formA, bA, cA, c2A
-static const char* ARMS[] = {"lt", "plain", "form", "g0", "b", "c", "d", "c2", "d2", "formA", "bA", "cA", "c2A"};
-constexpr int NARM = 13;
+// (only A~ per call): formA, bA, cA, c2A; c3 the ADD3 probe at stride 32
+static const char* ARMS[] = {"lt", "plain", "form", "g0", "b", "c", "d", "c2", "d2", "formA", "bA", "cA", "c2A", "c3"};
+constexpr int NARM = 14;
 constexpr bool form_only(int a) { return a == 2 || a == 9; }
 static void run_arm(Prob& P, int arm, int i) {
   switch (arm) {
@@ -705,6 +711,7 @@ static void run_arm(Prob& P, int arm, int i) {
     case 10: form_a(P); gemm(P, 1, i); break;
     case 11: form_a(P); gemm(P, 2, i); break;
     case 12: form_a(P); gemm(P, 4, i); break;
+    case 13: form(P, i); gemm(P, 6, i); break;
   }
 }
 
@@ -742,7 +749,7 @@ static int cmd_gate(const std::string& dir, int m, int n, int k, int grid, uint3
   dump(dir, "XB.bin", P.XB[0], (size_t)n * k, true);
   dump(dir, "PA.bin", P.PA, (size_t)m * 128, true);
   dump(dir, "PB.bin", P.PB[0], (size_t)n * 128, true);
-  for (int g = 0; g < 6; g++) {
+  for (int g = 0; g < 7; g++) {
     CK(cudaMemset(P.U, 0xA5, ub)); CK(cudaMemset(P.R, 0xA5, rb));
     gemm(P, g, 0);
     CK(cudaStreamSynchronize(P.st));
