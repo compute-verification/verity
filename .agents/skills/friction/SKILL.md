@@ -102,7 +102,9 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 Newest first. Each is Daniel's unless it names the coordinator.
 
 - 2026-10-14 (11:34 AM PDT, broadening his 10:14 AM ruling): every coordinator and worker opens and edits its own PRs
-  with no approval step, through Cursor's PR tool or gh through the broker, whichever works. Waiting on dashboard
+  with no approval step, through Cursor's PR tool or gh through the broker, whichever works (for a branch other than
+  the agent's own run branch, which the PR tool refuses: `research queue open --head BRANCH --title T --body-file F`,
+  which goes through the broker and refuses a duplicate or a moved head). Waiting on dashboard
   clicks cost about six hours across fourteen finished PRs overnight on 14 Oct; the launcher no longer pins PR
   creation off per run. A cloud agent whose launch-time run rules still gate both paths registers the request and
   posts the exact payload where it registered it, so a capable hand opens it without a duplicate; the ruling reaches
