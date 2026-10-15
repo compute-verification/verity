@@ -22,6 +22,8 @@ Part 8: links adding combinations of d words: the one-sided certificate and the 
 links, and the d^2*L bound on any set of cells.
 Part 9: the label certificate past the shared labels: rank-1 labels from a quadric through the points of ker B, on the
 instance where row-, column- and pool-shared labels fall short.
+Part 10: mixed products charged by junk: on a segment between special nodes, #products >= rank(bilinear part) - j/2,
+with j the smaller junk rank of the segment's net change (0 when its ends share a junk-free side); Winograd is tight.
 """
 
 import random
@@ -1074,6 +1076,98 @@ def part9(rng):
           "reach k - rank B")
 
 
+def sym_product(g, h, p):
+    """Symmetric matrix of the quadratic form (g.v)(h.v) on V = X + Y."""
+    return (np.outer(g, h) + np.outer(h, g)) * pow(2, p - 2, p) % p
+
+
+def segment_bound(R, nX, p):
+    """(rank of the bilinear part, j = min of the XX- and YY-junk ranks) of a segment's net change R."""
+    return rank(R[:nX, nX:], p), min(rank(R[:nX, :nX], p), rank(R[nX:, nX:], p))
+
+
+def part10(rng):
+    """Mixed products charged by junk. A segment (a maximal path between special nodes of a merge-free tree) with net
+    change R, a symmetric form on V = X + Y with bilinear block Q and junk blocks P (XX), S (YY), has
+    rank R >= 2 rank Q - min(rank P, rank S); every product has symmetric rank <= 2, so
+    #products >= rank(bilinear part) - j/2 with j = min(rank P, rank S). Random segments with mixed, pure and
+    junk-only products from starts with no junk, one-sided or two-sided junk; then Winograd from a head carrying
+    -Xi_i - H_j, which meets the bound with equality."""
+    count, tight, one_sided = 0, 0, 0
+    for p in (3, 10007):
+        for _ in range(300):
+            nX, nY = rng.randint(1, 4), rng.randint(1, 4)
+            n = nX + nY
+            cancel = rng.choice([(), ("Y",), ("X",), ("X", "Y")])
+            steps, mixed = [], 0
+            for _ in range(rng.randint(1, 6)):
+                ops = []
+                for _ in range(2):
+                    v = np.array([rng.randrange(p) for _ in range(n)])
+                    t = rng.choice(["mixed", "mixed", "X", "Y"])
+                    if t == "X":
+                        v[nX:] = 0
+                    elif t == "Y":
+                        v[:nX] = 0
+                    ops.append(v)
+                steps.append(sym_product(ops[0], ops[1], p))
+                mixed += all(v[:nX].any() and v[nX:].any() for v in ops)
+                for side in cancel:
+                    g, h = ops[0].copy(), ops[1].copy()
+                    for v in (g, h):
+                        v[nX:] = 0 if side == "X" else v[nX:]
+                        v[:nX] = 0 if side == "Y" else v[:nX]
+                    if g.any() and h.any():
+                        steps.append((-sym_product(g, h, p)) % p)
+            R = sum(steps) % p
+            rQ, j = segment_bound(R, nX, p)
+            P, S = R[:nX, :nX], R[nX:, nX:]
+            assert rank(R, p) >= 2 * rQ - min(rank(P, p), rank(S, p)), "block inequality fails"
+            assert all(rank(s, p) <= 2 for s in steps), "a product has symmetric rank > 2"
+            assert 2 * len(steps) >= 2 * rQ - j, "segment bound fails"
+            assert len(steps) + mixed >= rQ, "bilinear bound fails"
+            if cancel:
+                assert j == 0, "cancelled side still carries junk"
+                assert len(steps) >= rQ, "one-sided junk but mixed products gained"
+                one_sided += 1
+            tight += 2 * len(steps) == 2 * rQ - j
+            count += 1
+        for _ in range(100):
+            nX, nY = rng.randint(1, 4), rng.randint(1, 4)
+            n = nX + nY
+            steps = []
+            for _ in range(rng.randint(1, 3)):
+                a, a2, c, c2 = ([rng.randrange(p) for _ in range(nX)] + [0] * nY for _ in range(4))
+                b, d = ([0] * nX + [rng.randrange(p) for _ in range(nY)] for _ in range(2))
+                a, a2, c, c2, b, d = map(np.array, (a, a2, c, c2, b, d))
+                steps += [sym_product(a + b, c + d, p), sym_product(a2 + b, (c2 - d) % p, p)]
+            R = sum(steps) % p
+            rQ, j = segment_bound(R, nX, p)
+            assert not R[nX:, nX:].any() and j == 0, "paired products should cancel their YY junk"
+            assert len(steps) >= rQ, "YY junk cancelled between mixed products, but they gained"
+            one_sided += 1
+            count += 1
+    for L in (2, 4, 6):
+        p = 10007
+        n = 2 * L
+        eye = np.eye(n, dtype=np.int64)
+        x = lambda k, eye=eye: eye[k]
+        y = lambda k, eye=eye, L=L: eye[L + k]
+        Xi = sum(sym_product(x(2 * k), x(2 * k + 1), p) for k in range(L // 2)) % p
+        H = sum(sym_product(y(2 * k + 1), y(2 * k), p) for k in range(L // 2)) % p
+        head = (-Xi - H) % p
+        steps = [sym_product(x(2 * k) + y(2 * k + 1), x(2 * k + 1) + y(2 * k), p) for k in range(L // 2)]
+        end = (head + sum(steps)) % p
+        target = sum(sym_product(x(k), y(k), p) for k in range(L)) % p
+        assert np.array_equal(end, target), "Winograd does not reach the dot product"
+        rQ, j = segment_bound((end - head) % p, L, p)
+        assert (rQ, j) == (L, L) and 2 * len(steps) == 2 * rQ - j, "Winograd should meet the bound"
+    print(f"[junk] {count} random segments over GF(3) and GF(10007) (mixed and pure products, some followed by the "
+          "pure products that cancel their XX or YY junk): rank R >= 2 rank Q - min junk rank, #products >= "
+          f"rank B - j/2: ok ({tight} tight); {one_sided} with one-sided net junk gain nothing; Winograd from a head "
+          "carrying -Xi - H at L = 2, 4, 6: #products = L - L/2 (tight)")
+
+
 def part4(rng):
     count = 0
     for (P, Q, m, L, trials) in ((2, 2, 4, 2, 60), (2, 3, 4, 4, 30), (2, 2, 6, 3, 30)):
@@ -1092,7 +1186,7 @@ def part4(rng):
 
 if __name__ == "__main__":
     rng = random.Random(20261015)
-    parts = sys.argv[1:] or ["1", "3", "4", "5", "6", "7", "8", "9"]
+    parts = sys.argv[1:] or ["1", "3", "4", "5", "6", "7", "8", "9", "10"]
     if "1" in parts:
         part1_2(rng)
     if "3" in parts:
@@ -1109,3 +1203,5 @@ if __name__ == "__main__":
         part8(rng)
     if "9" in parts:
         part9(rng)
+    if "10" in parts:
+        part10(rng)
