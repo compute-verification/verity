@@ -26,6 +26,8 @@ Part 10: mixed products charged by junk: on a segment between special nodes, #pr
 with j the smaller junk rank of the segment's net change (0 when its ends share a junk-free side); Winograd is tight.
 Part 11: recursive Strassen inside one block saves L - L^(log2 7 - 2) per merge-built word, so Theorem C's charge of
 L per distinct word is asymptotically tight.
+Part 12: symmetric Lemma C: links adding one word save at most L in total with mixed products counted once, whatever
+junk the word carries (on a row star, sum_t rank >= 2L(k-1) + (k-2) rank Z_YY for any word, step by step).
 """
 
 import random
@@ -1237,6 +1239,155 @@ def part11(rng):
           + "; so Theorem C's charge of L per distinct word is asymptotically tight")
 
 
+def star_targets(L, k):
+    """D-hat_t of a row star of k cells on X_r + Y_1 + ... + Y_k (blocks of size L): I_L at blocks (0, t) and (t, 0)."""
+    n = L * (k + 1)
+    Ds = []
+    for t in range(k):
+        D = np.zeros((n, n), dtype=np.int64)
+        for i in range(L):
+            D[i, L * (t + 1) + i] = D[L * (t + 1) + i, i] = 1
+        Ds.append(D)
+    return Ds
+
+
+def rank_mod(M, Q, p):
+    """Rank of M modulo the column space of Q."""
+    return rank(np.concatenate([M, Q], axis=1) % p, p) - rank(Q, p)
+
+
+def sym_star_bounds(L, k, Z, gammas, p):
+    """The proof of symmetric Lemma C on a row star, step by step, for one word Z (any square matrix) and links
+    F_t = gamma_t D-hat_t - Z. Returns (sum_t rank F_t, rank Z_YY)."""
+    Ds = star_targets(L, k)
+    F = [(g * D - Z) % p for g, D in zip(gammas, Ds)]
+    Dyy = (-Z[L:, L:]) % p
+    w = rank(Dyy, p)
+    U = nullspace(Dyy, k * L, p).T
+    betas = [pow(g, p - 2, p) for g in gammas]
+    K = np.concatenate([b * np.eye(L, dtype=np.int64) for b in betas], axis=0) % p
+    K2 = nullspace(np.concatenate([b * np.eye(L, dtype=np.int64) for b in betas], axis=1) % p, k * L, p).T
+    dim_UK = (k * L - w) + L - rank(np.concatenate([U, K], axis=1), p)
+    dim_KQ = (k - 1) * L + w - rank(np.concatenate([K2, Dyy], axis=1), p)
+    total, sum_B, sum_C = 0, 0, 0
+    for Ft in F:
+        B_U = rank(Ft[:L, L:] @ U % p, p) if U.shape[1] else 0
+        C_Q = rank_mod(Ft[L:, :L], Dyy, p)
+        r = rank(Ft, p)
+        assert r >= B_U + w + C_Q, "block-triangular step fails"
+        total, sum_B, sum_C = total + r, sum_B + B_U, sum_C + C_Q
+    assert sum_B >= k * L - w - dim_UK, "certificate on ker Z_YY fails"
+    assert sum_C >= (k - 1) * L - dim_KQ, "certificate modulo col Z_YY fails"
+    assert total >= 2 * L * (k - 1) + (k - 2) * w, "symmetric Lemma C fails on a row star"
+    return total, w
+
+
+def star_word(L, k, gammas, rng, p, sym):
+    """A word aimed at the star: partials of the cells (inner indices split among them), plus junk on X_r and on the
+    Y blocks of a few cells (Winograd-style pairs or random low rank), plus low-rank noise."""
+    n = L * (k + 1)
+    Z = np.zeros((n, n), dtype=np.int64)
+    owner = [rng.randrange(k) for _ in range(L)]
+    for i, t in enumerate(owner):
+        if rng.random() < 0.8:
+            Z[i, L * (t + 1) + i] = Z[L * (t + 1) + i, i] = gammas[t]
+    for _ in range(rng.randint(0, 3)):
+        kind = rng.choice(["xx", "yy", "cross", "winograd", "noise"])
+        if kind == "winograd":
+            t = rng.randrange(k)
+            for i in range(0, L - 1, 2):
+                for u, v in ((i, i + 1), (L * (t + 1) + i + 1, L * (t + 1) + i)):
+                    Z[u, v] = (Z[u, v] - gammas[t]) % p
+                    Z[v, u] = (Z[v, u] - gammas[t]) % p
+            continue
+        a = np.array([rng.randrange(p) for _ in range(n)], dtype=np.int64)
+        b = np.array([rng.randrange(p) for _ in range(n)], dtype=np.int64)
+        if kind == "xx":
+            a[L:], b[L:] = 0, 0
+        elif kind == "yy":
+            t = rng.randrange(k)
+            for v in (a, b):
+                v[: L * (t + 1)], v[L * (t + 2) :] = 0, 0
+        elif kind == "cross":
+            t = rng.randrange(k)
+            a[L:], b[:L] = 0, 0
+            b[: L * (t + 1)], b[L * (t + 2) :] = 0, 0
+        Z = (Z + np.outer(a, b) + (np.outer(b, a) if sym else 0)) % p
+    return Z
+
+
+def part12(rng):
+    """Symmetric Lemma C: links adding one word Z save at most L in total with mixed products counted once, whatever
+    junk Z carries. Path changes are quadratic forms R_t = M(D_t) - beta_t M(Z), every product has symmetric rank
+    <= 2, so it suffices that sum_t rank R_t >= 2L(k - 1). Disjoint pairs give 4L; on a row star, for any Z,
+    sum_t rank(gamma_t D-hat_t - Z) >= 2L(k - 1) + (k - 2) rank Z_YY, by a block-triangular split on ker Z_YY and
+    one label certificate on each side. Each step is checked on star words with junk, random words and the local
+    search's minimisers; then random cell patterns in a P x Q block, where the links the word helps form a star."""
+    count, tight, tight_w = 0, 0, 0
+    for p in (3, 5, 10007):
+        for _ in range(250):
+            L, k = rng.randint(1, 4), rng.randint(2, 4)
+            gammas = [rng.randrange(1, p) for _ in range(k)]
+            sym = rng.random() < 0.7
+            if rng.random() < 0.8:
+                Z = star_word(L, k, gammas, rng, p, sym)
+            else:
+                n = L * (k + 1)
+                Z = np.array([[rng.randrange(p) for _ in range(n)] for _ in range(n)], dtype=np.int64)
+                Z = (np.triu(Z) + np.triu(Z, 1).T) % p if sym else Z
+            total, w = sym_star_bounds(L, k, Z, gammas, p)
+            tight += total == 2 * L * (k - 1)
+            tight_w += w > 0 and total == 2 * L * (k - 1) + (k - 2) * w
+            count += 1
+    for L, k in ((2, 3), (2, 4), (3, 3)):
+        p = 3
+        Ds = star_targets(L, k)
+        for _ in range(4):
+            gammas = [rng.randrange(1, p) for _ in range(k)]
+            Z = star_word(L, k, gammas, rng, p, True)
+            best = sum(rank((g * D - Z) % p, p) for g, D in zip(gammas, Ds))
+            for _ in range(400):
+                Z2 = Z.copy()
+                i, j = rng.randrange(len(Z)), rng.randrange(len(Z))
+                Z2[i, j] = Z2[j, i] = rng.randrange(p)
+                s = sum(rank((g * D - Z2) % p, p) for g, D in zip(gammas, Ds))
+                if s <= best:
+                    Z, best = Z2, s
+            total, _ = sym_star_bounds(L, k, Z, gammas, p)
+            tight += total == 2 * L * (k - 1)
+            count += 1
+    patterns = 0
+    for p in (3, 10007):
+        for _ in range(120):
+            P, Q, L = rng.randint(2, 3), rng.randint(2, 3), rng.randint(1, 3)
+            nX, n = P * L, (P + Q) * L
+            cells = rng.sample([(r, c) for r in range(P) for c in range(Q)], rng.randint(2, P * Q))
+            Dh = []
+            for r, c in cells:
+                D = np.zeros((n, n), dtype=np.int64)
+                for i in range(L):
+                    D[r * L + i, nX + c * L + i] = D[nX + c * L + i, r * L + i] = 1
+                Dh.append(D)
+            betas = [rng.randrange(1, p) for _ in cells]
+            Z = np.zeros((n, n), dtype=np.int64)
+            for (r, c), b in zip(cells, betas):
+                if rng.random() < 0.4:
+                    Z = (Z + Dh[cells.index((r, c))] * pow(b, p - 2, p) * rng.randrange(p)) % p
+            for _ in range(rng.randint(0, 3)):
+                a = np.array([rng.randrange(p) for _ in range(n)], dtype=np.int64)
+                Z = (Z + np.outer(a, a)) % p
+            ranks = [rank((D - b * Z) % p, p) for D, b in zip(Dh, betas)]
+            assert sum(ranks) >= 2 * L * (len(cells) - 1), "symmetric Lemma C fails on a cell pattern"
+            helped = [c for c, r in zip(cells, ranks) if r < 2 * L]
+            assert len({r for r, _ in helped}) <= 1 or len({c for _, c in helped}) <= 1, "helped links not a star"
+            patterns += 1
+    print(f"[sym Lemma C] {count} row stars (L <= 4, k <= 4; star words with XX, YY and Winograd-style junk, random "
+          "words, local-search minimisers; GF(3), GF(5), GF(10007)): block-triangular split, both certificates, "
+          f"sum rank >= 2L(k-1) + (k-2) rank Z_YY: ok ({tight} at 2L(k-1), {tight_w} tight with Z_YY != 0); "
+          f"{patterns} cell patterns: "
+          "sum rank >= 2L(k-1), helped links form a star: ok")
+
+
 def part4(rng):
     count = 0
     for (P, Q, m, L, trials) in ((2, 2, 4, 2, 60), (2, 3, 4, 4, 30), (2, 2, 6, 3, 30)):
@@ -1255,7 +1406,7 @@ def part4(rng):
 
 if __name__ == "__main__":
     rng = random.Random(20261015)
-    parts = sys.argv[1:] or ["1", "3", "4", "5", "6", "7", "8", "9", "10", "11"]
+    parts = sys.argv[1:] or ["1", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"]
     if "1" in parts:
         part1_2(rng)
     if "3" in parts:
@@ -1276,3 +1427,5 @@ if __name__ == "__main__":
         part10(rng)
     if "11" in parts:
         part11(rng)
+    if "12" in parts:
+        part12(rng)
