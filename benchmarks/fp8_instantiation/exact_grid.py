@@ -26,6 +26,7 @@ picks each weight row's clip ratio in {1, 0.95, ..., 0.5} by squared error.
 
     python exact_grid.py MODEL_SNAPSHOT IDS.npy OUT_DIR METHOD...
     python exact_grid.py --selftest
+    python exact_grid.py --table RESULTS.jsonl...
 """
 from __future__ import annotations
 
@@ -280,10 +281,37 @@ def selftest() -> dict:
     return out
 
 
+#: sm_120 dense tensor rate (MACs/SM/clk, note:20261015T0608Z-draft-census-sm120) of the instruction each format runs on
+RATE = {"int8": (1024, "IMMA s8"), "e4m3i16": (1024, "QMMA e4m3"), "e4m3ik": (1024, "QMMA e4m3"),
+        "e4m3i448": (1024, "QMMA e4m3"), "e2m1i": (2048, "OMMA.SF nvf4, unit scales"), "fp8_tensor": (1024, "QMMA e4m3"),
+        "fp8_token": (1024, "QMMA e4m3"), "fp8_block": (1024, "QMMA e4m3 + rescale per 128"),
+        "nvfp4": (2048, "OMMA.SF nvf4")}
+
+
+def table(results: list[dict]) -> str:
+    rows = ["| format | exact? (k M^2 <= acc; observed max sum|a||b| / acc) | perplexity | worst linear: rel. error "
+            "(layer.linear) | tensor rate, MACs/SM/clk |", "|---|---|---:|---|---:|"]
+    for r in results:
+        m = r["method"]
+        base = m.split("_rot")[0].split("_wclip")[0]
+        w = r.get("worst_linear")
+        if r.get("guaranteed_all") is None:
+            ex = "n/a" if m == "bf16" else "no"
+        else:
+            ex = f"{'yes' if r['guaranteed_all'] else 'no'}; {r['max_bound_over_acc']:.3f}"
+        worst = f"{w['rel_err']:.4f} ({w['layer']}.{w['linear'].split('.')[-1]})" if w else "-"
+        rate = f"{RATE[base][0]:,} ({RATE[base][1]})" if base in RATE else "512 (HMMA bf16)"
+        rows.append(f"| {m} | {ex} | {r['ppl']:.3f} | {worst} | {rate} |")
+    return "\n".join(rows)
+
+
 def main(argv: list[str]) -> int:
     torch.backends.cuda.matmul.allow_tf32 = False
     if argv[0] == "--selftest":
         print(json.dumps(selftest(), indent=1))
+        return 0
+    if argv[0] == "--table":
+        print(table([json.loads(line) for p in argv[1:] for line in Path(p).read_text().splitlines() if line.startswith("{")]))
         return 0
     snapshot, ids, out = argv[0], torch.from_numpy(np.load(argv[1]))[None].cuda(), Path(argv[2])
     out.mkdir(parents=True, exist_ok=True)
