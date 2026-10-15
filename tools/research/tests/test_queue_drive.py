@@ -309,6 +309,31 @@ def test_a_failure_outside_the_suites_or_without_a_failing_test_points_at_no_fil
     assert implicated(d) is None
 
 
+def test_a_guard_failed_suite_with_no_failing_test_points_at_its_outside_reads_and_their_readers(tmp_path):
+    """Train 21b3d26fe1a6 (14 Oct 21:08Z): verity-lean-audit failed with 146/146 tests passing — the read guard alone — and
+    drive said "the failure names no file", so attribution took an agent's archaeology. The suite's record names the files
+    read outside the inputs and the test module that read each (`outside`, path -> module; a child's reads in
+    `child_outside`), and those implicate the PR that added the reading test or changed the file read."""
+    import json
+
+    from research.drive import implicated, touches
+
+    d = tmp_path / "run"
+    (d / "suites").mkdir(parents=True)
+    (d / "steps.jsonl").write_text('{"step": "lean-suites", "status": "failed"}\n')
+    record = {"name": "verity-lean-audit", "suite": "tools/verity/lean", "status": "failed", "failed_tests": [],
+              "outside": {"tools/verity/check/lean_slot.py": "tools/verity/lean/tests/test_lean_changed.py",
+                          "tools/verity/check/slot.py": "*"},
+              "child_outside": {"tools/verity/lean/tests/test_cache.py": ["elsewhere/data.txt"]}, "log": None}
+    (d / "suites-lean.json").write_text(json.dumps([record]))
+    got = implicated(d)
+    assert got == {"tools/verity/check/lean_slot.py", "tools/verity/check/slot.py",
+                   "tools/verity/lean/tests/test_lean_changed.py", "tools/verity/lean/tests/test_cache.py", "elsewhere/data.txt"}
+    assert touches({"tools/verity/lean/tests/test_lean_changed.py", "a.txt"}, got) == {"tools/verity/lean/tests/test_lean_changed.py"}
+    (d / "suites-lean.json").write_text(json.dumps([{**record, "outside": {}, "child_outside": {}}]))
+    assert implicated(d) is None
+
+
 def test_what_a_running_check_has_failed_is_read_from_its_steps_and_its_suites_failures(tmp_path):
     import json
 
