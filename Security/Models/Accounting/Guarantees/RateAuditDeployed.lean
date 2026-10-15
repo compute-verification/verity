@@ -29,8 +29,10 @@ It rests on the random oracle (the game's), and on two named assumptions: `Accou
 on-chip state `S`, the link `L`, the tiers) are the game's bounds, as in every guarantee it composes.
 
 The receipt here is the oracle's tag of the whole block; the deployed receipt hashes a 16-row sketch of it (the driver
-also supports 64 rows), and the step from one to the other is not proved here; the last section states the shape
-through which it plugs in.
+also supports 64 rows). For the verbatim-sector class the sketch receipt is proved directly:
+`RemoteSessionConservationSketch` (the product form, each grinding candidate at its own query cap) and
+`RemoteSessionConservationSketchDeployed` (at the deployed 16-row parameters, under the per-pass hash budget
+`Accounting.Assumptions.SketchHashBudget`: the sum form, whose query term stays non-vacuous at the measured caps).
 -/
 
 namespace Accounting.Guarantees
@@ -326,7 +328,9 @@ The reading's non-sampling share is
 The two added receipt terms are exactly the rank-priced reduction behind `RateAuditTensorSketchRank`: one rank-tail
 event per window, and one `q/2^(8r)` unknown-sector query term per candidate pass. `N/2^h` covers a correct receipt
 whose tag was never queried. There is no compression slack `λ`: in the verbatim class an unobtained sector is uniform.
-`RateTensorSketchTable` proves why this statement cannot be extended to arbitrary layouts.
+`RateTensorSketchTable` proves why this statement cannot be extended to arbitrary layouts. Here each of a pass's `G`
+candidates gets the whole cap `q`; the deployed guarantee (`RemoteSessionConservationSketchDeployed`) prices the
+candidates' queries by one shared per-pass budget instead.
 
 Frozen (no-function, hash): a bound in the random-oracle model over a causal session of abstract verbatim-sector
 devices, not the rate audit's code. -/
@@ -350,18 +354,30 @@ def RemoteSessionConservationSketch : Prop :=
       ≤ ENNReal.ofReal (1 - dbar) ^ (d * n) + ENNReal.ofReal (1 - dw / n) ^ (d * n) +
         (n : ℝ≥0∞) * ε + (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ h + (q : ℝ≥0∞) / 2 ^ (8 * r))
 
-/-- **The verbatim sketch session at the deployed receipt parameters.** `RemoteSessionConservationSketch` at 4 KiB
-tiles (`m = 128` 32-byte sectors), 16 sketch rows, SHA-512 tags, rank `r = 12`, 2,773 pooled openings per window,
-`d̄ = 0.15%` and `d_w = 1%`. From seven windows on, the two draw terms are at most `2^-40` each:
+/-- **The verbatim sketch session at the deployed receipt parameters, under the per-pass hash budget.**
+`RemoteSessionConservationSketch`'s game at 4 KiB tiles (`m = 128` 32-byte sectors), 16 sketch rows, SHA-512 tags,
+rank `r = 12`, 2,773 pooled openings per window, `d̄ = 0.15%` and `d_w = 1%`, with one added named assumption: across
+each pass's `G` grinding candidates the oracle queries total at most `qtot`
+(`Accounting.Assumptions.SketchHashBudget`). The receipt term is the sum form — queries add across a pass's
+candidates, and grinding multiplies only the tag-guess term. From seven windows on, the two draw terms are at most
+`2^-40` each:
 
-  `2·2^-40 + n·ε + n·P·G·(N/2^512 + q/2^96)`.
+  `2·2^-40 + n·ε + (n·P·G)·N/2^512 + (n·P)·qtot/2^96`.
 
-This is the exact 16-row reading. At the conservative caps `q = G = 2^55`, its query term alone is at least
-`2^14` before `n·P`, so the probability bound is vacuous; the proof does not hide that by replacing `q` or `G`.
+**The reading.** `qtot` is the node's hash budget for one pass, so the deployed cap of at most `2^55` compressions a
+pass reads `qtot = 2^55`, where the query term is `n·P·2^-41` (`sketchQueryTermCapsSum`) and the guess term
+`n·P·G·N/2^512` stays negligible at `G ≤ 2^55`. The multiplicative bound `n·P·G·(N/2^512 + q/2^96)` is the special
+case `qtot = G·q` that the per-candidate caps alone give (`Device.budget_of_bounded`;
+`Accounting.SecurityProofs.RemoteSessionConservationSketchDeployedProduct` keeps it stated), which at those caps was
+vacuous: its query term alone is `2^14` before `n·P` (`sketchQueryTermCaps`).
 
-Frozen (no-function, hash): `RemoteSessionConservationSketch` at the deployed parameters. -/
+Proof: `Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed`, from
+`RemoteSessionConservationSketchSum`'s budgeted union over the queries each pass's candidates actually make.
+
+Frozen (no-function, hash): `RemoteSessionConservationSketch`'s game at the deployed parameters, under the per-pass
+hash budget. -/
 def RemoteSessionConservationSketchDeployed : Prop :=
-  ∀ (n P N ρ S L q G X : ℕ) (ε : ℝ≥0∞)
+  ∀ (n P N ρ S L q G X qtot : ℕ) (ε : ℝ≥0∞)
     (A : RateSketch.SketchDeployedSession n P N 128 ρ 512 S L q 16 G 2773),
     7 ≤ n → 0 < P → 0 < N →
     Assumptions.SketchRank 16 128 12 ε →
@@ -369,6 +385,7 @@ def RemoteSessionConservationSketchDeployed : Prop :=
       let B := (A.window w η).device j ι c
       let D := RateSketch.Data.ofParts E R
       (B.prog σ D).rebuilds O D * 256 ≤ X) →
+    (∀ w η j ι, Assumptions.SketchHashBudget ((A.window w η).device j ι) qtot) →
     pr (fun x : RateSketch.SketchStore N 128 ×
         (Fin n → RateSketch.SketchWindowCoins P N 128 ρ 512 16 G 2773) =>
       (∀ w t, (x.2 w).2.2 t ∈
@@ -378,6 +395,7 @@ def RemoteSessionConservationSketchDeployed : Prop :=
           ∃ w, (((A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 : ℕ) : ℝ) <
             (1 - (0.01 + RateSketch.gammaSketch N 128 ρ S L X)) * (P * N * 32768)))
       ≤ 2 / 2 ^ 40 + (n : ℝ≥0∞) * ε +
-        (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ 512 + (q : ℝ≥0∞) / 2 ^ 96)
+        (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ 512) +
+          (n * P : ℝ≥0∞) * ((qtot : ℝ≥0∞) / 2 ^ 96)
 
 end Accounting.Guarantees

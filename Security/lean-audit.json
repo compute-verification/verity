@@ -6,6 +6,10 @@
    "owner": "@memory-accounting",
    "digest": "9d865547ca23af09cf67e3ad5149642660839a871ec3c4cb85abd72829fdb257"
   },
+  "Accounting.Assumptions.SketchHashBudget": {
+   "owner": "@memory-accounting",
+   "digest": "f3124bfd590b659120d11eac7d0a3f243c6fae7023c117bf8e6a9033d64f2f77"
+  },
   "Accounting.Assumptions.SketchRank": {
    "owner": "@memory-accounting",
    "digest": "727be124ba9dbc421e926b9388e089735913296fe529e8940e43750724733d8c"
@@ -5141,7 +5145,7 @@
    "Accounting.SecurityProofs.SketchRankFiber": "frozen (premise): Like Accounting.SecurityProofs.SketchBinds, it is a property of Accounting.RateSketch.sketch under a hypothesis on the window's signs (every sector's block has rank at least r over Q), which is neither an acceptance of the sketch nor a premise under shape.premises; Accounting.SecurityProofs.RateAuditTensorSketchRank prices the hypothesis as Pr_sigma[exists u, rank < r].",
    "Flock.SecurityProofs.RecursiveAuditC3": "restatable: PublicAudit at candidate 3's table (holoInnerAt); (i), a probability statement whose event is its acceptance, takes beside its premises (_hCust, _hIC, _hA3, _hbr) the recursive model's input fields Vs.hU, Vs.hscope, zr.hDraw, zr.hTags and zr.hown, the count curve's _hk, _hRw, _hM, _hρ and _hr, the obligations _hob (VStarParses, over the verifier's own list) and _hF (TagsFound), and R's registration, its cap and the record's stacked entry (_hstk), none a premise; it fits once the recursive model's inputs and count curve, those two obligations and the registration are restated as premises (constants of Proofs.Flock.Recursive.Premises). Its hidden statement is the word the prover's runs open at R's level 0 against the cap (regStmt), no registrant's openings taken. V*'s list at candidate 3's inner shape is circuits' gap 2's eleven statements (#1847). It says nothing about a private inner session: at a private inner shape (ish.holo) RecVStar.statements refuses (statements_holo), so no run the verifier accepts has one until V*'s holo parts land (#1896).",
    "Accounting.SecurityProofs.RemoteSessionConservationSketch": "frozen (no-function,hash): It composes the verbatim-sector tensor-sketch rank bound at every candidate pass with a causal session's pooled draws; the one shared store and every device read, link sector, rebuild and correct receipt are explicit, but the random-oracle game is not the rate audit's code.",
-   "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservationSketch at the deployed 16-row, 4 KiB-tile and draw parameters, with the two draw terms bounded by 2^-40; its q/2^96 query term remains explicit."
+   "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservationSketchSum at the deployed 16-row, 4 KiB-tile and draw parameters, with the two draw terms bounded by 2^-40 and each pass's grinding candidates' queries priced once by the named per-pass hash budget (Accounting.Assumptions.SketchHashBudget): its query term (n P) qtot/2^96 stays explicit, non-vacuous at the measured caps where the product form's was 2^14."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -15510,8 +15514,9 @@
    ]
   },
   "Models.Accounting.Assumptions.RateAuditDeployed": {
-   "digest": "efd4d9ab62d36d7090c90942f2aa19f053bdc94cfccffa03274dbcb108d73799",
+   "digest": "c1f721bed97a072ac7ad3ecb703089db1ecbbe43d26f648b1538f1aa7c13f889",
    "definitions": {
+    "Accounting.Assumptions.SketchHashBudget": "f3124bfd590b659120d11eac7d0a3f243c6fae7023c117bf8e6a9033d64f2f77",
     "Accounting.Assumptions.SketchRank": "727be124ba9dbc421e926b9388e089735913296fe529e8940e43750724733d8c",
     "Accounting.Assumptions.SquaringCeiling": "4bd7f6457fb6df920661b769a3ad9517f6e4f0e7a2fd0d36a43e376a2deeaca9"
    },
@@ -15747,13 +15752,13 @@
    ]
   },
   "Models.Accounting.Guarantees.RateAuditDeployed": {
-   "digest": "4594e4239286c965d8f6bbe3d942df219a814b7678d257434ceae2b24cbcfd8e",
+   "digest": "22e962053c7a1542b486471bd42c3e723b8913c8f1c527de91dd2746b166df57",
    "definitions": {
     "Accounting.Guarantees.RemoteSessionConservation": "3f4411a964fa206d9530e594bd14116ff5f7cedbf7f9b2e2560182b381143ea6",
     "Accounting.Guarantees.RemoteSessionConservationDeployed": "b77ed5b9ba11dfd9eac1b11c65741b7f341d3404d6d77388387d18281eae0741",
     "Accounting.Guarantees.RemoteSessionConservationRelay": "e60e4d3f4bc74723b17528be1f7f72902c09635211e36cd9cf8a1c1e6958f8c0",
     "Accounting.Guarantees.RemoteSessionConservationSketch": "a8914ef436d616c8db02d6b052247db53261e1db71fca857c1702e3bfefd9eb8",
-    "Accounting.Guarantees.RemoteSessionConservationSketchDeployed": "c7540fcda254f84ba696ef1d8700d31ea399ad04531ea5d35261f4dfe04dc259",
+    "Accounting.Guarantees.RemoteSessionConservationSketchDeployed": "f8b5cb197681527966494ff35cee03269daf951f9c6d4f4d771bb84b4d5ca5a1",
     "Accounting.Guarantees.RemoteSessionRoutes": "6813a372a70745fa98988fc999a8ff17869588001d426c30cccba8453372bf77",
     "Accounting.Guarantees.RemoteSessionRunConservation": "4587d6124824128a52413a2aaaaf458558c3a967a571e4776d972931cd45deb1",
     "Accounting.Guarantees.RemoteSessionRunConservationRelay": "d09517c694d81239ec79c958a0d54a316ce89945920f4cf2ca4b4fedbde9a509",
