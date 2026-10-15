@@ -3,21 +3,26 @@ import Mathlib
 /-!
 # Relative security for matmul PoUW: the definition, the masking algebra, the reduction's shape
 
-Neekon Vafa's definition (`note:20261015T1810Z-draft-relative-security-def`) in an abstract machine model, so that the
-construction and proof workers' results land here as theorems or as named hypotheses.
+Neekon Vafa's definition (`note:20261015T1810Z-draft-relative-security-def`) as RS-DEF froze it
+(`note:20261015T1815Z-draft-rs-definition-frozen`, v1), in an abstract machine model, so that the construction and
+proof workers' results land here as theorems or as named hypotheses.
 
 * The machine model (`Machine`, `MatMachine`): algorithms from inputs to outputs, their semantics with the coins as
-  part of the input, and an abstract cost `time` with axioms: nonnegativity, monotonicity (running `f` first, or beside
-  another algorithm, costs at least `f`), subadditivity of sequential and side-by-side composition, free routing, and
-  the cost of a linear map (an `a × b` by `b × c` product costs at most `κ a b c`).
-* The definition (`Protocol`, `Complete`, `Secure`, `Efficient`, `RelativelySecure`) with `ε`, `δ`, `γ`, `η`;
-  probabilities are uniform counts over the finite σ and coins (`prob`).
+  part of the input, a per-run `cost` and its worst case `time`, with axioms: nonnegativity, monotonicity (running `f`
+  first, or beside another algorithm, costs at least `f`), subadditivity of sequential and side-by-side composition,
+  free routing, and the cost of a linear map (an `a × b` by `b × c` product costs at most `κ a b c`). `costed` shows
+  the axioms are satisfiable with nontrivial prices.
+* The definition (`Protocol`, with a commitment before the live coins, `CommitsFirst`; `Complete`; `Secure`, Neekon's
+  `∃ M'` form; `SecureInf`, RS-DEF's frozen form against `Tuse`; `Core`, the per-run proof target; `Efficient`;
+  `RelativelySecure`) with `ε`, `δ`, `γ`, `η`, `α`, `κ`. Probabilities are uniform counts over the finite σ and coins
+  (`prob`). `secureInf_of_core` (Core ⇒ Security for `δ > κ`) and `core_of_floor` (RS-DEF's Lemma R) are proved.
 * The masking algebra, proved over any ring (`mask_peel`, `lowRank_peel`), exact over `ZMod (2^32)` and over any
   field, and recovering the integer product from its s32 residue when the entries are below `2^31`
   (`int8_product_exact`); a saturating int8 accumulator breaks the peel (`sat8_breaks_peel`).
-* The reduction's shape (`reduction`): run the extractor (M's run and its committed blocks), keep the proof, peel and
-  correct; `time_reduction_le` is `time M' ≤ time E + time peel + time correction`, and `secure_of_extraction` gives
-  relative security from the extraction step, a named hypothesis (`Extraction`), for full-rank and low-rank masks.
+* The reduction's shape (`reduction`, `M' = M ++ Q`): run the extractor (M's run and its committed blocks), keep the
+  prover messages, peel and correct; `time_reduction_le` is `time M' ≤ time E + time peel + time correction`.
+  `secure_of_extraction_floor` gives security from two named hypotheses, `Extraction` (RS-EXT's) and `Floor` (the floor
+  agenda's), and `secure_fullRank` and `secure_lowRank` instantiate it with the explicit peels of `MatMachine`.
 -/
 
 namespace Pouw.RelativeSecurity
@@ -61,8 +66,10 @@ structure Machine where
   Alg : Type → Type → Type
   /-- What an algorithm computes. -/
   eval : ∀ {I O : Type}, Alg I O → I → O
-  /-- Its cost (an abstract `time`: priced work, depth, …). -/
+  /-- Its cost (an abstract `time`: priced work, worst case over inputs and coins). -/
   time : ∀ {I O : Type}, Alg I O → ℝ
+  /-- One run's cost (RS-DEF §1.2's `cost_P(x; σ, ρ)`), which `time` bounds. -/
+  cost : ∀ {I O : Type}, Alg I O → I → ℝ
   /-- Run `f`, then `g` on its output. -/
   seq : ∀ {I O P : Type}, Alg I O → Alg O P → Alg I P
   /-- Run `f` and `g` on the same input. -/
@@ -76,6 +83,8 @@ structure Machine where
   eval_snd : ∀ {I J : Type} (x : I × J), eval (snd (I := I) (J := J)) x = x.2
   /-- Costs are nonnegative. -/
   time_nonneg : ∀ {I O : Type} (f : Alg I O), 0 ≤ time f
+  /-- `time` is the worst case: every run costs at most `time`. -/
+  cost_le_time : ∀ {I O : Type} (f : Alg I O) (x : I), cost f x ≤ time f
   /-- Subadditivity of sequential composition. -/
   time_seq_le : ∀ {I O P : Type} (f : Alg I O) (g : Alg O P), time (seq f g) ≤ time f + time g
   /-- Monotonicity: running `f` first costs at least `f`. (Not `g`: `g`'s worst case may lie outside `f`'s range.) -/
@@ -152,6 +161,7 @@ def costed : Machine where
   Alg I O := (I → O) × ℕ
   eval f := f.1
   time f := f.2
+  cost f _ := f.2
   seq f g := (g.1 ∘ f.1, f.2 + g.2)
   pair f g := (fun x => (f.1 x, g.1 x), f.2 + g.2)
   fst := (Prod.fst, 0)
@@ -161,6 +171,7 @@ def costed : Machine where
   eval_fst _ := rfl
   eval_snd _ := rfl
   time_nonneg _ := Nat.cast_nonneg _
+  cost_le_time _ _ := le_rfl
   time_seq_le _ _ := by push_cast; rfl
   le_time_seq _ g := by push_cast; linarith [Nat.cast_nonneg (α := ℝ) g.2]
   time_pair_le _ _ := by push_cast; rfl
@@ -188,76 +199,157 @@ end Machine
 
 section Definition
 
-/-- A proof-of-useful-work protocol in a machine model, for instances `Inst` with answers `Out`. -/
+/-- A proof-of-useful-work protocol in a machine model, for instances `Inst` with answers `Out` (RS-DEF §1.3, one
+round): the prover sends a commitment to its instance before any coin, the verifier sends live coins σ, the prover
+answers, and the verifier decides, deterministically in its view. `Solve` also outputs `C`, kept by the prover. The
+`|π| ≤ 10λ` bound of Neekon's draft is dropped, as RS-DEF does (security never uses it). -/
 structure Protocol (Mc : Machine) (Inst Out : Type) where
-  /-- The verifier's random strings σ, `λ` bits. -/
+  /-- The verifier's live coins σ, `λ` bits. -/
   Seed : Type
   [instSeed : Fintype Seed]
   lam : ℕ
   card_seed : Fintype.card Seed = 2 ^ lam
-  /-- Solve's coins `r`. -/
+  /-- The prover's commitment `c`, sent before σ. -/
+  Com : Type
+  /-- The prover's answer `a` to σ. -/
+  Ans : Type
+  /-- Solve's coins `ρ`. -/
   Coins : Type
   [instCoins : Fintype Coins]
-  /-- Proofs `π`, at most `10 λ` bits. -/
-  Proof : Type
-  proofBits : Proof → ℕ
-  proofBits_le : ∀ π, proofBits π ≤ 10 * lam
   /-- `C` answers `x` (for matmul: `A · B = C` on the exact grid). -/
   correct : Inst → Out → Prop
-  /-- `Solve(σ, x; r) → (π, C)`. -/
-  solve : Mc.Alg (Seed × Inst × Coins) (Proof × Out)
-  /-- `Verify(σ, π) → b`, deterministic and not priced. -/
-  verify : Seed → Proof → Bool
+  /-- `Solve(x; ρ)` against σ: `((c, a), C)`. -/
+  solve : Mc.Alg (Seed × Inst × Coins) ((Com × Ans) × Out)
+  /-- `V(c, σ, a) → b`, deterministic and not priced. -/
+  verify : Com → Seed → Ans → Bool
 
 attribute [instance] Protocol.instSeed Protocol.instCoins
 
+/-- A transcript's prover messages `(c, a)`. -/
+abbrev Protocol.Proof {Mc : Machine} {Inst Out : Type} (P : Protocol Mc Inst Out) : Type := P.Com × P.Ans
+
+/-- The verifier accepts the prover messages `π = (c, a)` against σ. -/
+def Protocol.accepts {Mc : Machine} {Inst Out : Type} (P : Protocol Mc Inst Out) (σ : P.Seed) (π : P.Proof) : Bool :=
+  P.verify π.1 σ π.2
+
 variable {Mc : Machine} {Inst Out : Type}
 
-/-- An algorithm with inputs `(σ, x; r)` answers `x` correctly with a proof that verifies, with probability at least
-`1 - η` over σ and its coins, for every instance. -/
+/-- **Live coins** (RS-DEF's T6): the commitment a prover sends doesn't depend on σ. -/
+def CommitsFirst (P : Protocol Mc Inst Out) {X : Type} (f : P.Seed × X → P.Proof) : Prop :=
+  ∀ σ σ' x, (f (σ, x)).1 = (f (σ', x)).1
+
+/-- A useful prover `M'(x; r)` against σ answers `x` correctly and is accepted, with probability at least `1 - η` over
+σ and its coins, for every instance (RS-DEF §1.4's event `b = 1 ∧ C = AB`). -/
 def SolvesAll (P : Protocol Mc Inst Out) {Ω : Type} [Fintype Ω] (M' : Mc.Alg (P.Seed × Inst × Ω) (P.Proof × Out))
     (η : ℝ) : Prop :=
   ∀ x : Inst, 1 - η ≤ prob fun ω : P.Seed × Ω =>
-    P.correct x (Mc.eval M' (ω.1, x, ω.2)).2 ∧ P.verify ω.1 (Mc.eval M' (ω.1, x, ω.2)).1 = true
+    P.correct x (Mc.eval M' (ω.1, x, ω.2)).2 ∧ P.accepts ω.1 (Mc.eval M' (ω.1, x, ω.2)).1 = true
 
-/-- The probability that an adversary `M(σ; r)` is accepted. -/
+/-- A useful prover: it commits first and solves every instance. -/
+def Useful (P : Protocol Mc Inst Out) {Ω : Type} [Fintype Ω] (M' : Mc.Alg (P.Seed × Inst × Ω) (P.Proof × Out))
+    (η : ℝ) : Prop :=
+  CommitsFirst P (fun y => (Mc.eval M' y).1) ∧ SolvesAll P M' η
+
+/-- `p(M)`: the probability that an adversary `M(σ; r)`, with no input, is accepted. -/
 noncomputable def acceptance (P : Protocol Mc Inst Out) {Ω : Type} [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof) :
     ℝ :=
-  prob fun ω : P.Seed × Ω => P.verify ω.1 (Mc.eval M ω) = true
+  prob fun ω : P.Seed × Ω => P.accepts ω.1 (Mc.eval M ω) = true
 
-/-- **Completeness**: Solve answers every instance with a proof that verifies, with probability at least `1 - η`. -/
+/-- **Completeness** (RS-DEF §1.4): Solve commits first and answers every instance with a proof that verifies, with
+probability at least `1 - η`. -/
 def Complete (P : Protocol Mc Inst Out) (η : ℝ) : Prop :=
-  SolvesAll P P.solve η
+  Useful P P.solve η
 
-/-- **Security**: every adversary `M` accepted with probability at least `δ` gives an `M'` that costs at most
-`(1 + ε) time M` and answers every instance with a proof that verifies, with probability at least `1 - η`. -/
-def Secure (P : Protocol Mc Inst Out) (ε δ η : ℝ) : Prop :=
-  ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), δ ≤ acceptance P M →
+/-- **Security, Neekon's form**: every adversary `M` that commits first and is accepted with probability at least `δ`
+gives a useful `M'` with `time M' ≤ (1 + ε) time M + α`. -/
+def Secure (P : Protocol Mc Inst Out) (ε δ η α : ℝ) : Prop :=
+  ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
+    δ ≤ acceptance P M →
     ∃ (Ω' : Type) (_ : Fintype Ω') (M' : Mc.Alg (P.Seed × Inst × Ω') (P.Proof × Out)),
-      Mc.time M' ≤ (1 + ε) * Mc.time M ∧ SolvesAll P M' η
+      Mc.time M' ≤ (1 + ε) * Mc.time M + α ∧ Useful P M' η
 
-/-- **Efficiency**: Solve costs at most `(1 + γ)` times the baseline (`NaiveMatmul`). -/
-def Efficient (P : Protocol Mc Inst Out) (γ : ℝ) (naive : Mc.Alg Inst Out) : Prop :=
-  Mc.time P.solve ≤ (1 + γ) * Mc.time naive
+/-- `T_use(η)` (RS-DEF §1.5): the least time of a useful prover. -/
+noncomputable def Tuse (P : Protocol Mc Inst Out) (η : ℝ) : ℝ :=
+  sInf {t | ∃ (Ω' : Type) (_ : Fintype Ω') (M' : Mc.Alg (P.Seed × Inst × Ω') (P.Proof × Out)),
+    Useful P M' η ∧ Mc.time M' = t}
 
-/-- **Relative security** with parameters `ε, δ, γ, η` against a baseline. -/
-def RelativelySecure (P : Protocol Mc Inst Out) (ε δ γ η : ℝ) (naive : Mc.Alg Inst Out) : Prop :=
-  Complete P η ∧ Secure P ε δ η ∧ Efficient P γ naive
+theorem tuse_le (P : Protocol Mc Inst Out) {η : ℝ} {Ω' : Type} [Fintype Ω']
+    {M' : Mc.Alg (P.Seed × Inst × Ω') (P.Proof × Out)} (h : Useful P M' η) : Tuse P η ≤ Mc.time M' :=
+  csInf_le ⟨0, fun _ ⟨_, _, M'', _, ht⟩ => ht ▸ Mc.time_nonneg M''⟩ ⟨Ω', inferInstance, M', h, rfl⟩
+
+/-- **Security, RS-DEF's frozen form** (§1.5): every adversary that commits first and is accepted with probability at
+least `δ` has `(1 + ε) time M + α ≥ T_use(η)`. -/
+def SecureInf (P : Protocol Mc Inst Out) (ε δ η α : ℝ) : Prop :=
+  ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
+    δ ≤ acceptance P M → Tuse P η ≤ (1 + ε) * Mc.time M + α
+
+theorem secureInf_of_secure (P : Protocol Mc Inst Out) {ε δ η α : ℝ} (h : Secure P ε δ η α) :
+    SecureInf P ε δ η α := fun Ω _ M hc hM => by
+  obtain ⟨_, _, M', ht, hu⟩ := h Ω M hc hM
+  exact (tuse_le P hu).trans ht
+
+/-- **The per-run core** (RS-DEF §1.6, the proof target): for every adversary that commits first, the runs that are
+accepted and cost less than `(T_use(η) − α)/(1 + ε)` have probability at most `κ`. -/
+def Core (P : Protocol Mc Inst Out) (ε κ η α : ℝ) : Prop :=
+  ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
+    prob (fun ω : P.Seed × Ω => P.accepts ω.1 (Mc.eval M ω) = true ∧
+      Mc.cost M ω < (Tuse P η - α) / (1 + ε)) ≤ κ
+
+/-- **Core ⇒ Security** for every `δ > κ`: some accepted run costs at least the bound, and `time` bounds every run. -/
+theorem secureInf_of_core (P : Protocol Mc Inst Out) {ε κ δ η α : ℝ} (h : Core P ε κ η α) (hκδ : κ < δ)
+    (hε : 0 < 1 + ε) : SecureInf P ε δ η α := by
+  intro Ω _ M hc hM
+  by_contra hlt
+  replace hlt := not_le.mp hlt
+  have hbound : Mc.time M < (Tuse P η - α) / (1 + ε) := by
+    rw [lt_div_iff₀ hε]
+    linarith
+  have hsub := prob_mono (Ω := P.Seed × Ω) (p := fun ω => P.accepts ω.1 (Mc.eval M ω) = true)
+    (q := fun ω => P.accepts ω.1 (Mc.eval M ω) = true ∧ Mc.cost M ω < (Tuse P η - α) / (1 + ε))
+    fun ω hω => ⟨hω, (Mc.cost_le_time M ω).trans_lt hbound⟩
+  have := h Ω M hc
+  unfold acceptance at hM
+  linarith
+
+/-- **Lemma R** (RS-DEF §1.6: a floor plus an honest upper bound give the core): if every adversary's accepted runs
+below `F` have probability at most `κ`, and some useful prover costs at most `U`, then Core holds with
+`1 + ε = U / F` and `α = 0`. -/
+theorem core_of_floor (P : Protocol Mc Inst Out) {κ η F U : ℝ} (hF : 0 < F) (hFU : F ≤ U)
+    (hfloor : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
+      prob (fun ω : P.Seed × Ω => P.accepts ω.1 (Mc.eval M ω) = true ∧ Mc.cost M ω < F) ≤ κ)
+    {Ω₀ : Type} [Fintype Ω₀] {M₀ : Mc.Alg (P.Seed × Inst × Ω₀) (P.Proof × Out)} (hM₀ : Useful P M₀ η)
+    (hU : Mc.time M₀ ≤ U) : Core P (U / F - 1) κ η 0 := by
+  intro Ω _ M hc
+  have hU0 : 0 < U := hF.trans_le hFU
+  have hb : (Tuse P η - 0) / (1 + (U / F - 1)) ≤ F := by
+    rw [sub_zero, add_sub_cancel, div_div_eq_mul_div, div_le_iff₀ hU0]
+    rw [mul_comm F]
+    exact mul_le_mul_of_nonneg_right ((tuse_le P hM₀).trans hU) hF.le
+  exact (prob_mono fun ω hω => ⟨hω.1, hω.2.trans_le hb⟩).trans (hfloor Ω M hc)
+
+/-- **Efficiency** (RS-DEF §1.7): Solve costs at most `(1 + γ) N + α`, for `N` the reference matmul's time. -/
+def Efficient (P : Protocol Mc Inst Out) (γ N α : ℝ) : Prop :=
+  Mc.time P.solve ≤ (1 + γ) * N + α
+
+/-- **Relative security** with parameters `ε, δ, γ, η, α` against the reference time `N` (RS-DEF's frozen form). -/
+def RelativelySecure (P : Protocol Mc Inst Out) (ε δ γ η α N : ℝ) : Prop :=
+  Complete P η ∧ SecureInf P ε δ η α ∧ Efficient P γ N α
 
 /-- The matmul problem: instances `(A, B)` of `n × n` matrices over `R`, answered by `C = A · B`. -/
 def IsMatmul {R : Type} [Ring R] {n : ℕ} {Mc : Machine} (P : Protocol Mc (Mat R n n × Mat R n n) (Mat R n n)) :
     Prop :=
   ∀ x C, P.correct x C ↔ x.1 * x.2 = C
 
-theorem secure_mono (P : Protocol Mc Inst Out) {ε ε' δ δ' η η' : ℝ} (h : Secure P ε δ η) (hε : ε ≤ ε')
-    (hδ : δ ≤ δ') (hη : η ≤ η') : Secure P ε' δ' η' := by
-  intro Ω _ M hM
-  obtain ⟨Ω', _, M', ht, hs⟩ := h Ω M (hδ.trans hM)
-  refine ⟨Ω', inferInstance, M', ht.trans ?_, fun x => le_trans (by linarith) (hs x)⟩
-  exact mul_le_mul_of_nonneg_right (by linarith) (Mc.time_nonneg M)
+theorem secure_mono (P : Protocol Mc Inst Out) {ε ε' δ δ' η η' α α' : ℝ} (h : Secure P ε δ η α) (hε : ε ≤ ε')
+    (hδ : δ ≤ δ') (hη : η ≤ η') (hα : α ≤ α') : Secure P ε' δ' η' α' := by
+  intro Ω _ M hc hM
+  obtain ⟨Ω', _, M', ht, hc', hs⟩ := h Ω M hc (hδ.trans hM)
+  refine ⟨Ω', inferInstance, M', ht.trans ?_, hc', fun x => le_trans (by linarith) (hs x)⟩
+  have := mul_le_mul_of_nonneg_right (show 1 + ε ≤ 1 + ε' by linarith) (Mc.time_nonneg M)
+  linarith
 
 theorem complete_mono (P : Protocol Mc Inst Out) {η η' : ℝ} (h : Complete P η) (hη : η ≤ η') : Complete P η' :=
-  fun x => le_trans (by linarith) (h x)
+  ⟨h.1, fun x => le_trans (by linarith) (h.2 x)⟩
 
 end Definition
 
@@ -400,17 +492,21 @@ end Machine
 
 variable {Mc : Machine} {Inst Out : Type}
 
-/-- **Extraction** (a named hypothesis, RS-EXT's): from an adversary `M`, an extractor `E` that costs at most `M` (it
-runs M's own program on the masked instance and reads blocks off its wires) and, for every instance `x`, with
-probability at least `1 - η` over σ and its coins, outputs a proof that verifies and blocks valid for `x`. -/
-def Extraction (P : Protocol Mc Inst Out) {Bl : Type} (valid : Inst → Bl → Prop) {Ω : Type} [Fintype Ω]
+/-- **Extraction** (a named hypothesis, RS-EXT's Lemma E and Theorem R): from an adversary `M`, an extractor `E` that
+commits first, costs at most `(1 + εext) time M` (one straight-line run of M on the planted instance, reading M's
+committed blocks off its hash log, plus the check, the fixes and its own proof), and, for every instance `x`, with
+probability at least `1 - η` over σ and its coins, outputs prover messages that are accepted and blocks valid for
+`x`. -/
+def Extraction (P : Protocol Mc Inst Out) {Bl : Type} (valid : Inst → Bl → Prop) (εext : ℝ) {Ω : Type} [Fintype Ω]
     (M : Mc.Alg (P.Seed × Ω) P.Proof) (η : ℝ) : Prop :=
   ∃ (Ω' : Type) (_ : Fintype Ω') (E : Mc.Alg (P.Seed × Inst × Ω') (P.Proof × Bl)),
-    Mc.time E ≤ Mc.time M ∧ ∀ x, 1 - η ≤ prob fun ω : P.Seed × Ω' =>
-      valid x (Mc.eval E (ω.1, x, ω.2)).2 ∧ P.verify ω.1 (Mc.eval E (ω.1, x, ω.2)).1 = true
+    CommitsFirst P (fun y => (Mc.eval E y).1) ∧ Mc.time E ≤ (1 + εext) * Mc.time M ∧
+    ∀ x, 1 - η ≤ prob fun ω : P.Seed × Ω' =>
+      valid x (Mc.eval E (ω.1, x, ω.2)).2 ∧ P.accepts ω.1 (Mc.eval E (ω.1, x, ω.2)).1 = true
 
-/-- **The floor** (a named hypothesis, the floor agenda's: Conjecture A, Theorem W): every algorithm that answers every
-instance correctly with probability at least `1 - η` over its coins costs at least `T` (`T_mm(n)` for matmul). -/
+/-- **The floor** (a named hypothesis, the floor agenda's: Conjecture A, Theorems B/C/W/F): every algorithm that
+answers every instance correctly with probability at least `1 - η` over its coins costs at least `T` (`T*_mm(n)` for
+matmul, RS-DEF §1.7; no proof is asked for, so `T_use(η) ≥ T`). -/
 def Floor (Mc : Machine) {Inst Out : Type} (correct : Inst → Out → Prop) (T η : ℝ) : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (N : Mc.Alg (Inst × Ω) Out),
     (∀ x, 1 - η ≤ prob fun ω : Ω => correct x (Mc.eval N (x, ω))) → T ≤ Mc.time N
@@ -426,87 +522,90 @@ theorem Floor.le_time (P : Protocol Mc Inst Out) {T η : ℝ} (h : Floor Mc P.co
   have hT := h (P.Seed × Ω) (Mc.seq (Mc.seq route M') Mc.snd) fun x => (hM' x).trans (prob_mono fun ω hω => by
     rw [Mc.eval_seq, Mc.eval_seq, hroute, Mc.eval_snd]
     exact hω.1)
+  have hr : Mc.time route ≤ 0 := by
+    apply le_trans
+    · apply_rules [Machine.time_pair_le_of, Machine.time_seq_le_of, Machine.time_fst_le, Machine.time_snd_le]
+    · norm_num
   have r1 := Mc.time_seq_le (Mc.seq route M') (Mc.snd (I := P.Proof) (J := Out))
   have r2 := Mc.time_seq_le route M'
-  have r3 := Mc.time_pair_le (Mc.seq (Mc.snd (I := Inst) (J := P.Seed × Ω)) Mc.fst)
-    (Mc.pair Mc.fst (Mc.seq (Mc.snd (I := Inst) (J := P.Seed × Ω)) Mc.snd))
-  have r4 := Mc.time_pair_le (Mc.fst (I := Inst) (J := P.Seed × Ω))
-    (Mc.seq (Mc.snd (I := Inst) (J := P.Seed × Ω)) Mc.snd)
-  have r5 := Mc.time_seq_le (Mc.snd (I := Inst) (J := P.Seed × Ω)) (Mc.fst (I := P.Seed) (J := Ω))
-  have r6 := Mc.time_seq_le (Mc.snd (I := Inst) (J := P.Seed × Ω)) (Mc.snd (I := P.Seed) (J := Ω))
-  have z1 := Mc.time_fst (I := Inst) (J := P.Seed × Ω)
-  have z2 := Mc.time_snd (I := Inst) (J := P.Seed × Ω)
-  have z3 := Mc.time_fst (I := P.Seed) (J := Ω)
-  have z4 := Mc.time_snd (I := P.Seed) (J := Ω)
-  have z5 := Mc.time_snd (I := P.Proof) (J := Out)
+  have z := Mc.time_snd (I := P.Proof) (J := Out)
   linarith
 
-/-- With extraction, the reduction solves every instance and costs at most `time M + time peel + time corr`, when the
+theorem Floor.le_tuse (P : Protocol Mc Inst Out) {T η : ℝ} (h : Floor Mc P.correct T η)
+    (hne : ∃ (Ω' : Type) (_ : Fintype Ω') (M' : Mc.Alg (P.Seed × Inst × Ω') (P.Proof × Out)), Useful P M' η) :
+    T ≤ Tuse P η := by
+  obtain ⟨Ω', _, M', hu⟩ := hne
+  exact le_csInf ⟨_, Ω', inferInstance, M', hu, rfl⟩ fun _ ⟨_, _, _, hu', ht⟩ => ht ▸ h.le_time P hu'.2
+
+/-- With extraction, the reduction is useful and costs at most `(1 + εext) time M + time peel + time corr`, when the
 peel and the correction answer `x` from blocks valid for `x`. -/
 theorem exists_reduction (P : Protocol Mc Inst Out) {Bl Mid : Type} {valid : Inst → Bl → Prop}
     (peel : Mc.Alg Bl Mid) (corr : Mc.Alg Mid Out)
-    (hpeel : ∀ x b, valid x b → P.correct x (Mc.eval corr (Mc.eval peel b))) {η : ℝ} {Ω : Type} [Fintype Ω]
-    {M : Mc.Alg (P.Seed × Ω) P.Proof} (hext : Extraction P valid M η) :
+    (hpeel : ∀ x b, valid x b → P.correct x (Mc.eval corr (Mc.eval peel b))) {εext η : ℝ} {Ω : Type} [Fintype Ω]
+    {M : Mc.Alg (P.Seed × Ω) P.Proof} (hext : Extraction P valid εext M η) :
     ∃ (Ω' : Type) (_ : Fintype Ω') (M' : Mc.Alg (P.Seed × Inst × Ω') (P.Proof × Out)),
-      Mc.time M' ≤ Mc.time M + Mc.time peel + Mc.time corr ∧ SolvesAll P M' η := by
-  obtain ⟨Ω', _, E, hE, hsucc⟩ := hext
-  refine ⟨Ω', inferInstance, Mc.reduction E peel corr, Mc.time_reduction_le_of_le hE peel corr,
-    fun x => (hsucc x).trans (prob_mono fun ω hω => ?_)⟩
-  rw [Mc.eval_reduction]
-  exact ⟨hpeel x _ hω.1, hω.2⟩
+      Mc.time M' ≤ (1 + εext) * Mc.time M + Mc.time peel + Mc.time corr ∧ Useful P M' η := by
+  obtain ⟨Ω', _, E, hc, hE, hsucc⟩ := hext
+  refine ⟨Ω', inferInstance, Mc.reduction E peel corr, (Mc.time_reduction_le E peel corr).trans (by linarith),
+    fun σ σ' y => ?_, fun x => (hsucc x).trans (prob_mono fun ω hω => ?_)⟩
+  · simp only [Mc.eval_reduction]
+    exact hc σ σ' y
+  · rw [Mc.eval_reduction]
+    exact ⟨hpeel x _ hω.1, hω.2⟩
 
 /-- **Security from extraction**, given that the peel and the correction cost at most `ε time M` for every adversary
-`M` accepted with probability at least `δ`. -/
+`M` accepted with probability at least `δ` (extraction overhead `εext`). -/
 theorem secure_of_extraction (P : Protocol Mc Inst Out) {Bl Mid : Type} {valid : Inst → Bl → Prop}
     (peel : Mc.Alg Bl Mid) (corr : Mc.Alg Mid Out)
-    (hpeel : ∀ x b, valid x b → P.correct x (Mc.eval corr (Mc.eval peel b))) {ε δ η : ℝ}
-    (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), δ ≤ acceptance P M →
-      Extraction P valid M η)
-    (hcost : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), δ ≤ acceptance P M →
-      Mc.time peel + Mc.time corr ≤ ε * Mc.time M) :
-    Secure P ε δ η := by
-  intro Ω _ M hM
-  obtain ⟨Ω', _, M', ht, hs⟩ := exists_reduction P peel corr hpeel (hext Ω M hM)
-  exact ⟨Ω', inferInstance, M', by linarith [hcost Ω M hM], hs⟩
+    (hpeel : ∀ x b, valid x b → P.correct x (Mc.eval corr (Mc.eval peel b))) {εext ε δ η : ℝ}
+    (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
+      δ ≤ acceptance P M → Extraction P valid εext M η)
+    (hcost : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
+      δ ≤ acceptance P M → Mc.time peel + Mc.time corr ≤ ε * Mc.time M) :
+    Secure P (εext + ε) δ η 0 := by
+  intro Ω _ M hc hM
+  obtain ⟨Ω', _, M', ht, hu⟩ := exists_reduction P peel corr hpeel (hext Ω M hc hM)
+  exact ⟨Ω', inferInstance, M', by linarith [hcost Ω M hc hM], hu⟩
 
 /-- **Security from extraction and the floor**: if the peel and the correction cost at most `q < T`, where `T` is the
-floor, then `ε = q / (T - q)`. (`M'` solves every instance, so `T ≤ time M' ≤ time M + q`.) -/
+floor, then `ε = εext + (1 + εext) q / (T − q)`; with `εext = 0` this is RS-MODEL's `q / (T − q)`, eq. (2).
+(`M'` is useful, so `T ≤ time M' ≤ (1 + εext) time M + q`.) -/
 theorem secure_of_extraction_floor (P : Protocol Mc Inst Out) {Bl Mid : Type} {valid : Inst → Bl → Prop}
     (peel : Mc.Alg Bl Mid) (corr : Mc.Alg Mid Out)
-    (hpeel : ∀ x b, valid x b → P.correct x (Mc.eval corr (Mc.eval peel b))) {δ η T q : ℝ}
-    (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), δ ≤ acceptance P M →
-      Extraction P valid M η)
+    (hpeel : ∀ x b, valid x b → P.correct x (Mc.eval corr (Mc.eval peel b))) {εext δ η T q : ℝ}
+    (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
+      δ ≤ acceptance P M → Extraction P valid εext M η)
     (hfloor : Floor Mc P.correct T η) (hq : Mc.time peel + Mc.time corr ≤ q) (hqT : q < T) :
-    Secure P (q / (T - q)) δ η := by
-  intro Ω _ M hM
-  obtain ⟨Ω', _, M', ht, hs⟩ := exists_reduction P peel corr hpeel (hext Ω M hM)
-  refine ⟨Ω', inferInstance, M', ?_, hs⟩
-  have hTM := hfloor.le_time P hs
+    Secure P (εext + (1 + εext) * (q / (T - q))) δ η 0 := by
+  intro Ω _ M hc hM
+  obtain ⟨Ω', _, M', ht, hu⟩ := exists_reduction P peel corr hpeel (hext Ω M hc hM)
+  refine ⟨Ω', inferInstance, M', ?_, hu⟩
+  have hTM := hfloor.le_time P hu.2
   have hTq : 0 < T - q := sub_pos.2 hqT
   have hq0 : 0 ≤ q := (add_nonneg (Mc.time_nonneg _) (Mc.time_nonneg _)).trans hq
-  set ε := q / (T - q) with hε
-  have hε0 : 0 ≤ ε := div_nonneg hq0 hTq.le
-  have hεq : ε * (T - q) = q := div_mul_cancel₀ q hTq.ne'
-  have hM : ε * (T - q) ≤ ε * Mc.time M := mul_le_mul_of_nonneg_left (by linarith) hε0
-  linarith
+  set θ := q / (T - q) with hθ
+  have hθ0 : 0 ≤ θ := div_nonneg hq0 hTq.le
+  have hθq : θ * (T - q) = q := div_mul_cancel₀ q hTq.ne'
+  have hM : θ * (T - q) ≤ θ * ((1 + εext) * Mc.time M) := mul_le_mul_of_nonneg_left (by linarith) hθ0
+  nlinarith
 
-/-- **Security is a relative floor** (RS-DEF's finding (i)), one direction: if some algorithm `M₀` solves every
-instance and costs at most `(1 + ε) time M` for every adversary `M` accepted with probability at least `δ`, the
-protocol is secure. No reduction from `M` is needed. -/
-theorem secure_of_solver (P : Protocol Mc Inst Out) {ε δ η : ℝ} {Ω₀ : Type} [Fintype Ω₀]
-    {M₀ : Mc.Alg (P.Seed × Inst × Ω₀) (P.Proof × Out)} (hM₀ : SolvesAll P M₀ η)
-    (hcost : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), δ ≤ acceptance P M →
-      Mc.time M₀ ≤ (1 + ε) * Mc.time M) :
-    Secure P ε δ η :=
-  fun Ω _ M hM => ⟨Ω₀, inferInstance, M₀, hcost Ω M hM, hM₀⟩
+/-- **Security is a relative floor** (RS-DEF §1.5), one direction: if some useful `M₀` costs at most
+`(1 + ε) time M + α` for every adversary `M` accepted with probability at least `δ`, the protocol is secure. No
+reduction from `M` is needed. -/
+theorem secure_of_solver (P : Protocol Mc Inst Out) {ε δ η α : ℝ} {Ω₀ : Type} [Fintype Ω₀]
+    {M₀ : Mc.Alg (P.Seed × Inst × Ω₀) (P.Proof × Out)} (hM₀ : Useful P M₀ η)
+    (hcost : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
+      δ ≤ acceptance P M → Mc.time M₀ ≤ (1 + ε) * Mc.time M + α) :
+    Secure P ε δ η α :=
+  fun Ω _ M hc hM => ⟨Ω₀, inferInstance, M₀, hcost Ω M hc hM, hM₀⟩
 
 /-- **Security is a relative floor**, the other direction: under security, every adversary accepted with probability
-at least `δ` costs at least `T / (1 + ε)`, for `T` the floor. -/
-theorem floor_le_of_secure (P : Protocol Mc Inst Out) {ε δ η T : ℝ} (h : Secure P ε δ η)
+at least `δ` has `T ≤ (1 + ε) time M + α`, for `T` the floor. -/
+theorem floor_le_of_secure (P : Protocol Mc Inst Out) {ε δ η α T : ℝ} (h : Secure P ε δ η α)
     (hfloor : Floor Mc P.correct T η) {Ω : Type} [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof)
-    (hM : δ ≤ acceptance P M) : T ≤ (1 + ε) * Mc.time M := by
-  obtain ⟨Ω', _, M', ht, hs⟩ := h Ω M hM
-  exact (hfloor.le_time P hs).trans ht
+    (hc : CommitsFirst P (Mc.eval M)) (hM : δ ≤ acceptance P M) : T ≤ (1 + ε) * Mc.time M + α := by
+  obtain ⟨Ω', _, M', ht, hu⟩ := h Ω M hc hM
+  exact (hfloor.le_time P hu.2).trans ht
 
 end Reduction
 
@@ -641,28 +740,30 @@ theorem time_peelLow_le (n r : ℕ) : Mc.time (Mc.peelLow n r) ≤ 4 * Mc.κ * (
 
 variable {n : ℕ} {P : Protocol Mc.toMachine (Mat R n n × Mat R n n) (Mat R n n)}
 
-/-- **Relative security of matmul PoUW with full-rank masks**, from extraction (named hypothesis `Extraction`) and
-the floor (named hypothesis `Floor`) above the peel's and the correction's cost `q = 2κ n³ + 2κadd n²`:
-`ε = q / (T − q)`. -/
-theorem secure_fullRank (hmat : IsMatmul P) {δ η T : ℝ}
-    (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), δ ≤ acceptance P M →
-      Extraction P ValidFull M η)
+/-- **Relative security of matmul PoUW with full-rank masks**, from extraction (named hypothesis `Extraction`, overhead
+`εext`) and the floor (named hypothesis `Floor`) above the peel's and the correction's cost
+`q = 2κ n³ + 2κadd n²`: `ε = εext + (1 + εext) q / (T − q)`. -/
+theorem secure_fullRank (hmat : IsMatmul P) {εext δ η T : ℝ}
+    (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
+      δ ≤ acceptance P M → Extraction P ValidFull εext M η)
     (hfloor : Floor Mc.toMachine P.correct T η) (hT : 2 * Mc.κ * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2 < T) :
-    Secure P ((2 * Mc.κ * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2) /
-      (T - (2 * Mc.κ * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2))) δ η :=
+    Secure P (εext + (1 + εext) * ((2 * Mc.κ * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2) /
+      (T - (2 * Mc.κ * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2)))) δ η 0 :=
   secure_of_extraction_floor P (Mc.peelFull n) (Mc.corr n)
     (fun x b hb => (hmat x _).2 (Mc.peelFull_correct x b hb)) hext hfloor
     (by linarith [Mc.time_peelFull_le n, Mc.time_corr_le n]) hT
 
 /-- **Relative security of matmul PoUW with rank-`r` masks**, from extraction and the floor above
-`q = 4κ n² r + 2κadd n²`: `ε = q / (T − q)`, which is `O(r / n)` against a floor of order `n³`. -/
-theorem secure_lowRank (hmat : IsMatmul P) (r : ℕ) {δ η T : ℝ}
-    (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), δ ≤ acceptance P M →
-      Extraction P (ValidLow (r := r)) M η)
+`q = 4κ n² r + 2κadd n²`: `ε = εext + (1 + εext) q / (T − q)`, and `q / (T − q)` is `O(r / n)` against a floor of order
+`n³`. (RS-EXT's Lemma U: planting rank-`r` masks is detectable, so for RS-D2 this `Extraction` is expected to fail and
+security comes from the floor itself, `core_of_floor`.) -/
+theorem secure_lowRank (hmat : IsMatmul P) (r : ℕ) {εext δ η T : ℝ}
+    (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
+      δ ≤ acceptance P M → Extraction P (ValidLow (r := r)) εext M η)
     (hfloor : Floor Mc.toMachine P.correct T η)
     (hT : 4 * Mc.κ * (n : ℝ) ^ 2 * r + 2 * Mc.κadd * (n : ℝ) ^ 2 < T) :
-    Secure P ((4 * Mc.κ * (n : ℝ) ^ 2 * r + 2 * Mc.κadd * (n : ℝ) ^ 2) /
-      (T - (4 * Mc.κ * (n : ℝ) ^ 2 * r + 2 * Mc.κadd * (n : ℝ) ^ 2))) δ η :=
+    Secure P (εext + (1 + εext) * ((4 * Mc.κ * (n : ℝ) ^ 2 * r + 2 * Mc.κadd * (n : ℝ) ^ 2) /
+      (T - (4 * Mc.κ * (n : ℝ) ^ 2 * r + 2 * Mc.κadd * (n : ℝ) ^ 2)))) δ η 0 :=
   secure_of_extraction_floor P (Mc.peelLow n r) (Mc.corr n)
     (fun x b hb => (hmat x _).2 (Mc.peelLow_correct x b hb)) hext hfloor
     (by linarith [Mc.time_peelLow_le n r, Mc.time_corr_le n]) hT
