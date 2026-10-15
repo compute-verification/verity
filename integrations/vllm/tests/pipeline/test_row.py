@@ -921,3 +921,15 @@ def test_the_admission_plan_survives_a_broken_planner_input(tmp_path):
     r.admission()
     log = (Path(r.d) / "row.log").read_text()
     assert "ADMISSION advisory unavailable" in log and "WARN" not in log
+
+
+def test_a_tp_rows_gpu_budget_is_the_option_else_the_workloads_else_tp_util(tmp_path, monkeypatch):
+    from verity_vllm.pipeline import row_tp
+    assert _tp_row(tmp_path, TP_DENSE).gpu_util == row_tp.TP_UTIL
+    monkeypatch.setattr(R, "load_json", lambda path: {"gpu_memory_utilization": 0.9} if path.endswith(f"{TP_DENSE}.json") else None)
+    t = _tp_row(tmp_path, TP_DENSE)
+    assert (t.gpu_util, t.commit_util) == ("0.9", "0.9")
+    o = _opts(tmp_path, row=TP_DENSE)
+    explicit = row_tp.TpRow(row=o.row, role=o.role, repo=o.repo, rev=o.rev, stages=o.stages, env=o.env, world=2, gpu_util="0.7",
+                            build=o.build, match=o.match, commit=o.commit)
+    assert explicit.gpu_util == "0.7"
