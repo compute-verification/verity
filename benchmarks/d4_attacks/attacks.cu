@@ -255,7 +255,9 @@ struct Plan {
   int ncand = 0, best = -1;
 };
 
-static Plan make_plan(cublasLtHandle_t h, Kind kind, int n, size_t ws) {
+// Our D (m x n, row-major) = A (m x k) . B (n x k)^T; rows of A and D may be a subset (m < n), k = n.
+static Plan make_plan(cublasLtHandle_t h, Kind kind, int n, size_t ws, int m = 0) {
+  if (!m) m = n;
   Plan p{};
   p.h = h;
   p.kind = kind;
@@ -273,8 +275,8 @@ static Plan make_plan(cublasLtHandle_t h, Kind kind, int n, size_t ws) {
     LTC(cublasLtMatmulDescSetAttribute(p.op, CUBLASLT_MATMUL_DESC_B_SCALE_MODE, &sm, sizeof sm));
   }
   LTC(cublasLtMatrixLayoutCreate(&p.a, in, n, n, n));  // our B (n x k row-major) = k x n column-major, op T
-  LTC(cublasLtMatrixLayoutCreate(&p.b, in, n, n, n));  // our A
-  LTC(cublasLtMatrixLayoutCreate(&p.c, out, n, n, n));
+  LTC(cublasLtMatrixLayoutCreate(&p.b, in, n, m, n));  // our A, m x k row-major
+  LTC(cublasLtMatrixLayoutCreate(&p.c, out, n, m, n));
   LTC(cublasLtMatmulPreferenceCreate(&p.pref));
   LTC(cublasLtMatmulPreferenceSetAttribute(p.pref, CUBLASLT_MATMUL_PREF_MAX_WORKSPACE_BYTES, &ws, sizeof ws));
   return p;
@@ -287,12 +289,12 @@ static void set_scales(Plan& p, const void* sa, const void* sb) {
 }
 
 static void run(Plan& p, const cublasLtMatmulAlgo_t* algo, const void* A, const void* B, void* D, const void* sa,
-                const void* sb, void* ws, float alpha = 1.f, float beta = 0.f) {
+                const void* sb, void* ws, float alpha = 1.f, float beta = 0.f, cudaStream_t st = 0) {
   set_scales(p, sa, sb);
   int32_t ia = int32_t(alpha), ib = int32_t(beta);
   const void* al = p.kind == K_INT8 ? static_cast<const void*>(&ia) : &alpha;
   const void* be = p.kind == K_INT8 ? static_cast<const void*>(&ib) : &beta;
-  LTC(cublasLtMatmul(p.h, p.op, al, B, p.a, A, p.b, be, D, p.c, D, p.c, algo, ws, p.ws, 0));
+  LTC(cublasLtMatmul(p.h, p.op, al, B, p.a, A, p.b, be, D, p.c, D, p.c, algo, ws, p.ws, st));
 }
 
 static float time_calls(const std::function<void()>& f, int iters) {
@@ -640,6 +642,60 @@ int main(int argc, char** argv) {
            "\"mismatches\":%llu}\n",
            N2, b);
     if (!b) routes.push_back({"four_russians_t8", fr});
+  }
+
+  // Hybrid for {±1}: NVFP4 tensor-core GEMM on the first m1 rows beside the CUDA-core XOR+POPC GEMM on the rest, on two
+  // non-blocking streams at once (the census: POPC issues on MUFU's pipe, which runs beside MMAs at 0.97 of its rate).
+  std::vector<Plan> hplans;
+  hplans.reserve(4);
+  void* ws2 = nullptr;
+  cudaStream_t s1 = nullptr, s2 = nullptr;
+  cudaEvent_t ev0, ev1, ev2;
+  if (!strcmp(al->name, "pm1") && Ab) {
+    CK(cudaMalloc(&ws2, WS));
+    CK(cudaStreamCreateWithFlags(&s1, cudaStreamNonBlocking));
+    CK(cudaStreamCreateWithFlags(&s2, cudaStreamNonBlocking));
+    CK(cudaEventCreateWithFlags(&ev0, cudaEventDisableTiming));
+    CK(cudaEventCreateWithFlags(&ev1, cudaEventDisableTiming));
+    CK(cudaEventCreateWithFlags(&ev2, cudaEventDisableTiming));
+    uint8_t* A4 = fp4bufs.size() >= 2 ? fp4bufs[0] : nullptr;
+    uint8_t* B4 = fp4bufs.size() >= 2 ? fp4bufs[1] : nullptr;
+    for (int sixteenths : {1, 2, 3}) {
+      const int mb = (n / 16) * sixteenths / BT * BT, m1 = n - mb;
+      if (!A4 || mb <= 0) continue;
+      hplans.push_back(make_plan(h, K_NVFP4, n, WS, m1));
+      Plan& hp = hplans.back();
+      std::string tl;
+      if (!autotune(hp, A4, B4, Df, s_nv, s_nv, ws, tl)) continue;
+      auto hyb = [&hp, A4, B4, m1, mb, n, s_nv, &Df, &Di, &ws, &ws2, &Ab, &Bb, s1, s2, ev0, ev1, ev2] {
+        CK(cudaEventRecord(ev0, 0));
+        CK(cudaStreamWaitEvent(s1, ev0, 0));
+        CK(cudaStreamWaitEvent(s2, ev0, 0));
+        run(hp, &hp.algo, A4, B4, Df, s_nv, s_nv, ws, 1.f, 0.f, s1);
+        k_bin<<<dim3(n / BT, mb / BT), 256, 0, s2>>>(Ab + size_t(m1) * (n / 32), Bb, Di + size_t(m1) * n, n, n / 32, n);
+        CK(cudaEventRecord(ev1, s1));
+        CK(cudaEventRecord(ev2, s2));
+        CK(cudaStreamWaitEvent(0, ev1, 0));
+        CK(cudaStreamWaitEvent(0, ev2, 0));
+      };
+      CK(cudaMemset(Df, 0xA5, N2 * 4));
+      CK(cudaMemset(Di, 0xA5, N2 * 4));
+      hyb();
+      CK(cudaGetLastError());
+      CK(cudaDeviceSynchronize());
+      // rows [0, m1) come out as FP32 in Df, rows [m1, n) as int32 in Di; fold Di's rows into Df and compare all of it
+      std::vector<int32_t> hi(size_t(mb) * n);
+      CK(cudaMemcpy(hi.data(), Di + size_t(m1) * n, hi.size() * 4, cudaMemcpyDeviceToHost));
+      std::vector<float> hf(hi.begin(), hi.end());
+      CK(cudaMemcpy(Df + size_t(m1) * n, hf.data(), hf.size() * 4, cudaMemcpyHostToDevice));
+      unsigned long long b = cmp_f(Df);
+      char name[64];
+      snprintf(name, sizeof name, "hybrid_nvfp4_bitslice_%dof16", sixteenths);
+      printf("{\"event\":\"gate\",\"route\":\"%s\",\"against\":\"int8\",\"checked\":%zu,\"mismatches\":%llu,"
+             "\"rows_bitslice\":%d,\"candidates\":%d,\"best\":%d,\"autotune_ms\":[%s]}\n",
+             name, N2, b, mb, hp.ncand, hp.best, tl.c_str());
+      if (!b) routes.push_back({name, hyb});
+    }
   }
 
   // Interleaved timing: items of about 25 ms of device time, one item per route a round, SM clock before and after.
