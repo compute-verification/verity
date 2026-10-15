@@ -690,6 +690,32 @@ def header_names(text: str, reg: dict) -> list[str]:
     return lead_names(first.split(" to ", 1)[1], reg) if " to " in first else []
 
 
+def with_routes(reg: dict, routes: "Routes | None") -> dict:
+    """`reg` with each handle's open inbox route folded in: its holder's id joins `holder`, and the route's
+    `branch_suffixes` join the handle's.  A successor's `names open --succeeds` records both, so its PRs and runs find
+    their owner with no registry edit (11 of 13 registry holders were a generation stale on 15 Oct)."""
+    if routes is None:
+        return reg
+    handles = []
+    for h in reg["handles"]:
+        r = routes.get_route(h["handle"])
+        if r and not r.get("closed") and r.get("holder"):
+            sfx = list(dict.fromkeys([*h.get("branch_suffixes", []), *r.get("branch_suffixes", [])]))
+            h = {**h, "holder": f"{h.get('holder') or ''}; its inbox's holder ({r['holder']})", "branch_suffixes": sfx}
+        handles.append(h)
+    return {**reg, "handles": handles}
+
+
+def _branch_suffix() -> str | None:
+    """The last 4 characters of this checkout's `cursor/...-XXXX` branch: the suffix this agent's PRs carry."""
+    try:
+        b = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], capture_output=True, text=True, timeout=10).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return None
+    m = re.fullmatch(r"cursor/.+-([0-9a-z]{4})", b)
+    return m[1] if m else None
+
+
 def branch_owners(branch: str, reg: dict) -> list[str]:
     """The handles whose agent made `branch`: its last 4 characters are the last 4 of the holder's agent id, or one of the
     handle's `branch_suffixes` (a holder whose PRs another agent of its own opens)."""
@@ -1039,6 +1065,7 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, link: str
     root = api.root(ch, thread) if thread else None
     for n in lead_names(msg.get("text", ""), reg):
         routes.get_route(n, fresh=n not in routes.local)            # a name new since the clone was pulled
+    reg = with_routes(reg, routes)
     inboxes = routes.inboxes()
     now = _now().timestamp() if now is None else now
     history, branches = watch_context(api, ch, msg, root, now, log)
@@ -1617,6 +1644,9 @@ def inbox_open(ns: argparse.Namespace, reg: dict, routes: Routes, name: str) -> 
     ch = channel_id(ns, reg, FRONT_DOOR)
     if old and not old.get("closed") and old.get("holder") == holder:
         print(f"@{name} is open already: inbox {old['inbox_ts']}")
+        if (s := _branch_suffix()) and s not in old.get("branch_suffixes", []) and not ns.dry_run:
+            old = {**old, "branch_suffixes": [*old.get("branch_suffixes", []), s]}
+            print(publish_route(routes.root, old, f"routes.d: @{name} holder's branch suffix {s}"))
     else:
         if old and not old.get("closed") and not ns.succeeds:
             raise SlackError(f"@{name}'s inbox is held by {old.get('holder')}; a successor passes --succeeds")
@@ -1627,8 +1657,10 @@ def inbox_open(ns: argparse.Namespace, reg: dict, routes: Routes, name: str) -> 
             ts = _post(api, ch, name, f"{INBOX_HEAD}{name}. Posts addressed to @{name} land here as replies; don't reply "
                        f"here, answer in the source thread.")
         remit = " ".join((ns.remit or (old or {}).get("remit") or "").split()) or None
+        prev = [a[-4:] for a in AGENT_ID_RE.findall((old or {}).get("holder") or "") if len(a) > 11]
+        sfx = list(dict.fromkeys([*(old or {}).get("branch_suffixes", []), *prev, *([s] if (s := _branch_suffix()) else [])]))
         r = {"schema": ROUTE_SCHEMA, "name": name, "holder": holder, "channel": ch, "inbox_ts": ts, "opened": _now_stamp(),
-             "closed": None, "forward_to": None, **({"remit": remit} if remit else {}),
+             "closed": None, "forward_to": None, **({"remit": remit} if remit else {}), **({"branch_suffixes": sfx} if sfx else {}),
              **({"succeeds": old.get("holder")} if old and old.get("holder") != holder else {})}
         if not ns.dry_run:
             print(publish_route(routes.root, r, f"routes.d: open @{name} for {holder}"))

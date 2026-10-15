@@ -1159,6 +1159,34 @@ def test_a_reply_in_the_merge_thread_rings_the_owners_of_the_prs_it_names_and_no
     assert rc == 0 and [len(bells(fake, b)) for b in boxes.values()] == [1, 1, 0]
 
 
+def test_a_successors_pr_rings_its_handle_through_the_inbox_route_with_no_registry_edit(fake, registry, routes_dirs, capsys, tmp_path, monkeypatch):
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
+    root_box = fake.add(COORD, text=f"{slack.INBOX_HEAD}compute-accounting. pointers", username="compute-accounting", bot_id=BOT)
+    add_route(routes_dirs[0], "compute-accounting", root_box["ts"], holder="bc-abcdef12-0000-0000-0000-00000000c0de",
+              branch_suffixes=["zz99"])
+    (tmp_path / "pr-branches.json").write_text(json.dumps({"1700": "cursor/new-lead-zz99", "1701": "cursor/other-c0de"}))
+    root = fake.add(COORD, text="\U0001f4e3 *Announcement* from @infra to every handle\nmerge thread", username="infra", bot_id=BOT)
+    assert run(capsys, "send", "--as", "infra", "--thread", root["ts"], "--text", "Landed #1700")[0] == 0
+    assert run(capsys, "send", "--as", "infra", "--thread", root["ts"], "--text", "Landed #1701")[0] == 0
+    assert len(bells(fake, root_box["ts"])) == 2                                       # its branch suffix, then its id's
+    reg = slack.with_routes(json.loads(registry.read_text()), slack.Routes())
+    assert slack.branch_owners("cursor/new-lead-zz99", reg) == ["compute-accounting"]
+
+
+def test_names_open_succeeds_records_the_working_branch_and_keeps_the_predecessors_suffix(fake, registry, routes_dirs, tmp_path, capsys, monkeypatch):
+    notes_clone(tmp_path)
+    monkeypatch.setenv("RESEARCH_NOTES_CITE_CHECK", "0")
+    box = inbox(fake, routes_dirs, "circuits")
+    add_route(routes_dirs[0], "circuits", box, holder="bc-11111111-2222-3333-4444-555555555555", branch_suffixes=["ab12"])
+    monkeypatch.setattr(slack, "_branch_suffix", lambda: "cd34")
+    assert run(capsys, "names", "open", "--as", "circuits", "--holder", "bc-99999999-2222-3333-4444-666666666666", "--succeeds")[0] == 0
+    r = json.loads((routes_dirs[0] / "circuits.json").read_text())
+    assert r["holder"].startswith("bc-99999999") and r["branch_suffixes"] == ["ab12", "5555", "cd34"]
+    monkeypatch.setattr(slack, "_branch_suffix", lambda: "ef56")                      # the same holder, on a new branch
+    assert run(capsys, "names", "open", "--as", "circuits", "--holder", "bc-99999999-2222-3333-4444-666666666666")[0] == 0
+    assert json.loads((routes_dirs[0] / "circuits.json").read_text())["branch_suffixes"] == ["ab12", "5555", "cd34", "ef56"]
+
+
 def test_pr_branches_asks_gh_once_per_unknown_number_and_keeps_its_answers(tmp_path, monkeypatch):
     import sys
     calls = tmp_path / "calls"
