@@ -56,12 +56,154 @@ def shape_terms(a: int, b: int, c: int, L: int) -> tuple[int, int, list[dict]]:
     return matmul_targets(a, b, c, L)
 
 
+def _gl(n: int) -> list[list[int]]:
+    """GL_n(F2) as lists of column bit masks (all of them for n <= 3, the permutation matrices above)."""
+    if n > 3:
+        import itertools
+
+        return [[1 << p[i] for i in range(n)] for p in itertools.permutations(range(n))]
+    out = []
+
+    def rec(cols, span):
+        if len(cols) == n:
+            out.append(list(cols))
+            return
+        for v in range(1, 1 << n):
+            if v not in span:
+                rec(cols + [v], span | {s ^ v for s in span})
+
+    rec([], {0})
+    return out
+
+
+def _apply(cols: list[int], v: int) -> int:
+    r = 0
+    for i, cv in enumerate(cols):
+        if (v >> i) & 1:
+            r ^= cv
+    return r
+
+
+def _inv_t(cols: list[int], n: int) -> list[int]:
+    """The columns of (Q^-1)^T for Q given by its columns."""
+    inv = [next(x for x in range(1 << n) if _apply(cols, x) == 1 << i) for i in range(n)]  # columns of Q^-1
+    return [sum(((inv[j] >> i) & 1) << j for j in range(n)) for i in range(n)]  # transpose
+
+
+def symmetry_ops(a: int, b: int, c: int, L: int):
+    """The maps (u, w) -> (u', w') of rank-1 forms u w^T under S_a x S_c x GL_L^(b/L) (inner blocks; permutation
+    matrices for L > 3) and the transpose when a = c: substitutions X -> X Q, Y -> Q^-1 Y (Q block diagonal, so every
+    prefix X_{<sL} Y_{<sL} is kept), row and column permutations and (XY)^T = Y^T X^T, each permuting the terminals."""
+    import itertools
+
+    nb = b // L
+    gls = _gl(L)
+    Qs = []
+    for combo in itertools.product(gls, repeat=nb):
+        cols = []
+        for blk, q in enumerate(combo):
+            cols += [cv << (blk * L) for cv in q]
+        Qs.append(cols)
+
+    def vec_x(u, sig, Q):  # u over (r, k) at r*b + k
+        out = 0
+        for r in range(a):
+            ur = (u >> (r * b)) & ((1 << b) - 1)
+            out |= _apply(Q, ur) << (sig[r] * b)
+        return out
+
+    def vec_y(w, tau, QT):  # w over (k, j) at k*c + j: w'[(m, j)] = sum_k Q^-1[k, m] w[(k, j)]
+        out = 0
+        for j in range(c):
+            wj = sum(((w >> (k * c + j)) & 1) << k for k in range(b))
+            wj2 = _apply(QT, wj)
+            for m in range(b):
+                if (wj2 >> m) & 1:
+                    out |= 1 << (m * c + tau[j])
+        return out
+
+    # generators: adjacent transpositions of rows and of columns, and Q over every element of each block's group
+    ida, idc, idQ = list(range(a)), list(range(c)), [1 << k for k in range(b)]
+    gens = []
+    for i in range(a - 1):
+        s = ida[:]
+        s[i], s[i + 1] = s[i + 1], s[i]
+        gens.append((s, idc, idQ))
+    for j in range(c - 1):
+        t = idc[:]
+        t[j], t[j + 1] = t[j + 1], t[j]
+        gens.append((ida, t, idQ))
+    for blk in range(nb):
+        for q in gls:
+            Q = idQ[:]
+            for i, cv in enumerate(q):
+                Q[blk * L + i] = cv << (blk * L)
+            gens.append((ida, idc, Q))
+    ops = [lambda u, w, sig=sig, tau=tau, Q=Q, QT=_inv_t(Q, b): (vec_x(u, sig, Q), vec_y(w, tau, QT))
+           for sig, tau, Q in gens]
+    if a == c:
+        def tr(u, w):  # x_{rk} <-> y_{kr}: (u over (r,k), w over (k',j)) -> (w over (j,k'), u over (k,r))
+            u2 = sum(((w >> (k * c + j)) & 1) << (j * b + k) for j in range(c) for k in range(b))
+            w2 = sum(((u >> (r * b + k)) & 1) << (k * c + r) for r in range(a) for k in range(b))
+            return u2, w2
+        ops.append(tr)
+    return ops
+
+
+def first_edge_forbid(a: int, b: int, c: int, L: int) -> list[tuple[int, int]]:
+    """The rank-1 (u, w) whose value is not the least of its orbit under the group symmetry_ops generates."""
+    R, C = a * b, b * c
+    ops = symmetry_ops(a, b, c, L)
+    targets = set()
+    pieces = []
+    for r in range(a):
+        for j in range(c):
+            for s in range(1, b // L + 1):
+                pc = [(1 << (r * b + k), 1 << (k * c + j)) for k in range(s * L)]
+                pieces.append(pc)
+                v = 0
+                for u, w in pc:
+                    v ^= outer(u, w, R, C)
+                targets.add(v)
+    for op in ops:
+        for pc in pieces:
+            img = 0
+            for u, w in pc:
+                img ^= outer(*op(u, w), R, C)
+            if img not in targets:
+                raise SystemExit(f"symmetry_ops: a generator maps a target of {(a, b, c, L)} outside the targets")
+    seen: set[tuple[int, int]] = set()
+    bad = []
+    for u in range(1, 1 << R):
+        for w in range(1, 1 << C):
+            if (u, w) in seen:
+                continue
+            orbit, todo = {(u, w)}, [(u, w)]
+            while todo:
+                x = todo.pop()
+                for op in ops:
+                    y = op(*x)
+                    if y not in orbit:
+                        orbit.add(y)
+                        todo.append(y)
+            seen |= orbit
+            least = min(orbit, key=lambda p: outer(p[0], p[1], R, C))
+            bad += [p for p in orbit if p != least]
+    return bad
+
+
 # ---------------------------------------------------------------- the encoding
 
 
-def encode(R: int, C: int, terms: list[int], E: int, M: int, K: int, arity: int, extra_steps: int = 0):
+def encode(R: int, C: int, terms: list[int], E: int, M: int, K: int, arity: int, extra_steps: int = 0,
+           blocks: bool = False, first_forbid: list[tuple[int, int]] | None = None):
     """CNF for: a computation with <= E edges + copies, <= M merges, <= K copies covering terms. Returns (clauses,
-    decode) where decode(model) gives the steps."""
+    decode) where decode(model) gives the steps.
+
+    blocks: list the steps as tau_0, head 1, tau_1, head 2, ... where tau_i is the merge-free tree under head i (a
+    topological order of every computation: a node not below head i never reads one that is), each edge reading its
+    own block and each head earlier blocks, with the value order only between adjacent steps of one block.
+    first_forbid: (u, w) pairs the first edge may not be (rank-1 values not least in their symmetry orbit)."""
     P = R * C
     S = E + M + extra_steps
     pool = IDPool()
@@ -168,9 +310,46 @@ def encode(R: int, C: int, terms: list[int], E: int, M: int, K: int, arity: int,
         reads = [V(slot, t2, t) for t2 in range(t + 1, S + 1) for slot in "ABC"]
         cl.append([idl[t]] + [h[j, t] for j in range(len(terms))] + reads)
 
-    # adjacent independent steps in increasing value order (bit P-1 most significant)
+    if blocks:
+        # z[t][i]: step t lies in block i; a head (merge or copy) opens the next block. Edges read their own block (or 0
+        # in block 0); heads read earlier blocks only.
+        H = M + K
+        z = lambda t, i: V("z", t, i)  # noqa: E731
+        for t in range(1, S + 1):
+            exactly_one([z(t, i) for i in range(H + 1)])
+            head = [me[t], co[t]]
+            if t == 1:
+                cl.append([z(1, 0)])
+                cl.append([ed[1]])
+            else:
+                for i in range(H + 1):
+                    # z(t, i) <-> (z(t-1, i) & !head) | (z(t-1, i-1) & head)
+                    cl.append([-z(t - 1, i), me[t], co[t], z(t, i)])
+                    if i >= 1:
+                        cl.append([-z(t - 1, i - 1), -me[t], z(t, i)])
+                        cl.append([-z(t - 1, i - 1), -co[t], z(t, i)])
+                    else:
+                        cl.append([-me[t]] + [-z(t, 0)])
+                        cl.append([-co[t]] + [-z(t, 0)])
+            for i in range(H + 1):
+                for s in range(1, t):
+                    for slot in "ABC":
+                        x = V(slot, t, s)
+                        cl.append([-x, -ed[t], -z(t, i), z(s, i)])
+                        cl.append([-x, ed[t], -z(t, i), -z(s, i)])
+            cl.append([-V("A", t, 0), -ed[t], z(t, 0)])
+    if first_forbid:
+        # the problem's symmetry group maps any computation to one whose first edge (the least root edge) is the least
+        # of its orbit: forbid the rank-1 values that are not
+        u1 = [V("u", 1, i) for i in range(R)]
+        w1 = [V("w", 1, j) for j in range(C)]
+        for (uu, ww) in first_forbid:
+            cl.append([-ed[1]] + [-u1[i] if (uu >> i) & 1 else u1[i] for i in range(R)]
+                      + [-w1[j] if (ww >> j) & 1 else w1[j] for j in range(C)])
+
+    # adjacent independent steps in increasing value order (bit P-1 most significant); with blocks, only inside a block
     for t in range(1, S):
-        dep = [V(slot, t + 1, t) for slot in "ABC"]
+        dep = [V(slot, t + 1, t) for slot in "ABC"] + ([me[t + 1], co[t + 1]] if blocks else [])
         lt = [V("lt", t, k) for k in range(P)]  # lt[k]: value(t) < value(t+1) on bits k..0 (from the top: P-1-k)
         bits = list(range(P - 1, -1, -1))
         for k, p in enumerate(bits):
@@ -265,7 +444,9 @@ def solve(job: dict) -> dict:
     terms = [t["m"] for t in tl]
     E, M, K, arity = job["E"], job["M"], job["K"], job["arity"]
     t0 = time.time()
-    clauses, decode, nvars = encode(R, C, terms, E, M, K, arity)
+    blocks = job.get("enc", "flat") == "blocks"
+    forbid = first_edge_forbid(a, b, c, L) if blocks else None
+    clauses, decode, nvars = encode(R, C, terms, E, M, K, arity, blocks=blocks, first_forbid=forbid)
     t1 = time.time()
     res = dict(job, R=R, C=C, naive=a * b * c, vars=nvars, clauses=len(clauses), encode_s=round(t1 - t0, 2))
     with Solver(name=job.get("solver", "cadical195"), bootstrap_with=clauses) as s:
@@ -329,15 +510,25 @@ def jobs_for_table(shape, model: str, Ms: list[int], arity: int, lo: int, timeou
 
 def job(shape, model, E, x, arity=3, timeout=0.0) -> dict:
     M, K = (x, 0) if model == "merge" else (0, x)
-    return {"shape": shape, "model": model, "E": E, "M": M, "K": K, "arity": arity, "timeout": timeout}
+    return {"shape": shape, "model": model, "E": E, "M": M, "K": K, "arity": arity, "timeout": timeout, "enc": "blocks"}
 
 
 def plan(name: str, timeout: float) -> list[dict]:
-    """Named job lists. `small`: the requested shapes (<2,2,2> and <2,2,3>, L = 2 and 1), every M and K up to 4 at
+    """Named job lists, every job in the block encoding. `quick`: the seconds-long part of `small`. `small`: the requested shapes (<2,2,2> and <2,2,3>, L = 2 and 1), every M and K up to 4 at
     the budgets between the rank bound and naive - 1, plus E = rank - 1 with M = 8 (the rank bound inside the model).
     `kappa`: shapes whose gap naive - rank exceeds 1, where one merge could save more than L."""
     J = []
-    if name == "small":
+    if name == "quick":
+        # the seconds-long part of `small`
+        J += [job((2, 2, 2, 2), "merge", 7, m, 3, timeout) for m in (0, 1, 2)]
+        J += [job((2, 2, 2, 2), "merge", 7, m, 2, timeout) for m in (1, 2, 3)]
+        J += [job((2, 2, 2, 2), "copy", 7, k, 3, timeout) for k in (1, 2, 3)]
+        J.append(job((2, 2, 2, 2), "merge", 6, 8, 3, timeout))
+        J += [job((2, 2, 2, 1), "merge", 7, m, 3, timeout) for m in (1, 2)]
+        J += [job((2, 2, 3, 2), "merge", 11, m, 3, timeout) for m in (0, 1, 2)]
+        J += [job((2, 2, 3, 2), "merge", 11, m, 2, timeout) for m in (2, 3)]
+        J += [job((2, 2, 3, 2), "copy", 11, k, 3, timeout) for k in (1, 2)]
+    elif name == "small":
         for shape, E in (((2, 2, 2, 2), 7), ((2, 2, 3, 2), 11)):
             J += [job(shape, "merge", E, m, 3, timeout) for m in (0, 1, 2, 3)]
             J += [job(shape, "merge", E, m, 2, timeout) for m in (1, 2, 3, 4)]
@@ -350,8 +541,8 @@ def plan(name: str, timeout: float) -> list[dict]:
         # (shape, rank of the target set, M values, include copies)
         for shape, rank, Ms, copies in (
             ((2, 2, 4, 2), 14, (0, 1, 2, 3, 4), True),
-            ((2, 3, 2, 3), 11, (0, 1, 2), False),
             ((3, 2, 3, 2), 15, (0, 1, 2, 3), True),
+            ((2, 3, 2, 3), 11, (0, 1, 2), False),
             ((2, 4, 2, 4), 14, (1, 2, 3), False),
             ((2, 4, 2, 2), 14, (1, 2, 3), False),
             ((2, 3, 3, 3), 15, (1, 2, 3), False),
@@ -374,7 +565,7 @@ def main() -> None:
     ap.add_argument("--out", default="-")
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("batch")
-    p.add_argument("--plan", required=True, help="small | kappa")
+    p.add_argument("--plan", required=True, help="quick | small | kappa (comma separated)")
     p.add_argument("--timeout", type=float, default=0)
     p.add_argument("--procs", type=int, default=os.cpu_count())
     p = sub.add_parser("solve")
@@ -384,6 +575,7 @@ def main() -> None:
     p.add_argument("--K", type=int, default=0)
     p.add_argument("--arity", type=int, default=3)
     p.add_argument("--timeout", type=float, default=0)
+    p.add_argument("--enc", choices=["flat", "blocks"], default="blocks")
     p = sub.add_parser("table")
     p.add_argument("--shape", required=True, help="a,b,c,L")
     p.add_argument("--model", choices=["merge", "copy"], default="merge")
@@ -399,7 +591,7 @@ def main() -> None:
         jobs = [j for p in args.plan.split(",") for j in plan(p, args.timeout)]
     elif args.cmd == "solve":
         jobs = [{"shape": shape, "model": "merge" if args.K == 0 else "copy", "E": args.E, "M": args.M, "K": args.K,
-                 "arity": args.arity, "timeout": args.timeout}]
+                 "arity": args.arity, "timeout": args.timeout, "enc": args.enc}]
     else:
         jobs = jobs_for_table(shape, args.model, [int(x) for x in args.values.split(",")], args.arity, args.lo,
                               args.timeout)
