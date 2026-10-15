@@ -1,0 +1,4 @@
+# The receipted INT8 filler's issue slack. Not a package: filler.cu runs on a GPU node (run.sh, serve.sh), and its twin,
+# gate and frontier arithmetic run here as a suite (`uv run tools/verity/check/suites.py benchmarks/filler_slack`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]

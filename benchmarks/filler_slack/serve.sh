@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # The receipted filler beside vLLM decode (cwd = the source tree): builds libifill.so (serve.cu) and fill_compute's
-# libfill.so (its green-context split), then under one gpu-lease 1 --wait --max-min MAXMIN (default 40) one serve.py process
-# per arm in ARMS (default "warmup stock share:16 share:8 share:4 gc:128 gc:128:16 stock"), NVML sampled by nvidia-smi
-# every 200 ms beside them, and fill_compute's compare_fill.py over the arms. Results in $OUT.
+# libfill.so (its green-context split), then under one gpu-lease 1 --wait --max-min MAXMIN (default 30; GPU pins it) one
+# serve.py process per arm in ARMS (default "warmup stock share:16 share:8 share:4 gc:128 gc:128:16 stock"; an arm that
+# can't start with 150 s left in the lease is skipped, in arms.txt), NVML sampled by nvidia-smi every 200 ms beside them,
+# and fill_compute's compare_fill.py over the arms. Results in $OUT.
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-12 --source . --cwd source --mem-gb 64 \
 #     --env GPU_LEASE_WHO=W11 -- bash benchmarks/filler_slack/serve.sh
@@ -27,21 +28,23 @@ nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -fmad=false -Xcompil
   $FC/fill.cu -ldl > "$O/ptxas-fill.txt" 2>&1 || { tail -30 "$O/ptxas-fill.txt"; exit 4; }
 cat "$MODEL"/*.safetensors > /dev/null
 export B PY MODEL D ARMS=${ARMS:-warmup stock share:16 share:8 share:4 gc:128 gc:128:16 stock} SERVE_ARGS=${SERVE_ARGS:-}
-export ARM_MIN=${ARM_MIN:-8}
+export ARM_MIN=${ARM_MIN:-8} MAXMIN=${MAXMIN:-30}
 # shellcheck disable=SC2016
-gpu-lease 1 --wait --max-min "${MAXMIN:-40}" -- bash -c '
+gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "$MAXMIN" -- bash -c '
   export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*}
   nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,power.draw,power.limit,temperature.gpu --format=csv,noheader \
     -i "$GPU_LEASE_UUID" > "$O/gpu.txt" 2>&1
   nvidia-smi --query-gpu=timestamp,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu --format=csv,noheader \
     -lms 200 -i "$GPU_LEASE_UUID" > "$O/smi.csv" 2>&1 &
   smi=$!
-  i=0; files=()
+  i=0; files=(); end=$(( $(date +%s) + MAXMIN * 60 - 45 ))
   for arm in $ARMS; do
+    left=$(( end - $(date +%s) ))
+    if [ "$left" -lt 150 ]; then echo "$arm skipped: ${left}s left in the lease" >> "$O/arms.txt"; continue; fi
     f="$O/arm-$i-${arm//:/-}.json"; files+=("$f")
     echo "$arm start $(date -u +%FT%T.%3NZ)" >> "$O/arms.txt"
     # shellcheck disable=SC2086
-    timeout $((ARM_MIN * 60)) "$PY" $D/serve.py --lib "$B/libifill.so" --fill-lib "$B/libfill.so" --model "$MODEL" \
+    timeout $(( left < ARM_MIN * 60 ? left : ARM_MIN * 60 )) "$PY" $D/serve.py --lib "$B/libifill.so" --fill-lib "$B/libfill.so" --model "$MODEL" \
       --arm "$arm" --out "$f" $SERVE_ARGS > "$O/arm-$i-${arm//:/-}.log" 2>&1
     echo "$arm $?" >> "$O/arms.rc"; echo "$arm end $(date -u +%FT%T.%3NZ)" >> "$O/arms.txt"; i=$((i + 1))
   done
