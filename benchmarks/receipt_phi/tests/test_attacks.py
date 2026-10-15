@@ -117,6 +117,13 @@ def test_decay_keeps_mad_bit0_linear_and_raises_duo() -> None:
     assert (attacks.two_word_table("duo", 9, 4, k8) == (yy ^ (((zz << 4) | (zz >> 4)) & 0xFF))).all()
 
 
+def test_mum_adaptive_cancels_somewhere_in_every_block() -> None:
+    """The function asserts each counted cancellation by stepping the chain; across a block's 255 adjacent pairs, a
+    prover who knows the state finds one."""
+    r = attacks.mum_adaptive(64)
+    assert r["mean_share"] > 0.05 and r["block_without_any_pair_independent_estimate"] < 1e-6
+
+
 def test_mum_lattice_patterns_cancel() -> None:
     for m, r in attacks.mum_lattice().items():
         d, n = r["deltas"], len(r["deltas"])

@@ -15,7 +15,8 @@ random-operand work's words).
 - ``chain_end``: fixed differences in the block's last word and last two words, read through the receipt (the wide
   kinds' fold of their 64-bit state to 32 bits), by direct sampling.
 - ``mum_lattice``: mum's state-independent additive cancellations Σ δ_t a_t ≡ 0 mod 2^64 for the real keys, with
-  the bits a prover pays to reach them through the XOR of the state's halves.
+  the bits a prover pays to reach them through the XOR of the state's halves; ``mum_adaptive`` (with it) the
+  state-dependent ones over Z, (δ_t, δ_{t+1}) = ±(a_{t+1}, −a_t)/gcd, open to a prover who knows the state.
 - ``linearity``: the block receipt f(P) over b² = 256 words, tested for f(P ∘ Q) = f(P) ∘ f(Q) ∘ f(0)⁻¹ over
   Z/2^32, GF(2)^32 and Z/(2^32 − 1), with the share of exact hits and of output bits that are linear.
 - ``degree2``: the receipt's third derivative over Z/2^32 and GF(2)^32, which vanishes for degree ≤ 2 (Σp²'s class).
@@ -694,6 +695,35 @@ def duo_adaptive(samples: int, t: int = 4, seed: int = 10) -> dict:
     return {"t": t, "r": twins.rot_of(t), "share_with_partner": float(np.mean(has)), "samples": samples}
 
 
+def mum_adaptive(samples: int, seed: int = 11) -> dict:
+    """mum's state-dependent two-word cancellation: a_t·δ_t + a_{t+1}·δ_{t+1} = 0 over Z for (δ_t, δ_{t+1}) =
+    ±(a_{t+1}, −a_t)/gcd, so a prover who knows the state moves u_t and u_{t+1} by them through p (u = hi ⊕ lo ⊕ p)
+    and the 64-bit state after word t+1 is the honest one. It needs only both moved u in [0, 2^32): the share of
+    states where one sign does, per adjacent pair of the block, each checked by stepping the chain."""
+    from math import gcd
+    rng = np.random.default_rng(seed)
+    shares = []
+    for t in range(B2 - 1):
+        a1, a2 = int(KA[t]), int(KA[t + 1])
+        g = gcd(a1, a2)
+        y, z, p1, p2 = (rng.integers(0, 1 << 32, size=samples, dtype=np.uint64) for _ in range(4))
+        my, mz = step("mum", y, z, p1, t)
+        hy, hz = step("mum", my, mz, p2, t + 1)
+        u1, u2 = (y ^ z ^ p1).astype(np.int64), (my ^ mz ^ p2).astype(np.int64)
+        hit = np.zeros(samples, dtype=bool)
+        for sgn in (1, -1):
+            v1, v2 = u1 + sgn * (a2 // g), u2 - sgn * (a1 // g)
+            ok = (v1 >= 0) & (v1 <= int(M32)) & (v2 >= 0) & (v2 <= int(M32))
+            y1, z1 = step("mum", y, z, (y ^ z ^ v1.astype(np.uint64)) & M32, t)
+            y2, z2 = step("mum", y1, z1, (y1 ^ z1 ^ v2.astype(np.uint64)) & M32, t + 1)
+            assert np.all(((y2 == hy) & (z2 == hz))[ok])
+            hit |= ok
+        shares.append(float(np.mean(hit)))
+    miss = float(np.prod([1 - s for s in shares]))
+    return {"samples_per_pair": samples, "mean_share": float(np.mean(shares)), "min_share": min(shares),
+            "max_share": max(shares), "block_without_any_pair_independent_estimate": miss}
+
+
 def duo_g_image(bits: int = 16, keys_: int = 8, seed: int = 9) -> dict:
     """duo's word t changes the state's z exactly when g_t(u) = rotl(u, r_t) + a_t·u changes, and a change at word t is
     cancelled by word t+1 only if z is unchanged, so two-word cancellations are the collisions of g_t. The share of u
@@ -820,6 +850,7 @@ def main() -> int:
         res["chi_image_share_16bit"] = chi_image(16)
     if "mum_lattice" in todo:
         res["mum_lattice"] = mum_lattice()
+        res["mum_adaptive"] = mum_adaptive(ns >> 6)
     if "mad_sketch" in todo:
         res["mad_sketch"] = mad_sketch(n=128 if args.quick else 256)
     if "duo_g" in todo:
