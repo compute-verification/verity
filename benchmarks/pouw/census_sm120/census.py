@@ -7,6 +7,7 @@ backward-branch range) are counted, so a rate is for what ptxas emitted, not for
 
     python3 census.py OUT_DIR [RUN_ID]
     python3 census.py --merge MERGED.json OUT_DIR...   # every run's rows in one file, with each constant's spread
+    python3 census.py --amx OUT_DIR                    # host_amx.sh's AMX table (amx_summary)
 """
 
 import json
@@ -355,8 +356,73 @@ def merge(dest, dirs):
           f"{rel[len(rel) // 2] if rel else 0:.4%}")
 
 
+NODE_FP8_MACS_PER_CLOCK = 8 * 188 * 1024  # 8 GPUs x 188 SMs x 1,024 dense FP8 MACs an SM a clock (tensor.cu)
+NODE_CLOCKS_MHZ = (2430, 2092)  # boost, and the lock the node's GPUs run at
+HOST_CORES = 96  # 2 sockets x 48 physical cores (lscpu)
+
+
+def amx_summary(out):
+    """host_amx.sh's outputs -> amx-summary.json and amx.md: every AMX run's aggregate, per-core rate against the 1- and
+    16-core rates, its share of the node's FP8 tensor capacity at each clock, the whole host (HOST_CORES x the per-core
+    rate) as a share, and the GEMMs' rate on the leased GPUs inside and outside each AMX run."""
+    amx = [r for r in jsonl(out / "amx.jsonl") if r.get("unit") == "MAC/s"]
+    freq = jsonl(out / "freq.jsonl")
+    gemm = [r for f in sorted(out.glob("gemm-*.jsonl")) for r in jsonl(f) if r.get("probe") == "gemm_fp8"]
+    cap = {mhz: NODE_FP8_MACS_PER_CLOCK * mhz * 1e6 for mhz in NODE_CLOCKS_MHZ}
+
+    def base(r, tag):
+        key = re.sub(r"\.t\d+\..*$", "", r["constant"])
+        return next((b["per_core_macs_per_s"] for b in amx if re.sub(r"\.t\d+\..*$", "", b["constant"]) == key
+                     and b["constant"].endswith(f".{tag}.macs_per_s")), None)
+
+    rows = []
+    for r in amx:
+        one, sixteen = base(r, "1core"), base(r, "16core")
+        inside = [g["macs_per_s"] for g in gemm if g["t0_unix"] >= r["t0_unix"] and g["t1_unix"] <= r["t1_unix"]]
+        host = HOST_CORES * r["per_core_macs_per_s"]
+        rows.append(dict(
+            constant=r["constant"], threads=r["threads"], cores=r["cores"], macs_per_s=r["value"],
+            per_core_macs_per_s=r["per_core_macs_per_s"], per_thread=r["per_thread_macs_per_s"],
+            implied_ghz=r["implied_ghz_per_thread_median"], windows=r["window_macs_per_s"],
+            per_core_vs_1core=r["per_core_macs_per_s"] / one if one else None,
+            per_core_vs_16core=r["per_core_macs_per_s"] / sixteen if sixteen else None,
+            share={str(m): r["value"] / c for m, c in cap.items()},
+            host_96core_macs_per_s=host, host_96core_share={str(m): host / c for m, c in cap.items()},
+            gemm_batches_inside=len(inside), gemm_macs_per_s_inside=statistics.mean(inside) if inside else None,
+            t0_unix=r["t0_unix"], t1_unix=r["t1_unix"]))
+    spans = [(r["t0_unix"], r["t1_unix"]) for r in amx]
+    gpus = {}
+    for g in gemm:
+        busy = any(g["t1_unix"] > a and g["t0_unix"] < b for a, b in spans)
+        gpus.setdefault(g["gpu_uuid"], dict(beside_amx=[], alone=[]))["beside_amx" if busy else "alone"].append(
+            g["macs_per_s"])
+    gemm_by_gpu = {u: {k: dict(batches=len(v), mean=statistics.mean(v) if v else None,
+                               min=min(v) if v else None, max=max(v) if v else None) for k, v in d.items()}
+                   for u, d in gpus.items()}
+    doc = dict(capacity_macs_per_s={str(m): c for m, c in cap.items()}, host_cores=HOST_CORES, rows=rows,
+               freq=[dict(constant=f["constant"], ghz=f["value"], windows=f["window_ghz"]) for f in freq],
+               gemm=gemm_by_gpu)
+    (out / "amx-summary.json").write_text(json.dumps(doc, indent=1))
+    lines = ["| run | threads | cores | MAC/s | per core | vs 1 core | vs 16 cores | implied GHz | share @2430 | "
+             "share @2092 | 96-core share @2430 | 96-core share @2092 | GEMM MAC/s inside |",
+             "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    f = lambda v, p=3: "" if v is None else f"{v:.{p}g}"
+    for r in rows:
+        lines.append(f"| `{r['constant']}` | {r['threads']} | {r['cores']} | {f(r['macs_per_s'])} | "
+                     f"{f(r['per_core_macs_per_s'])} | {f(r['per_core_vs_1core'])} | {f(r['per_core_vs_16core'])} | "
+                     f"{f(r['implied_ghz'])} | {f(r['share']['2430'])} | {f(r['share']['2092'])} | "
+                     f"{f(r['host_96core_share']['2430'])} | {f(r['host_96core_share']['2092'])} | "
+                     f"{f(r['gemm_macs_per_s_inside'])} |")
+    for u, d in gemm_by_gpu.items():
+        lines.append(f"\nGEMM on `{u}`: alone {d['alone']}, beside AMX {d['beside_amx']}")
+    (out / "amx.md").write_text("\n".join(lines) + "\n")
+    print(f"{len(rows)} AMX rows, {len(gemm)} GEMM batches -> {out / 'amx-summary.json'}")
+
+
 if __name__ == "__main__":
     if sys.argv[1] == "--merge":
         merge(sys.argv[2], sys.argv[3:])
+    elif sys.argv[1] == "--amx":
+        amx_summary(pathlib.Path(sys.argv[2]))
     else:
         main()
