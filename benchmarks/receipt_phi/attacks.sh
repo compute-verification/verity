@@ -15,6 +15,7 @@ for dist in u32 int26 fp32; do
   python3 $D/attacks.py --only linearity,carries --dist $dist > "$P/lin-$dist.json" 2>> "$O/errors.txt" & pids+=($!)
 done
 python3 $D/attacks.py --only small,mum_lattice --dist u32 > "$P/small.json" 2>> "$O/errors.txt" & pids+=($!)
+python3 $D/attacks.py --only duo_g,decay --dist u32 > "$P/duo.json" 2>> "$O/errors.txt" & pids+=($!)
 python3 $D/attacks.py --only mad_sketch --dist u32 > "$P/sketch.json" 2>> "$O/errors.txt" & pids+=($!)
 rc=0
 for p in "${pids[@]}"; do wait "$p" || rc=1; done
