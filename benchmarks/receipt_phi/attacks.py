@@ -11,6 +11,9 @@ random-operand work's words).
   the chain at word t+1. For every sample, φ_{t+1}(y', ·) is inverted at the honest state, which gives the one p'' that
   cancels, and the most frequent p'' ⊕ p or p'' − p is the best Δ2 for that Δ1. Its frequency is the probability that
   the pair (Δ1, Δ2) leaves the receipt unchanged.
+- ``three_word``: the same search one word further, for the kinds without a high-probability two-word canceller.
+- ``mum_lattice``: mum's state-independent additive cancellations Σ δ_t a_t ≡ 0 mod 2^64 for the real keys, with
+  the bits a prover pays to reach them through the XOR of the state's halves.
 - ``linearity``: the block receipt f(P) over b² = 256 words, tested for f(P ∘ Q) = f(P) ∘ f(Q) ∘ f(0)⁻¹ over
   Z/2^32, GF(2)^32 and Z/(2^32 − 1), with the share of exact hits and of output bits that are linear.
 - ``carries``: ra's chain is linear mod 2^32 − 1 except for one carry per wrapped addition; the number of carries per
@@ -206,6 +209,123 @@ def differential(dist: str, samples: int, seed: int = 1) -> dict:
         best["log2p"] = float(np.log2(best["p"])) if best["p"] > 0 else None
         best["resolution_log2"] = -float(np.log2(samples))
         out[kind] = best
+    return out
+
+
+def three_word(dist: str, samples: int, kinds=("mum", "xsm4", "xsm2"), seed: int = 6) -> dict:
+    """``differential`` one word further: fixed Δ1 at word t and Δ2 at word t+1, the canceller at t+2 by inversion."""
+    rng = np.random.default_rng(seed)
+    deltas = [("xor", 1 << j) for j in range(32)] + [("add", 1 << j) for j in range(32)] + \
+             [("add", (1 << 32) - (1 << j)) for j in range(32)]
+
+    def apply(op, d, p):
+        return p ^ U(d) if op == "xor" else (p + U(d)) & M32
+
+    out = {}
+    t = 4
+    for kind in kinds:
+        best = {"p": 0.0}
+        y = rng.integers(0, 1 << 32, size=samples, dtype=np.uint64)
+        z = rng.integers(0, 1 << 32, size=samples, dtype=np.uint64)
+        p0, p1, p2 = (words(dist, rng, samples) for _ in range(3))
+        s1, z1 = step(kind, y, z, p0, t)
+        s2, z2 = step(kind, s1, z1, p1, t + 1)
+        ty, tz = step(kind, s2, z2, p2, t + 2)
+        for op1, d1 in deltas:
+            a1, b1 = step(kind, y, z, apply(op1, d1, p0), t)
+            for op2, d2 in deltas:
+                a2, b2 = step(kind, a1, b1, apply(op2, d2, p1), t + 1)
+                q2, ok = invert(kind, a2, b2, ty, tz, t + 2)
+                for rep, dd in (("xor", q2 ^ p2), ("add", (q2 - p2) & M32)):
+                    v, share = mode_share(dd, ok)
+                    if share > best["p"]:
+                        best = {"p": share, "d1": f"{op1} {d1:#010x}", "d2": f"{op2} {d2:#010x}",
+                                "d3": f"{rep} {v:#010x}"}
+        best["log2p"] = float(np.log2(best["p"])) if best["p"] > 0 else None
+        best["resolution_log2"] = -float(np.log2(samples))
+        out[kind] = best
+    return out
+
+
+def naf_weight(v: int) -> int:
+    w = 0
+    while v:
+        if v & 1:
+            v -= 2 - (v & 3)
+            w += 1
+        v >>= 1
+    return w
+
+
+def signed64(v: int) -> int:
+    v %= 1 << 64
+    return v - (1 << 64) if v >= 1 << 63 else v
+
+
+def lll(B: list[list[int]], delta: float = 0.99) -> list[list[int]]:
+    from fractions import Fraction
+    B = [list(b) for b in B]
+    n = len(B)
+
+    def dot(u, v):
+        return sum(x * y for x, y in zip(u, v))
+
+    def gso():
+        Bs, mu = [], [[Fraction(0)] * n for _ in range(n)]
+        for i in range(n):
+            v = [Fraction(x) for x in B[i]]
+            for j in range(i):
+                mu[i][j] = Fraction(dot(B[i], Bs[j])) / dot(Bs[j], Bs[j])
+                v = [a - mu[i][j] * b for a, b in zip(v, Bs[j])]
+            Bs.append(v)
+        return Bs, mu
+
+    k = 1
+    Bs, mu = gso()
+    while k < n:
+        for j in range(k - 1, -1, -1):
+            q = round(mu[k][j])
+            if q:
+                B[k] = [a - q * b for a, b in zip(B[k], B[j])]
+                Bs, mu = gso()
+        if dot(Bs[k], Bs[k]) >= (delta - mu[k][k - 1] ** 2) * dot(Bs[k - 1], Bs[k - 1]):
+            k += 1
+        else:
+            B[k], B[k - 1] = B[k - 1], B[k]
+            Bs, mu = gso()
+            k = max(k - 1, 1)
+    return B
+
+
+def mum_lattice(t: int = 4) -> dict:
+    """mum's state is S ← S + u_t·a_t mod 2^64 with u_t = hi(S) ⊕ lo(S) ⊕ p_t, so additive differences δ_t of u
+    cancel, state-independently, whenever Σ δ_t a_t ≡ 0 mod 2^64 with |δ_t| < 2^32: a lattice of determinant 2^64.
+    The prover reaches u only through p and the state's hi ⊕ lo, so a pattern costs about one bit per nonzero signed
+    digit of each δ_t (setting it through the XOR) and of each intermediate state difference D (its carries). This
+    gives, for the real keys, the cheapest such pattern found by LLL and small combinations of the reduced basis."""
+    import itertools
+    out = {}
+    for m in (2, 3, 4):
+        a = [int(KA[t + i]) for i in range(m)]
+        inv = pow(a[-1], -1, 1 << 64)
+        basis = [[1 if j == i else 0 for j in range(m - 1)] + [(-a[i] * inv) % (1 << 64)] for i in range(m - 1)]
+        basis.append([0] * (m - 1) + [1 << 64])
+        red = lll(basis)
+        best = None
+        for co in itertools.product(range(-2, 3), repeat=m):
+            if not any(co):
+                continue
+            v = [sum(c * b[i] for c, b in zip(co, red)) for i in range(m)]
+            if max(abs(x) for x in v) >= 1 << 32 or not any(v):
+                continue
+            D, cost, ds = 0, sum(naf_weight(abs(x)) for x in v), []
+            for i in range(m - 1):
+                D = signed64(D + v[i] * a[i])
+                ds.append(D)
+                cost += naf_weight(abs(D))
+            if best is None or cost < best["cost_bits"]:
+                best = {"deltas": v, "state_diffs": ds, "cost_bits": cost}
+        out[f"{m}_words"] = best or {"cost_bits": None}
     return out
 
 
@@ -430,13 +550,20 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--quick", action="store_true")
     ap.add_argument("--only", default="")
+    ap.add_argument("--dist", default="u32,int26,fp32")
+    ap.add_argument("--samples-log2", type=int, default=0)
     args = ap.parse_args()
     ns, nt = (1 << 12, 1 << 9) if args.quick else (1 << 16, 1 << 12)
-    todo = args.only.split(",") if args.only else ["differential", "linearity", "carries", "small", "mad_sketch"]
+    if args.samples_log2:
+        ns = 1 << args.samples_log2
+    todo = args.only.split(",") if args.only else ["differential", "three_word", "linearity", "carries", "small",
+                                                    "mum_lattice", "mad_sketch"]
     res = {}
-    for dist in ("u32", "int26", "fp32"):
+    for dist in args.dist.split(","):
         if "differential" in todo:
             res.setdefault("differential", {})[dist] = differential(dist, ns)
+        if "three_word" in todo:
+            res.setdefault("three_word", {})[dist] = three_word(dist, ns >> 2)
         if "linearity" in todo:
             res.setdefault("linearity", {})[dist] = linearity(dist, nt)
         if "carries" in todo:
@@ -444,6 +571,8 @@ def main() -> int:
     if "small" in todo:
         res["small_8bit"] = small()
         res["chi_image_share_16bit"] = chi_image(16)
+    if "mum_lattice" in todo:
+        res["mum_lattice"] = mum_lattice()
     if "mad_sketch" in todo:
         res["mad_sketch"] = mad_sketch(n=128 if args.quick else 256)
     print(json.dumps(res, indent=1))
