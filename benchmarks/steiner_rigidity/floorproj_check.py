@@ -474,6 +474,11 @@ def part5(broken=None):
     D = sum((proj_product(u, v, 2, 2, 0) for u, v in zip(us, vs)), np.zeros((2, 2), dtype=object))
     r = mrank(D, 0)
     assert r == 2 and step_bounds(us, vs, 2, 4, 0)[1] == 33
+    # Expectation per accumulator step with excess e (private-variable forms): a miss costs >= 16 slots a side.
+    short = {e: e - 32 * (1 - pin ** e) for e in range(1, 33)}
+    assert all(v <= 0 for e, v in short.items() if e <= 31) and 0 < short[32] < Fraction(1, 200)
+    print(f"part 5: expected repair 16 * 2 * (1 - (3/4)^e) >= excess e for e <= 31, short by {float(short[32]):.4f} "
+          f"at e = 32: ok")
     print(f"part 5: dispatch on one reused mixed form a side: tile cheap with probability {p_cheap}, expected "
           f"{float(price):.4f} int8 slots a rank-2 product even when a miss costs a whole extra tile, so the "
           f"per-product form of R is false; the step's projected rank is {r} against its 32 slots: ok")
