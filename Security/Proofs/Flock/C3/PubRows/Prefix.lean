@@ -23,9 +23,11 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
   {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
 
 /-- **(g) The public file's rows are the transcript's**, at every registered value `fixedRow` knows, in every session
-the verifier accepts (where `VCommits` reads them; the check is the verifier's). -/
+that accepts a transcript it writes (`ZkOuter.Writes`, an outcome its game reaches: where `VCommits` reads them; the
+check is the verifier's). -/
 def HPubRows (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) : Prop :=
-  ∀ R ω t R₂ j, (∃ tr, AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr) → ∀ reg ∈ (F.zs R ω t R₂ j).own,
+  ∀ R ω t R₂ j, (∃ R' tr, (F.zs R ω t R₂ j).Writes R' tr ∧ AcceptsZKR (F.zs R ω t R₂ j).I (F.zs R ω t R₂ j).own tr) →
+    ∀ reg ∈ (F.zs R ω t R₂ j).own,
     ∀ (u : Fin (F.Vs j).nv) (q : Fin (F.Vs j).c.ports.size) x, (F.Vs j).c.ports[q].name = reg.name →
       reg.reads[u.val]? = some (some x) → ∀ b, F.row reg.value x t = some b →
         (F.zs R ω t R₂ j).pub.digest u.val q.val (F.Vs j).c.ports.size = ⟨b.toArray⟩

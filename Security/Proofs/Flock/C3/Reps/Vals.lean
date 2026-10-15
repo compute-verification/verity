@@ -245,7 +245,7 @@ theorem sched_holoAt
     (h : FlockSoundness.Discharge.Recursion.ClassOk (FlockSoundness.Discharge.Recursion.shapeOf st))
     {s : Flock.Schedule} (hs : Flock.fast100 (holoAt st hp).cls.m = some s) : schedOf s = (holoAt st hp).sch := by
   have e : FlockSoundness.Discharge.Recursion.execClassAt st =
-      FlockSoundness.Discharge.Recursion.ExecClass.ofStmt st h := dif_pos h
+      FlockSoundness.Discharge.Recursion.ExecClass.ofStmt st h := dite_eq_left h
   have hm : (holoAt st hp).cls.m = st.m := by
     show (FlockSoundness.Discharge.Recursion.execClassAt st).cls.m = st.m
     exact congrArg (fun c : FlockSoundness.Discharge.Recursion.ExecClass => c.cls.m) e

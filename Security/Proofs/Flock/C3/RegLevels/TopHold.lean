@@ -312,8 +312,8 @@ theorem eok_bind {ε α β : Type} {x : Except ε α} {f : α → Except ε β} 
 /-- `bcs` makes R's registered entry: `regR` is the registration's `program` and `stacked` entry, and `topEntry` at
 `bcs` has the entry's canonical form. -/
 def Made (regR : Option (String × Json)) (bcs : Array ByteArray) : Prop :=
-  ∃ prog e, regR = some (prog, e) ∧ ∃ e' str, topEntry prog bcs = .ok e' ∧ Flock.canon e' = .ok str ∧
-    Flock.canon e = .ok str
+  ∃ prog e, regR = some (prog, e) ∧ topEntryFields prog bcs e = .ok true ∧
+    ∃ e' str, topEntry prog bcs = .ok e' ∧ Flock.canon e' = .ok str ∧ Flock.canon e = .ok str
 
 theorem forIn_all {α ε : Type} (P : α → Prop) {f : α → Unit → Except ε (ForInStep Unit)}
     (hf : ∀ a u r, f a u = .ok r → P a ∧ ∃ u', r = .yield u') :
@@ -499,6 +499,7 @@ theorem candidate3_top {tr : Json} {rounds : Array Json} {t : String} {names : L
           rcases hR : regR with _ | ⟨program, e⟩
           rotate_left
           · rw [hR] at h
+            obtain ⟨structural, hfields, h⟩ := eok_bind h
             obtain ⟨e', h1, hA⟩ := eok_bind h
             obtain ⟨s1, h2, hB⟩ := eok_bind hA
             obtain ⟨s2, h3, hC⟩ := eok_bind hB
@@ -507,11 +508,16 @@ theorem candidate3_top {tr : Json} {rounds : Array Json} {t : String} {names : L
             split at hD
             · cases hD
             rename_i hmade
-            have hm' : (s1 == s2) = made := Except.ok.inj hm
-            have hs : s1 = s2 := by
-              rw [← hm'] at hmade
-              simpa using hmade
-            refine ⟨bcs, (Except.ok.inj hD).symm, fun _ => ⟨program, e, rfl, e', s1, h1, h2, ?_⟩⟩
+            have hm' : (structural && (s1 == s2)) = made := Except.ok.inj hm
+            have hmade' : made = true := by simpa using hmade
+            have hboth : (structural && (s1 == s2)) = true := by
+              exact hm'.trans hmade'
+            simp only [Bool.and_eq_true] at hboth
+            have hstruct : structural = true := hboth.1
+            have hs : s1 = s2 := beq_iff_eq.mp hboth.2
+            rw [hstruct] at hfields
+            refine ⟨bcs, (Except.ok.inj hD).symm,
+              fun _ => ⟨program, e, rfl, hfields, e', s1, h1, h2, ?_⟩⟩
             rw [hs]; exact h3
           · rw [hR] at h
             obtain ⟨made, hm, hD⟩ := eok_bind h
@@ -580,6 +586,7 @@ theorem innerCommits_top {tr : Json} {record : String} {reg : Json} {bound : Opt
     (h : innerCommits tr record (some reg) bound shape = .ok cs) (hs : cs.stream? "stacked/rep0" = some s)
     (htop : s.tops[0]? = some bcs) :
     ∃ prog e, registration (some reg) bound = .ok (some (prog, some e)) ∧
+      topEntryFields prog bcs e = .ok true ∧
       ∃ e' str, topEntry prog bcs = .ok e' ∧ Flock.canon e' = .ok str ∧ Flock.canon e = .ok str := by
   unfold innerCommits at h
   extract_lets msgs0 extra stackedS declaredR jpMain at h
@@ -650,9 +657,9 @@ theorem innerCommits_top {tr : Json} {record : String} {reg : Json} {bound : Opt
         exact hx.2
       have hs' : out.find? (·.name == "stacked/rep0") = some s := hstreams ▸ hs
       have hq := Array.find?_some hs'
-      obtain ⟨prog, e, hreg, e', str, h1, h2, h3⟩ := candidate3_top (tbl_ne_stacked hnS) hout s
+      obtain ⟨prog, e, hreg, hfields, e', str, h1, h2, h3⟩ := candidate3_top (tbl_ne_stacked hnS) hout s
         (Array.mem_of_find?_eq_some hs') (beq_iff_eq.1 hq) bcs htop
-      refine ⟨prog, e, ?_, e', str, h1, h2, h3⟩
+      refine ⟨prog, e, ?_, hfields, e', str, h1, h2, h3⟩
       rw [hheld]
       rcases held with _ | ⟨p, _ | e0⟩
       · simp [regR] at hreg
@@ -669,3 +676,6 @@ theorem innerCommits_top {tr : Json} {record : String} {reg : Json} {bound : Opt
 end Session
 
 end FlockC3.RegLevels.TopHold
+
+#print axioms FlockC3.RegLevels.TopHold.candidate3_top
+#print axioms FlockC3.RegLevels.TopHold.innerCommits_top

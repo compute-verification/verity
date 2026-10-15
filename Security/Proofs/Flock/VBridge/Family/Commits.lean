@@ -152,12 +152,12 @@ registers the stages' commitments where its public files hold their `b ‖ c` (`
 theorem hCommits_of (own : Fin F.stmts.size → Array Flock.Registered.Port) (sel : ℕ → String → ℕ → Prop)
     (bc : (j : Fin F.stmts.size) → Cm → PosK (F.Vs j).c (F.Vs j).hU (F.Vs j).nv → List UInt8)
     (hSk : F.Sk = skOf F.Vs own sel) (hcmt : F.cmt = cmtOf F.Vs bc) (hpub : F.PubCommits bc) : F.HCommits := by
-  intro i R ω t e he R₂ j hacc pos hpos R'
+  intro i R ω t e he R₂ j R' tr _ hacc pos hpos
   rcases pos with ⟨u, q⟩ | g
   · rw [hcmt]
     exact (vb_cs_inl (F.zs R ω t R₂ j) R' u q).trans
       (congrArg (fun l => ((Sum.inl (u, q) : PosK (F.Vs j).c (F.Vs j).hU (F.Vs j).nv),
-        Refine.H512 (Refine.K512.leafPrefix ++ l))) (hpub i R ω t e he R₂ j hacc u q hpos))
+        Refine.H512 (Refine.K512.leafPrefix ++ l))) (hpub i R ω t e he R₂ j ⟨tr, hacc⟩ u q hpos))
   · rw [hSk] at hpos
     exact absurd hpos (inr_not_mem_skOf g)
 

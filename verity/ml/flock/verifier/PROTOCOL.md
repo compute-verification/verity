@@ -1231,6 +1231,9 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   - its input ports must total `384·LANES + 1024·max(1, ⌈H/2⌉) + 2048` bits and its output ports 2048, compared before
     the verifier builds its net (about 4,374 rows a lane), so a name can't make it build a net larger than the file's
     rows allow;
+  - the statement's first five rows must be `row, aux, acc, coef, dirs` at the input widths below (`out` and `acc_out`
+    follow), and every copy's input word `i` must read leaf `i` (`leaves_in[u] = [0, 1, …]`), so each copy reads its
+    opening's rows in that order; both are compared before the net is built (`RecOpen.rowsOk`, `RecOpen.leavesOk`);
   - the net must be `Flock.RecOpen`'s builder of `rec_open._steps` at those parameters, laid out as `ir_lower.layout`
     lays it out: inputs `row, aux, acc, coef, dirs` of `8·LANES`, `64·max(1, ⌈H/2⌉)` (at `H = 0` one row the net does
     not read), `64`, `16·LANES` and `64` u16 words, and outputs `out` then `acc_out` of 64 words each, one 16-bit port
@@ -1261,14 +1264,25 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   - its input ports must total the part's (`16·P(n)` bits a row port of `n` elements and `v`, `P(n) = 64·⌈8n/64⌉`) and
     its output ports 2048, compared before the verifier builds its net;
   - the net must be `Flock.RecResiduals`' builder of `rec_residuals.unit_circuit` on part `j`'s S, laid out as
-    `ir_lower.layout` lays it out, one 16-bit port per word.
+    `ir_lower.layout` lays it out, one 16-bit port per word;
+  - its computed rows must read each row-port element in all 128 bits or in none (`RecResiduals.partlyRead`), refused
+    by the first element read in part and how many of its bits are;
+  - at copy 0 and each copy below `units_per_vu`, a circuit port that keys a bit of an element of `w` (its leaf at the
+    column's word, `HmRow.delta`'s copy) must be named `m<r>` for each round `r` that holds the element's key
+    (`RecResiduals.misnamed`, `roundNames`), refused by the first copy, element, bit and port that is not.
 
   So must a unit net whose name starts with `rec-opening/` (a part of R's opening, `rec_residuals.stage_opening`):
   - its name must be `rec-opening/m<m>-c<claims>-p<j>`, with a `fast100` schedule at `m` and `claims ≥ 1`;
   - the circuit must have one unit per VU (`units_per_vu = 1`), so each part is one copy of its unit, refused before
     the structure is computed;
   - the rest is a `rec-residuals/` part's (the claims bounded by the input bits, part `j`'s bits, the net), at the
-    opening's S (`Flock.RecOpening.structureOf`, `rec_algebra.structure` at an opening-only shape) and its row ports.
+    opening's S (`Flock.RecOpening.structureOf`, `rec_algebra.structure` at an opening-only shape) and its row ports;
+  - its computed rows must read each element of a claim's ring switch, and of Ligerito's running sums (`acc0`,
+    `acc1`), the part holds in all 128 bits (`RecOpening.rsUnread`), refused by the first that is not and how many of
+    its bits are, and each other element in all 128 or in none (`RecResiduals.partlyRead`), refused as a
+    `rec-residuals/` part is;
+  - a circuit port that keys a bit of claim `i`'s ring-switch element must be named `m<i>` (`RecResiduals.misnamed`,
+    `RecOpening.rsName`), refused as a `rec-residuals/` part's misnamed port is.
 
   Any other unit is not checked against a builder (D13, §17.1).
 - **Units.** `units_per_vu ≥ 1` (D8, §17.1). The unit range's `vus_per_block × units_per_vu` slots are a power of two only
@@ -1739,9 +1753,11 @@ expectation):
 - **D13:** a unit net named `rec-open/…` or `rec-open-stacked/…` is the verifier's V* opening net (`Flock.RecOpen`,
   §16.10). Upstream takes the unit's net as the file gives it. The spec refuses such a unit whose name is not
   `rec-open/l<LANES>-h<H>` (or `rec-open-stacked/l<LANES>-h<H>`) at valid parameters, one whose port bits are not the
-  opening's at them, and one whose net differs from the verifier's. No vector exercises it;
-  `test_rec_open_unit_of_other_bits_is_refused_before_its_net_is_built` runs the bits' refusal on the Lean verifier, and
-  `test_the_lean_verifier_reads_rs_level_under_its_own_name_as_the_opening` a stacked unit's acceptance and its net's.
+  opening's at them, one whose rows or copies' leaves are not the opening's inputs in order, and one whose net differs
+  from the verifier's. No vector exercises it; `test_rec_open_unit_of_other_bits_is_refused_before_its_net_is_built` runs
+  the bits' refusal on the Lean verifier, `verity/core/service/flock/Flock/Test/RecOpenLeaves.lean` the rows' and
+  leaves', and `test_the_lean_verifier_reads_rs_level_under_its_own_name_as_the_opening` a stacked unit's acceptance and
+  its net's.
 - **D14:** U4 (§7.3, §16.10): a drawn statement must draw in full each unit that reads a round's commitment. Upstream
   ignores the header's `registered` (D5) and so cannot tell which units read one; the spec refuses the draw at setup. No
   vector exercises it: no set's draw meets a port of a round's commitment (`rec-c<i>`, `rec-top-L<l>`, R's and the sparse
@@ -1750,6 +1766,11 @@ expectation):
   refuses a description table that is not the registration in order, a row that does not open the registered root, and a
   registered row no instance reads. No vector exercises it; `verity/ml/flock/tests/test_inner_registered.py` runs each
   refusal on the Lean verifier.
+- **D16:** a drawn session with an inner shape (`--rec-inner`, V*'s) must label each table's instances with the units its
+  draw proves (`RecVStar.checkLabels`): a registered read's position is read at an instance's label, so the label must be
+  the unit. V*'s populations are their units `0..n-1`, so its honest statements pass. Upstream reads no inner shape; the
+  spec refuses at setup. No vector exercises it; `Flock.Test.Labels` runs it on synthetic draws and labels, and
+  `test_the_honest_level_passes_setup_at_the_honest_inner_session` passes it on an honest V* level.
 
 D3 and D4 are closed by `631567f7`; the corpus's `upstream_checks` names them per set (`--upstream-checks` in
 `redigest.py` and `fuzz.py`).
