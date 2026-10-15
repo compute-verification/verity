@@ -551,6 +551,153 @@ def FlatteningLowerBound (F : Type*) [Field F] (m n : Type*) [Fintype m] [Fintyp
     (∀ r, LinearIndepOn F a ↑(P.filter (·.1 = r))) → (∀ c, LinearIndepOn F b ↑(P.filter (·.2 = c))) →
       ∑ t ∈ P, (M t).rank ≤ (flattening P a b M).rank
 
+/-- `z ↦ u ⊗ z`, entrywise `(i, x) ↦ u i * z x`. -/
+def tensorLeft {α : Type*} (u : α → F) : (m → F) →ₗ[F] (α × m → F) where
+  toFun z i := u i.1 * z i.2
+  map_add' z z' := by
+    ext i
+    simp [mul_add]
+  map_smul' c z := by
+    ext i
+    simp only [Pi.smul_apply, smul_eq_mul, RingHom.id_apply]
+    ring
+
+/-- Independent vectors have a dual vector: one that pairs to `1` with a chosen vector and `0` with the rest. -/
+theorem exists_dual_of_linearIndepOn {κ β : Type*} [Fintype β] [DecidableEq κ] {s : Finset κ}
+    {b : κ → β → F} (h : LinearIndepOn F b ↑s) {t₀ : κ} (ht₀ : t₀ ∈ s) :
+    ∃ g : β → F, ∀ t ∈ s, b t ⬝ᵥ g = if t = t₀ then 1 else 0 := by
+  classical
+  let B : Matrix s β F := Matrix.of fun t => b t
+  have hrank : B.rank = Fintype.card s := by
+    rw [Matrix.rank_eq_finrank_span_row]
+    exact finrank_span_eq_card (b := B.row) h
+  have htop : LinearMap.range B.mulVecLin = ⊤ := by
+    refine Submodule.eq_top_of_finrank_eq ?_
+    rw [Module.finrank_fintype_fun_eq_card]
+    exact hrank
+  obtain ⟨g, hg⟩ := LinearMap.range_eq_top.mp htop (Pi.single ⟨t₀, ht₀⟩ 1)
+  refine ⟨g, fun t ht => ?_⟩
+  have := congrFun hg ⟨t, ht⟩
+  simp only [Matrix.mulVecLin_apply, Matrix.mulVec, B, Matrix.of_apply] at this
+  rw [this, Pi.single_apply]
+  simp [Subtype.ext_iff]
+
+omit [Fintype m] in
+theorem mem_colSpace_eq_zero {A : Matrix m n F} {v : m → F} (hv : v ∈ colSpace A) {x : m}
+    (hx : ∀ y, A x y = 0) : v x = 0 := by
+  obtain ⟨y, rfl⟩ := hv
+  simp [Matrix.mulVec, dotProduct, hx]
+
+omit [Fintype m] in
+theorem kron_mulVec_tensor {α β : Type*} [Fintype β] (u : α → F) (v : β → F) (W : Matrix m n F)
+    (g : β → F) (y : n → F) :
+    kron (vecMulVec u v) W *ᵥ (fun j => g j.1 * y j.2) = fun i => u i.1 * (v ⬝ᵥ g) * (W *ᵥ y) i.2 := by
+  ext i
+  simp only [Matrix.mulVec, dotProduct, kron, vecMulVec_apply, Fintype.sum_prod_type]
+  conv_rhs => rw [mul_assoc, Finset.sum_mul_sum, Finset.mul_sum]
+  refine Finset.sum_congr rfl fun j _ => ?_
+  rw [Finset.mul_sum]
+  refine Finset.sum_congr rfl fun y' _ => ?_
+  ring
+
+/-- **Lemma 2(b), proved.** -/
+theorem flatteningLowerBound [DecidableEq m] [DecidableEq n] : FlatteningLowerBound F m n := by
+  classical
+  intro p q α β rowBlk colBlk P M a b hM hIa hIb
+  let Φ := flattening P a b M
+  let Ψ : (∀ t : P, colSpace (M t)) →ₗ[F] (Fin α × m → F) :=
+    ∑ t : P, tensorLeft (a t) ∘ₗ (colSpace (M t)).subtype ∘ₗ LinearMap.proj t
+  have hΨ : ∀ z, Ψ z = ∑ t : P, tensorLeft (a t) (z t : m → F) := by
+    intro z
+    simp [Ψ]
+  -- Ψ is injective: the `a t` of each grid row are independent and `M t` lives in its row block.
+  have hinj : Function.Injective Ψ := by
+    rw [← LinearMap.ker_eq_bot, LinearMap.ker_eq_bot']
+    intro z hz
+    funext t₀
+    apply Subtype.ext
+    funext x
+    let f : Fin p × Fin q → F := fun t => if h : t ∈ P then (z ⟨t, h⟩ : m → F) x else 0
+    have hf0 : ∀ t, t.1 ≠ rowBlk x → f t = 0 := by
+      intro t ht
+      by_cases h : t ∈ P
+      · simp only [f, h, ↓reduceDIte]
+        refine mem_colSpace_eq_zero (z ⟨t, h⟩).2 fun y => ?_
+        by_contra hne
+        exact ht (hM t h x y hne).1.symm
+      · simp [f, h]
+    have hsum : ∑ t ∈ P.filter (·.1 = rowBlk x), f t • a t = 0 := by
+      funext i
+      have h1 := congrFun (hΨ z ▸ hz) (i, x)
+      simp only [Finset.sum_apply, tensorLeft, LinearMap.coe_mk, AddHom.coe_mk, Pi.zero_apply] at h1
+      rw [Finset.sum_apply, Pi.zero_apply, Finset.sum_filter]
+      rw [← Finset.sum_coe_sort P]
+      refine Eq.trans (Finset.sum_congr rfl fun t _ => ?_) h1
+      by_cases ht : (t : Fin p × Fin q).1 = rowBlk x
+      · simp [f, ht, mul_comm]
+      · simp only [ht, ↓reduceIte]
+        have := mem_colSpace_eq_zero (z t).2 (x := x) fun y => by
+          by_contra hne
+          exact ht (hM t t.2 x y hne).1.symm
+        simp [this]
+    have hf := (linearIndepOn_finset_iff.mp (hIa (rowBlk x))) f hsum
+    have : f t₀ = 0 := by
+      by_cases ht : (t₀ : Fin p × Fin q).1 = rowBlk x
+      · exact hf t₀ (Finset.mem_filter.mpr ⟨t₀.2, ht⟩)
+      · exact hf0 t₀ ht
+    simpa [f, t₀.2] using this
+  -- The range of Ψ lies in the column space of Φ: the `b t` of each grid column have dual vectors.
+  have hrange : LinearMap.range Ψ ≤ colSpace Φ := by
+    rintro _ ⟨z, rfl⟩
+    rw [hΨ]
+    refine Submodule.sum_mem _ fun t₀ _ => ?_
+    obtain ⟨y, hy⟩ := (z t₀).2
+    let c := (t₀ : Fin p × Fin q).2
+    obtain ⟨g, hg⟩ := exists_dual_of_linearIndepOn (hIb c)
+      (Finset.mem_filter.mpr ⟨t₀.2, rfl⟩)
+    let yc : n → F := fun y' => if colBlk y' = c then y y' else 0
+    refine ⟨fun j => g j.1 * yc j.2, ?_⟩
+    simp only [Matrix.mulVecLin_apply, Φ, flattening, Matrix.sum_mulVec, kron_mulVec_tensor]
+    rw [Finset.sum_eq_single_of_mem (t₀ : Fin p × Fin q) t₀.2]
+    · have hyc : M t₀ *ᵥ yc = M t₀ *ᵥ y := by
+        funext x
+        refine Finset.sum_congr rfl fun y' _ => ?_
+        by_cases h : colBlk y' = c
+        · simp [yc, h]
+        · have : M t₀ x y' = 0 := by
+            by_contra hne
+            exact h (hM t₀ t₀.2 x y' hne).2
+          simp [this]
+      have h1 : b t₀ ⬝ᵥ g = 1 := by
+        simpa using hg t₀ (Finset.mem_filter.mpr ⟨t₀.2, rfl⟩)
+      funext i
+      simp only [tensorLeft, LinearMap.coe_mk, AddHom.coe_mk, h1, mul_one, hyc]
+      rw [← hy]
+      rfl
+    · intro t ht hne
+      funext i
+      by_cases htc : t.2 = c
+      · have h0 : b t ⬝ᵥ g = 0 := by
+          simpa [hne] using hg t (Finset.mem_filter.mpr ⟨ht, htc⟩)
+        simp [h0]
+      · have h0 : M t *ᵥ yc = 0 := by
+          funext x
+          refine Finset.sum_eq_zero fun y' _ => ?_
+          by_cases h : colBlk y' = c
+          · have : M t x y' = 0 := by
+              by_contra hne'
+              exact htc ((hM t ht x y' hne').2.symm.trans h)
+            simp [this]
+          · simp [yc, h]
+        simp [h0]
+  calc ∑ t ∈ P, (M t).rank = ∑ t : P, finrank F ↥(colSpace (M t)) := by
+        rw [← Finset.sum_coe_sort P]
+        rfl
+    _ = finrank F (∀ t : P, colSpace (M t)) := by rw [Module.finrank_pi_fintype]
+    _ = finrank F ↥(LinearMap.range Ψ) := (LinearMap.finrank_range_of_inj hinj).symm
+    _ ≤ finrank F ↥(colSpace Φ) := Submodule.finrank_mono hrange
+    _ = Φ.rank := rfl
+
 /-- **Lemma 3 (labels for a laminar family).** For one target per cell of a set `P` and a laminar family `𝓕` of
 subsets of `P`, there are labels with (L) every `Λ(S)`, `S ∈ 𝓕`, a rank-one product, and (I) the `a t` of each grid
 row linearly independent and the `b t` of each grid column linearly independent. -/
@@ -571,12 +718,12 @@ def LaminarBound (F : Type*) [Field F] (m n : Type*) [Fintype m] [Fintype n] : P
       Laminar 𝓕 → (∀ S ∈ 𝓕, S ⊆ P) → (∀ t ∈ P, ∑ S ∈ 𝓕.filter (t ∈ ·), W S = M t) →
         ∑ t ∈ P, (M t).rank ≤ ∑ S ∈ 𝓕, (W S).rank
 
-/-- Lemmas 2 and 3 give Theorem 1 for laminar decompositions. -/
-theorem laminarBound_of_labelLemma [DecidableEq m] [DecidableEq n] (h3 : LabelLemma F)
-    (h2 : FlatteningLowerBound F m n) : LaminarBound F m n := by
+/-- Lemma 3 gives Theorem 1 for laminar decompositions (with Lemma 2, proved). -/
+theorem laminarBound_of_labelLemma [DecidableEq m] [DecidableEq n] (h3 : LabelLemma F) :
+    LaminarBound F m n := by
   intro p q rowBlk colBlk P M hM 𝓕 W hlam hsub hdec
   obtain ⟨α, β, a, b, hL, hIa, hIb⟩ := h3 p q P 𝓕 hlam hsub
-  exact (h2 p q α β rowBlk colBlk P M a b hM hIa hIb).trans
+  exact (flatteningLowerBound p q α β rowBlk colBlk P M a b hM hIa hIb).trans
     (rank_flattening_le P a b M 𝓕 W hsub hdec hL)
 
 /-- **Lemma 1(a, b)**: a Steiner tree spanning `0` and the targets gives a laminar decomposition no longer than the
@@ -627,15 +774,14 @@ theorem conjectureA_lower_of_blockRigidityCoord {N L : ℕ}
         Finset.sum_le_sum fun t _ => le_rank_prefixTarget t.1 t.2 hsL.ge
     _ ≤ T.length := key
 
-/-- **Conjecture A's lower bound from Lemmas 1, 2(b) and 3.** -/
+/-- **Conjecture A's lower bound from Lemmas 1 and 3.** -/
 theorem conjectureA_lower_of_lemmas {N L : ℕ}
-    (h1 : TreeLaminarDecomposition F (Fin N × Fin N) (Fin N × Fin N))
-    (h2 : FlatteningLowerBound F (Fin N × Fin N) (Fin N × Fin N)) (h3 : LabelLemma F)
+    (h1 : TreeLaminarDecomposition F (Fin N × Fin N) (Fin N × Fin N)) (h3 : LabelLemma F)
     (hL : 0 < L) (hLN : L ∣ N) (T : SteinerTree F (Fin N × Fin N) (Fin N × Fin N)) (h0 : T.Reaches 0)
     (hT : ∀ r c : Fin N, ∀ s ∈ Finset.Icc 1 (N / L), T.Reaches (prefixTarget F N L r c s)) :
     N ^ 3 ≤ T.length :=
   conjectureA_lower_of_blockRigidityCoord
-    (blockRigidityCoord_of_laminarBound h1 (laminarBound_of_labelLemma h3 h2)) hL hLN T h0 hT
+    (blockRigidityCoord_of_laminarBound h1 (laminarBound_of_labelLemma h3)) hL hLN T h0 hT
 
 end Flattening
 
