@@ -53,6 +53,33 @@ def arm_gate(name, checks):
     return "pass" if all(all(checks[key]) for key in keys) else "FAIL"
 
 
+def geo(by, shapes, name, fmt, which):
+    xs = [by[s]["arms"][name]["ms"] / by[s]["arms"][f"plain_{fmt}"]["ms"] for s in shapes
+          if s in which and name in by[s]["arms"] and f"plain_{fmt}" in by[s]["arms"]]
+    return math.exp(sum(map(math.log, xs)) / len(xs)) if xs else float("nan")
+
+
+def compact(by, shapes, checks):
+    """1 + gamma, geometric mean over the Llama linears (and 4096^3 in brackets), one row a construction, format and r:
+    no receipts (the best of cuBLASLt over the stacked operands and the custom mainloop), and each receipt on the custom
+    mainloop; both operands formed on CUDA cores on every call."""
+    print("| construction | format | r | no receipts | duo L = 32 | duo L = 64 | TB4C L = 32 | TB4C L = 64 | gate |")
+    print("|---|---|---|---|---|---|---|---|---|")
+    for fmt in ("i8", "e4"):
+        for tag, r in [("full", "-")] + [(f"low{r}", str(r)) for r in (8, 16, 32, 64, 128)]:
+            plain = [f"{'full' if tag == 'full' else tag}_{fmt}", f"cg_{tag}_{fmt}"]
+            rc = [f"{c}_{tag}_{fmt}" for c in ("cduo32", "cduo64", "ct4c32", "ct4c64")]
+            cells = []
+            vals = {n: (geo(by, shapes, n, fmt, LLAMA), geo(by, shapes, n, fmt, ["sq4096"])) for n in plain + rc}
+            best = min(plain, key=lambda n: vals[n][0])
+            for n in [best] + rc:
+                g, s = vals[n]
+                cells.append(f"{g:.2f} ({s:.2f})")
+            verdicts = {arm_gate(n, checks) for n in plain + rc}
+            v = "pass" if verdicts == {"pass"} else "/".join(sorted(verdicts))
+            print(f"| {'full rank' if tag == 'full' else 'low rank'} | {fmt} | {r} | " + " | ".join(cells) + f" | {v} |")
+
+
 def main(bench, gate):
     rows = [json.loads(line) for line in open(bench)]
     checks = gate_verdicts(gate)
@@ -77,6 +104,8 @@ def main(bench, gate):
             digits = "/".join(str(by[s]["low"][r]["L"][fi]) for s in ("o", "down") if s in by)
         print(f"| {cons} | {fmt} | {r} | {digits} | {receipt} | {forming} | {gemm} | "
               + " | ".join(f"{x:.3f}" for x in ratios) + f" | {geo:.3f} | {arm_gate(name, checks)} |")
+    print()
+    compact(by, shapes, checks)
     print()
     print("plain GEMM ms (cuBLASLt): " + ", ".join(
         f"{s} i8 {by[s]['arms']['plain_i8']['ms']:.4f} e4 {by[s]['arms']['plain_e4']['ms']:.4f}"
