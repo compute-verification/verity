@@ -13,7 +13,10 @@ Parts:
   2  Exact St_sym (Dreyfus-Wagner over every tree, `symsteiner.c`) on small instances over GF(3) and GF(5):
      rooted at 0, St_sym = 2L * sum_pi hi_pi; with a free root (a head tree), 2L (sum hi - min lo).
   3  The depth-3 inequality behind Proposition 3 (two Steiner points, three targets with one pair in disjoint rows
-     and columns), on random Steiner points; and local search for symmetric gains in deeper trees at L = 2.
+     and columns), on random Steiner points.
+  4  Local search for symmetric gains in deeper trees at L = 2.
+  5  The span bound: every computation costs at least the tensor rank of T = sum_t S_t (x) e_t, and R(T) >= 2Lk when
+     no two cells share a D-column (or a D-row), for trees of any depth and for DAGs with merges.
 
 Run: python cmix_check.py [part ...] [--big]   (--big adds the 5-dimensional GF(3) instances, about 14 M states)
 """
@@ -527,7 +530,202 @@ def run_job_default(arg):
     return run_job(job, steps)
 
 
-PARTS = {"1": part1, "2": part2, "3": part3, "4": part4}
+# ---------------------------------------------------------------------------------------------------------------
+# Part 5: the span bound. Any computation from 0 (a tree, or a DAG of products and free linear combinations) writes
+# T = sum_t S_t (x) e_t as a sum of at most sum_e rank(Delta_e) (2 per product) rank-1 tensors, so its cost is at
+# least the tensor rank R(T). Substitution: R(T) >= dim B + R(A) >= rank_Y(T') + R(T'), where B and A are T's
+# mode-1 slices from Y- and X-functionals (pure X (x) C and pure Y (x) C) and T' = sum_t D_t (x) e_t.
+
+
+def rref(M, p):
+    """Reduced row echelon form mod p and its rank."""
+    A = np.array(M, dtype=np.int64) % p
+    r, (rows, cols) = 0, A.shape
+    for c in range(cols):
+        piv = next((i for i in range(r, rows) if A[i, c]), None)
+        if piv is None:
+            continue
+        A[[r, piv]] = A[[piv, r]]
+        A[r] = A[r] * pow(int(A[r, c]), p - 2, p) % p
+        nz = A[:, c].copy()
+        nz[r] = 0
+        A = (A - np.outer(nz, A[r])) % p
+        r += 1
+        if r == rows:
+            break
+    return A, r
+
+
+def rowspace(M, p):
+    A, r = rref(M, p)
+    return list(A[:r])
+
+
+def lemma_steps(n_kill, mats, cover, p, kill="X"):
+    """The substitution lemma on one computation, step by step. `mats` are the target slices S_t (n x n), `cover`
+    the rank-1 matrices (u, w) in V (x) C whose span must contain T's mode-1 slices. kill="X" projects V onto Y
+    (the first n_kill coordinates are X). Returns (m, bound)."""
+    n, k = mats[0].shape[0], len(mats)
+    T = np.stack(mats, axis=2) % p
+    slices = [T[i].reshape(-1) for i in range(n)]
+    vec = [np.outer(u, w).reshape(-1) % p for u, w in cover]
+    m = len(cover)
+    assert rank(vec + slices, p) == rank(vec, p), "the cover's span misses a slice of T"
+    killed = list(range(n_kill)) if kill == "X" else list(range(n_kill, n))
+    kept = [i for i in range(n) if i not in killed]
+    I0 = [i for i, (u, _) in enumerate(cover) if not u[kept].any()]
+    rest = [i for i in range(m) if i not in I0]
+    proj = []
+    for i in rest:
+        u = cover[i][0].copy()
+        u[killed] = 0
+        proj.append(np.outer(u, cover[i][1]).reshape(-1) % p)
+    d = rank(proj, p) if proj else 0
+    dim_rel = len(rest) - d
+    B = [slices[i] for i in kept]          # contractions with kept-side functionals land in killed (x) C
+    A = [slices[i] for i in killed]
+    dim_B = rank(B, p)
+    assert dim_B <= len(I0) + dim_rel, "substitution: B outside span(I0) + rho(Rel)"
+    flat_A = max(rank(A, p), rank([T[np.ix_(killed, kept, [t])].reshape(-1) for t in range(k)], p),
+                 rank([T[np.ix_(killed, [j], range(k))].reshape(-1) for j in kept], p))
+    assert d >= flat_A, "substitution: the projected cover cannot hold A"
+    bound = dim_B + flat_A
+    assert m >= bound
+    return m, bound
+
+
+def tree_cover(G, cells, top, rng, p, rooted=True):
+    """A random tree over the cells (Steiner points from `random_point`) as (edges' rank-1 cover, cost)."""
+    nodes = flatten_tree(top)
+    children = {nid: [] for nid, _, _ in nodes}
+    for nid, par, _ in nodes:
+        if par is not None:
+            children[par].append(nid)
+
+    def leaves(nid):
+        leaf = nodes[nid][2]
+        return [leaf] if leaf is not None else [x for ch in children[nid] for x in leaves(ch)]
+
+    vals = {}
+    for nid, par, leaf in nodes:
+        vals[nid] = G.target(*cells[leaf], 1) if leaf is not None else random_point(G, [cells[x] for x in leaves(nid)], rng, p)
+    cover, cost = [], 0
+    for nid, par, leaf in nodes:
+        if par is None and not rooted:
+            continue
+        delta = vals[nid] if par is None else (vals[nid] - vals[par]) % p
+        chi = np.zeros(len(cells), dtype=np.int64)
+        chi[leaves(nid)] = 1
+        if not rooted:
+            chi = (chi[:-1] - chi[-1]) % p
+        for q in rowspace(delta, p):
+            cover.append((q, chi))
+        cost += rank(delta, p)
+    return cover, cost
+
+
+def strassen_cover(p):
+    """Strassen's 7 products on the full 2 x 2 grid at L = 2: a DAG with 14 < 16 = 2Lk rank-1 terms."""
+    G = Grid(2, 2, 2)
+    a = lambda r, k: np.eye(G.n, dtype=np.int64)[G.x(r, k)]
+    b = lambda k, c: np.eye(G.n, dtype=np.int64)[G.y(k, c)]
+    M = [(a(0, 0) + a(1, 1), b(0, 0) + b(1, 1)), (a(1, 0) + a(1, 1), b(0, 0)), (a(0, 0), b(0, 1) - b(1, 1)),
+         (a(1, 1), b(1, 0) - b(0, 0)), (a(0, 0) + a(0, 1), b(1, 1)), (a(1, 0) - a(0, 0), b(0, 0) + b(0, 1)),
+         (a(0, 1) - a(1, 1), b(1, 0) + b(1, 1))]
+    cells = [(0, 0), (0, 1), (1, 0), (1, 1)]
+    use = {(0, 0): [1, 0, 0, 1, -1, 0, 1], (0, 1): [0, 0, 1, 0, 1, 0, 0], (1, 0): [0, 1, 0, 1, 0, 0, 0],
+           (1, 1): [1, -1, 1, 0, 0, 1, 0]}
+    mats = [G.target(r, c, 1) for (r, c) in cells]
+    for t, cell in enumerate(cells):
+        got = sum(2 * c * sym(g % p, h % p, p) for c, (g, h) in zip(use[cell], M)) % p
+        assert (got == mats[t] % p).all(), "Strassen's products miss a target"
+    cover = []
+    for i, (g, h) in enumerate(M):
+        w = np.array([use[cell][i] for cell in cells], dtype=np.int64) % p
+        cover += [(g % p, w), (h % p, w)]
+    return G, mats, cover
+
+
+def rank_at_most(mats, p, extra):
+    """Exact test: is R(T) <= dim W + extra (extra in {0, 1}), W = T's mode-1 slice space, over GF(p)?"""
+    n, k = mats[0].shape[0], len(mats)
+    T = np.stack(mats, axis=2) % p
+    Wb = rowspace([T[i].reshape(-1) for i in range(n)], p)
+    dW = len(Wb)
+    full = list(Wb)
+    for i in range(n * k):
+        e = np.zeros(n * k, dtype=np.int64)
+        e[i] = 1
+        if rank(full + [e], p) > len(full):
+            full.append(e)
+    Bm = np.array(full, dtype=np.int64)
+    aug, _ = rref(np.hstack([Bm.T, np.eye(n * k, dtype=np.int64)]), p)
+    inv = aug[:, n * k:]                    # coordinates of v in the basis `full`: inv @ v
+    projv = lambda d: [np.array(v) for v in itertools.product(range(p), repeat=d)
+                       if any(v) and v[next(i for i in range(d) if v[i])] == 1]
+    ones = [np.outer(u, w).reshape(-1) % p for u in projv(n) for w in projv(k)]
+    R1 = np.array(ones, dtype=np.int64)
+    Q = (R1 @ inv.T % p)[:, dW:]
+    inside = [i for i in range(len(ones)) if not Q[i].any()]
+    if extra == 0:
+        return rank([ones[i] for i in inside], p) == dW if inside else dW == 0
+    for z in projv(Q.shape[1]):
+        lead = Q[:, next(i for i in range(len(z)) if z[i])]
+        members = [i for i in range(len(ones)) if (Q[i] == lead[i] * z % p).all()]
+        if len(members) > dW and rank([ones[i] for i in members], p) == dW + 1:
+            return True
+    return False
+
+
+def part5(rng):
+    """The span bound, checked on random trees and on Strassen. (a) Column-injective patterns (no two cells in one
+    D-column) and row-injective ones: on random trees rooted at 0 the substitution's steps hold, and the bound is
+    2Lk; with a free root (differences S_t - S_k), 2L(k - 1). (b) The hypothesis is needed: Strassen's DAG on the full
+    2 x 2 grid at L = 2 covers T with 14 < 2Lk = 16 rank-1 terms, and the lemma's bound there is only 8. (c) Exact
+    tensor rank at L = 1 over GF(3): a row pair has R = 4 = 2Lk; the L-shape has R = 6 = 2Lk although the bound gives 5.
+    Mutation: the bound + 1 on the star."""
+    count = 0
+    pats = [((1, 3), [(0, 0), (0, 1), (0, 2)], "X"), ((2, 3), [(0, 0), (0, 1), (1, 2)], "X"),
+            ((3, 1), [(0, 0), (1, 0), (2, 0)], "Y"), ((2, 2), [(0, 0), (1, 1)], "X"),
+            ((1, 4), [(0, 0), (0, 1), (0, 2), (0, 3)], "X")]
+    for p in (3, 5, 10007):
+        for (P, Q), cells, kill in pats:
+            for L in (1, 2):
+                G = Grid(P, Q, L)
+                k = len(cells)
+                tops = topologies(k, rooted=True)
+                for _ in range(6):
+                    top = rng.choice(tops)
+                    cover, cost = tree_cover(G, cells, top, rng, p)
+                    mats = [G.target(r, c, 1) for (r, c) in cells]
+                    m, bound = lemma_steps(G.nX, mats, cover, p, kill)
+                    assert m == cost and bound == 2 * L * k, (m, bound)
+                    cover, cost = tree_cover(G, cells, top, rng, p, rooted=False)
+                    diff = [(mats[t] - mats[-1]) % p for t in range(k - 1)]
+                    m, bound = lemma_steps(G.nX, diff, cover, p, kill)
+                    assert m == cost and bound >= 2 * L * (k - 1), (m, bound)
+                    count += 2
+    G = Grid(1, 3, 2)
+    mats = [G.target(0, c, 1) for c in range(3)]
+    star = [(q, np.eye(3, dtype=np.int64)[t]) for t in range(3) for q in rowspace(mats[t], 3)]
+    m, bound = lemma_steps(G.nX, mats, star, 3)
+    assert m == bound == 12 and not m >= bound + 1, "mutation not caught: the bound + 1 on the star"
+    G, mats, cover = strassen_cover(3)
+    m, bound = lemma_steps(G.nX, mats, cover, 3)
+    assert m == 14 < 2 * G.L * 4 and bound == 8, "mutation not caught: R(T) >= 2Lk without injectivity"
+    G = Grid(1, 2, 1)
+    row2 = [G.target(0, c, 1) for c in range(2)]
+    assert not rank_at_most(row2, 3, 0) and rank_at_most(row2, 3, 1)
+    G = Grid(2, 2, 1)
+    lshape = [G.target(r, c, 1) for (r, c) in [(0, 0), (0, 1), (1, 0)]]
+    cover = [(q, np.eye(3, dtype=np.int64)[t]) for t in range(3) for q in rowspace(lshape[t], 3)]
+    assert lemma_steps(G.nX, lshape, cover, 3)[1] == 5
+    assert not rank_at_most(lshape, 3, 1), "the L-shape at L = 1 has tensor rank <= 5 over GF(3)"
+    print(f"  part 5: substitution steps on {count} random trees (rooted 2Lk, free root 2L(k-1)); Strassen 14 < 16 "
+          f"with bound 8; exact GF(3), L = 1: row pair R = 4, L-shape R = 6 (> bound 5); mutations caught")
+
+
+PARTS = {"1": part1, "2": part2, "3": part3, "4": part4, "5": part5}
 
 
 def main(argv):
