@@ -199,8 +199,8 @@ def device_run():
     return make, kernel, weights, roots, salt
 
 
-PER_CALL = ["s512_rows", "hm_leaves", "s512_frame_leaves", "s512_tree_small", "s512_seeds", "s512_seeds", "lines", "stats_s5",
-            "eprime", "form_s5", "words", "pa", "gemm_pearlc_d", "s512_tile_leaves"]
+PER_CALL = ["s512_row_segs", "s512_folds", "hm_leaves", "s512_frame_leaves", "s512_tree_small", "s512_seeds", "s512_seeds", "lines",
+            "stats_s5", "eprime", "form_s5", "words", "pa", "gemm_pearlc_d", "s512_tile_segs", "s512_folds"]
 
 
 def test_each_call_runs_the_pipelines_call_steps_at_its_offset_and_keys(device_run):
@@ -216,7 +216,7 @@ def test_each_call_runs_the_pipelines_call_steps_at_its_offset_and_keys(device_r
         names = [n for n, *_ in dev.log if not n.endswith("_smem")]
         assert names == PER_CALL, names
         by = {n: (p, i) for n, _, p, i in dev.log}
-        assert by["s512_tile_leaves"][0][2] == run.leaves.data_ptr() + 64 * before
+        assert by["s512_folds"][0][1] == run.leaves.data_ptr() + 64 * before        # the tile leaves' fold, the call's last
         assert by["gemm_pearlc_d"][0][4] == y.data_ptr()
         sh = run.shapes[(32, weights[w].shape[0], 1024)]
         index = len(run.cur.matmuls) - 1
@@ -241,8 +241,8 @@ def test_a_call_over_whole_128_row_tiles_runs_the_128_tile_chain(device_run):
     names = [n for n, *_ in kernel.dev.log if not n.endswith("_smem")]
     assert run.pipes[(0, 128, frozenset(), True, "serial", False)][0].bm == 128
     by = {n: p for n, _, p, _ in kernel.dev.log}
-    assert names[-2:] == ["gemm_pearlc", "s512_tile_leaves"] and by["gemm_pearlc"][4] == y.data_ptr()
-    assert by["s512_tile_leaves"][:2] == tuple(by["gemm_pearlc"][2:4])
+    assert names[-3:] == ["gemm_pearlc", "s512_tile_segs", "s512_folds"] and by["gemm_pearlc"][4] == y.data_ptr()
+    assert by["s512_tile_segs"][:2] == tuple(by["gemm_pearlc"][2:4])
 
 
 def test_nohash_forms_and_multiplies_without_hashing(device_run):
@@ -296,7 +296,7 @@ def test_a_retained_pass_starts_from_poisoned_outputs_and_omit_drops_a_step(devi
     run.omit = frozenset({"hash_leaf"})
     kernel.dev.log.clear()
     run.gemm(0, torch.randn(32, 1024).to(torch.bfloat16), weights[0], None)
-    assert "s512_tile_leaves" not in [n for n, *_ in kernel.dev.log] and "gemm_pearlc_d" in [n for n, *_ in kernel.dev.log]
+    assert "s512_tile_segs" not in [n for n, *_ in kernel.dev.log] and "gemm_pearlc_d" in [n for n, *_ in kernel.dev.log]
 
 
 def test_the_e2e_gate_fails_a_device_that_writes_nothing(device_run):
@@ -357,9 +357,9 @@ def test_the_device_paths_keys_and_tree_hash_are_the_schemes(scheme):
 def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme):
     """B's roots, each call's A root over its m₁₆ rows (filler zero), and the pass's tile tree over the leaves the calls wrote,
     their kernels run by `simt_twin`: each is `MerkleTree`'s root in hm96-sha512 (frame-v3-sha512 over values salted by the
-    prover's key).  Each call's row digests are s512_rows', each `pearl_c.row_digest` of its row; its row seeds are s512_seeds'
-    over them, the scheme's `row_seeds`, with their line keys, which E_A's lines read for the m₁₆ committed rows; and seed_A is
-    the scheme's."""
+    prover's key).  Each call's row digests are hash_fast.cuh's (s512_row_segs, then s512_folds), each `pearl_c.row_digest`
+    of its row; its row seeds are s512_seeds' over them, the scheme's `row_seeds`, with their line keys, which E_A's lines
+    read for the m₁₆ committed rows; and seed_A is the scheme's."""
     s = PPD.scheme_of(scheme)
     h, nb, key = s.commitment_hash, 64, SALT_KEY
     rng = np.random.default_rng(5)
@@ -379,7 +379,7 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme):
         kernel.dev.log.clear()
         run.gemm(w, x, weights[w], None)
         names = [n for n, *_ in kernel.dev.log if not n.endswith("_smem")]
-        tree = ["s512_rows", "hm_leaves", "s512_frame_leaves", "s512_tree_small", "s512_seeds", "s512_seeds", "lines"]
+        tree = ["s512_row_segs", "s512_folds", "hm_leaves", "s512_frame_leaves", "s512_tree_small", "s512_seeds", "s512_seeds", "lines"]
         assert names[:len(tree)] == tree, names
         sh, index = run.shapes[(32, weights[w].shape[0], 1024)], len(run.cur.matmuls) - 1
         a = torch.zeros((32, 1024), dtype=torch.float32)
@@ -1462,13 +1462,15 @@ def test_the_deferred_schedule_hashes_tiles_on_the_side_stream_from_rotating_set
     for _ in range(3):
         run.gemm(0, torch.randn(32, 1024).to(torch.bfloat16), weights[0], None)
     log = [(n, st, p) for n, st, p, _ in kernel.dev.log if not n.endswith("_smem")]
-    assert {st for n, st, _ in log if n == "s512_tile_leaves"} == {run.side.raw} == {1}
-    assert {st for n, st, _ in log if n != "s512_tile_leaves"} == {main}
+    assert [n for n, st, _ in log if st == run.side.raw] == ["s512_tile_segs", "s512_folds"] * 3 and run.side.raw == 1
+    assert {st for n, st, _ in log if st != run.side.raw} == {main}
     sets = run.shapes[(32, 256, 1024)].sets
     ptr = lambda j: (sets[j]["c"].data_ptr(), sets[j]["u"].data_ptr())
     gemms = [p[2:4] for n, _, p in log if n == "gemm_pearlc_d"]
-    leaves = [p[:2] for n, _, p in log if n == "s512_tile_leaves"]
+    leaves = [p[:2] for n, _, p in log if n == "s512_tile_segs"]
     assert gemms == leaves == [ptr(0), ptr(1), ptr(0)] and ptr(0) != ptr(1)
+    scratch = [p[2] for n, _, p in log if n == "s512_tile_segs"]       # each set's own segment scratch (SIDE_IO's writes)
+    assert scratch == [sets[j]["segdig_t"].data_ptr() for j in (0, 1, 0)]
     run.begin()
     run.poison()
     assert all(bool((t == 0xA5).all()) for st in sets for t in st.values())
@@ -1531,7 +1533,7 @@ def test_a_schedule_this_path_or_the_format_cannot_run_is_refused():
         PPD.schedule_of(Schedule("screen-aside", frozenset({"tile_hash", "screen"}), ring=2), s)
     with pytest.raises(ValueError, match="a side lane needs ring >= 2"):
         PPD.schedule_of(Schedule("one-set", frozenset({"tile_hash"}), ring=1), s)
-    assert PPD.rotated(PPD.schedule_of("deferred", s)) == ("c", "u") and PPD.rotated(PPD.SERIAL) == ()
+    assert PPD.rotated(PPD.schedule_of("deferred", s)) == ("c", "segdig_t", "u") and PPD.rotated(PPD.SERIAL) == ()
 
 
 def test_the_schedule_changes_between_passes_and_the_ring_grows_poisoned(device_run):
@@ -1547,7 +1549,7 @@ def test_the_schedule_changes_between_passes_and_the_ring_grows_poisoned(device_
     run.gemm(0, torch.randn(32, 1024).to(torch.bfloat16), weights[0], None)
     assert len(sh.sets) == 2 and all(bool((t == 0xA5).all()) for t in sh.sets[1].values())
     assert run.details["schedule"] == {"name": "deferred", "side": ["tile_hash"], "ring": 2, "main": -(1 << 10), "side_lane": 0}
-    assert {st for n, st, _, _ in kernel.dev.log if n == "s512_tile_leaves"} == {1} and run.end()["schedule"] == "deferred"
+    assert {st for n, st, _, _ in kernel.dev.log if n == "s512_tile_segs"} == {1} and run.end()["schedule"] == "deferred"
 
 
 def test_the_gates_schedule_check_compares_with_serial_and_keeps_the_runs_schedule(device_run):
@@ -1699,5 +1701,5 @@ def test_the_modes_are_arms_and_the_negative_control_is_a_pass_control(device_ru
         assert run.omit == E2E.CONTROL_OMITS
         stack.apply(sites[0], _Layer(weights[0]), torch.randn(32, 1024).to(torch.bfloat16), None, None)
     names = {n for n, *_ in kernel.dev.log}
-    assert "s512_tile_leaves" not in names and "s512_rows" not in names and run.omit == frozenset()
+    assert not names & {"s512_tile_segs", "s512_row_segs", "s512_tile_leaves", "s512_rows"} and run.omit == frozenset()
     assert all(c <= set(PPD.CALL_STEPS) for c in E2E.CONTROLS.values())
