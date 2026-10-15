@@ -87,7 +87,9 @@ def expected(tid: str, seen: dict[str, Any]) -> torch.Tensor:
     if tid == "mla_kv_cache":
         return torch.cat((seen["kv_c"], seen["k_pe"]), dim=1)
     if tid == "indexer.k_cache":
-        return torch.stack([torch.cat(G.index_key(k)) for k in seen["index_k"]])
+        return torch.stack([G.index_key(k)[0] for k in seen["index_k"]])
+    if tid == "indexer.k_scale":
+        return torch.stack([G.index_key(k)[1].view(torch.float32) for k in seen["index_k"]])
     return {"indexer.topk": lambda: seen["topk"], "v_absorb": lambda: seen["output"][: seen["mqa_rows"]],
             "attn": lambda: seen["attn_mqa"], "attn.mha": lambda: seen["attn_mha"]}[tid]()
 
@@ -119,7 +121,7 @@ def test_each_bound_value_is_the_one_the_layer_computed(runs):
 
 def test_the_shared_top_k_buffer_is_flushed_as_soon_as_it_is_bound(runs):
     log = runs[True].log
-    topk = [j for j, (what, name) in enumerate(log) if what == "acquire" and name.endswith("indexer_op/topk")]
+    topk = [j for j, (what, name) in enumerate(log) if what == "acquire" and name.endswith("self_attn/topk")]
     assert len(topk) == 3 * len(INDEXER), "the decode, mixed and sparse prefill steps, on every indexer layer"
     assert all(log[j + 1] == ("flush", AS.TOPK) for j in topk)
 
@@ -136,7 +138,7 @@ def routes_bad(violation: dict[str, Any], names: set[str], counts: tuple[int, in
 
 
 def test_identity_check_holds_a_step_to_the_target_only_taps_on_the_target_only(runs, capsys):
-    q8 = f"model.layers.{min(INDEXER)}.self_attn.indexer/q_fp8"
+    q8 = f"model.layers.{min(INDEXER)}.self_attn/index_q"
     on, off = runs[True], runs[False]
     steps = full_steps(on, capsys, True)
     got = on.check(steps, sources=[on.src, on.att])
@@ -158,7 +160,7 @@ def test_a_cache_write_the_source_did_not_see_binds_no_cache_rows(capsys):
     finally:
         G.fused_norm_rope = wrapped
         r.close()
-    rows = {r.att.names["mla_kv_cache"][i] for i in range(L)} | {r.att.names["indexer.k_cache"][i] for i in INDEXER}
+    rows = {r.att.names["mla_kv_cache"][i] for i in range(L)} | {r.att.names[t][i] for t in ("indexer.k_cache", "indexer.k_scale") for i in INDEXER}
     assert set(map_names(capsys, SPARSE, "decode", binders=(AS.BINDER,))) - set(r.names(0)) == rows
     assert r.att.stats["unpaired"] == L and G.fused_norm_rope is NORM_ROPE
     v = r.check({0: r.names(0) + map_names(capsys, SPARSE, "decode", binders=OTHERS)}, sources=[r.src, r.att])["violations"]

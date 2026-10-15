@@ -9,7 +9,7 @@ module of the committer's acquired classes.  On every attention layer this sourc
 
 - `_sparse_indexer_and_attn`: before it runs, its arguments `ARGUMENTS` (fused_norm_rope's q_c, kv_c_out and k_pe_out, the W_UK_T
   product, fused_q's three outputs) and the layer's cache rows at the step's slots, which fused_norm_rope has just written: the MLA
-  cache entry (`mla_rows`) and, on an indexer layer, the indexer cache row (`indexer_rows`).  After it returns, the rows the MQA
+  cache entry (`mla_rows`) and, on an indexer layer, the indexer cache row's key bytes and f32 scale (`indexer_rows`).  After it returns, the rows the MQA
   path wrote into `output` (the W_UV product) and, on an indexer layer, `topk_indices_buffer[:M, :TOPK]`, the indices that path
   read (shared by every layer, so the committer flushes it at once);
 - the layer's `impl.forward_mqa` (its return: the latent attention of the rows it attends) and `impl.forward_mha` (its `output`
@@ -39,8 +39,9 @@ ATTEND, MQA, MHA, NORM_ROPE = "_sparse_indexer_and_attn", "forward_mqa", "forwar
 #: ATTEND's arguments -> the map's tap ids
 ARGUMENTS = {"q_c": "q_a_layernorm", "kv_c": "kv_a_layernorm", "k_pe": "k_pe_rope", "ql_nope": "q_nope_absorb", "mqa_q": "q_pe_rope",
              "index_q_fp8": "indexer.q_fp8", "index_weights_out": "indexer.weights"}
-MLA_ROWS, INDEX_ROWS, ATTN_MQA, ATTN_MHA, V_UP, TOPK = "mla_kv_cache", "indexer.k_cache", "attn", "attn.mha", "v_absorb", "indexer.topk"
-TAPS = frozenset(ARGUMENTS.values()) | {MLA_ROWS, INDEX_ROWS, ATTN_MQA, ATTN_MHA, V_UP, TOPK}
+MLA_ROWS, INDEX_ROWS, INDEX_SCALE = "mla_kv_cache", "indexer.k_cache", "indexer.k_scale"
+ATTN_MQA, ATTN_MHA, V_UP, TOPK = "attn", "attn.mha", "v_absorb", "indexer.topk"
+TAPS = frozenset(ARGUMENTS.values()) | {MLA_ROWS, INDEX_ROWS, INDEX_SCALE, ATTN_MQA, ATTN_MHA, V_UP, TOPK}
 SCALE_BYTES = 4
 _BYTES = {"bfloat16": 2, "float32": 4, "int32": 4, "float8_e4m3fn": 1, "uint8": 1}
 
@@ -58,21 +59,21 @@ def mla_rows(cache: Any, slots: Any, width: int, dtype: str) -> Any:
     return cache[slots // bs, slots % bs]
 
 
-def indexer_rows(cache: Any, slots: Any, width: int) -> Any:
-    """The indexer cache rows at `slots`, each its `width - SCALE_BYTES` e4m3 key bytes then its f32 scale's bytes.  A
-    [num_blocks, block_size, width] byte cache holds, per block, the block's key rows one after another and then their scales
+def indexer_rows(cache: Any, slots: Any, head: int) -> tuple[Any, Any] | None:
+    """The indexer cache rows at `slots`: their `head` e4m3 key bytes [n, head] and their f32 scales [n, 1].  A [num_blocks,
+    block_size, head + SCALE_BYTES] byte cache holds, per block, the block's key rows one after another and then their scales
     (fused_norm_rope's `_fp8_quant_and_cache_write`); None for another layout."""
+    width = head + SCALE_BYTES
     if cache.dim() != 3 or int(cache.shape[-1]) != width or cache.element_size() != 1:
         return None
     nb, bs, _w = (int(x) for x in cache.shape)
     if cache.stride(2) != 1 or cache.stride(1) != width:
         return None
-    head = width - SCALE_BYTES
     flat = cache.view(torch.uint8).view(nb, bs * width)
     blk, off = (slots // bs)[:, None], (slots % bs)[:, None]
     keys = flat[blk, off * head + torch.arange(head, device=flat.device)]
     scale = flat[blk, bs * head + off * SCALE_BYTES + torch.arange(SCALE_BYTES, device=flat.device)]
-    return torch.cat((keys, scale), dim=1)
+    return keys, scale.contiguous().view(torch.float32)
 
 
 class AttentionSource:
@@ -170,14 +171,16 @@ class AttentionSource:
             self.stats["unpaired"] += 1
             return
         s = slots[: int(q_c.shape[0])].long()
-        for tid, cache, rows in ((MLA_ROWS, kw.get("mla_kv_cache"), lambda c: mla_rows(c, s, self.width[MLA_ROWS], self.taps[MLA_ROWS]["dtype"])),
-                                 (INDEX_ROWS, kw.get("indexer_k_cache"), lambda c: indexer_rows(c, s, self.width[INDEX_ROWS]))):
-            if layer not in self.names.get(tid, {}) or cache is None:
+        for tids, cache, rows in (((MLA_ROWS,), kw.get("mla_kv_cache"), lambda c: (mla_rows(c, s, self.width[MLA_ROWS], self.taps[MLA_ROWS]["dtype"]),)),
+                                  ((INDEX_ROWS, INDEX_SCALE), kw.get("indexer_k_cache"), lambda c: indexer_rows(c, s, self.width[INDEX_ROWS]))):
+            if layer not in self.names.get(tids[0], {}) or cache is None:
                 continue
             got = rows(cache)
-            if got is None:
+            if got is None or got[0] is None:
                 self.stats["layout_refused"] += 1
-            self._bind(tid, layer, got, job)
+                continue
+            for tid, t in zip(tids, got):
+                self._bind(tid, layer, t, job)
 
     def _attend(self, layer: int, mod: Any) -> Any:
         me = self
