@@ -17129,12 +17129,12 @@
    ]
   },
   "Proofs.Flock.Recursive.AuditC3": {
-   "digest": "e50e0d36b6d735e3baa802698cee69cd1e2d678198b63ae53d66256af8267881",
+   "digest": "9d2c2dbc5c65a24652250752450fa52f6293547d24b9ff9a5dc1ae43ea316455",
    "definitions": {
     "Flock.Guarantees.ChecksC3": "51028e9378de1ba7733b8fe290d67ec773bd0903aa591c8f10a114ac189dbbb7",
     "Flock.Guarantees.ChecksVR": "91d4d45c655b92406ae93ab759d14b8488eee77108c5d38a2ff647a11312df12",
     "Flock.Guarantees.RecursiveAuditC3": "c627d9a8098dc7747b12bf04ed826276bf6a6d742b5daee6b4b5c74255aba752",
-    "Flock.Guarantees.RecursiveAuditC3At": "25764148296a219f7187ec28c723002a538aae21ad3715ec33735f128d8256d3",
+    "Flock.Guarantees.RecursiveAuditC3At": "0a03ab8033e6f360a556c7cda18f44a2a4c952dcc4dd2463fcc8592345ebd690",
     "Flock.Guarantees.RunOpensReg": "9fda8b4dbc946dcea4f52a843cd28022c3ce478f12bee70f3cd7d83fdd233871",
     "Flock.Guarantees.c3Of": "7a387edb360170506c4d9fe694a6badb5d15ffef124c97ec1b1350e75cbd2465",
     "Flock.Guarantees.checkedC3": "484710ae525294bcf9048eb3d726f25330e38d02e3e0000642eb08e508042213",
