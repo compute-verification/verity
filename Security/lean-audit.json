@@ -54,6 +54,10 @@
    "owner": "@lean",
    "digest": "39aeeeb2cb2d00dd802a7c1d91b8d93ed6b46429748d8ef583b6e2f1af51b59a"
   },
+  "Nci.Assumptions.ActivationsSupport": {
+   "owner": "@lean",
+   "digest": "9657b492f110a0188f677b492aec3e46e5eab5834bdfc613b955da6ee949f8ca"
+  },
   "Nci.Assumptions.PartialSumsIncompressible": {
    "owner": "@lean",
    "digest": "3e12dadef8d8457e3aa1179212599e1eabeef158cb25d3d51bab61e7668f6374"
@@ -6638,6 +6642,16 @@
     "Nci.readFactor": "427aa147343137e4df8ca0791a21530052e928f25b6372e268c4d65181ca7385"
    },
    "guarantees": ["Accounting.SecurityProofs.Actual.Runtime", "Nci.SecurityProofs.UpdatedMatMulReads"]
+  },
+  "Definitions.Nci.Support": {
+   "digest": "b466f060ad2fdf2d08c1efb55eca1519099dd9e35430c624e678cad47d21d303",
+   "definitions": {
+    "Nci.Chain.charge": "dcde75de43461f4dd16ca81443bfa3a8847eba585ed4a1bb90bb2080fc94cc92",
+    "Nci.admissible": "f44e179517ce8d6b284afca03359b71bf728dba0915709e06996cf862faa0221",
+    "Nci.support": "1163e4722a9cf138b9ee8bf985be1fc7d16d03c6bd78978790307e3156232cf2",
+    "Nci.values": "d449b501efbdba9b0ad5b679d9a383a3382c093923ba315198a1353a1a978ae4"
+   },
+   "guarantees": ["Nci.SecurityProofs.IuReads"]
   },
   "Definitions.NetworkCertifier.Grid": {
    "digest": "c7ed6edeeae9117352e16647ec33b99c24c886b9fb8833bad5989949fd0516fc",
@@ -15929,9 +15943,10 @@
    ]
   },
   "Models.Nci.Assumptions": {
-   "digest": "f4315d64f98e55121fb85549ad8ce05cbc17be8d78b6d137db676a4c1c12dae5",
+   "digest": "77db2b40d39cc8b6bc5517178d1ef001594f5057e5465c9e134f7555db16b5f3",
    "definitions": {
     "Nci.Assumptions.ActivationsIncompressible": "39aeeeb2cb2d00dd802a7c1d91b8d93ed6b46429748d8ef583b6e2f1af51b59a",
+    "Nci.Assumptions.ActivationsSupport": "9657b492f110a0188f677b492aec3e46e5eab5834bdfc613b955da6ee949f8ca",
     "Nci.Assumptions.PartialSumsIncompressible": "3e12dadef8d8457e3aa1179212599e1eabeef158cb25d3d51bab61e7668f6374"
    },
    "guarantees": [
@@ -15943,11 +15958,11 @@
    ]
   },
   "Models.Nci.Guarantees": {
-   "digest": "cd6f1af1ce140226037a84cb52697151bc5f5c8bd2c6405c131e5140bda3fc1b",
+   "digest": "65c397da381dbf606b830646356e6ffdd535d023053cc4403786e09e9f8a84cc",
    "definitions": {
     "Nci.Guarantees.FullPositions": "d54c7a931477700350ff52305d1c89e1b4edf5acb6615238fcbbbad1f077b49e",
     "Nci.Guarantees.Inference": "23d56232118a97bcf16c30143ce0e193b0058e2442abd9d09674a512007a3013",
-    "Nci.Guarantees.IuReads": "5d23271a1f8c301c26b77534099ad483df9e85d51ef43a15df9e410b302ed854",
+    "Nci.Guarantees.IuReads": "b75c25b57d70685ec0ab1cf5563484f6f1bb60d64013f2722ceac0f3a407705a",
     "Nci.Guarantees.LoomisWhitney": "a401175d8bc1c070806d801c28db80a156b55c612b14cd34a3ddf4de3de1216a",
     "Nci.Guarantees.OtherPositions": "621e09ac743f52a6a3fb895c4596891a2a2aef1190e08b55c7513de58b9276b6",
     "Nci.Guarantees.ReadBound": "7bebcecb05808d9088b29248b1d6c07dd8da1fc5fd13d10cf6ad822a15070804",
@@ -24774,7 +24789,7 @@
   "aesop": "b36c1fbce9f43510169424e3ec097b69126f0e6afe5a801760e86c4da75f285d",
   "batteries": "93d037527498f18cb49b52aa08a14febe351a161b47e44ca105e85e935264406",
   "importGraph": "c2a38b9540d4202c5331616b78727f2aeec0a2ae1b203889c6c6a2c8d6cb2ca3",
-  "mathlib": "a6d8a20d22b4bb1b26e538dd2ecdeb61c6bd65122c64cf013539ac3673a858a8",
+  "mathlib": "1d926eeec05a5c8f595aa7462ab1241e17765a14d656c47b4f6066becc802613",
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "4edab11dd995fc9c2cbf6c1e03d9a99e1f77e91b6b904838c87c7dad86c9c323",
   "toolchain": "aa972bbb9beca661b6dff9dc137830b371ecc15504c0130bbeaa1554de1d1c03"
