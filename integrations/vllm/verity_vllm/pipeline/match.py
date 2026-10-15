@@ -1143,7 +1143,7 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
                     if k == "view":
                         r2[k] = view(v) if v is not None else None
                     elif k == "refs":
-                        r2[k] = run_items(v) if v is not None else None
+                        r2[k] = run_items(v if isinstance(v, list) else runs(v)) if v is not None else None
                     else:
                         r2[str(k)] = _jsonable(v)
                 f.write(_dumps(r2, separators=(",", ":")) + "\n")
