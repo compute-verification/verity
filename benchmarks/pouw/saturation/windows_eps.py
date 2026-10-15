@@ -147,7 +147,7 @@ def main():
     tab = json.load(open(a.table))
     for t in map(lambda p: json.load(open(p)), a.more):
         have = {r["kernel"] for r in tab["rows"]}
-        new = lambda k: k not in have and not re.search(r"_x[ifm]?\d+$", k)
+        new = lambda k: k not in have and not re.search(r"_x[ifmga]?\d+$", k)
         tab["rows"] += [r for r in t["rows"] if new(r["kernel"])]
         tab["phases"] += [p for p in t["phases"] if new(p["kernel"])]
     kept = {(p["kernel"], p["phase"]): p["rate_kept"] for p in tab["phases"]}

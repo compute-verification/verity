@@ -5,8 +5,8 @@
 
 --drop X skips the X-step variants: runs before the cheater's store test read z[0] have x1 kernels whose chain nvcc
 removed (no cheater instructions; at most a different register allocation), so their X = 1 rows measure no work.
---xvar keeps only the cheaters of those step kinds (0 alu, 1 imad, 2 FFMA, 3 an alu step and six FFMAs), e.g. 0,1 for
-ALU-pipe work alone.
+--xvar keeps only the cheaters of those step kinds (0 alu, 1 imad, 2 FFMA, 3 an alu step and six FFMAs, 4 and 5
+FFMA and alu on eight chains), e.g. 0,1,5 for ALU-pipe work alone.
 
 Input: `cutlass_receipt`'s JSON from job.sh's cheat stage, where each design kernel runs beside its `_xX` variants: the
 same kernel plus X alu phi1 steps a thread after every 32-deep k-block on chains that never read the accumulators
@@ -30,9 +30,9 @@ import argparse
 import json
 import re
 
-PHI_SOLO = {0: 21.2, 1: 26.6, 2: 128.0, 3: 1 / (1 / 21.2 + 6 / 128.0)}
-VARIANT = re.compile(r"_x[ifm]?(\d+)$")
-XVAR = {0: "", 1: " imad", 2: " FFMA", 3: " alu + 6 FFMA"}
+PHI_SOLO = {0: 21.2, 1: 26.6, 2: 128.0, 3: 1 / (1 / 21.2 + 6 / 128.0), 4: 128.0, 5: 21.2}
+VARIANT = re.compile(r"_x[ifmga]?(\d+)$")
+XVAR = {0: "", 1: " imad", 2: " FFMA", 3: " alu + 6 FFMA", 4: " FFMA, 8 chains", 5: " alu, 8 chains"}
 NOISE = 0.005
 KB = 4
 

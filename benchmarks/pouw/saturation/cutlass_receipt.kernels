@@ -5,7 +5,7 @@
 # after every 32-deep k-block, on chains of its own; honest H gives the first H chain words of each receipt point one more
 # round; forced F adds F phi1 steps after every 32-deep k-block on receipt chains that read no accumulator; xvar 1 makes
 # the cheater's steps imad phi1 (`_xiX` in the name), xvar 2 FFMAs (`_xfX`), xvar 3 an alu phi1 and six FFMAs each
-# (`_xmX`); fvar 2 makes the forced steps FFMAs, `_ffF`)
+# (`_xmX`), xvar 4 and 5 FFMAs and alu phi1 on eight chains (`_xgX`, `_xaX`); fvar 2 makes the forced steps FFMAs, `_ffF`)
 p_plain    0 0 1 1 0
 p_dump     0 0 1 1 2
 p_alu_p1   0 0 1 1 1
@@ -320,3 +320,30 @@ p_alu_g4_x128 0 0 1 1 1 0 4 128 0 0 0 0
 p_alu_g4_x256 0 0 1 1 1 0 4 256 0 0 0 0
 p_alu_g4_ff256_x64 0 0 1 1 1 0 4 64 0 256 0 2
 p_alu_g4_ff256_x128 0 0 1 1 1 0 4 128 0 256 0 2
+p_alu_g4_xg16 0 0 1 1 1 0 4 16 0 0 4 0
+p_alu_g4_xg32 0 0 1 1 1 0 4 32 0 0 4 0
+p_alu_g4_xg64 0 0 1 1 1 0 4 64 0 0 4 0
+p_alu_g4_xg128 0 0 1 1 1 0 4 128 0 0 4 0
+p_alu_g4_xg256 0 0 1 1 1 0 4 256 0 0 4 0
+p_alu_g4_xa4 0 0 1 1 1 0 4 4 0 0 5 0
+p_alu_g4_xa8 0 0 1 1 1 0 4 8 0 0 5 0
+p_alu_g4_xa16 0 0 1 1 1 0 4 16 0 0 5 0
+p_alu_g4_xa32 0 0 1 1 1 0 4 32 0 0 5 0
+p_alu_g4_h4_ff192_xg16 0 0 1 1 1 0 4 16 4 192 4 2
+p_alu_g4_h4_ff192_xg32 0 0 1 1 1 0 4 32 4 192 4 2
+p_alu_g4_h4_ff192_xg64 0 0 1 1 1 0 4 64 4 192 4 2
+p_alu_g4_h4_ff192_xg128 0 0 1 1 1 0 4 128 4 192 4 2
+p_alu_g4_h4_ff192_xg256 0 0 1 1 1 0 4 256 4 192 4 2
+p_alu_g4_h4_ff192_xa4 0 0 1 1 1 0 4 4 4 192 5 2
+p_alu_g4_h4_ff192_xa8 0 0 1 1 1 0 4 8 4 192 5 2
+p_alu_g4_h4_ff192_xa16 0 0 1 1 1 0 4 16 4 192 5 2
+p_alu_g4_h4_ff192_xa32 0 0 1 1 1 0 4 32 4 192 5 2
+p_alu_g4_h8_ff192_xg16 0 0 1 1 1 0 4 16 8 192 4 2
+p_alu_g4_h8_ff192_xg32 0 0 1 1 1 0 4 32 8 192 4 2
+p_alu_g4_h8_ff192_xg64 0 0 1 1 1 0 4 64 8 192 4 2
+p_alu_g4_h8_ff192_xg128 0 0 1 1 1 0 4 128 8 192 4 2
+p_alu_g4_h8_ff192_xg256 0 0 1 1 1 0 4 256 8 192 4 2
+p_alu_g4_h8_ff192_xa4 0 0 1 1 1 0 4 4 8 192 5 2
+p_alu_g4_h8_ff192_xa8 0 0 1 1 1 0 4 8 8 192 5 2
+p_alu_g4_h8_ff192_xa16 0 0 1 1 1 0 4 16 8 192 5 2
+p_alu_g4_h8_ff192_xa32 0 0 1 1 1 0 4 32 8 192 5 2
