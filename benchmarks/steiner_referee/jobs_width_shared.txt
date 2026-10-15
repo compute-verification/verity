@@ -1,0 +1,4 @@
+# Round 3: Strassen over FP16 Winograd with shared products (referee). Run by run_jobs.sh from this directory.
+python3 width.py shared --n 32 --count 20 --seed 3
+python3 width.py shared --n 128 --count 4 --seed 4
+python3 width.py schemes --n 32 --count 50 --seed 5

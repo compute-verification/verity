@@ -14,6 +14,9 @@ granularity L = 2 on <n, k, n2> is n * k * n2 slots (one int8 slot a MAC).
            w + 4 bits, the FP16 analogue). Spans are tested over GF(P), so a hit is exact over Q and is then
            checked for an integral (odd-denominator) combination; a miss rules a scheme out over Z.
            `--ring W` instead tests single products modulo 2^W (W = w is the literal Z/4, Z/8 output ring).
+  shared   Strassen over FP16 Winograd with each product's value reused by several cells: exact while the
+           Winograd operands stay within FP16's integers (three levels), below the floor, and outside a count
+           that pays a product once per accumulator step.
 """
 
 import argparse
@@ -95,6 +98,55 @@ def run_schemes(X, Y):
                                   {"int8": 3, "cuda": 1}, fits_s8(u) and fits_s8(v))
 
     return T, out
+
+
+def strassen_fp16(A, B, levels, count):
+    """Strassen's 7 products, `levels` deep, over FP16 Winograd at the base. Each product is computed once and its
+    value added to several cells, which Theorem B's per-step count pays once per cell (so this is outside it)."""
+    if levels == 0:
+        s, t, jx, jy = winograd_operands(A, B)
+        ok = fits_fp16(s) and fits_fp16(t) and fits_fp16(A) and fits_fp16(B)
+        w = (np.float32(s) * np.float32(t)).astype(np.int64)
+        ok &= bool((w == s * t).all())
+        count["fp16"] += s.size + jx.size + jy.size
+        count["ok"] &= ok
+        return w.sum(axis=1) - jx[:, None] - jy[None, :]
+    h = A.shape[0] // 2
+    a11, a12, a21, a22 = A[:h, :h], A[:h, h:], A[h:, :h], A[h:, h:]
+    b11, b12, b21, b22 = B[:h, :h], B[:h, h:], B[h:, :h], B[h:, h:]
+    r = lambda x, y: strassen_fp16(x, y, levels - 1, count)
+    m1, m2, m3 = r(a11 + a22, b11 + b22), r(a21 + a22, b11), r(a11, b12 - b22)
+    m4, m5, m6, m7 = r(a22, b21 - b11), r(a11 + a12, b22), r(a21 - a11, b11 + b12), r(a12 - a22, b21 + b22)
+    return np.block([[m1 + m4 - m5 + m7, m3 + m5], [m2 + m4, m1 - m2 + m3 + m6]])
+
+
+def mode_shared(args):
+    rng = np.random.default_rng(args.seed)
+    rows = []
+    for levels in range(0, 5):
+        n = args.n
+        res = {"levels": levels, "exact": True, "fp16_ok": True}
+        for trial in range(args.count + 2):
+            if trial == 0:
+                X, Y = np.full((n, n), -128), np.full((n, n), -128)
+            elif trial == 1:
+                X, Y = np.full((n, n), -128), np.full((n, n), 127)
+            else:
+                X, Y = rng.integers(-128, 128, (n, n)), rng.integers(-128, 128, (n, n))
+            count = {"fp16": 0, "ok": True}
+            C = strassen_fp16(X.astype(np.int64), Y.astype(np.int64), levels, count)
+            res["exact"] &= bool(((C - X @ Y) % MOD == 0).all())
+            res["fp16_ok"] &= count["ok"]
+        res["worst_winograd_operand"] = 128 * 2 * 2 ** levels
+        res["fp16_ok"] &= res["worst_winograd_operand"] <= 2048
+        res["fp16_products"] = count["fp16"]
+        res["slots"] = 2 * count["fp16"]
+        res["ratio"] = res["slots"] / n ** 3
+        res["mixed_ratio"] = 2 * (7 ** levels) * ((n // 2 ** levels) ** 3 // 2) / n ** 3
+        rows.append(res)
+    best = min((r for r in rows if r["exact"] and r["fp16_ok"]), key=lambda r: r["mixed_ratio"])
+    return {"mode": "shared", "n": args.n, "rows": rows, "best_levels": best["levels"],
+            "best_mixed_ratio": best["mixed_ratio"], "failures": [] if rows[3]["fp16_ok"] and not rows[4]["fp16_ok"] else ["range"]}
 
 
 PRICE = {"int8": 1.0, "fp16": 2.0, "bf16": 2.0, "fp4": 0.5, "e4m3": 1.0, "cuda": 0.0}
@@ -361,7 +413,7 @@ def mode_ring(args):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("mode", choices=["schemes", "toy", "ring"])
+    ap.add_argument("mode", choices=["schemes", "toy", "ring", "shared"])
     ap.add_argument("--n", type=int, default=16)
     ap.add_argument("--count", type=int, default=50)
     ap.add_argument("--w", type=int, default=2)
@@ -373,7 +425,7 @@ def main():
                     help="I/N: this job takes the narrow triples whose first index is I mod N")
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
-    out = {"schemes": mode_schemes, "toy": mode_toy, "ring": mode_ring}[args.mode](args)
+    out = {"schemes": mode_schemes, "toy": mode_toy, "ring": mode_ring, "shared": mode_shared}[args.mode](args)
     print(json.dumps(out))
     return 1 if out["failures"] else 0
 
