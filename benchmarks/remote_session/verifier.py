@@ -43,16 +43,6 @@ from verity.core.protocols.remote_bandwidth import audit, coins, timing  # noqa:
 import wire  # noqa: E402
 from checks import Checks  # noqa: E402
 
-SPEC_BYTES_PER_S = 1597e9
-"""The RTX PRO 6000 Server Edition's datasheet memory bandwidth (`benchmarks/census/hardware.json`)."""
-MEASURED_BYTES_PER_S = 1539e9
-"""The fastest bare read of an encoded store measured on that GPU: 1,539.26 GB/s in the honest session of 14 Oct
-(prover r20261014-193057-8fec), rounded down. The "measured" ledger's capacity is the verifier's, never lower than this:
-the prover's calibration can only raise it, since a prover that reported a slower read would otherwise shrink every
-γ term (MEM-24: 0.066 read as 0.0057 at the least calibration still accepted)."""
-S_CHIP_BYTES = timing.CHIP_BYTES
-
-
 CHECK_BATCH = 1024
 """Openings a worker checks at once (`checks.Checks`)."""
 
@@ -320,23 +310,36 @@ class Verifier:
         return out
 
     def ledgers(self, record: audit.Record) -> dict:
+        """γ against the node's R at spec and measured (`timing.SPEC_BYTES_PER_S`, `timing.READ_BYTES_PER_S`: every
+        GPU's HBM and the host's DRAM), with the node's S_chip and squaring ceiling, whatever share of the node the
+        store is on.  Both R are the verifier's, which the prover's calibration can only raise: a prover reporting a
+        slower read would shrink every term but the timing (MEM-24).  R cancels in the certified bytes,
+        `(1 − γ)·R·Σ`, the same in both readings: they are what a session over part of the node establishes, whose γ
+        is the node's only once its store spans the node."""
         cal = self.calibration
         reported = float(cal["read_bytes_per_s"])
-        measured = max(MEASURED_BYTES_PER_S, reported)
+        measured = max(timing.READ_BYTES_PER_S, reported)
+        spec = max(timing.SPEC_BYTES_PER_S, measured)
         rebuild = audit.Rebuild(record.codec, timing.SQUARINGS_PER_S[record.codec.field.name])
-        out = {"inputs": {"spec_bytes_per_s": SPEC_BYTES_PER_S, "measured_read_bytes_per_s": measured,
-                          "reported_read_bytes_per_s": reported,
-                          "chip_bytes": S_CHIP_BYTES, "encode_bytes_per_s": cal["encode_bytes_per_s"],
+        node = {"gpus": timing.GPUS, "gpu_spec_bytes_per_s": timing.GPU_SPEC_BYTES_PER_S,
+                "gpu_read_bytes_per_s": timing.GPU_READ_BYTES_PER_S, "host_spec_bytes_per_s": timing.HOST_SPEC_BYTES_PER_S,
+                "host_read_bytes_per_s": timing.HOST_READ_BYTES_PER_S, "gpu_chip_bytes": timing.GPU_CHIP_BYTES,
+                "host_chip_bytes": timing.HOST_CHIP_BYTES}
+        out = {"inputs": {"spec_bytes_per_s": spec, "measured_read_bytes_per_s": measured,
+                          "reported_read_bytes_per_s": reported, "node": node,
+                          "chip_bytes": timing.CHIP_BYTES, "encode_bytes_per_s": cal["encode_bytes_per_s"],
                           "squarings_per_s": rebuild.squarings_per_s, "rows": record.rows,
                           "span_ns": record.span_ns, "receipts": record.receipts, "passes": record.passes,
                           "reads_bytes": record.receipts * record.block_bytes}}
-        for name, r in (("spec", max(SPEC_BYTES_PER_S, measured)), ("measured", measured)):
+        for name, r in (("spec", spec), ("measured", measured)):
             try:
-                lg = audit.ledger(record, capacity_bytes_per_s=r, chip_bytes=S_CHIP_BYTES, rebuild=rebuild)
-                out[name] = {"capacity_bytes_per_s": r, **lg.to_json()}
+                lg = audit.ledger(record, capacity_bytes_per_s=r, chip_bytes=timing.CHIP_BYTES, rebuild=rebuild)
+                whole = r * record.span_ns / 1e9
+                out[name] = {"capacity_bytes_per_s": r, **lg.to_json(), "certified_bytes": (1 - lg.gamma) * whole,
+                             "certified_bytes_horizon": (1 - lg.gamma_horizon) * whole}
             except ValueError as e:
                 out[name] = {"capacity_bytes_per_s": r, "refused": str(e)}
-        # RateAuditSketch's term: every compression the GPU could make over the span a guess or a key.
+        # RateAuditSketch's term: every compression the node's GPUs could make over the span a guess or a key.
         compressions = math.ceil(timing.SHA512_PER_S * record.span_ns / 1e9)
         out["sketch_failure"] = {"compressions": compressions,
                                  "log2": timing.log2(timing.sketch_failure(compressions, record.passes, record.rows))}
