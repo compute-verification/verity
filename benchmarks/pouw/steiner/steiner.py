@@ -1,4 +1,5 @@
-"""Searches for counterexamples to Conjecture A (Steiner rigidity of matmul prefix targets), driving dw_f2 / dw_f3.
+"""Searches for counterexamples to Conjecture A (Steiner rigidity of matmul prefix targets), driving dw_f2 / dw_f3 /
+dw_2b2 / sa.
 
 A bilinear form over X (a x b) and Y (b x c) is an R x C matrix, R = a*b X-variables by C = b*c Y-variables, with
 x[r][k] at row r*b + k and y[k][j] at column k*c + j; over F2 it is an int whose bit i*C + j is entry (i, j). The targets
@@ -1022,6 +1023,55 @@ def cmd_matmul(args, out) -> None:
                "root_dp": res["root_dp"], "labels": [t["label"] for t in terms]})
 
 
+def run_2b2(*args: str) -> dict:
+    out = subprocess.run([build("dw_2b2"), *args], check=True, stdout=subprocess.PIPE, text=True)
+    return json.loads(out.stdout)
+
+
+def cmd_full2x2(args, out) -> None:
+    """<2,b,2> with L = b by dw_2b2 (symmetric DW, whole space). First its checks: the in-place relaxation against brute
+    force, b = 2 against its no-symmetry arrays, and random four-terminal sets of 4 x 4 matrices against dw_f2 (every
+    subset's root value, and the tree)."""
+    rel = subprocess.run([build("dw_2b2"), "--test-relax", str(args.seed)], stdout=subprocess.PIPE, text=True)
+    emit(out, {"case": "dw_2b2_test_relax", "pass": rel.returncode == 0, "lines": rel.stdout.splitlines()[-1]})
+    ns = run_2b2("2", "--nosym")
+    emit(out, {"case": "dw_2b2_nosym_b2", "pass": ns["nosym_mismatch"] == 0 and ns["answer"] == 8,
+               "answer": ns["answer"], "nosym_mismatch": ns["nosym_mismatch"]})
+    rng = random.Random(args.seed)
+    fails = 0
+    for i in range(args.cross):
+        R = C = 4
+        ms: list[int] = []
+        while len(ms) < 4:
+            m = 0
+            for _ in range(rng.randint(1, 3)):
+                m ^= outer(rng.randrange(1, 16), rng.randrange(1, 16), R, C)
+            if m and m not in ms:
+                ms.append(m)
+        terms = [{"m": m, "label": f"t{q}"} for q, m in enumerate(ms)]
+        (ref,) = run_solver(spec_problem(f"cross{i}", R, C, terms))
+        got = run_2b2("2", "--terms", *[f"{m:x}" for m in ms])
+        same = all(got["root_dp"][str(S)] == ref["root_dp"][S] for S in range(1, 16))
+        tree = verify_tree_f2(got, R, C)
+        ok = same and tree["ok"] and got["answer"] == ref["answer"]
+        fails += not ok
+        if not ok or i < 3:
+            emit(out, {"case": f"dw_2b2_cross{i}", "pass": ok, "answer": got["answer"], "dw_f2": ref["answer"],
+                       "naive_sum_of_ranks": sum(rank_f2(m, R, C) for m in ms), "tree_check": tree})
+    emit(out, {"case": "dw_2b2_cross", "instances": args.cross, "fails": fails, "pass": fails == 0})
+    for b in args.b:
+        R, C, terms = matmul_targets(2, b, 2, b)
+        res = run_2b2(str(b))
+        if sorted(int(t[0], 16) for t in res["terminals"]) != sorted(t["m"] for t in terms):
+            raise SystemExit(f"dw_2b2 b={b}: its terminals are not matmul_targets(2, {b}, 2, {b})")
+        naive = 4 * b
+        sub_naive = {str(S): b * bin(S).count("1") for S in range(1, 16)}
+        below = [S for S, v in res["root_dp"].items() if v < sub_naive[S]]
+        emit(out, {"case": res["name"], "shape": [2, b, 2], "L": b, "naive": naive, "answer": res["answer"],
+                   "beats_naive": res["answer"] < naive, "subsets_below_naive": below,
+                   "tree_check": verify_tree_f2(res, R, C), "solver": res})
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", help="JSON lines file")
@@ -1076,11 +1126,15 @@ def main() -> None:
     p.add_argument("--iters", type=int, default=200000)
     p.add_argument("--restarts", type=int, default=64)
     p.add_argument("--seed", type=int, default=1)
+    p = sub.add_parser("full2x2")
+    p.add_argument("--b", type=int, nargs="+", default=[2, 3])
+    p.add_argument("--cross", type=int, default=200, help="random four-terminal sets checked against dw_f2")
+    p.add_argument("--seed", type=int, default=1)
     args = ap.parse_args()
     out = open(args.out, "a") if args.out else None
     cmds = {"validate": cmd_validate, "selftest": cmd_selftest, "selftest3": cmd_selftest3, "matmul": cmd_matmul,
             "matmul3": cmd_matmul3, "general": cmd_general, "grid": cmd_grid, "subspace": cmd_subspace, "sa": cmd_sa,
-            "sa-calibrate": cmd_sa_calibrate, "aligned": cmd_aligned}
+            "sa-calibrate": cmd_sa_calibrate, "aligned": cmd_aligned, "full2x2": cmd_full2x2}
     cmds[args.cmd](args, out)
 
 
