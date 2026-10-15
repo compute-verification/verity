@@ -20,6 +20,8 @@ Part 7: Theorem C end to end on random computations that reuse accumulators and 
 and Strassen inside one block, which shows the per-word charge W' cannot be dropped.
 Part 8: links adding combinations of d words: the one-sided certificate and the d*L bound when no D-column holds two
 links, and the d^2*L bound on any set of cells.
+Part 9: the label certificate past the shared labels: rank-1 labels from a quadric through the points of ker B, on the
+instance where row-, column- and pool-shared labels fall short.
 """
 
 import random
@@ -975,6 +977,103 @@ def part8(rng):
           f"({saved_total} products saved in total); on all cells savings <= d^2*L: ok (max seen {general:.2f}*d*L)")
 
 
+def quadric_labels(cells, B, rng, p, tries=200):
+    """Rank-1 2x2 labels M_t = phi(p_t) with sum_t B[j, t] M_t = 0, where p_t = U[:, t] are the points of ker B
+    (dim 4) and det phi is a split nondegenerate quadric through them; the labels with the largest rank of P (the
+    D-grid matrix with block M_t at cell t), or None."""
+    import itertools
+    k = len(cells)
+    U = nullspace(B, k, p)
+    if U.shape[0] != 4:
+        return None
+    pts = [U[:, t] for t in range(k)]
+    inv = lambda a: pow(int(a) % p, p - 2, p)  # noqa: E731
+    roots = {x * x % p: x for x in range(p)}
+    mons = list(itertools.combinations_with_replacement(range(4), 2))
+    Qs = nullspace(np.array([[x[i] * x[j] % p for i, j in mons] for x in pts]), len(mons), p)
+    nR, nC = 1 + max(r for r, _ in cells), 1 + max(c for _, c in cells)
+    best = None
+    for _ in range(tries):
+        q = sum(rng.randrange(p) * Qs[i] for i in range(len(Qs))) % p
+        S = np.zeros((4, 4), dtype=np.int64)
+        for (i, j), c in zip(mons, q):
+            S[i, j] = S[j, i] = c if i == j else c * inv(2) % p
+        if rank(S, p) < 4:
+            continue
+        f = lambda a, b: int(a @ S @ b) % p  # noqa: E731
+        u = pts[0]
+        v = next(e for e in np.eye(4, dtype=np.int64) if f(u, e))
+        v = v * inv(f(u, v)) % p
+        v = (v - f(v, v) * inv(2) * u) % p
+        a, b = nullspace(np.array([u @ S % p, v @ S % p]), 4, p)
+        A, Bc, C = f(a, a), f(a, b), f(b, b)
+        if A and (Bc * Bc - A * C) % p not in roots:
+            continue
+        w1 = a if A == 0 else ((-Bc + roots[(Bc * Bc - A * C) % p]) * inv(A) * a + b) % p
+        w2 = a if f(w1, a) else b
+        w2 = w2 * inv(f(w1, w2)) % p
+        w2 = (w2 - f(w2, w2) * inv(2) * w1) % p
+        basis = np.stack([u, v, w1, w2], axis=1)
+        for transpose in (False, True):
+            labels = []
+            for x in pts:
+                N = nullspace(np.concatenate([basis, x.reshape(4, 1)], axis=1) % p, 5, p)[0]
+                y = -N[:4] * inv(N[4]) % p
+                M = np.array([[y[0], y[2]], [-y[3], y[1]]]) % p
+                labels.append(M.T if transpose else M)
+            Pm = np.zeros((2 * nR, 2 * nC), dtype=np.int64)
+            for (r, c), M in zip(cells, labels):
+                Pm[2 * r:2 * r + 2, 2 * c:2 * c + 2] = M
+            if best is None or rank(Pm, p) > best[0]:
+                best = (rank(Pm, p), labels)
+    return best
+
+
+def part9(rng):
+    """Quadric labels for the label certificate. On 7 cells of a 3x3 D-grid with a generic rank-3 B, row-, column-
+    and pool-shared labels reach rank P = 3 < k - rank B = 4; labels from a quadric through the points of ker B have
+    rank 1, cancel every word, and reach rank P = 6, so these links save at most L for any words. Then random
+    instances with dim ker B = 4: how often quadric labels reach k - rank B."""
+    p = 101
+    pos = [(0, 0), (1, 1), (2, 1), (2, 2), (1, 2), (0, 2), (1, 0)]
+    B = np.array([[35, 14, 20, 75, 22, 7, 44], [47, 14, 32, 63, 72, 4, 63], [28, 82, 39, 94, 70, 85, 23]])
+    k, rB = len(pos), rank(B, p)
+    rP, labels = quadric_labels(pos, B, rng, p)
+    for M in labels:
+        assert rank(M, p) == 1, "label not rank 1"
+    for j in range(B.shape[0]):
+        assert not (sum(B[j, t] * labels[t] for t in range(k)) % p).any(), "labels do not cancel the words"
+    assert rP >= k - rB, "quadric labels too weak"
+    for L in (2, 4):
+        shape = Shape(3, 3, L, L)
+        cells = [(ij, 0) for ij in pos]
+        Ds = [shape.D(*c) for c in cells]
+        Psi_D = sum(np.kron(labels[t], Ds[t]) for t in range(k)) % p
+        assert rank(Psi_D, p) == L * rP, "rank Psi != L * rank P"
+        for _ in range(10):
+            Zs = [random_word(shape, cells, rng, p) for _ in range(B.shape[0])]
+            Ws = [sum(B[j, t] * Zs[j] for j in range(B.shape[0])) % p for t in range(k)]
+            Psi_DW = sum(np.kron(labels[t], (Ds[t] - Ws[t]) % p) for t in range(k)) % p
+            assert np.array_equal(Psi_D, Psi_DW), "W-terms do not cancel"
+            assert sum(rank((D - W) % p, p) for D, W in zip(Ds, Ws)) >= L * rP, "certificate bound fails"
+    reached, total = 0, 0
+    for _ in range(40):
+        nR, nC = rng.choice([(2, 3), (3, 2), (2, 4), (3, 3), (3, 4)])
+        allc = [(r, c) for r in range(nR) for c in range(nC)]
+        d = rng.randint(1, min(4, len(allc) - 4))
+        cells = rng.sample(allc, 4 + d)
+        Bx = np.array([[rng.randrange(1, p) for _ in range(4 + d)] for _ in range(d)])
+        got = quadric_labels(cells, Bx, rng, p, tries=60)
+        if got is None:
+            continue
+        total += 1
+        reached += got[0] >= len(cells) - rank(Bx, p)
+    print(f"[quadric labels] 7 cells of a 3x3 D-grid, generic rank-3 B: rank-1 labels from a quadric through ker B "
+          f"cancel every word and give rank P = {rP} >= k - rank B = {k - rB} (shared labels reach 3); Psi identity "
+          f"and bound at L = 2, 4 against random words: ok; random instances with dim ker B = 4: {reached}/{total} "
+          "reach k - rank B")
+
+
 def part4(rng):
     count = 0
     for (P, Q, m, L, trials) in ((2, 2, 4, 2, 60), (2, 3, 4, 4, 30), (2, 2, 6, 3, 30)):
@@ -993,7 +1092,7 @@ def part4(rng):
 
 if __name__ == "__main__":
     rng = random.Random(20261015)
-    parts = sys.argv[1:] or ["1", "3", "4", "5", "6", "7", "8"]
+    parts = sys.argv[1:] or ["1", "3", "4", "5", "6", "7", "8", "9"]
     if "1" in parts:
         part1_2(rng)
     if "3" in parts:
@@ -1008,3 +1107,5 @@ if __name__ == "__main__":
         part7(rng)
     if "8" in parts:
         part8(rng)
+    if "9" in parts:
+        part9(rng)
