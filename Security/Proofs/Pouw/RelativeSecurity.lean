@@ -696,6 +696,18 @@ theorem time_sub₂_le_of {I : Type} {a b : ℕ} {f g : Mc.Alg I (Mat R a b)} {u
     (hg : Mc.time g ≤ v) : Mc.time (Mc.sub₂ f g) ≤ u + v + Mc.κadd * ((a : ℝ) * b) :=
   (Machine.time_lift2_le _ _ _ _).trans (by linarith [Mc.time_sub_le a b])
 
+/-- Add the outputs of `f` and `g`. -/
+def add₂ {I : Type} {a b : ℕ} (f g : Mc.Alg I (Mat R a b)) : Mc.Alg I (Mat R a b) :=
+  Mc.lift2 f g (Mc.add a b)
+
+theorem eval_add₂ {I : Type} {a b : ℕ} (f g : Mc.Alg I (Mat R a b)) (x : I) :
+    Mc.eval (Mc.add₂ f g) x = Mc.eval f x + Mc.eval g x := by
+  rw [add₂, Machine.eval_lift2, Mc.eval_add]
+
+theorem time_add₂_le_of {I : Type} {a b : ℕ} {f g : Mc.Alg I (Mat R a b)} {u v : ℝ} (hf : Mc.time f ≤ u)
+    (hg : Mc.time g ≤ v) : Mc.time (Mc.add₂ f g) ≤ u + v + Mc.κadd * ((a : ℝ) * b) :=
+  (Machine.time_lift2_le _ _ _ _).trans (by linarith [Mc.time_add_le a b])
+
 /-- The correction `(C', X, Y) ↦ C' − X − Y`. -/
 def corr (n : ℕ) : Mc.Alg (Mat R n n × Mat R n n × Mat R n n) (Mat R n n) :=
   Mc.sub₂ (Mc.sub₂ Mc.fst (Mc.seq Mc.snd Mc.fst)) (Mc.seq Mc.snd Mc.snd)
@@ -792,6 +804,67 @@ theorem time_peelLow_le (n r : ℕ) : Mc.time (Mc.peelLow n r) ≤ 4 * Mc.κ * (
   · unfold peelLow
     apply_rules (maxDepth := 200) [time_mul₂_le_of, time_sub₂_le_of, Machine.time_pair_le_of, Machine.time_seq_le_of,
       Machine.time_fst_le, Machine.time_snd_le]
+  · linarith
+
+/-- **The honest useful computation, full-rank masks**: `(A, B, R, S) ↦ (A + R)(B + S) − R (B + S) − A S`, the masked
+product and its peel (RS-DEF §1.7's Solve without its commitments and proof). -/
+def honestFull (n : ℕ) : Mc.Alg (Mat R n n × Mat R n n × Mat R n n × Mat R n n) (Mat R n n) :=
+  Mc.sub₂
+    (Mc.sub₂
+      (Mc.mul₂ (Mc.add₂ Mc.fst (Mc.seq Mc.snd (Mc.seq Mc.snd Mc.fst)))
+        (Mc.add₂ (Mc.seq Mc.snd Mc.fst) (Mc.seq Mc.snd (Mc.seq Mc.snd Mc.snd))))
+      (Mc.mul₂ (Mc.seq Mc.snd (Mc.seq Mc.snd Mc.fst))
+        (Mc.add₂ (Mc.seq Mc.snd Mc.fst) (Mc.seq Mc.snd (Mc.seq Mc.snd Mc.snd)))))
+    (Mc.mul₂ Mc.fst (Mc.seq Mc.snd (Mc.seq Mc.snd Mc.snd)))
+
+theorem eval_honestFull (n : ℕ) (x : Mat R n n × Mat R n n × Mat R n n × Mat R n n) :
+    Mc.eval (Mc.honestFull n) x = x.1 * x.2.1 := by
+  simp only [honestFull, eval_sub₂, eval_mul₂, eval_add₂, Mc.eval_seq, Mc.eval_fst, Mc.eval_snd]
+  exact (mask_peel x.1 x.2.2.1 x.2.1 x.2.2.2).symm
+
+/-- The full-rank honest computation costs three `n × n × n` products: `γ ≤ 2 + 5 κadd / (κ n)` against the
+reference `κ n³` (RS-DEF's Proposition Z(e): full-rank noise buys nothing). -/
+theorem time_honestFull_le (n : ℕ) :
+    Mc.time (Mc.honestFull n) ≤ 3 * Mc.κ * (n : ℝ) ^ 3 + 5 * Mc.κadd * (n : ℝ) ^ 2 := by
+  apply le_trans
+  · unfold honestFull
+    apply_rules (maxDepth := 200) [time_mul₂_le_of, time_sub₂_le_of, time_add₂_le_of, Machine.time_pair_le_of,
+      Machine.time_seq_le_of, Machine.time_fst_le, Machine.time_snd_le]
+  · linarith
+
+/-- **The honest useful computation, rank-`r` masks**:
+`(A, B, U, Vᵀ, W, Zᵀ) ↦ (A + U Vᵀ)(B + W Zᵀ) − U (Vᵀ (B + W Zᵀ)) − (A W) Zᵀ`. -/
+def honestLow (n r : ℕ) :
+    Mc.Alg (Mat R n n × Mat R n n × Mat R n r × Mat R r n × Mat R n r × Mat R r n) (Mat R n n) :=
+  Mc.sub₂
+    (Mc.sub₂
+      (Mc.mul₂
+        (Mc.add₂ Mc.fst
+          (Mc.mul₂ (Mc.seq Mc.snd (Mc.seq Mc.snd Mc.fst)) (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd Mc.fst)))))
+        (Mc.add₂ (Mc.seq Mc.snd Mc.fst)
+          (Mc.mul₂ (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd Mc.fst))))
+            (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd Mc.snd)))))))
+      (Mc.mul₂ (Mc.seq Mc.snd (Mc.seq Mc.snd Mc.fst))
+        (Mc.mul₂ (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd Mc.fst)))
+          (Mc.add₂ (Mc.seq Mc.snd Mc.fst)
+            (Mc.mul₂ (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd Mc.fst))))
+              (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd Mc.snd)))))))))
+    (Mc.mul₂ (Mc.mul₂ Mc.fst (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd Mc.fst)))))
+      (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd Mc.snd)))))
+
+theorem eval_honestLow (n r : ℕ) (x : Mat R n n × Mat R n n × Mat R n r × Mat R r n × Mat R n r × Mat R r n) :
+    Mc.eval (Mc.honestLow n r) x = x.1 * x.2.1 := by
+  simp only [honestLow, eval_sub₂, eval_mul₂, eval_add₂, Mc.eval_seq, Mc.eval_fst, Mc.eval_snd]
+  exact lowRank_peel x.1 x.2.1 x.2.2.1 x.2.2.2.1 x.2.2.2.2.1 x.2.2.2.2.2
+
+/-- The rank-`r` honest computation costs one `n × n × n` product and seven products through the inner dimension `r`
+(the mask `W Zᵀ` is formed twice): `γ ≤ 7 r / n + 5 κadd / (κ n)` against the reference `κ n³`. -/
+theorem time_honestLow_le (n r : ℕ) :
+    Mc.time (Mc.honestLow n r) ≤ Mc.κ * (n : ℝ) ^ 3 + 7 * Mc.κ * (n : ℝ) ^ 2 * r + 5 * Mc.κadd * (n : ℝ) ^ 2 := by
+  apply le_trans
+  · unfold honestLow
+    apply_rules (maxDepth := 300) [time_mul₂_le_of, time_sub₂_le_of, time_add₂_le_of, Machine.time_pair_le_of,
+      Machine.time_seq_le_of, Machine.time_fst_le, Machine.time_snd_le]
   · linarith
 
 variable {n : ℕ} {P : Protocol Mc.toMachine (Mat R n n × Mat R n n) (Mat R n n)}
