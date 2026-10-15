@@ -14,6 +14,8 @@ count). Winograd's pairs meet it with equality.
 Part 5: Theorem B in general. The covering lemma exhaustively (per-tree bounds L*(sum hi - min lo), or L*sum hi for
 the tree at 0, sum to at least L*(|G_T| - H)); then random computations with merges split into merge-free trees, each
 tree re-rooted at 0 through its lowest correct target and checked with A1a's flattening on its top targets.
+Part 6: one word added to the running sums of single-level links saves at most L over all its uses, and the links
+it helps lie in one D-row or one D-column.
 """
 
 import random
@@ -645,6 +647,71 @@ def part5(rng):
           "2+ positions)")
 
 
+def random_word(shape, cells, rng, p):
+    """A word built to help several D-cells: partials of a row or column star whose inner indices partition the block
+    (the tight family), partials of random cells, sums of whole cells, or a random low-rank matrix; maybe plus noise."""
+    Xd, Yd = shape.P * shape.m, shape.Q * shape.m
+    Z = np.zeros((Xd, Yd), dtype=np.int64)
+
+    def partial(pos, s, ks):
+        out = np.zeros_like(Z)
+        for k in ks:
+            out[pos[0] * shape.m + k, pos[1] * shape.m + k] = 1
+        return out
+
+    kind = rng.choice(["row", "col", "cells", "whole", "lowrank"])
+    if kind in ("row", "col"):
+        i, j, s = rng.randrange(shape.P), rng.randrange(shape.Q), rng.randrange(shape.S)
+        star = [((i, jj), s) for jj in range(shape.Q)] if kind == "row" else [((ii, j), s) for ii in range(shape.P)]
+        star = rng.sample(star, rng.randint(1, len(star)))
+        ks = list(range(s * shape.L, (s + 1) * shape.L))
+        rng.shuffle(ks)
+        owner = [rng.randrange(len(star)) for _ in ks]
+        for n, (pos, _) in enumerate(star):
+            Z = Z + rng.randint(1, p - 1) * partial(pos, s, [k for k, o in zip(ks, owner) if o == n])
+    elif kind == "cells":
+        for pos, s in rng.sample(cells, rng.randint(1, 4)):
+            ks = [k for k in range(s * shape.L, (s + 1) * shape.L) if rng.random() < 0.6]
+            Z = Z + rng.randint(1, p - 1) * partial(pos, s, ks)
+    elif kind == "whole":
+        for pos, s in rng.sample(cells, rng.randint(1, 3)):
+            Z = Z + rng.randint(1, p - 1) * shape.D(pos, s)
+    else:
+        for _ in range(rng.randint(1, 3)):
+            Z = Z + np.outer([rng.randrange(p) for _ in range(Xd)], [rng.randrange(p) for _ in range(Yd)])
+    if rng.random() < 0.3:
+        Z = Z + np.outer([rng.randrange(p) for _ in range(Xd)], [rng.randrange(p) for _ in range(Yd)])
+    return Z % p
+
+
+def part6(rng):
+    """One word Z added (times any beta_t) to the running sums of any set of single-level links: link t needs at least
+    rank(D_t - beta_t Z) more products, so it saves s_t = L - that. Over every D-cell, with each beta_t chosen to help:
+    the cells with s_t > 0 form a star (one D-row or one D-column) and sum s_t <= L."""
+    count, tight, multi = 0, 0, 0
+    for (P, Q, m, L, p, trials) in ((2, 2, 4, 2, 3, 300), (2, 3, 4, 2, 3, 200), (3, 3, 4, 2, 5, 80),
+                                    (2, 3, 6, 3, 3, 120), (2, 2, 4, 4, 3, 100)):
+        shape = Shape(P, Q, m, L)
+        cells = [((i, j), s) for i in range(P) for j in range(Q) for s in range(shape.S)]
+        for _ in range(trials):
+            Z = random_word(shape, cells, rng, p)
+            savings = {}
+            for pos, s in cells:
+                r = min(rank((shape.D(pos, s) - b * Z) % p, p) for b in range(1, p))
+                if r < L:
+                    savings[(pos, s)] = L - r
+            rows = {(pos[0], s) for pos, s in savings}
+            cols = {(pos[1], s) for pos, s in savings}
+            assert len(rows) <= 1 or len(cols) <= 1, "positive savers are not a star"
+            assert sum(savings.values()) <= L, "one word saves more than L"
+            count += 1
+            tight += sum(savings.values()) == L
+            multi += sum(savings.values()) == L and len(savings) >= 2
+    print(f"[per word] {count} words (row and column star splits, partial and whole cells, low rank, noise) against "
+          "every D-cell with the best beta per cell: positive savers form a star and save <= L in total: ok "
+          f"({tight} save exactly L, {multi} of them across 2+ cells)")
+
+
 def part4(rng):
     count = 0
     for (P, Q, m, L, trials) in ((2, 2, 4, 2, 60), (2, 3, 4, 4, 30), (2, 2, 6, 3, 30)):
@@ -663,7 +730,7 @@ def part4(rng):
 
 if __name__ == "__main__":
     rng = random.Random(20261015)
-    parts = sys.argv[1:] or ["1", "3", "4", "5"]
+    parts = sys.argv[1:] or ["1", "3", "4", "5", "6"]
     if "1" in parts:
         part1_2(rng)
     if "3" in parts:
@@ -672,3 +739,5 @@ if __name__ == "__main__":
         part4(rng)
     if "5" in parts:
         part5(rng)
+    if "6" in parts:
+        part6(rng)
