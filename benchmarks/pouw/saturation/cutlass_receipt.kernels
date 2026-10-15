@@ -545,3 +545,36 @@ p_duo2c2_g4_xa4 0 2 1 1 1 0 4 4 0 0 5 0 2
 p_duo2c2_g4_xa8 0 2 1 1 1 0 4 8 0 0 5 0 2
 p_duo2c2_g4_xa16 0 2 1 1 1 0 4 16 0 0 5 0 2
 p_duo2c2_g4_xa32 0 2 1 1 1 0 4 32 0 0 5 0 2
+# timed-window MMA cheaters (R9, CMP-12): xmma X extra mma.sync m16n8k32 E4M3 a warp after every 32-deep k-block (X / 16
+# per honest MMA) on the k-block's own fragments into xacc accumulator tiles of their own (columns 16 and 17, after d2keys;
+# `_mmX`, `_mmXaA` for xacc A other than 2), beside 1x alu at L = 32, duo2 at L = 32 with 2 and 4 states, and plain (mode 3)
+p_alu_g4_mm1 0 0 1 1 1 0 4 0 0 0 0 0 4 0 1 2
+p_alu_g4_mm2 0 0 1 1 1 0 4 0 0 0 0 0 4 0 2 2
+p_alu_g4_mm4 0 0 1 1 1 0 4 0 0 0 0 0 4 0 4 2
+p_alu_g4_mm6 0 0 1 1 1 0 4 0 0 0 0 0 4 0 6 2
+p_alu_g4_mm8 0 0 1 1 1 0 4 0 0 0 0 0 4 0 8 2
+p_alu_g4_mm12 0 0 1 1 1 0 4 0 0 0 0 0 4 0 12 2
+p_alu_g4_mm16 0 0 1 1 1 0 4 0 0 0 0 0 4 0 16 2
+p_alu_g4_mm24 0 0 1 1 1 0 4 0 0 0 0 0 4 0 24 2
+p_alu_g4_mm32 0 0 1 1 1 0 4 0 0 0 0 0 4 0 32 2
+p_alu_g4_mm16a1 0 0 1 1 1 0 4 0 0 0 0 0 4 0 16 1
+p_alu_g4_mm16a4 0 0 1 1 1 0 4 0 0 0 0 0 4 0 16 4
+p_alu_g4_mm32a4 0 0 1 1 1 0 4 0 0 0 0 0 4 0 32 4
+p_alu_g4_mm32a8 0 0 1 1 1 0 4 0 0 0 0 0 4 0 32 8
+p_duo2c2_g4_mm2 0 2 1 1 1 0 4 0 0 0 0 0 2 0 2 2
+p_duo2c2_g4_mm4 0 2 1 1 1 0 4 0 0 0 0 0 2 0 4 2
+p_duo2c2_g4_mm8 0 2 1 1 1 0 4 0 0 0 0 0 2 0 8 2
+p_duo2c2_g4_mm12 0 2 1 1 1 0 4 0 0 0 0 0 2 0 12 2
+p_duo2c2_g4_mm16 0 2 1 1 1 0 4 0 0 0 0 0 2 0 16 2
+p_duo2c2_g4_mm24 0 2 1 1 1 0 4 0 0 0 0 0 2 0 24 2
+p_duo2c2_g4_mm32 0 2 1 1 1 0 4 0 0 0 0 0 2 0 32 2
+p_duo2_g4_mm2 0 2 1 1 1 0 4 0 0 0 0 0 4 0 2 2
+p_duo2_g4_mm4 0 2 1 1 1 0 4 0 0 0 0 0 4 0 4 2
+p_duo2_g4_mm8 0 2 1 1 1 0 4 0 0 0 0 0 4 0 8 2
+p_duo2_g4_mm12 0 2 1 1 1 0 4 0 0 0 0 0 4 0 12 2
+p_duo2_g4_mm16 0 2 1 1 1 0 4 0 0 0 0 0 4 0 16 2
+p_duo2_g4_mm24 0 2 1 1 1 0 4 0 0 0 0 0 4 0 24 2
+p_duo2_g4_mm32 0 2 1 1 1 0 4 0 0 0 0 0 4 0 32 2
+p_plain_mm2 0 0 1 1 3 0 1 0 0 0 0 0 4 0 2 2
+p_plain_mm8 0 0 1 1 3 0 1 0 0 0 0 0 4 0 8 2
+p_plain_mm16 0 0 1 1 3 0 1 0 0 0 0 0 4 0 16 2

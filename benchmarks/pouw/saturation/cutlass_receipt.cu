@@ -11,7 +11,7 @@
 //   - every kernel's bf16 output equals plain's bit for bit;
 //   - every receipt kernel's receipt words equal the host's phi chains over the dump's prefix sums.
 // At every timed shape: every kernel's output equals plain's, two launches agree on the receipt words, and they aren't all
-// zero. Times: operands rotate over sets past twice the L2; --reps rounds, each timing every kernel in turn (so each round
+// zero; a CR_XMMA kernel's extra-MMA words agree across two launches, aren't all zero, and leave plain's output. Times: operands rotate over sets past twice the L2; --reps rounds, each timing every kernel in turn (so each round
 // pairs each kernel with plain at nearly the same clocks), with NVML's SM clock after each batch; --shuffle times each
 // round in a fresh seeded order.
 //
@@ -215,10 +215,11 @@ struct Bufs {
     uint32_t* R = nullptr;
     float* dump = nullptr;
     uint32_t* map = nullptr;
+    uint32_t* X = nullptr;
 };
 
 static cr_args args_of(const Shape& s, const Bufs& b, int set, void* D) {
-    return cr_args{s.m, s.n, s.k, b.A + (size_t)set * s.m * s.k, b.B + (size_t)set * s.n * s.k, b.sa, b.sb, D, b.R, b.dump, b.map};
+    return cr_args{s.m, s.n, s.k, b.A + (size_t)set * s.m * s.k, b.B + (size_t)set * s.n * s.k, b.sa, b.sb, D, b.R, b.dump, b.map, b.X};
 }
 
 static unsigned long long count_diff(const void* a, const void* b, size_t words, unsigned long long* dc) {
@@ -263,6 +264,7 @@ static void gate_cfg(int cfg, const std::vector<const cr_kernel*>& ks, unsigned 
     CK(cudaMalloc(&D0, dbytes));
     CK(cudaMalloc(&D1, dbytes));
     CK(cudaMalloc(&b.R, (size_t)tiles * NT * 4));
+    CK(cudaMalloc(&b.X, (size_t)tiles * NT * 4));
     CK(cudaMalloc(&b.dump, (size_t)KD * s.m * s.n * 4));
     CK(cudaMalloc(&b.map, (size_t)NT * CH * 4 * 4));
     CK(cudaMemset(b.map, 0xff, (size_t)NT * CH * 4 * 4));
@@ -387,8 +389,18 @@ static void gate_cfg(int cfg, const std::vector<const cr_kernel*>& ks, unsigned 
                 }
         gate("receipt words differ from the host's chains over the dump", k->name, bad != 0);
     }
-    for (void* p : {(void*)b.A, (void*)b.B, (void*)b.sa, (void*)b.sb, D0, D1, (void*)b.R, (void*)b.dump, (void*)b.map})
+    for (void* p : {(void*)b.A, (void*)b.B, (void*)b.sa, (void*)b.sb, D0, D1, (void*)b.R, (void*)b.dump, (void*)b.map, (void*)b.X})
         CK(cudaFree(p));
+}
+
+static std::string join(const std::vector<double>& v, const char* fmt) {
+    std::string r;
+    char buf[64];
+    for (size_t i = 0; i < v.size(); i++) {
+        snprintf(buf, sizeof buf, fmt, v[i]);
+        r += (i ? ", " : "") + std::string(buf);
+    }
+    return r;
 }
 
 static double quant(std::vector<double>& v, double q) {  // v sorted
@@ -577,8 +589,8 @@ int main(int argc, char** argv) {
     for (size_t i = 0; i < ks.size(); i++) {
         auto* k = ks[i];
         printf("    {\"name\": \"%s\", \"cfg\": %d, \"var\": %d, \"rounds\": %d, \"p\": %d, \"L\": %d, \"mode\": %d, \"spread\": %d, "
-               "\"grain\": %d, \"extra\": %d, \"honest\": %d, \"forced\": %d, \"xvar\": %d, \"fvar\": %d, \"d2c\": %d, \"tile\": [%d, %d], \"threads\": %d, \"chains\": %d, \"stages\": %d, \"smem_bytes\": %d}%s\n",
-               k->name, k->cfg, k->var, k->rounds, k->p, 128 * k->p / k->grain, k->mode, k->spread, k->grain, k->extra, k->honest, k->forced, k->xvar, k->fvar, k->d2c, k->tile_m,
+               "\"grain\": %d, \"extra\": %d, \"honest\": %d, \"forced\": %d, \"xvar\": %d, \"fvar\": %d, \"d2c\": %d, \"xmma\": %d, \"xacc\": %d, \"tile\": [%d, %d], \"threads\": %d, \"chains\": %d, \"stages\": %d, \"smem_bytes\": %d}%s\n",
+               k->name, k->cfg, k->var, k->rounds, k->p, 128 * k->p / k->grain, k->mode, k->spread, k->grain, k->extra, k->honest, k->forced, k->xvar, k->fvar, k->d2c, k->xmma, k->xacc, k->tile_m,
                k->tile_n, k->threads,
                k->chains, k->stages, k->smem_bytes, i + 1 < ks.size() ? "," : "");
     }
@@ -623,6 +635,7 @@ int main(int argc, char** argv) {
         CK(cudaMalloc(&D, dbytes));
         CK(cudaMalloc(&D0, dbytes));
         CK(cudaMalloc(&b.R, (size_t)tiles * NT * 4));
+    CK(cudaMalloc(&b.X, (size_t)tiles * NT * 4));
         std::vector<std::vector<cr_impl*>> impl(sk.size());
         for (size_t j = 0; j < sk.size(); j++)
             for (int t = 0; t < sets; t++) {
@@ -652,9 +665,21 @@ int main(int argc, char** argv) {
         std::vector<uint32_t> r0((size_t)tiles * NT), r1(r0.size());
         for (size_t j = 1; j < sk.size(); j++) {
             CK(cudaMemset(b.R, 0, r0.size() * 4));
+            CK(cudaMemset(b.X, 0, r0.size() * 4));
             launch(j, 0);
             CK(cudaDeviceSynchronize());
             gate("output differs from plain's at a timed shape", sk[j]->name, count_diff(D0, D, dbytes / 4, dc) != 0);
+            if (sk[j]->xmma > 0) {
+                std::vector<uint32_t> x0((size_t)tiles * NT), x1(x0.size());
+                CK(cudaMemcpy(x0.data(), b.X, x0.size() * 4, cudaMemcpyDeviceToHost));
+                CK(cudaMemset(b.X, 0, x0.size() * 4));
+                launch(j, 0);
+                CK(cudaDeviceSynchronize());
+                CK(cudaMemcpy(x1.data(), b.X, x1.size() * 4, cudaMemcpyDeviceToHost));
+                gate("a second launch's extra-MMA words differ", sk[j]->name, x0 != x1);
+                gate("every extra-MMA word is zero", sk[j]->name, std::all_of(x0.begin(), x0.end(), [](uint32_t w) { return w == 0; }));
+                gate("plain's output changed beside the extra MMAs", sk[j]->name, count_diff(D0, D, dbytes / 4, dc) != 0);
+            }
             if (sk[j]->mode != 1) continue;
             CK(cudaMemcpy(r0.data(), b.R, r0.size() * 4, cudaMemcpyDeviceToHost));
             CK(cudaMemset(b.R, 0, r0.size() * 4));
@@ -787,19 +812,20 @@ int main(int argc, char** argv) {
                    "\"rounds\": %d, \"p\": %d, \"L\": %d, \"spread\": %d, \"grain\": %d, \"extra\": %d, \"mode\": %d, \"sets\": %d, \"launches\": %d, "
                    "\"reps\": %d, \"ms\": %.5f, "
                    "\"ms_min\": %.5f, \"tflops\": %.1f, \"sm_mhz\": %.0f, \"macs_per_sm_clk\": %.1f, \"receipt_words\": %.0f, "
-                   "\"phi1_per_sm_clk\": %.3f, \"wall_vs_plain\": %.4f, \"cycles_vs_plain\": %.4f}",
+                   "\"phi1_per_sm_clk\": %.3f, \"wall_vs_plain\": %.4f, \"cycles_vs_plain\": %.4f, \"xmma\": %d, \"xacc\": %d, "
+                   "\"ms_reps\": [%s], \"mhz_reps\": [%s]}",
                    first_row ? "" : ",\n", s.name, s.m, s.n, s.k, k->name, k->cfg, k->var, k->rounds, k->p,
                    128 * k->p / k->grain, k->spread, k->grain, k->extra, k->mode, sets,
                    launches, reps, t, *std::min_element(ms[j].begin(), ms[j].end()), 2.0 * s.m * s.n * (double)s.k / (t * 1e9), f,
                    f > 0 ? (double)s.m * s.n * s.k / (t * 1e-3 * f * 1e6 * prop.multiProcessorCount) : 0.0, words,
                    f > 0 ? words * k->rounds / (t * 1e-3 * f * 1e6 * prop.multiProcessorCount) : 0.0, med(wall[j]),
-                   med(cyc[j]));
+                   med(cyc[j]), k->xmma, k->xacc, join(ms[j], "%.5f").c_str(), join(mhz[j], "%.0f").c_str());
             first_row = false;
             fflush(stdout);
         }
         for (auto& v : impl)
             for (auto* g : v) delete g;
-        for (void* p : {(void*)b.A, (void*)b.B, (void*)b.sa, (void*)b.sb, D, D0, (void*)b.R}) CK(cudaFree(p));
+        for (void* p : {(void*)b.A, (void*)b.B, (void*)b.sa, (void*)b.sb, D, D0, (void*)b.R, (void*)b.X}) CK(cudaFree(p));
         CK(cudaEventDestroy(e0));
         CK(cudaEventDestroy(e1));
     }

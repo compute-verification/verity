@@ -33,8 +33,13 @@
 //              FFMA (the FMA pipe alone), on chains seeded as floats in [1, 2), 3 both pipes: an alu phi1 on the first
 //              chain and six FFMAs on the second (equal CUDA slots); 4 FFMAs and 5 alu phi1 steps round-robin over
 //              eight chains instead of two (more independent work for the scheduler)
+//   CR_XMMA X  (modes 1 and 3) a cheater's own tensor work fused beside the GEMM: X more mma.sync m16n8k32 E4M3 a warp after
+//              every 32-deep k-block's 16 (prefill) honest ones, so X / 16 extra MMAs per honest MMA, on the k-block's own
+//              register fragments (no operand traffic: the cheapest operands a cheater has) into CR_XACC (default 2)
+//              m16n8 FP32 accumulator tiles of its own. Each thread folds them into one word, stored to cr_args::X; the
+//              outputs and receipts the gates check are the design's
 // Compiled once per kernel: -DCR_NAME=name -DCR_CFG -DCR_VAR -DCR_ROUNDS -DCR_P -DCR_MODE -DCR_SPREAD -DCR_GRAIN
-// -DCR_EXTRA -DCR_HONEST -DCR_FORCED -DCR_XVAR -DCR_FVAR -DCR_D2C
+// -DCR_EXTRA -DCR_HONEST -DCR_FORCED -DCR_XVAR -DCR_FVAR -DCR_D2C -DCR_XMMA -DCR_XACC
 // (job.sh's cgemm).
 #include "cutlass_receipt.cuh"
 
@@ -80,6 +85,12 @@
 #ifndef CR_D2KEYS
 #define CR_D2KEYS 0
 #endif
+#ifndef CR_XMMA
+#define CR_XMMA 0
+#endif
+#ifndef CR_XACC
+#define CR_XACC 2
+#endif
 #define CR_STR2(x) #x
 #define CR_STR(x) CR_STR2(x)
 
@@ -92,6 +103,7 @@ struct Out {
     float* dump;
     uint32_t* map;
     int tiles_n, m, n;
+    uint32_t* X;
 };
 __device__ Out g_out;
 __constant__ uint32_t D2K[4][D2_KEYS];
@@ -152,6 +164,9 @@ struct ReceiptMma : Base {
         auto thread_mma = tiled_mma.get_thread_slice(thread_idx);
         Tensor tCrA = thread_mma.partition_fragment_A(sA(_, _, Int<0>{}));
         Tensor tCrB = thread_mma.partition_fragment_B(sB(_, _, Int<0>{}));
+        constexpr int XA = CR_XMMA > 0 ? CR_XACC : 1;
+        Tensor xacc = make_tensor<float>(make_shape(Int<MW>{}, Int<XA>{}));
+        clear(xacc);
         auto smem_tiled_copy_A = make_tiled_copy_A(SmemCopyAtomA{}, tiled_mma);
         auto smem_thr_copy_A = smem_tiled_copy_A.get_thread_slice(thread_idx);
         Tensor tCsA = smem_thr_copy_A.partition_S(as_position_independent_swizzle_tensor(sA));
@@ -252,6 +267,11 @@ struct ReceiptMma : Base {
                     else
                         z[j % XC] = phi1<CR_XVAR == 5 ? 0 : CR_XVAR>(z[j % XC], p, 0x7f4a7c15u, key(j, b));
             }
+            if constexpr ((MODE == 1 || MODE == 3) && CR_XMMA > 0) {
+                CUTLASS_PRAGMA_UNROLL
+                for (int j = 0; j < CR_XMMA; ++j)
+                    cute::gemm(tiled_mma, tCrA(_, j % MM, k_block), tCrB(_, (j / MM) % NN, k_block), xacc(_, j % XA));
+            }
             if constexpr (b == KB - 1) ++kt;
         };
 
@@ -320,6 +340,14 @@ struct ReceiptMma : Base {
             for (int c = 2; c < XC; c += 2) za ^= z[c], zb += z[c + 1];
             if ((za ^ zb) == 0x6a09e667u && (za + zb) == 0xbb67ae85u) g_out.R[0] = 0;
         }
+        if constexpr ((MODE == 1 || MODE == 3) && CR_XMMA > 0) {
+            uint32_t f = 0;
+            CUTLASS_PRAGMA_UNROLL
+            for (int i = 0; i < MW * XA; ++i) f = rotl13(f) ^ __float_as_uint(xacc(i % MW, i / MW));
+            constexpr int NT = decltype(size(TiledMma{}))::value;
+            const int tile = int(get<0>(blk_crd)) * g_out.tiles_n + int(get<1>(blk_crd));
+            if (g_out.X) g_out.X[(size_t)tile * NT + thread_idx] = f;
+        }
     }
 };
 
@@ -379,7 +407,7 @@ cr_impl* make(const cr_args& a, int* err) {
         *err = 1;
         return nullptr;
     }
-    const Out o{a.R, a.dump, a.map, a.n / decltype(size<1>(Tile{}))::value, a.m, a.n};
+    const Out o{a.R, a.dump, a.map, a.n / decltype(size<1>(Tile{}))::value, a.m, a.n, a.X};
     if (cudaMemcpyToSymbol(g_out, &o, sizeof o) != cudaSuccess) {
         *err = 2;
         return nullptr;
@@ -424,6 +452,8 @@ const cr_kernel K{CR_STR(CR_NAME),
                   CR_XVAR,
                   CR_FVAR,
                   CR_D2C,
+                  CR_XMMA,
+                  CR_XMMA > 0 ? CR_XACC : 0,
                   kTileM,
                   kTileN,
                   kThreads,

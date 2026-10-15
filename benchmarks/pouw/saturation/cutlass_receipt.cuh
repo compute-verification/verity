@@ -15,6 +15,7 @@ struct cr_args {
     uint32_t* R;                 // receipt kernels: one word a tile and MMA thread, its chains folded
     float* dump;                 // the dump kernel: every 32-deep k-block's prefix sums, [k / 32][m][n]
     uint32_t* map;               // the dump kernel: (row << 16 | col) within the tile of each thread's chain words
+    uint32_t* X = nullptr;       // CR_XMMA kernels: one word a tile and MMA thread, the extra accumulators folded
 };
 
 struct cr_impl {
@@ -36,6 +37,7 @@ struct cr_kernel {
     int xvar;                    // the cheater's step: 0 alu phi1, 1 imad phi1, 2 FFMA
     int fvar;                    // the forced steps: 0 alu phi1, 2 FFMA
     int d2c;                     // var 2 (duo2): the four-word states a thread, tile c's words into state c % d2c
+    int xmma, xacc;              // a cheater's own mma.sync m16n8k32 a warp after every 32-deep k-block, into xacc tiles
     int tile_m, tile_n, threads, chains, nn_max, kblocks, stages, smem_bytes;
     cr_impl* (*make)(const cr_args& a, int* err);
 };
