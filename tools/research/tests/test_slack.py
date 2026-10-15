@@ -883,7 +883,7 @@ def test_ask_daniel_mentions_him_on_the_card_so_slack_notifies_him(route, fake, 
     human = json.loads(registry.read_text())["humans"][0]["slack_user"]
     (ping,) = [m for m in fake.messages.get(ASK, []) if m.get("thread_ts") == "1790800000.000100"]
     assert rc == 0 and ping["username"] == "infra" and ping["text"].startswith(f"<@{human}> a decision for you: Test: does the")
-    assert "I recommend: Looks right. `yes` applies at 3:00 PM PDT" in ping["text"]
+    assert "I recommend: Looks right. `yes` applies at 3:00 PM PDT" in ping["text"] and ping["text"].endswith("(card `42`)")
 
 
 def test_send_to_daniel_mentions_him_and_nobody_posts_as_him(fake, registry, capsys):
@@ -1002,7 +1002,9 @@ def test_status_reads_the_decision_and_exits_0_only_once_decided(route, registry
 def test_status_404_says_no_card_has_that_id(route, registry, capsys):
     route.answer = (404, {"error": "not_found"})
     rc, _, err = run(capsys, "ask-daniel", "status", "1790800000.000100")
-    assert rc == 2 and "HTTP 404: no card has that ID" in err and "not the card's Slack ts" in err
+    assert rc == 2 and "HTTP 404: no card has that ID" in err and "not the card's Slack ts" in err and "prefix" not in err
+    rc, _, err = run(capsys, "ask-daniel", "status", "81f010d2")
+    assert rc == 2 and "looks up no prefix" in err and "its mention in the card's thread also ends with" in err
 
 
 def test_resolve_records_a_thread_answer_and_says_clearly_when_there_is_no_such_card(route, registry, capsys):

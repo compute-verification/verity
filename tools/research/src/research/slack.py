@@ -2119,8 +2119,10 @@ def permalink(reg: dict, ch: str, ts: str) -> str:
 
 def no_such_card(verb: str, cid: str) -> str:
     """The route answers 404 only for an ID with no card: a pending card's status is 200."""
-    return (f"ask-daniel {verb} {cid}: HTTP 404: no card has that ID. It is the UUID `ask-daniel` printed first when it posted "
-            "the card, not the card's Slack ts; for a card posted any other way, record Daniel's thread reply as a ruling")
+    short = " The route takes the whole ID and looks up no prefix." if re.fullmatch(r"[0-9a-f]{4,12}", cid) else ""
+    return (f"ask-daniel {verb} {cid}: HTTP 404: no card has that ID.{short} It is the UUID `ask-daniel` printed first when "
+            "it posted the card, which its mention in the card's thread also ends with (`research msg read --channel ask-daniel "
+            "--thread TS`), not the card's Slack ts; for a card posted any other way, record Daniel's thread reply as a ruling")
 
 
 def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
@@ -2179,7 +2181,8 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
     when = pacific(datetime.fromisoformat(body["deadline"]))
     rec = next((o["label"] for o in body["options"] if o.get("recommended")), "")
     ping = (f"{deciders} a decision for you: {body['question']} I recommend: {rec}. "
-            + (f"`{body['default']}` applies at {when} unless you choose." if body["kind"] == "default" else f"Blocking: nothing happens until you choose (by {when})."))
+            + (f"`{body['default']}` applies at {when} unless you choose." if body["kind"] == "default" else f"Blocking: nothing happens until you choose (by {when}).")
+            + f" (card `{cid}`)")
     try:                                                             # the card alone notifies nobody; a mention does
         client(ns).call("chat.postMessage", channel=ch, thread_ts=ts, username=body["requested_by"], text=ping, unfurl_links="false")
     except SlackError as e:
