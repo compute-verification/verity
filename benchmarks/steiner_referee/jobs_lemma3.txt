@@ -1,0 +1,108 @@
+# Lemma 3 sweep (referee, CMP-8). One job per line, run by run_jobs.sh from this directory.
+python3 lemma3.py random --rows 4 --cols 4 --n 60000 --primes 2,3,5 --gen all --full-every 100 --seed 0
+python3 lemma3.py random --rows 4 --cols 4 --n 60000 --primes 2,3,5 --gen all --full-every 100 --seed 1
+python3 lemma3.py random --rows 4 --cols 4 --n 60000 --primes 2,3,5 --gen all --full-every 100 --seed 2
+python3 lemma3.py random --rows 4 --cols 4 --n 60000 --primes 2,3,5 --gen all --full-every 100 --seed 3
+python3 lemma3.py random --rows 4 --cols 4 --n 60000 --primes 2,3,5 --gen all --full-every 100 --seed 4
+python3 lemma3.py random --rows 4 --cols 4 --n 60000 --primes 2,3,5 --gen all --full-every 100 --seed 5
+python3 lemma3.py random --rows 4 --cols 4 --n 60000 --primes 2,3,5 --gen all --full-every 100 --seed 6
+python3 lemma3.py random --rows 4 --cols 4 --n 60000 --primes 2,3,5 --gen all --full-every 100 --seed 7
+python3 lemma3.py random --rows 4 --cols 4 --n 60000 --primes 2,3,5 --gen all --full-every 100 --seed 8
+python3 lemma3.py random --rows 4 --cols 4 --n 60000 --primes 2,3,5 --gen all --full-every 100 --seed 9
+python3 lemma3.py random --rows 4 --cols 4 --n 60000 --primes 2,3,5 --gen all --full-every 100 --seed 10
+python3 lemma3.py random --rows 4 --cols 4 --n 60000 --primes 2,3,5 --gen all --full-every 100 --seed 11
+python3 lemma3.py random --rows 4 --cols 4 --n 60000 --primes 2,3,5 --gen all --full-every 100 --seed 12
+python3 lemma3.py random --rows 4 --cols 4 --n 60000 --primes 2,3,5 --gen all --full-every 100 --seed 13
+python3 lemma3.py random --rows 4 --cols 4 --n 60000 --primes 2,3,5 --gen all --full-every 100 --seed 14
+python3 lemma3.py random --rows 4 --cols 4 --n 60000 --primes 2,3,5 --gen all --full-every 100 --seed 15
+python3 lemma3.py random --rows 4 --cols 4 --n 50000 --primes 2,3 --subset-prob 0.3 --full-every 100 --seed 100
+python3 lemma3.py random --rows 4 --cols 4 --n 50000 --primes 2,3 --subset-prob 0.3 --full-every 100 --seed 101
+python3 lemma3.py random --rows 4 --cols 4 --n 50000 --primes 2,3 --subset-prob 0.3 --full-every 100 --seed 102
+python3 lemma3.py random --rows 4 --cols 4 --n 50000 --primes 2,3 --subset-prob 0.3 --full-every 100 --seed 103
+python3 lemma3.py random --rows 4 --cols 4 --n 50000 --primes 2,3 --subset-prob 0.3 --full-every 100 --seed 104
+python3 lemma3.py random --rows 4 --cols 4 --n 50000 --primes 2,3 --subset-prob 0.3 --full-every 100 --seed 105
+python3 lemma3.py random --rows 4 --cols 4 --n 50000 --primes 2,3 --subset-prob 0.3 --full-every 100 --seed 106
+python3 lemma3.py random --rows 4 --cols 4 --n 50000 --primes 2,3 --subset-prob 0.3 --full-every 100 --seed 107
+python3 lemma3.py random --rows 5 --cols 5 --n 15000 --primes 2,3 --full-every 100 --seed 200
+python3 lemma3.py random --rows 5 --cols 5 --n 15000 --primes 2,3 --full-every 100 --seed 201
+python3 lemma3.py random --rows 5 --cols 5 --n 15000 --primes 2,3 --full-every 100 --seed 202
+python3 lemma3.py random --rows 5 --cols 5 --n 15000 --primes 2,3 --full-every 100 --seed 203
+python3 lemma3.py random --rows 5 --cols 5 --n 15000 --primes 2,3 --full-every 100 --seed 204
+python3 lemma3.py random --rows 5 --cols 5 --n 15000 --primes 2,3 --full-every 100 --seed 205
+python3 lemma3.py random --rows 5 --cols 5 --n 15000 --primes 2,3 --full-every 100 --seed 206
+python3 lemma3.py random --rows 5 --cols 5 --n 15000 --primes 2,3 --full-every 100 --seed 207
+python3 lemma3.py random --rows 3 --cols 5 --n 10000 --primes 2,3 --full-every 100 --seed 335
+python3 lemma3.py random --rows 3 --cols 5 --n 10000 --primes 2,3 --full-every 100 --seed 336
+python3 lemma3.py random --rows 4 --cols 6 --n 6000 --primes 2,3 --full-every 100 --seed 346
+python3 lemma3.py random --rows 4 --cols 6 --n 6000 --primes 2,3 --full-every 100 --seed 347
+python3 lemma3.py random --rows 2 --cols 8 --n 10000 --primes 2,3 --full-every 100 --seed 328
+python3 lemma3.py random --rows 2 --cols 8 --n 10000 --primes 2,3 --full-every 100 --seed 329
+python3 lemma3.py random --rows 6 --cols 6 --n 3000 --primes 2,3 --full-every 100 --seed 366
+python3 lemma3.py random --rows 6 --cols 6 --n 3000 --primes 2,3 --full-every 100 --seed 367
+python3 lemma3.py exhaust --rows 2 --cols 4 --subsets --primes 2,3,5
+python3 lemma3.py exhaust --rows 3 --cols 3 --subsets --primes 2,3 --shard 0 --shards 16
+python3 lemma3.py exhaust --rows 3 --cols 3 --subsets --primes 2,3 --shard 1 --shards 16
+python3 lemma3.py exhaust --rows 3 --cols 3 --subsets --primes 2,3 --shard 2 --shards 16
+python3 lemma3.py exhaust --rows 3 --cols 3 --subsets --primes 2,3 --shard 3 --shards 16
+python3 lemma3.py exhaust --rows 3 --cols 3 --subsets --primes 2,3 --shard 4 --shards 16
+python3 lemma3.py exhaust --rows 3 --cols 3 --subsets --primes 2,3 --shard 5 --shards 16
+python3 lemma3.py exhaust --rows 3 --cols 3 --subsets --primes 2,3 --shard 6 --shards 16
+python3 lemma3.py exhaust --rows 3 --cols 3 --subsets --primes 2,3 --shard 7 --shards 16
+python3 lemma3.py exhaust --rows 3 --cols 3 --subsets --primes 2,3 --shard 8 --shards 16
+python3 lemma3.py exhaust --rows 3 --cols 3 --subsets --primes 2,3 --shard 9 --shards 16
+python3 lemma3.py exhaust --rows 3 --cols 3 --subsets --primes 2,3 --shard 10 --shards 16
+python3 lemma3.py exhaust --rows 3 --cols 3 --subsets --primes 2,3 --shard 11 --shards 16
+python3 lemma3.py exhaust --rows 3 --cols 3 --subsets --primes 2,3 --shard 12 --shards 16
+python3 lemma3.py exhaust --rows 3 --cols 3 --subsets --primes 2,3 --shard 13 --shards 16
+python3 lemma3.py exhaust --rows 3 --cols 3 --subsets --primes 2,3 --shard 14 --shards 16
+python3 lemma3.py exhaust --rows 3 --cols 3 --subsets --primes 2,3 --shard 15 --shards 16
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 0 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 1 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 2 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 3 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 4 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 5 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 6 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 7 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 8 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 9 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 10 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 11 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 12 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 13 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 14 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 15 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 16 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 17 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 18 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 19 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 20 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 21 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 22 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 23 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 24 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 25 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 26 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 27 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 28 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 29 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 30 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 31 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 32 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 33 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 34 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 35 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 36 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 37 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 38 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 39 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 40 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 41 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 42 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 43 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 44 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 45 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 46 --shards 48
+python3 lemma3.py exhaust --rows 2 --cols 5 --primes 2,3 --shard 47 --shards 48
+python3 lemma3.py mutate --rows 4 --cols 4 --n 500 --primes 2
+python3 lemma3.py mutate --rows 3 --cols 3 --n 500 --primes 3
