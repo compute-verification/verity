@@ -105,17 +105,15 @@ struct ReceiptMma : Base {
         int kt = 0;
         auto hook = [&]() {
             if constexpr (MODE == 1) {
-                if (P == 1 || (kt + 1) % P == 0) {
-                    const uint32_t w = (uint32_t)(kt + 1);
+                const uint32_t w = (uint32_t)(kt + 1);
+                CUTLASS_PRAGMA_UNROLL
+                for (int mm = 0; mm < MM; ++mm)
                     CUTLASS_PRAGMA_UNROLL
-                    for (int mm = 0; mm < MM; ++mm)
+                    for (int nn = 0; nn < NN; ++nn)
                         CUTLASS_PRAGMA_UNROLL
-                        for (int nn = 0; nn < NN; ++nn)
-                            CUTLASS_PRAGMA_UNROLL
-                            for (int e = 0; e < MW; ++e)
-                                y[mm * NN + nn] = phi<ROUNDS, VAR>(y[mm * NN + nn], __float_as_uint(accum(e, mm, nn)), w,
-                                                                   key(mm * NN + nn, e));
-                }
+                        for (int e = 0; e < MW; ++e)
+                            y[mm * NN + nn] = phi<ROUNDS, VAR>(y[mm * NN + nn], __float_as_uint(accum(e, mm, nn)), w,
+                                                               key(mm * NN + nn, e));
             } else if constexpr (MODE == 2) {
                 Tensor tCcC = thread_mma.partition_C(make_identity_tensor(take<0, 2>(TileShape{})));
                 const int m0 = int(get<0>(blk_crd)) * decltype(size<0>(TileShape{}))::value;
@@ -135,10 +133,9 @@ struct ReceiptMma : Base {
             ++kt;
         };
 
-        pipeline.consumer_wait(smem_pipe_read);
-        copy_kblock(_0{});
-        CUTLASS_PRAGMA_NO_UNROLL
-        for (; k_tile_count > 1; --k_tile_count) {
+        // One k-tile of the main loop. The stride is unrolled at compile time: a runtime `(kt + 1) % P` test is
+        // if-converted by nvcc, which then runs φ on every k-tile and selects the result.
+        auto ktile = [&](auto receipted) {
             for_each(make_int_sequence<K_BLOCK_MAX>{}, [&](auto k_block) {
                 auto k_block_next = ((k_block + 1) == K_BLOCK_MAX) ? 0 : (k_block + 1);
                 if (k_block == K_BLOCK_MAX - 1) {
@@ -153,9 +150,22 @@ struct ReceiptMma : Base {
                 }
                 copy_kblock(k_block_next);
                 gemm_kblock(k_block);
-                if (k_block == K_BLOCK_MAX - 1) hook();
+                if (k_block == K_BLOCK_MAX - 1) {
+                    if constexpr (decltype(receipted)::value) hook();
+                    else ++kt;
+                }
             });
+        };
+
+        // k_tile_count is a multiple of P (make() refuses other K).
+        pipeline.consumer_wait(smem_pipe_read);
+        copy_kblock(_0{});
+        CUTLASS_PRAGMA_NO_UNROLL
+        for (; k_tile_count > P; k_tile_count -= P) {
+            for_each(make_int_sequence<P - 1>{}, [&](auto) { ktile(cute::false_type{}); });
+            ktile(cute::true_type{});
         }
+        for_each(make_int_sequence<P - 1>{}, [&](auto) { ktile(cute::false_type{}); });
         for_each(make_int_sequence<K_BLOCK_MAX>{}, [&](auto k_block) {
             auto k_block_next = ((k_block + 1) == K_BLOCK_MAX) ? 0 : (k_block + 1);
             if (k_block == K_BLOCK_MAX - 1) {
@@ -232,7 +242,7 @@ cr_impl* make(const cr_args& a, int* err) {
                                   {{}, nullptr, sC, reinterpret_cast<BF16*>(a.D), sD}};
     typename EVT0::Arguments e0{typename ScaleB::Arguments{a.sb, 0.0f, {}}, {}, {}};
     args.epilogue.thread = typename EVT::Arguments{typename ScaleA::Arguments{a.sa, 0.0f, {}}, e0, {}};
-    if (Gemm::can_implement(args) != cutlass::Status::kSuccess) {
+    if (Gemm::can_implement(args) != cutlass::Status::kSuccess || a.k % (128 * CR_P) != 0) {
         *err = 1;
         return nullptr;
     }

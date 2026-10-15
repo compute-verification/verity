@@ -94,6 +94,28 @@ def main() -> int:
         batch(launches)
         ms = [batch(launches) for _ in range(a.reps)]
         t = statistics.median(ms)
+        # Eager launches from Python can't keep up with a ~20 us kernel; vLLM replays CUDA graphs, so time one too.
+        side = torch.cuda.Stream()
+        side.wait_stream(torch.cuda.current_stream())
+        with torch.cuda.stream(side):
+            call(0)
+        torch.cuda.current_stream().wait_stream(side)
+        graph = torch.cuda.CUDAGraph()
+        with torch.cuda.graph(graph):
+            for i in range(launches):
+                call(i)
+
+        def replay() -> float:
+            e0.record()
+            graph.replay()
+            e1.record()
+            e1.synchronize()
+            return e0.elapsed_time(e1) / launches
+
+        replay()
+        ms_graph = [replay() for _ in range(a.reps)]
+        tg = statistics.median(ms_graph)
+        del graph
         rows.append(
             {
                 "shape": name,
@@ -106,10 +128,12 @@ def main() -> int:
                 "ms": round(t, 5),
                 "ms_min": round(min(ms), 5),
                 "tflops": round(2.0 * m * n * k / (t * 1e9), 1),
+                "ms_graph": round(tg, 5),
+                "tflops_graph": round(2.0 * m * n * k / (tg * 1e9), 1),
                 "kernels": [kernel_config(x) for x in names],
             }
         )
-        print(f"{name}: {t:.4f} ms {rows[-1]['tflops']} TFLOPS {rows[-1]['kernels']}", file=sys.stderr)
+        print(f"{name}: {t:.4f} ms ({tg:.4f} graphed) {rows[-1]['tflops']} TFLOPS {rows[-1]['kernels']}", file=sys.stderr)
         del xs, ws
         torch.cuda.empty_cache()
     json.dump({"schema": "verity-pouw/saturation-vllm-gemm-ref/v1", "device": props.name, "rows": rows}, sys.stdout, indent=1)

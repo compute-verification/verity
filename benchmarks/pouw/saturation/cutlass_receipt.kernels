@@ -12,6 +12,9 @@ p_alu2_p1  0 0 2 1 1
 p_alu2_p2  0 0 2 2 1
 p_alu3_p1  0 0 3 1 1
 p_alu4_p1  0 0 4 1 1
+p_alu4_p2  0 0 4 2 1
+p_alu6_p2  0 0 6 2 1
+p_alu12_p4 0 0 12 4 1
 d_plain    1 0 1 1 0
 d_dump     1 0 1 1 2
 d_alu_p1   1 0 1 1 1
@@ -21,3 +24,5 @@ d_alu4_p1  1 0 4 1 1
 d_alu8_p1  1 0 8 1 1
 d_alu16_p1 1 0 16 1 1
 d_alu32_p1 1 0 32 1 1
+d_alu32_p2 1 0 32 2 1
+d_alu64_p2 1 0 64 2 1
