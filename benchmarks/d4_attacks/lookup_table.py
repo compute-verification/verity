@@ -1,4 +1,5 @@
-"""The NoLookupGain table from lookup_coissue.cu and fused_coissue.cu summaries (JSON lines on stdin or as files).
+"""The NoLookupGain table from lookup_coissue.cu, fused_coissue.cu and register_lookup.cu summaries (JSON lines on
+stdin or as files). Times are compared as ratios to each program's own interleaved cuBLASLt int8.
 
 For each (n, alphabet): T_tensor = the fastest tensor-only exact program (cuBLASLt int8, cuBLASLt FP8, our own int8
 kernel); T_best = the fastest exact program over every route and α; η̂ = 1 − T_best/T_tensor. Also the note's
@@ -28,13 +29,21 @@ def main():
         for line in open(src) if src != "-" else sys.stdin:
             if '"event":"summary"' in line:
                 rows.append(json.loads(line))
+    # Each program times cuBLASLt int8 interleaved with its own routes, possibly on a different GPU from the others, so
+    # routes are compared by ratio_vs_int8 (their program's own int8), never by milliseconds across programs.
+    for r in rows:
+        r["median_ms_raw"], r["median_ms"] = r["median_ms"], r["ratio_vs_int8"]
     by = defaultdict(dict)
+    t8ms = defaultdict(list)
     for r in rows:
         key = (r["n"], r["alphabet"])
+        if r["route"] == "int8":
+            t8ms[key].append(r["median_ms_raw"])
         prev = by[key].get(r["route"])
         if prev is None or r["median_ms"] < prev["median_ms"]:
             by[key][r["route"]] = r
-    print("| n | S | T_int8 ms | T_tensor (route) | best route | α | b | T_best/T_tensor | η̂ | best lookup / own_mma | "
+    print("| n | S | T_int8 ms (each program) | T_tensor/T_int8 (route) | best route | α | b | T_best/T_tensor | η̂ | "
+          "best lookup / own_mma | "
           "η̂_note | SM clock MHz |")
     print("|---|---|---|---|---|---|---|---|---|---|---|---|")
     order = {"k2": 0, "k4": 1, "k6": 2, "k8": 3, "u6": 4}
@@ -51,8 +60,8 @@ def main():
         own = d.get("own_mma")
         inkernel = (min(v["median_ms"] for v in fused_look) / own["median_ms"]) if fused_look and own else float("nan")
         clk = (min(v["clk_min"] for v in full.values()), max(v["clk_max"] for v in full.values()))
-        t8 = d["int8"]["median_ms"]
-        print(f"| {n} | {a} | {t8:.4f} | {tens['median_ms']:.4f} ({tens['route']}) | {best['route']} | "
+        t8 = "/".join(f"{t:.3f}" for t in sorted(t8ms[(n, a)]))
+        print(f"| {n} | {a} | {t8} | {tens['median_ms']:.4f} ({tens['route']}) | {best['route']} | "
               f"{best['alpha']:.4f} | {best['b']} | {best['median_ms'] / tens['median_ms']:.4f} | "
               f"{1 - best['median_ms'] / tens['median_ms']:+.4f} | {inkernel:.4f} | {1 - tlook / tfix:+.4f} | "
               f"{clk[0]}–{clk[1]} |")
