@@ -60,3 +60,49 @@ class CublasLinear:
                 else bind(b1.GemmV2, K=K, N=N, DOT=dot))
         return Compute(spec, M, (PerRow(x), Shared(w)), (PerRow(out),), tuple(sorted(node.ids())), hint=hint_of(node, roots[0].name),
                        kernels=("gemm", "splitK", "cutlass", "sm90"), attribution=attribution_for(ctx, M, node.phase), pattern=self.name)
+
+
+def _permuted(v: ViewDesc, order: tuple[int, ...]) -> ViewDesc:
+    return ViewDesc(v.alloc, v.offset, tuple(v.shape[i] for i in order), tuple(v.strides[i] for i in order), v.dtype, v.device)
+
+
+@dataclass
+class MlaAbsorbBmm:
+    """`aten.bmm(x [B,M,K] bf16, W [B,K,N] bf16 parameter view)` / `aten.bmm.out(..., out=)`, MLA's latent absorptions (`W_UK_T`,
+    `W_UV`, views of a parameter's storage) -> `Compute(BatchedGemmWord_v1{B,K,N,DOT}, rows=M, (PerRow(x[:, m, :]), Shared(W^T)),
+    (PerRow(out[:, m, :]),))`: the Build's `MlaAbsorbBmmRule`, token for token over all B heads, DOT the target's k16 step."""
+
+    name: str = "gemm.mla_absorb_bmm"
+
+    def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
+        if node.is_triton or base_op(node.op) != "aten.bmm":
+            return None
+        tp, _recorded = target_of(ctx)
+        if tp.batch_invariant:
+            return None
+        from verity_vllm.program.registry import cublas_bf16
+
+        a = bound_args(node)
+        x, w = a.get("self", a.get("arg0")), a.get("mat2", a.get("arg1"))
+        outs = [a["out"]] if isinstance(a.get("out"), ViewDesc) else node.output_views()
+        if not isinstance(x, ViewDesc) or not isinstance(w, ViewDesc) or len(outs) != 1:
+            return unsupported(node, "aten.bmm arguments not bound as (self, mat2)", x=repr(x), w=repr(w))
+        out = outs[0]
+        if x.rank != 3 or w.rank != 3 or out.rank != 3 or {x.dtype, w.dtype, out.dtype} != {"bfloat16"}:
+            return unsupported(node, "MLA absorb bmm takes bf16 [B,M,K] x [B,K,N] -> [B,M,N]", x=repr(x), w=repr(w), out=repr(out))
+        (B, M, K), (B2, K2, N) = x.shape, w.shape
+        if (B2, K2) != (B, K) or out.shape != (B, M, N) or x.strides[2] != 1 or w.strides[1] != 1 or out.strides[2] != 1:
+            return unsupported(node, "bmm shapes or inner strides are not [B,M,K] x [B,K,N] -> [B,M,N] with unit inner strides",
+                               x=repr(x), w=repr(w), out=repr(out))
+        roots = ctx.roots_of(w)
+        if not roots:
+            return unsupported(node, "the absorbed weight is not a view of a parameter's storage (no Root)", w=repr(w))
+        T = _targets()
+        try:
+            dot = T.tensor_core_dot(tp)
+        except T.UnregisteredTarget as e:
+            return unsupported(node, str(e))
+        spec = bind(cublas_bf16.BatchedGemmWord, B=B, K=K, N=N, DOT=dot)
+        return Compute(spec, M, (PerRow(_permuted(x, (1, 0, 2))), Shared(_permuted(w, (0, 2, 1)))), (PerRow(_permuted(out, (1, 0, 2))),),
+                       tuple(sorted(node.ids())), hint=hint_of(node, roots[0].name), kernels=("gemm", "cutlass", "sm90"),
+                       attribution=attribution_for(ctx, M, node.phase), pattern=self.name)
