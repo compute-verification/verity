@@ -30,6 +30,8 @@
 #   cheat  (not default) lease 1: cutlass_receipt over the prefill shapes for the kernels CG_BUILD names, each design
 #          beside its CR_EXTRA variants (a cheater's own CUDA work fused into the GEMM); CG_BUILD also limits the build;
 #          CG_SHUFFLE=1 times each round in a fresh order
+#   cgncu  (not default) lease 1: ncu over the kernels CG_NCU names (comma list, built as for cheat with CG_BUILD) at
+#          p8192 qkv
 #   gap    (not default) lease 1: gap_filler.py, forced work (φ pump, or a tag-like read of a 1 GiB store) on a
 #          low-priority stream beside vLLM's FP8 layer stack (its own ops), graph-replayed at high priority
 # Timeouts run in the foreground so `research cancel` reaches the GPU process.
@@ -101,8 +103,8 @@ cgemm_build() {  # cutlass_receipt in $d with one object a line of cutlass_recei
   gzip -c "$d/cutlass_receipt-sass.txt" > "$OUT/cutlass_receipt-sass.txt.gz"
   stamp "build cutlass_receipt ok"
 }
-[[ " $STAGES " == *" cgemm "* || " $STAGES " == *" corun "* || " $STAGES " == *" cheat "* ]] \
-  && { cgemm_build || STAGES=${STAGES/cgemm/} STAGES=${STAGES/corun/} STAGES=${STAGES/cheat/}; }
+[[ " $STAGES " == *" cgemm "* || " $STAGES " == *" corun "* || " $STAGES " == *" cheat "* || " $STAGES " == *" cgncu "* ]] \
+  && { cgemm_build || STAGES=${STAGES/cgemm/} STAGES=${STAGES/corun/} STAGES=${STAGES/cheat/} STAGES=${STAGES/cgncu/}; }
 
 split() {
   for cfg in "$@"; do
@@ -224,23 +226,26 @@ cgemm() {
   else
     stamp "vllm gemm ref FAILED rc=$?"
   fi
-  local run
-  for run in "p8192_qkv p_alu_p1,p_alu3_p1,p_alu3_p1s,p_imad_g4,p_alu_g4" "d32_gateup d_alu8_p1,d_alu32_p1,d_alu8_g4"; do
-    set -- $run
-    stamp "cutlass receipt ncu $1"
-    if timeout --foreground 600 "$NCU" --clock-control none --kernel-name regex:device_kernel --section LaunchStats \
-        --section WarpStateStats --section SchedulerStats --section ComputeWorkloadAnalysis --section SpeedOfLight \
-        --metrics "$METRICS" --export "$d/cg-ncu-$1" --force-overwrite \
-        "$d/cutlass_receipt" --shapes $1 --profile --only $2 > "$d/cg-ncu-$1.log" 2>&1; then
-      "$NCU" --import "$d/cg-ncu-$1.ncu-rep" --csv --page details > "$OUT/cg-ncu-$1-details.csv"
-      "$NCU" --import "$d/cg-ncu-$1.ncu-rep" --csv --page raw | gzip -c > "$OUT/cg-ncu-$1-raw.csv.gz"
-      stamp "cutlass receipt ncu $1 ok"
-    else
-      stamp "cutlass receipt ncu $1 FAILED rc=$?"
-    fi
-    grep -v "^\s*$" "$d/cg-ncu-$1.log" | tail -40 > "$OUT/cg-ncu-$1.log.tail"
-  done
+  cg_ncu p8192_qkv p_alu_p1,p_alu3_p1,p_alu3_p1s,p_imad_g4,p_alu_g4
+  cg_ncu d32_gateup d_alu8_p1,d_alu32_p1,d_alu8_g4
 }
+
+cg_ncu() {  # SHAPE KERNEL,...: ncu's pipe, scheduler and warp-state sections over those kernels at that shape
+  stamp "cutlass receipt ncu $1"
+  if timeout --foreground 600 "$NCU" --clock-control none --kernel-name regex:device_kernel --section LaunchStats \
+      --section WarpStateStats --section SchedulerStats --section ComputeWorkloadAnalysis --section SpeedOfLight \
+      --metrics "$METRICS" --export "$d/cg-ncu-$1" --force-overwrite \
+      "$d/cutlass_receipt" --shapes $1 --profile --only $2 > "$d/cg-ncu-$1.log" 2>&1; then
+    "$NCU" --import "$d/cg-ncu-$1.ncu-rep" --csv --page details > "$OUT/cg-ncu-$1-details.csv"
+    "$NCU" --import "$d/cg-ncu-$1.ncu-rep" --csv --page raw | gzip -c > "$OUT/cg-ncu-$1-raw.csv.gz"
+    stamp "cutlass receipt ncu $1 ok"
+  else
+    stamp "cutlass receipt ncu $1 FAILED rc=$?"
+  fi
+  grep -v "^\s*$" "$d/cg-ncu-$1.log" | tail -40 > "$OUT/cg-ncu-$1.log.tail"
+}
+
+cgncu() { cg_ncu p8192_qkv "$CG_NCU"; }
 
 corun() {
   stamp "cutlass corun"
@@ -275,7 +280,7 @@ gap() {
 
 leased() {
   stamp "lease for: $*"
-  gpu-lease 1 --wait --max-min 30 -- bash -c "$(declare -f stamp split micro ncu_stage phi isa rgemm cgemm corun cheat gap); $(declare -p OUT d S PY MODEL REV NCU METRICS); $*" \
+  gpu-lease 1 --wait --max-min 30 -- bash -c "$(declare -f stamp split micro ncu_stage phi isa rgemm cgemm cg_ncu cgncu corun cheat gap); $(declare -p OUT d S PY MODEL REV NCU METRICS); $*" \
     || stamp "lease for '$*' FAILED rc=$?"
 }
 [[ " $STAGES " == *" split "* ]] && leased split "'bf16 eager'" "'fp8 eager'" "'bf16 graphs'" "'fp8 graphs'"
@@ -290,6 +295,7 @@ leased() {
 [[ " $STAGES " == *" cgemm "* ]] && leased cgemm
 [[ " $STAGES " == *" corun "* ]] && leased corun
 [[ " $STAGES " == *" cheat "* ]] && leased cheat
+[[ " $STAGES " == *" cgncu "* ]] && leased cgncu
 [[ " $STAGES " == *" gap "* ]] && leased gap
 
 for rep in "$d"/ncu-*.ncu-rep; do
