@@ -55,7 +55,7 @@ for phase in ${PHASES:-f3 general grid exact}; do
             IFS=, read -r a b cc L samples budget bk <<<"$c"
             python3 steiner.py --out "$OUT/subspace_$a$b${cc}_L$L.jsonl" subspace --a "$a" --b "$b" --c "$cc" --L "$L" \
                 --samples "$samples" --budget-s "$budget" --batch-k "$bk" --max-k "${SUB_MAX_K:-24}" \
-                --only ${SUB_ONLY:-a b c d} --extra ${SUB_EXTRA:-2 4 6 8}
+                --only ${SUB_ONLY:-a b c d} --extra ${SUB_EXTRA:-2 4 6 8} --greedy-rounds "${SUB_GREEDY:-5}"
         done ;;
     jointsub)
         python3 steiner.py --out "$OUT/jointsub_calibrate.jsonl" jointsub --calibrate --seed "${SEED:-1}" \
