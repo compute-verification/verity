@@ -1,0 +1,4 @@
+# Exact per-cell Steiner lengths at r = 2L on generic instances with S = 7 (RS-D2F, CMP-13): lowrank_cell.py R Q RHO S TRIALS SEED generic.
+python3 lowrank_cell.py 4 2 2 7 2 115 generic
+python3 lowrank_cell.py 4 2 2 7 2 116 generic
+python3 lowrank_cell.py 4 2 2 7 2 117 generic
