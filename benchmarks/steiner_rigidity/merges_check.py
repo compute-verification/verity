@@ -31,7 +31,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from check import nullspace, rank, rref  # noqa: E402
+from check import nullspace, rank, rref
 
 
 def binary_hierarchy(sets, universe):
@@ -60,18 +60,18 @@ def type_sets(tree, rows_of, cols_of):
 
     def go(t):
         if isinstance(t, int):
-            node = dict(S=[t], D=[t], E=[t], rho=set(rows_of[t]), gam=set(cols_of[t]))
+            node = {"S": [t], "D": [t], "E": [t], "rho": set(rows_of[t]), "gam": set(cols_of[t])}
         else:
             A, B = go(t[0]), go(t[1])
             if not (A["rho"] & B["rho"]):
                 xcons.append((A["D"], B["D"]))
-                node = dict(S=A["S"] + B["S"], D=A["D"], E=A["E"] + B["E"], rho=A["rho"] | B["rho"],
-                            gam=A["gam"] & B["gam"])
+                node = {"S": A["S"] + B["S"], "D": A["D"], "E": A["E"] + B["E"], "rho": A["rho"] | B["rho"],
+                            "gam": A["gam"] & B["gam"]}
             else:
                 assert not (A["gam"] & B["gam"]), "both merges blocked"
                 ycons.append((A["E"], B["E"]))
-                node = dict(S=A["S"] + B["S"], D=A["D"] + B["D"], E=A["E"], rho=A["rho"] & B["rho"],
-                            gam=A["gam"] | B["gam"])
+                node = {"S": A["S"] + B["S"], "D": A["D"] + B["D"], "E": A["E"], "rho": A["rho"] & B["rho"],
+                            "gam": A["gam"] | B["gam"]}
         nodes.append(node)
         return node
 
@@ -249,15 +249,15 @@ def chain_form(shape, rng, p):
             D = shape.D(pos, s)
             kind = rng.choice(["none", "one", "one", "two"])
             if kind == "none":
-                links.append(dict(pos=pos, s=s, kind=kind, Z=None, beta=1, local=rank_one_terms(D, p)))
+                links.append({"pos": pos, "s": s, "kind": kind, "Z": None, "beta": 1, "local": rank_one_terms(D, p)})
             elif kind == "one":
                 Z, beta = rng.randrange(1, len(F_val)), rng.randint(1, p - 1)
-                links.append(dict(pos=pos, s=s, kind=kind, Z=Z, beta=beta,
-                                  local=rank_one_terms(D - beta * F_val[Z], p)))
+                links.append({"pos": pos, "s": s, "kind": kind, "Z": Z, "beta": beta,
+                                  "local": rank_one_terms(D - beta * F_val[Z], p)})
             else:
                 Z1, Z2 = rng.randrange(1, len(F_val)), rng.randrange(1, len(F_val))
                 rest = D - F_val[Z1] - F_val[Z2]
-                links.append(dict(pos=pos, s=s, kind=kind, Z=None, beta=1, local=rank_one_terms(rest, p)))
+                links.append({"pos": pos, "s": s, "kind": kind, "Z": None, "beta": 1, "local": rank_one_terms(rest, p)})
 
     n_products = (len(F_val) - 1) + sum(len(l["local"]) for l in links)
     n_merges = sum({"none": 0, "one": 1, "two": 2}[l["kind"]] for l in links)
@@ -372,7 +372,7 @@ def mixed_chain_form(shape, rng, p, winograd_only=False):
                 pieces = None
             F_val.append((F_val[parent] + beta) % p)
             F_par.append(parent)
-            products.append(dict(where=("F", len(F_val) - 1), beta=beta, pieces=pieces))
+            products.append({"where": ("F", len(F_val) - 1), "beta": beta, "pieces": pieces})
 
     positions = [(i, j) for i in range(shape.P) for j in range(shape.Q)]
     links = []
@@ -395,7 +395,7 @@ def mixed_chain_form(shape, rng, p, winograd_only=False):
                     g, h = new_word(xv(i, k1), yv(j, k2)), new_word(xv(i, k2), yv(j, k1))
                     beta, pieces = mixed(g, h)
                     rest = (rest - beta) % p
-                    local.append(dict(where=("local", t), beta=beta, pieces=pieces))
+                    local.append({"where": ("local", t), "beta": beta, "pieces": pieces})
             if not winograd_only:
                 uses = [rng.choice(dense)] if rng.random() < 0.5 else []
                 g = new_word(xv(i, ks[0]), yv(j, ks[-1]))
@@ -404,10 +404,10 @@ def mixed_chain_form(shape, rng, p, winograd_only=False):
                     h = new_word([rng.randrange(p) for _ in range(Xd)], [rng.randrange(p) for _ in range(Yd)])
                     beta, pieces = mixed(g, h)
                     rest = (rest - beta) % p
-                    local.append(dict(where=("local", t), beta=beta, pieces=pieces))
+                    local.append({"where": ("local", t), "beta": beta, "pieces": pieces})
             for R in rank_one_terms(rest, p):
-                local.append(dict(where=("local", t), beta=R, pieces=None))
-            links.append(dict(pos=(i, j), s=s, kind=kind, Z=Z, beta=beta_t, local=local))
+                local.append({"where": ("local", t), "beta": R, "pieces": None})
+            links.append({"pos": (i, j), "s": s, "kind": kind, "Z": Z, "beta": beta_t, "local": local})
             products.extend(local)
 
     kept = [t for t, l in enumerate(links) if l["kind"] != "two"]
@@ -886,8 +886,8 @@ def strassen_words(L, p=10007):
             v[a * L + h * h2 + k] += c
         return v
 
-    A = lambda i, h: {(i, h): 1}  # noqa: E731
-    B = lambda h, j: {(j, h): 1}  # noqa: E731
+    A = lambda i, h: {(i, h): 1}
+    B = lambda h, j: {(j, h): 1}
 
     def add(*ds):
         out = {}
@@ -947,9 +947,9 @@ def part8(rng):
             Zs = [random_word(shape, cells, rng, p) for _ in range(d)]
             combos = [bs for bs in itertools.product(range(p), repeat=d) if any(bs)]
 
-            def best(cell):
+            def best(cell, shape=shape, Zs=Zs, p=p, combos=combos):
                 D = shape.D(*cell)
-                return min(((rank((D - sum(b * Z for b, Z in zip(bs, Zs))) % p, p), bs) for bs in combos))
+                return min((rank((D - sum(b * Z for b, Z in zip(bs, Zs))) % p, p), bs) for bs in combos)
 
             chosen = {}
             for cell in rng.sample(cells, len(cells)):
@@ -987,7 +987,7 @@ def quadric_labels(cells, B, rng, p, tries=200):
     if U.shape[0] != 4:
         return None
     pts = [U[:, t] for t in range(k)]
-    inv = lambda a: pow(int(a) % p, p - 2, p)  # noqa: E731
+    inv = lambda a: pow(int(a) % p, p - 2, p)
     roots = {x * x % p: x for x in range(p)}
     mons = list(itertools.combinations_with_replacement(range(4), 2))
     Qs = nullspace(np.array([[x[i] * x[j] % p for i, j in mons] for x in pts]), len(mons), p)
@@ -1000,7 +1000,7 @@ def quadric_labels(cells, B, rng, p, tries=200):
             S[i, j] = S[j, i] = c if i == j else c * inv(2) % p
         if rank(S, p) < 4:
             continue
-        f = lambda a, b: int(a @ S @ b) % p  # noqa: E731
+        f = lambda a, b, S=S: int(a @ S @ b) % p
         u = pts[0]
         v = next(e for e in np.eye(4, dtype=np.int64) if f(u, e))
         v = v * inv(f(u, v)) % p
