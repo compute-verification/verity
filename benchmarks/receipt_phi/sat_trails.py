@@ -281,8 +281,10 @@ def _floor_job(args: tuple) -> dict:
 
 
 def span(s: str) -> list[int]:
+    """"lo-hi" or "lo-hi:step", inclusive."""
+    s, _, step = s.partition(":")
     lo, _, hi = s.partition("-")
-    return list(range(int(lo), int(hi or lo) + 1))
+    return list(range(int(lo), int(hi or lo) + 1, int(step or 1)))
 
 
 def main() -> int:
