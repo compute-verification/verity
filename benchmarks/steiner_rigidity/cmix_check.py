@@ -14,7 +14,8 @@ Parts:
      rooted at 0, St_sym = 2L * sum_pi hi_pi; with a free root (a head tree), 2L (sum hi - min lo).
   3  The depth-3 inequality behind Proposition 3 (two Steiner points, three targets with one pair in disjoint rows
      and columns), on random Steiner points.
-  4  Local search for symmetric gains in deeper trees at L = 2.
+  4  Local search for symmetric gains in deeper trees at L = 2: none on the proved patterns; on the full 2 x 2
+     block it finds the gains of part 8.
   5  The span bound: every computation costs at least the tensor rank of T = sum_t S_t (x) e_t, and R(T) >= 2Lk when
      no two cells share a D-column (or a D-row), for trees of any depth and for DAGs with merges.
   6  The L-shape at L = 2, exactly over GF(3): the proved inequalities leave five cost-11 rank profiles for the open
@@ -454,6 +455,7 @@ SEARCH = [  # (name, grid (P, Q, L), cells)
     ("row of 4, L=2", (1, 4, 2), [(0, 0), (0, 1), (0, 2), (0, 3)]),
     ("column of 3, L=2", (3, 1, 2), [(0, 0), (1, 0), (2, 0)]),
 ]
+GAINS = ("2x2, L=2",)  # below 2Lk by Proposition 5; the others are proved (Theorems S and L)
 
 
 def search_jobs(seeds):
@@ -527,10 +529,14 @@ def part4(rng, seeds=range(2), procs=1, out=None, steps=6000):
             if out:
                 with open(out, "a") as f:
                     f.write(json.dumps(res) + "\n")
-    viol = [r for r in results if r["violation"]]
+    viol = [r for r in results if r["violation"] and r["name"] not in GAINS]
     tight = sum(r["best"] == r["bound"] for r in results)
-    assert not viol, f"symmetric gain found: {viol[0]}"
-    print(f"  part 4: {len(results)} searches, none below the bound, {tight} reach it")
+    assert not viol, f"symmetric gain found on a proved pattern: {viol[0]}"
+    gains = [r for r in results if r["violation"]]
+    least = {f"{n}, {'rooted' if ro else 'free root'}": min(r["best"] for r in results if (r["name"], r["rooted"]) == (n, ro))
+             for n in GAINS for ro in (True, False)}
+    print(f"  part 4: {len(results)} searches, none below the bound on the proved patterns, {tight} reach it; "
+          f"{len(gains)} below it on {', '.join(GAINS)} (Proposition 5), least {least}")
 
 
 def run_job_default(arg):
