@@ -146,3 +146,20 @@ def test_a_bmm_whose_weight_is_no_parameter_view_is_refused():
     node = _node("aten.bmm.default", BMM_SCHEMA, [view(5604, (8, 1, 192), strides=(256, 2048, 1)), W_UK_T.view],
                  outs=view(5605, (8, 1, 512)))
     assert isinstance(MlaAbsorbBmm().match(node, _ctx(1)), Unsupported)
+
+
+def test_a_transposed_weight_root_writes_one_run_per_inner_row_with_its_leaves_unchanged():
+    """`memory.address_ordered`: W_UK_T's (448, 1, 3584)-strided view as 4,096 address runs, not one per element (VLLM-14)."""
+    from verity.ml.circuits.refs import Affine
+    from verity_vllm.observe.fold.memory import address_ordered
+    from verity_vllm.observe.fold.views import element_runs
+
+    v = W_UK_T.view
+    r = Affine("p", 0, 1000, 8 * 192 * 512)
+    pv, pr = address_ordered(v, r)
+    assert len(element_runs(pv)) == 8 * 512 and len(element_runs(v)) == 8 * 192 * 512
+    for b, k, n in ((0, 0, 0), (7, 191, 511), (3, 17, 300)):
+        assert pv.offset + n * pv.strides[0] + b * pv.strides[1] + k * pv.strides[2] == b * 448 + k + n * 3584
+        assert pr[n * 8 * 192 + b * 192 + k] == r[b * 192 * 512 + k * 512 + n]
+    contiguous, refs = view(7, (160, H)), Affine("p", 0, 0, 160 * H)
+    assert address_ordered(contiguous, refs) == (contiguous, refs)
