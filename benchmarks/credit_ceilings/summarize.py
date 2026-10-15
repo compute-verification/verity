@@ -77,6 +77,23 @@ def main(out: Path) -> None:
                 f"| {r['ops']} | {r['mix']} | {r['dp4a']:.3f} | {r['ffma']:.3f} | {r['ffma2']:.3f} | {r['dp4a_cycles']:.0f} | "
                 f"{r['fma_cycles']:.0f} | {r['block_cycles']:.0f} | {r['mac_equiv_per_sm_clk']:.1f} |"
             )
+    print("\n| beside FP8 MMAs (share of 1,024 MACs/SM/clk) | config | MMA/SMSP/clk | tensor | other | combined | clock64 MHz |")
+    print("|---|---|---|---|---|---|---|")
+    for r in rows:
+        k = r.get("kind")
+        if k == "mix":
+            cfg = f"form {r['form']}, {r['nf_per_16_mma']} a 16 MMAs, {r['wps']} warps/SMSP"
+        elif k == "lp":
+            cfg = f"{r['nmma']} MMAs + dp4a {r['nd']}, rot {r['nr']}, ffma {r['nf']}, hfma2 {r['nh']} an iteration"
+        elif k == "lp2":
+            cfg = f"16 MMAs + dp4a {r['nd']}; {r['wr']} rotate warps/SMSP, {r['nr']} an iteration"
+        else:
+            continue
+        mma = r.get("mma_per_smsp_clk", r["tensor_share"] / 16)
+        print(
+            f"| {k} | {cfg} | {mma:.5f} | {r['tensor_share']:.4f} | {r['other_share']:.4f} | "
+            f"{r['combined_share']:.4f} | {r['sm_mhz']:.0f} |"
+        )
     for r in rows:
         if r.get("kind") in ("decoder_selftest", "device"):
             print(f"\n`{json.dumps(r)}`")
