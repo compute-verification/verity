@@ -25,7 +25,10 @@ proof workers' results land here as theorems or as named hypotheses.
 * The reduction's shape (`reduction`, `M' = M ++ Q`): run the extractor (M's run and its committed blocks), keep the
   prover messages, peel and correct; `time_reduction_le` is `time M' ≤ time E + time peel + time correction`.
   `secure_of_extraction_floor` gives security from two named hypotheses, `Extraction` (RS-EXT's) and `Floor` (the floor
-  agenda's), and `secure_fullRank` and `secure_lowRank` instantiate it with the explicit peels of `MatMachine`.
+  agenda's), and `secure_fullRank` and `secure_lowRank` instantiate it with the explicit peels of `MatMachine`. With
+  products typed by grid (`WideGridMatMachine`: grid products at `κG`, wide-by-grid products at `κW`), the full-rank
+  peel costs `2κG n³` and the low-rank peel `(2κG + 2κW) n² r` (`secure_fullRank_grid`, `secure_lowRank_grid`,
+  `secure_lowRank_advTime_grid`; RS-MODEL §5's `10 n² r` u at 1 u and 4 u).
 * Route (c), edited instances (Daniel's rulings of 18:20Z and 18:28Z): correctness reads σ, an `Edit` adds σ-indexed
   noise to both operands, unpeeled; `edited` is the protocol (promised on the instances `use`, served by a
   product algorithm `m`), `edited_complete` its completeness, `honestEdit` costs `time m + 2κadd n²` beyond the proof
@@ -1604,6 +1607,162 @@ theorem relativelySecure_of_editFloor_grid (S : Service) {n : ℕ} (E : Mc.Edit 
     ((Mc.time_mulG_le n n n hshape).trans_eq (by ring)) hcom hacc hfloor hκδ hF hFU hN
 
 end GridMatMachine
+
+/-- **A matrix machine with grid and wide-by-grid products** (RS-MODEL §4's width refinement for the peel routes): on
+the shapes `shape`, `mulW` computes the product when one operand is on the grid (a 32-bit by small product, byte-split),
+at `κW` per multiply-accumulate (4 u on sm_120). -/
+structure WideGridMatMachine (R : Type) [Ring R] extends GridMatMachine R where
+  κW : ℝ
+  mulW : ∀ a b c : ℕ, Alg (Mat R a b × Mat R b c) (Mat R a c)
+  eval_mulW : ∀ (a b c : ℕ) (x : Mat R a b × Mat R b c), shape a b c →
+    ((∀ i k, G (x.1 i k)) ∨ ∀ k j, G (x.2 k j)) → eval (mulW a b c) x = x.1 * x.2
+  time_mulW_le : ∀ a b c : ℕ, shape a b c → time (mulW a b c) ≤ κW * ((a : ℝ) * b * c)
+
+namespace WideGridMatMachine
+
+variable {R : Type} [Ring R] (Mc : WideGridMatMachine R)
+
+/-- Multiply the outputs of `f` and `g` with the grid product. -/
+def mulG₂ {I : Type} {a b c : ℕ} (f : Mc.Alg I (Mat R a b)) (g : Mc.Alg I (Mat R b c)) : Mc.Alg I (Mat R a c) :=
+  Mc.lift2 f g (Mc.mulG a b c)
+
+/-- Multiply the outputs of `f` and `g` with the wide-by-grid product. -/
+def mulW₂ {I : Type} {a b c : ℕ} (f : Mc.Alg I (Mat R a b)) (g : Mc.Alg I (Mat R b c)) : Mc.Alg I (Mat R a c) :=
+  Mc.lift2 f g (Mc.mulW a b c)
+
+theorem time_mulG₂_le_of {I : Type} {a b c : ℕ} {f : Mc.Alg I (Mat R a b)} {g : Mc.Alg I (Mat R b c)} {u v : ℝ}
+    (hs : Mc.shape a b c) (hf : Mc.time f ≤ u) (hg : Mc.time g ≤ v) :
+    Mc.time (Mc.mulG₂ f g) ≤ u + v + Mc.κG * ((a : ℝ) * b * c) :=
+  (Machine.time_lift2_le _ _ _ _).trans (by linarith [Mc.time_mulG_le a b c hs])
+
+theorem time_mulW₂_le_of {I : Type} {a b c : ℕ} {f : Mc.Alg I (Mat R a b)} {g : Mc.Alg I (Mat R b c)} {u v : ℝ}
+    (hs : Mc.shape a b c) (hf : Mc.time f ≤ u) (hg : Mc.time g ≤ v) :
+    Mc.time (Mc.mulW₂ f g) ≤ u + v + Mc.κW * ((a : ℝ) * b * c) :=
+  (Machine.time_lift2_le _ _ _ _).trans (by linarith [Mc.time_mulW_le a b c hs])
+
+/-- A matrix on the grid. -/
+def On {a b : ℕ} (X : Mat R a b) : Prop := ∀ i k, Mc.G (X i k)
+
+/-- The full-rank blocks on the grid: `A`, `Y = B + S`, `R` and `S`. -/
+def GridFull {n : ℕ} (b : MatMachine.FullBlocks R n) : Prop :=
+  Mc.On b.2.1 ∧ Mc.On b.2.2.1 ∧ Mc.On b.2.2.2.1 ∧ Mc.On b.2.2.2.2
+
+/-- **The full-rank peel on the grid**: `R Y` and `A S` are grid products. -/
+def peelFullG (n : ℕ) : Mc.Alg (MatMachine.FullBlocks R n) (Mat R n n × Mat R n n × Mat R n n) :=
+  Mc.pair Mc.fst
+    (Mc.pair (Mc.mulG₂ (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd Mc.fst))) (Mc.seq Mc.snd (Mc.seq Mc.snd Mc.fst)))
+      (Mc.mulG₂ (Mc.seq Mc.snd Mc.fst) (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd Mc.snd)))))
+
+theorem eval_peelFullG {n : ℕ} (hs : Mc.shape n n n) (b : MatMachine.FullBlocks R n) (hb : Mc.GridFull b) :
+    Mc.eval (Mc.peelFullG n) b = (b.1, b.2.2.2.1 * b.2.2.1, b.2.1 * b.2.2.2.2) := by
+  simp only [peelFullG, mulG₂, Machine.eval_lift2, Mc.eval_pair, Mc.eval_seq, Mc.eval_fst, Mc.eval_snd]
+  rw [Mc.eval_mulG n n n (b.2.2.2.1, b.2.2.1) hs hb.2.2.1 hb.2.1,
+    Mc.eval_mulG n n n (b.2.1, b.2.2.2.2) hs hb.1 hb.2.2.2]
+
+theorem peelFullG_correct {n : ℕ} (hs : Mc.shape n n n) (x : Mat R n n × Mat R n n) (b : MatMachine.FullBlocks R n)
+    (hb : MatMachine.ValidFull x b) (hg : Mc.GridFull b) : x.1 * x.2 = Mc.eval (Mc.corr n) (Mc.eval (Mc.peelFullG n) b) := by
+  rw [Mc.eval_peelFullG hs b hg, ← Mc.eval_peelFull n b]
+  exact Mc.peelFull_correct x b hb
+
+/-- The full-rank peel on the grid costs two grid products: `2 κG n³`. -/
+theorem time_peelFullG_le {n : ℕ} (hs : Mc.shape n n n) : Mc.time (Mc.peelFullG n) ≤ 2 * Mc.κG * (n : ℝ) ^ 3 := by
+  apply le_trans
+  · unfold peelFullG
+    apply_rules [time_mulG₂_le_of, Machine.time_pair_le_of, Machine.time_seq_le_of, Machine.time_fst_le,
+      Machine.time_snd_le]
+  · linarith
+
+/-- The low-rank blocks on the grid: `A`, `Y = B + W Zᵀ` and the factors `U`, `Vᵀ`, `W`, `Zᵀ`. -/
+def GridLow {n r : ℕ} (b : MatMachine.LowBlocks R n r) : Prop :=
+  Mc.On b.2.1 ∧ Mc.On b.2.2.1 ∧ Mc.On b.2.2.2.1 ∧ Mc.On b.2.2.2.2.1 ∧ Mc.On b.2.2.2.2.2.1 ∧ Mc.On b.2.2.2.2.2.2
+
+/-- The shapes the low-rank peel's products take. -/
+def LowShapes (n r : ℕ) : Prop := Mc.shape r n n ∧ Mc.shape n r n ∧ Mc.shape n n r
+
+/-- **The low-rank peel on the grid** (RS-MODEL §5): `Vᵀ Y` and `A W` are grid products, and `U (Vᵀ Y)` and
+`(A W) Zᵀ`, whose `r`-wide intermediates are off the grid, are wide-by-grid products. -/
+def peelLowG (n r : ℕ) : Mc.Alg (MatMachine.LowBlocks R n r) (Mat R n n × Mat R n n × Mat R n n) :=
+  Mc.pair Mc.fst
+    (Mc.pair
+      (Mc.mulW₂ (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd Mc.fst)))
+        (Mc.mulG₂ (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd Mc.fst))))
+          (Mc.seq Mc.snd (Mc.seq Mc.snd Mc.fst))))
+      (Mc.mulW₂
+        (Mc.mulG₂ (Mc.seq Mc.snd Mc.fst)
+          (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd Mc.fst))))))
+        (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd (Mc.seq Mc.snd Mc.snd)))))))
+
+theorem eval_peelLowG {n r : ℕ} (hs : Mc.LowShapes n r) (b : MatMachine.LowBlocks R n r) (hb : Mc.GridLow b) :
+    Mc.eval (Mc.peelLowG n r) b =
+      (b.1, b.2.2.2.1 * (b.2.2.2.2.1 * b.2.2.1), (b.2.1 * b.2.2.2.2.2.1) * b.2.2.2.2.2.2) := by
+  obtain ⟨hA, hY, hU, hV, hW, hZ⟩ := hb
+  simp only [peelLowG, mulG₂, mulW₂, Machine.eval_lift2, Mc.eval_pair, Mc.eval_seq, Mc.eval_fst, Mc.eval_snd]
+  rw [Mc.eval_mulG r n n (b.2.2.2.2.1, b.2.2.1) hs.1 hV hY,
+    Mc.eval_mulG n n r (b.2.1, b.2.2.2.2.2.1) hs.2.2 hA hW,
+    Mc.eval_mulW n r n (b.2.2.2.1, b.2.2.2.2.1 * b.2.2.1) hs.2.1 (Or.inl hU),
+    Mc.eval_mulW n r n (b.2.1 * b.2.2.2.2.2.1, b.2.2.2.2.2.2) hs.2.1 (Or.inr hZ)]
+
+theorem peelLowG_correct {n r : ℕ} (hs : Mc.LowShapes n r) (x : Mat R n n × Mat R n n) (b : MatMachine.LowBlocks R n r)
+    (hb : MatMachine.ValidLow x b) (hg : Mc.GridLow b) : x.1 * x.2 = Mc.eval (Mc.corr n) (Mc.eval (Mc.peelLowG n r) b) := by
+  rw [Mc.eval_peelLowG hs b hg, ← Mc.eval_peelLow n r b]
+  exact Mc.peelLow_correct x b hb
+
+/-- The low-rank peel on the grid costs two grid and two wide-by-grid products through `r`:
+`2 κG n² r + 2 κW n² r` (RS-MODEL §5's `10 n² r` u at `κG = 1`, `κW = 4`). -/
+theorem time_peelLowG_le {n r : ℕ} (hs : Mc.LowShapes n r) :
+    Mc.time (Mc.peelLowG n r) ≤ 2 * Mc.κG * (n : ℝ) ^ 2 * r + 2 * Mc.κW * (n : ℝ) ^ 2 * r := by
+  obtain ⟨h1, h2, h3⟩ := hs
+  apply le_trans
+  · unfold peelLowG
+    apply_rules (maxDepth := 200) [time_mulG₂_le_of, time_mulW₂_le_of, Machine.time_pair_le_of,
+      Machine.time_seq_le_of, Machine.time_fst_le, Machine.time_snd_le]
+  · linarith
+
+variable {n : ℕ} {Inst : Type} {P : Protocol Mc.toMachine Inst (Mat R n n)} {emb : Inst → Mat R n n × Mat R n n}
+
+/-- **Full-rank masks, products typed by grid**: from extraction of on-grid valid blocks and the floor above
+`q = 2κG n³ + 2κadd n²`, `ε = εext + (1 + εext) q / (T − q)`. -/
+theorem secure_fullRank_grid (hmat : IsMatmulOn P emb) (hs : Mc.shape n n n) {εext δ η T : ℝ}
+    (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
+      δ ≤ acceptance P M → Extraction P (fun x b => MatMachine.ValidFull (emb x) b ∧ Mc.GridFull b) εext M η)
+    (hfloor : Floor Mc.toMachine P.promise (fun x C => (emb x).1 * (emb x).2 = C) T η)
+    (hT : 2 * Mc.κG * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2 < T) :
+    Secure P (εext + (1 + εext) * ((2 * Mc.κG * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2) /
+      (T - (2 * Mc.κG * (n : ℝ) ^ 3 + 2 * Mc.κadd * (n : ℝ) ^ 2)))) δ η 0 :=
+  secure_of_extraction_floor P (Mc.peelFullG n) (Mc.corr n)
+    (fun σ x b hb => (hmat σ x _).2 (Mc.peelFullG_correct hs (emb x) b hb.1 hb.2)) hext hfloor
+    (fun σ x C h => (hmat σ x C).1 h)
+    (by linarith [Mc.time_peelFullG_le hs, Mc.time_corr_le n]) hT
+
+/-- **Rank-`r` masks, products typed by grid**: from extraction of on-grid valid blocks and the floor above
+`q = (2κG + 2κW) n² r + 2κadd n²`, `ε = εext + (1 + εext) q / (T − q)`. -/
+theorem secure_lowRank_grid (hmat : IsMatmulOn P emb) (r : ℕ) (hs : Mc.LowShapes n r) {εext δ η T : ℝ}
+    (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
+      δ ≤ acceptance P M → Extraction P (fun x b => MatMachine.ValidLow (r := r) (emb x) b ∧ Mc.GridLow b) εext M η)
+    (hfloor : Floor Mc.toMachine P.promise (fun x C => (emb x).1 * (emb x).2 = C) T η)
+    (hT : 2 * Mc.κG * (n : ℝ) ^ 2 * r + 2 * Mc.κW * (n : ℝ) ^ 2 * r + 2 * Mc.κadd * (n : ℝ) ^ 2 < T) :
+    Secure P (εext + (1 + εext) * ((2 * Mc.κG * (n : ℝ) ^ 2 * r + 2 * Mc.κW * (n : ℝ) ^ 2 * r +
+      2 * Mc.κadd * (n : ℝ) ^ 2) / (T - (2 * Mc.κG * (n : ℝ) ^ 2 * r + 2 * Mc.κW * (n : ℝ) ^ 2 * r +
+        2 * Mc.κadd * (n : ℝ) ^ 2)))) δ η 0 :=
+  secure_of_extraction_floor P (Mc.peelLowG n r) (Mc.corr n)
+    (fun σ x b hb => (hmat σ x _).2 (Mc.peelLowG_correct hs (emb x) b hb.1 hb.2)) hext hfloor
+    (fun σ x C h => (hmat σ x C).1 h)
+    (by linarith [Mc.time_peelLowG_le hs, Mc.time_corr_le n]) hT
+
+/-- **Rank-`r` masks by route 2, products typed by grid** (RS-MODEL §5): with every accepted adversary costing at
+least `F`, `ε = εext + ((2κG + 2κW) n² r + 2κadd n²) / F`, `(10 r + 2)/(c n)` on sm_120 for `F = c n³`. -/
+theorem secure_lowRank_advTime_grid (hmat : IsMatmulOn P emb) (r : ℕ) (hs : Mc.LowShapes n r) {εext δ η F : ℝ}
+    (hext : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
+      δ ≤ acceptance P M → Extraction P (fun x b => MatMachine.ValidLow (r := r) (emb x) b ∧ Mc.GridLow b) εext M η)
+    (hM : ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (P.Seed × Ω) P.Proof), CommitsFirst P (Mc.eval M) →
+      δ ≤ acceptance P M → F ≤ Mc.time M) (hF : 0 < F) :
+    Secure P (εext + (2 * Mc.κG * (n : ℝ) ^ 2 * r + 2 * Mc.κW * (n : ℝ) ^ 2 * r + 2 * Mc.κadd * (n : ℝ) ^ 2) / F)
+      δ η 0 :=
+  secure_of_extraction_advTime P (Mc.peelLowG n r) (Mc.corr n)
+    (fun σ x b hb => (hmat σ x _).2 (Mc.peelLowG_correct hs (emb x) b hb.1 hb.2)) hext hM hF
+    (by linarith [Mc.time_peelLowG_le hs, Mc.time_corr_le n])
+
+end WideGridMatMachine
 
 end EditedInstances
 
