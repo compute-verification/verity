@@ -22,10 +22,10 @@ Inputs come in two distributions:
 | `ffma_fp32` | narrow as FP32 (products exact, sums exact below 2^24, flushed to int64 every 1,024 k) | 4 FFMA |
 | `imad_swar2` | narrow, two rows in 16-bit lanes of one IMAD, lanes split every 2 k's | 2 IMAD + split |
 | `smem_lut` | generic, a product table per k in shared memory (hi/lo 18-bit halves), table build timed | 2 LDS.128 |
-| `combo_dp4a_ffma` | dp4a and FFMA tiles in the same warps, narrow | |
 
-`k_probe` measures dp4a beside IMAD, FFMA and LOP3 (warp instructions a SM a clock), and `ffma2_probe.cu` whether
-packed FP32 FMA (`fma.rn.f32x2`) builds and runs on sm_120. Raw pipe caps are the census's
+`corun_dp4a_ffma` runs the dp4a and FFMA GEMMs at once on two streams, one block of each a SM, with the dp4a GEMM's K
+calibrated so both end together. `k_probe` measures instruction mixes of dp4a, IMAD, FFMA, LOP3 and packed FFMA2
+(`fma.rn.f32x2`) in warp instructions a SM a clock, to say which pipes the routes share. Raw pipe caps are the census's
 (`benchmarks/pouw/census_sm120/` on `cursor/census-sm120-ea24`), not repeated here.
 
 Run it on vy-nebius-2 from a clean commit (`run.sh` has the full command); outputs go to `$OUT` and

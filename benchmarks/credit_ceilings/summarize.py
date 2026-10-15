@@ -1,8 +1,8 @@
 """Summarize a credit-ceilings run: each route's measured share of the FP8 tensor rate against M5's credit.
 
-Usage: python3 summarize.py OUT_DIR > summary.md. Reads OUT_DIR/results.jsonl (credit_ceilings, ffma2_probe) and
-OUT_DIR/smi-samples.csv (nvidia-smi clocks.sm every 200 ms during the lease). Shares are over 1,024 FP8 MACs a SM a
-clock, M5's tensor capacity and the census's measured 1,023.8.
+Usage: python3 summarize.py OUT_DIR > summary.md. Reads OUT_DIR/results.jsonl and OUT_DIR/smi-samples.csv (nvidia-smi
+clocks.sm every 200 ms during the lease). Shares are over 1,024 FP8 MACs a SM a clock, M5's tensor capacity and the
+census's measured 1,023.8.
 """
 
 import json
@@ -10,14 +10,14 @@ import statistics
 import sys
 from pathlib import Path
 
-# M5 (note:20261015T0438Z-draft-gpu-model-m5, section 1.4): the credit a route's row grants, as a share.
+# M5 (note:20261015T0438Z-draft-gpu-model-m5, section 1.4): the row a route falls under and the share it grants.
 CREDIT = {
     "dp4a_int8": ("dp4a", 0.250),
     "dp4a_karatsuba3": ("dp4a", 0.250),
+    "ffma_fp32": ("dp4a (the FMA pipe)", 0.250),
     "imad_swar2": ("integer SWAR", 0.109),
     "smem_lut": ("shared-memory lookups", 0.094),
-    "ffma_fp32": ("(FMA pipe; v2 fma weight)", 0.250),
-    "combo_dp4a_ffma": ("dp4a + SWAR + lookups (issue rows)", 0.453),
+    "corun_dp4a_ffma": ("dp4a + SWAR + lookups", 0.453),
 }
 
 
@@ -32,24 +32,33 @@ def main(out: Path) -> None:
                 smi.append(float(parts[1].split()[0]))
     smi_txt = f"{statistics.median(smi):.0f} MHz (min {min(smi):.0f}, max {max(smi):.0f}, n={len(smi)})" if smi else "n/a"
     print(f"# credit ceilings: {out}\n\nnvidia-smi clocks.sm over the lease: {smi_txt}\n")
-    print("| route | inputs | M x N x K | MACs/SM/clk | share | M5 row | credit | measured/credit | clock64 MHz | checked | mismatches |")
-    print("|---|---|---|---|---|---|---|---|---|---|---|")
+    print("| route | inputs | shape | MACs/SM/clk | share | M5 row | credit | measured/credit | clock64 MHz | blocks/SM | checked | mismatches |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|")
     for r in rows:
         if r.get("kind") != "route":
             continue
         row, credit = CREDIT.get(r["route"], ("", float("nan")))
+        shape = f"{r['M']}x{r['N']}x{r['K']}" if "Kd" not in r else f"Kd {r['Kd']}, Kf {r['Kf']}"
         print(
-            f"| {r['route']} | {r['dist']} | {r['M']}x{r['N']}x{r['K']} | {r['macs_per_sm_clk']:.1f} | "
-            f"{r['share_of_1024']:.4f} | {row} | {credit:.3f} | {r['share_of_1024'] / credit:.3f} | {r['sm_mhz']:.0f} | "
+            f"| {r['route']} | {r['dist']} | {shape} | {r['macs_per_sm_clk']:.1f} | {r['share_of_1024']:.4f} | {row} | "
+            f"{credit:.3f} | {r['share_of_1024'] / credit:.3f} | {r['sm_mhz']:.0f} | {r['blocks_per_sm']} | "
             f"{r['checked']} | {r['mismatches']} |"
         )
-    print("\n| probe | warp instr/SM/clk (total) | per op | MAC-equivalent/SM/clk | clock64 MHz |")
-    print("|---|---|---|---|---|")
+    for r in rows:
+        if r.get("route") == "corun_dp4a_ffma":
+            print(
+                f"\nCo-run: dp4a {r['dp4a_macs_per_sm_clk']:.1f} + FFMA {r['ffma_macs_per_sm_clk']:.1f} MACs/SM/clk "
+                f"while both ran (alone at one block a SM: {r['dp4a_alone_macs_per_sm_clk']:.1f} and "
+                f"{r['ffma_alone_macs_per_sm_clk']:.1f}); co-run time over the sum of alone times "
+                f"{r['corun_over_sum_of_alone']:.3f}."
+            )
+    print("\n| probe | mix (dp4a, imad, ffma, lop3, ffma2) | warp instr/SM/clk | dp4a | imad | ffma | lop3 | ffma2 | MAC-equivalent/SM/clk | clock64 MHz |")
+    print("|---|---|---|---|---|---|---|---|---|---|")
     for r in rows:
         if r.get("kind") == "probe":
             print(
-                f"| {r['ops']} | {r['warp_instr_per_sm_clk']:.3f} | {r.get('per_op', r['warp_instr_per_sm_clk']):.3f} | "
-                f"{r['mac_equiv_per_sm_clk']:.1f} | {r.get('sm_mhz', 0):.0f} |"
+                f"| {r['ops']} | {r['mix']} | {r['warp_instr_per_sm_clk']:.3f} | {r['dp4a']:.3f} | {r['imad']:.3f} | "
+                f"{r['ffma']:.3f} | {r['lop3']:.3f} | {r['ffma2']:.3f} | {r['mac_equiv_per_sm_clk']:.1f} | {r['sm_mhz']:.0f} |"
             )
     for r in rows:
         if r.get("kind") in ("decoder_selftest", "device"):

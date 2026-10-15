@@ -4,8 +4,7 @@
 #   research run --on vy-nebius-2 --project verity --campaign cmp-12 --source <tree> --cwd clone --custody-ttl 12h \
 #     --env GPU_LEASE_WHO=<id> -- bash benchmarks/credit_ceilings/run.sh [all|small|probe|big]
 #
-# Builds outside the lease, then under `gpu-lease 1 --wait --max-min 20` runs credit_ceilings (and ffma2_probe if it
-# built) with nvidia-smi sampling the leased GPU's SM clock every 200 ms. Clocks are only read. Outputs go to $OUT:
+# Builds outside the lease, then under `gpu-lease 1 --wait --max-min 20` runs credit_ceilings with nvidia-smi sampling the leased GPU's SM clock every 200 ms. Clocks are only read. Outputs go to $OUT:
 # results.jsonl, the SASS of each binary, smi-*.txt/csv, and summary.md from summarize.py.
 set -uo pipefail
 OUT=${OUT:?run under research run}
@@ -16,7 +15,7 @@ WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 FLAGS=(-O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v)
 echo "{\"run_id\":\"${RESEARCH_RUN_ID:-$(basename "${RESEARCH_RUN_DIR:-unknown}")}\",\"host\":\"$(hostname)\",\"what\":\"$WHAT\",\"start_utc\":\"$(date -u +%FT%TZ)\",\"nvcc\":\"$($NVCC --version | tail -2 | head -1)\",\"commit\":\"$(git -C "$SRC" rev-parse HEAD 2>/dev/null)\"}" >"$OUT/meta.json"
-for b in credit_ceilings ffma2_probe; do
+for b in credit_ceilings; do
   if "$NVCC" "${FLAGS[@]}" -o "$WORK/$b" "$SRC/$b.cu" >"$OUT/build-$b.log" 2>&1; then
     "$(dirname "$NVCC")/cuobjdump" -sass "$WORK/$b" >"$OUT/$b.sass" 2>&1 || true
   else
@@ -34,10 +33,6 @@ SMI=\$!
 if [ -x "$WORK/credit_ceilings" ]; then
   timeout 900 "$WORK/credit_ceilings" $WHAT >>"$OUT/results.jsonl" 2>>"$OUT/credit_ceilings.err"
   echo "credit_ceilings rc=\$?" >>"$OUT/sections.log"
-fi
-if [ -x "$WORK/ffma2_probe" ]; then
-  timeout 120 "$WORK/ffma2_probe" >>"$OUT/results.jsonl" 2>>"$OUT/ffma2_probe.err"
-  echo "ffma2_probe rc=\$?" >>"$OUT/sections.log"
 fi
 kill \$SMI 2>/dev/null
 nvidia-smi -q -d CLOCK,POWER,PERFORMANCE --id="\$U" >"$OUT/smi-after.txt" 2>&1

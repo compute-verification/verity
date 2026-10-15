@@ -19,6 +19,7 @@
 #include <cstring>
 #include <functional>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #define CK(x)                                                                                \
@@ -118,113 +119,138 @@ static bool decoder_selftest() {
 // Thread grid 16 x 16 (tx = threadIdx.x & 15 over columns, ty = threadIdx.x >> 4 over rows); a thread owns TM x TN
 // outputs. Operands are k-major, so a warp's B loads are 16 contiguous vectors and its A loads two broadcast addresses.
 
-// dp4a over L packed int8 limbs: A[(l*KW + kw)*M + i] holds 4 consecutive k's of limb l as bytes.
-// L = 1: narrow inputs, one int8 per value, C = 64 * P.
-// L = 6: generic inputs, 3 signed 6-bit digits per value, Karatsuba's 6 limb pairs (d0, d1, d2, d0+d1, d1+d2, d0+d2).
-template <int TM, int TN, int L>
-__global__ void __launch_bounds__(256) k_dp4a(const int* __restrict__ A, const int* __restrict__ B,
-                                              long long* __restrict__ C, int M, int N, int KW, BlockClk* rec) {
-  const int tx = threadIdx.x & 15, ty = threadIdx.x >> 4;
-  const int row0 = blockIdx.y * (16 * TM) + ty * TM, col0 = blockIdx.x * (16 * TN) + tx * TN;
-  int acc[L][TM][TN];
-#pragma unroll
-  for (int l = 0; l < L; l++)
-#pragma unroll
-    for (int i = 0; i < TM; i++)
-#pragma unroll
-      for (int j = 0; j < TN; j++) acc[l][i][j] = 0;
-  CLK_BEGIN
-#pragma unroll 2
-  for (int kw = 0; kw < KW; kw++) {
-#pragma unroll
-    for (int l = 0; l < L; l++) {
-      int a[TM], b[TN];
-      const int4* pa = reinterpret_cast<const int4*>(A + ((size_t)l * KW + kw) * M + row0);
-      const int4* pb = reinterpret_cast<const int4*>(B + ((size_t)l * KW + kw) * N + col0);
-#pragma unroll
-      for (int v = 0; v < TM / 4; v++) {
-        int4 t = __ldg(pa + v);
-        a[4 * v] = t.x, a[4 * v + 1] = t.y, a[4 * v + 2] = t.z, a[4 * v + 3] = t.w;
-      }
-#pragma unroll
-      for (int v = 0; v < TN / 4; v++) {
-        int4 t = __ldg(pb + v);
-        b[4 * v] = t.x, b[4 * v + 1] = t.y, b[4 * v + 2] = t.z, b[4 * v + 3] = t.w;
-      }
-#pragma unroll
-      for (int i = 0; i < TM; i++)
-#pragma unroll
-        for (int j = 0; j < TN; j++) acc[l][i][j] = __dp4a(a[i], b[j], acc[l][i][j]);
-    }
-  }
-  CLK_END
-#pragma unroll
-  for (int i = 0; i < TM; i++)
-#pragma unroll
-    for (int j = 0; j < TN; j++) {
-      long long c;
-      if constexpr (L == 1) {
-        c = 64ll * acc[0][i][j];
-      } else {
-        long long p0 = acc[0][i][j], p1 = acc[1][i][j], p2 = acc[2][i][j];
-        long long p01 = acc[3][i][j], p12 = acc[4][i][j], p02 = acc[5][i][j];
-        c = p0 + ((p01 - p0 - p1) << 6) + ((p02 - p0 - p2 + p1) << 12) + ((p12 - p1 - p2) << 18) + (p2 << 24);
-      }
-      C[(size_t)(row0 + i) * N + col0 + j] = c;
-    }
+__device__ __forceinline__ void cp_async16(void* smem, const void* gmem) {
+  unsigned s = (unsigned)__cvta_generic_to_shared(smem);
+  asm volatile("cp.async.cg.shared.global [%0], [%1], 16;\n" ::"r"(s), "l"(gmem));
+}
+__device__ __forceinline__ void cp_commit() { asm volatile("cp.async.commit_group;\n" ::); }
+template <int N>
+__device__ __forceinline__ void cp_wait() {
+  asm volatile("cp.async.wait_group %0;\n" ::"n"(N));
 }
 
-// FP32 FFMA on narrow inputs (q as float): products exact, sums exact while below 2^24, so accumulators flush to the
-// int64 output every FLUSH k's (14400 * 1024 < 2^24). C must be zeroed first.
-template <int TM, int TN>
-__global__ void __launch_bounds__(256) k_ffma(const float* __restrict__ A, const float* __restrict__ B,
-                                              long long* __restrict__ C, int M, int N, int K, BlockClk* rec) {
+// Staged register-tiled GEMM over words: a word is 4 packed int8 k's (dp4a) or one FP32 k (FFMA), k-major,
+// A[(l*KW + kw)*M + i] and B[(l*KW + kw)*N + j] for limb l. BKW words a stage through a STAGES-deep cp.async
+// pipeline; persistent over tiles (block b takes tiles b, b + gridDim.x, ... below ntiles). Thread (tx, ty) owns rows
+// m0 + 64v + 4ty + r and columns n0 + 64v + 4tx + c, so a warp's shared-memory reads are two broadcast addresses (A)
+// and 256 contiguous bytes (B).
+//   EPI 0: narrow inputs, one int8 per value (q = v/8), C = 64 P.
+//   EPI 1: generic inputs, 3 signed 6-bit digits per value; limbs are Karatsuba's 6 operands (d0, d1, d2, d0+d1,
+//          d1+d2, d0+d2), whose pairwise products give the 5 digit-product coefficients.
+//   EPI 2: narrow inputs as FP32 (L = 1): products exact, sums exact below 2^24 (14400 * 1024 < 2^24), so the
+//          accumulators flush into C every FLUSHW words.
+template <int EPI, int TM, int TN, int L, int BKW, int STAGES, int FLUSHW, int MINB>
+__global__ void __launch_bounds__(256, MINB) k_gemm(const void* __restrict__ Av, const void* __restrict__ Bv,
+                                              long long* __restrict__ C, int M, int N, int KW, int ntiles,
+                                              BlockClk* rec) {
+  using T = typename std::conditional<EPI == 2, float, int>::type;
+  using V = typename std::conditional<EPI == 2, float4, int4>::type;
+  constexpr int BM = 16 * TM, BN = 16 * TN;
+  __shared__ __align__(16) T As[STAGES][L][BKW][BM];
+  __shared__ __align__(16) T Bs[STAGES][L][BKW][BN];
+  const T* A = reinterpret_cast<const T*>(Av);
+  const T* B = reinterpret_cast<const T*>(Bv);
   const int tx = threadIdx.x & 15, ty = threadIdx.x >> 4;
-  const int row0 = blockIdx.y * (16 * TM) + ty * TM, col0 = blockIdx.x * (16 * TN) + tx * TN;
-  constexpr int FLUSH = 1024;
-  float acc[TM][TN];
-  long long tot[TM][TN];
-#pragma unroll
-  for (int i = 0; i < TM; i++)
-#pragma unroll
-    for (int j = 0; j < TN; j++) tot[i][j] = 0;
+  const int tiles_n = N / BN, nst = KW / BKW;
   CLK_BEGIN
-  for (int k0 = 0; k0 < K; k0 += FLUSH) {
+  for (int tile = blockIdx.x; tile < ntiles; tile += gridDim.x) {
+    const int m0 = (tile / tiles_n) * BM, n0 = (tile % tiles_n) * BN;
+    T acc[L][TM][TN];
 #pragma unroll
-    for (int i = 0; i < TM; i++)
-#pragma unroll
-      for (int j = 0; j < TN; j++) acc[i][j] = 0.f;
-#pragma unroll 4
-    for (int k = k0; k < k0 + FLUSH; k++) {
-      float a[TM], b[TN];
-      const float4* pa = reinterpret_cast<const float4*>(A + (size_t)k * M + row0);
-      const float4* pb = reinterpret_cast<const float4*>(B + (size_t)k * N + col0);
-#pragma unroll
-      for (int v = 0; v < TM / 4; v++) {
-        float4 t = __ldg(pa + v);
-        a[4 * v] = t.x, a[4 * v + 1] = t.y, a[4 * v + 2] = t.z, a[4 * v + 3] = t.w;
-      }
-#pragma unroll
-      for (int v = 0; v < TN / 4; v++) {
-        float4 t = __ldg(pb + v);
-        b[4 * v] = t.x, b[4 * v + 1] = t.y, b[4 * v + 2] = t.z, b[4 * v + 3] = t.w;
-      }
+    for (int l = 0; l < L; l++)
 #pragma unroll
       for (int i = 0; i < TM; i++)
 #pragma unroll
-        for (int j = 0; j < TN; j++) acc[i][j] = __fmaf_rn(a[i], b[j], acc[i][j]);
+        for (int j = 0; j < TN; j++) acc[l][i][j] = 0;
+    auto load_stage = [&](int s, int kw0) {
+      constexpr int CA = L * BKW * (BM / 4), CB = L * BKW * (BN / 4);
+      for (int c = threadIdx.x; c < CA; c += 256) {
+        const int row = c / (BM / 4), c4 = c % (BM / 4), l = row / BKW, kk = row % BKW;
+        cp_async16(&As[s][l][kk][4 * c4], A + ((size_t)l * KW + kw0 + kk) * M + m0 + 4 * c4);
+      }
+      for (int c = threadIdx.x; c < CB; c += 256) {
+        const int row = c / (BN / 4), c4 = c % (BN / 4), l = row / BKW, kk = row % BKW;
+        cp_async16(&Bs[s][l][kk][4 * c4], B + ((size_t)l * KW + kw0 + kk) * N + n0 + 4 * c4);
+      }
+    };
+    __syncthreads();
+#pragma unroll
+    for (int s = 0; s < STAGES - 1; s++) {
+      if (s < nst) load_stage(s, s * BKW);
+      cp_commit();
     }
+    for (int st = 0; st < nst; st++) {
+      cp_wait<STAGES - 2>();
+      __syncthreads();
+      {
+        const int nx = st + STAGES - 1;
+        if (nx < nst) load_stage(nx % STAGES, nx * BKW);
+        cp_commit();
+      }
+      const int s = st % STAGES;
 #pragma unroll
-    for (int i = 0; i < TM; i++)
+      for (int kk = 0; kk < BKW; kk++) {
 #pragma unroll
-      for (int j = 0; j < TN; j++) tot[i][j] += (long long)acc[i][j];
+        for (int l = 0; l < L; l++) {
+          T a[TM], b[TN];
+#pragma unroll
+          for (int v = 0; v < TM / 4; v++) {
+            V t = *reinterpret_cast<const V*>(&As[s][l][kk][64 * v + 4 * ty]);
+            a[4 * v] = t.x, a[4 * v + 1] = t.y, a[4 * v + 2] = t.z, a[4 * v + 3] = t.w;
+          }
+#pragma unroll
+          for (int v = 0; v < TN / 4; v++) {
+            V t = *reinterpret_cast<const V*>(&Bs[s][l][kk][64 * v + 4 * tx]);
+            b[4 * v] = t.x, b[4 * v + 1] = t.y, b[4 * v + 2] = t.z, b[4 * v + 3] = t.w;
+          }
+#pragma unroll
+          for (int i = 0; i < TM; i++)
+#pragma unroll
+            for (int j = 0; j < TN; j++) {
+              if constexpr (EPI == 2) acc[l][i][j] = __fmaf_rn(a[i], b[j], acc[l][i][j]);
+              else acc[l][i][j] = __dp4a(a[i], b[j], acc[l][i][j]);
+            }
+        }
+        if constexpr (EPI == 2) {
+          const int w = st * BKW + kk + 1;
+          if (w % FLUSHW == 0) {
+#pragma unroll
+            for (int i = 0; i < TM; i++)
+#pragma unroll
+              for (int j = 0; j < TN; j++) {
+                long long* p = &C[(size_t)(m0 + 64 * (i / 4) + 4 * ty + i % 4) * N + n0 + 64 * (j / 4) + 4 * tx + j % 4];
+                const long long v = 64ll * (long long)acc[0][i][j];
+                *p = w == FLUSHW ? v : *p + v;
+                acc[0][i][j] = 0.f;
+              }
+          }
+        }
+      }
+    }
+    if constexpr (EPI != 2) {
+#pragma unroll
+      for (int i = 0; i < TM; i++)
+#pragma unroll
+        for (int j = 0; j < TN; j++) {
+          long long c;
+          if constexpr (EPI == 0) {
+            c = 64ll * acc[0][i][j];
+          } else {
+            const long long p0 = acc[0][i][j], p1 = acc[1][i][j], p2 = acc[2][i][j];
+            const long long p01 = acc[3][i][j], p12 = acc[4][i][j], p02 = acc[5][i][j];
+            c = p0 + ((p01 - p0 - p1) << 6) + ((p02 - p0 - p2 + p1) << 12) + ((p12 - p1 - p2) << 18) + (p2 << 24);
+          }
+          C[(size_t)(m0 + 64 * (i / 4) + 4 * ty + i % 4) * N + n0 + 64 * (j / 4) + 4 * tx + j % 4] = c;
+        }
+    }
   }
   CLK_END
-#pragma unroll
-  for (int i = 0; i < TM; i++)
-#pragma unroll
-    for (int j = 0; j < TN; j++) C[(size_t)(row0 + i) * N + col0 + j] = 64ll * tot[i][j];
 }
+
+// The three configurations timed: tile, limbs, stage depth.
+#define GEMM_NARROW k_gemm<0, 8, 8, 1, 8, 3, 0, 2>
+#define GEMM_K3 k_gemm<1, 4, 4, 6, 4, 3, 0, 1>
+#define GEMM_FFMA k_gemm<2, 8, 8, 1, 8, 3, 1024, 2>
 
 // Integer SWAR on IMAD, narrow inputs: two rows packed in one word, w = q[2p] + 2^16 q[2p+1]; IMAD acc += w * q_b
 // gives both products in 16-bit lanes. A lane holds two products (2 * 14400 < 2^15), so lanes are split into int32
@@ -341,104 +367,46 @@ __global__ void __launch_bounds__(512) k_lut(const unsigned short* __restrict__ 
   }
 }
 
-// dp4a and FFMA together in the same warps, narrow inputs: each thread owns a TMD x TND dp4a tile of Cd and a
-// TMF x TNF FFMA tile of Cf over the same K (A8/B8 packed as k_dp4a's L = 1; Af/Bf as k_ffma's). K <= 1024 keeps the
-// FP32 sums exact without a flush.
-template <int TMD, int TND, int TMF, int TNF>
-__global__ void __launch_bounds__(256) k_combo(const int* __restrict__ A8, const int* __restrict__ B8,
-                                               const float* __restrict__ Af, const float* __restrict__ Bf,
-                                               long long* __restrict__ Cd, long long* __restrict__ Cf, int Md,
-                                               int Nd, int Mf, int Nf, int K, BlockClk* rec) {
-  const int tx = threadIdx.x & 15, ty = threadIdx.x >> 4;
-  const int rd0 = blockIdx.y * (16 * TMD) + ty * TMD, cd0 = blockIdx.x * (16 * TND) + tx * TND;
-  const int rf0 = blockIdx.y * (16 * TMF) + ty * TMF, cf0 = blockIdx.x * (16 * TNF) + tx * TNF;
-  int ad[TMD][TND];
-  float af[TMF][TNF];
-#pragma unroll
-  for (int i = 0; i < TMD; i++)
-#pragma unroll
-    for (int j = 0; j < TND; j++) ad[i][j] = 0;
-#pragma unroll
-  for (int i = 0; i < TMF; i++)
-#pragma unroll
-    for (int j = 0; j < TNF; j++) af[i][j] = 0.f;
-  CLK_BEGIN
-  const int KW = K / 4;
-#pragma unroll 2
-  for (int kw = 0; kw < KW; kw++) {
-    int a[TMD], b[TND];
-#pragma unroll
-    for (int v = 0; v < TMD / 4; v++) {
-      int4 t = __ldg(reinterpret_cast<const int4*>(A8 + (size_t)kw * Md + rd0) + v);
-      a[4 * v] = t.x, a[4 * v + 1] = t.y, a[4 * v + 2] = t.z, a[4 * v + 3] = t.w;
-    }
-#pragma unroll
-    for (int v = 0; v < TND / 4; v++) {
-      int4 t = __ldg(reinterpret_cast<const int4*>(B8 + (size_t)kw * Nd + cd0) + v);
-      b[4 * v] = t.x, b[4 * v + 1] = t.y, b[4 * v + 2] = t.z, b[4 * v + 3] = t.w;
-    }
-#pragma unroll
-    for (int kk = 0; kk < 4; kk++) {
-      float fa[TMF], fb[TNF];
-#pragma unroll
-      for (int v = 0; v < TMF / 4; v++) {
-        float4 t = __ldg(reinterpret_cast<const float4*>(Af + (size_t)(4 * kw + kk) * Mf + rf0) + v);
-        fa[4 * v] = t.x, fa[4 * v + 1] = t.y, fa[4 * v + 2] = t.z, fa[4 * v + 3] = t.w;
-      }
-#pragma unroll
-      for (int v = 0; v < TNF / 4; v++) {
-        float4 t = __ldg(reinterpret_cast<const float4*>(Bf + (size_t)(4 * kw + kk) * Nf + cf0) + v);
-        fb[4 * v] = t.x, fb[4 * v + 1] = t.y, fb[4 * v + 2] = t.z, fb[4 * v + 3] = t.w;
-      }
-#pragma unroll
-      for (int i = 0; i < TMF; i++)
-#pragma unroll
-        for (int j = 0; j < TNF; j++) af[i][j] = __fmaf_rn(fa[i], fb[j], af[i][j]);
-    }
-#pragma unroll
-    for (int i = 0; i < TMD; i++)
-#pragma unroll
-      for (int j = 0; j < TND; j++) ad[i][j] = __dp4a(a[i], b[j], ad[i][j]);
-  }
-  CLK_END
-#pragma unroll
-  for (int i = 0; i < TMD; i++)
-#pragma unroll
-    for (int j = 0; j < TND; j++) Cd[(size_t)(rd0 + i) * Nd + cd0 + j] = 64ll * ad[i][j];
-#pragma unroll
-  for (int i = 0; i < TMF; i++)
-#pragma unroll
-    for (int j = 0; j < TNF; j++) Cf[(size_t)(rf0 + i) * Nf + cf0 + j] = 64ll * (long long)af[i][j];
-}
-
 // ---------------------------------------------------------------- pipe-pairing probe
-// 32 warps a SM, one block a SM, 8 independent chains per op per thread; immediates keep FFMA off the register-bank
-// limit. MODE bits: 1 dp4a, 2 IMAD, 4 FFMA, 8 LOP3.
-template <int MODE>
+// 32 warps a SM, one block a SM, 8 independent chains per op; per chain step ND dp4a, NI IMAD, NF FFMA, NL LOP3 and
+// NF2 packed FFMA2 (fma.rn.f32x2). Immediates keep FFMA off the register-bank limit.
+template <int ND, int NI, int NF, int NL, int NF2>
 __global__ void __launch_bounds__(1024) k_probe(int* out, int iters, BlockClk* rec) {
   int d[8], m[8], l[8];
   float f[8];
+  unsigned long long g[8];
 #pragma unroll
-  for (int r = 0; r < 8; r++) d[r] = m[r] = l[r] = threadIdx.x + r, f[r] = (float)(threadIdx.x + r);
+  for (int r = 0; r < 8; r++) {
+    d[r] = m[r] = l[r] = threadIdx.x + r, f[r] = (float)(threadIdx.x + r);
+    g[r] = ((unsigned long long)__float_as_uint(f[r] + 0.5f) << 32) | __float_as_uint(f[r]);
+  }
   const int x = 0x01020304 + blockIdx.x, y = 0x05060708 ^ threadIdx.x;
+  const unsigned long long gb = 0x3F8001003F800100ull, gc = 0x3F0000003F000000ull;
   __syncthreads();
   CLK_BEGIN
   for (int it = 0; it < iters; it++) {
 #pragma unroll
     for (int r = 0; r < 8; r++) {
-      if (MODE & 1) asm volatile("dp4a.s32.s32 %0, %1, %2, %0;" : "+r"(d[r]) : "r"(x), "r"(y));
-      if (MODE & 2) asm volatile("mad.lo.s32 %0, %0, %1, %2;" : "+r"(m[r]) : "r"(x), "r"(y));
-      if (MODE & 4) asm volatile("fma.rn.f32 %0, %0, 0f3F800100, 0f3F000000;" : "+f"(f[r]));
-      if (MODE & 8) asm volatile("lop3.b32 %0, %0, %1, %2, 0x96;" : "+r"(l[r]) : "r"(x), "r"(y));
+#pragma unroll
+      for (int q = 0; q < ND; q++) asm volatile("dp4a.s32.s32 %0, %1, %2, %0;" : "+r"(d[r]) : "r"(x), "r"(y));
+#pragma unroll
+      for (int q = 0; q < NI; q++) asm volatile("mad.lo.s32 %0, %0, %1, %2;" : "+r"(m[r]) : "r"(x), "r"(y));
+#pragma unroll
+      for (int q = 0; q < NF; q++) asm volatile("fma.rn.f32 %0, %0, 0f3F800100, 0f3F000000;" : "+f"(f[r]));
+#pragma unroll
+      for (int q = 0; q < NL; q++) asm volatile("lop3.b32 %0, %0, %1, %2, 0x96;" : "+r"(l[r]) : "r"(x), "r"(y));
+#pragma unroll
+      for (int q = 0; q < NF2; q++) asm volatile("fma.rn.f32x2 %0, %0, %1, %2;" : "+l"(g[r]) : "l"(gb), "l"(gc));
     }
   }
   __syncthreads();
   CLK_END
   int s = 0;
 #pragma unroll
-  for (int r = 0; r < 8; r++) s += d[r] + m[r] + l[r] + __float_as_int(f[r]);
+  for (int r = 0; r < 8; r++) s += d[r] + m[r] + l[r] + __float_as_int(f[r]) + (int)g[r];
   if (s == 0x7FFFFFFF) out[0] = s;
 }
+
 
 // ---------------------------------------------------------------- host side
 
@@ -557,67 +525,166 @@ static std::vector<int> pack_int8(const std::vector<uint8_t>& X, int rows, int K
   return out;
 }
 
-static void run_dp4a(bool generic, int M, int N, int K, int reps, int samples) {
+using GemmFn = void (*)(const void*, const void*, long long*, int, int, int, int, BlockClk*);
+
+template <int EPI>
+static GemmFn gemm_fn() {
+  if constexpr (EPI == 0) return GEMM_NARROW;
+  else if constexpr (EPI == 1) return GEMM_K3;
+  else return GEMM_FFMA;
+}
+
+// Device operands for one route: A is M x K, B is K x N codes; the layout is the route's.
+struct Operands {
+  void *dA = nullptr, *dB = nullptr;
+  int KW = 0;
+};
+
+template <int EPI>
+static Operands upload(const std::vector<uint8_t>& A, const std::vector<uint8_t>& B, int M, int N, int K) {
+  Operands o;
+  if constexpr (EPI == 2) {
+    std::vector<float> Af((size_t)K * M), Bf((size_t)K * N);
+    for (int i = 0; i < M; i++)
+      for (int k = 0; k < K; k++) Af[(size_t)k * M + i] = (float)q_narrow(A[(size_t)i * K + k]);
+    for (int k = 0; k < K; k++)
+      for (int j = 0; j < N; j++) Bf[(size_t)k * N + j] = (float)q_narrow(B[(size_t)k * N + j]);
+    o.dA = to_dev(Af), o.dB = to_dev(Bf), o.KW = K;
+  } else {
+    const int L = EPI == 1 ? 6 : 1;
+    auto Ap = pack_int8(A, M, K, true, L, 0), Bp = pack_int8(B, N, K, false, L, 0);
+    o.dA = to_dev(Ap), o.dB = to_dev(Bp), o.KW = K / 4;
+  }
+  return o;
+}
+
+static const char* gemm_route(int epi) { return epi == 0 ? "dp4a_int8" : epi == 1 ? "dp4a_karatsuba3" : "ffma_fp32"; }
+
+template <int EPI>
+static void run_gemm(int M, int N, int K, int reps, int samples, int grid_blocks) {
+  constexpr int BM = EPI == 1 ? 64 : 128, BN = BM;
   std::vector<uint8_t> A, B;
-  gen_codes(A, (size_t)M * K, !generic, 1 + M + K);
-  gen_codes(B, (size_t)K * N, !generic, 2 + N + K);
-  const int L = generic ? 6 : 1;
-  auto Ap = pack_int8(A, M, K, true, L, 0), Bp = pack_int8(B, N, K, false, L, 0);
-  int *dA = to_dev(Ap), *dB = to_dev(Bp);
+  gen_codes(A, (size_t)M * K, EPI != 1, 1 + EPI + M + K);
+  gen_codes(B, (size_t)K * N, EPI != 1, 2 + EPI + N + K);
+  Operands o = upload<EPI>(A, B, M, N, K);
   long long* dC;
   CK(cudaMalloc(&dC, sizeof(long long) * M * N));
-  constexpr int TMn = 8, TNn = 8, TMg = 4, TNg = 4;
-  const int TM = generic ? TMg : TMn, TN = generic ? TNg : TNn;
-  dim3 grid(N / (16 * TN), M / (16 * TM));
+  const int ntiles = (M / BM) * (N / BN), grid = grid_blocks > 0 ? grid_blocks : ntiles;
+  GemmFn f = gemm_fn<EPI>();
   int occ = 0;
-  if (generic) {
-    CK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ, k_dp4a<TMg, TNg, 6>, 256, 0));
-  } else {
-    CK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ, k_dp4a<TMn, TNn, 1>, 256, 0));
-  }
-  auto launch = [&](BlockClk* rec) {
-    if (generic) k_dp4a<TMg, TNg, 6><<<grid, 256>>>(dA, dB, dC, M, N, K / 4, rec);
-    else k_dp4a<TMn, TNn, 1><<<grid, 256>>>(dA, dB, dC, M, N, K / 4, rec);
-  };
-  Meas m = timed(launch, grid.x * grid.y, reps);
+  CK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ, f, 256, 0));
+  auto launch = [&](BlockClk* rec) { f<<<grid, 256>>>(o.dA, o.dB, dC, M, N, o.KW, ntiles, rec); };
+  Meas m = timed(launch, grid, reps);
   std::vector<long long> C((size_t)M * N);
   CK(cudaMemcpy(C.data(), dC, sizeof(long long) * M * N, cudaMemcpyDeviceToHost));
   long long checked;
   long long bad = check(C, A, B, M, N, K, samples, &checked);
-  emit(generic ? "dp4a_karatsuba3" : "dp4a_int8", generic ? "generic" : "narrow", M, N, K, m, occ, checked, bad,
-       generic ? ",\"dp4a_per_mac\":1.5" : ",\"dp4a_per_mac\":0.25");
-  CK(cudaFree(dA));
-  CK(cudaFree(dB));
+  char extra[160];
+  snprintf(extra, sizeof extra, ",\"grid\":%d,\"tiles\":%d,\"instr_per_mac\":%s", grid, ntiles,
+           EPI == 0 ? "\"0.25 dp4a\"" : EPI == 1 ? "\"1.5 dp4a\"" : "\"1 FFMA\"");
+  emit(gemm_route(EPI), EPI == 1 ? "generic" : "narrow", M, N, K, m, occ, checked, bad, extra);
+  CK(cudaFree(o.dA));
+  CK(cudaFree(o.dB));
   CK(cudaFree(dC));
 }
 
-static void run_ffma(int M, int N, int K, int reps, int samples) {
-  std::vector<uint8_t> A, B;
-  gen_codes(A, (size_t)M * K, true, 3 + M + K);
-  gen_codes(B, (size_t)K * N, true, 4 + N + K);
-  std::vector<float> Af((size_t)K * M), Bf((size_t)K * N);
-  for (int i = 0; i < M; i++)
-    for (int k = 0; k < K; k++) Af[(size_t)k * M + i] = (float)q_narrow(A[(size_t)i * K + k]);
-  for (int k = 0; k < K; k++)
-    for (int j = 0; j < N; j++) Bf[(size_t)k * N + j] = (float)q_narrow(B[(size_t)k * N + j]);
-  float *dA = to_dev(Af), *dB = to_dev(Bf);
-  long long* dC;
-  CK(cudaMalloc(&dC, sizeof(long long) * M * N));
-  constexpr int TM = 8, TN = 8;
-  dim3 grid(N / (16 * TN), M / (16 * TM));
-  int occ = 0;
-  CK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ, k_ffma<TM, TN>, 256, 0));
-  auto launch = [&](BlockClk* rec) { k_ffma<TM, TN><<<grid, 256>>>(dA, dB, dC, M, N, K, rec); };
-  Meas m = timed(launch, grid.x * grid.y, reps);
-  std::vector<long long> C((size_t)M * N);
-  CK(cudaMemcpy(C.data(), dC, sizeof(long long) * M * N, cudaMemcpyDeviceToHost));
-  long long checked;
-  long long bad = check(C, A, B, M, N, K, samples, &checked);
-  emit("ffma_fp32", "narrow", M, N, K, m, occ, checked, bad);
-  CK(cudaFree(dA));
-  CK(cudaFree(dB));
-  CK(cudaFree(dC));
+// dp4a (narrow) and FFMA (narrow) GEMMs at once on two streams, one block of each a SM (188 tiles each). The dp4a
+// GEMM's K is calibrated so both kernels end together; the combined rate is both GEMMs' MACs over the later end.
+static void run_corun(int reps, int samples) {
+  const int nsm = g_nsm, Md = 128 * (nsm / 4), Nd = 128 * 4, Mf = Md, Nf = Nd, Kf = 2048, Kd_max = 32768;
+  std::vector<uint8_t> Ad, Bd, Af8, Bf8;
+  gen_codes(Ad, (size_t)Md * Kd_max, true, 21);
+  gen_codes(Bd, (size_t)Kd_max * Nd, true, 22);
+  gen_codes(Af8, (size_t)Mf * Kf, true, 23);
+  gen_codes(Bf8, (size_t)Kf * Nf, true, 24);
+  Operands od = upload<0>(Ad, Bd, Md, Nd, Kd_max), of = upload<2>(Af8, Bf8, Mf, Nf, Kf);
+  long long *dCd, *dCf;
+  CK(cudaMalloc(&dCd, sizeof(long long) * Md * Nd));
+  CK(cudaMalloc(&dCf, sizeof(long long) * Mf * Nf));
+  BlockClk *rd, *rf;
+  CK(cudaMalloc(&rd, sizeof(BlockClk) * nsm));
+  CK(cudaMalloc(&rf, sizeof(BlockClk) * nsm));
+  cudaStream_t s0, s1;
+  CK(cudaStreamCreateWithFlags(&s0, cudaStreamNonBlocking));
+  CK(cudaStreamCreateWithFlags(&s1, cudaStreamNonBlocking));
+  cudaEvent_t e0, ed, ef;
+  CK(cudaEventCreate(&e0));
+  CK(cudaEventCreate(&ed));
+  CK(cudaEventCreate(&ef));
+  const int ntd = nsm, ntf = nsm;
+  // A's packed layout is [kw][M] for the whole Kd_max, so a shorter K reads the first kw rows: the same matrix
+  // truncated in k, which the check below follows.
+  auto go = [&](int Kd, bool d_on, bool f_on, float* td, float* tf) {
+    CK(cudaEventRecord(e0, s0));
+    CK(cudaStreamWaitEvent(s1, e0, 0));
+    if (d_on) GEMM_NARROW<<<nsm, 256, 0, s0>>>(od.dA, od.dB, dCd, Md, Nd, Kd / 4, ntd, rd);
+    if (f_on) GEMM_FFMA<<<nsm, 256, 0, s1>>>(of.dA, of.dB, dCf, Mf, Nf, Kf, ntf, rf);
+    CK(cudaEventRecord(ed, s0));
+    CK(cudaEventRecord(ef, s1));
+    CK(cudaEventSynchronize(ed));
+    CK(cudaEventSynchronize(ef));
+    CK(cudaGetLastError());
+    CK(cudaEventElapsedTime(td, e0, ed));
+    CK(cudaEventElapsedTime(tf, e0, ef));
+  };
+  float td, tf;
+  int Kd = 8192;
+  go(Kd, true, true, &td, &tf);  // warm-up
+  for (int it = 0; it < 3; it++) {
+    go(Kd, true, true, &td, &tf);
+    Kd = std::min(Kd_max, std::max(32, (int)std::lround(Kd * (double)tf / td / 32.0) * 32));
+  }
+  std::vector<float> both, tds, tfs;
+  for (int r = 0; r < reps; r++) {
+    go(Kd, true, true, &td, &tf);
+    both.push_back(std::max(td, tf)), tds.push_back(td), tfs.push_back(tf);
+  }
+  std::vector<BlockClk> h(nsm);
+  CK(cudaMemcpy(h.data(), rd, sizeof(BlockClk) * nsm, cudaMemcpyDeviceToHost));
+  std::vector<double> mhz;
+  for (auto& b : h) mhz.push_back((double)b.cyc / (double)b.ns * 1000.0);
+  std::sort(mhz.begin(), mhz.end());
+  const double clk = mhz[nsm / 2];
+  float tda, tfa, dummy;
+  go(Kd, true, false, &tda, &dummy);
+  go(Kd, false, true, &dummy, &tfa);
+  auto med = [](std::vector<float> v) {
+    std::sort(v.begin(), v.end());
+    return (double)v[v.size() / 2];
+  };
+  const double tb = med(both), macs_d = (double)Md * Nd * Kd, macs_f = (double)Mf * Nf * Kf;
+  const double per_ms = nsm * clk * 1e3;  // SM clocks a ms over the device
+  std::vector<long long> Cd((size_t)Md * Nd), Cf((size_t)Mf * Nf);
+  go(Kd, true, true, &td, &tf);
+  CK(cudaMemcpy(Cd.data(), dCd, sizeof(long long) * Md * Nd, cudaMemcpyDeviceToHost));
+  CK(cudaMemcpy(Cf.data(), dCf, sizeof(long long) * Mf * Nf, cudaMemcpyDeviceToHost));
+  std::vector<uint8_t> AdK((size_t)Md * Kd), BdK((size_t)Kd * Nd);
+  for (int i = 0; i < Md; i++)
+    for (int k = 0; k < Kd; k++) AdK[(size_t)i * Kd + k] = Ad[(size_t)i * Kd_max + k];
+  std::copy(Bd.begin(), Bd.begin() + (size_t)Kd * Nd, BdK.begin());
+  long long c1, c2;
+  long long bad = check(Cd, AdK, BdK, Md, Nd, Kd, samples, &c1) + check(Cf, Af8, Bf8, Mf, Nf, Kf, samples, &c2);
+  const double comb = (macs_d + macs_f) / (tb * per_ms);
+  printf(
+      "{\"kind\":\"route\",\"route\":\"corun_dp4a_ffma\",\"dist\":\"narrow\",\"M\":%d,\"N\":1,\"K\":1,\"Kd\":%d,\"Kf\":%d,"
+      "\"ms_median\":%.4f,\"ms_dp4a_in_corun\":%.4f,\"ms_ffma_in_corun\":%.4f,\"ms_dp4a_alone\":%.4f,"
+      "\"ms_ffma_alone\":%.4f,\"sm_mhz\":%.1f,\"blocks_per_sm\":2,\"macs_per_sm_clk\":%.2f,\"share_of_1024\":%.4f,"
+      "\"dp4a_macs_per_sm_clk\":%.2f,\"ffma_macs_per_sm_clk\":%.2f,\"dp4a_alone_macs_per_sm_clk\":%.2f,"
+      "\"ffma_alone_macs_per_sm_clk\":%.2f,\"corun_over_sum_of_alone\":%.3f,\"checked\":%lld,\"mismatches\":%lld}\n",
+      (int)((macs_d + macs_f) / 1e3), Kd, Kf, tb, med(tds), med(tfs), (double)tda, (double)tfa, clk, comb,
+      comb / 1024.0, macs_d / (tb * per_ms), macs_f / (tb * per_ms), macs_d / (tda * per_ms),
+      macs_f / (tfa * per_ms), tb / (tda + tfa), c1 + c2, bad);
+  fflush(stdout);
+  CK(cudaFree(od.dA));
+  CK(cudaFree(od.dB));
+  CK(cudaFree(of.dA));
+  CK(cudaFree(of.dB));
+  CK(cudaFree(dCd));
+  CK(cudaFree(dCf));
+  CK(cudaFree(rd));
+  CK(cudaFree(rf));
 }
+
 
 static void run_swar(int M, int N, int K, int reps, int samples) {
   std::vector<uint8_t> A, B;
@@ -679,68 +746,20 @@ static void run_lut(int M, int N, int K, int reps, int samples) {
   CK(cudaFree(dC));
 }
 
-template <int TMD, int TND, int TMF, int TNF>
-static void run_combo(int gx, int gy, int K, int reps, int samples) {
-  const int Md = gy * 16 * TMD, Nd = gx * 16 * TND, Mf = gy * 16 * TMF, Nf = gx * 16 * TNF;
-  std::vector<uint8_t> Ad, Bd, Af8, Bf8;
-  gen_codes(Ad, (size_t)Md * K, true, 9 + K);
-  gen_codes(Bd, (size_t)K * Nd, true, 10 + K);
-  gen_codes(Af8, (size_t)Mf * K, true, 11 + K);
-  gen_codes(Bf8, (size_t)K * Nf, true, 12 + K);
-  auto Ap = pack_int8(Ad, Md, K, true, 1, 0), Bp = pack_int8(Bd, Nd, K, false, 1, 0);
-  std::vector<float> Af((size_t)K * Mf), Bf((size_t)K * Nf);
-  for (int i = 0; i < Mf; i++)
-    for (int k = 0; k < K; k++) Af[(size_t)k * Mf + i] = (float)q_narrow(Af8[(size_t)i * K + k]);
-  for (int k = 0; k < K; k++)
-    for (int j = 0; j < Nf; j++) Bf[(size_t)k * Nf + j] = (float)q_narrow(Bf8[(size_t)k * Nf + j]);
-  int *dA8 = to_dev(Ap), *dB8 = to_dev(Bp);
-  float *dAf = to_dev(Af), *dBf = to_dev(Bf);
-  long long *dCd, *dCf;
-  CK(cudaMalloc(&dCd, sizeof(long long) * Md * Nd));
-  CK(cudaMalloc(&dCf, sizeof(long long) * Mf * Nf));
-  dim3 grid(gx, gy);
-  int occ = 0;
-  CK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ, k_combo<TMD, TND, TMF, TNF>, 256, 0));
-  auto launch = [&](BlockClk* rec) {
-    k_combo<TMD, TND, TMF, TNF><<<grid, 256>>>(dA8, dB8, dAf, dBf, dCd, dCf, Md, Nd, Mf, Nf, K, rec);
-  };
-  Meas m = timed(launch, gx * gy, reps);
-  std::vector<long long> Cd((size_t)Md * Nd), Cf((size_t)Mf * Nf);
-  CK(cudaMemcpy(Cd.data(), dCd, sizeof(long long) * Md * Nd, cudaMemcpyDeviceToHost));
-  CK(cudaMemcpy(Cf.data(), dCf, sizeof(long long) * Mf * Nf, cudaMemcpyDeviceToHost));
-  long long c1, c2;
-  long long bad = check(Cd, Ad, Bd, Md, Nd, K, samples, &c1) + check(Cf, Af8, Bf8, Mf, Nf, K, samples, &c2);
-  double macs_d = (double)Md * Nd * K, macs_f = (double)Mf * Nf * K;
-  double clk = g_nsm * m.ms * 1e-3 * m.mhz * 1e6;
-  char extra[256];
-  snprintf(extra, sizeof extra, ",\"tiles\":\"dp4a %dx%d + ffma %dx%d\",\"dp4a_macs_per_sm_clk\":%.2f,\"ffma_macs_per_sm_clk\":%.2f",
-           TMD, TND, TMF, TNF, macs_d / clk, macs_f / clk);
-  // emit() takes M*N*K as the MAC count: pass the sum as one M x 1 x K.
-  int Meq = (int)((macs_d + macs_f) / K);
-  emit("combo_dp4a_ffma", "narrow", Meq, 1, K, m, occ, c1 + c2, bad, extra);
-  CK(cudaFree(dA8));
-  CK(cudaFree(dB8));
-  CK(cudaFree(dAf));
-  CK(cudaFree(dBf));
-  CK(cudaFree(dCd));
-  CK(cudaFree(dCf));
-}
-
-template <int MODE>
+template <int ND, int NI, int NF, int NL, int NF2>
 static void run_probe(const char* name, int iters) {
   int* out;
   CK(cudaMalloc(&out, sizeof(int)));
-  auto launch = [&](BlockClk* rec) { k_probe<MODE><<<g_nsm, 1024>>>(out, iters, rec); };
+  auto launch = [&](BlockClk* rec) { k_probe<ND, NI, NF, NL, NF2><<<g_nsm, 1024>>>(out, iters, rec); };
   Meas m = timed(launch, g_nsm, 5);
-  int ops = ((MODE & 1) != 0) + ((MODE & 2) != 0) + ((MODE & 4) != 0) + ((MODE & 8) != 0);
-  double warp_instr = 32.0 * 8 * iters * ops;  // per SM: 32 warps x 8 chains x iters x ops
-  double per_clk = warp_instr / m.cyc_med;
-  double per_op = per_clk / ops;
-  double mac_lanes = 32.0 * per_op * (4.0 * ((MODE & 1) != 0) + 2.0 * ((MODE & 2) != 0) + 1.0 * ((MODE & 4) != 0));
+  const double steps = 32.0 * 8 * iters / m.cyc_med;  // chain steps a SM a clock (warp-wide)
+  const double total = steps * (ND + NI + NF + NL + NF2);
+  const double macs = steps * 32 * (4.0 * ND + 2.0 * NI + 1.0 * NF + 2.0 * NF2);
   printf(
-      "{\"kind\":\"probe\",\"ops\":\"%s\",\"warp_instr_per_sm_clk\":%.3f,\"per_op\":%.3f,\"sm_mhz\":%.1f,"
+      "{\"kind\":\"probe\",\"ops\":\"%s\",\"mix\":[%d,%d,%d,%d,%d],\"warp_instr_per_sm_clk\":%.3f,"
+      "\"dp4a\":%.3f,\"imad\":%.3f,\"ffma\":%.3f,\"lop3\":%.3f,\"ffma2\":%.3f,\"sm_mhz\":%.1f,"
       "\"mac_equiv_per_sm_clk\":%.1f}\n",
-      name, per_clk, per_op, m.mhz, mac_lanes);
+      name, ND, NI, NF, NL, NF2, total, steps * ND, steps * NI, steps * NF, steps * NL, steps * NF2, m.mhz, macs);
   fflush(stdout);
   CK(cudaFree(out));
 }
@@ -753,37 +772,39 @@ int main(int argc, char** argv) {
   printf("{\"kind\":\"device\",\"name\":\"%s\",\"sms\":%d,\"cc\":\"%d.%d\"}\n", p.name, g_nsm, p.major, p.minor);
   if (!decoder_selftest()) return 3;
   const bool all = what == "all";
-  const int S = g_nsm;  // grid sizes are multiples of the SM count
-  // small instances: every output checked
-  if (all || what == "small") {
-    run_dp4a(false, 256, 256, 512, 1, 0);
-    run_dp4a(true, 128, 128, 512, 1, 0);
-    run_ffma(256, 256, 1024, 1, 0);
+  const int Q = g_nsm / 4;  // 47 on the RTX PRO 6000: grids are multiples of the SM count
+  if (all || what == "small") {  // every output checked
+    run_gemm<0>(256, 256, 512, 1, 0, 0);
+    run_gemm<1>(128, 128, 512, 1, 0, 0);
+    run_gemm<2>(256, 256, 2048, 1, 0, 0);
     run_swar(256, 256, 512, 1, 0);
     run_lut(2048, 16, 256, 1, 0);
-    run_combo<8, 8, 4, 4>(2, 2, 512, 1, 0);
   }
   if (all || what == "probe") {
-    run_probe<1>("dp4a", 4096);
-    run_probe<2>("imad", 4096);
-    run_probe<4>("ffma_imm", 4096);
-    run_probe<8>("lop3", 4096);
-    run_probe<1 | 2>("dp4a+imad", 4096);
-    run_probe<1 | 4>("dp4a+ffma_imm", 4096);
-    run_probe<1 | 8>("dp4a+lop3", 4096);
-    run_probe<1 | 4 | 8>("dp4a+ffma_imm+lop3", 4096);
-    run_probe<2 | 4>("imad+ffma_imm", 4096);
+    run_probe<1, 0, 0, 0, 0>("dp4a", 4096);
+    run_probe<0, 1, 0, 0, 0>("imad", 4096);
+    run_probe<0, 0, 1, 0, 0>("ffma", 4096);
+    run_probe<0, 0, 0, 1, 0>("lop3", 4096);
+    run_probe<0, 0, 0, 0, 1>("ffma2", 4096);
+    run_probe<1, 1, 0, 0, 0>("dp4a+imad", 4096);
+    run_probe<1, 0, 1, 0, 0>("dp4a+ffma", 4096);
+    run_probe<2, 0, 1, 0, 0>("2dp4a+ffma", 4096);
+    run_probe<1, 0, 2, 0, 0>("dp4a+2ffma", 4096);
+    run_probe<1, 0, 0, 0, 1>("dp4a+ffma2", 4096);
+    run_probe<2, 0, 0, 0, 1>("2dp4a+ffma2", 4096);
+    run_probe<1, 0, 0, 1, 0>("dp4a+lop3", 4096);
+    run_probe<2, 0, 1, 1, 0>("2dp4a+ffma+lop3", 4096);
+    run_probe<0, 0, 1, 0, 1>("ffma+ffma2", 4096);
+    run_probe<0, 1, 1, 0, 0>("imad+ffma", 4096);
   }
-  // timed instances: grids of 2 x SMs blocks or more; 4096 sampled outputs checked
-  if (all || what == "big") {
-    run_dp4a(false, 128 * (S / 4), 128 * 8, 8192, 9, 4096);    // 47 x 8 = 376 blocks
-    run_dp4a(true, 64 * (S / 4), 64 * 8, 4096, 9, 4096);       // 376 blocks
-    run_ffma(128 * (S / 4), 128 * 8, 4096, 9, 4096);
-    run_swar(128 * (S / 4), 128 * 8, 4096, 9, 4096);           // pairs: 64 per block row
-    run_lut(2048 * 8, 8 * (S / 4) * 2, 1024, 5, 4096);         // 94 x 8 = 752 blocks
-    run_combo<8, 8, 4, 4>(8, S / 4, 1024, 9, 4096);
-    run_combo<8, 8, 2, 4>(8, S / 4, 1024, 9, 4096);
-    run_combo<8, 8, 4, 8>(8, S / 4, 1024, 9, 4096);
+  if (all || what == "big") {  // timed; 4096 sampled outputs checked
+    run_gemm<0>(128 * Q, 128 * 8, 8192, 9, 4096, 0);
+    run_gemm<1>(64 * Q, 64 * 8, 4096, 9, 4096, 0);
+    run_gemm<1>(64 * Q * 2, 64 * 8, 4096, 9, 4096, 0);
+    run_gemm<2>(128 * Q, 128 * 8, 4096, 9, 4096, 0);
+    run_swar(128 * Q, 128 * 8, 4096, 9, 4096);
+    run_lut(2048 * 8, 8 * Q * 2, 1024, 5, 4096);
   }
+  if (all || what == "corun") run_corun(9, 4096);
   return 0;
 }
