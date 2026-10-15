@@ -139,6 +139,7 @@
         "Security/Proofs/Nci/",
         "benchmarks/pouw/",
         "benchmarks/floored_gemm/",
+        "benchmarks/masked_gemm/",
         "benchmarks/numerical/",
         ".agents/skills/kernel-engineering/",
         "integrations/vllm/verity_vllm/protocol_options/pouw.py",
