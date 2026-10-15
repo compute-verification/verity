@@ -20370,7 +20370,7 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Integrate.Sites": {
-   "digest": "bb02070d9942821459a9a2b0fb95d494931d948c2cd1a6edd4b365520364f6e8",
+   "digest": "22cb10127c1a67addd0c81fc493b5411bfe94c176f8dc1a8b5e92a9acdc53d58",
    "definitions": {
     "FlockSoundness.Discharge.Integrate.DrawSetup": "9f130afcf9e7c9a63af6c37cd9db677a6d9897832dc5c42863537e59ffff9641",
     "FlockSoundness.Discharge.Integrate.DrawSetup.D": "989ad66e9b82d696785530cec53cb6a68f762e0895b5cd49439118968d03c8bd",
@@ -20382,6 +20382,7 @@
     "FlockSoundness.Discharge.Integrate.DrawSetup.m": "81c934a5f3b519eef9afbc537601800fc13d719d463116c2926d93e3b844c444",
     "FlockSoundness.Discharge.Integrate.DrawSetup.rank": "1d4e8f18e1d1cd2c32c88f27f5158910e8f61d3afeeccd9aeae028d90f9c9094",
     "FlockSoundness.Discharge.Integrate.DrawSetup.refused": "0fe8b256cb2dd88a5d43c9846b520c69a55fd2824af8ef3dfa94db06128f7afc",
+    "FlockSoundness.Discharge.Integrate.DrawSetup.refusedC": "c1e17cf7c22950d37e27b45d220d572dd4b16f4b579448d425767151f3cdd4fd",
     "FlockSoundness.Discharge.Integrate.DrawSetup.rest": "e16d5c48047ae243572f7b40cc338727fb67703635fa840c664688e1b4941263",
     "FlockSoundness.Discharge.Integrate.DrawSetup.specAt": "1868221c97b273c123ce565b4fe64eebde5ddc4d66c35f9582afd0297d79189d",
     "FlockSoundness.Discharge.Integrate.DrawSetup.st": "039d451e0d486142366de0be9007cfb20632a30532a55c73b82b55b82e79a27b",
@@ -20996,7 +20997,7 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkBind.At": {
-   "digest": "bf0c84316729e71383d7d5042abf7c46344829a834e39ba8bdbbe78d36ba87c5",
+   "digest": "2e21a705c431b9b9235c58652cb91babf4569f84d0f4a60cc460eaba9fddd454",
    "definitions": {
     "FlockSoundness.Discharge.ZkBind.layZAt": "054c5c45d32fb4da6287111b2b9b1c3c56137d171b54338271c76cafbf5bba9b",
     "FlockSoundness.Discharge.ZkBind.planSh": "bb85dda4bde842a566155f0972a03d8a6bc209c19cf275eed1905e6df94dd574",
@@ -21007,7 +21008,7 @@
     "FlockSoundness.Discharge.ZkBind.sitesZAt": "c1708754d95ab554b83edc4764bf3dc7a64f96ebba95166b8059f21c806ba796",
     "FlockSoundness.Discharge.ZkBind.tabSh": "4ac497051a3850a13e54e951359792186ff94dd6ba662daf39f86765b60746fb",
     "FlockSoundness.Discharge.ZkBind.tabZAt": "29922a12e82b45299aed557e4bb00fcd487cfe958ea82aad3abc2be3f2676901",
-    "FlockSoundness.Discharge.ZkBind.tableSh": "2296b859094e2bba3f60518b8f289e898b40fb550a970898ee6883c196da28ef"
+    "FlockSoundness.Discharge.ZkBind.tableSh": "c4e699bb16c89024576e974a75356eac387985ea1248fa6e9bcdbe10157e5d84"
    },
    "guarantees": [
     "Flock.SecurityProofs.EndToEnd",
@@ -21814,12 +21815,12 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt": {
-   "digest": "0ef11b1186b76e60eacdc6915a9e34b540e770ade85c7a8a2909ffeab51eeacd",
+   "digest": "db286abad301a4b5ecb29dbde48c08d9843ef1b00382930a925f974b540cd79f",
    "definitions": {
     "FlockSoundness.Discharge.ZkLink.DrawOkZK": "6380d5afca3fcfe84679d7762f8330d72c1b490515f249bc81ff35256237b4a8",
     "FlockSoundness.Discharge.ZkLink.DrawSetupZK": "48491d752c6a82404edb98d00bf0c2a3bd9934c4d3cb0d89c4877d97a781e57d",
     "FlockSoundness.Discharge.ZkLink.DrawSetupZK.innerDom": "c05ee8f6bb9cd4aeb560365b5a5707e7693d00daf71bfb029211ed55da7ad2d6",
-    "FlockSoundness.Discharge.ZkLink.DrawSetupZK.refused": "cfb3e3d932dbfd33bb04adc83d4b63975e96a0ad98a1de7257075c15d7659e1a",
+    "FlockSoundness.Discharge.ZkLink.DrawSetupZK.refused": "a6474f9d3ec33b431e2a160b111d51a3f772904bbfa8b5cc7c33520d8d1fdb2b",
     "FlockSoundness.Discharge.ZkLink.DrawSetupZK.sch": "83fbc776ef0bec77e58f6a44ceb47194b3a173b782237a05374821b84bf8ae9e",
     "FlockSoundness.Discharge.ZkLink.DrawSetupZK.tPad": "4d0575b212a09ce1d5c3599a018f70138c32d752e62058cabf399ac882f2fb88",
     "FlockSoundness.Discharge.ZkLink.DrawSetupZK.tabAt": "19886044aa5d0ddce916d0fecf5c56cec7cd36fa482f86aa6f2d287d180aed67",
