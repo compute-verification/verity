@@ -565,6 +565,55 @@ __global__ void __launch_bounds__(1024) k_probe(int* out, int iters, BlockClk* r
 }
 
 
+// Tensor pipe beside CUDA-core fillers: each warp runs 16 FP8 mma.sync m16n8k32 an iteration on 8 independent
+// accumulators, with NF fillers of one FORM spread evenly between them (NF per 16 MMAs), WPS warps a sub-partition.
+// FORM 0: IDP.4A on three vector registers; 1: IDP.4A with an immediate second operand (two vector registers, the cost
+// of a warp-uniform B in a uniform register or the constant bank); 2: FFMA with immediates; 3: MUFU.EX2;
+// 4: HFMA2 with constant operands; 5: LOP3 on two vector registers.
+template <int FORM>
+__device__ __forceinline__ void filler(int (&d)[8], float (&f)[8], int r, int x, int y) {
+  if constexpr (FORM == 0) asm volatile("dp4a.s32.s32 %0, %1, %2, %0;" : "+r"(d[r]) : "r"(x), "r"(y));
+  if constexpr (FORM == 1) asm volatile("dp4a.s32.s32 %0, %1, 0x01020304, %0;" : "+r"(d[r]) : "r"(x));
+  if constexpr (FORM == 2) asm volatile("fma.rn.f32 %0, %0, 0f3F800100, 0f3F000000;" : "+f"(f[r]));
+  if constexpr (FORM == 3) asm volatile("ex2.approx.f32 %0, %0;" : "+f"(f[r]));
+  if constexpr (FORM == 4) asm volatile("fma.rn.f16x2 %0, %0, %1, %2;" : "+r"(d[r]) : "r"(0x3C003C00), "r"(0x00010001));
+  if constexpr (FORM == 5) asm volatile("lop3.b32 %0, %0, %1, 0x0F0F0F0F, 0x96;" : "+r"(d[r]) : "r"(x));
+}
+
+template <int FORM, int NF, int WPS>
+__global__ void __launch_bounds__(128 * WPS, 1) k_mix(float* out, int iters, BlockClk* rec) {
+  float acc[8][4];
+  int d[8];
+  float f[8];
+#pragma unroll
+  for (int r = 0; r < 8; r++) {
+    d[r] = threadIdx.x + r, f[r] = 0.5f + 1e-3f * r;
+#pragma unroll
+    for (int c = 0; c < 4; c++) acc[r][c] = 0.f;
+  }
+  const unsigned a0 = 0x30303030u ^ (threadIdx.x & 7), b0 = 0x28282828u ^ (threadIdx.x & 3);
+  const int x = 0x01020304 + 3 * threadIdx.x, y = 0x05060708 ^ threadIdx.x;
+  __syncthreads();
+  CLK_BEGIN
+  for (int it = 0; it < iters; it++) {
+#pragma unroll
+    for (int q = 0; q < 16; q++) {
+      asm volatile(
+          "mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};"
+          : "+f"(acc[q & 7][0]), "+f"(acc[q & 7][1]), "+f"(acc[q & 7][2]), "+f"(acc[q & 7][3])
+          : "r"(a0), "r"(a0 ^ 1u), "r"(a0 ^ 2u), "r"(a0 ^ 3u), "r"(b0), "r"(b0 ^ 1u));
+#pragma unroll
+      for (int n = (q * NF) / 16; n < ((q + 1) * NF) / 16; n++) filler<FORM>(d, f, n & 7, x, y);
+    }
+  }
+  __syncthreads();
+  CLK_END
+  float s = 0.f;
+#pragma unroll
+  for (int r = 0; r < 8; r++) s += acc[r][0] + acc[r][1] + acc[r][2] + acc[r][3] + f[r] + (float)d[r];
+  if (s == 1234.5f) out[0] = s;
+}
+
 // The first build's probe (MODE bits: 1 dp4a, 2 IMAD, 4 FFMA, 8 LOP3, one of each a chain step), for which ptxas
 // alternated IDP.4A and FFMA one by one. ROLL keeps the iteration loop rolled (8 chains a body).
 template <int MODE, bool ROLL>
@@ -1080,6 +1129,28 @@ static void run_probe(const char* name, int iters) {
   CK(cudaFree(out));
 }
 
+// MAC-equivalents a lane-op of each filler FORM, as M5-v2's kappa credits them (dp4a 4, FFMA 1, MUFU 1, HFMA2 2,
+// an integer op 2).
+static double filler_macs(int form) { return form <= 1 ? 4.0 : form == 4 || form == 5 ? 2.0 : 1.0; }
+
+template <int FORM, int NF, int WPS>
+static void run_mix(int iters) {
+  float* out;
+  CK(cudaMalloc(&out, sizeof(float)));
+  auto launch = [&](BlockClk* rec) { k_mix<FORM, NF, WPS><<<g_nsm, 128 * WPS>>>(out, iters, rec); };
+  Meas m = timed(launch, g_nsm, 5);
+  const double warps = 4.0 * WPS, cyc = m.cyc_med;
+  const double mma_per_smsp_clk = warps * 16 * iters / cyc / 4, fill_per_smsp_clk = warps * NF * iters / cyc / 4;
+  const double t = mma_per_smsp_clk * 16;  // tensor share: 4,096 MACs a MMA over 256 MACs a SMSP a clock
+  const double other = fill_per_smsp_clk * 32 * filler_macs(FORM) / 256;
+  printf(
+      "{\"kind\":\"mix\",\"form\":%d,\"nf_per_16_mma\":%d,\"wps\":%d,\"mma_per_smsp_clk\":%.5f,\"fill_per_smsp_clk\":%.4f,"
+      "\"tensor_share\":%.4f,\"other_share\":%.4f,\"combined_share\":%.4f,\"sm_mhz\":%.1f}\n",
+      FORM, NF, WPS, mma_per_smsp_clk, fill_per_smsp_clk, t, other, t + other, m.mhz);
+  fflush(stdout);
+  CK(cudaFree(out));
+}
+
 template <int MODE, bool ROLL>
 static void run_probe1(const char* name, int iters) {
   int* out;
@@ -1186,6 +1257,33 @@ int main(int argc, char** argv) {
     run_swar(128 * Q, 128 * 8, 4096, 9, 4096);
     run_lut(2048 * 8, 8 * Q * 2, 1024, 5, 4096);
     run_lut8(4096 * 4, 2 * Q * 4, 1024, 5, 4096);
+  }
+  if (all || what == "mix") {  // FP8 MMAs beside fillers: NF fillers per 16 MMAs
+    run_mix<0, 0, 2>(2048);
+    run_mix<0, 0, 4>(1024);
+    run_mix<0, 32, 2>(2048);
+    run_mix<0, 64, 2>(2048);
+    run_mix<0, 96, 2>(2048);
+    run_mix<0, 128, 2>(2048);
+    run_mix<0, 160, 2>(2048);
+    run_mix<0, 256, 2>(2048);
+    run_mix<1, 32, 2>(2048);
+    run_mix<1, 64, 2>(2048);
+    run_mix<1, 96, 2>(2048);
+    run_mix<1, 112, 2>(2048);
+    run_mix<1, 128, 2>(2048);
+    run_mix<1, 160, 2>(2048);
+    run_mix<1, 256, 2>(2048);
+    run_mix<1, 64, 4>(1024);
+    run_mix<1, 128, 4>(1024);
+    run_mix<2, 16, 2>(2048);
+    run_mix<2, 64, 2>(2048);
+    run_mix<3, 16, 2>(2048);
+    run_mix<3, 32, 2>(2048);
+    run_mix<4, 32, 2>(2048);
+    run_mix<4, 64, 2>(2048);
+    run_mix<5, 32, 2>(2048);
+    run_mix<5, 64, 2>(2048);
   }
   if (all || what == "alt") {  // the first build's probe, unrolled as ptxas likes and rolled
     run_probe1<1, false>("v1 dp4a", 4096);

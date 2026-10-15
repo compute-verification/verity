@@ -2,7 +2,7 @@
 # Credit ceilings on sm_120 (CMP-12, worker W10; README.md). Run from a clean commit under `research run --cwd clone`:
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-12 --source <tree> --cwd clone --custody-ttl 12h \
-#     --env GPU_LEASE_WHO=<id> -- bash benchmarks/credit_ceilings/run.sh [all|small|probe|alt|big|fused|wide]
+#     --env GPU_LEASE_WHO=<id> -- bash benchmarks/credit_ceilings/run.sh [all|small|probe|alt|big|fused|wide|mix]
 #
 # Builds outside the lease, then under `gpu-lease 1 --wait --max-min 20` runs credit_ceilings with nvidia-smi sampling the leased GPU's SM clock every 200 ms. Clocks are only read. Outputs go to $OUT:
 # results.jsonl, the SASS of each binary, smi-*.txt/csv, and summary.md from summarize.py.
