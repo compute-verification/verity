@@ -131,7 +131,6 @@ class CheckpointIndex:
         self.dir = ckpt_dir
         self.tensors: dict[str, tuple[str, str, list[int], int, int]] = {}
         self.shards: list[str] = []
-        self._maps: dict[str, np.memmap] = {}
         self.config = {}
         cfg = os.path.join(ckpt_dir, "config.json")
         if os.path.exists(cfg):
@@ -175,10 +174,9 @@ class CheckpointIndex:
 
     def array(self, name: str) -> np.ndarray:
         fn, dt, shape, lo, hi = self.tensors[name]
-        if fn not in self._maps:
-            self._maps[fn] = np.memmap(os.path.join(self.dir, fn), dtype=np.uint8, mode="r")
         npdt, isz = _ST_DTYPE[dt]
-        raw = self._maps[fn][lo:hi]
+        with open(os.path.join(self.dir, fn), "rb") as f:     # a positioned read: a whole-shard memmap keeps every page it touched resident
+            raw = f.read(hi - lo) if f.seek(lo) == lo else b""
         n = 1
         for s in shape:
             n *= s
