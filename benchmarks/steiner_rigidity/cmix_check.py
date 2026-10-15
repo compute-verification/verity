@@ -533,8 +533,8 @@ def part4(rng, seeds=range(2), procs=1, out=None, steps=6000):
     tight = sum(r["best"] == r["bound"] for r in results)
     assert not viol, f"symmetric gain found on a proved pattern: {viol[0]}"
     gains = [r for r in results if r["violation"]]
-    least = {f"{n}, {'rooted' if ro else 'free root'}": min(r["best"] for r in results if (r["name"], r["rooted"]) == (n, ro))
-             for n in GAINS for ro in (True, False)}
+    least = {f"{n}, {'rooted' if ro else 'free root'}":
+             min(r["best"] for r in results if (r["name"], r["rooted"]) == (n, ro)) for n in GAINS for ro in (True, False)}
     print(f"  part 4: {len(results)} searches, none below the bound on the proved patterns, {tight} reach it; "
           f"{len(gains)} below it on {', '.join(GAINS)} (Proposition 5), least {least}")
 
