@@ -1148,17 +1148,22 @@ class Device:
         return {"encode_bytes_per_s": rate, "blocks": self.blocks, "bytes": self.blocks * BLOCK}
 
     def read_ms(self, segments: list[int], tries: int = 6) -> float:
-        """The read alone (`rb_read`, 16 CTAs an SM) of `segments` at once, each on its GPU (a host segment on the
-        GPU's host stream, over its PCIe link): the best of `tries` after the first, in ms."""
+        """The read alone (`rb_read`) of `segments` at once, each on its GPU, a host segment on the GPU's host stream
+        over its PCIe link: 16 CTAs an SM, except that beside HBM a host segment is launched first on a quarter of a
+        CTA an SM, which a PCIe link's outstanding reads need, so the HBM read's grid doesn't queue it behind itself.
+        The best of `tries` after the first, in ms."""
         s, out = self.store, []
         xr = [self.torch.zeros(1, dtype=self.torch.int64, device=f"cuda:{self.gpus[g].index}") for g in s.seg_gpu]
+        beside = any(not s.on_host[q] for q in segments)
+        segments = sorted(segments, key=lambda q: not s.on_host[q])
         for _ in range(tries):
             s.sync()
             t0 = time.perf_counter_ns()
             for q in segments:
                 gpu = self.gpus[s.seg_gpu[q]]
+                ctas = max(1, gpu.sms // 4) if s.on_host[q] and beside else 16 * gpu.sms
                 with s.on(gpu, gpu.host_main if s.on_host[q] else None):
-                    self.lib.call("rb_read", s.data_g[q].data_ptr(), s.n[q] * BLOCK, xr[q].data_ptr(), 16 * gpu.sms)
+                    self.lib.call("rb_read", s.data_g[q].data_ptr(), s.n[q] * BLOCK, xr[q].data_ptr(), ctas)
             s.sync()
             out.append((time.perf_counter_ns() - t0) / 1e6)
         return min(out[1:])
