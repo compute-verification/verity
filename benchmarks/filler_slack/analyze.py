@@ -95,7 +95,8 @@ def bracket(points: list[tuple[int, float, float]], thr: float) -> dict:
     return {"lo": ms(los), "hi": ms(his)}
 
 
-FAMILY = {"probe": ("probe-base", "in-kernel"), "ss-probe": ("ss-base", "second-stream")}
+FAMILY = {"probe": ("probe-base", "in-kernel"), "ss-probe": ("ss-base", "second-stream"),
+          "ssf-probe": ("ss-base", "second-stream-first")}
 IDLE_NS = 1000000
 
 
@@ -103,7 +104,8 @@ def method_a(rows: list[dict], over: dict[str, float]) -> dict:
     """Per probe point, three references for the filler's rate:
     rel        the filler alone launched just before it with the same filler code (in-kernel: the same kernel with no
                probe warps, since ptxas compiles the filler loop differently once a probe path is in the kernel;
-               second stream: base-u1 at the second-stream shared memory size)
+               second stream, the probe kernel launched after the filler or resident before it: base-u1 at the
+               second-stream shared memory size)
     rel_plain  the plain filler (base-u1 at 16 warps, one block an SM) of the same rep: what the probe costs in all
     rel_idle   the same kernel and probe warps sleeping 1 ms between bodies (probes resident but nearly idle)
     nu: probe warp-instructions per SM-clock over 4 schedulers, scaled by the loop's SASS count over its PB ops; for the

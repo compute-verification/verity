@@ -17,6 +17,8 @@ export B; B=$(mktemp -d /tmp/filler-slack.XXXXXX); trap 'rm -rf "$B"' EXIT
 nvcc -O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xptxas -v -o "$B/filler" $D/filler.cu > "$O/build.log" 2>&1 \
   || { tail -40 "$O/build.log"; exit 4; }
 nvcc --version > "$O/nvcc.txt"
+nvcc -O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -o "$B/libifill.so" $D/serve.cu \
+  > "$O/build-libifill.log" 2>&1 || echo "serve.cu build failed" >> "$O/errors.txt"
 git rev-parse HEAD > "$O/commit.txt" 2>&1 || true
 cuobjdump -sass "$B/filler" > "$B/filler.sass" 2>&1
 python3 $D/sass_loops.py "$B/filler.sass" > "$O/sass-loops.json"
@@ -46,6 +48,9 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-30}" -- bash -c '
   timeout 1200 "$B/filler" sweep "$ITERS" "$REPS" "$O/verify.txt" > "$O/sweep.jsonl" 2>> "$O/errors.txt" \
     || echo "sweep rc $?" >> "$O/errors.txt"
   echo "sweep-done $(date -u +%FT%TZ)" >> "$O/gpu.txt"; q >> "$O/gpu.txt"
+  for first in 0 1; do
+    timeout 120 "$B/filler" ssdump s-imma-b32 16 4 0 "$ITERS" $first > "$O/ssdump-imma-first$first.txt" 2>> "$O/errors.txt"
+  done
   M=smsp__inst_executed.sum,smsp__inst_issued.sum,smsp__cycles_active.sum,smsp__issue_active.avg.pct_of_peak_sustained_active
   M=$M,sm__inst_executed_pipe_alu.sum,sm__inst_executed_pipe_fma.sum,sm__inst_executed_pipe_fmaheavy.sum,sm__inst_executed_pipe_fmalite.sum
   M=$M,sm__inst_executed_pipe_tensor.sum,sm__inst_executed_pipe_uniform.sum,sm__pipe_alu_cycles_active.avg.pct_of_peak_sustained_active

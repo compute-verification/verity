@@ -62,8 +62,8 @@ extern "C" int ifill_init(uint32_t kseed, int grid, int depth) {
   int e;
   set_keys(kseed);
   if ((e = cudaMalloc(&pinfo, (size_t)grid * MAXW * 4 * sizeof(long long)))) return e;
-  if ((e = cudaMalloc(&gdone, NSMID * sizeof(int)))) return e;
-  if ((e = cudaMemset(gdone, 0, NSMID * sizeof(int)))) return e;
+  if ((e = cudaMalloc(&gdone, 2 * NSMID * sizeof(int)))) return e;
+  if ((e = cudaMemset(gdone, 0, 2 * NSMID * sizeof(int)))) return e;
   slots.resize(depth);
   for (Slot& s : slots) {
     if ((e = cudaMalloc(&s.out, (size_t)grid * MAXW * 32 * OUTW * sizeof(uint32_t)))) return e;
