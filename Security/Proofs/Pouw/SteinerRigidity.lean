@@ -15,7 +15,8 @@ its edges of the rank of the difference of the endpoints' labels.
   and each column of cells, at least the sum of the targets' ranks (`flatteningLowerBound`). Lemma 3 (`labelLemma`):
   such labels exist for every laminar family, by induction up a binary refinement of it (`Hier`), typing each node
   by the rule of Claims 3–5 and taking the labels from annihilators (Claims 1, 2). That gives Theorem 1 in coordinate
-  blocks (`blockRigidityCoord`), and an invertible change of coordinates gives it for independent subspaces.
+  blocks (`blockRigidityCoord`), and an invertible change of coordinates gives it for independent subspaces. The
+  star attains it (`exists_star`, `blockRigidity_min`).
 * Conjecture A: Theorem 1 on the full outputs gives `N³ ≤ length` (`conjectureA_lower`), and a spanning tree of the
   spider (`0`, then each output cell's chain of prefix targets) has length `N³` (`conjectureA_upper`).
 * Also here: the rank metric's facts, and the merge-proof case (Corollary 6 of the note) for any connected labelled
@@ -1750,6 +1751,70 @@ theorem blockRigidity : BlockRigidity F m n := by
   simpa only [hrank] using h
 
 end ChangeOfBasis
+
+section Star
+
+variable {F : Type*} [Field F] {m n : Type*} [Fintype m] [Fintype n]
+
+omit [Fintype m] in
+/-- **The star**: for any targets, a spanning tree of the star from `0` to the targets is no longer than the sum of
+their ranks. -/
+theorem exists_star {κ : Type} (P : Finset κ) (M : κ → Matrix m n F) :
+    ∃ T : SteinerTree F m n, T.Reaches 0 ∧ (∀ t ∈ P, T.Reaches (M t)) ∧ T.length ≤ ∑ t ∈ P, (M t).rank := by
+  classical
+  let G : SimpleGraph (Option P) := SimpleGraph.fromRel fun u _ => u = none
+  have hG : G.Connected := by
+    have h : ∀ v, G.Reachable none v := by
+      rintro (_ | t)
+      · rfl
+      · exact SimpleGraph.Adj.reachable (by simp [G])
+    exact ⟨fun u v => (h u).symm.trans (h v)⟩
+  obtain ⟨H, hHle, hH⟩ := hG.exists_isTree_le
+  let label : Option P → Matrix m n F := fun o => o.elim 0 fun t => M t
+  let T : SteinerTree F m n := { V := Option P, G := H, isTree := hH, label := label }
+  refine ⟨T, ⟨none, rfl⟩, fun t ht => ⟨some ⟨t, ht⟩, rfl⟩, ?_⟩
+  have hsub : H.edgeFinset ⊆ Finset.univ.image fun t : P => s(none, some t) := by
+    intro e he
+    induction e using Sym2.ind with
+    | _ a b =>
+      have hab := hHle ((SimpleGraph.mem_edgeSet _).1 (SimpleGraph.mem_edgeFinset.1 he))
+      simp only [G, SimpleGraph.fromRel_adj] at hab
+      obtain ⟨hne, h | h⟩ := hab
+      · subst h
+        obtain _ | t := b
+        · exact absurd rfl hne
+        · exact Finset.mem_image.2 ⟨t, Finset.mem_univ _, rfl⟩
+      · subst h
+        obtain _ | t := a
+        · exact absurd rfl hne
+        · exact Finset.mem_image.2 ⟨t, Finset.mem_univ _, Sym2.eq_swap⟩
+  calc T.length = ∑ e ∈ H.edgeFinset, SteinerTree.edgeLength label e := rfl
+    _ ≤ ∑ e ∈ Finset.univ.image (fun t : P => s(none, some t)), SteinerTree.edgeLength label e :=
+        Finset.sum_le_sum_of_subset hsub
+    _ = ∑ t : P, SteinerTree.edgeLength label s(none, some t) := by
+        rw [Finset.sum_image]
+        intro t _ t' _ h
+        exact Option.some_injective _ (Sym2.congr_right.1 h)
+    _ = ∑ t ∈ P, (M t).rank := by
+        rw [← Finset.sum_coe_sort P]
+        refine Finset.sum_congr rfl fun t _ => ?_
+        change rankDist 0 (M t) = (M t).rank
+        exact rankDist_zero_left _
+
+variable [DecidableEq m] [DecidableEq n]
+
+/-- **Theorem 1 is tight**: with targets in distinct cells, the minimum Steiner length is exactly the sum of their
+ranks. -/
+theorem blockRigidity_min {p q : ℕ} (R : Fin p → Submodule F (m → F)) (C : Fin q → Submodule F (n → F))
+    (hR : iSupIndep R) (hC : iSupIndep C) (P : Finset (Fin p × Fin q)) (M : Fin p × Fin q → Matrix m n F)
+    (hM : ∀ t ∈ P, colSpace (M t) ≤ R t.1 ∧ rowSpace (M t) ≤ C t.2) :
+    (∀ T : SteinerTree F m n, T.Reaches 0 → (∀ t ∈ P, T.Reaches (M t)) → ∑ t ∈ P, (M t).rank ≤ T.length) ∧
+      ∃ T : SteinerTree F m n, T.Reaches 0 ∧ (∀ t ∈ P, T.Reaches (M t)) ∧ T.length = ∑ t ∈ P, (M t).rank := by
+  refine ⟨fun T h0 hT => blockRigidity p q R C hR hC P M hM T h0 hT, ?_⟩
+  obtain ⟨T, h0, hT, hlen⟩ := exists_star P M
+  exact ⟨T, h0, hT, le_antisymm hlen (blockRigidity p q R C hR hC P M hM T h0 hT)⟩
+
+end Star
 
 section Spider
 
