@@ -323,11 +323,13 @@ def mat_total_words(HB: int, M: int, NB: int, BN: int, D: int, ms: bool = False)
     return HB * M * N * 2 + HB * M * (N // 2) + HB * M * NB * 8 + HB * M * NB * D + HB * M * 4 + (HB * M * NB if ms else 0)
 
 
-def load_program(program_dir: str) -> dict[str, Any]:
+def load_program(program_dir: str, *, expand: bool = True) -> dict[str, Any]:
+    """The Program dir's instances, result and artifact.  `expand=False` keeps a v2 row's argument progressions as stored, for a reader
+    that expands what it reads (the sampled replay's `index.row_args` / `node_runs`)."""
     from verity_vllm.program.compact import expanded_file_args
     with gzip.open(os.path.join(program_dir, "instances.json.gz"), "rt") as f:
         inst = json.load(f)
-    for r in inst.get("rows") or ():   # a v2 file's argument progressions -> the v1 per-leaf run lists every consumer reads
+    for r in (inst.get("rows") or ()) if expand else ():   # a v2 file's argument progressions -> the v1 per-leaf run lists
         a = r.get("args")
         if a:
             r["args"] = expanded_file_args(a)

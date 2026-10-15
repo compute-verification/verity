@@ -76,7 +76,7 @@ def load(cfg: dict[str, Any], rank: int, world: Any) -> Loaded:
     if not of_record:
         raise RuntimeError(f"no Program digest of record for rank {rank} (GP-01 workload_program components / manifest per-rank digest)")
     dirs = request_program_dirs(str(root), reqs, rank)
-    by_dir = {d: RM.load_program(d) for d in sorted(set(dirs.values()))}
+    by_dir = {d: RM.load_program(d, expand=False) for d in sorted(set(dirs.values()))}   # the replay expands the rows it reads
     loaded: dict[str, dict] = {rid: by_dir[d] for rid, d in dirs.items()}
     digs = {k: str(((v.get("result") or {}).get("program") or {}).get("digest") or (v.get("result") or {}).get("program_digest")
                    or (v.get("instances") or {}).get("digest") or "") for k, v in loaded.items()}
@@ -143,6 +143,17 @@ def manifest_of_rank(doc: Any, rank: int) -> dict[str, Any] | None:
     return dict(doc, identities=[x for x in doc["identities"] if int(x.get("rank", 0) or 0) == rank])
 
 
+def index_memo(p: Loaded, manifest: dict[str, Any] | None) -> dict:
+    """`sampled_replay`'s memo holding `load`'s index of the first Program, when it is the index the replay would build (the manifest's
+    query is the default one, no norm-scale policy); else empty, and the replay builds its own."""
+    from verity_vllm.check.replay import driver as SR, index as IX
+    from verity_vllm.query import norm_scales
+
+    if (SR.manifest_query(manifest) or IX.DEFAULT_QUERY) != IX.DEFAULT_QUERY or norm_scales.policy_of(manifest):
+        return {}
+    return {("index", id(p.progs[next(iter(p.progs))])): p.index}
+
+
 def evaluate(p: Loaded, cfg: dict[str, Any], *, bmap: dict[str, Any], committed: Any, weights_of: Callable[[str], Any],
              weights_check: dict[str, Any], run_root: bytes, manifest_doc: Any, worker_peak: int | None = None) -> tuple[dict, dict]:
     """(the rank's sampled-replay record, its boundary-linkage record) on the rank's map, committed members and weight shards."""
@@ -151,11 +162,12 @@ def evaluate(p: Loaded, cfg: dict[str, Any], *, bmap: dict[str, Any], committed:
     rank = p.rank
     seed, seed_src = seed_of(cfg, run_root)
     ring = cfg.get("ring_slots")
+    man = manifest_of_rank(manifest_doc, rank)
     sr = SR.sampled_replay(p.progs, bmap, committed, weights_of(p.index.prefix), arrivals=p.arrivals, per_stratum=int(cfg.get("per_stratum") or 2),
                            seed=seed, seed_source=seed_src, max_evaluate=int(cfg.get("max_evaluate") or 2000), weights_check=weights_check,
                            targets=list(cfg.get("targets") or []), workers=cfg.get("workers"), worker_peak=worker_peak,
                            ring_slots=(int(ring) if ring else None), attention_paths=p.attn_paths, tp=p.tp,
-                           manifest=manifest_of_rank(manifest_doc, rank), program_dirs=p.dirs, replay_k=(cfg.get("k_per_rank") or {}).get(str(rank)))
+                           manifest=man, program_dirs=p.dirs, replay_k=(cfg.get("k_per_rank") or {}).get(str(rank)), memo=index_memo(p, man))
     sr["wrapper_prefix"] = p.index.prefix
     sr["tp_context"] = p.tp
     sr["programs"] = {k: {"dir": p.loaded[k].get("dir"), "program_digest": p.digs[k]} for k in p.loaded}

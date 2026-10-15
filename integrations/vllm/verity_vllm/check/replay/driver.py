@@ -67,7 +67,7 @@ from verity_vllm.check.replay.fork import WorkerDied
 from verity_vllm.check.replay.replay_codes import NOT_YET, WHY_CLASSES_BY_NAME, WHY_CLASSES_FAULT, why_class
 from verity_vllm.commit.opened import opened_in_children
 from verity_vllm.program.kernels.rows import EVALUATOR_PROVENANCE, EVALUATORS
-from verity_vllm.check.replay.index import V2_QUERY, ProgramIndex
+from verity_vllm.check.replay.index import V2_QUERY, ProgramIndex, row_args
 from verity_vllm.query import norm_scales
 from verity_vllm.check.replay.opening import CommittedStore, model_weights_provider
 from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH, ROW_EVALUATORS, plan_vu, replay_vu
@@ -126,7 +126,7 @@ def _prewarm_weights(indices: dict, picked: list[dict], weights: Callable[[str, 
     seen: set[str] = set()
 
     def walk(pi: ProgramIndex, r: dict, depth: int) -> None:
-        for group in r.get("args") or []:
+        for group in row_args(r):
             for sl in group:
                 if sl[0] == "p" and int(sl[1]) < len(pi.pnames) and pi.pnames[int(sl[1])] == "weights":
                     ws = pi.weight_slice(int(sl[2]), int(sl[3]))
