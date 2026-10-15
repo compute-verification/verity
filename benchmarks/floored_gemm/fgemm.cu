@@ -177,6 +177,22 @@ DEV void imma0(int* d, const uint32_t* a, const uint32_t* b) {
       : "=r"(d[0]), "=r"(d[1]), "=r"(d[2]), "=r"(d[3])
       : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]), "r"(0));
 }
+// the same atom on E4M3 operands with f32 accumulators (the fragment layouts are the s8 ones); the accumulator words hold
+// the f32 bits, so receipts and the epilogue treat them as words
+DEV void fmma(int* d, const uint32_t* a, const uint32_t* b) {
+  float f0 = __int_as_float(d[0]), f1 = __int_as_float(d[1]), f2 = __int_as_float(d[2]), f3 = __int_as_float(d[3]);
+  asm("mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32 {%0, %1, %2, %3}, {%4, %5, %6, %7}, {%8, %9}, {%0, %1, %2, %3};"
+      : "+f"(f0), "+f"(f1), "+f"(f2), "+f"(f3)
+      : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]));
+  d[0] = __float_as_int(f0); d[1] = __float_as_int(f1); d[2] = __float_as_int(f2); d[3] = __float_as_int(f3);
+}
+DEV void fmma0(int* d, const uint32_t* a, const uint32_t* b) {
+  float f0, f1, f2, f3;
+  asm("mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32 {%0, %1, %2, %3}, {%4, %5, %6, %7}, {%8, %9}, {%10, %10, %10, %10};"
+      : "=f"(f0), "=f"(f1), "=f"(f2), "=f"(f3)
+      : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]), "f"(0.f));
+  d[0] = __float_as_int(f0); d[1] = __float_as_int(f1); d[2] = __float_as_int(f2); d[3] = __float_as_int(f3);
+}
 // the receipt IMMAs: R += A B, A u8 (the accumulator's bytes), B s8 (the key), no saturation (|R| stays far below 2^31)
 DEV void rimma32(St (&r)[2], uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t b0, uint32_t b1) {
   asm("mma.sync.aligned.m16n8k32.row.col.s32.u8.s8.s32 {%0, %1, %2, %3}, {%4, %5, %6, %7}, {%8, %9}, {%0, %1, %2, %3};"
@@ -207,12 +223,13 @@ struct Args {
   uint32_t* R;       // receipts: [tile][thread][8]
   int M, N, K, group;
   uint32_t seed;
+  int KR;            // receipts over the first KR columns only (0: all K)
 };
 
 // TM x BN tile, 8 warps of WM x 32 (MI = WM / 16 row blocks of 16, NI = 4 column blocks of 8); thread 0 also issues
 // every TMA, refilling each slot as the CTA releases it; STAGES stages of 128 bytes of depth (4 atoms); the tail
 // stage holds the peel rows.
-template <int TM, int BN, int WM, int STAGES> struct ML {
+template <int TM, int BN, int WM, int STAGES, bool F8 = false> struct ML {
   static constexpr int BK = 128, WN = 32, WARPS_M = TM / WM, WARPS_N = BN / WN, NCW = WARPS_M * WARPS_N, NCT = NCW * 32,
                        MI = WM / 16, NI = WN / 8;
   static_assert(NCW == 8 || NCW == 16, "8 or 16 warps");
@@ -374,8 +391,13 @@ template <int TM, int BN, int WM, int STAGES> struct ML {
                       const uint32_t (&fb)[NI][2]) {
     if constexpr (IDX < MI * NI) {
       constexpr int mi = IDX / NI, ni = IDX % NI;
-      if (FROM0) imma0(acc[mi][ni], fa[mi], fb[ni]);
-      else imma(acc[mi][ni], fa[mi], fb[ni]);
+      if constexpr (F8) {
+        if (FROM0) fmma0(acc[mi][ni], fa[mi], fb[ni]);
+        else fmma(acc[mi][ni], fa[mi], fb[ni]);
+      } else {
+        if (FROM0) imma0(acc[mi][ni], fa[mi], fb[ni]);
+        else imma(acc[mi][ni], fa[mi], fb[ni]);
+      }
       if constexpr (ABS && is_tb(KIND)) tb_at<KIND, IDX>(ch, kr, acc);
       else if constexpr (ABS) absorb_at<KIND, IDX>(ch, acc[mi][ni]);
       mma<FROM0, ABS, KIND, IDX + 1>(acc, ch, kr, fa, fb);
@@ -401,15 +423,27 @@ template <int TM, int BN, int WM, int STAGES> struct ML {
     mma<false, absorbs(RS, 3), KIND>(acc, ch, kr, fa[1], fb[1]);
     release(done);
   }
-  template <int RS, int KIND> DEV void tile(int K, int (&acc)[MI][NI][4], St (&ch)[NCH<KIND>], const uint32_t (&kr)[NK<KIND>]) {
-    const int KT = K / BK;
+  // receipts at stride RS over the first KR columns (0: all of K), then the rest of K without
+  template <int RS, int KIND>
+  DEV void tile(int K, int KR, int (&acc)[MI][NI][4], St (&ch)[NCH<KIND>], const uint32_t (&kr)[NK<KIND>]) {
+    const int KT = K / BK, KRT = KR > 0 ? min(KR / BK, KT) : KT;
     uint32_t fa[2][MI][4], fb[2][NI][2];
     mbar_wait_warp(full(s), ph);
     load(fa[0], fb[0], stage(s), 0);
     stage_body<RS, KIND, true, false>(acc, ch, kr, fa, fb);
+    if constexpr (RS == 0) {
 #pragma unroll 1
-    for (int kt = 1; kt < KT - 1; kt++) stage_body<RS, KIND, false, false>(acc, ch, kr, fa, fb);
-    stage_body<RS, KIND, false, true>(acc, ch, kr, fa, fb);
+      for (int kt = 1; kt < KT - 1; kt++) stage_body<RS, KIND, false, false>(acc, ch, kr, fa, fb);
+      stage_body<RS, KIND, false, true>(acc, ch, kr, fa, fb);
+    } else {
+      const int e1 = min(KRT, KT - 1);
+#pragma unroll 1
+      for (int kt = 1; kt < e1; kt++) stage_body<RS, KIND, false, false>(acc, ch, kr, fa, fb);
+#pragma unroll 1
+      for (int kt = max(e1, 1); kt < KT - 1; kt++) stage_body<0, KIND, false, false>(acc, ch, kr, fa, fb);
+      if (KRT >= KT) stage_body<RS, KIND, false, true>(acc, ch, kr, fa, fb);
+      else stage_body<0, KIND, false, true>(acc, ch, kr, fa, fb);
+    }
   }
   // the peel: U = C - 256 (E_A W_hi^T + V_hi E_B^T) - (E_A W_lo^T + V_lo E_B^T), the tail stage's four atoms
   DEV void peel(int (&acc)[MI][NI][4]) {
@@ -440,8 +474,8 @@ template <int TM, int BN, int WM, int STAGES> struct ML {
   }
 };
 
-template <int TM, int BN, int WM, int STAGES, bool TAIL, int RS, int KIND> DEV void gemm_body(const Args& a) {
-  using L = ML<TM, BN, WM, STAGES>;
+template <int TM, int BN, int WM, int STAGES, bool TAIL, int RS, int KIND, bool F8 = false> DEV void gemm_body(const Args& a) {
+  using L = ML<TM, BN, WM, STAGES, F8>;
   constexpr int MI = L::MI, NI = L::NI;
   extern __shared__ __align__(1024) uint8_t smem[];
   L ml(smem, a.maps, a.M, a.N, a.K, a.group, TAIL);
@@ -468,7 +502,7 @@ template <int TM, int BN, int WM, int STAGES, bool TAIL, int RS, int KIND> DEV v
       }
     }
     int acc[MI][NI][4];
-    ml.template tile<RS, KIND>(a.K, acc, ch, kr);
+    ml.template tile<RS, KIND>(a.K, a.KR, acc, ch, kr);
     if constexpr (TAIL) ml.peel(acc);
     const int row0 = tm * TM + wm * WM + g, col0 = tn * BN + wn * L::WN + 2 * q;
 #pragma unroll
@@ -1051,6 +1085,7 @@ static int cmd_one(const std::string& arm, int m, int n, int k, char cfg) {
   return 0;
 }
 
+#ifndef FG_LIB
 int main(int argc, char** argv) {
   if (argc >= 9 && !strcmp(argv[1], "gate"))
     return cmd_gate(argv[2], atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), atoi(argv[6]), (uint32_t)strtoul(argv[7], 0, 0),
@@ -1063,3 +1098,4 @@ int main(int argc, char** argv) {
   fprintf(stderr, "usage: fgemm gate DIR M N K GRID SEED P|D|Q|W | bench REPS name:m:n:k[:C]... | one ARM M N K [C]\n");
   return 2;
 }
+#endif
