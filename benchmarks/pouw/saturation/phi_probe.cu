@@ -17,6 +17,8 @@
 //           each warp's instruction stream alternates the two pipes instead of running one at a time
 //   mode 5  mode 2's mma rounds and phi work, the phi reading the mma's (constant) A registers instead of its accumulators:
 //           the same instructions with no dependency between the pipes, what a prover hashing words it didn't compute runs
+//   modes 6, 7, 8  modes 3, 0 and 1 plus 32 * FIL independent FFMAs a thread per outer round (8 chains): how much of the FP32
+//           FMA pipe is still free beside the receipt, the mma, and both
 // Gates (exit 3, before any rate is printed): every mode-2..5 kernel's accumulators equal mode 0's after the same mma rounds
 // (so the phi work did not change what the tensor cores computed), every mode-4 kernel's outputs equal its mode-3 twin's, two
 // launches of every kernel agree, and mode 1's thread-0 chains equal a host recomputation.
@@ -109,12 +111,23 @@ __device__ __forceinline__ void interleaved(float (&c)[NACC][4], const uint32_t 
     }
 }
 
-template <int MODE, int PER, int ROUNDS, int VAR>
+template <int FIL>
+__device__ __forceinline__ void filler(float (&z)[8]) {
+#pragma unroll
+    for (int m = 0; m < 16 * FIL; m++) z[m % 8] = fmaf(z[m % 8], 0.5f, 1.0f);
+}
+
+constexpr int base_mode(int mode) { return mode == 6 ? 3 : mode == 7 ? 0 : mode == 8 ? 1 : mode; }
+
+template <int MODE_, int PER, int ROUNDS, int VAR, int FIL = 0>
 __global__ void __launch_bounds__(THREADS, 2)
     probe(const uint32_t* __restrict__ in, uint32_t* __restrict__ out, long long* __restrict__ clk, int outer) {
+    constexpr int MODE = base_mode(MODE_);
     const int tid = blockIdx.x * blockDim.x + threadIdx.x;
     uint32_t a[4], b[2], y[NACC];
-    float c[NACC][4];
+    float c[NACC][4], z[8];
+#pragma unroll
+    for (int m = 0; m < 8; m++) z[m] = (float)(tid % 7 + m);
 #pragma unroll
     for (int i = 0; i < 4; i++) a[i] = in[(tid * 7 + i) % IN_WORDS];
 #pragma unroll
@@ -132,12 +145,15 @@ __global__ void __launch_bounds__(THREADS, 2)
     for (int o = 0; o < outer; o++) {
         if (MODE == 0 || MODE == 2) mma_rounds<0, NACC, PER>(c, a, b);
         if (MODE == 1 || MODE == 2) receipt<ROUNDS, VAR, 0, NACC>(y, c, ++s);
+        if (MODE == 0 || MODE == 1) filler<2 * FIL>(z);
         if (MODE == 3) {
             ++s;
             mma_rounds<0, NACC / 2, PER>(c, a, b);
             receipt<ROUNDS, VAR, NACC / 2, NACC>(y, c, s);
+            filler<FIL>(z);
             mma_rounds<NACC / 2, NACC, PER>(c, a, b);
             receipt<ROUNDS, VAR, 0, NACC / 2>(y, c, s);
+            filler<FIL>(z);
         }
         if (MODE == 4) {
             ++s;
@@ -157,6 +173,8 @@ __global__ void __launch_bounds__(THREADS, 2)
     if (MODE == 3 || MODE == 4) receipt<ROUNDS, VAR, NACC / 2, NACC>(y, c, s + 1);
     const long long t1 = clock64();
     uint32_t cx = 0, yx = 0;
+#pragma unroll
+    for (int m = 0; m < 8; m++) yx ^= __float_as_uint(z[m]) << m;
 #pragma unroll
     for (int j = 0; j < NACC; j++) {
         yx ^= y[j] * (2u * j + 1u);
@@ -193,14 +211,19 @@ static std::vector<uint32_t> host_chains(const std::vector<uint32_t>& in, int ou
 
 struct Kernel {
     std::string name;
-    int mode, per, rounds, var;
+    int mode, per, rounds, var, fil;
     void (*fn)(const uint32_t*, uint32_t*, long long*, int);
     std::vector<uint32_t> (*chains)(const std::vector<uint32_t>&, int);
 };
 
 static const char* VARS[] = {"alu", "imad"};
 #define K(M, P, R, V) \
-    Kernel { "mode" #M "_per" #P "_r" #R "_" + std::string(VARS[V]), M, P, R, V, probe<M, P, R, V>, host_chains<R, V> }
+    Kernel { "mode" #M "_per" #P "_r" #R "_" + std::string(VARS[V]), M, P, R, V, 0, probe<M, P, R, V>, host_chains<R, V> }
+#define KF(M, P, R, V, F)                                                                                     \
+    Kernel {                                                                                                  \
+        "mode" #M "_per" #P "_r" #R "_" + std::string(VARS[V]) + "_f" #F, M, P, R, V, F, probe<M, P, R, V, F>, \
+            host_chains<R, V>                                                                                 \
+    }
 static const Kernel KERNELS[] = {
     K(0, 1, 1, 0),
     K(1, 1, 1, 0), K(1, 1, 1, 1), K(1, 1, 2, 0), K(1, 1, 2, 1),
@@ -221,6 +244,11 @@ static const Kernel KERNELS[] = {
     K(5, 1, 1, 0), K(5, 2, 1, 0), K(5, 3, 1, 0), K(5, 4, 1, 0), K(5, 8, 1, 0),
     K(5, 1, 2, 0), K(5, 2, 2, 0), K(5, 3, 2, 0), K(5, 4, 2, 0), K(5, 8, 2, 0),
     K(5, 1, 1, 1), K(5, 2, 1, 1), K(5, 4, 1, 1), K(5, 2, 2, 1), K(5, 3, 2, 1),
+    KF(6, 1, 1, 0, 2), KF(6, 1, 1, 0, 4), KF(6, 1, 1, 0, 8),
+    KF(6, 2, 1, 0, 2), KF(6, 2, 1, 0, 4), KF(6, 2, 1, 0, 8),
+    KF(6, 3, 2, 0, 2), KF(6, 3, 2, 0, 4), KF(6, 3, 2, 0, 8),
+    KF(7, 2, 1, 0, 2), KF(7, 2, 1, 0, 4), KF(7, 2, 1, 0, 8),
+    KF(8, 1, 1, 0, 2), KF(8, 1, 1, 0, 4), KF(8, 1, 1, 0, 8),
 };
 
 struct Launch {
@@ -314,9 +342,10 @@ int main(int argc, char** argv) {
                 fprintf(stderr, "GATE %s: launches disagree\n", k.name.c_str());
                 return 3;
             }
+        const int base = base_mode(k.mode);
         if (k.mode == 0) {
             mode0_out = runs[0].out, mode0_rounds = outer, mode0_grid = grid;
-        } else if (k.mode >= 2) {
+        } else if (base != 1) {
             const int rounds = outer * k.per;
             const Launch ref = rounds == mode0_rounds && grid == mode0_grid ? Launch{0, 0, mode0_out}
                                                                             : launch(KERNELS[0], d_in, grid, rounds);
@@ -342,13 +371,15 @@ int main(int argc, char** argv) {
                     return 3;
                 }
         }
-        std::vector<double> mac_rate, phi_rate, mhz;
+        std::vector<double> mac_rate, phi_rate, ffma_rate, mhz;
         const double warps = (double)nthreads / 32;
         for (const Launch& r : runs) {
-            const double macs = k.mode == 1 ? 0 : warps * outer * k.per * NACC * 4096.0;
-            const double phis = k.mode == 0 ? 0 : (double)nthreads * 4 * (outer * NACC + (k.mode == 3 || k.mode == 4 ? NACC / 2 : 0));
+            const double macs = base == 1 ? 0 : warps * outer * k.per * NACC * 4096.0;
+            const double phis =
+                base == 0 ? 0 : (double)nthreads * 4 * (outer * NACC + (base == 3 || base == 4 ? NACC / 2 : 0));
             mac_rate.push_back(macs / (sms * r.span_cycles));
             phi_rate.push_back(phis / (sms * r.span_cycles));
+            ffma_rate.push_back((double)nthreads * outer * 32 * k.fil / (sms * r.span_cycles));
             mhz.push_back(r.span_cycles / (r.ms * 1e3));
         }
         auto med = [](std::vector<double> v) {
@@ -357,11 +388,11 @@ int main(int argc, char** argv) {
         };
         printf("%s {\"kernel\": \"%s\", \"mode\": %d, \"per\": %d, \"L\": %d, \"rounds\": %d, \"var\": \"%s\", \"regs\": %d, "
                "\"blocks_per_sm\": %d, \"grid\": %d, \"outer\": %d, \"ms\": %.4f, \"sm_mhz\": %.1f, \"macs_per_sm_clk\": %.2f, "
-               "\"phi_per_sm_clk\": %.3f, \"gate\": \"ok\"}",
+               "\"phi_per_sm_clk\": %.3f, \"fil\": %d, \"ffma_per_sm_clk\": %.2f, \"gate\": \"ok\"}",
                first ? "" : ",\n", k.name.c_str(), k.mode, k.per, 32 * k.per, k.rounds, VARS[k.var], attr.numRegs, bps, grid,
                outer,
                med([&] { std::vector<double> v; for (auto& r : runs) v.push_back(r.ms); return v; }()), med(mhz),
-               med(mac_rate), med(phi_rate));
+               med(mac_rate), med(phi_rate), k.fil, med(ffma_rate));
         first = false;
         fflush(stdout);
     }
