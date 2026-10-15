@@ -254,6 +254,88 @@ __global__ void __launch_bounds__(256, MINB) k_gemm(const void* __restrict__ Av,
   CLK_END
 }
 
+// Fused dp4a + FFMA: one loop runs a narrow dp4a GEMM (Cd = Ad * Bd, K = 4 KW) and a narrow FFMA GEMM (Cf = Af * Bf,
+// K = KW, at most 1,024 so FP32 sums stay exact) on the same 128 x 128 tile, each k step issuing 64 dp4a and 64 FFMA,
+// so the FFMAs can fill the FMA pipe's lite half beside dp4a on the heavy half. Layouts are k_gemm's EPI 0 and EPI 2.
+template <int BKW, int STAGES>
+__global__ void __launch_bounds__(256, 1) k_fused(const int* __restrict__ Ad, const int* __restrict__ Bd,
+                                                  const float* __restrict__ Af, const float* __restrict__ Bf,
+                                                  long long* __restrict__ Cd, long long* __restrict__ Cf, int M, int N,
+                                                  int KW, int ntiles, BlockClk* rec) {
+  constexpr int BM = 128, BN = 128;
+  __shared__ __align__(16) int Ads[STAGES][BKW][BM], Bds[STAGES][BKW][BN];
+  __shared__ __align__(16) float Afs[STAGES][BKW][BM], Bfs[STAGES][BKW][BN];
+  const int tx = threadIdx.x & 15, ty = threadIdx.x >> 4;
+  const int tiles_n = N / BN, nst = KW / BKW;
+  CLK_BEGIN
+  for (int tile = blockIdx.x; tile < ntiles; tile += gridDim.x) {
+    const int m0 = (tile / tiles_n) * BM, n0 = (tile % tiles_n) * BN;
+    int ad[8][8];
+    float af[8][8];
+#pragma unroll
+    for (int i = 0; i < 8; i++)
+#pragma unroll
+      for (int j = 0; j < 8; j++) ad[i][j] = 0, af[i][j] = 0.f;
+    auto load_stage = [&](int s, int kw0) {
+      for (int c = threadIdx.x; c < BKW * (BM / 4); c += 256) {
+        const int kk = c / (BM / 4), c4 = c % (BM / 4);
+        cp_async16(&Ads[s][kk][4 * c4], Ad + (size_t)(kw0 + kk) * M + m0 + 4 * c4);
+        cp_async16(&Afs[s][kk][4 * c4], Af + (size_t)(kw0 + kk) * M + m0 + 4 * c4);
+        cp_async16(&Bds[s][kk][4 * c4], Bd + (size_t)(kw0 + kk) * N + n0 + 4 * c4);
+        cp_async16(&Bfs[s][kk][4 * c4], Bf + (size_t)(kw0 + kk) * N + n0 + 4 * c4);
+      }
+    };
+    __syncthreads();
+#pragma unroll
+    for (int s = 0; s < STAGES - 1; s++) {
+      if (s < nst) load_stage(s, s * BKW);
+      cp_commit();
+    }
+    for (int st = 0; st < nst; st++) {
+      cp_wait<STAGES - 2>();
+      __syncthreads();
+      {
+        const int nx = st + STAGES - 1;
+        if (nx < nst) load_stage(nx % STAGES, nx * BKW);
+        cp_commit();
+      }
+      const int s = st % STAGES;
+#pragma unroll
+      for (int kk = 0; kk < BKW; kk++) {
+        int a[8], b[8];
+        float fa[8], fb[8];
+#pragma unroll
+        for (int v = 0; v < 2; v++) {
+          int4 t = *reinterpret_cast<const int4*>(&Ads[s][kk][64 * v + 4 * ty]);
+          int4 u = *reinterpret_cast<const int4*>(&Bds[s][kk][64 * v + 4 * tx]);
+          float4 p = *reinterpret_cast<const float4*>(&Afs[s][kk][64 * v + 4 * ty]);
+          float4 q = *reinterpret_cast<const float4*>(&Bfs[s][kk][64 * v + 4 * tx]);
+          a[4 * v] = t.x, a[4 * v + 1] = t.y, a[4 * v + 2] = t.z, a[4 * v + 3] = t.w;
+          b[4 * v] = u.x, b[4 * v + 1] = u.y, b[4 * v + 2] = u.z, b[4 * v + 3] = u.w;
+          fa[4 * v] = p.x, fa[4 * v + 1] = p.y, fa[4 * v + 2] = p.z, fa[4 * v + 3] = p.w;
+          fb[4 * v] = q.x, fb[4 * v + 1] = q.y, fb[4 * v + 2] = q.z, fb[4 * v + 3] = q.w;
+        }
+#pragma unroll
+        for (int i = 0; i < 8; i++)
+#pragma unroll
+          for (int j = 0; j < 8; j++) {
+            ad[i][j] = __dp4a(a[i], b[j], ad[i][j]);
+            af[i][j] = __fmaf_rn(fa[i], fb[j], af[i][j]);
+          }
+      }
+    }
+#pragma unroll
+    for (int i = 0; i < 8; i++)
+#pragma unroll
+      for (int j = 0; j < 8; j++) {
+        const size_t o = (size_t)(m0 + 64 * (i / 4) + 4 * ty + i % 4) * N + n0 + 64 * (j / 4) + 4 * tx + j % 4;
+        Cd[o] = 64ll * ad[i][j];
+        Cf[o] = 64ll * (long long)af[i][j];
+      }
+  }
+  CLK_END
+}
+
 // The three configurations timed: tile, limbs, stage depth.
 #define GEMM_NARROW k_gemm<0, 8, 8, 1, 8, 3, 0, 2>
 #define GEMM_K3 k_gemm<1, 4, 4, 6, 4, 3, 0, 1>
@@ -704,6 +786,46 @@ static void run_gemm(int M, int N, int K, int reps, int samples, int grid_blocks
   CK(cudaFree(dC));
 }
 
+template <int BKW, int STAGES>
+static void run_fused(int M, int N, int KW, int reps, int samples) {
+  const int Kd = 4 * KW, Kf = KW;
+  std::vector<uint8_t> Ad, Bd, Af8, Bf8;
+  gen_codes(Ad, (size_t)M * Kd, true, 31 + M);
+  gen_codes(Bd, (size_t)Kd * N, true, 32 + N);
+  gen_codes(Af8, (size_t)M * Kf, true, 33 + M);
+  gen_codes(Bf8, (size_t)Kf * N, true, 34 + N);
+  Operands od = upload<0>(Ad, Bd, M, N, Kd), of = upload<2>(Af8, Bf8, M, N, Kf);
+  long long *dCd, *dCf;
+  CK(cudaMalloc(&dCd, sizeof(long long) * M * N));
+  CK(cudaMalloc(&dCf, sizeof(long long) * M * N));
+  const int ntiles = (M / 128) * (N / 128);
+  int occ = 0;
+  CK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ, k_fused<BKW, STAGES>, 256, 0));
+  auto launch = [&](BlockClk* rec) {
+    k_fused<BKW, STAGES><<<ntiles, 256>>>((const int*)od.dA, (const int*)od.dB, (const float*)of.dA,
+                                          (const float*)of.dB, dCd, dCf, M, N, KW, ntiles, rec);
+  };
+  Meas m = timed(launch, ntiles, reps);
+  std::vector<long long> Cd((size_t)M * N), Cf((size_t)M * N);
+  CK(cudaMemcpy(Cd.data(), dCd, sizeof(long long) * M * N, cudaMemcpyDeviceToHost));
+  CK(cudaMemcpy(Cf.data(), dCf, sizeof(long long) * M * N, cudaMemcpyDeviceToHost));
+  long long cd, cf;
+  const long long bad = check(Cd, Ad, Bd, M, N, Kd, samples, &cd) + check(Cf, Af8, Bf8, M, N, Kf, samples, &cf);
+  const double sm_clk = g_nsm * m.ms * 1e-3 * m.mhz * 1e6;
+  char extra[200];
+  snprintf(extra, sizeof extra,
+           ",\"grid\":%d,\"tiles\":%d,\"config\":\"BKW%d S%d\",\"Kd\":%d,\"Kf\":%d,\"dp4a_macs_per_sm_clk\":%.1f,"
+           "\"ffma_macs_per_sm_clk\":%.1f",
+           ntiles, ntiles, BKW, STAGES, Kd, Kf, (double)M * N * Kd / sm_clk, (double)M * N * Kf / sm_clk);
+  emit("fused_dp4a_ffma", "narrow", M, N, Kd + Kf, m, occ, cd + cf, bad, extra);
+  CK(cudaFree(od.dA));
+  CK(cudaFree(od.dB));
+  CK(cudaFree(of.dA));
+  CK(cudaFree(of.dB));
+  CK(cudaFree(dCd));
+  CK(cudaFree(dCf));
+}
+
 // dp4a (narrow) and FFMA (narrow) GEMMs at once on two streams, one block of each a SM (188 tiles each). The dp4a
 // GEMM's K is calibrated so both kernels end together; the combined rate is both GEMMs' MACs over the later end.
 static void run_corun(int reps, int samples) {
@@ -1004,6 +1126,12 @@ int main(int argc, char** argv) {
     run_swar(128 * Q, 128 * 8, 4096, 9, 4096);
     run_lut(2048 * 8, 8 * Q * 2, 1024, 5, 4096);
     run_lut8(4096 * 4, 2 * Q * 4, 1024, 5, 4096);
+  }
+  if (all || what == "fused") {  // dp4a and FFMA in one loop; K = 4 KW + KW
+    run_fused<4, 3>(256, 256, 256, 1, 0);
+    run_fused<4, 3>(128 * Q, 128 * 8, 1024, 9, 4096);
+    run_fused<2, 4>(128 * Q, 128 * 8, 1024, 9, 4096);
+    run_fused<8, 2>(128 * Q, 128 * 8, 1024, 9, 4096);
   }
   if (all || what == "wide") {  // IMAD.WIDE: one exact generic MAC an instruction
     run_gemm<3, 4, 8, 3, 2>(128, 128, 512, 1, 0, 0);

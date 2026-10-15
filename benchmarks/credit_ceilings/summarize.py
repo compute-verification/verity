@@ -20,6 +20,7 @@ CREDIT = {
     "smem_lut": ("shared-memory lookups", 0.094),
     "smem_lut8": ("shared-memory lookups", 0.094),
     "corun_dp4a_ffma": ("dp4a + SWAR + lookups", 0.453),
+    "fused_dp4a_ffma": ("dp4a (the FMA pipe)", 0.250),
 }
 
 
@@ -53,6 +54,11 @@ def main(out: Path) -> None:
                 f"while both ran (alone at one block a SM: {r['dp4a_alone_macs_per_sm_clk']:.1f} and "
                 f"{r['ffma_alone_macs_per_sm_clk']:.1f}); co-run time over the sum of alone times "
                 f"{r['corun_over_sum_of_alone']:.3f}."
+            )
+        if r.get("route") == "fused_dp4a_ffma":
+            print(
+                f"\nFused ({r['config']}, Kd {r['Kd']}, Kf {r['Kf']}): dp4a {r['dp4a_macs_per_sm_clk']:.1f} + FFMA "
+                f"{r['ffma_macs_per_sm_clk']:.1f} = {r['macs_per_sm_clk']:.1f} MACs/SM/clk."
             )
     print("\n| probe | mix (dp4a, imad, ffma, lop3, ffma2, imad.wide) | warp instr/SM/clk | dp4a | imad | ffma | lop3 | ffma2 | imad.wide | MAC-equivalent/SM/clk | clock64 MHz |")
     print("|---|---|---|---|---|---|---|---|---|---|---|")
