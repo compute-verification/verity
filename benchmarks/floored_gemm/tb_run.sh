@@ -63,3 +63,4 @@ gpu-lease 1 --wait --max-min 30 -- bash -c '
   done'
 python3 $D/tb_table.py "$O/bench.jsonl" "$O" > "$O/table.md" 2> "$O/table.err"
 cat "$O/rc.txt" "$O/table.md"
+[ "${DIFF:-1}" = 1 ] && python3 $D/diff.py --trials "${DIFF_TRIALS:-200000}" --json "$O/diff.json" > /dev/null 2> "$O/diff.err"

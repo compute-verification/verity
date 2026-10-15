@@ -169,7 +169,7 @@ def main() -> int:
 
     # one skipped k column at one checkpoint: δ[r, c] = −a_r b_c over a whole warp tile (32 x 32, the W config), with
     # nonzero codes; R unchanged needs all 16 receipt rows to cancel
-    NT = max(2000, N // 20)
+    NT = min(4000, max(2000, N // 20))
     out["rank1_skip"] = {}
     Tt = honest(rng, NT * 32 * 32, 16).reshape(NT, 32, 32)
     av = rng.integers(1, 128, size=(NT, 32)) * rng.choice([-1, 1], size=(NT, 32))
