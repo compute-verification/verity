@@ -28,6 +28,8 @@ Part 11: recursive Strassen inside one block saves L - L^(log2 7 - 2) per merge-
 L per distinct word is asymptotically tight.
 Part 12: symmetric Lemma C: links adding one word save at most L in total with mixed products counted once, whatever
 junk the word carries (on a row star, sum_t rank >= 2L(k-1) + (k-2) rank Z_YY for any word, step by step).
+Part 13: d*L for two words on a cross (a D-row and a D-column): labels on the two sides coupled through one direction
+lam cancel both words and reach rank P >= k - rank B, unless each side adds one word.
 """
 
 import random
@@ -1234,7 +1236,8 @@ def part11(rng):
         assert n_products == 7 ** k and n_products >= L * (targets - H_prime - W_prime), "Theorem C fails"
         saved = L * targets - n_products
         assert saved * 4 ** k == (8 ** k - 7 ** k) * words
-        rows.append(f"L={L}: {n_products} products for {words} targets, {saved / words:.3f} = L - L^0.807 saved per word")
+        rows.append(f"L={L}: {n_products} products for {words} targets, "
+                    f"{saved / words:.3f} = L - L^0.807 saved per word")
     print("[per-word charge] recursive Strassen in one block, every word checked exactly: " + "; ".join(rows)
           + "; so Theorem C's charge of L per distinct word is asymptotically tight")
 
@@ -1400,6 +1403,91 @@ def part12(rng):
           "star: ok")
 
 
+def cross_labels(B, S, T, lam, p):
+    """Rank-1 labels u_t h0^T on S (the row side) and g0 v_t^T on T (the column side), coupled through lam in F^2:
+    the columns of U (and V) are a basis of {x : B_S x in span lam}, with B_S U = lam g0^T and B_T V = -lam h0^T.
+    None if g0 or h0 vanishes (lam outside im B_S or im B_T)."""
+    def side(idx):
+        Bs = B[:, idx]
+        X = nullspace(((lam[1] * Bs[0] - lam[0] * Bs[1]) % p).reshape(1, -1), len(idx), p).T % p
+        i = 0 if lam[0] % p else 1
+        return X, Bs @ X % p * pow(int(lam[i]), p - 2, p) % p
+    U, BU = side(S)
+    V, BV = side(T)
+    i = 0 if lam[0] % p else 1
+    g0, h0 = BU[i], -BV[i] % p
+    if not g0.any() or not h0.any():
+        return None
+    labels = {}
+    for n, t in enumerate(S):
+        labels[t] = np.outer(U[n], h0) % p
+    for n, t in enumerate(T):
+        labels[t] = np.outer(g0, V[n]) % p
+    return labels, U.shape[1], V.shape[1]
+
+
+def part13(rng):
+    """d*L for two words on a cross (a D-row and a D-column, with or without the cell where they meet): the coupled
+    labels cancel both words, rank P = k + 2 - rank B_S - rank B_T - eps (eps = 1 iff the center is present with
+    beta_c on span lam, whichever side holds it), and some choice of side and lam reaches k - rank B unless each
+    side adds one word (Lemma C per side). Then the Psi identity and the bound at L = 2 against random words."""
+    counts = {"label": 0, "one word per side": 0, "rank B = 1": 0}
+    psi = 0
+    for p in (3, 5, 101):
+        for _ in range(150):
+            a, b, center = rng.randint(1, 4), rng.randint(1, 4), rng.random() < 0.5
+            cells = [(0, c) for c in range(1, a + 1)] + [(r, 0) for r in range(1, b + 1)] + [(0, 0)] * center
+            k = len(cells)
+            pool = [v for v in (np.array([rng.randrange(p), rng.randrange(p)]) for _ in range(rng.randint(1, 4)))
+                    if v.any()] or [np.array([1, 0])]
+            B = np.array([pool[rng.randrange(len(pool))] if rng.random() < 0.6 else
+                          np.array([rng.randrange(1, p), rng.randrange(p)]) for _ in range(k)]).T % p
+            rB = rank(B, p)
+            if rB < 2:
+                counts["rank B = 1"] += 1
+                continue
+            rows, cols, c = list(range(a)), list(range(a, a + b)), [k - 1] * center
+            best, single = -1, False
+            for S, T in ((rows + c, cols), (rows, cols + c)):
+                single |= rank(B[:, S], p) == 1 and rank(B[:, T], p) == 1
+                for lam in [B[:, t] for t in range(k)] + [np.array([1, 0]), np.array([0, 1])]:
+                    got = cross_labels(B, S, T, lam, p)
+                    if got is None:
+                        continue
+                    labels, dU, dV = got
+                    assert dU == len(S) - rank(B[:, S], p) + 1 and dV == len(T) - rank(B[:, T], p) + 1
+                    for j in range(2):
+                        assert not (sum(B[j, t] * labels[t] for t in range(k)) % p).any(), "labels do not cancel"
+                    Pm = np.zeros((dU * (b + 1), dV * (a + 1)), dtype=np.int64)
+                    for t, (r, col) in enumerate(cells):
+                        Pm[r * dU:(r + 1) * dU, col * dV:(col + 1) * dV] = labels[t]
+                    eps = int(bool(c) and rank(np.stack([B[:, c[0]], lam]), p) == 1)
+                    rP = rank(Pm, p)
+                    assert rP == k + 2 - rank(B[:, S], p) - rank(B[:, T], p) - eps, "rank P formula fails"
+                    best = max(best, rP)
+                    if psi < 40 and p == 101 and rP >= k - rB:
+                        L = 2
+                        shape = Shape(b + 1, a + 1, L, L)
+                        lc = [((r, col), 0) for r, col in cells]
+                        Ds = [shape.D(*x) for x in lc]
+                        Zs = [random_word(shape, lc, rng, p) for _ in range(2)]
+                        Ws = [(B[0, t] * Zs[0] + B[1, t] * Zs[1]) % p for t in range(k)]
+                        Psi_D = sum(np.kron(labels[t], Ds[t]) for t in range(k)) % p
+                        Psi_DW = sum(np.kron(labels[t], (Ds[t] - Ws[t]) % p) for t in range(k)) % p
+                        assert np.array_equal(Psi_D, Psi_DW) and rank(Psi_D, p) == L * rP, "Psi identity fails"
+                        assert sum(rank((D - W) % p, p) for D, W in zip(Ds, Ws)) >= L * (k - rB), "d*L fails"
+                        psi += 1
+            if best >= k - rB:
+                counts["label"] += 1
+            else:
+                assert single, (cells, B.tolist(), best, k - rB)
+                counts["one word per side"] += 1
+    print(f"[crosses, d = 2] GF(3), GF(5), GF(101): coupled labels cancel both words and rank P = k + 2 - rank B_S - "
+          f"rank B_T - eps: ok; k - rank B reached ({counts['label']}) or one word per side "
+          f"({counts['one word per side']}), rank B = 1 ({counts['rank B = 1']}); Psi identity and d*L bound at L = 2 "
+          f"against random words ({psi}): ok")
+
+
 def part4(rng):
     count = 0
     for (P, Q, m, L, trials) in ((2, 2, 4, 2, 60), (2, 3, 4, 4, 30), (2, 2, 6, 3, 30)):
@@ -1418,7 +1506,7 @@ def part4(rng):
 
 if __name__ == "__main__":
     rng = random.Random(20261015)
-    parts = sys.argv[1:] or ["1", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"]
+    parts = sys.argv[1:] or ["1", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"]
     if "1" in parts:
         part1_2(rng)
     if "3" in parts:
@@ -1441,3 +1529,5 @@ if __name__ == "__main__":
         part11(rng)
     if "12" in parts:
         part12(rng)
+    if "13" in parts:
+        part13(rng)
