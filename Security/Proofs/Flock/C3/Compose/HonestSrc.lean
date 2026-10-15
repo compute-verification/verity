@@ -346,3 +346,7 @@ theorem hbr_honest_src {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Arr
 end
 
 end FlockC3.Compose
+
+#print axioms FlockC3.Compose.hbr_honest_src
+#print axioms FlockC3.Compose.covers_atSrc
+#print axioms FlockC3.Compose.sched_of_holoRounds
