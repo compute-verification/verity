@@ -1074,7 +1074,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
             elif a.get("digest") != b["digest"]:
                 fails.append(f"guarantees: the digest recorded for {m} is not the SHA-256 of its definitions; "
                              f"`python tools/verity/lean/merge.py --normalize` recomputes it")
-    records, why = assumption_records(policy, now_reads, update, owner)
+    records, why = assumption_records(policy, now_reads, update, owner, reads)
     fails += why
     out = dict(policy)
     if kept:
@@ -1084,12 +1084,16 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     return fails, out
 
 
-def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str | None) -> tuple[dict, list[str]]:
+def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str | None,
+                       reads: dict | None = None) -> tuple[dict, list[str]]:
     """The `assumptions` records as the build has them, and the failures: each named assumption (a definition of the spec,
     stated as a `Prop` and taken as a hypothesis or read inside a guarantee's statement) has an `owner` and the digest its
     `reads` record holds, so a changed assumption shows as its own record, and an entry no guarantee reads fails.  An
     update writes the digests, drops an entry no guarantee reads, and converts a list of assumption modules into the
-    definitions the guarantees read there, each owned by the one owner of the guarantees that read it (or ``owner``)."""
+    definitions the guarantees read there, each owned by the one owner of the guarantees that read it (or ``owner``).
+    A `Prop` a guarantee reads in an assumptions module (a module path with an `Assumptions` component) that the lock
+    doesn't list fails, and an update adds it the same way: an entry lost in a merge is never silent, and a
+    hypothesis that applies an assumption to the guarantee's own variables (`h : Premises.P x`) is read like any other."""
     assumed, fails, out = policy.get("assumptions", {}), [], {}
     read = {d: (m, h, g["guarantees"]) for m, g in now_reads.items() for d, h in g["definitions"].items()}
     owners = {n: (r or {}).get("owner") for n, r in policy.get("guarantees", {}).items()}
@@ -1121,6 +1125,18 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
         elif rec["digest"] != h:
             fails.append(f"assumptions: {a}'s definition in {m} changed; run `audit.py --update` and commit the record "
                          f"(Daniel's DM shows the change when it lands)")
+    props = {n for es in (reads or {}).values() for n, e in es.items() if e.get("prop")}
+    for d, (m, h, by) in sorted(read.items()):
+        if d in assumed or d not in props or "Assumptions" not in m.split("."):
+            continue
+        if update:
+            who = {owners.get(g) for g in by} - {None}
+            mine = who.pop() if len(who) == 1 else owner
+            out[d] = ({"owner": mine} if mine else {}) | {"digest": h}
+        else:
+            fails.append(f"assumptions: {', '.join(by)} read {d}, a Prop of the assumptions module {m}, which the lock "
+                         f"doesn't list; run `audit.py --update` to add it with its readers' owner and commit the record "
+                         f"(Daniel's DM shows it when it lands)")
     return out, fails
 
 

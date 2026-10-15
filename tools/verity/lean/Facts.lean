@@ -70,6 +70,12 @@ def kind : ConstantInfo → String
   | .ctorInfo _ => "constructor"
   | .recInfo _ => "recursor"
 
+/-- Whether a definition states a `Prop` (its type, past its binders, is `Prop`): what a named assumption is. -/
+def propValued : ConstantInfo → Bool
+  | .defnInfo d => d.type.getForallBody == .sort .zero
+  | .opaqueInfo d => d.type.getForallBody == .sort .zero
+  | _ => false
+
 def hex (x : UInt64) : String :=
   let s := (Nat.toDigits 16 x.toNat).foldl String.push ""
   "".pushn '0' (16 - s.length) ++ s
@@ -435,7 +441,7 @@ def pinInfo (env : Environment) (meaning : Array Name) (axioms : Std.HashMap Nam
     let fam := family c
     let own := (meaningDeps ci).foldl (fun (s : NameSet) d => if d != c && fam.isPrefixOf d then s.insert d else s) {}
     Json.mkObj [("name", toJson c.toString), ("module", toJson m.toString), ("kind", toJson (kind ci)),
-      ("hash", toJson s!"{hex ci.type.hash}{hex (valueHash ci)}"),
+      ("prop", toJson (propValued ci)), ("hash", toJson s!"{hex ci.type.hash}{hex (valueHash ci)}"),
       ("own", toJson (own.toArray.qsort Name.lt |>.map toString)),
       ("lines", toJson (ranges[c]?.map fun (d : DeclarationRanges) => #[d.range.pos.line, d.range.endPos.line]))]
   return Json.mkObj [("kind", toJson (kind ci)), ("module", toJson ((moduleOf n).map toString)),
