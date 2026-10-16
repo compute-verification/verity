@@ -21,7 +21,8 @@ when every table's Merkle scheme is the registry's, `Zk.verify_eq_verifyWith`):
   accounting `Refine.ligerito_refines` proves) and the pair's two `ρ` coins after the last lane challenge;
 * so an accepted rep passed level 0's Merkle check on its proof's rows at the positions of round `zkQueryRound` of its
   stream (`zkQueryRound_verifyRepWith`), and the reader's columns (`zkRepColsOf`) are those positions with those rows
-  (`zkRepColsOf_verifyRepWith`), for every rep of every table of an accepted session (`zkQueryRound_verifyWithM`).
+  (`zkRepColsOf_verifyRepWith`), for every rep of every table of an accepted session (`zkQueryRound_verifyWithM`;
+  for `Zk.verify` on the registry's Merkle schemes, `zkQueryRound_verify`).
 
 Each table is checked on its own: its reps' streams, its schedule's level 0 and its own `root_B[i]`. A multi-table
 session commits one level-0 codeword per table, so `zkRunCols` reads one table's.
@@ -536,5 +537,33 @@ theorem zkQueryRound_verifyWithM (hs : Hashes V) (spec : SessionSpec) (tabs : Ar
   obtain ⟨sch, tPad, c, hsch, hr⟩ := hreps i hi
   refine ⟨sch, tPad, hsch, fun r hr2 => ?_⟩
   exact zkRepColsOf_verifyRepWith hs spec tabs[i] sch tPad sess i r _ c hsch (hr r hr2)
+
+/-- **The same for the deployed `--zk` verifier** (`Zk.verify`) on tables whose Merkle schemes are the registry's
+(`Zk.verify_eq_verifyWith`; every table `Stmt.setupTables` sets up, `setupTables_named`). -/
+theorem zkQueryRound_verify (spec : SessionSpec) (tabs : Array Setup) (record : String) (proofs : Array ByteArray)
+    (hN : ∀ st ∈ tabs, st.merkle.Named) (h : Flock.Zk.verify spec tabs record proofs = .ok ()) :
+    ∃ sess : Session, Record.decodeWith (Hashes.ofSha512 Sha512.hash : Hashes V) spec record = .ok sess ∧
+      tabs.size = spec.tables.size ∧
+      ∀ (i : ℕ) (hi : i < tabs.size), ∃ (sch : Flock.Schedule) (tPad : ℕ),
+        Flock.Zk.schedule tabs[i].m = .ok (sch, tPad) ∧ ∀ r < 2,
+        ∃ (stream : StreamRec) (extras : Array Flock.Claim) (zp : Flock.Zk.ZkProof),
+          sess.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some stream ∧
+          Flock.Zk.decode (shapeZK tabs[i] sch extras) proofs[2 * i + r]! = .ok zp ∧
+          Claims.Flock.zkQueryRound tabs[i].m tabs[i].kLog sch.k0 (2 + extras.size) < stream.rounds.size ∧
+          Claims.Flock.zkRepColsOf (Claims.Flock.zkProofShape tabs[i].m tabs[i].kLog (2 + extras.size)
+              tabs[i].merkle.digestLen (if tabs[i].merkle.saltBytes = 0 then none else some tabs[i].merkle.saltBytes))
+              stream.rounds proofs[2 * i + r]! =
+            Claims.Flock.zkRepCols (sch.levels.getD 0 default)
+              (stream.rounds[Claims.Flock.zkQueryRound tabs[i].m tabs[i].kLog sch.k0 (2 + extras.size)]!).coins
+              zp.proof.ligerito.initialProof.rows ∧
+          merkleCheckWith (tabs[i].merkle.opsWith (Hashes.ofSha512 Sha512.hash : Hashes V)) tabs[i].merkle zp.proof.cap
+            (sch.levels.getD 0 default).cap (sch.levels.getD 0 default).d
+            (positions (sch.levels.getD 0 default)
+              (stream.rounds[Claims.Flock.zkQueryRound tabs[i].m tabs[i].kLog sch.k0 (2 + extras.size)]!).coins)
+            zp.proof.ligerito.initialProof.rows zp.proof.ligerito.initialProof.siblings
+            zp.proof.ligerito.initialProof.salts (2 ^ (sch.levels.getD 0 default).lanes + Zk.EXTRA_LANES) = .ok () ∧
+          zp.proof.cap.foldl (· ++ ·) ByteArray.empty = sess.rootB[i]! :=
+  zkQueryRound_verifyWithM (Hashes.ofSha512 Sha512.hash : Hashes V) spec tabs record proofs
+    (by rw [Flock.Zk.verify_eq_verifyWith spec tabs record proofs hN] at h; exact h)
 
 end FlockSoundness.ZkQuery
