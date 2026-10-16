@@ -17,7 +17,7 @@ with `E₂`'s coins; its judged draw is the judged run's coins `r₀` with `E₂
 * **Knowledge soundness** (`servedERep_bad_le`): the composed extractor fails on an accepted run only if `E₂` fails at
   the judged run, or `E₂` succeeds there and the inner stage fails (`PrBadServed`, the inner stage's failure at the
   outer's output). So the outer's `KS`/`KSLin` and a bound on the inner's term give the composed extractor's `KS`
-  (`KS_servedERep`, `KS_servedERep_lin`, `KSLin_servedERep`), with an extraction-based finder's linear term folded in
+  (`KSLin_of_servedERep`, `KS_servedERep`, `KSLin_servedERep`), with an extraction-based finder's linear term folded in
   through `Finder.either`, which runs two finders and outputs a collision either finds.
 -/
 
