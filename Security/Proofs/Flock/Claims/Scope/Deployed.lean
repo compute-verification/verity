@@ -21,7 +21,7 @@ theorem relS_deployed {zk : Bool} {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : FlockDeploy.parse zk relation x = some s) (hin : Claims.Flock.InScope zk s) (w : Claims.Flock.Wit) :
     ∃ p : Parsed, parseBytes (FlockDeploy.readOf zk) x = some p ∧ s = toReadable relation p ∧
       (Claims.Flock.RelS s w ↔ ∀ c (hc : c < p.sts.size), ∃ L : FlockSoundness.Layout p.sts[c],
-        (L.model (FlockSoundness.Refine.regionsOf p.sts[c])).Satisfies (zOf (2 ^ s.m) w c p.sts[c].m)) := by
+        (L.model (FlockSoundness.Refine.regionsOf p.sts[c])).Satisfies (zOf p.sts.size w c p.sts[c].m)) := by
   obtain ⟨p, hp, rfl⟩ := Option.map_eq_some_iff.1 hs
   obtain ⟨r, -, hrp⟩ := Option.bind_eq_some_iff.1 hp
   obtain ⟨-, -, -, -, -, ht, -, -, -, hpi, -⟩ := hin

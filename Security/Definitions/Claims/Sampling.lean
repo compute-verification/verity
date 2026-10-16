@@ -512,10 +512,10 @@ def Deploy.k (D : Deploy Coin Col T) (x : Msg) : ℕ := 2 ^ 40 * (nRU D x + nPU 
 /-- The waits give up after `K = 2^128·k` reruns. -/
 def Deploy.cap (D : Deploy Coin Col T) (x : Msg) : ℕ := 2 ^ 128 * D.k x
 
-/-- The opened columns of a checked unit's session. -/
-def Deploy.sessionCols (D : Deploy Coin Col T) (x : Msg) (u : ℕ × ℕ) (v : Seen) : List (ℕ × Col) :=
+/-- The opened columns of a checked unit's session, each table's, as Flock's `E^rep` reads a run's opening. -/
+def Deploy.sessionCols (D : Deploy Coin Col T) (x : Msg) (u : ℕ × ℕ) (v : Seen) : List (ℕ → List (ℕ × Col)) :=
   match D.session x u v with
-  | some (_, vS) => D.flock.cols vS
+  | some (_, vS) => [D.flock.cols vS]
   | none => []
 
 /-- The coins of one session's `E^rep`. -/
@@ -536,7 +536,7 @@ noncomputable def unitExt (D : Deploy Coin Col T) (decode : List (ℕ × Col) �
   match D.session x u v with
   | none => .ret []
   | some (xS, _) =>
-    (firstWait (D.innerK x) (D.sessionCols x u) (Flock.assemble D.flock.parse decode D.flock.read xS)
+    (firstWait (D.innerK x) (D.sessionCols x u) (Flock.assemble D.flock.parse D.flock.table decode D.flock.read xS)
         (Flock.check D.flock.parse xS)
         ((List.finRange (D.innerWaits x)).map fun i =>
           (List.finRange (D.innerCap x)).map fun j => forkOn (D.rounds x u) r (ρ i j))).bind fun
