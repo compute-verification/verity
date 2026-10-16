@@ -4628,7 +4628,12 @@
   }
  },
  "shape": {
-  "premises": ["Definitions.Accounting.Actual", "Definitions.Accounting.Physical", "Models.Accounting.Assumptions.PouwWork", "Proofs.Flock.Recursive.Premises"],
+  "premises": [
+   "Definitions.Accounting.Actual",
+   "Definitions.Accounting.Physical",
+   "Models.Accounting.Assumptions.PouwWork",
+   "Proofs.Flock.Recursive.Premises"
+  ],
   "properties": {
    "Flock.SecurityProofs.PublicAudit": {
     "conjuncts": [
@@ -15771,11 +15776,17 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
    ]
   },
+  "Models.Accounting.Assumptions.PouwFloor": {
+   "digest": "4f9b562c931e2da9c956607655fcd71f416e3789589c2c2a40b16527b84a2885",
+   "definitions": {
+    "Accounting.Assumptions.PouwFloorOff": "cb69980ba4455ac7c7d3ab82f79bdb5feffc93ef386cb447f23bb32f3f2542f7"
+   },
+   "guarantees": ["Accounting.SecurityProofs.PouwLocalOff"]
+  },
   "Models.Accounting.Assumptions.PouwWork": {
-   "digest": "c7c56c81ae1e51b82ad42c21ee71a1ef2f4b742c30549c10b8a5c741d3c13e77",
+   "digest": "d7ef5345e7bd10ce96d0d77e73b4de28014de81cb02ee711d7ef8bdfd028068c",
    "definitions": {
     "Accounting.Assumptions.PouwDetection": "3fc26faa7c656f11bfca790d2e20bd400fe1d80ed62b71c22fe2f32e056b67e1",
-    "Accounting.Assumptions.PouwFloorOff": "cb69980ba4455ac7c7d3ab82f79bdb5feffc93ef386cb447f23bb32f3f2542f7",
     "Accounting.Assumptions.PouwHelpBound": "f29e9b0238ad0658794339e9247e6e746b53c7c915d232cfa44a1db23084ef10",
     "Accounting.Assumptions.PouwLuck": "0a53fdf464410f9e8d1e6a3af8793d11656045cb65e70da05e11362d45ac4c4c"
    },
