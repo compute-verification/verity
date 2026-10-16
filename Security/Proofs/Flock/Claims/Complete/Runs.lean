@@ -4,10 +4,11 @@ import Proofs.Flock.Claims.Complete.Json
 # The honest session runs
 
 `sessionRuns_goal`: the goal `SessionRuns`, given `StmtOk` (no keyed coin tree, so the record's `hello` is the
-statement's) and one named hypothesis on the prover's pieces, `ProverRuns`: at every good case's table, the table's
-extra claims at the link's points return, and each rep returns, on the level-0 commitment and those claims, from any
-sends. The level-0 commitment itself returns (`commitP_ok`: through `Hashes.ofSha512` every leaf and node hash is a
-`pure`).
+statement's) and one named hypothesis on the prover's pieces, `ProverRuns`: at every good case's table, the regions
+fit (`RegionsFit`: each region's bytes at each block are its free bits), and each rep returns, on the level-0 commitment
+and the extra claims at the link's points, from any sends. The level-0 commitment returns (`commitP_ok`: through
+`Hashes.ofSha512` every leaf and node hash is a `pure`), and so do the extra claims where the regions fit
+(`extraClaims_ok`).
 
 `Runs y l P`: `y` returns from the sends `l`, with `P` of its value and the sends after; `Runs.bind`, `Runs.forIn_array`
 and `Runs.mapM_singleton` walk the session.
@@ -117,14 +118,63 @@ theorem commitP_ok (h : ByteArray → ByteArray) (ms : MerkleScheme) (lv : Level
   dsimp only
   exact ok_bind (g := ForInStep.yield) (mapM_array_ok _ (fun _ => hn _ _) _) fun _ => ⟨_, rfl⟩
 
+/-! ## The extra claims return
+
+`regionValue` refuses only a block whose bytes are not its region's free bits, a property of the statement. -/
+
+theorem forIn_list_ok_mem {α β : Type} (f : α → β → V (ForInStep β)) (s : List α)
+    (hf : ∀ a ∈ s, ∀ b, ∃ b', f a b = .ok (.yield b')) :
+    ∀ (xs : List α), (∀ a ∈ xs, a ∈ s) → ∀ b : β, ∃ b', forIn xs b f = .ok b'
+  | [], _, b => ⟨b, rfl⟩
+  | a :: xs, hx, b => by
+    obtain ⟨b₁, h₁⟩ := hf a (hx a List.mem_cons_self) b
+    obtain ⟨b₂, h₂⟩ := forIn_list_ok_mem f s hf xs (fun x hx' => hx x (List.mem_cons_of_mem a hx')) b₁
+    exact ⟨b₂, by rw [List.forIn_cons, h₁]; exact h₂⟩
+
+theorem forIn_upto_ok {β : Type} (n : ℕ) (b : β) (f : Nat → β → V (ForInStep β))
+    (hf : ∀ a < n, ∀ b, ∃ b', f a b = .ok (.yield b')) : ∃ b', forIn [0:n] b f = .ok b' := by
+  rw [Std.Legacy.Range.forIn_eq_forIn_range']
+  refine forIn_list_ok_mem f _ (fun a ha b => hf a ?_ b) _ (fun _ h => h) b
+  simp only [List.mem_range'_1] at ha
+  simp [Std.Legacy.Range.size] at ha
+  omega
+
+theorem forIn_array_ok {α β : Type} (xs : Array α) (b : β) (f : α → β → V (ForInStep β))
+    (hf : ∀ a ∈ xs, ∀ b, ∃ b', f a b = .ok (.yield b')) : ∃ b', forIn xs b f = .ok b' := by
+  rw [← Array.forIn_toList]
+  exact forIn_list_ok_mem f xs.toList (fun a ha => hf a (Array.mem_toList_iff.1 ha)) _ (fun _ h => h) b
+
+/-- **A statement's regions fit**: each region's bytes at each block are its free bits. -/
+def RegionsFit (st : Flock.Stmt) : Prop :=
+  ∀ reg ∈ st.regions, ∀ b < 2 ^ st.nbl, (reg.bytes b).size * 8 = 2 ^ reg.free.size
+
+theorem regionValue_ok (st : Flock.Stmt) (reg : Region)
+    (h : ∀ b < 2 ^ st.nbl, (reg.bytes b).size * 8 = 2 ^ reg.free.size) (r : Array F128) :
+    ∃ v, st.regionValue reg r = .ok v := by
+  unfold Stmt.regionValue
+  refine ok_bind (g := id) (forIn_upto_ok _ _ _ fun b hb acc => ?_) fun _ => ⟨_, rfl⟩
+  dsimp only
+  rw [show ((reg.bytes b).size * 8 != 2 ^ reg.free.size) = false by simp [h b hb]]
+  simp only [Bool.false_eq_true, ↓reduceIte]
+  refine ok_bind (g := ForInStep.yield) (forIn_range_ok _ _ _ fun i s => ?_) fun _ => ⟨_, rfl⟩
+  refine ok_bind (g := ForInStep.yield) (forIn_range_ok _ _ _ fun t s => ?_) fun _ => ⟨_, rfl⟩
+  split <;> exact ⟨_, rfl⟩
+
+/-- **The extra claims return** at any points, when the statement's regions fit. -/
+theorem extraClaims_ok (st : Flock.Stmt) (h : RegionsFit st) (pts : Array (Array F128)) :
+    ∃ e, st.extraClaims pts = .ok e := by
+  unfold Stmt.extraClaims
+  refine ok_bind (g := id) (forIn_array_ok _ _ _ fun reg hreg out => ?_) fun _ => ⟨_, rfl⟩
+  refine ok_bind (g := ForInStep.yield) (forIn_array_ok _ _ _ fun r _ out => ?_) fun _ => ⟨_, rfl⟩
+  exact ok_bind (g := ForInStep.yield) (regionValue_ok st reg (h reg hreg) r) fun _ => ⟨_, rfl⟩
+
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **The prover's pieces return**, at every good case's table with its schedule: the table's extra claims at the
-link's points, and each rep on the level-0 commitment of the trace's packed table (under any salts) and those claims,
-under any salts, nonces and domain, from any sends. -/
+/-- **The prover's pieces return**, at every good case's table with its schedule: the table's regions fit
+(`RegionsFit`, so its extra claims return), and each rep returns on the level-0 commitment of the trace's packed table
+(under any salts) and the extra claims at the link's points, under any salts, nonces and domain, from any sends. -/
 def ProverRuns (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
-  ∀ c : Case H rel, ∀ st sch, c.sts = #[st] → fast100 (Setup.ofCircuit st).m = some sch →
-    (∃ e, (Setup.ofCircuit st).extra (pointsOf c.spec (Claims.coinSeq c.r 0)) = .ok e) ∧
+  ∀ c : Case H rel, ∀ st sch, c.sts = #[st] → fast100 (Setup.ofCircuit st).m = some sch → RegionsFit st ∧
     ∀ salt₀ cm e, commitP (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st).merkle
       (sch.levels.getD 0 default) (packed (tracesOf c.sts c.w)[0]! (Setup.ofCircuit st).m) salt₀ = .ok cm →
     (Setup.ofCircuit st).extra (pointsOf c.spec (Claims.coinSeq c.r 0)) = .ok e →
@@ -139,7 +189,9 @@ theorem sessionRuns_goal (hS : StmtOk H rel) (hR : ProverRuns H rel) : SessionRu
   obtain ⟨hct, -, -, -⟩ := hS c
   have ht : c.spec.tables = #[st.tags.table] := by rw [hsp]; rfl
   obtain ⟨sch, hsch⟩ := Option.isSome_iff_exists.1 (fast100_isSome (m := (Setup.ofCircuit st).m) hm1 hm2)
-  obtain ⟨⟨e, he⟩, hRep⟩ := hR c st sch hst hsch
+  obtain ⟨hreg, hRep⟩ := hR c st sch hst hsch
+  obtain ⟨e, he⟩ := extraClaims_ok st hreg (pointsOf c.spec (Claims.coinSeq c.r 0))
+  replace he : (Setup.ofCircuit st).extra (pointsOf c.spec (Claims.coinSeq c.r 0)) = .ok e := he
   obtain ⟨cm, hcm⟩ := commitP_ok (Claims.hOf H) (Setup.ofCircuit st).merkle (sch.levels.getD 0 default)
     (packed (tracesOf c.sts c.w)[0]! (Setup.ofCircuit st).m) (c.ω.salt 0 0 0)
   rw [hst] at hcm hRep
