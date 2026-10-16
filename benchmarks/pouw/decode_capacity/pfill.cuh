@@ -39,6 +39,9 @@
 #ifndef PF_CTAS
 #define PF_CTAS 2  // blocks an SM: 2 x 48 KB, 4 warps an SMSP
 #endif
+#ifndef PF_DEFER
+#define PF_DEFER 0  // 1: absorb B fragment j's outputs after issuing j + 1's MMAs (same receipt; 16 more registers)
+#endif
 #define PF_TN 1024
 #define DFILL_GATE_W PF_W
 #define DFILL_GATE_S {32, 512}
@@ -121,6 +124,12 @@ __device__ __forceinline__ void pf_block(uint64_t c0, uint64_t c1, uint64_t tile
   rs_compress(st, w);
 }
 
+__device__ __forceinline__ void pf_mma(uint32_t (&d)[4], const uint32_t (&a)[4], uint2 b) {
+  asm("mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%10,%10,%10,%10};"
+      : "=r"(d[0]), "=r"(d[1]), "=r"(d[2]), "=r"(d[3])
+      : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b.x), "r"(b.y), "r"(0));
+}
+
 template <int NC>
 __global__ void __launch_bounds__(32 * PF_W, PF_CTAS) dfill_k(uint64_t c0, uint64_t c1, unsigned long long tile0, int tiles,
                                                        int steps, unsigned long long* __restrict__ rec) {
@@ -193,19 +202,40 @@ __global__ void __launch_bounds__(32 * PF_W, PF_CTAS) dfill_k(uint64_t c0, uint6
         a[c][2] = pf_pm1((R0 >> (16 + 4 * t)) & 15);
         a[c][3] = pf_pm1((R1 >> (16 + 4 * t)) & 15);
       }
+#if PF_DEFER
+      uint32_t pd[4][4];
+      {
+        const uint2 b = *(const uint2*)bp;
+#pragma unroll
+        for (int c = 0; c < 4; c++) pf_mma(pd[c], a[c], b);
+      }
+#pragma unroll 4
+      for (int j = 1; j < PF_TN / 8; j++) {
+        const uint2 b = *(const uint2*)(bp + j * 256);
+        uint32_t nd[4][4];
+#pragma unroll
+        for (int c = 0; c < 4; c++) pf_mma(nd[c], a[c], b);
+#pragma unroll
+        for (int c = 0; c < 4; c++) {
+          pf_absorb<NC>(y[c], z[c], pd[c][0], pd[c][1], pd[c][2], pd[c][3], key);
+#pragma unroll
+          for (int q = 0; q < 4; q++) pd[c][q] = nd[c][q];
+        }
+      }
+#pragma unroll
+      for (int c = 0; c < 4; c++) pf_absorb<NC>(y[c], z[c], pd[c][0], pd[c][1], pd[c][2], pd[c][3], key);
+#else
 #pragma unroll 4
       for (int j = 0; j < PF_TN / 8; j++) {
         const uint2 b = *(const uint2*)(bp + j * 256);
 #pragma unroll
         for (int c = 0; c < 4; c++) {
-          uint32_t d0, d1, d2, d3;
-          asm(
-              "mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%10,%10,%10,%10};"
-              : "=r"(d0), "=r"(d1), "=r"(d2), "=r"(d3)
-              : "r"(a[c][0]), "r"(a[c][1]), "r"(a[c][2]), "r"(a[c][3]), "r"(b.x), "r"(b.y), "r"(0));
-          pf_absorb<NC>(y[c], z[c], d0, d1, d2, d3, key);
+          uint32_t d[4];
+          pf_mma(d, a[c], b);
+          pf_absorb<NC>(y[c], z[c], d[0], d[1], d[2], d[3], key);
         }
       }
+#endif
     }
     const uint64_t K = dseed(c0, c1, tile);
     uint64_t h = 0;
