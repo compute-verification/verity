@@ -11,6 +11,7 @@ import Proofs.Flock.Claims.Sampling.Live
 import Proofs.Flock.Claims.Sampling.Extract
 import Proofs.Flock.Claims.Sampling.Binding
 import Proofs.Flock.Claims.Sampling.Escape
+import Proofs.Flock.Claims.Sampling.Cost
 
 /-! `Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated`, by reflexivity: the guarantee is there for its
 record, which holds the claims' text.
@@ -21,7 +22,8 @@ reruns and amplification (`ERep`), and `ERepCost` (`ERepCost`). The sampling com
 `Proofs.Flock.Claims.Sampling`: each registered draw law's miss bound in `Claims.Pr` (`Sampling.Draws`), the
 executable Bernoulli draw's bound (`Sampling.ExecBernoulli`), every law's live draw's (`Sampling.Live`), the sampled
 extractor and its reruns (`Sampling.Extract`), the boundary values' binding, `KSLin`'s linear term
-(`Sampling.Binding`), and the claims block's escape and miss as the draws' probabilities (`Sampling.Escape`). -/
+(`Sampling.Binding`), the claims block's escape and miss as the draws' probabilities (`Sampling.Escape`), and its
+extractor's reruns and own calls, `Efficient` but for the decoder (`Sampling.Cost`). -/
 
 /-- **The claims are stated** (`Flock.Guarantees.ClaimsStated`). -/
 theorem Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated := rfl
