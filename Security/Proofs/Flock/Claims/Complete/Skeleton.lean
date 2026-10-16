@@ -323,9 +323,9 @@ structure Goals (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Reada
 
 /-! ## The checks proved here -/
 
-/-- `ready` at the case's setup: the session draws a unit and the statement's length fits its word. -/
+/-- `ready` at the case's setup: the session draws a unit and the statement is under `2^56` bytes. -/
 theorem Case.ready_parts {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (c : Case H rel) :
-    c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 64 := by
+    c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 56 := by
   have h := c.ready
   unfold FlockComplete.ready at h
   rw [c.setup] at h
@@ -373,7 +373,7 @@ theorem Run.link_ok {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → R
 theorem Run.final_ok {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (hF : FinalFits H rel) (o : Run H rel) :
     finalOf o.final.encode = some o.final := by
   obtain ⟨h1, h2, h3⟩ := hF o
-  exact finalOf_encode o.ready_parts.2 h1 h2 h3
+  exact finalOf_encode (o.ready_parts.2.trans (by norm_num)) h1 h2 h3
 
 theorem bytes_eq_of_bne {a b : ByteArray} (h : (a != b) = false) : a = b := by
   have h' : (a.data == b.data) = true := by

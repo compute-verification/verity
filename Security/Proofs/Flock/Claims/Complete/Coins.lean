@@ -17,7 +17,8 @@ zerocheck outer coin is `1` (`Bad`), at most `2^-128` per coin element (`pr_slot
 * **`ε`** is their count over `2^128`; `pr_bad_le`: `Pr[Bad] ≤ ε`, a union bound.
 * **`δc`** is `ε` on the statements the deployed verifier can accept (`ready`), and `1` elsewhere: a statement that sets
   up no session, or whose session draws no unit (`checks` ends in `drawLaw zk none`, which refuses), is refused at every
-  run, and a statement of `2^64` bytes or more is past the last message's length word (`Final.encode`).
+  run, and the last message's length words (`Final.encode`) fit only a statement under `2^56` bytes: the record carries
+  the statement's `hello`, which JSON escaping can grow sixfold, past `2^64` bytes for a statement near it.
 * **The composition** (`complete_of`): if the honest prover is accepted at every coin outside `Bad` on every statement in
   scope, ready, with a witness in the relation, then `Claims.Flock.Complete H (deployPlain rel) honestP δc`.
 -/
@@ -132,10 +133,10 @@ def Bad (x : Claims.Msg) {k : ℕ} (r : Fin k → Coin) : Prop := ∃ p ∈ oute
 noncomputable def ε (x : Claims.Msg) : ℝ := (outerSlots x).length / 2 ^ 128
 
 /-- **The statements the deployed verifier can accept**: it sets up the session, the session draws a unit, and the
-statement's length fits the last message's length word. -/
+statement is under `2^56` bytes, so that the last message's lengths fit their words. -/
 def ready (x : Claims.Msg) : Bool :=
   match setupOf false x with
-  | some (s, _, _) => s.read.draw.isSome && decide (x.length < 2 ^ 64)
+  | some (s, _, _) => s.read.draw.isSome && decide (x.length < 2 ^ 56)
   | none => false
 
 /-- **Flock's `δc` at the plain verifier**: `ε` where the verifier can accept, else `1`. -/
