@@ -1,4 +1,5 @@
-"""The one link between the slice's prover and its challenger: JSON lines over a loopback TCP socket, bytes as hex.
+"""The one link between the slice's prover and its challenger: JSON lines over a TCP socket (loopback, or the challenger's
+machine's address when it runs elsewhere), bytes as hex.
 
 A reader thread files each message under (kind, round), so the prover's round loop and its proof worker each wait on their
 own (`take`); `send` is safe from any thread."""
@@ -8,6 +9,7 @@ import json
 import queue
 import socket
 import threading
+import time
 from collections import defaultdict
 
 
@@ -47,12 +49,21 @@ class Wire:
         return msg
 
 
-def connect(port: int) -> Wire:
-    return Wire(socket.create_connection(("127.0.0.1", port)))
+def connect(port: int, host: str = "127.0.0.1", tries: int = 1) -> Wire:
+    """The prover's end; ``tries`` attempts a second apart (a challenger on another machine may still be staging)."""
+    for i in range(tries):
+        try:
+            return Wire(socket.create_connection((host, port)))
+        except OSError:
+            if i == tries - 1:
+                raise
+            time.sleep(1)
+    raise ValueError("tries >= 1")
 
 
-def listen() -> tuple[socket.socket, int]:
+def listen(host: str = "127.0.0.1", port: int = 0) -> tuple[socket.socket, int]:
     s = socket.socket()
-    s.bind(("127.0.0.1", 0))
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s.bind((host, port))
     s.listen(1)
     return s, s.getsockname()[1]

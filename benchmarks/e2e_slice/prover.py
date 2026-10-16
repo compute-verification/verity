@@ -100,7 +100,7 @@ class Prover:
         t2 = time.time()
         self.st = ST.Stager(self.scratch / "circuit.txt", self.ks, self.dither, a.window, a.fold)
         t3 = time.time()
-        self.wire = connect(a.port)
+        self.wire = connect(a.port, a.host, a.connect_tries)
         self.wire.start_reader()
         self.wire.send("hello", m=self.km, n=self.kn, k=a.k, calls=a.calls, stages=a.stages, coins=a.coins, served=a.served,
                        window=a.window, fold=a.fold, session=self.session, b_roots=[t.root.hex() for t in self.tb],
@@ -279,6 +279,8 @@ def main() -> int:
     ap.add_argument("--engine", required=True, help="slice.cu's binary, or fake (fake_engine.py, numpy, small shapes)")
     ap.add_argument("--flock", required=True, help="flock-circuit, or none (no proof: the challenger's checks only)")
     ap.add_argument("--port", type=int, required=True)
+    ap.add_argument("--host", default="127.0.0.1", help="the challenger's machine (its --listen)")
+    ap.add_argument("--connect-tries", type=int, default=1, help="attempts a second apart (a remote challenger may still be staging)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--scratch", required=True)
     ap.add_argument("--rounds", type=int, default=24)

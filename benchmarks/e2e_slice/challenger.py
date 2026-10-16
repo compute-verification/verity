@@ -210,7 +210,7 @@ class Challenger:
             self.rec(w, serve_s=0.0, session=None)
             self.final(w, "passed", "checks only (no proof: --flock none)")
             return
-        cmd = [self.a.flock, "serve", "--zk", "--listen", "127.0.0.1:0", "--out", str(d / "sessions"), "--instances",
+        cmd = [self.a.flock, "serve", "--zk", "--listen", f"{self.a.listen}:0", "--out", str(d / "sessions"), "--instances",
                str(d / "pub.bin"), "--circuit", str(self.st.circuit), "--pin", self.st.pin, "--operator", "loopback",
                "--draw", f"subset:{COORDS}", "--sessions", "1"]
         env = {**os.environ, "RAYON_NUM_THREADS": str(self.a.verify_threads)}
@@ -266,6 +266,9 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--scratch", required=True)
     ap.add_argument("--port-file", required=True)
+    ap.add_argument("--listen", default="127.0.0.1",
+                    help="the address the link and the C-Flock verifier listen on: this machine's own when the prover runs elsewhere")
+    ap.add_argument("--port", type=int, default=0, help="the link's port (0: any, written to --port-file)")
     ap.add_argument("--cadence", type=float, default=10.0)
     ap.add_argument("--verify-threads", type=int, default=16)
     ap.add_argument("--p", type=float, default=0.75)
@@ -280,7 +283,7 @@ def main() -> int:
     t = time.time()
     st = ST.Stager(Path(a.scratch) / "circuit.txt", a.k // 32, a.served == "dither", a.window, a.fold)
     stager_s = time.time() - t
-    srv, port = listen()
+    srv, port = listen(a.listen, a.port)
     Path(a.port_file).write_text(str(port))
     conn, _ = srv.accept()
     wire = Wire(conn)
