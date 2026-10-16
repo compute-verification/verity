@@ -631,6 +631,23 @@ def tp_manifest_complete(d: str) -> bool:
     return _field(f"{d}/manifest.json", lambda m: m.get("complete")) == "True"
 
 
+def tp_manifest_not_of_record(d: str, ck: Any) -> str:
+    """Why a TP row's `<d>/manifest.json` is not the Commit's manifest of record ("" when it is): complete, built under the query of
+    record with a partition, under the row's tap policies, recording the strict word check it passed.  The per-rank Program digests are
+    tp-commit's own check (each rank's rows against its Build), so a manifest the Build or a CPU host wrote is reused, not rebuilt on the
+    GPU host ([GLM-5.3] the rebuild is hours of CPU and ~470 GB beside the engine)."""
+    doc = load_json(f"{d}/manifest.json")
+    if not isinstance(doc, dict) or doc.get("complete") is not True:
+        return "absent or not complete"
+    q = doc.get("query") if isinstance(doc.get("query"), dict) else {}
+    if q.get("query_id") != QUERY_OF_RECORD or not isinstance(q.get("partition"), dict):
+        return f"not built under the query of record {QUERY_OF_RECORD} with a partition"
+    mismatch = policy_mismatch(q, ck)
+    if mismatch:
+        return f"disagrees with this Commit's taps on the {', '.join(mismatch)} policy"
+    return word_check_refusal(q) or ""
+
+
 def tp_check_line(m: str) -> str:
     return _field(f"{m}/tp2_match.json", lambda d: " ".join(str(x) for x in [
         "pass", d["pass"], "structure", d["structure"]["pass"], "n_coll_r0", d["structure"]["per_rank"]["0"]["n_collectives"], "sig_len",

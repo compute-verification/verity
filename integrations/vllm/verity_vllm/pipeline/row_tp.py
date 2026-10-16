@@ -393,10 +393,12 @@ class TpRow(Row):
             if not R.tp_rank_workload_digest(self.bdir, r):
                 self.verdict("commit", "FAIL", f"GP-01 workload digest absent for rank {r}: Build first")
                 raise Stop(12)
-        if self.config_run and R.tp_manifest_complete(d):
-            rc_man = 0                            # the Build's, word-checked; tp-commit checks its per-rank Programs against the Build
-            self.log("required manifest of record: the Build's (config run)")
+        why = "" if self.config_run and R.tp_manifest_complete(d) else R.tp_manifest_not_of_record(d, ck)
+        if not why:
+            rc_man = 0                            # word-checked under the row's taps; tp-commit checks its per-rank Programs against the Build
+            self.log(f"required manifest of record: the one beside the Build{' (config run)' if self.config_run else ''}")
         else:
+            self.log(f"manifest.json beside the Build is not of record ({why}): rebuilding it")
             rc_man = self.manifest_global("commit.required_manifest", to_k)
         man = R.tp_manifest_line(d)
         self.log(f"manifest rc={rc_man}: {man or 'no manifest.json'}")
