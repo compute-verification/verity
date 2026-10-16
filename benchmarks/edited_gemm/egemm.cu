@@ -564,7 +564,14 @@ __global__ void __launch_bounds__(256, 3) qwe(const uint16_t* __restrict__ x, in
   int q, e;   // the quantizer's block, else the edit's
   if constexpr (ORD == 0) { q = b < qb ? b : -1; e = b - qb; }
   else if constexpr (ORD == 1) { q = b >= nw ? b - nw : -1; e = b; }
-  else { q = b % 3 == 0 && b / 3 < qb ? b / 3 : -1; e = b - min((b + 2) / 3, qb); }
+  else {
+    // every third block quantizes while quantizer blocks remain; when the grid runs out first (qb > ceil(grid/3)),
+    // the blocks past the last edit take the rest
+    const int Q = min(qb, ((int)gridDim.x + 2) / 3);
+    q = b % 3 == 0 && b / 3 < qb ? b / 3 : -1;
+    e = b - min((b + 2) / 3, qb);
+    if (q < 0 && e >= nw) q = Q + (e - nw);
+  }
   if (q >= 0) quant_blk<true>(q, sm, sp, x, X, PA, rows, k, inv_s, sg);
   else wedit_blk(e, sm, W, Wp, PB, k, sg);
 }
