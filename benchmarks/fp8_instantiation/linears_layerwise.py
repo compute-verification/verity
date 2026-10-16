@@ -14,7 +14,8 @@ accumulation.  Method names are '-'-joined tokens:
     hq          the flat rotation: Q = signs (H_{k/28} x H_28) / sqrt(k) with Paley's H_28 for k = 7 2^j (every entry
                 +-1 / sqrt(k)), instead of exact_grid's H_{k/7} x a random 7 x 7 orthogonal; `nr` no rotation
     wgG         weights one scale per (output channel, G inputs), each group's s32 read and scaled on its own
-    gptq        weights rounded by GPTQ (blocks of 128, 1% damping) on the calibration windows' rotated inputs
+    gptq        weights rounded by GPTQ (blocks of 128, 1% damping) on the calibration windows' rotated inputs (smoothed
+                first under smA)
     smA         SmoothQuant before the rotation, alpha = A / 100: x / m and W m per input channel, m from the calibration
                 windows' channel maxima (1 / m folds into the RMSNorm weights before q/k/v and gate/up, and into up_proj's
                 rows before down_proj); `smkv` shares o_proj's m across each KV group's query heads, so it folds into
@@ -170,8 +171,8 @@ def parse(method: str) -> dict:
             spec[t[:2]] = {int(v) for v in t[3:].split(".")}
         else:
             raise ValueError(f"{method}: unknown token {t!r}")
-    if spec["gptq"] and (spec["wg"] or spec["sm"] or spec["oc"]):
-        raise ValueError(f"{method}: gptq runs on the plain rotated weights")
+    if spec["gptq"] and (spec["wg"] or spec["oc"]):
+        raise ValueError(f"{method}: gptq runs on one rotated weight matrix (smoothed or not)")
     if spec["smkv"] and not spec["sm"]:
         raise ValueError(f"{method}: smkv qualifies smA")
     return spec
@@ -292,6 +293,18 @@ class LayerWeights:
         al = spec["sm"] / 100
         return (ax.clamp(min=1e-5) ** al / aw.clamp(min=1e-5) ** (1 - al)).clamp(min=1e-5)
 
+    def hessian(self, spec: dict, name: str, sm: torch.Tensor | None) -> torch.Tensor:
+        """The second moment of the served (smoothed, rotated) inputs, Q^T (M^-1 H M^-1) Q, from the unrotated H."""
+        g = GROUP[name]
+        key = ("H", g, spec["rot"], spec["sm"], spec["smkv"])
+        if key not in self.cache:
+            h = self.calib["H"][g]
+            if sm is not None:
+                h = h / sm[:, None] / sm[None, :]
+            r = self.rot(spec["rot"], h.shape[0])
+            self.cache[key] = r.apply(r.apply(h).T.contiguous()).T.contiguous()
+        return self.cache[key]
+
     def outliers(self, spec: dict, name: str) -> torch.Tensor | None:
         if not spec["oc"]:
             return None
@@ -321,7 +334,7 @@ class LayerWeights:
                 self.rotated[rk] = wr
         top = spec["top"]
         if spec["gptq"]:
-            q, s = gptq(wr, self.calib["H"][(spec["rot"], GROUP[name])], top)
+            q, s = gptq(wr, self.hessian(spec, name, sm), top)
             out["wl"], out["s"] = [(q.to(torch.int8), 1)], s
         elif spec["wg"]:
             g = spec["wg"]
@@ -541,7 +554,7 @@ def evaluate(snapshot: str, ids: np.ndarray, methods: list[str], out: Path, cali
     streams = {m: emb[ids_t].clone() for m in ["bf16"] + [m for m in methods if m != "bf16"]}
     cal = emb[torch.from_numpy(calib_ids).to(device)].clone() if calib_ids is not None else None
     del emb
-    gptq_kinds = sorted({s["rot"] for s in specs.values() if s["gptq"]})
+    use_h = any(s["gptq"] for s in specs.values())
     rots: dict = {}
     diag: list = []
     diverge: dict = {m: [] for m in methods if m != "bf16"}
@@ -583,7 +596,7 @@ def evaluate(snapshot: str, ids: np.ndarray, methods: list[str], out: Path, cali
             return y
 
         try:
-            # calibration: channel maxima and rotated second moments of every input group, on the bf16 stream
+            # calibration: channel maxima and second moments (unrotated) of every input group, on the bf16 stream
             if cal is not None:
                 amax: dict = {}
                 H: dict = {}
@@ -594,11 +607,10 @@ def evaluate(snapshot: str, ids: np.ndarray, methods: list[str], out: Path, cali
                         return
                     a = x.abs().amax(0)
                     amax[g] = torch.maximum(amax[g], a) if g in amax else a
-                    for kind in gptq_kinds:
-                        xr = lw.rot(kind, x.shape[1]).apply(x)
-                        h = xr.T @ xr
-                        H[(kind, g)] = H[(kind, g)] + h if (kind, g) in H else h
-                        del xr, h
+                    if use_h:
+                        h = x.T @ x
+                        H[g] = H[g] + h if g in H else h
+                        del h
 
                 for i in range(0, len(cal), batch):
                     cal[i:i + batch] = run(cal[i:i + batch], None, i, {"collect": collect})
@@ -788,7 +800,7 @@ def selftest(attn_dir: str | None = None) -> dict:
     calib = torch.randint(0, 512, (4, 64))
     calib[:, 0] = 7
     methods = ["bf16", "r127", "r63", "d63", "d63-s1", "d63-hq", "d63-t0", "d63-t0x", "d63-xt4", "d111", "d63-wg32",
-               "d63-gptq", "r63-gptq", "d63-sm50", "d63-sm50-smkv", "d63-oc8", "d63-a2=0.1.2", "d63-a2=0.1.2-w2=0.1.2",
+               "d63-gptq", "r63-gptq", "d63-sm50", "d63-sm50-smkv", "d63-sm50-gptq", "d63-oc8", "d63-a2=0.1.2", "d63-a2=0.1.2-w2=0.1.2",
                "r127-lx=0.1.2", "d63-oc8-t0"]
     res = evaluate(str(tmp), ids.numpy(), methods, tmp, calib_ids=calib.numpy(), batch=2, diag_windows=2, device="cpu",
                    log=lambda s: None)
@@ -808,7 +820,15 @@ def selftest(attn_dir: str | None = None) -> dict:
     assert div["d63-a2=0.1.2-w2=0.1.2"] < 0.75 * div["d63-a2=0.1.2"] and div["r127-lx=0.1.2"] < div["r127"], div
     assert res["d63-t0x"]["divergence"][-1]["pos0"] < 1e-2 and res["d63-t0"]["divergence"][-1]["pos0"] < res["d63"]["divergence"][-1]["pos0"]
     assert math.isfinite(ppl["d63-sm50-smkv"]) and ppl["d63-sm50-smkv"] != ppl["d63-sm50"], ppl
-    lw0 = LayerWeights(model.model.layers[0], 0, {}, {"amax": {"o": torch.rand(cfg.hidden_size) * 10}})
+    assert math.isfinite(ppl["d63-sm50-gptq"]) and ppl["d63-sm50-gptq"] != ppl["d63-sm50"], ppl
+    xh = torch.randn(96, cfg.hidden_size) * (torch.rand(cfg.hidden_size) * 4)
+    lw0 = LayerWeights(model.model.layers[0], 0, {}, {"amax": {"o": torch.rand(cfg.hidden_size) * 10, "qkv": xh.abs().amax(0)},
+                                                      "H": {"qkv": xh.T @ xh}})
+    for mth in ("d63-gptq", "d63-sm50-gptq", "d63-hq-sm50-gptq"):
+        sp = parse(mth)
+        sm0 = lw0.smooth(sp, "self_attn.q_proj")
+        xs = lw0.rot(sp["rot"], cfg.hidden_size).apply(xh / sm0[None, :] if sm0 is not None else xh)
+        assert torch.allclose(lw0.hessian(sp, "self_attn.q_proj", sm0), xs.T @ xs, rtol=1e-3, atol=1e-2), mth
     m_kv = lw0.smooth(parse("d63-sm50-smkv"), "self_attn.o_proj").view(cfg.num_key_value_heads, -1, cfg.head_dim)
     assert torch.equal(m_kv, m_kv[:, :1].expand_as(m_kv)) and not torch.equal(m_kv, lw0.smooth(parse("d63-sm50"), "self_attn.o_proj").view_as(m_kv))
     d = res["_meta"]["diag"][0]
