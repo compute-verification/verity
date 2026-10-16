@@ -40,6 +40,7 @@ for s in $SECTIONS; do
     uniform) build issue_uniform; gpu_bins+=(issue_uniform) ;;
     wide) build issue_wide; gpu_bins+=(issue_wide) ;;
     ce7) build ce7 -lcublasLt -lcublas; gpu_bins+=(ce7) ;;
+    bs_csa) build bs_csa -lcublasLt -lcublas; gpu_bins+=(bs_csa) ;;
     *) echo "unknown section $s" >&2 ;;
   esac
 done
