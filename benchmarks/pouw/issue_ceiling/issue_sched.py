@@ -100,21 +100,22 @@ def main():
     funcs = funcs_with_lines(out / "sass" / "issue_sched.sass")
 
     alone = {r["mma"]: r["mma_macs_per_sm_per_clk"] for r in rows if r.get("mode") == "specmma_alone"}
+    alone_hi = {r["mma"]: r["mma_macs_per_sm_per_clk"] for r in rows if r.get("mode") == "specmma_hi_alone"}
 
-    result = {"alone": alone, "spec": [], "mixu": []}
+    result = {"alone": alone, "alone_hi": alone_hi, "spec": [], "spec_hi": [], "mixu": []}
     md = ["# Round-2 schedules: beating round-1's MMA+lane overlap (sm_120, RTX PRO 6000)\n"]
     md.append("Frac = MMA MAC rate / spec-geometry MMA-alone. Displacement = 1 − frac. Perfect pipe overlap keeps")
     md.append("frac ≈ 1.0 when tensor-bound (ratios 4, 8) and ≈ tensor/lane demand when lane-bound (ratio 16 ≈ 0.50).\n")
     md.append("## MMA-alone baselines (spec geometry, 2 MMA warps a SMSP)\n")
     for m, v in alone.items():
-        md.append(f"- `{m}`: {v:.1f} MAC/SM/clk")
+        md.append(f"- `{m}`: {v:.1f} MAC/SM/clk (16-warp geometry)")
+    for m, v in alone_hi.items():
+        md.append(f"- `{m}`: {v:.1f} MAC/SM/clk (32-warp high-occupancy geometry)")
     md.append("")
 
     def sass_for(mode, M, X, R):
-        if mode == "spec":
-            name, lines = by_tmpl(funcs, "k_spec", [M, X, R])
-        else:
-            name, lines = by_tmpl(funcs, "k_mixu", [M, X, R])
+        stem = {"spec": "k_spec", "spec_hi": "k_spec_hi", "mixu": "k_mixu"}[mode]
+        name, lines = by_tmpl(funcs, stem, [M, X, R])
         if not lines:
             return None
         ls = loops_from_text(lines)
@@ -126,10 +127,11 @@ def main():
     best = {}  # ratio -> (frac, descr, row)
     for r in rows:
         mode = r.get("mode")
-        if mode not in ("spec", "mixu"):
+        if mode not in ("spec", "spec_hi", "mixu"):
             continue
         M, X = m_idx[r["mma"]], x_idx[r["op"]]
-        R = int(round(r["ops_per_mma"] * 8))
+        # R = ops a loop body: spec lane warp does R (ratio R/8); spec_hi does R (ratio R/4); mixu body has 8*R.
+        R = int(round(r["ops_per_mma"] * (4 if mode == "spec_hi" else 8)))
         frac = r["mma_macs_frac_of_alone"]
         total_min_smsp = (r["mma_calls_per_sm_per_clk"] + r["op_calls_per_sm_per_clk"]) / 4.0
         # SASS confirmation. intended op count in the loop body: R (spec lane warp) or 8*R (mixu body = 8 sub x R).
@@ -140,7 +142,7 @@ def main():
         s = sass_for(mode, M, X, R)
         if s:
             ls, name = s
-            if mode == "spec":
+            if mode in ("spec", "spec_hi"):
                 mma_len, mma_h = loop_containing(ls, [M_SASS[M]])
                 alu_len, alu_h = loop_containing(ls, X_SASS[X])
                 got = sum(alu_h.get(x, 0) for x in X_SASS[X])

@@ -191,12 +191,68 @@ __global__ void __launch_bounds__(512) k_mixu(int iters, const uint32_t* g, uint
   sink[blockIdx.x * blockDim.x + threadIdx.x] = x;
 }
 
+// ---- high-occupancy warp-specialized (32 warps a SM, 8 a SMSP, 4 MMA + 4 lane) ----------------------------------
+// Tests whether more warps let the lane ops hide behind IMMA. 4 MMA accumulators a warp (register-safe at 1024
+// threads); 4 MMA warps a SMSP x 4 accumulators = 16 in-flight IMMAs a SMSP, enough to saturate the tensor pipe.
+template <int M>
+__global__ void __launch_bounds__(1024) k_specmma_hi(int iters, uint32_t* sink, BlockClk* rec) {
+  const uint32_t lane = threadIdx.x & 31;
+  uint32_t a[4], b[2]; init_mma(M, lane, a, b);
+  int32_t di[4][4] = {}; float df[4][4] = {};
+  CLK_BEGIN
+#pragma unroll 1
+  for (int it = 0; it < iters; it++) {
+#pragma unroll
+    for (int c = 0; c < 4; c++) { if (M == M_IMMA) mma_imma(di[c], a, b); else mma_omma(df[c], a, b); }
+  }
+  CLK_END(rec)
+  uint32_t x = lane;
+#pragma unroll
+  for (int c = 0; c < 4; c++) x ^= (M == M_IMMA) ? (uint32_t)di[c][0] : __float_as_uint(df[c][0]);
+  sink[blockIdx.x * blockDim.x + threadIdx.x] = x;
+}
+
+template <int M, int X, int R>
+__global__ void __launch_bounds__(1024) k_spec_hi(int iters, const uint32_t* g, uint32_t* sink, BlockClk* rec) {
+  const uint32_t warp = threadIdx.x >> 5;
+  const uint32_t lane = threadIdx.x & 31;
+  const bool mma_role = warp < (blockDim.x >> 6);  // first half of warps
+  uint32_t a[4], b[2]; init_mma(M, lane, a, b);
+  int32_t di[4][4] = {}; float df[4][4] = {};
+  uint32_t r[8]; init_r(r, threadIdx.x);
+  CLK_BEGIN
+  if (mma_role) {
+#pragma unroll 1
+    for (int it = 0; it < iters; it++) {
+#pragma unroll
+      for (int c = 0; c < 4; c++) { if (M == M_IMMA) mma_imma(di[c], a, b); else mma_omma(df[c], a, b); }
+    }
+  } else {
+#pragma unroll 1
+    for (int it = 0; it < iters; it++) {
+#pragma unroll
+      for (int q = 0; q < R; q++) oone<X>(q, r, q & 7, g);
+    }
+  }
+  CLK_END(rec)
+  uint32_t x = lane;
+  if (mma_role) {
+#pragma unroll
+    for (int c = 0; c < 4; c++) x ^= (M == M_IMMA) ? (uint32_t)di[c][0] : __float_as_uint(df[c][0]);
+  } else {
+#pragma unroll
+    for (int i = 0; i < 8; i++) x += r[i];
+  }
+  sink[blockIdx.x * blockDim.x + threadIdx.x] = x;
+}
+
 // ---- host driver ------------------------------------------------------------------------------------------------
 static uint32_t* g_sink;
 static BlockClk* g_rec;
 static uint32_t* g_ldg;
 static int g_sms;
-static const int WSM = 16;  // warps a SM (4 a SMSP), as round 1
+static const int WSM = 16;     // warps a SM (4 a SMSP), as round 1
+static const int WSM_HI = 32;  // high-occupancy variant (8 a SMSP, 4 MMA + 4 lane)
 
 static int size_iters(double cyc_warm, int warm) {
   return std::max(64, (int)(2e7 / (cyc_warm / warm)));
@@ -265,6 +321,48 @@ template <int M, int X>
 static void sweep(double a) { spec_case<M, X, 32>(a); spec_case<M, X, 64>(a); spec_case<M, X, 128>(a);
                               mixu_case<M, X, 32>(a); mixu_case<M, X, 64>(a); mixu_case<M, X, 128>(a); }
 
+template <int M>
+static double specmma_hi_alone(double* macs_per_clk) {
+  auto kern = k_specmma_hi<M>;
+  CK(cudaFuncSetAttribute(kern, cudaFuncAttributeMaxDynamicSharedMemorySize, ONE_BLOCK_SMEM));
+  int warps = WSM_HI / 2;  // 16 MMA warps a SM (4 a SMSP)
+  auto launch = [&](int it) { return run_timed([&] { kern<<<g_sms, warps * 32, ONE_BLOCK_SMEM>>>(it, g_sink, g_rec); }, g_sms, g_rec); };
+  Timing w = launch(64);
+  int iters = size_iters(w.cyc_med, 64);
+  Timing t = launch(iters);
+  double mmas = (double)warps * iters * 4;
+  *macs_per_clk = mmas * M_MACS[M] / t.cyc_med;
+  printf("{\"probe\":\"sched\",\"mode\":\"specmma_hi_alone\",\"mma\":\"%s\",\"mma_warps\":%d,\"iters\":%d,\"cyc\":%.0f,"
+         "\"mhz\":%.1f,\"mma_calls_per_sm_per_clk\":%.4f,\"mma_macs_per_sm_per_clk\":%.2f}\n",
+         M_NAME[M], warps, iters, t.cyc_med, t.mhz, mmas / t.cyc_med, *macs_per_clk);
+  fflush(stdout);
+  return t.cyc_med;
+}
+
+template <int M, int X, int R>
+static void spec_hi_case(double mma_macs_alone) {
+  auto kern = k_spec_hi<M, X, R>;
+  CK(cudaFuncSetAttribute(kern, cudaFuncAttributeMaxDynamicSharedMemorySize, ONE_BLOCK_SMEM));
+  auto launch = [&](int it) { return run_timed([&] { kern<<<g_sms, WSM_HI * 32, ONE_BLOCK_SMEM>>>(it, g_ldg, g_sink, g_rec); }, g_sms, g_rec); };
+  Timing w = launch(64);
+  int iters = size_iters(w.cyc_med, 64);
+  Timing t = launch(iters);
+  int mma_warps = WSM_HI / 2, alu_warps = WSM_HI / 2;
+  double mmas = (double)mma_warps * iters * 4;   // 4 MMAs a warp-iter
+  double ops = (double)alu_warps * iters * R;
+  double macs = mmas * M_MACS[M] / t.cyc_med;
+  printf("{\"probe\":\"sched\",\"mode\":\"spec_hi\",\"mma\":\"%s\",\"op\":\"%s\",\"ops_per_mma\":%.3f,"
+         "\"mma_warps\":%d,\"alu_warps\":%d,\"iters\":%d,\"cyc\":%.0f,\"mhz\":%.1f,"
+         "\"mma_calls_per_sm_per_clk\":%.4f,\"op_calls_per_sm_per_clk\":%.4f,"
+         "\"mma_macs_per_sm_per_clk\":%.2f,\"mma_macs_frac_of_alone\":%.4f}\n",
+         M_NAME[M], X_NAME[X], (double)R / 4.0, mma_warps, alu_warps, iters, t.cyc_med, t.mhz,
+         mmas / t.cyc_med, ops / t.cyc_med, macs, macs / mma_macs_alone);
+  fflush(stdout);
+}
+
+template <int M, int X>
+static void sweep_hi(double a) { spec_hi_case<M, X, 32>(a); spec_hi_case<M, X, 64>(a); }  // ratio R/4 = 8, 16
+
 int main(int, char**) {
   g_sms = num_sms();
   CK(cudaMalloc(&g_sink, (size_t)g_sms * 512 * 4));
@@ -286,6 +384,14 @@ int main(int, char**) {
   sweep<M_IMMA, X_MIX3>(a_imma);
   // OMMA where cheap: the ALU representative only
   sweep<M_OMMA, X_IADD3>(a_omma);
+
+  // high-occupancy confirmation (32 warps a SM): does more occupancy let lane ops hide behind IMMA?
+  double a_imma_hi = 0;
+  specmma_hi_alone<M_IMMA>(&a_imma_hi);
+  sweep_hi<M_IMMA, X_IADD3>(a_imma_hi);
+  sweep_hi<M_IMMA, X_IDP4A>(a_imma_hi);
+  sweep_hi<M_IMMA, X_HFMA2>(a_imma_hi);
+  sweep_hi<M_IMMA, X_MIX3>(a_imma_hi);
 
   printf("{\"probe\":\"sched\",\"done\":true,\"num_sms\":%d}\n", g_sms);
   return 0;
