@@ -962,6 +962,43 @@ static void host_node(const Dom& c, int level, u64 index, const u64* L, const u6
   sha::compress(out, W + 16);
 }
 
+// The salt phase's S[pos] (M_key y || c, 16 words, as salt_one<true> writes it) on the CPU from the same constants and the
+// row-major T, so host threads can make the small path's S records (ovl.cu's cgh arms copy them in).
+static void host_salt(const Consts& c, const uint8_t* T, u64 pos, u64* S) {
+  u64 Y[24];
+  for (int r = 0; r < 3; ++r) {
+    u64 w[16] = {};
+    for (int i = 0; i < 8; ++i) w[i] = c.ks[i];
+    w[8] = pos; w[9] = (u64)r; w[10] = 0x8000000000000000ull; w[15] = 80 * 8;
+    sha::iv(Y + 8 * r);
+    sha::compress(Y + 8 * r, w);
+  }
+  u32 m[16] = {};
+  for (int r = 0; r < 16; ++r) {
+    u32 A[20] = {};
+    for (int q = 0; q < 12; ++q) {
+      const int p = 16 * q + r;
+      const u32 v = (u32)(Y[p >> 3] >> (56 - 8 * (p & 7))) & 0xFFu;
+      u32 t[20];
+      memcpy(t, T + 256 * v + 16 * q, sizeof t);
+      for (int i = 0; i < 20; ++i) A[i] ^= t[i];
+    }
+    const int sw = r >> 2, s = 8 * (r & 3);
+    for (int w = 0; w < 16; ++w) m[w] ^= s ? (A[w + sw] >> s) | (A[w + sw + 1] << (32 - s)) : A[w + sw];
+  }
+  u64 d[8], w[16];
+  memcpy(d, c.mid_salt, sizeof d);
+  for (int i = 0; i < 16; ++i) w[i] = Y[i];
+  sha::compress(d, w);
+  for (int i = 0; i < 8; ++i) w[i] = Y[16 + i];
+  w[8] = 0x8000000000000000ull;
+  for (int i = 9; i < 15; ++i) w[i] = 0;
+  w[15] = (128 + 192) * 8;
+  sha::compress(d, w);
+  for (int i = 0; i < 8; ++i) S[i] = (u64)__builtin_bswap32(m[2 * i]) << 32 | __builtin_bswap32(m[2 * i + 1]);
+  for (int i = 0; i < 8; ++i) S[8 + i] = d[i];
+}
+
 struct Committer {
   u64 n = 0, width = 0;
   int depth = 0;

@@ -44,6 +44,9 @@
 //             start, layer l+1's salts for stage t on the chunk's salt stream after layer l's commitment of stage t.
 //             Their poisoned check holds them to commit_gpu's serial roots, and CG_DUMP=DIR writes chunk 0's six
 //             operands, levels and params for `reference.py verify` (benchmarks/commit_gpu) after the lease
+//   cgh, cgheq, cghrrW, cghonly: the same with layers 1..31's S records made by host threads (commit_gpu's host_salt,
+//             checked equal to the GPU's) and copied in by cudaMemcpyAsync where the cg arms run salt_small; layer 0's
+//             salts, F and the pads stay on the GPU at the chunk's start
 //
 // env: ARMS, DRAW_US (300), PLAIN_RB (8192), MID (1: stage.cu's frame heads ahead), CARVE (unset: the commitments' and draws'
 // kernels at the driver's carveout; P: P% shared memory), BESIDE_C (367), CG_R (64), CG_DUMP, CG_SKIP (timing only: salts,
@@ -201,7 +204,8 @@ struct Sched {
   int rr;        // > 0: the GEMMs in one static order, each after the one rr places before it
   int lite;      // each commitment a stand-in of its stage's compressions a row (LITE_C) in 128-thread CTAs, no shared
                  // memory: 1 flat (LITE_N chained a thread), 2 chained as the tree (segments, the row, CTA levels, the top);
-                 // 3: commit_gpu's small path, the real commitment
+                 // 3: commit_gpu's small path, the real commitment; 4: the same with layers 1..31's S records made by host
+                 // threads and copied in (cudaMemcpyAsync on the chunk's salt stream) in place of salt_small
 };
 static Sched sched_of(const std::string& n) {
   if (n == "chunked") return {n, false, false, true, false, 0, 0, 0};
@@ -224,6 +228,10 @@ static Sched sched_of(const std::string& n) {
   if (n == "litecprio") return {n, true, true, true, true, 1, 0, 2};
   if (n == "liteconly") return {n, true, false, false, false, 1, 0, 2};
   if (n.rfind("litecrr", 0) == 0) return {n, true, true, true, false, 1, atoi(n.c_str() + 7), 2};
+  if (n == "cgh") return {n, true, true, true, false, 1, 0, 4};
+  if (n == "cgheq") return {n, true, true, true, false, 0, 0, 4};
+  if (n == "cghonly") return {n, true, false, false, false, 1, 0, 4};
+  if (n.rfind("cghrr", 0) == 0) return {n, true, true, true, false, 1, atoi(n.c_str() + 5), 4};
   if (n == "cg") return {n, true, true, true, false, 1, 0, 3};
   if (n == "cgeq") return {n, true, true, true, false, 0, 0, 3};
   if (n == "cgonly") return {n, true, false, false, false, 1, 0, 3};
@@ -298,7 +306,11 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
   CK(cudaStreamSynchronize(d.st));
   const size_t mem_act = mem_used();
   bool use_cg = false;
-  for (const std::string& nm : arm_names) use_cg |= nm != "plain" && sched_of(nm).lite == 3;
+  bool use_cgh = false;
+  for (const std::string& nm : arm_names) {
+    use_cg |= nm != "plain" && sched_of(nm).lite >= 3;
+    use_cgh |= nm != "plain" && sched_of(nm).lite == 4;
+  }
   for (int c = 0; c < K; c++)
     for (int t = 0; t < NSTAGE; t++) ch[c].cm[t] = make_commit(hc[t]);
   CK(cudaDeviceSynchronize());
@@ -307,9 +319,11 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
   // must agree, as C holds one copy
   const int CGR = getenv("CG_R") && *getenv("CG_R") ? atoi(getenv("CG_R")) : 64;
   cg::u64 cg_n[NSTAGE] = {};
+  std::vector<cg::Params> cgp;
   if (use_cg) {
     for (int t = 0; t < NSTAGE; t++) {
-      const cg::Params p = cg::read_params(dir + "/cg-" + std::to_string(M) + "-" + std::to_string(CGR) + "-" + std::to_string(t) + ".bin");
+      cgp.push_back(cg::read_params(dir + "/cg-" + std::to_string(M) + "-" + std::to_string(CGR) + "-" + std::to_string(t) + ".bin"));
+      const cg::Params& p = cgp.back();
       cg_n[t] = cg::tile_leaves(M, SK[t], CGR);
       for (int c = 0; c < K; c++) {
         ch[c].cgc[t].init(p, cg_n[t], 32 * CGR, false, false, 0, t, true, LAYERS);
@@ -341,6 +355,8 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
     CK(cudaDeviceSynchronize());
   };
   std::vector<uint8_t> cg_ref;
+  cg::u64* cg_hs[NSTAGE] = {};
+  bool cg_host_equal = true;
   if (use_cg) {
     cg_poison(K);
     for (int c = 0; c < K; c++)
@@ -352,6 +368,43 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
     CK(cudaStreamSynchronize(d.st));
     CK(cudaGetLastError());
     cg_ref = cg_roots(K);
+    if (use_cgh) {
+      // the cgh arms' S records for layers 1..31 from host threads (cg::host_salt), a pinned buffer a stage (the bench's
+      // stage-t salts are one function of pos for every chunk and layer), held to the GPU's slot 0 here and by the arms'
+      // poisoned roots
+      const unsigned nth = std::max(1u, std::thread::hardware_concurrency());
+      auto t0 = std::chrono::steady_clock::now();
+      for (int t = 0; t < NSTAGE; t++) {
+        CK(cudaMallocHost(&cg_hs[t], cg_n[t] * 128));
+        std::vector<std::thread> th;
+        for (unsigned j = 0; j < nth; j++)
+          th.emplace_back([&, t, j] {
+            for (cg::u64 pos = j; pos < cg_n[t]; pos += nth) cg::host_salt(ch[0].cgc[t].hc, cgp[t].T.data(), pos, cg_hs[t] + 16 * pos);
+          });
+        for (auto& x : th) x.join();
+      }
+      const double fill_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+      const cg::u64 probe = std::min<cg::u64>(8192, cg_n[0]);
+      cg::u64 tmp[16];
+      volatile cg::u64 sink = 0;
+      t0 = std::chrono::steady_clock::now();
+      for (cg::u64 pos = 0; pos < probe; pos++) {
+        cg::host_salt(ch[0].cgc[0].hc, cgp[0].T.data(), pos, tmp);
+        sink = sink ^ tmp[0] ^ tmp[15];
+      }
+      const double ns_leaf = std::chrono::duration<double, std::nano>(std::chrono::steady_clock::now() - t0).count() / probe;
+      for (int t = 0; t < NSTAGE; t++) {
+        std::vector<cg::u64> g(cg_n[t] * 16);
+        CK(cudaMemcpy(g.data(), ch[0].cgc[t].S, g.size() * 8, cudaMemcpyDeviceToHost));
+        cg_host_equal &= memcmp(g.data(), cg_hs[t], g.size() * 8) == 0;
+      }
+      cg::u64 leaves = 0;
+      for (int t = 0; t < NSTAGE; t++) leaves += cg_n[t];
+      printf("{\"mode\": \"host_salt\", \"M\": %d, \"threads\": %u, \"leaves_a_layer\": %llu, \"fill_ms\": %.3f, \"ns_leaf_core\": %.1f, "
+             "\"equal\": %s}\n",
+             M, nth, (unsigned long long)leaves, fill_ms, ns_leaf, cg_host_equal ? "true" : "false");
+      fflush(stdout);
+    }
     // chunk 0's six commitments for reference.py verify: operand, every level, the CGP1 file
     const char* dump = getenv("CG_DUMP");
     if (dump && *dump) {
@@ -473,7 +526,7 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
   printf("]}\n");
   fflush(stdout);
 
-  int fails = 0;
+  int fails = cg_host_equal ? 0 : 1;
   for (int k : ks) {
     // plain's plans for this k
     const int rows = k * M, rb = std::min(rows, RB);
@@ -507,7 +560,7 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
       if (k == 1 && (S.classes || S.hp || S.rr)) continue;  // one chunk: the same as eq or nodraw
       if (S.rr && S.rr >= k) continue;
       a.hash = S.hash && !S.lite;
-      a.cg = S.hash && S.lite == 3;
+      a.cg = S.hash && S.lite >= 3;
       a.stamps = S.draw;
       std::vector<cudaStream_t> sg(k), sh(k), ss(k);
       for (int c = 0; c < k; c++) {
@@ -529,10 +582,10 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
         std::vector<std::vector<cudaEvent_t>> salt_ev(k, std::vector<cudaEvent_t>(NS));
         for (int c = 0; c < k; c++) {
           pool.join(sm, sg[c]);
-          if (!S.hash || (S.lite && S.lite != 3)) continue;
+          if (!S.hash || (S.lite && S.lite < 3)) continue;
           pool.join(sg[c], ss[c]);
           for (int t = 0; t < NSTAGE; t++) {
-            if (S.lite == 3) {
+            if (S.lite >= 3) {
               if (!skip_salts) ch[c].cgc[t].salts<true>(nullptr, ss[c], 0, 1);
             }
             else commit_salt(ch[c].cm[t], LAYERS, ss[c]);
@@ -555,15 +608,21 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
                                                                            lite_cap);
                   lite_levels<<<(unsigned)((M + 127) / 128), 128, 0, sh[c]>>>(M, 2, lite_out);
                   if (M > 128) lite_levels<<<1, std::min(M / 128, 1024), 0, sh[c]>>>(M / 128, 2, lite_out);
-                } else if (S.lite == 3) {
+                } else if (S.lite >= 3) {
                   // the next layer's salts for this stage on the chunk's salt stream, behind this commitment: they run
-                  // beside the GEMMs, NSTAGE stages ahead of their use
+                  // beside the GEMMs, NSTAGE stages ahead of their use (cgh: the host's S records copied in instead)
                   CK(cudaStreamWaitEvent(sh[c], salt_ev[c][s], 0));
                   if (!skip_leaves) ch[c].cgc[t].tiles(ch[c].op[t], M, SK[t], CGR, false, sh[c], l);
                   if (!skip_top) ch[c].cgc[t].nodes(sh[c]);
                   if (l + 1 < LAYERS) {
                     pool.join(sh[c], ss[c]);
-                    if (!skip_salts) ch[c].cgc[t].salts<true>(nullptr, ss[c], l + 1, 1);
+                    const cg::Committer& m = ch[c].cgc[t];
+                    if (skip_salts) {
+                    } else if (S.lite == 4) {
+                      CK(cudaMemcpyAsync(m.S + 16 * m.n * (l + 1), cg_hs[t], m.n * 128, cudaMemcpyHostToDevice, ss[c]));
+                    } else {
+                      ch[c].cgc[t].salts<true>(nullptr, ss[c], l + 1, 1);
+                    }
                     salt_ev[c][s + NSTAGE] = pool.get();
                     CK(cudaEventRecord(salt_ev[c][s + NSTAGE], ss[c]));
                   }

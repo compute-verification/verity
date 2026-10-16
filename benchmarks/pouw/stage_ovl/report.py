@@ -62,12 +62,20 @@ def is_cg(name: str) -> bool:
     return name in ("cg", "cgeq") or name.startswith("cgrr")
 
 
+def is_cgh(name: str) -> bool:
+    """the same with layers 1..31's salt records made by host threads and copied in"""
+    return name in ("cgh", "cgheq") or name.startswith("cghrr")
+
+
+KIND = {"cg": is_cg, "cgh": is_cgh}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("out", nargs="+")
     ap.add_argument("--json")
     a = ap.parse_args()
-    gates, setups, ovl, thru, beside, checks = [], {}, [], [], [], {}
+    gates, setups, ovl, thru, beside, checks, hosts = [], {}, [], [], [], {}, []
     for d in map(Path, a.out):
         gates += rows(d / "gate.jsonl")
         thru += rows(d / "shathru.jsonl")
@@ -83,10 +91,17 @@ def main() -> int:
                     rot = (f"rot{r.get('fr_rot', 0)}" + (f" carve{r['carve']}" if r.get("carve", -1) >= 0 else "")
                            + (f" R{r['cg_r']}" if r.get("cg_r") else ""))
                     setups[(rot, r["M"])] = r
+                elif r["mode"] == "host_salt":
+                    hosts.append(r)
                 else:
                     ovl.append({**r, "fr_rot": rot})
     for name, s in checks.items():
         print(f"{name}: {s}")
+    for h in hosts:
+        per_chunk = 31 * h["leaves_a_layer"] * h["ns_leaf_core"] * 1e-9
+        print(f"host salts, M = {h['M']}: {h['ns_leaf_core']:.0f} ns a leaf on one core, equal to the GPU's: {h['equal']}; "
+              f"{h['leaves_a_layer']} leaves a layer, so layers 1..31 of a chunk take {per_chunk:.2f} core-s "
+              f"({h['threads']} threads filled one layer in {h['fill_ms']:.1f} ms)")
     for t in thru:
         c = t["compressions_a_s"]
         best = max(c, key=c.get)
@@ -141,8 +156,8 @@ def main() -> int:
                 cell["best_cost_sat"] = proto[b]["cost_sat"]
             if proto:
                 cell["best_cost_best"] = proto[cell["best"]]["cost_best"]
-            for kind in ("lite", "litec", "cg"):
-                lite = {n: v for n, v in cell["arms"].items() if (is_cg(n) if kind == "cg" else lite_kind(n) == kind)}
+            for kind in ("lite", "litec", "cg", "cgh"):
+                lite = {n: v for n, v in cell["arms"].items() if (KIND[kind](n) if kind in KIND else lite_kind(n) == kind)}
                 if lite:
                     b = min(lite, key=lambda n: lite[n]["ms"])
                     cell[f"best_{kind}"] = b
@@ -161,13 +176,14 @@ def main() -> int:
                 print(f"        the commitments alone: {100 * cell['arms']['hashonly']['ms'] / p:.1f}% of plain's makespan")
             for kind, only, what in (("lite", "liteonly", "stand-in committer, flat (small CTAs, same compressions)"),
                                      ("litec", "liteconly", "stand-in committer, chained (small CTAs, same compressions)"),
-                                     ("cg", "cgonly", "commit_gpu's committer (small path, real roots)")):
+                                     ("cg", "cgonly", "commit_gpu's committer (small path, real roots)"),
+                                     ("cgh", "cghonly", "commit_gpu's committer, salts from host threads (real roots)")):
                 if f"best_{kind}" in cell:
                     lo = cell["arms"].get(only)
                     print(f"        {what}: best {cell[f'best_{kind}']} {100 * cell[f'best_{kind}_cost']:+.1f}% "
                           f"({100 * cell[f'best_{kind}_cost_best']:+.1f}% against the fastest plain)"
                           + (f"; alone {100 * lo['ms'] / p:.1f}% of plain's makespan" if lo else "")
-                          + (f"; roots {cell['cg_roots']}" if kind == "cg" else ""))
+                          + (f"; roots {cell['cg_roots']}" if kind in KIND else ""))
             if "best" in cell:
                 print(f"        best {cell['best']} {100 * cell['best_cost']:+.1f}% (vs saturated plain {100 * cell['best_cost_sat']:+.1f}%); "
                       f"draws {k * 192 / (proto[cell['best']]['ms'] * 1e-3):.0f}/s; roots {cell['roots']}")
@@ -200,7 +216,8 @@ def main() -> int:
                   + "; against the fastest plain: " + (f"{min(okb, key=lambda c: c['k'])['k']}" if okb else "none measured"))
         for kind, what in (("lite", "the stand-in committer, flat: latency understated"),
                            ("litec", "the stand-in committer, chained as the tree: ~40 dependent compressions a stage"),
-                           ("cg", "commit_gpu's committer, the real roots")):
+                           ("cg", "commit_gpu's committer, the real roots"),
+                           ("cgh", "commit_gpu's committer, salts from host threads, the real roots")):
             if not any(f"best_{kind}" in c for c in cs):
                 continue
             print(f"  with {what} (128-thread CTAs, no shared memory):")
