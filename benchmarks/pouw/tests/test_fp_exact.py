@@ -300,13 +300,17 @@ def test_limits_take_the_worst_draw_for_each_c0():
 def test_rates_are_macs_per_sm_clock_against_imma():
     rows = [{"probe": "imma_s8", "rate": 0.25, "sm_mhz": 2000, "distinct_sms": 188},
             {"probe": "omma_sp_nvf4", "rate": 0.2, "sm_mhz": 2000, "distinct_sms": 188},
+            {"probe": "omma_nvf4", "rate": 0.24, "sm_mhz": 2000, "distinct_sms": 188},
+            {"probe": "omma_nvf4_data", "rate": 0.237, "sm_mhz": 2000, "distinct_sms": 188},
             {"probe": "lds32", "rate": 1.0}]
     r = fx.rates(rows)
-    assert set(r) == {"imma_s8", "omma_sp_nvf4"}
+    assert set(r) == {"imma_s8", "omma_sp_nvf4", "omma_nvf4", "omma_nvf4_data"}
     assert r["imma_s8"]["macs_sm_clk"] == 1024 and r["omma_sp_nvf4"]["vs_imma"] == pytest.approx(3.2)
     assert r["imma_s8"]["tmacs"] == pytest.approx(1024 * 188 * 2000e6 / 1e12)
+    # the data probe reports its rate against the fixed one (the data-dependent-clock check); fixed probes don't.
+    assert r["omma_nvf4_data"]["vs_fixed"] == pytest.approx(0.237 / 0.24) and r["omma_nvf4"]["vs_fixed"] is None
     with pytest.raises(SystemExit):
-        fx.rates(rows[1:])
+        fx.rates([rows[1]])
 
 
 # ---- the binary --------------------------------------------------------------------------------------------------------

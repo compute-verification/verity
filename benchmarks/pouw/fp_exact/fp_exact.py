@@ -580,11 +580,15 @@ def limits(v: dict) -> list[str]:
 
 
 PROBE_MACS = {"imma_s8": 4096, "qmma_e4m3": 4096, "omma_mxf4": 8192, "omma_nvf4": 8192, "omma_sp_mxf4": 16384,
-              "omma_sp_nvf4": 16384}
+              "omma_sp_nvf4": 16384,
+              # the same opcodes on the sweep's drawn operands (a data-dependent-clock check against the fixed probes)
+              "qmma_e4m3_data": 4096, "omma_mxf4_data": 8192, "omma_nvf4_data": 8192, "omma_sp_mxf4_data": 16384,
+              "omma_sp_nvf4_data": 16384}
 
 
 def rates(rows: list[dict], sms: int = 188) -> dict[str, dict]:
-    """opcode_probe's rows for probes/mma.cu as MACs an SM a clock, against the same run's IMMA."""
+    """opcode_probe's rows for probes/mma.cu as MACs an SM a clock, against the same run's IMMA. A `_data` probe runs the
+    same opcode on the sweep's drawn operands; `vs_fixed` (its rate over the fixed probe's) rules out a data clock."""
     by = {r["probe"]: r for r in rows if r["probe"] in PROBE_MACS}
     if "imma_s8" not in by:
         raise SystemExit("fp_exact: no imma_s8 row to compare with")
@@ -593,8 +597,10 @@ def rates(rows: list[dict], sms: int = 188) -> dict[str, dict]:
     for name, r in by.items():
         m = r["rate"] * PROBE_MACS[name]
         n = r.get("distinct_sms") or sms
+        fixed = by.get(name[:-5]) if name.endswith("_data") else None
         out[name] = {"rate": r["rate"], "macs_sm_clk": m, "vs_imma": m / base, "sm_mhz": r.get("sm_mhz"), "sms": n,
                      "tmacs": m * n * (r.get("sm_mhz") or 0) * 1e6 / 1e12, "tags": r.get("tags", []),
+                     "vs_fixed": r["rate"] / fixed["rate"] if fixed else None,
                      "run": r.get("run", ""), "sass_sha256": r.get("sass_sha256", "")}
     return out
 
@@ -668,8 +674,9 @@ def main(argv: list[str] | None = None) -> int:
         r = rates([json.loads(x) for x in a.rows.read_text().splitlines() if x.strip()])
         (a.rows.parent / "rates.json").write_text(json.dumps(r, indent=1))
         for name, x in r.items():
+            vf = f", {x['vs_fixed']:.4f}x the fixed probe" if x["vs_fixed"] is not None else ""
             print(f"{name}: {x['rate']:.5f} instructions/SM/clk, {x['macs_sm_clk']:.0f} MACs/SM/clk, "
-                  f"{x['vs_imma']:.3f}x IMMA, {x['tmacs']:.1f} TMAC/s at {x['sm_mhz']} MHz, tags {x['tags']}")
+                  f"{x['vs_imma']:.3f}x IMMA, {x['tmacs']:.1f} TMAC/s at {x['sm_mhz']} MHz{vf}, tags {x['tags']}")
         return 0
     quick = json.loads((a.dir / "sweep.json").read_text())["quick"]
     cfgs = configs(quick)
