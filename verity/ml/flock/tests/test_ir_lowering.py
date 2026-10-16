@@ -500,6 +500,31 @@ def test_silu_v2_unit_is_the_served_function_on_every_gate_word():
     assert [int(x) for x in out] == [act.SiluMulBf16.evaluate(*v) for v in vecs]
 
 
+def test_silu_v2_circuit_units_are_a_power_of_two():
+    """`verity/flock-circuit` holds a power-of-two number of units an instance (both verifiers refuse another count), so at
+    GLM-5.3's dense I = 1536 a `silu-mul-v2` unit is three elements, 512 units, each still `SiluMulBf16_v2`; at I = 256 it is
+    the circuit-checked unit."""
+    import json
+
+    from verity_flock import circuit as FC
+
+    act = pytest.importorskip("verity_vllm.program.registry.act")
+    mod = REG.module("silu-mul-v2")
+    assert mod.circuit_lowering(TM.subcircuit("silu-mul-v2", I=256)).sha256 == mod.PINS[256]
+    sub = TM.subcircuit("silu-mul-v2", I=1536)
+    low = mod.circuit_lowering(sub)
+    assert low.sha256 == mod.CIRCUIT_PINS[1536]
+    assert (low.name, low.units.n, low.layout.counts["ands"]) == ("silu-mul-v2/bf16/element/x3", 512, 3 * 1380)
+    rng = random.Random(11)
+    fin = np.array([bf16_words(rng, 2 * 1536) for _ in range(4)], dtype=np.uint64)
+    got, _, ok = low.evaluate(fin)
+    assert ok == (1 << (4 * 512)) - 1
+    assert got.tolist() == [[act.SiluMulBf16.evaluate(int(r[i]), int(r[1536 + i])) for i in range(1536)] for r in fin]
+    meta = json.loads(FC.compose(low, sub).split("\n", 2)[1].removeprefix("META "))
+    (unit,) = [r for r in meta["ranges"] if r["net"] == "unit"]
+    assert unit["count"] == meta["vus_per_block"] * 512 and unit["count"] & (unit["count"] - 1) == 0
+
+
 @pytest.mark.parametrize("which", ["gemm-tc-step", "silu-mul"])
 def test_a_units_nonzeros_are_its_netlist_rows_inside_its_slot(which):
     """`Layout.nonzeros` on a GEMM coordinate's tensor-core step and on SiLU·mul (its table read's rows): the (row, column)

@@ -78,6 +78,16 @@ def test_flock_rows_is_the_layout(built, template, params, pin, tmp_path):
 
 
 @needs_lake
+def test_flock_rows_is_the_grouped_circuit_unit(built, tmp_path):
+    """`silu-mul-v2`'s `verity/flock-circuit` unit at I = 1536, three elements (`CIRCUIT_PINS`)."""
+    mod = REG.module("silu-mul-v2")
+    low = mod.circuit_lowering(TM.subcircuit("silu-mul-v2", I=1536))
+    out = flock_rows(low, tmp_path)
+    assert out.returncode == 0, out.stderr
+    assert out.stdout == low.text and hashlib.sha256(out.stdout.encode()).hexdigest() == mod.CIRCUIT_PINS[1536]
+
+
+@needs_lake
 def test_flock_rows_refuses_a_split_out_of_order(built, tmp_path):
     low = REG.module("rope-head").lowering(TM.subcircuit("rope-head", D=64))
     out = flock_rows(low, tmp_path, in_split="3,1")
