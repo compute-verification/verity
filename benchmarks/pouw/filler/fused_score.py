@@ -184,6 +184,18 @@ def harness_accounting(rows: list[dict], stats: dict) -> dict:
             "entries_serving_099": {e["entry"]: e["coverage"] for e in at["entries"]}}
 
 
+def rounded(r: dict) -> bool:
+    """An fscore row's rounds are where the replay gate reads them: the fused step's warm-up and power rounds and every
+    arm block's fused round with its fixed work, or, with no filler warps (no slots a step), none of them: the pump
+    alone beside FILL's step, its rounds dscore's."""
+    pump_only = r["fused"]["slots_a_step"] == 0
+    fused_keys = ("fused_warm_round", "fused_power_round")
+    if "round" not in r["alone_fill"] or any((k in r["alone_fill"]) == pump_only for k in fused_keys):
+        return False
+    return all("solo" in b and ("fused_round" in b["arm"]) != pump_only and bool(b["arm"].get("fixed_ms")) != pump_only
+               for b in r["blocks"])
+
+
 def report(out: Path, arm) -> dict:
     res = SC.report(out, arm)
     shutil.copy(out / "score.json", out / "score-locked.json")
@@ -193,10 +205,7 @@ def report(out: Path, arm) -> dict:
     frows = [r for r in rows if r.get("driver") == "fscore"]
     want = sorted(f"decode {b}/{l}" for ph, b, l in S.points() if fused_of(arm, ph, b, l) is not None)
     got = sorted(f"decode {r['B']}/{r['L']}" for r in frows)
-    unrounded = [f"decode {r['B']}/{r['L']}" for r in frows
-                 if any(k not in r["alone_fill"] for k in ("round", "fused_warm_round", "fused_power_round"))
-                 or any("fused_round" not in b["arm"] or not b["arm"].get("fixed_ms") or "solo" not in b
-                        for b in r["blocks"])]
+    unrounded = [f"decode {r['B']}/{r['L']}" for r in frows if not rounded(r)]
     g["fused_receipts"] = {
         "ok": bool(frows) and not unrounded and set(want) <= set(got)
         and all(r["rec_bad"] == 0 and r["fused"]["steps_bad"] == 0 and r["fused"]["out_mismatches"] == 0

@@ -163,6 +163,7 @@ static int run_fscore(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, 
   FRing ring;
   fl.ring = fa.ring = &ring;
   const unsigned long long per = fused_layout(fl, c.FW, fa);
+  const bool fused = per != 0;  // with no filler warps (FW = AFW = 0) the pump alone: no fixed work, no fused rounds
   d.st = full;
   const double setup_ms = now_ms() - ts0;
   const int sp_step = sm_spread(d, ss, true);
@@ -276,7 +277,7 @@ static int run_fscore(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, 
   auto arm_block = [&](Block& b, int r) {
     b.rd = round_open(f, point, 1 + r);
     b.frd = fopen(4 + 2 * rounds + r, K + 2);
-    b.fused = true;
+    b.fused = fused;
     CK(cudaMemsetAsync(f.rec, 0xA5, f.per() * sizeof(unsigned long long), fs));
     CK(cudaStreamSynchronize(fs));
     DPump pump;
@@ -369,10 +370,12 @@ static int run_fscore(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, 
          fa.pg[1], per, FBIT, out_rows, out_bad_total, lm_bad_total, steps_bad, ctl_equal, lin_macs);
   printf("\"alone_fill\": {\"mac_per_s\": %.6e, \"mhz\": %.1f, \"watt\": %.1f, ", alone, amhz, awatt);
   print_round(r0);
-  printf(", ");
-  print_round(rw, "fused_warm_round");
-  printf(", ");
-  print_round(rpw, "fused_power_round");
+  if (fused) {
+    printf(", ");
+    print_round(rw, "fused_warm_round");
+    printf(", ");
+    print_round(rpw, "fused_power_round");
+  }
   printf("}, \"rec_checked\": %d, \"rec_bad\": %d, \"power\": {\"settle_ms\": %.0f, \"meas_ms\": %.0f, ", checked, bad,
          PW_SETTLE_MS, PW_MEAS_MS);
   print_pwr("alone", pw_alone, true);
