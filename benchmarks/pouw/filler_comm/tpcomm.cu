@@ -91,10 +91,14 @@ __device__ __forceinline__ int ld_flag(const int* p) {
 constexpr int KF_G = 2;   // tile groups a block: one block an SM, 2 x 8 warps at 128 registers fill the register file
 constexpr int KF_PJ = 16;  // B fragments (64 MMAs a warp) between a warp's polls of the flag
 constexpr int KF_PAIRS_J = PF_TN / 8;
-constexpr int KF_A0 = 20;  // A fragments a tile's first SHA pass makes (lanes 12..31), a multiple of 4 above 16
-static_assert(KF_A0 % 4 == 0 && KF_A0 > 16 && KF_A0 <= 23, "lanes 9..31 hold the first pass's A fragments");
-constexpr size_t KF_SMEM_GRP = (size_t)PF_TN * 32 + (size_t)PF_W * 32 * 16 * 4;  // B as s8 bytes, A's 32 SHA blocks a warp
+constexpr int KF_H = PF_W / 2;            // warps of a group that run a tile's first SHA pass: one an SMSP
+constexpr int KF_HB = PF_TN / 16 / KF_H;  // B's SHA blocks each of them makes (lanes 0 .. KF_HB - 1)
+constexpr int KF_A0 = 8;                  // A fragments each makes for itself; for its upper partner, 4
+static_assert(KF_HB + 4 + KF_A0 + 1 <= 32 && KF_A0 % 4 == 0 && KF_A0 >= 8, "the first pass's lanes: B, 4, KF_A0, key");
+constexpr size_t KF_SMEM_GRP = (size_t)PF_TN * 32 + (size_t)PF_W * 32 * 16 * 4 + sizeof(PfKeys);  // B as s8 bytes, A's
+                                                                                                  // 32 SHA blocks a warp
 constexpr size_t KF_SMEM = KF_G * KF_SMEM_GRP;
+static_assert(KF_SMEM_GRP % 16 == 0 && KF_SMEM <= 101376, "a group's B is 16-byte aligned; one block an SM");
 // bar.sync / bar.red over one tile group's 32 PF_W threads (barrier 0 is __syncthreads')
 __device__ __forceinline__ void kf_bar(int id) { asm volatile("bar.sync %0, %1;" ::"r"(id), "n"(32 * PF_W) : "memory"); }
 __device__ __forceinline__ int kf_bar_or(int id, int v) {
@@ -122,6 +126,7 @@ __global__ void __launch_bounds__(32 * PF_W * KF_G, 1)
   const int grp = threadIdx.x / (32 * PF_W), bar = 1 + grp;
   uint8_t* Bs = kf_smem + grp * KF_SMEM_GRP;
   uint32_t(*Ab)[32 * 16] = reinterpret_cast<uint32_t(*)[32 * 16]>(Bs + PF_TN * 32);
+  PfKeys* ks = reinterpret_cast<PfKeys*>(Bs + PF_TN * 32 + PF_W * 32 * 16 * 4);
   const int lane = threadIdx.x & 31, w = (threadIdx.x >> 5) % PF_W, g = lane >> 2, t = lane & 3;
   const unsigned long long ng = (unsigned long long)gridDim.x * KF_G, gid = (unsigned long long)blockIdx.x * KF_G + grp;
   const unsigned long long base = (*epoch * (unsigned long long)nslots + slot) * ng * maxcap + gid * maxcap;
@@ -136,18 +141,26 @@ __global__ void __launch_bounds__(32 * PF_W * KF_G, 1)
     if (poll >= 0) fr = ld_flag(flag);
     const unsigned long long tile = base + i;
     started++;
-    // One SHA pass a warp starts the tile: lanes 0..7 hash B's blocks 8 w .. 8 w + 7, lane 8 the key block, lanes
-    // 32 - KF_A0 .. 31 A's fragments 0 .. KF_A0 - 1 (pfill hashes B and then a whole A pass, two serial passes, which
-    // halved what a 30-45 us window had left for MMAs). The lower warps regenerate A at fragment KF_A0, the upper ones at
-    // KF_A0 - P / 2, so the two warps of a pair on an SMSP still hash half a pass apart.
-    PfKeys key{0, 0, 0, 0};
-    {
-      const int fa = lane - (32 - KF_A0);
-      if (lane <= 8 || (fa >= 0 && fa < S)) {
+    // The tile's first SHA pass runs on the group's lower KF_H warps alone, one a group on each SMSP, so an SM's start
+    // is 2 passes deep instead of 4 (a pass 4 deep is about 12 us of a 46-240 us window). Lower warp w: lanes
+    // 0 .. KF_HB - 1 hash B's blocks KF_HB w + lane, the next 4 its upper partner w + KF_H's A fragments 0..3, the next
+    // KF_A0 its own fragments 0 .. KF_A0 - 1, the next the key block. Each warp then regenerates A itself (agen), the
+    // upper ones at fragment 4 and the lower at KF_A0, so the two warps of a pair on an SMSP hash at different times.
+    if (w < KF_H) {
+      int wa = -1, fa = 0;
+      uint64_t ctr = PF_KEY;
+      if (lane < KF_HB) {
+        ctr = PF_B + (uint64_t)(KF_HB * w + lane);
+      } else if (lane < KF_HB + 4 + KF_A0) {
+        wa = lane < KF_HB + 4 ? w + KF_H : w;
+        fa = lane < KF_HB + 4 ? lane - KF_HB : lane - KF_HB - 4;
+        ctr = (uint64_t)wa * S + fa;
+      }
+      if (lane <= KF_HB + 4 + KF_A0) {
         uint64_t st[8];
-        const int bb = w * 8 + (lane & 7);
-        pf_block(dom, c0, c1, tile, lane < 8 ? PF_B + (uint64_t)bb : lane == 8 ? PF_KEY : (uint64_t)w * S + fa, st);
-        if (lane < 8) {
+        pf_block(dom, c0, c1, tile, ctr, st);
+        if (lane < KF_HB) {
+          const int bb = KF_HB * w + lane;
 #pragma unroll
           for (int nn = 0; nn < 16; nn++) {
             const uint32_t R = pf_row(st, nn);
@@ -155,21 +168,18 @@ __global__ void __launch_bounds__(32 * PF_W * KF_G, 1)
             p[0] = make_uint4(pf_01(R & 15), pf_01((R >> 16) & 15), pf_01((R >> 4) & 15), pf_01((R >> 20) & 15));
             p[1] = make_uint4(pf_01((R >> 8) & 15), pf_01((R >> 24) & 15), pf_01((R >> 12) & 15), pf_01(R >> 28));
           }
-        } else if (lane == 8) {
-          key = pf_keys(st);
-        } else {
-          uint4* p = (uint4*)&Ab[w][fa * 16];
+        } else if (wa >= 0) {
+          uint4* p = (uint4*)&Ab[wa][fa * 16];
 #pragma unroll
           for (int q = 0; q < 4; q++)
             p[q] = make_uint4(pf_row(st, 4 * q), pf_row(st, 4 * q + 1), pf_row(st, 4 * q + 2), pf_row(st, 4 * q + 3));
+        } else if (w == 0) {
+          *ks = pf_keys(st);
         }
       }
     }
-    key.a0 = __shfl_sync(~0u, key.a0, 8);
-    key.a1 = __shfl_sync(~0u, key.a1, 8);
-    key.k0 = __shfl_sync(~0u, key.k0, 8);
-    key.k1 = __shfl_sync(~0u, key.k1, 8);
     kf_bar(bar);
+    const PfKeys key = *ks;
     auto agen = [&](int f0) {
       __syncwarp();
       if (f0 + lane < S) {
@@ -189,7 +199,7 @@ __global__ void __launch_bounds__(32 * PF_W * KF_G, 1)
       y[c] = pf_y0(pos);
       z[c] = pf_z0(pos);
     }
-    int f0 = 0, next = (w >> 2) & 1 ? KF_A0 - P / 2 : KF_A0;
+    int f0 = 0, next = w < KF_H ? KF_A0 : 4;
     const uint8_t* bp = Bs + g * 32 + 8 * t;
     int q = 0;
     bool stop = false;
