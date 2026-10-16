@@ -179,8 +179,9 @@ class Prover:
         Y = np.fromfile(ypath, np.int32).reshape(derive.TM, derive.BN)
         ypath.unlink()
         pl = ST.thread_place(th, a.window, self.ks, tile, j)
-        R = np.fromfile(rpaths[s][c], np.uint32).reshape(-1, pl["nw"], derive.NCT)[tile].copy()
-        rc_row = CM.leaf_row(("receipts", str(rpaths[s][c]), (-1,)), pl["r_leaf"]).copy()
+        Rf = np.fromfile(rpaths[s][c], np.uint32)
+        R = Rf.reshape(-1, pl["nw"], derive.NCT)[tile].copy()
+        rc_row = CM.receipt_rows(Rf, pl["r_leaf"], pl["r_leaf"] + 1)[0].copy()
         at, bt = (self.tb[s], atrees[s][c]) if self.dither else (atrees[s][c], self.tb[s])
         rt = rtrees[s][c]
         pos_a = CM.tile_pos(self.km, tm * derive.TM + CM.RL * pl["a_block"], j)
