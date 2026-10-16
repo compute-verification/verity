@@ -24,9 +24,9 @@ def _load(name):
     return mod
 
 
-A = _load("arms")
 F = _load("fused_arm")
 FS = _load("fused_score")
+A = F.A  # the arms module fused_arm imported (the one test_filler_score loaded, when it ran first): one Placement class
 ARMS = [F.Fused(), F.FusedV2()]
 
 
