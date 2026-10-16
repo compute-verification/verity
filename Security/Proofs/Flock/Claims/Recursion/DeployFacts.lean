@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Recursion.Deploy
 import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Soundness.Refine.Paths
 
 /-!
 # The compiled verifier's structural code facts
@@ -20,7 +21,8 @@ stated as the analysis states it (`Refuses`, `InnerRounds`, `SessionNums`, `Sess
   witnesses.
 
 `nextO_acc_length` and `next_acc_length`: the outer verifier and the compiled verifier accept only at their last
-rounds, as `FlockDeploy.next_acc_length` has it for Flock's. `zeroCommit_sha512`: the record's commit string to the zero digest is the deployed one at SHA-512.
+rounds, as `FlockDeploy.next_acc_length` has it for Flock's. `coinOf_bytes`: a coin's bytes determine it, so `coinOf`
+reads an inner round's answer back as its coin. `zeroCommit_sha512`: the record's commit string to the zero digest is the deployed one at SHA-512.
 -/
 
 namespace RecDeploy
@@ -305,6 +307,46 @@ theorem next_acc_length (H : Claims.Msg → Claims.Msg) {IV : Claims.Verifier Co
   rw [List.range_succ, List.map_append, List.sum_append]
   simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero]
   omega
+
+/-! ## Coins off their bytes -/
+
+theorem flatten_inj_of_length {n : ℕ} :
+    ∀ {L₁ L₂ : List (List UInt8)}, L₁.length = L₂.length → (∀ l ∈ L₁, l.length = n) → (∀ l ∈ L₂, l.length = n) →
+      L₁.flatten = L₂.flatten → L₁ = L₂
+  | [], [], _, _, _, _ => rfl
+  | [], _ :: _, hl, _, _, _ => by simp at hl
+  | _ :: _, [], hl, _, _, _ => by simp at hl
+  | a :: L₁, b :: L₂, hl, h₁, h₂, h => by
+    simp only [List.flatten_cons] at h
+    obtain ⟨rfl, h'⟩ := List.append_inj h ((h₁ a (by simp)).trans (h₂ b (by simp)).symm)
+    rw [flatten_inj_of_length (by simpa using hl) (fun l hl' => h₁ l (by simp [hl']))
+      (fun l hl' => h₂ l (by simp [hl'])) h']
+
+/-- **A coin's bytes determine it.** -/
+theorem coin_bytes_injective : Function.Injective FlockDeploy.Coin.bytes := by
+  intro c d h
+  simp only [FlockDeploy.Coin.bytes, List.flatMap] at h
+  have hm := flatten_inj_of_length (n := 16) (by simp)
+    (fun l hl => by obtain ⟨i, -, rfl⟩ := List.mem_map.1 hl; exact FlockSoundness.Refine.toBytes_length _)
+    (fun l hl => by obtain ⟨i, -, rfl⟩ := List.mem_map.1 hl; exact FlockSoundness.Refine.toBytes_length _) h
+  funext i
+  have hi := (List.map_inj_left.1 hm) i (List.mem_finRange i)
+  exact FlockSoundness.Refine.toBytes_inj (ByteArray.ext (Array.ext' hi))
+
+open Classical in
+/-- A coin read back off its bytes; `default` off anything else. -/
+noncomputable def coinOf (m : Claims.Msg) : Coin :=
+  if h : ∃ c : Coin, c.bytes = m then Classical.choose h else default
+
+/-- **`coinOf` inverts a coin's bytes**: the compiled verifier's inner-round answers (`.msg c.bytes`) show their
+coins. -/
+theorem coinOf_bytes (c : Coin) : coinOf c.bytes = c := by
+  unfold coinOf
+  split
+  · rename_i h
+    exact coin_bytes_injective (Classical.choose_spec h)
+  · rename_i h
+    exact absurd ⟨c, rfl⟩ h
 
 /-! ## The inner rounds' commit strings -/
 
