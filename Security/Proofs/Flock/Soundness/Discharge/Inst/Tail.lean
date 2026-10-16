@@ -1,5 +1,7 @@
 import Proofs.Flock.Soundness.Discharge.Inst.Keys
 import Proofs.Flock.Soundness.Discharge.Layout.OutPin
+import Proofs.Flock.Soundness.Discharge.Layout.RowEnc
+import Proofs.Flock.Soundness.Discharge.Composed.RegWords
 
 /-!
 # The returned outputs at the output net's slots, a tail's included
@@ -7,12 +9,17 @@ import Proofs.Flock.Soundness.Discharge.Layout.OutPin
 `Layout/Out*` pin the returned outputs where the unit returns them (`c.outNet = c.unitNet`). A tail returns them from its
 last stage (GLM's tailed RMSNorm): `HmRow.regions` then ends with a region "out" over the out range's slots, one per VU,
 each the VU's instance's `nOut` output words, two bytes each, at the last stage's only output group (`tailRegion`,
-`regions_outT`). Here both are read at `(netOf c c.outNet).outGroups` (`outGrp`) and at the output net's slot columns
-`slotCol c.outNet g i + outColT j t`:
+`regions_outT`). Here both are read at the output net's group `(netOf c c.outNet).outGroups` (`outGrp`) and at its
+slots' columns `slotCol c.outNet g i + outColT c j t`:
 
-* `OutShapeT`, `check_tail`, `outShape_of_parseT`: the returned outputs' shape, from the parse;
+* `hm_regions_wholeT`, `setupH_wholeT`: the regions are whole-word, a tail's region "out" when it has a whole word per
+  slot (`7 ≤ tz (16 · nOut)`, `seven_le_tz`);
+* `check_outT`, `OutShapeT`, `outShape_of_parseT`: the returned outputs' shape, from the parse (`check_tail` at a tail);
 * `tail_pinned`, `out_pinnedT`, `out_drawnT`, `out_siteT`: a satisfying witness holds the population's output words at
-  the output net's slots, under `PinShape` (`pinShape_of`; a tail has one slot per VU, `TailOne`).
+  the output net's slots, under `PinShape` (`pinShape_of`, for a circuit whose tail has one slot per VU, `TailOne`);
+* `OutsOutT`, `instOutBitOf`, `instProg_hout`: at `instProg`'s places, a unit's committed gates on the returned outputs'
+  columns (`OutColAtT`: `(order c).getD x 0 = code c.outNet i (outColT c j t)`) hold the registration's bit, which is
+  `instProg_valPinned`'s `hout`; `instRowsEnc` is `instHmRows` with `enc := rowEnc`, `encO := bitCode` and that bit.
 -/
 
 set_option Elab.async false
@@ -211,6 +218,26 @@ theorem outGrp_unit {c : Circuit} (ho : c.outNet = c.unitNet) : outGrp c = c.uni
   unfold outGrp netOf Circuit.unit
   rw [ho]
 
+/-- **What `HmRow.check` checks of the returned outputs, at the output net's group**, in an untyped circuit: where the
+unit returns them, `Layout.check_out` (16-bit ports; one leaf map per unit, with one output per port, each below
+`nOut`); at a tail, `check_tail`. -/
+theorem check_outT {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed = none)
+    (h : HmRow.check c tags ls = .ok ()) :
+    (c.outNet = c.unitNet → (∀ b ∈ (outGrp c).bits.toList, b = 16) ∧ c.leavesOut.size = c.upv ∧
+      ∀ u < c.upv, (outsOf c u).size = (outGrp c).bits.size ∧ ∀ o ∈ (outsOf c u).toList, o < c.outWords) ∧
+    (c.outNet ≠ c.unitNet → (portCols (netOf c c.outNet).outGroups).size = c.outWords ∧
+      (∀ x ∈ (portCols (netOf c c.outNet).outGroups).toList, x.2 = 16) ∧ (netOf c c.outNet).outGroups.size = 1 ∧
+      isPow2 (16 * c.outWords) = true ∧ isPow2 c.g = true) := by
+  refine ⟨fun ho => ?_, fun ho => check_tail ht ho h⟩
+  obtain ⟨h16, hsz, hlo⟩ := Layout.check_out ht ho h
+  rw [outGrp_unit ho]
+  refine ⟨h16, hsz, fun u hu => ?_⟩
+  have e : outsOf c u = c.leavesOut[u]! := by
+    rw [outsOf, ite_eq_left ho, Array.getD_eq_getD_getElem?, getElem!_pos c.leavesOut u (by omega),
+      Array.getElem?_eq_getElem (by omega), Option.getD_some]
+  rw [e]
+  exact hlo u hu
+
 /-- **The returned outputs' shape, at the output net's group** (`Layout.OutShape` where the unit returns them): where
 the unit returns them, the group's words are a power of two, and each copy's leaf's outputs are 16-bit ports, output
 words below `nOut`, that fit in the group's words; at a tail, the last stage's only output group is one 16-bit port
@@ -294,6 +321,55 @@ theorem outShape_of_parseT {tags : Tags} {bytes : ByteArray} {tables : List (Str
     refine ⟨h1, hbs, fun j hj => ?_, hp, hbound, hg⟩
     rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem (by omega), Option.getD_some]
     exact hb16 _ (Array.getElem_mem_toList _)
+
+/-! ## The regions are whole-word -/
+
+/-- `tz` of a power of two of at least `2^7`, below `2^64`, is at least 7. -/
+theorem seven_le_tz {x : ℕ} (h : isPow2 x = true) (hx : x < 2 ^ 64) (h7 : 128 ≤ x) : 7 ≤ tz x := by
+  have e := tz_of_pow2 h hx
+  by_contra hc
+  have : 2 ^ tz x < 2 ^ 7 := Nat.pow_lt_pow_right (by norm_num) (by omega)
+  omega
+
+open Refine in
+set_option maxHeartbeats 2000000 in
+/-- **`HmRow.regions`' regions are whole-word** in an untyped circuit (`Composed.hm_regions_whole` without
+`c.outNet = c.unitNet`), when a tail's region "out" has a whole word per slot (`7 ≤ tz (16 · nOut)`): each port's
+"digest p", and region "out", the unit's (`Circuit.outRegion`) or the tail's (`tailRegion`). -/
+theorem hm_regions_wholeT {c : Flock.Circuit} {pub : Flock.Public} {regs : Array Flock.Region}
+    (h : HmRow.regions c pub = .ok regs) (ht : c.typed = none)
+    (hw : c.outNet ≠ c.unitNet → 7 ≤ tz (16 * c.outWords)) : ∀ x ∈ regs.toList, Composed.WholeWord x := by
+  unfold HmRow.regions at h
+  dsimp only at h
+  try simp only [throw_bind', pure_bind] at h
+  obtain ⟨out, hloop, h⟩ := ebind_ok h
+  rw [Std.Legacy.Range.forIn_eq_forIn_range'] at hloop
+  obtain ⟨es, hes, heq⟩ := list_forIn_push _ (fun _ v => v) _ _ _ hloop
+  have hI : ∀ x ∈ out.toList, Composed.WholeWord x := by
+    intro x hx
+    have hx' : x ∈ es := by simpa [heq] using hx
+    obtain ⟨a, -, v, hv, rfl⟩ := Layout.forall₂_mem hes.flip x hx'
+    exact Composed.mkRegion_whole hv (Composed.hmFree_low c)
+  split at h
+  · rename_i hc
+    have hne : c.outNet ≠ c.unitNet := by simpa [ht] using hc
+    obtain ⟨r, hr, h⟩ := ebind_ok h
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    exact Composed.whole_push hI (Composed.mkRegion_whole hr (Composed.low_mem (hw hne) _))
+  · obtain ⟨r, hr, h⟩ := ebind_ok h
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    exact Composed.whole_push hI (Composed.outRegion_whole hr)
+
+/-- **A `setupH` statement's regions are whole-word** once its circuit is untyped and a tail's region "out" has a
+whole word per slot (`Composed.setupH_whole` without `st.c.outNet = st.c.unitNet`). -/
+theorem setupH_wholeT {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
+    {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
+    (h : Stmt.setupH tags circuitFile publicFile coins tables draw partition program = .ok st)
+    (ht : st.c.typed = none) (hw : st.c.outNet ≠ st.c.unitNet → 7 ≤ tz (16 * st.c.outWords)) :
+    Composed.WholeWords st :=
+  hm_regions_wholeT (Layout.setupH_regions h) ht hw
 
 /-! ## Where region "out" pins them at a tail -/
 
@@ -591,5 +667,163 @@ theorem out_siteT (a : Placed.Accepted T) {pop : Public} {o : Fin (2 ^ T.nbl)} {
   exact out_drawnT h hpop hD hlt (setupH_layout ht' h) regs hregs hty hz o hg hr hi hP hj ht
 
 end pin
+
+/-! ## The template instance's committed gates at `instProg`'s places -/
+
+section prog
+
+variable (c : Flock.Circuit) (n : ℕ)
+
+/-- **Composite column `x` of a template instance is a returned output's bit**: past the composite inputs, on the
+output net's slot `i` at column `outColT j t`, for output `j` of the slot's returned output words and bit `t < 16`. -/
+def OutColAtT (x i j t : ℕ) : Prop :=
+  j < (outsOf c i).size ∧ t < 16 ∧ (instRows c).nIn ≤ x ∧ x < (order c).length ∧
+    (order c).getD x 0 = code c.outNet i (outColT c j t)
+
+/-- The slot, output and bit a composite column is on (`OutColAtT` read back). -/
+def outDecodeT (x : ℕ) : ℕ × ℕ × ℕ :=
+  (codeSlot ((order c).getD x 0), (codeOff ((order c).getD x 0) - (outGrp c).col * WORD) / 16,
+    (codeOff ((order c).getD x 0) - (outGrp c).col * WORD) % 16)
+
+variable {c} in
+theorem outDecodeT_of {x i j t : ℕ} (h : OutColAtT c x i j t) : outDecodeT c x = (i, j, t) := by
+  obtain ⟨-, ht, -, -, he⟩ := h
+  unfold outDecodeT
+  rw [he, codeSlot_code, codeOff_code]
+  simp only [outColT, Nat.add_sub_cancel_left, Prod.mk.injEq]
+  exact ⟨trivial, by omega, by omega⟩
+
+variable {Reg : Type} (outs : Finset (Fin (instN c n))) (popOf : Reg → Public)
+
+open Classical in
+/-- **The registration's bit at a unit's computed gate** of `instProg`: bit `t` of the population's output word
+`(outsOf c i)[j]` of the unit, where the gate's column in the unit's instance is the output net's slot `i`'s output
+`j`, bit `t` (`outDecodeT`). -/
+noncomputable def instOutBitOf (R : Reg) (g : Fin (instN c n)) : Bool :=
+  match (instProg c n).unit g with
+  | some u =>
+    if h : ∃ x, (Const.Prog.instC (instProg c n) outs u).wire x = g then
+      ((popOf R).outputs.getD (u.val * c.outWords +
+        (outsOf c (outDecodeT c (Classical.choose h).val).1)[(outDecodeT c (Classical.choose h).val).2.1]!)
+          0).testBit (outDecodeT c (Classical.choose h).val).2.2
+    else false
+  | none => false
+
+/-- **The committed gates a unit of `instProg` computes are returned outputs' bits** (a condition on the circuit's
+outputs `outs`): each column of the unit's instance on one is a returned output's bit (`OutColAtT`). -/
+def OutsOutT : Prop :=
+  ∀ u g, g ∈ ((instProg c n).partition outs).io u → (instProg c n).unit g = some u →
+    ∀ x : Fin ((instProg c n).rows u).w, (Const.Prog.instC (instProg c n) outs u).wire x = g →
+      ∃ i j t, OutColAtT c x.val i j t
+
+variable {c n outs popOf} {mPts : ℕ} {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
+  {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
+  {si : Placed.Sites plan tab}
+  (hparse : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
+    HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables = .ok c)
+
+/-- **A drawn unit's composite column `x`** (one of `order c`) sits at its code's place in the unit's template
+instance (`pos`). -/
+theorem instCol_val {S : Finset (Fin n)} {R : Reg} {u : Fin n} (hu : u ∈ S) (x : Fin ((instProg c n).rows u).w)
+    (hx : x.val < (order c).length) :
+    (Sites.instCol hparse S R u hu x).val =
+      pos (si.acc S R u hu).st.c (si.vu S R u hu) ((order c).getD x.val 0) := by
+  have hcc := (si.acc S R u hu).c_eq (hparse S R u hu)
+  unfold Sites.instCol
+  rw [Fin.val_cast, composePlace_val, Fin.val_cast]
+  have hlen : x.val < (logical (si.acc S R u hu).st.c).order.length := by
+    show _ < (order (si.acc S R u hu).st.c).length
+    rw [hcc]
+    exact hx
+  rw [ite_eq_left hlen]
+  show pos (si.acc S R u hu).st.c (si.vu S R u hu) ((order (si.acc S R u hu).st.c).getD _ 0) = _
+  rw [hcc]
+
+include hparse in
+/-- **`hout` at `instProg`'s places**: in an untyped circuit, whether its unit or a tail returns the outputs, at each
+drawn unit's site (`BcSite`), a satisfying witness holds at every committed gate the unit computes the registration's
+bit `instOutBitOf`, the population's returned output's, when those gates are returned outputs' bits (`OutsOutT`) and a
+tail has one slot per VU (`TailOne`); the shape region "out" pins is the parse's (`pinShape_of`). -/
+theorem instProg_hout
+    (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
+      Layout.BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
+    (houts : OutsOutT c n outs) (hone : TailOne c) :
+    ∀ S R u, u ∈ S → ∀ M, Binding.Sat plan tab S R u M → ∀ g ∈ ((instProg c n).partition outs).io u,
+      (instProg c n).unit g = some u →
+        bit (Binding.wit plan tab S R u M (Layout.gateAt (instPlace hparse outs) S R u g)) =
+          instOutBitOf c n outs popOf R g := by
+  intro S R u hu M hM g hg hgu
+  have hc' := Layout.exists_col_of_io ((instPlace hparse outs) S R u hu).inst hg
+  have hc : ∃ x, (Const.Prog.instC (instProg c n) outs u).wire x = g := hc'
+  obtain ⟨i, j, t, hoc⟩ := houts u g hg hgu (Classical.choose hc') (Classical.choose_spec hc')
+  have hob : instOutBitOf c n outs popOf R g =
+      ((popOf R).outputs.getD (u.val * c.outWords + (outsOf c i)[j]!) 0).testBit t := by
+    unfold instOutBitOf
+    rw [hgu]
+    dsimp only
+    rw [dite_eq_left hc, outDecodeT_of (show OutColAtT c (Classical.choose hc).val i j t from hoc)]
+  obtain ⟨hj, ht, hnx, hx, hcode⟩ := hoc
+  have hcc := (si.acc S R u hu).c_eq (hparse S R u hu)
+  have hcol : (Sites.instCol hparse S R u hu (Classical.choose hc')).val =
+      (si.acc S R u hu).st.c.slotCol (si.acc S R u hu).st.c.outNet (si.vu S R u hu) i +
+        outColT (si.acc S R u hu).st.c j t := by
+    rw [instCol_val hparse hu (Classical.choose hc') hx, hcode, hcc, pos_code]
+  have hlt : (si.acc S R u hu).st.c.slotCol (si.acc S R u hu).st.c.outNet (si.vu S R u hu) i +
+      outColT (si.acc S R u hu).st.c j t < 2 ^ (si.acc S R u hu).st.c.kLog := by
+    rw [← hcol]
+    exact lt_of_lt_of_eq (Fin.isLt _) (si.acc S R u hu).kLog_eq.symm
+  have hga : Layout.gateAt (instPlace hparse outs) S R u g = Layout.siteAddr (si.acc S R u hu) (si.o S R u hu)
+      ((si.acc S R u hu).st.c.slotCol (si.acc S R u hu).st.c.outNet (si.vu S R u hu) i +
+        outColT (si.acc S R u hu).st.c j t) := by
+    unfold Layout.gateAt
+    rw [dite_eq_left hu, dite_eq_left hc']
+    unfold Layout.siteAddr
+    congr 1
+    apply Fin.ext
+    have hin : (Layout.inBlockOr (si.acc S R u hu).st.c.kLog
+        ((si.acc S R u hu).st.c.slotCol (si.acc S R u hu).st.c.outNet (si.vu S R u hu) i +
+          outColT (si.acc S R u hu).st.c j t)).val =
+        (si.acc S R u hu).st.c.slotCol (si.acc S R u hu).st.c.outNet (si.vu S R u hu) i +
+          outColT (si.acc S R u hu).st.c j t := by
+      simp only [Layout.inBlockOr, hlt, ↓reduceDIte]
+    exact hcol.trans hin.symm
+  rw [hga, hob]
+  have hrow := order_row (c := c) hx hnx
+  rw [hcode] at hrow
+  unfold row at hrow
+  rw [codeNet_code, codeSlot_code, codeOff_code] at hrow
+  obtain ⟨-, -, -, hi, -⟩ := rowAt_dom hrow
+  have hpar := hparse S R u hu
+  rw [← hcc] at hpar
+  have hP := pinShape_of (si.acc S R u hu).layout hpar (by rw [hcc]; exact hone)
+  have := out_siteT (si.acc S R u hu) (hsite S R u hu M hM) (parse_facts hpar).typed hM (si.hvu S R u hu)
+    (i := i) (j := j) (t := t) (by rw [hcc]; exact hi) hP (by rw [hcc]; exact hj) ht
+  rw [this, hcc]
+
+variable (rowW : Fin c.ports.size → ℕ) (saltCol : Flock.Circuit → ℕ → ℕ → ℕ → ℕ → ℕ)
+
+/-- **`rs` at `instProg`'s places, with the returned outputs and the row bytes `sha512/row/v1` hashes**: `instHmRows`
+with `enc := rowEnc`, `bitCode` for the other commit strings, the registration's bit `instOutBitOf` and its `hout`
+from `instProg_hout`. -/
+noncomputable def instRowsEnc
+    (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
+      Layout.BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
+    (hkeys : InstKeysRow c rowW) (houts : OutsOutT c n outs) (hone : TailOne c)
+    (hc1 : ((instProg c n).partition outs).ConstCols plan tab (instPlace hparse outs) {instOneG (c := c) (n := n)})
+    (hz1 : ((instProg c n).partition outs).ZeroCols plan tab (instPlace hparse outs) {instZeroG (c := c) (n := n)}) :
+    Binding.HmRows (instLayout rowW hparse outs saltCol popOf (instOutBitOf c n outs popOf) Layout.bitCode) :=
+  instHmRows rowW hparse outs saltCol popOf (instOutBitOf c n outs popOf) Layout.rowEnc Layout.rowEnc_inj
+    Layout.bitCode Layout.bitCode_inj hsite hkeys hc1 hz1 (instProg_hout hparse hsite houts hone)
+
+/-- `instRowsEnc`'s `enc` is `rowEnc`. -/
+theorem instRowsEnc_enc
+    (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
+      Layout.BcSite (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
+    (hkeys : InstKeysRow c rowW) (houts : OutsOutT c n outs) (hone : TailOne c)
+    (hc1 : ((instProg c n).partition outs).ConstCols plan tab (instPlace hparse outs) {instOneG (c := c) (n := n)})
+    (hz1 : ((instProg c n).partition outs).ZeroCols plan tab (instPlace hparse outs) {instZeroG (c := c) (n := n)}) :
+    (instRowsEnc hparse rowW saltCol hsite hkeys houts hone hc1 hz1).enc = Layout.rowEnc := rfl
+
+end prog
 
 end FlockSoundness.Discharge.Inst
