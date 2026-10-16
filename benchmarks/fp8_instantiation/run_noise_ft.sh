@@ -15,7 +15,7 @@ export SNAP=/workspace/hf/hub/models--unsloth--Llama-3.1-8B/snapshots/3f0d51f8e5
 export HF_HUB_OFFLINE=1
 CAPTURE=/workspace/pouw/fp8-security/llama8b-w0/ids.npy
 WT=/workspace/hf/datasets/Salesforce___wikitext/wikitext-2-raw-v1/0.0.0/b08601e04326c79dfdd32d625aee71d232d685c3
-S=benchmarks/fp8_instantiation/noise_ft.py
+export S=benchmarks/fp8_instantiation/noise_ft.py
 SCR=$(mktemp -d)
 trap 'rm -rf "$SCR"' EXIT
 "$PY" -c "import pyarrow" 2>/dev/null || "$PY" -m pip install -q --target "$SCR/pa" pyarrow > "$O/pip.txt" 2>&1 \
