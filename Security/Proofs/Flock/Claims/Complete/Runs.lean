@@ -4,9 +4,10 @@ import Proofs.Flock.Claims.Complete.Json
 # The honest session runs
 
 `sessionRuns_goal`: the goal `SessionRuns`, given `StmtOk` (no keyed coin tree, so the record's `hello` is the
-statement's) and one named hypothesis on the prover's pieces, `ProverRuns`: at every good case's table, the level-0
-commitment returns, the table's extra claims at the link's points return, and each rep returns, on that commitment and
-those claims, from any sends.
+statement's) and one named hypothesis on the prover's pieces, `ProverRuns`: at every good case's table, the table's
+extra claims at the link's points return, and each rep returns, on the level-0 commitment and those claims, from any
+sends. The level-0 commitment itself returns (`commitP_ok`: through `Hashes.ofSha512` every leaf and node hash is a
+`pure`).
 
 `Runs y l P`: `y` returns from the sends `l`, with `P` of its value and the sends after; `Runs.bind`, `Runs.forIn_array`
 and `Runs.mapM_singleton` walk the session.
@@ -62,15 +63,67 @@ theorem Runs.mapM_singleton {α β : Type} (f : α → PS β) (a : α) {l : Arra
   refine Runs.bind (Q := fun b l' => P #[b] l') h fun b l' hb => ?_
   exact Runs.pure hb
 
+/-! ## The level-0 commitment returns
+
+Through `Hashes.ofSha512`, every scheme's leaf and node hash is a `pure`, so `commitP` returns. -/
+
+theorem ok_bind {α β γ : Type} {x : V α} {f : α → V β} {g : γ → β} (hx : ∃ a, x = .ok a)
+    (hf : ∀ a, ∃ c, f a = .ok (g c)) : ∃ c, (x >>= f) = .ok (g c) := by
+  obtain ⟨a, rfl⟩ := hx
+  exact hf a
+
+theorem mapM_list_ok {α β : Type} (f : α → V β) (hf : ∀ a, ∃ b, f a = .ok b) :
+    ∀ xs : List α, ∃ ys, xs.mapM f = .ok ys
+  | [] => ⟨[], rfl⟩
+  | a :: xs => by
+    obtain ⟨b, hb⟩ := hf a
+    obtain ⟨ys, hys⟩ := mapM_list_ok f hf xs
+    exact ⟨b :: ys, by rw [List.mapM_cons, hb, hys]; rfl⟩
+
+theorem mapM_array_ok {α β : Type} (f : α → V β) (hf : ∀ a, ∃ b, f a = .ok b) (xs : Array α) :
+    ∃ ys, xs.mapM f = .ok ys := by
+  rw [Array.mapM_eq_mapM_toList]
+  obtain ⟨ys, h⟩ := mapM_list_ok f hf xs.toList
+  exact ⟨ys.toArray, by rw [h]; rfl⟩
+
+theorem forIn_list_ok {α β : Type} (f : α → β → V (ForInStep β)) (hf : ∀ a b, ∃ b', f a b = .ok (.yield b')) :
+    ∀ (xs : List α) (b : β), ∃ b', forIn xs b f = .ok b'
+  | [], b => ⟨b, rfl⟩
+  | a :: xs, b => by
+    obtain ⟨b₁, h₁⟩ := hf a b
+    obtain ⟨b₂, h₂⟩ := forIn_list_ok f hf xs b₁
+    exact ⟨b₂, by rw [List.forIn_cons, h₁]; exact h₂⟩
+
+theorem forIn_range_ok {β : Type} (r : Std.Legacy.Range) (b : β) (f : Nat → β → V (ForInStep β))
+    (hf : ∀ a b, ∃ b', f a b = .ok (.yield b')) : ∃ b', forIn r b f = .ok b' := by
+  rw [Std.Legacy.Range.forIn_eq_forIn_range']
+  exact forIn_list_ok f hf _ b
+
+theorem opsWith_ok (h : ByteArray → ByteArray) (ms : MerkleScheme) :
+    (∀ l r, ∃ v, (ms.opsWith (Hashes.ofSha512 h : Hashes V)).node l r = .ok v) ∧
+    ∀ row salt, ∃ v, (ms.opsWith (Hashes.ofSha512 h : Hashes V)).leaf row salt = .ok v := by
+  unfold MerkleScheme.opsWith
+  split
+  · split_ifs <;> exact ⟨fun _ _ => ⟨_, rfl⟩, fun _ _ => ⟨_, rfl⟩⟩
+  · exact ⟨fun _ _ => ⟨_, rfl⟩, fun _ _ => ⟨_, rfl⟩⟩
+
+/-- **A level's commitment returns** through `Hashes.ofSha512`. -/
+theorem commitP_ok (h : ByteArray → ByteArray) (ms : MerkleScheme) (lv : Level) (g : Array F128)
+    (salt : ℕ → ByteArray) : ∃ cm, commitP (Hashes.ofSha512 h : Hashes V) ms lv g salt = .ok cm := by
+  obtain ⟨hn, hl⟩ := opsWith_ok h ms
+  unfold commitP
+  refine ok_bind (g := id) (mapM_array_ok _ (fun _ => hl _ _) _) fun leaves => ?_
+  refine ok_bind (g := id) (forIn_range_ok _ _ _ fun _ r => ?_) fun r => ⟨_, rfl⟩
+  dsimp only
+  exact ok_bind (g := ForInStep.yield) (mapM_array_ok _ (fun _ => hn _ _) _) fun _ => ⟨_, rfl⟩
+
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **The prover's pieces return**, at every good case's table with its schedule: the level-0 commitment of the
-trace's packed table, under any salts; the table's extra claims at the link's points; and each rep on such a commitment
-and those claims, under any salts, nonces and domain, from any sends. -/
+/-- **The prover's pieces return**, at every good case's table with its schedule: the table's extra claims at the
+link's points, and each rep on the level-0 commitment of the trace's packed table (under any salts) and those claims,
+under any salts, nonces and domain, from any sends. -/
 def ProverRuns (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ c : Case H rel, ∀ st sch, c.sts = #[st] → fast100 (Setup.ofCircuit st).m = some sch →
-    (∀ salt₀, ∃ cm, commitP (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st).merkle
-      (sch.levels.getD 0 default) (packed (tracesOf c.sts c.w)[0]! (Setup.ofCircuit st).m) salt₀ = .ok cm) ∧
     (∃ e, (Setup.ofCircuit st).extra (pointsOf c.spec (Claims.coinSeq c.r 0)) = .ok e) ∧
     ∀ salt₀ cm e, commitP (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st).merkle
       (sch.levels.getD 0 default) (packed (tracesOf c.sts c.w)[0]! (Setup.ofCircuit st).m) salt₀ = .ok cm →
@@ -86,8 +139,9 @@ theorem sessionRuns_goal (hS : StmtOk H rel) (hR : ProverRuns H rel) : SessionRu
   obtain ⟨hct, -, -, -⟩ := hS c
   have ht : c.spec.tables = #[st.tags.table] := by rw [hsp]; rfl
   obtain ⟨sch, hsch⟩ := Option.isSome_iff_exists.1 (fast100_isSome (m := (Setup.ofCircuit st).m) hm1 hm2)
-  obtain ⟨hC, ⟨e, he⟩, hRep⟩ := hR c st sch hst hsch
-  obtain ⟨cm, hcm⟩ := hC (c.ω.salt 0 0 0)
+  obtain ⟨⟨e, he⟩, hRep⟩ := hR c st sch hst hsch
+  obtain ⟨cm, hcm⟩ := commitP_ok (Claims.hOf H) (Setup.ofCircuit st).merkle (sch.levels.getD 0 default)
+    (packed (tracesOf c.sts c.w)[0]! (Setup.ofCircuit st).m) (c.ω.salt 0 0 0)
   rw [hst] at hcm hRep
   suffices h : Runs (sessionP (asksS c.resp) (Hashes.ofSha512 (Claims.hOf H)) c.spec #[Setup.ofCircuit st]
       (tracesOf #[st] c.w) c.ω) #[] fun _ _ => True by
