@@ -12,7 +12,9 @@ to right, and a thread adds its vector partials with F32Add, not an FMA chain; B
 threads by the token count), and threads beyond N / 8 hold nothing. :func:`warps` says when every warp is the same unit:
 ``min(BLOCK, N / 8)`` threads in whole warps, each holding the same number of vectors. A unit is the warp count's odd part of
 consecutive warps, so an instance holds a power-of-two number of units (GLM-5.3: 24 warps of one vector at BLOCK 1024, three
-a unit; 8 warps of three vectors at BLOCK 256; 8 units of 768 elements either way). The unit netlist is pinned per
+a unit; 8 warps of three vectors at BLOCK 256; 8 units of 768 elements either way). At N = 6144 the tail's ``/ N`` divides by a
+constant that is not a power of two, which the tail lowers through the IEEE divider (``verity_flock.tail``) where 2048 and 4096
+took an exact reciprocal. The unit netlist is pinned per
 (N, EPS, BLOCK) by :data:`PINS`, its leaf maps and cut structure (the tail with N and eps, the cut ports) included.
 
 A unit of 768 elements is about 2^21.8 rows, more than frame-v3's 2^22-bit block holds beside its compressions, so these
