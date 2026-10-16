@@ -24,7 +24,8 @@ attention `attention.evaluate` per window with LoRA unmerged.  16 WikiText-2 tes
     python noise_ft.py --table RESULTS.jsonl...
 
 Environment: NFT_STEPS (max optimizer steps), NFT_TRAIN_MIN (training wall budget, evaluations excluded), NFT_EVAL_AT
-(steps to evaluate at), NFT_SEEDS (noise seeds per evaluation), NFT_ACCUM (sequences per step), NFT_LR, NFT_RANK.
+(steps to evaluate at), NFT_SEEDS (noise seeds per evaluation), NFT_ACCUM (sequences per step), NFT_LR, NFT_RANK, NFT_TAG
+(a suffix for the config's output directory and label).
 """
 from __future__ import annotations
 
@@ -262,6 +263,8 @@ CONFIGS = {
     "lin-u5": ("lin:wa:u5", ["int8_rot@wa:u5"], ["bf16", "int8@-", "int8_rot@-"]),
     "lin-u8": ("lin:wa:u8", ["int8_rot@wa:u8"], ["bf16", "int8@-", "int8_rot@-"]),
     "attn-pm1": ("attn:int8-pm1-rot", ["int8-pm1-rot", "int8-p=pm1"], ["bf16", "int8-none-rot", "int8-none"]),
+    "attn-u2": ("attn:int8-u2-rot", ["int8-u2-rot", "int8-p=u2"], ["bf16", "int8-none-rot"]),
+    "attn-u4": ("attn:int8-u4-rot", ["int8-u4-rot", "int8-p=u4"], ["bf16", "int8-none-rot"]),
 }
 
 
@@ -273,13 +276,14 @@ def seeded(method: str, seed: int) -> str:
 
 def evaluate_all(model, mods, ids, config: str, step: int, seeds: int, baselines: bool, out) -> list[dict]:
     noise, methods, base = CONFIGS[config]
+    label = config + os.environ.get("NFT_TAG", "")
     fn = eval_linears if noise.startswith("lin") else eval_attention
     todo = [(m, s) for m in methods for s in range(seeds)] + ([(m, None) for m in base] if baselines else [])
     rows = []
     for m, s in todo:
         name = seeded(m, s) if s is not None else m
         r = fn(model, mods, ids, name) if fn is eval_linears else fn(model, ids, name)
-        r.update(config=config, step=step, family=m, seed=s)
+        r.update(config=label, step=step, family=m, seed=s)
         rows.append(r)
         print(json.dumps(r), file=out, flush=True)
         print(f"eval step {step} {name}: {r['ppl']:.4f} ({r['seconds']} s)", file=sys.stderr, flush=True)
@@ -317,7 +321,7 @@ def kd_step(model, seq: torch.Tensor) -> tuple[torch.Tensor, float]:
 def train(snapshot: str, windows: str, corpus: str, out_dir: str, config: str) -> int:
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cudnn.allow_tf32 = False
-    out = Path(out_dir) / config
+    out = Path(out_dir) / (config + os.environ.get("NFT_TAG", ""))
     out.mkdir(parents=True, exist_ok=True)
     steps = int(os.environ.get("NFT_STEPS", "1000"))
     budget = float(os.environ.get("NFT_TRAIN_MIN", "40")) * 60
@@ -339,7 +343,7 @@ def train(snapshot: str, windows: str, corpus: str, out_dir: str, config: str) -
     data = torch.from_numpy(np.load(corpus)).cuda()
     params = [p for m in mods for p in (m.A, m.B)]
     opt = torch.optim.AdamW(params, lr=lr, betas=(0.9, 0.999), weight_decay=0.0)
-    meta = {"config": config, "noise": noise, "steps": steps, "budget_s": budget, "eval_at": eval_at, "seeds": seeds,
+    meta = {"config": config, "tag": os.environ.get("NFT_TAG", ""), "noise": noise, "steps": steps, "budget_s": budget, "eval_at": eval_at, "seeds": seeds,
             "accum": accum, "lr": lr, "rank": rank, "alpha": 2 * rank, "warmup": warm, "seq": int(data.shape[1]),
             "corpus_sequences": int(data.shape[0]), "lora_params": sum(p.numel() for p in params),
             "gpu": torch.cuda.get_device_name(), "torch": torch.__version__, "transformers": transformers.__version__}

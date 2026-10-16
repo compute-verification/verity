@@ -37,17 +37,17 @@ for cfg in ${NFT_CONFIGS:?}; do
   export CFG=$cfg
   # shellcheck disable=SC2016
   gpu-lease 1 --wait --max-min "${NFT_MAX_MIN:-75}" -- bash -c '
-    mkdir -p "$O/$CFG"
-    nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,clocks.mem,power.limit --format=csv -i "$GPU_LEASE_UUID" > "$O/$CFG/gpu.txt" 2>&1
-    "$PY" "$S" --selftest > "$O/$CFG/selftest.json" 2> "$O/$CFG/selftest_stderr.txt" || exit 3
-    "$PY" "$S" "$SNAP" "$O/windows.npy" "$CORPUS" "$O" "$CFG" 2> "$O/$CFG/stderr.txt"
+    export CFGT=$CFG${NFT_TAG:-}; mkdir -p "$O/$CFGT"
+    nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,clocks.mem,power.limit --format=csv -i "$GPU_LEASE_UUID" > "$O/$CFGT/gpu.txt" 2>&1
+    "$PY" "$S" --selftest > "$O/$CFGT/selftest.json" 2> "$O/$CFGT/selftest_stderr.txt" || exit 3
+    "$PY" "$S" "$SNAP" "$O/windows.npy" "$CORPUS" "$O" "$CFG" 2> "$O/$CFGT/stderr.txt"
     r=$?
-    nvidia-smi --query-gpu=index,clocks.sm,clocks.mem --format=csv -i "$GPU_LEASE_UUID" >> "$O/$CFG/gpu.txt" 2>&1
+    nvidia-smi --query-gpu=index,clocks.sm,clocks.mem --format=csv -i "$GPU_LEASE_UUID" >> "$O/$CFGT/gpu.txt" 2>&1
     exit $r'
   r=$?
   echo "$cfg $r" >> "$O/status.txt"
   [ $r -ne 0 ] && rc=$r
-  tail -3 "$O/$cfg/selftest_stderr.txt" "$O/$cfg/stderr.txt" 2>/dev/null
+  tail -3 "$O/$cfg${NFT_TAG:-}/selftest_stderr.txt" "$O/$cfg${NFT_TAG:-}/stderr.txt" 2>/dev/null
 done
 "$PY" "$S" --table "$O"/*/results.jsonl > "$O/table.md" 2>> "$O/status.txt"
 exit $rc
