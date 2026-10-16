@@ -11,7 +11,7 @@ import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 `decodeProof` (`Zk.decode`) reads each opened level-0 row with exactly `2^lanes` (`2^lanes + EXTRA_LANES`) symbols
 (`decodeProof_rows`, `zkDecode_rows`), so each column has the `2^lanes` witness lanes (under `--zk`, a row's first
 `2^lanes` symbols), the zero column's width (`plain_colsOk`, `zk_colsOk`). That leaves `TableBoundθ`
-and `ConflictTied` for `KSθ` at SHA-512 (`plain_KSθ_sha512`, `zk_KSθ_sha512`); `KS.ConflictTied` proves the second.
+and `ConflictTied` for `Flock.KS` at SHA-512 (`plain_KS_sha512`, `zk_KS_sha512`); `KS.ConflictTied` proves the second.
 -/
 
 namespace FlockDeploy.KS
@@ -260,7 +260,7 @@ theorem zeroCol_length {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : S
 
 /-- **`ColsOk` at the plain record**: an accepted run opens only columns of the zero column's width. -/
 theorem plain_colsOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
-    Claims.Flock.ColsOk H (deployPlain rel) plainRadius (wide false) := by
+    Claims.Flock.ColsOk H (deployPlain rel) (wordLen false) (wide false) := by
   intro x Ω P ω r q u hacc _ hu
   obtain ⟨spec, st, hh, hl⟩ := acc_cols (zk := false) hacc hu
   unfold wide
@@ -269,26 +269,25 @@ theorem plain_colsOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → 
 /-- **`ColsOk` at the masked record**: an accepted run opens only columns of the zero column's width, the witness
 lanes. -/
 theorem zk_colsOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
-    Claims.Flock.ColsOk H (deployZk rel) zkRadius (wide true) := by
+    Claims.Flock.ColsOk H (deployZk rel) (wordLen true) (wide true) := by
   intro x Ω P ω r q u hacc _ hu
   obtain ⟨spec, st, hh, hl⟩ := acc_cols (zk := true) hacc hu
   unfold wide
   rw [hl, zeroCol_length hh]
 
-/-- **The deployed plain verifier: KS at the filled word**, at SHA-512, from a fixed table's bound and conflicts tied
-to collisions. -/
-theorem plain_KSθ_sha512 (rel : Readable.Parsed → Readable.Relation)
-    (hconf : Claims.Flock.ConflictTied sha512 (deployPlain rel) plainRadius)
-    (htab : Claims.Flock.TableBoundθ sha512 (deployPlain rel) plainRadius (wide false)) :
-    Claims.Flock.KSθ sha512 (deployPlain rel) plainRadius :=
-  plain_KSθ_of_tableBound rel (plain_colsOk sha512 rel) hconf htab
+/-- **The deployed plain verifier: KS**, at SHA-512, from a fixed table's bound and conflicts tied to collisions. -/
+theorem plain_KS_sha512 (rel : Readable.Parsed → Readable.Relation)
+    (hconf : Claims.Flock.ConflictTied sha512 (deployPlain rel) (wordLen false))
+    (htab : Claims.Flock.TableBoundθ sha512 (deployPlain rel) (wordLen false) (Claims.Flock.orZero (wide false))) :
+    Claims.Flock.KS sha512 (deployPlain rel) :=
+  plain_KS_of_tableBound rel (plain_colsOk sha512 rel) hconf htab
 
-/-- **The deployed masked (`--zk`) verifier: KS at the filled word**, at SHA-512, from a fixed table's bound and
-conflicts tied to collisions. -/
-theorem zk_KSθ_sha512 (rel : Readable.Parsed → Readable.Relation)
-    (hconf : Claims.Flock.ConflictTied sha512 (deployZk rel) zkRadius)
-    (htab : Claims.Flock.TableBoundθ sha512 (deployZk rel) zkRadius (wide true)) :
-    Claims.Flock.KSθ sha512 (deployZk rel) zkRadius :=
-  zk_KSθ_of_tableBound rel (zk_colsOk sha512 rel) hconf htab
+/-- **The deployed masked (`--zk`) verifier: KS**, at SHA-512, from a fixed table's bound and conflicts tied to
+collisions. -/
+theorem zk_KS_sha512 (rel : Readable.Parsed → Readable.Relation)
+    (hconf : Claims.Flock.ConflictTied sha512 (deployZk rel) (wordLen true))
+    (htab : Claims.Flock.TableBoundθ sha512 (deployZk rel) (wordLen true) (Claims.Flock.orZero (wide true))) :
+    Claims.Flock.KS sha512 (deployZk rel) :=
+  zk_KS_of_tableBound rel (zk_colsOk sha512 rel) hconf htab
 
 end FlockDeploy.KS

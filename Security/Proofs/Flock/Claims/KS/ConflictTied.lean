@@ -15,7 +15,7 @@ records that.
 Two runs at one tape send one link message (`run_head`), so their openings at `q` climb to one cap: with different
 rows they collide in the two runs' joined logs (`tiedColl_of_openings`, `tiedColl_of_opens`), which is
 `ConflictTied` (`plain_conflictTied`, `zk_conflictTied`). That leaves `TableBoundθ` for KS at SHA-512
-(`plain_KSθ_of_table`, `zk_KSθ_of_table`).
+(`plain_KS_of_table`, `zk_KS_of_table`).
 -/
 
 namespace FlockDeploy.KS
@@ -368,7 +368,7 @@ theorem zk_opening {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
 /-- **`ConflictTied` at the deployed plain record**: two accepted runs at one tape that open different columns at one
 position collide in their joined verifier logs, at SHA-512. -/
 theorem plain_conflictTied (rel : Readable.Parsed → Readable.Relation) :
-    Claims.Flock.ConflictTied sha512 (deployPlain rel) plainRadius := by
+    Claims.Flock.ConflictTied sha512 (deployPlain rel) (wordLen false) := by
   intro x Ω P ω r r' q u v hacc hacc' _ hu hv huv
   obtain ⟨s, spec, sts, st, sch, link, row, hs, hst, hsch, hlink, ho, hu'⟩ :=
     plain_opening (P := P) (r := r) hacc hu
@@ -387,7 +387,7 @@ theorem plain_conflictTied (rel : Readable.Parsed → Readable.Relation) :
 /-- **`ConflictTied` at the deployed masked (`--zk`) record**: two accepted runs at one tape that open different
 columns at one position collide in their joined verifier logs, at SHA-512. -/
 theorem zk_conflictTied (rel : Readable.Parsed → Readable.Relation) :
-    Claims.Flock.ConflictTied sha512 (deployZk rel) zkRadius := by
+    Claims.Flock.ConflictTied sha512 (deployZk rel) (wordLen true) := by
   intro x Ω P ω r r' q u v hacc hacc' _ hu hv huv
   obtain ⟨s, spec, sts, st, sch, tPad, link, row, hs, hst, hsch, hlink, ho, hu'⟩ :=
     zk_opening (P := P) (r := r) hacc hu
@@ -405,16 +405,16 @@ theorem zk_conflictTied (rel : Readable.Parsed → Readable.Relation) :
 
 /-! ## KS at SHA-512 from a fixed table's bound -/
 
-/-- **The deployed plain verifier: KS at the filled word**, at SHA-512, from a fixed table's bound alone. -/
-theorem plain_KSθ_of_table (rel : Readable.Parsed → Readable.Relation)
-    (htab : Claims.Flock.TableBoundθ sha512 (deployPlain rel) plainRadius (wide false)) :
-    Claims.Flock.KSθ sha512 (deployPlain rel) plainRadius :=
-  plain_KSθ_sha512 rel (plain_conflictTied rel) htab
+/-- **The deployed plain verifier: KS**, at SHA-512, from a fixed table's bound alone. -/
+theorem plain_KS_of_table (rel : Readable.Parsed → Readable.Relation)
+    (htab : Claims.Flock.TableBoundθ sha512 (deployPlain rel) (wordLen false) (Claims.Flock.orZero (wide false))) :
+    Claims.Flock.KS sha512 (deployPlain rel) :=
+  plain_KS_sha512 rel (plain_conflictTied rel) htab
 
-/-- **The deployed masked (`--zk`) verifier: KS at the filled word**, at SHA-512, from a fixed table's bound alone. -/
-theorem zk_KSθ_of_table (rel : Readable.Parsed → Readable.Relation)
-    (htab : Claims.Flock.TableBoundθ sha512 (deployZk rel) zkRadius (wide true)) :
-    Claims.Flock.KSθ sha512 (deployZk rel) zkRadius :=
-  zk_KSθ_sha512 rel (zk_conflictTied rel) htab
+/-- **The deployed masked (`--zk`) verifier: KS**, at SHA-512, from a fixed table's bound alone. -/
+theorem zk_KS_of_table (rel : Readable.Parsed → Readable.Relation)
+    (htab : Claims.Flock.TableBoundθ sha512 (deployZk rel) (wordLen true) (Claims.Flock.orZero (wide true))) :
+    Claims.Flock.KS sha512 (deployZk rel) :=
+  zk_KS_sha512 rel (zk_conflictTied rel) htab
 
 end FlockDeploy.KS

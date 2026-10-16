@@ -6,20 +6,20 @@ import Proofs.Flock.Soundness.LigeritoPadLevel0
 # The old table at the filled word
 
 `TableBoundθ` (`KS.Joint`) is the old theorems' fixed-table bound at the deployed verifier. The old bound's event is
-`¬ Committed A S sch T` at an oracle `T`, the radius form's `¬ GoodTable C` at a word of columns `C`. This file maps one
-to the other.
+`¬ Committed A S sch T` at an oracle `T`, the spec's `¬ GoodTable C` at a word of columns `C`. This file maps one to
+the other.
 
 * **The word as the old oracle** (`oracleOf`): lane `ℓ` at position `q` is column `q`'s symbol `ℓ`. When every column
-  has the code's width, `Close γ` (every lane agreeing on a `1 − γ` fraction of the positions) bounds the distance per
-  whole column by `γ·N` (`hdist_le_of_close`).
+  has the code's width, `Close γ` (every lane agreeing on a `1 − γ` fraction of the positions) is whole columns
+  agreeing on that fraction (`agree_of_close`).
 * **The plain record**: the deployed code is the old `encode` (`plainEncD_encode`), the read step the bits of the old
   `witnessOf` (`plainReadD_hid`), and the deployed schedule the old model's (`fast100_plainSched`), whose level 0 is
-  the deployed one (`level₀_plainSched`) with the radius form's `θ` as its `radius` (`radius_plain`). So a table of
+  the deployed one (`level₀_plainSched`) with the deployed `θ` as its `radius` (`radius_plain`). So a table of
   full-width columns whose oracle is `Committed` at the deployed schedule extracts (`good_of_committed_plain`), given
   that a satisfying old witness reads as a witness of the parsed statement.
 * **The masked record**: a masked message's lanes are coefficient rows of the old padded code (`zkRowsOf`,
-  `zkEnc_eq_encAt`), the read step reads the old `padWit` of them (`zkReadD_eq_padWit`), and the radius form's `θ` is
-  the old `padRadius` (`radius_zk`). A masked column is an opened row's witness lanes, so the old masked bound's
+  `zkEnc_eq_encAt`), the read step reads the old `padWit` of them (`zkReadD_eq_padWit`), and the deployed `θ` is the
+  old `padRadius` (`radius_zk`). A masked column is an opened row's witness lanes, so the old masked bound's
   `CommittedPad` (`padList` with no extra lanes) reads exactly the masked columns: a table of witness-lane columns
   whose oracle is `CommittedPad` at the deployed masked schedule and padding extracts (`good_of_committed_zk`), its
   rows taken back to a masked message (`zkOfRows`).
@@ -38,61 +38,26 @@ the column. -/
 def oracleOf {F : Type} [Zero F] {N : ℕ} (C : Fin N → List F) : ℕ → ℕ → F :=
   fun ℓ q => if h : q < N then (C ⟨q, h⟩).getD ℓ 0 else 0
 
-theorem hdist_ofFn {Col : Type} [DecidableEq Col] {N : ℕ} (C : Fin N → Col) (f : ℕ → Col) :
-    hdist (List.ofFn C) f = (Finset.univ.filter fun q : Fin N => C q ≠ f q).card := by
-  unfold hdist
-  rw [List.length_ofFn, ← Finset.card_map Fin.valEmbedding]
-  congr 1
-  ext q
-  simp only [Finset.mem_filter, Finset.mem_range, Finset.mem_map, Finset.mem_univ, true_and,
-    Fin.valEmbedding_apply]
-  constructor
-  · rintro ⟨hq, h⟩
-    refine ⟨⟨q, hq⟩, fun he => h ?_, rfl⟩
-    simp [hq, he]
-  · rintro ⟨q', h, rfl⟩
-    refine ⟨q'.isLt, fun he => h ?_⟩
-    simpa [List.getElem?_ofFn] using he
-
-/-- **`Close` bounds the distance per whole column**: when every column has the code's `2^lanes` symbols and is the
-codeword's column wherever every lane agrees, a `γ`-close oracle's word is within `γ·2^d` of the codeword. -/
-theorem hdist_le_of_close {F : Type} [Field F] [DecidableEq F] {lanes d N : ℕ} (hN : N = 2 ^ d) {γ : ℝ}
+/-- **`Close` is whole columns agreeing**: when every column has the code's `2^lanes` symbols and is the codeword's
+column wherever every lane agrees, a `γ`-close oracle's word agrees with the codeword on a `1 − γ` fraction of the
+positions. -/
+theorem agree_of_close {F : Type} [Field F] [DecidableEq F] {lanes d N : ℕ} (hN : N = 2 ^ d) {γ : ℝ}
     (C : Fin N → List F) (hw : ∀ q, (C q).length = 2 ^ lanes) (U : Table F lanes d) (f : ℕ → List F)
     (hf : ∀ q : Fin (2 ^ d), f q = List.ofFn fun ℓ => U ℓ q)
     (h : Close γ (fun (ℓ : Fin (2 ^ lanes)) (q : Fin (2 ^ d)) => oracleOf C ℓ q) U) :
-    (hdist (List.ofFn C) f : ℝ) ≤ γ * 2 ^ d := by
+    (1 - γ) * 2 ^ d ≤ ((Finset.univ : Finset (Fin (2 ^ d))).filter fun q => f q.val = extTab C q.val).card := by
   subst hN
-  rw [hdist_ofFn]
-  have hsub : (Finset.univ.filter fun q : Fin (2 ^ d) => C q ≠ f q) ⊆
-      Finset.univ.filter fun q => ¬ ∀ ℓ : Fin (2 ^ lanes), oracleOf C ℓ q = U ℓ q := by
-    intro q
-    simp only [Finset.mem_filter, Finset.mem_univ, true_and]
-    intro hne hall
-    apply hne
-    rw [hf q]
-    refine List.ext_getElem (by simp [hw q]) fun n h1 h2 => ?_
-    have e := hall ⟨n, by rwa [hw q] at h1⟩
-    simp only [oracleOf, q.isLt, ↓reduceDIte, Fin.eta, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem h1,
-      Option.getD_some] at e
-    simpa using e
-  have hc := Finset.card_filter_add_card_filter_not (s := (Finset.univ : Finset (Fin (2 ^ d))))
-    (fun q => ∀ ℓ : Fin (2 ^ lanes), oracleOf C ℓ q = U ℓ q)
-  rw [Finset.card_univ, Fintype.card_fin] at hc
-  have h1 := Finset.card_le_card hsub
-  have h' : ((Finset.univ.filter fun q : Fin (2 ^ d) => ∀ ℓ : Fin (2 ^ lanes), oracleOf C ℓ q = U ℓ q).card : ℝ) ≥
-      (1 - γ) * 2 ^ d := by
-    unfold Close at h
-    convert h
-  have hc' : ((Finset.univ.filter fun q : Fin (2 ^ d) => ¬ ∀ ℓ : Fin (2 ^ lanes), oracleOf C ℓ q = U ℓ q).card : ℝ) =
-      2 ^ d - ((Finset.univ.filter fun q : Fin (2 ^ d) => ∀ ℓ : Fin (2 ^ lanes), oracleOf C ℓ q = U ℓ q).card : ℝ) := by
-    have := congrArg (Nat.cast (R := ℝ)) hc
-    push_cast at this
-    linarith
-  calc (((Finset.univ.filter fun q : Fin (2 ^ d) => C q ≠ f q).card : ℕ) : ℝ)
-      ≤ ((Finset.univ.filter fun q : Fin (2 ^ d) => ¬ ∀ ℓ : Fin (2 ^ lanes), oracleOf C ℓ q = U ℓ q).card : ℝ) := by
-        exact_mod_cast h1
-    _ = _ := hc'
-    _ ≤ γ * 2 ^ d := by linarith
+  unfold Close at h
+  refine le_trans (ge_iff_le.1 h) ?_
+  refine Nat.cast_le.2 (Finset.card_le_card fun q => ?_)
+  simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+  intro hall
+  rw [hf q, extTab, dif_pos q.isLt]
+  refine List.ext_getElem (by simp [hw q]) fun n h1 h2 => ?_
+  have e := hall ⟨n, by simpa using h1⟩
+  simp only [oracleOf, q.isLt, ↓reduceDIte, Fin.eta, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem h2,
+    Option.getD_some] at e
+  simpa using e.symm
 
 /-! ## The plain record -/
 
@@ -107,9 +72,6 @@ theorem plainEncD_encode (i : PlainIdx) (M : Message 𝔽 (plainLanes i) (plainC
 theorem plainReadD_hid (i : PlainIdx) (M : Message 𝔽 (plainLanes i) (plainCols i)) (a : Fin (2 ^ i.m)) :
     (plainReadD ⟨i, M⟩).hid.getD a false = decide (witnessOf execArith i.m (plainLanes i) (plainCols i) M a = 1) :=
   readTrace_hid _ _ _ _ _ _
-
-theorem plainReadD_salts (i : PlainIdx) (M : Message 𝔽 (plainLanes i) (plainCols i)) :
-    (plainReadD ⟨i, M⟩).salts = [] := rfl
 
 theorem plainSched_some (i : PlainIdx) : _root_.Flock.fast100 i.m = some (plainSched i.m) := by
   have h := (plainShape_table i).1
@@ -138,13 +100,13 @@ theorem logLen_plain (i : PlainIdx) : (levelOf (plainLevel0 i.m)).logLen = plain
   rw [(plainLevel_table i).1, (plainShape_table i).2.2.2.1]
   rfl
 
-/-- **The radius form's plain `θ` is the old level-0 `radius`**, `1 − √(1/2) − 1/200`. -/
-theorem radius_plain (i : PlainIdx) :
-    FlockDeploy.KS.radiusOf (2 ^ plainCols i) (2 ^ plainLen i) = (levelOf (plainLevel0 i.m)).radius := by
+/-- **The deployed plain `θ` is the old level-0 `radius`**, `1 − √(1/2) − 1/200`. -/
+theorem radius_plain (M : PlainTrace) : plainThetaD M = (levelOf (plainLevel0 M.1.m)).radius := by
+  obtain ⟨i, M⟩ := M
   have hd : plainLen i = plainCols i + 1 := (plainShape_table i).2.2.2.1
   have hr := (plainLevel_table i).1
-  unfold FlockDeploy.KS.radiusOf Level.radius Level.rate eta
-  have e : (((2 ^ plainCols i : ℕ) : ℝ) / ((2 ^ plainLen i : ℕ) : ℝ)) = (2⁻¹ : ℝ) ^ (levelOf (plainLevel0 i.m)).logInvRate := by
+  unfold plainThetaD Level.radius Level.rate eta
+  have e : ((2 : ℝ) ^ plainCols i / 2 ^ plainLen i) = (2⁻¹ : ℝ) ^ (levelOf (plainLevel0 i.m)).logInvRate := by
     show _ = (2⁻¹ : ℝ) ^ (plainLevel0 i.m).rate
     rw [hr, hd]
     push_cast
@@ -186,11 +148,11 @@ theorem zkReadD_eq_padWit (i : ZkIdx) (M : ZkMessage 𝔽 (zkWidth i) (zkCols i)
 theorem zkLevel_rate : ∀ i : ZkIdx, (zkLevel0 i.m).rate = 1 := by
   decide +kernel
 
-/-- **The radius form's masked `θ` is the old `padRadius`** at the deployed padding. -/
-theorem radius_zk (i : ZkIdx) :
-    FlockDeploy.KS.radiusOf (2 ^ zkCols i + zkPad i) (2 ^ zkLen i) = (levelOf (zkLevel0 i.m)).padRadius (zkPad i) := by
+/-- **The deployed masked `θ` is the old `padRadius`** at the deployed padding. -/
+theorem radius_zk (M : ZkTrace) : zkThetaD M = (levelOf (zkLevel0 M.1.m)).padRadius (zkPad M.1) := by
+  obtain ⟨i, M⟩ := M
   have hd : zkLen i = zkCols i + 1 := (zkShape_table i).2.2.2.1
-  unfold FlockDeploy.KS.radiusOf Level.padRadius Level.padRate eta
+  unfold zkThetaD Level.padRadius Level.padRate eta
   have hl : (levelOf (zkLevel0 i.m)).logLen = zkLen i := by
     show (zkLevel0 i.m).cols + (zkLevel0 i.m).rate = zkLen i
     rw [zkLevel_rate i, hd]
@@ -240,55 +202,55 @@ open Flock FlockSoundness FlockSoundness.Model FlockSoundness.Refine Claims.Floc
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- **A close table extracts**, at the plain record: a table of full-width columns at a statement whose table 0 is at
-index `i`, `γ`-close at the radius form's `θ` to the old encoding of a message whose read step is a witness. -/
-theorem good_of_close_plain (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+index `i`, `θ`-close to the old encoding of a message whose read step is a witness. -/
+theorem good_of_close_plain (rel : Readable.Parsed → Readable.Relation)
     (x : Claims.Msg) (s : Claims.Flock.Stmt) (hs : (deployPlain rel).parse x = some s) (i : PlainIdx)
-    (hN : plainRadius.N x = 2 ^ plainLen i) (C : Fin (plainRadius.N x) → List 𝔽)
+    (hN : wordLen false x = 2 ^ plainLen i) (C : Fin (wordLen false x) → List 𝔽)
     (hw : ∀ q, (C q).length = 2 ^ plainLanes i) (M : Message 𝔽 (plainLanes i) (plainCols i))
-    (hclose : Close (radiusOf (2 ^ plainCols i) (2 ^ plainLen i))
+    (hclose : Close (plainThetaD ⟨i, M⟩)
       (fun (ℓ : Fin (2 ^ plainLanes i)) (q : Fin (2 ^ plainLen i)) => oracleOf C ℓ q) (encode execArith (plainLen i) M))
-    (hrel : Claims.Flock.RelS H s (plainReadD ⟨i, M⟩)) :
-    GoodTable H (deployPlain rel) plainRadius x C := by
-  refine ⟨⟨i, M⟩, s, hs, hrel, hN, ?_⟩
-  have := hdist_le_of_close hN C hw _ _ (plainEncD_encode i M) hclose
-  show (hdist (List.ofFn C) (plainEncD ⟨i, M⟩) : ℝ) ≤ radiusOf (2 ^ plainCols i) (2 ^ plainLen i) *
-    ((2 ^ plainLen i : ℕ) : ℝ)
+    (hrel : Claims.Flock.RelS s (plainReadD ⟨i, M⟩)) :
+    GoodTable (deployPlain rel) (wordLen false) x C := by
+  refine ⟨⟨i, M⟩, s, hs, hrel, hN.ge, ?_⟩
+  have := agree_of_close hN C hw _ _ (plainEncD_encode i M) hclose
+  show (1 - plainThetaD ⟨i, M⟩) * ((2 ^ plainLen i : ℕ) : ℝ) ≤
+    ((Finset.univ : Finset (Fin (2 ^ plainLen i))).filter fun q => plainEncD ⟨i, M⟩ q.val = extTab C q.val).card
   push_cast
   exact this
 
 /-- **A committed table extracts**, at the plain record: a table of full-width columns at a statement whose table 0 is
 at index `i`, whose oracle is `Committed` for the old statement `S` at the deployed schedule, when a satisfying old
 witness of `S` reads as a witness of the parsed statement. -/
-theorem good_of_committed_plain (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem good_of_committed_plain (rel : Readable.Parsed → Readable.Relation)
     (x : Claims.Msg) (s : Claims.Flock.Stmt) (hs : (deployPlain rel).parse x = some s) (i : PlainIdx)
-    (hN : plainRadius.N x = 2 ^ plainLen i) (C : Fin (plainRadius.N x) → List 𝔽)
+    (hN : wordLen false x = 2 ^ plainLen i) (C : Fin (wordLen false x) → List 𝔽)
     (hw : ∀ q, (C q).length = 2 ^ plainLanes i) (S : Statement)
     (hwit : ∀ M : Message 𝔽 (plainLanes i) (plainCols i),
-      S.Satisfies (witnessOf execArith S.m (plainLanes i) (plainCols i) M) → Claims.Flock.RelS H s (plainReadD ⟨i, M⟩))
+      S.Satisfies (witnessOf execArith S.m (plainLanes i) (plainCols i) M) → Claims.Flock.RelS s (plainReadD ⟨i, M⟩))
     (hc : Committed execArith S (schedOf (plainSched i.m)) (oracleOf C)) :
-    GoodTable H (deployPlain rel) plainRadius x C := by
+    GoodTable (deployPlain rel) (wordLen false) x C := by
   have key : ∀ (k0 cols d : ℕ) (γ : ℝ), k0 = plainLanes i → cols = plainCols i → d = plainLen i →
-      γ = radiusOf (2 ^ plainCols i) (2 ^ plainLen i) →
+      γ = (levelOf (plainLevel0 i.m)).radius →
       CommittedSatisfies execArith S k0 cols d γ (fun (ℓ : Fin (2 ^ k0)) (q : Fin (2 ^ d)) => oracleOf C ℓ q) →
-      GoodTable H (deployPlain rel) plainRadius x C := by
+      GoodTable (deployPlain rel) (wordLen false) x C := by
     intro k0 cols d γ hk hcols hd hγ h
     subst hk hcols hd hγ
     obtain ⟨M, hclose, hsat⟩ := h
-    exact good_of_close_plain H rel x s hs i hN C hw M hclose (hwit M hsat)
+    rw [← radius_plain ⟨i, M⟩] at hclose
+    exact good_of_close_plain rel x s hs i hN C hw M hclose (hwit M hsat)
   refine key _ _ _ _ (k0_plainSched i) ?_ ?_ ?_ hc
   · rw [level₀_plainSched]
     rfl
   · rw [level₀_plainSched]
     exact logLen_plain i
-  · rw [level₀_plainSched, radius_plain]
+  · rw [level₀_plainSched]
 
 /-- **At table 0's index**: the word is `2^d` long and a full-width column has `2^lanes` symbols. -/
-theorem plain_at {x : Claims.Msg} {spec : SessionSpec} {st : _root_.Flock.Stmt} (h : (tables false x).head? = some (spec, st))
-    {i : PlainIdx} (hi : i.m = st.m) :
-    plainRadius.N x = 2 ^ plainLen i ∧ ∀ u, wide false x u ↔ u.length = 2 ^ plainLanes i := by
+theorem plain_at {x : Claims.Msg} {spec : SessionSpec} {st : _root_.Flock.Stmt}
+    (h : (tables false x).head? = some (spec, st)) {i : PlainIdx} (hi : i.m = st.m) :
+    wordLen false x = 2 ^ plainLen i ∧ ∀ u, wide false x u ↔ u.length = 2 ^ plainLanes i := by
   refine ⟨?_, fun u => ?_⟩
-  · show wordLen false x = _
-    unfold wordLen
+  · unfold wordLen
     rw [h]
     simp [plainLen, hi]
   · unfold wide zeroCol
@@ -298,16 +260,17 @@ theorem plain_at {x : Claims.Msg} {spec : SessionSpec} {st : _root_.Flock.Stmt} 
 /-- **An uncommitted old table**, at the plain record: a table of full-width columns that does not extract has an
 oracle that is not `Committed` at the deployed schedule, for an old statement whose satisfying witnesses read as
 witnesses of the parsed statement. -/
-theorem not_committed_plain (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem not_committed_plain (rel : Readable.Parsed → Readable.Relation)
     (x : Claims.Msg) (s : Claims.Flock.Stmt) (hs : (deployPlain rel).parse x = some s) {spec : SessionSpec}
     {st : _root_.Flock.Stmt}
     (hst : (tables false x).head? = some (spec, st)) (i : PlainIdx) (hi : i.m = st.m)
-    (C : Fin (plainRadius.N x) → List 𝔽) (hw : ∀ q, wide false x (C q)) (S : Statement)
+    (C : Fin (wordLen false x) → List 𝔽) (hw : ∀ q, wide false x (C q)) (S : Statement)
     (hwit : ∀ M : Message 𝔽 (plainLanes i) (plainCols i),
-      S.Satisfies (witnessOf execArith S.m (plainLanes i) (plainCols i) M) → Claims.Flock.RelS H s (plainReadD ⟨i, M⟩))
-    (hg : ¬ GoodTable H (deployPlain rel) plainRadius x C) :
+      S.Satisfies (witnessOf execArith S.m (plainLanes i) (plainCols i) M) → Claims.Flock.RelS s (plainReadD ⟨i, M⟩))
+    (hg : ¬ GoodTable (deployPlain rel) (wordLen false) x C) :
     ¬ Committed execArith S (schedOf (plainSched i.m)) (oracleOf C) := fun hc =>
-  hg (good_of_committed_plain H rel x s hs i (plain_at hst hi).1 C (fun q => ((plain_at hst hi).2 _).1 (hw q)) S hwit hc)
+  hg (good_of_committed_plain rel x s hs i (plain_at hst hi).1 C (fun q => ((plain_at hst hi).2 _).1 (hw q)) S hwit
+    hc)
 
 /-! ## A committed table extracts, at the masked record -/
 
@@ -320,19 +283,18 @@ theorem padLane_zero (k0 r : ℕ) (ℓ : Fin (2 ^ k0 + 0)) : padLane k0 0 r ℓ 
   rfl
 
 /-- **A close table extracts**, at the masked record: a table of witness-lane columns at a statement whose table 0 is
-at index `i`, `γ`-close at the radius form's `θ` to the old padded encoding of coefficient rows whose padded witness
-reads as a witness. -/
-theorem good_of_close_zk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+at index `i`, close at the deployed `θ` to the old padded encoding of coefficient rows whose padded witness reads as a
+witness. -/
+theorem good_of_close_zk (rel : Readable.Parsed → Readable.Relation)
     (x : Claims.Msg) (s : Claims.Flock.Stmt) (hs : (deployZk rel).parse x = some s) (i : ZkIdx)
-    (hN : zkRadius.N x = 2 ^ zkLen i) (C : Fin (zkRadius.N x) → List 𝔽)
+    (hN : wordLen true x = 2 ^ zkLen i) (C : Fin (wordLen true x) → List 𝔽)
     (hw : ∀ q, (C q).length = 2 ^ zkLanes i) (R : Fin (2 ^ zkLanes i) → Fin (2 ^ zkCols i + zkPad i) → 𝔽)
-    (hclose : CloseRows execArith (zkLen i) (2 ^ zkCols i + zkPad i)
-      (radiusOf (2 ^ zkCols i + zkPad i) (2 ^ zkLen i))
+    (hclose : CloseRows execArith (zkLen i) (2 ^ zkCols i + zkPad i) (zkThetaD ⟨i, zkOfRows padC R⟩)
       (fun (ℓ : Fin (2 ^ zkLanes i)) (q : Fin (2 ^ zkLen i)) => oracleOf C ℓ q) R)
-    (hrel : Claims.Flock.RelS H s (readTrace execArith i.m (zkLanes i) (zkCols i) (padWit (e := 0) padC R))) :
-    GoodTable H (deployZk rel) zkRadius x C := by
-  refine ⟨⟨i, zkOfRows padC R⟩, s, hs, ?_, hN, ?_⟩
-  · show Claims.Flock.RelS H s (zkReadD ⟨i, zkOfRows padC R⟩)
+    (hrel : Claims.Flock.RelS s (readTrace execArith i.m (zkLanes i) (zkCols i) (padWit (e := 0) padC R))) :
+    GoodTable (deployZk rel) (wordLen true) x C := by
+  refine ⟨⟨i, zkOfRows padC R⟩, s, hs, ?_, hN.ge, ?_⟩
+  · show Claims.Flock.RelS s (zkReadD ⟨i, zkOfRows padC R⟩)
     rw [zkReadD_eq_padWit, zkRowsOf_zkOfRows]
     exact hrel
   · have hf : ∀ q : Fin (2 ^ zkLen i), zkEncD ⟨i, zkOfRows padC R⟩ q =
@@ -341,36 +303,41 @@ theorem good_of_close_zk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed 
       rw [zkEncD_eq]
       refine congrArg List.ofFn (funext fun ℓ => ?_)
       rw [zkEnc_eq_encAt, zkRowsOf_zkOfRows]
-    have hc : Close (radiusOf (2 ^ zkCols i + zkPad i) (2 ^ zkLen i))
+    have hc : Close (zkThetaD ⟨i, zkOfRows padC R⟩)
         (fun (ℓ : Fin (2 ^ zkLanes i)) (q : Fin (2 ^ zkLen i)) => oracleOf C ℓ q)
         (fun ℓ q => encAt execArith (zkLen i) (2 ^ zkCols i + zkPad i) (R ℓ) q.val) := by
       unfold Close
       unfold CloseRows at hclose
       convert hclose using 4
-    have := hdist_le_of_close hN C hw _ _ hf hc
-    exact this.trans_eq (by simp [zkRadius])
+    have := agree_of_close hN C hw _ _ hf hc
+    show (1 - zkThetaD ⟨i, zkOfRows padC R⟩) * ((2 ^ zkLen i : ℕ) : ℝ) ≤
+      ((Finset.univ : Finset (Fin (2 ^ zkLen i))).filter fun q =>
+        zkEncD ⟨i, zkOfRows padC R⟩ q.val = extTab C q.val).card
+    push_cast
+    exact this
 
 /-- **A committed table extracts**, at the masked record: a table of witness-lane columns at a statement whose table 0
 is at index `i`, whose oracle is `CommittedPad` for the old statement `S` at the deployed masked schedule and padding,
 when a satisfying old witness of `S` reads as a witness of the parsed statement. -/
-theorem good_of_committed_zk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem good_of_committed_zk (rel : Readable.Parsed → Readable.Relation)
     (x : Claims.Msg) (s : Claims.Flock.Stmt) (hs : (deployZk rel).parse x = some s) (i : ZkIdx)
-    (hN : zkRadius.N x = 2 ^ zkLen i) (C : Fin (zkRadius.N x) → List 𝔽)
+    (hN : wordLen true x = 2 ^ zkLen i) (C : Fin (wordLen true x) → List 𝔽)
     (hw : ∀ q, (C q).length = 2 ^ zkLanes i) (S : Statement)
     (hwit : ∀ P : Message 𝔽 (zkLanes i) (zkCols i),
       S.Satisfies (witnessOf execArith S.m (zkLanes i) (zkCols i) P) →
-        Claims.Flock.RelS H s (readTrace execArith i.m (zkLanes i) (zkCols i) P))
+        Claims.Flock.RelS s (readTrace execArith i.m (zkLanes i) (zkCols i) P))
     (hc : CommittedPad execArith S (schedOf (zkSched i.m).1) (zkPad i) padC (oracleOf C)) :
-    GoodTable H (deployZk rel) zkRadius x C := by
+    GoodTable (deployZk rel) (wordLen true) x C := by
   have key : ∀ (k0 : ℕ) (l : FlockSoundness.Accounting.Level), k0 = zkLanes i → l = levelOf (zkLevel0 i.m) →
       ∀ R ∈ padList execArith l (zkPad i) k0 0 0 (oracleOf C),
         S.Satisfies (witnessOf execArith S.m k0 l.logCols (padWit padC R)) →
-      GoodTable H (deployZk rel) zkRadius x C := by
+      GoodTable (deployZk rel) (wordLen true) x C := by
     intro k0 l hk hl R hR hsat
     subst hk hl
     simp only [padList, Finset.mem_filter, Finset.mem_univ, true_and] at hR
-    refine good_of_close_zk H rel x s hs i hN C hw R ?_ (hwit _ hsat)
-    rw [logLen_zk, ← radius_zk] at hR
+    refine good_of_close_zk rel x s hs i hN C hw R ?_ (hwit _ hsat)
+    rw [logLen_zk, show (levelOf (zkLevel0 i.m)).padRadius (zkPad i) = zkThetaD ⟨i, zkOfRows padC R⟩ from
+      (radius_zk _).symm] at hR
     unfold CloseRows at hR ⊢
     convert hR using 5 with q
     simp only [padRows, padLane_zero]
@@ -379,12 +346,11 @@ theorem good_of_committed_zk (H : Claims.Msg → Claims.Msg) (rel : Readable.Par
   exact key _ _ (zkLevel_table i).2 (zkLevel_table i).1 R hR hsat
 
 /-- **At table 0's index**, masked: the word is `2^d` long and a column has the `2^lanes` witness lanes. -/
-theorem zk_at {x : Claims.Msg} {spec : SessionSpec} {st : _root_.Flock.Stmt} (h : (tables true x).head? = some (spec, st))
-    {i : ZkIdx} (hi : i.m = st.m) :
-    zkRadius.N x = 2 ^ zkLen i ∧ ∀ u, wide true x u ↔ u.length = 2 ^ zkLanes i := by
+theorem zk_at {x : Claims.Msg} {spec : SessionSpec} {st : _root_.Flock.Stmt}
+    (h : (tables true x).head? = some (spec, st)) {i : ZkIdx} (hi : i.m = st.m) :
+    wordLen true x = 2 ^ zkLen i ∧ ∀ u, wide true x u ↔ u.length = 2 ^ zkLanes i := by
   refine ⟨?_, fun u => ?_⟩
-  · show wordLen true x = _
-    unfold wordLen
+  · unfold wordLen
     rw [h]
     simp [zkLen, hi]
   · unfold wide zeroCol
@@ -394,16 +360,16 @@ theorem zk_at {x : Claims.Msg} {spec : SessionSpec} {st : _root_.Flock.Stmt} (h 
 /-- **An uncommitted old table**, at the masked record: a table of witness-lane columns that does not extract has an
 oracle that is not `CommittedPad` at the deployed masked schedule, for an old statement whose satisfying witnesses read
 as witnesses of the parsed statement. -/
-theorem not_committed_zk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem not_committed_zk (rel : Readable.Parsed → Readable.Relation)
     (x : Claims.Msg) (s : Claims.Flock.Stmt) (hs : (deployZk rel).parse x = some s) {spec : SessionSpec}
     {st : _root_.Flock.Stmt}
     (hst : (tables true x).head? = some (spec, st)) (i : ZkIdx) (hi : i.m = st.m)
-    (C : Fin (zkRadius.N x) → List 𝔽) (hw : ∀ q, wide true x (C q)) (S : Statement)
+    (C : Fin (wordLen true x) → List 𝔽) (hw : ∀ q, wide true x (C q)) (S : Statement)
     (hwit : ∀ P : Message 𝔽 (zkLanes i) (zkCols i),
       S.Satisfies (witnessOf execArith S.m (zkLanes i) (zkCols i) P) →
-        Claims.Flock.RelS H s (readTrace execArith i.m (zkLanes i) (zkCols i) P))
-    (hg : ¬ GoodTable H (deployZk rel) zkRadius x C) :
+        Claims.Flock.RelS s (readTrace execArith i.m (zkLanes i) (zkCols i) P))
+    (hg : ¬ GoodTable (deployZk rel) (wordLen true) x C) :
     ¬ CommittedPad execArith S (schedOf (zkSched i.m).1) (zkPad i) padC (oracleOf C) := fun hc =>
-  hg (good_of_committed_zk H rel x s hs i (zk_at hst hi).1 C (fun q => ((zk_at hst hi).2 _).1 (hw q)) S hwit hc)
+  hg (good_of_committed_zk rel x s hs i (zk_at hst hi).1 C (fun q => ((zk_at hst hi).2 _).1 (hw q)) S hwit hc)
 
 end FlockDeploy.KS

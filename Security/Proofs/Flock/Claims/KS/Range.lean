@@ -164,19 +164,12 @@ theorem k_range_zk (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg
 
 /-- **The deployed plain verifier at SHA-512: KS from one wait's bound**, with the `k` range discharged. -/
 theorem plain_of_oneWait_sha512 (rel : Readable.Parsed → Readable.Relation)
-    (h : Claims.Flock.OneWait sha512 (deployPlain rel)) :
-    Claims.KS sha512 (deployPlain rel).V (Claims.Flock.R sha512 (deployPlain rel).parse)
-      (Claims.Flock.E sha512 (deployPlain rel)
-        (Claims.Flock.plainDecodeD Claims.Flock.Numbers.agree₀ ∘ Claims.Flock.dedupPos))
-      (Claims.Flock.κ (deployPlain rel)) (Claims.Flock.γ (deployPlain rel)) :=
+    (h : Claims.Flock.OneWait sha512 (deployPlain rel)) : Claims.Flock.KS sha512 (deployPlain rel) :=
   plain_of_oneWait sha512 rel (k_range_plain rel) h
 
 /-- **The deployed masked (`--zk`) verifier at SHA-512: KS from one wait's bound**, with the `k` range discharged. -/
 theorem zk_of_oneWait_sha512 (rel : Readable.Parsed → Readable.Relation)
-    (h : Claims.Flock.OneWait sha512 (deployZk rel)) :
-    Claims.KS sha512 (deployZk rel).V (Claims.Flock.R sha512 (deployZk rel).parse)
-      (Claims.Flock.E sha512 (deployZk rel) (Claims.Flock.zkDecodeD Claims.Flock.zkAgree ∘ Claims.Flock.dedupPos))
-      (Claims.Flock.κ (deployZk rel)) (Claims.Flock.γ (deployZk rel)) :=
+    (h : Claims.Flock.OneWait sha512 (deployZk rel)) : Claims.Flock.KS sha512 (deployZk rel) :=
   zk_of_oneWait sha512 rel (k_range_zk rel) h
 
 end FlockDeploy.KS
