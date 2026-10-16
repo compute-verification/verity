@@ -15,6 +15,27 @@
   "PouwI8Pm1_v2": {
    "and": 6
   },
+  "PouwSegCheckDither_v2{S=8,FOLD='duo'}": {
+   "and": 280496
+  },
+  "PouwSegCheck_v2{S=1,FOLD='duo'}": {
+   "and": 205088
+  },
+  "PouwSegCheck_v2{S=1,FOLD='xin'}": {
+   "and": 195356
+  },
+  "PouwSegCheck_v2{S=16,FOLD='duo'}": {
+   "and": 366128
+  },
+  "PouwSegCheck_v2{S=4,FOLD='duo'}": {
+   "and": 237296
+  },
+  "PouwSegCheck_v2{S=8,FOLD='duo'}": {
+   "and": 280240
+  },
+  "PouwSegCheck_v2{S=8,FOLD='xin'}": {
+   "and": 236446
+  },
   "PouwSegDot_v2": {
    "and": 4125
   },
