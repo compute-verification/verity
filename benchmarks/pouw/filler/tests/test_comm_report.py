@@ -129,14 +129,15 @@ def test_pfill_gates_fail(tmp_path, kw, gate):
 
 
 def test_proved_fraction_by_fold():
-    # decision 43: duo binds every word (PROVED), ram binds word pairs only (half), XOR-in is provisional at (S+1)/(2S)
+    # decision 43: duo binds every word (PROVED), ram binds word pairs only (half); r9's XOR family (LI, XIN13) reads at
+    # ram's proved half, provisional, until the select-charging lemma lands
     assert R.proved_fraction(2, False, 64) == pytest.approx(0.9)
     assert R.proved_fraction(4, False, 64) == pytest.approx(0.45)             # round 3's rem fill K was 2x this
-    assert R.proved_fraction(4, True, 64) == pytest.approx(0.9 * 65 / 128)    # XOR-in, provisional
+    assert R.proved_fraction(4, True, 64) == pytest.approx(0.45)
     assert R.proved_fraction(None, False, None) == pytest.approx(0.9)         # no fold recorded: word-binding reading
     assert R.fold_label(2, False) == "duo"
     assert R.fold_label(4, False) == "ram"
-    assert R.fold_label(4, True) == "xin(prov)"
+    assert R.fold_label(4, True) == "xin13/li(prov)"
 
 
 def _write_defer(tmp_path, nc, xin, store_bytes=25e9):
@@ -170,5 +171,5 @@ def test_defer_fill_k_and_storage_duo(tmp_path):
 def test_defer_fill_k_xin_is_provisional(tmp_path):
     _write_defer(tmp_path, nc=4, xin=True)
     (row,) = R.rows(str(tmp_path))
-    assert row["defer_fold"] == "xin(prov)"
-    assert row["defer_fill_k"] == pytest.approx(row["defer_fill"] * 0.9 * 65 / 128)
+    assert row["defer_fold"] == "xin13/li(prov)"
+    assert row["defer_fill_k"] == pytest.approx(row["defer_fill"] * 0.45)
