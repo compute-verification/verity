@@ -32,6 +32,7 @@ import Proofs.Flock.C3.Compose.HoloStreamSizes
 import Proofs.Flock.C3.Compose.HoloSparseRounds
 import Proofs.Flock.C3.Compose.HoloSparseWords
 import Proofs.Flock.C3.Compose.CoinsChecked
+import Proofs.Flock.C3.Compose.HonestSrc
 import Proofs.Flock.Soundness.Refine.HoloRepConverse
 import Proofs.Flock.C3.Sparse.Read
 import Proofs.Flock.C3.Sparse.Src
