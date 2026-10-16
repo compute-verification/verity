@@ -1,7 +1,8 @@
 """The filler scorer's arithmetic (benchmarks/pouw/filler/scoring.py) on synthetic driver rows: the paired slowdown, the
 filler's rate over its windows, coverage with the proved and provisional certified fractions, SCORE as the time-weighted
 mean, the gates (slowdown, receipts, anti-replay, honesty against the interleaved standalone reference and its positive
-control, DRAM with its counter's control, clocks), the settled power and the arms' placement policies."""
+control, DRAM with its counter's control, clocks), the settled power and the arms' placement policies; filler-scorer/v5's
+fold reading, modelled served part and SCORE-TP."""
 
 from __future__ import annotations
 
@@ -453,7 +454,7 @@ def test_kernel_facts_decide_the_filler_entry_with_the_declaration():
     # an inactive entry that applies leaves SCORE at the next active one that does
     off = {**S.FILLER_ENTRIES, "theorem-k": {**S.FILLER_ENTRIES["theorem-k"], "active": False}}
     assert S.filler_entry("bits01", f, entries=off)["active"] == "unproven"
-    assert S.SCORER == S.V4 and all(e["active"] and e["status"] == "proved" for e in S.FILLER_ENTRIES.values())
+    assert S.SCORER == S.V5 and all(e["active"] and e["status"] == "proved" for e in S.FILLER_ENTRIES.values())
     stats = all_points()
     sc = {n: S.score(stats, S.certified(n)) for n in S.FILLER_ENTRIES}
     assert sc["chained"]["SCORE"] == sc["unproven"]["SCORE"] < sc["theorem-e"]["SCORE"] < sc["theorem-k"]["SCORE"]
@@ -647,7 +648,6 @@ def test_fixed_work_is_credited_from_checked_public_tiles_of_a_read_binary():
     h = S.honesty(v1, st, [], whole={"decode 32/2048": S.whole_of_peak(over)})
     assert not h["ok"] and h["over_peak_whole"] and not h["over_peak"]
     assert "over_peak_whole" not in S.honesty(v1, st, [])  # v3's honest gate is unchanged
-    assert S.SCORER == S.V4
 
 
 def test_record_limits_are_checked_when_the_arm_loads():
@@ -697,3 +697,270 @@ def test_arms():
         A.Placement("split", 0)
     with pytest.raises(A.ArmError):
         A.load("no-such-arm")
+
+
+#: pf_absorb<NC>'s MMA word entries as the sm_120a builds compile them (FILL-SEC c259a89b5): one 16832 IMMA's four
+#: words R28..R31, y in R9, the keys in R20/R21
+IMMA4 = "IMMA.16832.S8.S8 R28, R12.ROW, R40.COL, RZ"
+RAM = [IMMA4, "LEA.HI R9, R9, R28, R9, 0x7", "IMAD R9, R9, R20, R29", "LEA.HI R9, R9, R30, R9, 0x13",
+       "IMAD R9, R9, R21, R31", "EXIT"]
+XIN = [IMMA4, "SHF.L.W.U32.HI R9, R9, 0x7, R9", "LOP3.LUT R9, R9, R28, RZ, 0x3c, !PT", "IMAD R9, R9, R20, R29",
+       "SHF.L.W.U32.HI R9, R9, 0x13, R9", "LOP3.LUT R9, R9, R30, RZ, 0x3c, !PT", "IMAD R9, R9, R21, R31", "EXIT"]
+DUO = [IMMA4] + [x for w in (28, 29, 30, 31) for x in (f"LOP3.LUT R9, R9, R{w}, R22, 0x96, !PT", "IMAD R9, R9, R20, R10",
+                                                     "IADD3 R10, R9, R11, RZ")] + ["EXIT"]
+#: P2-FF r9's folds (note:20261016T1117Z-draft-fullfloor-s-r9) as the scratch -DPFILL_XIN13 and -DPFILL_LI builds of
+#: c259a89b5's pfill.cuh compile them: XOR-in at rotations 13 and 19; LOP3+IMAD's y ^ d0 ^ k0 in one LOP3, no shift
+XIN13 = [IMMA4, "SHF.L.W.U32.HI R9, R9, 0xd, R9", "LOP3.LUT R9, R9, R28, RZ, 0x3c, !PT", "IMAD R9, R9, R20, R29",
+         "SHF.L.W.U32.HI R9, R9, 0x13, R9", "LOP3.LUT R9, R9, R30, RZ, 0x3c, !PT", "IMAD R9, R9, R21, R31", "EXIT"]
+LI = [IMMA4, "LOP3.LUT R9, R22, R28, R9, 0x96, !PT", "IMAD R9, R20, R9, R29", "LOP3.LUT R9, R23, R30, R9, 0x96, !PT",
+      "IMAD R9, R21, R9, R31", "EXIT"]
+K4, K2, K1, K7 = (f"_Z7dfill_kILi{n}EEvmmyiiPy" for n in (4, 2, 1, 7))
+
+
+def test_the_fold_reads_from_the_sass_of_the_instantiation_that_runs():
+    """filler-scorer/v5 traces each MMA word of the filler that runs to its first reader (through moves): ram's adds
+    and addends (or Q = a0·d0 + d1's multiplicand and addend), XOR-in's XORs and addends, duo's XORs; two words in one
+    reader (NC 1's y ^= d0 ^ d1 ^ ...), a word never read, or a probe fold (NC 7's adds) read as no fold v5 reads."""
+    def facts(nc, *fns):
+        return S.fold_facts({"dscore": nvd(*((n, True, b) for n, b in fns))}, nc)
+
+    assert S.fold_words(S.parse_nvdisasm(nvd((K4, True, RAM)))[0]) == ["add", "addend", "add", "addend"]
+    ff = facts(4, (K4, RAM), (K2, DUO))
+    assert (ff["signature"], ff["templated"], ff["not_run"]) == ("ram", True, 1)
+    assert ff["functions"] == {f"dscore: {K4}": {"words": {"add": 2, "addend": 2}, "rotations": {}, "signature": "ram"}}
+    assert facts(2, (K4, RAM), (K2, DUO))["signature"] == "duo" and facts(4, (K4, XIN))["signature"] == "xor-in"
+    q = [IMMA4, "MOV R40, R28", "IMAD R11, R40, R20, R29", "IMAD R9, R9, R20, R11", "LEA.HI R9, R9, R30, R9, 0x13",
+         "IMAD R9, R9, R21, R31", "EXIT"]
+    assert facts(4, (K4, q))["functions"][f"dscore: {K4}"]["words"] == {"add": 1, "addend": 2, "mul": 1}
+    assert facts(4, (K4, q))["signature"] == "ram"
+    xor1 = [IMMA4, "LOP3.LUT R9, R28, R29, R30, 0x96, !PT", "LOP3.LUT R9, R9, R31, RZ, 0x3c, !PT", "EXIT"]
+    assert facts(1, (K1, xor1))["functions"][f"dscore: {K1}"]["words"] == {"combined": 3, "xor": 1}
+    assert facts(1, (K1, xor1))["signature"] == "combined"
+    lost = [IMMA4, "LEA.HI R9, R9, R28, R9, 0x7", "IMAD R9, R9, R20, R29", IMMA4, *RAM[1:]]
+    assert facts(4, (K4, lost))["signature"] == "unread"
+    adds = [IMMA4, *(f"IADD3 R9, R9, R{w}, RZ" for w in (28, 29, 30, 31)), "EXIT"]
+    assert facts(7, (K7, adds))["signature"] == "unrecognised"
+    # a fused filler's dfill_k_warp clone is read in every clone, at any NC
+    clone = S.fold_facts({"fscore": nvd(serving(), (WARP, False, RAM[:-1] + [WARP_BODY[-1]]))}, 2)
+    assert (clone["signature"], clone["templated"]) == ("ram", False)
+
+
+def test_the_fold_is_read_from_the_declaration_and_what_the_build_confirms():
+    """Decision 43: duo and XOR-in read in full only where declared and the SASS, the NC and the recorded
+    NVCC_APPEND_FLAGS confirm it; ram reads half; undeclared or unconfirmed reads as ram where the build shows any
+    fold v5 reads, else no fold (no theorem entry); the folded fraction is the entry's times the share."""
+    def ff(nc, body, name=None):
+        return S.fold_facts({"dscore": nvd((name or f"_Z7dfill_kILi{nc}EEvmmyiiPy", True, body))}, nc)
+
+    def read(declared, nc, flags, facts):
+        r = S.fold_reading(declared, nc, flags, facts)
+        return r["fold"], r["share"]
+
+    assert read(None, 4, None, ff(4, RAM)) == ("ram", 0.5)
+    assert S.fold_reading(None, 4, None, ff(4, RAM))["why"] == ["undeclared: read as ram"]
+    assert read("ram", 4, "", ff(4, RAM)) == ("ram", 0.5) and read("duo", 2, None, ff(2, DUO)) == ("duo", 1.0)
+    assert read("xor-in", 4, "-DPFILL_BITS -DPFILL_XIN", ff(4, XIN)) == ("xor-in", 1.0)
+    assert read("xor-in", 4, None, ff(4, XIN)) == ("xor-in", 1.0)  # a build that recorded no flags
+    r = S.fold_reading("xor-in", 4, "-DPFILL_BITS", ff(4, XIN))
+    assert (r["fold"], r["share"]) == ("ram", 0.5) and "lack -DPFILL_XIN" in r["why"][0]
+    r = S.fold_reading("duo", 4, None, ff(4, RAM))
+    assert r["fold"] == "ram" and any("not duo's entries" in w for w in r["why"]) and any("NC 4" in w for w in r["why"])
+    assert read("xor-in", 4, "-DPFILL_XIN", ff(4, RAM)) == ("ram", 0.5)  # the SASS shows ram's entries
+    assert read(None, 2, None, ff(2, DUO)) == ("ram", 0.5)  # undeclared duo reads as ram
+    xor1 = [IMMA4, "LOP3.LUT R9, R28, R29, R30, 0x96, !PT", "LOP3.LUT R9, R9, R31, RZ, 0x3c, !PT", "EXIT"]
+    assert read("duo", 1, None, ff(1, xor1)) == (None, None) and read(None, 1, None, ff(1, xor1)) == (None, None)
+    adds = [IMMA4, *(f"IADD3 R9, R9, R{w}, RZ" for w in (28, 29, 30, 31)), "EXIT"]
+    assert read("ram", 7, None, ff(7, adds)) == (None, None)
+    assert read(None, 4, None, None) == ("ram", 0.5)  # a build from before v5
+    assert S.fold_reading(None, 4, None, None)["unchecked"] == list(S.FOLD_UNCHECKED)
+    # the declaration: Filler.fold, else the one receipt lineage tag
+    assert S.declared_fold({"fold": "duo"}, {"mechanism": ["receipt:ram-k32"]}) == ("duo", "Filler.fold")
+    assert S.declared_fold({}, {"mechanism": ["noise:x", "receipt:xin-k32"]}) == ("xor-in", "lineage receipt tag")
+    assert S.declared_fold(None, {"mechanism": ["receipt:ram-k64"]}) == ("ram", "lineage receipt tag")
+    assert S.declared_fold({}, {"mechanism": ["place:split"]}) == (None, "undeclared")
+    assert S.declared_fold({}, {"mechanism": ["receipt:ram-k32", "receipt:duo-k32"]})[0] is None
+    assert tuple(S.FOLDS) == A.FOLDS
+    import dataclasses
+    v1 = A.FillV1()
+    assert any("filler.fold" in p for p in A.check_arm(dataclasses.replace(v1, filler=A.Filler(fold="xor"))))
+    assert A.check_arm(dataclasses.replace(v1, filler=A.Filler(fold="duo"))) == []
+    assert A.config(A.Filler(fold="duo")) == A.config(A.Filler())
+    # the entry: Theorem K at 0.45 under ram, 0.9 under duo; Theorem E at 0.1125 under ram; no fold, no theorem
+    split = S.program_facts({"dscore": nvd((DFILL, True, K_TILE))})
+    e = S.filler_entry_v5("bits01", split, S.fold_reading(None, 4, None, ff(4, RAM)))
+    assert (e["applies"], e["fraction"], e["unfolded"], e["active_fraction"]) == ("theorem-k", 0.45, 0.9, 0.45)
+    assert S.filler_entry_v5("bits01", split, S.fold_reading("duo", 2, None, ff(2, DUO)))["fraction"] == 0.9
+    assert S.filler_entry_v5("pm1", split, S.fold_reading("ram", 4, None, ff(4, RAM)))["fraction"] == 0.1125
+    none = S.filler_entry_v5("bits01", split, S.fold_reading(None, 1, None, ff(1, xor1)))
+    assert none["applies"] == "unproven" and none["fraction"] == 0.0 and any(
+        w.startswith("fold: ") for w in none["failed"]["theorem-k"])
+    assert S.certified_v5(e)["filler"]["fraction"] == 0.45 and S.SCORER == S.V5
+
+
+def test_the_r9_folds_are_told_apart_by_the_rotation_into_their_xor_and_read_provisionally():
+    """P2-FF r9's folds (coordinator 12:10Z): XOR-in (13, 19) and LOP3+IMAD read in full at 0.9 where declared and
+    confirmed, told apart from the superseded XOR-in (7, 19) by the state's funnel-shift rotation into each XOR
+    (through a move); XORs and addends at rotations no fold lists read as ram; each of the three is provisional, which
+    the filler's certified status and the score's flags carry."""
+    def ff(nc, body):
+        return S.fold_facts({"dscore": nvd((f"_Z7dfill_kILi{nc}EEvmmyiiPy", True, body))}, nc)
+
+    for body, sig, rots in ((XIN, "xor-in", {"7": 1, "19": 1}), (XIN13, "xor-in-13", {"13": 1, "19": 1}),
+                            (LI, "lop3-imad", {"0": 2})):
+        f = ff(4, body)
+        assert f["signature"] == sig and next(iter(f["functions"].values()))["rotations"] == rots
+    moved = [IMMA4, "SHF.L.W.U32.HI R40, R9, 0xd, R9", "MOV R41, R40", "LOP3.LUT R9, R41, R28, RZ, 0x3c, !PT",
+             *XIN13[3:]]
+    assert ff(4, moved)["signature"] == "xor-in-13"
+    right = [x.replace("SHF.L.W.U32.HI R9, R9, 0xd, R9", "SHF.R.W.U32.HI R9, R9, 0x13, R9") for x in XIN13]
+    assert ff(4, right)["signature"] == "xor-in-13"  # rotr 19 = rotl 13
+    odd = [x.replace("0xd", "0x5") for x in XIN13]
+    assert ff(4, odd)["signature"] == "xor-addend"
+    assert S.fold_words(S.parse_nvdisasm(nvd((K4, True, LI)))[0], rot := []) == ["xor", "addend"] * 2 and rot == [0, None, 0, None]
+
+    def read(declared, flags, body):
+        r = S.fold_reading(declared, 4, flags, ff(4, body))
+        return r["fold"], r["share"], r["provisional"] is not None
+
+    assert read("xor-in-13", "-DPFILL_XIN13", XIN13) == ("xor-in-13", 1.0, True)
+    assert read("lop3-imad", "-DPFILL_LI", LI) == ("lop3-imad", 1.0, True)
+    assert read("xor-in", "-DPFILL_XIN", XIN) == ("xor-in", 1.0, True)  # superseded, still read in full
+    assert read("xor-in-13", "-DPFILL_XIN", XIN) == ("ram", 0.5, False)  # the SASS shows rotation 7
+    assert read("lop3-imad", "-DPFILL_LI", XIN13) == ("ram", 0.5, False)
+    assert read("xor-in-13", "-DPFILL_LI", XIN13) == ("ram", 0.5, False)  # the flags lack -DPFILL_XIN13
+    assert read(None, None, LI) == ("ram", 0.5, False) and read("ram", None, odd) == ("ram", 0.5, False)
+    assert S.declared_fold({}, {"mechanism": ["receipt:xin13-k32"]})[0] == "xor-in-13"
+    assert S.declared_fold({}, {"mechanism": ["receipt:li-k32"]})[0] == "lop3-imad"
+    import dataclasses
+    assert A.check_arm(dataclasses.replace(A.FillV1(), filler=A.Filler(fold="lop3-imad"))) == []
+    split = S.program_facts({"dscore": nvd((DFILL, True, K_TILE))})
+    e = S.filler_entry_v5("bits01", split, S.fold_reading("lop3-imad", 4, "-DPFILL_LI", ff(4, LI)))
+    c = S.certified_v5(e)
+    assert c["filler"]["fraction"] == 0.9 and c["filler"]["status"].startswith("provisional (fold lop3-imad: ")
+    assert any("provisional (fold lop3-imad" in f for f in S.score(all_points(), c)["flags"])
+    ram = S.certified_v5(S.filler_entry_v5("bits01", split, S.fold_reading("ram", 4, None, ff(4, RAM))))
+    assert ram["filler"]["status"] == "proved" and not S.score(all_points(), ram)["flags"]
+
+
+def test_score_v5_is_the_measured_filler_part_plus_the_modelled_served_part():
+    """filler-scorer/v5's SCORE: every served MAC at 0.9 over a wall time the modelled edits lengthen (decode's
+    deferred pass's shown part, prefill's edited GEMMs and coins), the filler's decode MACs less what the pass's hidden
+    part displaces; each part shown, the factors named constants, prefill's coins a parameter."""
+    shown = S.defer_shown_1gpu()
+    assert shown == pytest.approx(0.053 * 12.14 / (32 * 32 * 0.97e-3)) and 0.64 < shown < 0.66
+    stats = all_points()
+    sc = S.score_v5(stats, 0.45)
+    assert not sc["missing"] and sc["SCORE"] == pytest.approx(sc["filler_part"] + sc["served_part_modelled"])
+    c = sc["served_model"]["constants"]
+    assert {k: v for k, v in c.items() if k != "DEFER_FIT"} == {
+        "fraction": 0.9, "EGEMM": 1.57, "DEFER_OF_PEAK": 0.71, "DEFER_T": 4096, "DEFER_SHOWN_1GPU": shown,
+        "PREFILL_COINS": 0.13}
+    assert c["DEFER_FIT"]["s"]["intercept"] == {str(t): v for t, v in S.DEFER_FIT["s"]["intercept"].items()}
+    assert set(sc["served_model"]["sources"]) == set(c)
+    by = {e["entry"]: e for e in sc["entries"]}
+    for e in sc["entries"]:
+        assert e["t1_ms"] > e["t1_measured_ms"] and e["filler_macs"] <= e["filler_measured_macs"]
+        assert e["served_part_modelled"] == pytest.approx(0.9 * e["serving_macs"] / e["capacity_macs"])
+    d = next(e for e in sc["entries"] if e["kind"] == "decode")
+    v4 = S.decode_entry(stats[("decode", d["B"], d["L"])], d["B"], d["L"])
+    pass_ms = 1.57 * v4["serving_macs"] / (0.71 * S.cap(v4["mhz"])) * 1e3
+    u = max(0.71, S.defer_rates(2, d["B"], d["L"])["u"])
+    assert d["served_model"]["defer_u"] == pytest.approx(u) and d["served_model"]["defer_s"] == shown
+    assert d["t1_ms"] == pytest.approx(v4["t1_ms"] + shown * pass_ms)
+    assert d["filler_macs"] == pytest.approx(
+        max(0.0, v4["filler_macs"] - u * (1 - shown) * pass_ms * S.cap(v4["mhz"]) * 1e-3))
+    p = next(e for e in by.values() if e["kind"] == "prefill")
+    st = stats[("prefill", S.PREFILL_M, 0)]
+    assert p["t1_ms"] == pytest.approx(p["t1_measured_ms"] + (0.57 + 0.13) * (st["alone_ms"] + share.FA2_MS_8192))
+    assert p["filler_macs"] == p["filler_measured_macs"]
+    assert S.score_v5(stats, 0.0)["filler_part"] == 0.0
+    assert S.score_v5(stats, 0.45, coins=0.0)["SCORE"] > sc["SCORE"] > S.score_v5(stats, 0.45, coins=0.3)["SCORE"]
+    # the entries' measured arithmetic is v4's
+    v4sc = S.score(stats, S.certified("theorem-k"))
+    assert [e["t1_ms"] for e in v4sc["entries"]] == [e["t1_measured_ms"] for e in sc["entries"]]
+
+
+def test_the_deferred_pass_is_calibrated_to_measurement(monkeypatch):
+    """Coordinator 12:10Z: the deferred pass's shown share s and displacement rate u come from measurement, TP's
+    fitted by TP, batch and context to HC-COMM r3 (each point's residual reported), one GPU's share from STAGE-COST
+    (B 32, held flat) and its u the larger of TP 2's and the MAC-for-MAC rule; read at B and L clamped to the points."""
+    def point(tp, b, l, s, u, mhz=2000.0, served=1e12):
+        plain = served / (0.71 * S.cap(mhz)) * 1e3
+        lost = u * (plain - s * plain) * S.cap(mhz) * 1e-3
+        return {"T": 4096, "tp": tp, "B": b, "L": l, "base_ms": 40.0, "defer_ms": 40.0 + s * plain, "dalone_ms": plain,
+                "mhz": mhz, "served_macs": served, "defer_fill_macs": 5e12 - lost, "phase_slowdown": 1.0,
+                "phase_fill_macs": 5e12}
+
+    law = {2: (0.8, 1.1), 4: (0.6, 1.4)}
+    pts = [point(t, b, l, law[t][0] * (b / 32) ** -0.5 * (l / 2048) ** 0.1, law[t][1] * (b / 32) ** -0.2)
+           for t in (2, 4) for b, l in ((32, 2048), (64, 2048), (128, 8192), (256, 2048))]
+    f = S.defer_fit(4096, pts)
+    assert f["s"]["intercept"] == pytest.approx({2: 0.8, 4: 0.6}) and f["u"]["intercept"] == pytest.approx({2: 1.1, 4: 1.4})
+    assert (f["s"]["batch"], f["s"]["context"], f["u"]["batch"]) == pytest.approx((-0.5, 0.1, -0.2))
+    assert f["s"]["rms"] < 1e-9 and f["slowdown_err_pts_max"] < 1e-9
+    with pytest.raises(ValueError, match="measured at"):
+        S.defer_fit(2048)
+    assert S.defer_fit(8192)["tps"] == S.defer_fit(16384)["tps"] == [2]  # HC-COMM r4: TP 2 alone
+    # the fit to HC-COMM r3 at T = 4096: every residual reported, the model (EGEMM 1) giving back each point within it
+    fit = S.DEFER_FIT
+    assert fit["T"] == 4096 and fit["tps"] == [2, 4] and fit["n"] == 12 and len(fit["points"]) == 12
+    assert fit["s"]["batch"] < 0 and fit["s"]["rms"] < 0.15 and fit["u"]["rms"] < 0.15 and fit["slowdown_err_pts_max"] < 2
+    monkeypatch.setattr(S, "EGEMM", 1.0)
+    for p, r in zip([p for p in S.DEFER_TP if p["T"] == 4096], fit["points"]):
+        m = S.defer_measured(p)
+        dp = S.defer_pass(p["served_macs"], p["mhz"], p["tp"], p["B"], p["L"])
+        assert dp["added_ms"] == pytest.approx(m["added_ms"] + r["added_err_ms"])
+        assert dp["displaces"] / m["lost_macs"] == pytest.approx((1 + r["u_resid"]) * (1 - r["s_fit"]) / (1 - r["s"]))
+    assert S.defer_rates(2, 1, 1024) == S.defer_rates(2, 32, 2048)
+    assert S.defer_rates(4, 1024, 65536) == S.defer_rates(4, 256, 8192)
+    with pytest.raises(ValueError, match="TP 8"):
+        S.defer_rates(8, 32, 2048)
+    one = S.defer_rates(1, 128, 6144)
+    assert one["s"] == S.defer_shown_1gpu() and one["u"] == max(0.71, S.defer_rates(2, 128, 6144)["u"])
+    assert S.defer_rates(1, 256, 8192)["u"] == 0.71 < S.defer_rates(1, 32, 2048)["u"]
+
+
+def tp_log(rank, tp=2, b=32, l=2048, *, base=40.0, phase=41.0, fill=1e12, served=1e12, mhz=2000.0, repeats=2, reps=9,
+           rec_bad=0, kinds=("fixed", "up", "cut")):
+    import json
+    out = [json.dumps({"mode": "pf_gate", "kind": k, "rank": rank, "ok": True}) for k in kinds]
+    for _ in range(repeats):
+        for arm, ms in (("base", base), ("phase", phase)):
+            r = {"mode": "tp", "tp": tp, "rank": rank, "B": b, "L": l, "arm": arm, "ms": ms, "mhz": mhz,
+                 "served_macs": served, "fill_macs_rep": fill if arm == "phase" else 0.0,
+                 "reps": [[ms, mhz, 200]] * reps}
+            if arm == "phase":
+                r |= {"rec_checked": 8, "rec_bad": rec_bad, "shape_bad": 0}
+            out.append(json.dumps(r))
+    return "\n".join(out)
+
+
+def test_score_tp_reads_the_slowest_rank_with_the_gates_per_rank():
+    """SCORE-TP (HC-COMM r2's suite): each TP point over the slowest rank's step, per GPU, its served MACs at 0.9 with
+    the deferred pass and the filler at the folded fraction, weighted TP × wall time; the slowdown, pf_gate, receipts
+    and NCCL gates read every rank."""
+    rows = S.tp_rows({0: tp_log(0, phase=41.0), 1: tp_log(1, phase=42.0, fill=2e12)})
+    by = rows["arms"][(2, 32, 2048)]
+    assert len(by["base"]) == 2 and [len(x) for x in by["phase"]] == [2, 2]
+    e = S.tp_entry(by, (2, 32, 2048), 0.45)
+    assert (e["entry"], e["tp"], e["B"], e["L"]) == ("TP 2 B 32 L 2K", 2, 32, 2048)
+    assert e["t1_measured_ms"] == 42.0 and e["slowdown"] == pytest.approx(42.0 / 40.0)
+    dp = S.defer_pass(1e12, 2000.0, 2, 32, 2048)
+    assert dp["s"] == pytest.approx(S.DEFER_FIT["s"]["intercept"][2]) and e["served_model"]["defer_s"] == dp["s"]
+    assert e["t1_ms"] == pytest.approx(42.0 + dp["added_ms"]) and e["filler_measured_macs"] == 1.5e12
+    c = S.cap(2000.0) * e["t1_ms"] * 1e-3
+    assert e["filler_part"] == pytest.approx(0.45 * (1.5e12 - dp["displaces"]) / c)
+    assert e["served_part_modelled"] == pytest.approx(0.9 * 1e12 / c) and e["time"] == pytest.approx(2 * e["t1_ms"] / 40.0)
+    assert e["time_v4"] == pytest.approx(2 * 42.0 / 40.0)  # v4's form weighs by v4's wall time, no modelled pass
+    sets = [{"dir": "a/set0", "settings": "NCCL_CGA_CLUSTER_SIZE=1 TPC_S=64", "rows": rows}]
+    g = S.tp_gates(sets, {(2, 32, 2048): e}, None)
+    assert all(g[k]["ok"] for k in ("slowdown", "pf_gate", "receipts", "nccl", "filler_paths")), g
+    bad = S.tp_rows({0: tp_log(0), 1: tp_log(1, rec_bad=1, kinds=("fixed", "up"), reps=5)})
+    g = S.tp_gates([{"dir": "b/set0", "settings": "TPC_S=64", "rows": bad}], {(2, 32, 2048): e}, None)
+    assert not any(g[k]["ok"] for k in ("slowdown", "pf_gate", "receipts", "nccl"))
+    assert "rank 1" in g["pf_gate"]["why"] and g["receipts"]["bad"] == ["(2, 32, 2048) repeat 0 rank 1",
+                                                                        "(2, 32, 2048) repeat 1 rank 1"]
+    sc = S.tp_score([e])
+    assert "SCORE_TP" not in sc and len(sc["missing"]) == len(S.TP_SUITE) - 1
+    assert sc["by_tp"][2]["coverage"] == pytest.approx(e["coverage"])
+    assert e["coverage_v4_form"] == pytest.approx((0.225 * 1e12 + 0.45 * 1.5e12) / (S.cap(2000.0) * 42.0e-3))
