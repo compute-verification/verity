@@ -12,7 +12,7 @@ D=benchmarks/pouw/decode_capacity
 export B; B=$(mktemp -d /tmp/dcap.XXXXXX); trap 'rm -rf "$B"' EXIT
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 nvcc --version | tail -2 > "$O/nvcc.txt"
-nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/dcap" $D/dcap.cu -lcublasLt -lnvidia-ml \
+nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/dcap" $D/dcap.cu -lcublasLt -lnvidia-ml -ldl \
   > "$O/build.log" 2>&1 || { grep -E "error" "$O/build.log" | head -40; tail -20 "$O/build.log"; exit 4; }
 grep -E "spill|Used" "$O/build.log" | head -20
 # shellcheck disable=SC2016
