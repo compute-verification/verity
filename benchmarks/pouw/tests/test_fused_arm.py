@@ -62,8 +62,8 @@ def test_fscore_arguments_follow_its_usage():
     use = re.search(r'const char\* use = "fscore ([^"]+)"', (FILLER / "fscore.cu").read_text()).group(1).split()
     fields = [f.name for f in F.FusedStep.__dataclass_fields__.values()]
     assert use[use.index("S") + 1:use.index("ROUNDS")] == fields
-    q = F.FusedStep(FW=1, FNC=2, AFW=3, ANC=4, APS=5, ALZ=6, LT=7, FLZ=8, LM=9)
-    assert FS.fused_args(q) == [str(i) for i in range(1, 10)]
+    q = F.FusedStep(FW=1, FNC=2, AFW=3, ANC=4, APS=5, ALZ=6, LT=7, LM=8)
+    assert FS.fused_args(q) == [str(i) for i in range(1, 9)]
 
 
 @pytest.mark.parametrize("arm", ARMS, ids=lambda a: a.name)

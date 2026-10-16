@@ -68,7 +68,7 @@ def filler_of(arm, ph, b, l):
 
 
 def fused_args(q) -> list[str]:
-    return [str(x) for x in (q.FW, q.FNC, q.AFW, q.ANC, q.APS, q.ALZ, q.LT, q.FLZ, q.LM)]
+    return [str(x) for x in (q.FW, q.FNC, q.AFW, q.ANC, q.APS, q.ALZ, q.LT, q.LM)]
 
 
 def measure(arm, bdir: Path, out: Path, rounds: int, reps: int, robust: bool) -> int:
