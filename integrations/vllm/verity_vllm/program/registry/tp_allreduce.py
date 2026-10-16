@@ -88,7 +88,7 @@ __all__ = ["AllReduceCustom", "AllReduceCustomCoordinate", "AllReduceMnnvl", "Al
            "CUSTOM_SYMM_MAX_BYTES", "Captured", "FI_MAX_BYTES", "MNNVL_ONE_SHOT_BYTES", "SETTINGS",
            "SYMM_MEM_MAX_BYTES", "WARP", "chain", "covered", "custom_order", "custom_owners", "custom_stage", "eps_bits",
            "fused_max_tokens", "mnnvl_grid", "mnnvl_shot", "multimem_owners", "multimem_runs", "multimem_tree", "multimem_trees",
-           "ranks", "strategy", "tree_clusters", "tree_from_clusters", "tree_leaves"]
+           "ranks", "route_binding", "served_route", "settings_of", "strategy", "tree_clusters", "tree_from_clusters", "tree_leaves"]
 
 WARP = 32
 #: FlashInfer `MNNVL_ONE_SHOT_THRESHOLD`: the one-shot kernel up to this many bytes of M * H * WORLD
@@ -535,3 +535,43 @@ def AllReduceMultimem(B, S, parts):
         cols = array_of([parts[r][lo:hi] for r in range(W)])
         outs.append(B.batch(bind(AllReduceMultimemCoordinate, WORLD=W, TREE=tree, FTZ=bool(S.FTZ)), cols, axes=(1,)))
     return outs[0] if len(outs) == 1 else coll_concat(Array(int(S.SIZE), BF16), outs)
+
+
+def settings_of(disable_custom_all_reduce: bool, env) -> dict[str, bool]:
+    """vLLM's all-reduce switches as `served_route` reads them: the engine's ``disable_custom_all_reduce`` and the process's
+    ``VLLM_ALLREDUCE_USE_SYMM_MEM`` / ``VLLM_ALLREDUCE_USE_FLASHINFER`` (unset is vLLM's default, on)."""
+    on = lambda name: str(env.get(name, "1")).strip().lower() not in ("0", "false", "no", "off")  # noqa: E731
+    return {"custom_all_reduce": not bool(disable_custom_all_reduce), "symmetric_memory": on("VLLM_ALLREDUCE_USE_SYMM_MEM"),
+            "flashinfer": on("VLLM_ALLREDUCE_USE_FLASHINFER")}
+
+
+def served_route(settings: dict, M: int, N: int) -> tuple[str | None, str]:
+    """The setting name and communicator route vLLM d9105ea80 takes for one bf16 [M,N] world-8 all-reduce."""
+    custom = bool(settings.get("custom_all_reduce"))
+    symm = bool(settings.get("symmetric_memory"))
+    flashinfer = bool(settings.get("flashinfer"))
+    setting = ("custom-off" if not custom and symm and flashinfer else
+               "defaults" if custom and symm and flashinfer else
+               "switch" if custom and not symm and flashinfer else None)
+    nbytes = M * N * 2
+    if flashinfer and nbytes <= FI_MAX_BYTES:
+        route = "fi_ar_comm"
+    elif custom and nbytes < (CUSTOM_SYMM_MAX_BYTES if symm else CUSTOM_MAX_BYTES):
+        route = "ca_comm"
+    elif symm and nbytes <= SYMM_MEM_MAX_BYTES:
+        route = "symm_mem_comm"
+    else:
+        route = "pynccl_comm"
+    return setting, route
+
+
+def route_binding(c: Captured, world: int, M: int, N: int) -> tuple[object, dict]:
+    """The Definition and statics of one covered communicator all-reduce of [M,N] over `world` ranks: one call over the M * N words."""
+    size = M * N
+    if c.definition == "AllReduceMnnvl_v1":
+        return AllReduceMnnvl, {"WORLD": world, "N": size, "SHOT": mnnvl_shot(M, N, world)}
+    if c.definition == "AllReduceMultimem_v1":
+        return AllReduceMultimem, {"WORLD": world, "SIZE": size, **c.statics}
+    if c.definition == "AllReduceCustom_v1":
+        return AllReduceCustom, {"WORLD": world, "SIZE": size, **c.statics}
+    raise ValueError(f"covered route {c.route!r} names unsupported definition {c.definition!r}")
