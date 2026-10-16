@@ -3,6 +3,7 @@
   python fp_exact.py configs [--quick]                 # the sweep, one line a config (fp_exact.cu's input)
   python fp_exact.py run BINARY --out DIR [--quick]    # one GPU: the sweep, the no-write control, the recheck
   python fp_exact.py summarize DIR                     # the verdicts from a run's outputs
+  python fp_exact.py limits DIR/verdicts.json          # the K limits per format, grid and C0, as a table
 
 `fp_exact.cu` chains K / k_step MMAs of one format into one FP32 accumulator from the word C0, with operands from one
 of GRIDS, and counts every output whose word isn't the exact sum's. Here the host regenerates the first tiles of every
@@ -412,6 +413,21 @@ def verdicts(rows: list[dict], cfgs: list[Config]) -> dict:
     return out
 
 
+def limits(v: dict) -> list[str]:
+    """Per format, grid and C0: the largest K through which every draw was exact, and the first K any draw rounded."""
+    out = ["| format/grid | C0 | exact for every draw through K | first inexact K (draws) |", "|---|---|---|---|"]
+    for key, x in v.items():
+        by: dict[str, list] = {}
+        for s, y in x["series"].items():
+            by.setdefault(s.split("/")[1], []).append((s.split("/")[0], y))
+        for c0, ys in sorted(by.items()):
+            first = [y["first_inexact_K"] for _, y in ys if y["first_inexact_K"]]
+            k1 = min(first) if first else None
+            cell = f"{k1} ({','.join(d for d, y in ys if y['first_inexact_K'] == k1)})" if k1 else "-"
+            out.append(f"| {key} | {c0} | {min(y['exact_through_K'] for _, y in ys)} | {cell} |")
+    return out
+
+
 PROBE_MACS = {"imma_s8": 4096, "qmma_e4m3": 4096, "omma_mxf4": 8192, "omma_nvf4": 8192, "omma_sp_mxf4": 16384,
               "omma_sp_nvf4": 16384}
 
@@ -474,7 +490,12 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("dir", type=Path)
     t = sub.add_parser("rates")
     t.add_argument("rows", type=Path, help="opcode_probe's rows.jsonl for probes/mma.cu")
+    lm = sub.add_parser("limits")
+    lm.add_argument("verdicts", type=Path, help="a run's exact/verdicts.json")
     a = ap.parse_args(argv)
+    if a.cmd == "limits":
+        print("\n".join(limits(json.loads(a.verdicts.read_text())["verdicts"])))
+        return 0
     if a.cmd == "configs":
         print("\n".join(x.line() for x in configs(a.quick)))
         return 0

@@ -235,6 +235,15 @@ def test_verdicts_find_the_last_exact_k_and_the_first_inexact_one():
     assert v["refused"] == [cs[1].name] and v["series"]["U/zero"]["exact_through_K"] == 32
 
 
+def test_limits_take_the_worst_draw_for_each_c0():
+    cs = [cfg(dist=d, K=k) for d in ("U", "EDGE") for k in (32, 64, 128)] + [cfg(c0="over", K=32)]
+    exact = {("EDGE", 128), ("U", 32), ("U", 64), ("U", 128), ("EDGE", 32), ("EDGE", 64)}
+    rows = [_row(c, 128 * 128 if (c.dist, c.K) in exact and c.c0 == "zero" else 1) for c in cs]
+    rows[4]["exact"] = 1
+    t = fx.limits(fx.verdicts(rows, cs))
+    assert "| e4m3/e4m3_int16 | zero | 32 | 64 (EDGE) |" in t and "| e4m3/e4m3_int16 | over | 0 | 32 (U) |" in t
+
+
 def test_rates_are_macs_per_sm_clock_against_imma():
     rows = [{"probe": "imma_s8", "rate": 0.25, "sm_mhz": 2000, "distinct_sms": 188},
             {"probe": "omma_sp_nvf4", "rate": 0.2, "sm_mhz": 2000, "distinct_sms": 188},
