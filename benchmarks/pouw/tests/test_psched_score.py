@@ -16,6 +16,7 @@ import psched_score as P
 
 A, S, SC = P.A, P.S, P.SC
 ARM = "benchmarks/pouw/filler/psched_arm.py:PhaseSched"
+PBIT = 1 << 62  # dcap.cu's: the phase filler's tile ids carry it, its rounds' tag
 
 
 @pytest.fixture(autouse=True)
@@ -32,12 +33,41 @@ def ncu_csv(kernel, rows):
     return "==PROF== Connected\n" + "\n".join([head, *body]) + "\n"
 
 
-def block(alone_ms, arm_ms, chunks):
+def block(alone_ms, arm_ms, chunks, solo=None):
     arm = {"window_ms": 3 * arm_ms, "reps": [[arm_ms, 2000.0, 300.0]] * 3}
+    b = {"order": "alone,arm,solo", "alone": {"window_ms": 3 * alone_ms, "reps": [[alone_ms, 2000.0, 300.0]] * 3},
+         "arm": arm}
     if chunks is not None:
         arm["chunks"] = chunks
-    return {"order": "alone,arm", "alone": {"window_ms": 3 * alone_ms, "reps": [[alone_ms, 2000.0, 300.0]] * 3},
-            "arm": arm}
+        b["solo"] = {"window_ms": 3 * arm_ms, "chunks": chunks if solo is None else solo, "reps": []}
+    return b
+
+
+def a_round(point, slots, slot, tag=0):
+    """A round record as rounds.cuh prints it: the scorer's range for the slot, its own coins."""
+    rid = point * slots + slot
+    lo = rid << S.RANGE_LOG2
+    c0, c1 = S.smix(2 * rid + 1 + (tag >> 40)), S.smix(2 * rid + 2 + (tag >> 40))
+    rd = {"id": rid, "slot": slot, "range": [lo, (rid + 1) << S.RANGE_LOG2], "tiles": [lo, lo + 4000],
+          "coins": [f"{c0:016x}", f"{c1:016x}"], "seed0": f"{S.dseed(c0, c1, tag | lo):016x}", "checked": [lo + 3000]}
+    return {**rd, "tag": f"{tag:016x}"} if tag else rd
+
+
+def v2_rounds(r, phase):
+    """dscore's rounds, or pscore's with the phase filler's tagged ones beside the split's, POINT_SLOTS (256) a point."""
+    n, pt = len(r["blocks"]), r["point"]
+    r["rounds"] = n
+    r["slots"] = 256
+    r["alone_fill"]["round"] = a_round(pt, r["slots"], 0)
+    if phase:
+        r["alone_fill"]["phase_round"] = a_round(pt, r["slots"], 1, PBIT)
+    for i, b in enumerate(r["blocks"]):
+        off = 2 if phase else 1
+        b["arm"]["round"] = a_round(pt, r["slots"], off + i)
+        b["solo"]["round"] = a_round(pt, r["slots"], off + (2 if phase else 1) * n + i)
+        if phase:
+            b["arm"]["phase_round"] = a_round(pt, r["slots"], 2 + n + i, PBIT)
+            b["solo"]["phase_round"] = a_round(pt, r["slots"], 2 + 3 * n + i, PBIT)
 
 
 def write_run(tmp: Path, *, phase_dram=("Kbyte", "20"), tiles_short=0, phase_bad=0, spec=ARM,
@@ -49,19 +79,26 @@ def write_run(tmp: Path, *, phase_dram=("Kbyte", "20"), tiles_short=0, phase_bad
     (out / "coins.txt").write_text("ab" * 16)
     (out / "commit.txt").write_text("c" * 40)
     rows = []
-    for ph, b, l in S.points():
+    for i, (ph, b, l) in enumerate(S.points()):
         p, q = A.placed(arm, ph, b, l), P.phase_of(arm, ph, b, l)
         alone = 10.0 if ph == "decode" else 160.0
         fill = p.place != "none"
         r = {"mode": "dscore", "kind": "step" if ph == "decode" else "prefill", "B": b, "L": l, "place": p.place,
              "fill_sms": p.fill_sms, "chunk_macs": 1e9, "alone_fill": {"mac_per_s": 1e12 if fill else 0.0},
              "rec_checked": 32 if fill else 0, "rec_bad": 0, "setup_ms": 1.0, "spread": {}, "kv_wrapped": False,
-             "blocks": [block(alone, alone * 1.02, (20.5 if q else 10) if fill else None) for _ in range(4)]}
+             "point": i, "blocks": [block(alone, alone * 1.02, (20.5 if q else 10) if fill else None) for _ in range(4)]}
         if q:
             r |= {"driver": "pscore", "rec_bad": phase_bad,
                   "phase": {"W": q.W, "NC": q.NC, "S": q.S, "tiles": q.tiles, "tiles_short": tiles_short}}
+        if fill:
+            v2_rounds(r, q is not None)
         rows.append(r)
     (out / "dscore.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    ctl = {"mode": "dscore", "kind": "step", "B": 32, "L": 8192, "place": "split", "fill_sms": 124, "chunk_macs": 1e9,
+           "alone_fill": {"mac_per_s": 1e12}, "rec_checked": 32, "rec_bad": 0, "setup_ms": 1.0, "spread": {},
+           "kv_wrapped": False, "S": 2048, "cheat_S": S.cheat_s(2048), "point": len(rows),
+           "blocks": [block(10.0, 10.2, 11, solo=10) for _ in range(4)]}
+    (out / "control.jsonl").write_text(json.dumps(ctl) + "\n")
     fillers = [arm.filler] + sorted({P.filler_of(arm, ph, b, l) for ph, b, l in S.points()
                                      if A.placed(arm, ph, b, l).place != "none"} - {arm.filler}, key=str)
     sg = [{"mode": "sgate", "W": f.W, "NC": f.NC, "S": f.S, "tiles": (1 << f.chunk_log2) // (f.W * f.NC * f.S), "ok": True}
@@ -89,8 +126,9 @@ def test_locked_report_scores_the_phase_rows(tmp_path):
     assert res["points"]["decode 256/2048"]["fill_rate"] == pytest.approx(20.5 * 1e9 / 30.6e-3)
     assert res["points"]["decode 1/2048"]["fill_rate"] == pytest.approx(10 * 1e9 / 30.6e-3)
     n_phase = sum(1 for ph, b, l in S.points() if P.phase_of(arm, ph, b, l))
-    assert res["gates"]["phase_receipts"] == {"ok": True, "points": n_phase, "checked": 32 * n_phase, "bad": 0,
-                                              "tiles_short": 0}
+    assert res["gates"]["phase_receipts"] == {"ok": True, "unrounded": [], "points": n_phase, "checked": 32 * n_phase,
+                                              "bad": 0, "tiles_short": 0}
+    assert res["gates"]["replay"]["ok"] and res["gates"]["honest"]["control"]["caught"]
     assert res["gates"]["phase_dram"]["ok"]
     assert res["gates"]["phase_dram"]["share_of_hbm"] == pytest.approx((20e3 / 0.5e-3) / (1.08e9 / 0.72e-3))
 

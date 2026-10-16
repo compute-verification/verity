@@ -103,20 +103,21 @@ def measure(arm, bdir: Path, out: Path, rounds: int, reps: int, robust: bool) ->
                    err=err, env=env)
         note(f"ncu phase W {w} NC {nc} S {s} rc {rc}")
     SC.smi(out)
-    for ph, b, l in pts:
+    for i, (ph, b, l) in enumerate(pts):
         p, q = A.placed(arm, ph, b, l), phase_of(arm, ph, b, l)
         if q is not None:
             cmd = [str(bdir / "pscore"), "pscore", str(b), str(l), str(p.fill_sms), str(fl.W), str(fl.NC), str(fl.S),
-                   str(q.W), str(q.NC), str(q.S), str(q.tiles), str(rounds), str(reps)]
+                   str(q.W), str(q.NC), str(q.S), str(q.tiles), str(rounds), str(reps), str(i)]
         else:
             f = filler_of(arm, ph, b, l)
             cmd = [str(bdir / "dscore"), "dscore", "step" if ph == "decode" else "prefill", str(b), str(l), p.place,
-                   str(p.fill_sms), str(f.W), str(f.NC), str(f.S), str(rounds), str(reps)]
+                   str(p.fill_sms), str(f.W), str(f.NC), str(f.S), str(rounds), str(reps), str(i)]
         f = filler_of(arm, ph, b, l)
         rc = SC.sh(cmd, out=out / "dscore.jsonl", err=err, env=at(f))
         note(f"{cmd[1]} {ph} {b} {l} {p.place} {p.fill_sms} filler {dataclasses.astuple(f)} "
              f"phase {dataclasses.astuple(q) if q else None} rc {rc}")
         SC.smi(out)
+    SC.control(arm, fl, bdir, out, env, rounds, reps, len(pts), note)
     return 0
 
 
@@ -148,8 +149,13 @@ def report(out: Path, arm) -> dict:
     g["phase_dram"] = phase_dram(out)
     rows = SC.rows(out / "dscore.jsonl")
     ph_rows = [r for r in rows if r.get("driver") == "pscore"]
-    g["phase_receipts"] = {"ok": bool(ph_rows) and all(r["rec_bad"] == 0 and r["phase"]["tiles_short"] == 0
-                                                       for r in ph_rows),
+    # the phase filler's own rounds (its calibration, every arm and standalone block), which the replay gate checks
+    unrounded = [f"decode {r['B']}/{r['L']}" for r in ph_rows if "phase_round" not in r["alone_fill"]
+                 or any("phase_round" not in b[k] for b in r["blocks"] for k in ("arm", "solo") if k in b)
+                 or any("solo" not in b for b in r["blocks"])]
+    g["phase_receipts"] = {"ok": bool(ph_rows) and not unrounded and all(r["rec_bad"] == 0 and
+                                                                         r["phase"]["tiles_short"] == 0 for r in ph_rows),
+                           "unrounded": unrounded,
                            "points": len(ph_rows), "checked": sum(r["rec_checked"] for r in ph_rows),
                            "bad": sum(r["rec_bad"] for r in ph_rows),
                            "tiles_short": sum(r["phase"]["tiles_short"] for r in ph_rows)}
