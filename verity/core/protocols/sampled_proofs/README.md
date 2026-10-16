@@ -400,7 +400,20 @@ Pinned by `verity/core/protocols/sampled_proofs/tests/test_consumers.py` and
   registrations' audit records accept, `session_roots` split between them by value, and its profile is the boundary's,
   the replay sampling design's over the RUs. Its refusals are `rule`, `not-drawn`, `final`, `delivered`,
   `interior-registered`, `interior-empty` and `interior-population`, then the public-items rule's and R1 to R7's.
-- **No retries.** A second `select`, `register_interiors`, `deliver` or `outcome` is refused. A proof delivered more than
+- **The salt and the registration deadline.** A stream runs one epoch. `salt(n=64)` issues its salt coin once, `n`
+  bytes of the challenger's coins (read in order with the draws'), and reads its release on the challenger's clock
+  (`salted_at`). Under `Check.registration_deadline`, seconds on that clock from the release, `register` reads the
+  receipt (`received_at`) before any check and refuses a registration received more than the deadline after the salt,
+  or before any salt, as `late-registration`, whatever it holds. That refusal is the epoch's one visible failure: it is
+  logged with both readings and ends the epoch (`ended`), so later registrations are refused (`epoch-ended`), and a
+  second `salt` is refused (`salted`). An on-time `Registration` carries `salted_at` and `received_at`. The epoch log
+  (`epoch_log`) holds `{"event": "salt", "salt", "salted_at"}`, then each `{"event": "registration", "order",
+  "registration", "salted_at", "received_at"}` or `{"event": "late-registration", "salted_at", "received_at"}`.
+  Neither the receipt nor an outcome's record carries a clock reading, and the interiors' registration is not held to
+  the deadline. This is PoUW's `Pouw.AcceptsBy` (`Security/Definitions/Pouw/Game/Deadline.lean`): `ts` is `salted_at`,
+  `tr` is `received_at`, and `td` is `ts` plus the deadline. With no registration deadline, `register` reads no clock
+  and logs nothing to the epoch log.
+- **No retries.** A second `salt`, `select`, `register_interiors`, `deliver` or `outcome` is refused. A proof delivered more than
   `Check.proof_deadline` seconds after the draw, or none by then, is the symbol `late`. An outcome is pending until every
   verifier of record has run, and each verdict of record names the delivered sessions and reports the public outputs
   alike (`check_verdicts`: `pending`, `sessions`, `public`, by the verifier of record).
@@ -416,6 +429,9 @@ A stream refuses a two-stage count, the `Sequential` rule, a window statement an
 Pinned by `tests/test_service.py` (`test_round_trip_register_select_deliver_outcome`,
 `test_the_rule_refuses_an_extra_field` and the other `test_the_rule_refuses_*`,
 `test_no_retries_nothing_redraws_and_an_outcome_is_final`, `test_a_late_proof_is_a_reject`,
+`test_a_late_registration_is_refused_and_ends_the_epoch`, `test_an_on_time_registration_carries_both_readings`,
+`test_a_registration_before_the_salt_is_late`, `test_the_salt_is_issued_once_from_the_challengers_coins`,
+`test_no_registration_deadline_changes_nothing`, `test_the_interiors_are_not_held_to_the_registration_deadline`,
 `test_the_stream_stops_at_its_budgeth_failure`, `test_a_call_names_its_own_streams_registration_and_draw`,
 `test_two_stage_round_trip_registers_the_interiors_between_the_draw_and_the_proof`,
 `test_the_interiors_are_registered_once_after_select_before_deliver_over_the_proved_rus`,
