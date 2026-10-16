@@ -183,6 +183,11 @@ def wkey(spec: dict) -> tuple:
     return (spec["rot"], spec["top"], spec["wg"], spec["gptq"], spec["sm"], spec["smkv"], spec["oc"], tuple(sorted(spec["w2"])))
 
 
+def hkey(spec: dict) -> tuple:
+    """What a GPTQ method's Hessian depends on (its served inputs)."""
+    return (spec["rot"], spec["sm"], spec["smkv"])
+
+
 def needs_calib(spec: dict) -> bool:
     return bool(spec["gptq"] or spec["sm"] or spec["oc"])
 
@@ -244,9 +249,17 @@ def gptq(w: torch.Tensor, h: torch.Tensor, top: int, block: int = 128, damp: flo
     h[dead, dead] = 1
     w[:, dead] = 0
     s = w.abs().amax(dim=1).clamp(min=1e-30) / top
-    h += damp * torch.mean(torch.diag(h)) * torch.eye(k, device=w.device)
-    hinv = torch.linalg.cholesky(torch.cholesky_inverse(torch.linalg.cholesky(h)), upper=True)
-    del h
+    h = (h + h.T) / 2
+    mean_diag = torch.mean(torch.diag(h))
+    for d in (damp, 10 * damp, 100 * damp):
+        try:
+            hd = h + d * mean_diag * torch.eye(k, device=w.device)
+            hinv = torch.linalg.cholesky(torch.cholesky_inverse(torch.linalg.cholesky(hd)), upper=True)
+            break
+        except torch.linalg.LinAlgError:
+            if d == 100 * damp:
+                raise
+    del h, hd
     q = torch.zeros_like(w)
     for i1 in range(0, k, block):
         i2 = min(i1 + block, k)
@@ -293,17 +306,13 @@ class LayerWeights:
         al = spec["sm"] / 100
         return (ax.clamp(min=1e-5) ** al / aw.clamp(min=1e-5) ** (1 - al)).clamp(min=1e-5)
 
-    def hessian(self, spec: dict, name: str, sm: torch.Tensor | None) -> torch.Tensor:
-        """The second moment of the served (smoothed, rotated) inputs, Q^T (M^-1 H M^-1) Q, from the unrotated H."""
-        g = GROUP[name]
-        key = ("H", g, spec["rot"], spec["sm"], spec["smkv"])
-        if key not in self.cache:
-            h = self.calib["H"][g]
-            if sm is not None:
-                h = h / sm[:, None] / sm[None, :]
-            r = self.rot(spec["rot"], h.shape[0])
-            self.cache[key] = r.apply(r.apply(h).T.contiguous()).T.contiguous()
-        return self.cache[key]
+    def hessian(self, spec: dict, name: str) -> torch.Tensor:
+        """The calibration windows' second moment of the served (smoothed, rotated) inputs."""
+        return self.calib["H"][(hkey(spec), GROUP[name])]
+
+    def served_input(self, spec: dict, name: str, x: torch.Tensor) -> torch.Tensor:
+        sm = self.smooth(spec, name)
+        return self.rot(spec["rot"], x.shape[1]).apply(x / sm[None, :] if sm is not None else x)
 
     def outliers(self, spec: dict, name: str) -> torch.Tensor | None:
         if not spec["oc"]:
@@ -334,7 +343,7 @@ class LayerWeights:
                 self.rotated[rk] = wr
         top = spec["top"]
         if spec["gptq"]:
-            q, s = gptq(wr, self.hessian(spec, name, sm), top)
+            q, s = gptq(wr, self.hessian(spec, name), top)
             out["wl"], out["s"] = [(q.to(torch.int8), 1)], s
         elif spec["wg"]:
             g = spec["wg"]
@@ -554,7 +563,7 @@ def evaluate(snapshot: str, ids: np.ndarray, methods: list[str], out: Path, cali
     streams = {m: emb[ids_t].clone() for m in ["bf16"] + [m for m in methods if m != "bf16"]}
     cal = emb[torch.from_numpy(calib_ids).to(device)].clone() if calib_ids is not None else None
     del emb
-    use_h = any(s["gptq"] for s in specs.values())
+    hkeys = sorted({hkey(s) for s in specs.values() if s["gptq"]})
     rots: dict = {}
     diag: list = []
     diverge: dict = {m: [] for m in methods if m != "bf16"}
@@ -596,26 +605,37 @@ def evaluate(snapshot: str, ids: np.ndarray, methods: list[str], out: Path, cali
             return y
 
         try:
-            # calibration: channel maxima and second moments (unrotated) of every input group, on the bf16 stream
+            # calibration on the bf16 stream: every input group's channel maxima, then (GPTQ) the second moments of its
+            # served inputs, a Gram matrix of the smoothed, rotated rows (positive semidefinite as computed)
             if cal is not None:
                 amax: dict = {}
                 H: dict = {}
+                first = ("self_attn.q_proj", "self_attn.o_proj", "mlp.gate_proj", "mlp.down_proj")
 
                 def collect(name, x):
-                    g = GROUP[name]
-                    if name not in ("self_attn.q_proj", "self_attn.o_proj", "mlp.gate_proj", "mlp.down_proj"):
-                        return
-                    a = x.abs().amax(0)
-                    amax[g] = torch.maximum(amax[g], a) if g in amax else a
-                    if use_h:
-                        h = x.T @ x
-                        H[g] = H[g] + h if g in H else h
-                        del h
+                    if name in first:
+                        g, a = GROUP[name], x.abs().amax(0)
+                        amax[g] = torch.maximum(amax[g], a) if g in amax else a
 
+                def collect_h(name, x):
+                    if name in first:
+                        for hk in hkeys:
+                            xr = lw.served_input({"rot": hk[0], "sm": hk[1], "smkv": hk[2]}, name, x)
+                            h = xr.T @ xr
+                            k2 = (hk, GROUP[name])
+                            H[k2] = H[k2] + h if k2 in H else h
+                            del xr, h
+
+                calib_in = cal.clone() if hkeys else None
                 for i in range(0, len(cal), batch):
                     cal[i:i + batch] = run(cal[i:i + batch], None, i, {"collect": collect})
+                lw.calib = {"amax": amax}
+                if hkeys:
+                    for i in range(0, len(cal), batch):
+                        run(calib_in[i:i + batch], None, i, {"collect": collect_h})
+                    del calib_in
                 ntok = cal.shape[0] * cal.shape[1]
-                lw.calib = {"amax": amax, "H": {k: v * (2 / ntok) for k, v in H.items()}}
+                lw.calib["H"] = {k: v * (2 / ntok) for k, v in H.items()}
             # the bf16 stream, with diagnostics on its first diag_windows windows
             ref_out = torch.empty_like(streams["bf16"])
             dlayer: dict = {}
@@ -821,14 +841,7 @@ def selftest(attn_dir: str | None = None) -> dict:
     assert res["d63-t0x"]["divergence"][-1]["pos0"] < 1e-2 and res["d63-t0"]["divergence"][-1]["pos0"] < res["d63"]["divergence"][-1]["pos0"]
     assert math.isfinite(ppl["d63-sm50-smkv"]) and ppl["d63-sm50-smkv"] != ppl["d63-sm50"], ppl
     assert math.isfinite(ppl["d63-sm50-gptq"]) and ppl["d63-sm50-gptq"] != ppl["d63-sm50"], ppl
-    xh = torch.randn(96, cfg.hidden_size) * (torch.rand(cfg.hidden_size) * 4)
-    lw0 = LayerWeights(model.model.layers[0], 0, {}, {"amax": {"o": torch.rand(cfg.hidden_size) * 10, "qkv": xh.abs().amax(0)},
-                                                      "H": {"qkv": xh.T @ xh}})
-    for mth in ("d63-gptq", "d63-sm50-gptq", "d63-hq-sm50-gptq"):
-        sp = parse(mth)
-        sm0 = lw0.smooth(sp, "self_attn.q_proj")
-        xs = lw0.rot(sp["rot"], cfg.hidden_size).apply(xh / sm0[None, :] if sm0 is not None else xh)
-        assert torch.allclose(lw0.hessian(sp, "self_attn.q_proj", sm0), xs.T @ xs, rtol=1e-3, atol=1e-2), mth
+    lw0 = LayerWeights(model.model.layers[0], 0, {}, {"amax": {"o": torch.rand(cfg.hidden_size) * 10}})
     m_kv = lw0.smooth(parse("d63-sm50-smkv"), "self_attn.o_proj").view(cfg.num_key_value_heads, -1, cfg.head_dim)
     assert torch.equal(m_kv, m_kv[:, :1].expand_as(m_kv)) and not torch.equal(m_kv, lw0.smooth(parse("d63-sm50"), "self_attn.o_proj").view_as(m_kv))
     d = res["_meta"]["diag"][0]
