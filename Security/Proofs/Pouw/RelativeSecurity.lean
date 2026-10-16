@@ -5703,6 +5703,320 @@ end OvPlay
 
 end OverlapLuck
 
+/-! ### The parity luck (RS-E-REF r6, `note:20261015T1931Z-draft-theorem-e-referee` VI.2)
+
+For one-sided operands of any form the luck is a parity lemma. Mod 2, a cell-block's target is `⟨x, y⟩` plus a
+function of `x` and a function of `y`, with `x` the cell's row of U at one odd-weighted plane and `y` the cell-block's
+coins. A run whose word for the cell-block has `R` two-sided products is, mod 2 at the cell's frame (every other bit
+fixed), `⟨F x, G y⟩ + a x + b y` with `F`, `G`, `a`, `b` of any form. Its agreement `p` has `(2p − 1)² ≤ 2^R / 2^K`
+(`parity_corr_sq`, `parity_prob_sq`: Cauchy–Schwarz over `y`, Parseval over `x`). So a cell-block one product short
+passes with probability at most `½ + ½ √½ < 0.854` (`parity_luck_short`), and two short at most `¾`
+(`parity_luck_two`), over `Z` or `Z/2³²` alike (any ring with a map onto `F₂`). At a cell's frame in the bits
+(`ParityForm`) the same bounds hold with every other bit uniform (`prob_zero_le_of_parityForm`). -/
+
+section Parity
+
+/-- `(−1)^z` on `F₂`. -/
+def sgn (z : ZMod 2) : ℝ := if z = 0 then 1 else -1
+
+theorem sgn_add (a b : ZMod 2) : sgn (a + b) = sgn a * sgn b := by
+  have h : ∀ a b : ZMod 2, (a + b = 0 ↔ (a = 0 ↔ b = 0)) := by decide
+  unfold sgn
+  by_cases ha : a = 0 <;> by_cases hb : b = 0 <;> simp [h, ha, hb]
+
+theorem sgn_mul_self (a : ZMod 2) : sgn a * sgn a = 1 := by
+  unfold sgn
+  split_ifs <;> norm_num
+
+theorem sgn_sum {ι : Type*} (s : Finset ι) (f : ι → ZMod 2) : sgn (∑ i ∈ s, f i) = ∏ i ∈ s, sgn (f i) := by
+  classical
+  induction s using Finset.induction_on with
+  | empty => simp [sgn]
+  | insert i s hi ih => rw [sum_insert hi, prod_insert hi, sgn_add, ih]
+
+theorem sgn_eq (u v : ZMod 2) : sgn (u + v) = 2 * (if u = v then 1 else 0) - 1 := by
+  have h : ∀ u v : ZMod 2, (u + v = 0 ↔ u = v) := by decide
+  unfold sgn
+  by_cases huv : u = v <;> simp [h, huv] <;> norm_num
+
+theorem sum_sgn_mul (g : ZMod 2) : ∑ t : ZMod 2, sgn (g * t) = if g = 0 then 2 else 0 := by
+  have h2 : ∀ f : ZMod 2 → ℝ, ∑ t : ZMod 2, f t = f 0 + f 1 := fun f => Fin.sum_univ_two f
+  rw [h2, mul_zero, mul_one]
+  unfold sgn
+  by_cases hg : g = 0 <;> simp [hg] <;> norm_num
+
+theorem sum_sgn_dot {K : ℕ} (γ : Fin K → ZMod 2) :
+    ∑ y : Fin K → ZMod 2, sgn (γ ⬝ᵥ y) = if γ = 0 then 2 ^ K else 0 := by
+  classical
+  simp only [dotProduct, sgn_sum]
+  rw [← Fintype.prod_sum (fun i t => sgn (γ i * t))]
+  simp only [sum_sgn_mul]
+  split_ifs with h
+  · simp [h]
+  · obtain ⟨i, hi⟩ : ∃ i, γ i ≠ 0 := by
+      by_contra hc
+      push Not at hc
+      exact h (funext hc)
+    exact prod_eq_zero (mem_univ i) (by simp [hi])
+
+theorem card_vec (K : ℕ) : Fintype.card (Fin K → ZMod 2) = 2 ^ K := by
+  simp
+
+theorem zmod2_add_eq_zero (s t : ZMod 2) : s + t = 0 ↔ t = s := by
+  revert s t
+  decide
+
+/-- Parseval on `F₂^K`. -/
+theorem sum_sq_hat {K : ℕ} (u : (Fin K → ZMod 2) → ℝ) :
+    ∑ y : Fin K → ZMod 2, (∑ x, u x * sgn (x ⬝ᵥ y)) ^ 2 = 2 ^ K * ∑ x, u x ^ 2 := by
+  classical
+  have h1 : ∀ y : Fin K → ZMod 2, (∑ x, u x * sgn (x ⬝ᵥ y)) ^ 2 =
+      ∑ x, ∑ x', u x * u x' * sgn ((x + x') ⬝ᵥ y) := fun y => by
+    rw [sq, sum_mul_sum]
+    refine sum_congr rfl fun x _ => sum_congr rfl fun x' _ => ?_
+    rw [add_dotProduct, sgn_add]
+    ring
+  simp only [h1]
+  rw [sum_comm]
+  simp only [fun x => sum_comm (s := (univ : Finset (Fin K → ZMod 2))) (t := univ)
+    (f := fun y x' => u x * u x' * sgn ((x + x') ⬝ᵥ y))]
+  simp only [← mul_sum, sum_sgn_dot]
+  rw [mul_sum]
+  refine sum_congr rfl fun x _ => ?_
+  have hx : ∀ x' : Fin K → ZMod 2, (x + x' = 0) ↔ x' = x := fun x' => by
+    constructor
+    · intro h
+      funext i
+      exact (zmod2_add_eq_zero _ _).mp (congrFun h i)
+    · rintro rfl
+      funext i
+      exact (zmod2_add_eq_zero _ _).mpr rfl
+  simp only [hx, mul_ite, mul_zero, sum_ite_eq', mem_univ, ↓reduceIte]
+  ring
+
+/-- **The parity correlation** (RS-E-REF r6, Lemma P2): for any `F, G : F₂^K → F₂^R` and any `a, b`, the sum of
+`(−1)^(⟨F x, G y⟩ + a x + b y + ⟨x, y⟩)` over `x, y` has square at most `2^R (2^K)³`. -/
+theorem parity_corr_sq {K R : ℕ} (F G : (Fin K → ZMod 2) → Fin R → ZMod 2) (a b : (Fin K → ZMod 2) → ZMod 2) :
+    (∑ x, ∑ y, sgn (F x ⬝ᵥ G y + a x + b y + x ⬝ᵥ y)) ^ 2 ≤ 2 ^ R * (2 ^ K) ^ 3 := by
+  classical
+  set N : ℝ := 2 ^ K with hN
+  let T : (Fin R → ZMod 2) → (Fin K → ZMod 2) → ℝ := fun β y => ∑ x, sgn (a x + F x ⬝ᵥ β) * sgn (x ⬝ᵥ y)
+  have hs : ∑ x, ∑ y, sgn (F x ⬝ᵥ G y + a x + b y + x ⬝ᵥ y) = ∑ y, sgn (b y) * T (G y) y := by
+    rw [sum_comm]
+    refine sum_congr rfl fun y _ => ?_
+    simp only [T, mul_sum]
+    refine sum_congr rfl fun x _ => ?_
+    simp only [sgn_add]
+    ring
+  have hcs := sum_mul_sq_le_sq_mul_sq univ (fun y => sgn (b y)) (fun y => T (G y) y)
+  have hb : ∑ y : Fin K → ZMod 2, sgn (b y) ^ 2 = N := by
+    simp only [sq, sgn_mul_self, sum_const, card_univ, card_vec, nsmul_eq_mul, mul_one, hN]
+    push_cast
+    ring
+  have hT : ∑ y : Fin K → ZMod 2, T (G y) y ^ 2 ≤ ∑ y : Fin K → ZMod 2, ∑ β, T β y ^ 2 :=
+    sum_le_sum fun y _ => single_le_sum (f := fun β => T β y ^ 2) (fun β _ => sq_nonneg _) (mem_univ (G y))
+  have hP : ∑ y : Fin K → ZMod 2, ∑ β, T β y ^ 2 = 2 ^ R * N * N := by
+    have hβ : ∀ β, ∑ y, T β y ^ 2 = N * N := fun β => by
+      simp only [T]
+      rw [sum_sq_hat (fun x => sgn (a x + F x ⬝ᵥ β))]
+      simp only [sq, sgn_mul_self, sum_const, card_univ, card_vec, nsmul_eq_mul, mul_one, hN]
+      push_cast
+      ring
+    rw [sum_comm]
+    simp only [hβ, sum_const, card_univ, card_vec, nsmul_eq_mul]
+    push_cast
+    ring
+  rw [hs]
+  calc (∑ y, sgn (b y) * T (G y) y) ^ 2 ≤ (∑ y, sgn (b y) ^ 2) * ∑ y, T (G y) y ^ 2 := hcs
+    _ ≤ N * (2 ^ R * N * N) := by
+      rw [hb, ← hP]
+      exact mul_le_mul_of_nonneg_left hT (by positivity)
+    _ = 2 ^ R * N ^ 3 := by ring
+
+/-- **The parity lemma** (RS-E-REF r6, Lemma P2) in probability: `x, y` uniform on `F₂^K`, any `F, G : F₂^K → F₂^R`
+and any `a, b`; the agreement `p` of `⟨F x, G y⟩ + a x + b y` with `⟨x, y⟩` has `(2p − 1)² ≤ 2^R / 2^K`. -/
+theorem parity_prob_sq {K R : ℕ} (F G : (Fin K → ZMod 2) → Fin R → ZMod 2) (a b : (Fin K → ZMod 2) → ZMod 2) :
+    (2 * prob (fun xy : (Fin K → ZMod 2) × (Fin K → ZMod 2) =>
+      F xy.1 ⬝ᵥ G xy.2 + a xy.1 + b xy.2 = xy.1 ⬝ᵥ xy.2) - 1) ^ 2 ≤ 2 ^ R / 2 ^ K := by
+  classical
+  have hN : (0 : ℝ) < 2 ^ K := by positivity
+  have hS : ∑ x, ∑ y, sgn (F x ⬝ᵥ G y + a x + b y + x ⬝ᵥ y) =
+      2 * ∑ xy : (Fin K → ZMod 2) × (Fin K → ZMod 2),
+        (if F xy.1 ⬝ᵥ G xy.2 + a xy.1 + b xy.2 = xy.1 ⬝ᵥ xy.2 then (1 : ℝ) else 0) - (2 ^ K) ^ 2 := by
+    rw [Fintype.sum_prod_type]
+    simp only [sgn_eq, sum_sub_distrib, ← mul_sum, sum_const, card_univ, card_vec, nsmul_eq_mul, mul_one]
+    push_cast
+    ring
+  have hp : 2 * prob (fun xy : (Fin K → ZMod 2) × (Fin K → ZMod 2) =>
+      F xy.1 ⬝ᵥ G xy.2 + a xy.1 + b xy.2 = xy.1 ⬝ᵥ xy.2) - 1 =
+      (∑ x, ∑ y, sgn (F x ⬝ᵥ G y + a x + b y + x ⬝ᵥ y)) / (2 ^ K) ^ 2 := by
+    rw [hS, prob_eq_expect]
+    unfold expect
+    rw [Fintype.card_prod, card_vec]
+    push_cast
+    field_simp
+  rw [hp, div_pow, div_le_div_iff₀ (by positivity) hN]
+  calc (∑ x, ∑ y, sgn (F x ⬝ᵥ G y + a x + b y + x ⬝ᵥ y)) ^ 2 * 2 ^ K ≤ 2 ^ R * (2 ^ K) ^ 3 * 2 ^ K :=
+        mul_le_mul_of_nonneg_right (parity_corr_sq F G a b) hN.le
+    _ = 2 ^ R * ((2 ^ K) ^ 2) ^ 2 := by ring
+
+/-- **The parity luck, one product short**: with `R < K` the agreement is at most `½ + ½ √½ < 0.854`. -/
+theorem parity_luck_short {K R : ℕ} (hR : R < K) (F G : (Fin K → ZMod 2) → Fin R → ZMod 2)
+    (a b : (Fin K → ZMod 2) → ZMod 2) :
+    prob (fun xy : (Fin K → ZMod 2) × (Fin K → ZMod 2) => F xy.1 ⬝ᵥ G xy.2 + a xy.1 + b xy.2 = xy.1 ⬝ᵥ xy.2) ≤
+      427 / 500 := by
+  have h := parity_prob_sq F G a b
+  have h2 : (2 : ℝ) ^ R / 2 ^ K ≤ 1 / 2 := by
+    rw [div_le_div_iff₀ (by positivity) (by positivity), one_mul]
+    calc (2 : ℝ) ^ R * 2 = 2 ^ (R + 1) := by ring
+      _ ≤ 2 ^ K := pow_le_pow_right₀ (by norm_num) hR
+  nlinarith
+
+/-- **The parity luck, two products short**: with `R + 2 ≤ K` the agreement is at most `¾`. -/
+theorem parity_luck_two {K R : ℕ} (hR : R + 2 ≤ K) (F G : (Fin K → ZMod 2) → Fin R → ZMod 2)
+    (a b : (Fin K → ZMod 2) → ZMod 2) :
+    prob (fun xy : (Fin K → ZMod 2) × (Fin K → ZMod 2) => F xy.1 ⬝ᵥ G xy.2 + a xy.1 + b xy.2 = xy.1 ⬝ᵥ xy.2) ≤
+      3 / 4 := by
+  have h := parity_prob_sq F G a b
+  have h2 : (2 : ℝ) ^ R / 2 ^ K ≤ 1 / 4 := by
+    rw [div_le_div_iff₀ (by positivity) (by positivity), one_mul]
+    calc (2 : ℝ) ^ R * 4 = 2 ^ (R + 2) := by ring
+      _ ≤ 2 ^ K := pow_le_pow_right₀ (by norm_num) hR
+  nlinarith
+
+end Parity
+
+section ParityFrame
+
+variable {V A : Type} [Fintype V] [DecidableEq V] [CommRing A] {K : ℕ}
+
+/-- A cell's frame bits mod 2 at the bit point `S`: its `x` bits (`.inl j`) and its `y` bits (`.inr j`). -/
+def frameBits (fr : Fin K ⊕ Fin K → V) (S : Finset V) : Fin K ⊕ Fin K → ZMod 2 := fun s => if fr s ∈ S then 1 else 0
+
+/-- The bit point `S` with its frame bits replaced by `z`. -/
+def reframe (fr : Fin K ⊕ Fin K → V) (S : Finset V) (z : Fin K ⊕ Fin K → ZMod 2) : Finset V :=
+  univ.filter fun v => (∃ s, fr s = v ∧ z s = 1) ∨ ((∀ s, fr s ≠ v) ∧ v ∈ S)
+
+theorem mem_reframe_fr {fr : Fin K ⊕ Fin K → V} (hfr : Function.Injective fr) (S : Finset V)
+    (z : Fin K ⊕ Fin K → ZMod 2) (s : Fin K ⊕ Fin K) : fr s ∈ reframe fr S z ↔ z s = 1 := by
+  simp only [reframe, mem_filter, mem_univ, true_and]
+  constructor
+  · rintro (⟨s', hs', hz⟩ | ⟨h, -⟩)
+    · rwa [← hfr hs']
+    · exact absurd rfl (h s)
+  · exact fun h => Or.inl ⟨s, rfl, h⟩
+
+omit [Fintype V] in
+theorem mem_reframe_off {fr : Fin K ⊕ Fin K → V} [Fintype V] (S : Finset V) (z : Fin K ⊕ Fin K → ZMod 2) {v : V}
+    (hv : ∀ s, fr s ≠ v) : v ∈ reframe fr S z ↔ v ∈ S := by
+  simp only [reframe, mem_filter, mem_univ, true_and]
+  constructor
+  · rintro (⟨s, hs, -⟩ | ⟨-, h⟩)
+    · exact absurd hs (hv s)
+    · exact h
+  · exact fun h => Or.inr ⟨hv, h⟩
+
+theorem zmod2_ite_one (t : ZMod 2) : (if t = 1 then (1 : ZMod 2) else 0) = t := by
+  revert t
+  decide
+
+theorem frameBits_reframe {fr : Fin K ⊕ Fin K → V} (hfr : Function.Injective fr) (S : Finset V)
+    (z : Fin K ⊕ Fin K → ZMod 2) : frameBits fr (reframe fr S z) = z := by
+  funext s
+  simp only [frameBits, mem_reframe_fr hfr]
+  exact zmod2_ite_one (z s)
+
+theorem reframe_reframe {fr : Fin K ⊕ Fin K → V} (hfr : Function.Injective fr) (S : Finset V)
+    (z : Fin K ⊕ Fin K → ZMod 2) : reframe fr (reframe fr S z) (frameBits fr S) = S := by
+  ext v
+  by_cases hv : ∃ s, fr s = v
+  · obtain ⟨s, rfl⟩ := hv
+    rw [mem_reframe_fr hfr]
+    simp only [frameBits]
+    split_ifs with h <;> simp [h]
+  · push Not at hv
+    rw [mem_reframe_off _ _ hv, mem_reframe_off _ _ hv]
+
+/-- Two frame replacements that agree off the frame bits in `P` agree at every bit outside `fr '' P`. -/
+theorem mem_reframe_congr {fr : Fin K ⊕ Fin K → V} (hfr : Function.Injective fr) (S : Finset V)
+    {z z' : Fin K ⊕ Fin K → ZMod 2} (P : Fin K ⊕ Fin K → Prop) (hz : ∀ s, ¬P s → z s = z' s) {v : V}
+    (hv : ∀ s, P s → fr s ≠ v) : v ∈ reframe fr S z ↔ v ∈ reframe fr S z' := by
+  by_cases h : ∃ s, fr s = v
+  · obtain ⟨s, rfl⟩ := h
+    rw [mem_reframe_fr hfr, mem_reframe_fr hfr, hz s fun hp => hv s hp rfl]
+  · push Not at h
+    rw [mem_reframe_off _ _ h, mem_reframe_off _ _ h]
+
+/-- Replacing a uniform bit point's frame bits by uniform ones keeps it uniform: `(S, z) ↦ (S with z, S's frame
+bits)` is an involution. -/
+theorem prob_reframe {fr : Fin K ⊕ Fin K → V} (hfr : Function.Injective fr) (P : Finset V → Prop) :
+    prob P = prob fun b : Finset V × (Fin K ⊕ Fin K → ZMod 2) => P (reframe fr b.1 b.2) := by
+  classical
+  let φ : Finset V × (Fin K ⊕ Fin K → ZMod 2) → Finset V × (Fin K ⊕ Fin K → ZMod 2) :=
+    fun b => (reframe fr b.1 b.2, frameBits fr b.1)
+  have hφ : Function.Involutive φ := fun b => by
+    simp only [φ, reframe_reframe hfr, frameBits_reframe hfr]
+  rw [prob_equiv hφ.toPerm (fun b : Finset V × (Fin K ⊕ Fin K → ZMod 2) => P (reframe fr b.1 b.2)),
+    ← prob_fst (β := Fin K ⊕ Fin K → ZMod 2) P]
+  congr 1
+  funext b
+  have hs : hφ.toPerm.symm b = φ b := rfl
+  rw [hs]
+  simp only [φ, reframe_reframe hfr]
+
+/-- **A parity form** of an error at a cell's frame `fr` (its `x` bits, then its `y` bits) with `R` terms: mod 2
+(`φ`) the error at every bit point is `⟨F, G⟩ + a + b + ⟨x, y⟩`, with `F` and `a` blind to the `y` bits and `G` and
+`b` blind to the `x` bits (RS-E-REF r6 VI.2.1's cell projection: every other bit is fixed). -/
+def ParityForm (fr : Fin K ⊕ Fin K → V) (φ : A →+* ZMod 2) (R : ℕ) (e : (V → A) → A) : Prop :=
+  ∃ (F G : Finset V → Fin R → ZMod 2) (a b : Finset V → ZMod 2),
+    (∀ S S' : Finset V, (∀ v, (∀ j, fr (.inr j) ≠ v) → (v ∈ S ↔ v ∈ S')) → F S = F S' ∧ a S = a S') ∧
+    (∀ S S' : Finset V, (∀ v, (∀ j, fr (.inl j) ≠ v) → (v ∈ S ↔ v ∈ S')) → G S = G S' ∧ b S = b S') ∧
+    ∀ S, φ (e (bitInd S)) =
+      F S ⬝ᵥ G S + a S + b S + (fun j => frameBits fr S (.inl j)) ⬝ᵥ fun j => frameBits fr S (.inr j)
+
+/-- **The parity lemma at a cell's frame**: an error with a parity form of `R` terms vanishes at a uniform bit point
+with probability at most any bound `q` of the parity lemma on `F₂^K` at `R` terms. -/
+theorem prob_zero_le_of_parityForm {fr : Fin K ⊕ Fin K → V} (hfr : Function.Injective fr) {φ : A →+* ZMod 2}
+    {R : ℕ} {e : (V → A) → A} (h : ParityForm fr φ R e) {q : ℝ} (hq : 0 ≤ q)
+    (hcore : ∀ (F G : (Fin K → ZMod 2) → Fin R → ZMod 2) (a b : (Fin K → ZMod 2) → ZMod 2),
+      prob (fun xy : (Fin K → ZMod 2) × (Fin K → ZMod 2) => F xy.1 ⬝ᵥ G xy.2 + a xy.1 + b xy.2 = xy.1 ⬝ᵥ xy.2) ≤
+        q) :
+    prob (fun S : Finset V => e (bitInd S) = 0) ≤ q := by
+  classical
+  obtain ⟨F, G, a, b, hF, hG, he⟩ := h
+  have hmono : prob (fun S : Finset V => e (bitInd S) = 0) ≤ prob fun S : Finset V =>
+      F S ⬝ᵥ G S + a S + b S = (fun j => frameBits fr S (.inl j)) ⬝ᵥ fun j => frameBits fr S (.inr j) :=
+    prob_mono fun S hS => by
+      have := he S
+      rw [hS, map_zero] at this
+      exact ((zmod2_add_eq_zero _ _).mp this.symm).symm
+  refine hmono.trans ?_
+  rw [prob_reframe hfr, prob_equiv (Equiv.prodComm _ _)]
+  refine prob_le_of_slices _ hq fun S => ?_
+  rw [prob_equiv (Equiv.sumArrowEquivProdArrow (Fin K) (Fin K) (ZMod 2))]
+  refine le_of_eq_of_le ?_ (hcore (fun x => F (reframe fr S (Sum.elim x 0))) (fun y => G (reframe fr S (Sum.elim 0 y)))
+    (fun x => a (reframe fr S (Sum.elim x 0))) fun y => b (reframe fr S (Sum.elim 0 y)))
+  congr 1
+  funext xy
+  have hsy : (Equiv.sumArrowEquivProdArrow (Fin K) (Fin K) (ZMod 2)).symm xy = Sum.elim xy.1 xy.2 := by
+    funext s
+    cases s <;> rfl
+  simp only [Equiv.prodComm_symm, Equiv.prodComm_apply, Prod.fst_swap, Prod.snd_swap, hsy,
+    frameBits_reframe hfr, Sum.elim_inl, Sum.elim_inr]
+  have hx := hF (reframe fr S (Sum.elim xy.1 xy.2)) (reframe fr S (Sum.elim xy.1 0)) fun v hv =>
+    mem_reframe_congr hfr S (fun s => ∃ j, s = .inr j) (fun s hs => by
+      cases s with
+      | inl j => rfl
+      | inr j => exact absurd ⟨j, rfl⟩ hs) fun s ⟨j, hj⟩ => hj ▸ hv j
+  have hy := hG (reframe fr S (Sum.elim xy.1 xy.2)) (reframe fr S (Sum.elim 0 xy.2)) fun v hv =>
+    mem_reframe_congr hfr S (fun s => ∃ j, s = .inl j) (fun s hs => by
+      cases s with
+      | inl j => exact absurd ⟨j, rfl⟩ hs
+      | inr j => rfl) fun s ⟨j, hj⟩ => hj ▸ hv j
+  rw [hx.1, hx.2, hy.1, hy.2]
+
+end ParityFrame
+
 section OverlapRound
 
 variable {St : ℕ} {R : Type} [CommRing R] {n B n' : Fin St → ℕ} {L np : ℕ}
