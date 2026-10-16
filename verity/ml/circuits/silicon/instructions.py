@@ -27,6 +27,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from .integer import BLACKWELL_SM120_S8_M16N8K32
 from .models import (
     ADA_BF16_M16N8K16,
     ADA_E4M3_M16N8K32,
@@ -435,6 +436,25 @@ INSTRUCTIONS: dict[str, Instruction] = {
                       "the same adder as nvf4 with the UE8M0 scale 2^(code-127) written as mantissa 8 at 2^(code-130) (D18); a "
                       "nonzero sum below the subnormal grid is +0 (D13: BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED refuted); the "
                       "accumulator window anchors on the exponent field and the grid never drops below 2^-174 (D19)"),
+        ),
+        _i(
+            # The int8 grid's instruction (lane compute-accounting, 2026-10-15).  Exact integer arithmetic, so the model has
+            # no adder parameters to fit.  benchmarks/tc_probe/trust.py computed PINNED (P1-P5) from the store on 2026-10-15
+            # before this flip (registry <= computed level).  Measured on one RTX PRO 6000 only, and anchors there.
+            id="sm120.mma.m16n8k32.s8",
+            sm="sm_120",
+            ptx="mma.sync.aligned.m16n8k32.row.col.satfinite.s32.s8.s8.s32",
+            shape=(16, 8, 32),
+            a_dtype="s8", b_dtype="s8", acc_dtype="s32", scale=None,
+            model=BLACKWELL_SM120_S8_M16N8K32,
+            status="pinned",
+            dossier="art:86f39a17b5a0c8a8c92e5e25dcdfbee95d6f65408130bc1db6c54d440dfd8474",
+            anchor_device="NVIDIA RTX PRO 6000 Blackwell Server Edition",
+            evidence=(BLACKWELL_SM120_S8_M16N8K32.validated,
+                      "SASS IMMA.16832.S8.S8.SAT, one per tile kernel; 0 mismatches over 10,243,968 elements: "
+                      "r20261015-084000-06d8 (tc-evidence art:67b817fc8b2237694c271a97110f6a9881644c4d7701cdd4abcc090b3d220148)",
+                      "census r20261015-062626-f65b: IMMA.16832 at 1,023.6 MACs/SM/clk (QMMA.16832: 1,023.8), 16 SMSP cycles "
+                      "per warp MMA, dependent latency 27.2 cycles"),
         ),
         # --- Blackwell datacenter (sm_100, tcgen05) ---------------------------------------------------------------
         _i(
