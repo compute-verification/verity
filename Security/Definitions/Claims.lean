@@ -32,6 +32,11 @@ The definitions every protocol's claims read, and Flock's claims, in the condens
   at every schedule, but the masked code's varies with `m`, so one `θ` would cost bits. It replaces the form that
   listed a trace from `nMin` opened columns above the Johnson bound, under which a prover that avoids positions was
   accepted at about `2^{−8}`, so `KS` was false. `Flock.Efficient` asks it of the decoder it costs.
+* (16 Oct) Flock's relation is the block circuit in every block, and nothing else (`Flock.RelS`). The commitments are
+  hm96 rows under frame-v3-sha512 trees that the circuit itself computes and outputs, so the relation reads them as
+  the circuit's outputs, and their salts are among the hidden values (`Flock.Wit.hid`). The form first frozen also
+  asked the witness to open commit strings `H(u ‖ s)` (`commit`, `Flock.Stmt.cs`), a form the deployed verifier never
+  accepts: its commitments are those rows.
 
 Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed verifier, its parser and the hash:
 binding them to the compiled verifier (`Flock.verifyWith Sha512.hash`, `Flock.ProvedScope.check`) is the code side's.
@@ -45,22 +50,14 @@ here: the lock records each one's text under `reads`, so a changed claim is a ch
 
 namespace Claims
 
-/-! ## Messages, the hash, commitments -/
+/-! ## Messages and the hash -/
 
 /-- `Msg = {0,1}^*` in whole bytes, as the deployed SHA-512 reads them: a padding convention for other lengths would
 make collisions that are not SHA-512's. -/
 abbrev Msg := List UInt8
 
-/-- Bits packed into bytes, low bit first, the last byte padded with zeros: injective on bit strings of one length. -/
-def packBits (bs : List Bool) : Msg :=
-  (List.range ((bs.length + 7) / 8)).map fun i =>
-    UInt8.ofNat ((List.range 8).foldl (fun acc j => acc + if bs.getD (8 * i + j) false then 2 ^ j else 0) 0)
-
 /-- A collision of `H`. -/
 def Collision (H : Msg → Msg) (u v : Msg) : Prop := u ≠ v ∧ H u = H v
-
-/-- `commit(u; s) = H(u ‖ s)`. -/
-def commit (H : Msg → Msg) (u s : Msg) : Msg := H (u ++ s)
 
 /-! ## AND/XOR circuits -/
 
@@ -493,8 +490,10 @@ structure Form where
   rowsV2OrSeg : Bool
 
 /-- **Flock's statement**: `2^m` trace bits in blocks of `2^kLog`, the block circuit `C`, the blocks' inputs and outputs
-(`inp b`, `out b`, reading the public or the hidden values), the public values, the commit strings (string `c` commits
-to the hidden values `grp c`), and the statement's form. -/
+(`inp b`, `out b`, reading the public or the hidden values), the public values, and the statement's form. The
+commitments are no field of their own: they are hm96 rows under frame-v3-sha512 trees, which the circuit computes and
+outputs (the forms `hm96Rows`, `rowsV1`, `rowsV2OrSeg`), so they are among `C`'s outputs, which the verifier checks
+against the registered rows; their salts are among the hidden values. -/
 structure Stmt where
   m : ℕ
   kLog : ℕ
@@ -502,39 +501,35 @@ structure Stmt where
   inp : ℕ → List Src
   out : ℕ → List Src
   pub : List Bool
-  cs : List Msg
-  grp : ℕ → List ℕ
   form : Form
 
 def Stmt.nBlocks (s : Stmt) : ℕ := 2 ^ (s.m - s.kLog)
 
-/-- **Flock's witness**: the hidden values and the salts. -/
+/-- **Flock's witness**: the hidden values, the salts of the statement's hm96 rows among them. -/
 structure Wit where
   hid : List Bool
-  salts : List Msg
 
 def val (s : Stmt) (w : Wit) : Src → Bool
   | .pub i => s.pub.getD i false
   | .hid i => w.hid.getD i false
 
-/-- **Flock's relation** on a parsed statement: `w` opens the commit strings, and `C` maps inputs to outputs in every
-block. -/
-def RelS (H : Msg → Msg) (s : Stmt) (w : Wit) : Prop :=
-  (∀ c < s.cs.length,
-    commit H (packBits ((s.grp c).map fun i => w.hid.getD i false)) (w.salts.getD c []) = s.cs.getD c []) ∧
+/-- **Flock's relation** on a parsed statement: `C` maps inputs to outputs in every block. That is the whole relation:
+the commitments are hm96 rows under frame-v3-sha512 trees that `C` computes from the hidden values, salts included,
+and outputs, so this clause reads them as `C`'s outputs. -/
+def RelS (s : Stmt) (w : Wit) : Prop :=
   ∀ b < s.nBlocks, s.C.eval ((s.inp b).map (val s w)) = (s.out b).map (val s w)
 
-instance instDecidableRelS (H : Msg → Msg) (s : Stmt) (w : Wit) : Decidable (RelS H s w) := by
+instance instDecidableRelS (s : Stmt) (w : Wit) : Decidable (RelS s w) := by
   unfold RelS; infer_instance
 
 /-- **Flock's relation** on the statement's bytes: it parses (`parse`, the verifier's own parser) and `RelS` holds. No
 scope: the verifier refuses what is out of scope, and completeness carries the scope. -/
-def R (H : Msg → Msg) (parse : Msg → Option Stmt) : Rel Wit := fun x w => ∃ s, parse x = some s ∧ RelS H s w
+def R (parse : Msg → Option Stmt) : Rel Wit := fun x w => ∃ s, parse x = some s ∧ RelS s w
 
 /-- The decidable relation, as `E^rep`'s check. -/
-def check (H : Msg → Msg) (parse : Msg → Option Stmt) (x : Msg) (w : Wit) : Bool :=
+def check (parse : Msg → Option Stmt) (x : Msg) (w : Wit) : Bool :=
   match parse x with
-  | some s => decide (RelS H s w)
+  | some s => decide (RelS s w)
   | none => false
 
 /-- **Flock's scope, readable**: the deployed parameters (`22 ≤ m ≤ 35`, `25 ≤ m` under `--zk`, `6 ≤ kLog ≤ min(m, 27)`)
@@ -567,11 +562,11 @@ def ListWithin {Col T : Type} [DecidableEq Col] [Zero Col] (len : T → ℕ) (en
 
 /-- **Flock's assemble step**: the opened columns as they were opened, decoded to candidate traces, each read for its
 witness; the first candidate in the relation. A position opened twice needs no step here: `fill` reads the first. -/
-def assemble {Col T : Type} (H : Msg → Msg) (parse : Msg → Option Stmt) (decode : List (ℕ × Col) → List T)
-    (read : T → Wit) (x : Msg) (opens : List (ℕ × Col)) : Option Wit :=
+def assemble {Col T : Type} (parse : Msg → Option Stmt) (decode : List (ℕ × Col) → List T) (read : T → Wit)
+    (x : Msg) (opens : List (ℕ × Col)) : Option Wit :=
   match parse x with
   | none => none
-  | some s => ((decode opens).map read).find? fun w => decide (RelS H s w)
+  | some s => ((decode opens).map read).find? fun w => decide (RelS s w)
 
 /-- What the deployed verifier brings, read by Flock's claims: the verifier and whether it is the masked (`--zk`) one,
 its parser and scope check, the opened columns of the first committed codeword in a run (`cols`), the code (`enc`),
@@ -602,9 +597,8 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [De
 noncomputable def Deploy.k (D : Deploy Coin Col T) (x : Msg) : ℕ := ⌈4 * D.N₀ x / Real.exp 1⌉₊
 
 /-- **Flock's extractor**, `E^rep` at a decoder. -/
-noncomputable def E (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) :
-    Extractor Coin Wit D.V :=
-  ERep D.V D.waits D.k D.cap D.cols (assemble H D.parse decode D.read) (check H D.parse)
+noncomputable def E (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) : Extractor Coin Wit D.V :=
+  ERep D.V D.waits D.k D.cap D.cols (assemble D.parse decode D.read) (check D.parse)
 
 /-- **Flock's knowledge error**: `κ = 4·ε_table + 2^{−m′} + 2k/K + e^{−k/8}`. -/
 noncomputable def κ (D : Deploy Coin Col T) (x : Msg) : ℝ :=
@@ -619,11 +613,11 @@ def Scope (D : Deploy Coin Col T) (x : Msg) : Prop := ∃ s, D.parse x = some s 
 
 /-- **Flock: KS**, at `E^rep` and every decoder that meets the list-decoding spec. -/
 def KS [Zero Col] (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
-  ∀ decode, ListWithin D.len D.enc D.θ decode → Claims.KS H D.V (R H D.parse) (E H D decode) (κ D) (γ D)
+  ∀ decode, ListWithin D.len D.enc D.θ decode → Claims.KS H D.V (R D.parse) (E D decode) (κ D) (γ D)
 
 /-- **Flock: Complete**, on the statements in scope. -/
 def Complete {Ω : Type} (H : Msg → Msg) (D : Deploy Coin Col T) (P : Wit → Prover Ω) (δc : Msg → ℝ) : Prop :=
-  Claims.Complete H D.V P (R H D.parse) (Scope D) δc
+  Claims.Complete H D.V P (R D.parse) (Scope D) δc
 
 /-- **Flock: the readable scope is the verifier's.** -/
 def ScopeMatches (D : Deploy Coin Col T) : Prop := Claims.ScopeMatches (Scope D) D.scopeCheck
@@ -632,18 +626,18 @@ def ScopeMatches (D : Deploy Coin Col T) : Prop := Claims.ScopeMatches (Scope D)
 verifier's rounds `D.V.k`: `Hello`, answered by the commitment to every coin, then the rounds that open them. -/
 def ZK {Ω : Type} [Fintype Ω] (H : Msg → Msg) (D : Deploy Coin Col T) (P : Wit → Prover Ω) (S : Simulator)
     (εzk : Msg → ℝ) : Prop :=
-  D.zk = true ∧ ZKmalR H D.V.k P (R H D.parse) S εzk
+  D.zk = true ∧ ZKmalR H D.V.k P (R D.parse) S εzk
 
 /-- **Flock: bits**, `λ = min(log₂(1/κ), 255.5 − ½ log₂ γ) − 1`, at every decoder that meets the spec. -/
 def Bits [Zero Col] (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
   ∀ decode, ListWithin D.len D.enc D.θ decode →
-    Claims.Bits H D.V (R H D.parse) (E H D decode) fun x => lamOf (κ D x) (γ D x)
+    Claims.Bits H D.V (R D.parse) (E D decode) fun x => lamOf (κ D x) (γ D x)
 
 /-- **Flock: efficiency**: `E^rep`'s reruns at every decoder, and a decoder that meets the list-decoding spec, with its
 stated complexity. -/
 def Efficient [Zero Col] (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T)
     (counted : List (ℕ × Col) → List T × ℕ) (size : List (ℕ × Col) → ℕ) (p : Polynomial ℕ) : Prop :=
-  ERepCost H D.V D.waits D.k D.cap D.cols (assemble H D.parse decode D.read) (check H D.parse) ∧
+  ERepCost H D.V D.waits D.k D.cap D.cols (assemble D.parse decode D.read) (check D.parse) ∧
     ListWithin D.len D.enc D.θ decode ∧ DecoderComplexity decode counted size p
 
 /-- **Flock: nontriviality**: recorded honest runs, each of a statement the scope check takes, that the verifier
