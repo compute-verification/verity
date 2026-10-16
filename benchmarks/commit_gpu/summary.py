@@ -18,7 +18,8 @@ def tagged(out: str, prefix: str) -> list[tuple[str, list[dict]]]:
 
 
 def best(out: str) -> str:
-    runs = [(r[0]["commit_ms"], tag) for tag, r in tagged(out, "bench-e2e-") if r and "nomask" not in tag and "merged" not in tag]
+    runs = [(r[0]["commit_ms"], tag) for tag, r in tagged(out, "bench-e2e-")
+            if r and not any(d in tag for d in ("nomask", "merged", "quad"))]
     return min(runs)[1] if runs else ""
 
 

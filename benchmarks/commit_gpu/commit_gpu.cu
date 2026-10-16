@@ -12,7 +12,8 @@
 // [-DSHA_ROLL=0|1] (sha512.cuh; the defaults, 0, 0 and 1, are the fastest measured)
 // (-DCOMMIT_GPU_DIAG_NOMASK: a timing-only build that skips M_key y, to measure its share; -DCOMMIT_GPU_DIAG_MERGED: one
 // that skips h's two compressions (the frame leaf takes b ^ c), the timing of a format whose one leaf hash takes b || c and
-// pos after a constant midstate (2 compressions where h and the frame leaf take 4); both refuse `check`)
+// pos after a constant midstate (2 compressions where h and the frame leaf take 4); -DCOMMIT_GPU_DIAG_QUAD: one whose tree
+// is 4-ary, 3 compressions a node, the timing of a 4-ary node format; all three refuse `check`)
 #include <cublasLt.h>
 #include <nvml.h>
 
@@ -332,7 +333,9 @@ static int bench(int argc, char** argv) {
       std::vector<u64> cur(hbuf, hbuf + (8ull << ks[i]));
       cm.host_tail(from, cur);
       t_host[i].push_back(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
+#ifndef COMMIT_GPU_DIAG_QUAD   // the CPU tail is binary
       if (!std::equal(cur.begin(), cur.begin() + 8, groot)) { fprintf(stderr, "the CPU tail's root differs (k %d)\n", ks[i]); return 1; }
+#endif
     }
   size_t kb = 0;
   for (size_t i = 1; i < ks.size(); ++i) if (median(t_host[i]) < median(t_host[kb])) kb = i;
@@ -461,7 +464,7 @@ static int sha_bench(int reps) {
 
 int main(int argc, char** argv) {
   if (argc >= 2 && !strcmp(argv[1], "selftest")) return selftest();
-#if defined(COMMIT_GPU_DIAG_NOMASK) || defined(COMMIT_GPU_DIAG_MERGED)
+#if defined(COMMIT_GPU_DIAG_NOMASK) || defined(COMMIT_GPU_DIAG_MERGED) || defined(COMMIT_GPU_DIAG_QUAD)
   if (argc >= 2 && !strcmp(argv[1], "check")) { fprintf(stderr, "a timing-only build (COMMIT_GPU_DIAG_*) has no check\n"); return 2; }
 #endif
   if (argc >= 2 && !strcmp(argv[1], "check")) return check(argc, argv);

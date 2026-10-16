@@ -499,6 +499,76 @@ __global__ void __launch_bounds__(NODE_THREADS) node_kernel(const u64* __restric
     }
   }
 }
+
+#ifdef COMMIT_GPU_DIAG_QUAD
+// Timing only: a 4-ary node, 3 compressions after the level's midstate (children 0-1, children 2-3, then the index and
+// padding), as a 4-ary frame node's message would take; it stands for two binary levels' 2 + 2 serial compressions.
+DEV void quad(int level, u64 index, const u64* a, const u64* b, const u64* c, const u64* e, u64* out) {
+  u64 W[16];
+  cpy8(out, C.node_mid[level]);
+#pragma unroll
+  for (int i = 0; i < 8; ++i) { W[i] = a[i]; W[8 + i] = b[i]; }
+  sha::compress(out, W);
+#pragma unroll
+  for (int i = 0; i < 8; ++i) { W[i] = c[i]; W[8 + i] = e[i]; }
+  sha::compress(out, W);
+#pragma unroll
+  for (int i = 0; i < 16; ++i) W[i] = 0;
+  W[0] = index; W[1] = 0x8000000000000000ull; W[15] = (128 + 256 + 8) * 8;
+  sha::compress(out, W);
+}
+DEV void quad_from(const u64* p, int level, u64 index, u64* o) {
+  u64 a[8], b[8], c[8], e[8];
+  ld8(p, a); ld8(p + 8, b); ld8(p + 16, c); ld8(p + 24, e);
+  quad(level, index, a, b, c, e, o);
+}
+__global__ void __launch_bounds__(NODE_THREADS) quad_level_kernel(const u64* __restrict__ in, u64* __restrict__ out, u64 n_in, int d) {
+  const u64 i = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n_in / 4) return;
+  u64 o[8];
+  quad_from(in + 32 * i, d, i, o);
+  st8(out + 8 * i, o);
+}
+// The top in one block from level d (n_in <= 1024 nodes, nl levels): 4-ary steps, then a binary one if one level is left.
+__global__ void __launch_bounds__(NODE_THREADS) quad_node_kernel(const u64* __restrict__ in, LevelPtrs out, u64 n_in, int d, int nl) {
+  __shared__ u64 s[NODE_THREADS * 8];
+  const int t = threadIdx.x;
+  u64 L[8], R[8], o[8];
+  int l = nl >= 2 ? 2 : 1;
+  u64 cnt = n_in >> l;
+  if (t < (int)cnt) {
+    if (l == 2) {
+      quad_from(in + 32 * t, d, t, o);
+    } else {
+      ld8(in + 16 * t, L);
+      ld8(in + 16 * t + 8, R);
+      node(d, t, L, R, o);
+    }
+    st8(s + 8 * t, o);
+    st8(out.p[l - 1] + 8 * t, o);
+  }
+  while (l < nl && cnt > 1) {
+    __syncthreads();
+    const int step = nl - l >= 2 ? 2 : 1;
+    cnt >>= step;
+    if (t < (int)cnt) {
+      if (step == 2) {
+        quad(d + l, t, s + 32 * t, s + 32 * t + 8, s + 32 * t + 16, s + 32 * t + 24, o);
+      } else {
+        cpy8(L, s + 16 * t);
+        cpy8(R, s + 16 * t + 8);
+        node(d + l, t, L, R, o);
+      }
+    }
+    __syncthreads();
+    l += step;
+    if (t < (int)cnt) {
+      cpy8(s + 8 * t, o);
+      st8(out.p[l - 1] + 8 * t, o);
+    }
+  }
+}
+#endif
 // --- host --------------------------------------------------------------------------------------------------------
 
 static const char FRAME[] = "veritor/protocol/merkle/frame/v3";  // + its NUL: 33 bytes
@@ -731,10 +801,28 @@ struct Committer {
     else leaves<RowTile>(RowTile{g}, st);
   }
   // Levels 1 .. top (default the root): a level a launch while a level is wider than 512 nodes (blocks of 64 threads below
-  // 2^16 nodes), then the rest in one block.
+  // 2^16 nodes), then the rest in one block (COMMIT_GPU_DIAG_QUAD: the same with 4-ary steps).
   void nodes(cudaStream_t st, int top = -1) {
     if (top < 0) top = depth;
     int d = 0;
+#ifdef COMMIT_GPU_DIAG_QUAD
+    for (; d + 2 <= top && (width >> d) > 4 * NODE_THREADS; d += 2) {
+      const u64 n_out = width >> (d + 2);
+      const unsigned t = n_out >= (1u << 16) ? NODE_THREADS : 64;
+      quad_level_kernel<<<(unsigned)((n_out + t - 1) / t), t, 0, st>>>(lv[d], lv[d + 2], width >> d, d);
+    }
+    if (d + 1 == top && (width >> d) > 2 * NODE_THREADS) {
+      const u64 n_out = width >> (d + 1);
+      const unsigned t = n_out >= (1u << 16) ? NODE_THREADS : 64;
+      level_kernel<<<(unsigned)((n_out + t - 1) / t), t, 0, st>>>(lv[d], lv[d + 1], width >> d, d);
+      ++d;
+    }
+    if (d < top) {
+      LevelPtrs o{};
+      for (int l = 0; l < top - d; ++l) o.p[l] = lv[d + 1 + l];
+      quad_node_kernel<<<1, NODE_THREADS, 0, st>>>(lv[d], o, width >> d, d, top - d);
+    }
+#else
     for (; d < top && (width >> d) > 2 * NODE_THREADS; ++d) {
       const u64 n_out = width >> (d + 1);
       const unsigned t = n_out >= (1u << 16) ? NODE_THREADS : 64;
@@ -745,6 +833,7 @@ struct Committer {
       for (int l = 0; l < top - d; ++l) o.p[l] = lv[d + 1 + l];
       node_kernel<<<1, NODE_THREADS, 0, st>>>(lv[d], o, width >> d, d, top - d);
     }
+#endif
   }
   // Levels from+1 .. depth on the CPU from level `from` (cur: its nodes' words, replaced by the root's); each level's words
   // are appended to `keep` when given.
