@@ -1263,6 +1263,24 @@ DEFER_TP = [dict(zip(DEFER_TP_FIELDS, p)) for p in (
     (16384, 2, 64, 8192, 71.7421, 79.2344, None, 2092, 2.567652e+12, 2.576298e+12, 1.01809, 3.028382e+12),
     (16384, 2, 128, 2048, 66.4212, 79.0456, None, 2089, 4.619908e+12, 4.353902e+12, 1.01812, 5.069118e+12),
     (16384, 2, 256, 2048, 100.1074, 123.2141, None, 2055, 9.239817e+12, 7.506000e+12, 1.01282, 9.252450e+12))]
+#: HC-COMM r6's deferred pass (note:20261016T1432Z-draft-hc-comm-r6, d6d0e4e57): the duo fold's put-split filler at
+#: T = 4096 and TPC_DMAXC 1 (r3's), its base, phase, defer and dalone arms in one set, over the slowest rank; its fill
+#: counters are d6d0e4e57's (76c68bcf2's, HC-COMM r5's, kept each collective's last count, 22-35x low)
+DEFER_TP_RUNS["r6"] = {2: "r20261016-142613-eff2@d6d0e4e57, r20261016-143248-9563@d6d0e4e57",
+                       4: "r20261016-142933-e6c4@d6d0e4e57"}
+DEFER_TP_R6 = [dict(zip(DEFER_TP_FIELDS, p)) for p in (
+    (4096, 2, 32, 2048, 39.4189, 44.8212, 4.8656, 2091.7, 1.154977e+12, 1.110414e+12, 1.04044, 1.394642e+12),
+    (4096, 2, 256, 2048, 100.2084, 110.9293, 37.7894, 2055.3, 9.239817e+12, 2.957386e+11, 1.01171, 6.681906e+12),
+    (4096, 2, 32, 8192, 50.6277, 56.1886, 5.4751, 2092.0, 1.283826e+12, 1.087498e+12, 1.02957, 1.396081e+12),
+    (4096, 2, 64, 2048, 49.0053, 57.2022, 9.6383, 2091.5, 2.309954e+12, 1.394104e+12, 1.03682, 2.105104e+12),
+    (4096, 2, 64, 8192, 71.9169, 80.1428, 10.6793, 2092.0, 2.567652e+12, 1.363410e+12, 1.02370, 2.138440e+12),
+    (4096, 2, 128, 2048, 66.7963, 77.0255, 19.0254, 2079.05, 4.619908e+12, 1.537026e+12, 1.01985, 3.577272e+12),
+    (4096, 4, 32, 2048, 30.2300, 33.0232, 2.5548, 2092.0, 5.774886e+11, 2.153635e+12, 1.03945, 2.421171e+12),
+    (4096, 4, 32, 8192, 35.8321, 38.4280, 2.7825, 2092.0, 6.419131e+11, 2.074844e+12, 1.03020, 2.451717e+12),
+    (4096, 4, 64, 2048, 34.2544, 38.1180, 4.8688, 2092.0, 1.154977e+12, 2.427403e+12, 1.03729, 2.889602e+12),
+    (4096, 4, 128, 2048, 48.2082, 52.7303, 9.6649, 2092.0, 2.309954e+12, 3.442700e+12, 1.02612, 5.018321e+12),
+    (4096, 4, 128, 8192, 70.8932, 75.4798, 10.6993, 2085.0, 2.567652e+12, 3.262757e+12, 1.01883, 5.040100e+12),
+    (4096, 4, 256, 2048, 79.2017, 82.0726, 19.0380, 2070.0, 4.619908e+12, 4.241883e+12, 1.02302, 8.944750e+12))]
 #: the (B, L) range the TP points span; the fit is read at B and L clamped to it
 DEFER_B_RANGE, DEFER_L_RANGE = (32, 256), (2048, 8192)
 
@@ -1276,14 +1294,15 @@ def defer_shown_1gpu(T: int = DEFER_T) -> float:
 def defer_measured(p: dict) -> dict:
     """A TP point's (`DEFER_TP`) deferred pass against the model's unit: ``plain_ms``, its served MACs at DEFER_OF_PEAK
     of peak; ``added_ms``, the deferred arm's step beyond serving with the filler (base × r2's phase slowdown);
-    ``lost_macs``, the filler MACs it gave up against r2's phase arm; s = added ÷ plain and u = lost ÷ C × the hidden
-    ms (plain − added)."""
+    ``lost_macs``, the filler MACs it gave up against the phase arm (r2's, or the point's own set); s = added ÷ plain,
+    u = lost ÷ C × the hidden ms (plain − added), and d = lost ÷ C × the whole pass's ms (u(1 − s), but defined where
+    s ≈ 1, where u isn't)."""
     c = cap(p["mhz"])
     plain = p["served_macs"] / (DEFER_OF_PEAK * c) * 1e3
     added = p["defer_ms"] - p["base_ms"] * p["phase_slowdown"]
     lost = p["phase_fill_macs"] - p["defer_fill_macs"]
     return {"plain_ms": plain, "added_ms": added, "lost_macs": lost, "s": added / plain,
-            "u": lost / ((plain - added) * c * 1e-3)}
+            "u": lost / ((plain - added) * c * 1e-3), "d": lost / (plain * c * 1e-3)}
 
 
 def _lstsq(rows: list[list[float]], y: list[float]) -> list[float]:
@@ -1301,59 +1320,81 @@ def _lstsq(rows: list[list[float]], y: list[float]) -> list[float]:
     return [a[i][n] / a[i][i] for i in range(n)]
 
 
-def defer_fit(T: int = DEFER_T, points: list[dict] | None = None) -> dict:
-    """The deferred pass's s and u fitted to the TP points at T (`defer_measured`): ln s and ln u each = an intercept a
-    TP + a batch slope × ln(B/32) + a context slope × ln(L/2048), by least squares. Each point's residual is the
-    fit's error, fit ÷ measured − 1 (positive overstates the added time or the displacement, the conservative side),
-    and the added time's error in ms and in points of the step's slowdown; ``rms`` is their relative rms."""
+def defer_fit(T: int = DEFER_T, points: list[dict] | None = None, form: str = "u") -> dict:
+    """The deferred pass's s and its displacement fitted to the TP points at T (`defer_measured`): ln s and ln u (form
+    "u") or ln d (form "d") each = an intercept a TP + a batch slope × ln(B/32) + a context slope × ln(L/2048), by least
+    squares. Each point's residual is the fit's error, fit ÷ measured − 1 (positive overstates the added time or the
+    displacement, the conservative side), the added time's error in ms and in points of the step's slowdown, and the
+    filler's remaining share of C the fit gives back at the harness's plain pass (s at most 1) against the defer arm's,
+    in points (``fill_err_pts``); ``rms`` is their relative rms."""
     pts = [p for p in (points if points is not None else DEFER_TP) if p["T"] == T]
     if not pts:
-        raise ValueError(f"no deferred-pass TP points at T = {T}: measured at {sorted({p['T'] for p in DEFER_TP})}")
+        raise ValueError(f"no deferred-pass TP points at T = {T}: measured at "
+                         f"{sorted({p['T'] for p in (points if points is not None else DEFER_TP)})}")
+    qs = ("s", form)
     tps = sorted({p["tp"] for p in pts})
     meas = [defer_measured(p) for p in pts]
     rows = [[float(p["tp"] == t) for t in tps] + [math.log(p["B"] / 32), math.log(p["L"] / 2048)] for p in pts]
-    out = {"T": T, "tps": tps, "n": len(pts)}
-    for q in ("s", "u"):
+    out = {"T": T, "form": form, "tps": tps, "n": len(pts)}
+    for q in qs:
         coef = _lstsq(rows, [math.log(m[q]) for m in meas])
         out[q] = {"intercept": {t: math.exp(c) for t, c in zip(tps, coef)}, "batch": coef[-2], "context": coef[-1]}
     res = []
     for p, m, r in zip(pts, meas, rows):
         fit = {q: math.exp(sum(c * x for c, x in zip([math.log(out[q]["intercept"][t]) for t in tps]
-                                                    + [out[q]["batch"], out[q]["context"]], r))) for q in ("s", "u")}
-        res.append({"tp": p["tp"], "B": p["B"], "L": p["L"], "s": m["s"], "s_fit": fit["s"],
-                    "s_resid": fit["s"] / m["s"] - 1, "u": m["u"], "u_fit": fit["u"], "u_resid": fit["u"] / m["u"] - 1,
-                    "added_ms": m["added_ms"], "added_err_ms": (fit["s"] - m["s"]) * m["plain_ms"],
+                                                    + [out[q]["batch"], out[q]["context"]], r))) for q in qs}
+        c, s = cap(p["mhz"]) * 1e-3, min(1.0, fit["s"])
+        disp = (fit["u"] * (1 - s) if form == "u" else fit["d"]) * m["plain_ms"] * c
+        t1 = p["base_ms"] * p["phase_slowdown"] + s * m["plain_ms"]
+        share_fit = max(0.0, p["phase_fill_macs"] - disp) / (c * t1)
+        share = p["defer_fill_macs"] / (c * p["defer_ms"])
+        res.append({"tp": p["tp"], "B": p["B"], "L": p["L"],
+                    **{k: v for q in qs for k, v in ((q, m[q]), (f"{q}_fit", fit[q]), (f"{q}_resid", fit[q] / m[q] - 1))},
+                    "added_ms": m["added_ms"], "added_err_ms": (s - m["s"]) * m["plain_ms"],
                     "slowdown_pts": 100 * m["added_ms"] / p["base_ms"],
-                    "slowdown_err_pts": 100 * (fit["s"] - m["s"]) * m["plain_ms"] / p["base_ms"]})
-    for q in ("s", "u"):
+                    "slowdown_err_pts": 100 * (s - m["s"]) * m["plain_ms"] / p["base_ms"],
+                    "fill_share": share, "fill_share_fit": share_fit, "fill_err_pts": 100 * (share_fit - share)})
+    for q in qs:
         out[q]["rms"] = math.sqrt(statistics.mean(x[f"{q}_resid"] ** 2 for x in res))
     out["slowdown_err_pts_max"] = max(abs(x["slowdown_err_pts"]) for x in res)
+    out["fill_err_pts_rms"] = math.sqrt(statistics.mean(x["fill_err_pts"] ** 2 for x in res))
+    out["fill_err_pts_max"] = max(abs(x["fill_err_pts"]) for x in res)
     out["points"] = res
     return out
 
 
+#: one GPU's displacement: r3's fit (the ram fold) in the u form, TP 2's u the floor of `defer_rates`'s one-GPU rule
 DEFER_FIT = defer_fit()
+#: TP's deferred pass (coordinator 14:42Z): s and d fitted jointly to HC-COMM r3 (ram) and r6 (duo) at T = 4096 in the
+#: d form, displacement per ms of the whole pass, since u = d ÷ (1 − s) is ill-conditioned where s ≈ 1 (r6's TP 2 B 32)
+DEFER_FIT_TP = defer_fit(points=DEFER_TP + DEFER_TP_R6, form="d")
 
 
-def defer_rates(tp: int = 1, B: int | None = None, L: int | None = None, fit: dict = DEFER_FIT) -> dict:
-    """The deferred pass's shown share s (in [0, 1]) and displacement rate u at (TP, B, L), T = DEFER_T. TP: the fit
-    (`defer_fit`) at B and L clamped to the points' range. One GPU: STAGE-COST's share, measured at B 32 only and held
-    flat in B and L (the TP points' share falls with B at T = 4096, so this overstates it above B 32); its displacement,
-    which no one-GPU run measured, is the larger of TP 2's fit (the smallest TP measured) and the MAC-for-MAC rule's
-    DEFER_OF_PEAK (the hidden time was the filler's, displaced at the pass's own rate)."""
+def defer_at(fit: dict, q: str, tp: int, B: int | None = None, L: int | None = None) -> float:
+    """A `defer_fit` fit's q at (TP, B, L), B and L clamped to the points' range (`DEFER_B_RANGE`, `DEFER_L_RANGE`)."""
     b = min(max(B or DEFER_B, DEFER_B_RANGE[0]), DEFER_B_RANGE[1])
     l = min(max(L or 2048, DEFER_L_RANGE[0]), DEFER_L_RANGE[1])
+    if tp not in fit[q]["intercept"]:
+        raise ValueError(f"the deferred pass is calibrated at TP {fit['tps']}, not TP {tp}: add HC-COMM's points "
+                         f"at TP {tp} to DEFER_TP")
+    return fit[q]["intercept"][tp] * (b / 32) ** fit[q]["batch"] * (l / 2048) ** fit[q]["context"]
 
-    def at(q, t):
-        if t not in fit[q]["intercept"]:
-            raise ValueError(f"the deferred pass is calibrated at TP {fit['tps']}, not TP {t}: add HC-COMM's points "
-                             f"at TP {t} to DEFER_TP")
-        return fit[q]["intercept"][t] * (b / 32) ** fit[q]["batch"] * (l / 2048) ** fit[q]["context"]
 
+def defer_rates(tp: int = 1, B: int | None = None, L: int | None = None, fit: dict = DEFER_FIT,
+                fit_tp: dict = DEFER_FIT_TP) -> dict:
+    """The deferred pass's shown share s (in [0, 1]) and displacement d (filler MACs lost a ms of the whole pass, over
+    C) at (TP, B, L), T = DEFER_T, read at B and L clamped to the points' range. TP: `DEFER_FIT_TP` (r3 and r6, the d
+    form). One GPU: STAGE-COST's share, measured at B 32 only and held flat in B and L (the TP points' share falls with
+    B at T = 4096, so this overstates it above B 32); its displacement, which no one-GPU run measured, is u(1 − s) at
+    u the larger of TP 2's r3 fit (`DEFER_FIT`, the smallest TP measured) and the MAC-for-MAC rule's DEFER_OF_PEAK (the
+    hidden time was the filler's, displaced at the pass's own rate)."""
+    b = min(max(B or DEFER_B, DEFER_B_RANGE[0]), DEFER_B_RANGE[1])
+    l = min(max(L or 2048, DEFER_L_RANGE[0]), DEFER_L_RANGE[1])
     if tp == 1:
-        return {"s": min(1.0, defer_shown_1gpu(fit["T"])), "u": max(DEFER_OF_PEAK, at("u", min(fit["tps"]))), "B": b,
-                "L": l}
-    return {"s": min(1.0, at("s", tp)), "u": at("u", tp), "B": b, "L": l}
+        s = min(1.0, defer_shown_1gpu(fit["T"]))
+        u = max(DEFER_OF_PEAK, defer_at(fit, "u", min(fit["tps"]), b, l))
+        return {"s": s, "u": u, "d": u * (1 - s), "B": b, "L": l}
+    return {"s": min(1.0, defer_at(fit_tp, "s", tp, b, l)), "d": defer_at(fit_tp, "d", tp, b, l), "B": b, "L": l}
 #: prefill's per-stage live coins over its GEMMs at 32K tokens a draw (commit then GEMM a stage: +13%,
 #: r20261016-101324-cab4, note:20261016T0846Z-draft-stage-cost; STAGE-OVL and STAGE-COST r2 may lower it): a parameter
 PREFILL_COINS = 0.13
@@ -1361,10 +1402,13 @@ PREFILL_COINS = 0.13
 
 def served_model(constants: dict | None = None) -> dict:
     """The modelled served component's constants, each with its source, as a run's report records them."""
-    fit = {q: {"intercept": {str(t): v for t, v in DEFER_FIT[q]["intercept"].items()}, "batch": DEFER_FIT[q]["batch"],
-               "context": DEFER_FIT[q]["context"], "rms": DEFER_FIT[q]["rms"]} for q in ("s", "u")}
+    def fit(f, qs):
+        return {q: {"intercept": {str(t): v for t, v in f[q]["intercept"].items()}, "batch": f[q]["batch"],
+                    "context": f[q]["context"], "rms": f[q]["rms"]} for q in qs}
+
     c = {"fraction": SERVED_V5["fraction"], "EGEMM": EGEMM, "DEFER_OF_PEAK": DEFER_OF_PEAK, "DEFER_T": DEFER_T,
-         "DEFER_SHOWN_1GPU": defer_shown_1gpu(), "DEFER_FIT": fit, "PREFILL_COINS": PREFILL_COINS} | (constants or {})
+         "DEFER_SHOWN_1GPU": defer_shown_1gpu(), "DEFER_FIT": fit(DEFER_FIT, ("u",)),
+         "DEFER_FIT_TP": fit(DEFER_FIT_TP, ("s", "d")), "PREFILL_COINS": PREFILL_COINS} | (constants or {})
     return {"constants": c, "sources": {
         "fraction": SERVED_V5["source"],
         "EGEMM": "edited:e_l2q 0.640 ms = 1.570x plain cuBLASLt int8 at o_proj (r20261016-104404-700b, "
@@ -1375,27 +1419,35 @@ def served_model(constants: dict | None = None) -> dict:
         "DEFER_SHOWN_1GPU": f"one GPU, measured: +{DEFER_1GPU[DEFER_T][0]:.1%} of the {DEFER_STEP_MS} ms b32 step for its "
                             f"{DEFER_B} x {share.LAYERS} token-layers in the model's unit (T = {DEFER_T}, "
                             "r20261016-100833-1b7c); B 32 only, held flat in B and L",
-        "DEFER_FIT": f"TP, measured: s and u fitted by TP, ln(B/32) and ln(L/2048) to HC-COMM r3's deferred arm beside r2's "
-                     f"phase arm at T = {DEFER_T} ({', '.join(DEFER_TP_RUNS['r3'].values())}; r2 "
-                     f"{', '.join(DEFER_TP_RUNS['r2'])}; note:20261016T0948Z-draft-hc-comm-r3), read at B and L clamped "
-                     f"to {DEFER_B_RANGE} x {DEFER_L_RANGE}; one GPU's u, which no one-GPU run measured, is the larger "
-                     f"of TP {min(DEFER_FIT['tps'])}'s and the MAC-for-MAC rule's DEFER_OF_PEAK",
+        "DEFER_FIT": f"one GPU's displacement, which no one-GPU run measured: u(1 - s), u the larger of the MAC-for-MAC "
+                     f"rule's DEFER_OF_PEAK and TP {min(DEFER_FIT['tps'])}'s u fitted by TP, ln(B/32) and ln(L/2048) to "
+                     f"HC-COMM r3's deferred arm (ram) beside r2's phase arm at T = {DEFER_T} "
+                     f"({', '.join(DEFER_TP_RUNS['r3'].values())}; r2 {', '.join(DEFER_TP_RUNS['r2'])}; "
+                     "note:20261016T0948Z-draft-hc-comm-r3)",
+        "DEFER_FIT_TP": f"TP, measured: s and d (filler MACs lost a ms of the whole pass, over C) fitted by TP, ln(B/32) "
+                        f"and ln(L/2048) to HC-COMM r3 (above) and r6's duo deferred arm beside its own phase arm at "
+                        f"T = {DEFER_T} ({'; '.join(DEFER_TP_RUNS['r6'].values())}; "
+                        "note:20261016T1432Z-draft-hc-comm-r6), read at B and L clamped to "
+                        f"{DEFER_B_RANGE} x {DEFER_L_RANGE}; the filler's remaining share it gives back at the plain "
+                        f"pass is within {DEFER_FIT_TP['fill_err_pts_max']:.1f} points of C "
+                        f"(rms {DEFER_FIT_TP['fill_err_pts_rms']:.1f})",
         "PREFILL_COINS": "commit then GEMM a stage at 32K tokens: +13% over the GEMMs (r20261016-101324-cab4, "
                          "note:20261016T0846Z-draft-stage-cost); a parameter (STAGE-OVL, STAGE-COST r2)"},
         "model": "decode: the plain step as measured plus the deferred pass of its served MACs a GPU, EGEMM x their time "
-                 "at DEFER_OF_PEAK of peak, its shown share s (one GPU DEFER_SHOWN_1GPU, TP DEFER_FIT) added to the wall "
-                 "time and each hidden ms displacing u x C filler MACs (DEFER_FIT; at most the filler's); prefill: the "
+                 "at DEFER_OF_PEAK of peak, its shown share s (one GPU DEFER_SHOWN_1GPU, TP DEFER_FIT_TP) added to the "
+                 "wall time and each ms of it displacing d x C filler MACs (one GPU u(1 - s), DEFER_FIT; TP "
+                 "DEFER_FIT_TP; at most the filler's); prefill: the "
                  "measured step plus (EGEMM - 1 + PREFILL_COINS) x its GEMMs' time alone (linears and FA2), the "
                  "filler's MACs as measured; every served MAC at fraction"}
 
 
 def defer_pass(macs: float, mhz: float, tp: int = 1, B: int | None = None, L: int | None = None) -> dict:
     """Decode's deferred noised pass over `macs` served products a GPU at (TP, B, L): its time (EGEMM × the model's
-    unit), the ms of wall time it adds (s of it) and the filler MACs its hidden part displaces (u·C a hidden ms)."""
+    unit), the ms of wall time it adds (s of it) and the filler MACs it displaces (d·C a ms of the pass)."""
     r = defer_rates(tp, B, L)
     pass_ms = EGEMM * macs / (DEFER_OF_PEAK * cap(mhz)) * 1e3
-    return {"pass_ms": pass_ms, "s": r["s"], "u": r["u"], "added_ms": r["s"] * pass_ms,
-            "displaces": r["u"] * (1 - r["s"]) * pass_ms * cap(mhz) * 1e-3}
+    return {"pass_ms": pass_ms, "s": r["s"], "d": r["d"], "added_ms": r["s"] * pass_ms,
+            "displaces": r["d"] * pass_ms * cap(mhz) * 1e-3}
 
 
 def entry_v5(e: dict, stats: dict, coins: float = PREFILL_COINS) -> dict:
@@ -1416,12 +1468,12 @@ def entry_v5(e: dict, stats: dict, coins: float = PREFILL_COINS) -> dict:
         m = mix_parts(pre, dec, e["P"], e["D"], e["B"], e["L"])
         n_pre, f_pre, gemm, n_dec, f_dec = m["n_pre"], m["f_pre"], m["gemm_pre_ms"], m["n_dec"], m["f_dec"]
     dp = defer_pass(n_dec, r["mhz"], 1, e.get("B"), e.get("L")) if n_dec else \
-        {"pass_ms": 0.0, "added_ms": 0.0, "displaces": 0.0, "s": None, "u": None}
+        {"pass_ms": 0.0, "added_ms": 0.0, "displaces": 0.0, "s": None, "d": None}
     pre_ms = (EGEMM - 1 + coins) * gemm
     return {**r, "t1_measured_ms": r["t1_ms"], "filler_measured_macs": r["filler_macs"],
             "t1_ms": r["t1_ms"] + pre_ms + dp["added_ms"], "filler_macs": f_pre + max(0.0, f_dec - dp["displaces"]),
             "served_model": {"prefill_added_ms": pre_ms, "defer_pass_ms": dp["pass_ms"], "defer_added_ms": dp["added_ms"],
-                             "defer_s": dp["s"], "defer_u": dp["u"], "displaced_macs": min(f_dec, dp["displaces"])}}
+                             "defer_s": dp["s"], "defer_d": dp["d"], "displaced_macs": min(f_dec, dp["displaces"])}}
 
 
 def coverage_v5(e: dict, filler_fraction: float) -> dict:
@@ -1523,7 +1575,7 @@ def tp_entry(by_arm: dict, key: tuple[int, int, int], filler_fraction: float) ->
             "coverage_v4_form": (CERTIFIED["serving"]["fraction"] * n + filler_fraction * f) / c4,
             "time": tp * t1 / base, "time_v4": tp * phase / base,
             "served_model": {"defer_pass_ms": dp["pass_ms"], "defer_added_ms": dp["added_ms"],
-                                                    "defer_s": dp["s"], "defer_u": dp["u"],
+                                                    "defer_s": dp["s"], "defer_d": dp["d"],
                                                     "displaced_macs": min(f, dp["displaces"])}}
 
 

@@ -422,33 +422,41 @@ def show_margins(mg: dict) -> None:
 
 
 def fit_line(f: dict) -> str:
-    """`scoring.defer_fit`'s s and u as formulas."""
+    """`scoring.defer_fit`'s fitted quantities (s, u or d) as formulas."""
     return "; ".join(f"{q} = {' / '.join(f'TP {t} {v:.3f}' for t, v in f[q]['intercept'].items())} x (B/32)^"
-                     f"{f[q]['batch']:.3f} x (L/2K)^{f[q]['context']:.3f} (rms {f[q]['rms']:.1%})" for q in ("s", "u"))
+                     f"{f[q]['batch']:.3f} x (L/2K)^{f[q]['context']:.3f} (rms {f[q]['rms']:.1%})"
+                     for q in ("s", "u", "d") if q in f)
 
 
 def show_served_model(sm: dict) -> None:
     c = sm["constants"]
+    fits = {"DEFER_FIT": "one GPU's u (r3)", "DEFER_FIT_TP": "TP (r3 + r6)"}
     print("  MODELLED served component (the harness serves plain int8): "
-          + ", ".join(f"{k} {fmt(v)}" for k, v in c.items() if k != "DEFER_FIT"))
-    if "DEFER_FIT" in c:
-        print(f"    deferred pass, TP: {fit_line(c['DEFER_FIT'])}")
+          + ", ".join(f"{k} {fmt(v)}" for k, v in c.items() if k not in fits))
+    for k, what in fits.items():
+        if k in c:
+            print(f"    deferred pass, {what}: {fit_line(c[k])}")
     for k, src in sm["sources"].items():
         print(f"    {k}: {src}")
     print(f"    model: {sm['model']}")
 
 
 def show_defer_fit(res: dict) -> None:
-    print(f"the deferred pass at T = {res['T']}, {res['n']} TP points: {fit_line(res)}")
-    print(f"  the added time's largest error {res['slowdown_err_pts_max']:.2f} points of step slowdown; residual = fit ÷ "
-          "measured − 1 (positive: the model overstates)")
-    print("\n| TP | B | L | s | s fit | resid | u | u fit | resid | added ms | error ms | slowdown pts | error pts |\n"
-          "|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+    q = res["form"]
+    print(f"the deferred pass at T = {res['T']}, {res['n']} TP points ({q} form): {fit_line(res)}")
+    print(f"  the added time's largest error {res['slowdown_err_pts_max']:.2f} points of step slowdown; the filler's "
+          f"remaining share at the plain pass, error rms {res['fill_err_pts_rms']:.2f} and largest "
+          f"{res['fill_err_pts_max']:.2f} points of C; residual = fit ÷ measured − 1 (positive: the model overstates)")
+    print(f"\n| TP | B | L | s | s fit | resid | {q} | {q} fit | resid | added ms | error ms | slowdown pts | error pts "
+          "| fill share | fit | error pts |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for p in res["points"]:
         print(f"| {p['tp']} | {p['B']} | {p['L']} | {p['s']:.3f} | {p['s_fit']:.3f} | {p['s_resid']:+.1%} | "
-              f"{p['u']:.3f} | {p['u_fit']:.3f} | {p['u_resid']:+.1%} | {p['added_ms']:.2f} | {p['added_err_ms']:+.2f} | "
-              f"{p['slowdown_pts']:.1f} | {p['slowdown_err_pts']:+.2f} |")
+              f"{p[q]:.3f} | {p[q + '_fit']:.3f} | {p[q + '_resid']:+.1%} | {p['added_ms']:.2f} | "
+              f"{p['added_err_ms']:+.2f} | {p['slowdown_pts']:.1f} | {p['slowdown_err_pts']:+.2f} | "
+              f"{p['fill_share']:.4f} | {p['fill_share_fit']:.4f} | {p['fill_err_pts']:+.2f} |")
     print("\none GPU's shown share (STAGE-COST, B 32): " + ", ".join(f"T {t} {v:.3f}" for t, v in res["one_gpu"].items()))
+    if res.get("one_gpu_u"):
+        print(f"one GPU's displacement u(1 − s), u at least DEFER_OF_PEAK and TP 2's r3 fit: {fit_line(res['one_gpu_u'])}")
     print(f"runs: {res['runs']}")
 
 
@@ -748,12 +756,17 @@ def main(argv=None) -> int:
         return 0
     if argv and argv[0] == "defer-fit":
         ap = argparse.ArgumentParser(prog="score.py defer-fit", description="the deferred pass's calibration "
-                                     "(scoring.defer_fit): s and u fitted to HC-COMM's TP points, each point's residual, "
-                                     "and one GPU's shown share by T")
+                                     "(scoring.defer_fit): s and d (or u) fitted to HC-COMM's TP points (r3 and r6 at "
+                                     "T 4096, the fit TP scores with), each point's residual, and one GPU's shown "
+                                     "share by T and its u")
         ap.add_argument("--T", type=int, default=S.DEFER_T)
+        ap.add_argument("--form", choices=("d", "u"), default="d")
         ap.add_argument("--json", action="store_true")
         a = ap.parse_args(argv[1:])
-        res = {**S.defer_fit(a.T), "one_gpu": {t: S.defer_shown_1gpu(t) for t in S.DEFER_1GPU}, "runs": S.DEFER_TP_RUNS}
+        one_u = {k: S.DEFER_FIT[k] for k in ("T", "tps", "u")} if a.T == S.DEFER_T else None
+        res = {**S.defer_fit(a.T, S.DEFER_TP + S.DEFER_TP_R6, a.form), "one_gpu": {t: S.defer_shown_1gpu(t) for t in
+                                                                                  S.DEFER_1GPU},
+               "one_gpu_u": one_u, "runs": S.DEFER_TP_RUNS}
         print(json.dumps(res, indent=1)) if a.json else show_defer_fit(res)
         return 0
     if argv and argv[0] == "check":

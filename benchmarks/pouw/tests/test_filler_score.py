@@ -874,10 +874,11 @@ def test_score_v5_is_the_measured_filler_part_plus_the_modelled_served_part():
     sc = S.score_v5(stats, 0.45)
     assert not sc["missing"] and sc["SCORE"] == pytest.approx(sc["filler_part"] + sc["served_part_modelled"])
     c = sc["served_model"]["constants"]
-    assert {k: v for k, v in c.items() if k != "DEFER_FIT"} == {
+    assert {k: v for k, v in c.items() if k not in ("DEFER_FIT", "DEFER_FIT_TP")} == {
         "fraction": 0.9, "EGEMM": 1.57, "DEFER_OF_PEAK": 0.71, "DEFER_T": 4096, "DEFER_SHOWN_1GPU": shown,
         "PREFILL_COINS": 0.13}
-    assert c["DEFER_FIT"]["s"]["intercept"] == {str(t): v for t, v in S.DEFER_FIT["s"]["intercept"].items()}
+    assert c["DEFER_FIT"]["u"]["intercept"] == {str(t): v for t, v in S.DEFER_FIT["u"]["intercept"].items()}
+    assert c["DEFER_FIT_TP"]["d"]["intercept"] == {str(t): v for t, v in S.DEFER_FIT_TP["d"]["intercept"].items()}
     assert set(sc["served_model"]["sources"]) == set(c)
     by = {e["entry"]: e for e in sc["entries"]}
     for e in sc["entries"]:
@@ -886,8 +887,8 @@ def test_score_v5_is_the_measured_filler_part_plus_the_modelled_served_part():
     d = next(e for e in sc["entries"] if e["kind"] == "decode")
     v4 = S.decode_entry(stats[("decode", d["B"], d["L"])], d["B"], d["L"])
     pass_ms = 1.57 * v4["serving_macs"] / (0.71 * S.cap(v4["mhz"])) * 1e3
-    u = max(0.71, S.defer_rates(2, d["B"], d["L"])["u"])
-    assert d["served_model"]["defer_u"] == pytest.approx(u) and d["served_model"]["defer_s"] == shown
+    u = max(0.71, S.defer_at(S.DEFER_FIT, "u", 2, d["B"], d["L"]))
+    assert d["served_model"]["defer_d"] == pytest.approx(u * (1 - shown)) and d["served_model"]["defer_s"] == shown
     assert d["t1_ms"] == pytest.approx(v4["t1_ms"] + shown * pass_ms)
     assert d["filler_macs"] == pytest.approx(
         max(0.0, v4["filler_macs"] - u * (1 - shown) * pass_ms * S.cap(v4["mhz"]) * 1e-3))
@@ -903,9 +904,11 @@ def test_score_v5_is_the_measured_filler_part_plus_the_modelled_served_part():
 
 
 def test_the_deferred_pass_is_calibrated_to_measurement(monkeypatch):
-    """Coordinator 12:10Z: the deferred pass's shown share s and displacement rate u come from measurement, TP's
-    fitted by TP, batch and context to HC-COMM r3 (each point's residual reported), one GPU's share from STAGE-COST
-    (B 32, held flat) and its u the larger of TP 2's and the MAC-for-MAC rule; read at B and L clamped to the points."""
+    """Coordinator 12:10Z and 14:42Z: the deferred pass's shown share s and displacement come from measurement, TP's s
+    and d (lost MACs a ms of the whole pass) fitted by TP, batch and context to HC-COMM r3 (ram) and r6 (duo) jointly
+    (each point's residual reported, the filler's remaining share among them), one GPU's share from STAGE-COST (B 32,
+    held flat) and its displacement u(1 − s), u the larger of TP 2's r3 fit and the MAC-for-MAC rule; read at B and L
+    clamped to the points."""
     def point(tp, b, l, s, u, mhz=2000.0, served=1e12):
         plain = served / (0.71 * S.cap(mhz)) * 1e3
         lost = u * (plain - s * plain) * S.cap(mhz) * 1e-3
@@ -919,26 +922,40 @@ def test_the_deferred_pass_is_calibrated_to_measurement(monkeypatch):
     f = S.defer_fit(4096, pts)
     assert f["s"]["intercept"] == pytest.approx({2: 0.8, 4: 0.6}) and f["u"]["intercept"] == pytest.approx({2: 1.1, 4: 1.4})
     assert (f["s"]["batch"], f["s"]["context"], f["u"]["batch"]) == pytest.approx((-0.5, 0.1, -0.2))
-    assert f["s"]["rms"] < 1e-9 and f["slowdown_err_pts_max"] < 1e-9
+    assert f["s"]["rms"] < 1e-9 and f["slowdown_err_pts_max"] < 1e-9 and f["fill_err_pts_max"] < 1e-9
+    fd = S.defer_fit(4096, pts, "d")  # d = u(1 − s): its batch slope is u's plus (1 − s)'s, not a power law, so a residual
+    assert fd["form"] == "d" and fd["s"]["intercept"] == pytest.approx({2: 0.8, 4: 0.6}) and fd["d"]["rms"] < 0.25
+    for xd, xu in zip(fd["points"], f["points"]):
+        assert "u" not in xd and xd["d"] == pytest.approx(xu["u"] * (1 - xu["s"]))
     with pytest.raises(ValueError, match="measured at"):
         S.defer_fit(2048)
     assert S.defer_fit(8192)["tps"] == S.defer_fit(16384)["tps"] == [2]  # HC-COMM r4: TP 2 alone
-    # the fit to HC-COMM r3 at T = 4096: every residual reported, the model (EGEMM 1) giving back each point within it
+    # one GPU's u: the fit to HC-COMM r3 at T = 4096, every residual reported
     fit = S.DEFER_FIT
     assert fit["T"] == 4096 and fit["tps"] == [2, 4] and fit["n"] == 12 and len(fit["points"]) == 12
     assert fit["s"]["batch"] < 0 and fit["s"]["rms"] < 0.15 and fit["u"]["rms"] < 0.15 and fit["slowdown_err_pts_max"] < 2
+    # TP: r3 and r6 jointly in the d form; the model (EGEMM 1) gives back each point's added time and remaining fill
+    tpf = S.DEFER_FIT_TP
+    assert (tpf["form"], tpf["tps"], tpf["n"], len(S.DEFER_TP_R6)) == ("d", [2, 4], 24, 12)
+    assert tpf["s"]["batch"] < 0 and tpf["slowdown_err_pts_max"] < 5 and tpf["fill_err_pts_rms"] < 2
+    assert max(abs(x["fill_err_pts"]) for x in tpf["points"][12:]) < 2  # r6's duo points, the ones TP scores
+    assert tpf["fill_err_pts_rms"] < S.defer_fit(points=S.DEFER_TP + S.DEFER_TP_R6)["fill_err_pts_rms"]
     monkeypatch.setattr(S, "EGEMM", 1.0)
-    for p, r in zip([p for p in S.DEFER_TP if p["T"] == 4096], fit["points"]):
+    for p, r in zip([p for p in S.DEFER_TP + S.DEFER_TP_R6 if p["T"] == 4096], tpf["points"]):
         m = S.defer_measured(p)
         dp = S.defer_pass(p["served_macs"], p["mhz"], p["tp"], p["B"], p["L"])
         assert dp["added_ms"] == pytest.approx(m["added_ms"] + r["added_err_ms"])
-        assert dp["displaces"] / m["lost_macs"] == pytest.approx((1 + r["u_resid"]) * (1 - r["s_fit"]) / (1 - r["s"]))
+        assert dp["displaces"] / m["lost_macs"] == pytest.approx(1 + r["d_resid"])
+        t1 = p["base_ms"] * p["phase_slowdown"] + dp["added_ms"]
+        share = max(0.0, p["phase_fill_macs"] - dp["displaces"]) / (S.cap(p["mhz"]) * t1 * 1e-3)
+        assert 100 * share == pytest.approx(100 * r["fill_share"] + r["fill_err_pts"])
     assert S.defer_rates(2, 1, 1024) == S.defer_rates(2, 32, 2048)
     assert S.defer_rates(4, 1024, 65536) == S.defer_rates(4, 256, 8192)
     with pytest.raises(ValueError, match="TP 8"):
         S.defer_rates(8, 32, 2048)
     one = S.defer_rates(1, 128, 6144)
-    assert one["s"] == S.defer_shown_1gpu() and one["u"] == max(0.71, S.defer_rates(2, 128, 6144)["u"])
+    assert one["s"] == S.defer_shown_1gpu() and one["u"] == max(0.71, S.defer_at(fit, "u", 2, 128, 6144))
+    assert one["d"] == pytest.approx(one["u"] * (1 - one["s"]))
     assert S.defer_rates(1, 256, 8192)["u"] == 0.71 < S.defer_rates(1, 32, 2048)["u"]
 
 
@@ -968,7 +985,8 @@ def test_score_tp_reads_the_slowest_rank_with_the_gates_per_rank():
     assert (e["entry"], e["tp"], e["B"], e["L"]) == ("TP 2 B 32 L 2K", 2, 32, 2048)
     assert e["t1_measured_ms"] == 42.0 and e["slowdown"] == pytest.approx(42.0 / 40.0)
     dp = S.defer_pass(1e12, 2000.0, 2, 32, 2048)
-    assert dp["s"] == pytest.approx(S.DEFER_FIT["s"]["intercept"][2]) and e["served_model"]["defer_s"] == dp["s"]
+    assert dp["s"] == pytest.approx(min(1.0, S.DEFER_FIT_TP["s"]["intercept"][2])) and e["served_model"]["defer_s"] == dp["s"]
+    assert dp["d"] == pytest.approx(S.DEFER_FIT_TP["d"]["intercept"][2]) and e["served_model"]["defer_d"] == dp["d"]
     assert e["t1_ms"] == pytest.approx(42.0 + dp["added_ms"]) and e["filler_measured_macs"] == 1.5e12
     c = S.cap(2000.0) * e["t1_ms"] * 1e-3
     assert e["filler_part"] == pytest.approx(0.45 * (1.5e12 - dp["displaces"]) / c)
