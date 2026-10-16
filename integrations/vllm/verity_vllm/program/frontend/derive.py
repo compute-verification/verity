@@ -288,6 +288,10 @@ class Ctx:
         (`...mlp.experts.gate` where `named_modules()` yields `...mlp.gate`).  Rooted entries are kept verbatim (a shared RoPE instance
         stays under each layer's path, as the manifest's alias rule expects); an unrooted entry is resolved relative to its parent entry
         and, when that resolved path is a duplicate registration, replaced by the module's first registration -- the collector's name.
+        The entries below an unrooted one are qualified from the same holder (GLM-5.3's shared expert, which the runner calls as
+        `_shared_experts._layer`: `_shared_experts`, `_shared_experts._layer`, `_shared_experts._layer.act_fn`), so an entry extending
+        the previous unrooted entry is resolved relative to that entry's holder (`...mlp.experts._shared_experts._layer.act_fn`,
+        canonically `...mlp.shared_experts.act_fn`), not to the previous entry.
         Stated consequences (global M-0595): a ROOTED duplicate (an export that yields the full `...mlp.experts.gate` itself) stays under
         the duplicate name while the collector binds `...mlp.gate` -- C1 coverage then FAILS it as missing (fail-closed, never a silent
         merge); an unrooted entry that resolves under NO registered path keeps its bare name (as before) and is COUNTED in
@@ -299,15 +303,21 @@ class Ctx:
         paths = self._module_paths
         if not paths:
             return entries[-1]
-        parent = ""
+        parent = registered = ""       # the resolved path, and the registered path it was reached under
+        holder = chain = ""            # an unrooted run: the registered path its entries are qualified from, and its last entry
         for fqn in entries:
             if fqn in paths or not fqn:
-                parent = fqn
-            elif parent and f"{parent}.{fqn}" in paths:
-                parent = self._canonical_path.get(f"{parent}.{fqn}", f"{parent}.{fqn}")
+                parent = registered = fqn
+                holder = chain = ""
+                continue
+            base = holder if chain and fqn.startswith(chain + ".") else registered
+            if base and f"{base}.{fqn}" in paths:
+                holder, chain, registered = base, fqn, f"{base}.{fqn}"
+                parent = self._canonical_path.get(registered, registered)
             else:
                 self.unresolved_module_paths[fqn] = self.unresolved_module_paths.get(fqn, 0) + 1
-                parent = fqn
+                parent = registered = fqn
+                holder = chain = ""
         return parent
 
     def hint_name(self, node) -> str:
