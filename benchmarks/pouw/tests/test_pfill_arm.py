@@ -9,6 +9,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 FILLER = Path(__file__).resolve().parents[1] / "filler"
 sys.path.insert(0, str(FILLER.parent / "harness"))
 import ledger  # noqa: E402
@@ -57,17 +59,20 @@ def test_pfill_arms_meet_the_contract_and_place_as_fill_v1(monkeypatch):
             assert A.placed(arm, ph, b, l) == A.placed(v1, ph, b, l)
 
 
-def test_power_split_arm_has_a_split_at_every_scored_point(monkeypatch):
-    """pfill-power-split is pfill-ram's filler on HC-POWER's table: an exact entry at every scored decode point, and 4
-    filler SMs during prefill."""
+@pytest.mark.parametrize("attr, flags, k", [("PFillPowerSplit", "", False), ("PFillK", "-DPFILL_BITS", True)])
+def test_power_split_arms_have_a_split_at_every_scored_point(monkeypatch, attr, flags, k):
+    """pfill-power-split and pfill-k are pfill-ram's filler (pfill-k's on {0,1} bits) on HC-POWER's table: an exact
+    entry at every scored decode point, and 4 filler SMs during prefill."""
     A, S = _module("arms"), _module("scoring")
     P = _load_file("pfill_arm")
     monkeypatch.setenv("NVCC_APPEND_FLAGS", "unset")
-    arm = A.load("benchmarks/pouw/filler/pfill_arm.py:PFillPowerSplit")
+    arm = A.load(f"benchmarks/pouw/filler/pfill_arm.py:{attr}")
+    env = __import__("os").environ["NVCC_APPEND_FLAGS"]
     ram = A.load("benchmarks/pouw/filler/pfill_arm.py:PFillRam")
     assert A.check_arm(arm) == []
     assert ledger.one_line(arm.lineage["hypothesis"], "the hypothesis")
-    assert (arm.filler, arm.sources, __import__("os").environ["NVCC_APPEND_FLAGS"]) == (ram.filler, ram.sources, "")
+    assert (arm.filler, arm.sources, env) == (ram.filler, ram.sources, flags)
+    assert (P.theorem_k_setting(arm.lineage), P.products_per_slot(arm.lineage)) == (k, 1)
     for ph, b, l in S.points(robust=False):
         p = A.placed(arm, ph, b, l)
         assert p == (A.Placement("split", 4) if ph == "prefill" else A.Placement("split", P.POWER_SPLIT[(b, l)]))
@@ -119,3 +124,26 @@ def test_e2m1_arm_adds_only_the_conditional_l64_reading(tmp_path):
     assert f4["priced-l64"]["filler_fraction"] == 2 * s8["proved"]["filler_fraction"]
     assert f4["priced-l64"]["status"] == "conditional"
     assert f4["priced-l64"]["SCORE"] > s8["proved"]["SCORE"]
+    assert "theorem-k" not in f4
+
+
+def test_k_arm_adds_only_the_pending_theorem_k_reading(tmp_path):
+    """A pfill-k run keeps every reading of a ±1 run, E½'s proved 0.225 included, and adds Theorem K's c = 1 at
+    φ = 0.9, marked pending referee; a ±1 run never gets it."""
+    S = _module("scoring")
+    P = _load_file("pfill_proved")
+    A = _load_file("pfill_arm")
+    rows = [_row("step" if ph == "decode" else "prefill", b, l, 10.0, 10.2) for ph, b, l in S.points()]
+    (tmp_path / "dscore.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+
+    def lineage(cls):
+        return cls.__dataclass_fields__["lineage"].default_factory()
+
+    (tmp_path / "arm.json").write_text(json.dumps({"lineage": lineage(A.PFillPowerSplit)}))
+    pm1 = P.readings(tmp_path)
+    assert "theorem-k" not in pm1
+    (tmp_path / "arm.json").write_text(json.dumps({"lineage": lineage(A.PFillK)}))
+    k = P.readings(tmp_path)
+    assert {n: k[n] for n in pm1} == pm1
+    assert (k["theorem-k"]["filler_fraction"], k["theorem-k"]["status"]) == (0.9, "pending referee")
+    assert k["theorem-k"]["SCORE"] > k["proved"]["SCORE"]
