@@ -37,9 +37,15 @@
 //             shared memory: what a committer of that shape would cost (its latency understated, its roots not real)
 //   litec, litecprio, litecrrW, liteconly: the same, the stand-in chained as the tree is (a thread a segment, a thread a
 //             row, each CTA's 128-leaf levels, one CTA for the levels above: ~40 dependent compressions a stage at 2K)
+//   cg, cgrrW, cgonly: hhi, rrW and hashonly with each commitment commit_gpu's small path (benchmarks/commit_gpu: CTAs of 128
+//             threads, no shared memory) over the stage's operand as tile leaves of CG_R rows x 32 values (Decision 46),
+//             sha512/row/v2 rows, hm96-sha512 leaves with derived salts in a frame-v3-sha512 tree of the stage's own domain
+//             (the CGP1 files DIR/cg-M-R-t.bin); salts, frame-leaf first blocks and pads for all 32 layers at the chunk's
+//             start. Their poisoned check holds them to commit_gpu's serial roots, and CG_DUMP=DIR writes chunk 0's six
+//             operands, levels and params for `reference.py verify` (benchmarks/commit_gpu) after the lease
 //
 // env: ARMS, DRAW_US (300), PLAIN_RB (8192), MID (1: stage.cu's frame heads ahead), CARVE (unset: the commitments' and draws'
-// kernels at the driver's carveout; P: P% shared memory), BESIDE_C (367)
+// kernels at the driver's carveout; P: P% shared memory), BESIDE_C (367), CG_R (64), CG_DUMP
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a [-DFR_ROT=BITS] ovl.cu -lcublasLt -lnvidia-ml -ldl
 #include <cublasLt.h>
 #include <cuda.h>
@@ -68,6 +74,12 @@ namespace sc {
 #include "../stage_cost/stage.cu"
 }
 using namespace sc;
+// commit_gpu's committer (benchmarks/commit_gpu, its small path), a domain slot per stage
+#define COMMIT_GPU_DOMS 6
+namespace cg {
+#include "../../commit_gpu/commit_gpu.cuh"
+}
+#undef HD  // sha512.cuh's qualifier macro; HD below is stage.cu's head dimension
 
 // the draw: one thread waits ns on the global timer and stamps when it started (its commitment done) and ended
 __global__ void draw_stamp(unsigned long long ns, unsigned long long* o) {
@@ -149,6 +161,9 @@ static void set_carve(int p) {
                      (const void*)draw_stamp, (const void*)stamp, (const void*)sha_beside, (const void*)lite_items,
                      (const void*)lite_levels};
   for (const void* k : f) CK(cudaFuncSetAttribute(k, cudaFuncAttributePreferredSharedMemoryCarveout, p));
+  const void* g[] = {(const void*)cg::salt_small<true>, (const void*)cg::leaf_small<cg::RowTile, 0>, (const void*)cg::level_kernel,
+                     (const void*)cg::top_small};
+  for (const void* k : g) CK(cudaFuncSetAttribute(k, cudaFuncAttributePreferredSharedMemoryCarveout, p));
   g_carve = p;
 }
 
@@ -157,6 +172,7 @@ struct OChunk {
   int8_t* A;
   int* D;
   Commit cm[NSTAGE];
+  cg::Committer cgc[NSTAGE];
   LtCtx lt;
 };
 struct Sched {
@@ -167,7 +183,8 @@ struct Sched {
                  // with the GEMMs at the highest
   int rr;        // > 0: the GEMMs in one static order, each after the one rr places before it
   int lite;      // each commitment a stand-in of its stage's compressions a row (LITE_C) in 128-thread CTAs, no shared
-                 // memory: 1 flat (LITE_N chained a thread), 2 chained as the tree (segments, the row, CTA levels, the top)
+                 // memory: 1 flat (LITE_N chained a thread), 2 chained as the tree (segments, the row, CTA levels, the top);
+                 // 3: commit_gpu's small path, the real commitment
 };
 static Sched sched_of(const std::string& n) {
   if (n == "chunked") return {n, false, false, true, false, 0, 0, 0};
@@ -190,6 +207,9 @@ static Sched sched_of(const std::string& n) {
   if (n == "litecprio") return {n, true, true, true, true, 1, 0, 2};
   if (n == "liteconly") return {n, true, false, false, false, 1, 0, 2};
   if (n.rfind("litecrr", 0) == 0) return {n, true, true, true, false, 1, atoi(n.c_str() + 7), 2};
+  if (n == "cg") return {n, true, true, true, false, 1, 0, 3};
+  if (n == "cgonly") return {n, true, false, false, false, 1, 0, 3};
+  if (n.rfind("cgrr", 0) == 0) return {n, true, true, true, false, 1, atoi(n.c_str() + 4), 3};
   fprintf(stderr, "unknown arm %s\n", n.c_str());
   exit(1);
 }
@@ -223,7 +243,7 @@ struct ArmRun {
   std::string name;
   Graph G;
   int k;
-  bool hash, stamps;
+  bool hash, stamps, cg = false;
   double macs;
   std::vector<Rep> reps;
   unsigned long long* st = nullptr;  // k x (2 * 192 + 1) stamps and one start stamp at the end
@@ -259,10 +279,87 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
   }
   CK(cudaStreamSynchronize(d.st));
   const size_t mem_act = mem_used();
+  bool use_cg = false;
+  for (const std::string& nm : arm_names) use_cg |= nm != "plain" && sched_of(nm).lite == 3;
   for (int c = 0; c < K; c++)
     for (int t = 0; t < NSTAGE; t++) ch[c].cm[t] = make_commit(hc[t]);
   CK(cudaDeviceSynchronize());
   const size_t mem_cm = mem_used();
+  // commit_gpu's committers: stage t in domain slot t; every stage's Consts (P(256 R), the salt prefix, leaf_prefix, Ks)
+  // must agree, as C holds one copy
+  const int CGR = getenv("CG_R") && *getenv("CG_R") ? atoi(getenv("CG_R")) : 64;
+  cg::u64 cg_n[NSTAGE] = {};
+  if (use_cg) {
+    for (int t = 0; t < NSTAGE; t++) {
+      const cg::Params p = cg::read_params(dir + "/cg-" + std::to_string(M) + "-" + std::to_string(CGR) + "-" + std::to_string(t) + ".bin");
+      cg_n[t] = cg::tile_leaves(M, SK[t], CGR);
+      for (int c = 0; c < K; c++) {
+        ch[c].cgc[t].init(p, cg_n[t], 32 * CGR, false, false, 0, t, true, LAYERS);
+        if (memcmp(&ch[c].cgc[t].hc, &ch[0].cgc[0].hc, sizeof(cg::Consts))) {
+          fprintf(stderr, "commit_gpu: stage %d's constants differ from stage 0's (one Ks, key and row size for all)\n", t);
+          exit(4);
+        }
+      }
+    }
+    CK(cudaDeviceSynchronize());
+  }
+  const size_t mem_cg = mem_used();
+  auto cg_root = [&](const cg::Committer& m) { return m.levels + 8 * (2 * m.width - 2); };
+  auto cg_roots = [&](int k) {
+    std::vector<uint8_t> r((size_t)k * NSTAGE * 64);
+    for (int c = 0; c < k; c++)
+      for (int t = 0; t < NSTAGE; t++)
+        CK(cudaMemcpy(r.data() + ((size_t)c * NSTAGE + t) * 64, cg_root(ch[c].cgc[t]), 64, cudaMemcpyDeviceToHost));
+    return r;
+  };
+  auto cg_poison = [&](int k) {
+    for (int c = 0; c < k; c++)
+      for (int t = 0; t < NSTAGE; t++) {
+        const cg::Committer& m = ch[c].cgc[t];
+        CK(cudaMemset(m.levels, 0xA5, 2 * m.width * 64));
+        CK(cudaMemset(m.S, 0xA5, m.n * 128 * m.slots));
+        CK(cudaMemset(m.F, 0xA5, m.n * 64));
+      }
+    CK(cudaDeviceSynchronize());
+  };
+  std::vector<uint8_t> cg_ref;
+  if (use_cg) {
+    cg_poison(K);
+    for (int c = 0; c < K; c++)
+      for (int t = 0; t < NSTAGE; t++) {
+        ch[c].cgc[t].salts<true>(nullptr, d.st);
+        ch[c].cgc[t].tiles(ch[c].op[t], M, SK[t], CGR, false, d.st, LAYERS - 1);
+        ch[c].cgc[t].nodes(d.st);
+      }
+    CK(cudaStreamSynchronize(d.st));
+    CK(cudaGetLastError());
+    cg_ref = cg_roots(K);
+    // chunk 0's six commitments for reference.py verify: operand, every level, the CGP1 file
+    const char* dump = getenv("CG_DUMP");
+    if (dump && *dump) {
+      for (int t = 0; t < NSTAGE; t++) {
+        const cg::Committer& m = ch[0].cgc[t];
+        const std::string w = std::string(dump) + "/M" + std::to_string(M) + "-R" + std::to_string(CGR) + "-" + SNAME[t];
+        if (system(("mkdir -p " + w).c_str())) exit(4);
+        std::vector<uint8_t> op((size_t)M * SK[t]);
+        CK(cudaMemcpy(op.data(), ch[0].op[t], op.size(), cudaMemcpyDeviceToHost));
+        cg::u64 used = 0;
+        for (int l = 0; l <= m.depth; l++) used += m.width >> l;
+        std::vector<cg::u64> lv(8 * used);
+        CK(cudaMemcpy(lv.data(), m.levels, lv.size() * 8, cudaMemcpyDeviceToHost));
+        std::vector<uint8_t> lb(lv.size() * 8);
+        for (size_t i = 0; i < lv.size(); i++) cg::sha::put_be64(lb.data() + 8 * i, lv[i]);
+        const std::vector<uint8_t> pf =
+            cg::readf(dir + "/cg-" + std::to_string(M) + "-" + std::to_string(CGR) + "-" + std::to_string(t) + ".bin");
+        cg::writef(w + "/operand.bin", op.data(), op.size());
+        cg::writef(w + "/levels.bin", lb.data(), lb.size());
+        cg::writef(w + "/params.bin", pf.data(), pf.size());
+        const std::string meta = "{\"m\": " + std::to_string(M) + ", \"k\": " + std::to_string(SK[t]) + ", \"r\": " + std::to_string(CGR) +
+                                 ", \"stage\": \"" + SNAME[t] + "\", \"layer_slot\": " + std::to_string(LAYERS - 1) + "}";
+        cg::writef(w + "/dump.json", meta.data(), meta.size());
+      }
+    }
+  }
   // plain's buffers: every token's A, one output block, one context
   const size_t plain_rows = (size_t)K * M;
   int8_t* Ap;
@@ -340,10 +437,12 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
   const std::vector<uint8_t> ref = roots(K);
 
   printf("{\"mode\": \"ovl_setup\", \"M\": %d, \"k_max\": %d, \"draw_us\": %d, \"plain_rb\": %d, \"levels\": %d, "
-         "\"fr_rot\": %d, \"carve\": %d, \"mid_ahead\": %d, \"lite_n\": %d, \"macs_chunk\": %.6e, \"gemm_alone_ms_chunk\": %.4f, \"mem_bytes\": {\"before\": "
-         "%zu, \"att_standins\": %zu, \"activations\": %zu, \"commit_state\": %zu}, \"gemms\": [",
-         M, K, draw_us, RB, levels, FR_ROT, g_carve, g_mid, lite_n, macs_chunk, gemm_alone_ms, mem0, mem_kb - mem0, mem_act - mem_kb,
-         mem_cm - mem_act);
+         "\"fr_rot\": %d, \"carve\": %d, \"mid_ahead\": %d, \"lite_n\": %d, \"cg_r\": %d, \"cg_leaves\": [%llu, %llu, %llu, %llu, %llu, %llu], "
+         "\"macs_chunk\": %.6e, \"gemm_alone_ms_chunk\": %.4f, \"mem_bytes\": {\"before\": "
+         "%zu, \"att_standins\": %zu, \"activations\": %zu, \"commit_state\": %zu, \"cg_state\": %zu}, \"gemms\": [",
+         M, K, draw_us, RB, levels, FR_ROT, g_carve, g_mid, lite_n, use_cg ? CGR : 0, (unsigned long long)cg_n[0],
+         (unsigned long long)cg_n[1], (unsigned long long)cg_n[2], (unsigned long long)cg_n[3], (unsigned long long)cg_n[4],
+         (unsigned long long)cg_n[5], macs_chunk, gemm_alone_ms, mem0, mem_kb - mem0, mem_act - mem_kb, mem_cm - mem_act, mem_cg - mem_cm);
   for (int t = 0; t < NSTAGE; t++)
     printf("%s{\"stage\": \"%s\", \"m\": %d, \"n\": %d, \"k\": %d, \"algo\": %d, \"ms_alone\": %.4f}", t ? ", " : "", SNAME[t], M,
            GN[t], GK[t], g[t].L.algo_id, g[t].L.ms);
@@ -384,6 +483,7 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
       if (k == 1 && (S.classes || S.hp || S.rr)) continue;  // one chunk: the same as eq or nodraw
       if (S.rr && S.rr >= k) continue;
       a.hash = S.hash && !S.lite;
+      a.cg = S.hash && S.lite == 3;
       a.stamps = S.draw;
       std::vector<cudaStream_t> sg(k), sh(k), ss(k);
       for (int c = 0; c < k; c++) {
@@ -404,10 +504,11 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
         std::vector<std::vector<cudaEvent_t>> salt_ev(k);
         for (int c = 0; c < k; c++) {
           pool.join(sm, sg[c]);
-          if (!S.hash || S.lite) continue;
+          if (!S.hash || (S.lite && S.lite != 3)) continue;
           pool.join(sg[c], ss[c]);
           for (int t = 0; t < NSTAGE; t++) {
-            commit_salt(ch[c].cm[t], LAYERS, ss[c]);
+            if (S.lite == 3) ch[c].cgc[t].salts<true>(nullptr, ss[c]);
+            else commit_salt(ch[c].cm[t], LAYERS, ss[c]);
             salt_ev[c].push_back(pool.get());
             CK(cudaEventRecord(salt_ev[c].back(), ss[c]));
           }
@@ -427,6 +528,10 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
                                                                            lite_cap);
                   lite_levels<<<(unsigned)((M + 127) / 128), 128, 0, sh[c]>>>(M, 2, lite_out);
                   if (M > 128) lite_levels<<<1, std::min(M / 128, 1024), 0, sh[c]>>>(M / 128, 2, lite_out);
+                } else if (S.lite == 3) {
+                  if (l == 0) CK(cudaStreamWaitEvent(sh[c], salt_ev[c][t], 0));
+                  ch[c].cgc[t].tiles(ch[c].op[t], M, SK[t], CGR, false, sh[c], l);
+                  ch[c].cgc[t].nodes(sh[c]);
                 } else {
                   if (l == 0) CK(cudaStreamWaitEvent(sh[c], salt_ev[c][t], 0));
                   commit_tree(ch[c].cm[t], l, ch[c].op[t], sh[c]);
@@ -492,6 +597,18 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
       root_ok[i] = memcmp(got.data(), ref.data(), got.size()) == 0;
       if (arms[i].hash ? !root_ok[i] : root_ok[i]) fails++;
     }
+    // the same for commit_gpu's arms against its serial roots, with nohash's run as their control too
+    std::vector<int> cg_ok(arms.size(), -1);
+    for (size_t i = 0; use_cg && i < arms.size(); i++) {
+      if (!arms[i].cg && arms[i].name.rfind("nohash", 0) != 0) continue;
+      cg_poison(k);
+      CK(cudaGraphLaunch(arms[i].G.ge, sm));
+      CK(cudaStreamSynchronize(sm));
+      CK(cudaGetLastError());
+      const std::vector<uint8_t> got = cg_roots(k);
+      cg_ok[i] = memcmp(got.data(), cg_ref.data(), got.size()) == 0;
+      if (arms[i].cg ? !cg_ok[i] : cg_ok[i]) fails++;
+    }
     printf("{\"mode\": \"ovl\", \"M\": %d, \"k\": %d, \"draw_us\": %d, \"plain_rb\": %d, \"macs\": %.6e, \"rejected\": %d, "
            "\"missing_algo\": %d, \"plain_gemms\": [",
            M, k, draw_us, rb, macs_chunk * k, g_rejected_total, g_missing);
@@ -503,6 +620,13 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
     for (size_t i = 0; i < arms.size(); i++) {
       if (root_ok[i] < 0) continue;
       printf("%s\"%s\": %s", first ? "" : ", ", arms[i].name.c_str(), root_ok[i] ? "\"equal\"" : "\"differ\"");
+      first = false;
+    }
+    printf("}, \"cg_roots\": {");
+    first = true;
+    for (size_t i = 0; i < arms.size(); i++) {
+      if (cg_ok[i] < 0) continue;
+      printf("%s\"%s\": %s", first ? "" : ", ", arms[i].name.c_str(), cg_ok[i] ? "\"equal\"" : "\"differ\"");
       first = false;
     }
     // per chunk: its end (ms after the graph's start stamp), the mean commit + draw and GEMM + commit spans a stage

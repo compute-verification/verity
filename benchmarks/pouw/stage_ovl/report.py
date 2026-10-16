@@ -15,9 +15,12 @@ For each chunk size M and depth k (k chunks of M tokens in flight, each its own 
 - beside.jsonl: plain's GEMMs against the same tokens' commitment compressions in small CTAs at the highest priority: its
   cost launched before (hfirst) or after (gfirst) the GEMMs as one kernel, or spread (a slice after each GEMM, waiting on
   it), its rate, and the rate the GEMMs need (need_rate);
-- cells are keyed by (variant, M): the variant is the build's FR_ROT (rotations on the FMA pipe, stage.cu's bits) and
-  CARVE (the commitments' and draws' kernels' preferred shared-memory carveout, when set), and
-  shathru.jsonl's SHA-512 compressions a second on the whole GPU are printed by rotation choice and CTAs a SM.
+- cells are keyed by (variant, M): the variant is the build's FR_ROT (rotations on the FMA pipe, stage.cu's bits),
+  CARVE (the commitments' and draws' kernels' preferred shared-memory carveout, when set) and, for the cg arms
+  (commit_gpu's real committer, small path), its tile height R (ovl.jsonl and ovl-r*.jsonl), and
+  shathru.jsonl's SHA-512 compressions a second on the whole GPU are printed by rotation choice and CTAs a SM;
+- check-small.jsonl and verify.jsonl: commit_gpu's case set on the small path, and the timed operands' dumped
+  commitments, against verity.ml.commitments.
 """
 from __future__ import annotations
 
@@ -54,23 +57,36 @@ def lite_kind(name: str) -> str | None:
     return "litec" if name.startswith("litec") else "lite"
 
 
+def is_cg(name: str) -> bool:
+    """the protocol's schedules with each commitment commit_gpu's small path (real roots)"""
+    return name == "cg" or name.startswith("cgrr")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("out", nargs="+")
     ap.add_argument("--json")
     a = ap.parse_args()
-    gates, setups, ovl, thru, beside = [], {}, [], [], []
+    gates, setups, ovl, thru, beside, checks = [], {}, [], [], [], {}
     for d in map(Path, a.out):
         gates += rows(d / "gate.jsonl")
         thru += rows(d / "shathru.jsonl")
         beside += rows(d / "beside.jsonl")
-        rot = "rot0"
-        for r in rows(d / "ovl.jsonl"):
-            if r["mode"] == "ovl_setup":
-                rot = f"rot{r.get('fr_rot', 0)}" + (f" carve{r['carve']}" if r.get("carve", -1) >= 0 else "")
-                setups[(rot, r["M"])] = r
-            else:
-                ovl.append({**r, "fr_rot": rot})
+        for name in ("check-small.jsonl", "verify.jsonl"):
+            s = [r["summary"] for r in rows(d / name) if "summary" in r]
+            if s:
+                checks[f"{d.name}/{name}"] = s[-1]
+        for f in sorted(d.glob("ovl*.jsonl")):
+            rot = "rot0"
+            for r in rows(f):
+                if r["mode"] == "ovl_setup":
+                    rot = (f"rot{r.get('fr_rot', 0)}" + (f" carve{r['carve']}" if r.get("carve", -1) >= 0 else "")
+                           + (f" R{r['cg_r']}" if r.get("cg_r") else ""))
+                    setups[(rot, r["M"])] = r
+                else:
+                    ovl.append({**r, "fr_rot": rot})
+    for name, s in checks.items():
+        print(f"{name}: {s}")
     for t in thru:
         c = t["compressions_a_s"]
         best = max(c, key=c.get)
@@ -109,8 +125,9 @@ def main() -> int:
             p = arms["plain"]["ms"]
             sat = k * M / plain_best[M]
             cell = {"fr_rot": rot, "M": M, "k": k, "plain_ms": p, "plain_mhz": arms["plain"]["mhz"], "plain_ktok_s": k * M / p,
-                    "roots": r.get("roots", {}), "arms": {}}
+                    "roots": r.get("roots", {}), "cg_roots": r.get("cg_roots", {}), "arms": {}}
             root_bad += [(rot, M, k, n, v) for n, v in cell["roots"].items() if v != ("differ" if n == "nohash" else "equal")]
+            root_bad += [(rot, M, k, n, v) for n, v in cell["cg_roots"].items() if v != ("differ" if n.startswith("nohash") else "equal")]
             pb = min(v["ms"] for n, v in arms.items() if n == "plain" or n.startswith("chunked"))
             cell["plain_best_ms"] = pb
             for n, v in arms.items():
@@ -124,8 +141,8 @@ def main() -> int:
                 cell["best_cost_sat"] = proto[b]["cost_sat"]
             if proto:
                 cell["best_cost_best"] = proto[cell["best"]]["cost_best"]
-            for kind in ("lite", "litec"):
-                lite = {n: v for n, v in cell["arms"].items() if lite_kind(n) == kind}
+            for kind in ("lite", "litec", "cg"):
+                lite = {n: v for n, v in cell["arms"].items() if (is_cg(n) if kind == "cg" else lite_kind(n) == kind)}
                 if lite:
                     b = min(lite, key=lambda n: lite[n]["ms"])
                     cell[f"best_{kind}"] = b
@@ -142,11 +159,15 @@ def main() -> int:
             print(f"  k={k:2d} plain {p:8.2f} ms ({cell['plain_ktok_s']:.1f} k tok/s, {arms['plain']['mhz']:.0f} MHz) | {line}")
             if "hashonly" in cell["arms"]:
                 print(f"        the commitments alone: {100 * cell['arms']['hashonly']['ms'] / p:.1f}% of plain's makespan")
-            for kind, only, what in (("lite", "liteonly", "flat"), ("litec", "liteconly", "chained")):
+            for kind, only, what in (("lite", "liteonly", "stand-in committer, flat (small CTAs, same compressions)"),
+                                     ("litec", "liteconly", "stand-in committer, chained (small CTAs, same compressions)"),
+                                     ("cg", "cgonly", "commit_gpu's committer (small path, real roots)")):
                 if f"best_{kind}" in cell:
                     lo = cell["arms"].get(only)
-                    print(f"        stand-in committer, {what} (small CTAs, same compressions): best {cell[f'best_{kind}']} "
-                          f"{100 * cell[f'best_{kind}_cost']:+.1f}%" + (f"; alone {100 * lo['ms'] / p:.1f}% of plain's makespan" if lo else ""))
+                    print(f"        {what}: best {cell[f'best_{kind}']} {100 * cell[f'best_{kind}_cost']:+.1f}% "
+                          f"({100 * cell[f'best_{kind}_cost_best']:+.1f}% against the fastest plain)"
+                          + (f"; alone {100 * lo['ms'] / p:.1f}% of plain's makespan" if lo else "")
+                          + (f"; roots {cell['cg_roots']}" if kind == "cg" else ""))
             if "best" in cell:
                 print(f"        best {cell['best']} {100 * cell['best_cost']:+.1f}% (vs saturated plain {100 * cell['best_cost_sat']:+.1f}%); "
                       f"draws {k * 192 / (proto[cell['best']]['ms'] * 1e-3):.0f}/s; roots {cell['roots']}")
@@ -177,10 +198,12 @@ def main() -> int:
             okb = [c for c in cs if c["M"] == M and "best" in c and c["best_cost_best"] <= 0.05]
             print(f"  smallest k at <= 5% for M = {M}: " + (f"{min(ok, key=lambda c: c['k'])['k']}" if ok else "none measured")
                   + "; against the fastest plain: " + (f"{min(okb, key=lambda c: c['k'])['k']}" if okb else "none measured"))
-        for kind, what in (("lite", "flat: latency understated"), ("litec", "chained as the tree: ~40 dependent compressions a stage")):
+        for kind, what in (("lite", "the stand-in committer, flat: latency understated"),
+                           ("litec", "the stand-in committer, chained as the tree: ~40 dependent compressions a stage"),
+                           ("cg", "commit_gpu's committer, the real roots")):
             if not any(f"best_{kind}" in c for c in cs):
                 continue
-            print(f"  with the stand-in committer, {what} (each commitment's compressions in 128-thread CTAs, no shared memory):")
+            print(f"  with {what} (128-thread CTAs, no shared memory):")
             for k in ks:
                 cells = {c["M"]: c for c in cs if c["k"] == k}
                 out = [f"{100 * cells[M][f'best_{kind}_cost']:+.1f}% ({100 * cells[M][f'best_{kind}_cost_best']:+.1f}%) {cells[M][f'best_{kind}']}"
@@ -189,7 +212,7 @@ def main() -> int:
             for M in Ms:
                 ok = [c for c in cs if c["M"] == M and f"best_{kind}" in c and c[f"best_{kind}_cost"] <= 0.05]
                 okb = [c for c in cs if c["M"] == M and f"best_{kind}" in c and c[f"best_{kind}_cost_best"] <= 0.05]
-                print(f"  smallest k at <= 5% with the {kind} stand-in, M = {M}: "
+                print(f"  smallest k at <= 5% with the {kind} arms, M = {M}: "
                       + (f"{min(ok, key=lambda c: c['k'])['k']}" if ok else "none measured")
                       + "; against the fastest plain: " + (f"{min(okb, key=lambda c: c['k'])['k']}" if okb else "none measured"))
         lone = {}
