@@ -13,18 +13,18 @@ record holds the text from then on.
 namespace Flock.Guarantees
 
 /-- **The sampling claims are stated**: the tuple of the sampling claims (`KS`, `KSCount`, `Binding`, `Universal`,
-`Complete`, `ScopeMatches`, `ZK`, `Bits`, `Efficient`, `Nontrivial`), the claims they add (`BitsLin`, `ExtractOwnLe`,
-`ZKaux`) and the shared ones they instantiate (`Claims.KSLin`, `Complete`, `ScopeMatches`, `ExtractRunsLe`,
-`ExtractRunsExpLe`, `DecoderComplexity`, `Nontrivial`, and Flock's `ListComplete`), the named assumptions
-(`StrictBirthday`, `ExpectedCR`, `CommitHides`) and `trustedBase`, equal to itself. -/
+`FaultyBoundary`, `Complete`, `ScopeMatches`, `ZK`, `Bits`, `Efficient`, `Nontrivial`), the claims they add (`BitsLin`,
+`ExtractOwnLe`, and the local copies `ListWithin` and `ZKmalR`) and the shared ones they instantiate (`Claims.KSLin`,
+`Complete`, `ScopeMatches`, `ExtractRunsLe`, `ExtractRunsExpLe`, `DecoderComplexity`, `Nontrivial`), the named
+assumptions (`StrictBirthday`, `ExpectedCR`) and `trustedBase`, equal to itself. -/
 def SamplingClaimsStated : Prop :=
   let claims := (@Claims.Sampling.KS, @Claims.Sampling.KSCount, @Claims.Sampling.Binding, @Claims.Sampling.Universal,
-    @Claims.Sampling.Complete, @Claims.Sampling.ScopeMatches, @Claims.Sampling.ZK, @Claims.Sampling.Bits,
-    @Claims.Sampling.Efficient, @Claims.Sampling.Nontrivial,
-    @Claims.Sampling.BitsLin, @Claims.Sampling.ExtractOwnLe, @Claims.Sampling.ZKaux,
+    Claims.Sampling.FaultyBoundary, @Claims.Sampling.Complete, @Claims.Sampling.ScopeMatches, @Claims.Sampling.ZK,
+    @Claims.Sampling.Bits, @Claims.Sampling.Efficient, @Claims.Sampling.Nontrivial,
+    @Claims.Sampling.BitsLin, @Claims.Sampling.ExtractOwnLe, @Claims.Sampling.ListWithin, @Claims.Sampling.ZKmalR,
     @Claims.KSLin, @Claims.Complete, @Claims.ScopeMatches, @Claims.ExtractRunsLe, @Claims.ExtractRunsExpLe,
-    @Claims.DecoderComplexity, @Claims.Nontrivial, @Claims.Flock.ListComplete,
-    @Claims.StrictBirthday, @Claims.ExpectedCR, @Claims.CommitHides, Claims.trustedBase)
+    @Claims.DecoderComplexity, @Claims.Nontrivial,
+    @Claims.StrictBirthday, @Claims.ExpectedCR, Claims.trustedBase)
   claims = claims
 
 end Flock.Guarantees
