@@ -1047,10 +1047,20 @@ struct Export {
   int E;
   uint32_t seq;
 };
+// the level fr_tree exports for an Export's E: the first of at most E nodes, so the leaves themselves when E >= width
+static int export_width(long long width, int E) {
+  long long lw = width;
+  while (lw > E) lw /= 2;
+  return (int)lw;
+}
 // CTAs [cta0, cta0 + n) of the tree's width / 128 (all by default); the last of all to finish takes the top
 static void commit_frtree(const Commit& m, int slot, cudaStream_t st, int cta0 = 0, int n = -1, const Export* x = nullptr) {
   const int L = std::min(m.width, 128), total = m.width / L;
   if (n < 0) n = total;
+  if (x && export_width(m.width, x->E) > 1024) {
+    fprintf(stderr, "an export of %d nodes: the link holds 1024 (link_init)\n", export_width(m.width, x->E));
+    exit(2);
+  }
   Args f{};
   const unsigned long long ps[16] = {(unsigned long long)m.digests, (unsigned long long)(m.mids + 64 * m.s),
                                      (unsigned long long)(m.my + (size_t)64 * m.R * slot),
@@ -1082,6 +1092,24 @@ static void commit_frtree(const Commit& m, int slot, cudaStream_t st, int cta0 =
 static void commit_tree(const Commit& m, int slot, const uint8_t* data, cudaStream_t st, const Export* x = nullptr) {
   commit_segs(m, data, st);
   commit_frtree(m, slot, st, 0, -1, x);
+}
+// slab i of k over m's rows (R / k each, the last taking the rest): its rows [r0, r0 + nr) and the tree's CTAs
+// [c0, c0 + nc) whose rows are all in slabs 0..i, since a CTA's leaves read every one of its rows' segment digests (the
+// last slab takes every CTA left, the pads' among them)
+struct Slab {
+  long long r0, nr;
+  int c0, nc;
+};
+static Slab slab(const Commit& m, int k, int i) {
+  const int L = std::min(m.width, 128), total = m.width / L;
+  const long long rk = m.R / k, r0 = i * rk, r1 = i == k - 1 ? m.R : r0 + rk;
+  const int c0 = i == 0 ? 0 : (int)std::min<long long>(total, r0 / L), c1 = i == k - 1 ? total : (int)std::min<long long>(total, r1 / L);
+  return {r0, r1 - r0, c0, c1 - c0};
+}
+static void commit_slab(const Commit& m, int slot, const uint8_t* data, cudaStream_t st, int k, int i, const Export* x) {
+  const Slab b = slab(m, k, i);
+  if (b.nr > 0) commit_segs(m, data, st, b.r0, b.nr);
+  if (b.nc > 0) commit_frtree(m, slot, st, b.c0, b.nc, x);
 }
 // the next block of a chain from the state alone (so the one-warp and two-warp chains hash the same blocks)
 __device__ __forceinline__ void chain_next(const uint64_t st[8], uint64_t w[16]) {
@@ -1275,6 +1303,11 @@ static inline void h_warm_node(const HostConst& c, const std::vector<uint64_t>& 
 }
 static void h_sub(const HostConst& c, const std::vector<uint64_t>& nmid, const uint8_t* v, long long n, long long lw,
                   long long j0, uint8_t root[64]) {
+  if (n < 1 || j0 < 0 || j0 + n > lw || lw > c.width) {
+    fprintf(stderr, "h_sub: nodes [%lld, %lld) of a level of %lld in a tree of %d leaves (an export wider than the tree? "
+            "h_top and h_warm take export_width)\n", j0, j0 + n, lw, c.width);
+    exit(2);
+  }
   static thread_local std::vector<uint8_t> cur, nxt;
   cur.assign(v, v + 64 * n);
   while (n > 1) {
@@ -1356,8 +1389,9 @@ static void pool_stop() {
   g_pool.th.clear();
   g_pool.P = 1;
 }
-// warm the pool's caches for an export of E nodes of shape c (h_top's next call, same c and E)
+// warm the pool's caches for an Export's E on shape c (h_top's next call, same c and E)
 static void h_warm(const HostConst& c, const std::vector<uint64_t>& nmid, int E) {
+  E = export_width(c.width, E);
   if (g_pool.P == 1 || E < 2 * g_pool.P) {
     for (long long n = E, lw = E; n > 1; n /= 2, lw /= 2)
       for (long long j = 0; j < n / 2; j++) h_warm_node(c, nmid, c.width - lw + j);
@@ -1370,9 +1404,10 @@ static void h_warm(const HostConst& c, const std::vector<uint64_t>& nmid, int E)
   g_pool.go.store(cmd << 1 | 1, std::memory_order_release);
   pool_share(0, true, cmd);
 }
-// the levels above an exported level of E nodes (ex) to the root, by the pool when it has helpers and E >= 2P (h_nmid(c)
-// computed before: the helpers read it)
+// the levels above the level fr_tree exported (ex) for an Export's E to the root, by the pool when it has helpers and that
+// level has at least 2P nodes (h_nmid(c) computed before: the helpers read it)
 static void h_top(const HostConst& c, const std::vector<uint64_t>& nmid, const uint8_t* ex, int E, uint8_t root[64]) {
+  E = export_width(c.width, E);
   const int P = g_pool.P;
   if (P == 1 || E < 2 * P) return h_sub(c, nmid, ex, E, E, 0, root);
   // a helper still warming reads c, nmid and E: rewritten only when they change (never right after h_warm)
@@ -1565,11 +1600,7 @@ static bool commit_gate(const Commit& m, int path, std::vector<uint8_t>* tree_ou
     commit_frtree(m, LAYERS - 1, 0, 0, -1, E ? &x : nullptr);
   } else if (path == 2) {
     commit_salt(m, LAYERS, 0);
-    const int L = std::min(m.width, 128), rk = m.R / k;
-    for (int i = 0; i < k; i++) {
-      commit_segs(m, rows, 0, (long long)i * rk, rk);
-      commit_frtree(m, LAYERS - 1, 0, i * rk / L, i == k - 1 ? m.width / L - i * rk / L : rk / L, E ? &x : nullptr);
-    }
+    for (int i = 0; i < k; i++) commit_slab(m, LAYERS - 1, rows, 0, k, i, E ? &x : nullptr);
   }
   CK(cudaDeviceSynchronize());
   CK(cudaGetLastError());
@@ -2286,7 +2317,14 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
                             {"cpu256p8_nopdl", 1, 1, 256, 2, du, 0, 8, 0, 1},
                             {"cpu512p16_nd_nopdl", 1, 1, 512, 2, 0, 0, 16, 0, 1}};
     for (const Cfg& f : all)
-      if (!sel || strstr(("," + std::string(sel) + ",").c_str(), ("," + f.name + ",").c_str())) cfgs.push_back(f);
+      if (!sel || strstr(("," + std::string(sel) + ",").c_str(), ("," + f.name + ",").c_str())) {
+        if (f.k > 1 && !f.col && M % (128 * f.k)) {
+          fprintf(stderr, "prefill M=%d: %s skipped: its row slabs aren't whole tree CTAs of 128 rows, and each slab's hash "
+                  "stream waits on its own GEMM slab alone\n", M, f.name.c_str());
+          continue;
+        }
+        cfgs.push_back(f);
+      }
     for (const Cfg& f : cfgs) {
       if (f.k > 1 && !f.col && std::find(ks.begin(), ks.end(), f.k) == ks.end()) ks.push_back(f.k);
       if (f.col && std::find(kc.begin(), kc.end(), f.k) == kc.end()) kc.push_back(f.k);
@@ -2337,7 +2375,6 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
       }
       const int qn = q + 1, ln = qn / NSTAGE, tn = qn % NSTAGE;
       const Commit& m = c.cm[tn];
-      const int L = std::min(m.width, 128), rk = M / f.k;
       const Export xn{g_link.ex_d, g_link.up_d, f.E, (uint32_t)qn + 1};
       if (f.col) {
         const int B = row_blocks(m);
@@ -2354,8 +2391,7 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
         slab_gemm(c, l, t, f.k, i, g);
         fork(g, hsl[i]);
         if (qn < NSTAGE) CK(cudaStreamWaitEvent(hsl[i], ev[tn], 0));
-        commit_segs(m, c.op[tn], hsl[i], (long long)i * rk, rk);
-        commit_frtree(m, ln, hsl[i], i * rk / L, i == f.k - 1 ? m.width / L - i * rk / L : rk / L, f.draw == 2 ? &xn : nullptr);
+        commit_slab(m, ln, c.op[tn], hsl[i], f.k, i, f.draw == 2 ? &xn : nullptr);
         if (f.draw != 2) fork(hsl[i], h);
       }
     }
@@ -3039,7 +3075,8 @@ static int run_gate(Dev& d, const std::string& dir, const std::vector<int>& Ms) 
   return fails + gate(d);
 }
 
-// the host pool's roots (h_warm, h_top) against one thread's (h_sub) over random templates and exports, on the host alone
+// the host pool's roots (h_warm, h_top) against one thread's (h_sub) over random templates and exports, on the host alone:
+// trees of 64, 512 and 4096 leaves, E up to 1024 (at E >= width the tree's export is its leaves)
 static int pool_test(int maxP) {
   for (const char* lib : {"libcrypto.so.3", "libcrypto.so.1.1", "libcrypto.so"})
     if (void* h = dlopen(lib, RTLD_NOW | RTLD_LOCAL)) {
@@ -3056,34 +3093,37 @@ static int pool_test(int maxP) {
     x = (x ^ (x >> 27)) * 0x94D049BB133111EBull;
     return x ^ (x >> 31);
   };
-  HostConst c{};
-  c.width = 4096;
-  c.ntpl.resize((size_t)384 * (c.width - 1));
-  c.noff.resize((size_t)4 * (c.width - 1));
-  for (auto& b : c.ntpl) b = (uint8_t)rnd();
-  for (long long j = 0; j < c.width - 1; j++) {
-    const uint32_t o = 139 + (uint32_t)(j & 1);
-    memcpy(&c.noff[4 * j], &o, 4);
-  }
-  std::vector<uint64_t> nmid((size_t)8 * (c.width - 1));
-  for (auto& x : nmid) x = rnd();
   std::vector<uint8_t> ex(64 * 1024);
   int cases = 0, bad = 0;
-  for (int P = 2; P <= maxP; P *= 2) {
-    pool_start(P);
-    for (int E : {2 * P, 256, 512, 1024}) {
-      if (E < 2 * P) continue;
-      for (int it = 0; it < 200; it++) {
-        for (int b = 0; b < 64 * E; b++) ex[b] = (uint8_t)rnd();
-        uint8_t want[64], got[64];
-        h_sub(c, nmid, ex.data(), E, E, 0, want);
-        if (it & 1) h_warm(c, nmid, E);
-        h_top(c, nmid, ex.data(), E, got);
-        bad += memcmp(want, got, 64) != 0;
-        cases++;
-      }
+  for (int width : {64, 512, 4096}) {
+    HostConst c{};
+    c.width = width;
+    c.ntpl.resize((size_t)384 * (c.width - 1));
+    c.noff.resize((size_t)4 * (c.width - 1));
+    for (auto& b : c.ntpl) b = (uint8_t)rnd();
+    for (long long j = 0; j < c.width - 1; j++) {
+      const uint32_t o = 139 + (uint32_t)(j & 1);
+      memcpy(&c.noff[4 * j], &o, 4);
     }
-    pool_stop();
+    std::vector<uint64_t> nmid((size_t)8 * (c.width - 1));
+    for (auto& x : nmid) x = rnd();
+    for (int P = 2; P <= maxP; P *= 2) {
+      pool_start(P);
+      for (int E : {2 * P, 256, 512, 1024}) {
+        if (E < 2 * P) continue;
+        const int ew = export_width(width, E);
+        for (int it = 0; it < 100; it++) {
+          for (int b = 0; b < 64 * ew; b++) ex[b] = (uint8_t)rnd();
+          uint8_t want[64], got[64];
+          h_sub(c, nmid, ex.data(), ew, ew, 0, want);
+          if (it & 1) h_warm(c, nmid, E);
+          h_top(c, nmid, ex.data(), E, got);
+          bad += memcmp(want, got, 64) != 0;
+          cases++;
+        }
+      }
+      pool_stop();
+    }
   }
   printf("{\"mode\": \"pooltest\", \"cases\": %d, \"bad\": %d}\n", cases, bad);
   return bad != 0;
