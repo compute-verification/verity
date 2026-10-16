@@ -23,7 +23,8 @@ S = _load("scoring")
 
 
 @pytest.mark.parametrize("attr, name, dmap", [("KernM2", "kern-m2", "2"), ("KernM2C18", "kern-m2-c18", "2"),
-                                              ("KernM2C21", "kern-m2-c21", "2"), ("KernM1", "kern-m1", "1")])
+                                              ("KernM2C21", "kern-m2-c21", "2"), ("KernM2C20", "kern-m2-c20", "2"),
+                                              ("KernM1", "kern-m1", "1")])
 def test_hc_kern_arms(monkeypatch, attr, name, dmap):
     # the arm imports whichever `arms` module is registered when it loads, as under score.py
     A = sys.modules.get("arms") or _load("arms")

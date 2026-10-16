@@ -81,6 +81,24 @@ class KernM2C21(KernM2):
 
 
 @dataclass
+class KernM2C20(KernM2):
+    """kern-m2 in 2^20-MMA chunks (2 tiles a warp, ~2 ms). kern-m2-c21 (r20261016-054503-d1e8) kept 0.992-0.997 of peak
+    beside serving and scored 0.425 if gated, but read 1.001 of peak at decode 32/2K, where a window holds 7 chunks and the
+    blocks' NVML clock (2092 MHz) sits below the SM clock's 2100: the honest gate's peak bound has no tolerance for either.
+    Half the chunk keeps about half the launch-gap gain with twice the completions a window."""
+
+    name: str = "kern-m2-c20"
+    lineage: dict = field(default_factory=lambda: {
+        "parent": "kern-m2-c21", "approach": "pouw/filler-kernel",
+        "mechanism": ["filler:chained-imma-registers", "kernel:map-in-register-order", "kernel:seed-128",
+                      "kernel:c-16bit", "kernel:w16-s8192", "chunk:2^20", "place:split", "split:per-point-table",
+                      "prefill:none"],
+        "hypothesis": "kern-m2 in 2x longer chunks: half the chunk-launch gaps, ~0.99 of peak beside serving, under the "
+                      "peak bound's noise"})
+    filler: A.Filler | None = A.Filler(W=16, NC=4, S=8192, chunk_log2=20)
+
+
+@dataclass
 class KernM1(KernM2):
     """Map 1 (in-place, unhardened) at FILL v1's own shape, W 8, NC 4, S 2048: 0.984 of peak alone."""
 
