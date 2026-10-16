@@ -44,6 +44,16 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
       echo "rc $? for palone $a" >> "$O/errors.txt"
   done
   q
+  for a in ${PW_NCU:-}; do  # "KIND:PAT:W:NC ...": the filler's DRAM bytes a chunk, and the counters' positive control
+    IFS=: read -r k p w nc <<< "$a"
+    ncu --clock-control none -k regex:pfill_k --launch-count 3 --metrics \
+      gpu__time_duration.sum,dram__bytes.sum,lts__t_bytes.sum,sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_elapsed \
+      --csv "$B/pwr" pdone "$k" "$p" "$w" "$nc" > "$O/ncu-pfill-k$k-p$p-w$w-nc$nc.csv" 2>&1; echo "ncu $a rc $?" >> "$O/rc.txt"
+  done
+  if [ -n "${PW_NCU:-}" ]; then
+    ncu --clock-control none -k regex:bw_read --launch-count 3 --metrics gpu__time_duration.sum,dram__bytes.sum --csv \
+      "$B/pwr" pbw > "$O/ncu-bw-control.csv" 2>&1; echo "ncu bw control rc $?" >> "$O/rc.txt"
+  fi
   for a in $PW_POINTS; do
     IFS=: read -r b l f k p w nc sl <<< "$a"
     PF_SLEEP_NS=${sl:-0} "$B/pwr" pfill "$b" "$l" "$f" "$k" "$p" "$w" "$nc" "$PW_WARM" "$PW_MEAS" "$PW_ROUNDS" ${PW_CTL} \

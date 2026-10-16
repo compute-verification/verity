@@ -7,12 +7,15 @@
 //   pgate                                         the variants' receipts against the host (int8 kinds), KIND 0 PAT 0 against
 //                                                 FILL's dfill_ref, and each control
 //   pidle SECS                                    the idle board
+//   pdone KIND PAT W NC                           three chunks on every SM, for ncu's DRAM counters
+//   pbw                                           dcap's bw_read over 1 GiB, three launches: the DRAM counters' positive control
 //   palone FILL_SMS KIND PAT W NC WARM MEAS       the filler alone on FILL_SMS SMs (the GPU's count: no split)
 //   pfill B L FILL_SMS KIND PAT W NC WARM MEAS ROUNDS [CTL_PAT]
 //                                                 per round: the step on all SMs (full), on its partition with cuBLASLt
 //                                                 re-tuned there (split), the same beside the filler (split_fill), beside
 //                                                 the CTL_PAT filler (split_ctl, when given), the filler alone (fill), and
-//                                                 full again (full2)
+//                                                 full again (full2); PW_CO=1 adds the step on all SMs beside the filler
+//                                                 on all SMs (co_fill), PW_CO=2 also attention alone with and without it
 //   pprefill M B L FILL_SMS KIND PAT W NC HEAT MEAS ROUNDS
 //                                                 M-row prefill linears on all SMs right after HEAT s of the decode step on
 //                                                 its partition, alone or beside the filler (run_pprefill)
@@ -572,6 +575,19 @@ static cudaStream_t fill_stream(Dev& d, int fill_sms, cudaStream_t* ss, int got[
   return fs;
 }
 
+// three chunks on every SM, for ncu
+static int run_pdone(Dev& d, int kind, int pat, int W, int NC) {
+  PFill f = pfill_make(d.sms, kind, pat, W, NC, 2048);
+  for (int k = 0; k < 3; k++) pfill_launch(f, k, d.st);
+  CK(cudaStreamSynchronize(d.st));
+  CK(cudaGetLastError());
+  const int bad = pfill_check(f, 2, 4);
+  printf("{\"mode\": \"pdone\", \"kind\": %d, \"pat\": %d, \"W\": %d, \"NC\": %d, \"chunk_mmas\": %.6e, \"rec_bad\": %d}\n", kind,
+         pat, W, NC, f.mmas(), bad);
+  CK(cudaFree(f.rec));
+  return bad > 0;
+}
+
 static void run_palone(Dev& d, int fill_sms, int kind, int pat, int W, int NC, double warm, double meas) {
   cudaStream_t ss;
   int got[2];
@@ -597,10 +613,13 @@ static void run_pfill(Dev& d, int B, int L, int fill_sms, int kind, int pat, int
   if (ctl_pat >= 0) fc = pfill_make(got[1], kind, ctl_pat, W, NC, 2048);
   // PW_CO=1: an arm with the step on all SMs at the highest stream priority beside the filler on all SMs at the lowest
   // (FILL's co-residency), the power ceiling of any schedule that puts filler warps on the step's SMs
+  // PW_CO=2: the same beside decode's attention alone (the step's attention kernels, no linears): the attention phase of
+  // a schedule that fills every SM while attention runs (HC-SCHED's phase filler)
+  const int co_mode = getenv("PW_CO") ? atoi(getenv("PW_CO")) : 0;
   PFill fco;
   PFill* co = nullptr;
   cudaStream_t co_step = nullptr, co_fs = nullptr;
-  if (getenv("PW_CO") && atoi(getenv("PW_CO"))) {
+  if (co_mode) {
     int lo, hi;
     CK(cudaDeviceGetStreamPriorityRange(&lo, &hi));
     CK(cudaStreamCreateWithPriority(&co_step, cudaStreamNonBlocking, hi));
@@ -611,6 +630,7 @@ static void run_pfill(Dev& d, int B, int L, int fill_sms, int kind, int pat, int
   bool wrapped = false;
   const cudaGraphExec_t g_full = capture(d, full, [&] { enqueue_step(d, p, 2, B, L, &wrapped); });
   const cudaGraphExec_t g_split = capture(d, ss, [&] { enqueue_step(d, p2, 2, B, L, &wrapped); });
+  const cudaGraphExec_t g_att = co_mode == 2 ? capture(d, full, [&] { enqueue_step(d, p, 1, B, L, &wrapped); }) : nullptr;
   d.st = full;
   double step_macs = 0;
   for (int j = 0; j < 4; j++) step_macs += (double)LAYERS * B * LN[j] * LK[j];
@@ -638,11 +658,18 @@ static void run_pfill(Dev& d, int B, int L, int fill_sms, int kind, int pat, int
       head("co_fill", r, *co);
       arm(d, g_full, co_step, co, co_fs, warm, meas, step_macs);
     }
+    if (g_att) {
+      head("att", r, f);
+      arm(d, g_att, co_step, nullptr, nullptr, warm, meas, step_macs);
+      head("att_co_fill", r, *co);
+      arm(d, g_att, co_step, co, co_fs, warm, meas, step_macs);
+    }
     head("full2", r, f);
     arm(d, g_full, full, nullptr, nullptr, warm, meas, step_macs);
   }
   CK(cudaGraphExecDestroy(g_full));
   CK(cudaGraphExecDestroy(g_split));
+  if (g_att) CK(cudaGraphExecDestroy(g_att));
   CK(cudaFree(f.rec));
   if (ctl_pat >= 0) CK(cudaFree(fc.rec));
   if (co) CK(cudaFree(fco.rec));
@@ -725,7 +752,7 @@ static void setup(Dev& d, bool need_w, int B, int L) {
   CK(cudaMalloc(&d.X, (size_t)8192 * FF));
   fill_s8<<<1024, 256, 0, d.st>>>(d.X, (size_t)8192 * FF, 0x55);
   CK(cudaMalloc(&d.D, (size_t)1 << 30));
-  d.kv_bytes = (size_t)1 << 20;
+  d.kv_bytes = B < 0 ? ((size_t)1 << 30) + ((size_t)1 << 20) : (size_t)1 << 20;  // B < 0: pbw's 1 GiB stream
   if (B > 0) {
     size_t fr, tot;
     CK(cudaMemGetInfo(&fr, &tot));
@@ -780,11 +807,17 @@ int main(int argc, char** argv) {
     if ((size_t)B * L > 786432 || L % 512 || B > 256 || B < 1) { fprintf(stderr, "B*L <= 786432, L %% 512 == 0, B <= 256\n"); return 1; }
     if (o && (atoi(argv[2]) < 1 || atoi(argv[2]) > 8192)) { fprintf(stderr, "1 <= M <= 8192\n"); return 1; }
   }
+  if (mode == "pbw") B = -1;
   setup(d, mode == "pfill" || mode == "pprefill", B, L);
   g_samp.start(d.nv);
   int rc = 0;
   if (mode == "pgate") rc = pgate();
+  else if (mode == "pbw") { g_graph = false; run_bw(d, (size_t)1 << 30, 3); }
   else if (mode == "pidle") run_pidle(d, argc > 2 ? atof(argv[2]) : 3);
+  else if (mode == "pdone") {
+    if (argc < 6) { fprintf(stderr, "pdone KIND PAT W NC\n"); rc = 1; }
+    else rc = run_pdone(d, atoi(argv[2]), atoi(argv[3]), atoi(argv[4]), atoi(argv[5]));
+  }
   else if (mode == "palone") {
     if (argc < 9) { fprintf(stderr, "palone FILL_SMS KIND PAT W NC WARM MEAS\n"); rc = 1; }
     else run_palone(d, atoi(argv[2]), atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), atoi(argv[6]), atof(argv[7]), atof(argv[8]));
