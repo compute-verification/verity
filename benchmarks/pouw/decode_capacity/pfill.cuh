@@ -423,6 +423,11 @@ static uint64_t pf_ref(uint64_t c0, uint64_t c1, uint64_t tile, int steps) {
           }
         }
         h ^= pf_fold(K, pos, NC == 2 ? (uint64_t)z << 32 | y : (uint64_t)y);
+#ifdef TPC_DBG
+        if (w == 0 && lane == 0 && c <= 1)
+          printf("PFREF tile=%llu k0=%08x k1=%08x | c%d y=%08x z=%08x | steps=%d PF_TN/8=%d\n",
+                 (unsigned long long)tile, key.k0, key.k1, c, y, z, steps, PF_TN / 8);
+#endif
       }
     }
   }
