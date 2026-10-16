@@ -1641,7 +1641,9 @@ def inbox_open(ns: argparse.Namespace, reg: dict, routes: Routes, name: str) -> 
     if not holder and not ns.dry_run:
         raise SlackError("no agent id: pass --holder bc-... (or set RESEARCH_AGENT_URL)")
     old = routes.get_route(name, fresh=True)
-    ch = channel_id(ns, reg, FRONT_DOOR)
+    if old and (mine := routes.local.get(name)) and mine.get("holder") == old.get("holder"):
+        old = {**old, "branch_suffixes": list(dict.fromkeys([*old.get("branch_suffixes", []), *mine.get("branch_suffixes", [])]))}
+    ch = channel_id(ns, reg, FRONT_DOOR)                           # the published copy lags the clone by minutes: keep both's suffixes
     if old and not old.get("closed") and old.get("holder") == holder:
         print(f"@{name} is open already: inbox {old['inbox_ts']}")
         if (s := _branch_suffix()) and s not in old.get("branch_suffixes", []) and not ns.dry_run:

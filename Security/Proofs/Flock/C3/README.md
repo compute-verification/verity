@@ -8,9 +8,9 @@ them. V*'s statements are indexed by the verifier's own list (`vstarCount ish`),
 circuits' gap 2's (#1847, merged here at `100c17932`): eleven statements in the writer's order, 0–3 `rec-open`, 4–5
 `rec-residuals`, 6 `rec-sparse`, 7–9 R's levels `rec-open-stacked`, 10 `rec-opening` at META's `stacked` shape.
 
-What stays open is the hypotheses the discharge takes, `hbr_honest_reg`'s (`C3/Compose/Discharge.lean`, `_hbr` itself)
-and `srcOK_holo_rs`'s (`C3/Compose/AtHolo.lean`, `SrcOK` at the checked family), and what the event's bridge and the
-bound still need: Open now, next.
+What stays open is the hypotheses the discharge takes, `hbr_honest_reg`'s (`C3/Compose/Discharge.lean`, `_hbr` itself;
+at the honest source, `hbr_honest_src`'s) and `srcOK_holo_rs`'s (`C3/Compose/AtHolo.lean`, `SrcOK` at the checked
+family), and what the event's bridge and the bound still need: Open now, next.
 
 ## Open now (round 21, against Wed 14 Oct EOD PT)
 
@@ -79,7 +79,7 @@ level-`l` tops are `rec_vstage.stage_stacked`'s `rec-top-stacked-L<l>`, and open
 | the drawn labels at the outcome | R's `hlb` and K's `ReachedChecked`: `checkLabels` (and `ChecksC3`) at an `Accepted` outcome's own record. Daniel's ruling (card d70e5127, option (a)): `Accepted` ties each record to its session's game (`Game.Outcome`, `VBridgeOff`'s antecedent, H round 27), so an accepted record is one the session writes, and under V*'s full draw every written record carries one draw, so `ChecksC3` at the written transcript the keep checked transfers to the outcome's (`reachedChecked_of`, `checksC3_of_recordDraw`). At the checked family `ChecksC3Reached` is the keep's own predicate (`checksC3Reached_checked`, `checks_of_keepOwn`), so `reachedChecked_checked` and `labels_checked` (R's `hlb`, in `label_of_checked`'s form) hold with no premise | `Recursive/{AuditC3,HPortTie}.lean`, `C3/RegLevels/Reached.lean` | +182 (K round 9) | R's `hlb`, K's `ReachedChecked`, `ReadsOwnAt` (`readsOwnAt_checked`) | proved (K round 9) |
 | R's levels' tops reads | `TopRead`, `topRead_of_check`, `topLevel_of_check`, `topRead_of_accepted`, `topReads_of_accepted` (round 23): `RecCoins.checkStackedLevel` refuses a level whose `out` is not R's tops `rec-top-stacked-L<l>` read at node `pos[j] >>> H` (`checkTopReads`, `Flock/Test/TopReads`) | `C3/RegLevels/TopRead.lean` | +114 | on the session's own reads file `(F.zs …).own`, which C's link (d) and `HPubRows` read: each opening's `out` at its node `pos >>> H` of R's tops, through `fixedRow` | proved; C reads it |
 
-## Start now (independent, rounds 1–4; proved, but a1c, a cleanup, is open)
+## Start now (independent, rounds 1–4; proved)
 
 Sizes are estimates of the proof, in lines. Owners in this table and the next: **W** a parallel worker, **C** circuits'
 code, **L** rec-lean.
@@ -90,8 +90,8 @@ code, **L** rec-lean.
 | a1o | `FlockC3.Fork.holoTable_sound`: the oracle table (`holoTableOf`) accepts while no table close to `w` is committed with probability at most `holoError`; `table_sound`'s analogue, where a1s and a1r are used | `C3/Fork/OracleTable.lean` | 900–1400 | a1s, a1r; at most one message near `w` (`card_closeL_ud_le`), its cells a table `R`, and claims read only the cells; `holoLincheck` at `h = sparseFold` at `R.bits` is the lincheck of `R.toStatement` (`hunits`), so `rep_sound`'s phases and `link_sound`; each rep with its sparse phase on its own coins, multiplied as `value_interleave_le` does (`(repError + sparseError)^2`) | W |
 | a1l | `FlockC3.Fork.holoTable_value_le_oracle`: on a clash-free set, the compiled table is accepted no more often than the oracle table at `w`; `table_prob_clashFree`'s analogue | `C3/Fork/Coupling.lean` | 900–1300 | `CompiledL`'s lockstep (`lockTableL`, `compiled_le_bad_on`, `bad_zero_of_fixed`) with `regPhase` and R's stream as a third table whose level 0 is fixed (`x.w`, by no `RegClash`) | W |
 | a1s | `FlockC3.Fork.sparse_sound`: the sparse phase's Schwartz–Zippel count against `sparseError` | `C3/Fork/Sparse.lean` | 300–500 | `degRounds`' round step (the sum rule in characteristic 2), Schwartz–Zippel per `drawFin` coin; nothing in `Runs.lean` | W |
-| a1r | `FlockC3.Fork.regOpen_sound`: R's opening at unique decoding against `regOpenError` | `C3/Fork/RegOpen.lean` | 250–400 | `fast100_uniqueDecoding` (proved, beside it); `ligerito_sound`'s argument at the unique-decoding radius, one message and no list; `opening`'s ring-switch and `γ` count; nothing in `Runs.lean` | W (proved, `cursor/c3-fork-regopen-95d4` @ `7c61afbd8`; lands with a1s in a1's assembly) |
-| a1c | cleanup, not soundness: generalize level 0's Ligerito lemmas in `Soundness/` over the radius (they hard-code Johnson's) and drop a1r's copies (`udDecode`, `udPhaseA`, `ligerito_sound_ud`, …) | `C3/Fork/RegOpen.lean`, `Soundness/` | −480 | a1r | W |
+| a1r | `FlockC3.Fork.regOpen_sound`: R's opening at unique decoding against `regOpenError` | `C3/Fork/RegOpen.lean` | 250–400 | `fast100_uniqueDecoding` (proved, beside it); `ligerito_sound_at` at the unique-decoding radius, one message and no list (a1c); `opening`'s ring-switch and `γ` count; nothing in `Runs.lean` | W (proved, `cursor/c3-fork-regopen-95d4` @ `7c61afbd8`; lands with a1s in a1's assembly) |
+| a1c | cleanup, not soundness: level 0's Ligerito lemmas in `Soundness/` take any doom radius `δ ≤ radius`, with the list bound and the queries' cost beyond `queryError` as parameters (`decode`, `PostFoldAt`, `query_bound_at`, `phaseA`, `phaseB0`, `ligerito_sound_at`); `PostFold`, `query_bound_of_doom`, `phaseA'` and `ligerito_sound` are their instances at the radius, statements unchanged. `regOpen_sound` is `ligerito_sound_at` at `udRadius`, so a1r's copies (`udDecode`, `PostFoldUD`, `udQuery_bound`, `udQueryAndBatch_le`, `udExistsZero`, `ennreal_reshuffle`, `udPhaseA`, `udPhaseB0`, `ligerito_sound_ud`) are gone | `C3/Fork/RegOpen.lean`, `Soundness/` | +182 −600 | a1r | W (proved, `cursor/c3-a1c-fold-c7a9`) |
 | a3 | `FlockC3.Fork.holo_inner_sound_compiled` | `C3/Fork/Sound.lean` | proved (round 2), from a1 | | |
 | a4 | `holoAt_fast100`, `holoAt_linkLayout`, `holoAt_rsch`, `holoAt_units` | `C3/Fork/Sound.lean` | proved (round 2) | | |
 | b1 | `FlockC3.Compose.holoTableCL_plays` | `C3/Compose/Tape.lean` | 100 | `playsT_interleave_first`, `PlaysT` bind lemmas, `regPhase` at two claims | W |
@@ -161,6 +161,10 @@ checks are those of a transcript each session writes (`checksReached_checked`, i
   `RepUnitOfAlg` are the four parts' (`hpr`, `hsv`, `hf`, the values' cap `hcap`). Left there: V*'s sessions and
   copies (`hsess`, the `SparseSessionAt` row), the pub read (`hpub`), `HCols`, `HAlgRows`, `hcap`, and G's items 1–4
   at every accepted proof (`srcOK_holo_held` and `srcSparseTie_of_copies` take them so, not off `Bad`).
+  `hbr_honest_src` (`C3/Compose/HonestSrc.lean`) is `hbr_honest_reg` there, at `stp := histPts ish tbl bcM stp0`,
+  `own := ownAt ss` and the map's `sel`, its `SrcOK` `srcOK_holo_family_hist`'s: what the checks give is discharged
+  (`HeldOk`, `SparseCountedAt` from `checkCovers`, `hdr`, `hrec`, `he` and `hr` at R's first round from
+  `checkInnerStmt`, `HeldIs`, `_htop`); left: those above, `hrd`, `hbc`, the other parts' read facts, `hmaps`, `hot`.
 * `ChecksReached` is no hypothesis: where a session accepts a transcript it writes, one it writes and accepts passes
   the public-row and statement checks (`checksReached_checked`: `keepOwn` keeps the list only at such a transcript).
   There every unit is drawn (`rowsHeld`, `RowsHeld` proved: G's `RowsDrawn` at every value `fixedRow` knows, from the
