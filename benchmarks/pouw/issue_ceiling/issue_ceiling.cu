@@ -48,8 +48,9 @@ static const double M_MACS[] = {4096, 8192};
 // cross-op dependency; __shared__ base and a warp-uniform runtime flag feed LDS.128 and the BRA.
 #define F(x) __uint_as_float(x)
 
+// two dependent PTX adds; ptxas fuses them into one IADD3 (census cuda_pipes.cu does the same)
 __device__ __forceinline__ void x_iadd3(uint32_t& x, uint32_t y, uint32_t z, uint32_t*, uint32_t) {
-  asm volatile("iadd3 %0, %0, %1, %2;" : "+r"(x) : "r"(y), "r"(z));
+  asm volatile("add.u32 %0, %0, %1;\n\tadd.u32 %0, %0, %2;" : "+r"(x) : "r"(y), "r"(z));
 }
 __device__ __forceinline__ void x_lop3(uint32_t& x, uint32_t y, uint32_t z, uint32_t*, uint32_t) {
   asm volatile("lop3.b32 %0, %0, %1, %2, 0x96;" : "+r"(x) : "r"(y), "r"(z));
@@ -64,7 +65,7 @@ __device__ __forceinline__ void x_imad(uint32_t& x, uint32_t y, uint32_t z, uint
   asm volatile("mad.lo.s32 %0, %0, %1, %2;" : "+r"(x) : "r"(y), "r"(z));
 }
 __device__ __forceinline__ void x_idp4a(uint32_t& x, uint32_t y, uint32_t z, uint32_t*, uint32_t) {
-  asm volatile("dp4a.s32.s32 %0, %1, %2, %0;" : "+r"(x) : "r"(y), "r"(z));
+  asm volatile("dp4a.u32.u32 %0, %1, %2, %0;" : "+r"(x) : "r"(y), "r"(z));
 }
 __device__ __forceinline__ void x_hfma2(uint32_t& x, uint32_t y, uint32_t z, uint32_t*, uint32_t) {
   asm volatile("fma.rn.f16x2 %0, %0, %1, %2;" : "+r"(x) : "r"(y), "r"(z));
@@ -294,8 +295,7 @@ static void all_ops(double mma_macs_alone) {
 }
 
 int main(int argc, char** argv) {
-  const char* only = argc > 1 ? argv[1] : nullptr;
-  (void)only;
+  (void)argc; (void)argv;
   g_sms = num_sms();
   CK(cudaMalloc(&g_sink, (size_t)g_sms * 512 * 4));
   CK(cudaMalloc(&g_rec, (size_t)g_sms * sizeof(BlockClk)));
