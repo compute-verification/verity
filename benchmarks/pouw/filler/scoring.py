@@ -1481,7 +1481,8 @@ def tp_entry(by_arm: dict, key: tuple[int, int, int], filler_fraction: float) ->
             "filler_part": filler_fraction * fv5 / c5, "served_part_modelled": SERVED_V5["fraction"] * n / c5,
             "coverage": (filler_fraction * fv5 + SERVED_V5["fraction"] * n) / c5,
             "coverage_v4_form": (CERTIFIED["serving"]["fraction"] * n + filler_fraction * f) / c4,
-            "time": tp * t1 / base, "served_model": {"defer_pass_ms": dp["pass_ms"], "defer_added_ms": dp["added_ms"],
+            "time": tp * t1 / base, "time_v4": tp * phase / base,
+            "served_model": {"defer_pass_ms": dp["pass_ms"], "defer_added_ms": dp["added_ms"],
                                                     "defer_s": dp["s"], "defer_u": dp["u"],
                                                     "displaced_macs": min(f, dp["displaces"])}}
 
@@ -1525,10 +1526,10 @@ def tp_gates(sets: list[dict], entries: dict, pf: dict | None) -> dict:
 
 def tp_score(entries: list[dict]) -> dict:
     """SCORE-TP over the TP entries present, per GPU: the mean of their coverage weighted by TP × wall time (`tp_entry`'s
-    ``time``), in its filler and served parts, beside v4's form (served plain at 0.225); per TP as well. Missing
-    `TP_SUITE` entries are listed, and SCORE-TP needs them all."""
+    ``time``), in its filler and served parts, beside v4's form (served plain at 0.225, weighted by v4's own wall time,
+    ``time_v4``); per TP as well. Missing `TP_SUITE` entries are listed, and SCORE-TP needs them all."""
     def mean(es, k):
-        w = [e["time"] for e in es]
+        w = [e["time_v4" if k == "coverage_v4_form" else "time"] for e in es]
         return sum(e[k] * x for e, x in zip(es, w)) / sum(w) if es else None
 
     have = {(e["tp"], e["B"], e["L"]) for e in entries}

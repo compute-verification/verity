@@ -950,6 +950,7 @@ def test_score_tp_reads_the_slowest_rank_with_the_gates_per_rank():
     c = S.cap(2000.0) * e["t1_ms"] * 1e-3
     assert e["filler_part"] == pytest.approx(0.45 * (1.5e12 - dp["displaces"]) / c)
     assert e["served_part_modelled"] == pytest.approx(0.9 * 1e12 / c) and e["time"] == pytest.approx(2 * e["t1_ms"] / 40.0)
+    assert e["time_v4"] == pytest.approx(2 * 42.0 / 40.0)  # v4's form weighs by v4's wall time, no modelled pass
     sets = [{"dir": "a/set0", "settings": "NCCL_CGA_CLUSTER_SIZE=1 TPC_S=64", "rows": rows}]
     g = S.tp_gates(sets, {(2, 32, 2048): e}, None)
     assert all(g[k]["ok"] for k in ("slowdown", "pf_gate", "receipts", "nccl", "filler_paths")), g
