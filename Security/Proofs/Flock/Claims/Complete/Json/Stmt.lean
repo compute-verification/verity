@@ -12,14 +12,15 @@ to the statement's instances (`DrawOk`), and the statement's draw is the one it 
 setup alone, under the JSON library's specification (`Claims.JsonSpec`).
 
 * The plain verifier's coins are the OS's or a seed's (`Raw.ins`: only `--zk` keys a coin tree), so the hello's `coins`
-  entry is absent or a string, and `CoinTree.ofHello` reads none (`ofHello_none`). The scope check (`ProvedScope.check`)
-  reads no coins, so it is `Raw.ins`, not the scope, that keeps a keyed coin tree out of the plain verifier's statements.
+  entry is absent or a string, and `CoinTree.ofHello` reads none (`ofHello_helloOf`). The scope check
+  (`ProvedScope.check`) reads no coins, so it is `Raw.ins`, not the scope, that keeps a keyed coin tree out of the plain
+  verifier's statements.
 * `Σ` is a SHA-512 digest (`setupH_stmt`, `Hidden.setupHidden_spec'`).
 * The public header is the population's with the draw put in (`HmRow.drawn`), so its `unit_draw` is the draw
   (`unitDraw_of`), which decodes to the statement's instances (`PublicTies.instances`).
-* The draw is the statement's parsed JSON (`jsonOf`) and stratified (`ProvedScope.drawLaw`), and a stratified draw that
-  decodes has exactly the keys it reads, each a string, a natural number or an array of them (`good_of_stratified`), so
-  it is printable.
+* The draw is the statement's parsed JSON (`jsonOf`) and stratified (the setup's `ProvedScope.drawLaw`,
+  `Ins.setup_drawLaw`), and a stratified draw that decodes has exactly the keys it reads, each a string, a natural number
+  or an array of them (`good_stratified`), so it is printable.
 -/
 
 namespace FlockComplete.JsonRT
@@ -32,7 +33,8 @@ open private stratumOfJson from Flock.Draw
 
 /-! ## The statement's inputs -/
 
-/-- What `Raw.ins` reads: the masked verifier or not, the plain verifier's coins (the OS's or a seed's), and the draw. -/
+/-- What `Raw.ins` reads: the masked verifier or not, the plain verifier's coins (the OS's or a seed's), and the
+draw. -/
 theorem Raw.ins_read {w : Raw} {s : Ins} (h : w.ins = .ok s) :
     s.read.zk = w.zk ∧ (w.zk = false → s.read.I.coins = .os ∨ s.read.I.coins = .seed) ∧
       w.draw.mapM (jsonOf "draw") = .ok s.read.draw := by

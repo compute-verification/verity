@@ -3,12 +3,12 @@ import Proofs.Flock.Claims.Complete.Json
 /-!
 # The honest session runs
 
-`sessionRuns_goal`: the goal `SessionRuns`, given `StmtOk` (no keyed coin tree, so the record's `hello` is the
-statement's) and one named hypothesis on the prover's pieces, `ProverRuns`: at every good case's table, the regions
-fit (`RegionsFit`: each region's bytes at each block are its free bits), and each rep returns, on the level-0 commitment
-and the extra claims at the link's points, from any sends. The level-0 commitment returns (`commitP_ok`: through
-`Hashes.ofSha512` every leaf and node hash is a `pure`), and so do the extra claims where the regions fit
-(`extraClaims_ok`).
+`sessionRuns_goal`: the goal `SessionRuns`, under `Claims.JsonSpec` (`stmtOk`: no keyed coin tree, so the record's
+`hello` is the statement's) and one named hypothesis on the prover's pieces, `ProverRuns`: at every good case's table,
+the regions fit (`RegionsFit`: each region's bytes at each block are its free bits), and each rep returns, on the
+level-0 commitment and the extra claims at the link's points, from any sends. The level-0 commitment returns
+(`commitP_ok`: through `Hashes.ofSha512` every leaf and node hash is a `pure`), and so do the extra claims where the
+regions fit (`extraClaims_ok`).
 
 `Runs y l P`: `y` returns from the sends `l`, with `P` of its value and the sends after; `Runs.bind`, `Runs.forIn_array`
 and `Runs.mapM_singleton` walk the session.
@@ -183,10 +183,10 @@ def ProverRuns (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readab
       (Transcript.init #[] d)).go l = (.ok pt, l')
 
 /-- **The session runs**: the goal `SessionRuns`. -/
-theorem sessionRuns_goal (hS : StmtOk H rel) (hR : ProverRuns H rel) : SessionRuns H rel := by
+theorem sessionRuns_goal (S : Claims.JsonSpec Flock.canon) (hR : ProverRuns H rel) : SessionRuns H rel := by
   intro c
   obtain ⟨st, hst, hsp, hm1, hm2⟩ := c.table
-  obtain ⟨hct, -, -, -⟩ := hS c
+  obtain ⟨hct, -, -, -⟩ := stmtOk S c
   have ht : c.spec.tables = #[st.tags.table] := by rw [hsp]; rfl
   obtain ⟨sch, hsch⟩ := Option.isSome_iff_exists.1 (fast100_isSome (m := (Setup.ofCircuit st).m) hm1 hm2)
   obtain ⟨hreg, hRep⟩ := hR c st sch hst hsch
