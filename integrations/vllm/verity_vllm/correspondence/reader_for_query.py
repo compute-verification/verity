@@ -98,11 +98,17 @@ def implementation_prefix(program_modules: Iterable[str], implementation_paths: 
     candidates: list[set[str]] = []
     for a in obs:
         c = set()
-        for m in mods:
-            if m == a:
-                c.add("")
-            elif m.endswith("." + a):
-                c.add(m[: len(m) - len(a)])
+        # the path itself, else its nearest parent down to the layer that is a Program module: GLM-5.3's MLA attention is a custom op
+        # inside `self_attn`, so `model.layers.0.self_attn.attn` is observed and `inner.model.model.layers.0.self_attn` is the module
+        parts = a.split(".")
+        for t in [a, *(".".join(parts[:k]) for k in range(len(parts) - 1, 2, -1))]:
+            for m in mods:
+                if m == t:
+                    c.add("")
+                elif m.endswith("." + t):
+                    c.add(m[: len(m) - len(t)])
+            if c:
+                break
         candidates.append(c)
     common = set.intersection(*candidates) if candidates else set()
     if not common:
