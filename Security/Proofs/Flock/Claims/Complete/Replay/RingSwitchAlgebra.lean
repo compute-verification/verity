@@ -75,6 +75,7 @@ theorem regionValue_eq :
     regionValue S R ptLocal mPts r = ∑ b : Fin (2 ^ S.nbl), eqAt (highPoint S ptLocal mPts r) b.val *
       ∑ i ∈ Finset.range (2 ^ R.free.length), eqAt (freePoint S R mPts r) i * ((R.bits b i).val : F) := rfl
 
+omit [Fintype F] in
 /-- **The in-block weight of a region point**: over the block's addresses, it vanishes off the region's addresses
 `R.inBlock i`, and at `R.inBlock i` it is the free coordinates' weight at `i`. -/
 theorem sum_low (hR : R.free.Nodup) (g : ℕ → F) :
