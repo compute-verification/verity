@@ -11,7 +11,8 @@ the colliding pair is a Lean term (`Classical.choice`) though nobody can print i
 
 * `exists_collision`: a hash whose outputs are at most `n` bytes has a collision (pigeonhole).
 * `collSim u v`: the simulator that hashes `u`, then `v`, and outputs the empty transcript; two calls (`simCost_collSim`).
-* `zkmalR_collSim`: at a collision `(u, v)`, `ZKmalR H k P R (collSim u v) 0` for every `k`, `P` and `R`.
+* `zkmalR_of_findColl`: `ZKmalR H k P R S 0` for every `k`, `P` and `R`, at any simulator `S` whose own calls hold a
+  collision on every coin; `zkmalR_collSim`, at `collSim u v` of a collision `(u, v)`.
 * `flockZK_collSim`: Flock's `ZK` at any masked record and any hash with a collision; at SHA-512 and the deployed
   `--zk` record, `RedTeam.Deployed.flockZK_deployZk`.
 -/
@@ -43,19 +44,26 @@ theorem Pr_le_one' {α : Type} [Fintype α] (p : α → Prop) : Pr p ≤ 1 := by
   unfold Pr
   exact div_le_one_of_le₀ (by exact_mod_cast Finset.card_filter_le _ _) (Nat.cast_nonneg _)
 
-/-- **`ZKmalR` at `ε_zk = 0`, for every prover**, at the colliding simulator of any collision. -/
-theorem zkmalR_collSim {W Ω : Type} [Fintype Ω] (H : Msg → Msg) (k : Msg → ℕ) (P : W → Prover Ω) (R : Rel W)
-    {u v : Msg} (h : Collision H u v) : ZKmalR H k P R (collSim u v) 0 := by
+/-- **`ZKmalR` at `ε_zk = 0`, for every prover**, at any simulator whose own calls hold a collision on every coin and
+against every verifier. -/
+theorem zkmalR_of_findColl {W Ω : Type} [Fintype Ω] (H : Msg → Msg) (k : Msg → ℕ) (P : W → Prover Ω) (R : Rel W)
+    (S : Simulator) (hS : ∀ x (Θ : Type) (Vs : VStar Θ) (θ : Θ) (c : S.C x), findColl (simLog H S Vs θ x c) ≠ none) :
+    ZKmalR H k P R S 0 := by
   intro x w _ Θ Vs θ _ Ev
-  have h1 : Pr (fun c : (collSim u v).C x => findColl (simLog H (collSim u v) Vs θ x c) ≠ none) = 1 := by
-    rw [Pr_congr (q := fun _ => True) fun c => by simp [findColl_collSim h Vs θ x c]]
+  have h1 : Pr (fun c : S.C x => findColl (simLog H S Vs θ x c) ≠ none) = 1 := by
+    rw [Pr_congr (q := fun _ => True) fun c => iff_true_intro (hS x Θ Vs θ c)]
     exact Pr_true
   rw [h1, Pi.zero_apply, zero_add, abs_sub_le_iff]
   have := Pr_nonneg (fun ω : Ω => Ev (runStar H (P w) Vs x ω θ).msgs)
   have := Pr_le_one' (fun ω : Ω => Ev (runStar H (P w) Vs x ω θ).msgs)
-  have := Pr_nonneg (fun c : (collSim u v).C x => Ev ((collSim u v).out H Vs θ x c))
-  have := Pr_le_one' (fun c : (collSim u v).C x => Ev ((collSim u v).out H Vs θ x c))
+  have := Pr_nonneg (fun c : S.C x => Ev (S.out H Vs θ x c))
+  have := Pr_le_one' (fun c : S.C x => Ev (S.out H Vs θ x c))
   constructor <;> linarith
+
+/-- **`ZKmalR` at `ε_zk = 0`, for every prover**, at the colliding simulator of any collision. -/
+theorem zkmalR_collSim {W Ω : Type} [Fintype Ω] (H : Msg → Msg) (k : Msg → ℕ) (P : W → Prover Ω) (R : Rel W)
+    {u v : Msg} (h : Collision H u v) : ZKmalR H k P R (collSim u v) 0 :=
+  zkmalR_of_findColl H k P R _ fun x _ Vs θ c => by simp [findColl_collSim h Vs θ x c]
 
 /-- The colliding simulator makes two calls on every coin, against every verifier. -/
 theorem simCost_collSim (H : Msg → Msg) (u v : Msg) : SimCost H (collSim u v) fun _ => 2 := by
