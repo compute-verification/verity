@@ -5,8 +5,8 @@ A simulation between two verdict monads: a relation `R` between computations of 
 or counting oracle is then one simulation each (`Flock.With.Log`).
 
 Here: the simulation, its lift through `StateT` (the transcript and the Ligerito state), its rules for the loops and
-traversals the verifier uses (`forIn` over lists, arrays and ranges, `Array.mapM`, `Array.mapIdxM`, `List.findM?`), related
-oracles, and `sim_walk`, which walks two copies of one definition in step.
+traversals the verifier uses (`forIn` over lists, arrays and ranges, `Array.mapM`, `Array.mapIdxM`, `List.findM?`), and
+related oracles. `sim_walk` (`Flock.With.SimWalk`) walks two copies of one definition in step with them.
 -/
 import Flock.With.Transcript
 
@@ -149,42 +149,5 @@ theorem liftTM (S : Sim M N) {α : Type} (x : Transcript.TM α) : (S.st Transcri
   fun t => S.lift (x t)
 
 end Sim
-
-/-- One step of walking two copies of a definition: a `bind`, `pure`, `throw` or lift of either side's monad, a branch, a
-loop or traversal, a state action, a `let` (moved to the context, so a `do` block's join point is walked at each of
-its calls but never copied into the goal), or one of `lemmas` (each relating two calls of a `…With` function). -/
-syntax "sim_walk" (" [" term,* "]")? : tactic
-
-macro_rules
-  | `(tactic| sim_walk) => `(tactic| sim_walk [])
-  | `(tactic| sim_walk [$ls,*]) => `(tactic| repeat (first
-    | extract_lets
-    | (with_reducible apply Sim.bind)
-    | (with_reducible intro _)
-    | (with_reducible apply Sim.pure)
-    | (with_reducible apply Sim.throw)
-    | (with_reducible apply Sim.lift)
-    | (with_reducible apply Sim.liftTM)
-    | (with_reducible apply Sim.monadLift_st2)
-    | (with_reducible apply Sim.monadLift_st)
-    | (with_reducible apply Sim.lift_st)
-    | (with_reducible apply Sim.run)
-    | (with_reducible apply Sim.get)
-    | (with_reducible apply Sim.set)
-    | (with_reducible apply Sim.modify)
-    | (with_reducible apply Sim.modifyGet)
-    | (with_reducible apply Sim.forIn_range)
-    | (with_reducible apply Sim.forIn_array)
-    | (with_reducible apply Sim.forIn_list)
-    | (with_reducible apply Sim.mapM_array)
-    | (with_reducible apply Sim.mapIdxM_array)
-    | (with_reducible apply Sim.findM?_list)
-    | (with_reducible apply Sim.ite)
-    | (with_reducible apply Sim.dite)
-    | assumption
-    | (with_reducible apply Sim.Hashes.sha512); assumption
-    | (with_reducible apply Sim.Hashes.sha256); assumption
-    $[| (with_reducible apply $ls)]*
-    | split))
 
 end Flock.With
