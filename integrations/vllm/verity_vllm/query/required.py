@@ -457,17 +457,20 @@ class Population:
                 continue
             self.collectives[c.id] = k
             parts = c.reads[: len(c.reads) - collective_trailing(c.family)]     # the fused norm's residual and weight follow its parts
+            # the rank's own part: one Value, or the M row Values a flat collective (`AllReduceRule`: one Call over M rows) reshapes
             own = [r for r in parts if r.call >= 0]
-            if len(own) != 1:
-                self.tp_faults.append(f"{c.family} under {corr.implementation_path(corr.module_of(c.id))}: {len(own)} rank-local operands (one expected)")
-                continue
-            self.operand[c.id] = op = own[0]
             where = corr.implementation_path(corr.module_of(c.id))
-            if corr.module_of(op.call) == corr.module_of(c.id):
-                if op in self.partial_of:
-                    self.tp_faults.append(f"{P.call(op.call).family} under {where}: one Value is the rank-local partial of two collectives")
+            inside = {corr.module_of(r.call) == corr.module_of(c.id) for r in own}
+            if not own or len(inside) != 1:
+                self.tp_faults.append(f"{c.family} under {where}: {len(own)} rank-local operands"
+                                      f"{', some produced in its body and some outside it' if own else ''} (one part expected)")
+                continue
+            self.operand[c.id] = own[0]
+            if inside == {True}:
+                if any(op in self.partial_of for op in own):
+                    self.tp_faults.append(f"{P.call(own[0].call).family} under {where}: one Value is the rank-local partial of two collectives")
                     continue
-                self.partial_of[op] = c.id
+                self.partial_of.update(dict.fromkeys(own, c.id))
             elif (len({p.elems for p in c.port_table}) != 1 if k == "all_reduce" else
                   len(c.port_table) != 1 or c.port_table[0].elems % self.world):
                 self.tp_faults.append(f"{c.family} under {where}: an operand from another body and output ports "
