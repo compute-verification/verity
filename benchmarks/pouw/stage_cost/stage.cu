@@ -32,7 +32,9 @@
 //                       over the 8 KV heads with the 4 query heads of a group stacked. COMP seq500: T/512 sequences of
 //                       512 tokens; b32: 32 sequences of T/32 tokens. Contexts spread over 1K..8K; keys = context + half the
 //                       sub-round's tokens (the causal mean). Arms gemm (no forming) and form (every operand's noised copy
-//                       formed by a pass over it, and S -> P quantized, before the GEMMs: an unfused upper bound).
+//                       formed by a pass over it, and S -> P quantized, before the GEMMs: an unfused upper bound). Attention
+//                       by ATT: fused (the default, att_fused below: S and P never leave registers) or lt (cuBLASLt with S
+//                       and P in memory); att_lt and att_fused time each alone.
 //   beside T COMP B L   the deferred pass's layers kept queued beside the decode step: the step on the whole GPU, the
 //                       step with the pass on a low-priority stream, the step on a green partition with the pass on
 //                       FILL_SMS SMs, the step on the whole GPU again; the step's slowdown and the pass's rate in the window
@@ -482,7 +484,7 @@ static void commit_salt(const Commit& m, int slot, cudaStream_t st) {
   a.i[0] = m.R;
   fr_salt<<<(unsigned)((m.R + 127) / 128), 128, 0, st>>>(a);
 }
-static void commit_tree(const Commit& m, int slot, const uint8_t* data, cudaStream_t st) {
+static void commit_segs(const Commit& m, const uint8_t* data, cudaStream_t st) {
   Args a{};
   a.p[0] = (unsigned long long)data;
   a.p[1] = (unsigned long long)m.mids;
@@ -490,6 +492,8 @@ static void commit_tree(const Commit& m, int slot, const uint8_t* data, cudaStre
   a.i[0] = m.R; a.i[1] = m.k; a.i[2] = m.s; a.i[3] = m.last;
   const long long total = (long long)m.R * m.s;
   fr_segments<<<(unsigned)((total + 255) / 256), 256, 8 * 32 * 33 * 4, st>>>(a);
+}
+static void commit_frtree(const Commit& m, int slot, cudaStream_t st) {
   Args f{};
   const unsigned long long ps[13] = {(unsigned long long)m.digests, (unsigned long long)(m.mids + 64 * m.s),
                                      (unsigned long long)(m.my + (size_t)64 * m.R * slot),
@@ -501,6 +505,55 @@ static void commit_tree(const Commit& m, int slot, const uint8_t* data, cudaStre
   f.i[0] = m.R; f.i[1] = m.s; f.i[2] = m.width;
   const int L = std::min(m.width, 128);
   fr_tree<<<(unsigned)(m.width / L), L, 0, st>>>(f);
+}
+static void commit_tree(const Commit& m, int slot, const uint8_t* data, cudaStream_t st) {
+  commit_segs(m, data, st);
+  commit_frtree(m, slot, st);
+}
+// n chained compressions a thread (each block xor-fed from the last state), rolled (fr_compress) or fully unrolled
+__global__ void sha_chain(int n, int unrolled, uint64_t* out) {
+  uint64_t st[8], w[16];
+  s512_iv(st);
+  for (int j = 0; j < 16; j++) w[j] = (uint64_t)(threadIdx.x + 1) * (j + 1);
+  for (int i = 0; i < n; i++) {
+    if (unrolled) s512_compress(st, w);
+    else fr_compress(st, w);
+    for (int j = 0; j < 8; j++) w[j] ^= st[j];
+  }
+  out[blockIdx.x * blockDim.x + threadIdx.x] = st[0];
+}
+// the latency of one compression in a chain: (n = 257) - (n = 1) over 256, by threads a CTA (1: one thread on the GPU)
+static void sha_latency(Dev& d) {
+  uint64_t* out;
+  CK(cudaMalloc(&out, 128 * 188 * sizeof(uint64_t)));
+  cudaEvent_t e0, e1;
+  CK(cudaEventCreate(&e0)); CK(cudaEventCreate(&e1));
+  printf("{\"mode\": \"sha_latency\", \"mhz\": %.0f, \"us_a_compression\": {", nvml_mhz(d));
+  bool first = true;
+  for (int unrolled : {0, 1})
+    for (int thr : {1, 32, 128}) {
+      double ms[2];
+      for (int k = 0; k < 2; k++) {
+        const int n = k ? 257 : 1;
+        std::vector<double> v;
+        for (int r = 0; r < 5; r++) {
+          CK(cudaEventRecord(e0, d.st));
+          sha_chain<<<1, thr, 0, d.st>>>(n, unrolled, out);
+          CK(cudaEventRecord(e1, d.st));
+          CK(cudaEventSynchronize(e1));
+          float x;
+          CK(cudaEventElapsedTime(&x, e0, e1));
+          v.push_back(x);
+        }
+        std::sort(v.begin(), v.end());
+        ms[k] = v[2];
+      }
+      printf("%s\"%s_%d\": %.3f", first ? "" : ", ", unrolled ? "unrolled" : "rolled", thr, (ms[1] - ms[0]) * 1e3 / 256);
+      first = false;
+    }
+  printf("}}\n");
+  fflush(stdout);
+  CK(cudaFree(out));
 }
 // a whole commitment on one stream: the salt-only part, then the rest (fast), or hm96_rows.cu's
 static void commit_full(const Commit& m, int slot, const uint8_t* data, cudaStream_t st) {
@@ -574,6 +627,132 @@ __global__ void soft_q(const int4* __restrict__ S, int* __restrict__ P, size_t n
 }
 static void form(const void* src, void* dst, size_t bytes, uint64_t seed, cudaStream_t st, int sms) {
   form_add<<<sms * 8, 256, 0, st>>>((const int4*)src, (int4*)dst, bytes / 16, seed);
+}
+
+// ---------------------------------------------------------------- the deferred pass's attention, fused (ATT=fused)
+// One sequence's three attention products against its cache, nothing S-sized in memory: a CTA is up to 128 stacked query
+// rows (4 query heads x tokens) of one KV head, a warp 16 of them, over 32-key tiles of K and V (cp.async, double-buffered):
+//   S = Q K^T (clean, to rebuild P), P = att_q(S) in registers, P' = P + noise (bytewise), O = P' V, and Sn = Qn K^T (Qn the
+//   noised Q, formed beforehand) reduced to a checksum a row (a stand-in for what consumes it).
+// mma.sync m16n8k32 s8. QK^T's n-tile a column g is key 16(a>>1) + 4(g>>1) + 2(a&1) + (g&1) of the tile, so that S's
+// accumulators are P's A fragments for P.V in the keys' natural order (no shuffles). K's 16-byte chunks are swizzled by
+// c ^ ((key & 1) | ((key >> 1) & 6)), V's rows padded to 48 bytes: conflict-free fragment loads.
+// Q, Qn [HKV][rows][HD], K [HKV][lk][HD], V [HKV][HD][lk], O [HKV][rows][HD] s32, csum [HKV][rows]; lk % 32 == 0.
+__host__ __device__ __forceinline__ int att_q(int s) {
+  const int x = s >> 10;
+  return x < 0 ? 0 : x > 127 ? 127 : x;
+}
+__host__ __device__ __forceinline__ uint32_t att_noise(uint32_t seed, uint32_t r, uint32_t k0) {
+  uint32_t x = seed ^ (r * 0x9E3779B1u) ^ (k0 * 0x85EBCA77u);
+  x ^= x >> 16; x *= 0x7FEB352Du; x ^= x >> 15;
+  return x & 0x3F3F3F3Fu;
+}
+__device__ __forceinline__ void cp_async16(uint32_t s, const void* g) { asm volatile("cp.async.cg.shared.global [%0], [%1], 16;" ::"r"(s), "l"(g)); }
+__device__ __forceinline__ void cp_commit() { asm volatile("cp.async.commit_group;"); }
+template <int N> __device__ __forceinline__ void cp_wait() { asm volatile("cp.async.wait_group %0;" ::"n"(N)); }
+__device__ __forceinline__ void mma_s8(int c[4], const uint32_t a[4], uint32_t b0, uint32_t b1) {
+  asm volatile("mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};"
+               : "+r"(c[0]), "+r"(c[1]), "+r"(c[2]), "+r"(c[3])
+               : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b0), "r"(b1));
+}
+__device__ __forceinline__ uint32_t pack4(int a, int b, int c, int d) {
+  return (uint32_t)att_q(a) | ((uint32_t)att_q(b) << 8) | ((uint32_t)att_q(c) << 16) | ((uint32_t)att_q(d) << 24);
+}
+constexpr int ATT_KT = 32, ATT_VS = 48;
+__global__ void __launch_bounds__(256) att_fused(const int8_t* __restrict__ Q, const int8_t* __restrict__ Qn,
+                                                 const int8_t* __restrict__ K, const int8_t* __restrict__ V, int rows, int lk,
+                                                 int* __restrict__ O, int* __restrict__ csum, uint32_t seed) {
+  __shared__ __align__(16) uint8_t ks[2][ATT_KT * HD];
+  __shared__ __align__(16) uint8_t vs[2][HD * ATT_VS];
+  const int head = blockIdx.y, warp = threadIdx.x >> 5, lane = threadIdx.x & 31, g = lane >> 2, t = lane & 3;
+  const int nthr = blockDim.x;
+  const int r0 = blockIdx.x * 128 + warp * 16;
+  const int8_t* Kh = K + (size_t)head * lk * HD;
+  const int8_t* Vh = V + (size_t)head * HD * lk;
+  auto load = [&](int kt, int buf) {
+    const int key0 = kt * ATT_KT;
+    for (int c = threadIdx.x; c < ATT_KT * 8; c += nthr) {
+      const int key = c >> 3, ch = c & 7, sw = (key & 1) | ((key >> 1) & 6);
+      cp_async16((uint32_t)__cvta_generic_to_shared(&ks[buf][key * HD + ((ch ^ sw) << 4)]), Kh + (size_t)(key0 + key) * HD + ch * 16);
+    }
+    for (int c = threadIdx.x; c < HD * 2; c += nthr) {
+      const int dim = c >> 1, ch = c & 1;
+      cp_async16((uint32_t)__cvta_generic_to_shared(&vs[buf][dim * ATT_VS + ch * 16]), Vh + (size_t)dim * lk + key0 + ch * 16);
+    }
+    cp_commit();
+  };
+  uint32_t qa[4][4], qn[4][4];
+  const int8_t* Qh = Q + (size_t)head * rows * HD;
+  const int8_t* Qnh = Qn + (size_t)head * rows * HD;
+#pragma unroll
+  for (int kk = 0; kk < 4; kk++)
+#pragma unroll
+    for (int j = 0; j < 4; j++) {
+      const int r = r0 + g + 8 * (j & 1), col = 32 * kk + 16 * (j >> 1) + 4 * t;
+      qa[kk][j] = r < rows ? *(const uint32_t*)(Qh + (size_t)r * HD + col) : 0u;
+      qn[kk][j] = r < rows ? *(const uint32_t*)(Qnh + (size_t)r * HD + col) : 0u;
+    }
+  int o[16][4];
+#pragma unroll
+  for (int nd = 0; nd < 16; nd++) o[nd][0] = o[nd][1] = o[nd][2] = o[nd][3] = 0;
+  int cs0 = 0, cs1 = 0;
+  const int nt = lk / ATT_KT;
+  load(0, 0);
+#pragma unroll 1
+  for (int kt = 0; kt < nt; kt++) {
+    const int buf = kt & 1;
+    if (kt + 1 < nt) load(kt + 1, buf ^ 1);
+    else cp_commit();
+    cp_wait<1>();
+    __syncthreads();
+    int s[4][4], sn[4][4];
+#pragma unroll
+    for (int a = 0; a < 4; a++) s[a][0] = s[a][1] = s[a][2] = s[a][3] = sn[a][0] = sn[a][1] = sn[a][2] = sn[a][3] = 0;
+#pragma unroll
+    for (int a = 0; a < 4; a++) {
+      const int key = 16 * (a >> 1) + 4 * (g >> 1) + 2 * (a & 1) + (g & 1), sw = (key & 1) | ((key >> 1) & 6);
+      const uint8_t* kr = &ks[buf][key * HD + 4 * t];
+#pragma unroll
+      for (int kk = 0; kk < 4; kk++) {
+        const uint32_t b0 = *(const uint32_t*)(kr + (((2 * kk) ^ sw) << 4)), b1 = *(const uint32_t*)(kr + (((2 * kk + 1) ^ sw) << 4));
+        mma_s8(s[a], qa[kk], b0, b1);
+        mma_s8(sn[a], qn[kk], b0, b1);
+      }
+    }
+#pragma unroll
+    for (int a = 0; a < 4; a++) { cs0 += sn[a][0] + sn[a][1]; cs1 += sn[a][2] + sn[a][3]; }
+    const uint32_t k0 = (uint32_t)(kt * ATT_KT);
+    uint32_t p[4];
+    p[0] = __vadd4(pack4(s[0][0], s[0][1], s[1][0], s[1][1]), att_noise(seed, r0 + g, k0 + 4 * t));
+    p[1] = __vadd4(pack4(s[0][2], s[0][3], s[1][2], s[1][3]), att_noise(seed, r0 + g + 8, k0 + 4 * t));
+    p[2] = __vadd4(pack4(s[2][0], s[2][1], s[3][0], s[3][1]), att_noise(seed, r0 + g, k0 + 16 + 4 * t));
+    p[3] = __vadd4(pack4(s[2][2], s[2][3], s[3][2], s[3][3]), att_noise(seed, r0 + g + 8, k0 + 16 + 4 * t));
+#pragma unroll
+    for (int nd = 0; nd < 16; nd++) {
+      const uint8_t* vr = &vs[buf][(8 * nd + g) * ATT_VS + 4 * t];
+      mma_s8(o[nd], p, *(const uint32_t*)vr, *(const uint32_t*)(vr + 16));
+    }
+    __syncthreads();
+  }
+  cp_wait<0>();
+  int* Oh = O + (size_t)head * rows * HD;
+#pragma unroll
+  for (int nd = 0; nd < 16; nd++) {
+    const int col = 8 * nd + 2 * t;
+    if (r0 + g < rows) *(int2*)(Oh + (size_t)(r0 + g) * HD + col) = make_int2(o[nd][0], o[nd][1]);
+    if (r0 + g + 8 < rows) *(int2*)(Oh + (size_t)(r0 + g + 8) * HD + col) = make_int2(o[nd][2], o[nd][3]);
+  }
+  cs0 += __shfl_xor_sync(0xffffffffu, cs0, 1); cs0 += __shfl_xor_sync(0xffffffffu, cs0, 2);
+  cs1 += __shfl_xor_sync(0xffffffffu, cs1, 1); cs1 += __shfl_xor_sync(0xffffffffu, cs1, 2);
+  if (t == 0) {
+    if (r0 + g < rows) csum[(size_t)head * rows + r0 + g] = cs0;
+    if (r0 + g + 8 < rows) csum[(size_t)head * rows + r0 + g + 8] = cs1;
+  }
+}
+static void att_run(const int8_t* Q, const int8_t* Qn, const int8_t* K, const int8_t* V, int rows, int lk, int* O, int* csum,
+                    uint32_t seed, cudaStream_t st) {
+  const int warps = std::min(8, (rows + 15) / 16);
+  att_fused<<<dim3((unsigned)((rows + 127) / 128), HKV), 32 * warps, 0, st>>>(Q, Qn, K, V, rows, lk, O, csum, seed);
 }
 
 // ---------------------------------------------------------------- cuBLASLt int8, strided batched, verified on batch 0
@@ -907,7 +1086,7 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
   }, macs);
   // hash latency a stage: 32 commitments of one stage's operands back to back (the fast path's critical part: its salt-only
   // part, timed apart, runs ahead)
-  std::vector<std::pair<std::string, std::vector<Rep>>> lat, salt_lat;
+  std::vector<std::pair<std::string, std::vector<Rep>>> lat, salt_lat, seg_lat, tree_lat;
   for (int t = 0; t < NSTAGE; t++) {
     const Graph G = capture(sm, [&] {
       for (int l = 0; l < LAYERS; l++)
@@ -920,6 +1099,12 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
     const Graph S = capture(sm, [&] { for (int l = 0; l < LAYERS; l++) commit_salt(ch[0].cm[t], l, sm); });
     salt_lat.push_back({SNAME[t], time_graph(d, S, sm, reps)});
     CK(cudaGraphExecDestroy(S.ge));
+    const Graph Sg = capture(sm, [&] { for (int l = 0; l < LAYERS; l++) commit_segs(ch[0].cm[t], ch[0].op[t], sm); });
+    seg_lat.push_back({SNAME[t], time_graph(d, Sg, sm, reps)});
+    CK(cudaGraphExecDestroy(Sg.ge));
+    const Graph Tr = capture(sm, [&] { for (int l = 0; l < LAYERS; l++) commit_frtree(ch[0].cm[t], l, sm); });
+    tree_lat.push_back({SNAME[t], time_graph(d, Tr, sm, reps)});
+    CK(cudaGraphExecDestroy(Tr.ge));
   }
   // C chunks in flight, each hash -> draw -> GEMM a stage, chunk 0 at the highest priority
   for (int C = 1; C <= NC; C++) {
@@ -970,6 +1155,12 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
   printf("}, \"salt_latency\": {");
   for (size_t i = 0; i < salt_lat.size(); i++)
     print_reps(salt_lat[i].first.c_str(), salt_lat[i].second, 0, d.sms, i + 1 < salt_lat.size());
+  printf("}, \"segments_latency\": {");
+  for (size_t i = 0; i < seg_lat.size(); i++)
+    print_reps(seg_lat[i].first.c_str(), seg_lat[i].second, 0, d.sms, i + 1 < seg_lat.size());
+  printf("}, \"tree_latency\": {");
+  for (size_t i = 0; i < tree_lat.size(); i++)
+    print_reps(tree_lat[i].first.c_str(), tree_lat[i].second, 0, d.sms, i + 1 < tree_lat.size());
   printf("}, \"green\": [");
   for (size_t i = 0; i < green.size(); i++) {
     const auto& g = green[i];
@@ -993,12 +1184,13 @@ struct Seq {
   int t, ctx, lk;
   int8_t *K, *V;  // [HKV][lk][HD] and [HKV][HD][lk]
 };
+static bool g_att_fused = true;  // ATT=lt: attention as cuBLASLt's batched GEMMs with S and P in memory
 struct Pass {
   int T;
   bool b32;
   std::vector<Seq> seqs;
-  int8_t *X, *Q, *P, *Wf, *Xf, *KVf;
-  int *D, *S, *O;
+  int8_t *X, *Q, *Qn, *P, *Wf, *Xf, *KVf;
+  int *D, *S, *O, *csum;
   size_t lin_rows_max;
   double lin_macs = 0, att_macs = 0, form_bytes = 0, stored_bytes_token_layer = 0;
   LtCtx lt;
@@ -1037,6 +1229,9 @@ static Pass make_pass(Dev& d, int T, bool b32) {
   CK(cudaMalloc(&p.KVf, kvmax));
   CK(cudaMalloc(&p.Q, (size_t)HKV * 4 * t * HD));
   fill_s8<<<1024, 256, 0, d.st>>>(p.Q, (size_t)HKV * 4 * t * HD, 0x7001);
+  CK(cudaMalloc(&p.Qn, (size_t)HKV * 4 * t * HD));
+  fill_s8<<<1024, 256, 0, d.st>>>(p.Qn, (size_t)HKV * 4 * t * HD, 0x7003);
+  CK(cudaMalloc(&p.csum, (size_t)HKV * 4 * t * sizeof(int)));
   CK(cudaMalloc(&p.P, smax));
   fill_s8<<<1024, 256, 0, d.st>>>(p.P, smax, 0x7002);
   CK(cudaMalloc(&p.S, smax * sizeof(int)));
@@ -1067,6 +1262,11 @@ static void pass_layer(Dev& d, Pass& p, int layer, bool forming, cudaStream_t st
   for (const Seq& s : p.seqs) {
     const int m = 4 * s.t;
     const size_t kv = (size_t)HKV * s.lk * HD;
+    if (g_att_fused && !plan_only) {
+      if (forming) form(p.Q, p.Qn, (size_t)HKV * m * HD, 0x303, st, d.sms);
+      att_run(p.Q, p.Qn, s.K, s.V, m, s.lk, p.O, p.csum, 0x304, st);
+      continue;
+    }
     const LtB& QK = plan(m, s.lk, HD, HKV, (long long)m * HD, (long long)s.lk * HD, (long long)m * s.lk, p.Q, s.K, p.S, d.st);
     const LtB& PV = plan(m, HD, s.lk, HKV, (long long)m * s.lk, (long long)HD * s.lk, (long long)m * HD, p.P, s.V, p.O, d.st);
     if (plan_only) continue;
@@ -1083,7 +1283,8 @@ static void pass_layer(Dev& d, Pass& p, int layer, bool forming, cudaStream_t st
   }
   if (forming) {
     double att = 0;
-    for (const Seq& s : p.seqs) att += 4.0 * HKV * s.lk * HD + (double)HKV * 4 * s.t * s.lk * 7;
+    for (const Seq& s : p.seqs)
+      att += g_att_fused ? 2.0 * HKV * 4 * s.t * HD : 4.0 * HKV * s.lk * HD + (double)HKV * 4 * s.t * s.lk * 7;
     p.form_bytes += att;
   }
 }
@@ -1092,10 +1293,10 @@ static void print_pass(const Pass& p) {
   int nseq = (int)p.seqs.size();
   double ctx = 0;
   for (const Seq& s : p.seqs) ctx += s.ctx;
-  printf("\"T\": %d, \"comp\": \"%s\", \"seqs\": %d, \"tokens_a_seq\": %d, \"ctx_mean\": %.0f, \"lin_macs\": %.6e, \"att_macs\": %.6e, "
-         "\"stored_bytes_token_layer\": %.0f, \"stored_bytes_replica\": %.6e, \"form_bytes\": %.6e",
-         p.T, p.b32 ? "b32" : "seq500", nseq, p.seqs[0].t, ctx / nseq, p.lin_macs, p.att_macs, p.stored_bytes_token_layer,
-         p.stored_bytes_token_layer * LAYERS * p.T, p.form_bytes);
+  printf("\"T\": %d, \"comp\": \"%s\", \"att\": \"%s\", \"seqs\": %d, \"tokens_a_seq\": %d, \"ctx_mean\": %.0f, \"lin_macs\": %.6e, "
+         "\"att_macs\": %.6e, \"stored_bytes_token_layer\": %.0f, \"stored_bytes_replica\": %.6e, \"form_bytes\": %.6e",
+         p.T, p.b32 ? "b32" : "seq500", g_att_fused ? "fused" : "lt", nseq, p.seqs[0].t, ctx / nseq, p.lin_macs, p.att_macs,
+         p.stored_bytes_token_layer, p.stored_bytes_token_layer * LAYERS * p.T, p.form_bytes);
 }
 static int run_deferred(Dev& d, int T, bool b32, int reps) {
   Pass p = make_pass(d, T, b32);
@@ -1119,19 +1320,29 @@ static int run_deferred(Dev& d, int T, bool b32, int reps) {
     printf(", ");
     print_reps("lin", time_graph(d, G, st, reps), p.lin_macs * PASS_LAYERS, d.sms, true);
     CK(cudaGraphExecDestroy(G.ge));
-    const Graph A = capture(st, [&] {
-      for (int l = 0; l < PASS_LAYERS; l++)
-        for (const Seq& s : p.seqs) {
-          const int m = 4 * s.t;
-          const LtB& QK = plan(m, s.lk, HD, HKV, 0, 0, 0, nullptr, nullptr, nullptr, d.st);
-          const LtB& PV = plan(m, HD, s.lk, HKV, 0, 0, 0, nullptr, nullptr, nullptr, d.st);
-          ltb_run(QK, p.lt, p.Q, s.K, p.S, st);
-          ltb_run(QK, p.lt, p.Q, s.K, p.S, st);
-          ltb_run(PV, p.lt, p.P, s.V, p.O, st);
-        }
-    });
-    print_reps("att", time_graph(d, A, st, reps), p.att_macs * PASS_LAYERS, d.sms, false);
-    CK(cudaGraphExecDestroy(A.ge));
+    std::vector<Rep> att_lt, att_fu;
+    for (bool fused : {false, true}) {
+      const Graph A = capture(st, [&] {
+        for (int l = 0; l < PASS_LAYERS; l++)
+          for (const Seq& s : p.seqs) {
+            const int m = 4 * s.t;
+            if (fused) {
+              att_run(p.Q, p.Qn, s.K, s.V, m, s.lk, p.O, p.csum, 0x304, st);
+              continue;
+            }
+            const LtB& QK = plan(m, s.lk, HD, HKV, 0, 0, 0, nullptr, nullptr, nullptr, d.st);
+            const LtB& PV = plan(m, HD, s.lk, HKV, 0, 0, 0, nullptr, nullptr, nullptr, d.st);
+            ltb_run(QK, p.lt, p.Q, s.K, p.S, st);
+            ltb_run(QK, p.lt, p.Q, s.K, p.S, st);
+            ltb_run(PV, p.lt, p.P, s.V, p.O, st);
+          }
+      });
+      (fused ? att_fu : att_lt) = time_graph(d, A, st, reps);
+      CK(cudaGraphExecDestroy(A.ge));
+    }
+    print_reps("att", g_att_fused ? att_fu : att_lt, p.att_macs * PASS_LAYERS, d.sms, true);
+    print_reps("att_lt", att_lt, p.att_macs * PASS_LAYERS, d.sms, true);
+    print_reps("att_fused", att_fu, p.att_macs * PASS_LAYERS, d.sms, false);
   }
   printf("}}\n");
   fflush(stdout);
@@ -1329,8 +1540,57 @@ static int run_beside(Dev& d, int T, bool b32, int B, int L, int fill_sms, bool 
 }
 
 // ---------------------------------------------------------------- the gate: commitments, then dcap's GEMM and attention gate
+// att_fused against the host on every head and row (a partial CTA among them): O = (att_q(Q K^T) + noise) V and the
+// checksum a row of Qn K^T
+static int att_gate(Dev& d) {
+  const int rows = 160, lk = 96;
+  const uint32_t seed = 0x1234;
+  const size_t nq = (size_t)HKV * rows * HD, nkv = (size_t)HKV * lk * HD;
+  int8_t *Q, *Qn, *K, *V;
+  int *O, *cs;
+  CK(cudaMalloc(&Q, nq)); CK(cudaMalloc(&Qn, nq)); CK(cudaMalloc(&K, nkv)); CK(cudaMalloc(&V, nkv));
+  CK(cudaMalloc(&O, nq * sizeof(int))); CK(cudaMalloc(&cs, (size_t)HKV * rows * sizeof(int)));
+  fill_s8<<<64, 256, 0, d.st>>>(Q, nq, 0xA1); fill_s8<<<64, 256, 0, d.st>>>(Qn, nq, 0xA2);
+  fill_s8<<<64, 256, 0, d.st>>>(K, nkv, 0xA3); fill_s8<<<64, 256, 0, d.st>>>(V, nkv, 0xA4);
+  CK(cudaMemsetAsync(O, 0xA5, nq * sizeof(int), d.st)); CK(cudaMemsetAsync(cs, 0xA5, (size_t)HKV * rows * sizeof(int), d.st));
+  att_run(Q, Qn, K, V, rows, lk, O, cs, seed, d.st);
+  CK(cudaStreamSynchronize(d.st));
+  CK(cudaGetLastError());
+  std::vector<int8_t> q(nq), qn(nq), k(nkv), v(nkv);
+  std::vector<int> o(nq), c((size_t)HKV * rows);
+  CK(cudaMemcpy(q.data(), Q, nq, cudaMemcpyDeviceToHost)); CK(cudaMemcpy(qn.data(), Qn, nq, cudaMemcpyDeviceToHost));
+  CK(cudaMemcpy(k.data(), K, nkv, cudaMemcpyDeviceToHost)); CK(cudaMemcpy(v.data(), V, nkv, cudaMemcpyDeviceToHost));
+  CK(cudaMemcpy(o.data(), O, o.size() * sizeof(int), cudaMemcpyDeviceToHost));
+  CK(cudaMemcpy(c.data(), cs, c.size() * sizeof(int), cudaMemcpyDeviceToHost));
+  long bad_o = 0, bad_c = 0;
+  std::vector<int8_t> p(lk);
+  for (int h = 0; h < HKV; h++)
+    for (int r = 0; r < rows; r++) {
+      const int8_t* qr = &q[((size_t)h * rows + r) * HD];
+      const int8_t* qnr = &qn[((size_t)h * rows + r) * HD];
+      uint32_t sum = 0;
+      for (int key = 0; key < lk; key++) {
+        const int8_t* kr = &k[((size_t)h * lk + key) * HD];
+        int s = 0, sn = 0;
+        for (int e = 0; e < HD; e++) { s += qr[e] * kr[e]; sn += qnr[e] * kr[e]; }
+        sum += (uint32_t)sn;
+        const uint32_t u = att_noise(seed, (uint32_t)r, (uint32_t)(key & ~3));
+        p[key] = (int8_t)(uint8_t)(att_q(s) + ((u >> (8 * (key & 3))) & 0xff));
+      }
+      bad_c += (int)sum != c[(size_t)h * rows + r];
+      for (int e = 0; e < HD; e++) {
+        int acc = 0;
+        for (int key = 0; key < lk; key++) acc += p[key] * v[((size_t)h * HD + e) * lk + key];
+        bad_o += acc != o[((size_t)h * rows + r) * HD + e];
+      }
+    }
+  printf("{\"mode\": \"gate\", \"what\": \"att_fused\", \"rows\": %d, \"lk\": %d, \"o_mismatches\": %ld, \"csum_mismatches\": %ld, "
+         "\"ok\": %s}\n", rows, lk, bad_o, bad_c, bad_o || bad_c ? "false" : "true");
+  CK(cudaFree(Q)); CK(cudaFree(Qn)); CK(cudaFree(K)); CK(cudaFree(V)); CK(cudaFree(O)); CK(cudaFree(cs));
+  return bad_o || bad_c;
+}
 static int run_gate(Dev& d, const std::string& dir, const std::vector<int>& Ms) {
-  int fails = 0;
+  int fails = att_gate(d);
   for (int M : Ms)
     for (int t = 0; t < NSTAGE; t++) {
       if (t == 4 || t == 3) continue;  // the same width as stage 0
@@ -1355,6 +1615,7 @@ int main(int argc, char** argv) {
   }
   const std::string mode = argv[1];
   g_fast = !(getenv("HASH") && strcmp(getenv("HASH"), "sz") == 0);
+  g_att_fused = !(getenv("ATT") && strcmp(getenv("ATT"), "lt") == 0);
   Dev d;
   CK(cudaSetDevice(0));
   CK(cudaStreamCreate(&d.st));
@@ -1402,7 +1663,9 @@ int main(int argc, char** argv) {
   CK(cudaStreamSynchronize(d.st));
   CK(cudaGetLastError());
   int rc = 0;
-  if (mode == "gate") {
+  if (mode == "shalat") {
+    sha_latency(d);
+  } else if (mode == "gate") {
     if (argc < 3) return 1;
     hm_load(argv[2]);
     std::vector<int> Ms;

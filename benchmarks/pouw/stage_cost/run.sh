@@ -31,6 +31,7 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
   echo "gate rc $g" >> "$O/rc.txt"
   [ "$g" -eq 0 ] || exit 5
   if has prefill; then
+    "$B/stage" shalat > "$O/shalat.jsonl" 2>> "$O/errors.txt" || echo "rc $? shalat" >> "$O/errors.txt"
     for h in $HASHES; do for M in $PREFILL; do
       HASH=$h "$B/stage" prefill "$B/c" "$M" 7 >> "$O/prefill.jsonl" 2>> "$O/errors.txt" || echo "rc $? prefill $h $M" >> "$O/errors.txt"
     done; done

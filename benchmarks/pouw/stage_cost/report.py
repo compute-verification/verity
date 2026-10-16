@@ -51,6 +51,8 @@ def prefill(r: dict) -> dict:
         "hash_over_gemm": a["hash"] / g, "hash_gb_s": m * r["op_bytes_token_layer"] * LAYERS / a["hash"] / 1e6,
         "salt_ms": a.get("salt"), "tree_ms": a.get("tree"),
         "salt_latency_ms": {k: v["ms"] / LAYERS for k, v in r.get("salt_latency", {}).items()},
+        "segments_latency_ms": {k: v["ms"] / LAYERS for k, v in r.get("segments_latency", {}).items()},
+        "tree_latency_ms": {k: v["ms"] / LAYERS for k, v in r.get("tree_latency", {}).items()},
         "hash_only_ms_a_stage": (a["pipe1_hash"] - g) / per if "pipe1_hash" in a else None,
         "serialized": a["serial"] / g - 1, "overlapped": a["conc"] / g - 1, "overlapped_lo": a["conc_lo"] / g - 1,
         "green": [{"N": x["N"], "hash_sms": x["hash_sms"], "both_over_gemm_graph": x["both_ms"] / g - 1,
@@ -73,7 +75,11 @@ def deferred(r: dict) -> dict:
     a = r["arms"]
     n = r["layers_timed"]
     return {
-        "T": r["T"], "comp": r["comp"], "seqs": r["seqs"], "tokens_a_seq": r["tokens_a_seq"], "ctx_mean": r["ctx_mean"],
+        "T": r["T"], "comp": r["comp"], "att": r.get("att", "lt"), "seqs": r["seqs"], "tokens_a_seq": r["tokens_a_seq"],
+        "ctx_mean": r["ctx_mean"],
+        "att_lt_ms_layer": a["att_lt"]["ms"] / n if "att_lt" in a else None,
+        "att_fused_ms_layer": a["att_fused"]["ms"] / n if "att_fused" in a else None,
+        "share_att_fused": a["att_fused"]["share_of_peak"] if "att_fused" in a else None,
         "gemm_ms_layer": a["gemm"]["ms"] / n, "form_ms_layer": a["form"]["ms"] / n, "lin_ms_layer": a["lin"]["ms"] / n,
         "att_ms_layer": a["att"]["ms"] / n, "share_gemm": a["gemm"]["share_of_peak"], "share_form": a["form"]["share_of_peak"],
         "share_lin": a["lin"]["share_of_peak"], "share_att": a["att"]["share_of_peak"],
@@ -95,7 +101,7 @@ def beside(r: dict) -> dict:
         return (w["pass_layers"] * r["T"] / w["window_ms"]) / (tl / a[arm]["ms"])
 
     return {
-        "T": r["T"], "comp": r["comp"], "forming": r["forming"], "B": r["B"], "L": r["L"], "step_ms": base,
+        "T": r["T"], "comp": r["comp"], "att": r.get("att", "lt"), "forming": r["forming"], "B": r["B"], "L": r["L"], "step_ms": base,
         "pass_alone_ms": a["pass_alone"]["ms"], "pass_alone_green_ms": a.get("pass_alone_green", {}).get("ms"),
         "prio_slowdown": r["prio"]["slowdown"] - 1, "prio_layers": r["prio"]["pass_layers"], "prio_margin": margin("prio", "prio"),
         "green_slowdown": r["green"]["slowdown"] - 1, "green_slowdown_vs_split": r["green"]["slowdown_vs_split"] - 1,
@@ -114,10 +120,14 @@ def main() -> int:
     ap.add_argument("--json")
     a = ap.parse_args()
     d = Path(a.out)
-    res = {"gate": rows(d / "gate.jsonl"), "prefill": [prefill(r) for r in rows(d / "prefill.jsonl")],
+    res = {"gate": rows(d / "gate.jsonl"), "sha_latency": rows(d / "shalat.jsonl"),
+           "prefill": [prefill(r) for r in rows(d / "prefill.jsonl")],
            "deferred": [deferred(r) for r in rows(d / "deferred.jsonl")], "beside": [beside(r) for r in rows(d / "beside.jsonl")]}
     pct = lambda x: "-" if x is None else f"{100 * x:+.1f}%"  # noqa: E731
-    print("gate:", [(g.get("what"), g.get("k"), g.get("R"), g.get("m"), g.get("ok"), g.get("control_rejected")) for g in res["gate"]])
+    print("gate:", [(g.get("what"), g.get("k"), g.get("R"), g.get("m"), g.get("ok"), g.get("fast_ok"), g.get("fast_tree_equal"),
+                     g.get("control_rejected")) for g in res["gate"]])
+    for s in res["sha_latency"]:
+        print(f"SHA-512 compression latency in a chain at {s['mhz']} MHz (us): {s['us_a_compression']}")
     for p in res["prefill"]:
         print(f"\nprefill M={p['M']} hash={p['hash']}: gemm {p['gemm_ms']:.2f} ms ({100 * p['gemm_share']:.1f}% of peak), hash "
               f"{p['hash_ms']:.2f} ms ({p['hash_gb_s']:.0f} GB/s, {100 * p['hash_over_gemm']:.1f}% of gemm)"
@@ -133,21 +143,27 @@ def main() -> int:
               + ", ".join(f"{k} {v:.3f} ms" for k, v in p["hash_latency_ms"].items()))
         if p["salt_latency_ms"]:
             print("  salt-only part (ahead): " + ", ".join(f"{k} {v:.3f} ms" for k, v in p["salt_latency_ms"].items()))
+        if p["segments_latency_ms"]:
+            print("  of the rest, segment digests: " + ", ".join(f"{k} {v:.3f}" for k, v in p["segments_latency_ms"].items())
+                  + "; leaves and tree: " + ", ".join(f"{k} {v:.3f}" for k, v in p["tree_latency_ms"].items()))
         print("  gemm a stage: " + ", ".join(f"{k} {v:.3f} ms" for k, v in p["gemm_ms_a_stage"].items()))
         print(f"  draws/s a GPU: {p['draws_a_s_gpu']}  node priorities: {p['node_priorities']}")
     if res["deferred"]:
         print("\ndeferred, one layer: T comp seqs tok/seq | gemm ms (share) | form ms (share) | lin share | att share (att MAC frac) | "
               "us/token-layer | stored GB")
     for r in res["deferred"]:
-        print(f"  {r['T']:6d} {r['comp']:6s} {r['seqs']:3d} {r['tokens_a_seq']:5d} | {r['gemm_ms_layer']:8.3f} ({100 * r['share_gemm']:.1f}%) | "
-              f"{r['form_ms_layer']:8.3f} ({100 * r['share_form']:.1f}%) | {100 * r['share_lin']:.1f}% | {100 * r['share_att']:.1f}% "
-              f"({100 * r['att_mac_frac']:.0f}%) | {r['us_a_token_layer']:.4f} / {r['us_a_token_layer_form']:.4f} | {r['stored_gb_replica']:.1f}")
+        fu = (f" | att lt {r['att_lt_ms_layer']:.3f} ms, fused {r['att_fused_ms_layer']:.3f} ms ({100 * r['share_att_fused']:.1f}%)"
+              if r["att_fused_ms_layer"] is not None else "")
+        print(f"  {r['T']:6d} {r['comp']:6s} {r['att']:5s} {r['seqs']:3d} {r['tokens_a_seq']:5d} | {r['gemm_ms_layer']:8.3f} "
+              f"({100 * r['share_gemm']:.1f}%) | {r['form_ms_layer']:8.3f} ({100 * r['share_form']:.1f}%) | {100 * r['share_lin']:.1f}% | "
+              f"{100 * r['share_att']:.1f}% ({100 * r['att_mac_frac']:.0f}%) | {r['us_a_token_layer']:.4f} / "
+              f"{r['us_a_token_layer_form']:.4f} | {r['stored_gb_replica']:.1f}" + fu)
     if res["beside"]:
         print("\nbeside decode: T comp forming | step ms | saturated prio: slowdown, margin | saturated green: slowdown (vs split), "
               "margin | paced prio: slowdown, tail ms | paced green: slowdown, tail ms | sub-round s")
     for r in res["beside"]:
         mg = lambda x: "-" if x is None else f"{x:.2f}"  # noqa: E731
-        print(f"  {r['T']:6d} {r['comp']:6s} {str(r['forming']):5s} | {r['step_ms']:.3f} | {pct(r['prio_slowdown'])}, {mg(r['prio_margin'])} "
+        print(f"  {r['T']:6d} {r['comp']:6s} {r['att']:5s} {str(r['forming']):5s} | {r['step_ms']:.3f} | {pct(r['prio_slowdown'])}, {mg(r['prio_margin'])} "
               f"({r['prio_layers']} layers) | {pct(r['green_slowdown'])} ({pct(r['green_slowdown_vs_split'])}), {mg(r['green_margin'])} "
               f"({r['green_layers']} layers) | {pct(r['paced_prio_slowdown'])}, {r['paced_prio_tail_ms']:.1f} | "
               f"{pct(r['paced_green_slowdown'])}, {r['paced_green_tail_ms']:.1f} | {r['subround_s']:.2f}")
