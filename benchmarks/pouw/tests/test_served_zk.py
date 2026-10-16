@@ -334,6 +334,51 @@ def test_select_draws_once_over_the_draw_coin_opened_after_the_registration(serv
 
 
 @LEAN
+def test_a_window_received_past_the_deadline_from_the_salt_coins_release_earns_no_credit(served):
+    """Under ``registration_deadline`` (`Pouw.AcceptsBy`'s td, seconds on the challenger's clock), the salt coin's opening
+    reads its release, and each stream records the epoch's salt at that release before its first registration.  A window
+    received within the deadline registers with both readings.  One received later, or before the salt is open, is
+    refused (`late-registration`) and ends the epoch: the stream takes nothing after it.  Without the parameter nothing is
+    timed."""
+    *_, words = served
+    params, public, _, _ = _window(words)
+    rec = _register(params, public)
+    coins, _, man = PASSES[params["context"]]
+    salt = CoinOpening.from_json(man["salt_opening"])
+    timed = {**params, "registration_deadline": 5.0}
+
+    def challenger():
+        t = [0.0]
+        return SC.Challenger(timed, SC.Recorded(coins.commitment, [salt]), clock=lambda: t[0]), t
+
+    ch, t = challenger()
+    t[0] = 10.0
+    ch.open("salt", salt.after)
+    t[0] = 14.0
+    reg = _held(ch, "honest", rec)
+    assert (reg.salted_at, reg.received_at) == (10.0, 14.0) and ch.salt_released_at == 10.0
+    assert ch.regs["honest"][0].spec.check.registration_deadline == 5.0
+
+    late, t = challenger()
+    late.open("salt", salt.after)
+    t[0] = 5.5
+    with pytest.raises(S.Refused) as e:
+        _held(late, "late", rec)
+    assert _codes(e) == {"late-registration"} and "late" not in late.regs
+    with pytest.raises(S.Refused) as e:
+        _held(late, "again", rec)
+    assert _codes(e) == {"epoch-ended"}
+
+    unsalted, _ = challenger()
+    with pytest.raises(S.Refused) as e:
+        _held(unsalted, "early", rec)
+    assert _codes(e) == {"late-registration"}
+
+    untimed = SC.Challenger(params, SC.Recorded(coins.commitment, [salt]), clock=lambda: 1e9)
+    assert _held(untimed, "honest", rec).received_at is None and untimed.salt_released_at is None
+
+
+@LEAN
 def test_a_window_whose_pass_coin_is_foreign_early_mislabelled_or_tampered_is_refused(served):
     """The challenger re-starts the window's pass's epoch from its manifest under its own coin commitment: a salt coin of
     another challenger, opened after what it had not recorded, labelled the draw coin or tampered is refused, and so is a

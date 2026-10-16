@@ -8,6 +8,7 @@ import json
 
 import numpy as np
 import pytest
+from verity.ml.circuits import library
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.ops import mufu as MU
@@ -50,9 +51,12 @@ def test_router_input_intactness_compares_f32_words():
     assert not S._equal_f32_words(changed.view(torch.float32), before)
 
 
-def test_lg2_words_are_the_measured_unit():
+def test_lg2_words_are_the_measured_unit_and_the_library_table():
     w = S.lg2_words(S.lg2_inputs())
-    assert hashlib.sha256(w.astype("<u4").tobytes()).hexdigest() == D.LG2_MEASURED["sha256"]
+    raw = w.astype("<u4").tobytes()
+    lib = library.table("lg2")
+    assert hashlib.sha256(raw).hexdigest() == D.LG2_MEASURED["sha256"] == lib.sha256
+    assert hashlib.sha512(raw).hexdigest() == lib.sha512 and len(w) == lib.words == D.LG2_MEASURED["words"]
     m = np.random.default_rng(1).integers(0, 1 << 23, 400)
     assert w[m].tolist() == [D.mufu_lg2_mantissa_bits(int(v)) for v in m]
 

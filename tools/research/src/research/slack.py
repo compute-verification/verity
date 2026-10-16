@@ -1277,8 +1277,9 @@ def cmd_ask(ns: argparse.Namespace, reg: dict) -> int:
 
 
 def linear_ask(ns: argparse.Namespace, owner: dict, sender: str, body: str) -> str:
-    """The ask's body, filed as an issue in its owner's Linear team (`linear` in the registry) and ending with the issue's
-    link; as it was when the owner has no team or Linear fails, so the ask still goes out on Slack."""
+    """The ask filed as an issue in its owner's Linear team (`linear` in the registry), which holds the whole brief; what
+    Slack carries is then its first line and the issue's link (COMM-15).  The body as it was when the owner has no team
+    or Linear fails, so the ask still goes out on Slack in full."""
     if not (getattr(ns, "linear", False) or ASKS_ON_LINEAR) or ns.dry_run or not owner.get("linear"):
         return body
     from . import linear  # noqa: PLC0415
@@ -1288,7 +1289,7 @@ def linear_ask(ns: argparse.Namespace, owner: dict, sender: str, body: str) -> s
         print(f"research msg: not filed on Linear ({why}); asking on Slack only", file=sys.stderr)
         return body
     print(f"linear: {issue['identifier']} {issue['url']}")
-    return f"{body}\nLinear: <{issue['url']}|{issue['identifier']}>"
+    return f"{linear.title(body)}\nLinear: <{issue['url']}|{issue['identifier']}>"
 
 
 def linear_close(text: str, state_type: str) -> None:

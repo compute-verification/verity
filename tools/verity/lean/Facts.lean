@@ -3,10 +3,10 @@ import Lean
 /-!
 # The audit's facts, from the package's `.olean` files as data
 
-`lake env lean --run Facts.lean CONFIG` imports the roots named in `CONFIG` (a JSON file `audit.py` writes) with
+`lake env lean --run Facts.lean CONFIG` imports the roots named in `CONFIG` (a JSON file `check.py` writes) with
 initializers disabled and no environment extension loaded, so none of the package's code runs: no `initialize`, no
 attribute handler, no delaborator. It writes one JSON document to the path `CONFIG` names. It reports facts and makes no
-judgement; `audit.py` holds the policy.
+judgement; `check.py` holds the policy.
 
 - `modules`: the imported modules under the roots; `imports`: what each imports. `oleans`: the `.olean` file of every
   imported module, the roots' dependencies' included; `graph`: each one's `.olean` file and what it imports.
@@ -32,19 +32,19 @@ judgement; `audit.py` holds the policy.
   starting with `inst`, with that component as an identifier (`id`) and where its declaration's name is (`at`: line,
   codepoint column). An anonymous `instance` has its name there as the keyword `instance` itself.
 - `spans`: for each module under the roots, the first and last source line of each declaration range it holds, so that
-  `audit.py` can find a declaration in the source that the module does not hold.
+  `check.py` can find a declaration in the source that the module does not hold.
 
-The hashes in the document are Lean's `Expr.hash`, which has 32 bits; `audit.py` keeps them only to check records written
+The hashes in the document are Lean's `Expr.hash`, which has 32 bits; `check.py` keeps them only to check records written
 before SHA-256. When `CONFIG` names a `canon` path, the pins' statements and the definitions they read are also written
-there, one JSON line each, as `canon` texts, and `audit.py` hashes those with SHA-256. A pinned statement that is a
+there, one JSON line each, as `canon` texts, and `check.py` hashes those with SHA-256. A pinned statement that is a
 definition under `meaning` applied under binders (`∀ xs, G as`) is also written with that definition unfolded once
-(`liftOf`), with the definition and its module, so that `audit.py` can certify a statement lifted into a `Guarantees`
+(`liftOf`), with the definition and its module, so that `check.py` can certify a statement lifted into a `Guarantees`
 definition as the statement its record holds.
 
 With `moved` (pairs of a new name, a declaration or a namespace, and the old name it moved from), each of those texts is
 written once more with the names as they were before the move (the longest moved prefix renamed back), and a pinned
 statement that is such a definition also with that definition unfolded (`liftOf`), so that
-`audit.py` can compare them with records made before the move. `moved_conflicts` lists each constant of those texts (or
+`check.py` can compare them with records made before the move. `moved_conflicts` lists each constant of those texts (or
 pin) whose old name would be another one's too: there the comparison would not tell the two apart. A constant that keeps
 its name stands for itself, and an old name that only a declaration outside the texts still has (an old theorem kept as a
 lemma) is no conflict.
@@ -125,7 +125,7 @@ def nodeKey (rn : Name → Name) (e : Expr) (ix : Array Nat) : Option String :=
   | .fvar id => some s!"F{id.name}"
   | .mvar id => some s!"M{id.name}"
 
-/-- A canonical text of `e`, which `audit.py` hashes with SHA-256: one line per distinct node, its children given as the
+/-- A canonical text of `e`, which `check.py` hashes with SHA-256: one line per distinct node, its children given as the
 numbers of earlier lines, then the root. It keeps what `Expr.hash` keeps (constant names, universe levels, bound variable
 indices, projections, literals) and drops what it drops (binder names and binder info, `let` names, metadata), so it tells
 two terms apart exactly when `Expr.hash` would, collisions aside. The walk is iterative: Mathlib's terms are too deep for
@@ -503,6 +503,57 @@ def names (j : Json) (k : String) : Array Name :=
 end LeanAudit
 
 open LeanAudit in
+/-- The verifier's path: the constants its `entries` reach through definitions' values and `implemented_by` targets, in
+every imported module, expanding nothing in `stop`. Reported: each reached `@[implemented_by]` and `@[extern]` constant,
+and each constant of the `hash` namespace the walk enters from outside it, with the path from an entry. -/
+unsafe def verifierInfo (env : Environment) (entries stop : Array Name) (hash : Name) : Json := Id.run do
+  let moduleOf (c : Name) : Option Name := (env.getModuleIdxFor? c).map fun i => moduleName env i
+  let mut impl : Std.HashMap Name Name := {}
+  let mut ext : NameSet := {}
+  for data in env.header.moduleData do
+    for (n, t) in entriesOf Name data Compiler.implementedByAttr.ext.name do
+      impl := impl.insert n t
+    for (n, _) in entriesOf Unit data externAttr.ext.name do
+      ext := ext.insert n
+  let stops := stop.foldl NameSet.insert {}
+  let mut seen : NameSet := {}
+  let mut parent : Std.HashMap Name Name := {}
+  let mut stack := #[]
+  for e in entries do
+    if env.contains e then
+      seen := seen.insert e
+      stack := stack.push e
+  while !stack.isEmpty do
+    let n := stack.back!
+    stack := stack.pop
+    if stops.contains n then continue
+    let next := (match env.find? n with
+      | some (.defnInfo d) => d.value.getUsedConstants
+      | some (.opaqueInfo d) => d.value.getUsedConstants
+      | _ => #[]) ++ (impl[n]?.toArray)
+    for c in next do
+      if !seen.contains c then
+        seen := seen.insert c
+        parent := parent.insert c n
+        stack := stack.push c
+  let pathTo (c : Name) : Array String := Id.run do
+    let mut p := #[c.toString]
+    let mut x := c
+    for _ in [0:16] do
+      match parent[x]? with
+      | some y => p := p.push y.toString; x := y
+      | none => break
+    return p.reverse
+  let reached := seen.toArray.qsort Name.lt
+  let locOf (c : Name) : List (String × Json) := [("name", toJson c.toString), ("module", toJson ((moduleOf c).map toString))]
+  return Json.mkObj [
+    ("missing", toJson ((entries.filter (!env.contains ·)).map toString)), ("reached", toJson reached.size),
+    ("implemented_by", toJson (reached.filterMap fun c => impl[c]?.map fun t => Json.mkObj (locOf c ++ [("by", toJson t.toString)]))),
+    ("extern", toJson (reached.filter ext.contains |>.map fun c => Json.mkObj (locOf c))),
+    ("hash", toJson (reached.filter (fun c => hash.isPrefixOf c && !(parent[c]?.map hash.isPrefixOf).getD true)
+      |>.map fun c => Json.mkObj (locOf c ++ [("path", toJson (pathTo c))])))]
+
+open LeanAudit in
 unsafe def main (args : List String) : IO UInt32 := do
   initSearchPath (← findSysroot)
   let some cfgPath := args.head? | throw <| IO.userError "usage: Facts.lean CONFIG"
@@ -639,5 +690,9 @@ unsafe def main (args : List String) : IO UInt32 := do
     ("unreported_errors", toJson unreportedErrors), ("declared_axioms", toJson declared), ("escapes", toJson escapes), ("spec_definitions", toJson specDefs),
     ("instances", toJson instances), ("pins", Json.mkObj pinned.toList),
     ("moved_conflicts", toJson conflicts)]
+  let vcfg := cfg.getObjValD "verifier"
+  let doc := if (names vcfg "entries").isEmpty then doc else
+    doc.setObjVal! "verifier" (verifierInfo env (names vcfg "entries") (names vcfg "stop")
+      (((vcfg.getObjValD "hash").getStr?.toOption.getD "").toName))
   IO.FS.writeFile out doc.compress
   return 0
