@@ -95,6 +95,9 @@ theorem sched_of_holoRounds {ish : RecVStar.Inner} {rr : Array RecVStar.SchedRou
     obtain ⟨out, hout, -⟩ := FlockC3.Reps.repRounds_zp h
     exact ⟨out, hout⟩
 
+-- Moving the five read facts from `offZs zs Bad`'s family to the checked one exceeds the default at `whnf`
+-- (r20261016-015424-7b88).
+set_option maxHeartbeats 1600000 in
 /-- **(step 8) The guarantee's `_hbr` at the honest source**: `hbr_honest_reg` at the checked family and the fixed
 decoder over the honest source, built at V*'s sessions refusing `Bad` (`offZs zs Bad`), where `Bad` holds only inside
 `hbr_honest_reg`'s bad event (`hBad`): G's items 1–4 are needed only off `Bad` (`halg`, `hacc`), `SrcOK` and each read
