@@ -114,7 +114,7 @@ The built-in steps (`run.py steps` prints their parameters and docs):
 | `attention.center_keys()` | real | kc | D4-ATTN |
 | `attention.int8(q_top, k, k_top, p_top, p_block, p_sink, v, v_top, v_scale)` | quantize | one limb; K and V rounded or dithered; P per row or per key block, `p_sink` | D4-ATTN |
 | `attention.peel(operand, width, offset)` | integer | low-rank noise on Q or P, peeled exactly | D4-ATTN |
-| `linear.grid(grid, act, weight)` | quantize | both operands on a low-bit grid (`fp4c`, `fp4`, `int5`), per token and per row, each rounded or dithered | D4-LOWBIT |
+| `linear.grid(grid, act, weight)` | quantize | both operands on a low-bit grid (`fp4c`, `fp4`, `int5`), per token and per row, each rounded, dithered or `sr` | D4-LOWBIT |
 | `attention.grid(grid, q, k, p, v, p_sink)` | quantize | Q, K, P and V on a low-bit grid, each rounded or dithered (P's bits only where key ≤ query) | D4-LOWBIT |
 
 `specs/` holds the arms in use: the three plain int8 arms, and the adopted design (`adopted`) with its halves
@@ -126,7 +126,8 @@ E2M1's every value (times 2: 0, ±1, ±2, ±3, ±4, ±6, ±8, ±12) and `int5` t
 activations, rounding the weights as the adopted linears do; `GRID-MODE-all` puts attention on the
 grid too, with no key blocks; `fp4c-dither-all-kv` dithers only K and V there, as the adopted attention does, with
 `p_sink`. A dithered operand serves the level below x / s or the one above it by a fresh fair bit (on a uniform grid,
-floor(x / s) + b), the weights' bits drawn once per seed and layer. Any other file passes as a path.
+floor(x / s) + b), the weights' bits drawn once per seed and layer; `GRID-sr` rounds the linears' operands up with
+probability the fraction instead (unbiased, a uniform coin). Any other file passes as a path.
 
 ## Adding an intervention
 

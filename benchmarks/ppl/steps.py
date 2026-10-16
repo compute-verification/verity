@@ -415,6 +415,8 @@ def peel(mm, nxt, *, operand: str, width: int, offset: int = 0):
 GRIDS = {"fp4c": tuple(range(-4, 5)), "fp4": (-12, -8, -6, -4, -3, -2, -1, 0, 1, 2, 3, 4, 6, 8, 12),
          "int5": tuple(range(-16, 17))}
 GRID_MODES = ("round", "dither")
+#: linears also take `sr`, unbiased stochastic rounding, whose coin is a uniform draw rather than one bit
+LINEAR_GRID_MODES = GRID_MODES + ("sr",)
 
 
 def bracket(v: torch.Tensor, grid: str) -> tuple[torch.Tensor, torch.Tensor]:
@@ -431,7 +433,8 @@ def bracket(v: torch.Tensor, grid: str) -> tuple[torch.Tensor, torch.Tensor]:
 def on_grid(x: torch.Tensor, grid: str, mode: str, bits: torch.Tensor | None, dims) -> tuple[torch.Tensor, torch.Tensor]:
     """Integers on the grid and scales s (one per slice over `dims`, kept) with x ~ q s: `round` the nearest level,
     s = absmax / top; `dither` the level below v = x / s or the one above it by the fair bit b, s = absmax / top
-    (1 + 2^-20) so that |v| < top (on a uniform grid, floor(v) + b)."""
+    (1 + 2^-20) so that |v| < top (on a uniform grid, floor(v) + b); `sr` the level above with probability
+    (v - lo) / (hi - lo), `bits` holding uniform draws in [0, 1), the same s (unbiased: E q = v)."""
     top = GRIDS[grid][-1]
     a = x.abs().amax(dim=dims, keepdim=True).clamp(min=1e-30)
     if mode == "round":
@@ -440,38 +443,56 @@ def on_grid(x: torch.Tensor, grid: str, mode: str, bits: torch.Tensor | None, di
         lo, hi = bracket(v, grid)
         return torch.where(v - lo <= hi - v, lo, hi), s
     s = a * (1 + 2 ** -20) / top
-    lo, hi = bracket(x / s, grid)
+    v = x / s
+    lo, hi = bracket(v, grid)
+    if mode == "sr":
+        bits = (bits < (v - lo) / (hi - lo)).float()
     return lo + bits * (hi - lo), s
 
 
-def weight_bits(mm, shape) -> torch.Tensor:
-    """The weight's dither bits: one draw per (seed, layer, linear), so every window (and shard) serves one weight."""
+def weight_bits(mm, shape, mode: str = "dither") -> torch.Tensor:
+    """The weight's coins: one draw per (seed, layer, linear), so every window (and shard) serves one weight; fair bits
+    (`dither`) or uniforms in [0, 1) (`sr`)."""
     g = torch.Generator(device=mm.device)
     g.manual_seed(zlib.crc32(f"w/{mm.seed}/{mm.layer}/{mm.name}".encode()))
+    if mode == "sr":
+        return torch.rand(tuple(shape), generator=g, device=mm.device)
     return torch.randint(0, 2, tuple(shape), generator=g, device=mm.device).float()
 
 
-def _check_grid(p, operands):
+def act_coins(mm, mode: str):
+    """The activations' coins: the linear's fair bits (`dither`), or uniforms (`sr`) from its own stream per (seed,
+    layer, linear, window)."""
+    if mode == "dither":
+        return mm.coins(mm.x.shape)
+    if mode != "sr":
+        return None
+    g = torch.Generator(device=mm.device)
+    g.manual_seed(zlib.crc32(f"u/{mm.seed}/{mm.layer}/{mm.name}/{mm.window}".encode()))
+    return torch.rand(tuple(mm.x.shape), generator=g, device=mm.device)
+
+
+def _check_grid(p, operands, modes=GRID_MODES):
     if p["grid"] not in GRIDS:
         raise ValueError(f"grid.grid is one of {sorted(GRIDS)}")
     for o in operands:
-        if p[o] not in GRID_MODES:
-            raise ValueError(f"grid.{o} is round or dither")
+        if p[o] not in modes:
+            raise ValueError(f"grid.{o} is one of {modes}")
 
 
-@linear_step("grid", phase="quantize", seeded=lambda p: "dither" in (p["act"], p["weight"]),
-             check=lambda p: _check_grid(p, ("act", "weight")))
+@linear_step("grid", phase="quantize", seeded=lambda p: {p["act"], p["weight"]} != {"round"},
+             check=lambda p: _check_grid(p, ("act", "weight"), LINEAR_GRID_MODES))
 def grid_linear(mm, nxt, *, grid: str, act: str = "dither", weight: str = "dither"):
     """Both operands on a low-bit grid (`GRIDS`: fp4c, fp4, int5): activations one scale per token, weights one per
-    output row, both applied after the exact integer product (no block scales over k); each `round`ed or `dither`ed
-    (`on_grid`), the weight's bits drawn once per seed and layer (`weight_bits`)."""
+    output row, both applied after the exact integer product (no block scales over k); each `round`ed, `dither`ed or
+    `sr` (`on_grid`), the weight's coins drawn once per seed and layer (`weight_bits`)."""
     def weights():
         w = mm.weight()
-        q, s = on_grid(w, grid, weight, weight_bits(mm, w.shape) if weight == "dither" else None, 1)
+        q, s = on_grid(w, grid, weight, weight_bits(mm, w.shape, weight) if weight != "round" else None, 1)
         return q.to(torch.int8), s[:, 0]
 
     wq, sw = mm.cached("grid", weights)
-    xq, sa = on_grid(mm.x, grid, act, mm.coins(mm.x.shape) if act == "dither" else None, 1)
+    xq, sa = on_grid(mm.x, grid, act, act_coins(mm, act), 1)
     return nxt(mm.integer(xq, wq)).float() * sa * sw[None, :]
 
 

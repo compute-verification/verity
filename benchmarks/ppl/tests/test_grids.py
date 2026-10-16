@@ -52,6 +52,16 @@ def test_dither_serves_the_level_below_or_above_by_its_bit(grid):
         assert torch.equal(q, torch.floor(v) + bits)
 
 
+@pytest.mark.parametrize("grid", sorted(steps.GRIDS))
+def test_sr_is_unbiased_between_adjacent_levels(grid):
+    g = torch.Generator().manual_seed(4)
+    x = torch.randn(1, 64, generator=g).expand(4096, -1)
+    q, s = steps.on_grid(x, grid, "sr", torch.rand(x.shape, generator=g), 1)
+    lo, hi = steps.bracket(x / s, grid)
+    assert bool(((q == lo) | (q == hi)).all())
+    assert torch.allclose(q.mean(0), (x / s)[0], atol=0.1 * (hi - lo).amax().item())
+
+
 def test_a_dithered_p_serves_no_future_key():
     rep, s, d = 2, 12, 8
     g = torch.Generator().manual_seed(3)
@@ -72,7 +82,7 @@ def test_a_dithered_p_serves_no_future_key():
     assert out.shape == (rep, s, d) and run.gates.passed and run.gates.log["int8_range"]["checked"] == 1
 
 
-ARMS = ["fp4c-dither", "fp4c-dither-all", "fp4-dither-all", "int5-round", "fp4c-dither-all-kv"]
+ARMS = ["fp4c-dither", "fp4c-dither-all", "fp4-dither-all", "int5-round", "fp4c-dither-all-kv", "int5-sr"]
 
 
 def test_the_grid_arms_pass_every_gate(llama, ids, calib):

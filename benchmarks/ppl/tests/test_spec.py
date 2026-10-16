@@ -19,6 +19,7 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
         for m in ("dither", "round"):
             want[f"{g}-{m}"] = want[f"{g}-{m}-all"] = ("all", "int8-all", True)
         want[f"{g}-dither-act"] = ("all", "int8-all", True)
+    want["fp4-sr"] = want["int5-sr"] = ("all", "int8-all", True)
     want["fp4c-dither-all-kv"] = ("all", "int8-all", True)
     got = {p.stem: spec.load(str(p)) for p in spec.SPECS.glob("*.toml")}
     assert set(got) == set(want)
