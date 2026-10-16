@@ -6648,7 +6648,11 @@
     "Claims.trustedBase": "da78771f74000413bb27b7edf566b5e665954850e41c535e8fc45d2f283842fb",
     "Claims.waitAcc": "85b751a4e882d0ce61736041f2349297297bc4eb996b472d6a6191513053bca7"
    },
-   "guarantees": ["Flock.SecurityProofs.ClaimsStated", "Flock.SecurityProofs.SamplingClaimsStated", "Flock.SecurityProofs.RecursionClaimsStated"]
+   "guarantees": [
+    "Flock.SecurityProofs.ClaimsStated",
+    "Flock.SecurityProofs.RecursionClaimsStated",
+    "Flock.SecurityProofs.SamplingClaimsStated"
+   ]
   },
   "Definitions.Claims.Hm96": {
    "digest": "1a0af7a4f0c55c58b023c3336ffdfb726648ac202948524990a2c2b96840ec44",
@@ -16504,19 +16508,19 @@
    },
    "guarantees": ["Flock.SecurityProofs.ClaimsStated"]
   },
-  "Models.Flock.Guarantees.SamplingClaims": {
-   "digest": "c2352622c95136d730646430616c894b565d78d20ecfccd9b0607d9761c36aa0",
-   "definitions": {
-    "Flock.Guarantees.SamplingClaimsStated": "cc0a5dc13228bef5be3e70dd81798d8b31668c84e7ad2db5a89042b3e365a792"
-   },
-   "guarantees": ["Flock.SecurityProofs.SamplingClaimsStated"]
-  },
   "Models.Flock.Guarantees.RecursionClaims": {
    "digest": "bad07c60f801785f5f536b8e04d08b6b7351f526bb28d23af3f2f4289dd37d79",
    "definitions": {
     "Flock.Guarantees.RecursionClaimsStated": "6aed0f9c69049c2da04bdf80a90493f09d34e9244c592e96871cf16bd5c5e870"
    },
    "guarantees": ["Flock.SecurityProofs.RecursionClaimsStated"]
+  },
+  "Models.Flock.Guarantees.SamplingClaims": {
+   "digest": "c2352622c95136d730646430616c894b565d78d20ecfccd9b0607d9761c36aa0",
+   "definitions": {
+    "Flock.Guarantees.SamplingClaimsStated": "cc0a5dc13228bef5be3e70dd81798d8b31668c84e7ad2db5a89042b3e365a792"
+   },
+   "guarantees": ["Flock.SecurityProofs.SamplingClaimsStated"]
   },
   "Models.Nci.Assumptions": {
    "digest": "f4315d64f98e55121fb85549ad8ce05cbc17be8d78b6d137db676a4c1c12dae5",
