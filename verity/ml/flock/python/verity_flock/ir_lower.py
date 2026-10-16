@@ -2,7 +2,8 @@
 
 :func:`lower` walks the Definition's gates in canonical order, as ``verity.ml.circuits.evaluate`` does, and maps each primitive to
 its piece in :data:`PIECES` (a primitive without one is an error naming it). Constant gates, and gates whose operands are
-all constant, are evaluated by the primitive's own evaluator and become constant wires.
+all constant, are evaluated by the primitive's own evaluator and become constant wires. An activation of a Boolean
+Definition that the walk holds whole is lowered by the Definition's builder instead of its gates (:func:`lower_gates`).
 
 :func:`units` splits a template instance into identical units read off its IR graph: the connected components of the gate
 graph (with the input leaves) must all compute the same function of their inputs; the unit is one component, and the
@@ -11,13 +12,18 @@ arrangement lists which input and output leaves of the instance each unit takes.
 """
 from __future__ import annotations
 
+import bisect
 import hashlib
 import json
 from dataclasses import dataclass, field
 from functools import lru_cache, partial, reduce
-from typing import Callable, Sequence
+from typing import Callable, Collection, Sequence
 
 import numpy as np
+
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits.boolean.trace import _flat_out
+from verity.ml.circuits.layout import Region, param_leaf, resolve
 
 from . import fp
 from . import tail_pieces
@@ -102,7 +108,8 @@ GATE_FAMILIES = {r"And(?:[2-9]|[1-9][0-9]+)_v1": lambda C, *x: [fp.and_reduce(C,
 
 def _boolean_build(key):
     """The ``build`` of a registered Boolean Definition (``verity.ml.circuits.boolean.trace.definition``) whose ``word`` is the
-    primitive ``key``: a `forms` builder on the operand words, as a piece is."""
+    primitive ``key``: a `forms` builder on the operand words, as a piece is. So the word primitive lowers by the builder that
+    lowers an activation of the Definition itself (`lower_gates`), commits included."""
     from verity.ml.circuits.defs import REGISTRY
 
     for d in list(REGISTRY.defs.values()):
@@ -165,13 +172,46 @@ def _value(word) -> int:
     return sum(w.c << i for i, w in enumerate(word))
 
 
-def lower_gates(C: Circuit, gates, wires: dict[int, list], pieces: dict[str, Callable] | None = None) -> dict[int, list]:
+def lower_gates(C: Circuit, gates, wires: dict[int, list], pieces: dict[str, Callable] | None = None,
+                reads: Collection[int] = ()) -> dict[int, list]:
     """Lower ``gates`` (``verity.ml.circuits.layout.Gate``s in canonical order) into C, reading operand words from ``wires`` (gate index
-    -> word) and writing each gate's output word there; ``pieces`` (default :data:`PIECES`) maps primitive ids to pieces."""
+    -> word) and writing each gate's output word there; ``pieces`` (default :data:`PIECES`) maps primitive ids to pieces.
+
+    An activation of a Boolean Definition (`verity.ml.circuits.boolean.trace.definition`'s, whose Definition carries its
+    ``build``) is lowered at its first gate by the builder, over its parameter leaves' wires and with an AND memo of its own,
+    as its trace had: so C has the builder's commits (`forms.Circuit.commit`'s rows, which its gates drop) and its trace's
+    ANDs, and only its returned gates get words. One that ``gates`` hold in part (a unit's split or cut, a dead gate dropped),
+    whose parameter leaves are not all in ``wires``, or with a gate other than its returns in ``reads`` (gate indices the
+    caller reads besides the gates' own operands) is lowered gate by gate."""
     pieces = PIECES if pieces is None else pieces
-    for g in gates:
+    region = isinstance(gates, Region)
+    if region:
+        i, end = gates.lo, gates.hi
+        held = lambda lo, hi: gates.lo <= lo and hi <= gates.hi  # noqa: E731
+    else:
+        gates = list(gates)
+        i, end = 0, len(gates)
+        have = {g.index for g in gates}
+        held = lambda lo, hi: all(j in have for j in range(lo, hi))  # noqa: E731
+    reads = sorted(reads)
+    whole: dict[int, bool] = {}
+    while i < end:
+        g = gates.circuit.gate(i) if region else gates[i]
+        act = _boolean_activation(g)
+        if act is not None:
+            s, build = act
+            lo, hi = s.offset, s.offset + s.spec.gates
+            if lo not in whole:
+                rets = {resolve(s, r) for r in s.spec.body.ret}
+                whole[lo] = held(lo, hi) and all(j in rets for j in reads[bisect.bisect_left(reads, lo):bisect.bisect_left(reads, hi)])
+            if whole[lo]:
+                whole[lo] = _lower_activation(C, s, build, wires, pieces)
+            if whole[lo]:
+                i += hi - lo
+                continue
         prim = g.prim
         fam = getattr(prim, "family", None)
+        i += 1
         if fam == "Input":
             if g.index not in wires:
                 raise KeyError(f"input gate {g.index} has no wires")
@@ -188,6 +228,47 @@ def lower_gates(C: Circuit, gates, wires: dict[int, list], pieces: dict[str, Cal
             raise AssertionError(f"piece for {prim.id} returned {len(out)} bits, the primitive returns {_width(prim)}")
         wires[g.index] = out
     return wires
+
+
+def _boolean_activation(g):
+    """``(scope, build)``: the activation of a Boolean Definition that the gate ``g``'s scope chain reaches, and its builder; or None."""
+    s = getattr(g, "scope", None)
+    while s is not None:
+        build = getattr(getattr(s.spec, "defn", s.spec), "build", None)
+        if callable(build):
+            return s, build
+        s = s.parent
+    return None
+
+
+def _lower_activation(C: Circuit, s, build: Callable, wires: dict[int, list], pieces) -> bool:
+    """Run ``build`` on C for the activation ``s`` (`lower_gates`), setting its returned gates' words; False, building nothing,
+    when a parameter leaf has no wire. Its operands are its parameters' elements (`boolean.elements`, one bit a leaf), as
+    `trace` gives them."""
+    params, ret = s.spec.signature()
+    leaves = [[param_leaf(s, pi, j) for j in range(t.leaves)] for pi, (_, t) in enumerate(params)]
+    if any(o not in wires for ls in leaves for o in ls):
+        return False
+    els = []
+    for (_, t), ls in zip(params, leaves):
+        at = 0
+        for w in BL.elements(t):
+            els.append([wires[o][0] for o in ls[at:at + w]])
+            at += w
+    wrap = getattr(pieces, "wrap", None)
+    fn = wrap(s.spec.id, build) if wrap else build
+    memo = C.cse
+    C.cse = {} if memo is None else memo
+    try:
+        outs = _flat_out(fn(C, *els), ret)
+    finally:
+        C.cse = memo
+    lo, hi = s.offset, s.offset + s.spec.gates
+    for r, f in zip(s.spec.body.ret, outs):
+        j = resolve(s, r)
+        if lo <= j < hi:
+            wires.setdefault(j, [f])
+    return True
 
 
 def standalone(target):
@@ -262,7 +343,7 @@ class Units:
         C = Circuit(cse=True)
         ins = [C.input(f"in{j}", w) for j, w in enumerate(self.in_widths)]
         wires = dict(zip(self.arg_gates, ins))
-        lower_gates(C, self.gates, wires)
+        lower_gates(C, self.gates, wires, reads=self.ret_gates)
         for j, g in enumerate(self.ret_gates):
             C.output(f"out{j}", wires[g])
         return C
