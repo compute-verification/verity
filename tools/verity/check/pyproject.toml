@@ -21,7 +21,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # shipped-tree commit record, the flock-circuit build step's script and the patches its Rust tests cover, the repository
 # lints the preflight names, and the Lean audit's tool directory: Lean's jobs (`lean_audit.py`, `lean_changed.py`, the pin
 # `lean-deps.json`), the sandbox lean_changed builds in, and the audit whose judgment of the guarantees it runs (a
-# directory, since loading `audit.py` reads and writes its `__pycache__`), the security proofs' manifest and record (a
+# directory, since loading `check.py` reads and writes its `__pycache__`), the security proofs' manifest and record (a
 # shard's package), the Slack registry, whose handles are the owners `ci.toml` may name, and what of research the fixture
 # fetch and the run tooling import beyond its `exports`.
 inputs = [".agents/skills/using-slack/registry.json", "READY.json", "verity/ml/flock/check_build.sh", "verity/ml/flock/flock-glue-b684b12.patch",
