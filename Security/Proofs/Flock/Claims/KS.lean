@@ -15,6 +15,7 @@ import Proofs.Flock.Claims.KS.ConflictRun
 import Proofs.Flock.Claims.KS.ConflictTied
 import Proofs.Flock.Claims.KS.TableBound
 import Proofs.Flock.Claims.KS.Refit
+import Proofs.Flock.Claims.KS.Rounds
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -70,4 +71,7 @@ fork and self-clash terms are escapes' (`Flock.oldEsc`, `Flock.oldEsc_term`; mas
 `Flock.oldEscZ`, `Flock.oldEscZ_term`) that fit the weight with the fork event of weight `k`
 (`FlockDeploy.KS.oldEsc_fitsFork_plain`, `FlockDeploy.KS.oldEscZ_fitsFork_zk`), so the salted and masked sessions'
 `ε_c⁻` are at most `ε_table` and their term (`FlockDeploy.KS.epsSL_le`, `FlockDeploy.KS.epsSZ_le`), also averaged over
-a mixture of strategies (`FlockDeploy.KS.mean_epsSL_le`, `FlockDeploy.KS.mean_epsSZ_le`). -/
+a mixture of strategies (`FlockDeploy.KS.mean_epsSL_le`, `FlockDeploy.KS.mean_epsSZ_le`). The plain fork rounds
+(`Rounds`): rep `r`'s level-`ℓ + 1` cap round at table 0, no two of them one (`FlockDeploy.KS.plainJ`,
+`FlockDeploy.KS.plainJ_inj`), at which the old escapes fit the plain weight (`FlockDeploy.KS.oldEsc_fitsFork_plainJ`).
+-/
