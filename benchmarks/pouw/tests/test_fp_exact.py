@@ -38,23 +38,26 @@ def f32(w: int) -> float:
     return struct.unpack("<f", struct.pack("<I", w))[0]
 
 
-def cfg(fmt="e4m3", grid="e4m3_int16", dist="U", c0="zero", K=64, nrec=1, seed=12345) -> "fx.Config":
-    w = {**fx.c0_words(fx.GRIDS[fx.GRID[grid]]), "negzero": 0x80000000}[c0]
-    return fx.Config(fmt, grid, dist, c0, w, K, 128, seed, nrec)
+def cfg(fmt="e4m3", grid="e4m3_int16", dist="U", scale="unit", c0="zero", K=64, nrec=1, seed=12345) -> "fx.Config":
+    sh = fx.make_scale(fmt, scale).sh
+    w = {**fx.c0_words(fx.GRIDS[fx.GRID[grid]], sh), "negzero": 0x80000000}[c0]
+    return fx.Config(fmt, grid, dist, scale, c0, w, K, 128, seed, nrec)
 
 
 def records(c, corrupt=None):
     """What the device writes for the config's recorded tiles when every output is the exact sum's word."""
-    s_tot = 2 * fx.GRIDS[fx.GRID[c.grid]].s
-    units = fx.word_units(c.c0_word, s_tot)
+    units = 2 * fx.GRIDS[fx.GRID[c.grid]].s + fx.make_scale(c.fmt, c.scale).sh
+    c0_units = fx.word_units(c.c0_word, units)
     out = np.zeros(c.nrec * 128, dtype=fx.REC)
     for t in range(c.nrec):
         A, B = fx.values(c, t)
+        fA, fB, _ = fx.scale_arrays(c, t)
         n = c.K // fx.KSTEP[c.fmt]
-        part = np.einsum("isk,jsk->ijs", A.reshape(16, n, -1), B.reshape(8, n, -1)).cumsum(axis=2) + units
+        sA, sB = (A * fA).reshape(16, n, -1), (B * fB).reshape(8, n, -1)
+        part = np.einsum("isk,jsk->ijs", sA, sB).cumsum(axis=2) + c0_units
         ref = part[:, :, -1]
         r = out[t * 128:(t + 1) * 128].reshape(16, 8)
-        r["d"] = fx.exact_words(ref, s_tot)[:, :, None].astype(np.uint32)
+        r["d"] = fx.exact_words(ref, units)[:, :, None].astype(np.uint32)
         r["ref"] = ref
         r["flags"] = fx.TAG | fx.representable(part).all(axis=2) | (fx.representable(ref) << 1)
     if corrupt:
@@ -84,6 +87,9 @@ def test_c0_words_sit_where_their_names_say():
     assert f32(w["binade"]) == 1.5 * 2 ** 23 * 2 ** -4 and f32(w["over"]) == 1.5 * 2 ** 24 * 2 ** -4
     assert w["nobits"] == 0x4B400000 and w["zero"] == 0
     assert "nobits" not in fx.c0_words(fx.GRIDS[fx.GRID["e4m3_int16"]])
+    # With sh fraction bits the binade ulp is one scaled unit: C0's value is 1.5 x 2^(23 - (2s + sh)).
+    e2 = fx.GRIDS[fx.GRID["e2m1_x2"]]
+    assert f32(fx.c0_words(e2, 6)["binade"]) == 1.5 * 2 ** 23 * 2 ** -(2 + 6)
 
 
 def test_sweep_spans_k32_to_16384_and_beyond_for_every_format():
@@ -130,6 +136,36 @@ def test_sparse_operands_keep_two_pairs_of_every_four(fmt):
     assert (pairs.sum(axis=2) <= 2).all() and (pairs.sum(axis=2) == 2).mean() > 0.5
 
 
+# ---- the block scales --------------------------------------------------------------------------------------------------
+
+
+def test_scale_sets_decode_to_their_values_on_the_silicon_model():
+    from verity.ml.circuits.silicon.models import _scale_dyadic
+    for fmt, fam in (("nvf4", "ue4m3"), ("mxf4", "ue8m0")):
+        for scale in fx.scales_of(fmt):
+            s = fx.make_scale(fmt, scale)
+            for code, num, exp in zip(s.code, s.num, s.exp):
+                ma, ea = _scale_dyadic(fam, code)
+                assert ma * 2.0 ** ea == num * 2.0 ** exp, (fmt, scale, code)
+    assert fx.make_scale("nvf4", "mix").num == tuple(range(1, 16, 2)) and fx.make_scale("nvf4", "mix").sh == 0
+    assert fx.make_scale("mxf4", "mix").sh == 6 and fx.make_scale("mxf4", "bind").sh == 14
+    # bind and bind26 straddle the 27-bit frac anchor: unit spread 28 (one past) and 26 (within).
+    b, b26 = fx.make_scale("mxf4", "bind"), fx.make_scale("mxf4", "bind26")
+    assert max(b.exp) - min(b.exp) == 14 and max(b26.exp) - min(b26.exp) == 13
+
+
+def test_scale_arrays_fold_num_and_shift_and_are_constant_within_a_block():
+    c = cfg(fmt="mxf4", grid="e2m1_x2", scale="mix", K=128)
+    fA, fB, sh = fx.scale_arrays(c, 0)
+    assert sh == 6 and (fA > 0).all() and (fB > 0).all()
+    scblk = fx.scale_block(c.fmt)
+    for row in (fA, fB):
+        blocks = row.reshape(row.shape[0], -1, scblk)
+        assert (blocks == blocks[:, :, :1]).all()  # one scale a block
+    # A's factor times B's realizes num_a num_b 2^(exp_a + exp_b + sh); mode-1 draws vary across blocks.
+    assert len(np.unique(fA[0])) > 1
+
+
 # ---- representability, the recheck and its refusals --------------------------------------------------------------------
 
 
@@ -140,10 +176,14 @@ def test_representable_is_an_odd_part_under_2_24():
 
 @pytest.mark.parametrize("c", [cfg(), cfg(grid="e4m3_half8", c0="binade", K=128),
                                cfg(fmt="nvf4", grid="e2m1_x2", dist="MAXSIGN", c0="nobits", K=128),
+                               cfg(fmt="nvf4", grid="e2m1_x2", scale="mix", c0="binade", K=128),
+                               cfg(fmt="nvf4", grid="e2m1_int", scale="hi", dist="MAX", c0="binade", K=128),
+                               cfg(fmt="mxf4", grid="e2m1_x2", scale="lo", c0="binade", K=128, nrec=2),
+                               cfg(fmt="mxf4nv", grid="e2m1_x2", scale="mix", dist="MAXSIGN", c0="zero", K=128),
                                cfg(fmt="sp_mxf4", grid="e2m1_x2", dist="CANCEL", c0="negzero", K=256, nrec=2)],
                          ids=lambda c: c.name)
 def test_recheck_accepts_exact_records(c):
-    units = fx.word_units(c.c0_word, 2 * fx.GRIDS[fx.GRID[c.grid]].s)
+    units = fx.word_units(c.c0_word, 2 * fx.GRIDS[fx.GRID[c.grid]].s + fx.make_scale(c.fmt, c.scale).sh)
     h = fx.recheck(c, units, records(c))
     assert h["outputs"] == 128 * c.nrec and not (h["ref_disagree"] or h["flag_disagree"] or h["bad_rep"])
     assert h["order_diff"] == 0 and h["unwritten"] == 0
@@ -194,6 +234,9 @@ def test_sass_refusal_wants_one_expected_mma_a_kernel():
 
 
 @pytest.mark.parametrize("c", [cfg(K=64), cfg(fmt="mxf4", grid="e2m1_x2", K=128),
+                               cfg(fmt="nvf4", grid="e2m1_x2", scale="mix", K=128),
+                               cfg(fmt="nvf4", grid="e2m1_int", scale="hi", dist="MAX", K=128),
+                               cfg(fmt="mxf4", grid="e2m1_x2", scale="lo", K=128),
                                cfg(fmt="sp_nvf4", grid="e2m1_x2", dist="MAX", K=128)], ids=lambda c: c.name)
 def test_replay_agrees_with_exact_records(c):
     r = fx.replay(c, records(c))
@@ -227,12 +270,21 @@ def _row(c, exact, **kw):
 def test_verdicts_find_the_last_exact_k_and_the_first_inexact_one():
     cs = [cfg(K=k) for k in (32, 64, 128, 256)]
     rows = [_row(cs[0], 128 * 128), _row(cs[1], 128 * 128), _row(cs[2], 100), _row(cs[3], 128 * 128)]
-    v = fx.verdicts(rows, cs)["e4m3/e4m3_int16"]
+    v = fx.verdicts(rows, cs)["e4m3/e4m3_int16/unit"]
     s = v["series"]["U/zero"]
     assert s["exact_through_K"] == 64 and s["first_inexact_K"] == 128 and v["refused"] == []
     rows[1]["refused"] = "the kernel didn't write its counts"
-    v = fx.verdicts(rows, cs)["e4m3/e4m3_int16"]
+    v = fx.verdicts(rows, cs)["e4m3/e4m3_int16/unit"]
     assert v["refused"] == [cs[1].name] and v["series"]["U/zero"]["exact_through_K"] == 32
+
+
+def test_verdicts_separate_the_scales():
+    cs = [cfg(fmt="nvf4", grid="e2m1_x2", scale=sc, K=k) for sc in ("unit", "hi") for k in (64, 128)]
+    rows = [_row(c, 128 * 128 if c.scale == "unit" or c.K == 64 else 1) for c in cs]
+    v = fx.verdicts(rows, cs)
+    assert v["nvf4/e2m1_x2/unit"]["series"]["U/zero"]["first_inexact_K"] is None
+    assert v["nvf4/e2m1_x2/hi"]["series"]["U/zero"]["first_inexact_K"] == 128
+    assert v["nvf4/e2m1_x2/hi"]["max_scale"] == 15.0
 
 
 def test_limits_take_the_worst_draw_for_each_c0():
@@ -241,7 +293,8 @@ def test_limits_take_the_worst_draw_for_each_c0():
     rows = [_row(c, 128 * 128 if (c.dist, c.K) in exact and c.c0 == "zero" else 1) for c in cs]
     rows[4]["exact"] = 1
     t = fx.limits(fx.verdicts(rows, cs))
-    assert "| e4m3/e4m3_int16 | zero | 32 | 64 (EDGE) |" in t and "| e4m3/e4m3_int16 | over | 0 | 32 (U) |" in t
+    assert "| e4m3/e4m3_int16 | unit | 1 | zero | 32 | 64 (EDGE) |" in t
+    assert "| e4m3/e4m3_int16 | unit | 1 | over | 0 | 32 (U) |" in t
 
 
 def test_rates_are_macs_per_sm_clock_against_imma():
@@ -275,7 +328,9 @@ def test_build_dump_and_sass(tmp_path, monkeypatch):
     subprocess.run([_tool("nvcc"), "-std=c++20", "-O2", "-gencode", "arch=compute_120a,code=sm_120a", "-o", str(binary),
                     str(HERE / "fp_exact.cu")], check=True)
     for c in (cfg(dist="RAMP", K=64), cfg(dist="EDGE", K=128), cfg(grid="e4m3_quarter4", dist="CANCEL", c0="negzero", K=128),
-              cfg(fmt="sp_nvf4", grid="e2m1_x2", K=256), cfg(fmt="mxf4nv", grid="e2m1_int", dist="MAXSIGN", K=128)):
+              cfg(fmt="sp_nvf4", grid="e2m1_x2", K=256), cfg(fmt="mxf4nv", grid="e2m1_int", dist="MAXSIGN", K=128),
+              cfg(fmt="nvf4", grid="e2m1_x2", scale="mix", c0="binade", K=128),
+              cfg(fmt="mxf4", grid="e2m1_x2", scale="bind", dist="CANCEL", c0="zero", K=256)):
         (tmp_path / "c.txt").write_text(c.line() + "\n")
         subprocess.run([str(binary), str(tmp_path / "c.txt"), "--dump", str(tmp_path / "d.bin")], check=True)
         d = np.fromfile(tmp_path / "d.bin", dtype="<i4")
