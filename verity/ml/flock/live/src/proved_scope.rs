@@ -43,8 +43,9 @@ fn row(m: &[Vec<usize>], r: usize) -> &[usize] {
 /// `ProvedScope.outReads`: for each output port of `net`, the input ports whose bits it reads, ascending; and whether its
 /// computed rows and output ports read, among the input columns, only port bits, each row only earlier rows. A column's reads
 /// are a mask, bit `p + 1` for input port `p` and bit `0` for an input column no port carries or a row read out of order; a
-/// computed row's are the union of the columns' it reads, and the constant and the zero rows past it read nothing. A lookup
-/// slot (`lookup`), which the verifier builds from its pinned table, is taken whole: each output port reads every input port.
+/// computed row's are the union of the columns' it reads, the constant reads nothing, and a column past it, which no row
+/// computes, is read out of order. A lookup slot (`lookup`), which the verifier builds from its pinned table, is taken whole:
+/// each output port reads every input port.
 pub fn out_reads(net: &IrUnitNet, lookup: bool) -> (Vec<Vec<usize>>, bool) {
     let ins = port_cols(&net.in_groups);
     let outs = port_cols(&net.out_groups);
@@ -69,6 +70,8 @@ pub fn out_reads(net: &IrUnitNet, lookup: bool) -> (Vec<Vec<usize>>, bool) {
             } else {
                 m[0] |= 1;
             }
+        } else if x > net.const_pos {
+            m[0] |= 1;
         }
     };
     let mut rows = vec![0u64; n_rows * words];
@@ -449,6 +452,11 @@ mod tests {
             assert!(!wires_acyclic(&circ(vec![unit(), loose.clone()], vec![1, 1], &[(0, 0, 1, 1, 0, 0), (1, 0, 0, 0, 0, 0)], vec![], vec![])));
             assert!(wires_acyclic(&circ(vec![unit(), loose], vec![1, 0], &[], vec![(0, 1, 0)], vec![])));
         }
+        // Lean's `past k`: output ports on the first `k` columns from 128, the constant at 129
+        let past = |k: usize| wnet(one(), 1, vec![1; k], vec![(vec![0], vec![0])]);
+        assert_eq!(out_reads(&past(2), false), (vec![vec![0], vec![]], true));
+        assert!(!out_reads(&past(3), false).1);
+        assert!(!wires_acyclic(&circ(vec![unit(), past(3)], vec![1, 1], &[(0, 0, 1, 1, 0, 2), (1, 0, 0, 0, 0, 0)], vec![], vec![])));
         // a lookup slot between two stages, taken whole: Lean's is a one-row stand-in, this one a 16-word table's
         let table: &'static [u32] = Box::leak(vec![0u32; 16].into_boxed_slice());
         let lookup = |back: bool| {
