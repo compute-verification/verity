@@ -599,6 +599,16 @@ def test_a_store_only_dfill_k_function_may_take_the_receipt_pointers():
         v = facts(put_body=body)["violations"]
         assert v and all("writes global memory" in x for x in v) and any(why in x for x in v), (body, v)
         assert not S.paths_gate(facts(put_body=body))["ok"]
+    # the put as nvcc places its arguments (HC-COMM's tp_dfill_k_put split of c286d4f81): register-to-register moves
+    # copy an argument, and the self-branch after the last RET never runs
+    placed = ["LDCU.64 UR4, c[0x0][0x358]", "MOV R20, R27", "MOV R27, 0x0", "MOV R21, R28", "IMAD.MOV.U32 R5, RZ, RZ, R11",
+              "STG.E.64 desc[UR4][R2.64], R20", "STG.E desc[UR4][R4.64], R5", f"RET.REL.NODEC R8 `({SERVE})", ".L_x_9:",
+              "BRA `(.L_x_9)", "NOP"]
+    assert facts(put_body=placed)["violations"] == []
+    for body, why in ((["IADD3 R27, R27, 0x1, RZ", *placed[1:]], "STG.E.64 at 0050 stores a value the function computes"),
+                      ([*placed[:2], "BRA `(.L_x_9)", *placed[2:]], "BRA at 0020")):
+        v = facts(put_body=body)["violations"]
+        assert v and any(why in x for x in v), (body, v)
     split = S.program_facts({"dscore": nvd((DFILL, True, [*K_TILE[:-1], "STG.E desc[UR4][R2.64], R9", "EXIT"]))})
     assert split["violations"] == [] and split["filler"]["stores"] == []
 
@@ -846,13 +856,17 @@ def test_score_v5_is_the_measured_filler_part_plus_the_modelled_served_part():
     """filler-scorer/v5's SCORE: every served MAC at 0.9 over a wall time the modelled edits lengthen (decode's
     deferred pass's shown part, prefill's edited GEMMs and coins), the filler's decode MACs less what the pass's hidden
     part displaces; each part shown, the factors named constants, prefill's coins a parameter."""
-    assert S.DEFER_SHOWN == pytest.approx(0.053 * 12.14 / (32 * 32 * 0.97e-3)) and 0.64 < S.DEFER_SHOWN < 0.66
+    shown = S.defer_shown_1gpu()
+    assert shown == pytest.approx(0.053 * 12.14 / (32 * 32 * 0.97e-3)) and 0.64 < shown < 0.66
     stats = all_points()
     sc = S.score_v5(stats, 0.45)
     assert not sc["missing"] and sc["SCORE"] == pytest.approx(sc["filler_part"] + sc["served_part_modelled"])
-    assert sc["served_model"]["constants"] == {"fraction": 0.9, "EGEMM": 1.57, "DEFER_OF_PEAK": 0.71,
-                                               "DEFER_SHOWN": S.DEFER_SHOWN, "DISPLACE": 1.57, "PREFILL_COINS": 0.13}
-    assert set(sc["served_model"]["sources"]) == set(sc["served_model"]["constants"])
+    c = sc["served_model"]["constants"]
+    assert {k: v for k, v in c.items() if k != "DEFER_FIT"} == {
+        "fraction": 0.9, "EGEMM": 1.57, "DEFER_OF_PEAK": 0.71, "DEFER_T": 4096, "DEFER_SHOWN_1GPU": shown,
+        "PREFILL_COINS": 0.13}
+    assert c["DEFER_FIT"]["s"]["intercept"] == {str(t): v for t, v in S.DEFER_FIT["s"]["intercept"].items()}
+    assert set(sc["served_model"]["sources"]) == set(c)
     by = {e["entry"]: e for e in sc["entries"]}
     for e in sc["entries"]:
         assert e["t1_ms"] > e["t1_measured_ms"] and e["filler_macs"] <= e["filler_measured_macs"]
@@ -860,8 +874,11 @@ def test_score_v5_is_the_measured_filler_part_plus_the_modelled_served_part():
     d = next(e for e in sc["entries"] if e["kind"] == "decode")
     v4 = S.decode_entry(stats[("decode", d["B"], d["L"])], d["B"], d["L"])
     pass_ms = 1.57 * v4["serving_macs"] / (0.71 * S.cap(v4["mhz"])) * 1e3
-    assert d["t1_ms"] == pytest.approx(v4["t1_ms"] + S.DEFER_SHOWN * pass_ms)
-    assert d["filler_macs"] == pytest.approx(max(0.0, v4["filler_macs"] - 1.57 * (1 - S.DEFER_SHOWN) * v4["serving_macs"]))
+    u = max(0.71, S.defer_rates(2, d["B"], d["L"])["u"])
+    assert d["served_model"]["defer_u"] == pytest.approx(u) and d["served_model"]["defer_s"] == shown
+    assert d["t1_ms"] == pytest.approx(v4["t1_ms"] + shown * pass_ms)
+    assert d["filler_macs"] == pytest.approx(
+        max(0.0, v4["filler_macs"] - u * (1 - shown) * pass_ms * S.cap(v4["mhz"]) * 1e-3))
     p = next(e for e in by.values() if e["kind"] == "prefill")
     st = stats[("prefill", S.PREFILL_M, 0)]
     assert p["t1_ms"] == pytest.approx(p["t1_measured_ms"] + (0.57 + 0.13) * (st["alone_ms"] + share.FA2_MS_8192))
@@ -871,6 +888,46 @@ def test_score_v5_is_the_measured_filler_part_plus_the_modelled_served_part():
     # the entries' measured arithmetic is v4's
     v4sc = S.score(stats, S.certified("theorem-k"))
     assert [e["t1_ms"] for e in v4sc["entries"]] == [e["t1_measured_ms"] for e in sc["entries"]]
+
+
+def test_the_deferred_pass_is_calibrated_to_measurement(monkeypatch):
+    """Coordinator 12:10Z: the deferred pass's shown share s and displacement rate u come from measurement, TP's
+    fitted by TP, batch and context to HC-COMM r3 (each point's residual reported), one GPU's share from STAGE-COST
+    (B 32, held flat) and its u the larger of TP 2's and the MAC-for-MAC rule; read at B and L clamped to the points."""
+    def point(tp, b, l, s, u, mhz=2000.0, served=1e12):
+        plain = served / (0.71 * S.cap(mhz)) * 1e3
+        lost = u * (plain - s * plain) * S.cap(mhz) * 1e-3
+        return {"T": 4096, "tp": tp, "B": b, "L": l, "base_ms": 40.0, "defer_ms": 40.0 + s * plain, "dalone_ms": plain,
+                "mhz": mhz, "served_macs": served, "defer_fill_macs": 5e12 - lost, "phase_slowdown": 1.0,
+                "phase_fill_macs": 5e12}
+
+    law = {2: (0.8, 1.1), 4: (0.6, 1.4)}
+    pts = [point(t, b, l, law[t][0] * (b / 32) ** -0.5 * (l / 2048) ** 0.1, law[t][1] * (b / 32) ** -0.2)
+           for t in (2, 4) for b, l in ((32, 2048), (64, 2048), (128, 8192), (256, 2048))]
+    f = S.defer_fit(4096, pts)
+    assert f["s"]["intercept"] == pytest.approx({2: 0.8, 4: 0.6}) and f["u"]["intercept"] == pytest.approx({2: 1.1, 4: 1.4})
+    assert (f["s"]["batch"], f["s"]["context"], f["u"]["batch"]) == pytest.approx((-0.5, 0.1, -0.2))
+    assert f["s"]["rms"] < 1e-9 and f["slowdown_err_pts_max"] < 1e-9
+    with pytest.raises(ValueError, match="measured at"):
+        S.defer_fit(2048)
+    assert S.defer_fit(8192)["tps"] == S.defer_fit(16384)["tps"] == [2]  # HC-COMM r4: TP 2 alone
+    # the fit to HC-COMM r3 at T = 4096: every residual reported, the model (EGEMM 1) giving back each point within it
+    fit = S.DEFER_FIT
+    assert fit["T"] == 4096 and fit["tps"] == [2, 4] and fit["n"] == 12 and len(fit["points"]) == 12
+    assert fit["s"]["batch"] < 0 and fit["s"]["rms"] < 0.15 and fit["u"]["rms"] < 0.15 and fit["slowdown_err_pts_max"] < 2
+    monkeypatch.setattr(S, "EGEMM", 1.0)
+    for p, r in zip([p for p in S.DEFER_TP if p["T"] == 4096], fit["points"]):
+        m = S.defer_measured(p)
+        dp = S.defer_pass(p["served_macs"], p["mhz"], p["tp"], p["B"], p["L"])
+        assert dp["added_ms"] == pytest.approx(m["added_ms"] + r["added_err_ms"])
+        assert dp["displaces"] / m["lost_macs"] == pytest.approx((1 + r["u_resid"]) * (1 - r["s_fit"]) / (1 - r["s"]))
+    assert S.defer_rates(2, 1, 1024) == S.defer_rates(2, 32, 2048)
+    assert S.defer_rates(4, 1024, 65536) == S.defer_rates(4, 256, 8192)
+    with pytest.raises(ValueError, match="TP 8"):
+        S.defer_rates(8, 32, 2048)
+    one = S.defer_rates(1, 128, 6144)
+    assert one["s"] == S.defer_shown_1gpu() and one["u"] == max(0.71, S.defer_rates(2, 128, 6144)["u"])
+    assert S.defer_rates(1, 256, 8192)["u"] == 0.71 < S.defer_rates(1, 32, 2048)["u"]
 
 
 def tp_log(rank, tp=2, b=32, l=2048, *, base=40.0, phase=41.0, fill=1e12, served=1e12, mhz=2000.0, repeats=2, reps=9,
@@ -898,11 +955,13 @@ def test_score_tp_reads_the_slowest_rank_with_the_gates_per_rank():
     e = S.tp_entry(by, (2, 32, 2048), 0.45)
     assert (e["entry"], e["tp"], e["B"], e["L"]) == ("TP 2 B 32 L 2K", 2, 32, 2048)
     assert e["t1_measured_ms"] == 42.0 and e["slowdown"] == pytest.approx(42.0 / 40.0)
-    dp = S.defer_pass(1e12, 2000.0)
+    dp = S.defer_pass(1e12, 2000.0, 2, 32, 2048)
+    assert dp["s"] == pytest.approx(S.DEFER_FIT["s"]["intercept"][2]) and e["served_model"]["defer_s"] == dp["s"]
     assert e["t1_ms"] == pytest.approx(42.0 + dp["added_ms"]) and e["filler_measured_macs"] == 1.5e12
     c = S.cap(2000.0) * e["t1_ms"] * 1e-3
     assert e["filler_part"] == pytest.approx(0.45 * (1.5e12 - dp["displaces"]) / c)
     assert e["served_part_modelled"] == pytest.approx(0.9 * 1e12 / c) and e["time"] == pytest.approx(2 * e["t1_ms"] / 40.0)
+    assert e["time_v4"] == pytest.approx(2 * 42.0 / 40.0)  # v4's form weighs by v4's wall time, no modelled pass
     sets = [{"dir": "a/set0", "settings": "NCCL_CGA_CLUSTER_SIZE=1 TPC_S=64", "rows": rows}]
     g = S.tp_gates(sets, {(2, 32, 2048): e}, None)
     assert all(g[k]["ok"] for k in ("slowdown", "pf_gate", "receipts", "nccl", "filler_paths")), g
