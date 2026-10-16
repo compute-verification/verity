@@ -89,7 +89,7 @@ theorem recZK_at (reg : Prog → Rr → Rv) (nh : ℕ) (msgs : Prog → Wit → 
       prCoin (fun q : Ωo => E (view P w r a (fun i => Flock.Guarantees.firewallLeaf (msgs P w r a p i) (y i)) p y q))
         ≤ prCoin (fun s : Ωs =>
             E (sim o (reg P r) a (fun i => Flock.Guarantees.firewallLeaf (msgs P w r a p i) (y i)) s)) + εo)
-    {δ : ℝ≥0∞} (hT1 : FlockSoundness.Assumptions.Hm96Hiding ZkView.My ZkView.saltHash δ)
+    {δ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ)
     (E : Rv × Ωa × (Fin nh → ByteArray) × V → Prop) :
     realAt reg nh msgs view P w E r ≤ idealAt nh sim o E (reg P r) + (εo + nh * δ) ∧
       idealAt nh sim o E (reg P r) ≤ realAt reg nh msgs view P w E r + (εo + nh * δ) := by
@@ -98,7 +98,7 @@ theorem recZK_at (reg : Prog → Rr → Rv) (nh : ℕ) (msgs : Prog → Wit → 
   refine prCoin_flip _ _ ((zk fun t => ¬ E (reg P r, t.1, t.2.1, t.2.2)).trans (le_of_eq (add_assoc _ _ _)))
 
 /-- **`RecursiveCircuitPrivate` at any hm96 hiding bound**: `Flock.Guarantees.RecursiveCircuitPrivate` with
-`Assumptions.Hm96Hiding` at `δ` taken as a hypothesis, and `nh·δ` in place of `nh·hidingGap My saltHash`. -/
+`Claims.Hm96Hiding` at `δ` taken as a hypothesis, and `nh·δ` in place of `nh·hidingGap My saltHash`. -/
 theorem recursiveCircuitPrivate_le (reg : Prog → Rr → Rv) {ε : ℝ≥0∞} (hreg : Hides reg ε)
     (honest : Out → Prog → Wit → Prop) (nh : ℕ) (msgs : Prog → Wit → Rr → Ωa → Ωp → Fin nh → ByteArray)
     (view : Prog → Wit → Rr → Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
@@ -107,7 +107,7 @@ theorem recursiveCircuitPrivate_le (reg : Prog → Rr → Rv) {ε : ℝ≥0∞} 
       prCoin (fun q : Ωo => E (view P w r a (fun i => Flock.Guarantees.firewallLeaf (msgs P w r a p i) (y i)) p y q))
         ≤ prCoin (fun s : Ωs =>
             E (sim o (reg P r) a (fun i => Flock.Guarantees.firewallLeaf (msgs P w r a p i) (y i)) s)) + εo)
-    {δ : ℝ≥0∞} (hT1 : FlockSoundness.Assumptions.Hm96Hiding ZkView.My ZkView.saltHash δ)
+    {δ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ)
     (p₀ : Prog) (o : Out) (P : Prog) (w : Wit) (hw : honest o P w) (E : Rv × Ωa × (Fin nh → ByteArray) × V → Prop) :
     Flock.Guarantees.recRealPr reg nh msgs view P w E ≤ Flock.Guarantees.recSimPr reg nh sim o p₀ E + (ε + εo + nh * δ) ∧
       Flock.Guarantees.recSimPr reg nh sim o p₀ E ≤ Flock.Guarantees.recRealPr reg nh msgs view P w E +
@@ -164,7 +164,7 @@ def unitProd (T : Type) : Unit × T ≃ T where
 /-- **T1 for a private circuit's rows**: the leaves of `Q`'s rows under fresh salts are within `n_r·δ` of ideal leaves, at
 every event `G` of the leaves, at any hm96 hiding bound `δ`. -/
 theorem rowLeaves_swap {nr : ℕ} (rows : Prog → Fin nr → ByteArray)
-    {δ : ℝ≥0∞} (hT1 : FlockSoundness.Assumptions.Hm96Hiding ZkView.My ZkView.saltHash δ) (Q : Prog)
+    {δ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ) (Q : Prog)
     (G : (Fin nr → ByteArray) → Prop) :
     prCoin (fun r : Fin nr → ZkView.Salt => G fun i => Flock.Guarantees.firewallLeaf (rows Q i) (r i)) ≤
       prCoin (fun u : Fin nr → ZkView.Bits × ZkView.Salt => G fun i => Flock.Guarantees.idealLeaf (u i)) + nr * δ :=
@@ -184,7 +184,7 @@ theorem rowLeaves_swap {nr : ℕ} (rows : Prog → Fin nr → ByteArray)
 /-- **A registration by hm96 leaves hides**, at `2·n_r·δ` at any hm96 hiding bound `δ`: each private circuit's leaves
 are within `n_r·δ` of ideal ones (`rowLeaves_swap`), the second way on the complement. -/
 theorem regLeaves_hides {nr : ℕ} (rows : Prog → Fin nr → ByteArray) (pub : (Fin nr → ByteArray) → Rv)
-    {δ : ℝ≥0∞} (hT1 : FlockSoundness.Assumptions.Hm96Hiding ZkView.My ZkView.saltHash δ) :
+    {δ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ) :
     Hides (Flock.Guarantees.regLeaves rows pub) (2 * nr * δ) := by
   intro P P' E
   have h1 := rowLeaves_swap rows hT1 P fun l => E (pub l)
@@ -196,7 +196,7 @@ theorem regLeaves_hides {nr : ℕ} (rows : Prog → Fin nr → ByteArray) (pub :
     _ = prCoin (fun r => E (Flock.Guarantees.regLeaves rows pub P' r)) + 2 * nr * δ := by ring
 
 /-- **`RecursiveCircuitPrivateLeaves` at any hm96 hiding bound**: `Flock.Guarantees.RecursiveCircuitPrivateLeaves` with
-`Assumptions.Hm96Hiding` at `δ` taken as a hypothesis, and `δ` in place of `hidingGap My saltHash`. -/
+`Claims.Hm96Hiding` at `δ` taken as a hypothesis, and `δ` in place of `hidingGap My saltHash`. -/
 theorem recursiveCircuitPrivateLeaves_le (nr : ℕ) (rows : Prog → Fin nr → ByteArray) (pub : (Fin nr → ByteArray) → Rv)
     (honest : Out → Prog → Wit → Prop)
     (nh : ℕ) (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → Fin nh → ByteArray)
@@ -207,7 +207,7 @@ theorem recursiveCircuitPrivateLeaves_le (nr : ℕ) (rows : Prog → Fin nr → 
         ≤ prCoin (fun s : Ωs =>
             E (sim o (Flock.Guarantees.regLeaves rows pub P r) a
               (fun i => Flock.Guarantees.firewallLeaf (msgs P w r a p i) (y i)) s)) + εo)
-    {δ : ℝ≥0∞} (hT1 : FlockSoundness.Assumptions.Hm96Hiding ZkView.My ZkView.saltHash δ)
+    {δ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ)
     (p₀ : Prog) (o : Out) (P : Prog) (w : Wit) (hw : honest o P w) (E : Rv × Ωa × (Fin nh → ByteArray) × V → Prop) :
     Flock.Guarantees.recRealPr (Flock.Guarantees.regLeaves rows pub) nh msgs view P w E ≤
         Flock.Guarantees.recSimPr (Flock.Guarantees.regLeaves rows pub) nh sim o p₀ E + (2 * nr * δ + εo + nh * δ) ∧

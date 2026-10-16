@@ -19,7 +19,7 @@ uniform), and no premise on a stream generator is left on the salts:
   (`leaf_os`, from `leafSplit`). `saltsEquiv n`: `n` salts from `n` streams of 192 bytes.
 * `prCoin_os`, `prCoin_os_prod`: an event of values decoded bijectively from A3's bytes has the probability it has for
   uniform values, alone or beside any independent randomness.
-* `hm96Hiding_os`: hm96 hiding (`Assumptions.Hm96Hiding`, a statement about uniform salts) at the OS's salt;
+* `hm96Hiding_os`: hm96 hiding (`Claims.Hm96Hiding`, a statement about uniform salts) at the OS's salt;
   `hm96Sha512_os`: at hm96-sha512's pinned key with no premise but A3, at the bound `hidingGap My saltHash`
   (`CROnly.hm96Hiding_gap`), which `hash-derived-key` says is at most `2^-193`.
 * `ideal_leaves_swap_os`: T1 once per leaf (`ZK.ideal_leaves_swap`) for `n` leaves salted from `n` OS streams.
@@ -140,10 +140,10 @@ theorem prCoin_os_prod {A Ω Y : Type} [Fintype A] [Fintype Ω] [Fintype Y] {m :
 theorem hm96Hiding_os {Ω Y B C : Type} [Fintype Ω] [Fintype Y] [Fintype B] {m : ℕ} {L : Fin m → ℕ}
     {t : Ω → (i : Fin m) → Fin (L i) → Fin 256} (hA3 : Assumptions.UniformRandomBytes L t)
     (e : ((i : Fin m) → Fin (L i) → Fin 256) ≃ Y) (My : Y → B) (c : Y → C) {δ₁ : ℝ≥0∞}
-    (hT1 : Assumptions.Hm96Hiding My c δ₁) (E : B × C → Prop) :
+    (hT1 : Claims.Hm96Hiding My c δ₁) (E : B × C → Prop) :
     prCoin (fun ω => E (My (e (t ω)), c (e (t ω)))) ≤ prCoin (fun p : B × Y => E (p.1, c p.2)) + δ₁ := by
   rw [prCoin_os hA3 e fun y => E (My y, c y)]
-  exact hT1 E
+  exact Assumptions.hm96Hiding_apply hT1 E
 
 /-- **hm96-sha512 hides at the OS's salt, with no premise but A3**: for the salt of one 192-byte stream of a byte
 source that meets A3 (`uniform/io-getrandombytes`), no test tells `(M(κ₀)·y, SHA-512(sp ‖ y))` from `(U, SHA-512(sp ‖ y))`
@@ -162,7 +162,7 @@ streams are read by their leaves only. -/
 theorem ideal_leaves_swap_os {Ω Ωos Y B C D : Type} [Fintype Ω] [Nonempty Ω] [Fintype Ωos] [Fintype Y] [Nonempty Y]
     [AddCommGroup B] [Fintype B] {n : ℕ} {L : Fin n → ℕ} {t : Ωos → (i : Fin n) → Fin (L i) → Fin 256}
     (hA3 : Assumptions.UniformRandomBytes L t) (e : ((i : Fin n) → Fin (L i) → Fin 256) ≃ (Fin n → Y))
-    (My : Y → B) (c : Y → C) {δ₁ : ℝ≥0∞} (hT1 : Assumptions.Hm96Hiding My c δ₁) (H : B × C → D)
+    (My : Y → B) (c : Y → C) {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding My c δ₁) (H : B × C → D)
     (x : Ω → Fin n → B) (G : Ω → (Fin n → D) → Prop) :
     prCoin (fun p : Ω × Ωos => G p.1 fun i => H (x p.1 i + My (e (t p.2) i), c (e (t p.2) i)))
       ≤ prCoin (fun p : Ω × (Fin n → B × Y) => G p.1 fun i => H ((p.2 i).1, c (p.2 i).2)) + n * δ₁ := by
@@ -188,7 +188,7 @@ theorem prCoin_unit_snd {C : Type} [Fintype C] (P : C → Prop) : prCoin (fun p 
 `H(x p i + M·y_i, c(y_i))` under uniform salts hides the program up to `2·|ι|·δ₁` (`PrivateCircuit.Hides`), by T1 to
 ideal leaves at `p` and back at `p'`. -/
 theorem hides_leaves {P Y B C D ι : Type} [Fintype Y] [Nonempty Y] [AddCommGroup B] [Fintype B] [Fintype ι]
-    [DecidableEq ι] (My : Y → B) (c : Y → C) {δ₁ : ℝ≥0∞} (hT1 : Assumptions.Hm96Hiding My c δ₁) (H : B × C → D)
+    [DecidableEq ι] (My : Y → B) (c : Y → C) {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding My c δ₁) (H : B × C → D)
     (x : P → ι → B) :
     PrivateCircuit.Hides (fun p (y : ι → Y) i => H (x p i + My (y i), c (y i))) (2 * Fintype.card ι * δ₁) := by
   intro p p' E

@@ -17,8 +17,8 @@ relation's fields, and the `Form` the scope check reads, each field the value `P
   parsed tables' `m`, as `verifyCmd`'s verdict runs them.
 * `Read.form`: the `Form` of `ProvedScope.check`'s tests, on the circuit and public file as it reads them
   (`ProvedScope.circuitOf`, `ProvedScope.publicOf`).
-* `Relation`: the readable relation's fields (`C`, `inp`, `out`, `pub`, `cs`, `grp`), which `toReadable` takes as a
-  function of the parsed statement; the scope reads none of them. The deployed one is `relation` (`Scope.Tables`).
+* `Relation`: the readable relation's fields (`C`, `inp`, `out`, `pub`), which `toReadable` takes as a function of the
+  parsed statement; the scope reads none of them. The deployed one is `relation` (`Scope.Tables`).
 -/
 
 namespace Flock.Readable
@@ -108,15 +108,12 @@ def Parsed.scope (p : Parsed) : Except String Unit := do
 /-- The parsed statement is the parser's own. -/
 def Parses (p : Parsed) : Prop := p.toRead.parse = some p
 
-/-- The readable relation's fields: the block circuit, each block's inputs and outputs, the public values, and the
-commit strings with the hidden values each commits to. -/
+/-- The readable relation's fields: the block circuit, each block's inputs and outputs, and the public values. -/
 structure Relation where
   C : Claims.Circuit
   inp : ℕ → List Claims.Flock.Src
   out : ℕ → List Claims.Flock.Src
   pub : List Bool
-  cs : List Claims.Msg
-  grp : ℕ → List ℕ
 
 /-- **The verifier's statement, readable**: `m` and `kLog` of the first table's statement (`Stmt.m`, the circuit's
 `k_log`), the relation's fields from `rel`, and the form the scope check reads (`Read.form`). -/
@@ -127,8 +124,6 @@ def toReadable (rel : Parsed → Relation) (p : Parsed) : Claims.Flock.Stmt wher
   inp := (rel p).inp
   out := (rel p).out
   pub := (rel p).pub
-  cs := (rel p).cs
-  grp := (rel p).grp
   form := p.form
 
 end Flock.Readable

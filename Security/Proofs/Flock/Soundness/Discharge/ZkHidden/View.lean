@@ -106,7 +106,7 @@ randomness (`prCoin_pi_close`), where every valid witness's registered values ar
 `coinedOf_reg`). -/
 theorem zkViewAtJ_of_ok {J : ℕ} (C : Fin J → CoinedSetup) (hC : ∀ j, CoinedOK execArith (fOf Zk.PAD_C) (C j))
     (hreg : ∀ j c w, (C j).Valid w → ((C j).T c).tab.sReg w = ((C j).T c).tab.pubReg)
-    {δ₁ : ℝ≥0∞} (hT1 : Assumptions.Hm96Hiding ZkView.My ZkView.saltHash δ₁) :
+    {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) :
     ZkViewAtJ C δ₁ := by
   intro c hc Out enc w w0 hv E
   have hreg := fun j => hreg j (c j) (w j) (hv j)
@@ -173,7 +173,7 @@ theorem zk_session_viewHJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀
     {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) (ht : I.tags.typed = false)
     (hdm : ∀ (S : Finset (Fin n)) (j : Fin (nTab I))
       (y : DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)), avoidsMask y.x.st = true)
-    {δ₁ : ℝ≥0∞} (hT1 : Assumptions.Hm96Hiding ZkView.My ZkView.saltHash δ₁) :
+    {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) :
     ∀ (S : Finset (Fin n)) (R : Reg)
       (ys : ∀ j : Fin (nTab I), DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)),
       ZkViewAtJ (fun j => coinedOf P ((planZHJ (Reg := Reg) dj y₀ S R).get
