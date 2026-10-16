@@ -35,17 +35,39 @@ PINNED = [
 ]
 
 
+# Map 1 (DFILL_MAP=1: the accumulator quad read in register order), the same way.
+PINNED_MAP1 = [
+    (1, 1, 0, 0x1CFF3491F1FF237C), (1, 1, 1, 0x7D9A7A94FDDBA199), (1, 1, 1000003, 0xC943701011E5F7D1),
+    (1, 8, 0, 0x733E8C216CB02FDD), (1, 8, 1, 0x8F38190869F3A6C3), (1, 8, 1000003, 0x0E4AF9C7352FCEEE),
+    (1, 64, 0, 0x592FA7AB9774A0F0), (1, 64, 1, 0x3FA855D33B182F9F), (1, 64, 1000003, 0x991284F7A46B1D74),
+    (2, 1, 0, 0x015FEBF53FD50CEE), (2, 1, 1, 0x251B47D0D7C68A88), (2, 1, 1000003, 0x93FC1D11DE1863D5),
+    (2, 8, 0, 0xF63C459772198BE5), (2, 8, 1, 0x6F911598E9C9EB37), (2, 8, 1000003, 0xF83C75F986A38FDC),
+    (2, 64, 0, 0x2D9A584D1A532743), (2, 64, 1, 0x7CA7D5783339C428), (2, 64, 1000003, 0xED9AA19DEAF8BCD7),
+    (4, 1, 0, 0xC10CC5A507FC58F1), (4, 1, 1, 0x8F77E3C51B973638), (4, 1, 1000003, 0x22F22ABAF16BD44D),
+    (4, 8, 0, 0x110CAEB5EBC97F03), (4, 8, 1, 0x67F00253250FB472), (4, 8, 1000003, 0x301A1790716A7868),
+    (4, 64, 0, 0x2444CD1D7AF45339), (4, 64, 1, 0x451A522722DDE4BE), (4, 64, 1000003, 0xF2E5A4621DB44B6E),
+    (8, 0, 0, 0xE54F09F395158AC1), (8, 1, 1, 0x0B92403DEF87EDB7), (8, 8, 1000003, 0x00A6D2D6A88307D0),
+]
+
+
 @pytest.mark.parametrize("nc,steps,tile,want", PINNED)
 def test_receipt_equals_dcap_reference(nc, steps, tile, want):
     assert R.receipt(C0, C1, tile, nc, steps) == want
 
 
+@pytest.mark.parametrize("nc,steps,tile,want", PINNED_MAP1)
+def test_map1_receipt_equals_dcap_reference(nc, steps, tile, want):
+    assert R.receipt(C0, C1, tile, nc, steps, 1) == want
+
+
 def test_receipt_at_measured_depth():
     """S = 2048, the depth every timed point ran, at a second pair of coins."""
     assert R.receipt(0x7F88ED5DFF52F729, 0xE9FECEAE8FAABB27, 77, 2, 2048) == 0x2F39A861AAA55C8D
+    assert R.receipt(0x7F88ED5DFF52F729, 0xE9FECEAE8FAABB27, 77, 2, 2048, 1) == 0xB26B98B1DA78C728
 
 
-def test_byte_map_is_a_bijection():
+@pytest.mark.parametrize("map_", [0, 1])
+def test_byte_map_is_a_bijection(map_):
     """Every byte of D lands in exactly one byte of the next A, so a step loses nothing a later step could need."""
     ids = np.arange(16 * 8 * 4, dtype=np.int64).reshape(16, 8, 4)
     a = np.empty((16, 32), dtype=np.int64)
@@ -53,20 +75,26 @@ def test_byte_map_is_a_bijection():
         for t in range(4):
             for q in range(4):
                 a[g, 4 * t + q] = ids[g, 2 * t, q]
-                a[g + 8, 4 * t + q] = ids[g + 8, 2 * t, q]
-                a[g, 16 + 4 * t + q] = ids[g + 8, 2 * t + 1, q]
-                a[g + 8, 16 + 4 * t + q] = ids[g, 2 * t + 1, q]
+                if map_:
+                    a[g + 8, 4 * t + q] = ids[g, 2 * t + 1, q]
+                    a[g, 16 + 4 * t + q] = ids[g + 8, 2 * t, q]
+                    a[g + 8, 16 + 4 * t + q] = ids[g + 8, 2 * t + 1, q]
+                else:
+                    a[g + 8, 4 * t + q] = ids[g + 8, 2 * t, q]
+                    a[g, 16 + 4 * t + q] = ids[g + 8, 2 * t + 1, q]
+                    a[g + 8, 16 + 4 * t + q] = ids[g, 2 * t + 1, q]
     assert sorted(a.ravel().tolist()) == list(range(16 * 8 * 4))
     d = np.random.default_rng(1).integers(-(1 << 31), 1 << 31, (16, 8)).astype("<i4")
-    got = R.step(np.zeros((16, 32), np.int64), np.zeros((8, 32), np.int64), d.astype(np.int64))
+    got = R.step(np.zeros((16, 32), np.int64), np.zeros((8, 32), np.int64), d.astype(np.int64), map_)
     by = d.view(np.uint8).reshape(16, 8, 4).astype(np.int8)
     assert got.tolist() == [[int(by.reshape(-1)[i]) for i in row] for row in a.tolist()]
 
 
-def test_receipt_depends_on_every_step_block():
+@pytest.mark.parametrize("map_", [0, 1])
+def test_receipt_depends_on_every_step_block(map_):
     """dgate's control: a tile cut short by one 8-step block writes a different receipt."""
     for nc in (1, 2, 4):
         for tile in (0, 5):
-            full = R.receipt(C0, C1, tile, nc, 64)
-            assert full != R.receipt(C0, C1, tile, nc, 56)
-            assert full != R.receipt(C0, C1, tile, nc, 63)
+            full = R.receipt(C0, C1, tile, nc, 64, map_)
+            assert full != R.receipt(C0, C1, tile, nc, 56, map_)
+            assert full != R.receipt(C0, C1, tile, nc, 63, map_)

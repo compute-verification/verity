@@ -35,16 +35,21 @@ def s8_rows(seed: int, tag: int, rows: int) -> np.ndarray:
     return words.view(np.int8).astype(np.int64)
 
 
-def step(a: np.ndarray, bt: np.ndarray, c: np.ndarray) -> np.ndarray:
-    """D = A B + C, then A' = D's bytes under the fixed map (the accumulator registers reread as the next A fragment)."""
+def step(a: np.ndarray, bt: np.ndarray, c: np.ndarray, map_: int = 0) -> np.ndarray:
+    """D = A B + C, then A' = D's bytes under the fixed map (the accumulator registers reread as the next A fragment).
+    Map 0 is FILL v1's (a' = d0, d2, d3, d1); map 1 reads the accumulator quad in register order (a' = d0, d1, d2, d3)."""
     d = (c + a @ bt.T).astype("<i4")
     b = lambda x: np.ascontiguousarray(x).view(np.int8)
-    top = np.concatenate([b(d[:8, 0::2]), b(d[8:, 1::2])], axis=1)
-    bot = np.concatenate([b(d[8:, 0::2]), b(d[:8, 1::2])], axis=1)
+    if map_:
+        top = np.concatenate([b(d[:8, 0::2]), b(d[8:, 0::2])], axis=1)
+        bot = np.concatenate([b(d[:8, 1::2]), b(d[8:, 1::2])], axis=1)
+    else:
+        top = np.concatenate([b(d[:8, 0::2]), b(d[8:, 1::2])], axis=1)
+        bot = np.concatenate([b(d[8:, 0::2]), b(d[:8, 1::2])], axis=1)
     return np.concatenate([top, bot]).astype(np.int64)
 
 
-def receipt(c0: int, c1: int, tile: int, nc: int, steps: int) -> int:
+def receipt(c0: int, c1: int, tile: int, nc: int, steps: int, map_: int = 0) -> int:
     seed = dseed(c0, c1, tile)
     bt = [s8_rows(seed, 1 + b, 8) for b in range(2)]
     c = np.array([[(dword(seed, 3, r, n) & 0xFFFFFF) - 0x800000 for n in range(8)] for r in range(16)], dtype=np.int64)
@@ -52,7 +57,7 @@ def receipt(c0: int, c1: int, tile: int, nc: int, steps: int) -> int:
     for ch in range(nc):
         a = s8_rows(seed, 16 + ch, 16)
         for s in range(steps):
-            a = step(a, bt[s & 1], c)
+            a = step(a, bt[s & 1], c, map_)
         words = a.astype(np.int8).view("<u4")
         for r in range(16):
             for w in range(8):

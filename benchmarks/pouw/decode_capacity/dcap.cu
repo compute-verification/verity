@@ -688,6 +688,10 @@ static int run_fill(Dev& d, int B, int L, int fill_sms, bool big, int reps) {
 // can't start before step s ends. After S steps the tile's NC final states fold into an 8-byte receipt, the XOR over
 // (chain c, row r, word w) of drec(seed, c, r, w, word w of row r), which is all the tile writes. dfill_ref is the same
 // tile on the host, written from the matrices above rather than from the fragment layout.
+// MAP 1 (DFILL_MAP=1) reads the accumulator quad in its own register order (a' = d0, d1, d2, d3), so the next A fragment
+// is the MMA's own output quad and ptxas needs no MOVs (map 0 costs four a step, through one shared staging quad):
+//   A'[g][4t+q] = byte q of D[g][2t]           A'[g+8][4t+q] = byte q of D[g][2t+1]
+//   A'[g][16+4t+q] = byte q of D[g+8][2t]      A'[g+8][16+4t+q] = byte q of D[g+8][2t+1]
 __host__ __device__ inline uint64_t smix(uint64_t x) {
   x += 0x9E3779B97F4A7C15ull;
   x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull;
@@ -705,21 +709,28 @@ __host__ __device__ inline uint64_t drec(uint64_t seed, int c, int r, int w, uin
   return smix(seed ^ ((uint64_t)(c * 16 + r) << 40) ^ ((uint64_t)w << 32) ^ word);
 }
 
+template <int MAP>
 __device__ __forceinline__ void dstep(uint32_t (&a)[4], const uint32_t (&b)[2], const uint32_t (&c)[4]) {
-  uint32_t d0, d1, d2, d3;
-  asm("mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%10,%11,%12,%13};"
-      : "=r"(d0), "=r"(d1), "=r"(d2), "=r"(d3)
-      : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]), "r"(c[0]), "r"(c[1]), "r"(c[2]), "r"(c[3]));
-  a[0] = d0;  // A'[g][4t..]       = D[g][2t]
-  a[1] = d2;  // A'[g+8][4t..]     = D[g+8][2t]
-  a[2] = d3;  // A'[g][16+4t..]    = D[g+8][2t+1]
-  a[3] = d1;  // A'[g+8][16+4t..]  = D[g][2t+1]
+  if constexpr (MAP == 1) {
+    asm("mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%0,%1,%2,%3}, {%4,%5}, {%6,%7,%8,%9};"
+        : "+r"(a[0]), "+r"(a[1]), "+r"(a[2]), "+r"(a[3])
+        : "r"(b[0]), "r"(b[1]), "r"(c[0]), "r"(c[1]), "r"(c[2]), "r"(c[3]));
+  } else {
+    uint32_t d0, d1, d2, d3;
+    asm("mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%10,%11,%12,%13};"
+        : "=r"(d0), "=r"(d1), "=r"(d2), "=r"(d3)
+        : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]), "r"(c[0]), "r"(c[1]), "r"(c[2]), "r"(c[3]));
+    a[0] = d0;  // A'[g][4t..]       = D[g][2t]
+    a[1] = d2;  // A'[g+8][4t..]     = D[g+8][2t]
+    a[2] = d3;  // A'[g][16+4t..]    = D[g+8][2t+1]
+    a[3] = d1;  // A'[g+8][16+4t..]  = D[g][2t+1]
+  }
 }
 // Warp `wid` runs tiles tile0 + wid·tiles + i, i < tiles, S steps each (S a multiple of 8), and writes tile i's receipt to
 // rec[wid·tiles + i]. Lane (g, t) holds A rows g and g + 8, words t and 4 + t; B column g, words t and 4 + t; C rows g
 // and g + 8, columns 2t and 2t + 1 (the PTX fragment layout of m16n8k32 .s8).
-template <int NC>
-__global__ void __launch_bounds__(512) dfill_k(uint64_t c0, uint64_t c1, unsigned long long tile0, int tiles, int steps,
+template <int NC, int MAP>
+__global__ void __launch_bounds__(NC >= 8 ? 256 : 512) dfill_k(uint64_t c0, uint64_t c1, unsigned long long tile0, int tiles, int steps,
                                               unsigned long long* __restrict__ rec) {
   const int lane = threadIdx.x & 31, g = lane >> 2, t = lane & 3;
   const unsigned long long wid = (unsigned long long)blockIdx.x * (blockDim.x >> 5) + (threadIdx.x >> 5);
@@ -748,7 +759,7 @@ __global__ void __launch_bounds__(512) dfill_k(uint64_t c0, uint64_t c1, unsigne
 #pragma unroll
       for (int u = 0; u < 8; u++)
 #pragma unroll
-        for (int ch = 0; ch < NC; ch++) dstep(a[ch], b[u & 1], c);
+        for (int ch = 0; ch < NC; ch++) dstep<MAP>(a[ch], b[u & 1], c);
     }
     uint64_t h = 0;
 #pragma unroll
@@ -761,7 +772,7 @@ __global__ void __launch_bounds__(512) dfill_k(uint64_t c0, uint64_t c1, unsigne
   }
 }
 
-static uint64_t dfill_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int steps) {
+static uint64_t dfill_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int steps, int map = 0) {
   const uint64_t seed = dseed(c0, c1, tile);
   int8_t Bt[2][8][32];  // Bt[b][n][k] = B_b[k][n]
   int32_t C[16][8];
@@ -794,9 +805,9 @@ static uint64_t dfill_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int s
         for (int t = 0; t < 4; t++)
           for (int q = 0; q < 4; q++) {
             A[g][4 * t + q] = byte(D[g][2 * t], q);
-            A[g + 8][4 * t + q] = byte(D[g + 8][2 * t], q);
-            A[g][16 + 4 * t + q] = byte(D[g + 8][2 * t + 1], q);
-            A[g + 8][16 + 4 * t + q] = byte(D[g][2 * t + 1], q);
+            A[g + 8][4 * t + q] = byte(D[map ? g : g + 8][map ? 2 * t + 1 : 2 * t], q);
+            A[g][16 + 4 * t + q] = byte(D[g + 8][map ? 2 * t : 2 * t + 1], q);
+            A[g + 8][16 + 4 * t + q] = byte(D[map ? g + 8 : g][2 * t + 1], q);
           }
     }
     for (int r = 0; r < 16; r++)
@@ -811,7 +822,7 @@ static uint64_t dfill_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int s
 
 // one chunk: `grid` blocks of W warps, each warp `tiles` tiles of NC chains x S steps; chunk k covers tiles from k·per on
 struct DFill {
-  int W = 4, NC = 2, S = 2048, tiles = 1, grid = 0;
+  int W = 4, NC = 2, S = 2048, tiles = 1, grid = 0, map = 0;
   uint64_t c0 = 0, c1 = 0;
   unsigned long long* rec = nullptr;
   long long per() const { return (long long)grid * W * tiles; }
@@ -820,22 +831,31 @@ struct DFill {
 static void dfill_launch(const DFill& f, long long chunk, cudaStream_t st) {
   const unsigned long long t0 = (unsigned long long)chunk * f.per();
   const dim3 gr(f.grid), bl(32 * f.W);
-  switch (f.NC) {
-    case 1: dfill_k<1><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
-    case 2: dfill_k<2><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
-    case 4: dfill_k<4><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
-    default: fprintf(stderr, "NC must be 1, 2 or 4\n"); exit(1);
+  switch (f.NC * 2 + f.map) {
+    case 2: dfill_k<1, 0><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
+    case 4: dfill_k<2, 0><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
+    case 8: dfill_k<4, 0><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
+    case 3: dfill_k<1, 1><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
+    case 5: dfill_k<2, 1><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
+    case 9: dfill_k<4, 1><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
+    case 17: dfill_k<8, 1><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
+    default: fprintf(stderr, "NC must be 1, 2 or 4 (map 0) or 1, 2, 4 or 8 (map 1)\n"); exit(1);
   }
 }
 static void dfill_prep() {
-  CK(cudaFuncSetAttribute(dfill_k<1>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
-  CK(cudaFuncSetAttribute(dfill_k<2>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
-  CK(cudaFuncSetAttribute(dfill_k<4>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
+  CK(cudaFuncSetAttribute(dfill_k<1, 0>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
+  CK(cudaFuncSetAttribute(dfill_k<2, 0>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
+  CK(cudaFuncSetAttribute(dfill_k<4, 0>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
+  CK(cudaFuncSetAttribute(dfill_k<1, 1>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
+  CK(cudaFuncSetAttribute(dfill_k<2, 1>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
+  CK(cudaFuncSetAttribute(dfill_k<4, 1>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
+  CK(cudaFuncSetAttribute(dfill_k<8, 1>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
 }
+static int dfill_map() { return getenv("DFILL_MAP") ? atoi(getenv("DFILL_MAP")) : 0; }
 // tiles a warp so that a chunk is about 2^DFILL_CHUNK_LOG2 (default 19) MMAs an SM, ~1 ms at the tensor peak
 static DFill dfill_make(int grid, int W, int NC, int S, uint64_t c0, uint64_t c1) {
   DFill f;
-  f.grid = grid; f.W = W; f.NC = NC; f.S = S; f.c0 = c0; f.c1 = c1;
+  f.grid = grid; f.W = W; f.NC = NC; f.S = S; f.c0 = c0; f.c1 = c1; f.map = dfill_map();
   const int lg = getenv("DFILL_CHUNK_LOG2") ? atoi(getenv("DFILL_CHUNK_LOG2")) : 19;
   f.tiles = std::max(1, (int)((1LL << lg) / ((long long)W * NC * S)));
   CK(cudaMalloc(&f.rec, f.per() * sizeof(unsigned long long)));
@@ -848,7 +868,7 @@ static int dfill_check(const DFill& f, long long chunk, int n) {
   int bad = 0;
   for (int i = 0; i < n; i++) {
     const long long idx = (long long)i * f.per() / n + (i * 7919) % std::max(1LL, f.per() / n);
-    bad += h[idx] != dfill_ref(f.c0, f.c1, (unsigned long long)chunk * f.per() + idx, f.NC, f.S);
+    bad += h[idx] != dfill_ref(f.c0, f.c1, (unsigned long long)chunk * f.per() + idx, f.NC, f.S, f.map);
   }
   return bad;
 }
@@ -914,10 +934,12 @@ static uint64_t g_c0 = 0x0123456789abcdefull, g_c1 = 0xfedcba9876543210ull;  // 
 static int dgate(Dev& d) {
   int fails = 0;
   dfill_prep();
-  for (int nc : {1, 2, 4})
+  for (int map : {0, 1})
+  for (int nc : {1, 2, 4, 8})
     for (int S : {8, 2048}) {
+      if (nc == 8 && map == 0) continue;
       DFill f;
-      f.grid = 3; f.W = 4; f.NC = nc; f.S = S; f.tiles = 2; f.c0 = g_c0; f.c1 = g_c1;
+      f.grid = 3; f.W = 4; f.NC = nc; f.S = S; f.tiles = 2; f.c0 = g_c0; f.c1 = g_c1; f.map = map;
       CK(cudaMalloc(&f.rec, f.per() * sizeof(unsigned long long)));
       CK(cudaMemset(f.rec, 0xA5, f.per() * sizeof(unsigned long long)));
       dfill_launch(f, 5, d.st);
@@ -928,12 +950,12 @@ static int dgate(Dev& d) {
       long bad = 0, ctl_equal = 0;
       for (long long i = 0; i < f.per(); i++) {
         const unsigned long long tile = 5ull * f.per() + i;
-        bad += h[i] != dfill_ref(f.c0, f.c1, tile, nc, S);
-        ctl_equal += h[i] == dfill_ref(f.c0, f.c1, tile, nc, S - 8);
+        bad += h[i] != dfill_ref(f.c0, f.c1, tile, nc, S, map);
+        ctl_equal += h[i] == dfill_ref(f.c0, f.c1, tile, nc, S - 8, map);
       }
-      printf("{\"mode\": \"dgate\", \"NC\": %d, \"S\": %d, \"tiles\": %lld, \"mismatches\": %ld, \"control_equal\": %ld, "
-             "\"ok\": %s}\n",
-             nc, S, f.per(), bad, ctl_equal, bad || ctl_equal ? "false" : "true");
+      printf("{\"mode\": \"dgate\", \"map\": %d, \"NC\": %d, \"S\": %d, \"tiles\": %lld, \"mismatches\": %ld, "
+             "\"control_equal\": %ld, \"ok\": %s}\n",
+             map, nc, S, f.per(), bad, ctl_equal, bad || ctl_equal ? "false" : "true");
       fails += bad != 0 || ctl_equal != 0;
       CK(cudaFree(f.rec));
     }
@@ -947,11 +969,14 @@ static void run_dalone(Dev& d, int W, int NC, int S) {
   DFill f = dfill_make(d.sms, W, NC, S, g_c0, g_c1);
   double mhz, watt;
   long long last = 0;
-  const double r = dfill_alone(d, f, d.st, 40, &mhz, &watt, &last);
+  // DFILL_ALONE_N: chunks timed (default 40, ~45 ms); NVML's power lags, so read board power from a run of seconds
+  const int n = getenv("DFILL_ALONE_N") ? atoi(getenv("DFILL_ALONE_N")) : 40;
+  const double r = dfill_alone(d, f, d.st, n, &mhz, &watt, &last);
   const int bad = dfill_check(f, last, 8);
-  printf("{\"mode\": \"dalone\", \"W\": %d, \"NC\": %d, \"S\": %d, \"tiles\": %d, \"grid\": %d, \"chunk_macs\": %.6e, "
-         "\"mac_per_s\": %.6e, \"share\": %.5f, \"mhz\": %.1f, \"watt\": %.1f, \"rec_checked\": 8, \"rec_bad\": %d}\n",
-         W, NC, S, f.tiles, f.grid, f.macs(), r, r / (1024.0 * d.sms * mhz * 1e6), mhz, watt, bad);
+  printf("{\"mode\": \"dalone\", \"map\": %d, \"W\": %d, \"NC\": %d, \"S\": %d, \"tiles\": %d, \"grid\": %d, \"chunks\": %d, "
+         "\"chunk_macs\": %.6e, \"mac_per_s\": %.6e, \"share\": %.5f, \"mhz\": %.1f, \"watt\": %.1f, \"rec_checked\": 8, "
+         "\"rec_bad\": %d}\n",
+         f.map, W, NC, S, f.tiles, f.grid, n, f.macs(), r, r / (1024.0 * d.sms * mhz * 1e6), mhz, watt, bad);
   fflush(stdout);
   CK(cudaFree(f.rec));
 }
@@ -962,8 +987,8 @@ static void run_done(Dev& d, int W, int NC, int S) {
   for (int k = 0; k < 3; k++) dfill_launch(f, k, d.st);
   CK(cudaStreamSynchronize(d.st));
   CK(cudaGetLastError());
-  printf("{\"mode\": \"done\", \"W\": %d, \"NC\": %d, \"S\": %d, \"chunk_macs\": %.6e, \"rec_bad\": %d}\n", W, NC, S, f.macs(),
-         dfill_check(f, 2, 4));
+  printf("{\"mode\": \"done\", \"map\": %d, \"W\": %d, \"NC\": %d, \"S\": %d, \"chunk_macs\": %.6e, \"rec_bad\": %d}\n", f.map, W,
+         NC, S, f.macs(), dfill_check(f, 2, 4));
   CK(cudaFree(f.rec));
 }
 
@@ -1044,16 +1069,17 @@ static int run_dfill(Dev& d, int B, int L, int place, int fill_sms, int W, int N
   const Rep mf = median(a_fill), m0 = median(a_full), m2 = median(a_full2);
   const double peak = 1024.0 * d.sms * mf.mhz * 1e6;
   char shape[64];
-  snprintf(shape, sizeof shape, "dfree-%s-w%d-nc%d-t%d%s", place ? "co" : "split", W, NC, f.tiles,
-           kind == 0 ? "-lin" : kind == 1 ? "-att" : "");
-  printf("{\"mode\": \"dfill\", \"place\": \"%s\", \"shape\": \"%s\", \"B\": %d, \"L\": %d, \"W\": %d, \"NC\": %d, \"S\": %d, "
+  snprintf(shape, sizeof shape, "dfree-%s-w%d-nc%d-t%d%s%s", place ? "co" : "split", W, NC, f.tiles,
+           kind == 0 ? "-lin" : kind == 1 ? "-att" : "", f.map ? "-m1" : "");
+  printf("{\"mode\": \"dfill\", \"map\": %d, \"place\": \"%s\", \"shape\": \"%s\", \"B\": %d, \"L\": %d, \"W\": %d, \"NC\": %d, "
+         "\"S\": %d, "
          "\"tiles\": %d, \"grid\": %d, \"coins\": [\"%016llx\", \"%016llx\"], \"prio\": [%d, %d], \"fill_sms_req\": %d, "
          "\"step_sms\": %d, \"fill_sms\": %d, \"spread\": {\"step_graph\": %d, \"fill\": %d}, \"kv_wrapped\": %s, "
          "\"step_macs\": %.6e, \"chunk_macs\": %.6e, \"alone\": {\"mac_per_s\": %.6e, \"share\": %.5f, \"mhz\": %.1f, "
          "\"watt\": %.1f}, \"window\": {\"ms\": %.3f, \"fill_chunks\": %lld, \"fill_mac_per_s\": %.6e, \"fill_share\": %.5f, "
          "\"fill_gb_per_s\": %.6f}, \"rec_checked\": %d, \"rec_bad\": %d, \"slowdown\": %.4f, \"step_share_full\": %.5f, "
          "\"step_share_fill\": %.5f, ",
-         place ? "co" : "split", shape, B, L, W, NC, S, f.tiles, f.grid, (unsigned long long)g_c0, (unsigned long long)g_c1,
+         f.map, place ? "co" : "split", shape, B, L, W, NC, S, f.tiles, f.grid, (unsigned long long)g_c0, (unsigned long long)g_c1,
          lo, hi, place ? d.sms : fill_sms, place ? d.sms : got[0], got[1], sp_step, sp_fill, wrapped ? "true" : "false",
          step_macs, f.macs(), alone, alone / (1024.0 * d.sms * amhz * 1e6), amhz, awatt, t1 - t0, nwin, rate, rate / peak,
          (double)nwin * f.per() * 8 / ((t1 - t0) * 1e-3) / 1e9, place ? 8 : 16, bad, mf.ms / ((m0.ms + m2.ms) / 2),
