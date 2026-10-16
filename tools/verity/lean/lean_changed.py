@@ -12,10 +12,10 @@ the audit's cold build reaches it.
 node's Lean slots of pool `build` (`lean_slot.py`; refused when SLOTS lists no `build` pool, which pool `any` never stands in
 for), never one of the `audit` pool's, where hour-long audits hold every slot, whatever slot (LEAN_SLOT) the process that
 started it holds. Slot `build/I`'s tree is `lean-records/build-I` under the check cache, whoever holds that slot's lock owns
-it, and audit.py inherits the lock's descriptor, so the slot is held until audit.py exits; with no SLOTS (a laptop) the tree
+it, and check.py inherits the lock's descriptor, so the slot is held until check.py exits; with no SLOTS (a laptop) the tree
 is `lean-records/local`. `--tree` names another only under `lean-records/`. The tree's fetched dependencies are its own copy
 of the audit's (taken once per manifest and toolchain, else fetched cold), never links, so what Lake writes there stays out of
-what the audit keeps. That bounds Lake's own writes, not compile-time code: audit.py builds in its sandbox only where the
+what the audit keeps. That bounds Lake's own writes, not compile-time code: check.py builds in its sandbox only where the
 machine allows one, and without it that code can write anything this user can, the audit's kept dependencies and passes
 included, as any build this user runs by hand can. `--update` writes the record back into this checkout, but not in a recorded
 run, whose source tree the commit's other runs share: there it is in the run's `lean-audit/audit-*/`.
@@ -41,7 +41,7 @@ taken under their lock while the tree has none for its manifest and toolchain; t
 move them away without touching the links. The first build of a package here is cold; later ones are not.
 
 A package with guarantees then has its roots built (`lake build +ROOT`, as the audit does) and its guarantees' records
-compared with that build (`records`): `audit.py`'s own reading of the `.olean` files (`Facts.lean`, in the sandbox) and its
+compared with that build (`records`): `check.py`'s own reading of the `.olean` files (`Facts.lean`, in the sandbox) and its
 judgment of the guarantees, without the kernel replay, so a record two merges left stale (a statement or a definition a
 guarantee reads changed, a guarantee gone, a `reads` digest no longer its definitions') fails the run before the audit's cold
 build reaches it.
@@ -241,7 +241,7 @@ def guarantee_roots(pkg: str, tree: Path) -> list[str]:
 
 
 def records(pkg: str, tree: Path, lake: str) -> list[str]:
-    """The audit's failures about the guarantees on the tree's build of ``pkg`` (`audit.py`'s `facts_of` and `judge`, without
+    """The audit's failures about the guarantees on the tree's build of ``pkg`` (`check.py`'s `facts_of` and `judge`, without
     the kernel replay): a guarantee missing, no longer a theorem or with no record, using an axiom the policy does not allow or
     assuming an unnamed `Prop`, whose statement or the definitions it reads no longer match its record, or a `reads` entry
     that no longer lists the modules the guarantees read, the guarantees that read them or their definitions' digest, or a
@@ -295,7 +295,7 @@ def records_tree() -> Path:
 
 
 def label(out: Path) -> None:
-    """Write ``FAST_KIND`` into the reports audit.py left under ``out``: `audit.json`, its packages, and each `report.json`."""
+    """Write ``FAST_KIND`` into the reports check.py left under ``out``: `audit.json`, its packages, and each `report.json`."""
     for p in [out / "audit.json", *sorted(out.glob("audit-*/report.json"))]:
         if not p.is_file():
             continue
@@ -312,7 +312,7 @@ def write_result(run_dir: Path, run_id: str, pkg: str, rc: int, out: Path, updat
     doc = {"schema": "research/result/v0.1", "kind": FAST_KIND, "run_id": run_id,
            "workload_fingerprint": {"package": pkg, "update": update, "replay": False, "runs": False},
            "validation": {"status": "passed" if rc == 0 else "failed", "checker": "tools/verity/lean/lean_changed.py --records",
-                          "detail": f"audit.py exit {rc} without the kernel replay or the tests: not a Lean verdict, and no "
+                          "detail": f"check.py exit {rc} without the kernel replay or the tests: not a Lean verdict, and no "
                                     "merge accepts it"},
            "artifacts": [] if rel.startswith("..") else [rel]}
     tmp = run_dir / "result.json.tmp"
@@ -322,8 +322,8 @@ def write_result(run_dir: Path, run_id: str, pkg: str, rc: int, out: Path, updat
 
 def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool = False, moved: Path | None = None,
                   out: Path | None = None, log=print) -> int:
-    """`--records`: `audit.py --build --no-replay --no-runs` on the package ``name`` names, in ``tree`` (default: the tree of the
-    `build` slot it takes; any other must be under `RECORDS`); audit.py's exit status, or 2 when ``tree`` is not under
+    """`--records`: `check.py --build --no-replay --no-runs` on the package ``name`` names, in ``tree`` (default: the tree of the
+    `build` slot it takes; any other must be under `RECORDS`); check.py's exit status, or 2 when ``tree`` is not under
     `RECORDS`, ``name`` matches no single package, the node's Lean slots refuse it or another run holds the tree."""
     base = (LA.COMMON.cache_dir() / RECORDS).resolve()
     if tree is not None and base not in tree.resolve().parents:
@@ -375,7 +375,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 got = subprocess.run(argv, cwd=tree, env={**os.environ, "LEAN_NUM_THREADS": str(LA.COMMON.cores())},
                                      pass_fds=() if slot is None else (slot,)).returncode
                 label(mine_out)
-                log(f"lean-records: {p}: audit.py exit {got} in {time.monotonic() - t0:.0f} s on {tree} ({n} files changed "
+                log(f"lean-records: {p}: check.py exit {got} in {time.monotonic() - t0:.0f} s on {tree} ({n} files changed "
                     f"there), without the kernel replay or the tests: a {FAST_KIND} result, which check and research merge "
                     f"refuse; reports in {mine_out}")
                 if p == pkg:
@@ -492,9 +492,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--records", metavar="PKG",
                     help=f"audit PKG's records without the kernel replay, on a tree kept per Lean slot of pool {FAST_POOL} "
                     f"(a {FAST_KIND} result, which no merge accepts)")
-    ap.add_argument("--update", action="store_true", help="with --records: audit.py --update")
-    ap.add_argument("--moved", type=Path, metavar="FILE", help="with --records --update: audit.py --moved FILE")
-    ap.add_argument("--out", type=Path, help="with --records: audit.py --out DIR")
+    ap.add_argument("--update", action="store_true", help="with --records: check.py --update")
+    ap.add_argument("--moved", type=Path, metavar="FILE", help="with --records --update: check.py --moved FILE")
+    ap.add_argument("--out", type=Path, help="with --records: check.py --out DIR")
     a = ap.parse_args(argv)
     if not a.records:
         if a.update or a.moved or a.out:

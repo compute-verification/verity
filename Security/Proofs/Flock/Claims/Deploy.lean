@@ -218,19 +218,19 @@ def next (zk : Bool) (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) : 
   | .coin c => .ret (.msg c.bytes)
   | .decide s spec sts link c₁ mids f => outOf (decision zk s spec sts x link c₁ mids f)
 
-/-- A rep's recorded rounds: the masked replay's `m + kLog − 6`, else zerocheck's `m − 3` and lincheck's `kLog − 3`;
-the ring switch's `claims + 1`; Ligerito's `k0 + 5 + 11R` (`R + 1` levels), with the masked one's level-0 out-of-domain
-point and coin and its four inner rounds. -/
+/-- A rep's recorded rounds: the masked replay's `m + (kLog − 6)`, else zerocheck's `3 + (m − 6)` and lincheck's
+`3 + (kLog − 6)`; the ring switch's `claims + 1`; Ligerito's `k0 + 5 + 11R` (`R + 1` levels), with the masked one's
+two lane-phase coins and its four inner rounds. -/
 def repRounds (zk : Bool) (spec : SessionSpec) (st : Stmt) : ℕ :=
   let claims := 2 + spec.points * st.regions.size
   let kLog := st.c.kLog
   if zk then
     match Zk.schedule st.m with
-    | .ok (sch, _) => (st.m + kLog - 6) + (claims + 1) + (sch.k0 + 7 + 11 * (sch.levels.size - 1)) + 4
+    | .ok (sch, _) => (st.m + (kLog - 6)) + (claims + 1) + (sch.k0 + 7 + 11 * (sch.levels.size - 1)) + 4
     | .error _ => 0
   else
     match fast100 st.m with
-    | some sch => (st.m - 3) + (kLog - 3) + (claims + 1) + (sch.k0 + 5 + 11 * (sch.levels.size - 1))
+    | some sch => (3 + (st.m - 6)) + (3 + (kLog - 6)) + (claims + 1) + (sch.k0 + 5 + 11 * (sch.levels.size - 1))
     | none => 0
 
 /-- The session's recorded rounds: each table's two reps. -/

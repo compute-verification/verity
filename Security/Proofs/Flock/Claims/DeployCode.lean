@@ -111,10 +111,10 @@ theorem plainReadD_hid_length (M : PlainTrace) : (plainReadD M).hid.length = 2 ^
 
 /-! ## A plain run's opened level-0 columns -/
 
-/-- **The round of level 0's query coins** in a plain rep's stream: after zerocheck's `m − 3` rounds, lincheck's
-`kLog − 3`, the ring switch's `claims + 1` and Ligerito's `k0 + 6` before level 0's queries (the out-of-domain point and
-its coin, the `k0` lane challenges, and level 1's two OOD intros of two rounds each). -/
-def plainQueryRound (m kLog k0 claims : ℕ) : ℕ := (m - 3) + (kLog - 3) + (claims + 1) + (k0 + 6)
+/-- **The round of level 0's query coins** in a plain rep's stream: after zerocheck's `3 + (m − 6)` rounds, lincheck's
+`3 + (kLog − 6)`, the ring switch's `claims + 1` and Ligerito's `k0 + 6` before level 0's queries (the out-of-domain
+point and its coin, the `k0` lane challenges, and level 1's two OOD intros of two rounds each). -/
+def plainQueryRound (m kLog k0 claims : ℕ) : ℕ := (3 + (m - 6)) + (3 + (kLog - 6)) + (claims + 1) + (k0 + 6)
 
 /-- The plain verifier's proof shape for a table (`verifyRep`'s `shape`). -/
 def plainProofShape (m kLog claims hashLen : ℕ) (saltLen : Option ℕ) : _root_.Flock.Shape :=
@@ -392,15 +392,13 @@ theorem listComplete_zk (rel : Readable.Parsed → Readable.Relation) :
       (Claims.Flock.zkDecodeD Claims.Flock.zkAgree) :=
   Claims.Flock.listComplete_zkDecodeD _ Claims.Flock.zkAgree_pos
 
-/-- **`ScopeMatches` for the masked verifier** (C's `scopeMatches_zk` at the verifier's parser and scope check). -/
+/-- **`ScopeMatches` for the masked verifier** (C's `scopeMatches` at the verifier's parser and scope check). -/
 theorem scopeMatches_zk (rel : Readable.Parsed → Readable.Relation) : Claims.Flock.ScopeMatches (deployZk rel) :=
-  Readable.scopeMatches_zk (deployZk rel) rel (readOf true) rfl rfl (fun _ _ h => readOf_zk h) rfl
+  Readable.scopeMatches (deployZk rel) rel (readOf true) rfl rfl (fun _ _ h => readOf_zk h)
 
-/-- **`ScopeMatches` for the plain verifier**, exactly when every statement it parses and checks has `22 ≤ m`. -/
-theorem scopeMatches_plain_iff (rel : Readable.Parsed → Readable.Relation) :
-    Claims.Flock.ScopeMatches (deployPlain rel) ↔
-      ∀ x p, Readable.parseBytes (readOf false) x = some p → p.check = .ok () → 22 ≤ (Readable.toReadable rel p).m :=
-  Readable.scopeMatches_iff (deployPlain rel) rel (readOf false) rfl rfl (fun _ _ h => readOf_zk h)
+/-- **`ScopeMatches` for the plain verifier** (C's `scopeMatches` at the verifier's parser and scope check). -/
+theorem scopeMatches_plain (rel : Readable.Parsed → Readable.Relation) : Claims.Flock.ScopeMatches (deployPlain rel) :=
+  Readable.scopeMatches (deployPlain rel) rel (readOf false) rfl rfl (fun _ _ h => readOf_zk h)
 
 /-- The opened columns of a plain run sit at distinct positions. -/
 theorem cols_nodup_plain (rel : Readable.Parsed → Readable.Relation) (s : Claims.Seen) :
