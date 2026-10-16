@@ -49,12 +49,13 @@ GF(p).
 
 ## A script as a recorded run
 
-A script on the kit runs as a `research run`, and its verdict lands in `$OUT`:
+A script on the kit runs as a `research run`, and its verdict lands in `$OUT`. Without `pipefail` the run takes
+`tee`'s exit code, and a failed verdict records a passing run:
 
 ~~~sh
 research run --cwd source --run-record -- bash -c \
-  'd=$(mktemp -d); trap "rm -rf $d" EXIT; research data fetch art:<script tree> --to "$d" >/dev/null &&
-   cd "$d" && python ref_k.py | tee "$OUT/ref_k.out"'
+  'set -o pipefail; d=$(mktemp -d); trap "rm -rf $d" EXIT; research data fetch art:<script tree> --to "$d" >/dev/null &&
+   cd "$d" && python -B ref_k.py | tee "$OUT/ref_k.out"'
 ~~~
 
 A re-run is `research compare` against that Attempt. Same bytes in, same `ref_k.verdict.json` out.
