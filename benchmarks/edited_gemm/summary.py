@@ -67,19 +67,21 @@ def main(o: Path) -> None:
         for name, v in a.items():
             print(f"| {name} | {v['ms']:.4f} | {f(v['ms'] / pl if pl else None)} | {f(v['ms'] / pq if pq else None)} | {v['mhz']:.0f} |")
     print("\n## the ratio table\n")
-    print("GEMM: the kernel against plain cuBLASLt int8 on the same X, W; edited call: editedf:K (qwe, then K) against plainq "
-          "(the plain quantizer, then cuBLASLt). Hot: medians of interleaved items; IL: per call, alternating; cold: IL with "
-          "L2 flushed before each call.\n")
-    print("| shape | kernel | receipt | GEMM hot | GEMM IL | GEMM IL cold | edited hot | edited IL | edited IL cold |")
-    print("|---|---|---|---|---|---|---|---|---|")
+    print("GEMM: the kernel against plain cuBLASLt int8 on the same X, W; wedit + GEMM: edited:K (wedit, then K) against "
+          "plain; edited call: editedf:K (qwe, then K) against plainq (the plain quantizer, then cuBLASLt). Hot: medians of "
+          "interleaved items; IL: per call, alternating; cold: IL with L2 flushed before each call.\n")
+    print("| shape | kernel | receipt | GEMM hot | GEMM IL | GEMM IL cold | wedit + GEMM hot | wedit + GEMM IL | edited hot | "
+          "edited IL | edited IL cold |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|")
     for sh, b in bench.items():
         a = b["arms"]
         pl, pq = a.get("plain", {}).get("ms"), a.get("plainq", {}).get("ms")
         for k in [n for n in a if kind(n) or n == "e_plain"]:
-            ef = a.get(f"editedf:{k}", {}).get("ms")
+            ew, ef = a.get(f"edited:{k}", {}).get("ms"), a.get(f"editedf:{k}", {}).get("ms")
             g = lambda arm, base, cold: il.get((sh, arm, base, cold), {}).get("ratio")  # noqa: E731
             print(f"| {sh} | {k} | {kind(k) or 'none'} | {f(a[k]['ms'] / pl if pl else None)} | {f(g(k, 'plain', False))} | "
-                  f"{f(g(k, 'plain', True))} | {f(ef / pq if ef and pq else None)} | {f(g(f'editedf:{k}', 'plainq', False))} | "
+                  f"{f(g(k, 'plain', True))} | {f(ew / pl if ew and pl else None)} | {f(g(f'edited:{k}', 'plain', False))} | "
+                  f"{f(ef / pq if ef and pq else None)} | {f(g(f'editedf:{k}', 'plainq', False))} | "
                   f"{f(g(f'editedf:{k}', 'plainq', True))} |")
     a = bench.get("o_proj", {}).get("arms", {})
     g = lambda n: a.get(n, {}).get("ms")  # noqa: E731

@@ -6,7 +6,8 @@
 # them on the CPU from x, W and the key, every kernel's receipts by its kind; only if both pass, lease 2 times o_proj's
 # hot items (EG_ARMS), the slice's per-call interleaving (IL pairs ARM:BASE; IL_COLD the same with L2 flushed before each
 # call), each other linear's hot items and interleaving (LAYER_ARMS, LAYER_IL), and ncu's issue and pipe counters at
-# o_proj. Clocks are read, never set.
+# o_proj. EG_SET=best times each receipt kind's fastest kernels instead, also after wedit alone (edited:K). Clocks are
+# read, never set.
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=EGEMM \
 #     -- bash benchmarks/edited_gemm/run.sh
@@ -87,14 +88,27 @@ for k in e_plain $KALL; do il="$il $k:plain"; done
 for k in $KALL; do il="$il editedf:$k:plainq"; done
 cold=""
 for k in e_l3qm e_l2q d64_lsq x_l2q t2w_l2 t1w_l2; do cold="$cold $k:plain editedf:$k:plainq"; done
-export EG_ARMS=${EG_ARMS:-$arms} IL=${IL:-$il} IL_COLD=${IL_COLD:-$cold}
 lk="e_l2q e_l3qm d64_lsq x_l2q x_l3qm t2w_l2 t1w_l2"
 larms="plain,plainq,qwe,e_plain"
 for k in $lk; do larms="$larms,$k,editedf:$k"; done
 lil=""
 for k in $lk; do lil="$lil $k:plain editedf:$k:plainq"; done
+ncu="e_plain e_l2q d64_lsq x_l2q t4_l2 t2w_l2 t1w_l2 qwe" stall="e_l2q x_l2q t1w_l2"
+# EG_SET=best: each kind's fastest kernels at o_proj, also as edited:K (wedit, then K, against plain), at every linear
+if [ "${EG_SET:-all}" = best ]; then
+  kb="e_l2q e_l4q d64_l2q d64_lsqm x_l2o x_l2q t2w_l2 t1w_l2"
+  arms="plain,plainq,wedit,qwe,e_plain" il="e_plain:plain"
+  for k in $kb; do arms="$arms,$k,edited:$k,editedf:$k"; il="$il $k:plain edited:$k:plain editedf:$k:plainq"; done
+  cold=""
+  for k in e_l4q d64_l2q x_l2o; do cold="$cold $k:plain editedf:$k:plainq"; done
+  lk="e_l2q e_l4q d64_l2q x_l2o x_l2q t1w_l2"
+  larms="plain,plainq,wedit,qwe,e_plain" lil=""
+  for k in $lk; do larms="$larms,$k,edited:$k,editedf:$k"; lil="$lil $k:plain edited:$k:plain editedf:$k:plainq"; done
+  ncu="e_l4q d64_l2q d64_lsqm x_l2o" stall="d64_l2q x_l2o"
+fi
+export EG_ARMS=${EG_ARMS:-$arms} IL=${IL:-$il} IL_COLD=${IL_COLD:-$cold}
 export LAYER_ARMS=${LAYER_ARMS:-$larms} LAYER_IL=${LAYER_IL:-$lil}
-export NCU=${NCU:-"e_plain e_l2q d64_lsq x_l2q t4_l2 t2w_l2 t1w_l2 qwe"} NCU_STALL=${NCU_STALL:-"e_l2q x_l2q t1w_l2"}
+export NCU=${NCU:-$ncu} NCU_STALL=${NCU_STALL:-$stall}
 # shellcheck disable=SC2016
 gpu-lease 1 --wait --max-min 30 -- bash -c '
   nvidia-smi --query-gpu=timestamp,clocks.sm,power.draw,temperature.gpu --format=csv -lms 500 -i "$GPU_LEASE_UUID" > "$O/smi.csv" 2>&1 &
