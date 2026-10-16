@@ -21,6 +21,7 @@ import Proofs.Flock.Claims.DeployOC
 import Proofs.Flock.Claims.DeployInputs
 import Proofs.Flock.Claims.Deploy
 import Proofs.Flock.Claims.DeployCode
+import Proofs.Flock.Claims.NumbersDeploy
 
 /-! `Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated`, by reflexivity: the guarantee is there for its
 record, which holds the claims' text.
@@ -36,7 +37,8 @@ such decoders read as one (`DecodeFamily`), the masked verifier's deployed code 
 pads' domain (`NumbersPads`), the weight and `γ` (`NumbersGamma`), and `nMin` (`NumbersNMin`). The deployed instance of
 `Claims.Flock.Deploy`: the hash-parametric verdict over the oracle (`DeployOC`), the statement's bytes, parser and setup
 (`DeployInputs`), the verifier in public-coin form (`Deploy`), and the code, columns and numbers that complete the
-plain and masked instances (`DeployCode`: `FlockDeploy.deployPlain`, `FlockDeploy.deployZk`). -/
+plain and masked instances (`DeployCode`: `FlockDeploy.deployPlain`, `FlockDeploy.deployZk`), and the numbers read
+at those instances (`NumbersDeploy`). -/
 
 /-- **The claims are stated** (`Flock.Guarantees.ClaimsStated`). -/
 theorem Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated := rfl
