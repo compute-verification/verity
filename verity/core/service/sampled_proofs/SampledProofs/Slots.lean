@@ -10,8 +10,8 @@ there.
   unit; it is drawn `all`, as `partition_object`'s input unit is always checked and never drawn.
 * **Slots.** A replay unit's slot is its index in class, stratum and replay-unit order (`Partition.rus`). Where no two
   templates' units interleave, unit `i`'s slot is `i`.
-* **Checked.** `checked` lists the proof units of every replay unit the draw proves (`Draw.proved`: its units and a work
-  draw's closure) and of every input slot, each as `(slot, index)`, in slot order. The one-stage rules and the two-stage
+* **Checked.** `checked` lists the proof units of every replay unit the draw proves (`Select.select`'s proved units: its
+  units and a work draw's closure) and of every input slot, each as `(slot, index)`, in slot order. The one-stage rules and the two-stage
   rule a stream runs (each replay unit one instance of the check's unit, all of it checked) make every replay unit one
   proof unit, so each index is `0`.
 -/
@@ -64,20 +64,19 @@ def layout (d : Desc) (query : Json) : V Layout := do
   let inputs := (inputGates d).map fun g => ({ unit := none, pus := #[(g, g + 1)] } : RU)
   return { classes := #[pop, if inputs.isEmpty then #[] else #[inputs]] }
 
-/-- **The checked proof units** (`Deploy.checked`) of a draw: each proof unit of every replay unit the draw proves
-(`Draw.proved`) and of every input slot, as `(slot, index)`, in slot order. -/
-def checked (l : Layout) (draw : Json) : Array (Nat × Nat) :=
-  let proved := Draw.proved draw
-  (l.rus.zipIdx.filter fun (r, _) => r.unit.all fun u => proved.contains (u : Int)).flatMap fun (r, v) =>
+/-- **The checked proof units** (`Deploy.checked`) of a draw that proves the units `proved`: each proof unit of every
+replay unit among them and of every input slot, as `(slot, index)`, in slot order. -/
+def checked (l : Layout) (proved : Array Nat) : Array (Nat × Nat) :=
+  (l.rus.zipIdx.filter fun (r, _) => r.unit.all proved.contains).flatMap fun (r, v) =>
     (Array.range r.pus.size).map (v, ·)
 
-/-- **The challenger's draw in the claims' slots**: the layout of `d` under `query`, and the proof units of
-`Select.select`'s draw on the coins `src`. An error where either is. -/
+/-- **The challenger's draw in the claims' slots**: the layout of `d` under `query`, and the proof units of the units
+`Select.select`'s draw on the coins `src` proves. An error where either is. -/
 def select (rule : Select.Rule) (d : Desc) (query : Json) (table : Option Json) (cm : Option (Array (Int × Array Int)))
     (src : ByteArray) : V (Layout × Array (Nat × Nat)) := do
   let l ← layout d query
-  let (draw, _) ← Select.select rule d query table cm src
-  return (l, checked l draw)
+  let (_, proved, _) ← Select.select rule d query table cm src
+  return (l, checked l proved)
 
 def RU.toJson (r : RU) : Json :=
   Json.mkObj [("unit", (r.unit.map Lean.toJson).getD .null),

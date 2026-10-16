@@ -115,7 +115,7 @@ def select (j : Json) : V Json := do
   let cm ← match getD j "closure" with
     | .null => pure none
     | c => some <$> Select.closureMap? c
-  let (draw, read) ← Select.select rule d (getD j "query") table cm (← Flock.unhex (← Flock.J.str j "source" "the select"))
+  let (draw, _, read) ← Select.select rule d (getD j "query") table cm (← Flock.unhex (← Flock.J.str j "source" "the select"))
   return Json.mkObj [("draw", draw), ("read", Lean.toJson read)]
 
 /-- `select`'s input to `{"classes", "checked"}`: the claims' partition over the program under the query (`Slots.layout`),

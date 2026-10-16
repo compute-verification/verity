@@ -231,21 +231,19 @@ def checkProved (draw : Json) (provedUnits : Array Json) (instances : Json) : Ar
   (checkProvedFull draw provedUnits instances).codes
 
 /-- `src`'s bytes handed out in order, `need` at a time (`OwnRandomness.read`); an error when fewer are left. -/
-private def take (src : ByteArray) (need : Nat) : StateT Nat (Except String) ByteArray := do
+def take (src : ByteArray) (need : Nat) : StateT Nat (Except String) ByteArray := do
   let at_ ← get
   if src.size < at_ + need then throw "the randomness source ran out"
   set (at_ + need)
   return src.extract at_ (at_ + need)
 
-/-- `two_stage.draw_first` without a closure map: the one-stage draw object of the verifier's law over `[0, population)`
-(the law as `derive` expands it, with `population` and the drawn `units`), sampled as `Flock.Draw.drawWith` samples it
-from `src` read in order: `subset` and `bernoulli` (at its `NUM/DEN` as written) on one stream, `stratified` and `work` one
-stream per stratum, each extended and rerun when it runs out. An error when the law is not exactly a one-stage law's keys
-(`two_stage._law_problem`), a subset exceeds the population, a stratified or work law isn't well formed over it
-(`strataProblem`), or `src` runs out. With the draw, the number of bytes of `src` it read. -/
-def drawFirstRead (law : Json) (population : Nat) (src : ByteArray) : Except String (Json × Nat) := do
+/-- The C-Flock law a one-stage law object (the verifier's law as `derive` expands it) names over `[0, population)`, as
+`two_stage.draw_first` reads it: `subset`, `bernoulli` at its `NUM/DEN` as written, `stratified` or `work`. An error when
+the law is not exactly a one-stage law's keys (`two_stage._law_problem`), a subset exceeds the population, or a stratified
+or work law isn't well formed over it (`strataProblem`). -/
+def flockLaw (law : Json) (population : Nat) : Except String Flock.Draw.Law := do
   let kind := match getD law "law" with | .str s => s | _ => ""
-  let flock ← match kind with
+  match kind with
     | "subset" =>
       if keys? law != some (sortStrings #["law", "k"]) then throw "a subset law is exactly {law, k}"
       let some k := nat? (getD law "k") | throw "a subset law's k is a natural number"
@@ -264,9 +262,21 @@ def drawFirstRead (law : Json) (population : Nat) (src : ByteArray) : Except Str
       let some strata := ss.mapM (stratum? (kind == "work")) | throw s!"the {kind} law's strata"
       pure (if kind == "work" then .work k strata else .stratified k (strata.map (·.toStratum)))
     | _ => throw "a one-stage law is subset, bernoulli, stratified or work"
-  let (some d, read) ← (Flock.Draw.drawWith (fun _ need => take src need) flock population).run 0
+
+/-- The units `law` draws over `[0, population)` as `Flock.Draw.drawWith` samples them from `src` read in order (`take`):
+`subset` and `bernoulli` on one stream, `stratified` and `work` one stream per stratum, each extended and rerun when it
+runs out; with the number of bytes of `src` read. An error when `src` runs out. -/
+def drawUnits (law : Flock.Draw.Law) (population : Nat) (src : ByteArray) : Except String (Array Nat × Nat) := do
+  let (some d, read) ← (Flock.Draw.drawWith (fun _ need => take src need) law population).run 0
     | throw "the draw did not end"
-  return (Json.mkObj (entries law |>.toList |>.append [("population", Lean.toJson population), ("units", natsJson d.units)]),
+  return (d.units, read)
+
+/-- `two_stage.draw_first` without a closure map: the one-stage draw object of the verifier's law over `[0, population)`
+(the law as `derive` expands it, with `population` and the drawn `units`), its units drawn from `src` (`drawUnits`) under
+the law's C-Flock law (`flockLaw`). An error where either is. With the draw, the number of bytes of `src` it read. -/
+def drawFirstRead (law : Json) (population : Nat) (src : ByteArray) : Except String (Json × Nat) := do
+  let (units, read) ← drawUnits (← flockLaw law population) population src
+  return (Json.mkObj (entries law |>.toList |>.append [("population", Lean.toJson population), ("units", natsJson units)]),
     read)
 
 /-- `drawFirstRead`'s draw. -/
