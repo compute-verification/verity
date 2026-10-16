@@ -141,10 +141,23 @@ def main() -> int:
         for M in Ms:
             ok = [c for c in cs if c["M"] == M and "best" in c and c["best_cost"] <= 0.05]
             print(f"  smallest k at <= 5% for M = {M}: " + (f"{min(ok, key=lambda c: c['k'])['k']}" if ok else "none measured"))
+        lone = {}
         for c in cs:
             if c["k"] == 1 and "eq" in c["arms"]:
+                lone[c["M"]] = c["arms"]["eq"]["ms"]
                 print(f"  lone TTFT M = {c['M']}: {c['arms']['eq']['ms']:.1f} ms against plain {c['plain_ms']:.1f} ms "
                       f"({100 * c['arms']['eq']['cost']:+.0f}%)")
+        print("  TTFT under load (ms): plain's makespan (every request's, batched); the best arm's median chunk end; "
+              "hprio's first (top-priority) chunk end")
+        for c in sorted(cs, key=lambda c: (c["M"], c["k"])):
+            if c["k"] == 1 or "best" not in c:
+                continue
+            p = c["plain_ms"]
+            med = c["arms"][c["best"]].get("ends_over_plain", {}).get("median")
+            top = c["arms"].get("hprio", {}).get("ends_over_plain", {}).get("first")
+            ref = f" ({top * p / lone[c['M']]:.2f}x lone)" if top and c["M"] in lone else ""
+            print(f"    M = {c['M']:5d}, k = {c['k']:2d}: plain {p:7.1f}; {c['best']} {med * p if med else float('nan'):7.1f}; "
+                  f"hprio first {top * p if top else float('nan'):7.1f}{ref}")
     if a.json:
         Path(a.json).write_text(json.dumps(res, indent=1) + "\n")
     return 0
