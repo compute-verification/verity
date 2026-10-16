@@ -11,10 +11,10 @@ eight items:
 1. **Statement format.** `x` is the canonical bytes of what the compiled verifier reads, parsed by its own parser
    (`Deploy.parse`) into the inner statement's bytes, the inner statement's dimensions as its parser reads them, the
    commitment to the circuit (the private-circuit variant only) and the recursion's form (`Stmt`, `Form`).
-2. **Witness.** The inner protocol's (`W`). The private-circuit variant adds the circuit commitment's salt; the circuit
-   is in the inner witness, which the universal unit's relation reads (`RPriv`).
+2. **Witness.** The inner protocol's (`W`), in both variants. In the private-circuit one the circuit is in the inner
+   witness, which the universal unit's relation reads, and its commitment is hm96 rows that unit outputs.
 3. **Relation (inherited).** `R(x, w) :⇔ x` parses, has no circuit commitment, and `R_I(x_I, w)` (`R`). The private
-   variant: `x` parses with the commitment `cc`, `commit(circ(w); salt) = cc`, and `R_I(x_I, w)` (`RPriv`).
+   variant: `x` parses with a circuit commitment, and `R_I(x_I, w)`, whose outputs bind it to the circuit (`RPriv`).
 4. **Scope, readable** (`Scope`, `InScope`): the inner scope, and candidate 3's form (a fast100 inner table,
    `k_log ≥ 6`, two claims and two per region, no private circuit, a valid RecSparse phase at `T_LOG = 0` with
    `6 ≤ ℓ ≤ k_log` and its unit range inside a block, R at `table_m` with two claims). `ScopeMatches` states that it is
@@ -28,9 +28,9 @@ eight items:
    outer witnesses record (`Deploy.calls`), which no party computes in the clear.
 6. **Claims.** `KS` with costs (`Efficient`), `Bits`, `ZK`, `Complete` on the scope, `ScopeMatches`, `Nontrivial`, and
    the private variant's `KSPriv`, `ZKPriv`; `At Flock` instantiates the inner protocol with Flock and its decoder.
-7. **Assumptions used.** `StrictBirthday` (for `B`), `ExpectedCR` (for `Be`), each read once in `Bits`; `ZK`'s
-   `ε_zk` is a parameter, which the guarantee instantiates under a hiding assumption on hm96 commit strings; and
-   `trustedBase`.
+7. **Assumptions used.** `StrictBirthday` (for `B`), `ExpectedCR` (for `Be`), each read once in `Bits`; `Hm96Hiding`
+   (hm96 leaves hide up to `δ₁`), read in `ZK` and `ZKPriv`; and `trustedBase`. The decoders are those within Flock's
+   list-decoding radius (`decOK`, `Flock.ListWithin`).
 8. **Status.** A draft: nothing here is frozen, and every constant in `κ`, `γ`, `γe` and `cBe` is the draft's, fixed by
    the proof before freezing.
 
@@ -41,6 +41,7 @@ binding them to the compiled verifier is the code side's, as Flock's is.
 namespace Claims.Recursion
 
 open Claims
+open scoped NNReal
 
 /-! ## Rerun programs served by rerun programs -/
 
@@ -182,9 +183,10 @@ noncomputable def Inner.ofFlock (H : Msg → Msg) (D : Flock.Deploy Coin Col T) 
   κ := Flock.κ D
   γ := Flock.γ D
 
-/-- The decoders a claim quantifies over: those that meet Flock's list-decoding spec. -/
-def decOK (D : Flock.Deploy Coin Col T) (decode : List (ℕ × Col) → List T) : Prop :=
-  Flock.ListComplete D.enc D.agree decode
+/-- The decoders a claim quantifies over: those that meet Flock's list-decoding spec, within the deployment's radius
+at each trace's codeword length (`Flock.ListWithin`). -/
+def decOK [Zero Col] (D : Flock.Deploy Coin Col T) (decode : List (ℕ × Col) → List T) : Prop :=
+  Flock.ListWithin D.len D.enc D.θ decode
 
 end OfFlock
 
@@ -253,10 +255,9 @@ message answered by its live coin, the decision the shipped verdict), its parser
 a run, from the inner session's public transcript (`vstar`), and their count at `x` (`nS`, fixed by `x`'s form); outer
 session `s`'s view in a run's view (`session`: its messages and its verifier's decision as the compiled verifier's
 answers show it); the inner session's view read off a run's coins and the outer witnesses (`innerView`); the SHA-512
-evaluations the outer witnesses record (`calls`); the circuit commitment's salt in them (`saltOf`, the private
-variant); the numbers of outer session `s` at `x` (`nums`, the outer Flock's at that session's V* statements, which
-their public shape fixes); and, for the simulator, the inner round `j`'s commit string to a zero message under a salt
-(`zeroCommit`) and the salts' length. -/
+evaluations the outer witnesses record (`calls`); the numbers of outer session `s` at `x` (`nums`, the outer Flock's
+at that session's V* statements, which their public shape fixes); and, for the simulator, the inner round `j`'s commit
+string, an hm96 leaf, to a zero message under a salt (`zeroCommit`), and the salts' length. -/
 structure Deploy (Coin : Type) where
   V : Verifier Coin
   parse : Msg → Option Stmt
@@ -266,7 +267,6 @@ structure Deploy (Coin : Type) where
   session : Msg → ℕ → Seen → Seen
   innerView : (x : Msg) → (Fin (V.k x) → Coin) → List Flock.Wit → Seen
   calls : Msg → List Flock.Wit → List (Msg × Msg)
-  saltOf : Msg → List Flock.Wit → Option Msg
   nums : Msg → ℕ → Nums
   zeroCommit : Msg → ℕ → Msg → OC Msg
   saltLen : ℕ
@@ -283,10 +283,11 @@ statement. -/
 def R (D : Deploy Coin) (I : Inner Coin W) : Rel W := fun x w =>
   ∃ s, D.parse x = some s ∧ s.circ = none ∧ I.R s.inner w
 
-/-- **The private-circuit variant's relation**: `x` parses with the circuit commitment `cc`, the circuit the inner
-(universal unit's) witness carries (`circ w`) opens it under `salt`, and the inner relation holds. -/
-def RPriv (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (circ : W → Msg) : Rel (Msg × W) := fun x sw =>
-  ∃ s cc, D.parse x = some s ∧ s.circ = some cc ∧ commit H (circ sw.2) sw.1 = cc ∧ I.R s.inner sw.2
+/-- **The private-circuit variant's relation**: `x` parses with a circuit commitment, and the inner relation holds at
+its inner statement. The commitment is hm96 rows that the inner (universal unit's) circuit outputs, which `parse` reads
+off the inner statement's public outputs, so the inner relation binds it to the circuit the inner witness carries. -/
+def RPriv (D : Deploy Coin) (I : Inner Coin W) : Rel W := fun x w =>
+  ∃ s, D.parse x = some s ∧ s.circ.isSome = true ∧ I.R s.inner w
 
 /-- **The recursion's scope** on the statement's bytes: it parses, its inner statement is in the inner scope, and its
 form is in `InScope`. -/
@@ -325,18 +326,6 @@ noncomputable def E (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO :
     (decO : List (ℕ × Col) → List T) : Extractor Coin W D.V :=
   served D.V (EO H D I DO decO) (dec D) (fun x => I.waits (xI D x)) (fun x => I.k (xI D x))
     (fun x => I.cap (xI D x)) I.opens (fun x => I.assemble (xI D x)) (fun x => I.check (xI D x))
-
-/-- **The private variant's extractor**: `E*`, and the circuit commitment's salt read off `E_O`'s output at the judged
-run. -/
-noncomputable def EPriv (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
-    (decO : List (ℕ × Col) → List T) : Extractor Coin (Msg × W) D.V where
-  C x := (EO H D I DO decO).C x × (Fin (I.waits (xI D x)) → Fin (I.cap (xI D x)) →
-    (Fin (D.V.k x) → Coin) × (EO H D I DO decO).C x)
-  ext x r₀ c := ((E H D I DO decO).ext x r₀ c).bind fun ow =>
-    ((EO H D I DO decO).ext x r₀ c.1).bind fun ows =>
-      .ret (match ow, ows with
-        | some w, some ws => (D.saltOf x ws).map fun salt => (salt, w)
-        | _, _ => none)
 
 /-! ### The extraction-based finder -/
 
@@ -428,7 +417,7 @@ def Sim (D : Deploy Coin) (I : Inner Coin W) (SO : Msg → ℕ → OSim) : Simul
 
 /-- **The recursion: KS**, at `E*` and every outer decoder that meets the list-decoding spec: on every prover,
 `Pr[run = acc ∧ ¬R(x, E*(x))] ≤ κ(x) + √(γ(x) · Pr[B]) + √(γ_e(x) · Pr[Be])`. -/
-def KS (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
+def KS [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ decO, decOK DO decO → ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
     PrBad H D.V (R D I) (E H D I DO decO) x P ≤
       κ D I x + Real.sqrt (γ D I x * PrB H D.V P x) + Real.sqrt (γe D I x * PrBe H D I DO decO P x)
@@ -436,7 +425,7 @@ def KS (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy
 /-- **The recursion: bits**, at every outer decoder that meets the spec: every prover making at most `t ≥ 1` SHA-512
 calls per run (both parties') has `Pr[acc ∧ ¬R] ≤ t · 2^{−λ(x)}`, where `B` obeys the strict birthday bound and `Be`
 the linear expected-time bound. -/
-def Bits (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
+def Bits [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ decO, decOK DO decO → ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (t : ℕ), 1 ≤ t →
     (∀ ω r, (run H P D.V x ω r).pLog.length + (run H P D.V x ω r).vLog.length ≤ t) →
     (∀ hk : 0 < D.V.k x, StrictBirthday H (B H D.V P x hk)) →
@@ -460,29 +449,35 @@ def Complete {Ω : Type} (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) 
 /-- **The recursion: the readable scope is the compiled verifier's.** -/
 def ScopeMatches (D : Deploy Coin) (I : Inner Coin W) : Prop := Claims.ScopeMatches (Scope D I) D.scopeCheck
 
-/-- **The recursion: zero knowledge** of the honest prover against every malicious verifier, at `Sim` over the outer
-`--zk` Flock's simulator. -/
-def ZK {Ω : Type} [Fintype Ω] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
-    (P : W → Prover Ω) (SO : Msg → ℕ → OSim) (εzk : Msg → ℝ) : Prop :=
-  DO.zk = true ∧ ZKmal H P (R D I) (Sim D I SO) εzk
+/-- **The recursion: zero knowledge** of the honest prover against every malicious verifier of the compiled verifier's
+rounds (`ZKmalR` at `D.V.k`), at `Sim` over the outer `--zk` Flock's simulators: wherever hm96 leaves hide up to `δ₁`
+(`Hm96Hiding` at the pinned key's salt mask `My` and salt hash `cy`), within `Σ_s ε_O(x, s) + 2·k_I(x_I)·δ₁`, with
+`ε_O(x, s)` outer session `s`'s simulation error and `2δ₁` for each of the inner session's `k_I(x_I)` commit strings,
+which `Sim` commits to zero. -/
+def ZK {Ω Y B Cy : Type} [Fintype Ω] [Fintype Y] [Fintype B] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
+    (DO : Flock.Deploy Coin Col T) (P : W → Prover Ω) (SO : Msg → ℕ → OSim) (My : Y → B) (cy : Y → Cy)
+    (εO : Msg → ℕ → ℝ) : Prop :=
+  DO.zk = true ∧ ∀ δ₁ : ℝ≥0, Hm96Hiding My cy δ₁ →
+    ZKmalR H D.V.k P (R D I) (Sim D I SO) fun x =>
+      ∑ s : Fin (D.nS x), εO x s + 2 * I.V.k (xI D x) * (δ₁ : ℝ)
 
 /-- **The recursion: nontriviality**: recorded honest runs, each of a statement the scope check takes, that the compiled
 verifier accepts. -/
 def Nontrivial (H : Msg → Msg) (D : Deploy Coin) (recs : List (Recorded D.V)) : Prop :=
   Claims.Nontrivial H D.V recs ∧ ∀ e ∈ recs, D.scopeCheck e.x = true
 
-/-- **The private variant: KS**, at `E*` with the salt, the same errors. -/
-def KSPriv (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) (circ : W → Msg) :
-    Prop :=
+/-- **The private variant: KS**, at `E*` and the same errors. -/
+def KSPriv [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ decO, decOK DO decO → ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
-    PrBad H D.V (RPriv H D I circ) (EPriv H D I DO decO) x P ≤
+    PrBad H D.V (RPriv D I) (E H D I DO decO) x P ≤
       κ D I x + Real.sqrt (γ D I x * PrB H D.V P x) + Real.sqrt (γe D I x * PrBe H D I DO decO P x)
 
-/-- **The private variant: zero knowledge**, at a simulator that commits to a fixed circuit of the class. -/
-def ZKPriv {Ω : Type} [Fintype Ω] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
-    (DO : Flock.Deploy Coin Col T) (circ : W → Msg) (P : Msg × W → Prover Ω) (S : Simulator) (εzk : Msg → ℝ) :
-    Prop :=
-  DO.zk = true ∧ ZKmal H P (RPriv H D I circ) S εzk
+/-- **The private variant: zero knowledge**, at a simulator that commits to a fixed circuit of the class, against every
+malicious verifier of the compiled verifier's rounds: wherever hm96 leaves hide up to `δ₁`, within `ε_zk(δ₁, x)`. -/
+def ZKPriv {Ω Y B Cy : Type} [Fintype Ω] [Fintype Y] [Fintype B] (H : Msg → Msg) (D : Deploy Coin)
+    (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) (P : W → Prover Ω) (S : Simulator) (My : Y → B) (cy : Y → Cy)
+    (εzk : ℝ≥0 → Msg → ℝ) : Prop :=
+  DO.zk = true ∧ ∀ δ₁ : ℝ≥0, Hm96Hiding My cy δ₁ → ZKmalR H D.V.k P (RPriv D I) S (εzk δ₁)
 
 end Recursion
 
@@ -493,11 +488,11 @@ section AtFlock
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
 
 /-- **KS of the recursion over Flock**, at every inner and outer decoder that meets the spec. -/
-def KSFlock (H : Msg → Msg) (D : Deploy Coin) (DI DO : Flock.Deploy Coin Col T) : Prop :=
+def KSFlock [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (DI DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ decI, decOK DI decI → KS H D (Inner.ofFlock H DI decI) DO
 
 /-- **Bits of the recursion over Flock**, at every inner decoder that meets the spec. -/
-def BitsFlock (H : Msg → Msg) (D : Deploy Coin) (DI DO : Flock.Deploy Coin Col T) : Prop :=
+def BitsFlock [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (DI DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ decI, decOK DI decI → Bits H D (Inner.ofFlock H DI decI) DO
 
 end AtFlock

@@ -200,9 +200,9 @@ end ERep
 /-- **Flock: efficiency rests on the decoder alone**: `ERepCost` holds at every deployment, so Flock's `Efficient` is a
 decoder that meets the list-decoding spec, with its stated complexity. -/
 theorem Flock.Efficient_of_decoder {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
-    [DecidableEq Col] (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (decode : List (ℕ × Col) → List T)
+    [DecidableEq Col] [Zero Col] (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (decode : List (ℕ × Col) → List T)
     (counted : List (ℕ × Col) → List T × ℕ) (size : List (ℕ × Col) → ℕ) (p : Polynomial ℕ)
-    (hl : Flock.ListComplete D.enc D.agree D.nMin decode) (hd : DecoderComplexity decode counted size p) :
+    (hl : Flock.ListWithin D.len D.enc D.θ decode) (hd : DecoderComplexity decode counted size p) :
     Flock.Efficient H D decode counted size p :=
   ⟨ERep_cost H D.V D.waits D.k D.cap D.cols _ _, hl, hd⟩
 

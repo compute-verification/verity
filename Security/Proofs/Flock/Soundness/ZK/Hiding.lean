@@ -8,7 +8,7 @@ never revealed, while its digest `x` may depend on everything else the experimen
 one changes the probability of any event by at most `δ₁`.
 
 An hm96 leaf is a function of the pair `(b, c) = (x ⊕ M·y, H(sp ‖ y))`, and an ideal one of `(U, H(sp ‖ y))` with `U` fresh
-and uniform. `Assumptions.Hm96Hiding` bounds the distance of `(M·y, c)` from `(U, c)` by `δ₁`. XOR by `x` is a bijection
+and uniform. `Claims.Hm96Hiding` bounds the distance of `(M·y, c)` from `(U, c)` by `δ₁`. XOR by `x` is a bijection
 that maps uniform to uniform, so for each value of the other randomness the two leaves are `δ₁` apart, and averaging keeps
 the bound. Here XOR is the addition of the group `B`, so the proof holds for any group of digests.
 
@@ -45,7 +45,7 @@ theorem prCoin_equiv {C : Type} [Fintype C] (e : C ≃ C) (P : C → Prop) : prC
 `H(U, c(y))` with a fresh uniform `U` changes the probability of any event `G` by at most `δ₁`. The digest `x` may depend on
 anything in `ω`; the salt `y` is used only by this leaf. -/
 theorem ideal_leaf_swap {Ω Y B C D : Type} [Fintype Ω] [Nonempty Ω] [Fintype Y] [AddCommGroup B] [Fintype B]
-    (My : Y → B) (c : Y → C) {δ₁ : ℝ≥0∞} (hT1 : Assumptions.Hm96Hiding My c δ₁) (H : B × C → D) (x : Ω → B)
+    (My : Y → B) (c : Y → C) {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding My c δ₁) (H : B × C → D) (x : Ω → B)
     (G : Ω → D → Prop) :
     prCoin (fun p : Ω × Y => G p.1 (H (x p.1 + My p.2, c p.2)))
       ≤ prCoin (fun p : Ω × (B × Y) => G p.1 (H (p.2.1, c p.2.2))) + δ₁ := by
@@ -54,7 +54,7 @@ theorem ideal_leaf_swap {Ω Y B C D : Type} [Fintype Ω] [Nonempty Ω] [Fintype 
   calc avg (fun ω => prCoin fun y => G ω (H (x ω + My y, c y)))
       ≤ avg (fun ω => prCoin (fun u : B × Y => G ω (H (u.1, c u.2))) + δ₁) := by
         refine avg_mono fun ω => ?_
-        have h := hT1 fun bc => G ω (H (x ω + bc.1, bc.2))
+        have h := Assumptions.hm96Hiding_apply hT1 fun bc => G ω (H (x ω + bc.1, bc.2))
         have e : prCoin (fun u : B × Y => G ω (H (x ω + u.1, c u.2))) = prCoin fun u : B × Y => G ω (H (u.1, c u.2)) :=
           prCoin_equiv ((Equiv.addLeft (x ω)).prodCongr (Equiv.refl Y)) (fun u : B × Y => G ω (H (u.1, c u.2)))
         exact h.trans (le_of_eq (by rw [e]))
@@ -73,7 +73,7 @@ changes the probability of any event by at most `n·δ₁`. Each digest may depe
 by its leaf. One leaf at a time: the first by `ideal_leaf_swap`, with the other salts part of the experiment, then the
 rest by induction, with the first leaf's ideal seed part of it. -/
 theorem ideal_leaves_swap {Y B C D : Type} [Fintype Y] [Nonempty Y] [AddCommGroup B] [Fintype B]
-    (My : Y → B) (c : Y → C) {δ₁ : ℝ≥0∞} (hT1 : Assumptions.Hm96Hiding My c δ₁) (H : B × C → D) :
+    (My : Y → B) (c : Y → C) {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding My c δ₁) (H : B × C → D) :
     ∀ (n : ℕ) {Ω : Type} [Fintype Ω] [Nonempty Ω] (x : Ω → Fin n → B) (G : Ω → (Fin n → D) → Prop),
       prCoin (fun p : Ω × (Fin n → Y) => G p.1 fun i => H (x p.1 i + My (p.2 i), c (p.2 i)))
         ≤ prCoin (fun p : Ω × (Fin n → B × Y) => G p.1 fun i => H ((p.2 i).1, c (p.2 i).2)) + n * δ₁ := by

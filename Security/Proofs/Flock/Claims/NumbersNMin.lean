@@ -4,7 +4,8 @@ import Proofs.Flock.Claims.NumbersGamma
 /-!
 # `nMin` at the deployed parameters
 
-Ruling 2 (16 Oct) asks a decoder to list a trace only from at least `nMin` opened columns at distinct positions, the
+Ruling 2 (16 Oct) asked a decoder to list a trace only from at least `nMin` opened columns at distinct positions (the
+spec's `nMin` form, since replaced by its radius form, `Flock.ListWithin`, for what follows), the
 Johnson count `johnsonCount k agree = ⌊(k+1)/agree²⌋ + 1` of the trace's code (`Claims.johnsonCount`,
 `listComplete_flockLevelZero`). Flock's first committed codeword is level 0 of its `fast100` schedule, of dimension
 `k = 2^c` (`c = level₀.logCols`) and length `N₀ = 2^{c+1}` (rate `1/2`). At the analysis' threshold
@@ -20,8 +21,9 @@ Johnson count `johnsonCount k agree = ⌊(k+1)/agree²⌋ + 1` of the trace's co
 * a set of the `N₀ − nMin + 1` positions that `nMin` distinct positions must meet is missed by `q ≤ 277` uniform
   queries with probability `((nMin − 1)/N₀)^q ≥ 1/64` (`miss_ge`), against `κ ≤ 2^{−202.98}`;
 * under `--zk` the masked level-0 code has dimension `2^c + t` (`t = 2q₀`) and the same length, so at `agree₀` its
-  Johnson count is past the length at `m = 25, 26, 27` (`zk_nMin_gt_len`): `Deploy.agree` is one number, while the
-  masked rate `ρ' = (2^c + t)/2^{c+1}` runs from `0.568` (`m = 25`) to `0.500` (`m = 35`).
+  Johnson count is past the length at `m = 25, 26, 27` (`zk_nMin_gt_len`): the `nMin` form's agreement was one
+  number, while the masked rate `ρ' = (2^c + t)/2^{c+1}` runs from `0.568` (`m = 25`) to `0.500` (`m = 35`), which is
+  why the radius form reads its radius per trace (`Deploy.θ`).
 -/
 
 namespace Claims.Flock.Numbers

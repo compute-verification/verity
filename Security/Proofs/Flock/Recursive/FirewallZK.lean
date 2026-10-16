@@ -151,7 +151,7 @@ theorem recursiveZK_enc {D Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa
     (hOuter : ∀ a p y (E : V → Prop),
       prCoin (fun q : Ωo => E (view a (encAt H (msgs a p) y) p y q))
         ≤ prCoin (fun s : Ωs => E (sim a (encAt H (msgs a p) y) s)) + εo)
-    {δ : ℝ≥0∞} (hT1 : FlockSoundness.Assumptions.Hm96Hiding ZkView.My ZkView.saltHash δ)
+    {δ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ)
     (E : Ωa × (Fin nh → D) × V → Prop) :
     prCoin (fun w : ((Ωa × Ωp) × (Fin nh → ZkView.Salt)) × Ωo =>
         E (w.1.1.1, encAt H (msgs w.1.1.1 w.1.1.2) w.1.2,
@@ -250,7 +250,7 @@ theorem private_enc {D Out Prog Wit Rr Rv Ωa Ωp Ωo Ωs V : Type} [Fintype Rr]
     (hOuter : ∀ o P w, honest o P w → ∀ r a p (y : Fin nh → ZkView.Salt) (E : V → Prop),
       prCoin (fun q : Ωo => E (view P w r a (encAt H (msgs P w r a p) y) p y q))
         ≤ prCoin (fun s : Ωs => E (sim o (reg P r) a (encAt H (msgs P w r a p) y) s)) + εo)
-    {δ : ℝ≥0∞} (hT1 : FlockSoundness.Assumptions.Hm96Hiding ZkView.My ZkView.saltHash δ)
+    {δ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ)
     (p₀ : Prog) (o : Out) (P : Prog) (w : Wit) (hw : honest o P w) (E : Rv × Ωa × (Fin nh → D) × V → Prop) :
     avg (realAt H reg nh msgs view P w E) ≤
         avg (fun r => idealAt H nh sim o E (reg p₀ r)) + (ε + εo + nh * δ) ∧
