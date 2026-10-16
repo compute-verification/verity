@@ -1,6 +1,10 @@
 """HC-SCHED's arm-side runner (cmp-13, approach pouw/filler-sched): the locked scorer's run (`score.py`) for an arm that adds
-a phase filler (`phase(phase, B, L)`, psched_arm.py), which filler-arm/v1 can't place. It changes nothing in the scorer;
-it calls score.py's own functions wherever they apply and adds only what the phase filler needs.
+a phase filler (`phase(phase, B, L)`, psched_arm.py), which filler-arm/v1 can't place, and may name a chunk shape per
+point (`filler_at(phase, B, L)`, a `Filler`; the arm's `filler` where it has none, and always at a phase point), which v1
+runs one of. It changes nothing in the scorer; it calls score.py's own functions wherever they apply and adds only what
+these need: every shape the arm runs gets its own `dscore sgate` row and ncu DRAM rows (in sgate.jsonl after the arm's
+`filler`'s, which the locked gate reads, and in ncu-filler.csv, whose every launch the locked DRAM gate bounds), and the
+`sgates` gate requires a passing row for each.
 
   python3 benchmarks/pouw/filler/psched_score.py ARM [--rounds 8] [--reps 3] [--no-robust]   build, lease, measure, report
   python3 benchmarks/pouw/filler/psched_score.py measure ARM --bin DIR --out DIR             the measurement, in a lease
@@ -44,6 +48,18 @@ def phase_of(arm, ph, b, l):
     return q
 
 
+def filler_of(arm, ph, b, l):
+    """The chunk shape at a point: `filler_at(phase, B, L)` when the arm has one, else its `filler`. A phase point keeps the
+    arm's `filler` (pscore pumps it on the split)."""
+    at = getattr(arm, "filler_at", None)
+    f = at(ph, b, l) if callable(at) else arm.filler
+    if not isinstance(f, A.Filler):
+        raise A.ArmError(f"{arm.name}: the filler at {ph} {b}/{l} is {f!r}, not a Filler")
+    if phase_of(arm, ph, b, l) is not None and f != arm.filler:
+        raise A.ArmError(f"{arm.name}: a phase point ({ph} {b}/{l}) runs the arm's filler, not {f}")
+    return f
+
+
 def measure(arm, bdir: Path, out: Path, rounds: int, reps: int, robust: bool) -> int:
     env = dict(os.environ, DFILL_COINS=(out / "coins.txt").read_text().strip(), DFILL_CHUNK_LOG2=str(arm.filler.chunk_log2))
     fl, err, rc_log = arm.filler, out / "errors.txt", out / "rc.txt"
@@ -52,25 +68,32 @@ def measure(arm, bdir: Path, out: Path, rounds: int, reps: int, robust: bool) ->
         with open(rc_log, "a") as f:
             f.write(s + "\n")
 
+    def at(f):
+        return dict(env, DFILL_CHUNK_LOG2=str(f.chunk_log2))
+
     pts = S.points(robust)
     shapes = sorted({(q.W, q.NC, q.S) for ph, b, l in pts if (q := phase_of(arm, ph, b, l))})
+    fillers = [fl] + sorted({filler_of(arm, ph, b, l) for ph, b, l in pts
+                             if A.placed(arm, ph, b, l).place != "none"} - {fl}, key=dataclasses.astuple)
     SC.smi(out)
     SC.sh(["nvidia-smi", "-q", "-d", "CLOCK,PERFORMANCE,POWER"] + (["-i", env["GPU_LEASE_UUID"]]
                                                                   if env.get("GPU_LEASE_UUID") else []),
           out=out / "smi-q.txt", err=err)
-    gates = [("dgate", [str(bdir / "dcap"), "dgate"]),
-             ("dgate", [str(bdir / "dcap"), "pgate", *sorted({str(s) for _, _, s in shapes})]),
-             ("sgate", [str(bdir / "dscore"), "sgate", str(fl.W), str(fl.NC), str(fl.S)]),
-             ("gate", [str(bdir / "dcap"), "gate"])]
-    for name, cmd in gates:
-        rc = SC.sh(cmd, out=out / f"{name}.jsonl", err=err, env=env)
-        note(f"{cmd[1]} rc {rc}")
+    gates = [("dgate", [str(bdir / "dcap"), "dgate"], env),
+             ("dgate", [str(bdir / "dcap"), "pgate", *sorted({str(s) for _, _, s in shapes})], env)]
+    gates += [("sgate", [str(bdir / "dscore"), "sgate", str(f.W), str(f.NC), str(f.S)], at(f)) for f in fillers]
+    gates += [("gate", [str(bdir / "dcap"), "gate"], env)]
+    for name, cmd, e in gates:
+        rc = SC.sh(cmd, out=out / f"{name}.jsonl", err=err, env=e)
+        note(f"{' '.join(cmd[1:])} rc {rc}")
         if rc:
             return 5
     m = "gpu__time_duration.sum,dram__bytes.sum"
-    rc = SC.sh(["ncu", "--clock-control", "none", "-k", "regex:dfill_k", "--launch-count", "3", "--metrics", m, "--csv",
-                str(bdir / "dcap"), "done", str(fl.W), str(fl.NC), str(fl.S)], out=out / "ncu-filler.csv", err=err, env=env)
-    note(f"ncu filler rc {rc}")
+    for f in fillers:
+        rc = SC.sh(["ncu", "--clock-control", "none", "-k", "regex:dfill_k", "--launch-count", "3", "--metrics", m,
+                    "--csv", str(bdir / "dcap"), "done", str(f.W), str(f.NC), str(f.S)], out=out / "ncu-filler.csv",
+                   err=err, env=at(f))
+        note(f"ncu filler {dataclasses.astuple(f)} rc {rc}")
     rc = SC.sh(["ncu", "--clock-control", "none", "-k", "regex:bw_read", "--launch-count", "3", "--metrics", m, "--csv",
                 str(bdir / "dcap"), "bw", "1", "3"], out=out / "ncu-control.csv", err=err, env=dict(env, DCAP_NOGRAPH="1"))
     note(f"ncu control rc {rc}")
@@ -86,11 +109,13 @@ def measure(arm, bdir: Path, out: Path, rounds: int, reps: int, robust: bool) ->
             cmd = [str(bdir / "pscore"), "pscore", str(b), str(l), str(p.fill_sms), str(fl.W), str(fl.NC), str(fl.S),
                    str(q.W), str(q.NC), str(q.S), str(q.tiles), str(rounds), str(reps)]
         else:
-            f = fl or A.Filler()
+            f = filler_of(arm, ph, b, l)
             cmd = [str(bdir / "dscore"), "dscore", "step" if ph == "decode" else "prefill", str(b), str(l), p.place,
                    str(p.fill_sms), str(f.W), str(f.NC), str(f.S), str(rounds), str(reps)]
-        rc = SC.sh(cmd, out=out / "dscore.jsonl", err=err, env=env)
-        note(f"{cmd[1]} {ph} {b} {l} {p.place} {p.fill_sms} phase {dataclasses.astuple(q) if q else None} rc {rc}")
+        f = filler_of(arm, ph, b, l)
+        rc = SC.sh(cmd, out=out / "dscore.jsonl", err=err, env=at(f))
+        note(f"{cmd[1]} {ph} {b} {l} {p.place} {p.fill_sms} filler {dataclasses.astuple(f)} "
+             f"phase {dataclasses.astuple(q) if q else None} rc {rc}")
         SC.smi(out)
     return 0
 
@@ -128,13 +153,24 @@ def report(out: Path, arm) -> dict:
                            "points": len(ph_rows), "checked": sum(r["rec_checked"] for r in ph_rows),
                            "bad": sum(r["rec_bad"] for r in ph_rows),
                            "tiles_short": sum(r["phase"]["tiles_short"] for r in ph_rows)}
-    g["ok"] = g["ok"] and g["phase_dram"]["ok"] and g["phase_receipts"]["ok"]
+    shapes = {filler_of(arm, ph, b, l) for ph, b, l in S.points() if A.placed(arm, ph, b, l).place != "none"} | {arm.filler}
+    sg = SC.rows(out / "sgate.jsonl")
+    ran = {(r.get("W"), r.get("NC"), r.get("S"), r.get("tiles")) for r in sg if r.get("ok") is True}
+    g["sgates"] = {"ok": bool(sg) and all(r.get("ok") is True for r in sg) and len(sg) >= len(shapes), "rows": len(sg),
+                   "shapes": len(shapes), "ran": sorted(ran, key=str)}
+    g["ok"] = all(g[k]["ok"] for k in ("phase_dram", "phase_receipts", "sgates")) and g["ok"]
     res["scored"] = g["ok"] and res["score_if_gated"] is not None
     res["SCORE"] = res["score_if_gated"] if res["scored"] else None
     res["driver"] = "psched_score.py (arm-side: pscore.cu for the phase points, the locked dscore elsewhere)"
     res["phase_points"] = {f"decode {r['B']}/{r['L']}": {**r["phase"], "fill_sms": r["fill_sms"]} for r in ph_rows}
     (out / "score.json").write_text(json.dumps(res, indent=1))
     return res
+
+
+def show(res: dict) -> None:
+    SC.show(res)
+    for k in ("phase_dram", "phase_receipts", "sgates"):
+        print(f"  gate {k}: {'pass' if res['gates'][k]['ok'] else 'FAIL'}  {res['gates'][k]}")
 
 
 def main(argv=None) -> int:
@@ -154,10 +190,7 @@ def main(argv=None) -> int:
         ap.add_argument("out", type=Path)
         a = ap.parse_args(argv[1:])
         res = report(a.out, A.load(json.loads((a.out / "arm.json").read_text())["spec"]))
-        SC.show(res)
-        print(f"  gate phase_dram: {'pass' if res['gates']['phase_dram']['ok'] else 'FAIL'}  {res['gates']['phase_dram']}")
-        print(f"  gate phase_receipts: {'pass' if res['gates']['phase_receipts']['ok'] else 'FAIL'}  "
-              f"{res['gates']['phase_receipts']}")
+        show(res)
         return 0
     ap = argparse.ArgumentParser(prog="psched_score.py", description="score a phase-filler arm with the locked scorer")
     ap.add_argument("arm", help="benchmarks/pouw/filler/FILE.py:Class, an arm with phase(phase, B, L)")
@@ -177,7 +210,9 @@ def main(argv=None) -> int:
     out.mkdir(parents=True, exist_ok=True)
     doc = {**SC.arm_doc(arm), "spec": a.arm,
            "phase": {f"{ph} {b}/{l}": (dataclasses.asdict(q) if (q := phase_of(arm, ph, b, l)) else None)
-                     for ph, b, l in S.points()}}
+                     for ph, b, l in S.points()},
+           "fillers": {f"{ph} {b}/{l}": dataclasses.asdict(filler_of(arm, ph, b, l)) for ph, b, l in S.points()
+                       if A.placed(arm, ph, b, l).place != "none"}}
     (out / "arm.json").write_text(json.dumps(doc, indent=1))
     (out / "coins.txt").write_text(secrets.token_hex(16))
     (out / "commit.txt").write_text(subprocess.run(["git", "-C", str(SC.REPO), "rev-parse", "HEAD"], capture_output=True,
@@ -209,9 +244,7 @@ def main(argv=None) -> int:
     res = report(out, arm)
     run_dir = Path(os.environ["RESEARCH_RUN_DIR"]) if os.environ.get("RESEARCH_RUN_DIR") else out
     SC.record(res, doc, run_dir, a.by)
-    SC.show(res)
-    for k in ("phase_dram", "phase_receipts"):
-        print(f"  gate {k}: {'pass' if res['gates'][k]['ok'] else 'FAIL'}  {res['gates'][k]}")
+    show(res)
     return 0 if rc == 0 else rc
 
 
