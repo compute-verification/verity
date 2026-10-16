@@ -21,8 +21,10 @@ The definitions every protocol's claims read, and Flock's claims, in the condens
   the coin commitment binds only computationally. The form first frozen, `ZKmal`, held only at `ε_zk ≥ 1`. The
   simulator's cost is its expected calls over its coins (`SimCost`).
 * Efficiency is the structural cost claims (`ExtractRunsLe`, `ExtractRunsExpLe`, `ERepCost`: reruns of the prover;
-  `RP.eval` also counts SHA-512 calls) and a separate stated complexity claim for the decoder's pure computation
-  (`DecoderComplexity`).
+  `RP.eval` also counts SHA-512 calls) and the decoder's steps. (16 Oct) The steps are the deployed decoder's own count
+  (`Flock.Deploy.dec`, a named, counted program), at the encoded length of the word it decodes (`Flock.wordLen`). The
+  form first frozen (`DecoderComplexity`) took the decoder, its count and its size as arguments, so a count of `0` met
+  it.
 * Nontriviality is recorded honest runs that the verifier accepts (`Nontrivial`). (16 Oct, TOP-53) It is established
   by a test against recorded sessions, not by a Lean theorem, and no Lean proof of it is expected: Lean's kernel can't
   evaluate SHA-512 over real proofs. The test is `check`'s `lean-agreement` job (`tools/verity/check/ci.toml`), which
@@ -324,6 +326,8 @@ def trustedBase : List String :=
    "the live coins: the auditor's coins are uniform, and each is hidden from the prover until the verifier opens it: " ++
      "the prover sees nothing that depends on a coin before the round that opens it, except the commitment to every " ++
      "coin that the --zk verifier sends at Hello and opens round by round",
+   "the decoder's count: the deployed decoder's step count (Flock.Deploy.dec) is the cost of running it, one step " ++
+     "per field operation (arithmetic or a comparison), per position compared and per column entry read",
    "trusted-nebius-host: the auditor's devices and their host provider"]
 
 /-! ## The claims -/
@@ -456,11 +460,6 @@ def ERepCost {Op : Type} (H : Msg → Msg) (V : Verifier Coin) (m k K : Msg → 
 
 end Claims
 
-/-- **The decoder's complexity (a stated claim)**: `counted` computes what `decode` does, and the steps it reports are
-at most `p(size)`. The step count is the instrumented decoder's own: nothing here checks it against a machine model. -/
-def DecoderComplexity {I T : Type} (decode : I → T) (counted : I → T × ℕ) (size : I → ℕ) (p : Polynomial ℕ) : Prop :=
-  ∀ i, (counted i).1 = decode i ∧ (counted i).2 ≤ p.eval (size i)
-
 /-- A prover that sends the recorded messages `as` whatever the verifier says. -/
 def replay (as : List Msg) : Prover Unit := ⟨fun _ hist _ => .ret (as.getD hist.length [])⟩
 
@@ -579,6 +578,12 @@ def ListWithin {Col T : Type} [DecidableEq Col] [Zero Col] (len : T → ℕ) (en
     (1 - θ M) * len M ≤ ((Finset.univ : Finset (Fin (len M))).filter fun i => enc M i.val = fill (len M) os i).card →
     M ∈ decode os
 
+/-- **The encoded length of an opened word**, in bits, the size the decoder's steps are bounded at: per opened column,
+its position in binary (`Nat.size`), one bit that ends the entry, and each of its field elements in `⌈log₂ |F|⌉`
+bits. -/
+def wordLen {F : Type} [Fintype F] (os : List (ℕ × List F)) : ℕ :=
+  (os.map fun o => Nat.size o.1 + 1 + o.2.length * Nat.clog 2 (Fintype.card F)).sum
+
 /-- **Flock's assemble step**: each table's opened columns (`o j` of every opening `o`, for table `j` below the
 statement's `Stmt.tables`) as they were opened, decoded by the one decoder to candidate traces; for each table, its
 first candidate that, read alone, is in the relation of that table's own statement (`table x j`); the tables' choices,
@@ -599,11 +604,17 @@ def assemble {Col T : Type} (parse : Msg → Option Stmt) (table : Msg → ℕ �
 its parser and scope check, each table's own statement (`table x j`: the statement of table `j`'s units alone, one
 table, as the verifier's parser reads it), each table's opened columns of its first committed codeword in a run
 (`cols v j` for table `j`), the code (`enc`), each trace's codeword length (`len`) and decoding radius (`θ`), functions
-of the trace because one `T` holds the traces of every statement's code, how the tables' traces, one per table in table
-order (the units' order), are read as one witness (`read`), and the numbers the errors read: `ε_table`, the tables'
-errors summed; `N₀`, the tables' level-0 codeword lengths summed; the weight `C` of `γ`; `E^rep`'s waits `m′` and its
-truncation `K`. Every table is decoded by the one decoder at the one code. A single-table statement is its own table
-`0`, and reads table `0`'s columns and one trace (`read [M]`), its `ε_table` and `N₀` that table's. -/
+of the trace because one `T` holds the traces of every statement's code, the deployed decoder with its step count
+(`dec`), how the tables' traces, one per table in table order (the units' order), are read as one witness (`read`), and
+the numbers the errors read: `ε_table`, the tables' errors summed; `N₀`, the tables' level-0 codeword lengths summed;
+the weight `C` of `γ`; `E^rep`'s waits `m′` and its truncation `K`. Every table is decoded by the one decoder at the one
+code. A single-table statement is its own table `0`, and reads table `0`'s columns and one trace (`read [M]`), its
+`ε_table` and `N₀` that table's.
+
+`dec` is a named, counted program: on opened columns it returns its list and the steps it took, counted along the same
+computation, one step per field operation (arithmetic or a comparison of field elements), per position compared and
+per column entry read, moving data free. `Flock.Efficient` reads that count; that it is the cost of running the
+decoder is `trustedBase`'s. -/
 structure Deploy (Coin Col T : Type) where
   zk : Bool
   V : Verifier Coin
@@ -614,12 +625,16 @@ structure Deploy (Coin Col T : Type) where
   enc : T → ℕ → Col
   len : T → ℕ
   θ : T → ℝ
+  dec : List (ℕ × Col) → List T × ℕ
   read : List T → Wit
   εtable : Msg → ℝ
   N₀ : Msg → ℝ
   weight : Msg → ℝ
   waits : Msg → ℕ
   cap : Msg → ℕ
+
+/-- The deployed decoder's list, without its count. -/
+def Deploy.decode {Coin Col T : Type} (D : Deploy Coin Col T) (os : List (ℕ × Col)) : List T := (D.dec os).1
 
 section Claims
 
@@ -667,14 +682,15 @@ def Bits [Zero Col] (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
   ∀ decode, ListWithin D.len D.enc D.θ decode →
     Claims.Bits H D.V (R D.parse) (E D decode) fun x => lamOf (κ D x) (γ D x)
 
-/-- **Flock: efficiency**: `E^rep`'s reruns at every decoder, and a decoder that meets the list-decoding spec, with its
-stated complexity: the one decoder of every table. Its lists are at most `p(size)` long too, so `assemble`, which checks
-each table's list once, makes at most `p(size)` checks per table. -/
-def Efficient [Zero Col] (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T)
-    (counted : List (ℕ × Col) → List T × ℕ) (size : List (ℕ × Col) → ℕ) (p : Polynomial ℕ) : Prop :=
-  ERepCost H D.V D.waits D.k D.cap (fun v => [D.cols v]) (assemble D.parse D.table decode D.read) (check D.parse) ∧
-    ListWithin D.len D.enc D.θ decode ∧ DecoderComplexity decode counted size p ∧
-    ∀ os, (decode os).length ≤ p.eval (size os)
+/-- **Flock: efficiency**: `E^rep`'s reruns at the deployed decoder, which meets the list-decoding spec: the one decoder
+of every table. On every opened word its steps (`D.dec`'s count) are at most `p` at the word's encoded length
+(`wordLen`), and so are its lists' lengths, so `assemble`, which checks each table's list once, makes at most that many
+checks per table. -/
+def Efficient {F : Type} [Fintype F] [DecidableEq F] [Zero (List F)] (H : Msg → Msg) (D : Deploy Coin (List F) T)
+    (p : Polynomial ℕ) : Prop :=
+  ERepCost H D.V D.waits D.k D.cap (fun v => [D.cols v]) (assemble D.parse D.table D.decode D.read) (check D.parse) ∧
+    ListWithin D.len D.enc D.θ D.decode ∧ (∀ os, (D.dec os).2 ≤ p.eval (wordLen os)) ∧
+    ∀ os, (D.decode os).length ≤ p.eval (wordLen os)
 
 /-- **Flock: nontriviality**: recorded honest runs, each of a statement the scope check takes, that the verifier
 accepts. It is established by a test against recorded sessions, not by a Lean proof, and none is expected (TOP-53):
