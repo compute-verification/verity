@@ -4789,29 +4789,9 @@ def Paths.const {Ω : Type} (a : Ω) : ∀ n, Paths Ω n
   | 0 => ()
   | n + 1 => (a, Paths.const a n)
 
-/-- **A prover's spot-check play** over `n` rounds: per round, its error table (its committed word minus the target,
-per cell, as a function of the round's bits), fixed before the round's coins, then the rest of the play, which may
-depend on them. -/
-inductive SpotPlay (C V A : Type) : ℕ → Type
-  | done : SpotPlay C V A 0
-  | round {n : ℕ} (e : C → (V → A) → A) (next : C × Finset V → SpotPlay C V A n) : SpotPlay C V A (n + 1)
-
 namespace SpotPlay
 
 variable {C V A : Type} [Fintype C] [Fintype V] [DecidableEq V] [CommRing A]
-
-/-- **The window's game** of a play: round `w`'s deficiency is the share of uncertified cells (`spotDef`), and its
-check passes where the drawn cell's error vanishes at the drawn bits. -/
-noncomputable def game : {n : ℕ} → SpotPlay C V A n → RoundGame (C × Finset V) n
-  | _, .done => .done
-  | _, .round e next => .round (fun _ => spotDef e) (fun a => e a.1 (bitInd a.2) = 0) fun a => (next a).game
-
-omit [Fintype C] [Fintype V] [DecidableEq V] [CommRing A] in
-/-- Round `w`'s error table along the realized coins. -/
-def errAt : {n : ℕ} → SpotPlay C V A n → Paths (C × Finset V) n → Fin n → C → (V → A) → A
-  | _, .done, _, w => w.elim0
-  | _, .round e next, x, w =>
-    Fin.cases (motive := fun _ => C → (V → A) → A) e (fun w' => (next x.1).errAt x.2 w') w
 
 omit [Fintype V] in
 theorem dAt_game : ∀ {n : ℕ} (P : SpotPlay C V A n) (x : Paths (C × Finset V) n) (w : Fin n),
@@ -5284,9 +5264,6 @@ theorem bitInd_map_mk (t : Fin St) (U : Finset (ι t)) :
   funext v
   simp [bitInd]
 
-/-- A product of two bit-affine operands on any bits (`AffProd` on bits that are not split in two). -/
-def AffMul {V : Type} [Fintype V] (π : (V → R) → R) : Prop := ∃ A B : BitAff V R, ∀ z, π z = A.eval z * B.eval z
-
 /-- A program whose products have affine operands computes words of degree 2, on any bits. -/
 theorem SlpG.cubeQuad_val_mul {V : Type} [Fintype V] [DecidableEq V] {N : ℕ} (P : SlpG V R N)
     (hOk : ∀ j, P.isProd j = true → AffMul (P.prod j)) (j : Fin N) : CubeQuad fun z => P.val z j := by
@@ -5389,16 +5366,6 @@ theorem SlpG.cells_card_le_ov {w : Fin np → R} {c : ℕ}
         exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, P.isProd_of_coef_ne_zero _ _ hek⟩
 
 end OverlapRound
-
-/-- A round's bits with overlapping draws: draw `t`'s design bits, stage `t` of shape `(n t, L, B t, n' t)`. -/
-abbrev OBits (St : ℕ) (n : Fin St → ℕ) (L np : ℕ) (B n' : Fin St → ℕ) : Type := Σ t, DBits (n t) L np (B t) (n' t)
-
-/-- A round's cell-blocks, over all its stages. -/
-abbrev OCells (St : ℕ) (n n' B : Fin St → ℕ) : Type := Σ t, DCells (n t) (n' t) (B t)
-
-/-- A round's coins with overlapping draws: the check's cell-block, among every stage's, and every draw's bits. -/
-abbrev OSpot (St : ℕ) (n : Fin St → ℕ) (L np : ℕ) (B n' : Fin St → ℕ) : Type :=
-  OCells St n n' B × Finset (OBits St n L np B n')
 
 /-- **The window's rounds with overlapping stages** (Theorem K∥, RS-D1E r2 §2.2 and §2.5), a named hypothesis. Each
 round is `St` stages of any shapes (stage `t`: `n t` rows, `B t` blocks of `L`, `n' t` columns); their draws may
