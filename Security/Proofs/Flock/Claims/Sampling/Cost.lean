@@ -18,7 +18,8 @@ weights `g`, from `a` accepted so far, average `G(K, a)` with `ε·G(K, a) ≤ (
 * `E_runs_le`, `E_runs_exp`: the two bounds.
 * `OpenCallsLe`, `E_own_le`: `E`'s own SHA-512 calls are its openings' checks, at most `k·openCalls` when one rerun's
   checks make at most `openCalls` (what the block's `Deploy.openCalls` describes, and does not state).
-* `Efficient_of_decoder`: under `OpenCallsLe`, `Efficient` is the decoder's stated complexity.
+* `Efficient_of_decoder`: under `OpenCallsLe`, `Efficient` is a decoder that meets Flock's `ListComplete`, with its
+  stated complexity.
 -/
 
 namespace Claims.Sampling
@@ -475,11 +476,14 @@ theorem E_own_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ �
         exact Nat.mul_le_mul_right _ (min_le_left _ _)
     · simp [ownLog]
 
-/-- **Sampling: efficiency rests on the decoder**, once one rerun's openings checks are bounded (`OpenCallsLe`). -/
-theorem Efficient_of_decoder (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T)
+/-- **Sampling: efficiency rests on the decoder**, once one rerun's openings checks are bounded (`OpenCallsLe`): a
+decoder that meets Flock's list-decoding spec, with its stated complexity. -/
+theorem Efficient_of_decoder [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin Col T)
+    (decode : List (ℕ × Col) → List T)
     (counted : List (ℕ × Col) → List T × ℕ) (size : List (ℕ × Col) → ℕ) (p : Polynomial ℕ) (h : OpenCallsLe H D)
+    (hl : Flock.ListComplete D.flock.enc D.flock.agree D.flock.nMin decode)
     (hd : DecoderComplexity decode counted size p) : Efficient H D decode counted size p :=
-  ⟨E_runs_le H D decode, E_runs_exp H D decode, E_own_le H D decode h, hd⟩
+  ⟨E_runs_le H D decode, E_runs_exp H D decode, E_own_le H D decode h, hl, hd⟩
 
 end Cost
 

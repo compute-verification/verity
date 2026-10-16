@@ -1,7 +1,7 @@
 import Definitions.Claims
 
 /-!
-# Claims: the sampling compiler (draft, not frozen)
+# Claims: the sampling compiler (frozen before any proof work)
 
 The claims block of the sampled-proofs one-stage audit (`verity/core/protocols/sampled_proofs/`), on the shared
 definitions of `Definitions.Claims`, in the template's eight items. Parametric in the deployed sampled verifier
@@ -21,14 +21,17 @@ definitions of `Definitions.Claims`, in the template's eight items. Parametric i
 5. **Named pieces**: the assemble step (`assemble`, `inner`): a region's boundary values are what Flock's `E^rep`
    recovers in the reruns that sampled it; Flock's decoder (`Flock.ListComplete`); the draw's escape and miss
    (`Law.escape`, `Law.miss`); the expected-time finder (`Bext`); and the parameters (`Deploy`).
-6. **Claims**: `KS` (with `β = 1`, as commit strings opened inside Flock proofs are bound), `Complete`, `ZK`,
-   `Nontrivial`, `Bits` and `Efficient`.
+6. **Claims**: `KS` at every `t`, with `κ_t = C(N, t)^{1/k}·(miss(t) + κ_F) + 2k/K + e^{−k/8}` and `β = 1` (commit
+   strings opened inside Flock proofs are bound); `Complete`; `ZK`; `Nontrivial`; `Bits`; and `Efficient`.
 7. **Assumptions used**: `StrictBirthday` (for `B`), `ExpectedCR` (for `Bext`), `CommitHides` (for zero knowledge,
    through Flock's), and `trustedBase`.
-8. **Status**: stated as a draft for review. The draws' miss bounds are proved in `Proofs/Flock/Claims/Sampling/`.
+8. **Status**: stated; no claim is proved.
 
-Generic pieces this block adds, which belong with the shared definitions when it freezes: `ownLog`, `ofOC`,
-`flatMapRP`, `waitAccC`, `Bext`, `lamLin`, `BitsLin`, `ExtractOwnLe`, `SimAux` and `ZKaux`.
+Generic pieces this block adds, which belong with the shared definitions: `ownLog`, `ofOC`, `flatMapRP`, `waitAccC`,
+`Bext`, `lamLin`, `BitsLin`, `ExtractOwnLe`, `SimAux` and `ZKaux`.
+
+Frozen by `Flock.Guarantees.SamplingClaimsStated` (`Models/Flock/Guarantees/SamplingClaims.lean`), whose statement
+reads every claim here: the lock records each one's text under `reads`, so a changed claim is a changed record.
 -/
 
 namespace Claims.Sampling
@@ -163,7 +166,7 @@ noncomputable def Law.miss (L : Law) (N t : ℕ) : ℝ :=
 
 /-- What the deployed sampled verifier brings, read by the claims: the verifier, its parser and scope check, the
 registered scheme's path check, the Flock verifier its sessions run (`flock`; the claims read its parser, columns, code,
-witness reading and masking, not its numbers), where a run's session is (`session`: the session's statement and what its
+decoding threshold and count, witness reading and masking, not its numbers), where a run's session is (`session`: the session's statement and what its
 run showed), how a session's witness opens rows (`openings`, from the statement, the run and the witness), and the
 numbers the errors read. The extractor waits for `k` accepted reruns among `K` (`cap`). The session's `E^rep` at `x`
 makes `m′` waits (`innerWaits`) of `K′` reruns (`innerCap`) with `N₀` (`innerN₀`), `ε_table` and the weight `C` of
@@ -396,7 +399,7 @@ def Scope (D : Deploy Coin Col T) (x : Msg) : Prop := ∃ s, D.parse x = some s 
 /-- **Sampling: KS**, at every `t`, at the sampling extractor and every decoder that meets Flock's list-decoding spec:
 `Pr[acc ∧ ¬R_t] ≤ κ_t + √(γ_t·Pr[B]) + Pr[B_ext]`. -/
 def KS (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
-  ∀ t decode, Flock.ListComplete D.flock.enc D.flock.agree decode →
+  ∀ t decode, Flock.ListComplete D.flock.enc D.flock.agree D.flock.nMin decode →
     Claims.KSLin H D.V (R H D.path D.parse t) (E H D decode) (κ D t) (γ D t) (fun _ => 1)
       (Bext H D.V (E H D decode))
 
@@ -416,18 +419,19 @@ def ZK {Ω : Type} [Fintype Ω] (H : Msg → Msg) (D : Deploy Coin Col T) (P : W
 /-- **Sampling: bits** at every `t`, `λ_t = min(log₂(1/κ_t), 255.5 − ½ log₂ γ_t, 256 − log₂(2c)) − log₂ 3`, at every
 decoder that meets the spec. -/
 def Bits (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
-  ∀ t decode, Flock.ListComplete D.flock.enc D.flock.agree decode →
+  ∀ t decode, Flock.ListComplete D.flock.enc D.flock.agree D.flock.nMin decode →
     BitsLin H D.V (R H D.path D.parse t) (E H D decode) (Bext H D.V (E H D decode))
       fun x => lamLin (κ D t x) (γ D t x) 1 (work D x)
 
 /-- **Sampling: efficiency**: the extractor's reruns, at most `1 + K + k·m′·K′` and `1 + k·(1 + m′·k′)` expected; its
-own SHA-512 calls, at most `k·openCalls`; and the decoder's stated complexity. -/
+own SHA-512 calls, at most `k·openCalls`; and a decoder that meets Flock's list-decoding spec, with its stated
+complexity. -/
 def Efficient (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T)
     (counted : List (ℕ × Col) → List T × ℕ) (size : List (ℕ × Col) → ℕ) (p : Polynomial ℕ) : Prop :=
   ExtractRunsLe H (E H D decode) (fun x => 1 + D.cap x + D.k x * (D.innerWaits x * D.innerCap x)) ∧
     ExtractRunsExpLe H (E H D decode) (fun x => 1 + D.k x * (1 + D.innerWaits x * D.innerK x)) ∧
     ExtractOwnLe H (E H D decode) (fun x => D.k x * D.openCalls x) ∧
-    DecoderComplexity decode counted size p
+    Flock.ListComplete D.flock.enc D.flock.agree D.flock.nMin decode ∧ DecoderComplexity decode counted size p
 
 /-- **Sampling: nontriviality**: recorded honest runs, each of a statement the scope check takes, that the verifier
 accepts. -/

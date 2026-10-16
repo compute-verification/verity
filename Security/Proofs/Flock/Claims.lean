@@ -12,18 +12,22 @@ import Proofs.Flock.Claims.Sampling.Extract
 import Proofs.Flock.Claims.Sampling.Binding
 import Proofs.Flock.Claims.Sampling.Escape
 import Proofs.Flock.Claims.Sampling.Cost
+import Proofs.Flock.Claims.Decode
+import Proofs.Flock.Claims.DecodeFlock
 
 /-! `Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated`, by reflexivity: the guarantee is there for its
 record, which holds the claims' text.
 
 The claims' lemmas sit under `Proofs.Flock.Claims`: uniform-coin probability (`Prob`), `B`'s soundness and the
 finders' Cauchy–Schwarz aggregation (`Finder`, `Aggregate`), the `Bits` corollary of `KS` (`Bits`), `E^rep`'s
-reruns and amplification (`ERep`), and `ERepCost` (`ERepCost`). The sampling compiler's lemmas are under
-`Proofs.Flock.Claims.Sampling`: each registered draw law's miss bound in `Claims.Pr` (`Sampling.Draws`), the
-executable Bernoulli draw's bound (`Sampling.ExecBernoulli`), every law's live draw's (`Sampling.Live`), the sampled
-extractor and its reruns (`Sampling.Extract`), the boundary values' binding, `KSLin`'s linear term
-(`Sampling.Binding`), the claims block's escape and miss as the draws' probabilities (`Sampling.Escape`), and its
-extractor's reruns and own calls, `Efficient` but for the decoder (`Sampling.Cost`). -/
+reruns and amplification (`ERep`), `ERepCost` (`ERepCost`), and a decoder that meets `ListComplete` at the Johnson
+count for interleaved Reed–Solomon codes, from ArkLib's Guruswami–Sudan decoder (`Decode`), and that decoder at Flock's
+level-0 code (`DecodeFlock`). The sampling compiler's lemmas are under `Proofs.Flock.Claims.Sampling`: each registered
+draw law's miss bound in `Claims.Pr` (`Sampling.Draws`), the executable Bernoulli draw's bound
+(`Sampling.ExecBernoulli`), every law's live draw's (`Sampling.Live`), the sampled extractor and its reruns
+(`Sampling.Extract`), the boundary values' binding, `KSLin`'s linear term (`Sampling.Binding`), the claims block's
+escape and miss as the draws' probabilities (`Sampling.Escape`), and its extractor's reruns and own calls, `Efficient`
+from the decoder (`Sampling.Cost`). -/
 
 /-- **The claims are stated** (`Flock.Guarantees.ClaimsStated`). -/
 theorem Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated := rfl

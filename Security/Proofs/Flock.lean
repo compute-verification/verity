@@ -12,5 +12,6 @@ import Proofs.Flock.VBridge
 import Proofs.Flock.VBridge.Family.RegistrantFinder
 import Proofs.Flock.Sampled
 import Proofs.Flock.Claims
+import Proofs.Flock.SamplingClaims
 
 /-! C-Flock's proofs: the verifier's, level3's and soundness's. -/
