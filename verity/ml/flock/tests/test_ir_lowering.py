@@ -480,24 +480,24 @@ SILU_V2_UPS = (0x3F80, 0x0000, 0x8000, 0xBF80, 0x7F80, 0xFF80, 0x7FC0, 0xFFC1, 0
 
 
 def test_silu_v2_unit_is_the_served_function_on_every_gate_word():
-    """`SiluMul_v2`'s unit against `SiluMulBf16_v2` (``registry.act``) on every gate word at each of :data:`SILU_V2_UPS`, then on
-    random (g, u). The two versions differ on NaN, -inf, -0 and the gates whose ``expf(-g)`` overflows, so a unit with
-    `SiluMul_v1`'s semantics fails here."""
-    act = pytest.importorskip("verity_vllm.program.registry.act")
+    """`SiluMul_v2`'s unit against `SiluMulBf16_v2`, the primitive the template's Definition registers, on every gate word at
+    each of :data:`SILU_V2_UPS`, then on random (g, u). The two versions differ on NaN, -inf, -0 and the gates whose
+    ``expf(-g)`` overflows, so a unit with `SiluMul_v1`'s semantics fails here."""
     low = REG.module("silu-mul-v2").lowering(TM.subcircuit("silu-mul-v2", I=4))
+    served = REGISTRY["SiluMulBf16_v2"].evaluate
     assert low.units.n == 4 and low.layout.counts["ands"] == 1380
     g = list(range(1 << 16))
-    differs = {w for w in g if act.SiluMulBf16.evaluate(w, 0x3F80) != P.SiluMulBf16.evaluate(w, 0x3F80)}
+    differs = {w for w in g if served(w, 0x3F80) != P.SiluMulBf16.evaluate(w, 0x3F80)}
     assert {0x7FC0, 0xFF80, 0x8000, 0xC2B2} <= differs        # NaN, -inf, -0, -89
     for u in SILU_V2_UPS:
         (out,), ok = IL.evaluate_layout(low.layout, [g, [u] * len(g)], len(g))
         assert ok == (1 << len(g)) - 1
-        assert [w for w, x in zip(g, out) if int(x) != act.SiluMulBf16.evaluate(w, u)] == [], hex(u)
+        assert [w for w, x in zip(g, out) if int(x) != served(w, u)] == [], hex(u)
     rng = random.Random(7)
     vecs = [bf16_words(rng, 2) for _ in range(8000)]
     (out,), ok = IL.evaluate_layout(low.layout, [[v[0] for v in vecs], [v[1] for v in vecs]], len(vecs))
     assert ok == (1 << len(vecs)) - 1
-    assert [int(x) for x in out] == [act.SiluMulBf16.evaluate(*v) for v in vecs]
+    assert [int(x) for x in out] == [served(*v) for v in vecs]
 
 
 def test_silu_v2_circuit_units_are_a_power_of_two():
@@ -508,18 +508,18 @@ def test_silu_v2_circuit_units_are_a_power_of_two():
 
     from verity_flock import circuit as FC
 
-    act = pytest.importorskip("verity_vllm.program.registry.act")
     mod = REG.module("silu-mul-v2")
     assert mod.circuit_lowering(TM.subcircuit("silu-mul-v2", I=256)).sha256 == mod.PINS[256]
     sub = TM.subcircuit("silu-mul-v2", I=1536)
     low = mod.circuit_lowering(sub)
+    served = REGISTRY["SiluMulBf16_v2"].evaluate
     assert low.sha256 == mod.CIRCUIT_PINS[1536]
     assert (low.name, low.units.n, low.layout.counts["ands"]) == ("silu-mul-v2/bf16/element/x3", 512, 3 * 1380)
     rng = random.Random(11)
     fin = np.array([bf16_words(rng, 2 * 1536) for _ in range(4)], dtype=np.uint64)
     got, _, ok = low.evaluate(fin)
     assert ok == (1 << (4 * 512)) - 1
-    assert got.tolist() == [[act.SiluMulBf16.evaluate(int(r[i]), int(r[1536 + i])) for i in range(1536)] for r in fin]
+    assert got.tolist() == [[served(int(r[i]), int(r[1536 + i])) for i in range(1536)] for r in fin]
     meta = json.loads(FC.compose(low, sub).split("\n", 2)[1].removeprefix("META "))
     (unit,) = [r for r in meta["ranges"] if r["net"] == "unit"]
     assert unit["count"] == meta["vus_per_block"] * 512 and unit["count"] & (unit["count"] - 1) == 0
