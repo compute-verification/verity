@@ -16,11 +16,13 @@ the record Flock's claims read, at the relation's fields `rel` (C's `Readable.Re
 * `cols`: the opened level-0 columns of table 0's two reps, read off the run's last message (its statement, record and
   proof files) with no hash: the record's rep streams give the level-0 query round's coins, the proof files the opened
   rows (`runOf`, `Claims.Flock.plainRunCols`, `Claims.Flock.zkRunCols`).
-* `enc`, `nMin`, `read`: the level-0 code at each `m` the verifier serves, read as one (`IRS.famEnc`): the plain one
-  (`plainEncD`, `22 ≤ m ≤ 35`) and the masked one (`zkEncD`, `25 ≤ m ≤ 35`), each with its Johnson count at `agree`
-  and its read step. A decoder meeting `ListComplete` exists for each (`listComplete_plain`, `listComplete_zk`).
-* `agree`: `√ρ + 1/200`, at rate `1/2` without `--zk` (`Numbers.agree₀`) and at the masked code's largest rate
-  `(2^12 + 554)/2^13` (`m = 25`) with it (`zkAgree`, `zkRate_le`).
+* `enc`, `len`, `θ`, `read`: the level-0 code at each `m` the verifier serves, read as one (`IRS.famEnc`): the plain
+  one (`plainEncD`, `22 ≤ m ≤ 35`) and the masked one (`zkEncD`, `25 ≤ m ≤ 35`), each trace's codeword length `2^d`
+  and radius `1 − √ρ − 1/200` at its `m` (`plainLenD`, `plainThetaD`, `zkLenD`, `zkThetaD`), and its read step. A
+  decoder meeting `ListWithin` at them exists for each (`GS.listWithin_deployPlain`, `GS.listWithin_deployZk`).
+* The list-decoding spec's earlier `nMin` form (`ListComplete`) is met at one agreement, `√ρ + 1/200`, at rate `1/2`
+  without `--zk` (`Numbers.agree₀`) and at the masked code's largest rate `(2^12 + 554)/2^13` (`m = 25`) with it
+  (`zkAgree`, `zkRate_le`): `listComplete_plain`, `listComplete_zk`.
 * `εtable`: the tables' errors summed: `tableError` at the table's `fast100` schedule, or under `--zk` the padded
   table's `padLinkError + (padRepError + ε_inner)²` at `m1Schedule` with `ε_inner`'s bound at the inner proof's
   parameters (`Numbers.innerUp`). `N₀`: table 0's level-0 codeword length `2^{d₀}`. `weight`: the tables' weights
@@ -85,6 +87,13 @@ theorem plainEncD_eq (M : PlainTrace) (q : ℕ) :
     plainEncD M q = List.ofFn (levelZeroEnc execArith (plainLanes M.1) (plainCols M.1) M.2 q) := by
   unfold plainEncD IRS.famEnc flockPlainLevelZero
   rw [levelZero_enc]
+
+/-- **The plain code's length** at a candidate: `2^d` at its `m`. -/
+def plainLenD (M : PlainTrace) : ℕ := 2 ^ plainLen M.1
+
+/-- **The plain code's radius** at a candidate: `1 − √ρ − 1/200` at its `m`, `ρ = 2^cols/2^d`. -/
+noncomputable def plainThetaD (M : PlainTrace) : ℝ :=
+  1 - Real.sqrt ((2 : ℝ) ^ plainCols M.1 / 2 ^ plainLen M.1) - 1 / 200
 
 /-- **The deployed plain code's Johnson count** at `agree`: `⌊(2^cols + 1)/agree²⌋ + 1` at the candidate's `m`. -/
 noncomputable def plainNMinD (agree : ℝ) (M : PlainTrace) : ℕ :=
@@ -351,8 +360,8 @@ noncomputable def deployPlain (rel : Readable.Parsed → Readable.Relation) :
   scopeCheck := scopeCheck false
   cols := cols false
   enc := Claims.Flock.plainEncD
-  agree := Claims.Flock.Numbers.agree₀
-  nMin := Claims.Flock.plainNMinD Claims.Flock.Numbers.agree₀
+  len := Claims.Flock.plainLenD
+  θ := Claims.Flock.plainThetaD
   read := Claims.Flock.plainReadD
   εtable := εtable false
   N₀ := N₀ false
@@ -369,8 +378,8 @@ noncomputable def deployZk (rel : Readable.Parsed → Readable.Relation) :
   scopeCheck := scopeCheck true
   cols := cols true
   enc := Claims.Flock.zkEncD
-  agree := Claims.Flock.zkAgree
-  nMin := Claims.Flock.zkNMinD Claims.Flock.zkAgree
+  len := Claims.Flock.zkLenD
+  θ := Claims.Flock.zkThetaD
   read := Claims.Flock.zkReadD
   εtable := εtable true
   N₀ := N₀ true
@@ -380,15 +389,17 @@ noncomputable def deployZk (rel : Readable.Parsed → Readable.Relation) :
 
 /-! ## What the instances meet -/
 
-/-- **A plain decoder meets the list-decoding spec** at the deployed code, threshold and count. -/
+/-- **A plain decoder meets the list-decoding spec's earlier `nMin` form** at the deployed code, at `agree₀` and its
+Johnson count. -/
 theorem listComplete_plain (rel : Readable.Parsed → Readable.Relation) :
-    Claims.Flock.ListComplete (deployPlain rel).enc (deployPlain rel).agree (deployPlain rel).nMin
-      (Claims.Flock.plainDecodeD Claims.Flock.Numbers.agree₀) :=
+    Claims.Flock.ListComplete (deployPlain rel).enc Claims.Flock.Numbers.agree₀
+      (Claims.Flock.plainNMinD Claims.Flock.Numbers.agree₀) (Claims.Flock.plainDecodeD Claims.Flock.Numbers.agree₀) :=
   Claims.Flock.listComplete_plainDecodeD _ Claims.Flock.Numbers.agree₀_pos
 
-/-- **A masked decoder meets the list-decoding spec** at the deployed code, threshold and count. -/
+/-- **A masked decoder meets the list-decoding spec's earlier `nMin` form** at the deployed code, at `zkAgree` and its
+Johnson count. -/
 theorem listComplete_zk (rel : Readable.Parsed → Readable.Relation) :
-    Claims.Flock.ListComplete (deployZk rel).enc (deployZk rel).agree (deployZk rel).nMin
+    Claims.Flock.ListComplete (deployZk rel).enc Claims.Flock.zkAgree (Claims.Flock.zkNMinD Claims.Flock.zkAgree)
       (Claims.Flock.zkDecodeD Claims.Flock.zkAgree) :=
   Claims.Flock.listComplete_zkDecodeD _ Claims.Flock.zkAgree_pos
 
@@ -411,7 +422,8 @@ theorem cols_nodup_zk (rel : Readable.Parsed → Readable.Relation) (s : Claims.
 /-- **A plain run opens fewer level-0 columns than `nMin`** of every trace: ruling 2's count is never reached by one
 run. -/
 theorem cols_length_lt_nMin_plain (rel : Readable.Parsed → Readable.Relation) (s : Claims.Seen)
-    (M : Claims.Flock.PlainTrace) : ((deployPlain rel).cols s).length < (deployPlain rel).nMin M := by
+    (M : Claims.Flock.PlainTrace) :
+    ((deployPlain rel).cols s).length < Claims.Flock.plainNMinD Claims.Flock.Numbers.agree₀ M := by
   show (cols false s).length < Claims.Flock.plainNMinD Claims.Flock.Numbers.agree₀ M
   unfold cols
   split
@@ -423,7 +435,7 @@ theorem cols_length_lt_nMin_plain (rel : Readable.Parsed → Readable.Relation) 
 /-- **A masked run opens fewer level-0 columns than `nMin`** of every trace: ruling 2's count is never reached by one
 run. -/
 theorem cols_length_lt_nMin_zk (rel : Readable.Parsed → Readable.Relation) (s : Claims.Seen)
-    (M : Claims.Flock.ZkTrace) : ((deployZk rel).cols s).length < (deployZk rel).nMin M := by
+    (M : Claims.Flock.ZkTrace) : ((deployZk rel).cols s).length < Claims.Flock.zkNMinD Claims.Flock.zkAgree M := by
   show (cols true s).length < Claims.Flock.zkNMinD Claims.Flock.zkAgree M
   unfold cols
   split

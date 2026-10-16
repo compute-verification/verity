@@ -197,7 +197,7 @@ real prover (every table's hidden leaves real hm96 leaves of what they commit) a
 `S_shvzk` with real leaves, in both directions. `|Hid_j|` counts table `j`'s unopened leaves, so the sum is at most the
 paper's `2·δ₁·N_hid` with `N_hid` summed over the session's tables. -/
 theorem session_shvzk_hm96 {C : Type} (M : ∀ j, (T j).Hm96 C) {δ₁ : ℝ≥0∞}
-    (hT1 : ∀ j, Assumptions.Hm96Hiding (M j).My (M j).cs δ₁) (hrank : ∀ j, (T j).Rank) (hpad : ∀ j, (T j).PadOnto)
+    (hT1 : ∀ j, Claims.Hm96Hiding (M j).My (M j).cs δ₁) (hrank : ∀ j, (T j).Rank) (hpad : ∀ j, (T j).PadOnto)
     (hW : ∀ j r, Function.Bijective fun p : F × F => (T j).Wr r p.1 p.2) (hpads : ∀ j, (T j).PadsOnto)
     (hβ : ∀ j r, (T j).β r ≠ 0) (w : Fin J → W) (hreg : ∀ j, (T j).sReg (w j) = (T j).pubReg)
     (hinner : ∀ j, (T j).InnerHolds (w j)) (w0 : Fin J → W) (E : (∀ j, (T j).View) → Prop) :

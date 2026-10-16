@@ -3,7 +3,7 @@ import Proofs.Flock.Soundness.ZK.Hiding
 /-!
 # One committed round's leaf
 
-* `hiding_fun`: T1 (`Assumptions.Hm96Hiding`) for `[0,1]`-valued tests: from an event bound to a bound on every
+* `hiding_fun`: T1 (`Claims.Hm96Hiding`) for `[0,1]`-valued tests: from an event bound to a bound on every
   expectation, by the statistical-distance argument (the event is where the real leaf's mass exceeds the ideal's).
 * `kern g v`: the salt's posterior given leaf `v`, for the leaf map `g` of a fixed block: uniform on the fiber of `v`
   (uniform on all salts when the fiber is empty, a value the real round never takes).
@@ -96,14 +96,14 @@ variable {Salt B Cs D : Type} [Fintype Salt] [Nonempty Salt] [AddCommGroup B] [F
 
 /-- **T1 for `[0,1]`-valued tests**, at a leaf shifted by any digest `x`: replacing the leaf `H(x + M·y, c(y))` by the
 ideal `H(U, c(y))` changes the expectation of any test with values in `[0,1]` by at most `δ`. -/
-theorem hiding_fun (My : Salt → B) (cs : Salt → Cs) {δ : ℝ≥0∞} (hT : Assumptions.Hm96Hiding My cs δ)
+theorem hiding_fun (My : Salt → B) (cs : Salt → Cs) {δ : ℝ≥0∞} (hT : Claims.Hm96Hiding My cs δ)
     (H : B × Cs → D) (x : B) (Γ : D → ℝ≥0∞) (hΓ : ∀ d, Γ d ≤ 1) :
     avg (fun y => Γ (H (x + My y, cs y))) ≤ avg (fun q : B × Salt => Γ (H (q.1, cs q.2))) + δ := by
   classical
   have h := avg_le_of_prCoin (fun y => (My y, cs y)) (fun q : B × Salt => (q.1, cs q.2))
     ((univ : Finset B) ×ˢ univ.image cs)
     (fun y => mem_product.2 ⟨mem_univ _, mem_image_of_mem cs (mem_univ y)⟩)
-    (fun q => mem_product.2 ⟨mem_univ _, mem_image_of_mem cs (mem_univ q.2)⟩) (fun P => hT P)
+    (fun q => mem_product.2 ⟨mem_univ _, mem_image_of_mem cs (mem_univ q.2)⟩) (Assumptions.hm96Hiding_apply hT)
     (fun v => Γ (H (x + v.1, v.2))) (fun v => hΓ _)
   refine h.trans (le_of_eq ?_)
   congr 1

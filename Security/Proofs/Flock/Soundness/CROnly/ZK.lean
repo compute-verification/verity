@@ -6,7 +6,7 @@ import Proofs.Flock.Soundness.ZK.AdaptivePrefinal
 # The ZK theorems with hm96 hiding discharged
 
 `Session.session_shvzk_hm96` (Lemma B) and `Session.adaptive_prefinal_hm96_tape` (Lemma C) take
-`Assumptions.Hm96Hiding My cs δ₁` as a hypothesis. `hm96Hiding_gap` proves it, with no hypothesis, at `δ₁` the hiding gap
+`Claims.Hm96Hiding My cs δ₁` as a hypothesis. `hm96Hiding_gap` proves it, with no hypothesis, at `δ₁` the hiding gap
 `hidingGap My cs`; here both theorems are restated at that `δ₁` (`session_shvzk_gap`, `adaptive_prefinal_gap`), and at any
 bound `δ` on the gap (`session_shvzk_le`, `adaptive_prefinal_le`). For `hm96-sha512` the gap is at most `2^-193` at all
 but a `2^-64` fraction of the keys (`hm96_sha512_bad_keys`), so what remains is that the pinned key is uniform
@@ -25,7 +25,7 @@ open scoped ENNReal
 
 theorem hm96Hiding_le {Y B C : Type} [Fintype Y] [Fintype B] [DecidableEq B] [DecidableEq C] [Nonempty Y]
     [Nonempty B] {My : Y → B} {c : Y → C} {δ : ℝ} (h : hidingGap My c ≤ δ) :
-    Assumptions.Hm96Hiding My c (ENNReal.ofReal δ) :=
+    Claims.Hm96Hiding My c (ENNReal.ofReal δ) :=
   hm96Hiding_mono (hm96Hiding_gap My c) (ENNReal.ofReal_le_ofReal h)
 
 open Classical in
@@ -35,11 +35,11 @@ whenever `n + m + 2a ≤ l` and `b + e = a + 1`. -/
 theorem hm96_bad_keys {F : Type} [Field F] [Fintype F] [DecidableEq F] (hF : Fintype.card F = 2) {C : Type}
     [DecidableEq C] {n l m a b e : ℕ} (c : (Fin l → F) → C) (hc : #(univ.image c) ≤ 2 ^ m) (h : n + m + 2 * a ≤ l)
     (hbe : b + e = a + 1) :
-    (#{κ : Fin (n + l - 1) → F | ¬ Assumptions.Hm96Hiding (hankel κ) c (ENNReal.ofReal (1 / 2 ^ b))} : ℝ) ≤
+    (#{κ : Fin (n + l - 1) → F | ¬ Claims.Hm96Hiding (hankel κ) c (ENNReal.ofReal (1 / 2 ^ b))} : ℝ) ≤
       Fintype.card (Fin (n + l - 1) → F) / 2 ^ e := by
   refine le_trans ?_ (hm96_tail hF c hc h hbe)
   have hsub : (univ.filter fun κ : Fin (n + l - 1) → F =>
-        ¬ Assumptions.Hm96Hiding (hankel κ) c (ENNReal.ofReal (1 / 2 ^ b))) ⊆
+        ¬ Claims.Hm96Hiding (hankel κ) c (ENNReal.ofReal (1 / 2 ^ b))) ⊆
       univ.filter fun κ : Fin (n + l - 1) → F => 1 / 2 ^ b < hidingGap (hankel κ) c := fun κ hκ => by
     rw [mem_filter] at hκ ⊢
     exact ⟨hκ.1, lt_of_not_ge fun hg => hκ.2 (hm96Hiding_le hg)⟩
@@ -51,7 +51,7 @@ are at most a `2^-64` fraction, for any salt hash `c` with at most `2^512` value
 theorem hm96_sha512_bad_keys {F : Type} [Field F] [Fintype F] [DecidableEq F] (hF : Fintype.card F = 2) {C : Type}
     [DecidableEq C] (c : (Fin 1536 → F) → C) (hc : #(univ.image c) ≤ 2 ^ 512) :
     (#{κ : Fin (512 + 1536 - 1) → F |
-        ¬ Assumptions.Hm96Hiding (hankel κ) c (ENNReal.ofReal (1 / 2 ^ 193))} : ℝ) ≤
+        ¬ Claims.Hm96Hiding (hankel κ) c (ENNReal.ofReal (1 / 2 ^ 193))} : ℝ) ≤
       Fintype.card (Fin (512 + 1536 - 1) → F) / 2 ^ 64 :=
   hm96_bad_keys hF (n := 512) (a := 256) c hc (by norm_num) (by norm_num)
 
