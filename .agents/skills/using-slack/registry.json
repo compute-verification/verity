@@ -117,6 +117,9 @@
         "benchmarks/steiner_referee/",
         "benchmarks/fp4_sparse_tp/",
         "benchmarks/fp4_nobits/",
+        "benchmarks/masked_gemm/",
+        "benchmarks/floored_gemm/",
+        "benchmarks/e2e_slice/",
         ".agents/skills/kernel-engineering/"
       ]
     },
