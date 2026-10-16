@@ -92,8 +92,8 @@ proof workers' results land here as theorems or as named hypotheses.
   `EditFloor` on this design: the window's floor is B's service floor, and the edited protocol is relatively secure
   from it (`relativelySecure_edited120θ_K`). The one-sided chain lemma holds over any field the ring maps to, so it
   covers exact arithmetic too (over ℚ, merges free, `certifiedFraction120θ_reEncodedExactK_40`). Lemma G needs
-  characteristic 2 (s32 wrap, or exact integer sums read mod 2): over ℚ one mixed product computes two
-  coin-weighted bit products.
+  characteristic 2 (s32 wrap, or exact integer sums read mod 2): over ℚ one mixed product commits a word of two
+  bit products (`winograd_rat_word`), so the bound fails there (`not_chainBound_affProd_rat`).
 * The luck lemma (RS-E-REF r4 IV.4): a nonzero error of degree at most 2 on the cube (`CubeQuad`) is nonzero on a
   quarter of it, in any ring (`luck_quad`), so spot checks with degree-2 errors satisfy `PathBound (3/4)`
   (`RoundGame.Spot`, `RoundGame.pathBound_spot`). Runs with affine operands have such errors on the design's bits,
@@ -4268,7 +4268,7 @@ maps to (`F₂` for s32 wrap, `toF2`): `T` committed prefix words of a row need 
 function of U's bits plus an affine function of the bits (`GProd`), mixed bytes included. The words' cross blocks are
 the products' alternating forms (`pairDiff_mul_flat`), whose coin–coin blocks vanish with the targets'
 (`pairDiff_dPrefix_inr_inr`), so Lemma G bounds their rank by the products' count, and `rank_cross_dRow` gives
-`T L`. In odd characteristic one mixed product computes two coin-weighted bit products, and the factor fails. -/
+`T L`. Over `ℚ` the factor fails (`not_chainBound_affProd_rat`). -/
 theorem chainBound_gProd {F : Type} [Field F] (φ : R →+* F) (h2 : (2 : F) = 0) {w : Fin np → R} {p₀ : Fin np}
     (hw : φ (w p₀) = 1) : ChainBound R n L np B n' w GProd 1 := by
   classical
@@ -4307,6 +4307,43 @@ theorem chainBound_gProd {F : Type} [Field F] (φ : R →+* F) (h2 : (2 : F) = 0
   exact hrank.trans (lemmaG h2 S a b c hYY)
 
 end ChainDesign
+
+/-- Winograd's mixed product over `ℚ` at `L = 2`, first operand: `(x₀ + x₁)/2 − y₀ + y₁`. -/
+def winogradA : BitAff (DBits 1 2 1 1 1) ℚ :=
+  ⟨0, Sum.elim (fun a => ![1 / 2, 1 / 2] a.2.1) fun b => ![-1, 1] b.2.1⟩
+
+/-- Winograd's mixed product over `ℚ` at `L = 2`, second operand: `(x₁ − x₀)/2 + y₀ + y₁`. -/
+def winogradB : BitAff (DBits 1 2 1 1 1) ℚ :=
+  ⟨0, Sum.elim (fun a => ![-1 / 2, 1 / 2] a.2.1) fun b => ![1, 1] b.2.1⟩
+
+/-- The affine correction to Winograd's product: `(x₀ − x₁)/4 + y₀ − y₁`. -/
+def winogradR : BitAff (DBits 1 2 1 1 1) ℚ :=
+  ⟨0, Sum.elim (fun a => ![1 / 4, -1 / 4] a.2.1) fun b => ![1, -1] b.2.1⟩
+
+/-- Over `ℚ`, one mixed affine product plus an affine word is the prefix word `x₀ y₀ + x₁ y₁` of `L = 2` at every
+bit point. -/
+theorem winograd_rat_word (z : DBits 1 2 1 1 1 → ℚ) (hz : ∀ v, z v * z v = z v) :
+    winogradA.eval z * winogradB.eval z + winogradR.eval z = dPrefix 0 0 (fun _ => 1) 0 0 0 z := by
+  have hx0 := hz (.inl (0, 0, 0))
+  have hx1 := hz (.inl (0, 1, 0))
+  have hy0 := hz (.inr (0, 0, 0))
+  have hy1 := hz (.inr (0, 1, 0))
+  simp only [winogradA, winogradB, winogradR, BitAff.eval, dPrefix, dIncr, dP, dX, Fintype.sum_sum_type,
+    Fintype.sum_prod_type, Fin.sum_univ_two, Fin.sum_univ_one, Sum.elim_inl, Sum.elim_inr, Matrix.cons_val_zero,
+    Matrix.cons_val_one, Fin.isValue, Pi.zero_apply]
+  simp
+  linear_combination (1 / 4 : ℚ) * hx1 - (1 / 4 : ℚ) * hx0 + hy1 - hy0
+
+/-- **Lemma G needs characteristic 2**: over `ℚ` the chain bound fails at factor 1 for affine products, since one
+mixed product commits a word of `L = 2` (`winograd_rat_word`). -/
+theorem not_chainBound_affProd_rat : ¬ChainBound ℚ 1 2 1 1 1 (fun _ => 1) AffProd 1 := by
+  intro h
+  have := h Unit Unit {()} (fun _ z => winogradA.eval z * winogradB.eval z)
+    (fun _ _ => ⟨winogradA, winogradB, fun _ => rfl⟩) 0 0 0 (fun _ => (0, 0)) (fun _ _ _ => rfl) (fun _ _ => 1)
+    (fun _ => winogradR) fun _ U _ => by
+      rw [Finset.sum_singleton, one_mul]
+      exact winograd_rat_word _ fun v => by unfold bitInd; split_ifs <;> norm_num
+  simp at this
 
 /-- **A straight-line program with products of any form**: as `Slp`, but slot `j`'s product is any function of the
 bits (`prod j`: a product of bytes the run formed, affine or not). -/
