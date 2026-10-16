@@ -262,6 +262,17 @@ deterministic arm between harnesses:
 |  | adopted-attention | 6.4975 (6.4959–6.5008) | +0.45 | -0.72 | - | - | - | - |
 |  | adopted-no-smooth | 6.5168 (6.5163–6.5171) | +0.75 | -0.50 | 6.5211 (6.5201–6.5230) | `int8-rot-lin8rd-eqp=w64-poff64-psink-kc-kv=dith` | -0.07 | yes |
 |  | adopted | 6.5202 (6.5160–6.5234) | +0.80 | -0.45 | - | - | - | - |
+| llama-3.1-8b · wikitext2 · 8K (16 windows) | bf16 | 5.5686 | - | - | 5.5686 | `sdpa` | +0.00 | yes |
+|  | int8-linears | 5.5726 | +0.07 | - | 5.5728 | `bf16-lin8r` (eager attention) | +0.00 | yes |
+|  | int8-attention | 5.6966 (5.6949–5.6976) | +2.30 | - | 5.6966 (5.6949–5.6976) | `int8-rot` | +0.00 | yes |
+|  | int8-all | 5.6994 (5.6991–5.6999) | +2.35 | - | 5.7004 (5.7000–5.7012) | `int8-rot-lin8r` | -0.02 | yes |
+|  | adopted-linears | 5.5851 (5.5842–5.5860) | +0.30 | +0.23 | - | - | - | - |
+|  | adopted-attention | 5.5989 (5.5977–5.6001) | +0.54 | -1.72 | - | - | - | - |
+|  | adopted-no-smooth | 5.6210 (5.6188–5.6229) | +0.94 | -1.38 | 5.6240 | `int8-rot-lin8rd-eqp=w64-poff64-psink-kc-kv=dith-s0` | -0.05 | yes |
+|  | adopted | 5.6164 (5.6144–5.6180) | +0.86 | -1.46 | - | - | - | - |
+| llama-3.1-8b · wikitext2 · 32K (4 windows) | bf16 | 5.3623 | - | - | 5.3623 | `sdpa` | +0.00 | yes |
+|  | int8-all | 5.6118 (5.6111–5.6126) | +4.65 | - | 5.6106 | `int8-rot-lin8r-s0` | +0.02 | yes |
+|  | adopted | 5.4183 (5.4174–5.4189) | +1.05 | -3.45 | - | - | - | - |
 | qwen2.5-7b · wikitext2 · 2K (16 windows) | bf16 | 6.3538 | - | - | 6.3553 | `sdpa` | -0.02 | yes |
 |  | int8-linears | 6.3583 | +0.07 | - | 6.3577 | `ref-lin8r` (FP32 attention) | +0.01 | yes |
 |  | int8-attention | 6.3940 (6.3895–6.3964) | +0.63 | - | - | - | - | - |
@@ -278,13 +289,24 @@ deterministic arm between harnesses:
 |  | adopted-attention | 5.9634 (5.9622–5.9643) | +0.20 | -1.03 | - | - | - | - |
 |  | adopted-no-smooth | 5.9792 (5.9778–5.9804) | +0.46 | -0.82 | 5.9793 (5.9773–5.9814) | `int8-rot-lin8rd-eqp=w64-poff64-psink-kc-kv=dith` | +0.00 | yes |
 |  | adopted | 5.9789 (5.9774–5.9801) | +0.46 | -0.83 | - | - | - | - |
+| llama-3.1-70b · c4 · 2K (16 windows) | bf16 | 7.0465 | - | - | 7.0486 | `bf16` | -0.03 | yes |
+|  | int8-linears | 7.2018 | +2.20 | - | 7.1959 | `r127` | +0.08 | yes |
+|  | int8-attention | 7.1408 (7.1382–7.1423) | +1.34 | - | - | - | - | - |
+|  | int8-all | 7.3506 (7.3472–7.3545) | +4.32 | - | - | - | - | - |
+|  | adopted-linears | 7.0721 (7.0668–7.0759) | +0.36 | -1.80 | 7.0699 (7.0694–7.0705) | `d63-sm50-smkv` | +0.03 | yes |
+|  | adopted-attention | 7.1540 (7.1410–7.1618) | +1.53 | +0.19 | 7.1636 | `bf16-at` | -0.13 | yes |
+|  | adopted-no-smooth | 35.8107 (28.5167–47.6529) | +408.20 | +387.18 | 47.4549 | `d63-at` | -24.54 | yes |
+|  | adopted | 7.1713 (7.1534–7.1826) | +1.77 | -2.44 | 7.1851 | `d63-sm50-smkv-at` | -0.19 | yes |
 
 Runs:
 
 - llama-3.1-8b · c4 · 2K: bench `r20261016-181132-a47c`; tonight `r20261016-151826-4e17`
 - llama-3.1-8b · wikitext2 · 2K: bench `r20261016-182558-c0e6`; tonight `r20261016-065318-8035`, `r20261016-091629-d9e7`, `r20261016-121921-ec96`
+- llama-3.1-8b · wikitext2 · 8K: bench `r20261016-183653-00ce`; tonight `r20261016-011841-01a2`, `r20261016-082150-e25a`, `r20261016-121921-ec96`
+- llama-3.1-8b · wikitext2 · 32K: bench `r20261016-195403-b5d8`; tonight `r20261016-105150-b602`, `r20261016-121921-ec96`
 - qwen2.5-7b · wikitext2 · 2K: bench `r20261016-183113-01ee`; tonight `r20261016-105148-9add`, `r20261016-110904-30f8`, `r20261016-121921-ec96`
 - qwen2.5-7b · wikitext2 · 8K: bench `r20261016-183927-f944`; tonight `r20261016-110904-30f8`, `r20261016-121921-ec96`
+- llama-3.1-70b · c4 · 2K: bench `r20261016-192547-f3f7`; tonight `r20261016-150804-a17f`
 <!-- /baseline -->
 
 ## Tests
