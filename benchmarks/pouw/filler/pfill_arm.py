@@ -1,10 +1,11 @@
 """HC-PROVED's arms (approach pouw/filler-proved): pfill, a DRAM-free filler in Theorem E's own setting, so its floor is
 proved without CH (note:20261016T0456Z-draft-hc-proved). Every MMA's operands are fresh i.i.d. ±1 noise expanded on chip
 from the round's coins and the tile id (A_M = B_M = 0), each MMA's output is a whole prefix sum (k32 on IMMA, k64 on the
-e2m1 tile's OMMA), and every one is folded at once into the receipt. pfill-k's noise is {0,1} bits instead of ±1. The
-kernel is `pfill.cuh` behind dcap.cu's dfill ABI (dcap.cu's default filler on this branch); an arm picks the tile's kind
-at build time through NVCC_APPEND_FLAGS (-DPFILL_E2M1, -DPFILL_BITS or nothing), which score.py's nvcc inherits, since it
-builds after loading the arm. Placement is FILL v1's
+e2m1 tile's OMMA), and every one is folded at once into the receipt. pfill-k's noise is {0,1} bits instead of ±1,
+and pfill-bu's is bits on A and {±1, ..., ±64} on B (FILL-SEC). The kernel is `pfill.cuh` behind dcap.cu's dfill ABI
+(dcap.cu's default filler on this branch); an arm picks the tile's kind at build time through NVCC_APPEND_FLAGS
+(-DPFILL_E2M1, -DPFILL_BITS, -DPFILL_BU or nothing), which score.py's nvcc inherits, since it builds after loading the
+arm. Placement is FILL v1's
 per-point split: on a green split the filler adds ≤ 0.4% to the split's own cost, so decode's slowdown is the split's,
 whatever runs on the filler's SMs.
 
@@ -123,7 +124,91 @@ class PFillK(PFillPowerSplit):
                       "split:per-point-table", "split:every-scored-point", "prefill:split"],
         "hypothesis": "{0,1} bits on both operands at the ±1 tile's rate meet Theorem K's hypotheses (int8, affine "
                       "bytes, s32 unscaled), so the same filler reads c = 1 (0.9 a slot) once K is refereed, 0.225 now"})
+    filler: Filler | None = Filler(W=8, NC=4, S=256, chunk_log2=19, noise="bits01")
     nvcc_flags: str = "-DPFILL_BITS"
+
+
+@dataclass
+class PFillBU(PFillPowerSplit):
+    """pfill-power-split's ram tile as pfill-bU (-DPFILL_BU, note:20261016T0710Z-draft-filler-floor-r2 §5): A's entries
+    their SHA-512 bits as s8 0 or 1, B's U = (t & 0x7F) - 64 + ((t >> 6) & 1) from one digest byte t an entry (uniform on
+    {±1, ..., ±64}), 512 blocks a tile, on the same s8 IMMA m16n8k32 with C = 0, each s32 word in [-2048, 2048] folded
+    unscaled into the same ram receipt at K = L = 32. Theorem K's setting as RS-E-REF r4 refereed it
+    (note:20261015T1931Z-draft-theorem-e-referee Part IV): straight-line, cell-pure, int MMAs, unscaled s32 reads,
+    operands affine in their bits (U's weights 1, 2, ..., 32, 65 on the odd parity bits t_0, t_6), every prefix word
+    committed. dgate adds the uniformity check of U and A; -mpopcnt is for the host reference's seven popcounts a word."""
+
+    name: str = "pfill-bu"
+    lineage: dict = field(default_factory=lambda: {
+        "parent": "pfill-power-split", "approach": "pouw/filler-proved",
+        "mechanism": ["filler:fresh-noise-imma", "noise:sha512-coins-bU", "receipt:ram-k32", "place:split",
+                      "split:per-point-table", "split:every-scored-point", "prefill:split"],
+        "hypothesis": "pfill-bU: c = 1 under Theorem K (cell-pure, F₂-affine-parity operands, straight-line, full words; "
+                      "Lemma W at L = 32); ¼ under Theorem E."})
+    filler: Filler | None = Filler(W=8, NC=4, S=256, chunk_log2=19, noise="bitsU")
+    nvcc_flags: str = "-DPFILL_BU -Xcompiler -mpopcnt"
+
+
+def _fold_lineage(parent: str, noise_tag: str, receipt: str, hypothesis: str) -> dict:
+    return {"parent": parent, "approach": "pouw/filler-proved",
+            "mechanism": ["filler:fresh-noise-imma", noise_tag, receipt, "place:split", "split:per-point-table",
+                          "split:every-scored-point", "prefill:split"],
+            "hypothesis": hypothesis}
+
+
+@dataclass
+class PFillBUDuo(PFillBU):
+    """pfill-bU with duo receipts (NC 2, three ops a word): a fold with no all-state kernel at a pair or an MMA, so the
+    receipt reads every word, where ram's reads a pair only through Q = a0 d0 + d1
+    (note:20261016T0917Z-draft-fullfloor-s-r8 §1.2)."""
+
+    name: str = "pfill-bu-duo"
+    lineage: dict = field(default_factory=lambda: _fold_lineage(
+        "pfill-bu", "noise:sha512-coins-bU", "receipt:duo-k32",
+        "pfill-bU with duo for ram: every word certified, so K's c = 1 holds where ram's Q-only receipt halves it"))
+    filler: Filler | None = Filler(W=8, NC=2, S=256, chunk_log2=19, noise="bitsU")
+
+
+@dataclass
+class PFillBUXin(PFillBU):
+    """pfill-bU with XOR-in receipts (NC 4 built with -DPFILL_XIN, three ops a pair: y <- (rotl(y, 7) ^ d0) a0 + d1):
+    its all-state kernel is a fixed group of 16 an MMA, each a bijection of every word, so no data-free representative
+    such as ram's (0, Q)."""
+
+    name: str = "pfill-bu-xin"
+    lineage: dict = field(default_factory=lambda: _fold_lineage(
+        "pfill-bu", "noise:sha512-coins-bU", "receipt:xin-k32",
+        "pfill-bU with XOR-in for ram: every word certified at one op a pair more than ram, so K's c = 1 holds"))
+    nvcc_flags: str = "-DPFILL_BU -DPFILL_XIN -Xcompiler -mpopcnt"
+
+
+@dataclass
+class PFillKDuo(PFillK):
+    """pfill-k with duo receipts (NC 2)."""
+
+    name: str = "pfill-k-duo"
+    lineage: dict = field(default_factory=lambda: _fold_lineage(
+        "pfill-k", "noise:sha512-coins-01", "receipt:duo-k32",
+        "pfill-k with duo for ram: every word certified, so K's c = 1 holds where ram's Q-only receipt halves it"))
+    filler: Filler | None = Filler(W=8, NC=2, S=256, chunk_log2=19, noise="bits01")
+
+
+@dataclass
+class PFillKXin(PFillK):
+    """pfill-k with XOR-in receipts (NC 4 built with -DPFILL_XIN)."""
+
+    name: str = "pfill-k-xin"
+    lineage: dict = field(default_factory=lambda: _fold_lineage(
+        "pfill-k", "noise:sha512-coins-01", "receipt:xin-k32",
+        "pfill-k with XOR-in for ram: every word certified at one op a pair more than ram, so K's c = 1 holds"))
+    nvcc_flags: str = "-DPFILL_BITS -DPFILL_XIN"
+
+
+def fold_share(lineage: dict) -> float:
+    """The share of committed words the arm's receipt certifies: ½ for ram (it reads a pair only through Q = a0 d0 +
+    d1), 1 for duo and XOR-in (note:20261016T0917Z-draft-fullfloor-s-r8 §1.2)."""
+    mech = lineage.get("mechanism") or []
+    return 0.5 if any(t.startswith("receipt:ram") for t in mech) else 1.0
 
 
 def products_per_slot(lineage: dict) -> int:
@@ -132,5 +217,6 @@ def products_per_slot(lineage: dict) -> int:
 
 
 def theorem_k_setting(lineage: dict) -> bool:
-    """Whether the arm's filler runs on {0,1} bits (pfill-k), the setting Theorem K reads."""
-    return "noise:sha512-coins-01" in (lineage.get("mechanism") or [])
+    """Whether the arm's filler is one Theorem K reads: {0,1} bits on both sides (pfill-k) or pfill-bU."""
+    mech = lineage.get("mechanism") or []
+    return "noise:sha512-coins-01" in mech or "noise:sha512-coins-bU" in mech
