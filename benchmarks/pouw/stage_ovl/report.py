@@ -59,7 +59,7 @@ def lite_kind(name: str) -> str | None:
 
 def is_cg(name: str) -> bool:
     """the protocol's schedules with each commitment commit_gpu's small path (real roots)"""
-    return name == "cg" or name.startswith("cgrr")
+    return name in ("cg", "cgeq") or name.startswith("cgrr")
 
 
 def main() -> int:

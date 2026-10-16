@@ -37,7 +37,7 @@
 //             shared memory: what a committer of that shape would cost (its latency understated, its roots not real)
 //   litec, litecprio, litecrrW, liteconly: the same, the stand-in chained as the tree is (a thread a segment, a thread a
 //             row, each CTA's 128-leaf levels, one CTA for the levels above: ~40 dependent compressions a stage at 2K)
-//   cg, cgrrW, cgonly: hhi, rrW and hashonly with each commitment commit_gpu's small path (benchmarks/commit_gpu: CTAs of 128
+//   cg, cgeq, cgrrW, cgonly: hhi, eq, rrW and hashonly with each commitment commit_gpu's small path (benchmarks/commit_gpu: CTAs of 128
 //             threads, no shared memory) over the stage's operand as tile leaves of CG_R rows x 32 values (Decision 46),
 //             sha512/row/v2 rows, hm96-sha512 leaves with derived salts in a frame-v3-sha512 tree of the stage's own domain
 //             (the CGP1 files DIR/cg-M-R-t.bin); salts, frame-leaf first blocks and pads for all 32 layers at the chunk's
@@ -208,6 +208,7 @@ static Sched sched_of(const std::string& n) {
   if (n == "liteconly") return {n, true, false, false, false, 1, 0, 2};
   if (n.rfind("litecrr", 0) == 0) return {n, true, true, true, false, 1, atoi(n.c_str() + 7), 2};
   if (n == "cg") return {n, true, true, true, false, 1, 0, 3};
+  if (n == "cgeq") return {n, true, true, true, false, 0, 0, 3};
   if (n == "cgonly") return {n, true, false, false, false, 1, 0, 3};
   if (n.rfind("cgrr", 0) == 0) return {n, true, true, true, false, 1, atoi(n.c_str() + 4), 3};
   fprintf(stderr, "unknown arm %s\n", n.c_str());
