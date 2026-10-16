@@ -38,7 +38,8 @@ __host__ __device__ inline float e2m1_decode(uint8_t c) {
 }
 
 constexpr uint32_t MAGIC = 0x4B400000u;  // 1.5 * 2^23 = 12582912.0f ; binade [2^23, 2^24) has ULP 1
-constexpr uint8_t UE4M3_ONE = 0x38;      // UE4M3 encoding of 1.0 (exp 0111, mantissa 000)
+constexpr uint8_t UE4M3_ONE = 0x38;      // UE4M3 (NVFP4) encoding of 1.0 (exp 0111, mantissa 000)
+constexpr uint8_t UE8M0_ONE = 0x7F;      // UE8M0 (MXFP4) encoding of 1.0 (exponent 127, 2^(b-127))
 
 // ---- NVFP4 / MXFP4 kind::mxf4nvf4 m16n8k64 (copied from mma_fp4.cu, lane fp4-5090) ----
 __device__ __forceinline__ void mma_nvfp4(float d[4], const uint32_t a[4], const uint32_t b[2], const float c[4],
@@ -268,8 +269,11 @@ int main(int argc, char** argv) {
   const int wpb = 4, blocks = (T + wpb - 1) / wpb;
   std::vector<uint32_t> D((size_t)T * 128), C0((size_t)T * 128, 0), Cm((size_t)T * 128, MAGIC);
 
-  // Run and analyze one kind / accumulator variant.
-  auto run_nvfp4 = [&](const char* name, int mxf4, const std::vector<uint32_t>& Cinit, uint32_t cbias) -> int {
+  // Run and analyze one kind / accumulator variant.  scale_byte is the format's encoding of 1.0 (UE4M3 for nvfp4, UE8M0
+  // for mxfp4), so every block scale is exactly 1 and each product is the integer e2m1 * e2m1.
+  auto run_nvfp4 = [&](const char* name, int mxf4, const std::vector<uint32_t>& Cinit, uint32_t cbias, uint8_t scale_byte) -> int {
+    CK(cudaMemset(dSFA, scale_byte, SFA.size()));
+    CK(cudaMemset(dSFB, scale_byte, SFB.size()));
     CK(cudaMemcpy(dC, Cinit.data(), cbytes, cudaMemcpyHostToDevice));
     CK(cudaMemset(dD, 0xA5, cbytes));
     nvfp4_kernel<<<blocks, 32 * wpb>>>(dA, dBt, dSFA, dSFB, dC, dD, T, mxf4);
@@ -299,10 +303,10 @@ int main(int argc, char** argv) {
   };
 
   int bad = 0;
-  bad |= run_nvfp4("nvfp4", 0, C0, 0);
-  bad |= run_nvfp4("nvfp4", 0, Cm, MAGIC);
-  bad |= run_nvfp4("mxfp4", 1, C0, 0);
-  bad |= run_nvfp4("mxfp4", 1, Cm, MAGIC);
+  bad |= run_nvfp4("nvfp4", 0, C0, 0, UE4M3_ONE);
+  bad |= run_nvfp4("nvfp4", 0, Cm, MAGIC, UE4M3_ONE);
+  bad |= run_nvfp4("mxfp4", 1, C0, 0, UE8M0_ONE);
+  bad |= run_nvfp4("mxfp4", 1, Cm, MAGIC, UE8M0_ONE);
 
   // int8 IMMA: accumulator s32, C = 0, so D's bits ARE the committed s32 word with no op.
   CK(cudaMemcpy(dC, C0.data(), cbytes, cudaMemcpyHostToDevice));
@@ -327,6 +331,8 @@ int main(int argc, char** argv) {
   const int ne = T * 128;
   int32_t* dOut; CK(cudaMalloc(&dOut, (size_t)ne * 4));
   std::vector<int32_t> outB(ne), outF(ne);
+  CK(cudaMemset(dSFA, UE4M3_ONE, SFA.size()));  // nvfp4 scales back to 1.0
+  CK(cudaMemset(dSFB, UE4M3_ONE, SFB.size()));
   // binade accumulator (C = magic): one IADD3 strips 0x4B400000.
   CK(cudaMemcpy(dC, Cm.data(), cbytes, cudaMemcpyHostToDevice));
   CK(cudaMemset(dD, 0xA5, cbytes));
