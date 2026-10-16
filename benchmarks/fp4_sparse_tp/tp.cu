@@ -92,7 +92,7 @@ __device__ inline uint8_t e2m1_piece(int c, int piece, int* bad) {
     }
   } else {
     switch (m) {
-      case 0: code = 0; break;  case 5: code = 4; break;  // 5/1.25 = 4 -> E2M1 mag 2 -> code 4
+      case 0: code = 0; break;  case 5: code = 6; break;  // 5/1.25 = 4.0 -> E2M1 value 4.0 -> code 6
       default: atomicAdd(bad, 1); code = 0;
     }
   }
