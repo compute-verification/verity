@@ -104,17 +104,20 @@ the commitment's stream at the device's highest priority.
 - **The salt phase is half of a small leaf's work.** At 32 values a leaf, splitting it off took the critical path from
   3.0 ms to 1.54 ms (straight-line form, run `r20261016-104229-1de9`); the GPU still spends the salt phase's ~1.56 ms,
   earlier.
-- **Big leaves are latency-bound.** A warp alone on its sub-partition takes ~5 us a compression (one dependent chain of
-  ~3400 integer instructions), and the tree's top is 2 x depth serial compressions. With 4 KiB leaves the leaf pass is 16
-  serial compressions (row-seg: a segment's 9, the outer 3, h 2, the frame leaf 2) and the tree 26: 42 x ~5.4 us is the
-  0.227 ms. The straight-line compression is ~56 KB of code, and a lone warp waits on instruction fetch; the rolled loop
-  (`SHA_ROLL=1`, 2.5x less code) took 4 KiB leaves from 0.270 to 0.227 ms and e2e from 1.541 to 1.276 ms.
+- **Big leaves are latency-bound.** A warp alone on its sub-partition takes ~4.6 us a compression (one dependent chain of
+  ~3400 integer instructions; nsys: a tree level's kernel, two serial compressions, takes 9.2 us), and the tree's top is 2 x
+  depth serial compressions. With 4 KiB leaves the leaf pass is 16 serial compressions (row-seg: a segment's 9, the outer
+  3, h 2, the frame leaf 2) and the tree 26: 42 x ~5.4 us with the launch gaps is the 0.227 ms. A 4 KiB `row/v2` leaf
+  hashes its row as one chain of 33 compressions (its leaf kernel takes 161 us), which is why row-seg wins there. The
+  straight-line compression is ~56 KB of code, and a lone warp waits on instruction fetch; the rolled loop (`SHA_ROLL=1`,
+  2.5x less code) took a level's kernel from 16.5 to 9.2 us, 4 KiB leaves from 0.270 to 0.227 ms and e2e from 1.541 to
+  1.276 ms.
 - **The GEMM goes first unless the commitment's stream outranks it.** cuBLASLt picks cutlass's
   `i16832gemm_s8_128x128_64x6` (2048 CTAs of 128 threads, 224 registers, 98 KB of shared memory), one CTA an SM. At equal
-  priority the GEMM's queued CTAs are dispatched before the commitment's blocks, so a big-leaf commitment runs after the
-  GEMM (done at ~0.72 ms). At the highest stream priority its blocks are dispatched as soon as a CTA retires; a latency-bound
-  commitment needs few issue slots, so it finishes first and costs the GEMM 7-9%. A throughput-bound one (small leaves)
-  takes the issue slots from the GEMM instead (GEMMs 1.8x slower at e2e).
+  priority a big-leaf commitment is done at ~0.72 ms, about the GEMM's time plus its own (0.44 + 0.23 ms): its blocks
+  wait behind the GEMM's queued CTAs. At the highest stream priority they go ahead of them; a latency-bound commitment
+  needs few issue slots, so it finishes first and costs the GEMM 7-9%. A throughput-bound one (small leaves) takes the
+  issue slots from the GEMM instead (GEMMs 1.8x slower at e2e).
 - **The CPU tail** (the top 3-5 levels on the host, which needs the root anyway) saves 5-15 us.
 
 ## Leaf size (RS-DEF owns it)
