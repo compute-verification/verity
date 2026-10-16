@@ -245,6 +245,50 @@ __global__ void __launch_bounds__(32 * (CWN * CWM + 1 + FW), 1) flin_k(const Fli
   if (lane == 0) atomicAdd(&flag[0], 1);
 }
 
+// ---------------------------------------------------------------- attention blocks with filler warps
+// qk_dec's and pv_dec's blocks, unchanged in what their 8 warps do, each with FW filler warps more that run the chain
+// until the block's attention warps are done (the hardware still schedules the blocks, so the load stays balanced).
+// Filler warp f of block blk (x fastest) runs tile tile0 + blk·FW + f.
+struct FattArgs {
+  uint64_t c0, c1;
+  unsigned long long tile0;
+  unsigned long long* rec;
+  int* cnt;
+};
+template <int FW, int NC>
+__global__ void __launch_bounds__(QK_W * 32 + 32 * FW, 2) fqk_k(const int8_t* __restrict__ K, const int8_t* __restrict__ q,
+                                                                 int* __restrict__ S, int L, const FattArgs fa) {
+  __shared__ int done;
+  if (threadIdx.x == 0) done = 0;
+  __syncthreads();
+  const int w = threadIdx.x >> 5, lane = threadIdx.x & 31;
+  if (w >= QK_W) {
+    const size_t slot = (((size_t)blockIdx.z * gridDim.y + blockIdx.y) * gridDim.x + blockIdx.x) * FW + (w - QK_W);
+    filler_warp<NC>(fa.c0, fa.c1, fa.tile0 + slot, &done, &done, QK_W, 0, fa.rec + slot, fa.cnt + slot);
+    return;
+  }
+  qk_body(K, q, S, L, blockIdx.x, blockIdx.y, blockIdx.z, w, lane);
+  __syncwarp();
+  if (lane == 0) atomicAdd(&done, 1);
+}
+template <int FW, int NC>
+__global__ void __launch_bounds__(PV_W * 32 + 32 * FW, 2) fpv_k(const int8_t* __restrict__ V, const int8_t* __restrict__ P,
+                                                                 int* __restrict__ O, int L, const FattArgs fa) {
+  __shared__ int red[PV_W][4][HD];
+  __shared__ int done;
+  if (threadIdx.x == 0) done = 0;
+  __syncthreads();
+  const int w = threadIdx.x >> 5, lane = threadIdx.x & 31;
+  if (w >= PV_W) {
+    const size_t slot = (((size_t)blockIdx.z * gridDim.y + blockIdx.y) * gridDim.x + blockIdx.x) * FW + (w - PV_W);
+    filler_warp<NC>(fa.c0, fa.c1, fa.tile0 + slot, &done, &done, PV_W, 0, fa.rec + slot, fa.cnt + slot);
+    return;
+  }
+  pv_body<true>(V, P, O, L, blockIdx.x, blockIdx.y, blockIdx.z, w, lane, red);
+  __syncwarp();
+  if (lane == 0) atomicAdd(&done, 1);
+}
+
 // Wt[nt][kb][i][c][lane][4 words] from W (N x K row-major): word r of lane (g, t) is W[row][col..col+3] with
 // row = nt·BN + 16i + g + 8·(r & 1), col = kb·BK + 32c + 16·(r >> 1) + 4t (a0 a1 a2 a3 of m16n8k32's A fragment)
 __global__ void repack_w(const int8_t* __restrict__ W, int8_t* __restrict__ Wt, int N, int K, int BK) {
@@ -365,6 +409,8 @@ struct Flin {
   int slots = 0;  // a launch's filler slots, grid · FW
   static constexpr int LAUNCHES = LAYERS * 4;
 };
+// launch i's filler warp `slot` (blockIdx.x · FW + fw) runs tile flin_tile0(i) + slot
+static unsigned long long flin_tile0(int i) { return (0x5ull << 56) | ((unsigned long long)i << 24); }
 static void flin_tile_x(const Dev& d, Flin& f) {
   const size_t h = (size_t)f.M * HID, ff = (size_t)f.M * FF;
   if (!f.XtH) CK(cudaMalloc(&f.XtH, h));
@@ -408,56 +454,146 @@ static bool flin_one(Dev& d, const Flin& f, int i, int next_j) {
   a.K = LK[j];
   a.c0 = g_c0;
   a.c1 = g_c1;
-  a.tile0 = (0x5ull << 56) | ((unsigned long long)i << 24);
+  a.tile0 = flin_tile0(i);
   a.rec = f.rec + (size_t)i * f.grid * 16;
   a.cnt = f.cnt + (size_t)i * f.grid * 16;
   a.thr = f.thr;
   return flin_launch(f.M, a, f.grid, f.FW, f.NC, d.st);
 }
-// the filler's MACs over the launches `ls` (counts from the last run of them), and up to n receipts checked on the host
+// A launch's filler receipts: n slots from rec/cnt on the device, slot s ran tile tile0 + s.
+struct FillLaunch {
+  const unsigned long long* rec;
+  const int* cnt;
+  size_t n;
+  unsigned long long tile0;
+};
+// the filler's MACs over `ls` (counts from the last run of each), and up to n receipts checked on the host against
+// dfill_ref, each with the steps − 8 control that must differ
 struct FlinTally {
   double macs = 0;
   long long steps = 0, slots = 0, idle = 0;
   int checked = 0, bad = 0, ctl_equal = 0;
 };
-static FlinTally flin_tally(const Flin& f, const std::vector<int>& ls, int n, uint64_t salt) {
+static FlinTally fill_tally(const std::vector<FillLaunch>& ls, int NC, int n, uint64_t salt) {
   FlinTally r;
-  if (f.FW == 0) return r;
-  const size_t per = (size_t)f.grid * 16;
-  std::vector<unsigned long long> rec(per);
-  std::vector<int> cnt(per);
-  std::vector<std::pair<int, int>> cand;
+  std::vector<std::pair<int, size_t>> cand;
   std::vector<std::vector<unsigned long long>> recs(ls.size());
   std::vector<std::vector<int>> cnts(ls.size());
   for (size_t q = 0; q < ls.size(); q++) {
-    CK(cudaMemcpy(rec.data(), f.rec + (size_t)ls[q] * per, per * 8, cudaMemcpyDeviceToHost));
-    CK(cudaMemcpy(cnt.data(), f.cnt + (size_t)ls[q] * per, per * 4, cudaMemcpyDeviceToHost));
-    for (int s = 0; s < f.grid * f.FW; s++) {
-      r.steps += cnt[s];
+    recs[q].resize(ls[q].n);
+    cnts[q].resize(ls[q].n);
+    CK(cudaMemcpy(recs[q].data(), ls[q].rec, ls[q].n * 8, cudaMemcpyDeviceToHost));
+    CK(cudaMemcpy(cnts[q].data(), ls[q].cnt, ls[q].n * 4, cudaMemcpyDeviceToHost));
+    for (size_t s = 0; s < ls[q].n; s++) {
+      r.steps += cnts[q][s];
       r.slots++;
-      r.idle += cnt[s] == 0;
-      if (cnt[s] > 0) cand.push_back({(int)q, s});
+      r.idle += cnts[q][s] == 0;
+      if (cnts[q][s] > 0) cand.push_back({(int)q, s});
     }
-    recs[q] = rec;
-    cnts[q] = cnt;
   }
-  r.macs = (double)r.steps * f.NC * 4096.0;
+  r.macs = (double)r.steps * NC * 4096.0;
   std::mt19937_64 rng(salt);
   for (int k = 0; k < n && !cand.empty(); k++) {
     const auto [q, s] = cand[rng() % cand.size()];
-    const unsigned long long tile = (0x5ull << 56) | ((unsigned long long)ls[q] << 24) | (unsigned long long)s;
+    const unsigned long long tile = ls[q].tile0 + s;
     const int steps = cnts[q][s];
-    r.bad += recs[q][s] != dfill_ref(g_c0, g_c1, tile, f.NC, steps);
-    if (steps >= 8) r.ctl_equal += recs[q][s] == dfill_ref(g_c0, g_c1, tile, f.NC, steps - 8);
+    r.bad += recs[q][s] != dfill_ref(g_c0, g_c1, tile, NC, steps);
+    if (steps >= 8) r.ctl_equal += recs[q][s] == dfill_ref(g_c0, g_c1, tile, NC, steps - 8);
     r.checked++;
   }
   return r;
 }
+static FlinTally flin_tally(const Flin& f, const std::vector<int>& ls, int n, uint64_t salt) {
+  if (f.FW == 0) return {};
+  std::vector<FillLaunch> v;
+  for (int i : ls)
+    v.push_back({f.rec + (size_t)i * f.grid * 16, f.cnt + (size_t)i * f.grid * 16, (size_t)f.grid * f.FW, flin_tile0(i)});
+  return fill_tally(v, f.NC, n, salt);
+}
+
+// The attention blocks' filler: FW warps a block (0: dcap's own kernels), NC chains each, and every attention launch's
+// receipts (launch k = 2·layer is qk, 2·layer + 1 is pv; `per` slots each, qk's blocks · FW).
+struct Fatt {
+  int FW = 0, NC = 4;
+  size_t per = 0;
+  unsigned long long* rec = nullptr;
+  int* cnt = nullptr;
+};
+static dim3 qk_grid(int B, int L) { return dim3((L + QK_W * QK_KW - 1) / (QK_W * QK_KW), HKV, B); }
+static dim3 pv_grid(int B, int L) { return dim3((L / 4 + PV_W * PV_GW - 1) / (PV_W * PV_GW), HKV, B); }
+static size_t blocks(dim3 g) { return (size_t)g.x * g.y * g.z; }
+static unsigned long long fatt_tile0(int k) { return (0x6ull << 56) | ((unsigned long long)k << 32); }
+static void fatt_prepare(Fatt& a, int FW, int NC, int B, int L) {
+  a.FW = FW;
+  a.NC = NC;
+  if (FW == 0) return;
+  a.per = blocks(qk_grid(B, L)) * FW;
+  CK(cudaMalloc(&a.rec, a.per * 2 * LAYERS * sizeof(unsigned long long)));
+  CK(cudaMalloc(&a.cnt, a.per * 2 * LAYERS * sizeof(int)));
+}
+template <int FW, int NC>
+static void fatt_go(Dev& d, const Fatt& a, int B, int L, const int8_t* K, const int8_t* V, int layer) {
+  const size_t kq = (size_t)2 * layer, kp = kq + 1;
+  fqk_k<FW, NC><<<qk_grid(B, L), QK_W * 32 + 32 * FW, 0, d.st>>>(
+      K, d.q, d.S, L, FattArgs{g_c0, g_c1, fatt_tile0((int)kq), a.rec + kq * a.per, a.cnt + kq * a.per});
+  CK(cudaMemsetAsync(d.O, 0, (size_t)B * HQ * HD * sizeof(int), d.st));
+  fpv_k<FW, NC><<<pv_grid(B, L), PV_W * 32 + 32 * FW, 0, d.st>>>(
+      V, d.P, d.O, L, FattArgs{g_c0, g_c1, fatt_tile0((int)kp), a.rec + kp * a.per, a.cnt + kp * a.per});
+}
+// enqueue_att's work for `layer`, with the attention filler when a.FW > 0; false if (FW, NC) isn't built
+static bool enqueue_fatt(Dev& d, const Fatt& a, int B, int L, int layer, bool* wrapped) {
+  if (a.FW == 0) {
+    enqueue_att(d, B, L, layer, wrapped);
+    return true;
+  }
+  const int8_t* K = kv_layer(d, B, L, layer, false, wrapped);
+  const int8_t* V = kv_layer(d, B, L, layer, true, wrapped);
+  switch (a.FW * 10 + a.NC) {
+    case 24: fatt_go<2, 4>(d, a, B, L, K, V, layer); return true;
+    case 42: fatt_go<4, 2>(d, a, B, L, K, V, layer); return true;
+    case 44: fatt_go<4, 4>(d, a, B, L, K, V, layer); return true;
+    case 84: fatt_go<8, 4>(d, a, B, L, K, V, layer); return true;
+  }
+  return false;
+}
+static const char* fatt_built() { return "0, 2:4, 4:2, 4:4, 8:4"; }
+static FlinTally fatt_tally(const Fatt& a, int B, int L, int layers, int n, uint64_t salt) {
+  if (a.FW == 0) return {};
+  std::vector<FillLaunch> v;
+  for (int k = 0; k < 2 * layers; k++)
+    v.push_back({a.rec + (size_t)k * a.per, a.cnt + (size_t)k * a.per,
+                 blocks(k & 1 ? pv_grid(B, L) : qk_grid(B, L)) * a.FW, fatt_tile0(k)});
+  return fill_tally(v, a.NC, n, salt);
+}
 
 // fgate: flin bit for bit against ref_rows (every row, M ≤ 256) for each linear's shape at M = 32, 64, 128, 256, alone and
-// with filler warps (whose receipts are checked against dfill_ref, with the steps − 8 control), from poisoned outputs.
+// with filler warps (whose receipts are checked against dfill_ref, with the steps − 8 control), from poisoned outputs; then
+// the attention blocks with filler warps against the host (att_gate), with their receipts checked the same way.
 static int flin_gate(Dev& d) {
   int fails = 0;
+  std::mt19937_64 rng(0xFA77);
+  for (const auto [fw, nc] : {std::pair{2, 4}, {4, 2}, {4, 4}, {8, 4}}) {
+    Fatt a;
+    fatt_prepare(a, fw, nc, 3, 1536);
+    CK(cudaMemset(a.rec, 0xA5, a.per * 2 * LAYERS * 8));
+    char what[48];
+    snprintf(what, sizeof what, "attention FW %d NC %d", fw, nc);
+    bool built = true;
+    fails += att_gate(d, rng, "fgate", what, [&](int B, int L) {
+      bool wr = false;
+      built = enqueue_fatt(d, a, B, L, 0, &wr);
+    });
+    if (!built) { fprintf(stderr, "fatt: FW %d NC %d not built (%s)\n", fw, nc, fatt_built()); return fails + 1; }
+    const FlinTally t = fatt_tally(a, 3, 1536, 1, 16, 0xA77 + fw * 8 + nc);
+    const bool ok = t.bad == 0 && t.ctl_equal == 0 && t.checked > 0;
+    printf("{\"mode\": \"fgate\", \"what\": \"%s receipts\", \"slots\": %lld, \"filler_steps\": %lld, \"idle_slots\": %lld, "
+           "\"rec_checked\": %d, \"rec_bad\": %d, \"ctl_equal\": %d, \"ok\": %s}\n",
+           what, t.slots, t.steps, t.idle, t.checked, t.bad, t.ctl_equal, ok ? "true" : "false");
+    fflush(stdout);
+    fails += !ok;
+    CK(cudaFree(a.rec));
+    CK(cudaFree(a.cnt));
+  }
   for (int M : {32, 64, 128, 256}) {
     Flin f;
     flin_prepare(d, f, M, false);
@@ -531,24 +667,28 @@ static int run_flin(Dev& d, int M, int FW, int NC, int thr, int reps) {
   return 0;
 }
 
-// fstep B L FW NC THR: the decode step (enqueue_step's order) with its linears through flin; lm_head stays on cuBLASLt and
-// attention is unchanged. Arms: the cuBLASLt step, flin alone, flin with filler warps, the cuBLASLt step again. The
-// filler's MACs are its step counts over the 128 launches of the last rep; the last linear's output is checked on every row.
-static void enqueue_fstep(Dev& d, const Flin& f, const std::vector<Lt>& p, int B, int L, bool* wrapped) {
+// fstep B L FW NC THR AFW: the decode step (enqueue_step's order) with its linears through flin and its attention blocks
+// with AFW filler warps each (0: dcap's kernels); lm_head stays on cuBLASLt. Arms: the cuBLASLt step, flin alone with
+// dcap's attention, both with filler warps, the cuBLASLt step again. The filler's MACs are its step counts over the last
+// rep's launches; the last linear's output is checked on every row.
+static void enqueue_fstep(Dev& d, const Flin& f, const Fatt& a, const std::vector<Lt>& p, int B, int L, bool* wrapped) {
   for (int l = 0; l < LAYERS; l++) {
     flin_one(d, f, 4 * l, 1);
-    enqueue_att(d, B, L, l, wrapped);
+    enqueue_fatt(d, a, B, L, l, wrapped);
     for (int j = 1; j < 4; j++) flin_one(d, f, 4 * l + j, (j + 1) % 4);
   }
   if (B <= 256 && p[4].algo_id != -2) lt_run(p[4], d.X, d.Wlm, d.D, d.st);
 }
-static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int reps) {
+static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int reps) {
   const std::vector<Lt> p = lin_plans(d, B);
   Flin f;
   flin_prepare(d, f, B, true);
   f.thr = thr;
   f.NC = NC;
+  Fatt a0, a;
+  fatt_prepare(a, AFW, 4, B, L);
   bool wrapped = false;
+  if (!enqueue_fatt(d, a, B, L, 0, &wrapped)) { fprintf(stderr, "fatt: FW %d NC 4 not built (%s)\n", AFW, fatt_built()); exit(1); }
   for (int fw : {FW, 0}) {  // the kernels' attributes, outside capture
     f.FW = fw;
     if (!flin_one(d, f, 0, 1)) { fprintf(stderr, "flin: M %d FW %d NC %d not built (%s)\n", B, fw, NC, flin_built(B)); exit(1); }
@@ -556,7 +696,7 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int reps) {
   }
   CK(cudaStreamSynchronize(d.st));
   auto base = [&] { enqueue_step(d, p, 2, B, L, &wrapped); };
-  auto fused = [&](int fw) { f.FW = fw; enqueue_fstep(d, f, p, B, L, &wrapped); };
+  auto fused = [&](int fw) { f.FW = fw; enqueue_fstep(d, f, fw ? a : a0, p, B, L, &wrapped); };
   const auto vb = time_work(d, base, reps);
   const auto v0 = time_work(d, [&] { fused(0); }, reps);
   const auto vf = time_work(d, [&] { fused(FW); }, reps);
@@ -564,7 +704,7 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int reps) {
   f.FW = FW;
   std::vector<int> all(Flin::LAUNCHES);
   for (int i = 0; i < Flin::LAUNCHES; i++) all[i] = i;
-  const FlinTally t = flin_tally(f, all, 16, 0xF57E + B * 8 + L);
+  const FlinTally t = flin_tally(f, all, 16, 0xF57E + B * 8 + L), ta = fatt_tally(a, B, L, LAYERS, 16, 0xA57E + B * 8 + L);
   const int N = LN[3], K = LK[3];
   ref_rows<<<(unsigned)(((size_t)B * N + 255) / 256), 256, 0, d.st>>>(d.X, d.W[LAYERS - 1][3], g_ref, B, 1, N, K);
   CK(cudaMemsetAsync(g_cnt, 0, sizeof *g_cnt, d.st));
@@ -578,20 +718,25 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int reps) {
   const double step_macs = lin_macs + (double)B * VOCAB * HID + 2.0 * LAYERS * B * HQ * HD * (double)L;
   const Rep mb = median(vb), m0 = median(v0), mf = median(vf), mb2 = median(vb2);
   const double bms = (mb.ms + mb2.ms) / 2, cap = 1024.0 * d.sms * mf.mhz * 1e6;
-  printf("{\"mode\": \"fstep\", \"pdl\": %d, \"B\": %d, \"L\": %d, \"FW\": %d, \"NC\": %d, \"thr\": %d, \"coins\": [\"%016llx\", \"%016llx\"], "
-         "\"kv_wrapped\": %s, \"step_macs\": %.6e, \"lin_macs\": %.6e, \"base_ms\": %.4f, \"base2_ms\": %.4f, \"fused0_ms\": %.4f, "
-         "\"fused_ms\": %.4f, \"fused0_vs_base\": %.4f, \"slowdown\": %.4f, \"step_share_base\": %.5f, \"step_share_fused\": %.5f, "
-         "\"fill_macs\": %.6e, \"fill_share\": %.5f, \"mhz\": %.0f, \"watt\": %.1f, \"filler_steps\": %lld, \"slots\": %lld, "
-         "\"idle_slots\": %lld, \"rec_checked\": %d, \"rec_bad\": %d, \"ctl_equal\": %d, \"out_mismatches\": %llu, \"arms\": {",
-         (int)g_pdl, B, L, FW, NC, thr, (unsigned long long)g_c0, (unsigned long long)g_c1, wrapped ? "true" : "false", step_macs, lin_macs,
-         mb.ms, mb2.ms, m0.ms, mf.ms, m0.ms / bms, mf.ms / bms, step_macs / (bms * 1e-3) / (1024.0 * d.sms * mb.mhz * 1e6),
-         step_macs / (mf.ms * 1e-3) / cap, t.macs, t.macs / (mf.ms * 1e-3) / cap, mf.mhz, mf.watt, t.steps, t.slots, t.idle,
-         t.checked, t.bad, t.ctl_equal, out_bad);
+  const double lin_share = t.macs / (mf.ms * 1e-3) / cap, att_share = ta.macs / (mf.ms * 1e-3) / cap;
+  printf("{\"mode\": \"fstep\", \"pdl\": %d, \"B\": %d, \"L\": %d, \"FW\": %d, \"NC\": %d, \"thr\": %d, \"AFW\": %d, "
+         "\"coins\": [\"%016llx\", \"%016llx\"], \"kv_wrapped\": %s, \"step_macs\": %.6e, \"lin_macs\": %.6e, \"base_ms\": %.4f, "
+         "\"base2_ms\": %.4f, \"fused0_ms\": %.4f, \"fused_ms\": %.4f, \"fused0_vs_base\": %.4f, \"slowdown\": %.4f, "
+         "\"step_share_base\": %.5f, \"step_share_fused\": %.5f, \"fill_macs\": %.6e, \"fill_share\": %.5f, "
+         "\"fill_share_lin\": %.5f, \"fill_share_att\": %.5f, \"mhz\": %.0f, \"watt\": %.1f, "
+         "\"lin\": {\"filler_steps\": %lld, \"slots\": %lld, \"idle_slots\": %lld, \"rec_checked\": %d, \"rec_bad\": %d, \"ctl_equal\": %d}, "
+         "\"att\": {\"filler_steps\": %lld, \"slots\": %lld, \"idle_slots\": %lld, \"rec_checked\": %d, \"rec_bad\": %d, \"ctl_equal\": %d}, "
+         "\"out_mismatches\": %llu, \"arms\": {",
+         (int)g_pdl, B, L, FW, NC, thr, AFW, (unsigned long long)g_c0, (unsigned long long)g_c1, wrapped ? "true" : "false",
+         step_macs, lin_macs, mb.ms, mb2.ms, m0.ms, mf.ms, m0.ms / bms, mf.ms / bms,
+         step_macs / (bms * 1e-3) / (1024.0 * d.sms * mb.mhz * 1e6), step_macs / (mf.ms * 1e-3) / cap, t.macs + ta.macs,
+         lin_share + att_share, lin_share, att_share, mf.mhz, mf.watt, t.steps, t.slots, t.idle, t.checked, t.bad, t.ctl_equal,
+         ta.steps, ta.slots, ta.idle, ta.checked, ta.bad, ta.ctl_equal, out_bad);
   print_arm("base", vb, true);
   print_arm("fused0", v0, true);
   print_arm("fused", vf, true);
   print_arm("base2", vb2, false);
   printf("}}\n");
   fflush(stdout);
-  return t.bad || t.ctl_equal || out_bad ? 8 : 0;
+  return t.bad || t.ctl_equal || ta.bad || ta.ctl_equal || out_bad ? 8 : 0;
 }

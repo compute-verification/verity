@@ -9,15 +9,16 @@
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=FILL \
 #     --send benchmarks/pouw/decode_capacity/flin.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/flin.sh"'
 #
-# FL_FLIN ("M:FW:NC:THR[:PDL] ..."), FL_STEP ("B:L:FW:NC:THR[:PDL] ..."), PDL 0 to launch each linear after the previous
-# grid finishes (FLIN_PDL), FL_NCU ("M:FW:NC:THR ...", ncu over flin's first launches), FL_REPS, FL_GATE (0 skips CAP's gate)
+# FL_FLIN ("M:FW:NC:THR[:PDL] ..."), FL_STEP ("B:L:FW:NC:THR:AFW[:PDL] ..."), PDL 0 to launch each linear after the
+# previous grid finishes (FLIN_PDL), FL_NCU ("M:FW:NC:THR ...", ncu over flin's first launches; "none" skips), FL_REPS,
+# FL_GATE (0 skips CAP's gate)
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
 D=benchmarks/pouw/decode_capacity
 export B; B=$(mktemp -d /tmp/flin.XXXXXX); trap 'rm -rf "$B"' EXIT
 export FL_FLIN=${FL_FLIN:-"32:4:2:0 32:8:4:0 32:8:4:1 64:4:2:0 64:4:4:0 64:8:4:0 128:4:2:0 128:4:4:0 128:4:4:1 256:2:2:0 256:2:4:0"}
-export FL_STEP=${FL_STEP:-"32:2048:8:4:0 32:8192:8:4:0 64:2048:8:4:0 128:2048:4:4:0 256:2048:2:4:0"}
+export FL_STEP=${FL_STEP:-"32:2048:8:4:0:0 32:2048:8:4:0:2 32:2048:8:4:0:4 32:8192:8:4:0:2 128:2048:4:4:0:2 256:2048:2:4:0:2"}
 export FL_NCU=${FL_NCU:-"32:8:4:0 128:4:4:0"}
 export FL_REPS=${FL_REPS:-15} FL_GATE=${FL_GATE:-1}
 git rev-parse HEAD > "$O/commit.txt" 2>&1
@@ -46,7 +47,7 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
     FLIN_PDL=${pdl:-1} "$B/dcap" flin "$m" "$fw" "$nc" "$thr" "$FL_REPS" >> "$O/flin.jsonl" 2>> "$O/errors.txt" || echo "rc $? for flin $c" >> "$O/errors.txt"
   done
   q
-  for c in $FL_NCU; do
+  for c in ${FL_NCU/none/}; do
     IFS=: read -r m fw nc thr <<< "$c"
     # the first 64 launches are qkv with the filler warps (32 layers), then qkv alone (32 layers)
     ncu --clock-control none -k regex:flin_k --launch-count 64 \
@@ -56,8 +57,8 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
   done
   q
   for c in $FL_STEP; do
-    IFS=: read -r b l fw nc thr pdl <<< "$c"
-    FLIN_PDL=${pdl:-1} "$B/dcap" fstep "$b" "$l" "$fw" "$nc" "$thr" "$FL_REPS" >> "$O/fstep.jsonl" 2>> "$O/errors.txt" ||
+    IFS=: read -r b l fw nc thr afw pdl <<< "$c"
+    FLIN_PDL=${pdl:-1} "$B/dcap" fstep "$b" "$l" "$fw" "$nc" "$thr" "${afw:-0}" "$FL_REPS" >> "$O/fstep.jsonl" 2>> "$O/errors.txt" ||
       echo "rc $? for fstep $c" >> "$O/errors.txt"
     q
   done
