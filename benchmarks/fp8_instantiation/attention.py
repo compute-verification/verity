@@ -45,8 +45,9 @@ Method names are '-'-joined tokens:
                on `int8_rot@a:dither:wtop63:sN` (the activations served as floor(x / s) + b, the weights on [-63, 63])
     `rot`, `sN` (noise seed, also the linears' under `lin8rd`)
 
-`bf16` is the model's own eager attention and `ref` this file's attention in FP32 with no edit (`ref-rot` checks the
-rotation).  IDS is one window (T,) or several (N, T) (`windows.py`); perplexity is over every token of every window, and
+`bf16` is the model's own eager attention (Q K^T rounded to bf16 before the scale), `sdpa` its bf16 attention through
+torch's fused causal kernel (scores in FP32, as served), and `ref` this file's attention in FP32 with no edit (`ref-rot`
+checks the rotation).  IDS is one window (T,) or several (N, T) (`windows.py`); perplexity is over every token of every window, and
 window w draws its own noise (window 0's is the single-window runs').  On window 0 every peel is checked on every layer:
 Q K^T's per KV group, and P V's per KV group and key block.
 
@@ -73,6 +74,7 @@ import numpy as np
 import torch
 import transformers
 from transformers.models.llama import modeling_llama
+from transformers.integrations.sdpa_attention import sdpa_attention_forward
 from transformers.models.qwen2 import modeling_qwen2
 
 import exact_grid
@@ -137,7 +139,7 @@ def parse(method: str) -> dict:
         if a and is_alphabet(a) and ops and set(ops) <= set(OPERANDS):
             over.update({x: a for x in ops})
             continue
-        if t in GRID_PAIRS or t in ("bf16", "ref"):
+        if t in GRID_PAIRS or t in ("bf16", "ref", "sdpa"):
             spec["grid"] = t
         elif t in ("prow", "pfix", "prow2"):
             spec["p"] = t
@@ -388,6 +390,9 @@ def edited_attention(module, query, key, value, attention_mask, scaling=None, dr
     spec = STATE["spec"]
     b, H, s, d = query.shape
     assert kwargs.get("sliding_window") is None or kwargs["sliding_window"] >= s, "full causal attention only"
+    if spec is not None and spec["grid"] == "sdpa":
+        assert b == 1, "one unpadded sequence"
+        return sdpa_attention_forward(module, query, key, value, None, dropout=dropout, scaling=scaling, is_causal=True)
     if spec is None or spec["grid"] == "bf16":
         if H * s * s * 4 <= EAGER_BYTES and not STATE.get("rows"):
             return ORIG[type(module).__module__](module, query, key, value, attention_mask, scaling=scaling,
@@ -585,7 +590,7 @@ def evaluate(model, ids: torch.Tensor, method: str) -> dict:
         STATE["spec"] = None
         for h in hooks:
             h.remove()
-    if spec["grid"] != "bf16":
+    if spec["grid"] not in ("bf16", "sdpa"):
         assert STATE["calls"] == model.config.num_hidden_layers * len(ids), STATE["calls"]
     nll = torch.cat(nlls)
     rec = STATE["record"]
@@ -677,13 +682,14 @@ def selftest() -> dict:
                         attn_implementation="eager")
     model = L.LlamaForCausalLM(cfg).to(torch.bfloat16).to(dev).eval()
     ids = torch.randint(0, 512, (1, 96), device=dev)
-    runs = {m: evaluate(model, ids, m) for m in ("bf16", "ref", "ref-rot", "int8-none", "int8-pfix-vhead-none",
+    runs = {m: evaluate(model, ids, m) for m in ("bf16", "sdpa", "ref", "ref-rot", "int8-none", "int8-pfix-vhead-none",
                                                  "int8-u16", "int8-rot-u16", "e4m3-none", "e4m3-pm57-rot", "int8-u4-qk",
                                                  "int8-u4-pv-s2", "e4m3qk-qk=u4-v=u2-p=d6-rot", "int8-p=d2",
                                                  "int8-prow2-none", "int8-prow2-p=u16-rot", "int8-prow2-vchan2-qk2-none",
                                                  "int8-prow2-vchan2-qk2-u16-rot", "int8-vchan2-v=u8")}
     out["tiny"] = {m: {k: r[k] for k in ("ppl", "attn_rel_err", "exact") if k in r} for m, r in runs.items()}
     assert abs(runs["ref"]["ppl"] / runs["bf16"]["ppl"] - 1) < 1e-2, out
+    assert abs(runs["sdpa"]["ppl"] / runs["ref"]["ppl"] - 1) < 1e-2, out
     assert abs(runs["ref-rot"]["ppl"] / runs["ref"]["ppl"] - 1) < 1e-3, out
     assert runs["int8-none"]["attn_rel_err"] < runs["int8-u16"]["attn_rel_err"], out
     assert runs["int8-none"]["attn_rel_err"] < runs["e4m3-none"]["attn_rel_err"], out
@@ -861,11 +867,13 @@ def selftest() -> dict:
             for h in hooks:
                 h.remove()
     lin_err = float(torch.linalg.norm(hooked - plain) / torch.linalg.norm(plain))
-    qw = {m: evaluate(qm, ids, m) for m in ("bf16", "ref", "int8-rot-lin8r", "int8-rot-lin8rd-eqp=w64-poff64-psink-kv=dith-s1")}
+    qw = {m: evaluate(qm, ids, m) for m in ("bf16", "sdpa", "ref", "int8-rot-lin8r",
+                                            "int8-rot-lin8rd-eqp=w64-poff64-psink-kv=dith-s1")}
     out["tiny_qwen2"] = {"lin_rel_err": lin_err, **{m: {k: r.get(k) for k in ("ppl", "attn_rel_err", "peel_exact", "peel_checks")}
                                                     for m, r in qw.items()}}
     assert lin_err < 0.05, out["tiny_qwen2"]
     assert abs(qw["ref"]["ppl"] / qw["bf16"]["ppl"] - 1) < 1e-2, out["tiny_qwen2"]
+    assert abs(qw["sdpa"]["ppl"] / qw["ref"]["ppl"] - 1) < 1e-2, out["tiny_qwen2"]
     e2e = qw["int8-rot-lin8rd-eqp=w64-poff64-psink-kv=dith-s1"]
     assert e2e["exact"] and e2e["peel_exact"] and e2e["peel_checks"] == 2 * 2 * 3 and e2e["lin_exact_all"], out["tiny_qwen2"]
     assert qw["int8-rot-lin8r"]["attn_rel_err"] < 0.1, out["tiny_qwen2"]
