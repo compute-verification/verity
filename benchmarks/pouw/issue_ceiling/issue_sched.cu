@@ -365,7 +365,7 @@ static void sweep_hi(double a) { spec_hi_case<M, X, 32>(a); spec_hi_case<M, X, 6
 
 int main(int, char**) {
   g_sms = num_sms();
-  CK(cudaMalloc(&g_sink, (size_t)g_sms * 512 * 4));
+  CK(cudaMalloc(&g_sink, (size_t)g_sms * 1024 * 4));  // 1024 threads a block in the high-occupancy kernels
   CK(cudaMalloc(&g_rec, (size_t)g_sms * sizeof(BlockClk)));
   CK(cudaMalloc(&g_ldg, (size_t)(GMASK + 1) * 4));
   CK(cudaMemset(g_ldg, 0x5a, (size_t)(GMASK + 1) * 4));

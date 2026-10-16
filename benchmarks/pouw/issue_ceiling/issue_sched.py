@@ -134,8 +134,8 @@ def main():
         R = int(round(r["ops_per_mma"] * (4 if mode == "spec_hi" else 8)))
         frac = r["mma_macs_frac_of_alone"]
         total_min_smsp = (r["mma_calls_per_sm_per_clk"] + r["op_calls_per_sm_per_clk"]) / 4.0
-        # SASS confirmation. intended op count in the loop body: R (spec lane warp) or 8*R (mixu body = 8 sub x R).
-        intended = R if mode == "spec" else 8 * R
+        # SASS confirmation. intended op count in the loop body: R (spec/spec_hi lane warp) or 8*R (mixu body = 8 sub x R).
+        intended = 8 * R if mode == "mixu" else R
         confirmed = "—"
         got = 0
         total_sass_smsp = None
