@@ -5,13 +5,17 @@ import Proofs.Flock.Claims.Aggregate
 import Proofs.Flock.Claims.Bits
 import Proofs.Flock.Claims.ERep
 import Proofs.Flock.Claims.ERepCost
+import Proofs.Flock.Claims.Sampling.Draws
+import Proofs.Flock.Claims.Sampling.ExecBernoulli
 
 /-! `Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated`, by reflexivity: the guarantee is there for its
 record, which holds the claims' text.
 
 The claims' lemmas sit under `Proofs.Flock.Claims`: uniform-coin probability (`Prob`), `B`'s soundness and the
 finders' Cauchy–Schwarz aggregation (`Finder`, `Aggregate`), the `Bits` corollary of `KS` (`Bits`), `E^rep`'s
-reruns and amplification (`ERep`), and `ERepCost` (`ERepCost`). -/
+reruns and amplification (`ERep`), and `ERepCost` (`ERepCost`). The sampling compiler's lemmas are under
+`Proofs.Flock.Claims.Sampling`: each registered draw law's miss bound in `Claims.Pr` (`Sampling.Draws`) and the
+executable Bernoulli draw's bound (`Sampling.ExecBernoulli`). -/
 
 /-- **The claims are stated** (`Flock.Guarantees.ClaimsStated`). -/
 theorem Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated := rfl
