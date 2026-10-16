@@ -145,7 +145,7 @@ def neqs (k N : ℕ) : ℕ := N * ((k + 1) * (k + 2) / 2)
 /-- **The regime**: `(k+1)·N < t²` and `t ≤ N`. -/
 def Reg (k N t : ℕ) : Prop := (k + 1) * N < t * t ∧ t ≤ N
 
-instance (k N t : ℕ) : Decidable (Reg k N t) := by unfold Reg; infer_instance
+instance instDecidableReg (k N t : ℕ) : Decidable (Reg k N t) := by unfold Reg; infer_instance
 
 theorem Reg.pos {k N t : ℕ} (h : Reg k N t) : 0 < t := by
   rcases Nat.eq_zero_or_pos t with rfl | ht
