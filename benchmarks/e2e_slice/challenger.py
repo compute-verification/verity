@@ -18,6 +18,7 @@ import argparse
 import json
 import os
 import secrets
+import shutil
 import subprocess
 import sys
 import threading
@@ -187,8 +188,16 @@ class Challenger:
             _pid, status, ru = os.wait4(p.pid, 0)
             p.returncode = os.waitstatus_to_exitcode(status)
             self.serving = None
+        kept = Path(self.a.out) / "sessions"
+        kept.mkdir(exist_ok=True)
+        proof_bytes = 0
+        for sd in (d / "sessions").glob("*/"):
+            proof_bytes += sum(f.stat().st_size for f in sd.glob("*.bin"))
+            if (sd / "session.json").exists():
+                shutil.copy(sd / "session.json", kept / f"r{w:04d}-{sd.name}.json")
+        shutil.rmtree(d / "sessions", ignore_errors=True)
         self.rec(w, serve_s=round(time.time() - t, 3), serve_rc=p.returncode, verify_cpu_s=round(ru.ru_utime + ru.ru_stime, 3),
-                 serve_maxrss_mb=round(ru.ru_maxrss / 1024), session=session)
+                 serve_maxrss_mb=round(ru.ru_maxrss / 1024), session=session, proof_bytes=proof_bytes)
         if addr is None:
             self.wire.send("serve", round=w, addr=None)
             self.final(w, "failed", f"serve exited before SERVING (rc {p.returncode}): {(d / 'serve.err').read_text()[-300:]}")
@@ -205,7 +214,7 @@ class Challenger:
             self.serve_cv.notify()
         for w, r in sorted(self.rounds.items()):
             if r["status"] == "live":
-                self.final(w, "failed", "abandoned after its coin")
+                self.final(w, "failed", "abandoned after its draw, no proof" if "t_d" in r else "abandoned before (c)")
             elif r["status"] == "committed":
                 self.rec(w, status="skipped")
 

@@ -52,7 +52,8 @@ def main() -> int:
                                                  "prove_maxrss_mb")},
         "challenger_per_round_s": {"check_s": c("check_s"), "serve_setup_s": c("serve_setup_s"), "serve_s": c("serve_s"),
                                    "verify_cpu_s": c("verify_cpu_s"), "session_verify_s": sess("verify_s"),
-                                   "session_handle_s": sess("handle_s"), "serve_maxrss_mb": c("serve_maxrss_mb")},
+                                   "session_handle_s": sess("handle_s"), "serve_maxrss_mb": c("serve_maxrss_mb"),
+                                   "proof_bytes": c("proof_bytes")},
         "circuit": win["circuit"],
     }
     if plain:
