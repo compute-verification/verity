@@ -331,7 +331,7 @@ theorem Case.ready_parts {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed 
   have h := c.ready
   unfold FlockComplete.ready at h
   rw [c.setup] at h
-  simpa using h
+  simpa [and_assoc] using h
 
 /-- **A drawn session**: `checks` never reaches `drawLaw zk none`. -/
 theorem Case.drawn {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (c : Case H rel) : c.s.read.draw.isNone = false := by
