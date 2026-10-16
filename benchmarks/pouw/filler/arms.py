@@ -12,7 +12,8 @@ workload, the timing and its serving-alone controls, the gates and the arithmeti
   None for no filler. v1's driver runs one filler ABI, dcap.cu's ``dfill_k`` (``DFill``, ``dfill_launch``,
   ``dfill_check``, ``dfill_ref``): an arm with another kernel brings it behind that ABI. ``Filler.noise`` optionally
   declares its operands (`NOISE`); filler-scorer/v3 reads it, with the facts of its own build, to pick the filler's
-  certified-fraction entry (`scoring.filler_entry`). It is not part of the variant's run-time config (`config`).
+  certified-fraction entry (`scoring.filler_entry`). ``Filler.fold`` optionally declares its receipt's fold (`FOLDS`),
+  which filler-scorer/v5 reads (`scoring.fold_reading`). Neither is part of the variant's run-time config (`config`).
 - ``placement(phase, B, L)``: where the filler runs beside serving at a suite point, a `Placement`. ``phase`` is
   ``"decode"`` (the decode step at batch B, context L) or ``"prefill"`` (the 32 layers of linears at M = B rows, L = 0).
   It is a pure function of the point: the same placement on every call, chosen before the run (desideratum 5's fixed work
@@ -43,6 +44,9 @@ SMS = 188  # the RTX PRO 6000's SMs
 #: fresh bits A ∈ {0,1} with B = U uniform on {±1..±64} (pfill-bU, note:20261016T0710Z-draft-filler-floor-r2 §5), or
 #: the dither ⌊x/s⌋ + b (data quantized down plus a fresh uniform bit; note:20261016T0525Z-draft-fullfloor-s-r6 §2)
 NOISE = ("chained", "pm1", "bits01", "bitsU", "dither")
+#: a filler's declarable receipt folds (pfill.cuh's pf_absorb): ram (NC 4), duo (NC 2), XOR-in (NC 4 built with
+#: -DPFILL_XIN); filler-scorer/v5 reads the declaration with its build's SASS (`scoring.fold_reading`), undeclared as ram
+FOLDS = ("ram", "duo", "xor-in")
 #: the `Filler` fields the driver runs and the variant's run-time config carries
 SHAPE = ("W", "NC", "S", "chunk_log2")
 
@@ -58,6 +62,7 @@ class Filler:
     S: int = 2048
     chunk_log2: int = 19
     noise: str | None = None
+    fold: str | None = None
 
 
 def config(filler: Filler | None) -> dict[str, str]:
@@ -157,6 +162,8 @@ def check_arm(arm, *, record: bool = False) -> list[str]:
         bad.append("filler is a Filler or None")
     elif fl is not None and fl.noise is not None and fl.noise not in NOISE:
         bad.append(f"filler.noise {fl.noise!r} is one of {NOISE} or None")
+    if fl is not None and isinstance(fl, Filler) and fl.fold is not None and fl.fold not in FOLDS:
+        bad.append(f"filler.fold {fl.fold!r} is one of {FOLDS} or None")
     if not isinstance(getattr(arm, "choice", None), str):
         bad.append("choice is one line")
     if not callable(getattr(arm, "placement", None)):
