@@ -13,20 +13,25 @@ open Lean (Json)
 open Flock (V)
 open Flock.TemplateQuery (Desc)
 
-/-- `draw.derive`: `stratified` and `work` (the rule, or an expanded law, whose strata are ignored) expand over the strata of
-the verifier's program and query (`Flock.Draw.derive`, and `Flock.Draw.deriveWork` with its work table); `subset` and
-`bernoulli` are unchanged. An error when the query doesn't apply, `k` isn't in `[1, population]`, a work law has no table,
-the table names no work for a template, or the population does none. -/
-def derive (d : Desc) (query law : Json) (table : Option Json) : V Json := do
+/-- `draw.derive`'s expansion as C-Flock's law: `stratified` and `work` (the rule, or an expanded law, whose strata are
+ignored) over the strata of the verifier's program and query (`Flock.Draw.derive`, and `Flock.Draw.deriveWork` with its
+work table); `none` for `subset` and `bernoulli`, which `derive` leaves unchanged. An error when the query doesn't apply,
+`k` isn't in `[1, population]`, a work law has no table, the table names no work for a template, or the population does
+none. -/
+def deriveLaw (d : Desc) (query law : Json) (table : Option Json) : V (Option Flock.Draw.Law) := do
   let kind := getD law "law"
-  if !(jeq kind "stratified" || jeq kind "work") then return law
+  if !(jeq kind "stratified" || jeq kind "work") then return none
   let strata ← Partition.strata d query
   let n := strata.foldl (fun acc (_, rs) => acc + rs.foldl (fun a (lo, hi) => a + (hi - lo)) 0) 0
   let some k := nat? (getD law "k") | throw s!"a law needs 1 <= k <= {n}"
   if jeq kind "stratified" then
-    return (← Flock.Draw.derive k strata).toJson
+    return some (← Flock.Draw.derive k strata)
   let some t := table | throw "a work law needs the verifier's work table"
-  return (← Flock.Draw.deriveWork k strata (← Flock.Draw.workTableOfJson t)).toJson
+  return some (← Flock.Draw.deriveWork k strata (← Flock.Draw.workTableOfJson t))
+
+/-- `draw.derive`: the law object of `deriveLaw`'s expansion, and `law` itself where it has none. -/
+def derive (d : Desc) (query law : Json) (table : Option Json) : V Json :=
+  return ((← deriveLaw d query law table).map (·.toJson)).getD law
 
 /-- `draw.same_law`: the same canonical bytes. -/
 def sameLaw (a b : Json) : Bool := jeq a b

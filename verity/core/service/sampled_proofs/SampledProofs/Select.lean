@@ -82,20 +82,26 @@ private def inRange (n : Nat) (u : Int) : Bool := 0 ≤ u && u < n
 draw object over the population of `d` under `query` (`Partition.units`), the units it proves (`Draw.proved`'s: the drawn
 units, then a work draw's closure) and the number of bytes of `src` it read. The law is the rule's over that population,
 expanded (`Draw.derive`, with the work `table`); `All` draws every unit and reads nothing, any other rule draws its C-Flock
-law (`Draw.flockLaw`) by `Draw.drawUnits`, as `Draw.drawFirstRead` does. With the closure map `cm`, a work draw carries
+law by `Draw.drawUnits`, as `Draw.drawFirstRead` does: the law `Draw.flockLaw` reads from the law object, or, for
+`stratified` and `work`, once `flockLaw` accepts that object, the expansion it was written from (`Draw.deriveLaw`), the
+same law. With the closure map `cm`, a work draw carries
 the drawn units' closure (`Flock.Draw.closureOf`) when it is not empty. An error where the Python raises: the query
 doesn't apply, the rule's law or its expansion is refused, a closure map is given for another law or names a unit outside
 the population, the draw is refused (`drawFirstRead`), or it is not well formed under the law (`Draw.checkDraw`). -/
 def select (rule : Rule) (d : Desc) (query : Json) (table : Option Json) (cm : Option (Array (Int × Array Int)))
     (src : ByteArray) : V (Json × Array Nat × Nat) := do
   let n ← Partition.units d query
-  let law ← Draw.derive d query (← rule.lawOver n) table
+  let named ← rule.lawOver n
+  let derived ← Draw.deriveLaw d query named table
+  let law := (derived.map (·.toJson)).getD named
   if let some cm := cm then
     if !(jeq (getD law "law") "work" && cm.all fun (u, cs) => inRange n u && cs.all (inRange n)) then
       throw s!"a closure map over [0, {n}) widens a work draw only"
   let (units, read) ← match rule with
     | .all => pure (Array.range n, 0)
-    | _ => Draw.drawUnits (← Draw.flockLaw law n) n src
+    | _ => do
+      let parsed ← Draw.flockLaw law n
+      Draw.drawUnits (derived.getD parsed) n src
   let draw := Json.mkObj ((entries law).toList ++ [("population", Lean.toJson n), ("units", natsJson units)])
   let closure := match cm with
     | some cm => Flock.Draw.closureOf (cm.foldl (fun m (u, cs) => m.insert u.toNat (cs.map Int.toNat)) {}) units
