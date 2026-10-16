@@ -287,6 +287,12 @@ def check_picks(dumps: dict[int, dict[str, Any]], world: int = 2) -> dict[str, A
                 res["mismatches"].append({"pick": i, "site": p0["site"], "step": p0["step"], "kind": "embedding_shard", "family": "EmbeddingShard_v1", "rows": p0["rows"][:8],
                                           "received_equals_definition_per_rank": {str(r): bool(embs[j].get("ok")) for j, r in enumerate(ranks)}, "received_equal_across_ranks": None,
                                           "n_diff_per_rank": {str(r): embs[j].get("n_diff") for j, r in enumerate(ranks)}, "vocab_range_per_rank": {str(r): embs[j].get("vocab_range") for j, r in enumerate(ranks)}})
+        route_whys = [f"rank {r}: {p['route_why']}" for p, r in zip(ps, ranks) if p.get("route_why")]
+        if p0["kind"] == "all_reduce" and route_whys:
+            fam["missing"] += 1
+            res["missing"].append({"pick": i, "site": p0["site"], "step": p0["step"], "kind": p0["kind"], "family": p0["family"],
+                                   "why": ("no routed Definition for the call: " + "; ".join(route_whys[:4]))[:400]})
+            continue
         if p0["kind"] == "all_reduce" and p0.get("spec"):
             ok, d = _check_routed(ps, ranks)
             if ok is None:

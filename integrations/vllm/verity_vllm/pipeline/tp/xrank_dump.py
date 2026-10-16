@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.acquire.sources.allreduce_norm import REDUCED_MEMBER
+from verity_vllm.acquire.sources.allreduce_norm import FUSED, REDUCED_MEMBER
 from verity_vllm.check.match import xrank_collectives as XC
 
 ROUTED_WORLD = 8
@@ -57,6 +57,17 @@ def residual_member(order: list[str] | None, site: str, embedding: str | None) -
     return f"{order[k - 1]}/1" if k else embedding
 
 
+def path_disagrees(route: dict[str, Any], took: str | None, order: list[str] | None, site: str) -> dict[str, Any] | None:
+    """{"why"} when the norm source recorded this call taking the other path than `route` names (`AllReduceNorm.paths`: one
+    character per call, in `order`); None when they agree or the step's paths were not kept."""
+    if not took or not order or site not in order or len(took) != len(order):
+        return None
+    ch = took[order.index(site)]
+    if (ch == FUSED) == bool(route["fused"]):
+        return None
+    return {"why": f"{site}: the call took path {ch}, the route names {'the fused norm' if route['fused'] else 'an all-reduce then the norm'}"}
+
+
 def program_specs(progs: dict[str, dict[str, Any]]) -> list[str]:
     """The routed all-reduce specs the rank's Programs bind (`rank_replay.Loaded.progs`)."""
     from verity_vllm.query.manifest import format as RM
@@ -96,6 +107,7 @@ def dump(st: dict[str, Any], *, settings: dict[str, Any], out_dir: str, seed_hex
     mods = dict(st["eng"].model.named_modules())
     far = getattr(st.get("tps"), "far", None)
     order = list(getattr(far, "order", None) or []) or None
+    paths = {int(s): str(p) for s, p in (getattr(far, "paths", None) or ())}
     embedding = next((n for n, m in mods.items() if XC.is_embedding_site(n) and hasattr(m, "shard_indices")), None)
     specs = st.get("xrank_program_specs")
     known = None if specs is None else {XC.spec_key(s) for s in specs}
@@ -119,8 +131,12 @@ def dump(st: dict[str, Any], *, settings: dict[str, Any], out_dir: str, seed_hex
         metas = {m.name: m for m in com._layouts.get(step, [])}
         pm = metas.get(pk["member"])
         extra: dict[str, Any] = {}
-        if pk["kind"] == "all_reduce" and pm is not None and len(pm.shape) == 2:
+        if pk["kind"] == "all_reduce" and pm is not None and len(pm.shape) != 2 and world == ROUTED_WORLD:
+            extra = {"route_why": f"partial {pm.name} of shape {tuple(pm.shape)}, not [M, N]"}
+        elif pk["kind"] == "all_reduce" and pm is not None and len(pm.shape) == 2:
             route = route_of(settings, int(pm.shape[0]), int(pm.shape[1]), world, norm=mods.get(pk["site"]) if order and pk["site"] in order else None)
+            if route is not None and "why" not in route:
+                route = path_disagrees(route, paths.get(step), order, pk["site"]) or route
             if route is not None and "why" in route:
                 extra = {"route_why": route["why"]}
             elif route is not None:
@@ -197,4 +213,4 @@ def embedding_leg(pk: dict[str, Any], metas: dict[str, Any], step: int, rows: An
         return {"ok": None, "why": f"embedding-shard leg error: {e!r}"[:200]}
 
 
-__all__ = ["dump", "route_of", "residual_member", "program_specs", "embedding_leg", "ROUTED_WORLD"]
+__all__ = ["dump", "route_of", "residual_member", "path_disagrees", "program_specs", "embedding_leg", "ROUTED_WORLD"]
