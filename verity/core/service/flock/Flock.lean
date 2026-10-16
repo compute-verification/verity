@@ -63,4 +63,5 @@ import Flock.Firewall.Contract
 import Flock.Firewall.Assumptions
 import Flock.Firewall.Released
 import Flock.Witness
+import Flock.With.Deployed
 import Flock.RecOpeningCmd
