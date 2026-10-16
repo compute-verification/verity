@@ -938,11 +938,13 @@ class UnitStager:
     row ``(schema, output ports)``, a run of consecutive output ports of exactly their words (`circuit.compose`'s
     ``seg_out_rows`` / ``v2_out_rows``). ``public_inputs`` (``{param: {"seed", "derivation"}}``): parameters that are public
     input ports, not rows (`circuit.compose`; PoUW's anchors, which the verifier recomputes from public seeds), laid out as
-    `unit_lowering`'s ``public``. ``pin`` (`circuit.digest`) is computed on first read: `stage` reads it after writing
-    circuit.txt, so a streamed circuit (``benchmarks/pouw/hidden_zk/fast_stage.py``) is hashed in the pass that writes it."""
+    `unit_lowering`'s ``public``. ``circuit``: where circuit.txt is written, once; else `stage` writes it beside each round's
+    files. ``pin`` and ``class_sha512`` (`circuit.digest`, `circuit.class_digest`) are computed on first read: `stage` reads
+    them after writing circuit.txt, so a streamed circuit (``benchmarks/pouw/hidden_zk/fast_stage.py``) is hashed in the pass
+    that writes it."""
 
     def __init__(self, definition, name: str, in_rows: Sequence[tuple[str, str, int, Sequence[str]]],
-                 out_rows: Sequence[tuple[str, Sequence[int]]], public_inputs: dict | None = None):
+                 out_rows: Sequence[tuple[str, Sequence[int]]], public_inputs: dict | None = None, circuit: Path | None = None):
         from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG
 
         public_inputs = dict(public_inputs or {})
@@ -968,10 +970,18 @@ class UnitStager:
         self._meta = self.text.split("\n", 2)[1][5:]
         self.meta = json.loads(self._meta)
         self.ports = FC._meta_ports(self.meta)
+        self.circuit = circuit
+        if circuit is not None:
+            circuit.parent.mkdir(parents=True, exist_ok=True)
+            circuit.write_text(self.text)
 
     @functools.cached_property
     def pin(self) -> str:
         return FC.digest(self.text)
+
+    @functools.cached_property
+    def class_sha512(self) -> str:
+        return FC.class_digest(self.text)
 
     def reference_check(self, rows: dict[str, np.ndarray], outs: dict[str, np.ndarray]) -> None:
         """``outs`` (``{o{j}: (n, words)}``) are the IR reference's on every instance's ``rows``, leaf by leaf, from one call of
@@ -1003,8 +1013,9 @@ class UnitStager:
     def stage(self, rows: dict[str, np.ndarray], out_dir: Path, salt_key: bytes, salts: dict | None = None) -> dict:
         """A round's statement: ``rows`` each input row's words per instance ``(n, words)`` u16, and each public input's
         (``rows[param]``). The outputs are the lowering's, checked against the IR reference (`reference_check`); the salts are
-        ``salts``' where given, else `circuit.stage_salts`'. Writes ``circuit.txt``, ``inst.bin`` and ``pub.bin``; returns META,
-        the outputs per port, every row's salts, and the unit's ANDs and matrix entries."""
+        ``salts``' where given, else `circuit.stage_salts`'. Writes ``inst.bin`` and ``pub.bin`` (and ``circuit.txt`` without the
+        stager's ``circuit``) under ``out_dir``; returns META, the outputs per port, every row's salts, and the unit's ANDs and
+        matrix entries."""
         n = len(rows[self.in_rows[0][0]])
         flat = np.concatenate([np.asarray(rows[r], dtype=np.uint16) for r in self.row_ports], axis=1)
         got, _cut, ok = self.low.evaluate(flat.astype(np.uint64))
@@ -1016,10 +1027,12 @@ class UnitStager:
         self.reference_check(rows, outs)
         salts = {**FC.stage_salts(self.iset, 0, n, self.ports, salt_key), **(salts or {})}
         out_dir.mkdir(parents=True, exist_ok=True)
-        (out_dir / "circuit.txt").write_text(self.text)
+        if self.circuit is None:
+            (out_dir / "circuit.txt").write_text(self.text)
         FC.write(self.text, self.iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin", salt_key,
                  rows={r: np.asarray(rows[r], dtype=np.uint16) for r, *_ in self.in_rows}, outs=outs, salts=salts,
-                 public_words={p: np.asarray(rows[p], dtype=np.uint16) for p in self.public_inputs})
+                 public_words={p: np.asarray(rows[p], dtype=np.uint16) for p in self.public_inputs},
+                 digests=(self.pin, self.class_sha512))
         counts = self.low.layout.counts
         return {"meta": json.loads(self._meta), "outs": outs, "salts": salts, "ands": counts["ands"],
                 "unit_nnz": counts["nnz_a"] + counts["nnz_b"], "circuit_sha512": self.pin}

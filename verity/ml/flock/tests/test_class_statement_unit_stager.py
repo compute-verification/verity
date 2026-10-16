@@ -108,9 +108,9 @@ def _toy(seed: int = 0) -> tuple:
 STATEMENTS = {"pc4": lambda: _tile("pc4"), "pc8": lambda: _tile("pc8"), "anchor": _anchor, "toy": _toy}
 
 
-def _same(base: Path, base_got: dict, new: Path, got: dict) -> None:
-    for f in ("circuit.txt", "inst.bin", "pub.bin"):
-        assert (new / f).read_bytes() == (base / f).read_bytes(), f
+def _same(base: Path, base_got: dict, new: Path, got: dict, circuit: Path | None = None) -> None:
+    for f, p in (("circuit.txt", circuit or new / "circuit.txt"), ("inst.bin", new / "inst.bin"), ("pub.bin", new / "pub.bin")):
+        assert p.read_bytes() == (base / f).read_bytes(), f
     assert {k: v for k, v in got.items() if k != "outs"} == {k: v for k, v in base_got.items() if k != "outs"}
     assert set(got["outs"]) == set(base_got["outs"])
     for o, a in base_got["outs"].items():
@@ -129,26 +129,32 @@ def test_stage_unit_writes_the_bytes_and_returns_the_values_it_did_before_the_st
 
 
 @pytest.mark.slow
-def test_a_stagers_rounds_share_its_pin_and_are_each_the_statement_of_their_own_rows(tmp_path):
-    """One stager, two rounds on different rows (the second with given salts on one row): one pin and one circuit.txt, and the
-    second round's files and values are those `stage_unit`'s code before the stager gives that round alone."""
+@pytest.mark.parametrize("once", [False, True], ids=["each-round", "once"])
+def test_a_stagers_rounds_share_its_pin_and_are_each_the_statement_of_their_own_rows(once, tmp_path):
+    """One stager, two rounds on different rows (the second with given salts on one row): one pin and one circuit.txt, beside
+    each round's files or written once where the stager's ``circuit`` says, and the second round's files and values are those
+    `stage_unit`'s code before the stager gives that round alone."""
     args, rows, _kw = _toy(0)
     _args, rows2, _kw = _toy(1)
     salts = {"ac": [bytes([7]) * FC.SALT_BYTES] * len(rows2["ac"])}
-    st = CS.UnitStager(*args)
+    circuit = tmp_path / "once" / "circuit.txt" if once else None
+    st = CS.UnitStager(*args, circuit=circuit)
     first = st.stage(rows, tmp_path / "r1", b"k" * 32)
     second = st.stage(rows2, tmp_path / "r2", b"k" * 32, salts)
     assert first["circuit_sha512"] == second["circuit_sha512"] == st.pin == FC.digest(st.text)
-    assert (tmp_path / "r1" / "circuit.txt").read_bytes() == (tmp_path / "r2" / "circuit.txt").read_bytes()
+    assert st.class_sha512 == FC.class_digest(st.text)
+    written = [circuit] if once else [tmp_path / r / "circuit.txt" for r in ("r1", "r2")]
+    assert [p.read_text() for p in written] == [st.text] * len(written)
+    assert (tmp_path / "r1" / "circuit.txt").exists() != once
     assert (tmp_path / "r1" / "inst.bin").read_bytes() != (tmp_path / "r2" / "inst.bin").read_bytes()
     assert second["salts"]["ac"] == salts["ac"]
-    _same(tmp_path / "base", _stage_unit_at_base(*args, rows2, tmp_path / "base", b"k" * 32, salts), tmp_path / "r2", second)
+    _same(tmp_path / "base", _stage_unit_at_base(*args, rows2, tmp_path / "base", b"k" * 32, salts), tmp_path / "r2", second, circuit)
 
 
 @pytest.mark.slow
 @pytest.mark.parametrize("which", ["toy", "anchor"])
 def test_a_lowering_output_that_is_not_the_references_is_refused_naming_the_first_such_instance(which, tmp_path, monkeypatch):
-    """With bit 0 of the lowering's first output word wrong on instances 1 and 3, the round is refused by one `evaluate_batch`
+    """With bit 0 of the lowering's first output word wrong on every odd instance, the round is refused by one `evaluate_batch`
     call, naming instance 1, and writes nothing: on a Boolean unit, bit-sliced (the per-instance reference never runs), and on
     the anchors' stand-in, which has no kernel (the reference)."""
     args, rows, kw = STATEMENTS[which]()
@@ -158,7 +164,7 @@ def test_a_lowering_output_that_is_not_the_references_is_refused_naming_the_firs
     def wrong(flat):
         got, cut, ok = evaluate(flat)
         got = got.copy()
-        got[[1, 3], 0] ^= np.uint64(1)
+        got[1::2, 0] ^= np.uint64(1)
         return got, cut, ok
 
     monkeypatch.setattr(st.low, "evaluate", wrong)
