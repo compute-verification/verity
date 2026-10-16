@@ -42,7 +42,7 @@ def main() -> int:
         "why_failed": win["why_failed"],
         "self_checks_ok": all((r.get("self_check") or {}).get("receipts") and (r.get("self_check") or {}).get("product") for r in ch
                               if r["status"] != "skipped"),
-        "stages": info.get("stages"), "coins": info.get("coins"), "attack": info.get("attack"),
+        "stages": info.get("stages"), "coins": info.get("coins"), "attack": info.get("attack"), "served": info.get("served"),
         "by_drawn_stage": {st: {"rounds": len(rs), "passed": sum(r["status"] == "passed" for r in rs),
                                 "failed": sum(r["status"] == "failed" for r in rs),
                                 "statement_ok": sum((r.get("self_check") or {}).get("ok") == 1 for r in rs),

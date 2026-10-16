@@ -6,7 +6,8 @@ Its rows, each hm96-sha512/row/v2:
     xa0..xa3  a[r]   the thread's row r of A at segment j (32 int8, 256 bits): A's committed leaf (row, j), the committer's salt
     xu        u      U at those 4 rows (4 x 32 int8): the coin's noise, salt public (`public_salt`)
     wb0..wb7  b[c]   the thread's column c's row of B at segment j: B's committed leaf (column, j), the committer's salt
-    wf        f      F's sign bits at those 8 rows and segment j (256 bits), public
+    wf        f      F's sign bits at those 8 rows and segment j (256 bits), public; under the dither
+                     (`PouwSegCheckDither_v1{KS}`) the same coin bits are b
     prev      prev   the thread's 32 prefix words after segment j - 1 (zero at j = 0): witness, the committer's salt
     st        st     the chain keys of segments j - 1 and j (y then z, 16 words each; derive.seg_keys), public
     rc        rc     the thread's receipt row, its KS words: the call's receipt tree's leaf tile NCT + thread, the committer's salt
@@ -43,8 +44,9 @@ def in_rows(ks: int) -> list[tuple[str, str, int, list[str]]]:
                                                                        ("sel", V2, ks, ["sel"])])
 
 
-def definition(ks: int):
-    return bind(SG.PouwSegCheck, KS=ks)
+def definition(ks: int, dither: bool = False):
+    """`PouwSegCheck_v1{KS}`, or under decision 29's dither `PouwSegCheckDither_v1{KS}` (wf's bits are then b, not F's signs)."""
+    return bind(SG.PouwSegCheckDither if dither else SG.PouwSegCheck, KS=ks)
 
 
 def public_salt(sigma: bytes, stage: int, call: int, port: str) -> bytes:
@@ -77,16 +79,17 @@ class Stager:
     """`class_statement.stage_unit` split in two: the lowering and the composed circuit once (``circuit``, its pin), then a
     round's statement (`stage`) from the lowering's own evaluation and `circuit.write`."""
 
-    def __init__(self, circuit: Path, ks: int):
-        self.ks = ks
+    def __init__(self, circuit: Path, ks: int, dither: bool = False):
+        self.ks, self.dither = ks, dither
+        self.D = definition(ks, dither)
         self.rows = in_rows(ks)
-        self.name = f"unit/e2e-slice-segcheck-ks{ks}"
+        self.name = f"unit/e2e-slice-segcheck{'-dither' if dither else ''}-ks{ks}"
         CS.cache_slot_circuits()
-        self.low, out_words = CS.unit_lowering(definition(ks), self.name, [(r, ps) for r, _s, _b, ps in self.rows])
+        self.low, out_words = CS.unit_lowering(self.D, self.name, [(r, ps) for r, _s, _b, ps in self.rows])
         if out_words != [1]:
             raise ValueError(f"{self.name}: outputs {out_words} words, not one")
         port = lambda nm: SimpleNamespace(name=nm, dtype="u16")  # noqa: E731
-        content = json.dumps([definition(ks).id, [list(r[:3]) + [list(r[3])] for r in self.rows], [[V2, [0]]]]).encode()
+        content = json.dumps([self.D.id, [list(r[:3]) + [list(r[3])] for r in self.rows], [[V2, [0]]]]).encode()
         sub = SimpleNamespace(id=self.name, template=SimpleNamespace(id="unit-class"), inputs=[port(r) for r, *_ in self.rows],
                               outputs=[port("o0")],
                               program_digests=lambda statics: {self.name: hashlib.sha256(content).hexdigest()})
@@ -102,7 +105,7 @@ class Stager:
     def stats(self) -> dict:
         c = self.low.layout.counts
         return {"pin": self.pin, "ands": c["ands"], "unit_nnz": c["nnz_a"] + c["nnz_b"], "k_log": self.meta["k_log"],
-                "circuit_bytes": len(self.text), "ports": [p.name for p in self.ports], "definition": definition(self.ks).id}
+                "circuit_bytes": len(self.text), "ports": [p.name for p in self.ports], "definition": self.D.id}
 
     def stage(self, out: Path, rows: dict, salts: dict, sigma: bytes, stage: int, call: int, salt_key: bytes) -> int:
         """The spot check's inst.bin and pub.bin under ``out`` from its rows (``{port: (1, words) u16}``, every input row);

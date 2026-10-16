@@ -1,10 +1,13 @@
-"""gate.py ENGINE DIR M N K [KIND]: the engine's served product and receipts against derive.py, bit for bit, at one shape.
+"""gate.py ENGINE DIR M N K [KIND [SERVED]]: the engine's served product and receipts against derive.py, bit for bit, at one
+shape.
 
 Two calls (B's side as two passes, then fused) on seeded operands under a fresh coin: P_A against hashlib's U (LP_UW 64),
 and on three tiles (the first, the last, one drawn) the duo receipts (KIND duo: a thread's 8 words; duos: a word a thread
 and segment) and the served product A (B + F)^T recomputed from A, B and the coin alone. Then the second stage (its own B):
 the first call's served product through the public map (derive.phi) loaded as its A (m x n, so stage 2's k is n), one call,
-the same checks. Prints one JSON line; exits 0 only if every check passes.
+the same checks. SERVED dither (ENGINE built -DLP_DITHER): the engine's SIDE b, the slots holding B (the served
+activations, B' = B + (1 - F) / 2) and the stage's fixed operand A, stage 2's B phi(Y)^T (n x m, so its k is m). Prints one
+JSON line; exits 0 only if every check passes.
 """
 from __future__ import annotations
 
@@ -23,7 +26,10 @@ from engine import Engine  # noqa: E402
 def main() -> int:
     binary, d, m, n, k = sys.argv[1], Path(sys.argv[2]).resolve(), *map(int, sys.argv[3:6])
     kind = sys.argv[6] if len(sys.argv) > 6 else "duo"
+    dither = (sys.argv[7] if len(sys.argv) > 7 else "pm1") == "dither"
     seg = kind == "duos"
+    side, k2 = ("b", m) if dither else ("a", n)
+    fixed_rows, call_rows = (m, n) if dither else (n, m)
     d.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(int.from_bytes(os.urandom(8), "little"))
     checks, calls = {}, []
@@ -35,7 +41,7 @@ def main() -> int:
         tiles_n = n // 128
         for t in sorted({0, R.shape[0] - 1, int(rng.integers(R.shape[0]))}):
             tm, tn = divmod(t, tiles_n)
-            want_r, want_y, _U, F = derive.tile_check(A, B, sigma, c, tm, tn, k, seg=seg)
+            want_r, want_y, _U, F = derive.tile_check(A, B, sigma, c, tm, tn, k, seg=seg, dither=dither)
             E.cmd("tile", slot, tm, tn, d / "Y.bin", stage)
             checks[f"R{tag}_t{t}"] = bool((R[t] == want_r).all())
             checks[f"Y{tag}_t{t}"] = bool((np.fromfile(d / "Y.bin", np.int32).reshape(128, 128) == want_y).all())
@@ -43,15 +49,20 @@ def main() -> int:
 
     with open(d / "engine.err", "w") as log:
         E = Engine(binary, log)
-        setup = [E.cmd("setup", m, n, k, 0x5EED, d / "B.bin", kind, 0), E.cmd("setup", m, n, n, 0x5EEE, d / "B2.bin", kind, 1)]
-        B = np.fromfile(d / "B.bin", np.int8).reshape(n, k)
-        B2 = np.fromfile(d / "B2.bin", np.int8).reshape(n, n)
-        checks["B_range"] = bool(np.abs(B.astype(int)).max() <= 119 and np.abs(B2.astype(int)).max() <= 119)
-        checks["B2_differs"] = bool((B[:, :min(n, k)] != B2[:, :min(n, k)]).any())
+        setup = [E.cmd("setup", m, n, k, 0x5EED, d / "B.bin", kind, 0, side),
+                 E.cmd("setup", m, n, k2, 0x5EEE, d / "B2.bin", kind, 1, side)]
+        checks["build"] = all(r.get("dither") == int(dither) and r.get("side") == side for r in setup)
+        Fx = np.fromfile(d / "B.bin", np.int8).reshape(fixed_rows, k)
+        Fx2 = np.fromfile(d / "B2.bin", np.int8).reshape(fixed_rows, k2)
+        lim = 63 if dither else 119
+        checks["fixed_range"] = bool(np.abs(Fx.astype(int)).max() <= lim and np.abs(Fx2.astype(int)).max() <= lim)
+        checks["fixed2_differs"] = bool((Fx[:, :min(k2, k)] != Fx2[:, :min(k2, k)]).any())
         for slot, fused in ((0, 0), (1, 1)):
             E.cmd("opnds", slot, 1000 + slot, d / f"A{slot}.bin")
-            A = np.fromfile(d / f"A{slot}.bin", np.int8).reshape(m, k)
-            checks[f"A{slot}_range"] = bool(np.abs(A.astype(int)).max() <= 63 and A.min() == -63 and A.max() == 63)
+            X = np.fromfile(d / f"A{slot}.bin", np.int8).reshape(call_rows, k)
+            lo = 119 if dither else 63
+            checks[f"X{slot}_range"] = bool(np.abs(X.astype(int)).max() <= lo and X.min() == -lo and X.max() == lo)
+            A, B = (Fx, X) if dither else (X, Fx)
             sigma = os.urandom(64)
             key = derive.call_key(sigma, slot)
             r = E.cmd("call", slot, *derive.sig_words(key), derive.receipt_seed(sigma, slot), d / f"R{slot}.bin", fused)
@@ -63,17 +74,18 @@ def main() -> int:
             check(E, 0, slot, A, B, sigma, slot, str(slot))
             if slot == 0:
                 E.cmd("ydump", 0, d / "Y1.bin")
-                A2 = derive.phi(np.fromfile(d / "Y1.bin", np.int32).reshape(m, n))
-                A2.tofile(d / "A2.bin")
+                X2 = derive.phi(np.fromfile(d / "Y1.bin", np.int32).reshape(m, n))
+                X2 = np.ascontiguousarray(X2.T) if dither else X2
+                X2.tofile(d / "A2.bin")
                 E.cmd("aload", 0, d / "A2.bin", 1)
                 sigma2 = os.urandom(64)
                 key2 = derive.call_key(sigma2, 0)
                 calls.append(E.cmd("call", 0, *derive.sig_words(key2), derive.receipt_seed(sigma2, 0), d / "Rs2.bin", 1, 1))
-                checks["A2_range"] = bool(np.abs(A2.astype(int)).max() <= 63)
-                check(E, 1, 0, A2, B2, sigma2, 0, "s2")
+                checks["X2_range"] = bool(np.abs(X2.astype(int)).max() <= 63)
+                check(E, 1, 0, *((Fx2, X2) if dither else (X2, Fx2)), sigma2, 0, "s2")
         E.close()
     ok = all(checks.values())
-    print(json.dumps({"m": m, "n": n, "k": k, "kind": kind, "ok": ok, "failed": [c for c, v in checks.items() if not v],
+    print(json.dumps({"m": m, "n": n, "k": k, "kind": kind, "served": "dither" if dither else "pm1", "ok": ok, "failed": [c for c, v in checks.items() if not v],
                       "setup": setup, "calls": calls, "checks": checks}))
     for f in d.glob("*.bin"):
         f.unlink()

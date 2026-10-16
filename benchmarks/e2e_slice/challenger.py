@@ -9,7 +9,8 @@ frozen definition v2.2 to the prover:
         nothing more (sigma_w,1 = sigma_w), and stage 2's receipt roots follow
     (d) after the last of (c), one block drawn with fresh OS coins: a stage, a call, a 128 x 128 tile, one of its 512
         threads and a 32-step segment j
-    (e) the block's statement (statement.py, `PouwSegCheck_v1{KS}`) checked against the commitments and the coins: the
+    (e) the block's statement (statement.py, `PouwSegCheck_v1{KS}`, or with --served dither `PouwSegCheckDither_v1{KS}`, the
+        activations on B under decision 29's dither and the weights on A) checked against the commitments and the coins: the
         thread's 4 A leaves and 8 B leaves at j and its receipt leaf by their paths, the noise rows, chain keys and one-hot
         j recomputed, the output row held to 1; then one C-Flock --zk session of the Rust verifier (`flock-circuit serve
         --zk`, its own circuit and pin), one session at a time
@@ -81,10 +82,12 @@ class Challenger:
         self.m, self.n, self.k, self.calls, self.sid = m["m"], m["n"], m["k"], m["calls"], m["session"]
         self.stages = m["stages"]
         self.b_roots, self.b_count = [bytes.fromhex(h) for h in m["b_roots"]], m["b_count"]
-        if (self.b_count != self.n * self.k // 32 or m["pin"] != self.st.pin or self.k // 32 != self.st.ks
-                or len(self.b_roots) != self.stages or m["coins"] != self.a.coins):
-            raise SystemExit(f"hello: B's trees {self.b_count} leaves, pin {m['pin'][:16]} (own {self.st.pin[:16]}), k {self.k}, "
-                             f"{len(self.b_roots)} B roots for {self.stages} stages, coins {m['coins']} (own {self.a.coins})")
+        fixed_rows = self.m if self.st.dither else self.n
+        if (self.b_count != fixed_rows * self.k // 32 or m["pin"] != self.st.pin or self.k // 32 != self.st.ks
+                or len(self.b_roots) != self.stages or m["coins"] != self.a.coins or m.get("served") != self.a.served):
+            raise SystemExit(f"hello: the fixed trees {self.b_count} leaves, pin {m['pin'][:16]} (own {self.st.pin[:16]}), k "
+                             f"{self.k}, {len(self.b_roots)} fixed roots for {self.stages} stages, coins {m['coins']} (own "
+                             f"{self.a.coins}), served {m.get('served')} (own {self.a.served})")
         self.F = 2 * self.m * self.n * self.k * self.calls * self.stages
 
     def on_operands(self, m: dict) -> None:
@@ -153,14 +156,18 @@ class Challenger:
             salt = np.frombuffer(ST.public_salt(sigma, st, c, port), np.uint8)[None]
             if CM.commit_strings(row, salt)[0].tobytes() != bc[port][0]:
                 return f"{port}: not the coin's row" if port != "o0" else "o0: the statement's output is not 1"
-        root_a = bytes.fromhex(r["roots"][st][c])
+        # the call's tree (committed in (a), before the coin) and the stage's fixed tree (at hello): A and B, or under the
+        # dither (the activations served) B and A
+        call_tree = (CM.label_a(self.sid, w, c, st), bytes.fromhex(r["roots"][st][c]))
+        fixed_tree = (CM.label_b(self.sid, st), self.b_roots[st])
+        (la, ra), (lb, rb) = (fixed_tree, call_tree) if self.st.dither else (call_tree, fixed_tree)
         for q, rw in enumerate(rows):
-            if not CM.verify_path(CM.label_a(self.sid, w, c, st), self.m * ks, root_a, (tm * derive.TM + int(rw)) * ks + j,
-                                  bc[f"xa{q}"][0], [bytes.fromhex(h) for h in m["xa"][q]]):
+            if not CM.verify_path(la, self.m * ks, ra, (tm * derive.TM + int(rw)) * ks + j, bc[f"xa{q}"][0],
+                                  [bytes.fromhex(h) for h in m["xa"][q]]):
                 return f"xa{q}: not stage {st} A's committed leaf ({tm * derive.TM + int(rw)}, {j})"
         for q, cc in enumerate(cols):
-            if not CM.verify_path(CM.label_b(self.sid, st), self.b_count, self.b_roots[st], (tn * derive.BN + int(cc)) * ks + j,
-                                  bc[f"wb{q}"][0], [bytes.fromhex(h) for h in m["wb"][q]]):
+            if not CM.verify_path(lb, self.n * ks, rb, (tn * derive.BN + int(cc)) * ks + j, bc[f"wb{q}"][0],
+                                  [bytes.fromhex(h) for h in m["wb"][q]]):
                 return f"wb{q}: not stage {st} B's committed leaf ({tn * derive.BN + int(cc)}, {j})"
         nr = self.m // derive.TM * (self.n // derive.BN) * derive.NCT
         if not CM.verify_path(CM.label_r(self.sid, w, c, st), nr, bytes.fromhex(r["receipt_roots"][st][c]),
@@ -261,11 +268,12 @@ def main() -> int:
     ap.add_argument("--p", type=float, default=0.75)
     ap.add_argument("--k", type=int, default=4096, help="the layer's k (the statement's KS = k / 32), held to the prover's")
     ap.add_argument("--coins", choices=("one", "per-stage"), default="one")
+    ap.add_argument("--served", choices=("pm1", "dither"), default="pm1", help="held to the prover's (prover.py --served)")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     t = time.time()
-    st = ST.Stager(Path(a.scratch) / "circuit.txt", a.k // 32)
+    st = ST.Stager(Path(a.scratch) / "circuit.txt", a.k // 32, a.served == "dither")
     stager_s = time.time() - t
     srv, port = listen()
     Path(a.port_file).write_text(str(port))
@@ -299,7 +307,7 @@ def main() -> int:
                 f.write(json.dumps(r) + "\n")
         coins = [r["t_b"] for r in rounds if "t_b" in r]
         summary = {"window": WD.floor(rounds, a.p), "circuit": st.stats(), "stager_s": round(stager_s, 2), "bye": bye,
-                   "coins": a.coins, "stages": getattr(ch, "stages", None),
+                   "coins": a.coins, "served": a.served, "stages": getattr(ch, "stages", None),
                    "coin_intervals_s": [round(b - x, 3) for x, b in zip(coins, coins[1:])],
                    "why_failed": {r["round"]: r.get("why") for r in rounds if r["status"] == "failed"}}
         (out / "window.json").write_text(json.dumps(summary, indent=1))

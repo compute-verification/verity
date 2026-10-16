@@ -15,10 +15,15 @@ round protocol (challenger.py) over the loopback link:
            (derive.tile_noised, the prover's own check of its GPU), the thread's statement staged (statement.Stager), the
            public file and the paths out, then `flock-circuit prove --zk` against the challenger's server
 
---attack cancel is RT2's cancellation (decision 36's Proposition 1.2): stage 2's A is committed as -U_2 W^T (A_ik = -U_{i, k
-mod 32}) under the noise the prover expects, call_key(sigma_0, c, 1), so A' = A + U_2 W^T is zero and so is every prefix word
-of the noised product: its receipts are the chains' keys alone, no MAC of it is needed. Under one draw a round that is the
-true noise; under per-stage draws it is a guess made before sigma_1.
+--served dither is decision 29's served side: the kernel's B is the layer's activations X = floor(x / s) + b (b the coin
+bit, slice.cu built -DLP_DITHER) and its A the weights, peeled (kernel shape n x m x k); --served pm1 (the default) has the
+activations on A, peeled, and the weights on B with F ±1.
+
+--attack cancel is RT2's cancellation (decision 36's Proposition 1.2) under the noise the prover expects, call_key(sigma_0, c,
+1): with --served pm1 stage 2's A is committed as -U_2 W^T (A_ik = -U_{i, k mod 32}), so A' = A + U_2 W^T is zero; under the
+dither its served B is committed as floor(x / s) = -b_2, so B' = 0. Either way every prefix word of the noised product is
+zero: its receipts are the chains' keys alone, no MAC of it is needed. Under one draw a round that is the true noise; under
+per-stage draws it is a guess made before sigma_1.
 
 At most --max-pending rounds wait on their proofs before the next round's (a) goes out (a delay before (a) is free).
 Writes rounds.jsonl (timings per round) and prover.json under --out.
@@ -56,6 +61,11 @@ class Prover:
         self.session = os.urandom(8).hex()
         self.salt_key = os.urandom(32)
         self.ks = a.k // 32
+        # the kernel's problem Y = A B'^T: the layer's activations (m x k) on A and its weights (n x k) on B, or under the
+        # dither the weights on A (peeled) and the activations on B (served, X = floor(x / s) + b)
+        self.dither = a.served == "dither"
+        self.km, self.kn = (a.n, a.m) if self.dither else (a.m, a.n)
+        self.fixed_rows, self.call_rows = (self.km, self.kn) if self.dither else (self.kn, self.km)
         self.jobs: queue.Queue = queue.Queue()
         self.pending = threading.Semaphore(a.max_pending)
         self.log = open(self.out / "rounds.jsonl", "w")
@@ -71,28 +81,31 @@ class Prover:
         a = self.a
         if a.engine == "fake":
             from fake_engine import FakeEngine
-            self.E = FakeEngine()
+            self.E = FakeEngine(self.dither)
         else:
             from engine import Engine
             self.E = Engine(a.engine, open(self.out / "engine.err", "w"))
         t = time.time()
-        self.setup_info = [self.E.cmd("setup", a.m, a.n, a.k, a.bseed + s, self.scratch / f"B{s}.bin", "duos", s)
+        side = "b" if self.dither else "a"
+        self.setup_info = [self.E.cmd("setup", self.km, self.kn, a.k, a.bseed + s, self.scratch / f"B{s}.bin", "duos", s, side)
                            for s in range(a.stages)]
-        self.B = [np.fromfile(self.scratch / f"B{s}.bin", np.int8).reshape(a.n, a.k) for s in range(a.stages)]
+        if any(i.get("dither") != int(self.dither) or i.get("side") != side for i in self.setup_info):
+            raise SystemExit(f"engine: {self.setup_info[0]}, not side {side} with dither {int(self.dither)} (slice.cu -DLP_DITHER)")
+        self.Fx = [np.fromfile(self.scratch / f"B{s}.bin", np.int8).reshape(self.fixed_rows, a.k) for s in range(a.stages)]
         t1 = time.time()
-        self.tb = [CM.commit_operand(self.pool, str(self.scratch / f"B{s}.bin"), (a.n, a.k), CM.label_b(self.session, s),
+        self.tb = [CM.commit_operand(self.pool, str(self.scratch / f"B{s}.bin"), (self.fixed_rows, a.k), CM.label_b(self.session, s),
                                      self.salt_key) for s in range(a.stages)]
         t2 = time.time()
-        self.st = ST.Stager(self.scratch / "circuit.txt", self.ks)
+        self.st = ST.Stager(self.scratch / "circuit.txt", self.ks, self.dither)
         t3 = time.time()
         self.wire = connect(a.port)
         self.wire.start_reader()
-        self.wire.send("hello", m=a.m, n=a.n, k=a.k, calls=a.calls, stages=a.stages, coins=a.coins, session=self.session,
-                       b_roots=[t.root.hex() for t in self.tb], b_count=self.tb[0].count, pin=self.st.pin)
+        self.wire.send("hello", m=self.km, n=self.kn, k=a.k, calls=a.calls, stages=a.stages, coins=a.coins, served=a.served,
+                       session=self.session, b_roots=[t.root.hex() for t in self.tb], b_count=self.tb[0].count, pin=self.st.pin)
         return {"engine": self.setup_info, "setup_s": round(t1 - t, 3), "b_commit_s": round(t2 - t1, 3),
                 "b_commit_cpu_s": round(sum(t.cpu_s for t in self.tb), 3), "b_leaves": self.tb[0].count,
                 "stager_s": round(t3 - t2, 3), "circuit": self.st.stats(), "stages": a.stages, "coins": a.coins,
-                "attack": a.attack}
+                "attack": a.attack, "served": a.served, "kernel_mnk": [self.km, self.kn, a.k]}
 
     def receipts(self, w: int, s: int, sigmas: list, keys: list) -> tuple[list, list, list, float]:
         """Stage s's calls on the engine (A already in each slot), their receipt trees."""
@@ -101,7 +114,7 @@ class Prover:
         for c in range(a.calls):
             gpu.append(self.E.cmd("call", c, *derive.sig_words(keys[c]), derive.receipt_seed(sigmas[s], c, s), rpaths[c],
                                   a.fused, s))
-        shape = (a.m // derive.TM * (a.n // derive.BN), self.ks, derive.NCT)
+        shape = (self.km // derive.TM * (self.kn // derive.BN), self.ks, derive.NCT)
         trees = [CM.commit_receipts(self.pool, str(rpaths[c]), shape, CM.label_r(self.session, w, c, s), self.salt_key)
                  for c in range(a.calls)]
         return gpu, rpaths, trees, sum(t.cpu_s for t in trees)
@@ -114,8 +127,8 @@ class Prover:
         for c in range(a.calls):
             self.E.cmd("opnds", c, (w * a.calls + c) & 0xFFFFFFFF, apaths[0][c], 0)
         t1 = time.time()
-        atrees = [[CM.commit_operand(self.pool, str(apaths[0][c]), (a.m, a.k), CM.label_a(self.session, w, c, 0), self.salt_key)
-                   for c in range(a.calls)]]
+        atrees = [[CM.commit_operand(self.pool, str(apaths[0][c]), (self.call_rows, a.k), CM.label_a(self.session, w, c, 0),
+                                     self.salt_key) for c in range(a.calls)]]
         t2 = time.time()
         self.wire.send("operands", round=w, stage=0, roots=[t.root.hex() for t in atrees[0]])
         sigmas = [bytes.fromhex(self.wire.take("coin", w)["sigma"])]
@@ -126,17 +139,21 @@ class Prover:
             t4 = time.time()
             guess = [derive.call_key(sigmas[0], c, 1) for c in range(a.calls)]
             for c in range(a.calls):
-                if a.attack == "cancel":
-                    U2 = derive.u_noise64(guess[c], a.m)
+                if a.attack == "cancel" and self.dither:
+                    F2 = derive.f_rows(guess[c], 0, self.kn, a.k)
+                    (-derive.served_noise(F2, True)).astype(np.int8).tofile(apaths[1][c])
+                elif a.attack == "cancel":
+                    U2 = derive.u_noise64(guess[c], self.km)
                     np.tile(-U2, (1, a.k // 32)).astype(np.int8).tofile(apaths[1][c])
                 else:
                     yp = self.scratch / f"Y-{w}-{c}.bin"
                     self.E.cmd("ydump", c, yp, 0)
-                    derive.phi(np.fromfile(yp, np.int32).reshape(a.m, a.n)).tofile(apaths[1][c])
+                    X2 = derive.phi(np.fromfile(yp, np.int32).reshape(self.km, self.kn))
+                    (X2.T if self.dither else X2).tofile(apaths[1][c])
                     yp.unlink()
                 self.E.cmd("aload", c, apaths[1][c], 1)
-            atrees.append([CM.commit_operand(self.pool, str(apaths[1][c]), (a.m, a.k), CM.label_a(self.session, w, c, 1),
-                                             self.salt_key) for c in range(a.calls)])
+            atrees.append([CM.commit_operand(self.pool, str(apaths[1][c]), (self.call_rows, a.k),
+                                             CM.label_a(self.session, w, c, 1), self.salt_key) for c in range(a.calls)])
             t5 = time.time()
             self.wire.send("products", round=w, stage=0, receipt_roots=[t.root.hex() for t in rt0], gpu=gpu0,
                            next_roots=[t.root.hex() for t in atrees[1]])
@@ -153,7 +170,7 @@ class Prover:
         d = self.wire.take("draw", w)
         t8 = time.time()
         s, c, (tm, tn), th, j = d["stage"], d["call"], d["tile"], d["thread"], d["seg"]
-        tile = tm * (a.n // derive.BN) + tn
+        tile = tm * (self.kn // derive.BN) + tn
         ypath = self.scratch / f"Y-{w}.bin"
         self.E.cmd("tile", c, tm, tn, ypath, s)
         Y = np.fromfile(ypath, np.int32).reshape(derive.TM, derive.BN)
@@ -161,7 +178,8 @@ class Prover:
         R = np.fromfile(rpaths[s][c], np.uint32).reshape(-1, self.ks, derive.NCT)[tile].copy()
         rows, cols = derive.thread_slots(th)
         per = self.ks
-        at, bt, rt = atrees[s][c], self.tb[s], rtrees[s][c]
+        at, bt = (self.tb[s], atrees[s][c]) if self.dither else (atrees[s][c], self.tb[s])
+        rt = rtrees[s][c]
         pos_a = [(tm * derive.TM + int(r)) * per + j for r in rows]
         pos_b = [(tn * derive.BN + int(cc)) * per + j for cc in cols]
         pos_r = tile * derive.NCT + th
@@ -199,10 +217,11 @@ class Prover:
         a, w, d, sigma = self.a, job["round"], job["draw"], job["sigma"]
         s, c, (tm, tn), th, j = d["stage"], d["call"], d["tile"], d["thread"], d["seg"]
         t0 = time.time()
-        A = np.fromfile(job["apath"], np.int8).reshape(a.m, a.k)
+        X = np.fromfile(job["apath"], np.int8).reshape(self.call_rows, a.k)
+        A, B = (self.Fx[s], X) if self.dither else (X, self.Fx[s])
         key, rseed = derive.call_key(sigma, c, s), derive.receipt_seed(sigma, c, s)
-        Ar, U, Bp, F, Ts = derive.tile_noised(A, self.B[s], key, tm, tn, a.k)
-        tile = tm * (a.n // derive.BN) + tn
+        Ar, U, Bp, F, Ts = derive.tile_noised(A, B, key, tm, tn, a.k, self.dither)
+        tile = tm * (self.kn // derive.BN) + tn
         want_r = derive.seg_receipts(rseed, Ts, tile)
         self_check = {"receipts": bool((job["R"] == want_r).all()), "product": bool((job["Y"] == Ar @ Bp.T).all()),
                       "noised_product_zero": bool((Ts[-1] == 0).all())}
@@ -212,7 +231,7 @@ class Prover:
         prev = (Ts[j - 1][ent_r[th], ent_c[th]] if j else np.zeros(32, np.uint32)).astype("<u4")
         jj = slice(32 * j, 32 * j + 32)
         inst = {**{f"xa{r}": ST._u16(A[tm * derive.TM + int(rw), jj].view(np.uint8)) for r, rw in enumerate(rows)},
-                **{f"wb{q}": ST._u16(self.B[s][tn * derive.BN + int(cc), jj].view(np.uint8)) for q, cc in enumerate(cols)},
+                **{f"wb{q}": ST._u16(B[tn * derive.BN + int(cc), jj].view(np.uint8)) for q, cc in enumerate(cols)},
                 "prev": ST._u16(prev.view(np.uint8)), "rc": ST._u16(job["R"][:, th].astype("<u4").view(np.uint8)),
                 **ST.public_rows(U[rows], F[cols, jj], rseed, {**d, "tile_index": tile}, self.ks)}
         rd = self.scratch / f"r{w:04d}"
@@ -267,6 +286,9 @@ def main() -> int:
     ap.add_argument("--stages", type=int, choices=(1, 2), default=1)
     ap.add_argument("--coins", choices=("one", "per-stage"), default="one")
     ap.add_argument("--attack", choices=("none", "cancel"), default="none")
+    ap.add_argument("--served", choices=("pm1", "dither"), default="pm1",
+                    help="the served noise: F ±1 on the weights, or decision 29's dither b on the activations (slice.cu "
+                         "-DLP_DITHER, the weights peeled)")
     ap.add_argument("--workers", type=int, default=32)
     ap.add_argument("--prove-threads", type=int, default=64)
     ap.add_argument("--max-pending", type=int, default=2)
@@ -276,6 +298,8 @@ def main() -> int:
         raise SystemExit("--calls: at most the engine's 8 slots")
     if a.attack != "none" and a.stages != 2:
         raise SystemExit("--attack: on stage 2, so --stages 2")
+    if a.stages == 2 and a.n != a.k:
+        raise SystemExit("--stages 2: stage 2's k is stage 1's n, so n = k (one statement for both)")
     P = Prover(a)
     info = P.setup()
     print(json.dumps({"setup": info}), flush=True)

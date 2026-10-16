@@ -8,9 +8,10 @@ appended past stage 0):
     U       = lpgemm.cu's U at LP_UW 64 under key_c (m x 32, {±1..±64}): block j = rows 2j, 2j + 1, entry e = (row % 2) 32 + l
               digest byte e, u = (v & 63) + 1, negated if v & 64
     F       = sha_noise.cuh's pm1 noise of B's side under key_c (n x k, ±1)
-A' = A + U W^T (A'_ik = A_ik + U_{i, k mod 32}), B' = B + F; the duo receipts at L = 32 over A' B'^T (mref.py's), or DUOS's
-word a thread and segment (fgemm.cu, verity/core/protocols/pouw/circuit/segment.py), one tile at a time. The two-stage slice's
-second stage reads phi of the first's served product.
+A' = A + U W^T (A'_ik = A_ik + U_{i, k mod 32}), B' = B + F, or under decision 29's dither B' = B + (1 - F) / 2 (the served
+X = floor(x / s) + b, b the coin bit); the duo receipts at L = 32 over A' B'^T (mref.py's), or DUOS's word a thread and
+segment (fgemm.cu, verity/core/protocols/pouw/circuit/segment.py), one tile at a time. The two-stage slice's second stage
+reads phi of the first's served product.
 """
 from __future__ import annotations
 
@@ -152,12 +153,18 @@ def seg_receipts(seed: int, Ts: np.ndarray, tile: int) -> np.ndarray:
         return np.bitwise_xor.reduce(y ^ rotl(z, 16), axis=2)
 
 
-def tile_noised(A: np.ndarray, B: np.ndarray, key: bytes, tm: int, tn: int, k: int):
-    """The tile (tm, tn)'s A rows, U rows, B' rows and F rows, and its u32 prefix words after each segment (KS, 128, 128)."""
+def served_noise(F: np.ndarray, dither: bool) -> np.ndarray:
+    """B's noise from F's coin bits: F itself, or decision 29's dither b = (1 - F) / 2 in {0, 1} (lpgemm.cu's fb_word)."""
+    return (1 - F) // 2 if dither else F
+
+
+def tile_noised(A: np.ndarray, B: np.ndarray, key: bytes, tm: int, tn: int, k: int, dither: bool = False):
+    """The tile (tm, tn)'s A rows, U rows, B' rows and F rows (±1; under ``dither`` B' = B + (1 - F) / 2), and its u32
+    prefix words after each segment (KS, 128, 128)."""
     U = u_noise64(key, A.shape[0])[tm * TM:(tm + 1) * TM]
     F = f_rows(key, tn * BN, BN, k)
     Ar = A[tm * TM:(tm + 1) * TM].astype(np.int64)
-    Bp = B[tn * BN:(tn + 1) * BN].astype(np.int64) + F
+    Bp = B[tn * BN:(tn + 1) * BN].astype(np.int64) + served_noise(F, dither)
     Ap = Ar + np.tile(U, (1, k // 32))
     inc = np.einsum("isk,jsk->sij", Ap.reshape(TM, k // 32, 32), Bp.reshape(BN, k // 32, 32))
     Ts = (np.cumsum(inc, axis=0) & 0xFFFFFFFF).astype(np.uint32)
@@ -165,13 +172,13 @@ def tile_noised(A: np.ndarray, B: np.ndarray, key: bytes, tm: int, tn: int, k: i
 
 
 def tile_check(A: np.ndarray, B: np.ndarray, sigma: bytes, c: int, tm: int, tn: int, k: int, seg: bool = False,
-               key: bytes | None = None, rseed: int | None = None):
+               key: bytes | None = None, rseed: int | None = None, dither: bool = False):
     """The tile (tm, tn)'s duo receipts and served product A B'^T from A (m x k) and B (n x k) int8 and the coin alone:
     the receipts over the whole of K (NCT, 8), or with ``seg`` a word a segment (KS, NCT). ``key`` and ``rseed`` replace
-    the call's noise key and receipt key."""
+    the call's noise key and receipt key; ``dither``: B's noise is the dither."""
     key = call_key(sigma, c) if key is None else key
     rseed = receipt_seed(sigma, c) if rseed is None else rseed
-    Ar, U, Bp, F, Ts = tile_noised(A, B, key, tm, tn, k)
+    Ar, U, Bp, F, Ts = tile_noised(A, B, key, tm, tn, k, dither)
     tile = tm * (B.shape[0] // BN) + tn
     R = seg_receipts(rseed, Ts, tile) if seg else tile_receipts(rseed, list(Ts), tile)
     return R, Ar @ Bp.T, U, F
