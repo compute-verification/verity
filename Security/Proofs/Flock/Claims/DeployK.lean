@@ -1,4 +1,4 @@
-import Proofs.Flock.Claims.DeployRounds
+import Proofs.Flock.Claims.DeployRoundsZk
 import Proofs.Flock.Claims.DeployCode
 import Proofs.Flock.Soundness.Discharge.Exec.Tables
 
@@ -142,6 +142,57 @@ theorem verifyWithM_tables (hs : Hashes Flock.V) {spec : SessionSpec} {tabs : Ar
   cases hm : fast100 tabs[i].m with
   | none => rw [hm] at hf; cases hf
   | some s => rw [hm] at hf; cases hf; rfl
+
+/-- **The masked verdict accepts each table's reps**: when `Zk.verifyWithM hs` accepts, whatever the hashes `hs`, the
+record decodes, there is one setup per table, and each table `i` has its `--zk` schedule and both reps' checks accept on
+the proof files `proofs[2i]` and `proofs[2i+1]`. -/
+theorem zkVerifyWithM_tables (hs : Hashes Flock.V) {spec : SessionSpec} {tabs : Array Setup} {record : String}
+    {proofs : Array ByteArray} (h : Zk.verifyWithM hs spec tabs record proofs = .ok ()) :
+    ∃ (sess : Session) (schs : Array (Schedule × ℕ)), Record.decodeWith hs spec record = .ok sess ∧
+      tabs.size = spec.tables.size ∧ schs.size = tabs.size ∧
+      ∀ (i : ℕ) (hi : i < tabs.size), ∃ (hs' : i < schs.size) (c₀ c₁ : ByteArray),
+        Zk.schedule tabs[i].m = .ok schs[i] ∧
+        Zk.verifyRepWith hs spec tabs[i] schs[i].1 schs[i].2 sess i 0 proofs[2 * i]! = .ok c₀ ∧
+        Zk.verifyRepWith hs spec tabs[i] schs[i].1 schs[i].2 sess i 1 proofs[2 * i + 1]! = .ok c₁ := by
+  unfold Zk.verifyWithM at h
+  dsimp only at h
+  by_cases c0 : (tabs.size != spec.tables.size || tabs.size == 0) = true
+  · rw [ite_eq_left c0] at h; obtain ⟨_, h0, _⟩ := ebind_ok h; cases h0
+  rw [ite_eq_right c0] at h
+  by_cases c0' : spec.coinTree.isNone = true
+  · rw [ite_eq_left c0'] at h; obtain ⟨_, h0, _⟩ := ebind_ok h; cases h0
+  rw [ite_eq_right c0'] at h
+  obtain ⟨sess, hsess, h⟩ := ebind_ok h
+  obtain ⟨_, _, h⟩ := ebind_ok h
+  obtain ⟨schs, hschs, h⟩ := ebind_ok h
+  split at h
+  · obtain ⟨_, h0, _⟩ := ebind_ok h; cases h0
+  split at h
+  · obtain ⟨_, h0, _⟩ := ebind_ok h; cases h0
+  obtain ⟨_, _, h⟩ := ebind_ok h
+  obtain ⟨_, hloop, _⟩ := ebind_ok h
+  rw [Std.Legacy.Range.forIn_eq_forIn_range'] at hloop
+  simp only [Std.Legacy.Range.size, Nat.sub_zero, Nat.add_one_sub_one, Nat.div_one] at hloop
+  have c0'' : tabs.size = spec.tables.size := by
+    simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, beq_iff_eq, not_or, not_not] at c0
+    exact c0.1
+  obtain ⟨hsz, hsch⟩ := array_mapM_ok_getElem hschs
+  have hP := range'_forIn_each tabs.size _
+    (fun i => ∃ c₀ c₁, Zk.verifyRepWith hs spec tabs[i]! schs[i]!.1 schs[i]!.2 sess i 0 proofs[2 * i]! = .ok c₀ ∧
+      Zk.verifyRepWith hs spec tabs[i]! schs[i]!.1 schs[i]!.2 sess i 1 proofs[2 * i + 1]! = .ok c₁)
+    (fun a s y hy => by
+      obtain ⟨c₀, h₀, hy⟩ := ebind_ok hy
+      obtain ⟨c₁, h₁, hy⟩ := ebind_ok hy
+      by_cases c3 : ((c₀ : ByteArray) != c₁) = true
+      · rw [ite_eq_left c3] at hy; obtain ⟨_, h0, _⟩ := ebind_ok hy; cases h0
+      rw [ite_eq_right c3] at hy
+      simp only [pure, Except.pure, Except.ok.injEq] at hy
+      exact ⟨⟨c₀, c₁, h₀, h₁⟩, _, hy.symm⟩) _ _ hloop
+  refine ⟨sess, schs, hsess, c0'', hsz, fun i hi => ?_⟩
+  have hs' : i < schs.size := hsz ▸ hi
+  obtain ⟨c₀, c₁, h₀, h₁⟩ := hP i hi
+  rw [getElem!_pos tabs i hi, getElem!_pos schs i hs'] at h₀ h₁
+  exact ⟨hs', c₀, c₁, hsch i hi hs', h₀, h₁⟩
 
 /-! ## The record's streams, read twice -/
 
@@ -679,6 +730,76 @@ theorem runOf_queryRound_plain (hs : Hashes Flock.V) {s : Claims.Seen} {f : Fina
     rw [hrd]
     rfl
 
+/-! ## The masked round count -/
+
+/-- **Rep stream `k` of an accepted masked record** is table `k / 2`'s rep `k % 2`: when the masked verdict accepts the
+record at any hashes and `liveOf` reads it, there are two rep streams per table, and for stream `k` the verifier's rep
+check passes on proof file `k` at the table's `--zk` schedule, over the link points `liveOf` read, and its stream of
+that name has the rounds `liveOf` read, with the same coin counts and coins. -/
+theorem rep_zk (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record : String}
+    {proofs : Array ByteArray} {lv : Live} (hv : Zk.verifyWithM hs spec (tabsOf sts) record proofs = .ok ())
+    (hl : liveOf spec record = .ok lv) :
+    lv.streams.size = 2 * sts.size ∧ ∀ (k : ℕ) (hk : k < lv.streams.size),
+      ∃ (sess : Session) (sch : Schedule) (tPad : ℕ) (stream : StreamRec) (c : ByteArray),
+        sess.points = lv.points ∧ sess.points.size = spec.points ∧ Zk.schedule sts[k / 2]!.m = .ok (sch, tPad) ∧
+        Zk.verifyRepWith hs spec (Setup.ofCircuit sts[k / 2]!) sch tPad sess (k / 2) (k % 2) proofs[k]! = .ok c ∧
+        sess.streams.find? (fun x => x.name == s!"{spec.tables[k / 2]!}/rep{k % 2}") = some stream ∧
+        List.Forall₂ (fun a b => a.n = b.n ∧ a.coins = b.coins) lv.streams[k].toList stream.rounds.toList := by
+  obtain ⟨sess, schs, hdec, hsz, -, hall⟩ := zkVerifyWithM_tables hs hv
+  obtain ⟨hpts, hpn, hlsz, hstr⟩ := liveOf_decodeWith hs hl hdec
+  have hn : sts.size = spec.tables.size := by simpa [tabsOf] using hsz
+  have hk₂ : ∀ k, k < lv.streams.size → k < spec.repStreams.size := fun k hk => hlsz ▸ hk
+  rw [repStreams_size, ← hn] at hlsz
+  refine ⟨hlsz, fun k hk => ?_⟩
+  obtain ⟨stream, hfind, hfa⟩ := hstr k (hk₂ k hk) hk
+  have hi : k / 2 < (tabsOf sts).size := by simp only [tabsOf, Array.size_map]; omega
+  have hi' : k / 2 < sts.size := by omega
+  obtain ⟨_, c₀, c₁, hf, h₀, h₁⟩ := hall (k / 2) hi
+  have htab : (tabsOf sts)[k / 2] = Setup.ofCircuit sts[k / 2]! := by
+    rw [getElem!_pos sts (k / 2) hi']; exact Array.getElem_map ..
+  rw [htab] at h₀ h₁ hf
+  simp only [repStreams_getElem spec (hk₂ k hk)] at hfind
+  refine ⟨sess, schs[k / 2].1, schs[k / 2].2, stream, ?_⟩
+  rcases Nat.mod_two_eq_zero_or_one k with h | h
+  · rw [show 2 * (k / 2) = k by omega] at h₀
+    rw [h] at hfind ⊢
+    exact ⟨c₀, hpts.symm, hpn, hf, h₀, hfind, hfa⟩
+  · rw [show 2 * (k / 2) + 1 = k by omega] at h₁
+    rw [h] at hfind ⊢
+    exact ⟨c₁, hpts.symm, hpn, hf, h₁, hfind, hfa⟩
+
+/-- **Each masked rep stream has its table's `repRounds`**: when the masked verdict accepts the record at any hashes and
+`liveOf` reads it, there are two rep streams per table, and stream `k` (table `k / 2`'s rep `k % 2`) has
+`repRounds true spec sts[k / 2]` rounds. -/
+theorem streams_size_zk (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record : String}
+    {proofs : Array ByteArray} {lv : Live} (hv : Zk.verifyWithM hs spec (tabsOf sts) record proofs = .ok ())
+    (hl : liveOf spec record = .ok lv) :
+    lv.streams.size = 2 * sts.size ∧
+      ∀ (k : ℕ) (hk : k < lv.streams.size), lv.streams[k].size = repRounds true spec sts[k / 2]! := by
+  obtain ⟨hsz, hall⟩ := rep_zk hs hv hl
+  refine ⟨hsz, fun k hk => ?_⟩
+  obtain ⟨sess, sch, tPad, stream, c, -, hpn, hf, hrep, hfind, hfa⟩ := hall k hk
+  obtain ⟨stream', extras, hfind', hex, hsize⟩ := zkVerifyRepWith_rounds hs hf hrep
+  rw [hfind] at hfind'
+  cases hfind'
+  have hx : extras.size = sts[k / 2]!.regions.size * sess.points.size := extraClaims_size hex
+  rw [← Array.length_toList, hfa.length_eq, Array.length_toList, hsize]
+  unfold repRounds
+  simp only [↓reduceIte, hf]
+  rw [hx, hpn, Nat.mul_comm]
+  rfl
+
+/-- **Each rep stream has its table's `repRounds`**, plain or masked: when the shipped verdict accepts the record at any
+hashes and `liveOf` reads it. -/
+theorem streams_size (zk : Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record : String}
+    {proofs : Array ByteArray} {lv : Live} (hv : verdictM zk hs spec (tabsOf sts) record proofs = .ok ())
+    (hl : liveOf spec record = .ok lv) :
+    lv.streams.size = 2 * sts.size ∧
+      ∀ (k : ℕ) (hk : k < lv.streams.size), lv.streams[k].size = repRounds zk spec sts[k / 2]! := by
+  cases zk
+  · exact streams_size_plain hs hv hl
+  · exact streams_size_zk hs hv hl
+
 /-- The session's recorded rounds, table by table. -/
 theorem rounds_sum (zk : Bool) (spec : SessionSpec) (sts : Array Stmt) :
     rounds zk spec sts = ((List.range sts.size).map fun i => 2 * repRounds zk spec sts[i]!).sum := by
@@ -691,24 +812,28 @@ theorem rounds_sum (zk : Bool) (spec : SessionSpec) (sts : Array Stmt) :
     simp only [List.getElem_map, List.getElem_range, Array.getElem_toList]
     rw [getElem!_pos sts i (by simpa using h₁)]
 
-/-- **`Deploy.V`'s plain round count is the rounds the shipped verifier reads**: wherever the plain verifier accepts,
-against any oracle `H` and with one coin per message, the prover sent `(V false).k x` messages: the link message, one
-message per round the shipped verifier's reps read from the record (`verifyRepWith_rounds`: each table's two reps,
-each `repRounds false` rounds), and the last message. -/
-theorem next_acc_length (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
-    (hcs : cs.length = as.length) (h : ((next false x as cs).eval H).1 = .acc) : as.length = (V false).k x := by
-  cases ha : act false x as cs with
+/-- **`Deploy.V`'s round count is the rounds the shipped verifier reads**, plain or masked: wherever the verifier
+accepts, against any oracle `H` and with one coin per message, the prover sent `(V zk).k x` messages: the link message,
+one message per round the shipped verifier's reps read from the record (`verifyRepWith_rounds`,
+`zkVerifyRepWith_rounds`: each table's two reps, each `repRounds zk` rounds), and the last message. -/
+theorem next_acc_length (zk : Bool) (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg}
+    {cs : List Coin} (hcs : cs.length = as.length) (h : ((next zk x as cs).eval H).1 = .acc) :
+    as.length = (V zk).k x := by
+  cases ha : act zk x as cs with
   | rej => rw [next_rej H ha] at h; cases h
   | coin c => rw [next_coin H ha] at h; cases h
   | decide s spec sts link c₁ mids f =>
   obtain ⟨hv, hc⟩ := (next_decide H ha).1 h
   obtain ⟨lv, hlv, hcus⟩ := checks_custody hc
-  obtain ⟨hsz, hk⟩ := streams_size_plain (Hashes.ofSha512 (Claims.hOf H)) hv hlv
-  show as.length = (match setupOf false x with | some (_, spec, sts) => 2 + rounds false spec sts | none => 1)
+  have hv' : verdictM (M := Flock.V) zk (Hashes.ofSha512 (Claims.hOf H)) spec (tabsOf sts) f.record f.proofs =
+      .ok () := by
+    cases zk <;> exact hv
+  obtain ⟨hsz, hk⟩ := streams_size zk (Hashes.ofSha512 (Claims.hOf H)) hv' hlv
+  show as.length = (match setupOf zk x with | some (_, spec, sts) => 2 + rounds zk spec sts | none => 1)
   rw [act_decide ha, act_decide_length hcs ha, ← custody_length hcus]
   dsimp only
   rw [rounds_sum, List.length_flatMap,
-    Nat.add_comm _ 2, ← sum_pairs (fun i => repRounds false spec sts[i]!)]
+    Nat.add_comm _ 2, ← sum_pairs (fun i => repRounds zk spec sts[i]!)]
   congr 2
   apply List.ext_getElem
   · simp [hsz]
