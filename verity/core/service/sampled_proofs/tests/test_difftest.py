@@ -1281,7 +1281,8 @@ DRAW = D.Port(PIECES, "draw", draw, st.one_of(
 #: leading zeros, a missing or zero argument.
 ODD_LAW_TEXTS = ["subset:", "subset", "", "subset:\u0663", "work:\u00b2", "stratified:\uff11", "bernoulli:1/\u0662",
                  "bernoulli:\u00b9/2", "bernoulli:01/04", "bernoulli:0/0", "bernoulli:3/2", "bernoulli:1", "bernoulli:1/2/3",
-                 "subset:1:2", "subset:+1", "subset: 1", "subset:-1", "stratified:0", "work:007", "subset:007", "nope:1",
+                 "subset:1:2", "subset:+1", "subset: 1", "subset:-1", "stratified:0", "subset:0", "subset:00", "work:007",
+                 "subset:007", "nope:1",
                  "Subset:1", "bernoulli:", "bernoulli:/2"]
 LAW_TEXTS = st.one_of(
     st.builds(lambda kind, k: f"{kind}:{k}", st.sampled_from(["subset", "stratified", "work"]), st.integers(0, 30)),

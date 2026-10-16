@@ -22,12 +22,12 @@ private def split1 (s sep : String) : String × String :=
   | a :: rest => (a, sep.intercalate rest)
   | [] => (s, "")
 
-/-- `draw.parse_law`: `subset:K`, `stratified:K` or `work:K` (`K ≥ 1` for the last two), or `bernoulli:NUM/DEN` with
-`0 < DEN` and `NUM ≤ DEN`, split at the first `:` and the first `/`, each number one or more ASCII digits; the law object,
-a Bernoulli law's `p` written without leading zeros. -/
+/-- `draw.parse_law`: `subset:K`, `stratified:K` or `work:K` (`K ≥ 1`), or `bernoulli:NUM/DEN` with `0 < DEN` and
+`NUM ≤ DEN`, split at the first `:` and the first `/`, each number one or more ASCII digits; the law object, a Bernoulli
+law's `p` written without leading zeros. -/
 def parseLaw (text : String) : V Json := do
   let (kind, arg) := split1 text ":"
-  if kind == "subset" && digits arg then
+  if kind == "subset" && digits arg && 1 ≤ arg.toNat! then
     return Json.mkObj [("law", "subset"), ("k", Lean.toJson arg.toNat!)]
   if (kind == "stratified" || kind == "work") && digits arg && 1 ≤ arg.toNat! then
     return Json.mkObj [("law", Json.str kind), ("k", Lean.toJson arg.toNat!)]
