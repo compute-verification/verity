@@ -1,7 +1,7 @@
 // PoUW's receipt folds in C++ (CUDA device and host), the same as receipt_folds.py: each fold's step, the key rules, and
 // the start states and keys of the schedules that run them. Every word is a uint32 and all arithmetic wraps.
-// receipt_conform.py holds this header to vectors.json (tests/test_header.py builds conform_host.cpp with g++, and with
-// nvcc where it is installed).
+// receipt_conform.py holds this header to vectors.json (tests/test_receipt_folds.py builds conform_host.cpp with g++, and
+// with nvcc where it is installed).
 //
 // Soundness (receipt_folds.py FOLDS; README.md):
 //   duo    proved: no all-state kernel, binds every word
@@ -12,10 +12,14 @@
 #pragma once
 #include <stdint.h>
 
+// The key rules are RF_RULE, inline but not forced: forced, lambda8's 128-step loop changes the code of every kernel
+// that derives keys (pfill.cuh's r9 builds keep their SASS only this way).
 #ifdef __CUDACC__
 #define RF_HD __host__ __device__ __forceinline__
+#define RF_RULE __host__ __device__ inline
 #else
 #define RF_HD inline
+#define RF_RULE inline
 #endif
 
 // r in 1..31
@@ -68,12 +72,12 @@ RF_HD void rf_duo_step(uint32_t& y, uint32_t& z, uint32_t d0, uint32_t d1, uint3
 RF_HD uint32_t rf_duo_final(uint32_t y, uint32_t z) { return y ^ rf_rotl(z, 16); }
 
 // ---- key rules
-RF_HD bool rf_key_ok(uint32_t a) {
+RF_RULE bool rf_key_ok(uint32_t a) {
   const uint32_t m = a & 0xFFFFFFu, r = a & 31u;
   return (a & 1u) && m > 256u && m < (1u << 24) - 256u && r != 1u && r != 31u;
 }
 // a odd, and a b mod 2^30 outside [-128, 128] for every b in 1..128 (neither a nor -a in Λ8 mod 2^30)
-RF_HD bool rf_lambda8_ok(uint32_t a) {
+RF_RULE bool rf_lambda8_ok(uint32_t a) {
   if (!(a & 1u)) return false;
   uint32_t t = 0;
 #ifdef __CUDA_ARCH__
@@ -85,9 +89,9 @@ RF_HD bool rf_lambda8_ok(uint32_t a) {
   }
   return true;
 }
-RF_HD bool rf_key_ok_r9(uint32_t a) { return rf_key_ok(a) && rf_lambda8_ok(a); }
+RF_RULE bool rf_key_ok_r9(uint32_t a) { return rf_key_ok(a) && rf_lambda8_ok(a); }
 // for each j < 19, the signed residue of a mod 2^(31 - j) is at least 2^(19 - j) in size
-RF_HD bool rf_kj19(uint32_t a) {
+RF_RULE bool rf_kj19(uint32_t a) {
   for (int j = 0; j < 19; j++) {
     const uint32_t mod = 1u << (31 - j), v = a & (mod - 1u), lim = 1u << (19 - j);
     const uint32_t mag = v >= (mod >> 1) ? mod - v : v;
@@ -95,7 +99,7 @@ RF_HD bool rf_kj19(uint32_t a) {
   }
   return true;
 }
-RF_HD bool rf_key_ok_r11(uint32_t a) { return rf_key_ok_r9(a) && rf_kj19(a); }
+RF_RULE bool rf_key_ok_r11(uint32_t a) { return rf_key_ok_r9(a) && rf_kj19(a); }
 
 // ---- schedules' starts and keys
 RF_HD uint32_t rf_pfill_y0(uint32_t pos) { return pos; }
