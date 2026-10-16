@@ -245,7 +245,7 @@ int main(int argc, char** argv) {
     if (int rc = setup(d, false, (size_t)1 << 20)) return rc;
     return run_sgate(d, W, NC, S);
   }
-  if (mode != "dscore" || argc < 13) {
+  if (mode != "dscore" || argc < 12) {
     fprintf(stderr, "dscore step|prefill B L none|split|co FILL_SMS W NC S ROUNDS K\n");
     return 1;
   }
