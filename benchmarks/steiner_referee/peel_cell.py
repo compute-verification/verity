@@ -9,7 +9,8 @@ spanning 0 and every target, by Dreyfus-Wagner on the Cayley graph of F_2^{m x n
 sum_t rank W_t a cell) and with Theorem 1's bound (a column map Q that sends the chain to a direct sum, maximized over
 coordinate restrictions of the U index).
 
-W modes: full (each block of rank min(r, L) mod 2), uniform ({0, 1} entries), ones (W = J, i.e. W in {+-1} read mod 2).
+W modes: full (each block of rank min(r, L) mod 2), uniform ({0, 1} entries), ones (W = J, i.e. W in {+-1} read mod 2),
+eye (fixed: W_ka = [k mod L = a], stacked identities, so (U W^T)_ik = U_{i, k mod L}).
 
 Usage: peel_cell.py R L S CELLS MODE TRIALS SEED
   CELLS: one (one cell), row2 (two cells sharing rows), col2 (two cells sharing columns), grid (2 x 2 cells).
@@ -97,6 +98,8 @@ def draw_w(r, L, S, mode, rng):
         return np.ones((s, r), dtype=np.uint8)
     if mode == "uniform":
         return rng.integers(0, 2, size=(s, r)).astype(np.uint8)
+    if mode == "eye":
+        return (np.arange(s)[:, None] % L == np.arange(r)[None, :]).astype(np.uint8)
     blocks = []
     for _ in range(S):
         while True:
