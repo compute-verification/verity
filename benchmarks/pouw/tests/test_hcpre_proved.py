@@ -52,10 +52,11 @@ def test_pfill_k_co_arm(monkeypatch, cls, flags, w):
 
 
 def test_co_tile_is_the_4_warp_tile():
-    """The co tile's receipts are dfill_ref's for a tile of PF_W = 4 warps (B 32 x 512), the width it builds at
-    unless -DPF_CO_W says otherwise."""
+    """The co tile's receipts are dfill_ref's for a tile of PF_CO_W = 4 warps (B 32 x 512) unless -DPF_CO_W says
+    otherwise: the co tile's width, the co build's pump width, and in the dual build the width dfill_make gives a co
+    chunk and dfill_ref."""
     src = (FILLER.parent / "decode_capacity" / "pfill.cuh").read_text()
-    co = src[src.index("#ifdef PFILL_CO"):src.index("#else", src.index("#ifdef PFILL_CO"))]
-    assert "#define PF_CO_W 4" in co
-    assert "#define PF_W PF_CO_W" in co
-    assert "#define PF_TN (128 * PF_W)" in src
+    assert "#ifndef PF_CO_W\n#define PF_CO_W 4\n#endif" in src
+    assert "constexpr int W = PF_CO_W, TN = 128 * W, P = 32;" in src
+    assert "#define PF_W PF_CO_W" in src
+    assert "W = PF_CO_W;" in src and "g_pf_tile_w = W;" in src
