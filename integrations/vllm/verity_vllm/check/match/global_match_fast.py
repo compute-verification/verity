@@ -216,7 +216,7 @@ def _check_origin(h) -> None:
 # (prefix node, base, delta, count) WITHIN ONE CALL (the producers named by a (step, index) base are this Prog's, under this cone):
 # the attention gather at position t+1 is the gather at position t plus one producer, so it costs ONE trie step instead of t -- the
 # run count no longer multiplies the work.  The relation is unchanged: every memoised node is the trie node the full walk would reach.
-# Values stay equality keys inside ONE process (F-r17-07: `_Hashes` carries the pid).
+# A non-node progression is one trie step of its own (a different item set, the same partition: the operand is a normal form).  Values stay equality keys inside ONE process (F-r17-07: `_Hashes` carries the pid).
 _trie: dict[tuple, int] = {}         # (prefix node, run item) -> node; node 0 = the empty operand; per process, released on leave
 
 
@@ -276,12 +276,12 @@ def _dag_hashes_intern(P: C.Prog, only: set[int] | None = None) -> dict[int, int
                                 if memo:
                                     pm[(node0, base, delta, k + 1)] = node
                             continue
-                        for k in range(c):   # a compact input / parameter progression: its runs, one trie step each (few)
-                            item = head + tuple(b + k * d for b, d in zip(base, delta))
-                            nk = trie.get((node, item))
-                            if nk is None:
-                                nk = trie[(node, item)] = len(trie) + 1
-                            node = nk
+                        # an input / parameter progression is ONE trie step: canon's operands are rle_mapped's normal form, so equal run
+                        # lists give equal items ([GLM-5.3] a strided W_UV read is ~2048 progressions over ~1e6 runs)
+                        nk = trie.get((node, t))
+                        if nk is None:
+                            nk = trie[(node, t)] = len(trie) + 1
+                        node = nk
                         continue
                     if t[0] == "N":
                         ii = steps[t[1]][t[2]]
