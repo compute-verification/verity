@@ -453,7 +453,7 @@ def test_kernel_facts_decide_the_filler_entry_with_the_declaration():
     # an inactive entry that applies leaves SCORE at the next active one that does
     off = {**S.FILLER_ENTRIES, "theorem-k": {**S.FILLER_ENTRIES["theorem-k"], "active": False}}
     assert S.filler_entry("bits01", f, entries=off)["active"] == "unproven"
-    assert S.SCORER == S.V3 and all(e["active"] and e["status"] == "proved" for e in S.FILLER_ENTRIES.values())
+    assert S.SCORER == S.V4 and all(e["active"] and e["status"] == "proved" for e in S.FILLER_ENTRIES.values())
     stats = all_points()
     sc = {n: S.score(stats, S.certified(n)) for n in S.FILLER_ENTRIES}
     assert sc["chained"]["SCORE"] == sc["unproven"]["SCORE"] < sc["theorem-e"]["SCORE"] < sc["theorem-k"]["SCORE"]
@@ -461,6 +461,193 @@ def test_kernel_facts_decide_the_filler_entry_with_the_declaration():
     ch = S.score(stats, S.certified(S.UNDER_CH))  # SCORE under CH is v2's SCORE, every filler at 0.99
     assert ch["SCORE"] == pytest.approx(S.score(stats)["SCORE"]) and ch["SCORE"] > sc["theorem-k"]["SCORE"]
     assert ch["flags"] == ["filler certified fraction 0.99 is under CH (withdrawn, decision 27)"]
+
+
+def nvd(*functions):
+    """``nvdisasm -c`` text: each (name, entry, instructions) a function in its line format, a kernel (entry) opening
+    its section and a clone (``$kernel$callee``) following its kernel's; an item ending in ":" is a branch label."""
+    out = []
+    for name, entry, ins in functions:
+        if entry:
+            out += [f"//--------------------- .text.{name} --------------------------",
+                    f'\t.section\t.text.{name},"ax",@progbits']
+        out.append(f"        .type           {name},@function")
+        if entry:
+            out.append(f'        .other          {name},@"STO_CUDA_ENTRY STV_DEFAULT"')
+        out.append(f"{name}:")
+        a = 0
+        for x in ins:
+            if x.endswith(":"):
+                out.append(x)
+            else:
+                out.append(f"        /*{a:04x}*/                   {x} ;")
+                a += 16
+    return "\n".join(out + ["//--------------------- SYMBOLS --------------------------"])
+
+
+SERVE = "_Z6flin_kv"
+WARP = f"${SERVE}$_Z12dfill_k_warpmmyy"
+CONSUMER = ["IMMA.16832.S8.S8 R8, R12.ROW, R16.COL, R8", "STG.E desc[UR4][R6.64], R8"]
+#: dfill_k_warp's clone in a serving kernel: K's tile, returning its receipt
+WARP_BODY = [*K_TILE[:4], f"RET.REL.NODEC R2 `({SERVE})"]
+#: dfill_k_put's clone, as FILL's arm B (2c2a61827) compiles it: the receipt and step count stored through the pointers
+PUT = f"${SERVE}$_Z11dfill_k_putPyPimi"
+PUT_BODY = ["LDCU.64 UR4, c[0x0][0x358]", "MOV R9, 0x0", "STG.E.64 desc[UR4][R2.64], R6", "STG.E desc[UR4][R4.64], R11",
+            f"RET.REL.NODEC R8 `({SERVE})"]
+
+
+def serving(*, before=(), after=(), consumer=CONSUMER, role="@P1 BRA `(.L_x_1)", tail=("EXIT",)):
+    """A serving kernel with the INTERFACE's form: a warp-role branch to its filler warps, which call dfill_k_warp and
+    return; the consumer's own MMAs and stores. `before` and `after` go on the filler path around the CALL."""
+    return (SERVE, True, ["S2R R0, SR_TID.X", "ISETP.GE.AND P1, PT, R2, UR6, PT", "STS [R3], RZ", role, *consumer,
+                          "EXIT", ".L_x_1:", *before, "BSSY.RECONVERGENT B0, `(.L_x_2)", f"CALL.REL.NOINC `({WARP})",
+                          ".L_x_2:", "BSYNC.RECONVERGENT B0", *after, *tail])
+
+
+def test_program_facts_read_the_filler_wherever_it_is_called_from():
+    """filler-scorer/v4 reads a dfill_k function's body alone for the theorem checks, whether a kernel or a __noinline__
+    clone a serving kernel calls from its filler warps; the serving kernel's own MMAs are serving's; and an MMA, a
+    global store or a register call on the filler warps' path outside dfill_k, a role split by predication, or a branch
+    it can't follow refuses the arm."""
+    pf = S.program_facts({"fscore": nvd(serving(), (WARP, False, WARP_BODY))})
+    f = pf["filler"]
+    assert f["functions"] == [f"fscore: {WARP}"] and (f["kind"], f["L"], f["fp_free"], f["accumulating_mma"]) == \
+        ("int8", 32, True, 0)
+    assert pf["violations"] == [] and pf["serving_mma"] == {f"fscore: {SERVE}": 1}
+    assert list(pf["callers"]) == [f"fscore: {SERVE}"] and S.paths_gate(pf)["ok"]
+    e = S.filler_entry_v4("bits01", pf)
+    assert (e["applies"], e["fraction"], e["failed"]) == ("theorem-k", 0.9, {})
+    assert e["unchecked"][-len(S.UNCHECKED_V4):] == list(S.UNCHECKED_V4)
+    assert e["kernel"]["serving_mma"] == pf["serving_mma"] and e["kernel"]["functions"] == f["functions"]
+    assert S.filler_entry_v4("pm1", pf)["applies"] == "theorem-e"
+    # v3 reads the same build at the floor: its cuobjdump view has the clone inside the kernel, an MMA outside the filler
+    assert S.filler_entry("bits01", S.kernel_facts(sass((SERVE, CONSUMER + K_TILE))))["applies"] == "unproven"
+
+    def refused(*fns, binary="fscore"):
+        pf = S.program_facts({binary: nvd(*fns, (WARP, False, WARP_BODY))})
+        e = S.filler_entry_v4("bits01", pf)
+        assert not S.paths_gate(pf)["ok"] and e["applies"] == "unproven" and "confined" in e["checks"]["theorem-k"]
+        assert not e["checks"]["theorem-k"]["confined"]
+        return pf["violations"]
+
+    imma = "IMMA.16832.S8.S8 R28, R12.ROW, R40.COL, RZ"
+    assert refused(serving(before=[imma])) == [f"{SERVE} (fscore), on its filler warps' path: {imma.split()[0]} at 0070"]
+    v = refused(serving(after=["STG.E.64 desc[UR4][R4.64], R10"]))
+    assert len(v) == 1 and "STG.E.64 at 00a0 (a store that can write a receipt)" in v[0]
+    assert "a call through a register" in refused(serving(after=["CALL.ABS.NOINC R14"]))[0]
+    assert all("a store" in x for x in refused(serving(after=["RED.E.ADD desc[UR4][R4.64], R10"])))
+    # the filler path rejoining the consumer's code instead of returning reads the consumer's work as the filler's
+    v = refused(serving(tail=["BRA `(.L_x_0)"], consumer=[".L_x_0:", *CONSUMER]))
+    assert len(v) == 2 and "IMMA" in v[0] and "STG.E at" in v[1]
+    # predication instead of a branch: everything after the CALL is on the filler path
+    pred = (SERVE, True, ["S2R R0, SR_TID.X", f"@P1 CALL.REL.NOINC `({WARP})", *CONSUMER, "EXIT"])
+    assert len(refused(pred)) == 2
+    assert "a branch whose target isn't named" in refused(serving(before=["BRX R4 -0x10"]))[0]
+    # off the filler path, a register call (the cp.async.bulk syscall a producer makes) or a store is serving's
+    ok = S.program_facts({"fscore": nvd(serving(consumer=[*CONSUMER, "CALL.ABS.NOINC R14"]), (WARP, False, WARP_BODY))})
+    assert ok["violations"] == []
+
+    # what the filler path calls is held to no MMA and no store; its FP (a u64 remainder's reciprocal) isn't the filler's
+    rem = f"${SERVE}$__internal_1_$__cuda_sm20_rem_u64"
+    pf = S.program_facts({"fscore": nvd(serving(before=[f"CALL.REL.NOINC `({rem})"]), (WARP, False, WARP_BODY),
+                                         (rem, False, ["I2F.U64.RP R6, R4", "MUFU.RCP R6, R6", "RET.REL.NODEC R2 `(x)"]))})
+    assert pf["violations"] == [] and pf["filler"]["fp_free"] and pf["filler"]["path_helpers"] == [f"fscore: {rem}"]
+    pf = S.program_facts({"fscore": nvd(serving(before=[f"CALL.REL.NOINC `({rem})"]), (WARP, False, WARP_BODY),
+                                        (rem, False, ["STG.E desc[UR4][R4.64], R6", "RET.REL.NODEC R2 `(x)"]))})
+    assert pf["violations"] == [f"{rem} (fscore), called on the filler warps' path: STG.E at 0000 (a store that can "
+                                "write a receipt)"]
+    # what dfill_k itself calls is the filler's: its FP ops fail fp_free
+    pf = S.program_facts({"fscore": nvd(serving(), (WARP, False, [f"CALL.REL.NOINC `({rem})", *WARP_BODY]),
+                                        (rem, False, ["I2F.U64.RP R6, R4", "RET.REL.NODEC R2 `(x)"]))})
+    assert not pf["filler"]["fp_free"] and pf["filler"]["helpers"] == [f"fscore: {rem}"]
+    assert S.filler_entry_v4("bits01", pf)["failed"]["theorem-k"] == ["FP or conversion ops in the filler's code: "
+                                                                      "{'I2F.U64.RP': 1}"]
+    # FILL v1's chain in the clone reads chained; a split filler's kernel reads as v3 reads it
+    chain = [x.replace("COL, RZ", "COL, R28") for x in WARP_BODY]
+    assert S.filler_entry_v4("bits01", S.program_facts({"f": nvd(serving(), (WARP, False, chain))}))["applies"] == \
+        "chained"
+    split = S.program_facts({"dscore": nvd((DFILL, True, K_TILE))})
+    assert split["callers"] == {} and split["filler"]["L"] == 32 and S.filler_entry_v4("bits01", split)["applies"] == \
+        "theorem-k"
+    # rows from a driver the scorer didn't read: no theorem
+    e = S.filler_entry_v4("bits01", split, unread=["fscore"])
+    assert e["applies"] == "unproven" and any("drivers the scorer didn't build" in w for w in e["failed"]["theorem-k"])
+    none = S.filler_entry_v4("bits01", None)
+    assert none["applies"] == "unproven" and none["kernel"] is None and S.paths_gate(None)["ok"]
+
+
+def test_a_store_only_dfill_k_function_may_take_the_receipt_pointers():
+    """A dfill_k device function that writes global memory (dfill_k_put, coordinator 11:05Z) holds stores and address
+    arithmetic only and stores its arguments as they came; an MMA function that stores, a put that computes, combines or
+    calls, is refused. A dfill_k kernel (the split filler) is its own driver's and isn't held to it."""
+    def facts(put_body=PUT_BODY, warp_body=WARP_BODY):
+        return S.program_facts({"fscore": nvd(serving(after=[f"CALL.REL.NOINC `({PUT})"]), (WARP, False, warp_body),
+                                              (PUT, False, put_body))})
+
+    pf = facts()
+    assert pf["violations"] == [] and pf["filler"]["stores"] == [f"fscore: {PUT}"] and S.paths_gate(pf)["ok"]
+    assert (pf["filler"]["kind"], pf["filler"]["L"], pf["filler"]["fp_free"]) == ("int8", 32, True)
+    assert S.filler_entry_v4("bits01", pf)["applies"] == "theorem-k"
+    v = facts(warp_body=[*WARP_BODY[:-1], "STG.E.64 desc[UR4][R2.64], R28", WARP_BODY[-1]])["violations"]
+    assert any("IMMA.16832.S8.S8 at" in x for x in v) and all("writes global memory" in x for x in v)
+    for body, why in ((["IADD3 R6, R6, 0x1, RZ", *PUT_BODY[2:]], "stores a value the function computes"),
+                      (["MOV R7, 0x0", *PUT_BODY[2:]], "stores a value the function computes"),
+                      (["LOP3.LUT R11, R11, 0xff, RZ, 0xc0, !PT", *PUT_BODY], "LOP3.LUT at 0000"),
+                      ([PUT_BODY[0], "RED.E.ADD desc[UR4][R2.64], R6", PUT_BODY[-1]], "RED.E.ADD at 0010"),
+                      ([f"CALL.REL.NOINC `({WARP})", *PUT_BODY], "CALL.REL.NOINC at 0000")):
+        v = facts(put_body=body)["violations"]
+        assert v and all("writes global memory" in x for x in v) and any(why in x for x in v), (body, v)
+        assert not S.paths_gate(facts(put_body=body))["ok"]
+    split = S.program_facts({"dscore": nvd((DFILL, True, [*K_TILE[:-1], "STG.E desc[UR4][R2.64], R9", "EXIT"]))})
+    assert split["violations"] == [] and split["filler"]["stores"] == []
+
+
+def fixed_row(*, driver="fscore", checked=True, rec_bad=0, fixed_macs=1e12, fixed_ms=20.0, mhz=2000.0, b=1, l=2048):
+    r = row("step", b, l, "split", alone_ms=6.0, arm_ms=6.2, rounds=2, fill_sms=108, rec_bad=rec_bad)
+    r |= {"driver": driver, "fixed_sms": 80}
+    for blk in r["blocks"]:
+        blk["arm"]["reps"] = [[6.2, mhz, 300.0]] * 3
+        blk["arm"] |= {"fixed_ms": fixed_ms, "fixed_macs": fixed_macs, "round": {"id": 1},
+                       "fused_round": {"id": 2, "checked": [7, 9] if checked else []}}
+    return r
+
+
+def test_fixed_work_is_credited_from_checked_public_tiles_of_a_read_binary():
+    """filler-scorer/v4 credits a block's fixed work only when its row's binary is one the scorer built and read, the
+    filler warps' paths there are confined, the block's fixed round has spot-checked tiles and the row no bad receipt;
+    and bounds the whole kernel, serving's MACs and the filler warps', by its SMs' peak."""
+    pf = S.program_facts({"dscore": nvd((DFILL, True, K_TILE)), "fscore": nvd(serving(), (WARP, False, WARP_BODY))})
+    rows = [fixed_row(), fixed_row(driver="pscore"), fixed_row(checked=False), fixed_row(rec_bad=1)]
+    out, credit = S.credit_fixed(rows, pf)
+    assert credit["credited"] == 2 and len(credit["dropped"]) == 6
+    assert [b["arm"]["fixed_macs"] for r in out for b in r["blocks"]] == [1e12, 1e12] + [0.0] * 6
+    assert rows[1]["blocks"][0]["arm"]["fixed_macs"] == 1e12  # the rows read are not changed
+    assert "its driver pscore wasn't built and read" in credit["dropped"][0]
+    assert "none of its tiles' receipts was spot-checked" in credit["dropped"][2]
+    assert "1 bad receipts in its row" in credit["dropped"][4]
+    bad = S.program_facts({"fscore": nvd(serving(before=["STG.E desc[UR4][R4.64], R1"]), (WARP, False, WARP_BODY))})
+    assert S.credit_fixed([fixed_row()], bad)[1]["credited"] == 0
+    assert "no program facts" in S.credit_fixed([fixed_row()], None)[1]["dropped"][0]
+    # filler warps inlined into a serving kernel (FILL r3's form): nothing v4 reads as the filler did that work
+    r3 = S.program_facts({"fscore": nvd((DFILL, True, K_TILE), (SERVE, True, [*CONSUMER, *K_TILE]))})
+    assert r3["violations"] == [] and r3["fixed_from"] == {"fscore": 0}
+    assert "no function in fscore it can come from" in S.credit_fixed([fixed_row()], r3)[1]["dropped"][0]
+    phase = S.program_facts({"pscore": nvd(("_Z7dfill_pILi4EEvmmPyyiiPKiS0_Pj", True, K_TILE))})
+    assert phase["fixed_from"] == {"pscore": 1} and S.credit_fixed([fixed_row(driver="pscore")], phase)[1]["credited"]
+    assert S.point_stats(out[0])["fill_rate"] > S.point_stats(out[2])["fill_rate"]
+
+    r = fixed_row(fixed_macs=1e12)
+    peak = S.PER_SM * 80 * 2000.0e6 * 20.0e-3
+    assert S.whole_of_peak(r) == pytest.approx((2 * 3 * share.decode_n(1, 2048) + 2e12) / (2 * peak))
+    assert S.whole_of_peak(row("step", 1, 2048, "split", alone_ms=6.0, arm_ms=6.2)) is None
+    over = fixed_row(fixed_macs=0.9 * peak, b=32)  # the filler warps alone under the peak, with serving's MACs past it
+    assert 1 < S.whole_of_peak(over) and S.point_stats(over)["of_peak"] == pytest.approx(0.9)
+    v1 = A.load("fill-v1")
+    st = {("decode", 32, 2048): S.point_stats(over)}
+    h = S.honesty(v1, st, [], whole={"decode 32/2048": S.whole_of_peak(over)})
+    assert not h["ok"] and h["over_peak_whole"] and not h["over_peak"]
+    assert "over_peak_whole" not in S.honesty(v1, st, [])  # v3's honest gate is unchanged
+    assert S.SCORER == S.V4
 
 
 def test_record_limits_are_checked_when_the_arm_loads():
