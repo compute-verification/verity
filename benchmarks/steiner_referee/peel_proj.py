@@ -12,6 +12,10 @@ Part 2 (F_2 bound at L = 32, S = 256). For W uniform on {0, 1} (no rejection), T
 column map is sum_{t<S} dim(row W_t cap row W_{t+1}) + rank W_S per cell (restricted to the first L columns of W when
 r > L), against the floor S min(r, L); with per-block rejection to full rank it is the floor exactly.
 
+Part 3 (u1's holes at L = r = 32, S = 256). The same two fractions when each row k of an invertible-block W (the
+stacked-identity W, or uniform invertible mod 2) is zeroed with probability 1/3, Proposition O's holes for one
+column l of a {-1, 0, 1} noise.
+
 Usage: peel_proj.py SEED
 """
 
@@ -125,6 +129,32 @@ def f2_bound(rng, r, L, S, trials):
             "spider_frac_mean": float(np.mean(spiders)), "mean_block_corank": float(np.mean(deltas))}
 
 
+def holes_bound(rng, L, S, w_mode, trials):
+    """r = L, invertible blocks (the stacked-identity W, or uniform invertible mod 2), each row k zeroed with
+    probability 1/3 (u1's holes for one column l): the same bound and chain fractions as f2_bound."""
+    vals, spiders = [], []
+    for _ in range(trials):
+        rows = []
+        for t in range(S):
+            if w_mode == "eye":
+                b = [1 << a for a in range(L)]
+            else:
+                while True:
+                    b = [int(x) for x in rng.integers(0, 1 << L, size=L, dtype=np.uint64)]
+                    if rank2_rows(b) == L:
+                        break
+            keep = rng.random(L) >= 1 / 3
+            rows.append([v for v, kp in zip(b, keep) if kp])
+        bases = [rowspace(b) for b in rows]
+        rk = [len(b) for b in bases]
+        inter = [rk[t] + rk[t + 1] - rank2_rows(bases[t] + bases[t + 1]) for t in range(S - 1)]
+        vals.append((sum(inter) + rk[-1]) / (S * L))
+        spiders.append(sum(rk) / (S * L))
+    return {"part": 3, "W": w_mode, "r": L, "L": L, "S": S, "trials": trials, "hole_prob": 1 / 3,
+            "bound_frac_mean": float(np.mean(vals)), "bound_frac_min": float(np.min(vals)),
+            "spider_frac_mean": float(np.mean(spiders))}
+
+
 def main():
     rng = np.random.default_rng(int(sys.argv[1]))
     for w_mode in ("01", "pm"):
@@ -132,6 +162,8 @@ def main():
             print(json.dumps(projection_check(rng, 4, 2, 2, 2, w_mode, inst)), flush=True)
     for r in (16, 24, 28, 30, 31, 32, 33, 40, 64):
         print(json.dumps(f2_bound(rng, r, 32, 256, 20)), flush=True)
+    for w_mode in ("eye", "full"):
+        print(json.dumps(holes_bound(rng, 32, 256, w_mode, 20)), flush=True)
 
 
 if __name__ == "__main__":

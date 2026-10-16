@@ -1,0 +1,17 @@
+# u1's holes (each row k of W zeroed with probability 1/3, one column l), exact over F_2 (RS-D2F round 2, CMP-13):
+# peel_cell.py R L S CELLS {eye-h,full-h} TRIALS SEED; the chain is sum_t rank of the holed blocks.
+python3 peel_cell.py 2 2 4 one eye-h 30 301
+python3 peel_cell.py 2 2 4 one full-h 30 302
+python3 peel_cell.py 3 3 2 one eye-h 30 303
+python3 peel_cell.py 3 3 2 one full-h 30 304
+python3 peel_cell.py 2 3 3 one eye-h 20 305
+python3 peel_cell.py 2 3 3 one full-h 20 306
+python3 peel_cell.py 1 2 6 one eye-h 20 307
+python3 peel_cell.py 2 4 2 one eye-h 20 308
+python3 peel_cell.py 2 4 2 one full-h 20 309
+python3 peel_cell.py 3 2 3 one eye-h 20 310
+python3 peel_cell.py 2 2 3 one full-h 30 311
+python3 peel_cell.py 2 2 2 col2 eye-h 20 312
+python3 peel_cell.py 2 2 2 col2 full-h 20 313
+# Parts 1-3 of peel_proj.py (Part 3: u1's holes at L = r = 32, S = 256)
+python3 peel_proj.py 7

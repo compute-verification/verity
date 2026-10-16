@@ -10,7 +10,9 @@ sum_t rank W_t a cell) and with Theorem 1's bound (a column map Q that sends the
 coordinate restrictions of the U index).
 
 W modes: full (each block of rank min(r, L) mod 2), uniform ({0, 1} entries), ones (W = J, i.e. W in {+-1} read mod 2),
-eye (fixed: W_ka = [k mod L = a], stacked identities, so (U W^T)_ik = U_{i, k mod L}).
+eye (fixed: W_ka = [k mod L = a], stacked identities, so (U W^T)_ik = U_{i, k mod L}). A suffix -h (eye-h, full-h)
+zeroes each row k with probability 1/3: u1's holes (Proposition O: q = 2/3 of F's entries carry a bit at the
+reading level), exact for cells that share one column l (one, col2).
 
 Usage: peel_cell.py R L S CELLS MODE TRIALS SEED
   CELLS: one (one cell), row2 (two cells sharing rows), col2 (two cells sharing columns), grid (2 x 2 cells).
@@ -94,6 +96,9 @@ def common_subset(w, r, L, S):
 
 def draw_w(r, L, S, mode, rng):
     s = S * L
+    if mode.endswith("-h"):
+        w = draw_w(r, L, S, mode[:-2], rng)
+        return w * (rng.random(s) >= 1 / 3).astype(np.uint8)[:, None]
     if mode == "ones":
         return np.ones((s, r), dtype=np.uint8)
     if mode == "uniform":
@@ -188,6 +193,8 @@ def main():
     cells_name, mode = sys.argv[4], sys.argv[5]
     trials, seed = int(sys.argv[6]), int(sys.argv[7])
     cells = CELLS[cells_name]
+    if mode.endswith("-h") and len({c[1] for c in cells}) > 1:
+        raise SystemExit("holes are per column l: use cells one or col2")
     rng = np.random.default_rng(seed)
     w0 = draw_w(r, L, S, "ones", rng)
     m, n, _ = targets_of(w0, r, L, S, cells)
