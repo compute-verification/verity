@@ -1,12 +1,16 @@
 """The slice's derivations and its CPU reference, shared by the prover, the challenger and the gate.
 
-From the round's coin sigma (64 bytes from the challenger's OS generator) and a call's index c:
-    key_c   = SHA-512("verity/e2e-slice/call-sigma/v1\\0" || sigma || BE32(c))[:32]: the call's SHA-512 noise key (lpgemm.cu's Sig)
-    rseed_c = BE32 of SHA-512("verity/e2e-slice/receipt-key/v1\\0" || sigma || BE32(c))[:4]: the duo receipts' key
+From a stage's coin sigma (64 bytes from the challenger's OS generator), a call's index c and the stage s (0 or 1; "stage" s
+appended past stage 0):
+    key_c   = SHA-512("verity/e2e-slice/call-sigma/v1\\0" || sigma || BE32(c) [|| "stage" s])[:32]: the call's SHA-512 noise key
+              (lpgemm.cu's Sig)
+    rseed_c = BE32 of SHA-512("verity/e2e-slice/receipt-key/v1\\0" || sigma || BE32(c) [|| "stage" s])[:4]: the duo receipts' key
     U       = lpgemm.cu's U at LP_UW 64 under key_c (m x 32, {±1..±64}): block j = rows 2j, 2j + 1, entry e = (row % 2) 32 + l
               digest byte e, u = (v & 63) + 1, negated if v & 64
     F       = sha_noise.cuh's pm1 noise of B's side under key_c (n x k, ±1)
-A' = A + U W^T (A'_ik = A_ik + U_{i, k mod 32}), B' = B + F; the duo receipts at L = 32 over A' B'^T (mref.py's), one tile at a time.
+A' = A + U W^T (A'_ik = A_ik + U_{i, k mod 32}), B' = B + F; the duo receipts at L = 32 over A' B'^T (mref.py's), or DUOS's
+word a thread and segment (fgemm.cu, verity/core/protocols/pouw/circuit/segment.py), one tile at a time. The two-stage slice's
+second stage reads phi of the first's served product.
 """
 from __future__ import annotations
 
@@ -28,12 +32,17 @@ TM = BN = 128
 WM, NCT = 32, 512
 
 
-def call_key(sigma: bytes, c: int) -> bytes:
-    return hashlib.sha512(b"verity/e2e-slice/call-sigma/v1\0" + sigma + c.to_bytes(4, "big")).digest()[:32]
+def _stage(stage: int) -> bytes:
+    return b"" if stage == 0 else b"stage" + bytes([stage])
 
 
-def receipt_seed(sigma: bytes, c: int) -> int:
-    return int.from_bytes(hashlib.sha512(b"verity/e2e-slice/receipt-key/v1\0" + sigma + c.to_bytes(4, "big")).digest()[:4], "big")
+def call_key(sigma: bytes, c: int, stage: int = 0) -> bytes:
+    return hashlib.sha512(b"verity/e2e-slice/call-sigma/v1\0" + sigma + c.to_bytes(4, "big") + _stage(stage)).digest()[:32]
+
+
+def receipt_seed(sigma: bytes, c: int, stage: int = 0) -> int:
+    h = hashlib.sha512(b"verity/e2e-slice/receipt-key/v1\0" + sigma + c.to_bytes(4, "big") + _stage(stage)).digest()
+    return int.from_bytes(h[:4], "big")
 
 
 def sig_words(key: bytes) -> list[str]:
@@ -106,6 +115,14 @@ def thread_entries() -> tuple[np.ndarray, np.ndarray]:
     rows = wm[:, None] * WM + g[:, None] + 8 * r[None, :]
     cols = wn[:, None] * 32 + 2 * qq[:, None] + 8 * (c[None, :] >> 1) + (c[None, :] & 1)
     return rows, cols
+
+
+def thread_slots(ctid: int) -> tuple[np.ndarray, np.ndarray]:
+    """Thread ``ctid``'s 4 rows (row slot r) and 8 columns (column slot c) in its tile."""
+    warp, lane = ctid // 32, ctid % 32
+    wm, wn, g, qq = warp // (BN // 32), warp % (BN // 32), lane >> 2, lane & 3
+    c = np.arange(8)
+    return wm * WM + g + 8 * np.arange(4), wn * 32 + 2 * qq + 8 * (c >> 1) + (c & 1)
 
 
 def seg_keys(seed: int, tile: int, ks: int, segs=None, threads=None) -> tuple[np.ndarray, np.ndarray]:
