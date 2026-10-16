@@ -36,6 +36,11 @@ def test_the_table_reports_both_deltas_and_the_verdict():
     assert a.endswith(f"| {100 * (math.exp(0.005) - 1):+.2f} | {100 * (math.exp(-0.005) - 1):+.2f} | < |")
 
 
+def test_pct():
+    assert report.pct(1.01, 1.0) == "+1.00" and report.pct(0.99, 1.0) == "-1.00"
+    assert report.pct(5.9792, 5.9793) == "+0.00" and report.pct(9.169, 9.1753, 3) == "-0.069"
+
+
 def test_a_failed_run_has_no_table():
     r = results(standard(), passed=False)
     r["gates"]["peel"] = {"checked": 3, "failed": 1, "first_failure": {"where": "layer 0"}}

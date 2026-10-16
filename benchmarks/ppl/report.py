@@ -35,6 +35,12 @@ def fmt_ppl(s: dict) -> str:
     return f"{s['ppl']:.4f}" + (f" ({s['min']:.4f}–{s['max']:.4f})" if s["n"] > 1 else "")
 
 
+def pct(a: float, b: float, digits: int = 2) -> str:
+    """a against b in percent, signed ("+0.00" for anything that rounds to zero)."""
+    x = round(100 * (a / b - 1), digits)
+    return f"{x + 0.0:+.{digits}f}"
+
+
 def table(r: dict) -> str:
     head = (f"### {r['model']} · {r['set']} · {r['ctx']} ({r['n_windows']} windows, {r['scored_tokens']:,} tokens)"
             f"{'' if r['passed'] else ' — GATES FAILED: no perplexities'}")
@@ -46,11 +52,10 @@ def table(r: dict) -> str:
     for name in r["arms"]:
         s = arm_stats(r, name)
         p = arm_stats(r, s["plain"]) if s["plain"] else None
-        db = 100 * (s["ppl"] / bf["ppl"] - 1) if name != "bf16" else None
-        dp = 100 * (s["ppl"] / p["ppl"] - 1) if p is not None and name != s["plain"] else None
+        db = pct(s["ppl"], bf["ppl"]) if name != "bf16" else "-"
+        dp = pct(s["ppl"], p["ppl"]) if p is not None and name != s["plain"] else "-"
         v = verdict(r, name, s["plain"]) if p is not None and name != s["plain"] else "-"
-        lines.append(f"| {name} | {s['n']} | {fmt_ppl(s)} | {'-' if db is None else f'{db:+.2f}'} | "
-                     f"{'-' if dp is None else f'{dp:+.2f}'} | {v} |")
+        lines.append(f"| {name} | {s['n']} | {fmt_ppl(s)} | {db} | {dp} | {v} |")
     g = r["gates"]
     lines.append("")
     lines.append("gates: " + ", ".join(f"{n} {v['checked']}" + (f" (skipped: {v['skipped']})" if v.get("skipped") else "")
@@ -116,15 +121,15 @@ def baseline_table(lk: dict) -> str:
             if s is None:
                 continue
             plain = p["arms"].get(s["plain"]) if s["plain"] and s["plain"] != name else None
-            db = "-" if name == "bf16" else f"{100 * (s['ppl'] / bf - 1):+.2f}"
-            dp = "-" if plain is None else f"{100 * (s['ppl'] / plain['ppl'] - 1):+.2f}"
+            db = "-" if name == "bf16" else pct(s["ppl"], bf)
+            dp = "-" if plain is None else pct(s["ppl"], plain["ppl"])
             t = tonight.get(name)
             if t is None:
                 tcells = "- | - | - | -"
             else:
                 same = methodology.reproduces(s["min"], s["max"], t["min"], t["max"])
                 how = f"`{t['as']}`" + (f" ({t['note']})" if t.get("note") else "")
-                tcells = f"{_range(t)} | {how} | {100 * (s['ppl'] / t['ppl'] - 1):+.2f} | {'yes' if same else 'NO'}"
+                tcells = f"{_range(t)} | {how} | {pct(s['ppl'], t['ppl'])} | {'yes' if same else 'NO'}"
             lines.append(f"| {where} | {name} | {_range(s)} | {db} | {dp} | {tcells} |")
             where = ""
         tr = sorted({t["run"] for t in tonight.values()})
@@ -154,7 +159,7 @@ def baseline_check(lk: dict, results: list[dict]) -> tuple[str, bool]:
             ok = methodology.reproduces(s["min"], s["max"], new["min"], new["max"])
             ok_all &= ok
             lines.append(f"| {p['model']} · {p['set']} · {p['ctx']} | {name} | {_range(s)} | {fmt_ppl(new)} | "
-                         f"{100 * (new['ppl'] / s['ppl'] - 1):+.3f} | {'yes' if ok else 'NO'} |")
+                         f"{pct(new['ppl'], s['ppl'], 3)} | {'yes' if ok else 'NO'} |")
     if not seen:
         ok_all = False
         lines.append("no results measure a locked arm")

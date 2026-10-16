@@ -255,7 +255,7 @@ deterministic arm between harnesses:
 |  | int8-all | 6.0289 (6.0271–6.0314) | +1.30 | - | 6.0296 (6.0282–6.0312) | `int8-rot-lin8r` | -0.01 | yes |
 |  | adopted-linears | 5.9668 (5.9661–5.9678) | +0.25 | +0.20 | - | - | - | - |
 |  | adopted-attention | 5.9634 (5.9622–5.9643) | +0.20 | -1.03 | - | - | - | - |
-|  | adopted-no-smooth | 5.9792 (5.9778–5.9804) | +0.46 | -0.82 | 5.9793 (5.9773–5.9814) | `int8-rot-lin8rd-eqp=w64-poff64-psink-kc-kv=dith` | -0.00 | yes |
+|  | adopted-no-smooth | 5.9792 (5.9778–5.9804) | +0.46 | -0.82 | 5.9793 (5.9773–5.9814) | `int8-rot-lin8rd-eqp=w64-poff64-psink-kc-kv=dith` | +0.00 | yes |
 |  | adopted | 5.9789 (5.9774–5.9801) | +0.46 | -0.83 | - | - | - | - |
 
 Runs:
