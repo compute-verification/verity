@@ -28,6 +28,7 @@ DOM01 = 0x5046494C4C2D6231  # "PFILL-b1": the s8 tile on {0,1} bits
 CTR_B, CTR_KEY = 1 << 56, 2 << 56
 M32 = 0xFFFFFFFF
 RAM, DUO, XOR = 4, 2, 1
+XIN = 9  # XOR-in: NC 4's fold in a -DPFILL_XIN build
 S8, E2M1, BITS = 0, 1, 2  # pfill.cuh's PF_S8, PF_E2M1, PF_BITS
 KINDS = (S8, E2M1, BITS)
 DOMS = {S8: DOM, E2M1: DOM4, BITS: DOM01}
@@ -109,6 +110,9 @@ def receipt(c0: int, c1: int, tile: int, nc: int, steps: int, kind: int = S8) ->
             if nc == RAM:
                 ny = (rotl(ny, 7) + d0[j]) * a0 + d1[j]
                 ny = (rotl(ny, 19) + d2[j]) * a1 + d3[j]
+            elif nc == XIN:
+                ny = (rotl(ny, 7) ^ d0[j]) * a0 + d1[j]
+                ny = (rotl(ny, 19) ^ d2[j]) * a1 + d3[j]
             elif nc == DUO:
                 for p, k, a, r in ((d0[j], k0, a0, 5), (d1[j], k1, a1, 11), (d2[j], k0, a0, 17), (d3[j], k1, a1, 29)):
                     u = ny ^ p ^ k
