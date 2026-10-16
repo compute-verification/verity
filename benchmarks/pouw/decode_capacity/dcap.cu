@@ -790,7 +790,14 @@ __global__ void __launch_bounds__(NC >= 8 ? 256 : 512) dfill_k(uint64_t c0, uint
   }
 }
 
-static uint64_t dfill_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int steps, int map = 0) {
+static int dfill_map() {
+  const int m = getenv("DFILL_MAP") ? atoi(getenv("DFILL_MAP")) : 0;
+  if (m < 0 || m > 2) { fprintf(stderr, "DFILL_MAP must be 0, 1 or 2\n"); exit(1); }
+  return m;
+}
+// map < 0: the process's map (DFILL_MAP), as dfill_make picks it
+static uint64_t dfill_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int steps, int map = -1) {
+  if (map < 0) map = dfill_map();
   const DSeed seed = dseed_x(c0, c1, tile, map);
   int8_t Bt[2][8][32];  // Bt[b][n][k] = B_b[k][n]
   int32_t C[16][8];
@@ -867,7 +874,6 @@ static void dfill_prep() {
   DFILL_PREP(1, 2) DFILL_PREP(2, 2) DFILL_PREP(4, 2) DFILL_PREP(8, 2)
 #undef DFILL_PREP
 }
-static int dfill_map() { return getenv("DFILL_MAP") ? atoi(getenv("DFILL_MAP")) : 0; }
 // tiles a warp so that a chunk is about 2^DFILL_CHUNK_LOG2 (default 19) MMAs an SM, ~1 ms at the tensor peak
 static DFill dfill_make(int grid, int W, int NC, int S, uint64_t c0, uint64_t c1) {
   DFill f;
