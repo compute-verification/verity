@@ -12,6 +12,7 @@ import Proofs.Flock.Claims.Recursion.Inner
 import Proofs.Flock.Claims.Recursion.Abort
 import Proofs.Flock.Claims.Recursion.InnerAbort
 import Proofs.Flock.Claims.Recursion.Gap
+import Proofs.Flock.Claims.Recursion.RedTeam
 
 /-! The ZK-recursion compiler's claims proofs: serving one rerun program's reruns by another's (`Serve`), `E^rep`'s
 weighted reruns by Wald's identity (`Wald`), the composed extractor, `E^rep` served by the outer extractor, with its
