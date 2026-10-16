@@ -878,10 +878,13 @@ before them, which reach `serve` as the prover makes them, nor when a stop's cut
 session is ready). Holding every cut until its statement's release time is the firewall's to do and would take the cut's
 time out; it is not done yet.
 
-**The record fails closed.** Each call reads `record.jsonl` whole, under `record.lock`. A torn last line (a writer killed
-inside its append) fails every call of either firewall, so nothing is served or released until the developer repairs the
-record; neither skips an event it can't read, since a skipped `stop` would serve a stopped recursive session. The Python
-relay reports such a fault as its connection's outcome `error`.
+**The record fails closed.** Each call reads `record.jsonl` under `record.lock`. The Rust firewall reads it whole. The
+Python one keeps what the rules read of it and reads only the lines appended since its last call: it reads the record
+again from its start when it was replaced, cut shorter or no longer holds the last bytes it read, and whole when its last
+line has no newline yet or a line is one the firewall doesn't write. A torn last line (a writer killed inside its append)
+fails every call of either firewall, so nothing is served or released until the developer repairs the record; neither
+skips an event it can't read, since a skipped `stop` would serve a stopped recursive session. The Python relay reports
+such a fault as its connection's outcome `error`.
 
 **Retries.** Every stop is recorded and counted, in both phases, so the auditor knows how many times a recursive session was
 run, and each run it allows reveals its own ending: `r` stopped runs before an accepted one reveal at most `r + 1` times the

@@ -41,18 +41,28 @@ challenger's connection without sending ``Finish``. So every stop the firewall m
 session cut after some message, never why. A refused or stopped session's worker is answered outside the slot, so it
 can't hold up another session's.
 
-The record is read whole at every call. A torn last line (a writer killed inside its append) fails every call, so the
-firewall serves nothing until the developer repairs the record: it fails closed, never by skipping an event it can't read.
+A `Firewall` keeps what the rules read of the record (`_Index`: each recursive session's open, stop, finish and releases,
+each stream's first open and failures, the last ``slot``, the counts) and at each call reads only what other processes
+appended since its last one. A record that was replaced, cut shorter, or no longer holds the bytes this object read last
+is read again from its start; an edit further back that leaves the record no shorter isn't seen by an object that had
+read past it. Since the firewall only appends, the verdicts are the ones a read of the whole record gives. A record the
+index can't answer is read whole at every call, as before, and each rule's read is a scan of it (`_Scan`). That covers a
+record whose last line has no newline yet, or one holding a line the firewall doesn't write. A torn last line (a writer
+killed inside its append) fails every call, so the firewall serves nothing until the developer repairs the record: it
+fails closed, never by skipping an event it can't read.
 """
 from __future__ import annotations
 
 import fcntl
 import json
+import locale
+import os
 import socket
 import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 
 from .rec_live import (REQ_FINISH, REQ_PING, REQ_PROOF, RESP_REFUSED, RESP_VERDICT, decode_resp, read_frame, refused,
                        resp_ok, resp_str, write_frame)
@@ -74,13 +84,14 @@ class Firewall:
         self.state = Path(state)
         self.state.mkdir(parents=True, exist_ok=True)
         self._log = self.state / "record.jsonl"
+        self._index: _Index | None = None
 
     @contextmanager
-    def _locked(self) -> Iterator[list[dict]]:
+    def _locked(self) -> Iterator[_Index | _Scan]:
         with open(self.state / "record.lock", "a") as f:
             fcntl.flock(f, fcntl.LOCK_EX)
             try:
-                yield self._events()
+                yield self._read()
             finally:
                 fcntl.flock(f, fcntl.LOCK_UN)
 
@@ -89,17 +100,56 @@ class Firewall:
             return []
         return [json.loads(line) for line in self._log.read_text().splitlines() if line]
 
-    def _append(self, events: list[dict], ev: dict) -> dict:
-        ev = {"seq": len(events), **ev}
-        with open(self._log, "a") as f:
-            f.write(json.dumps(ev, sort_keys=True) + "\n")
-        events.append(ev)
+    def _read(self) -> _Index | _Scan:
+        """The record as the rules read it, under ``record.lock``: the index, given the lines appended since this object's
+        last read; or the record read whole (`_Scan`), when the index can't answer it or a line won't read."""
+        try:
+            f = open(self._log, "rb")
+        except FileNotFoundError:
+            self._index = _Index(None)
+            return self._index
+        with f:
+            st = os.fstat(f.fileno())
+            ix, file = self._index, (st.st_dev, st.st_ino)
+            if ix is None or ix.file != file or st.st_size < ix.offset:
+                ix = _Index(file)
+            f.seek(ix.offset - len(ix.last))
+            data = f.read()
+            if data.startswith(ix.last):
+                data = data[len(ix.last):]
+            else:
+                ix = _Index(file)
+                f.seek(0)
+                data = f.read()
+        end = data.rfind(b"\n") + 1
+        try:
+            lines = [json.loads(line) for line in data[:end].decode(_ENCODING).splitlines() if line]
+        except (ValueError, RecursionError):
+            self._index = None
+            return _Scan(self._events())
+        for e in lines:
+            ix.add(e)
+        ix.read(data[:end])
+        self._index = ix
+        return ix if ix.regular and end == len(data) else _Scan(self._events())
+
+    def _append(self, rec: _Index | _Scan, ev: dict) -> dict:
+        ev = {"seq": rec.count, **ev}
+        line = (json.dumps(ev, sort_keys=True) + "\n").encode(_ENCODING)
+        with open(self._log, "ab") as f:
+            f.write(line)
+            if rec is self._index and rec.file is None:
+                st = os.fstat(f.fileno())
+                rec.file = (st.st_dev, st.st_ino)
+        rec.add(ev)
+        if rec is self._index:
+            rec.read(line)
         return ev
 
     def record(self) -> list[dict]:
         """Every event so far, in order."""
-        with self._locked() as ev:
-            return ev
+        with self._locked():
+            return self._events()
 
     def open(self, stream: str, parts: list[str], budget: int | None = None, release: dict | None = None) -> str:
         """A new recursive session on ``stream``, opened by its inner session, with its V* statements in their order
@@ -112,38 +162,38 @@ class Firewall:
             raise ValueError(f"a failure budget is a positive integer, not {budget!r}")
         if release is not None:
             _schedule_ok(release, len(parts))
-        with self._locked() as ev:
-            first = next((e for e in ev if e["event"] == "open" and e["stream"] == stream), None)
+        with self._locked() as rec:
+            first = rec.first(stream)
             if first is not None and first.get("budget") != budget:
                 raise ValueError(f"stream {stream}'s budget is {first.get('budget')}, not {budget}")
-            if budget is not None and (n := _failures(ev, stream)) >= budget:
+            if budget is not None and (n := rec.failures(stream)) >= budget:
                 raise Refused(refused(f"stream {stream} stopped at its failure budget ({n} of {budget})"))
-            sid = f"r{sum(e['event'] == 'open' for e in ev):04d}"
+            sid = f"r{rec.opens:04d}"
             e = {"event": "open", "session": sid, "stream": stream, "parts": list(parts)}
             if budget is not None:
                 e["budget"] = budget
             if release is not None:
                 e["release"] = release
-            self._append(ev, e)
+            self._append(rec, e)
             return sid
 
     def finish(self, session: str) -> None:
         """The recursive session's inner session finished: its outer sessions may be served."""
-        with self._locked() as ev:
-            self._append(ev, {"event": "finish", "session": session, "part": INNER})
+        with self._locked() as rec:
+            self._append(rec, {"event": "finish", "session": session, "part": INNER})
 
     def stop(self, session: str, part: str, why: str) -> bool:
         """The recursive session stops at ``part``: its one failure, recorded once (False if it had already stopped)."""
-        with self._locked() as ev:
-            if _stopped(ev, session):
+        with self._locked() as rec:
+            if rec.stopped(session):
                 return False
-            self._append(ev, {"event": "stop", "session": session, "part": part, "why": why})
+            self._append(rec, {"event": "stop", "session": session, "part": part, "why": why})
             return True
 
     def release(self, session: str, part: str) -> None:
         """An outer proof of the recursive session was released (the challenger's verdict accepted it)."""
-        with self._locked() as ev:
-            self._append(ev, {"event": "release", "session": session, "part": part})
+        with self._locked() as rec:
+            self._append(rec, {"event": "release", "session": session, "part": part})
 
     def admit(self, session: str, part: str, *, timed: bool = False) -> int | None:
         """Raise `Refused` unless an outer session of ``session`` may be served now: the recursive session is open, has not
@@ -152,21 +202,21 @@ class Firewall:
         one (never opened), then refused. A refusal is recorded (``refused``). Returns ``part``'s release time (rule 3), or
         None. Only a ``timed`` caller (one that holds the proofs to that time: the Rust firewall, or a test of its rules)
         is admitted to a scheduled session; this module's relay is not."""
-        with self._locked() as ev:
+        with self._locked() as rec:
             why, at = None, None
-            open_ = next((e for e in ev if e["event"] == "open" and e["session"] == session), None)
+            open_ = rec.opened(session)
             if open_ is None:
                 why = f"recursive session {session} was never opened"
-            elif (s := _stopped(ev, session)) is not None:
+            elif (s := rec.stopped(session)) is not None:
                 why = f"recursive session {session} stopped at {s['part']}: the firewall serves nothing more of it"
-            elif (j := _next(ev, open_)) is None:
+            elif (j := rec.next(open_)) is None:
                 why = f"recursive session {session} released all its statements: the firewall serves nothing more of it"
-            elif (b := _budget(ev, open_["stream"])) is not None and (n := _failures(ev, open_["stream"])) >= b:
+            elif (b := rec.budget(open_["stream"])) is not None and (n := rec.failures(open_["stream"])) >= b:
                 why = f"stream {open_['stream']} stopped at its failure budget ({n} of {b})"
-            elif not any(e["event"] == "finish" and e["session"] == session for e in ev):
+            elif not rec.finished(session):
                 why = f"recursive session {session}: its inner session has not finished"
             elif (nxt := open_["parts"][j]) != part:
-                self._append(ev, {"event": "stop", "session": session, "part": nxt, "why": f"never opened: {part} was asked in its place"})
+                self._append(rec, {"event": "stop", "session": session, "part": nxt, "why": f"never opened: {part} was asked in its place"})
                 why = f"recursive session {session} stopped at {nxt}: {part} is not its next statement"
             elif (r := open_.get("release")) is not None:
                 if not timed:
@@ -175,19 +225,19 @@ class Firewall:
                 else:
                     at = r["start_ms"] + sum(r["windows_ms"][:j + 1])
             if why is not None:
-                self._append(ev, {"event": "refused", "session": session, "part": part})
+                self._append(rec, {"event": "refused", "session": session, "part": part})
                 raise Refused(refused(why))
             return at
 
     def stopped(self, session: str) -> dict | None:
-        with self._locked() as ev:
-            return _stopped(ev, session)
+        with self._locked() as rec:
+            return rec.stopped(session)
 
     def failures(self, stream: str) -> int:
         """The failures on ``stream`` so far (rule 4): its recursive sessions' stops, and each refusal of one that had not
         stopped while the stream had not."""
-        with self._locked() as ev:
-            return _failures(ev, stream)
+        with self._locked() as rec:
+            return rec.failures(stream)
 
     @contextmanager
     def slot(self, session: str, part: str, waiting: Callable[[], None] | None = None) -> Iterator[None]:
@@ -198,17 +248,17 @@ class Firewall:
             try:
                 fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
-                with self._locked() as ev:
-                    self._append(ev, {"event": "wait", "session": session, "part": part})
+                with self._locked() as rec:
+                    self._append(rec, {"event": "wait", "session": session, "part": part})
                 if waiting:
                     waiting()
                 fcntl.flock(f, fcntl.LOCK_EX)
             try:
-                with self._locked() as ev:
-                    if (o := _orphan(ev)) is not None and _stopped(ev, o["session"]) is None:
-                        self._append(ev, {"event": "stop", "session": o["session"], "part": o["part"],
-                                          "why": f"the slot's holder ended before its outcome (slot {o['seq']})"})
-                    self._append(ev, {"event": "slot", "session": session, "part": part})
+                with self._locked() as rec:
+                    if (o := rec.orphan()) is not None and rec.stopped(o["session"]) is None:
+                        self._append(rec, {"event": "stop", "session": o["session"], "part": o["part"],
+                                           "why": f"the slot's holder ended before its outcome (slot {o['seq']})"})
+                    self._append(rec, {"event": "slot", "session": session, "part": part})
                 yield
             finally:
                 fcntl.flock(f, fcntl.LOCK_UN)
@@ -254,6 +304,171 @@ def _orphan(ev: list[dict]) -> dict | None:
     done = any(e["session"] == s["session"] and (e["event"] in ("release", "refused") and e["part"] == s["part"] or e["event"] == "stop")
                for e in ev[k + 1:])
     return None if done else s
+
+
+#: the encoding `Path.read_text` reads the record in
+_ENCODING = locale.getpreferredencoding(False)
+#: how many of the last bytes it read an index keeps, to tell that the record still holds them
+_LAST = 256
+_KINDS = ("finish", "stop", "release", "refused", "wait", "slot")
+
+
+class _Scan:
+    """The record read whole, each rule's read a scan of it."""
+
+    def __init__(self, events: list[dict]) -> None:
+        self.events = events
+
+    @property
+    def count(self) -> int:
+        return len(self.events)
+
+    @property
+    def opens(self) -> int:
+        return sum(e["event"] == "open" for e in self.events)
+
+    def add(self, e: dict) -> None:
+        self.events.append(e)
+
+    def opened(self, session: str) -> dict | None:
+        return next((e for e in self.events if e["event"] == "open" and e["session"] == session), None)
+
+    def first(self, stream: str) -> dict | None:
+        return next((e for e in self.events if e["event"] == "open" and e["stream"] == stream), None)
+
+    def stopped(self, session: str) -> dict | None:
+        return _stopped(self.events, session)
+
+    def finished(self, session: str) -> bool:
+        return any(e["event"] == "finish" and e["session"] == session for e in self.events)
+
+    def next(self, open_: dict) -> int | None:
+        return _next(self.events, open_)
+
+    def budget(self, stream: str) -> int | None:
+        return _budget(self.events, stream)
+
+    def failures(self, stream: str) -> int:
+        return _failures(self.events, stream)
+
+    def orphan(self) -> dict | None:
+        return _orphan(self.events)
+
+
+def _regular(e: Any) -> bool:
+    """Whether ``e`` is an event as the firewall writes it, one whose reads `_Index` answers as `_Scan` does: an object with
+    a ``seq`` and a string ``session``, and either an ``open`` with a string ``stream``, a list of string ``parts`` and an
+    integer ``budget`` or none, or one of the other events with a string ``part``."""
+    if not (type(e) is dict and "seq" in e and type(e.get("session")) is str):
+        return False
+    if e.get("event") == "open":
+        return (type(e.get("stream")) is str and type(e.get("parts")) is list and all(type(p) is str for p in e["parts"])
+                and (e.get("budget") is None or type(e["budget"]) is int))
+    return e.get("event") in _KINDS and type(e.get("part")) is str
+
+
+class _Tally:
+    """A stream's failures as `_failures` counts them, an event at a time."""
+
+    def __init__(self, budget: int | None) -> None:
+        self.budget, self.n = budget, 0
+        self.mine: dict[str, list[str]] = {}
+        self.released: dict[str, set[str]] = {}
+        self.stopped: set[str] = set()
+
+    def add(self, kind: str, s: str, part: str) -> None:
+        if kind == "release":
+            self.released.setdefault(s, set()).add(part)
+        elif kind == "stop":
+            self.stopped.add(s)
+            self.n += 1
+        elif (kind == "refused" and not all(p in self.released.get(s, ()) for p in self.mine[s]) and s not in self.stopped
+              and (self.budget is None or self.n < self.budget)):
+            self.n += 1
+
+
+class _Index:
+    """What the rules read of the record, kept as it grows: `_Scan`'s answers, an event at a time. ``offset`` is how much
+    of the record (``file``, its device and inode) is in it, and ``last`` the last bytes of that. A line the firewall
+    doesn't write makes it not ``regular``: it can't answer that record."""
+
+    def __init__(self, file: tuple[int, int] | None) -> None:
+        self.file, self.offset, self.last, self.regular = file, 0, b"", True
+        self.count = self.opens = 0
+        self._opened: dict[str, dict] = {}
+        self._first: dict[str, dict] = {}
+        self._stopped: dict[str, dict] = {}
+        self._finished: set[str] = set()
+        self._released: dict[str, set[str]] = {}
+        self._tallies: dict[str, _Tally] = {}
+        self._member: dict[str, list[_Tally]] = {}
+        self._slot: dict | None = None
+        self._slot_done = False
+
+    def read(self, chunk: bytes) -> None:
+        """The record's next bytes, whole lines, are in the index."""
+        self.offset += len(chunk)
+        self.last = (self.last + chunk[-_LAST:])[-_LAST:]
+
+    def add(self, e: Any) -> None:
+        self.count += 1
+        if not (self.regular and _regular(e)):
+            self.regular = False
+            return
+        kind, s = e["event"], e["session"]
+        if kind == "open":
+            self.opens += 1
+            self._opened.setdefault(s, e)
+            t = self._tallies.get(e["stream"])
+            if t is None:
+                self._first[e["stream"]] = e
+                t = self._tallies[e["stream"]] = _Tally(e.get("budget"))
+            if s not in t.mine:
+                self._member.setdefault(s, []).append(t)
+            t.mine[s] = e["parts"]
+            return
+        if kind == "slot":
+            self._slot, self._slot_done = e, False
+            return
+        if self._slot is not None and s == self._slot["session"] and (
+                kind == "stop" or kind in ("release", "refused") and e["part"] == self._slot["part"]):
+            self._slot_done = True
+        if kind == "finish":
+            self._finished.add(s)
+        elif kind == "stop":
+            self._stopped.setdefault(s, e)
+        elif kind == "release":
+            self._released.setdefault(s, set()).add(e["part"])
+        if kind in ("release", "stop", "refused"):
+            for t in self._member.get(s, ()):
+                t.add(kind, s, e["part"])
+
+    def opened(self, session: str) -> dict | None:
+        return self._opened.get(session)
+
+    def first(self, stream: str) -> dict | None:
+        return self._first.get(stream)
+
+    def stopped(self, session: str) -> dict | None:
+        return self._stopped.get(session)
+
+    def finished(self, session: str) -> bool:
+        return session in self._finished
+
+    def next(self, open_: dict) -> int | None:
+        released = self._released.get(open_["session"], ())
+        return next((j for j, p in enumerate(open_["parts"]) if p not in released), None)
+
+    def budget(self, stream: str) -> int | None:
+        first = self._first.get(stream)
+        return None if first is None else first.get("budget")
+
+    def failures(self, stream: str) -> int:
+        t = self._tallies.get(stream)
+        return 0 if t is None else t.n
+
+    def orphan(self) -> dict | None:
+        return None if self._slot_done else self._slot
 
 
 def _parts_ok(parts) -> None:
