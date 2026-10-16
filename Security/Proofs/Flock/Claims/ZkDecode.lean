@@ -1,0 +1,186 @@
+import Proofs.Flock.Claims.Decode
+import Proofs.Flock.Soundness.PadCode
+
+/-!
+# The masked (`--zk`) level-0 code as an `IRS`, its decoder, and the read step
+
+In a masked session the first committed codeword is level 0 with VEIL's hiding (`Flock.Zk.ligerito`,
+`commit_zk` in `flock-zk-b684b12.patch`): `s` lanes, the witness's `2^lanes` then `e` extra lanes (`Zk.EXTRA_LANES = 4`,
+a pair per rep), each the Reed–Solomon encoding of `2^cols` message symbols `M` padded by `(Ŵ_cols + c₀)·μ`, `μ` of
+`t` coefficients (`t = 2·q₀`, `c₀ = Zk.PAD_C`). On the novel basis the padded lane's coefficients are `M + c₀·μ` at
+`[0, t)`, `M` up to `2^cols`, and `μ` at `[2^cols, 2^cols + t)` (`zkCoeffs`, `lane_codeword`), so each lane is a codeword
+of `RS[2^d, 2^cols + t]` at the points `ω_q` (`PadCode.encAt`), and the masked code is an interleaved Reed–Solomon code
+(`zkLevelZero`): the plain level-0 code with `e` more lanes and `t` more coefficients per lane, on the same positions.
+A message (`ZkMessage`) is every lane's `M` and `μ`, a column every lane's symbol (`zkEnc`). #2104's decoder therefore
+meets `ListComplete` for it at every `agree` (`listComplete_zkLevelZero`), and on opened columns at distinct positions
+below `2^64` it is the Guruswami–Sudan path once `agree ≤ 1` is above `√((2^cols + t + 1)/N)` (`zkLevelZero_regime`).
+
+The read step (`zkRead`) drops the padding and the extra lanes, keeps the witness lanes' messages (`zkWitnessMsg`), and
+reads the packed trace (`Model.witnessOf`) as the hidden values, bit `a` of the trace being hidden value `a`
+(`readTrace`), with no salts: the masked statement's commitments are `hm96` rows the circuit computes from trace bits,
+so their salts are trace bits too.
+-/
+
+namespace Claims.Flock
+
+open FlockSoundness FlockSoundness.Model Polynomial
+
+/-! ## The masked code -/
+
+/-- A masked level-0 message: each of `s` lanes' `2^cols` message symbols and its `t` padding coefficients. -/
+abbrev ZkMessage (F : Type) (s cols t : ℕ) := (Fin s → Fin (2 ^ cols) → F) × (Fin s → Fin t → F)
+
+/-- **A masked lane's coefficients** on the first `2^cols + t` novel-basis monomials: `M + c₀·μ` at `[0, t)`, `M` up
+to `2^cols`, then `μ` (`lane_codeword`'s `v[i] += c·pad[i]`, `v[L + i] = pad[i]`). -/
+def zkCoeffs {F : Type} [Field F] (c₀ : F) {cols t : ℕ} (M : Fin (2 ^ cols) → F) (μ : Fin t → F) :
+    Fin (2 ^ cols + t) → F :=
+  Fin.append (fun c => M c + if h : c.val < t then c₀ * μ ⟨c.val, h⟩ else 0) μ
+
+theorem zkCoeffs_right {F : Type} [Field F] (c₀ : F) {cols t : ℕ} (M : Fin (2 ^ cols) → F) (μ : Fin t → F)
+    (j : Fin t) : zkCoeffs c₀ M μ (Fin.natAdd (2 ^ cols) j) = μ j := by
+  simp [zkCoeffs]
+
+theorem zkCoeffs_left {F : Type} [Field F] (c₀ : F) {cols t : ℕ} (M : Fin (2 ^ cols) → F) (μ : Fin t → F)
+    (c : Fin (2 ^ cols)) :
+    zkCoeffs c₀ M μ (Fin.castAdd t c) = M c + if h : c.val < t then c₀ * μ ⟨c.val, h⟩ else 0 := by
+  simp [zkCoeffs]
+
+/-- A lane's message and padding are its coefficients' to read back. -/
+theorem zkCoeffs_inj {F : Type} [Field F] (c₀ : F) {cols t : ℕ} {M M' : Fin (2 ^ cols) → F} {μ μ' : Fin t → F}
+    (h : zkCoeffs c₀ M μ = zkCoeffs c₀ M' μ') : M = M' ∧ μ = μ' := by
+  have hμ : μ = μ' := funext fun j => by
+    have := congrFun h (Fin.natAdd (2 ^ cols) j)
+    rwa [zkCoeffs_right, zkCoeffs_right] at this
+  subst hμ
+  refine ⟨funext fun c => ?_, rfl⟩
+  have := congrFun h (Fin.castAdd t c)
+  rw [zkCoeffs_left, zkCoeffs_left] at this
+  exact add_right_cancel this
+
+/-- **The masked level-0 column** at position `q`: every lane's codeword symbol, its coefficients encoded at `d` bits. -/
+def zkEnc {F K : Type} [Field F] [Field K] (A : Arith F K) (d : ℕ) (c₀ : F) {s cols t : ℕ}
+    (M : ZkMessage F s cols t) (q : ℕ) : Fin s → F :=
+  fun ℓ => encAt A d (2 ^ cols + t) (zkCoeffs c₀ (M.1 ℓ) (M.2 ℓ)) q
+
+/-- The lane polynomial determines the coefficients: the novel basis is linearly independent. -/
+theorem encPoly_injective {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
+    [DecidableEq K] (A : Arith F K) (hA : A.Correct) (d k : ℕ) (hd : d ≤ 40) (hk : k ≤ 2 ^ d) :
+    Function.Injective (encPoly A hA d k hd hk) := by
+  intro a a' h
+  have hsum : ∑ c, (a c - a' c) • xP A hA d hd (Fin.castLE hk c) = 0 := by
+    rw [← sub_eq_zero.2 h]
+    simp only [encPoly, ← Finset.sum_sub_distrib, sub_smul, Polynomial.smul_eq_C_mul, ← sub_mul]
+  funext c
+  exact sub_eq_zero.1 (Fintype.linearIndependent_iff.1
+    ((xP_linearIndependent A hA d hd).comp _ (Fin.castLE_injective hk)) _ hsum c)
+
+/-- The masked message's lane polynomials. -/
+noncomputable def zkRows {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
+    [DecidableEq K] (A : Arith F K) (hA : A.Correct) (d : ℕ) (c₀ : F) {s cols t : ℕ} (hd : d ≤ 40)
+    (hk : 2 ^ cols + t ≤ 2 ^ d) (M : ZkMessage F s cols t) : Fin s → F[X] :=
+  fun ℓ => encPoly A hA d (2 ^ cols + t) hd hk (zkCoeffs c₀ (M.1 ℓ) (M.2 ℓ))
+
+theorem zkRows_injective {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
+    [DecidableEq K] (A : Arith F K) (hA : A.Correct) (d : ℕ) (c₀ : F) {s cols t : ℕ} (hd : d ≤ 40)
+    (hk : 2 ^ cols + t ≤ 2 ^ d) : Function.Injective (zkRows A hA d c₀ (s := s) hd hk) := by
+  intro M M' h
+  have hl : ∀ ℓ, M.1 ℓ = M'.1 ℓ ∧ M.2 ℓ = M'.2 ℓ := fun ℓ =>
+    zkCoeffs_inj c₀ (encPoly_injective A hA d _ hd hk (congrFun h ℓ))
+  exact Prod.ext (funext fun ℓ => (hl ℓ).1) (funext fun ℓ => (hl ℓ).2)
+
+/-- **The masked level-0 code** as an interleaved Reed–Solomon code: `s` lanes, each of degree below `2^cols + t`,
+at the points `ω_q`. -/
+noncomputable def zkLevelZero {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
+    [DecidableEq K] (A : Arith F K) (hA : A.Correct) (s cols t d : ℕ) (c₀ : F) (hd : d ≤ 40)
+    (hk : 2 ^ cols + t ≤ 2 ^ d) : IRS F (ZkMessage F s cols t) s where
+  k := 2 ^ cols + t
+  dom := A.omega
+  rows := zkRows A hA d c₀ hd hk
+  natDegree_rows M ℓ := encPoly_natDegree A hA d _ hd hk (by positivity) _
+  ofRows := Function.invFun (zkRows A hA d c₀ hd hk)
+  ofRows_rows := Function.leftInverse_invFun (zkRows_injective A hA d c₀ hd hk)
+
+theorem zkLevelZero_enc {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
+    [DecidableEq K] (A : Arith F K) (hA : A.Correct) (s cols t d : ℕ) (c₀ : F) (hd : d ≤ 40)
+    (hk : 2 ^ cols + t ≤ 2 ^ d) : (zkLevelZero A hA s cols t d c₀ hd hk).enc = zkEnc A d c₀ := by
+  funext M q ℓ
+  exact encPoly_eval A hA d _ hd hk _ q
+
+/-- **The masked level-0 decoder meets `ListComplete`** for the masked columns, at every `agree`. -/
+theorem listComplete_zkLevelZero {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
+    [DecidableEq K] (A : Arith F K) (hA : A.Correct) (s cols t d : ℕ) (c₀ : F) (hd : d ≤ 40)
+    (hk : 2 ^ cols + t ≤ 2 ^ d) (agree : ℝ) :
+    ListComplete (zkEnc A d c₀ (s := s) (cols := cols) (t := t)) agree
+      ((zkLevelZero A hA s cols t d c₀ hd hk).decode agree) := by
+  rw [← zkLevelZero_enc A hA s cols t d c₀ hd hk]
+  exact (zkLevelZero A hA s cols t d c₀ hd hk).listComplete_decode agree
+
+/-- **The masked code's Johnson regime**: opened columns at distinct positions below `2^64`, and `agree ≤ 1`
+strictly above `√((2^cols + t + 1)/N)`. -/
+theorem zkLevelZero_regime {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
+    [DecidableEq K] (A : Arith F K) (hA : A.Correct) (s cols t d : ℕ) (c₀ : F) (hd : d ≤ 40)
+    (hk : 2 ^ cols + t ≤ 2 ^ d) (agree : ℝ) (os : List (ℕ × (Fin s → F))) (hnd : (os.map Prod.fst).Nodup)
+    (hlt : ∀ p ∈ os, p.1 < 2 ^ 64) (ha : agree ≤ 1)
+    (hJ : Real.sqrt ((2 ^ cols + t + 1) * os.length) < agree * os.length) :
+    (zkLevelZero A hA s cols t d c₀ hd hk).Regime agree os := by
+  refine (zkLevelZero A hA s cols t d c₀ hd hk).regime_of_johnson agree os ?_ ha
+    (by simpa [zkLevelZero] using hJ)
+  have hpts : (os.map fun p => A.omega p.1) = (os.map Prod.fst).map A.omega := by rw [List.map_map]; rfl
+  change (os.map fun p => A.omega p.1).Nodup
+  rw [hpts]
+  refine hnd.map_on fun x hx y hy hxy => hA.omega_injective 64 le_rfl ?_ ?_ hxy
+  · obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hx
+    exact hlt p hp
+  · obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hy
+    exact hlt p hp
+
+/-- In the masked code's Johnson regime the decoder is the Guruswami–Sudan path. -/
+theorem zkLevelZero_decode_eq_gsPath {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
+    [DecidableEq K] (A : Arith F K) (hA : A.Correct) (s cols t d : ℕ) (c₀ : F) (hd : d ≤ 40)
+    (hk : 2 ^ cols + t ≤ 2 ^ d) (agree : ℝ) (os : List (ℕ × (Fin s → F))) (hnd : (os.map Prod.fst).Nodup)
+    (hlt : ∀ p ∈ os, p.1 < 2 ^ 64) (ha : agree ≤ 1)
+    (hJ : Real.sqrt ((2 ^ cols + t + 1) * os.length) < agree * os.length) :
+    (zkLevelZero A hA s cols t d c₀ hd hk).decode agree os =
+      (zkLevelZero A hA s cols t d c₀ hd hk).gsPath agree os
+        (zkLevelZero_regime A hA s cols t d c₀ hd hk agree os hnd hlt ha hJ).1 :=
+  (zkLevelZero A hA s cols t d c₀ hd hk).decode_eq_gsPath agree os
+    (zkLevelZero_regime A hA s cols t d c₀ hd hk agree os hnd hlt ha hJ)
+
+/-! ## The read step -/
+
+/-- The witness lanes' messages: the first `2^lanes` lanes' message symbols; their padding and the `e` extra lanes are
+the prover's randomness, not the trace. -/
+def zkWitnessMsg {F : Type} {lanes e cols t : ℕ} (M : ZkMessage F (2 ^ lanes + e) cols t) : Message F lanes cols :=
+  fun ℓ => M.1 (Fin.castAdd e ℓ)
+
+/-- A level-0 message's trace, `2^m` bits in address order (`Model.witnessOf`: table entry `c·2^lanes + ℓ` packs trace
+bits `128·(c·2^lanes + ℓ) + v`). -/
+def traceBits {F K : Type} [Field F] [Field K] (A : Arith F K) (m lanes cols : ℕ) (M : Message F lanes cols) :
+    List Bool :=
+  List.ofFn fun a : Fin (2 ^ m) => decide (witnessOf A m lanes cols M a = 1)
+
+/-- **The read step on a level-0 message**: the trace's bits are the hidden values, hidden value `a` being trace bit
+`a`, and no salts. -/
+def readTrace {F K : Type} [Field F] [Field K] (A : Arith F K) (m lanes cols : ℕ) (M : Message F lanes cols) : Wit :=
+  ⟨traceBits A m lanes cols M, []⟩
+
+/-- **The read step on a masked message**: the witness lanes' trace (`readTrace` of `zkWitnessMsg`). -/
+def zkRead {F K : Type} [Field F] [Field K] (A : Arith F K) (m lanes e cols t : ℕ)
+    (M : ZkMessage F (2 ^ lanes + e) cols t) : Wit :=
+  readTrace A m lanes cols (zkWitnessMsg M)
+
+theorem readTrace_hid {F K : Type} [Field F] [Field K] (A : Arith F K) (m lanes cols : ℕ) (M : Message F lanes cols)
+    (a : Fin (2 ^ m)) : (readTrace A m lanes cols M).hid.getD a false = decide (witnessOf A m lanes cols M a = 1) := by
+  simp [readTrace, traceBits]
+
+theorem readTrace_hid_length {F K : Type} [Field F] [Field K] (A : Arith F K) (m lanes cols : ℕ)
+    (M : Message F lanes cols) : (readTrace A m lanes cols M).hid.length = 2 ^ m := by
+  simp [readTrace, traceBits]
+
+/-- The masked read sees only the witness lanes' messages: the padding and the extra lanes don't reach the witness. -/
+theorem zkRead_eq_of_witnessMsg {F K : Type} [Field F] [Field K] (A : Arith F K) (m lanes e cols t : ℕ)
+    {M M' : ZkMessage F (2 ^ lanes + e) cols t} (h : zkWitnessMsg M = zkWitnessMsg M') :
+    zkRead A m lanes e cols t M = zkRead A m lanes e cols t M' := by
+  simp only [zkRead, h]
+
+end Claims.Flock
