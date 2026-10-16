@@ -22,7 +22,7 @@ from verity_numerical.bench.input_sets import InputSet  # noqa: E402
 
 SLICES = Path(__file__).resolve().parents[4] / "benchmarks" / "numerical" / "tests" / "bench" / "data" / "captured-101" / "slices"
 REG = lowerings.registry("C-Flock")
-LOWERED = {"rope-head": {"D": 64}, "silu-mul": {"I": 8192}}
+LOWERED = {"rope-head": {"D": 64}, "silu-mul": {"I": 8192}, "silu-mul-v2": {"I": 256}}
 
 
 SPECIAL = [0, 0x80000000, 0x7F800000, 0xFF800000, 1, 0x80000001, 0x7FFFFF, 0x800000, 0x7F7FFFFF, 0x3F800000, 0xBF800000,
@@ -475,6 +475,31 @@ def test_silu_unit_covers_the_whole_table():
     assert [int(x) for x in out] == [P.SiluMulBf16.evaluate(*v) for v in vecs]
 
 
+#: up words where `SiluMulBf16_v2` is not a plain product: -0 (``+ 0.0f`` makes it +0), +-inf, NaNs of either sign, a subnormal
+SILU_V2_UPS = (0x3F80, 0x0000, 0x8000, 0xBF80, 0x7F80, 0xFF80, 0x7FC0, 0xFFC1, 0x7F81, 0x0001, 0x4049)
+
+
+def test_silu_v2_unit_is_the_served_function_on_every_gate_word():
+    """`SiluMul_v2`'s unit against `SiluMulBf16_v2` (``registry.act``) on every gate word at each of :data:`SILU_V2_UPS`, then on
+    random (g, u). The two versions differ on NaN, -inf, -0 and the gates whose ``expf(-g)`` overflows, so a unit with
+    `SiluMul_v1`'s semantics fails here."""
+    act = pytest.importorskip("verity_vllm.program.registry.act")
+    low = REG.module("silu-mul-v2").lowering(TM.subcircuit("silu-mul-v2", I=4))
+    assert low.units.n == 4 and low.layout.counts["ands"] == 1380
+    g = list(range(1 << 16))
+    differs = {w for w in g if act.SiluMulBf16.evaluate(w, 0x3F80) != P.SiluMulBf16.evaluate(w, 0x3F80)}
+    assert {0x7FC0, 0xFF80, 0x8000, 0xC2B2} <= differs        # NaN, -inf, -0, -89
+    for u in SILU_V2_UPS:
+        (out,), ok = IL.evaluate_layout(low.layout, [g, [u] * len(g)], len(g))
+        assert ok == (1 << len(g)) - 1
+        assert [w for w, x in zip(g, out) if int(x) != act.SiluMulBf16.evaluate(w, u)] == [], hex(u)
+    rng = random.Random(7)
+    vecs = [bf16_words(rng, 2) for _ in range(8000)]
+    (out,), ok = IL.evaluate_layout(low.layout, [[v[0] for v in vecs], [v[1] for v in vecs]], len(vecs))
+    assert ok == (1 << len(vecs)) - 1
+    assert [int(x) for x in out] == [act.SiluMulBf16.evaluate(*v) for v in vecs]
+
+
 @pytest.mark.parametrize("which", ["gemm-tc-step", "silu-mul"])
 def test_a_units_nonzeros_are_its_netlist_rows_inside_its_slot(which):
     """`Layout.nonzeros` on a GEMM coordinate's tensor-core step and on SiLU·mul (its table read's rows): the (row, column)
@@ -778,9 +803,10 @@ def test_rmsnorm_captured_slices_and_pins(template):
     assert REG.module(template).lowering(s.subcircuit).sha256 == REG.module(template).PINS[(int(p["N"]), float(p["EPS"]))]
 
 
-#: The served workloads' other parameters (#73 Qwen3-4B on the H100, #60 Mistral-7B on the L40S): the same units read off the
-#: IR, so RoPE and SiLU·mul keep the granted rows and only their leaf maps (the LEAVES line) differ; the RMSNorm warps widen.
-WORKLOAD = [("rope-head", {"D": 128}), ("silu-mul", {"I": 9728}), ("silu-mul", {"I": 14336})]
+#: The served workloads' other parameters (#73 Qwen3-4B on the H100, #60 Mistral-7B on the L40S, GLM-5.3's dense layers at TP8
+#: for `silu-mul-v2`): the same units read off the IR, so RoPE and SiLU·mul keep the granted rows and only their leaf maps (the
+#: LEAVES line) differ; the RMSNorm warps widen.
+WORKLOAD = [("rope-head", {"D": 128}), ("silu-mul", {"I": 9728}), ("silu-mul", {"I": 14336}), ("silu-mul-v2", {"I": 1536})]
 WORKLOAD_RMS = [("rmsnorm-fused-cuda", {"N": 4096, "EPS": 1e-05}), ("rmsnorm-triton", {"N": 4096, "EPS": 1e-05}),
                 ("rmsnorm-triton", {"N": 128, "EPS": 1e-06})]
 

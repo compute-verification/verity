@@ -20,7 +20,8 @@ from verity_numerical.bench import lowerings, templates as TM  # noqa: E402
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 REG = lowerings.registry("C-Flock")
 #: The parameters each pinned template's `PINS` keys name, in their order.
-PIN_PARAMS = {"rope-head": ("D",), "silu-mul": ("I",), "rmsnorm-fused-cuda": ("N", "EPS"), "rmsnorm-triton": ("N", "EPS")}
+PIN_PARAMS = {"rope-head": ("D",), "silu-mul": ("I",), "silu-mul-v2": ("I",), "rmsnorm-fused-cuda": ("N", "EPS"),
+              "rmsnorm-triton": ("N", "EPS")}
 #: Every pinned unit with its pin, and one small unpinned unit.
 CASES = [(t, dict(zip(names, key if isinstance(key, tuple) else (key,))), pin)
          for t, names in PIN_PARAMS.items() for key, pin in sorted(REG.module(t).PINS.items())]

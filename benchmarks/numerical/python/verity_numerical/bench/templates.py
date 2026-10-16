@@ -20,6 +20,8 @@ The templates of row #101 (Llama-3.2-1B) and their Definitions:
   gumbel-top-p-token-select  GumbelTopPTokenSelect_v1{V}        in0 logits, in1 top_p, in2 seed, in3 pos, in4 temp, in5 splits
                                                                 -> out.sampled_token_ids (u64, as the row kernel returns it)
 
+GLM-5.3's served SiLU·mul (vLLM ``_C.silu_and_mul``) is ``silu-mul-v2``, ``SiluMul_v2{I}`` (``registry.act``), on the same ports.
+
 All but ``gemm-coordinate`` are Definitions of the vLLM integration's registry (``verity_vllm.program.registry``), imported
 lazily: this module and the GEMM template need only ``verity``.  Two templates are evaluated through an equal Definition
 that has a kernel: ``AttentionHead_v3`` as ``Attention_v3{NH=1, KVH=1}`` (a batch of that head) and ``RoPEHead_v1`` as
@@ -753,6 +755,10 @@ ROWS: dict[str, _Row] = {r.template: r for r in (
          lambda s: _u16(2 * s["I"], "in0"), lambda s: _u16(s["I"], "out.out"), _silu_sample,
          lambda s: f"i{s['I']}/bf16", lambda s: f"SiluMul_v1<{s['I']}> · BF16", {"in0 (gate | up)": SILU.describe()},
          pattern=r"i(?P<I>\d+)", example={"I": 8192}),
+    _Row("silu-mul-v2", "SiluMul_v2", "verity_vllm.program.registry.act:SiluMul", ("I",),
+         lambda s: _u16(2 * s["I"], "in0"), lambda s: _u16(s["I"], "out.out"), _silu_sample,
+         lambda s: f"i{s['I']}/bf16", lambda s: f"SiluMul_v2<{s['I']}> · BF16", {"in0 (gate | up)": SILU.describe()},
+         pattern=r"i(?P<I>\d+)", example={"I": 256}),
     _Row("gumbel-top-p-token-select", "GumbelTopPTokenSelect_v1", "verity_vllm.program.registry.sampling:GumbelTopPTokenSelect", ("V",),
          lambda s: (Port("in0", "u16", s["V"]), Port("in1", "u32", 1), Port("in2", "u64", 1), Port("in3", "u64", 1),
                     Port("in4", "u32", 1), Port("in5", "u32", 1)),
