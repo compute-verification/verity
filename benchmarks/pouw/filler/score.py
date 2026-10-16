@@ -389,9 +389,10 @@ def show(res: dict) -> None:
           + f" (mixes: {fmt((res['min_mix'] or {}).get('coverage'))} at {(res['min_mix'] or {}).get('entry')})"
           + f"; nominal ÷ capacity {fmt(res['score_nominal'])}, at 0.99 for all {fmt(res['score_at_target'])}")
     if "score_under_ch_if_gated" in res:
-        print(f"  SCORE under CH (every filler at 0.99; CH withdrawn, decision 27; v2's reading, for comparison): "
-              f"{fmt(res['score_under_ch'])}" + ("" if res["scored"] else f" ({fmt(res['score_under_ch_if_gated'])} "
-                                                                           "if gated)"))
+        print(f"  SCORE under CH (every filler at 0.99; CH withdrawn, decision 27; "
+              + ("of the fixed work v4 credits" if res["scorer"] == S.V4 else "v2's reading, for comparison")
+              + f"): {fmt(res['score_under_ch'])}" + ("" if res["scored"] else
+                                                      f" ({fmt(res['score_under_ch_if_gated'])} if gated)"))
     for f in res["flags"]:
         print(f"  FLAG: {f}")
     fe = res.get("filler_entry")
