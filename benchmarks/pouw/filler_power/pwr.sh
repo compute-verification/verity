@@ -9,7 +9,8 @@
 #     --send benchmarks/pouw/filler_power/pwr.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/pwr.sh"'
 #
 # PW_ALONE ("FILL_SMS:KIND:PAT:W:NC[:SLEEP_NS] ..."), PW_POINTS ("B:L:FILL_SMS:KIND:PAT:W:NC[:SLEEP_NS] ..."), PW_CTL (a
-# control pattern run beside the step at each point, e.g. 3; empty for none), PW_WARM, PW_MEAS, PW_ROUNDS
+# control pattern run beside the step at each point, e.g. 3; empty for none), PW_WARM, PW_MEAS, PW_ROUNDS; PW_PREFILL
+# ("M:B:L:FILL_SMS:KIND:PAT:W:NC ...": prefill after heat, pwr.cu's pprefill) with PW_HEAT, PW_PRE_MEAS, PW_PRE_ROUNDS
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -47,6 +48,12 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
     IFS=: read -r b l f k p w nc sl <<< "$a"
     PF_SLEEP_NS=${sl:-0} "$B/pwr" pfill "$b" "$l" "$f" "$k" "$p" "$w" "$nc" "$PW_WARM" "$PW_MEAS" "$PW_ROUNDS" ${PW_CTL} \
       >> "$O/arms.jsonl" 2>> "$O/errors.txt" || echo "rc $? for pfill $a" >> "$O/errors.txt"
+    q
+  done
+  for a in ${PW_PREFILL:-}; do
+    IFS=: read -r m b l f k p w nc <<< "$a"
+    "$B/pwr" pprefill "$m" "$b" "$l" "$f" "$k" "$p" "$w" "$nc" "${PW_HEAT:-8}" "${PW_PRE_MEAS:-2}" "${PW_PRE_ROUNDS:-2}" \
+      >> "$O/arms.jsonl" 2>> "$O/errors.txt" || echo "rc $? for pprefill $a" >> "$O/errors.txt"
     q
   done
   "$B/pwr" pidle 3 >> "$O/arms.jsonl" 2>> "$O/errors.txt"

@@ -13,10 +13,14 @@
 //                                                 re-tuned there (split), the same beside the filler (split_fill), beside
 //                                                 the CTL_PAT filler (split_ctl, when given), the filler alone (fill), and
 //                                                 full again (full2)
+//   pprefill M B L FILL_SMS KIND PAT W NC HEAT MEAS ROUNDS
+//                                                 M-row prefill linears on all SMs right after HEAT s of the decode step on
+//                                                 its partition, alone or beside the filler (run_pprefill)
 // KIND: 0 int8 m16n8k32 s32 (FILL v1's step), 1 FP8 e4m3 m16n8k32 f32, 2 NVFP4 m16n8k64 f32 (ue4m3 block scales 1.0).
 // Each step's D, read as the next A fragment in place (FILL's byte map); FP8 clears bit 3 of every byte (0xF7F7F7F7), so no
 // A or B byte is the e4m3 NaN; e2m1 has no NaN. PAT, the operands from the coins: 0 as FILL (B_0, B_1 uniform), 1 B_1 = B_0,
-// 2 B's bytes in {0, 1}, 3 B = 0 (a power control, not certified work: D = C every step), 4 B's bytes in [0, 16).
+// 2 B's bytes in {0, 1}, 3 B = 0 (a power control, not certified work: D = C every step), 4 B's bytes in [0, 16),
+// 5 C in [-2^15, 2^15) (FILL-SEC's optional hardening), 6 A' = (d0, d1, d2, d3) (HC-KERN's map:direct), 7 both 5 and 6.
 // PF_SLEEP_NS: each warp sleeps that long after each tile (duty cycling). The receipt is FILL's fold for every kind.
 //
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a pwr.cu -lcublasLt -lnvidia-ml -ldl
@@ -141,22 +145,38 @@ struct PPat {
   uint32_t bmask;
   int bsame;
   int sleep_ns;
+  int csmall;  // C in [-2^15, 2^15) instead of [-2^23, 2^23) (FILL-SEC's optional hardening)
+  int map;     // 0: FILL's A' = (d0, d2, d3, d1); 1: A' = (d0, d1, d2, d3) (HC-KERN's map:direct)
 };
 static PPat ppat(int pat) {
-  PPat p{0xffffffffu, 0, 0};
+  PPat p{0xffffffffu, 0, 0, 0, 0};
   if (pat == 1) p.bsame = 1;
   if (pat == 2) p.bmask = 0x01010101u;
   if (pat == 3) p.bmask = 0;
   if (pat == 4) p.bmask = 0x0f0f0f0fu;
+  if (pat == 5 || pat == 7) p.csmall = 1;
+  if (pat == 6 || pat == 7) p.map = 1;
   if (const char* e = getenv("PF_SLEEP_NS")) p.sleep_ns = atoi(e);
   return p;
 }
+__host__ __device__ inline int32_t pcval(uint64_t seed, int r, int n, int csmall) {
+  return csmall ? (int32_t)(dword(seed, 3, r, n) & 0xffffu) - 0x8000 : dcval(seed, r, n);
+}
 constexpr uint32_t FP8_MASK = 0xF7F7F7F7u;  // clears bit 3 of each byte: never 0x7F or 0xFF, e4m3's NaNs
 constexpr uint32_t UE4M3_ONE = 0x38383838u;
-template <int KIND>
+template <int KIND, int MAP>
 __device__ __forceinline__ void pstep(uint32_t (&a)[4], const uint32_t (&b)[2], const uint32_t (&c)[4]) {
-  if constexpr (KIND == 0) {
+  if constexpr (KIND == 0 && MAP == 0) {
     dstep(a, b, c);
+  } else if constexpr (KIND == 0) {
+    uint32_t d0, d1, d2, d3;
+    asm("mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%10,%11,%12,%13};"
+        : "=r"(d0), "=r"(d1), "=r"(d2), "=r"(d3)
+        : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]), "r"(c[0]), "r"(c[1]), "r"(c[2]), "r"(c[3]));
+    a[0] = d0;  // A'[g][4t..]       = D[g][2t]
+    a[1] = d1;  // A'[g+8][4t..]     = D[g][2t+1]
+    a[2] = d2;  // A'[g][16+4t..]    = D[g+8][2t]
+    a[3] = d3;  // A'[g+8][16+4t..]  = D[g+8][2t+1]
   } else {
     float d0, d1, d2, d3;
     if constexpr (KIND == 1)
@@ -173,13 +193,13 @@ __device__ __forceinline__ void pstep(uint32_t (&a)[4], const uint32_t (&b)[2], 
             "r"(UE4M3_ONE));
     const uint32_t m = KIND == 1 ? FP8_MASK : 0xffffffffu;
     a[0] = __float_as_uint(d0) & m;
-    a[1] = __float_as_uint(d2) & m;
-    a[2] = __float_as_uint(d3) & m;
-    a[3] = __float_as_uint(d1) & m;
+    a[1] = __float_as_uint(MAP ? d1 : d2) & m;
+    a[2] = __float_as_uint(MAP ? d2 : d3) & m;
+    a[3] = __float_as_uint(MAP ? d3 : d1) & m;
   }
 }
-// dfill_k with the operand pattern, the kind and the sleep; KIND 0 with PPat{~0, 0, 0} is dfill_k step for step
-template <int KIND, int NC>
+// dfill_k with the operand pattern, the kind and the sleep; KIND 0 with pattern 0 is dfill_k step for step
+template <int KIND, int NC, int MAP>
 __global__ void __launch_bounds__(512) pfill_k(uint64_t c0, uint64_t c1, unsigned long long tile0, int tiles, int steps,
                                               PPat pat, unsigned long long* __restrict__ rec) {
   const int lane = threadIdx.x & 31, g = lane >> 2, t = lane & 3;
@@ -195,8 +215,8 @@ __global__ void __launch_bounds__(512) pfill_k(uint64_t c0, uint64_t c1, unsigne
       b[j][0] = dword(seed, 1 + jj, g, t) & pat.bmask & im;
       b[j][1] = dword(seed, 1 + jj, g, 4 + t) & pat.bmask & im;
     }
-    const int cv[4] = {dcval(seed, g, 2 * t), dcval(seed, g, 2 * t + 1), dcval(seed, g + 8, 2 * t),
-                       dcval(seed, g + 8, 2 * t + 1)};
+    const int cv[4] = {pcval(seed, g, 2 * t, pat.csmall), pcval(seed, g, 2 * t + 1, pat.csmall),
+                       pcval(seed, g + 8, 2 * t, pat.csmall), pcval(seed, g + 8, 2 * t + 1, pat.csmall)};
 #pragma unroll
     for (int q = 0; q < 4; q++) c[q] = KIND == 0 ? (uint32_t)cv[q] : __float_as_uint((float)cv[q]);
 #pragma unroll
@@ -211,7 +231,7 @@ __global__ void __launch_bounds__(512) pfill_k(uint64_t c0, uint64_t c1, unsigne
 #pragma unroll
       for (int u = 0; u < 8; u++)
 #pragma unroll
-        for (int ch = 0; ch < NC; ch++) pstep<KIND>(a[ch], b[u & 1], c);
+        for (int ch = 0; ch < NC; ch++) pstep<KIND, MAP>(a[ch], b[u & 1], c);
     }
     uint64_t h = 0;
 #pragma unroll
@@ -236,7 +256,7 @@ static uint64_t pref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int steps,
         for (int q = 0; q < 4; q++) Bt[b][n][4 * w + q] = (int8_t)(x >> (8 * q));
       }
   for (int r = 0; r < 16; r++)
-    for (int n = 0; n < 8; n++) C[r][n] = dcval(seed, r, n);
+    for (int n = 0; n < 8; n++) C[r][n] = pcval(seed, r, n, p.csmall);
   uint64_t h = 0;
   for (int ch = 0; ch < nc; ch++) {
     int8_t A[16][32];
@@ -258,9 +278,9 @@ static uint64_t pref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int steps,
         for (int t = 0; t < 4; t++)
           for (int q = 0; q < 4; q++) {
             A[g][4 * t + q] = byte(D[g][2 * t], q);
-            A[g + 8][4 * t + q] = byte(D[g + 8][2 * t], q);
-            A[g][16 + 4 * t + q] = byte(D[g + 8][2 * t + 1], q);
-            A[g + 8][16 + 4 * t + q] = byte(D[g][2 * t + 1], q);
+            A[g + 8][4 * t + q] = byte(p.map ? D[g][2 * t + 1] : D[g + 8][2 * t], q);
+            A[g][16 + 4 * t + q] = byte(p.map ? D[g + 8][2 * t] : D[g + 8][2 * t + 1], q);
+            A[g + 8][16 + 4 * t + q] = byte(p.map ? D[g + 8][2 * t + 1] : D[g][2 * t + 1], q);
           }
     }
     for (int r = 0; r < 16; r++)
@@ -275,28 +295,34 @@ static uint64_t pref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int steps,
 
 struct PFill {
   int kind = 0, pat = 0, W = 8, NC = 4, S = 2048, tiles = 1, grid = 0;
-  PPat p{0xffffffffu, 0, 0};
+  PPat p{0xffffffffu, 0, 0, 0, 0};
   uint64_t c0 = 0, c1 = 0;
   unsigned long long* rec = nullptr;
   long long per() const { return (long long)grid * W * tiles; }
   double mmas() const { return (double)per() * NC * S; }
   double macs() const { return mmas() * (kind == 2 ? 8192.0 : 4096.0); }
 };
-template <int KIND>
+template <int KIND, int MAP>
 static void pfill_launch_k(const PFill& f, unsigned long long t0, cudaStream_t st) {
   const dim3 gr(f.grid), bl(32 * f.W);
   switch (f.NC) {
-    case 1: pfill_k<KIND, 1><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.p, f.rec); break;
-    case 2: pfill_k<KIND, 2><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.p, f.rec); break;
-    case 4: pfill_k<KIND, 4><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.p, f.rec); break;
+    case 1: pfill_k<KIND, 1, MAP><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.p, f.rec); break;
+    case 2: pfill_k<KIND, 2, MAP><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.p, f.rec); break;
+    case 4: pfill_k<KIND, 4, MAP><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.p, f.rec); break;
     default: fprintf(stderr, "NC must be 1, 2 or 4\n"); exit(1);
   }
 }
 static void pfill_launch(const PFill& f, long long chunk, cudaStream_t st) {
   const unsigned long long t0 = (unsigned long long)chunk * f.per();
-  if (f.kind == 0) pfill_launch_k<0>(f, t0, st);
-  else if (f.kind == 1) pfill_launch_k<1>(f, t0, st);
-  else pfill_launch_k<2>(f, t0, st);
+  if (f.p.map) {
+    if (f.kind == 0) pfill_launch_k<0, 1>(f, t0, st);
+    else if (f.kind == 1) pfill_launch_k<1, 1>(f, t0, st);
+    else pfill_launch_k<2, 1>(f, t0, st);
+  } else {
+    if (f.kind == 0) pfill_launch_k<0, 0>(f, t0, st);
+    else if (f.kind == 1) pfill_launch_k<1, 0>(f, t0, st);
+    else pfill_launch_k<2, 0>(f, t0, st);
+  }
 }
 static PFill pfill_make(int grid, int kind, int pat, int W, int NC, int S) {
   PFill f;
@@ -463,7 +489,7 @@ static void arm(Dev& d, cudaGraphExec_t ge, cudaStream_t ss, const PFill* f, cud
 // ---------------------------------------------------------------- modes
 static int pgate() {
   int fails = 0;
-  for (int pat : {0, 1, 2, 3, 4})
+  for (int pat : {0, 1, 2, 3, 4, 5, 6, 7})
     for (int nc : {2, 4})
       for (int S : {8, 2048}) {
         PFill f;
@@ -604,6 +630,47 @@ static void run_pfill(Dev& d, int B, int L, int fill_sms, int kind, int pat, int
   if (ctl_pat >= 0) CK(cudaFree(fc.rec));
 }
 
+// Prefill after heat: per round, the decode step on its partition for HEAT s, alone (heat_split) or beside the filler
+// (heat_fill), each followed at once by M-row prefill linears on all SMs for MEAS s (pre_after_split, pre_after_fill);
+// the two orders alternate by round. Whether the filler's heat makes the power-capped prefill that follows run slower.
+static void run_pprefill(Dev& d, int M, int B, int L, int fill_sms, int kind, int pat, int W, int NC, double heat,
+                         double meas, int rounds) {
+  const std::vector<Lt> pp = lin_plans(d, M);
+  cudaStream_t full = d.st, ss = nullptr;
+  int got[2];
+  cudaStream_t fs = fill_stream(d, fill_sms, &ss, got);
+  d.st = ss;
+  const std::vector<Lt> p2 = lin_plans(d, B);
+  d.st = full;
+  PFill f = pfill_make(got[1], kind, pat, W, NC, 2048);
+  bool wrapped = false;
+  const cudaGraphExec_t g_pre = capture(d, full, [&] { enqueue_step(d, pp, 0, M, 0, &wrapped); });
+  const cudaGraphExec_t g_split = capture(d, ss, [&] { enqueue_step(d, p2, 2, B, L, &wrapped); });
+  d.st = full;
+  double step_macs = 0, pre_macs = 0;
+  for (int j = 0; j < 4; j++) {
+    step_macs += (double)LAYERS * B * LN[j] * LK[j];
+    pre_macs += (double)LAYERS * M * LN[j] * LK[j];
+  }
+  step_macs += (double)B * VOCAB * HID + 2.0 * LAYERS * B * HQ * HD * (double)L;
+  auto head = [&](const char* name, int r) {
+    print_head("pprefill", name, r);
+    printf("\"M\": %d, \"B\": %d, \"L\": %d, \"step_sms\": %d, \"pre_macs\": %.6e, ", M, B, L, got[0], pre_macs);
+    print_fill(f, got[1]);
+  };
+  for (int r = 0; r < rounds; r++)
+    for (int c = 0; c < 2; c++) {
+      const bool with = (c + r) % 2 == 1;
+      head(with ? "heat_fill" : "heat_split", r);
+      arm(d, g_split, ss, with ? &f : nullptr, fs, 0, heat, step_macs);
+      head(with ? "pre_after_fill" : "pre_after_split", r);
+      arm(d, g_pre, full, nullptr, nullptr, 0, meas, pre_macs);
+    }
+  CK(cudaGraphExecDestroy(g_pre));
+  CK(cudaGraphExecDestroy(g_split));
+  CK(cudaFree(f.rec));
+}
+
 // dcap's device setup: weights only for pfill, KV sized to B·L
 static void setup(Dev& d, bool need_w, int B, int L) {
   CK(cudaSetDevice(0));
@@ -657,9 +724,12 @@ static void setup(Dev& d, bool need_w, int B, int L) {
   CK(cudaMalloc(&d.sink, 64));
   CK(cudaStreamSynchronize(d.st));
   CK(cudaGetLastError());
-  for (auto fn : {(const void*)pfill_k<0, 1>, (const void*)pfill_k<0, 2>, (const void*)pfill_k<0, 4>,
-                  (const void*)pfill_k<1, 1>, (const void*)pfill_k<1, 2>, (const void*)pfill_k<1, 4>,
-                  (const void*)pfill_k<2, 1>, (const void*)pfill_k<2, 2>, (const void*)pfill_k<2, 4>})
+  for (auto fn : {(const void*)pfill_k<0, 1, 0>, (const void*)pfill_k<0, 2, 0>, (const void*)pfill_k<0, 4, 0>,
+                  (const void*)pfill_k<1, 1, 0>, (const void*)pfill_k<1, 2, 0>, (const void*)pfill_k<1, 4, 0>,
+                  (const void*)pfill_k<2, 1, 0>, (const void*)pfill_k<2, 2, 0>, (const void*)pfill_k<2, 4, 0>,
+                  (const void*)pfill_k<0, 1, 1>, (const void*)pfill_k<0, 2, 1>, (const void*)pfill_k<0, 4, 1>,
+                  (const void*)pfill_k<1, 1, 1>, (const void*)pfill_k<1, 2, 1>, (const void*)pfill_k<1, 4, 1>,
+                  (const void*)pfill_k<2, 1, 1>, (const void*)pfill_k<2, 2, 1>, (const void*)pfill_k<2, 4, 1>})
     CK(cudaFuncSetAttribute(fn, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
 }
 
@@ -667,6 +737,7 @@ int main(int argc, char** argv) {
   if (argc < 2) {
     fprintf(stderr, "usage: pwr pgate | pidle SECS | palone FILL_SMS KIND PAT W NC WARM MEAS\n"
                     "       pwr pfill B L FILL_SMS KIND PAT W NC WARM MEAS ROUNDS [CTL_PAT]\n"
+                    "       pwr pprefill M B L FILL_SMS KIND PAT W NC HEAT MEAS ROUNDS\n"
                     "       (DFILL_COINS=<32 hex digits>: the round's coins; PF_SLEEP_NS: sleep a tile)\n");
     return 1;
   }
@@ -679,13 +750,19 @@ int main(int argc, char** argv) {
   }
   Dev d{};
   int B = 0, L = 0;
-  if (mode == "pfill") {
-    if (argc < 12) { fprintf(stderr, "pfill B L FILL_SMS KIND PAT W NC WARM MEAS ROUNDS [CTL_PAT]\n"); return 1; }
-    B = atoi(argv[2]);
-    L = atoi(argv[3]);
+  if (mode == "pfill" || mode == "pprefill") {
+    const int o = mode == "pprefill";
+    if (argc < 12 + o) {
+      fprintf(stderr, "pfill B L FILL_SMS KIND PAT W NC WARM MEAS ROUNDS [CTL_PAT]\n"
+                      "pprefill M B L FILL_SMS KIND PAT W NC HEAT MEAS ROUNDS\n");
+      return 1;
+    }
+    B = atoi(argv[2 + o]);
+    L = atoi(argv[3 + o]);
     if ((size_t)B * L > 786432 || L % 512 || B > 256 || B < 1) { fprintf(stderr, "B*L <= 786432, L %% 512 == 0, B <= 256\n"); return 1; }
+    if (o && (atoi(argv[2]) < 1 || atoi(argv[2]) > 8192)) { fprintf(stderr, "1 <= M <= 8192\n"); return 1; }
   }
-  setup(d, mode == "pfill", B, L);
+  setup(d, mode == "pfill" || mode == "pprefill", B, L);
   g_samp.start(d.nv);
   int rc = 0;
   if (mode == "pgate") rc = pgate();
@@ -698,6 +775,11 @@ int main(int argc, char** argv) {
     if (fsm <= 0 || fsm >= d.sms) { fprintf(stderr, "0 < FILL_SMS < %d\n", d.sms); rc = 1; }
     else run_pfill(d, B, L, fsm, atoi(argv[5]), atoi(argv[6]), atoi(argv[7]), atoi(argv[8]), atof(argv[9]), atof(argv[10]),
                    atoi(argv[11]), argc > 12 ? atoi(argv[12]) : -1);
+  } else if (mode == "pprefill") {
+    const int fsm = atoi(argv[5]);
+    if (fsm <= 0 || fsm >= d.sms) { fprintf(stderr, "0 < FILL_SMS < %d\n", d.sms); rc = 1; }
+    else run_pprefill(d, atoi(argv[2]), B, L, fsm, atoi(argv[6]), atoi(argv[7]), atoi(argv[8]), atoi(argv[9]),
+                      atof(argv[10]), atof(argv[11]), atoi(argv[12]));
   } else {
     fprintf(stderr, "unknown mode %s\n", mode.c_str());
     rc = 1;
