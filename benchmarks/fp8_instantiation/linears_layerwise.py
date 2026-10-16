@@ -16,7 +16,9 @@ accumulation.  Method names are '-'-joined tokens:
     wgG         weights one scale per (output channel, G inputs), each group's s32 read and scaled on its own
     gptq        weights rounded by GPTQ (blocks of 128, 1% damping) on the calibration windows' rotated inputs
     smA         SmoothQuant before the rotation, alpha = A / 100: x / m and W m per input channel, m from the calibration
-                windows' channel maxima
+                windows' channel maxima (1 / m folds into the RMSNorm weights before q/k/v and gate/up, and into up_proj's
+                rows before down_proj); `smkv` shares o_proj's m across each KV group's query heads, so it folds into
+                v_proj's rows (V is quantized per channel, so its integers are unchanged)
     ocN         the N input channels with the largest calibration maxima served on their own (one int8 product of depth
                 N, its own per-token and per-row scales), the rest rotated as usual: two s32 reads per output
     t0          the row at position 0 (BOS) on two activation limbs (X = 127 X_hi + X_lo + b), every linear
@@ -143,7 +145,7 @@ class Rotation:
 
 def parse(method: str) -> dict:
     spec = {"method": method, "a": None, "top": 127, "rot": "q", "wg": 0, "gptq": False, "sm": 0, "oc": 0, "t0": False,
-            "xt": 0, "a2": set(), "w2": set(), "t0x": False, "lx": set(), "seed": 0, "at": False}
+            "xt": 0, "a2": set(), "w2": set(), "t0x": False, "lx": set(), "seed": 0, "at": False, "smkv": False}
     toks = method.split("-")
     if toks[0] == "bf16":
         if toks[1:] not in ([], ["at"]):
@@ -159,7 +161,7 @@ def parse(method: str) -> dict:
     for t in toks[1:]:
         if t in ("hq", "nr"):
             spec["rot"] = "h" if t == "hq" else "n"
-        elif t in ("gptq", "t0", "t0x", "at"):
+        elif t in ("gptq", "t0", "t0x", "at", "smkv"):
             spec[t] = True
         elif re.fullmatch(r"(wg|sm|oc|xt|s)\d+", t):
             key = re.match(r"[a-z]+", t).group(0)
@@ -170,12 +172,14 @@ def parse(method: str) -> dict:
             raise ValueError(f"{method}: unknown token {t!r}")
     if spec["gptq"] and (spec["wg"] or spec["sm"] or spec["oc"]):
         raise ValueError(f"{method}: gptq runs on the plain rotated weights")
+    if spec["smkv"] and not spec["sm"]:
+        raise ValueError(f"{method}: smkv qualifies smA")
     return spec
 
 
 def wkey(spec: dict) -> tuple:
     """What a method's weight integers depend on (methods with the same key share them)."""
-    return (spec["rot"], spec["top"], spec["wg"], spec["gptq"], spec["sm"], spec["oc"], tuple(sorted(spec["w2"])))
+    return (spec["rot"], spec["top"], spec["wg"], spec["gptq"], spec["sm"], spec["smkv"], spec["oc"], tuple(sorted(spec["w2"])))
 
 
 def needs_calib(spec: dict) -> bool:
@@ -280,6 +284,11 @@ class LayerWeights:
         g = GROUP[name]
         ax = self.calib["amax"][g]
         aw = torch.stack([self.w[n].float().abs().amax(dim=0) for n in LINEARS if GROUP[n] == g]).amax(dim=0)
+        if spec["smkv"] and g == "o":
+            # one scale per (KV head, channel), shared by the group's query heads, so 1 / m folds into v_proj's rows
+            at = self.layer.self_attn
+            rep, d = at.num_key_value_groups, at.head_dim
+            ax, aw = (a.view(-1, rep, d).amax(1, keepdim=True).expand(-1, rep, d).reshape(-1) for a in (ax, aw))
         al = spec["sm"] / 100
         return (ax.clamp(min=1e-5) ** al / aw.clamp(min=1e-5) ** (1 - al)).clamp(min=1e-5)
 
@@ -352,7 +361,7 @@ def product(spec: dict, name: str, x: torch.Tensor, lw: LayerWeights, ctx: dict)
     wd = lw.get(spec, name)
     m, k = x.shape
     tag = f"{spec['seed']}/{li}/{name}/{ctx['w0']}"
-    ckey = (GROUP[name], spec["rot"], spec["sm"], spec["oc"])
+    ckey = (GROUP[name], spec["rot"], spec["sm"], spec["smkv"], spec["oc"])
     if ctx.get("xr_key") == ckey:
         xr, x1 = ctx["xr"], ctx["x1"]
     else:
@@ -779,8 +788,8 @@ def selftest(attn_dir: str | None = None) -> dict:
     calib = torch.randint(0, 512, (4, 64))
     calib[:, 0] = 7
     methods = ["bf16", "r127", "r63", "d63", "d63-s1", "d63-hq", "d63-t0", "d63-t0x", "d63-xt4", "d111", "d63-wg32",
-               "d63-gptq", "r63-gptq", "d63-sm50", "d63-oc8", "d63-a2=0.1.2", "d63-a2=0.1.2-w2=0.1.2", "r127-lx=0.1.2",
-               "d63-oc8-t0"]
+               "d63-gptq", "r63-gptq", "d63-sm50", "d63-sm50-smkv", "d63-oc8", "d63-a2=0.1.2", "d63-a2=0.1.2-w2=0.1.2",
+               "r127-lx=0.1.2", "d63-oc8-t0"]
     res = evaluate(str(tmp), ids.numpy(), methods, tmp, calib_ids=calib.numpy(), batch=2, diag_windows=2, device="cpu",
                    log=lambda s: None)
     ppl = {m: res[m]["ppl"] for m in methods}
@@ -798,6 +807,10 @@ def selftest(attn_dir: str | None = None) -> dict:
     out["d63_layers"] = [round(x["rel"], 5) for x in res["d63"]["divergence"]]
     assert div["d63-a2=0.1.2-w2=0.1.2"] < 0.75 * div["d63-a2=0.1.2"] and div["r127-lx=0.1.2"] < div["r127"], div
     assert res["d63-t0x"]["divergence"][-1]["pos0"] < 1e-2 and res["d63-t0"]["divergence"][-1]["pos0"] < res["d63"]["divergence"][-1]["pos0"]
+    assert math.isfinite(ppl["d63-sm50-smkv"]) and ppl["d63-sm50-smkv"] != ppl["d63-sm50"], ppl
+    lw0 = LayerWeights(model.model.layers[0], 0, {}, {"amax": {"o": torch.rand(cfg.hidden_size) * 10}})
+    m_kv = lw0.smooth(parse("d63-sm50-smkv"), "self_attn.o_proj").view(cfg.num_key_value_heads, -1, cfg.head_dim)
+    assert torch.equal(m_kv, m_kv[:, :1].expand_as(m_kv)) and not torch.equal(m_kv, lw0.smooth(parse("d63-sm50"), "self_attn.o_proj").view_as(m_kv))
     d = res["_meta"]["diag"][0]
     assert set(DIAG_CONFIGS) <= set(d["self_attn.q_proj"]) and d["self_attn.q_proj"]["r127"]["fro"] < d["self_attn.q_proj"]["d63"]["fro"]
     out["diag_l0_q"] = d["self_attn.q_proj"]
