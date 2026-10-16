@@ -385,9 +385,11 @@ DEV void salt_digest(const u64* Y, u64* c) {
 // M_key y as 16 little-endian u32 (mask byte 4w + k is byte k of m[w]): for salt bytes p = 16 q + r, the 80 bytes
 // [16 q, 16 q + 80) of T_{y_p} are xored into A_r, and A_r shifted down r bytes into m.
 // T in shared memory (TS, rows TSTRIDE apart) or read from global memory through L1 (rows 256 apart).
-template <bool TS>
+template <bool TS, bool NIB = false>
 DEV void hm96_mask(const uint8_t* T, const u64* Y, u32* m) {
   constexpr int STRIDE = TS ? TSTRIDE : 256;
+  // NIB: T_v = T_(v & 15) ^ T_(v & 0xF0) (T is linear in v), so the lookups touch 31 rows (8 KB, which stays in L1 at a
+  // 100% shared-memory carveout) instead of all 256 (64 KB, from L2)
 #pragma unroll
   for (int w = 0; w < 16; ++w) m[w] = 0;
 #pragma unroll
@@ -399,11 +401,19 @@ DEV void hm96_mask(const uint8_t* T, const u64* Y, u32* m) {
     for (int q = 0; q < 12; ++q) {
       const int p = 16 * q + r;
       const u32 v = (u32)(Y[p >> 3] >> (56 - 8 * (p & 7))) & 0xFFu;
-      const uint8_t* t = T + v * STRIDE + 16 * q;
+      const uint8_t* t = T + (NIB ? v & 15u : v) * STRIDE + 16 * q;
 #pragma unroll
       for (int i = 0; i < 5; ++i) {
         const uint4 u = TS ? *reinterpret_cast<const uint4*>(t + 16 * i) : ldg16(t + 16 * i);
         A[4 * i] ^= u.x; A[4 * i + 1] ^= u.y; A[4 * i + 2] ^= u.z; A[4 * i + 3] ^= u.w;
+      }
+      if constexpr (NIB) {
+        const uint8_t* th = T + (v & 0xF0u) * STRIDE + 16 * q;
+#pragma unroll
+        for (int i = 0; i < 5; ++i) {
+          const uint4 u = ldg16(th + 16 * i);
+          A[4 * i] ^= u.x; A[4 * i + 1] ^= u.y; A[4 * i + 2] ^= u.z; A[4 * i + 3] ^= u.w;
+        }
       }
     }
     const int sw = r >> 2, s = 8 * (r & 3);
@@ -443,7 +453,7 @@ DEV void st8(u64* p, const u64* d) {
 }
 
 // M_key y and c = SHA-512(salt_prefix || y) for pos to S[pos] (16 words), T at T (TS: in shared memory).
-template <bool PRF, bool TS>
+template <bool PRF, bool TS, bool NIB = false>
 DEV void salt_one(u64 pos, const uint8_t* __restrict__ salts, const uint8_t* T, u64* __restrict__ S) {
   u64 Y[24], c[8], my[8];
   u32 m[16];
@@ -452,7 +462,7 @@ DEV void salt_one(u64 pos, const uint8_t* __restrict__ salts, const uint8_t* T, 
 #ifdef COMMIT_GPU_DIAG_NOMASK
   for (int w = 0; w < 16; ++w) m[w] = (u32)Y[w];
 #else
-  hm96_mask<TS>(T, Y, m);
+  hm96_mask<TS, NIB>(T, Y, m);
 #endif
   salt_digest(Y, c);
 #pragma unroll
@@ -571,7 +581,7 @@ __global__ void __launch_bounds__(SMALL_THREADS, SMALL_MINB)
   const u32 cnt = (u32)(width < SMALL_THREADS ? width : SMALL_THREADS);
   const u64 slot = s0 + blockIdx.y;
   if (pos < n) {
-    salt_one<PRF, false>(pos, salts, reinterpret_cast<const uint8_t*>(Tg), S + 16 * n * slot);
+    salt_one<PRF, false, true>(pos, salts, reinterpret_cast<const uint8_t*>(Tg), S + 16 * n * slot);
     if (slot == 0) {
       u64 f[8];
       frame_first(dom, pos, f);
