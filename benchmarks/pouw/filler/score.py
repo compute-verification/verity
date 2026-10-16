@@ -51,8 +51,9 @@ MACs, serving's and the filler warps', by its SMs' peak (`whole_of_peak`). `scor
 filler-scorer/v5, the lock (`scoring.SCORER`, active since the coordinator's 12:10Z: its fold check is a soundness
 correction, decision 43), keeps v4's gates, the slowdown gate on the measured step against clean serving. It reads the
 receipt's fold (`scoring.fold_reading`) from `Filler.fold` or the lineage's receipt tag and the build's `fold_facts`:
-ram halves a theorem entry, and the folds that bind every word (`scoring.FOLDS`) read in full where the build confirms
-them. Its SCORE is the measured filler part plus a MODELLED served part (`scoring.score_v5`; `served_part_modelled` in
+ram and the XOR-family folds halve a theorem entry (Theorem K's proved half; their full reading, if P2-FF r10's
+select-charging lemma lands, is a secondary readout, `scoring.SELECT_LEMMA`), and duo, which binds every word
+(`scoring.FOLDS`), reads in full where the build confirms it. Its SCORE is the measured filler part plus a MODELLED served part (`scoring.score_v5`; `served_part_modelled` in
 score.json and the record): every served MAC at Theorem K's 0.9 over the wall time the edited design would take
 (`scoring.served_model`'s named constants and their sources, decode's deferred pass calibrated to measurement,
 `scoring.defer_fit`; `--coins` sets prefill's coins factor). `tp-report` reads HC-COMM's TP suite (`scoring.tp_score`).
@@ -292,6 +293,9 @@ def report(out: Path, arm=None, version: str | None = None, coins: float = S.PRE
         v5 = S.score_v5(stats, entry["active_fraction"] if entry else 0.0, coins)
         if entry and entry["applies"] != entry["active"]:
             entry["score_if_active"] = S.score_v5(stats, entry["fraction"], coins).get("SCORE")
+        if entry and entry.get("if_fold"):
+            x = S.score_v5(stats, entry["if_fold"]["active_fraction"], coins)
+            entry["if_fold"] |= {"SCORE": x.get("SCORE"), "filler_part": x.get("filler_part")}
     else:
         sc = S.score(stats, S.certified(entry["active"]) if entry else S.CERTIFIED)
         if entry and entry["applies"] != entry["active"]:
@@ -381,7 +385,7 @@ def record(res: dict, doc: dict, run_dir: Path, by: str | None) -> dict:
             meta["fold"] = {k: res["fold"][k] for k in ("declared", "signature", "fold", "share")}
         fe = res["filler_entry"]
         meta["filler_entry"] = fe and {k: fe.get(k) for k in ("applies", "active", "noise", "fraction", "checks",
-                                                              "failed", "kernel", "score_if_active")}
+                                                              "failed", "kernel", "score_if_active", "if_fold")}
     if res.get("fixed_credit"):
         meta["fixed_credit"] = {"credited": res["fixed_credit"]["credited"],
                                 "dropped": len(res["fixed_credit"]["dropped"])}
@@ -458,6 +462,10 @@ def show_v5(res: dict) -> None:
               f"shows {fd['signature']}, NC {fd['nc']}, NVCC_APPEND_FLAGS {fd['flags']!r}"
               + "".join(f"\n    {w}" for w in fd["why"]))
         print(f"  filler entry {fe.get('applies')}: {fe.get('unfolded')} unfolded, {fe.get('fraction')} folded")
+        if fe.get("if_fold"):
+            x = fe["if_fold"]
+            print(f"  secondary readout, not SCORE: {fmt(x.get('SCORE'))} (filler part {fmt(x.get('filler_part'))}, "
+                  f"entry {x['fraction']}) if {x['if']}")
     show_served_model(res["served_model"])
     print("\n| entry | coverage | filler part | served part (modelled) | t1 measured ms | t1 modelled ms | filler MACs measured → "
           "modelled |\n|---|---|---|---|---|---|---|")
