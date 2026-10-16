@@ -404,8 +404,8 @@ Pinned by `verity/core/protocols/sampled_proofs/tests/test_consumers.py` and
   bytes of the challenger's coins (read in order with the draws'), and reads its release on the challenger's clock
   (`salted_at`). Under `Check.registration_deadline`, seconds on that clock from the release, `register` reads the
   receipt (`received_at`) before any check and refuses a registration received more than the deadline after the salt,
-  or before any salt, as `late-registration`, whatever it holds. That refusal is the epoch's one visible failure: it is
-  logged with both readings and ends the epoch (`ended`), so later registrations are refused (`epoch-ended`), and a
+  or before any salt, as `late-registration`, whatever it holds. That refusal is one visible failure, never retried: it
+  is logged with both readings and ends the epoch (`ended`), so later registrations are refused (`epoch-ended`), and a
   second `salt` is refused (`salted`). An on-time `Registration` carries `salted_at` and `received_at`. The epoch log
   (`epoch_log`) holds `{"event": "salt", "salt", "salted_at"}`, then each `{"event": "registration", "order",
   "registration", "salted_at", "received_at"}` or `{"event": "late-registration", "salted_at", "received_at"}`.

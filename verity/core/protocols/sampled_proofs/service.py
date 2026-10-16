@@ -40,9 +40,9 @@ is the first stage's law over the RUs (one-stage's profile of the boundary regis
 **The salt and the registration deadline.** `Stream.salt` issues the epoch's salt coin once, from the challenger's own
 coins, and reads its release on the challenger's clock (`salted_at`). Under `Check.registration_deadline` (seconds on
 that clock from the release), `register` reads the receipt (`received_at`) first and refuses a registration received
-later than the deadline, or before any salt, as `late-registration`, whatever it holds. That is the epoch's one visible
-failure, and it ends the epoch: the stream receives no registration after it (`epoch-ended`) and never reissues the
-salt (`salted`). It is the rule of `Pouw.AcceptsBy` (`Security/Definitions/Pouw/Game/Deadline.lean`), with `ts` =
+later than the deadline, or before any salt, as `late-registration`, whatever it holds. That is one visible failure,
+never retried, and it ends the epoch: the stream receives no registration after it (`epoch-ended`) and never reissues
+the salt (`salted`). It is the rule of `Pouw.AcceptsBy` (`Security/Definitions/Pouw/Game/Deadline.lean`), with `ts` =
 `salted_at`, `tr` = `received_at` and `td` = `ts` + the deadline. The readings are the challenger's own: the stream's
 epoch log (`Stream.epoch_log`) and each `Registration` carry them, and neither the receipt nor an outcome's record does.
 
