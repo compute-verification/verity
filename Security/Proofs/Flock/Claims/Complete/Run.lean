@@ -12,7 +12,8 @@ whose sends are all of tag `0`.
   `resp 0, …, resp (j − 1)`, against a verifier that answers each of the first `N` messages with `resp j` and accepts the
   `(N + 1)`-th, is accepted within `N + 1` rounds.
 * **The honest run** (`honestRun`): the honest program's sends and last message, each send answered by its coin's
-  bytes. `run_acc_of`: when the statement sets up, the sends are all of tag `0`, fit the verifier's rounds, the first
+  bytes. `run_acc_of`: when the statement sets up, against `H` as at SHA-512, the sends are all of tag `0`, fit the
+  verifier's rounds, the first
   decodes as the link message and the last message as `Final`, and the shipped verdict and the custody checks pass on
   that last message, `honestP` is accepted.
 -/
@@ -145,12 +146,14 @@ theorem map_getD_range (L : List Claims.Msg) :
   simp only [List.getElem_map, List.getElem_range, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem h2,
     Option.getD_some]
 
-/-- **The honest prover is accepted** at the coins `r` when the statement sets up, the honest run's sends are of tag `0`,
+/-- **The honest prover is accepted** at the coins `r` when the statement sets up, against `H` as at SHA-512 (the
+verifier's setup), the honest run's sends are of tag `0`,
 fit the verifier's rounds, and start with a link message, its last message decodes, and the shipped verdict and the
 checks pass on it. -/
 theorem run_acc_of (H : Claims.Msg → Claims.Msg) (w : Claims.Flock.Wit) (x : Claims.Msg) (ω : Tape)
     (r : Fin ((V false).k x) → Coin) {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     {link : List ByteArray × List ByteArray} {F : Final} (hs : setupOf false x = some (s, spec, sts))
+    (hsu : setupWith (Claims.hOf H) s.read = .ok (spec, sts))
     (hk : (honestRun H x w ω r).1.length + 1 ≤ (V false).k x)
     (htag : ∀ m ∈ (honestRun H x w ω r).1, ∃ t, m = 0 :: t)
     (hne : (honestRun H x w ω r).1 ≠ [])
@@ -209,7 +212,7 @@ theorem run_acc_of (H : Claims.Msg → Claims.Msg) (w : Claims.Flock.Wit) (x : C
     have had := act_final (c₁ := Claims.coinSeq r 0) (crest := (List.range (a₁ :: rest).length).map
       (fun j => Claims.coinSeq r (j + 1))) hs hl hfin hlink'
     rw [next_decide H had]
-    refine ⟨hv, ?_⟩
+    refine ⟨spec, sts, hsu, hv, ?_⟩
     rw [hcs, hms1, List.cons_append] at hc
     exact hc
 

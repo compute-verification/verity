@@ -15,12 +15,15 @@ zerocheck outer coin is `1` (`Bad`), at most `2^-128` per coin element (`pr_slot
   its index among the verifier's coins (`repStart`: the link's coin, then the earlier reps' recorded rounds,
   `spec.repStreams` order).
 * **`ε`** is their count over `2^128`; `pr_bad_le`: `Pr[Bad] ≤ ε`, a union bound.
-* **`δc`** is `ε` on the statements the deployed verifier can accept (`ready`), and `1` elsewhere: a statement that sets
-  up no session, or whose session draws no unit (`checks` ends in `drawLaw zk none`, which refuses), is refused at every
-  run, and the last message's length words (`Final.encode`) fit only a statement under `2^56` bytes: the record carries
-  the statement's `hello`, which JSON escaping can grow sixfold, past `2^64` bytes for a statement near it.
+* **`δc`** is `ε` on the statements the deployed verifier can accept against `H` (`ready H`), and `1` elsewhere: a
+  statement that sets up no session, or whose session draws no unit (`checks` ends in `drawLaw zk none`, which refuses),
+  is refused at every run, and the last message's length words (`Final.encode`) fit only a statement under `2^56` bytes:
+  the record carries the statement's `hello`, which JSON escaping can grow sixfold, past `2^64` bytes for a statement
+  near it. The verifier sets the statement up against `H` (`setupWith (hOf H)`), and the statement pins digests of
+  SHA-512 that this setup recomputes with `H`; the honest prover sets up at SHA-512, so `ready H` asks that the two
+  setups agree. At `sha512` they do, and `ready` asks no more (`ready_sha512`).
 * **The composition** (`complete_of`): if the honest prover is accepted at every coin outside `Bad` on every statement in
-  scope, ready, with a witness in the relation, then `Claims.Flock.Complete H (deployPlain rel) honestP δc`.
+  scope, ready, with a witness in the relation, then `Claims.Flock.Complete H (deployPlain rel) honestP (δc H)`.
 -/
 
 namespace FlockComplete
@@ -132,15 +135,31 @@ def Bad (x : Claims.Msg) {k : ℕ} (r : Fin k → Coin) : Prop := ∃ p ∈ oute
 /-- `ε`: the outer coins' count over `2^128`. -/
 noncomputable def ε (x : Claims.Msg) : ℝ := (outerSlots x).length / 2 ^ 128
 
-/-- **The statements the deployed verifier can accept**: it sets up the session, the session draws a unit, and the
-statement is under `2^56` bytes, so that the last message's lengths fit their words. -/
-def ready (x : Claims.Msg) : Bool :=
+open Classical in
+/-- **The statements the deployed verifier can accept** against `H`: it sets up the session, its setup against `H` is
+the one at SHA-512, the session draws a unit, and the statement is under `2^56` bytes, so that the last message's
+lengths fit their words. -/
+noncomputable def ready (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : Bool :=
   match setupOf false x with
-  | some (s, _, _) => s.read.draw.isSome && decide (x.length < 2 ^ 56)
+  | some (s, spec, sts) => s.read.draw.isSome && decide (x.length < 2 ^ 56) &&
+      decide (setupWith (Claims.hOf H) s.read = .ok (spec, sts))
   | none => false
 
-/-- **Flock's `δc` at the plain verifier**: `ε` where the verifier can accept, else `1`. -/
-noncomputable def δc (x : Claims.Msg) : ℝ := if ready x then ε x else 1
+/-- **At SHA-512, `ready` asks only for a drawn session and the statement's length**: the setup against `sha512` is
+the statement's. -/
+theorem ready_sha512 (x : Claims.Msg) :
+    ready sha512 x = match setupOf false x with
+      | some (s, _, _) => s.read.draw.isSome && decide (x.length < 2 ^ 56)
+      | none => false := by
+  unfold ready
+  split
+  · rename_i s spec sts hs
+    rw [hOf_sha512, setupWith_sha512, Ins.setup_read (setupOf_some hs).2]
+    simp
+  · rfl
+
+/-- **Flock's `δc` at the plain verifier** against `H`: `ε` where the verifier can accept, else `1`. -/
+noncomputable def δc (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : ℝ := if ready H x then ε x else 1
 
 /-- **`Pr[Bad] ≤ ε`**: the union bound over the outer coins. -/
 theorem pr_bad_le (x : Claims.Msg) {k : ℕ} : Claims.Pr (fun r : Fin k → Coin => Bad x r) ≤ ε x := by
@@ -162,9 +181,9 @@ and every witness in the relation, the honest prover is accepted at every tape a
 plain verifier is complete for `honestP` with error `δc`. -/
 theorem complete_of (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (hacc : ∀ x w, Claims.Flock.Scope (deployPlain rel) x → Claims.Flock.R (deployPlain rel).parse x w →
-      ready x = true → ∀ (ω : Tape) (r : Fin ((V false).k x) → Coin), ¬ Bad x r →
+      ready H x = true → ∀ (ω : Tape) (r : Fin ((V false).k x) → Coin), ¬ Bad x r →
         (Claims.run H (honestP w) (V false) x ω r).out = .acc) :
-    Claims.Flock.Complete H (deployPlain rel) honestP δc := by
+    Claims.Flock.Complete H (deployPlain rel) honestP (δc H) := by
   intro x w hs hr ω
   unfold δc
   split
