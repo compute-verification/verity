@@ -228,8 +228,8 @@ struct Args {
   int batch;         // problems stacked in rows: A (batch M x K), B (batch N x K), U (batch x M x N); 0 is 1
   uint32_t nzA, nzB; // the fused edit's noise keys (ML's NZ)
   uint64_t sg[4];    // sigma, the SHA-512 noise's key (ML's NS), big-endian words
-  const uint8_t* eb; // NS < 0: A's noise, an M x K int8 buffer shared by the batch (row mod M); NS -2: M x 128, a row's
-                     // noise at column k its byte k % 128 (the one-side peel's [U U U U])
+  const uint8_t* eb; // NS < 0: A's noise, an M x K int8 buffer shared by the batch (row mod M); NS -2 and -3: M x 128, a
+                     // row's noise at column k its byte k % 128 (the one-side peel's [U U U U], period 32)
   int pa_rows;       // the tail's pa map has this many rows, shared by the batch (0: stacked as a)
 };
 
@@ -368,8 +368,29 @@ template <int TM, int BN, int WM, int STAGES, bool F8 = false, int NZ = 0, int N
   }
   DEV void load(uint32_t (&fa)[MI][4], uint32_t (&fb)[NI][2], uint32_t sb, int kk) const {
 #pragma unroll
-    for (int mi = 0; mi < MI; mi++) load_a(fa[mi], sb, kk, mi);
+    for (int mi = 0; mi < MI; mi++) {
+      load_a(fa[mi], sb, kk, mi);
+      if constexpr (NS == -3) {
+#pragma unroll
+        for (int i = 0; i < 4; i++) fa[mi][i] = add_noise<F8>(fa[mi][i], ur[mi][i]);
+      }
+    }
     load_b(fb, sb, kk);
+  }
+  // NS -3: A's noise has period 32 in k (one atom), so a thread's A fragments (rows g and g + 8 of each 16-row block,
+  // bytes 4 q and 16 + 4 q of the atom) take the same 4 words of eb's rows (row mod eM) at every atom; loaded once a tile
+  // and added after each ldmatrix, no pass over shared memory
+  uint32_t ur[MI][4];
+  DEV void load_u(int warp, int lane) {
+    const int r0 = nz_rowA + (warp / WARPS_N) * WM + (lane >> 2), q = lane & 3;
+#pragma unroll
+    for (int mi = 0; mi < MI; mi++)
+#pragma unroll
+      for (int h = 0; h < 2; h++) {
+        const uint8_t* p = eb + (size_t)((r0 + 16 * mi + 8 * h) % eM) * BK;
+        ur[mi][h] = __ldg(reinterpret_cast<const uint32_t*>(p + 4 * q));
+        ur[mi][2 + h] = __ldg(reinterpret_cast<const uint32_t*>(p + 16 + 4 * q));
+      }
   }
   // absorb acc[mi][ni]'s four words into chains 0-3 (and the second lane's 4-7) at position mi NI + ni
   template <int KIND, int MI_, int NI_> DEV static void absorb(St (&ch)[NCH<KIND>], const int (&w)[4]) {
@@ -620,6 +641,7 @@ DEV void gemm_body(const Args& a) {
     ml.tile_of(t, bi, tm, tn);
     const uint32_t tile_id = bi * tiles_m * tiles_n + tm * tiles_n + tn;
     ml.nz_rowA = (bi * tiles_m + tm) * TM; ml.nz_rowB = (bi * tiles_n + tn) * BN;
+    if constexpr (NS == -3) ml.load_u(warp, lane);
     St ch[NCH<KIND>];
 #pragma unroll
     for (int e = 0; e < NCH<KIND>; e++) {

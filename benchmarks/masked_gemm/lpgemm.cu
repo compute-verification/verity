@@ -10,9 +10,11 @@
 //       returns A B'^T (mx = ceil(max |Sh| / 127), |B'| <= 120)
 //   tail: fgemm.cu's tail stage, P_A = [U U U U] (shared by the batch) against P_B = [S_h1 | S_h2 | S_l | 0]
 //       (S = 256 (S_h1 + S_h2) + S_l), so the peel's acc -= 256 U S_h^T + U S_l^T is one extra stage of 128 at the end;
-//       A' formed by a pass (t) or added in shared memory from U's row (f serialized, o overlapped; fgemm.cu's NS -2)
-// B's side: the edit pass then a pass for S's digits (bsep), or one pass doing both (bfus, a warp a row group of 4 rows,
-// its lanes hashing 32 patches at once). Receipts: duo at L = 32 over the first k columns (td, fd, od), the tail outside.
+//       A' formed by a pass (t), added in shared memory from U's row (f serialized, o overlapped; fgemm.cu's NS -2), or
+//       added to A's fragments in registers after each ldmatrix (r; NS -3: U's period, 32 columns, is one atom)
+// B's side: the edit pass then a pass for S's digits (bsep), or one pass doing both (bfus: a warp a row group of 4 rows,
+// its lanes hashing 32 patches at once; at k = 128 a thread a patch); U's hashes run in the first blocks of B's pass.
+// Receipts: duo at L = 32 over the first k columns (td, fd, od, rd), the tail outside.
 // A and B in [-119, 119], so A' and B' can't saturate and every product is exact in s32.
 //   lpgemm gate DIR M N K BATCH SEED GRID   every arm at one small shape, inputs and outputs to DIR for lpref.py
 //   lpgemm bench REPS SHAPE...              interleaved timing, one JSON line a shape (SHAPE = name:m:n:k:batch); LP_ARMS
@@ -34,15 +36,17 @@ GEMML(f_plain, 0, NONE, 1, -2)
 GEMML(f_duo32, 32, DUO, 1, -2)
 GEMML(o_plain, 0, NONE, 2, -2)
 GEMML(o_duo32, 32, DUO, 2, -2)
+GEMML(r_plain, 0, NONE, 0, -3)
+GEMML(r_duo32, 32, DUO, 0, -3)
 static_assert(ML<128, 128, 32, 3, false, 2, -2>::SMEM == CSMEM, "one shared-memory size");
 
 DEV uint32_t u_byte(uint32_t v) {
   const uint32_t u = (v & 7u) + 1u;
   return (v & 8u ? 0u - u : u) & 0xFFu;
 }
-// U into P_A (m x 128, a row [U U U U]), one thread a block of 4 rows
-__global__ void __launch_bounds__(256) gen_u(uint8_t* __restrict__ PA, uint32_t blocks, const __grid_constant__ Sig sg) {
-  const uint32_t j = blockIdx.x * blockDim.x + threadIdx.x;
+// U's block j into P_A's rows 4j..4j+3 (m x 128, a row [U U U U]). B's passes run it in their first blocks, so U's few
+// hashes hide under B's pass; gen_u is it alone
+DEV void gen_u_blk(uint8_t* __restrict__ PA, uint32_t j, uint32_t blocks, const Sig& sg) {
   if (j >= blocks) return;
   uint64_t st[8];
   sha_block(sg.w, (uint64_t)U_TAG << 56 | j, st);
@@ -58,6 +62,16 @@ __global__ void __launch_bounds__(256) gen_u(uint8_t* __restrict__ PA, uint32_t 
 #pragma unroll
     for (int h = 0; h < 8; h++) row[h] = make_uint4(w[4 * (h & 1)], w[4 * (h & 1) + 1], w[4 * (h & 1) + 2], w[4 * (h & 1) + 3]);
   }
+}
+__global__ void __launch_bounds__(256) gen_u(uint8_t* __restrict__ PA, uint32_t blocks, const __grid_constant__ Sig sg) {
+  gen_u_blk(PA, blockIdx.x * blockDim.x + threadIdx.x, blocks, sg);
+}
+// B's passes: grid blocks 0..ub-1 generate U (ublocks of 4 rows), the rest do the pass
+struct UJob { uint8_t* PA; uint32_t ub, ublocks; };
+DEV bool u_part(const UJob& u, const Sig& sg) {
+  if (blockIdx.x >= u.ub) return false;
+  gen_u_blk(u.PA, blockIdx.x * blockDim.x + threadIdx.x, u.ublocks, sg);
+  return true;
 }
 
 // XA (rows x ld) = A + U in the first K columns; EXT also columns K + 32 c + l: -U[., l] (c = 0), -15 U[., l] (c = 1..mx)
@@ -93,8 +107,9 @@ __global__ void __launch_bounds__(256) edit_a(const uint8_t* __restrict__ A, con
 
 // B' = B + F into XB (row stride ld), one thread a patch
 __global__ void __launch_bounds__(256) edit_b(const uint8_t* __restrict__ B, uint8_t* __restrict__ XB, uint32_t pb, uint32_t KB, int ld,
-                                              const __grid_constant__ Sig sg) {
-  const uint32_t p = blockIdx.x * blockDim.x + threadIdx.x;
+                                              const UJob uj, const __grid_constant__ Sig sg) {
+  if (u_part(uj, sg)) return;
+  const uint32_t p = (blockIdx.x - uj.ub) * blockDim.x + threadIdx.x;
   if (p >= pb) return;
   const size_t k = (size_t)KB * 128, row0 = (size_t)(p / KB) * 4, col0 = (size_t)(p % KB) * 128;
   sha_patch<1>(sg.w, F_TAG, p, [&](int c, const uint32_t(&n)[4]) {
@@ -120,26 +135,35 @@ DEV uint4 pack16(const int (&v)[16]) {
            ((uint32_t)v[4 * q + 3] & 0xFFu) << 24;
   return make_uint4(w[0], w[1], w[2], w[3]);
 }
-// S[row, 16 h + e] = s[e]'s digits: P_B's atom j (j < 4: S_h1, S_h2, S_l, 0) and, EXT, XB's extension blocks c = j, j + nj, ..
-// (c = 0: b0; c = 1..mx: Sh's parts, q + [c > mx - r] for Sh = q mx + r)
+// floor(a / b) for |a| < 2^20 by b's reciprocal, corrected by one either way
+DEV int fdiv_r(int a, int b, float rb) {
+  int q = __float2int_rd((float)a * rb);
+  q -= q * b > a;
+  q += (q + 1) * b <= a;
+  return q;
+}
+// S[row, 16 h + e] = s[e]'s digits: P_B's atoms a = j, j + nj, .. < 4 (S_h1, S_h2, S_l, 0) and, EXT, XB's extension blocks
+// c = j, j + nj, .. <= mx (c = 0: b0; c = 1..mx: Sh's parts, q + [c > mx - r] for Sh = q mx + r)
 template <bool EXT>
 DEV void digits(const int (&s)[16], size_t row, int h, int j, int nj, int8_t* PB, uint8_t* XB, int K, int ld, int mx) {
-  if (j < 4) {
+  for (int a = j; a < 4; a += nj) {
     int v[16];
 #pragma unroll
     for (int e = 0; e < 16; e++) {
       const int lo = ((s[e] + 128) & 255) - 128, hi = (s[e] - lo) >> 8, h1 = hi >> 1;
-      v[e] = j == 0 ? h1 : j == 1 ? hi - h1 : j == 2 ? lo : 0;
+      v[e] = a == 0 ? h1 : a == 1 ? hi - h1 : a == 2 ? lo : 0;
     }
-    *reinterpret_cast<uint4*>(PB + row * 128 + 32 * j + 16 * h) = pack16(v);
+    *reinterpret_cast<uint4*>(PB + row * 128 + 32 * a + 16 * h) = pack16(v);
   }
   if constexpr (EXT) {
+    if (j > mx) return;
+    const float rm = 1.0f / (float)mx;
     int b0[16], q[16], r[16];
 #pragma unroll
     for (int e = 0; e < 16; e++) {
       const int sh = fdiv(s[e] + 7, 15);
       b0[e] = s[e] - 15 * sh;
-      q[e] = fdiv(sh, mx);
+      q[e] = fdiv_r(sh, mx, rm);
       r[e] = sh - q[e] * mx;
     }
     for (int c = j; c <= mx; c += nj) {
@@ -165,13 +189,25 @@ __global__ void __launch_bounds__(256) speel(uint8_t* __restrict__ XB, int8_t* _
     for (int o = 2; o < 32; o <<= 1) s[e] += __shfl_xor_sync(0xFFFFFFFFu, s[e], o);
   digits<EXT>(s, row, lane & 1, lane >> 1, 16, PB, XB, K, ld, mx);
 }
+// the same for short rows (K <= 512), one thread a half row (columns 16 h .. mod 32)
+template <bool EXT>
+__global__ void __launch_bounds__(256) speel_t(uint8_t* __restrict__ XB, int8_t* __restrict__ PB, int rows, int K, int ld, int mx) {
+  const int t = blockIdx.x * blockDim.x + threadIdx.x, row = t >> 1, h = t & 1;
+  if (row >= rows) return;
+  const uint8_t* x = XB + (size_t)row * ld;
+  int s[16] = {0};
+#pragma unroll 4
+  for (int c = h; c < K / 16; c += 2) acc16(s, *reinterpret_cast<const uint4*>(x + 16 * c));
+  digits<EXT>(s, row, h, 0, 1, PB, XB, K, ld, mx);
+}
 // B' = B + F and S's digits in one pass, one warp a row group (4 rows, patches g KB ..): its lanes hash 32 patches at once
 // into shared memory, then lane i edits chunk i of each (row i / 8, columns 16 (i % 8) ..) and sums its 16 columns
 template <bool EXT>
 __global__ void __launch_bounds__(256) bsp(const uint8_t* __restrict__ B, uint8_t* __restrict__ XB, int8_t* __restrict__ PB, int groups,
-                                           int K, int ld, int mx, const __grid_constant__ Sig sg) {
+                                           int K, int ld, int mx, const UJob uj, const __grid_constant__ Sig sg) {
   __shared__ uint64_t dg[8][32][8];
-  const int lane = threadIdx.x & 31, warp = threadIdx.x >> 5, g = blockIdx.x * 8 + warp;
+  if (u_part(uj, sg)) return;
+  const int lane = threadIdx.x & 31, warp = threadIdx.x >> 5, g = (blockIdx.x - uj.ub) * 8 + warp;
   if (g >= groups) return;
   const int KB = K / 128, r = lane >> 3, cc = lane & 7;
   const size_t row = (size_t)g * 4 + r;
@@ -206,6 +242,30 @@ __global__ void __launch_bounds__(256) bsp(const uint8_t* __restrict__ B, uint8_
     s[e] += __shfl_xor_sync(0xFFFFFFFFu, s[e], 4);
   }
   digits<EXT>(s, row, cc & 1, cc >> 1, 4, PB, XB, K, ld, mx);
+}
+// the same at K = 128 (a patch is 4 whole rows), one thread a patch, its rows' sums finished one row at a time
+template <bool EXT>
+__global__ void __launch_bounds__(256) bsp1(const uint8_t* __restrict__ B, uint8_t* __restrict__ XB, int8_t* __restrict__ PB,
+                                            uint32_t groups, int ld, int mx, const UJob uj, const __grid_constant__ Sig sg) {
+  if (u_part(uj, sg)) return;
+  const uint32_t p = (blockIdx.x - uj.ub) * blockDim.x + threadIdx.x;
+  if (p >= groups) return;
+  int s0[16] = {0}, s1[16] = {0};
+  sha_patch<1>(sg.w, F_TAG, p, [&](int c, const uint32_t(&n)[4]) {
+    const size_t row = (size_t)p * 4 + c / 8;
+    if (c % 8 == 0) {
+#pragma unroll
+      for (int e = 0; e < 16; e++) s0[e] = s1[e] = 0;
+    }
+    const uint4 x = *reinterpret_cast<const uint4*>(B + row * 128 + (c % 8) * 16);
+    const uint4 y = make_uint4(add_noise<false>(x.x, n[0]), add_noise<false>(x.y, n[1]), add_noise<false>(x.z, n[2]), add_noise<false>(x.w, n[3]));
+    *reinterpret_cast<uint4*>(XB + row * ld + (c % 8) * 16) = y;
+    if (c % 2 == 0) acc16(s0, y); else acc16(s1, y);
+    if (c % 8 == 7) {
+      digits<EXT>(s0, row, 0, 0, 1, PB, XB, 128, ld, mx);
+      digits<EXT>(s1, row, 1, 0, 1, PB, XB, 128, ld, mx);
+    }
+  });
 }
 
 static CUtensorMap tmap_ld(const void* p, int depth, int ld, int rows) {
@@ -274,7 +334,8 @@ static void lsetup(LProb& P, int m, int n, int k, int batch, uint32_t seed, int 
   P.mAB = upload_maps(Maps{tmap(P.A, k, batch * m, 128), tmap(P.B, k, batch * n, 128), tmap(P.A, k, batch * m, 128), tmap(P.B, k, batch * n, 128)});
   P.mT = upload_maps(Maps{tmap_ld(P.XA, k, P.Kp, batch * m), tmap_ld(P.XB, k, P.Kp, batch * n), pa, pbm});
   P.mF = upload_maps(Maps{tmap(P.A, k, batch * m, 128), tmap_ld(P.XB, k, P.Kp, batch * n), pa, pbm});
-  for (Kern kern : {RCK[0][0], RCK[0][1], (Kern)t_plain, (Kern)t_duo32, (Kern)f_plain, (Kern)f_duo32, (Kern)o_plain, (Kern)o_duo32})
+  for (Kern kern : {RCK[0][0], RCK[0][1], (Kern)t_plain, (Kern)t_duo32, (Kern)f_plain, (Kern)f_duo32, (Kern)o_plain, (Kern)o_duo32,
+                     (Kern)r_plain, (Kern)r_duo32})
     CK(cudaFuncSetAttribute(kern, cudaFuncAttributeMaxDynamicSharedMemorySize, CSMEM));
 }
 static void lfree(LProb& P) {
@@ -286,15 +347,15 @@ static void lfree(LProb& P) {
 }
 
 enum { L_PLAIN, L_CPLAIN, L_CDUO, L_GENU, L_GENF, L_FORMA, L_FORMAX, L_FORMB, L_SPEEL, L_SPEELX, L_BSP, L_BSPX, L_LTK, L_TK, L_FK,
-       L_OK, L_ROUTE };
-enum { R_LT, R_T, R_F, R_O };
-static const char* RN[4] = {"lt", "t", "f", "o"};
+       L_OK, L_RK, L_ROUTE };
+enum { R_LT, R_T, R_F, R_O, R_R };
+static const char* RN[5] = {"lt", "t", "f", "o", "r"};
 struct LArm { std::string name; int kind, route, bfus, duo; };
 static std::vector<LArm> lall() {
   std::vector<LArm> v{{"plain", L_PLAIN}, {"cplain", L_CPLAIN}, {"cduo", L_CDUO}, {"genU", L_GENU}, {"genF", L_GENF},
                       {"formA", L_FORMA}, {"formAx", L_FORMAX}, {"formB", L_FORMB}, {"speel", L_SPEEL}, {"speelx", L_SPEELX},
-                      {"bsp", L_BSP}, {"bspx", L_BSPX}, {"ltK", L_LTK}, {"tK", L_TK}, {"fK", L_FK}, {"oK", L_OK}};
-  for (int r = 0; r < 4; r++)
+                      {"bsp", L_BSP}, {"bspx", L_BSPX}, {"ltK", L_LTK}, {"tK", L_TK}, {"fK", L_FK}, {"oK", L_OK}, {"rK", L_RK}};
+  for (int r = 0; r < 5; r++)
     for (int d = 0; d < (r == R_LT ? 1 : 2); d++)
       for (int bf = 0; bf < 2; bf++) v.push_back({std::string(RN[r]) + (d ? "d" : "") + (bf ? "_bfus" : "_bsep"), L_ROUTE, r, bf, d});
   return v;
@@ -303,12 +364,13 @@ static std::vector<LArm> lall() {
 static const std::pair<const char*, const char*> COVER[] = {{"formA", "t_bsep"}, {"formAx", "lt_bsep"}, {"formB", "lt_bsep"},
                                                             {"speel", "t_bsep"}, {"speelx", "lt_bsep"}, {"bsp", "f_bfus"},
                                                             {"bspx", "lt_bfus"}, {"ltK", "lt_bsep"}, {"tK", "t_bsep"},
-                                                            {"fK", "f_bsep"}, {"oK", "o_bsep"}};
+                                                            {"fK", "f_bsep"}, {"oK", "o_bsep"}, {"rK", "r_bsep"}};
 static bool larm_ok(const LProb& P, const LArm& a) {
   if (a.kind == L_PLAIN) return P.plain.algo_id != -2;
   if (a.kind == L_LTK || (a.kind == L_ROUTE && a.route == R_LT)) return P.ltk.algo_id != -2;
   return true;
 }
+static UJob ujob(LProb& P) { return UJob{P.PA, (uint32_t)(P.m / 4 + 255) / 256, (uint32_t)(P.m / 4)}; }
 static void genU(LProb& P, const Sig& s) { gen_u<<<(P.m / 4 + 255) / 256, 256, 0, P.st>>>(P.PA, P.m / 4, s); }
 static void formA(LProb& P, bool ext) {
   const int cw = (ext ? P.Kp : P.k) / 16, rows = P.batch * P.m;
@@ -316,16 +378,33 @@ static void formA(LProb& P, bool ext) {
   if (ext) edit_a<true><<<g, b, 0, P.st>>>(P.A, P.PA, P.XA, rows, P.k, P.m, P.Kp, cw);
   else edit_a<false><<<g, b, 0, P.st>>>(P.A, P.PA, P.XA, rows, P.k, P.m, P.Kp, cw);
 }
-static void formB(LProb& P, const Sig& s) { edit_b<<<(P.pb + 255) / 256, 256, 0, P.st>>>(P.B, P.XB, P.pb, P.KB, P.Kp, s); }
+// B's passes, U's blocks first in each
+static void formB(LProb& P, const Sig& s) {
+  const UJob u = ujob(P);
+  edit_b<<<u.ub + (P.pb + 255) / 256, 256, 0, P.st>>>(P.B, P.XB, P.pb, P.KB, P.Kp, u, s);
+}
 static void speelS(LProb& P, bool ext) {
   const int rows = P.batch * P.n;
-  if (ext) speel<true><<<(rows + 7) / 8, 256, 0, P.st>>>(P.XB, P.PB, rows, P.k, P.Kp, P.mx);
-  else speel<false><<<(rows + 7) / 8, 256, 0, P.st>>>(P.XB, P.PB, rows, P.k, P.Kp, P.mx);
+  if (P.k <= 512) {
+    if (ext) speel_t<true><<<(2 * rows + 255) / 256, 256, 0, P.st>>>(P.XB, P.PB, rows, P.k, P.Kp, P.mx);
+    else speel_t<false><<<(2 * rows + 255) / 256, 256, 0, P.st>>>(P.XB, P.PB, rows, P.k, P.Kp, P.mx);
+  } else {
+    if (ext) speel<true><<<(rows + 7) / 8, 256, 0, P.st>>>(P.XB, P.PB, rows, P.k, P.Kp, P.mx);
+    else speel<false><<<(rows + 7) / 8, 256, 0, P.st>>>(P.XB, P.PB, rows, P.k, P.Kp, P.mx);
+  }
 }
 static void bspS(LProb& P, bool ext, const Sig& s) {
   const int groups = P.batch * P.n / 4;
-  if (ext) bsp<true><<<(groups + 7) / 8, 256, 0, P.st>>>(P.B, P.XB, P.PB, groups, P.k, P.Kp, P.mx, s);
-  else bsp<false><<<(groups + 7) / 8, 256, 0, P.st>>>(P.B, P.XB, P.PB, groups, P.k, P.Kp, P.mx, s);
+  const UJob u = ujob(P);
+  if (P.k == 128) {
+    const unsigned g = u.ub + (groups + 255) / 256;
+    if (ext) bsp1<true><<<g, 256, 0, P.st>>>(P.B, P.XB, P.PB, groups, P.Kp, P.mx, u, s);
+    else bsp1<false><<<g, 256, 0, P.st>>>(P.B, P.XB, P.PB, groups, P.Kp, P.mx, u, s);
+  } else {
+    const unsigned g = u.ub + (groups + 7) / 8;
+    if (ext) bsp<true><<<g, 256, 0, P.st>>>(P.B, P.XB, P.PB, groups, P.k, P.Kp, P.mx, u, s);
+    else bsp<false><<<g, 256, 0, P.st>>>(P.B, P.XB, P.PB, groups, P.k, P.Kp, P.mx, u, s);
+  }
 }
 static void bside(LProb& P, bool fused, bool ext, const Sig& s) {
   if (fused) bspS(P, ext, s);
@@ -354,18 +433,21 @@ static void lrun(LProb& P, const LArm& a) {
     case L_TK: lgemm(P, t_plain, P.mT, s); break;
     case L_FK: lgemm(P, f_plain, P.mF, s); break;
     case L_OK: lgemm(P, o_plain, P.mF, s); break;
+    case L_RK: lgemm(P, r_plain, P.mF, s); break;
     case L_ROUTE:
-      genU(P, s);
+      bside(P, a.bfus, a.route == R_LT, s);
       if (a.route == R_LT) {
         formA(P, true);
-        bside(P, a.bfus, true, s);
         ltg_run(P.ltk, P.st);
+      } else if (a.route == R_T) {
+        formA(P, false);
+        lgemm(P, a.duo ? t_duo32 : t_plain, P.mT, s);
+      } else if (a.route == R_F) {
+        lgemm(P, a.duo ? f_duo32 : f_plain, P.mF, s);
+      } else if (a.route == R_O) {
+        lgemm(P, a.duo ? o_duo32 : o_plain, P.mF, s);
       } else {
-        if (a.route == R_T) formA(P, false);
-        bside(P, a.bfus, false, s);
-        if (a.route == R_T) lgemm(P, a.duo ? t_duo32 : t_plain, P.mT, s);
-        else if (a.route == R_F) lgemm(P, a.duo ? f_duo32 : f_plain, P.mF, s);
-        else lgemm(P, a.duo ? o_duo32 : o_plain, P.mF, s);
+        lgemm(P, a.duo ? r_duo32 : r_plain, P.mF, s);
       }
       break;
   }

@@ -116,7 +116,7 @@ def main(d: Path, receipts: bool) -> int:
         checks["G_genF"] = bool((ld("G_genF.bin", np.uint32, (len(pt),)) == fold(pt)).all())
     for name in sorted(arms):
         route = name.split("_")[0]
-        if route not in ("lt", "t", "td", "f", "fd", "o", "od"):
+        if route not in ("lt", "t", "td", "f", "fd", "o", "od", "r", "rd"):
             continue
         seen.add(name)
         checks[f"U_{name}"] = bool((got("U", name, np.int32, (batch * m, n)) == want).all())
@@ -128,7 +128,7 @@ def main(d: Path, receipts: bool) -> int:
         if route in ("lt", "t", "td"):
             XA = got("XA", name, np.int8, (batch * m, Kp))
             checks[f"XA_{name}"] = bool((XA == XAx).all()) if route == "lt" else bool((XA[:, :k] == Ap).all())
-        if route in ("td", "fd", "od"):
+        if route in ("td", "fd", "od", "rd"):
             check_r(name, Ap, Bp)
     for comp, by in cover.items():
         seen.add(comp)
