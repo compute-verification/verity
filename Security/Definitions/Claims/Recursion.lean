@@ -168,15 +168,15 @@ section OfFlock
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
 
 /-- **Flock as the inner protocol**, at a decoder: its verifier, relation, scope, `E^rep` and errors. -/
-noncomputable def Inner.ofFlock (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (decode : List (ℕ × Col) → List T) :
+noncomputable def Inner.ofFlock (D : Flock.Deploy Coin Col T) (decode : List (ℕ × Col) → List T) :
     Inner Coin Flock.Wit where
   V := D.V
-  R := Flock.R H D.parse
+  R := Flock.R D.parse
   Scope := Flock.Scope D
   Op := ℕ × Col
   opens := D.cols
-  assemble := Flock.assemble H D.parse decode D.read
-  check := Flock.check H D.parse
+  assemble := Flock.assemble D.parse decode D.read
+  check := Flock.check D.parse
   waits := D.waits
   k := D.k
   cap := D.cap
@@ -300,7 +300,7 @@ def Scope (D : Deploy Coin) (I : Inner Coin W) (x : Msg) : Prop :=
 statement (read off the judged run's inner transcript), `E^rep` with the outer Flock's assemble and check over forks of
 the judged run at the session's first round, each rerun seen as the session's view; all the sessions' witnesses, or
 none. -/
-noncomputable def EO (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
+noncomputable def EO (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) : Extractor Coin (List Flock.Wit) D.V where
   C x := (s : Fin (D.nS x)) → Fin (D.nums x s).waits → Fin (D.nums x s).cap → Fin (D.V.k x) → Coin
   ext x r₀ c := .rerun r₀ fun v₀ =>
@@ -308,8 +308,8 @@ noncomputable def EO (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO 
       let xs := D.vstar x (v₀.msgs.take (I.V.k (xI D x)))
       collect ((List.finRange (D.nS x)).map fun (s : Fin (D.nS x)) =>
         serve (viewing (D.session x s))
-          (firstWait (D.nums x s).k DO.cols (Flock.assemble H DO.parse decO DO.read (xs.getD s []))
-            (Flock.check H DO.parse (xs.getD s []))
+          (firstWait (D.nums x s).k DO.cols (Flock.assemble DO.parse decO DO.read (xs.getD s []))
+            (Flock.check DO.parse (xs.getD s []))
             ((List.finRange (D.nums x s).waits).map fun i => (List.finRange (D.nums x s).cap).map fun j =>
               fork (I.V.k (xI D x) + ((xs.take s).map DO.V.k).sum) r₀ (c s i j))))
     else .ret none
@@ -322,9 +322,9 @@ def dec (D : Deploy Coin) (x : Msg) (r : Fin (D.V.k x) → Coin) : Option (List 
 /-- **`E*`, the recursion's extractor**: the outer extractor, then the inner one. The inner protocol's `E^rep` at its
 inner statement, each of its reruns served by `E_O` at that draw's coins and `E_O`'s own, the inner view read off
 `E_O`'s output (`dec`). -/
-noncomputable def E (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
+noncomputable def E (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) : Extractor Coin W D.V :=
-  served D.V (EO H D I DO decO) (dec D) (fun x => I.waits (xI D x)) (fun x => I.k (xI D x))
+  served D.V (EO D I DO decO) (dec D) (fun x => I.waits (xI D x)) (fun x => I.k (xI D x))
     (fun x => I.cap (xI D x)) I.opens (fun x => I.assemble (xI D x)) (fun x => I.check (xI D x))
 
 /-! ### The extraction-based finder -/
@@ -336,18 +336,18 @@ clear). Its cost is both runs' calls, both parties', and both extractions'. -/
 noncomputable def Be (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg)
     (hk : 0 < D.V.k x) : Finder where
-  S := BCoins Ω Coin (D.V.k x) × (EO H D I DO decO).C x × (EO H D I DO decO).C x
+  S := BCoins Ω Coin (D.V.k x) × (EO D I DO decO).C x × (EO D I DO decO).C x
   ne := ⟨(⟨⟨0, hk⟩, Classical.arbitrary _, fun _ => default, fun _ => default⟩, Classical.arbitrary _,
     Classical.arbitrary _)⟩
   out s :=
-    findColl (D.calls x (((EO H D I DO decO).eval H P x s.1.2.1 s.1.2.2.1 s.2.1).1.getD []) ++
-      D.calls x (((EO H D I DO decO).eval H P x s.1.2.1 (forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2) s.2.2).1.getD []))
+    findColl (D.calls x (((EO D I DO decO).eval H P x s.1.2.1 s.1.2.2.1 s.2.1).1.getD []) ++
+      D.calls x (((EO D I DO decO).eval H P x s.1.2.1 (forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2) s.2.2).1.getD []))
   cost s :=
     (run H P D.V x s.1.2.1 s.1.2.2.1).pLog.length + (run H P D.V x s.1.2.1 s.1.2.2.1).vLog.length +
       (run H P D.V x s.1.2.1 (forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2)).pLog.length +
       (run H P D.V x s.1.2.1 (forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2)).vLog.length +
-      ((EO H D I DO decO).eval H P x s.1.2.1 s.1.2.2.1 s.2.1).2.1 +
-      ((EO H D I DO decO).eval H P x s.1.2.1 (forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2) s.2.2).2.1
+      ((EO D I DO decO).eval H P x s.1.2.1 s.1.2.2.1 s.2.1).2.1 +
+      ((EO D I DO decO).eval H P x s.1.2.1 (forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2) s.2.2).2.1
 
 /-- `Pr[Be^{P*}(x) outputs a collision]`, `0` for a verifier that takes no rounds at `x`. -/
 noncomputable def PrBe (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
@@ -419,7 +419,7 @@ def Sim (D : Deploy Coin) (I : Inner Coin W) (SO : Msg → ℕ → OSim) : Simul
 `Pr[run = acc ∧ ¬R(x, E*(x))] ≤ κ(x) + √(γ(x) · Pr[B]) + √(γ_e(x) · Pr[Be])`. -/
 def KS [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ decO, decOK DO decO → ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
-    PrBad H D.V (R D I) (E H D I DO decO) x P ≤
+    PrBad H D.V (R D I) (E D I DO decO) x P ≤
       κ D I x + Real.sqrt (γ D I x * PrB H D.V P x) + Real.sqrt (γe D I x * PrBe H D I DO decO P x)
 
 /-- **The recursion: bits**, at every outer decoder that meets the spec: every prover making at most `t ≥ 1` SHA-512
@@ -430,15 +430,15 @@ def Bits [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO :
     (∀ ω r, (run H P D.V x ω r).pLog.length + (run H P D.V x ω r).vLog.length ≤ t) →
     (∀ hk : 0 < D.V.k x, StrictBirthday H (B H D.V P x hk)) →
     (∀ hk : 0 < D.V.k x, ExpectedCR H (Be H D I DO decO P x hk)) →
-    PrBad H D.V (R D I) (E H D I DO decO) x P ≤ t * (2 : ℝ) ^ (-lam D I x)
+    PrBad H D.V (R D I) (E D I DO decO) x P ≤ t * (2 : ℝ) ^ (-lam D I x)
 
 /-- **The recursion: cost**: `E*` reruns the prover at most `(1 + m′_I·K_I) · (1 + Σ_s m′_s·K_s)` times, and
 `N_I · (1 + Σ_s m′_s·k_s)` in expectation. The decoders' complexity is Flock's (`Flock.Efficient`). -/
 def Efficient (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) : Prop :=
-  ExtractRunsLe H (E H D I DO decO) (fun x => (1 + I.waits (xI D x) * I.cap (xI D x)) *
+  ExtractRunsLe H (E D I DO decO) (fun x => (1 + I.waits (xI D x) * I.cap (xI D x)) *
     (1 + ∑ s : Fin (D.nS x), (D.nums x s).waits * (D.nums x s).cap)) ∧
-  ExtractRunsExpLe H (E H D I DO decO) (fun x => (NI D I x : ℝ) *
+  ExtractRunsExpLe H (E D I DO decO) (fun x => (NI D I x : ℝ) *
     (1 + ∑ s : Fin (D.nS x), ((D.nums x s).waits * (D.nums x s).k : ℕ)))
 
 /-- **The recursion: Complete**, on the statements in scope. -/
@@ -469,7 +469,7 @@ def Nontrivial (H : Msg → Msg) (D : Deploy Coin) (recs : List (Recorded D.V)) 
 /-- **The private variant: KS**, at `E*` and the same errors. -/
 def KSPriv [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ decO, decOK DO decO → ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
-    PrBad H D.V (RPriv D I) (E H D I DO decO) x P ≤
+    PrBad H D.V (RPriv D I) (E D I DO decO) x P ≤
       κ D I x + Real.sqrt (γ D I x * PrB H D.V P x) + Real.sqrt (γe D I x * PrBe H D I DO decO P x)
 
 /-- **The private variant: zero knowledge**, at a simulator that commits to a fixed circuit of the class, against every
@@ -489,11 +489,11 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [De
 
 /-- **KS of the recursion over Flock**, at every inner and outer decoder that meets the spec. -/
 def KSFlock [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (DI DO : Flock.Deploy Coin Col T) : Prop :=
-  ∀ decI, decOK DI decI → KS H D (Inner.ofFlock H DI decI) DO
+  ∀ decI, decOK DI decI → KS H D (Inner.ofFlock DI decI) DO
 
 /-- **Bits of the recursion over Flock**, at every inner decoder that meets the spec. -/
 def BitsFlock [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (DI DO : Flock.Deploy Coin Col T) : Prop :=
-  ∀ decI, decOK DI decI → Bits H D (Inner.ofFlock H DI decI) DO
+  ∀ decI, decOK DI decI → Bits H D (Inner.ofFlock DI decI) DO
 
 end AtFlock
 
