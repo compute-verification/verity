@@ -18,7 +18,10 @@ Johnson count `johnsonCount k agree = ⌊(k+1)/agree²⌋ + 1` of the trace's co
 * `E^rep` gathers its `k = ⌈4N₀/e⌉` accepted reruns' columns, `218·k > N₀` of them (`len_lt_k_mul_queries`), so they
   never sit at distinct positions of the codeword, which `ListComplete` asks of its input;
 * a set of the `N₀ − nMin + 1` positions that `nMin` distinct positions must meet is missed by `q ≤ 277` uniform
-  queries with probability `((nMin − 1)/N₀)^q ≥ 1/64` (`miss_ge`), against `κ ≤ 2^{−202.98}`.
+  queries with probability `((nMin − 1)/N₀)^q ≥ 1/64` (`miss_ge`), against `κ ≤ 2^{−202.98}`;
+* under `--zk` the masked level-0 code has dimension `2^c + t` (`t = 2q₀`) and the same length, so at `agree₀` its
+  Johnson count is past the length at `m = 25, 26, 27` (`zk_nMin_gt_len`): `Deploy.agree` is one number, while the
+  masked rate `ρ' = (2^c + t)/2^{c+1}` runs from `0.568` (`m = 25`) to `0.500` (`m = 35`).
 -/
 
 namespace Claims.Flock.Numbers
@@ -138,5 +141,24 @@ theorem miss_ge {c q : ℕ} (hc : c ∈ [9, 10, 11, 12, 13, 14, 17, 18, 19, 20, 
   rw [div_le_one (by positivity)]
   have := (nMin_lt_len hc).1
   exact_mod_cast (Nat.sub_le _ _).trans this.le
+
+/-- **Under `--zk`, `agree₀` puts `nMin` past the codeword at `m = 25, 26, 27`**: the masked level-0 code, of
+dimension `2^c + t` (`t = 2q₀`, `m1Pad`) and length `2^{c+1}`, has its Johnson count at `agree₀` above its length
+(`9172 > 2^13`, `17112 > 2^14`, `33215 > 2^15`), so no columns at distinct positions reach it. -/
+theorem zk_nMin_gt_len {m : ℕ} (hm : m ∈ [25, 26, 27]) :
+    2 ^ (((m1Schedule m).levels.headD default).logCols + 1) <
+      johnsonCount (2 ^ ((m1Schedule m).levels.headD default).logCols + m1Pad m) agree₀ := by
+  obtain ⟨hlo, hhi⟩ := agree₀_sq_bounds
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at hm
+  rcases hm with rfl | rfl | rfl
+  · rw [show ((m1Schedule 25).levels.headD default).logCols = 12 by decide, show m1Pad 25 = 554 by decide,
+      johnsonCount_eq_of (J := 9172) (by norm_num) (by norm_num) hlo hhi (by norm_num) (by norm_num)]
+    norm_num
+  · rw [show ((m1Schedule 26).levels.headD default).logCols = 13 by decide, show m1Pad 26 = 484 by decide,
+      johnsonCount_eq_of (J := 17112) (by norm_num) (by norm_num) hlo hhi (by norm_num) (by norm_num)]
+    norm_num
+  · rw [show ((m1Schedule 27).levels.headD default).logCols = 14 by decide, show m1Pad 27 = 458 by decide,
+      johnsonCount_eq_of (J := 33215) (by norm_num) (by norm_num) hlo hhi (by norm_num) (by norm_num)]
+    norm_num
 
 end Claims.Flock.Numbers
