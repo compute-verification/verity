@@ -875,18 +875,22 @@ __device__ __forceinline__ void dtiles_p(uint64_t c0, uint64_t c1, unsigned long
   if (lane == 0) rec[base + tiles - 1] = h;
 }
 // The filler kernel. A chunk's receipt buffer holds per() receipts and then one mode word, map | DFILL_PIPE << 2, that
-// dfill_alloc writes, so dscore's direct launch of dfill_k<NC> runs the map and loop the process chose.
+// dfill_alloc writes, so dscore's direct launch of dfill_k<NC> runs the map the process chose. The pipelined loop is its
+// own kernel, dfill_kp, which only dfill_launch starts: in dfill_k it would raise every map's registers (NC 4: 88 to
+// 124) and with them the footprint a co-resident filler leaves its neighbours. dfill_k writes nothing in a pipe mode.
 template <int NC>
 __global__ void __launch_bounds__(NC >= 8 ? 256 : 512) dfill_k(uint64_t c0, uint64_t c1, unsigned long long tile0, int tiles,
                                                                int steps, unsigned long long* __restrict__ rec) {
   const unsigned long long mode = rec[(unsigned long long)gridDim.x * (blockDim.x >> 5) * tiles];
-  if constexpr (NC <= 4) {
+  if constexpr (NC <= 4)
     if (mode == 0) return dtiles<NC, 0>(c0, c1, tile0, tiles, steps, rec);
-    if (mode == 5) return dtiles_p<NC, 1>(c0, c1, tile0, tiles, steps, rec);
-    if (mode == 6) return dtiles_p<NC, 2>(c0, c1, tile0, tiles, steps, rec);
-  }
   if (mode == 1) return dtiles<NC, 1>(c0, c1, tile0, tiles, steps, rec);
   if (mode == 2) return dtiles<NC, 2>(c0, c1, tile0, tiles, steps, rec);
+}
+template <int NC, int MAP>
+__global__ void __launch_bounds__(256) dfill_kp(uint64_t c0, uint64_t c1, unsigned long long tile0, int tiles, int steps,
+                                                unsigned long long* __restrict__ rec) {
+  dtiles_p<NC, MAP>(c0, c1, tile0, tiles, steps, rec);
 }
 
 static int dfill_map() {
@@ -956,6 +960,16 @@ struct DFill {
 static void dfill_launch(const DFill& f, long long chunk, cudaStream_t st) {
   const unsigned long long t0 = (unsigned long long)chunk * f.per();
   const dim3 gr(f.grid), bl(32 * f.W);
+  if (f.pipe) {
+    switch (f.NC * 4 + f.map) {
+#define DFILL_CASE(NC_, MAP_) \
+  case NC_ * 4 + MAP_: dfill_kp<NC_, MAP_><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
+      DFILL_CASE(1, 1) DFILL_CASE(2, 1) DFILL_CASE(4, 1) DFILL_CASE(1, 2) DFILL_CASE(2, 2) DFILL_CASE(4, 2)
+#undef DFILL_CASE
+      default: fprintf(stderr, "DFILL_PIPE: maps 1, 2 and NC 1, 2 or 4\n"); exit(1);
+    }
+    return;
+  }
   switch (f.NC) {
     case 1: dfill_k<1><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
     case 2: dfill_k<2><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
@@ -968,6 +982,10 @@ static void dfill_prep() {
 #define DFILL_PREP(NC_) \
   CK(cudaFuncSetAttribute(dfill_k<NC_>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
   DFILL_PREP(1) DFILL_PREP(2) DFILL_PREP(4) DFILL_PREP(8)
+#undef DFILL_PREP
+#define DFILL_PREP(NC_, MAP_) \
+  CK(cudaFuncSetAttribute(dfill_kp<NC_, MAP_>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
+  DFILL_PREP(1, 1) DFILL_PREP(2, 1) DFILL_PREP(4, 1) DFILL_PREP(1, 2) DFILL_PREP(2, 2) DFILL_PREP(4, 2)
 #undef DFILL_PREP
 }
 // f.rec: per() receipts, then dfill_k's mode word
