@@ -26,6 +26,11 @@
 //        2R + 4 + r round r's fused work, 3R + 4 the fused power window (3R + 5 <= POINT_SLOTS).
 //
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a fscore.cu -lcublasLt -lnvidia-ml -ldl
+// -DFSCORE_PUMP_ONLY (a pump-only arm, every fused step FW = AFW = 0) builds fscore's flin and attention without filler
+// warps, so the binary the scorer reads holds only the pump's filler; dcap's own build keeps them for its gates.
+#ifdef FSCORE_PUMP_ONLY
+#define FLIN_PUMP_ONLY
+#endif
 #define DCAP_FLIN
 #define main dcap_main
 #include "../decode_capacity/dcap.cu"

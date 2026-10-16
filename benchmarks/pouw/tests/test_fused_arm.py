@@ -98,6 +98,18 @@ def test_pump_arm_has_no_fixed_work():
     assert F.FusedPumpK().table == F.FusedPumpBU().table == F.FusedPumpBUXin().table == F.FusedPump().table
 
 
+@pytest.mark.parametrize("arm", ARMS, ids=lambda a: a.name)
+def test_pump_only_build_runs_no_filler_warp(arm):
+    """-DFSCORE_PUMP_ONLY builds fscore with no flin or attention filler warps (fscore.cu sets FLIN_PUMP_ONLY before
+    dcap.cu brings in flin.cuh), so an arm with it has none in any row, and filler-scorer/v5 reads only its pump's fold."""
+    if "-DFSCORE_PUMP_ONLY" not in arm.nvcc_flags.split():
+        return
+    assert all(q.FW == 0 and q.AFW == 0 for _, q in arm.table.values())
+    src = (FILLER / "fscore.cu").read_text()
+    assert re.search(r"#ifdef FSCORE_PUMP_ONLY\n#define FLIN_PUMP_ONLY\n#endif\n#define DCAP_FLIN\n", src)
+    assert src.index("#define FLIN_PUMP_ONLY") < src.index('#include "../decode_capacity/dcap.cu"')
+
+
 def test_warp_arm_fills_through_dfill_k_warp():
     """FusedWarpK's filler warps are flin's alone, each stopped before its block's end, and on a pfill build flin's filler
     step is the `__noinline__` dfill_k_warp the scorer's check reads (coins, tile id and step its only inputs)."""

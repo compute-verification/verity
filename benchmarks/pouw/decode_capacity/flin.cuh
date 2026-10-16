@@ -604,11 +604,14 @@ static void flin_go(const FlinArgs& a, int grid, cudaStream_t st) {
   cfg.numAttrs = g_pdl ? 1 : 0;
   CK(cudaLaunchKernelEx(&cfg, flin_k<M, BK, ST, CWN, CWM, FW, NC>, a));
 }
-// the (FW, NC) pairs built for each M: FW = 0 is the GEMM alone
+// the (FW, NC) pairs built for each M: FW = 0 is the GEMM alone. FLIN_PUMP_ONLY (fscore.cu's FSCORE_PUMP_ONLY) builds
+// FW = 0 alone and no attention filler warps (fatt_with), so a pump-only arm's fscore holds no clone of dfill_k_warp
+// for the scorer to read as its filler.
 template <int M, int BK, int ST, int CWN, int CWM>
 static bool flin_fw(const FlinArgs& a, int grid, int FW, int NC, cudaStream_t st) {
   const int k = FW == 0 ? 0 : FW * 10 + NC;
   if (k == 0) { flin_go<M, BK, ST, CWN, CWM, 0, 2>(a, grid, st); return true; }
+#ifndef FLIN_PUMP_ONLY
   if constexpr (M == 32) {
     if (k == 114) { flin_go<M, BK, ST, CWN, CWM, 11, 4>(a, grid, st); return true; }
   }
@@ -644,6 +647,7 @@ static bool flin_fw(const FlinArgs& a, int grid, int FW, int NC, cudaStream_t st
       case 24: flin_go<M, BK, ST, CWN, CWM, 2, 4>(a, grid, st); return true;
     }
   }
+#endif
   return false;
 }
 static bool flin_launch(int M, const FlinArgs& a, int grid, int FW, int NC, cudaStream_t st) {
@@ -657,6 +661,7 @@ static bool flin_launch(int M, const FlinArgs& a, int grid, int FW, int NC, cuda
   }
   return false;
 }
+#ifndef FLIN_PUMP_ONLY
 static const char* flin_built(int M) {
   return M == 32    ? "0, 1:4, 2:4, 4:2, 4:4, 8:2, 8:4, 11:4"
          : M == 64  ? "0, 1:4, 2:4, 4:2, 4:4, 8:2, 8:4"
@@ -664,6 +669,9 @@ static const char* flin_built(int M) {
          : M < 256  ? "0, 1:4, 2:2, 2:4, 4:4"
                     : "0, 1:4, 2:2, 2:4";
 }
+#else
+static const char* flin_built(int) { return "0"; }
+#endif
 
 // The filler warps' ring on the host (FSlots): the round's coins and first tile id (its tag included), the slots a step
 // and the ring's depth in steps.
@@ -871,6 +879,7 @@ struct FwNc {
 // f(FwNc<FW, NC>{}) for a built (FW, NC); false if it isn't
 template <class F>
 static bool fatt_with(int FW, int NC, F&& f) {
+#ifndef FLIN_PUMP_ONLY
   switch (FW * 10 + NC) {
     case 24: f(FwNc<2, 4>{}); return true;
     case 42: f(FwNc<4, 2>{}); return true;
@@ -880,9 +889,16 @@ static bool fatt_with(int FW, int NC, F&& f) {
     case 82: f(FwNc<8, 2>{}); return true;
     case 84: f(FwNc<8, 4>{}); return true;
   }
+#else
+  (void)FW, (void)NC, (void)f;
+#endif
   return false;
 }
+#ifndef FLIN_PUMP_ONLY
 static const char* fatt_built() { return "0, 2:4, 4:2, 4:4, 6:2, 6:4, 8:2, 8:4"; }
+#else
+static const char* fatt_built() { return "0"; }
+#endif
 static void fatt_prepare(Fatt& a, int FW, int NC, int B, int L, int sms = 0) {
   a.FW = FW;
   a.NC = NC;

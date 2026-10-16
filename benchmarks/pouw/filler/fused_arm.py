@@ -219,7 +219,9 @@ class FusedPumpBU(FusedPumpK):
     filler: A.Filler | None = BU_DUO_FILLER
     choice: str = ("FusedPump's offline table of pump-only splits, a pfill-bU duo pump, pfill's 4-SM prefill split; at "
                    "serving time a lookup, a green split and one graph a step")
-    nvcc_flags: str = "-DPFILL_BU -Xcompiler -mpopcnt"
+    #: FSCORE_PUMP_ONLY: fscore built without flin's and attention's filler warps (every row is FW = AFW = 0), so the
+    #: binary filler-scorer/v5 reads holds no ram-folding dfill_k_warp clone beside the pump's duo
+    nvcc_flags: str = "-DPFILL_BU -Xcompiler -mpopcnt -DFSCORE_PUMP_ONLY"
 
 
 @dataclass
@@ -237,7 +239,7 @@ class FusedPumpBUXin(FusedPumpBU):
     filler: A.Filler | None = BU_XIN_FILLER
     choice: str = ("FusedPump's offline table of pump-only splits, a pfill-bU XOR-in pump, pfill's 4-SM prefill split; at "
                    "serving time a lookup, a green split and one graph a step")
-    nvcc_flags: str = "-DPFILL_BU -DPFILL_XIN -Xcompiler -mpopcnt"
+    nvcc_flags: str = "-DPFILL_BU -DPFILL_XIN -Xcompiler -mpopcnt -DFSCORE_PUMP_ONLY"
 
 
 def _warp(sms, fw, st=32, lm=1, aps=1):
