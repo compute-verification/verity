@@ -328,7 +328,7 @@ def class_lowering(act: Activation, uc: UnitCircuit, name: str, groups: list[lis
             w = uc.in_widths[t]
             wires[act.absolute(uc.inputs[t])] = [b for word in leaves[base + leaf:base + leaf + _words(bit + w)] for b in word][bit:bit + w]
         base += w_port
-    IL.lower_gates(C, [act.gate(j) for j in uc.gates], wires)
+    IL.lower_gates(C, [act.gate(j) for j in uc.gates], wires, reads=[act.absolute(j) for j in uc.outputs])
     out_bits = []
     for j, w in zip(uc.outputs, uc.out_widths):
         out_bits += list(wires[act.absolute(j)]) + [gf2.ZERO] * (16 * _words(w) - w)
