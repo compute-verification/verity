@@ -241,6 +241,14 @@ deterministic arm between harnesses:
 |  | adopted-attention | 6.4975 (6.4959–6.5008) | +0.45 | -0.72 | - | - | - | - |
 |  | adopted-no-smooth | 6.5168 (6.5163–6.5171) | +0.75 | -0.50 | 6.5211 (6.5201–6.5230) | `int8-rot-lin8rd-eqp=w64-poff64-psink-kc-kv=dith` | -0.07 | yes |
 |  | adopted | 6.5202 (6.5160–6.5234) | +0.80 | -0.45 | - | - | - | - |
+| llama-3.1-8b · wikitext2 · 8K (16 windows) | bf16 | 5.5686 | - | - | 5.5686 | `sdpa` | +0.00 | yes |
+|  | int8-linears | 5.5726 | +0.07 | - | 5.5728 | `bf16-lin8r` (eager attention) | +0.00 | yes |
+|  | int8-attention | 5.6966 (5.6949–5.6976) | +2.30 | - | 5.6966 (5.6949–5.6976) | `int8-rot` | +0.00 | yes |
+|  | int8-all | 5.6994 (5.6991–5.6999) | +2.35 | - | 5.7004 (5.7000–5.7012) | `int8-rot-lin8r` | -0.02 | yes |
+|  | adopted-linears | 5.5851 (5.5842–5.5860) | +0.30 | +0.23 | - | - | - | - |
+|  | adopted-attention | 5.5989 (5.5977–5.6001) | +0.54 | -1.72 | - | - | - | - |
+|  | adopted-no-smooth | 5.6210 (5.6188–5.6229) | +0.94 | -1.38 | 5.6240 | `int8-rot-lin8rd-eqp=w64-poff64-psink-kc-kv=dith-s0` | -0.05 | yes |
+|  | adopted | 5.6164 (5.6144–5.6180) | +0.86 | -1.46 | - | - | - | - |
 | qwen2.5-7b · wikitext2 · 2K (16 windows) | bf16 | 6.3538 | - | - | 6.3553 | `sdpa` | -0.02 | yes |
 |  | int8-linears | 6.3583 | +0.07 | - | 6.3577 | `ref-lin8r` (FP32 attention) | +0.01 | yes |
 |  | int8-attention | 6.3940 (6.3895–6.3964) | +0.63 | - | - | - | - | - |
@@ -262,6 +270,7 @@ Runs:
 
 - llama-3.1-8b · c4 · 2K: bench `r20261016-181132-a47c`; tonight `r20261016-151826-4e17`
 - llama-3.1-8b · wikitext2 · 2K: bench `r20261016-182558-c0e6`; tonight `r20261016-065318-8035`, `r20261016-091629-d9e7`, `r20261016-121921-ec96`
+- llama-3.1-8b · wikitext2 · 8K: bench `r20261016-183653-00ce`; tonight `r20261016-011841-01a2`, `r20261016-082150-e25a`, `r20261016-121921-ec96`
 - qwen2.5-7b · wikitext2 · 2K: bench `r20261016-183113-01ee`; tonight `r20261016-105148-9add`, `r20261016-110904-30f8`, `r20261016-121921-ec96`
 - qwen2.5-7b · wikitext2 · 8K: bench `r20261016-183927-f944`; tonight `r20261016-110904-30f8`, `r20261016-121921-ec96`
 <!-- /baseline -->
