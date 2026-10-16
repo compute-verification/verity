@@ -1248,6 +1248,9 @@
    "assumptions": [],
    "type_hash": "106f9eeb8a719c5b3bdc75b1580cd548d065c3f5d3b7d429eb3709f3b281ee09"
   },
+  "Properties.SampledProofs.SecurityProofs.drawMisses": {
+   "owner": "@proofs"
+  },
   "Properties.SampledProofs.acceptMeans": {
    "owner": "@proofs",
    "signature": ["Properties.SampledProofs.acceptMeans : Properties.SampledProofs.AcceptMeans"],
@@ -1270,6 +1273,7 @@
  "shape": {
   "premises": ["Definitions.NetworkCertifier.Premises"],
   "statements": ["Properties"],
+  "events": ["Claims.Pr"],
   "properties": {
    "MemoryChallenger.Properties.SecurityProofs.judgeAccepts": {
     "function": "MemoryChallenger.Judge.judge",
@@ -1935,6 +1939,10 @@
    },
    "Properties.Pouw.Window.workAtRefuses": {
     "function": "PouwWindow.Work.at?",
+    "outcome": "accept"
+   },
+   "Properties.SampledProofs.SecurityProofs.drawMisses": {
+    "function": "SampledProofs.Slots.select",
     "outcome": "accept"
    },
    "Properties.SampledProofs.acceptMeans": {
