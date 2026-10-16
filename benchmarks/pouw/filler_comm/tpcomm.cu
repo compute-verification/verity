@@ -69,8 +69,8 @@ __device__ __forceinline__ int ld_flag(const int* p) {
 // Warp wid of collective `slot` runs tiles tile0 + wid·tiles + i, i < tiles, tile0 = (epoch·nslots + slot)·warps·maxcap (a
 // public range a collective, never reused), the tiles and receipts of dcap.cu's dtiles. cnt[wid] is how many it finished; a
 // tile the flag interrupts after s steps (a multiple of the poll) writes the receipt of its state after s steps at the next
-// index, and part[wid] = s (0 if none), so the verifier recomputes exactly s steps. total sums the steps run (finished tiles
-// times S plus interrupted steps) over warps and launches.
+// index, and part[wid] = s (0 if none), so the verifier recomputes exactly s steps. total[0] sums the steps run (finished
+// tiles times S plus interrupted steps) over warps and launches, total[1] the finished tiles' steps alone.
 template <int NC, int MAP>
 __global__ void __launch_bounds__(512) cfill_k(uint64_t c0, uint64_t c1, const unsigned long long* __restrict__ epoch, int slot,
                                                int nslots, int tiles, int maxcap, int steps, int poll, const int* flag,
@@ -114,6 +114,7 @@ __global__ void __launch_bounds__(512) cfill_k(uint64_t c0, uint64_t c1, const u
     cnt[wid] = done;
     part[wid] = cut;
     atomicAdd(total, (unsigned long long)done * steps + cut);
+    atomicAdd(total + 1, (unsigned long long)done * steps);
   }
 }
 
@@ -414,19 +415,20 @@ static int run_point(Rank& R, int B, int L, int reps) {
     const bool pf = a == "phase" || a == "commphase";
     if (pf && !R.pf.on) continue;
     barrier(R);
-    if (pf) CK(cudaMemset(R.pf.total, 0, 8));
+    if (pf) CK(cudaMemset(R.pf.total, 0, 16));
     const std::vector<Rep> v = time_work(R.d, [&] { enqueue_step(R, p, lm, kind, pf, B, L, &wrapped); }, reps);
     double steps_rep = 0;
     char extra[256] = "";
     if (pf) {
-      unsigned long long tot;
-      CK(cudaMemcpy(&tot, R.pf.total, 8, cudaMemcpyDeviceToHost));
-      steps_rep = (double)tot / (reps + 2);  // time_work's 2 warm-ups ran it too
+      unsigned long long tot[2];
+      CK(cudaMemcpy(tot, R.pf.total, 16, cudaMemcpyDeviceToHost));
+      steps_rep = (double)tot[0] / (reps + 2);  // time_work's 2 warm-ups ran it too
       long checked, bad, over, cuts;
       pf_check(R, 8, &checked, &bad, &over, &cuts);
-      snprintf(extra, sizeof extra, ", \"rec_checked\": %ld, \"rec_bad\": %ld, \"cnt_over_cap\": %ld, \"cuts\": %ld, "
-               "\"pf\": [%d, %d, %d, %d, %d, %d, %d]",
-               checked, bad, over, cuts, R.pf.W, R.pf.NC, R.pf.S, R.pf.tiles, R.pf.poll, R.pf.grid, R.pf.map);
+      snprintf(extra, sizeof extra, ", \"fill_steps_full_rep\": %.1f, \"rec_checked\": %ld, \"rec_bad\": %ld, "
+               "\"cnt_over_cap\": %ld, \"cuts\": %ld, \"pf\": [%d, %d, %d, %d, %d, %d, %d]",
+               (double)tot[1] / (reps + 2), checked, bad, over, cuts, R.pf.W, R.pf.NC, R.pf.S, R.pf.tiles, R.pf.poll,
+               R.pf.grid, R.pf.map);
       if (bad || over) rc = 8;
     }
     emit(R, a.c_str(), B, L, v, kind == 2 ? 0 : served, steps_rep, extra);
@@ -503,7 +505,7 @@ static int rank_main(int r, int tp, const ncclUniqueId& id, int argc, char** arg
     CK(cudaMemset(f.flags, 0, f.nslots * sizeof(int)));
     CK(cudaMalloc(&f.epoch, 8));
     CK(cudaMemset(f.epoch, 0, 8));
-    CK(cudaMalloc(&f.total, 8));
+    CK(cudaMalloc(&f.total, 16));
     CK(cudaMalloc(&f.rec, (size_t)f.nslots * f.stride() * 8));
     CK(cudaMalloc(&f.cnt, (size_t)f.nslots * f.warps() * 4));
     CK(cudaMalloc(&f.part, (size_t)f.nslots * f.warps() * 4));

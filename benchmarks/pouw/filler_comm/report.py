@@ -74,6 +74,8 @@ def rows(out_dir):
                     fm = first("phase", "fill_macs_rep")
                     pm = first("phase", "mhz")
                     row["fill"] = fm / (phase * 1e-3) / (1024 * 188 * pm * 1e6)
+                    if by_arm["phase"][0][0].get("fill_steps_full_rep") is not None:
+                        row["fill_finished"] = row["fill"] * first("phase", "fill_steps_full_rep") / first("phase", "fill_steps_rep")
                     row["served_phase"] = macs / (phase * 1e-3) / (1024 * 188 * pm * 1e6)
                     row["rec_bad"] = sum(r.get("rec_bad", 0) for ranks in by_arm["phase"] for r in ranks)
                     row["rec_checked"] = sum(r.get("rec_checked", 0) for ranks in by_arm["phase"] for r in ranks)
@@ -96,14 +98,15 @@ def main():
         return
     f = lambda v, p=4: "-" if v is None else (f"{v:.{p}f}" if isinstance(v, float) else str(v))
     print("| set | TP | B | L | base ms | nocomm ms | comm ms | comm exposed | served | idle | phase ms | slowdown | fill | "
-          "served+fill | comm+filler/comm | receipts bad/checked |")
-    print("|" + "---|" * 16)
+          "fill (finished tiles) | served+fill | comm+filler/comm | receipts bad/checked |")
+    print("|" + "---|" * 17)
     for r in rs:
         tot = r["served_phase"] + r["fill"] if "fill" in r else None
         L = f"{r['L']} (KV wrapped)" if r["kv_wrapped"] else r["L"]
         print(f"| {r['set']} | {r['tp']} | {r['B']} | {L} | {f(r['base_ms'], 2)} | {f(r['nocomm_ms'], 2)} | "
               f"{f(r['comm_ms'], 2)} | {f(r.get('comm_exposed'), 3)} | {f(r.get('served'), 4)} | {f(r.get('idle'), 3)} | "
-              f"{f(r['phase_ms'], 2)} | {f(r.get('slowdown'), 4)} | {f(r.get('fill'), 4)} | {f(tot, 4)} | "
+              f"{f(r['phase_ms'], 2)} | {f(r.get('slowdown'), 4)} | {f(r.get('fill'), 4)} | {f(r.get('fill_finished'), 4)} | "
+              f"{f(tot, 4)} | "
               f"{f(r.get('comm_slowdown'), 4)} | {r.get('rec_bad', '-')}/{r.get('rec_checked', '-')} |")
     for s in sorted({(r["set"], r["settings"]) for r in rs}):
         print(f"- {s[0]}: `{s[1]}`")
