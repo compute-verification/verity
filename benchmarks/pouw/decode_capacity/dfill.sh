@@ -53,6 +53,10 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
           >> "$O/ncu-dfill-w${a%:*}-nc${a#*:}.csv" 2>&1; echo "ncu $a $m rc $?" >> "$O/rc.txt"
       done
     done
+    # positive control for the DRAM counters: bw_read streams 1 GiB, so dram__bytes.sum should read ≈ 1.07e9 a launch
+    DCAP_NOGRAPH=1 ncu --clock-control none -k regex:bw_read --launch-count 3 \
+      --metrics gpu__time_duration.sum,dram__bytes.sum,dram__throughput.avg.pct_of_peak_sustained_elapsed --csv \
+      "$B/dcap" bw 1 3 > "$O/ncu-bw-control.csv" 2>&1; echo "ncu bw control rc $?" >> "$O/rc.txt"
     L=launch__grid_size,launch__block_size,launch__registers_per_thread,launch__shared_mem_per_block_static,launch__shared_mem_per_block_dynamic,launch__occupancy_limit_registers,launch__occupancy_limit_shared_mem,launch__occupancy_limit_warps,launch__occupancy_limit_blocks
     for bl in 32:2048 256:2048; do
       DCAP_NOGRAPH=1 ncu --clock-control none --nvtx --nvtx-include "timed/" --launch-count 200 --metrics $L --csv "$B/dcap" step "${bl%:*}" "${bl#*:}" 1 \
