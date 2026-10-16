@@ -135,6 +135,7 @@ import Proofs.Flock.C3.RegLevels.SrcMaps
 import Proofs.Flock.C3.Sparse.SessionReg
 import Proofs.Flock.C3.Sparse.SessionKeys
 import Proofs.Flock.C3.Sparse.SessionZero
+import Proofs.Flock.C3.Sparse.HCols
 import Proofs.Flock.C3.RegLevels.LgCoins
 import Proofs.Flock.C3.RegLevels.RRounds
 import Proofs.Flock.C3.RegLevels.LgHeld
@@ -161,7 +162,7 @@ discharge what it takes besides: VBridge at candidate 3's table (`_hbr`) and V*'
   the source's runs' own steps from their sparse phases' plays (`SrcSparseOK`, `sparseReadAt_of_ok`), which a source
   tied to V*'s accepted RecSparse units gives (`SrcSparseTie`, `srcSparseOK_of_tie`), and the tie from the unit's copy
   in a good layer of V*'s (`SparseTieL`, `sparseTie_of_layer`), that copy from V*'s sessions (`SparseSessionAt`,
-  `sparseTieL_of_session`).
+  `sparseTieL_of_session`), and `HCols` at every unit `RecSparse.check` accepts (`hCols_of_check`).
 * (e) `C3/Opening/`, `FlockC3.Opening`: R's opening on the two claims (`HOpening`; n4), at the honest family from
   its read fact (`OpeningRead`, `hOpening_of_read`), and that fact from the `rec-opening` unit's residuals
   (`residuals_eq_runO`, `openingRead_of_rows`), and from V*'s sessions and the verifier's coins but the claim tie and
