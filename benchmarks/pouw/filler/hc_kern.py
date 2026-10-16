@@ -62,6 +62,25 @@ class KernM2C18(KernM2):
 
 
 @dataclass
+class KernM2C21(KernM2):
+    """kern-m2 in 2^21-MMA chunks (4 tiles a warp, ~4 ms): 0.998 of peak alone against 0.994 at 2^19
+    (r20261016-051127-18ab). Beside serving kern-m2 keeps 0.975-0.990 of peak against 0.990 alone, losing most at the
+    largest batches, where serving launches the most kernels beside the filler's chunk launches; four times longer
+    chunks pay each launch gap a quarter as often. dscore (5e74544b9 on) times a block's rate over its completion span,
+    which a chunk's length no longer biases."""
+
+    name: str = "kern-m2-c21"
+    lineage: dict = field(default_factory=lambda: {
+        "parent": "kern-m2", "approach": "pouw/filler-kernel",
+        "mechanism": ["filler:chained-imma-registers", "kernel:map-in-register-order", "kernel:seed-128",
+                      "kernel:c-16bit", "kernel:w16-s8192", "chunk:2^21", "place:split", "split:per-point-table",
+                      "prefill:none"],
+        "hypothesis": "kern-m2 in 4x longer chunks: the filler pays its chunk-launch gap a quarter as often, 0.99 -> "
+                      "0.995 of peak beside serving"})
+    filler: A.Filler | None = A.Filler(W=16, NC=4, S=8192, chunk_log2=21)
+
+
+@dataclass
 class KernM1(KernM2):
     """Map 1 (in-place, unhardened) at FILL v1's own shape, W 8, NC 4, S 2048: 0.984 of peak alone."""
 
