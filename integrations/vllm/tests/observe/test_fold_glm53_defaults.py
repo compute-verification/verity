@@ -4,7 +4,8 @@
   back into the partial's buffer; another pattern code, quantisation or world is refused;
 * vLLM's CUDA rms_norm / fused_add_rms_norm off batch invariance fold to `RMSNormCudaVector8_v1` / `RMSNormFusedCudaVector8_v1`;
 * an unbiased bf16 `aten.linear` folds to cuBLAS's captured route, and a shape without one is refused;
-* MLA's absorb `bmm` folds to `BatchedGemmWord_v1` per token over permuted views, the `out=` variant included;
+* MLA's absorb `bmm` folds to `BatchedGemmWord_v1` per token over permuted views, the `out=` variant included, named by the Root
+  (W_UK_T or W_UV of kv_b's one allocation) its weight view lies in;
 * none of them claims another op.
 """
 from __future__ import annotations
@@ -151,6 +152,22 @@ def test_the_bmm_out_variant_writes_its_out_view():
                  kwargs={"out": view(5599, (8, 1, 256), strides=(256, 2048, 1))}, module="model.layers.0.self_attn")
     r = MlaAbsorbBmm().match(node, _ctx(1, [w_uv]))
     assert isinstance(r, Compute) and r.outputs[0].view.alloc == 5599 and r.outputs[0].view.shape == (1, 8, 256)
+
+
+def test_each_absorb_bmm_is_named_by_the_root_its_weight_view_lies_in():
+    """W_UK_T and W_UV are two Roots of kv_b's one allocation: each absorb is hinted by the one its view lies in (the allocation's first
+    Root named both, so the Match's weight map spanned W_UV's reads under W_UK_T)."""
+    w_uv = Root(view(2, (8, 512, 256), strides=(448, 3584, 1), offset=192), "weight", "model.layers.0.self_attn.W_UV")
+    roots = [W_UK_T, w_uv]
+    uv = _node("aten.bmm.out", BMM_OUT_SCHEMA, [view(5618, (8, 1, 64), strides=(64, 2048, 1)),
+                                                view(2, (8, 64, 256), strides=(448, 3584, 1), offset=192 + 3584)],
+               kwargs={"out": view(5599, (8, 1, 256), strides=(256, 2048, 1))}, module="")
+    uk = _node("aten.bmm.default", BMM_SCHEMA, [view(5604, (8, 1, 192), strides=(256, 2048, 1)), W_UK_T.view], outs=view(5605, (8, 1, 512)))
+    assert MlaAbsorbBmm().match(uv, _ctx(1, roots)).hint.rpartition("/")[2] == w_uv.name
+    assert MlaAbsorbBmm().match(uk, _ctx(1, roots)).hint.rpartition("/")[2] == W_UK_T.name
+    straddling = _node("aten.bmm.default", BMM_SCHEMA, [view(5604, (8, 1, 300), strides=(256, 2048, 1)),
+                                                        view(2, (8, 300, 512), strides=(448, 1, 3584))], outs=view(5605, (8, 1, 512)))
+    assert isinstance(MlaAbsorbBmm().match(straddling, _ctx(1, roots)), Unsupported)
 
 
 def test_a_bmm_whose_weight_is_no_parameter_view_is_refused():
