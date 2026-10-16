@@ -36,6 +36,7 @@ gpu_bins=()
 for s in $SECTIONS; do
   case $s in
     issue) build issue_ceiling; gpu_bins+=(issue_ceiling) ;;
+    sched) build issue_sched; gpu_bins+=(issue_sched) ;;
     ce7) build ce7 -lcublasLt -lcublas; gpu_bins+=(ce7) ;;
     *) echo "unknown section $s" >&2 ;;
   esac
@@ -63,5 +64,6 @@ EOF
 fi
 
 python3 "$SRC/issue_ceiling.py" "$OUT" >"$OUT/combine.log" 2>&1 || echo "issue_ceiling.py rc=$?" >>"$OUT/sections.log"
+[ -f "$OUT/issue_sched.jsonl" ] && { python3 "$SRC/issue_sched.py" "$OUT" >"$OUT/combine-sched.log" 2>&1 || echo "issue_sched.py rc=$?" >>"$OUT/sections.log"; }
 ls -la "$OUT" >&2
 cat "$OUT/sections.log" >&2
