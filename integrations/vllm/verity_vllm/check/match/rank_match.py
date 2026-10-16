@@ -36,6 +36,28 @@ PRODUCER_BY_SITE_CLASS = {"VocabParallelEmbedding": ("EmbeddingShard_v1",),
                           "RowParallelLinear": ("Gemm_v1", "Gemm_v2", "DeepGemmFp8Linear", "batch:Gemm"),
                           "LogitsProcessor": ("Gemm_v1", "Gemm_v2", "batch:Gemm"), "ParallelLMHead": ("Gemm_v1", "Gemm_v2", "batch:Gemm"),
                           "FusedMoE": ("MoeSum", "MoeExpertSum"), "SharedFusedMoE": ("MoeSum", "MoeExpertSum"), "MoERunner": ("MoeSum", "MoeExpertSum")}
+#: a row adding two partials of its rank and step is a partial too (GLM-5.3's MoE block: the routed `MoeSum` plus the shared expert's
+#: down-proj), named `<spec><-<producer>|<producer>` (`_named`) and admitted only when every operand's producer is (`_admitted`)
+SUMMED_PARTIALS = ("ResidualAdd_v1",)
+
+
+def _named(k: int, spec_of: Any, args_of: Any, step_of: Any) -> str:
+    """Node k's spec; for a `SUMMED_PARTIALS` node, with the producers of its operands' rows (`<other-step>` for a node of another
+    step, `<not-a-node>` for anything but a node output)."""
+    sp = str(spec_of(k))
+    if not sp.startswith(SUMMED_PARTIALS):
+        return sp
+    ops = {(str(spec_of(int(r[1]))) if step_of(int(r[1])) == step_of(k) else "<other-step>") if r[0] == "n" else "<not-a-node>"
+           for rs in (args_of(k) or [[]]) for r in (rs or [("?",)])}
+    return f"{sp}<-" + "|".join(sorted(ops))
+
+
+def _admitted(sp: Any, classes: tuple[str, ...] = PARTIAL_PRODUCERS) -> bool:
+    """Every producer named in `sp` (`_own_rows`' ``+``-joined names) is of `classes`; a summed partial's, each of its operands'."""
+    def one(x: str) -> bool:
+        head, _, ops = x.partition("<-")
+        return all(o.startswith(classes) for o in ops.split("|")) if ops and head.startswith(SUMMED_PARTIALS) else x.startswith(classes)
+    return all(one(x) for x in str(sp).split("+"))
 
 
 def _site_class(module_path: str | None) -> str | None:
@@ -85,40 +107,45 @@ def own_producers(result: Any) -> dict[tuple[int, int], list[str]]:
     unwritten read) yields the marker `<not-a-node>`."""
     from verity.ml.circuits.refs import runs
     out: dict[tuple[int, int], list[str]] = {}
-    node_spec = {}
-    for i, n in enumerate(result.body.nodes):
-        fid = getattr(n.fn, "id", None) or str(n.fn)
-        node_spec[i] = fid
+    nodes = result.body.nodes
+    node_spec = {i: getattr(n.fn, "id", None) or str(n.fn) for i, n in enumerate(nodes)}
+    node_step = {m["node"]: m.get("step") for m in result.instances if m.get("node") is not None}
+    name = lambda k: _named(k, lambda j: node_spec.get(j, "?"), lambda j: [list(runs(a.refs)) for a in nodes[j].args], node_step.get)  # noqa: E731
     for m in result.instances:
         c = m.get("collective")
         if not c:
             continue
         key = (int(c["step"]), int(c["k"]))
-        node = result.body.nodes[m["node"]]
-        out.setdefault(key, []).extend(_own_rows(list(runs(node.args[0].refs)), c, lambda k: node_spec.get(k, "?")))
+        out.setdefault(key, []).extend(_own_rows(list(runs(nodes[m["node"]].args[0].refs)), c, name))
     return out
 
 
 def own_producers_from_record(instances_path: str | Path, program_nodes_spec: dict[int, str] | None = None) -> dict[tuple[int, int], list[str]]:
     """The same from a persisted record: `instances.jsonl` rows carrying `collective` + `operand_refs` (node-space runs kept in the file);
     the producer's spec is read from the row whose `node` the own run names."""
+    from verity_vllm.program.compact import runs_from_file_items   # [R17 mfast F2] v2 files hold node-space progressions
     spec_of: dict[int, str] = {}
+    step_of: dict[int, Any] = {}
+    args_of: dict[int, list] = {}
     rows = []
     with open(instances_path) as f:
         for line in f:
             o = json.loads(line)
             if "node" not in o:
                 continue
-            spec_of[int(o["node"])] = o.get("spec")
+            k = int(o["node"])
+            spec_of[k], step_of[k] = o.get("spec"), o.get("step")
+            if str(o.get("spec")).startswith(SUMMED_PARTIALS):
+                args_of[k] = [runs_from_file_items(a) for a in o.get("operand_refs") or []]
             if o.get("collective"):
                 rows.append(o)
     out: dict[tuple[int, int], list[str]] = {}
+    name = lambda k: _named(k, lambda j: spec_of.get(j, "?"), args_of.get, step_of.get)  # noqa: E731
     for o in rows:
         c = o["collective"]
         key = (int(c["step"]), int(c["k"]))
-        from verity_vllm.program.compact import runs_from_file_items   # [R17 mfast F2] v2 files hold node-space progressions
         rs = runs_from_file_items((o.get("operand_refs") or [[]])[0])
-        out.setdefault(key, []).extend(_own_rows(rs, c, lambda k: spec_of.get(k, "?")) if rs else ["<not-a-node>"])
+        out.setdefault(key, []).extend(_own_rows(rs, c, name) if rs else ["<not-a-node>"])
     return out
 
 
@@ -268,7 +295,7 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
                 if not specs:
                     c.fail(f"rank {r} (step {key[0]}, k {key[1]}): no producer recorded for the own partial")
                     continue
-                bad = [sp for sp in specs if not any(str(sp).startswith(p) for p in PARTIAL_PRODUCERS)]
+                bad = [sp for sp in specs if not _admitted(sp)]
                 if bad:
                     c.fail(f"rank {r} (step {key[0]}, k {key[1]}): own partial produced by {sorted(set(map(str, bad)))[:3]}, not an admitted "
                            f"partial producer {PARTIAL_PRODUCERS}")
@@ -404,7 +431,7 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
                     if want and producers is not None:
                         key = (int(col["step"]), int(col["k"]))
                         specs = producers.get(r, {}).get(key) or []
-                        bad = sorted({str(sp) for sp in specs if not any(str(sp).startswith(p) for p in want)})
+                        bad = sorted({str(sp) for sp in specs if not _admitted(sp, want)})
                         if bad:
                             c.fail(f"{tag} link {k} ({cls}): own partial produced by {bad[:3]}, the site class admits {want} (wrong producer)")
         c.close()
