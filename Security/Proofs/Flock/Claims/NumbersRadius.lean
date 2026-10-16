@@ -16,7 +16,7 @@ word. Both count the positions, out of `2^d`, at which every lane they read agre
   and that level and padding are the masked code's columns, length and padding (`zk_level₀`). So
   `γ = 1 − √((2^cols + t)/2^d) − 1/200`, the decoder's `θ` (`zk_radius_eq`): at least `0.241` (least at `m = 25`) and
   below the plain radius at every `m` (`zk_radius_ge`, `zk_radius_lt_plain`). `CommittedPad` reads the `2^k0` witness
-  lanes (`padWits`, `padList … 0 0`); the masked code's columns have `2^k0 + 4` (`zkWidth_eq`).
+  lanes (`padWits`, `padList … 0 0`), and the masked code's columns are those `2^k0` lanes (`zkWidth_eq`).
 -/
 
 namespace Claims.Flock.Numbers
@@ -94,10 +94,9 @@ theorem zk_radius_eq (i : ZkIdx) :
   obtain ⟨-, hc, hl, ht, -⟩ := zk_level₀ i
   rw [level_padRadius_eq, hc, hl, ht]
 
-/-- The masked code's columns have the table's `2^k0` witness lanes and four more. -/
-theorem zkWidth_eq (i : ZkIdx) : zkWidth i = 2 ^ (m1Schedule i.m).k0 + 4 := by
+/-- The masked code's columns are the table's `2^k0` witness lanes, the lanes `CommittedPad` reads. -/
+theorem zkWidth_eq (i : ZkIdx) : zkWidth i = 2 ^ (m1Schedule i.m).k0 := by
   rw [(zk_level₀ i).1]
-  rfl
 
 theorem m1SqrtUp_le : ∀ m, 25 ≤ m → m ≤ 35 → m1SqrtUp m ≤ 377 / 500 := by
   intro m h1 h2
