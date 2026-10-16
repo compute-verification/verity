@@ -756,8 +756,9 @@ def test_the_fold_reads_from_the_sass_of_the_instantiation_that_runs():
 
 
 def test_the_fold_is_read_from_the_declaration_and_what_the_build_confirms():
-    """Decision 43: duo and XOR-in read in full only where declared and the SASS, the NC and the recorded
-    NVCC_APPEND_FLAGS confirm it; ram reads half; undeclared or unconfirmed reads as ram where the build shows any
+    """Decision 43: duo reads in full and XOR-in at Theorem K's proved half (RS-E-REF r7), each only where declared and
+    the SASS, the NC and the recorded NVCC_APPEND_FLAGS confirm it; ram reads half; undeclared or unconfirmed reads as
+    ram where the build shows any
     fold v5 reads, else no fold (no theorem entry); the folded fraction is the entry's times the share."""
     def ff(nc, body, name=None):
         return S.fold_facts({"dscore": nvd((name or f"_Z7dfill_kILi{nc}EEvmmyiiPy", True, body))}, nc)
@@ -769,8 +770,8 @@ def test_the_fold_is_read_from_the_declaration_and_what_the_build_confirms():
     assert read(None, 4, None, ff(4, RAM)) == ("ram", 0.5)
     assert S.fold_reading(None, 4, None, ff(4, RAM))["why"] == ["undeclared: read as ram"]
     assert read("ram", 4, "", ff(4, RAM)) == ("ram", 0.5) and read("duo", 2, None, ff(2, DUO)) == ("duo", 1.0)
-    assert read("xor-in", 4, "-DPFILL_BITS -DPFILL_XIN", ff(4, XIN)) == ("xor-in", 1.0)
-    assert read("xor-in", 4, None, ff(4, XIN)) == ("xor-in", 1.0)  # a build that recorded no flags
+    assert read("xor-in", 4, "-DPFILL_BITS -DPFILL_XIN", ff(4, XIN)) == ("xor-in", 0.5)
+    assert read("xor-in", 4, None, ff(4, XIN)) == ("xor-in", 0.5)  # a build that recorded no flags
     r = S.fold_reading("xor-in", 4, "-DPFILL_BITS", ff(4, XIN))
     assert (r["fold"], r["share"]) == ("ram", 0.5) and "lack -DPFILL_XIN" in r["why"][0]
     r = S.fold_reading("duo", 4, None, ff(4, RAM))
@@ -808,10 +809,12 @@ def test_the_fold_is_read_from_the_declaration_and_what_the_build_confirms():
 
 
 def test_the_r9_folds_are_told_apart_by_the_rotation_into_their_xor_and_read_provisionally():
-    """P2-FF r9's folds (coordinator 12:10Z): XOR-in (13, 19) and LOP3+IMAD read in full at 0.9 where declared and
-    confirmed, told apart from the superseded XOR-in (7, 19) by the state's funnel-shift rotation into each XOR
-    (through a move); XORs and addends at rotations no fold lists read as ram; each of the three is provisional, which
-    the filler's certified status and the score's flags carry."""
+    """P2-FF r9's folds (coordinator 12:10Z): XOR-in (13, 19) and LOP3+IMAD read where declared and confirmed, told
+    apart from the superseded XOR-in (7, 19) by the state's funnel-shift rotation into each XOR (through a move); XORs
+    and addends at rotations no fold lists read as ram; each of the three is provisional, which the filler's certified
+    status and the score's flags carry. All three read at Theorem K's proved half, 0.45, with 0.9 if P2-FF r10's
+    select-charging lemma lands as the entry's secondary readout, never its fraction (coordinator 13:09Z, RS-E-REF r7);
+    ram and duo have no such readout."""
     def ff(nc, body):
         return S.fold_facts({"dscore": nvd((f"_Z7dfill_kILi{nc}EEvmmyiiPy", True, body))}, nc)
 
@@ -832,9 +835,9 @@ def test_the_r9_folds_are_told_apart_by_the_rotation_into_their_xor_and_read_pro
         r = S.fold_reading(declared, 4, flags, ff(4, body))
         return r["fold"], r["share"], r["provisional"] is not None
 
-    assert read("xor-in-13", "-DPFILL_XIN13", XIN13) == ("xor-in-13", 1.0, True)
-    assert read("lop3-imad", "-DPFILL_LI", LI) == ("lop3-imad", 1.0, True)
-    assert read("xor-in", "-DPFILL_XIN", XIN) == ("xor-in", 1.0, True)  # superseded, still read in full
+    assert read("xor-in-13", "-DPFILL_XIN13", XIN13) == ("xor-in-13", 0.5, True)
+    assert read("lop3-imad", "-DPFILL_LI", LI) == ("lop3-imad", 0.5, True)
+    assert read("xor-in", "-DPFILL_XIN", XIN) == ("xor-in", 0.5, True)  # superseded, still read
     assert read("xor-in-13", "-DPFILL_XIN", XIN) == ("ram", 0.5, False)  # the SASS shows rotation 7
     assert read("lop3-imad", "-DPFILL_LI", XIN13) == ("ram", 0.5, False)
     assert read("xor-in-13", "-DPFILL_LI", XIN13) == ("ram", 0.5, False)  # the flags lack -DPFILL_XIN13
@@ -844,11 +847,20 @@ def test_the_r9_folds_are_told_apart_by_the_rotation_into_their_xor_and_read_pro
     import dataclasses
     assert A.check_arm(dataclasses.replace(A.FillV1(), filler=A.Filler(fold="lop3-imad"))) == []
     split = S.program_facts({"dscore": nvd((DFILL, True, K_TILE))})
-    e = S.filler_entry_v5("bits01", split, S.fold_reading("lop3-imad", 4, "-DPFILL_LI", ff(4, LI)))
-    c = S.certified_v5(e)
-    assert c["filler"]["fraction"] == 0.9 and c["filler"]["status"].startswith("provisional (fold lop3-imad: ")
-    assert any("provisional (fold lop3-imad" in f for f in S.score(all_points(), c)["flags"])
-    ram = S.certified_v5(S.filler_entry_v5("bits01", split, S.fold_reading("ram", 4, None, ff(4, RAM))))
+    for fold, flag, body in (("lop3-imad", "-DPFILL_LI", LI), ("xor-in-13", "-DPFILL_XIN13", XIN13),
+                             ("xor-in", "-DPFILL_XIN", XIN)):
+        e = S.filler_entry_v5("bits01", split, S.fold_reading(fold, 4, flag, ff(4, body)))
+        c = S.certified_v5(e)
+        assert (e["fraction"], e["active_fraction"], c["filler"]["fraction"]) == (0.45, 0.45, 0.45)
+        assert c["filler"]["status"].startswith(f"provisional (fold {fold}: ")
+        assert any(f"provisional (fold {fold}" in f for f in S.score(all_points(), c)["flags"])
+        x = e["if_fold"]
+        assert (x["share"], x["fraction"], x["active_fraction"], x["if"]) == (1.0, 0.9, 0.9, S.SELECT_LEMMA)
+        assert "select-charging lemma" in x["if"] and "Part VII" in x["if"]
+    ram_e = S.filler_entry_v5("bits01", split, S.fold_reading("ram", 4, None, ff(4, RAM)))
+    duo_e = S.filler_entry_v5("bits01", split, S.fold_reading("duo", 2, None, ff(2, DUO)))
+    assert (ram_e["fraction"], ram_e["if_fold"], duo_e["fraction"], duo_e["if_fold"]) == (0.45, None, 0.9, None)
+    ram = S.certified_v5(ram_e)
     assert ram["filler"]["status"] == "proved" and not S.score(all_points(), ram)["flags"]
 
 

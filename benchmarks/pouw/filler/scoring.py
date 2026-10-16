@@ -47,8 +47,9 @@ V2, V3, V4, V5 = "filler-scorer/v2", "filler-scorer/v3", "filler-scorer/v4", "fi
 #: beside it. V4 reads the filler wherever it's called from, filler warps inside serving kernels included
 #: (`program_facts`, `filler_entry_v4`, `credit_fixed`, `paths_gate`, `whole_of_peak`). V5 (active, coordinator 12:10Z:
 #: its fold check is a soundness correction, decision 43) reads the receipt's fold (`fold_reading`), the served products
-#: at the MODELLED edited design's reading (`score_v5`), and the TP entries (`tp_score`). `score.py report OUT --as
-#: v2|v3|v4` reads a run as that version does
+#: at the MODELLED edited design's reading (`score_v5`), and the TP entries (`tp_score`); a v5 correction (coordinator
+#: 13:09Z, RS-E-REF r7) reads the XOR-family folds at Theorem K's proved half (`FOLDS`, `SELECT_LEMMA`).
+#: `score.py report OUT --as v2|v3|v4` reads a run as that version does
 SCORER = V5
 LIMIT = 1.05  # serving slowdown, every entry
 DRAM_LIMIT = 0.01  # of the HBM bandwidth the same run's validated counter measures
@@ -843,7 +844,11 @@ def whole_of_peak(row: dict) -> float | None:
 #: the receipt folds filler-scorer/v5 reads (decision 43): ``share`` is the part of a filler's committed words its
 #: receipt binds, which multiplies a theorem entry's fraction; ``nc`` the NC pfill.cuh runs the fold at, ``flag`` the
 #: build flag that selects it, ``sass`` how its MMA words enter the state (`fold_facts`; ``rotations`` the state's
-#: rotations into each word's XOR, 0 none), ``provisional`` why a full reading isn't settled (the record flags it)
+#: rotations into each word's XOR, 0 none), ``provisional`` why the reading isn't settled (the record flags it);
+#: ``share_if`` the share it reads at if ``if`` holds, a secondary readout (`fold_reading`), never SCORE
+SELECT_LEMMA = ("P2-FF r10's select-charging lemma lands: under the XOR-family folds a run may choose a complement "
+                "flip from the data, so Theorem K certifies only ≥ ½ (≤ about 5/8) of the words "
+                "(note:20261015T1931Z-draft-theorem-e-referee, Part VII, RS-E-REF r7)")
 FOLDS = {
     "ram": {"share": 0.5, "nc": (4,), "flag": None, "sass": "d0 added (LEA.HI, IADD3), d1 an IMAD addend",
             "source": "y <- (rotl(y, 7) + d0)·a0 + d1 = rotl(y, 7)·a0 + Q reads a pair only through Q = a0·d0 + d1, "
@@ -851,26 +856,29 @@ FOLDS = {
     "duo": {"share": 1.0, "nc": (2,), "flag": None, "sass": "every word into an XOR (LOP3)",
             "source": "u = y ⊕ d ⊕ k; y <- u·a + z; z <- rotl(u, r) + y: no all-state kernel at 2, 4, 6 or 8 words "
                       "(note:20261016T1013Z-draft-pfill-fold §2)"},
-    "xor-in": {"share": 1.0, "nc": (4,), "flag": "-DPFILL_XIN", "rotations": (7, 19),
+    "xor-in": {"share": 0.5, "share_if": 1.0, "if": SELECT_LEMMA, "nc": (4,), "flag": "-DPFILL_XIN",
+               "rotations": (7, 19),
                "sass": "d0 into an XOR (LOP3) with the state rotated by 7 and 19 (SHF.L.W), d1 an IMAD addend",
-               "source": "y <- (rotl(y, 7) ⊕ d0)·a0 + d1 (-DPFILL_XIN, 5e3b88559): its all-state kernel is a fixed group "
-                         "of word bijections (note:20261016T1013Z-draft-pfill-fold §2.1); read in full by decision 43",
+               "source": "y <- (rotl(y, 7) ⊕ d0)·a0 + d1 (-DPFILL_XIN, 5e3b88559): its all-state kernel is a group of "
+                         "word bijections (note:20261016T1013Z-draft-pfill-fold §2.1) whose low-bit flips mod 2 leave "
+                         "Theorem K the add words, ½ proved (RS-E-REF r7, Part VII; coordinator 13:09Z)",
                "provisional": "superseded by xor-in-13: rotation 7 puts the step boundary's bad merge ratio ±128 in Λ8 "
-                              "(note:20261016T1117Z-draft-fullfloor-s-r9 §1); still read in full (coordinator 12:10Z)"},
-    "xor-in-13": {"share": 1.0, "nc": (4,), "flag": "-DPFILL_XIN13", "rotations": (13, 19),
+                              "(note:20261016T1117Z-draft-fullfloor-s-r9 §1); still read"},
+    "xor-in-13": {"share": 0.5, "share_if": 1.0, "if": SELECT_LEMMA, "nc": (4,), "flag": "-DPFILL_XIN13",
+                  "rotations": (13, 19),
                   "sass": "d0 into an XOR (LOP3) with the state rotated by 13 and 19 (SHF.L.W), d1 an IMAD addend",
                   "source": "y <- (rotl(y, 13) ⊕ d0)·a0 + d1; y <- (rotl(y, 19) ⊕ d2)·a1 + d3 (-DPFILL_XIN13): duo's "
                             "luck under (H-μ⁺) and key_ok_r9, no layout condition (note:20261016T1117Z-draft-fullfloor-s-r9 "
-                            "§1, P2-FF's served-path pick)",
-                  "provisional": "P2-FF r9's DP_M ≈ 0 over Λ8 is measured, not proved, and pairwise only; read in full "
-                                 "like XOR-in (coordinator 12:10Z)"},
-    "lop3-imad": {"share": 1.0, "nc": (4,), "flag": "-DPFILL_LI", "rotations": (0,),
+                            "§1, P2-FF's served-path pick); XOR-in's group, so Theorem K's ½ proved (RS-E-REF r7, Part VII)",
+                  "provisional": "P2-FF r9's DP_M ≈ 0 over Λ8 is measured, not proved, and pairwise only"},
+    "lop3-imad": {"share": 0.5, "share_if": 1.0, "if": SELECT_LEMMA, "nc": (4,), "flag": "-DPFILL_LI", "rotations": (0,),
                   "sass": "d0 into a three-input XOR (LOP3) with the unrotated state and a key, d1 an IMAD addend",
                   "source": "y <- (y ⊕ d0 ⊕ k0)·a0 + d1; y <- (y ⊕ d2 ⊕ k1)·a1 + d3 (-DPFILL_LI): duo's luck under "
                             "(H-μ⁺), key_ok_r9 and (HO), which a filler's hashed rows meet "
-                            "(note:20261016T1117Z-draft-fullfloor-s-r9 §2, P2-FF's filler pick)",
+                            "(note:20261016T1117Z-draft-fullfloor-s-r9 §2, P2-FF's filler pick); a chain kernel with "
+                            "low-bit flips, so Theorem K's ½ proved (RS-E-REF r7, Part VII)",
                   "provisional": "P2-FF r9's DP_M ≈ 0 over Λ8 is measured, not proved, and pairwise only; (HO) is the "
-                                 "rows' hashing, not a check; read in full like XOR-in (coordinator 12:10Z)"},
+                                 "rows' hashing, not a check"},
 }
 #: the lineage tags FILL-SEC's arms declare their fold with (pfill_arm.py: receipt:ram-k32, receipt:duo-k32,
 #: receipt:xin-k32; r5's -DPFILL_XIN13 and -DPFILL_LI arms as receipt:xin13-… and receipt:li-…)
@@ -1092,8 +1100,9 @@ def declared_fold(filler: dict | None, lineage: dict | None) -> tuple[str | None
 
 def fold_reading(declared: str | None, nc: int | None, flags: str | None, ff: dict | None,
                  how: str = "Filler.fold") -> dict:
-    """The fold filler-scorer/v5 reads the filler at (decision 43): duo, XOR-in (7, 19; superseded), XOR-in (13, 19) or
-    LOP3+IMAD, in full, only when the arm declares it and the build confirms it (`_fold_problems`). Otherwise ram,
+    """The fold filler-scorer/v5 reads the filler at (decision 43): duo in full; XOR-in (7, 19; superseded), XOR-in
+    (13, 19) or LOP3+IMAD at Theorem K's proved half, with ``share_if`` (in full) under ``if`` (`SELECT_LEMMA`) as a
+    secondary readout; each only when the arm declares it and the build confirms it (`_fold_problems`). Otherwise ram,
     halved: an undeclared fold, a declared ram, or a declaration the build doesn't confirm, provided the build shows a
     fold that binds at least ram's half (any `FOLDS` entry's word entries, or XORs and addends at other rotations, at an
     NC dcap checks receipts at). No fold at all (``share`` None, so no theorem entry
@@ -1115,7 +1124,8 @@ def fold_reading(declared: str | None, nc: int | None, flags: str | None, ff: di
         why = why + (ram if claim != "ram" else []) + ["the build shows no fold v5 reads: no theorem entry applies"]
     return out | {"fold": fold, "share": FOLDS[fold]["share"] if fold else None, "why": list(dict.fromkeys(why)),
                   "source": FOLDS[fold]["source"] if fold else None,
-                  "provisional": FOLDS[fold].get("provisional") if fold else None}
+                  "provisional": FOLDS[fold].get("provisional") if fold else None,
+                  "share_if": FOLDS[fold].get("share_if") if fold else None, "if": FOLDS[fold].get("if") if fold else None}
 
 
 def _fold_problems(fold: str, nc: int | None, flags: str | None, ff: dict) -> list[str]:
@@ -1146,7 +1156,8 @@ def filler_entry_v5(noise: str | None, pf: dict | None, fold: dict, *, unread=()
                     entries: dict = FILLER_ENTRIES) -> dict:
     """filler-scorer/v5's entry: v4's (`filler_entry_v4`), with the fold (`fold_reading`) as one more theorem check,
     ``fold``, that fails where no fold applies; a theorem entry's fraction is then its fraction times the fold's
-    share (ram ½: Theorem K 0.45, Theorem E 0.1125; duo and XOR-in in full). The floors stay 0."""
+    share (ram and the XOR-family folds ½: Theorem K 0.45, Theorem E 0.1125; duo in full). The floors stay 0.
+    ``if_fold`` is the secondary readout at the fold's ``share_if`` (the XOR family's 0.9 if `SELECT_LEMMA` holds)."""
     def check(x):
         checks, why = _theorem_checks_v4(x, noise, pf, unread)
         checks["fold"] = fold["share"] is not None
@@ -1160,11 +1171,14 @@ def filler_entry_v5(noise: str | None, pf: dict | None, fold: dict, *, unread=()
     if e["unchecked"]:
         e["unchecked"] += list(UNCHECKED_V4) + list(FOLD_UNCHECKED)
 
-    def folded(name):
-        return entries[name]["fraction"] * (fold["share"] if "noise" in entries[name] else 1.0)
+    def folded(name, share):
+        return entries[name]["fraction"] * (share if "noise" in entries[name] else 1.0)
 
-    e |= {"fold": fold, "unfolded": entries[e["applies"]]["fraction"], "fraction": folded(e["applies"]),
-          "active_fraction": folded(e["active"])}
+    e |= {"fold": fold, "unfolded": entries[e["applies"]]["fraction"], "fraction": folded(e["applies"], fold["share"]),
+          "active_fraction": folded(e["active"], fold["share"])}
+    e["if_fold"] = fold.get("share_if") and {"if": fold["if"], "share": fold["share_if"],
+                                             "fraction": folded(e["applies"], fold["share_if"]),
+                                             "active_fraction": folded(e["active"], fold["share_if"])}
     return e
 
 
