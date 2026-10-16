@@ -132,26 +132,39 @@ HD uint64_t s1(uint64_t w) { return SHA_R(8, w, 19) ^ SHA_R(8, w, 61) ^ SHA_SHR(
 HD uint64_t ch(uint64_t e, uint64_t f, uint64_t g) { return (e & f) ^ (~e & g); }
 HD uint64_t maj(uint64_t a, uint64_t b, uint64_t c) { return (a & b) | (c & (a | b)); }
 
+// SHA_ROLL=1: rounds 16..79 as a loop of four 16-round bodies (and compress_kw's 80 as five) instead of straight-line code,
+// for 2.5x less code a compression: a warp alone on its sub-partition (a tree's top, few big leaves) otherwise waits on
+// instruction fetches.
+#ifndef SHA_ROLL
+#define SHA_ROLL 0
+#endif
+#if SHA_ROLL
+#define SHA_ROLL_PRAGMA _Pragma("unroll 1")
+#else
+#define SHA_ROLL_PRAGMA _Pragma("unroll")
+#endif
+
 // Rounds R0..79 of the block w (all 16 words given; the schedule overwrites w), from round-R0 state m, feeding forward cv.
 template <int R0>
 HD void compress_from(uint64_t* cv, const uint64_t* m, uint64_t* w) {
   uint64_t a = m[0], b = m[1], c = m[2], d = m[3], e = m[4], f = m[5], g = m[6], h = m[7];
 #pragma unroll
-  for (int i = 0; i < 80; ++i) {
-    if (i < 16) {
-      if (i >= R0) {
-        const uint64_t kw = add(SHA_K_TABLE[i], w[i]);
-        const uint64_t t1 = add3(h, S1(e), ch(e, f, g));
-        const uint64_t t1b = add(t1, kw);
-        const uint64_t mj = maj(a, b, c);
-        h = g; g = f; f = e; e = add(d, t1b);
-        d = c; c = b; b = a; a = add3(t1b, S0(b), mj);
-      }
-    } else {
-      const uint64_t wi = add3(add(s1(w[(i - 2) & 15]), w[(i - 7) & 15]), s0(w[(i - 15) & 15]), w[i & 15]);
-      w[i & 15] = wi;
+  for (int i = R0; i < 16; ++i) {
+    const uint64_t kw = add(SHA_K_TABLE[i], w[i]);
+    const uint64_t t1 = add3(h, S1(e), ch(e, f, g));
+    const uint64_t t1b = add(t1, kw);
+    const uint64_t mj = maj(a, b, c);
+    h = g; g = f; f = e; e = add(d, t1b);
+    d = c; c = b; b = a; a = add3(t1b, S0(b), mj);
+  }
+  SHA_ROLL_PRAGMA
+  for (int j = 16; j < 80; j += 16) {
+#pragma unroll
+    for (int i = 0; i < 16; ++i) {
+      const uint64_t wi = add3(add(s1(w[(i - 2) & 15]), w[(i - 7) & 15]), s0(w[(i - 15) & 15]), w[i]);
+      w[i] = wi;
       const uint64_t t1 = add3(h, S1(e), ch(e, f, g));
-      const uint64_t t1b = add3(t1, SHA_K_TABLE[i], wi);
+      const uint64_t t1b = add3(t1, SHA_K_TABLE[j + i], wi);
       const uint64_t mj = maj(a, b, c);
       h = g; g = f; f = e; e = add(d, t1b);
       d = c; c = b; b = a; a = add3(t1b, S0(b), mj);
@@ -166,13 +179,16 @@ HD void compress(uint64_t* st, uint64_t* w) { compress_from<0>(st, st, w); }
 // A fixed block: kw[i] = K[i] + W[i] for the block's whole schedule, precomputed (host `schedule_kw`).
 HD void compress_kw(uint64_t* st, const uint64_t* kw) {
   uint64_t a = st[0], b = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7];
+  SHA_ROLL_PRAGMA
+  for (int j = 0; j < 80; j += 16) {
 #pragma unroll
-  for (int i = 0; i < 80; ++i) {
-    const uint64_t t1 = add3(h, S1(e), ch(e, f, g));
-    const uint64_t t1b = add(t1, kw[i]);
-    const uint64_t mj = maj(a, b, c);
-    h = g; g = f; f = e; e = add(d, t1b);
-    d = c; c = b; b = a; a = add3(t1b, S0(b), mj);
+    for (int i = 0; i < 16; ++i) {
+      const uint64_t t1 = add3(h, S1(e), ch(e, f, g));
+      const uint64_t t1b = add(t1, kw[j + i]);
+      const uint64_t mj = maj(a, b, c);
+      h = g; g = f; f = e; e = add(d, t1b);
+      d = c; c = b; b = a; a = add3(t1b, S0(b), mj);
+    }
   }
   st[0] = add(st[0], a); st[1] = add(st[1], b); st[2] = add(st[2], c); st[3] = add(st[3], d);
   st[4] = add(st[4], e); st[5] = add(st[5], f); st[6] = add(st[6], g); st[7] = add(st[7], h);

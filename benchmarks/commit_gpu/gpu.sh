@@ -8,8 +8,8 @@
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=COMMIT-GPU \
 #     -- bash benchmarks/commit_gpu/gpu.sh
-# CHECK=quick|full (default full); REPS (default 9); BUILDS (tags a<SHA_ADD>r<SHA_ROT>[nomask]); SWEEP and SEG_SWEEP (int8
-# values a leaf).
+# CHECK=quick|full (default full); REPS (default 9); BUILDS (tags a<SHA_ADD>r<SHA_ROT>[l][nomask], l for SHA_ROLL=1);
+# SWEEP and SEG_SWEEP (int8 values a leaf).
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -20,10 +20,11 @@ trap 'rm -rf "$W"' EXIT
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 nproc > "$O/nproc.txt"
 
-build() {   # build TAG: a<SHA_ADD>r<SHA_ROT>[nomask]
+build() {   # build TAG: a<SHA_ADD>r<SHA_ROT>[l][nomask] (l: SHA_ROLL=1)
   local t=$1 add=${1:1:1} rot flags=""
   rot=${t#a?r}; rot=${rot%nomask}
-  case $t in *nomask) flags=-DCOMMIT_GPU_DIAG_NOMASK ;; esac
+  case $rot in *l) rot=${rot%l}; flags="-DSHA_ROLL=1" ;; esac
+  case $t in *nomask) flags="$flags -DCOMMIT_GPU_DIAG_NOMASK" ;; esac
   nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v -DSHA_ADD="$add" -DSHA_ROT="$rot" $flags \
     -o "$W/commit_gpu_$t" $D/commit_gpu.cu -lcublasLt -lnvidia-ml > "$O/build-$t.log" 2>&1
   echo "build $t rc $?" >> "$O/rc.txt"
