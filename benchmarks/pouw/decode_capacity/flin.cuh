@@ -94,7 +94,7 @@ __device__ __forceinline__ void filler_warp(uint64_t c0, uint64_t c1, unsigned l
 #pragma unroll
     for (int u = 0; u < 8 * (LAZY ? LAZY : 1); u++)
 #pragma unroll
-      for (int ch = 0; ch < NC; ch++) dstep(st[ch], b[u & 1], c);
+      for (int ch = 0; ch < NC; ch++) dstep<0>(st[ch], b[u & 1], c);
     steps += 8 * (LAZY ? LAZY : 1);
   }
   uint64_t h = 0;
