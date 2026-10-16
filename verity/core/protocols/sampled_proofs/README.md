@@ -98,7 +98,10 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `verity/core/service/sampled_proofs/tests/test_difftest.py`. The same package ports the challenger's draw from the
   selection rule on (`SampledProofs/Select.lean`: `service.selection_law`, `draw.derive` and `service.select_draw`,
   with the number of coin bytes it reads), which the difftest holds to the Python on fixed coins, every rule and random
-  partitions; the `Stream` still draws in Python.
+  partitions; the `Stream` still draws in Python. `SampledProofs/Slots.lean` puts that draw in the claims' terms
+  (`Claims.Sampling.Partition`, `Deploy.checked`): the partition as two classes, the population's strata and then the
+  root's input gates (drawn `all`: the input unit is always checked), each replay unit one proof unit, and the draw's
+  checked proof units as `(slot, index)` in class, stratum and replay-unit order.
 - **The Python.** `verity.core.protocols.sampled_proofs.one_stage` is the one-stage audit's reference: `registration`,
   `draw` (the draw's checks, not a sampler), `partition`, `audit` and `verdict`. `consumers` reads its profile. `service` is the proof service over it, whose `Stream`
   draws from the challenger's own randomness as `two_stage.draw_first` does. `two_stage` is two-stage sampling and the
