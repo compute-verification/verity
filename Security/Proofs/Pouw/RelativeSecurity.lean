@@ -90,9 +90,13 @@ proof workers' results land here as theorems or as named hypotheses.
 * The luck lemma (RS-E-REF r4 IV.4): a nonzero error of degree at most 2 on the cube (`CubeQuad`) is nonzero on a
   quarter of it, in any ring (`luck_quad`), so spot checks with degree-2 errors satisfy `PathBound (3/4)`
   (`RoundGame.Spot`, `RoundGame.pathBound_spot`). Runs with affine operands have such errors on the design's bits,
-  U's 7 uniform planes (`SlpG.cubeQuad_err`). The ¾ is tight (`luck_quad_tight`) and fails for one-sided operands of
-  any form (`luck_oneSided_point`). On the integer alphabet a dropped term is right with probability ½ + 1/(2|α|)
-  (`luck_coins`, `luck_dropped`: 0.5039 at U's 128 letters); a ½ bound needs a deficiency priced by dropped terms.
+  U's 7 uniform planes (`SlpG.cubeQuad_err`). With the window's game built from the prover's play (`SpotPlay`,
+  `RoundsHypKS`), `RoundsHypK` follows at `p = ¾` with `PathBound` and the certified count derived
+  (`roundsHypK_of_spot`), and for one-sided affine products the floor has neither a luck nor a chain hypothesis
+  (`certifiedFraction120θ_reEncodedSpot_40`; mixed under `MixedChain`, `_reEncodedSpotMixed_40`). The ¾ is tight
+  (`luck_quad_tight`) and fails for one-sided operands of any form (`luck_oneSided_point`). On the integer alphabet a
+  dropped term is right with probability ½ + 1/(2|α|) (`luck_coins`, `luck_dropped`: 0.5039 at U's 128 letters); a
+  ½ bound needs a deficiency priced by dropped terms.
 * Theorem H (round 6 §6, merges priced) is not needed for the re-encoded design: the chain lemma covers it in every
   arithmetic (RS-E-REF r4 IV.3). It stays proved as the alternative with merges priced, including `_H` of route (c).
   In the quad model, with merges at `h ≥ 2K/3` slots, each useful cell costs
@@ -4045,7 +4049,10 @@ nonzero, one end of each of its edges is; else it is constant. So spot windows w
 `PathBound (3/4)`, the deficiency the share of uncertified cells (`RoundGame.Spot`, `RoundGame.passBound_spot`,
 `RoundGame.pathBound_spot`). The design's targets have degree 2 (`cubeQuad_dPrefix`), and so have the errors of runs
 whose products have affine operands, one-sided or mixed (`SlpG.cubeQuad_err`), on U's 7 uniform planes: the
-re-encoded alphabet is covered at ¾.
+re-encoded alphabet is covered at ¾. A prover's play is a tree of per-round error tables (`SpotPlay`), each fixed
+before its round's coins; its game (`SpotPlay.game`) is a spot-check window whenever its errors have degree 2
+(`SpotPlay.game_spot`), and `RoundsHypKS`, the window's rounds over that game, gives `RoundsHypK` at `p = ¾` for
+runs with affine operands (`roundsHypK_of_spot`).
 
 The ¾ is tight in that deficiency: dropping one plane's term leaves the error `w_p β_p x`, which vanishes on three
 quarters of the cube (`luck_quad_tight`). It fails for one-sided operands of any form, whose errors can be wrong at
@@ -4459,6 +4466,71 @@ theorem luck_dropped {α V : Type} [Fintype α] [Fintype V] [DecidableEq V] (f�
 
 end LuckDesign
 
+theorem prob_eq_card {Ω : Type*} [Fintype Ω] (p : Ω → Prop) [DecidablePred p] :
+    prob p = ((univ.filter p).card : ℝ) / Fintype.card Ω := by
+  rw [prob_eq_expect]
+  unfold expect
+  rw [Finset.sum_boole]
+
+/-- The path that plays `a` every round. -/
+def Paths.const {Ω : Type} (a : Ω) : ∀ n, Paths Ω n
+  | 0 => ()
+  | n + 1 => (a, Paths.const a n)
+
+/-- **A prover's spot-check play** over `n` rounds: per round, its error table (its committed word minus the target,
+per cell, as a function of the round's bits), fixed before the round's coins, then the rest of the play, which may
+depend on them. -/
+inductive SpotPlay (C V A : Type) : ℕ → Type
+  | done : SpotPlay C V A 0
+  | round {n : ℕ} (e : C → (V → A) → A) (next : C × Finset V → SpotPlay C V A n) : SpotPlay C V A (n + 1)
+
+namespace SpotPlay
+
+variable {C V A : Type} [Fintype C] [Fintype V] [DecidableEq V] [CommRing A]
+
+/-- **The window's game** of a play: round `w`'s deficiency is the share of uncertified cells (`spotDef`), and its
+check passes where the drawn cell's error vanishes at the drawn bits. -/
+noncomputable def game : {n : ℕ} → SpotPlay C V A n → RoundGame (C × Finset V) n
+  | _, .done => .done
+  | _, .round e next => .round (fun _ => spotDef e) (fun a => e a.1 (bitInd a.2) = 0) fun a => (next a).game
+
+omit [Fintype C] [Fintype V] [DecidableEq V] [CommRing A] in
+/-- Round `w`'s error table along the realized coins. -/
+def errAt : {n : ℕ} → SpotPlay C V A n → Paths (C × Finset V) n → Fin n → C → (V → A) → A
+  | _, .done, _, w => w.elim0
+  | _, .round e next, x, w =>
+    Fin.cases (motive := fun _ => C → (V → A) → A) e (fun w' => (next x.1).errAt x.2 w') w
+
+omit [Fintype V] in
+theorem dAt_game : ∀ {n : ℕ} (P : SpotPlay C V A n) (x : Paths (C × Finset V) n) (w : Fin n),
+    P.game.dAt x w = spotDef (P.errAt x w)
+  | _, .done, _, w => w.elim0
+  | _, .round e next, x, w => by
+    induction w using Fin.cases with
+    | zero => simp [game, errAt, RoundGame.dAt]
+    | succ w' =>
+      simp only [game, errAt, RoundGame.dAt, Fin.cases_succ]
+      exact dAt_game (next x.1) x.2 w'
+
+/-- Degree-2 errors along every play make the game a spot-check window. -/
+theorem game_spot : ∀ {n : ℕ} (P : SpotPlay C V A n), (∀ x w c, CubeQuad (P.errAt x w c)) → P.game.Spot A
+  | _, .done, _ => trivial
+  | _, .round e next, h => by
+    simp only [game]
+    refine ⟨⟨e, fun c => ?_, fun _ => rfl, fun a ha => ha⟩, fun a => game_spot (next a) fun x w c => ?_⟩
+    · simpa [errAt] using h (Paths.const (c, ∅) _) 0 c
+    · simpa [errAt] using h (a, x) w.succ c
+
+end SpotPlay
+
+/-- A round's spot coins on the re-encoded design: a cell-block and the round's bits. -/
+abbrev DSpot (n L np B n' : ℕ) : Type := DCells n n' B × Finset (DBits n L np B n')
+
+theorem ChainBound.mono {R : Type} [CommRing R] {n L np B n' : ℕ} {w : Fin np → R}
+    {Ok Ok' : ((DBits n L np B n' → R) → R) → Prop} {c : ℕ} (h : ChainBound R n L np B n' w Ok c)
+    (hOk : ∀ π, Ok' π → Ok π) : ChainBound R n L np B n' w Ok' c :=
+  fun ι τ _ _ S π hπ => h ι τ S π fun k hk => hOk _ (hπ k hk)
+
 /-- **The window's rounds with Theorem K's cost line** (the re-encoded design, chain form), a named hypothesis. It is
 `RoundsHyp` with the cost line derived rather than assumed. Along every play `x`:
 - round `w`'s run is a straight-line program over a ring `Ar` on the round's bits (`prog w`; `Z/2³²` for s32 wrap
@@ -4471,9 +4543,9 @@ end LuckDesign
 - it certifies at least `(1 − d_w) C` of the round's `C = n n' B` cell-blocks, `d_w` the game's round-`w` deficiency;
 - the run is charged at least `κ` a product, less the noise reads `V`.
 
-The game's `PathBound p` holds at `p = ¾` when the rounds are spot checks of runs with affine operands
-(`RoundGame.pathBound_spot`, `SlpG.cubeQuad_err`); for one-sided operands of any form, and at `p ≈ ½`, it needs a
-deficiency priced by dropped terms (`luck_oneSided_point`, `luck_quad_tight`) and stays named here. -/
+The game's `PathBound p` is derived at `p = ¾` when the game is the spot-check game of runs with affine operands
+(`RoundsHypKS`, `roundsHypK_of_spot`); for one-sided operands of any form, and at `p ≈ ½`, it needs a deficiency
+priced by dropped terms (`luck_oneSided_point`, `luck_quad_tight`) and stays named here. -/
 def RoundsHypK (Mc : Machine) (S : Service) (Ω : Type) [Fintype Ω] (R : ℕ) (p Vmax δb δz κ : ℝ)
     (n L np B n' : ℕ) {Ar : Type} [CommRing Ar] (wt : Fin np → Ar)
     (Ok : ((DBits n L np B n' → Ar) → Ar) → Prop) : Prop :=
@@ -4535,6 +4607,79 @@ theorem roundsHyp_of_K_one {Mc : Machine} {S : Service} {Ω : Type} [Fintype Ω]
     (h : RoundsHypK Mc S Ω R p Vmax δb δz κ n L np B n' wt Ok) (hc : ChainBound Ar n L np B n' wt Ok 1)
     (hκ : 0 ≤ κ) : RoundsHyp Mc S Ω R p (κ * L * ((n * n' * B : ℕ) : ℝ)) 0 Vmax δb δz := by
   simpa using roundsHyp_of_K h hc one_pos hκ
+
+/-- **The window's rounds as spot checks** (the re-encoded design, chain form, with the luck derived), a named
+hypothesis. It is `RoundsHypK` with its game the spot-check game of the prover's play (`SpotPlay.game`: the round's
+deficiency is the share of uncertified cell-blocks, and the check passes where the drawn cell-block's error vanishes
+at the drawn bits), and the certified cell-blocks those whose error is zero at every bit point with at most two
+ones. Along every play `x`, round `w`'s error table is its run's committed prefix words minus their targets. -/
+def RoundsHypKS (Mc : Machine) (S : Service) (R : ℕ) (Vmax δb δz κ : ℝ) (n L np B n' : ℕ) {Ar : Type}
+    [CommRing Ar] (wt : Fin np → Ar) (Ok : ((DBits n L np B n' → Ar) → Ar) → Prop) : Prop :=
+  ∃ e : S.Seed ≃ Paths (DSpot n L np B n') R, ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
+    (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ r : Ω',
+    ∃ (P : SpotPlay (DCells n n' B) (DBits n L np B n') Ar R) (Bind ZK : Fin R → Paths (DSpot n L np B n') R → Prop)
+      (V : Paths (DSpot n L np B n') R → ℝ),
+      (∀ w, prob (Bind w) ≤ δb) ∧ (∀ w, prob (ZK w) ≤ δz) ∧
+      (∀ x, S.verify (Mc.eval M (e.symm x, r)).1 (e.symm x) (Mc.eval M (e.symm x, r)).2 = true →
+        P.game.accepts x ∨ ∃ w, Bind w x ∨ ZK w x) ∧
+      (∀ x, V x ≤ Vmax) ∧
+      ∀ x, ∃ (N : Fin R → ℕ) (prog : ∀ w, SlpG (DBits n L np B n') Ar (N w))
+        (pc : Fin R → Fin n → Fin B → Fin L → Ar)
+        (vq : Fin R → Fin B → Fin L → Fin n' → Ar)
+        (word : ∀ w, DCells n n' B → Fin (N w)),
+        (∀ w j, (prog w).isProd j = true → Ok ((prog w).prod j)) ∧
+        (∀ w c, P.errAt x w c =
+          fun z => (prog w).val z (word w c) - dPrefix (pc w) (vq w) wt c.1 c.2.1 c.2.2.val z) ∧
+        (∀ w c c', (∀ U : Finset (DBits n L np B n'), U.card ≤ 2 → P.errAt x w c (bitInd U) = 0) →
+          (∀ U : Finset (DBits n L np B n'), U.card ≤ 2 → P.errAt x w c' (bitInd U) = 0) →
+          (c.1, c.2.1) ≠ (c'.1, c'.2.1) → ∀ k,
+          (prog w).coef (word w c) k ≠ 0 → (prog w).coef (word w c') k = 0) ∧
+        κ * ∑ w, ((univ.filter fun j => (prog w).isProd j = true).card : ℝ) - V x ≤ Mc.charge M (e.symm x, r)
+
+/-- **The luck is derived for affine operands**: under `RoundsHypKS` with products of affine operands (one-sided or
+mixed), `RoundsHypK` holds at `p = ¾`, its `PathBound` from the spot check's degree-2 errors
+(`RoundGame.pathBound_spot`, `SlpG.cubeQuad_err`) and its certified count from the game's deficiency. -/
+theorem roundsHypK_of_spot {Mc : Machine} {S : Service} {R : ℕ} {Vmax δb δz κ : ℝ} {n L np B n' : ℕ}
+    {Ar : Type} [CommRing Ar] {wt : Fin np → Ar} {Ok : ((DBits n L np B n' → Ar) → Ar) → Prop}
+    (h : RoundsHypKS Mc S R Vmax δb δz κ n L np B n' wt Ok) (hOk : ∀ π, Ok π → AffProd π) :
+    RoundsHypK Mc S (DSpot n L np B n') R (3 / 4) Vmax δb δz κ n L np B n' wt Ok := by
+  classical
+  obtain ⟨e, h⟩ := h
+  refine ⟨e, fun Ω' _ M hcom r => ?_⟩
+  obtain ⟨P, Bind, ZK, V, hB, hZ, hacc, hV, hK⟩ := h Ω' M hcom r
+  refine ⟨P.game, Bind, ZK, V, P.game.pathBound_spot (P.game_spot fun x w c => ?_), hB, hZ, hacc, hV,
+    fun x => ?_⟩
+  · obtain ⟨N, prog, pc, vq, word, hOk', hE, -, -⟩ := hK x
+    rw [hE w c]
+    exact (prog w).cubeQuad_err (fun j hj => hOk _ (hOk' w j hj)) (word w c) (pc w) (vq w) wt c.1 c.2.1 c.2.2.val
+  · obtain ⟨N, prog, pc, vq, word, hOk', hE, hpure, hcharge⟩ := hK x
+    let cor : Fin R → Finset (DCells n n' B) := fun w =>
+      univ.filter fun c => ∀ U : Finset (DBits n L np B n'), U.card ≤ 2 → P.errAt x w c (bitInd U) = 0
+    refine ⟨N, prog, pc, vq, word, cor, hOk', fun w c hc U hU => ?_, fun w c hc c' hc' hne k hk => ?_,
+      fun w => ?_, hcharge⟩
+    · have := (Finset.mem_filter.mp hc).2 U hU
+      rw [hE w c] at this
+      exact sub_eq_zero.mp this
+    · exact hpure w c c' (Finset.mem_filter.mp hc).2 (Finset.mem_filter.mp hc').2 hne k hk
+    · rw [P.dAt_game x w, spotDef, prob_eq_card]
+      have hC : ((n * n' * B : ℕ) : ℝ) = (Fintype.card (DCells n n' B) : ℝ) := by
+        simp [Fintype.card_prod, mul_assoc]
+      have hsplit := Finset.card_filter_add_card_filter_not (s := (univ : Finset (DCells n n' B)))
+        (fun c => ∃ U : Finset (DBits n L np B n'), U.card ≤ 2 ∧ P.errAt x w c (bitInd U) ≠ 0)
+      have hnot : (univ.filter fun c => ¬∃ U : Finset (DBits n L np B n'), U.card ≤ 2 ∧
+          P.errAt x w c (bitInd U) ≠ 0) = cor w :=
+        Finset.filter_congr fun c _ => by simp only [not_exists, not_and, not_not]
+      rw [hnot, Finset.card_univ] at hsplit
+      rw [hC]
+      rcases Nat.eq_zero_or_pos (Fintype.card (DCells n n' B)) with h0 | h0
+      · rw [h0]
+        simp
+      · have hpos : (0 : ℝ) < Fintype.card (DCells n n' B) := by exact_mod_cast h0
+        have hs : ((univ.filter fun c => ∃ U : Finset (DBits n L np B n'), U.card ≤ 2 ∧
+            P.errAt x w c (bitInd U) ≠ 0).card : ℝ) + ((cor w).card : ℝ) = Fintype.card (DCells n n' B) := by
+          exact_mod_cast hsplit
+        rw [mul_sub, mul_one, mul_div_cancel₀ _ hpos.ne']
+        linarith
 
 /-- **The window's rounds with Theorem H's cost line** (the re-encoded design in exact arithmetic over a field `F`:
 FP8 operands or scaled reads, with exact sums), a named hypothesis. It is `RoundsHyp` with the cost line derived
@@ -5478,6 +5623,43 @@ theorem certifiedFraction120θ_reEncodedExactK_40 (kd : K120 → Kind) (S : Serv
       (((2 : ℝ) ^ 40)⁻¹ + R * (δb + δz)) :=
   certifiedFraction120θ_K_40 kd S h
     (chainBound_oneSided (RingHom.id ℚ) (p₀ := 0) (by rw [RingHom.id_apply]; exact wReQ_zero)) hp hκ hC hδb hδz
+
+/-- **The re-encoded design's certified fraction with the luck derived** (one-sided affine products: `U`'s planes
+times the coins' word, or any product of an operand affine in U's bits and one affine in the coins): under
+`RoundsHypKS`, neither `PathBound` nor a chain bound is a hypothesis; the spot check gives `p = ¾`, so `D₀ = 160 ln 2`
+rounds of luck at `2⁻⁴⁰`. -/
+theorem certifiedFraction120θ_reEncodedSpot_40 (kd : K120 → Kind) (S : Service) {R : ℕ} {Vmax δb δz κ : ℝ}
+    {n L B n' : ℕ}
+    (h : RoundsHypKS (machine kd (.ofNat price120)) S R Vmax δb δz κ n L 7 B n' wRe
+      fun π => OneSided π ∧ AffProd π)
+    (hκ : 0 < κ) (hC : 0 < L * (n * n' * B)) (hδb : 0 ≤ δb) (hδz : 0 ≤ δz) :
+    ServiceFloor (machine (kdθ kd) priceθ) S
+      (4 / 5 * ((R - 160 * Real.log 2) * (κ * L * ((n * n' * B : ℕ) : ℝ)) - Vmax))
+      (((2 : ℝ) ^ 40)⁻¹ + R * (δb + δz)) := by
+  have e : (40 * Real.log 2 / (1 - 3 / 4) : ℝ) = 160 * Real.log 2 := by
+    rw [show (1 : ℝ) - 3 / 4 = 1 / 4 by norm_num]
+    ring
+  have := certifiedFraction120θ_K_40 kd S (roundsHypK_of_spot h fun _ hπ => hπ.2)
+    ((chainBound_oneSided toF2 toF2_wRe_zero).mono fun _ hπ => hπ.1) (by norm_num) hκ hC hδb hδz
+  rwa [e] at this
+
+/-- ... with mixed affine products allowed too (any product of two affine operands), under the named
+`MixedChain`. -/
+theorem certifiedFraction120θ_reEncodedSpotMixed_40 (kd : K120 → Kind) (S : Service) {R : ℕ} {Vmax δb δz κ : ℝ}
+    {n L B n' : ℕ}
+    (h : RoundsHypKS (machine kd (.ofNat price120)) S R Vmax δb δz κ n L 7 B n' wRe fun π => AffProd π)
+    (hmix : MixedChain (ZMod (2 ^ 32)) n L 7 B n' wRe)
+    (hκ : 0 < κ) (hC : 0 < L * (n * n' * B)) (hδb : 0 ≤ δb) (hδz : 0 ≤ δz) :
+    ServiceFloor (machine (kdθ kd) priceθ) S
+      (4 / 5 * ((R - 160 * Real.log 2) * (κ * L * ((n * n' * B : ℕ) : ℝ)) - Vmax))
+      (((2 : ℝ) ^ 40)⁻¹ + R * (δb + δz)) := by
+  have e : (40 * Real.log 2 / (1 - 3 / 4) : ℝ) = 160 * Real.log 2 := by
+    rw [show (1 : ℝ) - 3 / 4 = 1 / 4 by norm_num]
+    ring
+  have := certifiedFraction120θ_K_40 kd S (roundsHypK_of_spot h fun _ hπ => hπ)
+    (ChainBound.mono hmix fun _ hπ => Or.inr hπ) (by norm_num) hκ hC hδb hδz
+  rwa [e] at this
+
 
 /-- **The certified fraction from Theorem H** (the re-encoded design in exact arithmetic, merges priced at
 `h ≥ 2L/3` slots): under `RoundsHypH` in Model B, the same floor as from Theorem K. -/
