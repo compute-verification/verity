@@ -7,7 +7,9 @@
 `fp_exact.cu` chains K / k_step MMAs of one format into one FP32 accumulator from the word C0, with operands from one
 of GRIDS, and counts every output whose word isn't the exact sum's. Here the host regenerates the first tiles of every
 config from the same counter hash, recomputes their sums in int64 and judges their words itself; a config whose device
-reference disagrees with the host's is refused, and so is every config of the no-write control.
+reference disagrees with the host's is refused, and so is every config of the no-write control. For K <= REPLAY_K the
+host also replays the first tile's identity-order chain through `verity.ml.circuits.silicon`'s model of the firing,
+so an inexact word is shown to be the modelled truncation and not a fault.
 
 A partial sum is *representable* when FP32 holds it exactly (its odd part under 2^24). The question per format is
 whether every output whose partial sums at the MMA boundaries were all representable comes out as the exact sum's
@@ -93,6 +95,11 @@ def word(x: float) -> int:
     return struct.unpack("<I", struct.pack("<f", x))[0]
 
 
+def word_units(w: int, s_tot: int) -> int:
+    """The FP32 word `w`'s value in units of 2^-s_tot (the device's `c0_units`)."""
+    return int(struct.unpack("<f", struct.pack("<I", w))[0] * 2 ** s_tot)
+
+
 def c0_words(g: GridDef) -> dict[str, int]:
     """The initial accumulators: zero; the binade whose ulp is the grid's product resolution (NOBITS' form, generalized);
     NOBITS' own 0x4B400000 (ulp 1); and the binade above the first (ulp twice the resolution: FP32 must round)."""
@@ -157,9 +164,10 @@ U64 = np.uint64 if np else None
 
 
 def mix64(z):
-    z = z + U64(0x9E3779B97F4A7C15)
-    z = (z ^ (z >> U64(30))) * U64(0xBF58476D1CE4E5B9)
-    z = (z ^ (z >> U64(27))) * U64(0x94D049BB133111EB)
+    with np.errstate(over="ignore"):
+        z = z + U64(0x9E3779B97F4A7C15)
+        z = (z ^ (z >> U64(30))) * U64(0xBF58476D1CE4E5B9)
+        z = (z ^ (z >> U64(27))) * U64(0x94D049BB133111EB)
     return z ^ (z >> U64(31))
 
 
@@ -236,7 +244,7 @@ def recheck(c: Config, c0_units: int, recs: np.ndarray) -> dict:
     s_tot = 2 * GRIDS[GRID[c.grid]].s
     nsteps, KS = c.K // KSTEP[c.fmt], KSTEP[c.fmt]
     out = {"tiles": int(c.nrec), "outputs": 0, "unwritten": 0, "ref_disagree": 0, "flag_disagree": 0, "exact": 0,
-           "bad_rep": 0, "order_diff": 0}
+           "bad_rep": 0, "order_diff": 0, "in_binade": 0, "binade_linear": 0}
     for t in range(c.nrec):
         r = recs[t * 128:(t + 1) * 128].reshape(16, 8)
         A, B = values(c, t)
@@ -254,6 +262,61 @@ def recheck(c: Config, c0_units: int, recs: np.ndarray) -> dict:
         out["exact"] += int(ex.sum())
         out["bad_rep"] += int((rep_all & ~ex).sum())
         out["order_diff"] += int((r["d"] != r["d"][:, :, :1]).any(axis=2).sum())
+        if c.c0 == "binade":
+            # NOBITS' form: while every partial stays in C0's binade (ulp one unit), the word is C0's word plus T.
+            inside = ((part >= 1 << 23) & (part < 1 << 24)).all(axis=2)
+            lin = d0.astype(np.int64) - c.c0_word == ref - c0_units
+            out["in_binade"] += int(inside.sum())
+            out["binade_linear"] += int((inside & lin).sum())
+    return out
+
+
+REPLAY_K = 256
+UNIT_SCALE = {"ue8m0": 0x7F, "ue4m3": 0x38}
+
+
+def model(fmt: str):
+    """One firing of `fmt` as `verity.ml.circuits.silicon` models it. The 2:4-sparse firing has no model of its own:
+    it is replayed as the dense adder over its 128 logical elements (one align-add and one RZ a firing), which is the
+    hypothesis its replay tests."""
+    try:
+        from verity.ml.circuits.silicon import models as m
+    except ImportError:  # the node's python3 runs this from the source tree, outside the workspace's environment
+        sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+        from verity.ml.circuits.silicon import models as m
+    import dataclasses
+    if fmt.startswith("e4m3"):
+        return m.BLACKWELL_SM120_E4M3_M16N8K32
+    base = m.BLACKWELL_SM120_NVF4 if fmt.endswith("nvf4") else m.BLACKWELL_SM120_MXF4
+    if fmt in SPARSE:
+        return dataclasses.replace(base, name=base.name.replace("m16n8k64", "sp_m16n8k128"), k_per_instruction=128)
+    return base
+
+
+def replay(c: Config, recs: np.ndarray) -> dict:
+    """The silicon model's words for the config's first recorded tile, chained in the identity order from C0, against
+    the device's: every output, and the inexact ones among them."""
+    g = GRIDS[GRID[c.grid]]
+    m, step = model(c.fmt), KSTEP[c.fmt]
+    scales = [UNIT_SCALE[m.scale]] * m.scales_per_step if g.e2m1 else []
+    code = dict(zip(g.vals, codes(g, g.vals)))
+    A, B = values(c, 0)
+    a = [[code[int(v)] for v in row] for row in A]
+    b = [[code[int(v)] for v in row] for row in B]
+    r = recs[:128].reshape(16, 8)
+    ref = r["ref"].astype(np.int64)
+    exact = representable(ref) & (r["d"][:, :, 0].astype(np.uint64) == exact_words(ref, 2 * g.s))
+    out = {"model": m.name, "outputs": 0, "agree": 0, "inexact": 0, "inexact_agree": 0}
+    for i in range(16):
+        for j in range(8):
+            w = c.c0_word
+            for s in range(0, c.K, step):
+                w = m.step(w, a[i][s:s + step] + scales, b[j][s:s + step] + scales)
+            agree = w == int(r["d"][i, j, 0])
+            out["outputs"] += 1
+            out["agree"] += agree
+            out["inexact"] += not exact[i, j]
+            out["inexact_agree"] += agree and not exact[i, j]
     return out
 
 
@@ -274,6 +337,7 @@ def read_run(d: Path, cfgs: list[Config], control: bool = False) -> list[dict]:
         if row["host"] and (row["host"]["ref_disagree"] or row["host"]["flag_disagree"]):
             row["refused"] = (f"the host's sums disagree with the device's on {row['host']['ref_disagree']} outputs "
                               f"(flags on {row['host']['flag_disagree']})")
+        row["replay"] = replay(c, rc) if not row["refused"] and c.nrec and c.K <= REPLAY_K else None
         out.append({**row, "head": head})
     return out
 
@@ -283,6 +347,8 @@ def refusal(c: Config, row: dict, recs: np.ndarray) -> str:
         return f"the kernel didn't write its counts (tag 0x{row['tag']:08x})"
     if row["out"] != c.tiles * 128:
         return f"{row['out']} outputs counted, {c.tiles * 128} expected"
+    if row["c0_units"] != (u := word_units(c.c0_word, 2 * GRIDS[GRID[c.grid]].s)):
+        return f"the device started from {row['c0_units']} units, not C0's {u}"
     if int(((recs["flags"] & 0xFF000000) != TAG).sum()):
         return "a recorded tile left poisoned words"
     return ""
@@ -335,6 +401,11 @@ def verdicts(rows: list[dict], cfgs: list[Config]) -> dict:
             "negzero": sum(r["negzero"] for _, r in ok),
             "host_outputs": sum(r["host"]["outputs"] for _, r in ok),
             "host_bad_rep": sum(r["host"]["bad_rep"] for _, r in ok),
+            "host_in_binade": sum(r["host"]["in_binade"] for _, r in ok),
+            "host_binade_linear": sum(r["host"]["binade_linear"] for _, r in ok),
+            "replay": {k: sum(r["replay"][k] for _, r in ok if r.get("replay"))
+                       for k in ("outputs", "agree", "inexact", "inexact_agree")}
+                      | {"model": next((r["replay"]["model"] for _, r in ok if r.get("replay")), None)},
             "series": per,
         }
     return out
@@ -358,6 +429,21 @@ def rates(rows: list[dict], sms: int = 188) -> dict[str, dict]:
                      "tmacs": m * n * (r.get("sm_mhz") or 0) * 1e6 / 1e12, "tags": r.get("tags", []),
                      "run": r.get("run", ""), "sass_sha256": r.get("sass_sha256", "")}
     return out
+
+
+EXPECT_MMA = {"e4m3": "QMMA.16832.F32.E4M3.E4M3", "e4m3_kind": "QMMA.16832.F32.E4M3.E4M3",
+              "mxf4": "OMMA.SF.16864.F32.E2M1.E2M1.E8", "mxf4nv": "OMMA.SF.16864.F32.E2M1.E2M1.E8",
+              "nvf4": "OMMA.SF.16864.F32.E2M1.E2M1.UE4M3.4X", "sp_mxf4": "OMMA.SF.SP.168128.F32.E2M1.E2M1.E8",
+              "sp_nvf4": "OMMA.SF.SP.168128.F32.E2M1.E2M1.UE4M3.4X"}
+
+
+def sass_refusal(mmas: dict[str, list[str]]) -> str:
+    """Each format's kernel must issue exactly its one expected MMA (the chain loop is `#pragma unroll 1`)."""
+    for i, fmt in enumerate(FMTS):
+        got = mmas.get(f"_Z12exact_kernelILi{i}EEv6ParamsP6CountsP3Rec")
+        if got != [EXPECT_MMA[fmt]]:
+            return f"fp_exact: {fmt}'s kernel issues {got}, not one {EXPECT_MMA[fmt]}"
+    return ""
 
 
 def sass_mmas(binary: Path) -> dict[str, list[str]]:
@@ -396,7 +482,10 @@ def main(argv: list[str] | None = None) -> int:
         cfgs = configs(a.quick)
         (a.out / "configs.txt").write_text("\n".join(x.line() for x in cfgs) + "\n")
         (a.out / "sweep.json").write_text(json.dumps({"quick": a.quick}))
-        (a.out / "sass_mmas.json").write_text(json.dumps(sass_mmas(a.binary), indent=1))
+        mmas = sass_mmas(a.binary)
+        (a.out / "sass_mmas.json").write_text(json.dumps(mmas, indent=1))
+        if why := sass_refusal(mmas):
+            raise SystemExit(why)
         for args in ((), ("--control",)):
             stem = ("control", "control") if args else ("counts", "records")
             subprocess.run([str(a.binary), str(a.out / "configs.txt"), str(a.out / f"{stem[0]}.jsonl"),
@@ -421,7 +510,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{key}: {x['outputs']} outputs, {x['exact']} exact, bad_rep {x['bad_rep']}, unrep {x['unrep']} "
               f"(inexact {x['bad_unrep']}), order_diff {x['order_diff']} (when exact {x['order_diff_when_exact']}), "
               f"negzero {x['negzero']}/{x['zero']}, host bad_rep {x['host_bad_rep']}/{x['host_outputs']}, "
-              f"refused {len(x['refused'])}")
+              f"binade word = C0 + T {x['host_binade_linear']}/{x['host_in_binade']}, "
+              f"{x['replay']['model']} replay {x['replay']['agree']}/{x['replay']['outputs']} "
+              f"(inexact {x['replay']['inexact_agree']}/{x['replay']['inexact']}), refused {len(x['refused'])}")
     if accepted:
         print(f"fp_exact: the no-write control was accepted for {len(accepted)} configs", file=sys.stderr)
         return 9
