@@ -31,6 +31,7 @@ the session's own run accepts, so `OuterAtEnd` is the hypothesis `FlockDeploy.ne
 namespace RecDeploy
 
 open Claims (Msg Out Seen Trace Prover stepWith run coinSeq)
+open FlockDeploy (Coin)
 
 /-! ## The goal, as the recursion's analysis states it -/
 
@@ -524,5 +525,282 @@ theorem sim (hP : ∀ hs, PS.next xO hs () = P.next x (hist₀ ++ hs) ω)
         · exact Or.inr hl
 
 end Sim
+
+/-! ## Coins -/
+
+theorem coinSeq_fork_lt {C : Type} [Inhabited C] {k : ℕ} (off : ℕ) (r d : Fin k → C) {i : ℕ} (h : i < off) :
+    coinSeq (Claims.Recursion.fork off r d) i = coinSeq r i := by
+  by_cases hk : i < k <;> simp [coinSeq, Claims.Recursion.fork, hk, h]
+
+theorem coinSeq_fork_ge {C : Type} [Inhabited C] {k : ℕ} (off : ℕ) (r d : Fin k → C) {i : ℕ} (h : off ≤ i) :
+    coinSeq (Claims.Recursion.fork off r d) i = coinSeq d i := by
+  by_cases hk : i < k <;> simp [coinSeq, Claims.Recursion.fork, hk, Nat.not_lt.2 h]
+
+theorem coinSeq_sessCoins {C : Type} [Inhabited C] {k : ℕ} (o : ℕ) (d : Fin k → C) (n : ℕ) {i : ℕ} (h : i < n) :
+    coinSeq (sessCoins o d n) i = coinSeq d (o + i) := by
+  simp [coinSeq, sessCoins, h]
+
+theorem range_map_take {α : Type} (f : ℕ → α) {a b : ℕ} (h : a ≤ b) :
+    ((List.range b).map f).take a = (List.range a).map f := by
+  rw [← List.map_take, List.take_range, Nat.min_eq_left h]
+
+theorem range_map_drop {α : Type} (f : ℕ → α) (a b : ℕ) :
+    ((List.range (a + b)).map f).drop a = (List.range b).map fun i => f (a + i) := by
+  rw [List.range_add, List.map_append, List.drop_left' (by simp), List.map_map]
+  rfl
+
+/-- **The coins from round `off` on of a fork at `off`** are the session's coins (`sessCoins`) at the second draw. -/
+theorem fork_drop_coins {k : ℕ} (off : ℕ) (r d : Fin k → Coin) {b n : ℕ} (hb : b ≤ n) :
+    ((List.range (off + b)).map (coinSeq (Claims.Recursion.fork off r d))).drop off =
+      (List.range b).map (coinSeq (sessCoins off d n)) := by
+  rw [range_map_drop]
+  refine List.map_congr_left fun i hi => ?_
+  rw [List.mem_range] at hi
+  rw [coinSeq_fork_ge off r d (Nat.le_add_right _ _), coinSeq_sessCoins off d n (by omega)]
+
+/-- **The coins before round `off` of a fork at `off`** are the first draw's. -/
+theorem fork_take_coins {k : ℕ} (off : ℕ) (r d : Fin k → Coin) {m : ℕ} (hm : m ≤ off) :
+    (List.range m).map (coinSeq (Claims.Recursion.fork off r d)) = (List.range m).map (coinSeq r) :=
+  List.map_congr_left fun i hi => coinSeq_fork_lt off r d (by rw [List.mem_range] at hi; omega)
+
+theorem coin_bytes_ne_nil (c : Coin) : c.bytes ≠ [] := by
+  intro h
+  rw [FlockDeploy.Coin.bytes, List.flatMap_eq_nil_iff] at h
+  have := congrArg List.length (h 0 (List.mem_finRange 0))
+  rw [FlockSoundness.Refine.toBytes_length] at this
+  cases this
+
+/-! ## The outer verifier's answers -/
+
+theorem VO_k_pos (xO : Msg) : 0 < VO.k xO := by
+  show 0 < (match setupO xO with | some (_, spec, sts) => 2 + FlockDeploy.rounds true spec sts | none => 1)
+  split
+  · exact Nat.add_pos_left Nat.two_pos _
+  · exact Nat.one_pos
+
+/-- **The outer verifier answers a message only at a coin**, with the coin's bytes. -/
+theorem nextO_msg (H : Msg → Msg) {xO : Msg} {as : List Msg} {cs : List Coin} {m : Msg}
+    (h : ((nextO xO as cs).eval H).1 = .msg m) : ∃ c, actO xO as cs = .coin c ∧ m = c.bytes := by
+  cases ha : actO xO as cs with
+  | rej => rw [nextO_rej H ha] at h; cases h
+  | coin c =>
+    rw [nextO_coin H ha] at h
+    exact ⟨c, rfl, by simpa using h.symm⟩
+  | decide s spec sts link c₁ mids f =>
+    rcases nextO_decide_out H ha with ho | ho <;> rw [ho] at h <;> cases h
+
+theorem nextO_msg_ne_nil (H : Msg → Msg) {xO : Msg} {as : List Msg} {cs : List Coin} {m : Msg}
+    (h : ((nextO xO as cs).eval H).1 = .msg m) : m ≠ [] := by
+  obtain ⟨c, -, hm⟩ := nextO_msg H h
+  rw [hm]
+  exact coin_bytes_ne_nil c
+
+/-- A session that the outer verifier answers with a message has not decided. -/
+theorem decided_of_msg (H : Msg → Msg) {xO : Msg} {as : List Msg} {cs : List Coin} {m : Msg}
+    (h : ((nextO xO as cs).eval H).1 = .msg m) : decided xO as cs = false := by
+  obtain ⟨c, ha, -⟩ := nextO_msg H h
+  unfold decided
+  rw [ha]
+
+/-! ## The compiled verifier's step -/
+
+theorem locate_eq : ∀ (ks : List ℕ) {s j : ℕ}, s < ks.length → j < ks.getD s 0 →
+    locate ks ((ks.take s).sum + j) = some (s, j)
+  | [], _, _, h, _ => by simp at h
+  | k :: ks, 0, j, _, hj => by
+    simp only [List.getD_cons_zero] at hj
+    simp [locate, hj]
+  | k :: ks, s + 1, j, hs, hj => by
+    simp only [List.length_cons] at hs
+    simp only [List.getD_cons_succ] at hj
+    have := locate_eq ks (by omega) hj
+    rw [List.take_succ_cons, List.sum_cons]
+    simp only [locate]
+    split_ifs with h
+    · omega
+    · rw [show k + (ks.take s).sum + j - k = (ks.take s).sum + j by omega, this]
+      rfl
+
+theorem ract_inner {IV : Claims.Verifier Coin} {st : Stage} {x : Msg} {as : List Msg} {cs : List Coin} {xr : XR}
+    {c : Coin} (hx : readX x = some xr) (hk : as.length ≤ IV.k (xIOf x)) (hc : cs.getLast? = some c) :
+    ract IV st x as cs = .coin c := by
+  unfold ract
+  rw [hx]
+  dsimp only
+  rw [ite_eq_left hk, hc]
+
+open Classical in
+/-- **The compiled verifier's step past the inner rounds**, at the round `locate` places: part `s`'s numbers check,
+then at a session's first round the session before it, then the session's round. -/
+theorem ract_eq {IV : Claims.Verifier Coin} {st : Stage} {x : Msg} {as : List Msg} {cs : List Coin} {xr : XR}
+    (hx : readX x = some xr) (hk : IV.k (xIOf x) < as.length) {s j : ℕ}
+    (hl : locate ((vstar st x (innerPairs (IV.k (xIOf x)) as cs)).map VO.k) (as.length - 1 - IV.k (xIOf x)) =
+      some (s, j)) :
+    ract IV st x as cs =
+      if numsOf (staged st x (innerPairs (IV.k (xIOf x)) as cs) s) ≠ nums st x s then RAct.rej
+      else if j = 0 ∧ 0 < s ∧ decided ((vstar st x (innerPairs (IV.k (xIOf x)) as cs)).getD (s - 1) [])
+          ((as.take (as.length - 1 - j)).drop (as.length - 1 - j -
+            ((vstar st x (innerPairs (IV.k (xIOf x)) as cs)).map VO.k).getD (s - 1) 0))
+          ((cs.take (as.length - 1 - j)).drop (as.length - 1 - j -
+            ((vstar st x (innerPairs (IV.k (xIOf x)) as cs)).map VO.k).getD (s - 1) 0)) = false then RAct.rej
+      else .sess s j ((vstar st x (innerPairs (IV.k (xIOf x)) as cs)).getD s []) (as.drop (as.length - 1 - j))
+        (cs.drop (as.length - 1 - j)) := by
+  unfold ract
+  rw [hx]
+  dsimp only
+  rw [ite_eq_right (Nat.not_le.2 hk), hl]
+
+theorem getD_map_k (xs : List Msg) {s : ℕ} (hs : s < xs.length) : (xs.map VO.k).getD s 0 = VO.k (xs.getD s []) := by
+  simp [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hs]
+
+theorem rounds_through (xs : List Msg) {s : ℕ} (hs : s < xs.length) :
+    ((xs.take s).map VO.k).sum + VO.k (xs.getD s []) = ((xs.take (s + 1)).map VO.k).sum := by
+  rw [List.take_add_one, List.map_append, List.sum_append]
+  simp [List.getElem?_eq_getElem hs, List.getD_eq_getElem?_getD]
+
+theorem take_sum_le (l : List ℕ) (m : ℕ) : (l.take m).sum ≤ l.sum := by
+  have := List.sum_take_add_sum_drop l m
+  omega
+
+/-! ## The compiled verifier's runs -/
+
+/-- The compiled verifier's next message at coins `r`, as a run asks it. -/
+noncomputable def vnOf (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) {k : ℕ} (r : Fin k → Coin)
+    (as : List Msg) : Claims.OC Out :=
+  next IV st x as ((List.range as.length).map (coinSeq r))
+
+/-- **A run's message at round `i`**: the prover's after the run's first `i` messages, answered by the verifier on
+the prover's messages so far and the first `i + 1` coins. -/
+theorem run_get {C : Type} [Inhabited C] (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (V' : Claims.Verifier C)
+    (x : Msg) (ω : Ω) (r : Fin (V'.k x) → C) (i : ℕ) (h : i < (run H P V' x ω r).msgs.length) :
+    ∃ new : List (Msg × Out), new = (run H P V' x ω r).msgs.take i ∧
+      (run H P V' x ω r).msgs[i]? = some (((P.next x (new.map histOf) ω).eval H).1,
+        ((V'.next x (new.map Prod.fst ++ [((P.next x (new.map histOf) ω).eval H).1])
+          ((List.range (i + 1)).map (coinSeq r))).eval H).1) := by
+  obtain ⟨new, hnl, hnew, hget⟩ := stepWith_get H P x ω
+    (fun as => V'.next x as ((List.range as.length).map (coinSeq r))) i (V'.k x) [] [] ⟨[], [], [], .rej⟩
+    (by simpa [Claims.run] using h)
+  refine ⟨new, by simpa [Claims.run] using hnew, ?_⟩
+  simpa [hnl, Claims.run] using hget
+
+section Runs
+
+variable (H : Msg → Msg) (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω)
+  (r : Fin ((V IV st).k x) → Coin)
+
+theorem run_eq :
+    run H P (V IV st) x ω r = stepWith H P x ω (vnOf IV st x r) ((V IV st).k x) [] [] ⟨[], [], [], .rej⟩ := rfl
+
+theorem run_acc_readX (h : (run H P (V IV st) x ω r).out = .acc) : ∃ xr, readX x = some xr := by
+  obtain ⟨as', ha⟩ := stepWith_acc H P x ω _ _ _ _ _ h
+  obtain ⟨s, j, xO, as'', cs', hr, -⟩ := next_acc (IV := IV) (st := st) H ha
+  exact ract_readX hr
+
+theorem run_acc_length (h : (run H P (V IV st) x ω r).out = .acc) :
+    (run H P (V IV st) x ω r).msgs.length = (V IV st).k x := by
+  obtain ⟨as', hl, ha⟩ := stepWith_acc_length H P x ω (vnOf IV st x r) ((V IV st).k x) [] [] ⟨[], [], [], .rej⟩ rfl h
+  rw [run_eq, ← hl]
+  exact next_acc_length H ha
+
+/-- **An inner round's answer is its coin's bytes.** -/
+theorem run_inner {xr : XR} (hx : readX x = some xr) {i : ℕ} (hi : i < IV.k (xIOf x))
+    (hl : i < (run H P (V IV st) x ω r).msgs.length) :
+    ∃ a, (run H P (V IV st) x ω r).msgs[i]? = some (a, .msg (coinSeq r i).bytes) := by
+  obtain ⟨new, hnew, hget⟩ := run_get H P (V IV st) x ω r i hl
+  have hnl : new.length = i := by
+    rw [hnew, List.length_take]
+    omega
+  have hc := ract_inner (IV := IV) (st := st) hx (as := new.map Prod.fst ++ [((P.next x (new.map histOf) ω).eval H).1])
+    (cs := (List.range (i + 1)).map (coinSeq r)) (c := coinSeq r i)
+    (by simp only [List.length_append, List.length_map, List.length_singleton, hnl]; omega)
+    (by simp [List.range_succ])
+  refine ⟨((P.next x (new.map histOf) ω).eval H).1, ?_⟩
+  rw [hget]
+  show some (_, ((next IV st x _ _).eval H).1) = _
+  rw [next_coin H hc]
+
+/-- **An accepted run's inner rounds are its inner messages with their coins' bytes**, so messages that extend its
+first `off ≥ k_I` and coins that extend its first `k_I` show them as `innerPairs`. -/
+theorem innerPairs_run (h : (run H P (V IV st) x ω r).out = .acc) {off : ℕ} (hk : IV.k (xIOf x) ≤ off)
+    (ho : off ≤ (V IV st).k x) (bs : List Msg) {cs : List Coin}
+    (hc : cs.take (IV.k (xIOf x)) = (List.range (IV.k (xIOf x))).map (coinSeq r)) :
+    innerPairs (IV.k (xIOf x)) (((run H P (V IV st) x ω r).msgs.take off).map Prod.fst ++ bs) cs =
+      (run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x)) := by
+  obtain ⟨xr, hx⟩ := run_acc_readX H IV st x P ω r h
+  have hlen := run_acc_length H IV st x P ω r h
+  unfold innerPairs
+  rw [hc, List.take_append_of_le_length (by simp only [List.length_map, List.length_take]; omega),
+    ← List.map_take, List.take_take, Nat.min_eq_left hk, List.map_map]
+  conv_rhs => rw [← List.zip_unzip ((run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x)))]
+  rw [List.unzip_fst, List.unzip_snd]
+  congr 1
+  apply List.ext_getElem (by simp only [List.length_map, List.length_range, List.length_take]; omega)
+  intro i h₁ h₂
+  simp only [List.length_map, List.length_range] at h₁
+  obtain ⟨a, ha⟩ := run_inner H IV st x P ω r hx h₁ (by omega)
+  rw [List.getElem?_eq_getElem (by omega)] at ha
+  simp [Option.some.inj ha]
+
+open Classical in
+/-- **An accepted run passed session `s`'s checks at its first round**: part `s`'s staged numbers are its numbers,
+and the session before it ended on a decision. -/
+theorem run_round (hacc : (run H P (V IV st) x ω r).out = .acc) {s off : ℕ} {xs : List Msg} (hs : s < nS x)
+    (hxs : xs = vstar st x ((run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x))))
+    (hoff : off = IV.k (xIOf x) + ((xs.take s).map VO.k).sum) :
+    numsOf (staged st x ((run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x))) s) = nums st x s ∧
+      (0 < s → decided (xs.getD (s - 1) [])
+        ((((run H P (V IV st) x ω r).msgs.take off).map Prod.fst).drop (off - (xs.map VO.k).getD (s - 1) 0))
+        (((List.range off).map (coinSeq r)).drop (off - (xs.map VO.k).getD (s - 1) 0)) = true) := by
+  obtain ⟨xr, hx⟩ := run_acc_readX H IV st x P ω r hacc
+  have hK := run_acc_length H IV st x P ω r hacc
+  have hxl : xs.length = nS x := by rw [hxs, vstar_length]
+  have hpos := VO_k_pos (xs.getD s [])
+  have hthrough := rounds_through xs (s := s) (by omega)
+  have hKeq : (V IV st).k x = IV.k (xIOf x) + (xs.map VO.k).sum := by
+    show _ + _ = _
+    rw [hxs, vstar_map_k]
+  have hsum := take_sum_le (xs.map VO.k) (s + 1)
+  rw [← List.map_take] at hsum
+  have hlt : off < (V IV st).k x := by omega
+  obtain ⟨new, hnew, hget⟩ := run_get H P (V IV st) x ω r off (by omega)
+  subst hnew
+  set R := run H P (V IV st) x ω r with hR
+  set pa := ((P.next x ((R.msgs.take off).map histOf) ω).eval H).1 with hpa
+  have hml : ((R.msgs.take off).map Prod.fst).length = off := by
+    simp only [List.length_map, List.length_take]
+    omega
+  have hip : innerPairs (IV.k (xIOf x)) ((R.msgs.take off).map Prod.fst ++ [pa])
+      ((List.range (off + 1)).map (coinSeq r)) = R.msgs.take (IV.k (xIOf x)) :=
+    innerPairs_run H IV st x P ω r hacc (by omega) hlt.le [pa] (range_map_take _ (by omega))
+  have hlen : ((R.msgs.take off).map Prod.fst ++ [pa]).length = off + 1 := by
+    simp only [List.length_append, hml, List.length_singleton]
+  have hl : locate ((vstar st x (innerPairs (IV.k (xIOf x)) ((R.msgs.take off).map Prod.fst ++ [pa])
+      ((List.range (off + 1)).map (coinSeq r)))).map VO.k)
+      (((R.msgs.take off).map Prod.fst ++ [pa]).length - 1 - IV.k (xIOf x)) = some (s, 0) := by
+    rw [hip, ← hxs, hlen, show off + 1 - 1 - IV.k (xIOf x) = ((xs.map VO.k).take s).sum + 0 by
+      rw [← List.map_take]; omega]
+    exact locate_eq _ (by simp only [List.length_map]; omega) (by rw [getD_map_k xs (s := s) (by omega)]; exact hpos)
+  have hnr : ract IV st x ((R.msgs.take off).map Prod.fst ++ [pa]) ((List.range (off + 1)).map (coinSeq r)) ≠
+      .rej := by
+    intro h0
+    have h1 : R.msgs[off]? = some (pa, .rej) := by
+      rw [hget]
+      show some (_, ((next IV st x _ _).eval H).1) = _
+      rw [next_rej H h0]
+    have h2 : R.out = .rej :=
+      stepWith_rej_out H P x ω (vnOf IV st x r) ((V IV st).k x) off [] [] ⟨[], [], [], .rej⟩ pa
+        (by show R.msgs[0 + off]? = _; rwa [Nat.zero_add])
+    rw [h2] at hacc
+    cases hacc
+  rw [ract_eq (st := st) hx (by omega) hl, hip, ← hxs, hlen, show off + 1 - 1 - 0 = off by omega] at hnr
+  split_ifs at hnr with h1 h2
+  · exact absurd rfl hnr
+  · exact absurd rfl hnr
+  · refine ⟨not_not.1 h1, fun hs0 => ?_⟩
+    rw [List.take_left' hml, range_map_take _ (by omega)] at h2
+    by_contra hd
+    exact h2 ⟨rfl, hs0, by simpa using hd⟩
+
+end Runs
 
 end RecDeploy
