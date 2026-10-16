@@ -6,7 +6,7 @@ import Proofs.Flock.VBridge.Family
 # C3's rep decoder: the reps' unit maps, openings and values over a list of V*'s statements
 
 `RepMaps stmt Vs sh Reg Ω C` is what (a)'s lemmas read of G's `VStarFamily`, generic in the list `stmt` so that it fits
-`Fin (vstarCount ish)` (it is not instantiated at `RecVStar.statements`, #1896): each part's and each opening's
+`Fin (vstarCount ish)` (at the verifier's own list, `RepMaps.atList` in `AtList.lean`): each part's and each opening's
 session and unit, the values read off the history `(R, ω, t)` (`rounds`, `extras`, `alpha`: nothing sent reads the
 coins) and those read off V*'s layers (`rep₀`'s `w` and `comb`, `rows`, `acc`), which stay fields.
 

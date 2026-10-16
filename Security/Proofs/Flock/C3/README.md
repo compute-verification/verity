@@ -217,8 +217,8 @@ checks are those of a transcript each session writes (`checksReached_checked`, i
   inputs, so the claim it cites is the one the verifier computes.
 * The guarantee holds at every `hp : HoloParams`; to state with h2: `hp` is the verifier's own, the inner shape's
   `sparse` entry (`RecVStar.Inner.sparse`, `[NU, ELL, S_LOG, T_LOG]`).
-* Private inner sessions: `RecVStar.statements` refuses a holo inner shape (`statements_holo`), so the guarantee covers
-  none until V*'s holo-parts writer lands with its proof (#1896, its own PR after C3 closes).
+* Private inner sessions: at a holo inner shape the verifier's list is V*'s holo statements (`statements_holo`);
+  `RepMaps.atList` decodes over that list, G's items 1–3 at the holo form from `ResZeroAtLH` (`C3/Reps/AtList.lean`).
 * Prover constraint (W round 8): the verifier refuses a held `sparse/…` stream whose coins by round are not
   `sparsePhaseRounds`' (`RecVStar.checkSparseCoins`, in `checkCovers`), coins at a zero-coin round included, so a prover
   change to how the sparse phases' coins are recorded keeps `rec_live.sparse_rounds` exactly.
