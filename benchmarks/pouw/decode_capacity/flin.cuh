@@ -1,5 +1,6 @@
 // ---------------------------------------------------------------- flin: the decode linears as a warp-specialized GEMM with filler warps
-// (FILL, round 2; included by dcap.cu after the dfill section, whose dseed/dword/dcval/drec/dstep/dchain_ref it reuses)
+// (FILL, round 2; included by dcap.cu after the dfill section, whose dseed/dword/dcval/drec/dstep/dchain_ref it reuses,
+// and pfill.cuh's pf_* on a pfill build)
 //
 // D (M x N, row-major s32) = X (M x K s8) W^T (W N x K s8), computed as D^T = W X^T: the weights are the MMA's A operand
 // (16 output features a fragment), the tokens its B operand (8 a fragment). Weights and activations are repacked once into
@@ -68,14 +69,182 @@ __global__ void fadv_k(FState* s, unsigned long long per) {
   s->step++;
 }
 
+#ifndef DFILL_V1
+// ---------------------------------------------------------------- the filler warps' tile on a pfill build (round 4)
+// pfill-k's arithmetic (pfill.cuh, -DPFILL_BITS: {0,1} SHA-512 noise, s8 IMMA m16n8k32 with C = 0, every s32 word into
+// the ram receipt) in one warp's registers, as a step a serving kernel's filler warp calls: dfill_k_warp(c0, c1, tile,
+// step) reads nothing but its arguments (the round's coins, the slot's public tile id, the step's index) and returns the
+// lane's share of the step's receipt; every filler MMA is inside it. Lane l hashes one SHA-512 block, (c0, c1, tile,
+// PW_DOM, 32 step + l) as pfill's 40-byte message, its row words R[0..15] (pf_row: bit k of R[r] is entry 32 r + k).
+// The step's matrices A_i (16 x 32, i < 16) and B_j (32 x 8, j < 28) are those bits in m16n8k32's fragment layout, each
+// entry held by the one lane that loads it, so no bit crosses lanes: lane (g, t)'s word q of A_i is the four entries
+// A_i[g + 8 (q & 1)][16 (q >> 1) + 4 t + e], e < 4, bits 16 (i & 1) + 4 q + e of R[i >> 1]; its B_j words are
+// B_j[16 h + 4 t + e][g], bits 8 (j & 3) + 4 h + e of R[8 + j / 4]. The keys (a0, a1) are the first two pf_key_ok words
+// among R[15] of lanes 0..31 (pfill's defaults if fewer), bits no operand reads. Lane (g, t) keeps chains c < 4 with y =
+// 4 lane + c; chain c absorbs A_{4 a + c} B_j for a < 4, then j < 28 (pf_absorb<4>, pfill's ram), and the lane returns
+// the XOR over c of pf_fold(smix(dseed(c0, c1, tile) ^ step), 4 lane + c, y). pw_ref is the same step on the host, from
+// the matrices. A step is 448 MMAs from one SHA block a lane (pfill: 4 bits an MMA; here 36, so the hashing is a third
+// of a step's issue slots).
+constexpr uint64_t PW_DOM = 0x5046494C4C2D7731ull;  // "PFILL-w1"
+constexpr int PW_NA = 16, PW_NB = 28, PW_MMAS = PW_NA * PW_NB;
+
+__device__ __noinline__ uint64_t dfill_k_warp(uint64_t c0, uint64_t c1, unsigned long long tile, unsigned long long step) {
+  const int lane = threadIdx.x & 31;
+  uint32_t R[16];
+  {
+    uint64_t st[8];
+    pf_block(PW_DOM, c0, c1, tile, step << 5 | lane, st);
+#pragma unroll
+    for (int r = 0; r < 16; r++) R[r] = pf_row(st, r);
+  }
+  PfKeys key{0x9E3779B9u, 0x7F4A7C15u, 0, 0};
+  const unsigned ok = __ballot_sync(~0u, pf_key_ok(R[15])), ok1 = ok & (ok - 1);
+  const uint32_t k0 = __shfl_sync(~0u, R[15], ok ? __ffs(ok) - 1 : 0), k1 = __shfl_sync(~0u, R[15], ok1 ? __ffs(ok1) - 1 : 0);
+  if (ok) key.a0 = k0;
+  if (ok1) key.a1 = k1;
+  uint32_t y[4];
+#pragma unroll
+  for (int c = 0; c < 4; c++) y[c] = 4 * lane + c;
+#pragma unroll 1
+  for (int ag = 0; ag < PW_NA / 4; ag++) {
+    uint32_t a[4][4];
+#pragma unroll
+    for (int c = 0; c < 4; c++) {
+      const uint32_t w = (c < 2 ? R[0] : R[1]) >> (16 * (c & 1));
+#pragma unroll
+      for (int q = 0; q < 4; q++) a[c][q] = pf_01((w >> (4 * q)) & 15);
+    }
+#pragma unroll
+    for (int j = 0; j < PW_NB; j++) {
+      const uint32_t by = (R[8 + (j >> 2)] >> (8 * (j & 3))) & 255;
+      const uint2 b = make_uint2(pf_01(by & 15), pf_01(by >> 4));
+#pragma unroll
+      for (int c = 0; c < 4; c++) {
+        uint32_t d[4], z = 0;
+        pf_mma(d, a[c], b);
+        pf_absorb<4>(y[c], z, d[0], d[1], d[2], d[3], key);
+      }
+    }
+    R[0] = R[2]; R[1] = R[3]; R[2] = R[4]; R[3] = R[5]; R[4] = R[6]; R[5] = R[7];  // group ag + 1's A words
+  }
+  const uint64_t K = smix(dseed(c0, c1, tile) ^ step);
+  uint64_t h = 0;
+#pragma unroll
+  for (int c = 0; c < 4; c++) h ^= pf_fold(K, 4 * lane + c, y[c]);
+  return h;
+}
+static uint64_t pw_step_ref(uint64_t c0, uint64_t c1, uint64_t tile, uint64_t step) {
+  pf_host_k();
+  uint32_t R[32][16];
+  uint64_t st[8];
+  for (int l = 0; l < 32; l++) {
+    pf_block_h(PW_DOM, c0, c1, tile, step << 5 | l, st);
+    for (int r = 0; r < 16; r++) R[l][r] = pf_row(st, r);
+  }
+  PfKeys key{0x9E3779B9u, 0x7F4A7C15u, 0, 0};
+  for (int l = 0, n = 0; l < 32 && n < 2; l++)
+    if (pf_key_ok(R[l][15])) (n++ ? key.a1 : key.a0) = R[l][15];
+  uint32_t Ar[PW_NA][16] = {}, Bc[PW_NB][8] = {};  // bit k of Ar[i][row] is A_i[row][k], of Bc[j][n] B_j[k][n]
+  for (int l = 0; l < 32; l++) {
+    const int g = l >> 2, t = l & 3;
+    for (int i = 0; i < PW_NA; i++)
+      for (int q = 0; q < 4; q++)
+        for (int e = 0; e < 4; e++)
+          Ar[i][g + 8 * (q & 1)] |= (R[l][i >> 1] >> (16 * (i & 1) + 4 * q + e) & 1u) << (16 * (q >> 1) + 4 * t + e);
+    for (int j = 0; j < PW_NB; j++)
+      for (int h = 0; h < 2; h++)
+        for (int e = 0; e < 4; e++) Bc[j][g] |= (R[l][8 + j / 4] >> (8 * (j & 3) + 4 * h + e) & 1u) << (16 * h + 4 * t + e);
+  }
+  const uint64_t K = smix(dseed(c0, c1, tile) ^ step);
+  uint64_t h = 0;
+  for (int l = 0; l < 32; l++) {
+    const int g = l >> 2, t = l & 3;
+    for (int c = 0; c < 4; c++) {
+      uint32_t y = 4 * l + c, z = 0;
+      for (int ag = 0; ag < PW_NA / 4; ag++) {
+        const int i = 4 * ag + c;
+        for (int j = 0; j < PW_NB; j++)
+          pf_absorb<4>(y, z, __builtin_popcount(Ar[i][g] & Bc[j][2 * t]), __builtin_popcount(Ar[i][g] & Bc[j][2 * t + 1]),
+                       __builtin_popcount(Ar[i][g + 8] & Bc[j][2 * t]), __builtin_popcount(Ar[i][g + 8] & Bc[j][2 * t + 1]),
+                       key);
+      }
+      h ^= pf_fold(K, 4 * l + c, y);
+    }
+  }
+  return h;
+}
+// a filler slot's receipt after `steps` steps, the step count fill_tally reads
+static uint64_t fwarp_ref(uint64_t c0, uint64_t c1, uint64_t tile, int, int steps) {
+  uint64_t h = 0;
+  for (int s = 0; s < steps; s++) h ^= pw_step_ref(c0, c1, tile, s);
+  return h;
+}
+static double fwarp_macs(int, long long steps) { return (double)steps * PW_MMAS * 4096.0; }
+constexpr int FW_CTL = 1;  // the receipts gate's control: the same slot one step short
+
+// One filler warp: dfill_k_warp's steps for its slot while *done < ndone (and, with thr, only while *wait == ndone), and
+// while *stop.prog < stop.at, then its receipt and its step count to the ring. Every lane reads the flags through lane 0.
+// LAZY > 0 tests a read of done issued a step earlier. NC is the chain build's and unused here.
+struct FStop {
+  const int* prog;
+  int at;
+};
+template <int NC, int LAZY = 0>
+__device__ __forceinline__ void filler_warp(const FSlots& fs, size_t slot, const int* done, const int* wait, int ndone,
+                                            int thr, FStop stop = {nullptr, 0}) {
+  const int lane = threadIdx.x & 31;
+  const FState rs = *fs.st;
+  const size_t at = (size_t)(rs.step % fs.ring) * fs.per + fs.off + slot;
+  const unsigned long long tile = rs.base + fs.off + slot;
+  const volatile int* vd = done;
+  const volatile int* vw = wait;
+  const volatile int* vp = stop.prog;
+  uint64_t h = 0;
+  int steps = 0, raw = LAZY && lane == 0 ? *vd : 0, d = 0;
+  for (;;) {
+    if constexpr (LAZY == 0) d = __shfl_sync(0xffffffffu, lane == 0 ? *vd : 0, 0);
+    if (d >= ndone) break;
+    if constexpr (LAZY > 0) {
+      d = __shfl_sync(0xffffffffu, raw, 0);
+      raw = lane == 0 ? *vd : 0;
+    }
+    if (vp && __shfl_sync(0xffffffffu, lane == 0 ? *vp : 0, 0) >= stop.at) break;
+    if (thr) {
+      const int w = __shfl_sync(0xffffffffu, lane == 0 ? *vw : 0, 0);
+      if (w < ndone) {
+        __nanosleep(64);
+        continue;
+      }
+    }
+    h ^= dfill_k_warp(rs.c0, rs.c1, tile, (unsigned long long)steps);
+    steps++;
+  }
+#pragma unroll
+  for (int o = 16; o; o >>= 1) h ^= __shfl_xor_sync(0xffffffffu, h, o);
+  if (lane == 0) {
+    fs.rec[at] = h;
+    fs.cnt[at] = steps;
+  }
+}
+#else
+static uint64_t fwarp_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int steps) {
+  return dchain_ref(c0, c1, tile, nc, steps);
+}
+static double fwarp_macs(int nc, long long steps) { return (double)steps * nc * 4096.0; }
+constexpr int FW_CTL = 8;  // the receipts gate's control: the same slot 8 steps short
+struct FStop {
+  const int* prog;
+  int at;
+};
 // One filler warp: dfill_k's tile for its slot (NC chains), stepping 8 at a time while *done < ndone (and, with thr, only
 // while *wait == ndone), then its receipt and its step count to the ring. Every lane reads the flags through lane 0.
 // LAZY > 0 steps 8·LAZY at a time and tests a read of done issued a round earlier: the served warps' memory traffic can
 // hold a shared load in the MIO queue for hundreds of cycles, and a warp waiting on it stalls its chains (pv's filler
-// warps lost a third of their loop there). Such a warp runs up to two rounds past the last served warp.
+// warps lost a third of their loop there). Such a warp runs up to two rounds past the last served warp. stop is the
+// pfill build's (FLIN_STOP) and unused here.
 template <int NC, int LAZY = 0>
 __device__ __forceinline__ void filler_warp(const FSlots& fs, size_t slot, const int* done, const int* wait, int ndone,
-                                            int thr) {
+                                            int thr, FStop = {nullptr, 0}) {
   const int lane = threadIdx.x & 31, g = lane >> 2, t = lane & 3;
   const FState rs = *fs.st;
   const size_t at = (size_t)(rs.step % fs.ring) * fs.per + fs.off + slot;
@@ -132,6 +301,7 @@ __device__ __forceinline__ void filler_warp(const FSlots& fs, size_t slot, const
     fs.cnt[at] = steps;
   }
 }
+#endif
 
 struct FlinArgs {
   const int8_t* W;  // tiled, [N/BN][K/BK][BN·BK]
@@ -142,6 +312,7 @@ struct FlinArgs {
   int N, K;
   FSlots fs;  // filler warp `slot` = blockIdx.x · FW + fw
   int thr;
+  int stop;  // > 0: the filler warps start no step once consumer warp 0 has `stop` or fewer of the CTA's units left
 };
 
 template <int M, int BK, int ST, int CWN, int CWM, int FW, int NC>
@@ -152,7 +323,8 @@ __global__ void __launch_bounds__(32 * (CWN * CWM + 1 + FW), 1) flin_k(const Fli
   extern __shared__ __align__(128) uint8_t sm[];
   uint64_t* full = reinterpret_cast<uint64_t*>(sm + ST * SB);
   uint64_t* empty = full + ST;
-  int* flag = reinterpret_cast<int*>(empty + ST);  // [0] consumer warps done, [1] consumer warps waiting on a stage
+  int* flag = reinterpret_cast<int*>(empty + ST);  // [0] consumer warps done, [1] consumer warps waiting on a stage,
+                                                    // [2] the units consumer warp 0 has finished
   const int warp = threadIdx.x >> 5, lane = threadIdx.x & 31;
   const int KB = a.K / BK, U = a.N / BN * KB;
   const int u0 = (int)((long long)blockIdx.x * U / gridDim.x), u1 = (int)((long long)(blockIdx.x + 1) * U / gridDim.x);
@@ -161,7 +333,7 @@ __global__ void __launch_bounds__(32 * (CWN * CWM + 1 + FW), 1) flin_k(const Fli
       mb_init(&full[s], 1);
       mb_init(&empty[s], CW);
     }
-    flag[0] = flag[1] = 0;
+    flag[0] = flag[1] = flag[2] = 0;
     asm volatile("fence.mbarrier_init.release.cluster;" ::: "memory");
   }
   __syncthreads();
@@ -195,7 +367,8 @@ __global__ void __launch_bounds__(32 * (CWN * CWM + 1 + FW), 1) flin_k(const Fli
   }
   if (warp > CW) {
     if constexpr (FW > 0) {
-      filler_warp<NC>(a.fs, blockIdx.x * FW + (warp - CW - 1), &flag[0], &flag[1], CW, a.thr);
+      filler_warp<NC>(a.fs, blockIdx.x * FW + (warp - CW - 1), &flag[0], &flag[1], CW, a.thr,
+                      FStop{a.stop > 0 ? &flag[2] : nullptr, u1 - u0 - a.stop});
     }
     return;
   }
@@ -265,6 +438,7 @@ __global__ void __launch_bounds__(32 * (CWN * CWM + 1 + FW), 1) flin_k(const Fli
       }
     __syncwarp();
     if (lane == 0) mb_arrive(&empty[s]);
+    if (warp == 0 && lane == 0) *(volatile int*)&flag[2] = i + 1;
   }
   flush(nt);
   __syncwarp();
@@ -406,6 +580,7 @@ static int flin_smem(int M) {
   return c.ST * (FLIN_BN + M) * c.BK + 2 * c.ST * 8 + 16;
 }
 static bool g_pdl = true;  // FLIN_PDL=0 launches each linear only after the previous grid has finished
+static int g_flin_stop = 0;  // FLIN_STOP: Flin.stop (a pfill build's filler warps start no step with that few units left)
 static int g_flin_lm = 0;    // FLIN_LM=1: fstep's lm_head through flin (Flin.lm) when any linear is
 template <int M, int BK, int ST, int CWN, int CWM, int FW, int NC>
 static void flin_go(const FlinArgs& a, int grid, cudaStream_t st) {
@@ -531,7 +706,7 @@ static FSlots fslots(const FRing& r, unsigned long long off) { return {r.st, r.r
 // With lm (flin_prepare_lm), lm_head is launch LAUNCHES: weights Wlm tiled, output Dlm, which the sequence's last launch
 // zeroes, and it zeroes Db[0] for the next step's first.
 struct Flin {
-  int M = 0, BK = 0, FW = 0, NC = 2, thr = 0, grid = 0;
+  int M = 0, BK = 0, FW = 0, NC = 2, thr = 0, grid = 0, stop = 0;
   bool lm = false;
   int8_t* Wt[LAYERS][4] = {};
   int8_t *XtH = nullptr, *XtF = nullptr, *Wlm = nullptr;
@@ -590,6 +765,7 @@ static bool flin_one(Dev& d, const Flin& f, int i, int k, int next_j) {
   a.K = LK[j];
   a.fs = fslots(*f.ring, (unsigned long long)i * f.stride);
   a.thr = f.thr;
+  a.stop = f.stop;
   return flin_launch(f.M, a, f.grid, f.FW, f.NC, d.st);
 }
 // lm_head as launch LAUNCHES into Dlm, zeroing Db[0] for the next step's first launch (linear next_j)
@@ -604,6 +780,7 @@ static bool flin_lm(Dev& d, const Flin& f, int next_j) {
   a.K = HID;
   a.fs = fslots(*f.ring, (unsigned long long)Flin::LAUNCHES * f.stride);
   a.thr = f.thr;
+  a.stop = f.stop;
   return flin_launch(f.M, a, f.grid, f.FW, f.NC, d.st);
 }
 // the flin launches of a step whose linears `seq` run through flin: seq, then lm_head's when f.lm
@@ -619,7 +796,7 @@ struct FillLaunch {
   int NC;
 };
 // the filler's MACs over `ls`, and up to n receipts drawn from the slots that stepped, checked on the host against
-// dchain_ref at the ring's coins, each with the steps − 8 control that must differ; `ids` collects the checked tiles less
+// fwarp_ref at the ring's coins, each with the control FW_CTL steps short that must differ; `ids` collects the checked tiles less
 // `tag`
 struct FlinTally {
   double macs = 0;
@@ -644,7 +821,7 @@ static FlinTally fill_tally(const FRing& r, const std::vector<FillLaunch>& ls, i
     for (size_t s = 0; s < ls[q].n; s++) {
       const int c = cnt[ls[q].at - lo + s];
       t.steps += c;
-      t.macs += (double)c * ls[q].NC * 4096.0;
+      t.macs += fwarp_macs(ls[q].NC, c);
       t.slots++;
       t.idle += c == 0;
       if (c > 0) cand.push_back({(int)q, s});
@@ -654,8 +831,8 @@ static FlinTally fill_tally(const FRing& r, const std::vector<FillLaunch>& ls, i
     const auto [q, s] = cand[rng() % cand.size()];
     const unsigned long long tile = ls[q].tile0 + s;
     const size_t i = ls[q].at - lo + s;
-    t.bad += rec[i] != dchain_ref(r.c0, r.c1, tile, ls[q].NC, cnt[i]);
-    if (cnt[i] >= 8) t.ctl_equal += rec[i] == dchain_ref(r.c0, r.c1, tile, ls[q].NC, cnt[i] - 8);
+    t.bad += rec[i] != fwarp_ref(r.c0, r.c1, tile, ls[q].NC, cnt[i]);
+    if (cnt[i] >= FW_CTL) t.ctl_equal += rec[i] == fwarp_ref(r.c0, r.c1, tile, ls[q].NC, cnt[i] - FW_CTL);
     t.checked++;
     if (ids) ids->push_back(tile & ~tag);
   }
@@ -776,7 +953,7 @@ static bool enqueue_fatt(Dev& d, const Fatt& a, int B, int L, int layer, bool* w
 }
 
 // fgate: flin bit for bit against ref_rows (every row) for each linear's shape at M = 32, 64, 128, 160, 192, 256, alone and
-// with filler warps (whose receipts are checked against dchain_ref, with the steps − 8 control), from poisoned outputs; then
+// with filler warps (whose receipts are checked against fwarp_ref, with the control FW_CTL steps short), from poisoned outputs; then
 // the attention blocks with filler warps against the host (att_gate), with their receipts checked the same way.
 static int flin_gate(Dev& d) {
   int fails = 0;
@@ -896,6 +1073,7 @@ static int run_flin(Dev& d, int M, int FW, int NC, int thr, int reps) {
   FRing r;
   flin_prepare(d, f, M, true);
   f.thr = thr;
+  f.stop = g_flin_stop;
   f.ring = &r;
   f.stride = (unsigned long long)f.grid * FW;
   fring_open(r, (Flin::LAUNCHES + 1) * f.stride, 1, g_c0, g_c1, 0x5ull << 56, d.st);
@@ -984,6 +1162,7 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
   flin_prepare(d, f, flin_m_for(B), true);
   if (g_flin_lm && !seq.empty()) flin_prepare_lm(d, f);
   f.thr = thr;
+  f.stop = g_flin_stop;
   f.NC = NC;
   Fatt a0, a;
   cudaStream_t full = d.st, ss = d.st, fs = nullptr;

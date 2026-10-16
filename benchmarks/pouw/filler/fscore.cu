@@ -154,6 +154,7 @@ static int run_fscore(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, 
   flin_prepare(d, fl, flin_m_for(B), true);
   fl.grid = got[0];
   fl.thr = 0;
+  fl.stop = g_flin_stop;
   fl.NC = c.FNC;
   fl.FW = c.FW;
   if (c.LM && !seq.empty()) flin_prepare_lm(d, fl);
@@ -406,6 +407,7 @@ int main(int argc, char** argv) {
   }
   g_graph = true;
   g_pdl = !(getenv("FLIN_PDL") && !atoi(getenv("FLIN_PDL")));
+  g_flin_stop = getenv("FLIN_STOP") ? atoi(getenv("FLIN_STOP")) : 0;
   if (const char* cs = getenv("DFILL_COINS")) {
     if (strlen(cs) != 32 || sscanf(cs, "%16llx%16llx", (unsigned long long*)&g_c0, (unsigned long long*)&g_c1) != 2) {
       fprintf(stderr, "DFILL_COINS must be 32 hex digits\n");

@@ -9,12 +9,12 @@
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=FILL \
 #     --send benchmarks/pouw/decode_capacity/flin.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/flin.sh"'
 #
-# FL_FLIN ("M:FW:NC:THR[:PDL] ..."; "none" skips), FL_STEP ("B:L:FW:NC:THR:AFW[:PDL[:FILL_SMS[:LT[:FP[:ANC[:APS[:ALZ[:LM]]]]]]]] ..."), PDL 0
+# FL_FLIN ("M:FW:NC:THR[:PDL] ..."; "none" skips), FL_STEP ("B:L:FW:NC:THR:AFW[:PDL[:FILL_SMS[:LT[:FP[:ANC[:APS[:ALZ[:LM[:ST]]]]]]]]] ..."), PDL 0
 # to launch each linear after the previous grid finishes (FLIN_PDL), FILL_SMS > 0 to run the fused step on a green split
 # beside the dfill pump on that many SMs, LT the linears that stay on cuBLASLt (FLIN_LT: 1 qkv, 2 o, 4 gate_up, 8 down), FP the
 # attention filler blocks' PDL (FATT_PDL: 0 none, 1 with, 2 with their filler warps starting early), ANC their warps'
 # chains (FATT_NC, 4 unless set), APS 1 those blocks persistent on the step's SMs (FATT_PERSIST), ALZ their
-# filler warps' lazy done test (FATT_LAZY: 0, 2, 4), LM 1 lm_head through flin (FLIN_LM), FL_NCU ("M:FW:NC:THR ...", ncu over flin's first launches; "none" skips), FL_NCU_STEP
+# filler warps' lazy done test (FATT_LAZY: 0, 2, 4), LM 1 lm_head through flin (FLIN_LM), ST a pfill build's FLIN_STOP, FL_NCU ("M:FW:NC:THR ...", ncu over flin's first launches; "none" skips), FL_NCU_STEP
 # ("B:L:FW:NC:THR:AFW[:ANC[:APS[:ALZ]]] ...", ncu's tensor-pipe counters over one step's attention blocks and first linear, each with
 # filler warps; FL_NCU_SECTIONS adds those ncu sections over the attention blocks only and keeps the report with its
 # details, raw and SASS pages), FL_REPS,
@@ -86,8 +86,9 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
   done
   q
   for c in $FL_STEP; do
-    IFS=: read -r b l fw nc thr afw pdl fsm lt fp anc aps alz lm <<< "$c"
+    IFS=: read -r b l fw nc thr afw pdl fsm lt fp anc aps alz lm st <<< "$c"
     FLIN_PDL=${pdl:-1} FLIN_LT=${lt:-0} FATT_PDL=${fp:-0} FATT_NC=${anc:-4} FATT_PERSIST=${aps:-0} FATT_LAZY=${alz:-0} FLIN_LM=${lm:-0} \
+      FLIN_STOP=${st:-0} \
       "$B/dcap" fstep "$b" "$l" "$fw" "$nc" "$thr" "${afw:-0}" "${fsm:-0}" "$FL_REPS" \
       >> "$O/fstep.jsonl" 2>> "$O/errors.txt" ||
       echo "rc $? for fstep $c" >> "$O/errors.txt"

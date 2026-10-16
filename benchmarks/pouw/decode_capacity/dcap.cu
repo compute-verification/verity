@@ -1222,7 +1222,8 @@ int main(int argc, char** argv) {
                     "       FATT_PDL=1|2: the attention filler blocks under PDL, 2 with their filler warps starting early;\n"
                     "       FATT_NC=n: the attention filler warps' chains, 4 unless set; FATT_PERSIST=1: the attention filler\n"
                     "       blocks persistent on the step's SMs; FATT_LAZY=2|4: their filler warps test a read of done issued a\n"
-                    "       round earlier, stepping 8·FATT_LAZY at a time; FLIN_LM=1: fstep's lm_head through flin too)\n");
+                    "       round earlier, stepping 8·FATT_LAZY at a time; FLIN_LM=1: fstep's lm_head through flin too; FLIN_STOP=n:\n"
+                    "       a pfill build's flin filler warps start no step once consumer warp 0 has n or fewer units left)\n");
     return 1;
   }
   const std::string mode = argv[1];
@@ -1235,6 +1236,7 @@ int main(int argc, char** argv) {
   g_fatt_per = getenv("FATT_PERSIST") ? atoi(getenv("FATT_PERSIST")) : 0;
   g_fatt_lazy = getenv("FATT_LAZY") ? atoi(getenv("FATT_LAZY")) : 0;
   g_flin_lm = getenv("FLIN_LM") ? atoi(getenv("FLIN_LM")) : 0;
+  g_flin_stop = getenv("FLIN_STOP") ? atoi(getenv("FLIN_STOP")) : 0;
   if (g_fatt_lazy != 0 && g_fatt_lazy != 2 && g_fatt_lazy != 4) {
     fprintf(stderr, "FATT_LAZY must be 0, 2 or 4\n");
     return 1;
