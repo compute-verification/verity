@@ -4,7 +4,7 @@ import Proofs.Flock.Claims.Complete.Honest
 /-!
 # Flock's honest prover at the deployed masked verifier (`honestPZk`)
 
-The prover of `Claims.Flock.Complete H (deployZk rel) honestPZk δcZk`, against B's masked record
+The prover of `Claims.Flock.Complete H (deployZk rel) honestPZk (δcZk H)`, against B's masked record
 (`FlockDeploy.V true`): `honestP`'s program (`PI`, the sends `asks`, SHA-512 the oracle `Hashes.pi`, `feed`) on the
 masked session (`sessionPZk`), with its tape `TapeZk`.
 

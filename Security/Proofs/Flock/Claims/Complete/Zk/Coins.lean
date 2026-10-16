@@ -19,8 +19,9 @@ fail.
 * **The inner proof's `β`** (`betaSlotsZk`): refused at `0` (round `2` of the inner proof), by the verifier and the
   prover alike.
 
-`εZk` is their count, each pair coin twice, over `2^128`; `pr_badZk_le` is the union bound. `δcZk` is `εZk` on the
-statements the masked verifier can accept at one table (`readyZk`, as `ready`), and `1` elsewhere. The slots read the
+`εZk` is their count, each pair coin twice, over `2^128`; `pr_badZk_le` is the union bound. `δcZk H` is `εZk` on the
+statements the masked verifier can accept against `H` at one table (`readyZk H`, as `ready H`: the setup against `H`
+is the one at SHA-512, which at `sha512` asks no more, `readyZk_sha512`), and `1` elsewhere. The slots read the
 statement's `m`, `k_log`, regions and points, as Deploy's `repRounds true`, and the `--zk` schedule's `k_0` and levels;
 rep `q` is table `q / 2`'s rep `q % 2`, its first coin after the link's and every earlier rep's rounds (`repStartZk`).
 -/
@@ -178,16 +179,31 @@ def BadZk (x : Claims.Msg) {k : ℕ} (r : Fin k → Coin) : Prop :=
 noncomputable def εZk (x : Claims.Msg) : ℝ :=
   ((outerSlotsZk x).length + (betaSlotsZk x).length + 2 * (rhoSlotsZk x).length) / 2 ^ 128
 
-/-- **The statements the masked verifier can accept**, at one table: it sets up the session at one table, the session
-draws a unit, and the statement is under `2^56` bytes (`ready`'s reasons). The `--zk` scope admits several tables,
-whose masked record is per table; `δcZk` is `1` there until it is. -/
-def readyZk (x : Claims.Msg) : Bool :=
+open Classical in
+/-- **The statements the masked verifier can accept** against `H`, at one table: it sets up the session at one table,
+its setup against `H` is the one at SHA-512, the session draws a unit, and the statement is under `2^56` bytes
+(`ready H`'s reasons). The `--zk` scope admits several tables, whose masked record is per table; `δcZk H` is `1` there
+until it is. -/
+noncomputable def readyZk (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : Bool :=
   match setupOf true x with
-  | some (s, _, sts) => sts.size == 1 && s.read.draw.isSome && decide (x.length < 2 ^ 56)
+  | some (s, spec, sts) => sts.size == 1 && s.read.draw.isSome && decide (x.length < 2 ^ 56) &&
+      decide (setupWith (Claims.hOf H) s.read = .ok (spec, sts))
   | none => false
 
-/-- **Flock's `δc` at the masked verifier**: `εZk` where the verifier can accept, else `1`. -/
-noncomputable def δcZk (x : Claims.Msg) : ℝ := if readyZk x then εZk x else 1
+/-- **At SHA-512, `readyZk` asks only for one table, a drawn session and the statement's length** (`ready_sha512`). -/
+theorem readyZk_sha512 (x : Claims.Msg) :
+    readyZk sha512 x = match setupOf true x with
+      | some (s, _, sts) => sts.size == 1 && s.read.draw.isSome && decide (x.length < 2 ^ 56)
+      | none => false := by
+  unfold readyZk
+  split
+  · rename_i s spec sts hs
+    rw [hOf_sha512, setupWith_sha512, Ins.setup_read (setupOf_some hs).2]
+    simp
+  · rfl
+
+/-- **Flock's `δc` at the masked verifier** against `H`: `εZk` where the verifier can accept, else `1`. -/
+noncomputable def δcZk (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : ℝ := if readyZk H x then εZk x else 1
 
 theorem pr_list_le {k : ℕ} {β : Type} (E : β → (Fin k → Coin) → Prop) (L : List β) (c : ℝ)
     (h : ∀ b ∈ L, Claims.Pr (E b) ≤ c) : Claims.Pr (fun r => ∃ b ∈ L, E b r) ≤ L.length * c := by
@@ -214,12 +230,12 @@ theorem pr_badZk_le (x : Claims.Msg) {k : ℕ} : Claims.Pr (fun r : Fin k → Co
 
 /-- **Completeness from acceptance at the good coins**, at the masked verifier: if, on every statement in scope that it
 can accept and every witness in the relation, the honest masked prover is accepted at every tape and every coin outside
-`BadZk`, then Flock's masked verifier is complete for `honestPZk` with error `δcZk`. -/
+`BadZk`, then Flock's masked verifier is complete for `honestPZk` with error `δcZk H`. -/
 theorem complete_zk_of (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (hacc : ∀ x w, Claims.Flock.Scope (deployZk rel) x → Claims.Flock.R (deployZk rel).parse x w →
-      readyZk x = true → ∀ (ω : TapeZk) (r : Fin ((V true).k x) → Coin), ¬ BadZk x r →
+      readyZk H x = true → ∀ (ω : TapeZk) (r : Fin ((V true).k x) → Coin), ¬ BadZk x r →
         (Claims.run H (honestPZk w) (V true) x ω r).out = .acc) :
-    Claims.Flock.Complete H (deployZk rel) honestPZk δcZk := by
+    Claims.Flock.Complete H (deployZk rel) honestPZk (δcZk H) := by
   intro x w hs hr ω
   unfold δcZk
   split

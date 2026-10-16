@@ -56,12 +56,13 @@ def honestRunZk (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claims.Flo
     (r : Fin k → Coin) : List Claims.Msg × Claims.Msg :=
   (progZk x w ω).sim H (fun j => (Claims.coinSeq r j).bytes) 0
 
-/-- **The honest masked prover is accepted** at the coins `r` when the statement sets up, the honest run's sends are of
-tag `0`, fit the verifier's rounds, and start with a link message, its last message decodes, and the masked verdict and
-the checks pass on it. -/
+/-- **The honest masked prover is accepted** at the coins `r` when the statement sets up, against `H` as at SHA-512
+(the verifier's setup), the honest run's sends are of tag `0`, fit the verifier's rounds, and start with a link
+message, its last message decodes, and the masked verdict and the checks pass on it. -/
 theorem run_acc_of_zk (H : Claims.Msg → Claims.Msg) (w : Claims.Flock.Wit) (x : Claims.Msg) (ω : TapeZk)
     (r : Fin ((V true).k x) → Coin) {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     {link : List ByteArray × List ByteArray} {F : Final} (hs : setupOf true x = some (s, spec, sts))
+    (hsu : setupWith (Claims.hOf H) s.read = .ok (spec, sts))
     (hk : (honestRunZk H x w ω r).1.length + 1 ≤ (V true).k x)
     (htag : ∀ m ∈ (honestRunZk H x w ω r).1, ∃ t, m = 0 :: t)
     (hne : (honestRunZk H x w ω r).1 ≠ [])
@@ -118,7 +119,7 @@ theorem run_acc_of_zk (H : Claims.Msg → Claims.Msg) (w : Claims.Flock.Wit) (x 
     have had := act_final_any (c₁ := Claims.coinSeq r 0) (crest := (List.range (a₁ :: rest).length).map
       (fun j => Claims.coinSeq r (j + 1))) hs hl hfin hlink'
     rw [next_decide H had]
-    refine ⟨hv, ?_⟩
+    refine ⟨spec, sts, hsu, hv, ?_⟩
     rw [hcs, hms1, List.cons_append] at hc
     exact hc
 

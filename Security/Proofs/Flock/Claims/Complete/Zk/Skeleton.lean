@@ -6,11 +6,12 @@ import Proofs.Flock.Claims.Complete.Zk.Verdict
 /-!
 # The masked completeness proof's skeleton
 
-`complete_zk_of_goals`: Flock's masked verifier is complete for `honestPZk` with error `δcZk`
-(`Claims.Flock.Complete H (deployZk rel) honestPZk δcZk`), given one goal per check the honest masked run must pass.
+`complete_zk_of_goals`: Flock's masked verifier is complete for `honestPZk` with error `δcZk H`
+(`Claims.Flock.Complete H (deployZk rel) honestPZk (δcZk H)`), given one goal per check the honest masked run must
+pass.
 
 * **The setting.** A good case (`CaseZk`): a statement in scope that the masked verifier can accept at one table
-  (`readyZk`), at its setup, a witness in the relation, a masked tape, and coins outside `BadZk`. The honest run at it
+  (`readyZk H`), at its setup, a witness in the relation, a masked tape, and coins outside `BadZk`. The honest run at it
   (`RunZk`): the pure masked session's record, proof files and sends' bodies (`sessionSZk`, `honestRunZk_eq`).
 * **What the masked verifier computes** on that run (`RunZk.sess`, `RunZk.zp`, `RunZk.rp`, …): each step's value where
   it returns (`val`), so each goal states only that its step returns, on the earlier steps' values.
@@ -46,7 +47,7 @@ structure CaseZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Read
   sts : Array Flock.Stmt
   scope : Claims.Flock.Scope (deployZk rel) x
   rel_w : Claims.Flock.R (deployZk rel).parse x w
-  ready : readyZk x = true
+  ready : readyZk H x = true
   good : ¬ BadZk x r
   setup : setupOf true x = some (s, spec, sts)
 
@@ -338,9 +339,11 @@ section Proved
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- `readyZk` at the case's setup: one table, the session draws a unit and the statement is under `2^56` bytes. -/
+/-- `readyZk` at the case's setup: one table, the session draws a unit, the statement is under `2^56` bytes, and the
+setup against `H` is the case's. -/
 theorem CaseZk.ready_parts (c : CaseZk H rel) :
-    c.sts.size = 1 ∧ c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 56 := by
+    c.sts.size = 1 ∧ c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 56 ∧
+      setupWith (Claims.hOf H) c.s.read = .ok (c.spec, c.sts) := by
   have h := c.ready
   unfold readyZk at h
   rw [c.setup] at h
@@ -386,7 +389,7 @@ theorem RunZk.link_ok (hL : LinkFirstZk H rel) (o : RunZk H rel) : linkOf (o.sen
 /-- **The last message reads back.** -/
 theorem RunZk.final_ok (hF : FinalFitsZk H rel) (o : RunZk H rel) : finalOf o.final.encode = some o.final := by
   obtain ⟨h1, h2, h3⟩ := hF o
-  exact finalOf_encode (o.ready_parts.2.2.trans (by norm_num)) h1 h2 h3
+  exact finalOf_encode (o.ready_parts.2.2.1.trans (by norm_num)) h1 h2 h3
 
 /-! ## The composition -/
 
@@ -429,7 +432,8 @@ theorem RunZk.acc (g : GoalsZk H rel) (o : RunZk H rel) :
     rw [o.setup]
   have hlen : (honestRunZk H o.x o.w o.ω o.r).1.length = o.bodies.size := by
     rw [he]; simp
-  refine run_acc_of_zk H o.w o.x o.ω o.r (link := o.link) (F := o.final) o.setup ?_ ?_ ?_ ?_ ?_ (o.verdict_ok g) ?_
+  refine run_acc_of_zk H o.w o.x o.ω o.r (link := o.link) (F := o.final) o.setup o.ready_parts.2.2.2 ?_ ?_ ?_ ?_ ?_
+    (o.verdict_ok g) ?_
   · rw [hlen, hk]
     have := g.sends o
     omega
@@ -455,10 +459,10 @@ theorem RunZk.acc (g : GoalsZk H rel) (o : RunZk H rel) :
 
 end Proved
 
-/-- **Masked completeness from the goals**: Flock's masked verifier is complete for `honestPZk` with error `δcZk`, given
-each goal. -/
+/-- **Masked completeness from the goals**: Flock's masked verifier is complete for `honestPZk` with error `δcZk H`,
+given each goal. -/
 theorem complete_zk_of_goals (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
-    (g : GoalsZk H rel) : Claims.Flock.Complete H (deployZk rel) honestPZk δcZk := by
+    (g : GoalsZk H rel) : Claims.Flock.Complete H (deployZk rel) honestPZk (δcZk H) := by
   refine complete_zk_of H rel fun x w hsc hr hready ω r hgood => ?_
   have hset : ∃ s spec sts, setupOf true x = some (s, spec, sts) := by
     unfold readyZk at hready
