@@ -59,6 +59,9 @@
 #ifndef PF_PW
 #define PF_PW 8  // the phase filler's warps a block (dfill_p): its tile is PF_PW warps x 128 PF_PW columns
 #endif
+#ifndef PF_PMIN
+#define PF_PMIN (PF_CTAS * PF_W / PF_PW)  // dfill_p's launch-bounds blocks an SM: its register cap, 128 by default
+#endif
 static_assert(PF_PW == 2 || PF_PW == 4 || PF_PW == 8, "PF_PW is 2, 4 or 8");
 #define DFILL_GATE_W PF_W
 #define DFILL_GATE_S {32, 512}
@@ -358,7 +361,7 @@ constexpr unsigned long long PBIT = 1ull << 62;
 #define DFILL_P_W PF_PW
 __host__ __device__ constexpr double pf_tile_macs(int steps) { return (double)PF_PW * steps * (16 * PF_PW) * 4096.0; }
 template <int NC>
-__global__ void __launch_bounds__(32 * PF_PW, PF_CTAS * PF_W / PF_PW)
+__global__ void __launch_bounds__(32 * PF_PW, PF_PMIN)
     dfill_p(uint64_t c0, uint64_t c1, unsigned long long* __restrict__ st, unsigned long long off, int tiles, int steps,
             const int* stop, unsigned long long* __restrict__ rec, unsigned* smbits) {
   __shared__ __align__(16) uint8_t Bs[128 * PF_PW * 32];
