@@ -524,6 +524,10 @@ def test_the_cli_runs_the_pass_whatever_the_target_and_reports_it(node, monkeypa
     assert main(["evict", "--target-free-gb", "0", "--src-dir", str(node.src), "--src-origin", node.origin, "--dry-run", "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["src"] == {"deleted": [], "kept": [], "error": None}
     assert seen["src"] == node.src and seen["origin"] == node.origin and seen["dry_run"] is True
+    assert seen["keep_s"] == EV.SRC_KEEP_S
+    main(["evict", "--target-free-gb", "0", "--src-dir", str(node.src), "--src-keep-h", "0.5", "--dry-run", "--json"])
+    capsys.readouterr()
+    assert seen["keep_s"] == 1800, "a node short of inodes keeps recent trees for less"
 
 
 def test_by_default_a_tree_is_recoverable_when_the_nodes_own_repository_holds_its_commit(node):
