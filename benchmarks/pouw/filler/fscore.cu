@@ -6,14 +6,14 @@
 // `score.py report` scores.
 //
 // Modes (one JSON line each; DFILL_COINS = the gates' coins, DFILL_CHUNK_LOG2 = the pump's chunk size, as dscore):
-//   fscore B L FILL_SMS W NC S FW FNC AFW ANC APS ALZ LT ROUNDS K POINT
+//   fscore B L FILL_SMS W NC S FW FNC AFW ANC APS ALZ LT FLZ ROUNDS K POINT
 //        the decode step at batch B, context L as `dscore dscore step B L split FILL_SMS W NC S ROUNDS K POINT` (ROUNDS
 //        rounds in ABBA order of K reps of serving alone, dcap's cuBLASLt step on the whole GPU, and K reps under the arm),
 //        the arm's step the fused one (enqueue_fstep): flin at the next tile height with FW filler warps of FNC chains a
 //        block, but the linears whose bit is set in LT (1 qkv, 2 o, 4 gate_up, 8 down), which stay on cuBLASLt, and the
 //        attention blocks with AFW filler warps of ANC chains (APS 1 persistent on the step's SMs; ALZ their lazy done
-//        test); lm_head on cuBLASLt. The filler warps stop when their block's serving work is done, so a step's work is
-//        what the device counted: every slot's steps, its receipt the chain at that count.
+//        test; FLZ flin's filler warps'); lm_head on cuBLASLt. The filler warps stop when their block's serving work is
+//        done, so a step's work is what the device counted: every slot's steps, its receipt the chain at that count.
 //        Each fused round's tiles come from the scorer's range for its slot (rounds.cuh), tagged FBIT; the device keeps
 //        the round's coins and tile base (flin.cuh's FState), so each launch of the captured step takes the next `per`
 //        ids, and its receipts a row of a ring of K + 2 steps. An arm block's fixed work is its K timed steps' filler
@@ -122,7 +122,7 @@ static bool flin_has(int M, int FW, int NC) {
 }
 
 struct FusedCfg {
-  int FW, FNC, AFW, ANC, APS, ALZ, LT;
+  int FW, FNC, AFW, ANC, APS, ALZ, LT, FLZ;
 };
 
 static int run_fscore(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, const FusedCfg& c, int rounds, int K,
@@ -154,6 +154,7 @@ static int run_fscore(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, 
   fl.thr = 0;
   fl.NC = c.FNC;
   fl.FW = c.FW;
+  fl.lazy = c.FLZ;
   Fatt fa;
   fatt_prepare(fa, c.AFW, c.ANC, B, L, c.APS ? got[0] : 0);
   fa.lazy = c.ALZ;
@@ -344,10 +345,10 @@ static int run_fscore(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, 
          "\"setup_ms\": %.3f, \"rounds\": %d, \"K\": %d, ",
          B, L, fill_sms, d.sms, got[0], got[1], sp_step, sp_fill, W, NC, S, f.tiles, f.grid, f.macs(), got[0], point,
          POINT_SLOTS, lo, hi, wrapped ? "true" : "false", setup_ms, rounds, K);
-  printf("\"fused\": {\"M\": %d, \"FW\": %d, \"FNC\": %d, \"AFW\": %d, \"ANC\": %d, \"APS\": %d, \"ALZ\": %d, \"LT\": %d, "
+  printf("\"fused\": {\"M\": %d, \"FW\": %d, \"FNC\": %d, \"AFW\": %d, \"ANC\": %d, \"APS\": %d, \"ALZ\": %d, \"LT\": %d, \"FLZ\": %d, "
          "\"pdl\": %d, \"flin_launches\": %zu, \"att_grid\": [%zu, %zu], \"slots_a_step\": %llu, \"tag\": \"%016llx\", "
          "\"out_rows\": %d, \"out_mismatches\": %lld, \"steps_bad\": %lld, \"ctl_equal\": %lld, \"lin_macs\": %.6e}, ",
-         fl.M, c.FW, c.FNC, c.AFW, c.ANC, c.APS, c.ALZ, c.LT, (int)g_pdl, seq.size(), fa.pg[0], fa.pg[1], per, FBIT,
+         fl.M, c.FW, c.FNC, c.AFW, c.ANC, c.APS, c.ALZ, c.LT, c.FLZ, (int)g_pdl, seq.size(), fa.pg[0], fa.pg[1], per, FBIT,
          out_rows, out_bad_total, steps_bad, ctl_equal, lin_macs);
   printf("\"alone_fill\": {\"mac_per_s\": %.6e, \"mhz\": %.1f, \"watt\": %.1f, ", alone, amhz, awatt);
   print_round(r0);
@@ -377,8 +378,8 @@ static int run_fscore(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, 
 }
 
 int main(int argc, char** argv) {
-  const char* use = "fscore B L FILL_SMS W NC S FW FNC AFW ANC APS ALZ LT ROUNDS K POINT";
-  if (argc < 2 || std::string(argv[1]) != "fscore" || argc < 18) {
+  const char* use = "fscore B L FILL_SMS W NC S FW FNC AFW ANC APS ALZ LT FLZ ROUNDS K POINT";
+  if (argc < 2 || std::string(argv[1]) != "fscore" || argc < 19) {
     fprintf(stderr, "usage: fscore %s\n", use);
     return 1;
   }
@@ -390,15 +391,15 @@ int main(int argc, char** argv) {
       return 1;
     }
   }
-  int v[16];
-  for (int i = 0; i < 16; i++) v[i] = atoi(argv[2 + i]);
-  const int B = v[0], L = v[1], fsm = v[2], W = v[3], NC = v[4], S = v[5], rounds = v[13], K = v[14], point = v[15];
-  const FusedCfg c{v[6], v[7], v[8], v[9], v[10], v[11], v[12]};
+  int v[17];
+  for (int i = 0; i < 17; i++) v[i] = atoi(argv[2 + i]);
+  const int B = v[0], L = v[1], fsm = v[2], W = v[3], NC = v[4], S = v[5], rounds = v[14], K = v[15], point = v[16];
+  const FusedCfg c{v[6], v[7], v[8], v[9], v[10], v[11], v[12], v[13]};
   if ((size_t)B * L > MAX_BL || L % 512 || L <= 0 || B < 1 || B > 256 || rounds < 2 || 3 * rounds + 5 > POINT_SLOTS ||
       K < 1 || W < 1 || W > 16 || S % 8 || S <= 0 || point < 0 || c.FW < 0 || c.AFW < 0 || (c.LT & ~15) ||
-      !(c.ALZ == 0 || c.ALZ == 2 || c.ALZ == 4) || (c.APS != 0 && c.APS != 1)) {
+      !(c.ALZ == 0 || c.ALZ == 2 || c.ALZ == 4) || !(c.FLZ == 0 || c.FLZ == 2 || c.FLZ == 4) || (c.APS != 0 && c.APS != 1)) {
     fprintf(stderr, "%s: B*L <= %zu, L %% 512 == 0, 1 <= B <= 256, ROUNDS >= 2, 3 ROUNDS + 5 <= %d, K >= 1, "
-                    "1 <= W <= 16, 8 | S, LT in [0, 16), ALZ 0|2|4, APS 0|1\n", use, MAX_BL, POINT_SLOTS);
+                    "1 <= W <= 16, 8 | S, LT in [0, 16), ALZ and FLZ 0|2|4, APS 0|1\n", use, MAX_BL, POINT_SLOTS);
     return 1;
   }
   Dev d;

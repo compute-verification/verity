@@ -1203,7 +1203,7 @@ int main(int argc, char** argv) {
                     "       FATT_PDL=1|2: the attention filler blocks under PDL, 2 with their filler warps starting early;\n"
                     "       FATT_NC=n: the attention filler warps' chains, 4 unless set; FATT_PERSIST=1: the attention filler\n"
                     "       blocks persistent on the step's SMs; FATT_LAZY=2|4: their filler warps test a read of done issued a\n"
-                    "       round earlier, stepping 8·FATT_LAZY at a time)\n");
+                    "       round earlier, stepping 8·FATT_LAZY at a time; FLIN_LAZY=2|4: flin's filler warps the same)\n");
     return 1;
   }
   const std::string mode = argv[1];
@@ -1214,10 +1214,12 @@ int main(int argc, char** argv) {
   g_fatt_nc = getenv("FATT_NC") ? atoi(getenv("FATT_NC")) : 4;
   g_fatt_per = getenv("FATT_PERSIST") ? atoi(getenv("FATT_PERSIST")) : 0;
   g_fatt_lazy = getenv("FATT_LAZY") ? atoi(getenv("FATT_LAZY")) : 0;
-  if (g_fatt_lazy != 0 && g_fatt_lazy != 2 && g_fatt_lazy != 4) {
-    fprintf(stderr, "FATT_LAZY must be 0, 2 or 4\n");
-    return 1;
-  }
+  g_flin_lazy = getenv("FLIN_LAZY") ? atoi(getenv("FLIN_LAZY")) : 0;
+  for (const int lz : {g_fatt_lazy, g_flin_lazy})
+    if (lz != 0 && lz != 2 && lz != 4) {
+      fprintf(stderr, "FATT_LAZY and FLIN_LAZY must be 0, 2 or 4\n");
+      return 1;
+    }
   if (const char* cs = getenv("DFILL_COINS")) {
     if (strlen(cs) != 32 || sscanf(cs, "%16llx%16llx", (unsigned long long*)&g_c0, (unsigned long long*)&g_c1) != 2) {
       fprintf(stderr, "DFILL_COINS must be 32 hex digits\n");

@@ -142,6 +142,7 @@ struct FlinArgs {
   int N, K;
   FSlots fs;  // filler warp `slot` = blockIdx.x · FW + fw
   int thr;
+  int lazy;  // the filler warps' LAZY (0, 2, 4)
 };
 
 template <int M, int BK, int ST, int CWN, int CWM, int FW, int NC>
@@ -196,7 +197,11 @@ __global__ void __launch_bounds__(32 * (CWN * CWM + 1 + FW), 1) flin_k(const Fli
   if (warp > CW) {
     if constexpr (FW > 0) {
       const int slot = blockIdx.x * FW + (warp - CW - 1);
-      filler_warp<NC>(a.fs, slot, &flag[0], &flag[1], CW, a.thr);
+      switch (a.lazy) {
+        case 0: filler_warp<NC, 0>(a.fs, slot, &flag[0], &flag[1], CW, a.thr); break;
+        case 2: filler_warp<NC, 2>(a.fs, slot, &flag[0], &flag[1], CW, a.thr); break;
+        default: filler_warp<NC, 4>(a.fs, slot, &flag[0], &flag[1], CW, a.thr);
+      }
     }
     return;
   }
@@ -401,6 +406,7 @@ static int flin_smem(int M) {
   return c.ST * (FLIN_BN + M) * c.BK + 2 * c.ST * 8 + 16;
 }
 static bool g_pdl = true;  // FLIN_PDL=0 launches each linear only after the previous grid has finished
+static int g_flin_lazy = 0;  // FLIN_LAZY: flin's filler warps' LAZY (0, 2, 4; filler_warp)
 template <int M, int BK, int ST, int CWN, int CWM, int FW, int NC>
 static void flin_go(const FlinArgs& a, int grid, cudaStream_t st) {
   static bool attr = false;
@@ -442,11 +448,14 @@ static bool flin_fw(const FlinArgs& a, int grid, int FW, int NC, cudaStream_t st
     }
   } else if constexpr (M < 256) {
     switch (k) {
+      case 14: flin_go<M, BK, ST, CWN, CWM, 1, 4>(a, grid, st); return true;
+      case 22: flin_go<M, BK, ST, CWN, CWM, 2, 2>(a, grid, st); return true;
       case 24: flin_go<M, BK, ST, CWN, CWM, 2, 4>(a, grid, st); return true;
       case 44: flin_go<M, BK, ST, CWN, CWM, 4, 4>(a, grid, st); return true;
     }
   } else {
     switch (k) {
+      case 14: flin_go<M, BK, ST, CWN, CWM, 1, 4>(a, grid, st); return true;
       case 22: flin_go<M, BK, ST, CWN, CWM, 2, 2>(a, grid, st); return true;
       case 24: flin_go<M, BK, ST, CWN, CWM, 2, 4>(a, grid, st); return true;
     }
@@ -468,8 +477,8 @@ static const char* flin_built(int M) {
   return M == 32    ? "0, 4:2, 4:4, 8:2, 8:4, 11:4"
          : M == 64  ? "0, 4:2, 4:4, 8:2, 8:4"
          : M == 128 ? "0, 4:2, 4:4"
-         : M < 256  ? "0, 2:4, 4:4"
-                    : "0, 2:2, 2:4";
+         : M < 256  ? "0, 1:4, 2:2, 2:4, 4:4"
+                    : "0, 1:4, 2:2, 2:4";
 }
 
 // The filler warps' ring on the host (FSlots): the round's coins and first tile id (its tag included), the slots a step
@@ -520,7 +529,7 @@ static FSlots fslots(const FRing& r, unsigned long long off) { return {r.st, r.r
 // (a sequence's k-th flin launch writes Db[k & 1] and zeroes Db[(k + 1) & 1] for the next; a sequence has an even count).
 // Launch i's filler slots are [i · stride, i · stride + grid · FW) of the step's layout (stride: grid · the configured FW).
 struct Flin {
-  int M = 0, BK = 0, FW = 0, NC = 2, thr = 0, grid = 0;
+  int M = 0, BK = 0, FW = 0, NC = 2, thr = 0, grid = 0, lazy = 0;
   int8_t* Wt[LAYERS][4] = {};
   int8_t *XtH = nullptr, *XtF = nullptr;
   int* Db[2] = {};
@@ -566,6 +575,7 @@ static bool flin_one(Dev& d, const Flin& f, int i, int k, int next_j) {
   a.K = LK[j];
   a.fs = fslots(*f.ring, (unsigned long long)i * f.stride);
   a.thr = f.thr;
+  a.lazy = f.lazy;
   return flin_launch(f.M, a, f.grid, f.FW, f.NC, d.st);
 }
 // A launch's filler slots in the ring: n of them from ring index `at`, slot s ran tile tile0 + s with NC chains.
@@ -782,10 +792,14 @@ static int flin_gate(Dev& d) {
     FRing r;
     flin_prepare(d, f, M, false);
     f.ring = &r;
+    const int fw0 = M == 256 ? 2 : 4, nc0 = M == 160 || M == 192 ? 4 : 2;
+    std::vector<std::tuple<int, int, int>> cfgs = {{0, nc0, 0}, {fw0, nc0, 0}, {fw0, nc0, 4}};
+    if (M >= 160) cfgs.insert(cfgs.end(), {{1, 4, 4}, {2, 2, 4}});
     for (int j = 0; j < 4; j++)
-      for (int fw : {0, M == 256 ? 2 : 4}) {
+      for (const auto [fw, nc, lazy] : cfgs) {
         f.FW = fw;
-        f.NC = M == 160 || M == 192 ? 4 : 2;
+        f.lazy = lazy;
+        f.NC = nc;
         f.stride = (unsigned long long)f.grid * fw;
         fring_open(r, (Flin::LAUNCHES + 1) * f.stride, 1, g_c0, g_c1, 0x5ull << 56, d.st);
         const int i = j;  // layer 0's linear j
@@ -800,10 +814,11 @@ static int flin_gate(Dev& d) {
         CK(cudaGetLastError());
         const FlinTally t = fill_tally(r, fused_launches(r, &f, {i}, nullptr, 0, 0), 8, 0x6A7E + M * 16 + j);
         const bool ok = bad == 0 && t.bad == 0 && t.ctl_equal == 0 && (fw == 0 || t.checked > 0);
-        printf("{\"mode\": \"fgate\", \"M\": %d, \"linear\": \"%s\", \"N\": %d, \"K\": %d, \"FW\": %d, \"NC\": %d, "
+        printf("{\"mode\": \"fgate\", \"M\": %d, \"linear\": \"%s\", \"N\": %d, \"K\": %d, \"FW\": %d, \"NC\": %d, \"lazy\": %d, "
                "\"mismatches\": %llu, \"rec_checked\": %d, \"rec_bad\": %d, \"ctl_equal\": %d, \"filler_steps\": %lld, "
                "\"idle_slots\": %lld, \"ok\": %s}\n",
-               M, LNAME[j], LN[j], LK[j], fw, f.NC, bad, t.checked, t.bad, t.ctl_equal, t.steps, t.idle, ok ? "true" : "false");
+               M, LNAME[j], LN[j], LK[j], fw, f.NC, lazy, bad, t.checked, t.bad, t.ctl_equal, t.steps, t.idle,
+               ok ? "true" : "false");
         fflush(stdout);
         fails += !ok;
       }
@@ -817,6 +832,7 @@ static int run_flin(Dev& d, int M, int FW, int NC, int thr, int reps) {
   FRing r;
   flin_prepare(d, f, M, true);
   f.thr = thr;
+  f.lazy = g_flin_lazy;
   f.ring = &r;
   f.stride = (unsigned long long)f.grid * FW;
   fring_open(r, (Flin::LAUNCHES + 1) * f.stride, 1, g_c0, g_c1, 0x5ull << 56, d.st);
@@ -900,6 +916,7 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
   flin_prepare(d, f, flin_m_for(B), true);
   f.thr = thr;
   f.NC = NC;
+  f.lazy = g_flin_lazy;
   Fatt a0, a;
   cudaStream_t full = d.st, ss = d.st, fs = nullptr;
   int got[2] = {d.sms, 0};
@@ -985,7 +1002,7 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
          (int)g_pdl, g_fatt_pdl, g_lt_mask, fill_sms, got[0], got[1], fs ? alone / (1024.0 * d.sms * amhz * 1e6) : 0.0, pump_share, nwin,
          fs ? pf.macs() : 0.0, fs ? 8 : 0, pbad, pump_share, lin_share + att_share + pump_share);
   printf("\"M\": %d, ", f.M);
-  printf("\"APS\": %d, \"ALZ\": %d, \"att_grid\": [%zu, %zu], ", a.sms > 0, a.lazy, a.pg[0], a.pg[1]);
+  printf("\"APS\": %d, \"ALZ\": %d, \"FLZ\": %d, \"att_grid\": [%zu, %zu], ", a.sms > 0, a.lazy, f.lazy, a.pg[0], a.pg[1]);
   printf("\"B\": %d, \"L\": %d, \"FW\": %d, \"NC\": %d, \"thr\": %d, \"AFW\": %d, \"ANC\": %d, "
          "\"coins\": [\"%016llx\", \"%016llx\"], \"kv_wrapped\": %s, \"step_macs\": %.6e, \"lin_macs\": %.6e, \"base_ms\": %.4f, "
          "\"base2_ms\": %.4f, \"fused0_ms\": %.4f, \"fused_ms\": %.4f, \"fused0_vs_base\": %.4f, \"slowdown\": %.4f, "
