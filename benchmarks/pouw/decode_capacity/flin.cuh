@@ -90,6 +90,7 @@ constexpr int PW_NA = 16, PW_NB = 28, PW_MMAS = PW_NA * PW_NB;
 
 __device__ __noinline__ uint64_t dfill_k_warp(uint64_t c0, uint64_t c1, unsigned long long tile, unsigned long long step) {
   const int lane = threadIdx.x & 31;
+  const uint64_t K = smix(dseed(c0, c1, tile) ^ step);  // first, so that only K is live through the hashing
   uint32_t R[16];
   {
     uint64_t st[8];
@@ -127,7 +128,6 @@ __device__ __noinline__ uint64_t dfill_k_warp(uint64_t c0, uint64_t c1, unsigned
     }
     R[0] = R[2]; R[1] = R[3]; R[2] = R[4]; R[3] = R[5]; R[4] = R[6]; R[5] = R[7];  // group ag + 1's A words
   }
-  const uint64_t K = smix(dseed(c0, c1, tile) ^ step);
   uint64_t h = 0;
 #pragma unroll
   for (int c = 0; c < 4; c++) h ^= pf_fold(K, 4 * lane + c, y[c]);
@@ -609,6 +609,12 @@ static bool flin_fw(const FlinArgs& a, int grid, int FW, int NC, cudaStream_t st
   if constexpr (M == 32) {
     if (k == 114) { flin_go<M, BK, ST, CWN, CWM, 11, 4>(a, grid, st); return true; }
   }
+  if constexpr (M <= 128) {
+    switch (k) {
+      case 14: flin_go<M, BK, ST, CWN, CWM, 1, 4>(a, grid, st); return true;
+      case 24: flin_go<M, BK, ST, CWN, CWM, 2, 4>(a, grid, st); return true;
+    }
+  }
   if constexpr (M <= 64) {
     switch (k) {
       case 42: flin_go<M, BK, ST, CWN, CWM, 4, 2>(a, grid, st); return true;
@@ -649,9 +655,9 @@ static bool flin_launch(int M, const FlinArgs& a, int grid, int FW, int NC, cuda
   return false;
 }
 static const char* flin_built(int M) {
-  return M == 32    ? "0, 4:2, 4:4, 8:2, 8:4, 11:4"
-         : M == 64  ? "0, 4:2, 4:4, 8:2, 8:4"
-         : M == 128 ? "0, 4:2, 4:4"
+  return M == 32    ? "0, 1:4, 2:4, 4:2, 4:4, 8:2, 8:4, 11:4"
+         : M == 64  ? "0, 1:4, 2:4, 4:2, 4:4, 8:2, 8:4"
+         : M == 128 ? "0, 1:4, 2:4, 4:2, 4:4"
          : M < 256  ? "0, 1:4, 2:2, 2:4, 4:4"
                     : "0, 1:4, 2:2, 2:4";
 }

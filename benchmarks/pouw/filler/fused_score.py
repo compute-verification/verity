@@ -238,6 +238,12 @@ def report(out: Path, arm) -> dict:
     res["harness"] = harness_accounting(rows, stats) if not res["missing"] else None
     if "score_under_ch_if_gated" in res and not res["missing"]:
         res["entries_under_ch"] = {e["entry"]: e["coverage"] for e in S.score(stats, S.certified(S.UNDER_CH))["entries"]}
+    if "theorem-k" in S.FILLER_ENTRIES and not res["missing"] and arm.filler.noise in S.FILLER_ENTRIES["theorem-k"]["noise"]:
+        # what the scorer would read with every filler MAC at Theorem K's entry, the fused filler warps' included (a
+        # projection: v3 reads no theorem for a filler with an arm-side driver's fixed work)
+        k = S.score(stats, S.certified("theorem-k"))
+        res["projected_under_k"] = {"SCORE": k["SCORE"] if res["scored"] else None, "min": k.get("min"),
+                                    "entries": {e["entry"]: e["coverage"] for e in k["entries"]}}
     (out / "score.json").write_text(json.dumps(res, indent=1))
     return res
 
@@ -248,6 +254,10 @@ def show(res: dict) -> None:
         v = dict(res["gates"][k])
         v.pop("bound_share_of_hbm", None)
         print(f"  gate {k}: {'pass' if res['gates'][k]['ok'] else 'FAIL'}  {v}")
+    pk = res.get("projected_under_k")
+    if pk:
+        print(f"\nprojected under Theorem K (every filler MAC at its entry, the fused filler warps' too): SCORE "
+              f"{SC.fmt(pk['SCORE'])}, min {SC.fmt((pk['min'] or {}).get('coverage'))} at {(pk['min'] or {}).get('entry')}")
     h = res.get("harness")
     if h:
         print(f"\nharness accounting (every filler at 0.99, as SCORE under CH; fused filler over the measured step only, the "
