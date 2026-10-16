@@ -95,12 +95,18 @@ FUSED = {
     "s8": [(48, 16384, 124, 0), (48, 16384, 132, 0), (48, 16384, 140, 0), (128, 6144, 100, 0), (128, 6144, 108, 0),
            (128, 6144, 116, 0), (128, 2048, 108, 0), (32, 24576, 140, 1), (132, 5120, 84, 0), (144, 5120, 84, 0),
            (1, 32768, 144, 1), (32, 1024, 144, 1), (32, 2048, 144, 1), (32, 8192, 144, 1)],
+    # 132/5K is the reasoning mix's decode (about half of SCORE's time): more pump SMs, and the linears on cuBLASLt (LT 15)
+    "s9": [(132, 5120, 80, 0), (132, 5120, 84, 0), (132, 5120, 88, 0), (132, 5120, 92, 0), (132, 5120, 96, 0),
+           (132, 5120, 84, 0, 15), (132, 5120, 92, 0, 15), (132, 5120, 84, 1), (144, 5120, 88, 0), (128, 2048, 116, 0),
+           (128, 2048, 124, 0), (128, 6144, 112, 0), (32, 24576, 136, 1), (48, 16384, 128, 0)],
 }
 
 
 def fused_probes(rows):
-    return ";".join(f"DFILL_CHUNK_LOG2=19 fscore fscore {b} {l} {f} 8 4 256 0 4 0 2 1 0 0 {lm} {ROUNDS} {K} {i}"
-                    for i, (b, l, f, lm) in enumerate(rows))
+    """Rows (B, L, pump SMs, LM[, LT[, APS]]): FILL's step with no filler warps (FW = AFW = 0) beside pfill-k's pump."""
+    def row(i, b, l, f, lm, lt=0, aps=1):
+        return f"DFILL_CHUNK_LOG2=19 fscore fscore {b} {l} {f} 8 4 256 0 4 0 2 {aps} 0 {lt} {lm} {ROUNDS} {K} {i}"
+    return ";".join(row(i, *r) for i, r in enumerate(rows))
 
 
 #: prefill 8192 with pfill-k's pump (W 8, NC 4) in the co placement (every SM, the lowest stream priority: its 48 KB
