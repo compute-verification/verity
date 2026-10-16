@@ -32,7 +32,16 @@
 // Keys are the key block's row words in order, the first two that are odd, at least 2^8 + 1 away from 0 mod 2^24 and not
 // ±1 mod 32 (a0, a1); duo's k0, k1 are its rows 14 and 15. A tile's receipt is the XOR over its chains of
 // smix(smix(K ^ pos) ^ v), K = dseed(c0, c1, tile), pos = (32 w + lane) 4 + c, v the chain's state (duo: z << 32 | y).
+//
+// PFILL_MMA=e2m1 (read by dfill_make, which sets the kernels' flag, and by dfill_ref) runs the e2m1 tile instead: K = L =
+// 64 on OMMA m16n8k64 (kind::mxf4nvf4, every ue4m3 block scale 1), the same noise as e2m1 codes (+1 = 0x2, -1 = 0xA) in
+// the domain PF_DOM4, each fragment and B block two SHA blocks (ctr 2 F + h and 2^56 + 2 b + h for k in 32 h .. 32 h + 31),
+// and each word the bits of the exact f32 sum 64 - 2 popcount(a ^ b). The chains, keys and fold are the s8 tile's. An
+// OMMA holds the tensor pipe as long as an IMMA and does twice the products, each half an int8 slot, so DFill::macs()
+// counts int8 slots in both kinds (the e2m1 tile's products / 2).
 #pragma once
+#include <cstdlib>
+#include <cstring>
 #include "../pearl_c/sha512.cuh"
 
 #define PF_W 8
@@ -42,15 +51,17 @@
 #ifndef PF_SHA_ROLL
 #define PF_SHA_ROLL 1  // pf_compress (16 rounds a loop iteration); 0: rs_compress (all 80 unrolled); same digests
 #endif
-#ifndef PF_DEFER
-#define PF_DEFER 0  // 1: absorb B fragment j's outputs after issuing j + 1's MMAs (same receipt; 16 more registers)
-#endif
 #define PF_TN 1024
 #define DFILL_GATE_W PF_W
 #define DFILL_GATE_S {32, 512}
-constexpr uint64_t PF_DOM = 0x5046494C4C2D7631ull;  // "PFILL-v1"
+constexpr uint64_t PF_DOM = 0x5046494C4C2D7631ull;   // "PFILL-v1": the s8 tile
+constexpr uint64_t PF_DOM4 = 0x5046494C4C2D6634ull;  // "PFILL-f4": the e2m1 tile
 constexpr uint64_t PF_B = 1ull << 56, PF_KEY = 2ull << 56;
-static_assert(PF_TN == 16 * 8 * PF_W, "lanes 0..7 of every warp make B's blocks");
+static_assert(PF_TN == 16 * 8 * PF_W, "lanes 0..7 (e2m1: 0..15) of every warp make B's blocks");
+static inline bool pf_e2m1() {
+  const char* m = getenv("PFILL_MMA");
+  return m && !strcmp(m, "e2m1");
+}
 
 __host__ __device__ inline uint32_t pf_bswap(uint32_t x) {
   return (x >> 24) | ((x >> 8) & 0xFF00u) | ((x << 8) & 0xFF0000u) | (x << 24);
@@ -68,6 +79,13 @@ __host__ __device__ inline uint32_t pf_row(const uint64_t* st, int r) {
 }
 // four entries (bits of nib, entry q in bit q) as s8 bytes 1 - 2 bit, entry q in byte q
 __host__ __device__ inline uint32_t pf_pm1(uint32_t nib) { return 0x01010101u | (((nib * 0x00204081u) & 0x01010101u) * 0xFEu); }
+// eight entries (bits of byte, entry q in bit q) as e2m1 codes of 1 - 2 bit, entry q in nibble q
+__host__ __device__ inline uint32_t pf_e2m1x8(uint32_t byte) {
+  uint32_t x = (byte | (byte << 12)) & 0x000F000Fu;
+  x = (x | (x << 6)) & 0x03030303u;
+  x = (x | (x << 3)) & 0x11111111u;
+  return 0x22222222u | (x << 3);
+}
 __host__ __device__ inline bool pf_key_ok(uint32_t a) {
   const uint32_t m = a & 0xFFFFFFu, r = a & 31u;
   return (a & 1u) && m > 256u && m < (1u << 24) - 256u && r != 1u && r != 31u;
@@ -140,9 +158,9 @@ __device__ __forceinline__ void pf_compress(uint64_t* st, uint64_t* w) {
   }
   st[0] += a; st[1] += b; st[2] += c; st[3] += d; st[4] += e; st[5] += f; st[6] += g; st[7] += h;
 }
-__device__ __forceinline__ void pf_block(uint64_t c0, uint64_t c1, uint64_t tile, uint64_t ctr, uint64_t* st) {
+__device__ __forceinline__ void pf_block(uint64_t dom, uint64_t c0, uint64_t c1, uint64_t tile, uint64_t ctr, uint64_t* st) {
   uint64_t w[16];
-  w[0] = c0; w[1] = c1; w[2] = tile; w[3] = PF_DOM; w[4] = ctr; w[5] = 0x8000000000000000ull;
+  w[0] = c0; w[1] = c1; w[2] = tile; w[3] = dom; w[4] = ctr; w[5] = 0x8000000000000000ull;
 #pragma unroll
   for (int i = 6; i < 15; i++) w[i] = 0;
   w[15] = 320;
@@ -159,43 +177,62 @@ __device__ __forceinline__ void pf_mma(uint32_t (&d)[4], const uint32_t (&a)[4],
       : "=r"(d[0]), "=r"(d[1]), "=r"(d[2]), "=r"(d[3])
       : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b.x), "r"(b.y), "r"(0));
 }
+// e2m1 x e2m1 over k64, every block scale 1 (ue4m3 0x38), C = 0: exact f32 sums of 64 products of ±1
+__device__ __forceinline__ void pf_omma(uint32_t (&d)[4], const uint32_t (&a)[4], uint2 b) {
+  float f0, f1, f2, f3;
+  asm("mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::4X.m16n8k64.row.col.f32.e2m1.e2m1.f32.ue4m3 "
+      "{%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%10,%10,%10,%10}, {%11}, {0, 0}, {%11}, {0, 0};"
+      : "=f"(f0), "=f"(f1), "=f"(f2), "=f"(f3)
+      : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b.x), "r"(b.y), "f"(0.f), "r"(0x38383838u));
+  d[0] = __float_as_uint(f0); d[1] = __float_as_uint(f1); d[2] = __float_as_uint(f2); d[3] = __float_as_uint(f3);
+}
 
-template <int NC>
-__global__ void __launch_bounds__(32 * PF_W, PF_CTAS) dfill_k(uint64_t c0, uint64_t c1, unsigned long long tile0, int tiles,
-                                                       int steps, unsigned long long* __restrict__ rec) {
+// The tile loop of either kind (F4: the e2m1 tile). Bs: column n's 32 bytes at 32 n, s8 words in order 0 4 1 5 2 6 3 7
+// (word q holds k 4q..4q+3), e2m1 words in order (q, h) (word 2q + h holds k 32h + 8q .. 32h + 8q + 7), so a lane's B
+// fragment is one 8-byte load in both. Ab: a warp's 32 SHA blocks of A, 16 row words each: P = 32 / KH fragments a pass.
+template <int NC, bool F4>
+__device__ __forceinline__ void pf_tiles(uint8_t* Bs, uint32_t (*Ab)[32 * 16], uint64_t c0, uint64_t c1,
+                                         unsigned long long tile0, int tiles, int steps, unsigned long long* rec) {
   constexpr bool regen = NC == 1 || NC == 2 || NC == 4;
-  __shared__ __align__(16) uint8_t Bs[PF_TN * 32];  // column n's 32 bytes at 32 n, words in order 0 4 1 5 2 6 3 7
-  __shared__ __align__(16) uint32_t Ab[PF_W][32 * 16];  // a warp's 32 fragments, 16 row words each
+  constexpr int KH = F4 ? 2 : 1, P = 32 / KH;
+  constexpr uint64_t dom = F4 ? PF_DOM4 : PF_DOM;
   const int lane = threadIdx.x & 31, w = threadIdx.x >> 5, g = lane >> 2, t = lane & 3;
   const int S = steps;
   for (int i = 0; i < tiles; i++) {
     const unsigned long long idx = (unsigned long long)blockIdx.x * tiles + i, tile = tile0 + idx;
     PfKeys key{0, 0, 0, 0};
-    if (lane <= 8) {
+    if (lane <= 8 * KH) {
       uint64_t st[8];
-      pf_block(c0, c1, tile, lane < 8 ? PF_B + (uint64_t)(w * 8 + lane) : PF_KEY, st);
-      if (lane < 8) {
+      const int bb = w * 8 + (lane & 7), h = lane >> 3;
+      pf_block(dom, c0, c1, tile, lane < 8 * KH ? PF_B + (uint64_t)(KH * bb + h) : PF_KEY, st);
+      if (lane < 8 * KH) {
 #pragma unroll
         for (int nn = 0; nn < 16; nn++) {
           const uint32_t R = pf_row(st, nn);
-          uint4* p = (uint4*)&Bs[(16 * (w * 8 + lane) + nn) * 32];
-          p[0] = make_uint4(pf_pm1(R & 15), pf_pm1((R >> 16) & 15), pf_pm1((R >> 4) & 15), pf_pm1((R >> 20) & 15));
-          p[1] = make_uint4(pf_pm1((R >> 8) & 15), pf_pm1((R >> 24) & 15), pf_pm1((R >> 12) & 15), pf_pm1(R >> 28));
+          if (F4) {
+            uint32_t* p = (uint32_t*)&Bs[(16 * bb + nn) * 32];
+#pragma unroll
+            for (int q = 0; q < 4; q++) p[2 * q + h] = pf_e2m1x8((R >> (8 * q)) & 255);
+          } else {
+            uint4* p = (uint4*)&Bs[(16 * bb + nn) * 32];
+            p[0] = make_uint4(pf_pm1(R & 15), pf_pm1((R >> 16) & 15), pf_pm1((R >> 4) & 15), pf_pm1((R >> 20) & 15));
+            p[1] = make_uint4(pf_pm1((R >> 8) & 15), pf_pm1((R >> 24) & 15), pf_pm1((R >> 12) & 15), pf_pm1(R >> 28));
+          }
         }
       } else {
         key = pf_keys(st);
       }
     }
-    key.a0 = __shfl_sync(~0u, key.a0, 8);
-    key.a1 = __shfl_sync(~0u, key.a1, 8);
-    key.k0 = __shfl_sync(~0u, key.k0, 8);
-    key.k1 = __shfl_sync(~0u, key.k1, 8);
+    key.a0 = __shfl_sync(~0u, key.a0, 8 * KH);
+    key.a1 = __shfl_sync(~0u, key.a1, 8 * KH);
+    key.k0 = __shfl_sync(~0u, key.k0, 8 * KH);
+    key.k1 = __shfl_sync(~0u, key.k1, 8 * KH);
     __syncthreads();
     auto agen = [&](int f0) {
       __syncwarp();
-      if (f0 + lane < S) {
+      if (f0 + lane / KH < S) {
         uint64_t st[8];
-        pf_block(c0, c1, tile, (uint64_t)w * S + f0 + lane, st);
+        pf_block(dom, c0, c1, tile, (uint64_t)KH * ((uint64_t)w * S + f0 + lane / KH) + lane % KH, st);
         uint4* p = (uint4*)&Ab[w][lane * 16];
 #pragma unroll
         for (int q = 0; q < 4; q++)
@@ -210,7 +247,7 @@ __global__ void __launch_bounds__(32 * PF_W, PF_CTAS) dfill_k(uint64_t c0, uint6
       y[c] = pf_y0(pos);
       z[c] = pf_z0(pos);
     }
-    int f0 = 0, next = (w >> 2) & 1 ? 16 : 32;
+    int f0 = 0, next = (w >> 2) & 1 ? P / 2 : P;
     agen(0);
     const uint8_t* bp = Bs + g * 32 + 8 * t;
 #pragma unroll 1
@@ -220,52 +257,35 @@ __global__ void __launch_bounds__(32 * PF_W, PF_CTAS) dfill_k(uint64_t c0, uint6
           f0 = f;
           agen(f0);
         }
-        next = f + 32;
+        next = f + P;
       }
       uint32_t a[4][4];
 #pragma unroll
       for (int c = 0; c < 4; c++) {
-        const int s = regen ? f - f0 + c : (f + c) & 31;
-        const uint32_t R0 = Ab[w][s * 16 + g], R1 = Ab[w][s * 16 + g + 8];
-        a[c][0] = pf_pm1((R0 >> (4 * t)) & 15);
-        a[c][1] = pf_pm1((R1 >> (4 * t)) & 15);
-        a[c][2] = pf_pm1((R0 >> (16 + 4 * t)) & 15);
-        a[c][3] = pf_pm1((R1 >> (16 + 4 * t)) & 15);
-      }
-#if PF_DEFER
-      uint32_t pd[4][4];
-      {
-        const uint2 b = *(const uint2*)bp;
-#pragma unroll
-        for (int c = 0; c < 4; c++) pf_mma(pd[c], a[c], b);
-      }
-#pragma unroll 4
-      for (int j = 1; j < PF_TN / 8; j++) {
-        const uint2 b = *(const uint2*)(bp + j * 256);
-        uint32_t nd[4][4];
-#pragma unroll
-        for (int c = 0; c < 4; c++) pf_mma(nd[c], a[c], b);
-#pragma unroll
-        for (int c = 0; c < 4; c++) {
-          pf_absorb<NC>(y[c], z[c], pd[c][0], pd[c][1], pd[c][2], pd[c][3], key);
-#pragma unroll
-          for (int q = 0; q < 4; q++) pd[c][q] = nd[c][q];
+        const uint32_t* r = &Ab[w][KH * (regen ? f - f0 + c : (f + c) & (P - 1)) * 16];
+        if (F4) {
+          a[c][0] = pf_e2m1x8((r[g] >> (8 * t)) & 255);
+          a[c][1] = pf_e2m1x8((r[g + 8] >> (8 * t)) & 255);
+          a[c][2] = pf_e2m1x8((r[16 + g] >> (8 * t)) & 255);
+          a[c][3] = pf_e2m1x8((r[16 + g + 8] >> (8 * t)) & 255);
+        } else {
+          a[c][0] = pf_pm1((r[g] >> (4 * t)) & 15);
+          a[c][1] = pf_pm1((r[g + 8] >> (4 * t)) & 15);
+          a[c][2] = pf_pm1((r[g] >> (16 + 4 * t)) & 15);
+          a[c][3] = pf_pm1((r[g + 8] >> (16 + 4 * t)) & 15);
         }
       }
-#pragma unroll
-      for (int c = 0; c < 4; c++) pf_absorb<NC>(y[c], z[c], pd[c][0], pd[c][1], pd[c][2], pd[c][3], key);
-#else
 #pragma unroll 4
       for (int j = 0; j < PF_TN / 8; j++) {
         const uint2 b = *(const uint2*)(bp + j * 256);
 #pragma unroll
         for (int c = 0; c < 4; c++) {
           uint32_t d[4];
-          pf_mma(d, a[c], b);
+          if (F4) pf_omma(d, a[c], b);
+          else pf_mma(d, a[c], b);
           pf_absorb<NC>(y[c], z[c], d[0], d[1], d[2], d[3], key);
         }
       }
-#endif
     }
     const uint64_t K = dseed(c0, c1, tile);
     uint64_t h = 0;
@@ -288,6 +308,15 @@ __global__ void __launch_bounds__(32 * PF_W, PF_CTAS) dfill_k(uint64_t c0, uint6
     }
   }
 }
+__device__ int pf_f4_flag;  // dfill_make's PFILL_MMA: 1 runs the e2m1 tile
+template <int NC>
+__global__ void __launch_bounds__(32 * PF_W, PF_CTAS) dfill_k(uint64_t c0, uint64_t c1, unsigned long long tile0, int tiles,
+                                                       int steps, unsigned long long* __restrict__ rec) {
+  __shared__ __align__(16) uint8_t Bs[PF_TN * 32];
+  __shared__ __align__(16) uint32_t Ab[PF_W][32 * 16];
+  if (pf_f4_flag) pf_tiles<NC, true>(Bs, Ab, c0, c1, tile0, tiles, steps, rec);
+  else pf_tiles<NC, false>(Bs, Ab, c0, c1, tile0, tiles, steps, rec);
+}
 
 #endif
 
@@ -304,8 +333,8 @@ static void pf_host_k() {
   ok = true;
 }
 static inline uint64_t pf_rotr64(uint64_t x, int n) { return (x >> n) | (x << (64 - n)); }
-static void pf_block_h(uint64_t c0, uint64_t c1, uint64_t tile, uint64_t ctr, uint64_t* st) {
-  uint64_t w[80] = {c0, c1, tile, PF_DOM, ctr, 0x8000000000000000ull, 0, 0, 0, 0, 0, 0, 0, 0, 0, 320};
+static void pf_block_h(uint64_t dom, uint64_t c0, uint64_t c1, uint64_t tile, uint64_t ctr, uint64_t* st) {
+  uint64_t w[80] = {c0, c1, tile, dom, ctr, 0x8000000000000000ull, 0, 0, 0, 0, 0, 0, 0, 0, 0, 320};
   for (int i = 16; i < 80; i++)
     w[i] = (pf_rotr64(w[i - 2], 19) ^ pf_rotr64(w[i - 2], 61) ^ (w[i - 2] >> 6)) + w[i - 7] +
            (pf_rotr64(w[i - 15], 1) ^ pf_rotr64(w[i - 15], 8) ^ (w[i - 15] >> 7)) + w[i - 16];
@@ -321,36 +350,50 @@ static void pf_block_h(uint64_t c0, uint64_t c1, uint64_t tile, uint64_t ctr, ui
   }
   for (int i = 0; i < 8; i++) st[i] = iv[i] + v[i];
 }
-template <int NC>
+// a word: the s8 tile's s32 sum 32 - 2 popcount, or the e2m1 tile's f32 sum 64 - 2 popcount as its bits
+template <bool F4>
+static inline uint32_t pf_word(uint64_t x) {
+  const int s = (F4 ? 64 : 32) - 2 * __builtin_popcountll(x);
+  if (!F4) return (uint32_t)s;
+  const float v = (float)s;
+  uint32_t u;
+  memcpy(&u, &v, sizeof u);
+  return u;
+}
+template <int NC, bool F4>
 static uint64_t pf_ref(uint64_t c0, uint64_t c1, uint64_t tile, int steps) {
+  constexpr int KH = F4 ? 2 : 1;
+  constexpr uint64_t dom = F4 ? PF_DOM4 : PF_DOM;
   pf_host_k();
   uint64_t st[8];
-  std::vector<uint32_t> Bb(PF_TN);  // bit k of Bb[n]: entry (k, n)
-  for (int b = 0; b < PF_TN / 16; b++) {
-    pf_block_h(c0, c1, tile, PF_B + b, st);
-    for (int i = 0; i < 16; i++) Bb[16 * b + i] = pf_row(st, i);
-  }
-  pf_block_h(c0, c1, tile, PF_KEY, st);
+  std::vector<uint64_t> Bb(PF_TN, 0);  // bit k of Bb[n]: entry (k, n), k < 32 KH
+  for (int b = 0; b < PF_TN / 16; b++)
+    for (int h = 0; h < KH; h++) {
+      pf_block_h(dom, c0, c1, tile, PF_B + (uint64_t)(KH * b + h), st);
+      for (int i = 0; i < 16; i++) Bb[16 * b + i] |= (uint64_t)pf_row(st, i) << (32 * h);
+    }
+  pf_block_h(dom, c0, c1, tile, PF_KEY, st);
   const PfKeys key = pf_keys(st);
   const uint64_t K = dseed(c0, c1, tile);
-  std::vector<uint32_t> Ar(16 * std::max(steps, 0));  // bit k of Ar[16 f + i]: entry (row 16 f + i of the warp's rows, k)
+  std::vector<uint64_t> Ar(16 * std::max(steps, 0));  // bit k of Ar[16 f + i]: entry (row 16 f + i of the warp's rows, k)
   uint64_t h = 0;
   for (int w = 0; w < PF_W; w++) {
-    for (int f = 0; f < steps; f++) {
-      pf_block_h(c0, c1, tile, (uint64_t)w * steps + f, st);
-      for (int i = 0; i < 16; i++) Ar[16 * f + i] = pf_row(st, i);
-    }
+    for (int f = 0; f < steps; f++)
+      for (int hh = 0; hh < KH; hh++) {
+        pf_block_h(dom, c0, c1, tile, (uint64_t)KH * ((uint64_t)w * steps + f) + hh, st);
+        for (int i = 0; i < 16; i++) Ar[16 * f + i] = (hh ? Ar[16 * f + i] : 0) | (uint64_t)pf_row(st, i) << (32 * hh);
+      }
     for (int lane = 0; lane < 32; lane++) {
       const int g = lane >> 2, t = lane & 3;
       for (int c = 0; c < 4; c++) {
         const uint32_t pos = (uint32_t)((w * 32 + lane) * 4 + c);
         uint32_t y = pf_y0(pos), z = pf_z0(pos);
         for (int f = c; f < steps; f += 4) {
-          const uint32_t R0 = Ar[16 * f + g], R1 = Ar[16 * f + g + 8];
+          const uint64_t R0 = Ar[16 * f + g], R1 = Ar[16 * f + g + 8];
           for (int j = 0; j < PF_TN / 8; j++) {
-            const uint32_t b0 = Bb[8 * j + 2 * t], b1 = Bb[8 * j + 2 * t + 1];
-            pf_absorb<NC>(y, z, 32 - 2 * __builtin_popcount(R0 ^ b0), 32 - 2 * __builtin_popcount(R0 ^ b1),
-                          32 - 2 * __builtin_popcount(R1 ^ b0), 32 - 2 * __builtin_popcount(R1 ^ b1), key);
+            const uint64_t b0 = Bb[8 * j + 2 * t], b1 = Bb[8 * j + 2 * t + 1];
+            pf_absorb<NC>(y, z, pf_word<F4>(R0 ^ b0), pf_word<F4>(R0 ^ b1), pf_word<F4>(R1 ^ b0), pf_word<F4>(R1 ^ b1),
+                          key);
           }
         }
         h ^= pf_fold(K, pos, NC == 2 ? (uint64_t)z << 32 | y : (uint64_t)y);
@@ -361,13 +404,19 @@ static uint64_t pf_ref(uint64_t c0, uint64_t c1, uint64_t tile, int steps) {
 }
 // steps need not be a multiple of 32 here (dgate's control runs S - 8); the probes have no host tile, and
 // dfill_check reports -1 for them
-static uint64_t dfill_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int steps) {
-  switch (nc) {
-    case 1: return pf_ref<1>(c0, c1, tile, steps);
-    case 2: return pf_ref<2>(c0, c1, tile, steps);
-    case 4: return pf_ref<4>(c0, c1, tile, steps);
+static uint64_t dfill_ref_kind(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int steps, bool f4) {
+  switch (nc * 2 + f4) {
+    case 2: return pf_ref<1, false>(c0, c1, tile, steps);
+    case 3: return pf_ref<1, true>(c0, c1, tile, steps);
+    case 4: return pf_ref<2, false>(c0, c1, tile, steps);
+    case 5: return pf_ref<2, true>(c0, c1, tile, steps);
+    case 8: return pf_ref<4, false>(c0, c1, tile, steps);
+    case 9: return pf_ref<4, true>(c0, c1, tile, steps);
     default: return 0;
   }
+}
+static inline uint64_t dfill_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int steps) {
+  return dfill_ref_kind(c0, c1, tile, nc, steps, pf_e2m1());
 }
 
 #ifdef __CUDACC__
@@ -416,6 +465,8 @@ static DFill dfill_make(int grid, int W, int NC, int S, uint64_t c0, uint64_t c1
   const int lg = getenv("DFILL_CHUNK_LOG2") ? atoi(getenv("DFILL_CHUNK_LOG2")) : 19;
   f.tiles = std::max(1, (int)((1LL << lg) / ((long long)PF_CTAS * W * S * (PF_TN / 8))));
   CK(cudaMalloc(&f.rec, f.per() * sizeof(unsigned long long)));
+  const int f4 = pf_e2m1();
+  CK(cudaMemcpyToSymbol(pf_f4_flag, &f4, sizeof f4));
   return f;
 }
 static int dfill_check(const DFill& f, long long chunk, int n) {
