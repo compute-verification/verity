@@ -486,6 +486,23 @@ def test_circuit_check_has_the_whole_slot_only_when_neither_pytest_nor_lean_runs
     assert CHECK.cc_mem_gb(400, True) == 100 and CHECK.cc_mem_gb(100, True) == 25
 
 
+def test_the_tests_get_what_circuit_check_leaves_of_the_slot(tmp_path, monkeypatch):
+    """CI-35: pytest's parallel suites had no bound beside circuit-check's, so the two together outgrew the slot."""
+    monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
+    monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
+    monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
+
+    def mem(only):
+        [pt] = [s for g in CHECK.groups(tmp_path, 16, only=only) for s in g if s[0] == "pytest"]
+        return pt[1][pt[1].index("--mem-gb") + 1]
+
+    assert mem(None) == mem(["circuit-check", "pytest"]) == "350"
+    assert mem(["pytest"]) == "560"
+    monkeypatch.delenv(CHECK.SLOT.SLOT_MEM_ENV)
+    [pt] = [s for g in CHECK.groups(tmp_path, 16) for s in g if s[0] == "pytest"]
+    assert "--mem-gb" not in pt[1]
+
+
 def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
     monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)

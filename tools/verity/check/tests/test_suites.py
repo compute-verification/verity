@@ -1412,6 +1412,16 @@ def test_a_package_under_a_name_git_quotes_is_a_suite(tmp_path, monkeypatch):
     assert [s.path for s in S.discover()] == ["pké"]
 
 
+def test_a_parallel_suite_that_declares_worker_gb_runs_as_many_workers_as_mem_gb_holds(tmp_path, monkeypatch):
+    """16 Oct 13:53Z: check r20261016-133552-a7e9's pytest ran verity_ml_flock on 38 xdist workers of 15.6 GB each beside
+    circuit-check, and the OOM killer took its workers at the session's 600 GiB cap (CI-35)."""
+    S = _suites(monkeypatch, tmp_path)
+    heavy = S.Suite("flock", "f", (), (), parallel=True, worker_gb=16)
+    assert S.wide_workers(heavy, 69, 350) == 21 and S.wide_workers(heavy, 8, 350) == 8 and S.wide_workers(heavy, 69, 10) == 1
+    assert S.wide_workers(heavy, 69, None) == 69, "no --mem-gb: the lane's processes"
+    assert S.wide_workers(S.Suite("light", "l", (), (), parallel=True), 69, 350) == 69, "no worker_gb: unbounded"
+
+
 def test_the_suites_in_one_process_get_the_fewest_slots_that_finish_them_with_their_longest(tmp_path, monkeypatch):
     """ee02's pytest step ran its parallel suites one at a time (650 s) before circuit_check's one process (2,730 s) started, and
     its lean-suites ran evaluate (527 s) only after flock (862 s): the suites in one process now run beside the parallel ones."""
