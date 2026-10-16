@@ -114,7 +114,344 @@ theorem markov {Ω : Type*} [Fintype Ω] {f : Ω → ℝ} (hf : ∀ ω, 0 ≤ f 
       _ ≤ ∑ ω, f ω := sum_le_sum_of_subset_of_nonneg (subset_univ _) fun ω _ _ => hf ω
   exact key _ fun ω hω => (mem_filter_univ_iff _ ω).mp hω
 
+theorem expect_mono {Ω : Type*} [Fintype Ω] {f g : Ω → ℝ} (h : ∀ ω, f ω ≤ g ω) : expect f ≤ expect g :=
+  div_le_div_of_nonneg_right (sum_le_sum fun ω _ => h ω) (by positivity)
+
+theorem expect_mul_left {Ω : Type*} [Fintype Ω] (k : ℝ) (f : Ω → ℝ) :
+    expect (fun ω => k * f ω) = k * expect f := by
+  unfold expect
+  rw [← mul_sum, mul_div_assoc]
+
+theorem expect_sum {Ω ι : Type*} [Fintype Ω] (s : Finset ι) (f : ι → Ω → ℝ) :
+    expect (fun ω => ∑ l ∈ s, f l ω) = ∑ l ∈ s, expect (f l) := by
+  unfold expect
+  rw [Finset.sum_comm, Finset.sum_div]
+
+theorem expect_le_of_le {Ω : Type*} [Fintype Ω] {f : Ω → ℝ} {k : ℝ} (hk : 0 ≤ k) (h : ∀ ω, f ω ≤ k) :
+    expect f ≤ k := by
+  unfold expect
+  rcases Nat.eq_zero_or_pos (Fintype.card Ω) with h0 | h0
+  · simp [h0, hk]
+  · rw [div_le_iff₀ (by exact_mod_cast h0)]
+    calc ∑ ω, f ω ≤ ∑ _ω : Ω, k := sum_le_sum fun ω _ => h ω
+      _ = k * (Fintype.card Ω : ℝ) := by rw [sum_const, card_univ, nsmul_eq_mul, mul_comm]
+
+/-- The expectation over a product is the iterated expectation (fresh coins). -/
+theorem expect_prod {α β : Type*} [Fintype α] [Fintype β] (f : α × β → ℝ) :
+    expect f = expect fun a => expect fun b => f (a, b) := by
+  unfold expect
+  rw [Fintype.sum_prod_type, Fintype.card_prod, Nat.cast_mul, ← sum_div, div_div, mul_comm (Fintype.card β : ℝ)]
+
+theorem expect_prod_swap {α β : Type*} [Fintype α] [Fintype β] (f : α × β → ℝ) :
+    expect f = expect fun b => expect fun a => f (a, b) := by
+  unfold expect
+  rw [Fintype.sum_prod_type, Finset.sum_comm, Fintype.card_prod, Nat.cast_mul, ← sum_div, div_div]
+
+/-- A probability is the expectation of the event's indicator. -/
+theorem prob_eq_expect {Ω : Type*} [Fintype Ω] (p : Ω → Prop) [DecidablePred p] :
+    prob p = expect fun ω => if p ω then 1 else 0 := by
+  classical
+  unfold prob expect
+  rw [Finset.card_filter, Nat.cast_sum]
+  congr 1
+  refine Finset.sum_congr rfl fun ω _ => ?_
+  by_cases h : p ω <;> simp [h]
+
+/-- An event whose every slice at the second coordinate has probability at most `κ ≥ 0` has probability at most
+`κ`. -/
+theorem prob_le_of_slices {α β : Type*} [Fintype α] [Fintype β] (E : α × β → Prop) {κ : ℝ} (hκ : 0 ≤ κ)
+    (h : ∀ b, prob (fun a => E (a, b)) ≤ κ) : prob E ≤ κ := by
+  classical
+  rw [prob_eq_expect, expect_prod_swap]
+  exact expect_le_of_le hκ fun b => by rw [← prob_eq_expect (fun a => E (a, b))]; exact h b
+
+/-- Probabilities are invariant under a relabelling of the sample space. -/
+theorem prob_equiv {α β : Type*} [Fintype α] [Fintype β] (e : α ≃ β) (p : α → Prop) :
+    prob p = prob fun b => p (e.symm b) := by
+  classical
+  unfold prob
+  rw [Fintype.card_congr e]
+  congr 2
+  exact Finset.card_equiv e fun a => by simp
+
+/-- The union bound over a finite family of events. -/
+theorem prob_exists_le {Ω ι : Type*} [Fintype Ω] (s : Finset ι) (B : ι → Ω → Prop) :
+    prob (fun ω => ∃ w ∈ s, B w ω) ≤ ∑ w ∈ s, prob (B w) := by
+  classical
+  induction s using Finset.induction_on with
+  | empty =>
+    simp only [Finset.notMem_empty, false_and, exists_false, sum_empty]
+    unfold prob
+    simp
+  | insert a s ha ih =>
+    rw [Finset.sum_insert ha]
+    refine (prob_mono fun ω hω => ?_).trans ((prob_or_le (B a) _).trans (add_le_add le_rfl ih))
+    obtain ⟨w, hw, hB⟩ := hω
+    rcases Finset.mem_insert.mp hw with rfl | hw
+    · exact Or.inl hB
+    · exact Or.inr ⟨w, hw, hB⟩
+
+theorem one_sub_mul_exp_le (u : ℝ) : (1 - u) * Real.exp u ≤ 1 := by
+  have h := Real.add_one_le_exp (-u)
+  have h2 : Real.exp (-u) * Real.exp u = 1 := by rw [← Real.exp_add, neg_add_cancel, Real.exp_zero]
+  nlinarith [Real.exp_pos u]
+
 end Probability
+
+section Rounds
+
+/-! ### Theorem S: one spot check per round, fresh coins (luck-loss round 4 §1; guarded, round 5's Theorem S_G)
+
+A window is `R` rounds. Round `w` draws fresh coins, uniform on `Ω`, and runs one check; the window accepts iff every
+check passes. The prover's play is a `RoundGame`, a tree over the earlier rounds' coins, so each round's deficiency
+and check may depend on the whole past. The deficiency is fixed before the round's coins (straight-line rounds,
+`PassBound`) or read off the round's guard path (`PathBound`). The proof is the supermartingale
+`Π_w 1[pass_w] e^{(1−p) d_w}` as a finite product over rounds (`expect_weight_le`), then Markov. -/
+
+/-- The coins of `n` rounds, each fresh and uniform on `Ω`. -/
+@[reducible] def Paths (Ω : Type) : ℕ → Type
+  | 0 => Unit
+  | n + 1 => Ω × Paths Ω n
+
+instance Paths.instFintype (Ω : Type) [Fintype Ω] : ∀ n, Fintype (Paths Ω n)
+  | 0 => inferInstanceAs (Fintype Unit)
+  | n + 1 => @instFintypeProd Ω (Paths Ω n) _ (Paths.instFintype Ω n)
+
+/-- A prover's play over `n` rounds of coins on `Ω`: per round, its deficiency `d` and its check `pass` as
+functions of the round's coins, then the rest of the play, which may depend on them. -/
+inductive RoundGame (Ω : Type) : ℕ → Type
+  | done : RoundGame Ω 0
+  | round {n : ℕ} (d : Ω → ℝ) (pass : Ω → Prop) (next : Ω → RoundGame Ω n) : RoundGame Ω (n + 1)
+
+namespace RoundGame
+
+variable {Ω : Type}
+
+/-- The window accepts: every round's check passes. -/
+def accepts : {n : ℕ} → RoundGame Ω n → Paths Ω n → Prop
+  | _, .done, _ => True
+  | _, .round _ pass next, x => pass x.1 ∧ (next x.1).accepts x.2
+
+/-- The hidden deficiency `Σ_w d_w` along the realized coins. -/
+def deficiency : {n : ℕ} → RoundGame Ω n → Paths Ω n → ℝ
+  | _, .done, _ => 0
+  | _, .round d _ next, x => d x.1 + (next x.1).deficiency x.2
+
+open Classical in
+/-- The supermartingale's last value, `Π_w 1[pass_w] e^{c d_w}`. -/
+noncomputable def weight (c : ℝ) : {n : ℕ} → RoundGame Ω n → Paths Ω n → ℝ
+  | _, .done, _ => 1
+  | _, .round d pass next, x => (if pass x.1 then Real.exp (c * d x.1) else 0) * (next x.1).weight c x.2
+
+open Classical in
+/-- The exponential form of the per-round bound (Part III.1): given the past, `E[1[pass_w] e^{c d_w}] ≤ 1`. -/
+def ExpBound [Fintype Ω] (c : ℝ) : {n : ℕ} → RoundGame Ω n → Prop
+  | _, .done => True
+  | _, .round d pass next =>
+    expect (fun a => if pass a then Real.exp (c * d a) else 0) ≤ 1 ∧ ∀ a, (next a).ExpBound c
+
+/-- **Theorem S's per-round hypothesis**, named: the round's deficiency is fixed before its coins (straight-line
+rounds), and given the past the check passes with probability at most `1 − (1 − p) d_w`. -/
+def PassBound [Fintype Ω] (p : ℝ) : {n : ℕ} → RoundGame Ω n → Prop
+  | _, .done => True
+  | _, .round d pass next =>
+    (∃ d₀, (∀ a, d a = d₀) ∧ prob pass ≤ 1 - (1 - p) * d₀) ∧ ∀ a, (next a).PassBound p
+
+/-- **Theorem S_G's per-round hypothesis**, named: the round's coins split into guard paths `path a ∈ Λ`, the
+round's deficiency is its path's implied deficiency `dt`, and given the past and the path the check passes with
+probability at most `1 − (1 − p) dt`. -/
+def PathBound [Fintype Ω] (p : ℝ) : {n : ℕ} → RoundGame Ω n → Prop
+  | _, .done => True
+  | _, .round d pass next =>
+    (∃ (Λ : Type) (_ : Fintype Λ) (path : Ω → Λ) (dt : Λ → ℝ), (∀ a, d a = dt (path a)) ∧
+      ∀ l, prob (fun a => pass a ∧ path a = l) ≤ (1 - (1 - p) * dt l) * prob fun a => path a = l) ∧
+      ∀ a, (next a).PathBound p
+
+theorem weight_nonneg (c : ℝ) : ∀ {n : ℕ} (G : RoundGame Ω n) (x : Paths Ω n), 0 ≤ G.weight c x
+  | _, .done, _ => by simp [weight]
+  | _, .round d pass next, x => by
+    simp only [weight]
+    exact mul_nonneg (by split_ifs <;> positivity) (weight_nonneg c (next x.1) x.2)
+
+theorem weight_of_accepts (c : ℝ) : ∀ {n : ℕ} (G : RoundGame Ω n) (x : Paths Ω n), G.accepts x →
+    G.weight c x = Real.exp (c * G.deficiency x)
+  | _, .done, _, _ => by simp [weight, deficiency]
+  | _, .round d pass next, x, h => by
+    obtain ⟨h1, h2⟩ := h
+    simp only [weight, deficiency, h1, ↓reduceIte, weight_of_accepts c (next x.1) x.2 h2, mul_add, Real.exp_add]
+
+/-- **The supermartingale bound**, as a finite product over rounds: `E[Π_w 1[pass_w] e^{c d_w}] ≤ 1`. -/
+theorem expect_weight_le [Fintype Ω] (c : ℝ) : ∀ {n : ℕ} (G : RoundGame Ω n), G.ExpBound c →
+    expect (G.weight c) ≤ 1
+  | _, .done, _ => by simp [expect, weight]
+  | _, .round d pass next, h => by
+    classical
+    obtain ⟨h1, h2⟩ := h
+    rw [expect_prod]
+    calc expect (fun a => expect fun y => (round d pass next).weight c (a, y))
+        = expect (fun a => (if pass a then Real.exp (c * d a) else 0) * expect ((next a).weight c)) := by
+          congr 1
+          funext a
+          simp only [weight]
+          exact expect_mul_left _ _
+      _ ≤ expect (fun a => if pass a then Real.exp (c * d a) else 0) :=
+          expect_mono fun a => mul_le_of_le_one_right (by split_ifs <;> positivity)
+            (expect_weight_le c (next a) (h2 a))
+      _ ≤ 1 := h1
+
+/-- The per-round pass bound gives the exponential form at `c = 1 − p`. -/
+theorem expBound_of_passBound [Fintype Ω] {p : ℝ} : ∀ {n : ℕ} (G : RoundGame Ω n), G.PassBound p →
+    G.ExpBound (1 - p)
+  | _, .done, _ => trivial
+  | _, .round d pass next, h => by
+    classical
+    obtain ⟨⟨d₀, hd, hpass⟩, h2⟩ := h
+    refine ⟨?_, fun a => expBound_of_passBound (next a) (h2 a)⟩
+    have e : (fun a => if pass a then Real.exp ((1 - p) * d a) else 0) =
+        fun a => Real.exp ((1 - p) * d₀) * if pass a then 1 else 0 := by
+      funext a
+      rw [hd a]
+      split_ifs <;> simp
+    rw [e, expect_mul_left, ← prob_eq_expect]
+    calc Real.exp ((1 - p) * d₀) * prob pass ≤ Real.exp ((1 - p) * d₀) * (1 - (1 - p) * d₀) :=
+          mul_le_mul_of_nonneg_left hpass (Real.exp_pos _).le
+      _ ≤ 1 := by rw [mul_comm]; exact one_sub_mul_exp_le _
+
+/-- The per-path pass bound gives the exponential form at `c = 1 − p` (round 5 §1(a)). -/
+theorem expBound_of_pathBound [Fintype Ω] {p : ℝ} : ∀ {n : ℕ} (G : RoundGame Ω n), G.PathBound p →
+    G.ExpBound (1 - p)
+  | _, .done, _ => trivial
+  | _, .round d pass next, h => by
+    classical
+    obtain ⟨⟨Λ, _, path, dt, hd, hl⟩, h2⟩ := h
+    refine ⟨?_, fun a => expBound_of_pathBound (next a) (h2 a)⟩
+    have e : (fun a => if pass a then Real.exp ((1 - p) * d a) else 0) =
+        fun a => ∑ l, Real.exp ((1 - p) * dt l) * if pass a ∧ path a = l then 1 else 0 := by
+      funext a
+      rw [Finset.sum_eq_single_of_mem (path a) (mem_univ _) fun l _ hl => by
+        simp [Ne.symm hl]]
+      rw [hd a]
+      by_cases hp : pass a <;> simp [hp]
+    have e2 : (fun _ : Ω => (1 : ℝ)) = fun a => ∑ l, if path a = l then 1 else 0 := by
+      funext a
+      rw [Finset.sum_eq_single_of_mem (path a) (mem_univ _) fun l _ hl => by simp [Ne.symm hl]]
+      simp
+    rw [e, expect_sum]
+    calc ∑ l, expect (fun a => Real.exp ((1 - p) * dt l) * if pass a ∧ path a = l then 1 else 0)
+        = ∑ l, Real.exp ((1 - p) * dt l) * prob (fun a => pass a ∧ path a = l) := by
+          refine Finset.sum_congr rfl fun l _ => ?_
+          rw [expect_mul_left, prob_eq_expect]
+      _ ≤ ∑ l, Real.exp ((1 - p) * dt l) * ((1 - (1 - p) * dt l) * prob fun a => path a = l) :=
+          Finset.sum_le_sum fun l _ => mul_le_mul_of_nonneg_left (hl l) (Real.exp_pos _).le
+      _ ≤ ∑ l, prob fun a => path a = l := Finset.sum_le_sum fun l _ => by
+          rw [← mul_assoc, mul_comm (Real.exp _)]
+          exact mul_le_of_le_one_left (prob_nonneg _) (one_sub_mul_exp_le _)
+      _ = expect fun _ : Ω => (1 : ℝ) := by
+          rw [e2, expect_sum]
+          exact Finset.sum_congr rfl fun l _ => prob_eq_expect _
+      _ ≤ 1 := expect_le_of_le zero_le_one fun _ => le_rfl
+
+/-- **Theorem S from the exponential form**: for `c ≥ 0`, `Pr[accept ∧ Σ_w d_w ≥ D] ≤ e^{−c D}` (Markov on the
+supermartingale's last value, which is `e^{c Σ d}` on acceptance). -/
+theorem prob_accepts_le [Fintype Ω] {c : ℝ} (hc : 0 ≤ c) {n : ℕ} (G : RoundGame Ω n) (hG : G.ExpBound c) (D : ℝ) :
+    prob (fun x => G.accepts x ∧ D ≤ G.deficiency x) ≤ Real.exp (-(c * D)) := by
+  have hm := markov (G.weight_nonneg c) (Real.exp (c * D))
+  have hsub : prob (fun x => G.accepts x ∧ D ≤ G.deficiency x) ≤
+      prob fun x => Real.exp (c * D) ≤ G.weight c x :=
+    prob_mono fun x hx => by
+      rw [G.weight_of_accepts c x hx.1]
+      exact Real.exp_le_exp.mpr (mul_le_mul_of_nonneg_left hx.2 hc)
+  have hpos := Real.exp_pos (c * D)
+  calc prob (fun x => G.accepts x ∧ D ≤ G.deficiency x)
+      ≤ prob fun x => Real.exp (c * D) ≤ G.weight c x := hsub
+    _ = (Real.exp (c * D))⁻¹ * (Real.exp (c * D) * prob fun x => Real.exp (c * D) ≤ G.weight c x) :=
+        (inv_mul_cancel_left₀ hpos.ne' _).symm
+    _ ≤ (Real.exp (c * D))⁻¹ * 1 :=
+        mul_le_mul_of_nonneg_left (hm.trans (G.expect_weight_le c hG)) (inv_nonneg.mpr hpos.le)
+    _ = Real.exp (-(c * D)) := by rw [mul_one, Real.exp_neg]
+
+/-- Theorem S with binding and zero knowledge: if every accepted run is accepted by the game or breaks binding or
+zero knowledge in some round, the union bound adds `R (δb + δz)`. -/
+theorem prob_accept_le [Fintype Ω] {c : ℝ} (hc : 0 ≤ c) {R : ℕ} (G : RoundGame Ω R) (hG : G.ExpBound c)
+    (acc : Paths Ω R → Prop) (Bind ZK : Fin R → Paths Ω R → Prop) {δb δz : ℝ}
+    (hBind : ∀ w, prob (Bind w) ≤ δb) (hZK : ∀ w, prob (ZK w) ≤ δz)
+    (hacc : ∀ x, acc x → G.accepts x ∨ ∃ w, Bind w x ∨ ZK w x) (D : ℝ) :
+    prob (fun x => acc x ∧ D ≤ G.deficiency x) ≤ Real.exp (-(c * D)) + R * (δb + δz) := by
+  have hbad : prob (fun x => ∃ w ∈ (univ : Finset (Fin R)), Bind w x ∨ ZK w x) ≤ R * (δb + δz) := by
+    refine (prob_exists_le _ _).trans ?_
+    calc ∑ w : Fin R, prob (fun x => Bind w x ∨ ZK w x) ≤ ∑ _w : Fin R, (δb + δz) :=
+          Finset.sum_le_sum fun w _ => (prob_or_le _ _).trans (add_le_add (hBind w) (hZK w))
+      _ = R * (δb + δz) := by rw [sum_const, card_univ, Fintype.card_fin, nsmul_eq_mul]
+  refine (prob_mono fun x hx => ?_).trans ((prob_or_le _ _).trans (add_le_add (G.prob_accepts_le hc hG D) hbad))
+  rcases hacc x hx.1 with h | ⟨w, hw⟩
+  · exact Or.inl ⟨h, hx.2⟩
+  · exact Or.inr ⟨w, mem_univ _, hw⟩
+
+/-- **Theorem S** (luck-loss round 4 §1, refereed in Part III): over `R` rounds with fresh coins, one check a round,
+accepting iff every check passes, given the per-round pass bound `1 − (1 − p) d_w` (`PassBound`, named) and
+binding and zero-knowledge failures of probability at most `δb` and `δz` per round,
+`Pr[accept ∧ Σ_w d_w ≥ D] ≤ e^{−(1−p) D} + R (δb + δz)`. -/
+theorem theoremS [Fintype Ω] {p : ℝ} (hp : p ≤ 1) {R : ℕ} (G : RoundGame Ω R) (hG : G.PassBound p)
+    (acc : Paths Ω R → Prop) (Bind ZK : Fin R → Paths Ω R → Prop) {δb δz : ℝ}
+    (hBind : ∀ w, prob (Bind w) ≤ δb) (hZK : ∀ w, prob (ZK w) ≤ δz)
+    (hacc : ∀ x, acc x → G.accepts x ∨ ∃ w, Bind w x ∨ ZK w x) (D : ℝ) :
+    prob (fun x => acc x ∧ D ≤ G.deficiency x) ≤ Real.exp (-((1 - p) * D)) + R * (δb + δz) :=
+  G.prob_accept_le (by linarith) (G.expBound_of_passBound hG) acc Bind ZK hBind hZK hacc D
+
+/-- **Theorem S_G** (round 5 §1(a)): the same bound with the deficiency read off each round's guard path
+(`PathBound`, named), so `Σ_w d̃_w` is the implied deficiency along the realized paths. -/
+theorem theoremS_G [Fintype Ω] {p : ℝ} (hp : p ≤ 1) {R : ℕ} (G : RoundGame Ω R) (hG : G.PathBound p)
+    (acc : Paths Ω R → Prop) (Bind ZK : Fin R → Paths Ω R → Prop) {δb δz : ℝ}
+    (hBind : ∀ w, prob (Bind w) ≤ δb) (hZK : ∀ w, prob (ZK w) ≤ δz)
+    (hacc : ∀ x, acc x → G.accepts x ∨ ∃ w, Bind w x ∨ ZK w x) (D : ℝ) :
+    prob (fun x => acc x ∧ D ≤ G.deficiency x) ≤ Real.exp (-((1 - p) * D)) + R * (δb + δz) :=
+  G.prob_accept_le (by linarith) (G.expBound_of_pathBound hG) acc Bind ZK hBind hZK hacc D
+
+/-- **The window form** (Theorem S's cost line, and S_G's with Lemma RD): if every run's cost is at least
+`(R − Σ_w d_w) F₀ − V − R sl` (Theorem E½'s per-round `x_w F₀ − L(M + K)` summed, with `V` the noise reads priced
+on the realized paths, `0` for straight-line rounds), then accepted runs costing below `(R − D) F₀ − V − R sl` have
+probability at most `e^{−(1−p) D} + R (δb + δz)`. -/
+theorem window_le [Fintype Ω] {p : ℝ} (hp : p ≤ 1) {R : ℕ} (G : RoundGame Ω R) (hG : G.PathBound p)
+    (acc : Paths Ω R → Prop) (Bind ZK : Fin R → Paths Ω R → Prop) {δb δz : ℝ}
+    (hBind : ∀ w, prob (Bind w) ≤ δb) (hZK : ∀ w, prob (ZK w) ≤ δz)
+    (hacc : ∀ x, acc x → G.accepts x ∨ ∃ w, Bind w x ∨ ZK w x) (cost V : Paths Ω R → ℝ) {F₀ sl : ℝ}
+    (hF₀ : 0 < F₀) (hcost : ∀ x, (R - G.deficiency x) * F₀ - V x - R * sl ≤ cost x) (D : ℝ) :
+    prob (fun x => acc x ∧ cost x < (R - D) * F₀ - V x - R * sl) ≤
+      Real.exp (-((1 - p) * D)) + R * (δb + δz) := by
+  refine (prob_mono fun x hx => ⟨hx.1, ?_⟩).trans (G.theoremS_G hp hG acc Bind ZK hBind hZK hacc D)
+  have h := (hcost x).trans_lt hx.2
+  have h' : (R - G.deficiency x) * F₀ < (R - D) * F₀ := by linarith
+  have := (mul_lt_mul_iff_of_pos_right hF₀).mp h'
+  linarith
+
+/-- Theorem S's straight-line rounds are guarded rounds with one path. -/
+theorem pathBound_of_passBound [Fintype Ω] {p : ℝ} : ∀ {n : ℕ} (G : RoundGame Ω n), G.PassBound p →
+    G.PathBound p
+  | _, .done, _ => trivial
+  | _, .round d pass next, h => by
+    obtain ⟨⟨d₀, hd, hpass⟩, h2⟩ := h
+    refine ⟨⟨Unit, inferInstance, fun _ => (), fun _ => d₀, hd, fun l => ?_⟩,
+      fun a => pathBound_of_passBound (next a) (h2 a)⟩
+    have e1 : prob (fun a => pass a ∧ () = l) = prob pass := by congr 1; funext a; simp
+    have e2 : prob (fun _ : Ω => () = l) = prob fun _ : Ω => True := by
+      congr 1
+      funext a
+      exact eq_iff_iff.mpr ⟨fun _ => trivial, fun _ => Subsingleton.elim _ _⟩
+    rw [e1, e2]
+    rcases isEmpty_or_nonempty Ω with hΩ | hΩ
+    · have h0 : ∀ q : Ω → Prop, prob q = 0 := fun q => by
+        unfold prob
+        simp
+      rw [h0, h0, mul_zero]
+    · have h1 : prob (fun _ : Ω => True) = 1 := by
+        unfold prob
+        simp
+      rw [h1, mul_one]
+      exact hpass
+
+end RoundGame
+
+end Rounds
 
 section Machine
 
@@ -1351,6 +1688,39 @@ def ServiceFloor (Mc : Machine) (S : Service) (F κ : ℝ) : Prop :=
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) →
     prob (fun ω : S.Seed × Ω => S.verify (Mc.eval M ω).1 ω.1 (Mc.eval M ω).2 = true ∧ Mc.charge M ω < F) ≤ κ
 
+/-- **The window's rounds** (Theorem S's and S_G's setting, a named hypothesis): the service's coins are `R` rounds
+of fresh coins on `Ω` (`e`), and every adversary that commits first plays, at each value `r` of its own coins, a
+round game that meets the per-round pass bound along its guard paths (`PathBound p`; `pathBound_of_passBound` gives
+it for straight-line rounds). Its accepted runs are accepted by the game or break binding or zero knowledge in some
+round (probabilities at most `δb` and `δz`), and its charge is at least `(R − Σ_w d_w) F₀ − V − R sl` with noise
+reads `V ≤ Vmax` (Theorem E½ per round, `x_w F₀ − L(M + K)` with `sl = L(M + K)`, and Lemma RD's `n v_λ`). -/
+def RoundsHyp (Mc : Machine) (S : Service) (Ω : Type) [Fintype Ω] (R : ℕ) (p F₀ sl Vmax δb δz : ℝ) : Prop :=
+  ∃ e : S.Seed ≃ Paths Ω R, ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
+    (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ r : Ω',
+    ∃ (G : RoundGame Ω R) (Bind ZK : Fin R → Paths Ω R → Prop) (V : Paths Ω R → ℝ),
+      G.PathBound p ∧ (∀ w, prob (Bind w) ≤ δb) ∧ (∀ w, prob (ZK w) ≤ δz) ∧
+      (∀ x, S.verify (Mc.eval M (e.symm x, r)).1 (e.symm x) (Mc.eval M (e.symm x, r)).2 = true →
+        G.accepts x ∨ ∃ w, Bind w x ∨ ZK w x) ∧
+      (∀ x, V x ≤ Vmax) ∧
+      ∀ x, (R - G.deficiency x) * F₀ - V x - R * sl ≤ Mc.charge M (e.symm x, r)
+
+/-- **The window's service floor from Theorem S** (in place of Theorem M): under the window's rounds, every adversary
+that commits first has its accepted runs charged below `(R − D) F₀ − Vmax − R sl` with probability at most
+`e^{−(1−p) D} + R (δb + δz)`. -/
+theorem serviceFloor_of_rounds {Mc : Machine} {S : Service} {Ω : Type} [Fintype Ω] {R : ℕ}
+    {p F₀ sl Vmax δb δz : ℝ} (h : RoundsHyp Mc S Ω R p F₀ sl Vmax δb δz) (hp : p ≤ 1) (hF₀ : 0 < F₀)
+    (hδb : 0 ≤ δb) (hδz : 0 ≤ δz) (D : ℝ) :
+    ServiceFloor Mc S ((R - D) * F₀ - Vmax - R * sl) (Real.exp (-((1 - p) * D)) + R * (δb + δz)) := by
+  obtain ⟨e, h⟩ := h
+  intro Ω' _ M hc
+  refine prob_le_of_slices _ (add_nonneg (Real.exp_pos _).le (mul_nonneg (Nat.cast_nonneg _) (add_nonneg hδb hδz)))
+    fun r => ?_
+  obtain ⟨G, Bind, ZK, V, hG, hB, hZ, hacc, hV, hcost⟩ := h Ω' M hc r
+  rw [prob_equiv e]
+  refine (prob_mono fun x hx => ⟨hx.1, hx.2.trans_le ?_⟩).trans
+    (G.window_le hp hG _ Bind ZK hB hZ hacc (fun x => Mc.charge M (e.symm x, r)) V hF₀ hcost D)
+  linarith [hV x]
+
 /-- Both operands lie in `G_use = [−g, g]` (RS-DEF v2 §1.10). -/
 def InGrid {n : ℕ} (g : ℤ) (x : Mat ℤ n n × Mat ℤ n n) : Prop := ∀ i j, |x.1 i j| ≤ g ∧ |x.2 i j| ≤ g
 
@@ -2551,6 +2921,33 @@ theorem certifiedFraction120θ_half (kd : K120 → Kind) (S : Service) (n : ℕ)
       ((phiE f m NB : ℝ) / 4 * (4 / 5 * (n : ℝ) ^ 3) - sl / 5) κf := by
   convert serviceFloor_θ kd S hfloorB using 1
   ring
+
+/-- **The certified fraction from Theorem S** (in place of Theorem M): under the window's rounds in Model B
+(`RoundsHyp`: per round, Theorem E's floor `F₀` of the round's GEMMs, the slack `sl = L(M + K)`, and the pass bound
+along guard paths), every adversary in B_θ that commits first has its accepted runs charged below
+`0.8 ((R − D) F₀ − Vmax − R sl)` with probability at most `e^{−(1−p) D} + R (δb + δz)`. Of the window's `0.8 R F₀`
+that is the share `1 − D / R − (Vmax + R sl) / (R F₀)`. -/
+theorem certifiedFraction120θ_rounds (kd : K120 → Kind) (S : Service) {Ω : Type} [Fintype Ω] {R : ℕ}
+    {p F₀ sl Vmax δb δz : ℝ} (h : RoundsHyp (machine kd (.ofNat price120)) S Ω R p F₀ sl Vmax δb δz) (hp : p ≤ 1)
+    (hF₀ : 0 < F₀) (hδb : 0 ≤ δb) (hδz : 0 ≤ δz) (D : ℝ) :
+    ServiceFloor (machine (kdθ kd) priceθ) S (4 / 5 * ((R - D) * F₀ - Vmax - R * sl))
+      (Real.exp (-((1 - p) * D)) + R * (δb + δz)) :=
+  serviceFloor_θ kd S (serviceFloor_of_rounds h hp hF₀ hδb hδz D)
+
+/-- **The certified fraction at `κ = 2⁻⁴⁰ + R (δb + δz)`**: `D₀ = 40 ln 2 / (1 − p)`, so the luck loss is
+`27.73 / ((1 − p) R)` of the window, detection included. -/
+theorem certifiedFraction120θ_rounds_40 (kd : K120 → Kind) (S : Service) {Ω : Type} [Fintype Ω] {R : ℕ}
+    {p F₀ sl Vmax δb δz : ℝ} (h : RoundsHyp (machine kd (.ofNat price120)) S Ω R p F₀ sl Vmax δb δz) (hp : p < 1)
+    (hF₀ : 0 < F₀) (hδb : 0 ≤ δb) (hδz : 0 ≤ δz) :
+    ServiceFloor (machine (kdθ kd) priceθ) S (4 / 5 * ((R - 40 * Real.log 2 / (1 - p)) * F₀ - Vmax - R * sl))
+      (((2 : ℝ) ^ 40)⁻¹ + R * (δb + δz)) := by
+  have hc : (1 - p) * (40 * Real.log 2 / (1 - p)) = ((40 : ℕ) : ℝ) * Real.log 2 := by
+    field_simp [(sub_pos.mpr hp).ne']
+    norm_num
+  have h40 : Real.exp (-((1 - p) * (40 * Real.log 2 / (1 - p)))) = ((2 : ℝ) ^ 40)⁻¹ := by
+    rw [hc, Real.exp_neg, Real.exp_nat_mul, Real.exp_log two_pos]
+  rw [← h40]
+  exact certifiedFraction120θ_rounds kd S h hp.le hF₀ hδb hδz _
 
 /-! ### Model A (RS-MODEL §3, over ℚ) and `B_θ ≤ A` -/
 
