@@ -13,8 +13,8 @@ by the check it names, or nothing is timed at all.
 | `run.sh` | The job: build and gate outside the lease, then gate and time under one `gpu-lease` |
 | `probes/lm.cu` | LDSM and STSM by register count, LDS.128, STS.128, and the two known-invalid round-7 forms |
 | `probes/issue.cu` | IMMA alone, and k_spec/k_mixu: DADD, DFMA or RED.64 beside IMMA (joint points, no census line) |
-| `probes/atom.cu` | ATOMS, ATOMG, REDG and ATOM.E, 32- and 64-bit; each global form on 16 SMs (its row) and on every SM (L2red) |
-| `probes/cl.cu` | DSMEM atomics and reductions in a 2-CTA cluster, to the own CTA (ATOME32) and the peer (joint) |
+| `probes/atom.cu` | ATOMS, ATOMG, REDG and ATOM.E, 32- and 64-bit (ATOME64: generic EXCH.64 and CAS.64 to shared); each global form on 16 SMs (its row) and on every SM (L2red) |
+| `probes/cl.cu` | DSMEM atomics and reductions in a 2-CTA cluster, to the own CTA (ATOME32; ATOME64's EXCH.64 and CAS.64, and the known-invalid red.add.u64) and the peer (joint) |
 
 ## Write a probe
 
@@ -94,5 +94,8 @@ over the block's `clock64` cycles from `OP_BEGIN` to `OP_END`; the median block,
   `#pragma unroll 1`. ptxas unrolled it, so the gate refuses it by `loops`: 3 loops between the clock reads, 1 declared.
 - `bad_stsm_conflict`: round 7's STSM addresses, a 128-B lane stride, so each 8-row phase lands on 4 banks. The gate
   refuses it by `smem`: 32 of 32 accesses conflict, 8-way.
+- `dsm_red_add64_self`: VF3h's ROW_ATOME64 form (r20261016-145213-5ed0), `red.shared::cluster.add.u64` at the own rank.
+  Every 64-bit ATOM.E but EXCH and CAS carries a QSPC + ATOMS.CAST.SPIN.64 fallback loop, so the gate refuses it by
+  `loops`: 8 loops nested in the timed loop. ATOME64 is timed by its EXCH.64 and CAS.64 forms.
 
 The tests are `../tests/test_opcode_probe.py`.
