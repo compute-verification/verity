@@ -1,6 +1,7 @@
 """The filler scorer's arithmetic (benchmarks/pouw/filler/scoring.py) on synthetic driver rows: the paired slowdown, the
 filler's rate over its windows, coverage with the proved and provisional certified fractions, SCORE as the time-weighted
-mean, the gates (slowdown, receipts, DRAM with its counter's control, clocks) and the arms' placement policies."""
+mean, the gates (slowdown, receipts, anti-replay, DRAM with its counter's control, clocks) and the arms' placement
+policies."""
 
 from __future__ import annotations
 
@@ -106,8 +107,62 @@ def test_mix_entry_per_request():
 
 def ok_gates(stats, sc, **kw):
     base = {"has_filler": True, "sgate": {"ok": True}, "dgate": [{"ok": True}],
-            "dram": {"ok": True}, "clocks": {"ok": True}, "honest": {"ok": True}}
+            "dram": {"ok": True}, "clocks": {"ok": True}, "honest": {"ok": True}, "replay": {"ok": True}}
     return S.gates(stats, sc, **{**base, **kw})
+
+
+def test_dseed_is_dcaps():
+    # dcap.cu's dseed on these inputs, from a host build of dcap.cu
+    assert S.dseed(0x0123456789ABCDEF, 0xFEDCBA9876543210, 0) == 0x4D3A3F76002DE7A2
+    assert S.dseed(0x00761986AA468DD5, 0xE62E90F303F1F770, 1 << 32) == 0x29AD174F1CC23ABE
+    assert S.dseed((1 << 64) - 1, 1, (19 * 9 + 8) << 32 | 12345) == 0x6D8721960565D78D
+
+
+def rounds_rows(points=3, rounds=4, per=1000, chunks=7):
+    """dscore rows whose rounds follow the scorer's ranges, each with its own coins."""
+    out = []
+    for p in range(points):
+        r = row("step", 32, 2048 * (p + 1), "split", alone_ms=10.0, arm_ms=10.2, rounds=rounds)
+        r["point"], r["rounds"] = p, rounds
+        for s, holder in enumerate([r["alone_fill"]] + [b["arm"] for b in r["blocks"]]):
+            rid = p * (rounds + 1) + s
+            lo = rid << S.RANGE_LOG2
+            c0, c1 = S.smix(2 * rid + 1), S.smix(2 * rid + 2)
+            holder["round"] = {"id": rid, "range": [lo, (rid + 1) << S.RANGE_LOG2], "tiles": [lo, lo + chunks * per],
+                               "coins": [f"{c0:016x}", f"{c1:016x}"], "seed0": f"{S.dseed(c0, c1, lo):016x}",
+                               "checked": [lo + (chunks - 1) * per + i * 250 for i in range(4)]}
+        out.append(r)
+    return out
+
+
+def test_replay_gate():
+    good = rounds_rows()
+    g = S.replay_gate(good)
+    assert g["ok"] and g["rounds"] == 3 * 5 and g["tiles"] == 15 * 7000 and not g["why"]
+    assert S.replay_gate(good + [row("prefill", 8192, 0, "none", alone_ms=1.0, arm_ms=1.0)])["ok"]
+
+    def broken(edit):
+        rs = rounds_rows()
+        edit(rs)
+        return S.replay_gate(rs)
+
+    def same_coins(rs):
+        a, b = rs[0]["blocks"][0]["arm"]["round"], rs[1]["blocks"][2]["arm"]["round"]
+        b["coins"], b["seed0"] = a["coins"], f"{S.dseed(*(int(x, 16) for x in a['coins']), b['tiles'][0]):016x}"
+    assert broken(same_coins)["coin_repeats"] == 1
+
+    def prover_range(rs):  # a block that numbers its tiles from 0, as FILL v1's pump does every round
+        rd = rs[1]["blocks"][0]["arm"]["round"]
+        rd["range"], rd["tiles"], rd["checked"] = [0, 1 << 32], [0, 7000], [6000]
+        rd["seed0"] = f"{S.dseed(*(int(x, 16) for x in rd['coins']), 0):016x}"
+    g = broken(prover_range)
+    assert not g["ok"] and "not the scorer's" in g["why"] and g["overlaps"]
+    assert "not dseed" in broken(lambda rs: rs[2]["alone_fill"]["round"].update(seed0="0" * 16))["why"]
+    assert "outside" in broken(lambda rs: rs[0]["blocks"][1]["arm"]["round"]["checked"].append(0))["why"]
+    assert "not at the start" in broken(lambda rs: rs[0]["blocks"][1]["arm"]["round"].update(tiles=[5, 1000]))["why"]
+    assert not broken(lambda rs: rs[1].update(point=0))["ok"]
+    assert not broken(lambda rs: rs[0]["blocks"][3]["arm"].pop("round"))["ok"]
+    assert not S.replay_gate([])["ok"]
 
 
 def test_slowdown_and_receipt_gates():

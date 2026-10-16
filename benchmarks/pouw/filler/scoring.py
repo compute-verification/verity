@@ -262,8 +262,68 @@ def dram_gate(filler_csv: str | None, control_csv: str | None) -> dict:
             "why": None if ok else f"filler DRAM {rate / hbm:.2%} of HBM > {DRAM_LIMIT:.0%}"}
 
 
+RANGE_LOG2 = 32  # dscore.cu's: round R's tiles are [R·2^32, (R + 1)·2^32)
+_M64 = (1 << 64) - 1
+
+
+def smix(x: int) -> int:
+    """dcap.cu's smix (splitmix64's finaliser)."""
+    x = (x + 0x9E3779B97F4A7C15) & _M64
+    x = ((x ^ (x >> 30)) * 0xBF58476D1CE4E5B9) & _M64
+    x = ((x ^ (x >> 27)) * 0x94D049BB133111EB) & _M64
+    return x ^ (x >> 31)
+
+
+def dseed(c0: int, c1: int, tile: int) -> int:
+    """dcap.cu's dseed: a tile's seed from the round's coins and its id."""
+    return smix(smix(c0 ^ smix(tile)) ^ c1)
+
+
+def replay_gate(rows: list[dict]) -> dict:
+    """Anti-replay over every filler round of the run (each point's calibration, slot 0, and each arm block, slot 1 + r):
+    the round's tile range is the scorer's, [R·2^32, (R + 1)·2^32) with R = point·(rounds + 1) + slot, so no id is the
+    prover's choice; its tiles start at the range's start and stay inside it; no two rounds' tiles overlap; no two rounds
+    share coins; the first tile's seed is dseed(the round's coins, its id) as the device printed it; and no sampled seed
+    (each round's first, last and checked tiles) repeats across rounds."""
+    bad, spans = [], []
+    fill_rows = [r for r in rows if r.get("place") != "none"]
+    pts = [r.get("point") for r in fill_rows]
+    if len(set(pts)) != len(pts) or None in pts:
+        bad.append(f"point indices missing or repeated: {pts}")
+    for r in fill_rows:
+        rds = [r["alone_fill"].get("round")] + [b["arm"].get("round") for b in r["blocks"]]
+        for s, rd in enumerate(rds):
+            where = f"{r['kind']} {r['B']}/{r['L']} slot {s}"
+            if rd is None or r.get("point") is None:
+                bad.append(f"{where}: no round record")
+                continue
+            want = r["point"] * (r["rounds"] + 1) + s
+            lo, hi = want << RANGE_LOG2, (want + 1) << RANGE_LOG2
+            t0, t1 = rd["tiles"]
+            if rd["id"] != want or rd["range"] != [lo, hi]:
+                bad.append(f"{where}: range {rd['range']} is not the scorer's [{lo}, {hi})")
+            if not lo == t0 < t1 <= hi:
+                bad.append(f"{where}: tiles [{t0}, {t1}) not at the start of [{lo}, {hi})")
+            if any(not t0 <= t < t1 for t in rd["checked"]):
+                bad.append(f"{where}: a checked tile outside the round's tiles")
+            c0, c1 = (int(x, 16) for x in rd["coins"])
+            if f"{dseed(c0, c1, t0):016x}" != rd["seed0"]:
+                bad.append(f"{where}: seed {rd['seed0']} is not dseed(the round's coins, {t0})")
+            spans.append((t0, t1, (c0, c1), {dseed(c0, c1, t) for t in (t0, t1 - 1, *rd["checked"])}, where))
+    spans.sort()
+    overlaps = [f"{a[4]} and {b[4]}" for a, b in zip(spans, spans[1:]) if b[0] < a[1]]
+    coins = [s[2] for s in spans]
+    seeds = [x for s in spans for x in s[3]]
+    coin_rep, seed_rep = len(coins) - len(set(coins)), len(seeds) - len(set(seeds))
+    why = bad + [f"tiles overlap: {o}" for o in overlaps] + ([f"{coin_rep} rounds reuse coins"] if coin_rep else []) + \
+        ([f"{seed_rep} sampled seeds repeat"] if seed_rep else []) + ([] if spans else ["no filler rounds"])
+    return {"ok": not why, "rounds": len(spans), "tiles": sum(s[1] - s[0] for s in spans), "seeds_sampled": len(seeds),
+            "overlaps": overlaps, "coin_repeats": coin_rep, "seed_repeats": seed_rep,
+            "why": "; ".join(why[:5]) or None}
+
+
 def gates(stats: dict, sc: dict, *, has_filler: bool, sgate: dict | None, dgate: list[dict], dram: dict,
-          clocks: dict, honest: dict) -> dict:
+          clocks: dict, honest: dict, replay: dict) -> dict:
     out = {}
     worst = []
     for e in sc["entries"]:
@@ -283,6 +343,7 @@ def gates(stats: dict, sc: dict, *, has_filler: bool, sgate: dict | None, dgate:
                            "timed_checked": checked, "timed_bad": bad, "unchecked": unchecked}
     else:
         out["receipts"] = {"ok": True, "why": "no filler"}
+    out["replay"] = replay
     out["honest"] = honest
     out["dram"] = dram
     out["clocks"] = clocks

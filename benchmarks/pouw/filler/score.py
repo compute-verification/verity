@@ -18,8 +18,11 @@ and launched, every receipt equal to the host's; poisoned with nothing launched,
 CAP's serving gate (`dcap gate`); a failed gate times nothing (exit 5). Then ncu's DRAM bytes for the filler's launches
 beside the counter's positive control (1 GiB streamed), and every suite point: ROUNDS rounds in ABBA order of K reps of
 serving alone on the whole GPU and K reps under the arm's placement, every rep's SM clock and board power read (clocks are
-never set). After the lease it scores the run (`report`), writes `score.json` and one `kernel-attempt/v1` record
-(`ledger/<arm>/filler-suite.json`, declared in the run's `outputs.json` so `research run --on` publishes it).
+never set). Each filler round (a point's calibration and each arm block) numbers its tiles from a public range the scorer
+fixes from the point and the round, then draws the round's coins from the OS; the replay gate checks the ranges and that
+no tile id, coins or sampled seed repeats across rounds. After the lease it scores the run (`report`), writes `score.json`
+and one `kernel-attempt/v1` record (`ledger/<arm>/filler-suite.json`, declared in the run's `outputs.json` so
+`research run --on` publishes it).
 
 An arm that fails a gate isn't scored: its SCORE is null and `score_if_gated` keeps the number for diagnosis.
 """
@@ -133,11 +136,11 @@ def measure(arm, bdir: Path, out: Path, rounds: int, reps: int, robust: bool) ->
                 env=dict(env, DCAP_NOGRAPH="1"))
         note(f"ncu control rc {rc}")
     smi(out)
-    for ph, b, l in S.points(robust):
+    for i, (ph, b, l) in enumerate(S.points(robust)):
         p = A.placed(arm, ph, b, l)
         f = fl or A.Filler()
         cmd = [str(bdir / "dscore"), "dscore", "step" if ph == "decode" else "prefill", str(b), str(l), p.place,
-               str(p.fill_sms), str(f.W), str(f.NC), str(f.S), str(rounds), str(reps)]
+               str(p.fill_sms), str(f.W), str(f.NC), str(f.S), str(rounds), str(reps), str(i)]
         rc = sh(cmd, out=out / "dscore.jsonl", err=err, env=env)
         note(f"dscore {ph} {b} {l} {p.place} {p.fill_sms} rc {rc}")
         smi(out)
@@ -156,7 +159,8 @@ def report(out: Path, arm=None) -> dict:
         except (A.ArmError, OSError, AttributeError):
             arm = None
     stats = {}
-    for r in rows(out / "dscore.jsonl"):
+    drows = rows(out / "dscore.jsonl")
+    for r in drows:
         stats[("decode" if r["kind"] == "step" else "prefill", r["B"], r["L"])] = S.point_stats(r)
     sc = S.score(stats)
     has_filler = doc["filler"] is not None
@@ -169,7 +173,8 @@ def report(out: Path, arm=None) -> dict:
     honest = (S.honesty(arm, stats, S.points()) if arm is not None else
               {"ok": False, "why": f"arm {doc['name']} can't be loaded to check its placement"})
     g = S.gates(stats, sc, has_filler=has_filler, sgate=sg[0] if sg else None, dgate=rows(out / "dgate.jsonl"),
-                dram=dram, clocks=clocks, honest=honest)
+                dram=dram, clocks=clocks, honest=honest,
+                replay=S.replay_gate(drows) if has_filler else {"ok": True, "why": "no filler"})
     serving_gate = rows(out / "gate.jsonl")
     g["serving_exact"] = {"ok": bool(serving_gate) and all(r.get("ok") is not False for r in serving_gate),
                           "rows": len(serving_gate)}
@@ -230,9 +235,11 @@ def show(res: dict) -> None:
           + f"; nominal ÷ capacity {fmt(res['score_nominal'])}, at 0.99 for all {fmt(res['score_at_target'])}")
     for f in res["flags"]:
         print(f"  FLAG: {f}")
-    for name in ("slowdown", "receipts", "honest", "dram", "clocks", "serving_exact"):
+    for name in ("slowdown", "receipts", "replay", "honest", "dram", "clocks", "serving_exact"):
         v = g.get(name, {})
         extra = {"slowdown": lambda: f"worst {fmt(v.get('worst'))} at {v.get('at')} ({v.get('phase')})",
+                 "replay": lambda: v.get("why") or f"{v.get('rounds')} rounds, {v.get('tiles'):.3g} tiles, ranges the "
+                                   f"scorer's and disjoint, coins and {v.get('seeds_sampled')} sampled seeds distinct",
                  "receipts": lambda: v.get("why") or f"timed {v.get('timed_checked')} checked, {v.get('timed_bad')} bad",
                  "dram": lambda: v.get("why") if not v.get("share_of_hbm") else
                  f"{v['share_of_hbm']:.3%} of HBM, counter control {fmt(v.get('control_bytes_ratio'))}",
