@@ -8,7 +8,10 @@ prompt from vLLM's kernels on random BF16 activations (no weights, no linears): 
 FP8 quantization of the qkv input, rotary on q and k, the KV write into a paged cache, FA2 over the paged cache (the
 `flash_fwd_splitkv_kernel` vLLM ran in note:20261015T0417Z-draft-saturation-budget), FP8 quantization of the o input, the
 second fused add + RMSNorm and its quantization, SiLU-and-mul on the 28,672-wide gate_up output, and the down input's
-quantization; captured as one CUDA graph per part (`att`: KV write + FA2; `ng`: the rest; `both`: the layer order).
+quantization; captured as one CUDA graph per part (`att`: KV write + FA2; `ng`: the rest; `both`: the layer order). With
+`lin` or `step` in --parts it also builds the four int8 linears a layer (torch._int_mm, cuBLASLt, random int8 activations
+and per-layer weights): `lin` is the 32 layers of linears alone (the scorer's measured part), `step` the whole prefill step
+in vLLM's layer order.
 
 Each part is then timed as `dscore` times a point: ROUNDS rounds in ABBA order of K reps of the part alone and K reps with
 dcap.cu's filler (libhcpre_fill.so, the scorer's `co`: chunks queued on the lowest-priority stream, the part on the
@@ -16,7 +19,7 @@ highest), each arm block followed by a standalone block of the filler alone as l
 read; each round's tiles numbered from a public range fixed before its coins (os.urandom), receipts checked on the host.
 Rows are dscore's JSON shape (kind "phase-<part>"), so the locked `scoring.point_stats` reads them.
 
-  python hcpre_phase.py --lib libhcpre_fill.so --out DIR [--parts both,att,ng] [--rounds 4] [--reps 3]
+  python hcpre_phase.py --lib libhcpre_fill.so --out DIR [--parts both,att,ng,lin,step] [--rounds 4] [--reps 3]
         [--fill W,NC,S,LOG2,MAP ...] [--probe]
 """
 
@@ -38,7 +41,7 @@ POINT_SLOTS = 256
 RANGE_LOG2 = 32
 
 
-def build(dev):
+def build(dev, lin):
     from vllm import _custom_ops as ops
 
     bf = torch.bfloat16
@@ -119,9 +122,47 @@ def build(dev):
         silu()
         quant(act)
 
+    i8 = torch.int8
+
+    def rnd8(*shape):
+        return torch.randint(-128, 128, shape, device=dev, dtype=i8, generator=g)
+
+    a_h, a_i = rnd8(T, H), rnd8(T, INTER)
+    shapes = {"qkv": (H, (NQ + 2 * NKV) * HD), "o": (NQ * HD, H), "gate_up": (H, 2 * INTER), "down": (INTER, H)}
+    wts = {n: [rnd8(nn, kk) for _ in range(LAYERS)] for n, (kk, nn) in shapes.items()} if lin else {}
+    outs = {n: torch.empty(T, nn, device=dev, dtype=torch.int32) for n, (_, nn) in shapes.items()} if lin else {}
+
+    def mm(name, layer):
+        a = a_i if name == "down" else a_h
+        torch._int_mm(a, wts[name][layer].t(), out=outs[name])
+
+    def layer_lin(layer):
+        for n in shapes:
+            mm(n, layer)
+
+    def layer_step(layer):
+        norm(0)
+        quant(x)
+        mm("qkv", layer)
+        rope()
+        kvw(layer)
+        fa(layer)
+        quant(att_out)
+        mm("o", layer)
+        norm(1)
+        quant(x)
+        mm("gate_up", layer)
+        silu()
+        quant(act)
+        mm("down", layer)
+
     parts = {"att": layer_att, "ng": layer_ng, "both": layer_both}
+    if lin:
+        parts.update(lin=layer_lin, step=layer_step)
     cats = {"norm": lambda l: (norm(0), norm(1)), "quant": lambda l: (quant(x), quant(att_out), quant(x), quant(act)),
             "rope": lambda l: rope(), "kv_write": kvw, "attention": fa, "act": lambda l: silu()}
+    if lin:
+        cats.update({n: (lambda l, n=n: mm(n, l)) for n in shapes})
     return parts, cats
 
 
@@ -284,7 +325,7 @@ def main(argv=None):
     prio = (ctypes.c_int * 2)()
     lib.L.hf_init(188, W, NC, S, LOG2, MAP, prio)
     stream = torch.cuda.Stream(device=dev, priority=prio[1])
-    parts, cats = build(dev)
+    parts, cats = build(dev, any(p in ("lin", "step") for p in a.parts.split(",")))
     out = open(os.path.join(a.out, "phase.jsonl"), "a")
     info = {"mode": "info", "prio": [prio[0], prio[1]], "torch": torch.__version__, "device": torch.cuda.get_device_name(0)}
     try:
