@@ -102,9 +102,7 @@ research merge --train --prepare BRANCH [--onto BASE] [--allow-removal PATH] N@S
 research merge --sweep [--into main] [--remote origin] [--dry-run]       # close the PRs that landed, retarget their children
 research merge --mirror [SHA]                                           # main or SHA to node 1's bare repo
 research merge --canary [--tool check] [--json]                    # the gates' daily self-test, in scratch stores
-research queue status|sync|land|eject|drive [--shadow] [--dry-run]  # the merge queue on `next` (queue.py)
-research queue ready N --on auto|--mark --by LANE                   # the owner marks its PR ready at its head
-research queue open --head BRANCH --sha SHA --title T --body-file F [--draft]  # open a PR (gh is read-only)
+research queue status|sync|land|eject|drive|ready|open [--dry-run]  # the merge queue on `next` (queue.py)
 research queue judge RUN [--by LANE]      # the mark `queue ready --on` writes, from its quick-tier run that ended after its caller died
 research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
 research msg send|close|read|list|names|traffic|owners|handles|subscriptions|ask-daniel|groups sync [--dry-run]   # Slack (slack.py, below)
