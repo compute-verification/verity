@@ -84,6 +84,14 @@ SCREENS = {
     "s7": [(b, l, f, 0, 0, 0) for b, l, fs in (
         (128, 2048, (100, 108, 116)), (128, 6144, (116, 124, 132)), (132, 5120, (68, 76, 84)),
         (144, 5120, (68, 76, 84)), (256, 2048, (68, 76)), (256, 3072, (68, 76, 84))) for f in fs],
+    # B 256 on pfill-bU's XOR-in build (NVCC_APPEND_FLAGS="-DPFILL_BU -DPFILL_XIN -DPF_PW=4 -Xcompiler -mpopcnt"):
+    # pfill-k-phase's rows (256/2K t5, 256/3K t8), the next tile before s4's cliffs (256/2K t7 1.079, 256/3K t12
+    # 1.131), half-size S 32 tiles between them, and a light phase at 256/1K
+    "s11": _at(4, [
+        (256, 2048, 60, 64, 5), (256, 2048, 60, 64, 6), (256, 2048, 60, 32, 11),
+        (256, 3072, 60, 64, 8), (256, 3072, 60, 64, 9), (256, 3072, 60, 64, 10), (256, 3072, 60, 32, 18),
+        (256, 1024, 60, 64, 1), (256, 1024, 60, 32, 2),
+    ]),
 }
 
 
