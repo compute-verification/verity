@@ -14,11 +14,13 @@
 // [p, p+64) of T_v = xor of (key >> s) over the set bits s of v: one 64 KB table T (reference.t_table), in shared memory.
 //
 // Row sources: `e2e` (the e2e slice's leaf: 32 int8 of an operand as bf16 words twice, l = 1024, leaf pos at bytes
-// [32 pos, 32 pos + 32)) and `rows` (n rows of l bits at a byte stride; an int8 operand's own memory is rows of 8 L bits).
+// [32 pos, 32 pos + 32)), `rows` (n rows of l bits at a byte stride; an int8 operand's own memory is rows of 8 L bits) and
+// `seg` (the same rows under sha512/row-seg/v1 and schema hm96-sha512/row-seg/v1: 1 KiB segments hashed a thread each, then
+// the outer hash over their digests, so a long row's hash is not one serial chain; P is then Q(l)).
 //
 //   commit_gpu selftest
-//   commit_gpu check PARAMS OUT e2e|rows N LBITS STRIDE ROWS SALTS|prf     (writes OUT/levels.bin, OUT/bc.bin)
-//   commit_gpu bench PARAMS e2e|rows N LBITS REPS [GEMM_M GEMM_N GEMM_K]     (JSON lines on stdout)
+//   commit_gpu check PARAMS OUT e2e|rows|seg N LBITS STRIDE ROWS SALTS|prf     (writes OUT/levels.bin, OUT/bc.bin)
+//   commit_gpu bench PARAMS e2e|rows|seg N LBITS REPS [GEMM_M GEMM_N GEMM_K]     (JSON lines on stdout)
 //   commit_gpu sha REPS                                                      (raw compression rate)
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a commit_gpu.cu -lcublasLt -lnvidia-ml [-DSHA_ADD=0|1] [-DSHA_ROT=0..15]
 // (-DCOMMIT_GPU_DIAG_NOMASK: a timing-only build that skips M_key y, to measure its share; it refuses `check`)
@@ -78,6 +80,7 @@ struct Consts {
   u64 node_mid[64][8];      // per level: the chaining value after a node message's first block (it fixes only the level)
   u64 node_tpl[MAX_NI + 1][32];  // a node message's blocks 2 and 3 per ni = len(uint(index)), index and children zero
   u64 pad_tpl[MAX_NB + 1][16];   // a pad's first block per nb, rank zero
+  u64 seg_mid[64][8];       // sha512/row-seg/v1: the chaining value after segment j's first block S(j, s, m_j)
 };
 __constant__ Consts C;
 
@@ -114,24 +117,26 @@ DEV void cpy8(u64* d, const u64* s) {
 
 // --- the frame: leaf, pad, node ----------------------------------------------------------------------------------
 
-template <int NB>
+// SX: the schema's length beyond "hm96-sha512/row/v2" (0; 4 for "hm96-sha512/row-seg/v1").
+template <int NB, int SX>
 DEV void frame_leaf_nb(u64 pos, const u64* h, u64* out) {
   u64 W[32];
 #pragma unroll
   for (int i = 0; i < 32; ++i) W[i] = C.fl_tpl[NB][i];
   or_be<121, NB>(W, pos);
   or_be<129 + NB, NB>(W, pos);
-  or_digest<163 + 2 * NB>(W, h);
+  or_digest<163 + 2 * NB + SX>(W, h);
   sha::iv(out);
   sha::compress_from<15>(out, C.fl_m15, W);
   sha::compress(out, W + 16);
 }
+template <int SX>
 DEV void frame_leaf(u64 pos, const u64* h, u64* out) {
   switch (nbytes(pos)) {
-    case 1: frame_leaf_nb<1>(pos, h, out); break;
-    case 2: frame_leaf_nb<2>(pos, h, out); break;
-    case 3: frame_leaf_nb<3>(pos, h, out); break;
-    default: frame_leaf_nb<4>(pos, h, out); break;
+    case 1: frame_leaf_nb<1, SX>(pos, h, out); break;
+    case 2: frame_leaf_nb<2, SX>(pos, h, out); break;
+    case 3: frame_leaf_nb<3, SX>(pos, h, out); break;
+    default: frame_leaf_nb<4, SX>(pos, h, out); break;
   }
 }
 
@@ -200,9 +205,10 @@ DEV void row_e2e(const uint8_t* A, u64 pos, u64* x) {
   sha::compress_kw(x, C.kw_xpad);
 }
 
-// x for a row of lb bytes at `row` (16-byte aligned; reads may run up to 15 bytes past the row, inside the buffer).
-DEV void row_bytes(const uint8_t* row, u32 lb, u64* x) {
-  cpy8(x, C.mid_P);
+// SHA-512 of a 128-byte first block (its chaining value cv) and the lb bytes at `row` (16-byte aligned; reads may run up
+// to 15 bytes past the row, inside the buffer).
+DEV void hash_after_block(const u64* cv, const uint8_t* row, u32 lb, u64* x) {
+  cpy8(x, cv);
   const u32 nblk = (lb + 17 + 127) / 128;
   for (u32 b = 0; b < nblk; ++b) {
     u64 W[16];
@@ -228,6 +234,23 @@ DEV void row_bytes(const uint8_t* row, u32 lb, u64* x) {
     if (b == nblk - 1) W[15] = (u64)(128 + lb) * 8;
     sha::compress(x, W);
   }
+}
+
+// sha512/row-seg/v1's segment digests: d_j = SHA-512(S(j, s, m_j) || segment j), a thread a segment, to D (64 bytes each,
+// in digest byte order, row pos's s digests contiguous: the outer hash then reads them as a row of 64 s bytes).
+__global__ void __launch_bounds__(256) seg_kernel(const uint8_t* __restrict__ rows, u64 stride, u64 n, u32 s, u32 last_bytes,
+                                                  uint8_t* __restrict__ D) {
+  const u64 t = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  if (t >= n * s) return;
+  const u64 pos = t / s;
+  const u32 j = (u32)(t % s);
+  u64 x[8];
+  hash_after_block(C.seg_mid[j], rows + pos * stride + 1024ull * j, j + 1 < s ? 1024u : last_bytes, x);
+  uint4* o = reinterpret_cast<uint4*>(D + 64 * t);
+#pragma unroll
+  for (int i = 0; i < 4; ++i)
+    o[i] = make_uint4(bswap32((u32)(x[2 * i] >> 32)), bswap32((u32)x[2 * i]), bswap32((u32)(x[2 * i + 1] >> 32)),
+                      bswap32((u32)x[2 * i + 1]));
 }
 
 DEV void salt_prf(u64 pos, u64* Y) {
@@ -306,11 +329,11 @@ struct RowBytes {
   const uint8_t* base;
   u64 stride;
   u32 lb;
-  DEV void digest(u64 pos, u64* x) const { row_bytes(base + pos * stride, lb, x); }
+  DEV void digest(u64 pos, u64* x) const { hash_after_block(C.mid_P, base + pos * stride, lb, x); }
 };
 
 // One thread a position: the tree leaf (or pad) to lv0[pos]; b || c to bc[pos] when bc is given.
-template <class Row, bool PRF, bool TS>
+template <class Row, bool PRF, bool TS, int SX>
 __global__ void __launch_bounds__(LEAF_THREADS, 1)
     leaf_kernel(Row row, const uint8_t* __restrict__ salts, const uint4* __restrict__ Tg, u64 n, u64 width,
                 u64* __restrict__ lv0, u64* __restrict__ bc) {
@@ -349,7 +372,7 @@ __global__ void __launch_bounds__(LEAF_THREADS, 1)
     cpy8(h, C.mid_leaf);
     sha::compress(h, B);
     sha::compress_kw(h, C.kw_leafpad);
-    frame_leaf(pos, h, out);
+    frame_leaf<SX>(pos, h, out);
   } else {
     pad(pos, out);
   }
@@ -436,6 +459,8 @@ __global__ void sha_rate(u64* io, int reps) {
 
 static const char FRAME[] = "veritor/protocol/merkle/frame/v3";  // + its NUL: 33 bytes
 static const char SCHEMA[] = "hm96-sha512/row/v2";
+static const char SCHEMA_SEG[] = "hm96-sha512/row-seg/v1";   // 4 bytes longer: SX = 4
+static const char SEG_TAG[] = "verity/sha512-row-seg/v1/segment";   // + its NUL
 
 struct Params {
   uint8_t P[128], salt_prefix[128], leaf_prefix[128], domain_id[64], ks[64];
@@ -500,7 +525,8 @@ static std::vector<uint8_t> zeros(int n) { return std::vector<uint8_t>(n, 0); }
 static std::vector<uint8_t> bytes_of(const uint8_t* p, int n) { return std::vector<uint8_t>(p, p + n); }
 static void words_of(const uint8_t* block, u64* w, int n) { for (int i = 0; i < n; ++i) w[i] = sha::be64(block + 8 * i); }
 
-static Consts build_consts(const Params& p, u32 lb) {
+// seg: sha512/row-seg/v1 rows of seg_bits bits (P is then Q(seg_bits), the outer hash's first block).
+static Consts build_consts(const Params& p, u32 lb, bool seg, u64 seg_bits) {
   Consts c{};
   u64 w[16], st[8];
   sha::iv(st); words_of(p.P, w, 16); sha::compress(st, w); memcpy(c.mid_P, st, 64);
@@ -524,7 +550,8 @@ static Consts build_consts(const Params& p, u32 lb) {
     sha::rounds_prefix(st, blk, 8, c.ks_m8);
   }
   const auto did = bytes_of(p.domain_id, 64);
-  const std::vector<uint8_t> schema(SCHEMA, SCHEMA + strlen(SCHEMA));
+  const char* sname = seg ? SCHEMA_SEG : SCHEMA;
+  const std::vector<uint8_t> schema(sname, sname + strlen(sname));
   for (int nb = 1; nb <= MAX_NB; ++nb) {
     const auto m = padded_words(message("leaf", {did, zeros(nb), zeros(nb), schema, zeros(64)}));
     if (m.size() != 32) { fprintf(stderr, "frame leaf at nb %d is not two blocks\n", nb); exit(2); }
@@ -551,6 +578,18 @@ static Consts build_consts(const Params& p, u32 lb) {
     if (m.size() != 32) { fprintf(stderr, "pad at nb %d is not two blocks\n", nb); exit(2); }
     std::copy(m.begin(), m.begin() + 16, c.pad_tpl[nb]);
   }
+  if (seg) {   // S(j, s, m_j) = tag || u64be j || u64be s || u64be m_j, zero padded to 128 bytes
+    const u64 s = (seg_bits + 8191) / 8192;
+    if (s > 64) { fprintf(stderr, "row-seg rows of at most 64 segments\n"); exit(2); }
+    for (u64 j = 0; j < s; ++j) {
+      uint8_t blk[128] = {};
+      memcpy(blk, SEG_TAG, sizeof SEG_TAG);
+      sha::put_be64(blk + sizeof SEG_TAG, j);
+      sha::put_be64(blk + sizeof SEG_TAG + 8, s);
+      sha::put_be64(blk + sizeof SEG_TAG + 16, j + 1 < s ? 8192 : seg_bits - 8192 * (s - 1));
+      sha::iv(c.seg_mid[j]); words_of(blk, w, 16); sha::compress(c.seg_mid[j], w);
+    }
+  }
   return c;
 }
 
@@ -562,11 +601,21 @@ struct Committer {
   u64* levels = nullptr;            // every level, leaves first: level d at offset 8 (2 width - 2 width >> d) words
   u64* bc = nullptr;
   uint4* T = nullptr;
+  uint8_t* D = nullptr;             // row-seg: the segment digests
+  u32 segs = 0, seg_last = 0;
   std::vector<u64*> lv;
-  void init(const Params& p, u64 n_, u32 lb, bool keep_bc) {
+  // lb: the row bytes after P; seg: row-seg rows of seg_bits bits (lb is then the outer hash's 64 s bytes; the empty row
+  // has no segment)
+  void init(const Params& p, u64 n_, u32 lb, bool keep_bc, bool seg = false, u64 seg_bits = 0) {
     n = n_; depth = depth_of(n); width = 1ull << depth;
     if (n == 0 || n > (1ull << 32)) { fprintf(stderr, "1 to 2^32 leaves, not %llu\n", (unsigned long long)n); exit(2); }
-    Consts c = build_consts(p, lb);
+    if (seg) {
+      segs = (u32)((seg_bits + 8191) / 8192);
+      seg_last = segs ? (u32)((seg_bits - 8192ull * (segs - 1) + 7) / 8) : 0;
+      lb = 64 * segs;
+      CK(cudaMalloc(&D, n * lb + 16));
+    }
+    Consts c = build_consts(p, lb, seg, seg_bits);
     CK(cudaMemcpyToSymbol(C, &c, sizeof c));
     CK(cudaMalloc(&levels, (2 * width) * 64));
     if (keep_bc) CK(cudaMalloc(&bc, n * 128));
@@ -577,16 +626,22 @@ struct Committer {
   }
   // Above 2^16 leaves T sits in shared memory (one block of LEAF_THREADS an SM); at or below, where the rows dominate a
   // leaf's work, blocks of 64 threads read T through L1, which spreads few leaves over the SMs and takes no shared memory.
-  template <class Row, bool PRF>
+  template <class Row, bool PRF, int SX = 0>
   void leaves(const Row& row, const uint8_t* salts, cudaStream_t st) {
     if (width > (1u << 16)) {
-      auto k = leaf_kernel<Row, PRF, true>;
+      auto k = leaf_kernel<Row, PRF, true, SX>;
       static bool attr = false;
       if (!attr) { CK(cudaFuncSetAttribute(k, cudaFuncAttributeMaxDynamicSharedMemorySize, TSMEM)); attr = true; }
       k<<<(unsigned)((width + LEAF_THREADS - 1) / LEAF_THREADS), LEAF_THREADS, TSMEM, st>>>(row, salts, T, n, width, lv[0], bc);
     } else {
-      leaf_kernel<Row, PRF, false><<<(unsigned)((width + 63) / 64), 64, 0, st>>>(row, salts, T, n, width, lv[0], bc);
+      leaf_kernel<Row, PRF, false, SX><<<(unsigned)((width + 63) / 64), 64, 0, st>>>(row, salts, T, n, width, lv[0], bc);
     }
+  }
+  // row-seg rows at `rows` (stride bytes apart, 16-byte aligned): the segment digests, then the leaves over them
+  template <bool PRF>
+  void seg_leaves(const uint8_t* rows, u64 stride, const uint8_t* salts, cudaStream_t st) {
+    if (segs) seg_kernel<<<(unsigned)((n * segs + 255) / 256), 256, 0, st>>>(rows, stride, n, segs, seg_last, D);
+    leaves<RowBytes, PRF, 4>(RowBytes{D, 64ull * segs, 64u * segs}, salts, st);
   }
   // A level a launch while a level is wider than 512 nodes (blocks of 64 threads below 2^16 nodes, so few nodes still spread
   // over the SMs), then the top in one block.
@@ -603,7 +658,7 @@ struct Committer {
       node_kernel<<<1, NODE_THREADS, 0, st>>>(lv[d], o, width >> d, d, depth - d);
     }
   }
-  void release() { cudaFree(levels); cudaFree(bc); cudaFree(T); lv.clear(); }
+  void release() { cudaFree(levels); cudaFree(bc); cudaFree(T); cudaFree(D); lv.clear(); }
 };
 
 static int selftest() {
@@ -627,7 +682,7 @@ static std::string out_dir;
 
 static int check(int argc, char** argv) {
   // check PARAMS OUT MODE N LBITS STRIDE ROWS SALTS|prf
-  if (argc < 10) { fprintf(stderr, "check PARAMS OUT e2e|rows N LBITS STRIDE ROWS SALTS|prf\n"); return 2; }
+  if (argc < 10) { fprintf(stderr, "check PARAMS OUT e2e|rows|seg N LBITS STRIDE ROWS SALTS|prf\n"); return 2; }
   const Params p = read_params(argv[2]);
   out_dir = argv[3];
   const std::string mode = argv[4];
@@ -648,8 +703,10 @@ static int check(int argc, char** argv) {
     CK(cudaMemcpy(dsalts, s.data(), s.size(), cudaMemcpyHostToDevice));
   }
   Committer cm;
-  cm.init(p, n, mode == "e2e" ? 128 : lb, true);
-  if (mode == "e2e") {
+  cm.init(p, n, mode == "e2e" ? 128 : lb, true, mode == "seg", lbits);
+  if (mode == "seg") {
+    prf ? cm.seg_leaves<true>(drows, stride, dsalts, 0) : cm.seg_leaves<false>(drows, stride, dsalts, 0);
+  } else if (mode == "e2e") {
     if (lbits != 1024) { fprintf(stderr, "an e2e leaf is 1024 bits\n"); return 2; }
     RowE2E r{drows};
     prf ? cm.leaves<RowE2E, true>(r, dsalts, 0) : cm.leaves<RowE2E, false>(r, dsalts, 0);
@@ -772,7 +829,7 @@ struct Gemm {   // y (m x n, s32) = A (m x k, int8, row-major) B (n x k, int8, r
 
 static int bench(int argc, char** argv) {
   // bench PARAMS MODE N LBITS REPS [GM GN GK]
-  if (argc < 7) { fprintf(stderr, "bench PARAMS e2e|rows N LBITS REPS [GEMM_M GEMM_N GEMM_K]\n"); return 2; }
+  if (argc < 7) { fprintf(stderr, "bench PARAMS e2e|rows|seg N LBITS REPS [GEMM_M GEMM_N GEMM_K]\n"); return 2; }
   const Params p = read_params(argv[2]);
   const std::string mode = argv[3];
   const u64 n = strtoull(argv[4], nullptr, 10), lbits = strtoull(argv[5], nullptr, 10);
@@ -780,7 +837,7 @@ static int bench(int argc, char** argv) {
   const bool gemm = argc >= 10;
   const u32 lb = (u32)((lbits + 7) / 8);
   const u64 data = mode == "e2e" ? 32 * n : (u64)lb * n;   // operand bytes the commitment covers
-  if (mode == "rows" && lb % 16) { fprintf(stderr, "bench rows: a multiple of 128 bits\n"); return 2; }
+  if (mode != "e2e" && lb % 16) { fprintf(stderr, "bench rows and seg: a multiple of 128 bits\n"); return 2; }
   uint8_t* src;
   CK(cudaMalloc(&src, data + 64));
   fill<<<1024, 256>>>(src, data + 64, 7u);
@@ -788,12 +845,13 @@ static int bench(int argc, char** argv) {
   CK(cudaStreamCreateWithFlags(&sc, cudaStreamNonBlocking));
   CK(cudaStreamCreateWithFlags(&sg, cudaStreamNonBlocking));
   Committer cm;
-  cm.init(p, n, mode == "e2e" ? 128 : lb, false);
-  auto commit = [&](cudaStream_t st) {
+  cm.init(p, n, mode == "e2e" ? 128 : lb, false, mode == "seg", lbits);
+  auto leaves = [&](cudaStream_t st) {
     if (mode == "e2e") cm.leaves<RowE2E, true>(RowE2E{src}, nullptr, st);
+    else if (mode == "seg") cm.seg_leaves<true>(src, lb, nullptr, st);
     else cm.leaves<RowBytes, true>(RowBytes{src, lb, lb}, nullptr, st);
-    cm.nodes(st);
   };
+  auto commit = [&](cudaStream_t st) { leaves(st); cm.nodes(st); };
   cudaEvent_t e[6];
   for (auto& x : e) CK(cudaEventCreate(&x));
   auto ms = [](cudaEvent_t a, cudaEvent_t b) { float t; CK(cudaEventElapsedTime(&t, a, b)); return (double)t; };
@@ -807,8 +865,7 @@ static int bench(int argc, char** argv) {
   std::vector<double> t_all, t_leaf, mhz;
   for (int r = 0; r < reps; ++r) {
     CK(cudaEventRecord(e[0], sc));
-    if (mode == "e2e") cm.leaves<RowE2E, true>(RowE2E{src}, nullptr, sc);
-    else cm.leaves<RowBytes, true>(RowBytes{src, lb, lb}, nullptr, sc);
+    leaves(sc);
     CK(cudaEventRecord(e[1], sc));
     cm.nodes(sc);
     CK(cudaEventRecord(e[2], sc));
@@ -818,7 +875,12 @@ static int bench(int argc, char** argv) {
     mhz.push_back(nv.sm());
   }
   const double tc = median(t_all);
-  const double comps = (double)n * (mode == "e2e" ? 2 : (lb + 17 + 127) / 128) + 3.0 * n + 2.0 * n + 2.0 * n + 2.0 * n + 2.0 * (cm.width - 1);
+  auto blocks = [](u64 bytes) { return (double)((bytes + 17 + 127) / 128); };   // after a first block the host folded
+  const double row_comps = mode == "e2e" ? 2
+                           : mode == "seg" ? (cm.segs ? (cm.segs - 1) * blocks(1024) + blocks(cm.seg_last) : 0) + blocks(64ull * cm.segs)
+                                           : blocks(lb);
+  // row, salt (3), c (2), hm96 leaf (2), frame leaf (2) a leaf; a node (2) a node; the pads' (2) are left out
+  const double comps = n * (row_comps + 9.0) + 2.0 * (cm.width - 1);
   printf("{\"bench\": \"%s\", \"gpu\": \"%s\", \"sms\": %d, \"sha_add\": %d, \"sha_rot\": %d, \"leaf_threads\": %d, \"n\": %llu, \"lbits\": %llu, "
          "\"depth\": %d, \"operand_bytes\": %llu, \"commit_ms\": %.5f, \"leaf_ms\": %.5f, \"nodes_ms\": %.5f, \"mhz\": %.0f, "
          "\"compressions\": %.0f, \"gcomp_per_s\": %.3f, \"sha_gb_per_s\": %.2f, \"operand_gb_per_s\": %.2f, ",

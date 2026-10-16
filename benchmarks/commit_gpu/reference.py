@@ -3,7 +3,8 @@ functions (``hm96.SHA512``, ``rowleaf``, ``merkle``), so a check compares commit
 
 A leaf at position ``pos`` of an n-leaf domain (rank = position) is ``rowleaf.row_leaf(domain, pos, h,
 "hm96-sha512/row/v2")`` with ``h = hm96.SHA512.tree_leaf(key, b || c)``, ``b || c = hm96.SHA512.commit_string(key, x,
-salt)`` and ``x = rowleaf.sha512_row_v2_digest(row, n_bits)``; the levels are ``merkle.tree_levels``.  The domain is the e2e
+salt)`` and ``x = rowleaf.sha512_row_v2_digest(row, n_bits)`` (in ``seg`` mode ``x = rowleaf.sha512_row_seg_digest(row,
+n_bits)`` under ``"hm96-sha512/row-seg/v1"``); the levels are ``merkle.tree_levels``.  The domain is the e2e
 slice's operand domain (benchmarks/e2e_slice/commit.py on cursor/e2e-slice-ea24): ``CommitmentDomain(identity_digest_sha512(
 BINDING_TAG, label), -1, RangeIndexedDomain(0, n), hash="sha512")``.
 
@@ -11,7 +12,8 @@ Salts are the committer's secret.  commit_gpu takes them from a file or derives 
 one hash: ``y = SHA-512(Ks || u64be(pos) || u64be(0)) || ... || SHA-512(Ks || u64be(pos) || u64be(2))`` (:func:`prf_salt`),
 Ks a 64-byte salt key.  Either way the root and openings are the reference's for those salts.
 
-    python3 reference.py params OUT N N_BITS [--fresh-key]   the CGP1 file for an n-leaf domain of n_bits rows
+    python3 reference.py params OUT N N_BITS [--fresh-key] [--seg]   the CGP1 file for an n-leaf domain of n_bits rows
+                                                              (--seg: sha512/row-seg/v1 rows)
     python3 reference.py prepare WORK [quick|full]            every case's inputs and the reference's levels, b || c and leaf
                                                               digests (WORK/cNNN; CPU only, before a GPU lease)
     python3 reference.py check BIN WORK TAG                   BIN's `check` on every prepared case, compared with the
@@ -36,8 +38,10 @@ from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.limits import VerificationLimits
 from verity.ml.commitments.merkle import Commitment, CommitmentDomain, MerkleTree, Opening, tree_levels, verify_opening
+from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.ml.commitments.rowleaf import bit_row, row_leaf, sha512_row_v2_digest, sha512_row_v2_prefix
+from verity.ml.commitments.rowleaf import (bit_row, row_leaf, sha512_row_seg_digest, sha512_row_seg_prefix, sha512_row_v2_digest,
+                                           sha512_row_v2_prefix)
 
 INST = hm96.SHA512
 KEY = INST.default_key
@@ -77,12 +81,13 @@ def check_t_table(key: bytes, t: bytes) -> None:
                 raise AssertionError(f"T table differs from byte_tables at p {p}, v {v}")
 
 
-def params(n: int, n_bits: int, ks: bytes, key: bytes = KEY) -> bytes:
-    """commit_gpu's CGP1 file: P(n_bits), the salt prefix, leaf_prefix(key), the domain id, Ks and T."""
+def params(n: int, n_bits: int, ks: bytes, key: bytes = KEY, seg: bool = False) -> bytes:
+    """commit_gpu's CGP1 file: P(n_bits) (row-seg: Q(n_bits)), the salt prefix, leaf_prefix(key), the domain id, Ks and T."""
 
     t = t_table(key)
     check_t_table(key, t)
-    out = b"CGP1" + sha512_row_v2_prefix(n_bits) + INST.salt_prefix + INST.leaf_prefix(key) + domain(n).domain_id + ks + t
+    p = sha512_row_seg_prefix(n_bits) if seg else sha512_row_v2_prefix(n_bits)
+    out = b"CGP1" + p + INST.salt_prefix + INST.leaf_prefix(key) + domain(n).domain_id + ks + t
     assert len(out) == 4 + 128 * 3 + 64 * 2 + 65536
     return out
 
@@ -115,13 +120,17 @@ def _leaves(span: tuple[int, int]) -> tuple[bytes, list[bytes], list[bytes]]:
         else:
             row = c["rows"][pos * c["stride"]:pos * c["stride"] + (c["n_bits"] + 7) // 8]
         salt = prf_salt(c["ks"], pos) if c["salts"] is None else c["salts"][192 * pos:192 * pos + 192]
-        x = sha512_row_v2_digest(row, c["n_bits"])
+        x = (sha512_row_seg_digest if c["mode"] == "seg" else sha512_row_v2_digest)(row, c["n_bits"])
         bc = INST.commit_string(c["key"], x, salt)
         h = INST.tree_leaf(c["key"], bc)
         bc_all.append(bc)
         hs.append(h)
-        leaves.append(row_leaf(dom, pos, h, V2))
+        leaves.append(row_leaf(dom, pos, h, schema(c["mode"])))
     return b"".join(bc_all), leaves, hs
+
+
+def schema(mode: str) -> str:
+    return SEG if mode == "seg" else V2
 
 
 def _rows_for(mode: str, n: int, n_bits: int, stride: int, rng: random.Random) -> bytes:
@@ -153,7 +162,7 @@ def prepare_case(work: str, mode: str, n: int, n_bits: int, stride: int, salts: 
         with mp.get_context("fork").Pool() as pool:   # forked after _CASE is set: the workers read it
             parts = pool.map(_leaves, spans)
     levels = tree_levels(domain(n), [x for p in parts for x in p[1]])
-    files = {"params.bin": params(n, n_bits, ks, key), "rows.bin": rows, "salts.bin": salt_bytes or b"",
+    files = {"params.bin": params(n, n_bits, ks, key, mode == "seg"), "rows.bin": rows, "salts.bin": salt_bytes or b"",
              "ref_levels.bin": b"".join(b"".join(level) for level in levels), "ref_bc.bin": b"".join(p[0] for p in parts),
              "ref_h.bin": b"".join(x for p in parts for x in p[2])}
     os.makedirs(work, exist_ok=True)
@@ -202,13 +211,13 @@ def check_case(binary: str, work: str, tag: str, openings: int = 64) -> dict:
     sib = lambda flat, d, pos: flat[offs[d] + 64 * ((pos >> d) ^ 1):offs[d] + 64 * ((pos >> d) ^ 1) + 64]  # noqa: E731
     rng = random.Random(case["seed"])
     picks = sorted(set(range(n)) if n <= openings else {0, 1, n - 2, n - 1, n // 2, *rng.sample(range(n), openings - 5)})
-    limits, commitment = VerificationLimits(), Commitment(g_levels[offs[depth]:offs[depth + 1]], n)
-    tree = MerkleTree(dom, dict(enumerate(hs)), lambda _p: V2) if n <= 4096 else None
+    limits, commitment, sch = VerificationLimits(), Commitment(g_levels[offs[depth]:offs[depth + 1]], n), schema(case["mode"])
+    tree = MerkleTree(dom, dict(enumerate(hs)), lambda _p: sch) if n <= 4096 else None
     bad_open = []
     for pos in picks:
         path = tuple(sib(g_levels, d, pos) for d in range(depth))
-        ok = verify_opening(dom, commitment, Opening(pos, hs[pos], path), V2, limits)
-        ok &= not verify_opening(dom, commitment, Opening(pos, bytes([hs[pos][0] ^ 1]) + hs[pos][1:], path), V2, limits)
+        ok = verify_opening(dom, commitment, Opening(pos, hs[pos], path), sch, limits)
+        ok &= not verify_opening(dom, commitment, Opening(pos, bytes([hs[pos][0] ^ 1]) + hs[pos][1:], path), sch, limits)
         ok &= path == tuple(sib(r_levels, d, pos) for d in range(depth))
         if tree is not None:
             ok &= tree.open(pos) == Opening(pos, hs[pos], path) and tree.commitment.root == commitment.root
@@ -221,7 +230,9 @@ def check_case(binary: str, work: str, tag: str, openings: int = 64) -> dict:
 
 def cases(kind: str) -> list[tuple]:
     """(mode, n, n_bits, stride, salts, key): ragged leaf counts (pads), every padding boundary of a row's last block, given
-    and derived salts, a fresh key; ``full`` adds the e2e slice's o_proj call (2^20 leaves) and int8 rows of 4096 values."""
+    and derived salts, a fresh key; row-seg rows from the empty row (no segment) through a short, a full and a one-bit
+    last segment to 64 segments; ``full`` adds the e2e slice's o_proj call (2^20 leaves) and int8 rows of 4096 values as
+    v2 and as row-seg rows."""
 
     fresh = INST.fresh_key()
     out = [("e2e", n, E2E_BITS, 0, s, KEY) for n in (1, 2, 3, 5, 7, 8, 255, 256, 257, 511, 513, 1000) for s in ("prf", "given")]
@@ -232,9 +243,14 @@ def cases(kind: str) -> list[tuple]:
         stride = max(16, -(-lb // 16) * 16)
         out += [("rows", 37, n_bits, stride, "given", KEY), ("rows", 300, n_bits, stride + 16, "prf", KEY)]
     out += [("rows", 1025, 256, 32, "prf", fresh)]
+    for n_bits in (0, 1, 13, 1016, 1024, 8184, 8191, 8192, 8193, 9095, 16384, 3 * 8192 + 5, 32768, 65536):
+        stride = max(16, -(-((n_bits + 7) // 8) // 16) * 16)
+        out += [("seg", 37, n_bits, stride, "given", KEY), ("seg", 300, n_bits, stride + 16, "prf", KEY)]
+    out += [("seg", 64, 64 * 8192, 65536, "given", KEY), ("seg", 513, 8192 + 128, 1040, "prf", fresh)]
     if kind == "full":
         out += [("e2e", 1 << 20, E2E_BITS, 0, "prf", KEY), ("e2e", (1 << 20) - 3, E2E_BITS, 0, "given", KEY),
-                ("rows", 8192, 32768, 4096, "prf", KEY), ("rows", 100003, 256, 32, "prf", KEY)]
+                ("rows", 8192, 32768, 4096, "prf", KEY), ("rows", 100003, 256, 32, "prf", KEY),
+                ("seg", 8192, 32768, 4096, "prf", KEY), ("seg", 8189, 65536, 8192, "given", KEY)]
     return out
 
 
@@ -242,7 +258,7 @@ def main(argv: list[str]) -> int:
     if len(argv) >= 5 and argv[1] == "params":
         key = INST.fresh_key() if "--fresh-key" in argv else KEY
         with open(argv[2], "wb") as f:
-            f.write(params(int(argv[3]), int(argv[4]), os.urandom(64), key))
+            f.write(params(int(argv[3]), int(argv[4]), os.urandom(64), key, "--seg" in argv))
         return 0
     if len(argv) >= 3 and argv[1] == "prepare":
         kind = argv[3] if len(argv) > 3 else "quick"

@@ -41,7 +41,7 @@ def main(out: str) -> None:
         for r in rows:
             s = r["sha"]
             print(f"sha {tag}: {s['gcomp_per_s']:.2f} G compressions/s ({s['gb_per_s']:.0f} GB/s of blocks) at {s['mhz']:.0f} MHz")
-    for prefix in ("bench-e2e-", "bench-sweep-"):
+    for prefix in ("bench-e2e-", "bench-sweep-", "bench-seg-"):
         for tag, rows in tagged(out, prefix):
             for r in rows:
                 print(bench_line(tag, r))

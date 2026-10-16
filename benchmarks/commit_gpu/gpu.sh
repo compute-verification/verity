@@ -3,11 +3,13 @@
 # 64-bit SHA-512 forms, and a timing-only build without M_key y) and reference.py's cases on the CPU. Under one lease: the
 # selftest, both builds' bit-exactness check against the reference (a build is timed only if its check passed), the raw
 # compression rate, the e2e slice's o_proj operand A (8192 x 4096 int8, 2^20 leaves) committed alone and beside cuBLASLt's
-# int8 o_proj GEMM, and the leaf-size sweep over the same operand as raw int8 rows. Clocks are read, never set.
+# int8 o_proj GEMM, and the leaf-size sweep over the same operand as raw int8 rows, as sha512/row/v2 rows and (from 1 KiB) as
+# sha512/row-seg/v1 rows. Clocks are read, never set.
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=COMMIT-GPU \
 #     -- bash benchmarks/commit_gpu/gpu.sh
-# CHECK=quick|full (default full); REPS (default 9); BUILDS (tags a<SHA_ADD>r<SHA_ROT>[nomask]); SWEEP (int8 values a leaf).
+# CHECK=quick|full (default full); REPS (default 9); BUILDS (tags a<SHA_ADD>r<SHA_ROT>[nomask]); SWEEP and SEG_SWEEP (int8
+# values a leaf).
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -33,6 +35,8 @@ echo "prepare rc $?" >> "$O/rc.txt"
 export SWEEP=${SWEEP:-32 64 128 256 512 1024 2048 4096}
 $PY $D/reference.py params "$W/p-e2e.bin" 1048576 1024
 for L in $SWEEP; do $PY $D/reference.py params "$W/p-rows-$L.bin" $((33554432 / L)) $((8 * L)); done
+export SEG_SWEEP=${SEG_SWEEP:-1024 2048 4096 8192 16384}
+for L in $SEG_SWEEP; do $PY $D/reference.py params "$W/p-seg-$L.bin" $((33554432 / L)) $((8 * L)) --seg; done
 wait
 cat "$O/rc.txt"
 
@@ -67,6 +71,12 @@ gpu-lease 1 --wait --max-min 20 -- bash -c '
     "$W/commit_gpu_$best" bench "$W/p-rows-$L.bin" rows $((33554432 / L)) $((8 * L)) "$REPS" 8192 4096 4096 \
       >> "$O/bench-sweep-$best.jsonl" 2>> "$O/bench.err"
     echo "bench rows L=$L $best rc $?" >> "$O/rc.txt"
+  done
+  for L in $SEG_SWEEP; do
+    [ -n "$best" ] || break
+    "$W/commit_gpu_$best" bench "$W/p-seg-$L.bin" seg $((33554432 / L)) $((8 * L)) "$REPS" 8192 4096 4096 \
+      >> "$O/bench-seg-$best.jsonl" 2>> "$O/bench.err"
+    echo "bench seg L=$L $best rc $?" >> "$O/rc.txt"
   done
   kill $smi
   # the kernels'"'"' launch shapes (registers a thread, shared memory, blocks): can a commit kernel sit beside a GEMM CTA?
