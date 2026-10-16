@@ -40,7 +40,7 @@ PUBLIC = (S.Public("population", "structure", "N, the draw's range; the interior
 VALUES = (*(S.Value(v, SCHEMA, "serve") for v in BOUNDARY), *(S.Value(v, SCHEMA, "interior") for v in INTERIOR_VALUES))
 
 
-def _spec(selection=S.TwoStage(S.Law(f"subset:{K}"), "all"), values=VALUES, public=PUBLIC, proof_deadline=None) -> S.Spec:
+def _spec(selection=S.TwoStage(S.Law(f"subset:{K}"), "all"), values=VALUES, public=PUBLIC, proof_deadline=60.0) -> S.Spec:
     return S.Spec(values, selection, S.Check(P.program_sha512(Program(TILE)), QUERY, proof_deadline=proof_deadline),
                   public, b"two-stage-test")
 

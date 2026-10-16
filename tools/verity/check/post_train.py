@@ -71,7 +71,7 @@ JOB = """set -u
 out=$RESEARCH_RUN_DIR/out; mkdir -p "$out"
 s=$(mktemp -d /workspace/research/scratch/post-train.XXXXXX 2>/dev/null || mktemp -d); trap 'rm -rf "$s"' EXIT
 export TMPDIR=$s VERITY_REGRESSION_SCRATCH=$s BUILD_RAM_BUDGET_GB=32 VERITY_MANIFEST_JOBS=4
-uv run -q --locked --extra torch-cpu python -m research data fetch-fixtures --repo "$PWD" --json \\
+uv run -q --locked --all-packages --extra torch-cpu python -m research data fetch-fixtures --repo "$PWD" --json \\
   integrations/vllm/tests/regression/expected > "$out/fetch-fixtures.json" || exit 1
 cd integrations/vllm
 VERITY_REGRESSION=1 VERITY_REGRESSION_REBUILD=1 VERITY_STORE_REQUIRED=1 VERITY_REGRESSION_RECORD_ACTUAL=$out/actual \\
