@@ -1,15 +1,16 @@
 // The filler scorer's round protocol and power window (SCORER, cmp-13), shared by dscore.cu and arm-side drivers that
 // include dcap.cu (DFill, DPump, Dev, now_ms, nvml_mhz). Include it after dcap.cu.
 //
-// Anti-replay. Slot s of point POINT is round R = POINT·SLOTS + s, SLOTS the driver's count of filler rounds a point
-// (dscore: 0 the filler-alone calibration, 1 + r round r's arm block, 1 + ROUNDS + r its standalone block, then the two
-// power windows'). Its tiles are the public range [R·2^32, (R + 1)·2^32), fixed by the scorer before the round's coins,
+// Anti-replay. Slot s of point POINT is round R = POINT·POINT_SLOTS + s, one count for every driver of a run, so no two
+// points' rounds share an id (dscore's slots: 0 the filler-alone calibration, 1 + r round r's arm block, 1 + ROUNDS + r
+// its standalone block, then the two power windows'). Its tiles are the public range [R·2^32, (R + 1)·2^32), fixed by the scorer before the round's coins,
 // which are drawn from the OS once the range is fixed; every seed is dseed(the round's coins, tag | tile id), tag 0 for
 // dfill_k (a filler whose kernel marks its ids with a high bit prints it as the round's tag).
 #pragma once
 #include <sys/random.h>
 
 constexpr int RANGE_LOG2 = 32;
+constexpr int POINT_SLOTS = 256;
 constexpr int ALONE_CHUNKS = 200;  // the filler-alone calibration, ~0.2 s at 2^19 MMAs an SM a chunk
 constexpr int SOLO_CHUNKS = 16;    // a standalone block's least chunks
 struct Round {
@@ -18,11 +19,15 @@ struct Round {
   uint64_t c0 = 0, c1 = 0;
   std::vector<unsigned long long> checked;
 };
-static Round round_open(int point, int slots, int slot, unsigned long long tag = 0) {
+static Round round_open(int point, int slot, unsigned long long tag = 0) {
+  if (slot < 0 || slot >= POINT_SLOTS) {
+    fprintf(stderr, "round slot %d outside [0, %d)\n", slot, POINT_SLOTS);
+    exit(9);
+  }
   Round r;
   r.slot = slot;
   r.tag = tag;
-  r.id = (unsigned long long)point * slots + slot;
+  r.id = (unsigned long long)point * POINT_SLOTS + slot;
   r.lo = r.id << RANGE_LOG2;
   r.hi = (r.id + 1) << RANGE_LOG2;
   uint64_t c[2];
@@ -34,8 +39,8 @@ static Round round_open(int point, int slots, int slot, unsigned long long tag =
   r.c1 = c[1];
   return r;
 }
-static Round round_open(DFill& f, int point, int slots, int slot) {
-  Round r = round_open(point, slots, slot);
+static Round round_open(DFill& f, int point, int slot) {
+  Round r = round_open(point, slot);
   f.c0 = r.c0;
   f.c1 = r.c1;
   return r;

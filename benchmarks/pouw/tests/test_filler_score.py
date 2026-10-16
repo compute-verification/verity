@@ -240,6 +240,9 @@ def test_replay_gate():
     tagged[0]["blocks"][1]["arm"]["phase_round"]["tag"] = "0" * 16
     assert "not dseed" in S.replay_gate(tagged)["why"]
     assert "slot 8 not in [0, 8)" in S.replay_gate([{**rounds_rows(points=1)[0], "slots": 8}])["why"]
+    # a run whose drivers count a point's slots differently: point 1 at 22 slots meets point 2 at 11
+    mixed = rounds_rows(points=2, slots=22) + [{**rounds_rows(points=3)[2]}]
+    assert "different slot counts" in S.replay_gate(mixed)["why"] and S.replay_gate(mixed)["overlaps"]
     no_solo_round = rounds_rows()
     no_solo_round[2]["blocks"][0]["solo"].pop("round")
     assert "standalone block 0: no round record" in S.replay_gate(no_solo_round)["why"]

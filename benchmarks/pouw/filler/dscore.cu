@@ -170,7 +170,6 @@ static int run_dscore(Dev& d, int kind, int B, int L, int place, int fill_sms, i
   }
   const double setup_ms = now_ms() - ts0;
   const bool fill = place != PL_NONE;
-  const int slots = 2 * rounds + 3;  // 0 the calibration, 1 + r arm block r, 1 + rounds + r its standalone block, 2 power
   DFill f;
   Round r0;
   double amhz = 0, awatt = 0, alone = 0;
@@ -179,7 +178,7 @@ static int run_dscore(Dev& d, int kind, int B, int L, int place, int fill_sms, i
   if (fill) {
     f = dfill_make(got[1], W, NC, S, 0, 0);
     sp_fill = sm_spread(d, fs, false);
-    r0 = round_open(f, point, slots, 0);
+    r0 = round_open(f, point, 0);
     DPump pump;
     spump_start(pump, f, fs, 3, r0.lo);
     double cs = 0, ps = 0;
@@ -207,7 +206,7 @@ static int run_dscore(Dev& d, int kind, int B, int L, int place, int fill_sms, i
       alone_block(b);
       return;
     }
-    b.rd = round_open(f, point, slots, 1 + r);
+    b.rd = round_open(f, point, 1 + r);
     CK(cudaMemsetAsync(f.rec, 0xA5, f.per() * sizeof(unsigned long long), fs));
     CK(cudaStreamSynchronize(fs));
     g_run_s = cheat_s;
@@ -224,7 +223,7 @@ static int run_dscore(Dev& d, int kind, int B, int L, int place, int fill_sms, i
     g_run_s = 0;
   };
   auto solo_block = [&](Block& b, int r, double win) {
-    b.rd = round_open(f, point, slots, 1 + rounds + r);
+    b.rd = round_open(f, point, 1 + rounds + r);
     CK(cudaMemsetAsync(f.rec, 0xA5, f.per() * sizeof(unsigned long long), fs));
     CK(cudaStreamSynchronize(fs));
     DPump pump;
@@ -256,7 +255,7 @@ static int run_dscore(Dev& d, int kind, int B, int L, int place, int fill_sms, i
   }
   if (power && fill) {
     for (int w = 0; w < 2; w++) {
-      Round rd = round_open(f, point, slots, 2 * rounds + 1 + w);
+      Round rd = round_open(f, point, 2 * rounds + 1 + w);
       DPump pump;
       spump_start(pump, f, fs, 3, rd.lo);
       while (pump.done.load() < 2) {
@@ -280,7 +279,7 @@ static int run_dscore(Dev& d, int kind, int B, int L, int place, int fill_sms, i
          "\"cheat_S\": %d, \"prio\": [%d, %d], \"kv_wrapped\": %s, \"setup_ms\": %.3f, \"rounds\": %d, \"K\": %d, "
          "\"alone_fill\": {\"mac_per_s\": %.6e, \"mhz\": %.1f, \"watt\": %.1f",
          kind == 0 ? "prefill" : "step", B, L, PL_NAME[place], fill_sms, d.sms, fill ? got[0] : d.sms, fill ? got[1] : 0,
-         sp_step, sp_fill, W, NC, S, fill ? f.tiles : 0, fill ? f.grid : 0, fill ? f.macs() : 0.0, point, slots, cheat_s,
+         sp_step, sp_fill, W, NC, S, fill ? f.tiles : 0, fill ? f.grid : 0, fill ? f.macs() : 0.0, point, POINT_SLOTS, cheat_s,
          lo, hi, wrapped ? "true" : "false", setup_ms, rounds, K, alone, amhz, awatt);
   if (fill) {
     printf(", ");
@@ -344,11 +343,11 @@ int main(int argc, char** argv) {
   const int place = pl == "none" ? PL_NONE : pl == "split" ? PL_SPLIT : pl == "co" ? PL_CO : -1;
   const int B = atoi(argv[3]), L = atoi(argv[4]), fsm = atoi(argv[6]), W = atoi(argv[7]), NC = atoi(argv[8]),
             S = atoi(argv[9]), rounds = atoi(argv[10]), K = atoi(argv[11]), point = atoi(argv[12]);
-  if (kind < 0 || place < 0 || rounds < 2 || K < 1 || W < 1 || W > 16 || S % 8 || S <= 0 || point < 0 ||
+  if (kind < 0 || place < 0 || rounds < 2 || 2 * rounds + 3 > POINT_SLOTS || K < 1 || W < 1 || W > 16 || S % 8 || S <= 0 || point < 0 ||
       (kind == 2 && ((size_t)B * L > MAX_BL || L % 512 || L <= 0 || B < 1 || B > 256)) ||
       (kind == 0 && (B < 1 || B > 8192))) {
     fprintf(stderr, "step: B*L <= %zu, L %% 512 == 0, 1 <= B <= 256; prefill: 1 <= B <= 8192; ROUNDS >= 2, K >= 1, "
-                    "1 <= W <= 16, 8 | S, POINT >= 0\n", MAX_BL);
+                    "1 <= W <= 16, 8 | S, POINT >= 0, 2 ROUNDS + 3 <= %d\n", MAX_BL, POINT_SLOTS);
     return 1;
   }
   const int cheat_s = getenv("DSCORE_CHEAT_S") ? atoi(getenv("DSCORE_CHEAT_S")) : 0;
