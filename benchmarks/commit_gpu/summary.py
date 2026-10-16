@@ -23,9 +23,10 @@ def best(out: str) -> str:
 
 def bench_line(tag: str, r: dict) -> str:
     if "bench" in r:
+        graph = f", graph {r['graph_ms']:.3f} ms ({r['operand_gb_per_s_graph']:.1f} GB/s)" if "graph_ms" in r else ""
         return (f"{tag} {r['bench']} n={r['n']} bits={r['lbits']}: commit {r['commit_ms']:.3f} ms (leaves {r['leaf_ms']:.3f}, "
-                f"nodes {r['nodes_ms']:.3f}), {r['operand_gb_per_s']:.1f} GB/s of operand, {r['gcomp_per_s']:.2f} G compressions/s, "
-                f"{r['mhz']:.0f} MHz")
+                f"nodes {r['nodes_ms']:.3f}){graph}, {r['operand_gb_per_s']:.1f} GB/s of operand, "
+                f"{r['gcomp_per_s']:.2f} G compressions/s, {r['mhz']:.0f} MHz")
     g = r["beside_gemm"]
     return (f"  beside GEMM {g['m']}x{g['n']}x{g['k']} ({g['gemm_ms']:.3f} ms, x{g['gemms']}): commit/GEMM {g['commit_over_gemm']:.2f}; "
             f"both {g['both_wall_ms']:.3f} ms vs serial {g['serial_wall_ms']:.3f}; hidden {g['hidden_fraction']:.2f}; "

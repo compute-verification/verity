@@ -861,20 +861,33 @@ static int bench(int argc, char** argv) {
   for (int w = 0; w < 2; ++w) commit(sc);
   CK(cudaStreamSynchronize(sc));
   CK(cudaGetLastError());
-  // alone: the whole commitment, and its leaf pass alone
-  std::vector<double> t_all, t_leaf, mhz;
+  // the same launches as one CUDA graph: a small commitment is a dozen short kernels, and their launch gaps count
+  cudaGraph_t graph;
+  cudaGraphExec_t gexec;
+  CK(cudaStreamBeginCapture(sc, cudaStreamCaptureModeThreadLocal));
+  commit(sc);
+  CK(cudaStreamEndCapture(sc, &graph));
+  CK(cudaGraphInstantiate(&gexec, graph, 0));
+  auto commit_graph = [&](cudaStream_t st) { CK(cudaGraphLaunch(gexec, st)); };
+  commit_graph(sc);
+  CK(cudaStreamSynchronize(sc));
+  // alone: the whole commitment, its leaf pass alone, and the graph
+  std::vector<double> t_all, t_leaf, t_graph, mhz;
   for (int r = 0; r < reps; ++r) {
     CK(cudaEventRecord(e[0], sc));
     leaves(sc);
     CK(cudaEventRecord(e[1], sc));
     cm.nodes(sc);
     CK(cudaEventRecord(e[2], sc));
-    CK(cudaEventSynchronize(e[2]));
+    commit_graph(sc);
+    CK(cudaEventRecord(e[3], sc));
+    CK(cudaEventSynchronize(e[3]));
     t_leaf.push_back(ms(e[0], e[1]));
     t_all.push_back(ms(e[0], e[2]));
+    t_graph.push_back(ms(e[2], e[3]));
     mhz.push_back(nv.sm());
   }
-  const double tc = median(t_all);
+  const double tc = median(t_all), tgr = median(t_graph);
   auto blocks = [](u64 bytes) { return (double)((bytes + 17 + 127) / 128); };   // after a first block the host folded
   const double row_comps = mode == "e2e" ? 2
                            : mode == "seg" ? (cm.segs ? (cm.segs - 1) * blocks(1024) + blocks(cm.seg_last) : 0) + blocks(64ull * cm.segs)
@@ -882,19 +895,22 @@ static int bench(int argc, char** argv) {
   // row, salt (3), c (2), hm96 leaf (2), frame leaf (2) a leaf; a node (2) a node; the pads' (2) are left out
   const double comps = n * (row_comps + 9.0) + 2.0 * (cm.width - 1);
   printf("{\"bench\": \"%s\", \"gpu\": \"%s\", \"sms\": %d, \"sha_add\": %d, \"sha_rot\": %d, \"leaf_threads\": %d, \"n\": %llu, \"lbits\": %llu, "
-         "\"depth\": %d, \"operand_bytes\": %llu, \"commit_ms\": %.5f, \"leaf_ms\": %.5f, \"nodes_ms\": %.5f, \"mhz\": %.0f, "
-         "\"compressions\": %.0f, \"gcomp_per_s\": %.3f, \"sha_gb_per_s\": %.2f, \"operand_gb_per_s\": %.2f, ",
+         "\"depth\": %d, \"operand_bytes\": %llu, \"commit_ms\": %.5f, \"leaf_ms\": %.5f, \"nodes_ms\": %.5f, \"graph_ms\": %.5f, "
+         "\"mhz\": %.0f, \"compressions\": %.0f, \"gcomp_per_s\": %.3f, \"sha_gb_per_s\": %.2f, \"operand_gb_per_s\": %.2f, "
+         "\"operand_gb_per_s_graph\": %.2f, ",
          mode.c_str(), prop.name, prop.multiProcessorCount, SHA_ADD, SHA_ROT, LEAF_THREADS, (unsigned long long)n,
-         (unsigned long long)lbits, cm.depth, (unsigned long long)data, tc, median(t_leaf), tc - median(t_leaf), median(mhz),
-         comps, comps / tc * 1e-6, comps * 128 / tc * 1e-6, data / tc * 1e-6);
+         (unsigned long long)lbits, cm.depth, (unsigned long long)data, tc, median(t_leaf), tc - median(t_leaf), tgr,
+         median(mhz), comps, comps / tc * 1e-6, comps * 128 / tc * 1e-6, data / tc * 1e-6, data / tgr * 1e-6);
   json_list("commit_ms_all", t_all);
+  printf(", ");
+  json_list("graph_ms_all", t_graph);
   printf("}\n");
   fflush(stdout);
   if (gemm) {
     Gemm G;
     G.init(atoi(argv[7]), atoi(argv[8]), atoi(argv[9]), sg);
-    // GEMM alone, then the same GEMMs with the commitment beside them on another stream, then both on one stream
-    const int ng = std::max(1, (int)(tc / G.best_ms + 0.5));
+    // GEMM alone, then the same GEMMs with the commitment (its graph) beside them on another stream, then both on one stream
+    const int ng = std::max(1, (int)(tgr / G.best_ms + 0.5));
     std::vector<double> g_alone, both_wall, both_commit, both_gemm, serial_wall, mz;
     for (int r = 0; r < reps; ++r) {
       CK(cudaEventRecord(e[0], sg));
@@ -907,7 +923,7 @@ static int bench(int argc, char** argv) {
       CK(cudaStreamWaitEvent(sc, e[0]));
       for (int i = 0; i < ng; ++i) CL(G.run(sg));
       CK(cudaEventRecord(e[1], sg));
-      commit(sc);
+      commit_graph(sc);
       CK(cudaEventRecord(e[2], sc));
       CK(cudaEventSynchronize(e[1]));
       CK(cudaEventSynchronize(e[2]));
@@ -919,25 +935,27 @@ static int bench(int argc, char** argv) {
       // serial on one stream
       CK(cudaEventRecord(e[3], sg));
       for (int i = 0; i < ng; ++i) CL(G.run(sg));
-      commit(sg);
+      commit_graph(sg);
       CK(cudaEventRecord(e[4], sg));
       CK(cudaEventSynchronize(e[4]));
       serial_wall.push_back(ms(e[3], e[4]));
     }
     const double ga = median(g_alone), bw = median(both_wall), sw = median(serial_wall);
     // the share of the shorter side that concurrency hides, against both on one stream measured in the same loop
-    const double hidden = (sw - bw) / std::min(ng * ga, tc);
+    const double hidden = (sw - bw) / std::min(ng * ga, tgr);
     printf("{\"beside_gemm\": {\"m\": %d, \"n\": %d, \"k\": %d, \"lt_algo_index\": %d, \"gemm_ms\": %.5f, \"gemms\": %d, "
-           "\"commit_alone_ms\": %.5f, \"both_wall_ms\": %.5f, \"both_commit_ms\": %.5f, \"both_gemm_ms\": %.5f, "
+           "\"graph\": true, \"commit_alone_ms\": %.5f, \"both_wall_ms\": %.5f, \"both_commit_ms\": %.5f, \"both_gemm_ms\": %.5f, "
            "\"serial_wall_ms\": %.5f, \"hidden_fraction\": %.4f, \"commit_over_gemm\": %.4f, \"commit_gb_per_s_beside\": %.2f, "
            "\"mhz\": %.0f, ",
-           G.m, G.n, G.k, G.algo_index, ga, ng, tc, bw, median(both_commit), median(both_gemm), sw, hidden, tc / ga,
+           G.m, G.n, G.k, G.algo_index, ga, ng, tgr, bw, median(both_commit), median(both_gemm), sw, hidden, tgr / ga,
            data / median(both_commit) * 1e-6, median(mz));
     json_list("both_wall_all", both_wall);
     printf(", ");
     json_list("serial_wall_all", serial_wall);
     printf("}}\n");
   }
+  CK(cudaGraphExecDestroy(gexec));
+  CK(cudaGraphDestroy(graph));
   cm.release();
   return 0;
 }
