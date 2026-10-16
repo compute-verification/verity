@@ -31,6 +31,7 @@ import Proofs.Flock.Claims.GS
 import Proofs.Flock.Claims.DeployRounds
 import Proofs.Flock.Claims.DeployRoundsZk
 import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.Assembled
 import Proofs.Flock.Claims.Recursion.DeployInputs
 import Proofs.Flock.Claims.Recursion.DeployOuter
 import Proofs.Flock.Claims.Recursion.Deploy
