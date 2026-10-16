@@ -11,7 +11,8 @@
 //           next block there: r20261016-081635-dcc5 had 69 of 188 exit a chunk);
 //   MODE 2: a block that finds another on its SM keeps its place asleep until that one is done, and the running warps
 //           take SUB tiles of a warp range at a time from a counter (so no SM runs two filler blocks at once, and the
-//           chunk's work ends evenly over the SMs that run it).
+//           chunk's work ends evenly over the SMs that run it); the chunk's last block zeroes the counter;
+//   MODE 3: MODE 0 behind the two memsets MODE 1 issues before each chunk (the log's and the counter's).
 // The linears run on the highest-priority stream (dscore.cu's prefill workload, ABBA alone/arm over ROUNDS rounds), the
 // probe's chunks on the lowest, three queued. Each pump's last chunk has 16 receipts checked against dfill_ref.
 //
@@ -78,6 +79,7 @@ static int setup(Dev& d, bool weights, size_t kv_want) {
 
 __device__ int occ_sm[1024];
 __device__ unsigned long long occ_next;
+__device__ unsigned occ_fin;  // MODE 2: blocks of the chunk done; the last one zeroes occ_next for the next chunk
 
 // log entry a block: smid, start ns, end ns, (ran ? 1 : 0) | warp ranges run << 1
 template <int NC, int MODE>
@@ -94,8 +96,10 @@ __global__ void __launch_bounds__(512) occ_k(uint64_t c0, uint64_t c1, unsigned 
     dtiles<NC, 1>(c0, c1, tile0, tiles, steps, rec);
     runs = 1 | ((unsigned long long)nw << 1);
   } else if (MODE == 2) {
-    if (threadIdx.x == 0)
+    if (threadIdx.x == 0) {
+      e[3] = 0;
       while (atomicCAS(&occ_sm[smid], 0, 1) != 0) __nanosleep(4000);
+    }
     __syncthreads();
     const int m = sub < tiles ? sub : tiles, per_w = tiles / m;
     const unsigned long long units = (unsigned long long)gridDim.x * nw * per_w;
@@ -116,6 +120,12 @@ __global__ void __launch_bounds__(512) occ_k(uint64_t c0, uint64_t c1, unsigned 
     if (threadIdx.x == 0) {
       atomicOr(&e[3], (e[3] >> 1) ? 1ull : 0ull);
       atomicExch(&occ_sm[smid], 0);
+      __threadfence();
+      if (atomicAdd(&occ_fin, 1u) == gridDim.x - 1) {
+        occ_next = 0;
+        occ_fin = 0;
+        __threadfence();
+      }
     }
     runs = 0;
   } else {
@@ -159,7 +169,7 @@ static void occ_launch(const Occ& o, long long k, cudaStream_t s) {
   const unsigned long long t0 = o.f.base + (unsigned long long)k * o.f.per();
   unsigned long long* lg = o.log + (unsigned long long)(k % NLOG) * o.f.grid * 4;
   const dim3 gr(o.f.grid), bl(32 * o.f.W);
-  if (o.mode != 0) {
+  if (o.mode == 1 || o.mode == 3) {
     CK(cudaMemsetAsync(lg, 0, (size_t)o.f.grid * 4 * sizeof(unsigned long long), s));
     void* p = nullptr;
     CK(cudaGetSymbolAddress(&p, occ_next));
@@ -167,7 +177,7 @@ static void occ_launch(const Occ& o, long long k, cudaStream_t s) {
   }
 #define OCC_CASE(NC_)                                                                                       \
   case NC_:                                                                                                 \
-    if (o.mode == 0) occ_k<NC_, 0><<<gr, bl, 0, s>>>(o.f.c0, o.f.c1, t0, o.f.tiles, o.f.S, o.f.rec, lg, o.sub); \
+    if (o.mode == 0 || o.mode == 3) occ_k<NC_, 0><<<gr, bl, 0, s>>>(o.f.c0, o.f.c1, t0, o.f.tiles, o.f.S, o.f.rec, lg, o.sub); \
     else if (o.mode == 1) occ_k<NC_, 1><<<gr, bl, 0, s>>>(o.f.c0, o.f.c1, t0, o.f.tiles, o.f.S, o.f.rec, lg, o.sub); \
     else occ_k<NC_, 2><<<gr, bl, 0, s>>>(o.f.c0, o.f.c1, t0, o.f.tiles, o.f.S, o.f.rec, lg, o.sub);         \
     break;
