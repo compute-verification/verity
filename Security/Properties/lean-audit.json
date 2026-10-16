@@ -26,6 +26,7 @@
   "Properties.Proofs.NetworkRecords",
   "Properties.SampledProofs",
   "Properties.Proofs.SampledProofs",
+  "Properties.SampledProofs.Draw",
   "Properties.Pous.TimedAudit",
   "Properties.Pous.MemoryChallenger",
   "Properties.Proofs.Pous.TimedAudit",
@@ -162,8 +163,13 @@
   },
   "Properties.SampledProofs": {
    "imports": ["SampledProofs"],
-   "except": [],
+   "except": ["Properties.SampledProofs.Draw"],
    "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib or of `security`"
+  },
+  "Properties.SampledProofs.Draw": {
+   "imports": ["Definitions.Claims", "SampledProofs"],
+   "except": [],
+   "why": "what the draw misses is stated against `Select.select`'s slots (`SampledProofs.Slots`) and the claims' miss probability `P_a` (`Definitions.Claims`), never a proof"
   },
   "Properties.CertifierNetwork": {
    "imports": [
