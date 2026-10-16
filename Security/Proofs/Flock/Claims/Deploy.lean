@@ -40,9 +40,9 @@ open Lean (Json)
 /-- **A live coin**: the `65536` GF(2^128) elements a round may draw. -/
 def Coin : Type := Fin 65536 → F128
 
-instance : Inhabited Coin := ⟨fun _ => 0⟩
-instance : Nonempty Coin := ⟨default⟩
-instance : Fintype Coin := inferInstanceAs (Fintype (Fin 65536 → FlockLevel3.GF128))
+instance instInhabitedCoin : Inhabited Coin := ⟨fun _ => 0⟩
+instance instNonemptyCoin : Nonempty Coin := ⟨default⟩
+instance instFintypeCoin : Fintype Coin := inferInstanceAs (Fintype (Fin 65536 → FlockLevel3.GF128))
 
 /-- The coin's element `i`, `0` past its end. -/
 def Coin.at (c : Coin) (i : ℕ) : F128 := if h : i < 65536 then c ⟨i, h⟩ else 0
