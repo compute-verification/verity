@@ -17,7 +17,7 @@ Files:
   repository's own functions; `check` compares a build's output with them.
 - `gpu.sh`: the pod job (builds and reference cases outside the lease; selftest, check, rate, e2e, both leaf-size sweeps,
   the tile sweep and an nsys trace under one GPU lease). `summary.py`: one line a measurement, or (`table`) the Results
-  table, or (`tiles`) the R table.
+  table, (`tiles`) the R table, or (`formats`) the leaf-format table.
 
 ~~~text
 research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=LANE \
@@ -62,7 +62,8 @@ leaves). `check` also folds the top six levels on the CPU and requires the GPU's
   sampled check tiles, that the tile's leaves hold exactly its values.
 
 The first 99 were passed by every build timed below (runs `r20261016-100920-6904`, `r20261016-104229-1de9`,
-`r20261016-104707-c15f`, `r20261016-110413-c5d1`); all 126 by run `r20261016-113335-fb16` (4b6190574).
+`r20261016-104707-c15f`, `r20261016-110413-c5d1`); all 126 by runs `r20261016-113335-fb16` (4b6190574) and
+`r20261016-114854-61b1` (8d8fc285f, with the committer in `commit_gpu.cuh`).
 
 ## Results
 
@@ -196,6 +197,9 @@ cost to the stage when the root isn't needed before the GEMM ends.
 | 8192 | R=64: 64 x 32 values (2 KiB) | row-seg/v1 | 16384 | 0.238 (141) | 0.57 | 0.086 | 0.420 | 0.377 | 0.463 | +0.10 |
 | 8192 | R=128: 128 x 32 values (4 KiB) | row-seg/v1 | 8192 | 0.231 (145) | 0.55 | 0.063 | 0.420 | 0.360 | 0.461 | +0.10 |
 
+- **What repeats.** Run `r20261016-114854-61b1`'s default build repeats this table's latency alone to within 1 us and its
+  GEMM slowdowns to within 0.02. "Root at" moved by up to 0.065 ms at 8K R = 16 and 32 (0.434 then 0.391, 0.338 then
+  0.403) and by up to 0.02 ms elsewhere.
 - **The gather is free.** In the same run, contiguous rows of the same size take 0.258, 0.242, 0.227 and 0.285 ms (512 B to
   4 KiB, row/v2) against tile leaves' 0.258, 0.244, 0.229 and 0.287; row-seg 2 and 4 KiB rows 0.233 and 0.227 against
   0.238 and 0.231.
@@ -252,30 +256,55 @@ with `reference.params(n, 256 R, ks, key, domain_id=domain(label, n).domain_id)`
 
 Per leaf the format spends, besides the row's blocks (R/4 + 1 for a row/v2 tile leaf, the last one padding), about 11 fixed
 compressions: the salt y (3) and c (2), h (2), the frame leaf (2), and its share of the nodes (2; serially, 2 a level).
+A format change can remove 3 of them, all on the critical path: h's 2 and one of the nodes'. Run `r20261016-114854-61b1`
+(8d8fc285f, `BUILDS="a0r0l a0r0lmerged a0r0lquad a0r0lmergedquad"`; `python3 summary.py formats OUT`) times both changes
+against the default build in the same run: `merged` skips h's compressions (the frame leaf takes b xor c), `quad` folds a
+4-ary tree of 3-compression nodes, and `mergedquad` does both. They do a changed format's compressions, but no reference
+computes that format, so `check` refuses them and their roots mean nothing.
+
+| chunk M | leaf | row digest | latency alone ms: default | merged | 4-ary | both | tree ms: binary -> 4-ary | high priority: root at ms, default -> both | GEMM slowdown x GEMM, default -> both |
+|---|---|---|---|---|---|---|---|---|---|
+| 2048 | e2e: 32 values (bf16 row, 1024 bits) | row/v2 | 0.449 | 0.383 | 0.379 | 0.311 | 0.245 -> 0.168 (depth 18) | 0.545 -> 0.404 | +0.51 (4) -> +0.71 (2) |
+| 2048 | R=16: 16 x 32 values (512 B) | row/v2 | 0.176 | 0.168 | 0.145 | 0.137 | 0.137 -> 0.104 (depth 14) | 0.215 -> 0.186 | +0.13 -> +0.12 |
+| 2048 | R=32: 32 x 32 values (1 KiB) | row/v2 | 0.184 | 0.174 | 0.147 | 0.139 | 0.127 -> 0.090 (depth 13) | 0.248 -> 0.192 | +0.15 -> +0.12 |
+| 2048 | R=64: 64 x 32 values (2 KiB) | row/v2 | 0.209 | 0.201 | 0.184 | 0.176 | 0.117 -> 0.090 (depth 12) | 0.283 -> 0.223 | +0.15 (2) -> +0.20 |
+| 2048 | R=128: 128 x 32 values (4 KiB) | row/v2 | 0.268 | 0.260 | 0.240 | 0.231 | 0.106 -> 0.076 (depth 11) | 0.340 -> 0.295 | -0.00 (2) -> -0.00 (2) |
+| 2048 | R=64: 64 x 32 values (2 KiB) | row-seg/v1 | 0.217 | 0.207 | 0.193 | 0.182 | 0.117 -> 0.090 (depth 12) | 0.291 -> 0.223 | +0.05 (2) -> +0.03 |
+| 2048 | R=128: 128 x 32 values (4 KiB) | row-seg/v1 | 0.213 | 0.203 | 0.182 | 0.174 | 0.107 -> 0.076 (depth 11) | 0.281 -> 0.203 | +0.05 (2) -> +0.05 |
+| 8192 | e2e: 32 values (bf16 row, 1024 bits) | row/v2 | 1.279 | 1.038 | 1.098 | 0.858 | 0.506 -> 0.322 (depth 20) | 1.483 -> 0.971 | +0.84 (3) -> +0.82 (2) |
+| 8192 | R=16: 16 x 32 values (512 B) | row/v2 | 0.258 | 0.240 | 0.217 | 0.199 | 0.164 -> 0.119 (depth 16) | 0.391 -> 0.369 | +0.18 -> +0.16 |
+| 8192 | R=32: 32 x 32 values (1 KiB) | row/v2 | 0.244 | 0.229 | 0.201 | 0.188 | 0.147 -> 0.104 (depth 15) | 0.403 -> 0.299 | +0.12 -> +0.10 |
+| 8192 | R=64: 64 x 32 values (2 KiB) | row/v2 | 0.229 | 0.219 | 0.197 | 0.190 | 0.137 -> 0.104 (depth 14) | 0.352 -> 0.281 | +0.09 -> +0.08 |
+| 8192 | R=128: 128 x 32 values (4 KiB) | row/v2 | 0.287 | 0.279 | 0.250 | 0.244 | 0.127 -> 0.090 (depth 13) | 0.414 -> 0.381 | +0.12 -> +0.11 |
+| 8192 | R=64: 64 x 32 values (2 KiB) | row-seg/v1 | 0.238 | 0.227 | 0.207 | 0.197 | 0.137 -> 0.104 (depth 14) | 0.365 -> 0.270 | +0.10 -> +0.09 |
+| 8192 | R=128: 128 x 32 values (4 KiB) | row-seg/v1 | 0.231 | 0.223 | 0.197 | 0.188 | 0.127 -> 0.090 (depth 13) | 0.348 -> 0.272 | +0.10 -> +0.09 |
 
 - **h and the frame leaf can be one hash: -2 a leaf.** All of the leaf's constant material (hm96's key-dependent leaf
   prefix, the frame tag, the domain id, the schema) in whole blocks first, a midstate, then b || c || pos: 2 compressions
-  where h and the frame leaf take 4. Measured with the `merged` build (h's compressions skipped, same run): latency
-  0.258 -> 0.240 ms at R = 16 (-7%), 0.229 -> 0.221 at R = 64 (-3.5%) at 8K; 0.176 -> 0.168 at R = 16 at 2K; 1.278 -> 1.038
-  ms (-19%) at 32 values a leaf. Beside the GEMM: +0.17 -> +0.16 at R = 16, +0.12 -> +0.10 at R = 32. It changes hm96's
-  tree-leaf definition and frame-v3's leaf.
-- **4-ary nodes halve the nodes' share: -1 a leaf, and a quarter of the tree's chain.** A binary node is 2 compressions
-  (two 64-byte children and the padding don't fit one block), the floor under full SHA-512 outputs. A 4-ary node is 3
-  compressions for 4 children, so the chain from the last leaf to the root goes from 2 x depth to 1.5 x depth compressions
-  (8-ary: 1.67; 16-ary: 2.25). At the measured 10.3 us a binary level, that's about -35 us at depth 14 (0.137 -> ~0.10 ms),
-  14-19% of the latency at R <= 64, the largest format lever at tile sizes (an estimate from the per-level time, not a
-  measured build). An opening carries 3 siblings a 4-ary level
-  (1.5x the path's digests) but costs 1.5 instead of 2 compressions a binary level in-circuit.
+  where h and the frame leaf take 4. It shortens the leaf pass by 6-18 us and leaves the tree alone: latency -3 to -7% at
+  tile leaves (8K: 0.258 -> 0.240 ms at R = 16, 0.229 -> 0.219 at R = 64), -15 to -19% at 32 values a leaf (8K: 1.279 ->
+  1.038 ms). It changes hm96's tree-leaf definition and frame-v3's leaf.
+- **4-ary nodes: -1 a leaf, and a quarter of the tree's chain.** A binary node is 2 compressions (two 64-byte children and
+  the padding don't fit one block), the floor under full SHA-512 outputs. A 4-ary node is 3 compressions for 4 children,
+  so the chain from the last leaf to the root goes from 2 x depth to 1.5 x depth compressions (8-ary: 1.67; 16-ary: 2.25).
+  Measured, the tree takes 23-29% less time at tile depths 11-16 (8K R = 64: 0.137 -> 0.104 ms) and 36% less at depth 20,
+  and the latency 10-20% less (8K: 0.258 -> 0.217 ms at R = 16, 0.229 -> 0.197 at R = 64, 0.231 -> 0.197 for row-seg
+  R = 128; 2K: 0.176 -> 0.145 at R = 16): the largest format lever at tile sizes. An opening carries 3 siblings a 4-ary
+  level (1.5x the path's digests) but costs 1.5 instead of 2 compressions a binary level in-circuit.
 - **The salt stays.** y's 192 bytes are what M_key needs for hiding, and c binds y: dropping c or shortening y is a claim
   about hm96. It's off the critical path (the salt phase runs before the operand exists), and tile leaves cut it R times
   (8K: 1.56 ms at 32 values a leaf, 0.087 ms at R = 64).
 - **The row's padding block stays.** A row of whole 128-byte blocks always takes one more under SHA-512; a fixed-length
   chain without padding isn't SHA-512.
 
-Together, at R = 16 the data phase goes from 11 to 8 compressions a leaf (-27%) and, from the merged build and the
-per-level estimate, the latency at 8K from 0.258 to about 0.20 ms; at R = 64, 23 to 20 a leaf and 0.229 to about 0.19 ms.
-Tile leaves already took the larger share: the same fixed compressions are paid once a 2 KiB leaf instead of once every
-32 values (8K: 1.28 ms -> 0.23 ms).
+Together, the data phase goes from 11 to 8 compressions a leaf at R = 16 and from 23 to 20 at R = 64, and the latency
+alone falls 14-25% at tile leaves (8K: 0.258 -> 0.199 ms at R = 16, 0.229 -> 0.190 at R = 64, 0.231 -> 0.188 for row-seg
+R = 128; 2K: 0.176 -> 0.137 at R = 16) and 31-33% at 32 values a leaf (8K: 1.279 -> 0.858 ms). Beside the GEMM at high
+priority the root is in at 0.27-0.30 ms at 8K (R = 32 and 64, row-seg R = 64 and 128; 0.35-0.40 in the default build)
+while the GEMM's slowdown drops by only 0.01-0.03. At 2K the root is in at 0.19-0.22 ms (R <= 64 and row-seg), so a stage
+that must hold it when its 0.12 ms GEMM ends grows by 0.06-0.10 ms instead of 0.09-0.17. Tile leaves already took the
+larger share: the same fixed compressions are paid once a 2 KiB leaf instead of once every 32 values (8K: 1.28 ms ->
+0.23 ms).
 
 ## The vLLM integration
 

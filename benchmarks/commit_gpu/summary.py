@@ -1,6 +1,7 @@
 """A gpu.sh run's outputs, one line a measurement: `python3 summary.py OUT`; `python3 summary.py best OUT` prints the tag of
 the checked build whose e2e commitment was fastest; `python3 summary.py table OUT` renders the best build's measurements as
-the README's Markdown table, and `python3 summary.py tiles OUT [TAG]` a build's tile-leaf sweep."""
+the README's Markdown table, `python3 summary.py tiles OUT [TAG]` a build's tile-leaf sweep, and `python3 summary.py formats
+OUT [TAG]` that sweep under the timing-only format builds."""
 from __future__ import annotations
 
 import json
@@ -69,6 +70,19 @@ def table(out: str) -> None:
             print("| " + " | ".join(cells) + " |")
 
 
+def tile_case(b: dict) -> tuple[int, str, str]:
+    if b["bench"] == "e2e":
+        return b["n"] // 128, "e2e: 32 values (bf16 row, 1024 bits)", "row/v2"
+    leaf = f"R={b['tile_r']}: {b['tile_r']} x 32 values ({size(b['lbits'] // 8)})"
+    return b["tile_m"], leaf, "row-seg/v1" if b["bench"] == "tileseg" else "row/v2"
+
+
+def slowdown(s: dict) -> str:
+    g = s["beside_gemm"]
+    ga = g["gemms"] * g["gemm_ms"]
+    return f"{g['priority']['gemm_ms'] / ga - 1:+.2f}" + (f" ({g['gemms']})" if g["gemms"] > 1 else "")
+
+
 def tiles(out: str, tag: str = "") -> None:
     """The tile-leaf sweep (bench-tile-TAG, default the best build's): per prefill chunk M and leaf, the latency from the
     operand's last write to the root alone and beside the chunk's GEMM at high stream priority, and what each costs as a
@@ -81,16 +95,31 @@ def tiles(out: str, tag: str = "") -> None:
     rows = lines(os.path.join(out, f"bench-tile-{tag}.jsonl"))
     for b, s in zip(rows[::2], rows[1::2]):
         g, p = s["beside_gemm"], s["beside_gemm"]["priority"]
-        if b["bench"] == "e2e":
-            m, leaf, digest = b["n"] // 128, "e2e: 32 values (bf16 row, 1024 bits)", "row/v2"
-        else:
-            m = b["tile_m"]
-            leaf = f"R={b['tile_r']}: {b['tile_r']} x 32 values ({size(b['lbits'] // 8)})"
-            digest = "row-seg/v1" if b["bench"] == "tileseg" else "row/v2"
+        m, leaf, digest = tile_case(b)
         ga = g["gemms"] * g["gemm_ms"]
         cells = [str(m), leaf, digest, str(b["n"]), f"{b['graph_ms']:.3f} ({b['operand_gb_per_s_graph']:.0f})",
                  f"{g['commit_over_gemm']:.2f}", f"{b['salt_ms']:.3f}", f"{ga:.3f}" + (f" ({g['gemms']})" if g["gemms"] > 1 else ""),
                  f"{p['commit_ms']:.3f}", f"{p['gemm_ms']:.3f}", f"{p['gemm_ms'] / ga - 1:+.2f}"]
+        print("| " + " | ".join(cells) + " |")
+
+
+def formats(out: str, tag: str = "") -> None:
+    """The tile sweep under the timing-only format builds (TAG, then TAGmerged, TAGquad and TAGmergedquad, default the best
+    build's): latency alone in each, the tree's time binary and 4-ary, and at high priority beside the GEMM the root's time
+    and the GEMMs' slowdown (over as many GEMMs as the parenthesis says) in the default build and with both changes."""
+
+    tag = tag or best(out)
+    builds = [lines(os.path.join(out, f"bench-tile-{tag}{d}.jsonl")) for d in ("", "merged", "quad", "mergedquad")]
+    print("| chunk M | leaf | row digest | latency alone ms: default | merged | 4-ary | both | tree ms: binary -> 4-ary "
+          "| high priority: root at ms, default -> both | GEMM slowdown x GEMM, default -> both |")
+    print("|" + "---|" * 10)
+    for i in range(0, len(builds[0]), 2):
+        b, s, qs = builds[0][i], builds[0][i + 1], builds[3][i + 1]
+        m, leaf, digest = tile_case(b)
+        cells = [str(m), leaf, digest, *(f"{r[i]['graph_ms']:.3f}" for r in builds),
+                 f"{b['nodes_ms']:.3f} -> {builds[2][i]['nodes_ms']:.3f} (depth {b['depth']})",
+                 f"{s['beside_gemm']['priority']['commit_ms']:.3f} -> {qs['beside_gemm']['priority']['commit_ms']:.3f}",
+                 f"{slowdown(s)} -> {slowdown(qs)}"]
         print("| " + " | ".join(cells) + " |")
 
 
@@ -111,4 +140,4 @@ def main(out: str) -> None:
 
 if __name__ == "__main__":
     {"best": lambda: print(best(sys.argv[2])), "table": lambda: table(sys.argv[2]),
-     "tiles": lambda: tiles(*sys.argv[2:4])}.get(sys.argv[1], lambda: main(sys.argv[1]))()
+     "tiles": lambda: tiles(*sys.argv[2:4]), "formats": lambda: formats(*sys.argv[2:4])}.get(sys.argv[1], lambda: main(sys.argv[1]))()
