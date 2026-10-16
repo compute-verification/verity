@@ -31,7 +31,7 @@
 
 // ---- BS-CSA kernel ----------------------------------------------------------------------------------------------
 // A block owns WARPS rows x 1024 columns (32 column-blocks).  A warp owns one row; a lane owns one 32-column plane.
-constexpr int WARPS = 16;
+constexpr int WARPS = 8;
 constexpr int CB = 32;                 // column-blocks a block (= 32 lanes); 1024 columns
 constexpr int CT = BS_CSA_CHUNK_TERMS; // terms a chunk
 constexpr int LP = BS_CSA_LEVELS_P;
