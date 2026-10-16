@@ -192,7 +192,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                          "a clean environment; the runner keeps its records as itself (research.jobuser)")
     ap.add_argument("--pool", default=None, metavar="NAME",
                     help="with --on --source: run in the machine's NAME pool (`research`: any lane's research runs on vy-nebius-cpu-1, "
-                         "at nice 19 beside the merge checks; `proofs`): the run takes a slot there and its cwd is its source")
+                         "at nice 19 beside the merge checks; `proofs`): the run takes a slot there and its cwd is its source, or "
+                         "with --cwd clone a private clone of it, for a job that writes into the tree (a Lean check that rewrites a lock)")
     ap.add_argument("--as", dest="lane", default=os.environ.get("RESEARCH_LANE"), metavar="LANE",
                     help="with --pool: the lane the slot names (default $RESEARCH_LANE)")
     q = ap.add_argument_group("the queue (--queue): the one queue over the shared nodes (infra/cluster) places and runs the job; "
@@ -269,7 +270,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         why = ("is for --on, not --queue" if ns.queue
                else "needs --on MACHINE and --source (slot.py runs from the shipped tree)" if not (ns.on and ns.source)
                else "needs a lane: --as LANE or $RESEARCH_LANE" if not ns.lane
-               else f"runs from its source, not --cwd {cwd}" if cwd not in (None, "source") else None)
+               else f"runs from its source or a clone of it (slot.py's path is the tree's), not --cwd {cwd}"
+               if cwd not in (None, "source", "clone") else None)
         if why:
             print(f"research run: --pool {why}", file=sys.stderr)
             return 2
