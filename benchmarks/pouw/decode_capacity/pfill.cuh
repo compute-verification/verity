@@ -34,6 +34,9 @@
 #include "../pearl_c/sha512.cuh"
 
 #define PF_W 8
+#ifndef PF_CTAS
+#define PF_CTAS 2  // blocks an SM: 2 x 48 KB, 4 warps an SMSP
+#endif
 #define PF_TN 1024
 #define DFILL_GATE_W PF_W
 #define DFILL_GATE_S {32, 512}
@@ -110,7 +113,7 @@ __device__ __forceinline__ void pf_block(uint64_t c0, uint64_t c1, uint64_t tile
 }
 
 template <int NC>
-__global__ void __launch_bounds__(32 * PF_W, 1) dfill_k(uint64_t c0, uint64_t c1, unsigned long long tile0, int tiles,
+__global__ void __launch_bounds__(32 * PF_W, PF_CTAS) dfill_k(uint64_t c0, uint64_t c1, unsigned long long tile0, int tiles,
                                                        int steps, unsigned long long* __restrict__ rec) {
   constexpr bool regen = NC == 1 || NC == 2 || NC == 4;
   __shared__ __align__(16) uint8_t Bs[PF_TN * 32];  // column n's 32 bytes at 32 n, words in order 0 4 1 5 2 6 3 7
@@ -326,16 +329,17 @@ static void dfill_prep() {
   CK(cudaFuncSetAttribute(dfill_k<4>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
   CK(cudaFuncSetAttribute(dfill_k<5>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
 }
-// tiles a block so that a chunk is about 2^DFILL_CHUNK_LOG2 (default 19) MMAs an SM
+// PF_CTAS blocks for each of `grid` SMs, and tiles a block so that a chunk is about 2^DFILL_CHUNK_LOG2 (default 19) MMAs
+// an SM
 static DFill dfill_make(int grid, int W, int NC, int S, uint64_t c0, uint64_t c1) {
   if (W != PF_W || S < 32 || S % 32) {
     fprintf(stderr, "pfill: W must be %d and S a positive multiple of 32 (W %d, S %d)\n", PF_W, W, S);
     exit(1);
   }
   DFill f;
-  f.grid = grid; f.W = W; f.NC = NC; f.S = S; f.c0 = c0; f.c1 = c1;
+  f.grid = grid * PF_CTAS; f.W = W; f.NC = NC; f.S = S; f.c0 = c0; f.c1 = c1;
   const int lg = getenv("DFILL_CHUNK_LOG2") ? atoi(getenv("DFILL_CHUNK_LOG2")) : 19;
-  f.tiles = std::max(1, (int)((1LL << lg) / ((long long)W * S * (PF_TN / 8))));
+  f.tiles = std::max(1, (int)((1LL << lg) / ((long long)PF_CTAS * W * S * (PF_TN / 8))));
   CK(cudaMalloc(&f.rec, f.per() * sizeof(unsigned long long)));
   return f;
 }
