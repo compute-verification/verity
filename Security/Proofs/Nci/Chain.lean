@@ -168,4 +168,6 @@ end Nci.SecurityProofs
 
 theorem Nci.SecurityProofs.FullPositions : Nci.Guarantees.FullPositions := @Nci.SecurityProofs.full_positions
 
+theorem Nci.SecurityProofs.IuReads : Nci.Guarantees.IuReads := @Nci.SecurityProofs.iu_reads
+
 theorem Nci.SecurityProofs.OtherPositions : Nci.Guarantees.OtherPositions := @Nci.SecurityProofs.other_positions

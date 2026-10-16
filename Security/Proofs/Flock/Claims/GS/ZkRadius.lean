@@ -4,9 +4,8 @@ import Proofs.Flock.Claims.ZkDecodeFlock
 /-!
 # The masked level-0 code in the radius form
 
-The masked (`--zk`) verifier's level-0 code at each `m` it serves (`Flock.flockZkLevelZero i`, `m = 25 + i`): the
-`s = 2^k0` witness lanes of degree below `k = 2^cols + t` (`t = 2·q₀`) on `n = 2^d` positions, at rate
-`ρ_zk = (2^cols + t)/2^d`.
+The masked (`--zk`) verifier's level-0 code at each `m` it serves (`Flock.flockZkLevelZero i`, `m = 25 + i`): `s = 2^k0 + 4`
+lanes of degree below `k = 2^cols + t` (`t = 2·q₀`) on `n = 2^d` positions, at rate `ρ_zk = (2^cols + t)/2^d`.
 
 * `zkReader`: a masked message from its lanes' coefficient lists. Per lane, its `k` novel-basis coefficients by the
   inverse of `encPoly`'s coefficient matrix (`padInv`, the code's public data, fixed by `d` and `k`), `2k²` operations,

@@ -278,21 +278,6 @@ def test_a_tree_that_may_be_a_runs_only_copy_of_its_source_is_kept(node, setup, 
     assert (node.src / node.a).is_dir()
 
 
-def test_a_run_refused_before_its_workload_does_not_keep_the_tree_once_it_is_old(node):
-    """On node 2 (16 Oct), 43 trees and 1.15M inodes were kept only by refused runs (launch.json, refused.json, no job.json), as
-    "records no source commit": a refused run ran nothing, so the tree can't be the only copy of what it ran."""
-    for name, hours in (("r15", 3.0), ("r16", 1.0)):
-        rd = node.root / "runs" / name
-        rd.mkdir(parents=True)
-        (rd / "launch.json").write_text(json.dumps({"run_id": name, "cwd": f"{node.src}/{node.a if name == 'r15' else node.b}"}))
-        (rd / "refused.json").write_text(json.dumps({"run_id": name, "reason": "memory"}))
-        (rd / "job.json").write_text(json.dumps({"run": {"id": name}}))
-        _age(rd, hours)
-    rep = run(node)
-    assert rep["error"] is None and node.a in [d["tree"] for d in rep["deleted"]], kept(rep)
-    assert kept(rep)[node.b] == ["recent: run r16 was recorded within 2 h"], "a refused run still counts as recent"
-
-
 def _captured(n, *, marker: dict | None, digest: str = "d" * 64, cap_digest: str | None = None) -> None:
     rd = write_run(n, "r14", source=n.a, store={"commit": n.a, "dirty": True, "dirty_digest": digest})
     job = json.loads((rd / "job.json").read_text())
@@ -539,10 +524,6 @@ def test_the_cli_runs_the_pass_whatever_the_target_and_reports_it(node, monkeypa
     assert main(["evict", "--target-free-gb", "0", "--src-dir", str(node.src), "--src-origin", node.origin, "--dry-run", "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["src"] == {"deleted": [], "kept": [], "error": None}
     assert seen["src"] == node.src and seen["origin"] == node.origin and seen["dry_run"] is True
-    assert seen["keep_s"] == EV.SRC_KEEP_S
-    main(["evict", "--target-free-gb", "0", "--src-dir", str(node.src), "--src-keep-h", "0.5", "--dry-run", "--json"])
-    capsys.readouterr()
-    assert seen["keep_s"] == 1800, "a node short of inodes keeps recent trees for less"
 
 
 def test_by_default_a_tree_is_recoverable_when_the_nodes_own_repository_holds_its_commit(node):

@@ -1237,9 +1237,6 @@ def test_as_takes_only_a_name_this_agent_holds(fake, registry, routes_dirs, caps
     add_route(routes_dirs[0], "circuits", "1700000900.000200", holder="bc-11111111-2222-3333-4444-555555555555")
     monkeypatch.setenv("RESEARCH_AGENT_URL", "https://cursor.com/agents/bc-11111111-2222-3333-4444-555555555555")
     assert run(capsys, "send", "--as", "circuits", "--text", "a successor's first post")[0] == 0
-    desktop = next(a for a in held["console"] if not a.startswith("bc-"))
-    monkeypatch.setenv("RESEARCH_AGENT_URL", f"https://cursor.com/agents/{desktop}")
-    assert run(capsys, "send", "--as", "console", "--text", "from Daniel's laptop")[0] == 0
     monkeypatch.delenv("RESEARCH_AGENT_URL")
     monkeypatch.setattr(slack, "self_agent_id", lambda: None)
     rc, _, err = run(capsys, "send", "--as", "infra", "--text", "x")

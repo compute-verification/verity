@@ -1,6 +1,5 @@
 import Proofs.Flock.Claims.GS.RadiusFamily
 import Proofs.Flock.Claims.DeployCode
-import Proofs.Flock.Claims.ERepCost
 
 /-!
 # The radius decoders at Flock's deployed instances
@@ -17,13 +16,11 @@ import Proofs.Flock.Claims.ERepCost
   `(os.length + n)·2^k0·128` (`plainDecodeR_complexity`).
 * `plainDecodeRD`, the plain family (`famDecodeR`): `ListWithin` at `deployPlain rel`'s `len`, `enc` and `θ`
   (`listWithin_deployPlain`), with `DecoderComplexity` `14·(flockPolyR + X)` at the schedules' sizes summed
-  (`plainSizeRD`, `plainDecodeRD_complexity`), its lists at most that long (`plainDecodeRD_length_le`).
+  (`plainSizeRD`, `plainDecodeRD_complexity`).
 * `zkDecodeRD`, the masked family: `ListWithin` at `deployZk rel`'s `len`, `enc` and `θ` (`listWithin_deployZk`), with
-  `DecoderComplexity` `11·(zkPolyR + X)` at `zkSizeRD` (`zkDecodeRD_complexity`), its lists at most that long
-  (`zkDecodeRD_length_le`).
+  `DecoderComplexity` `11·(zkPolyR + X)` at `zkSizeRD` (`zkDecodeRD_complexity`).
 
-`radius_deployPlain` and `radius_deployZk` state each record's pair, `ListWithin` and `DecoderComplexity`;
-`efficient_deployPlain` and `efficient_deployZk` are `Claims.Flock.Efficient` at each record and its decoder.
+`radius_deployPlain` and `radius_deployZk` state each record's pair, `ListWithin` and `DecoderComplexity`.
 -/
 
 namespace Claims.GS
@@ -178,27 +175,6 @@ theorem plainDecodeRD_complexity :
   rw [Fintype.card_fin] at this
   exact this
 
-/-- **The plain verifier's radius decoder lists at most `14·(flockPolyR + X)` at `plainSizeRD`**: each `m`'s decoder
-lists at most `2^d`, one per point of the filled word (`length_gsDecode_le`), and `2^d` is within the size. -/
-theorem plainDecodeRD_length_le (os : List (ℕ × List GF128)) :
-    (plainDecodeRD os).length ≤ (C 14 * (flockPolyR + Polynomial.X)).eval (plainSizeRD os) := by
-  have hi : ∀ i : Flock.PlainIdx,
-      (plainDecodeR i (IRS.colsAt (2 ^ Flock.plainLanes i) os)).length ≤ plainSizeRD os := by
-    intro i
-    unfold plainDecodeR
-    refine (length_gsDecode_le _ _ _ _ _).trans ?_
-    rw [length_fillPts, max_eq_right Nat.one_le_two_pow]
-    refine le_trans ?_ (Finset.single_le_sum
-      (f := fun i : Flock.PlainIdx => (os.length + 2 ^ Flock.plainLen i) * 2 ^ Flock.plainLanes i * 128)
-      (fun _ _ => Nat.zero_le _) (Finset.mem_univ i))
-    have hw : 1 ≤ 2 ^ Flock.plainLanes i * 128 := Nat.one_le_iff_ne_zero.2 (by positivity)
-    calc 2 ^ Flock.plainLen i ≤ os.length + 2 ^ Flock.plainLen i := Nat.le_add_left _ _
-      _ ≤ (os.length + 2 ^ Flock.plainLen i) * (2 ^ Flock.plainLanes i * 128) := Nat.le_mul_of_pos_right _ hw
-      _ = (os.length + 2 ^ Flock.plainLen i) * 2 ^ Flock.plainLanes i * 128 := by ring
-  refine (length_famDecodeR_le plainDecodeR os _ hi).trans ?_
-  simp only [Fintype.card_fin, eval_mul, eval_C, eval_add, eval_X]
-  exact Nat.mul_le_mul_left 14 (Nat.le_add_left _ _)
-
 /-! ## At the deployed instances -/
 
 /-- **The plain verifier's radius decoder meets `ListWithin`** at the deployed plain instance's code, length and
@@ -228,18 +204,5 @@ theorem radius_deployZk (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
         zkDecodeRD ∧
       DecoderComplexity zkDecodeRD zkCountedRD zkSizeRD (C 11 * (zkPolyR + Polynomial.X)) :=
   ⟨listWithin_deployZk rel, zkDecodeRD_complexity⟩
-
-/-- **Flock's `Efficient` at the plain instance**: `E^rep`'s reruns, the radius decoder's `ListWithin` and
-`DecoderComplexity`, and its lists, which bound `assemble`'s checks, at most `14·(flockPolyR + X)` at `plainSizeRD`. -/
-theorem efficient_deployPlain (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
-    Flock.Efficient H (FlockDeploy.deployPlain rel) plainDecodeRD plainCountedRD plainSizeRD
-      (C 14 * (flockPolyR + Polynomial.X)) :=
-  Flock.Efficient_of_decoder H _ _ _ _ _ (listWithin_deployPlain rel) plainDecodeRD_complexity plainDecodeRD_length_le
-
-/-- **Flock's `Efficient` at the masked instance**: `E^rep`'s reruns, the radius decoder's `ListWithin` and
-`DecoderComplexity`, and its lists, which bound `assemble`'s checks, at most `11·(zkPolyR + X)` at `zkSizeRD`. -/
-theorem efficient_deployZk (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
-    Flock.Efficient H (FlockDeploy.deployZk rel) zkDecodeRD zkCountedRD zkSizeRD (C 11 * (zkPolyR + Polynomial.X)) :=
-  Flock.Efficient_of_decoder H _ _ _ _ _ (listWithin_deployZk rel) zkDecodeRD_complexity zkDecodeRD_length_le
 
 end Claims.GS

@@ -5,8 +5,7 @@ import Proofs.Flock.Claims.Scope.Sizes
 
 A deployed record whose parser is the verifier's (`parseOf`: the statement's bytes decoded to what the verifier reads, set
 up by `Read.parse`, read by `toReadable`) and whose scope check is the verifier's (`scopeCheckOf`: the parser accepts
-and `verify`'s scope refusal, `Parsed.scope`, passes: `ProvedScope.check`, then `ProvedScope.sizesOk` on the tables),
-and whose table `j` is the verifier's table `j` alone (`tableOf`):
+and `verify`'s scope refusal, `Parsed.scope`, passes: `ProvedScope.check`, then `ProvedScope.sizesOk` on the tables):
 
 * `scope_iff`: the readable scope holds exactly when the verifier parses the statement and `Parsed.scope` passes;
 * `scopeMatches`: `ScopeMatches` holds, with `--zk` and without.
@@ -22,12 +21,6 @@ def parseBytes (decode : Claims.Msg → Option Read) (x : Claims.Msg) : Option P
 def parseOf (rel : Parsed → Relation) (decode : Claims.Msg → Option Read) (x : Claims.Msg) :
     Option Claims.Flock.Stmt :=
   (parseBytes decode x).map (toReadable rel)
-
-/-- **Table `j`'s own statement at the deployed parser**: table `j` of the verifier's parsed statement, alone
-(`Parsed.only`), readable. -/
-def tableOf (rel : Parsed → Relation) (decode : Claims.Msg → Option Read) (x : Claims.Msg) (j : ℕ) :
-    Option Claims.Flock.Stmt :=
-  (parseBytes decode x).map fun p => toReadable rel (p.only j)
 
 /-- **The deployed scope check**: the verifier parses the statement and its scope refusal (`Parsed.scope`) passes. -/
 def scopeCheckOf (decode : Claims.Msg → Option Read) (x : Claims.Msg) : Bool :=

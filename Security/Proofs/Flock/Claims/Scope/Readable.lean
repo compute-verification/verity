@@ -17,7 +17,6 @@ relation's fields, and the `Form` the scope check reads, each field the value `P
   parsed tables' `m`, as `verifyCmd`'s verdict runs them.
 * `Read.form`: the `Form` of `ProvedScope.check`'s tests, on the circuit and public file as it reads them
   (`ProvedScope.circuitOf`, `ProvedScope.publicOf`).
-* `Parsed.only`: one table of a parsed statement, alone.
 * `Relation`: the readable relation's fields (`C`, `inp`, `out`, `pub`), which `toReadable` takes as a function of the
   parsed statement; the scope reads none of them. The deployed one is `relation` (`Scope.Tables`).
 -/
@@ -108,10 +107,6 @@ def Parsed.scope (p : Parsed) : Except String Unit := do
 
 /-- The parsed statement is the parser's own. -/
 def Parses (p : Parsed) : Prop := p.toRead.parse = some p
-
-/-- **Table `j` alone**: the parsed statement with table `j`'s statement as its only table, the statement of its units
-by themselves. -/
-def Parsed.only (p : Parsed) (j : ℕ) : Parsed := { p with sts := #[p.sts[j]!] }
 
 /-- The readable relation's fields: the block circuit, each block's inputs and outputs, and the public values. -/
 structure Relation where

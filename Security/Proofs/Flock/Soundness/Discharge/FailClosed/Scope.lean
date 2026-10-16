@@ -147,11 +147,6 @@ theorem check_ok {t : Tags} {zk : Bool} {cf pf : ByteArray} {tables : List (Stri
       generalize ProvedScope.sharedRowsOk t zk reg = b
       cases b <;> simp
   refine ⟨c, pub, hc, hp, htab, ?_⟩
-  have hw : ¬ (ProvedScope.wiresFeed c && !ProvedScope.wiresAcyclic c) = true := by
-    intro hx
-    simp only [hx, ↓reduceIte] at h
-    cases h
-  simp only [hw] at h
   generalize (if t.hiddenOutputs then ProvedScope.scopeOkH c else ProvedScope.scopeOk c) = b at h
   cases b
   · cases h

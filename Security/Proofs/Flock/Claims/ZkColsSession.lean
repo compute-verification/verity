@@ -9,8 +9,7 @@ salts, against the table's committed `root_B`, which must be the proof's cap. A 
 climb's left and right turns and its cap entry), so passing it is opening exactly where the verifier opened: the
 positions of every other round of the stream with at least `q₀` coins must fail it, and so must the reader's with one
 position's low bit flipped. The table's `zkRunCols` must be both reps' positions below `2^d`, once each, in any order,
-each with its row's first `2^k0` symbols, the witness lanes. Prints one `ZKCOLS` JSON line per table; exits 1 if a
-check fails.
+each with a row of `2^k0 + Zk.EXTRA_LANES` symbols. Prints one `ZKCOLS` JSON line per table; exits 1 if a check fails.
 
     uv run python -m research data fetch art:5542740a --to STORE
     cd Security/Proofs && lake env lean --run Flock/Claims/ZkColsSession.lean SESSION_DIR M K_LOG CLAIMS TABLE...
@@ -78,12 +77,12 @@ def table (j : Json) (dir : String) (m kLog claims : Nat) (t : String) : IO Bool
   let colPos := cols.map (·.1)
   let want := (opened.toList.filter (· < 2 ^ lv.d)).eraseDups
   let posOk := sorted colPos == sorted want
-  let widthOk := cols.all (·.2.length == 2 ^ lv.lanes)
+  let widthOk := cols.all (·.2.length == 2 ^ lv.lanes + Zk.EXTRA_LANES)
   ok := ok && posOk && widthOk
   IO.println s!"ZKCOLS {(Json.mkObj [("table", toJson t), ("m", toJson m), ("k_log", toJson kLog),
     ("claims", toJson claims), ("k0", toJson sh.sched.k0), ("q0", toJson lv.q), ("d", toJson lv.d),
     ("query_round", toJson q), ("reps", Json.arr out), ("opened", toJson opened.size), ("run_cols", toJson cols.length),
-    ("run_cols_are_the_reps_positions", toJson posOk), ("run_cols_are_2^k0_witness_lanes", toJson widthOk),
+    ("run_cols_are_the_reps_positions", toJson posOk), ("run_cols_rows_are_2^k0+extra", toJson widthOk),
     ("ok", toJson ok)]).compress}"
   return ok
 

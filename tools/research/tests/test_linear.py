@@ -9,7 +9,7 @@ import urllib.parse
 import pytest
 
 from research import linear, slack
-from test_slack import COORD, bells, fake, inbox, registry, routes_dirs, run  # noqa: F401  (Slack's fixtures)
+from test_slack import COORD, fake, registry, routes_dirs, run  # noqa: F401  (Slack's fixtures)
 
 APP = {"LINEAR_CLIENT_ID": "dummy-client", "LINEAR_CLIENT_SECRET": "dummy-secret"}
 KEY = {"LINEAR_API_KEY": "dummy-key"}
@@ -73,8 +73,6 @@ class FakeLinear:
             return {"data": {"issues": {"nodes": [
                 {"identifier": "INF-2", "title": "later", "createdAt": "2026-10-14T02:00Z", "state": {"name": "In Progress"}},
                 {"identifier": "INF-1", "title": "first", "createdAt": "2026-10-14T01:00Z", "state": {"name": "Backlog"}}]}}}
-        if "team { key }" in q:
-            return {"data": {"issue": {"id": "I1", "identifier": "INF-1", "url": "https://linear.app/x/issue/INF-1", "team": {"key": "INF"}}}}
         if "issue(id: $id) { id }" in q:
             return {"data": {"issue": {"id": "I1"}}}
         if "issueUpdate" in q:
@@ -237,21 +235,6 @@ def test_the_state_comment_and_list_verbs(fake, registry, capsys, lin):
     assert lin.listed["state"] == {"name": {"eqIgnoreCase": "In Progress"}}
     rc, _, err = run(capsys, "linear", "state", "INF-1")
     assert rc != 0 and "give the STATE" in err
-
-
-def test_a_comment_rings_the_issues_team_and_the_names_it_starts_with_but_never_its_author(fake, registry, routes_dirs, capsys, lin):
-    """No one subscribes to Linear comments (each would echo its author), so a lane polled its issues instead (COMM-30)."""
-    lin.subscribers["I1"] = []
-    infra, circuits = inbox(fake, routes_dirs, "infra"), inbox(fake, routes_dirs, "circuits")
-    rc, _, err = run(capsys, "linear", "comment", "INF-1", "@circuits the trace is up", "--as", "compute-accounting")
-    assert rc == 0 and "route @infra: rang" in err and "route @circuits: rang" in err
-    (bell,) = bells(fake, infra)
-    assert bell["text"] == "from compute-accounting, Linear INF-1 (https://linear.app/x/issue/INF-1): @circuits the trace is up"
-    assert len(bells(fake, circuits)) == 1 and not bell["text"].startswith("@")
-    rc, _, err = run(capsys, "linear", "comment", "INF-1", "picked up", "--as", "infra")              # the owner on its own issue
-    assert rc == 0 and "route" not in err and len(bells(fake, infra)) == 1
-    rc, _, err = run(capsys, "linear", "comment", "INF-1", "see this, @circuits", "--as", "proofs")
-    assert rc == 2 and "past its start" in err                                                         # names ring only at the start
 
 
 def test_subscriptions_name_the_leads_linear_team_and_the_registry_refuses_a_shared_key(registry, capsys):

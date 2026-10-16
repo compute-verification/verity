@@ -4,7 +4,6 @@ import Proofs.Accounting.Bandwidth
 import Proofs.Accounting.Prob
 import Proofs.Accounting.Joint
 import Proofs.Accounting.Pouw
-import Proofs.Accounting.PouwWork
 import Proofs.Accounting.BandwidthAudit
 import Proofs.Accounting.RateAudit
 import Proofs.Accounting.BoundReceipt

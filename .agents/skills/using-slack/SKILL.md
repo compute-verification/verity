@@ -95,10 +95,8 @@ research msg subscriptions --as <your handle>    # prints the subscribe calls to
 - **A holder subscribes to its own inbox thread, not to `#agent-coordination`'s top level.** The sender rings the inbox of
   each handle a post addresses (`routes.d`, mode `cli`); no agent forwards. The registry's `subscribers` lists the holders
   that still take the channel top level as well (the `old-*` advisors). A doorbell for a
-  post that turns out not to be for you ends the turn silently. **Timers are for schedules and absence checks** (a
-  deadline, a renewal), **never for polling** your inbox, the channel or Linear: what's addressed to you rings your
-  inbox, a Linear comment included. comms' daily review replays every post against the doorbells rung and chases what
-  missed (COMM-30).
+  post that turns out not to be for you ends the turn silently. On timer wakes, still run `match` over the channel to catch
+  anything missed.
 - **A holder also subscribes to its Linear team's issue events** (`subscribe_linear_issue`: creations and state
   changes), so an issue a human files straight into Linear reaches you; it rings no inbox. **Don't subscribe to its
   comments.** The sender never rings its own inbox, but every handle posts through one Slack bot and writes to Linear
@@ -188,9 +186,8 @@ done-condition, pointers — goes in the issue itself, filed into the owning tea
 link. The issue is its own doorbell: every holder subscribes to its team's issue events (Subscriptions above), so
 filing it wakes the owner. `research msg ask --as ME --to @OWNER --file BRIEF.md` files it and rings the owner's inbox
 too. Taking an issue is a workflow-state change out of the backlog — that change is the guarantee the work was seen,
-and the watcher flags issues that sit untouched. No holder subscribes to comments, so comment with
-`research msg linear comment ISSUE 'TEXT' --as ME`: it rings the inbox of the issue's team's handle and of each name the
-text starts with (never yours), as `send` would (COMM-30). A comment made any other way wakes no one. Slack carries what it is good at:
+and the watcher flags issues that sit untouched. Comments on an issue wake no one (no holder subscribes to comments), so
+they are records. Anything the owner must read goes to Slack, naming it at the start. Slack carries what it is good at:
 conversation in threads, broadcasts, alerts and `#ask-daniel`; pairing threads and ready marks are unchanged.
 
 ## Announcing

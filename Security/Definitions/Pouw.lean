@@ -84,7 +84,6 @@ import Definitions.Pouw.PearlC.W1
 import Definitions.Pouw.PearlC.W1Stop
 import Definitions.Pouw.PearlC.WholeCircuit
 import Definitions.Pouw.PearlC.WholeCircuit4
-import Definitions.Pouw.RelativeSecurity
 import Definitions.Pouw.TileBound.AlignedExactDefs
 import Definitions.Pouw.TileBound.Defs
 import Definitions.Pouw.TileBound.Fp8Defs

@@ -29,8 +29,8 @@ Two kinds of local copy can go, and only these:
   environment, any `src/<sha>` they spell, any sha a process inside `<src>` names, a thread's cwd when its leader exited), no git worktree made from it, no run that has not ended and no request without a
   run dir names it, no live check or Lean slot holder or waiter (`<root>/locks`) names it, no job script queued for the fill
   (`retention.JobScripts`) names it, and nothing in it changed and no run naming it was recorded within `SRC_KEEP_S`; (3) no run
-  record holds it as its source's only copy: its READY.json names its own commit, and every run record naming it, but a refused
-  one (refused.json, no status.json: its workload never ran), names that commit as its source, clean, or dirty with the dirty bytes in the run's preserved record (the runner's capture, env.DIRTY_CAPTURE, at the
+  record holds it as its source's only copy: its READY.json names its own commit, and every run record naming it names that commit
+  as its source, clean, or dirty with the dirty bytes in the run's preserved record (the runner's capture, env.DIRTY_CAPTURE, at the
   size and sha256 job.json names, listed by the run's `.custody`; `_dirty_preserved`).  A tree with a `research keep` record is left
   to `research retention`.  This pass is the only thing that deletes a whole source tree (`node_sweep.sh` no longer does).  Not on a free-space target: an
   unused tree costs inodes as much as bytes (node 1 at 74% inodes, 4 Oct), and `research run` re-ships one from
@@ -607,8 +607,7 @@ def _dirty_preserved(rd: Path, job: dict[str, Any], src: dict[str, Any]) -> bool
 def record_uses(pattern: re.Pattern[str], runs_dirs: list[Path], requests_dir: Path, *, now: float,
                 keep_s: float = SRC_KEEP_S) -> dict[str, set[str]]:
     """{sha: reasons} from the run records that name a tree (job.json, launch.json, remote.json) and the requests: a run that has
-    not ended, or was recorded within `keep_s`, or whose source is not the tree's own clean commit (condition 3; a refused run ran
-    nothing, so it is no run's source and keeps a tree only while recent), and a request
+    not ended, or was recorded within `keep_s`, or whose source is not the tree's own clean commit (condition 3), and a request
     with no run dir yet or whose run has not ended."""
     uses: dict[str, set[str]] = {}
 
@@ -628,8 +627,6 @@ def record_uses(pattern: re.Pattern[str], runs_dirs: list[Path], requests_dir: P
             mtime = _quiet(lambda: os.stat(rd / "job.json").st_mtime)
             if mtime is not None and now - mtime < keep_s:
                 add(named, f"recent: run {name} was recorded within {keep_s / 3600:g} h")
-            if state == "refused":
-                continue
             job = _doc(texts["job.json"])
             if job == {}:
                 add(named, f"3: run {name}'s job.json does not parse")

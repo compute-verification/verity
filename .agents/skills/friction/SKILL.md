@@ -109,12 +109,6 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
-- 2026-10-16 (10:06 AM PDT, decision 22 of the compute-accounting decision pack): duo receipts are a second named
-  exception to one hash, beside Pearl's FP8 scheme (`AGENTS.md`, "One hash"). PoUW's per-step receipts, keyed u32
-  mul/xor/rotl folds over committed accumulator words, tie each committed prefix word to its SHA-512 commitment inside
-  the GEMM, since a SHA-512 leaf for every prefix word costs 52–68× the GEMM at L = 32. Their binding premise H-μ⁺ is
-  named (the premise ledger's row R1, `note:20261016T0219Z-report-premise-ledger`) and goes into the lock; proving it
-  beyond single-word errors is a work item. The served GEMM stays on duo while Theorem K is the floor of record.
 - 2026-10-14 (12:53 PM PDT): hard switches, one abstraction per job. The moves we've made are total: the new repository,
   one cloud agent per lead talking horizontally, and Linear as the work-item layer (the brief colocated in the issue,
   filed into the owning team; pickup is the issue's state change; Slack narrows to conversation, broadcasts, alerts and

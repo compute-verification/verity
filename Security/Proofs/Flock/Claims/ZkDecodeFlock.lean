@@ -9,14 +9,12 @@ import Flock.Zk
 The masked verifier's level 0 at `m` is `Zk.schedule m`'s (`zkSched`, `zkLevel0`): `fast100`'s level 0, `2^k0` witness
 lanes of `2^cols` columns on `2^d = 2^{cols+1}` positions, with level 0's query count `q₀` and padding `t = 2·q₀`. At
 the `m` the masked verifier serves, `25 ≤ m ≤ 35` (`ZkIdx`, `m = 25 + i`), its masked code is `zkLevelZero` in the
-executable's arithmetic (`execArith`, GF(2^128)) on the `2^k0` witness lanes, with `c₀ = Zk.PAD_C`
-(`flockZkLevelZero`). The committed codeword also carries `Zk.EXTRA_LANES` lanes after the witness's, two per rep, each
-rep's own; extraction needs only the witness lanes, so a masked column is an opened row's first `2^k0` symbols
-(`zkRepColsOf`), the lanes the old `--zk` theorems bound closeness on (`padList` with no extra lanes):
+executable's arithmetic (`execArith`, GF(2^128)) with `2^k0 + Zk.EXTRA_LANES` lanes and `c₀ = Zk.PAD_C`
+(`flockZkLevelZero`):
 
 | `m`      | 25   | 26   | 27   | 28   | 29   | 30   | 31   | 32..35     |
 |----------|------|------|------|------|------|------|------|------------|
-| lanes    | 64   | 64   | 64   | 16   | 32   | 64   | 64   | 64         |
+| lanes    | 68   | 68   | 68   | 20   | 36   | 68   | 68   | 68         |
 | degree < | 4650 | 8676 | 16842| 131510 | 131510 | 131510 | 262582 | 2^cols + 436 |
 | `2^d`    | 2^13 | 2^14 | 2^15 | 2^18 | 2^18 | 2^18 | 2^19 | 2^20..2^23 |
 
@@ -56,8 +54,8 @@ def zkCols (i : ZkIdx) : ℕ := (zkLevel0 i.m).cols
 def zkPad (i : ZkIdx) : ℕ := (zkSched i.m).2
 def zkLen (i : ZkIdx) : ℕ := (zkLevel0 i.m).d
 
-/-- The masked code's lanes at index `i`: the witness's `2^k0`. -/
-abbrev zkWidth (i : ZkIdx) : ℕ := 2 ^ zkLanes i
+/-- The masked code's lanes at index `i`: the witness's `2^k0`, then the extra lanes. -/
+abbrev zkWidth (i : ZkIdx) : ℕ := 2 ^ zkLanes i + Flock.Zk.EXTRA_LANES
 
 theorem zkShape_fits : ∀ i : ZkIdx, zkLen i ≤ 40 ∧ 2 ^ zkCols i + zkPad i ≤ 2 ^ zkLen i := by
   decide +kernel
@@ -75,8 +73,8 @@ theorem zkShape_table : ∀ i : ZkIdx,
       (Flock.Zk.queries0 i.m).toOption = some (zkLevel0 i.m).q := by
   decide +kernel
 
-/-- **The deployed masked level-0 code at index `i`**: `zkLevelZero` in the executable's arithmetic, the `2^k0`
-witness lanes of degree below `2^cols + t` at `2^d` positions, padded with `c₀ = Zk.PAD_C`. -/
+/-- **The deployed masked level-0 code at index `i`**: `zkLevelZero` in the executable's arithmetic, `2^k0 + 4` lanes
+of degree below `2^cols + t` at `2^d` positions, padded with `c₀ = Zk.PAD_C`. -/
 noncomputable def flockZkLevelZero (i : ZkIdx) : IRS 𝔽 (ZkMessage 𝔽 (zkWidth i) (zkCols i) (zkPad i)) (zkWidth i) :=
   zkLevelZero execArith execArith_correct (zkWidth i) (zkCols i) (zkPad i) (zkLen i)
     (FlockLevel3.GF128.of Flock.Zk.PAD_C) (zkShape_fits i).1 (zkShape_fits i).2
@@ -125,9 +123,9 @@ theorem zkQueries_lt_zkNMinD {agree : ℝ} (ha0 : 0 < agree) (ha1 : agree ≤ 1)
   rw [zkNMinD_eq, ← (zkShape_table M.1).2.2.2.2.1]
   exact pad_lt_zkJohnsonCount ha0 ha1
 
-/-- **The deployed masked read step**: `zkRead` at the candidate's `m`, every lane a witness lane. -/
+/-- **The deployed masked read step**: `zkRead` at the candidate's `m`. -/
 noncomputable def zkReadD (M : ZkTrace) : Wit :=
-  zkRead execArith M.1.m (zkLanes M.1) 0 (zkCols M.1) (zkPad M.1) M.2
+  zkRead execArith M.1.m (zkLanes M.1) Flock.Zk.EXTRA_LANES (zkCols M.1) (zkPad M.1) M.2
 
 /-- The read covers the statement's trace: `2^m` hidden values. -/
 theorem zkReadD_hid_length (M : ZkTrace) : (zkReadD M).hid.length = 2 ^ M.1.m :=

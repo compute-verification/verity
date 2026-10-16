@@ -150,7 +150,6 @@ import Proofs.Flock.Soundness.Discharge.Zero
 import Proofs.Flock.Soundness.Discharge.Layout
 import Proofs.Flock.Soundness.Discharge.Const
 import Proofs.Flock.Soundness.Discharge.Placed
-import Proofs.Flock.Soundness.Discharge.Inst
 import Proofs.Flock.Soundness.Discharge.Exec
 import Proofs.Flock.Soundness.Discharge.Integrate
 import Proofs.Flock.Soundness.Discharge.ZkSession

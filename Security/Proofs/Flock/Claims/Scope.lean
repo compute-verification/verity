@@ -11,7 +11,6 @@ import Proofs.Flock.Claims.Scope.Tables
 import Proofs.Flock.Claims.Scope.Fit
 import Proofs.Flock.Claims.Scope.Deployed
 import Proofs.Flock.Claims.Scope.Witness
-import Proofs.Flock.Claims.Scope.Split
 
 /-! Flock's scope at the deployed verifier: the verifier's statement read as `Claims.Flock.Stmt` (`Readable`),
 `ProvedScope.check` both ways (`Check`), what the setup gives the scope (`Setup`), the readable scope against the check
@@ -24,6 +23,5 @@ relation (`Tables`: `relation`), the verifier's tables as that system, whose `Re
 verifier parses, every table fits the first's blocks and has the verifier's layout (`Fit`: `tables_fit`,
 `relS_layout`), and at the deployed parser (`FlockDeploy.parse`) a parsed statement's `RelS` is its tables' models
 satisfied (`Deployed`: `relS_deployed`). The tables' model witnesses as a readable witness that satisfies `RelS`
-(`Witness`: `relS_witOf`). The relation splits by table: `RelS` holds exactly when each table's share satisfies that
-table alone (`Split`: `relS_only`). `ScopeMatches` at the deployed records is `FlockDeploy.scopeMatches_zk` and
+(`Witness`: `relS_witOf`). `ScopeMatches` at the deployed records is `FlockDeploy.scopeMatches_zk` and
 `FlockDeploy.scopeMatches_plain` (`DeployCode`), `Matches`' `scopeMatches` at the verifier's reading. -/
