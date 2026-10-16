@@ -237,7 +237,7 @@ theorem foldl_add_eq {α : Type} (f : α → ℕ) :
     omega
 
 /-- **A plain rep records at most `2200` rounds** at a served `m`, `k_log ≤ 27`, at most `1026` regions and two link
-points: `(m − 3) + (k_log − 3) + (2 + 2·regions + 1) + (k0 + 5 + 11·(levels − 1)) ≤ 2188`. -/
+points: `(3 + (m − 6)) + (3 + (k_log − 6)) + (2 + 2·regions + 1) + (k0 + 5 + 11·(levels − 1)) ≤ 2188`. -/
 theorem repRounds_plain_le (spec : SessionSpec) (st : Stmt) (h1 : 22 ≤ st.m) (h2 : st.m ≤ 35)
     (hk : st.c.kLog ≤ 27) (hR : st.regions.size ≤ 1026) (hp : spec.points ≤ 2) : repRounds false spec st ≤ 2200 := by
   have hc : spec.points * st.regions.size ≤ 2052 := (Nat.mul_le_mul hp hR).trans (by norm_num)
@@ -255,7 +255,7 @@ theorem repRounds_plain_le (spec : SessionSpec) (st : Stmt) (h1 : 22 ≤ st.m) (
     omega
 
 /-- **A masked rep records at most `2200` rounds** at a served `m`, `k_log ≤ 27`, at most `1026` regions and two link
-points: `(m + k_log − 6) + (2 + 2·regions + 1) + (k0 + 7 + 11·(levels − 1)) + 4 ≤ 2194`. -/
+points: `(m + (k_log − 6)) + (2 + 2·regions + 1) + (k0 + 7 + 11·(levels − 1)) + 4 ≤ 2194`. -/
 theorem repRounds_zk_le (spec : SessionSpec) (st : Stmt) (h1 : 25 ≤ st.m) (h2 : st.m ≤ 35)
     (hk : st.c.kLog ≤ 27) (hR : st.regions.size ≤ 1026) (hp : spec.points ≤ 2) : repRounds true spec st ≤ 2200 := by
   have hc : spec.points * st.regions.size ≤ 2052 := (Nat.mul_le_mul hp hR).trans (by norm_num)
