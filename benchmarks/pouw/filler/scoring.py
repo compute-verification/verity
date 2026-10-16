@@ -19,7 +19,7 @@ Each entry is one unit of serving-alone wall time. Per entry, with the arm:
 
 SCORE is the time-weighted mean of the entries' coverage (weights: each entry's wall time with the arm, one unit alone),
 i.e. Σ certified ÷ Σ capacity × time. The c's are the PROVED certified fractions (`CERTIFIED`); the filler's is the
-spec's provisional 0.99 until FILL-SEC proves one, and every result carries that flag.
+spec's provisional 0.99 until FILL-SEC proves one, and every result with filler work carries that flag.
 """
 
 from __future__ import annotations
@@ -105,11 +105,15 @@ def point_stats(row: dict) -> dict:
     fill = row["place"] != "none"
     rate, cv = 0.0, None
     if fill:
-        win = sum(b["arm"]["window_ms"] for b in row["blocks"])
-        chunks = sum(b["arm"]["chunks"] for b in row["blocks"])
-        rate = chunks * row["chunk_macs"] / (win * 1e-3) if win > 0 else 0.0
-        per = [b["arm"]["chunks"] * row["chunk_macs"] / (b["arm"]["window_ms"] * 1e-3) for b in row["blocks"]
-               if b["arm"]["window_ms"] > 0]
+        # completions between the first and last seen inside each window over that span (rows from before span_ms:
+        # completions over the window, whose phase biases a ~20-chunk window by up to a chunk)
+        span = all("span_ms" in b["arm"] for b in row["blocks"])
+        work = [(b["arm"]["chunks"] - 1, b["arm"]["span_ms"]) if span else (b["arm"]["chunks"], b["arm"]["window_ms"])
+                for b in row["blocks"]]
+        work = [(n, ms) for n, ms in work if n > 0 and ms > 0]
+        tot = sum(ms for _, ms in work)
+        rate = sum(n for n, _ in work) * row["chunk_macs"] / (tot * 1e-3) if tot > 0 else 0.0
+        per = [n * row["chunk_macs"] / (ms * 1e-3) for n, ms in work]
         cv = statistics.pstdev(per) / statistics.mean(per) if len(per) > 1 and statistics.mean(per) > 0 else None
     alone_rate = row["alone_fill"]["mac_per_s"] if fill else 0.0
     return {
@@ -119,6 +123,7 @@ def point_stats(row: dict) -> dict:
         "clock_reads": sum(1 for r in al + ar if r[1] > 0), "power_reads": sum(1 for r in al + ar if r[2] > 0),
         "reps": len(al) + len(ar), "fill_rate": rate, "fill_rate_alone": alone_rate, "fill_rate_cv": cv,
         "beside_over_alone": rate / alone_rate if alone_rate else None,
+        "of_peak": rate / (PER_SM * row["fill_sms"] * _med([r[1] for r in ar]) * 1e6) if fill and row["fill_sms"] else None,
         "rec_checked": row["rec_checked"], "rec_bad": row["rec_bad"], "place": row["place"],
         "fill_sms": row["fill_sms"], "setup_ms": row["setup_ms"], "spread": row["spread"],
         "kv_wrapped": row["kv_wrapped"],
@@ -200,7 +205,7 @@ def score(stats: dict, certified: dict = CERTIFIED) -> dict:
         entries.append({"entry": e["entry"], "kind": e["kind"], **coverage(r, certified)})
     out = {"entries": entries, "missing": missing, "certified": certified,
            "flags": [f"filler certified fraction {certified['filler']['fraction']} is {certified['filler']['status']}"]
-           if certified["filler"]["status"] != "proved" else []}
+           if certified["filler"]["status"] != "proved" and any(e["filler_share"] > 0 for e in entries) else []}
     if entries and not missing:
         w = [e["time"] for e in entries]
         out["SCORE"] = sum(e["coverage"] * x for e, x in zip(entries, w)) / sum(w)
@@ -262,8 +267,68 @@ def dram_gate(filler_csv: str | None, control_csv: str | None) -> dict:
             "why": None if ok else f"filler DRAM {rate / hbm:.2%} of HBM > {DRAM_LIMIT:.0%}"}
 
 
+RANGE_LOG2 = 32  # dscore.cu's: round R's tiles are [R·2^32, (R + 1)·2^32)
+_M64 = (1 << 64) - 1
+
+
+def smix(x: int) -> int:
+    """dcap.cu's smix (splitmix64's finaliser)."""
+    x = (x + 0x9E3779B97F4A7C15) & _M64
+    x = ((x ^ (x >> 30)) * 0xBF58476D1CE4E5B9) & _M64
+    x = ((x ^ (x >> 27)) * 0x94D049BB133111EB) & _M64
+    return x ^ (x >> 31)
+
+
+def dseed(c0: int, c1: int, tile: int) -> int:
+    """dcap.cu's dseed: a tile's seed from the round's coins and its id."""
+    return smix(smix(c0 ^ smix(tile)) ^ c1)
+
+
+def replay_gate(rows: list[dict]) -> dict:
+    """Anti-replay over every filler round of the run (each point's calibration, slot 0, and each arm block, slot 1 + r):
+    the round's tile range is the scorer's, [R·2^32, (R + 1)·2^32) with R = point·(rounds + 1) + slot, so no id is the
+    prover's choice; its tiles start at the range's start and stay inside it; no two rounds' tiles overlap; no two rounds
+    share coins; the first tile's seed is dseed(the round's coins, its id) as the device printed it; and no sampled seed
+    (each round's first, last and checked tiles) repeats across rounds."""
+    bad, spans = [], []
+    fill_rows = [r for r in rows if r.get("place") != "none"]
+    pts = [r.get("point") for r in fill_rows]
+    if len(set(pts)) != len(pts) or None in pts:
+        bad.append(f"point indices missing or repeated: {pts}")
+    for r in fill_rows:
+        rds = [r["alone_fill"].get("round")] + [b["arm"].get("round") for b in r["blocks"]]
+        for s, rd in enumerate(rds):
+            where = f"{r['kind']} {r['B']}/{r['L']} slot {s}"
+            if rd is None or r.get("point") is None:
+                bad.append(f"{where}: no round record")
+                continue
+            want = r["point"] * (r["rounds"] + 1) + s
+            lo, hi = want << RANGE_LOG2, (want + 1) << RANGE_LOG2
+            t0, t1 = rd["tiles"]
+            if rd["id"] != want or rd["range"] != [lo, hi]:
+                bad.append(f"{where}: range {rd['range']} is not the scorer's [{lo}, {hi})")
+            if not lo == t0 < t1 <= hi:
+                bad.append(f"{where}: tiles [{t0}, {t1}) not at the start of [{lo}, {hi})")
+            if any(not t0 <= t < t1 for t in rd["checked"]):
+                bad.append(f"{where}: a checked tile outside the round's tiles")
+            c0, c1 = (int(x, 16) for x in rd["coins"])
+            if f"{dseed(c0, c1, t0):016x}" != rd["seed0"]:
+                bad.append(f"{where}: seed {rd['seed0']} is not dseed(the round's coins, {t0})")
+            spans.append((t0, t1, (c0, c1), {dseed(c0, c1, t) for t in (t0, t1 - 1, *rd["checked"])}, where))
+    spans.sort()
+    overlaps = [f"{a[4]} and {b[4]}" for a, b in zip(spans, spans[1:]) if b[0] < a[1]]
+    coins = [s[2] for s in spans]
+    seeds = [x for s in spans for x in s[3]]
+    coin_rep, seed_rep = len(coins) - len(set(coins)), len(seeds) - len(set(seeds))
+    why = bad + [f"tiles overlap: {o}" for o in overlaps] + ([f"{coin_rep} rounds reuse coins"] if coin_rep else []) + \
+        ([f"{seed_rep} sampled seeds repeat"] if seed_rep else []) + ([] if spans else ["no filler rounds"])
+    return {"ok": not why, "rounds": len(spans), "tiles": sum(s[1] - s[0] for s in spans), "seeds_sampled": len(seeds),
+            "overlaps": overlaps, "coin_repeats": coin_rep, "seed_repeats": seed_rep,
+            "why": "; ".join(why[:5]) or None}
+
+
 def gates(stats: dict, sc: dict, *, has_filler: bool, sgate: dict | None, dgate: list[dict], dram: dict,
-          clocks: dict, honest: dict) -> dict:
+          clocks: dict, honest: dict, replay: dict) -> dict:
     out = {}
     worst = []
     for e in sc["entries"]:
@@ -283,6 +348,7 @@ def gates(stats: dict, sc: dict, *, has_filler: bool, sgate: dict | None, dgate:
                            "timed_checked": checked, "timed_bad": bad, "unchecked": unchecked}
     else:
         out["receipts"] = {"ok": True, "why": "no filler"}
+    out["replay"] = replay
     out["honest"] = honest
     out["dram"] = dram
     out["clocks"] = clocks
@@ -291,14 +357,17 @@ def gates(stats: dict, sc: dict, *, has_filler: bool, sgate: dict | None, dgate:
 
 
 def honesty(arm, stats: dict, phases_points) -> dict:
-    """The arm's placement is a pure function of the point (asked twice, the same answer), and no filler ran faster
-    beside serving than alone on the same SMs (TOO_GOOD; such a result goes to the assessor)."""
+    """The arm's placement is a pure function of the point (asked twice, the same answer), no filler ran faster beside
+    serving than alone on the same SMs (TOO_GOOD; such a result goes to the assessor), and none above its SMs' int8
+    tensor peak at the clock its blocks read."""
     import arms as A  # noqa: PLC0415
 
     unstable = [f"{ph} {b}/{l}" for ph, b, l in phases_points if A.placed(arm, ph, b, l) != A.placed(arm, ph, b, l)]
     fast = [f"{k[0]} {k[1]}/{k[2]}: {v['beside_over_alone']:.3f}" for k, v in stats.items()
             if v.get("beside_over_alone") and v["beside_over_alone"] > TOO_GOOD]
-    return {"ok": not unstable and not fast, "unstable_placement": unstable, "too_good": fast}
+    peak = [f"{k[0]} {k[1]}/{k[2]}: {v['of_peak']:.3f}" for k, v in stats.items() if (v.get("of_peak") or 0) > 1.0]
+    return {"ok": not unstable and not fast and not peak, "unstable_placement": unstable, "too_good": fast,
+            "over_peak": peak}
 
 
 def clock_gate(stats: dict, smi: list[dict]) -> dict:
