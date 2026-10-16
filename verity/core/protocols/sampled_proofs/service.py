@@ -37,10 +37,21 @@ proof. Every proof unit of a drawn RU is
 checked, so there is no second draw. The outcome accepts only when both registrations' audit records do, and its profile
 is the first stage's law over the RUs (one-stage's profile of the boundary registration).
 
-**No retries.** A registration is drawn once, after its receipt (`select`); its interiors are registered once; its proof
-is delivered once (`deliver`); its outcome is final (`outcome`), and nothing redraws. A proof delivered after
-`Check.proof_deadline` (seconds on the challenger's clock, from the draw) is a reject. Each failure is one visible
-symbol, `reject` or `late`.
+**The salt and the registration deadline.** `Stream.salt` issues the epoch's salt coin once, from the challenger's own
+coins, and reads its release on the challenger's clock (`salted_at`). `Stream.salt_released` instead records a salt
+released elsewhere (PoUW's epoch coin, shared by one stream per level) with its release on the same clock, which can't
+be later than the clock's reading now (`released-later`); either is the epoch's one salt. Under `Check.registration_deadline` (seconds on
+that clock from the release), `register` reads the receipt (`received_at`) first and refuses a registration received
+later than the deadline, or before any salt, as `late-registration`, whatever it holds. That is one visible failure,
+never retried, and it ends the epoch: the stream receives no registration after it (`epoch-ended`) and never reissues
+the salt (`salted`). It is the rule of `Pouw.AcceptsBy` (`Security/Definitions/Pouw/Game/Deadline.lean`), with `ts` =
+`salted_at`, `tr` = `received_at` and `td` = `ts` + the deadline. The readings are the challenger's own: the stream's
+epoch log (`Stream.epoch_log`) and each `Registration` carry them, and neither the receipt nor an outcome's record does.
+
+**No retries.** The salt is issued or recorded once (`salt`, `salt_released`). A registration is drawn once, after its receipt (`select`); its
+interiors are registered once; its proof is delivered once (`deliver`); its outcome is final (`outcome`), and nothing
+redraws. A proof delivered after `Check.proof_deadline` (seconds on the challenger's clock, from the draw) is a reject.
+Each failure is one visible symbol, `reject` or `late`, or a late registration's refusal, `late-registration`.
 
 **The failure budget.** A stream counts its failures, and at the `budget`-th it stops and refuses further registrations.
 It holds one open registration at a time, so it never ends with more than `budget` failures.
@@ -48,6 +59,7 @@ It holds one open registration at a time, so it never ends with more than `budge
 from __future__ import annotations
 
 import hashlib
+import math
 import os
 import re
 import time
@@ -206,7 +218,10 @@ class Check:
     `query`: its proof units, one-stage's template query over that Program's Definition. `window`: the window statement's
     Program's SHA-512, proved once per window over the committed layout. `public_outputs`: what the verifier reports that
     the auditor reads. `deadline`: a timed session's (PoUS's rounds). `proof_deadline`: seconds on the challenger's clock
-    from the draw; a proof delivered later is a reject."""
+    from the draw; a proof delivered later is a reject. `registration_deadline`: seconds on the challenger's clock from
+    the salt coin's release (`Stream.salt`, or `Stream.salt_released`'s `released_at`); a registration received later,
+    or before any salt, is refused (`late-registration`) and ends the epoch. The interiors' registration is not held to
+    it: it follows the draw, which `proof_deadline` bounds."""
 
     program: str
     query: Mapping[str, Any]
@@ -214,6 +229,7 @@ class Check:
     public_outputs: tuple[str, ...] = ()
     deadline: Mapping[str, Any] | None = None
     proof_deadline: float | None = None
+    registration_deadline: float | None = None
 
     def __post_init__(self) -> None:
         if not (isinstance(self.program, str) and _DIGEST.match(self.program)):
@@ -225,14 +241,14 @@ class Check:
         if not (isinstance(self.public_outputs, tuple) and all(isinstance(o, str) and o for o in self.public_outputs)
                 and len(set(self.public_outputs)) == len(self.public_outputs)):
             raise ValueError("a check's public outputs are distinct names")
-        if self.proof_deadline is not None and not (isinstance(self.proof_deadline, (int, float))
-                                                    and not isinstance(self.proof_deadline, bool) and self.proof_deadline > 0):
-            raise ValueError(f"a proof deadline is a positive number of seconds, not {self.proof_deadline!r}")
+        for name, d in (("proof", self.proof_deadline), ("registration", self.registration_deadline)):
+            if d is not None and not (isinstance(d, (int, float)) and not isinstance(d, bool) and d > 0):
+                raise ValueError(f"a {name} deadline is a positive number of seconds, not {d!r}")
 
     def to_json(self) -> dict[str, Any]:
         return {"program": self.program, "query": dict(self.query), "window": self.window,
                 "public_outputs": list(self.public_outputs), "deadline": None if self.deadline is None else dict(self.deadline),
-                "proof_deadline": self.proof_deadline}
+                "proof_deadline": self.proof_deadline, "registration_deadline": self.registration_deadline}
 
 
 @dataclass(frozen=True)
@@ -326,12 +342,15 @@ class Outcome:
 class Registration:
     """A registration the challenger accepted: one-stage's `record`, its `receipt` and `digest`, and `order`, its audit's
     index in the stream (a two-stage audit's interiors share it). The receipt's `received` is the record's position in
-    the stream's log; the challenger's clock stays its own."""
+    the stream's log; the challenger's clock stays its own. Under `Check.registration_deadline`, `salted_at` and
+    `received_at` are its readings of the salt's release and of this registration's receipt (None otherwise)."""
 
     record: Mapping[str, Any]
     receipt: Mapping[str, Any]
     digest: str
     order: int
+    salted_at: float | None = None
+    received_at: float | None = None
 
 
 @dataclass(frozen=True)
@@ -355,7 +374,8 @@ class Draw:
 
 
 class Refused(Exception):
-    """The challenger refused a call, and nothing in the stream changed. `verdict` says why."""
+    """The challenger refused a call, and nothing in the stream changed, except that a late registration
+    (`late-registration`) is logged and ends the epoch. `verdict` says why."""
 
     def __init__(self, verdict: Verdict) -> None:
         super().__init__(", ".join(verdict.codes))
@@ -473,6 +493,11 @@ class Stream:
     the challenger's own randomness (n bytes a call, read in order by `OwnRandomness`), and `clock` its clock in seconds;
     tests inject both. `sampler`, when given, draws instead of the coins (`flock-verify draw` in a process of its own,
     say): it takes the challenger's law and N, and its draw is held to them like any other.
+
+    A stream runs one epoch with one salt: `salt` issues it from the coins, or `salt_released` records one released
+    elsewhere with its release, and under `Check.registration_deadline` every registration is received within the
+    deadline of that release, or the epoch ends (`ended`) at the first that isn't. `epoch_log` holds the challenger's
+    clock readings.
     """
 
     def __init__(self, spec: Spec, unit: SpecializedDefinition, *, budget: int, delta: float, challenger: str,
@@ -500,6 +525,9 @@ class Stream:
         self._entries: list[_Entry] = []
         self._log: list[dict[str, Any]] = []
         self._records: list[dict[str, Any]] = []
+        self._epoch_log: list[dict[str, Any]] = []
+        self._salted_at: float | None = None
+        self._ended: dict[str, Any] | None = None
 
     @property
     def failures(self) -> int:
@@ -508,6 +536,20 @@ class Stream:
     @property
     def stopped(self) -> bool:
         return self.failures >= self.budget
+
+    @property
+    def ended(self) -> bool:
+        """The epoch ended: a registration was late (`late-registration`), and the stream receives none from then on."""
+        return self._ended is not None
+
+    @property
+    def epoch_log(self) -> tuple[dict[str, Any], ...]:
+        """The epoch's clock readings, in order: the salt's release, `{"event": "salt", "salt": <hex>, "salted_at"}`
+        (with `"external": true` from `salt_released`, `salted_at` being its `released_at`), and under `Check.registration_deadline` each registration received, `{"event": "registration", "order",
+        "registration": <digest>, "salted_at", "received_at"}`, or refused as late, `{"event": "late-registration",
+        "salted_at", "received_at"}` (`salted_at` null when no salt was issued). A registration refused on what it holds
+        is not received, and not logged."""
+        return tuple(self._epoch_log)
 
     @property
     def symbols(self) -> tuple[str, ...]:
@@ -525,12 +567,52 @@ class Stream:
         return tuple(self._records)
 
     def ready(self) -> None:
-        """Raises `Refused` when the stream receives no registration now: it has stopped, or an earlier registration has
-        no final outcome."""
+        """Raises `Refused` when the stream receives no registration now: it has stopped, its epoch ended
+        (`epoch-ended`, with the late registration's readings), or an earlier registration has no final outcome."""
         if self.stopped:
             raise _refuse("stopped", {"failures": self.failures, "budget": self.budget})
+        if self._ended is not None:
+            raise _refuse("epoch-ended", dict(self._ended))
         if self._entries and self._entries[-1].outcome is None:
             raise _refuse("open", {"order": self._entries[-1].registration.order})
+
+    def _unsalted(self) -> None:
+        if self._salted_at is not None:
+            raise _refuse("salted", {"salted_at": self._salted_at})
+        if self._ended is not None:
+            raise _refuse("epoch-ended", dict(self._ended))
+
+    def salt(self, n: int = 64) -> bytes:
+        """The epoch's salt coin: `n` bytes of the challenger's own coins (`OwnRandomness`, in order with the draws'
+        reads), issued once. Its release is read on the challenger's clock (`salted_at`) and logged (`epoch_log`);
+        `Check.registration_deadline` counts from it. Raises `Refused`: `salted` (the epoch has a salt, from `salt` or
+        `salt_released`: nothing redraws it) or `epoch-ended` (the epoch ended before any salt)."""
+        if not (type(n) is int and n >= 1):
+            raise ValueError(f"a salt is a positive number of bytes, not {n!r}")
+        self._unsalted()
+        salt = OwnRandomness(self._coins).read(n)
+        self._salted_at = self._clock()
+        self._epoch_log.append({"event": "salt", "salt": salt.hex(), "salted_at": self._salted_at})
+        return salt
+
+    def salt_released(self, salt: bytes, released_at: float) -> None:
+        """The epoch's salt when it was released elsewhere (PoUW's epoch coin, shared by one stream per level):
+        `released_at` is its release, read on this stream's clock. It is then the epoch's salt as `salt`'s is, and
+        `Check.registration_deadline` counts from `released_at`, so a stream created after the release (a level's, at
+        its first registration) still measures from it. Logged with `"external": true`. Raises `ValueError` for a salt
+        that isn't non-empty bytes or a release that isn't a finite number, and `Refused`: `salted` (the epoch has a
+        salt), `epoch-ended`, or `released-later` (`released_at` after the clock's reading now: a release is never in
+        the future)."""
+        if not (isinstance(salt, bytes) and salt):
+            raise ValueError(f"a released salt is non-empty bytes, not {salt!r}")
+        if not (isinstance(released_at, (int, float)) and not isinstance(released_at, bool) and math.isfinite(released_at)):
+            raise ValueError(f"a salt's release is a finite reading of the clock, not {released_at!r}")
+        self._unsalted()
+        now = self._clock()
+        if released_at > now:
+            raise _refuse("released-later", {"released_at": released_at, "now": now})
+        self._salted_at = released_at
+        self._epoch_log.append({"event": "salt", "salt": salt.hex(), "salted_at": released_at, "external": True})
 
     def register(self, record: Mapping[str, Any], ports: Mapping[str, Mapping[str, Any]], *, leaf_layer: str | None = None,
                  anchors: Sequence[Any] = (), registered: Mapping[str, int] | None = None,
@@ -540,9 +622,22 @@ class Stream:
         the population program it builds from `unit` and the record's N, the check's query, the selection rule's law (a
         two-stage rule's `replay`), `SCHEME`, the stream's log, and the per-registration copies given here (`ports`,
         `leaf_layer`, `anchors`, `registered`, `work_table`, as `registration.check` takes them). Under `TwoStage` its
-        roots are the boundary values'. Then the receipt. Raises `Refused`: when the stream has stopped, while an earlier
-        registration has no final outcome, or when either check fails."""
+        roots are the boundary values'. Then the receipt. Under `Check.registration_deadline` the challenger first reads
+        its clock (`received_at`): a registration received more than the deadline after the salt's release, or before
+        any salt, is refused (`late-registration`, with both readings) whatever it holds, logged, and ends the epoch; an
+        on-time one carries both readings (`Registration.salted_at`, `received_at`) and is logged with them. Raises
+        `Refused`: when the stream has stopped or its epoch ended (`epoch-ended`), while an earlier registration has no
+        final outcome, when it is late, or when either check fails."""
         self.ready()
+        d = self.spec.check.registration_deadline
+        received_at = None
+        if d is not None:
+            received_at = self._clock()
+            if self._salted_at is None or not received_at - self._salted_at <= d:
+                self._ended = {"salted_at": self._salted_at, "received_at": received_at, "registration_deadline": d}
+                self._epoch_log.append({"event": "late-registration", "salted_at": self._salted_at,
+                                        "received_at": received_at})
+                raise _refuse("late-registration", dict(self._ended))
         v = self._public(record, interior=False)
         if not v.ok:
             raise Refused(v)
@@ -557,8 +652,12 @@ class Stream:
                     work_table, registered)
         if not v.ok:
             raise Refused(v)
-        reg = self._log_record(record, len(self._entries))
+        salted_at = None if d is None else self._salted_at
+        reg = self._log_record(record, len(self._entries), salted_at, received_at)
         self._entries.append(_Entry(reg, D.derive(program, self.spec.check.query, law, work_table)))
+        if d is not None:
+            self._epoch_log.append({"event": "registration", "order": reg.order, "registration": reg.digest,
+                                    "salted_at": salted_at, "received_at": received_at})
         return reg
 
     def _values(self, *, interior: bool) -> tuple[Value, ...]:
@@ -573,9 +672,10 @@ class Stream:
         return V.check_public(check_public(self.spec, record, values), record, SCHEME, self.spec.check.query,
                               [(v.name, v.registered) for v in values], [p.item for p in self.spec.public])
 
-    def _log_record(self, record: Mapping[str, Any], order: int) -> Registration:
+    def _log_record(self, record: Mapping[str, Any], order: int, salted_at: float | None = None,
+                    received_at: float | None = None) -> Registration:
         reg = Registration(dict(record), R.receipt(record, self.challenger, received=str(len(self._log))), R.digest(record),
-                           order)
+                           order, salted_at, received_at)
         self._log.append(dict(record))
         return reg
 
@@ -624,7 +724,8 @@ class Stream:
         (every unit drawn), with the interior values' roots, `previous` the boundary registration's digest, and a window
         other than the boundary's (R6). It is held to the public-items rule and
         to one-stage's R1-R7 as `register` holds a registration (`ports`, `leaf_layer` and `anchors` are the challenger's
-        copies), logged after the boundary registration, and receipted. Raises `Refused`: `rule` (not a two-stage
+        copies), but not to `Check.registration_deadline` (it follows the draw, which `proof_deadline` bounds), logged
+        after the boundary registration, and receipted. Raises `Refused`: `rule` (not a two-stage
         stream), `not-drawn`, `final`, `delivered`, `interior-registered` (a second time), `interior-empty` (no RU was
         drawn), `interior-population` (not the proved RUs), or either check's codes."""
         if not isinstance(self.spec.selection, TwoStage):
