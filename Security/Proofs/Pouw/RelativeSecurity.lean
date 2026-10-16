@@ -101,7 +101,8 @@ proof workers' results land here as theorems or as named hypotheses.
   `RoundsHypKS`), `RoundsHypK` follows at `p = ¾` with `PathBound` and the certified count derived
   (`roundsHypK_of_spot`), and for one-sided affine products the floor has neither a luck nor a chain hypothesis
   (`certifiedFraction120θ_reEncodedSpot_40`; mixed, `_reEncodedSpotMixed_40`). The ¾ is tight
-  (`luck_quad_tight`) and fails for one-sided operands of any form (`luck_oneSided_point`). On the integer alphabet a
+  (`luck_quad_tight`) and fails in this deficiency for one-sided operands of any form (`luck_oneSided_point`; the
+  parity luck below covers them). On the integer alphabet a
   dropped term is right with probability ½ + 1/(2|α|) (`luck_coins`, `luck_dropped`); U's 128 letters are distinct
   and never 0 (`uRe_injective`, `uRe_ne_zero`), so 0.5039 (`luck_dropped_reEncoded`), and ½ for a term dropped
   outright (`_zero`). The window-level ½ is false at `|S| ≥ 4` (RS-E-REF r5 V.2), so ¾ is the window's bound
@@ -127,6 +128,16 @@ proof workers' results land here as theorems or as named hypotheses.
   `certifiedFraction120θ_overlap_40`), with no joint projection. `RoundsHypKSt` allows what `RoundsHypKOv` doesn't,
   a stage's program branching on earlier draws; overlap with that (RS-E-REF r3 III.1's adaptive model) is open
   (r2 §2.5).
+* The parity luck for one-sided operands of any form (RS-E-REF r6 VI.2, `note:20261015T1931Z-draft-theorem-e-referee`):
+  mod 2 at a cell-block's frame (`dFrame`), a one-sided run's error is `⟨F x, G y⟩ + a x + b y` with a term per
+  product its word reads that is two-sided there (`SlpG.parityForm_err`), and such an error with fewer than `L` terms
+  vanishes with probability at most `½ + ½ √½ < 0.854` (`parity_prob_sq`, `parity_luck_short`; ¾ two short,
+  `parity_luck_two`), over `Z` or `Z/2³²`. In the product deficit (`parDef`, `ovDefP`) the staged and overlapped
+  games meet Theorem S's bounds at `0.854` whatever the errors (`StagedPlay.game_stagedP`, `OvPlay.passBound_gameP`),
+  and with charging purity in place of row purity (`SlpG.ChargePure`, `SlpG.ChargePureAt`) `RoundsHypKStP` and
+  `RoundsHypKOvP` give `RoundsHyp` at `p = 0.854` with K's `F₀` (`roundsHyp_of_stagedP`, `roundsHyp_of_overlapP`;
+  `certifiedFraction120θ_stagedP_40`, `_overlapP_40` at `D₀ = 274 ln 2`). The affine route is the sharper corollary,
+  at ¾.
 * Theorem H (round 6 §6, merges priced) is not needed for the re-encoded design: the chain lemma covers it in every
   arithmetic (RS-E-REF r4 IV.3). It stays proved as the alternative with merges priced, including `_H` of route (c).
   In the quad model, with merges at `h ≥ 2K/3` slots, each useful cell costs
@@ -4508,8 +4519,9 @@ vanishes on at most one letter, so `½ + 1/(2|α|)` (`luck_dropped`). The design
 128 distinct values, none 0 (`uRe_injective`, `uRe_ne_zero`), so a dropped term is right with probability at most
 `½ + 2⁻⁸ = 0.5039` (`luck_dropped_reEncoded`), and `½` if dropped outright (`luck_dropped_reEncoded_zero`). Those
 are per-term bounds: a window-level ½ is false at `|S| ≥ 4` (RS-E-REF r5 V.2), and the luck premise is stated given
-the drawn pair indices at `p = ¾` (decision 39), which the spot check gives. `PathBound` for one-sided operands of any
-form stays named, in `RoundsHypK`'s `PathBound`. -/
+the drawn pair indices at `p = ¾` (decision 39), which the spot check gives. For one-sided operands of any form the
+luck is the parity lemma's `0.854`, in the product deficit rather than this one (`roundsHyp_of_stagedP`,
+`roundsHyp_of_overlapP`). -/
 
 section Luck
 
@@ -4814,8 +4826,8 @@ theorem luck_quad_tight :
 
 /-- **One-sided products of any form are not of degree 2, and the ¾ fails for them**: the product of the
 indicators that no U bit and no coin is set is one-sided, is wrong at the all-zero point (so its word is
-uncertified) and right everywhere else, so it passes with probability `1 − 2^{−|V|}`. For such runs `PathBound`
-needs a cost-aware deficiency. -/
+uncertified) and right everywhere else, so it passes with probability `1 − 2^{−|V|}`. For such runs the deficiency
+is the product deficit (`parDef`), where the parity luck holds at `0.854` (`StagedPlay.game_stagedP`). -/
 theorem luck_oneSided_point {Vl Vr : Type} [Fintype Vl] [Fintype Vr] [DecidableEq Vl] [DecidableEq Vr] :
     OneSided (fun z : Vl ⊕ Vr → ℤ =>
         (if ∀ a, z (.inl a) = 0 then 1 else 0) * (if ∀ b, z (.inr b) = 0 then 1 else 0)) ∧
@@ -5250,8 +5262,9 @@ theorem ChainBound.mono {R : Type} [CommRing R] {n L np B n' : ℕ} {w : Fin np 
 - the run is charged at least `κ` a product, less the noise reads `V`.
 
 The game's `PathBound p` is derived at `p = ¾` when the game is the spot-check game of runs with affine operands
-(`RoundsHypKS`, `roundsHypK_of_spot`); for one-sided operands of any form it stays named here
-(`luck_oneSided_point`). -/
+(`RoundsHypKS`, `roundsHypK_of_spot`). For one-sided operands of any form it fails in this deficiency
+(`luck_oneSided_point`) and holds at `p = 0.854` in the product deficit, with charging purity in place of row purity
+(`RoundsHypKStP`, `roundsHyp_of_stagedP`; `RoundsHypKOvP`, `roundsHyp_of_overlapP`). -/
 def RoundsHypK (Mc : Machine) (S : Service) (Ω : Type) [Fintype Ω] (R : ℕ) (p Vmax δb δz κ : ℝ)
     (n L np B n' : ℕ) {Ar : Type} [CommRing Ar] (wt : Fin np → Ar)
     (Ok : ((DBits n L np B n' → Ar) → Ar) → Prop) : Prop :=
@@ -5712,7 +5725,22 @@ fixed), `⟨F x, G y⟩ + a x + b y` with `F`, `G`, `a`, `b` of any form. Its ag
 (`parity_corr_sq`, `parity_prob_sq`: Cauchy–Schwarz over `y`, Parseval over `x`). So a cell-block one product short
 passes with probability at most `½ + ½ √½ < 0.854` (`parity_luck_short`), and two short at most `¾`
 (`parity_luck_two`), over `Z` or `Z/2³²` alike (any ring with a map onto `F₂`). At a cell's frame in the bits
-(`ParityForm`) the same bounds hold with every other bit uniform (`prob_zero_le_of_parityForm`). -/
+(`ParityForm`) the same bounds hold with every other bit uniform (`prob_zero_le_of_parityForm`).
+
+That luck can't sit in `RoundsHypK`'s `PathBound`, whose deficiency is the share of uncertified cells: no `p < 1`
+bounds it for one-sided operands (`luck_oneSided_point`). It sits in the product deficit (RS-E-REF r6 VI.2.1): a
+cell-block is short of products (`ParShort`) when its error has a parity form with fewer than `L` terms at its frame,
+and a round's product deficit is the share of its cell-blocks short (`parDef`; per draw, `ovDefP`). The spot, staged
+and overlapped games in that deficiency (`SpotPlay.gameP`, `StagedPlay.gameP`, `OvPlay.gameP`) accept as their games
+do and meet Theorem S's bounds at `0.854` whatever the errors (`passBound_gameP`, `StagedPlay.game_stagedP`). The
+floor reads the design: at cell-block `(i, l, t)`'s frame (`dFrame`: row `i` of U at plane `p₀`, the block's coins)
+the target is `⟨x, y⟩` plus junk (`split_dPrefix`), one-sided products split (`OneSided.splitProd`), so a one-sided
+run's error is a parity form whose terms are the products its word reads that are two-sided there
+(`SlpG.parityForm_err`; per draw, `SlpG.parityForm_err_ov`). A cell-block not short is charged at least `L` products,
+and with no product charged to two cell-blocks (charging purity, `SlpG.ChargePure`, `SlpG.ChargePureAt`, in place of
+row purity) the charges add up (`SlpG.card_full_le`, `SlpG.card_full_le_ov`). So `RoundsHypKStP` and `RoundsHypKOvP`
+give `RoundsHyp` at `p = 0.854` with Theorem K's `F₀` (`roundsHyp_of_stagedP`, `roundsHyp_of_overlapP`), and
+`D₀ = 274 ln 2` reaches `2⁻⁴⁰` (`certifiedFraction120θ_stagedP_40`, `certifiedFraction120θ_overlapP_40`). -/
 
 section Parity
 
@@ -5737,13 +5765,13 @@ theorem sgn_sum {ι : Type*} (s : Finset ι) (f : ι → ZMod 2) : sgn (∑ i �
 theorem sgn_eq (u v : ZMod 2) : sgn (u + v) = 2 * (if u = v then 1 else 0) - 1 := by
   have h : ∀ u v : ZMod 2, (u + v = 0 ↔ u = v) := by decide
   unfold sgn
-  by_cases huv : u = v <;> simp [h, huv] <;> norm_num
+  by_cases huv : u = v <;> norm_num [h, huv]
 
 theorem sum_sgn_mul (g : ZMod 2) : ∑ t : ZMod 2, sgn (g * t) = if g = 0 then 2 else 0 := by
   have h2 : ∀ f : ZMod 2 → ℝ, ∑ t : ZMod 2, f t = f 0 + f 1 := fun f => Fin.sum_univ_two f
   rw [h2, mul_zero, mul_one]
   unfold sgn
-  by_cases hg : g = 0 <;> simp [hg] <;> norm_num
+  by_cases hg : g = 0 <;> norm_num [hg]
 
 theorem sum_sgn_dot {K : ℕ} (γ : Fin K → ZMod 2) :
     ∑ y : Fin K → ZMod 2, sgn (γ ⬝ᵥ y) = if γ = 0 then 2 ^ K else 0 := by
@@ -6017,6 +6045,618 @@ theorem prob_zero_le_of_parityForm {fr : Fin K ⊕ Fin K → V} (hfr : Function.
 
 end ParityFrame
 
+section ParitySplit
+
+variable {V : Type} {K : ℕ}
+
+/-- A function of the bit points blind to a frame's `x` bits: it agrees on bit points that agree off them. -/
+def XBlind (fr : Fin K ⊕ Fin K → V) (g : Finset V → ZMod 2) : Prop :=
+  ∀ S S' : Finset V, (∀ v, (∀ j, fr (.inl j) ≠ v) → (v ∈ S ↔ v ∈ S')) → g S = g S'
+
+/-- A function of the bit points blind to a frame's `y` bits. -/
+def YBlind (fr : Fin K ⊕ Fin K → V) (g : Finset V → ZMod 2) : Prop :=
+  ∀ S S' : Finset V, (∀ v, (∀ j, fr (.inr j) ≠ v) → (v ∈ S ↔ v ∈ S')) → g S = g S'
+
+/-- One-sided junk at a frame: a function blind to the `y` bits plus one blind to the `x` bits. -/
+def Split (fr : Fin K ⊕ Fin K → V) (h : Finset V → ZMod 2) : Prop :=
+  ∃ a b : Finset V → ZMod 2, YBlind fr a ∧ XBlind fr b ∧ ∀ S, h S = a S + b S
+
+theorem XBlind.const (fr : Fin K ⊕ Fin K → V) (u : ZMod 2) : XBlind fr fun _ => u := fun _ _ _ => rfl
+
+theorem YBlind.const (fr : Fin K ⊕ Fin K → V) (u : ZMod 2) : YBlind fr fun _ => u := fun _ _ _ => rfl
+
+theorem XBlind.add {fr : Fin K ⊕ Fin K → V} {f g : Finset V → ZMod 2} (hf : XBlind fr f) (hg : XBlind fr g) :
+    XBlind fr fun S => f S + g S := fun S S' h => congrArg₂ (· + ·) (hf S S' h) (hg S S' h)
+
+theorem YBlind.add {fr : Fin K ⊕ Fin K → V} {f g : Finset V → ZMod 2} (hf : YBlind fr f) (hg : YBlind fr g) :
+    YBlind fr fun S => f S + g S := fun S S' h => congrArg₂ (· + ·) (hf S S' h) (hg S S' h)
+
+theorem XBlind.mul {fr : Fin K ⊕ Fin K → V} {f g : Finset V → ZMod 2} (hf : XBlind fr f) (hg : XBlind fr g) :
+    XBlind fr fun S => f S * g S := fun S S' h => congrArg₂ (· * ·) (hf S S' h) (hg S S' h)
+
+theorem YBlind.mul {fr : Fin K ⊕ Fin K → V} {f g : Finset V → ZMod 2} (hf : YBlind fr f) (hg : YBlind fr g) :
+    YBlind fr fun S => f S * g S := fun S S' h => congrArg₂ (· * ·) (hf S S' h) (hg S S' h)
+
+theorem XBlind.sum {fr : Fin K ⊕ Fin K → V} {ι : Type} (s : Finset ι) {f : ι → Finset V → ZMod 2}
+    (hf : ∀ i ∈ s, XBlind fr (f i)) : XBlind fr fun S => ∑ i ∈ s, f i S := fun S S' h =>
+  sum_congr rfl fun i hi => hf i hi S S' h
+
+theorem YBlind.sum {fr : Fin K ⊕ Fin K → V} {ι : Type} (s : Finset ι) {f : ι → Finset V → ZMod 2}
+    (hf : ∀ i ∈ s, YBlind fr (f i)) : YBlind fr fun S => ∑ i ∈ s, f i S := fun S S' h =>
+  sum_congr rfl fun i hi => hf i hi S S' h
+
+theorem YBlind.congr {fr : Fin K ⊕ Fin K → V} {f g : Finset V → ZMod 2} (hf : YBlind fr f) (h : ∀ S, f S = g S) :
+    YBlind fr g := fun S S' hS => by rw [← h, ← h]; exact hf S S' hS
+
+theorem Split.of_y {fr : Fin K ⊕ Fin K → V} {f : Finset V → ZMod 2} (hf : YBlind fr f) : Split fr f :=
+  ⟨f, fun _ => 0, hf, XBlind.const fr 0, fun _ => (add_zero _).symm⟩
+
+theorem Split.of_x {fr : Fin K ⊕ Fin K → V} {f : Finset V → ZMod 2} (hf : XBlind fr f) : Split fr f :=
+  ⟨fun _ => 0, f, YBlind.const fr 0, hf, fun _ => (zero_add _).symm⟩
+
+theorem Split.add {fr : Fin K ⊕ Fin K → V} {f g : Finset V → ZMod 2} (hf : Split fr f) (hg : Split fr g) :
+    Split fr fun S => f S + g S := by
+  obtain ⟨a, b, ha, hb, he⟩ := hf
+  obtain ⟨a', b', ha', hb', he'⟩ := hg
+  exact ⟨fun S => a S + a' S, fun S => b S + b' S, ha.add ha', hb.add hb', fun S => by simp only [he, he']; ring⟩
+
+theorem Split.neg {fr : Fin K ⊕ Fin K → V} {f : Finset V → ZMod 2} (hf : Split fr f) : Split fr fun S => -f S := by
+  obtain ⟨a, b, ha, hb, he⟩ := hf
+  exact ⟨fun S => -a S, fun S => -b S, fun S S' h => congrArg (- ·) (ha S S' h),
+    fun S S' h => congrArg (- ·) (hb S S' h),
+    fun S => by simp only [he]; ring⟩
+
+theorem Split.sub {fr : Fin K ⊕ Fin K → V} {f g : Finset V → ZMod 2} (hf : Split fr f) (hg : Split fr g) :
+    Split fr fun S => f S - g S := by
+  simpa [sub_eq_add_neg] using hf.add hg.neg
+
+theorem Split.sum {fr : Fin K ⊕ Fin K → V} {ι : Type} (s : Finset ι) {f : ι → Finset V → ZMod 2}
+    (hf : ∀ i ∈ s, Split fr (f i)) : Split fr fun S => ∑ i ∈ s, f i S := by
+  classical
+  induction s using Finset.induction_on with
+  | empty => exact Split.of_y (by simpa using YBlind.const fr 0)
+  | insert i s hi ih =>
+    simp only [sum_insert hi]
+    exact (hf i (mem_insert_self i s)).add (ih fun i' hi' => hf i' (mem_insert_of_mem hi'))
+
+theorem Split.congr {fr : Fin K ⊕ Fin K → V} {f g : Finset V → ZMod 2} (hf : Split fr f) (h : ∀ S, f S = g S) :
+    Split fr g := by
+  obtain ⟨a, b, ha, hb, he⟩ := hf
+  exact ⟨a, b, ha, hb, fun S => by rw [← h, he]⟩
+
+variable [DecidableEq V] {A : Type} [CommRing A]
+
+/-- A product split at a frame, mod 2: a factor blind to the `y` bits times one blind to the `x` bits. -/
+def SplitProd (fr : Fin K ⊕ Fin K → V) (φ : A →+* ZMod 2) (π : (V → A) → A) : Prop :=
+  ∃ g h : Finset V → ZMod 2, YBlind fr g ∧ XBlind fr h ∧ ∀ S, φ (π (bitInd S)) = g S * h S
+
+/-- **A product two-sided at a frame**: mod 2 it reads both the frame's `x` bits and its `y` bits. -/
+def TwoSidedAt (fr : Fin K ⊕ Fin K → V) (φ : A →+* ZMod 2) (π : (V → A) → A) : Prop :=
+  ¬XBlind fr (fun S => φ (π (bitInd S))) ∧ ¬YBlind fr (fun S => φ (π (bitInd S)))
+
+omit [CommRing A] in
+/-- A bit off the frame's `x` bits. -/
+theorem XBlind.bit {fr : Fin K ⊕ Fin K → V} {v : V} (hv : ∀ j, fr (.inl j) ≠ v) :
+    XBlind fr fun S => if v ∈ S then 1 else 0 := fun S S' h => by simp only [h v hv]
+
+omit [CommRing A] in
+theorem YBlind.bit {fr : Fin K ⊕ Fin K → V} {v : V} (hv : ∀ j, fr (.inr j) ≠ v) :
+    YBlind fr fun S => if v ∈ S then 1 else 0 := fun S S' h => by simp only [h v hv]
+
+/-- A ring map onto `F₂` sends `bitInd` to the bit's indicator. -/
+theorem map_bitInd (φ : A →+* ZMod 2) (S : Finset V) (v : V) :
+    φ (bitInd S v) = if v ∈ S then 1 else 0 := by
+  unfold bitInd
+  split_ifs <;> simp
+
+omit [CommRing A] in
+/-- A bit times a constant is junk at any frame: blind to the `x` bits if it is a `y` bit, else to the `y` bits. -/
+theorem Split.const_mul_bit {fr : Fin K ⊕ Fin K → V} (hfr : Function.Injective fr) (u : ZMod 2) (v : V) :
+    Split fr fun S => u * if v ∈ S then 1 else 0 := by
+  by_cases hv : ∃ j, fr (.inr j) = v
+  · obtain ⟨j, rfl⟩ := hv
+    exact Split.of_x ((XBlind.const fr u).mul (XBlind.bit fun j' h => Sum.inl_ne_inr (hfr h)))
+  · push Not at hv
+    exact Split.of_y ((YBlind.const fr u).mul (YBlind.bit hv))
+
+/-- **A bit-affine word is junk at any frame**, mod 2. -/
+theorem Split.bitAff [Fintype V] {fr : Fin K ⊕ Fin K → V} (hfr : Function.Injective fr) (φ : A →+* ZMod 2)
+    (Af : BitAff V A) :
+    Split fr fun S => φ (Af.eval (bitInd S)) :=
+  ((Split.of_y (YBlind.const fr (φ Af.c))).add (Split.sum univ fun v _ =>
+    Split.const_mul_bit hfr (φ (Af.α v)) v)).congr fun S => by
+      simp only [BitAff.eval, map_add, map_sum, map_mul, map_bitInd]
+
+theorem zmod2_add_self (u : ZMod 2) : u + u = 0 := by
+  revert u
+  decide
+
+/-- **A parity form from junk**: two-sided factors `F` blind to the `y` bits and `G` blind to the `x` bits, and the
+rest of the error mod 2, past `⟨F, G⟩ + ⟨x, y⟩`, junk at the frame. -/
+theorem parityForm_of_split {fr : Fin K ⊕ Fin K → V} {φ : A →+* ZMod 2} {R : ℕ} {e : (V → A) → A}
+    (F G : Finset V → Fin R → ZMod 2) (hF : ∀ k, YBlind fr fun S => F S k) (hG : ∀ k, XBlind fr fun S => G S k)
+    (h : Split fr fun S => φ (e (bitInd S)) - F S ⬝ᵥ G S -
+      (fun j => frameBits fr S (.inl j)) ⬝ᵥ fun j => frameBits fr S (.inr j)) :
+    ParityForm fr φ R e := by
+  obtain ⟨a, b, ha, hb, he⟩ := h
+  refine ⟨F, G, a, b, fun S S' hS => ⟨funext fun k => hF k S S' hS, ha S S' hS⟩,
+    fun S S' hS => ⟨funext fun k => hG k S S' hS, hb S S' hS⟩, fun S => ?_⟩
+  linear_combination he S
+
+open Classical in
+/-- **The products charged to a word at a frame**: those it reads (nonzero coefficient) that are two-sided there. -/
+noncomputable def charged (fr : Fin K ⊕ Fin K → V) (φ : A →+* ZMod 2) {N : ℕ} (coef : Fin N → A)
+    (π : Fin N → (V → A) → A) : Finset (Fin N) :=
+  univ.filter fun i => coef i ≠ 0 ∧ TwoSidedAt fr φ (π i)
+
+/-- **A sum of split products plus a bit-affine word, minus a target of the form `⟨x, y⟩` plus junk, has a parity
+form with its charged products as terms**: the uncharged products it reads are blind to one side, so junk. -/
+theorem parityForm_sum [Fintype V] {fr : Fin K ⊕ Fin K → V} (hfr : Function.Injective fr) (φ : A →+* ZMod 2)
+    {N : ℕ} (coef : Fin N → A) (π : Fin N → (V → A) → A) (Af : BitAff V A)
+    (hπ : ∀ i, coef i ≠ 0 → SplitProd fr φ (π i)) (T : (V → A) → A)
+    (hT : Split fr fun S => φ (T (bitInd S)) -
+      (fun j => frameBits fr S (.inl j)) ⬝ᵥ fun j => frameBits fr S (.inr j)) :
+    ParityForm fr φ (charged fr φ coef π).card fun z => ∑ i, coef i * π i z + Af.eval z - T z := by
+  classical
+  have hπ' : ∀ i, ∃ g h : Finset V → ZMod 2,
+      coef i ≠ 0 → YBlind fr g ∧ XBlind fr h ∧ ∀ S, φ (π i (bitInd S)) = g S * h S := fun i => by
+    by_cases hc : coef i = 0
+    · exact ⟨0, 0, fun h => absurd hc h⟩
+    · obtain ⟨g, h, hg, hh, hgh⟩ := hπ i hc
+      exact ⟨g, h, fun _ => ⟨hg, hh, hgh⟩⟩
+  choose g h hgh using hπ'
+  set ch := charged fr φ coef π with hch
+  have hmem : ∀ i ∈ ch, coef i ≠ 0 := fun i hi => ((mem_filter.mp hi).2).1
+  let en := ch.equivFin
+  refine parityForm_of_split (fun S k => φ (coef (en.symm k)) * g (en.symm k) S) (fun S k => h (en.symm k) S)
+    (fun k => (YBlind.const fr _).mul (hgh _ (hmem _ (en.symm k).2)).1)
+    (fun k => (hgh _ (hmem _ (en.symm k).2)).2.1) ?_
+  have hjunk : Split fr fun S => ∑ i ∈ univ.filter (fun i => i ∉ ch), φ (coef i) * φ (π i (bitInd S)) := by
+    refine Split.sum _ fun i hi => ?_
+    have hi' : i ∉ ch := (mem_filter.mp hi).2
+    by_cases hc : coef i = 0
+    · exact Split.of_y ((YBlind.const fr 0).congr fun S => by rw [hc, map_zero, zero_mul])
+    · have hts : ¬TwoSidedAt fr φ (π i) := fun ht => hi' (mem_filter.mpr ⟨mem_univ _, hc, ht⟩)
+      unfold TwoSidedAt at hts
+      rcases not_and_or.mp hts with hx | hy
+      · exact Split.of_x ((XBlind.const fr _).mul (not_not.mp hx))
+      · exact Split.of_y ((YBlind.const fr _).mul (not_not.mp hy))
+  refine ((hjunk.add (Split.bitAff hfr φ Af)).sub hT).congr fun S => ?_
+  have hsplit := sum_filter_add_sum_filter_not (s := (univ : Finset (Fin N))) (fun i => i ∈ ch)
+    (fun i => φ (coef i) * φ (π i (bitInd S)))
+  have hfilt : univ.filter (fun i => i ∈ ch) = ch := by ext i; simp
+  rw [hfilt] at hsplit
+  have hch' : ∑ i ∈ ch, φ (coef i) * φ (π i (bitInd S)) =
+      ∑ k, φ (coef (en.symm k)) * g (en.symm k) S * h (en.symm k) S := by
+    rw [← sum_coe_sort ch, ← Equiv.sum_comp en.symm]
+    refine sum_congr rfl fun k _ => ?_
+    rw [(hgh _ (hmem _ (en.symm k).2)).2.2 S, mul_assoc]
+  simp only [map_sub, map_add, map_sum, map_mul]
+  rw [← hsplit, hch']
+  simp only [dotProduct]
+  linear_combination zmod2_add_self (∑ x, frameBits fr S (Sum.inl x) * frameBits fr S (Sum.inr x))
+
+end ParitySplit
+
+section ParityDesign
+
+variable {Ar : Type} [CommRing Ar] {n L np B n' : ℕ}
+
+/-- **Cell-block `(i, l, t)`'s frame at plane `p₀`**: its `x` bits are row `i` of U at plane `p₀` (U's column `j`
+serves every block), its `y` bits the block's coins `b(t, ·, l)`. -/
+def dFrame (p₀ : Fin np) (c : DCells n n' B) : Fin L ⊕ Fin L → DBits n L np B n' :=
+  Sum.elim (fun j => .inl (c.1, j, p₀)) fun j => .inr (c.2.2, j, c.2.1)
+
+theorem dFrame_injective (p₀ : Fin np) (c : DCells n n' B) : Function.Injective (dFrame (L := L) p₀ c) := by
+  rintro (j | j) (j' | j') h <;> simp_all [dFrame]
+
+/-- A one-sided product of any form is split at every cell-block's frame: its factor on U's bits is blind to the
+coins, and its factor on the coins to U's bits. -/
+theorem OneSided.splitProd (φ : Ar →+* ZMod 2) (p₀ : Fin np) (c : DCells n n' B)
+    {π : (DBits n L np B n' → Ar) → Ar} (hπ : OneSided π) : SplitProd (dFrame p₀ c) φ π := by
+  obtain ⟨g, h, hg, hh, hgh⟩ := hπ
+  refine ⟨fun S => φ (g (bitInd S)), fun S => φ (h (bitInd S)), fun S S' hS => ?_, fun S S' hS => ?_,
+    fun S => by rw [hgh, map_mul]⟩
+  · exact congrArg φ (hg (bitInd S) (bitInd S') fun a => by
+      unfold bitInd
+      rw [if_congr (hS (.inl a) fun j => by simp [dFrame]) rfl rfl])
+  · exact congrArg φ (hh (bitInd S) (bitInd S') fun b => by
+      unfold bitInd
+      rw [if_congr (hS (.inr b) fun j => by simp [dFrame]) rfl rfl])
+
+theorem dX_eval (vq : Fin B → Fin L → Fin n' → Ar) (t : Fin B) (j : Fin L) (l : Fin n')
+    (z : DBits n L np B n' → Ar) : (dX vq t j l).eval z = vq t j l + z (.inr (t, j, l)) := by
+  simp [BitAff.eval, dX, Fintype.sum_sum_type]
+
+theorem dP_eval (pc : Fin n → Fin B → Fin L → Ar) (w : Fin np → Ar) (i : Fin n) (t : Fin B) (j : Fin L)
+    (z : DBits n L np B n' → Ar) : (dP pc w i t j).eval z = pc i t j + ∑ p, w p * z (.inl (i, j, p)) := by
+  simp [BitAff.eval, dP, Fintype.sum_sum_type, Fintype.sum_prod_type, ite_and]
+
+/-- **The design's target is `⟨x, y⟩` plus junk at its cell-block's frame**, mod 2 with `φ (w p₀) = 1`: block
+`t`'s increment is `Σ_j (x_j + Q_j)(c_j + y_j)`, `Q_j` U's other planes and the constants, and the earlier blocks'
+increments read no coin of the frame. -/
+theorem split_dPrefix (φ : Ar →+* ZMod 2) {p₀ : Fin np} {w : Fin np → Ar} (hw : φ (w p₀) = 1)
+    (pc : Fin n → Fin B → Fin L → Ar) (vq : Fin B → Fin L → Fin n' → Ar) (c : DCells n n' B) :
+    Split (dFrame p₀ c) fun S => φ (dPrefix pc vq w c.1 c.2.1 c.2.2.val (bitInd S)) -
+      (fun j => frameBits (dFrame p₀ c) S (.inl j)) ⬝ᵥ fun j => frameBits (dFrame p₀ c) S (.inr j) := by
+  classical
+  obtain ⟨i, l, t⟩ := c
+  set fr := dFrame (L := L) p₀ (i, l, t) with hfr
+  let xb : Fin L → Finset (DBits n L np B n') → ZMod 2 := fun j S =>
+    if (.inl (i, j, p₀) : DBits n L np B n') ∈ S then 1 else 0
+  let yb : Fin B → Fin L → Finset (DBits n L np B n') → ZMod 2 := fun t' j S =>
+    if (.inr (t', j, l) : DBits n L np B n') ∈ S then 1 else 0
+  let Q : Fin B → Fin L → Finset (DBits n L np B n') → ZMod 2 := fun t' j S =>
+    φ (pc i t' j) + ∑ p ∈ univ.erase p₀, φ (w p) * if (.inl (i, j, p) : DBits n L np B n') ∈ S then 1 else 0
+  have hP : ∀ t' j S, φ ((dP pc w i t' j).eval (bitInd S)) = xb j S + Q t' j S := fun t' j S => by
+    rw [dP_eval, map_add, map_sum, ← add_sum_erase _ _ (mem_univ p₀)]
+    simp only [map_mul, map_bitInd, hw, one_mul, xb, Q]
+    ring
+  have hX : ∀ t' j S, φ ((dX vq t' j l).eval (bitInd S)) = φ (vq t' j l) + yb t' j S := fun t' j S => by
+    rw [dX_eval, map_add, map_bitInd]
+  have hQx : ∀ t' j, XBlind fr (Q t' j) := fun t' j =>
+    (XBlind.const fr _).add (XBlind.sum _ fun p hp => (XBlind.const fr _).mul (XBlind.bit fun j' h => by
+      simp only [hfr, dFrame, Sum.elim_inl, Sum.inl.injEq, Prod.mk.injEq] at h
+      exact (mem_erase.mp hp).1 h.2.2.symm))
+  have hQy : ∀ t' j, YBlind fr (Q t' j) := fun t' j =>
+    (YBlind.const fr _).add (YBlind.sum _ fun p _ => (YBlind.const fr _).mul (YBlind.bit fun j' h => by
+      simp [hfr, dFrame] at h))
+  have hxy : ∀ j, YBlind fr (xb j) := fun j => YBlind.bit fun j' h => by simp [hfr, dFrame] at h
+  have hyx : ∀ t' j, XBlind fr (yb t' j) := fun t' j => XBlind.bit fun j' h => by simp [hfr, dFrame] at h
+  have hyy : ∀ t' j, t' ≠ t → YBlind fr (yb t' j) := fun t' j ht => YBlind.bit fun j' h => by
+    simp only [hfr, dFrame, Sum.elim_inr, Sum.inr.injEq, Prod.mk.injEq] at h
+    exact ht h.1.symm
+  have hpiece : ∀ t' j, Split fr fun S =>
+      (if t'.val ≤ t.val then (xb j S + Q t' j S) * (φ (vq t' j l) + yb t' j S) else 0) -
+        if t' = t then xb j S * yb t j S else 0 := fun t' j => by
+    by_cases ht : t' = t
+    · subst ht
+      refine ((Split.of_y (((hxy j).mul (YBlind.const fr (φ (vq t' j l)))).add
+        ((hQy t' j).mul (YBlind.const fr (φ (vq t' j l)))))).add
+        (Split.of_x ((hQx t' j).mul (hyx t' j)))).congr fun S => ?_
+      simp only [le_refl, ↓reduceIte]
+      ring
+    · by_cases hle : t'.val ≤ t.val
+      · refine (Split.of_y (((hxy j).add (hQy t' j)).mul ((YBlind.const fr (φ (vq t' j l))).add
+          (hyy t' j ht)))).congr
+          fun S => ?_
+        simp only [hle, ht, ↓reduceIte, sub_zero]
+      · exact (Split.of_y (YBlind.const fr 0)).congr fun S => by simp [hle, ht]
+  refine (Split.sum univ fun t' _ => Split.sum univ fun j _ => hpiece t' j).congr fun S => ?_
+  simp only [sum_sub_distrib]
+  have hdot : ((fun j => frameBits fr S (.inl j)) ⬝ᵥ fun j => frameBits fr S (.inr j)) =
+      ∑ t' : Fin B, ∑ j, if t' = t then xb j S * yb t j S else 0 := by
+    rw [sum_comm]
+    simp only [sum_ite_eq', mem_univ, ↓reduceIte, dotProduct]
+    rfl
+  rw [hdot]
+  congr 1
+  simp only [dPrefix, dIncr, map_sum, apply_ite φ, map_zero, map_mul]
+  refine sum_congr rfl fun t' _ => ?_
+  split_ifs with h
+  · exact sum_congr rfl fun j _ => by rw [hP, hX]
+  · simp
+
+/-- **A one-sided run's error has a parity form at every cell-block's frame**, its terms the products charged to the
+cell-block's word (`charged`): any straight-line program over a ring with a map `φ` onto `F₂`, its products one-sided
+of any form, and `φ (w p₀) = 1`. -/
+theorem SlpG.parityForm_err (φ : Ar →+* ZMod 2) {p₀ : Fin np} {w : Fin np → Ar} (hw : φ (w p₀) = 1) {N : ℕ}
+    (P : SlpG (DBits n L np B n') Ar N) (hOk : ∀ j, P.isProd j = true → OneSided (P.prod j))
+    (pc : Fin n → Fin B → Fin L → Ar) (vq : Fin B → Fin L → Fin n' → Ar) (j : Fin N) (c : DCells n n' B) :
+    ParityForm (dFrame p₀ c) φ (charged (dFrame p₀ c) φ (P.coef j) P.prod).card
+      fun z => P.val z j - dPrefix pc vq w c.1 c.2.1 c.2.2.val z := by
+  have h := parityForm_sum (dFrame_injective p₀ c) φ (P.coef j) P.prod (P.aff j)
+    (fun i hi => OneSided.splitProd φ p₀ c (hOk i (P.isProd_of_coef_ne_zero j i hi))) _ (split_dPrefix φ hw pc vq c)
+  have e : (fun z => P.val z j - dPrefix pc vq w c.1 c.2.1 c.2.2.val z) =
+      fun z => ∑ i, P.coef j i * P.prod i z + (P.aff j).eval z - dPrefix pc vq w c.1 c.2.1 c.2.2.val z :=
+    funext fun z => by rw [P.val_eq]
+  rw [e]
+  exact h
+
+/-- **Charging purity** of a run (RS-E-REF r6 VI.2.1): no product is two-sided at the frames of two cell-blocks
+whose words read it. Prefix chains, merges and partners are free: a product of block `t'` read by a later block's
+word reads none of that block's coins. -/
+def SlpG.ChargePure (φ : Ar →+* ZMod 2) (p₀ : Fin np) {N : ℕ} (P : SlpG (DBits n L np B n') Ar N)
+    (word : DCells n n' B → Fin N) : Prop :=
+  ∀ c c' i, c ≠ c' → P.coef (word c) i ≠ 0 → TwoSidedAt (dFrame p₀ c) φ (P.prod i) → P.coef (word c') i ≠ 0 →
+    ¬TwoSidedAt (dFrame p₀ c') φ (P.prod i)
+
+end ParityDesign
+
+section ParityCount
+
+variable {V A : Type} [DecidableEq V] [CommRing A] {K : ℕ}
+
+/-- **A cell-block short of products**: its error has a parity form with fewer than `K` terms at its frame. -/
+def ParShort (fr : Fin K ⊕ Fin K → V) (φ : A →+* ZMod 2) (e : (V → A) → A) : Prop :=
+  ∃ R < K, ParityForm fr φ R e
+
+/-- **Disjoint charges add up**: at least `L` products charged to each full cell, no product charged twice. -/
+theorem card_full_le {C : Type} [Fintype C] {N L : ℕ} (ch : C → Finset (Fin N)) (prods : Finset (Fin N))
+    (hsub : ∀ c, ch c ⊆ prods) (hdisj : ∀ c c', c ≠ c' → Disjoint (ch c) (ch c')) (full : C → Prop)
+    [DecidablePred full] (hfull : ∀ c, full c → L ≤ (ch c).card) : L * (univ.filter full).card ≤ prods.card := by
+  calc L * (univ.filter full).card = ∑ c ∈ univ.filter full, L := by rw [sum_const, smul_eq_mul, mul_comm]
+    _ ≤ ∑ c ∈ univ.filter full, (ch c).card := sum_le_sum fun c hc => hfull c (mem_filter.mp hc).2
+    _ = ((univ.filter full).biUnion ch).card := by
+        classical
+        exact (card_biUnion fun c _ c' _ hne => hdisj c c' hne).symm
+    _ ≤ prods.card := card_le_card (biUnion_subset.mpr fun c _ => hsub c)
+
+end ParityCount
+
+section ParityRound
+
+variable {Ar : Type} [CommRing Ar] {n L np B n' : ℕ}
+
+open Classical in
+/-- **Charge-pure one-sided runs add up**: the program has at least `L` products per cell-block not short of
+products. -/
+theorem SlpG.card_full_le (φ : Ar →+* ZMod 2) {p₀ : Fin np} {w : Fin np → Ar} (hw : φ (w p₀) = 1) {N : ℕ}
+    (P : SlpG (DBits n L np B n') Ar N) (hOk : ∀ j, P.isProd j = true → OneSided (P.prod j))
+    (pc : Fin n → Fin B → Fin L → Ar) (vq : Fin B → Fin L → Fin n' → Ar) (word : DCells n n' B → Fin N)
+    (hpure : P.ChargePure φ p₀ word) :
+    L * (univ.filter fun c => ¬ParShort (dFrame p₀ c) φ
+      fun z => P.val z (word c) - dPrefix pc vq w c.1 c.2.1 c.2.2.val z).card ≤
+      (univ.filter fun j => P.isProd j = true).card := by
+  refine _root_.Pouw.RelativeSecurity.card_full_le (fun c => charged (dFrame p₀ c) φ (P.coef (word c)) P.prod) _
+    (fun c i hi => mem_filter.mpr ⟨mem_univ _, P.isProd_of_coef_ne_zero _ _ (mem_filter.mp hi).2.1⟩)
+    (fun c c' hne => disjoint_left.mpr fun i hi hi' =>
+      hpure c c' i hne (mem_filter.mp hi).2.1 (mem_filter.mp hi).2.2 (mem_filter.mp hi').2.1
+        (mem_filter.mp hi').2.2) _ fun c hc => ?_
+  by_contra hlt
+  exact hc ⟨_, not_le.mp hlt, P.parityForm_err φ hw hOk pc vq (word c) c⟩
+
+end ParityRound
+
+
+section ParityGame
+
+variable {C V A : Type} [Fintype C] [Fintype V] [DecidableEq V] [CommRing A] {K : ℕ}
+
+/-- **A round's product deficit** (RS-E-REF r6 VI.2.1): the share of cells short of products at their frames
+(`ParShort`). -/
+noncomputable def parDef (fr : C → Fin K ⊕ Fin K → V) (φ : A →+* ZMod 2) (e : C → (V → A) → A) : ℝ :=
+  prob fun c => ParShort (fr c) φ (e c)
+
+omit [Fintype C] in
+/-- A cell short of products passes with probability at most `0.854`. -/
+theorem prob_parShort_le {fr : Fin K ⊕ Fin K → V} (hfr : Function.Injective fr) {φ : A →+* ZMod 2}
+    {e : (V → A) → A} (h : ParShort fr φ e) : prob (fun S : Finset V => e (bitInd S) = 0) ≤ 427 / 500 := by
+  obtain ⟨R, hR, hF⟩ := h
+  exact prob_zero_le_of_parityForm hfr hF (by norm_num) fun F G a b => parity_luck_short hR F G a b
+
+/-- **The spot check's pass bound for one-sided operands of any form**: a uniform cell and uniform bits find a zero
+with probability at most `1 − (1 − 0.854) d`, `d` the share of cells short of products. -/
+theorem prob_spot_parity_le (fr : C → Fin K ⊕ Fin K → V) (hfr : ∀ c, Function.Injective (fr c))
+    (φ : A →+* ZMod 2) (e : C → (V → A) → A) :
+    prob (fun a : C × Finset V => e a.1 (bitInd a.2) = 0) ≤ 1 - (1 - 427 / 500) * parDef fr φ e := by
+  classical
+  rw [prob_eq_expect, expect_prod, parDef, prob_eq_expect]
+  have hpt : ∀ c : C, expect (fun S : Finset V => if e (c, S).1 (bitInd (c, S).2) = 0 then (1 : ℝ) else 0) ≤
+      1 + -(1 - 427 / 500) * (if ParShort (fr c) φ (e c) then 1 else 0) := by
+    intro c
+    split_ifs with hb
+    · rw [← prob_eq_expect (fun S : Finset V => e c (bitInd S) = 0)]
+      have := prob_parShort_le (hfr c) hb
+      linarith
+    · rw [mul_zero, add_zero]
+      exact expect_le_of_le zero_le_one fun S => by split_ifs <;> norm_num
+  have := (expect_mono hpt).trans (expect_affine_le zero_le_one _ _)
+  linarith
+
+namespace SpotPlay
+
+/-- **The window's product-deficit game** of a spot play: as `game`, its deficiency the share of cells short of
+products (`parDef`). -/
+noncomputable def gameP (fr : C → Fin K ⊕ Fin K → V) (φ : A →+* ZMod 2) :
+    {n : ℕ} → SpotPlay C V A n → RoundGame (C × Finset V) n
+  | _, .done => .done
+  | _, .round e next => .round (fun _ => parDef fr φ e) (fun a => e a.1 (bitInd a.2) = 0) fun a => (next a).gameP fr φ
+
+omit [Fintype V] in
+theorem accepts_gameP (fr : C → Fin K ⊕ Fin K → V) (φ : A →+* ZMod 2) :
+    ∀ {n : ℕ} (P : SpotPlay C V A n) (x : Paths (C × Finset V) n), (P.gameP fr φ).accepts x ↔ P.game.accepts x
+  | _, .done, _ => Iff.rfl
+  | _, .round _ next, x => and_congr Iff.rfl (accepts_gameP fr φ (next x.1) x.2)
+
+omit [Fintype V] in
+theorem dAt_gameP (fr : C → Fin K ⊕ Fin K → V) (φ : A →+* ZMod 2) :
+    ∀ {n : ℕ} (P : SpotPlay C V A n) (x : Paths (C × Finset V) n) (w : Fin n),
+    (P.gameP fr φ).dAt x w = parDef fr φ (P.errAt x w)
+  | _, .done, _, w => w.elim0
+  | _, .round e next, x, w => by
+    induction w using Fin.cases with
+    | zero => simp [gameP, errAt, RoundGame.dAt]
+    | succ w' =>
+      simp only [gameP, errAt, RoundGame.dAt, Fin.cases_succ]
+      exact dAt_gameP fr φ (next x.1) x.2 w'
+
+/-- **Spot plays meet Theorem S's pass bound at `p = 0.854` in the product deficit**, whatever their errors. -/
+theorem passBound_gameP {fr : C → Fin K ⊕ Fin K → V} (hfr : ∀ c, Function.Injective (fr c)) (φ : A →+* ZMod 2) :
+    ∀ {n : ℕ} (P : SpotPlay C V A n), (P.gameP fr φ).PassBound (427 / 500)
+  | _, .done => trivial
+  | _, .round e next =>
+    ⟨⟨parDef fr φ e, fun _ => rfl, prob_spot_parity_le fr hfr φ e⟩, fun a => passBound_gameP hfr φ (next a)⟩
+
+end SpotPlay
+
+namespace StagePlay
+
+/-- **The round's product-deficit stage game**: as `sgame`, each stage's step `1/M` of its share of cells short of
+products. -/
+noncomputable def sgameP (M : ℕ) (fr : C → Fin K ⊕ Fin K → V) (φ : A →+* ZMod 2) :
+    {m : ℕ} → StagePlay C V A m → StageGame (Finset V) m
+  | _, .done => .done
+  | _, .stage e next =>
+    .stage ((M : ℝ)⁻¹ * parDef fr φ e) (fun S => (M : ℝ)⁻¹ * prob fun c => e c (bitInd S) ≠ 0)
+      fun S => (next S).sgameP M fr φ
+
+omit [Fintype V] in
+theorem defi_sgameP (M : ℕ) (fr : C → Fin K ⊕ Fin K → V) (φ : A →+* ZMod 2) :
+    ∀ {m : ℕ} (P : StagePlay C V A m) (x : Paths (Finset V) m),
+    (P.sgameP M fr φ).defi x = ∑ s, (M : ℝ)⁻¹ * parDef fr φ (P.errAt x s)
+  | _, .done, _ => by simp [sgameP, StageGame.defi]
+  | _, .stage e next, x => by
+    rw [Fin.sum_univ_succ]
+    simp only [sgameP, StageGame.defi, errAt, Fin.cases_zero, Fin.cases_succ]
+    rw [defi_sgameP M fr φ (next x.1) x.2]
+
+omit [Fintype V] in
+theorem wrong_sgameP (M : ℕ) (fr : C → Fin K ⊕ Fin K → V) (φ : A →+* ZMod 2) :
+    ∀ {m : ℕ} (P : StagePlay C V A m) (x : Paths (Finset V) m), (P.sgameP M fr φ).wrong x = (P.sgame M).wrong x
+  | _, .done, _ => rfl
+  | _, .stage e next, x => by
+    simp only [sgameP, sgame, StageGame.wrong]
+    rw [wrong_sgameP M fr φ (next x.1) x.2]
+
+/-- **The product-deficit stage game is valid at `p = 0.854`**, whatever the stages' errors. -/
+theorem valid_sgameP (M : ℕ) {fr : C → Fin K ⊕ Fin K → V} (hfr : ∀ c, Function.Injective (fr c))
+    (φ : A →+* ZMod 2) : ∀ {m : ℕ} (P : StagePlay C V A m), (P.sgameP M fr φ).Valid (427 / 500)
+  | _, .done => trivial
+  | _, .stage e next => by
+    classical
+    refine ⟨mul_nonneg (inv_nonneg.mpr (Nat.cast_nonneg _)) (prob_nonneg _),
+      fun S => mul_nonneg (inv_nonneg.mpr (Nat.cast_nonneg _)) (prob_nonneg _), ?_,
+      fun S => valid_sgameP M hfr φ (next S)⟩
+    rw [expect_mul_left, mul_left_comm]
+    refine mul_le_mul_of_nonneg_left ?_ (inv_nonneg.mpr (Nat.cast_nonneg _))
+    rcases isEmpty_or_nonempty C with hC | hC
+    · have h0 : parDef fr φ e = 0 := by
+        unfold parDef prob
+        simp
+      rw [h0, mul_zero]
+      unfold expect
+      exact div_nonneg (Finset.sum_nonneg fun S _ => prob_nonneg _) (Nat.cast_nonneg _)
+    · have h1 : expect (fun S : Finset V => prob fun c => e c (bitInd S) ≠ 0) =
+          prob fun a : C × Finset V => e a.1 (bitInd a.2) ≠ 0 := by
+        rw [prob_eq_expect (fun a : C × Finset V => e a.1 (bitInd a.2) ≠ 0), expect_prod_swap]
+        congr 1
+        funext S
+        exact prob_eq_expect _
+      rw [h1]
+      have h2 := prob_add_not (fun a : C × Finset V => e a.1 (bitInd a.2) = 0)
+      have h3 := prob_spot_parity_le fr hfr φ e
+      linarith
+
+end StagePlay
+
+namespace StagedPlay
+
+variable {M : ℕ}
+
+/-- **The window's product-deficit game** of a staged play: as `game`, round `w`'s deficiency its product-deficit
+stage game's. -/
+noncomputable def gameP (fr : C → Fin K ⊕ Fin K → V) (φ : A →+* ZMod 2) :
+    {n : ℕ} → StagedPlay C V A M n → RoundGame (Paths (Finset V) M × (Fin M × C)) n
+  | _, .done => .done
+  | _, .round P next =>
+    .round (fun a => (P.sgameP M fr φ).defi a.1) (fun a => P.ok a.1 a.2.1 a.2.2) fun a => (next a).gameP fr φ
+
+omit [Fintype V] in
+theorem accepts_gameP (fr : C → Fin K ⊕ Fin K → V) (φ : A →+* ZMod 2) :
+    ∀ {n : ℕ} (P : StagedPlay C V A M n) (x : Paths (Paths (Finset V) M × (Fin M × C)) n),
+    (P.gameP fr φ).accepts x ↔ P.game.accepts x
+  | _, .done, _ => Iff.rfl
+  | _, .round _ next, x => and_congr Iff.rfl (accepts_gameP fr φ (next x.1) x.2)
+
+omit [Fintype V] in
+theorem dAt_gameP (fr : C → Fin K ⊕ Fin K → V) (φ : A →+* ZMod 2) :
+    ∀ {n : ℕ} (P : StagedPlay C V A M n) (x : Paths (Paths (Finset V) M × (Fin M × C)) n) (w : Fin n),
+    (P.gameP fr φ).dAt x w = ∑ s, (M : ℝ)⁻¹ * parDef fr φ (P.errAt x w s)
+  | _, .done, _, w => w.elim0
+  | _, .round P next, x, w => by
+    induction w using Fin.cases with
+    | zero =>
+      simp only [gameP, errAt, RoundGame.dAt, Fin.cases_zero]
+      exact P.defi_sgameP M fr φ x.1.1
+    | succ w' =>
+      simp only [gameP, errAt, RoundGame.dAt, Fin.cases_succ]
+      exact dAt_gameP fr φ (next x.1) x.2 w'
+
+/-- **Staged plays make a staged window at `p = 0.854` in the product deficit**, whatever their errors. -/
+theorem game_stagedP {fr : C → Fin K ⊕ Fin K → V} (hfr : ∀ c, Function.Injective (fr c)) (φ : A →+* ZMod 2) :
+    ∀ {n : ℕ} (P : StagedPlay C V A M n), (P.gameP fr φ).Staged (427 / 500) M
+  | _, .done => trivial
+  | _, .round P next => by
+    simp only [gameP]
+    exact ⟨⟨P.sgameP M fr φ, P.valid_sgameP M hfr φ, fun x j => rfl, fun x => by
+      rw [P.wrong_sgameP M fr φ x]
+      exact P.prob_ok_le x⟩, fun a => game_stagedP hfr φ (next a)⟩
+
+end StagedPlay
+
+end ParityGame
+
+section ParityOverlap
+
+variable {St : ℕ} {κ ι : Fin St → Type} [∀ t, Fintype (κ t)] [∀ t, Fintype (ι t)] [∀ t, DecidableEq (ι t)]
+  {A : Type} [CommRing A] {K : ℕ}
+
+/-- **A round's product deficit with overlapping draws**: the share of cells and draws at which the cell, on its own
+draw's bits with every other draw's at theirs, is short of products at its frame. -/
+noncomputable def ovDefP (fr : (c : Σ t, κ t) → Fin K ⊕ Fin K → ι c.1) (φ : A →+* ZMod 2)
+    (e : (Σ t, κ t) → ((Σ s, ι s) → A) → A) : ℝ :=
+  prob fun a : (Σ t, κ t) × (∀ s, Finset (ι s)) => ParShort (fr a.1) φ fun z => e a.1 (mergeAt a.2 a.1.1 z)
+
+/-- **The overlapped spot check's pass bound for one-sided operands of any form**: per draw, with the other draws'
+bits given, as `prob_ov_le`. -/
+theorem prob_ovP_le (fr : (c : Σ t, κ t) → Fin K ⊕ Fin K → ι c.1) (hfr : ∀ c, Function.Injective (fr c))
+    (φ : A →+* ZMod 2) (e : (Σ t, κ t) → ((Σ s, ι s) → A) → A) :
+    prob (fun a : (Σ t, κ t) × (∀ s, Finset (ι s)) => e a.1 (drawInd a.2) = 0) ≤
+      1 - (1 - 427 / 500) * ovDefP fr φ e := by
+  classical
+  rw [prob_eq_expect, expect_prod, ovDefP, prob_eq_expect, expect_prod]
+  have hpt : ∀ c : Σ t, κ t,
+      expect (fun U : ∀ s, Finset (ι s) => if e (c, U).1 (drawInd (c, U).2) = 0 then (1 : ℝ) else 0) ≤
+        1 + -(1 - 427 / 500) * expect fun U : ∀ s, Finset (ι s) =>
+          if ParShort (fr (c, U).1) φ (fun z => e (c, U).1 (mergeAt (c, U).2 (c, U).1.1 z)) then (1 : ℝ) else 0 := by
+    intro c
+    rw [← prob_eq_expect (fun U : ∀ s, Finset (ι s) => e c (drawInd U) = 0), prob_cell_eq (e c) c.1,
+      ← prob_eq_expect (fun U : ∀ s, Finset (ι s) => ParShort (fr c) φ fun z => e c (mergeAt U c.1 z))]
+    have := prob_spot_parity_le (fun _ : ∀ s, Finset (ι s) => fr c) (fun _ => hfr c) φ
+      fun (U : ∀ s, Finset (ι s)) (z : ι c.1 → A) => e c (mergeAt U c.1 z)
+    rw [parDef] at this
+    linarith
+  have := (expect_mono hpt).trans (expect_affine_le zero_le_one _ _)
+  linarith
+
+namespace OvPlay
+
+/-- **The window's product-deficit game** of a play with overlapping draws: as `game`, its deficiency `ovDefP`. -/
+noncomputable def gameP (fr : (c : Σ t, κ t) → Fin K ⊕ Fin K → ι c.1) (φ : A →+* ZMod 2) :
+    {n : ℕ} → OvPlay κ ι A n → RoundGame ((Σ t, κ t) × (∀ s, Finset (ι s))) n
+  | _, .done => .done
+  | _, .round e next => .round (fun _ => ovDefP fr φ e) (fun a => e a.1 (drawInd a.2) = 0) fun a => (next a).gameP fr φ
+
+theorem accepts_gameP (fr : (c : Σ t, κ t) → Fin K ⊕ Fin K → ι c.1) (φ : A →+* ZMod 2) :
+    ∀ {n : ℕ} (P : OvPlay κ ι A n) (x : Paths ((Σ t, κ t) × (∀ s, Finset (ι s))) n),
+    (P.gameP fr φ).accepts x ↔ P.game.accepts x
+  | _, .done, _ => Iff.rfl
+  | _, .round _ next, x => and_congr Iff.rfl (accepts_gameP fr φ (next x.1) x.2)
+
+theorem dAt_gameP (fr : (c : Σ t, κ t) → Fin K ⊕ Fin K → ι c.1) (φ : A →+* ZMod 2) :
+    ∀ {n : ℕ} (P : OvPlay κ ι A n) (x : Paths ((Σ t, κ t) × (∀ s, Finset (ι s))) n) (w : Fin n),
+    (P.gameP fr φ).dAt x w = ovDefP fr φ (P.errAt x w)
+  | _, .done, _, w => w.elim0
+  | _, .round e next, x, w => by
+    induction w using Fin.cases with
+    | zero => simp [gameP, errAt, RoundGame.dAt]
+    | succ w' =>
+      simp only [gameP, errAt, RoundGame.dAt, Fin.cases_succ]
+      exact dAt_gameP fr φ (next x.1) x.2 w'
+
+/-- **Overlapped plays meet Theorem S's pass bound at `p = 0.854` in the product deficit**, whatever their
+errors. -/
+theorem passBound_gameP {fr : (c : Σ t, κ t) → Fin K ⊕ Fin K → ι c.1} (hfr : ∀ c, Function.Injective (fr c))
+    (φ : A →+* ZMod 2) : ∀ {n : ℕ} (P : OvPlay κ ι A n), (P.gameP fr φ).PassBound (427 / 500)
+  | _, .done => trivial
+  | _, .round e next =>
+    ⟨⟨ovDefP fr φ e, fun _ => rfl, prob_ovP_le fr hfr φ e⟩, fun a => passBound_gameP hfr φ (next a)⟩
+
+end OvPlay
+
+end ParityOverlap
+
 section OverlapRound
 
 variable {St : ℕ} {R : Type} [CommRing R] {n B n' : Fin St → ℕ} {L np : ℕ}
@@ -6240,6 +6880,236 @@ theorem roundsHyp_of_overlap {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb
         rw [hcor w, ← expect_mul_left]
         exact expect_le_of_le (Nat.cast_nonneg _) fun W => hprod w W
       _ ≤ Mc.charge M (e.symm x, r) := hcharge
+
+section ParityOverlapRound
+
+variable {St : ℕ} {Ar : Type} [CommRing Ar] {n B n' : Fin St → ℕ} {L np : ℕ}
+
+/-- **K∥'s products for one-sided operands of any form**: at every bit point of the other draws, one-sided on draw
+`t`'s bits, for every draw `t`; each side may depend on the other draws' bits in any way. -/
+def OneSidedAt (π : (OBits St n L np B n' → Ar) → Ar) : Prop :=
+  ∀ (W : ODraws St n L np B n') (t : Fin St), OneSided fun z => π (mergeAt W t z)
+
+/-- **An overlapped one-sided run's error has a parity form at every cell-block's frame**, at every bit point `W` of
+the other draws: its terms the products charged to the word there. -/
+theorem SlpG.parityForm_err_ov (φ : Ar →+* ZMod 2) {p₀ : Fin np} {w : Fin np → Ar} (hw : φ (w p₀) = 1) {N : ℕ}
+    (P : SlpG (OBits St n L np B n') Ar N) (hOk : ∀ j, P.isProd j = true → OneSidedAt (P.prod j))
+    (W : ODraws St n L np B n') (pc : ∀ t, Fin (n t) → Fin (B t) → Fin L → Ar)
+    (vq : ∀ t, Fin (B t) → Fin L → Fin (n' t) → Ar) (j : Fin N) (c : OCells St n n' B) :
+    ParityForm (dFrame p₀ c.2) φ (charged (dFrame p₀ c.2) φ (P.coef j) fun i z => P.prod i (mergeAt W c.1 z)).card
+      fun z => P.val (mergeAt W c.1 z) j - dPrefix (pc c.1) (vq c.1) w c.2.1 c.2.2.1 c.2.2.2.val z := by
+  have h := parityForm_sum (dFrame_injective p₀ c.2) φ (P.coef j) (fun i z => P.prod i (mergeAt W c.1 z))
+    ((P.aff j).restrictAt W c.1)
+    (fun i hi => OneSided.splitProd φ p₀ c.2 (hOk i (P.isProd_of_coef_ne_zero j i hi) W c.1)) _
+    (split_dPrefix φ hw (pc c.1) (vq c.1) c.2)
+  have e : (fun z => P.val (mergeAt W c.1 z) j - dPrefix (pc c.1) (vq c.1) w c.2.1 c.2.2.1 c.2.2.2.val z) =
+      fun z => ∑ i, P.coef j i * P.prod i (mergeAt W c.1 z) + ((P.aff j).restrictAt W c.1).eval z -
+        dPrefix (pc c.1) (vq c.1) w c.2.1 c.2.2.1 c.2.2.2.val z :=
+    funext fun z => by rw [P.val_eq, BitAff.eval_mergeAt]
+  rw [e]
+  exact h
+
+/-- **Charging purity across draws**: at every bit point of the draws, no product is two-sided at the frames of two
+cell-blocks, of any stages, whose words read it. -/
+def SlpG.ChargePureAt (φ : Ar →+* ZMod 2) (p₀ : Fin np) {N : ℕ} (P : SlpG (OBits St n L np B n') Ar N)
+    (word : OCells St n n' B → Fin N) : Prop :=
+  ∀ (W : ODraws St n L np B n') (c c' : OCells St n n' B) i, c ≠ c' → P.coef (word c) i ≠ 0 →
+    TwoSidedAt (dFrame p₀ c.2) φ (fun z => P.prod i (mergeAt W c.1 z)) → P.coef (word c') i ≠ 0 →
+      ¬TwoSidedAt (dFrame p₀ c'.2) φ fun z => P.prod i (mergeAt W c'.1 z)
+
+open Classical in
+/-- **Charge-pure one-sided overlapped runs add up**: at every bit point of the draws, the round's run has at least
+`L` products per cell-block, of any stage, not short of products. -/
+theorem SlpG.card_full_le_ov (φ : Ar →+* ZMod 2) {p₀ : Fin np} {w : Fin np → Ar} (hw : φ (w p₀) = 1) {N : ℕ}
+    (P : SlpG (OBits St n L np B n') Ar N) (hOk : ∀ j, P.isProd j = true → OneSidedAt (P.prod j))
+    (W : ODraws St n L np B n') (pc : ∀ t, Fin (n t) → Fin (B t) → Fin L → Ar)
+    (vq : ∀ t, Fin (B t) → Fin L → Fin (n' t) → Ar) (word : OCells St n n' B → Fin N)
+    (hpure : P.ChargePureAt φ p₀ word) :
+    L * (univ.filter fun c : OCells St n n' B => ¬ParShort (dFrame p₀ c.2) φ
+      fun z => P.val (mergeAt W c.1 z) (word c) - dPrefix (pc c.1) (vq c.1) w c.2.1 c.2.2.1 c.2.2.2.val z).card ≤
+      (univ.filter fun j => P.isProd j = true).card := by
+  refine _root_.Pouw.RelativeSecurity.card_full_le
+    (fun c => charged (dFrame p₀ c.2) φ (P.coef (word c)) fun i z => P.prod i (mergeAt W c.1 z)) _
+    (fun c i hi => mem_filter.mpr ⟨mem_univ _, P.isProd_of_coef_ne_zero _ _ (mem_filter.mp hi).2.1⟩)
+    (fun c c' hne => disjoint_left.mpr fun i hi hi' =>
+      hpure W c c' i hne (mem_filter.mp hi).2.1 (mem_filter.mp hi).2.2 (mem_filter.mp hi').2.1
+        (mem_filter.mp hi').2.2) _ fun c hc => ?_
+  by_contra hlt
+  exact hc ⟨_, not_le.mp hlt, P.parityForm_err_ov φ hw hOk W pc vq (word c) c⟩
+
+end ParityOverlapRound
+
+/-- A share's complement counts the cells outside it. -/
+theorem card_not_ge {C : Type} [Fintype C] (Q : C → Prop) [DecidablePred Q] :
+    (Fintype.card C : ℝ) * (1 - prob Q) ≤ (univ.filter fun c => ¬Q c).card := by
+  rw [prob_eq_card]
+  have hsplit := Finset.card_filter_add_card_filter_not (s := (univ : Finset C)) Q
+  rw [Finset.card_univ] at hsplit
+  rcases Nat.eq_zero_or_pos (Fintype.card C) with h0 | h0
+  · rw [h0]
+    simp
+  · have hpos : (0 : ℝ) < Fintype.card C := by exact_mod_cast h0
+    have hs : ((univ.filter Q).card : ℝ) + ((univ.filter fun c => ¬Q c).card : ℝ) = Fintype.card C := by
+      exact_mod_cast hsplit
+    rw [mul_sub, mul_one, mul_div_cancel₀ _ hpos.ne']
+    linarith
+
+/-- **The window's staged rounds, one-sided operands of any form** (RS-E-REF r6 VI.2), a named hypothesis:
+`RoundsHypKSt` with its products one-sided of any form (`OneSided`) in place of affine, and charging purity
+(`SlpG.ChargePure`, through a ring map `φ` onto `F₂` at plane `p₀`) in place of row purity. -/
+def RoundsHypKStP (Mc : Machine) (S : Service) (R St : ℕ) (Vmax δb δz κ : ℝ) (n L np B n' : ℕ) {Ar : Type}
+    [CommRing Ar] (wt : Fin np → Ar) (φ : Ar →+* ZMod 2) (p₀ : Fin np) : Prop :=
+  ∃ e : S.Seed ≃ Paths (DStage St n L np B n') R, ∀ (Ω' : Type) [Fintype Ω']
+    (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)), (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) →
+    ∀ r : Ω', ∃ (P : StagedPlay (DCells n n' B) (DBits n L np B n') Ar St R)
+      (Bind ZK : Fin R → Paths (DStage St n L np B n') R → Prop) (V : Paths (DStage St n L np B n') R → ℝ),
+      (∀ w, prob (Bind w) ≤ δb) ∧ (∀ w, prob (ZK w) ≤ δz) ∧
+      (∀ x, S.verify (Mc.eval M (e.symm x, r)).1 (e.symm x) (Mc.eval M (e.symm x, r)).2 = true →
+        P.game.accepts x ∨ ∃ w, Bind w x ∨ ZK w x) ∧
+      (∀ x, V x ≤ Vmax) ∧
+      ∀ x, ∃ (N : Fin R → Fin St → ℕ) (prog : ∀ w s, SlpG (DBits n L np B n') Ar (N w s))
+        (pc : Fin R → Fin St → Fin n → Fin B → Fin L → Ar)
+        (vq : Fin R → Fin St → Fin B → Fin L → Fin n' → Ar)
+        (word : ∀ w s, DCells n n' B → Fin (N w s)),
+        (∀ w s j, (prog w s).isProd j = true → OneSided ((prog w s).prod j)) ∧
+        (∀ w s c, P.errAt x w s c =
+          fun z => (prog w s).val z (word w s c) - dPrefix (pc w s) (vq w s) wt c.1 c.2.1 c.2.2.val z) ∧
+        (∀ w s, (prog w s).ChargePure φ p₀ (word w s)) ∧
+        κ * ∑ w, ∑ s, ((univ.filter fun j => (prog w s).isProd j = true).card : ℝ) - V x ≤ Mc.charge M (e.symm x, r)
+
+/-- **Staged rounds of one-sided operands of any form give the window's cost line** (RS-E-REF r6 VI.2): under
+`RoundsHypKStP` with `φ (wt p₀) = 1`, `RoundsHyp` holds at `p = 0.854` with `F₀ = St κ L n n' B` and no slack. The
+game is the product-deficit game (`StagedPlay.gameP`, accepting as `game` does), whose rounds are staged at `0.854`
+whatever the errors (`StagedPlay.game_stagedP`); each stage's cell-blocks not short of products are counted by
+`SlpG.card_full_le`. -/
+theorem roundsHyp_of_stagedP {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n L np B n' : ℕ}
+    {Ar : Type} [CommRing Ar] {wt : Fin np → Ar} {φ : Ar →+* ZMod 2} {p₀ : Fin np}
+    (h : RoundsHypKStP Mc S R St Vmax δb δz κ n L np B n' wt φ p₀) (hw : φ (wt p₀) = 1) (hSt : 0 < St)
+    (hκ : 0 ≤ κ) :
+    RoundsHyp Mc S (DStage St n L np B n') R (427 / 500) (St * (κ * L * ((n * n' * B : ℕ) : ℝ))) 0 Vmax δb δz := by
+  classical
+  obtain ⟨e, h⟩ := h
+  refine ⟨e, fun Ω' _ M hcom r => ?_⟩
+  obtain ⟨P, Bind, ZK, V, hB, hZ, hacc, hV, hK⟩ := h Ω' M hcom r
+  refine ⟨P.gameP (dFrame p₀) φ, Bind, ZK, V, (P.gameP (dFrame p₀) φ).expBound_of_staged (by norm_num)
+    (P.game_stagedP (fun c => dFrame_injective p₀ c) φ), hB, hZ,
+    fun x hx => (hacc x hx).imp_left (P.accepts_gameP (dFrame p₀) φ x).mpr, hV, fun x => ?_⟩
+  obtain ⟨N, prog, pc, vq, word, hOk, hE, hpure, hcharge⟩ := hK x
+  set C : ℝ := ((n * n' * B : ℕ) : ℝ)
+  have hC : C = (Fintype.card (DCells n n' B) : ℝ) := by
+    simp [C, Fintype.card_prod, mul_assoc]
+  have hprod : ∀ w s, (L : ℝ) * (C * (1 - parDef (dFrame p₀) φ (P.errAt x w s))) ≤
+      ((univ.filter fun j => (prog w s).isProd j = true).card : ℝ) := fun w s => by
+    have h1 := (prog w s).card_full_le φ hw (hOk w s) (pc w s) (vq w s) (word w s) (hpure w s)
+    have h2 := card_not_ge fun c => ParShort (dFrame p₀ c) φ (P.errAt x w s c)
+    rw [hC, parDef]
+    refine (mul_le_mul_of_nonneg_left h2 (Nat.cast_nonneg L)).trans ?_
+    simp only [hE w s] at h1 ⊢
+    exact_mod_cast h1
+  have hSt' : (St : ℝ) ≠ 0 := by exact_mod_cast hSt.ne'
+  have hdef : (P.gameP (dFrame p₀) φ).deficiency x =
+      (St : ℝ)⁻¹ * ∑ w, ∑ s, parDef (dFrame p₀) φ (P.errAt x w s) := by
+    rw [RoundGame.deficiency_eq_sum, Finset.mul_sum]
+    refine Finset.sum_congr rfl fun w _ => ?_
+    rw [P.dAt_gameP (dFrame p₀) φ x w, Finset.mul_sum]
+  have hsum : ((R : ℝ) - (P.gameP (dFrame p₀) φ).deficiency x) * (St * (κ * L * C)) =
+      κ * ∑ w, ∑ s, (L : ℝ) * (C * (1 - parDef (dFrame p₀) φ (P.errAt x w s))) := by
+    have e2 : ∑ w : Fin R, ∑ s : Fin St, (L : ℝ) * (C * (1 - parDef (dFrame p₀) φ (P.errAt x w s))) =
+        L * C * (R * St - ∑ w, ∑ s, parDef (dFrame p₀) φ (P.errAt x w s)) := by
+      simp only [mul_sub, mul_one, Finset.sum_sub_distrib, Finset.sum_const, Finset.card_univ, Fintype.card_fin,
+        nsmul_eq_mul, ← Finset.mul_sum]
+      ring
+    rw [hdef, e2]
+    field_simp
+  calc ((R : ℝ) - (P.gameP (dFrame p₀) φ).deficiency x) * (St * (κ * L * C)) - V x - R * 0
+      = κ * ∑ w, ∑ s, (L : ℝ) * (C * (1 - parDef (dFrame p₀) φ (P.errAt x w s))) - V x := by rw [hsum]; ring
+    _ ≤ κ * ∑ w, ∑ s, ((univ.filter fun j => (prog w s).isProd j = true).card : ℝ) - V x := by
+      gcongr with w _ s
+      exact hprod w s
+    _ ≤ Mc.charge M (e.symm x, r) := hcharge
+
+/-- **The window's rounds with overlapping stages, one-sided operands of any form** (RS-E-REF r6 VI.2), a named
+hypothesis: `RoundsHypKOv` with its products one-sided per draw at every bit point of the other draws (`OneSidedAt`)
+in place of `AffMulAt`, and charging purity across draws (`SlpG.ChargePureAt`) in place of row purity. -/
+def RoundsHypKOvP (Mc : Machine) (S : Service) (R St : ℕ) (Vmax δb δz κ : ℝ) (n : Fin St → ℕ) (L np : ℕ)
+    (B n' : Fin St → ℕ) {Ar : Type} [CommRing Ar] (wt : Fin np → Ar) (φ : Ar →+* ZMod 2) (p₀ : Fin np) : Prop :=
+  ∃ e : S.Seed ≃ Paths (OSpot St n L np B n') R, ∀ (Ω' : Type) [Fintype Ω']
+    (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)), (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) →
+    ∀ r : Ω', ∃ (P : OvPlay (fun t => DCells (n t) (n' t) (B t)) (fun t => DBits (n t) L np (B t) (n' t)) Ar R)
+      (Bind ZK : Fin R → Paths (OSpot St n L np B n') R → Prop) (V : Paths (OSpot St n L np B n') R → ℝ),
+      (∀ w, prob (Bind w) ≤ δb) ∧ (∀ w, prob (ZK w) ≤ δz) ∧
+      (∀ x, S.verify (Mc.eval M (e.symm x, r)).1 (e.symm x) (Mc.eval M (e.symm x, r)).2 = true →
+        P.game.accepts x ∨ ∃ w, Bind w x ∨ ZK w x) ∧
+      (∀ x, V x ≤ Vmax) ∧
+      ∀ x, ∃ (N : Fin R → ℕ) (prog : ∀ w, SlpG (OBits St n L np B n') Ar (N w))
+        (pc : Fin R → ∀ t, Fin (n t) → Fin (B t) → Fin L → Ar)
+        (vq : Fin R → ∀ t, Fin (B t) → Fin L → Fin (n' t) → Ar)
+        (word : ∀ w, OCells St n n' B → Fin (N w)),
+        (∀ w j, (prog w).isProd j = true → OneSidedAt ((prog w).prod j)) ∧
+        (∀ w c, P.errAt x w c = fun z => (prog w).val z (word w c) -
+          dPrefix (pc w c.1) (vq w c.1) wt c.2.1 c.2.2.1 c.2.2.2.val fun v => z ⟨c.1, v⟩) ∧
+        (∀ w, (prog w).ChargePureAt φ p₀ (word w)) ∧
+        κ * ∑ w, ((univ.filter fun j => (prog w).isProd j = true).card : ℝ) - V x ≤ Mc.charge M (e.symm x, r)
+
+/-- **Overlapping stages of one-sided operands of any form give the window's cost line** (RS-E-REF r6 VI.2): under
+`RoundsHypKOvP` with `φ (wt p₀) = 1`, `RoundsHyp` holds at `p = 0.854` with `F₀ = κ L C`, `C` the round's
+cell-blocks over all its stages, and no slack. The game is the product-deficit game (`OvPlay.gameP`), whose rounds
+pass at most `1 − 0.146 d` whatever the errors (`OvPlay.passBound_gameP`); the count is `SlpG.card_full_le_ov`'s at
+every bit point of the draws, so at least its mean. -/
+theorem roundsHyp_of_overlapP {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n B n' : Fin St → ℕ}
+    {L np : ℕ} {Ar : Type} [CommRing Ar] {wt : Fin np → Ar} {φ : Ar →+* ZMod 2} {p₀ : Fin np}
+    (h : RoundsHypKOvP Mc S R St Vmax δb δz κ n L np B n' wt φ p₀) (hw : φ (wt p₀) = 1) (hκ : 0 ≤ κ) :
+    RoundsHyp Mc S (OSpot St n L np B n') R (427 / 500) (κ * L * (Fintype.card (OCells St n n' B) : ℝ)) 0 Vmax δb
+      δz := by
+  classical
+  obtain ⟨e, h⟩ := h
+  refine ⟨e, fun Ω' _ M hcom r => ?_⟩
+  obtain ⟨P, Bind, ZK, V, hB, hZ, hacc, hV, hK⟩ := h Ω' M hcom r
+  let fr : (c : OCells St n n' B) → Fin L ⊕ Fin L → DBits (n c.1) L np (B c.1) (n' c.1) := fun c => dFrame p₀ c.2
+  refine ⟨P.gameP fr φ, Bind, ZK, V, RoundGame.expBound_of_pathBound _
+    ((P.gameP fr φ).pathBound_of_passBound (P.passBound_gameP (fun c => dFrame_injective p₀ c.2) φ)), hB, hZ,
+    fun x hx => (hacc x hx).imp_left (P.accepts_gameP fr φ x).mpr, hV, fun x => ?_⟩
+  obtain ⟨N, prog, pc, vq, word, hOk, hE, hpure, hcharge⟩ := hK x
+  set C : ℝ := (Fintype.card (OCells St n n' B) : ℝ)
+  let full : Fin R → ODraws St n L np B n' → OCells St n n' B → Prop := fun w W c =>
+    ¬ParShort (fr c) φ fun z => P.errAt x w c (mergeAt W c.1 z)
+  have hprod : ∀ w W, (L : ℝ) * ((univ.filter fun c => full w W c).card : ℝ) ≤
+      ((univ.filter fun j => (prog w).isProd j = true).card : ℝ) := fun w W => by
+    have h1 := (prog w).card_full_le_ov φ hw (hOk w) W (pc w) (vq w) (word w) (hpure w)
+    simp only [full, fr, hE, mergeAt_mk]
+    exact_mod_cast h1
+  have hcor : ∀ w, C * (1 - ovDefP fr φ (P.errAt x w)) ≤
+      expect fun W : ODraws St n L np B n' => ((univ.filter fun c => full w W c).card : ℝ) := fun w => by
+    have hd : ovDefP fr φ (P.errAt x w) = expect fun W : ODraws St n L np B n' =>
+        prob fun c : OCells St n n' B => ParShort (fr c) φ fun z => P.errAt x w c (mergeAt W c.1 z) := by
+      rw [ovDefP, prob_eq_expect, expect_prod_swap]
+      congr 1
+      funext W
+      rw [prob_eq_expect]
+    have ha : C * (1 - ovDefP fr φ (P.errAt x w)) = expect fun W : ODraws St n L np B n' =>
+        C + -C * prob fun c : OCells St n n' B => ParShort (fr c) φ fun z => P.errAt x w c (mergeAt W c.1 z) := by
+      rw [hd, expect_const_add_mul]
+      ring
+    rw [ha]
+    refine expect_mono fun W => ?_
+    have := card_not_ge fun c : OCells St n n' B => ParShort (fr c) φ fun z => P.errAt x w c (mergeAt W c.1 z)
+    simp only [full]
+    linarith
+  have hdef : (P.gameP fr φ).deficiency x = ∑ w, ovDefP fr φ (P.errAt x w) := by
+    rw [RoundGame.deficiency_eq_sum]
+    exact Finset.sum_congr rfl fun w _ => P.dAt_gameP fr φ x w
+  calc ((R : ℝ) - (P.gameP fr φ).deficiency x) * (κ * L * C) - V x - R * 0
+      = κ * ∑ w, (L : ℝ) * (C * (1 - ovDefP fr φ (P.errAt x w))) - V x := by
+        rw [hdef]
+        simp only [mul_sub, mul_one, Finset.sum_sub_distrib, Finset.sum_const, Finset.card_univ, Fintype.card_fin,
+          nsmul_eq_mul, ← Finset.mul_sum]
+        ring
+    _ ≤ κ * ∑ w, ((univ.filter fun j => (prog w).isProd j = true).card : ℝ) - V x := by
+      gcongr with w
+      refine (mul_le_mul_of_nonneg_left (hcor w) (Nat.cast_nonneg L)).trans ?_
+      rw [← expect_mul_left]
+      exact expect_le_of_le (Nat.cast_nonneg _) fun W => hprod w W
+    _ ≤ Mc.charge M (e.symm x, r) := hcharge
 
 /-- **The window's rounds with Theorem H's cost line** (the re-encoded design in exact arithmetic over a field `F`:
 FP8 operands or scaled reads, with exact sums), a named hypothesis. It is `RoundsHyp` with the cost line derived
@@ -7273,6 +8143,54 @@ theorem certifiedFraction120θ_overlap_40 (kd : K120 → Kind) (S : Service) {R 
     (roundsHyp_of_overlap h (fun _ => (chainBound_gProd toF2 rfl toF2_wRe_zero).mono fun _ hπ => hπ.gProd) hκ.le)
     (by norm_num) hF₀ hδb hδz
   rwa [e, mul_zero, sub_zero, card_oCells] at this
+
+theorem ServiceFloor.mono {Mc : Machine} {S : Service} {F κ κ' : ℝ} (h : ServiceFloor Mc S F κ) (hκ : κ ≤ κ') :
+    ServiceFloor Mc S F κ' := fun Ω _ M hc => (h Ω M hc).trans hκ
+
+/-- At the parity luck `0.854`, `D₀ = 274 ln 2` rounds of luck reach `2⁻⁴⁰`: `0.146 · 274 ≥ 40`. -/
+theorem exp_parity_274 : Real.exp (-((1 - 427 / 500) * (274 * Real.log 2))) ≤ ((2 : ℝ) ^ 40)⁻¹ := by
+  have h40 : Real.exp (-(((40 : ℕ) : ℝ) * Real.log 2)) = ((2 : ℝ) ^ 40)⁻¹ := by
+    rw [Real.exp_neg, Real.exp_nat_mul, Real.exp_log two_pos]
+  rw [← h40]
+  refine Real.exp_le_exp.mpr ?_
+  have := Real.log_pos (by norm_num : (1 : ℝ) < 2)
+  push_cast
+  nlinarith
+
+/-- **The certified fraction with per-stage draws, one-sided operands of any form** (RS-E-REF r6 VI.2): under
+`RoundsHypKStP` on `Z/2³²` read mod 2 (`toF2`, plane 0 at an odd weight), the staged floor `F₀ = St κ L n n' B` at
+`D₀ = 274 ln 2` rounds of luck at `2⁻⁴⁰` (the parity luck `0.854`), with neither a luck nor a chain hypothesis. -/
+theorem certifiedFraction120θ_stagedP_40 (kd : K120 → Kind) (S : Service) {R St : ℕ} {Vmax δb δz κ : ℝ}
+    {n L B n' : ℕ} (h : RoundsHypKStP (machine kd (.ofNat price120)) S R St Vmax δb δz κ n L 7 B n' wRe toF2 0)
+    (hSt : 0 < St) (hκ : 0 < κ) (hC : 0 < L * (n * n' * B)) (hδb : 0 ≤ δb) (hδz : 0 ≤ δz) :
+    ServiceFloor (machine (kdθ kd) priceθ) S
+      (4 / 5 * ((R - 274 * Real.log 2) * (St * (κ * L * ((n * n' * B : ℕ) : ℝ))) - Vmax))
+      (((2 : ℝ) ^ 40)⁻¹ + R * (δb + δz)) := by
+  have hF₀ : 0 < (St : ℝ) * (κ * L * ((n * n' * B : ℕ) : ℝ)) := by
+    rw [mul_assoc]
+    exact mul_pos (by exact_mod_cast hSt) (mul_pos hκ (by exact_mod_cast hC))
+  have := certifiedFraction120θ_rounds kd S (roundsHyp_of_stagedP h toF2_wRe_zero hSt hκ.le) (by norm_num) hF₀ hδb
+    hδz (274 * Real.log 2)
+  rw [mul_zero, sub_zero] at this
+  exact ServiceFloor.mono this (by linarith [exp_parity_274])
+
+/-- **The certified fraction with overlapping stages, one-sided operands of any form** (RS-E-REF r6 VI.2): under
+`RoundsHypKOvP` on `Z/2³²` read mod 2, the floor `F₀ = κ L Σ_t n_t n'_t B_t` at `D₀ = 274 ln 2` rounds of luck at
+`2⁻⁴⁰`, with neither a luck nor a chain hypothesis. -/
+theorem certifiedFraction120θ_overlapP_40 (kd : K120 → Kind) (S : Service) {R St : ℕ} {Vmax δb δz κ : ℝ}
+    {n B n' : Fin St → ℕ} {L : ℕ}
+    (h : RoundsHypKOvP (machine kd (.ofNat price120)) S R St Vmax δb δz κ n L 7 B n' wRe toF2 0) (hκ : 0 < κ)
+    (hC : 0 < L * ∑ t, n t * n' t * B t) (hδb : 0 ≤ δb) (hδz : 0 ≤ δz) :
+    ServiceFloor (machine (kdθ kd) priceθ) S
+      (4 / 5 * ((R - 274 * Real.log 2) * (κ * L * ((∑ t, n t * n' t * B t : ℕ) : ℝ)) - Vmax))
+      (((2 : ℝ) ^ 40)⁻¹ + R * (δb + δz)) := by
+  have hF₀ : 0 < κ * L * (Fintype.card (OCells St n n' B) : ℝ) := by
+    rw [mul_assoc, card_oCells]
+    exact mul_pos hκ (by exact_mod_cast hC)
+  have := certifiedFraction120θ_rounds kd S (roundsHyp_of_overlapP h toF2_wRe_zero hκ.le) (by norm_num) hF₀ hδb hδz
+    (274 * Real.log 2)
+  rw [mul_zero, sub_zero, card_oCells] at this
+  exact ServiceFloor.mono this (by linarith [exp_parity_274])
 
 /-- **The certified fraction from Theorem H** (the re-encoded design in exact arithmetic, merges priced at
 `h ≥ 2L/3` slots): under `RoundsHypH` in Model B, the same floor as from Theorem K. -/
