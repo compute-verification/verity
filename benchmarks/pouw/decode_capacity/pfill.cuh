@@ -47,8 +47,8 @@
 // bits, the s8 byte 0 or 1; B's are U in {±1, ..., ±64}, one digest byte t an entry, U = (t & 0x7F) - 64 + ((t >> 6) & 1)
 // = -64 + sum_{p<6} 2^p t_p + 65 t_6 (bit 7 unused), so each word is the s32 sum of a U over the row's set bits, in
 // [-2048, 2048], read unscaled. B's block b (columns 2b, 2b + 1) is ctr = 2^56 + b, entry 32 i + k its (k, column 2b + i)
-// from digest byte 32 i + k: 512 blocks a tile, two for each of the block's 256 lanes, and lane 8 of every warp makes the
-// keys after them. dcap's dgate also runs pf_bu_uniform, the histograms of U and of A on the host generators that
+// from digest byte 32 i + k: 512 blocks a tile, two for each of the block's 256 lanes, and thread 0 makes the keys after
+// them and hands them to the block through shared memory. dcap's dgate also runs pf_bu_uniform, the histograms of U and of A on the host generators that
 // dfill_ref (and so dgate's receipts) holds the GPU to.
 #pragma once
 #include "../pearl_c/sha512.cuh"
@@ -230,14 +230,19 @@ __device__ __forceinline__ void pf_tiles(uint8_t* Bs, uint32_t (*Ab)[32 * 16], u
     const unsigned long long idx = (unsigned long long)blockIdx.x * tiles + i, tile = tile0 + idx;
     PfKeys key{0, 0, 0, 0};
     if (KD == PF_BU) {
-      // blocks 32 w + lane and 256 + 32 w + lane, then lane 8's key block; one copy of the compression's code
+      // blocks 32 w + lane and 256 + 32 w + lane, then thread 0's key block (one warp's third pass, not all eight's),
+      // handed over in Ab[0][0..3], which nothing reads from the tile's end until agen; one copy of the compression's code
 #pragma unroll 1
-      for (int h = 0; h < 3 && (h < 2 || lane == 8); h++) {
+      for (int h = 0; h < 2 + (threadIdx.x == 0); h++) {
         const int b = 32 * w + lane + 32 * PF_W * h;
         uint64_t st[8];
         pf_block(dom, c0, c1, tile, h < 2 ? PF_B + (uint64_t)b : PF_KEY, st);
         if (h == 2) {
           key = pf_keys(st);
+          Ab[0][0] = key.a0;
+          Ab[0][1] = key.a1;
+          Ab[0][2] = key.k0;
+          Ab[0][3] = key.k1;
           continue;
         }
 #pragma unroll
@@ -249,6 +254,8 @@ __device__ __forceinline__ void pf_tiles(uint8_t* Bs, uint32_t (*Ab)[32 * 16], u
                             pf_u4(pf_row(st, 8 * c + 7)));
         }
       }
+      __syncthreads();
+      key = PfKeys{Ab[0][0], Ab[0][1], Ab[0][2], Ab[0][3]};
     } else if (lane <= 8 * KH) {
       uint64_t st[8];
       const int bb = w * 8 + (lane & 7), h = lane >> 3;
@@ -271,10 +278,12 @@ __device__ __forceinline__ void pf_tiles(uint8_t* Bs, uint32_t (*Ab)[32 * 16], u
         key = pf_keys(st);
       }
     }
-    key.a0 = __shfl_sync(~0u, key.a0, 8 * KH);
-    key.a1 = __shfl_sync(~0u, key.a1, 8 * KH);
-    key.k0 = __shfl_sync(~0u, key.k0, 8 * KH);
-    key.k1 = __shfl_sync(~0u, key.k1, 8 * KH);
+    if (KD != PF_BU) {
+      key.a0 = __shfl_sync(~0u, key.a0, 8 * KH);
+      key.a1 = __shfl_sync(~0u, key.a1, 8 * KH);
+      key.k0 = __shfl_sync(~0u, key.k0, 8 * KH);
+      key.k1 = __shfl_sync(~0u, key.k1, 8 * KH);
+    }
     __syncthreads();
     auto agen = [&](int f0) {
       __syncwarp();
