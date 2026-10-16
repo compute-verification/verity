@@ -1,0 +1,36 @@
+description = "ablation rung 4: ablate-3-peels with the linears' activations dithered; with K and V dithered it is adopted (rung 5)"
+
+[[linear]]
+step = "smooth"
+alpha = 0.5
+kv_shared = true
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "int8"
+act = "dither"
+weight_top = 63
+
+[[attention]]
+step = "rotate"
+
+[[attention]]
+step = "center_keys"
+
+[[attention]]
+step = "int8"
+q_top = 63
+p_sink = true
+
+[[attention]]
+step = "peel"
+operand = "q"
+width = 64
+
+[[attention]]
+step = "peel"
+operand = "p"
+width = 64
+offset = 64

@@ -1,0 +1,22 @@
+description = "ablation rung 1: the adopted quality recipe without Dither (SmoothQuant alpha 0.5 foldable, rotated, kc, psink; activations, weights, Q, K, V rounded to ±127, no peels)"
+
+[[linear]]
+step = "smooth"
+alpha = 0.5
+kv_shared = true
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "int8"
+
+[[attention]]
+step = "rotate"
+
+[[attention]]
+step = "center_keys"
+
+[[attention]]
+step = "int8"
+p_sink = true

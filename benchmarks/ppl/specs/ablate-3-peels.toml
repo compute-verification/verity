@@ -1,0 +1,35 @@
+description = "ablation rung 3: ablate-2b-q63 with the w64 peels on Q and P (P served as P - 64 + E); exact, so equal to rung 2b"
+
+[[linear]]
+step = "smooth"
+alpha = 0.5
+kv_shared = true
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "int8"
+weight_top = 63
+
+[[attention]]
+step = "rotate"
+
+[[attention]]
+step = "center_keys"
+
+[[attention]]
+step = "int8"
+q_top = 63
+p_sink = true
+
+[[attention]]
+step = "peel"
+operand = "q"
+width = 64
+
+[[attention]]
+step = "peel"
+operand = "p"
+width = 64
+offset = 64
