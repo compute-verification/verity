@@ -106,6 +106,12 @@ def tree(rows: bytes, ks: bytes, off: int, dom: CommitmentDomain) -> tuple[list[
     return [x for p in parts for x in p[0]], b"".join(b"".join(level) for level in levels)
 
 
+def device_levels(p: Path) -> bytes:
+    """A level dump as digest bytes: the device stores each digest as 8 native (little-endian) u64 words, a word each 8
+    big-endian digest bytes."""
+    return np.fromfile(p, np.uint64).byteswap().tobytes()
+
+
 def offsets(n: int) -> tuple[int, list[int]]:
     depth = (n - 1).bit_length() if n > 1 else 0
     offs = [0]
@@ -204,17 +210,17 @@ def check(d: Path) -> dict:
         offx, offr = (2 * c) << 40, (2 * c + 1) << 40
         refx = tree(xrows, ks, offx, dx)
         if c == 0 and (d / "cg_X.bin").exists():   # commit_gpu's Committer on the same X (PRF offset 0), and both salt phases
-            cg = (d / "cg_X.bin").read_bytes()
+            cg = device_levels(d / "cg_X.bin")
             ds, cs = (d / "S_X.bin").read_bytes(), (d / "cgS_X.bin").read_bytes()
             out["committer_X"] = {"levels_ok": cg[:len(refx[1])] == refx[1], "salts_equal": ds == cs,
                                   "salts_bad": sum(ds[128 * i:128 * i + 128] != cs[128 * i:128 * i + 128] for i in range(nx)),
                                   "salts_first_bad": [i for i in range(nx) if ds[128 * i:128 * i + 128] != cs[128 * i:128 * i + 128]][:8]}
         for kn in meta["kernels"]:
-            gx = (d / f"lv_{kn}_{c}_X.bin").read_bytes()
+            gx = device_levels(d / f"lv_{kn}_{c}_X.bin")
             trees.append({"kernel": kn, "call": c, **judge("X", dx, xrows, ks, offx, gx, refx, rng, 1)})
             rrows = (d / f"R_{kn}_{c}.bin").read_bytes()
             assert len(rrows) == ROW * nr
-            gr = (d / f"lv_{kn}_{c}_R.bin").read_bytes()
+            gr = device_levels(d / f"lv_{kn}_{c}_R.bin")
             trees.append({"kernel": kn, "call": c, **judge("R", dr, rrows, ks, offr, gr, tree(rrows, ks, offr, dr), rng, 4)})
             roots |= {trees[-2]["root"], trees[-1]["root"]}
     out["trees"] = trees
