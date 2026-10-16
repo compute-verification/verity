@@ -1,5 +1,5 @@
 """The round's spot check as a C-Flock statement: GemmCoordinate_v3{K = 128, HopperBF16WgmmaDot16} (Boolean), one instance a
-drawn coordinate (i, l) of the drawn call's tile at step j, staged by `class_statement.stage_unit` with every instance's own
+drawn coordinate (i, l) of the drawn call's tile at step j, staged (`Stager`: `class_statement.stage_unit` split in two) with every instance's own
 rows (no shared rows, no public input ports), its output hidden (one hm96-sha512/row/v2 output row).
 
     x    = [A_i,S | U_i | A_i,S | U_i]      S = columns 32 j .. 32 j + 31, U_i U's row i (U_{i, k mod 32} over S)
@@ -19,6 +19,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 
@@ -64,23 +65,57 @@ def bf16_rne(v: np.ndarray) -> np.ndarray:
     return ((u + 0x7FFF + ((u >> 16) & 1)) >> 16).astype(np.uint16)
 
 
-def stage(out: Path, A: np.ndarray, B: np.ndarray, U: np.ndarray, F: dict, draw: dict, sigma: bytes, salts: dict,
-          salt_key: bytes) -> dict:
-    """Stages the drawn spot check under ``out`` (circuit.txt, inst.bin, pub.bin) from the call's A, B, its U and F rows;
-    ``salts`` xa's and wb's committed salts per instance. Each output is checked against the exact step increment in bf16."""
-    j, coords = draw["step"], draw["coords"]
-    rows = {"xa": np.stack([twice(A[i, 32 * j:32 * j + 32]) for i, _l in coords]),
-            "wb": np.stack([twice(B[l, 32 * j:32 * j + 32]) for _i, l in coords]), **noise_rows(U, F, draw)}
-    pub = {p: [public_salt(sigma, draw["call"], p, n) for n in range(len(coords))] for p in ("xu", "wf")}
-    got = CS.stage_unit(definition(), NAME, IN_ROWS, [(V2, (0,))], rows, out, salt_key, salts={**salts, **pub})
-    inc = np.array([int((A[i, 32 * j:32 * j + 32].astype(np.int64) + U[i]) @ (B[l, 32 * j:32 * j + 32].astype(np.int64)
-                                                                              + F[l][32 * j:32 * j + 32])) for i, l in coords])
-    o0 = np.asarray(got["outs"]["o0"], np.uint16)[:, 0]
-    if not np.array_equal(o0, bf16_rne(inc.astype(np.float32))):
-        raise AssertionError("the statement's outputs are not the step increments in bf16")
-    text = (out / "circuit.txt").read_text()
-    return {"pin": FC.digest(text), "ands": got["ands"], "unit_nnz": got["unit_nnz"], "k_log": got["meta"]["k_log"],
-            "instances": len(coords), "circuit_bytes": len(text), "increments": [int(x) for x in inc]}
+class Stager:
+    """`class_statement.stage_unit` split in two: the lowering and the composed circuit once (``circuit``, its pin), then a
+    round's statement (`stage`) from the lowering's own evaluation and `circuit.write`. stage_unit's per-instance IR
+    reference evaluation (seconds an instance) is replaced by the check against the exact step increment in bf16."""
+
+    def __init__(self, circuit: Path):
+        CS.cache_slot_circuits()
+        self.low, out_words = CS.unit_lowering(definition(), NAME, [(r, ps) for r, _s, _b, ps in IN_ROWS])
+        if out_words != [1]:
+            raise ValueError(f"{NAME}: outputs {out_words} words, not one bf16")
+        port = lambda nm: SimpleNamespace(name=nm, dtype="u16")  # noqa: E731
+        content = json.dumps([definition().id, [list(r[:3]) + [list(r[3])] for r in IN_ROWS], [[V2, [0]]]]).encode()
+        sub = SimpleNamespace(id=NAME, template=SimpleNamespace(id="unit-class"), inputs=[port(r) for r, *_ in IN_ROWS],
+                              outputs=[port("o0")], program_digests=lambda statics: {NAME: hashlib.sha256(content).hexdigest()})
+        self.iset = SimpleNamespace(subcircuit=sub, name=NAME.replace("/", "-"), content_digest=hashlib.sha256(content).hexdigest())
+        self.text = FC.compose(self.low, sub, port_bits=[b for _r, _s, b, _ps in IN_ROWS], v2_out_rows=(("o0",),))
+        self.meta = json.loads(self.text.split("\n", 2)[1][5:])
+        self.ports = FC._meta_ports(self.meta)
+        self.pin = FC.digest(self.text)
+        self.circuit = circuit
+        circuit.parent.mkdir(parents=True, exist_ok=True)
+        circuit.write_text(self.text)
+
+    def stats(self) -> dict:
+        c = self.low.layout.counts
+        return {"pin": self.pin, "ands": c["ands"], "unit_nnz": c["nnz_a"] + c["nnz_b"], "k_log": self.meta["k_log"],
+                "circuit_bytes": len(self.text), "ports": [p.name for p in self.ports]}
+
+    def stage(self, out: Path, A: np.ndarray, B: np.ndarray, U: np.ndarray, F: dict, draw: dict, sigma: bytes, salts: dict,
+              salt_key: bytes) -> dict:
+        """The drawn spot check's inst.bin and pub.bin under ``out`` from the call's A, B, its U and F rows; ``salts`` xa's
+        and wb's committed salts per instance, xu's and wf's public (`public_salt`), o0's from ``salt_key``."""
+        j, coords = draw["step"], draw["coords"]
+        n = len(coords)
+        rows = {"xa": np.stack([twice(A[i, 32 * j:32 * j + 32]) for i, _l in coords]),
+                "wb": np.stack([twice(B[l, 32 * j:32 * j + 32]) for _i, l in coords]), **noise_rows(U, F, draw)}
+        flat = np.concatenate([rows[r].astype(np.uint16) for r, *_ in IN_ROWS], axis=1)
+        got, _cut, ok = self.low.evaluate(flat.astype(np.uint64))
+        if int(ok) != (1 << n) - 1:
+            raise AssertionError(f"{NAME}: a unit is unsatisfied on its rows")
+        o0 = got.astype(np.uint16)[:, :1]
+        inc = np.array([int((A[i, 32 * j:32 * j + 32].astype(np.int64) + U[i]) @ (B[l, 32 * j:32 * j + 32].astype(np.int64)
+                                                                                  + F[l][32 * j:32 * j + 32])) for i, l in coords])
+        if not np.array_equal(o0[:, 0], bf16_rne(inc.astype(np.float32))):
+            raise AssertionError("the statement's outputs are not the step increments in bf16")
+        pub = {p: [public_salt(sigma, draw["call"], p, q) for q in range(n)] for p in ("xu", "wf")}
+        all_salts = {**FC.stage_salts(self.iset, 0, n, self.ports, salt_key), **salts, **pub}
+        out.mkdir(parents=True, exist_ok=True)
+        FC.write(self.text, self.iset, 0, n, out / "inst.bin", out / "pub.bin", salt_key, rows=rows, outs={"o0": o0},
+                 salts=all_salts)
+        return {"instances": n, "increments": [int(x) for x in inc]}
 
 
 def ports(text: str) -> list[str]:
