@@ -9,9 +9,12 @@ set -uo pipefail
 R=${OUT:?}
 SHAPE=${SHAPE:---m 256 --n 256 --k 4096}
 K=$(echo "$SHAPE" | sed -E 's/.*--k ([0-9]+).*/\1/')
+# build.sh writes builds.json under the run's own out (hidden_zk's job.sh), which each window reads from its OUT
+bash benchmarks/e2e_slice/build.sh > "$R/build.log" 2>&1 || { tail -20 "$R/build.log"; exit 2; }
 for cfg in ${CONFIGS:-duo:1 duo:4 duo:8 duo:16 duo:32}; do
   f=${cfg%%:*} s=${cfg##*:}
   mkdir -p "$R/$f-s$s"
+  cp "$R/builds.json" "$R/$f-s$s/"
   OUT=$R/$f-s$s ENGINE=fake WINDOW=$s FOLD=$f ROUNDS=${ROUNDS:-3} CALLS=1 CADENCE=${CADENCE:-2} \
     PROVER_ARGS="$SHAPE --prove-threads ${THREADS:-48} --workers 8" CHALLENGER_ARGS="--k $K" \
     bash benchmarks/e2e_slice/window.sh > "$R/$f-s$s.log" 2>&1
