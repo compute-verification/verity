@@ -114,7 +114,7 @@ def unreplayable_sites(p: Loaded) -> dict[str, Any]:
         xr_fams = collective_kinds.cross_rank_families(p.world)     # [lane vllm-tp-n] from the registry's composites at this world, not typed
         for r_ in p.index.rows:
             fam_ = RM.spec_family(r_["spec"])
-            if fam_ in xr_fams or collective_kinds.collective_kind(fam_) == "all_reduce":   # the routed world-8 all-reduces too
+            if collective_kinds.evaluated_cross_rank(fam_, xr_fams):
                 d_ = p.index.describe(r_)
                 if d_ and d_.get("members"):
                     xs.setdefault(fam_, set()).add(str(d_["op_path"]))

@@ -891,7 +891,7 @@ def main(args: Options) -> int:
         (out / "sampled_replay.json").write_text(json.dumps({"schema": "verity-sweep/tp-sampled-replay/v1", "tp": args.tp, "sampled_replay": sr_comp, "boundary_linkage": lk_comp,
                                                              "per_pair_artifacts": [str(out / f"finalize_pair{p}.json") for p in range(args.pairs)],
                                                              "note": "per-rank full records (strata, mismatches, programs) live in finalize_pair<k>.json[rank].sampled_replay",
-                                                             "unreplayable_collectives_evaluated_by": {"pass": "cross_rank_collectives (TP-12)", "families": sorted(xrank_families),
+                                                             "unreplayable_collectives_evaluated_by": {"pass": "cross_rank_collectives (TP-12)", "families": sorted(set(xrank_families) | {u["family"] for u in sr_comp.get("unreplayable") or [] if u.get("evaluated_by")}),
                                                                                                         "result": xr_comp.get("result"), "by_family": xr_comp.get("by_family"), "artifact": "xrank_collectives.json"}},
                                                             indent=1, default=str) + "\n")
 

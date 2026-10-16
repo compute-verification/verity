@@ -140,14 +140,20 @@ def c2_and_pin_gates(cblock: dict, f: dict, ok: bool, why: str | None, *, rank: 
 
 
 def annotate_unreplayable(srs: list[dict], xr: dict, pair: int, xrank_families: set[str] | list[str]) -> None:
-    """Self-describing record: the replay's unreplayable collective families name the pass that evaluated them."""
+    """Self-describing record: the replay's unreplayable collective families name the pass that evaluated them
+    (`collective_kinds.evaluated_cross_rank`: the world's cross-rank families and every routed all-reduce) and its site coverage of each."""
+    from verity_vllm.program.frontend.collective_kinds import evaluated_cross_rank
+
     byf = xr.get("by_family") or {}
+    cov = (xr.get("coverage_of_unreplayable") or {}).get("families") or {}
     for sr in srs:
         for u_ in (sr or {}).get("unreplayable") or []:
             fam_ = str(u_.get("family"))
-            if fam_ in xrank_families:
+            if evaluated_cross_rank(fam_, xrank_families):
+                c_ = cov.get(fam_) or {}
                 u_["evaluated_by"] = {"pass": "cross_rank_collectives (TP-12, rev F-r16-18 / COORD ruling 27)", "result": xr.get("result"),
                                       "picks": (byf.get(fam_) or {}).get("picks"), "equal": (byf.get(fam_) or {}).get("equal"),
+                                      "sites": c_.get("sites"), "sites_covered": c_.get("covered"), "sites_missing": c_.get("missing"),
                                       "artifact": f"xrank_pair{pair}.json", "rule": "sampled strata over the committed collective outputs (>= per_stratum per site x kind x phase), not every VU"}
 
 
@@ -226,6 +232,8 @@ def sampled_replay_components(rows: list[dict], versions: dict) -> tuple[dict, d
             unrep.setdefault(k, {"family": k, "n": 0, "why": u.get("why"), "ranks": []})
             unrep[k]["n"] += int(u.get("n") or 0)
             unrep[k]["ranks"].append(int(r_))
+            if u.get("evaluated_by") and "evaluated_by" not in unrep[k]:
+                unrep[k]["evaluated_by"] = u["evaluated_by"]
     lifetimes: dict[str, int] = {}
     for k_ in keys.values():
         for lv, n_ in ((((k_.get("lifetime") or {}).get("values")) or {}).items()):
