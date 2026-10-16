@@ -22,8 +22,9 @@
 //   prio      eq with chunk c's stream at priority class floor(c * levels / k), chunk 0 highest
 //   hhi       eq with each chunk's commitments on a stream of its own at the highest priority
 //   hprio     prio with the commitments at the highest priority
+//   hlo       the commitments at the lowest priority, the GEMMs at the highest
 //   rrW       hhi with the GEMMs in one static order (stage-major, chunk-minor), each after the GEMM W places before it
-//   nodraw    hhi without the draws; nohash: eq without the commitments
+//   nodraw    hhi without the draws; nohash: eq without the commitments; hashonly: the k chunks' commitments alone
 //
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a ovl.cu -lcublasLt -lnvidia-ml -ldl
 #include <cublasLt.h>
@@ -80,18 +81,21 @@ struct Sched {
   std::string name;
   bool hash, draw, gemm;
   bool classes;  // chunk c's GEMMs at priority class floor(c * levels / k)
-  bool hhi;      // commitments on a highest-priority stream of their chunk
+  int hp;        // the commitments' stream: 0 the chunk's own, 1 one of their own at the highest priority, -1 at the lowest
+                 // with the GEMMs at the highest
   int rr;        // > 0: the GEMMs in one static order, each after the one rr places before it
 };
 static Sched sched_of(const std::string& n) {
-  if (n == "chunked") return {n, false, false, true, false, false, 0};
-  if (n == "eq") return {n, true, true, true, false, false, 0};
-  if (n == "prio") return {n, true, true, true, true, false, 0};
-  if (n == "hhi") return {n, true, true, true, false, true, 0};
-  if (n == "hprio") return {n, true, true, true, true, true, 0};
-  if (n == "nodraw") return {n, true, false, true, false, true, 0};
-  if (n == "nohash") return {n, false, true, true, false, false, 0};
-  if (n.rfind("rr", 0) == 0) return {n, true, true, true, false, true, atoi(n.c_str() + 2)};
+  if (n == "chunked") return {n, false, false, true, false, 0, 0};
+  if (n == "eq") return {n, true, true, true, false, 0, 0};
+  if (n == "prio") return {n, true, true, true, true, 0, 0};
+  if (n == "hhi") return {n, true, true, true, false, 1, 0};
+  if (n == "hprio") return {n, true, true, true, true, 1, 0};
+  if (n == "hlo") return {n, true, true, true, false, -1, 0};
+  if (n == "nodraw") return {n, true, false, true, false, 1, 0};
+  if (n == "nohash") return {n, false, true, true, false, 0, 0};
+  if (n == "hashonly") return {n, true, false, false, false, 0, 0};
+  if (n.rfind("rr", 0) == 0) return {n, true, true, true, false, 1, atoi(n.c_str() + 2)};
   fprintf(stderr, "unknown arm %s\n", n.c_str());
   exit(1);
 }
@@ -263,18 +267,18 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
         continue;
       }
       const Sched S = sched_of(nm);
-      if (k == 1 && (S.classes || S.hhi || S.rr)) continue;  // one chunk: the same as eq or nodraw
+      if (k == 1 && (S.classes || S.hp || S.rr)) continue;  // one chunk: the same as eq or nodraw
       if (S.rr && S.rr >= k) continue;
       a.hash = S.hash;
       a.stamps = S.draw;
       std::vector<cudaStream_t> sg(k), sh(k), ss(k);
       for (int c = 0; c < k; c++) {
-        const int pg = S.classes ? hi + std::min(levels - 1, c * levels / k) : lo;
+        const int pg = S.classes ? hi + std::min(levels - 1, c * levels / k) : S.hp < 0 ? hi : lo;
         sg[c] = prio_stream(pg);
-        sh[c] = S.hhi ? prio_stream(hi) : sg[c];
+        sh[c] = S.hp ? prio_stream(S.hp > 0 ? hi : lo) : sg[c];
         ss[c] = prio_stream(pg);
         a.streams.push_back(sg[c]);
-        if (S.hhi) a.streams.push_back(sh[c]);
+        if (S.hp) a.streams.push_back(sh[c]);
         a.streams.push_back(ss[c]);
       }
       EvPool pool;
@@ -306,7 +310,7 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
               }
               if (S.draw) draw_stamp<<<1, 1, 0, sg[c]>>>((unsigned long long)draw_us * 1000ull, st + (size_t)c * NSTAMP + 2 * s);
               if (S.rr && idx >= S.rr) CK(cudaStreamWaitEvent(sg[c], gev[idx - S.rr], 0));
-              ltb_run(g[t], ch[c].lt, ch[c].A, wt(l, t, c), ch[c].D, sg[c]);
+              if (S.gemm) ltb_run(g[t], ch[c].lt, ch[c].A, wt(l, t, c), ch[c].D, sg[c]);
               if (S.rr) CK(cudaEventRecord(gev[idx], sg[c]));
             }
         for (int c = 0; c < k; c++) {
@@ -483,7 +487,7 @@ int main(int argc, char** argv) {
     }
     std::vector<std::string> arms;
     const char* an = getenv("ARMS");
-    std::string s = an && *an ? an : "plain chunked eq prio hhi hprio rr1 rr2 nodraw nohash";
+    std::string s = an && *an ? an : "plain chunked eq prio hhi hprio hlo rr1 rr2 rr4 nodraw nohash hashonly";
     for (size_t p = 0; p < s.size();) {
       const size_t q = s.find(' ', p);
       const std::string w = s.substr(p, q == std::string::npos ? std::string::npos : q - p);
