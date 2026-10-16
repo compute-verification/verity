@@ -10,6 +10,8 @@
 #include <sys/random.h>
 
 constexpr int RANGE_LOG2 = 32;
+constexpr int ALONE_CHUNKS = 200;  // the filler-alone calibration, ~0.2 s at 2^19 MMAs an SM a chunk
+constexpr int SOLO_CHUNKS = 16;    // a standalone block's least chunks
 struct Round {
   unsigned long long id = 0, lo = 0, hi = 0, end = 0, tag = 0;  // the round, its range [lo, hi), the tiles run [lo, end)
   int slot = 0;
@@ -83,6 +85,17 @@ static void spump_start(DPump& p, const DFill& f, cudaStream_t fs, int depth, un
     CK(cudaStreamSynchronize(fs));
     for (auto& e : ev) CK(cudaEventDestroy(e));
   });
+}
+// the chunks a stopped pump finished inside (t0, t1], and the span from the first to the last
+static void count_done(const DPump& p, double t0, double t1, long long* chunks, double* span) {
+  double first = 0, last = 0;
+  *chunks = 0;
+  for (double x : p.t)
+    if (x > t0 && x <= t1) {
+      if (!(*chunks)++) first = x;
+      last = x;
+    }
+  *span = last - first;
 }
 // after the round's pump stopped: the tiles it launched, and n receipts of its last chunk against dfill_ref (dcap's
 // dfill_check at that chunk's first tile, at the steps the chunk ran); a round that ran past its range fails the run
