@@ -4,7 +4,7 @@ the arm contract: `arms.py`; the device driver: `dscore.cu`.
 
   python3 benchmarks/pouw/filler/score.py ARM [--rounds 8] [--reps 3] [--no-robust]   build, lease one GPU, measure, report
   python3 benchmarks/pouw/filler/score.py measure ARM --bin DIR --out DIR             the measurement, inside a lease
-  python3 benchmarks/pouw/filler/score.py report OUT_DIR [--json] [--as v3]           score a measured run's out dir
+  python3 benchmarks/pouw/filler/score.py report OUT_DIR [--json] [--as v2]           score a measured run's out dir
   python3 benchmarks/pouw/filler/score.py check ARM                                   the arm's contract and record limits
   python3 benchmarks/pouw/filler/score.py --leaderboard [--refresh] [--local DIR ...] every filler attempt, best first
 
@@ -31,8 +31,11 @@ After the lease it scores the run (`report`), writes `score.json` and one `kerne
 
 An arm that fails a gate isn't scored: its SCORE is null and `score_if_gated` keeps the number for diagnosis.
 
-filler-scorer/v3 (prepared, not active: `scoring.SCORER`) refuses at load, before the build and the lease, an arm whose
-record the ledger or the store would refuse (`arms.record_problems`); `check ARM` runs that check alone, under either.
+filler-scorer/v3, the lock (`scoring.SCORER`), refuses at load, before the build and the lease, an arm whose record the
+ledger or the store would refuse (`arms.record_problems`); `check ARM` runs that check alone. Its SCORE is the proved
+reading: the filler at the entry `scoring.filler_entry` decides from the arm's declared `Filler.noise` and the kernel
+facts of the scorer's own build (`build.json`), with SCORE under CH (every filler at 0.99, v2's reading) beside it, and
+each point's slowdown margin. `report OUT --as v2` reads a run as v2 did, without writing `score.json`.
 """
 
 from __future__ import annotations
@@ -220,6 +223,7 @@ def report(out: Path, arm=None, version: str | None = None) -> dict:
     sc = S.score(stats, S.certified(entry["active"]) if entry else S.CERTIFIED)
     if entry and entry["applies"] != entry["active"]:
         entry["score_if_active"] = S.score(stats, S.certified(entry["applies"])).get("SCORE")
+    under_ch = S.score(stats, S.certified(S.UNDER_CH)).get("SCORE") if entry else sc.get("SCORE")
     sg = rows(out / "sgate.jsonl")
     def read(p):
         return p.read_text().strip() if p.is_file() else None
@@ -247,6 +251,7 @@ def report(out: Path, arm=None, version: str | None = None) -> dict:
     if version == S.V3:
         res["margins"] = S.margins(stats)
         res["filler_entry"] = entry
+        res |= {"score_under_ch": under_ch if g["ok"] else None, "score_under_ch_if_gated": under_ch}
     if version == S.SCORER:
         (out / "score.json").write_text(json.dumps(res, indent=1))
     return res
@@ -281,10 +286,12 @@ def record(res: dict, doc: dict, run_dir: Path, by: str | None) -> dict:
     if v3:
         mg = res["margins"]
         meta["metrics"] |= {"margin_min": mg["min"], "no_margin": mg["no_margin"],
-                            "margins": {k: m["margin"] for k, m in mg["points"].items() if m["scored"]}}
+                            "margins": {k: m["margin"] for k, m in mg["points"].items() if m["scored"]},
+                            "score_under_ch": res["score_under_ch"],
+                            "score_under_ch_if_gated": res["score_under_ch_if_gated"]}
         fe = res["filler_entry"]
-        meta["filler_entry"] = fe and {k: fe.get(k) for k in ("applies", "active", "noise", "checks", "failed", "kernel",
-                                                              "score_if_active")}
+        meta["filler_entry"] = fe and {k: fe.get(k) for k in ("applies", "active", "noise", "fraction", "checks",
+                                                              "failed", "kernel", "score_if_active")}
     rec = {"kind": ledger.KIND, "meta": ledger._clean(meta), "refs": {"parent": lin["parent"]}
            if str(lin.get("parent") or "").startswith("art:") else {}, "labels": [(ledger.KERNEL_OUTCOME, "screened")]}
     ledger.write(run_dir, [rec])
@@ -326,15 +333,19 @@ def show(res: dict) -> None:
           + f", min {fmt((res['min'] or {}).get('coverage'))} at {(res['min'] or {}).get('entry')}"
           + f" (mixes: {fmt((res['min_mix'] or {}).get('coverage'))} at {(res['min_mix'] or {}).get('entry')})"
           + f"; nominal ÷ capacity {fmt(res['score_nominal'])}, at 0.99 for all {fmt(res['score_at_target'])}")
+    if "score_under_ch_if_gated" in res:
+        print(f"  SCORE under CH (every filler at 0.99; CH withdrawn, decision 27; v2's reading, for comparison): "
+              f"{fmt(res['score_under_ch'])}" + ("" if res["scored"] else f" ({fmt(res['score_under_ch_if_gated'])} "
+                                                                           "if gated)"))
     for f in res["flags"]:
         print(f"  FLAG: {f}")
     fe = res.get("filler_entry")
     if fe:
-        print(f"  filler entry: {fe['applies']} applies, declared noise {fe['noise']}"
+        print(f"  filler entry: {fe['applies']} applies ({fe['fraction']}), declared noise {fe['noise']}"
               + ("" if fe["applies"] == fe["active"] else
                  f"; inactive, so SCORE reads {fe['active']} ({fmt(fe.get('score_if_active'))} once it is active)")
-              + "".join(f"\n    not Theorem K's: {w}" for w in fe["failed"])
-              + "\n    unchecked: " + "; ".join(fe["unchecked"]))
+              + "".join(f"\n    not {k}: {w}" for k, ws in fe["failed"].items() for w in ws)
+              + ("\n    unchecked: " + "; ".join(fe["unchecked"]) if fe["unchecked"] else ""))
     for name in GATES:
         v = g.get(name, {})
         extra = {"slowdown": lambda: f"worst {fmt(v.get('worst'))} at {v.get('at')} ({v.get('phase')})",
@@ -399,18 +410,27 @@ def leaderboard(local: list[Path], refresh: bool, as_json: bool) -> int:
         gt = m.get("gate") or {}
         return bool(gt.get("ok")) and all(k in gt for k in GATES)
 
-    uniq.sort(key=lambda x: (not gated(x[1]), -((x[1]["metrics"].get("SCORE") or
-                                                  x[1]["metrics"].get("score_if_gated") or 0))))
+    def readings(m):  # (proved SCORE, SCORE under CH), each the gated number or None; v1's and v2's SCORE was CH's
+        mt, ok = m["metrics"], gated(m)
+        if m.get("scorer") in ("filler-scorer/v1", S.V2):
+            return None, mt.get("SCORE" if ok else "score_if_gated")
+        return mt.get("SCORE" if ok else "score_if_gated"), mt.get("score_under_ch" if ok else "score_under_ch_if_gated")
+
+    uniq.sort(key=lambda x: (not gated(x[1]), *(-(r if r is not None else -1) for r in readings(x[1]))))
     if as_json:
-        print(json.dumps([{"record": a, "gated": gated(m), **m} for a, m in uniq]))
+        print(json.dumps([{"record": a, "gated": gated(m), "proved": readings(m)[0], "under_ch": readings(m)[1], **m}
+                          for a, m in uniq]))
         return 0
-    print("| # | arm | variant | SCORE | min (entry) | worst slowdown | gates | run | scorer | parent | mechanism | flags |")
-    print("|---|---|---|---|---|---|---|---|---|---|---|---|")
+    print("SCORE is the proved reading (filler-scorer/v3); SCORE under CH reads every filler at 0.99 (CH withdrawn, "
+          "decision 27), as v2's SCORE did. A v2 record has no proved SCORE; an ungated one's numbers are in ().")
+    print("| # | arm | variant | SCORE | SCORE under CH | min (entry) | worst slowdown | gates | run | scorer | parent | "
+          "mechanism | flags |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for i, (art, m) in enumerate(uniq, 1):
         mt, gt = m["metrics"], m.get("gate") or {}
-        sc = fmt(mt.get("SCORE")) if gated(m) else f"({fmt(mt.get('score_if_gated'))})"
+        sc, ch = (fmt(r) if gated(m) or r is None else f"({fmt(r)})" for r in readings(m))
         failed = [k for k, v in gt.items() if k != "ok" and not v] + [f"no {k}" for k in GATES if k not in gt]
-        print(f"| {i} | {m['arm']} | {m.get('variant')} | {sc} | {fmt((mt.get('min') or {}).get('coverage'))} "
+        print(f"| {i} | {m['arm']} | {m.get('variant')} | {sc} | {ch} | {fmt((mt.get('min') or {}).get('coverage'))} "
               f"({(mt.get('min') or {}).get('entry')}) | {fmt(mt.get('slowdown_worst'))} | "
               f"{'pass' if gated(m) else 'FAIL ' + ','.join(failed)} | {m.get('run')} | "
               f"{(m.get('scorer') or '').removeprefix('filler-scorer/')}@{(m.get('harness') or '')[:9]} | "

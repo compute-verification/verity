@@ -39,9 +39,10 @@ VERSION = "filler-arm/v1"
 PLACES = ("none", "split", "co")
 PHASES = ("decode", "prefill")
 SMS = 188  # the RTX PRO 6000's SMs
-#: a filler's declarable operands: its chain's own outputs, fresh uniform ±1, fresh uniform {0,1} bits, or the dither
-#: ⌊x/s⌋ + b (data quantized down plus a fresh uniform bit; note:20261016T0525Z-draft-fullfloor-s-r6 §2)
-NOISE = ("chained", "pm1", "bits01", "dither")
+#: a filler's declarable operands: its chain's own outputs, fresh uniform ±1, fresh uniform {0,1} bits on both sides,
+#: fresh bits A ∈ {0,1} with B = U uniform on {±1..±64} (pfill-bU, note:20261016T0710Z-draft-filler-floor-r2 §5), or
+#: the dither ⌊x/s⌋ + b (data quantized down plus a fresh uniform bit; note:20261016T0525Z-draft-fullfloor-s-r6 §2)
+NOISE = ("chained", "pm1", "bits01", "bitsU", "dither")
 #: the `Filler` fields the driver runs and the variant's run-time config carries
 SHAPE = ("W", "NC", "S", "chunk_log2")
 
@@ -217,7 +218,7 @@ class FillV1:
         "mechanism": ["filler:chained-imma-registers", "place:split", "split:per-point-table", "prefill:none"],
         "hypothesis": "FILL v1 as measured: 0.35–0.62 certified ÷ capacity at ≤ 5% decode slowdown"})
     sources: tuple = ("benchmarks/pouw/decode_capacity/dcap.cu", "benchmarks/pouw/filler/arms.py")
-    filler: Filler | None = Filler(W=8, NC=4, S=2048, chunk_log2=19)
+    filler: Filler | None = Filler(W=8, NC=4, S=2048, chunk_log2=19, noise="chained")
     choice: str = "an offline table of 11 (B, L) splits from FILL's runs 2–5; a lookup and a green split at serving time"
 
     def placement(self, phase, b, l):
