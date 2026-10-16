@@ -22,6 +22,41 @@ namespace FlockComplete.Replay
 
 open Flock Transcript
 
+/-! ## The pending bytes each absorb leaves (`label`, `absorbBytes`, `absorbSlice`, `absorbF`) -/
+
+def pLabel (s : String) (P : ByteArray) : ByteArray := P ++ header 2 0 s.toUTF8.size ++ padded s.toUTF8
+
+def pBytes (b P : ByteArray) : ByteArray := P ++ header 5 0 b.size ++ padded b
+
+def pSlice (vs : Array F128) (P : ByteArray) : ByteArray := vs.foldl F128.pushBytes (P ++ header 3 2 vs.size)
+
+def pF (v : F128) (P : ByteArray) : ByteArray := F128.pushBytes (P ++ header 3 1 1) v
+
+/-- `f 0, …, f (n − 1)`, pushed in turn. -/
+def pushes {α : Type} (f : ℕ → α) : ℕ → Array α
+  | 0 => #[]
+  | i + 1 => (pushes f i).push (f i)
+
+theorem pushes_size {α : Type} (f : ℕ → α) (n : ℕ) : (pushes f n).size = n := by
+  induction n with
+  | zero => rfl
+  | succ n ih => simp [pushes, ih]
+
+theorem pushes_get {α : Type} [Inhabited α] (f : ℕ → α) (n : ℕ) : ∀ j < n, (pushes f n)[j]! = f j := by
+  induction n with
+  | zero => intro j hj; omega
+  | succ n ih =>
+    intro j hj
+    rw [pushes, getElem!_pos _ j (by simp [pushes_size]; omega), Array.getElem_push]
+    split
+    · rw [← getElem!_pos]; exact ih j (by rename_i h; simpa [pushes_size] using h)
+    · rename_i h; simp only [pushes_size] at h; congr 1; omega
+
+theorem pushes_congr {α : Type} {f g : ℕ → α} {n : ℕ} (h : ∀ i < n, f i = g i) : pushes f n = pushes g n := by
+  induction n with
+  | zero => rfl
+  | succ n ih => rw [pushes, pushes, ih fun i hi => h i (by omega), h n (by omega)]
+
 /-! ## The prover's steps in the pure session -/
 
 theorem liftTM_go {α : Type} (x : TM α) (t : Transcript) (l : Array Claims.Msg) :
@@ -140,6 +175,15 @@ theorem sampleWith_sent (hs : Hashes V) {R : Array Round} {t : Transcript} {coin
   show Except.ok (_, _) = _
   simp
 
+/-- `sampleWith_sent` at a transcript `u` given field by field, so that `u` unifies with any form of the state. -/
+theorem sampleWith_sent_at (hs : Hashes V) {R : Array Round} {t : Transcript} {coin : ℕ → F128} (u : Transcript)
+    (hR : u.rounds = R) (hk : u.k = t.k) (hp : u.pending = t.pending) (hc : Carries R t.k (sent t 1 1 coin)) :
+    sampleWith hs u = .ok (coin 0, ⟨R, t.k + 1, ByteArray.empty⟩) := by
+  obtain ⟨R', k, P⟩ := u
+  dsimp only at hR hk hp
+  subst hR hk hp
+  exact sampleWith_sent hs hc
+
 theorem sampleVecWith_sent (hs : Hashes V) {n : ℕ} (hn : n ≠ 0) {R : Array Round} {t : Transcript}
     {coin : ℕ → F128} (hc : Carries R t.k (sent t 2 n coin)) :
     sampleVecWith hs n ⟨R, t.k, t.pending⟩ = .ok ((Array.range n).map coin, ⟨R, t.k + 1, ByteArray.empty⟩) :=
@@ -153,8 +197,41 @@ theorem sampleKWith_sent (hs : Hashes V) {R : Array Round} {t : Transcript} {coi
   show Except.ok (_, _) = _
   simp
 
-/-- `Agrees` at a round the prover pushed. -/
-theorem Agrees.carries {R P : Array Round} {k₀ : ℕ} (h : Agrees R P k₀) {j : ℕ} (hj : j < P.size) (hk : k₀ ≤ j) :
-    Carries R j P[j] := h j hj hk
+/-- `A`'s rounds are the first of `B`'s. -/
+def Prefix (A B : Array Round) : Prop := ∃ C, B = A ++ C
+
+theorem Prefix.refl (A : Array Round) : Prefix A A := ⟨#[], by simp⟩
+
+theorem Prefix.trans {A B C : Array Round} (h₁ : Prefix A B) (h₂ : Prefix B C) : Prefix A C := by
+  obtain ⟨D₁, rfl⟩ := h₁
+  obtain ⟨D₂, rfl⟩ := h₂
+  exact ⟨D₁ ++ D₂, by simp⟩
+
+theorem Prefix.push (A : Array Round) (x : Round) : Prefix A (A.push x) := ⟨#[x], by simp⟩
+
+/-- **The rounds agree at a pushed round**: where the prover's final rounds `B` begin with `A.push x`, from `k₀ ≤ |A|`,
+the verifier's rounds carry `x` at `|A|`. -/
+theorem Agrees.at_push {R B A : Array Round} {k₀ : ℕ} {x : Round} (h : Agrees R B k₀) (hp : Prefix (A.push x) B)
+    (hk : k₀ ≤ A.size) : Carries R A.size x := by
+  obtain ⟨C, rfl⟩ := hp
+  have hlt : A.size < (A.push x ++ C).size := by simp; omega
+  have e : (A.push x ++ C)[A.size] = x := by
+    rw [Array.getElem_append_left (by simp)]
+    simp
+  exact e ▸ h A.size hlt hk
+
+/-- **A squeeze of a retained round of one coin**, read through `t.rounds[t.k]!`. -/
+theorem sampleWith_of (hs : Hashes V) {t : Transcript} (hN : (t.rounds[t.k]!).n = 1)
+    (hb : (t.rounds[t.k]!).bytes = some (framed t 1 1)) :
+    sampleWith hs t = .ok ((t.rounds[t.k]!).coins.getD 0 0, ⟨t.rounds, t.k + 1, ByteArray.empty⟩) := by
+  have hlt : t.k < t.rounds.size := by
+    by_contra hge
+    rw [getElem!_neg t.rounds t.k hge] at hN
+    cases hN
+  have hr : t.rounds[t.k]? = some t.rounds[t.k]! := by
+    rw [getElem!_pos t.rounds t.k hlt, Array.getElem?_eq_getElem hlt]
+  unfold sampleWith
+  rw [Flock.RecAlgebra.bind_of_ok (squeezeWith_of hs 1 one_ne_zero hr hN hb)]
+  rfl
 
 end FlockComplete.Replay
