@@ -15,6 +15,9 @@
 // dgate, dalone, done, dfill B L PLACE FILL_SMS W NC S: the DRAM-free filler (FILL; see "dfill" below): its receipts bit
 // for bit against the host, its rate alone, one chunk for ncu, and the step beside it, on a green split (PLACE split) or
 // co-resident on every SM at the lowest stream priority with the step at the highest (PLACE co).
+// fgate, flin M FW NC THR, fstep B L FW NC THR: the decode linears as a warp-specialized GEMM whose filler warps run the
+// DRAM-free chain while the consumers wait on memory (flin.cuh): its outputs and receipts bit for bit, each linear's 32
+// layers against cuBLASLt, and the step with its linears through it.
 //
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a dcap.cu -lcublasLt -lnvidia-ml -ldl
 #include <cublasLt.h>
@@ -1082,6 +1085,8 @@ static int run_dfill(Dev& d, int B, int L, int place, int fill_sms, int W, int N
   return bad ? 8 : 0;
 }
 
+#include "flin.cuh"
+
 // ---------------------------------------------------------------- gate: every kernel and cuBLASLt bit for bit on the host
 static int gate(Dev& d) {
   int fails = 0;
@@ -1170,6 +1175,7 @@ int main(int argc, char** argv) {
   if (argc < 2) {
     fprintf(stderr, "usage: dcap gate | bw GiB | lin M | att B L | step B L | fill B L FILL_SMS big|l2  [reps]\n"
                     "       dcap dgate | dalone W NC S | done W NC S | dfill B L split|co FILL_SMS W NC S [reps]\n"
+                    "       dcap fgate | flin M FW NC THR [reps] | fstep B L FW NC THR [reps]   (M, B in 32 64 128 256)\n"
                     "       (DFILL_COINS=<32 hex digits>: the round's coins for the d* modes)\n");
     return 1;
   }
@@ -1202,7 +1208,8 @@ int main(int argc, char** argv) {
   CK(cudaMalloc(&g_ws, g_wsz));
   CK(cudaMalloc(&g_ref, (size_t)256 * VOCAB * sizeof(int)));
   CK(cudaMalloc(&g_cnt, sizeof *g_cnt));
-  const bool need_w = mode == "lin" || mode == "step" || mode == "gate" || mode == "fill" || mode == "dfill";
+  const bool need_w = mode == "lin" || mode == "step" || mode == "gate" || mode == "fill" || mode == "dfill" ||
+                      mode == "fgate" || mode == "flin" || mode == "fstep";
   if (need_w) {
     for (int l = 0; l < LAYERS; l++)
       for (int j = 0; j < 4; j++) {
@@ -1217,12 +1224,16 @@ int main(int argc, char** argv) {
   fill_s8<<<1024, 256, 0, d.st>>>(d.X, (size_t)8192 * FF, 0x55);
   CK(cudaMalloc(&d.D, (size_t)1 << 30));
   const size_t maxBL = 786432;  // tokens of context over the batch
-  d.kv_bytes = (mode == "lin") ? ((size_t)1 << 20) : maxBL * KV_TOKEN_BYTES / LAYERS * 4;  // room for 4 layers at maxBL
-  if (mode == "att" || mode == "step" || mode == "bw" || mode == "fill" || mode == "dfill") {
+  d.kv_bytes = (mode == "lin" || mode == "flin" || mode == "fgate") ? ((size_t)1 << 20)
+                                                                     : maxBL * KV_TOKEN_BYTES / LAYERS * 4;  // room for 4 layers at maxBL
+  if (mode == "att" || mode == "step" || mode == "bw" || mode == "fill" || mode == "dfill" || mode == "fstep") {
     size_t fr, tot;
     CK(cudaMemGetInfo(&fr, &tot));
-    d.kv_bytes = std::min((size_t)48 << 30, fr - ((size_t)3 << 30));
-    if ((mode == "fill" || mode == "dfill") && argc > 3)  // every layer's KV distinct, and room for the filler's buffers
+    // fstep: room for the tiled copy of every layer's weights
+    const size_t keep = ((size_t)3 << 30) + (mode == "fstep" ? (size_t)7600 << 20 : 0);
+    d.kv_bytes = std::min((size_t)48 << 30, fr - keep);
+    // every layer's KV distinct, and room for the filler's buffers
+    if ((mode == "fill" || mode == "dfill" || mode == "fstep") && argc > 3)
       d.kv_bytes = std::min(d.kv_bytes, (size_t)atoi(argv[2]) * atoi(argv[3]) * KV_TOKEN_BYTES + ((size_t)1 << 20));
   }
   CK(cudaMalloc(&d.kv, d.kv_bytes));
@@ -1273,6 +1284,21 @@ int main(int argc, char** argv) {
       return 1;
     }
     rc = run_dfill(d, B, L, place, fsm, W, NC, S, argc > 9 ? atoi(argv[9]) : 9);
+  } else if (mode == "fgate") {
+    rc = flin_gate(d);
+  } else if (mode == "flin") {
+    if (argc < 6) { fprintf(stderr, "flin M FW NC THR [reps]\n"); return 1; }
+    const int M = atoi(argv[2]);
+    if (!flin_m_ok(M)) { fprintf(stderr, "M in 32 64 128 256\n"); return 1; }
+    rc = run_flin(d, M, atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), argc > 6 ? atoi(argv[6]) : 9);
+  } else if (mode == "fstep") {
+    if (argc < 7) { fprintf(stderr, "fstep B L FW NC THR [reps]\n"); return 1; }
+    const int B = atoi(argv[2]), L = atoi(argv[3]);
+    if ((size_t)B * L > maxBL || L % 512 || !flin_m_ok(B)) {
+      fprintf(stderr, "B*L <= %zu, L %% 512 == 0, B in 32 64 128 256\n", maxBL);
+      return 1;
+    }
+    rc = run_fstep(d, B, L, atoi(argv[4]), atoi(argv[5]), atoi(argv[6]), argc > 7 ? atoi(argv[7]) : 9);
   } else {
     fprintf(stderr, "unknown mode %s\n", mode.c_str());
     return 1;

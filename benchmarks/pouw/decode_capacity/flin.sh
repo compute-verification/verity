@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# dcap.cu's fused filler (flin.cuh) on one leased GPU (cwd = the source tree): the decode linears as a warp-specialized GEMM
+# whose filler warps run the DRAM-free chain while its consumers wait on memory. Under one lease: fgate (every linear's
+# output on every row and the filler's receipts, bit for bit) and CAP's gate first, and nothing is timed unless both pass;
+# then each linear's 32 layers against cuBLASLt (flin), ncu's DRAM and tensor-pipe counters for a few configurations, and
+# the decode step with its linears through flin (fstep). The round's coins are drawn once per run (coins.txt). Clocks are
+# read, never set.
+#
+#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=FILL \
+#     --send benchmarks/pouw/decode_capacity/flin.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/flin.sh"'
+#
+# FL_FLIN ("M:FW:NC:THR ..."), FL_STEP ("B:L:FW:NC:THR ..."), FL_NCU ("M:FW:NC:THR ...", ncu over flin's first launches),
+# FL_REPS, FL_GATE (0 skips CAP's gate)
+set -uo pipefail
+export O=${OUT:?}
+export PATH=/usr/local/cuda-13.0/bin:$PATH
+D=benchmarks/pouw/decode_capacity
+export B; B=$(mktemp -d /tmp/flin.XXXXXX); trap 'rm -rf "$B"' EXIT
+export FL_FLIN=${FL_FLIN:-"32:4:2:0 32:8:4:0 32:8:4:1 64:4:2:0 64:4:4:0 64:8:4:0 128:4:2:0 128:4:4:0 128:4:4:1 256:2:2:0 256:2:4:0"}
+export FL_STEP=${FL_STEP:-"32:2048:8:4:0 32:8192:8:4:0 64:2048:8:4:0 128:2048:4:4:0 256:2048:2:4:0"}
+export FL_NCU=${FL_NCU:-"32:8:4:0 128:4:4:0"}
+export FL_REPS=${FL_REPS:-15} FL_GATE=${FL_GATE:-1}
+git rev-parse HEAD > "$O/commit.txt" 2>&1
+export DFILL_COINS; DFILL_COINS=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
+echo "$DFILL_COINS" > "$O/coins.txt"
+nvcc --version | tail -2 > "$O/nvcc.txt"
+nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/dcap" $D/dcap.cu -lcublasLt -lnvidia-ml -ldl \
+  > "$O/build.log" 2>&1 || { grep -E "error" "$O/build.log" | head -40; tail -20 "$O/build.log"; exit 4; }
+cuobjdump -sass "$B/dcap" | awk '/Function : /{p = /flin_k/} p' > "$O/sass-flin.txt" 2>&1
+echo "flin_k SASS: $(grep -c IMMA "$O/sass-flin.txt") IMMA, $(grep -cE 'LDL|STL' "$O/sass-flin.txt") local memory ops"
+# shellcheck disable=SC2016
+gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
+  q() { nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,power.draw,power.limit,clocks_event_reasons.active \
+    --format=csv,noheader -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1; }
+  q
+  "$B/dcap" fgate > "$O/fgate.jsonl" 2>> "$O/errors.txt"; g=$?
+  echo "fgate rc $g" >> "$O/rc.txt"
+  [ "$g" -eq 0 ] || exit 5
+  if [ "$FL_GATE" = 1 ]; then
+    "$B/dcap" gate > "$O/gate.jsonl" 2>> "$O/errors.txt"; g=$?
+    echo "gate rc $g" >> "$O/rc.txt"
+    [ "$g" -eq 0 ] || exit 5
+  fi
+  for c in $FL_FLIN; do
+    IFS=: read -r m fw nc thr <<< "$c"
+    "$B/dcap" flin "$m" "$fw" "$nc" "$thr" "$FL_REPS" >> "$O/flin.jsonl" 2>> "$O/errors.txt" || echo "rc $? for flin $c" >> "$O/errors.txt"
+  done
+  q
+  for c in $FL_NCU; do
+    IFS=: read -r m fw nc thr <<< "$c"
+    # the first 64 launches are qkv with the filler warps (32 layers), then qkv alone (32 layers)
+    ncu --clock-control none -k regex:flin_k --launch-count 64 \
+      --metrics gpu__time_duration.sum,dram__bytes.sum,dram__throughput.avg.pct_of_peak_sustained_elapsed,sm__inst_executed_pipe_tensor.sum,sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_elapsed,lts__t_bytes.sum \
+      --csv "$B/dcap" flin "$m" "$fw" "$nc" "$thr" 1 > "$O/ncu-flin-$m-$fw-$nc-$thr.csv" 2>&1
+    echo "ncu flin $c rc $?" >> "$O/rc.txt"
+  done
+  q
+  for c in $FL_STEP; do
+    IFS=: read -r b l fw nc thr <<< "$c"
+    "$B/dcap" fstep "$b" "$l" "$fw" "$nc" "$thr" "$FL_REPS" >> "$O/fstep.jsonl" 2>> "$O/errors.txt" ||
+      echo "rc $? for fstep $c" >> "$O/errors.txt"
+    q
+  done
+'
+r=$?
+echo "lease rc $r" >> "$O/rc.txt"
+cat "$O/fgate.jsonl" "$O/rc.txt" 2>/dev/null | cut -c1-260
+cut -c1-400 "$O/flin.jsonl" 2>/dev/null
+grep -v "^device" "$O/errors.txt" 2>/dev/null | tail -5
+exit "$r"
