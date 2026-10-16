@@ -13,11 +13,12 @@ relation's fields, and the `Form` the scope check reads, each field the value `P
 * `Read`: the flags' values (`Exec.Inputs`, under `--zk` before `zkTags` and `zkCoins` replace `--statement`'s tags and
   `--coins`), whether the verifier is the masked one, the record's draw, the verifier's own public input words
   (`--public-inputs`) and whether it holds its own registered reads (`--registered`).
-* `Read.check`: `ProvedScope.check` as `verifyCmd` calls it.
+* `Read.check`: `ProvedScope.check` as `verifyCmd` calls it; `Parsed.scope`: it, then `ProvedScope.sizesOk` on the
+  parsed tables' `m`, as `verifyCmd`'s verdict runs them.
 * `Read.form`: the `Form` of `ProvedScope.check`'s tests, on the circuit and public file as it reads them
   (`ProvedScope.circuitOf`, `ProvedScope.publicOf`).
 * `Relation`: the readable relation's fields (`C`, `inp`, `out`, `pub`, `cs`, `grp`), which `toReadable` takes as a
-  function of the parsed statement; the scope reads none of them.
+  function of the parsed statement; the scope reads none of them. The deployed one is `relation` (`Scope.Tables`).
 -/
 
 namespace Flock.Readable
@@ -97,6 +98,12 @@ structure Parsed extends Read where
 
 /-- **The verifier's parser**: the tables `Read.tablesOf` accepted, none where the setup refuses. -/
 def Read.parse (r : Read) : Option Parsed := r.tablesOf.map fun sts => { r with sts }
+
+/-- **`verify`'s scope refusal** at a parsed statement, as `verifyCmd`'s verdict runs it: `ProvedScope.check`, then
+`ProvedScope.sizesOk` on its tables' `m` (each table's `Setup.ofCircuit`). -/
+def Parsed.scope (p : Parsed) : Except String Unit := do
+  p.check
+  ProvedScope.sizesOk p.zk ((p.sts.map Setup.ofCircuit).map Setup.m)
 
 /-- The parsed statement is the parser's own. -/
 def Parses (p : Parsed) : Prop := p.toRead.parse = some p

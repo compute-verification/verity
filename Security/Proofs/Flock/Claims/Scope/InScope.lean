@@ -8,7 +8,8 @@ For every statement the verifier parses (`Parses`) and every relation part `rel`
 
 * `inScope_iff`: `Claims.Flock.InScope zk (toReadable rel p)` holds exactly when `ProvedScope.check` passes and
   `22 ≤ m`. The check reads no parameter of `m` and `k_log`; the setup gives `m ≤ 35`, `6 ≤ k_log ≤ min(m, 27)`, and under
-  `--zk` `25 ≤ m` (`table0`). Without `--zk`, `22 ≤ m` is `verify`'s (`fast100`'s schedule), not the setup's.
+  `--zk` `25 ≤ m` (`table0`). Without `--zk`, `22 ≤ m` is `ProvedScope.sizesOk`'s, which `verify` runs on the tables
+  after the check (`Sizes`: `inScope_iff_scope`), not the setup's.
 * `inScope_iff_zk`: under `--zk`, exactly when `ProvedScope.check` passes.
 -/
 
