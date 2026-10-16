@@ -7,10 +7,13 @@
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=E2E \
 #     --env ROUNDS=24 -- bash benchmarks/e2e_slice/window.sh
-# ROUNDS (24), CALLS (4), CADENCE (10), MAXMIN (the lease, 30), PROVER_ARGS, CHALLENGER_ARGS.
+# ROUNDS (24), CALLS (4), CADENCE (10), MAXMIN (the lease, 30), STAGES (1; 2: the two-stage slice), COINS (one: one draw a
+# round; per-stage: a coin a stage, decision 36), ATTACK (none; cancel: RT2's cancellation on stage 2), PROVER_ARGS,
+# CHALLENGER_ARGS.
 set -uo pipefail
 export O=${OUT:?} D=benchmarks/e2e_slice
 export ROUNDS=${ROUNDS:-24} CALLS=${CALLS:-4} CADENCE=${CADENCE:-10} MAXMIN=${MAXMIN:-30}
+export STAGES=${STAGES:-1} COINS=${COINS:-one} ATTACK=${ATTACK:-none}
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 bash $D/build.sh > "$O/build.log" 2>&1 || { tail -20 "$O/build.log"; exit 2; }
 PY=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["python"])' "$O/builds.json")
@@ -33,12 +36,12 @@ gpu-lease 1 --wait --max-min "$MAXMIN" -- bash -c '
     -i "$GPU_LEASE_UUID" > "$O/smi.csv" 2>&1 &
   smi=$!
   $PY $D/challenger.py --flock "$FLOCK" --out "$O/challenger" --scratch "$S/c" --port-file "$S/port" --cadence "$CADENCE" \
-    ${CHALLENGER_ARGS:-} > "$O/challenger.log" 2>&1 &
+    --coins "$COINS" ${CHALLENGER_ARGS:-} > "$O/challenger.log" 2>&1 &
   ch=$!
   until [ -s "$S/port" ]; do kill -0 $ch 2>/dev/null || break; sleep 1; done
   if [ -s "$S/port" ]; then
     $PY $D/prover.py --engine "$S/slice" --flock "$FLOCK" --port "$(cat "$S/port")" --out "$O/prover" --scratch "$S/p" \
-      --rounds "$ROUNDS" --calls "$CALLS" ${PROVER_ARGS:-} > "$O/prover.log" 2>&1
+      --rounds "$ROUNDS" --calls "$CALLS" --stages "$STAGES" --coins "$COINS" --attack "$ATTACK" ${PROVER_ARGS:-} > "$O/prover.log" 2>&1
     echo "prover rc $?" >> "$O/rc.txt"
   fi
   wait $ch; echo "challenger rc $?" >> "$O/rc.txt"

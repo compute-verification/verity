@@ -1,11 +1,13 @@
-"""The slice's operand commitments: hm96-sha512/row/v2 rows in frame-v3-sha512 trees, by circuit.py's own leaf rule
+"""The slice's commitments: hm96-sha512/row/v2 rows in frame-v3-sha512 trees, by circuit.py's own leaf rule
 (`verity_flock.circuit.statement`: tree leaf hm96.SHA512.tree_leaf(default key, b || c), then rowleaf.row_leaf under a
-CommitmentDomain), so a spot check's row in its statement's public file is a leaf of a tree committed before the coin.
+CommitmentDomain), so a spot check's row in its statement's public file is a leaf of a tree committed before it is read.
 
-A leaf is row i, step j of an operand X (rows x k int8): the 32 values X[i, 32 j .. 32 j + 31] as bf16 words, twice (64 words,
-1024 bits: the spot check's xa or wb row), at position i (k / 32) + j. Its salt is the committer's secret: SHAKE-256 of the
-salt key, the tree's label and the chunk (CHUNK leaves), 192 bytes a leaf. Built in CHUNK-leaf pieces by a process pool;
-the tree's levels are kept for the paths. `verify_path` is the challenger's side.
+An operand leaf is row i, segment j of an operand X (rows x k int8): the 32 bytes X[i, 32 j .. 32 j + 31] (256 bits, the spot
+check's a[r] or b[c] row, `verity.core.protocols.pouw.circuit.segment`), at position i (k / 32) + j. A receipt leaf is thread
+t of tile T of a call's DUOS receipts: its k / 32 words, one a segment (the spot check's rc row), at position T NCT + t.
+A leaf's salt is the committer's secret: SHAKE-256 of the salt key, the tree's label and the chunk (CHUNK leaves), 192 bytes a
+leaf. Built in CHUNK-leaf pieces by a process pool; the tree's levels are kept for the paths. `verify_path` is the
+challenger's side.
 """
 from __future__ import annotations
 
@@ -25,7 +27,7 @@ from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, sha51
 INST = hm96.SHA512
 KEY = INST.default_key
 SALT = INST.salt_bytes
-ROW_BITS = 1024
+NCT = 512
 CHUNK = 1 << 14
 BINDING_TAG = "verity/e2e-slice/operand/v1"
 OWNER = -1
@@ -41,29 +43,38 @@ def tables() -> np.ndarray:
     return _TAB
 
 
-_H_ROW = hashlib.sha512(sha512_row_v2_prefix(ROW_BITS))
+_H_ROWS: dict[int, "hashlib._Hash"] = {}
 _H_SALT = hashlib.sha512(INST.salt_prefix)
 _H_LEAF = hashlib.sha512(INST.leaf_prefix(KEY))
 
 
-def bf16_words(v: np.ndarray) -> np.ndarray:
-    """int8 (or small int) values as bf16 bit patterns, u16 (exact: |v| < 256)."""
-    return (np.asarray(v, np.float32).view(np.uint32) >> 16).astype(np.uint16)
-
-
 def rows_of(X: np.ndarray) -> np.ndarray:
-    """Every leaf's row of X (rows x k): (rows k / 32, 64) u16, the 32 values' bf16 words twice."""
-    w = bf16_words(X.reshape(-1, 32))
-    return np.concatenate([w, w], axis=1)
+    """Every leaf's row of X (rows x k int8): (rows k / 32, 16) u16, the 32 bytes little-endian."""
+    return np.ascontiguousarray(X, np.int8).reshape(-1, 32).view("<u2")
+
+
+def receipt_rows(R: np.ndarray) -> np.ndarray:
+    """Every leaf's row of a call's DUOS receipts R (tiles, KS, NCT) u32: (tiles NCT, 2 KS) u16, thread t of tile T at
+    T NCT + t, its KS words little-endian."""
+    tiles, ks, nct = R.shape
+    return np.ascontiguousarray(np.asarray(R, "<u4").transpose(0, 2, 1)).reshape(tiles * nct, ks).view("<u2")
+
+
+def _h_row(bits: int):
+    if bits not in _H_ROWS:
+        _H_ROWS[bits] = hashlib.sha512(sha512_row_v2_prefix(bits))
+    return _H_ROWS[bits]
 
 
 def commit_strings(rows: np.ndarray, salts: np.ndarray) -> np.ndarray:
-    """``b || c`` (n, 128) of hm96-sha512/row/v2 rows (n, 64 u16) under their salts (n, 192): hm96.SHA512.commit_string."""
+    """``b || c`` (n, 128) of hm96-sha512/row/v2 rows (n, words u16; 16 words bits) under their salts (n, 192):
+    hm96.SHA512.commit_string."""
     rb = np.ascontiguousarray(rows.astype("<u2")).view(np.uint8).reshape(len(rows), -1)
+    h_row = _h_row(16 * rows.shape[1])
     x = np.empty((len(rows), 64), np.uint8)
     c = np.empty((len(rows), 64), np.uint8)
     for i in range(len(rows)):
-        h = _H_ROW.copy()
+        h = h_row.copy()
         h.update(rb[i].tobytes())
         x[i] = np.frombuffer(h.digest(), np.uint8)
         h = _H_SALT.copy()
@@ -76,12 +87,16 @@ def commit_strings(rows: np.ndarray, salts: np.ndarray) -> np.ndarray:
     return np.concatenate([b, c], axis=1)
 
 
-def label_a(session: str, rnd: int, call: int) -> dict:
-    return {"session": session, "round": rnd, "call": call, "operand": "A"}
+def label_a(session: str, rnd: int, call: int, stage: int = 0) -> dict:
+    return {"session": session, "round": rnd, "call": call, "operand": "A", **({"stage": stage} if stage else {})}
 
 
-def label_b(session: str) -> dict:
-    return {"session": session, "operand": "B", "layer": "llama-3.1-8b/o_proj"}
+def label_b(session: str, stage: int = 0) -> dict:
+    return {"session": session, "operand": "B", "layer": "llama-3.1-8b/o_proj" if stage == 0 else f"stage-{stage}"}
+
+
+def label_r(session: str, rnd: int, call: int, stage: int = 0) -> dict:
+    return {"session": session, "round": rnd, "call": call, "operand": "receipts", "kind": "duos", "stage": stage}
 
 
 def domain(label: dict, count: int) -> CommitmentDomain:
@@ -103,18 +118,36 @@ def leaf_salt(salt_key: bytes, label: dict, pos: int) -> bytes:
     return chunk_salts(salt_key, label, pos // CHUNK)[pos % CHUNK].tobytes()
 
 
+def leaf_row(src: tuple, pos: int) -> np.ndarray:
+    """Leaf ``pos``'s row (`_rows`)."""
+    kind, _path, shape = src
+    step = shape[1] // 32 if kind == "operand" else shape[2]
+    lo = pos - pos % step
+    return _rows(src, lo, lo + step)[pos - lo]
+
+
+def _rows(src: tuple, lo: int, hi: int) -> np.ndarray:
+    """Leaves [lo, hi)'s rows: of an operand file (``("operand", path, (rows, k))``) or a receipts file
+    (``("receipts", path, (tiles, KS, NCT))``)."""
+    kind, path, shape = src
+    if kind == "operand":
+        X = np.memmap(path, np.int8, "r", shape=shape)
+        per_row = shape[1] // 32
+        return rows_of(np.asarray(X[lo // per_row:hi // per_row]))
+    R = np.memmap(path, np.uint32, "r", shape=shape)
+    return receipt_rows(np.asarray(R[lo // shape[2]:hi // shape[2]]))
+
+
 def _chunk(args):
     t = time.process_time()
-    path, shape, label, count, salt_key, ci = args
-    X = np.memmap(path, np.int8, "r", shape=shape)
-    per_row = shape[1] // 32
-    r0, r1 = ci * CHUNK // per_row, (ci + 1) * CHUNK // per_row
-    bc = commit_strings(rows_of(np.asarray(X[r0:r1])), chunk_salts(salt_key, label, ci))
+    src, label, count, salt_key, ci = args
+    nl = min(CHUNK, count)
+    bc = commit_strings(_rows(src, ci * nl, (ci + 1) * nl), chunk_salts(salt_key, label, ci)[:nl])
     dom = domain(label, count)
-    level = [tree_leaf(dom, ci * CHUNK + i, bc[i].tobytes()) for i in range(CHUNK)]
+    level = [tree_leaf(dom, ci * nl + i, bc[i].tobytes()) for i in range(nl)]
     levels, depth = [level], 0
     while len(level) > 1:
-        base = (ci * CHUNK >> depth) // 2
+        base = (ci * nl >> depth) // 2
         level = [dom.node(depth, base + i // 2, level[i], level[i + 1]) for i in range(0, len(level), 2)]
         levels.append(level)
         depth += 1
@@ -141,10 +174,18 @@ class Tree:
 
 def commit_operand(pool, path: str, shape: tuple[int, int], label: dict, salt_key: bytes) -> Tree:
     """X's tree (X the int8 file at ``path``, rows x k), its leaves built CHUNK at a time by ``pool``."""
-    count = shape[0] * shape[1] // 32
-    if count % CHUNK or count & (count - 1):
+    return _commit(pool, ("operand", path, shape), shape[0] * shape[1] // 32, label, salt_key)
+
+
+def commit_receipts(pool, path: str, shape: tuple[int, int, int], label: dict, salt_key: bytes) -> Tree:
+    """A call's DUOS receipts' tree (the u32 file at ``path``, (tiles, KS, NCT)), a leaf a thread."""
+    return _commit(pool, ("receipts", path, shape), shape[0] * shape[2], label, salt_key)
+
+
+def _commit(pool, src: tuple, count: int, label: dict, salt_key: bytes) -> Tree:
+    if count & (count - 1) or (count > CHUNK and count % CHUNK):
         raise ValueError(f"{count} leaves: a power of two, whole chunks")
-    parts = pool.map(_chunk, [(path, shape, label, count, salt_key, ci) for ci in range(count // CHUNK)])
+    parts = pool.map(_chunk, [(src, label, count, salt_key, ci) for ci in range(max(1, count // CHUNK))])
     bc = b"".join(p[0] for p in parts)
     levels = [b"".join(p[1][d] for p in parts) for d in range(len(parts[0][1]))]
     dom, depth = domain(label, count), len(levels) - 1
@@ -165,23 +206,6 @@ def verify_path(label: dict, count: int, root: bytes, pos: int, bc: bytes, path:
         idx = pos >> d
         cur = dom.node(d, idx // 2, cur, sib) if idx % 2 == 0 else dom.node(d, idx // 2, sib, cur)
     return cur == root
-
-
-RECEIPT_SCHEMA = "verity/e2e-slice/duo-receipts/v1"
-
-
-def receipt_root(R: np.ndarray, session: str, rnd: int, call: int, salt_key: bytes) -> bytes:
-    """A call's duo receipts (tiles x NCT x 8 u32) under one frame-v3-sha512 tree, a leaf a tile: its 64-byte salt (SHAKE-256
-    of the salt key and the tree's label) then the tile's 16 KB of receipts."""
-    from verity.ml.commitments.merkle import tree_levels
-
-    label = {"session": session, "round": rnd, "call": call, "operand": "receipts"}
-    tiles, raw = R.shape[0], np.ascontiguousarray(R).tobytes()
-    per = len(raw) // tiles
-    salts = hashlib.shake_256(b"verity/e2e-slice/receipt-salt/v1\0" + salt_key + identity_digest_sha512(BINDING_TAG, label)).digest(64 * tiles)
-    dom = domain(label, tiles)
-    return tree_levels(dom, [dom.leaf(t, t, RECEIPT_SCHEMA, salts[64 * t:64 * t + 64] + raw[per * t:per * t + per])
-                             for t in range(tiles)])[-1][0]
 
 
 def pool(workers: int | None = None):

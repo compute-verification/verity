@@ -1,12 +1,18 @@
 """challenger.py: the slice's challenger, a process of its own on the loopback link (wire.py), holding the round protocol of the
 frozen definition v2.2 to the prover:
 
-    (a) the prover commits round w's operands A (one tree a call, commit.py; B's tree once, at hello)
+    (a) the prover commits round w's operands A (one tree a call, commit.py; each stage's B tree once, at hello)
     (b) the coin sigma_w, 64 bytes from the OS generator, only after (a), at least CADENCE seconds after the last coin
-    (c) the prover commits the products (one receipt tree a call)
-    (d) after (c), one block drawn with fresh OS coins: a call, a 128 x 128 tile, a 32-step j, 16 coordinates in the tile
-    (e) the block's statement (statement.py) checked against the commitments and the coin, then one C-Flock --zk session
-        of the Rust verifier (`flock-circuit serve --zk`, its own circuit and pin), one session at a time
+    (c) the prover commits the products (one DUOS receipt tree a call). With two stages (decision 36), stage 1's receipt
+        roots come with stage 2's operand roots; --coins per-stage then draws stage 2's own coin sigma_w,1 right after
+        them (protocol (a): each stage commits its operands, then draws, then commits its outputs), --coins one draws
+        nothing more (sigma_w,1 = sigma_w), and stage 2's receipt roots follow
+    (d) after the last of (c), one block drawn with fresh OS coins: a stage, a call, a 128 x 128 tile, one of its 512
+        threads and a 32-step segment j
+    (e) the block's statement (statement.py, `PouwSegCheck_v1{KS}`) checked against the commitments and the coins: the
+        thread's 4 A leaves and 8 B leaves at j and its receipt leaf by their paths, the noise rows, chain keys and one-hot
+        j recomputed, the output row held to 1; then one C-Flock --zk session of the Rust verifier (`flock-circuit serve
+        --zk`, its own circuit and pin), one session at a time
 
 A round fails after its coin if it is abandoned before (c), its session started and didn't finish, or its check or proof
 fails; nothing is retried or redrawn. A round whose (a) came but not its coin is skipped. At the end: rounds.jsonl and the
@@ -34,7 +40,7 @@ import statement as ST  # noqa: E402
 import window as WD  # noqa: E402
 from wire import Wire, listen  # noqa: E402
 
-COORDS = 16
+COORDS = 1
 
 
 class Challenger:
@@ -73,73 +79,93 @@ class Challenger:
     # (a) and (b)
     def on_hello(self, m: dict) -> None:
         self.m, self.n, self.k, self.calls, self.sid = m["m"], m["n"], m["k"], m["calls"], m["session"]
-        self.b_root, self.b_count = bytes.fromhex(m["b_root"]), m["b_count"]
-        if self.b_count != self.n * self.k // 32 or m["pin"] != self.st.pin:
-            raise SystemExit(f"hello: B's tree {self.b_count} leaves, pin {m['pin'][:16]} (own {self.st.pin[:16]})")
-        self.F = 2 * self.m * self.n * self.k * self.calls
+        self.stages = m["stages"]
+        self.b_roots, self.b_count = [bytes.fromhex(h) for h in m["b_roots"]], m["b_count"]
+        if (self.b_count != self.n * self.k // 32 or m["pin"] != self.st.pin or self.k // 32 != self.st.ks
+                or len(self.b_roots) != self.stages or m["coins"] != self.a.coins):
+            raise SystemExit(f"hello: B's trees {self.b_count} leaves, pin {m['pin'][:16]} (own {self.st.pin[:16]}), k {self.k}, "
+                             f"{len(self.b_roots)} B roots for {self.stages} stages, coins {m['coins']} (own {self.a.coins})")
+        self.F = 2 * self.m * self.n * self.k * self.calls * self.stages
 
     def on_operands(self, m: dict) -> None:
         w = m["round"]
-        if w in self.rounds or len(m["roots"]) != self.calls:
-            raise SystemExit(f"operands {w}: a round once, one root a call")
-        self.rec(w, roots=m["roots"], t_a=self.now())
+        if w in self.rounds or len(m["roots"]) != self.calls or m.get("stage") != 0:
+            raise SystemExit(f"operands {w}: a round once, stage 0's, one root a call")
+        self.rec(w, roots=[m["roots"]], receipt_roots=[], sigmas=[], t_a=self.now())
         with self.lock:
             due = max(time.time(), self.last_coin + self.a.cadence)
             self.last_coin = due
         threading.Timer(due - time.time(), self.coin, (w,)).start()
 
-    def coin(self, w: int) -> None:
+    def coin(self, w: int, stage: int = 0) -> None:
         sigma = os.urandom(64)
-        self.rec(w, sigma=sigma.hex(), status="live", t_b=self.now())
-        self.wire.send("coin", round=w, sigma=sigma.hex())
+        with self.lock:
+            self.rounds[w]["sigmas"].append(sigma.hex())
+        self.rec(w, status="live", **{f"t_b{stage}" if stage else "t_b": self.now()})
+        self.wire.send("coin", round=w, stage=stage, sigma=sigma.hex())
 
     # (c) and (d)
     def on_products(self, m: dict) -> None:
-        w = m["round"]
+        w, s = m["round"], m["stage"]
         r = self.rounds.get(w)
-        if r is None or r["status"] != "live" or len(m["receipt_roots"]) != self.calls:
-            raise SystemExit(f"products {w} before its coin, or not one receipt root a call")
-        self.rec(w, receipt_roots=m["receipt_roots"], t_c=self.now(), gpu=m["gpu"])
+        if (r is None or r["status"] != "live" or len(m["receipt_roots"]) != self.calls or s != len(r["receipt_roots"])
+                or len(r["sigmas"]) != (s + 1 if self.a.coins == "per-stage" else 1)):
+            raise SystemExit(f"products {w} stage {s}: before its coin, out of order, or not one receipt root a call")
+        r["receipt_roots"].append(m["receipt_roots"])
+        self.rec(w, **{f"t_c{s}": self.now()}, **{f"gpu{s}": m["gpu"]})
+        if s + 1 < self.stages:
+            if len(m.get("next_roots", [])) != self.calls:
+                raise SystemExit(f"products {w} stage {s}: stage {s + 1}'s operand roots, one a call")
+            r["roots"].append(m["next_roots"])
+            if self.a.coins == "per-stage":
+                self.coin(w, s + 1)
+            return
         tm, tn = secrets.randbelow(self.m // derive.TM), secrets.randbelow(self.n // derive.BN)
-        coords: set = set()
-        while len(coords) < COORDS:
-            coords.add((tm * derive.TM + secrets.randbelow(derive.TM), tn * derive.BN + secrets.randbelow(derive.BN)))
-        draw = {"call": secrets.randbelow(self.calls), "tile": [tm, tn], "step": secrets.randbelow(self.k // 32),
-                "coords": sorted(coords)}
-        self.rec(w, draw=draw, t_d=self.now())
+        draw = {"stage": secrets.randbelow(self.stages), "call": secrets.randbelow(self.calls), "tile": [tm, tn],
+                "thread": secrets.randbelow(derive.NCT), "seg": secrets.randbelow(self.k // 32)}
+        self.rec(w, draw=draw, t_d=self.now(), t_c=self.now())
         self.wire.send("draw", round=w, **draw)
 
     # (e)
     def check(self, w: int, m: dict, pub: bytes) -> str | None:
         r = self.rounds[w]
-        d, sigma = r["draw"], bytes.fromhex(r["sigma"])
-        c, j, per = d["call"], d["step"], self.k // 32
+        d = r["draw"]
+        st, c, (tm, tn), th, j, ks = d["stage"], d["call"], d["tile"], d["thread"], d["seg"], self.k // 32
+        sigma = bytes.fromhex(r["sigmas"][st if self.a.coins == "per-stage" else 0])
         path = Path(self.a.scratch) / f"r{w:04d}" / "pub.bin"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(pub)
         try:
-            head, bc = ST.public_rows(path, self.names)
+            head, bc = ST.read_public(path, self.names)
         except (ValueError, json.JSONDecodeError) as e:
             return f"public file: {e}"
         if head.get("circuit_sha512") != self.st.pin or head.get("instances") != COORDS or head.get("range") != [0, COORDS]:
-            return "public file: not this circuit's, or not the drawn instances"
-        if len(m["xa"]) != COORDS or len(m["wb"]) != COORDS:
-            return "opening: one path a drawn coordinate"
-        key = derive.call_key(sigma, c)
-        U = derive.u_noise64(key, self.m)
-        root_a = bytes.fromhex(r["roots"][c])
-        for q, (i, l) in enumerate(d["coords"]):
-            F = derive.f_rows(key, l - l % 4, 4, self.k)[l % 4]
-            for port, row in (("xu", U[i]), ("wf", F[32 * j:32 * j + 32])):
-                salt = np.frombuffer(ST.public_salt(sigma, c, port, q), np.uint8)[None]
-                if CM.commit_strings(ST.twice(row)[None], salt)[0].tobytes() != bc[port][q]:
-                    return f"instance {q}: {port} is not the coin's noise"
-            if not CM.verify_path(CM.label_a(self.sid, w, c), self.m * per, root_a, i * per + j, bc["xa"][q],
-                                  [bytes.fromhex(h) for h in m["xa"][q]]):
-                return f"instance {q}: xa is not A's committed leaf ({i}, {j})"
-            if not CM.verify_path(CM.label_b(self.sid), self.b_count, self.b_root, l * per + j, bc["wb"][q],
-                                  [bytes.fromhex(h) for h in m["wb"][q]]):
-                return f"instance {q}: wb is not B's committed leaf ({l}, {j})"
+            return "public file: not this circuit's, or not one instance"
+        if len(m["xa"]) != 4 or len(m["wb"]) != 8:
+            return "opening: 4 xa paths and 8 wb paths"
+        key, rseed = derive.call_key(sigma, c, st), derive.receipt_seed(sigma, c, st)
+        tile = tm * (self.n // derive.BN) + tn
+        rows, cols = derive.thread_slots(th)
+        U = derive.u_noise64(key, self.m)[tm * derive.TM + rows]
+        F = np.stack([derive.f_rows(key, (l := tn * derive.BN + int(cc)) - l % 4, 4, self.k)[l % 4] for cc in cols])
+        want = ST.public_rows(U, F[:, 32 * j:32 * j + 32], rseed, {**d, "tile_index": tile}, ks)
+        for port, row in [*want.items(), ("o0", ST.ok_row())]:
+            salt = np.frombuffer(ST.public_salt(sigma, st, c, port), np.uint8)[None]
+            if CM.commit_strings(row, salt)[0].tobytes() != bc[port][0]:
+                return f"{port}: not the coin's row" if port != "o0" else "o0: the statement's output is not 1"
+        root_a = bytes.fromhex(r["roots"][st][c])
+        for q, rw in enumerate(rows):
+            if not CM.verify_path(CM.label_a(self.sid, w, c, st), self.m * ks, root_a, (tm * derive.TM + int(rw)) * ks + j,
+                                  bc[f"xa{q}"][0], [bytes.fromhex(h) for h in m["xa"][q]]):
+                return f"xa{q}: not stage {st} A's committed leaf ({tm * derive.TM + int(rw)}, {j})"
+        for q, cc in enumerate(cols):
+            if not CM.verify_path(CM.label_b(self.sid, st), self.b_count, self.b_roots[st], (tn * derive.BN + int(cc)) * ks + j,
+                                  bc[f"wb{q}"][0], [bytes.fromhex(h) for h in m["wb"][q]]):
+                return f"wb{q}: not stage {st} B's committed leaf ({tn * derive.BN + int(cc)}, {j})"
+        nr = self.m // derive.TM * (self.n // derive.BN) * derive.NCT
+        if not CM.verify_path(CM.label_r(self.sid, w, c, st), nr, bytes.fromhex(r["receipt_roots"][st][c]),
+                              tile * derive.NCT + th, bc["rc"][0], [bytes.fromhex(h) for h in m["rc"]]):
+            return f"rc: not the committed receipt leaf (tile {tile}, thread {th})"
         return None
 
     def on_opening(self, m: dict) -> None:
@@ -169,6 +195,11 @@ class Challenger:
 
     def serve_one(self, w: int) -> None:
         d = Path(self.a.scratch) / f"r{w:04d}"
+        if self.a.flock == "none":
+            self.wire.send("serve", round=w, addr=None)
+            self.rec(w, serve_s=0.0, session=None)
+            self.final(w, "passed", "checks only (no proof: --flock none)")
+            return
         cmd = [self.a.flock, "serve", "--zk", "--listen", "127.0.0.1:0", "--out", str(d / "sessions"), "--instances",
                str(d / "pub.bin"), "--circuit", str(self.st.circuit), "--pin", self.st.pin, "--operator", "loopback",
                "--draw", f"subset:{COORDS}", "--sessions", "1"]
@@ -228,11 +259,13 @@ def main() -> int:
     ap.add_argument("--cadence", type=float, default=10.0)
     ap.add_argument("--verify-threads", type=int, default=16)
     ap.add_argument("--p", type=float, default=0.75)
+    ap.add_argument("--k", type=int, default=4096, help="the layer's k (the statement's KS = k / 32), held to the prover's")
+    ap.add_argument("--coins", choices=("one", "per-stage"), default="one")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     t = time.time()
-    st = ST.Stager(Path(a.scratch) / "circuit.txt")
+    st = ST.Stager(Path(a.scratch) / "circuit.txt", a.k // 32)
     stager_s = time.time() - t
     srv, port = listen()
     Path(a.port_file).write_text(str(port))
@@ -266,6 +299,7 @@ def main() -> int:
                 f.write(json.dumps(r) + "\n")
         coins = [r["t_b"] for r in rounds if "t_b" in r]
         summary = {"window": WD.floor(rounds, a.p), "circuit": st.stats(), "stager_s": round(stager_s, 2), "bye": bye,
+                   "coins": a.coins, "stages": getattr(ch, "stages", None),
                    "coin_intervals_s": [round(b - x, 3) for x, b in zip(coins, coins[1:])],
                    "why_failed": {r["round"]: r.get("why") for r in rounds if r["status"] == "failed"}}
         (out / "window.json").write_text(json.dumps(summary, indent=1))

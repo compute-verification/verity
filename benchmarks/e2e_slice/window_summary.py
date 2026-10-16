@@ -24,8 +24,8 @@ def main() -> int:
     pr = [json.loads(x) for x in open(o / "prover/rounds.jsonl")] if (o / "prover/rounds.jsonl").exists() else []
     win = json.loads((o / "challenger/window.json").read_text())
     info = json.loads((o / "prover/prover.json").read_text()) if (o / "prover/prover.json").exists() else {}
-    calls = info.get("calls") or len(ch[0].get("receipt_roots", [])) or 1
-    gpu = [g for r in ch for g in r.get("gpu") or []]
+    calls = info.get("calls") or len((ch[0].get("receipt_roots") or [[]])[0]) or 1
+    gpu = [g for r in ch for key in ("gpu0", "gpu1") for g in r.get(key) or []]
     plain, edited = med([g["plain_ms"] for g in gpu]), med([g["edited_ms"] for g in gpu])
     commit_gpu = None
     if (o / "commit.jsonl").exists() and (o / "commit.jsonl").stat().st_size:
@@ -42,6 +42,14 @@ def main() -> int:
         "why_failed": win["why_failed"],
         "self_checks_ok": all((r.get("self_check") or {}).get("receipts") and (r.get("self_check") or {}).get("product") for r in ch
                               if r["status"] != "skipped"),
+        "stages": info.get("stages"), "coins": info.get("coins"), "attack": info.get("attack"),
+        "by_drawn_stage": {st: {"rounds": len(rs), "passed": sum(r["status"] == "passed" for r in rs),
+                                "failed": sum(r["status"] == "failed" for r in rs),
+                                "statement_ok": sum((r.get("self_check") or {}).get("ok") == 1 for r in rs),
+                                "noised_product_zero": sum(bool((r.get("self_check") or {}).get("noised_product_zero")) for r in rs),
+                                "why": sorted({r.get("why") for r in rs if r["status"] == "failed"} - {None})}
+                           for st in sorted({(r.get("draw") or {}).get("stage", 0) for r in ch if r["status"] != "skipped"})
+                           for rs in [[r for r in ch if r["status"] != "skipped" and (r.get("draw") or {}).get("stage", 0) == st]]},
         "coin_interval_s": {"median": med(win["coin_intervals_s"]), "min": min(win["coin_intervals_s"], default=None),
                             "max": max(win["coin_intervals_s"], default=None)},
         "calls_per_round": calls,
