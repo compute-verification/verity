@@ -48,6 +48,9 @@
 #pragma once
 #include "../pearl_c/sha512.cuh"
 
+#if defined(PFILL_DUAL) && !defined(PFILL_CO)
+#define PFILL_CO
+#endif
 #ifdef PFILL_CO
 #ifndef PF_CO_W
 #define PF_CO_W 4
@@ -62,8 +65,15 @@ static_assert(PF_CO_W == 2 || PF_CO_W == 4, "the co tile is 2 or 4 warps");
 #ifndef PF_CO_DEP
 #define PF_CO_DEP 0  // pf_tile_co's DEP in co, NC 4 (env PF_CO_DEP overrides)
 #endif
+#ifdef PFILL_DUAL
+// -DPFILL_DUAL: a split runs pf_tile's 8-warp tile with its B and A in global memory (L1), so the kernel's only shared
+// memory is the co tile's, and co runs the co tile (W PF_CO_W)
+#define PF_W 8
+#define PF_CTAS 2
+#else
 #define PF_W PF_CO_W
 #define PF_CTAS (16 / PF_CO_W)  // blocks an SM on a split: 16 warps, 4 an SMSP; co runs one an SM
+#endif
 #if defined(PFILL_E2M1)
 #error "pfill: the co tile (-DPFILL_CO) is the s8 or bits tile"
 #endif
@@ -375,7 +385,7 @@ template <int NC, int KD, int DEP = 0>
 __device__ __forceinline__ uint64_t pf_tile_co(uint32_t* Bw, uint64_t c0, uint64_t c1, unsigned long long tile, int steps,
                                                unsigned gap, long long thr) {
   const uint32_t zero = DEP ? (uint32_t)*(volatile int*)&pf_zero : 0u;
-  constexpr int W = PF_W, TN = 128 * W, P = 32;
+  constexpr int W = PF_CO_W, TN = 128 * W, P = 32;
   constexpr uint64_t dom = pf_dom(KD);
   const int lane = threadIdx.x & 31, w = threadIdx.x >> 5, g = lane >> 2, t = lane & 3;
   const int S = steps;
@@ -503,16 +513,24 @@ __device__ __forceinline__ unsigned long long pf_udiv(unsigned long long n, unsi
   }
   return q;
 }
+// The dual build's split scratch: a block's pf_tile B (s8, PF_TN x 32 bytes) and A (PF_W x 2 KB), PF_SCRATCH bytes a block
+#define PF_SCRATCH (PF_TN * 32 + PF_W * 32 * 16 * 4)
+__device__ uint8_t* pf_scratch;
 template <int NC>
 __global__ void __launch_bounds__(32 * PF_W, PF_CTAS) dfill_k(uint64_t c0, uint64_t c1, unsigned long long tile0, int tiles,
                                                        int steps, unsigned long long* __restrict__ rec) {
-  __shared__ __align__(16) uint32_t Bw[PF_TN];
+  __shared__ __align__(16) uint32_t Bw[128 * PF_CO_W];
   if (!pf_co_one) {
+#ifdef PFILL_DUAL
+    uint8_t* const sb = pf_scratch + (size_t)blockIdx.x * PF_SCRATCH;
+    pf_tiles<NC, PF_KIND>(sb, (uint32_t(*)[32 * 16])(sb + PF_TN * 32), c0, c1, tile0, tiles, steps, rec);
+#else
     for (int i = 0; i < tiles; i++) {
       const unsigned long long idx = (unsigned long long)blockIdx.x * tiles + i;
       const uint64_t x = pf_tile_co<NC, PF_KIND>(Bw, c0, c1, tile0 + idx, steps, 0, 0);
       if (threadIdx.x == 0) rec[idx] = x;
     }
+#endif
     return;
   }
   const unsigned long long units = (unsigned long long)gridDim.x * tiles;
@@ -727,9 +745,11 @@ static uint64_t dfill_ref_kind(uint64_t c0, uint64_t c1, uint64_t tile, int nc, 
     default: return 0;
   }
 }
-// a phase id (bit 62, dfill_p's) names a PF_PW-warp tile, any other id a pump tile of PF_W warps
+// the pump tile's warps in this process (the dual build's co is PF_CO_W; dfill_make sets it)
+static int g_pf_tile_w = PF_W;
+// a phase id (bit 62, dfill_p's) names a PF_PW-warp tile, any other id a pump tile of g_pf_tile_w warps
 static inline uint64_t dfill_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int steps) {
-  return dfill_ref_kind(c0, c1, tile, nc, steps, PF_KIND, (tile >> 62) == 1 ? PF_PW : PF_W);
+  return dfill_ref_kind(c0, c1, tile, nc, steps, PF_KIND, (tile >> 62) == 1 ? PF_PW : g_pf_tile_w);
 }
 
 #ifdef __CUDACC__
@@ -739,11 +759,11 @@ struct DFill {
   uint64_t c0 = 0, c1 = 0;
   unsigned long long* rec = nullptr;
   long long per() const { return (long long)grid * tiles; }
-  double macs() const { return (double)per() * W * S * (PF_TN / 8) * 4096.0; }
+  double macs() const { return (double)per() * W * S * (16 * W) * 4096.0; }
 };
 static void dfill_launch(const DFill& f, long long chunk, cudaStream_t st) {
   const unsigned long long t0 = (unsigned long long)chunk * f.per();
-  const dim3 gr(f.grid), bl(32 * PF_W);
+  const dim3 gr(f.grid), bl(32 * f.W);
   switch (f.NC) {
     case 1: dfill_k<1><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
     case 2: dfill_k<2><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
@@ -789,10 +809,24 @@ static DFill dfill_make(int grid, int W, int NC, int S, uint64_t c0, uint64_t c1
   CK(cudaMemcpyToSymbol(pf_co_thr, &thr, sizeof thr));
   const int dep = one ? (getenv("PF_CO_DEP") ? atoi(getenv("PF_CO_DEP")) : PF_CO_DEP) : 0;
   CK(cudaMemcpyToSymbol(pf_co_dep, &dep, sizeof dep));
+#ifdef PFILL_DUAL
+  if (one) {
+    W = PF_CO_W;
+  } else {
+    // the split tile's B and A live in L1, so its SMs (the filler's alone) take the smallest shared-memory carveout
+    uint8_t* sc = nullptr;
+    CK(cudaMalloc(&sc, (size_t)grid * ctas * PF_SCRATCH));
+    CK(cudaMemcpyToSymbol(pf_scratch, &sc, sizeof sc));
+    CK(cudaFuncSetAttribute(dfill_k<1>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxL1));
+    CK(cudaFuncSetAttribute(dfill_k<2>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxL1));
+    CK(cudaFuncSetAttribute(dfill_k<4>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxL1));
+  }
+  g_pf_tile_w = W;
+#endif
 #endif
   f.grid = grid * ctas; f.W = W; f.NC = NC; f.S = S; f.c0 = c0; f.c1 = c1;
   const int lg = getenv("DFILL_CHUNK_LOG2") ? atoi(getenv("DFILL_CHUNK_LOG2")) : 19;
-  f.tiles = std::max(1, (int)((1LL << lg) / ((long long)ctas * W * S * (PF_TN / 8))));
+  f.tiles = std::max(1, (int)((1LL << lg) / ((long long)ctas * W * S * (16 * W))));
   CK(cudaMalloc(&f.rec, f.per() * sizeof(unsigned long long)));
   return f;
 }

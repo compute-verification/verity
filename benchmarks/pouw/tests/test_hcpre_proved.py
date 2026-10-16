@@ -26,16 +26,20 @@ def _module(name):
     return mod
 
 
-@pytest.mark.parametrize("cls,extra", [("PFillKCo", []), ("PFillKCoDep", ["-DPF_CO_DEP=2"])])
-def test_pfill_k_co_arm(monkeypatch, cls, extra):
+@pytest.mark.parametrize("cls,flags,w", [
+    ("PFillKCo", ["-DPFILL_BITS", "-DPFILL_CO", "-DPFILL_NO_PHASE"], 4),
+    ("PFillKCoDep", ["-DPFILL_BITS", "-DPFILL_CO", "-DPFILL_NO_PHASE", "-DPF_CO_DEP=2"], 4),
+    ("PFillKDual", ["-DPFILL_BITS", "-DPFILL_DUAL", "-DPFILL_NO_PHASE", "-DPF_CO_DEP=2"], 8),
+])
+def test_pfill_k_co_arm(monkeypatch, cls, flags, w):
     monkeypatch.setenv("NVCC_APPEND_FLAGS", "")
     monkeypatch.syspath_prepend(str(FILLER))
     A, S = _module("arms"), _module("scoring")
     arm = A.load(str(FILLER / "hcpre_proved.py") + ":" + cls, record=True)
     assert A.check_arm(arm, record=True) == []
     import os
-    assert os.environ["NVCC_APPEND_FLAGS"].split() == ["-DPFILL_BITS", "-DPFILL_CO", "-DPFILL_NO_PHASE"] + extra
-    assert arm.filler.noise == "bits01" and arm.filler.W == 4 and arm.filler.NC == 4
+    assert os.environ["NVCC_APPEND_FLAGS"].split() == flags
+    assert arm.filler.noise == "bits01" and arm.filler.W == w and arm.filler.NC == 4
     assert "bits01" in S.FILLER_ENTRIES["theorem-k"]["noise"]
     split = _module("pfill_arm").POWER_SPLIT
     for ph, b, l in S.points(robust=True):
