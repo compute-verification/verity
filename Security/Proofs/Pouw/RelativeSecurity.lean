@@ -74,6 +74,8 @@ proof workers' results land here as theorems or as named hypotheses.
   products (`Slp.dIncr_products_ge`) and cell-pure blocks add up (`Slp.card_mul_le`). `RoundsHypK` puts that in
   `RoundsHyp`'s cost line, F₀ = κ L n n' B with no slack (`roundsHyp_of_K`), and the certified fraction follows
   (`certifiedFraction120θ_K`, `_K_40`, at w = (1, 2, 4, 8, 16, 32, 65) `certifiedFraction120θ_reEncoded_40`).
+  Route (c) then needs no `EditFloor` on this design: the window's floor is B's service floor, and the edited
+  protocol is relatively secure from it (`relativelySecure_edited120θ_K`; in exact arithmetic `_H`, below).
 * Theorem H (round 6 §6, merges priced): in the quad model, with merges at `h ≥ 2K/3` slots, each useful cell costs
   `K` slots (`theoremH`, from Theorem J and the rank bounds). Those premises hold on quad runs in exact arithmetic
   over a field (`QuadRun`; `QuadRun.theoremJ`, `full_ge`, `merged_ge`, from free-diagonal rank floors `PairRankGe`).
@@ -4593,6 +4595,77 @@ theorem certifiedFraction120θ_reEncodedExact_40 (kd : K120 → Kind) (S : Servi
     linarith
   simpa only [mul_zero, sub_zero] using
     certifiedFraction120θ_rounds_40 kd S (roundsHyp_of_H hH wReQ_zero hκ.le hh) hp hF₀ hδb hδz
+
+/-- **Route (c) in B_θ from Theorem K**, with no edit-floor hypothesis: on the int8 grid, if the window's rounds
+satisfy `RoundsHypK` on B for the grid service (the re-encoded design, a plane of odd weight), then the window's floor
+`F_B = (R − D) κ L m n' B − Vmax` (positive, at most `n³`) is B's service floor at `κf = e^{−(1−p) D} + R (δb + δz)`,
+and the edited protocol is relatively secure with `ε = U / (0.8 F_B) − 1` for every `δ > κf`. Over `Z/2³²`, Theorem K
+takes the place of the field-only bit-pair projection behind `EditFloor`. -/
+theorem relativelySecure_edited120θ_K (kd : K120 → Kind) (G : MatGates kd (.ofNat price120) 16 1)
+    (I : Int8Gates120 kd) {n : ℕ} {s : ℤ} (S : GridService n (127 - s)) (hn : 0 < n) (h32 : 32 ∣ n)
+    (h17 : n ≤ 2 ^ 17) (E : (gridMatMachine120θ kd G I).Edit S.Seed n) (hE : E.Bounded s)
+    (prove : (gridMatMachine120θ kd G I).Alg ((S.Seed × (Mat ℤ n n × Mat ℤ n n) × S.Coins) × Mat ℤ n n)
+      (S.Com × S.Ans)) {δ η : ℝ}
+    (hcom : ∀ (σ σ' : S.Seed) (y : (Mat ℤ n n × Mat ℤ n n) × S.Coins) (C C' : Mat ℤ n n),
+      ((gridMatMachine120θ kd G I).eval prove ((σ, y), C)).1 =
+        ((gridMatMachine120θ kd G I).eval prove ((σ', y), C')).1)
+    (hacc : ∀ x : Mat ℤ n n × Mat ℤ n n, InGrid (127 - s) x → 1 - η ≤ prob fun ω : S.Seed × S.Coins =>
+      S.verify ((gridMatMachine120θ kd G I).eval prove
+          ((ω.1, x, ω.2), (gridMatMachine120θ kd G I).eval ((gridMatMachine120θ kd G I).mulG n n n)
+            (E.edit ω.1 x))).1
+        ω.1 ((gridMatMachine120θ kd G I).eval prove
+          ((ω.1, x, ω.2), (gridMatMachine120θ kd G I).eval ((gridMatMachine120θ kd G I).mulG n n n)
+            (E.edit ω.1 x))).2 = true)
+    {Ω : Type} [Fintype Ω] {R : ℕ} {p Vmax δb δz κ : ℝ} {m L np B n' : ℕ} {wt : Fin np → ZMod (2 ^ 32)}
+    {p₀ : Fin np} (hK : RoundsHypK (machine kd (.ofNat price120)) S.toService Ω R p Vmax δb δz κ m L np B n' wt)
+    (hwt : toF2 (wt p₀) = 1) (hp : p ≤ 1) (hκ : 0 < κ) (hC : 0 < L * (m * n' * B)) (hδb : 0 ≤ δb)
+    (hδz : 0 ≤ δz) (D : ℝ) {FB : ℝ} (hFBdef : FB = (R - D) * (κ * L * ((m * n' * B : ℕ) : ℝ)) - Vmax)
+    (hFB : 0 < FB) (hFBn : FB ≤ (n : ℝ) ^ 3) (hκδ : Real.exp (-((1 - p) * D)) + R * (δb + δz) < δ) :
+    RelativelySecure ((gridMatMachine120θ kd G I).edited S.toService E ((gridMatMachine120θ kd G I).mulG n n n) prove (InGrid (127 - s)))
+      ((4 / 5 * (n : ℝ) ^ 3 + 2 * (4 / 5) * (n : ℝ) ^ 2 + (gridMatMachine120θ kd G I).time E.gen + (gridMatMachine120θ kd G I).time prove) / (4 / 5 * FB) - 1) δ
+      ((2 * (4 / 5) * (n : ℝ) ^ 2 + (gridMatMachine120θ kd G I).time E.gen + (gridMatMachine120θ kd G I).time prove) /
+        (4 / 5 * (n : ℝ) ^ 3)) η 0 (4 / 5 * (n : ℝ) ^ 3) := by
+  have hF₀ : 0 < κ * L * ((m * n' * B : ℕ) : ℝ) := by
+    rw [mul_assoc]
+    exact mul_pos hκ (by exact_mod_cast hC)
+  have hfl := serviceFloor_of_rounds (roundsHyp_of_K hK hwt hκ.le) hp hF₀ hδb hδz D
+  rw [mul_zero, sub_zero, ← hFBdef] at hfl
+  exact relativelySecure_edited120θ_of_floor kd G I S hn h32 h17 E hE prove hcom hacc hfl hκδ hFB hFBn
+
+/-- **Route (c) in B_θ from Theorem H**, with no edit-floor hypothesis: the same conclusion under `RoundsHypH`, the
+re-encoded design in exact arithmetic over a field with merges at `h ≥ 2L/3` slots. -/
+theorem relativelySecure_edited120θ_H (kd : K120 → Kind) (G : MatGates kd (.ofNat price120) 16 1)
+    (I : Int8Gates120 kd) {n : ℕ} {s : ℤ} (S : GridService n (127 - s)) (hn : 0 < n) (h32 : 32 ∣ n)
+    (h17 : n ≤ 2 ^ 17) (E : (gridMatMachine120θ kd G I).Edit S.Seed n) (hE : E.Bounded s)
+    (prove : (gridMatMachine120θ kd G I).Alg ((S.Seed × (Mat ℤ n n × Mat ℤ n n) × S.Coins) × Mat ℤ n n)
+      (S.Com × S.Ans)) {δ η : ℝ}
+    (hcom : ∀ (σ σ' : S.Seed) (y : (Mat ℤ n n × Mat ℤ n n) × S.Coins) (C C' : Mat ℤ n n),
+      ((gridMatMachine120θ kd G I).eval prove ((σ, y), C)).1 =
+        ((gridMatMachine120θ kd G I).eval prove ((σ', y), C')).1)
+    (hacc : ∀ x : Mat ℤ n n × Mat ℤ n n, InGrid (127 - s) x → 1 - η ≤ prob fun ω : S.Seed × S.Coins =>
+      S.verify ((gridMatMachine120θ kd G I).eval prove
+          ((ω.1, x, ω.2), (gridMatMachine120θ kd G I).eval ((gridMatMachine120θ kd G I).mulG n n n)
+            (E.edit ω.1 x))).1
+        ω.1 ((gridMatMachine120θ kd G I).eval prove
+          ((ω.1, x, ω.2), (gridMatMachine120θ kd G I).eval ((gridMatMachine120θ kd G I).mulG n n n)
+            (E.edit ω.1 x))).2 = true)
+    {Ω : Type} [Fintype Ω] {R : ℕ} {p Vmax δb δz κ h : ℝ} {F : Type} [Field F] {m L np B n' : ℕ}
+    {wt : Fin np → F} {p₀ : Fin np}
+    (hH : RoundsHypH (machine kd (.ofNat price120)) S.toService Ω R p Vmax δb δz κ h F m L np B n' wt)
+    (hwt : wt p₀ = 1) (hh : 2 * (L : ℝ) / 3 ≤ h) (hp : p ≤ 1) (hκ : 0 < κ) (hC : 0 < L * (m * n' * B))
+    (hδb : 0 ≤ δb) (hδz : 0 ≤ δz) (D : ℝ) {FB : ℝ}
+    (hFBdef : FB = (R - D) * (κ * L * ((m * n' * B : ℕ) : ℝ)) - Vmax) (hFB : 0 < FB) (hFBn : FB ≤ (n : ℝ) ^ 3)
+    (hκδ : Real.exp (-((1 - p) * D)) + R * (δb + δz) < δ) :
+    RelativelySecure ((gridMatMachine120θ kd G I).edited S.toService E ((gridMatMachine120θ kd G I).mulG n n n) prove (InGrid (127 - s)))
+      ((4 / 5 * (n : ℝ) ^ 3 + 2 * (4 / 5) * (n : ℝ) ^ 2 + (gridMatMachine120θ kd G I).time E.gen + (gridMatMachine120θ kd G I).time prove) / (4 / 5 * FB) - 1) δ
+      ((2 * (4 / 5) * (n : ℝ) ^ 2 + (gridMatMachine120θ kd G I).time E.gen + (gridMatMachine120θ kd G I).time prove) /
+        (4 / 5 * (n : ℝ) ^ 3)) η 0 (4 / 5 * (n : ℝ) ^ 3) := by
+  have hF₀ : 0 < κ * L * ((m * n' * B : ℕ) : ℝ) := by
+    rw [mul_assoc]
+    exact mul_pos hκ (by exact_mod_cast hC)
+  have hfl := serviceFloor_of_rounds (roundsHyp_of_H hH hwt hκ.le hh) hp hF₀ hδb hδz D
+  rw [mul_zero, sub_zero, ← hFBdef] at hfl
+  exact relativelySecure_edited120θ_of_floor kd G I S hn h32 h17 E hE prove hcom hacc hfl hκδ hFB hFBn
 
 /-! ### Model A (RS-MODEL §3, over ℚ) and `B_θ ≤ A` -/
 
