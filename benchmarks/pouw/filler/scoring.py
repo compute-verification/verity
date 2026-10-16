@@ -340,8 +340,8 @@ def row_rounds(r: dict) -> list[tuple[str, int, dict | None]]:
 
 def replay_gate(rows: list[dict]) -> dict:
     """Anti-replay over every filler round of the run (`row_rounds`): the round's tile range is the scorer's,
-    [R·2^32, (R + 1)·2^32) with R = point·slots + slot (slots: the row's count of rounds a point; rows from before it,
-    rounds + 1, the slot by position), so no id is the prover's choice; its tiles start at the range's start and stay inside
+    [R·2^32, (R + 1)·2^32) with R = point·slots + slot (slots: rounds.cuh's POINT_SLOTS, one count for every row of the
+    run; rows from before it, rounds + 1, the slot by position), so no id is the prover's choice; its tiles start at the range's start and stay inside
     it; no two rounds' tiles overlap; no two rounds share coins; the first tile's seed is dseed(the round's coins,
     tag | its id) as the device printed it (tag: a high bit the filler's kernel marks its ids with, else 0); and no sampled
     seed (each round's first, last and checked tiles) repeats across rounds."""
@@ -350,6 +350,9 @@ def replay_gate(rows: list[dict]) -> dict:
     pts = [r.get("point") for r in fill_rows]
     if len(set(pts)) != len(pts) or None in pts:
         bad.append(f"point indices missing or repeated: {pts}")
+    counts = {r.get("slots", r.get("rounds", len(r["blocks"])) + 1) for r in fill_rows}
+    if len(counts) > 1:
+        bad.append(f"rows number their rounds with different slot counts {sorted(counts)}, so two points' ids can meet")
     for r in fill_rows:
         slots = r.get("slots", r.get("rounds", len(r["blocks"])) + 1)
         for name, pos, rd in row_rounds(r):
