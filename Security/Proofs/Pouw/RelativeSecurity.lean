@@ -38,7 +38,19 @@ proof workers' results land here as theorems or as named hypotheses.
   (`bitPair_coefficient`) and the abstract core of RS-D1E's homogenization (`bitProj_rank_le`, `products_ge_half_rank`;
   `editedEntry_products_ge`: an edited prefix-sum entry with `r` live terms needs at least `r / 2` plain products,
   whatever the committed instance; `editedEntries_products_ge`: entries at distinct rows and columns, sharing their
-  products, add up, Theorem B's accounting without merges) are proved.
+  products, add up, and with merges free they still add up when entries share only rows or only columns, `_cols`,
+  `_rows`) are proved.
+* Theorem B's accounting over a field, for entries that share rows and columns (A3): in Theorem B's one-parent model
+  (`Forest`, `AccumProg`), `m` plain products and `H` heads hosting a target give
+  `2m + b·H ≥ Σ_e r_e` (`editedEntries_products_ge_shared`), the forest re-rooted at 0 being a Steiner tree
+  (`Forest.exists_steinerTree`) that Theorem 1 (`SteinerRigidity.blockRigidity`) bounds.
+* Theorem S and S_G (`note:20261016T0005Z-draft-luck-loss-round4`, `note:20261016T0100Z-draft-guarded-round5`): a
+  finite game of rounds with fresh coins, one check a round, accepted iff every check passes (`RoundGame`); with the
+  per-round pass bound `1 − (1−p)·d` named (`PassBound`, or `PathBound` along guard paths),
+  `Pr[accept ∧ deficiency ≥ D] ≤ e^{−(1−p)D} + R(δ_bind + δ_ZK)` (`theoremS`, `theoremS_G`), by the supermartingale
+  `Π 1[pass]·e^{(1−p)d}` as a product over rounds and Markov. The window's corollary (`window_le`) is a service floor
+  (`RoundsHyp`, `serviceFloor_of_rounds`), and the B_θ certified fraction rests on it in place of Theorem M
+  (`certifiedFraction120θ_rounds`, at `2^{−40}` `_rounds_40`).
 * The Model B bridge (RS-MODEL): typed circuits of priced gates with free routing; `ModelB.machine` is a `Machine`
   whose time is `timeB`, `ModelB.matMachine` a `MatMachine` from priced circuits (`MatGates`, realized by a GEMM gate
   family), `matMachine120` the sm_120 instance at `price120` with the worst-case `κ = 16` u (circuits named `Gemm120`),
@@ -1704,16 +1716,146 @@ theorem editedEntries_products_ge {K : Type} [Field K] [DecidableEq K] {a b c m 
     _ ≤ (bitProj W).rank := hdiag ▸ Matrix.rank_submatrix_le _ _ _
     _ ≤ 2 * m := hW
 
+/-- The projection is homogeneous. -/
+theorem bitProj_smul {X Y K : Type} [DecidableEq X] [DecidableEq Y] [CommRing K] (k : K) (f : (X ⊕ Y → K) → K) :
+    bitProj (fun z => k * f z) = k • bitProj f := by
+  ext x y
+  simp only [bitProj, Matrix.smul_apply, smul_eq_mul]
+  ring
+
+/-- Each entry's projection, read off the products it combines: `Σ_j λ_ej (α_uj γ_vjᵀ + α_vj γ_ujᵀ)`. -/
+theorem bitProj_editedEntry_of_products {K : Type} [CommRing K] {a b c m : ℕ} (C D : Mat K a b) (C' D' : Mat K b c)
+    (p : Fin b → K) (i : Fin a) (l : Fin c) (lam : Fin m → K) (u v : Fin m → Aff (Fin a × Fin b) (Fin b × Fin c) K)
+    (r : Aff (Fin a × Fin b) (Fin b × Fin c) K)
+    (hT : ∀ x y s t, (s = 0 ∨ s = 1) → (t = 0 ∨ t = 1) →
+      editedEntry C D C' D' p i l (bitPt x y s t) =
+        ∑ j, lam j * ((u j).eval (bitPt x y s t) * (v j).eval (bitPt x y s t)) + r.eval (bitPt x y s t)) :
+    bitProj (editedEntry C D C' D' p i l) =
+      ∑ j, lam j • (Matrix.vecMulVec (u j).α (v j).γ + Matrix.vecMulVec (v j).α (u j).γ) := by
+  have h : bitProj (editedEntry C D C' D' p i l) =
+      bitProj fun z => ∑ j, lam j * ((u j).eval z * (v j).eval z) + r.eval z := by
+    ext x y
+    simp only [bitProj]
+    rw [hT x y 1 1 (.inr rfl) (.inr rfl), hT x y 1 0 (.inr rfl) (.inl rfl), hT x y 0 1 (.inl rfl) (.inr rfl),
+      hT x y 0 0 (.inl rfl) (.inl rfl)]
+  rw [h, bitProj_add (fun z => ∑ j, lam j * ((u j).eval z * (v j).eval z)) (fun z => r.eval z), bitProj_aff,
+    add_zero, bitProj_sum (fun j z => lam j * ((u j).eval z * (v j).eval z))]
+  refine Finset.sum_congr rfl fun j _ => ?_
+  rw [bitProj_smul (lam j) (fun z => (u j).eval z * (v j).eval z), bitProj_mul]
+
+/-- **Entries at distinct columns, rows shared, merges free** (the flattening with the entries on the row side): if
+`m` plain products, shared, compute `q` edited prefix-sum entries at distinct columns `l_e`, each entry's word any
+linear combination of the products plus a plain word, then `2m ≥ Σ_e r_e`, whatever the committed constants.
+Sharing rows and columns both needs Theorem B's charge (`editedEntries_products_ge_shared`). -/
+theorem editedEntries_products_ge_cols {K : Type} [Field K] [DecidableEq K] {a b c m q : ℕ} (C D : Mat K a b)
+    (C' D' : Mat K b c) (p : Fin b → K) (ent : Fin q → Fin a × Fin c)
+    (hcol : Function.Injective fun e => (ent e).2)
+    (lam : Fin q → Fin m → K) (u v : Fin m → Aff (Fin a × Fin b) (Fin b × Fin c) K)
+    (r : Fin q → Aff (Fin a × Fin b) (Fin b × Fin c) K)
+    (hT : ∀ e x y s t, (s = 0 ∨ s = 1) → (t = 0 ∨ t = 1) →
+      editedEntry C D C' D' p (ent e).1 (ent e).2 (bitPt x y s t) =
+        ∑ j, lam e j * ((u j).eval (bitPt x y s t) * (v j).eval (bitPt x y s t)) + (r e).eval (bitPt x y s t)) :
+    ∑ e, Fintype.card {k // D (ent e).1 k * p k * D' k (ent e).2 ≠ 0} ≤ 2 * m := by
+  have hc : ∀ e e', (ent e).2 = (ent e').2 ↔ e = e' := fun _ _ => hcol.eq_iff
+  let Φ : Matrix (Fin q × (Fin a × Fin b)) (Fin b × Fin c) K := fun ex y =>
+    bitProj (editedEntry C D C' D' p (ent ex.1).1 (ent ex.1).2) ex.2 y
+  have hΦ : Φ.rank ≤ 2 * m := by
+    have e : Φ = ∑ j, (Matrix.vecMulVec (fun ex : Fin q × (Fin a × Fin b) => lam ex.1 j * (u j).α ex.2) (v j).γ +
+        Matrix.vecMulVec (fun ex : Fin q × (Fin a × Fin b) => lam ex.1 j * (v j).α ex.2) (u j).γ) := by
+      ext ⟨e, x⟩ y
+      simp only [Φ, bitProj_editedEntry_of_products C D C' D' p _ _ (lam e) u v (r e) (hT e), Matrix.sum_apply,
+        Matrix.smul_apply, Matrix.add_apply, Matrix.vecMulVec_apply, smul_eq_mul]
+      exact Finset.sum_congr rfl fun j _ => by ring
+    rw [e]
+    exact rank_sum_vecMulVec_le _ _ _ _
+  have hdiag : Φ.submatrix (fun ek : Fin q × Fin b => (ek.1, ((ent ek.1).1, ek.2)))
+      (fun ek : Fin q × Fin b => (ek.2, (ent ek.1).2)) =
+      Matrix.diagonal fun ek : Fin q × Fin b => D (ent ek.1).1 ek.2 * p ek.2 * D' ek.2 (ent ek.1).2 := by
+    ext ⟨e, k⟩ ⟨e', k'⟩
+    rw [Matrix.submatrix_apply]
+    simp only [Φ, bitProj_editedEntry, Matrix.sum_apply, Matrix.vecMulVec_apply,
+      Pi.single_apply, Prod.mk.injEq, hc, Matrix.diagonal_apply, true_and]
+    by_cases h : e = e' ∧ k = k'
+    · obtain ⟨rfl, rfl⟩ := h
+      simp [mul_assoc]
+    · simp only [h, ↓reduceIte]
+      refine Finset.sum_eq_zero fun k'' _ => ?_
+      by_cases h1 : k = k''
+      · have h2 : ¬(k' = k'' ∧ e' = e) := fun h2 => h ⟨h2.2.symm, h1.trans h2.1.symm⟩
+        simp only [h2, ↓reduceIte, mul_zero]
+      · simp only [h1, ↓reduceIte, zero_mul]
+  have hcard : ∑ e, Fintype.card {k // D (ent e).1 k * p k * D' k (ent e).2 ≠ 0} =
+      Fintype.card {ek : Fin q × Fin b // D (ent ek.1).1 ek.2 * p ek.2 * D' ek.2 (ent ek.1).2 ≠ 0} := by
+    simp only [Fintype.card_subtype, Finset.card_filter]
+    rw [Fintype.sum_prod_type]
+  rw [hcard]
+  calc Fintype.card {ek : Fin q × Fin b // D (ent ek.1).1 ek.2 * p ek.2 * D' ek.2 (ent ek.1).2 ≠ 0}
+      = (Matrix.diagonal fun ek : Fin q × Fin b => D (ent ek.1).1 ek.2 * p ek.2 * D' ek.2 (ent ek.1).2).rank :=
+        (Matrix.rank_diagonal _).symm
+    _ ≤ Φ.rank := hdiag ▸ Matrix.rank_submatrix_le _ _ _
+    _ ≤ 2 * m := hΦ
+
+/-- **Entries at distinct rows, columns shared, merges free** (the flattening with the entries on the column
+side). -/
+theorem editedEntries_products_ge_rows {K : Type} [Field K] [DecidableEq K] {a b c m q : ℕ} (C D : Mat K a b)
+    (C' D' : Mat K b c) (p : Fin b → K) (ent : Fin q → Fin a × Fin c)
+    (hrow : Function.Injective fun e => (ent e).1)
+    (lam : Fin q → Fin m → K) (u v : Fin m → Aff (Fin a × Fin b) (Fin b × Fin c) K)
+    (r : Fin q → Aff (Fin a × Fin b) (Fin b × Fin c) K)
+    (hT : ∀ e x y s t, (s = 0 ∨ s = 1) → (t = 0 ∨ t = 1) →
+      editedEntry C D C' D' p (ent e).1 (ent e).2 (bitPt x y s t) =
+        ∑ j, lam e j * ((u j).eval (bitPt x y s t) * (v j).eval (bitPt x y s t)) + (r e).eval (bitPt x y s t)) :
+    ∑ e, Fintype.card {k // D (ent e).1 k * p k * D' k (ent e).2 ≠ 0} ≤ 2 * m := by
+  have hr : ∀ e e', (ent e).1 = (ent e').1 ↔ e = e' := fun _ _ => hrow.eq_iff
+  let Φ : Matrix (Fin a × Fin b) (Fin q × (Fin b × Fin c)) K := fun x ey =>
+    bitProj (editedEntry C D C' D' p (ent ey.1).1 (ent ey.1).2) x ey.2
+  have hΦ : Φ.rank ≤ 2 * m := by
+    have e : Φ = ∑ j, (Matrix.vecMulVec (u j).α (fun ey : Fin q × (Fin b × Fin c) => lam ey.1 j * (v j).γ ey.2) +
+        Matrix.vecMulVec (v j).α (fun ey : Fin q × (Fin b × Fin c) => lam ey.1 j * (u j).γ ey.2)) := by
+      ext x ⟨e, y⟩
+      simp only [Φ, bitProj_editedEntry_of_products C D C' D' p _ _ (lam e) u v (r e) (hT e), Matrix.sum_apply,
+        Matrix.smul_apply, Matrix.add_apply, Matrix.vecMulVec_apply, smul_eq_mul]
+      exact Finset.sum_congr rfl fun j _ => by ring
+    rw [e]
+    exact rank_sum_vecMulVec_le _ _ _ _
+  have hdiag : Φ.submatrix (fun ek : Fin q × Fin b => ((ent ek.1).1, ek.2))
+      (fun ek : Fin q × Fin b => (ek.1, (ek.2, (ent ek.1).2))) =
+      Matrix.diagonal fun ek : Fin q × Fin b => D (ent ek.1).1 ek.2 * p ek.2 * D' ek.2 (ent ek.1).2 := by
+    ext ⟨e, k⟩ ⟨e', k'⟩
+    rw [Matrix.submatrix_apply]
+    simp only [Φ, bitProj_editedEntry, Matrix.sum_apply, Matrix.vecMulVec_apply,
+      Pi.single_apply, Prod.mk.injEq, hr, Matrix.diagonal_apply, and_true]
+    by_cases h : e = e' ∧ k = k'
+    · obtain ⟨rfl, rfl⟩ := h
+      simp [mul_assoc]
+    · simp only [h, ↓reduceIte]
+      refine Finset.sum_eq_zero fun k'' _ => ?_
+      by_cases h1 : e = e' ∧ k = k''
+      · have h2 : k' ≠ k'' := fun h2 => h ⟨h1.1, h1.2.trans h2.symm⟩
+        simp only [h2, ↓reduceIte, mul_zero]
+      · simp only [h1, ↓reduceIte, zero_mul]
+  have hcard : ∑ e, Fintype.card {k // D (ent e).1 k * p k * D' k (ent e).2 ≠ 0} =
+      Fintype.card {ek : Fin q × Fin b // D (ent ek.1).1 ek.2 * p ek.2 * D' ek.2 (ent ek.1).2 ≠ 0} := by
+    simp only [Fintype.card_subtype, Finset.card_filter]
+    rw [Fintype.sum_prod_type]
+  rw [hcard]
+  calc Fintype.card {ek : Fin q × Fin b // D (ent ek.1).1 ek.2 * p ek.2 * D' ek.2 (ent ek.1).2 ≠ 0}
+      = (Matrix.diagonal fun ek : Fin q × Fin b => D (ent ek.1).1 ek.2 * p ek.2 * D' ek.2 (ent ek.1).2).rank :=
+        (Matrix.rank_diagonal _).symm
+    _ ≤ Φ.rank := hdiag ▸ Matrix.rank_submatrix_le _ _ _
+    _ ≤ 2 * m := hΦ
+
 /-! ### Theorem B's accounting over a field (A3): entries that share rows and columns
 
 `editedEntries_products_ge` lets each entry's word be any linear combination of the shared products, a merge in
-Theorem B's model, and at distinct rows and columns that costs nothing. Once entries share both rows and columns,
-free merges are too strong: recursive Strassen on plain operands covers `n³` live terms with `7^{log₂ n}` products,
-below `n³/2` from `n = 64`. So Theorem B charges them. Words are accumulators with one parent, plus heads (merges,
-conversions, CUDA multiplications, copy edges), and each head whose merge-free tree holds a target costs at most
-`b` (Theorem B's `L`). The projected words form a rank-metric Steiner forest; joined to 0 through one target per
-hosting head, it is a Steiner tree, and Theorem 1 (`SteinerRigidity.blockRigidity`) bounds it below
-(`editedEntries_products_ge_shared`). -/
+Theorem B's model, and at distinct rows and columns that costs nothing; nor does it when entries share only rows
+(`editedEntries_products_ge_cols`) or only columns (`editedEntries_products_ge_rows`). Once entries share both rows
+and columns, free merges are too strong: recursive Strassen on plain operands covers `n³` live terms with
+`7^{log₂ n}` products, below `n³/2` from `n = 64`. So Theorem B charges them. Words are accumulators with one
+parent, plus heads (merges, conversions, CUDA multiplications, copy edges), and each head whose merge-free tree holds
+a target costs at most `b` (Theorem B's `L`). The projected words form a rank-metric Steiner forest; joined to 0
+through one target per hosting head, it is a Steiner tree, and Theorem 1 (`SteinerRigidity.blockRigidity`) bounds it
+below (`editedEntries_products_ge_shared`). -/
 
 /-- The shape of Theorem B's computation: each word is a head or a step on one parent, an earlier word or the zero
 word (`none`). -/
