@@ -5,22 +5,23 @@ import Proofs.Flock.Claims.DeployCode
 /-!
 # Flock's zero knowledge against a malicious verifier, from its committed coins
 
-`Flock.zkR_of_proto`: a deployed masked verifier (`D.zk`) whose coins are a committed-coin protocol's
-(`D.V.k = G.K + 1`: every message of `D.V` but the last is answered by a coin) meets the proposed claim `Flock.ZKR` at
-the protocol's honest prover `P_zk = G.prover` and the Goldreich–Kahan simulator `S_Flock = G.simulator N`, at
+`Flock.zkR_of_proto`: a deployed masked verifier (`D.zk`) whose rounds are a committed-coin protocol's (`D.V.k = G.k`:
+`Hello`, answered by the coin commitment, then `K` rounds each answered by an opened coin, then the last) meets the
+proposed claim `Flock.ZKR` at the protocol's honest prover `P_zk = G.prover` and the Goldreich–Kahan simulator
+`S_Flock = G.simulator N`, at
 
   `ε_zk(x) = 1/(N+1) + 2·δ_A(x) + 2·N·δ_B(x)`
 
 plus the probability of a collision among `S_Flock`'s own SHA-512 calls, with cost `G.simBound N`
-(`Flock.simCost_of_proto`). The verifier's decision does not enter: zero knowledge reads only its rounds and that it is
-the masked one. `Flock.zkR_deployZk` is the same at the deployed masked verifier, `FlockDeploy.deployZk`, for a protocol
-whose coins are its verifier's (`G.K = (FlockDeploy.V true).k − 1`).
+(`Flock.simCost_of_proto`). The verifier's decision does not enter: zero knowledge reads only its rounds and that it
+is the masked one.
 
-**The rounds.** `D.V` is the shipped verifier in public-coin form: its messages are the link, the recorded rounds and
-the last, each but the last answered by a live coin in the clear. A simulator against a malicious `V*` needs the coins
-fixed before the prover's first message, which only the coin commitment at `Hello` does
-(`verity/ml/flock/live/PROTOCOL.md` §9). So `Flock.ZKR` reads `D.V.k + 1` rounds, `Hello` first, and the protocol's `K`
-coins are `D.V`'s `D.V.k − 1`.
+**The rounds.** A simulator against a malicious `V*` needs the coins fixed before the prover's first message, which only
+the coin commitment at `Hello` does (`verity/ml/flock/live/PROTOCOL.md` §9), so the deployed `--zk` verifier's model
+`D.V` is to have that round, and `Flock.ZKR` reads `D.V.k`. `FlockDeploy.V` does not have it yet: it is the public-coin
+form, whose messages are the link, the recorded rounds and the last, each but the last answered by a live coin in the
+clear. Until it does, `Flock.ZKRHello` reads `D.V.k + 1` rounds, `Hello` first, and the protocol's `K` coins are
+`D.V`'s `D.V.k − 1` (`Flock.zkRHello_of_proto`, `Flock.zkRHello_deployZk` at `FlockDeploy.deployZk`).
 
 **What changes for a malicious verifier**, against `Flock.Guarantees.ZeroKnowledgeHidden` (honest-verifier zero
 knowledge at each fixed coin vector the prover does not refuse, on runs its self-check does not stop):
@@ -70,12 +71,23 @@ open Claims
 
 /-- **Flock's zero knowledge against a malicious verifier, from a committed-coin protocol**: the proposed claim
 `Flock.ZKR` at `P_zk = G.prover` and `S_Flock = G.simulator N`, at `ε_zk = 1/(N+1) + 2·δ_A + 2·N·δ_B`, when the
-protocol commits `D.V`'s coins. -/
+deployed verifier's rounds are the protocol's (`Hello`, its `K` coins, the last message). -/
 theorem Flock.zkR_of_proto {Coin Col T : Type} (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (G : Proto Flock.Wit)
-    (N : ℕ) (δA δB : Msg → ℝ) (hzk : D.zk = true) (hk : ∀ x, D.V.k x = G.K x + 1)
+    (N : ℕ) (δA δB : Msg → ℝ) (hzk : D.zk = true) (hk : ∀ x, D.V.k x = G.k x)
     (hA : G.PrefixHides H (Flock.R H D.parse) δA) (hB : G.SHVZK H (Flock.R H D.parse) δB) (hB0 : ∀ x, 0 ≤ δB x)
     (hC : G.Binding H) :
     Flock.ZKR H D G.prover (G.simulator N) fun x => 1 / ((N : ℝ) + 1) + 2 * δA x + 2 * N * δB x := by
+  refine ⟨hzk, ?_⟩
+  rw [show D.V.k = G.k from funext hk]
+  exact G.gk_zk H _ N δA δB hA hB hB0 hC
+
+/-- **The same before `D.V` models `Hello`** (`Flock.ZKRHello`): the protocol commits the coins of `D.V`'s public-coin
+form (`D.V.k = G.K + 1`). -/
+theorem Flock.zkRHello_of_proto {Coin Col T : Type} (H : Msg → Msg) (D : Flock.Deploy Coin Col T)
+    (G : Proto Flock.Wit) (N : ℕ) (δA δB : Msg → ℝ) (hzk : D.zk = true) (hk : ∀ x, D.V.k x = G.K x + 1)
+    (hA : G.PrefixHides H (Flock.R H D.parse) δA) (hB : G.SHVZK H (Flock.R H D.parse) δB) (hB0 : ∀ x, 0 ≤ δB x)
+    (hC : G.Binding H) :
+    Flock.ZKRHello H D G.prover (G.simulator N) fun x => 1 / ((N : ℝ) + 1) + 2 * δA x + 2 * N * δB x := by
   refine ⟨hzk, ?_⟩
   have hk' : (fun x => D.V.k x + 1) = G.k := funext fun x => by
     show D.V.k x + 1 = G.K x + 2
@@ -89,15 +101,16 @@ theorem deployV_k_pos (zk : Bool) (x : Msg) : 0 < (FlockDeploy.V zk).k x := by
   split <;> omega
 
 /-- **Flock's zero knowledge against a malicious verifier, at the deployed masked verifier** `FlockDeploy.deployZk`: the
-proposed `Flock.ZKR` at `P_zk = G.prover` and `S_Flock = G.simulator N`, at `ε_zk = 1/(N+1) + 2·δ_A + 2·N·δ_B`, for a
-committed-coin protocol whose coins are the deployed verifier's. -/
-theorem Flock.zkR_deployZk (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
+bridge `Flock.ZKRHello` at `P_zk = G.prover` and `S_Flock = G.simulator N`, at `ε_zk = 1/(N+1) + 2·δ_A + 2·N·δ_B`,
+for a committed-coin protocol whose coins are the deployed verifier's. `FlockDeploy.V` is the public-coin form, without
+the `Hello` round; once it has it, `Flock.zkR_of_proto` gives `Flock.ZKR` itself. -/
+theorem Flock.zkRHello_deployZk (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (G : Proto Flock.Wit) (N : ℕ) (δA δB : Msg → ℝ) (hK : ∀ x, G.K x = (FlockDeploy.V true).k x - 1)
     (hA : G.PrefixHides H (Flock.R H (FlockDeploy.deployZk rel).parse) δA)
     (hB : G.SHVZK H (Flock.R H (FlockDeploy.deployZk rel).parse) δB) (hB0 : ∀ x, 0 ≤ δB x) (hC : G.Binding H) :
-    Flock.ZKR H (FlockDeploy.deployZk rel) G.prover (G.simulator N)
+    Flock.ZKRHello H (FlockDeploy.deployZk rel) G.prover (G.simulator N)
       fun x => 1 / ((N : ℝ) + 1) + 2 * δA x + 2 * N * δB x :=
-  Flock.zkR_of_proto H _ G N δA δB rfl
+  Flock.zkRHello_of_proto H _ G N δA δB rfl
     (fun x => by have := deployV_k_pos true x; rw [hK x]; show (FlockDeploy.V true).k x = _; omega) hA hB hB0 hC
 
 /-- `S_Flock`'s cost (`SimCost`), at `simBound`. -/
