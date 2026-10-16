@@ -1,4 +1,5 @@
 import Mathlib
+import Proofs.Pouw.SteinerRigidity
 
 /-!
 # Relative security for matmul PoUW: the definition, the masking algebra, the reduction's shape
@@ -1565,16 +1566,11 @@ theorem bitProj_editedEntry {K : Type} [CommRing K] {a b c : ℕ} (C D : Mat K a
     bitProj_sum (fun k z => (U k).eval z * (V k).eval z)]
   simp only [bitProj_mul, U, V, Matrix.zero_vecMulVec, add_zero]
 
-/-- **RS-D1E's Lemma 2, counted** (over a field): a word computed with `m` plain products that agrees with an
-edited prefix-sum entry at every bit pair's four points has `m ≥ #{k : d_ik p_k d′_kl ≠ 0} / 2`, whatever the
-committed constants. (One entry; entries with disjoint live terms add up, `editedEntries_products_ge`.) -/
-theorem editedEntry_products_ge {K : Type} [Field K] [DecidableEq K] {a b c m : ℕ} (C D : Mat K a b)
-    (C' D' : Mat K b c) (p : Fin b → K) (i : Fin a) (l : Fin c)
-    (u v : Fin m → Aff (Fin a × Fin b) (Fin b × Fin c) K) (r : Aff (Fin a × Fin b) (Fin b × Fin c) K)
-    (hT : ∀ x y s t, (s = 0 ∨ s = 1) → (t = 0 ∨ t = 1) →
-      editedEntry C D C' D' p i l (bitPt x y s t) =
-        ∑ j, (u j).eval (bitPt x y s t) * (v j).eval (bitPt x y s t) + r.eval (bitPt x y s t)) :
-    Fintype.card {k // D i k * p k * D' k l ≠ 0} ≤ 2 * m := by
+/-- An edited prefix-sum entry's projection has rank at least its live terms `#{k : d_ik p_k d′_kl ≠ 0}` (its
+submatrix on the rows `(i, k)` and columns `(k, l)` is their diagonal). -/
+theorem card_live_le_rank {K : Type} [Field K] [DecidableEq K] {a b c : ℕ} (C D : Mat K a b) (C' D' : Mat K b c)
+    (p : Fin b → K) (i : Fin a) (l : Fin c) :
+    Fintype.card {k // D i k * p k * D' k l ≠ 0} ≤ (bitProj (editedEntry C D C' D' p i l)).rank := by
   have hproj := bitProj_editedEntry C D C' D' p i l
   have hdiag : (bitProj (editedEntry C D C' D' p i l)).submatrix (fun k => (i, k)) (fun k => (k, l)) =
       Matrix.diagonal fun k => D i k * p k * D' k l := by
@@ -1589,7 +1585,50 @@ theorem editedEntry_products_ge {K : Type} [Field K] [DecidableEq K] {a b c m : 
   calc Fintype.card {k // D i k * p k * D' k l ≠ 0}
       = (Matrix.diagonal fun k => D i k * p k * D' k l).rank := (Matrix.rank_diagonal _).symm
     _ ≤ (bitProj (editedEntry C D C' D' p i l)).rank := hdiag ▸ Matrix.rank_submatrix_le _ _ _
-    _ ≤ 2 * m := products_ge_half_rank u v r _ hT
+
+/-- ... and at most `b`: it factors through the inner index `k`. -/
+theorem rank_bitProj_editedEntry_le {K : Type} [Field K] {a b c : ℕ} (C D : Mat K a b) (C' D' : Mat K b c)
+    (p : Fin b → K) (i : Fin a) (l : Fin c) : (bitProj (editedEntry C D C' D' p i l)).rank ≤ b := by
+  rw [bitProj_editedEntry]
+  let U : Matrix (Fin a × Fin b) (Fin b) K := fun x k => (Pi.single (i, k) (D i k * p k) : Fin a × Fin b → K) x
+  let V : Matrix (Fin b) (Fin b × Fin c) K := fun k y => (Pi.single (k, l) (D' k l) : Fin b × Fin c → K) y
+  have hUV : ∑ k, Matrix.vecMulVec (Pi.single (i, k) (D i k * p k)) (Pi.single (k, l) (D' k l)) = U * V := by
+    ext x y
+    simp only [Matrix.sum_apply, Matrix.vecMulVec_apply]
+    rfl
+  rw [hUV]
+  exact (Matrix.rank_mul_le_left U V).trans ((Matrix.rank_le_card_width U).trans (by simp))
+
+/-- Its columns live on the x-bits of row `i`. -/
+theorem colSpace_bitProj_editedEntry_le {K : Type} [Field K] {a b c : ℕ} (C D : Mat K a b) (C' D' : Mat K b c)
+    (p : Fin b → K) (i : Fin a) (l : Fin c) :
+    SteinerRigidity.colSpace (bitProj (editedEntry C D C' D' p i l)) ≤
+      SteinerRigidity.blockSubspace K (fun x : Fin a × Fin b => x.1) i := by
+  rw [bitProj_editedEntry]
+  rintro _ ⟨y, rfl⟩ x hx
+  simp [Matrix.mulVec, dotProduct, Matrix.vecMulVec_apply, Pi.single_apply, Prod.ext_iff, hx]
+
+/-- Its rows live on the y-bits of column `l`. -/
+theorem rowSpace_bitProj_editedEntry_le {K : Type} [Field K] {a b c : ℕ} (C D : Mat K a b) (C' D' : Mat K b c)
+    (p : Fin b → K) (i : Fin a) (l : Fin c) :
+    SteinerRigidity.rowSpace (bitProj (editedEntry C D C' D' p i l)) ≤
+      SteinerRigidity.blockSubspace K (fun y : Fin b × Fin c => y.2) l := by
+  rw [bitProj_editedEntry]
+  rintro _ ⟨x, rfl⟩ y hy
+  simp only at hy
+  simp [Matrix.vecMul, dotProduct, Matrix.vecMulVec_apply, Pi.single_apply, Prod.ext_iff, hy]
+
+/-- **RS-D1E's Lemma 2, counted** (over a field): a word computed with `m` plain products that agrees with an
+edited prefix-sum entry at every bit pair's four points has `m ≥ #{k : d_ik p_k d′_kl ≠ 0} / 2`, whatever the
+committed constants. (One entry; entries with disjoint live terms add up, `editedEntries_products_ge`.) -/
+theorem editedEntry_products_ge {K : Type} [Field K] [DecidableEq K] {a b c m : ℕ} (C D : Mat K a b)
+    (C' D' : Mat K b c) (p : Fin b → K) (i : Fin a) (l : Fin c)
+    (u v : Fin m → Aff (Fin a × Fin b) (Fin b × Fin c) K) (r : Aff (Fin a × Fin b) (Fin b × Fin c) K)
+    (hT : ∀ x y s t, (s = 0 ∨ s = 1) → (t = 0 ∨ t = 1) →
+      editedEntry C D C' D' p i l (bitPt x y s t) =
+        ∑ j, (u j).eval (bitPt x y s t) * (v j).eval (bitPt x y s t) + r.eval (bitPt x y s t)) :
+    Fintype.card {k // D i k * p k * D' k l ≠ 0} ≤ 2 * m :=
+  (card_live_le_rank C D C' D' p i l).trans (products_ge_half_rank u v r _ hT)
 
 /-- A scalar multiple of a plain operand. -/
 def Aff.smul {X Y K : Type} [CommRing K] (s : K) (u : Aff X Y K) : Aff X Y K :=
@@ -1664,6 +1703,282 @@ theorem editedEntries_products_ge {K : Type} [Field K] [DecidableEq K] {a b c m 
         (Matrix.rank_diagonal _).symm
     _ ≤ (bitProj W).rank := hdiag ▸ Matrix.rank_submatrix_le _ _ _
     _ ≤ 2 * m := hW
+
+/-! ### Theorem B's accounting over a field (A3): entries that share rows and columns
+
+`editedEntries_products_ge` lets each entry's word be any linear combination of the shared products, a merge in
+Theorem B's model, and at distinct rows and columns that costs nothing. Once entries share both rows and columns,
+free merges are too strong: recursive Strassen on plain operands covers `n³` live terms with `7^{log₂ n}` products,
+below `n³/2` from `n = 64`. So Theorem B charges them. Words are accumulators with one parent, plus heads (merges,
+conversions, CUDA multiplications, copy edges), and each head whose merge-free tree holds a target costs at most
+`b` (Theorem B's `L`). The projected words form a rank-metric Steiner forest; joined to 0 through one target per
+hosting head, it is a Steiner tree, and Theorem 1 (`SteinerRigidity.blockRigidity`) bounds it below
+(`editedEntries_products_ge_shared`). -/
+
+/-- The shape of Theorem B's computation: each word is a head or a step on one parent, an earlier word or the zero
+word (`none`). -/
+structure Forest (N : ℕ) where
+  isHead : Fin N → Bool
+  parent : Fin N → Option (Fin N)
+  parent_lt : ∀ j k, parent j = some k → k < j
+
+namespace Forest
+
+/-- The root of a word's merge-free tree: the head it hangs from, or `none` for the zero word's tree. -/
+def root {N : ℕ} (P : Forest N) (j : Fin N) : Option (Fin N) :=
+  if P.isHead j then some j else
+    match h : P.parent j with
+    | none => none
+    | some k =>
+      have : k < j := P.parent_lt j k h
+      root P k
+termination_by j.val
+decreasing_by exact this
+
+variable {N : ℕ} (P : Forest N)
+
+theorem root_head {j : Fin N} (h : P.isHead j = true) : P.root j = some j := by
+  rw [root]
+  simp [h]
+
+theorem root_none {j : Fin N} (h : P.isHead j = false) (hp : P.parent j = none) : P.root j = none := by
+  rw [root]
+  simp only [h, Bool.false_eq_true, ↓reduceIte]
+  split <;> simp_all
+
+theorem root_some {j k : Fin N} (h : P.isHead j = false) (hp : P.parent j = some k) : P.root j = P.root k := by
+  rw [root]
+  simp only [h, Bool.false_eq_true, ↓reduceIte]
+  split <;> simp_all
+
+theorem root_isHead : ∀ (n : ℕ) (j : Fin N), j.val = n → ∀ {h}, P.root j = some h → P.isHead h = true := by
+  intro n
+  induction n using Nat.strong_induction_on with
+  | _ n ih =>
+    intro j hj h hr
+    cases hh : P.isHead j
+    · cases hp : P.parent j with
+      | none =>
+        rw [P.root_none hh hp] at hr
+        cases hr
+      | some k =>
+        rw [P.root_some hh hp] at hr
+        exact ih k.val (hj ▸ P.parent_lt j k hp) k rfl hr
+    · rw [P.root_head hh] at hr
+      cases hr
+      exact hh
+
+/-- Some target's word hangs from the head `h`. -/
+def Hosts {q : ℕ} (t : Fin q → Fin N) (h : Fin N) : Prop := ∃ e, P.root (t e) = some h
+
+/-- **The forest is a Steiner tree** (Theorem B's tree decomposition, re-rooted at 0): label the words by
+matrices, each step's label at rank distance at most 2 from its parent's (the zero word's label is 0), and the
+targets of rank at most `b`. Some Steiner tree reaches 0 and every target's label, with length at most `2m + b H`:
+`m` the steps, `H` the heads whose tree holds a target. Each such tree joins 0 through one of its targets (length at
+most `b`); a head's tree with no target is shifted by its head's label, which keeps its edge lengths and puts the
+head at 0. -/
+theorem exists_steinerTree {F : Type} [Field F] {m n : Type} [Fintype m] [Fintype n] {q : ℕ}
+    (lab : Fin N → Matrix m n F) (hstep : ∀ j, P.isHead j = false → (lab j - (P.parent j).elim 0 lab).rank ≤ 2)
+    (t : Fin q → Fin N) {b : ℕ} (hb : ∀ e, (lab (t e)).rank ≤ b) :
+    ∃ T : SteinerRigidity.SteinerTree F m n, T.Reaches 0 ∧ (∀ e, T.Reaches (lab (t e))) ∧
+      T.length ≤ 2 * Fintype.card {j // P.isHead j = false} +
+        b * Nat.card {h // P.isHead h = true ∧ P.Hosts t h} := by
+  classical
+  let shift : Fin N → Matrix m n F := fun j =>
+    match P.root j with
+    | none => 0
+    | some h => if P.Hosts t h then 0 else lab h
+  let label : Option (Fin N) → Matrix m n F := fun v => v.elim 0 fun j => lab j - shift j
+  let anchor : Fin N → Fin N := fun h => if hh : P.Hosts t h then t hh.choose else h
+  let E1 : Finset (Sym2 (Option (Fin N))) :=
+    (univ.filter fun j => P.isHead j = false).image fun j => s(P.parent j, some j)
+  let E2 : Finset (Sym2 (Option (Fin N))) :=
+    (univ.filter fun h => P.isHead h = true ∧ P.Hosts t h).image fun h => s(none, some (anchor h))
+  let E3 : Finset (Sym2 (Option (Fin N))) :=
+    (univ.filter fun h => P.isHead h = true ∧ ¬P.Hosts t h).image fun h => s(none, some h)
+  let G : SimpleGraph (Option (Fin N)) := SimpleGraph.fromEdgeSet ↑(E1 ∪ E2 ∪ E3)
+  have hadj : ∀ u v, s(u, v) ∈ E1 ∪ E2 ∪ E3 → u ≠ v → G.Adj u v := fun u v h hne =>
+    (SimpleGraph.fromEdgeSet_adj _).mpr ⟨Finset.mem_coe.mpr h, hne⟩
+  have key : ∀ (n : ℕ) (j : Fin N), j.val = n → G.Reachable (P.root j) (some j) := by
+    intro n
+    induction n using Nat.strong_induction_on with
+    | _ n ih =>
+      intro j hj
+      cases hh : P.isHead j
+      · have hE : s(P.parent j, some j) ∈ E1 ∪ E2 ∪ E3 :=
+          mem_union_left _ (mem_union_left _ (mem_image.mpr ⟨j, by simp [hh], rfl⟩))
+        cases hp : P.parent j with
+        | none =>
+          rw [P.root_none hh hp]
+          rw [hp] at hE
+          exact (hadj _ _ hE (by simp)).reachable
+        | some k =>
+          rw [P.root_some hh hp]
+          rw [hp] at hE
+          have hk : k < j := P.parent_lt j k hp
+          exact (ih k.val (hj ▸ hk) k rfl).trans (hadj _ _ hE (by simp [hk.ne])).reachable
+      · rw [P.root_head hh]
+  have key0 : ∀ j, G.Reachable none (P.root j) := by
+    intro j
+    cases hr : P.root j with
+    | none => rfl
+    | some h =>
+      have hh := P.root_isHead j.val j rfl hr
+      by_cases hos : P.Hosts t h
+      · have ha : anchor h = t hos.choose := by simp only [anchor, hos, ↓reduceDIte]
+        have hE : s(none, some (anchor h)) ∈ E1 ∪ E2 ∪ E3 :=
+          mem_union_left _ (mem_union_right _ (mem_image.mpr ⟨h, by simp [hh, hos], rfl⟩))
+        have h1 := (hadj _ _ hE (by simp)).reachable
+        have h2 := key _ (t hos.choose) rfl
+        rw [hos.choose_spec] at h2
+        rw [ha] at h1
+        exact h1.trans h2.symm
+      · have hE : s(none, some h) ∈ E1 ∪ E2 ∪ E3 :=
+          mem_union_right _ (mem_image.mpr ⟨h, by simp [hh, hos], rfl⟩)
+        exact (hadj _ _ hE (by simp)).reachable
+  have hconn : G.Connected := by
+    rw [SimpleGraph.connected_iff_exists_forall_reachable]
+    refine ⟨none, fun v => ?_⟩
+    cases v with
+    | none => rfl
+    | some j => exact (key0 j).trans (key _ j rfl)
+  obtain ⟨T, hTG, hT⟩ := hconn.exists_isTree_le
+  let ST : SteinerRigidity.SteinerTree F m n := { V := Option (Fin N), G := T, isTree := hT, label := label }
+  have hshift0 : ∀ e, shift (t e) = 0 := by
+    intro e
+    simp only [shift]
+    cases hr : P.root (t e) with
+    | none => rfl
+    | some h => simp only [show P.Hosts t h from ⟨e, hr⟩, ↓reduceIte]
+  have hlen : ∀ x, SteinerRigidity.SteinerTree.edgeLength label x =
+      Sym2.lift ⟨fun u v => SteinerRigidity.rankDist (label u) (label v),
+        fun _ _ => SteinerRigidity.rankDist_comm _ _⟩ x := fun _ => rfl
+  have hsub : ST.G.edgeFinset ⊆ E1 ∪ E2 ∪ E3 := by
+    intro x hx
+    have hx' : x ∈ G.edgeSet := SimpleGraph.edgeSet_mono hTG (SimpleGraph.mem_edgeFinset.mp hx)
+    rw [SimpleGraph.edgeSet_fromEdgeSet] at hx'
+    exact Finset.mem_coe.mp hx'.1
+  have hunion : ∀ (s s' : Finset (Sym2 (Option (Fin N)))) (f : Sym2 (Option (Fin N)) → ℕ),
+      ∑ x ∈ s ∪ s', f x ≤ ∑ x ∈ s, f x + ∑ x ∈ s', f x := fun s s' f => by
+    rw [← Finset.sum_union_inter]
+    exact Nat.le_add_right _ _
+  have h1 : ∑ x ∈ E1, SteinerRigidity.SteinerTree.edgeLength label x ≤
+      2 * Fintype.card {j // P.isHead j = false} := by
+    refine (Finset.sum_image_le_of_nonneg fun _ _ => Nat.zero_le _).trans ?_
+    rw [Fintype.card_subtype, mul_comm, ← smul_eq_mul, ← Finset.sum_const]
+    refine Finset.sum_le_sum fun j hj => ?_
+    have hh : P.isHead j = false := (Finset.mem_filter.mp hj).2
+    rw [hlen, Sym2.lift_mk]
+    cases hp : P.parent j with
+    | none =>
+      have hs : shift j = 0 := by simp only [shift, P.root_none hh hp]
+      have := hstep j hh
+      rw [hp] at this
+      simpa [label, hs, SteinerRigidity.rankDist_zero_left] using this
+    | some k =>
+      have hs : shift j = shift k := by simp only [shift, P.root_some hh hp]
+      have := hstep j hh
+      rw [hp] at this
+      simp only [label, Option.elim, hs]
+      rw [SteinerRigidity.rankDist_comm, SteinerRigidity.rankDist, sub_sub_sub_cancel_right]
+      exact this
+  have h2 : ∑ x ∈ E2, SteinerRigidity.SteinerTree.edgeLength label x ≤
+      b * Nat.card {h // P.isHead h = true ∧ P.Hosts t h} := by
+    refine (Finset.sum_image_le_of_nonneg fun _ _ => Nat.zero_le _).trans ?_
+    rw [Nat.card_eq_fintype_card, Fintype.card_subtype, mul_comm, ← smul_eq_mul, ← Finset.sum_const]
+    refine Finset.sum_le_sum fun h hh => ?_
+    have hos : P.Hosts t h := (Finset.mem_filter.mp hh).2.2
+    have ha : anchor h = t hos.choose := by simp only [anchor, hos, ↓reduceDIte]
+    rw [hlen, Sym2.lift_mk, ha]
+    simp only [label, Option.elim, hshift0, sub_zero, SteinerRigidity.rankDist_zero_left]
+    exact hb _
+  have h3 : ∑ x ∈ E3, SteinerRigidity.SteinerTree.edgeLength label x = 0 := by
+    refine Nat.eq_zero_of_le_zero ((Finset.sum_image_le_of_nonneg fun _ _ => Nat.zero_le _).trans ?_)
+    refine (Finset.sum_eq_zero fun h hh => ?_).le
+    have hh' := (Finset.mem_filter.mp hh).2
+    have hs : shift h = lab h := by simp only [shift, P.root_head hh'.1, hh'.2, ↓reduceIte]
+    rw [hlen, Sym2.lift_mk]
+    simp only [label, Option.elim, hs, sub_self, SteinerRigidity.rankDist_self]
+  refine ⟨ST, ⟨none, rfl⟩, fun e => ⟨some (t e), ?_⟩, ?_⟩
+  · show lab (t e) - shift (t e) = lab (t e)
+    rw [hshift0, sub_zero]
+  · calc ST.length = ∑ x ∈ ST.G.edgeFinset, SteinerRigidity.SteinerTree.edgeLength label x := rfl
+      _ ≤ ∑ x ∈ E1 ∪ E2 ∪ E3, SteinerRigidity.SteinerTree.edgeLength label x := Finset.sum_le_sum_of_subset hsub
+      _ ≤ ∑ x ∈ E1, SteinerRigidity.SteinerTree.edgeLength label x +
+          ∑ x ∈ E2, SteinerRigidity.SteinerTree.edgeLength label x +
+          ∑ x ∈ E3, SteinerRigidity.SteinerTree.edgeLength label x :=
+          (hunion _ _ _).trans (Nat.add_le_add_right (hunion _ _ _) _)
+      _ ≤ _ := by rw [h3, add_zero]; exact Nat.add_le_add h1 h2
+
+end Forest
+
+/-- **Theorem B's model on the noise bits** (A3, as RS-D1E §1 uses it): a `Forest` of `N` words, each step exactly
+`w_j = w_parent + u_j v_j` with plain operands, each head any word. -/
+structure AccumProg (N : ℕ) (X Y K : Type) [Fintype X] [Fintype Y] [CommRing K] extends Forest N where
+  val : Fin N → (X ⊕ Y → K) → K
+  u : Fin N → Aff X Y K
+  v : Fin N → Aff X Y K
+  step : ∀ j, isHead j = false → ∀ z, val j z = (parent j).elim 0 (fun k => val k z) + (u j).eval z * (v j).eval z
+
+/-- **Theorem B's accounting over a field, entries sharing rows and columns** (A3's Theorem B at one bit pair, for
+RS-D1E's edited prefix-sum entries): if a computation in Theorem B's model commits, for `q` edited prefix-sum
+entries at distinct cells `(i_e, l_e)`, rows and columns shared freely, words that agree with the entries at every
+bit pair's four points, then `Σ_e #{k : d_(i_e k) p_k d′_(k l_e) ≠ 0} ≤ 2m + b H`, with `m` its products and `H` the
+heads whose merge-free tree holds a committed entry, whatever the committed constants. With accumulators only
+(`H = 0`) that is `2m ≥ Σ_e r_e`; each hosting head costs at most `b` (Theorem B's `L` per head). -/
+theorem editedEntries_products_ge_shared {K : Type} [Field K] [DecidableEq K] {a b c N q : ℕ} (C D : Mat K a b)
+    (C' D' : Mat K b c) (p : Fin b → K) (P : AccumProg N (Fin a × Fin b) (Fin b × Fin c) K)
+    (ent : Fin q → Fin a × Fin c) (hent : Function.Injective ent) (t : Fin q → Fin N)
+    (hT : ∀ e x y s s', (s = 0 ∨ s = 1) → (s' = 0 ∨ s' = 1) →
+      P.val (t e) (bitPt x y s s') = editedEntry C D C' D' p (ent e).1 (ent e).2 (bitPt x y s s')) :
+    ∑ e, Fintype.card {k // D (ent e).1 k * p k * D' k (ent e).2 ≠ 0} ≤
+      2 * Fintype.card {j // P.isHead j = false} + b * Nat.card {h // P.isHead h = true ∧ P.Hosts t h} := by
+  classical
+  let lab : Fin N → Matrix (Fin a × Fin b) (Fin b × Fin c) K := fun j => bitProj (P.val j)
+  have hstep : ∀ j, P.isHead j = false → (lab j - (P.parent j).elim 0 lab).rank ≤ 2 := by
+    intro j hj
+    have hv : P.val j = fun z => (P.parent j).elim 0 (fun k => P.val k z) + (P.u j).eval z * (P.v j).eval z :=
+      funext (P.step j hj)
+    have he : lab j - (P.parent j).elim 0 lab = bitProj fun z => (P.u j).eval z * (P.v j).eval z := by
+      simp only [lab]
+      rw [hv, bitProj_add]
+      cases P.parent j with
+      | none =>
+        have h0 : bitProj (X := Fin a × Fin b) (Y := Fin b × Fin c) (fun _ => (0 : K)) = 0 := by
+          ext x y
+          simp [bitProj]
+        simp [h0]
+      | some k => simp
+    rw [he, bitProj_mul]
+    exact (SteinerRigidity.rank_add_le _ _).trans
+      (add_le_add (Matrix.rank_vecMulVec_le _ _) (Matrix.rank_vecMulVec_le _ _))
+  have hagree : ∀ e, lab (t e) = bitProj (editedEntry C D C' D' p (ent e).1 (ent e).2) := by
+    intro e
+    ext x y
+    simp only [lab, bitProj]
+    rw [hT e x y 1 1 (.inr rfl) (.inr rfl), hT e x y 1 0 (.inr rfl) (.inl rfl), hT e x y 0 1 (.inl rfl) (.inr rfl),
+      hT e x y 0 0 (.inl rfl) (.inl rfl)]
+  obtain ⟨T, h0, hreach, hlen⟩ := P.toForest.exists_steinerTree lab hstep t fun e => by
+    rw [hagree e]
+    exact rank_bitProj_editedEntry_le C D C' D' p _ _
+  have hB := SteinerRigidity.blockRigidity (F := K) (m := Fin a × Fin b) (n := Fin b × Fin c) a c
+    (SteinerRigidity.blockSubspace K fun x : Fin a × Fin b => x.1)
+    (SteinerRigidity.blockSubspace K fun y : Fin b × Fin c => y.2)
+    (SteinerRigidity.iSupIndep_blockSubspace _) (SteinerRigidity.iSupIndep_blockSubspace _) (univ.image ent)
+    (fun cell => bitProj (editedEntry C D C' D' p cell.1 cell.2))
+    (fun cell _ => ⟨colSpace_bitProj_editedEntry_le C D C' D' p _ _,
+      rowSpace_bitProj_editedEntry_le C D C' D' p _ _⟩) T h0 fun cell hcell => by
+      obtain ⟨e, _, rfl⟩ := mem_image.mp hcell
+      rw [← hagree e]
+      exact hreach e
+  calc ∑ e, Fintype.card {k // D (ent e).1 k * p k * D' k (ent e).2 ≠ 0}
+      ≤ ∑ e, (bitProj (editedEntry C D C' D' p (ent e).1 (ent e).2)).rank :=
+        Finset.sum_le_sum fun e _ => card_live_le_rank C D C' D' p _ _
+    _ = ∑ cell ∈ univ.image ent, (bitProj (editedEntry C D C' D' p cell.1 cell.2)).rank :=
+        (Finset.sum_image (f := fun cell : Fin a × Fin c => (bitProj (editedEntry C D C' D' p cell.1 cell.2)).rank)
+          fun e _ e' _ h => hent h).symm
+    _ ≤ T.length := hB
+    _ ≤ _ := hlen
 
 /-- The proof service's layer of a protocol (AGENTS.md's one proof service): live coins, messages and the verifier.
 A protocol is a service with a problem (`correct`) and an honest Solve. -/
