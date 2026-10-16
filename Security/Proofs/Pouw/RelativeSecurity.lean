@@ -3301,7 +3301,7 @@ def QLane.IsPiece {M : Type} : QLane M → Prop
   | .piece _ => True
   | _ => False
 
-instance {M : Type} (x : QLane M) : Decidable x.IsPiece := by
+instance instDecidableIsPiece {M : Type} (x : QLane M) : Decidable x.IsPiece := by
   cases x <;> simp only [QLane.IsPiece] <;> infer_instance
 
 theorem QLane.ite_isPiece {M : Type} [Fintype M] [DecidableEq M] (x : QLane M) (a : ℝ) :
