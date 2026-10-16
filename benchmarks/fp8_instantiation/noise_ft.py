@@ -24,7 +24,7 @@ attention `attention.evaluate` per window with LoRA unmerged.  16 WikiText-2 tes
     python noise_ft.py --table RESULTS.jsonl...
 
 Environment: NFT_STEPS (max optimizer steps), NFT_TRAIN_MIN (training wall budget, evaluations excluded), NFT_EVAL_AT
-(steps to evaluate at), NFT_SEEDS (noise seeds per evaluation), NFT_ACCUM (sequences per step), NFT_LR, NFT_RANK, NFT_TAG
+(steps to evaluate at), NFT_SEEDS (noise seeds per evaluation), NFT_ACCUM (sequences per step), NFT_LR, NFT_SCHED (const, or cos: cosine to lr/10 at NFT_STEPS), NFT_RANK, NFT_TAG
 (a suffix for the config's output directory and label).
 """
 from __future__ import annotations
@@ -331,6 +331,7 @@ def train(snapshot: str, windows: str, corpus: str, out_dir: str, config: str) -
     lr = float(os.environ.get("NFT_LR", "1e-4"))
     rank = int(os.environ.get("NFT_RANK", "16"))
     warm = 20
+    sched = os.environ.get("NFT_SCHED", "const")
     noise = CONFIGS[config][0]
     torch.manual_seed(1234)
     model = transformers.AutoModelForCausalLM.from_pretrained(snapshot, dtype=torch.bfloat16, attn_implementation="sdpa")
@@ -344,7 +345,7 @@ def train(snapshot: str, windows: str, corpus: str, out_dir: str, config: str) -
     params = [p for m in mods for p in (m.A, m.B)]
     opt = torch.optim.AdamW(params, lr=lr, betas=(0.9, 0.999), weight_decay=0.0)
     meta = {"config": config, "tag": os.environ.get("NFT_TAG", ""), "noise": noise, "steps": steps, "budget_s": budget, "eval_at": eval_at, "seeds": seeds,
-            "accum": accum, "lr": lr, "rank": rank, "alpha": 2 * rank, "warmup": warm, "seq": int(data.shape[1]),
+            "accum": accum, "lr": lr, "sched": sched, "rank": rank, "alpha": 2 * rank, "warmup": warm, "seq": int(data.shape[1]),
             "corpus_sequences": int(data.shape[0]), "lora_params": sum(p.numel() for p in params),
             "gpu": torch.cuda.get_device_name(), "torch": torch.__version__, "transformers": transformers.__version__}
     (out / "meta.json").write_text(json.dumps(meta, indent=1))
@@ -358,6 +359,8 @@ def train(snapshot: str, windows: str, corpus: str, out_dir: str, config: str) -
         set_noise(noise)
         for g in opt.param_groups:
             g["lr"] = lr * min(1.0, (step + 1) / warm)
+            if sched == "cos" and step >= warm:
+                g["lr"] = lr * (0.1 + 0.45 * (1 + math.cos(math.pi * min(1.0, (step - warm) / max(1, steps - warm)))))
         kls, ces = [], []
         for _ in range(accum):
             kl, ce = kd_step(model, data[seq_i % len(data)])
