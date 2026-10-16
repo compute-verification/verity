@@ -19,8 +19,8 @@ to the other.
   that a satisfying old witness reads as a witness of the parsed statement.
 * **The masked record**: a masked message's lanes are coefficient rows of the old padded code (`zkRowsOf`,
   `zkEnc_eq_encAt`), the read step reads the old `padWit` of them (`zkReadD_eq_padWit`), and the radius form's `θ` is
-  the old `padRadius` (`radius_zk`). The old masked bound's `CommittedPad` reads only the witness lanes (`padList` with
-  no extra lanes), so it bounds the distance of no whole masked column, which carries the reps' extra lanes too.
+  the old `padRadius` (`radius_zk`). A masked column is an opened row's witness lanes, so the old masked bound's
+  `CommittedPad` (`padList` with no extra lanes) reads exactly the masked columns.
 -/
 
 namespace Claims.Flock
@@ -176,8 +176,9 @@ theorem padWit_zkRowsOf {F : Type} [Field F] (c₀ : F) {lanes e cols t : ℕ} (
 /-- **The deployed masked read step reads the old padded witness** of the message's rows. -/
 theorem zkReadD_eq_padWit (i : ZkIdx) (M : ZkMessage 𝔽 (zkWidth i) (zkCols i) (zkPad i)) :
     zkReadD ⟨i, M⟩ = readTrace execArith i.m (zkLanes i) (zkCols i)
-      (padWit (FlockLevel3.GF128.of _root_.Flock.Zk.PAD_C) (zkRowsOf (FlockLevel3.GF128.of _root_.Flock.Zk.PAD_C) M)) := by
-  rw [padWit_zkRowsOf]
+      (padWit (e := 0) (FlockLevel3.GF128.of _root_.Flock.Zk.PAD_C)
+        (zkRowsOf (FlockLevel3.GF128.of _root_.Flock.Zk.PAD_C) M)) := by
+  rw [padWit_zkRowsOf (e := 0)]
   rfl
 
 theorem zkLevel_rate : ∀ i : ZkIdx, (zkLevel0 i.m).rate = 1 := by

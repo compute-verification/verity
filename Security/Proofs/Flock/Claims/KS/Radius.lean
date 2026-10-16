@@ -193,12 +193,11 @@ def wordLen (zk : Bool) (x : Claims.Msg) : ℕ :=
   | some (_, st) => 2 ^ (if zk then Claims.Flock.zkLevel0 st.m else Claims.Flock.plainLevel0 st.m).d
   | none => 0
 
-/-- **The zero column**: table 0's level-0 lanes (under `--zk`, with the extra lanes), each `0`. -/
+/-- **The zero column**: table 0's level-0 witness lanes, each `0`. -/
 noncomputable def zeroCol (zk : Bool) (x : Claims.Msg) : List 𝔽 :=
   match (tables zk x).head? with
   | some (_, st) =>
-    List.replicate (if zk then 2 ^ (Claims.Flock.zkLevel0 st.m).lanes + _root_.Flock.Zk.EXTRA_LANES
-      else 2 ^ (Claims.Flock.plainLevel0 st.m).lanes) 0
+    List.replicate (2 ^ (if zk then Claims.Flock.zkLevel0 st.m else Claims.Flock.plainLevel0 st.m).lanes) 0
   | none => []
 
 /-- **The plain radius form**: a trace's code has length `2^d` and radius `1 − √(2^cols/2^d) − 1/200`. -/

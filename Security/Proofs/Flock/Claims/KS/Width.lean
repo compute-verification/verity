@@ -9,7 +9,8 @@ import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 (`run_acc_next`, `act_decide_final`), whose statement is the statement (`checks`' first check,
 `Bridge.Custody.checks_ok`), so the run's columns are read at the statement's own table 0 (`acc_last`, `runOf_m`).
 `decodeProof` (`Zk.decode`) reads each opened level-0 row with exactly `2^lanes` (`2^lanes + EXTRA_LANES`) symbols
-(`decodeProof_rows`, `zkDecode_rows`), the zero column's width (`plain_colsOk`, `zk_colsOk`). That leaves `TableBoundθ`
+(`decodeProof_rows`, `zkDecode_rows`), so each column has the `2^lanes` witness lanes (under `--zk`, a row's first
+`2^lanes` symbols), the zero column's width (`plain_colsOk`, `zk_colsOk`). That leaves `TableBoundθ`
 and `ConflictTied` for `KSθ` at SHA-512 (`plain_KSθ_sha512`, `zk_KSθ_sha512`).
 -/
 
@@ -111,12 +112,13 @@ theorem plainRepColsOf_width {sh : Shape} {rounds : Array Round} {bytes : ByteAr
 
 theorem zkRepColsOf_width {sh : Shape} {rounds : Array Round} {bytes : ByteArray} {p : ℕ × List 𝔽}
     (hp : p ∈ Claims.Flock.zkRepColsOf sh rounds bytes) :
-    p.2.length = 2 ^ (sh.sched.levels.getD 0 default).lanes + Zk.EXTRA_LANES := by
+    p.2.length = 2 ^ (sh.sched.levels.getD 0 default).lanes := by
   unfold Claims.Flock.zkRepColsOf at hp
   split at hp
   · rename_i zp hzp
-    unfold Claims.Flock.zkRepCols at hp
-    obtain ⟨⟨pos, row⟩, hmem, rfl⟩ := List.mem_map.1 hp
+    obtain ⟨p', hp', rfl⟩ := List.mem_map.1 hp
+    unfold Claims.Flock.zkRepCols at hp'
+    obtain ⟨⟨pos, row⟩, hmem, rfl⟩ := List.mem_map.1 hp'
     have hrow : row ∈ zp.proof.ligerito.initialProof.rows :=
       Array.mem_toList_iff.1 (List.mem_of_mem_take (List.of_mem_zip hmem).2)
     simp [zkDecode_rows hzp row hrow]
@@ -132,9 +134,9 @@ theorem plainRunCols_width {r : Claims.Flock.ZkRun} {p : ℕ × List 𝔽} (hp :
   obtain ⟨y, -, hy⟩ := List.mem_flatMap.1 (mem_of_distinctBelow hp)
   exact plainRepColsOf_width hy
 
-/-- **A masked run's columns have level 0's `2^lanes + EXTRA_LANES` symbols.** -/
+/-- **A masked run's columns have level 0's `2^lanes` witness symbols.** -/
 theorem zkRunCols_width {r : Claims.Flock.ZkRun} {p : ℕ × List 𝔽} (hp : p ∈ Claims.Flock.zkRunCols r) :
-    p.2.length = 2 ^ (Claims.Flock.zkLevel0 r.m).lanes + Zk.EXTRA_LANES := by
+    p.2.length = 2 ^ (Claims.Flock.zkLevel0 r.m).lanes := by
   obtain ⟨y, -, hy⟩ := List.mem_flatMap.1 (mem_of_distinctBelow hp)
   exact zkRepColsOf_width hy
 
@@ -229,8 +231,7 @@ theorem acc_cols {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Cl
     {r : Fin ((V zk).k x) → Coin} (h : (Claims.run H P (V zk) x ω r).out = .acc) {q : ℕ} {u : List 𝔽}
     (hu : Claims.Flock.lookCol (cols zk (Claims.run H P (V zk) x ω r).seen) q = some u) :
     ∃ spec st, (tables zk x).head? = some (spec, st) ∧
-      u.length = if zk then 2 ^ (Claims.Flock.zkLevel0 st.m).lanes + Zk.EXTRA_LANES
-        else 2 ^ (Claims.Flock.plainLevel0 st.m).lanes := by
+      u.length = 2 ^ (if zk then Claims.Flock.zkLevel0 st.m else Claims.Flock.plainLevel0 st.m).lanes := by
   obtain ⟨s, spec, sts, f, hs, hf, hx⟩ := acc_last h
   unfold cols at hu
   split at hu
@@ -251,8 +252,8 @@ theorem acc_cols {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Cl
 
 theorem zeroCol_length {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
     (h : (tables zk x).head? = some (spec, st)) :
-    (zeroCol zk x).length = if zk then 2 ^ (Claims.Flock.zkLevel0 st.m).lanes + Zk.EXTRA_LANES
-      else 2 ^ (Claims.Flock.plainLevel0 st.m).lanes := by
+    (zeroCol zk x).length =
+      2 ^ (if zk then Claims.Flock.zkLevel0 st.m else Claims.Flock.plainLevel0 st.m).lanes := by
   unfold zeroCol
   rw [h]
   cases zk <;> simp
@@ -265,8 +266,8 @@ theorem plain_colsOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → 
   unfold wide
   rw [hl, zeroCol_length hh]
 
-/-- **`ColsOk` at the masked record**: an accepted run opens only columns of the zero column's width, extra lanes
-included. -/
+/-- **`ColsOk` at the masked record**: an accepted run opens only columns of the zero column's width, the witness
+lanes. -/
 theorem zk_colsOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
     Claims.Flock.ColsOk H (deployZk rel) zkRadius (wide true) := by
   intro x Ω P ω r q u hacc _ hu
