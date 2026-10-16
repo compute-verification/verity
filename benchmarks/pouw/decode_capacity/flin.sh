@@ -9,8 +9,8 @@
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=FILL \
 #     --send benchmarks/pouw/decode_capacity/flin.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/flin.sh"'
 #
-# FL_FLIN ("M:FW:NC:THR ..."), FL_STEP ("B:L:FW:NC:THR ..."), FL_NCU ("M:FW:NC:THR ...", ncu over flin's first launches),
-# FL_REPS, FL_GATE (0 skips CAP's gate)
+# FL_FLIN ("M:FW:NC:THR[:PDL] ..."), FL_STEP ("B:L:FW:NC:THR[:PDL] ..."), PDL 0 to launch each linear after the previous
+# grid finishes (FLIN_PDL), FL_NCU ("M:FW:NC:THR ...", ncu over flin's first launches), FL_REPS, FL_GATE (0 skips CAP's gate)
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -42,8 +42,8 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
     [ "$g" -eq 0 ] || exit 5
   fi
   for c in $FL_FLIN; do
-    IFS=: read -r m fw nc thr <<< "$c"
-    "$B/dcap" flin "$m" "$fw" "$nc" "$thr" "$FL_REPS" >> "$O/flin.jsonl" 2>> "$O/errors.txt" || echo "rc $? for flin $c" >> "$O/errors.txt"
+    IFS=: read -r m fw nc thr pdl <<< "$c"
+    FLIN_PDL=${pdl:-1} "$B/dcap" flin "$m" "$fw" "$nc" "$thr" "$FL_REPS" >> "$O/flin.jsonl" 2>> "$O/errors.txt" || echo "rc $? for flin $c" >> "$O/errors.txt"
   done
   q
   for c in $FL_NCU; do
@@ -56,8 +56,8 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
   done
   q
   for c in $FL_STEP; do
-    IFS=: read -r b l fw nc thr <<< "$c"
-    "$B/dcap" fstep "$b" "$l" "$fw" "$nc" "$thr" "$FL_REPS" >> "$O/fstep.jsonl" 2>> "$O/errors.txt" ||
+    IFS=: read -r b l fw nc thr pdl <<< "$c"
+    FLIN_PDL=${pdl:-1} "$B/dcap" fstep "$b" "$l" "$fw" "$nc" "$thr" "$FL_REPS" >> "$O/fstep.jsonl" 2>> "$O/errors.txt" ||
       echo "rc $? for fstep $c" >> "$O/errors.txt"
     q
   done

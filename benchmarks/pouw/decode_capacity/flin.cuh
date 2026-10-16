@@ -138,16 +138,26 @@ __global__ void __launch_bounds__(32 * (CWN * CWM + 1 + FW), 1) flin_k(const Fli
     asm volatile("fence.mbarrier_init.release.cluster;" ::: "memory");
   }
   __syncthreads();
+  // Launched with programmatic stream serialization, the next linear's CTA takes this SM as soon as this one leaves it:
+  // its filler warps start at once and its producer prefetches weights, while X, Z and D wait for this grid (griddepcontrol.wait).
+  asm volatile("griddepcontrol.launch_dependents;" ::: "memory");
   if (warp == CW) {  // producer
     if (lane == 0) {
       uint64_t pw, px;
       asm volatile("createpolicy.fractional.L2::evict_first.b64 %0, 1.0;" : "=l"(pw));
       asm volatile("createpolicy.fractional.L2::evict_last.b64 %0, 1.0;" : "=l"(px));
-      for (int u = u0, i = 0; u < u1; u++, i++) {
+      const int pre = min(ST, u1 - u0);
+      for (int i = 0; i < pre; i++) {
+        const int u = u0 + i;
+        mb_expect(&full[i], SB);
+        bulk_g2s(sm + i * SB, a.W + ((size_t)(u / KB) * KB + u % KB) * WB, WB, &full[i], pw);
+      }
+      asm volatile("griddepcontrol.wait;" ::: "memory");
+      for (int i = 0; i < pre; i++) bulk_g2s(sm + i * SB + WB, a.X + (size_t)((u0 + i) % KB) * XB, XB, &full[i], px);
+      for (int u = u0 + pre, i = pre; u < u1; u++, i++) {
         const int s = i % ST;
-        if (i >= ST)
-          while (!mb_try(&empty[s], ((i / ST) - 1) & 1)) {
-          }
+        while (!mb_try(&empty[s], ((i / ST) - 1) & 1)) {
+        }
         mb_expect(&full[s], SB);
         const int nt = u / KB, kb = u % KB;
         bulk_g2s(sm + s * SB, a.W + ((size_t)nt * KB + kb) * WB, WB, &full[s], pw);
@@ -165,6 +175,7 @@ __global__ void __launch_bounds__(32 * (CWN * CWM + 1 + FW), 1) flin_k(const Fli
   }
   // consumer
   const int wn = warp % CWN, wm = warp / CWN, g = lane >> 2, t = lane & 3;
+  asm volatile("griddepcontrol.wait;" ::: "memory");
   {
     const long long n4 = a.zn / 4, z0 = (long long)blockIdx.x * n4 / gridDim.x, z1 = (long long)(blockIdx.x + 1) * n4 / gridDim.x;
     int4* z = reinterpret_cast<int4*>(a.Z);
@@ -281,6 +292,7 @@ static int flin_smem(int M) {
   const FlinCfg c = flin_cfg(M);
   return c.ST * (FLIN_BN + M) * c.BK + 2 * c.ST * 8 + 16;
 }
+static bool g_pdl = true;  // FLIN_PDL=0 launches each linear only after the previous grid has finished
 template <int M, int BK, int ST, int CWN, int CWM, int FW, int NC>
 static void flin_go(const FlinArgs& a, int grid, cudaStream_t st) {
   static bool attr = false;
@@ -288,13 +300,26 @@ static void flin_go(const FlinArgs& a, int grid, cudaStream_t st) {
     CK(cudaFuncSetAttribute(flin_k<M, BK, ST, CWN, CWM, FW, NC>, cudaFuncAttributeMaxDynamicSharedMemorySize, flin_smem(M)));
     attr = true;
   }
-  flin_k<M, BK, ST, CWN, CWM, FW, NC><<<grid, 32 * (CWN * CWM + 1 + FW), flin_smem(M), st>>>(a);
+  cudaLaunchConfig_t cfg = {};
+  cfg.gridDim = dim3(grid);
+  cfg.blockDim = dim3(32 * (CWN * CWM + 1 + FW));
+  cfg.dynamicSmemBytes = flin_smem(M);
+  cfg.stream = st;
+  cudaLaunchAttribute at[1];
+  at[0].id = cudaLaunchAttributeProgrammaticStreamSerialization;
+  at[0].val.programmaticStreamSerializationAllowed = 1;
+  cfg.attrs = at;
+  cfg.numAttrs = g_pdl ? 1 : 0;
+  CK(cudaLaunchKernelEx(&cfg, flin_k<M, BK, ST, CWN, CWM, FW, NC>, a));
 }
 // the (FW, NC) pairs built for each M: FW = 0 is the GEMM alone
 template <int M, int BK, int ST, int CWN, int CWM>
 static bool flin_fw(const FlinArgs& a, int grid, int FW, int NC, cudaStream_t st) {
   const int k = FW == 0 ? 0 : FW * 10 + NC;
   if (k == 0) { flin_go<M, BK, ST, CWN, CWM, 0, 2>(a, grid, st); return true; }
+  if constexpr (M == 32) {
+    if (k == 114) { flin_go<M, BK, ST, CWN, CWM, 11, 4>(a, grid, st); return true; }
+  }
   if constexpr (M <= 64) {
     switch (k) {
       case 42: flin_go<M, BK, ST, CWN, CWM, 4, 2>(a, grid, st); return true;
@@ -325,7 +350,7 @@ static bool flin_launch(int M, const FlinArgs& a, int grid, int FW, int NC, cuda
   return false;
 }
 static const char* flin_built(int M) {
-  return M <= 64 ? "0, 4:2, 4:4, 8:2, 8:4" : M == 128 ? "0, 4:2, 4:4" : "0, 2:2, 2:4";
+  return M == 32 ? "0, 4:2, 4:4, 8:2, 8:4, 11:4" : M == 64 ? "0, 4:2, 4:4, 8:2, 8:4" : M == 128 ? "0, 4:2, 4:4" : "0, 2:2, 2:4";
 }
 
 // The step's linears through flin: every layer's weights tiled for M, X tiled for K = HID and K = FF, two output buffers
@@ -492,12 +517,12 @@ static int run_flin(Dev& d, int M, int FW, int NC, int thr, int reps) {
     const Rep mb = median(vb), m0 = median(v0), mf = median(vf), mb2 = median(vb2);
     const double base = (mb.ms + mb2.ms) / 2, cap = 1024.0 * d.sms * mf.mhz * 1e6;
     const double macs = (double)LAYERS * M * LN[j] * LK[j], bytes = (double)LAYERS * LN[j] * LK[j];
-    printf("{\"mode\": \"flin\", \"M\": %d, \"linear\": \"%s\", \"N\": %d, \"K\": %d, \"FW\": %d, \"NC\": %d, \"thr\": %d, "
+    printf("{\"mode\": \"flin\", \"pdl\": %d, \"M\": %d, \"linear\": \"%s\", \"N\": %d, \"K\": %d, \"FW\": %d, \"NC\": %d, \"thr\": %d, "
            "\"cublas_ms\": %.4f, \"cublas2_ms\": %.4f, \"flin_ms\": %.4f, \"fill_ms\": %.4f, \"flin_vs_cublas\": %.4f, "
            "\"slowdown\": %.4f, \"cublas_gb_s\": %.1f, \"flin_gb_s\": %.1f, \"useful_share\": %.4f, \"fill_share\": %.4f, "
            "\"mhz\": %.0f, \"watt\": %.1f, \"filler_steps\": %lld, \"idle_slots\": %lld, \"rec_checked\": %d, \"rec_bad\": %d, "
            "\"ctl_equal\": %d}\n",
-           M, LNAME[j], LN[j], LK[j], FW, NC, thr, mb.ms, mb2.ms, m0.ms, mf.ms, m0.ms / base, mf.ms / base,
+           (int)g_pdl, M, LNAME[j], LN[j], LK[j], FW, NC, thr, mb.ms, mb2.ms, m0.ms, mf.ms, m0.ms / base, mf.ms / base,
            bytes / (base * 1e-3) / 1e9, bytes / (m0.ms * 1e-3) / 1e9, macs / (mf.ms * 1e-3) / cap,
            t.macs / (mf.ms * 1e-3) / cap, mf.mhz, mf.watt, t.steps, t.idle, t.checked, t.bad, t.ctl_equal);
     fflush(stdout);
@@ -553,12 +578,12 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int reps) {
   const double step_macs = lin_macs + (double)B * VOCAB * HID + 2.0 * LAYERS * B * HQ * HD * (double)L;
   const Rep mb = median(vb), m0 = median(v0), mf = median(vf), mb2 = median(vb2);
   const double bms = (mb.ms + mb2.ms) / 2, cap = 1024.0 * d.sms * mf.mhz * 1e6;
-  printf("{\"mode\": \"fstep\", \"B\": %d, \"L\": %d, \"FW\": %d, \"NC\": %d, \"thr\": %d, \"coins\": [\"%016llx\", \"%016llx\"], "
+  printf("{\"mode\": \"fstep\", \"pdl\": %d, \"B\": %d, \"L\": %d, \"FW\": %d, \"NC\": %d, \"thr\": %d, \"coins\": [\"%016llx\", \"%016llx\"], "
          "\"kv_wrapped\": %s, \"step_macs\": %.6e, \"lin_macs\": %.6e, \"base_ms\": %.4f, \"base2_ms\": %.4f, \"fused0_ms\": %.4f, "
          "\"fused_ms\": %.4f, \"fused0_vs_base\": %.4f, \"slowdown\": %.4f, \"step_share_base\": %.5f, \"step_share_fused\": %.5f, "
          "\"fill_macs\": %.6e, \"fill_share\": %.5f, \"mhz\": %.0f, \"watt\": %.1f, \"filler_steps\": %lld, \"slots\": %lld, "
          "\"idle_slots\": %lld, \"rec_checked\": %d, \"rec_bad\": %d, \"ctl_equal\": %d, \"out_mismatches\": %llu, \"arms\": {",
-         B, L, FW, NC, thr, (unsigned long long)g_c0, (unsigned long long)g_c1, wrapped ? "true" : "false", step_macs, lin_macs,
+         (int)g_pdl, B, L, FW, NC, thr, (unsigned long long)g_c0, (unsigned long long)g_c1, wrapped ? "true" : "false", step_macs, lin_macs,
          mb.ms, mb2.ms, m0.ms, mf.ms, m0.ms / bms, mf.ms / bms, step_macs / (bms * 1e-3) / (1024.0 * d.sms * mb.mhz * 1e6),
          step_macs / (mf.ms * 1e-3) / cap, t.macs, t.macs / (mf.ms * 1e-3) / cap, mf.mhz, mf.watt, t.steps, t.slots, t.idle,
          t.checked, t.bad, t.ctl_equal, out_bad);

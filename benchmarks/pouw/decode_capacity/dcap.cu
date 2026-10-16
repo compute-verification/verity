@@ -1181,6 +1181,7 @@ int main(int argc, char** argv) {
   }
   const std::string mode = argv[1];
   g_graph = !(getenv("DCAP_NOGRAPH") && atoi(getenv("DCAP_NOGRAPH")));
+  g_pdl = !(getenv("FLIN_PDL") && !atoi(getenv("FLIN_PDL")));
   if (const char* cs = getenv("DFILL_COINS")) {
     if (strlen(cs) != 32 || sscanf(cs, "%16llx%16llx", (unsigned long long*)&g_c0, (unsigned long long*)&g_c1) != 2) {
       fprintf(stderr, "DFILL_COINS must be 32 hex digits\n");
