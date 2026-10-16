@@ -193,11 +193,13 @@ def law_of(params: dict, ell: int) -> dict:
 
 def spec_of(params: dict, ell: int) -> S.Spec:
     """P1's Spec of a window at level `ell`: the entries and W committed, subset:K′ of the level, the tile template's
-    Program and query as the check, and `LAYOUT` declared."""
+    Program and query as the check, and `LAYOUT` declared.  With ``registration_deadline`` in `params` (seconds on the
+    challenger's clock from the epoch's salt coin's release), the check carries it: `Pouw.AcceptsBy`'s td."""
     d = template(params["k"])
     return S.Spec(values=(S.Value(PORT, ENTRY_SCHEMA, "serve"), S.Value("W", W_SCHEMA, "epoch")),
                   selection=S.Law(f"subset:{law_of(params, ell)['k']}"),
-                  check=S.Check(PT.program_sha512(Program(d)), PT.template_instance_query(d)),
+                  check=S.Check(PT.program_sha512(Program(d)), PT.template_instance_query(d),
+                                registration_deadline=params.get("registration_deadline")),
                   public=tuple(S.Public(i, k, r) for i, k, r in LAYOUT), context=params["context"].encode())
 
 
@@ -631,8 +633,11 @@ class Challenger:
     `Recorded` in a replay); the window's draw coin keys `sampler` (Lean's draw, or its twin `python_sampler`).  A Spec
     fixes one law and K′ is a function of the registered level, so it holds one Stream per (stream name, level); each
     registration it accepted is held by name.  A control stream `replay`s an earlier draw and opens no coin, so a
-    control's verdicts are judged on the honest draw's units.  The window's Check has no proof deadline, so the streams'
-    clock decides nothing; it counts the challenger's reads of it unless `clock` is given."""
+    control's verdicts are judged on the honest draw's units.  The window's Check has no proof deadline.  Under a
+    ``registration_deadline`` the salt coin's opening reads the clock (its release), and each stream records the epoch's
+    salt at that release (`Stream.salt_released`) before its first registration, so a window received later than the
+    deadline, or before the salt is open, is refused (`late-registration`) and earns no credit.  Without one the clock
+    decides nothing; it counts the challenger's reads of it unless `clock` is given."""
 
     def __init__(self, params: dict, coins: Any, sampler: Sampler = python_sampler, budget: int = BUDGET,
                  clock: Callable[[], float] | None = None, record: OR.Record | None = None) -> None:
@@ -650,6 +655,8 @@ class Challenger:
         self.draws: dict[str, S.Draw] = {}
         self.sessions: dict[str, list[str]] = {}
         self.openings: dict[str, CoinOpening] = {}
+        self.salt_released_at: float | None = None
+        self._salted: set[tuple[str, int]] = set()
         self._key: Key | None = None
 
     def open(self, label: str, after: bytes) -> CoinOpening:
@@ -662,6 +669,8 @@ class Challenger:
         if why is not None:
             raise _refused("coin", f"the {label}'s {why}")
         self.openings[label] = o
+        if label == "salt" and self.params.get("registration_deadline") is not None:
+            self.salt_released_at = self.clock()
         return o
 
     def _of_record(self, name: str, check: Callable[..., Any], *args: Any) -> Any:
@@ -743,6 +752,10 @@ class Challenger:
         ell = level_of(rec)
         sampler = self._keyed if replay is None else (lambda law, n, d=self._drawn(replay): d.units)
         st = self.stream(stream, ell, sampler)
+        if (self.params.get("registration_deadline") is not None and self.salt_released_at is not None
+                and (stream, ell) not in self._salted):
+            st.salt_released(self.openings["salt"].coin, self.salt_released_at)
+            self._salted.add((stream, ell))
         own = ports(self.params, ell)
         st.ready()
         self.r1_r6(name, st, rec, own, list(S.check_public(st.spec, rec).codes))
