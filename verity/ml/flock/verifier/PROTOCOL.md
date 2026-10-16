@@ -1252,8 +1252,8 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
     `holo`, so exactly one net is accepted: a holo statement on plain parts refuses, and so does a plain statement on
     holo parts. With `--rec-inner`, V*'s statements are built at the verifier's own `--hide` (`holo` in
     `verity/rec-inner/v1`, `RecVStar.Inner.holo`), so a file's META `holo` must equal it, and every `VERDICT` line
-    carries it as `private_circuit`. The verifier refuses an inner shape with `holo` true until V*'s circuit writer
-    writes holo parts;
+    carries it as `private_circuit`. At `holo` true V*'s statements are its holo ones (`VStar.statementsHolo`: the parts
+    of `specHolo`, whose files carry META `holo`), and a part's message rounds are `holoRepRounds`', `h`'s among them;
   - the verifier computes `GfResiduals`' S at that shape (`Flock.RecAlgebra.structureOf`, `rec_algebra.structure`) and
     its row ports (`rec_residuals.spec`: one per round that absorbs elements, then `acc0` and `acc1` of 2), groups its
     residuals as `rec_residuals.parts` does, each residual in the first part of at most 64 regions, 160 `sha512x3`

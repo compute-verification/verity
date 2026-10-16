@@ -65,16 +65,17 @@ theorem cIndex_opening (k : ℕ) : cIndex s!"rec-opening-c{k}" = none := by
 /-! ## The statement's port -/
 
 /-- **An accepted part port names one of its rep's message rounds**: when the part name fixes its recursive shape and
-`checkMsgNames` accepts a circuit port named `m<i>`, the shape has its rep's rounds `rs`, and `i` is below their message
-rounds. -/
+`checkMsgNames` accepts a circuit port named `m<i>`, the shape has its rep's rounds `rs` (`holoRepRounds`' at a holo
+shape), and `i` is below their message rounds. -/
 theorem inner_round_lt_of_checkMsgNames
-    {p m kLog claims partNo i : ℕ} {name : String} {part : VStar.Part} {c : Flock.Circuit}
+    {p m kLog claims partNo i : ℕ} {name : String} {part : VStar.Part} {c : Flock.Circuit} {holo : Bool}
     (hp : RecResiduals.params name = some (m, kLog, claims, partNo))
-    (h : checkMsgNames (.inner p name part) c = .ok ())
+    (h : checkMsgNames (.inner p name part) c holo = .ok ())
     {q : Fin c.ports.size} (hq : c.ports[q].name = s!"m{i}") :
-    ∃ rs, repRounds m kLog claims = some rs ∧ i < (commitRounds rs).length := by
-  generalize hB : ((repRounds m kLog claims).map fun rs => (commitRounds rs).length).getD 0 = B
-  have hr : innerMsgRounds (.inner p name part) = some B := by
+    ∃ rs, (if holo then holoRepRounds else repRounds) m kLog claims = some rs ∧ i < (commitRounds rs).length := by
+  generalize hB : (((if holo then holoRepRounds else repRounds) m kLog claims).map
+    fun rs => (commitRounds rs).length).getD 0 = B
+  have hr : innerMsgRounds (.inner p name part) holo = some B := by
     simp [innerMsgRounds, hp, hB]
   have hn : msgRoundOutOfRange B c = none := by
     cases hx : msgRoundOutOfRange B c with
@@ -94,15 +95,15 @@ theorem inner_round_lt_of_checkMsgNames
     intro hle
     apply hi
     simp [hle]
-  cases hrs : repRounds m kLog claims with
+  cases hrs : (if holo then holoRepRounds else repRounds) m kLog claims with
   | none => rw [hrs] at hB; simp at hB; omega
   | some rs => rw [hrs] at hB; exact ⟨rs, rfl, by simp at hB; omega⟩
 
 /-- **`checkMsgNames` passing at a part or a part of R's opening**: each circuit port named `m<k>` is the name of one
 of the statement's message-round ports. -/
-theorem ownName_of_msgNames {s : VStar.Stmt} {c : Flock.Circuit}
+theorem ownName_of_msgNames {s : VStar.Stmt} {c : Flock.Circuit} {holo : Bool}
     (hs : (∃ j nm p, s = .inner j nm p) ∨ ∃ m cl j S ps nv, s = .opening m cl j S ps nv)
-    (h : checkMsgNames s c = .ok ()) {q : Fin c.ports.size} {k : ℕ}
+    (h : checkMsgNames s c holo = .ok ()) {q : Fin c.ports.size} {k : ℕ}
     (hq : c.ports[q].name = s!"m{k}") : ∃ e ∈ ownPorts s, e.1 = s!"m{k}" := by
   have hn : msgUnnamed s c = none := by
     rcases hs with ⟨j, nm, p, rfl⟩ | ⟨m, cl, j, S, ps, nv, rfl⟩ <;>
@@ -125,8 +126,8 @@ theorem ownName_of_msgNames {s : VStar.Stmt} {c : Flock.Circuit}
 
 /-- **A part's circuit port `m<k>` is its `rec-c<k>` message-round port**, read at both reps' rows, where
 `checkMsgNames` passes. -/
-theorem inner_port_of_msgNames {j : ℕ} {nm : String} {p : VStar.Part} {c : Flock.Circuit}
-    (h : checkMsgNames (.inner j nm p) c = .ok ()) {q : Fin c.ports.size} {k : ℕ} (hq : c.ports[q].name = s!"m{k}") :
+theorem inner_port_of_msgNames {j : ℕ} {nm : String} {p : VStar.Part} {c : Flock.Circuit} {holo : Bool}
+    (h : checkMsgNames (.inner j nm p) c holo = .ok ()) {q : Fin c.ports.size} {k : ℕ} (hq : c.ports[q].name = s!"m{k}") :
     (s!"m{k}", s!"rec-c{k}", #[some 0, some 1]) ∈ ownPorts (.inner j nm p) := by
   obtain ⟨e, he, he1⟩ := ownName_of_msgNames (.inl ⟨_, _, _, rfl⟩) h hq
   have he' := he
@@ -147,7 +148,7 @@ theorem inner_port_of_msgNames {j : ℕ} {nm : String} {p : VStar.Part} {c : Flo
 /-- **A part of R's opening's circuit port `m<k>` is its `rec-opening-c<k>` message-round port**, read at row 0 (R's
 one stream's), where `checkMsgNames` passes. -/
 theorem opening_port_of_msgNames {m cl j nv : ℕ} {S : Flock.RecOpen.GfS} {ps : List (String × ℕ)} {c : Flock.Circuit}
-    (h : checkMsgNames (.opening m cl j S ps nv) c = .ok ()) {q : Fin c.ports.size} {k : ℕ}
+    {holo : Bool} (h : checkMsgNames (.opening m cl j S ps nv) c holo = .ok ()) {q : Fin c.ports.size} {k : ℕ}
     (hq : c.ports[q].name = s!"m{k}") :
     (s!"m{k}", s!"rec-opening-c{k}", #[some 0]) ∈ ownPorts (.opening m cl j S ps nv) := by
   obtain ⟨e, he, he1⟩ := ownName_of_msgNames (.inr ⟨_, _, _, _, _, _, rfl⟩) h hq
@@ -171,7 +172,7 @@ theorem opening_of_name {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVSt
   obtain ⟨n1, n2, n3, n4⟩ := openingName_ne m c j
   obtain ⟨vsh, A, C, hA, hC, rfl, -⟩ := FlockC3.VStarList.statements_ok h
   rcases Array.mem_append.1 hs with hs | hs
-  · obtain ⟨_, _, _, -, -, -, rfl⟩ := FlockVBridge.Family.statements_eq hA
+  · obtain ⟨_, _, _, -, -, -, rfl⟩ := FlockVBridge.Family.statementsOf_eq hA
     simp only [Array.mem_append, List.mem_toArray, List.mem_map, List.mem_range] at hs
     rcases hs with ⟨l, -, rfl⟩ | ⟨j', -, rfl⟩
     · exact absurd hn (n1 _ _)
@@ -210,7 +211,7 @@ theorem inner_of_resName {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVS
   obtain ⟨n1, n2, n3⟩ := resName_ne m k c j
   obtain ⟨vsh, A, C, hA, hC, rfl, -⟩ := FlockC3.VStarList.statements_ok h
   rcases Array.mem_append.1 hs with hs | hs
-  · obtain ⟨_, _, _, -, -, -, rfl⟩ := FlockVBridge.Family.statements_eq hA
+  · obtain ⟨_, _, _, -, -, -, rfl⟩ := FlockVBridge.Family.statementsOf_eq hA
     simp only [Array.mem_append, List.mem_toArray, List.mem_map, List.mem_range] at hs
     rcases hs with ⟨l, -, rfl⟩ | ⟨j', -, rfl⟩
     · exact absurd hn (n1 _ _)
@@ -310,7 +311,7 @@ def MsgNamesAt (ish : RecVStar.Inner) (zs : Reg → L.Ω → List (Cm × (ℐ).C
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) : Prop :=
   ∀ R ω t R₂ τ o, FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o → ∀ s : Fin S,
     ∃ (ss : Array VStar.Stmt) (sv : VStar.Stmt), RecVStar.statements ish = .ok ss ∧ ss[(s : ℕ)]? = some sv ∧
-      RecVStar.checkMsgNames sv (Vs s).c = .ok ()
+      RecVStar.checkMsgNames sv (Vs s).c ish.holo = .ok ()
 
 /-- **Some outer proof is accepted** (named; at its history and registration). -/
 def AcceptedAt (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')

@@ -238,8 +238,8 @@ of each other, both ways.
 
 The audits it speaks of are those whose inner session's circuits are private: the verifier's own `--hide` sets the inner
 shape's `RecVStar.Inner.holo`, and every `VERDICT` line verified with `--rec-inner` carries it as `"private_circuit"`. A
-verdict with `"private_circuit": false` claims no circuit privacy. `RecVStar.statements` refuses a holo inner shape
-until V*'s circuit writer writes holo parts (`statements_holo`), so no audit the verifier accepts says true yet.
+verdict with `"private_circuit": false` claims no circuit privacy. At a holo inner shape `RecVStar.statements` lists
+V*'s holo statements (`FlockC3.VStarList.statements_holo`), whose parts' files carry META `holo`.
 
 `δ_{K*}` is `hidingGap My saltHash`, the commitments' hiding gap at hm96-sha512's pinned key `K*` (`ZkView.My`,
 `ZkView.saltHash`): the statistical distance of `(M(K*)·y, H(sp ‖ y))` from `(U, H(sp ‖ y))` for a uniform salt `y`.

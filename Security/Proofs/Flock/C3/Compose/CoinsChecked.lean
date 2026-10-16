@@ -37,8 +37,6 @@ theorem shape_of_statements {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : Re
   unfold RecVStar.statements at h
   dsimp only at h
   split at h
-  · cases h
-  split at h
   rotate_left
   · cases h
   rename_i sh hsh

@@ -119,6 +119,50 @@ theorem statements_eq {vsh : VStar.Algebra.Shape} {stmts : Array VStar.Stmt} (h 
         rw [foldl_push_map, foldl_push_map]
         simp [Std.Legacy.Range.size, List.range_eq_range']
 
+/-- **V*'s statements over a holo inner session** (`VStar/Holo.lean`, `statementsHolo`): `statements_eq`'s form, the
+parts `parts (specHolo vsh)`'s. -/
+theorem statementsHolo_eq {vsh : VStar.Algebra.Shape} {stmts : Array VStar.Stmt}
+    (h : VStar.statementsHolo vsh = .ok stmts) :
+    ∃ s sp ps, vsh.sched = .ok s ∧ VStar.Algebra.specHolo vsh = .ok sp ∧ VStar.parts sp = .ok ps ∧
+      stmts = ((List.range s.levels.size).map fun l => VStar.Stmt.recOpen l (2 ^ (s.levels[l]!).lanes)
+          ((s.levels[l]!).d - (s.levels[l]!).cap) (2 * (s.levels[l]!).q)).toArray ++
+        ((List.range ps.size).map fun j =>
+          VStar.Stmt.inner j s!"rec-residuals/m{vsh.m}-k{vsh.kLog}-c{vsh.claims}-p{j}" ps[j]!).toArray := by
+  unfold VStar.statementsHolo at h
+  cases hs : vsh.sched with
+  | error e => simp [hs, Bind.bind, Except.bind] at h
+  | ok s =>
+    cases hsp : VStar.Algebra.specHolo vsh with
+    | error e => simp [hs, hsp, Bind.bind, Except.bind] at h
+    | ok sp =>
+      cases hps : VStar.parts sp with
+      | error e => simp [hs, hsp, hps, Bind.bind, Except.bind] at h
+      | ok ps =>
+        simp only [hs, hsp, hps, Bind.bind, Except.bind, Pure.pure, Except.pure, Except.ok.injEq] at h
+        subst h
+        refine ⟨s, sp, ps, rfl, rfl, hps, ?_⟩
+        rw [← Array.toList_inj]
+        simp only [Array.toList_append, Array.toList_map, Array.toList_range, Array.toList_mapIdx]
+        congr 1
+        apply List.ext_getElem
+        · simp
+        · intro n _ h2
+          have hn : n < ps.size := by simpa using h2
+          simp [List.getElem_mapIdx, getElem!_pos ps n hn]
+
+/-- **V*'s statements over an inner session holo or plain** (`statementsOf`): `statements_eq`'s form, the parts
+`parts (specOf vsh holo)`'s. -/
+theorem statementsOf_eq {vsh : VStar.Algebra.Shape} {holo : Bool} {stmts : Array VStar.Stmt}
+    (h : VStar.statementsOf vsh holo = .ok stmts) :
+    ∃ s sp ps, vsh.sched = .ok s ∧ VStar.Algebra.specOf vsh holo = .ok sp ∧ VStar.parts sp = .ok ps ∧
+      stmts = ((List.range s.levels.size).map fun l => VStar.Stmt.recOpen l (2 ^ (s.levels[l]!).lanes)
+          ((s.levels[l]!).d - (s.levels[l]!).cap) (2 * (s.levels[l]!).q)).toArray ++
+        ((List.range ps.size).map fun j =>
+          VStar.Stmt.inner j s!"rec-residuals/m{vsh.m}-k{vsh.kLog}-c{vsh.claims}-p{j}" ps[j]!).toArray := by
+  cases holo
+  · exact statements_eq h
+  · exact statementsHolo_eq h
+
 /-- Statement `l` is level `l`'s openings. -/
 theorem statements_recOpen {vsh : VStar.Algebra.Shape} {stmts : Array VStar.Stmt}
     (h : VStar.statements vsh = .ok stmts) {s : Flock.Schedule} (hs : vsh.sched = .ok s) {l : ℕ}

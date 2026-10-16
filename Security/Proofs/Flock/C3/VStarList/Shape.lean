@@ -4,9 +4,9 @@ import Proofs.Flock.VBridge.Family.Structure
 /-!
 # Piece (h): the list's R at `mReg`, and `hp` as the inner shape's `sparse` entry
 
-The verifier's list (`RecVStar.statements`) is V*'s statements (`VStar.statements`, `rec-open` and `rec-residuals`),
-then candidate 3's (`candidate3Statements`): RecSparse at the inner shape's `sparse` entry, then R's levels and the
-parts of R's opening at META's `stacked`. `checkCandidate3` refuses a list with an opening off R's shape, and
+The verifier's list (`RecVStar.statements`) is V*'s statements (`VStar.statementsOf`, `rec-open` and `rec-residuals`,
+the parts of `specHolo` at a private inner shape: `statements_holo`), then candidate 3's (`candidate3Statements`):
+RecSparse at the inner shape's `sparse` entry, then R's levels and the parts of R's opening at META's `stacked`. `checkCandidate3` refuses a list with an opening off R's shape, and
 `candidate3Statements` RecSparse without R and an R off the two claims or off the bucket's `table_m`. So:
 
 * `SparseIs ish hp`: `hp` is the verifier's own, the inner shape's `sparse` entry (`[NU, ELL, S_LOG, T_LOG]`).
@@ -27,14 +27,13 @@ theorem eok_bind {ε α β : Type} {x : Except ε α} {f : α → Except ε β} 
   | error e => cases h
   | ok a => exact ⟨a, rfl, h⟩
 
-/-- **The verifier's list**: V*'s statements at the inner shape, then candidate 3's, and `checkCandidate3` passes. -/
+/-- **The verifier's list**: V*'s statements at the inner shape, holo where it is (`statementsOf`), then candidate 3's,
+and `checkCandidate3` passes. -/
 theorem statements_ok {i : Flock.RecVStar.Inner} {ss : Array VStar.Stmt} (h : Flock.RecVStar.statements i = .ok ss) :
-    ∃ vsh A C, VStar.statements vsh = .ok A ∧ Flock.RecVStar.candidate3Statements i = .ok C ∧ ss = A ++ C ∧
+    ∃ vsh A C, VStar.statementsOf vsh i.holo = .ok A ∧ Flock.RecVStar.candidate3Statements i = .ok C ∧ ss = A ++ C ∧
       Flock.RecVStar.checkCandidate3 i (A ++ C) = .ok () := by
   unfold Flock.RecVStar.statements at h
   dsimp only at h
-  split at h
-  · cases h
   split at h
   rotate_left
   · cases h
@@ -49,6 +48,16 @@ theorem statements_ok {i : Flock.RecVStar.Inner} {ss : Array VStar.Stmt} (h : Fl
   obtain ⟨u, hu, h⟩ := eok_bind h
   cases h
   exact ⟨_, A, C, hA, hC, rfl, hu⟩
+
+/-- **The verifier's list at a private inner shape**: V*'s holo statements (`statementsHolo`, the parts of
+`specHolo`), then candidate 3's. -/
+theorem statements_holo {i : Flock.RecVStar.Inner} {ss : Array VStar.Stmt} (h : Flock.RecVStar.statements i = .ok ss)
+    (hh : i.holo = true) :
+    ∃ vsh A C, VStar.statementsHolo vsh = .ok A ∧ Flock.RecVStar.candidate3Statements i = .ok C ∧ ss = A ++ C ∧
+      Flock.RecVStar.checkCandidate3 i (A ++ C) = .ok () := by
+  obtain ⟨vsh, A, C, hA, hC, e, hu⟩ := statements_ok h
+  rw [hh] at hA
+  exact ⟨vsh, A, C, hA, hC, e, hu⟩
 
 /-- **Candidate 3's statements**: none without a `sparse` entry; with one, RecSparse at it first, and R at the two
 claims and the bucket's `table_m` (which a `sparse` entry needs, `stacked_of_candidate3`). -/
@@ -207,7 +216,7 @@ theorem opening_of_list {i : Flock.RecVStar.Inner} {ss : Array VStar.Stmt} (h : 
     ∃ sp, i.sparse = some sp ∧ m = Flock.RecVStar.tableM sp ∧ c = Flock.RecVStar.STACKED_CLAIMS := by
   obtain ⟨vsh, A, C, hA, hC, rfl, hck⟩ := statements_ok h
   have hAo : VStar.Stmt.opening m c j S ports nv ∉ A := by
-    obtain ⟨s, sp, ps, -, -, -, rfl⟩ := FlockVBridge.Family.statements_eq hA
+    obtain ⟨s, sp, ps, -, -, -, rfl⟩ := FlockVBridge.Family.statementsOf_eq hA
     simp
   have hCo : VStar.Stmt.opening m c j S ports nv ∈ C := by
     rcases Array.mem_append.1 hs with h' | h'
