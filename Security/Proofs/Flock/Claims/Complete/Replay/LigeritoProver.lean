@@ -19,7 +19,8 @@ sent. Its first cap is the commitment's.
   (`PRuns.loop`), the transcript's steps (`PRuns.absorb`, the squeezes), the state's (`PRuns.modify`, `PRuns.get`), a
   message (`PRuns.sendMsg`), a nonce (`PRuns.powQ`, `PRuns.powC`, `PRuns.powB`), an out-of-domain value
   (`PRuns.oodPush`) and a commitment (`PRuns.commit`); then, against the model's own steps, a challenge
-  (`PRuns.challenge`), an out-of-domain intro (`PRuns.oodIntro`) and a level's query (`PRuns.query`).
+  (`PRuns.challenge`), a level's four challenges (`levelChals`), an out-of-domain intro (`PRuns.oodIntro`) and a level's
+  query (`PRuns.query`).
 -/
 
 namespace FlockComplete.Replay
