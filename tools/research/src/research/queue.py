@@ -729,9 +729,13 @@ class Queue:
         return entries
 
 
-#: what a change must touch to move most circuit-check targets' cache keys: the circuits package (every Definition imports its
-#: library), the checker, the lock and the workspace's member list (installed distributions), and a sidecar (the registries)
-_COLD_PREFIXES = ("verity/ml/circuits/", "tools/verity/circuit_check/")
+#: what a change must touch to move many circuit-check targets' cache keys: the circuits package (every Definition imports its
+#: library), the checker, the lock and the workspace's member list (installed distributions), a sidecar (the registries), and
+#: what every target's entry reads or the registries import (16 Oct: entries on node 1 each read about 70 files of vLLM's
+#: `program/` and these packages; #2114, which changed only `verity_vllm/pipeline/` and `config.py`, reran 907 targets, 1.8 h)
+_COLD_PREFIXES = ("verity/ml/circuits/", "tools/verity/circuit_check/", "integrations/vllm/verity_vllm/",
+                  "verity/core/protocols/pouw/", "verity/core/protocols/pous/", "verity/ml/flock/python/",
+                  "verity/ml/commitments/", "verity/ml/private_circuits/", "benchmarks/numerical/python/")
 
 
 def forces_cold(files: Iterable[str]) -> bool:

@@ -22,11 +22,12 @@ history's, `coinsEncoded_holoMap`) from those, with the check at every accepted 
 the sparse phases' and R's (`hn`) as hypotheses; `repsDrawn_holoMapAt` is it at the guarantee's coin types and
 `m := holoMap`. `hchk` is the covers check's last step (`checkCommitRounds_of_checkCovers`),
 so it holds where the covers check passes at the held record at every accepted outer proof (`hchk_of_held`), as
-`AcceptsC3` at the history would give it (`hchk_of_acceptsC3`). The checked sessions pass it there (`covers_checked`:
+`AcceptsC3` at the history would give it (`hchk_of_acceptsC3`). `repsDrawn_held` is `repsDrawn_holoMapAt` at the
+guarantee's hold at any sessions accepting only at a whole history and where the covers check passes, with `hn` the
+guarantee's `_htbl`, the schedule read off `holoStreams` (`holoStreams_eq`) and the coin count's room off the reps'
+forms at the class's public statement (`hA`). The checked sessions pass the check there (`covers_checked`:
 `ChecksC3`'s covers conjunct, which the verifier's run gives through `AcceptsC3`, `covers_of_acceptsC3`), so
-`repsDrawn_checked` is `repsDrawn_holoMapAt` at the checked sessions and the guarantee's hold, with `hchk` and the
-whole history theirs, `hn` the guarantee's `_htbl`, the schedule read off `holoStreams` (`holoStreams_eq`) and the coin
-count's room off the reps' forms at the class's public statement (`hA`).
+`repsDrawn_checked` is `repsDrawn_held` at them.
 -/
 
 namespace FlockC3.Reps
@@ -407,6 +408,44 @@ theorem repsDrawn_holoMapAt {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → R
       (fun i => (Flock.Guarantees.HoloStream.rep i).name tbl) fun _ q => q :=
   repsDrawn_holoMap hS hcl hrs hr halg hacc hleaf hpr hsv hf hcus (holoSel_first hS hcl hrs hr) hrd hn hchk
 
+/-- **`RepsDrawn` at the verifier's map at sessions accepting only at a whole history** (`hleaf`) **and only where the
+covers check passes at the guarantee's hold** (`hcov`): `repsDrawn_holoMapAt` with the round-for-round check
+`hchk_of_held` at `hcov`, the reps' streams and rounds `holoStreams`' (`holoStreams_eq`), and the coin count's room
+for both reps' rounds from the reps' forms (`heldBefore_rep_forms`, `length_kindCoinTys_holoKinds`) at the class's
+public statement (`hA`). -/
+theorem repsDrawn_held {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
+    {ish : Flock.RecVStar.Inner} {reg : Lean.Json} {wr : List (Cm × (ℐ).Coin) → Lean.Json × String}
+    {dg : ByteArray → ByteArray} {N k Rw : ℕ}
+    {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
+    {sh : Flock.Shape} {rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData}
+    {vals : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals}
+    {tbl : String} {bc : Cm → String → ℕ → List UInt8}
+    {Ls : List (Flock.Guarantees.HoloStream × Array Flock.RecVStar.SchedRound)}
+    (hS : Flock.Guarantees.holoStreams ish.m ish.kLog ish.claims ish.sparse ish.stacked = some Ls)
+    (hcl : 0 < ish.claims) (hA : repFormsAt (holoAt st hp) = repForms ish.m ish.kLog ish.claims)
+    (halg : AlgebraDecodes (I := ℐ) zs dg N k Rw sh rep) (hacc : AccChains (I := ℐ) zs dg N k Rw sh rep)
+    (hleaf : HLeafC3 zs dg N k Rw) (hpr : ProofOfVals zs dg N k Rw sh rep vals)
+    (hsv : SetupOfVals zs dg N k Rw src sh rep vals) (hf : FramesOfVals zs dg N k Rw sh rep vals)
+    (hcus : FlockSoundness.Assumptions.InnerRecordCustody wr (fun w => innerCommitsAt w.1 w.2 st reg) ish.sparse
+      (Flock.Guarantees.holoMap st hp Cm ish tbl bc))
+    (hrd : ∀ R ω t Lb i, (rep R ω t Lb i).rounds =
+      heldRounds (innerCommitsAt (wr t).1 (wr t).2 st reg) ((Flock.Guarantees.HoloStream.rep i).name tbl))
+    (htbl : ∀ i : Fin 2, (((Flock.Guarantees.HoloStream.rep i).name tbl).startsWith s!"{Flock.RecVStar.SPARSE}/" ||
+      ((Flock.Guarantees.HoloStream.rep i).name tbl).startsWith s!"{Flock.RecVStar.STACKED}/") = false)
+    (hcov : AtRep zs dg N k Rw sh rep fun _ _ t _ _ =>
+      ∀ c, Flock.Guarantees.innerHeld wr st reg t = some c → (Flock.RecVStar.checkCovers ish c).isOk = true) :
+    RepsDrawn zs dg N k Rw sh rep vals (holoSelOne ish tbl) (fun i => (Flock.Guarantees.HoloStream.rep i).name tbl)
+      fun _ q => q := by
+  obtain ⟨rs, Ls', hrs, rfl⟩ := holoStreams_eq hS
+  have hc := (heldBefore_rep_size 0 rs).symm.trans (heldBefore_rep_forms 0 hcl hrs)
+  have h1 := length_kindCoinTys_holoKinds (holoAt st hp)
+  have h2 := congrArg List.length (holoForms_eq (holoAt st hp))
+  rw [hA] at h2
+  simp only [List.length_append] at h2
+  exact repsDrawn_holoMapAt (held := fun w => innerCommitsAt w.1 w.2 st reg) hS hcl
+    ((Flock.Guarantees.HoloRepCoins.holoRepRounds_eq _ _ _).trans hrs) (by omega) halg hacc hleaf hpr hsv hf hcus hrd
+    htbl (hchk_of_held (held := fun w => innerCommitsAt w.1 w.2 st reg) hcov)
+
 /-- **`RepsDrawn` at the verifier's map at the checked sessions** and the guarantee's hold of the inner transcript
 (`innerCommitsAt`): `repsDrawn_holoMapAt` with the whole history (`hLeafC3_checked`) and the round-for-round check
 (`hchk_of_held` at `covers_checked`, `ChecksC3`'s covers conjunct) that the checked sessions give, the reps' streams
@@ -446,18 +485,9 @@ theorem repsDrawn_checked {ish : Flock.RecVStar.Inner} {reg : Lean.Json}
     (htbl : ∀ i : Fin 2, (((Flock.Guarantees.HoloStream.rep i).name tbl).startsWith s!"{Flock.RecVStar.SPARSE}/" ||
       ((Flock.Guarantees.HoloStream.rep i).name tbl).startsWith s!"{Flock.RecVStar.STACKED}/") = false) :
     RepsDrawn (Flock.Guarantees.checkedC3 ish (Flock.Guarantees.innerHeld wr st reg) coins bind rows zr hC h) dg N k Rw
-      sh rep vals (holoSelOne ish tbl) (fun i => (Flock.Guarantees.HoloStream.rep i).name tbl) fun _ q => q := by
-  obtain ⟨rs, Ls', hrs, rfl⟩ := holoStreams_eq hS
-  have hc := (heldBefore_rep_size 0 rs).symm.trans (heldBefore_rep_forms 0 hcl hrs)
-  have h1 := length_kindCoinTys_holoKinds (holoAt st hp)
-  have h2 := congrArg List.length (holoForms_eq (holoAt st hp))
-  rw [hA] at h2
-  simp only [List.length_append] at h2
-  exact repsDrawn_holoMapAt (held := fun w => innerCommitsAt w.1 w.2 st reg) hS hcl
-    ((Flock.Guarantees.HoloRepCoins.holoRepRounds_eq _ _ _).trans hrs) (by omega) halg hacc
-    (hLeafC3_checked hS₀ dg N k Rw) hpr hsv hf hcus hrd htbl
-    (hchk_of_held (held := fun w => innerCommitsAt w.1 w.2 st reg)
-      (covers_checked (cs := Flock.Guarantees.innerHeld wr st reg) hS₀))
+      sh rep vals (holoSelOne ish tbl) (fun i => (Flock.Guarantees.HoloStream.rep i).name tbl) fun _ q => q :=
+  repsDrawn_held hS hcl hA halg hacc (hLeafC3_checked hS₀ dg N k Rw) hpr hsv hf hcus hrd htbl
+    (covers_checked (cs := Flock.Guarantees.innerHeld wr st reg) hS₀)
 
 end holo
 
