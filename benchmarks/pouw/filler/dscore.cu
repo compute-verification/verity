@@ -33,8 +33,6 @@
 enum { PL_NONE = 0, PL_SPLIT = 1, PL_CO = 2 };
 static const char* PL_NAME[3] = {"none", "split", "co"};
 constexpr size_t MAX_BL = 786432;  // dcap's bound on batch x context
-constexpr int ALONE_CHUNKS = 200;  // the filler-alone calibration, ~0.2 s at 2^19 MMAs an SM a chunk
-constexpr int SOLO_CHUNKS = 16;    // a standalone block's least chunks
 
 static int setup(Dev& d, bool weights, size_t kv_want) {
   CK(cudaSetDevice(0));
@@ -204,16 +202,6 @@ static int run_dscore(Dev& d, int kind, int B, int L, int place, int fill_sms, i
     d.st = full;
     b.reps = time_work(d, w_full, K, &b.t0, &b.t1);
   };
-  // the chunks a pump finished inside (t0, t1], and the span from the first to the last
-  auto count = [](const DPump& pump, Block& b) {
-    double first = 0, last = 0;
-    for (double x : pump.t)
-      if (x > b.t0 && x <= b.t1) {
-        if (!b.chunks++) first = x;
-        last = x;
-      }
-    b.span = last - first;
-  };
   auto arm_block = [&](Block& b, int r) {
     if (!fill) {
       alone_block(b);
@@ -230,7 +218,7 @@ static int run_dscore(Dev& d, int kind, int B, int L, int place, int fill_sms, i
     d.st = ss;
     b.reps = time_work(d, w_arm, K, &b.t0, &b.t1);
     dpump_stop(pump);
-    count(pump, b);
+    count_done(pump, b.t0, b.t1, &b.chunks, &b.span);
     bad += round_close(b.rd, f, pump, 4);
     checked += 4;
     g_run_s = 0;
@@ -248,7 +236,7 @@ static int run_dscore(Dev& d, int kind, int B, int L, int place, int fill_sms, i
     }
     b.t1 = now_ms();
     dpump_stop(pump);
-    count(pump, b);
+    count_done(pump, b.t0, b.t1, &b.chunks, &b.span);
     bad += round_close(b.rd, f, pump, 4);
     checked += 4;
   };
