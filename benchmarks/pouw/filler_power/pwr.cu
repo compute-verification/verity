@@ -624,6 +624,8 @@ static void setup(Dev& d, bool need_w, int B, int L) {
   fprintf(stderr, "device %s %s, %d SMs\n", name, uuid, d.sms);
   CL(cublasLtCreate(&g_lt));
   CK(cudaMalloc(&g_ws, g_wsz));
+  CK(cudaMalloc(&g_ref, (size_t)256 * VOCAB * sizeof(int)));  // lt_make checks each candidate algorithm against these
+  CK(cudaMalloc(&g_cnt, sizeof *g_cnt));
   if (need_w) {
     for (int l = 0; l < LAYERS; l++)
       for (int j = 0; j < 4; j++) {
