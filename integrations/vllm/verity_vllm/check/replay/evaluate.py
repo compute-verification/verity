@@ -231,6 +231,14 @@ def plan_vu(pi: ProgramIndex, store: CommittedStore, vu: dict, *, arrive: int) -
     return why
 
 
+def by_member(got: dict[str, Any], ports: dict[str, str]) -> dict[str, Any]:
+    """A multi-output relation's values (keyed by its Definition's ports) under the member each port is committed as
+    (`ProgramIndex.member_of_port`; DeepGemmFp8Linear_v1: 0 -> x_q, 1 -> x_s, 2 -> 0 or part_rank<r>).  A port with no committed member
+    keeps its name unless that name is another port's member: it never stands in for it."""
+    out = {ports[p]: v for p, v in got.items() if p in ports}
+    return out | {p: v for p, v in got.items() if p not in ports and p not in out}
+
+
 def _replay_vu(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, int, int], np.ndarray | None], vu: dict, arrive: int,
                rec: dict[str, Any]) -> dict[str, Any]:
     r = pi.by_i[vu["i"]]
@@ -249,6 +257,8 @@ def _replay_vu(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, 
     except Exception as e:  # noqa: BLE001
         rec["why"] = f"evaluator error: {e!r}"[:300]
         return rec | {"result": None}
+    if len(got) > 1:
+        got = by_member(got, pi.member_of_port(vu["i"]))
     if d.get("plane") and d["plane"] not in got and len(got) == 1:
         got = {d["plane"]: next(iter(got.values()))}                             # [MAN-06f v3] a dense relation's `out` IS this row's plane (act = SiluMul out)
         rec["plane"] = d["plane"]
