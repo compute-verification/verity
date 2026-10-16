@@ -246,4 +246,105 @@ theorem law_bound (d : Flock.TemplateQuery.Desc) (query : Lean.Json) (rs : Array
         simp only [List.flatMap_map] at h1
         simpa [popUnits, List.flatMap_map, Function.comp_def, h1] using hm v hv
 
+/-- **`Slots.select` misses `B` no more often than the claims' `P_a(B)`** (`Properties.SampledProofs.DrawMisses`). -/
+theorem drawMisses : DrawMisses := by
+  intro rule d query table cm L B
+  set E := fun src : Fin L → Fin 256 => (Slots.select rule d query table cm (bytesOf src)).isOk = true ∧
+    Misses B (checkedOf (Slots.select rule d query table cm (bytesOf src))) with hE
+  have hev : ∀ src, E src → ∃ l c, Slots.select rule d query table cm (bytesOf src) = .ok (l, c) ∧ Misses B c := by
+    rintro src ⟨hok, hm⟩
+    cases h : Slots.select rule d query table cm (bytesOf src) with
+    | error e => rw [h] at hok; exact absurd hok (by simp [Except.isOk, Except.toBool])
+    | ok x => rw [h] at hm; exact ⟨x.1, x.2, rfl, hm⟩
+  have hzero : (∀ src, ¬ E src) → Claims.Pr E = 0 := fun h => by
+    rw [Claims.Pr_congr fun src => iff_false_intro (h src), Claims.Pr_false]
+  unfold missBound
+  cases hl : Slots.layout d query with
+  | error e =>
+    refine le_of_eq (hzero fun src hs => ?_)
+    obtain ⟨l', c, hs, -⟩ := hev src hs
+    have := (slots_select_ok _ _ _ _ _ _ _ _ hs).1
+    rw [hl] at this
+    exact absurd this (by simp)
+  | ok l =>
+  cases hD : slotDesign rule d query table with
+  | error e =>
+    refine le_of_eq (hzero fun src hs => ?_)
+    obtain ⟨l', c, hs, -⟩ := hev src hs
+    obtain ⟨-, draw, proved, read, hsel, -⟩ := slots_select_ok _ _ _ _ _ _ _ _ hs
+    obtain ⟨n, named, derived, hn, hnamed, hd, _units, _hsub, hcase⟩ := select_ok _ _ _ _ _ _ _ _ _ hsel
+    rcases hcase with ⟨rfl, -⟩ | ⟨hne, parsed, -, hp, -⟩
+    · rw [slotDesign_all d query table n named derived hn hnamed hd] at hD
+      exact absurd hD (by simp)
+    · rw [slotDesign_law rule d query table n named derived parsed hne hn hnamed hd hp] at hD
+      exact absurd hD (by simp)
+  | ok D =>
+  dsimp only
+  obtain ⟨rs, he, pop, rfl, hlays⟩ := layout_ok d query l hl
+  set S := Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)) with hS
+  have hperm : (popUnits S).Perm (List.range' 0 (Flock.TemplateQuery.population rs)) :=
+    strataOf_perm _ _ (partition_evaluate_tiles d query rs he)
+  obtain ⟨n, named, derived, hn, hnamed, hd, hDc⟩ := slotDesign_ok rule d query table D hD
+  have hnU : n = (popUnits S).length := by
+    rw [units_eq d query rs he] at hn
+    rw [hperm.length_eq, List.length_range']
+    exact (Except.ok.inj hn).symm
+  subst hnU
+  have hlenP : (popRUs pop).length = (popUnits S).length := by
+    obtain ⟨hu, -, -⟩ := laysOut_units _ _ hlays
+    rw [← List.length_map (f := fun r : Slots.RU => r.unit),
+      show (popRUs pop).map (·.unit) = (popUnits S).map some from hu, List.length_map]
+  have hstep : ∀ src, E src → window (popUnits S).length (popRUs (inputClass d)).length B = ∅ ∧
+      ∃ units : Array ℕ, (∀ v ∈ window 0 (popUnits S).length B, (popUnits S).getD v 0 ∉ units) ∧
+        ((rule = .all ∧ units = Array.range (popUnits S).length) ∨
+          (rule ≠ .all ∧ ∃ parsed read', Draw.flockLaw (lawObj named derived) (popUnits S).length = .ok parsed ∧
+            Draw.drawUnits (derived.getD parsed) (popUnits S).length (bytesOf src) = .ok (units, read'))) := by
+    intro src hs
+    obtain ⟨l', c, hs, hm⟩ := hev src hs
+    obtain ⟨hl', draw, proved, read, hsel, rfl⟩ := slots_select_ok _ _ _ _ _ _ _ _ hs
+    rw [hl] at hl'
+    obtain rfl := (Except.ok.inj hl')
+    obtain ⟨hW1, hW0⟩ := misses_layout S pop (inputClass d) hlays (inputClass_rus d) proved B hm
+    obtain ⟨n', named', derived', hn', hnamed', hd', units, hsub, hcase⟩ := select_ok _ _ _ _ _ _ _ _ _ hsel
+    rw [hn] at hn'
+    obtain rfl := Except.ok.inj hn'
+    rw [hnamed] at hnamed'
+    obtain rfl := Except.ok.inj hnamed'
+    rw [hd] at hd'
+    obtain rfl := Except.ok.inj hd'
+    exact ⟨hW1, units, fun v hv hu => hW0 v hv (hsub _ hu), hcase⟩
+  by_cases hW1 : window (popUnits S).length (popRUs (inputClass d)).length B = ∅
+  swap
+  · rcases hDc with ⟨-, rfl⟩ | ⟨-, -, -, rfl⟩ <;>
+    · rw [hzero fun src hs => hW1 (hstep src hs).1, pa_slots, hlenP]
+      simp [hW1]
+  rcases hDc with ⟨hrule, rfl⟩ | ⟨hne, parsed, hp, rfl⟩
+  · rw [pa_slots, hlenP]
+    simp only [hW1, ↓reduceIte, mul_one]
+    by_cases hW0 : window 0 (popUnits S).length B = ∅
+    · simp only [OneStage.Pa, hW0, ↓reduceIte]
+      exact Claims.Pr_le_one _
+    · simp only [OneStage.Pa, hW0, ↓reduceIte]
+      refine le_of_eq (hzero fun src hs => ?_)
+      obtain ⟨-, units, hW0', hcase⟩ := hstep src hs
+      rcases hcase with ⟨-, rfl⟩ | ⟨hr, -⟩
+      · obtain ⟨v, hv⟩ := Finset.nonempty_iff_ne_empty.2 hW0
+        have hvl := Finset.mem_range.1 (window_subset _ _ _ hv)
+        refine hW0' v hv (Array.mem_range.2 ?_)
+        rw [List.getD_eq_getElem _ _ hvl]
+        have := List.mem_range'.1 (hperm.subset (List.getElem_mem hvl))
+        rw [hperm.length_eq, List.length_range']
+        omega
+      · exact absurd hrule hr
+  · rw [pa_slots, hlenP]
+    simp only [hW1, ↓reduceIte, mul_one]
+    refine le_trans (Claims.Pr_mono fun src hs => ?_)
+      (law_bound d query rs he pop hlays named table derived parsed hd hp _ (window_subset _ _ _) L)
+    obtain ⟨-, units, hW0, hcase⟩ := hstep src hs
+    rcases hcase with ⟨hr, -⟩ | ⟨-, parsed', read', hp', hu⟩
+    · exact absurd hr hne
+    · rw [hp] at hp'
+      obtain rfl := Except.ok.inj hp'
+      exact ⟨units, read', hu, hW0⟩
+
 end Properties.SampledProofs.SecurityProofs
