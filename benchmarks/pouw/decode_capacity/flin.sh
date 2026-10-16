@@ -15,7 +15,8 @@
 # attention filler blocks' PDL (FATT_PDL: 0 none, 1 with, 2 with their filler warps starting early), ANC their warps'
 # chains (FATT_NC, 4 unless set), APS 1 those blocks persistent on the step's SMs (FATT_PERSIST), FL_NCU ("M:FW:NC:THR ...", ncu over flin's first launches; "none" skips), FL_NCU_STEP
 # ("B:L:FW:NC:THR:AFW[:ANC[:APS]] ...", ncu's tensor-pipe counters over one step's attention blocks and first linear, each with
-# filler warps; FL_NCU_SECTIONS adds those ncu sections and keeps the report with its details, raw and SASS pages), FL_REPS,
+# filler warps; FL_NCU_SECTIONS adds those ncu sections over the attention blocks only and keeps the report with its
+# details, raw and SASS pages), FL_REPS,
 # FL_GATE (0 skips CAP's gate)
 set -uo pipefail
 export O=${OUT:?}
@@ -64,14 +65,16 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
     IFS=: read -r b l fw nc thr afw anc aps <<< "$c"
     n="$O/ncu-fstep-$b-$l-$fw-$afw-${anc:-4}-${aps:-0}"
     # fstep first runs the attention blocks of layer 0 with their filler warps, then its first linear with filler warps
-    nf() { FATT_NC=${anc:-4} FATT_PERSIST=${aps:-0} ncu --clock-control none -k regex:"flin_k|fqk_k|fpv_k" --launch-count 3 \
+    nf() { FATT_NC=${anc:-4} FATT_PERSIST=${aps:-0} ncu --clock-control none -k regex:"$1" --launch-count "$2" \
       --metrics gpu__time_duration.sum,dram__throughput.avg.pct_of_peak_sustained_elapsed,sm__inst_executed_pipe_tensor.sum,sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_elapsed \
-      "$@" "$B/dcap" fstep "$b" "$l" "$fw" "$nc" "$thr" "$afw" 0 1; }
+      "${@:3}" "$B/dcap" fstep "$b" "$l" "$fw" "$nc" "$thr" "$afw" 0 1; }
     if [ -z "${FL_NCU_SECTIONS:-}" ]; then
-      nf --csv > "$n.csv" 2>&1
+      nf "flin_k|fqk_k|fpv_k" 3 --csv > "$n.csv" 2>&1
     else
+      # the attention blocks only: flin_k fails to launch under the full sections
       s=(); for x in $FL_NCU_SECTIONS; do s+=(--section "$x"); done
-      nf "${s[@]}" -o "$n" > "$n.log" 2>&1 && ncu --import "$n.ncu-rep" --csv --page details > "$n.csv" 2>&1 &&
+      nf "fqk_k|fpv_k" 2 "${s[@]}" -o "$n" > "$n.log" 2>&1
+      ncu --import "$n.ncu-rep" --csv --page details > "$n.csv" 2>&1 &&
         ncu --import "$n.ncu-rep" --csv --page raw > "$n-raw.csv" 2>&1 &&
         ncu --import "$n.ncu-rep" --csv --page source --print-source sass > "$n-sass.csv" 2>&1
     fi
