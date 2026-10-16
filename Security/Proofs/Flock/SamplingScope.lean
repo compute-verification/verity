@@ -247,7 +247,8 @@ def toyFlock : Flock.Deploy Bool ℕ Unit where
   V := toyV
   parse _ := none
   scopeCheck _ := false
-  cols _ := []
+  table _ _ := none
+  cols _ _ := []
   enc _ _ := 0
   len _ := 0
   θ _ := 0
