@@ -107,8 +107,8 @@ suite runs in one process.
 still running then has its process group killed and fails as timed out (`timed_out` in --json), so a hung test costs the check
 an hour, not its slot until the run's own timeout.
 
-`--mem-gb GB` (`check` passes its slot's share) bounds a parallel suite that declares `[tool.verity.tests] worker_gb`, what one
-of its xdist workers may reach, to as many workers as GB holds at that size.
+`--mem-gb GB` (`check` passes its slot's share) bounds a parallel suite to as many xdist workers as GB holds at its `[tool.verity.tests]
+worker_gb`, what one of them may reach, else at `TEST_PROCESS_GB`.
 """
 from __future__ import annotations
 
@@ -1512,10 +1512,11 @@ class Slots:
 
 
 def wide_workers(s: Suite, n: int, mem_gb: float | None) -> int:
-    """A parallel suite's xdist workers on a lane of ``n`` processes: fewer where ``mem_gb`` holds fewer at its `worker_gb`."""
-    if mem_gb is None or s.worker_gb <= 0:
+    """A parallel suite's xdist workers on a lane of ``n`` processes: fewer where ``mem_gb`` holds fewer at its `worker_gb`, else
+    at `TEST_PROCESS_GB` (16 Oct: verity_core_protocols_pous_check's undeclared workers reached 11 GB each)."""
+    if mem_gb is None:
         return n
-    return max(1, min(n, int(mem_gb // s.worker_gb)))
+    return max(1, min(n, int(mem_gb // (s.worker_gb if s.worker_gb > 0 else TEST_PROCESS_GB))))
 
 
 def serial_slots(seconds: list[float | None], parallel: int, jobs: int) -> int:
@@ -1594,7 +1595,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="test processes at once, a parallel suite's xdist workers included (default: the CPUs this process may use, "
                          f"at most one per {TEST_PROCESS_GB} GB of available memory)")
     ap.add_argument("--mem-gb", type=float, default=None, metavar="GB",
-                    help="the memory the tests may use: a parallel suite that declares worker_gb runs at most GB / worker_gb workers")
+                    help=f"the memory the tests may use: a parallel suite runs at most GB / worker_gb workers ({TEST_PROCESS_GB} GB undeclared)")
     ap.add_argument("--logs", type=Path, help="write each suite's log and report here (default: under the cache)")
     ap.add_argument("--json", type=Path, help="write the outcome of every selected suite here")
     ap.add_argument("--run", metavar="RUN", help="the recorded run this is (check passes its own): kept with each pass, so a reuse of it "

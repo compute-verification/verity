@@ -95,8 +95,9 @@ a `sys.path` entry another test file added: every suite runs alone.
   (637 s in one process, 209 s on four). Its tests must then run in any order and in any process. Session and module
   fixtures are built once per worker, so keep them cheap. Declare it only after the suite passes
   `uv run tools/verity/check/suites.py SUITE --fresh` a few times. A parallel suite whose workers are big declares
-  `worker_gb` (one worker's peak), and `check` then runs it on at most as many workers as its slot's memory holds, after
-  circuit-check's share. C-Flock's workers peak at 15.6 GB.
+  `worker_gb` (one worker's peak; undeclared counts as 9 GB). `check` then runs it on at most as many workers as its share
+  of the slot's memory holds: what circuit-check leaves, halved between pytest and lean-suites. C-Flock's workers peak at
+  15.6 GB.
 - In `check`, a suite still running after an hour (`SUITE_TIMEOUT_S`) has its process group killed and fails as timed out. A
   suite that honestly needs longer declares `timeout_s` under `[tool.verity.tests]`, with a comment giving its longest pass.
   The bound is flat, not a multiple of a suite's measured time: a suite slowed by memory load on a shared node would then

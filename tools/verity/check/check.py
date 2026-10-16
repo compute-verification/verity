@@ -992,7 +992,8 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     suites = [py, str(ROOT / "tools" / "verity" / "check" / "suites.py")]
     slot_gb = int(m) if (m := os.environ.get(SLOT.SLOT_MEM_ENV, "")).isdigit() else None
     with_cc = only is None or "circuit-check" in names
-    tests_gb = None if slot_gb is None else slot_gb - cc_mem_gb(slot_gb, beside) if with_cc else slot_gb
+    # pytest and lean-suites run at once, each with this share: what circuit-check leaves, halved
+    tests_gb = None if slot_gb is None else (slot_gb - cc_mem_gb(slot_gb, beside) if with_cc else slot_gb) // 2
     tail = ["--jobs", str(a), *([] if cache else ["--fresh"]), *(["--mem-gb", str(tests_gb)] if tests_gb is not None else []),
             *(["--run", os.environ["RESEARCH_RUN_ID"]] if os.environ.get("RESEARCH_RUN_ID") else [])]
     lean = lean_steps(out, cache, urls)
