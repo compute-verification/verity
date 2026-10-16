@@ -215,8 +215,8 @@ theorem servedWaits_runs_le {R W' Op Dr : Type} (H : Msg → Msg) (run : R → T
 theorem EO_runs_pt {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
     (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) (hS : SessionAccepts D) (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω)
-    (r₀ : Fin (D.V.k x) → Coin) (c : (EO H D I DO decO).C x) :
-    (((EO H D I DO decO).eval H P x ω r₀ c).2.2 : ℝ) ≤ 1 + ∑ s : Fin (D.nS x),
+    (r₀ : Fin (D.V.k x) → Coin) (c : (EO D I DO decO).C x) :
+    (((EO D I DO decO).eval H P x ω r₀ c).2.2 : ℝ) ≤ 1 + ∑ s : Fin (D.nS x),
       (if (sessRun H D P x ω s r₀).out = .acc then (1 : ℝ) else 0) *
         ∑ i, (waitRuns (fun d => sessRun H D P x ω s (fork (offO H D I DO P x ω s r₀) r₀ d)) (D.nums x s).k
           ((List.finRange (D.nums x s).cap).map (c s i)) 0 : ℝ) := by
@@ -248,10 +248,10 @@ session accepting: the judged run, then session `s`'s waits over forks at its fi
 theorem EO_runs_exp {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
     (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) (hS : SessionAccepts D) :
-    ExtractRunsExpLe H (EO H D I DO decO) fun x =>
+    ExtractRunsExpLe H (EO D I DO decO) fun x =>
       1 + ∑ s : Fin (D.nS x), (((D.nums x s).waits * (D.nums x s).k : ℕ) : ℝ) := by
   intro x Ω P ω
-  have hpt := fun p : (Fin (D.V.k x) → Coin) × (EO H D I DO decO).C x => EO_runs_pt H D I DO decO hS x P ω p.1 p.2
+  have hpt := fun p : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => EO_runs_pt H D I DO decO hS x P ω p.1 p.2
   refine (Ex_mono hpt).trans ?_
   rw [Ex_add, Ex_const, Ex_sum]
   refine add_le_add_right (Finset.sum_le_sum fun s _ => ?_) 1

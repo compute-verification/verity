@@ -40,9 +40,9 @@ theorem served_eq {Coin W W₂ Op : Type} [Fintype Coin] [Nonempty Coin] [Inhabi
 theorem efficient_of_EO {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
     (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T)
-    (hle : ExtractRunsLe H (EO H D I DO decO) fun x =>
+    (hle : ExtractRunsLe H (EO D I DO decO) fun x =>
       1 + ∑ s : Fin (D.nS x), (D.nums x s).waits * (D.nums x s).cap)
-    (hexp : ExtractRunsExpLe H (EO H D I DO decO) fun x =>
+    (hexp : ExtractRunsExpLe H (EO D I DO decO) fun x =>
       1 + ∑ s : Fin (D.nS x), (((D.nums x s).waits * (D.nums x s).k : ℕ) : ℝ)) :
     Efficient H D I DO decO := by
   unfold Efficient E
@@ -78,7 +78,7 @@ theorem viewing_runs {R : Type} (H : Msg → Msg) (run : R → Trace) (f : Seen 
 theorem EO_runs_le {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
     (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) :
-    ExtractRunsLe H (EO H D I DO decO) fun x => 1 + ∑ s : Fin (D.nS x), (D.nums x s).waits * (D.nums x s).cap := by
+    ExtractRunsLe H (EO D I DO decO) fun x => 1 + ∑ s : Fin (D.nS x), (D.nums x s).waits * (D.nums x s).cap := by
   intro x Ω P ω r₀ c
   simp only [Extractor.eval, EO, RP.eval]
   split_ifs
@@ -98,7 +98,7 @@ theorem EO_runs_le {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabit
 theorem efficient_le {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
     (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) :
-    ExtractRunsLe H (E H D I DO decO) fun x => (1 + I.waits (xI D x) * I.cap (xI D x)) *
+    ExtractRunsLe H (E D I DO decO) fun x => (1 + I.waits (xI D x) * I.cap (xI D x)) *
       (1 + ∑ s : Fin (D.nS x), (D.nums x s).waits * (D.nums x s).cap) := by
   unfold E
   rw [served_eq]

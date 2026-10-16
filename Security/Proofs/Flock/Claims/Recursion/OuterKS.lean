@@ -243,10 +243,10 @@ theorem castCoins_lists {Coin : Type} [Inhabited Coin] {W W' K K' k : ℕ} (hW :
 theorem EOs_eval_acc {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
     (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) (x : Msg) (s : ℕ) {Ω : Type} (P : Prover Ω) (ω : Ω)
-    (r : Fin (D.V.k x) → Coin) (c : (EOs H D I DO decO s).C x) (hacc : (run H P D.V x ω r).out = .acc) :
-    ((EOs H D I DO decO s).eval H P x ω r c).1 =
-      ((firstWait (D.nums x s).k DO.cols (Flock.assemble H DO.parse decO DO.read (sessStmt H D I P x ω s r))
-        (Flock.check H DO.parse (sessStmt H D I P x ω s r))
+    (r : Fin (D.V.k x) → Coin) (c : (EOs D I DO decO s).C x) (hacc : (run H P D.V x ω r).out = .acc) :
+    ((EOs D I DO decO s).eval H P x ω r c).1 =
+      ((firstWait (D.nums x s).k DO.cols (Flock.assemble DO.parse decO DO.read (sessStmt H D I P x ω s r))
+        (Flock.check DO.parse (sessStmt H D I P x ω s r))
         ((List.finRange (D.nums x s).waits).map fun i => (List.finRange (D.nums x s).cap).map fun j =>
           fork (offO H D I DO P x ω s r) r (c i j))).eval H
         (servedRun H (viewing (D.session x s)) (run H P D.V x ω))).1.map fun w => (sessStmt H D I P x ω s r, w) := by
@@ -256,9 +256,9 @@ theorem EOs_eval_acc {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhab
 
 theorem flockE_eval_acc {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
     (H : Msg → Msg) (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (Q : Prover Unit) (y : Msg)
-    (σ₀ : Fin (DO.V.k y) → Coin) (ρ : (Flock.E H DO decO).C y) (hacc : (run H Q DO.V y () σ₀).out = .acc) :
-    ((Flock.E H DO decO).eval H Q y () σ₀ ρ).1 =
-      ((firstWait (DO.k y) DO.cols (Flock.assemble H DO.parse decO DO.read y) (Flock.check H DO.parse y)
+    (σ₀ : Fin (DO.V.k y) → Coin) (ρ : (Flock.E DO decO).C y) (hacc : (run H Q DO.V y () σ₀).out = .acc) :
+    ((Flock.E DO decO).eval H Q y () σ₀ ρ).1 =
+      ((firstWait (DO.k y) DO.cols (Flock.assemble DO.parse decO DO.read y) (Flock.check DO.parse y)
         ((List.finRange (DO.waits y)).map fun i => (List.finRange (DO.cap y)).map (ρ i))).eval H
         (run H Q DO.V y ())).1 := by
   simp only [Extractor.eval, Flock.E, ERep, RP.eval, Trace.seen, hacc, ↓reduceIte]
@@ -280,8 +280,8 @@ theorem sessionRuns_fork {Coin W Col T : Type} [Inhabited Coin] {H : Msg → Msg
   exact h
 
 theorem sessR_ext_map {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
-    (H : Msg → Msg) (DO : Flock.Deploy Coin Col T) (x y : Msg) (o : Option Flock.Wit) :
-    (sessR H DO).ext x (o.map fun w => (y, w)) ↔ (Flock.R H DO.parse).ext y o := by
+    (DO : Flock.Deploy Coin Col T) (x y : Msg) (o : Option Flock.Wit) :
+    (sessR DO).ext x (o.map fun w => (y, w)) ↔ (Flock.R DO.parse).ext y o := by
   cases o <;> rfl
 
 /-- **Session `s`'s failure at a fork is the outer Flock's at the session's prover**: on an accepted fork at the
@@ -291,16 +291,16 @@ theorem bad_fork {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited
     {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     (hS : SessionAccepts D) (hR : SessionRuns H D I DO) (decO : List (ℕ × Col) → List T) (x : Msg)
     (s : Fin (D.nS x)) {Ω : Type} (P : Prover Ω) (ω : Ω) (r d : Fin (D.V.k x) → Coin)
-    (c : (EOs H D I DO decO s).C x)
+    (c : (EOs D I DO decO s).C x)
     (hW : DO.waits (sessStmt H D I P x ω s r) = (D.nums x s).waits)
     (hK : DO.cap (sessStmt H D I P x ω s r) = (D.nums x s).cap)
     (hk : DO.k (sessStmt H D I P x ω s r) = (D.nums x s).k)
     (h : (run H P D.V x ω (fork (offO H D I DO P x ω s r) r d)).out = .acc ∧
-      ¬ (sessR H DO).ext x ((EOs H D I DO decO s).eval H P x ω (fork (offO H D I DO P x ω s r) r d) c).1) :
+      ¬ (sessR DO).ext x ((EOs D I DO decO s).eval H P x ω (fork (offO H D I DO P x ω s r) r d) c).1) :
     (run H (sessP H D I DO P x ω s r) DO.V (sessStmt H D I P x ω s r) ()
         (sessCoins (offO H D I DO P x ω s r) d _)).out = .acc ∧
-      ¬ (Flock.R H DO.parse).ext (sessStmt H D I P x ω s r)
-        ((Flock.E H DO decO).eval H (sessP H D I DO P x ω s r) (sessStmt H D I P x ω s r) ()
+      ¬ (Flock.R DO.parse).ext (sessStmt H D I P x ω s r)
+        ((Flock.E DO decO).eval H (sessP H D I DO P x ω s r) (sessStmt H D I P x ω s r) ()
           (sessCoins (offO H D I DO P x ω s r) d _) (castCoins hW hK (offO H D I DO P x ω s r) _ c)).1 := by
   obtain ⟨hacc, hbad⟩ := h
   have hrun := sessionRuns_fork hR x s P ω r d
@@ -388,9 +388,9 @@ theorem prefix_bad_le {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inha
     (hN : SessionNums D DO) (hε : TableErrNonneg D) (hRd : SessionRounds D I DO) (hS : SessionAccepts D)
     (hR : SessionRuns H D I DO) (decO : List (ℕ × Col) → List T) (hdec : decOK DO decO) (x : Msg)
     (s : Fin (D.nS x)) {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin) :
-    Pr (fun p : (Fin (D.V.k x) → Coin) × (EOs H D I DO decO s).C x =>
+    Pr (fun p : (Fin (D.V.k x) → Coin) × (EOs D I DO decO s).C x =>
       (run H P D.V x ω (fork (offO H D I DO P x ω s r) r p.1)).out = .acc ∧
-        ¬ (sessR H DO).ext x ((EOs H D I DO decO s).eval H P x ω (fork (offO H D I DO P x ω s r) r p.1) p.2).1) ≤
+        ¬ (sessR DO).ext x ((EOs D I DO decO s).eval H P x ω (fork (offO H D I DO P x ω s r) r p.1) p.2).1) ≤
       (D.nums x s).κ + Real.sqrt ((D.nums x s).γ * sessPrB H D I DO P x ω s r) := by
   classical
   obtain ⟨hk', hW, hK, hN₀, hεt, hwt⟩ := hN x s ((run H P D.V x ω r).msgs.take (I.V.k (xI D x)))
@@ -406,7 +406,7 @@ theorem prefix_bad_le {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inha
   have hle : offO H D I DO P x ω s r + DO.V.k (sessStmt H D I P x ω s r) ≤ D.V.k x := hRd x s _
   unfold sessPrB
   split_ifs with hA
-  · have hφ : UnifMap (fun p : (Fin (D.V.k x) → Coin) × (EOs H D I DO decO s).C x =>
+  · have hφ : UnifMap (fun p : (Fin (D.V.k x) → Coin) × (EOs D I DO decO s).C x =>
         ((), sessCoins (offO H D I DO P x ω s r) p.1 (DO.V.k (sessStmt H D I P x ω s r)),
           castCoins hW hK (offO H D I DO P x ω s r) (DO.V.k (sessStmt H D I P x ω s r)) p.2)) :=
       UnifMap.comp ((unifMap_sessCoins _ _ hle).prod (unifMap_castCoins hW hK _ _ hle)) UnifMap.unit
@@ -417,18 +417,18 @@ theorem prefix_bad_le {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inha
       unfold Flock.γ Nums.γ
       rw [hk', hwt]
     calc _ ≤ _ := Pr_mono fun p hp => bad_fork hS hR decO x s P ω r p.1 p.2 hW hK hkk hp
-      _ = PrBad H DO.V (Flock.R H DO.parse) (Flock.E H DO decO) (sessStmt H D I P x ω s r)
+      _ = PrBad H DO.V (Flock.R DO.parse) (Flock.E DO decO) (sessStmt H D I P x ω s r)
             (sessP H D I DO P x ω s r) :=
           hφ.Pr fun t : Unit × (Fin (DO.V.k (sessStmt H D I P x ω s r)) → Coin) ×
-              (Flock.E H DO decO).C (sessStmt H D I P x ω s r) =>
+              (Flock.E DO decO).C (sessStmt H D I P x ω s r) =>
             (run H (sessP H D I DO P x ω s r) DO.V (sessStmt H D I P x ω s r) t.1 t.2.1).out = .acc ∧
-              ¬ (Flock.R H DO.parse).ext (sessStmt H D I P x ω s r)
-                ((Flock.E H DO decO).eval H (sessP H D I DO P x ω s r) (sessStmt H D I P x ω s r) t.1 t.2.1
+              ¬ (Flock.R DO.parse).ext (sessStmt H D I P x ω s r)
+                ((Flock.E DO decO).eval H (sessP H D I DO P x ω s r) (sessStmt H D I P x ω s r) t.1 t.2.1
                   t.2.2).1
       _ ≤ _ := hF decO hdec _ Unit _
       _ = _ := by rw [hκ, hγ]
   · rw [mul_zero, Real.sqrt_zero, add_zero]
-    calc _ ≤ Pr (fun _ : (Fin (D.V.k x) → Coin) × (EOs H D I DO decO s).C x => False) :=
+    calc _ ≤ Pr (fun _ : (Fin (D.V.k x) → Coin) × (EOs D I DO decO s).C x => False) :=
           Pr_mono fun p hp => hA ⟨p.1, hp.1⟩
       _ = 0 := Pr_false
       _ ≤ _ := (D.nums x s).κ_nonneg (hε x s)
@@ -440,7 +440,7 @@ theorem PrBad_EOs_le {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhab
     (hN : SessionNums D DO) (hε : TableErrNonneg D) (hRd : SessionRounds D I DO) (hS : SessionAccepts D)
     (hR : SessionRuns H D I DO) (decO : List (ℕ × Col) → List T) (hdec : decOK DO decO) (x : Msg)
     (s : Fin (D.nS x)) {Ω : Type} [Fintype Ω] (P : Prover Ω) :
-    PrBad H D.V (sessR H DO) (EOs H D I DO decO s) x P ≤
+    PrBad H D.V (sessR DO) (EOs D I DO decO s) x P ≤
       Ex (fun p : Ω × (Fin (D.V.k x) → Coin) =>
         (D.nums x s).κ + Real.sqrt ((D.nums x s).γ * sessPrB H D I DO P x p.1 s p.2)) := by
   unfold PrBad
@@ -590,7 +590,7 @@ theorem outerKS_sharp {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inha
     (hN : SessionNums D DO) (hε : TableErrNonneg D) (hRd : SessionRounds D I DO) (hS : SessionAccepts D)
     (hR : SessionRuns H D I DO) (decO : List (ℕ × Col) → List T) (hdec : decOK DO decO) (x : Msg) (Ω : Type)
     [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (s : Fin (D.nS x)) :
-    PrBad H D.V (sessR H DO) (EOs H D I DO decO s) x P ≤
+    PrBad H D.V (sessR DO) (EOs D I DO decO s) x P ≤
       (D.nums x s).κ + Real.sqrt ((D.nums x s).γ * (D.V.k x / (D.nums x s).rounds) * PrB H D.V P x) := by
   have hZ0 : ∀ p : Ω × (Fin (D.V.k x) → Coin), 0 ≤ sessPrB H D I DO P x p.1 s p.2 := fun p =>
     sessPrB_nonneg H D I DO P x p.1 s p.2
@@ -610,7 +610,7 @@ theorem outerKS_sharp {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inha
       exact (Ex_const 0).le
     · rw [div_mul_eq_mul_div, le_div_iff₀ (by exact_mod_cast hpos), mul_comm (D.V.k x : ℝ)]
       exact Ex_sessPrB_le hN hRd hR x s P
-  calc PrBad H D.V (sessR H DO) (EOs H D I DO decO s) x P
+  calc PrBad H D.V (sessR DO) (EOs D I DO decO s) x P
       ≤ Ex fun p : Ω × (Fin (D.V.k x) → Coin) =>
           (D.nums x s).κ + Real.sqrt ((D.nums x s).γ * sessPrB H D I DO P x p.1 s p.2) :=
         PrBad_EOs_le hF hN hε hRd hS hR decO hdec x s P
@@ -656,9 +656,9 @@ theorem KS_of_flockKS {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inha
 theorem KSFlock_of_flockKS {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
     [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (DI DO : Flock.Deploy Coin Col T) (hF : Flock.KS H DO)
     (hRef : Refuses H D) (hRounds : ∀ x, DI.V.k (xI D x) ≤ D.V.k x) (hN : SessionNums D DO) (hε : TableErrNonneg D)
-    (hRd : ∀ decI, SessionRounds D (Inner.ofFlock H DI decI) DO) (hS : SessionAccepts D)
-    (hR : ∀ decI, SessionRuns H D (Inner.ofFlock H DI decI) DO)
-    (hI : ∀ decI, decOK DI decI → InnerKS H D (Inner.ofFlock H DI decI) DO) : KSFlock H D DI DO :=
+    (hRd : ∀ decI, SessionRounds D (Inner.ofFlock DI decI) DO) (hS : SessionAccepts D)
+    (hR : ∀ decI, SessionRuns H D (Inner.ofFlock DI decI) DO)
+    (hI : ∀ decI, decOK DI decI → InnerKS H D (Inner.ofFlock DI decI) DO) : KSFlock H D DI DO :=
   KSFlock_of H D DI DO hRef hRounds (fun decI _ => outerKS_of_flockKS hF hN hε (hRd decI) hS (hR decI)) hI
 
 end Claims.Recursion
