@@ -15,7 +15,7 @@
 # commitments' lowest, each call's commitments released with the next call's GEMM, so they get only the K SMs the GEMM
 # leaves while it runs), tiles[g] (a CTA a tile, not persistent), greenK (the
 # commitments in a green context of K SMs, the GEMMs in one of the rest), old (r0 on the committer's default path, not its
-# small one).
+# small one), and a leading d on any of them (the default path).
 set -uo pipefail
 export O=${OUT:?} D=benchmarks/e2e_slice
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -61,6 +61,7 @@ export PIPE_CFGS=${PIPE_CFGS:-"old r0 r1 r17 r30 r41 r60 r1g r17g r30g r41g r60g
 cfg_env() {
   local c=$1 e="CG_SMALL=1"
   [ "$c" = old ] && { echo "CG_SMALL=0"; return; }
+  [[ $c == d* ]] && { e="CG_SMALL=0"; c=${c#d}; }
   [[ $c == *g ]] && { e="$e WG_PRIO=gemm"; c=${c%g}; }
   case $c in tiles) e="$e WG_GRID=tiles" ;; green*) e="$e WG_GREEN=${c#green}" ;; r*) e="$e WG_RESERVE=${c#r}" ;; esac
   echo "$e"
