@@ -117,8 +117,15 @@ proof workers' results land here as theorems or as named hypotheses. The definit
   valid at `p = ¾` for degree-2 errors (`StagePlay.valid_sgame`, `StagedPlay.game_staged`), and `RoundsHypKSt` gives
   `RoundsHyp` with the stage floors summed, `F₀ = St κ L n n' B` (`roundsHyp_of_staged`), so for affine products the
   floor has neither a luck nor a chain hypothesis (`certifiedFraction120θ_staged_40`). Decode's deferred edit, every
-  operand committed before one draw, is `St = 1` (`certifiedFraction120θ_decode_40`). Overlapping stages (chunks in
-  flight, no node barrier) are outside it: their cost side needs the joint-projection Theorem E½ (r5 V.3).
+  operand committed before one draw, is `St = 1` (`certifiedFraction120θ_decode_40`).
+* Overlapping stages (chunks in flight, no node barrier) and stages of different shapes (Theorem K∥,
+  `note:20261016T0908Z-draft-rs-d1e-stage-coins-r2` §2.2 and §2.5): with the round's run one straight-line program
+  over every draw's bits, fixed before its first draw (`RoundsHypKOv`), K's count is local to one row of one draw,
+  every other draw's bits at 0 (`extZ`), and row purity adds the rows' bounds over every draw at any depth
+  (`SlpG.cells_card_le_ov`). The luck is the spot check's on the round's bits, so `F₀ = κ L Σ_t n_t n'_t B_t`, every
+  stage's cell-blocks once (`roundsHyp_of_overlap`, `certifiedFraction120θ_overlap_40`), with no joint projection.
+  `RoundsHypKSt` allows what `RoundsHypKOv` doesn't, a stage's program reading earlier draws; overlap with that
+  (RS-E-REF r3 III.1's adaptive model) is open (r2 §2.5).
 * Theorem H (round 6 §6, merges priced) is not needed for the re-encoded design: the chain lemma covers it in every
   arithmetic (RS-E-REF r4 IV.3). It stays proved as the alternative with merges priced, including `_H` of route (c).
   In the quad model, with merges at `h ≥ 2K/3` slots, each useful cell costs
@@ -5124,7 +5131,8 @@ window's game is the staged spot-check game of the prover's play (`StagedPlay.ga
 - the run is charged at least `κ` a product over every stage of every round (cost additivity: a stage's interval,
   from its draw to its outputs' commitment, holds no other draw), less the noise reads `V`.
 
-Decode's deferred edit, every operand of the round's products committed before one draw, is the case `St = 1`. -/
+Decode's deferred edit, every operand of the round's products committed before one draw, is the case `St = 1`.
+Overlapping stages, and stages of different shapes, are `RoundsHypKOv`. -/
 def RoundsHypKSt (Mc : Machine) (S : Service) (R St : ℕ) (Vmax δb δz κ : ℝ) (n L np B n' : ℕ) {Ar : Type}
     [CommRing Ar] (wt : Fin np → Ar) (Ok : ((DBits n L np B n' → Ar) → Ar) → Prop) : Prop :=
   ∃ e : S.Seed ≃ Paths (DStage St n L np B n') R, ∀ (Ω' : Type) [Fintype Ω']
@@ -5207,6 +5215,290 @@ theorem roundsHyp_of_staged {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb 
         gcongr with w _ s
         exact (mul_le_mul_of_nonneg_left (hcor w s) (Nat.cast_nonneg L)).trans (hprod w s)
       _ ≤ Mc.charge M (e.symm x, r) := hcharge
+
+section Overlap
+
+variable {St : ℕ} {ι : Fin St → Type} [∀ t, Fintype (ι t)] [∀ t, DecidableEq (ι t)] {R : Type} [CommRing R]
+
+/-- Draw `t`'s bits `z`, every other draw's bits at 0. -/
+noncomputable def extZ (t : Fin St) (z : ι t → R) : (Σ t, ι t) → R := Function.extend (Sigma.mk t) z 0
+
+omit [∀ t, Fintype (ι t)] [∀ t, DecidableEq (ι t)] in
+theorem extZ_mk (t : Fin St) (z : ι t → R) (v : ι t) : extZ t z ⟨t, v⟩ = z v :=
+  sigma_mk_injective.extend_apply z 0 v
+
+omit [∀ t, Fintype (ι t)] [∀ t, DecidableEq (ι t)] in
+theorem extZ_ne (t : Fin St) (z : ι t → R) {t' : Fin St} (h : t' ≠ t) (v : ι t') : extZ t z ⟨t', v⟩ = 0 := by
+  rw [extZ, Function.extend_apply']
+  · rfl
+  · rintro ⟨a, ha⟩
+    exact h (congrArg Sigma.fst ha).symm
+
+omit [∀ t, DecidableEq (ι t)] in
+theorem sum_extZ_mul (t : Fin St) (z : ι t → R) (g : (Σ t, ι t) → R) :
+    ∑ b, g b * extZ t z b = ∑ v, g ⟨t, v⟩ * z v := by
+  rw [Fintype.sum_sigma, Finset.sum_eq_single t]
+  · exact Finset.sum_congr rfl fun v _ => by rw [extZ_mk]
+  · intro t' _ ht
+    exact Finset.sum_eq_zero fun v _ => by rw [extZ_ne t z ht, mul_zero]
+  · simp
+
+/-- A joint bit-affine operand with every other draw's bits at 0: an operand on draw `t`'s bits. -/
+def BitAff.restrict (t : Fin St) (A : BitAff (Σ t, ι t) R) : BitAff (ι t) R := ⟨A.c, fun v => A.α ⟨t, v⟩⟩
+
+omit [∀ t, DecidableEq (ι t)] in
+theorem BitAff.eval_extZ (t : Fin St) (A : BitAff (Σ t, ι t) R) (z : ι t → R) :
+    A.eval (extZ t z) = (A.restrict t).eval z := by
+  simp only [BitAff.eval, BitAff.restrict, sum_extZ_mul]
+
+/-- An operand on draw `t`'s bits as a joint operand. -/
+noncomputable def BitAff.lift (t : Fin St) (A : BitAff (ι t) R) : BitAff (Σ t, ι t) R := ⟨A.c, extZ t A.α⟩
+
+omit [∀ t, DecidableEq (ι t)] in
+theorem BitAff.eval_lift (t : Fin St) (A : BitAff (ι t) R) (z : (Σ t, ι t) → R) :
+    (A.lift t).eval z = A.eval fun v => z ⟨t, v⟩ := by
+  simp only [BitAff.eval, BitAff.lift]
+  congr 1
+  calc ∑ b, extZ t A.α b * z b = ∑ b, z b * extZ t A.α b := Finset.sum_congr rfl fun _ _ => mul_comm _ _
+    _ = ∑ v, z ⟨t, v⟩ * A.α v := sum_extZ_mul t A.α z
+    _ = ∑ v, A.α v * z ⟨t, v⟩ := Finset.sum_congr rfl fun _ _ => mul_comm _ _
+
+omit [∀ t, Fintype (ι t)] in
+theorem extZ_bitInd (t : Fin St) (U : Finset (ι t)) :
+    extZ t (bitInd U : ι t → R) = bitInd (U.map ⟨Sigma.mk t, sigma_mk_injective⟩) := by
+  funext ⟨t', v⟩
+  by_cases h : t' = t
+  · subst h
+    rw [extZ_mk]
+    simp [bitInd]
+  · rw [extZ_ne t _ h]
+    simp only [bitInd, Finset.mem_map, Function.Embedding.coeFn_mk]
+    split_ifs with h'
+    · obtain ⟨a, -, ha⟩ := h'
+      exact absurd (congrArg Sigma.fst ha).symm h
+    · rfl
+
+omit [∀ t, Fintype (ι t)] in
+theorem bitInd_map_mk (t : Fin St) (U : Finset (ι t)) :
+    (fun v => (bitInd (U.map ⟨Sigma.mk t, sigma_mk_injective⟩) : (Σ t, ι t) → R) ⟨t, v⟩) = bitInd U := by
+  funext v
+  simp [bitInd]
+
+/-- A product of two bit-affine operands on any bits (`AffProd` on bits that are not split in two). -/
+def AffMul {V : Type} [Fintype V] (π : (V → R) → R) : Prop := ∃ A B : BitAff V R, ∀ z, π z = A.eval z * B.eval z
+
+/-- A program whose products have affine operands computes words of degree 2, on any bits. -/
+theorem SlpG.cubeQuad_val_mul {V : Type} [Fintype V] [DecidableEq V] {N : ℕ} (P : SlpG V R N)
+    (hOk : ∀ j, P.isProd j = true → AffMul (P.prod j)) (j : Fin N) : CubeQuad fun z => P.val z j := by
+  refine CubeQuad.congr (fun z => (P.val_eq z j).symm)
+    ((CubeQuad.sum univ fun i _ => ?_).add (cubeQuad_aff _))
+  by_cases hc : P.coef j i = 0
+  · exact cubeQuad_zero.congr fun z => by rw [hc, zero_mul]
+  · obtain ⟨A, B, hAB⟩ := hOk i (P.isProd_of_coef_ne_zero j i hc)
+    exact ((cubeQuad_mul A B).congr fun z => (hAB z).symm).mul_left _
+
+end Overlap
+
+section OverlapRound
+
+variable {St : ℕ} {R : Type} [CommRing R] {n B n' : Fin St → ℕ} {L np : ℕ}
+
+/-- Stage `t`'s targets, read on draw `t`'s bits, are of degree 2 on the round's bits. -/
+theorem cubeQuad_dPrefix_mk (t : Fin St) (pc : Fin (n t) → Fin (B t) → Fin L → R)
+    (vq : Fin (B t) → Fin L → Fin (n' t) → R) (w : Fin np → R) (i : Fin (n t)) (l : Fin (n' t)) (b : ℕ) :
+    CubeQuad fun z : (Σ t, DBits (n t) L np (B t) (n' t)) → R => dPrefix pc vq w i l b fun v => z ⟨t, v⟩ := by
+  simp only [dPrefix, dIncr]
+  refine CubeQuad.sum univ fun t' _ => ?_
+  by_cases h : t'.val ≤ b
+  · simp only [h, ↓reduceIte]
+    exact CubeQuad.sum univ fun j _ => (cubeQuad_mul ((dP pc w i t' j).lift t) ((dX vq t' j l).lift t)).congr
+      fun z => by rw [BitAff.eval_lift, BitAff.eval_lift]
+  · simp only [h, ↓reduceIte]
+    exact cubeQuad_zero
+
+open Classical in
+/-- **Overlapping draws add up** (Theorem K∥, RS-D1E r2 §2.2): a round's run over every draw's bits, with products
+of affine operands, row-pure across the rows of every draw, has at least `L / c` products per certified cell-block
+of every stage. Per stage `t` and row: with every other draw's bits at 0 (`extZ`), the products are affine products
+on draw `t`'s bits, their coefficients unchanged, so the chain bound counts the products feeding the row's certified
+words; row purity makes the counts add over every row of every draw, whatever intervals the products lie in. -/
+theorem SlpG.cells_card_le_ov {w : Fin np → R} {c : ℕ}
+    (hc : ∀ t, ChainBound R (n t) L np (B t) (n' t) w (fun π => AffProd π) c) {N : ℕ}
+    (P : SlpG (Σ t, DBits (n t) L np (B t) (n' t)) R N) (hOk : ∀ j, P.isProd j = true → AffMul (P.prod j))
+    (pc : ∀ t, Fin (n t) → Fin (B t) → Fin L → R) (vq : ∀ t, Fin (B t) → Fin L → Fin (n' t) → R)
+    (word : (Σ t, DCells (n t) (n' t) (B t)) → Fin N) (cor : ∀ t, Finset (DCells (n t) (n' t) (B t)))
+    (hT : ∀ t, ∀ e ∈ cor t, ∀ U : Finset (DBits (n t) L np (B t) (n' t)), U.card ≤ 2 →
+      P.val (extZ t (bitInd U)) (word ⟨t, e⟩) = dPrefix (pc t) (vq t) w e.1 e.2.1 e.2.2.val (bitInd U))
+    (hpure : ∀ t, ∀ e ∈ cor t, ∀ t', ∀ e' ∈ cor t', (⟨t, e.1⟩ : Σ t, Fin (n t)) ≠ ⟨t', e'.1⟩ → ∀ k,
+      P.coef (word ⟨t, e⟩) k ≠ 0 → P.coef (word ⟨t', e'⟩) k = 0) :
+    L * ∑ t, (cor t).card ≤ c * (univ.filter fun j => P.isProd j = true).card := by
+  let fib : ∀ ρ : Σ t, Fin (n t), Finset (DCells (n ρ.1) (n' ρ.1) (B ρ.1)) := fun ρ =>
+    (cor ρ.1).filter fun e => e.1 = ρ.2
+  let used : (Σ t, Fin (n t)) → Finset (Fin N) := fun ρ =>
+    univ.filter fun k => ∃ e ∈ fib ρ, P.coef (word ⟨ρ.1, e⟩) k ≠ 0
+  have hq : ∀ ρ, L * (fib ρ).card ≤ c * (used ρ).card := by
+    rintro ⟨t, q⟩
+    have := hc t (Fin N) (fib ⟨t, q⟩) (used ⟨t, q⟩) (fun k z => P.prod k (extZ t z))
+      (fun k hk => by
+        obtain ⟨e, -, he⟩ := (Finset.mem_filter.mp hk).2
+        obtain ⟨A, A', hA⟩ := hOk k (P.isProd_of_coef_ne_zero _ _ he)
+        exact ⟨A.restrict t, A'.restrict t, fun z => by
+          show P.prod k (extZ t z) = _
+          rw [hA, BitAff.eval_extZ, BitAff.eval_extZ]⟩)
+      (pc t) (vq t) q (fun e => e.1.2)
+      (fun e e' h => Subtype.ext (Prod.ext ((Finset.mem_filter.mp e.2).2.trans (Finset.mem_filter.mp e'.2).2.symm) h))
+      (fun e k => P.coef (word ⟨t, e.1⟩) k) (fun e => (P.aff (word ⟨t, e.1⟩)).restrict t)
+      (fun e U hU => by
+        have h1 := Finset.mem_filter.mp e.2
+        have hq1 : e.1.1 = q := h1.2
+        have hTe := hT t e.1 h1.1 U hU
+        rw [hq1] at hTe
+        rw [← hTe, P.val_eq, ← BitAff.eval_extZ]
+        congr 1
+        refine (Finset.sum_subset (Finset.subset_univ (used ⟨t, q⟩))
+          (f := fun k => P.coef (word ⟨t, e.1⟩) k * P.prod k (extZ t (bitInd U))) fun k _ hk => ?_)
+        have : P.coef (word ⟨t, e.1⟩) k = 0 := by
+          by_contra hne
+          exact hk (Finset.mem_filter.mpr ⟨Finset.mem_univ _, e.1, e.2, hne⟩)
+        rw [this, zero_mul])
+    simpa [Fintype.card_coe] using this
+  have hdisj : ((univ : Finset (Σ t, Fin (n t))) : Set (Σ t, Fin (n t))).PairwiseDisjoint used := by
+    rintro ⟨t, q⟩ - ⟨t', q'⟩ - hne
+    refine Finset.disjoint_left.mpr fun k hk hk' => ?_
+    obtain ⟨e, he, hek⟩ := (Finset.mem_filter.mp hk).2
+    obtain ⟨e', he', hek'⟩ := (Finset.mem_filter.mp hk').2
+    have h1 := Finset.mem_filter.mp he
+    have h2 := Finset.mem_filter.mp he'
+    refine hek' (hpure t e h1.1 t' e' h2.1 ?_ k hek)
+    have e1 : e.1 = q := h1.2
+    have e2 : e'.1 = q' := h2.2
+    rw [e1, e2]
+    exact hne
+  have hcard : ∀ t, (cor t).card = ∑ q, (fib ⟨t, q⟩).card := fun t =>
+    Finset.card_eq_sum_card_fiberwise (f := fun e : DCells (n t) (n' t) (B t) => e.1) (s := cor t) (t := univ)
+      fun _ _ => Finset.mem_univ _
+  calc L * ∑ t, (cor t).card = ∑ ρ : Σ t, Fin (n t), L * (fib ρ).card := by
+        rw [Fintype.sum_sigma, Finset.mul_sum]
+        exact Finset.sum_congr rfl fun t _ => by rw [hcard t, Finset.mul_sum]
+    _ ≤ ∑ ρ, c * (used ρ).card := Finset.sum_le_sum fun ρ _ => hq ρ
+    _ = c * (univ.biUnion used).card := by rw [Finset.card_biUnion hdisj, Finset.mul_sum]
+    _ ≤ c * (univ.filter fun j => P.isProd j = true).card := by
+        refine Nat.mul_le_mul_left _ (Finset.card_le_card fun k hk => ?_)
+        obtain ⟨ρ, -, hk⟩ := Finset.mem_biUnion.mp hk
+        obtain ⟨e, -, hek⟩ := (Finset.mem_filter.mp hk).2
+        exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, P.isProd_of_coef_ne_zero _ _ hek⟩
+
+end OverlapRound
+
+/-- A round's bits with overlapping draws: draw `t`'s design bits, stage `t` of shape `(n t, L, B t, n' t)`. -/
+abbrev OBits (St : ℕ) (n : Fin St → ℕ) (L np : ℕ) (B n' : Fin St → ℕ) : Type := Σ t, DBits (n t) L np (B t) (n' t)
+
+/-- A round's cell-blocks, over all its stages. -/
+abbrev OCells (St : ℕ) (n n' B : Fin St → ℕ) : Type := Σ t, DCells (n t) (n' t) (B t)
+
+/-- A round's coins with overlapping draws: the check's cell-block, among every stage's, and every draw's bits. -/
+abbrev OSpot (St : ℕ) (n : Fin St → ℕ) (L np : ℕ) (B n' : Fin St → ℕ) : Type :=
+  OCells St n n' B × Finset (OBits St n L np B n')
+
+/-- **The window's rounds with overlapping stages** (Theorem K∥, RS-D1E r2 §2.2 and §2.5), a named hypothesis. Each
+round is `St` stages of any shapes (stage `t`: `n t` rows, `B t` blocks of `L`, `n' t` columns); their draws may
+overlap at any depth, since the round's run is one straight-line program over every draw's bits (`prog w`), fixed
+before the round's first draw. The window's game is the spot-check game of the prover's play over the round's bits
+(`SpotPlay.game`): the check draws a cell-block among every stage's, and the round's deficiency is the share of
+uncertified cell-blocks. Along every play `x`:
+- round `w`'s products are products of two operands affine in every draw's bits (`AffMul`);
+- stage `t`'s error table is its committed prefix words (`word w`) minus their targets on draw `t`'s bits;
+- certified words of distinct rows, of any stages, share no product (row-pure);
+- the run is charged at least `κ` a product, less the noise reads `V`.
+
+`RoundsHypKSt` is the sequential case with stages of one shape, where a stage's program may also depend on earlier
+draws. -/
+def RoundsHypKOv (Mc : Machine) (S : Service) (R St : ℕ) (Vmax δb δz κ : ℝ) (n : Fin St → ℕ) (L np : ℕ)
+    (B n' : Fin St → ℕ) {Ar : Type} [CommRing Ar] (wt : Fin np → Ar) : Prop :=
+  ∃ e : S.Seed ≃ Paths (OSpot St n L np B n') R, ∀ (Ω' : Type) [Fintype Ω']
+    (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)), (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) →
+    ∀ r : Ω', ∃ (P : SpotPlay (OCells St n n' B) (OBits St n L np B n') Ar R)
+      (Bind ZK : Fin R → Paths (OSpot St n L np B n') R → Prop) (V : Paths (OSpot St n L np B n') R → ℝ),
+      (∀ w, prob (Bind w) ≤ δb) ∧ (∀ w, prob (ZK w) ≤ δz) ∧
+      (∀ x, S.verify (Mc.eval M (e.symm x, r)).1 (e.symm x) (Mc.eval M (e.symm x, r)).2 = true →
+        P.game.accepts x ∨ ∃ w, Bind w x ∨ ZK w x) ∧
+      (∀ x, V x ≤ Vmax) ∧
+      ∀ x, ∃ (N : Fin R → ℕ) (prog : ∀ w, SlpG (OBits St n L np B n') Ar (N w))
+        (pc : Fin R → ∀ t, Fin (n t) → Fin (B t) → Fin L → Ar)
+        (vq : Fin R → ∀ t, Fin (B t) → Fin L → Fin (n' t) → Ar)
+        (word : ∀ w, OCells St n n' B → Fin (N w)),
+        (∀ w j, (prog w).isProd j = true → AffMul ((prog w).prod j)) ∧
+        (∀ w c, P.errAt x w c = fun z => (prog w).val z (word w c) -
+          dPrefix (pc w c.1) (vq w c.1) wt c.2.1 c.2.2.1 c.2.2.2.val fun v => z ⟨c.1, v⟩) ∧
+        (∀ w c c', (∀ U : Finset (OBits St n L np B n'), U.card ≤ 2 → P.errAt x w c (bitInd U) = 0) →
+          (∀ U : Finset (OBits St n L np B n'), U.card ≤ 2 → P.errAt x w c' (bitInd U) = 0) →
+          (⟨c.1, c.2.1⟩ : Σ t, Fin (n t)) ≠ ⟨c'.1, c'.2.1⟩ → ∀ k,
+          (prog w).coef (word w c) k ≠ 0 → (prog w).coef (word w c') k = 0) ∧
+        κ * ∑ w, ((univ.filter fun j => (prog w).isProd j = true).card : ℝ) - V x ≤ Mc.charge M (e.symm x, r)
+
+/-- **Overlapping stages give the window's cost line** (Theorem K∥): under `RoundsHypKOv` with chain factor 1 on
+every stage's shape, `RoundsHyp` holds at `p = ¾` with `F₀ = κ L C`, `C` the round's cell-blocks over all its
+stages, and no slack. The luck is the spot check's on the round's bits (degree-2 errors, `RoundGame.pathBound_spot`),
+and the certified count is `SlpG.cells_card_le_ov`'s. -/
+theorem roundsHyp_of_overlap {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n B n' : Fin St → ℕ}
+    {L np : ℕ} {Ar : Type} [CommRing Ar] {wt : Fin np → Ar} (h : RoundsHypKOv Mc S R St Vmax δb δz κ n L np B n' wt)
+    (hc : ∀ t, ChainBound Ar (n t) L np (B t) (n' t) wt (fun π => AffProd π) 1) (hκ : 0 ≤ κ) :
+    RoundsHyp Mc S (OSpot St n L np B n') R (3 / 4) (κ * L * (Fintype.card (OCells St n n' B) : ℝ)) 0 Vmax δb δz := by
+  classical
+  obtain ⟨e, h⟩ := h
+  refine ⟨e, fun Ω' _ M hcom r => ?_⟩
+  obtain ⟨P, Bind, ZK, V, hB, hZ, hacc, hV, hK⟩ := h Ω' M hcom r
+  refine ⟨P.game, Bind, ZK, V, RoundGame.expBound_of_pathBound _ (P.game.pathBound_spot (P.game_spot fun x w c => ?_)),
+    hB, hZ, hacc, hV, fun x => ?_⟩
+  · obtain ⟨N, prog, pc, vq, word, hOk, hE, -, -⟩ := hK x
+    rw [hE w c]
+    exact ((prog w).cubeQuad_val_mul (hOk w) (word w c)).sub
+      (cubeQuad_dPrefix_mk c.1 (pc w c.1) (vq w c.1) wt c.2.1 c.2.2.1 c.2.2.2.val)
+  · obtain ⟨N, prog, pc, vq, word, hOk, hE, hpure, hcharge⟩ := hK x
+    let cert : Fin R → OCells St n n' B → Prop := fun w c =>
+      ∀ U : Finset (OBits St n L np B n'), U.card ≤ 2 → P.errAt x w c (bitInd U) = 0
+    let cor : Fin R → ∀ t, Finset (DCells (n t) (n' t) (B t)) := fun w t => univ.filter fun c => cert w ⟨t, c⟩
+    have hprod : ∀ w, (L : ℝ) * ∑ t, ((cor w t).card : ℝ) ≤
+        ((univ.filter fun j => (prog w).isProd j = true).card : ℝ) := fun w => by
+      have := (prog w).cells_card_le_ov hc (hOk w) (pc w) (vq w) (word w) (cor w)
+        (fun t c hc U hU => by
+          have h1 := (Finset.mem_filter.mp hc).2 (U.map ⟨Sigma.mk t, sigma_mk_injective⟩) (by rwa [Finset.card_map])
+          rw [hE w ⟨t, c⟩] at h1
+          simp only at h1
+          rw [bitInd_map_mk (ι := fun t => DBits (n t) L np (B t) (n' t)) (R := Ar) t U,
+            ← extZ_bitInd (ι := fun t => DBits (n t) L np (B t) (n' t)) (R := Ar) t U] at h1
+          exact sub_eq_zero.mp h1)
+        fun t c hc t' c' hc' hne k hk =>
+          hpure w ⟨t, c⟩ ⟨t', c'⟩ (Finset.mem_filter.mp hc).2 (Finset.mem_filter.mp hc').2 hne k hk
+      rw [one_mul] at this
+      exact_mod_cast this
+    have hcor : ∀ w, (Fintype.card (OCells St n n' B) : ℝ) * (1 - spotDef (P.errAt x w)) ≤
+        ∑ t, ((cor w t).card : ℝ) := fun w => by
+      have h2 : (univ.filter fun c => cert w c) = univ.sigma (cor w) := by
+        ext ⟨t, c⟩
+        simp [cor]
+      have := card_certified_ge (P.errAt x w)
+      rw [show (univ.filter fun c => ∀ U : Finset (OBits St n L np B n'), U.card ≤ 2 → P.errAt x w c (bitInd U) = 0)
+        = univ.sigma (cor w) from h2, Finset.card_sigma] at this
+      exact_mod_cast this
+    set C : ℝ := (Fintype.card (OCells St n n' B) : ℝ)
+    have hdef : P.game.deficiency x = ∑ w, spotDef (P.errAt x w) := by
+      rw [P.game.deficiency_eq_sum]
+      exact Finset.sum_congr rfl fun w _ => P.dAt_game x w
+    calc ((R : ℝ) - P.game.deficiency x) * (κ * L * C) - V x - R * 0
+        = κ * ∑ w, (L : ℝ) * (C * (1 - spotDef (P.errAt x w))) - V x := by
+          rw [hdef]
+          simp only [mul_sub, mul_one, Finset.sum_sub_distrib, Finset.sum_const, Finset.card_univ, Fintype.card_fin,
+            nsmul_eq_mul, ← Finset.mul_sum]
+          ring
+      _ ≤ κ * ∑ w, ((univ.filter fun j => (prog w).isProd j = true).card : ℝ) - V x := by
+        gcongr with w
+        exact (mul_le_mul_of_nonneg_left (hcor w) (Nat.cast_nonneg L)).trans (hprod w)
+      _ ≤ Mc.charge M (e.symm x, r) := hcharge
+
+theorem card_oCells (St : ℕ) (n n' B : Fin St → ℕ) :
+    Fintype.card (OCells St n n' B) = ∑ t, n t * n' t * B t := by
+  simp [OCells, Fintype.card_sigma, Fintype.card_prod, mul_assoc]
 
 /-- **The window's rounds with Theorem H's cost line** (the re-encoded design in exact arithmetic over a field `F`:
 FP8 operands or scaled reads, with exact sums), a named hypothesis. It is `RoundsHyp` with the cost line derived
@@ -6218,6 +6510,28 @@ theorem certifiedFraction120θ_decode_40 (kd : K120 → Kind) (S : Service) {R :
       (4 / 5 * ((R - 160 * Real.log 2) * (κ * L * ((n * n' * B : ℕ) : ℝ)) - Vmax))
       (((2 : ℝ) ^ 40)⁻¹ + R * (δb + δz)) := by
   simpa only [Nat.cast_one, one_mul] using certifiedFraction120θ_staged_40 kd S h one_pos hκ hC hδb hδz
+
+/-- **The certified fraction with overlapping stages** (Theorem K∥): under `RoundsHypKOv` with products of affine
+operands, rounds of `St` stages of any shapes, their draws overlapping at any depth, have the floor
+`F₀ = κ L Σ_t n_t n'_t B_t`, every stage's cell-blocks counted once, at `D₀ = 160 ln 2` rounds of luck at `2⁻⁴⁰`,
+with neither a luck nor a chain hypothesis. -/
+theorem certifiedFraction120θ_overlap_40 (kd : K120 → Kind) (S : Service) {R St : ℕ} {Vmax δb δz κ : ℝ}
+    {n B n' : Fin St → ℕ} {L : ℕ}
+    (h : RoundsHypKOv (machine kd (.ofNat price120)) S R St Vmax δb δz κ n L 7 B n' wRe) (hκ : 0 < κ)
+    (hC : 0 < L * ∑ t, n t * n' t * B t) (hδb : 0 ≤ δb) (hδz : 0 ≤ δz) :
+    ServiceFloor (machine (kdθ kd) priceθ) S
+      (4 / 5 * ((R - 160 * Real.log 2) * (κ * L * ((∑ t, n t * n' t * B t : ℕ) : ℝ)) - Vmax))
+      (((2 : ℝ) ^ 40)⁻¹ + R * (δb + δz)) := by
+  have e : (40 * Real.log 2 / (1 - 3 / 4) : ℝ) = 160 * Real.log 2 := by
+    rw [show (1 : ℝ) - 3 / 4 = 1 / 4 by norm_num]
+    ring
+  have hF₀ : 0 < κ * L * (Fintype.card (OCells St n n' B) : ℝ) := by
+    rw [mul_assoc, card_oCells]
+    exact mul_pos hκ (by exact_mod_cast hC)
+  have := certifiedFraction120θ_rounds_40 kd S
+    (roundsHyp_of_overlap h (fun _ => (chainBound_gProd toF2 rfl toF2_wRe_zero).mono fun _ hπ => hπ.gProd) hκ.le)
+    (by norm_num) hF₀ hδb hδz
+  rwa [e, mul_zero, sub_zero, card_oCells] at this
 
 /-- **The certified fraction from Theorem H** (the re-encoded design in exact arithmetic, merges priced at
 `h ≥ 2L/3` slots): under `RoundsHypH` in Model B, the same floor as from Theorem K. -/
