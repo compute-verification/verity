@@ -7,6 +7,8 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+
 FILLER = Path(__file__).resolve().parents[1] / "filler"
 
 
@@ -21,11 +23,12 @@ def _load(name):
 S = _load("scoring")
 
 
-def test_hc_power_arms(monkeypatch):
+@pytest.mark.parametrize("attr, name, pre", [("PowerPre4", "power-pre4", 4)])
+def test_hc_power_arms(monkeypatch, attr, name, pre):
     A = sys.modules.get("arms") or _load("arms")
     monkeypatch.setenv("DFILL_MAP", "0")
-    arm = A.load("benchmarks/pouw/filler/hc_power.py:PowerPre12")
-    assert A.check_arm(arm) == []
+    arm = A.load(f"benchmarks/pouw/filler/hc_power.py:{attr}")
+    assert arm.name == name and arm.pre_sms == pre and A.check_arm(arm) == []
     assert os.environ["DFILL_MAP"] == "2"
     kern = A.load("benchmarks/pouw/filler/hc_kern.py:KernM2")
     assert arm.filler == kern.filler
