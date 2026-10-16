@@ -220,6 +220,9 @@ theorem Agrees.at_push {R B A : Array Round} {k₀ : ℕ} {x : Round} (h : Agree
     simp
   exact e ▸ h A.size hlt hk
 
+theorem Agrees.mono {R P : Array Round} {k₀ k₁ : ℕ} (h : Agrees R P k₀) (hk : k₀ ≤ k₁) : Agrees R P k₁ :=
+  fun j hj hj₁ => h j hj (hk.trans hj₁)
+
 /-- Rounds that carry the prover's final rounds carry every earlier stage's. -/
 theorem Agrees.of_prefix {R P P' : Array Round} {k₀ : ℕ} (h : Agrees R P k₀) (hp : Prefix P' P) : Agrees R P' k₀ := by
   obtain ⟨C, rfl⟩ := hp

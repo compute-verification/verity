@@ -109,6 +109,15 @@ theorem _root_.FlockComplete.Run.outer_ne_one (o : Run H rel) {i : ℕ} (hi : i 
   simp only [List.mem_flatMap, List.mem_range, List.mem_map, Prod.mk.injEq]
   exact ⟨2 * i + r, by omega, k, by rw [hq, ← (o.tab_m hi).1]; exact hk, rfl, rfl⟩
 
+/-- The prover's `r_outer` coins at table `i`'s rep `r` are not `1`. -/
+theorem _root_.FlockComplete.Run.zc_c1 (o : Run H rel) {i : ℕ} (hi : i < o.tabs.size) {r : ℕ} (hr : r < 2) :
+    ∀ k < o.tabs[i]!.m - 13, (o.zcCoins i r).c1 k ≠ 1 := by
+  intro k hk
+  obtain ⟨-, -, hm35⟩ := o.tab_m hi
+  show coinOf (Claims.coinSeq o.r (repStart o.spec o.sts (2 * i + r) + 1)).bytes k ≠ 1
+  rw [coinOf_bytes _ (by omega)]
+  exact o.outer_ne_one hi hr hk
+
 /-! ## The goal -/
 
 /-- **The replay returns** on rounds that carry the prover's zerocheck rounds, from the rep's start, when the trace
@@ -143,13 +152,10 @@ theorem zerocheck_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed �
     (hR1 : TraceR1CS H rel) (hzc : ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, ZcAt o i r) : Zerocheck H rel := by
   intro o i hi r hr
   obtain ⟨hp, hag⟩ := hzc o i hi r hr
-  obtain ⟨-, hm, hm35⟩ := o.tab_m hi
+  obtain ⟨-, hm, -⟩ := o.tab_m hi
   refine ok_val ?_
   rw [hp]
-  exact zerocheck_replay o.hs (by omega) _ _ _ _ _ _ hag (hR1 o i hi) fun k hk => by
-    show coinOf (Claims.coinSeq o.r (repStart o.spec o.sts (2 * i + r) + 1)).bytes k ≠ 1
-    rw [coinOf_bytes _ (by omega)]
-    exact o.outer_ne_one hi hr hk
+  exact zerocheck_replay o.hs (by omega) _ _ _ _ _ _ hag (hR1 o i hi) (o.zc_c1 hi hr)
 
 /-! ## What a returning rep carries -/
 
