@@ -383,7 +383,7 @@ theorem sessPrB_nonneg {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inh
 /-- **One prefix**: over the forks of `r` at session `s`'s first round and `E_O`'s coins, session `s`'s extraction
 fails at most as often as the outer Flock's `E^rep` at the session prover (`bad_fork`, the coins read uniformly), which
 Flock's KS bounds at the session's numbers; it never fails where no fork accepts. -/
-theorem prefix_bad_le {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
+theorem prefix_bad_le {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T} (hF : Flock.KS H DO)
     (hN : SessionNums D DO) (hε : TableErrNonneg D) (hRd : SessionRounds D I DO) (hS : SessionAccepts D)
     (hR : SessionRuns H D I DO) (decO : List (ℕ × Col) → List T) (hdec : decOK DO decO) (x : Msg)
@@ -435,7 +435,7 @@ theorem prefix_bad_le {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inha
 
 /-- **Every prefix, averaged**: a draw is a fork of a draw at session `s`'s first round (`Ex_fork`), so session `s`'s
 failure is the average over prefixes of `prefix_bad_le`'s. -/
-theorem PrBad_EOs_le {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
+theorem PrBad_EOs_le {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T} (hF : Flock.KS H DO)
     (hN : SessionNums D DO) (hε : TableErrNonneg D) (hRd : SessionRounds D I DO) (hS : SessionAccepts D)
     (hR : SessionRuns H D I DO) (decO : List (ℕ × Col) → List T) (hdec : decOK DO decO) (x : Msg)
@@ -585,7 +585,7 @@ theorem Ex_sessPrB_le {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inha
 `κ_s + √(γ_s·(k(x)/k_s)·Pr[B])`, `k_s` the session's rounds. Each prefix's failure is the outer Flock's at the session
 prover (`prefix_bad_le`); Jensen moves the average under the root, and the session's `k_s` round guesses are `k_s` of
 the compiled verifier's `k(x)` (`Ex_sessPrB_le`). -/
-theorem outerKS_sharp {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
+theorem outerKS_sharp {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T} (hF : Flock.KS H DO)
     (hN : SessionNums D DO) (hε : TableErrNonneg D) (hRd : SessionRounds D I DO) (hS : SessionAccepts D)
     (hR : SessionRuns H D I DO) (decO : List (ℕ × Col) → List T) (hdec : decOK DO decO) (x : Msg) (Ω : Type)
@@ -631,9 +631,9 @@ statement (`SessionNums`), its rounds end by `k(x)` (`SessionRounds`), its table
 first round shows the outer verifier's run of the session prover, whose calls are the compiled verifier's
 (`SessionRuns`). `outerKS_sharp`'s `k(x)/k_s` is at most `OuterKS`'s `k(x)`. -/
 theorem outerKS_of_flockKS {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
-    {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T} (hF : Flock.KS H DO)
-    (hN : SessionNums D DO) (hε : TableErrNonneg D) (hRd : SessionRounds D I DO) (hS : SessionAccepts D)
-    (hR : SessionRuns H D I DO) : OuterKS H D I DO := by
+    [Zero Col] {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
+    (hF : Flock.KS H DO) (hN : SessionNums D DO) (hε : TableErrNonneg D) (hRd : SessionRounds D I DO)
+    (hS : SessionAccepts D) (hR : SessionRuns H D I DO) : OuterKS H D I DO := by
   intro decO hdec x Ω _ _ P s
   refine (outerKS_sharp hF hN hε hRd hS hR decO hdec x Ω P s).trans (add_le_add le_rfl (Real.sqrt_le_sqrt ?_))
   have hm : (D.V.k x : ℝ) / (D.nums x s).rounds ≤ D.V.k x := by
@@ -644,7 +644,7 @@ theorem outerKS_of_flockKS {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] 
 
 /-- **The recursion's KS from Flock's KS at the outer deployment**: `KS_of`, its `OuterKS` from `outerKS_of_flockKS`.
 It rests on `Claims.Flock.KS` at `DO`, `InnerKS` and code facts only. -/
-theorem KS_of_flockKS {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
+theorem KS_of_flockKS {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) (hF : Flock.KS H DO)
     (hRef : Refuses H D) (hRounds : InnerRounds D I) (hN : SessionNums D DO) (hε : TableErrNonneg D)
     (hRd : SessionRounds D I DO) (hS : SessionAccepts D) (hR : SessionRuns H D I DO) (hI : InnerKS H D I DO) :
@@ -654,8 +654,8 @@ theorem KS_of_flockKS {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inha
 /-- **KS of the recursion over Flock, from Flock's KS at the outer deployment**: `KSFlock_of`, each inner decoder's
 `OuterKS` from `outerKS_of_flockKS`. -/
 theorem KSFlock_of_flockKS {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
-    (H : Msg → Msg) (D : Deploy Coin) (DI DO : Flock.Deploy Coin Col T) (hF : Flock.KS H DO) (hRef : Refuses H D)
-    (hRounds : ∀ x, DI.V.k (xI D x) ≤ D.V.k x) (hN : SessionNums D DO) (hε : TableErrNonneg D)
+    [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (DI DO : Flock.Deploy Coin Col T) (hF : Flock.KS H DO)
+    (hRef : Refuses H D) (hRounds : ∀ x, DI.V.k (xI D x) ≤ D.V.k x) (hN : SessionNums D DO) (hε : TableErrNonneg D)
     (hRd : ∀ decI, SessionRounds D (Inner.ofFlock H DI decI) DO) (hS : SessionAccepts D)
     (hR : ∀ decI, SessionRuns H D (Inner.ofFlock H DI decI) DO)
     (hI : ∀ decI, decOK DI decI → InnerKS H D (Inner.ofFlock H DI decI) DO) : KSFlock H D DI DO :=

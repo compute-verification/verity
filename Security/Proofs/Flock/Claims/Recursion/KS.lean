@@ -94,7 +94,7 @@ session `s`'s extraction fails on an accepted run of the compiled verifier with 
 verifier's (a fork at the session's first round is one of `B`'s `k(x)` guesses). `Claims.KS`'s inequality at each
 session, as `Claims.Flock.KS` states it of Flock's verifier; the session's embedding in the compiled verifier's run
 carries one to the other. -/
-def OuterKS (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
+def OuterKS [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ decO, decOK DO decO → ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (s : Fin (D.nS x)),
     PrBad H D.V (sessR H DO) (EOs H D I DO decO s) x P ≤
       (D.nums x s).κ + Real.sqrt ((D.nums x s).γ * D.V.k x * PrB H D.V P x)
@@ -279,7 +279,7 @@ when `E_O` succeeds at every draw it reruns at, with probability at most
 `κ_I + √(γ_I·Pr[B_I]) + Pr[a collision among the verifier's calls in one run] + (N_I + 1)·Pr[Be]`: `Inner.KS`'s bound
 with `B_I` for the inner `B` (the inner verifier's calls are recorded in the outer witnesses only), and the terms the
 carriage costs. -/
-def InnerKS (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
+def InnerKS [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ decO, decOK DO decO → ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
     PrBadGood H D.V (innerR D I) outR (EO H D I DO decO) (dec D) (fun x => I.waits (xI D x))
         (fun x => I.k (xI D x)) (fun x => I.cap (xI D x)) I.opens (fun x => I.assemble (xI D x))
@@ -307,7 +307,7 @@ theorem Nums.γ_nonneg (n : Nums) : 0 ≤ n.γ := by unfold Nums.γ; positivity
 /-- **The recursion's KS**, at a general inner protocol: from the outer `--zk` Flock's KS at each session (`OuterKS`),
 the inner protocol's KS at the served runs (`InnerKS`), and the code facts `Refuses` and `InnerRounds`, `E*` fails on
 an accepted run with probability at most `κ(x) + √(γ(x)·Pr[B]) + √(γ_e(x)·Pr[Be])`. -/
-theorem KS_of (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
+theorem KS_of [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (hRef : Refuses H D) (hRounds : InnerRounds D I) (hO : OuterKS H D I DO) (hI : InnerKS H D I DO) :
     KS H D I DO := by
   intro decO hdec x Ω _ _ P
@@ -391,7 +391,7 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [De
 
 /-- **KS of the recursion over Flock**: `KS_of` with Flock as the inner protocol, at every inner decoder that meets the
 spec. -/
-theorem KSFlock_of (H : Msg → Msg) (D : Deploy Coin) (DI DO : Flock.Deploy Coin Col T) (hRef : Refuses H D)
+theorem KSFlock_of [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (DI DO : Flock.Deploy Coin Col T) (hRef : Refuses H D)
     (hRounds : ∀ x, DI.V.k (xI D x) ≤ D.V.k x)
     (hO : ∀ decI, decOK DI decI → OuterKS H D (Inner.ofFlock H DI decI) DO)
     (hI : ∀ decI, decOK DI decI → InnerKS H D (Inner.ofFlock H DI decI) DO) : KSFlock H D DI DO :=
