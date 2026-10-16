@@ -4,11 +4,10 @@ import Proofs.Flock.Claims.Complete.Json
 # The honest session runs
 
 `sessionRuns_goal`: the goal `SessionRuns`, given `StmtOk` (no keyed coin tree, so the record's `hello` is the
-statement's) and one named hypothesis on the prover's pieces, `ProverRuns`: at every good case's table, the regions
-fit (`RegionsFit`: each region's bytes at each block are its free bits), and each rep returns, on the level-0 commitment
-and the extra claims at the link's points, from any sends. The level-0 commitment returns (`commitP_ok`: through
-`Hashes.ofSha512` every leaf and node hash is a `pure`), and so do the extra claims where the regions fit
-(`extraClaims_ok`).
+statement's) and one named hypothesis on the prover's reps, `ProverRuns`: at every good case's table, each rep
+returns, on the level-0 commitment and the extra claims at the link's points, from any sends. The level-0 commitment
+returns (`commitP_ok`: through `Hashes.ofSha512` every leaf and node hash is a `pure`), and so do the extra claims
+(`extraClaims_ok`), since `ready` asks that the regions fit (`RegionsFit`).
 
 `Runs y l P`: `y` returns from the sends `l`, with `P` of its value and the sends after; `Runs.bind`, `Runs.forIn_array`
 and `Runs.mapM_singleton` walk the session.
@@ -144,10 +143,6 @@ theorem forIn_array_ok {α β : Type} (xs : Array α) (b : β) (f : α → β �
   rw [← Array.forIn_toList]
   exact forIn_list_ok_mem f xs.toList (fun a ha => hf a (Array.mem_toList_iff.1 ha)) _ (fun _ h => h) b
 
-/-- **A statement's regions fit**: each region's bytes at each block are its free bits. -/
-def RegionsFit (st : Flock.Stmt) : Prop :=
-  ∀ reg ∈ st.regions, ∀ b < 2 ^ st.nbl, (reg.bytes b).size * 8 = 2 ^ reg.free.size
-
 theorem regionValue_ok (st : Flock.Stmt) (reg : Region)
     (h : ∀ b < 2 ^ st.nbl, (reg.bytes b).size * 8 = 2 ^ reg.free.size) (r : Array F128) :
     ∃ v, st.regionValue reg r = .ok v := by
@@ -170,11 +165,11 @@ theorem extraClaims_ok (st : Flock.Stmt) (h : RegionsFit st) (pts : Array (Array
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **The prover's pieces return**, at every good case's table with its schedule: the table's regions fit
-(`RegionsFit`, so its extra claims return), and each rep returns on the level-0 commitment of the trace's packed table
-(under any salts) and the extra claims at the link's points, under any salts, nonces and domain, from any sends. -/
+/-- **The prover's reps return**, at every good case's table with its schedule: each rep returns on the level-0
+commitment of the trace's packed table (under any salts) and the extra claims at the link's points, under any salts,
+nonces and domain, from any sends. -/
 def ProverRuns (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
-  ∀ c : Case H rel, ∀ st sch, c.sts = #[st] → fast100 (Setup.ofCircuit st).m = some sch → RegionsFit st ∧
+  ∀ c : Case H rel, ∀ st sch, c.sts = #[st] → fast100 (Setup.ofCircuit st).m = some sch →
     ∀ salt₀ cm e, commitP (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st).merkle
       (sch.levels.getD 0 default) (packed (tracesOf c.sts c.w)[0]! (Setup.ofCircuit st).m) salt₀ = .ok cm →
     (Setup.ofCircuit st).extra (pointsOf c.spec (Claims.coinSeq c.r 0)) = .ok e →
@@ -189,7 +184,8 @@ theorem sessionRuns_goal (hS : StmtOk H rel) (hR : ProverRuns H rel) : SessionRu
   obtain ⟨hct, -, -, -⟩ := hS c
   have ht : c.spec.tables = #[st.tags.table] := by rw [hsp]; rfl
   obtain ⟨sch, hsch⟩ := Option.isSome_iff_exists.1 (fast100_isSome (m := (Setup.ofCircuit st).m) hm1 hm2)
-  obtain ⟨hreg, hRep⟩ := hR c st sch hst hsch
+  have hRep := hR c st sch hst hsch
+  have hreg : RegionsFit st := c.ready_parts.2.2.1 st (by simp [hst])
   obtain ⟨e, he⟩ := extraClaims_ok st hreg (pointsOf c.spec (Claims.coinSeq c.r 0))
   replace he : (Setup.ofCircuit st).extra (pointsOf c.spec (Claims.coinSeq c.r 0)) = .ok e := he
   obtain ⟨cm, hcm⟩ := commitP_ok (Claims.hOf H) (Setup.ofCircuit st).merkle (sch.levels.getD 0 default)

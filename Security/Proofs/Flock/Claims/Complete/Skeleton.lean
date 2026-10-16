@@ -323,10 +323,10 @@ structure Goals (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Reada
 
 /-! ## The checks proved here -/
 
-/-- `ready` at the case's setup: the session draws a unit, the statement is under `2^56` bytes, and the setup against
-`H` is the case's. -/
+/-- `ready` at the case's setup: the session draws a unit, the statement is under `2^56` bytes, each table's regions
+fit, and the setup against `H` is the case's. -/
 theorem Case.ready_parts {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (c : Case H rel) :
-    c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 56 ∧
+    c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 56 ∧ (∀ st ∈ c.sts, RegionsFit st) ∧
       setupWith (Claims.hOf H) c.s.read = .ok (c.spec, c.sts) := by
   have h := c.ready
   unfold FlockComplete.ready at h
@@ -423,7 +423,7 @@ theorem Run.acc {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Reada
     rw [o.setup]
   have hlen : (honestRun H o.x o.w o.ω o.r).1.length = o.bodies.size := by
     rw [he]; simp
-  refine run_acc_of H o.w o.x o.ω o.r (link := o.link) (F := o.final) o.setup o.ready_parts.2.2 ?_ ?_ ?_ ?_ ?_
+  refine run_acc_of H o.w o.x o.ω o.r (link := o.link) (F := o.final) o.setup o.ready_parts.2.2.2 ?_ ?_ ?_ ?_ ?_
     (o.verdict_ok g) ?_
   · rw [hlen, hk]
     have := g.sends o

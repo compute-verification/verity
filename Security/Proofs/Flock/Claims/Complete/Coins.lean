@@ -19,9 +19,12 @@ zerocheck outer coin is `1` (`Bad`), at most `2^-128` per coin element (`pr_slot
   statement that sets up no session, or whose session draws no unit (`checks` ends in `drawLaw zk none`, which refuses),
   is refused at every run, and the last message's length words (`Final.encode`) fit only a statement under `2^56` bytes:
   the record carries the statement's `hello`, which JSON escaping can grow sixfold, past `2^64` bytes for a statement
-  near it. The verifier sets the statement up against `H` (`setupWith (hOf H)`), and the statement pins digests of
-  SHA-512 that this setup recomputes with `H`; the honest prover sets up at SHA-512, so `ready H` asks that the two
-  setups agree. At `sha512` they do, and `ready` asks no more (`ready_sha512`).
+  near it. Where a table's regions do not fit (`RegionsFit`: some region's bytes at some block are not its free bits),
+  the extra claims refuse (`Stmt.regionValue`), the honest prover's as the verifier's, and the relation, on the
+  circuit's values, does not pin the public bytes the regions read. The verifier sets the statement up against `H`
+  (`setupWith (hOf H)`), and the statement pins digests of SHA-512 that this setup recomputes with `H`; the honest
+  prover sets up at SHA-512, so `ready H` asks that the two setups agree. At `sha512` they do, and `ready` asks no more
+  (`ready_sha512`).
 * **The composition** (`complete_of`): if the honest prover is accepted at every coin outside `Bad` on every statement in
   scope, ready, with a witness in the relation, then `Claims.Flock.Complete H (deployPlain rel) honestP (δc H)`.
 -/
@@ -135,21 +138,26 @@ def Bad (x : Claims.Msg) {k : ℕ} (r : Fin k → Coin) : Prop := ∃ p ∈ oute
 /-- `ε`: the outer coins' count over `2^128`. -/
 noncomputable def ε (x : Claims.Msg) : ℝ := (outerSlots x).length / 2 ^ 128
 
+/-- **A statement's regions fit**: each region's bytes at each block are its free bits. -/
+def RegionsFit (st : Flock.Stmt) : Prop :=
+  ∀ reg ∈ st.regions, ∀ b < 2 ^ st.nbl, (reg.bytes b).size * 8 = 2 ^ reg.free.size
+
 open Classical in
 /-- **The statements the deployed verifier can accept** against `H`: it sets up the session, its setup against `H` is
-the one at SHA-512, the session draws a unit, and the statement is under `2^56` bytes, so that the last message's
-lengths fit their words. -/
+the one at SHA-512, the session draws a unit, the statement is under `2^56` bytes, so that the last message's lengths
+fit their words, and each table's regions fit. -/
 noncomputable def ready (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : Bool :=
   match setupOf false x with
-  | some (s, spec, sts) => s.read.draw.isSome && decide (x.length < 2 ^ 56) &&
+  | some (s, spec, sts) => s.read.draw.isSome && decide (x.length < 2 ^ 56) && decide (∀ st ∈ sts, RegionsFit st) &&
       decide (setupWith (Claims.hOf H) s.read = .ok (spec, sts))
   | none => false
 
-/-- **At SHA-512, `ready` asks only for a drawn session and the statement's length**: the setup against `sha512` is
-the statement's. -/
+open Classical in
+/-- **At SHA-512, `ready` asks only for a drawn session, the statement's length and its regions**: the setup against
+`sha512` is the statement's. -/
 theorem ready_sha512 (x : Claims.Msg) :
     ready sha512 x = match setupOf false x with
-      | some (s, _, _) => s.read.draw.isSome && decide (x.length < 2 ^ 56)
+      | some (s, _, sts) => s.read.draw.isSome && decide (x.length < 2 ^ 56) && decide (∀ st ∈ sts, RegionsFit st)
       | none => false := by
   unfold ready
   split
