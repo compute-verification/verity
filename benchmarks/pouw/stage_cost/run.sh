@@ -6,7 +6,8 @@
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=STAGE-COST \
 #     -- bash benchmarks/pouw/stage_cost/run.sh
 # env: PREFILL (2048 8192), DEFERRED_T, BESIDE_T (1024 4096 16384 32768), DEC_B, DEC_L (32 4096), FILL_SMS (92), DRAW_US
-# (300), PARTS (gate prefill deferred beside), HASHES (fr sz: stage.cu's commitment paths for prefill), MAXMIN (25)
+# (300), PARTS (gate prefill deferred beside), HASHES (fr sz: stage.cu's commitment paths for prefill), MAXMIN (25),
+# PIPE_GREEN (1; 0 skips prefill's pipe_green arms)
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH

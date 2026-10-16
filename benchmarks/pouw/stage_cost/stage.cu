@@ -757,14 +757,24 @@ __global__ void __launch_bounds__(256) att_fused(const int8_t* __restrict__ Q, c
     if (r0 + g + 8 < rows) { if (ns == 1) c[8] = cs1; else atomicAdd(c + 8, cs1); }
   }
 }
-// ns key splits a launch (0: enough to fill the GPU twice over, at least 8 key tiles a split); split, a CTA adds its keys'
-// share of O and the checksums into zeroed outputs (integer sums: the same bits whatever the split)
+// ns key splits a launch (0: the count, of at least 8 key tiles a split, whose CTAs fill their last wave of resident CTAs
+// best, fewer splits unless 2% better); split, a CTA adds its keys' share of O and the checksums into zeroed outputs
+// (integer sums: the same bits whatever the split)
 static void att_run(const int8_t* Q, const int8_t* Qn, const int8_t* K, const int8_t* V, int rows, int lk, int* O, int* csum,
                     uint32_t seed, cudaStream_t st, int ns = 0) {
-  static int sms = 0;
+  static int sms = 0, occ[9] = {0};
   if (!sms) CK(cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, 0));
   const int warps = std::min(8, (rows + 15) / 16), rb = (rows + 127) / 128, nt = lk / ATT_KT;
-  if (ns <= 0) ns = std::max(1, std::min((2 * sms + rb * HKV - 1) / (rb * HKV), nt / 8));
+  if (!occ[warps]) CK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ[warps], att_fused, 32 * warps, 0));
+  if (ns <= 0) {
+    const long long slots = (long long)sms * std::max(1, occ[warps]), base = (long long)rb * HKV;
+    double best = -1;
+    for (int s = 1; s <= std::max(1, nt / 8); s++) {
+      const long long n = base * s;
+      const double eff = (double)n / ((n + slots - 1) / slots * slots);
+      if (eff > best + 0.02) { best = eff; ns = s; }
+    }
+  }
   if (ns > 1) {
     CK(cudaMemsetAsync(O, 0, (size_t)HKV * rows * HD * sizeof(int), st));
     CK(cudaMemsetAsync(csum, 0, (size_t)HKV * rows * sizeof(int), st));
@@ -1047,7 +1057,8 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
   P.M = M;
   const int GN[NSTAGE] = {QKV, M / 2, M / 2, HID, 2 * FF, HID}, GK[NSTAGE] = {HID, HID, HID, HID, HID, FF};
   for (int l = 0; l < LAYERS; l++) {
-    const int8_t* w[NSTAGE] = {d.W[l][0], d.W[l][1], d.W[(l + 1) % LAYERS][1], d.W[l][1], d.W[l][2], d.W[l][3]};
+    const int kv = M / 2 > HID ? 2 : 1;  // the attention stand-ins read (M/2) x HID bytes: o's weights up to M = 8192
+    const int8_t* w[NSTAGE] = {d.W[l][0], d.W[l][kv], d.W[(l + 1) % LAYERS][kv], d.W[l][1], d.W[l][2], d.W[l][3]};
     for (int t = 0; t < NSTAGE; t++) P.W[l][t] = w[t];
   }
   const int NC = 3;
@@ -1216,7 +1227,9 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
   // C chunks in flight on a split: each stage's commitment and draw on the hash partition's stream c, its GEMM on the
   // rest's, the commitment after the stage before's GEMM (events; host-launched, against C x gemm)
   std::vector<std::tuple<int, int, int, int, double, double>> pgreen;  // N asked, C, gemm SMs, hash SMs, GEMMs alone, pipelined
+  const bool pg_on = !getenv("PIPE_GREEN") || atoi(getenv("PIPE_GREEN"));  // PIPE_GREEN=0 skips these arms
   for (int N : {20, 28, 36, 44}) {
+    if (!pg_on) break;
     Split g;
     int e = gc_split_n(d.sms - N, NC, hi, NC * LAYERS * NSTAGE, g);
     if (e) {
