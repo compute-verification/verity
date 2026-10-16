@@ -40,9 +40,13 @@ def test_research_run_pool_wraps_the_command_in_a_named_pool_that_the_launcher_a
     from research.cli import main
     for argv, why in ((["--pool", "research", "--", "true"], "needs --on MACHINE and --source"),
                       (["--on", "m", "--source", ".", "--pool", "research", "--", "true"], "needs a lane"),
-                      (["--on", "m", "--source", ".", "--pool", "research", "--as", "x", "--cwd", "clone", "--", "true"], "not --cwd clone"),
+                      (["--on", "m", "--source", ".", "--pool", "research", "--as", "x", "--cwd", "clone/sub", "--", "true"], "not --cwd clone/sub"),
+                      (["--on", "m", "--source", ".", "--pool", "research", "--as", "x", "--cwd", "/tmp", "--", "true"], "not --cwd /tmp"),
                       (["--on", "m", "--source", ".", "--pool", "gpu", "--as", "x", "--", "true"], "no pool 'gpu'")):
         assert main(["run", *argv]) == 2 and why in capsys.readouterr().err, argv
+    # a job that writes into its tree (a Lean check rewriting a lock) runs in a private clone, so the shared tree stays clean
+    main(["run", "--on", "m", "--source", ".", "--pool", "proofs", "--as", "x", "--cwd", "clone", "--", "true"])
+    assert "--pool" not in capsys.readouterr().err
 
 
 def _run(runs, rid, state, command, *, pgid=None, runner=None):
