@@ -20,9 +20,9 @@ fail.
   prover alike.
 
 `εZk` is their count, each pair coin twice, over `2^128`; `pr_badZk_le` is the union bound. `δcZk` is `εZk` on the
-statements the masked verifier can accept (`readyZk`, as `ready`), and `1` elsewhere. The slots read the statement's
-`m`, `k_log`, regions and points, as Deploy's `repRounds true`, and the `--zk` schedule's `k_0` and levels; rep `q` is
-table `q / 2`'s rep `q % 2`, its first coin after the link's and every earlier rep's rounds (`repStartZk`).
+statements the masked verifier can accept at one table (`readyZk`, as `ready`), and `1` elsewhere. The slots read the
+statement's `m`, `k_log`, regions and points, as Deploy's `repRounds true`, and the `--zk` schedule's `k_0` and levels;
+rep `q` is table `q / 2`'s rep `q % 2`, its first coin after the link's and every earlier rep's rounds (`repStartZk`).
 -/
 
 namespace FlockComplete
@@ -178,11 +178,12 @@ def BadZk (x : Claims.Msg) {k : ℕ} (r : Fin k → Coin) : Prop :=
 noncomputable def εZk (x : Claims.Msg) : ℝ :=
   ((outerSlotsZk x).length + (betaSlotsZk x).length + 2 * (rhoSlotsZk x).length) / 2 ^ 128
 
-/-- **The statements the masked verifier can accept**: it sets up the session, the session draws a unit, and the
-statement is under `2^56` bytes (`ready`'s reasons). -/
+/-- **The statements the masked verifier can accept**, at one table: it sets up the session at one table, the session
+draws a unit, and the statement is under `2^56` bytes (`ready`'s reasons). The `--zk` scope admits several tables,
+whose masked record is per table; `δcZk` is `1` there until it is. -/
 def readyZk (x : Claims.Msg) : Bool :=
   match setupOf true x with
-  | some (s, _, _) => s.read.draw.isSome && decide (x.length < 2 ^ 56)
+  | some (s, _, sts) => sts.size == 1 && s.read.draw.isSome && decide (x.length < 2 ^ 56)
   | none => false
 
 /-- **Flock's `δc` at the masked verifier**: `εZk` where the verifier can accept, else `1`. -/
