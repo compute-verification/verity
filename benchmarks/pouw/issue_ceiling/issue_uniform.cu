@@ -5,7 +5,7 @@
 // unsound. The question is whether a uniform instruction and a vector instruction can ISSUE in the same cycle.
 //
 // Warp-specialized test on one SMSP: some warps run a pure vector saturator (FFMA/IADD3), other warps run pure
-// uniform-datapath work (a runtime-trip inner loop whose induction + geometric keep-alive land on UIADD3/UISETP/ULEA).
+// uniform-datapath work (a runtime-trip inner loop whose induction is UIADD3/UISETP and each clock() read is CS2UR).
 // Run each alone and then both together on the same SMSPs:
 //   - one shared dispatch port  => both together take ~ the sum of the issue the two need (the vector rate FALLS when
 //                                  uniform warps are added), so a uniform instruction consumes a dispatch slot.
@@ -31,7 +31,7 @@ __global__ void __launch_bounds__(1024) k_spec(int iters, uint32_t ucount, uint3
   uint32_t acc[NACC];
 #pragma unroll
   for (int c = 0; c < NACC; c++) acc[c] = tid * 0x9e3779b9u + c * 0x85ebca6bu + 1u;
-  uint32_t v0 = s0, v1 = s0 ^ 0x5a5a5a5au, v2 = s0 + 0x9e3779b9u, v3 = s0 ^ 0xa5a5a5a5u;  // ILP-4 keep-alive
+  uint32_t uacc = s0;  // uniform accumulator; each inner step reads %clock (CS2UR, a uniform-datapath op ptxas can't drop)
   CLK_BEGIN
 #pragma unroll 1
   for (int it = 0; it < iters; it++) {
@@ -48,13 +48,11 @@ __global__ void __launch_bounds__(1024) k_spec(int iters, uint32_t ucount, uint3
       }
     }
     if (do_uni) {
-      // runtime-trip inner loop; induction + bound + geometric keep-alive land on the uniform datapath (UIADD3/UISETP/ULEA)
+      // runtime-trip inner loop; induction (j++/j<ucount) is UIADD3/UISETP and each clock() read is CS2UR (uniform
+      // datapath, non-eliminable). This is the purest stream of uniform-datapath ops ptxas will emit.
 #pragma unroll 1
       for (uint32_t j = 0; j < ucount; j++) {
-        v0 = v0 + v0 + j;
-        v1 = v1 + v1 + j;
-        v2 = v2 + v2 + j;
-        v3 = v3 + v3 + j;
+        uacc = uacc + (uint32_t)clock() + j;
       }
     }
   }
@@ -65,7 +63,7 @@ __global__ void __launch_bounds__(1024) k_spec(int iters, uint32_t ucount, uint3
     for (int c = 0; c < NACC; c++) vs ^= acc[c];
     vsink[blockIdx.x * blockDim.x + tid] = vs;
   }
-  if (do_uni && (v0 ^ v1 ^ v2 ^ v3) == 0x1234567u) usink[blockIdx.x] = tid;
+  if (do_uni && uacc == 0x1234567u) usink[blockIdx.x] = tid;
 }
 
 // ---- host ----------------------------------------------------------------------------------------------------------
