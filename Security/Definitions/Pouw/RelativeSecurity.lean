@@ -16,7 +16,10 @@ follow them into the spec:
 * the staged spot check (`StagePlay`, `StagedPlay`, `DStage`) and an adversary's window run on it (`StagedRun`);
 * the spot check over a round's overlapping draws: its bit points (`drawInd`, `mergeAt`), K∥'s products (`AffMulAt`),
   the per-draw deficiency (`ovDef`), the play (`OvPlay`, its game and errors), the round's bits, cell-blocks, draws
-  and coins (`OBits`, `OCells`, `ODraws`, `OSpot`), and an adversary's window run on it (`OverlapRun`).
+  and coins (`OBits`, `OCells`, `ODraws`, `OSpot`), and an adversary's window run on it (`OverlapRun`);
+* the parity luck's scope: one-sided products of any form (`LeftOnly`, `RightOnly`, `OneSided`; per draw,
+  `OneSidedAt`), `Z/2³²` read mod 2 (`toF2`), a cell-block's frame (`dFrame`), products two-sided at a frame
+  (`XBlind`, `YBlind`, `TwoSidedAt`) and charging purity (`SlpG.ChargePure`; across draws, `SlpG.ChargePureAt`).
 -/
 
 namespace Pouw.RelativeSecurity
@@ -248,6 +251,9 @@ end Design
 `{±1, …, ±64}`, and plane 0's weight is odd. -/
 def wRe : Fin 7 → ZMod (2 ^ 32) := ![1, 2, 4, 8, 16, 32, 65]
 
+/-- `Z/2³² → F₂`. -/
+def toF2 : ZMod (2 ^ 32) →+* ZMod 2 := ZMod.castHom (by norm_num) (ZMod 2)
+
 /-- A round's cell-blocks: cells `(i, l)` and blocks `t`. -/
 abbrev DCells (n n' B : ℕ) : Type := Fin n × Fin n' × Fin B
 
@@ -260,6 +266,18 @@ variable {Vl Vr R : Type} [Fintype Vl] [Fintype Vr] [DecidableEq Vl] [DecidableE
 /-- A product of two bit-affine operands, mixed or not. -/
 def AffProd (π : (Vl ⊕ Vr → R) → R) : Prop :=
   ∃ A B : BitAff (Vl ⊕ Vr) R, ∀ z, π z = A.eval z * B.eval z
+
+/-- A function of the bits that reads only U's side (`Vl`). -/
+def LeftOnly (g : (Vl ⊕ Vr → R) → R) : Prop :=
+  ∀ z z' : Vl ⊕ Vr → R, (∀ a, z (.inl a) = z' (.inl a)) → g z = g z'
+
+/-- A function of the bits that reads only the coins' side (`Vr`). -/
+def RightOnly (h : (Vl ⊕ Vr → R) → R) : Prop :=
+  ∀ z z' : Vl ⊕ Vr → R, (∀ b, z (.inr b) = z' (.inr b)) → h z = h z'
+
+/-- **A one-sided product**: a function of U's bits times a function of the coins, each of any form. -/
+def OneSided (π : (Vl ⊕ Vr → R) → R) : Prop :=
+  ∃ g h, LeftOnly g ∧ RightOnly h ∧ ∀ z, π z = g z * h z
 
 end Chain
 
@@ -349,6 +367,45 @@ def toSlp (P : SlpG V R N) : Slp V R N := ⟨P.isProd, fun _ => ⟨0, 0⟩, fun 
 def coef (P : SlpG V R N) : Fin N → Fin N → R := P.toSlp.coef
 
 end SlpG
+
+section ParitySplit
+
+variable {V : Type} {K : ℕ}
+
+/-- A function of the bit points blind to a frame's `x` bits: it agrees on bit points that agree off them. -/
+def XBlind (fr : Fin K ⊕ Fin K → V) (g : Finset V → ZMod 2) : Prop :=
+  ∀ S S' : Finset V, (∀ v, (∀ j, fr (.inl j) ≠ v) → (v ∈ S ↔ v ∈ S')) → g S = g S'
+
+/-- A function of the bit points blind to a frame's `y` bits. -/
+def YBlind (fr : Fin K ⊕ Fin K → V) (g : Finset V → ZMod 2) : Prop :=
+  ∀ S S' : Finset V, (∀ v, (∀ j, fr (.inr j) ≠ v) → (v ∈ S ↔ v ∈ S')) → g S = g S'
+
+variable [DecidableEq V] {A : Type} [CommRing A]
+
+/-- **A product two-sided at a frame**: mod 2 it reads both the frame's `x` bits and its `y` bits. -/
+def TwoSidedAt (fr : Fin K ⊕ Fin K → V) (φ : A →+* ZMod 2) (π : (V → A) → A) : Prop :=
+  ¬XBlind fr (fun S => φ (π (bitInd S))) ∧ ¬YBlind fr (fun S => φ (π (bitInd S)))
+
+end ParitySplit
+
+section ParityDesign
+
+variable {Ar : Type} [CommRing Ar] {n L np B n' : ℕ}
+
+/-- **Cell-block `(i, l, t)`'s frame at plane `p₀`**: its `x` bits are row `i` of U at plane `p₀` (U's column `j`
+serves every block), its `y` bits the block's coins `b(t, ·, l)`. -/
+def dFrame (p₀ : Fin np) (c : DCells n n' B) : Fin L ⊕ Fin L → DBits n L np B n' :=
+  Sum.elim (fun j => .inl (c.1, j, p₀)) fun j => .inr (c.2.2, j, c.2.1)
+
+/-- **Charging purity** of a run (RS-E-REF r6 VI.2.1): no product is two-sided at the frames of two cell-blocks
+whose words read it. Prefix chains, merges and partners are free: a product of block `t'` read by a later block's
+word reads none of that block's coins. -/
+def SlpG.ChargePure (φ : Ar →+* ZMod 2) (p₀ : Fin np) {N : ℕ} (P : SlpG (DBits n L np B n') Ar N)
+    (word : DCells n n' B → Fin N) : Prop :=
+  ∀ c c' i, c ≠ c' → P.coef (word c) i ≠ 0 → TwoSidedAt (dFrame p₀ c) φ (P.prod i) → P.coef (word c') i ≠ 0 →
+    ¬TwoSidedAt (dFrame p₀ c') φ (P.prod i)
+
+end ParityDesign
 
 section Luck
 
@@ -454,6 +511,25 @@ abbrev ODraws (St : ℕ) (n : Fin St → ℕ) (L np : ℕ) (B n' : Fin St → �
 /-- A round's coins with overlapping stages: the check's cell-block, among every stage's, and every stage's draw. -/
 abbrev OSpot (St : ℕ) (n : Fin St → ℕ) (L np : ℕ) (B n' : Fin St → ℕ) : Type :=
   OCells St n n' B × ODraws St n L np B n'
+
+section ParityOverlapRound
+
+variable {St : ℕ} {Ar : Type} [CommRing Ar] {n B n' : Fin St → ℕ} {L np : ℕ}
+
+/-- **K∥'s products for one-sided operands of any form**: at every bit point of the other draws, one-sided on draw
+`t`'s bits, for every draw `t`; each side may depend on the other draws' bits in any way. -/
+def OneSidedAt (π : (OBits St n L np B n' → Ar) → Ar) : Prop :=
+  ∀ (W : ODraws St n L np B n') (t : Fin St), OneSided fun z => π (mergeAt W t z)
+
+/-- **Charging purity across draws**: at every bit point of the draws, no product is two-sided at the frames of two
+cell-blocks, of any stages, whose words read it. -/
+def SlpG.ChargePureAt (φ : Ar →+* ZMod 2) (p₀ : Fin np) {N : ℕ} (P : SlpG (OBits St n L np B n') Ar N)
+    (word : OCells St n n' B → Fin N) : Prop :=
+  ∀ (W : ODraws St n L np B n') (c c' : OCells St n n' B) i, c ≠ c' → P.coef (word c) i ≠ 0 →
+    TwoSidedAt (dFrame p₀ c.2) φ (fun z => P.prod i (mergeAt W c.1 z)) → P.coef (word c') i ≠ 0 →
+      ¬TwoSidedAt (dFrame p₀ c'.2) φ fun z => P.prod i (mergeAt W c'.1 z)
+
+end ParityOverlapRound
 
 /-- **An adversary's window run on the staged design**, as the analysis reads it: its staged play (per round and
 stage, the error table fixed by the stage's operand commitment before its draw), the per-round binding and
