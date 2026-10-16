@@ -14,19 +14,22 @@ The old theorems' extraction step (`Extract.joint_acc_le`) is stated over a game
 * **The table** (`opθ`, `firstTable_opθ`): an accepted run's opening at a position of the word is its first opened
   column there (`lookCol`), a rejected run's none; on accepted reruns the extractor's table (`firstTable`) is the filled
   word (`fillWord`, `fillWord_eq_ofFn`).
-* **The two obligations** at the verifier:
+* **The three obligations** at the verifier, for a predicate `Ok` on columns (at the records, `wide`: the code's
+  width, the zero column's):
   * `TableBoundθ`: at every statement and prover, escapes that fit the weight with one more fork event, such that at
-    every tape and every table at the word's positions that does not extract (`GoodTable`), a run accepts with
-    probability at most `ε_table + escapes(ω)` beyond that of accepting and opening a position off the table. This is
-    the old theorems' fixed-table bound (`table_sound_compiled_of_table`: `Pr[accepted ∧ T uncommitted] ≤ ε_c⁻ +
-    Pr[off T]`) at the deployed verifier.
+    every tape and every table at the word's positions whose columns `Ok` admits and that does not extract
+    (`GoodTable`), a run accepts with probability at most `ε_table + escapes(ω)` beyond that of accepting and opening a
+    position off the table. This is the old theorems' fixed-table bound from accepted runs
+    (`session_sound_of_table_acc`: `Pr[Acc ∧ T uncommitted] ≤ ε_c⁻ + Pr[Acc ∧ off T]`) at the deployed verifier.
+  * `ColsOk`: an accepted run opens only columns `Ok` admits. A column of the wrong width differs from every codeword's
+    column, while the old table reads it lane by lane, so the old bound speaks only of tables of full-width columns.
   * `ConflictTied`: two accepted runs at one tape that open one position of the word to two columns collide among the
     verifier's calls.
 * **One wait** (`oneWaitθ_of_tableBound`): `joint_acc_le` at `runGame`, with the conflict term an escape at round `0`
   (two independent runs, `forkCoins_zero`) of weight `k` (`Escapes.addFork`), gives `OneWaitθ` when the word is no
-  longer than `N₀`. At the deployed records (`plain_oneWaitθ_of_tableBound`, `zk_oneWaitθ_of_tableBound`) the word is
-  `N₀` long, and KS at both instances asks only the two obligations (`plain_KSθ_of_tableBound`,
-  `zk_KSθ_of_tableBound`).
+  longer than `N₀` and `Ok` admits the zero column. At the deployed records (`plain_oneWaitθ_of_tableBound`,
+  `zk_oneWaitθ_of_tableBound`) the word is `N₀` long, and KS at both instances asks only the three obligations
+  (`plain_KSθ_of_tableBound`, `zk_KSθ_of_tableBound`).
 -/
 
 namespace Claims.Flock
@@ -142,6 +145,20 @@ theorem lookCol_append (os os' : List (ℕ × Col)) (q : ℕ) :
   unfold lookCol
   rw [List.find?_append]
   cases os.find? fun p => decide (p.1 = q) <;> rfl
+
+omit [DecidableEq Col] in
+/-- A column the joined openings open at `q` is one list's. -/
+theorem lookCol_flatMap_some {β : Type} (cs : β → List (ℕ × Col)) (q : ℕ) (u : Col) :
+    ∀ bs : List β, lookCol (bs.flatMap cs) q = some u → ∃ b ∈ bs, lookCol (cs b) q = some u
+  | [], h => by simp [lookCol] at h
+  | b :: bs, h => by
+    rw [List.flatMap_cons, lookCol_append] at h
+    cases hb : lookCol (cs b) q with
+    | some v => rw [hb] at h; exact ⟨b, List.mem_cons_self, hb.trans h⟩
+    | none =>
+      rw [hb] at h
+      obtain ⟨b', hb', h'⟩ := lookCol_flatMap_some cs q u bs h
+      exact ⟨b', List.mem_cons_of_mem _ hb', h'⟩
 
 omit [DecidableEq Col] in
 theorem fillWord_eq_ofFn (z : Col) (N : ℕ) (os : List (ℕ × Col)) :
@@ -281,16 +298,24 @@ section OneWait
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
 
-/-- **The fixed-table bound at the filled word**, the old theorems' `table_sound_compiled_of_table` at the deployed
-verifier: at every statement and prover, escapes that fit the weight with one more fork event of weight `k`, such that
-at every tape and every table at the word's positions that does not extract, a run accepts with probability at most
-`ε_table + escapes(ω)` beyond that of accepting and opening a position of the word off the table. -/
-def TableBoundθ (H : Msg → Msg) (D : Deploy Coin Col T) (Rd : Radius Col T) : Prop :=
+/-- **The fixed-table bound at the filled word**, the old theorems' fixed-table bound from accepted runs
+(`session_sound_of_table_acc`: `Pr[Acc ∧ T uncommitted] ≤ ε_c⁻ + Pr[Acc ∧ off T]`) at the deployed verifier: at every
+statement and prover, escapes that fit the weight with one more fork event of weight `k`, such that at every tape and
+every table at the word's positions whose columns `Ok` admits and which does not extract, a run accepts with
+probability at most `ε_table + escapes(ω)` beyond that of accepting and opening a position of the word off the
+table. -/
+def TableBoundθ (H : Msg → Msg) (D : Deploy Coin Col T) (Rd : Radius Col T) (Ok : Msg → Col → Prop) : Prop :=
   ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω), ∃ e : Escapes H D.V P x,
-    e.FitsFork (D.weight x) (D.k x) ∧ ∀ (ω : Ω) (C : Fin (Rd.N x) → Col), ¬ GoodTable H D Rd x C →
+    e.FitsFork (D.weight x) (D.k x) ∧ ∀ (ω : Ω) (C : Fin (Rd.N x) → Col), (∀ p, Ok x (C p)) →
+      ¬ GoodTable H D Rd x C →
       accPr H D.V P x ω ≤ D.εtable x + e.term ω +
         Pr fun r : Fin (D.V.k x) → Coin => (run H P D.V x ω r).out = .acc ∧
           ∃ (p : Fin (Rd.N x)) (u : Col), lookCol (D.cols (run H P D.V x ω r).seen) p.val = some u ∧ u ≠ C p
+
+/-- **An accepted run opens only columns `Ok` admits** at the word's positions. -/
+def ColsOk (H : Msg → Msg) (D : Deploy Coin Col T) (Rd : Radius Col T) (Ok : Msg → Col → Prop) : Prop :=
+  ∀ (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin) (q : ℕ) (u : Col),
+    (run H P D.V x ω r).out = .acc → q < Rd.N x → lookCol (D.cols (run H P D.V x ω r).seen) q = some u → Ok x u
 
 /-- **Two accepted runs at one tape open each position of the word to one column**, or the verifier's calls in the two
 runs collide. -/
@@ -301,10 +326,12 @@ def ConflictTied (H : Msg → Msg) (D : Deploy Coin Col T) (Rd : Radius Col T) :
     u ≠ v → TiedColl H ((run H P D.V x ω r).vLog ++ (run H P D.V x ω r').vLog)
 
 /-- **Flock's one-wait bound at the filled word, from the table's bound**: when the word is no longer than `N₀`,
-`ε_table ≥ 0`, the verifier takes a round, and `k ≥ 1` wherever it accepts some run. -/
+`ε_table ≥ 0`, the verifier takes a round, `k ≥ 1` wherever it accepts some run, and `Ok` admits the zero column and
+every column an accepted run opens. -/
 theorem oneWaitθ_of_tableBound (H : Msg → Msg) (D : Deploy Coin Col T) (Rd : Radius Col T)
     (hN : ∀ x, (Rd.N x : ℝ) ≤ D.N₀ x) (hεt : ∀ x, 0 ≤ D.εtable x) (hVk : ∀ x, 0 < D.V.k x)
-    (hk : ∀ x, 1 ≤ D.k x ∨ NoAcc H D.V x) (hconf : ConflictTied H D Rd) (htab : TableBoundθ H D Rd) :
+    (hk : ∀ x, 1 ≤ D.k x ∨ NoAcc H D.V x) (Ok : Msg → Col → Prop) (hz : ∀ x, Ok x (Rd.zero x))
+    (hok : ColsOk H D Rd Ok) (hconf : ConflictTied H D Rd) (htab : TableBoundθ H D Rd Ok) :
     OneWaitθ H D Rd := by
   classical
   intro x Ω _ _ P
@@ -345,8 +372,17 @@ theorem oneWaitθ_of_tableBound (H : Msg → Msg) (D : Deploy Coin Col T) (Rd : 
           fun p => fillAt (Rd.zero x) ((seenOf H D.V P x ω bs).flatMap D.cols) p.val :=
         funext (firstTable_opθ H D Rd P x ω bs hall)
       rwa [this] at hg
+    have hOk : ∀ p, Ok x (firstTable (opθ H D Rd P x ω) (fun _ => Rd.zero x) bs p) := by
+      intro p
+      rw [firstTable_opθ H D Rd P x ω bs hall p, fillAt_eq_lookCol]
+      cases hl : lookCol ((seenOf H D.V P x ω bs).flatMap D.cols) p.val with
+      | none => exact hz x
+      | some u =>
+        rw [seenOf, List.flatMap_map] at hl
+        obtain ⟨b, hb', hu⟩ := lookCol_flatMap_some (fun r => D.cols (run H P D.V x ω r).seen) p.val u bs hl
+        exact hok x Ω P ω b p.val u (hall b hb') p.isLt hu
     rw [← accPr_eq, expect_runGame, ← Claims.Bridge.Pr_eq_Ex]
-    refine (hb ω _ hgood).trans (le_of_eq ?_)
+    refine (hb ω _ hOk hgood).trans (le_of_eq ?_)
     congr 1
     refine Pr_congr fun r => ?_
     unfold Acc Off opθ
@@ -405,6 +441,8 @@ namespace FlockDeploy.KS
 
 open Flock
 
+local notation "𝔽" => FlockLevel3.GF128
+
 theorem wordLen_eq_N₀ (zk : Bool) (x : Claims.Msg) : (wordLen zk x : ℝ) = N₀ zk x := by
   unfold wordLen N₀
   cases (tables zk x).head? with
@@ -423,35 +461,43 @@ theorem k_one_zk (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) 
     1 ≤ (deployZk rel).k x ∨ Claims.Flock.NoAcc sha512 (deployZk rel).V x :=
   (k_range_zk rel x).imp_left fun h => by omega
 
+/-- **A column of the code's width**: as long as the zero column, table 0's level-0 lanes (under `--zk` with the extra
+lanes). -/
+def wide (zk : Bool) (x : Claims.Msg) (u : List 𝔽) : Prop := u.length = (zeroCol zk x).length
+
 /-- **The deployed plain verifier: one wait's bound at the filled word from the table's bound**, at SHA-512. -/
 theorem plain_oneWaitθ_of_tableBound (rel : Readable.Parsed → Readable.Relation)
+    (hok : Claims.Flock.ColsOk sha512 (deployPlain rel) plainRadius (wide false))
     (hconf : Claims.Flock.ConflictTied sha512 (deployPlain rel) plainRadius)
-    (htab : Claims.Flock.TableBoundθ sha512 (deployPlain rel) plainRadius) :
+    (htab : Claims.Flock.TableBoundθ sha512 (deployPlain rel) plainRadius (wide false)) :
     Claims.Flock.OneWaitθ sha512 (deployPlain rel) plainRadius :=
   Claims.Flock.oneWaitθ_of_tableBound sha512 (deployPlain rel) plainRadius (fun x => (wordLen_eq_N₀ false x).le)
-    (fun x => εtable_nonneg false x) (V_k_pos false) (k_one_plain rel) hconf htab
+    (fun x => εtable_nonneg false x) (V_k_pos false) (k_one_plain rel) (wide false) (fun _ => rfl) hok hconf htab
 
 /-- **The deployed masked (`--zk`) verifier: one wait's bound at the filled word from the table's bound**, at
 SHA-512. -/
 theorem zk_oneWaitθ_of_tableBound (rel : Readable.Parsed → Readable.Relation)
+    (hok : Claims.Flock.ColsOk sha512 (deployZk rel) zkRadius (wide true))
     (hconf : Claims.Flock.ConflictTied sha512 (deployZk rel) zkRadius)
-    (htab : Claims.Flock.TableBoundθ sha512 (deployZk rel) zkRadius) :
+    (htab : Claims.Flock.TableBoundθ sha512 (deployZk rel) zkRadius (wide true)) :
     Claims.Flock.OneWaitθ sha512 (deployZk rel) zkRadius :=
   Claims.Flock.oneWaitθ_of_tableBound sha512 (deployZk rel) zkRadius (fun x => (wordLen_eq_N₀ true x).le)
-    (fun x => εtable_nonneg true x) (V_k_pos true) (k_one_zk rel) hconf htab
+    (fun x => εtable_nonneg true x) (V_k_pos true) (k_one_zk rel) (wide true) (fun _ => rfl) hok hconf htab
 
 /-- **The deployed plain verifier: KS at the filled word from the table's bound**, at SHA-512. -/
 theorem plain_KSθ_of_tableBound (rel : Readable.Parsed → Readable.Relation)
+    (hok : Claims.Flock.ColsOk sha512 (deployPlain rel) plainRadius (wide false))
     (hconf : Claims.Flock.ConflictTied sha512 (deployPlain rel) plainRadius)
-    (htab : Claims.Flock.TableBoundθ sha512 (deployPlain rel) plainRadius) :
+    (htab : Claims.Flock.TableBoundθ sha512 (deployPlain rel) plainRadius (wide false)) :
     Claims.Flock.KSθ sha512 (deployPlain rel) plainRadius :=
-  plain_of_oneWaitθ_sha512 rel (plain_oneWaitθ_of_tableBound rel hconf htab)
+  plain_of_oneWaitθ_sha512 rel (plain_oneWaitθ_of_tableBound rel hok hconf htab)
 
 /-- **The deployed masked (`--zk`) verifier: KS at the filled word from the table's bound**, at SHA-512. -/
 theorem zk_KSθ_of_tableBound (rel : Readable.Parsed → Readable.Relation)
+    (hok : Claims.Flock.ColsOk sha512 (deployZk rel) zkRadius (wide true))
     (hconf : Claims.Flock.ConflictTied sha512 (deployZk rel) zkRadius)
-    (htab : Claims.Flock.TableBoundθ sha512 (deployZk rel) zkRadius) :
+    (htab : Claims.Flock.TableBoundθ sha512 (deployZk rel) zkRadius (wide true)) :
     Claims.Flock.KSθ sha512 (deployZk rel) zkRadius :=
-  zk_of_oneWaitθ_sha512 rel (zk_oneWaitθ_of_tableBound rel hconf htab)
+  zk_of_oneWaitθ_sha512 rel (zk_oneWaitθ_of_tableBound rel hok hconf htab)
 
 end FlockDeploy.KS
