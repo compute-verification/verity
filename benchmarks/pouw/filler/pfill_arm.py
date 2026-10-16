@@ -15,8 +15,11 @@ whatever runs on the filler's SMs.
 # No `from __future__ import annotations`: arms.load runs this file without registering it in sys.modules, and
 # dataclasses needs the module to resolve string annotations.
 import os
+import sys
 from dataclasses import dataclass, field
+from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # fused_arm (the fused tables' FusedStep), wherever loaded from
 from arms import FILL_V1_SPLIT, NONE, Filler, Placement, point_lookup
 
 SOURCES = ("benchmarks/pouw/decode_capacity/dcap.cu", "benchmarks/pouw/decode_capacity/pfill.cuh",
@@ -273,6 +276,25 @@ class PFillKFused2(PFillKFused):
     choice: str = ("an offline table of 18 (B, L) points (split SMs, FILL's step or cuBLASLt's) from FILL's FusedPump rows, "
                    "POWER_SPLIT and screens s8-s9; a lookup, a green split and one graph a step at serving time")
     table = FUSED_K2
+
+
+#: FUSED_K2 with the pump on 92 SMs at 132/5K (s9: 1.041 twice, margin 0.009 to the gate against prefill's 0.011)
+FUSED_K3 = {**FUSED_K2, (132, 5120): _flin(92, lm=0)}
+
+
+@dataclass
+class PFillKFused3(PFillKFused2):
+    """pfill-k-fused2 with 8 more pump SMs at 132/5K, the reasoning mix's decode: more coverage, less margin there."""
+
+    name: str = "pfill-k-fused3"
+    lineage: dict = field(default_factory=lambda: {
+        "parent": "pfill-k-fused2", "approach": "pouw/filler-proved",
+        "mechanism": ["filler:fresh-noise-imma", "noise:sha512-coins-01", "receipt:ram-k32", "place:split",
+                      "split:per-point-table", "fused:flin-serving", "fused:persistent-attention", "fused:lm-head-flin",
+                      "prefill:split"],
+        "hypothesis": "FILL's step on 96 SMs holds 132/5K at 1.041, so the pump on 92 lifts the reasoning mix by another "
+                      "0.03 inside the gate"})
+    table = FUSED_K3
 
 
 def products_per_slot(lineage: dict) -> int:
