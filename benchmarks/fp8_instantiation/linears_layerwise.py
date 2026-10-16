@@ -25,9 +25,13 @@ accumulation.  Method names are '-'-joined tokens:
                 (W = 64 W_hi + W_lo, W_lo in 0..63 so W_lo + U fits int8 for U up to 64)
     t0x, lx=L.L..   diagnostics, outside the protocol: position 0 exact, or the listed layers exact
     sN          the dither's seed
+    at          attention by `attention.py` (branch cursor/d4-attention-ea24, with its `exact_grid.py`, found in
+                --attn-dir) under its method --attn (e.g. the adopted `int8-rot-eqp=w64-poff64-psink-kc-kv=dith-s0`),
+                one window at a time: the end to end.  Its peels are checked on window 0 of every layer
 
-    python linears_layerwise.py SNAPSHOT EVAL_IDS.npy OUT_DIR [--calib CALIB_IDS.npy] [--batch B] [--diag D] METHOD...
-    python linears_layerwise.py --selftest
+    python linears_layerwise.py SNAPSHOT EVAL_IDS.npy OUT_DIR [--calib CALIB_IDS.npy] [--batch B] [--diag D]
+        [--attn METHOD --attn-dir DIR] METHOD...
+    python linears_layerwise.py --selftest [ATTN_DIR]
 """
 from __future__ import annotations
 
@@ -54,6 +58,15 @@ GROUP = {"self_attn.q_proj": "qkv", "self_attn.k_proj": "qkv", "self_attn.v_proj
 #: the last linear reading each input group (its rotated input is dropped after it)
 LAST = {"self_attn.v_proj", "self_attn.o_proj", "mlp.up_proj", "mlp.down_proj"}
 A2_BASE, W2_BASE = 127, 64
+#: attention.py, once --attn-dir is on the path, and the method its `at` methods' attention runs
+ATTN: dict = {"mod": None, "method": None}
+
+
+def load_attention(attn_dir: str, method: str) -> None:
+    sys.path.insert(0, attn_dir)
+    import attention
+    attention.parse(method)
+    ATTN.update(mod=attention, method=method)
 
 
 # ---------------------------------------------------------------- rotations
@@ -130,11 +143,12 @@ class Rotation:
 
 def parse(method: str) -> dict:
     spec = {"method": method, "a": None, "top": 127, "rot": "q", "wg": 0, "gptq": False, "sm": 0, "oc": 0, "t0": False,
-            "xt": 0, "a2": set(), "w2": set(), "t0x": False, "lx": set(), "seed": 0}
+            "xt": 0, "a2": set(), "w2": set(), "t0x": False, "lx": set(), "seed": 0, "at": False}
     toks = method.split("-")
     if toks[0] == "bf16":
-        if len(toks) > 1:
+        if toks[1:] not in ([], ["at"]):
             raise ValueError(method)
+        spec["at"] = len(toks) > 1
         return spec
     m0 = re.fullmatch(r"([rd])(\d+)", toks[0])
     if not m0:
@@ -145,7 +159,7 @@ def parse(method: str) -> dict:
     for t in toks[1:]:
         if t in ("hq", "nr"):
             spec["rot"] = "h" if t == "hq" else "n"
-        elif t in ("gptq", "t0", "t0x"):
+        elif t in ("gptq", "t0", "t0x", "at"):
             spec[t] = True
         elif re.fullmatch(r"(wg|sm|oc|xt|s)\d+", t):
             key = re.match(r"[a-z]+", t).group(0)
@@ -501,6 +515,11 @@ def evaluate(snapshot: str, ids: np.ndarray, methods: list[str], out: Path, cali
     specs = {m: parse(m) for m in methods}
     if any(needs_calib(s) for s in specs.values()) and calib_ids is None:
         raise ValueError("gptq, sm and oc need --calib")
+    A = ATTN["mod"]
+    if any(s["at"] for s in specs.values()) and A is None:
+        raise ValueError("`at` needs --attn and --attn-dir")
+    aspec = A.parse(ATTN["method"]) if A is not None else None
+    attn_rec: dict = {m: {"peel": [], "err": [0.0, 0.0]} for m in methods if specs[m]["at"]}
     W = Weights(snapshot)
     n_layers = config.num_hidden_layers
     W.prefetch(0)
@@ -528,6 +547,8 @@ def evaluate(snapshot: str, ids: np.ndarray, methods: list[str], out: Path, cali
         hooks = [layer.get_submodule(n).register_forward_hook(make_hook(n, lw)) for n in LINEARS]
 
         def run(h: torch.Tensor, spec, w0: int, extra=None) -> torch.Tensor:
+            if spec is not None and spec["at"]:
+                return torch.cat([run_at(h[j:j + 1], spec, w0 + j) for j in range(h.shape[0])])
             B = h.shape[0]
             ctx = {"w0": w0, "T": T, "pos0": torch.arange(B, device=device) * T}
             if extra:
@@ -536,6 +557,21 @@ def evaluate(snapshot: str, ids: np.ndarray, methods: list[str], out: Path, cali
             cos, sin = rotary(h, pos)
             with torch.no_grad():
                 return layer(h, attention_mask=None, position_embeddings=(cos, sin))
+
+        def run_at(h: torch.Tensor, spec, w: int) -> torch.Tensor:
+            # attention.py's edited attention replaces the eager path, one window at a time (its window seeds the noise)
+            config._attn_implementation = "eager"
+            A.STATE.update(spec=aspec, calls=0, err=[0.0, 0.0], record={}, peel=[], window=w)
+            try:
+                y = run(h, {**spec, "at": False}, w)
+            finally:
+                config._attn_implementation = "sdpa"
+                A.STATE["spec"] = None
+            assert A.STATE["calls"] == 1, A.STATE["calls"]
+            rec = attn_rec[spec["method"]]
+            rec["peel"].extend(A.STATE["peel"])
+            rec["err"] = [a + b for a, b in zip(rec["err"], A.STATE["err"])]
+            return y
 
         try:
             # calibration: channel maxima and rotated second moments of every input group, on the bf16 stream
@@ -621,6 +657,10 @@ def evaluate(snapshot: str, ids: np.ndarray, methods: list[str], out: Path, cali
                                        "id": int(ids[j // (T - 1), j % (T - 1) + 1]), "dnll": float(d.flatten()[j])}
                                       for j in flat]
         results[m]["divergence"] = diverge[m]
+        if m in attn_rec:
+            rec = attn_rec[m]
+            results[m].update(attn=ATTN["method"], attn_peel_exact=all(rec["peel"]), attn_peel_checks=len(rec["peel"]),
+                              attn_rel_err_w0=math.sqrt(rec["err"][0] / rec["err"][1]) if rec["err"][1] else None)
     np.savez_compressed(out / "nll.npz", **{m.replace("=", "_"): v for m, v in nll_all.items()})
     results["_meta"] = {"windows": int(N), "T": int(T), "batch": batch, "diag_windows": diag_windows,
                         "seconds": round(time.time() - t_start, 1), "diag": diag, "resid": resid}
@@ -696,11 +736,13 @@ def divergence(h: torch.Tensor, ref: torch.Tensor, li: int) -> dict:
 
 # ---------------------------------------------------------------- selftest
 
-def selftest() -> dict:
+def selftest(attn_dir: str | None = None) -> dict:
     torch.manual_seed(0)
     # whole-model divergences are compared; one thread fixes the CPU kernels' reduction order (attention.py does the same)
     torch.set_num_threads(1)
     out: dict = {}
+    if attn_dir:
+        sys.path.insert(0, attn_dir)
     h28 = paley28()
     assert torch.equal(h28 @ h28.T, 28 * torch.eye(28, dtype=torch.float64)) and set(h28.unique().tolist()) == {-1.0, 1.0}
     for k in (56, 64, 448):
@@ -759,6 +801,24 @@ def selftest() -> dict:
     d = res["_meta"]["diag"][0]
     assert set(DIAG_CONFIGS) <= set(d["self_attn.q_proj"]) and d["self_attn.q_proj"]["r127"]["fro"] < d["self_attn.q_proj"]["d63"]["fro"]
     out["diag_l0_q"] = d["self_attn.q_proj"]
+    if attn_dir:
+        # attention.py's unedited FP32 attention through the `at` path is the model's, and the adopted design's peels
+        # are exact on window 0 of every layer
+        load_attention(attn_dir, "ref")
+        ra = evaluate(str(tmp), ids.numpy(), ["bf16", "bf16-at", "r127-lx=0.1.2-at"], tmp, batch=2, device="cpu",
+                      log=lambda s: None)
+        out["at_ref_ppl"] = {m: ra[m]["ppl"] for m in ("bf16", "bf16-at", "r127-lx=0.1.2-at")}
+        assert all(abs(v / ra["bf16"]["ppl"] - 1) < 5e-3 for v in out["at_ref_ppl"].values()), out["at_ref_ppl"]
+        adopted = "int8-rot-eqp=w64-poff64-psink-kc-kv=dith-s1"
+        load_attention(attn_dir, adopted)
+        ra = evaluate(str(tmp), ids.numpy(), ["bf16", "bf16-at", "d63-at", "d63-sm50-at"], tmp, calib_ids=calib.numpy(),
+                      batch=2, device="cpu", log=lambda s: None)
+        out["at_adopted"] = {m: {k: ra[m].get(k) for k in ("ppl", "attn_peel_exact", "attn_peel_checks", "attn_rel_err_w0")}
+                             for m in ("bf16-at", "d63-at", "d63-sm50-at")}
+        for m, r in out["at_adopted"].items():
+            assert r["attn_peel_exact"] and r["attn_peel_checks"] == cfg.num_hidden_layers * cfg.num_key_value_heads * 3, (m, r)
+        assert ra["d63-at"]["ppl"] != ra["bf16-at"]["ppl"] and math.isfinite(ra["d63-sm50-at"]["ppl"]), out["at_adopted"]
+        ATTN.update(mod=None, method=None)
     # the product, per method, against an independent float64 computation on one linear
     x = torch.randn(64, 448) * torch.rand(448)
     x[0, 5] = 300.0
@@ -793,11 +853,11 @@ def selftest() -> dict:
 
 def main(argv: list[str]) -> int:
     if argv[0] == "--selftest":
-        print(json.dumps(selftest(), indent=1, default=str))
+        print(json.dumps(selftest(argv[1] if len(argv) > 1 else None), indent=1, default=str))
         return 0
     snapshot, ids_path, out = argv[0], argv[1], Path(argv[2])
     rest = argv[3:]
-    calib, batch, diag = None, 4, 0
+    calib, batch, diag, attn, attn_dir = None, 4, 0, None, None
     while rest and rest[0].startswith("--"):
         flag, val, rest = rest[0], rest[1], rest[2:]
         if flag == "--calib":
@@ -806,8 +866,16 @@ def main(argv: list[str]) -> int:
             batch = int(val)
         elif flag == "--diag":
             diag = int(val)
+        elif flag == "--attn":
+            attn = val
+        elif flag == "--attn-dir":
+            attn_dir = val
         else:
             raise SystemExit(f"unknown flag {flag}")
+    if (attn is None) != (attn_dir is None):
+        raise SystemExit("--attn and --attn-dir go together")
+    if attn:
+        load_attention(attn_dir, attn)
     out.mkdir(parents=True, exist_ok=True)
     ids = np.load(ids_path)
     for m in rest:

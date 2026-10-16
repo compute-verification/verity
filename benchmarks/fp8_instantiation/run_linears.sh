@@ -5,9 +5,11 @@
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --custody-ttl 12h \
 #     --env GPU_LEASE_WHO=... --env LL_IDS=c4val2048x16.npy [--env LL_CALIB=c4cal2048x16.npy] [--env LL_DIAG=4] \
 #     --env LL_METHODS="bf16 r127 d63 ..." [--env LL_MODEL=llama70b|llama8b] [--env LL_TAG=SUBDIR] \
+#     [--env LL_ATTN=int8-rot-eqp=w64-poff64-psink-kc-kv=dith-s0 --send attention.py --send exact_grid.py] \
 #     --send c4val2048x16.npy [--send c4cal2048x16.npy] -- bash benchmarks/fp8_instantiation/run_linears.sh
 #
 # LL_IDS / LL_CALIB name files sent with the run (c4_windows.py: held-out C4 validation windows, calibration disjoint).
+# LL_ATTN is the attention method of the `at` methods, run by the sent attention.py (branch cursor/d4-attention-ea24).
 set -uo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out${LL_TAG:+/$LL_TAG}
 mkdir -p "$O"
@@ -20,9 +22,10 @@ esac
 export SNAP HF_HOME=/workspace/hf HF_HUB_OFFLINE=1
 IN=$RESEARCH_RUN_DIR/inputs
 export ARGS="$IN/${LL_IDS:?} $O ${LL_CALIB:+--calib $IN/$LL_CALIB} --batch ${LL_BATCH:-4} --diag ${LL_DIAG:-0}"
+ARGS+="${LL_ATTN:+ --attn $LL_ATTN --attn-dir $IN}"
 export LL_METHODS=${LL_METHODS:?}
 S=benchmarks/fp8_instantiation/linears_layerwise.py
-"$PY" "$S" --selftest > "$O/selftest.json" 2> "$O/selftest_stderr.txt" || { echo "selftest failed" | tee "$O/status.txt"; exit 3; }
+"$PY" "$S" --selftest ${LL_ATTN:+"$IN"} > "$O/selftest.json" 2> "$O/selftest_stderr.txt" || { echo "selftest failed" | tee "$O/status.txt"; exit 3; }
 # shellcheck disable=SC2016
 gpu-lease 1 --wait --max-min "${LL_MAX_MIN:-90}" -- bash -c '
   nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,clocks.mem,power.limit --format=csv -i "$GPU_LEASE_UUID" > "$O/gpu.txt" 2>&1
