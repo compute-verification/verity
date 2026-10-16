@@ -62,7 +62,7 @@ theorem plain_tableBoundθAt_of_sessions (rel : Readable.Parsed → Readable.Rel
               (L.model (Refine.regionsOf st)) ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal spec.mPts [] [] cap₀)),
             (Claims.Pr fun r : Fin ((V false).k x) → Coin => (Claims.run sha512 P (V false) x ω r).out = .acc ∧
                 ¬ ∃ (p : Fin (wordLen false x)) (u : List 𝔽),
-                  Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen) p.val = some u ∧
+                  Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen 0) p.val = some u ∧
                     u ≠ C p) ≤
               (∑ t, expect (ind fun outs => AccOne outs ∧ ¬ Off₀L Refine.H512 Refine.enc512 Refine.leaf512
                   ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ cap₀ (Claims.Flock.oracleOf C) (outs.getD 0 dfltOutL))
@@ -126,14 +126,14 @@ theorem plain_tableBoundθAt_of_sessions (rel : Readable.Parsed → Readable.Rel
   have hsplit : Claims.accPr sha512 (V false) P x ω ≤
       (Claims.Pr fun r : Fin ((V false).k x) → Coin => (Claims.run sha512 P (V false) x ω r).out = .acc ∧
         ¬ ∃ (p : Fin (wordLen false x)) (u : List 𝔽),
-          Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen) p.val = some u ∧ u ≠ C p) +
+          Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen 0) p.val = some u ∧ u ≠ C p) +
       Claims.Pr fun r : Fin ((V false).k x) → Coin => (Claims.run sha512 P (V false) x ω r).out = .acc ∧
         ∃ (p : Fin (wordLen false x)) (u : List 𝔽),
-          Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen) p.val = some u ∧ u ≠ C p := by
+          Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen 0) p.val = some u ∧ u ≠ C p := by
     unfold Claims.accPr
     refine le_trans (Claims.Pr_mono fun r hr => ?_) (Claims.Pr_or_le _ _)
     by_cases hq : ∃ (p : Fin (wordLen false x)) (u : List 𝔽),
-        Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen) p.val = some u ∧ u ≠ C p
+        Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen 0) p.val = some u ∧ u ≠ C p
     · exact Or.inr ⟨hr, hq⟩
     · exact Or.inl ⟨hr, hq⟩
   have key : Claims.accPr sha512 (V false) P x ω ≤ εtable false x +
@@ -141,7 +141,7 @@ theorem plain_tableBoundθAt_of_sessions (rel : Readable.Parsed → Readable.Rel
         ev₁ tied tied₁).term ω +
       Claims.Pr fun r : Fin ((V false).k x) → Coin => (Claims.run sha512 P (V false) x ω r).out = .acc ∧
         ∃ (p : Fin (wordLen false x)) (u : List 𝔽),
-          Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen) p.val = some u ∧ u ≠ C p := by
+          Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen 0) p.val = some u ∧ u ≠ C p := by
     linarith [hsplit, hacc, hmean, hdiv]
   exact key
 
@@ -201,7 +201,7 @@ theorem plain_tableBoundθAt_of_live (rel : Readable.Parsed → Readable.Relatio
             (hσ : ∀ u, (σL u).1 = rootB₀),
             (Claims.Pr fun r : Fin ((V false).k x) → Coin => (Claims.run sha512 P (V false) x ω r).out = .acc ∧
                 ¬ ∃ (p : Fin (wordLen false x)) (u : List 𝔽),
-                  Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen) p.val = some u ∧
+                  Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen 0) p.val = some u ∧
                     u ≠ C p) ≤
               (∑ u, (prob pL _ (σL u)).toReal) / Fintype.card τ ∧
             (∀ r ℓ, (∑ u, advRSL execArith Refine.H512 Refine.enc512 Refine.leaf512 (L.model (Refine.regionsOf st)) m

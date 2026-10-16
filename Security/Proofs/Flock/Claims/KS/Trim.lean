@@ -42,8 +42,8 @@ theorem lookCol_map {Col : Type} (f : Col → Col) (os : List (ℕ × Col)) (q :
     · simp only [h, decide_false]
       exact ih
 
-theorem mapCols_cols {Coin Col T : Type} (D : Deploy Coin Col T) (f : Col → Col) (s : Seen) :
-    (D.mapCols f).cols s = (D.cols s).map fun p => (p.1, f p.2) := rfl
+theorem mapCols_cols {Coin Col T : Type} (D : Deploy Coin Col T) (f : Col → Col) (s : Seen) (j : ℕ) :
+    (D.mapCols f).cols s j = (D.cols s j).map fun p => (p.1, f p.2) := rfl
 
 /-- **An accepted run opens columns through `f` of ones `Ok` admits** when it opens only columns `Ok` admits. -/
 theorem colsOk_mapCols {Coin Col T : Type} [Inhabited Coin] [Zero Col] (H : Msg → Msg) (D : Deploy Coin Col T)
@@ -75,8 +75,8 @@ wherever it agrees with the table. -/
 theorem goodTable_mapCols {Coin Col T : Type} [DecidableEq Col] [Zero Col] (D : Deploy Coin Col T) (N : Msg → ℕ)
     (x : Msg) (f : Col → Col) (hf : f 0 = 0) (C : Fin (N x) → Col) (h : GoodTable D N x C) :
     GoodTable (D.mapCols f) N x fun p => f (C p) := by
-  obtain ⟨M, s, hs, hrel, hle, hag⟩ := h
-  refine ⟨M, s, hs, hrel, hle, hag.trans ?_⟩
+  obtain ⟨M, t, ht, hrel, hle, hag⟩ := h
+  refine ⟨M, t, ht, hrel, hle, hag.trans ?_⟩
   have hsub : ((Finset.univ : Finset (Fin (D.len M))).filter fun i => D.enc M i.val = extTab C i.val) ⊆
       (Finset.univ : Finset (Fin (D.len M))).filter fun i =>
         (D.mapCols f).enc M i.val = extTab (fun p => f (C p)) i.val := by
@@ -100,21 +100,22 @@ theorem tableBoundθ_mapCols {Coin Col T : Type} [Fintype Coin] [Inhabited Coin]
     have := goodTable_mapCols D N x f hf C h
     rwa [show (fun p => f (C p)) = C' from funext hfC] at this)
   refine (hb ω C hC hg).trans (add_le_add le_rfl (Pr_mono fun r ⟨ha, p, u, hu, hne⟩ => ⟨ha, p, f u, ?_, ?_⟩))
-  · show lookCol ((D.cols (run H P D.V x ω r).seen).map fun q => (q.1, f q.2)) p.val = some (f u)
+  · show lookCol ((D.cols (run H P D.V x ω r).seen 0).map fun q => (q.1, f q.2)) p.val = some (f u)
     rw [lookCol_map, hu]
     rfl
   · rw [← hfC p]
     exact fun he => hne (hinj x u (C p) (hok x Ω P ω r p.val u ha p.isLt hu) (hC p) he)
 
-/-- **One wait's bound through `f`**, from the three obligations at `D` over the columns `Ok` admits: when `f` keeps
-`0`, `Ok` admits a column `f` takes to `0`, and `f` is one to one on the columns `Ok` admits. -/
+/-- **One wait's bound through `f`**, from the three obligations at `D` over the columns `Ok` admits: when the
+statement has one table wherever some run accepts, `f` keeps `0`, `Ok` admits a column `f` takes to `0`, and `f` is
+one to one on the columns `Ok` admits. -/
 theorem oneWait_mapCols {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
     [Zero Col] (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ) (f : Col → Col) (hf : f 0 = 0)
     (hN : ∀ x, (N x : ℝ) ≤ D.N₀ x) (hεt : ∀ x, 0 ≤ D.εtable x) (hVk : ∀ x, 0 < D.V.k x)
-    (hk : ∀ x, 1 ≤ D.k x ∨ NoAcc H D.V x) (Ok : Msg → Col → Prop) (hz : ∀ x, ∃ v, Ok x v ∧ f v = 0)
-    (hinj : ∀ x u v, Ok x u → Ok x v → f u = f v → u = v) (hok : ColsOk H D N Ok) (hconf : ConflictTied H D N)
-    (htab : TableBoundθ H D N Ok) : OneWait H (D.mapCols f) :=
-  oneWait_of_tableBound H (D.mapCols f) N hN hεt hVk hk (OkThrough f Ok) hz (colsOk_mapCols H D N f Ok hok)
+    (hk : ∀ x, 1 ≤ D.k x ∨ NoAcc H D.V x) (hone : ∀ x, (∃ s, D.parse x = some s ∧ s.tables = 1) ∨ NoAcc H D.V x)
+    (Ok : Msg → Col → Prop) (hz : ∀ x, ∃ v, Ok x v ∧ f v = 0) (hinj : ∀ x u v, Ok x u → Ok x v → f u = f v → u = v)
+    (hok : ColsOk H D N Ok) (hconf : ConflictTied H D N) (htab : TableBoundθ H D N Ok) : OneWait H (D.mapCols f) :=
+  oneWait_of_tableBound H (D.mapCols f) N hN hεt hVk hk hone (OkThrough f Ok) hz (colsOk_mapCols H D N f Ok hok)
     (conflictTied_mapCols H D N f hconf) (tableBoundθ_mapCols H D N f hf Ok hok hinj htab)
 
 end Claims.Flock
@@ -145,36 +146,42 @@ tables at the untrimmed instance. -/
 theorem plain_oneWait_trim (rel : Readable.Parsed → Readable.Relation)
     (htab : Claims.Flock.TableBoundθ sha512 (deployPlain rel) (wordLen false) (wide false)) :
     Claims.Flock.OneWait sha512 (deployPlainTrim rel) :=
-  Claims.Flock.oneWait_mapCols sha512 (deployPlain rel) (wordLen false) trimCol rfl
-    (fun x => (wordLen_eq_N₀ false x).le) (fun x => εtable_nonneg false x) (V_k_pos false) (k_one_plain rel)
-    (wide false) (fun x => trimWide_nil false x) (wide_trimCol_inj false) (plain_colsOk sha512 rel)
-    (plain_conflictTied rel) htab
+  Claims.Flock.oneWait_mapCols sha512 (deployPlain rel) (wordLen false) trimCol rfl (wordLen_le_N₀ false)
+    (fun x => εtable_nonneg false x) (V_k_pos false) (k_one_plain rel) (plain_hone rel) (wide false)
+    (fun x => trimWide_nil false x) (wide_trimCol_inj false) (plain_colsOk sha512 rel) (plain_conflictTied rel) htab
 
 /-- **The masked record the claims read: one wait's bound** at SHA-512, from the fixed-table bound over full-width
-tables at the untrimmed instance. -/
+tables at the untrimmed instance, where the statement has one table. -/
 theorem zk_oneWait_trim (rel : Readable.Parsed → Readable.Relation)
+    (hone : ∀ x, (∃ s, (deployZk rel).parse x = some s ∧ s.tables = 1) ∨
+      Claims.Flock.NoAcc sha512 (deployZk rel).V x)
     (htab : Claims.Flock.TableBoundθ sha512 (deployZk rel) (wordLen true) (wide true)) :
     Claims.Flock.OneWait sha512 (deployZkTrim rel) :=
-  Claims.Flock.oneWait_mapCols sha512 (deployZk rel) (wordLen true) trimCol rfl
-    (fun x => (wordLen_eq_N₀ true x).le) (fun x => εtable_nonneg true x) (V_k_pos true) (k_one_zk rel)
-    (wide true) (fun x => trimWide_nil true x) (wide_trimCol_inj true) (zk_colsOk sha512 rel)
-    (zk_conflictTied rel) htab
+  Claims.Flock.oneWait_mapCols sha512 (deployZk rel) (wordLen true) trimCol rfl (wordLen_le_N₀ true)
+    (fun x => εtable_nonneg true x) (V_k_pos true) (k_one_zk rel) hone (wide true)
+    (fun x => trimWide_nil true x) (wide_trimCol_inj true) (zk_colsOk sha512 rel) (zk_conflictTied rel) htab
 
 /-- **The plain record the claims read: KS** at SHA-512, from the fixed-table bound over full-width tables at the
 untrimmed instance. -/
 theorem plain_KS_trim (rel : Readable.Parsed → Readable.Relation)
     (htab : Claims.Flock.TableBoundθ sha512 (deployPlain rel) (wordLen false) (wide false)) :
     Claims.Flock.KS sha512 (deployPlainTrim rel) :=
-  Claims.Flock.KS_of_oneWait sha512 (deployPlainTrim rel) (fun _ => cap_pos) (k_range_plain rel)
+  Claims.Flock.KS_of_oneWait sha512 (deployPlainTrim rel) (fun _ => cap_pos)
+    (fun x => (k_range_plain rel x).elim (fun hk => ((plain_hone rel x).imp_left fun ⟨_, hs, h1⟩ =>
+      splits_of_one (deployPlainTrim rel) rfl rfl hs h1).imp (fun h => ⟨hk, h⟩) id) .inr)
     (fun x => εtable_nonneg false x) (plain_oneWait_trim rel htab)
 
 /-- **The masked record the claims read: KS** at SHA-512, from the fixed-table bound over full-width tables at the
-untrimmed instance. -/
+untrimmed instance, where the statement has one table. -/
 theorem zk_KS_trim (rel : Readable.Parsed → Readable.Relation)
+    (hone : ∀ x, (∃ s, (deployZk rel).parse x = some s ∧ s.tables = 1) ∨
+      Claims.Flock.NoAcc sha512 (deployZk rel).V x)
     (htab : Claims.Flock.TableBoundθ sha512 (deployZk rel) (wordLen true) (wide true)) :
     Claims.Flock.KS sha512 (deployZkTrim rel) :=
-  Claims.Flock.KS_of_oneWait sha512 (deployZkTrim rel) (fun _ => cap_pos) (k_range_zk rel)
-    (fun x => εtable_nonneg true x) (zk_oneWait_trim rel htab)
+  Claims.Flock.KS_of_oneWait sha512 (deployZkTrim rel) (fun _ => cap_pos)
+    (fun x => (k_range_zk rel x).elim (fun hk => ((hone x).imp_left fun ⟨_, hs, h1⟩ =>
+      splits_of_one (deployZkTrim rel) rfl rfl hs h1).imp (fun h => ⟨hk, h⟩) id) .inr)
+    (fun x => εtable_nonneg true x) (zk_oneWait_trim rel hone htab)
 
 /-- **The plain record the claims read: KS** at SHA-512, from the fixed-table bound over full-width tables at each
 statement some run accepts, which parses in scope and sets up. -/
@@ -186,12 +193,14 @@ theorem plain_KS_trim_of_acc (rel : Readable.Parsed → Readable.Relation)
   plain_KS_trim rel (plain_tableBoundθ_of_acc rel _ h)
 
 /-- **The masked record the claims read: KS** at SHA-512, from the fixed-table bound over full-width tables at each
-statement some run accepts, which parses in scope and sets up. -/
+statement some run accepts, which parses in scope and sets up, where the statement has one table. -/
 theorem zk_KS_trim_of_acc (rel : Readable.Parsed → Readable.Relation)
+    (hone : ∀ x, (∃ s, (deployZk rel).parse x = some s ∧ s.tables = 1) ∨
+      Claims.Flock.NoAcc sha512 (deployZk rel).V x)
     (h : ∀ x s ins spec sts, ¬ Claims.Flock.NoAcc sha512 (V true) x → parse true rel x = some s →
       Claims.Flock.InScope true s → setupOf true x = some (ins, spec, sts) →
       Claims.Flock.TableBoundθAt sha512 (deployZk rel) (wordLen true) (wide true) x) :
     Claims.Flock.KS sha512 (deployZkTrim rel) :=
-  zk_KS_trim rel (zk_tableBoundθ_of_acc rel _ h)
+  zk_KS_trim rel hone (zk_tableBoundθ_of_acc rel _ h)
 
 end FlockDeploy.KS

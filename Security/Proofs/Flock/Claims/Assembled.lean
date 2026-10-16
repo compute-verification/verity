@@ -16,22 +16,23 @@ relation's fields `rel` and every hash `H`, the conjunction of Flock's claims:
   bound `κ ≤ 2^{−a}`, `γ ≤ 2^b` (`Flock.Bits_ge`), from `KS` with `ε_table ≥ 0` and `γ > 0` (`εtable_nonneg`,
   `γ_pos`);
 * `Efficient` at the radius decoder (`GS.plainDecodeRD`, `GS.zkDecodeRD`): `E^rep`'s reruns at every deployment
-  (`ERep_cost`), and the decoder's `ListWithin` and `DecoderComplexity` (`GS.radius_deployPlain`,
-  `GS.radius_deployZk`);
+  (`ERep_cost`), the decoder's `ListWithin` and `DecoderComplexity` (`GS.radius_deployPlain`,
+  `GS.radius_deployZk`), and its lists at most `p(size)` long, which bounds `assemble`'s checks
+  (`GS.plainDecodeRD_length_le`, `GS.zkDecodeRD_length_le`);
 * `Complete` at the honest prover `P` with error `δc`: a hypothesis.
 
 ## What remains: the hypotheses
 
 * `hKS : Flock.KS H (deployPlainTrim rel)`, and at `deployZkTrim rel`: E4, `cursor/claims-ks-c7a9`. At SHA-512 it
   follows from the fixed-table bound over full-width tables at the untrimmed instance (`FlockDeploy.KS.plain_KS_trim`,
-  `FlockDeploy.KS.zk_KS_trim`). There KS at SHA-512 rests
-  on `TableBoundθ` at the statements that set up (`plain_KSθ_of_setup`, `zk_KSθ_of_setup`; `ConflictTied` and
-  `ColsOk` are proved there), but it concludes the branch's radius form `KSθ`, not `Flock.KS`. `KSθ`'s extractor
+  `FlockDeploy.KS.zk_KS_trim`). There KS at SHA-512 rests on `TableBoundθ` at the statements that set up
+  (`plain_KSθ_of_setup`, `zk_KSθ_of_setup`; `ConflictTied` and `ColsOk` are proved there), but it concludes the
+  branch's radius form `KSθ`, not `Flock.KS`. `KSθ`'s extractor
   decodes the word filled to table 0's level-0 length with a zero column of the lanes' width (`Eθ`, `fillWord`,
   `zeroCol`), at every decoder meeting `ListCompleteθ`; `Flock.KS`'s decodes the opened columns, at every decoder
   meeting `ListWithin`, whose word has `[]` where no column was opened. So the hypothesis is `Flock.KS` itself.
-* `hComplete : Flock.Complete H (deployPlain rel) P δc`: C3, `cursor/claims-complete-c7a9`, whose honest prover
-  (`honestP`, with its `δc`) is not on main, so `P` and `δc` are any. At `deployZk rel` no branch proves it yet.
+* `hComplete : Flock.Complete H (deployPlainTrim rel) P δc`: C3, `cursor/claims-complete-c7a9`, whose honest prover
+  (`honestP`, with its `δc`) is not on main, so `P` and `δc` are any. At `deployZkTrim rel` no branch proves it yet.
 -/
 
 namespace FlockDeploy.Assembled
@@ -89,7 +90,7 @@ theorem flock_plain_assembled (rel : Readable.Parsed → Readable.Relation) (H :
     fun _ _ hκ hγ => Claims.Flock.Bits_ge hKS (εtable_nonneg false) hκ
       (fun x => γ_pos (deployPlainTrim rel) x (V_k_pos false x)) hγ _ (Claims.GS.listWithin_deployPlain rel),
     Claims.Flock.Efficient_of_decoder H _ _ _ _ _ (Claims.GS.radius_deployPlain rel).1
-      (Claims.GS.radius_deployPlain rel).2,
+      (Claims.GS.radius_deployPlain rel).2 Claims.GS.plainDecodeRD_length_le,
     hComplete⟩
 
 /-- **Flock's claims at the deployed masked (`--zk`) verifier**, at every relation's fields and every hash: the
@@ -113,7 +114,8 @@ theorem flock_zk_assembled (rel : Readable.Parsed → Readable.Relation) (H : Cl
   ⟨scopeMatches_zk rel, hKS, Claims.Flock.Bits_of_KS hKS (εtable_nonneg true),
     fun _ _ hκ hγ => Claims.Flock.Bits_ge hKS (εtable_nonneg true) hκ
       (fun x => γ_pos (deployZkTrim rel) x (V_k_pos true x)) hγ _ (Claims.GS.listWithin_deployZk rel),
-    Claims.Flock.Efficient_of_decoder H _ _ _ _ _ (Claims.GS.radius_deployZk rel).1 (Claims.GS.radius_deployZk rel).2,
+    Claims.Flock.Efficient_of_decoder H _ _ _ _ _ (Claims.GS.radius_deployZk rel).1 (Claims.GS.radius_deployZk rel).2
+      Claims.GS.zkDecodeRD_length_le,
     hComplete⟩
 
 end FlockDeploy.Assembled
