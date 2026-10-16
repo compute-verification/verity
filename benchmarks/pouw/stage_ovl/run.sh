@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ovl.cu on one leased GPU (cwd = the source tree): the build and stage_cost/prep.py's constants outside the lease; under one
-# lease stage.cu's gate at every M, then ovl at each M over KS. Nothing is timed unless the gate passes. Clocks are read,
-# never set. Results in $OUT/*.jsonl; `python3 benchmarks/pouw/stage_ovl/report.py $OUT` renders them.
+# lease, at each M, stage.cu's gate and then ovl over KS. An M whose gate fails is not timed (the run exits 5). Clocks are
+# read, never set. Results in $OUT/*.jsonl; `python3 benchmarks/pouw/stage_ovl/report.py $OUT` renders them.
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=STAGE-OVL \
 #     -- bash benchmarks/pouw/stage_ovl/run.sh
@@ -37,15 +37,17 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
     done
   fi
   [[ " $PARTS " == *" gate "* ]] || exit 0
-  "$B/ovl" gate "$B/c" $MS > "$O/gate.jsonl" 2>> "$O/errors.txt"; g=$?
-  echo "gate rc $g" >> "$O/rc.txt"
-  [ "$g" -eq 0 ] || exit 5
-  [[ " $PARTS " == *" ovl "* ]] || exit 0
+  gf=0
   for M in $MS; do
+    "$B/ovl" gate "$B/c" "$M" >> "$O/gate.jsonl" 2>> "$O/errors.txt"; g=$?
+    echo "gate $M rc $g" >> "$O/rc.txt"
+    if [ "$g" -ne 0 ]; then gf=5; continue; fi
+    [[ " $PARTS " == *" ovl "* ]] || continue
     "$B/ovl" ovl "$B/c" "$M" $KS "r$REPS" >> "$O/ovl.jsonl" 2>> "$O/errors.txt"; r=$?
     echo "ovl $M rc $r" >> "$O/rc.txt"
     q
   done
+  exit "$gf"
 '
 r=$?
 echo "lease rc $r" >> "$O/rc.txt"
