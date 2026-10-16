@@ -17,7 +17,6 @@ from __future__ import annotations
 import collections
 import hashlib
 import json
-import re
 from dataclasses import dataclass
 from functools import partial
 from typing import Any, Callable, Sequence
@@ -25,7 +24,7 @@ from typing import Any, Callable, Sequence
 import numpy as np
 
 from verity.ml.circuits.evaluation.batch import type_dtype, type_shape
-from verity_vllm.program.kernels.kernel_registry import Declined, register
+from verity_vllm.program.kernels.kernel_registry import Declined, prim_static, register
 from verity_vllm.program.kernels.moe_router_rows import moe_router_topk
 from verity_vllm.program.kernels import value_rows as VR
 
@@ -167,23 +166,6 @@ EVALUATOR_PROVENANCE: dict[str, dict] = {"Fp8GroupQuant_v1": _FP8_TWIN_PROVENANC
 
 GEMM_CHUNK = 4096                       # Gemm coordinates evaluated per vectorised k16 chain (bounds the int64 temporaries to ~0.5 GB)
 SAMPLED_MEMBER = "sampled_token_ids"
-
-_DOT_STATIC_FN = re.compile(r'^\{"fn":"([A-Za-z0-9_]+)"\}$')
-
-
-def prim_static(statics: dict[str, Any], key: str, family: str) -> str:
-    """[R17 dense, ruling R17-3] A function-valued static (`DOT` of `Gemm_v2{K,N,DOT}` / `Attention_v2{..., DOT, INV}`, `INV` of the latter)
-    -> the registered primitive id.  The spec text renders it as `DOT={"fn":"HopperBF16WgmmaDot16_v1"}` (verity.ml.circuits.codec._spec_id); a bare
-    `<Name>_v<k>` id is accepted too.  Anything else is unresolved BY NAME: the evaluator never guesses the architecture from the target."""
-    v = statics.get(key, "")
-    raw = str(getattr(v, "id", v) or "")
-    m = _DOT_STATIC_FN.match(raw)
-    if m:
-        return m.group(1)
-    if re.match(r"^[A-Za-z0-9]+_v\d+$", raw):
-        return raw
-    raise Declined(f"{family} {key} static {raw!r} does not name a registered primitive")
-
 
 def gemm_dot_prim(statics: dict[str, Any]) -> str:
     """The DOT static of a `Gemm_v2{K,N,DOT}` row -> the registered k16 primitive id (see `prim_static`)."""
