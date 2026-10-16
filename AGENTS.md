@@ -126,8 +126,10 @@ Daniel's, current. `.agents/skills/friction/SKILL.md` has the dated rulings behi
     - Duo receipts, PoUW's per-step receipts: keyed u32 mul/xor/rotl folds over committed accumulator words. They
       bind under the named premise H-μ⁺, which is the premise ledger's row R1
       (`note:20261016T0219Z-report-premise-ledger`) and not yet in a lock.
-- **Live coins only.** Fiat–Shamir is out. There are no retries: a failed proof is a visible failure, and a retry never
-  redraws. Outer proofs go through the firewall one at a time.
+- **Live coins only.** Fiat–Shamir is out. The one exception is the remote bandwidth audit's pass seeds inside a
+  window, derived from the window's live challenge and the previous pass's root (Daniel, 12 Oct). There are no
+  retries: a failed proof is a visible failure, and a retry never redraws. Outer proofs go through the firewall one at a
+  time.
 - **Auditor-trusted devices.** The network certifiers and the memory challenger sign what they see. What they sign is
   witness and never reaches the auditor in the clear. They are the auditor's hardware: each runs on a machine the prover
   doesn't control, never as a process on the prover's node, and trust in the device and its host provider is a named
