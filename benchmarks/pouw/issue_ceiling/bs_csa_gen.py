@@ -154,8 +154,8 @@ def build_ir(chunk_terms, levels_p):
 def _render(name):
     if name == 'ZERO':
         return "0u"
-    if name.startswith('P') and name[1:].isdigit():  # term plane P{t} -> this lane's shared word
-        return f"yl[{name[1:]}]"
+    if name.startswith('P') and name[1:].isdigit():  # term plane P{t}: lane-interleaved shared (conflict-free)
+        return f"yl[{name[1:]} * BS_CSA_CB]"
     return name  # temp t{n} or "P[w]"
 
 
@@ -194,6 +194,7 @@ def emit_cuda(chunk_terms, levels_p):
 
 #define BS_CSA_CHUNK_TERMS {chunk_terms}
 #define BS_CSA_LEVELS_P {levels_p}
+#define BS_CSA_CB 32  // column-blocks a block (= warp lanes); yl is lane-interleaved so reads are bank-conflict-free
 
 template <int IMM>
 __device__ __forceinline__ uint32_t L3(uint32_t a, uint32_t b, uint32_t c) {{
@@ -202,7 +203,7 @@ __device__ __forceinline__ uint32_t L3(uint32_t a, uint32_t b, uint32_t c) {{
   return d;
 }}
 
-// yl[t] = term plane t (this lane's 32-column word, from shared); xb[t] = this warp's row X byte (shared, warp-uniform)
+// yl = &Ys[lane], term plane t at yl[t*BS_CSA_CB] (lane-interleaved shared); xb[t] = this warp's row X byte (shared)
 __device__ __forceinline__ void bs_csa_chunk(uint32_t* __restrict__ P, const uint32_t* __restrict__ yl,
                                              const int8_t* __restrict__ xb) {{
 {body}

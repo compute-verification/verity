@@ -39,7 +39,7 @@ constexpr int LP = BS_CSA_LEVELS_P;
 __global__ void __launch_bounds__(WARPS * 32)
     bs_csa_gemm(const int8_t* __restrict__ X, const uint32_t* __restrict__ YP, int32_t* __restrict__ C, int M, int N,
                 int K, long long* __restrict__ dbg) {
-  __shared__ uint32_t Ys[CB * CT];  // per-lane contiguous: Ys[cb*CT + t]
+  __shared__ uint32_t Ys[CT * CB];  // lane-interleaved: Ys[t*CB + cb] (bank-conflict-free lane reads)
   __shared__ int8_t Xs[WARPS * CT]; // per-warp row: Xs[warp*CT + t]
   const int tid = threadIdx.x, warp = tid >> 5, lane = tid & 31;
   const int row = blockIdx.y * WARPS + warp;
@@ -56,8 +56,8 @@ __global__ void __launch_bounds__(WARPS * 32)
 
   for (int base = 0; base < K; base += CT) {
 #pragma unroll 1
-    for (int i = tid; i < CB * CT; i += WARPS * 32) {
-      int cb = i / CT, t = i % CT;
+    for (int i = tid; i < CT * CB; i += WARPS * 32) {
+      int t = i / CB, cb = i % CB;  // Ys[t*CB + cb]
       Ys[i] = YP[(size_t)(base + t) * NB + (cb0 + cb)];
     }
 #pragma unroll 1
@@ -66,7 +66,7 @@ __global__ void __launch_bounds__(WARPS * 32)
       Xs[i] = X[(size_t)(blockIdx.y * WARPS + w) * K + base + t];
     }
     __syncthreads();
-    bs_csa_chunk(P, &Ys[lane * CT], &Xs[warp * CT]);
+    bs_csa_chunk(P, &Ys[lane], &Xs[warp * CT]);  // yl = &Ys[lane]; term t at yl[t*CB]
     __syncthreads();
   }
   if (clk) { dbg[0] = clock64() - c0; dbg[1] = gtimer() - g0; }
