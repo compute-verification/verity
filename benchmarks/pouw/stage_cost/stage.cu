@@ -30,6 +30,15 @@
 //                                  the C chunks' GEMMs alone on the split
 //                       Attention's QK^T and P.V are int8 GEMMs with the causal stage's MACs (m = M, n = M/2, k = 4096);
 //                       P.V's commitment is the per-row normalizers (256 bytes a token), since P is derived.
+//                       ARMS=r2: the proved forward, lockstep (commit, draw, GEMM a stage), by commitment latency lever:
+//                         before   round 1's commitment (pipe1); mid: the frame heads' first blocks compressed ahead
+//                         s<k>     every GEMM in k row slabs, the next stage's operands hashed behind each slab (an
+//                                  emulated epilogue); gemm_s<k> the slabbed GEMMs alone
+//                         cpu<E>   the tree stops at E nodes in pinned host memory, a host thread hashes the top and
+//                                  waits the draw, the GEMM's stream waits on its mapped flag (mid_host: E = 1, the
+//                                  GPU's root, the host only draws); _nd: no draw
+//   shalat              a compression's latency in a dependent chain on the GPU by rotation choice (FR_ROT's bits) and split
+//                       across two warps (rounds, schedule); the host's (C++, libcrypto's) and the mapped round trip
 //   deferred T COMP     the noised recompute of one layer's products batched over T tokens: QKV, o, gate_up, down (in row
 //                       chunks of at most 8192), and per sequence QK^T twice (clean, to rebuild P; noised) and P.V, batched
 //                       over the 8 KV heads with the 4 query heads of a group stacked. COMP seq500: T/512 sequences of
@@ -128,6 +137,7 @@ struct Commit {
   uint8_t *my, *cs;                    // the fast path's salt-only parts, a slot a layer (R x 64 each)
   const uint8_t *ltpl, *loff, *ntpl, *noff;
   int* counter;                        // CTAs done, for the last one to take the levels above the CTAs' subtrees
+  uint8_t* fmid;                       // the frame leaves' and nodes' first-block states (R, then width - 1), computed ahead
 };
 struct FrConst { uint8_t *ltpl, *loff, *ntpl, *noff; };
 static std::map<std::pair<int, int>, FrConst> g_fr;  // one copy of a shape's templates for all its commitments
@@ -139,8 +149,14 @@ static Commit make_commit(const HostConst& c) {
     g_fr[key] = {dput(c.ltpl.data(), c.ltpl.size()), dput(c.loff.data(), c.loff.size()), dput(c.ntpl.data(), c.ntpl.size()),
                  dput(c.noff.data(), c.noff.size())};
   if (c.s < 1 || c.width > 128 * 1024) { fprintf(stderr, "fr_tree takes s >= 1 and at most 1024 CTAs of 128 leaves\n"); exit(2); }
+  for (size_t j = 0; j < c.loff.size() + c.noff.size(); j += 4) {
+    uint32_t o;
+    memcpy(&o, j < c.loff.size() ? &c.loff[j] : &c.noff[j - c.loff.size()], 4);
+    if (o < 128 && c.width > 1) { fprintf(stderr, "a frame head shorter than a block (%u bytes): no first-block state\n", o); exit(2); }
+  }
   const FrConst& f = g_fr[key];
   m.ltpl = f.ltpl; m.loff = f.loff; m.ntpl = f.ntpl; m.noff = f.noff;
+  CK(cudaMalloc(&m.fmid, (size_t)64 * (c.R + c.width - 1)));
   CK(cudaMalloc(&m.my, (size_t)64 * c.R * LAYERS));
   CK(cudaMalloc(&m.cs, (size_t)64 * c.R * LAYERS));
   CK(cudaMalloc(&m.counter, sizeof(int)));
@@ -205,22 +221,79 @@ static void commit_run(const Commit& m, const uint8_t* data, cudaStream_t st) {
 //            template with the value inserted as words (no byte assembly); then the CTA's 128-leaf subtree in shared memory,
 //            and the last CTA to finish (a counter) the levels above. One launch after fr_segments (sz_segments with
 //            fr_compress).
+// Rotations on the FMA pipe, which the compression otherwise leaves idle (every SHF, LOP3 and IADD costs one warp 2 cycles of
+// the integer pipe): with m = 2^(32-n), x >> n = mul.hi(x, m) and (y << (32-n)) | (x >> n) = mad.lo(y, m, x >> n), the two
+// parts sharing no bit. m is read from constant memory, so ptxas can't turn the multiply back into a shift. ROT's bits pick
+// the functions so rotated: 1 S0, 2 S1, 4 s0, 8 s1 (FR_ROT for the commitment's kernels; shalat times each).
+#ifndef FR_ROT
+#define FR_ROT 0
+#endif
+__constant__ uint32_t FR_POW2[33] = {1u,       2u,       4u,       8u,       16u,      32u,      64u,      128u,     256u,
+                                     512u,     1u << 10, 1u << 11, 1u << 12, 1u << 13, 1u << 14, 1u << 15, 1u << 16, 1u << 17,
+                                     1u << 18, 1u << 19, 1u << 20, 1u << 21, 1u << 22, 1u << 23, 1u << 24, 1u << 25, 1u << 26,
+                                     1u << 27, 1u << 28, 1u << 29, 1u << 30, 1u << 31, 0u};
+__device__ __forceinline__ uint32_t fr_mulhi(uint32_t x, uint32_t m) {
+  uint32_t r;
+  asm("mul.hi.u32 %0, %1, %2;" : "=r"(r) : "r"(x), "r"(m));
+  return r;
+}
+__device__ __forceinline__ uint32_t fr_madlo(uint32_t y, uint32_t m, uint32_t t) {
+  uint32_t r;
+  asm("mad.lo.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(y), "r"(m), "r"(t));
+  return r;
+}
+template <int N, bool F>
+__device__ __forceinline__ uint64_t fr_rotr(uint64_t x) {
+  if constexpr (!F) {
+    return (x >> N) | (x << (64 - N));
+  } else {
+    uint32_t lo = (uint32_t)x, hi = (uint32_t)(x >> 32);
+    if constexpr (N > 32) { const uint32_t t = lo; lo = hi; hi = t; }
+    constexpr int n = N > 32 ? N - 32 : N;
+    const uint32_t m = FR_POW2[32 - n];
+    return (uint64_t)fr_madlo(lo, m, fr_mulhi(hi, m)) << 32 | fr_madlo(hi, m, fr_mulhi(lo, m));
+  }
+}
+template <int N, bool F>
+__device__ __forceinline__ uint64_t fr_shr(uint64_t x) {
+  if constexpr (!F) {
+    return x >> N;
+  } else {
+    const uint32_t lo = (uint32_t)x, hi = (uint32_t)(x >> 32), m = FR_POW2[32 - N];
+    return (uint64_t)fr_mulhi(hi, m) << 32 | fr_madlo(hi, m, fr_mulhi(lo, m));
+  }
+}
+template <int ROT> __device__ __forceinline__ uint64_t fr_S0(uint64_t a) {
+  return fr_rotr<28, (ROT & 1) != 0>(a) ^ fr_rotr<34, (ROT & 1) != 0>(a) ^ fr_rotr<39, (ROT & 1) != 0>(a);
+}
+template <int ROT> __device__ __forceinline__ uint64_t fr_S1(uint64_t e) {
+  return fr_rotr<14, (ROT & 2) != 0>(e) ^ fr_rotr<18, (ROT & 2) != 0>(e) ^ fr_rotr<41, (ROT & 2) != 0>(e);
+}
+template <int ROT> __device__ __forceinline__ uint64_t fr_s0(uint64_t w) {
+  return fr_rotr<1, (ROT & 4) != 0>(w) ^ fr_rotr<8, (ROT & 4) != 0>(w) ^ fr_shr<7, (ROT & 4) != 0>(w);
+}
+template <int ROT> __device__ __forceinline__ uint64_t fr_s1(uint64_t w) {
+  return fr_rotr<19, (ROT & 8) != 0>(w) ^ fr_rotr<61, (ROT & 8) != 0>(w) ^ fr_shr<6, (ROT & 8) != 0>(w);
+}
+// one round, its K + W given
+template <int ROT>
+__device__ __forceinline__ void fr_round(uint64_t& a, uint64_t& b, uint64_t& c, uint64_t& d, uint64_t& e, uint64_t& f,
+                                         uint64_t& g, uint64_t& h, uint64_t kw) {
+  const uint64_t t1 = h + fr_S1<ROT>(e) + ((e & f) ^ (~e & g)) + kw;
+  const uint64_t t2 = fr_S0<ROT>(a) + ((a & b) ^ (a & c) ^ (b & c));
+  h = g; g = f; f = e; e = d + t1; d = c; c = b; b = a; a = t1 + t2;
+}
 // s512_compress with 16 rounds unrolled, not 80: the same chain latency (shalat: 3.5-3.6 us a compression at 2.09 GHz, rolled
 // or not, bound by one warp's issue rate at ~43 instructions a round) in a fifth of the code
+template <int ROT = FR_ROT>
 __device__ __forceinline__ void fr_compress(uint64_t st[8], uint64_t w[16]) {
   uint64_t a = st[0], b = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7];
 #pragma unroll 1
   for (int r = 0; r < 80; r += 16) {
 #pragma unroll
     for (int j = 0; j < 16; j++) {
-      if (r) {
-        const uint64_t w15 = w[(j + 1) & 15], w2 = w[(j + 14) & 15];
-        w[j] += (s512_rotr(w2, 19) ^ s512_rotr(w2, 61) ^ (w2 >> 6)) + w[(j + 9) & 15]
-              + (s512_rotr(w15, 1) ^ s512_rotr(w15, 8) ^ (w15 >> 7));
-      }
-      const uint64_t t1 = h + (s512_rotr(e, 14) ^ s512_rotr(e, 18) ^ s512_rotr(e, 41)) + ((e & f) ^ (~e & g)) + SHA512_K[r + j] + w[j];
-      const uint64_t t2 = (s512_rotr(a, 28) ^ s512_rotr(a, 34) ^ s512_rotr(a, 39)) + ((a & b) ^ (a & c) ^ (b & c));
-      h = g; g = f; f = e; e = d + t1; d = c; c = b; b = a; a = t1 + t2;
+      if (r) w[j] += fr_s1<ROT>(w[(j + 14) & 15]) + w[(j + 9) & 15] + fr_s0<ROT>(w[(j + 1) & 15]);
+      fr_round<ROT>(a, b, c, d, e, f, g, h, SHA512_K[r + j] + w[j]);
     }
   }
   st[0] += a; st[1] += b; st[2] += c; st[3] += d; st[4] += e; st[5] += f; st[6] += g; st[7] += h;
@@ -295,12 +368,22 @@ __device__ __forceinline__ void fr_put(uint64_t w[16], int base, int o, const ui
     w[i] |= u;
   }
 }
-// SHA-512 of a padded template of nblk blocks, value L at byte o (and R at o + 72, a node's right child)
+// SHA-512 of a padded template of nblk blocks, value L at byte o (and R at o + 72, a node's right child), from the IV or (mid
+// given) from the state after the first block: a frame leaf's or node's head is longer than a block, so its first block is a
+// constant of the tree, its compression done ahead (fr_mid0)
 template <bool NODE>
-__device__ __forceinline__ void fr_hash(const uint8_t* tpl, int nblk, int o, const uint64_t L[8], const uint64_t R[8], uint64_t st[8]) {
-  s512_iv(st);
+__device__ __forceinline__ void fr_hash(const uint8_t* tpl, const uint64_t* mid, int nblk, int o, const uint64_t L[8],
+                                        const uint64_t R[8], uint64_t st[8]) {
+  int b0 = 0;
+  if (mid) {
+#pragma unroll
+    for (int k = 0; k < 8; k++) st[k] = __ldg(mid + k);
+    b0 = 1;
+  } else {
+    s512_iv(st);
+  }
 #pragma unroll 1
-  for (int b = 0; b < nblk; b++) {
+  for (int b = b0; b < nblk; b++) {
     uint64_t w[16];
     const uint4* t = (const uint4*)(tpl + 128 * b);
 #pragma unroll
@@ -313,6 +396,25 @@ __device__ __forceinline__ void fr_hash(const uint8_t* tpl, int nblk, int o, con
     if (NODE) fr_put(w, 16 * b, o + 72, R);
     fr_compress(st, w);
   }
+}
+// the state after each of n templates' first block (stride bytes apart) into mid, a thread a template; threads past n
+// repeat them (`total` threads: the ahead work of total / n commitments, each tree its own domain)
+extern "C" __global__ void fr_mid0(const uint8_t* tpl, int stride, long long n, long long total, uint64_t* mid) {
+  const long long i = blockIdx.x * (long long)blockDim.x + threadIdx.x;
+  if (i >= total) return;
+  const long long r = i % n;
+  uint64_t st[8], w[16];
+  s512_iv(st);
+  const uint4* t = (const uint4*)(tpl + r * stride);
+#pragma unroll
+  for (int j = 0; j < 8; j++) {
+    const uint4 v = __ldg(t + j);
+    w[2 * j] = s512_be(v.x, v.y);
+    w[2 * j + 1] = s512_be(v.z, v.w);
+  }
+  fr_compress(st, w);
+#pragma unroll
+  for (int k = 0; k < 8; k++) mid[8 * r + k] = st[k];
 }
 // p: tables, salts, hm96 mids, my out, cs out, b || c (c written)   i: rows (every layer's slot at once: R x slots), R (row i
 // takes salt i % R: the gate's salts stand in for each layer's)
@@ -362,9 +464,10 @@ extern "C" __global__ void __launch_bounds__(128) fr_salt(Args a) {
   if (i < a.i[1]) s512_out(cs, (uint8_t*)a.p[5] + i * 128 + 64);
 }
 // one level of a subtree held in sh (big-endian words): threads t < n/2 hash sh[2t], sh[2t+1] into node j0/2 + t of the
-// level above, the current level being lw nodes wide at tree offset off with its parents' templates from nb
+// level above, the current level being lw nodes wide at tree offset off with its parents' templates (and first-block states,
+// nmid, unless null) from nb
 __device__ __noinline__ void fr_level(uint64_t (*sh)[8], int n, long long j0, long long lw, long long off, long long nb,
-                                      const uint8_t* ntpl, const uint32_t* noff, uint8_t* tree) {
+                                      const uint8_t* ntpl, const uint32_t* noff, const uint64_t* nmid, uint8_t* tree) {
   const int t = threadIdx.x;
   const bool act = t < n / 2;
   uint64_t v[8];
@@ -373,7 +476,7 @@ __device__ __noinline__ void fr_level(uint64_t (*sh)[8], int n, long long j0, lo
 #pragma unroll
     for (int k = 0; k < 8; k++) { L[k] = sh[2 * t][k]; R[k] = sh[2 * t + 1][k]; }
     const long long j = j0 / 2 + t, idx = nb + j;
-    fr_hash<true>(ntpl + idx * 384, 3, (int)noff[idx], L, R, v);
+    fr_hash<true>(ntpl + idx * 384, nmid ? nmid + 8 * idx : nullptr, 3, (int)noff[idx], L, R, v);
     s512_out(v, tree + (off + lw + j) * 64);
   }
   __syncthreads();
@@ -382,17 +485,31 @@ __device__ __noinline__ void fr_level(uint64_t (*sh)[8], int n, long long j0, lo
     for (int k = 0; k < 8; k++) sh[t][k] = v[k];
   __syncthreads();
 }
+// the host's word v at f (mapped host memory), after everything this thread and the CTAs it synchronized with wrote
+__device__ __forceinline__ void fr_raise(uint32_t* f, uint32_t v) {
+  __threadfence_system();
+  asm volatile("st.release.sys.u32 [%0], %1;" ::"l"(f), "r"(v) : "memory");
+}
 // p: digests, q_mid, my, cs (the layer's slot), hm96 mids, leaf tpl, leaf off, node tpl, node off, hm96 leaves out, b || c
-//    (b written), tree, counter   i: rows, s, width.  Grid width / L CTAs of L = min(width, 128) leaves, at most 1024 CTAs;
-//    the last CTA to finish hashes the levels above their roots.
+//    (b written), tree, counter, first-block states (R leaves', then width - 1 nodes'), export (mapped host memory), its flag
+// i: rows, s, width, first CTA, CTAs in all, export width E, flag value, first-block states on.
+//    width / L CTAs of L = min(width, 128) leaves in all, at most 1024, launched whole or in slabs of consecutive CTAs (the
+//    rows a slab of the producing GEMM wrote); the last CTA to finish hashes the levels above their roots. With E, the
+//    tree stops at the level of E nodes: they go to the export, and the flag is raised for the host to take the levels
+//    above.
 extern "C" __global__ void __launch_bounds__(128) fr_tree(Args a) {
   __shared__ uint64_t sh[128][8];
   __shared__ int last;
-  const int tid = threadIdx.x, L = blockDim.x, s = a.i[1];
-  const long long R = a.i[0], width = a.i[2], i = (long long)blockIdx.x * L + tid;
+  const int tid = threadIdx.x, L = blockDim.x, s = a.i[1], total = a.i[4], E = a.i[5];
+  const long long cta = blockIdx.x + (long long)a.i[3];
+  const long long R = a.i[0], width = a.i[2], i = cta * L + tid;
   const uint8_t* ntpl = (const uint8_t*)a.p[7];
   const uint32_t* noff = (const uint32_t*)a.p[8];
   uint8_t* tree = (uint8_t*)a.p[11];
+  const uint64_t* lmid = a.i[7] ? (const uint64_t*)a.p[13] : nullptr;
+  const uint64_t* nmid = lmid ? lmid + 8 * R : nullptr;
+  uint8_t* ex = (uint8_t*)a.p[14];
+  uint32_t* flag = (uint32_t*)a.p[15];
   uint64_t v[8];
   if (i < R) {
     const uint64_t* q = (const uint64_t*)a.p[1];
@@ -442,7 +559,8 @@ extern "C" __global__ void __launch_bounds__(128) fr_tree(Args a) {
     fr_compress(lt, w);
     fr_pad_block(lt, 256);
     s512_out(lt, (uint8_t*)a.p[9] + i * 64);
-    fr_hash<false>((const uint8_t*)a.p[5] + i * 256, 2, (int)((const uint32_t*)a.p[6])[i], lt, lt, v);
+    fr_hash<false>((const uint8_t*)a.p[5] + i * 256, lmid ? lmid + 8 * i : nullptr, 2, (int)((const uint32_t*)a.p[6])[i], lt,
+                   lt, v);
     s512_out(v, tree + i * 64);
   } else {
     const uint64_t* pd = (const uint64_t*)(tree + i * 64);
@@ -452,22 +570,39 @@ extern "C" __global__ void __launch_bounds__(128) fr_tree(Args a) {
 #pragma unroll
   for (int k = 0; k < 8; k++) sh[tid][k] = v[k];
   __syncthreads();
-  long long lw = width, off = 0, nb = 0, j0 = (long long)blockIdx.x * L;
-  for (int n = L; n > 1; n >>= 1) {
-    fr_level(sh, n, j0, lw, off, nb, ntpl, noff, tree);
+  long long lw = width, off = 0, nb = 0, j0 = cta * L;
+  int n = L;
+  for (; n > 1 && !(E && lw <= E); n >>= 1) {
+    fr_level(sh, n, j0, lw, off, nb, ntpl, noff, nmid, tree);
     nb += lw / 2; off += lw; lw /= 2; j0 /= 2;
   }
-  if (gridDim.x == 1) return;
+  const bool here = E && lw <= E;  // this CTA's nodes are the export's
+  if (here) {
+    if (tid < n) s512_out(sh[tid], ex + (j0 + tid) * 64);
+    __threadfence_system();
+    __syncthreads();
+  }
+  if (total == 1) {
+    if (here && tid == 0) fr_raise(flag, (uint32_t)a.i[6]);
+    return;
+  }
   int* counter = (int*)a.p[12];
   if (tid == 0) {
     __threadfence();
-    last = atomicAdd(counter, 1) == (int)gridDim.x - 1;
+    last = atomicAdd(counter, 1) == total - 1;
   }
   __syncthreads();
   if (!last) return;
   __threadfence();
-  const int n0 = (int)gridDim.x;  // == lw: the CTAs' subtree roots
-  int n = n0;
+  if (here) {
+    if (tid == 0) {
+      *counter = 0;
+      fr_raise(flag, (uint32_t)a.i[6]);
+    }
+    return;
+  }
+  const int n0 = total;  // == lw: the CTAs' subtree roots
+  n = n0;
   // levels wider than sh from the tree in memory, the last of them into sh
   for (; n > L; n >>= 1) {
     for (int t = tid; t < n / 2; t += L) {
@@ -475,7 +610,7 @@ extern "C" __global__ void __launch_bounds__(128) fr_tree(Args a) {
       const uint64_t* pd = (const uint64_t*)(tree + (off + 2 * t) * 64);
 #pragma unroll
       for (int k = 0; k < 8; k++) { l[k] = s512_bswap(__ldcg(pd + k)); r[k] = s512_bswap(__ldcg(pd + 8 + k)); }
-      fr_hash<true>(ntpl + (nb + t) * 384, 3, (int)noff[nb + t], l, r, u);
+      fr_hash<true>(ntpl + (nb + t) * 384, nmid ? nmid + 8 * (nb + t) : nullptr, 3, (int)noff[nb + t], l, r, u);
       s512_out(u, tree + (off + lw + t) * 64);
       if (n / 2 <= L)
 #pragma unroll
@@ -491,13 +626,56 @@ extern "C" __global__ void __launch_bounds__(128) fr_tree(Args a) {
   }
   __syncthreads();
   j0 = 0;
-  for (; n > 1; n >>= 1) {
-    fr_level(sh, n, j0, lw, off, nb, ntpl, noff, tree);
+  for (; n > 1 && !(E && lw <= E); n >>= 1) {
+    fr_level(sh, n, j0, lw, off, nb, ntpl, noff, nmid, tree);
     nb += lw / 2; off += lw; lw /= 2;
   }
-  if (tid == 0) *counter = 0;
+  if (E) {
+    if (tid < n) s512_out(sh[tid], ex + tid * 64);
+    __threadfence_system();
+    __syncthreads();
+  }
+  if (tid == 0) {
+    *counter = 0;
+    if (E) fr_raise(flag, (uint32_t)a.i[6]);
+  }
+}
+// the GEMM's stream waits for the host to write v at f (the draw's coins are in): one thread polls the mapped word; after
+// 5 s it gives up and records v in err, so a lost host thread fails the run instead of hanging it
+__global__ void host_wait(const uint32_t* f, uint32_t v, uint32_t* err) {
+  unsigned long long t0, t;
+  asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t0));
+  for (;;) {
+    uint32_t x;
+    asm volatile("ld.acquire.sys.u32 %0, [%1];" : "=r"(x) : "l"(f) : "memory");
+    if (x == v) return;
+    asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t));
+    if (t - t0 > 5000000000ull) {
+      atomicMax(err, v);
+      return;
+    }
+  }
+}
+// n round trips through mapped host memory: raise up to i, wait for the host to answer dn = i
+__global__ void ping(uint32_t* up, const uint32_t* dn, int n, uint32_t* err) {
+  for (int i = 1; i <= n; i++) {
+    asm volatile("st.release.sys.u32 [%0], %1;" ::"l"(up), "r"((uint32_t)i) : "memory");
+    unsigned long long t0, t;
+    asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t0));
+    for (;;) {
+      uint32_t x;
+      asm volatile("ld.acquire.sys.u32 %0, [%1];" : "=r"(x) : "l"(dn) : "memory");
+      if (x == (uint32_t)i) break;
+      asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t));
+      if (t - t0 > 5000000000ull) {
+        *err = i;
+        return;
+      }
+    }
+  }
 }
 static bool g_fast = true;  // HASH=sz: served_zk's hm96_rows.cu as is
+static int g_mid = 1;       // the frame leaves' and nodes' first blocks compressed ahead (0: on the critical path, round 1's)
 // the salt-only parts of `slots` layers' commitments from slot 0, in one launch
 static void commit_salt(const Commit& m, int slots, cudaStream_t st) {
   Args a{};
@@ -507,81 +685,388 @@ static void commit_salt(const Commit& m, int slots, cudaStream_t st) {
   const long long rows = (long long)m.R * slots;
   a.i[0] = (int)rows; a.i[1] = m.R;
   fr_salt<<<(unsigned)((rows + 127) / 128), 128, 0, st>>>(a);
+  if (g_mid) {
+    const long long nl = m.R, nn = m.width - 1;
+    fr_mid0<<<(unsigned)((nl * slots + 127) / 128), 128, 0, st>>>(m.ltpl, 256, nl, nl * slots, (uint64_t*)m.fmid);
+    if (nn > 0)
+      fr_mid0<<<(unsigned)((nn * slots + 127) / 128), 128, 0, st>>>(m.ntpl, 384, nn, nn * slots, (uint64_t*)m.fmid + 8 * nl);
+  }
 }
-static void commit_segs(const Commit& m, const uint8_t* data, cudaStream_t st) {
+// rows [row0, row0 + rows) of the operand (all of it by default)
+static void commit_segs(const Commit& m, const uint8_t* data, cudaStream_t st, long long row0 = 0, long long rows = -1) {
+  if (rows < 0) rows = m.R;
   Args a{};
-  a.p[0] = (unsigned long long)data;
+  a.p[0] = (unsigned long long)(data + row0 * m.k);
   a.p[1] = (unsigned long long)m.mids;
-  a.p[2] = (unsigned long long)m.digests;
-  a.i[0] = m.R; a.i[1] = m.k; a.i[2] = m.s; a.i[3] = m.last;
-  const long long total = (long long)m.R * m.s;
+  a.p[2] = (unsigned long long)(m.digests + row0 * m.s * 64);
+  a.i[0] = (int)rows; a.i[1] = m.k; a.i[2] = m.s; a.i[3] = m.last;
+  const long long total = rows * m.s;
   fr_segments<<<(unsigned)((total + 255) / 256), 256, 8 * 32 * 33 * 4, st>>>(a);
 }
-static void commit_frtree(const Commit& m, int slot, cudaStream_t st) {
+// where a tree stops for the host: its level of E nodes into ex, then flag = seq (device views of mapped host memory)
+struct Export {
+  uint8_t* ex;
+  uint32_t* flag;
+  int E;
+  uint32_t seq;
+};
+// CTAs [cta0, cta0 + n) of the tree's width / 128 (all by default); the last of all to finish takes the top
+static void commit_frtree(const Commit& m, int slot, cudaStream_t st, int cta0 = 0, int n = -1, const Export* x = nullptr) {
+  const int L = std::min(m.width, 128), total = m.width / L;
+  if (n < 0) n = total;
   Args f{};
-  const unsigned long long ps[13] = {(unsigned long long)m.digests, (unsigned long long)(m.mids + 64 * m.s),
+  const unsigned long long ps[16] = {(unsigned long long)m.digests, (unsigned long long)(m.mids + 64 * m.s),
                                      (unsigned long long)(m.my + (size_t)64 * m.R * slot),
                                      (unsigned long long)(m.cs + (size_t)64 * m.R * slot), (unsigned long long)g_hm_mid,
                                      (unsigned long long)m.ltpl, (unsigned long long)m.loff, (unsigned long long)m.ntpl,
                                      (unsigned long long)m.noff, (unsigned long long)m.x, (unsigned long long)m.bc,
-                                     (unsigned long long)m.tree, (unsigned long long)m.counter};
-  for (int j = 0; j < 13; j++) f.p[j] = ps[j];
-  f.i[0] = m.R; f.i[1] = m.s; f.i[2] = m.width;
-  const int L = std::min(m.width, 128);
-  fr_tree<<<(unsigned)(m.width / L), L, 0, st>>>(f);
+                                     (unsigned long long)m.tree, (unsigned long long)m.counter, (unsigned long long)m.fmid,
+                                     (unsigned long long)(x ? x->ex : nullptr), (unsigned long long)(x ? x->flag : nullptr)};
+  for (int j = 0; j < 16; j++) f.p[j] = ps[j];
+  f.i[0] = m.R; f.i[1] = m.s; f.i[2] = m.width; f.i[3] = cta0; f.i[4] = total; f.i[5] = x ? x->E : 0;
+  f.i[6] = x ? (int)x->seq : 0; f.i[7] = g_mid;
+  fr_tree<<<(unsigned)n, L, 0, st>>>(f);
 }
-static void commit_tree(const Commit& m, int slot, const uint8_t* data, cudaStream_t st) {
+static void commit_tree(const Commit& m, int slot, const uint8_t* data, cudaStream_t st, const Export* x = nullptr) {
   commit_segs(m, data, st);
-  commit_frtree(m, slot, st);
+  commit_frtree(m, slot, st, 0, -1, x);
 }
-// n chained compressions a thread (each block xor-fed from the last state), rolled (fr_compress) or fully unrolled
+// the next block of a chain from the state alone (so the one-warp and two-warp chains hash the same blocks)
+__device__ __forceinline__ void chain_next(const uint64_t st[8], uint64_t w[16]) {
+#pragma unroll
+  for (int j = 0; j < 16; j++) w[j] = st[j & 7] ^ (0x9E3779B97F4A7C15ull * (j + 1));
+}
+// n chained compressions a thread, rolled (fr_compress<ROT>) or fully unrolled (s512_compress)
+template <int ROT>
 __global__ void sha_chain(int n, int unrolled, uint64_t* out) {
   uint64_t st[8], w[16];
   s512_iv(st);
   for (int j = 0; j < 16; j++) w[j] = (uint64_t)(threadIdx.x + 1) * (j + 1);
   for (int i = 0; i < n; i++) {
     if (unrolled) s512_compress(st, w);
-    else fr_compress(st, w);
-    for (int j = 0; j < 8; j++) w[j] ^= st[j];
+    else fr_compress<ROT>(st, w);
+    chain_next(st, w);
   }
   out[blockIdx.x * blockDim.x + threadIdx.x] = st[0];
 }
-// the latency of one compression in a chain: (n = 257) - (n = 1) over 256, by threads a CTA (1: one thread on the GPU)
+// the same chains, each split across a pair of warps (lane l of warp 0 and of warp 1, on different sub-partitions): warp 0
+// the rounds, warp 1 the message schedule, its K + W[16..79] through shared memory 16 words at a time behind named
+// barriers 2..5, the block handed over behind barrier 1
+template <int ROT>
+__global__ void __launch_bounds__(64) sha_chain2(int n, uint64_t* out) {
+  __shared__ uint64_t msg[16][32], kw[64][32];
+  const int lane = threadIdx.x & 31;
+  if (threadIdx.x < 32) {
+    uint64_t st[8], w[16];
+    s512_iv(st);
+    for (int j = 0; j < 16; j++) w[j] = (uint64_t)(lane + 1) * (j + 1);
+    for (int i = 0; i < n; i++) {
+#pragma unroll
+      for (int j = 0; j < 16; j++) msg[j][lane] = w[j];
+      __threadfence_block();
+      asm volatile("bar.arrive 1, 64;" ::: "memory");
+      uint64_t a = st[0], b = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7];
+#pragma unroll
+      for (int j = 0; j < 16; j++) fr_round<ROT>(a, b, c, d, e, f, g, h, SHA512_K[j] + w[j]);
+#pragma unroll 1
+      for (int q = 1; q < 5; q++) {
+        asm volatile("bar.sync %0, 64;" ::"r"(1 + q) : "memory");
+#pragma unroll
+        for (int j = 0; j < 16; j++) fr_round<ROT>(a, b, c, d, e, f, g, h, kw[16 * (q - 1) + j][lane]);
+      }
+      st[0] += a; st[1] += b; st[2] += c; st[3] += d; st[4] += e; st[5] += f; st[6] += g; st[7] += h;
+      chain_next(st, w);
+    }
+    out[blockIdx.x * 32 + lane] = st[0];
+  } else {
+    for (int i = 0; i < n; i++) {
+      asm volatile("bar.sync 1, 64;" ::: "memory");
+      uint64_t w[16];
+#pragma unroll
+      for (int j = 0; j < 16; j++) w[j] = msg[j][lane];
+#pragma unroll 1
+      for (int q = 1; q < 5; q++) {
+#pragma unroll
+        for (int j = 0; j < 16; j++) {
+          w[j] += fr_s1<0>(w[(j + 14) & 15]) + w[(j + 9) & 15] + fr_s0<0>(w[(j + 1) & 15]);
+          kw[16 * (q - 1) + j][lane] = SHA512_K[16 * q + j] + w[j];
+        }
+        __threadfence_block();
+        asm volatile("bar.arrive %0, 64;" ::"r"(1 + q) : "memory");
+      }
+    }
+  }
+}
+// ---------------------------------------------------------------- the host's side: SHA-512, the top of a tree, the draw
+static uint64_t g_hk[80];  // SHA512_K, read back from the device
+static void (*g_ossl)(void*, const unsigned char*) = nullptr;  // libcrypto's SHA512_Transform: SHA512_CTX's state is its h[8]
+static bool g_use_ossl = false;
+static inline uint64_t h_rotr(uint64_t x, int n) { return (x >> n) | (x << (64 - n)); }
+static inline uint64_t h_be(const uint8_t* p) {
+  uint64_t v = 0;
+  for (int k = 0; k < 8; k++) v = v << 8 | p[k];
+  return v;
+}
+static void h_compress_cpp(uint64_t st[8], const uint8_t* blk) {
+  uint64_t w[80];
+  for (int j = 0; j < 16; j++) w[j] = h_be(blk + 8 * j);
+  for (int j = 16; j < 80; j++)
+    w[j] = (h_rotr(w[j - 2], 19) ^ h_rotr(w[j - 2], 61) ^ (w[j - 2] >> 6)) + w[j - 7] +
+           (h_rotr(w[j - 15], 1) ^ h_rotr(w[j - 15], 8) ^ (w[j - 15] >> 7)) + w[j - 16];
+  uint64_t a = st[0], b = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7];
+  for (int j = 0; j < 80; j++) {
+    const uint64_t t1 = h + (h_rotr(e, 14) ^ h_rotr(e, 18) ^ h_rotr(e, 41)) + ((e & f) ^ (~e & g)) + g_hk[j] + w[j];
+    const uint64_t t2 = (h_rotr(a, 28) ^ h_rotr(a, 34) ^ h_rotr(a, 39)) + ((a & b) ^ (a & c) ^ (b & c));
+    h = g; g = f; f = e; e = d + t1; d = c; c = b; b = a; a = t1 + t2;
+  }
+  st[0] += a; st[1] += b; st[2] += c; st[3] += d; st[4] += e; st[5] += f; st[6] += g; st[7] += h;
+}
+static void h_compress_ossl(uint64_t st[8], const uint8_t* blk) {
+  alignas(64) uint64_t ctx[32] = {0};
+  memcpy(ctx, st, 64);
+  g_ossl(ctx, blk);
+  memcpy(st, ctx, 64);
+}
+static inline void h_compress(uint64_t st[8], const uint8_t* blk) {
+  if (g_use_ossl) h_compress_ossl(st, blk);
+  else h_compress_cpp(st, blk);
+}
+static void h_iv(uint64_t st[8]) {
+  const uint64_t iv[8] = {0x6a09e667f3bcc908ull, 0xbb67ae8584caa73bull, 0x3c6ef372fe94f82bull, 0xa54ff53a5f1d36f1ull,
+                          0x510e527fade682d1ull, 0x9b05688c2b3e6c1full, 0x1f83d9abfb41bd6bull, 0x5be0cd19137e2179ull};
+  memcpy(st, iv, 64);
+}
+static inline double h_us() {
+  return std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+// a host compression's latency in a chain of n, by the C++ or libcrypto's
+static double h_chain_us(bool ossl, int n) {
+  g_use_ossl = ossl;
+  uint8_t blk[128];
+  for (int j = 0; j < 128; j++) blk[j] = (uint8_t)(j * 7 + 1);
+  uint64_t st[8];
+  h_iv(st);
+  std::vector<double> v;
+  for (int r = 0; r < 5; r++) {
+    const double t0 = h_us();
+    for (int i = 0; i < n; i++) {
+      h_compress(st, blk);
+      blk[i & 127] ^= (uint8_t)st[0];
+    }
+    v.push_back((h_us() - t0) / n);
+  }
+  std::sort(v.begin(), v.end());
+  return v[2];
+}
+// SHA512_K from the device; libcrypto's compression if it computes the same block and is faster
+static bool g_ossl_equal = false;
+static double g_cpp_us = 0, g_ossl_us = 0;
+static void h_init() {
+  CK(cudaMemcpyFromSymbol(g_hk, SHA512_K, sizeof g_hk));
+  for (const char* lib : {"libcrypto.so.3", "libcrypto.so.1.1", "libcrypto.so"})
+    if (void* h = dlopen(lib, RTLD_NOW | RTLD_LOCAL)) {
+      g_ossl = (void (*)(void*, const unsigned char*))dlsym(h, "SHA512_Transform");
+      if (g_ossl) break;
+    }
+  uint8_t blk[128];
+  for (int j = 0; j < 128; j++) blk[j] = (uint8_t)(j * 3 + 5);
+  uint64_t a[8], b[8];
+  h_iv(a);
+  h_iv(b);
+  h_compress_cpp(a, blk);
+  if (g_ossl) {
+    h_compress_ossl(b, blk);
+    g_ossl_equal = memcmp(a, b, 64) == 0;
+  }
+  g_cpp_us = h_chain_us(false, 20000);
+  g_ossl_us = g_ossl_equal ? h_chain_us(true, 20000) : 0;
+  g_use_ossl = g_ossl_equal && g_ossl_us < g_cpp_us;
+}
+// the nodes' first-block states of a shape, on the host (the same constants fr_mid0 computes)
+static std::map<std::pair<int, int>, std::vector<uint64_t>> g_hnmid;
+static const std::vector<uint64_t>& h_nmid(const HostConst& c) {
+  auto& v = g_hnmid[{c.k, c.R}];
+  if (v.empty() && c.width > 1) {
+    v.resize((size_t)8 * (c.width - 1));
+    for (long long j = 0; j < c.width - 1; j++) {
+      h_iv(&v[8 * j]);
+      h_compress(&v[8 * j], &c.ntpl[384 * j]);
+    }
+  }
+  return v;
+}
+// the levels above an exported level of E nodes (ex, 64 bytes each) to the root. In node-head order the parents of a level
+// of lw nodes start at width - lw; a node is its template's last two blocks with L at o and R at o + 72, from its first
+// block's state
+static void h_top(const HostConst& c, const std::vector<uint64_t>& nmid, const uint8_t* ex, int E, uint8_t root[64]) {
+  std::vector<uint8_t> cur(ex, ex + 64 * (size_t)E), nxt;
+  long long lw = E, nb = c.width - E;
+  uint8_t m[256];
+  while (lw > 1) {
+    nxt.resize((size_t)32 * lw);
+    for (long long j = 0; j < lw / 2; j++) {
+      const long long idx = nb + j;
+      uint32_t o;
+      memcpy(&o, &c.noff[4 * idx], 4);
+      memcpy(m, &c.ntpl[384 * idx + 128], 256);
+      memcpy(m + o - 128, &cur[128 * j], 64);
+      memcpy(m + o + 72 - 128, &cur[128 * j + 64], 64);
+      uint64_t st[8];
+      memcpy(st, &nmid[8 * idx], 64);
+      h_compress(st, m);
+      h_compress(st, m + 128);
+      for (int k = 0; k < 8; k++)
+        for (int b = 0; b < 8; b++) nxt[64 * j + 8 * k + b] = (uint8_t)(st[k] >> (56 - 8 * b));
+    }
+    nb += lw / 2;
+    lw /= 2;
+    std::swap(cur, nxt);
+  }
+  memcpy(root, cur.data(), 64);
+}
+// mapped host memory the GPU and the host's thread meet in: the exported level, the GPU's flag (up) and the host's (dn)
+struct Link {
+  uint8_t *ex_h = nullptr, *ex_d = nullptr;
+  uint32_t *up_h = nullptr, *up_d = nullptr, *dn_h = nullptr, *dn_d = nullptr, *err_d = nullptr;
+};
+static Link g_link;
+static void link_init() {
+  if (g_link.ex_h) return;
+  void* p;
+  CK(cudaHostAlloc(&p, 64 * 1024 + 256, cudaHostAllocMapped));
+  memset(p, 0, 64 * 1024 + 256);
+  g_link.ex_h = (uint8_t*)p;
+  g_link.up_h = (uint32_t*)(g_link.ex_h + 64 * 1024);
+  g_link.dn_h = g_link.up_h + 32;
+  void* q;
+  CK(cudaHostGetDevicePointer(&q, p, 0));
+  g_link.ex_d = (uint8_t*)q;
+  g_link.up_d = (uint32_t*)(g_link.ex_d + 64 * 1024);
+  g_link.dn_d = g_link.up_d + 32;
+  CK(cudaMalloc(&g_link.err_d, sizeof(uint32_t)));
+  CK(cudaMemset(g_link.err_d, 0, sizeof(uint32_t)));
+}
+static inline uint32_t h_load(const uint32_t* p) { return __atomic_load_n(p, __ATOMIC_ACQUIRE); }
+static inline void h_store(uint32_t* p, uint32_t v) { __atomic_store_n(p, v, __ATOMIC_RELEASE); }
+// one stage's commitment as the host sees it: the shape, and the export's width (1: the GPU's root, nothing to hash)
+struct HostStep {
+  const HostConst* c;
+  int E;
+};
+struct HostStats {
+  long steps = 0, timeouts = 0;
+  double top_us = 0, top_max_us = 0;
+};
+// the host's side of `iters` passes over a step list: wait for step q's flag (q + 1), hash the levels above its export,
+// wait draw_us (the verifier's round trip for the coins), then raise the GEMM's flag; stops after 5 s without a flag
+static void host_loop(std::vector<HostStep> steps, int iters, int draw_us, HostStats* out) {
+  uint8_t root[64];
+  for (int it = 0; it < iters; it++)
+    for (size_t q = 0; q < steps.size(); q++) {
+      const uint32_t v = (uint32_t)q + 1;
+      const double t0 = h_us();
+      while (h_load(g_link.up_h) != v)
+        if (h_us() - t0 > 5e6) {
+          out->timeouts++;
+          return;
+        }
+      const double t1 = h_us();
+      if (steps[q].E > 1) h_top(*steps[q].c, h_nmid(*steps[q].c), g_link.ex_h, steps[q].E, root);
+      const double t2 = h_us();
+      out->top_us += t2 - t1;
+      out->top_max_us = std::max(out->top_max_us, t2 - t1);
+      out->steps++;
+      while (h_us() - t2 < draw_us) {
+      }
+      h_store(g_link.dn_h, v);
+    }
+}
+// the latency of one compression in a chain: (n = 257) - (n = 1) over 256, by threads a CTA (1: one thread on the GPU), for
+// each rotation choice and the two-warp split; the host's compression and the GPU-host round trip through mapped memory
 static void sha_latency(Dev& d) {
-  uint64_t* out;
+  uint64_t *out, *out2;
   CK(cudaMalloc(&out, 128 * 188 * sizeof(uint64_t)));
+  CK(cudaMalloc(&out2, 128 * 188 * sizeof(uint64_t)));
   cudaEvent_t e0, e1;
   CK(cudaEventCreate(&e0)); CK(cudaEventCreate(&e1));
+  auto per = [&](const std::function<void(int)>& launch) {
+    double ms[2];
+    for (int k = 0; k < 2; k++) {
+      const int n = k ? 257 : 1;
+      std::vector<double> v;
+      for (int r = 0; r < 5; r++) {
+        CK(cudaEventRecord(e0, d.st));
+        launch(n);
+        CK(cudaEventRecord(e1, d.st));
+        CK(cudaEventSynchronize(e1));
+        float x;
+        CK(cudaEventElapsedTime(&x, e0, e1));
+        v.push_back(x);
+      }
+      std::sort(v.begin(), v.end());
+      ms[k] = v[2];
+    }
+    return (ms[1] - ms[0]) * 1e3 / 256;
+  };
   printf("{\"mode\": \"sha_latency\", \"mhz\": %.0f, \"us_a_compression\": {", nvml_mhz(d));
   bool first = true;
-  for (int unrolled : {0, 1})
-    for (int thr : {1, 32, 128}) {
-      double ms[2];
-      for (int k = 0; k < 2; k++) {
-        const int n = k ? 257 : 1;
-        std::vector<double> v;
-        for (int r = 0; r < 5; r++) {
-          CK(cudaEventRecord(e0, d.st));
-          sha_chain<<<1, thr, 0, d.st>>>(n, unrolled, out);
-          CK(cudaEventRecord(e1, d.st));
-          CK(cudaEventSynchronize(e1));
-          float x;
-          CK(cudaEventElapsedTime(&x, e0, e1));
-          v.push_back(x);
-        }
-        std::sort(v.begin(), v.end());
-        ms[k] = v[2];
-      }
-      printf("%s\"%s_%d\": %.3f", first ? "" : ", ", unrolled ? "unrolled" : "rolled", thr, (ms[1] - ms[0]) * 1e3 / 256);
-      first = false;
+  auto put = [&](const std::string& nm, double us) {
+    printf("%s\"%s\": %.3f", first ? "" : ", ", nm.c_str(), us);
+    first = false;
+  };
+  using Chain = void (*)(int, int, uint64_t*);
+  const std::pair<int, Chain> rolled[] = {{0, sha_chain<0>}, {1, sha_chain<1>}, {2, sha_chain<2>}, {3, sha_chain<3>},
+                                          {4, sha_chain<4>}, {8, sha_chain<8>}, {12, sha_chain<12>}};
+  for (const auto& rc : rolled)
+    for (int thr : {1, 32}) put("rolled_r" + std::to_string(rc.first) + "_" + std::to_string(thr), per([&](int n) {
+      rc.second<<<1, thr, 0, d.st>>>(n, 0, out);
+    }));
+  put("unrolled_32", per([&](int n) { sha_chain<0><<<1, 32, 0, d.st>>>(n, 1, out); }));
+  using Chain2 = void (*)(int, uint64_t*);
+  const std::pair<int, Chain2> split[] = {{0, sha_chain2<0>}, {1, sha_chain2<1>}, {2, sha_chain2<2>}, {3, sha_chain2<3>}};
+  for (const auto& sc : split) put("split2_r" + std::to_string(sc.first) + "_32", per([&](int n) {
+    sc.second<<<1, 64, 0, d.st>>>(n, out2);
+  }));
+  // the split's chains equal the one-warp chains'
+  sha_chain<0><<<1, 32, 0, d.st>>>(257, 0, out);
+  sha_chain2<0><<<1, 64, 0, d.st>>>(257, out2);
+  std::vector<uint64_t> h1(32), h2(32);
+  CK(cudaMemcpy(h1.data(), out, 256, cudaMemcpyDeviceToHost));
+  CK(cudaMemcpy(h2.data(), out2, 256, cudaMemcpyDeviceToHost));
+  printf("}, \"split_equal\": %s}\n", h1 == h2 ? "true" : "false");
+  fflush(stdout);
+  // the host: a compression's latency in a chain (C++ and libcrypto's, h_init), the round trip through mapped memory
+  link_init();
+  const int n = 2000;
+  h_store(g_link.up_h, 0);
+  h_store(g_link.dn_h, 0);
+  std::thread echo([&] {
+    for (int i = 1; i <= n; i++) {
+      const double t0 = h_us();
+      while (h_load(g_link.up_h) != (uint32_t)i)
+        if (h_us() - t0 > 5e6) return;
+      h_store(g_link.dn_h, (uint32_t)i);
     }
-  printf("}}\n");
+  });
+  const double t0 = h_us();
+  ping<<<1, 1, 0, d.st>>>(g_link.up_d, g_link.dn_d, n, g_link.err_d);
+  CK(cudaStreamSynchronize(d.st));
+  const double rt = (h_us() - t0) / n;
+  echo.join();
+  uint32_t err = 0;
+  CK(cudaMemcpy(&err, g_link.err_d, 4, cudaMemcpyDeviceToHost));
+  printf("{\"mode\": \"cpu_latency\", \"cpp_us_a_compression\": %.4f, \"ossl_us_a_compression\": %.4f, \"ossl_equal\": %s, "
+         "\"host_uses\": \"%s\", \"mapped_round_trip_us\": %.3f, \"round_trip_errors\": %u}\n",
+         g_cpp_us, g_ossl_us, g_ossl_equal ? "true" : "false", g_use_ossl ? "ossl" : "cpp", rt, err);
   fflush(stdout);
   CK(cudaFree(out));
+  CK(cudaFree(out2));
 }
 // the commitment of the gate's rows into poisoned buffers by path (1 hm96_rows.cu, 2 fast; 0 the no-write control) equals
-// Python's leaves, b || c and root; the whole tree is copied out for the paths to be compared node by node
-static bool commit_gate(const Commit& m, int path, std::vector<uint8_t>* tree_out = nullptr) {
+// Python's leaves, b || c and root; the whole tree is copied out for the paths to be compared node by node. The fast path
+// in k slabs of rows (a launch pair a slab, as behind a slabbed GEMM), and with E stopped at the level of E nodes for the
+// host to hash the top (the root then the host's, the flag checked)
+static bool commit_gate(const Commit& m, int path, std::vector<uint8_t>* tree_out = nullptr, int k = 1, int E = 0) {
   const HostConst& c = *m.hc;
   uint8_t* rows = dput(c.rows.data(), c.rows.size());
   CK(cudaMemset(m.x, 0xA5, (size_t)64 * m.R));
@@ -589,18 +1074,33 @@ static bool commit_gate(const Commit& m, int path, std::vector<uint8_t>* tree_ou
   CK(cudaMemset(m.tree, 0xA5, m.tree_bytes));
   CK(cudaMemset(m.my, 0xA5, (size_t)64 * m.R * LAYERS));
   CK(cudaMemset(m.cs, 0xA5, (size_t)64 * m.R * LAYERS));
+  CK(cudaMemset(m.fmid, 0xA5, (size_t)64 * (m.R + m.width - 1)));
   if (!c.pads.empty()) CK(cudaMemcpy(m.tree + (size_t)64 * c.R, c.pads.data(), c.pads.size(), cudaMemcpyHostToDevice));
+  Export x{g_link.ex_d, g_link.up_d, E, 0x5A5A0000u + (uint32_t)E};
+  if (E) {
+    memset(g_link.ex_h, 0xA5, 64 * 1024);
+    h_store(g_link.up_h, 0);
+  }
   if (path == 1) commit_run(m, rows, 0);
   if (path == 2) {
     commit_salt(m, LAYERS, 0);
-    commit_tree(m, LAYERS - 1, rows, 0);
+    const int L = std::min(m.width, 128), rk = m.R / k;
+    for (int i = 0; i < k; i++) {
+      commit_segs(m, rows, 0, (long long)i * rk, rk);
+      commit_frtree(m, LAYERS - 1, 0, i * rk / L, i == k - 1 ? m.width / L - i * rk / L : rk / L, E ? &x : nullptr);
+    }
   }
   CK(cudaDeviceSynchronize());
   CK(cudaGetLastError());
   std::vector<uint8_t> hl((size_t)64 * m.R), bc((size_t)128 * m.R), root(64);
   CK(cudaMemcpy(hl.data(), m.x, hl.size(), cudaMemcpyDeviceToHost));
   CK(cudaMemcpy(bc.data(), m.bc, bc.size(), cudaMemcpyDeviceToHost));
-  CK(cudaMemcpy(root.data(), m.tree + m.tree_bytes - 64, 64, cudaMemcpyDeviceToHost));
+  if (E) {
+    if (h_load(g_link.up_h) != x.seq) return false;
+    h_top(c, h_nmid(c), g_link.ex_h, E, root.data());
+  } else {
+    CK(cudaMemcpy(root.data(), m.tree + m.tree_bytes - 64, 64, cudaMemcpyDeviceToHost));
+  }
   if (tree_out) {
     tree_out->resize(m.tree_bytes);
     CK(cudaMemcpy(tree_out->data(), m.tree, m.tree_bytes, cudaMemcpyDeviceToHost));
@@ -1156,33 +1656,37 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
     CK(cudaGraphExecDestroy(G.ge));
     arm_graphs.push_back(G);
   };
+  const char* arms_env = getenv("ARMS");  // r1 (round 1's arms), r2 (the proved forward's), both by default
+  const bool r1 = !arms_env || strstr(arms_env, "r1"), r2 = !arms_env || strstr(arms_env, "r2");
   add("gemm", sm, [&] { gemms(ch[0], sm); }, macs);
-  add("hash", sm, [&] { hashes(ch[0], sm); }, 0);
-  if (g_fast) {
+  if (r1) add("hash", sm, [&] { hashes(ch[0], sm); }, 0);
+  if (r1 && g_fast) {
     add("salt", sm, [&] { for (int t = 0; t < NSTAGE; t++) salt(ch[0], t, sm); }, 0);
     add("tree", sm, [&] {
       for (int l = 0; l < LAYERS; l++)
         for (int t = 0; t < NSTAGE; t++) commit_tree(ch[0].cm[t], l, ch[0].op[t], sm);
     }, 0);
   }
-  add("serial", sm, [&] { stage_seq(ch[0], sm, true, false, nullptr); }, macs);
-  add("conc", sm, [&] {
-    fork(sm, s0);
-    gemms(ch[0], s0);
-    fork(sm, s1);
-    hashes(ch[1], s1);
-    fork(s0, sm);
-    fork(s1, sm);
-  }, macs);
   cudaStream_t s1lo = prio_stream(lo), s0hi = prio_stream(hi);
-  add("conc_lo", sm, [&] {
-    fork(sm, s0hi);
-    gemms(ch[0], s0hi);
-    fork(sm, s1lo);
-    hashes(ch[1], s1lo);
-    fork(s0hi, sm);
-    fork(s1lo, sm);
-  }, macs);
+  if (r1) {
+    add("serial", sm, [&] { stage_seq(ch[0], sm, true, false, nullptr); }, macs);
+    add("conc", sm, [&] {
+      fork(sm, s0);
+      gemms(ch[0], s0);
+      fork(sm, s1);
+      hashes(ch[1], s1);
+      fork(s0, sm);
+      fork(s1, sm);
+    }, macs);
+    add("conc_lo", sm, [&] {
+      fork(sm, s0hi);
+      gemms(ch[0], s0hi);
+      fork(sm, s1lo);
+      hashes(ch[1], s1lo);
+      fork(s0hi, sm);
+      fork(s1lo, sm);
+    }, macs);
+  }
   // hash latency a stage: 32 commitments of one stage's operands back to back (the fast path's critical part: its salt-only
   // part, timed apart, runs ahead)
   std::vector<std::pair<std::string, std::vector<Rep>>> lat, salt_lat, seg_lat, tree_lat;
@@ -1205,8 +1709,113 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
     tree_lat.push_back({SNAME[t], time_graph(d, Tr, sm, reps)});
     CK(cudaGraphExecDestroy(Tr.ge));
   }
+  // the proved forward, lockstep: a stage's operands committed, the draw, then its GEMM, stage by stage. k > 1: every GEMM
+  // in k row slabs, the next stage's operands hashed slab by slab behind it on h (the producing kernel's epilogue, emulated:
+  // cuBLASLt's can't be fused), so at its end only the last slab's leaves and the top are left; the first stage's operands
+  // (the embedding's) whole. draw 0: none; 1: DRAW_US on the GPU; 2: the host's (the tree stops at E nodes for the host to
+  // hash the top, E = 1 the GPU's root; then the host waits its draw, dus, and raises the GEMM's flag). The salt-only parts
+  // and first-block states ahead on a side stream.
+  struct Cfg {
+    std::string name;
+    int mid, k, E, draw, dus;
+  };
+  std::vector<Cfg> cfgs;
+  std::vector<int> ks;
+  if (r2) {
+    ks = {4, 8};
+    cfgs = {{"before", 0, 1, 0, 1, draw_us},  {"mid", 1, 1, 0, 1, draw_us},      {"mid_host", 1, 1, 1, 2, draw_us},
+            {"cpu16", 1, 1, 16, 2, draw_us},  {"cpu64", 1, 1, 64, 2, draw_us},   {"s4", 1, 4, 0, 1, draw_us},
+            {"s8", 1, 8, 0, 1, draw_us},      {"s4_cpu16", 1, 4, 16, 2, draw_us}, {"s8_cpu16", 1, 8, 16, 2, draw_us},
+            {"s8_cpu64", 1, 8, 64, 2, draw_us}, {"before_nd", 0, 1, 0, 0, 0},      {"mid_nd", 1, 1, 0, 0, 0},
+            {"s8_nd", 1, 8, 0, 0, 0},         {"cpu16_nd", 1, 1, 16, 2, 0},       {"s8_cpu16_nd", 1, 8, 16, 2, 0}};
+  }
+  for (int k : ks)
+    for (int t = 0; t < NSTAGE; t++) plan(M / k, GN[t], GK[t], 1, 0, 0, 0, ch[0].A, P.W[0][t], ch[0].D, d.st);
+  auto slab_gemm = [&](Chunk& c, int l, int t, int k, int i, cudaStream_t st) {
+    const LtB& B = g_plans.at(std::make_tuple(M / k, GN[t], GK[t], 1));
+    const long long r0 = (long long)i * (M / k);
+    ltb_run(B, c.lt, c.A + r0 * GK[t], P.W[l][t], c.D + r0 * GN[t], st);
+  };
+  cudaStream_t hs = prio_stream(hi), as = prio_stream(lo);
+  auto proved = [&](Chunk& c, cudaStream_t g, cudaStream_t h, cudaStream_t ahead, const Cfg& f) {
+    std::vector<cudaEvent_t> ev;
+    fork(g, ahead);
+    for (int t = 0; t < NSTAGE; t++) {
+      salt(c, t, ahead);
+      cudaEvent_t e;
+      CK(cudaEventCreateWithFlags(&e, cudaEventDisableTiming));
+      CK(cudaEventRecord(e, ahead));
+      ev.push_back(e);
+    }
+    const int Q = LAYERS * NSTAGE;
+    for (int q = 0; q < Q; q++) {
+      const int l = q / NSTAGE, t = q % NSTAGE;
+      const Export x{g_link.ex_d, g_link.up_d, f.E, (uint32_t)q + 1};
+      if (f.k == 1 || q == 0) {
+        fork(g, h);
+        if (q < NSTAGE) CK(cudaStreamWaitEvent(h, ev[t], 0));
+        commit_tree(c.cm[t], l, c.op[t], h, f.draw == 2 ? &x : nullptr);
+      }
+      if (f.draw == 1) draw_wait<<<1, 1, 0, h>>>((unsigned long long)f.dus * 1000ull);
+      if (f.draw == 2) host_wait<<<1, 1, 0, g>>>(g_link.dn_d, (uint32_t)q + 1, g_link.err_d);
+      else fork(h, g);
+      if (f.k == 1 || q + 1 == Q) {
+        stage_gemm(P, c, l, t, g);
+        continue;
+      }
+      const int qn = q + 1, ln = qn / NSTAGE, tn = qn % NSTAGE;
+      const Commit& m = c.cm[tn];
+      const int L = std::min(m.width, 128), rk = M / f.k;
+      const Export xn{g_link.ex_d, g_link.up_d, f.E, (uint32_t)qn + 1};
+      if (qn < NSTAGE) CK(cudaStreamWaitEvent(h, ev[tn], 0));
+      for (int i = 0; i < f.k; i++) {
+        slab_gemm(c, l, t, f.k, i, g);
+        fork(g, h);
+        commit_segs(m, c.op[tn], h, (long long)i * rk, rk);
+        commit_frtree(m, ln, h, i * rk / L, i == f.k - 1 ? m.width / L - i * rk / L : rk / L, f.draw == 2 ? &xn : nullptr);
+      }
+    }
+    fork(h, g);
+    fork(ahead, g);
+  };
+  struct HostArm {
+    std::string name;
+    HostStats st;
+    uint32_t gpu_timeouts;
+  };
+  std::vector<HostArm> host_arms;
+  for (int k : ks) add("gemm_s" + std::to_string(k), sm, [&] {
+    for (int l = 0; l < LAYERS; l++)
+      for (int t = 0; t < NSTAGE; t++)
+        for (int i = 0; i < k; i++) slab_gemm(ch[0], l, t, k, i, sm);
+  }, macs);
+  for (const Cfg& f : cfgs) {
+    g_mid = f.mid;
+    const Graph G = capture(sm, [&] { proved(ch[0], sm, hs, as, f); });
+    g_mid = 1;
+    HostStats st;
+    std::thread th;
+    if (f.draw == 2) {
+      std::vector<HostStep> steps;
+      for (int q = 0; q < LAYERS * NSTAGE; q++) steps.push_back({&hc[q % NSTAGE], f.E});
+      h_store(g_link.up_h, 0);
+      h_store(g_link.dn_h, 0);
+      CK(cudaMemset(g_link.err_d, 0, 4));
+      th = std::thread(host_loop, steps, reps + 2, f.dus, &st);
+    }
+    arms.push_back({f.name, time_graph(d, G, sm, reps)});
+    arm_macs.push_back(macs);
+    arm_graphs.push_back(G);
+    if (th.joinable()) {
+      th.join();
+      uint32_t err = 0;
+      CK(cudaMemcpy(&err, g_link.err_d, 4, cudaMemcpyDeviceToHost));
+      host_arms.push_back({f.name, st, err});
+    }
+    CK(cudaGraphExecDestroy(G.ge));
+  }
   // C chunks in flight, each hash -> draw -> GEMM a stage, chunk 0 at the highest priority
-  for (int C = 1; C <= NC; C++) {
+  for (int C = 1; C <= NC && r1; C++) {
     add("pipe" + std::to_string(C), sm, [&] {
       for (int c = 0; c < C; c++) {
         fork(sm, cs[c]);
@@ -1215,11 +1824,14 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
       for (int c = 0; c < C; c++) fork(cs[c], sm);
     }, C * macs);
   }
-  add("pipe1_draw", sm, [&] { stage_seq(ch[0], sm, false, true, nullptr); }, macs);
-  add("pipe1_hash", sm, [&] { stage_seq(ch[0], sm, true, false, side[0]); }, macs);
+  if (r1) {
+    add("pipe1_draw", sm, [&] { stage_seq(ch[0], sm, false, true, nullptr); }, macs);
+    add("pipe1_hash", sm, [&] { stage_seq(ch[0], sm, true, false, side[0]); }, macs);
+  }
   // the commitments on a green partition of N SMs, the GEMMs on the rest (no graph: the two contexts' streams)
   std::vector<std::tuple<int, int, int, double, double, double>> green;  // N asked, gemm SMs, hash SMs, gemm alone, both, hash alone
   for (int N : {28, 44}) {
+    if (!r1) break;
     cudaStream_t sg = nullptr, sh = nullptr;
     int got[2] = {0, 0};
     const int e = gc_split(d.sms - N, &sg, &sh, got);
@@ -1247,7 +1859,7 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
   std::vector<std::tuple<int, int, int, int, double, double>> pgreen;  // N asked, C, gemm SMs, hash SMs, GEMMs alone, pipelined
   const bool pg_on = !getenv("PIPE_GREEN") || atoi(getenv("PIPE_GREEN"));  // PIPE_GREEN=0 skips these arms
   for (int N : {20, 28, 36, 44}) {
-    if (!pg_on) break;
+    if (!pg_on || !r1) break;
     Split g;
     int e = gc_split_n(d.sms - N, NC, hi, NC * LAYERS * NSTAGE, g);
     if (e) {
@@ -1339,11 +1951,21 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
     printf("%s\"%s\": ", i ? ", " : "", arms[i].first.c_str());
     print_prios(arm_graphs[i]);
   }
+  printf("}, \"host_sha\": {\"uses\": \"%s\", \"cpp_us\": %.4f, \"ossl_us\": %.4f}, \"host\": {", g_use_ossl ? "ossl" : "cpp",
+         g_cpp_us, g_ossl_us);
+  int bad = 0;
+  for (size_t i = 0; i < host_arms.size(); i++) {
+    const HostArm& h = host_arms[i];
+    printf("%s\"%s\": {\"steps\": %ld, \"top_us_mean\": %.3f, \"top_us_max\": %.3f, \"host_timeouts\": %ld, \"gpu_timeouts\": %u}",
+           i ? ", " : "", h.name.c_str(), h.st.steps, h.st.steps ? h.st.top_us / h.st.steps : 0.0, h.st.top_max_us,
+           h.st.timeouts, h.gpu_timeouts);
+    bad += h.st.timeouts > 0 || h.gpu_timeouts > 0 || h.st.steps != (long)(reps + 2) * LAYERS * NSTAGE;
+  }
   printf("}, \"arms\": {");
   for (size_t i = 0; i < arms.size(); i++) print_reps(arms[i].first.c_str(), arms[i].second, arm_macs[i], d.sms, i + 1 < arms.size());
   printf("}}\n");
   fflush(stdout);
-  return 0;
+  return bad ? 7 : 0;
 }
 
 // ---------------------------------------------------------------- the deferred pass: one layer's noised products over T
@@ -1768,13 +2390,27 @@ static int run_gate(Dev& d, const std::string& dir, const std::vector<int>& Ms) 
       if (t == 4 || t == 3) continue;  // the same width as stage 0
       const HostConst c = load_const(dir, SK[t], M);
       const Commit m = make_commit(c);
-      std::vector<uint8_t> t_sz, t_fr;
-      const bool ok = commit_gate(m, 1, &t_sz), fast = commit_gate(m, 2, &t_fr), control = commit_gate(m, 0);
-      const bool same = t_sz == t_fr;
+      std::vector<uint8_t> t_sz, t_fr, t_mid, t_slab;
+      const bool ok = commit_gate(m, 1, &t_sz);
+      g_mid = 0;
+      const bool fast = commit_gate(m, 2, &t_fr);
+      g_mid = 1;
+      const bool mid = commit_gate(m, 2, &t_mid), slab = commit_gate(m, 2, &t_slab, 4), control = commit_gate(m, 0);
+      const bool same = t_sz == t_fr && t_sz == t_mid && t_sz == t_slab;
       printf("{\"mode\": \"gate\", \"what\": \"hm96-sha512 row-seg frame-v3-sha512\", \"k\": %d, \"R\": %d, \"s\": %d, \"ok\": %s, "
-             "\"fast_ok\": %s, \"fast_tree_equal\": %s, \"control_rejected\": %s}\n",
-             c.k, c.R, c.s, ok ? "true" : "false", fast ? "true" : "false", same ? "true" : "false", control ? "false" : "true");
-      fails += !ok || !fast || !same || control;
+             "\"fast_ok\": %s, \"mid_ok\": %s, \"slab4_ok\": %s, \"fast_tree_equal\": %s, \"control_rejected\": %s, \"host_top\": {",
+             c.k, c.R, c.s, ok ? "true" : "false", fast ? "true" : "false", mid ? "true" : "false", slab ? "true" : "false",
+             same ? "true" : "false", control ? "false" : "true");
+      fails += !ok || !fast || !mid || !slab || !same || control;
+      bool fe = true;
+      for (int E : {1, 16, 32, 64, 128})
+        for (int k : {1, 4}) {
+          const bool h = commit_gate(m, 2, nullptr, k, E);
+          printf("%s\"E%d_k%d\": %s", fe ? "" : ", ", E, k, h ? "true" : "false");
+          fe = false;
+          fails += !h;
+        }
+      printf("}}\n");
     }
   fflush(stdout);
   return fails + gate(d);
@@ -1834,6 +2470,9 @@ int main(int argc, char** argv) {
   CK(cudaMalloc(&d.sink, 64));
   CK(cudaStreamSynchronize(d.st));
   CK(cudaGetLastError());
+  h_init();
+  link_init();
+  g_mid = !(getenv("MID") && atoi(getenv("MID")) == 0);
   int rc = 0;
   if (mode == "shalat") {
     sha_latency(d);

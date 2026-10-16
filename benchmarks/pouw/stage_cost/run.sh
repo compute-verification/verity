@@ -7,7 +7,8 @@
 #     -- bash benchmarks/pouw/stage_cost/run.sh
 # env: PREFILL (2048 8192), DEFERRED_T, BESIDE_T (1024 4096 16384 32768), DEC_B, DEC_L (32 4096), FILL_SMS (92), DRAW_US
 # (300), PARTS (gate prefill deferred beside), HASHES (fr sz: stage.cu's commitment paths for prefill), MAXMIN (25),
-# PIPE_GREEN (1; 0 skips prefill's pipe_green arms)
+# PIPE_GREEN (1; 0 skips prefill's pipe_green arms), ARMS (r1 r2: prefill's round-1 arms, the proved forward's), FR_ROT (0:
+# the commitment's rotations on the FMA pipe, stage.cu's bits)
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -18,8 +19,9 @@ export BESIDE_T=${BESIDE_T:-1024 4096 16384 32768} DEC_B=${DEC_B:-32} DEC_L=${DE
 export DRAW_US=${DRAW_US:-300} PARTS=${PARTS:-gate prefill deferred beside} HASHES=${HASHES:-fr sz}
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 nvcc --version | tail -2 > "$O/nvcc.txt"
-nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/stage" $D/stage.cu -lcublasLt -lnvidia-ml -ldl \
-  > "$O/build.log" 2>&1 || { grep -E "error" "$O/build.log" | head -40; tail -20 "$O/build.log"; exit 4; }
+lscpu > "$O/lscpu.txt" 2>&1
+nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -DFR_ROT="${FR_ROT:-0}" -Xptxas -v -o "$B/stage" $D/stage.cu \
+  -lcublasLt -lnvidia-ml -ldl > "$O/build.log" 2>&1 || { grep -E "error" "$O/build.log" | head -40; tail -20 "$O/build.log"; exit 4; }
 sha256sum "$B/stage" | cut -c1-64 > "$O/stage.sha256"
 python3 $D/prep.py "$B/c" --rows "${PREFILL// /,}" > "$O/prep.log" 2>&1 || { tail -20 "$O/prep.log"; exit 6; }
 # shellcheck disable=SC2016
