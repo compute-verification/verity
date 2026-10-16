@@ -20,8 +20,8 @@ empty transcript.
   its own SHA-512 calls: the old `gk_close` on the old `Model`, built from the protocol at each nonce (`Proto.model`),
   whose `bind_real` is `real_eq_of_not_mism`, `PrefinalClose` is `PrefixHides` and `RewindClose` is `SHVZK`;
 * `Proto.gkE_costExp`: at most `(1 + 5t)·runBound` calls in expectation over its coins against every verifier, for every
-  cap `M` (`SimCostExp`, the old `sim_runs_ev`); `Proto.gkE_cost`: at most `(1 + 5M)·runBound` on every coin
-  (`SimCost`, the old `sim_runs_le`);
+  cap `M` (`SimCost`, the old `sim_runs_ev`); `Proto.gkE_cost`: at most `(1 + 5M)·runBound` on every coin
+  (`SimCostLe`, the old `sim_runs_le`);
 * `Proto.gkE_zk_pow`: at the cap `M = t·3^t`, `ε_zk = 3·δ_A + 8t·δ_B + 2·3^{-t}`.
 
 **Why a cap.** A `Claims.Simulator` has finitely many coins and stops on every one, so the uncapped simulator is not
@@ -921,7 +921,7 @@ theorem gkE_zk_pow (G : Proto W) (H : Msg → Msg) (R : Rel W) (t : ℕ) (ht : 0
 verifier, at every cap `M`. -/
 theorem gkE_costExp (G : Proto W) (H : Msg → Msg) (t M : ℕ) (cChk cMsg cSim : Msg → ℕ)
     (hc : G.CostLe H cChk cMsg cSim) :
-    SimCostExp H (G.simulatorE t M) fun x => (1 + 5 * t) * G.runBound cChk cMsg cSim x := by
+    SimCost H (G.simulatorE t M) fun x => (1 + 5 * t) * G.runBound cChk cMsg cSim x := by
   intro x ask
   show Ex (fun c : G.Nonce × (G.Rand × (Fin M → G.Rand) × (Fin (4 * M) → G.SimRand x)) =>
     (((SP.eval H ask ((G.simulatorE t M).prog x c)).2 : ℕ) : ℝ)) ≤ _
@@ -944,7 +944,7 @@ theorem gkE_costExp (G : Proto W) (H : Msg → Msg) (t M : ℕ) (cChk cMsg cSim 
 /-- **The simulator's worst-case cost**: at most `(1 + 5M)·runBound` calls on every coin, against every verifier. -/
 theorem gkE_cost (G : Proto W) (H : Msg → Msg) (t M : ℕ) (cChk cMsg cSim : Msg → ℕ)
     (hc : G.CostLe H cChk cMsg cSim) :
-    SimCost H (G.simulatorE t M) fun x => (1 + 5 * M) * G.runBound cChk cMsg cSim x := by
+    SimCostLe H (G.simulatorE t M) fun x => (1 + 5 * M) * G.runBound cChk cMsg cSim x := by
   rintro x ⟨ν, r₀, rs, ss⟩ ask
   exact (G.simE_cost H ask x ν t M r₀ rs ss cChk cMsg cSim hc).trans
     (Nat.mul_le_mul_right _ (gkT_runs_le _ _ _ _ t M r₀ rs ss))

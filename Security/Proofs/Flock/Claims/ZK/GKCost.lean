@@ -157,9 +157,9 @@ theorem rewindsSP_cost (G : Proto W) (H : Msg → Msg) (ask : List Msg → Out) 
       · simp only [SP.eval]; omega
       · omega
 
-/-- **The simulator's cost** (`SimCost`): at most `simBound` calls, hash and ask, against every verifier. -/
+/-- **The simulator's cost, worst case** (`SimCostLe`): at most `simBound` calls, hash and ask, against every verifier. -/
 theorem gk_cost (G : Proto W) (H : Msg → Msg) (N : ℕ) (cChk cMsg cSim : Msg → ℕ)
-    (hc : G.CostLe H cChk cMsg cSim) : SimCost H (G.simulator N) (G.simBound N cChk cMsg cSim) := by
+    (hc : G.CostLe H cChk cMsg cSim) : SimCostLe H (G.simulator N) (G.simBound N cChk cMsg cSim) := by
   obtain ⟨hchk, hmsg, hsim⟩ := hc
   intro x c ask
   obtain ⟨ν, r, s⟩ := c

@@ -1,58 +1,28 @@
 import Proofs.Flock.Claims.Prob
 
 /-!
-# Zero knowledge against a malicious verifier, in a form a simulator can meet (proposed)
+# Zero knowledge against a malicious verifier: what the proofs add to the spec's `ZKmalR`
 
-`ZKmal` as frozen holds only at `εzk ≥ 1` (`Vacuous`). This module states the claim with two changes, for Daniel's
-ruling; `Claims.lean` is unchanged.
+The claim is the spec's `Claims.ZKmalR` (the real run lasts the protocol's `k(x)` rounds, and the bound adds the
+probability that the simulator's own SHA-512 calls, `simLog`, hold a collision), and Flock's is `Claims.Flock.ZK`, at the
+deployed verifier's rounds `D.V.k`. This module adds:
 
-* **The protocol's rounds.** The real run lasts the honest protocol's `k(x)` rounds (`Vs.k x = k x`). A verifier that
-  stops early still can (it decides), and the honest prover has nothing to send after its last message. The simulator
-  is not told `Vs.k`, so it could not otherwise match the run's length. Flock's are the deployed verifier's, `D.V.k`,
-  whose first round is `Hello`, answered by the coin commitment (`Flock.ZKR`). Until `D.V` models that round,
-  `Flock.ZKRHello` reads `D.V.k + 1`: `Hello`, then the public-coin form's.
-* **Binding, tied to the simulator's run.** The deployed coin commitment binds only computationally: a `V*` holding a
-  SHA-512 collision opens a coin two ways. The bound adds the probability that the simulator's own SHA-512 calls
-  (`simLog`) hold a collision. `ZKmalR.bits`: under `StrictBirthday` at the finder `Bzk` (the simulator, with every call
-  `V*` makes in the answers it is asked) that term is at most `q²/2^513`.
-
-The collision term means something only because the claim names its simulator, one reviewed definition: a simulator
-that hashed a known collision would meet the bound trivially, as a verifier that did would make `Bits` vacuous.
-
-**The simulator's cost in expectation** (`SimCostExp`), beside the worst case `SimCost`: a simulator with finitely many
-coins stops on every coin, so a worst case exists, but the Goldreich–Kahan simulator's is paid for by a cap whose cost
-in `ε_zk` falls only as the cap grows; its expected cost does not grow with the cap.
+* **ZK bits** (`ZKmalR.bits`): under `StrictBirthday` at the finder `Bzk` (the simulator, with every call `V*` makes in
+  the answers it is asked) the collision term is at most `q²/2^513`.
+* **The bridge `Flock.ZKRHello`**: `Claims.Flock.ZK` with `D.V.k + 1` rounds, `Hello` first, for a `D.V` in public-coin
+  form, which has no `Hello` round (`FlockDeploy.V`).
+* **The worst-case cost** (`SimCostLe`), beside the spec's expected `SimCost`, which it implies (`SimCostLe.simCost`).
 -/
 
 namespace Claims.ZKMal
 
 open Claims
 
-/-- The `H` calls of a simulator program, in order, against `H` and the verifier `ask`. -/
-def spLog {α : Type} (H : Msg → Msg) (ask : List Msg → Out) : SP α → List (Msg × Msg)
-  | .ret _ => []
-  | .hash q k => (q, H q) :: spLog H ask (k (H q))
-  | .ask as k => spLog H ask (k (ask as))
-
 /-- The calls of a simulator program, its own and those of the verifier `vnext` in every answer it is asked. -/
 def spCostV {α : Type} (H : Msg → Msg) (vnext : List Msg → OC Out) : SP α → ℕ
   | .ret _ => 0
   | .hash q k => spCostV H vnext (k (H q)) + 1
   | .ask as k => spCostV H vnext (k ((vnext as).eval H).1) + 1 + ((vnext as).eval H).2.length
-
-/-- The simulator's `H` calls against `V*` at `θ`. -/
-def simLog {Θ : Type} (H : Msg → Msg) (S : Simulator) (Vs : VStar Θ) (θ : Θ) (x : Msg) (c : S.C x) :
-    List (Msg × Msg) :=
-  spLog H (fun as => ((Vs.next x as θ).eval H).1) (S.prog x c)
-
-/-- **`ZKmalR(k, P, R, S, ε_zk)`, proposed**: for `(x, w) ∈ R`, every verifier `V*` and tape `θ` of the protocol's `k(x)`
-rounds, the transcript of `P(w)` against `V*` is within `ε_zk(x)` of `S`'s on every event, plus the probability that
-`S`'s SHA-512 calls hold a collision. -/
-def ZKmalR {W Ω : Type} [Fintype Ω] (H : Msg → Msg) (k : Msg → ℕ) (P : W → Prover Ω) (R : Rel W) (S : Simulator)
-    (εzk : Msg → ℝ) : Prop :=
-  ∀ x w, R x w → ∀ (Θ : Type) (Vs : VStar Θ) (θ : Θ), Vs.k x = k x → ∀ (Ev : List (Msg × Out) → Prop),
-    |Pr (fun ω : Ω => Ev (runStar H (P w) Vs x ω θ).msgs) - Pr (fun c : S.C x => Ev (S.out H Vs θ x c))|
-      ≤ εzk x + Pr (fun c : S.C x => findColl (simLog H S Vs θ x c) ≠ none)
 
 /-- **`Bzk`**: the simulator run against `V*`, outputting the first collision among its SHA-512 calls; its cost is its
 calls and every call `V*` makes in the answers it is asked. -/
@@ -70,23 +40,27 @@ def ZKmalBits {W Ω : Type} [Fintype Ω] (H : Msg → Msg) (k : Msg → ℕ) (P 
     |Pr (fun ω : Ω => Ev (runStar H (P w) Vs x ω θ).msgs) - Pr (fun c : S.C x => Ev (S.out H Vs θ x c))|
       ≤ εzk x + q ^ 2 / 2 ^ (513 : ℝ)
 
-/-- **The simulator's cost, expected, proposed**: at most `bound(x)` calls (hash and ask) in expectation over its coins,
-against every verifier. -/
-def SimCostExp (H : Msg → Msg) (S : Simulator) (bound : Msg → ℝ) : Prop :=
-  ∀ x (ask : List Msg → Out), Ex (fun c : S.C x => (((S.prog x c).eval H ask).2 : ℝ)) ≤ bound x
+/-- **The simulator's cost, worst case**: at most `bound(x)` calls (hash and ask) on every coin, against every
+verifier. -/
+def SimCostLe (H : Msg → Msg) (S : Simulator) (bound : Msg → ℕ) : Prop :=
+  ∀ x (c : S.C x) (ask : List Msg → Out), ((S.prog x c).eval H ask).2 ≤ bound x
 
-/-- **Flock: zero knowledge, proposed**: the masked verifier's honest prover, against every malicious verifier of the
-deployed verifier's rounds `D.V.k`: `Hello`, answered by the coin commitment, then the rounds whose coins are opened
-from it. -/
-def Flock.ZKR {Coin Col T Ω : Type} [Fintype Ω] (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (P : Flock.Wit → Prover Ω)
-    (S : Simulator) (εzk : Msg → ℝ) : Prop :=
-  D.zk = true ∧ ZKmalR H D.V.k P (Flock.R H D.parse) S εzk
+/-- A worst-case bound is an expected one. -/
+theorem SimCostLe.simCost {H : Msg → Msg} {S : Simulator} {bound : Msg → ℕ} (h : SimCostLe H S bound) :
+    SimCost H S fun x => (bound x : ℝ) := by
+  intro x ask
+  unfold Ex
+  rw [div_le_iff₀ (by exact_mod_cast Fintype.card_pos)]
+  calc (∑ c : S.C x, (((S.prog x c).eval H ask).2 : ℝ)) ≤ ∑ _c : S.C x, (bound x : ℝ) :=
+        Finset.sum_le_sum fun c _ => by exact_mod_cast h x c ask
+    _ = (bound x : ℝ) * Fintype.card (S.C x) := by
+        rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul, mul_comm]
 
-/-- **`Flock.ZKR` before `D.V` models `Hello`**: the rounds are `Hello`, then the public-coin form's `D.V.k`. A bridge,
-until the deployed verifier's model has the commitment round. -/
+/-- **`Claims.Flock.ZK` for a `D.V` in public-coin form**: the rounds are `Hello`, answered by the coin commitment, then
+the public-coin form's `D.V.k`, each but the last answered by an opened coin. -/
 def Flock.ZKRHello {Coin Col T Ω : Type} [Fintype Ω] (H : Msg → Msg) (D : Flock.Deploy Coin Col T)
     (P : Flock.Wit → Prover Ω) (S : Simulator) (εzk : Msg → ℝ) : Prop :=
-  D.zk = true ∧ ZKmalR H (fun x => D.V.k x + 1) P (Flock.R H D.parse) S εzk
+  D.zk = true ∧ ZKmalR H (fun x => D.V.k x + 1) P (Flock.R D.parse) S εzk
 
 /-! ## What `findColl` finds -/
 

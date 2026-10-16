@@ -1,4 +1,3 @@
-import Proofs.Flock.Claims.ZK.Vacuous
 import Proofs.Flock.Claims.ZK.Statement
 import Proofs.Flock.Claims.ZK.GK
 import Proofs.Flock.Claims.ZK.Interact
@@ -16,10 +15,8 @@ import Proofs.Flock.Claims.ZK.Flock
 /-!
 # Flock's zero knowledge against a malicious verifier
 
-* `Vacuous`: `ZKmal` as frozen holds exactly at `εzk ≥ 1` on the statements with a witness (`ZKmal_iff`), since the
-  simulator does not see the verifier's rounds; so does `Flock.ZK` (`flockZK_iff`).
-* `Statement`: the claim in a form a simulator can meet, proposed (`ZKmalR`, `Flock.ZKR`): the protocol's rounds, and the
-  simulator's own SHA-512 collisions as the binding term; ZK bits under `StrictBirthday` at `Bzk` (`ZKmalR.bits`).
+* `Statement`: what the proofs add to the spec's `ZKmalR` and `Claims.Flock.ZK`: ZK bits under `StrictBirthday` at `Bzk`
+  (`ZKmalR.bits`), the bridge `Flock.ZKRHello` at `D.V.k + 1` rounds, and the worst-case cost `SimCostLe`.
 * `GK`: a committed-coin protocol (`Proto`), its honest prover, its Goldreich–Kahan simulator with `N` rewinds
   (`Proto.simulator`), and the three facts the theorem reads (`PrefixHides`, `SHVZK`, `Binding`).
 * `Interact`: what the programs evaluate to: `runStar` and the simulator's runs as one interaction (`runStar_msgs`,
@@ -35,12 +32,12 @@ import Proofs.Flock.Claims.ZK.Flock
 * `GKProof`: **`Proto.gk_zk`**, the Goldreich–Kahan simulator meets `ZKmalR` at `1/(N+1) + 2·δ_A + 2·N·δ_B` from
   `PrefixHides`, `SHVZK` and `Binding`; a binding failure in the simulator is a collision among its own calls
   (`mm_coll`).
-* `GKCost`: its cost, `SimCost` at `simBound` under `CostLe` (`Proto.gk_cost`).
+* `GKCost`: its cost, `SimCostLe` at `simBound` under `CostLe` (`Proto.gk_cost`).
 * `GKExp`: **`Proto.gkE_zk`**, the session analysis's simulator with estimation (`gk_simulate`, threshold `t`, cap `M`)
   as a `Claims.Simulator` meets `ZKmalR` at `3·δ_A + 8t·δ_B + 3^{-t} + t/M` (`2·3^{-t}` for the last two at
   `M = t·3^t`, `gkE_zk_pow`) from the same three facts, through the old `gk_close` on the protocol's `Model` at each
-  nonce; its cost is `(1 + 5t)` runs in expectation at every cap (`SimCostExp`, `gkE_costExp`) and `1 + 5M` at worst
-  (`gkE_cost`).
+  nonce; its cost is `(1 + 5t)` runs in expectation at every cap (`SimCost`, `gkE_costExp`) and `1 + 5M` at worst
+  (`SimCostLe`, `gkE_cost`).
 * `CoinCheck`: the coin-tree check (`coin-tree/hm96-sha512/v2`) as an oracle program that logs its hash calls
   (`treeChk`); a protocol whose check it is meets `Binding` with no hypothesis on `H` (`Proto.binding_of_tree`), T6's
   aligned hash inputs being among the two walks' calls (`coinPairs_mem`).
@@ -52,9 +49,9 @@ import Proofs.Flock.Claims.ZK.Flock
 * `Shvzk`: `SHVZK` at every coin vector: from Lemma B where the prover goes on (`Proto.shvzk_at_hm96`, `2·n_hid·δ₁`,
   with `InnerHolds`), and from Lemma C at fixed answers where it refuses, the simulator sending the dummy-witness
   prover's messages (`Proto.shvzk_refused_hm96`, `2·|L|·δ₁`).
-* `Flock`: **`Flock.zkR_of_proto`**, the proposed `Flock.ZKR` for a masked deployed verifier that models the
+* `Flock`: **`Flock.zkR_of_proto`**, the spec's `Claims.Flock.ZK` for a masked deployed verifier that models the
   committed-coin protocol's rounds, `Hello` among them (`D.V.k = G.k`); `Flock.ZKRHello`, the bridge at `D.V.k = G.K + 1`
-  for today's `FlockDeploy.V`, which leaves `Hello` out (`Flock.zkRHello_deployZk`); `S_Flock`'s cost
+  for today's `FlockDeploy.V`, which leaves `Hello` out (`deployZk_proto_k`, `Flock.zkRHello_deployZk`); `S_Flock`'s cost
   (`Flock.simCost_of_proto`) and the expected-cost simulator's; what changes for a malicious verifier, how the
   hypotheses map to the session analysis's Theorem GK (`gk_simulate_hm96`), and what the `--zk` instance still needs.
 -/

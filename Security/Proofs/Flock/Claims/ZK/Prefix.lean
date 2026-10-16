@@ -335,7 +335,7 @@ theorem runs_close_hm96 (G : Proto W) (H : Msg → Msg) (x : Msg) (ν : G.Nonce)
     [Fintype Hi] [DecidableEq Hi] [Fintype Ω] [Nonempty Ω] [Fintype L] [DecidableEq L] {J : ℕ}
     (T : (Fin (G.K x + 1) → Out) → Fin J → FlockSoundness.ZK.Table F K Wt Salt (B × Salt) D Hi VL)
     (rep : ∀ a j, Fin (T a j).nC → Fin 2) (My : Salt → B) (cs : Salt → Cc) {δ₁ : ENNReal}
-    (hT1 : FlockSoundness.Assumptions.Hm96Hiding My cs δ₁) (hδ₁ : δ₁ ≠ ⊤) (Hl : B × Cc → D)
+    (hT1 : Claims.Hm96Hiding My cs δ₁) (hδ₁ : δ₁ ≠ ⊤) (Hl : B × Cc → D)
     (msgs : (Fin J → Wt) → Ω → (Fin (G.K x + 1) → Out) → (L → D) → Fin (G.K x + 1) → Msg)
     (dig : (Fin J → Wt) → Ω → (Fin (G.K x + 1) → Out) → L → B)
     (P : (Fin J → Wt) → FlockSoundness.ZK.Strategy (Ω × (L → B × Cc)) Msg Out (G.K x + 1))

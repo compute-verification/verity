@@ -63,7 +63,7 @@ theorem shvzk_at_hm96 (G : Proto W) (H : Msg → Msg) (x : Msg) (w : W) (ν : G.
     [AddCommGroup Hi] [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] [Fintype Salt] [DecidableEq Salt]
     [Fintype B] [DecidableEq B] [Fintype Hi] [DecidableEq Hi] {J : ℕ}
     (T : Fin J → FlockSoundness.ZK.Table F K Wt Salt (B × Salt) D Hi VL) (Mh : ∀ j, (T j).Hm96 Cc) {δ₁ : ENNReal}
-    (hT1 : ∀ j, FlockSoundness.Assumptions.Hm96Hiding (Mh j).My (Mh j).cs δ₁) (hδ₁ : δ₁ ≠ ⊤)
+    (hT1 : ∀ j, Claims.Hm96Hiding (Mh j).My (Mh j).cs δ₁) (hδ₁ : δ₁ ≠ ⊤)
     (hrank : ∀ j, (T j).Rank) (hpad : ∀ j, (T j).PadOnto)
     (hW : ∀ j r, Function.Bijective fun p : F × F => (T j).Wr r p.1 p.2) (hpads : ∀ j, (T j).PadsOnto)
     (hβ : ∀ j r, (T j).β r ≠ 0) (wt wt₀ : Fin J → Wt) (hreg : ∀ j, (T j).sReg (wt j) = (T j).pubReg)
@@ -115,7 +115,7 @@ theorem shvzk_refused_hm96 (G : Proto W) (H : Msg → Msg) (x : Msg) (w : W) (ν
     [AddCommGroup Hi] [Fintype F] [DecidableEq F] [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B]
     [Fintype Hi] [DecidableEq Hi] [Fintype Ω] [Nonempty Ω] [Fintype L] [DecidableEq L] {J : ℕ}
     (T : Fin J → FlockSoundness.ZK.Table F K Wt Salt (B × Salt) D Hi VL) (rep : ∀ j, Fin (T j).nC → Fin 2)
-    (My : Salt → B) (cs : Salt → Cc) {δ₁ : ENNReal} (hT1 : FlockSoundness.Assumptions.Hm96Hiding My cs δ₁)
+    (My : Salt → B) (cs : Salt → Cc) {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding My cs δ₁)
     (hδ₁ : δ₁ ≠ ⊤) (Hl : B × Cc → D) (msgs : (Fin J → Wt) → Ω → (L → D) → List Msg)
     (dig : (Fin J → Wt) → Ω → L → B) (e : Ω × (L → B × Salt) → ∀ j, (T j).Rand) (k : ℕ)
     (he : ∀ r, Nat.card {u // e u = r} = k) (out : (∀ j, (T j).Cut) → List Msg)
