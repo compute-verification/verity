@@ -107,6 +107,23 @@ def test_fixed_work_is_bounded_on_its_own_sms():
     assert phased(0.8 * peak_sm * 96)["of_peak"] == pytest.approx(0.8 * 96 / 92)
 
 
+def test_too_good_compares_the_split_alone_with_its_standalone_blocks():
+    """Alone, an arm-side phase filler runs at its full rate on the step's SMs; beside serving it gets a share. Pooled with
+    the split, that would hide a split 30% too fast (beside ÷ standalone ~0.6), so the too-good check reads the split's
+    chunks only."""
+    r = row("step", 256, 1024, "split", alone_ms=10.0, arm_ms=10.4, chunks=19, window_ms=31.2, fill_sms=60)
+    for b in r["blocks"]:
+        b["arm"].update(chunks=1 + round(18 * 1.3), span_ms=18.0, fixed_ms=31.2, fixed_macs=70e12 * 31.2e-3)
+        b["solo"].update(span_ms=18.0, fixed_ms=1.0, fixed_macs=180e12 * 1e-3)
+    st = S.point_stats(r)
+    split, alone = (1 + round(18 * 1.3) - 1) * 1e9 / 18.0e-3, 18 * 1e9 / 18.0e-3
+    assert st["fill_rate"] == pytest.approx(split + 70e12)
+    assert st["fill_rate_alone"] == pytest.approx(alone)
+    assert st["beside_over_alone"] == pytest.approx(split / alone) and st["beside_over_alone"] > 1.25
+    assert (split + 70e12) / (alone + 180e12) < 1.0
+    assert S.honesty(A.load("fill-v1"), {("decode", 256, 1024): st}, [])["too_good"]
+
+
 def test_decode_entry_coverage_uses_proved_and_provisional_fractions():
     st = S.point_stats(row("step", 32, 2048, "split", alone_ms=10.0, arm_ms=10.0, chunks=10, window_ms=30.0,
                            chunk_macs=1e9))
