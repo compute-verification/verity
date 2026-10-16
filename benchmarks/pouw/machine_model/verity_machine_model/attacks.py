@@ -9,13 +9,35 @@ from __future__ import annotations
 from collections import Counter
 
 from verity_machine_model.lp import MACS, Solution, cost, price
-from verity_machine_model.model import Attack, Census, Model, measured_cost
+from verity_machine_model.model import Attack, Census, Floor, Model, measured_cost
 
 EPS = 1e-9
 
 
 def x_of(census: Census, sol: Solution, prog: dict[str, float]) -> float:
     return cost(census, sol.lam, prog) / (price(census, sol.lam, "MMA") / MACS)
+
+
+def per_word(census: Census, sol: Solution, kind: str, words: int) -> float:
+    """A kind's price in tensor MACs a word it writes."""
+    return x_of(census, sol, {kind: 1}) / words
+
+
+def under_floor(census: Census, sol: Solution, floors: list[Floor]) -> dict[str, tuple[int, list[str], list[str]]]:
+    """Per claim: how many of its kinds the census has, each priced under its floor, and each the census lacks. A claim
+    holds over the census when nothing is under its floor; a kind the census lacks is a class the epoch didn't split
+    out, priced as the class that holds it."""
+    out: dict[str, tuple[int, list[str], list[str]]] = {}
+    for f in floors:
+        n, below, absent = out.get(f.claim, (0, [], []))
+        if f.kind not in census:
+            absent.append(f.kind)
+        else:
+            n += 1
+            if (x := per_word(census, sol, f.kind, f.words)) < f.floor * (1 - EPS):
+                below.append(f"{f.kind} {x:.2f} a word < {f.floor:g}")
+        out[f.claim] = (n, below, absent)
+    return out
 
 
 def cheapest(census: Census, sol: Solution, attacks: list[Attack], design: str, n: int = 3):

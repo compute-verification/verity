@@ -95,3 +95,17 @@ def test_margin_is_the_adopted_designs_cheapest():
     assert r.margin == min(xs) and r.cheapest[0][0] == r.margin
     assert r.three_piece == min(atk.x_of(r.census, r.solution, a.program) for a in r.attacks
                                 if a.design == r.model.adopted and a.family.startswith("(iv)"))
+
+
+# What each claim of data/floors.csv finds below its floor, by vector: (π₃₂) and PRICES-32's load half
+CLAIMED = {
+    "VF3j": ([], ["LDS128 8.00 a word < 16", "LDG128 8.00 a word < 16", "LDC64 0.00 a word < 16"]),
+    "VF3j-16": ([], []),
+}
+
+
+@pytest.mark.parametrize("name", sorted(CLAIMED))
+def test_claims(name):
+    r = solved(name)
+    assert (r.floors["pi32"][1], r.floors["loads16"][1]) == CLAIMED[name]
+    assert (r.floors["pi32"][0], r.floors["loads16"][0]) == (84, 9)

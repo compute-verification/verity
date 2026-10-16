@@ -3,14 +3,16 @@
 PoUW's price vectors for sm_120 (rs-machine-model §8): the LP that prices every warp instruction as a convex combination
 of the machine's rows, its inputs as data, the attack families, and `machine-model`, which re-solves a named vector and
 checks every attack against it. Each named vector (VF … VF3j-16) re-solves here to the τ, τ at 600 W, U/F_low and
-margin it was published with, at the vertex the legacy scripts landed on (`tests/test_vectors.py`).
+margin it was published with, at the vertex the legacy scripts landed on (`tests/test_vectors.py`), and `solve` says
+whether (π₃₂) and PRICES-32's load half hold at its prices (`data/floors.csv`).
 
 ~~~bash
 uv run machine-model list                 # the named vectors
-uv run machine-model solve VF3j-16        # τ, τ at 600 W, U/F_low, margin, θ, the cheapest attacks, then the check
+uv run machine-model solve VF3j-16        # τ, τ at 600 W, U/F_low, margin, θ, the cheapest attacks, the check, the claims
 uv run machine-model solve                # model.toml's `current` (VF3j)
 uv run machine-model census VF3j --kind FFMA
 uv run machine-model attacks VF3j -n 3    # the cheapest attacks of every design
+uv run machine-model adopt ~/.research/runs/RUN/out/census.csv EPOCH   # a probe's census at the last epoch
 uv run machine-model --data /tmp/candidate solve VF3k   # a copy of data/ with a candidate change
 ~~~
 
@@ -21,8 +23,10 @@ uv run machine-model --data /tmp/candidate solve VF3k   # a copy of data/ with a
 | `data/census.csv` | One line per instruction class on a row: its measured rate (warp instructions/SM/clk, with `noise` its derating), or the SMSP-cycles it holds the row, or a derived u; the epochs it holds (`since`, `until`) and its runs |
 | `data/vectors/NAME.toml` | A named vector: its epoch, the rows and credits it uses in LP order, its note, and the numbers it was published with |
 | `data/attacks/FAMILY.jsonl` | An attack family: one program a line, its design, and the epochs it holds |
+| `data/floors.csv` | What the claims read: each root-writing kind at 32 MACs a word ((π₃₂)) and each load into registers at 16 (PRICES-32's load half), with the words a warp instruction of it writes |
 | `verity_machine_model/lp.py` | The LP (Charnes–Cooper; stage 1 U/F_low, stage 2 τ), as the legacy `rs-price-99.py` `solve` computes it |
-| `verity_machine_model/attacks.py` | An attack's X, the cheapest of a design, and the check: every price at or below measured cost, ρ, every credit, every attack at X ≥ 1 |
+| `verity_machine_model/attacks.py` | An attack's X, the cheapest of a design, and the check: every price at or below measured cost, ρ, every credit, every attack at X ≥ 1; a kind's price a word, and what is under its floor |
+| `verity_machine_model/adopt.py` | Merging a measured census into `data/` at the last epoch, each (kind, row) at the faster of its two lines |
 | `verity_machine_model/resolve.py`, `cli.py` | Re-solving a named vector from the data, and the command |
 
 An *epoch* is a state of the census and the attacks, named after the vector that introduced it. A census line or an attack
@@ -47,7 +51,17 @@ A new measurement is lines of data and a vector file, not a script:
    attack. Record the printed numbers under `[published]` once you publish them; the tests then hold the vector to them.
 
 A new attack family is a new `data/attacks/FAMILY.jsonl` (`since` the epoch it joins); the check prices every attack of
-every vector's epoch.
+every vector's epoch. A new root-writing kind or register load also needs its line in `data/floors.csv`, which `solve`
+reads for the claims.
+
+## Adopt a probe's census
+
+An opcode probe (the `opcode_probe` beside this directory, #2160) writes its gated rows as `census.csv` in this
+schema, with no epochs. After steps 3 and 4 above, `uv run machine-model adopt CENSUS EPOCH` merges it at `EPOCH`, which
+must be the last epoch. Each (kind, row) keeps the faster of its line at the epoch before and the measured one: a row's
+u must be a lower bound on what every program pays on it, so a line slower than the hardware makes a price that isn't
+sound. A faster line closes the old one at the epoch before, adds its own from `EPOCH` and adds its runs to the row's in
+`rows.csv`; a slower one changes nothing.
 
 ## Where the data came from
 

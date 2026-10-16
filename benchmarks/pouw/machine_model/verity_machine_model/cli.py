@@ -2,10 +2,13 @@
 
     machine-model list                        the named vectors: epoch, rows, credits and published τ
     machine-model solve [NAME] [--json]       re-solve NAME (default: model.toml's `current`): τ, τ at 600 W, U/F_low and
-                                              margin against what was published, θ, the cheapest attacks, then the check
+                                              margin against what was published, θ, the cheapest attacks, the check,
+                                              then whether (π₃₂) and PRICES-32's load half hold (data/floors.csv)
     machine-model census [EPOCH] [--kind K]   each instruction class's u on each row at EPOCH (default: the last)
     machine-model attacks [NAME] [--design D] [-n N]
                                               the N cheapest attacks of each design (or of D) at NAME's prices
+    machine-model adopt CENSUS EPOCH          merge a measured census (an opcode probe's census.csv) into data/ at EPOCH,
+                                              the last epoch: each (kind, row) keeps the faster of its old and new line
 
 `--data DIR` (before the command) reads another data directory, such as a copy with a candidate row. `solve` exits 1 when
 the vector fails its check or doesn't reproduce a published number.
@@ -18,7 +21,8 @@ import sys
 from pathlib import Path
 
 from verity_machine_model import attacks as atk
-from verity_machine_model.model import DATA, census, model, vector, vectors
+from verity_machine_model.adopt import adopt
+from verity_machine_model.model import CLAIMS, DATA, census, model, vector, vectors
 from verity_machine_model.resolve import resolve
 
 
@@ -40,7 +44,9 @@ def _solve(args) -> int:
     if args.json:
         print(json.dumps({"vector": name, "epoch": v.epoch, **r.numbers(), "tau_max": s.tau_max, "theta": s.theta,
                           "cheapest": r.cheapest, "three_piece": r.three_piece, "attacks": len(r.attacks),
-                          "published": v.published, "unreproduced": bad, "failures": r.failures}, ensure_ascii=False,
+                          "published": v.published, "unreproduced": bad, "failures": r.failures,
+                          "floors": {k: {"kinds": n, "below": b, "absent": ab} for k, (n, b, ab) in r.floors.items()}},
+                         ensure_ascii=False,
                          indent=1))
         return 1 if bad or r.failures else 0
     print(f"{name} (epoch {v.epoch}, {len(v.rows)} rows, {len(v.credits)} credits): {v.summary}")
@@ -65,6 +71,9 @@ def _solve(args) -> int:
           + ("pass" if not r.failures else f"FAIL ({len(r.failures)})"))
     for f in r.failures[:20]:
         print(f"    {f}")
+    for claim, (n, below, absent) in r.floors.items():
+        print(f"  {CLAIMS[claim]}: {n} kinds, " + ("holds" if not below else "fails: " + "; ".join(below))
+              + (f" (not split out at {v.epoch}: {', '.join(absent)})" if absent else ""))
     return 1 if bad or r.failures else 0
 
 
@@ -92,6 +101,20 @@ def _attacks(args) -> int:
     return 0
 
 
+def _adopt(args) -> int:
+    out = adopt(args.census, args.epoch, args.data)
+    m = model(args.data)
+    prev = m.epochs[-2]
+    print(f"{'kind':10s} {'row':14s} {'u at ' + prev:>14s} {'measured':>10s}")
+    for a in out:
+        before = f"{a.before:.1f}" if a.before is not None else "–"
+        verdict = f"adopted from {args.epoch}" if a.adopted else "kept (the measurement is slower)"
+        print(f"{a.kind:10s} {a.row:14s} {before:>14s} {a.measured:10.1f}  {verdict}")
+    n = sum(a.adopted for a in out)
+    print(f"{n} of {len(out)} lines adopted at {args.epoch}, {len(out) - n} kept")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="machine-model", description=__doc__.split("\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -108,11 +131,14 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("name", nargs="?")
     a.add_argument("--design")
     a.add_argument("-n", type=int, default=3)
+    d = sub.add_parser("adopt")
+    d.add_argument("census", type=Path)
+    d.add_argument("epoch")
     args = p.parse_args(argv)
     if args.cmd is None:
         print(__doc__)
         return 0
-    return {"list": _list, "solve": _solve, "census": _census, "attacks": _attacks}[args.cmd](args)
+    return {"list": _list, "solve": _solve, "census": _census, "attacks": _attacks, "adopt": _adopt}[args.cmd](args)
 
 
 if __name__ == "__main__":
