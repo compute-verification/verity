@@ -16,10 +16,10 @@ record, which holds the claims' text.
 
 The claims' lemmas sit under `Proofs.Flock.Claims`: uniform-coin probability (`Prob`), `B`'s soundness and the
 finders' Cauchy–Schwarz aggregation (`Finder`, `Aggregate`), the `Bits` corollary of `KS` (`Bits`), `E^rep`'s
-reruns and amplification (`ERep`), `ERepCost` (`ERepCost`), and a decoder that meets `ListComplete` for interleaved
-Reed–Solomon codes, from ArkLib's Guruswami–Sudan decoder (`Decode`), that decoder at Flock's level-0 code
-(`DecodeFlock`), and at the masked (`--zk`) level-0 code, with its read step (`ZkDecode`); a family of such
-decoders read as one, by column width (`DecodeFamily`), and the masked verifier's deployed code at each `m` it serves
+reruns and amplification (`ERep`), `ERepCost` (`ERepCost`), and a decoder that meets `ListComplete` at the Johnson
+count for interleaved Reed–Solomon codes, from ArkLib's Guruswami–Sudan decoder (`Decode`), that decoder at Flock's
+level-0 code (`DecodeFlock`), and at the masked (`--zk`) level-0 code, with its read step (`ZkDecode`); a family of
+such decoders read as one (`DecodeFamily`), and the masked verifier's deployed code at each `m` it serves
 (`ZkDecodeFlock`). -/
 
 /-- **The claims are stated** (`Flock.Guarantees.ClaimsStated`). -/

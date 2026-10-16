@@ -20,8 +20,10 @@ executable's arithmetic (`execArith`, GF(2^128)) with `2^k0 + Zk.EXTRA_LANES` la
 
 (`zkShape_table`). The masked deployment's code is that family read as one (`IRS.famEnc`): a candidate is the
 statement's `m` and a masked message (`ZkTrace`), a column a list of GF(2^128) symbols (`zkEncD`). Its decoder
-(`zkDecodeD`, `IRS.famDecode`) meets `ListComplete` at every `agree` (`listComplete_zkDecodeD`), and its read step
-(`zkReadD`) is `zkRead` at the candidate's `m`: the witness lanes' trace, `2^m` bits (`zkReadD_hid_length`).
+(`zkDecodeD`, `IRS.famDecode`) meets `ListComplete` at the candidate's Johnson count (`zkNMinD`,
+`⌊(2^cols + t + 1)/agree²⌋ + 1`), at every `agree > 0` (`listComplete_zkDecodeD`); one run's two reps open fewer
+level-0 columns than that (`zkQueries_lt_zkNMinD`). Its read step (`zkReadD`) is `zkRead` at the candidate's `m`: the
+witness lanes' trace, `2^m` bits (`zkReadD_hid_length`).
 -/
 
 namespace Claims.Flock
@@ -84,13 +86,30 @@ theorem zkEncD_eq (M : ZkTrace) (q : ℕ) :
   unfold zkEncD IRS.famEnc flockZkLevelZero
   rw [zkLevelZero_enc]
 
-/-- **The deployed masked decoder**: each `m`'s masked decoder on the opened columns of its width. -/
+/-- **The deployed masked code's Johnson count** at `agree`: the candidate's code's,
+`⌊(2^cols + t + 1)/agree²⌋ + 1` at its `m` (`zkNMinD_eq`). -/
+noncomputable def zkNMinD (agree : ℝ) (M : ZkTrace) : ℕ :=
+  IRS.famNMin flockZkLevelZero agree M
+
+theorem zkNMinD_eq (agree : ℝ) (M : ZkTrace) :
+    zkNMinD agree M = johnsonCount (2 ^ zkCols M.1 + zkPad M.1) agree := rfl
+
+/-- **The deployed masked decoder**: each `m`'s masked decoder on the opened columns read at its width. -/
 noncomputable def zkDecodeD (agree : ℝ) (os : List (ℕ × List 𝔽)) : List ZkTrace :=
   IRS.famDecode flockZkLevelZero agree os
 
-/-- **The deployed masked decoder meets `ListComplete`** for the deployed masked code, at every `agree`. -/
-theorem listComplete_zkDecodeD (agree : ℝ) : ListComplete zkEncD agree (zkDecodeD agree) :=
-  IRS.listComplete_famDecode flockZkLevelZero agree
+/-- **The deployed masked decoder meets `ListComplete`** for the deployed masked code, at its Johnson count, at every
+`agree > 0`. -/
+theorem listComplete_zkDecodeD (agree : ℝ) (ha : 0 < agree) :
+    ListComplete zkEncD agree (zkNMinD agree) (zkDecodeD agree) :=
+  IRS.listComplete_famDecode flockZkLevelZero agree ha
+
+/-- **One masked run opens fewer level-0 columns than the Johnson count**: at `0 < agree ≤ 1`, both reps' `2·q₀`
+level-0 queries are below the candidate's count. -/
+theorem zkQueries_lt_zkNMinD {agree : ℝ} (ha0 : 0 < agree) (ha1 : agree ≤ 1) (M : ZkTrace) :
+    2 * (zkLevel0 M.1.m).q < zkNMinD agree M := by
+  rw [zkNMinD_eq, ← (zkShape_table M.1).2.2.2.2.1]
+  exact pad_lt_zkJohnsonCount ha0 ha1
 
 /-- **The deployed masked read step**: `zkRead` at the candidate's `m`. -/
 noncomputable def zkReadD (M : ZkTrace) : Wit :=
