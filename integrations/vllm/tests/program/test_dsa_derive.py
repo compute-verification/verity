@@ -47,7 +47,7 @@ IMPL = "vllm.v1.attention.backends.mla.flashattn_mla_sparse.FlashAttnMLASparseIm
 
 
 STANDIN = Vocabulary("dsa-standin", "profile", "dsa-standin",
-                     kinds={**PROFILE_B1_EAGER_V3.kinds, "dsa_rmsnorm": PROFILE_B1_EAGER_V3.kinds["rmsnorm"],
+                     kinds={**PROFILE_B1_EAGER_V3.kinds, "dsa_rmsnorm": lambda N, EPS: bind(b1.RMSNormTriton, N=N, EPS=EPS),
                             "batched_gemm": lambda B, K, N, DOT: bind(cublas_bf16.BatchedGemmWord, B=B, K=K, N=N, DOT=DOT)},
                      notes=dict(PROFILE_B1_EAGER_V3.notes))
 
