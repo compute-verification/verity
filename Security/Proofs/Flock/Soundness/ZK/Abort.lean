@@ -208,7 +208,7 @@ omit [DecidableEq F] [DecidableEq Salt] [DecidableEq B] [DecidableEq Hi] in
 /-- **The real prefix against world `W₀`**, both ways, at `|Pre|·δ₁` (T1 on every pre-final leaf). -/
 theorem prCoin_pubAbort_close {C : Type} (M : T.Hm96 C) (digT : F → B)
     (hT : ∀ t y, T.leafT t y = M.H (digT t + M.My y, M.cs y)) {δ₁ : ℝ≥0∞}
-    (hT1 : Assumptions.Hm96Hiding M.My M.cs δ₁) (S : T.Sent) (w : W) (G : T.Cut → Prop) :
+    (hT1 : Claims.Hm96Hiding M.My M.cs δ₁) (S : T.Sent) (w : W) (G : T.Cut → Prop) :
     prCoin (fun p : T.Rand × (T.Hid → Salt) => G (T.pubAbort S (M.viewR w p.1 p.2)))
         ≤ prCoin (fun ω => G (T.pubCut S (T.preView w ω))) + Fintype.card T.Pre * δ₁
       ∧ prCoin (fun ω => G (T.pubCut S (T.preView w ω)))
@@ -265,7 +265,7 @@ of the honest view on `w₀`, at `S_shvzk`'s dummy randomness) has probabilities
 ways. `τ`'s commitment is an hm96 leaf of its own digest `digT` (`hT`). -/
 theorem table_abort_hm96 {C : Type} (M : T.Hm96 C) (digT : F → B)
     (hT : ∀ t y, T.leafT t y = M.H (digT t + M.My y, M.cs y)) {δ₁ : ℝ≥0∞}
-    (hT1 : Assumptions.Hm96Hiding M.My M.cs δ₁) (S : T.Sent) (hS : T.Admits S) (w : W) (hreg : T.sReg w = T.pubReg)
+    (hT1 : Claims.Hm96Hiding M.My M.cs δ₁) (S : T.Sent) (hS : T.Admits S) (w : W) (hreg : T.sReg w = T.pubReg)
     (w0 : W) (G : T.Cut → Prop) :
     prCoin (fun p : T.Rand × (T.Hid → Salt) => G (T.abort S (M.viewR w p.1 p.2)))
         ≤ prCoin (fun p : T.SimRand × (T.Hid → Salt) => G (T.pubAbort S (M.viewR w0 (T.dummyOf p.1) p.2)))

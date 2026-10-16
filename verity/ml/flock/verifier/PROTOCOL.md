@@ -1620,6 +1620,10 @@ reason, and one whose verdict is `refused: <why>: a statement form the soundness
    chunk nor all unsegmented sha512/row/v2 rows of 16 · words bits ending in their hm96 block or sha512/row-seg/v1 rows
    of 16 · words bits whose segments end in their last block, the output rows unsegmented, one output port each`). A
    PoUW tile's rows, row-seg A rows and v2 B rows, are such a mix (`ZkHidden.witnessMix_scope`).
+8. every table's `m` at least `25` under `--zk`, else `22` (`ProvedScope.sizesOk`, the claims' `InScope` bound):
+   `m = <m>, below <22|25> without --zk|under --zk`. A table's `m` is its drawn statement's, so `verify` checks it on the
+   session's tables right after `ProvedScope.check`. Each verifier's own schedule refuses a smaller `m` first (§15's
+   `fast100` below `22`, `--zk`'s `queries0` at `m ≤ 24`), so no session's verdict carries this reason.
 
 At setup, a drawn session whose statement sets up is refused when no soundness claim draws by its draw's sampling
 design (`Flock.ProvedScope.drawLaw`), whatever flags the verifier holds: the claims draw by the stratified sampling

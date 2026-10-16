@@ -413,11 +413,20 @@ def test_a_pr_that_makes_circuit_check_run_cold_goes_above_the_warm_ones_and_the
     assert [c for c, _, _ in h.launched] == [members[1].commit, members[2].commit]
 
 
+def test_two_cold_prs_side_by_side_share_one_cold_train(world, monkeypatch):
+    """16 Oct 06:38Z: #2113 and #2115, both cold, were cut into two trains, and two nodes each ran circuit-check cold."""
+    h = Harness(world, monkeypatch)
+    assert h.d.trains(6, frozenset({4, 5})) == [3, 5]
+    assert h.d.trains(6, frozenset({2, 4})) == [1, 3, 5]
+
+
 def test_forces_cold_reads_the_paths_that_move_most_circuit_check_keys():
     from research.queue import forces_cold
 
     assert forces_cold(["verity/ml/circuits/library.py"]) and forces_cold(["uv.lock"]) and forces_cold(["x/y.circuit-check.py"])
     assert forces_cold(["tools/verity/circuit_check/src/circuit_check/cache.py"])
+    assert forces_cold(["integrations/vllm/verity_vllm/pipeline/serving_rows.py"])          # #2114: 907 targets rerun
+    assert not forces_cold(["integrations/vllm/tests/pipeline/test_row.py", "tools/research/src/research/drive.py"])
     assert not forces_cold(["Security/Proofs/X.lean", "verity/ml/circuits/README.md", "verity/ml/circuits/tests/test_x.py"])
     assert not forces_cold([])
 
