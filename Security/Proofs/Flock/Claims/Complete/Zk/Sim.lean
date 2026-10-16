@@ -44,7 +44,8 @@ theorem commitPZk_sim (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg
 theorem ligeritoPZk_sim (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) (ms : MerkleScheme) (sch : Schedule)
     (T : F128) (cm0 : Commit) (t b : Array F128) (lay : Zk.PadLayout) (h : Array F128) (rep tPad : ℕ)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) :
-    ((simS H resp).st Transcript).R (ligeritoPZk asks Hashes.pi ms sch T cm0 t b lay h rep tPad extra lanePad salt nonce)
+    ((simS H resp).st Transcript).R
+      (ligeritoPZk asks Hashes.pi ms sch T cm0 t b lay h rep tPad extra lanePad salt nonce)
       (ligeritoPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) ms sch T cm0 t b lay h rep tPad extra lanePad salt
         nonce) := by
   unfold ligeritoPZk sampleVecP

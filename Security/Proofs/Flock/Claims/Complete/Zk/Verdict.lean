@@ -7,10 +7,10 @@ import Proofs.Flock.Claims.Complete.Zk.Session
 The masked counterpart of `Verdict.lean`: each step of `Zk.verifyRepWith` and `Zk.verifyWithM`, as its own hypothesis,
 composes into acceptance. B's checks are the plain ones (`checks_ok`, generic in `zk`).
 
-* **A masked rep** (`zk_verifyRepWith_ok`): its stream is recorded (S11), the extra claims evaluate, the masked proof file
-  decodes at the rep's shape (`shapeZk`), its PCS parameters are the `--zk` schedule's, the pads' root is 64 bytes; the
-  masked replay (`Zk.replayWith`), the ring switch on the replay's claims valued by their checks (`ringClaimsZk`), the
-  masked Ligerito (`Zk.ligeritoWith`), level 0's lane phase as constraints (`Zk.ligeritoConstraints`) and the inner
+* **A masked rep** (`zk_verifyRepWith_ok`): its stream is recorded (S11), the extra claims evaluate, the masked proof
+  file decodes at the rep's shape (`shapeZk`), its PCS parameters are the `--zk` schedule's, the pads' root is 64 bytes;
+  the masked replay (`Zk.replayWith`), the ring switch on the replay's claims valued by their checks (`ringClaimsZk`),
+  the masked Ligerito (`Zk.ligeritoWith`), level 0's lane phase as constraints (`Zk.ligeritoConstraints`) and the inner
   proof on every constraint (`Zk.verifyInnerWith`, `repConsZk`) each pass from the transcript the previous one left;
   every recorded round is consumed (S15) and the cap is the committed `root_B` (S16).
 * **The masked verdict** (`zk_verifyWith_ok`): `verifyWith_ok`'s checks, the keyed coin tree, and each table's `--zk`

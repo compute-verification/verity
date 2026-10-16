@@ -5,17 +5,19 @@ import Proofs.Flock.Claims.Complete.Coins
 # δcZk: where the honest masked prover can fail
 
 The masked verifier refuses an honest proof at three kinds of coin, and nowhere else. A masked check is an affine
-constraint on the pads, and at the honest pads (`padsOf`: `h_ab = h_a·h_b` and `w = x·y` set) each constraint is the plain
-check on the true values: the masks cancel at every tape, whatever the pads, so no mask can make an honest proof fail.
+constraint on the pads, and at the honest pads (`padsOf`: `h_ab = h_a·h_b` and `w = x·y` set) each constraint is the
+plain check on the true values: the masks cancel at every tape, whatever the pads, so no mask can make an honest proof
+fail.
 
-* **Zerocheck's outer coins** (`outerSlotsZk`), as in the plain case (`Bad`): at `r_i = 1` the replay's `(1 + r)⁻¹` is `0`
-  and the zerocheck's final constraint need not hold at the true values. Rep `q`'s second round, elements `0` to `m − 14`.
-* **Level 0's pair coins** (`rhoSlotsZk`, `rhoDep`): `ρ_0, ρ_1`, read as `(c_0, c_1)` from Ligerito's rounds `k_0 + 2` and
-  `k_0 + 3`, are refused when dependent over F128 (`Zk.rhoIndependent`), by the verifier and the prover alike. At most
-  `2·2^-128` (`pr_rho_le`): `ρ_0`'s `c_0` is `0`, or it is not and `ρ_1`'s `c_1` is the one value that makes them
+* **Zerocheck's outer coins** (`outerSlotsZk`), as in the plain case (`Bad`): at `r_i = 1` the replay's `(1 + r)⁻¹` is
+  `0` and the zerocheck's final constraint need not hold at the true values. Rep `q`'s second round, elements `0` to
+  `m − 14`.
+* **Level 0's pair coins** (`rhoSlotsZk`, `rhoDep`): `ρ_0, ρ_1`, read as `(c_0, c_1)` from Ligerito's rounds `k_0 + 2`
+  and `k_0 + 3`, are refused when dependent over F128 (`Zk.rhoIndependent`), by the verifier and the prover alike. At
+  most `2·2^-128` (`pr_rho_le`): `ρ_0`'s `c_0` is `0`, or it is not and `ρ_1`'s `c_1` is the one value that makes them
   dependent.
-* **The inner proof's `β`** (`betaSlotsZk`): refused at `0` (round `2` of the inner proof), by the verifier and the prover
-  alike.
+* **The inner proof's `β`** (`betaSlotsZk`): refused at `0` (round `2` of the inner proof), by the verifier and the
+  prover alike.
 
 `εZk` is their count, each pair coin twice, over `2^128`; `pr_badZk_le` is the union bound. `δcZk` is `εZk` on the
 statements the masked verifier can accept (`readyZk`, as `ready`), and `1` elsewhere. The slots read the statement's
@@ -70,8 +72,8 @@ theorem Pr_fiber_le {α A B : Type} [Fintype α] [Fintype A] [Fintype B] [Nonemp
   rw [Fintype.card_congr e, Fintype.card_prod, Nat.cast_mul, div_le_div_iff₀ (mul_pos hA hB) hA]
   nlinarith
 
-/-- **`ρ_0, ρ_1` dependent**: read from the coins `a` and `a + 1` as `(c_0, c_1)`, `ρ_0.c_0 ρ_1.c_1 + ρ_0.c_1 ρ_1.c_0 = 0`
-(`Zk.rhoIndependent` false). -/
+/-- **`ρ_0, ρ_1` dependent**: read from the coins `a` and `a + 1` as `(c_0, c_1)`,
+`ρ_0.c_0 ρ_1.c_1 + ρ_0.c_1 ρ_1.c_0 = 0` (`Zk.rhoIndependent` false). -/
 def rhoDep {k : ℕ} (r : Fin k → Coin) (a : ℕ) : Prop :=
   a + 1 < k ∧ (Claims.coinSeq r a).at 0 * (Claims.coinSeq r (a + 1)).at 1 +
     (Claims.coinSeq r a).at 1 * (Claims.coinSeq r (a + 1)).at 0 = 0
