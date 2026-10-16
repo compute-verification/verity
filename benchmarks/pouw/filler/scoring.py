@@ -44,11 +44,12 @@ import share  # noqa: E402  CAP's constants: MACs a token, non-GEMM times, FA2, 
 V2, V3, V4, V5 = "filler-scorer/v2", "filler-scorer/v3", "filler-scorer/v4", "filler-scorer/v5"
 #: the active lock. V3 adds the arm's record checked before its lease (`arms.record_problems`), each point's slowdown
 #: margin (`margins`), and the filler read at its proved entry (`FILLER_ENTRIES`, `filler_entry`) with SCORE under CH
-#: beside it. V4 (active, coordinator 11:05Z) reads the filler wherever it's called from, filler warps inside serving
-#: kernels included (`program_facts`, `filler_entry_v4`, `credit_fixed`, `paths_gate`, `whole_of_peak`). V5 (prepared,
-#: not active) reads the receipt's fold (`fold_reading`), the served products at the modelled edited design's reading
-#: (`score_v5`) and the TP entries (`tp_score`). `score.py report OUT --as v2|v3|v5` reads a run as that version does
-SCORER = V4
+#: beside it. V4 reads the filler wherever it's called from, filler warps inside serving kernels included
+#: (`program_facts`, `filler_entry_v4`, `credit_fixed`, `paths_gate`, `whole_of_peak`). V5 (active, coordinator 12:10Z:
+#: its fold check is a soundness correction, decision 43) reads the receipt's fold (`fold_reading`), the served products
+#: at the MODELLED edited design's reading (`score_v5`), and the TP entries (`tp_score`). `score.py report OUT --as
+#: v2|v3|v4` reads a run as that version does
+SCORER = V5
 LIMIT = 1.05  # serving slowdown, every entry
 DRAM_LIMIT = 0.01  # of the HBM bandwidth the same run's validated counter measures
 CONTROL_BYTES = 1 << 30  # bw_read streams 1 GiB a launch: the DRAM counter's positive control
@@ -1186,11 +1187,11 @@ def entry_v5(e: dict, stats: dict, coins: float = PREFILL_COINS) -> dict:
 
 def coverage_v5(e: dict, filler_fraction: float) -> dict:
     """An `entry_v5` entry's coverage in its two parts, each over C × its v5 wall time: the measured filler part
-    (``filler_part``, its MACs at the folded fraction) and the modelled served part (``served_part``, every served MAC
+    (``filler_part``, its MACs at the folded fraction) and the modelled served part (``served_part_modelled``, every served MAC
     at `SERVED_V5`'s 0.9)."""
     c = cap(e["mhz"]) * e["t1_ms"] * 1e-3
     fp, sp = filler_fraction * e["filler_macs"] / c, SERVED_V5["fraction"] * e["serving_macs"] / c
-    return {**e, "capacity_macs": c, "filler_part": fp, "served_part": sp, "coverage": fp + sp,
+    return {**e, "capacity_macs": c, "filler_part": fp, "served_part_modelled": sp, "coverage": fp + sp,
             "filler_share": e["filler_macs"] / c, "time": e["t1_ms"] / e["t0_ms"]}
 
 
@@ -1208,7 +1209,7 @@ def score_v5(stats: dict, filler_fraction: float, coins: float = PREFILL_COINS) 
     out = {"entries": entries, "missing": missing, "served_model": served_model({"PREFILL_COINS": coins})}
     if entries and not missing:
         w = [e["time"] for e in entries]
-        for k, name in (("coverage", "SCORE"), ("filler_part", "filler_part"), ("served_part", "served_part")):
+        for k, name in (("coverage", "SCORE"), ("filler_part", "filler_part"), ("served_part_modelled", "served_part_modelled")):
             out[name] = sum(e[k] * x for e, x in zip(entries, w)) / sum(w)
         lo = min(entries, key=lambda e: e["coverage"])
         out["min"] = {"entry": lo["entry"], "coverage": lo["coverage"]}
@@ -1278,7 +1279,7 @@ def tp_entry(by_arm: dict, key: tuple[int, int, int], filler_fraction: float) ->
     return {"entry": f"TP {tp} B {key[1]} L {key[2] // 1024}K", "tp": tp, "B": key[1], "L": key[2], "t0_ms": base,
             "t1_measured_ms": phase, "t1_ms": t1, "slowdown": phase / base, "mhz": mhz,
             "serving_macs": n, "filler_measured_macs": f, "filler_macs": fv5,
-            "filler_part": filler_fraction * fv5 / c5, "served_part": SERVED_V5["fraction"] * n / c5,
+            "filler_part": filler_fraction * fv5 / c5, "served_part_modelled": SERVED_V5["fraction"] * n / c5,
             "coverage": (filler_fraction * fv5 + SERVED_V5["fraction"] * n) / c5,
             "coverage_v4_form": (CERTIFIED["serving"]["fraction"] * n + filler_fraction * f) / c4,
             "time": tp * t1 / base, "served_model": {"defer_pass_ms": dp["pass_ms"], "defer_added_ms": dp["added_ms"],
@@ -1335,10 +1336,10 @@ def tp_score(entries: list[dict]) -> dict:
     out = {"missing": missing, "by_tp": {}}
     for t in sorted({e["tp"] for e in entries}):
         es = [e for e in entries if e["tp"] == t]
-        out["by_tp"][t] = {k: mean(es, k) for k in ("coverage", "filler_part", "served_part", "coverage_v4_form")}
+        out["by_tp"][t] = {k: mean(es, k) for k in ("coverage", "filler_part", "served_part_modelled", "coverage_v4_form")}
     if entries and not missing:
         out |= {"SCORE_TP": mean(entries, "coverage"), "filler_part": mean(entries, "filler_part"),
-                "served_part": mean(entries, "served_part"), "v4_form": mean(entries, "coverage_v4_form")}
+                "served_part_modelled": mean(entries, "served_part_modelled"), "v4_form": mean(entries, "coverage_v4_form")}
     return out
 
 

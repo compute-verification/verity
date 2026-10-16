@@ -4,8 +4,9 @@ the arm contract: `arms.py`; the device driver: `dscore.cu`.
 
   python3 benchmarks/pouw/filler/score.py ARM [--rounds 8] [--reps 3] [--no-robust]   build, lease one GPU, measure, report
   python3 benchmarks/pouw/filler/score.py measure ARM --bin DIR --out DIR             the measurement, inside a lease
-  python3 benchmarks/pouw/filler/score.py report OUT_DIR [--json] [--as v5] [--coins]  score a measured run's out dir
+  python3 benchmarks/pouw/filler/score.py report OUT_DIR [--json] [--as v4] [--coins]  score a measured run's out dir
   python3 benchmarks/pouw/filler/score.py tp-report OUT... --bin|--nvd X [--noise]    SCORE-TP of tpcomm.sh out dirs (v5)
+  python3 benchmarks/pouw/filler/score.py defer-fit [--T 4096] [--json]               the deferred pass's calibration
   python3 benchmarks/pouw/filler/score.py check ARM                                   the arm's contract and record limits
   python3 benchmarks/pouw/filler/score.py --leaderboard [--refresh] [--local DIR ...] every filler attempt, best first
 
@@ -38,8 +39,8 @@ entry `scoring.filler_entry` decides from the arm's declared `Filler.noise` and 
 build (`build.json`), with SCORE under CH (every filler at 0.99, v2's reading) beside it, and each point's slowdown
 margin. `report OUT --as v2` (or `v3`) reads a run as that version did, without writing `score.json`.
 
-filler-scorer/v4, the lock (`scoring.SCORER`, active since the coordinator's 11:05Z), keeps v3's load check and reads
-the filler wherever it's called from.
+filler-scorer/v4 (`report OUT --as v4`; the lock from the coordinator's 11:05Z to 12:10Z) keeps v3's load check and
+reads the filler wherever it's called from.
 The build also compiles each CUDA driver the arm lists (fscore.cu, pscore.cu) and records `scoring.program_facts` over
 dscore's and the drivers' nvdisasm. The theorem entries' SASS checks read the `dfill_k`/`dfill_p` functions' bodies alone
 (kernels or __noinline__ clones in serving kernels); any MMA, global store or register call outside them on a path the
@@ -47,12 +48,15 @@ filler warps run refuses the arm (gate `filler_paths`); other MMAs are serving's
 spot-checked public tiles of a binary the scorer read (`credit_fixed`); and the honest gate bounds the whole kernel's
 MACs, serving's and the filler warps', by its SMs' peak (`whole_of_peak`). `scoring.UNCHECKED_V4` is what it can't see.
 
-filler-scorer/v5 (prepared, not active: `report OUT --as v5`) keeps v4's gates, the slowdown gate on the measured step
-against clean serving. It reads the receipt's fold (`scoring.fold_reading`) from `Filler.fold` or the lineage's receipt
-tag and the build's `fold_facts`: ram halves a theorem entry, duo and XOR-in read in full where the build confirms
-them. Its SCORE is the measured filler part plus a MODELLED served part (`scoring.score_v5`): every served MAC at
-Theorem K's 0.9 over the wall time the edited design would take (`scoring.served_model`'s named constants and their
-sources; `--coins` sets prefill's coins factor). `tp-report` reads HC-COMM's TP suite (`scoring.tp_score`).
+filler-scorer/v5, the lock (`scoring.SCORER`, active since the coordinator's 12:10Z: its fold check is a soundness
+correction, decision 43), keeps v4's gates, the slowdown gate on the measured step against clean serving. It reads the
+receipt's fold (`scoring.fold_reading`) from `Filler.fold` or the lineage's receipt tag and the build's `fold_facts`:
+ram halves a theorem entry, and the folds that bind every word (`scoring.FOLDS`) read in full where the build confirms
+them. Its SCORE is the measured filler part plus a MODELLED served part (`scoring.score_v5`; `served_part_modelled` in
+score.json and the record): every served MAC at Theorem K's 0.9 over the wall time the edited design would take
+(`scoring.served_model`'s named constants and their sources, decode's deferred pass calibrated to measurement,
+`scoring.defer_fit`; `--coins` sets prefill's coins factor). `tp-report` reads HC-COMM's TP suite (`scoring.tp_score`).
+`defer-fit` prints the deferred pass's calibration and its residuals.
 """
 
 from __future__ import annotations
@@ -330,9 +334,10 @@ def report(out: Path, arm=None, version: str | None = None, coins: float = S.PRE
         res["program_facts_why"] = build.get("program_facts_why")
     if version == S.V5:
         res |= {"SCORE": v5.get("SCORE") if g["ok"] else None, "score_if_gated": v5.get("SCORE"),
-                "filler_part": v5.get("filler_part"), "served_part": v5.get("served_part"), "min": v5.get("min"),
-                "scored": g["ok"] and "SCORE" in v5, "v4_form": sc.get("SCORE"), "entries_v5": v5["entries"],
-                "served_model": v5["served_model"], "fold": fold}
+                "SCORE_is": "the measured filler part + the MODELLED served part (the harness serves plain int8)",
+                "filler_part": v5.get("filler_part"), "served_part_modelled": v5.get("served_part_modelled"),
+                "min": v5.get("min"), "scored": g["ok"] and "SCORE" in v5, "v4_form": sc.get("SCORE"),
+                "entries_v5": v5["entries"], "served_model": v5["served_model"], "fold": fold}
         res.pop("score_under_ch")
         res.pop("score_under_ch_if_gated")
     if version == S.SCORER:
@@ -370,8 +375,8 @@ def record(res: dict, doc: dict, run_dir: Path, by: str | None) -> dict:
         mg = res["margins"]
         meta["metrics"] |= {"margin_min": mg["min"], "no_margin": mg["no_margin"],
                             "margins": {k: m["margin"] for k, m in mg["points"].items() if m["scored"]}}
-        meta["metrics"] |= {k: res[k] for k in ("score_under_ch", "score_under_ch_if_gated", "filler_part", "served_part",
-                                                "v4_form") if k in res}
+        meta["metrics"] |= {k: res[k] for k in ("score_under_ch", "score_under_ch_if_gated", "filler_part",
+                                                "served_part_modelled", "v4_form") if k in res}
         if res.get("fold"):
             meta["fold"] = {k: res["fold"][k] for k in ("declared", "signature", "fold", "share")}
         fe = res["filler_entry"]
@@ -423,7 +428,7 @@ def show_served_model(sm: dict) -> None:
 
 def show_v5(res: dict) -> None:
     fd, fe = res.get("fold"), res.get("filler_entry") or {}
-    print(f"  SCORE = measured filler part {fmt(res['filler_part'])} + modelled served part {fmt(res['served_part'])}"
+    print(f"  SCORE = measured filler part {fmt(res['filler_part'])} + modelled served part {fmt(res['served_part_modelled'])}"
           f" (v4's arithmetic, served plain at {S.CERTIFIED['serving']['fraction']}, with v5's fold: "
           f"{fmt(res['v4_form'])})")
     if fd:
@@ -432,10 +437,10 @@ def show_v5(res: dict) -> None:
               + "".join(f"\n    {w}" for w in fd["why"]))
         print(f"  filler entry {fe.get('applies')}: {fe.get('unfolded')} unfolded, {fe.get('fraction')} folded")
     show_served_model(res["served_model"])
-    print("\n| entry | coverage | filler part | served part | t1 measured ms | t1 modelled ms | filler MACs measured → "
+    print("\n| entry | coverage | filler part | served part (modelled) | t1 measured ms | t1 modelled ms | filler MACs measured → "
           "modelled |\n|---|---|---|---|---|---|---|")
     for e in res["entries_v5"]:
-        print(f"| {e['entry']} | {fmt(e['coverage'])} | {fmt(e['filler_part'])} | {fmt(e['served_part'])} | "
+        print(f"| {e['entry']} | {fmt(e['coverage'])} | {fmt(e['filler_part'])} | {fmt(e['served_part_modelled'])} | "
               f"{fmt(e['t1_measured_ms'], 2)} | {fmt(e['t1_ms'], 2)} | {e['filler_measured_macs']:.3g} → "
               f"{e['filler_macs']:.3g} |")
 
@@ -552,16 +557,19 @@ def leaderboard(local: list[Path], refresh: bool, as_json: bool) -> int:
         print(json.dumps([{"record": a, "gated": gated(m), "proved": readings(m)[0], "under_ch": readings(m)[1], **m}
                           for a, m in uniq]))
         return 0
-    print("SCORE is the proved reading (filler-scorer/v3 and v4); SCORE under CH reads every filler at 0.99 (CH withdrawn, "
-          "decision 27), as v2's SCORE did. A v2 record has no proved SCORE; an ungated one's numbers are in ().")
-    print("| # | arm | variant | SCORE | SCORE under CH | min (entry) | worst slowdown | gates | run | scorer | parent | "
-          "mechanism | flags |")
-    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+    print("SCORE is the proved reading (filler-scorer/v3, v4 and v5). A v5 SCORE is the measured filler part plus a "
+          "MODELLED served part (the harness serves plain int8), both shown; v3's and v4's read serving plain at 0.225. "
+          "SCORE under CH reads every filler at 0.99 (CH withdrawn, decision 27), as v2's SCORE did. A v2 record has no "
+          "proved SCORE; an ungated one's numbers are in ().")
+    print("| # | arm | variant | SCORE | filler part | served part (modelled) | SCORE under CH | min (entry) | "
+          "worst slowdown | gates | run | scorer | parent | mechanism | flags |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for i, (art, m) in enumerate(uniq, 1):
         mt, gt = m["metrics"], m.get("gate") or {}
         sc, ch = (fmt(r) if gated(m) or r is None else f"({fmt(r)})" for r in readings(m))
         failed = [k for k, v in gt.items() if k != "ok" and not v] + [f"no {k}" for k in GATES if k not in gt]
-        print(f"| {i} | {m['arm']} | {m.get('variant')} | {sc} | {ch} | {fmt((mt.get('min') or {}).get('coverage'))} "
+        print(f"| {i} | {m['arm']} | {m.get('variant')} | {sc} | {fmt(mt.get('filler_part'))} | "
+              f"{fmt(mt.get('served_part_modelled'))} | {ch} | {fmt((mt.get('min') or {}).get('coverage'))} "
               f"({(mt.get('min') or {}).get('entry')}) | {fmt(mt.get('slowdown_worst'))} | "
               f"{'pass' if gated(m) else 'FAIL ' + ','.join(failed)} | {m.get('run')} | "
               f"{(m.get('scorer') or '').removeprefix('filler-scorer/')}@{(m.get('harness') or '')[:9]} | "
@@ -583,7 +591,7 @@ def _text(p: Path) -> str | None:
 
 def tp_report(outs: list[Path], listings: dict | None, noise: str | None, fold: str | None,
               facts_from: str | None = None) -> dict:
-    """SCORE-TP (filler-scorer/v5, prepared): tpcomm.sh's out dirs (HC-COMM's TP suite, note:20261016T0748Z-draft-hc-comm
+    """SCORE-TP (filler-scorer/v5): tpcomm.sh's out dirs (HC-COMM's TP suite, note:20261016T0748Z-draft-hc-comm
     round 2), read together. The filler is read at v5's entry (`scoring.filler_entry_v5`) from the TP build's program
     and fold facts at `scoring.TP_FILLER` (`listings`: the tpcomm binary's nvdisasm; None reads the filler at the
     floor), with the declared noise and fold; each (TP, B, L) at `scoring.tp_entry`; the gates are `scoring.tp_gates`,
@@ -625,10 +633,13 @@ def tp_report(outs: list[Path], listings: dict | None, noise: str | None, fold: 
     g["honest"] = {"ok": bool(whole) and wmax[0] <= 1.0, "whole_of_peak_max": wmax[0], "at": wmax[1]}
     g["ok"] = all(v["ok"] for v in g.values())
     sc = S.tp_score(list(entries.values()))
-    return {"scorer": S.V5, "reading": "SCORE-TP (prepared, not active)", "outs": [str(o) for o in outs],
+    return {"scorer": S.V5, "reading": "SCORE-TP" + ("" if S.SCORER == S.V5 else " (a preview)"),
+            "outs": [str(o) for o in outs],
             "commits": sorted({_text(o / "commit.txt") or "?" for o in outs}), "facts_from": facts_from,
             "SCORE_TP": sc.get("SCORE_TP") if g["ok"] else None, "score_tp_if_gated": sc.get("SCORE_TP"),
-            "filler_part": sc.get("filler_part"), "served_part": sc.get("served_part"), "v4_form": sc.get("v4_form"),
+            "SCORE_TP_is": "the measured filler part + the MODELLED served part (tpcomm serves plain int8)",
+            "filler_part": sc.get("filler_part"), "served_part_modelled": sc.get("served_part_modelled"),
+            "v4_form": sc.get("v4_form"),
             "by_tp": sc["by_tp"], "missing": sc["missing"], "entries": list(entries.values()), "gates": g,
             "filler_entry": entry, "fold": fd, "served_model": S.served_model(), "unchecked": list(TP_UNCHECKED)}
 
@@ -637,7 +648,7 @@ def show_tp(res: dict) -> None:
     g, fe, fd = res["gates"], res["filler_entry"], res["fold"]
     print(f"\n{res['reading']}, {res['scorer']}: SCORE-TP {fmt(res['SCORE_TP'])}"
           + ("" if res["SCORE_TP"] is not None else f" (not scored; {fmt(res['score_tp_if_gated'])} if gated)")
-          + f" = measured filler part {fmt(res['filler_part'])} + modelled served part {fmt(res['served_part'])}; "
+          + f" = measured filler part {fmt(res['filler_part'])} + modelled served part {fmt(res['served_part_modelled'])}; "
           f"v4's form (served plain at {S.CERTIFIED['serving']['fraction']}) {fmt(res['v4_form'])}")
     print(f"  runs at {', '.join(c[:9] for c in res['commits'])}; filler facts from {res['facts_from'] or 'the runs'}")
     print(f"  filler entry {fe['applies']} ({fe['fraction']}, {fe['unfolded']} unfolded); fold {fd['fold']} (SASS "
@@ -653,14 +664,15 @@ def show_tp(res: dict) -> None:
                      "receipts": lambda: f"{v['checked']} checked" + (f", bad: {v['bad']}" if v["bad"] else ""),
                      "pf_gate": lambda: f"{v['ranks']} ranks" + (f": {v['why']}" if v["why"] else "")}.get(name, lambda: "")())
     print("  unchecked: " + "; ".join(res["unchecked"]))
-    print("\n| entry | slowdown | coverage | filler part | served part | v4 form | step ms base / phase / modelled |\n"
+    print("\n| entry | slowdown | coverage | filler part | served part (modelled) | v4 form | step ms base / phase / modelled |\n"
           "|---|---|---|---|---|---|---|")
     for e in res["entries"]:
         print(f"| {e['entry']} | {fmt(e['slowdown'], 4)} | {fmt(e['coverage'])} | {fmt(e['filler_part'])} | "
-              f"{fmt(e['served_part'])} | {fmt(e['coverage_v4_form'])} | {fmt(e['t0_ms'], 2)} / "
+              f"{fmt(e['served_part_modelled'])} | {fmt(e['coverage_v4_form'])} | {fmt(e['t0_ms'], 2)} / "
               f"{fmt(e['t1_measured_ms'], 2)} / {fmt(e['t1_ms'], 2)} |")
     for t, v in res["by_tp"].items():
-        print(f"TP {t}: coverage {fmt(v['coverage'])} = {fmt(v['filler_part'])} + {fmt(v['served_part'])} (v4 form "
+        print(f"TP {t}: coverage {fmt(v['coverage'])} = filler {fmt(v['filler_part'])} + modelled served "
+              f"{fmt(v['served_part_modelled'])} (v4 form "
               f"{fmt(v['coverage_v4_form'])})")
     if res["missing"]:
         print(f"missing entries: {', '.join(res['missing'])}")
@@ -689,7 +701,7 @@ def main(argv=None) -> int:
         print(json.dumps(res, indent=1)) if a.json else show(res)
         return 0
     if argv and argv[0] == "tp-report":
-        ap = argparse.ArgumentParser(prog="score.py tp-report", description="SCORE-TP (filler-scorer/v5, a preview) of "
+        ap = argparse.ArgumentParser(prog="score.py tp-report", description="SCORE-TP (filler-scorer/v5) of "
                                      "tpcomm.sh out dirs, together")
         ap.add_argument("outs", type=Path, nargs="+")
         src = ap.add_mutually_exclusive_group()
