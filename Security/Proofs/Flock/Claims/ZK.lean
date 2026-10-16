@@ -3,6 +3,7 @@ import Proofs.Flock.Claims.ZK.Statement
 import Proofs.Flock.Claims.ZK.GK
 import Proofs.Flock.Claims.ZK.Interact
 import Proofs.Flock.Claims.ZK.Coins
+import Proofs.Flock.Claims.ZK.Forced
 
 /-!
 # Flock's zero knowledge against a malicious verifier
@@ -18,4 +19,7 @@ import Proofs.Flock.Claims.ZK.Coins
 * `Coins`: what the coin checks evaluate to: a transcript opens `c` exactly when every opening is answered and passes
   the check (`cls_eq_some_iff`), the forced walk agrees (`cls_eq_some_iff_fcls`), and a mismatch is two checked
   openings within the walk's calls (`fcls_eq_mism`).
+* `Forced`: the forced run at `c` with the honest prover's messages at `c` opens all of `c` exactly when the real run
+  opens `c`, and is then the real run (`fcls_succ_iff`, `forced_eq_of_cls`, `real_eq_of_fcls`); one that stops before a
+  binding failure is a real run that opens no coin vector (`cls_none_of_abort`).
 -/
