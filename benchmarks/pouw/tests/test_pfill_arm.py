@@ -167,6 +167,32 @@ def test_fused4_fold_arms_are_fused4_with_only_the_filler_changed(monkeypatch, a
         assert A.placed(arm, ph, b, l) == A.placed(f4, ph, b, l) and arm.fused(ph, b, l) == f4.fused(ph, b, l)
 
 
+@pytest.mark.parametrize(("attr", "base", "nc", "tiles"), [("PFillBUXinFPhase", "PFillBUXinFused4", 4, {2048: 5, 3072: 8}),
+                                                          ("PFillBUDuoFPhase", "PFillBUDuoFused4", 2, {2048: 5, 3072: 8}),
+                                                          ("PFillBUDuoFPhase2", "PFillBUDuoFused4", 2, {2048: 5, 3072: 6})])
+def test_fphase_arms_add_a_phase_filler_at_b256_only(monkeypatch, attr, base, nc, tiles):
+    """An fphase arm is its fused4 fold arm with a phase filler of the build's fold (NC) and width (-DPF_PW=4) at 256/2K
+    and 256/3K, on the split there and with no fused step; every other point is the fused4 arm's."""
+    A, S = _module("arms"), _module("scoring")
+    P = _load_file("pfill_arm")
+    monkeypatch.setenv("NVCC_APPEND_FLAGS", "unset")
+    f4 = A.load(f"benchmarks/pouw/filler/pfill_arm.py:{base}")
+    want = __import__("os").environ["NVCC_APPEND_FLAGS"].split()
+    arm = A.load(f"benchmarks/pouw/filler/pfill_arm.py:{attr}")
+    assert A.check_arm(arm, record=True) == [] and A.record_problems(arm) == []
+    assert sorted(__import__("os").environ["NVCC_APPEND_FLAGS"].split()) == sorted(want + ["-DPF_PW=4"])
+    assert arm.filler == f4.filler and P.fold_share(arm.lineage) == 1.0
+    assert {"benchmarks/pouw/filler/pscore.cu", "benchmarks/pouw/filler/pfill_fp_score.py"} <= set(arm.sources)
+    for ph, b, l in S.points(robust=True):
+        q = arm.phase(ph, b, l)
+        assert A.placed(arm, ph, b, l) == A.placed(f4, ph, b, l)
+        if b == 256 and l in tiles:
+            assert arm.fused(ph, b, l) is None and A.placed(arm, ph, b, l).place == "split"
+            assert (q.W, q.NC, q.tiles) == (4, nc, tiles[l])
+        else:
+            assert q is None and arm.fused(ph, b, l) == f4.fused(ph, b, l)
+
+
 def test_bu_arm_is_power_split_on_the_bu_tile(monkeypatch):
     """pfill-bu is pfill-power-split's filler and placement with only the tile's kind changed (-DPFILL_BU), in Theorem
     K's setting and no other arm."""

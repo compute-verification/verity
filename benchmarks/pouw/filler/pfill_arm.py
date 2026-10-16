@@ -418,6 +418,19 @@ class PFillBUDuoFPhase(PFillBUDuoFused4):
 
 
 @dataclass
+class PFillBUDuoFPhase2(PFillBUDuoFPhase):
+    """pfill-bu-duo-fphase with 6 duo tiles at 256/3K: duo's phase tile runs at 0.85 of XOR-in's alone, so its 8 read
+    1.052 there (r20261016-121820-8853), past the cliff XOR-in's 9 reach (1.057, s11); 6 take about XOR-in's 7."""
+
+    name: str = "pfill-bu-duo-fphase2"
+    lineage: dict = field(default_factory=lambda: _fused_lineage(
+        "noise:sha512-coins-bU", "receipt:duo-k32",
+        "pfill-bu-duo-fphase with duo's 256/3K phase sized to its rate: 6 tiles take XOR-in's ~7, inside the cliff",
+        parent="pfill-bu-duo-fphase", extra=PHASE_TAGS))
+    table = {**PFillBUDuoFPhase.table, (256, 3072): (60, None, PhaseFill(NC=2, tiles=6))}
+
+
+@dataclass
 class PFillBU(PFillPowerSplit):
     """pfill-power-split's ram tile as pfill-bU (-DPFILL_BU, note:20261016T0710Z-draft-filler-floor-r2 §5): A's entries
     their SHA-512 bits as s8 0 or 1, B's U = (t & 0x7F) - 64 + ((t >> 6) & 1) from one digest byte t an entry (uniform on
