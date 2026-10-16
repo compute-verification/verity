@@ -1,4 +1,5 @@
 import Mathlib
+import Definitions.Pouw.RelativeSecurity
 import Proofs.Pouw.SteinerRigidity
 
 /-!
@@ -6,7 +7,8 @@ import Proofs.Pouw.SteinerRigidity
 
 Neekon Vafa's definition (`note:20261015T1810Z-draft-relative-security-def`) as RS-DEF froze it
 (`note:20261015T1815Z-draft-rs-definition-frozen`, v1), in an abstract machine model, so that the construction and
-proof workers' results land here as theorems or as named hypotheses.
+proof workers' results land here as theorems or as named hypotheses. The definitions the guarantees
+(`Models.Pouw.Guarantees.RelativeSecurity`) read are in `Definitions.Pouw.RelativeSecurity`, under the same names.
 
 * The machine model (`Machine`, `MatMachine`): algorithms from inputs to outputs, their semantics with the coins as
   part of the input, a per-run `cost` and its worst case `time`, with axioms: nonnegativity, monotonicity (running `f`
@@ -158,10 +160,6 @@ namespace Pouw.RelativeSecurity
 open Finset
 
 section Probability
-
-/-- The probability of an event under the uniform distribution on a finite type. -/
-noncomputable def prob {Ω : Type*} [Fintype Ω] (p : Ω → Prop) : ℝ := by
-  classical exact ((univ.filter p).card : ℝ) / (Fintype.card Ω : ℝ)
 
 theorem prob_nonneg {Ω : Type*} [Fintype Ω] (p : Ω → Prop) : 0 ≤ prob p := by
   unfold prob
@@ -341,34 +339,9 @@ and check may depend on the whole past. The deficiency is fixed before the round
 `PassBound`) or read off the round's guard path (`PathBound`). The proof is the supermartingale
 `Π_w 1[pass_w] e^{(1−p) d_w}` as a finite product over rounds (`expect_weight_le`), then Markov. -/
 
-/-- The coins of `n` rounds, each fresh and uniform on `Ω`. -/
-@[reducible] def Paths (Ω : Type) : ℕ → Type
-  | 0 => Unit
-  | n + 1 => Ω × Paths Ω n
-
-instance Paths.instFintype (Ω : Type) [Fintype Ω] : ∀ n, Fintype (Paths Ω n)
-  | 0 => inferInstanceAs (Fintype Unit)
-  | n + 1 => @instFintypeProd Ω (Paths Ω n) _ (Paths.instFintype Ω n)
-
-/-- A prover's play over `n` rounds of coins on `Ω`: per round, its deficiency `d` and its check `pass` as
-functions of the round's coins, then the rest of the play, which may depend on them. -/
-inductive RoundGame (Ω : Type) : ℕ → Type
-  | done : RoundGame Ω 0
-  | round {n : ℕ} (d : Ω → ℝ) (pass : Ω → Prop) (next : Ω → RoundGame Ω n) : RoundGame Ω (n + 1)
-
 namespace RoundGame
 
 variable {Ω : Type}
-
-/-- The window accepts: every round's check passes. -/
-def accepts : {n : ℕ} → RoundGame Ω n → Paths Ω n → Prop
-  | _, .done, _ => True
-  | _, .round _ pass next, x => pass x.1 ∧ (next x.1).accepts x.2
-
-/-- The hidden deficiency `Σ_w d_w` along the realized coins. -/
-def deficiency : {n : ℕ} → RoundGame Ω n → Paths Ω n → ℝ
-  | _, .done, _ => 0
-  | _, .round d _ next, x => d x.1 + (next x.1).deficiency x.2
 
 open Classical in
 /-- The supermartingale's last value, `Π_w 1[pass_w] e^{c d_w}`. -/
@@ -621,20 +594,9 @@ cheat step `a` is fixed before its draw, and its draw raises the round's wrong s
 so a round whose check passes with probability at most `1 − U` meets the exponential bound with `d_w = Σ_s a_s`
 (`RoundGame.Staged`, `RoundGame.expBound_of_staged`), which is all the window form reads (`window_le_exp`). -/
 
-/-- **A round's stages**: per stage, its cheat step `a` and the wrong share `u` its draw adds, then the rest of the
-round, which may depend on the draw. -/
-inductive StageGame (Ω : Type) : ℕ → Type
-  | done : StageGame Ω 0
-  | stage {m : ℕ} (a : ℝ) (u : Ω → ℝ) (next : Ω → StageGame Ω m) : StageGame Ω (m + 1)
-
 namespace StageGame
 
 variable {Ω : Type}
-
-/-- The round's deficiency `D = Σ_s a_s` along its draws. -/
-def defi : {m : ℕ} → StageGame Ω m → Paths Ω m → ℝ
-  | _, .done, _ => 0
-  | _, .stage a _ next, x => a + (next x.1).defi x.2
 
 /-- The round's wrong share `U = Σ_s u_s` along its draws. -/
 def wrong : {m : ℕ} → StageGame Ω m → Paths Ω m → ℝ
@@ -720,50 +682,6 @@ end Stages
 
 section Machine
 
-/-- A machine model: algorithms from inputs `I` to outputs `O` (coins are part of the input), what they compute, and
-their cost. The axioms are the properties of `time` the reduction uses. -/
-structure Machine where
-  /-- The algorithms from `I` to `O`. -/
-  Alg : Type → Type → Type
-  /-- What an algorithm computes. -/
-  eval : ∀ {I O : Type}, Alg I O → I → O
-  /-- Its cost (an abstract `time`: priced work, worst case over inputs and coins). -/
-  time : ∀ {I O : Type}, Alg I O → ℝ
-  /-- One run's cost (RS-DEF §1.2's `cost_P(x; σ, ρ)`), which `time` bounds. -/
-  cost : ∀ {I O : Type}, Alg I O → I → ℝ
-  /-- The program's size `|M|` (RS-DEF's T4), charged with every run (`charge`, RS-RT's V1). -/
-  size : ∀ {I O : Type}, Alg I O → ℝ
-  /-- Run `f`, then `g` on its output. -/
-  seq : ∀ {I O P : Type}, Alg I O → Alg O P → Alg I P
-  /-- Run `f` and `g` on the same input. -/
-  pair : ∀ {I O P : Type}, Alg I O → Alg I P → Alg I (O × P)
-  /-- The projections (routing). -/
-  fst : ∀ {I J : Type}, Alg (I × J) I
-  snd : ∀ {I J : Type}, Alg (I × J) J
-  eval_seq : ∀ {I O P : Type} (f : Alg I O) (g : Alg O P) (x : I), eval (seq f g) x = eval g (eval f x)
-  eval_pair : ∀ {I O P : Type} (f : Alg I O) (g : Alg I P) (x : I), eval (pair f g) x = (eval f x, eval g x)
-  eval_fst : ∀ {I J : Type} (x : I × J), eval (fst (I := I) (J := J)) x = x.1
-  eval_snd : ∀ {I J : Type} (x : I × J), eval (snd (I := I) (J := J)) x = x.2
-  /-- Costs are nonnegative. -/
-  time_nonneg : ∀ {I O : Type} (f : Alg I O), 0 ≤ time f
-  /-- `time` is the worst case: every run costs at most `time`. -/
-  cost_le_time : ∀ {I O : Type} (f : Alg I O) (x : I), cost f x ≤ time f
-  /-- T4: a program's time is at least its size. -/
-  size_le_time : ∀ {I O : Type} (f : Alg I O), size f ≤ time f
-  size_nonneg : ∀ {I O : Type} (f : Alg I O), 0 ≤ size f
-  /-- Subadditivity of sequential composition. -/
-  time_seq_le : ∀ {I O P : Type} (f : Alg I O) (g : Alg O P), time (seq f g) ≤ time f + time g
-  /-- Monotonicity: running `f` first costs at least `f`. (Not `g`: `g`'s worst case may lie outside `f`'s range.) -/
-  le_time_seq : ∀ {I O P : Type} (f : Alg I O) (g : Alg O P), time f ≤ time (seq f g)
-  /-- Subadditivity of side-by-side composition. -/
-  time_pair_le : ∀ {I O P : Type} (f : Alg I O) (g : Alg I P), time (pair f g) ≤ time f + time g
-  /-- Monotonicity: running `f` beside `g` costs at least each. -/
-  le_time_pair_left : ∀ {I O P : Type} (f : Alg I O) (g : Alg I P), time f ≤ time (pair f g)
-  le_time_pair_right : ∀ {I O P : Type} (f : Alg I O) (g : Alg I P), time g ≤ time (pair f g)
-  /-- Routing is free. -/
-  time_fst : ∀ {I J : Type}, time (fst (I := I) (J := J)) = 0
-  time_snd : ∀ {I J : Type}, time (snd (I := I) (J := J)) = 0
-
 /-- `n × m` matrices over `R`, indexed by `Fin`. -/
 abbrev Mat (R : Type) (a b : ℕ) : Type := Matrix (Fin a) (Fin b) R
 
@@ -817,10 +735,6 @@ theorem time_pair_le_of {I O P : Type} {f : Mc.Alg I O} {g : Mc.Alg I P} {a b : 
 theorem time_fst_le {I J : Type} : Mc.time (Mc.fst (I := I) (J := J)) ≤ 0 := Mc.time_fst.le
 
 theorem time_snd_le {I J : Type} : Mc.time (Mc.snd (I := I) (J := J)) ≤ 0 := Mc.time_snd.le
-
-/-- **A run's charge** (RS-DEF v2's `max(|M|, cost_M(σ, ρ))`, RS-RT's V1): the program's size and the run's cost.
-Charging the run alone lets a coin-indexed table of accepted answers pass at `O(λ)` per run. -/
-def charge {I O : Type} (f : Mc.Alg I O) (x : I) : ℝ := max (Mc.size f) (Mc.cost f x)
 
 theorem charge_le_time {I O : Type} (f : Mc.Alg I O) (x : I) : Mc.charge f x ≤ Mc.time f :=
   max_le (Mc.size_le_time f) (Mc.cost_le_time f x)
@@ -2374,29 +2288,6 @@ theorem editedEntries_products_ge_shared {K : Type} [Field K] [DecidableEq K] {a
     _ ≤ T.length := hB
     _ ≤ _ := hlen
 
-/-- The proof service's layer of a protocol (AGENTS.md's one proof service): live coins, messages and the verifier.
-A protocol is a service with a problem (`correct`) and an honest Solve. -/
-structure Service where
-  Seed : Type
-  [instSeed : Fintype Seed]
-  lam : ℕ
-  card_seed : Fintype.card Seed = 2 ^ lam
-  Com : Type
-  Ans : Type
-  Coins : Type
-  [instCoins : Fintype Coins]
-  verify : Com → Seed → Ans → Bool
-
-attribute [instance] Service.instSeed Service.instCoins
-
-/-- **The service's adversary floor** in a machine: every adversary that commits first has its accepted runs charged
-(`max(|M|, cost)`) below `F` with probability at most `κ`. It reads only the service, so it is `AdvFloor` of every protocol over the service
-(`MatMachine.editFloor_iff`). -/
-def ServiceFloor (Mc : Machine) (S : Service) (F κ : ℝ) : Prop :=
-  ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)),
-    (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) →
-    prob (fun ω : S.Seed × Ω => S.verify (Mc.eval M ω).1 ω.1 (Mc.eval M ω).2 = true ∧ Mc.charge M ω < F) ≤ κ
-
 /-- **The window's rounds** (Theorem S's and S_G's setting, a named hypothesis): the service's coins are `R` rounds
 of fresh coins on `Ω` (`e`), and every adversary that commits first plays, at each value `r` of its own coins, a
 round game whose rounds meet the exponential bound `E[1[pass_w] e^{(1−p) d_w}] ≤ 1` given the past (`ExpBound`; from
@@ -2863,25 +2754,9 @@ has `F₂` rank `2L` (`rank_projF2_dIncr`). Each certified cell-block therefore 
 sharing along a cell's prefix chain; the chain lemma, after the quad runs, lifts that to sharing among a row's cells,
 and gives the window's cost line (`RoundsHypK`, `roundsHyp_of_K`). -/
 
-
-/-- An operand affine in the bits `z : V → R`: `c + Σ_v α_v z_v`. -/
-structure BitAff (V R : Type) where
-  c : R
-  α : V → R
-
-/-- Its value at the bits `z`. -/
-def BitAff.eval {V R : Type} [Fintype V] [CommRing R] (A : BitAff V R) (z : V → R) : R := A.c + ∑ v, A.α v * z v
-
-/-- The bit point with ones on `S`. -/
-def bitInd {V R : Type} [DecidableEq V] [CommRing R] (S : Finset V) : V → R := fun v => if v ∈ S then 1 else 0
-
 theorem BitAff.eval_bitInd {V R : Type} [Fintype V] [DecidableEq V] [CommRing R] (A : BitAff V R) (S : Finset V) :
     A.eval (bitInd S) = A.c + ∑ v ∈ S, A.α v := by
   simp [BitAff.eval, bitInd, mul_ite, Finset.sum_ite_mem]
-
-/-- The bit-pair second difference `f(e_u + e_v) − f(e_u) − f(e_v) + f(0)`. -/
-def pairDiff {V R : Type} [DecidableEq V] [CommRing R] (f : (V → R) → R) (u v : V) : R :=
-  f (bitInd {u, v}) - f (bitInd {u}) - f (bitInd {v}) + f (bitInd ∅)
 
 /-- **The projection mod 2** onto bit pairs (Theorem K's form over `F₂`), zero on the diagonal. -/
 def projF2 {V R : Type} [DecidableEq V] [CommRing R] (φ : R →+* ZMod 2) (f : (V → R) → R) :
@@ -2994,17 +2869,6 @@ theorem winograd_cross_only :
   · fin_cases a <;> fin_cases b <;> simp [pairDiff, bitInd]
   · simp [pairDiff, bitInd]
 
-/-- **A straight-line program over `R` on the bits** (Theorem K's runs): slot `j` is a product of two bit-affine
-operands (`isProd j`: an MMA slot on bytes loaded from committed or coin data, or formed from them by adds), or a
-linear combination of earlier slots plus a bit-affine word (accumulation, merges, copies; ring operations only, so
-no shift and no fractional scale). -/
-structure Slp (V R : Type) (N : ℕ) where
-  isProd : Fin N → Bool
-  opA : Fin N → BitAff V R
-  opB : Fin N → BitAff V R
-  lin : (j : Fin N) → Fin j.val → R
-  off : Fin N → BitAff V R
-
 namespace Slp
 
 variable {V R : Type} [Fintype V] [CommRing R] {N : ℕ}
@@ -3013,13 +2877,6 @@ variable {V R : Type} [Fintype V] [CommRing R] {N : ℕ}
 def val (P : Slp V R N) (z : V → R) (j : Fin N) : R :=
   if P.isProd j then (P.opA j).eval z * (P.opB j).eval z
   else ∑ k : Fin j.val, P.lin j k * P.val z ⟨k.val, k.isLt.trans j.isLt⟩ + (P.off j).eval z
-termination_by j.val
-decreasing_by exact k.isLt
-
-/-- Each slot's coefficients on the products (the closed form). -/
-def coef (P : Slp V R N) (j : Fin N) : Fin N → R :=
-  if P.isProd j then Pi.single j 1
-  else ∑ k : Fin j.val, P.lin j k • P.coef ⟨k.val, k.isLt.trans j.isLt⟩
 termination_by j.val
 decreasing_by exact k.isLt
 
@@ -3139,34 +2996,9 @@ end Slp
 
 /-! ### The re-encoded design (P2-FF round 6 §2): `X = ⌊x/s⌋ + b` -/
 
-/-- The design's bits: U's planes `β_p(i, j)` (row `i`, column `j < L`, plane `p`) and the coins `b(t, j, l)` of
-`X`'s entries `(tL + j, l)`. -/
-abbrev DBits (n L np B n' : ℕ) : Type := (Fin n × Fin L × Fin np) ⊕ (Fin B × Fin L × Fin n')
-
 section Design
 
 variable {R : Type} [CommRing R] {n L np B n' : ℕ}
-
-/-- `P̃_(i, tL+j) = P_(i, tL+j) − 64 + U_ij` with `U_ij = −64 + Σ_p w_p β_p(i, j)` (the constants in `pc`): with `W`
-stacked identities, U's column `j` serves every block. -/
-def dP (pc : Fin n → Fin B → Fin L → R) (w : Fin np → R) (i : Fin n) (t : Fin B) (j : Fin L) :
-    BitAff (DBits n L np B n') R :=
-  ⟨pc i t j, Sum.elim (fun a => if a.1 = i ∧ a.2.1 = j then w a.2.2 else 0) fun _ => 0⟩
-
-/-- `X_(tL+j, l) = ⌊x/s⌋_(tL+j, l) + b(t, j, l)` (`⌊x/s⌋` in `vq`). -/
-def dX (vq : Fin B → Fin L → Fin n' → R) (t : Fin B) (j : Fin L) (l : Fin n') : BitAff (DBits n L np B n') R :=
-  ⟨vq t j l, Sum.elim (fun _ => 0) fun a => if a = (t, j, l) then 1 else 0⟩
-
-/-- Cell-block `(i, l, t)`'s target: block `t`'s increment `Σ_j P̃_(i, tL+j) X_(tL+j, l)` of the committed prefix
-sum at cell `(i, l)`. -/
-def dIncr (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R) (i : Fin n)
-    (l : Fin n') (t : Fin B) : (DBits n L np B n' → R) → R :=
-  fun z => ∑ j, (dP pc w i t j).eval z * (dX vq t j l).eval z
-
-/-- The committed prefix word `T_t(i, l) = Σ_{k < (t+1)L} P̃_ik X_kl`. -/
-def dPrefix (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R) (i : Fin n)
-    (l : Fin n') (t : ℕ) : (DBits n L np B n' → R) → R :=
-  fun z => ∑ t' : Fin B, if t'.val ≤ t then dIncr pc vq w i l t' z else 0
 
 theorem dPrefix_zero (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R)
     (i : Fin n) (l : Fin n') (h : 0 < B) (z : DBits n L np B n' → R) :
@@ -3283,19 +3115,8 @@ theorem Slp.incr_of_prefix_succ (pc : Fin n → Fin B → Fin L → R) (vq : Fin
 
 end Design
 
-
-/-- `Z/2³² → F₂`. -/
-def toF2 : ZMod (2 ^ 32) →+* ZMod 2 := ZMod.castHom (by norm_num) (ZMod 2)
-
-/-- The re-encoded design's plane weights `w = (1, 2, 4, 8, 16, 32, 65)`: `U = −64 + Σ_p w_p β_p` maps 7 bits onto
-`{±1, …, ±64}`, and plane 0's weight is odd. -/
-def wRe : Fin 7 → ZMod (2 ^ 32) := ![1, 2, 4, 8, 16, 32, 65]
-
 theorem toF2_wRe_zero : toF2 (wRe 0) = 1 := by
   simp [toF2, wRe]
-
-/-- A round's cell-blocks: cells `(i, l)` and blocks `t`. -/
-abbrev DCells (n n' B : ℕ) : Type := Fin n × Fin n' × Fin B
 
 end TheoremK
 
@@ -3863,22 +3684,6 @@ section Chain
 
 variable {Vl Vr R : Type} [Fintype Vl] [Fintype Vr] [DecidableEq Vl] [DecidableEq Vr] [CommRing R]
 
-/-- A function of the bits that reads only U's side (`Vl`). -/
-def LeftOnly (g : (Vl ⊕ Vr → R) → R) : Prop :=
-  ∀ z z' : Vl ⊕ Vr → R, (∀ a, z (.inl a) = z' (.inl a)) → g z = g z'
-
-/-- A function of the bits that reads only the coins' side (`Vr`). -/
-def RightOnly (h : (Vl ⊕ Vr → R) → R) : Prop :=
-  ∀ z z' : Vl ⊕ Vr → R, (∀ b, z (.inr b) = z' (.inr b)) → h z = h z'
-
-/-- **A one-sided product**: a function of U's bits times a function of the coins, each of any form. -/
-def OneSided (π : (Vl ⊕ Vr → R) → R) : Prop :=
-  ∃ g h, LeftOnly g ∧ RightOnly h ∧ ∀ z, π z = g z * h z
-
-/-- A product of two bit-affine operands, mixed or not. -/
-def AffProd (π : (Vl ⊕ Vr → R) → R) : Prop :=
-  ∃ A B : BitAff (Vl ⊕ Vr) R, ∀ z, π z = A.eval z * B.eval z
-
 /-- A product's cross block (its second differences on the pairs `(U bit, coin)`) is a sum of `m` rank-one terms. -/
 def CrossRankLe (π : (Vl ⊕ Vr → R) → R) (m : ℕ) : Prop :=
   ∃ (a : Fin m → Vl → R) (b : Fin m → Vr → R), ∀ u v, pairDiff π (.inl u) (.inr v) = ∑ s, a s u * b s v
@@ -4370,30 +4175,9 @@ theorem not_chainBound_affProd_rat : ¬ChainBound ℚ 1 2 1 1 1 (fun _ => 1) Aff
       exact winograd_rat_word _ fun v => by unfold bitInd; split_ifs <;> norm_num
   simp at this
 
-/-- **A straight-line program with products of any form**: as `Slp`, but slot `j`'s product is any function of the
-bits (`prod j`: a product of bytes the run formed, affine or not). -/
-structure SlpG (V R : Type) (N : ℕ) where
-  isProd : Fin N → Bool
-  prod : Fin N → (V → R) → R
-  lin : (j : Fin N) → Fin j.val → R
-  off : Fin N → BitAff V R
-
 namespace SlpG
 
 variable {V R : Type} [Fintype V] [CommRing R] {N : ℕ}
-
-/-- The slots' values at the bits `z`. -/
-def val (P : SlpG V R N) (z : V → R) (j : Fin N) : R :=
-  if P.isProd j then P.prod j z
-  else ∑ k : Fin j.val, P.lin j k * P.val z ⟨k.val, k.isLt.trans j.isLt⟩ + (P.off j).eval z
-termination_by j.val
-decreasing_by exact k.isLt
-
-/-- The program's linear structure, as an `Slp` (its products' operands dropped). -/
-def toSlp (P : SlpG V R N) : Slp V R N := ⟨P.isProd, fun _ => ⟨0, 0⟩, fun _ => ⟨0, 0⟩, P.lin, P.off⟩
-
-/-- Each slot's coefficients on the products. -/
-def coef (P : SlpG V R N) : Fin N → Fin N → R := P.toSlp.coef
 
 /-- Each slot's bit-affine part. -/
 def aff (P : SlpG V R N) : Fin N → BitAff V R := P.toSlp.aff
@@ -4530,13 +4314,6 @@ luck is the parity lemma's `0.854`, in the product deficit rather than this one 
 section Luck
 
 variable {V R : Type} [Fintype V] [DecidableEq V] [CommRing R]
-
-/-- A function of the bits of degree at most 2 on the cube: every square's second difference is its pair's,
-whatever the other bits. Bit-affine words, products of two bit-affine operands, and their sums are such. -/
-def CubeQuad (f : (V → R) → R) : Prop :=
-  ∀ (S : Finset V) (u v : V), u ≠ v → u ∉ S → v ∉ S →
-    f (bitInd (insert u (insert v S))) - f (bitInd (insert u S)) - f (bitInd (insert v S)) + f (bitInd S) =
-      pairDiff f u v
 
 omit [Fintype V] in
 theorem CubeQuad.add {f g : (V → R) → R} (hf : CubeQuad f) (hg : CubeQuad g) :
@@ -4721,11 +4498,6 @@ theorem expect_affine_le {Ω : Type*} [Fintype Ω] {c : ℝ} (hc : 0 ≤ c) (k :
 section Spot
 
 variable {C V R : Type} [Fintype C] [Fintype V] [DecidableEq V] [CommRing R]
-
-/-- A round's deficiency in a spot check: the share of cells whose error is nonzero at some bit point with at most
-two ones (the cells whose word is not certified). -/
-noncomputable def spotDef (e : C → (V → R) → R) : ℝ :=
-  prob fun c : C => ∃ U : Finset V, U.card ≤ 2 ∧ e c (bitInd U) ≠ 0
 
 /-- **The spot check's pass bound**: with degree-2 errors, a uniform cell and uniform bits find a zero with
 probability at most `1 − ¼ d`, `d` the share of uncertified cells. -/
@@ -5008,7 +4780,6 @@ theorem luck_dropped_reEncoded_zero {β V : Type} [Fintype β] [Fintype V] [Deci
     simp [hF]
   linarith
 
-
 end LuckDesign
 
 theorem prob_eq_card {Ω : Type*} [Fintype Ω] (p : Ω → Prop) [DecidablePred p] :
@@ -5096,38 +4867,9 @@ theorem card_certified_ge {C V A : Type} [Fintype C] [Fintype V] [DecidableEq V]
     rw [mul_sub, mul_one, mul_div_cancel₀ _ hpos.ne']
     linarith
 
-/-- **A round's staged spot play** (per-stage draws: decision 36 as RS-E-REF r5 V.3 repaired it): per stage, its
-error table (its committed words minus their targets, per cell, as functions of the stage's bits, both noise blocks
-of the stage's products drawn in its draw), fixed by the stage's operand commitment before its draw, then the rest of
-the round, which may depend on the draw. -/
-inductive StagePlay (C V A : Type) : ℕ → Type
-  | done : StagePlay C V A 0
-  | stage {m : ℕ} (e : C → (V → A) → A) (next : Finset V → StagePlay C V A m) : StagePlay C V A (m + 1)
-
 namespace StagePlay
 
 variable {C V A : Type} [Fintype C] [Fintype V] [DecidableEq V] [CommRing A]
-
-omit [Fintype C] [Fintype V] [DecidableEq V] [CommRing A] in
-/-- Stage `s`'s error table along the round's draws. -/
-def errAt : {m : ℕ} → StagePlay C V A m → Paths (Finset V) m → Fin m → C → (V → A) → A
-  | _, .done, _, s => s.elim0
-  | _, .stage e next, x, s =>
-    Fin.cases (motive := fun _ => C → (V → A) → A) e (fun s' => (next x.1).errAt x.2 s') s
-
-omit [Fintype C] [Fintype V] in
-/-- The round's check at stage `s` and cell `c`: the error vanishes at the stage's drawn bits. -/
-def ok : {m : ℕ} → StagePlay C V A m → Paths (Finset V) m → Fin m → C → Prop
-  | _, .done, _, s, _ => s.elim0
-  | _, .stage e next, x, s, c =>
-    Fin.cases (motive := fun _ => Prop) (e c (bitInd x.1) = 0) (fun s' => (next x.1).ok x.2 s' c) s
-
-/-- **The round's stage game**, `M` stages in all: stage `s`'s step is `1/M` of its share of uncertified cells,
-and its draw adds `1/M` of the share of cells it finds wrong. -/
-noncomputable def sgame (M : ℕ) : {m : ℕ} → StagePlay C V A m → StageGame (Finset V) m
-  | _, .done => .done
-  | _, .stage e next =>
-    .stage ((M : ℝ)⁻¹ * spotDef e) (fun S => (M : ℝ)⁻¹ * prob fun c => e c (bitInd S) ≠ 0) fun S => (next S).sgame M
 
 omit [Fintype V] in
 theorem defi_sgame (M : ℕ) : ∀ {m : ℕ} (P : StagePlay C V A m) (x : Paths (Finset V) m),
@@ -5196,31 +4938,9 @@ theorem valid_sgame (M : ℕ) : ∀ {m : ℕ} (P : StagePlay C V A m), (∀ x s 
 
 end StagePlay
 
-/-- **A prover's staged play** over `n` rounds of `M` stages: per round, its stage play, then the rest of the play,
-which may depend on the round's draws and its check. -/
-inductive StagedPlay (C V A : Type) (M : ℕ) : ℕ → Type
-  | done : StagedPlay C V A M 0
-  | round {n : ℕ} (P : StagePlay C V A M) (next : Paths (Finset V) M × (Fin M × C) → StagedPlay C V A M n) :
-      StagedPlay C V A M (n + 1)
-
 namespace StagedPlay
 
 variable {C V A : Type} [Fintype C] [Fintype V] [DecidableEq V] [CommRing A] {M : ℕ}
-
-/-- **The window's game** of a staged play: round `w`'s deficiency is its stage game's, and its check passes where
-the drawn stage's error at the drawn cell vanishes at that stage's bits. -/
-noncomputable def game : {n : ℕ} → StagedPlay C V A M n → RoundGame (Paths (Finset V) M × (Fin M × C)) n
-  | _, .done => .done
-  | _, .round P next =>
-    .round (fun a => (P.sgame M).defi a.1) (fun a => P.ok a.1 a.2.1 a.2.2) fun a => (next a).game
-
-omit [Fintype C] [Fintype V] [DecidableEq V] [CommRing A] in
-/-- Round `w`'s stage `s` error table along the realized coins. -/
-def errAt : {n : ℕ} → StagedPlay C V A M n → Paths (Paths (Finset V) M × (Fin M × C)) n → Fin n → Fin M → C →
-    (V → A) → A
-  | _, .done, _, w => w.elim0
-  | _, .round P next, x, w =>
-    Fin.cases (motive := fun _ => Fin M → C → (V → A) → A) (P.errAt x.1.1) (fun w' => (next x.1).errAt x.2 w') w
 
 omit [Fintype V] in
 theorem dAt_game : ∀ {n : ℕ} (P : StagedPlay C V A M n) (x : Paths (Paths (Finset V) M × (Fin M × C)) n)
@@ -5404,10 +5124,6 @@ theorem roundsHypK_of_spot {Mc : Machine} {S : Service} {R : ℕ} {Vmax δb δz 
         rw [mul_sub, mul_one, mul_div_cancel₀ _ hpos.ne']
         linarith
 
-/-- A round's coins with `St` stages on the re-encoded design: each stage's bits, then the check's stage and
-cell-block. -/
-abbrev DStage (St n L np B n' : ℕ) : Type := Paths (Finset (DBits n L np B n')) St × (Fin St × DCells n n' B)
-
 /-- **The window's staged rounds** (per-stage draws: decision 36, `note:20261016T0750Z-draft-rs-d1e-stage-coins` §2,
 as RS-E-REF r5 V.3 repaired it; the re-encoded design, chain form, the luck derived), a named hypothesis. Each round
 is `St` stages: stage `s` commits its operands, then draws both noise blocks of its products together (keyed by the
@@ -5532,13 +5248,6 @@ theorem sum_extZ_mul (t : Fin St) (z : ι t → R) (g : (Σ t, ι t) → R) :
     exact Finset.sum_eq_zero fun v _ => by rw [extZ_ne t z ht, mul_zero]
   · simp
 
-/-- The round's bit point at draws `U`: draw `s`'s bits are ones on `U s`. -/
-def drawInd (U : ∀ s, Finset (ι s)) : (Σ s, ι s) → R := fun v => bitInd (U v.1) v.2
-
-/-- The round's bit point at draws `U` with draw `t`'s bits replaced by `z`. -/
-def mergeAt (U : ∀ s, Finset (ι s)) (t : Fin St) (z : ι t → R) : (Σ s, ι s) → R :=
-  fun v => Function.update (fun s => (bitInd (U s) : ι s → R)) t z v.1 v.2
-
 omit [∀ t, Fintype (ι t)] in
 theorem mergeAt_mk (U : ∀ s, Finset (ι s)) (t : Fin St) (z : ι t → R) (v : ι t) : mergeAt U t z ⟨t, v⟩ = z v := by
   simp [mergeAt]
@@ -5587,11 +5296,6 @@ theorem BitAff.eval_mergeAt (U : ∀ s, Finset (ι s)) (t : Fin St) (A : BitAff 
   rw [add_assoc, ← sum_extZ_mul t z A.α, ← Finset.sum_add_distrib]
   exact congrArg _ (Finset.sum_congr rfl fun b _ => by rw [mergeAt_eq_add U t z b, mul_add])
 
-/-- **K∥'s operands**: a product of two operands affine in draw `t`'s bits at every bit point of the other draws',
-for every draw `t`. -/
-def AffMulAt (π : ((Σ s, ι s) → R) → R) : Prop :=
-  ∀ (U : ∀ s, Finset (ι s)) (t : Fin St), ∃ A B : BitAff (ι t) R, ∀ z, π (mergeAt U t z) = A.eval z * B.eval z
-
 /-- A program whose products are K∥'s computes, on draw `t`'s bits at any bit point of the other draws', words of
 degree 2. -/
 theorem SlpG.cubeQuad_val_mergeAt {N : ℕ} (P : SlpG (Σ s, ι s) R N) (hOk : ∀ j, P.isProd j = true → AffMulAt (P.prod j))
@@ -5610,13 +5314,6 @@ section OverlapLuck
 
 variable {St : ℕ} {κ ι : Fin St → Type} [∀ t, Fintype (κ t)] [∀ t, Fintype (ι t)] [∀ t, DecidableEq (ι t)]
   {R : Type} [CommRing R]
-
-/-- A round's deficiency with overlapping draws (RS-D1E r2 §2.5): the share of cells and draws at which the cell's
-error, on its own draw's bits with every other draw's at theirs, is nonzero at some bit point with at most two
-ones. -/
-noncomputable def ovDef (e : (Σ t, κ t) → ((Σ s, ι s) → R) → R) : ℝ :=
-  prob fun a : (Σ t, κ t) × (∀ s, Finset (ι s)) =>
-    ∃ S : Finset (ι a.1.1), S.card ≤ 2 ∧ e a.1 (mergeAt a.2 a.1.1 (bitInd S)) ≠ 0
 
 omit [∀ t, DecidableEq (ι t)] in
 theorem prob_fst {α β : Type} [Fintype α] [Fintype β] [Nonempty β] (p : α → Prop) :
@@ -5669,31 +5366,9 @@ theorem prob_ov_le (e : (Σ t, κ t) → ((Σ s, ι s) → R) → R) (he : ∀ c
   have := (expect_mono hpt).trans (expect_affine_le zero_le_one _ _)
   linarith
 
-/-- **A prover's play with overlapping draws** over `n` rounds: per round, its error table on every draw's bits, fixed
-before the round's first draw (the round's run straight-line over every draw's bits), then the rest of the play,
-which may depend on the round's draws and its check. -/
-inductive OvPlay (κ ι : Fin St → Type) (A : Type) : ℕ → Type
-  | done : OvPlay κ ι A 0
-  | round {n : ℕ} (e : (Σ t, κ t) → ((Σ s, ι s) → A) → A) (next : (Σ t, κ t) × (∀ s, Finset (ι s)) → OvPlay κ ι A n) :
-      OvPlay κ ι A (n + 1)
-
 namespace OvPlay
 
 variable {A : Type} [CommRing A]
-
-/-- **The window's game** of a play with overlapping draws: round `w`'s deficiency is `ovDef` of its errors, and its
-check passes where the drawn cell's error vanishes at the drawn bits of every draw. -/
-noncomputable def game : {n : ℕ} → OvPlay κ ι A n → RoundGame ((Σ t, κ t) × (∀ s, Finset (ι s))) n
-  | _, .done => .done
-  | _, .round e next => .round (fun _ => ovDef e) (fun a => e a.1 (drawInd a.2) = 0) fun a => (next a).game
-
-omit [∀ t, Fintype (κ t)] [∀ t, Fintype (ι t)] [∀ t, DecidableEq (ι t)] [CommRing A] in
-/-- Round `w`'s error table along the realized coins. -/
-def errAt : {n : ℕ} → OvPlay κ ι A n → Paths ((Σ t, κ t) × (∀ s, Finset (ι s))) n → Fin n → (Σ t, κ t) →
-    ((Σ s, ι s) → A) → A
-  | _, .done, _, w => w.elim0
-  | _, .round e next, x, w =>
-    Fin.cases (motive := fun _ => (Σ t, κ t) → ((Σ s, ι s) → A) → A) e (fun w' => (next x.1).errAt x.2 w') w
 
 theorem dAt_game : ∀ {n : ℕ} (P : OvPlay κ ι A n) (x : Paths ((Σ t, κ t) × (∀ s, Finset (ι s))) n) (w : Fin n),
     P.game.dAt x w = ovDef (P.errAt x w)
@@ -6053,14 +5728,6 @@ section ParitySplit
 
 variable {V : Type} {K : ℕ}
 
-/-- A function of the bit points blind to a frame's `x` bits: it agrees on bit points that agree off them. -/
-def XBlind (fr : Fin K ⊕ Fin K → V) (g : Finset V → ZMod 2) : Prop :=
-  ∀ S S' : Finset V, (∀ v, (∀ j, fr (.inl j) ≠ v) → (v ∈ S ↔ v ∈ S')) → g S = g S'
-
-/-- A function of the bit points blind to a frame's `y` bits. -/
-def YBlind (fr : Fin K ⊕ Fin K → V) (g : Finset V → ZMod 2) : Prop :=
-  ∀ S S' : Finset V, (∀ v, (∀ j, fr (.inr j) ≠ v) → (v ∈ S ↔ v ∈ S')) → g S = g S'
-
 /-- One-sided junk at a frame: a function blind to the `y` bits plus one blind to the `x` bits. -/
 def Split (fr : Fin K ⊕ Fin K → V) (h : Finset V → ZMod 2) : Prop :=
   ∃ a b : Finset V → ZMod 2, YBlind fr a ∧ XBlind fr b ∧ ∀ S, h S = a S + b S
@@ -6133,10 +5800,6 @@ variable [DecidableEq V] {A : Type} [CommRing A]
 /-- A product split at a frame, mod 2: a factor blind to the `y` bits times one blind to the `x` bits. -/
 def SplitProd (fr : Fin K ⊕ Fin K → V) (φ : A →+* ZMod 2) (π : (V → A) → A) : Prop :=
   ∃ g h : Finset V → ZMod 2, YBlind fr g ∧ XBlind fr h ∧ ∀ S, φ (π (bitInd S)) = g S * h S
-
-/-- **A product two-sided at a frame**: mod 2 it reads both the frame's `x` bits and its `y` bits. -/
-def TwoSidedAt (fr : Fin K ⊕ Fin K → V) (φ : A →+* ZMod 2) (π : (V → A) → A) : Prop :=
-  ¬XBlind fr (fun S => φ (π (bitInd S))) ∧ ¬YBlind fr (fun S => φ (π (bitInd S)))
 
 omit [CommRing A] in
 /-- A bit off the frame's `x` bits. -/
@@ -6247,11 +5910,6 @@ section ParityDesign
 
 variable {Ar : Type} [CommRing Ar] {n L np B n' : ℕ}
 
-/-- **Cell-block `(i, l, t)`'s frame at plane `p₀`**: its `x` bits are row `i` of U at plane `p₀` (U's column `j`
-serves every block), its `y` bits the block's coins `b(t, ·, l)`. -/
-def dFrame (p₀ : Fin np) (c : DCells n n' B) : Fin L ⊕ Fin L → DBits n L np B n' :=
-  Sum.elim (fun j => .inl (c.1, j, p₀)) fun j => .inr (c.2.2, j, c.2.1)
-
 theorem dFrame_injective (p₀ : Fin np) (c : DCells n n' B) : Function.Injective (dFrame (L := L) p₀ c) := by
   rintro (j | j) (j' | j') h <;> simp_all [dFrame]
 
@@ -6357,15 +6015,6 @@ theorem SlpG.parityForm_err (φ : Ar →+* ZMod 2) {p₀ : Fin np} {w : Fin np �
     funext fun z => by rw [P.val_eq]
   rw [e]
   exact h
-
-/-- **Charging purity** of a run (RS-E-REF r6 VI.2.1): no product is two-sided at the frames of two cell-blocks
-whose words read it with odd coefficients (mod 2 through `φ`, RS-E-REF r8 VIII.3 item 4: a word that reads a product
-at an even scale is not charged it). Prefix chains, merges and partners are free: a product of block `t'` read by a
-later block's word reads none of that block's coins. -/
-def SlpG.ChargePure (φ : Ar →+* ZMod 2) (p₀ : Fin np) {N : ℕ} (P : SlpG (DBits n L np B n') Ar N)
-    (word : DCells n n' B → Fin N) : Prop :=
-  ∀ c c' i, c ≠ c' → φ (P.coef (word c) i) ≠ 0 → TwoSidedAt (dFrame p₀ c) φ (P.prod i) →
-    φ (P.coef (word c') i) ≠ 0 → ¬TwoSidedAt (dFrame p₀ c') φ (P.prod i)
 
 end ParityDesign
 
@@ -6740,20 +6389,6 @@ theorem SlpG.cells_card_le_ov {w : Fin np → R} {c : ℕ}
 
 end OverlapRound
 
-/-- A round's bits with overlapping draws: draw `t`'s design bits, stage `t` of shape `(n t, L, B t, n' t)`. -/
-abbrev OBits (St : ℕ) (n : Fin St → ℕ) (L np : ℕ) (B n' : Fin St → ℕ) : Type := Σ t, DBits (n t) L np (B t) (n' t)
-
-/-- A round's cell-blocks, over all its stages. -/
-abbrev OCells (St : ℕ) (n n' B : Fin St → ℕ) : Type := Σ t, DCells (n t) (n' t) (B t)
-
-/-- A round's draws with overlapping stages: draw `t`'s bits. -/
-abbrev ODraws (St : ℕ) (n : Fin St → ℕ) (L np : ℕ) (B n' : Fin St → ℕ) : Type :=
-  ∀ t, Finset (DBits (n t) L np (B t) (n' t))
-
-/-- A round's coins with overlapping stages: the check's cell-block, among every stage's, and every stage's draw. -/
-abbrev OSpot (St : ℕ) (n : Fin St → ℕ) (L np : ℕ) (B n' : Fin St → ℕ) : Type :=
-  OCells St n n' B × ODraws St n L np B n'
-
 /-- **The window's rounds with overlapping stages** (Theorem K∥, RS-D1E r2 §2.2 and §2.5), a named hypothesis. Each
 round is `St` stages of any shapes (stage `t`: `n t` rows, `B t` blocks of `L`, `n' t` columns), each with its own
 draw of its design bits; the draws may overlap at any depth, since the round's run is one straight-line program over
@@ -6891,11 +6526,6 @@ section ParityOverlapRound
 
 variable {St : ℕ} {Ar : Type} [CommRing Ar] {n B n' : Fin St → ℕ} {L np : ℕ}
 
-/-- **K∥'s products for one-sided operands of any form**: at every bit point of the other draws, one-sided on draw
-`t`'s bits, for every draw `t`; each side may depend on the other draws' bits in any way. -/
-def OneSidedAt (π : (OBits St n L np B n' → Ar) → Ar) : Prop :=
-  ∀ (W : ODraws St n L np B n') (t : Fin St), OneSided fun z => π (mergeAt W t z)
-
 /-- **An overlapped one-sided run's error has a parity form at every cell-block's frame**, at every bit point `W` of
 the other draws: its terms the products charged to the word there. -/
 theorem SlpG.parityForm_err_ov (φ : Ar →+* ZMod 2) {p₀ : Fin np} {w : Fin np → Ar} (hw : φ (w p₀) = 1) {N : ℕ}
@@ -6914,14 +6544,6 @@ theorem SlpG.parityForm_err_ov (φ : Ar →+* ZMod 2) {p₀ : Fin np} {w : Fin n
     funext fun z => by rw [P.val_eq, BitAff.eval_mergeAt]
   rw [e]
   exact h
-
-/-- **Charging purity across draws**: at every bit point of the draws, no product is two-sided at the frames of two
-cell-blocks, of any stages, whose words read it with odd coefficients (mod 2 through `φ`). -/
-def SlpG.ChargePureAt (φ : Ar →+* ZMod 2) (p₀ : Fin np) {N : ℕ} (P : SlpG (OBits St n L np B n') Ar N)
-    (word : OCells St n n' B → Fin N) : Prop :=
-  ∀ (W : ODraws St n L np B n') (c c' : OCells St n n' B) i, c ≠ c' → φ (P.coef (word c) i) ≠ 0 →
-    TwoSidedAt (dFrame p₀ c.2) φ (fun z => P.prod i (mergeAt W c.1 z)) → φ (P.coef (word c') i) ≠ 0 →
-      ¬TwoSidedAt (dFrame p₀ c'.2) φ fun z => P.prod i (mergeAt W c'.1 z)
 
 open Classical in
 /-- **Charge-pure one-sided overlapped runs add up**: at every bit point of the draws, the round's run has at least

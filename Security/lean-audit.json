@@ -118,6 +118,30 @@
    "owner": "@memory-accounting",
    "digest": "98fbba3bae29f20560d86a31473797edc89dc0b1e28c7cde20737d9bf6e4254a"
   },
+  "Pouw.Assumptions.ChargeVF3f": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.Assumptions.ChargeVF3fOverlap": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.Assumptions.KScopeAffine": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.Assumptions.KScopeOneSided": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.Assumptions.KScopeOverlapAffine": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.Assumptions.KScopeOverlapOneSided": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.Assumptions.ServiceSoundOverlap": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.Assumptions.ServiceSoundStaged": {
+   "owner": "@compute-accounting"
+  },
   "Pouw.Assumptions.TT": {
    "owner": "@compute-accounting",
    "digest": "6fc4a19042b6bbf0c1774bcd962e5804ae3d01752eea790c9954960ef3b7c2b7"
@@ -4592,6 +4616,24 @@
    "assumptions": [],
    "type_hash": "e57381cb5ec70754de5727e83fd659312830ca151e3abe1da5c28e8c03580b3b"
   },
+  "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSided": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.RelativeSecurity.StagedFloorK": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSided": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.RelativeSecurity.TheoremSOverlap": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.RelativeSecurity.TheoremSStaged": {
+   "owner": "@compute-accounting"
+  },
   "Pouw.SecurityProofs.Theorem1": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.Theorem1 : Pouw.Guarantees.Theorem1"],
@@ -5170,7 +5212,13 @@
    "Flock.SecurityProofs.RecursiveAuditC3": "restatable: PublicAudit at candidate 3's table (holoInnerAt); (i), a probability statement whose event is its acceptance, takes beside its premises (_hCust, _hIC, _hA3, _hbr) the recursive model's input fields Vs.hU, Vs.hscope, zr.hDraw, zr.hTags and zr.hown, the count curve's _hk, _hRw, _hM, _hρ and _hr, the obligations _hob (VStarParses, over the verifier's own list) and _hF (TagsFound), and R's registration, its cap and the record's stacked entry (_hstk), none a premise; it fits once the recursive model's inputs and count curve, those two obligations and the registration are restated as premises (constants of Proofs.Flock.Recursive.Premises). Its hidden statement is the word the prover's runs open at R's level 0 against the cap (regStmt), no registrant's openings taken. V*'s list at candidate 3's inner shape is circuits' gap 2's eleven statements (#1847). It says nothing about a private inner session: at a private inner shape (ish.holo) RecVStar.statements refuses (statements_holo), so no run the verifier accepts has one until V*'s holo parts land (#1896).",
    "Accounting.SecurityProofs.RemoteSessionConservationSketch": "frozen (no-function,hash): It composes the verbatim-sector tensor-sketch rank bound at every candidate pass with a causal session's pooled draws; the one shared store and every device read, link sector, rebuild and correct receipt are explicit, but the random-oracle game is not the rate audit's code.",
    "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservationSketchSum at the deployed 16-row, 4 KiB-tile and draw parameters, with the two draw terms bounded by 2^-40 and each pass's grinding candidates' queries priced once by the named per-pass hash budget (Accounting.Assumptions.SketchHashBudget): its query term (n P) qtot/2^96 stays explicit, non-vacuous at the measured caps where the product form's was 2^14.",
-   "Flock.SecurityProofs.ClaimsStated": "frozen (no-function): It states no property of the verifier: it reads each claim of Security/Definitions/Claims.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed verifier."
+   "Flock.SecurityProofs.ClaimsStated": "frozen (no-function): It states no property of the verifier: it reads each claim of Security/Definitions/Claims.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed verifier.",
+   "Pouw.SecurityProofs.RelativeSecurity.TheoremSStaged": "frozen (no-function): It is a theorem about every staged spot-check play (StagedPlay, its game's acceptance and deficiency) over any finite cells and bits and any ring, not about a Lean function: the service's staged check has no Lean code yet, and once it has, this is restated as that check's property.",
+   "Pouw.SecurityProofs.RelativeSecurity.StagedFloorK": "frozen (no-function,world-unlisted,scope): It is stated over an arbitrary Machine and Service and an analysis map (RunMap), not the service's code, and takes three premises about that map: ServiceSoundStaged (live coins, and the proof layer's binding and zero knowledge, with the seed identified with the staged window's coins), KScopeAffine (Theorem K's proved affine scope: products of bit-affine operands, mixed included, row-pure, and E3, which no check of the service refuses a run outside of) and ChargeVF3f (VF3f's prices with B_theta complete, for stages that don't overlap). It is the sharper corollary of StagedFloorKOneSided, a floor of record (Daniel, decision 53), at the luck 3/4 on the affine scope, which isn't inside the one-sided one; K1 is not claimed outside the two proved scopes.",
+   "Pouw.SecurityProofs.RelativeSecurity.TheoremSOverlap": "frozen (no-function): It is a theorem about every play over a round's overlapping draws (OvPlay, its game's acceptance and per-draw deficiency ovDef) over any finite cell-blocks and bits per draw and any ring, not about a Lean function: the service's check over a round's overlapping draws has no Lean code yet, and once it has, this is restated as that check's property.",
+   "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK": "frozen (no-function,world-unlisted,scope): It is stated over an arbitrary Machine and Service and an analysis map (ORunMap), not the service's code, and takes three premises about that map: ServiceSoundOverlap (live coins, and the proof layer's binding and zero knowledge, with the seed identified with the overlapped window's coins, the check's cell-block uniform among every stage's, and each round's run fixed before its first draw, E3), KScopeOverlapAffine (Theorem K's proved affine scope across draws: operands affine in each draw's own bits at every bit point of the other draws' (AffMulAt), row-pure across draws, and E3, which no check of the service refuses a run outside of) and ChargeVF3fOverlap (VF3f's prices with B_theta complete, each product counted once). It is the sharper corollary of OverlapFloorKOneSided, a floor of record (Daniel, decision 53), at the luck 3/4 on the affine scope, which isn't inside the one-sided one; K1 is not claimed outside the two proved scopes.",
+   "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSided": "frozen (no-function,world-unlisted,scope): It is stated over an arbitrary Machine and Service and an analysis map (RunMap), not the service's code, and takes three premises about that map: ServiceSoundStaged (live coins, and the proof layer's binding and zero knowledge, with the seed identified with the staged window's coins), KScopeOneSided (Theorem K's proved one-sided scope, a sibling of the ledger's K1: products one-sided of any form, charging purity mod 2 (odd coefficients) at the cell-blocks' frames in place of row purity, and E3, which no check of the service refuses a run outside of) and ChargeVF3f (VF3f's prices with B_theta complete, for stages that don't overlap). It is a floor of record (Daniel, decision 53): c = 1 on K's proved one-sided scope; K1 is not claimed outside the two proved scopes, and the verifier can't observe which case applies.",
+   "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSided": "frozen (no-function,world-unlisted,scope): It is stated over an arbitrary Machine and Service and an analysis map (ORunMap), not the service's code, and takes three premises about that map: ServiceSoundOverlap (live coins, and the proof layer's binding and zero knowledge, with the seed identified with the overlapped window's coins, the check's cell-block uniform among every stage's, and each round's run fixed before its first draw, E3), KScopeOverlapOneSided (Theorem K's scope across draws for one-sided operands of any form per draw at every bit point of the other draws' (OneSidedAt), charging purity across draws (odd coefficients) in place of row purity, and E3, which no check of the service refuses a run outside of) and ChargeVF3fOverlap (VF3f's prices with B_theta complete, each product counted once). It is a floor of record (Daniel, decision 53): c = 1 on K's proved one-sided scope; K1 is not claimed outside the two proved scopes, and the verifier can't observe which case applies."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
