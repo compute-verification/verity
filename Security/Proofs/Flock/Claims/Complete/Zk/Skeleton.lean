@@ -45,7 +45,7 @@ structure CaseZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Read
   spec : SessionSpec
   sts : Array Flock.Stmt
   scope : Claims.Flock.Scope (deployZk rel) x
-  rel_w : Claims.Flock.R H (deployZk rel).parse x w
+  rel_w : Claims.Flock.R (deployZk rel).parse x w
   ready : readyZk x = true
   good : ¬ BadZk x r
   setup : setupOf true x = some (s, spec, sts)

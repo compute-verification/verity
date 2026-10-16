@@ -216,7 +216,7 @@ theorem pr_badZk_le (x : Claims.Msg) {k : ℕ} : Claims.Pr (fun r : Fin k → Co
 can accept and every witness in the relation, the honest masked prover is accepted at every tape and every coin outside
 `BadZk`, then Flock's masked verifier is complete for `honestPZk` with error `δcZk`. -/
 theorem complete_zk_of (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
-    (hacc : ∀ x w, Claims.Flock.Scope (deployZk rel) x → Claims.Flock.R H (deployZk rel).parse x w →
+    (hacc : ∀ x w, Claims.Flock.Scope (deployZk rel) x → Claims.Flock.R (deployZk rel).parse x w →
       readyZk x = true → ∀ (ω : TapeZk) (r : Fin ((V true).k x) → Coin), ¬ BadZk x r →
         (Claims.run H (honestPZk w) (V true) x ω r).out = .acc) :
     Claims.Flock.Complete H (deployZk rel) honestPZk δcZk := by
