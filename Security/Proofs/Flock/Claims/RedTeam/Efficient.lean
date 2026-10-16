@@ -12,6 +12,8 @@ the decoder that tries everything (`efficient_univ`).
 * `decoderComplexity_zero`: every decoder, at `counted = (decode, 0)` and `p = 0`.
 * `efficient_zero`: Flock's `Efficient` at every decoder that meets `ListWithin`, at `p = 0`; at the deployed decoders,
   `RedTeam.Deployed`.
+* `decoderComplexity_listLength`: a list-length bound `(decode os).length ≤ p.eval (size os)` at the same free `size`
+  and `p` adds nothing: both hold at `size = (decode ·).length`, `p = X`, for every decoder.
 -/
 
 namespace Claims.RedTeam
@@ -20,6 +22,14 @@ namespace Claims.RedTeam
 theorem decoderComplexity_zero {I T : Type} (decode : I → T) (size : I → ℕ) :
     DecoderComplexity decode (fun i => (decode i, 0)) size 0 :=
   fun _ => ⟨rfl, Nat.zero_le _⟩
+
+/-- **A list-length bound beside `DecoderComplexity`, at the same `size` and `p`, holds for every decoder** at
+`size = (decode ·).length` and `p = X`: the form of the per-table batch's `Efficient`
+(`∀ os, (decode os).length ≤ p.eval (size os)`), which reads `size` from its own arguments too. -/
+theorem decoderComplexity_listLength {I T : Type} (decode : I → List T) :
+    DecoderComplexity decode (fun i => (decode i, 0)) (fun i => (decode i).length) Polynomial.X ∧
+      ∀ i, (decode i).length ≤ Polynomial.X.eval ((decode i).length) :=
+  ⟨fun _ => ⟨rfl, Nat.zero_le _⟩, fun _ => by simp⟩
 
 /-- **Flock's `Efficient` at `p = 0`**, at every decoder that meets the list-decoding spec. -/
 theorem efficient_zero {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
