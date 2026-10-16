@@ -3102,6 +3102,159 @@ theorem roundsHyp_of_K {Mc : Machine} {S : Service} {Ω : Type} [Fintype Ω] {R 
 
 end TheoremK
 
+/-! ### Theorem H: merges priced (P2-FF, `note:20261016T0525Z-draft-fullfloor-s-r6` §6)
+
+Round 5 §3's quad model: a quad runs `s` slices on four lanes, at `4 s` slots, and each lane is a full cell, a piece of
+a merged cell, or junk; merging a cell's pieces costs `h` slots. Theorem J (two full lanes force `s ≥ K`) and the rank
+bounds (one full lane forces `s ≥ K / 2`; a merged cell's pieces carry `K / 2` slices) are hypotheses here. With
+`h ≥ 2K/3` every useful cell costs `K` slots. -/
+
+section TheoremH
+
+/-- A lane of a quad: a full cell, a piece of the merged cell `m`, or junk. -/
+inductive QLane (M : Type) where
+  | full
+  | piece (m : M)
+  | junk
+  deriving DecidableEq
+
+/-- The lane is a piece of some merged cell. -/
+def QLane.IsPiece {M : Type} : QLane M → Prop
+  | .piece _ => True
+  | _ => False
+
+instance {M : Type} (x : QLane M) : Decidable x.IsPiece := by
+  cases x <;> simp only [QLane.IsPiece] <;> infer_instance
+
+theorem QLane.ite_isPiece {M : Type} [Fintype M] [DecidableEq M] (x : QLane M) (a : ℝ) :
+    (if x.IsPiece then a else 0) = ∑ m, if x = .piece m then a else 0 := by
+  cases x with
+  | full => simp [QLane.IsPiece]
+  | piece m₀ => simp [QLane.IsPiece]
+  | junk => simp [QLane.IsPiece]
+
+/-- **Theorem H** (P2-FF round 6 §6, merges priced), the allocation. Quads `q` run `s q` slices, at `s q` slots a
+lane (`4 s q` a quad); each merged cell costs `h` slots. The premises are named:
+- Theorem J (round 5 §3): a quad with two full lanes has `s ≥ K`;
+- the rank bound: a quad with one full lane has `s ≥ K / 2`, and a merged cell's pieces carry `≥ K / 2` slices.
+
+With `h ≥ 2K/3`, the cost is at least `K` slots a useful cell (full lanes and merged cells). -/
+theorem theoremH {Q M : Type} [Fintype Q] [Fintype M] [DecidableEq M] (lane : Q → Fin 4 → QLane M) (s : Q → ℝ)
+    (K h : ℝ) (hs : ∀ q, 0 ≤ s q) (hK : 0 ≤ K) (hh : 2 * K / 3 ≤ h)
+    (hJ : ∀ q, 2 ≤ (univ.filter fun ℓ => lane q ℓ = .full).card → K ≤ s q)
+    (hR1 : ∀ q, (univ.filter fun ℓ => lane q ℓ = .full).card = 1 → K / 2 ≤ s q)
+    (hRm : ∀ m, K / 2 ≤ ∑ q, ∑ ℓ, if lane q ℓ = .piece m then s q else 0) :
+    K * (∑ q, ((univ.filter fun ℓ => lane q ℓ = .full).card : ℝ) + Fintype.card M) ≤
+      ∑ q, 4 * s q + h * Fintype.card M := by
+  set f : Q → ℕ := fun q => (univ.filter fun ℓ => lane q ℓ = .full).card with hf
+  -- the transfer: `K / 6` from a merged cell to each one-full-lane quad holding one of its pieces
+  set c : Q → ℝ := fun q => if f q = 1 then K / 6 else 0 with hc
+  set A : Q → ℝ := fun q => ∑ ℓ, ((if (lane q ℓ).IsPiece then 0 else s q) + if (lane q ℓ).IsPiece then c q else 0)
+  set Bm : M → ℝ := fun m => h + ∑ q, ∑ ℓ, if lane q ℓ = .piece m then s q - c q else 0
+  have hc_le : ∀ q, c q ≤ s q := fun q => by
+    simp only [hc]
+    split_ifs with h1
+    · linarith [hR1 q h1]
+    · exact hs q
+  have hsplit : ∑ q, 4 * s q + h * Fintype.card M = ∑ q, A q + ∑ m, Bm m := by
+    have e1 : ∀ q, 4 * s q = A q + ∑ ℓ, if (lane q ℓ).IsPiece then s q - c q else 0 := fun q => by
+      simp only [A, ← Finset.sum_add_distrib]
+      rw [show (4 : ℝ) * s q = ∑ _ℓ : Fin 4, s q by simp]
+      refine Finset.sum_congr rfl fun ℓ _ => ?_
+      split_ifs <;> ring
+    have e2 : ∑ q, ∑ ℓ, (if (lane q ℓ).IsPiece then s q - c q else 0) =
+        ∑ m, ∑ q, ∑ ℓ, if lane q ℓ = .piece m then s q - c q else 0 := by
+      calc _ = ∑ q, ∑ ℓ, ∑ m, (if lane q ℓ = .piece m then s q - c q else 0) := by
+            simp only [QLane.ite_isPiece]
+        _ = ∑ q, ∑ m, ∑ ℓ, (if lane q ℓ = .piece m then s q - c q else 0) :=
+            Finset.sum_congr rfl fun q _ => Finset.sum_comm
+        _ = _ := Finset.sum_comm
+    simp only [e1, Finset.sum_add_distrib, e2, Bm, Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
+    ring
+  have hA : ∀ q, K * f q ≤ A q := by
+    intro q
+    have hnp : ((univ.filter fun ℓ => ¬(lane q ℓ).IsPiece).card : ℝ) +
+        (univ.filter fun ℓ => (lane q ℓ).IsPiece).card = 4 := by
+      have := Finset.card_filter_add_card_filter_not (s := (univ : Finset (Fin 4)))
+        (fun ℓ => (lane q ℓ).IsPiece)
+      simp only [Finset.card_univ, Fintype.card_fin] at this
+      exact_mod_cast (by omega : (univ.filter fun ℓ => ¬(lane q ℓ).IsPiece).card +
+        (univ.filter fun ℓ => (lane q ℓ).IsPiece).card = 4)
+    have hfull : (f q : ℝ) ≤ (univ.filter fun ℓ => ¬(lane q ℓ).IsPiece).card := by
+      exact_mod_cast Finset.card_le_card fun ℓ hℓ => by
+        simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hℓ ⊢
+        simp [hℓ, QLane.IsPiece]
+    have hAq : A q = (univ.filter fun ℓ => ¬(lane q ℓ).IsPiece).card * s q +
+        (univ.filter fun ℓ => (lane q ℓ).IsPiece).card * c q := by
+      simp only [A, Finset.sum_add_distrib, Finset.sum_ite, Finset.sum_const_zero, zero_add, add_zero,
+        Finset.sum_const, nsmul_eq_mul]
+    rw [hAq]
+    have hpos1 : (0 : ℝ) ≤ (univ.filter fun ℓ => (lane q ℓ).IsPiece).card := Nat.cast_nonneg _
+    rcases Nat.lt_or_ge (f q) 2 with h2 | h2
+    · rcases Nat.lt_or_ge (f q) 1 with h1 | h1
+      · have h0 : f q = 0 := by omega
+        have hc0 : c q = 0 := by simp [hc, h0]
+        rw [h0, hc0]
+        simp only [Nat.cast_zero, mul_zero, add_zero]
+        exact mul_nonneg (Nat.cast_nonneg _) (hs q)
+      · have h1' : f q = 1 := by omega
+        have hc1 : c q = K / 6 := by simp [hc, h1']
+        have hsq := hR1 q h1'
+        rw [hc1, h1']
+        have hp3 : ((univ.filter fun ℓ => (lane q ℓ).IsPiece).card : ℝ) ≤ 3 := by
+          rw [h1'] at hfull
+          push_cast at hfull
+          linarith
+        nlinarith
+    · have hc0 : c q = 0 := by simp [hc, show f q ≠ 1 by omega]
+      rw [hc0, mul_zero, add_zero]
+      have hsq := hJ q h2
+      calc K * f q ≤ s q * f q := mul_le_mul_of_nonneg_right hsq (Nat.cast_nonneg _)
+        _ ≤ s q * (univ.filter fun ℓ => ¬(lane q ℓ).IsPiece).card := mul_le_mul_of_nonneg_left hfull (hs q)
+        _ = _ := mul_comm _ _
+  have hB : ∀ m, K ≤ Bm m := by
+    intro m
+    have hterm : ∀ q ℓ, 0 ≤ if lane q ℓ = .piece m then s q - c q else 0 := fun q ℓ => by
+      split_ifs
+      · linarith [hc_le q]
+      · exact le_rfl
+    have hsingle : ∀ q ℓ, lane q ℓ = .piece m →
+        s q - c q ≤ ∑ q, ∑ ℓ, if lane q ℓ = .piece m then s q - c q else 0 := fun q ℓ hql => by
+      have h1 := Finset.single_le_sum (f := fun ℓ => if lane q ℓ = .piece m then s q - c q else 0)
+        (fun ℓ _ => hterm q ℓ) (Finset.mem_univ ℓ)
+      have h2 := Finset.single_le_sum (f := fun q => ∑ ℓ, if lane q ℓ = .piece m then s q - c q else 0)
+        (fun q _ => Finset.sum_nonneg fun ℓ _ => hterm q ℓ) (Finset.mem_univ q)
+      simp only [hql, ↓reduceIte] at h1
+      exact h1.trans h2
+    by_cases hA2 : ∃ q ℓ, lane q ℓ = .piece m ∧ 2 ≤ f q
+    · obtain ⟨q, ℓ, hql, h2⟩ := hA2
+      have hc0 : c q = 0 := by simp [hc, show f q ≠ 1 by omega]
+      have := hsingle q ℓ hql
+      rw [hc0, sub_zero] at this
+      simp only [Bm]
+      linarith [hJ q h2]
+    · by_cases hA1 : ∃ q ℓ, lane q ℓ = .piece m ∧ f q = 1
+      · obtain ⟨q, ℓ, hql, h1⟩ := hA1
+        have hc1 : c q = K / 6 := by simp [hc, h1]
+        have := hsingle q ℓ hql
+        rw [hc1] at this
+        simp only [Bm]
+        linarith [hR1 q h1]
+      · have hzero : ∀ q ℓ, (if lane q ℓ = .piece m then s q - c q else 0) =
+            if lane q ℓ = .piece m then s q else 0 := fun q ℓ => by
+          split_ifs with hql
+          · have : f q ≠ 1 := fun h1 => hA1 ⟨q, ℓ, hql, h1⟩
+            simp [hc, this]
+          · rfl
+        simp only [Bm, hzero]
+        linarith [hRm m]
+  calc K * (∑ q, (f q : ℝ) + Fintype.card M) = ∑ q, K * f q + ∑ _m : M, K := by
+        rw [mul_add, Finset.mul_sum, Finset.sum_const, Finset.card_univ, nsmul_eq_mul, mul_comm K]
+    _ ≤ ∑ q, A q + ∑ m, Bm m := add_le_add (Finset.sum_le_sum fun q _ => hA q) (Finset.sum_le_sum fun m _ => hB m)
+    _ = _ := hsplit.symm
+
+end TheoremH
+
 section ModelB
 
 /-! ## The Model B bridge (RS-MODEL: note:20261015T1814Z-draft-rs-machine-model, `gpu-model/rs-model.lean`)
