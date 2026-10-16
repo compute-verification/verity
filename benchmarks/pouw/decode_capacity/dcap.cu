@@ -1646,6 +1646,7 @@ int main(int argc, char** argv) {
     fprintf(stderr, "usage: dcap gate | bw GiB | lin M | att B L | step B L | fill B L FILL_SMS big|l2  [reps]\n"
                     "       dcap dgate | dalone W NC S | done W NC S | dfill B L split|co FILL_SMS W NC S [reps]\n"
                     "       dcap fgate | flin M FW NC THR [reps] | fstep B L FW NC THR AFW [FILL_SMS [reps]]   (M in 32 64 128 160 192 256, B <= 256)\n"
+                    "       dcap walone S [reps]   (a pfill build: dfill_k_warp alone, S steps a warp)\n"
                     "       (DFILL_COINS=<32 hex digits>: the round's coins for the d* and f* modes; FLIN_PDL=0: no programmatic\n"
                     "       dependent launch; FLIN_LT=mask: fstep's linears that stay on cuBLASLt, 1 qkv 2 o 4 gate_up 8 down;\n"
                     "       FATT_PDL=1|2: the attention filler blocks under PDL, 2 with their filler warps starting early;\n"
@@ -1812,6 +1813,12 @@ int main(int argc, char** argv) {
       return 1;
     }
     rc = run_fstep(d, B, L, atoi(argv[4]), atoi(argv[5]), atoi(argv[6]), atoi(argv[7]), fsm, argc > 9 ? atoi(argv[9]) : 9);
+#if !defined(DFILL_V1) && !defined(main)
+  } else if (mode == "walone") {
+    const int S = argc > 2 ? atoi(argv[2]) : 256;
+    if (S < 2) { fprintf(stderr, "walone S [reps]: S >= 2\n"); return 1; }
+    rc = run_walone(d, S, argc > 3 ? atoi(argv[3]) : 5);
+#endif
 #endif
   } else {
     fprintf(stderr, "unknown mode %s\n", mode.c_str());

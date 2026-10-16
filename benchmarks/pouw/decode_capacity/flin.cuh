@@ -1076,6 +1076,76 @@ static int flin_gate(Dev& d) {
   return fails;
 }
 
+#if !defined(DFILL_V1) && !defined(main)
+// walone S [reps] (dcap's own build only, so no scored binary holds it): dfill_k_warp with no serving beside it, blocks
+// of 8 warps under flin's register cap (128 a thread), as many as fit an SM, each warp S steps of its own slot (tile id
+// tile0 + its index) and then its receipt through dfill_k_put: the in-kernel filler's rate and, under ncu, its issue
+// slots an MMA beside the pump's (dalone, done). 8 warps' receipts are held to fwarp_ref and to the control one step short.
+__global__ void __launch_bounds__(256, 2) kw_alone(uint64_t c0, uint64_t c1, unsigned long long tile0, int steps,
+                                                   unsigned long long* rec, int* cnt) {
+  const unsigned long long w = (unsigned long long)blockIdx.x * (blockDim.x >> 5) + (threadIdx.x >> 5);
+  uint64_t h = 0;
+  for (int s = 0; s < steps; s++) h ^= dfill_k_warp(c0, c1, tile0 + w, (unsigned long long)s);
+#pragma unroll
+  for (int o = 16; o; o >>= 1) h ^= __shfl_xor_sync(0xffffffffu, h, o);
+  if ((threadIdx.x & 31) == 0) dfill_k_put(rec + w, cnt + w, h, steps);
+}
+static int run_walone(Dev& d, int S, int reps) {
+  int per = 0;
+  CK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, kw_alone, 256, 0));
+  const int grid = d.sms * per, warps = grid * 8;
+  unsigned long long* rec;
+  int* cnt;
+  CK(cudaMalloc(&rec, warps * sizeof *rec));
+  CK(cudaMalloc(&cnt, warps * sizeof *cnt));
+  cudaEvent_t e0, e1;
+  CK(cudaEventCreate(&e0));
+  CK(cudaEventCreate(&e1));
+  kw_alone<<<grid, 256, 0, d.st>>>(g_c0, g_c1, 0, S, rec, cnt);
+  CK(cudaStreamSynchronize(d.st));
+  std::vector<double> ms;
+  double cs = 0, ps = 0;
+  long np = 0;
+  for (int r = 1; r <= reps; r++) {
+    CK(cudaEventRecord(e0, d.st));
+    kw_alone<<<grid, 256, 0, d.st>>>(g_c0, g_c1, (unsigned long long)r * warps, S, rec, cnt);
+    CK(cudaEventRecord(e1, d.st));
+    while (cudaEventQuery(e1) == cudaErrorNotReady) {
+      cs += nvml_mhz(d);
+      ps += nvml_w(d);
+      np++;
+    }
+    float t;
+    CK(cudaEventElapsedTime(&t, e0, e1));
+    ms.push_back(t);
+  }
+  CK(cudaGetLastError());
+  std::vector<unsigned long long> h(warps);
+  std::vector<int> n(warps);
+  CK(cudaMemcpy(h.data(), rec, warps * sizeof *rec, cudaMemcpyDeviceToHost));
+  CK(cudaMemcpy(n.data(), cnt, warps * sizeof *cnt, cudaMemcpyDeviceToHost));
+  const unsigned long long tile0 = (unsigned long long)reps * warps;
+  int bad = 0, ctl = 0;
+  for (int i = 0; i < 8; i++) {
+    const int w = (int)((long long)i * warps / 8);
+    const uint64_t ref = fwarp_ref(g_c0, g_c1, tile0 + w, 0, S);
+    bad += h[w] != ref || n[w] != S;
+    ctl += h[w] == (ref ^ pw_step_ref(g_c0, g_c1, tile0 + w, S - 1));
+  }
+  std::sort(ms.begin(), ms.end());
+  const double m = ms[ms.size() / 2], mmas = (double)warps * S * PW_MMAS, mhz = np ? cs / np : nvml_mhz(d);
+  printf("{\"mode\": \"walone\", \"W\": 8, \"S\": %d, \"blocks_per_sm\": %d, \"grid\": %d, \"warps\": %d, "
+         "\"launch_mmas\": %.6e, \"ms\": %.4f, \"mac_per_s\": %.6e, \"share\": %.5f, \"mhz\": %.1f, \"watt\": %.1f, "
+         "\"rec_checked\": 8, \"rec_bad\": %d, \"ctl_equal\": %d}\n",
+         S, per, grid, warps, mmas, m, mmas * 4096.0 / (m * 1e-3),
+         mmas * 4096.0 / (m * 1e-3) / (1024.0 * d.sms * mhz * 1e6), mhz, np ? ps / np : nvml_w(d), bad, ctl);
+  fflush(stdout);
+  CK(cudaFree(rec));
+  CK(cudaFree(cnt));
+  return bad || ctl ? 8 : 0;
+}
+#endif
+
 // flin M FW NC THR: each linear's 32 layers (distinct weights) as one graph: cuBLASLt, flin alone, flin with filler warps
 static int run_flin(Dev& d, int M, int FW, int NC, int thr, int reps) {
   Flin f;
