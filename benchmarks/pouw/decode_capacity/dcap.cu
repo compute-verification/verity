@@ -704,6 +704,10 @@ static int run_fill(Dev& d, int B, int L, int fill_sms, bool big, int reps) {
 // can't start before step s ends. After S steps the tile's NC final states fold into an 8-byte receipt, the XOR over
 // (chain c, row r, word w) of drec(seed, c, r, w, word w of row r), which is all the tile writes. dfill_ref is the same
 // tile on the host, written from the matrices above rather than from the fragment layout.
+// MAP 1 (DFILL_MAP=1) reads the accumulator quad in its own register order (a' = d0, d1, d2, d3), so the next A fragment
+// is the MMA's own output quad and ptxas needs no MOVs (map 0 costs four a step, through one shared staging quad):
+//   A'[g][4t+q] = byte q of D[g][2t]           A'[g+8][4t+q] = byte q of D[g][2t+1]
+//   A'[g][16+4t+q] = byte q of D[g+8][2t]      A'[g+8][16+4t+q] = byte q of D[g+8][2t+1]
 __host__ __device__ inline uint64_t smix(uint64_t x) {
   x += 0x9E3779B97F4A7C15ull;
   x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull;
@@ -720,81 +724,215 @@ __host__ __device__ inline int32_t dcval(uint64_t seed, int r, int n) { return (
 __host__ __device__ inline uint64_t drec(uint64_t seed, int c, int r, int w, uint32_t word) {
   return smix(seed ^ ((uint64_t)(c * 16 + r) << 40) ^ ((uint64_t)w << 32) ^ word);
 }
+// MAP 2 is map 1 with FILL-SEC's hardening (note:20261016T0418Z-draft-filler-floor): a 128-bit tile seed (lo, hi) that
+// every operand word and receipt term reads, so two tiles share operands only if both halves collide; and C drawn in
+// [-2^15, 2^15), so |C| no longer dwarfs |A B| and no byte-3 column of D is constant over a tile. Maps 0 and 1 read lo only.
+struct DSeed {
+  uint64_t lo, hi;
+};
+__host__ __device__ inline DSeed dseed_x(uint64_t c0, uint64_t c1, uint64_t tile, int map) {
+  return {dseed(c0, c1, tile), map == 2 ? smix(smix(c1 ^ smix(tile ^ 0xD1B54A32D192ED03ull)) ^ c0) : 0};
+}
+__host__ __device__ inline uint32_t dword_x(DSeed s, int map, uint32_t tag, uint32_t i, uint32_t j) {
+  return map == 2 ? (uint32_t)smix(s.hi ^ smix(s.lo ^ ((uint64_t)tag << 48) ^ ((uint64_t)i << 24) ^ j)) : dword(s.lo, tag, i, j);
+}
+__host__ __device__ inline int32_t dcval_x(DSeed s, int map, int r, int n) {
+  return map == 2 ? (int32_t)(dword_x(s, map, 3, r, n) & 0xffffu) - 0x8000 : dcval(s.lo, r, n);
+}
+__host__ __device__ inline uint64_t drec_x(DSeed s, int map, int c, int r, int w, uint32_t word) {
+  return map == 2 ? smix(s.hi ^ drec(s.lo, c, r, w, word)) : drec(s.lo, c, r, w, word);
+}
 
+template <int MAP>
 __device__ __forceinline__ void dstep(uint32_t (&a)[4], const uint32_t (&b)[2], const uint32_t (&c)[4]) {
-  uint32_t d0, d1, d2, d3;
-  asm("mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%10,%11,%12,%13};"
-      : "=r"(d0), "=r"(d1), "=r"(d2), "=r"(d3)
-      : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]), "r"(c[0]), "r"(c[1]), "r"(c[2]), "r"(c[3]));
-  a[0] = d0;  // A'[g][4t..]       = D[g][2t]
-  a[1] = d2;  // A'[g+8][4t..]     = D[g+8][2t]
-  a[2] = d3;  // A'[g][16+4t..]    = D[g+8][2t+1]
-  a[3] = d1;  // A'[g+8][16+4t..]  = D[g][2t+1]
+  if constexpr (MAP >= 1) {
+    asm("mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%0,%1,%2,%3}, {%4,%5}, {%6,%7,%8,%9};"
+        : "+r"(a[0]), "+r"(a[1]), "+r"(a[2]), "+r"(a[3])
+        : "r"(b[0]), "r"(b[1]), "r"(c[0]), "r"(c[1]), "r"(c[2]), "r"(c[3]));
+  } else {
+    uint32_t d0, d1, d2, d3;
+    asm("mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%10,%11,%12,%13};"
+        : "=r"(d0), "=r"(d1), "=r"(d2), "=r"(d3)
+        : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]), "r"(c[0]), "r"(c[1]), "r"(c[2]), "r"(c[3]));
+    a[0] = d0;  // A'[g][4t..]       = D[g][2t]
+    a[1] = d2;  // A'[g+8][4t..]     = D[g+8][2t]
+    a[2] = d3;  // A'[g][16+4t..]    = D[g+8][2t+1]
+    a[3] = d1;  // A'[g+8][16+4t..]  = D[g][2t+1]
+  }
 }
 // Warp `wid` runs tiles tile0 + wid·tiles + i, i < tiles, S steps each (S a multiple of 8), and writes tile i's receipt to
 // rec[wid·tiles + i]. Lane (g, t) holds A rows g and g + 8, words t and 4 + t; B column g, words t and 4 + t; C rows g
 // and g + 8, columns 2t and 2t + 1 (the PTX fragment layout of m16n8k32 .s8).
-template <int NC>
-__global__ void __launch_bounds__(512) dfill_k(uint64_t c0, uint64_t c1, unsigned long long tile0, int tiles, int steps,
-                                              unsigned long long* __restrict__ rec) {
+template <int NC, int MAP>
+__device__ __forceinline__ void dtiles(uint64_t c0, uint64_t c1, unsigned long long tile0, int tiles, int steps,
+                                       unsigned long long* __restrict__ rec) {
   const int lane = threadIdx.x & 31, g = lane >> 2, t = lane & 3;
   const unsigned long long wid = (unsigned long long)blockIdx.x * (blockDim.x >> 5) + (threadIdx.x >> 5);
   for (int i = 0; i < tiles; i++) {
     const unsigned long long idx = wid * tiles + i;
-    const uint64_t seed = dseed(c0, c1, tile0 + idx);
+    const DSeed seed = dseed_x(c0, c1, tile0 + idx, MAP);
     uint32_t b[2][2], c[4], a[NC][4];
 #pragma unroll
     for (int j = 0; j < 2; j++) {
-      b[j][0] = dword(seed, 1 + j, g, t);
-      b[j][1] = dword(seed, 1 + j, g, 4 + t);
+      b[j][0] = dword_x(seed, MAP, 1 + j, g, t);
+      b[j][1] = dword_x(seed, MAP, 1 + j, g, 4 + t);
     }
-    c[0] = (uint32_t)dcval(seed, g, 2 * t);
-    c[1] = (uint32_t)dcval(seed, g, 2 * t + 1);
-    c[2] = (uint32_t)dcval(seed, g + 8, 2 * t);
-    c[3] = (uint32_t)dcval(seed, g + 8, 2 * t + 1);
+    c[0] = (uint32_t)dcval_x(seed, MAP, g, 2 * t);
+    c[1] = (uint32_t)dcval_x(seed, MAP, g, 2 * t + 1);
+    c[2] = (uint32_t)dcval_x(seed, MAP, g + 8, 2 * t);
+    c[3] = (uint32_t)dcval_x(seed, MAP, g + 8, 2 * t + 1);
 #pragma unroll
     for (int ch = 0; ch < NC; ch++) {
-      a[ch][0] = dword(seed, 16 + ch, g, t);
-      a[ch][1] = dword(seed, 16 + ch, g + 8, t);
-      a[ch][2] = dword(seed, 16 + ch, g, 4 + t);
-      a[ch][3] = dword(seed, 16 + ch, g + 8, 4 + t);
+      a[ch][0] = dword_x(seed, MAP, 16 + ch, g, t);
+      a[ch][1] = dword_x(seed, MAP, 16 + ch, g + 8, t);
+      a[ch][2] = dword_x(seed, MAP, 16 + ch, g, 4 + t);
+      a[ch][3] = dword_x(seed, MAP, 16 + ch, g + 8, 4 + t);
     }
 #pragma unroll 1
     for (int s = 0; s < steps; s += 8) {
 #pragma unroll
       for (int u = 0; u < 8; u++)
 #pragma unroll
-        for (int ch = 0; ch < NC; ch++) dstep(a[ch], b[u & 1], c);
+        for (int ch = 0; ch < NC; ch++) dstep<MAP>(a[ch], b[u & 1], c);
     }
     uint64_t h = 0;
 #pragma unroll
     for (int ch = 0; ch < NC; ch++)
-      h ^= drec(seed, ch, g, t, a[ch][0]) ^ drec(seed, ch, g + 8, t, a[ch][1]) ^ drec(seed, ch, g, 4 + t, a[ch][2]) ^
-           drec(seed, ch, g + 8, 4 + t, a[ch][3]);
+      h ^= drec_x(seed, MAP, ch, g, t, a[ch][0]) ^ drec_x(seed, MAP, ch, g + 8, t, a[ch][1]) ^
+           drec_x(seed, MAP, ch, g, 4 + t, a[ch][2]) ^ drec_x(seed, MAP, ch, g + 8, 4 + t, a[ch][3]);
 #pragma unroll
     for (int o = 16; o; o >>= 1) h ^= __shfl_xor_sync(0xffffffffu, h, o);
     if (lane == 0) rec[idx] = h;
   }
 }
 
-static uint64_t dfill_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int steps) {
-  const uint64_t seed = dseed(c0, c1, tile);
+// dtiles_p (DFILL_PIPE=1, maps 1 and 2): the same tiles, chains and receipts as dtiles, software-pipelined so that a
+// warp's tile boundary doesn't idle its share of the tensor pipe: the first 8 steps of tile i run in one basic block
+// with the expansion of tile i + 1's operands and the receipt of tile i - 1's final state, and ptxas interleaves the
+// three. The expansion past the last tile is computed and dropped.
+template <int NC, int MAP>
+__device__ __forceinline__ void dgen(const DSeed& s, int g, int t, uint32_t (&b)[2][2], uint32_t (&c)[4], uint32_t (&a)[NC][4]) {
+#pragma unroll
+  for (int j = 0; j < 2; j++) {
+    b[j][0] = dword_x(s, MAP, 1 + j, g, t);
+    b[j][1] = dword_x(s, MAP, 1 + j, g, 4 + t);
+  }
+  c[0] = (uint32_t)dcval_x(s, MAP, g, 2 * t);
+  c[1] = (uint32_t)dcval_x(s, MAP, g, 2 * t + 1);
+  c[2] = (uint32_t)dcval_x(s, MAP, g + 8, 2 * t);
+  c[3] = (uint32_t)dcval_x(s, MAP, g + 8, 2 * t + 1);
+#pragma unroll
+  for (int ch = 0; ch < NC; ch++) {
+    a[ch][0] = dword_x(s, MAP, 16 + ch, g, t);
+    a[ch][1] = dword_x(s, MAP, 16 + ch, g + 8, t);
+    a[ch][2] = dword_x(s, MAP, 16 + ch, g, 4 + t);
+    a[ch][3] = dword_x(s, MAP, 16 + ch, g + 8, 4 + t);
+  }
+}
+template <int NC, int MAP>
+__device__ __forceinline__ uint64_t dhash(const DSeed& s, int g, int t, const uint32_t (&a)[NC][4]) {
+  uint64_t h = 0;
+#pragma unroll
+  for (int ch = 0; ch < NC; ch++)
+    h ^= drec_x(s, MAP, ch, g, t, a[ch][0]) ^ drec_x(s, MAP, ch, g + 8, t, a[ch][1]) ^
+         drec_x(s, MAP, ch, g, 4 + t, a[ch][2]) ^ drec_x(s, MAP, ch, g + 8, 4 + t, a[ch][3]);
+#pragma unroll
+  for (int o = 16; o; o >>= 1) h ^= __shfl_xor_sync(0xffffffffu, h, o);
+  return h;
+}
+template <int NC, int MAP>
+__device__ __forceinline__ void dtiles_p(uint64_t c0, uint64_t c1, unsigned long long tile0, int tiles, int steps,
+                                         unsigned long long* __restrict__ rec) {
+  const int lane = threadIdx.x & 31, g = lane >> 2, t = lane & 3;
+  const unsigned long long wid = (unsigned long long)blockIdx.x * (blockDim.x >> 5) + (threadIdx.x >> 5);
+  const unsigned long long base = wid * tiles;
+  DSeed seed = dseed_x(c0, c1, tile0 + base, MAP), pseed = seed;
+  uint32_t b[2][2], c[4], a[NC][4], nb[2][2], nc[4], na[NC][4], pa[NC][4];
+  dgen<NC, MAP>(seed, g, t, b, c, a);
+#pragma unroll
+  for (int ch = 0; ch < NC; ch++)
+#pragma unroll
+    for (int q = 0; q < 4; q++) pa[ch][q] = 0;
+  for (int i = 0; i < tiles; i++) {
+    const DSeed nseed = dseed_x(c0, c1, tile0 + base + i + 1, MAP);
+#pragma unroll
+    for (int u = 0; u < 8; u++)
+#pragma unroll
+      for (int ch = 0; ch < NC; ch++) dstep<MAP>(a[ch], b[u & 1], c);
+    dgen<NC, MAP>(nseed, g, t, nb, nc, na);
+    const uint64_t hp = dhash<NC, MAP>(pseed, g, t, pa);
+    if (lane == 0 && i > 0) rec[base + i - 1] = hp;
+#pragma unroll 1
+    for (int s = 8; s < steps; s += 8) {
+#pragma unroll
+      for (int u = 0; u < 8; u++)
+#pragma unroll
+        for (int ch = 0; ch < NC; ch++) dstep<MAP>(a[ch], b[u & 1], c);
+    }
+    pseed = seed;
+    seed = nseed;
+#pragma unroll
+    for (int ch = 0; ch < NC; ch++)
+#pragma unroll
+      for (int q = 0; q < 4; q++) {
+        pa[ch][q] = a[ch][q];
+        a[ch][q] = na[ch][q];
+      }
+#pragma unroll
+    for (int j = 0; j < 2; j++) {
+      b[j][0] = nb[j][0];
+      b[j][1] = nb[j][1];
+    }
+#pragma unroll
+    for (int q = 0; q < 4; q++) c[q] = nc[q];
+  }
+  const uint64_t h = dhash<NC, MAP>(pseed, g, t, pa);
+  if (lane == 0) rec[base + tiles - 1] = h;
+}
+// The filler kernel. A chunk's receipt buffer holds per() receipts and then one mode word, map | DFILL_PIPE << 2, that
+// dfill_alloc writes, so dscore's direct launch of dfill_k<NC> runs the map the process chose. The pipelined loop is its
+// own kernel, dfill_kp, which only dfill_launch starts: in dfill_k it would raise every map's registers (NC 4: 88 to
+// 124) and with them the footprint a co-resident filler leaves its neighbours. dfill_k writes nothing in a pipe mode.
+template <int NC>
+__global__ void __launch_bounds__(NC >= 8 ? 256 : 512) dfill_k(uint64_t c0, uint64_t c1, unsigned long long tile0, int tiles,
+                                                               int steps, unsigned long long* __restrict__ rec) {
+  const unsigned long long mode = rec[(unsigned long long)gridDim.x * (blockDim.x >> 5) * tiles];
+  if constexpr (NC <= 4)
+    if (mode == 0) return dtiles<NC, 0>(c0, c1, tile0, tiles, steps, rec);
+  if (mode == 1) return dtiles<NC, 1>(c0, c1, tile0, tiles, steps, rec);
+  if (mode == 2) return dtiles<NC, 2>(c0, c1, tile0, tiles, steps, rec);
+}
+template <int NC, int MAP>
+__global__ void __launch_bounds__(256) dfill_kp(uint64_t c0, uint64_t c1, unsigned long long tile0, int tiles, int steps,
+                                                unsigned long long* __restrict__ rec) {
+  dtiles_p<NC, MAP>(c0, c1, tile0, tiles, steps, rec);
+}
+
+static int dfill_map() {
+  const int m = getenv("DFILL_MAP") ? atoi(getenv("DFILL_MAP")) : 0;
+  if (m < 0 || m > 2) { fprintf(stderr, "DFILL_MAP must be 0, 1 or 2\n"); exit(1); }
+  return m;
+}
+// map < 0: the process's map (DFILL_MAP), as dfill_make picks it
+static uint64_t dfill_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int steps, int map = -1) {
+  if (map < 0) map = dfill_map();
+  const DSeed seed = dseed_x(c0, c1, tile, map);
   int8_t Bt[2][8][32];  // Bt[b][n][k] = B_b[k][n]
   int32_t C[16][8];
   for (int b = 0; b < 2; b++)
     for (int n = 0; n < 8; n++)
       for (int w = 0; w < 8; w++) {
-        const uint32_t x = dword(seed, 1 + b, n, w);
+        const uint32_t x = dword_x(seed, map, 1 + b, n, w);
         for (int q = 0; q < 4; q++) Bt[b][n][4 * w + q] = (int8_t)(x >> (8 * q));
       }
   for (int r = 0; r < 16; r++)
-    for (int n = 0; n < 8; n++) C[r][n] = dcval(seed, r, n);
+    for (int n = 0; n < 8; n++) C[r][n] = dcval_x(seed, map, r, n);
   uint64_t h = 0;
   for (int ch = 0; ch < nc; ch++) {
     int8_t A[16][32];
     for (int r = 0; r < 16; r++)
       for (int w = 0; w < 8; w++) {
-        const uint32_t x = dword(seed, 16 + ch, r, w);
+        const uint32_t x = dword_x(seed, map, 16 + ch, r, w);
         for (int q = 0; q < 4; q++) A[r][4 * w + q] = (int8_t)(x >> (8 * q));
       }
     for (int s = 0; s < steps; s++) {
@@ -810,16 +948,16 @@ static uint64_t dfill_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int s
         for (int t = 0; t < 4; t++)
           for (int q = 0; q < 4; q++) {
             A[g][4 * t + q] = byte(D[g][2 * t], q);
-            A[g + 8][4 * t + q] = byte(D[g + 8][2 * t], q);
-            A[g][16 + 4 * t + q] = byte(D[g + 8][2 * t + 1], q);
-            A[g + 8][16 + 4 * t + q] = byte(D[g][2 * t + 1], q);
+            A[g + 8][4 * t + q] = byte(D[map ? g : g + 8][map ? 2 * t + 1 : 2 * t], q);
+            A[g][16 + 4 * t + q] = byte(D[g + 8][map ? 2 * t : 2 * t + 1], q);
+            A[g + 8][16 + 4 * t + q] = byte(D[map ? g + 8 : g][2 * t + 1], q);
           }
     }
     for (int r = 0; r < 16; r++)
       for (int w = 0; w < 8; w++) {
         uint32_t x = 0;
         for (int q = 0; q < 4; q++) x |= (uint32_t)(uint8_t)A[r][4 * w + q] << (8 * q);
-        h ^= drec(seed, ch, r, w, x);
+        h ^= drec_x(seed, map, ch, r, w, x);
       }
   }
   return h;
@@ -827,7 +965,8 @@ static uint64_t dfill_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int s
 
 // one chunk: `grid` blocks of W warps, each warp `tiles` tiles of NC chains x S steps; chunk k covers tiles from k·per on
 struct DFill {
-  int W = 4, NC = 2, S = 2048, tiles = 1, grid = 0;
+  int W = 4, NC = 2, S = 2048, tiles = 1, grid = 0, map = 0;
+  bool pipe = false;  // dtiles_p (DFILL_PIPE=1): maps 1, 2, NC 1, 2, 4, W <= 8
   uint64_t c0 = 0, c1 = 0;
   unsigned long long* rec = nullptr;
   long long per() const { return (long long)grid * W * tiles; }
@@ -836,25 +975,50 @@ struct DFill {
 static void dfill_launch(const DFill& f, long long chunk, cudaStream_t st) {
   const unsigned long long t0 = (unsigned long long)chunk * f.per();
   const dim3 gr(f.grid), bl(32 * f.W);
+  if (f.pipe) {
+    switch (f.NC * 4 + f.map) {
+#define DFILL_CASE(NC_, MAP_) \
+  case NC_ * 4 + MAP_: dfill_kp<NC_, MAP_><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
+      DFILL_CASE(1, 1) DFILL_CASE(2, 1) DFILL_CASE(4, 1) DFILL_CASE(1, 2) DFILL_CASE(2, 2) DFILL_CASE(4, 2)
+#undef DFILL_CASE
+      default: fprintf(stderr, "DFILL_PIPE: maps 1, 2 and NC 1, 2 or 4\n"); exit(1);
+    }
+    return;
+  }
   switch (f.NC) {
     case 1: dfill_k<1><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
     case 2: dfill_k<2><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
     case 4: dfill_k<4><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
-    default: fprintf(stderr, "NC must be 1, 2 or 4\n"); exit(1);
+    case 8: dfill_k<8><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
+    default: fprintf(stderr, "NC must be 1, 2, 4 or 8\n"); exit(1);
   }
 }
 static void dfill_prep() {
-  CK(cudaFuncSetAttribute(dfill_k<1>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
-  CK(cudaFuncSetAttribute(dfill_k<2>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
-  CK(cudaFuncSetAttribute(dfill_k<4>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
+#define DFILL_PREP(NC_) \
+  CK(cudaFuncSetAttribute(dfill_k<NC_>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
+  DFILL_PREP(1) DFILL_PREP(2) DFILL_PREP(4) DFILL_PREP(8)
+#undef DFILL_PREP
+#define DFILL_PREP(NC_, MAP_) \
+  CK(cudaFuncSetAttribute(dfill_kp<NC_, MAP_>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
+  DFILL_PREP(1, 1) DFILL_PREP(2, 1) DFILL_PREP(4, 1) DFILL_PREP(1, 2) DFILL_PREP(2, 2) DFILL_PREP(4, 2)
+#undef DFILL_PREP
+}
+// f.rec: per() receipts, then dfill_k's mode word
+static void dfill_alloc(DFill& f) {
+  const unsigned long long mode = f.map | (f.pipe ? 4 : 0);
+  CK(cudaMalloc(&f.rec, (f.per() + 1) * sizeof(unsigned long long)));
+  CK(cudaMemcpy(f.rec + f.per(), &mode, sizeof mode, cudaMemcpyHostToDevice));
 }
 // tiles a warp so that a chunk is about 2^DFILL_CHUNK_LOG2 (default 19) MMAs an SM, ~1 ms at the tensor peak
 static DFill dfill_make(int grid, int W, int NC, int S, uint64_t c0, uint64_t c1) {
   DFill f;
-  f.grid = grid; f.W = W; f.NC = NC; f.S = S; f.c0 = c0; f.c1 = c1;
+  f.grid = grid; f.W = W; f.NC = NC; f.S = S; f.c0 = c0; f.c1 = c1; f.map = dfill_map();
+  f.pipe = getenv("DFILL_PIPE") && atoi(getenv("DFILL_PIPE"));
+  if (f.pipe && (f.map == 0 || W > 8 || NC > 4)) { fprintf(stderr, "DFILL_PIPE needs map 1 or 2, W <= 8, NC <= 4\n"); exit(1); }
+  if (f.map == 0 && NC > 4) { fprintf(stderr, "map 0: NC 1, 2 or 4\n"); exit(1); }
   const int lg = getenv("DFILL_CHUNK_LOG2") ? atoi(getenv("DFILL_CHUNK_LOG2")) : 19;
   f.tiles = std::max(1, (int)((1LL << lg) / ((long long)W * NC * S)));
-  CK(cudaMalloc(&f.rec, f.per() * sizeof(unsigned long long)));
+  dfill_alloc(f);
   return f;
 }
 // the host's receipts for `n` tiles of chunk `chunk` spread over it, against the device's; returns the mismatches
@@ -864,7 +1028,7 @@ static int dfill_check(const DFill& f, long long chunk, int n) {
   int bad = 0;
   for (int i = 0; i < n; i++) {
     const long long idx = (long long)i * f.per() / n + (i * 7919) % std::max(1LL, f.per() / n);
-    bad += h[idx] != dfill_ref(f.c0, f.c1, (unsigned long long)chunk * f.per() + idx, f.NC, f.S);
+    bad += h[idx] != dfill_ref(f.c0, f.c1, (unsigned long long)chunk * f.per() + idx, f.NC, f.S, f.map);
   }
   return bad;
 }
@@ -930,11 +1094,13 @@ static uint64_t g_c0 = 0x0123456789abcdefull, g_c1 = 0xfedcba9876543210ull;  // 
 static int dgate(Dev& d) {
   int fails = 0;
   dfill_prep();
-  for (int nc : {1, 2, 4})
+  for (int map : {0, 1, 2})
+  for (int nc : {1, 2, 4, 8})
     for (int S : {8, 2048}) {
+      if (nc == 8 && map == 0) continue;
       DFill f;
-      f.grid = 3; f.W = 4; f.NC = nc; f.S = S; f.tiles = 2; f.c0 = g_c0; f.c1 = g_c1;
-      CK(cudaMalloc(&f.rec, f.per() * sizeof(unsigned long long)));
+      f.grid = 3; f.W = 4; f.NC = nc; f.S = S; f.tiles = 2; f.c0 = g_c0; f.c1 = g_c1; f.map = map;
+      dfill_alloc(f);
       CK(cudaMemset(f.rec, 0xA5, f.per() * sizeof(unsigned long long)));
       dfill_launch(f, 5, d.st);
       CK(cudaStreamSynchronize(d.st));
@@ -944,15 +1110,40 @@ static int dgate(Dev& d) {
       long bad = 0, ctl_equal = 0;
       for (long long i = 0; i < f.per(); i++) {
         const unsigned long long tile = 5ull * f.per() + i;
-        bad += h[i] != dfill_ref(f.c0, f.c1, tile, nc, S);
-        ctl_equal += h[i] == dfill_ref(f.c0, f.c1, tile, nc, S - 8);
+        bad += h[i] != dfill_ref(f.c0, f.c1, tile, nc, S, map);
+        ctl_equal += h[i] == dfill_ref(f.c0, f.c1, tile, nc, S - 8, map);
       }
-      printf("{\"mode\": \"dgate\", \"NC\": %d, \"S\": %d, \"tiles\": %lld, \"mismatches\": %ld, \"control_equal\": %ld, "
-             "\"ok\": %s}\n",
-             nc, S, f.per(), bad, ctl_equal, bad || ctl_equal ? "false" : "true");
+      printf("{\"mode\": \"dgate\", \"map\": %d, \"NC\": %d, \"S\": %d, \"tiles\": %lld, \"mismatches\": %ld, "
+             "\"control_equal\": %ld, \"ok\": %s}\n",
+             map, nc, S, f.per(), bad, ctl_equal, bad || ctl_equal ? "false" : "true");
       fails += bad != 0 || ctl_equal != 0;
       CK(cudaFree(f.rec));
     }
+  // dtiles_p (DFILL_PIPE): 3 tiles a warp, so a receipt is written in the next tile's first block and after the last
+  for (int map : {1, 2})
+    for (int nc : {1, 2, 4})
+      for (int S : {8, 256}) {
+        DFill f;
+        f.grid = 3; f.W = 4; f.NC = nc; f.S = S; f.tiles = 3; f.c0 = g_c0; f.c1 = g_c1; f.map = map; f.pipe = true;
+        dfill_alloc(f);
+        CK(cudaMemset(f.rec, 0xA5, f.per() * sizeof(unsigned long long)));
+        dfill_launch(f, 5, d.st);
+        CK(cudaStreamSynchronize(d.st));
+        CK(cudaGetLastError());
+        std::vector<unsigned long long> h(f.per());
+        CK(cudaMemcpy(h.data(), f.rec, h.size() * sizeof h[0], cudaMemcpyDeviceToHost));
+        long bad = 0, ctl_equal = 0;
+        for (long long i = 0; i < f.per(); i++) {
+          const unsigned long long tile = 5ull * f.per() + i;
+          bad += h[i] != dfill_ref(f.c0, f.c1, tile, nc, S, map);
+          ctl_equal += h[i] == dfill_ref(f.c0, f.c1, tile, nc, S - 8, map);
+        }
+        printf("{\"mode\": \"dgate\", \"map\": %d, \"pipe\": true, \"NC\": %d, \"S\": %d, \"tiles\": %lld, \"mismatches\": %ld, "
+               "\"control_equal\": %ld, \"ok\": %s}\n",
+               map, nc, S, f.per(), bad, ctl_equal, bad || ctl_equal ? "false" : "true");
+        fails += bad != 0 || ctl_equal != 0;
+        CK(cudaFree(f.rec));
+      }
   fflush(stdout);
   return fails;
 }
@@ -963,11 +1154,14 @@ static void run_dalone(Dev& d, int W, int NC, int S) {
   DFill f = dfill_make(d.sms, W, NC, S, g_c0, g_c1);
   double mhz, watt;
   long long last = 0;
-  const double r = dfill_alone(d, f, d.st, 40, &mhz, &watt, &last);
+  // DFILL_ALONE_N: chunks timed (default 40, ~45 ms); NVML's power lags, so read board power from a run of seconds
+  const int n = getenv("DFILL_ALONE_N") ? atoi(getenv("DFILL_ALONE_N")) : 40;
+  const double r = dfill_alone(d, f, d.st, n, &mhz, &watt, &last);
   const int bad = dfill_check(f, last, 8);
-  printf("{\"mode\": \"dalone\", \"W\": %d, \"NC\": %d, \"S\": %d, \"tiles\": %d, \"grid\": %d, \"chunk_macs\": %.6e, "
-         "\"mac_per_s\": %.6e, \"share\": %.5f, \"mhz\": %.1f, \"watt\": %.1f, \"rec_checked\": 8, \"rec_bad\": %d}\n",
-         W, NC, S, f.tiles, f.grid, f.macs(), r, r / (1024.0 * d.sms * mhz * 1e6), mhz, watt, bad);
+  printf("{\"mode\": \"dalone\", \"map\": %d, \"pipe\": %d, \"W\": %d, \"NC\": %d, \"S\": %d, \"tiles\": %d, \"grid\": %d, "
+         "\"chunks\": %d, \"chunk_macs\": %.6e, \"mac_per_s\": %.6e, \"share\": %.5f, \"mhz\": %.1f, \"watt\": %.1f, "
+         "\"rec_checked\": 8, \"rec_bad\": %d}\n",
+         f.map, (int)f.pipe, W, NC, S, f.tiles, f.grid, n, f.macs(), r, r / (1024.0 * d.sms * mhz * 1e6), mhz, watt, bad);
   fflush(stdout);
   CK(cudaFree(f.rec));
 }
@@ -978,8 +1172,8 @@ static void run_done(Dev& d, int W, int NC, int S) {
   for (int k = 0; k < 3; k++) dfill_launch(f, k, d.st);
   CK(cudaStreamSynchronize(d.st));
   CK(cudaGetLastError());
-  printf("{\"mode\": \"done\", \"W\": %d, \"NC\": %d, \"S\": %d, \"chunk_macs\": %.6e, \"rec_bad\": %d}\n", W, NC, S, f.macs(),
-         dfill_check(f, 2, 4));
+  printf("{\"mode\": \"done\", \"map\": %d, \"W\": %d, \"NC\": %d, \"S\": %d, \"chunk_macs\": %.6e, \"rec_bad\": %d}\n", f.map, W,
+         NC, S, f.macs(), dfill_check(f, 2, 4));
   CK(cudaFree(f.rec));
 }
 
@@ -1060,16 +1254,17 @@ static int run_dfill(Dev& d, int B, int L, int place, int fill_sms, int W, int N
   const Rep mf = median(a_fill), m0 = median(a_full), m2 = median(a_full2);
   const double peak = 1024.0 * d.sms * mf.mhz * 1e6;
   char shape[64];
-  snprintf(shape, sizeof shape, "dfree-%s-w%d-nc%d-t%d%s", place ? "co" : "split", W, NC, f.tiles,
-           kind == 0 ? "-lin" : kind == 1 ? "-att" : "");
-  printf("{\"mode\": \"dfill\", \"place\": \"%s\", \"shape\": \"%s\", \"B\": %d, \"L\": %d, \"W\": %d, \"NC\": %d, \"S\": %d, "
+  snprintf(shape, sizeof shape, "dfree-%s-w%d-nc%d-t%d%s%s", place ? "co" : "split", W, NC, f.tiles,
+           kind == 0 ? "-lin" : kind == 1 ? "-att" : "", f.map ? "-m1" : "");
+  printf("{\"mode\": \"dfill\", \"map\": %d, \"place\": \"%s\", \"shape\": \"%s\", \"B\": %d, \"L\": %d, \"W\": %d, \"NC\": %d, "
+         "\"S\": %d, "
          "\"tiles\": %d, \"grid\": %d, \"coins\": [\"%016llx\", \"%016llx\"], \"prio\": [%d, %d], \"fill_sms_req\": %d, "
          "\"step_sms\": %d, \"fill_sms\": %d, \"spread\": {\"step_graph\": %d, \"fill\": %d}, \"kv_wrapped\": %s, "
          "\"step_macs\": %.6e, \"chunk_macs\": %.6e, \"alone\": {\"mac_per_s\": %.6e, \"share\": %.5f, \"mhz\": %.1f, "
          "\"watt\": %.1f}, \"window\": {\"ms\": %.3f, \"fill_chunks\": %lld, \"fill_mac_per_s\": %.6e, \"fill_share\": %.5f, "
          "\"fill_gb_per_s\": %.6f}, \"rec_checked\": %d, \"rec_bad\": %d, \"slowdown\": %.4f, \"step_share_full\": %.5f, "
          "\"step_share_fill\": %.5f, ",
-         place ? "co" : "split", shape, B, L, W, NC, S, f.tiles, f.grid, (unsigned long long)g_c0, (unsigned long long)g_c1,
+         f.map, place ? "co" : "split", shape, B, L, W, NC, S, f.tiles, f.grid, (unsigned long long)g_c0, (unsigned long long)g_c1,
          lo, hi, place ? d.sms : fill_sms, place ? d.sms : got[0], got[1], sp_step, sp_fill, wrapped ? "true" : "false",
          step_macs, f.macs(), alone, alone / (1024.0 * d.sms * amhz * 1e6), amhz, awatt, t1 - t0, nwin, rate, rate / peak,
          (double)nwin * f.per() * 8 / ((t1 - t0) * 1e-3) / 1e9, place ? 8 : 16, bad, mf.ms / ((m0.ms + m2.ms) / 2),
