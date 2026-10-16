@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.DeployRounds
 import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 import Flock.With.Zk
 
 /-!
@@ -7,7 +8,7 @@ import Flock.With.Zk
 
 `Zk.verifyWith h`'s phases, as `DeployRounds` has the plain verifier's: which round each squeeze reads does not depend
 on the hash. The masked replay reads `m + (kLog − 6)` rounds, Ligerito `k0 + 7 + 11 R` (the plain count and the lane
-phase's `ρ` pair), and the inner proof four.
+phase's `ρ` pair), and the inner proof four; a masked rep reads all of its stream's rounds (`zkVerifyRepWith_rounds`).
 -/
 
 namespace FlockDeploy
@@ -345,6 +346,70 @@ theorem zkLigeritoWith_rounds (hs : Hashes V) (ms : MerkleScheme) (sch : Schedul
     k₂.2, k₁.2], ?_⟩
   rw [hkL, hk₁₇, k₁₆.1, k₁₅.1, hk₁₄, hk₁₃, hk₁₂, k₁₁.1, hk₁₀, k₉.1, hk₈, k₇.1, k₆.1, hk₅, k₃'.1, k₃.1, k₂.1, k₁.1]
   rw [ite_eq_right (show ¬ sch.k0 = 0 by omega)]
+  omega
+
+/-! ## One rep -/
+
+open FlockSoundness.Discharge.ZkExec in
+/-- **A masked rep reads every recorded round of its stream**: when `Zk.verifyRepWith hs` accepts rep `r` of table `i`,
+at the table's `--zk` schedule, its stream has `(m + (kLog − 6)) + (claims + 1) + (k0 + 7 + 11 R) + 4` rounds (the
+replay, the ring switch over `claims = 2 + |extras|`, Ligerito over `R + 1` levels, the inner proof), whatever the hashes
+`hs` are. -/
+theorem zkVerifyRepWith_rounds (hs : Hashes V) {spec : SessionSpec} {st : Setup} {sch : Schedule} {tPad : ℕ}
+    {sess : Session} {i r : ℕ} {bytes c : ByteArray} (hsch : Zk.schedule st.m = .ok (sch, tPad))
+    (h : Zk.verifyRepWith hs spec st sch tPad sess i r bytes = .ok c) :
+    ∃ (stream : StreamRec) (extras : Array Claim),
+      sess.streams.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString r) = some stream ∧
+      st.extra sess.points = .ok extras ∧
+      stream.rounds.size =
+        (st.m + (st.kLog - 6)) + ((2 + extras.size) + 1) + (sch.k0 + 7 + 11 * (sch.levels.size - 1)) + 4 := by
+  obtain ⟨h25, -, hsm, hk0, -, hdim, hlv, -, -⟩ := zk_schedule_seams _ _ _ hsch
+  obtain ⟨hn7, h2, -, -, -, -, -⟩ := hdim
+  unfold Zk.verifyRepWith at h
+  dsimp only at h
+  cases hs' : Array.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString r)
+      sess.streams with
+  | none => rw [hs'] at h; cases h
+  | some stream =>
+  rw [hs'] at h
+  obtain ⟨extras, hex, h⟩ := ebind_ok h
+  obtain ⟨zp, -, h⟩ := ebind_ok h
+  by_cases c1 : (zp.proof.params != pcsParams st.merkle sch) = true
+  · rw [ite_eq_left c1] at h; obtain ⟨_, h0, _⟩ := ebind_ok h; cases h0
+  rw [ite_eq_right c1] at h
+  by_cases c1' : (zp.inner.root.size != 64) = true
+  · rw [ite_eq_left c1'] at h; obtain ⟨_, h0, _⟩ := ebind_ok h; cases h0
+  rw [ite_eq_right c1'] at h
+  obtain ⟨⟨u, tr⟩, hrun, h⟩ := ebind_ok h
+  change (if (tr.k != stream.rounds.size) = true then _ else _) = _ at h
+  by_cases c2 : (tr.k != stream.rounds.size) = true
+  · rw [ite_eq_left c2] at h; obtain ⟨_, h0, _⟩ := ebind_ok h; cases h0
+  simp only [bne_iff_ne, ne_eq, not_not] at c2
+  refine ⟨stream, extras, rfl, hex, ?_⟩
+  rw [StateT.run] at hrun
+  obtain ⟨rp, t₁, h₁, hrun⟩ := bind_ok hrun
+  obtain ⟨-, hk₁⟩ := replayWith_rounds hs (by omega) h₁
+  try dsimp only at hrun
+  obtain ⟨⟨T, sws⟩, t₂, h₂, hrun⟩ := bind_ok hrun
+  obtain ⟨-, hk₂⟩ := ringSwitchWith_rounds hs (by simp) h₂
+  obtain ⟨rc, t₃, h₃, hrun⟩ := bind_ok hrun
+  obtain ⟨-, hk₃⟩ := zkLigeritoWith_rounds hs _ sch _ _ _ _ _ (by omega) hk0 h2
+    (fun i hi => (hlv i hi).q_ne_zero) h₃
+  cases hv : Zk.ligeritoConstraints (Zk.PadLayout.new st.m st.kLog sch.k0) rc zp.proof.ligerito zp.level0 with
+  | error e =>
+    rw [hv] at hrun
+    try dsimp only at hrun
+    obtain ⟨_, _, h₄, _⟩ := bind_ok hrun
+    cases h₄
+  | ok v =>
+  rw [hv] at hrun
+  try dsimp only at hrun
+  obtain ⟨lg, t₄, h₄, hrun'⟩ := bind_ok hrun
+  clear hrun
+  obtain ⟨rfl, rfl⟩ := pure_ok h₄
+  obtain ⟨-, hk₅⟩ := verifyInnerWith_rounds hs hrun'
+  rw [← c2, hk₅, hk₃, hk₂, hk₁]
+  simp only [Transcript.init, Array.size_append, List.size_toArray, List.length_cons, List.length_nil]
   omega
 
 end FlockDeploy
