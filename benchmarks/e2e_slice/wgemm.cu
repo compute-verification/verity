@@ -5,7 +5,7 @@
 // order), and R_w = xor_j (y_j ^ rotl(z_j, 16)) stored at R[(t NW + w) NCT + c] (the receipts' (tile, window, thread)
 // layout: a 2 KiB row is one window of one tile). At a window's end the lagged absorbs are flushed, R_w stored, the chains
 // re-keyed and the whole accumulator absorbed; the next stage's first atom then absorbs nothing of the previous atom's.
-// Kernels w_l<LAG><tie>_s<S> (EGEMM's e_l2q, e_l3qm with windows).
+// Kernels w_l<LAG><tie>_s<S>[_r96] (EGEMM's e_l2q, e_l3qm with windows; _r96 at 96 registers).
 // The swapped launch (arms s:, sedited:, seditedf:) gives the same kernel a = W' (n x k), b = X (m x k), pa = P_B and
 // pb = P_A, with M = n and N = m: it stores Y^T and its receipts are over C^T = W' X^T, so W' = W + U is the a-side edit
 // and X = floor(x / s) + b the b-side dither, as in PouwSegCheckDither_v2 (the peel's tail, U S^T, is the transpose of
@@ -160,10 +160,18 @@ WGEMM(w_l2q_s16, 2, 4, 4)
 WGEMM(w_l2q_s32, 2, 4, 8)
 WGEMM(w_l3qm_s8, 3, -4, 2)
 WGEMM(w_l3qm_s16, 3, -4, 4)
+// _r96: registers capped at 96 (bounds of 640 threads; launched with 512), so a 128-thread CTA of the committer's small
+// path (at most 102 registers) fits on the SM beside the GEMM's CTA
+#define WGEMM96(NAME, LAG, TIE, SW) \
+  __global__ void __launch_bounds__(MLW::NT + 128, 1) NAME(const __grid_constant__ Args a) { w_body<LAG, TIE, SW>(a); }
+WGEMM96(w_l3qm_s16_r96, 3, -4, 4)
+WGEMM96(w_l2q_s16_r96, 2, 4, 4)
 
 struct WK { const char* name; Kern k; int S; };
-static const WK WKS[] = {{"w_l2q_s4", w_l2q_s4, 4}, {"w_l2q_s8", w_l2q_s8, 8}, {"w_l2q_s16", w_l2q_s16, 16},
-                         {"w_l2q_s32", w_l2q_s32, 32}, {"w_l3qm_s8", w_l3qm_s8, 8}, {"w_l3qm_s16", w_l3qm_s16, 16}};
+static const WK WKS[] = {{"w_l2q_s4", w_l2q_s4, 4},           {"w_l2q_s8", w_l2q_s8, 8},
+                         {"w_l2q_s16", w_l2q_s16, 16},        {"w_l2q_s32", w_l2q_s32, 32},
+                         {"w_l3qm_s8", w_l3qm_s8, 8},         {"w_l3qm_s16", w_l3qm_s16, 16},
+                         {"w_l3qm_s16_r96", w_l3qm_s16_r96, 16}, {"w_l2q_s16_r96", w_l2q_s16_r96, 16}};
 static uint32_t* g_rw = nullptr;   // the windowed receipts, room for S = 4: (m / 128)(n / 128) 512 (k / 128) words
 static size_t rw_words(const EP& P, int S) { return (size_t)(P.m / 128) * (P.n / 128) * 512 * (P.k / (32 * S)); }
 static Maps *g_mS = nullptr, *g_mSF = nullptr;   // the swapped launch's maps over W', X, P_B, P_A (and qwe's fused ones)
