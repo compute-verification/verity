@@ -16,6 +16,7 @@ import Proofs.Flock.Claims.KS.ConflictTied
 import Proofs.Flock.Claims.KS.TableBound
 import Proofs.Flock.Claims.KS.Refit
 import Proofs.Flock.Claims.KS.Rounds
+import Proofs.Flock.Claims.KS.Mixture
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -74,4 +75,6 @@ fork and self-clash terms are escapes' (`Flock.oldEsc`, `Flock.oldEsc_term`; mas
 a mixture of strategies (`FlockDeploy.KS.mean_epsSL_le`, `FlockDeploy.KS.mean_epsSZ_le`). The plain fork rounds
 (`Rounds`): rep `r`'s level-`ℓ + 1` cap round at table 0, no two of them one (`FlockDeploy.KS.plainJ`,
 `FlockDeploy.KS.plainJ_inj`), at which the old escapes fit the plain weight (`FlockDeploy.KS.oldEsc_fitsFork_plainJ`).
--/
+At one table the model does not commit to, a live verdict is no likelier than the simulated strategy's `ε_c⁻` after
+`Commit` and its probability of accepting off the table (`Mixture`: `FlockDeploy.KS.live_le_epsSL`; over a mixture of
+live strategies, `FlockDeploy.KS.mean_live_le`). -/
