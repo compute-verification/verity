@@ -159,3 +159,35 @@ class FusedPump(Fused):
     choice: str = ("an offline table of FILL's pump-only splits (no filler warps) from round 3's screens; at serving time a "
                    "lookup, a green split and one graph a step")
     table: dict = field(default_factory=lambda: TABLE_PUMP, repr=False)
+
+
+#: pfill-k's chunk (pfill_arm.PFillK's: 8 warps a block, 256 fragments a warp a tile, about 2^19 MMAs an SM a chunk)
+K_FILLER = A.Filler(W=8, NC=4, S=256, chunk_log2=19, noise="bits01")
+
+
+@dataclass
+class FusedPumpK(FusedPump):
+    """FusedPump's splits with HC-PROVED's pfill-k pumped on the filler SMs (-DPFILL_BITS: fresh {0,1} SHA-512 noise for
+    every IMMA, each k32 word into the ram receipt), and pfill-k's prefill (the linears on 184 SMs, the filler on 4):
+    a split's slowdown is the split's own, whatever runs on its filler SMs."""
+
+    name: str = "fill-fused-pump-k"
+    lineage: dict = field(default_factory=lambda: {
+        "parent": "fill-fused-pump", "approach": "pouw/filler-fused",
+        "mechanism": ["filler:fresh-noise-imma", "noise:sha512-coins-01", "receipt:ram-k32", "place:split",
+                      "split:per-point-table", "fused:flin-serving", "fused:persistent-attention", "fused:lm-head-flin",
+                      "prefill:split"],
+        "hypothesis": "FusedPump's splits beside a pfill-k pump read Theorem K's 0.9 under filler-scorer/v3: the pump's "
+                      "0.88 of FILL v1's rate an SM, on 44-140 SMs, projects 0.365"})
+    filler: A.Filler | None = K_FILLER
+    choice: str = ("FusedPump's offline table of pump-only splits, pfill-k's 4-SM prefill split; at serving time a lookup, "
+                   "a green split and one graph a step")
+    nvcc_flags: str = "-DPFILL_BITS"
+
+    def placement(self, phase, b, l):
+        if phase == "prefill":
+            return A.Placement("split", 4)
+        return super().placement(phase, b, l)
+
+    def filler_at(self, phase, b, l):
+        return self.filler

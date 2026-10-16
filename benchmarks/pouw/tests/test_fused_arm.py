@@ -27,7 +27,8 @@ def _load(name):
 F = _load("fused_arm")
 FS = _load("fused_score")
 A = F.A  # the arms module fused_arm imported (the one test_filler_score loaded, when it ran first): one Placement class
-ARMS = [F.Fused(), F.FusedV2(), F.FusedPump()]
+ARMS = [F.Fused(), F.FusedV2(), F.FusedPump(), F.FusedPumpK()]
+V1 = [a for a in ARMS if a.nvcc_flags == "-DDFILL_V1"]
 
 
 def _built() -> tuple[dict[str, set], set]:
@@ -47,14 +48,19 @@ def _flin_key(b):
 @pytest.mark.parametrize("arm", ARMS, ids=lambda a: a.name)
 def test_contract_and_record(arm):
     assert A.check_arm(arm, record=True) == []
-    assert arm.filler.noise == F.CO_PREFILL.noise == "chained"  # FILL v1's chains, and flin's and attention's filler warps
-    assert arm.nvcc_flags == "-DDFILL_V1"  # dcap.cu's filler is pfill otherwise
+    if arm in V1:  # FILL v1's chains, and flin's and attention's filler warps; dcap.cu's filler is pfill otherwise
+        assert arm.filler.noise == F.CO_PREFILL.noise == "chained"
+    else:  # pfill-k's {0,1} tile, the setting filler-scorer/v3's Theorem K entry reads
+        assert (arm.nvcc_flags, arm.filler.noise) == ("-DPFILL_BITS", "bits01")
+        assert (arm.filler.W, arm.filler.S) == (8, 256)  # pfill's 8-warp blocks; S a multiple of 32
 
 
 @pytest.mark.parametrize("arm", ARMS, ids=lambda a: a.name)
 def test_placements(arm):
-    assert A.placed(arm, "prefill", 8192, 0) == A.Placement("co")
-    assert arm.fused("prefill", 8192, 0) is None and arm.filler_at("prefill", 8192, 0) == F.CO_PREFILL
+    pre = A.Placement("co") if arm in V1 else A.Placement("split", 4)
+    assert A.placed(arm, "prefill", 8192, 0) == pre
+    assert arm.fused("prefill", 8192, 0) is None
+    assert arm.filler_at("prefill", 8192, 0) == (F.CO_PREFILL if arm in V1 else arm.filler)
     for (b, l), (sms, q) in arm.table.items():
         assert A.placed(arm, "decode", b, l) == A.Placement("split", sms)
         assert arm.fused("decode", b, l) == q and arm.filler_at("decode", b, l) == arm.filler
@@ -82,3 +88,4 @@ def test_pump_arm_has_no_fixed_work():
     """filler-scorer/v3 reads no theorem for a filler with an arm-side driver's fixed work, so FusedPump's rows carry no
     filler warps."""
     assert all(q.FW == 0 and q.AFW == 0 for _, q in F.FusedPump().table.values())
+    assert F.FusedPumpK().table == F.FusedPump().table
