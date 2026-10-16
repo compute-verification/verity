@@ -1,11 +1,13 @@
 import Proofs.Flock.Claims.KS.Wait
 import Proofs.Flock.Claims.KS.Fork
+import Proofs.Flock.Claims.Bits
 
 /-!
 # Flock's KS from one wait's bound
 
 `Flock.KS` at `E^rep` and a decoder that meets `ListComplete` follows from one wait's bound on `k` accepted runs
-(`Flock.OneWait`), with the numbers' side conditions `K > 0`, `k ≥ 8` and `ε_table ≥ 0` (`Flock.KS_of_oneWait`):
+(`Flock.OneWait`), with the numbers' side conditions `K > 0`, `ε_table ≥ 0`, and `k ≥ 8` wherever the verifier
+accepts some run (`Flock.NoAcc`) (`Flock.KS_of_oneWait`):
 
 * **Extraction** (`Flock.Extracts`, `Flock.assembles_of_extracts`): when the accepted runs' opened columns, each
   position once, number at least `nMin M` and agree with a trace `M` on a fraction `agree` of them, and `M` reads as a
@@ -142,13 +144,24 @@ theorem rate_le (D : Deploy Coin Col T) (x : Msg) (hk : 0 < D.k x) : D.N₀ x / 
   rw [div_le_iff₀ he] at hc
   linarith
 
+/-- The verifier accepts no run at `x`. -/
+def NoAcc (H : Msg → Msg) (V : Verifier Coin) (x : Msg) : Prop :=
+  ∀ (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (V.k x) → Coin), (run H P V x ω r).out ≠ .acc
+
 /-- **Flock: KS from one wait's bound**, at every decoder that meets `ListComplete` and reads each position once,
-when `K > 0`, `k ≥ 8` and `ε_table ≥ 0`. -/
-theorem KS_of_oneWait (H : Msg → Msg) (D : Deploy Coin Col T) (hK : ∀ x, 0 < D.cap x) (hk : ∀ x, 8 ≤ D.k x)
-    (hεt : ∀ x, 0 ≤ D.εtable x) (h : OneWait H D) (decode : List (ℕ × Col) → List T)
-    (hlc : ListComplete D.enc D.agree D.nMin decode) (hro : ReadsOnce decode) :
+when `K > 0`, `ε_table ≥ 0`, and `k ≥ 8` wherever the verifier accepts some run. -/
+theorem KS_of_oneWait (H : Msg → Msg) (D : Deploy Coin Col T) (hK : ∀ x, 0 < D.cap x)
+    (hk : ∀ x, 8 ≤ D.k x ∨ NoAcc H D.V x) (hεt : ∀ x, 0 ≤ D.εtable x) (h : OneWait H D)
+    (decode : List (ℕ × Col) → List T) (hlc : ListComplete D.enc D.agree D.nMin decode) (hro : ReadsOnce decode) :
     Claims.KS H D.V (R H D.parse) (E H D decode) (κ D) (γ D) := by
   intro x Ω _ _ P
+  rcases hk x with hk8 | hno
+  swap
+  · have h0 : PrBad H D.V (R H D.parse) (E H D decode) x P = 0 := by
+      unfold PrBad
+      rw [Pr_congr (q := fun _ => False) fun s => ⟨fun hs => hno Ω P s.1 s.2.1 hs.1, False.elim⟩, Pr_false]
+    rw [h0]
+    exact add_nonneg (κ_pos D x (hεt x)).le (Real.sqrt_nonneg _)
   obtain ⟨e, hfit, hw⟩ := h x Ω P
   have hwait : ∀ ω, 0 < accPr H D.V P x ω →
       accPr H D.V P x ω * (accFail H D.V P x ω (D.k x)
@@ -160,8 +173,8 @@ theorem KS_of_oneWait (H : Msg → Msg) (D : Deploy Coin Col T) (hK : ∀ x, 0 <
     unfold accFail
     exact Pr_mono fun σ ⟨hacc, hno⟩ => ⟨hacc, fun hex => hno (assembles_of_extracts H D decode hlc hro x _ hex)⟩
   have hb := ERep_trunc H D.V (R H D.parse) D.waits D.k D.cap D.cols (assemble H D.parse decode D.read)
-    (check H D.parse) (check_sound H D.parse) x P (hK x) (hk x) (fun ω => D.εtable x + e.term ω)
-    (fun ω => add_nonneg (hεt x) (e.term_nonneg ω)) (rate_le D x (by have := hk x; omega)) hwait
+    (check H D.parse) (check_sound H D.parse) x P (hK x) hk8 (fun ω => D.εtable x + e.term ω)
+    (fun ω => add_nonneg (hεt x) (e.term_nonneg ω)) (rate_le D x (by omega)) hwait
   have hEx : 4 * Ex (fun ω => D.εtable x + e.term ω) ≤
       4 * D.εtable x + Real.sqrt (γ D x * PrB H D.V P x) := by
     rw [Ex_add, Ex_const]
@@ -177,7 +190,8 @@ theorem KS_of_oneWait (H : Msg → Msg) (D : Deploy Coin Col T) (hK : ∀ x, 0 <
 /-- **Flock: KS from one wait's bound, at every decoder that meets `ListComplete`**, reading each opened position once:
 `E^rep` at `decode ∘ dedupPos`. -/
 theorem KS_of_oneWait_dedup (H : Msg → Msg) (D : Deploy Coin Col T) (hK : ∀ x, 0 < D.cap x)
-    (hk : ∀ x, 8 ≤ D.k x) (hεt : ∀ x, 0 ≤ D.εtable x) (h : OneWait H D) (decode : List (ℕ × Col) → List T)
+    (hk : ∀ x, 8 ≤ D.k x ∨ NoAcc H D.V x) (hεt : ∀ x, 0 ≤ D.εtable x) (h : OneWait H D)
+    (decode : List (ℕ × Col) → List T)
     (hlc : ListComplete D.enc D.agree D.nMin decode) :
     Claims.KS H D.V (R H D.parse) (E H D (decode ∘ dedupPos)) (κ D) (γ D) :=
   KS_of_oneWait H D hK hk hεt h _ (listComplete_dedup hlc) (readsOnce_dedup decode)
