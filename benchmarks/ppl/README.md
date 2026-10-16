@@ -241,11 +241,20 @@ deterministic arm between harnesses:
 |  | adopted-attention | 6.4975 (6.4959–6.5008) | +0.45 | -0.72 | - | - | - | - |
 |  | adopted-no-smooth | 6.5168 (6.5163–6.5171) | +0.75 | -0.50 | 6.5211 (6.5201–6.5230) | `int8-rot-lin8rd-eqp=w64-poff64-psink-kc-kv=dith` | -0.07 | yes |
 |  | adopted | 6.5202 (6.5160–6.5234) | +0.80 | -0.45 | - | - | - | - |
+| qwen2.5-7b · wikitext2 · 2K (16 windows) | bf16 | 6.3538 | - | - | 6.3553 | `sdpa` | -0.02 | yes |
+|  | int8-linears | 6.3583 | +0.07 | - | 6.3577 | `ref-lin8r` (FP32 attention) | +0.01 | yes |
+|  | int8-attention | 6.3940 (6.3895–6.3964) | +0.63 | - | - | - | - | - |
+|  | int8-all | 6.3971 (6.3934–6.4002) | +0.68 | - | 6.3970 (6.3951–6.3983) | `int8-rot-lin8r` | +0.00 | yes |
+|  | adopted-linears | 6.3767 (6.3717–6.3798) | +0.36 | +0.29 | - | - | - | - |
+|  | adopted-attention | 6.3642 (6.3625–6.3659) | +0.16 | -0.47 | 6.3642 | `int8-rot-eqp=w64-poff64-psink-kc-kv=dith-s1` | +0.00 | yes |
+|  | adopted-no-smooth | 6.3900 (6.3833–6.3956) | +0.57 | -0.11 | 6.3869 (6.3852–6.3891) | `int8-rot-lin8rd-eqp=w64-poff64-psink-kc-kv=dith` | +0.05 | yes |
+|  | adopted | 6.3865 (6.3813–6.3905) | +0.51 | -0.17 | - | - | - | - |
 
 Runs:
 
 - llama-3.1-8b · c4 · 2K: bench `r20261016-181132-a47c`; tonight `r20261016-151826-4e17`
 - llama-3.1-8b · wikitext2 · 2K: bench `r20261016-182558-c0e6`; tonight `r20261016-065318-8035`, `r20261016-091629-d9e7`, `r20261016-121921-ec96`
+- qwen2.5-7b · wikitext2 · 2K: bench `r20261016-183113-01ee`; tonight `r20261016-105148-9add`, `r20261016-110904-30f8`, `r20261016-121921-ec96`
 <!-- /baseline -->
 
 ## Tests
