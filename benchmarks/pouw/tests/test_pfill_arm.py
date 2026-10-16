@@ -57,6 +57,24 @@ def test_pfill_arms_meet_the_contract_and_place_as_fill_v1(monkeypatch):
             assert A.placed(arm, ph, b, l) == A.placed(v1, ph, b, l)
 
 
+def test_power_split_arm_has_a_split_at_every_scored_point(monkeypatch):
+    """pfill-power-split is pfill-ram's filler on HC-POWER's table: an exact entry at every scored decode point, and 4
+    filler SMs during prefill."""
+    A, S = _module("arms"), _module("scoring")
+    P = _load_file("pfill_arm")
+    monkeypatch.setenv("NVCC_APPEND_FLAGS", "unset")
+    arm = A.load("benchmarks/pouw/filler/pfill_arm.py:PFillPowerSplit")
+    ram = A.load("benchmarks/pouw/filler/pfill_arm.py:PFillRam")
+    assert A.check_arm(arm) == []
+    assert ledger.one_line(arm.lineage["hypothesis"], "the hypothesis")
+    assert (arm.filler, arm.sources, __import__("os").environ["NVCC_APPEND_FLAGS"]) == (ram.filler, ram.sources, "")
+    for ph, b, l in S.points(robust=False):
+        p = A.placed(arm, ph, b, l)
+        assert p == (A.Placement("split", 4) if ph == "prefill" else A.Placement("split", P.POWER_SPLIT[(b, l)]))
+    for b, l in S.ROBUST:
+        assert A.placed(arm, "decode", b, l) == A.Placement("split", A.point_lookup(P.POWER_SPLIT, b, l))
+
+
 def _row(kind, b, l, alone_ms, arm_ms):
     """A minimal `dscore` row with filler: 4 ABBA blocks, 3 reps each side, 10 chunks of 1e9 MACs a window."""
     blocks = [{"order": "alone,arm", "alone": {"window_ms": 3 * alone_ms, "reps": [[alone_ms, 2000.0, 300.0]] * 3},

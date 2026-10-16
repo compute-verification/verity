@@ -61,6 +61,35 @@ class PFillDuo(PFillRam):
     filler: Filler | None = Filler(W=8, NC=2, S=256, chunk_log2=19)
 
 
+#: HC-POWER's POWER_SPLIT (cursor/hc-power-ea24 benchmarks/pouw/filler/hc_power.py): the largest split its split-only sweep
+#: with the scorer's gc_split kept at step + filler <= 1.040 at every scored decode point (r20261016-050639-8537,
+#: r20261016-052600-c1e9), the split's own cost whatever runs on the filler's SMs.
+POWER_SPLIT = {(1, 2048): 108, (1, 8192): 108, (1, 32768): 108, (32, 1024): 92, (32, 2048): 108, (32, 8192): 124,
+               (32, 24576): 132, (48, 16384): 132, (128, 2048): 92, (128, 6144): 108, (132, 5120): 60, (144, 5120): 60,
+               (256, 1024): 60, (256, 2048): 60, (256, 3072): 60}
+
+
+@dataclass
+class PFillPowerSplit(PFillRam):
+    """pfill-ram on HC-POWER's power-split placement: its 15 decode splits, and 4 filler SMs during prefill (the linears
+    on 184, gc_split's only prefill split under 5%; prefill is power-capped and pays its SM share, r20261016-051754-e025)."""
+
+    name: str = "pfill-power-split"
+    lineage: dict = field(default_factory=lambda: {
+        "parent": "pfill-ram", "approach": "pouw/filler-proved",
+        "mechanism": ["filler:fresh-noise-imma", "noise:sha512-coins-pm1", "receipt:ram-k32", "place:split",
+                      "split:per-point-table", "split:every-scored-point", "prefill:split"],
+        "hypothesis": "power-split's placement (HC-POWER) is the split's own cost, so it carries to pfill: more filler "
+                      "SMs at four decode points and 4 during prefill raise the proved SCORE by its filler share"})
+    choice: str = ("HC-POWER's offline table of 15 (B, L) decode splits and one prefill split; a lookup and a green split "
+                   "at serving time")
+
+    def placement(self, phase, b, l):
+        if phase == "prefill":
+            return Placement("split", 4)
+        return Placement("split", point_lookup(POWER_SPLIT, b, l))
+
+
 @dataclass
 class PFillE2m1Ram(PFillRam):
     """pfill-ram's tile on OMMA m16n8k64 e2m1 (the same ±1 noise as E2M1 codes, every block scale 1): twice the products
