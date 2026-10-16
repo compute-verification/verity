@@ -349,6 +349,9 @@ theorem hbr_honest_src {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Arr
       exact FlockC3.Sparse.scOf_cs ..
     have hone' := hone R ω t R₂ τ o hA'
     have hv' := hv R ω t R₂ τ o hA' i
+    have hC : ∀ cs, innerCommitsAt (wr t).1 (wr t).2 st reg = .ok cs →
+        Flock.Guarantees.c3Of ish (some cs) = some (heldC3 ish sp (innerCommitsAt (wr t).1 (wr t).2 st reg)) :=
+      fun cs hcs' => hc3 R ω t (layers zs dg N k Rw R ω t R₂ τ) cs hcs'
     subst hunit hsw hzs
     exact FlockC3.Sparse.sparseSessionAt_of_checks (C3Family.checked (T := Flock.Guarantees.holoTys st hp)
       (CT := holoCTs st hp) (xR := xR) ish hss bind hob zr hCust h coins rows own sel bc dec wr reg)
@@ -356,8 +359,7 @@ theorem hbr_honest_src {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Arr
       (FlockC3.HPort.readsOwnAt_checked dg N k Rw)
       (C3Family.rowsRegisteredC3_of_covered _
         (rowsCovered_checked ish hss bind hob zr hCust h coins rows own sel bc dec wr reg hRC) dg N k Rw)
-      (sessStmt_checked hF) hsi hell hi hsS hlaid hA' (fun hvc => hb (hVB R ω t R₂ hvc)) hone' i
-      (fun cs hcs' => hc3 R ω t _ cs hcs') hcs hv'
+      (sessStmt_checked hF) hsi hell hi hsS hlaid hA' (fun hvc => hb (hVB R ω t R₂ hvc)) hone' i hC hcs hv'
   -- the same at the sessions refusing `Bad`, with G's items 1–4 there from `halg` and `hacc` off `Bad`
   have halgZ : AlgebraDecodes (I := ℐ) (offZs zs Bad) dg N k Rw sh rep := algebraDecodes_offZs hS halg
   have haccZ : AccChains (I := ℐ) (offZs zs Bad) dg N k Rw sh rep := accChains_offZs hS hacc
