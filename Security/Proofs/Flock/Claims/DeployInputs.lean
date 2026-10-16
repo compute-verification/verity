@@ -236,6 +236,27 @@ def setupOf (zk : Bool) (x : Claims.Msg) : Option (Ins × SessionSpec × Array S
   let (spec, sts) ← s.setup.toOption
   pure (s, spec, sts)
 
+/-- The setup's session is the verifier's statement's (`Read.setup`, `Stmt.setupTables`). -/
+theorem Ins.setup_read {s : Ins} {spec : SessionSpec} {sts : Array Stmt} (h : s.setup = .ok (spec, sts)) :
+    s.read.setup = .ok (spec, sts) := by
+  unfold Ins.setup at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  repeat' split at h
+  all_goals first | (cases h; done) | (cases h; assumption)
+
+theorem setupOf_some {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (h : setupOf zk x = some (s, spec, sts)) : insOf zk x = some s ∧ s.setup = .ok (spec, sts) := by
+  unfold setupOf at h
+  cases hi : insOf zk x with
+  | none => simp [hi] at h
+  | some s' =>
+    cases hsu : s'.setup with
+    | error e => simp [hi, hsu, Except.toOption] at h
+    | ok p =>
+      simp [hi, hsu, Except.toOption] at h
+      obtain ⟨rfl, rfl, rfl⟩ := h
+      exact ⟨rfl, hsu⟩
+
 /-- What the verifier reads of the statement's bytes (`Readable.Read`). -/
 def readOf (zk : Bool) (x : Claims.Msg) : Option Readable.Read := (insOf zk x).map Ins.read
 
