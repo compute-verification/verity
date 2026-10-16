@@ -598,6 +598,12 @@ def test_fixed_work_is_credited_from_checked_public_tiles_of_a_read_binary():
     bad = S.program_facts({"fscore": nvd(serving(before=["STG.E desc[UR4][R4.64], R1"]), (WARP, False, WARP_BODY))})
     assert S.credit_fixed([fixed_row()], bad)[1]["credited"] == 0
     assert "no program facts" in S.credit_fixed([fixed_row()], None)[1]["dropped"][0]
+    # filler warps inlined into a serving kernel (FILL r3's form): nothing v4 reads as the filler did that work
+    r3 = S.program_facts({"fscore": nvd((DFILL, True, K_TILE), (SERVE, True, [*CONSUMER, *K_TILE]))})
+    assert r3["violations"] == [] and r3["fixed_from"] == {"fscore": 0}
+    assert "no function in fscore it can come from" in S.credit_fixed([fixed_row()], r3)[1]["dropped"][0]
+    phase = S.program_facts({"pscore": nvd(("_Z7dfill_pILi4EEvmmPyyiiPKiS0_Pj", True, K_TILE))})
+    assert phase["fixed_from"] == {"pscore": 1} and S.credit_fixed([fixed_row(driver="pscore")], phase)[1]["credited"]
     assert S.point_stats(out[0])["fill_rate"] > S.point_stats(out[2])["fill_rate"]
 
     r = fixed_row(fixed_macs=1e12)

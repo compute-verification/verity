@@ -603,7 +603,9 @@ def program_facts(listings: dict[str, str]) -> dict:
       a register; and a caller with a branch whose target isn't named. A guarded instruction counts as run: a warp-role
       split by predication instead of a branch is refused.
     - ``serving_mma``: every other function's MMAs (a serving kernel's consumer warps, kernels with no filler), outside
-      the filler warps' paths, credited at the serving reading."""
+      the filler warps' paths, credited at the serving reading.
+    - ``fixed_from``: each binary's functions that fixed work can come from, its callers and its dfill_p phase kernels
+      (a dfill_k kernel is the split filler, counted in chunks): none, and its rows' fixed work isn't credited."""
     fns = {(b, f["name"]): f for b, text in listings.items() for f in parse_nvdisasm(text)}
     calls = {k: {(k[0], m["name"]) for _, _, op, args in f["insns"] if op.startswith("CALL") and (m := _REF.search(args))}
              for k, f in fns.items()}
@@ -645,7 +647,9 @@ def program_facts(listings: dict[str, str]) -> dict:
                 if i not in regions.get(k, ())) if k not in filler | helpers else 0
         if n:
             serving[f"{k[0]}: {k[1]}"] = n
-    return {"version": V4, "binaries": sorted(listings), "filler": {
+    fixed_from = {b: sum(k[0] == b for k in (reach - filler) | {k for k in filler if "dfill_p" in k[1]})
+                  for b in listings}
+    return {"version": V4, "binaries": sorted(listings), "fixed_from": fixed_from, "filler": {
         "functions": sorted(f"{b}: {n}" for b, n in filler), "helpers": sorted(f"{b}: {n}" for b, n in own),
         "path_helpers": sorted(f"{b}: {n}" for b, n in helpers - own),
         "mma": dict(sorted(mma.items())), "fp_ops": dict(sorted(fp.items())), "accumulating_mma": acc, "kind": kind,
@@ -655,9 +659,9 @@ def program_facts(listings: dict[str, str]) -> dict:
 #: what filler-scorer/v4 does not check, beside `UNCHECKED`, when a theorem's entry applies
 UNCHECKED_V4 = (
     "that every receipt is written by the filler: v4 sees what code can store on the filler warps' paths, not what "
-    "address another path's store hits, so a serving warp, or a kernel whose filler warps are inlined instead of "
-    "calling dfill_k (as FILL r3's are), could write one; the receipts gate holds every sampled receipt to the host "
-    "reference whoever wrote it",
+    "address another path's store hits, so in a binary that calls dfill_k (without one, its fixed work isn't "
+    "credited) a serving warp, or filler warps inlined into another kernel instead of calling it (FILL r3's form), "
+    "could write one; the receipts gate holds every sampled receipt to the host reference whoever wrote it",
     "that a filler warp only calls dfill_k: a path from the warp-role branch that never reaches the CALL looks like the "
     "serving warps' path, so its MMAs read as serving",
     "the filler function's inputs (only the coins, the public tile id and the step, besides its stop flag): the "
@@ -708,14 +712,17 @@ def filler_entry_v4(noise: str | None, pf: dict | None, *, unread=(), entries: d
 
 def credit_fixed(rows: list[dict], pf: dict | None) -> tuple[list[dict], dict]:
     """filler-scorer/v4: the rows with each block's fixed work credited only from receipts of public filler tiles that
-    pass the spot checks: its row's binary is one the scorer built and read (``driver``, else dscore), the filler
-    warps' paths there are confined (no violation), the block's fixed round (a ``*_round`` besides the split filler's
-    ``round``, whose range, tag and coins the replay gate holds to the scorer's) has spot-checked tiles, and its row has
-    no bad receipt. Any other block's ``fixed_macs`` becomes 0. Returns (rows, {credited, dropped})."""
+    pass the spot checks: its row's binary is one the scorer built and read (``driver``, else dscore), with a function
+    that work can come from (``fixed_from``: a caller of dfill_k, whose filler warps v4 reads, or a dfill_p kernel; not
+    filler warps inlined into serving code), the filler warps' paths there are confined (no violation), the block's
+    fixed round (a ``*_round`` besides the split filler's ``round``, whose range, tag and coins the replay gate holds to
+    the scorer's) has spot-checked tiles, and its row has no bad receipt. Any other block's ``fixed_macs`` becomes 0.
+    Returns (rows, {credited, dropped})."""
     read = set(pf["binaries"]) if pf else set()
     out, credited, dropped = [], 0, []
     for r in rows:
         r = json.loads(json.dumps(r))
+        d = r.get("driver", "dscore")
         for i, b in enumerate(r["blocks"]):
             for side in ("arm", "solo"):
                 x = b.get(side) or {}
@@ -723,8 +730,10 @@ def credit_fixed(rows: list[dict], pf: dict | None) -> tuple[list[dict], dict]:
                     continue
                 fr = [v for k, v in x.items() if k.endswith("_round") and k != "round" and isinstance(v, dict)]
                 why = ("the build recorded no program facts" if pf is None
-                       else f"its driver {r.get('driver', 'dscore')} wasn't built and read" if r.get("driver", "dscore")
-                       not in read else "the filler warps' paths aren't confined" if pf["violations"]
+                       else f"its driver {d} wasn't built and read" if d not in read
+                       else f"no function in {d} it can come from (no dfill_k caller, no dfill_p kernel)"
+                       if not pf["fixed_from"].get(d)
+                       else "the filler warps' paths aren't confined" if pf["violations"]
                        else "no round for its tiles" if not fr
                        else "none of its tiles' receipts was spot-checked" if not any(v.get("checked") for v in fr)
                        else f"{r['rec_bad']} bad receipts in its row" if r.get("rec_bad") else None)
