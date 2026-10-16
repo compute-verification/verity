@@ -60,6 +60,19 @@
   "_private.Flock.Program.0.Flock.Program.gateIn": "partial def: a gate's inputs in an activation, resolving references through scopes (descriptor §6, §7); no proof is about it, and qword_program_agree.py covers it",
   "Flock.Extract.evalDef": "partial def: cut.evaluate_definition with its memo, recursing through a separable body's members (PROTOCOL.md 16.7); no proof is about it, and qword_program_agree.py covers it"
  },
+ "verifier": {
+  "entries": ["Flock.verifyWith", "Flock.Zk.verifyWith"],
+  "stop": [
+   "Flock.Hm96.Default512.cols",
+   "Flock.Hm96.Default512.key",
+   "Flock.Hm96.Default512.leafPrefix",
+   "Flock.Hm96.Default512.mask",
+   "Flock.Hm96.Default512.saltPrefix",
+   "Flock.Hm96.Default512.tables"
+  ],
+  "hash": "Flock.Sha512",
+  "allow": ["module:Init"]
+ },
  "layers": {
   "VStar": {
    "imports": ["Lean", "Std", "Flock", "VStar"],
