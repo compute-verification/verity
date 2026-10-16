@@ -30,7 +30,7 @@ __global__ void __launch_bounds__(1024) k_vec(int iters, uint32_t ucount, uint32
   uint32_t acc[NACC];  // one array; FFMA path reinterprets, so 1024 threads fit without spilling
 #pragma unroll
   for (int c = 0; c < NACC; c++) acc[c] = tid * 0x9e3779b9u + c * 0x85ebca6bu + 1u;  // lane-dependent => vector regs
-  uint32_t uacc = s0;  // uniform (parameter seed), carried through the inner loop, consumed by a uniform predicate
+  uint32_t v0 = s0, v1 = s0 ^ 0x5a5a5a5au;  // two independent keep-alive accumulators: ILP => inner loop dispatch-bound
   CLK_BEGIN
 #pragma unroll 1
   for (int it = 0; it < iters; it++) {
@@ -44,12 +44,16 @@ __global__ void __launch_bounds__(1024) k_vec(int iters, uint32_t ucount, uint32
         acc[c] = acc[c] + acc[c ^ 1] + 0x1357u;   // IADD3 (3-input), coupled pairs, non-foldable
       }
     }
-    // uniform-datapath work: runtime-trip inner loop (ucount a parameter => a real loop, not unrolled or closed-form).
-    // uacc += j anchors to the induction variable; the xorshift blocks closed-form elimination. All operands uniform.
+    // uniform-datapath work: a runtime-trip inner loop (ucount a parameter => a real loop ptxas can't unroll or
+    // close-form). Its induction `j++` and bound compare land on the uniform datapath (UIADD3 + UISETP) — the only
+    // uniform instructions ptxas reliably emits; a data recurrence over uniform values gets demoted to vector. v0,v1
+    // are two independent geometric recurrences (v=2v+j, non-foldable => the loop survives) that give the inner loop
+    // ILP so it is dispatch-bound, not latency-bound: then cycles a inner-iteration == instructions a inner-iteration,
+    // and we can see whether the two uniform ops are in that count (took a slot) or not (co-issued for free).
 #pragma unroll 1
     for (uint32_t j = 0; j < ucount; j++) {
-      uacc = uacc + j;
-      uacc = uacc ^ (uacc >> 7);
+      v0 = v0 + v0 + j;
+      v1 = v1 + v1 + j;
     }
   }
   CLK_END(rec)
@@ -57,8 +61,7 @@ __global__ void __launch_bounds__(1024) k_vec(int iters, uint32_t ucount, uint32
 #pragma unroll
   for (int c = 0; c < NACC; c++) vs ^= acc[c];
   vsink[blockIdx.x * blockDim.x + tid] = vs;
-  // uacc's only live-out is this warp-uniform predicate, so ptxas keeps the recurrence on the uniform datapath.
-  if (uacc == 0x1234567u) usink[blockIdx.x] = tid;
+  if ((v0 ^ v1) == 0x1234567u) usink[blockIdx.x] = tid;
 }
 
 // ---- host ----------------------------------------------------------------------------------------------------------
