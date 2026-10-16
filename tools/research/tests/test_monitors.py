@@ -1331,6 +1331,9 @@ def test_the_daily_line_counts_yesterdays_full_checks_infrastructure_ended_and_p
     run("r20261007-230000-0004", None, None, check)                       # still running in session-9
     run("r20261007-130000-0005", "CGROUP_OOM_ATTRIBUTED", "failed", ["bash", "-c", "pytest"])
     run("r20261008-010000-0006", "CGROUP_OOM_ATTRIBUTED", "failed", check)
+    run("r20261007-140000-0007", None, None, check)                       # refused at launch: it never started
+    (root / M.RUNS.lstrip("/") / "r20261007-140000-0007" / "status.json").unlink()
+    (root / M.RUNS.lstrip("/") / "r20261007-140000-0007" / "refused.json").write_text(json.dumps({"fault": "Refused"}))
     (f,) = M.lost_checks(mctx(root, now=now))
     assert f.key == "2026-10-07" and f.severity == "page"
     assert "2 of 4 full checks lost to infrastructure (50.0%" in f.text
