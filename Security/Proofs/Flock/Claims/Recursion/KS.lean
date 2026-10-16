@@ -26,11 +26,13 @@ The recursion's `KS` (`Claims.Recursion.KS`) at a general inner protocol `I`, pr
   verifier, in `Claims.KS`'s inequality at that session's numbers. `outerKS_of_flockKS` (`OuterKS`'s module) proves
   it from `Claims.Flock.KS` at the outer deployment and code facts about how the compiled verifier runs each session,
   and `KS_of_flockKS` is `KS_of` with it.
-* `InnerKS`: the inner protocol's KS (`Inner.KS`) carried to the served runs. Its proof from `Inner.KS` needs an inner
-  prover that is rerun at the inner coins while the outer coins and `E_O`'s are drawn afresh at each rerun, which the
-  claims' prover (a tape fixed across reruns) is not. That embedding is open, and this hypothesis names it, with the
-  linear terms it costs (an inner view two extractions open differently, a collision among one run's recorded calls)
-  in `γ_e`'s budget.
+* `InnerKS`: the inner protocol's KS (`Inner.KS`) carried to the served runs, with the linear terms the carriage costs
+  (an inner view two extractions open differently, a collision among one run's recorded calls) in `γ_e`'s budget. It
+  doesn't follow from `Inner.KS` and the code facts of `Recursion/Inner.lean`: `E*` sees each inner rerun through `E_O`
+  at fresh outer coins, rejected wherever the compiled run rejects there, so the outer sessions' coins thin its inner
+  reruns, and `Inner.KS` bounds `E^rep` only against runs whose acceptance is the inner verifier's. `innerKS_gap`
+  (`Recursion/Gap.lean`) is a deployment with all of them, and every other hypothesis of `KS_of_flockKS`, whose `KS`
+  fails.
 * Code facts, which bind `D`'s readers to the compiled verifier: `Refuses` (the compiled verifier accepts only a
   statement that parses with no circuit commitment) and `InnerRounds` (its first rounds are the inner session's).
 -/

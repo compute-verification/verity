@@ -6,13 +6,15 @@ import Proofs.Flock.Claims.Recursion.OuterKS
 `KS_of` reads the inner protocol's KS at the served runs (`InnerKS`). Its route from `Inner.KS` is an inner prover whose
 tape holds one fill (outer coins and `E_O`'s) per inner-coin prefix, against `E*`'s fresh fill at each rerun; the two
 agree on every inner message unless two extractions open one commit string differently. This file states the code
-facts that route reads and proves its binding step.
+facts that route reads and proves its binding step. The route doesn't reach `InnerKS` from `Inner.KS` alone: the outer
+sessions' coins also decide whether `E*` sees an inner rerun accepted, which `Inner.KS` doesn't cover, and
+`Recursion/Gap.lean` gives a deployment with every code fact here where `InnerKS` fails (`innerKS_gap`).
 
-* Code facts (`Prop`s about `D`): the inner view `E_O`'s witnesses give on an accepted run is the inner verifier's run of
-  its own messages at the inner coins (`InnerViewRun`), which `coinOf` decodes from the compiled verifier's first `k_I`
-  coins (`CoinOfInverts`); the witnesses record the inner verifier's SHA-512 calls in that run, every recorded call a
-  true evaluation (`CallsRecord`), and at each inner round the call that opens the run's commit string to the inner
-  view's message (`CallsOpen`).
+* Code facts (`Prop`s about `D`): the inner view `E_O`'s witnesses give on an accepted run is the inner verifier's run
+  of its own messages at the inner coins (`InnerViewRun`), which `coinOf` decodes from the compiled verifier's first
+  `k_I` coins (`CoinOfInverts`); the witnesses record the inner verifier's SHA-512 calls in that run, every recorded
+  call a true evaluation (`CallsRecord`), and at each inner round the call that opens the run's commit string to the
+  inner view's message (`CallsOpen`).
 * Binding: two extractions whose runs agree on inner round `j`'s commit string and whose inner views differ there give
   a collision among their recorded calls (`opening_coll`), at a fork at `j` one of `Be`'s (`forkColl_of_opening`). So
   the inner rounds' differing openings cost at most `k(x)·Pr[Be]` (`sum_opensDiffer_le`).
