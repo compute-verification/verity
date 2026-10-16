@@ -153,10 +153,12 @@ def main() -> int:
     ap.add_argument("--json")
     a = ap.parse_args()
     d = Path(a.out)
-    pre = rows(d / "prefill.jsonl")
+    allp = rows(d / "prefill.jsonl")
+    pre = [r for r in allp if r.get("mode") == "prefill"]
     res = {"gate": rows(d / "gate.jsonl"), "sha_latency": rows(d / "shalat.jsonl"),
            "prefill": [p for p in (prefill(r) for r in pre) if p],
-           "proved": [proved(r) for r in pre if "before" in r["arms"]],
+           "proved": [proved(r) for r in pre if r.get("proved_arms") or "before" in r["arms"]],
+           "phases": [r for r in allp if r.get("mode") == "phases"],
            "deferred": [deferred(r) for r in rows(d / "deferred.jsonl")], "beside": [beside(r) for r in rows(d / "beside.jsonl")]}
     pct = lambda x: "-" if x is None else f"{100 * x:+.1f}%"  # noqa: E731
     print("gate:", [(g.get("what"), g.get("k"), g.get("R"), g.get("m"), g.get("ok"), g.get("fast_ok"), g.get("mid_ok"),
@@ -180,6 +182,19 @@ def main() -> int:
         print("  commitment latency a stage (ms): " + ", ".join(f"{k} {v:.3f}" for k, v in p["hash_latency_ms"].items())
               + "; segments " + ", ".join(f"{k} {v:.3f}" for k, v in p["segments_latency_ms"].items())
               + "; leaves and tree " + ", ".join(f"{k} {v:.3f}" for k, v in p["tree_latency_ms"].items()))
+        for dr, lab in ((True, "with the draw"), (False, "without")):
+            ok = {nm: x for nm, x in p["arms"].items() if x["host_ok"] and nm.endswith("_nd") != dr}
+            if ok:
+                nm = min(ok, key=lambda n: ok[n]["ms"])
+                print(f"  best {lab}: {nm}, {ok[nm]['ms']:.2f} ms (lone-request TTFT), {pct(ok[nm]['over_gemm'])} over the GEMMs, "
+                      f"critical path {ok[nm]['crit_ms_a_stage']:.4f} ms a stage")
+    for ph in res["phases"]:
+        top = [x for x in ph["last_us"][13:28] if x >= 0]
+        print(f"phases M={ph['M']} {ph['stage']} ({ph['ctas']} CTAs, us from the segments' start): segments end {ph['seg_end_us']:.1f}, "
+              f"tree start {ph['tree_start_us']:.1f}; CTA 0 x {ph['cta0_us'][1]:.1f}, hm96 {ph['cta0_us'][2]:.1f}, frame leaf "
+              f"{ph['cta0_us'][3]:.1f}, levels " + " ".join(f"{x:.1f}" for x in ph["cta0_us"][5:13] if x >= 0)
+              + f"; subtrees done min/median/max {'/'.join(f'{x:.1f}' for x in ph['subtree_done_us'])}; last CTA {ph['last_cta']}: "
+              + " ".join(f"{x:.1f}" for x in top))
     for p in res["prefill"]:
         print(f"\nprefill M={p['M']} hash={p['hash']}: gemm {p['gemm_ms']:.2f} ms ({100 * p['gemm_share']:.1f}% of peak), hash "
               f"{p['hash_ms']:.2f} ms ({p['hash_gb_s']:.0f} GB/s, {100 * p['hash_over_gemm']:.1f}% of gemm)"
