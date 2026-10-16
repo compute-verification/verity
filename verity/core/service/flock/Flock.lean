@@ -69,4 +69,5 @@ import Flock.With.ReturnsWalk
 import Flock.With.Deployed
 import Flock.With.Setup
 import Flock.With.SetupEq
+import Flock.With.SimSetup
 import Flock.RecOpeningCmd
