@@ -1,8 +1,8 @@
 # The machine model's constants (rs-machine-model §8). Units: u = 1/R* SMSP-cycle; X is an attack's price over the tensor
 # MACs it replaces, at the vector's MAC price.
 
-# The vector `machine-model solve` re-solves by default: the adopted vector (decision 17).
-current = "VF3k-16"
+# The vector `machine-model solve` re-solves by default: the adopted vector (decision 17; VF3l-16 by decision 62).
+current = "VF3l-16"
 # The design whose cheapest attack is a vector's margin.
 adopted = "U±64, F±1"
 

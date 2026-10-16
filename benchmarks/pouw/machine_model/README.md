@@ -9,10 +9,10 @@ price a word beside its measured cost.
 
 ~~~bash
 uv run machine-model list                 # the named vectors
-uv run machine-model solve VF3k-16        # τ, τ at 600 W, U/F_low, margin, θ, the cheapest attacks, the check, the claims
-uv run machine-model solve                # model.toml's `current` (VF3k-16, decision 17's active vector)
-uv run machine-model census VF3k-16 --kind ATOMS64
-uv run machine-model attacks VF3k-16 -n 3 # the cheapest attacks of every design
+uv run machine-model solve VF3l-16        # τ, τ at 600 W, U/F_low, margin, θ, the cheapest attacks, the check, the claims
+uv run machine-model solve                # model.toml's `current` (VF3l-16, the vector of record by decision 62)
+uv run machine-model census VF3l-16 --kind ATOMS64
+uv run machine-model attacks VF3l-16 -n 3 # the cheapest attacks of every design
 uv run machine-model adopt ~/.research/runs/RUN/out/census.csv EPOCH   # a probe's census at the last epoch
 uv run machine-model --data /tmp/candidate solve VF3l   # a copy of data/ with a candidate change
 ~~~
@@ -63,7 +63,8 @@ MOV, any landed word, UR fan-out, every SHFL mode, and any kind whose output can
 claim reads every kind that writes registers, a superset of those, so a route can't be missed. VF3k-16 and VF3l-16 fail
 it on the UR fan-out alone (UNI 2 and UNI64 1 MACs a lane-word); the candidates `VF3l-16-copy16`,
 `VF3l-16-copy16-fan32`, `VF3l-16-copy32-fan16` and `VF3l-16-copy32` credit the routes they name, each at or below its
-measured cost.
+measured cost. They wait for XOR-in. Theorem O's every-run floor reads only (π₃₂) and the load half: a UR word is one
+value, so the lanes it serves past the first are copies, credited only by copy luck.
 
 ## Adopt a probe's census
 

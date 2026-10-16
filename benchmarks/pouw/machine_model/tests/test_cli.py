@@ -28,7 +28,7 @@ def test_solve_prints_the_numbers_and_the_check(capsys):
 def test_solve_defaults_to_the_current_vector(capsys):
     assert main(["solve", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
-    assert d["vector"] == "VF3k-16" and round(d["tau"], 4) == 0.0603 and d["failures"] == [] and d["unreproduced"] == []
+    assert d["vector"] == "VF3l-16" and round(d["tau"], 4) == 0.0603 and d["failures"] == [] and d["unreproduced"] == []
     assert d["floors"] == {"pi32": {"kinds": 85, "below": [], "absent": []},
                            "loads16": {"kinds": 9, "below": [], "absent": []},
                            "copy16": {"kinds": 63, "below": ["UNI 2.00 a word < 16", "UNI64 1.00 a word < 16"],
