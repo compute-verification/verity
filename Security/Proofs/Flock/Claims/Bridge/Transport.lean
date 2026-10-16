@@ -23,7 +23,7 @@ namespace Claims.Bridge
 
 open FlockSoundness FlockSoundness.Game
 
-variable {β Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
+variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
 open Classical in
 theorem Pr_eq_Ex {α : Type} [Fintype α] (p : α → Prop) : Pr p = Ex fun a => ind p a := by
@@ -31,18 +31,18 @@ theorem Pr_eq_Ex {α : Type} [Fintype α] (p : α → Prop) : Pr p = Ex fun a =>
   rfl
 
 /-- **The strategy the run plays in the game**: the prover's bytes, decoded. -/
-abbrev stratG (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (g : Msg → Game β) (I : ∀ x, Iface Coin (g x)) (x : Msg)
-    (ω : Ω) : Strategy (g x) :=
+abbrev stratG {β : Msg → Type} (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (g : (x : Msg) → Game (β x))
+    (I : ∀ x, Iface Coin (g x)) (x : Msg) (ω : Ω) : Strategy (g x) :=
   toStrat (g x) (I x) (stratOf H P x ω (g x) (I x) [] none)
 
 section Transport
 
-variable (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (k : Msg → ℕ) (g : Msg → Game β) (I : ∀ x, Iface Coin (g x))
-  (d : Msg → β → OC Bool) (x : Msg)
+variable {β : Msg → Type} (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (k : Msg → ℕ) (g : (x : Msg) → Game (β x))
+  (I : ∀ x, Iface Coin (g x)) (d : (x : Msg) → β x → OC Bool) (x : Msg)
 
 /-- **The coin law for the run**: the run's outcome on uniform coins has the game's law against `stratG`. -/
 theorem ex_outcome (ω : Ω) (hR : RoundsLe (g x) (I x) (stratOf H P x ω (g x) (I x) [] none) false (k x))
-    (f : β → ℝ) :
+    (f : β x → ℝ) :
     Ex (fun r : Fin (k x) → Coin => f (outcome H P k g I x ω r)) = expect f (g x) (stratG H P g I x ω) :=
   ex_playOn_root f (g x) (I x) _ (k x) hR
 
@@ -50,7 +50,7 @@ open Classical in
 /-- **Acceptance with an event of the outcome**: `Pr_r[run = acc ∧ Q(outcome)]` is the game's probability that
 `d x` accepts the outcome and `Q` holds, against `stratG`. -/
 theorem Pr_acc_and (ω : Ω) (hR : RoundsLe (g x) (I x) (stratOf H P x ω (g x) (I x) [] none) false (k x))
-    (Q : β → Prop) :
+    (Q : β x → Prop) :
     Pr (fun r : Fin ((ofGame k g I d).k x) → Coin =>
         (run H P (ofGame k g I d) x ω r).out = .acc ∧ Q (outcome H P k g I x ω r)) =
       expect (ind fun b => ((d x b).eval H).1 = true ∧ Q b) (g x) (stratG H P g I x ω) := by
@@ -73,7 +73,7 @@ open Classical in
 /-- **Acceptance with an event of the transcript**: an event `Q` of what the game reads off the run's messages
 (`replay`) has the game's probability; at `Q := (· = some b₀)`, acceptance with the transcript of outcome `b₀`. -/
 theorem Pr_acc_replay (ω : Ω) (hR : RoundsLe (g x) (I x) (stratOf H P x ω (g x) (I x) [] none) false (k x))
-    (Q : Option β → Prop) :
+    (Q : Option (β x) → Prop) :
     Pr (fun r : Fin ((ofGame k g I d).k x) → Coin =>
         (run H P (ofGame k g I d) x ω r).out = .acc ∧ Q (replay ⟨g x, I x⟩ (run H P (ofGame k g I d) x ω r).msgs)) =
       expect (ind fun b => ((d x b).eval H).1 = true ∧ Q (some b)) (g x) (stratG H P g I x ω) := by
@@ -83,14 +83,14 @@ theorem Pr_acc_replay (ω : Ω) (hR : RoundsLe (g x) (I x) (stratOf H P x ω (g 
 
 /-- **The fork law for the run**: two runs sharing their first `j` coins have the law `forkX` of the game. -/
 theorem ex_fork_run (ω : Ω) (hR : RoundsLe (g x) (I x) (stratOf H P x ω (g x) (I x) [] none) false (k x))
-    (j : Fin (k x)) (F : β → β → ℝ) :
+    (j : Fin (k x)) (F : β x → β x → ℝ) :
     Ex (fun rr : (Fin (k x) → Coin) × (Fin (k x) → Coin) =>
         F (outcome H P k g I x ω rr.1) (outcome H P k g I x ω (forkCoins j rr.1 rr.2))) =
       forkX F j (g x) (I x) (stratOf H P x ω (g x) (I x) [] none) none :=
   ex_fork F (g x) (I x) _ none (k x) j.val j.isLt hR
 
 /-- The indicator that the two decisions' `H` logs hold a collision, `B`'s output on the two outcomes. -/
-noncomputable def collOf (H : Msg → Msg) (d : β → OC Bool) (b b' : β) : ℝ :=
+noncomputable def collOf {γ : Type} (H : Msg → Msg) (d : γ → OC Bool) (b b' : γ) : ℝ :=
   if (findColl (((d b).eval H).2 ++ ((d b').eval H).2)).isSome then 1 else 0
 
 /-- **`B`'s fork, in the game**: the probability that `B`'s two runs, forked at round `j`, collide is the average over
