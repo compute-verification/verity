@@ -21,7 +21,7 @@
 //        round's standalone block runs both fillers alone on their own SMs (the split pumped for the arm's window, the
 //        phase filler's launch timed 5 times on the step's SMs meanwhile); then the settled power windows. Slots: 0 the
 //        split's calibration, 1 the phase filler's, 2 + r and 2 + R + r round r's arm block, 2 + 2R + r and 2 + 3R + r
-//        its standalone block, then four for the power windows.
+//        its standalone block, then four for the power windows (4R + 6 <= rounds.cuh's POINT_SLOTS).
 //   pncu PW PNC PS PT
 //        dfill_p on every SM, 4 launches of PT tiles a warp: ncu reads the phase filler's DRAM bytes from these.
 //
@@ -128,8 +128,8 @@ static int pfill_lone(const PFill& f, int n, int* checked, std::vector<unsigned 
   return bad;
 }
 // a phase round: its coins on the filler, its range's start as the device's tile base
-static Round phase_open(PFill& pf, int point, int slots, int slot) {
-  Round r = round_open(point, slots, slot, PBIT);
+static Round phase_open(PFill& pf, int point, int slot) {
+  Round r = round_open(point, slot, PBIT);
   pf.c0 = r.c0;
   pf.c1 = r.c1;
   const unsigned long long st[2] = {r.lo, 0};
@@ -187,13 +187,12 @@ static int run_pscore(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, 
   const std::vector<Lt> p2 = lin_plans(d, B);
   d.st = full;
   const double setup_ms = now_ms() - ts0;
-  const int slots = 4 * rounds + 6;
   const int sp_step = sm_spread(d, ss, true), sp_step2 = sm_spread(d, ss2, true);
   DFill f = dfill_make(got[1], W, NC, S, 0, 0);
   const int sp_fill = sm_spread(d, fs, false);
   int bad = 0, checked = 0;
   double amhz = 0, awatt = 0, alone_split = 0;
-  Round r0 = round_open(f, point, slots, 0);
+  Round r0 = round_open(f, point, 0);
   {
     DPump pump;
     spump_start(pump, f, fs, 3, r0.lo);
@@ -221,7 +220,7 @@ static int run_pscore(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, 
     padv_k<<<1, 1, 0, d.st>>>(pf.st, (unsigned long long)pf.per_layer());
   };
   double alone_phase = 0, pmhz = 0;
-  Round rp0 = phase_open(pf, point, slots, 1);
+  Round rp0 = phase_open(pf, point, 1);
   {
     d.st = ss;
     const Rep m = median(time_work(d, w_lone, 5));
@@ -250,8 +249,8 @@ static int run_pscore(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, 
     CK(cudaStreamSynchronize(ss));
   };
   auto arm_block = [&](Block& b, int r) {
-    b.rd = round_open(f, point, slots, 2 + r);
-    b.prd = phase_open(pf, point, slots, 2 + rounds + r);
+    b.rd = round_open(f, point, 2 + r);
+    b.prd = phase_open(pf, point, 2 + rounds + r);
     poison();
     const unsigned long long p0 = pdone(pf);
     DPump pump;
@@ -275,8 +274,8 @@ static int run_pscore(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, 
     bad += pfill_last(pf, 8, &checked, &b.prd.checked);
   };
   auto solo_block = [&](Block& b, int r, double win) {
-    b.rd = round_open(f, point, slots, 2 + 2 * rounds + r);
-    b.prd = phase_open(pf, point, slots, 2 + 3 * rounds + r);
+    b.rd = round_open(f, point, 2 + 2 * rounds + r);
+    b.prd = phase_open(pf, point, 2 + 3 * rounds + r);
     poison();
     DPump pump;
     spump_start(pump, f, fs, 3, b.rd.lo);
@@ -313,8 +312,8 @@ static int run_pscore(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, 
     CK(cudaGraphExecDestroy(ge));
   }
   for (int w = 0; w < 2; w++) {
-    Round rd = round_open(f, point, slots, 2 + 4 * rounds + 2 * w);
-    Round prd = phase_open(pf, point, slots, 3 + 4 * rounds + 2 * w);
+    Round rd = round_open(f, point, 2 + 4 * rounds + 2 * w);
+    Round prd = phase_open(pf, point, 3 + 4 * rounds + 2 * w);
     DPump pump;
     spump_start(pump, f, fs, 3, rd.lo);
     while (pump.done.load() < 2) {
@@ -343,7 +342,7 @@ static int run_pscore(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, 
          "\"alone_fill\": {\"mac_per_s\": %.6e, \"mhz\": %.1f, \"watt\": %.1f, \"split_mac_per_s\": %.6e, "
          "\"phase_mac_per_s\": %.6e, ",
          B, L, fill_sms, d.sms, got[0], got[1], sp_step, sp_fill, sp_step2, psms, W, NC, S, f.tiles, f.grid, f.macs(),
-         point, slots, lo, hi, wrapped ? "true" : "false", setup_ms, rounds, K, PW, PNC, PS, PT, pf.grid, pf.prio,
+         point, POINT_SLOTS, lo, hi, wrapped ? "true" : "false", setup_ms, rounds, K, PW, PNC, PS, PT, pf.grid, pf.prio,
          pf.tile_macs(), per_step, tiles_short, alone_phase, pmhz, alone_split + alone_phase, amhz, awatt, alone_split,
          alone_phase);
   print_round(r0);
@@ -424,7 +423,8 @@ int main(int argc, char** argv) {
   const int B = atoi(argv[2]), L = atoi(argv[3]), fsm = atoi(argv[4]), W = atoi(argv[5]), NC = atoi(argv[6]),
             S = atoi(argv[7]), PW = atoi(argv[8]), PNC = atoi(argv[9]), PS = atoi(argv[10]), PT = atoi(argv[11]),
             rounds = atoi(argv[12]), K = atoi(argv[13]), point = atoi(argv[14]);
-  if ((size_t)B * L > MAX_BL || L % 512 || L <= 0 || B < 1 || B > 256 || rounds < 2 || K < 1 || W < 1 || W > 16 || point < 0 ||
+  if ((size_t)B * L > MAX_BL || L % 512 || L <= 0 || B < 1 || B > 256 || rounds < 2 || 4 * rounds + 6 > POINT_SLOTS ||
+      K < 1 || W < 1 || W > 16 || point < 0 ||
       S % 8 || S <= 0 || !phase_ok(PW, PNC, PS, PT)) {
     fprintf(stderr, "B*L <= %zu, L %% 512 == 0, 1 <= B <= 256, ROUNDS >= 2, K >= 1, 1 <= W <= 16, 8 | S; "
                     "1 <= PW <= 16, PNC 1|2|4, 8 | PS > 8, PT >= 1\n", MAX_BL);
