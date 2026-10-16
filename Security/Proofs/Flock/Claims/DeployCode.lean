@@ -263,7 +263,6 @@ theorem zkRunCols_length_lt_zkNMinD' {agree : ℝ} (ha0 : 0 < agree) (ha1 : agre
 /-- **The tables' traces read as one witness**: each trace's read, concatenated in table order (the units' order). -/
 def readTables {T : Type} (read : T → Wit) (Ms : List T) : Wit where
   hid := Ms.flatMap fun M => (read M).hid
-  salts := Ms.flatMap fun M => (read M).salts
 
 /-- **One table's trace reads as before.** -/
 theorem readTables_singleton {T : Type} (read : T → Wit) (M : T) : readTables read [M] = read M := by
@@ -289,11 +288,11 @@ theorem readTables_hid_getD {T : Type} (read : T → Wit) (n : ℕ) :
         (Nat.lt_of_succ_lt_succ hc) a ha
 
 /-- **At one table, `assemble` is the single-table step**: the decoded traces of table `0`'s columns, each read alone. -/
-theorem assemble_of_tables_eq_one {Col T : Type} (H : Msg → Msg) (parse : Msg → Option Claims.Flock.Stmt)
+theorem assemble_of_tables_eq_one {Col T : Type} (parse : Msg → Option Claims.Flock.Stmt)
     (decode : List (ℕ × Col) → List T) (read : List T → Wit) (x : Msg) (opens : List (ℕ → List (ℕ × Col)))
     (s : Claims.Flock.Stmt) (hp : parse x = some s) (h1 : s.tables = 1) :
-    assemble H parse decode read x opens =
-      ((decode (opens.flatMap fun o => o 0)).map fun M => read [M]).find? fun w => decide (RelS H s w) := by
+    assemble parse decode read x opens =
+      ((decode (opens.flatMap fun o => o 0)).map fun M => read [M]).find? fun w => decide (RelS s w) := by
   simp only [assemble, hp, h1, List.range_one, List.map_cons, List.map_nil, List.sections, List.flatMap_singleton,
     List.map_map]
   rfl
@@ -464,15 +463,13 @@ theorem listComplete_zk (rel : Readable.Parsed → Readable.Relation) :
       (Claims.Flock.zkDecodeD Claims.Flock.zkAgree) :=
   Claims.Flock.listComplete_zkDecodeD _ Claims.Flock.zkAgree_pos
 
-/-- **`ScopeMatches` for the masked verifier** (C's `scopeMatches_zk` at the verifier's parser and scope check). -/
+/-- **`ScopeMatches` for the masked verifier** (C's `scopeMatches` at the verifier's parser and scope check). -/
 theorem scopeMatches_zk (rel : Readable.Parsed → Readable.Relation) : Claims.Flock.ScopeMatches (deployZk rel) :=
-  Readable.scopeMatches_zk (deployZk rel) rel (readOf true) rfl rfl (fun _ _ h => readOf_zk h) rfl
+  Readable.scopeMatches (deployZk rel) rel (readOf true) rfl rfl (fun _ _ h => readOf_zk h)
 
-/-- **`ScopeMatches` for the plain verifier**, exactly when every statement it parses and checks has `22 ≤ m`. -/
-theorem scopeMatches_plain_iff (rel : Readable.Parsed → Readable.Relation) :
-    Claims.Flock.ScopeMatches (deployPlain rel) ↔
-      ∀ x p, Readable.parseBytes (readOf false) x = some p → p.check = .ok () → 22 ≤ (Readable.toReadable rel p).m :=
-  Readable.scopeMatches_iff (deployPlain rel) rel (readOf false) rfl rfl (fun _ _ h => readOf_zk h)
+/-- **`ScopeMatches` for the plain verifier** (C's `scopeMatches` at the verifier's parser and scope check). -/
+theorem scopeMatches_plain (rel : Readable.Parsed → Readable.Relation) : Claims.Flock.ScopeMatches (deployPlain rel) :=
+  Readable.scopeMatches (deployPlain rel) rel (readOf false) rfl rfl (fun _ _ h => readOf_zk h)
 
 /-- The opened columns of a plain run's table sit at distinct positions. -/
 theorem cols_nodup_plain (rel : Readable.Parsed → Readable.Relation) (s : Claims.Seen) (j : ℕ) :

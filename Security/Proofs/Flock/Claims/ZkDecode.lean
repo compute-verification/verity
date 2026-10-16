@@ -22,8 +22,8 @@ the count (`pad_lt_zkJohnsonCount`): it is reached only by `E^rep`'s columns, ga
 
 The read step (`zkRead`) drops the padding and the extra lanes, keeps the witness lanes' messages (`zkWitnessMsg`), and
 reads the packed trace (`Model.witnessOf`) as the hidden values, bit `a` of the trace being hidden value `a`
-(`readTrace`), with no salts: the masked statement's commitments are `hm96` rows the circuit computes from trace bits,
-so their salts are trace bits too.
+(`readTrace`): the masked statement's commitments are `hm96` rows the circuit computes from trace bits, so their salts
+are trace bits too.
 -/
 
 namespace Claims.Flock
@@ -224,9 +224,9 @@ def traceBits {F K : Type} [Field F] [Field K] (A : Arith F K) (m lanes cols : �
   List.ofFn fun a : Fin (2 ^ m) => decide (witnessOf A m lanes cols M a = 1)
 
 /-- **The read step on a level-0 message**: the trace's bits are the hidden values, hidden value `a` being trace bit
-`a`, and no salts. -/
+`a`. -/
 def readTrace {F K : Type} [Field F] [Field K] (A : Arith F K) (m lanes cols : ℕ) (M : Message F lanes cols) : Wit :=
-  ⟨traceBits A m lanes cols M, []⟩
+  ⟨traceBits A m lanes cols M⟩
 
 /-- **The read step on a masked message**: the witness lanes' trace (`readTrace` of `zkWitnessMsg`). -/
 def zkRead {F K : Type} [Field F] [Field K] (A : Arith F K) (m lanes e cols t : ℕ)

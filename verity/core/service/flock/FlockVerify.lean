@@ -593,7 +593,8 @@ Each DIR holds `session.json`
 and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order.
 A session whose draw is by a law no soundness claim draws by is refused at setup (`ProvedScope.drawLaw`: a bernoulli or
 work draw, whatever flags it holds, or a subset draw without `--zk`). Every session of a statement whose form the
-soundness proof does not cover (`ProvedScope.check`, §16.15) is refused, and so is a session without a draw, both after
+soundness proof does not cover (`ProvedScope.check`, then its tables' `m`, `ProvedScope.sizesOk`, §16.15) is refused, and
+so is a session without a draw, both after
 every check has passed (so the reason is the refusal only when nothing else fails; the form's first). Exit 0 iff every
 session is accepted. `--zk`: the sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree;
 none is on `os` or `seed` coins (the live build reads no `FC_COINS` under `--zk`), so `--zk` takes no `--coins`. -/
@@ -730,8 +731,10 @@ def verifyCmd (args : List String) : IO UInt32 := do
       if let some k := coinKey then CoinTree.checkFresh coinKeys k
       let (spec, tabs, _) ← st
       if zk then Zk.verify spec tabs record proofs else verify spec tabs record proofs
-      -- last, so a session that fails a check keeps that check's reason: the form's refusal, then a draw-less session's
+      -- last, so a session that fails a check keeps that check's reason: the form's refusal (its statement's, then its
+      -- tables' sizes), then a draw-less session's
       scope
+      ProvedScope.sizesOk zk (tabs.map Setup.m)
       if draw.isNone then ProvedScope.drawLaw zk draw
     if let some k := coinKey then coinKeys := coinKeys.push k
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
