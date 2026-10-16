@@ -37,3 +37,15 @@ def test_hc_power_arms(monkeypatch, attr, name, pre):
             assert A.placed(arm, ph, b, l) == A.Placement("split", arm.pre_sms)
         else:
             assert A.placed(arm, ph, b, l) == A.placed(kern, ph, b, l)
+
+
+def test_power_split_names_every_scored_point(monkeypatch):
+    A = sys.modules.get("arms") or _load("arms")
+    monkeypatch.setenv("DFILL_MAP", "0")
+    arm = A.load("benchmarks/pouw/filler/hc_power.py:PowerSplit")
+    assert arm.name == "power-split" and A.check_arm(arm) == [] and os.environ["DFILL_MAP"] == "2"
+    table = type(arm).placement.__globals__["POWER_SPLIT"]  # arms.load doesn't register the module
+    assert {(b, l) for e in S.suite() for ph, b, l in e["points"] if ph == "decode"} == set(table)
+    for ph, b, l in S.points():
+        want = A.Placement("split", arm.pre_sms if ph == "prefill" else A.point_lookup(table, b, l))
+        assert A.placed(arm, ph, b, l) == want
