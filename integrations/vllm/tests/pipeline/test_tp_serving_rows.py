@@ -294,3 +294,13 @@ def test_the_verifiers_window_is_refused_on_a_record_it_cannot_hold(served_tp, t
 def test_a_rank_outside_the_world_has_no_window(served_tp):
     with pytest.raises(ValueError, match="rank 2 is not a rank of the world of 2"):
         _mine(served_tp, 2)
+
+
+def test_the_verifiers_window_is_refused_for_a_workload_the_record_did_not_serve(served_tp, tmp_path):
+    doc = json.loads(served_tp["workload"].read_text())
+    doc["requests"][0]["max_tokens"] += 1
+    (wl := tmp_path / "workload.json").write_text(json.dumps(doc))
+    with pytest.raises(ValueError, match="workload sha256 .* is not the record's"):
+        SRT.window_of_record(served_tp["commit"], 0, served_tp["partition"], served_tp["build"], wl)
+    with pytest.raises(ValueError, match="is not the record's None"):
+        _mine(served_tp, 0, _copy_commit(served_tp, tmp_path, lambda rows: [{k: v for k, v in x.items() if k != "workload_sha256"} for x in rows]))

@@ -26,6 +26,7 @@ MAX_TOKENS = 3
 def commit(root: Path, *, world: int = 2, I: int = 256, law: str = "subset:2") -> dict:
     """The TP Commit's files under ``root`` (module docstring), and its TP run root, record and windows."""
     from verity_vllm.check.replay import driver as SR
+    from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline import deferred_rows as DRW
     from verity_vllm.pipeline import replay_bundle as RB
     from verity_vllm.pipeline.tp import serving_rows as SRT
@@ -46,6 +47,7 @@ def commit(root: Path, *, world: int = 2, I: int = 256, law: str = "subset:2") -
     wl = root / "workload.json"
     wl.write_text(json.dumps({"requests": [{"request_id": rid, "prompt_token_ids": pr, "max_tokens": MAX_TOKENS, "arrive_step": 0}
                                            for rid, pr in prompts.items()], "sampling": {"variant": "greedy"}}))
+    wl_sha = va.load_workload(wl)["sha256"]
     reqs = [{"request_id": f"r{i}", "arrive_step": 0, "prompt_len": len(pr), "max_tokens": MAX_TOKENS} for i, pr in enumerate(prompts.values())]
     roots = {r: bytes(o.run.run_root) for r, (_c, o) in enumerate(ranks)}
     tp_root = tp_run_root(world, roots)
@@ -67,7 +69,7 @@ def commit(root: Path, *, world: int = 2, I: int = 256, law: str = "subset:2") -
     out = root / "commit"
     out.mkdir()
     rows = [{"pair": 0, "arm": "control", "label": LABEL},
-            {"pair": 0, "arm": "instrumented", "label": LABEL,
+            {"pair": 0, "arm": "instrumented", "label": LABEL, "workload_sha256": wl_sha,
              "commit": {"tp_run_root": tp_root.hex(), "world": world, "per_rank": {str(r): {"run_root": x.hex()} for r, x in roots.items()}}}]
     (out / "runs.jsonl").write_text("".join(json.dumps(x) + "\n" for x in rows))
     (out / "versions.json").write_text(json.dumps({"root_tag": TP_ROOT_TAG.decode(), "sampled_replay": {"of_record": of_record},
