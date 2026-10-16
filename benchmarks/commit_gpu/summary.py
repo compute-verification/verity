@@ -50,8 +50,8 @@ def size(n_bytes: int) -> str:
 def table(out: str) -> None:
     tag = best(out)
     print("| leaf | row digest | leaves | critical path ms | GB/s | x GEMM | salt phase ms | beside: commit done ms (GB/s) "
-          "| GEMMs beside | hidden | high priority: commit done ms (GB/s) | GEMMs beside |")
-    print("|" + "---|" * 12)
+          "| GEMMs beside | high priority: commit done ms (GB/s) | GEMMs beside |")
+    print("|" + "---|" * 11)
     for prefix, digest in (("bench-e2e-", "row/v2"), ("bench-sweep-", "row/v2"), ("bench-seg-", "row-seg/v1")):
         rows = lines(os.path.join(out, f"{prefix}{tag}.jsonl"))
         for b, s in zip(rows[::2], rows[1::2]):
@@ -60,7 +60,7 @@ def table(out: str) -> None:
             cells = [leaf, digest, f"2^{b['n'].bit_length() - 1}", f"{b['graph_ms']:.3f}", f"{b['operand_gb_per_s_graph']:.1f}",
                      f"{g['commit_over_gemm']:.2f}", f"{b['salt_ms']:.3f}",
                      f"{g['both_commit_ms']:.3f} ({g['commit_gb_per_s_beside']:.1f})",
-                     f"{g['both_gemm_ms'] / (g['gemms'] * g['gemm_ms']):.2f}x of {g['gemms']}", f"{g['hidden_fraction']:.2f}"]
+                     f"{g['both_gemm_ms'] / (g['gemms'] * g['gemm_ms']):.2f}x of {g['gemms']}"]
             p = g.get("priority")
             cells += ([f"{p['commit_ms']:.3f} ({p['commit_gb_per_s_beside']:.1f})",
                        f"{p['gemm_ms'] / (g['gemms'] * g['gemm_ms']):.2f}x"] if p else ["", ""])
