@@ -238,6 +238,8 @@ These are Daniel's rulings, newest first.
   exact for a strategy that never collides on a fork and says nothing about one that collides on a single pair, so it
   is never called tighter than a bound under `cr/sha-512`. The quantitative forking version comes next: a strategy that
   beats the bound by δ yields, from two runs off one commitment, a collision with probability about δ².
+  (16 Oct, vacuity sweep, LEAN-19: `RecursiveSound`'s event is nearly empty, because the inner statement pins rows only
+  by their hm96 commit strings with the salt free. Follow the knowledge form instead: `EndToEndHidden`, `Claims.KS`.)
 - 2026-10-08 (4:30 PM PDT): a property's hypotheses come only from the named premises in `Security/Definitions/`
   (physical premises, and VBridge until it's proved). The Lean check refuses any other, and adding a premise messages
   Daniel like any `Definitions/` change. A theorem whose hypotheses can't all hold for the real system says nothing.
