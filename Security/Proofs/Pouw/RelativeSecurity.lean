@@ -48,8 +48,9 @@ proof workers' results land here as theorems or as named hypotheses.
   finite game of rounds with fresh coins, one check a round, accepted iff every check passes (`RoundGame`); with the
   per-round pass bound `1 − (1−p)·d` named (`PassBound`, or `PathBound` along guard paths),
   `Pr[accept ∧ deficiency ≥ D] ≤ e^{−(1−p)D} + R(δ_bind + δ_ZK)` (`theoremS`, `theoremS_G`), by the supermartingale
-  `Π 1[pass]·e^{(1−p)d}` as a product over rounds and Markov. The window's corollary (`window_le`) is a service floor
-  (`RoundsHyp`, `serviceFloor_of_rounds`), and the B_θ certified fraction rests on it in place of Theorem M
+  `Π 1[pass]·e^{(1−p)d}` as a product over rounds and Markov. The window's corollary (`window_le`; it reads only the
+  exponential form `E[1[pass_w] e^{(1−p) d_w}] ≤ 1`, `window_le_exp`) is a service floor (`RoundsHyp`, over
+  `ExpBound`, `serviceFloor_of_rounds`), and the B_θ certified fraction rests on it in place of Theorem M
   (`certifiedFraction120θ_rounds`, at `2^{−40}` `_rounds_40`).
 * The Model B bridge (RS-MODEL): typed circuits of priced gates with free routing; `ModelB.machine` is a `Machine`
   whose time is `timeB`, `ModelB.matMachine` a `MatMachine` from priced circuits (`MatGates`, realized by a GEMM gate
@@ -105,6 +106,17 @@ proof workers' results land here as theorems or as named hypotheses.
   and never 0 (`uRe_injective`, `uRe_ne_zero`), so 0.5039 (`luck_dropped_reEncoded`), and ½ for a term dropped
   outright (`_zero`). The window-level ½ is false at `|S| ≥ 4` (RS-E-REF r5 V.2), so ¾ is the window's bound
   (decision 39 states the luck given the drawn pair indices at `p = ¾`).
+* Stages inside a round (decision 36, `note:20261016T0750Z-draft-rs-d1e-stage-coins` §2, as RS-E-REF r5 V.3 repaired
+  it): a round of `St` stages, each committing its operands, then drawing both noise blocks of its products (keyed by
+  the draw), then committing its outputs, with one check at the round's end. Per stage, a cheat step fixed before its
+  draw and the wrong share the draw adds (`StageGame`): `(1 − U) e^{(1−p) D}` is a supermartingale over the stages
+  (`StageGame.expect_le`, RS-E-REF r3 III.1's extension), so staged rounds meet the exponential bound that `RoundsHyp`
+  reads (`RoundGame.Staged`, `RoundGame.expBound_of_staged`). The staged spot check (`StagePlay`, `StagedPlay`) is
+  valid at `p = ¾` for degree-2 errors (`StagePlay.valid_sgame`, `StagedPlay.game_staged`), and `RoundsHypKSt` gives
+  `RoundsHyp` with the stage floors summed, `F₀ = St κ L n n' B` (`roundsHyp_of_staged`), so for affine products the
+  floor has neither a luck nor a chain hypothesis (`certifiedFraction120θ_staged_40`). Decode's deferred edit, every
+  operand committed before one draw, is `St = 1` (`certifiedFraction120θ_decode_40`). Overlapping stages (chunks in
+  flight, no node barrier) are outside it: their cost side needs the joint-projection Theorem E½ (r5 V.3).
 * Theorem H (round 6 §6, merges priced) is not needed for the re-encoded design: the chain lemma covers it in every
   arithmetic (RS-E-REF r4 IV.3). It stays proved as the alternative with merges priced, including `_H` of route (c).
   In the quad model, with merges at `h ≥ 2K/3` slots, each useful cell costs
@@ -6405,6 +6417,39 @@ theorem certifiedFraction120θ_reEncodedSpotMixed_40 (kd : K120 → Kind) (S : S
   have := certifiedFraction120θ_K_40 kd S (roundsHypK_of_spot h fun _ hπ => hπ)
     ((chainBound_gProd toF2 rfl toF2_wRe_zero).mono fun _ hπ => hπ.gProd) (by norm_num) hκ hC hδb hδz
   rwa [e] at this
+
+/-- **The re-encoded design's certified fraction with per-stage draws** (decision 36, RS-E-REF r5 V.3's repair):
+under `RoundsHypKSt` with products of affine operands (one-sided or mixed), rounds of `St` stages, each drawing its
+products' noise after committing their operands, have the floor with the `St` stage floors summed,
+`F₀ = St κ L n n' B`, at `D₀ = 160 ln 2` rounds of luck at `2⁻⁴⁰`, with neither a luck nor a chain hypothesis. -/
+theorem certifiedFraction120θ_staged_40 (kd : K120 → Kind) (S : Service) {R St : ℕ} {Vmax δb δz κ : ℝ}
+    {n L B n' : ℕ}
+    (h : RoundsHypKSt (machine kd (.ofNat price120)) S R St Vmax δb δz κ n L 7 B n' wRe fun π => AffProd π)
+    (hSt : 0 < St) (hκ : 0 < κ) (hC : 0 < L * (n * n' * B)) (hδb : 0 ≤ δb) (hδz : 0 ≤ δz) :
+    ServiceFloor (machine (kdθ kd) priceθ) S
+      (4 / 5 * ((R - 160 * Real.log 2) * (St * (κ * L * ((n * n' * B : ℕ) : ℝ))) - Vmax))
+      (((2 : ℝ) ^ 40)⁻¹ + R * (δb + δz)) := by
+  have e : (40 * Real.log 2 / (1 - 3 / 4) : ℝ) = 160 * Real.log 2 := by
+    rw [show (1 : ℝ) - 3 / 4 = 1 / 4 by norm_num]
+    ring
+  have hF₀ : 0 < (St : ℝ) * (κ * L * ((n * n' * B : ℕ) : ℝ)) := by
+    rw [mul_assoc]
+    exact mul_pos (by exact_mod_cast hSt) (mul_pos hκ (by exact_mod_cast hC))
+  have := certifiedFraction120θ_rounds_40 kd S
+    (roundsHyp_of_staged h ((chainBound_gProd toF2 rfl toF2_wRe_zero).mono fun _ hπ => hπ.gProd) (fun _ hπ => hπ)
+      hSt hκ.le) (by norm_num) hF₀ hδb hδz
+  rwa [e, mul_zero, sub_zero] at this
+
+/-- **Decode's deferred edit as an instance** (RS-D1E (b), RS-E-REF r5 V.3: every operand of the round's products
+committed before the round's one draw): rounds of one stage, with the floor `F₀ = κ L n n' B`. -/
+theorem certifiedFraction120θ_decode_40 (kd : K120 → Kind) (S : Service) {R : ℕ} {Vmax δb δz κ : ℝ}
+    {n L B n' : ℕ}
+    (h : RoundsHypKSt (machine kd (.ofNat price120)) S R 1 Vmax δb δz κ n L 7 B n' wRe fun π => AffProd π)
+    (hκ : 0 < κ) (hC : 0 < L * (n * n' * B)) (hδb : 0 ≤ δb) (hδz : 0 ≤ δz) :
+    ServiceFloor (machine (kdθ kd) priceθ) S
+      (4 / 5 * ((R - 160 * Real.log 2) * (κ * L * ((n * n' * B : ℕ) : ℝ)) - Vmax))
+      (((2 : ℝ) ^ 40)⁻¹ + R * (δb + δz)) := by
+  simpa only [Nat.cast_one, one_mul] using certifiedFraction120θ_staged_40 kd S h one_pos hκ hC hδb hδz
 
 
 /-- **The certified fraction from Theorem H** (the re-encoded design in exact arithmetic, merges priced at
