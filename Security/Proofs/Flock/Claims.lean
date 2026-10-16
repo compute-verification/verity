@@ -11,6 +11,7 @@ import Proofs.Flock.Claims.NumbersTable
 import Proofs.Flock.Claims.NumbersPads
 import Proofs.Flock.Claims.NumbersGamma
 import Proofs.Flock.Claims.NumbersNMin
+import Proofs.Flock.Claims.RootFindGF128
 import Proofs.Flock.Claims.Decode
 import Proofs.Flock.Claims.DecodeFlock
 import Proofs.Flock.Claims.ZkDecode
