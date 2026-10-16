@@ -117,7 +117,7 @@ class Prover:
         for c in range(a.calls):
             gpu.append(self.E.cmd("call", c, *derive.sig_words(keys[c]), derive.receipt_seed(sigmas[s], c, s), rpaths[c],
                                   a.fused, s, a.window, a.fold))
-        shape = (self.km // derive.TM * (self.kn // derive.BN), derive.NCT, self.ks // a.window)
+        shape = (self.km // derive.TM * (self.kn // derive.BN), self.ks // a.window, derive.NCT)
         trees = [CM.commit_receipts(self.pool, str(rpaths[c]), shape, CM.label_r(self.session, w, c, s, self.rkind), self.salt_key)
                  for c in range(a.calls)]
         return gpu, rpaths, trees, sum(t.cpu_s for t in trees)
@@ -179,7 +179,7 @@ class Prover:
         Y = np.fromfile(ypath, np.int32).reshape(derive.TM, derive.BN)
         ypath.unlink()
         pl = ST.thread_place(th, a.window, self.ks, tile, j)
-        R = np.fromfile(rpaths[s][c], np.uint32).reshape(-1, derive.NCT, pl["nw"])[tile].copy()
+        R = np.fromfile(rpaths[s][c], np.uint32).reshape(-1, pl["nw"], derive.NCT)[tile].copy()
         rc_row = CM.leaf_row(("receipts", str(rpaths[s][c]), (-1,)), pl["r_leaf"]).copy()
         at, bt = (self.tb[s], atrees[s][c]) if self.dither else (atrees[s][c], self.tb[s])
         rt = rtrees[s][c]

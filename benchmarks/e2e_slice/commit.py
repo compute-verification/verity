@@ -5,8 +5,8 @@ CommitmentDomain), so a spot check's row in its statement's public file is a lea
 An operand leaf is decision 46's tile leaf of an operand X (rows x k int8): the RL x 32 block of rows RL i' .. RL i' + RL - 1
 and values 32 j .. 32 j + 31, row-major (16384 bits, the spot check's a or b, `verity.core.protocols.pouw.circuit.segment`),
 at position j (rows / RL) + i' (benchmarks/commit_gpu's tile mode). A receipt leaf is RW consecutive words of a call's
-checkpointed receipts, laid out (tile, thread, window) (the spot check's rc), so thread t of tile T's window w is word
-(T NCT + t) NW + w. A leaf's salt is the committer's secret, commit_gpu's PRF: SHA-512(Ks || BE64(pos) || BE64(r)) for
+checkpointed receipts, laid out (tile, window, thread) (the spot check's rc), so thread t of tile T's window w is word
+(T NW + w) NCT + t: a leaf is one window of one tile. A leaf's salt is the committer's secret, commit_gpu's PRF: SHA-512(Ks || BE64(pos) || BE64(r)) for
 r = 0, 1, 2, Ks = SHA-512 of the salt key and the tree's label. Built in CHUNK-leaf pieces by a process pool; the tree's
 levels are kept for the paths. `verify_path` is the challenger's side.
 """
@@ -67,7 +67,7 @@ def tile_rows(X: np.ndarray, lo: int, hi: int) -> np.ndarray:
 
 
 def receipt_rows(R: np.ndarray, lo: int, hi: int) -> np.ndarray:
-    """Receipt leaves [lo, hi)'s rows of a call's receipts R (any shape, (tile, thread, window) order) u32: (hi - lo, 2 RW)
+    """Receipt leaves [lo, hi)'s rows of a call's receipts R (any shape, (tile, window, thread) order) u32: (hi - lo, 2 RW)
     u16."""
     return np.ascontiguousarray(np.asarray(R, "<u4").reshape(-1)[RW * lo:RW * hi]).reshape(hi - lo, RW).view("<u2")
 
@@ -191,7 +191,7 @@ def commit_operand(pool, path: str, shape: tuple[int, int], label: dict, salt_ke
 
 
 def commit_receipts(pool, path: str, shape: tuple, label: dict, salt_key: bytes) -> Tree:
-    """A call's receipts' tree (the u32 file at ``path``, (tiles, NCT, NW)), RW words a leaf."""
+    """A call's receipts' tree (the u32 file at ``path``, (tiles, NW, NCT)), RW words a leaf."""
     return _commit(pool, ("receipts", path, shape), int(np.prod(shape)) // RW, label, salt_key)
 
 

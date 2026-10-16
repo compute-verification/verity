@@ -154,7 +154,7 @@ def seg_receipts(seed: int, Ts: np.ndarray, tile: int) -> np.ndarray:
 
 
 def win_receipts(seed: int, Ts: np.ndarray, tile: int, S: int, fold: str = "duo") -> np.ndarray:
-    """One tile's checkpointed receipts, (NCT, KS / S) u32 (`segment.PouwSegCheck_v2{S, FOLD}`): window w's word folds, from
+    """One tile's checkpointed receipts, (KS / S, NCT) u32 (`segment.PouwSegCheck_v2{S, FOLD}`): window w's word folds, from
     the keys of (tile, thread, w, KS / S), T_(w S - 1) (0 for w = 0) and T_(w S) .. T_(w S + S - 1). Ts (KS, 128, 128)."""
     from verity.core.protocols.pouw.circuit import segment as SG
 
@@ -180,7 +180,7 @@ def win_receipts(seed: int, Ts: np.ndarray, tile: int, S: int, fold: str = "duo"
                     y[:, :, t] = (rotl(y[:, :, t], SG.XROT[0]) ^ d[..., 0]) * np.uint32(SG.XA0[t]) + d[..., 1]
                     y[:, :, t] = (rotl(y[:, :, t], SG.XROT[1]) ^ d[..., 2]) * np.uint32(SG.XA1[t]) + d[..., 3]
         R = np.bitwise_xor.reduce(y ^ rotl(z, 16) if fold == "duo" else y, axis=2)
-    return np.ascontiguousarray(R.T)
+    return R
 
 
 def served_noise(F: np.ndarray, dither: bool) -> np.ndarray:

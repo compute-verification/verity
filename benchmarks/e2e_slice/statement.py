@@ -75,7 +75,7 @@ def thread_place(th: int, S: int, ks: int, tile: int, j: int) -> dict:
     warp, lane = th // 32, th % 32
     wm, wn, g, q = warp // 4, warp % 4, lane >> 2, lane & 3
     nw = ks // S
-    word = (tile * derive.NCT + th) * nw + j // S
+    word = (tile * nw + j // S) * derive.NCT + th
     return {"ia": 8 * (wm % 2) + g, "ib": 4 * (wn % 2) + q, "a_block": wm // 2, "b_block": wn // 2, "w": j // S, "i": j % S,
             "nw": nw, "r_leaf": word // SG.RW, "r_word": word % SG.RW}
 

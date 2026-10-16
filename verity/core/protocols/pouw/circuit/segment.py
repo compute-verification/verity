@@ -12,8 +12,8 @@ Receipts are checkpointed every S segments. Window w covers segments w S .. w S 
 gives the (tile, thread, window), absorbs the S + 1 prefix-word sets T_(w S - 1), T_(w S), ..., T_(w S + S - 1) (the
 window's incoming words, then each of its segments'), and commits one word, R_w. A step-j check therefore recomputes j's
 window from its keys (the last checkpoint) to its committed word, and both T_(j-1) and T_j are among the words it absorbs.
-A call's receipts are KS / S words a thread (KS = k / 32), 4 KS / S bytes, laid out thread-major and committed 512 words a
-leaf (RW).
+A call's receipts are KS / S words a thread (KS = k / 32), 4 KS / S bytes, laid out (tile, window, thread) and committed
+RW = 512 words a leaf, so a leaf is one window of one tile.
 
 The fold is a parameter (``FOLD``, `FOLDS`):
 

@@ -47,7 +47,7 @@ class FakeEngine:
             win, fold = (int(a[9]), a[10]) if len(a) > 10 else (1, "duo")
             A, B = (S["fixed"], S["X"][s]) if sb else (S["X"][s], S["fixed"])
             tn_ = n // derive.BN
-            R = np.empty((m // derive.TM * tn_, derive.NCT, k // 32 // win), np.uint32)
+            R = np.empty((m // derive.TM * tn_, k // 32 // win, derive.NCT), np.uint32)
             Y = np.empty((m, n), np.int64)
             for tm in range(m // derive.TM):
                 for tn in range(tn_):
