@@ -37,7 +37,7 @@ SMS, PER_SM, F_MAX = 188, 1024, 2430e6
 A_V99 = 0.2424 / (300.08 / 256)
 A_LADDER = [  # (what changes, A), rs-price-99.py's LP re-solved (note §1)
     ("V99 as frozen", A_V99),
-    ("u5 alphabet only", 0.3478),
+    ("u5 design only", 0.3478),
     ("and no W′ head credits", 0.5108),
     ("and ρ = 0 (no FP4 two-window split)", 0.5648),
     ("product routes only, A = 256/R*", 256 / 300.08),
@@ -123,7 +123,16 @@ class Model:
         nc, nc_max = n / (self.cap * ms * 1e-3), n / (self.cap_max * ms * 1e-3)
         tau = A_V99 * nc_max
         return {"nominal/capacity": nc, "nominal/capacity_2430": nc_max, "certified/nominal": CERT, "tau": tau,
-                "certified/capacity": CERT * nc, "forced_share": CERT * tau, "filler_share": fill}
+                "certified/capacity": CERT * nc, "forced_share": CERT * tau, "hidden": hidden(tau, A_V99),
+                "filler_share": fill}
+
+
+def hidden(tau, a):
+    """The share of tensor peak (at 2430 MHz) that undeclared MMAs may take while the guarantee holds.
+
+    Priced work in a window is at most the window (Σθ = 1, no row busier than real time). Undeclared MMAs at a share u
+    of peak are priced A·u of it, so the declared floor 0.99τ fits beside them while 0.99τ + A·u <= 1."""
+    return min(1.0, (1 - CERT * tau) / a)
 
 
 def decode_n(b, l):
@@ -262,11 +271,14 @@ def main():
         r = next(x for x in res["mixes"] if x["mix"] == name and x["B"] == b and x["schedule"] == "separate"
                  and x["attention"] == "FA2")
         picks += [(f"{name} B = {b}", r["tau"]), (f"{name} B = {b} + 92-SM filler", r["filler 92 SMs"]["tau"])]
-    res["tau_ladder"] = [{"row": n, **{w: t * a / A_V99 for w, a in A_LADDER}} for n, t in picks]
+    res["tau_ladder"] = [{"row": n, **{w: {"tau": t * a / A_V99, "hidden": hidden(t * a / A_V99, a)}
+                                       for w, a in A_LADDER}} for n, t in picks]
+    print("\nτ (hidden tensor share the guarantee allows) under each vector")
     print("\n| row | " + " | ".join(f"{w} (A = {a:.3f})" for w, a in A_LADDER) + " |")
     print("|---|" + "---|" * len(A_LADDER))
     for n, t in picks:
-        print(f"| {n} | " + " | ".join(fmt(t * a / A_V99) for _, a in A_LADDER) + " |")
+        print(f"| {n} | " + " | ".join(f"{fmt(t * a / A_V99)} ({fmt(hidden(t * a / A_V99, a))})"
+                                       for _, a in A_LADDER) + " |")
     if args.json:
         args.json.write_text(json.dumps(res, indent=1))
 
