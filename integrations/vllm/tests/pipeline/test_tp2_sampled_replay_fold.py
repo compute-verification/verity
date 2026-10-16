@@ -62,11 +62,11 @@ def test_earlier_pair_failure_is_not_forgotten():
 
 def test_every_collective_the_cross_rank_pass_evaluates_is_annotated_with_its_site_coverage_and_the_rest_are_not():
     """The world-8 routed all-reduces (GLM-5.3 TP8: Mnnvl, Multimem, the fused RMSNorm) are evaluated by TP-12 like AllReduce_v2 and
-    carry its record into the fold; BatchedGemm_v1 (no evaluator) stays a named gap."""
+    carry its record into the fold; a family the pass does not evaluate (AllGather2_v1 at world 8) stays a named gap."""
     from verity_vllm.pipeline.tp import c2 as C2
     from verity_vllm.program.frontend import collective_kinds as CK
 
-    fams = ["AllGather_v1", "AllReduceMnnvl_v1", "AllReduceMultimem_v1", "AllReduceRmsNormMnnvl_v1", "BatchedGemm_v1"]
+    fams = ["AllGather_v1", "AllReduceMnnvl_v1", "AllReduceMultimem_v1", "AllReduceRmsNormMnnvl_v1", "AllGather2_v1"]
     xr = {"result": True, "by_family": {"AllReduceRmsNormMnnvl_v1": {"picks": 156, "equal": 156}},
           "coverage_of_unreplayable": {"families": {"AllReduceRmsNormMnnvl_v1": {"sites": 78, "covered": 78, "missing": []}}}}
     per_rank = {}
@@ -79,7 +79,7 @@ def test_every_collective_the_cross_rank_pass_evaluates_is_annotated_with_its_si
     assert sorted(f for f, u in by.items() if "evaluated_by" in u) == fams[:4]
     fused = by["AllReduceRmsNormMnnvl_v1"]["evaluated_by"]
     assert (fused["picks"], fused["equal"], fused["sites"], fused["sites_covered"], fused["sites_missing"]) == (156, 156, 78, 78, [])
-    assert by["BatchedGemm_v1"] == {"family": "BatchedGemm_v1", "n": 4, "why": "no registered evaluator", "ranks": [0, 1]}
+    assert by["AllGather2_v1"] == {"family": "AllGather2_v1", "n": 4, "why": "no registered evaluator", "ranks": [0, 1]}
 
 
 def test_evaluated_cross_rank_is_the_worlds_families_and_every_all_reduce_route():
