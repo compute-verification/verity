@@ -66,6 +66,16 @@ proof workers' results land here as theorems or as named hypotheses.
   `c = ½`, `m_max = 2` (`_half`). The certified fraction (`certifiedFraction120θ`, `_half`): accepted runs are charged at
   least `(c φ / m_max) N` less the slack, except with probability `κ`. Model A (RS-MODEL §3) is ported over
   ℚ, and `timeθ_le_timeA` is `B_θ ≤ A` as the combination `(4/5)·ys + (1/5)·R6` of A's rows.
+* Theorem K (`note:20261016T0341Z-draft-fullfloor-s-r5` §3.6), over any ring with a map to F₂ (Z/2³² for s32 wrap):
+  a straight-line program of products of bit-affine operands and linear steps (`Slp`, closed form `Slp.val_eq`),
+  projected onto bit pairs mod 2 (`projF2`, zero diagonal), has F₂ rank at most twice its products (`theoremK`,
+  `Slp.rank_projF2_le`). On the re-encoded design X = ⌊x/s⌋ + b (`note:20261016T0525Z-draft-fullfloor-s-r6`; `dP`,
+  `dX`, `dIncr`) a cell-block's target has F₂ rank 2L (`rank_projF2_dIncr`), so a certified cell-block needs L
+  products (`Slp.dIncr_products_ge`) and cell-pure blocks add up (`Slp.card_mul_le`). `RoundsHypK` puts that in
+  `RoundsHyp`'s cost line, F₀ = κ L n n' B with no slack (`roundsHyp_of_K`), and the certified fraction follows
+  (`certifiedFraction120θ_K`, `_K_40`, at w = (1, 2, 4, 8, 16, 32, 65) `certifiedFraction120θ_reEncoded_40`).
+* Theorem H (round 6 §6, merges priced): in the quad model, with merges at `h ≥ 2K/3` slots, each useful cell costs
+  `K` slots (`theoremH`), with Theorem J and the rank bounds named.
 -/
 
 namespace Pouw.RelativeSecurity
