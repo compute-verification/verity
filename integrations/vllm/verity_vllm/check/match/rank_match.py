@@ -29,11 +29,11 @@ import json
 from pathlib import Path
 from typing import Any
 
-PARTIAL_PRODUCERS = ("EmbeddingShard_v1", "Gemm_v1", "Gemm_v2", "MoeSum", "MoeExpertSum", "batch:Gemm")   # own-partial producer classes
+PARTIAL_PRODUCERS = ("EmbeddingShard_v1", "Gemm_v1", "Gemm_v2", "DeepGemmFp8Linear", "MoeSum", "MoeExpertSum", "batch:Gemm")   # own-partial producer classes
 #: the producer class the ISSUING MODULE's class admits (the link table names the class: `... (RowParallelLinear)`): an all-reduce issued
 #: by a RowParallelLinear reduces a K-sharded Gemm output, never an embedding row (equal-result-but-wrong-producer fails here by name)
 PRODUCER_BY_SITE_CLASS = {"VocabParallelEmbedding": ("EmbeddingShard_v1",),
-                          "RowParallelLinear": ("Gemm_v1", "Gemm_v2", "batch:Gemm"),
+                          "RowParallelLinear": ("Gemm_v1", "Gemm_v2", "DeepGemmFp8Linear", "batch:Gemm"),
                           "LogitsProcessor": ("Gemm_v1", "Gemm_v2", "batch:Gemm"), "ParallelLMHead": ("Gemm_v1", "Gemm_v2", "batch:Gemm"),
                           "FusedMoE": ("MoeSum", "MoeExpertSum"), "SharedFusedMoE": ("MoeSum", "MoeExpertSum"), "MoERunner": ("MoeSum", "MoeExpertSum")}
 
@@ -62,18 +62,21 @@ def collectives_from_summary(summary: dict) -> list[dict]:
     return list(summary.get("collectives") or [])
 
 
-def _own_run(rs: list, c: dict) -> Any:
-    """The run of a collective row's operand (`parts` in rank order) that holds this rank's own part: the first run for rank 0, the last for
-    rank world-1, and for a rank between them the run holding leaf `rank * N` (its part's first leaf)."""
-    rank, world = int(c["rank"]), int(c.get("world") or 2)
-    if rank == 0 or rank == world - 1 or not rs:
-        return rs[0] if rank == 0 else rs[-1]
-    at, off = rank * int(c["N"]), 0
+def _own_rows(rs: list, c: dict, spec_of: Any) -> list[str]:
+    """The producer of each row of this rank's own part of a collective row's operand (`parts` in rank order, `world` equal parts: one
+    row of N for a per-row collective, all M rows for a flat one): the spec of the node whose output holds it (`spec_of(node)`), several
+    joined by ``+``, or `<not-a-node>` when a row reads anything but node outputs."""
+    rank, world, N = int(c["rank"]), int(c.get("world") or 2), int(c["N"])
+    total = sum(int(r[3]) - int(r[2]) for r in rs)
+    lo, hi = rank * (total // world), (rank + 1) * (total // world)
+    rows: list[set[str]] = [set() for _ in range(max(1, (hi - lo) // N))]
+    off = 0
     for r in rs:
-        if off <= at < off + int(r[3]) - int(r[2]):
-            return r
+        a, b = max(lo, off), min(hi, off + int(r[3]) - int(r[2]))
+        for i in range((a - lo) // N, min((b - 1 - lo) // N, len(rows) - 1) + 1) if a < b else ():
+            rows[i].add(spec_of(int(r[1])) if r[0] == "n" else "<not-a-node>")
         off += int(r[3]) - int(r[2])
-    return rs[-1]
+    return ["+".join(sorted(x)) if x else "<not-a-node>" for x in rows]
 
 
 def own_producers(result: Any) -> dict[tuple[int, int], list[str]]:
@@ -92,12 +95,7 @@ def own_producers(result: Any) -> dict[tuple[int, int], list[str]]:
             continue
         key = (int(c["step"]), int(c["k"]))
         node = result.body.nodes[m["node"]]
-        arg = node.args[0]
-        own = _own_run(list(runs(arg.refs)), c)
-        if own[0] == "n":
-            out.setdefault(key, []).append(node_spec.get(own[1], "?"))
-        else:
-            out.setdefault(key, []).append("<not-a-node>")
+        out.setdefault(key, []).extend(_own_rows(list(runs(node.args[0].refs)), c, lambda k: node_spec.get(k, "?")))
     return out
 
 
@@ -118,23 +116,22 @@ def own_producers_from_record(instances_path: str | Path, program_nodes_spec: di
     for o in rows:
         c = o["collective"]
         key = (int(c["step"]), int(c["k"]))
-        refs = (o.get("operand_refs") or [[]])[0]
-        rank, world = int(c["rank"]), int(c.get("world") or 2)
-        if 0 < rank < world - 1:
-            from verity_vllm.program.compact import runs_from_file_items
-            rs = runs_from_file_items(refs)
-            own = _own_run(rs, c) if rs else None
-        else:
-            own = refs[0] if rank == 0 else refs[-1]
-            if own and own[0] == "N":   # [R17 mfast F2] v2 file: a node-space progression ["N", idx, lo, hi, dI, dL, dH, count]; the own part
-                from verity_vllm.program.compact import runs_from_file_items   # is its first (rank 0) / last (rank world-1) run
-                r = runs_from_file_items([own])
-                own = r[0] if rank == 0 else r[-1]
-        if own and own[0] == "n":
-            out.setdefault(key, []).append(spec_of.get(int(own[1]), "?"))
-        else:
-            out.setdefault(key, []).append("<not-a-node>")
+        from verity_vllm.program.compact import runs_from_file_items   # [R17 mfast F2] v2 files hold node-space progressions
+        rs = runs_from_file_items((o.get("operand_refs") or [[]])[0])
+        out.setdefault(key, []).extend(_own_rows(rs, c, lambda k: spec_of.get(k, "?")) if rs else ["<not-a-node>"])
     return out
+
+
+def _recorded_as_folded(x: dict) -> tuple[str, list[int]]:
+    """A recorder row's (kind, partial shape) as the fold states that collective.  A `fused_norm.KIND` row's partial is
+    ``stack([partial, residual])``: on its fused path the fold's `fused_allreduce_rms_norm` collective, on its unfused path the
+    communicator `all_reduce` the call made, each over the [M, N] partial."""
+    from verity_vllm.collectives import fused_norm as FN
+
+    shape = [int(v) for v in x.get("shape") or []]
+    if x.get("kind") != FN.KIND:
+        return x.get("kind"), shape
+    return (FN.KIND if x.get("path") == FN.FUSED else "all_reduce"), shape[1:]
 
 
 def load_recorder(path: str | Path) -> list[dict]:
@@ -296,12 +293,12 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
                 only_rec, only_fold = sorted(set(rows) - set(by_key[r]))[:5], sorted(set(by_key[r]) - set(rows))[:5]
                 c.fail(f"rank {r}: recorder has {len(rows)} collectives, fold {len(by_key[r])} (recorder-only {only_rec}, fold-only {only_fold})")
             for key in sorted(set(rows) & set(by_key[r])):
-                x, col = rows[key], by_key[r][key]
-                if x["kind"] != col["kind"]:
-                    c.fail(f"rank {r} {key}: recorder kind {x['kind']} vs fold {col['kind']}")
+                (x, col), (kind, shape) = (rows[key], by_key[r][key]), _recorded_as_folded(rows[key])
+                if kind != col["kind"]:
+                    c.fail(f"rank {r} {key}: recorder kind {x['kind']}{'/' + str(x.get('path')) if x.get('path') else ''} (folds as {kind}) vs fold {col['kind']}")
                 if not _same_site(x.get("module"), col["site"]):
                     c.fail(f"rank {r} {key}: recorder module {x.get('module')!r} vs fold site {col['site']!r}")
-                if list(x.get("shape") or []) != [int(col["rows"]), int(col["N"])]:
+                if shape != [int(col["rows"]), int(col["N"])]:
                     c.fail(f"rank {r} {key}: recorder partial shape {x.get('shape')} vs fold [{col['rows']}, {col['N']}]")
         c.close()
 
@@ -348,11 +345,11 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
         # both ranks) is REQUIRED here: every common (step, k) must have been checked, none mismatching
         c = _Check(res, "provenance", "tp2_match provenance: received == Def(part_rank0 .. part_rank{world-1}) bit-exact at every (step, k), every rank, "
                                       "over stored tensors DIGEST-BOUND to the recorder rows this leg loaded (rev F-r17-03)")
-        n_checked, n_mis = int(provenance.get("collectives_checked") or 0), int(provenance.get("n_mismatches") or len(provenance.get("mismatches") or []))
+        n_checked, n_left, n_mis = int(provenance.get("collectives_checked") or 0), int(provenance.get("fused_norm_unfused_left_to_commit") or 0), int(provenance.get("n_mismatches") or len(provenance.get("mismatches") or []))
         if not provenance.get("pass"):
             c.fail(f"provenance FAIL: {n_mis} mismatches, first {json.dumps((provenance.get('mismatches') or [None])[0])[:200]}")
-        if n_checked != len(common):
-            c.fail(f"provenance checked {n_checked} collectives, the folds state {len(common)} (steps stored: {provenance.get('steps_checked')})")
+        if n_checked + n_left != len(common):
+            c.fail(f"provenance checked {n_checked} collectives (+{n_left} unfused fused-norm calls left to the Commit), the folds state {len(common)} (steps stored: {provenance.get('steps_checked')})")
         # [rev F-r17-03] the provenance record must be THIS run's: its recorder-file digests are the digests of the rows loaded here, every
         # stored tensor was digested against its row (part + out, both ranks = 4 per collective), none mismatching.  A record without
         # digests (pre-F-r17-03, or hand-written) or from another run is refused by name.

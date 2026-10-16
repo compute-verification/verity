@@ -349,6 +349,8 @@ def test_a_routed_all_reduce_is_one_flat_call_reading_every_rank_s_partial_whole
     assert [(c["step"], c["k"], c["kind"], c["site"], c["rows"], c["N"]) for c in res.collectives] == COLLECTIVES
     assert [c.get("flat", False) for c in res.collectives] == [c[2] == "all_reduce" for c in COLLECTIVES]
     assert res.peers_layout == per_row.peers_layout
+    from verity_vllm.check.match import rank_match as RMx
+    assert RMx.own_producers(res) == RMx.own_producers(per_row) and len(RMx.own_producers(res)[(0, 0)]) == STEPS[0][0]
     (layout,) = res.peers_layout
     tree = ",".join(["((((((0,(1,2)),3),5),6),4),7)"] * WORLD)
     for step, (M, _aligned) in STEPS.items():
