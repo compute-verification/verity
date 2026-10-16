@@ -98,19 +98,26 @@ def _med(xs):
     return statistics.median(xs) if xs else float("nan")
 
 
-def fill_rate(blocks: list[dict], chunk_macs: float) -> tuple[float, list[float]]:
-    """The filler's rate over `blocks` (arm or standalone block records), pooled, and each block's own: the chunks seen
-    done inside a window, less one, over the span from the first to the last (rows from before span_ms: completions over
-    the window, whose phase biases a ~20-chunk window by up to a chunk), plus any fixed work a block's filler counted on the
-    device (`fixed_macs` over `fixed_ms`: an arm-side phase filler's tiles a step)."""
+def fill_parts(blocks: list[dict], chunk_macs: float) -> tuple[float, float]:
+    """The filler's pooled rate over `blocks` (arm or standalone block records) in its two parts: the split filler's chunks
+    seen done inside a window, less one, over the span from the first to the last (rows from before span_ms: completions
+    over the window, whose phase biases a ~20-chunk window by up to a chunk), and any fixed work a block's filler counted
+    on the device (`fixed_macs` over `fixed_ms`: an arm-side phase filler's tiles a step, on the row's `fixed_sms`)."""
     span = all("span_ms" in b for b in blocks)
     work = [(b["chunks"] - 1, b["span_ms"]) if span else (b["chunks"], b["window_ms"]) for b in blocks]
     ok = [(n, ms) for n, ms in work if n > 0 and ms > 0]
     tot = sum(ms for _, ms in ok)
-    rate = sum(n for n, _ in ok) * chunk_macs / (tot * 1e-3) if tot > 0 else 0.0
+    split = sum(n for n, _ in ok) * chunk_macs / (tot * 1e-3) if tot > 0 else 0.0
     fx = [(b["fixed_macs"], b["fixed_ms"]) for b in blocks if b.get("fixed_ms")]
-    if fx:
-        rate += sum(m for m, _ in fx) / (sum(ms for _, ms in fx) * 1e-3)
+    fixed = sum(m for m, _ in fx) / (sum(ms for _, ms in fx) * 1e-3) if fx else 0.0
+    return split, fixed
+
+
+def fill_rate(blocks: list[dict], chunk_macs: float) -> tuple[float, list[float]]:
+    """The filler's rate over `blocks`, pooled (`fill_parts`' sum), and each block's own."""
+    rate = sum(fill_parts(blocks, chunk_macs))
+    span = all("span_ms" in b for b in blocks)
+    work = [(b["chunks"] - 1, b["span_ms"]) if span else (b["chunks"], b["window_ms"]) for b in blocks]
     per = []
     for b, (n, ms) in zip(blocks, work):
         x = n * chunk_macs / (ms * 1e-3) if n > 0 and ms > 0 else 0.0
@@ -131,27 +138,39 @@ def solo_spread(rates: list[float]) -> float:
     return (xs[-1] - xs[0]) / _med(rates)
 
 
+def of_peak(row: dict, reps: list) -> float:
+    """The filler's arm-block rate over its SMs' int8 tensor peak at the blocks' clock, the larger of its parts': the split
+    filler's on `fill_sms`, the fixed work's on `fixed_sms` (a row that counts fixed work without naming its SMs is
+    bounded on `fill_sms`)."""
+    split, fixed = fill_parts([b["arm"] for b in row["blocks"]], row["chunk_macs"])
+    per = PER_SM * _med([r[1] for r in reps]) * 1e6
+    return max(split / (per * row["fill_sms"]), fixed / (per * (row.get("fixed_sms") or row["fill_sms"])))
+
+
 def point_stats(row: dict) -> dict:
     """A `dscore` row's numbers: the paired slowdown (median over rounds of the arm block's median rep over the alone
     block's), both sides' median time, clock and power, the filler's rate over its windows and its per-block spread, and
-    its standalone reference: the median of the interleaved standalone blocks' rates, with the too-good limit set from
-    their spread (rows without them: the one calibration and TOO_GOOD)."""
+    its standalone reference: the median of the interleaved standalone blocks' rates of the split filler's chunks, with
+    the too-good limit set from their spread (rows without them: the one calibration, against the whole rate, and
+    TOO_GOOD). An arm-side filler's fixed work is not in that comparison: alone it runs at its full rate where beside
+    serving it gets a share, which would hide an inflated split; its tiles are a count its driver checks."""
     al = [r for b in row["blocks"] for r in b["alone"]["reps"]]
     ar = [r for b in row["blocks"] for r in b["arm"]["reps"]]
     pairs = [_med([r[0] for r in b["arm"]["reps"]]) / _med([r[0] for r in b["alone"]["reps"]]) for b in row["blocks"]]
     fill = row["place"] != "none"
-    rate, cv, solo = 0.0, None, []
+    rate, split, cv, solo = 0.0, 0.0, None, []
     if fill:
         rate, per = fill_rate([b["arm"] for b in row["blocks"]], row["chunk_macs"])
+        split = fill_parts([b["arm"] for b in row["blocks"]], row["chunk_macs"])[0]
         cv = statistics.pstdev(per) / statistics.mean(per) if len(per) > 1 and statistics.mean(per) > 0 else None
-        solo = [x for b in row["blocks"] if "solo" in b for x in fill_rate([b["solo"]], row["chunk_macs"])[1]]
+        solo = [x for b in row["blocks"] if "solo" in b if (x := fill_parts([b["solo"]], row["chunk_macs"])[0]) > 0]
     cal = row["alone_fill"]["mac_per_s"] if fill else 0.0
     if len(solo) >= 2:
-        ref = _med(solo)
+        ref, beside = _med(solo), split
         spread = solo_spread(solo)
         limit = 1 + max(TOO_GOOD_FLOOR, spread)
     else:
-        ref, spread, limit = cal, None, TOO_GOOD
+        ref, beside, spread, limit = cal, rate, None, TOO_GOOD
     pw = row.get("power") or {}
     return {
         "slowdown": _med(pairs), "slowdown_rounds": pairs, "alone_ms": _med([r[0] for r in al]),
@@ -160,10 +179,10 @@ def point_stats(row: dict) -> dict:
         "clock_reads": sum(1 for r in al + ar if r[1] > 0), "power_reads": sum(1 for r in al + ar if r[2] > 0),
         "reps": len(al) + len(ar), "fill_rate": rate, "fill_rate_alone": ref, "fill_rate_cv": cv,
         "solo_rates": solo, "solo_spread": spread, "too_good_limit": limit,
-        "beside_over_alone": rate / ref if fill and ref else None,
+        "beside_over_alone": beside / ref if fill and ref else None,
         "beside_over_calibration": rate / cal if fill and cal else None,
         "power_settled": {k: pw[k]["watt"] for k in ("alone", "arm", "filler_alone") if k in pw},
-        "of_peak": rate / (PER_SM * row["fill_sms"] * _med([r[1] for r in ar]) * 1e6) if fill and row["fill_sms"] else None,
+        "of_peak": of_peak(row, ar) if fill and row["fill_sms"] else None,
         "rec_checked": row["rec_checked"], "rec_bad": row["rec_bad"], "place": row["place"],
         "fill_sms": row["fill_sms"], "setup_ms": row["setup_ms"], "spread": row["spread"],
         "kv_wrapped": row["kv_wrapped"],
@@ -430,9 +449,9 @@ def _too_good(v: dict) -> bool:
 
 def honesty(arm, stats: dict, phases_points, *, control: dict | None = None, has_filler: bool = False) -> dict:
     """The arm's placement is a pure function of the point (asked twice, the same answer); no filler ran faster beside
-    serving than alone on the same SMs (beside ÷ the median of the round-interleaved standalone blocks above
-    1 + max(TOO_GOOD_FLOOR, their trimmed spread, `solo_spread`); such a result goes to the assessor), and every filler
-    point has that reference;
+    serving than alone on the same SMs (its split's chunks beside ÷ the median of the round-interleaved standalone
+    blocks' above 1 + max(TOO_GOOD_FLOOR, their trimmed spread, `solo_spread`); such a result goes to the assessor), and
+    every filler point has that reference;
     none ran above its SMs' int8 tensor peak at the clock its blocks read; and, with a filler, the positive control (a
     filler credited for S steps a tile that runs S - S/CHEAT beside serving and S alone, `control`) is caught as too good,
     so the check can see a dishonest arm at the run's own spread."""
