@@ -23,7 +23,7 @@
 #include "../gpu_kit/bench.cuh"
 
 enum Fmt : int { E4M3 = 0, E4M3_KIND = 1, MXF4 = 2, MXF4NV = 3, NVF4 = 4, SP_MXF4 = 5, SP_NVF4 = 6, NFMT };
-enum Dist : int { D_U = 0, D_MAX = 1, D_MAXSIGN = 2, D_RAMP = 3, D_CANCEL = 4 };
+enum Dist : int { D_U = 0, D_MAX = 1, D_MAXSIGN = 2, D_RAMP = 3, D_CANCEL = 4, D_EDGE = 5 };
 constexpr int NORD = 3;
 constexpr int NSAMPLE = 8;
 constexpr uint32_t TAG = 0x5A000000u;
@@ -431,6 +431,8 @@ static Params make_params(const Config& c) {
   if (c.dist == D_MAX) P.ga1 = P.gb1 = top;
   if (c.dist == D_MAXSIGN) P.ga1 = top, P.gb1 = topsign;
   if (c.dist == D_RAMP) P.ga1 = P.gb1 = top, P.ga2 = lowsign, P.gb2 = low, P.ksplit = c.K / 2;
+  // RAMP's +-min products sum to an even number a firing; EDGE's 0 or min products make a firing's sum odd half the time.
+  if (c.dist == D_EDGE) P.ga1 = P.gb1 = top, P.ga2 = make_grid(gd, {mn, 0}), P.gb2 = low, P.ksplit = c.K / 2;
   P.cancel = c.dist == D_CANCEL;
   P.K = c.K, P.tiles = c.tiles, P.nrec = c.nrec, P.s_tot = 2 * gd.s, P.c0 = c.c0, P.seed = c.seed;
   float f;

@@ -21,8 +21,17 @@ The grids (`GRIDS`, which `fp_exact.cu`'s `grids()` mirrors):
 - E4M3 has the integers in [−16, 16] and their halves and quarters (`e4m3_int16`, `e4m3_half8`, `e4m3_quarter4`).
 - E2M1 has the grid ×2 = {0, ±1, ±2, ±3, ±4, ±6, ±8, ±12} halves (`e2m1_x2`) and its integer subset (`e2m1_int`).
 
-The distributions (`DISTS`) are uniform, all-maximal, maximal with signs, a ramp (maximal products first, then
-minimal ones), and pairwise cancellation.
+The distributions (`DISTS`) are:
+
+- uniform;
+- all-maximal;
+- maximal with signs;
+- a ramp: maximal products first, then ±minimal ones, which sum to an even number in every firing;
+- pairwise cancellation;
+- an edge: maximal products first, then 0 or the minimal product, so a firing's sum is odd about half the time. This
+  is the draw that lands a partial on an odd value just past 2^24, or past C0's binade.
+
+K runs from one firing to 16384, then 65536, 131072 and 262144.
 
 Each value of C0 (`c0_words`) has a role:
 

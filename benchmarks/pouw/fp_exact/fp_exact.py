@@ -34,7 +34,7 @@ except ImportError:  # the GPU side (configs, run) needs only the standard libra
 FMTS = ("e4m3", "e4m3_kind", "mxf4", "mxf4nv", "nvf4", "sp_mxf4", "sp_nvf4")
 KSTEP = {"e4m3": 32, "e4m3_kind": 32, "mxf4": 64, "mxf4nv": 64, "nvf4": 64, "sp_mxf4": 128, "sp_nvf4": 128}
 MACS = {"e4m3": 4096, "e4m3_kind": 4096, "mxf4": 8192, "mxf4nv": 8192, "nvf4": 8192, "sp_mxf4": 16384, "sp_nvf4": 16384}
-DISTS = ("U", "MAX", "MAXSIGN", "RAMP", "CANCEL")
+DISTS = ("U", "MAX", "MAXSIGN", "RAMP", "CANCEL", "EDGE")
 NORD = 3
 SPARSE = {"sp_mxf4", "sp_nvf4"}
 PAT0 = (0, 0, 0, 1, 1, 2)
@@ -115,7 +115,7 @@ def ks(fmt: str, quick: bool) -> list[int]:
     while k <= 16384:
         out.append(k)
         k *= 2
-    out += [65536, 131072]
+    out += [65536, 131072, 262144]
     return out[::3] if quick else out
 
 
@@ -200,6 +200,8 @@ def dist_of(c: Config) -> Dist:
         return Dist((mx,), g.vals, (mx, -mx), g.vals, c.K, False)
     if c.dist == "RAMP":
         return Dist((mx,), (mn, -mn), (mx,), (mn,), c.K // 2, False)
+    if c.dist == "EDGE":
+        return Dist((mx,), (mn, 0), (mx,), (mn,), c.K // 2, False)
     return Dist(g.vals, g.vals, g.vals, g.vals, c.K, c.dist == "CANCEL")
 
 

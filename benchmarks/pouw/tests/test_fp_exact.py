@@ -90,7 +90,7 @@ def test_sweep_spans_k32_to_16384_and_beyond_for_every_format():
     cs = fx.configs()
     for fmt in fx.FMTS:
         k = {c.K for c in cs if c.fmt == fmt}
-        assert min(k) == fx.KSTEP[fmt] and {16384, 65536, 131072} <= k
+        assert min(k) == fx.KSTEP[fmt] and {16384, 65536, 131072, 262144} <= k
     assert len({c.name for c in cs}) == len(cs) and len({c.seed for c in cs}) == len(cs)
     assert {c.name for c in fx.configs(quick=True)} < {c.name for c in cs}
 
@@ -112,6 +112,15 @@ def test_ramp_puts_the_large_products_first():
     c = cfg(dist="RAMP", K=128)
     A, B = fx.values(c, 0)
     assert (A[:, :64] == 16).all() and (B[:, :64] == 16).all() and (np.abs(A[:, 64:]) == 1).all()
+
+
+def test_edge_firings_after_the_maximal_half_are_odd_about_half_the_time():
+    """RAMP's +-1 products sum to an even number in every firing, so its partials never land on an odd value past 2^24;
+    EDGE's 0-or-1 products do."""
+    A, B = fx.values(cfg(dist="EDGE", K=4096), 0)
+    assert (A[:, :2048] == 16).all() and set(np.unique(A[:, 2048:])) == {0, 1} and (B[:, 2048:] == 1).all()
+    firing = (A[:, 2048:, None] * B.T[None, 2048:, :]).reshape(16, -1, 32, 8).sum(axis=2)
+    assert 0.4 < (firing % 2).mean() < 0.6
 
 
 @pytest.mark.parametrize("fmt", sorted(fx.SPARSE))
@@ -256,7 +265,7 @@ def test_build_dump_and_sass(tmp_path, monkeypatch):
     binary = tmp_path / "fp_exact"
     subprocess.run([_tool("nvcc"), "-std=c++20", "-O2", "-gencode", "arch=compute_120a,code=sm_120a", "-o", str(binary),
                     str(HERE / "fp_exact.cu")], check=True)
-    for c in (cfg(dist="RAMP", K=64), cfg(grid="e4m3_quarter4", dist="CANCEL", c0="negzero", K=128),
+    for c in (cfg(dist="RAMP", K=64), cfg(dist="EDGE", K=128), cfg(grid="e4m3_quarter4", dist="CANCEL", c0="negzero", K=128),
               cfg(fmt="sp_nvf4", grid="e2m1_x2", K=256), cfg(fmt="mxf4nv", grid="e2m1_int", dist="MAXSIGN", K=128)):
         (tmp_path / "c.txt").write_text(c.line() + "\n")
         subprocess.run([str(binary), str(tmp_path / "c.txt"), "--dump", str(tmp_path / "d.bin")], check=True)
