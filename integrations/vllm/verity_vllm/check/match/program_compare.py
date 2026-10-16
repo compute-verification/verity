@@ -16,10 +16,11 @@ runs), segmented into engine steps at `TokenSelect` boundaries (one sampling eve
      muxes themselves are audited: per decode step ONE live bit keys the token slot and every layer's K and V row,
      against ONE zero gate; a mux anywhere else is reported (a real mismatch, never normalised).
 
-Every difference is reported with counts and examples; nothing is dropped silently.
+Every difference is reported with counts and examples; nothing is dropped silently.  `--operands progressions` holds both sides'
+operands in compact form (program.compact), for Programs whose strided reads are ~1e6 runs each (GLM-5.3's W_UK_T / W_UV).
 
     verity-vllm program-compare --a <dir with descriptor.json.gz + derive-report.json> \\
-        --b <oracle dir with program.json + instances.jsonl | derived dir> --out compare.json [--unfold-a]
+        --b <oracle dir with program.json + instances.jsonl | derived dir> --out compare.json [--unfold-a | --operands progressions]
 """
 
 from __future__ import annotations
@@ -40,7 +41,7 @@ from verity_vllm.check.match.canonical_operands import as_progression as _asP, w
 from verity_vllm.check.match import supplied_inputs as SI
 from verity_vllm.check.match.peer_reads import PeerReads
 from verity_vllm.check.match.sampler_geometry import constant_splits_agree
-from verity_vllm.config import option
+from verity_vllm.config import UsageError, option
 from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event  # [R15 stoch] the step-boundary families
 
 PAD_SPECS = ("Const", "I32Eq_v1", "BitNot_v1", "BitAnd_v1", "SelectI32_v1", "SelectBf16_v1")
@@ -112,10 +113,8 @@ class Prog(PeerReads):
                     continue
                 self.inst.append({"k": k, "spec": fid if n.form != "batch" else f"batch:{fid}", "form": n.form,
                                   "args": [runs(a.refs) for a in n.args], "out": str(n.out)})
-            # [R16 global, F-global-mem / GM-01 at LP 4096] the decoded IR (`body.nodes`: node objects + Refs trees, O(LP^2) leaves for the
-            # attention K/V gathers of a long prefill) is NOT retained: every comparison reads `inst` (spec, form, operand RUNS, out) only.
-            # Keeping `self.nodes` alive doubled the resident Program (fold 148 GB / comparator 172 GiB / GM-01 > 351 GiB on the 4096/512
-            # row, capacity M-0815).  `n_nodes` keeps the count; nothing in cb_a read the node objects after this loop.
+            # the decoded IR (node objects + Refs trees, O(LP^2) leaves for a long prefill's K/V gathers) is not retained: comparisons read
+            # `inst` only, and keeping it doubled the resident Program (GM-01 > 351 GiB at LP 4096, M-0815).  `n_nodes` keeps the count.
             self.n_nodes = len(body.nodes)
             self.nodes = None
             self.param_names = [n for n, _ in getattr(body, "params", ())]   # empty for a lowered root; kept for callers that inspect it
@@ -573,25 +572,19 @@ def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], c
     return p
 
 
-from verity_vllm.program.compact import expand_mixed as _expand_mixed, n_crosses_step as _n_crosses_step, p_item_indices as _p_indices, p_item_weight_span as _p_w_span  # noqa: E402  [R17 mfast; GLM-5.3 "P"]
+from verity_vllm.program.compact import expand_mixed as _expand_mixed, hash_operand as _hash_operand, n_crosses_step as _n_crosses_step, p_item_indices as _p_indices, p_item_weight_span as _p_w_span  # noqa: E402  [R17 mfast; GLM-5.3 "P"]
 
 
 def _norm_T(spec: str) -> str:
     return _T_RE.sub("{T=*,", spec)
 
 
-# [R18 x09, F-r18-x09-1] The divergence REPORT of a step whose spec sequences differ.  The record ran difflib.SequenceMatcher
-# (autojunk=False) over the WHOLE step: O(n*m) worst case, and a prefill step of an LP-row request-wrapper Program is ONE step of
-# LP x layers x ops instances (329,730 for LP 1024 x 32 layers).  When the sequences differ throughout -- a Build for another target's
-# kernel families (#60: Hopper Build, L40S fold), or a displaced co-scheduled request under the `dag` within-step criterion -- that one
-# alignment ran 40 min to 3 h per leg at 100 % CPU, flat memory (measured n^2.2: 32 K items 13.8 s, 329.7 K items hours).  No verdict
-# depends on it: spec_seq_equal / spec_multiset_equal / canonical_sha256 / the DAG multiset carry the check; the alignment only fills
-# `first_divergences_T_normalised` ("the first 6 divergent opcodes, 3 examples each") and `n_divergent_opcodes`.  Now the common prefix
-# and suffix are located in O(n) and the matcher runs over the differing CORE only, over at most `_DIVERGENCE_WINDOW` items of each
-# side -- the first divergences lie at the start of the core, exactly where the report looks.  A core longer than the window is reported
-# truncated BY NAME (`divergence_window`): the count then covers the window, never a guess.  An equal step never enters this path, so a
-# PASS record's bytes are unchanged.  The matcher's cost is ~ W^2 x matching blocks (measured on a 9-op row with 5 of 9 equal: W 512
-# 0.1 s, 1024 0.8 s, 2048 6 s, 4096 49 s), so the window is 1024: <= 1 s per divergent step, whatever the step holds.
+# [R18 x09, F-r18-x09-1] The divergence REPORT of a step whose spec sequences differ.  difflib.SequenceMatcher over a WHOLE step is
+# O(n*m): a prefill step of an LP-row Program is LP x layers x ops instances, and a step differing throughout ran 40 min to 3 h per leg.
+# No verdict depends on it (spec_seq_equal / spec_multiset_equal / canonical_sha256 / the DAG multiset carry the check); it only fills
+# `first_divergences_T_normalised` and `n_divergent_opcodes`.  So the common prefix and suffix are located in O(n) and the matcher runs
+# over the differing CORE only, at most `_DIVERGENCE_WINDOW` items of each side (the first divergences lie at its start); a longer core
+# is reported truncated BY NAME (`divergence_window`).  An equal step never enters this path.  Cost ~ W^2 (W 1024: 0.8 s, 4096: 49 s).
 _DIVERGENCE_WINDOW = 1024
 
 
@@ -704,9 +697,8 @@ def _canonical_hash(P: Prog, seqs: list[list[int]], unfold: bool, canon_step_rel
         for i in idxs:
             r = P.inst[i]
             cs = canon_step_relative(P, i, seqs, unfold)
-            if compact:   # [R17 mfast] the record's BYTES: the run-per-tuple serialisation (canonical_sha256 is on X-09's record)
-                cs = [_expand_mixed(c) for c in cs]
-            h.update(json.dumps([r["spec"], r["form"], [list(map(list, c)) for c in cs], r["out"]],
+            ops = [_hash_operand(c) for c in cs] if compact else [list(map(list, c)) for c in cs]   # the record's BYTES (compact.hash_operand)
+            h.update(json.dumps([r["spec"], r["form"], ops, r["out"]],
                                 separators=(",", ":"), default=str).encode())
         h.update(b"|step|")
     return h.hexdigest()
@@ -732,9 +724,11 @@ def _canon_step_relative(P: Prog, i: int, seqs: list[list[int]], unfold: bool):
         for s, idxs in enumerate(seqs):
             for j, ii in enumerate(idxs):
                 pos[ii] = (s, j)
-        P._pos_cache, P._pos_cache_key = pos, (unfold, id(seqs))
-    out = []
+        P._pos_cache, P._pos_cache_key, P._pos_ident = pos, (unfold, id(seqs)), not unfold and seqs == P.steps
     compact = getattr(P, "compact", False)
+    if compact and P._pos_ident:   # the remap is the identity: canon's normal-form progressions compare exactly as their runs
+        return [tuple(arg) for arg in P.canon(i, False)]
+    out = []
     for arg in P.canon(i, unfold):
         if compact:   # [R17 mfast] the record's per-run tuples: each run's producer is remapped on its own
             arg = _expand_mixed(arg)
@@ -807,12 +801,15 @@ class Options:
                             help="A is a padded program: drop pad kinds, follow muxes")
     label_a: str = option("--label-a", default="derived")
     label_b: str = option("--label-b", default="oracle")
+    operands: str = option("--operands", default="runs", choices=("runs", "progressions"), help="both sides' operand form (progressions: compact)")
 
 
 def main(a: Options) -> int:
-    t0 = time.time()
-    A = load_derived(a.a, a.label_a)
-    B = load_oracle(a.b, a.label_b) if os.path.exists(os.path.join(a.b, "program.json")) else load_derived(a.b, a.label_b)
+    t0, cp = time.time(), a.operands == "progressions"
+    if cp and a.unfold_a:
+        raise UsageError("--operands progressions compares without unfolding only: an unfolded side's operands are runs")
+    A = load_derived(a.a, a.label_a, compact=cp)
+    B = load_oracle(a.b, a.label_b, compact=cp) if os.path.exists(os.path.join(a.b, "program.json")) else load_derived(a.b, a.label_b, compact=cp)
     res = {"schema": "cb-a/compare/v1", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "a_dir": a.a, "b_dir": a.b, "unfold_a": a.unfold_a}
     res["digests"] = {"a": A.digest, "b": B.digest, "equal": A.digest == B.digest}
     res["histograms"] = {"a": spec_histograms(A), "b": spec_histograms(B)}

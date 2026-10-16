@@ -279,6 +279,21 @@ def n_runs(progs: Iterable[tuple]) -> int:
     return sum(t[-1] for t in progs)
 
 
+HASH_RLE_RUNS = 1 << 16
+
+
+def hash_operand(items: list[tuple]) -> list | dict:
+    """One canonical operand as `program_compare._canonical_hash` serialises it: the record's per-run tuples, except an operand in
+    progression form (`Prog.canon` without unfolding: `rle_mapped`'s normal form) of more than HASH_RLE_RUNS runs, which is serialised
+    as `{"rle": its progressions}`.  The normal form is a function of the run list and expands back to it, so equal hashes still mean
+    equal run lists; the tag keeps the two serialisations apart.  [GLM-5.3] a strided W_UK_T / W_UV read is ~1e6 runs in ~2048
+    progressions, 156 such reads a decode step: expanding them is ~5e9 tuples a hash.  A record-form Prog expands every operand, so the
+    two forms' hashes agree on every operand of at most HASH_RLE_RUNS runs."""
+    if items and all(is_prog(t) for t in items) and n_runs(items) > HASH_RLE_RUNS:
+        return {"rle": [list(t) for t in items]}
+    return [list(t) for t in expand_mixed(items)]
+
+
 # ---- the STORED form (F2, COORD R17-34 (2)): instances.jsonl `operand_refs` items ------------------------------------------------------
 # An operand in the file is a list of items in reference order.  Record form (verity-gen/instances/v1): every item a maximal run
 # ["space", idx, lo, hi].  Progressions form (v2): node- and parameter-space references as progressions

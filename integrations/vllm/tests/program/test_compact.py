@@ -115,6 +115,16 @@ def test_rle_of_mapped_progressions_equals_rle_of_the_mapped_runs():
         assert K.expand(m) == K.expand(items)
 
 
+def test_an_operand_past_the_hash_limit_hashes_as_its_normal_form():
+    # GLM-5.3's W_UV^T read: every element its own run, 512 at the row stride per (head, column)
+    big = [("W", "w_uv", (k, k + 1), (3584, 3584), 512) for k in range(256)]
+    assert K.n_runs(big) > K.HASH_RLE_RUNS and K.rle_mapped(big) == big
+    assert K.hash_operand(big) == {"rle": [list(t) for t in big]}
+    assert K.hash_operand(big[:-1] + [big[-1][:-1] + (511,)]) != K.hash_operand(big)
+    small = big[:100]
+    assert K.hash_operand(small) == [list(t) for t in K.expand(small)]
+
+
 def test_the_real_shapes_are_one_progression_each():
     # the attention K gather of a prefill at position T: window [0, 512) over T consecutive producer nodes -> ONE tuple
     T = 265
@@ -489,12 +499,14 @@ def test_persist_program_writer_is_byte_identical_to_the_generic_conversion(tmp_
             out.append(json.dumps(RC._jsonable(rec), separators=(",", ":")))
         return out
 
-    def generic_journal():
+    def generic_journal(form):     # under `progressions` a journal Refs is stored compact too, as an operand is
         out = []
         for r in res.accesses:
             r2 = dict(r)
             r2["view"] = generic_view(r2["view"]) if r2.get("view") is not None else None
-            r2["refs"] = access_runs(r2["refs"])
+            v = r2["refs"]
+            r2["refs"] = (file_items_from_refs_json(v.to_json()) if form == "progressions" and v is not None and not isinstance(v, list)
+                          else access_runs(v))
             out.append(json.dumps(RC._jsonable(r2), separators=(",", ":")))
         return out
 
@@ -507,5 +519,5 @@ def test_persist_program_writer_is_byte_identical_to_the_generic_conversion(tmp_
         rows = open(os.path.join(d, "instances.jsonl")).read().split("\n")[1:-1]
         assert rows == generic_rows(form) and len(rows) == len(res.instances)
         lines = gzip.open(os.path.join(d, "accesses.jsonl.gz"), "rt").read().split("\n")[:-1]
-        assert lines == generic_journal() and len(lines) == len(res.accesses)
+        assert lines == generic_journal(form) and len(lines) == len(res.accesses)
         assert any('"operand_views":[{"alloc":' in r for r in rows) and any('"view":{"alloc":' in l for l in lines)   # the shape path ran

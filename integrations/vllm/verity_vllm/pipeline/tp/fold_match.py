@@ -103,8 +103,8 @@ def compare_rank(py: str, rank_dir: Path, build: Path, derived: list[str], withi
                 "unattributed": (dec.get("attribution") or {}).get("unattributed"), "xreq": dec.get("xreq_total"), "missing_derived": dec.get("missing_derived"),
                 "per_request": [{"request_id": r.get("request_id"), "LP": r.get("LP"), "T": r.get("T"), "derived": r.get("derived"),
                                  "canonical_equal": r.get("canonical_equal"), "steps": r.get("steps")} for r in reqs]}
-    rc = _run([py, "-m", "verity_vllm.pipeline.cli", "program-compare", "--a", str(build), "--b", str(rank_dir), "--out", str(rank_dir / "match_compare.json")],
-              rank_dir / "match_compare.log", timeout)
+    rc = _run([py, "-m", "verity_vllm.pipeline.cli", "program-compare", "--a", str(build), "--b", str(rank_dir), "--out", str(rank_dir / "match_compare.json"),
+               "--operands", "progressions"], rank_dir / "match_compare.log", timeout)
     doc = _load(rank_dir / "match_compare.json") or {}
     cmp = doc.get("compare") or {}            # cb-a/compare/v1: the step comparison sits under `compare` (row_pod reads the same field)
     tot = cmp.get("totals") or {}

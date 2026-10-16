@@ -717,7 +717,7 @@ def _e2e(tmp_path, monkeypatch, *, drop_rank1_log=False, rank1_mut=None, provena
 
     monkeypatch.setattr(FM, "global_match_rank", gm_inproc)
 
-    def fold_inproc(py, log, profile, out, timeout):
+    def fold_inproc(py, log, profile, out, timeout, reuse=False):
         rank = int(str(log.name).split("rank")[1].split(".")[0])
         result = fold_rank(rank, mut=(rank1_mut if rank == 1 else None))
         out.mkdir(parents=True, exist_ok=True)

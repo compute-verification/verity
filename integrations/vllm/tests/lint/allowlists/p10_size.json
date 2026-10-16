@@ -6,7 +6,7 @@
     {"file": "verity_vllm/check/gates.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1397},
     {"file": "verity_vllm/check/match/batch_decomp.py", "kind": "function", "symbol": "decompose", "detail": "lines", "count": 348},
     {"file": "verity_vllm/check/match/batch_decomp.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 894},
-    {"file": "verity_vllm/check/match/program_compare.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 843},
+    {"file": "verity_vllm/check/match/program_compare.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 840},
     {"file": "verity_vllm/check/match/rank_match.py", "kind": "function", "symbol": "cross_rank_check", "detail": "lines", "count": 267},
     {"file": "verity_vllm/check/oracle_compare.py", "kind": "function", "symbol": "oracle_compare", "detail": "lines", "count": 196},
     {"file": "verity_vllm/check/oracle_compare.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 932},
