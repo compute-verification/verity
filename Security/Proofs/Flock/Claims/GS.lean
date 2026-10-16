@@ -2,6 +2,7 @@ import Proofs.Flock.Claims.GS.Decode
 import Proofs.Flock.Claims.GS.Flock
 import Proofs.Flock.Claims.GS.Radius
 import Proofs.Flock.Claims.GS.ZkRadius
+import Proofs.Flock.Claims.GS.RadiusFamily
 
 /-!
 # A counted Guruswami–Sudan decoder, and `DecoderComplexity` at Flock's level-0 code
@@ -28,4 +29,8 @@ The decoder computes on coefficient lists and tables, and counts its field opera
   message read from its lanes' coefficients (`zkReader`), and the decoder (`zkDecodeR`) that meets `ListWithin` at
   `θ = 1 − √ρ_zk − 1/200`, `ρ_zk = (2^cols + t)/2^d` (`listWithin_zkDecodeR`), with its `DecoderComplexity` at
   `(os.length + n)·(2^k0 + 4)·128` (`zkDecodeR_complexity`).
+* `GS.RadiusFamily`: a family of radius decoders read as one (`famDecodeR`), meeting `ListWithin` at the family's code
+  with each trace's length and radius its index's (`listWithin_famDecodeR`), its count the sum over the indices
+  (`famDecodeR_complexity`); at the masked verifier's deployed code, `zkDecodeRD` (`listWithin_zkDecodeRD`,
+  `zkDecodeRD_complexity`).
 -/
