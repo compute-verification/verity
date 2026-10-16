@@ -27,7 +27,7 @@ def _load(name):
 F = _load("fused_arm")
 FS = _load("fused_score")
 A = F.A  # the arms module fused_arm imported (the one test_filler_score loaded, when it ran first): one Placement class
-ARMS = [F.Fused(), F.FusedV2()]
+ARMS = [F.Fused(), F.FusedV2(), F.FusedPump()]
 
 
 def _built() -> tuple[dict[str, set], set]:
@@ -75,3 +75,9 @@ def test_table_configurations_are_built(arm):
             assert q.FW == 0 or f"{q.FW}:{q.FNC}" in flin[_flin_key(b)], (b, l, q)
         assert q.AFW == 0 or f"{q.AFW}:{q.ANC}" in fatt, (b, l, q)
         assert q.LM == 0 or q.LT != 15, (b, l, q)  # lm_head through flin needs a linear through flin before it
+
+
+def test_pump_arm_has_no_fixed_work():
+    """filler-scorer/v3 reads no theorem for a filler with an arm-side driver's fixed work, so FusedPump's rows carry no
+    filler warps."""
+    assert all(q.FW == 0 and q.AFW == 0 for _, q in F.FusedPump().table.values())

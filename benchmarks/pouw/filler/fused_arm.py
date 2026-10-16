@@ -117,3 +117,39 @@ class FusedV2(Fused):
     choice: str = ("fill-fused's table with lm_head through flin at B <= 64 (but B 32 L 1K) and a B 1 L 32K row, from "
                    "FILL's round-3 screens")
     table: dict = field(default_factory=lambda: TABLE_V2, repr=False)
+
+
+def _pump(sms, lm=1, aps=1, lt=0):
+    return sms, FusedStep(FW=0, AFW=0, APS=aps, ALZ=0, LT=lt, LM=lm)
+
+
+#: FILL's step with no filler warps (flin's GEMM, persistent attention, lm_head through flin at B <= 64) beside the pump
+#: alone: screens r20261016-090707-4181, -091213-6491 and -091824-6c9f, every row <= 1.025 (B <= 32 holds 0.92-0.96
+#: on 48 step SMs and breaks to 1.08-1.13 on 40)
+TABLE_PUMP = {
+    (1, 2048): _pump(140, aps=0), (1, 32768): _pump(140), (8, 2048): _pump(140), (8, 32768): _pump(140),
+    (32, 1024): _pump(140), (32, 2048): _pump(140), (32, 5120): _pump(140), (32, 8192): _pump(140),
+    (32, 16384): _pump(132), (32, 24576): _pump(132), (48, 2048): _pump(124), (48, 16384): _pump(116, lm=0),
+    (64, 2048): _pump(124), (64, 12288): _pump(100), (96, 8192): _pump(84, lm=0),
+    (128, 2048): _pump(100, lm=0), (128, 4096): _pump(92, lm=0), (132, 5120): _pump(76, lm=0),
+    (144, 5120): _pump(76, lm=0), (192, 2048): _pump(60, lm=0),
+    (256, 1024): _pump(44, lm=0, lt=15), (256, 2048): _pump(44, lm=0, lt=15), (256, 3072): _pump(44, lm=0, lt=15),
+}
+
+
+@dataclass
+class FusedPump(Fused):
+    """FILL's step without filler warps on a narrower split, the pump alone on the rest: no arm-side fixed work, so the
+    filler is the pump's alone, the form filler-scorer/v3's theorem entries read (with a Theorem K pump)."""
+
+    name: str = "fill-fused-pump"
+    lineage: dict = field(default_factory=lambda: {
+        "parent": "fill-fused-v2", "approach": "pouw/filler-fused",
+        "mechanism": ["filler:chained-imma-registers", "place:split", "split:per-point-table", "fused:flin-serving",
+                      "fused:persistent-attention", "fused:lm-head-flin", "prefill:co", "sched:prio-short-blocks"],
+        "hypothesis": "FILL's step without filler warps (flin, persistent attention, lm_head through flin) holds <= 1.02 "
+                      "on 48-144 SMs, so the pump alone takes 44-140: no fixed work, the shape a Theorem K pump is read "
+                      "in under filler-scorer/v3"})
+    choice: str = ("an offline table of FILL's pump-only splits (no filler warps) from round 3's screens; at serving time a "
+                   "lookup, a green split and one graph a step")
+    table: dict = field(default_factory=lambda: TABLE_PUMP, repr=False)
