@@ -1,0 +1,10 @@
+# The perplexity bench for interventions on matmuls (README.md). Not a package: `run.py eval` runs on a GPU node
+# (`job.sh`, through `run.py submit`), and its methodology, specs, gates and engine run here on a tiny model as a suite
+# (`uv run tools/verity/check/suites.py benchmarks/ppl`). Needs torch and numpy (the workspace's torch-cpu extra).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# The tests read only this directory: its modules, specs/, datasets.json, windows.lock.json, baseline.json and README.md.
+inputs = []
