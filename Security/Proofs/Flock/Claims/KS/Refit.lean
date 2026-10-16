@@ -24,6 +24,9 @@ terms one by one, at one table.
   fork term of weight `N_p²` and `τ`'s of weight `1` (`IZ`, `cZ`, `oldEscZ`, `oldEscZ_term`); they fit the masked
   weight when `N_p` is at most the deployed pads' domain, level 0's `2·2^{d₀}·Q₀ ≥ 2` paying for `k`'s rounding
   (`oldEscZ_fitsFork_zk`), and the masked session's `ε_c⁻` is at most `ε_table` plus their term (`epsSZ_le`).
+* **Mixtures.** Averaged over a mixture of session strategies, `ε_c⁻` is still at most `ε_table` plus the escapes'
+  term when the mean `Adv`s are at most the fork events' probabilities, since a mean of roots is at most the root of
+  the mean (`mean_sqrt_le`; `mean_epsSL_le`, `mean_epsSZ_le`).
 -/
 
 namespace Claims.Flock
@@ -243,6 +246,43 @@ theorem oldEscZ_term {Ω Coin : Type} [Fintype Coin] [Inhabited Coin] (H : Msg �
   · exact Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left (hP r) (cZ_nonneg sch Np (.inr (.inl r))))
   · exact Real.sqrt_le_sqrt ((hT r).trans_eq (one_mul _).symm)
 
+/-! ## Means over a mixture -/
+
+/-- **A mean of roots is at most the root of the mean** (Cauchy–Schwarz). -/
+theorem mean_sqrt_le {τ : Type} [Fintype τ] [Nonempty τ] (a : τ → ℝ) (ha : ∀ t, 0 ≤ a t) :
+    (∑ t, Real.sqrt (a t)) / Fintype.card τ ≤ Real.sqrt ((∑ t, a t) / Fintype.card τ) := by
+  have hn : (0 : ℝ) < Fintype.card τ := Nat.cast_pos.2 Fintype.card_pos
+  have cs := Real.sum_sqrt_mul_sqrt_le Finset.univ ha fun _ => zero_le_one
+  simp only [Real.sqrt_one, mul_one, Finset.sum_const, Finset.card_univ, nsmul_eq_mul] at cs
+  rw [div_le_iff₀ hn, Real.sqrt_div' _ hn.le, div_mul_eq_mul_div, le_div_iff₀ (Real.sqrt_pos.2 hn)]
+  calc (∑ t, Real.sqrt (a t)) * Real.sqrt (Fintype.card τ)
+      ≤ Real.sqrt (∑ t, a t) * Real.sqrt (Fintype.card τ) * Real.sqrt (Fintype.card τ) :=
+        mul_le_mul_of_nonneg_right cs (Real.sqrt_nonneg _)
+    _ = Real.sqrt (∑ t, a t) * Fintype.card τ := by
+        rw [mul_assoc, Real.mul_self_sqrt hn.le]
+
+theorem mean_sum_sqrt_le {τ ι : Type} [Fintype τ] [Nonempty τ] (s : Finset ι) (a : ι → τ → ℝ)
+    (ha : ∀ i t, 0 ≤ a i t) :
+    (∑ t, ∑ i ∈ s, Real.sqrt (a i t)) / Fintype.card τ ≤ ∑ i ∈ s, Real.sqrt ((∑ t, a i t) / Fintype.card τ) := by
+  rw [Finset.sum_comm, Finset.sum_div]
+  exact Finset.sum_le_sum fun i _ => mean_sqrt_le _ (ha i)
+
+theorem mean_sum_sqrt_mul_le {τ ι : Type} [Fintype τ] [Nonempty τ] (s : Finset ι) (c : ι → ℝ)
+    (hc : ∀ i, 0 ≤ c i) (a : ι → τ → ℝ) (ha : ∀ i t, 0 ≤ a i t) :
+    (∑ t, ∑ i ∈ s, Real.sqrt (c i * a i t)) / Fintype.card τ ≤
+      ∑ i ∈ s, Real.sqrt (c i * ((∑ t, a i t) / Fintype.card τ)) := by
+  refine (mean_sum_sqrt_le s (fun i t => c i * a i t) fun i t => mul_nonneg (hc i) (ha i t)).trans_eq ?_
+  refine Finset.sum_congr rfl fun i _ => ?_
+  rw [← Finset.mul_sum, mul_div_assoc]
+
+theorem mean_add {τ : Type} [Fintype τ] (f g : τ → ℝ) :
+    (∑ t, (f t + g t)) / Fintype.card τ = (∑ t, f t) / Fintype.card τ + (∑ t, g t) / Fintype.card τ := by
+  rw [Finset.sum_add_distrib, add_div]
+
+theorem mean_const {τ : Type} [Fintype τ] [Nonempty τ] (a : ℝ) : (∑ _t : τ, a) / Fintype.card τ = a := by
+  have hn : (0 : ℝ) < Fintype.card τ := Nat.cast_pos.2 Fintype.card_pos
+  rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul, mul_div_cancel_left₀ _ hn.ne']
+
 end Claims.Flock
 
 namespace FlockDeploy.KS
@@ -436,6 +476,65 @@ theorem epsSL_le {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [F
   rw [εtable_one_plain h hsch L, add_assoc]
   exact add_le_add le_rfl key
 
+open FlockSoundness.Discharge.Exec in
+theorem advRSL_nonneg {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
+    {D Sl : Type} [Inhabited D] [Inhabited Sl] (A : FlockSoundness.Model.Arith F K) (Hc : List UInt8 → D)
+    (E : FlockSoundness.Merkle.Enc (List F) D) (Lf : FlockSoundness.Merkle.Leaf (List F) Sl D Hc)
+    (S : FlockSoundness.Model.Statement) (m k0 : ℕ) (l₀ l₁ : FlockSoundness.Accounting.Level)
+    (rest : List FlockSoundness.Accounting.Level) (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
+    (pre post : List ((Fin 2 → Fin mPts → F) → FlockSoundness.Game (FlockSoundness.Model.OutCL F D Sl)))
+    (cap₀ : FlockSoundness.Model.Cap D) (r ℓ : ℕ)
+    (σ : FlockSoundness.Game.Strategy (sessAfterL A Hc E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post
+      cap₀)) :
+    0 ≤ advRSL A Hc E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts pre post cap₀ r ℓ σ := by
+  unfold advRSL
+  exact FlockSoundness.Game.Lock.forkE_nonneg _ _ (fun _ _ _ => FlockSoundness.Game.ind_nonneg _ _) _ _
+
+open FlockSoundness.Discharge.Exec in
+/-- **The salted session's `ε_c⁻`, averaged over a mixture of strategies, at one table**, is at most `ε_table` and the
+old escapes' term, when each fork term's mean `Adv` is at most its fork event's probability and the mean self-clash
+at most the one-run event's: the mean of each root is at most the root of the mean (`mean_sum_sqrt_mul_le`). -/
+theorem mean_epsSL_le {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
+    {D Sl : Type} [Inhabited D] [Inhabited Sl] (A : FlockSoundness.Model.Arith F K) (Hc : List UInt8 → D)
+    (E : FlockSoundness.Merkle.Enc (List F) D) (Lf : FlockSoundness.Merkle.Leaf (List F) Sl D Hc) {x : Claims.Msg}
+    {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)]) (L : FlockSoundness.Layout st)
+    (m k0 : ℕ) (l₀ l₁ : FlockSoundness.Accounting.Level) (rest : List FlockSoundness.Accounting.Level) (ext : ℕ)
+    (hsch : FlockSoundness.Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
+    (hm : 13 ≤ (L.model (FlockSoundness.Refine.regionsOf st)).m) (ptLocal : ℕ)
+    (pre post : List ((Fin 2 → Fin spec.mPts → F) → FlockSoundness.Game (FlockSoundness.Model.OutCL F D Sl)))
+    (cap₀ : FlockSoundness.Model.Cap D) {τ : Type} [Fintype τ] [Nonempty τ]
+    (σ : τ → FlockSoundness.Game.Strategy (sessAfterL A Hc E Lf (L.model (FlockSoundness.Refine.regionsOf st))
+      ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal spec.mPts pre post cap₀))
+    {Ω Coin : Type} [Fintype Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg) (V : Claims.Verifier Coin)
+    (P : Claims.Prover Ω) (j : Fin 2 → Fin (l₀ :: l₁ :: rest).length → Fin (V.k x))
+    (ev : Fin 2 → Fin (l₀ :: l₁ :: rest).length → Ω → (Fin (V.k x) → Coin) → (Fin (V.k x) → Coin) → Prop)
+    (ev₁ : Ω → (Fin (V.k x) → Coin) → Prop)
+    (tied : ∀ r ℓ ω s s', ev r ℓ ω s s' → Claims.TiedColl H
+      ((Claims.run H P V x ω s).vLog ++ (Claims.run H P V x ω (Claims.forkCoins (j r ℓ) s s')).vLog))
+    (tied₁ : ∀ ω s, ev₁ ω s → Claims.TiedColl H (Claims.run H P V x ω s).vLog) (ω : Ω)
+    (hadv : ∀ r ℓ, (∑ t, advRSL A Hc E Lf (L.model (FlockSoundness.Refine.regionsOf st)) m k0 l₀ l₁ rest ext hk0 hm
+        ptLocal spec.mPts pre post cap₀ r.val (ℓ.val + 1) (σ t)) / Fintype.card τ ≤
+      Claims.Pr fun s : (Fin (V.k x) → Coin) × (Fin (V.k x) → Coin) => ev r ℓ ω s.1 s.2)
+    (hsc : (∑ t, FlockSoundness.Game.expect
+        (FlockSoundness.Game.ind fun outs : List (FlockSoundness.Model.OutCL F D Sl) =>
+          SelfClashL Hc E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (outs.getD pre.length dfltOutL))
+        (sessAfterL A Hc E Lf (L.model (FlockSoundness.Refine.regionsOf st)) ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm
+          ptLocal spec.mPts pre post cap₀) (σ t)) / Fintype.card τ ≤
+      Claims.Pr fun s : Fin (V.k x) → Coin => ev₁ ω s) :
+    (∑ t, epsSL A Hc E Lf (L.model (FlockSoundness.Refine.regionsOf st)) m k0 l₀ l₁ rest ext hk0 hm ptLocal
+        spec.mPts pre post cap₀ (σ t)) / Fintype.card τ ≤
+      εtable false x + (Claims.Flock.oldEsc H V P x ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ j ev ev₁ tied tied₁).term ω := by
+  have key := Claims.Flock.oldEsc_term H V P x ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ j ev ev₁ tied tied₁ ω
+    (fun r ℓ => (∑ t, advRSL A Hc E Lf (L.model (FlockSoundness.Refine.regionsOf st)) m k0 l₀ l₁ rest ext hk0 hm
+      ptLocal spec.mPts pre post cap₀ r ℓ (σ t)) / Fintype.card τ) _ hadv hsc
+  unfold epsSL
+  rw [Claims.Flock.mean_add, Claims.Flock.mean_add, Claims.Flock.mean_const, εtable_one_plain h hsch L, add_assoc]
+  refine add_le_add le_rfl (le_trans (add_le_add ?_ le_rfl) key)
+  rw [Finset.sum_comm, Finset.sum_div]
+  exact Finset.sum_le_sum fun r _ => Claims.Flock.mean_sum_sqrt_mul_le _ _
+    (fun ℓ => Claims.Flock.cOf_nonneg _ ℓ) _ fun ℓ t => advRSL_nonneg A Hc E Lf _ m k0 l₀ l₁ rest ext hk0 hm ptLocal
+      spec.mPts pre post cap₀ r ℓ (σ t)
+
 /-! ## The masked escapes fit the masked weight -/
 
 /-- C-Flock ZK's level 0 reads at least one position at every `m` it serves. -/
@@ -563,5 +662,67 @@ theorem epsSZ_le {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [F
   unfold epsSZ
   rw [add_assoc, add_assoc, add_assoc]
   exact add_le_add hb (by simpa only [add_assoc] using key)
+
+open FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkSession in
+theorem advSZ_nonneg {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
+    {D Sl : Type} [Inhabited D] [Inhabited Sl] (A : FlockSoundness.Model.Arith F K) (Hs : Hashes F D Sl) {mPts : ℕ}
+    (T : TabZK F mPts) (pre post : List ((Fin 2 → Fin mPts → F) → FlockSoundness.Game (OutZC F D Sl)))
+    (cap₀ : FlockSoundness.Model.Cap D) (r ℓ : ℕ)
+    (σ : FlockSoundness.Game.Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) :
+    0 ≤ advRSZ A Hs T pre post cap₀ r ℓ σ ∧ 0 ≤ advPadsSZ A Hs T pre post cap₀ r σ ∧
+      0 ≤ advTauSZ A Hs T pre post cap₀ r σ :=
+  ⟨FlockSoundness.Game.Lock.forkE_nonneg _ _ (fun _ _ _ => FlockSoundness.Game.ind_nonneg _ _) _ _,
+    FlockSoundness.Game.Lock.forkE_nonneg _ _ (fun _ _ _ => FlockSoundness.Game.ind_nonneg _ _) _ _,
+    FlockSoundness.Game.Lock.forkE_nonneg _ _ (fun _ _ _ => FlockSoundness.Game.ind_nonneg _ _) _ _⟩
+
+open FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkSession in
+/-- **The masked session's `ε_c⁻`, averaged over a mixture of strategies, at one table**, is at most `ε_table` and
+the old masked escapes' term, when each fork term's mean `Adv` (a level's, a pads root's, `τ`'s) is at most its fork
+event's probability and the mean self-clash at most the one-run event's. -/
+theorem mean_epsSZ_le {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
+    (hF : Fintype.card F = 2 ^ 128) {D Sl : Type} [Inhabited D] [Inhabited Sl] (A : FlockSoundness.Model.Arith F K)
+    (Hs : Hashes F D Sl) {mPts : ℕ} (T : TabZK F mPts)
+    (pre post : List ((Fin 2 → Fin mPts → F) → FlockSoundness.Game (OutZC F D Sl)))
+    (cap₀ : FlockSoundness.Model.Cap D) {τ : Type} [Fintype τ] [Nonempty τ]
+    (σ : τ → FlockSoundness.Game.Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀)))
+    {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables true x = [(spec, st)]) (h25 : 25 ≤ st.m)
+    (h35 : st.m ≤ 35) (hsch : T.sch = FlockSoundness.Accounting.m1Schedule st.m)
+    (ht : T.t = FlockSoundness.Accounting.m1Pad st.m) (he : T.e = 2) (hS : T.S.shape mPts = acct spec st)
+    (hN : T.N ≤ 2 ^ 13) (hq : T.q = 168) (hδ : 7 / 16 ≤ T.δ)
+    {Ω Coin : Type} [Fintype Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg) (V : Claims.Verifier Coin)
+    (P : Claims.Prover Ω) (j : Claims.Flock.IZ T.sch.levels.length → Fin (V.k x))
+    (ev : Claims.Flock.IZ T.sch.levels.length → Ω → (Fin (V.k x) → Coin) → (Fin (V.k x) → Coin) → Prop)
+    (ev₁ : Ω → (Fin (V.k x) → Coin) → Prop)
+    (tied : ∀ i ω s s', ev i ω s s' → Claims.TiedColl H
+      ((Claims.run H P V x ω s).vLog ++ (Claims.run H P V x ω (Claims.forkCoins (j i) s s')).vLog))
+    (tied₁ : ∀ ω s, ev₁ ω s → Claims.TiedColl H (Claims.run H P V x ω s).vLog) (ω : Ω)
+    (hadv : ∀ r ℓ, (∑ t, advRSZ A Hs T pre post cap₀ r.val (ℓ.val + 1) (σ t)) / Fintype.card τ ≤
+      Claims.Pr fun s : (Fin (V.k x) → Coin) × (Fin (V.k x) → Coin) => ev (.inl (r, ℓ)) ω s.1 s.2)
+    (hP : ∀ r : Fin 2, (∑ t, advPadsSZ A Hs T pre post cap₀ r.val (σ t)) / Fintype.card τ ≤
+      Claims.Pr fun s : (Fin (V.k x) → Coin) × (Fin (V.k x) → Coin) => ev (.inr (.inl r)) ω s.1 s.2)
+    (hT : ∀ r : Fin 2, (∑ t, advTauSZ A Hs T pre post cap₀ r.val (σ t)) / Fintype.card τ ≤
+      Claims.Pr fun s : (Fin (V.k x) → Coin) × (Fin (V.k x) → Coin) => ev (.inr (.inr r)) ω s.1 s.2)
+    (hsc : (∑ t, FlockSoundness.Game.expect (FlockSoundness.Game.ind fun outs : List (OutZC F D Sl) =>
+        SelfClashZ Hs T (outs.getD pre.length dfltOutZC)) (sessAtZ pre post (tabAfterZC A Hs T cap₀)) (σ t)) /
+        Fintype.card τ ≤ Claims.Pr fun s : Fin (V.k x) → Coin => ev₁ ω s) :
+    (∑ t, epsSZ A Hs T pre post cap₀ (σ t)) / Fintype.card τ ≤
+      εtable true x + (Claims.Flock.oldEscZ H V P x T.sch T.N j ev ev₁ tied tied₁).term ω := by
+  have key := Claims.Flock.oldEscZ_term H V P x T.sch T.N j ev ev₁ tied tied₁ ω
+    (fun r ℓ => (∑ t, advRSZ A Hs T pre post cap₀ r ℓ (σ t)) / Fintype.card τ)
+    (fun r => (∑ t, advPadsSZ A Hs T pre post cap₀ r (σ t)) / Fintype.card τ)
+    (fun r => (∑ t, advTauSZ A Hs T pre post cap₀ r (σ t)) / Fintype.card τ) _ hadv hP hT hsc
+  have hb := bound_le_εtable_zk hF h T h25 h35 hsch ht he hS hN hq hδ
+  unfold epsSZ
+  rw [Claims.Flock.mean_add, Claims.Flock.mean_add, Claims.Flock.mean_add, Claims.Flock.mean_add,
+    Claims.Flock.mean_const, add_assoc, add_assoc, add_assoc]
+  simp only [add_assoc] at key
+  refine add_le_add hb (le_trans (add_le_add ?_ (add_le_add ?_ (add_le_add ?_ le_rfl))) key)
+  · rw [Finset.sum_comm, Finset.sum_div]
+    exact Finset.sum_le_sum fun r _ => Claims.Flock.mean_sum_sqrt_mul_le _ _
+      (fun ℓ => Claims.Flock.cOf_nonneg _ ℓ) _ fun ℓ t => (advSZ_nonneg A Hs T pre post cap₀ r ℓ (σ t)).1
+  · exact Claims.Flock.mean_sum_sqrt_mul_le _ (fun _ => (T.N : ℝ) * T.N)
+      (fun _ => mul_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)) _
+      fun r t => (advSZ_nonneg A Hs T pre post cap₀ r 0 (σ t)).2.1
+  · exact Claims.Flock.mean_sum_sqrt_le _ _ fun r t => (advSZ_nonneg A Hs T pre post cap₀ r 0 (σ t)).2.2
 
 end FlockDeploy.KS
