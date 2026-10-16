@@ -103,6 +103,12 @@ def collective_kind(family: str) -> str | None:
     from verity_vllm.program.frontend.collective_kinds import collective_kind as kind
     return kind(family)
 
+
+def collective_trailing(family: str) -> int:
+    """The operands a collective reads after its `parts` (`collective_kinds.trailing_operands`)."""
+    from verity_vllm.program.frontend.collective_kinds import trailing_operands
+    return trailing_operands(family)
+
 # ---------------------------------------------------------------------------------------------------------------------------------
 # named residuals: v1 spellings the structure does not give
 # ---------------------------------------------------------------------------------------------------------------------------------
@@ -450,7 +456,8 @@ class Population:
             if k is None:
                 continue
             self.collectives[c.id] = k
-            own = [r for r in c.reads if r.call >= 0]
+            parts = c.reads[: len(c.reads) - collective_trailing(c.family)]     # the fused norm's residual and weight follow its parts
+            own = [r for r in parts if r.call >= 0]
             if len(own) != 1:
                 self.tp_faults.append(f"{c.family} under {corr.implementation_path(corr.module_of(c.id))}: {len(own)} rank-local operands (one expected)")
                 continue
@@ -461,9 +468,11 @@ class Population:
                     self.tp_faults.append(f"{P.call(op.call).family} under {where}: one Value is the rank-local partial of two collectives")
                     continue
                 self.partial_of[op] = c.id
-            elif len(c.port_table) != 1 or (k == "all_gather" and c.port_table[0].elems % self.world):
+            elif (len({p.elems for p in c.port_table}) != 1 if k == "all_reduce" else
+                  len(c.port_table) != 1 or c.port_table[0].elems % self.world):
                 self.tp_faults.append(f"{c.family} under {where}: an operand from another body and output ports "
-                                      f"{[(p.name, p.elems) for p in c.port_table]} (one output, a multiple of world {self.world}, expected)")
+                                      f"{[(p.name, p.elems) for p in c.port_table]} (all_reduce: outputs of one width; all_gather: one "
+                                      f"output, a multiple of world {self.world}, expected)")
             else:
                 self.carries.add(c.id)
                 self.site[c.id] = corr.site_path(c.id)
