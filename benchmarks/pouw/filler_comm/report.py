@@ -123,8 +123,10 @@ def rows(out_dir):
                 gap = first("defer", "defer_gap_macs_rep")
                 drain = first("defer", "defer_drain_macs_rep")
                 pm = first("defer", "mhz")
-                row["defer_gap_share"] = gap / dm if dm else None      # the round's deferred work done free in the gaps
-                row["defer_overflow_share"] = drain / dm if dm else None  # the overflow, drained at step-time cost
+                row["defer_gap_share"] = gap / dm if dm else None      # the step's deferred work run beside the collectives
+                row["defer_overflow_share"] = drain / dm if dm else None  # the overflow, drained after the step
+                # the true step-time cost is defer_slowdown; a gap share of 1 with a slowdown > 1 means it ran in the gap
+                # windows but did not hide (the DRAM-bound load contends with the step)
                 row["defer_slowdown"] = defer / base
                 fm = first("defer", "fill_macs_rep")
                 row["defer_fill"] = fm / (defer * 1e-3) / (1024 * 188 * pm * 1e6)
@@ -219,8 +221,10 @@ def main():
               f"{f(r.get('coverage_base'), 4)} → {f(r.get('coverage'), 4)} | {f(r.get('comm_slowdown'), 4)} | {r.get('rec_bad', '-')}/{r.get('rec_checked', '-')} |")
     if any(r.get("defer_ms") for r in rs):
         print()
-        print("Decision 36's deferred decode pass: demand a step = the step's served MACs; gap share = done free beside the "
-              "collectives; overflow = drained at step-time cost; dalone = the whole step's deferred work with no gaps.")
+        print("Decision 36's deferred decode pass: demand a step = the step's served MACs; gap share = run beside the "
+              "collectives; overflow = drained after the step; slowdown = the true step-time cost (gap share 1 with "
+              "slowdown > 1 means it ran in the gap windows but did not hide); dalone = the whole step's deferred work "
+              "with no gaps.")
         print("| set | TP | B | L | T | base ms | defer ms | defer slowdown | gap share | overflow share | rem. fill K "
               f"(x{K_FRACTION}) | dalone ms | dalone cost (xbase) | dp bad/checked |")
         print("|" + "---|" * 15)
