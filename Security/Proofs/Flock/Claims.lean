@@ -5,6 +5,7 @@ import Proofs.Flock.Claims.Aggregate
 import Proofs.Flock.Claims.Bits
 import Proofs.Flock.Claims.ERep
 import Proofs.Flock.Claims.ERepCost
+import Proofs.Flock.Claims.RootFindGF128
 import Proofs.Flock.Claims.Decode
 import Proofs.Flock.Claims.DecodeFlock
 import Proofs.Flock.Claims.ZkDecode
