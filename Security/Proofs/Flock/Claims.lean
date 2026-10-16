@@ -35,7 +35,8 @@ such decoders read as one (`DecodeFamily`), the masked verifier's deployed code 
 (`Scope`). Flock's numbers at the deployed parameters: `k`, `κ` and `λ` (`Numbers`), `ε_table` (`NumbersTable`), the
 pads' domain (`NumbersPads`), the weight and `γ` (`NumbersGamma`), and `nMin` (`NumbersNMin`). The deployed instance of
 `Claims.Flock.Deploy`: the hash-parametric verdict over the oracle (`DeployOC`), the statement's bytes, parser and setup
-(`DeployInputs`), the verifier in public-coin form (`Deploy`). -/
+(`DeployInputs`), the verifier in public-coin form (`Deploy`), and the code, columns and numbers that complete the
+plain and masked instances (`DeployCode`: `FlockDeploy.deployPlain`, `FlockDeploy.deployZk`). -/
 
 /-- **The claims are stated** (`Flock.Guarantees.ClaimsStated`). -/
 theorem Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated := rfl
