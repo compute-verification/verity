@@ -20,9 +20,10 @@ the record's roots, link points and rounds are the run's link message, first coi
 * `viewOf`: the run's live outcome (`LiveOutJ`), its rounds the record's (`viewOf_rounds`: the round messages with
   their coins, in `spec.repStreams` order). Each round's coin count and each stream's share of the rounds are the
   record's: a round message carries no count.
-* `recordsLiveAt_of_checks`: where the checks pass on a statement with no `--public-inputs` (which `Exec.Inputs` does
-  not carry) and the record's draw is the statement's, the last message's record and proof files record `viewOf`
-  (`RecordsLiveAt`, `RecordsLiveZKJ` at one outcome).
+* `publicInputs_none_of_checks`: the checks run the scope check, which refuses `--public-inputs` (which `Exec.Inputs`
+  does not carry); `publicInputs_none_of_inScope`: so does `InScope`, at the verifier's reading of the statement.
+* `recordsLiveAt_of_checks`: where the checks pass and the record's draw is the statement's, the last message's record
+  and proof files record `viewOf` (`RecordsLiveAt`, `RecordsLiveZKJ` at one outcome).
 * `wrD`, `recordsLiveZKJ_wrD`, `acceptsZK_wrD`: the writer that, at an outcome, takes a transcript `verify --zk`
   accepts that records it, where one exists. It satisfies `RecordsLiveZKJ` (so `RecordCustodyZKJ` is its draw file
   half alone, `recordCustodyZKJ_wrD`), and on every run whose decision accepts at SHA-512, `verify --zk` accepts what it
@@ -407,6 +408,46 @@ theorem custody_ok {spec : SessionSpec} {lv : Live} {link : List ByteArray × Li
   obtain ⟨a, c⟩ := am
   simpa only [Bool.and_eq_true, beq_iff_eq] using this
 
+/-! ## No `--public-inputs` -/
+
+/-- **The checks run the verifier's scope check** (`Read.check`, `ProvedScope.check`). -/
+theorem checks_scope {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+    (h : checks zk s spec x link c₁ mids f = .ok ()) : s.read.check = .ok () := by
+  unfold checks at h
+  obtain ⟨_, -, h⟩ := ebind_ok h
+  obtain ⟨_, -, h⟩ := ebind_ok h
+  obtain ⟨_, -, h⟩ := ebind_ok h
+  obtain ⟨_, -, h⟩ := ebind_ok h
+  obtain ⟨⟨⟩, h5, -⟩ := ebind_ok h
+  exact h5
+
+/-- **The scope check refuses `--public-inputs`** (`statementRules`' last rule). -/
+theorem publicInputs_none_of_check {r : Readable.Read} (h : r.check = .ok ()) : r.publicInputs = none := by
+  have hR := ((Readable.check_ok_iff _ _ _ _ _ _ _ _).1 h).1
+  exact Option.not_isSome_iff_eq_none.1 (by simp [hR.2.2.2.2.2])
+
+/-- **A statement `Deploy.V`'s checks pass carries no `--public-inputs`**: the checks run the scope check. -/
+theorem publicInputs_none_of_checks {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+    (h : checks zk s spec x link c₁ mids f = .ok ()) : s.read.publicInputs = none :=
+  publicInputs_none_of_check (checks_scope h)
+
+/-- **`InScope` excludes `--public-inputs`** at the verifier's reading of the statement: where the claims' parser reads
+`x` as `st` and `st` is in scope, the inputs the verifier reads of `x` (at a decision, `setupOf_some`) carry none. -/
+theorem publicInputs_none_of_inScope {zk : Bool} {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg}
+    {st : Claims.Flock.Stmt} {s : Ins} (hp : FlockDeploy.parse zk rel x = some st)
+    (hin : Claims.Flock.InScope zk st) (hs : insOf zk x = some s) : s.read.publicInputs = none := by
+  obtain ⟨p, hpb, rfl⟩ := Option.map_eq_some_iff.1 hp
+  obtain ⟨r, hr, hrp⟩ := Option.bind_eq_some_iff.1 hpb
+  have hr' : r = s.read := by
+    simp only [readOf, hs, Option.map_some] at hr
+    exact (Option.some.inj hr).symm
+  obtain ⟨-, -, -, -, -, -, -, -, -, hpi, -⟩ := hin
+  simp only [Readable.toReadable, Readable.Read.form, Bool.not_eq_true] at hpi
+  rw [← hr', ← Readable.toRead_of_parse hrp]
+  exact Option.not_isSome_iff_eq_none.1 (by simp [hpi])
+
 /-- The session's rep streams: table `i`'s rep `r` is stream `2i + r`, named `<table>/rep<r>`. -/
 theorem repStreams_toList (spec : SessionSpec) :
     spec.repStreams.toList = (List.range spec.tables.size).flatMap fun i =>
@@ -551,17 +592,18 @@ theorem recordsLiveZKJ_iff {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (dj : F
     Composed.RecordsLiveZKJ I dj Jf wr ↔ ∀ S R o, RecordsLiveAt I (dj S) o (wr S R o) := Iff.rfl
 
 /-- **Custody gives `RecordsLiveAt`**: where `Deploy.V --zk`'s checks pass on a statement that sets up at its draw `d`
-with no `--public-inputs`, and the record's draw is the statement's, the last message's record and proof files are a
-record of the run's live outcome (`viewOf`), at any `J` of the session's tables. -/
+(so with no `--public-inputs`, `publicInputs_none_of_checks`), and the record's draw is the statement's, the last
+message's record and proof files are a record of the run's live outcome (`viewOf`), at any `J` of the session's
+tables. -/
 theorem recordsLiveAt_of_checks {zk : Bool} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
     {J mPts : ℕ} {d : Json} (hs : s.setup = .ok (spec, sts)) (hzk : s.read.zk = true)
-    (hpi : s.read.publicInputs = none) (hdraw : Exec.recordDraw f.record = s.read.draw)
-    (hd : s.read.draw = some d) (hJ : J ≤ spec.tables.size) (hc : checks zk s spec x link c₁ mids f = .ok ()) :
+    (hdraw : Exec.recordDraw f.record = s.read.draw) (hd : s.read.draw = some d) (hJ : J ≤ spec.tables.size)
+    (hc : checks zk s spec x link c₁ mids f = .ok ()) :
     RecordsLiveAt s.read.I d (viewOf J mPts spec link c₁ f) ⟨f.record, f.proofs⟩ := by
   intro _
   refine ⟨hdraw.trans hd, rfl, fun spec' sts' sess hset hdec => ?_⟩
-  rw [setupOf_zkInputs (Ins.setup_read hs) hzk hpi hdraw] at hset
+  rw [setupOf_zkInputs (Ins.setup_read hs) hzk (publicInputs_none_of_checks hc) hdraw] at hset
   obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj hset)
   obtain ⟨-, lv, hlv, hcus⟩ := checks_ok hc
   obtain ⟨hroot, -, hpts, hrounds⟩ := custody_ok hcus
@@ -621,37 +663,36 @@ theorem recordCustodyZKJ_wrD {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (dj :
   ⟨recordsLiveZKJ_wrD I dj Jf, hdf⟩
 
 /-- **An accepting decision of `Deploy.V --zk` at SHA-512 is an accepting `verify --zk` on a record of its live
-outcome**: on a statement with no `--public-inputs` whose record's draw is the statement's `d`, the last message's
-record and proof files are accepted by `verify --zk` (`AcceptsZK`) at the statement's inputs, and record the run's live
-outcome `viewOf` (`RecordsLiveAt`). -/
+outcome**: on a statement whose record's draw is the statement's `d`, the last message's record and proof files are
+accepted by `verify --zk` (`AcceptsZK`) at the statement's inputs, and record the run's live outcome `viewOf`
+(`RecordsLiveAt`). -/
 theorem accepts_of_decide {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
     {f : Final} {J mPts : ℕ} {d : Json} (ha : act true x as cs = .decide s spec sts link c₁ mids f)
-    (hacc : ((next true x as cs).eval sha512).1 = .acc) (hpi : s.read.publicInputs = none)
-    (hdraw : Exec.recordDraw f.record = s.read.draw) (hd : s.read.draw = some d) (hJ : J ≤ spec.tables.size) :
+    (hacc : ((next true x as cs).eval sha512).1 = .acc) (hdraw : Exec.recordDraw f.record = s.read.draw)
+    (hd : s.read.draw = some d) (hJ : J ≤ spec.tables.size) :
     ZkExec.AcceptsZK s.read.I ⟨f.record, f.proofs⟩ ∧
       RecordsLiveAt s.read.I d (viewOf J mPts spec link c₁ f) ⟨f.record, f.proofs⟩ := by
   obtain ⟨hv, hc⟩ := (next_decide_sha512 ha).1 hacc
   simp only [ite_true] at hv
   obtain ⟨hins, hs⟩ := setupOf_some (act_decide ha)
   have hzk : s.read.zk = true := readOf_zk (x := x) (by simp [readOf, hins])
-  exact ⟨⟨spec, sts, setupOf_zkInputs (Ins.setup_read hs) hzk hpi hdraw, setup_shapeOk hs hzk, hv⟩,
-    recordsLiveAt_of_checks hs hzk hpi hdraw hd hJ hc⟩
+  exact ⟨⟨spec, sts, setupOf_zkInputs (Ins.setup_read hs) hzk (publicInputs_none_of_checks hc) hdraw,
+    setup_shapeOk hs hzk, hv⟩, recordsLiveAt_of_checks hs hzk hdraw hd hJ hc⟩
 
 /-- **The old event holds on `Deploy.V --zk`'s accepting runs**: where its decision accepts at SHA-512, on a statement
-with no `--public-inputs` whose record's draw is the statement's `dj S`, `verify --zk` accepts what `wrD` writes for the
-run's live outcome at `Jf S R ≤` the session's tables, the event the old theorems bound under `RecordsLiveZKJ`. -/
+whose record's draw is the statement's `dj S`, `verify --zk` accepts what `wrD` writes for the run's live outcome at
+`Jf S R ≤` the session's tables, the event the old theorems bound under `RecordsLiveZKJ`. -/
 theorem acceptsZK_wrD {n mPts : ℕ} {Reg : Type} (dj : Finset (Fin n) → Json) (Jf : Finset (Fin n) → Reg → ℕ)
     {S : Finset (Fin n)} {R : Reg} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : Final} (ha : act true x as cs = .decide s spec sts link c₁ mids f)
-    (hacc : ((next true x as cs).eval sha512).1 = .acc) (hpi : s.read.publicInputs = none)
-    (hdraw : Exec.recordDraw f.record = s.read.draw) (hd : s.read.draw = some (dj S))
-    (hJ : Jf S R ≤ spec.tables.size) :
+    (hacc : ((next true x as cs).eval sha512).1 = .acc) (hdraw : Exec.recordDraw f.record = s.read.draw)
+    (hd : s.read.draw = some (dj S)) (hJ : Jf S R ≤ spec.tables.size) :
     ZkExec.AcceptsZK s.read.I (wrD s.read.I dj Jf S R (viewOf (Jf S R) mPts spec link c₁ f)) := by
   have hex : ∃ t, ZkExec.AcceptsZK s.read.I t ∧
       RecordsLiveAt s.read.I (dj S) (viewOf (Jf S R) mPts spec link c₁ f) t :=
-    ⟨_, accepts_of_decide ha hacc hpi hdraw hd hJ⟩
+    ⟨_, accepts_of_decide ha hacc hdraw hd hJ⟩
   unfold wrD
   rw [dite_eq_left_of_eq_true (eq_true hex)]
   exact (Classical.choose_spec hex).1
