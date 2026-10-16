@@ -1,0 +1,58 @@
+{"design": "{±1}", "family": "(i) FP4 two-window split", "name": "split, ops on FFMA", "program": {"MMA": 0.0001220703125, "FFMA": 0.001953125}}
+{"design": "{±1}", "family": "(i) FP4 two-window split", "name": "split, ops on VIMNMX", "program": {"MMA": 0.0001220703125, "VIMNMX": 0.001953125}}
+{"design": "{±1}", "family": "(i) FP4 two-window split", "name": "split, ops on HFMA2", "program": {"MMA": 0.0001220703125, "HFMA2": 0.001953125}}
+{"design": "{±1}", "family": "(i) FP4 two-window split", "name": "split, ops on IMAD", "program": {"MMA": 0.0001220703125, "IMAD": 0.001953125}}
+{"design": "{±1}", "family": "(i) FP4 two-window split", "name": "split, ops on ALU", "program": {"MMA": 0.0001220703125, "ALU": 0.001953125}}
+{"design": "{±1}", "family": "(i) FP4 two-window split", "name": "split, ops on F2FS", "program": {"MMA": 0.0001220703125, "F2FS": 0.001953125}}
+{"design": "{±1}", "family": "(i) FP4 two-window split", "name": "split, ops on XU", "program": {"MMA": 0.0001220703125, "XU": 0.001953125}}
+{"design": "{±1}", "family": "(i) FP4 two-window split", "name": "split, ops on SHFL", "program": {"MMA": 0.0001220703125, "SHFL": 0.001953125}}
+{"design": "{±1}", "family": "(i) FP4 two-window split", "name": "split, ops on NOROW", "program": {"MMA": 0.0001220703125, "NOROW": 0.001953125}}
+{"design": "{±1,±3}", "family": "(i) FP4 two-window split", "name": "split, ops on FFMA", "program": {"MMA": 0.0001220703125, "FFMA": 0.001953125}}
+{"design": "{±1,±3}", "family": "(i) FP4 two-window split", "name": "split, ops on VIMNMX", "program": {"MMA": 0.0001220703125, "VIMNMX": 0.001953125}}
+{"design": "{±1,±3}", "family": "(i) FP4 two-window split", "name": "split, ops on HFMA2", "program": {"MMA": 0.0001220703125, "HFMA2": 0.001953125}}
+{"design": "{±1,±3}", "family": "(i) FP4 two-window split", "name": "split, ops on IMAD", "program": {"MMA": 0.0001220703125, "IMAD": 0.001953125}}
+{"design": "{±1,±3}", "family": "(i) FP4 two-window split", "name": "split, ops on ALU", "program": {"MMA": 0.0001220703125, "ALU": 0.001953125}}
+{"design": "{±1,±3}", "family": "(i) FP4 two-window split", "name": "split, ops on F2FS", "program": {"MMA": 0.0001220703125, "F2FS": 0.001953125}}
+{"design": "{±1,±3}", "family": "(i) FP4 two-window split", "name": "split, ops on XU", "program": {"MMA": 0.0001220703125, "XU": 0.001953125}}
+{"design": "{±1,±3}", "family": "(i) FP4 two-window split", "name": "split, ops on SHFL", "program": {"MMA": 0.0001220703125, "SHFL": 0.001953125}}
+{"design": "{±1,±3}", "family": "(i) FP4 two-window split", "name": "split, ops on NOROW", "program": {"MMA": 0.0001220703125, "NOROW": 0.001953125}}
+{"design": "{±1}", "family": "(i) FP4 two-window split", "name": "split, ops on SEL", "program": {"MMA": 0.0001220703125, "SEL": 0.001953125}}
+{"design": "{±1,±3}", "family": "(i) FP4 two-window split", "name": "split, ops on SEL", "program": {"MMA": 0.0001220703125, "SEL": 0.001953125}}
+{"design": "{±1}", "family": "(i) FP4 two-window split", "name": "split, ops on IMAD, integer work on UNI", "program": {"MMA": 0.0001220703125, "UNI": 0.0625}, "since": "VF2"}
+{"design": "{±1}", "family": "(i) FP4 two-window split", "name": "split, ops on ALU, integer work on UNI", "program": {"MMA": 0.0001220703125, "UNI": 0.0625}, "since": "VF2"}
+{"design": "{±1}", "family": "(i) FP4 two-window split", "name": "split, ops on XU, integer work on UNI", "program": {"MMA": 0.0001220703125, "UNI": 0.0625}, "since": "VF2"}
+{"design": "{±1}", "family": "(i) FP4 two-window split", "name": "split, ops on NOROW, integer work on UNI", "program": {"MMA": 0.0001220703125, "UNI": 0.0625}, "since": "VF2"}
+{"design": "{±1,±3}", "family": "(i) FP4 two-window split", "name": "split, ops on IMAD, integer work on UNI", "program": {"MMA": 0.0001220703125, "UNI": 0.0625}, "since": "VF2"}
+{"design": "{±1,±3}", "family": "(i) FP4 two-window split", "name": "split, ops on ALU, integer work on UNI", "program": {"MMA": 0.0001220703125, "UNI": 0.0625}, "since": "VF2"}
+{"design": "{±1,±3}", "family": "(i) FP4 two-window split", "name": "split, ops on XU, integer work on UNI", "program": {"MMA": 0.0001220703125, "UNI": 0.0625}, "since": "VF2"}
+{"design": "{±1,±3}", "family": "(i) FP4 two-window split", "name": "split, ops on NOROW, integer work on UNI", "program": {"MMA": 0.0001220703125, "UNI": 0.0625}, "since": "VF2"}
+{"design": "{±1}", "family": "(i) FP4 two-window split", "name": "split, ops on SEL, integer work on UNI", "program": {"MMA": 0.0001220703125, "UNI": 0.0625}, "since": "VF2"}
+{"design": "{±1,±3}", "family": "(i) FP4 two-window split", "name": "split, ops on SEL, integer work on UNI", "program": {"MMA": 0.0001220703125, "UNI": 0.0625}, "since": "VF2"}
+{"design": "{±1}", "family": "(i) FP4 two-window split", "name": "split, ops on IMAD, IMAD on IMADW", "program": {"MMA": 0.0001220703125, "IMADW": 0.0009765625}, "since": "VF3c"}
+{"design": "{±1}", "family": "(i) FP4 two-window split", "name": "split, ops on IMAD, IMAD on UNI64", "program": {"MMA": 0.0001220703125, "UNI64": 0.03125}, "since": "VF3c"}
+{"design": "{±1}", "family": "(i) FP4 two-window split", "name": "split, ops on ALU, ALU on ALU64", "program": {"MMA": 0.0001220703125, "ALU64": 0.0009765625}, "since": "VF3c"}
+{"design": "{±1}", "family": "(i) FP4 two-window split", "name": "split, ops on ALU, ALU on UNI64", "program": {"MMA": 0.0001220703125, "UNI64": 0.03125}, "since": "VF3c"}
+{"design": "{±1}", "family": "(i) FP4 two-window split", "name": "split, ops on XU, XU on UNI64", "program": {"MMA": 0.0001220703125, "UNI64": 0.03125}, "since": "VF3c"}
+{"design": "{±1}", "family": "(i) FP4 two-window split", "name": "split, ops on NOROW, NOROW on MOV64", "program": {"MMA": 0.0001220703125, "MOV64": 0.0009765625}, "since": "VF3c"}
+{"design": "{±1}", "family": "(i) FP4 two-window split", "name": "split, ops on NOROW, NOROW on UNI64", "program": {"MMA": 0.0001220703125, "UNI64": 0.03125}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(i) FP4 two-window split", "name": "split, ops on IMAD, IMAD on IMADW", "program": {"MMA": 0.0001220703125, "IMADW": 0.0009765625}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(i) FP4 two-window split", "name": "split, ops on IMAD, IMAD on UNI64", "program": {"MMA": 0.0001220703125, "UNI64": 0.03125}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(i) FP4 two-window split", "name": "split, ops on ALU, ALU on ALU64", "program": {"MMA": 0.0001220703125, "ALU64": 0.0009765625}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(i) FP4 two-window split", "name": "split, ops on ALU, ALU on UNI64", "program": {"MMA": 0.0001220703125, "UNI64": 0.03125}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(i) FP4 two-window split", "name": "split, ops on XU, XU on UNI64", "program": {"MMA": 0.0001220703125, "UNI64": 0.03125}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(i) FP4 two-window split", "name": "split, ops on NOROW, NOROW on MOV64", "program": {"MMA": 0.0001220703125, "MOV64": 0.0009765625}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(i) FP4 two-window split", "name": "split, ops on NOROW, NOROW on UNI64", "program": {"MMA": 0.0001220703125, "UNI64": 0.03125}, "since": "VF3c"}
+{"design": "{±1}", "family": "(i) FP4 two-window split", "name": "split, ops on SEL, SEL on UNI64", "program": {"MMA": 0.0001220703125, "UNI64": 0.03125}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(i) FP4 two-window split", "name": "split, ops on SEL, SEL on UNI64", "program": {"MMA": 0.0001220703125, "UNI64": 0.03125}, "since": "VF3c"}
+{"design": "{±1}", "family": "(i) FP4 two-window split", "name": "split, ops on FFMA, FFMA on W2", "program": {"MMA": 0.0001220703125, "W2": 0.0009765625}, "since": "VF3e"}
+{"design": "{±1}", "family": "(i) FP4 two-window split", "name": "split, ops on IMAD, IMAD on W2", "program": {"MMA": 0.0001220703125, "W2": 0.0009765625}, "since": "VF3e"}
+{"design": "{±1}", "family": "(i) FP4 two-window split", "name": "split, ops on ALU, ALU on W2", "program": {"MMA": 0.0001220703125, "W2": 0.0009765625}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(i) FP4 two-window split", "name": "split, ops on FFMA, FFMA on W2", "program": {"MMA": 0.0001220703125, "W2": 0.0009765625}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(i) FP4 two-window split", "name": "split, ops on IMAD, IMAD on W2", "program": {"MMA": 0.0001220703125, "W2": 0.0009765625}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(i) FP4 two-window split", "name": "split, ops on ALU, ALU on W2", "program": {"MMA": 0.0001220703125, "W2": 0.0009765625}, "since": "VF3e"}
+{"design": "{±1}", "family": "(i) FP4 two-window split", "name": "split, ops on FFMA, FFMA on DMUL", "program": {"MMA": 0.0001220703125, "DMUL": 0.0009765625}, "since": "VF3e"}
+{"design": "{±1}", "family": "(i) FP4 two-window split", "name": "split, ops on IMAD, IMAD on DMUL", "program": {"MMA": 0.0001220703125, "DMUL": 0.0009765625}, "since": "VF3e"}
+{"design": "{±1}", "family": "(i) FP4 two-window split", "name": "split, ops on ALU, ALU on DMUL", "program": {"MMA": 0.0001220703125, "DMUL": 0.0009765625}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(i) FP4 two-window split", "name": "split, ops on FFMA, FFMA on DMUL", "program": {"MMA": 0.0001220703125, "DMUL": 0.0009765625}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(i) FP4 two-window split", "name": "split, ops on IMAD, IMAD on DMUL", "program": {"MMA": 0.0001220703125, "DMUL": 0.0009765625}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(i) FP4 two-window split", "name": "split, ops on ALU, ALU on DMUL", "program": {"MMA": 0.0001220703125, "DMUL": 0.0009765625}, "since": "VF3e"}
