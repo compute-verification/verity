@@ -32,6 +32,7 @@ well-formed columns, accepted runs opening only well-formed columns, and conflic
 (`Trace`): a word as the old oracle, `Close` bounding the distance per whole column (`Flock.hdist_le_of_close`), the
 deployed plain code, read step, schedule and radius as the old model's, so an old `Committed` table extracts
 (`FlockDeploy.KS.good_of_committed_plain`, `FlockDeploy.KS.not_committed_plain`), and the masked code and read step as
-the old padded ones (`Flock.zkEnc_eq_encAt`, `Flock.zkReadD_eq_padWit`, `Flock.radius_zk`). Accepted runs open only
+the old padded ones (`Flock.zkEnc_eq_encAt`, `Flock.zkReadD_eq_padWit`, `Flock.radius_zk`), so an old `CommittedPad`
+table extracts (`FlockDeploy.KS.good_of_committed_zk`, `FlockDeploy.KS.not_committed_zk`). Accepted runs open only
 full-width columns at both records (`Width`, `FlockDeploy.KS.plain_colsOk`, `FlockDeploy.KS.zk_colsOk`), which leaves
 `TableBoundθ` and `ConflictTied` for KS at SHA-512 (`FlockDeploy.KS.plain_KSθ_sha512`, `FlockDeploy.KS.zk_KSθ_sha512`). -/
