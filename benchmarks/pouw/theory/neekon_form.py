@@ -14,6 +14,11 @@ Parts:
 - C. Its products, read mod 2 on the ball: E and ρ_i have cross blocks of F₂ rank L, against ≤ 2 for an affine product.
 - D. It fails the spot check: its pass rate at uniform coins.
 - E. The comparison: its count against naive L·n·n′·B and the elementary lower bound on C_F₂(⟨n, L, n′B⟩).
+- F. At n = 1 and n′B < 20 its count is below L ≤ MC_∧(⟨1, L, n′B⟩), the AND count of every F₂ circuit exact on the
+  whole cube (restriction: t ANDs leave the outputs affine on a subspace of codimension ≤ t, whose direction is
+  isotropic for every output's alternating form).
+- G. The restriction bound's lemma, exhaustively at small L, N: the largest subspace isotropic for every output form of
+  ⟨1, L, N⟩ has dimension L·N, so its codimension is L.
 
 Run: `uv run --no-project --with numpy --with-editable benchmarks/pouw/exact_kit python -B neekon_form.py --mutations`
 (from this directory, or with the path).
@@ -300,13 +305,50 @@ def c_lower(S):
     return max(S.n * N, -(-max(S.n * S.L, S.L * N, S.n * N) // 2))
 
 
+def mc_lower(S):
+    """Lower bound on MC_and(<n, L, n'B>) over F2, general AND/XOR circuits exact on the whole cube: max(dimension
+    n·n'B, L at n = 1). A circuit with t ANDs is affine on an affine subspace of codimension <= t (fix one input of
+    each AND in order), whose direction is then isotropic for every output's alternating form; at n = 1 those spaces
+    have dimension <= L·N, so codimension >= L."""
+    N = S.n2 * S.B
+    return max(S.n * N, S.L if S.n == 1 else 0)
+
+
+def max_common_isotropic(L, N):
+    """Exhaustive: the largest subspace of F2^(L + L·N) isotropic for every output form of <1, L, N>
+    (B_l((x, y), (x', y')) = x·y'_l + x'·y_l), level by level over subspaces deduplicated by their span (tiny L, N)."""
+    dim = L + L * N
+    mx = (1 << L) - 1
+
+    def form(l, a, b):
+        ya, yb = (a >> (L + l * L)) & mx, (b >> (L + l * L)) & mx
+        return (bin(a & mx & yb).count("1") + bin(b & mx & ya).count("1")) & 1
+
+    level = {1: ((), frozenset([0]))}
+    best = 0
+    while level:
+        nxt = {}
+        for basis, span in level.values():
+            for v in range(1, 1 << dim):
+                if v in span or any(form(l, v, b) for b in basis for l in range(N)):
+                    continue
+                s2 = span | {s ^ v for s in span}
+                key = sum(1 << s for s in s2)
+                if key not in nxt:
+                    nxt[key] = (basis + (v,), frozenset(s2))
+        if nxt:
+            best += 1
+        level = nxt
+    return best
+
+
 def main():
     np.seterr(over="ignore")
     checks = Checks()
     rng = np.random.default_rng(20261016)
     part_a(checks, rng)
 
-    full = [Shape(1, 32, 8, 4), Shape(4, 32, 4, 2), Shape(2, 4, 2, 2)]
+    full = [Shape(1, 32, 8, 4), Shape(4, 32, 4, 2), Shape(2, 4, 2, 2), Shape(1, 32, 1, 1), Shape(1, 32, 4, 4)]
     sampled = [Shape(8, 32, 8, 4)]
     for S in full + sampled:
         for draw in range(2 if S in full else 1):
@@ -331,9 +373,18 @@ def main():
                 wpass, rpass = cube_pass(S, P, words, pc, vq, rng)
                 checks.check(f"D {S}: uniform coins, words right / all words right", rpass < 0.01,
                              f"{wpass:.4f} / {rpass:.4f} over 2000 points")
-        if S in full and S.L == 32:
+        if S in full and S.L == 32 and S.n2 * S.B > 1:
             checks.check(f"E {S}: below the elementary C_F2 bound", P.muls < c_lower(S),
                          f"{P.muls} < {c_lower(S)} <= C_F2(<{S.n},{S.L},{S.n2 * S.B}>)")
+        if S in full and S.n == 1 and S.n2 * S.B < 20:
+            checks.check(f"F {S}: below MC_and of the F2 target (general circuits exact on the cube)",
+                         P.muls < mc_lower(S),
+                         f"{P.muls} < {mc_lower(S)} <= MC_and(<1,{S.L},{S.n2 * S.B}>)")
+
+    for L, N in [(2, 1), (2, 2), (3, 1), (2, 3), (4, 1)]:
+        iso = max_common_isotropic(L, N)
+        checks.check(f"G <1,{L},{N}>: largest common isotropic subspace has dimension L·N", iso == L * N,
+                     f"{iso} (so codimension L = {L} <= MC_and)")
 
     if checks.mutations:
         S = Shape(2, 4, 2, 2)
