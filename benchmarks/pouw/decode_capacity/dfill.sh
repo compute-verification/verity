@@ -9,22 +9,24 @@
 #
 # DF_ALONE ("W:NC ..."), DF_ARMS ("split|co:FILL_SMS:W:NC[:CHUNK_LOG2[:KIND]] ...", KIND as DFILL_KIND), DF_BLS and
 # DF_CO_BLS ("B:L ...", for split and co arms), DF_ARMS2 with DF_BLS2 (a second set), DF_S (steps a tile), DF_REPS,
-# NCU (0|1), DF_T2 ("FILL_SMS ...": T2's chain, dcap fill ... big, at DF_BLS in the same lease, into fill.jsonl)
+# NCU (0|1), DF_NCU ("W:NC ...", the configs ncu reads), DF_T2 ("FILL_SMS ...": T2's chain, dcap fill ... big, at DF_BLS in
+# the same lease, into fill.jsonl), DF_NVCC (more nvcc flags: pfill.cuh's filler (HC-PROVED) is the default; -DDFILL_V1 builds FILL v1's). An empty
+# DF_ARMS runs no arms.
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
 D=benchmarks/pouw/decode_capacity
 export B; B=$(mktemp -d /tmp/dfill.XXXXXX); trap 'rm -rf "$B"' EXIT
 export DF_ALONE=${DF_ALONE:-"4:1 4:2 4:4 8:1 8:2 8:4"}
-export DF_ARMS=${DF_ARMS:-"split:92:8:4 split:60:8:4 split:44:8:4 split:28:8:4 co:0:4:4 co:0:2:4 co:0:4:4:15"}
+export DF_ARMS=${DF_ARMS-"split:92:8:4 split:60:8:4 split:44:8:4 split:28:8:4 co:0:4:4 co:0:2:4 co:0:4:4:15"}
 export DF_BLS=${DF_BLS:-"1:2048 32:2048 32:8192 128:2048 256:2048"}
 export DF_CO_BLS=${DF_CO_BLS:-"32:2048 256:2048"}
-export DF_S=${DF_S:-2048} DF_REPS=${DF_REPS:-15} NCU=${NCU:-1}
+export DF_S=${DF_S:-2048} DF_REPS=${DF_REPS:-15} NCU=${NCU:-1} DF_NCU=${DF_NCU:-"4:2 8:4"} DF_NVCC=${DF_NVCC:-}
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 export DFILL_COINS; DFILL_COINS=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
 echo "$DFILL_COINS" > "$O/coins.txt"
 nvcc --version | tail -2 > "$O/nvcc.txt"
-nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/dcap" $D/dcap.cu -lcublasLt -lnvidia-ml -ldl \
+nvcc -O3 -std=c++17 $DF_NVCC -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/dcap" $D/dcap.cu -lcublasLt -lnvidia-ml -ldl \
   > "$O/build.log" 2>&1 || { grep -E "error" "$O/build.log" | head -40; tail -20 "$O/build.log"; exit 4; }
 grep -B1 -E "spill" "$O/build.log" | grep -A1 dfill | head -12
 cuobjdump -sass "$B/dcap" | awk '/Function : /{p = /dfill_k/} p' > "$O/sass-dfill.txt" 2>&1
@@ -47,7 +49,7 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
   if [ "$NCU" = 1 ]; then
     ncu --query-metrics 2>&1 | grep -iE "^(dram|fbpa)" > "$O/ncu-dram-metrics.txt"
     M=gpu__time_duration.sum,lts__t_bytes.sum,sm__inst_executed_pipe_tensor.sum,sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_elapsed,smsp__issue_active.avg.pct_of_peak_sustained_active,sm__warps_active.avg.pct_of_peak_sustained_active
-    for a in 4:2 8:4; do
+    for a in $DF_NCU; do
       for m in $M dram__throughput.avg.pct_of_peak_sustained_elapsed dram__bytes.sum dram__sectors_read.sum,dram__sectors_write.sum; do
         ncu --clock-control none -k regex:dfill_k --launch-count 3 --metrics $m --csv "$B/dcap" done "${a%:*}" "${a#*:}" "$DF_S" \
           >> "$O/ncu-dfill-w${a%:*}-nc${a#*:}.csv" 2>&1; echo "ncu $a $m rc $?" >> "$O/rc.txt"
