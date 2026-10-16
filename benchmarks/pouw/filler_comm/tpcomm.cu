@@ -303,11 +303,14 @@ __device__ __host__ __forceinline__ uint32_t tp_add_s8x4(uint32_t a, uint32_t b)
 // One group claims deferred chunks from *dctr (a step-wide counter, capped at dcap) and runs each like a pfill tile, except
 // the operands are stored + formed noise. phase picks dtotal[phase] (0 the gap beside a collective, 1 the end-of-step drain).
 // poll >= 0 polls `flag` and stops mid-chunk when it is up (the gap); poll < 0 never stops (the drain), and flag may be null.
+// maxchunks caps the chunks a group runs in one launch (poll >= 0): a bounded beside-collective launch yields its SMs so the
+// main stream can advance and raise the flag (an unbounded launch hogs every SM and the step serialises behind it). The drain
+// (poll < 0) passes a large cap and runs the whole remainder.
 template <int NC>
 __device__ __noinline__ void tp_defer_run(uint64_t c0, uint64_t c1, int Sd, int poll, const int* flag,
                                           const int8_t* __restrict__ dA, const int8_t* __restrict__ dB,
                                           const int8_t* __restrict__ dU, const int8_t* __restrict__ dBias, int dwrap,
-                                          int* __restrict__ dctr, int dcap, int phase,
+                                          int* __restrict__ dctr, int dcap, int phase, int maxchunks,
                                           unsigned long long* __restrict__ drec, int* __restrict__ dqrec,
                                           unsigned long long* dtotal) {
   extern __shared__ __align__(16) uint8_t kf_smem[];
@@ -319,8 +322,9 @@ __device__ __noinline__ void tp_defer_run(uint64_t c0, uint64_t c1, int Sd, int 
   __shared__ int claim[KF_G];
   unsigned long long mine = 0;
   int fr = poll >= 0 ? ld_flag(flag) : 0;
-  for (;;) {
+  for (int done = 0;; done++) {
     if (kf_bar_or(bar, fr)) break;  // flag up between chunks: stop
+    if (poll >= 0 && done >= maxchunks) break;  // per-launch budget: yield the SMs between gaps
     if (poll >= 0) fr = ld_flag(flag);
     if (tg == 0) claim[grp] = atomicAdd(dctr, 1);
     kf_bar(bar);
@@ -409,13 +413,14 @@ __device__ __noinline__ void tp_defer_run(uint64_t c0, uint64_t c1, int Sd, int 
 // gap the deferred work left (SCORER v4's tp_dfill_k). Both read the same flag, so once it is up neither does more.
 template <int NC>
 __global__ void __launch_bounds__(32 * PF_W * KF_G, 1)
-    tp_dpass_k(uint64_t c0, uint64_t c1, int Sd, int poll, const int* flag, const int8_t* dA, const int8_t* dB,
+    tp_dpass_k(uint64_t c0, uint64_t c1, int Sd, int poll, int dmaxc, const int* flag, const int8_t* dA, const int8_t* dB,
                const int8_t* dU, const int8_t* dBias, int dwrap, int* dctr, int dcap, unsigned long long* drec, int* dqrec,
                unsigned long long* dtotal, const unsigned long long* epoch, int slot, int nslots, int tiles, int maxcap,
                int Sf, unsigned long long* frec, int* fqrec, int* fcnt, unsigned long long* ftotal) {
   // the deferred pass polls the flag between chunks only (poll 0): a chunk computes a real noised product, so it is atomic —
-  // none is lost to a mid-chunk cut, and the leftover goes to the drain. The filler then cuts mid-tile (poll) as before.
-  tp_defer_run<NC>(c0, c1, Sd, 0, flag, dA, dB, dU, dBias, dwrap, dctr, dcap, 0, drec, dqrec, dtotal);
+  // none is lost to a mid-chunk cut, and the leftover goes to the drain. dmaxc bounds this launch so it yields the SMs; the
+  // filler then cuts mid-tile (poll) as before.
+  tp_defer_run<NC>(c0, c1, Sd, 0, flag, dA, dB, dU, dBias, dwrap, dctr, dcap, 0, dmaxc, drec, dqrec, dtotal);
   tp_dfill_k<NC>(c0, c1, epoch, slot, nslots, tiles, maxcap, Sf, poll, flag, frec, fqrec, fcnt, ftotal);
 }
 
@@ -425,7 +430,7 @@ template <int NC>
 __global__ void __launch_bounds__(32 * PF_W * KF_G, 1)
     tp_drain_k(uint64_t c0, uint64_t c1, int Sd, const int8_t* dA, const int8_t* dB, const int8_t* dU, const int8_t* dBias,
                int dwrap, int* dctr, int dcap, unsigned long long* drec, int* dqrec, unsigned long long* dtotal) {
-  tp_defer_run<NC>(c0, c1, Sd, -1, nullptr, dA, dB, dU, dBias, dwrap, dctr, dcap, 1, drec, dqrec, dtotal);
+  tp_defer_run<NC>(c0, c1, Sd, -1, nullptr, dA, dB, dU, dBias, dwrap, dctr, dcap, 1, dcap, drec, dqrec, dtotal);
 }
 
 // a step's deferred counter back to 0 (the step's fresh demand); dtotal accumulates across the timed steps and is zeroed
@@ -567,6 +572,7 @@ struct DPass {  // decision 36's deferred noised pass
   int dwrap = 512;   // distinct chunks of synthetic operands in DRAM (the footprint exceeds L2)
   int grid = 0;      // the combined kernel's grid beside a collective (= the filler's, sms - reserve)
   int dgrid = 0;     // the drain's grid (every SM)
+  int dmaxc = 4;     // chunks a group a beside-collective launch (bounds it so it yields the SMs between gaps)
   int dcap = 0;      // a step's chunk quota (set per point)
   int* dctr = nullptr;
   unsigned long long* dtotal = nullptr;  // [0] the pairs run in the gaps, [1] the pairs drained
@@ -623,8 +629,8 @@ static void dpass_launch(Rank& R, int slot, cudaStream_t st) {
   const DPass& dp = R.dp;
   const PFill& f = R.pf;
   tp_dpass_k<4><<<dp.grid, 32 * PF_W * KF_G, KF_SMEM, st>>>(
-      g_tc0, g_tc1, dp.Sd, f.poll, f.flags + slot, dp.dA, dp.dB, dp.dU, dp.dBias, dp.dwrap, dp.dctr, dp.dcap, dp.drec,
-      dp.dqrec, dp.dtotal, f.epoch, slot, f.nslots, f.cap(slot), f.maxcap(), f.S, f.rec, f.qrec, f.cnt, f.total);
+      g_tc0, g_tc1, dp.Sd, f.poll, dp.dmaxc, f.flags + slot, dp.dA, dp.dB, dp.dU, dp.dBias, dp.dwrap, dp.dctr, dp.dcap,
+      dp.drec, dp.dqrec, dp.dtotal, f.epoch, slot, f.nslots, f.cap(slot), f.maxcap(), f.S, f.rec, f.qrec, f.cnt, f.total);
 }
 
 // a collective at slot `slot`: side work forks beside it (1 the filler alone, 2 the deferred pass then the filler); `fn`
@@ -1036,11 +1042,11 @@ static int run_point(Rank& R, int B, int L, int reps) {
       const DCheck dc = dp_sample(R, 8);
       snprintf(extra, sizeof extra, ", \"defer_gap_pairs_rep\": %.1f, \"defer_drain_pairs_rep\": %.1f, "
                "\"defer_gap_macs_rep\": %.6e, \"defer_drain_macs_rep\": %.6e, \"defer_demand_macs\": %.6e, \"dcap\": %d, "
-               "\"dchunk_pairs\": %lld, \"dSd\": %d, \"dT\": %d, \"dwrap\": %d, \"dgrid\": %d, \"dp_whole_checked\": %ld, "
-               "\"dp_whole_bad\": %ld, \"dp_whole_control_equal\": %ld",
+               "\"dchunk_pairs\": %lld, \"dSd\": %d, \"dT\": %d, \"dwrap\": %d, \"dmaxc\": %d, \"dgrid\": %d, "
+               "\"dp_whole_checked\": %ld, \"dp_whole_bad\": %ld, \"dp_whole_control_equal\": %ld",
                gap_pairs, drain_pairs, gap_pairs * 4 * 4096.0, drain_pairs * 4 * 4096.0, served, R.dp.dcap,
-               R.dp.chunk_pairs(), R.dp.Sd, R.dp.T, R.dp.dwrap, defer ? R.dp.grid : R.dp.dgrid, dc.whole, dc.whole_bad,
-               dc.whole_ctl);
+               R.dp.chunk_pairs(), R.dp.Sd, R.dp.T, R.dp.dwrap, R.dp.dmaxc, defer ? R.dp.grid : R.dp.dgrid, dc.whole,
+               dc.whole_bad, dc.whole_ctl);
       if (!dc.clean()) rc = 8;
     }
     emit(R, a.c_str(), B, L, v, (dalone || kind == 2) ? 0 : served, mmas_rep, extra);
@@ -1100,6 +1106,7 @@ static int dp_setup(Rank& R) {
   dp.Sd = dp.T / (PF_W * 16);
   dp.grid = R.pf.grid;                                     // beside a collective: the filler's grid (sms - reserve)
   dp.dgrid = R.d.sms - getenv_i("TPC_DRAIN_RESERVE", 0);   // the drain and dalone: every SM
+  dp.dmaxc = std::max(1, getenv_i("TPC_DMAXC", 4));        // chunks a group a beside-collective launch (bounds the hog)
   const size_t perA = (size_t)PF_W * dp.Sd * 512, perB = (size_t)PF_TN * 32;
   const size_t budget = (size_t)getenv_i("TPC_DBUF_MB", 256) << 20;
   dp.dwrap = std::max(256, (int)(budget / (2 * perA + 2 * perB)));
