@@ -343,6 +343,8 @@ struct FlinCfg {
   int BK, ST, CW;
 };
 static bool flin_m_ok(int M) { return M == 32 || M == 64 || M == 128 || M == 256; }
+// the flin tile height a batch of B rows runs at (its rows past B are computed and ignored)
+static int flin_m_for(int B) { return B <= 32 ? 32 : B <= 64 ? 64 : B <= 128 ? 128 : 256; }
 static FlinCfg flin_cfg(int M) {
   if (M == 32 || M == 64) return {128, 4, 4};
   if (M == 128) return {128, 3, 8};
@@ -703,8 +705,9 @@ static int run_flin(Dev& d, int M, int FW, int NC, int thr, int reps) {
 // each (0: dcap's kernels); lm_head stays on cuBLASLt. Arms: the cuBLASLt step on the whole GPU, flin alone with dcap's
 // attention, both with filler warps, the cuBLASLt step again. With FILL_SMS > 0 the two flin arms run on a green split's
 // other SMs and the last beside round 1's pump (W 8, NC 4, S 2048) on FILL_SMS SMs, whose window share and receipts are
-// reported with the rest. The filler warps' MACs are their step counts over the last rep's launches; the last linear's
-// output is checked on every row.
+// reported with the rest. A batch B ≤ 256 runs flin at the next tile height (flin_m_for), attention and the cuBLASLt
+// step at B. The filler warps' MACs are their step counts over the last rep's launches; the last linear's output is
+// checked on every row.
 static int g_lt_mask = 0;
 static std::vector<int> fstep_seq() {
   std::vector<int> s;
@@ -736,7 +739,7 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
   const std::vector<int> seq = fstep_seq();
   const std::vector<Lt> p = lin_plans(d, B);
   Flin f;
-  flin_prepare(d, f, B, true);
+  flin_prepare(d, f, flin_m_for(B), true);
   f.thr = thr;
   f.NC = NC;
   Fatt a0, a;
@@ -814,6 +817,7 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
          "\"rec_checked\": %d, \"rec_bad\": %d}, \"fill_share_pump\": %.5f, \"fill_share_total\": %.5f, ",
          (int)g_pdl, g_fatt_pdl, g_lt_mask, fill_sms, got[0], got[1], fs ? alone / (1024.0 * d.sms * amhz * 1e6) : 0.0, pump_share, nwin,
          fs ? pf.macs() : 0.0, fs ? 8 : 0, pbad, pump_share, lin_share + att_share + pump_share);
+  printf("\"M\": %d, ", f.M);
   printf("\"B\": %d, \"L\": %d, \"FW\": %d, \"NC\": %d, \"thr\": %d, \"AFW\": %d, "
          "\"coins\": [\"%016llx\", \"%016llx\"], \"kv_wrapped\": %s, \"step_macs\": %.6e, \"lin_macs\": %.6e, \"base_ms\": %.4f, "
          "\"base2_ms\": %.4f, \"fused0_ms\": %.4f, \"fused_ms\": %.4f, \"fused0_vs_base\": %.4f, \"slowdown\": %.4f, "

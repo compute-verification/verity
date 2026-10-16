@@ -13,7 +13,9 @@
 # to launch each linear after the previous grid finishes (FLIN_PDL), FILL_SMS > 0 to run the fused step on a green split
 # beside the dfill pump on that many SMs, LT the linears that stay on cuBLASLt (FLIN_LT: 1 qkv, 2 o, 4 gate_up), FP the
 # attention filler blocks' PDL (FATT_PDL: 0 none, 1 with, 2 with their filler warps starting early), FL_NCU
-# ("M:FW:NC:THR ...", ncu over flin's first launches; "none" skips), FL_REPS, FL_GATE (0 skips CAP's gate)
+# ("M:FW:NC:THR ...", ncu over flin's first launches; "none" skips), FL_NCU_STEP ("B:L:FW:NC:THR:AFW ...", ncu's
+# tensor-pipe counters over one step's attention blocks and first linear, each with filler warps), FL_REPS, FL_GATE (0
+# skips CAP's gate)
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -56,6 +58,14 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
       --metrics gpu__time_duration.sum,dram__bytes.sum,dram__throughput.avg.pct_of_peak_sustained_elapsed,sm__inst_executed_pipe_tensor.sum,sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_elapsed,lts__t_bytes.sum \
       --csv "$B/dcap" flin "$m" "$fw" "$nc" "$thr" 1 > "$O/ncu-flin-$m-$fw-$nc-$thr.csv" 2>&1
     echo "ncu flin $c rc $?" >> "$O/rc.txt"
+  done
+  for c in ${FL_NCU_STEP:-}; do
+    IFS=: read -r b l fw nc thr afw <<< "$c"
+    # fstep first runs layer 0's attention blocks with their filler warps, then its first linear with filler warps
+    ncu --clock-control none -k regex:"flin_k|fqk_k|fpv_k" --launch-count 3 \
+      --metrics gpu__time_duration.sum,dram__throughput.avg.pct_of_peak_sustained_elapsed,sm__inst_executed_pipe_tensor.sum,sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_elapsed \
+      --csv "$B/dcap" fstep "$b" "$l" "$fw" "$nc" "$thr" "$afw" 0 1 > "$O/ncu-fstep-$b-$l-$fw-$afw.csv" 2>&1
+    echo "ncu fstep $c rc $?" >> "$O/rc.txt"
   done
   q
   for c in $FL_STEP; do
