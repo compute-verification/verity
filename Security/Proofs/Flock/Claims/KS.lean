@@ -78,6 +78,7 @@ a mixture of strategies (`FlockDeploy.KS.mean_epsSL_le`, `FlockDeploy.KS.mean_ep
 `FlockDeploy.KS.plainJ_inj`), at which the old escapes fit the plain weight (`FlockDeploy.KS.oldEsc_fitsFork_plainJ`).
 At one table the model does not commit to, a live verdict is no likelier than the simulated strategy's `ε_c⁻` after
 `Commit` and its probability of accepting off the table (`Mixture`: `FlockDeploy.KS.live_le_epsSL`; over a mixture of
-live strategies, `FlockDeploy.KS.mean_live_le`). At a plain statement of one table, `TableBoundθAt` follows from a
-mixture of salted sessions after `Commit` that bounds `ε_ω`, the openings off each table and the escapes' events, the
-escapes at the plain fork rounds (`PlainBound`: `FlockDeploy.KS.plain_tableBoundθAt_of_sessions`). -/
+live strategies, `FlockDeploy.KS.mean_live_le`). At a plain statement of one table, `TableBoundθAt` follows from, at
+each table `C`, a mixture of salted sessions after `Commit` whose acceptance with no opening off `C` bounds the deployed
+runs accepting on `C`, and whose `Adv` and self-clash the escapes' events bound, the escapes at the plain fork rounds
+(`PlainBound`: `FlockDeploy.KS.plain_tableBoundθAt_of_sessions`). -/
