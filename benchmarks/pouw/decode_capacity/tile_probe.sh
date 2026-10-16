@@ -5,7 +5,8 @@
 # sections, kept as reports and exported (details, and the raw page with sass__inst_executed_per_opcode's instances), so
 # slots an MMA = smsp__inst_executed.sum over the launch's IMMAs. Clocks are read, never set.
 #   TP_BUILDS ("name:flags ...", a build's flags joined by commas), TP_NC ("name:NC ..."), TP_W ("name ...": walone),
-#   TP_S (the pump's fragments a warp a tile), TP_WS (walone's steps a warp; ncu takes TP_WS_NCU).
+#   TP_S (the pump's fragments a warp a tile, a list: dalone runs each, ncu the first), TP_WS (walone's steps a warp;
+#   ncu takes TP_WS_NCU), TP_NCU (0: no ncu).
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -13,7 +14,7 @@ D=benchmarks/pouw/decode_capacity
 export B; B=$(mktemp -d /tmp/tprobe.XXXXXX); trap 'rm -rf "$B"' EXIT
 export TP_BUILDS=${TP_BUILDS:-"bits:-DPFILL_BITS bu:-DPFILL_BU,-Xcompiler,-mpopcnt li:-DPFILL_BU,-DPFILL_LI,-Xcompiler,-mpopcnt xin13:-DPFILL_BU,-DPFILL_XIN13,-Xcompiler,-mpopcnt"}
 export TP_NC=${TP_NC:-"bits:4 bu:4 bu:2 li:4 xin13:4"} TP_W=${TP_W:-"bits"} TP_S=${TP_S:-256} TP_WS=${TP_WS:-2048}
-export TP_WS_NCU=${TP_WS_NCU:-64}
+export TP_WS_NCU=${TP_WS_NCU:-64} TP_NCU=${TP_NCU:-1}
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 export DFILL_COINS; DFILL_COINS=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
 echo "$DFILL_COINS" > "$O/coins.txt"
@@ -39,11 +40,15 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
   done
   for a in $TP_NC; do
     n=${a%%:*} nc=${a#*:}
-    "$B/dcap-$n" dalone 8 "$nc" "$TP_S" 2>> "$O/errors.txt" | sed "s/^{/{\"build\": \"$n\", /" >> "$O/dalone.jsonl"
+    for s in $TP_S; do
+      "$B/dcap-$n" dalone 8 "$nc" "$s" 2>> "$O/errors.txt" | sed "s/^{/{\"build\": \"$n\", /" >> "$O/dalone.jsonl"
+    done
   done
   for n in $TP_W; do
     "$B/dcap-$n" walone "$TP_WS" 2>> "$O/errors.txt" | sed "s/^{/{\"build\": \"$n\", /" >> "$O/walone.jsonl"
   done
+  [ "$TP_NCU" = 1 ] || exit 0
+  s0=${TP_S%% *}
   sec=(--section InstructionStats --section SchedulerStats --section WarpStateStats --section ComputeWorkloadAnalysis)
   report() {
     ncu --import "$1.ncu-rep" --page details > "$1.txt" 2>&1
@@ -52,7 +57,7 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
   for a in $TP_NC; do
     n=${a%%:*} nc=${a#*:} r="$O/ncu-pump-$n-nc$nc"
     ncu --clock-control none -k regex:dfill_k --launch-count 1 --launch-skip 1 "${sec[@]}" -o "$r" \
-      "$B/dcap-$n" done 8 "$nc" "$TP_S" > "$r.log" 2>&1
+      "$B/dcap-$n" done 8 "$nc" "$s0" > "$r.log" 2>&1
     echo "ncu pump $a rc $?" >> "$O/rc.txt"; report "$r"
   done
   for n in $TP_W; do
