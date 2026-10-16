@@ -269,14 +269,14 @@ struct FattArgs {
   int early;
   long long items;
   int nx;
-  int lazy;  // the filler warps' LAZY (0, 1, 2)
+  int lazy;  // the filler warps' LAZY (0, 2, 4)
 };
 template <int NC>
 __device__ __forceinline__ void att_filler(const FattArgs& fa, size_t slot, const int* done, int ndone) {
   switch (fa.lazy) {
     case 0: filler_warp<NC, 0>(fa.c0, fa.c1, fa.tile0 + slot, done, done, ndone, 0, fa.rec + slot, fa.cnt + slot); break;
-    case 1: filler_warp<NC, 1>(fa.c0, fa.c1, fa.tile0 + slot, done, done, ndone, 0, fa.rec + slot, fa.cnt + slot); break;
-    default: filler_warp<NC, 2>(fa.c0, fa.c1, fa.tile0 + slot, done, done, ndone, 0, fa.rec + slot, fa.cnt + slot);
+    case 2: filler_warp<NC, 2>(fa.c0, fa.c1, fa.tile0 + slot, done, done, ndone, 0, fa.rec + slot, fa.cnt + slot); break;
+    default: filler_warp<NC, 4>(fa.c0, fa.c1, fa.tile0 + slot, done, done, ndone, 0, fa.rec + slot, fa.cnt + slot);
   }
 }
 template <int FW, int NC>
@@ -683,7 +683,7 @@ static int flin_gate(Dev& d) {
   for (const auto [fw, nc, sms, lazy] :
        {std::tuple{2, 4, 0, 0}, {4, 2, 0, 0}, {4, 4, 0, 0}, {6, 2, 0, 0}, {6, 4, 0, 0}, {8, 2, 0, 0}, {8, 4, 0, 0},
         {2, 4, 5, 0}, {4, 2, 5, 0}, {4, 4, 5, 0}, {6, 2, 5, 0}, {6, 4, 5, 0}, {8, 2, 5, 0}, {8, 4, 5, 0},
-        {4, 2, 0, 1}, {8, 2, 0, 2}, {2, 4, 5, 1}, {4, 4, 5, 2}, {6, 2, 5, 1}, {6, 2, 5, 2}, {8, 2, 5, 1}, {8, 2, 5, 2}}) {
+        {4, 2, 0, 2}, {8, 2, 0, 4}, {2, 4, 5, 4}, {4, 4, 5, 2}, {6, 2, 5, 2}, {6, 2, 5, 4}, {8, 2, 5, 2}, {8, 2, 5, 4}}) {
     Fatt a;
     fatt_prepare(a, fw, nc, 3, 1536, sms);  // persistent on 5 SMs: every block takes several items
     a.lazy = lazy;

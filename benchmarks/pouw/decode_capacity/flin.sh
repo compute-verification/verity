@@ -14,7 +14,7 @@
 # beside the dfill pump on that many SMs, LT the linears that stay on cuBLASLt (FLIN_LT: 1 qkv, 2 o, 4 gate_up, 8 down), FP the
 # attention filler blocks' PDL (FATT_PDL: 0 none, 1 with, 2 with their filler warps starting early), ANC their warps'
 # chains (FATT_NC, 4 unless set), APS 1 those blocks persistent on the step's SMs (FATT_PERSIST), ALZ their
-# filler warps' lazy done test (FATT_LAZY: 0, 1, 2), FL_NCU ("M:FW:NC:THR ...", ncu over flin's first launches; "none" skips), FL_NCU_STEP
+# filler warps' lazy done test (FATT_LAZY: 0, 2, 4), FL_NCU ("M:FW:NC:THR ...", ncu over flin's first launches; "none" skips), FL_NCU_STEP
 # ("B:L:FW:NC:THR:AFW[:ANC[:APS[:ALZ]]] ...", ncu's tensor-pipe counters over one step's attention blocks and first linear, each with
 # filler warps; FL_NCU_SECTIONS adds those ncu sections over the attention blocks only and keeps the report with its
 # details, raw and SASS pages), FL_REPS,
