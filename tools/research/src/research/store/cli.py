@@ -342,6 +342,9 @@ def cmd_evict(argv: list[str]) -> int:
                          "whatever the target (evict.py `evict_src`; needs root or CAP_SYS_PTRACE to read /proc)")
     ap.add_argument("--src-origin", default=None, metavar="URL",
                     help="--src-dir: the repository whose refs make a tree recoverable (default <root>/git/verity.git, the node's own)")
+    ap.add_argument("--src-keep-h", type=float, default=EV.SRC_KEEP_S / 3600, metavar="H",
+                    help="--src-dir: keep a tree changed, or named by a run recorded, within H hours (default 2); a node short of "
+                         "inodes under many shipped commits takes less")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     st = LocalStore(ns.store)
@@ -357,7 +360,7 @@ def cmd_evict(argv: list[str]) -> int:
         rep["runs"] = EV.evict_runs(st, runs_root(ns.runs_dir), target_free_bytes=target, dry_run=ns.dry_run, min_bytes=min_bytes,
                                     quiet_s=ns.quiet_min * 60, log=say)
     if ns.src_dir:
-        rep["src"] = EV.evict_src(Path(ns.src_dir), origin=ns.src_origin, dry_run=ns.dry_run, log=say)
+        rep["src"] = EV.evict_src(Path(ns.src_dir), origin=ns.src_origin, dry_run=ns.dry_run, keep_s=ns.src_keep_h * 3600, log=say)
     if ns.json:
         _dump(rep)
     last = rep.get("runs") or rep["store"]
