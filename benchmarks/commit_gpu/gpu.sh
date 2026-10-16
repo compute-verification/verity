@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
-# commit_gpu on one leased sm_120 GPU (cwd = the source tree's root). Outside the lease: builds (the pair-add and native
-# 64-bit SHA-512 forms, and a timing-only build without M_key y) and reference.py's cases on the CPU. Under one lease: the
-# selftest, both builds' bit-exactness check against the reference (a build is timed only if its check passed), the raw
+# commit_gpu on one leased sm_120 GPU (cwd = the source tree's root). Outside the lease: builds (by default the fastest
+# measured form; BUILDS names others, and a nomask tag a timing-only build without M_key y) and reference.py's cases on
+# the CPU. Under one lease: the selftest, each build's bit-exactness check against the reference (a build is timed only if
+# its check passed), the raw
 # compression rate, the e2e slice's o_proj operand A (8192 x 4096 int8, 2^20 leaves) committed alone and beside cuBLASLt's
 # int8 o_proj GEMM, and the leaf-size sweep over the same operand as raw int8 rows, as sha512/row/v2 rows and (from 1 KiB) as
 # sha512/row-seg/v1 rows. Clocks are read, never set.
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=COMMIT-GPU \
 #     -- bash benchmarks/commit_gpu/gpu.sh
-# CHECK=quick|full (default full); REPS (default 9); BUILDS (tags a<SHA_ADD>r<SHA_ROT>[l][nomask], l for SHA_ROLL=1);
+# CHECK=quick|full (default full); REPS (default 9); BUILDS (default a0r0l; tags a<SHA_ADD>r<SHA_ROT>[l][nomask], l for
+# SHA_ROLL=1);
 # SWEEP and SEG_SWEEP (int8 values a leaf).
 set -uo pipefail
 export O=${OUT:?}
@@ -20,8 +22,8 @@ trap 'rm -rf "$W"' EXIT
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 nproc > "$O/nproc.txt"
 
-build() {   # build TAG: a<SHA_ADD>r<SHA_ROT>[l][nomask] (l: SHA_ROLL=1)
-  local t=$1 add=${1:1:1} rot flags=""
+build() {   # build TAG: a<SHA_ADD>r<SHA_ROT>[l][nomask] (l: SHA_ROLL=1, else 0)
+  local t=$1 add=${1:1:1} rot flags="-DSHA_ROLL=0"
   rot=${t#a?r}; rot=${rot%nomask}
   case $rot in *l) rot=${rot%l}; flags="-DSHA_ROLL=1" ;; esac
   case $t in *nomask) flags="$flags -DCOMMIT_GPU_DIAG_NOMASK" ;; esac
@@ -29,7 +31,7 @@ build() {   # build TAG: a<SHA_ADD>r<SHA_ROT>[l][nomask] (l: SHA_ROLL=1)
     -o "$W/commit_gpu_$t" $D/commit_gpu.cu -lcublasLt -lnvidia-ml > "$O/build-$t.log" 2>&1
   echo "build $t rc $?" >> "$O/rc.txt"
 }
-export BUILDS=${BUILDS:-a0r0 a0r3 a0r7 a0r15 a1r3 a0r3nomask}
+export BUILDS=${BUILDS:-a0r0l}
 for t in $BUILDS; do build "$t" & done
 $PY $D/reference.py prepare "$W/cases" "${CHECK:-full}" > "$O/prepare.jsonl" 2> "$O/prepare.err"
 echo "prepare rc $?" >> "$O/rc.txt"

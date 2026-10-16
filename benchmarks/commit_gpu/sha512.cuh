@@ -5,13 +5,14 @@
 // are fixed, the feed-forward still adding the chaining value) and `compress_kw` (a fixed block, whose schedule plus round
 // constants the host precomputed into a __constant__ table: no schedule on the device).
 //
-// SHA_ADD selects how the 64-bit adds are issued: 0 lets ptxas emit IADD.64 (half rate on sm_120, ISSUE r6), 1 issues them
-// as 32-bit pairs (add.cc / addc: IADD3 and IADD3.X, full rate). Rotations are funnel-shift pairs either way.
+// SHA_ADD selects how the 64-bit adds are issued: 0 lets ptxas emit IADD.64, 1 issues them as 32-bit pairs (add.cc / addc:
+// IADD3 and IADD3.X). On sm_120 every integer instruction issues at the same rate, so the one-instruction IADD.64 is faster
+// (7105 against 7776 cycles a warp-compression). Rotations are funnel-shift pairs either way.
 #pragma once
 #include <cstdint>
 
 #ifndef SHA_ADD
-#define SHA_ADD 1
+#define SHA_ADD 0
 #endif
 #define HD __host__ __device__ __forceinline__
 
@@ -134,9 +135,9 @@ HD uint64_t maj(uint64_t a, uint64_t b, uint64_t c) { return (a & b) | (c & (a |
 
 // SHA_ROLL=1: rounds 16..79 as a loop of four 16-round bodies (and compress_kw's 80 as five) instead of straight-line code,
 // for 2.5x less code a compression: a warp alone on its sub-partition (a tree's top, few big leaves) otherwise waits on
-// instruction fetches.
+// instruction fetches. 0 is the straight-line form, slower both alone and in bulk.
 #ifndef SHA_ROLL
-#define SHA_ROLL 0
+#define SHA_ROLL 1
 #endif
 #if SHA_ROLL
 #define SHA_ROLL_PRAGMA _Pragma("unroll 1")

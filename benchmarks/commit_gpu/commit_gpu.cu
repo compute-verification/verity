@@ -27,6 +27,7 @@
 //   commit_gpu bench PARAMS e2e|rows|seg N LBITS REPS [GEMM_M GEMM_N GEMM_K]     (JSON lines on stdout)
 //   commit_gpu sha REPS                                                      (raw compression rate)
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a commit_gpu.cu -lcublasLt -lnvidia-ml [-DSHA_ADD=0|1] [-DSHA_ROT=0..15]
+// [-DSHA_ROLL=0|1] (sha512.cuh; the defaults, 0, 0 and 1, are the fastest measured)
 // (-DCOMMIT_GPU_DIAG_NOMASK: a timing-only build that skips M_key y, to measure its share; it refuses `check`)
 #include <cublasLt.h>
 #include <cuda_runtime.h>
@@ -990,12 +991,12 @@ static int bench(int argc, char** argv) {
   // the data phase: row, hm96 leaf (2), frame leaf (2) a leaf, and a node (2) a node (the pads' left out); the salt phase:
   // salt (3) and c (2) a leaf
   const double comps = n * (row_comps + 4.0) + 2.0 * (cm.width - 1), salt_comps = 5.0 * n;
-  printf("{\"bench\": \"%s\", \"gpu\": \"%s\", \"sms\": %d, \"sha_add\": %d, \"sha_rot\": %d, \"leaf_threads\": %d, \"n\": %llu, \"lbits\": %llu, "
+  printf("{\"bench\": \"%s\", \"gpu\": \"%s\", \"sms\": %d, \"sha_add\": %d, \"sha_rot\": %d, \"sha_roll\": %d, \"leaf_threads\": %d, \"n\": %llu, \"lbits\": %llu, "
          "\"depth\": %d, \"operand_bytes\": %llu, \"salt_ms\": %.5f, \"salt_compressions\": %.0f, \"commit_ms\": %.5f, "
          "\"leaf_ms\": %.5f, \"nodes_ms\": %.5f, \"graph_ms\": %.5f, \"mhz\": %.0f, \"compressions\": %.0f, \"gcomp_per_s\": %.3f, "
          "\"sha_gb_per_s\": %.2f, \"operand_gb_per_s\": %.2f, \"operand_gb_per_s_graph\": %.2f, \"root_on_host_best_k\": %d, "
          "\"root_on_host_best_ms\": %.5f, \"operand_gb_per_s_root_on_host\": %.2f, \"root_on_host_ms\": {",
-         mode.c_str(), prop.name, prop.multiProcessorCount, SHA_ADD, SHA_ROT, LEAF_THREADS, (unsigned long long)n,
+         mode.c_str(), prop.name, prop.multiProcessorCount, SHA_ADD, SHA_ROT, SHA_ROLL, LEAF_THREADS, (unsigned long long)n,
          (unsigned long long)lbits, cm.depth, (unsigned long long)data, ts, salt_comps, tc, median(t_leaf), tc - median(t_leaf),
          tgr, median(mhz), comps, comps / tc * 1e-6, comps * 128 / tc * 1e-6, data / tc * 1e-6, data / tgr * 1e-6, ks[kb],
          median(t_host[kb]), data / median(t_host[kb]) * 1e-6);
@@ -1094,8 +1095,8 @@ static int sha_bench(int reps) {
     if (r) { t.push_back(ms); mz.push_back(nv.sm()); }
   }
   const double comps = (double)threads * blocks * chain, tm = median(t);
-  printf("{\"sha\": {\"sha_add\": %d, \"sha_rot\": %d, \"compressions\": %.0f, \"ms\": %.5f, \"gcomp_per_s\": %.3f, \"gb_per_s\": %.2f, \"mhz\": %.0f}}\n",
-         SHA_ADD, SHA_ROT, comps, tm, comps / tm * 1e-6, comps * 128 / tm * 1e-6, median(mz));
+  printf("{\"sha\": {\"sha_add\": %d, \"sha_rot\": %d, \"sha_roll\": %d, \"compressions\": %.0f, \"ms\": %.5f, \"gcomp_per_s\": %.3f, \"gb_per_s\": %.2f, \"mhz\": %.0f}}\n",
+         SHA_ADD, SHA_ROT, SHA_ROLL, comps, tm, comps / tm * 1e-6, comps * 128 / tm * 1e-6, median(mz));
   return 0;
 }
 
