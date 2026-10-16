@@ -64,6 +64,22 @@ def test_paired_slowdown_and_rate():
     assert st["beside_over_alone"] == pytest.approx(30 * 2e9 / 31.2e-3 / 1e12)
 
 
+def test_rate_over_completion_spans_and_the_peak_bound():
+    def spanned(**kw):
+        r = row("step", 1, 2048, "split", alone_ms=6.0, arm_ms=6.3, chunks=19, window_ms=18.9, fill_sms=100, **kw)
+        for b in r["blocks"]:
+            b["arm"]["span_ms"] = 18.0
+        return S.point_stats(r)
+
+    st = spanned(chunk_macs=1e9)
+    assert st["fill_rate"] == pytest.approx(18 * 1e9 / 18.0e-3)
+    assert st["of_peak"] == pytest.approx(st["fill_rate"] / (S.PER_SM * 100 * 2000.0e6))
+    v1 = A.load("fill-v1")
+    assert S.honesty(v1, {("decode", 1, 2048): st}, [])["ok"]
+    hot = S.honesty(v1, {("decode", 1, 2048): spanned(chunk_macs=3e11, alone_rate=1e15)}, [])
+    assert not hot["ok"] and hot["over_peak"] and not hot["too_good"]
+
+
 def test_decode_entry_coverage_uses_proved_and_provisional_fractions():
     st = S.point_stats(row("step", 32, 2048, "split", alone_ms=10.0, arm_ms=10.0, chunks=10, window_ms=30.0,
                            chunk_macs=1e9))

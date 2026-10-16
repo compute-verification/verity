@@ -105,11 +105,15 @@ def point_stats(row: dict) -> dict:
     fill = row["place"] != "none"
     rate, cv = 0.0, None
     if fill:
-        win = sum(b["arm"]["window_ms"] for b in row["blocks"])
-        chunks = sum(b["arm"]["chunks"] for b in row["blocks"])
-        rate = chunks * row["chunk_macs"] / (win * 1e-3) if win > 0 else 0.0
-        per = [b["arm"]["chunks"] * row["chunk_macs"] / (b["arm"]["window_ms"] * 1e-3) for b in row["blocks"]
-               if b["arm"]["window_ms"] > 0]
+        # completions between the first and last seen inside each window over that span (rows from before span_ms:
+        # completions over the window, whose phase biases a ~20-chunk window by up to a chunk)
+        span = all("span_ms" in b["arm"] for b in row["blocks"])
+        work = [(b["arm"]["chunks"] - 1, b["arm"]["span_ms"]) if span else (b["arm"]["chunks"], b["arm"]["window_ms"])
+                for b in row["blocks"]]
+        work = [(n, ms) for n, ms in work if n > 0 and ms > 0]
+        tot = sum(ms for _, ms in work)
+        rate = sum(n for n, _ in work) * row["chunk_macs"] / (tot * 1e-3) if tot > 0 else 0.0
+        per = [n * row["chunk_macs"] / (ms * 1e-3) for n, ms in work]
         cv = statistics.pstdev(per) / statistics.mean(per) if len(per) > 1 and statistics.mean(per) > 0 else None
     alone_rate = row["alone_fill"]["mac_per_s"] if fill else 0.0
     return {
@@ -119,6 +123,7 @@ def point_stats(row: dict) -> dict:
         "clock_reads": sum(1 for r in al + ar if r[1] > 0), "power_reads": sum(1 for r in al + ar if r[2] > 0),
         "reps": len(al) + len(ar), "fill_rate": rate, "fill_rate_alone": alone_rate, "fill_rate_cv": cv,
         "beside_over_alone": rate / alone_rate if alone_rate else None,
+        "of_peak": rate / (PER_SM * row["fill_sms"] * _med([r[1] for r in ar]) * 1e6) if fill and row["fill_sms"] else None,
         "rec_checked": row["rec_checked"], "rec_bad": row["rec_bad"], "place": row["place"],
         "fill_sms": row["fill_sms"], "setup_ms": row["setup_ms"], "spread": row["spread"],
         "kv_wrapped": row["kv_wrapped"],
@@ -352,14 +357,17 @@ def gates(stats: dict, sc: dict, *, has_filler: bool, sgate: dict | None, dgate:
 
 
 def honesty(arm, stats: dict, phases_points) -> dict:
-    """The arm's placement is a pure function of the point (asked twice, the same answer), and no filler ran faster
-    beside serving than alone on the same SMs (TOO_GOOD; such a result goes to the assessor)."""
+    """The arm's placement is a pure function of the point (asked twice, the same answer), no filler ran faster beside
+    serving than alone on the same SMs (TOO_GOOD; such a result goes to the assessor), and none above its SMs' int8
+    tensor peak at the clock its blocks read."""
     import arms as A  # noqa: PLC0415
 
     unstable = [f"{ph} {b}/{l}" for ph, b, l in phases_points if A.placed(arm, ph, b, l) != A.placed(arm, ph, b, l)]
     fast = [f"{k[0]} {k[1]}/{k[2]}: {v['beside_over_alone']:.3f}" for k, v in stats.items()
             if v.get("beside_over_alone") and v["beside_over_alone"] > TOO_GOOD]
-    return {"ok": not unstable and not fast, "unstable_placement": unstable, "too_good": fast}
+    peak = [f"{k[0]} {k[1]}/{k[2]}: {v['of_peak']:.3f}" for k, v in stats.items() if (v.get("of_peak") or 0) > 1.0]
+    return {"ok": not unstable and not fast and not peak, "unstable_placement": unstable, "too_good": fast,
+            "over_peak": peak}
 
 
 def clock_gate(stats: dict, smi: list[dict]) -> dict:

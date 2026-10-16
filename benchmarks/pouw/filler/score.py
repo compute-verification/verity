@@ -241,6 +241,8 @@ def show(res: dict) -> None:
                  "replay": lambda: v.get("why") or f"{v.get('rounds')} rounds, {v.get('tiles'):.3g} tiles, ranges the "
                                    f"scorer's and disjoint, coins and {v.get('seeds_sampled')} sampled seeds distinct",
                  "receipts": lambda: v.get("why") or f"timed {v.get('timed_checked')} checked, {v.get('timed_bad')} bad",
+                 "honest": lambda: v.get("why") or "; ".join(f"{k}: {', '.join(v[k])}" for k in
+                                                             ("unstable_placement", "too_good", "over_peak") if v.get(k)),
                  "dram": lambda: v.get("why") if not v.get("share_of_hbm") else
                  f"{v['share_of_hbm']:.3%} of HBM, counter control {fmt(v.get('control_bytes_ratio'))}",
                  "clocks": lambda: f"{v.get('reps')} reps read; nvidia-smi between points: MHz {v.get('mhz')}, W "

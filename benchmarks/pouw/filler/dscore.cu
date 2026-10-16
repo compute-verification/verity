@@ -13,7 +13,8 @@
 //                  serving partition) | co (the filler on every SM at the lowest stream priority, serving at the highest).
 //                  ROUNDS rounds in ABBA order, each K reps of serving alone on the whole GPU and K reps under the
 //                  placement (with PLACE none, serving alone again: the A/A control). Each placed block poisons the
-//                  receipts, keeps the filler queued, counts the chunks finished inside the block's window, and checks 4
+//                  receipts, keeps the filler queued, counts the chunks finished inside the block's window and the span
+//                  from the first to the last (the rate is completions over that span, free of the window's phase), checks 4
 //                  receipts of its last chunk on the host. Every rep's time, SM clock and board power are printed.
 //                  POINT (the point's index in the scorer's run) fixes each round's public tile range (`Round`).
 //
@@ -27,6 +28,7 @@
 enum { PL_NONE = 0, PL_SPLIT = 1, PL_CO = 2 };
 static const char* PL_NAME[3] = {"none", "split", "co"};
 constexpr size_t MAX_BL = 786432;  // dcap's bound on batch x context
+constexpr int ALONE_CHUNKS = 200;  // the filler-alone calibration, ~0.2 s at 2^19 MMAs an SM a chunk
 
 static int setup(Dev& d, bool weights, size_t kv_want) {
   CK(cudaSetDevice(0));
@@ -203,14 +205,14 @@ static void print_round(const Round& r) {
 
 struct Block {
   std::vector<Rep> reps;
-  double t0 = 0, t1 = 0;
+  double t0 = 0, t1 = 0, span = 0;  // span: from the first to the last chunk seen done inside (t0, t1]
   long long chunks = 0;
   Round rd;
 };
 static void print_block(const char* name, const Block& b, bool fill, bool comma) {
   printf("\"%s\": {\"window_ms\": %.3f, ", name, b.t1 - b.t0);
   if (fill) {
-    printf("\"chunks\": %lld, ", b.chunks);
+    printf("\"chunks\": %lld, \"span_ms\": %.4f, ", b.chunks, b.span);
     print_round(b.rd);
     printf(", ");
   }
@@ -261,7 +263,7 @@ static int run_dscore(Dev& d, int kind, int B, int L, int place, int fill_sms, i
     spump_start(pump, f, fs, 3, r0.lo);
     double cs = 0, ps = 0;
     long long np = 0;
-    while (pump.done.load() < 30) {
+    while (pump.done.load() < ALONE_CHUNKS) {
       cs += nvml_mhz(d);
       ps += nvml_w(d);
       np++;
@@ -294,7 +296,13 @@ static int run_dscore(Dev& d, int kind, int B, int L, int place, int fill_sms, i
     d.st = ss;
     b.reps = time_work(d, w_arm, K, &b.t0, &b.t1);
     dpump_stop(pump);
-    for (double x : pump.t) b.chunks += x > b.t0 && x <= b.t1;
+    double first = 0, last = 0;
+    for (double x : pump.t)
+      if (x > b.t0 && x <= b.t1) {
+        if (!b.chunks++) first = x;
+        last = x;
+      }
+    b.span = last - first;
     bad += round_close(b.rd, f, pump, 4);
     checked += 4;
   };
