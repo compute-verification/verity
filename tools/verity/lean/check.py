@@ -238,21 +238,33 @@ def cores() -> int:
 
 #: `--artifacts`: the node's Lake artifact cache, which only a passing audit writes (`lean_audit.LakeArtifacts`)
 ARTIFACTS: Path | None = None
+#: `--dev-cache`: the dependencies come from the verified build cache, so the result is not a Lean verdict
+DEV_CACHE = False
+#: the kind a `--dev-cache` run's reports carry: `lean_changed.FAST_KIND`, which `check` and `research merge` refuse
+DEV_KIND = "lean-fast/v1"
 
 
 def lake_env() -> dict[str, str]:
     """The environment of every `lake` and `setup.sh` the audit runs. `setup.sh` restores nothing from the build cache
     (`cache.py`). Lake builds from source, or with `--artifacts` restores a module whose input hash it finds there: with
-    `LAKE_ARTIFACT_CACHE` unset, a package that configures no cache reads it and never writes it."""
+    `LAKE_ARTIFACT_CACHE` unset, a package that configures no cache reads it and never writes it. With `--dev-cache`,
+    `setup.sh` restores Mathlib's cache and main's verified build (`cache.py get`) and Lake reads its local cache: the
+    replay still checks our packages' declarations, but a dependency's are taken as their `.olean` states them, which only
+    the gate's from-source build (the cache's root) and the nightly `--fresh` vouch for, so such a run is never a verdict."""
     env = dict(os.environ)
     env["PATH"] = f"{Path.home() / '.elan' / 'bin'}{os.pathsep}{env.get('PATH', '')}"
     env.setdefault("LEAN_NUM_THREADS", str(cores()))
     if ARTIFACTS:
         env.pop("LAKE_ARTIFACT_CACHE", None)
         env["LAKE_CACHE_DIR"] = str(ARTIFACTS)
+    elif DEV_CACHE:
+        env.pop("LAKE_ARTIFACT_CACHE", None)
     else:
         env["LAKE_ARTIFACT_CACHE"] = "false"
-    env["LEAN_CACHE"] = "off"
+    if DEV_CACHE:
+        env.pop("LEAN_CACHE", None)
+    else:
+        env["LEAN_CACHE"] = "off"
     return env
 
 
@@ -2317,7 +2329,7 @@ def tampered(seals: dict[str, str], watch: list[Path]) -> list[str]:
 
 
 def main(argv: list[str]) -> int:
-    global TOOL, ARTIFACTS
+    global TOOL, ARTIFACTS, DEV_CACHE
     ap = argparse.ArgumentParser(prog="check.py", description=__doc__.split("\n\n")[0])
     ap.add_argument("package", nargs="*", type=Path, help="a Lake package directory with a lean-audit.json")
     ap.add_argument("--all", action="store_true", help="the controls, then every package under --root")
@@ -2335,6 +2347,9 @@ def main(argv: list[str]) -> int:
                     "`theorem X.SecurityProofs.G : X.Guarantees.G` beside its proof, or in `beside` (`lift`), instead of "
                     "auditing, and FILE.moved.json for `--update --moved`")
     ap.add_argument("--no-replay", action="store_true", help="skip the kernel replay (`Replay.lean`)")
+    ap.add_argument("--dev-cache", action="store_true", help="restore the dependencies from the verified build cache "
+                    "(`cache.py get`, Mathlib's `cache get`) for a development check: our packages are still built and "
+                    "replayed, but the reports are a lean-fast/v1 result, which no gate accepts")
     ap.add_argument("--replay-cache", type=Path, metavar="DIR", help="reuse the replay of each module that passed it with the "
                     "same .olean files, its imports' included, on the same toolchain (`replay_keys`), and store each one "
                     "checked here")
@@ -2363,6 +2378,7 @@ def main(argv: list[str]) -> int:
         if errs := move_errors(moved):
             ap.error(f"{a.moved}: " + "; ".join(errs))
     ARTIFACTS = a.artifacts.resolve() if a.artifacts else None
+    DEV_CACHE = a.dev_cache
     lifts = None
     if a.lift:
         if a.update or a.all or a.name_instances or len(pkgs) != 1:
@@ -2475,9 +2491,17 @@ def main(argv: list[str]) -> int:
         print(f"audit: guarantees, the definitions they read, or listed compile-time code changed in "
               f"{', '.join(changed)}: say so in the PR; Daniel gets a DM with the changes above when they land (review.txt in "
               f"each package's reports)", flush=True)
-    (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "packages": reports}, indent=1,
-                                               ensure_ascii=False) + "\n")
-    print(f"AUDIT: {'PASS' if not failed else 'FAIL (' + ', '.join(failed) + ')'}; reports in {out}", flush=True)
+    doc = {"passed": not failed, "failed": failed, "packages": reports}
+    if DEV_CACHE:
+        doc["kind"] = DEV_KIND
+        for rep in reports:
+            rep["kind"] = DEV_KIND
+        for p in sorted(out.glob("audit-*/report.json")):
+            r = json.loads(p.read_text())
+            p.write_text(json.dumps(r | {"kind": DEV_KIND}, indent=1, ensure_ascii=False) + "\n")
+    (out / "audit.json").write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n")
+    print(f"AUDIT: {'PASS' if not failed else 'FAIL (' + ', '.join(failed) + ')'}; reports in {out}"
+          + (f" (--dev-cache: a {DEV_KIND} result, which no gate accepts)" if DEV_CACHE else ""), flush=True)
     return 1 if failed else 0
 
 

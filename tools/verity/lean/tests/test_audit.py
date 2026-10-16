@@ -1753,3 +1753,22 @@ def test_a_property_on_a_conjecture_lists_it_and_one_on_a_falsified_conjecture_c
         == [True] * 3, out
     bad["shape"]["conjectures"]["P.Conj"] = {"status": "maybe", "why": "x"}
     assert "has no status" in A.shape(bad, facts)[1]
+
+
+def test_a_dev_cache_run_restores_dependencies_and_is_never_a_verdict(monkeypatch):
+    """`--dev-cache` lets setup.sh and Lake restore the verified build cache (no `LEAN_CACHE=off`, no
+    `LAKE_ARTIFACT_CACHE=false`), so its reports carry the fast path's kind, which `check` and `research merge` refuse:
+    the gate's from-source build is the cache's root of trust and must never read it."""
+    monkeypatch.setattr(A, "ARTIFACTS", None)
+    monkeypatch.setattr(A, "DEV_CACHE", False)
+    env = A.lake_env()
+    assert env["LEAN_CACHE"] == "off" and env["LAKE_ARTIFACT_CACHE"] == "false"
+    monkeypatch.setenv("LEAN_CACHE", "off")
+    monkeypatch.setenv("LAKE_ARTIFACT_CACHE", "false")
+    monkeypatch.setattr(A, "DEV_CACHE", True)
+    env = A.lake_env()
+    assert "LEAN_CACHE" not in env and "LAKE_ARTIFACT_CACHE" not in env
+    spec = importlib.util.spec_from_file_location("lean_changed_under_test", HERE.parent / "lean_changed.py")
+    LC = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(LC)
+    assert A.DEV_KIND == LC.FAST_KIND
