@@ -143,16 +143,17 @@ class PhaseFill:
 #: r20261016-090209-21c7; 8-warp blocks were 1.08-1.30 everywhere, 2-warp 1.12-2.0): at most ~1.04 at every scored point
 #: and at least a tile below each point's cliff (where the phase outlasts attention and o waits on it). The phase pays
 #: at B >= 128; at B 32-48 and 256/1K pfill-k's split alone does as well per slowdown, and 1/32K and 32/8K take lighter
-#: splits for margin (pfill-k's read 1.046 there).
+#: splits for margin (pfill-k's read 1.046 there; 1/32K at 100 read 1.046 again in r20261016-091121-7bfc, 92 screened
+#: 1.027). 192/2K (robust, unscored) read 1.054 there with 4 tiles, so it keeps the split alone.
 PHASE_K = {
-    (1, 2048): (108, None), (1, 8192): (108, None), (1, 32768): (100, None),
+    (1, 2048): (108, None), (1, 8192): (108, None), (1, 32768): (92, None),
     (8, 16384): (108, None),
     (32, 1024): (92, None), (32, 2048): (108, None), (32, 8192): (108, PhaseFill(tiles=2)), (32, 24576): (132, None),
     (48, 16384): (108, PhaseFill(tiles=8)),
     (64, 4096): (92, None),
     (128, 2048): (76, PhaseFill(tiles=3)), (128, 6144): (92, PhaseFill(tiles=10)),
     (132, 5120): (60, PhaseFill(tiles=6)), (144, 5120): (60, PhaseFill(tiles=8)),
-    (192, 2048): (60, PhaseFill(tiles=4)),
+    (192, 2048): (60, None),
     (256, 1024): (60, None), (256, 2048): (60, PhaseFill(tiles=5)), (256, 3072): (60, PhaseFill(tiles=8)),
 }
 
