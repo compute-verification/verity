@@ -13,7 +13,8 @@
 //   ovl DIR M K... [rN]     for each k, the arms below as CUDA graphs timed interleaved rep by rep (after two warm-ups each),
 //                           then every hashing arm run once more into 0xA5-poisoned trees, its roots compared with the serial
 //                           path's, and nohash run the same way as the control that must differ
-//   shathru                 SHA-512 compressions a second on the whole GPU (stage.cu's sha_chain at 2-32 CTAs a SM)
+//   shathru                 SHA-512 compressions a second on the whole GPU (stage.cu's sha_chain at 4-32 CTAs a SM, by
+//                           which rotations run on the FMA pipe; the commitments use -DFR_ROT's)
 // Arms (k chunks of M tokens; the QK^T and P.V stand-ins are stage.cu's, m = M, n = M/2, k = 4096, against a sequence's own
 // distinct buffer a layer):
 //   plain     the k sequences plain int8 on one stream: the linears over all k * M tokens in row blocks of PLAIN_RB (8192),
@@ -27,7 +28,7 @@
 //   rrW       hhi with the GEMMs in one static order (stage-major, chunk-minor), each after the GEMM W places before it
 //   nodraw    hhi without the draws; nohash: eq without the commitments; hashonly: the k chunks' commitments alone
 //
-// Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a ovl.cu -lcublasLt -lnvidia-ml -ldl
+// Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a [-DFR_ROT=BITS] ovl.cu -lcublasLt -lnvidia-ml -ldl
 #include <cublasLt.h>
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -214,7 +215,11 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
   };
   auto poison = [&](int k) {
     for (int c = 0; c < k; c++)
-      for (int t = 0; t < NSTAGE; t++) CK(cudaMemset(ch[c].cm[t].tree, 0xA5, ch[c].cm[t].tree_bytes));
+      for (int t = 0; t < NSTAGE; t++) {
+        const Commit& m = ch[c].cm[t];
+        CK(cudaMemset(m.tree, 0xA5, m.tree_bytes));
+        CK(cudaMemset(m.fmid, 0xA5, (size_t)64 * (m.R + m.width - 1)));
+      }
     CK(cudaDeviceSynchronize());
   };
   poison(K);
@@ -228,9 +233,10 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
   const std::vector<uint8_t> ref = roots(K);
 
   printf("{\"mode\": \"ovl_setup\", \"M\": %d, \"k_max\": %d, \"draw_us\": %d, \"plain_rb\": %d, \"levels\": %d, "
-         "\"macs_chunk\": %.6e, \"gemm_alone_ms_chunk\": %.4f, \"mem_bytes\": {\"before\": %zu, \"att_standins\": %zu, "
-         "\"activations\": %zu, \"commit_state\": %zu}, \"gemms\": [",
-         M, K, draw_us, RB, levels, macs_chunk, gemm_alone_ms, mem0, mem_kb - mem0, mem_act - mem_kb, mem_cm - mem_act);
+         "\"fr_rot\": %d, \"mid_ahead\": %d, \"macs_chunk\": %.6e, \"gemm_alone_ms_chunk\": %.4f, \"mem_bytes\": {\"before\": "
+         "%zu, \"att_standins\": %zu, \"activations\": %zu, \"commit_state\": %zu}, \"gemms\": [",
+         M, K, draw_us, RB, levels, FR_ROT, g_mid, macs_chunk, gemm_alone_ms, mem0, mem_kb - mem0, mem_act - mem_kb,
+         mem_cm - mem_act);
   for (int t = 0; t < NSTAGE; t++)
     printf("%s{\"stage\": \"%s\", \"m\": %d, \"n\": %d, \"k\": %d, \"algo\": %d, \"ms_alone\": %.4f}", t ? ", " : "", SNAME[t], M,
            GN[t], GK[t], g[t].L.algo_id, g[t].L.ms);
@@ -420,26 +426,21 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
   return fails;
 }
 
-// SHA-512's throughput on the whole GPU: stage.cu's sha_chain (n chained compressions a thread, fr_compress rolled or
-// s512_compress unrolled) over CTAs a SM x 128 threads, (n = 33) - (n = 1) over 32 compressions a thread
-static void sha_throughput(Dev& d) {
-  uint64_t* out;
-  const int maxb = 32;
-  CK(cudaMalloc(&out, (size_t)maxb * d.sms * 128 * sizeof(uint64_t)));
-  cudaEvent_t e0, e1;
-  CK(cudaEventCreate(&e0));
-  CK(cudaEventCreate(&e1));
-  printf("{\"mode\": \"sha_throughput\", \"mhz\": %.0f, \"sms\": %d, \"compressions_a_s\": {", nvml_mhz(d), d.sms);
-  bool first = true;
-  for (int unrolled : {0, 1})
-    for (int b : {2, 4, 8, 16, 32}) {
+// SHA-512's throughput on the whole GPU: stage.cu's sha_chain<ROT> (n chained compressions a thread, fr_compress<ROT>
+// rolled or s512_compress unrolled) over CTAs a SM x 128 threads, (n = 65) - (n = 1) over 64 compressions a thread. ROT's
+// bits put S0, S1, s0, s1's rotations on the FMA pipe (stage.cu's FR_ROT; this binary's commitments use FR_ROT)
+template <int ROT>
+static void sha_thru_rot(Dev& d, uint64_t* out, cudaEvent_t e0, cudaEvent_t e1, bool& first) {
+  for (int unrolled : {0, 1}) {
+    if (unrolled && ROT) continue;
+    for (int b : {4, 8, 16, 32}) {
       double ms[2];
       for (int k = 0; k < 2; k++) {
-        const int n = k ? 33 : 1;
+        const int n = k ? 65 : 1;
         std::vector<double> v;
         for (int r = 0; r < 5; r++) {
           CK(cudaEventRecord(e0, d.st));
-          sha_chain<<<b * d.sms, 128, 0, d.st>>>(n, unrolled, out);
+          sha_chain<ROT><<<b * d.sms, 128, 0, d.st>>>(n, unrolled, out);
           CK(cudaEventRecord(e1, d.st));
           CK(cudaEventSynchronize(e1));
           float x;
@@ -449,11 +450,30 @@ static void sha_throughput(Dev& d) {
         std::sort(v.begin(), v.end());
         ms[k] = v[2];
       }
-      printf("%s\"%s_%dcta\": %.4e", first ? "" : ", ", unrolled ? "unrolled" : "rolled", b,
-             (double)b * d.sms * 128 * 32 / ((ms[1] - ms[0]) * 1e-3));
+      printf("%s\"%s_rot%d_%dcta\": %.4e", first ? "" : ", ", unrolled ? "unrolled" : "rolled", ROT, b,
+             (double)b * d.sms * 128 * 64 / ((ms[1] - ms[0]) * 1e-3));
       first = false;
     }
-  printf("}}\n");
+  }
+}
+static void sha_throughput(Dev& d) {
+  uint64_t* out;
+  CK(cudaMalloc(&out, (size_t)32 * d.sms * 128 * sizeof(uint64_t)));
+  cudaEvent_t e0, e1;
+  CK(cudaEventCreate(&e0));
+  CK(cudaEventCreate(&e1));
+  printf("{\"mode\": \"sha_throughput\", \"mhz\": %.0f, \"sms\": %d, \"fr_rot\": %d, \"compressions_a_s\": {", nvml_mhz(d),
+         d.sms, FR_ROT);
+  bool first = true;
+  sha_thru_rot<0>(d, out, e0, e1, first);
+  sha_thru_rot<1>(d, out, e0, e1, first);
+  sha_thru_rot<2>(d, out, e0, e1, first);
+  sha_thru_rot<3>(d, out, e0, e1, first);
+  sha_thru_rot<4>(d, out, e0, e1, first);
+  sha_thru_rot<8>(d, out, e0, e1, first);
+  sha_thru_rot<12>(d, out, e0, e1, first);
+  sha_thru_rot<15>(d, out, e0, e1, first);
+  printf("}, \"mhz_after\": %.0f}\n", nvml_mhz(d));
   fflush(stdout);
   CK(cudaFree(out));
 }
