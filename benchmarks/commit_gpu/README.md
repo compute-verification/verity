@@ -260,7 +260,10 @@ without spilling, where it took 156 uncapped), and a consumer sets their preferr
 
 `COMMIT_GPU_SMALL=1` puts `check` on it (domain slot 1, salt slot 1 of 2), so `reference.py check` holds the small path
 to the reference on the same cases (`COMMIT_GPU_FUSE=1` and `COMMIT_GPU_PREFETCH=1` with `fuse_top` and `prefetch`). `benchmarks/pouw/stage_ovl/` runs it in STAGE-OVL's schedule (its cg arms), dumps
-chunk 0's commitments, and `reference.py verify` checks them.
+chunk 0's commitments, and `reference.py verify` checks them. Its edited arms commit the edited GEMMs' receipts too, as
+2 KiB rows, with a second `Committer` in a translation unit of its own (`stage_ovl/eg.cu`): `Consts` hold one row size
+and one Ks a unit. Their dumps go to `reference.py verify` as rows (`row_bytes` in dump.json), in a domain whose label
+names the tree (`params --tree`).
 
 What fusing buys, from the latency anatomy above: the leaf kernel's launch and its re-read of A (the same-run gap between
 contiguous and gathered leaves is at most 5 us, so the re-read is cheap). It doesn't shorten one leaf's chain (R/4 + 5
