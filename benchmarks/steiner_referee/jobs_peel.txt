@@ -37,3 +37,5 @@ python3 peel_cell.py 1 1 3 grid full 6 148
 python3 peel_cell.py 1 2 2 grid full 4 149
 python3 peel_cell.py 2 1 3 row2 uniform 20 150
 python3 peel_cell.py 2 2 2 col2 uniform 20 151
+# Theorem E projection at one (U-bit, F-bit) pair, exact over Z/2^32 (random, zero, wrapping instances), and the F_2 floor fractions at L = 32, S = 256
+python3 peel_proj.py 7
