@@ -53,7 +53,7 @@ def nextO (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) : Claims.OC C
   match actO x as cs with
   | .rej => .ret .rej
   | .coin c => .ret (.msg c.bytes)
-  | .decide s spec sts link c₁ mids f => outOf (decision true s spec sts x link c₁ mids f)
+  | .decide s _ _ link c₁ mids f => outOf (decision true s x link c₁ mids f)
 
 /-- **The outer verifier in public-coin form**: `k(x)` is the link message, the session's recorded rounds and the last
 message (one round where the statement does not set up). -/
@@ -73,23 +73,28 @@ theorem nextO_coin (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List C
     {c : Coin} (h : actO x as cs = .coin c) : (nextO x as cs).eval H = (.msg c.bytes, []) := by
   simp only [nextO, h, Claims.OC.eval]
 
-/-- **The outer verifier's decision against `H`**: it accepts exactly when `Zk.verifyWith (hOf H)` and the custody
-checks are `.ok`. -/
+/-- **The outer verifier's decision against `H`**: it accepts exactly when Flock's setup with SHA-512 replaced by `H`
+is `.ok`, and at its session `Zk.verifyWith (hOf H)` and the custody checks are `.ok`. -/
 theorem nextO_decide (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : Final} (h : actO x as cs = .decide s spec sts link c₁ mids f) :
     ((nextO x as cs).eval H).1 = .acc ↔
-        verdictWith true (Claims.hOf H) spec (tabsOf sts) f.record f.proofs = .ok () ∧
-          checks true s spec x link c₁ mids f = .ok () := by
-  obtain ⟨he, -⟩ := FlockDeploy.decision_eval H true s spec sts x link c₁ mids f
+      ∃ spec' sts', FlockDeploy.setupWith (Claims.hOf H) s.read = .ok (spec', sts') ∧
+        verdictWith true (Claims.hOf H) spec' (tabsOf sts') f.record f.proofs = .ok () ∧
+          checks true s spec' x link c₁ mids f = .ok () := by
+  obtain ⟨he, -⟩ := FlockDeploy.decision_eval H true s x link c₁ mids f
   simp only [nextO, h, outOf, Claims.OC.eval_bind, Claims.OC.eval]
   rw [he]
-  cases hv : verdictWith true (Claims.hOf H) spec (tabsOf sts) f.record f.proofs with
+  cases hs : FlockDeploy.setupWith (Claims.hOf H) s.read with
   | error e => simp [bind, Except.bind]
-  | ok u =>
-    cases checks true s spec x link c₁ mids f with
-    | error e => simp [bind, Except.bind]
-    | ok u' => simp [bind, Except.bind]
+  | ok p =>
+    obtain ⟨spec', sts'⟩ := p
+    cases hv : verdictWith true (Claims.hOf H) spec' (tabsOf sts') f.record f.proofs with
+    | error e => simp [bind, Except.bind, hv]
+    | ok u =>
+      cases hc : checks true s spec' x link c₁ mids f with
+      | error e => simp [bind, Except.bind, hv, hc]
+      | ok u' => simp [bind, Except.bind, hv, hc]
 
 /-- A decision accepts or rejects. -/
 theorem nextO_decide_out (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
@@ -99,13 +104,17 @@ theorem nextO_decide_out (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : 
   simp only [nextO, h, outOf, Claims.OC.eval_bind, Claims.OC.eval]
   split <;> simp
 
-/-- **The decision's oracle log** has the shipped verdict's `Zk.shaCalls (hOf H)` entries. -/
+/-- **The decision's oracle log**: Flock's setup's `setupCallsOf (hOf H)` entries, then, where it is `.ok`, the
+shipped verdict's `Zk.shaCalls (hOf H)` at its session. -/
 theorem nextO_decide_log (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : Final} (h : actO x as cs = .decide s spec sts link c₁ mids f) :
     ((nextO x as cs).eval H).2.length =
-      FlockDeploy.shaCallsOf true (Claims.hOf H) spec (tabsOf sts) f.record f.proofs := by
-  obtain ⟨-, hl⟩ := FlockDeploy.decision_eval H true s spec sts x link c₁ mids f
+      FlockDeploy.setupCallsOf (Claims.hOf H) s.read +
+        match FlockDeploy.setupWith (Claims.hOf H) s.read with
+        | .ok (spec', sts') => FlockDeploy.shaCallsOf true (Claims.hOf H) spec' (tabsOf sts') f.record f.proofs
+        | .error _ => 0 := by
+  obtain ⟨-, hl⟩ := FlockDeploy.decision_eval H true s x link c₁ mids f
   simp only [nextO, h, outOf, Claims.OC.eval_bind, Claims.OC.eval, List.append_nil]
   exact hl
 
@@ -133,6 +142,15 @@ theorem verdictWithO_sha512 {x : Claims.Msg} {i : RecIns} {spec : SessionSpec} {
   rw [hOf_sha512]
   exact (Zk.verify_eq_verifyWith_of_setupTables _ _ _ _ _ _ _ _ _ _ _ _ _ hr record proofs).symm
 
+/-- On a decision, Flock's setup at the SHA-512 oracle is the recursive setup's session. -/
+theorem actO_decide_setupWith {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
+    {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
+    {f : Final} (h : actO x as cs = .decide s spec sts link c₁ mids f) :
+    FlockDeploy.setupWith (Claims.hOf sha512) s.read = .ok (spec, sts) := by
+  obtain ⟨i, hi, rfl⟩ := actO_decide h
+  rw [hOf_sha512, FlockDeploy.setupWith_sha512]
+  exact RecIns.setup_read (setupO_some hi).2
+
 /-- **The outer verifier's decision at SHA-512**: it accepts exactly when the deployed `verify --zk` with the recursive
 inputs (`Zk.verify` at the recursive setup's tables) accepts the record and proof files and the custody checks pass. -/
 theorem nextO_decide_sha512 {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
@@ -141,7 +159,13 @@ theorem nextO_decide_sha512 {x : Claims.Msg} {as : List Claims.Msg} {cs : List C
     ((nextO x as cs).eval sha512).1 = .acc ↔
       Zk.verify spec (tabsOf sts) f.record f.proofs = .ok () ∧ checks true s spec x link c₁ mids f = .ok () := by
   obtain ⟨i, hi, -⟩ := actO_decide h
-  rw [nextO_decide sha512 h, verdictWithO_sha512 hi]
+  rw [nextO_decide sha512 h, actO_decide_setupWith h, ← verdictWithO_sha512 hi]
+  constructor
+  · rintro ⟨spec', sts', he, hv, hc⟩
+    cases he
+    exact ⟨hv, hc⟩
+  · rintro ⟨hv, hc⟩
+    exact ⟨spec, sts, rfl, hv, hc⟩
 
 /-! ## The columns a run opens -/
 

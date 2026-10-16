@@ -20,8 +20,9 @@ stated as the analysis states it (`Refuses`, `InnerRounds`, `SessionNums`, `Sess
   run of replayed messages is the run of the messages it shows (`stepWith_replay`), so with no hypothesis on the
   witnesses.
 
-`nextO_acc_length` and `next_acc_length`: the outer verifier and the compiled verifier accept only at their last
-rounds, as `FlockDeploy.next_acc_length` has it for Flock's. `coinOf_bytes`: a coin's bytes determine it, so `coinOf`
+`nextO_acc_length` and `next_acc_length`: the outer verifier (at an oracle where its setup has its SHA-512 rounds,
+`nextO_acc_length_sha512`) and the compiled verifier accept only at their last rounds, as `FlockDeploy.next_acc_length`
+has it for Flock's. `coinOf_bytes`: a coin's bytes determine it, so `coinOf`
 reads an inner round's answer back as its coin. `zeroCommit_sha512`: the record's commit string to the zero digest is the deployed one at SHA-512.
 -/
 
@@ -231,28 +232,42 @@ theorem actO_decide_length {x : Claims.Msg} {as : List Claims.Msg} {cs : List Co
     omega
 
 /-- **The outer verifier accepts only at its last round** (`FlockDeploy.next_acc_length` at the recursive setup):
-wherever it accepts, against any oracle and with one coin per message, the prover sent `VO.k x` messages. -/
+wherever it accepts, against an oracle `H` at which Flock's setup of the statement has the rounds of its recursive setup
+(`hr`), and with one coin per message, the prover sent `VO.k x` messages. -/
 theorem nextO_acc_length (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
-    (hcs : cs.length = as.length) (h : ((nextO x as cs).eval H).1 = .acc) : as.length = VO.k x := by
+    (hcs : cs.length = as.length)
+    (hr : ∀ (i : RecIns) (spec : Flock.SessionSpec) (sts : Array Flock.Stmt) (spec' : Flock.SessionSpec)
+      (sts' : Array Flock.Stmt), setupO x = some (i, spec, sts) →
+        FlockDeploy.setupWith (Claims.hOf H) i.base.read = .ok (spec', sts') →
+          FlockDeploy.rounds true spec' sts' = FlockDeploy.rounds true spec sts)
+    (h : ((nextO x as cs).eval H).1 = .acc) : as.length = VO.k x := by
   cases ha : actO x as cs with
   | rej => rw [nextO_rej H ha] at h; cases h
   | coin c => rw [nextO_coin H ha] at h; cases h
   | decide s spec sts link c₁ mids f =>
-  obtain ⟨hv, hc⟩ := (nextO_decide H ha).1 h
+  obtain ⟨spec', sts', hsu, hv, hc⟩ := (nextO_decide H ha).1 h
   obtain ⟨lv, hlv, hcus⟩ := FlockDeploy.checks_custody hc
   obtain ⟨hsz, hk⟩ := FlockDeploy.streams_size true (Flock.Hashes.ofSha512 (Claims.hOf H)) hv hlv
-  obtain ⟨i, hi, -⟩ := actO_decide ha
+  obtain ⟨i, hi, rfl⟩ := actO_decide ha
   show as.length = (match setupO x with | some (_, spec, sts) => 2 + FlockDeploy.rounds true spec sts | none => 1)
   rw [hi, actO_decide_length hcs ha, ← FlockDeploy.custody_length hcus]
   dsimp only
-  rw [FlockDeploy.rounds_sum, List.length_flatMap,
-    Nat.add_comm _ 2, ← FlockDeploy.sum_pairs (fun i => FlockDeploy.repRounds true spec sts[i]!)]
+  rw [← hr i spec sts spec' sts' hi hsu, FlockDeploy.rounds_sum, List.length_flatMap,
+    Nat.add_comm _ 2, ← FlockDeploy.sum_pairs (fun i => FlockDeploy.repRounds true spec' sts'[i]!)]
   congr 2
   apply List.ext_getElem
   · simp [hsz]
   · intro k h₁ h₂
     simp only [List.getElem_map, List.getElem_range, Array.getElem_toList, Array.length_toList]
     exact hk k _
+
+/-- **At the SHA-512 oracle the outer verifier accepts only at its last round.** -/
+theorem nextO_acc_length_sha512 {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+    (hcs : cs.length = as.length) (h : ((nextO x as cs).eval FlockDeploy.sha512).1 = .acc) : as.length = VO.k x :=
+  nextO_acc_length FlockDeploy.sha512 hcs (fun i spec sts spec' sts' hi hsu => by
+    rw [FlockDeploy.hOf_sha512, FlockDeploy.setupWith_sha512, RecIns.setup_read (setupO_some hi).2] at hsu
+    cases hsu
+    rfl) h
 
 /-! ## The compiled verifier decides at its last round -/
 
