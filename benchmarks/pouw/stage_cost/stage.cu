@@ -36,8 +36,8 @@
 //                       512 tokens; b32: 32 sequences of T/32 tokens. Contexts spread over 1K..8K; keys = context + half the
 //                       sub-round's tokens (the causal mean). Arms gemm (no forming) and form (every operand's noised copy
 //                       formed by a pass over it, and S -> P quantized, before the GEMMs: an unfused upper bound). Attention
-//                       by ATT: fused (the default, att_fused below: S and P never leave registers) or lt (cuBLASLt with S
-//                       and P in memory); att_lt and att_fused time each alone.
+//                       by ATT: fused (the default, att_fused below: S and P never leave registers, the keys split across
+//                       CTAs to fill the GPU) or lt (cuBLASLt with S and P in memory); att_lt and att_fused time each alone.
 //   beside T COMP B L   the deferred pass's layers kept queued beside the decode step: the step on the whole GPU, the
 //                       step with the pass on a low-priority stream, the step on a green partition with the pass on
 //                       FILL_SMS SMs, the step on the whole GPU again; the step's slowdown and the pass's rate in the window
@@ -661,7 +661,7 @@ __device__ __forceinline__ uint32_t pack4(int a, int b, int c, int d) {
 constexpr int ATT_KT = 32, ATT_VS = 48;
 __global__ void __launch_bounds__(256) att_fused(const int8_t* __restrict__ Q, const int8_t* __restrict__ Qn,
                                                  const int8_t* __restrict__ K, const int8_t* __restrict__ V, int rows, int lk,
-                                                 int* __restrict__ O, int* __restrict__ csum, uint32_t seed) {
+                                                 int* __restrict__ O, int* __restrict__ csum, uint32_t seed, int ns) {
   __shared__ __align__(16) uint8_t ks[2][ATT_KT * HD];
   __shared__ __align__(16) uint8_t vs[2][HD * ATT_VS];
   const int head = blockIdx.y, warp = threadIdx.x >> 5, lane = threadIdx.x & 31, g = lane >> 2, t = lane & 3;
@@ -696,12 +696,12 @@ __global__ void __launch_bounds__(256) att_fused(const int8_t* __restrict__ Q, c
 #pragma unroll
   for (int nd = 0; nd < 16; nd++) o[nd][0] = o[nd][1] = o[nd][2] = o[nd][3] = 0;
   int cs0 = 0, cs1 = 0;
-  const int nt = lk / ATT_KT;
-  load(0, 0);
+  const int nt = lk / ATT_KT, kb = (int)((long long)nt * blockIdx.z / ns), ke = (int)((long long)nt * (blockIdx.z + 1) / ns);
+  if (kb < ke) load(kb, 0);
 #pragma unroll 1
-  for (int kt = 0; kt < nt; kt++) {
-    const int buf = kt & 1;
-    if (kt + 1 < nt) load(kt + 1, buf ^ 1);
+  for (int kt = kb; kt < ke; kt++) {
+    const int buf = (kt - kb) & 1;
+    if (kt + 1 < ke) load(kt + 1, buf ^ 1);
     else cp_commit();
     cp_wait<1>();
     __syncthreads();
@@ -739,20 +739,37 @@ __global__ void __launch_bounds__(256) att_fused(const int8_t* __restrict__ Q, c
 #pragma unroll
   for (int nd = 0; nd < 16; nd++) {
     const int col = 8 * nd + 2 * t;
-    if (r0 + g < rows) *(int2*)(Oh + (size_t)(r0 + g) * HD + col) = make_int2(o[nd][0], o[nd][1]);
-    if (r0 + g + 8 < rows) *(int2*)(Oh + (size_t)(r0 + g + 8) * HD + col) = make_int2(o[nd][2], o[nd][3]);
+    int* o0 = Oh + (size_t)(r0 + g) * HD + col;
+    int* o1 = Oh + (size_t)(r0 + g + 8) * HD + col;
+    if (ns == 1) {
+      if (r0 + g < rows) *(int2*)o0 = make_int2(o[nd][0], o[nd][1]);
+      if (r0 + g + 8 < rows) *(int2*)o1 = make_int2(o[nd][2], o[nd][3]);
+    } else {
+      if (r0 + g < rows) { atomicAdd(o0, o[nd][0]); atomicAdd(o0 + 1, o[nd][1]); }
+      if (r0 + g + 8 < rows) { atomicAdd(o1, o[nd][2]); atomicAdd(o1 + 1, o[nd][3]); }
+    }
   }
   cs0 += __shfl_xor_sync(0xffffffffu, cs0, 1); cs0 += __shfl_xor_sync(0xffffffffu, cs0, 2);
   cs1 += __shfl_xor_sync(0xffffffffu, cs1, 1); cs1 += __shfl_xor_sync(0xffffffffu, cs1, 2);
   if (t == 0) {
-    if (r0 + g < rows) csum[(size_t)head * rows + r0 + g] = cs0;
-    if (r0 + g + 8 < rows) csum[(size_t)head * rows + r0 + g + 8] = cs1;
+    int* c = csum + (size_t)head * rows + r0 + g;
+    if (r0 + g < rows) { if (ns == 1) c[0] = cs0; else atomicAdd(c, cs0); }
+    if (r0 + g + 8 < rows) { if (ns == 1) c[8] = cs1; else atomicAdd(c + 8, cs1); }
   }
 }
+// ns key splits a launch (0: enough to fill the GPU twice over, at least 8 key tiles a split); split, a CTA adds its keys'
+// share of O and the checksums into zeroed outputs (integer sums: the same bits whatever the split)
 static void att_run(const int8_t* Q, const int8_t* Qn, const int8_t* K, const int8_t* V, int rows, int lk, int* O, int* csum,
-                    uint32_t seed, cudaStream_t st) {
-  const int warps = std::min(8, (rows + 15) / 16);
-  att_fused<<<dim3((unsigned)((rows + 127) / 128), HKV), 32 * warps, 0, st>>>(Q, Qn, K, V, rows, lk, O, csum, seed);
+                    uint32_t seed, cudaStream_t st, int ns = 0) {
+  static int sms = 0;
+  if (!sms) CK(cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, 0));
+  const int warps = std::min(8, (rows + 15) / 16), rb = (rows + 127) / 128, nt = lk / ATT_KT;
+  if (ns <= 0) ns = std::max(1, std::min((2 * sms + rb * HKV - 1) / (rb * HKV), nt / 8));
+  if (ns > 1) {
+    CK(cudaMemsetAsync(O, 0, (size_t)HKV * rows * HD * sizeof(int), st));
+    CK(cudaMemsetAsync(csum, 0, (size_t)HKV * rows * sizeof(int), st));
+  }
+  att_fused<<<dim3((unsigned)rb, HKV, (unsigned)ns), 32 * warps, 0, st>>>(Q, Qn, K, V, rows, lk, O, csum, seed, ns);
 }
 
 // ---------------------------------------------------------------- cuBLASLt int8, strided batched, verified on batch 0
@@ -1671,42 +1688,47 @@ static int att_gate(Dev& d) {
   CK(cudaMalloc(&O, nq * sizeof(int))); CK(cudaMalloc(&cs, (size_t)HKV * rows * sizeof(int)));
   fill_s8<<<64, 256, 0, d.st>>>(Q, nq, 0xA1); fill_s8<<<64, 256, 0, d.st>>>(Qn, nq, 0xA2);
   fill_s8<<<64, 256, 0, d.st>>>(K, nkv, 0xA3); fill_s8<<<64, 256, 0, d.st>>>(V, nkv, 0xA4);
-  CK(cudaMemsetAsync(O, 0xA5, nq * sizeof(int), d.st)); CK(cudaMemsetAsync(cs, 0xA5, (size_t)HKV * rows * sizeof(int), d.st));
-  att_run(Q, Qn, K, V, rows, lk, O, cs, seed, d.st);
-  CK(cudaStreamSynchronize(d.st));
-  CK(cudaGetLastError());
   std::vector<int8_t> q(nq), qn(nq), k(nkv), v(nkv);
-  std::vector<int> o(nq), c((size_t)HKV * rows);
+  CK(cudaStreamSynchronize(d.st));
   CK(cudaMemcpy(q.data(), Q, nq, cudaMemcpyDeviceToHost)); CK(cudaMemcpy(qn.data(), Qn, nq, cudaMemcpyDeviceToHost));
   CK(cudaMemcpy(k.data(), K, nkv, cudaMemcpyDeviceToHost)); CK(cudaMemcpy(v.data(), V, nkv, cudaMemcpyDeviceToHost));
-  CK(cudaMemcpy(o.data(), O, o.size() * sizeof(int), cudaMemcpyDeviceToHost));
-  CK(cudaMemcpy(c.data(), cs, c.size() * sizeof(int), cudaMemcpyDeviceToHost));
-  long bad_o = 0, bad_c = 0;
-  std::vector<int8_t> p(lk);
-  for (int h = 0; h < HKV; h++)
-    for (int r = 0; r < rows; r++) {
-      const int8_t* qr = &q[((size_t)h * rows + r) * HD];
-      const int8_t* qnr = &qn[((size_t)h * rows + r) * HD];
-      uint32_t sum = 0;
-      for (int key = 0; key < lk; key++) {
-        const int8_t* kr = &k[((size_t)h * lk + key) * HD];
-        int s = 0, sn = 0;
-        for (int e = 0; e < HD; e++) { s += qr[e] * kr[e]; sn += qnr[e] * kr[e]; }
-        sum += (uint32_t)sn;
-        const uint32_t u = att_noise(seed, (uint32_t)r, (uint32_t)(key & ~3));
-        p[key] = (int8_t)(uint8_t)(att_q(s) + ((u >> (8 * (key & 3))) & 0xff));
+  int fails = 0;
+  for (int ns : {1, 2, 3}) {
+    CK(cudaMemsetAsync(O, 0xA5, nq * sizeof(int), d.st)); CK(cudaMemsetAsync(cs, 0xA5, (size_t)HKV * rows * sizeof(int), d.st));
+    att_run(Q, Qn, K, V, rows, lk, O, cs, seed, d.st, ns);
+    CK(cudaStreamSynchronize(d.st));
+    CK(cudaGetLastError());
+    std::vector<int> o(nq), c((size_t)HKV * rows);
+    CK(cudaMemcpy(o.data(), O, o.size() * sizeof(int), cudaMemcpyDeviceToHost));
+    CK(cudaMemcpy(c.data(), cs, c.size() * sizeof(int), cudaMemcpyDeviceToHost));
+    long bad_o = 0, bad_c = 0;
+    std::vector<int8_t> p(lk);
+    for (int h = 0; h < HKV; h++)
+      for (int r = 0; r < rows; r++) {
+        const int8_t* qr = &q[((size_t)h * rows + r) * HD];
+        const int8_t* qnr = &qn[((size_t)h * rows + r) * HD];
+        uint32_t sum = 0;
+        for (int key = 0; key < lk; key++) {
+          const int8_t* kr = &k[((size_t)h * lk + key) * HD];
+          int s = 0, sn = 0;
+          for (int e = 0; e < HD; e++) { s += qr[e] * kr[e]; sn += qnr[e] * kr[e]; }
+          sum += (uint32_t)sn;
+          const uint32_t u = att_noise(seed, (uint32_t)r, (uint32_t)(key & ~3));
+          p[key] = (int8_t)(uint8_t)(att_q(s) + ((u >> (8 * (key & 3))) & 0xff));
+        }
+        bad_c += (int)sum != c[(size_t)h * rows + r];
+        for (int e = 0; e < HD; e++) {
+          int acc = 0;
+          for (int key = 0; key < lk; key++) acc += p[key] * v[((size_t)h * HD + e) * lk + key];
+          bad_o += acc != o[((size_t)h * rows + r) * HD + e];
+        }
       }
-      bad_c += (int)sum != c[(size_t)h * rows + r];
-      for (int e = 0; e < HD; e++) {
-        int acc = 0;
-        for (int key = 0; key < lk; key++) acc += p[key] * v[((size_t)h * HD + e) * lk + key];
-        bad_o += acc != o[((size_t)h * rows + r) * HD + e];
-      }
-    }
-  printf("{\"mode\": \"gate\", \"what\": \"att_fused\", \"rows\": %d, \"lk\": %d, \"o_mismatches\": %ld, \"csum_mismatches\": %ld, "
-         "\"ok\": %s}\n", rows, lk, bad_o, bad_c, bad_o || bad_c ? "false" : "true");
+    printf("{\"mode\": \"gate\", \"what\": \"att_fused\", \"rows\": %d, \"lk\": %d, \"splits\": %d, \"o_mismatches\": %ld, "
+           "\"csum_mismatches\": %ld, \"ok\": %s}\n", rows, lk, ns, bad_o, bad_c, bad_o || bad_c ? "false" : "true");
+    fails += bad_o || bad_c;
+  }
   CK(cudaFree(Q)); CK(cudaFree(Qn)); CK(cudaFree(K)); CK(cudaFree(V)); CK(cudaFree(O)); CK(cudaFree(cs));
-  return bad_o || bad_c;
+  return fails;
 }
 static int run_gate(Dev& d, const std::string& dir, const std::vector<int>& Ms) {
   int fails = att_gate(d);
