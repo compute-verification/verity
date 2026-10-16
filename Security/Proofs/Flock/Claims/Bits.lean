@@ -143,16 +143,16 @@ theorem γ_nonneg {Coin Col T : Type} (D : Deploy Coin Col T) (x : Msg) : 0 ≤ 
   unfold γ; positivity
 
 /-- **Flock: bits from KS**: Flock's KS, with the table error nonnegative, gives Flock's bits. -/
-theorem Bits_of_KS {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
+theorem Bits_of_KS {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     {H : Msg → Msg} {D : Deploy Coin Col T} (h : KS H D) (hε : ∀ x, 0 ≤ D.εtable x) : Bits H D :=
   fun decode hdec => Claims.Bits_of_KS (h decode hdec) (fun x => κ_pos D x (hε x)) (γ_nonneg D)
 
 /-- **Flock: bits at bounds**: Flock's KS, with `κ ≤ 2^{−a}` and `0 < γ ≤ 2^b`, gives `min(a, 255.5 − b/2) − 1` bits at
 every decoder that meets the spec. -/
-theorem Bits_ge {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
+theorem Bits_ge {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     {H : Msg → Msg} {D : Deploy Coin Col T} (h : KS H D) (hε : ∀ x, 0 ≤ D.εtable x) {a b : Msg → ℝ}
     (hκ : ∀ x, κ D x ≤ 2 ^ (-a x)) (hγ0 : ∀ x, 0 < γ D x) (hγ : ∀ x, γ D x ≤ 2 ^ b x) (decode : List (ℕ × Col) → List T)
-    (hdec : ListComplete D.enc D.agree D.nMin decode) :
+    (hdec : ListWithin D.len D.enc D.θ decode) :
     Claims.Bits H D.V (R H D.parse) (E H D decode) fun x => min (a x) (255.5 - b x / 2) - 1 :=
   Claims.Bits_mono (Bits_of_KS h hε decode hdec) fun x => lamOf_ge (κ_pos D x (hε x)) (hκ x) (hγ0 x) (hγ x)
 

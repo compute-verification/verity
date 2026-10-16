@@ -7,8 +7,8 @@ The list-decoding spec in its radius form (`Flock.ListWithin`): the opened colum
 word of the trace's codeword length `n` (`Flock.fill`: at each position the first opened column there, zero where none
 was opened, positions from `n` on ignored), and the decoder lists every trace `M` whose encoding agrees with that word
 on at least `(1 − θ M)·n` positions. The radius `θ`, like the length `n`, is read per trace. Agreement is counted over
-all `n` positions, so a prover gains nothing by leaving positions unopened. `fill` and `ListWithin` are stated here in
-the shape `Definitions/Claims.lean` is to take.
+all `n` positions, so a prover gains nothing by leaving positions unopened. `fill` and `ListWithin` are the spec's
+(`Definitions/Claims.lean`).
 
 At Flock's level-0 code (`n = 2^level₀.logLen`, rate `ρ = 2^logCols / 2^logLen`, `θ = 1 − √ρ − 1/200`):
 
@@ -21,22 +21,6 @@ At Flock's level-0 code (`n = 2^level₀.logLen`, rate `ρ = 2^logCols / 2^logLe
 * `flockDecodeR_complexity`: its count (`n` lookups of at most `os.length` comparisons each and one step per point, then
   `flockCounted` on the `n` points) is at most `flockPolyR = flockPoly + X^2 + X` at the size `(os.length + n)·2^k0·128`.
 -/
-
-namespace Claims.Flock
-
-/-- The zero-filled word of length `n`: at each position the first opened column there, zero where none was opened. -/
-def fill {Col : Type} [Zero Col] (n : ℕ) (os : List (ℕ × Col)) : Fin n → Col :=
-  fun i => ((os.find? fun p => p.1 == i.val).map Prod.snd).getD 0
-
-/-- **List decoding within radius `θ`**: `decode` lists every trace whose encoding agrees with the zero-filled word of
-its codeword length `len M` on at least `(1 - θ M)·len M` positions. The radius is read per trace, like the length. -/
-def ListWithin {Col T : Type} [DecidableEq Col] [Zero Col] (len : T → ℕ) (enc : T → ℕ → Col) (θ : T → ℝ)
-    (decode : List (ℕ × Col) → List T) : Prop :=
-  ∀ (os : List (ℕ × Col)) (M : T),
-    (1 - θ M) * len M ≤ ((Finset.univ : Finset (Fin (len M))).filter fun i => enc M i.val = fill (len M) os i).card →
-    M ∈ decode os
-
-end Claims.Flock
 
 namespace Claims.GS
 

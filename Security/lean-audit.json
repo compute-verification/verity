@@ -30,6 +30,9 @@
    "owner": "@proofs",
    "digest": "ccb0737889852a6df27bfbac4afc86597d213f0c77267a6c81a44e5c1dd7479e"
   },
+  "Claims.Hm96Hiding": {
+   "owner": "@proofs"
+  },
   "Claims.StrictBirthday": {
    "owner": "@proofs",
    "digest": "113a796cfd6c01393b0be92014ae0e59eb6e5c5010f858f56fa480f5b1249cd8"
