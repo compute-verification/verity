@@ -899,7 +899,8 @@ def test_the_deferred_pass_is_calibrated_to_measurement(monkeypatch):
     assert (f["s"]["batch"], f["s"]["context"], f["u"]["batch"]) == pytest.approx((-0.5, 0.1, -0.2))
     assert f["s"]["rms"] < 1e-9 and f["slowdown_err_pts_max"] < 1e-9
     with pytest.raises(ValueError, match="measured at"):
-        S.defer_fit(8192)
+        S.defer_fit(2048)
+    assert S.defer_fit(8192)["tps"] == S.defer_fit(16384)["tps"] == [2]  # HC-COMM r4: TP 2 alone
     # the fit to HC-COMM r3 at T = 4096: every residual reported, the model (EGEMM 1) giving back each point within it
     fit = S.DEFER_FIT
     assert fit["T"] == 4096 and fit["tps"] == [2, 4] and fit["n"] == 12 and len(fit["points"]) == 12
