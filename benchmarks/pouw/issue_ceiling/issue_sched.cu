@@ -62,7 +62,8 @@ __device__ __forceinline__ void o_ffma(uint32_t& x, uint32_t y, uint32_t z, cons
   x = __float_as_uint(xf);
 }
 // LDG: a global load at a bounded index (emits LDG.E)
-#define GMASK 0xFFFFFu  // 1<<20 words
+#define GMASK 0xFFFFFu     // 1<<20 words, 4 MiB — memory-latency-bound (round 2)
+#define GMASK128 0xFFu     // 256 uint4 = 4 KiB — stays L1-resident, LDG.128 at throughput
 __device__ __forceinline__ void o_ldg(uint32_t& x, uint32_t y, uint32_t, const uint32_t* g) {
   uint32_t v;
   const uint32_t* p = g + ((x ^ y) & GMASK);
@@ -70,8 +71,77 @@ __device__ __forceinline__ void o_ldg(uint32_t& x, uint32_t y, uint32_t, const u
   x ^= v;
 }
 
-enum { X_IADD3, X_IDP4A, X_HFMA2, X_MOV, X_SEL, X_FFMA, X_LDG, X_MIX3, X_N };
-static const char* X_NAME[] = {"iadd3", "idp4a", "hfma2", "mov", "sel", "ffma", "ldg", "mix3"};
+// ---- round-3 kinds: XU / convert / branch / vote / 128-bit load, measured beside IMMA for JI2 coverage ----------
+// VIMNMX: signed integer max (scalar min/max lowers to VIMNMX on sm_120; = IMNMX on older archs)
+__device__ __forceinline__ void o_vimnmx(uint32_t& x, uint32_t y, uint32_t, const uint32_t*) {
+  int xi = (int)x;
+  asm volatile("max.s32 %0, %0, %1;" : "+r"(xi) : "r"((int)y));
+  x = (uint32_t)xi;
+}
+// F2FP.SATFINITE: two f32 -> packed e4m3 (FP8) with saturate-finite
+__device__ __forceinline__ void o_f2fp(uint32_t& x, uint32_t y, uint32_t z, const uint32_t*) {
+  uint16_t p;
+  asm volatile("cvt.rn.satfinite.e4m3x2.f32 %0, %1, %2;" : "=h"(p) : "f"(__uint_as_float(y)), "f"(__uint_as_float(z)));
+  x ^= p;
+}
+// POPC (XU)
+__device__ __forceinline__ void o_popc(uint32_t& x, uint32_t y, uint32_t, const uint32_t*) {
+  uint32_t p;
+  asm volatile("popc.b32 %0, %1;" : "=r"(p) : "r"(x));
+  x = p + y;
+}
+// MUFU (XU, low throughput): reciprocal approximation
+__device__ __forceinline__ void o_mufu(uint32_t& x, uint32_t y, uint32_t, const uint32_t*) {
+  float r, xf = __uint_as_float(x | 1u);
+  asm volatile("rcp.approx.f32 %0, %1;" : "=f"(r) : "f"(xf));
+  x = __float_as_uint(r) ^ y;
+}
+// FLO (XU): find leading one (bfind)
+__device__ __forceinline__ void o_flo(uint32_t& x, uint32_t y, uint32_t, const uint32_t*) {
+  uint32_t p;
+  asm volatile("bfind.u32 %0, %1;" : "=r"(p) : "r"(x));
+  x = p ^ y;
+}
+// BREV (XU): bit reverse
+__device__ __forceinline__ void o_brev(uint32_t& x, uint32_t y, uint32_t, const uint32_t*) {
+  uint32_t p;
+  asm volatile("brev.b32 %0, %1;" : "=r"(p) : "r"(x));
+  x = p ^ y;
+}
+// BRX: a data-dependent switch (ptxas may predicate it away; measured as far as it keeps a BRX)
+__device__ __forceinline__ void o_brx(uint32_t& x, uint32_t y, uint32_t, const uint32_t*) {
+  switch ((x ^ y) & 7) {
+    case 0: x += 1u; break;   case 1: x ^= 3u; break;   case 2: x += 5u; break;   case 3: x ^= 7u; break;
+    case 4: x += 11u; break;  case 5: x ^= 13u; break;  case 6: x += 17u; break;  default: x ^= 19u; break;
+  }
+}
+// S2R: read %clock (non-hoistable, changes each read) — a live S2R/CS2R in the loop
+__device__ __forceinline__ void o_s2r(uint32_t& x, uint32_t y, uint32_t, const uint32_t*) {
+  uint32_t c;
+  asm volatile("mov.u32 %0, %%clock;" : "=r"(c));
+  x = c ^ y;
+}
+// VOTE: warp ballot on a data-dependent predicate
+__device__ __forceinline__ void o_vote(uint32_t& x, uint32_t y, uint32_t, const uint32_t*) {
+  uint32_t b;
+  asm volatile("{\n\t.reg .pred %%p;\n\tsetp.ne.s32 %%p, %1, 0;\n\tvote.sync.ballot.b32 %0, %%p, 0xffffffff;\n\t}"
+               : "=r"(b) : "r"((int)(x ^ y)));
+  x = b ^ y;
+}
+// LDG.128 at density, cache-resident: 128-bit load from a 4 KiB region (L1-resident); addresses not chained to the
+// immediately preceding load, so loads pipeline (throughput, not latency)
+__device__ __forceinline__ void o_ldg128(uint32_t& x, uint32_t y, uint32_t, const uint32_t* g) {
+  const uint4* p = (const uint4*)g + ((x ^ y) & GMASK128);
+  uint4 v;
+  asm volatile("ld.global.v4.b32 {%0,%1,%2,%3}, [%4];"
+               : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w) : "l"(p));
+  x ^= v.x ^ v.y ^ v.z ^ v.w;
+}
+
+enum { X_IADD3, X_IDP4A, X_HFMA2, X_MOV, X_SEL, X_FFMA, X_LDG, X_MIX3,
+       X_VIMNMX, X_F2FP, X_POPC, X_MUFU, X_FLO, X_BREV, X_BRX, X_S2R, X_VOTE, X_LDG128, X_N };
+static const char* X_NAME[] = {"iadd3", "idp4a", "hfma2", "mov", "sel", "ffma", "ldg", "mix3",
+                               "vimnmx", "f2fp", "popc", "mufu", "flo", "brev", "brx", "s2r", "vote", "ldg128"};
 
 // apply op #j (for MIX3, cycle three kinds); i selects the register, g the global buffer
 template <int X>
@@ -85,6 +155,16 @@ __device__ __forceinline__ void oone(int j, uint32_t* r, int i, const uint32_t* 
   else if (X == X_SEL) o_sel(x, y, z, g);
   else if (X == X_FFMA) o_ffma(x, y, z, g);
   else if (X == X_LDG) o_ldg(x, y, z, g);
+  else if (X == X_VIMNMX) o_vimnmx(x, y, z, g);
+  else if (X == X_F2FP) o_f2fp(x, y, z, g);
+  else if (X == X_POPC) o_popc(x, y, z, g);
+  else if (X == X_MUFU) o_mufu(x, y, z, g);
+  else if (X == X_FLO) o_flo(x, y, z, g);
+  else if (X == X_BREV) o_brev(x, y, z, g);
+  else if (X == X_BRX) o_brx(x, y, z, g);
+  else if (X == X_S2R) o_s2r(x, y, z, g);
+  else if (X == X_VOTE) o_vote(x, y, z, g);
+  else if (X == X_LDG128) o_ldg128(x, y, z, g);
   else {  // MIX3: IADD3, IDP.4A, HFMA2 in turn
     int m = j % 3;
     if (m == 0) o_iadd3(x, y, z, g);
@@ -370,28 +450,22 @@ int main(int, char**) {
   CK(cudaMalloc(&g_ldg, (size_t)(GMASK + 1) * 4));
   CK(cudaMemset(g_ldg, 0x5a, (size_t)(GMASK + 1) * 4));
 
-  double a_imma = 0, a_omma = 0;
+  double a_imma = 0;
   specmma_alone<M_IMMA>(&a_imma);
-  specmma_alone<M_OMMA>(&a_omma);
 
-  sweep<M_IMMA, X_IADD3>(a_imma);
-  sweep<M_IMMA, X_IDP4A>(a_imma);
-  sweep<M_IMMA, X_HFMA2>(a_imma);
-  sweep<M_IMMA, X_MOV>(a_imma);
-  sweep<M_IMMA, X_SEL>(a_imma);
-  sweep<M_IMMA, X_FFMA>(a_imma);
-  sweep<M_IMMA, X_LDG>(a_imma);
-  sweep<M_IMMA, X_MIX3>(a_imma);
-  // OMMA where cheap: the ALU representative only
-  sweep<M_OMMA, X_IADD3>(a_omma);
-
-  // high-occupancy confirmation (32 warps a SM): does more occupancy let lane ops hide behind IMMA?
-  double a_imma_hi = 0;
-  specmma_hi_alone<M_IMMA>(&a_imma_hi);
-  sweep_hi<M_IMMA, X_IADD3>(a_imma_hi);
-  sweep_hi<M_IMMA, X_IDP4A>(a_imma_hi);
-  sweep_hi<M_IMMA, X_HFMA2>(a_imma_hi);
-  sweep_hi<M_IMMA, X_MIX3>(a_imma_hi);
+  // round-3: the kinds JI2 hasn't been timed against, beside IMMA s8 (spec + mixu, ratios 4/8/16).
+  sweep<M_IMMA, X_IADD3>(a_imma);   // the fitted JI2 reference
+  sweep<M_IMMA, X_VIMNMX>(a_imma);
+  sweep<M_IMMA, X_F2FP>(a_imma);
+  sweep<M_IMMA, X_POPC>(a_imma);
+  sweep<M_IMMA, X_MUFU>(a_imma);
+  sweep<M_IMMA, X_FLO>(a_imma);
+  sweep<M_IMMA, X_BREV>(a_imma);
+  sweep<M_IMMA, X_BRX>(a_imma);
+  sweep<M_IMMA, X_S2R>(a_imma);
+  sweep<M_IMMA, X_VOTE>(a_imma);
+  sweep<M_IMMA, X_LDG128>(a_imma);
+  sweep<M_IMMA, X_MOV>(a_imma);     // MOV-defeat attempt (expected: ptxas eliminates it)
 
   printf("{\"probe\":\"sched\",\"done\":true,\"num_sms\":%d}\n", g_sms);
   return 0;
