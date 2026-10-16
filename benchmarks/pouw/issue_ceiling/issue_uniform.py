@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Does a uniform-datapath instruction take the dispatch slot? Combine issue_uniform.jsonl with its SASS.
 
-Saturate the SMSP dispatch with a vector kind (FFMA/IADD3) at ~1 instr a SMSP-cycle, add a live UIADD3 chain at
-densities D (uniform a SMSP-iter). slots a uniform = Δ(cycles a outer-iter) / Δ(#uniform a outer-iter), i.e. the slope of
-cycles-per-iter vs D, / warps-a-SMSP. ~1 => uniform takes a full slot (VF2's 0.594 is a valid lower bound); ~0 =>
-uniform takes no slot (0.594 exceeds real cost => VF2 unsound). The LOW-density points (D < NACC, the uniform pipe not
-yet saturated) are the discriminator: high density saturates any port, so it can't separate co-issue from slot-sharing.
+Saturate the SMSP dispatch with a vector kind (FFMA/IADD3) at ~1 instr a SMSP-cycle, then run a uniform-datapath INNER
+LOOP at runtime trip counts `ucount`. The SASS gives the uniform-datapath op count a inner-iteration (U-ops); the timing
+gives the cycles added a inner-iteration. slots a inner-iteration vs (U-ops + 1 BRA) says whether uniform instructions
+consume dispatch slots: ~ (U-ops+1) => each uniform op takes a full slot (VF2's 0.594 is a valid lower bound); ~1 (only
+the BRA) => uniform ops co-issue on their own port (0.594 exceeds real cost => VF2 unsound). LOW density is the
+discriminator; high density saturates any port.
 
 $OUT/issue_uniform.jsonl, $OUT/sass/issue_uniform.sass -> $OUT/uniform.md, $OUT/uniform.json
 """
@@ -21,7 +22,6 @@ TMPL_INT = re.compile(r"Li(-?\d+)E")
 
 VK_NAME = ["ffma", "iadd3"]
 VK_SASS = ["FFMA", "IADD3"]
-vk_idx = {n: i for i, n in enumerate(VK_NAME)}
 A_UNI = 0.594  # VF2 §13 price of a uniform-datapath instruction (SMSP-cycles)
 
 
@@ -53,6 +53,7 @@ def funcs_with_lines(path):
 
 
 def loops_from_text(lines):
+    """Every backward-branch loop as (body_len, histogram-of-opcodes)."""
     instrs = []
     for line in lines:
         m = ADDR.search(line)
@@ -82,6 +83,15 @@ def by_tmpl(funcs, stem, tmpl):
     return None
 
 
+def is_uop(op):
+    k = op.split(".")[0]
+    return k.startswith("U") or k in ("CS2UR", "S2UR", "R2UR")
+
+
+def uop_count(hist):
+    return sum(c for k, c in hist.items() if is_uop(k))
+
+
 def main():
     out = Path(sys.argv[1])
     rows = [json.loads(l) for l in (out / "issue_uniform.jsonl").read_text().splitlines()
@@ -90,91 +100,82 @@ def main():
     funcs = funcs_with_lines(out / "sass" / "issue_uniform.sass")
 
     md = ["# Uniform-datapath probe: does a uniform instruction take the dispatch slot? (sm_120, RTX PRO 6000)\n"]
-    md.append("Saturate the SMSP dispatch with a vector kind, add a live UIADD3 chain at density D (uniform a SMSP-iter).")
-    md.append(f"VF2 §13 prices a uniform instruction at **{A_UNI} SMSP-cycles**. `slots/uni` = Δ(cycles a outer-iter)/Δ")
-    md.append("(#uniform a outer-iter) — ~1 means it takes a full dispatch slot, ~0 means it takes none.\n")
+    md.append("Saturate the SMSP dispatch with a vector kind; run a uniform-datapath inner loop at runtime trip `ucount`.")
+    md.append(f"VF2 §13 prices a uniform instruction at **{A_UNI} SMSP-cycles**. The inner loop body is `W` uniform ops +")
+    md.append("1 BRA; `slots/inner-it` ≈ W+1 means each uniform op takes a full dispatch slot, ≈1 (just the BRA) means they")
+    md.append("co-issue for free. LOW density is the discriminator; high density saturates any port.\n")
     result = {"a_uni": A_UNI, "by_vk": {}}
 
-    nacc = next((r["nacc"] for r in rows if "nacc" in r), 32)
     for vk in (0, 1):
         vr = sorted([r for r in rows if r["vk"] == VK_NAME[vk]], key=lambda r: r["density"])
         if not vr:
             continue
         base = next((r for r in vr if r["density"] == 0), None)
-        warps_smsp = (base["warps"] if base else vr[0]["warps"]) / 4.0  # warps a SMSP (4 SMSPs a SM)
+        warps_smsp = (base["warps"] if base else vr[0]["warps"]) / 4.0
 
-        def uget_of(dd):  # UIADD3 in the largest loop body of the k_vec<vk,dd> SASS
-            lls = by_tmpl(funcs, "k_vec", [vk, dd])
-            if not lls:
-                return None
-            return max(lls, key=lambda x: x[0])[1].get("UIADD3", 0)
-        base_u0 = uget_of(0)  # loop-control UIADD3 at D=0; the chain adds D more on top
-        md.append(f"## Vector = {VK_NAME[vk].upper()}\n")
-        md.append("| density D (uni/SMSP-it) | vec/SMSP-cyc | uni/SMSP-cyc | cyc/outer-it | slots/uni (vs D=0) | SASS (vec / uni) | promoted? |")
-        md.append("|---|---|---|---|---|---|---|")
-        pts = []  # (D, cyc_per_iter)
+        # the SASS has one k_vec<vk> kernel; its outer loop holds the vector saturator, a nested inner loop holds the
+        # uniform-datapath work. Inner loop = the backward-branch loop with uniform ops and no vector saturator.
+        ls = by_tmpl(funcs, "k_vec", [vk]) or []
+        outer = max(ls, key=lambda x: x[0])[1] if ls else {}
+        vec_sat = outer.get(VK_SASS[vk], 0)
+        inner_cands = [h for _, h in ls if uop_count(h) > 0 and h.get(VK_SASS[vk], 0) == 0]
+        inner = max(inner_cands, key=uop_count) if inner_cands else {}
+        w_uops = uop_count(inner)          # uniform-datapath ops a inner-iteration
+        bra_inner = inner.get("BRA", 0)    # branch a inner-iteration (control, not uniform datapath)
+        uop_mix = ", ".join(f"{c}×{k}" for k, c in sorted(inner.items()) if is_uop(k)) or "—"
+
+        md.append(f"## Vector = {VK_NAME[vk].upper()}  (inner loop: {w_uops} uniform ops + {bra_inner} BRA a iteration: {uop_mix})\n")
+        md.append("| ucount | vec/SMSP-cyc | inner-it/SMSP-cyc | cyc/outer-it | slots/inner-it (vs 0) | slots/uniform-op |")
+        md.append("|---|---|---|---|---|---|")
+        pts = []  # (ucount, cyc_per_outer_iter)
         rowsout = []
+        base_cyc_it = base["cyc"] / base["iters"] if base else None
         for r in vr:
-            D = r["density"]
+            uc = r["density"]
             cyc_it = r["cyc"] / r["iters"]
-            n_uni_it = r["n_uni_smsp"] / r["iters"]  # = warps_smsp*D, uniform instrs a SMSP a outer-iter
-            pts.append((D, cyc_it))
-            ls = by_tmpl(funcs, "k_vec", [vk, D])
-            vget = uget = 0
-            uni_other = 0
-            if ls:
-                body = max(ls, key=lambda x: x[0])[1] if ls else {}
-                vget = body.get(VK_SASS[vk], 0)
-                uget = body.get("UIADD3", 0)
-                uni_other = sum(c for k, c in body.items() if (k.startswith("U") and k != "UIADD3") or k in ("R2UR", "CS2UR"))
-            slots = ((cyc_it - base["cyc"] / base["iters"]) / n_uni_it) if (base and D > 0) else None
-            # the chain is D fully-unrolled UIADD3 on top of the loop-control UIADD3 (base_u0); promotion succeeded iff
-            # the body has base_u0 + D of them.
-            chain_u = (uget - base_u0) if base_u0 is not None else None
-            promoted = (chain_u == D) if chain_u is not None else False
-            prom = "ok" if promoted else f"NO (chain {chain_u}≠{D})"
-            sass = f"{vget}×{VK_SASS[vk]} / {uget}×UIADD3" + (f" (+{uni_other} U-other)" if uni_other else "")
-            md.append(f"| {D} ({n_uni_it:.0f}) | {r['vec_per_smsp_per_cyc']:.4f} | {r['uni_per_smsp_per_cyc']:.4f} | "
-                      f"{cyc_it:.1f} | {('%.3f' % slots) if slots is not None else '—'} | {sass} | {prom} |")
-            rowsout.append({"density": D, "cyc_per_iter": cyc_it, "vec_per_smsp_per_cyc": r["vec_per_smsp_per_cyc"],
-                            "uni_per_smsp_per_cyc": r["uni_per_smsp_per_cyc"], "slots_per_uni_vs0": slots,
-                            "sass_vec": vget, "sass_uiadd3": uget, "sass_uni_other": uni_other,
-                            "promoted": promoted, "iters": r["iters"]})
-        # slots a uniform = slope of cyc/outer-it vs D, / warps_smsp (each unit D is warps_smsp uni a SMSP a iter).
-        # LOW density (D < nacc, uniform pipe unsaturated) is the discriminator: with the vector pipe the bottleneck,
-        #   co-issue => flat (slope~0, slots~0); a shared slot => cycles rise at once (slots~1). HIGH density saturates
-        #   either way, so it can't tell them apart.
-        lo = [(d, c) for d, c in pts if d <= nacc // 2]
-        slope_lo = lin_slope(lo)
-        slope_all = lin_slope(pts)
-        slots_lo = slope_lo / warps_smsp
-        slots_all = slope_all / warps_smsp
+            n_inner_it = r["n_inner_smsp"] / r["iters"]  # = warps_smsp*ucount, inner-iters a SMSP a outer-iter
+            pts.append((uc, cyc_it))
+            slots_it = ((cyc_it - base_cyc_it) / n_inner_it) if (base_cyc_it is not None and uc > 0) else None
+            slots_uop = (slots_it / w_uops) if (slots_it is not None and w_uops) else None
+            md.append(f"| {uc} | {r['vec_per_smsp_per_cyc']:.4f} | {r['inner_per_smsp_per_cyc']:.4f} | {cyc_it:.1f} | "
+                      f"{('%.3f' % slots_it) if slots_it is not None else '—'} | "
+                      f"{('%.3f' % slots_uop) if slots_uop is not None else '—'} |")
+            rowsout.append({"ucount": uc, "cyc_per_iter": cyc_it, "vec_per_smsp_per_cyc": r["vec_per_smsp_per_cyc"],
+                            "inner_per_smsp_per_cyc": r["inner_per_smsp_per_cyc"], "slots_per_inner_it": slots_it,
+                            "slots_per_uop": slots_uop, "iters": r["iters"]})
+
+        lo = [(u, c) for u, c in pts if u <= 16]
+        slope_lo = lin_slope(lo) / warps_smsp          # cyc added a inner-iteration (low density)
+        slope_all = lin_slope(pts) / warps_smsp
+        slots_uop_lo = slope_lo / w_uops if w_uops else None
         sat = base["vec_per_smsp_per_cyc"] if base else 0.0
-        saturated = sat > 0.9
-        all_promoted = all(ro["promoted"] for ro in rowsout if ro["density"] > 0)
+        promoted = w_uops > 0 and bra_inner > 0  # a real uniform-datapath inner loop exists
+        expected_if_slots = w_uops + bra_inner     # every op (uniform + branch) takes one dispatch slot
         md.append("")
-        md.append(f"- Uniform chain promoted to UIADD3: **{'yes' if all_promoted else 'NO — chain stayed vector, result INVALID'}** "
-                  f"(loop-control UIADD3 at D=0 = {base_u0}).")
-        md.append(f"- Dispatch saturation (D=0): **{sat:.4f}** {VK_NAME[vk].upper()} a SMSP-cycle"
-                  f" ({'saturated ~1/cyc' if saturated else 'below 1/cyc — NOT a full saturator, low-density test confounded'}).")
-        md.append(f"- **Low-density slots/uni = {slots_lo:.3f}** (D≤{nacc//2}, the discriminating regime; slope {slope_lo:.3f} cyc/iter a unit D, /{warps_smsp:.0f} warps a SMSP).")
-        md.append(f"- Full-range slots/uni = {slots_all:.3f} (slope {slope_all:.3f}); high D saturates any port, so this over-states co-issue cost.")
-        if not all_promoted:
-            verdict = "INVALID — the chain did not promote to UIADD3 (it ran on the vector datapath), so this measures vector cost, not uniform cost"
-        elif not saturated:
-            verdict = f"inconclusive — the vector saturator only reached {sat:.3f}/cyc, so spare dispatch could hide uniforms for free"
-        elif slots_lo > 0.9:
-            verdict = f"takes a full dispatch slot (~{slots_lo:.2f}) — VF2's {A_UNI} is a valid lower bound (SOUND)"
-        elif slots_lo < A_UNI - 0.05:
-            verdict = f"takes ~{slots_lo:.2f} slot, below VF2's {A_UNI} — VF2 OVER-prices a uniform instruction (UNSOUND)"
+        md.append(f"- Uniform inner loop found: **{'yes' if promoted else 'NO — no uniform-datapath inner loop in SASS, INVALID'}** "
+                  f"({w_uops} uniform ops + {bra_inner} BRA a iteration).")
+        md.append(f"- Dispatch saturation (ucount=0): **{sat:.4f}** {VK_NAME[vk].upper()} a SMSP-cycle"
+                  f" ({'saturated ~1/cyc' if sat > 0.9 else 'below 1/cyc — spare dispatch can hide some uniforms'}).")
+        md.append(f"- **Low-density slots a inner-iteration = {slope_lo:.3f}** (ucount≤16); if every op took a slot this would be ~{expected_if_slots} (={w_uops} uniform + {bra_inner} BRA).")
+        md.append(f"- Low-density slots a uniform op = **{slots_uop_lo:.3f}**" if slots_uop_lo is not None else "- (no uniform ops counted)")
+        md.append(f"- Full-range slots a inner-iteration = {slope_all:.3f} (high density saturates any port).")
+        if not promoted:
+            verdict = "INVALID — no uniform-datapath inner loop was emitted"
+        elif slope_lo >= expected_if_slots - 1.0:
+            verdict = (f"each uniform op takes ~{slots_uop_lo:.2f} dispatch slot — VF2's {A_UNI} is a valid lower bound (SOUND)")
+        elif slope_lo <= bra_inner + 0.5:
+            verdict = (f"uniform ops add ~0 slots beyond the BRA (slots a inner-it {slope_lo:.2f} ≈ {bra_inner} BRA) — they "
+                       f"co-issue on their own port; VF2's {A_UNI}/op OVER-prices (UNSOUND)")
         else:
-            verdict = f"takes ~{slots_lo:.2f} slot — consistent with VF2's {A_UNI}"
-        md.append(f"- Verdict ({VK_NAME[vk].upper()} saturator): a uniform UIADD3 {verdict}.")
+            verdict = (f"each uniform op takes ~{slots_uop_lo:.2f} slot — compare to VF2's {A_UNI}: "
+                       + ("below the price, VF2 over-prices (unsound)" if (slots_uop_lo or 0) < A_UNI - 0.05 else "consistent with VF2"))
+        md.append(f"- Verdict ({VK_NAME[vk].upper()} saturator): {verdict}.")
         md.append("")
-        result["by_vk"][VK_NAME[vk]] = {"saturation_d0": sat, "saturated": saturated, "warps_smsp": warps_smsp,
-                                        "all_promoted": all_promoted, "loop_control_uiadd3": base_u0,
-                                        "slots_per_uni_low_density": slots_lo, "slots_per_uni_full": slots_all,
-                                        "slope_low": slope_lo, "slope_full": slope_all, "rows": rowsout}
+        result["by_vk"][VK_NAME[vk]] = {"saturation_d0": sat, "warps_smsp": warps_smsp, "vec_saturator_count": vec_sat,
+                                        "uniform_ops_per_inner_it": w_uops, "bra_per_inner_it": bra_inner,
+                                        "inner_uop_mix": uop_mix, "promoted": promoted,
+                                        "slots_per_inner_it_low": slope_lo, "slots_per_inner_it_full": slope_all,
+                                        "slots_per_uop_low": slots_uop_lo, "rows": rowsout}
 
     (out / "uniform.md").write_text("\n".join(md) + "\n")
     (out / "uniform.json").write_text(json.dumps(result, indent=2))
