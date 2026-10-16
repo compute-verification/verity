@@ -1,3 +1,4 @@
+import Proofs.Flock.Claims.Sampling.Assembled
 import Proofs.Flock.Claims.Sampling.Bext
 import Proofs.Flock.Claims.Sampling.Count
 import Proofs.Flock.Claims.Sampling.Draws
@@ -18,4 +19,5 @@ programs (`Sampling.Extract`, `Sampling.Cost`); the commitment's binding at the 
 (`Sampling.Binding`), at the registered path check (`Sampling.Path`) and at its hm96 leaf (`Sampling.Leaf`); `B_ext`
 and the block's bits from its KS (`Sampling.Bext`); the waits' truncation and union bound (`Sampling.Wait`); the
 block's KS, its count form and its bits from Flock's KS at the checked units' sessions and the deployed sampled
-verifier's named facts (`Sampling.KS`); and Flock's KS at those sessions from `Claims.Flock.KS` (`Sampling.Session`). -/
+verifier's named facts (`Sampling.KS`); Flock's KS at those sessions from `Claims.Flock.KS` (`Sampling.Session`); and
+the block's claims assembled, with what remains as hypotheses (`Sampling.Assembled`). -/
