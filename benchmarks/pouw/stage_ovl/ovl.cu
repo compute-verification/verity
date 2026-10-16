@@ -686,6 +686,9 @@ int main(int argc, char** argv) {
   CK(cudaMalloc(&d.sink, 64));
   CK(cudaStreamSynchronize(d.st));
   CK(cudaGetLastError());
+  h_init();
+  link_init();
+  g_mid = !(getenv("MID") && atoi(getenv("MID")) == 0);
   if (mode == "shathru") {
     sha_throughput(d);
     return 0;
