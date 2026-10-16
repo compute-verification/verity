@@ -91,6 +91,8 @@ __device__ __forceinline__ int ld_flag(const int* p) {
 constexpr int KF_G = 2;   // tile groups a block: one block an SM, 2 x 8 warps at 128 registers fill the register file
 constexpr int KF_PJ = 16;  // B fragments (64 MMAs a warp) between a warp's polls of the flag
 constexpr int KF_PAIRS_J = PF_TN / 8;
+constexpr int KF_A0 = 20;  // A fragments a tile's first SHA pass makes (lanes 12..31), a multiple of 4 above 16
+static_assert(KF_A0 % 4 == 0 && KF_A0 > 16 && KF_A0 <= 23, "lanes 9..31 hold the first pass's A fragments");
 constexpr size_t KF_SMEM_GRP = (size_t)PF_TN * 32 + (size_t)PF_W * 32 * 16 * 4;  // B as s8 bytes, A's 32 SHA blocks a warp
 constexpr size_t KF_SMEM = KF_G * KF_SMEM_GRP;
 // bar.sync / bar.red over one tile group's 32 PF_W threads (barrier 0 is __syncthreads')
@@ -134,21 +136,33 @@ __global__ void __launch_bounds__(32 * PF_W * KF_G, 1)
     if (poll >= 0) fr = ld_flag(flag);
     const unsigned long long tile = base + i;
     started++;
+    // One SHA pass a warp starts the tile: lanes 0..7 hash B's blocks 8 w .. 8 w + 7, lane 8 the key block, lanes
+    // 32 - KF_A0 .. 31 A's fragments 0 .. KF_A0 - 1 (pfill hashes B and then a whole A pass, two serial passes, which
+    // halved what a 30-45 us window had left for MMAs). The lower warps regenerate A at fragment KF_A0, the upper ones at
+    // KF_A0 - P / 2, so the two warps of a pair on an SMSP still hash half a pass apart.
     PfKeys key{0, 0, 0, 0};
-    if (lane <= 8) {
-      uint64_t st[8];
-      const int bb = w * 8 + (lane & 7);
-      pf_block(dom, c0, c1, tile, lane < 8 ? PF_B + (uint64_t)bb : PF_KEY, st);
-      if (lane < 8) {
+    {
+      const int fa = lane - (32 - KF_A0);
+      if (lane <= 8 || (fa >= 0 && fa < S)) {
+        uint64_t st[8];
+        const int bb = w * 8 + (lane & 7);
+        pf_block(dom, c0, c1, tile, lane < 8 ? PF_B + (uint64_t)bb : lane == 8 ? PF_KEY : (uint64_t)w * S + fa, st);
+        if (lane < 8) {
 #pragma unroll
-        for (int nn = 0; nn < 16; nn++) {
-          const uint32_t R = pf_row(st, nn);
-          uint4* p = (uint4*)&Bs[(16 * bb + nn) * 32];
-          p[0] = make_uint4(pf_01(R & 15), pf_01((R >> 16) & 15), pf_01((R >> 4) & 15), pf_01((R >> 20) & 15));
-          p[1] = make_uint4(pf_01((R >> 8) & 15), pf_01((R >> 24) & 15), pf_01((R >> 12) & 15), pf_01(R >> 28));
+          for (int nn = 0; nn < 16; nn++) {
+            const uint32_t R = pf_row(st, nn);
+            uint4* p = (uint4*)&Bs[(16 * bb + nn) * 32];
+            p[0] = make_uint4(pf_01(R & 15), pf_01((R >> 16) & 15), pf_01((R >> 4) & 15), pf_01((R >> 20) & 15));
+            p[1] = make_uint4(pf_01((R >> 8) & 15), pf_01((R >> 24) & 15), pf_01((R >> 12) & 15), pf_01(R >> 28));
+          }
+        } else if (lane == 8) {
+          key = pf_keys(st);
+        } else {
+          uint4* p = (uint4*)&Ab[w][fa * 16];
+#pragma unroll
+          for (int q = 0; q < 4; q++)
+            p[q] = make_uint4(pf_row(st, 4 * q), pf_row(st, 4 * q + 1), pf_row(st, 4 * q + 2), pf_row(st, 4 * q + 3));
         }
-      } else {
-        key = pf_keys(st);
       }
     }
     key.a0 = __shfl_sync(~0u, key.a0, 8);
@@ -175,8 +189,7 @@ __global__ void __launch_bounds__(32 * PF_W * KF_G, 1)
       y[c] = pf_y0(pos);
       z[c] = pf_z0(pos);
     }
-    int f0 = 0, next = (w >> 2) & 1 ? P / 2 : P;
-    agen(0);
+    int f0 = 0, next = (w >> 2) & 1 ? KF_A0 - P / 2 : KF_A0;
     const uint8_t* bp = Bs + g * 32 + 8 * t;
     int q = 0;
     bool stop = false;
