@@ -3,11 +3,14 @@
 // Every int8 x is balanced base-16 limbs x = 16 h + l, l in [-8, 7], h in [-8, 8], m = h + l in [-15, 14]; all three are
 // E4M3 integers, and so are 4h, 16h and -l. Two emulations of each k32 step's 32 MACs:
 //   k3 (Karatsuba, 3 QMMAs): xy = 240 hh' + 16 mm' - 15 ll'. Planes A = [4h, m, -l], B = [4h', m', l']; acc1 = QMMA(4h, 4h',
-//      C0) then QMMA(-l, l', acc1) = 16 HH - LL; acc2 = QMMA(m, m', C0) = MM; word += 15 acc1 + 16 acc2.
+//      C1) then QMMA(-l, l', acc1) = C1 + T1, T1 = 16 HH - LL; acc2 = QMMA(m, m', C2) = C2 + T2, T2 = MM; the step adds
+//      15 T1 + 16 T2 to the word.
 //   k4 (schoolbook, 4 QMMAs): planes A = [16h, l], B = [16h', l'], the four pairings chained into one accumulator from C0.
-// C0 = 1.5 2^23 (0x4B400000), the binade whose ulp is 1: every accumulator starts each k32 step there (the MMA's C input,
-// a constant register), every partial stays in [2^23, 2^24) (|T| <= 34816 a step for k3's acc1, 2^19 for k4), so the
-// FP32 word is C0 + T exactly (FP-EXACT, art:2521ff4c…) and T is its bits minus 0x4B400000. The int32 prefix word of
+// Every accumulator starts each k32 step from a constant word (the MMA's C input) in a binade wide enough for the step:
+// k4's C0 = 0x4B400000 (1.5 2^23, ulp 1; |T| <= 2^19), k3's C1 = 0x4B7BAB6C (ulp 1; |T1| <= 32768) and C2 = 0x49E07A56
+// (1838922.75, ulp 1/8; -6720 <= T2 <= 7200), each with room to spare. In a binade the FP32 word is C + T exactly
+// (FP-EXACT, art:2521ff4c…), so T is the bits' difference (times the ulp's inverse), and since 15 C1 + 2 C2 = 0 mod 2^32,
+// k3's increment is 15 bits(acc1) + 2 bits(acc2) mod 2^32: two integer ops a word, no constant. The int32 prefix word of
 // every k32 step is rebuilt in registers from those bits, never through memory; it is the word IMMA's s32 accumulator
 // holds after the same step.
 //
@@ -37,7 +40,8 @@
 
 #define DEV __device__ __forceinline__
 
-constexpr uint32_t C0_BITS = 0x4B400000u;
+constexpr uint32_t C0_BITS = 0x4B400000u, C1_BITS = 0x4B7BAB6Cu, C2_BITS = 0x49E07A56u;
+static_assert(15u * C1_BITS + 2u * C2_BITS == 0u, "k3's increment carries no constant");
 constexpr uint32_t FOLD_MUL = 0x9E3779B1u;
 constexpr int IMMA = 0, K3 = 1, K4 = 2;
 constexpr int BM = 128, BN = 128, THREADS = 256;
@@ -210,6 +214,10 @@ __global__ void __launch_bounds__(THREADS, 1)
   uint32_t sink[4] = {0, 0, 0, 0};
   const float c0[4] = {__uint_as_float(C0_BITS), __uint_as_float(C0_BITS), __uint_as_float(C0_BITS),
                        __uint_as_float(C0_BITS)};
+  const float c1[4] = {__uint_as_float(C1_BITS), __uint_as_float(C1_BITS), __uint_as_float(C1_BITS),
+                       __uint_as_float(C1_BITS)};
+  const float c2[4] = {__uint_as_float(C2_BITS), __uint_as_float(C2_BITS), __uint_as_float(C2_BITS),
+                       __uint_as_float(C2_BITS)};
 
 #pragma unroll
   for (int s = 0; s < C::NS - 1; s++) {
@@ -252,12 +260,13 @@ __global__ void __launch_bounds__(THREADS, 1)
             imma(acc[i][j], af[0][i], bf[0][j]);
           } else if constexpr (ARM == K3) {
             float f1[4], f2[4];
-            qmma(f1, af[0][i], bf[0][j], c0);
+            qmma(f1, af[0][i], bf[0][j], c1);
             qmma(f1, af[2][i], bf[2][j], f1);
-            qmma(f2, af[1][i], bf[1][j], c0);
+            qmma(f2, af[1][i], bf[1][j], c2);
 #pragma unroll
             for (int e = 0; e < 4; e++)
-              acc[i][j][e] += (int32_t)(15u * __float_as_uint(f1[e]) + 16u * __float_as_uint(f2[e]) - 31u * C0_BITS);
+              asm("mad.lo.u32 %0, %1, 15, %0;\n\tmad.lo.u32 %0, %2, 2, %0;"
+                  : "+r"(acc[i][j][e]) : "r"(__float_as_uint(f1[e])), "r"(__float_as_uint(f2[e])));
           } else {
             float f[4];
             qmma(f, af[0][i], bf[0][j], c0);

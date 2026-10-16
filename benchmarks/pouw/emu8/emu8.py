@@ -5,9 +5,9 @@
   python emu8.py identities                      # the k3 and k4 limb identities over every int8 pair, through E4M3 codes
 
 The limbs: x = 16 h + l with l in [-8, 7] (h = (x + 8) >> 4), m = h + l. k3 (Karatsuba) computes a k32 step's 32 MACs as
-15 acc1 + 16 acc2 with acc1 = sum(4h 4h') + sum(-l l') and acc2 = sum(m m'), every accumulator started from the binade
-C0 = 0x4B400000 so that its FP32 word is C0 + T; k4 chains the four products (16h)(16h'), (16h) l', l (16h'), l l' into
-one accumulator from C0. `recheck` regenerates every case's operands from emu8.cu's counter hash, checks the device's bytes
+15 T1 + 16 T2 with T1 = sum(4h 4h') + sum(-l l') from C1 = 0x4B7BAB6C (ulp 1) and T2 = sum(m m') from C2 = 0x49E07A56
+(ulp 1/8), so that the step's increment is 15 bits(acc1) + 2 bits(acc2) mod 2^32 (15 C1 + 2 C2 = 0); k4 chains the four products (16h)(16h'), (16h) l', l (16h'), l l' into
+one accumulator from C0 = 0x4B400000. `recheck` regenerates every case's operands from emu8.cu's counter hash, checks the device's bytes
 against them, recomputes every k32 prefix word in int64 and compares each arm's words with them; it also replays sampled
 k32 steps of k3 and k4 through `verity.ml.circuits.silicon`'s E4M3 model, so the words are shown to be the model's.
 """
@@ -24,7 +24,7 @@ import numpy as np
 
 DISTS = ("uniform", "maxlimb", "samesign", "runs", "mixed", "dither", "zero_a")
 ARMS = ("imma", "k3", "k4")
-C0_BITS = 0x4B400000
+C0_BITS, C1_BITS, C2_BITS = 0x4B400000, 0x4B7BAB6C, 0x49E07A56   # emu8.cu's: k4's binade, k3's acc1 and acc2
 MAXLIMB = np.array([127, -127, 120, -121, 119, -120, -128, 104, -104, 8, -8, -9, 7, 112, -113, 121], np.int64)
 M64 = (1 << 64) - 1
 
@@ -171,9 +171,9 @@ def replay(A: np.ndarray, B: np.ndarray, samples: int, seed: int = 0) -> dict:
         a, b = A[i, 32 * l:32 * l + 32].astype(np.int64), B[j, 32 * l:32 * l + 32].astype(np.int64)
         exact = int((a * b).sum())
         pa, pb = [[int(c) for c in codes(p)] for p in planes(a, "k3", 0)], [[int(c) for c in codes(p)] for p in planes(b, "k3", 1)]
-        f1 = mdl.step(mdl.step(C0_BITS, pa[0], pb[0]), pa[2], pb[2])
-        f2 = mdl.step(C0_BITS, pa[1], pb[1])
-        w3 = (15 * f1 + 16 * f2 - 31 * C0_BITS) & 0xFFFFFFFF
+        f1 = mdl.step(mdl.step(C1_BITS, pa[0], pb[0]), pa[2], pb[2])
+        f2 = mdl.step(C2_BITS, pa[1], pb[1])
+        w3 = (15 * f1 + 2 * f2) & 0xFFFFFFFF
         qa, qb = [[int(c) for c in codes(p)] for p in planes(a, "k4", 0)], [[int(c) for c in codes(p)] for p in planes(b, "k4", 1)]
         f = C0_BITS
         for x, y in ((0, 0), (0, 1), (1, 0), (1, 1)):
