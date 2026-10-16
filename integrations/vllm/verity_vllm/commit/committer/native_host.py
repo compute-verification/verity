@@ -66,7 +66,7 @@ DEFAULT_CHUNK = 4096
 ACQUIRE_CLASSES = {
     "ColumnParallelLinear", "RowParallelLinear", "QKVParallelLinear", "MergedColumnParallelLinear", "ReplicatedLinear", "LinearBase",
     "RMSNorm", "GemmaRMSNorm", "LayerNorm",
-    "SiluAndMul", "GeluAndMul", "GeluAndMulSparse", "MulAndSilu",
+    "SiluAndMul", "GeluAndMul", "GeluAndMulSparse", "MulAndSilu", "SiluAndMulWithClamp",
     "RotaryEmbedding",
     "Attention",
     "VocabParallelEmbedding",
@@ -574,7 +574,7 @@ def step_bound_bytes(model: Any, modules: list[tuple[str, Any]], envelope: dict[
         elif names & {"RMSNorm", "GemmaRMSNorm", "LayerNorm"}:
             hs = int(m.weight.numel()) if hasattr(m, "weight") and isinstance(m.weight, torch.Tensor) else hidden
             w = 2 * hs * isz                                                            # fused add+norm returns (out, residual)
-        elif names & {"SiluAndMul", "GeluAndMul", "GeluAndMulSparse", "MulAndSilu"}:
+        elif names & {"SiluAndMul", "GeluAndMul", "GeluAndMulSparse", "MulAndSilu", "SiluAndMulWithClamp"}:
             w = inter * 2
         elif "RotaryEmbedding" in names:
             w = (heads + kv_heads) * head_dim * 2 * rope_mult                           # returns (q, k); once per layer when shared
@@ -2038,7 +2038,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                     tp_bad["<foreign rank tag>"] = sum(c for n, c in names.items() if TP_PARTIAL_RE.search(n) and not n.endswith(f"_rank{rk}"))
             elif tp_counts:
                 tp_bad = {"<undeclared tp source>": sum(tp_counts.values())}
-            mod_names, rt_bad = rt_src.split_step_names(mod_names, step, padding_only) if rt_src is not None else (mod_names, {})
+            mod_names, rt_bad = rt_src.split_step_names(mod_names, step, padding_only, metas) if rt_src is not None else (mod_names, {})
             by_module = Counter()
             for n, c in mod_names.items():
                 by_module[self._module_of(n)] += c
