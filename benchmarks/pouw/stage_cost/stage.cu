@@ -232,7 +232,8 @@ static void commit_run(const Commit& m, const uint8_t* data, cudaStream_t st) {
 // Rotations on the FMA pipe, which the compression otherwise leaves idle (every SHF, LOP3 and IADD costs one warp 2 cycles of
 // the integer pipe): with m = 2^(32-n), x >> n = mul.hi(x, m) and (y << (32-n)) | (x >> n) = mad.lo(y, m, x >> n), the two
 // parts sharing no bit. m is read from constant memory, so ptxas can't turn the multiply back into a shift. ROT's bits pick
-// the functions so rotated: 1 S0, 2 S1, 4 s0, 8 s1 (FR_ROT for the commitment's kernels; shalat times each).
+// the functions so rotated: 1 S0, 2 S1, 4 s0, 8 s1 (FR_ROT for the commitment's kernels; shalat times each). Bits 16 and
+// 32 reassociate the round's sums (fr_round), the same digests.
 #ifndef FR_ROT
 #define FR_ROT 0
 #endif
@@ -283,13 +284,33 @@ template <int ROT> __device__ __forceinline__ uint64_t fr_s0(uint64_t w) {
 template <int ROT> __device__ __forceinline__ uint64_t fr_s1(uint64_t w) {
   return fr_rotr<19, (ROT & 8) != 0>(w) ^ fr_rotr<61, (ROT & 8) != 0>(w) ^ fr_shr<6, (ROT & 8) != 0>(w);
 }
-// one round, its K + W given
+// a 64-bit add NVVM can't reassociate (it otherwise sums h + S1 + Ch + K + W left to right, five IADD.64 deep)
+__device__ __forceinline__ uint64_t fr_add(uint64_t x, uint64_t y) {
+  uint64_t r;
+  asm("add.u64 %0, %1, %2;" : "=l"(r) : "l"(x), "l"(y));
+  return r;
+}
+// one round, its K + W given. As written (ROT & 48 == 0) e's path is SHF, LOP3 and five IADD.64 a round. 16: (h + KW) + Ch
+// beside S1, then + S1 and d + T1, four deep in six adds. 32: also d + h + KW ahead, so e' = (d + h + KW + Ch) + S1 is
+// three deep, and a' = (T1 + Maj) + S0 three deep from a, in eight adds
 template <int ROT>
 __device__ __forceinline__ void fr_round(uint64_t& a, uint64_t& b, uint64_t& c, uint64_t& d, uint64_t& e, uint64_t& f,
                                          uint64_t& g, uint64_t& h, uint64_t kw) {
-  const uint64_t t1 = h + fr_S1<ROT>(e) + ((e & f) ^ (~e & g)) + kw;
-  const uint64_t t2 = fr_S0<ROT>(a) + ((a & b) ^ (a & c) ^ (b & c));
-  h = g; g = f; f = e; e = d + t1; d = c; c = b; b = a; a = t1 + t2;
+  if constexpr ((ROT & 32) != 0) {
+    const uint64_t hk = fr_add(h, kw), ch = (e & f) ^ (~e & g), s1 = fr_S1<ROT>(e);
+    const uint64_t t1 = fr_add(fr_add(hk, ch), s1);
+    const uint64_t en = fr_add(fr_add(fr_add(d, hk), ch), s1);
+    const uint64_t an = fr_add(fr_add(t1, (a & b) ^ (a & c) ^ (b & c)), fr_S0<ROT>(a));
+    h = g; g = f; f = e; e = en; d = c; c = b; b = a; a = an;
+  } else if constexpr ((ROT & 16) != 0) {
+    const uint64_t t1 = fr_add(fr_add(fr_add(h, kw), (e & f) ^ (~e & g)), fr_S1<ROT>(e));
+    const uint64_t t2 = fr_add(fr_S0<ROT>(a), (a & b) ^ (a & c) ^ (b & c));
+    h = g; g = f; f = e; e = fr_add(d, t1); d = c; c = b; b = a; a = fr_add(t1, t2);
+  } else {
+    const uint64_t t1 = h + fr_S1<ROT>(e) + ((e & f) ^ (~e & g)) + kw;
+    const uint64_t t2 = fr_S0<ROT>(a) + ((a & b) ^ (a & c) ^ (b & c));
+    h = g; g = f; f = e; e = d + t1; d = c; c = b; b = a; a = t1 + t2;
+  }
 }
 // s512_compress with 16 rounds unrolled, not 80: the same chain latency (shalat: 3.5-3.6 us a compression at 2.09 GHz, rolled
 // or not, bound by one warp's issue rate at ~43 instructions a round) in a fifth of the code
@@ -1382,24 +1403,35 @@ static void sha_latency(Dev& d) {
   };
   using Chain = void (*)(int, int, uint64_t*);
   const std::pair<int, Chain> rolled[] = {{0, sha_chain<0>}, {1, sha_chain<1>}, {2, sha_chain<2>}, {3, sha_chain<3>},
-                                          {4, sha_chain<4>}, {8, sha_chain<8>}, {12, sha_chain<12>}};
+                                          {4, sha_chain<4>}, {8, sha_chain<8>}, {12, sha_chain<12>},
+                                          {16, sha_chain<16>}, {32, sha_chain<32>}};
   for (const auto& rc : rolled)
     for (int thr : {1, 32}) put("rolled_r" + std::to_string(rc.first) + "_" + std::to_string(thr), per([&](int n) {
       rc.second<<<1, thr, 0, d.st>>>(n, 0, out);
     }));
   put("unrolled_32", per([&](int n) { sha_chain<0><<<1, 32, 0, d.st>>>(n, 1, out); }));
   using Chain2 = void (*)(int, uint64_t*);
-  const std::pair<int, Chain2> split[] = {{0, sha_chain2<0>}, {1, sha_chain2<1>}, {2, sha_chain2<2>}, {3, sha_chain2<3>}};
+  const std::pair<int, Chain2> split[] = {{0, sha_chain2<0>}, {1, sha_chain2<1>}, {2, sha_chain2<2>}, {3, sha_chain2<3>},
+                                          {16, sha_chain2<16>}, {32, sha_chain2<32>}};
   for (const auto& sc : split) put("split2_r" + std::to_string(sc.first) + "_32", per([&](int n) {
     sc.second<<<1, 64, 0, d.st>>>(n, out2);
   }));
-  // the split's chains equal the one-warp chains'
+  // the split's chains, and the reassociated rounds', equal the one-warp chains'
   sha_chain<0><<<1, 32, 0, d.st>>>(257, 0, out);
-  sha_chain2<0><<<1, 64, 0, d.st>>>(257, out2);
   std::vector<uint64_t> h1(32), h2(32);
   CK(cudaMemcpy(h1.data(), out, 256, cudaMemcpyDeviceToHost));
-  CK(cudaMemcpy(h2.data(), out2, 256, cudaMemcpyDeviceToHost));
-  printf("}, \"split_equal\": %s}\n", h1 == h2 ? "true" : "false");
+  bool same = true;
+  for (const auto& sc : split) {
+    sc.second<<<1, 64, 0, d.st>>>(257, out2);
+    CK(cudaMemcpy(h2.data(), out2, 256, cudaMemcpyDeviceToHost));
+    same &= h1 == h2;
+  }
+  for (const auto& rc : rolled) {
+    rc.second<<<1, 32, 0, d.st>>>(257, 0, out2);
+    CK(cudaMemcpy(h2.data(), out2, 256, cudaMemcpyDeviceToHost));
+    same &= h1 == h2;
+  }
+  printf("}, \"split_equal\": %s}\n", same ? "true" : "false");
   fflush(stdout);
   // the host: a compression's latency in a chain (C++ and libcrypto's, h_init), the round trip through mapped memory
   link_init();
