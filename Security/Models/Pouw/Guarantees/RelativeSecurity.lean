@@ -7,6 +7,13 @@ import Models.Pouw.Assumptions.RelativeSecurity
 Each guarantee is a `def G : Prop` over `Definitions.Pouw.RelativeSecurity` with the named premises it rests on as
 hypotheses (`Models.Pouw.Assumptions.RelativeSecurity`). Its proof is the theorem
 `Pouw.SecurityProofs.RelativeSecurity.G : Pouw.Guarantees.RelativeSecurity.G`.
+
+The four floors are `c = 1` on K's two proved scopes:
+- one-sided operands of any form, charge-pure, at the parity luck 0.854 (`StagedFloorKOneSided`,
+  `OverlapFloorKOneSided`);
+- affine operands, row-pure, at ¾ (`StagedFloorK`, `OverlapFloorK`).
+
+No guarantee here covers a run outside both, and the verifier can't observe which case a run is in.
 -/
 
 namespace Pouw.Guarantees.RelativeSecurity
@@ -27,8 +34,9 @@ def TheoremSStaged : Prop :=
 mod 2), the luck ¾ and the stage floors summed. In every machine `Mc` and for every service `S` whose seed is `R`
 rounds of `St` stage draws on the re-encoded design (7 planes at `wRe`, integers mod `2^32`), under the three
 premises, every adversary that commits first has its accepted runs charged below
-`(R − 160 ln 2) · St · κ L n n' B − Vmax` with probability at most `2^{−40} + R (δb + δz)`. Its scope
-(`KScopeAffine`: affine operands, mixed included, row-pure) is not `StagedFloorKOneSided`'s, and its luck is sharper. -/
+`(R − 160 ln 2) · St · κ L n n' B − Vmax` with probability at most `2^{−40} + R (δb + δz)`: `c = 1` on K's proved
+affine scope (`KScopeAffine`: affine operands, mixed included, row-pure). That scope is not `StagedFloorKOneSided`'s,
+and its luck is sharper. -/
 def StagedFloorK : Prop :=
   ∀ (Mc : Machine) (S : Service) (R St n L B n' : ℕ) (e : S.Seed ≃ Paths (DStage St n L 7 B n') R)
     (run : RunMap Mc S R St n L 7 B n' (ZMod (2 ^ 32))) (δb δz κ Vmax : ℝ),
@@ -43,7 +51,7 @@ charged `L` of them, none twice) and the stage floors summed. In every machine `
 seed is `R` rounds of `St` stage draws on the re-encoded design (7 planes at `wRe`, integers mod `2^32` read mod 2 by
 `toF2`, plane 0 at an odd weight), under the three premises, every adversary that commits first has its accepted runs
 charged below `(R − 274 ln 2) · St · κ L n n' B − Vmax` with probability at most `2^{−40} + R (δb + δz)`
-(`0.146 · 274 ≥ 40`). -/
+(`0.146 · 274 ≥ 40`): `c = 1` on K's proved one-sided scope (`KScopeOneSided`, a sibling of the ledger's K1). -/
 def StagedFloorKOneSided : Prop :=
   ∀ (Mc : Machine) (S : Service) (R St n L B n' : ℕ) (e : S.Seed ≃ Paths (DStage St n L 7 B n') R)
     (run : RunMap Mc S R St n L 7 B n' (ZMod (2 ^ 32))) (δb δz κ Vmax : ℝ),
@@ -69,8 +77,9 @@ cell-blocks counted once. In every machine `Mc` and for every service `S` whose 
 draws of any shapes (stage `t`: `n t` rows, `B t` blocks of `L`, `n' t` columns, 7 planes at `wRe`, integers mod
 `2^32`) overlapping at any depth, its check's cell-block drawn uniformly among every stage's (`ServiceSoundOverlap`'s
 deployment requirement), under the three premises, every adversary that commits first has its accepted runs charged
-below `(R − 160 ln 2) · κ L Σ_t n_t n'_t B_t − Vmax` with probability at most `2^{−40} + R (δb + δz)`. Its scope
-(`KScopeOverlapAffine`) is not `OverlapFloorKOneSided`'s, and its luck is sharper. -/
+below `(R − 160 ln 2) · κ L Σ_t n_t n'_t B_t − Vmax` with probability at most `2^{−40} + R (δb + δz)`: `c = 1` on
+K∥'s proved affine scope (`KScopeOverlapAffine`). That scope is not `OverlapFloorKOneSided`'s, and its luck is
+sharper. -/
 def OverlapFloorK : Prop :=
   ∀ (Mc : Machine) (S : Service) (R St L : ℕ) (n B n' : Fin St → ℕ) (e : S.Seed ≃ Paths (OSpot St n L 7 B n') R)
     (run : ORunMap Mc S R St n L 7 B n' (ZMod (2 ^ 32))) (δb δz κ Vmax : ℝ),
@@ -87,7 +96,7 @@ rounds of `St` stage draws of any shapes (as `OverlapFloorK`; integers mod `2^32
 an odd weight) overlapping at any depth, its check's cell-block drawn uniformly among every stage's
 (`ServiceSoundOverlap`'s deployment requirement), under the three premises, every adversary that commits first has
 its accepted runs charged below `(R − 274 ln 2) · κ L Σ_t n_t n'_t B_t − Vmax` with probability at most
-`2^{−40} + R (δb + δz)`. -/
+`2^{−40} + R (δb + δz)`: `c = 1` on K∥'s proved one-sided scope (`KScopeOverlapOneSided`). -/
 def OverlapFloorKOneSided : Prop :=
   ∀ (Mc : Machine) (S : Service) (R St L : ℕ) (n B n' : Fin St → ℕ) (e : S.Seed ≃ Paths (OSpot St n L 7 B n') R)
     (run : ORunMap Mc S R St n L 7 B n' (ZMod (2 ^ 32))) (δb δz κ Vmax : ℝ),

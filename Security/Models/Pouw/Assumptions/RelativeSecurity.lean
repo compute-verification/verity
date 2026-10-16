@@ -12,6 +12,11 @@ one-sided operands of any form, charge-pure), and what the machine charges for i
 `KScopeOverlapOneSided`, `ChargeVF3fOverlap`, over `ORunMap`). `KScopeAffine` and `KScopeOverlapAffine` are the
 affine scopes, row-pure, which `StagedFloorK` and `OverlapFloorK` take for the sharper luck ¾ (`RoundsHypKSt`,
 `RoundsHypKOv`). The ledger ids are the premise ledger's.
+
+These are K's two proved scopes. The one-sided scope is a sibling of the ledger's K1, not a narrowing of it. The
+ledger's K1 at `c = 1` is false outside both scopes (RS-E-REF r8 VIII): a factor `∏(1 − z_u)` in one operand leaves a
+word wrong only at `U = 0`, so the word is uncertified and passes almost always, and K's count binds certified words
+only. No scope here is observable: no check of the service refuses a run outside it.
 -/
 
 namespace Pouw.Assumptions
@@ -37,17 +42,17 @@ def ServiceSoundStaged (Mc : Machine) (S : Service) (run : RunMap Mc S R St n L 
       ∀ x, S.verify (Mc.eval M (e.symm x, r)).1 (e.symm x) (Mc.eval M (e.symm x, r)).2 = true →
         (run Ω' M r).play.game.accepts x ∨ ∃ w, (run Ω' M r).Bind w x ∨ (run Ω' M r).ZK w x
 
-/-- `pouw-rs-k-scope` (proposed). **Theorem K's scope, affine operands.** For every adversary that commits first,
+/-- `pouw-rs-k-scope` (proposed). **Theorem K's proved affine scope.** For every adversary that commits first,
 every value of its coins and every play `x`, each round's stage is a straight-line program over `Ar` on the stage's
 bits (E3, straight-line; integer MMAs with s32 wrap and unscaled reads, so ring operations only), and:
-- every product slot is a product of two bit-affine operands (K1's operands, narrowed to affine: the luck ¾ is proved
-  for affine operands, LA);
+- every product slot is a product of two bit-affine operands, mixed included (the luck ¾ is proved for them, LA);
 - the stage's error table is its committed prefix words (`word`) minus their targets at the plane weights `wt` (S4,
   the check reads the prefix word);
-- certified words of distinct rows of a stage share no product (K1, row-pure).
+- certified words of distinct rows of a stage share no product (row-pure).
 
-K1 is unobservable: no check of the service refuses a run outside it (the ledger's "priced, not prevented").
-`KScopeOneSided` is the scope for one-sided operands of any form, at the parity luck 0.854. -/
+On this scope `c = 1` is proved at the luck ¾. The scope is unobservable: no check of the service refuses a run
+outside it (the ledger's "priced, not prevented"). `KScopeOneSided` is the proved scope for one-sided operands of
+any form, at the parity luck 0.854. -/
 def KScopeAffine (Mc : Machine) (S : Service) (run : RunMap Mc S R St n L np B n' Ar) (wt : Fin np → Ar) : Prop :=
   ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ (r : Ω') x,
@@ -60,19 +65,23 @@ def KScopeAffine (Mc : Machine) (S : Service) (run : RunMap Mc S R St n L np B n
         c.1 ≠ c'.1 → ∀ k, ((run Ω' M r).prog x w s).coef ((run Ω' M r).word x w s c) k ≠ 0 →
           ((run Ω' M r).prog x w s).coef ((run Ω' M r).word x w s c') k = 0
 
-/-- `pouw-rs-k-scope-one-sided` (proposed). **Theorem K's scope, one-sided operands of any form.** For every adversary
-that commits first, every value of its coins and every play `x`, each round's stage is a straight-line program over
-`Ar` on the stage's bits (E3, straight-line; ring operations only, so reads are unscaled), and:
+/-- `pouw-rs-k-scope-one-sided` (proposed). **Theorem K's proved one-sided scope, operands of any form.** For every
+adversary that commits first, every value of its coins and every play `x`, each round's stage is a straight-line
+program over `Ar` on the stage's bits (E3, straight-line; ring operations only, so reads are unscaled), and:
 - every product slot is one-sided, of any form (`OneSided`: a function of U's bits times a function of the coins,
-  neither side asked to be affine; K1's operands, as the parity luck reads them, RS-E-REF r6 VI.2.2);
+  neither side asked to be affine, so wider than K1's `GProd` on the coin side; RS-E-REF r6 VI.2.2);
 - the stage's error table is its committed prefix words (`word`) minus their targets at the plane weights `wt` (S4,
   the check reads the prefix word);
 - no product is two-sided, mod 2 through `φ`, at the frames (`dFrame`, plane `p₀`) of two cell-blocks of the stage
-  whose words read it (`SlpG.ChargePure`, charging purity, RS-E-REF r6 VI.2.1, in place of row purity). Prefix chains,
-  merges and partners are free: a product of block `t'` that a later block's word reads reads none of that block's
-  coins. A product two-sided at the frames of two columns of a row, which row purity allows, is outside it.
+  whose words read it with odd coefficients (`SlpG.ChargePure`, charging purity, RS-E-REF r6 VI.2.1, in place of row
+  purity). Prefix chains, merges and partners are free: a product of block `t'` that a later block's word reads
+  reads none of that block's coins. A product two-sided at the frames of two columns of a row, which row purity
+  allows, is outside it.
 
-K1 is unobservable, as for `KScopeAffine`, which covers affine operands, mixed included, under row purity. -/
+On this scope `c = 1` is proved at the parity luck 0.854. It is a sibling of the ledger's K1, not a narrowing
+(RS-E-REF r8 VIII.3 item 6): its coin side may be non-affine, which no `GProd` is, and charging purity neither implies
+nor follows from row purity. It is unobservable, as `KScopeAffine` is, which is the proved scope for affine
+operands, mixed included, under row purity. -/
 def KScopeOneSided (Mc : Machine) (S : Service) (run : RunMap Mc S R St n L np B n' Ar) (wt : Fin np → Ar)
     (φ : Ar →+* ZMod 2) (p₀ : Fin np) : Prop :=
   ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
@@ -125,21 +134,21 @@ def ServiceSoundOverlap (Mc : Machine) (S : Service) (run : ORunMap Mc S R St n 
       ∀ x, S.verify (Mc.eval M (e.symm x, r)).1 (e.symm x) (Mc.eval M (e.symm x, r)).2 = true →
         (run Ω' M r).play.game.accepts x ∨ ∃ w, (run Ω' M r).Bind w x ∨ (run Ω' M r).ZK w x
 
-/-- `pouw-rs-k-scope-overlap-affine` (proposed). **Theorem K∥'s scope, operands affine per draw.** For every
-adversary that commits first, every value of its coins and every play `x`, each round's run is one straight-line
-program over `Ar` on every draw's bits (E3), and:
+/-- `pouw-rs-k-scope-overlap-affine` (proposed). **Theorem K∥'s proved affine scope, operands affine per draw.** For
+every adversary that commits first, every value of its coins and every play `x`, each round's run is one
+straight-line program over `Ar` on every draw's bits (E3), and:
 - every product slot is, at every bit point of the other draws', a product of two operands affine in draw `t`'s bits,
-  for every draw `t` (`AffMulAt`: K1's operands, narrowed to affine in each draw's own bits, as `KScopeAffine` narrows
-  them; an operand may depend on the other draws' bits in any way, nonlinear included, as the served operands' later
-  stages do on earlier draws);
+  for every draw `t` (`AffMulAt`: affine in each draw's own bits, as `KScopeAffine`'s operands are in the stage's; an
+  operand may depend on the other draws' bits in any way, nonlinear included, as the served operands' later stages do
+  on earlier draws);
 - stage `t`'s error table is its committed prefix words (`word`) minus their targets at the plane weights `wt`, read
   on draw `t`'s bits (S4);
-- at every bit point `W` of the draws, certified words of distinct rows, of any stages, share no product (K1,
-  row-pure across draws; a word is certified at `W` where its error vanishes on its own draw's bits with at most two
-  ones, the other draws' at `W`).
+- at every bit point `W` of the draws, certified words of distinct rows, of any stages, share no product (row-pure
+  across draws; a word is certified at `W` where its error vanishes on its own draw's bits with at most two ones, the
+  other draws' at `W`).
 
-K1 is unobservable, as for `KScopeAffine`. `KScopeOverlapOneSided` is the scope for one-sided operands of any form,
-at the parity luck 0.854. -/
+On this scope `c = 1` is proved at the luck ¾ per draw. It is unobservable, as `KScopeAffine` is.
+`KScopeOverlapOneSided` is the proved scope for one-sided operands of any form, at the parity luck 0.854. -/
 def KScopeOverlapAffine (Mc : Machine) (S : Service) (run : ORunMap Mc S R St n L np B n' Ar) (wt : Fin np → Ar) :
     Prop :=
   ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
@@ -156,18 +165,20 @@ def KScopeOverlapAffine (Mc : Machine) (S : Service) (run : ORunMap Mc S R St n 
           ((run Ω' M r).prog x w).coef ((run Ω' M r).word x w c) k ≠ 0 →
             ((run Ω' M r).prog x w).coef ((run Ω' M r).word x w c') k = 0
 
-/-- `pouw-rs-k-scope-overlap-one-sided` (proposed). **Theorem K∥'s scope, one-sided operands of any form per draw.**
-For every adversary that commits first, every value of its coins and every play `x`, each round's run is one
+/-- `pouw-rs-k-scope-overlap-one-sided` (proposed). **Theorem K∥'s proved one-sided scope, operands of any form per
+draw.** For every adversary that commits first, every value of its coins and every play `x`, each round's run is one
 straight-line program over `Ar` on every draw's bits (E3), and:
 - every product slot is, at every bit point of the other draws', one-sided of any form on draw `t`'s bits, for every
-  draw `t` (`OneSidedAt`: K1's operands per draw; each side may depend on the other draws' bits in any way);
+  draw `t` (`OneSidedAt`: `KScopeOneSided`'s products per draw; each side may depend on the other draws' bits in any
+  way);
 - stage `t`'s error table is its committed prefix words (`word`) minus their targets at the plane weights `wt`, read
   on draw `t`'s bits (S4);
 - at every bit point of the draws, no product is two-sided, mod 2 through `φ`, at the frames (plane `p₀`) of two
-  cell-blocks, of any stages, whose words read it (`SlpG.ChargePureAt`, charging purity across draws, in place of row
-  purity).
+  cell-blocks, of any stages, whose words read it with odd coefficients (`SlpG.ChargePureAt`, charging purity across
+  draws, in place of row purity).
 
-K1 is unobservable, as for `KScopeAffine`. -/
+On this scope `c = 1` is proved at the parity luck 0.854 per draw. Like `KScopeOneSided` it is a sibling of the
+ledger's K1, not a narrowing, and it is unobservable. -/
 def KScopeOverlapOneSided (Mc : Machine) (S : Service) (run : ORunMap Mc S R St n L np B n' Ar) (wt : Fin np → Ar)
     (φ : Ar →+* ZMod 2) (p₀ : Fin np) : Prop :=
   ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
