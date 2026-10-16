@@ -7,7 +7,7 @@ import Proofs.Flock.Soundness.Refine.Paths
 
 The code facts the recursion's analysis reads of a deployment that follow from `deployRec`'s definition alone, each
 stated as the analysis states it (`Refuses`, `InnerRounds`, `SessionNums`, `SessionRounds`, `TableErrNonneg`,
-`SessionAccepts`, `InnerViewRun`), at `deployRec H I.V …` and the outer record `deployZkRec rel`:
+`SessionAccepts`, `InnerViewRun`, `CallsNil`), at `deployRec H I.V …` and the outer record `deployZkRec rel`:
 
 * `refuses`: a run accepts only at a step where the compiled verifier's does (`stepWith_acc`), which is a session's
   (`next_acc`), so the statement parses (`readX`) and `parse` reads no circuit commitment.
@@ -19,6 +19,7 @@ stated as the analysis states it (`Refuses`, `InnerRounds`, `SessionNums`, `Sess
 * `innerViewRun`: the inner view is `I.V`'s run of the readers' messages at the oracle the record runs it against, and a
   run of replayed messages is the run of the messages it shows (`stepWith_replay`), so with no hypothesis on the
   witnesses.
+* `callsNil`: the record's calls are each session's witness's, so no witnesses record none.
 
 `nextO_acc_length` and `next_acc_length`: the outer verifier (at an oracle where its setup has its SHA-512 rounds,
 `nextO_acc_length_sha512`) and the compiled verifier accept only at their last rounds, as `FlockDeploy.next_acc_length`
@@ -207,6 +208,11 @@ theorem innerViewRun (H : Claims.Msg → Claims.Msg) (I : Claims.Recursion.Inner
       fun i => Claims.coinSeq r i.val).seen
   unfold innerView
   rw [run_replay_seen]
+
+/-- **`CallsNil`, at every oracle**: no witnesses record no calls. -/
+theorem callsNil (Hr H : Claims.Msg → Claims.Msg) (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool)
+    (st : Stage) (rd : Readers) : ∀ x, ∀ e ∈ (deployRec Hr IV ivScope st rd).calls x [], H e.1 = e.2 := by
+  simp [deployRec]
 
 /-! ## The outer verifier decides at its last round -/
 

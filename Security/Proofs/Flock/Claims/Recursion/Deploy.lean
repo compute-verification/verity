@@ -378,10 +378,11 @@ noncomputable def session (IV : Claims.Verifier Coin) (st : Stage) (x : Claims.M
   let seg := fixLast (s + 1 == nS x) k ((v.msgs.drop off).take k)
   ⟨seg, if v.out = .acc then .acc else segOut seg⟩
 
-/-- What the outer witnesses give: the inner session's messages, and the SHA-512 evaluations they record. -/
+/-- What the outer witnesses give: the inner session's messages, and the SHA-512 evaluations session `s`'s witness
+records. -/
 structure Readers where
   msgs : Claims.Msg → List Claims.Flock.Wit → List Claims.Msg
-  calls : Claims.Msg → List Claims.Flock.Wit → List (Claims.Msg × Claims.Msg)
+  calls : Claims.Msg → ℕ → Claims.Flock.Wit → List (Claims.Msg × Claims.Msg)
 
 /-- **The inner session's view**: `IV`'s run at `H` of the inner messages the outer witnesses give, at the run's first
 `k_I` coins. -/
@@ -409,7 +410,7 @@ noncomputable def deployRec (H : Claims.Msg → Claims.Msg) (IV : Claims.Verifie
   nS := nS
   session := session IV st
   innerView x r ws := innerView H IV rd x r ws
-  calls := rd.calls
+  calls x ws := (ws.mapIdx fun s w => rd.calls x s w).flatten
   nums := nums st
   zeroCommit := zeroCommit
   saltLen := Hm96.sha512.saltBytes
