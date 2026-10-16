@@ -3010,6 +3010,21 @@ theorem Slp.dIncr_products_ge (φ : R →+* ZMod 2) (pc : Fin n → Fin B → Fi
   have := (rank_projF2_dIncr φ pc vq w hw i l t).trans (P.rank_projF2_le φ c c' _ hT)
   omega
 
+/-- A cell's first committed word, correct at a bit point, certifies its first cell-block there. -/
+theorem Slp.incr_of_prefix_zero (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R)
+    (w : Fin np → R) {N : ℕ} (P : Slp (DBits n L np B n') R N) (c : Fin N) (i : Fin n) (l : Fin n') (h : 0 < B)
+    (z : DBits n L np B n' → R) (hc : P.val z c = dPrefix pc vq w i l 0 z) :
+    P.val z c - (none : Option (Fin N)).elim 0 (fun k => P.val z k) = dIncr pc vq w i l ⟨0, h⟩ z := by
+  rw [Option.elim_none, sub_zero, hc, dPrefix_zero]
+
+/-- Two consecutive committed words of a cell, correct at a bit point, certify the cell-block between them there. -/
+theorem Slp.incr_of_prefix_succ (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R)
+    (w : Fin np → R) {N : ℕ} (P : Slp (DBits n L np B n') R N) (c c' : Fin N) (i : Fin n) (l : Fin n') {t : ℕ}
+    (h : t + 1 < B) (z : DBits n L np B n' → R) (hc : P.val z c = dPrefix pc vq w i l (t + 1) z)
+    (hc' : P.val z c' = dPrefix pc vq w i l t z) :
+    P.val z c - (some c').elim 0 (fun k => P.val z k) = dIncr pc vq w i l ⟨t + 1, h⟩ z := by
+  rw [Option.elim_some, hc, hc', dPrefix_succ]
+
 end Design
 
 
@@ -3899,6 +3914,47 @@ theorem certifiedFraction120θ_rounds_40 (kd : K120 → Kind) (S : Service) {Ω 
     rw [hc, Real.exp_neg, Real.exp_nat_mul, Real.exp_log two_pos]
   rw [← h40]
   exact certifiedFraction120θ_rounds kd S h hp.le hF₀ hδb hδz _
+
+/-- **The certified fraction from Theorem K** (the re-encoded design, in place of the paper's cost line): under
+`RoundsHypK` in Model B with a plane of odd weight, every adversary in B_θ that commits first has its accepted runs
+charged below `0.8 ((R − D) κ L n n' B − Vmax)` with probability at most `e^{−(1−p) D} + R (δb + δz)`. That is
+`c = 1` of the window's `R` GEMMs of `n × LB × n'` at `κ` a product, less `D` rounds of luck and the noise reads. -/
+theorem certifiedFraction120θ_K (kd : K120 → Kind) (S : Service) {Ω : Type} [Fintype Ω] {R : ℕ}
+    {p Vmax δb δz κ : ℝ} {n L np B n' : ℕ} {wt : Fin np → ZMod (2 ^ 32)} {p₀ : Fin np}
+    (h : RoundsHypK (machine kd (.ofNat price120)) S Ω R p Vmax δb δz κ n L np B n' wt) (hwt : toF2 (wt p₀) = 1)
+    (hp : p ≤ 1) (hκ : 0 < κ) (hC : 0 < L * (n * n' * B)) (hδb : 0 ≤ δb) (hδz : 0 ≤ δz) (D : ℝ) :
+    ServiceFloor (machine (kdθ kd) priceθ) S (4 / 5 * ((R - D) * (κ * L * ((n * n' * B : ℕ) : ℝ)) - Vmax))
+      (Real.exp (-((1 - p) * D)) + R * (δb + δz)) := by
+  have hF₀ : 0 < κ * L * ((n * n' * B : ℕ) : ℝ) := by
+    rw [mul_assoc]
+    exact mul_pos hκ (by exact_mod_cast hC)
+  simpa only [mul_zero, sub_zero] using
+    certifiedFraction120θ_rounds kd S (roundsHyp_of_K h hwt hκ.le) hp hF₀ hδb hδz D
+
+/-- ... at `κ = 2⁻⁴⁰ + R (δb + δz)` (`D₀ = 40 ln 2 / (1 − p)`). -/
+theorem certifiedFraction120θ_K_40 (kd : K120 → Kind) (S : Service) {Ω : Type} [Fintype Ω] {R : ℕ}
+    {p Vmax δb δz κ : ℝ} {n L np B n' : ℕ} {wt : Fin np → ZMod (2 ^ 32)} {p₀ : Fin np}
+    (h : RoundsHypK (machine kd (.ofNat price120)) S Ω R p Vmax δb δz κ n L np B n' wt) (hwt : toF2 (wt p₀) = 1)
+    (hp : p < 1) (hκ : 0 < κ) (hC : 0 < L * (n * n' * B)) (hδb : 0 ≤ δb) (hδz : 0 ≤ δz) :
+    ServiceFloor (machine (kdθ kd) priceθ) S
+      (4 / 5 * ((R - 40 * Real.log 2 / (1 - p)) * (κ * L * ((n * n' * B : ℕ) : ℝ)) - Vmax))
+      (((2 : ℝ) ^ 40)⁻¹ + R * (δb + δz)) := by
+  have hF₀ : 0 < κ * L * ((n * n' * B : ℕ) : ℝ) := by
+    rw [mul_assoc]
+    exact mul_pos hκ (by exact_mod_cast hC)
+  simpa only [mul_zero, sub_zero] using
+    certifiedFraction120θ_rounds_40 kd S (roundsHyp_of_K h hwt hκ.le) hp hF₀ hδb hδz
+
+/-- **The re-encoded design's certified fraction** (`X = ⌊x/s⌋ + b`, U's planes at `w = (1, 2, 4, 8, 16, 32, 65)`),
+at `κ = 2⁻⁴⁰ + R (δb + δz)`. -/
+theorem certifiedFraction120θ_reEncoded_40 (kd : K120 → Kind) (S : Service) {Ω : Type} [Fintype Ω] {R : ℕ}
+    {p Vmax δb δz κ : ℝ} {n L B n' : ℕ}
+    (h : RoundsHypK (machine kd (.ofNat price120)) S Ω R p Vmax δb δz κ n L 7 B n' wRe) (hp : p < 1) (hκ : 0 < κ)
+    (hC : 0 < L * (n * n' * B)) (hδb : 0 ≤ δb) (hδz : 0 ≤ δz) :
+    ServiceFloor (machine (kdθ kd) priceθ) S
+      (4 / 5 * ((R - 40 * Real.log 2 / (1 - p)) * (κ * L * ((n * n' * B : ℕ) : ℝ)) - Vmax))
+      (((2 : ℝ) ^ 40)⁻¹ + R * (δb + δz)) :=
+  certifiedFraction120θ_K_40 kd S h toF2_wRe_zero hp hκ hC hδb hδz
 
 /-! ### Model A (RS-MODEL §3, over ℚ) and `B_θ ≤ A` -/
 
