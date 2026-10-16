@@ -4628,7 +4628,7 @@
   }
  },
  "shape": {
-  "premises": ["Definitions.Accounting.Actual", "Definitions.Accounting.Physical", "Proofs.Flock.Recursive.Premises"],
+  "premises": ["Definitions.Accounting.Actual", "Definitions.Accounting.Physical", "Models.Accounting.Assumptions.PouwWork", "Proofs.Flock.Recursive.Premises"],
   "properties": {
    "Flock.SecurityProofs.PublicAudit": {
     "conjuncts": [
@@ -5193,7 +5193,7 @@
    "Accounting.SecurityProofs.RemoteSessionConservationSketch": "frozen (no-function,hash): It composes the verbatim-sector tensor-sketch rank bound at every candidate pass with a causal session's pooled draws; the one shared store and every device read, link sector, rebuild and correct receipt are explicit, but the random-oracle game is not the rate audit's code.",
    "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservationSketchSum at the deployed 16-row, 4 KiB-tile and draw parameters, with the two draw terms bounded by 2^-40 and each pass's grinding candidates' queries priced once by the named per-pass hash budget (Accounting.Assumptions.SketchHashBudget): its query term (n P) qtot/2^96 stays explicit, non-vacuous at the measured caps where the product form's was 2^14.",
    "Flock.SecurityProofs.ClaimsStated": "frozen (no-function): It states no property of the verifier: it reads each claim of Security/Definitions/Claims.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed verifier.",
-   "Accounting.SecurityProofs.PouwLocalOff": "frozen (no-function,world-unlisted): It is stated over arbitrary strategies (maps from the verifier's coins to Accounting.Actual.Run) and an abstract verdict (Accounting.PouwWork.Verdict, its acceptance a field), and takes PoUW's A2, A2b, A3 and A5 at 0 (Accounting.Assumptions.PouwDetection, PouwLuck, PouwFloorOff, PouwHelpBound) as hypotheses that are not on the premises list, rather than a function's acceptance."
+   "Accounting.SecurityProofs.PouwLocalOff": "frozen (conjecture,no-function,world-unlisted): It is stated over arbitrary strategies (maps from the verifier's coins to Accounting.Actual.Run) and an abstract verdict (Accounting.PouwWork.Verdict, its acceptance a field) rather than a function's acceptance, and it rests on the named open conjecture A3 (Accounting.Assumptions.PouwFloorOff, Security/Models/Accounting/Assumptions/PouwFloor.lean: on paper at L = 32 given a merge price, conjectured at served eta, claimed only at removable markings), a hypothesis that is not on the premises list until shape.conjectures lists it with a falsification test; its other premises, A2, A2b and A5 at 0 (PouwDetection, PouwLuck, PouwHelpBound), are."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
