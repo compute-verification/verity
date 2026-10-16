@@ -21,7 +21,8 @@
 //                                   GEMM's persistent grid on SMs - k), WG_GRID=tiles (a CTA a tile, not persistent),
 //                                   WG_PRIO=gemm (the GEMM's stream at the highest priority and the commitments' at the
 //                                   lowest, so their CTAs go only where the GEMM's don't fit; default: the commitments'
-//                                   at the highest)
+//                                   at the highest), WG_GREEN=k (the commitments in a green context of k SMs, the arm's
+//                                   GEMMs in one of the rest, the base on the whole device)
 // Build: nvcc -O3 -std=c++17 --no-compress -gencode arch=compute_120a,code=sm_120a wgemm.cu cgpipe.cu -lcuda -lcublasLt
 //        -lnvidia-ml
 #define main egemm_main
@@ -190,21 +191,28 @@ static const WK* wfind(const std::string& n) {
   for (auto& w : WKS) if (n == w.name) return &w;
   return nullptr;
 }
-static std::function<void(EP&)> warm(const std::string& a) {
+// an arm's call: its producers (pre: W's edit, or the fused quantizer and edit; none for egemm's arms) and its GEMM
+struct Arm { std::function<void(EP&)> pre, run; };
+static Arm warm2(const std::string& a) {
   for (const char* pre : {"", "edited:", "editedf:", "s:", "sedited:", "seditedf:"}) {
     const std::string p = pre;
     if (a.rfind(p, 0) != 0) continue;
     const WK* w = wfind(a.substr(p.size()));
     if (!w) continue;
     Kern k = w->k;
-    if (p.empty()) return [k](EP& P) { egemm_run(P, k, P.Y, g_rw); };
-    if (p == "edited:") return [k](EP& P) { we(P, sigma(P.seed, P.inst++)); egemm_run(P, k, P.Y, g_rw); };
-    if (p == "editedf:") return [k](EP& P) { qf(P, sigma(P.seed, P.inst++)); egemm_run(P, k, P.Y, g_rw, P.mF); };
-    if (p == "s:") return [k](EP& P) { srun(P, k, g_mS); };
-    if (p == "sedited:") return [k](EP& P) { we(P, sigma(P.seed, P.inst++)); srun(P, k, g_mS); };
-    return [k](EP& P) { qf(P, sigma(P.seed, P.inst++)); srun(P, k, g_mSF); };
+    const bool sw = p[0] == 's', fused = p.find("editedf:") != std::string::npos;
+    std::function<void(EP&)> e;
+    if (fused) e = [](EP& P) { qf(P, sigma(P.seed, P.inst++)); };
+    else if (p.find("edited:") != std::string::npos) e = [](EP& P) { we(P, sigma(P.seed, P.inst++)); };
+    if (sw) return {e, [k, fused](EP& P) { srun(P, k, fused ? g_mSF : g_mS); }};
+    return {e, [k, fused](EP& P) { egemm_run(P, k, P.Y, g_rw, fused ? P.mF : nullptr); }};
   }
-  return earm(a);
+  return {nullptr, earm(a)};
+}
+static std::function<void(EP&)> warm(const std::string& a) {
+  const Arm r = warm2(a);
+  if (!r.pre) return r.run;
+  return [r](EP& P) { r.pre(P); r.run(P); };
 }
 __global__ void tcmp(const int* __restrict__ Yt, const int* __restrict__ Y, int m, int n, unsigned long long* bad) {
   const size_t i = blockIdx.x * (size_t)blockDim.x + threadIdx.x;
@@ -322,6 +330,52 @@ bool cgp_small();
 // ended, so they run beside the next call's GEMM (pipe); against BASE alone, ARM alone, the commitments alone, and ARM then
 // its commitments on one stream (serial). The commitments read X and the receipts while the next call rewrites them: a
 // timing, not a commitment of each call's own values.
+static void cu(CUresult r, const char* what) {
+  if (r == CUDA_SUCCESS) return;
+  const char* s = "?";
+  cuGetErrorString(r, &s);
+  fprintf(stderr, "%s: %s\n", what, s);
+  exit(3);
+}
+// a context's side of the pipe: its stream and the events its stream records (an event is recorded only by a stream of
+// its own context; a wait may cross contexts)
+struct Side {
+  CUcontext ctx = nullptr;
+  cudaStream_t st = nullptr;
+  int sms = 0;
+  cudaEvent_t e0, e1, ej;
+  std::vector<cudaEvent_t> ev;
+  void use() const { if (ctx) cu(cuCtxSetCurrent(ctx), "cuCtxSetCurrent"); }
+  void events(int calls) {
+    use();
+    CK(cudaEventCreate(&e0)); CK(cudaEventCreate(&e1)); CK(cudaEventCreateWithFlags(&ej, cudaEventDisableTiming));
+    ev.resize(calls);
+    for (auto& x : ev) CK(cudaEventCreateWithFlags(&x, cudaEventDisableTiming));
+  }
+};
+// the device's SMs split into a green context of k (rounded up as the split requires) for the commitments and one of the
+// rest for the GEMMs, each with a stream (the commitments' at priority prio)
+static void green_split(int k, Side& gemm, Side& commit, int prio) {
+  CUdevice dev;
+  cu(cuDeviceGet(&dev, 0), "cuDeviceGet");
+  CUdevResource all, grp, rest;
+  unsigned nb = 1;
+  cu(cuDeviceGetDevResource(dev, &all, CU_DEV_RESOURCE_TYPE_SM), "cuDeviceGetDevResource");
+  cu(cuDevSmResourceSplitByCount(&grp, &nb, &all, &rest, 0, (unsigned)k), "cuDevSmResourceSplitByCount");
+  Side* sd[2] = {&commit, &gemm};
+  CUdevResource* rs[2] = {&grp, &rest};
+  for (int i = 0; i < 2; i++) {
+    CUdevResourceDesc d;
+    CUgreenCtx g;
+    CUstream s;
+    cu(cuDevResourceGenerateDesc(&d, rs[i], 1), "cuDevResourceGenerateDesc");
+    cu(cuGreenCtxCreate(&g, d, dev, CU_GREEN_CTX_DEFAULT_STREAM), "cuGreenCtxCreate");
+    cu(cuCtxFromGreenCtx(&sd[i]->ctx, g), "cuCtxFromGreenCtx");
+    cu(cuGreenCtxStreamCreate(&s, g, CU_STREAM_NON_BLOCKING, i == 0 ? prio : 0), "cuGreenCtxStreamCreate");
+    sd[i]->st = reinterpret_cast<cudaStream_t>(s);
+    sd[i]->sms = (int)rs[i]->sm.smCount;
+  }
+}
 static int wpipe(int reps, const std::string& arm, const std::string& base, int m, int n, int k, const char* params, int S) {
   Nv nv;
   EP P;
@@ -329,68 +383,119 @@ static int wpipe(int reps, const std::string& arm, const std::string& base, int 
   int nsm;
   CK(cudaDeviceGetAttribute(&nsm, cudaDevAttrMultiProcessorCount, 0));
   const int tiles = (m / 128) * (n / 128), reserve = getenv("WG_RESERVE") ? atoi(getenv("WG_RESERVE")) : 0;
+  const int green = getenv("WG_GREEN") ? atoi(getenv("WG_GREEN")) : 0;
   const bool per_tile = getenv("WG_GRID") && !strcmp(getenv("WG_GRID"), "tiles");
   const bool gemm_first = getenv("WG_PRIO") && !strcmp(getenv("WG_PRIO"), "gemm");
   if (reserve < 0 || reserve >= nsm) { fprintf(stderr, "WG_RESERVE %d of %d SMs\n", reserve, nsm); exit(2); }
   P.grid = per_tile ? tiles : std::min(tiles, nsm - reserve);
   auto fa = warm(arm), fb = warm(base);
-  void* h = cgp_new(params, reinterpret_cast<const uint8_t*>(P.X), m, k, reinterpret_cast<const uint8_t*>(g_rw), rw_words(P, S) / 512);
   int lo, hi;
   CK(cudaDeviceGetStreamPriorityRange(&lo, &hi));
+  constexpr int calls = 8;
+  // pb: the base's side (the primary context, the whole device); pa the arm's GEMMs'; pc the commitments'
+  Side pb, pa, pc;
+  cu(cuCtxGetCurrent(&pb.ctx), "cuCtxGetCurrent");
   if (gemm_first) {
     CK(cudaStreamSynchronize(P.st));
     CK(cudaStreamDestroy(P.st));
     CK(cudaStreamCreateWithPriority(&P.st, cudaStreamDefault, hi));
   }
-  cudaStream_t sp;
-  CK(cudaStreamCreateWithPriority(&sp, cudaStreamNonBlocking, gemm_first ? lo : hi));
-  constexpr int calls = 8;
-  std::vector<cudaEvent_t> ev(calls);
-  for (auto& x : ev) CK(cudaEventCreateWithFlags(&x, cudaEventDisableTiming));
-  cudaEvent_t e0, e1, ej;
-  CK(cudaEventCreate(&e0)); CK(cudaEventCreate(&e1)); CK(cudaEventCreateWithFlags(&ej, cudaEventDisableTiming));
-  auto timed = [&](const std::function<void()>& f) {
-    CK(cudaEventRecord(e0, P.st));
+  pb.st = P.st;
+  pb.sms = nsm;
+  if (green > 0) {
+    green_split(green, pa, pc, hi);
+    if (!per_tile) P.grid = std::min(tiles, pa.sms);
+  } else {
+    pa = pb;
+    pc.ctx = pb.ctx;
+    pc.sms = nsm;
+    CK(cudaStreamCreateWithPriority(&pc.st, cudaStreamNonBlocking, gemm_first ? lo : hi));
+  }
+  pc.use();
+  void* h = cgp_new(params, reinterpret_cast<const uint8_t*>(P.X), m, k, reinterpret_cast<const uint8_t*>(g_rw), rw_words(P, S) / 512);
+  pb.events(calls);
+  pa.events(calls);
+  pc.events(calls);
+  auto timed = [&](const Side& sd, const std::function<void()>& f) {
+    sd.use();
+    CK(cudaEventRecord(sd.e0, sd.st));
     f();
-    CK(cudaEventRecord(e1, P.st));
-    CK(cudaEventSynchronize(e1));
+    sd.use();
+    CK(cudaEventRecord(sd.e1, sd.st));
+    CK(cudaEventSynchronize(sd.e1));
     float t;
-    CK(cudaEventElapsedTime(&t, e0, e1));
+    CK(cudaEventElapsedTime(&t, sd.e0, sd.e1));
     return (double)t / calls;
   };
-  auto base_only = [&] { for (int i = 0; i < calls; i++) fb(P); };
-  auto arm_only = [&] { for (int i = 0; i < calls; i++) fa(P); };
-  auto commits = [&] { for (int i = 0; i < calls; i++) { cgp_salts(h, P.st); cgp_data(h, P.st); } };
-  auto serial = [&] { for (int i = 0; i < calls; i++) { fa(P); cgp_salts(h, P.st); cgp_data(h, P.st); } };
-  auto piped = [&] {
-    CK(cudaEventRecord(ej, P.st));
-    CK(cudaStreamWaitEvent(sp, ej));
-    for (int i = 0; i < calls; i++) {
-      fa(P);
-      CK(cudaEventRecord(ev[i], P.st));
-      CK(cudaStreamWaitEvent(sp, ev[i]));
-      cgp_salts(h, sp);
-      cgp_data(h, sp);
+  auto on = [&](const Side& sd, const std::function<void(EP&)>& f) {
+    sd.use();
+    const cudaStream_t s0 = P.st;
+    P.st = sd.st;
+    f(P);
+    P.st = s0;
+  };
+  auto commit = [&](cudaStream_t st) { pc.use(); cgp_salts(h, st); cgp_data(h, st); };
+  // the arm's call i, then its commitments on pc after it (serial: pa then waits for them)
+  auto call = [&](int i, bool wait) {
+    on(pa, fa);
+    CK(cudaEventRecord(pa.ev[i], pa.st));
+    CK(cudaStreamWaitEvent(pc.st, pa.ev[i]));
+    commit(pc.st);
+    if (wait) {
+      CK(cudaEventRecord(pc.ev[i], pc.st));
+      pa.use();
+      CK(cudaStreamWaitEvent(pa.st, pc.ev[i]));
     }
-    CK(cudaEventRecord(ej, sp));
-    CK(cudaStreamWaitEvent(P.st, ej));
+  };
+  auto base_only = [&] { for (int i = 0; i < calls; i++) on(pb, fb); };
+  auto arm_only = [&] { for (int i = 0; i < calls; i++) on(pa, fa); };
+  auto commits = [&] { for (int i = 0; i < calls; i++) commit(pc.st); };
+  auto serial = [&] { for (int i = 0; i < calls; i++) call(i, true); };
+  // GEMM-first: call i - 1's commitments wait for call i's producers too, so they're released with call i's GEMM, whose
+  // CTAs then go first (a producer's small blocks would otherwise let the commitments' CTAs onto every SM)
+  const Arm A = warm2(arm);
+  auto release = [&](int i) {
+    CK(cudaEventRecord(pa.ev[i], pa.st));
+    CK(cudaStreamWaitEvent(pc.st, pa.ev[i]));
+    commit(pc.st);
+  };
+  auto piped = [&] {
+    if (gemm_first && !green) {
+      for (int i = 0; i < calls; i++) {
+        if (A.pre) on(pa, A.pre);
+        pa.use();
+        if (i > 0) release(i - 1);
+        on(pa, A.run);
+      }
+      pa.use();
+      release(calls - 1);
+    } else {
+      for (int i = 0; i < calls; i++) call(i, false);
+    }
+    pc.use();
+    CK(cudaEventRecord(pc.ej, pc.st));
+    pa.use();
+    CK(cudaStreamWaitEvent(pa.st, pc.ej));
   };
   std::vector<double> tb, ta, tc, ts, tp, mz;
   for (int r = -2; r < reps; r++) {
-    const double b = timed(base_only), a = timed(arm_only), c = timed(commits), s = timed(serial), p = timed(piped);
+    const double b = timed(pb, base_only), a = timed(pa, arm_only), c = timed(pc, commits), s = timed(pa, serial),
+                 p = timed(pa, piped);
     if (r < 0) continue;
     tb.push_back(b); ta.push_back(a); tc.push_back(c); ts.push_back(s); tp.push_back(p);
     mz.push_back(nv.sm());
   }
+  pb.use();
+  CK(cudaDeviceSynchronize());
   CK(cudaGetLastError());
   const double b = median(tb), a = median(ta), c = median(tc), s = median(ts), p = median(tp);
   printf("{\"pipe\": \"%s\", \"base\": \"%s\", \"S\": %d, \"m\": %d, \"n\": %d, \"k\": %d, \"calls\": %d, \"reps\": %d, "
-         "\"reserve\": %d, \"grid\": %d, \"sms\": %d, \"prio\": \"%s\", \"small\": %s, "
-         "\"receipt_mib\": %.1f, \"base_ms\": %.6f, \"arm_ms\": %.6f, \"commit_ms\": %.6f, \"serial_ms\": %.6f, \"pipe_ms\": %.6f, "
-         "\"arm_ratio\": %.4f, \"serial_ratio\": %.4f, \"pipe_ratio\": %.4f, \"mhz\": %.0f, \"mhz_min\": %.0f}\n",
-         arm.c_str(), base.c_str(), S, m, n, k, calls, reps, per_tile ? -1 : reserve, P.grid, nsm, gemm_first ? "gemm" : "commit",
-         cgp_small() ? "true" : "false", rw_words(P, S) * 4.0 / (1 << 20), b, a, c, s, p, a / b, s / b, p / b, median(mz),
-         *std::min_element(mz.begin(), mz.end()));
+         "\"reserve\": %d, \"green\": %d, \"grid\": %d, \"sms\": %d, \"gemm_sms\": %d, \"commit_sms\": %d, \"prio\": \"%s\", "
+         "\"small\": %s, \"receipt_mib\": %.1f, \"base_ms\": %.6f, \"arm_ms\": %.6f, \"commit_ms\": %.6f, \"serial_ms\": %.6f, "
+         "\"pipe_ms\": %.6f, \"arm_ratio\": %.4f, \"serial_ratio\": %.4f, \"pipe_ratio\": %.4f, \"mhz\": %.0f, \"mhz_min\": %.0f}\n",
+         arm.c_str(), base.c_str(), S, m, n, k, calls, reps, per_tile ? -1 : reserve, green, P.grid, nsm, pa.sms, pc.sms,
+         gemm_first ? "gemm" : "commit", cgp_small() ? "true" : "false", rw_words(P, S) * 4.0 / (1 << 20), b, a, c, s, p, a / b,
+         s / b, p / b, median(mz), *std::min_element(mz.begin(), mz.end()));
   fflush(stdout);
   return 0;
 }

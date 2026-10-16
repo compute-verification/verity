@@ -12,8 +12,10 @@
 #     -- bash benchmarks/e2e_slice/wgemm.sh
 # IL (the pairs; none: skip), IL_REPS (41), PIPE (none: skip), PIPE_REPS (15), PIPE_CFGS: rK (the GEMM's persistent grid on
 # SMs - K, the commitments' stream at the highest priority), rKg (the same with the GEMM's stream highest and the
-# commitments' lowest, so they get only the K SMs the GEMM leaves), tiles[g] (a CTA a tile, not persistent), old (r0 on
-# the committer's default path, not its small one).
+# commitments' lowest, each call's commitments released with the next call's GEMM, so they get only the K SMs the GEMM
+# leaves while it runs), tiles[g] (a CTA a tile, not persistent), greenK (the
+# commitments in a green context of K SMs, the GEMMs in one of the rest), old (r0 on the committer's default path, not its
+# small one).
 set -uo pipefail
 export O=${OUT:?} D=benchmarks/e2e_slice
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -53,13 +55,14 @@ export IL=${IL:-"edited:w_l3qm_s8:plain sedited:w_l3qm_s8:plain edited:w_l3qm_s1
 # PIPE: ARM:BASE:S, the call with its commitments (wgemm pipe), COMMIT-GPU's params for 16,384-bit rows
 export PIPE=${PIPE:-"edited:w_l3qm_s16:plain:16 sedited:w_l3qm_s16:plain:16 editedf:w_l3qm_s16:plainq:16"}
 [ "$PIPE" = none ] && PIPE=""
-export PIPE_CFGS=${PIPE_CFGS:-"old r0 r1 r17 r30 r41 r60 r1g r17g r30g r41g r60g tiles tilesg"}
+export PIPE_CFGS=${PIPE_CFGS:-"old r0 r1 r17 r30 r41 r60 r1g r17g r30g r41g r60g tiles tilesg green16 green24 green30 green40
+  green48 green60"}
 # a PIPE_CFGS entry as wgemm pipe's environment
 cfg_env() {
   local c=$1 e="CG_SMALL=1"
   [ "$c" = old ] && { echo "CG_SMALL=0"; return; }
   [[ $c == *g ]] && { e="$e WG_PRIO=gemm"; c=${c%g}; }
-  case $c in tiles) e="$e WG_GRID=tiles" ;; r*) e="$e WG_RESERVE=${c#r}" ;; esac
+  case $c in tiles) e="$e WG_GRID=tiles" ;; green*) e="$e WG_GREEN=${c#green}" ;; r*) e="$e WG_RESERVE=${c#r}" ;; esac
   echo "$e"
 }
 export -f cfg_env
@@ -96,7 +99,7 @@ if os.path.exists(pipe):
           " | arm / base | serial / base | pipe / base | MHz |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for l in open(pipe):
         r = json.loads(l)
-        res = "tiles" if r["reserve"] < 0 else r["reserve"]
+        res = "tiles" if r["reserve"] < 0 else f"green {r['commit_sms']}" if r.get("green") else r["reserve"]
         print(f"| {r['pipe']} | {r['S']} | {res} | {r['grid']} | {r['prio']} | {'small' if r['small'] else 'default'} |"
               f" {r['base_ms']:.4f} | {r['arm_ms']:.4f} | {r['commit_ms']:.4f} | {r['serial_ms']:.4f} | {r['pipe_ms']:.4f} |"
               f" {r['arm_ratio']:.3f} | {r['serial_ratio']:.3f} | {r['pipe_ratio']:.3f} | {r['mhz']:.0f} |")
