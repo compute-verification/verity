@@ -41,7 +41,7 @@ def main(o: Path) -> None:
         if pl and g("e_plain") and g("wedit"):
             print("\n## the edited GEMM by part (hot items, ms)\n")
             print(f"- mainloop + 2-atom tail against cuBLASLt (e_plain - plain): {g('e_plain') - pl:+.4f}")
-            for v in ("e_l0", "e_l0t", "e_l1", "e_l1t", "e_l2t", "e_l4t", "t_duo32"):
+            for v in [n for n in a if n.startswith("e_l")] + ["t_duo32"]:
                 if g(v):
                     print(f"- receipts in {v} ({v} - e_plain): {g(v) - g('e_plain'):+.4f}; wedit + {v} = {g('wedit') + g(v):.4f}"
                           f" = {(g('wedit') + g(v)) / pl:.3f}x plain")
@@ -49,8 +49,6 @@ def main(o: Path) -> None:
             if g("qdither") and g("qplain"):
                 print(f"- the dither and S in the quantizer (qdither - qplain): {g('qdither') - g('qplain'):+.4f}"
                       f" (qplain {g('qplain'):.4f}, qdither {g('qdither'):.4f})")
-            if g("old"):
-                print(f"- the slice's route before (old = td_bfus): {g('old'):.4f} = {g('old') / pl:.3f}x plain")
     il = jl(o / "il.jsonl")
     if il:
         print("\n## per call, interleaved (41 reps, medians)\n\n| arm | base | ms | base ms | ratio | MHz (min-max) |\n|---|---|---|---|---|---|")

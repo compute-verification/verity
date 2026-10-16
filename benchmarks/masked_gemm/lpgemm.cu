@@ -21,7 +21,9 @@
 //   lpgemm gate DIR M N K BATCH SEED GRID   every arm at one small shape, inputs and outputs to DIR for lpref.py
 //   lpgemm bench REPS SHAPE...              interleaved timing, one JSON line a shape (SHAPE = name:m:n:k:batch); LP_ARMS
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a lpgemm.cu -lcuda -lcublasLt -lnvidia-ml
-// -DLP_UW=64: U in {±1..±64} (u_byte's comment), A then in [-63, 63]; -DLP_LIB: no main (benchmarks/e2e_slice/slice.cu)
+// -DLP_UW=64: U in {±1..±64} (u_byte's comment), A then in [-63, 63]; -DLP_LIB: no main (benchmarks/e2e_slice/slice.cu);
+// -DLP_NO_ROUTES: no routes either, so bsp's, bsp1's and speel's divisions (which the SASS gate refuses) aren't built
+// (benchmarks/edited_gemm/egemm.cu)
 #define MG_LIB
 #include "mgemm.cu"
 #include "sha_pass.cuh"
@@ -320,6 +322,7 @@ static int ext_parts(int k) {
   return (sh + 126) / 127;
 }
 
+#ifndef LP_NO_ROUTES
 struct LProb {
   int m, n, k, batch, grid, Kp, mx;
   uint32_t pb, KB;
@@ -606,6 +609,7 @@ static int lbench(int reps, const std::vector<std::string>& shapes) {
   }
   return 0;
 }
+#endif
 
 #ifndef LP_LIB
 int main(int argc, char** argv) {

@@ -26,8 +26,9 @@
 //                                   receipt arm's receipts against t_duo32's, a no-write control; tiles to DIR for egemm_ref.py
 //   egemm bench REPS M N K          hot items (about 20 ms each) interleaved across EG_ARMS, one JSON line
 //   egemm il REPS ARM BASE M N K    per call, ARM and BASE alternating (the slice's timing), one JSON line
-// Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a egemm.cu -lcuda -lcublasLt -lnvidia-ml
+// Build: nvcc -O3 -std=c++17 --no-compress -gencode arch=compute_120a,code=sm_120a egemm.cu -lcuda -lcublasLt -lnvidia-ml
 #define LP_LIB
+#define LP_NO_ROUTES
 #define LP_UW 64
 #include "../masked_gemm/lpgemm.cu"
 
@@ -36,7 +37,11 @@
 constexpr uint32_t DITHER_TAG = 7;
 using MLW = ML<128, 128, 32, 3>;
 
-template <int LAG, bool TIE> struct EL : MLW {
+// d ^= z & zero in one LOP3 (LUT 0x78 = a ^ (b & c)); ptxas otherwise splits it into an AND and an XOR
+DEV void tie(int& d, uint32_t z, uint32_t zero) { asm("lop3.b32 %0, %0, %1, %2, 0x78;" : "+r"(d) : "r"(z), "r"(zero)); }
+
+// TIE 0: none, 1: every MMA, 2: every second MMA
+template <int LAG, int TIE> struct EL : MLW {
   static_assert(LAG >= 0 && LAG < MI * NI, "an absorb runs before its accumulator's next MMA");
   using MLW::MLW;
   template <int J> DEV static void ab(St (&ch)[8], const int (&acc)[MI][NI][4]) { absorb<DUO, J / NI, J % NI>(ch, acc[J / NI][J % NI]); }
@@ -54,9 +59,9 @@ template <int LAG, bool TIE> struct EL : MLW {
       if constexpr (FIRST) {
         imma0(acc[mi][ni], fa[mi], fb[ni]);
       } else {
-        if constexpr (R && TIE) {
+        if constexpr (R && (TIE == 1 || (TIE == 2 && IDX % 2 == 0))) {
           constexpr int TP = (IDX - 1 - LAG + 2 * MI * NI) % (MI * NI);   // the tile the previous absorb took
-          acc[mi][ni][0] ^= (int)(ch[4 * (TP % 2) + 3].z & zero);
+          tie(acc[mi][ni][0], ch[4 * (TP % 2) + 3].z, zero);
         }
         imma(acc[mi][ni], fa[mi], fb[ni]);
       }
@@ -124,7 +129,7 @@ template <int LAG, bool TIE> struct EL : MLW {
   }
 };
 
-template <bool R, int LAG, bool TIE> DEV void e_body(const Args& a) {
+template <bool R, int LAG, int TIE> DEV void e_body(const Args& a) {
   using L = EL<LAG, TIE>;
   constexpr int MI = L::MI, NI = L::NI;
   extern __shared__ __align__(1024) uint8_t smem[];
@@ -168,13 +173,16 @@ template <bool R, int LAG, bool TIE> DEV void e_body(const Args& a) {
 }
 #define EGEMM(NAME, R, LAG, TIE) \
   __global__ void __launch_bounds__(MLW::NT, 1) NAME(const __grid_constant__ Args a) { e_body<R, LAG, TIE>(a); }
-EGEMM(e_plain, false, 0, false)
-EGEMM(e_l0, true, 0, false)
-EGEMM(e_l0t, true, 0, true)
-EGEMM(e_l1, true, 1, false)
-EGEMM(e_l1t, true, 1, true)
-EGEMM(e_l2t, true, 2, true)
-EGEMM(e_l4t, true, 4, true)
+EGEMM(e_plain, false, 0, 0)
+EGEMM(e_l0, true, 0, 0)
+EGEMM(e_l0t, true, 0, 1)
+EGEMM(e_l1, true, 1, 0)
+EGEMM(e_l1t, true, 1, 1)
+EGEMM(e_l2t, true, 2, 1)
+EGEMM(e_l4t, true, 4, 1)
+EGEMM(e_l1h, true, 1, 2)
+EGEMM(e_l2h, true, 2, 2)
+EGEMM(e_l3h, true, 3, 2)
 
 // ---------------------------------------------------------------- the operands
 // x (rows x k bf16) to X (rows x k int8): a warp a group of 4 rows, its lanes 8 columns each (512 contiguous bytes of x a
@@ -334,19 +342,18 @@ struct EP {
   float inv_s = 1.f;
   cudaStream_t st;
   unsigned long long* bad;
-  LProb old;
-  bool has_old = false;
 };
 
-static const std::pair<const char*, Kern> EK[] = {{"e_plain", e_plain}, {"e_l0", e_l0}, {"e_l0t", e_l0t}, {"e_l1", e_l1},
-                                                  {"e_l1t", e_l1t},     {"e_l2t", e_l2t}, {"e_l4t", e_l4t}, {"t_duo32", t_duo32}};
+static const std::pair<const char*, Kern> EK[] = {{"e_plain", e_plain}, {"e_l0", e_l0},   {"e_l0t", e_l0t},    {"e_l1", e_l1},
+                                                  {"e_l1t", e_l1t},     {"e_l2t", e_l2t}, {"e_l4t", e_l4t},    {"e_l1h", e_l1h},
+                                                  {"e_l2h", e_l2h},     {"e_l3h", e_l3h}, {"t_duo32", t_duo32}};
 static Kern ekern(const std::string& n) {
   for (auto& [name, k] : EK) if (n == name) return k;
   fprintf(stderr, "no kernel %s\n", n.c_str());
   exit(2);
 }
 
-static void esetup(EP& P, int m, int n, int k, uint32_t seed, bool gate, bool old) {
+static void esetup(EP& P, int m, int n, int k, uint32_t seed, bool gate) {
   P.m = m; P.n = n; P.k = k; P.seed = seed;
   if (m % 128 || n % 128 || k % 256 || k > 4096) { fprintf(stderr, "shape %d %d %d: 128-tiled, k %% 256 == 0, k <= 4096\n", m, n, k); exit(2); }
   int nsm;
@@ -375,21 +382,13 @@ static void esetup(EP& P, int m, int n, int k, uint32_t seed, bool gate, bool ol
   P.plainq = ltg(I8, m, n, k, k, k, n, P.Xq, P.W, P.Yr, 0, P.st);
   P.mE = upload_maps(Maps{tmap(P.X, k, m, 128), tmap(P.Wp, k, n, 128), tmap(P.PA, 128, m, 128), tmap(P.PB, 128, n, 128)});
   for (auto& [name, kern] : EK) CK(cudaFuncSetAttribute(kern, cudaFuncAttributeMaxDynamicSharedMemorySize, CSMEM));
-  if (old) {   // the old route on this stream, so one stream's events time both
-    lsetup(P.old, m, n, k, 1, 0x5EED0000u + m + n + k + 1, 0, false);
-    CK(cudaStreamSynchronize(P.old.st));
-    CK(cudaStreamDestroy(P.old.st));
-    P.old.st = P.st;
-    P.has_old = true;
-  }
 }
 static void efree(EP& P) {
   CK(cudaDeviceSynchronize());
   for (void* p : {(void*)P.x, (void*)P.X, (void*)P.Xq, (void*)P.W, (void*)P.Wp, (void*)P.PA, (void*)P.PB, (void*)P.Y, (void*)P.Yr,
                   (void*)P.R, (void*)P.R2, (void*)P.bad, (void*)P.mE})
     CK(cudaFree(p));
-  if (P.has_old) lfree(P.old);   // destroys the shared stream
-  else CK(cudaStreamDestroy(P.st));
+  CK(cudaStreamDestroy(P.st));
 }
 static void egemm_run(EP& P, Kern kern, int* Y, uint32_t* R) {
   Args a{P.mE, Y, R, P.m, P.n, P.k, 8, P.seed, 0, 1, 0, 0, {0, 0, 0, 0}, nullptr, 0};
@@ -403,19 +402,13 @@ static void we(EP& P, const Sig& s) {
 }
 
 // an arm: plain (cuBLASLt on X, W), plainq (the plain quantizer, then cuBLASLt on its X), qplain, qdither, wedit, a
-// GEMM kernel by name (EK), edited:KERN (wedit, then KERN), editedq:KERN (qdither, wedit, KERN: one key for both), old
-// (the slice's td_bfus route, lpgemm.cu, on its own operands)
+// GEMM kernel by name (EK), edited:KERN (wedit, then KERN), editedq:KERN (qdither, wedit, KERN: one key for both)
 static std::function<void(EP&)> earm(const std::string& a) {
   if (a == "plain") return [](EP& P) { ltg_run(P.plain, P.st); };
   if (a == "plainq") return [](EP& P) { qp(P, sigma(P.seed, P.inst++)); ltg_run(P.plainq, P.st); };
   if (a == "qplain") return [](EP& P) { qp(P, sigma(P.seed, P.inst++)); };
   if (a == "qdither") return [](EP& P) { qd(P, sigma(P.seed, P.inst++)); };
   if (a == "wedit") return [](EP& P) { we(P, sigma(P.seed, P.inst++)); };
-  if (a == "old") {
-    LArm la{};
-    for (const LArm& x : lall()) if (x.name == "td_bfus") la = x;
-    return [la](EP& P) { lrun(P.old, la); };
-  }
   if (a.rfind("edited:", 0) == 0) {
     Kern k = ekern(a.substr(7));
     return [k](EP& P) { we(P, sigma(P.seed, P.inst++)); egemm_run(P, k, P.Y, P.R); };
@@ -442,7 +435,7 @@ static unsigned long long ecmp(EP& P, const void* a, const void* b, size_t words
 
 static int egate(const std::string& dir, int m, int n, int k, uint32_t seed) {
   EP P;
-  esetup(P, m, n, k, seed, true, false);
+  esetup(P, m, n, k, seed, true);
   const size_t xb = (size_t)m * k, wb = (size_t)n * k;
   auto poison = [&] {
     for (auto [p, b] : {std::pair<void*, size_t>{P.X, xb}, {P.Xq, xb}, {P.Wp, wb}, {P.PA, (size_t)m * 128}, {P.PB, (size_t)n * 128},
@@ -527,16 +520,12 @@ static std::vector<std::string> split(const char* s, const char* dflt) {
   }
   return v;
 }
-static bool wants_old(const std::vector<std::string>& arms) {
-  for (auto& a : arms) if (a == "old") return true;
-  return false;
-}
 
 static int ebench(int reps, int m, int n, int k) {
   Nv nv;
   const std::vector<std::string> names = split(getenv("EG_ARMS"), "plain,plainq,qplain,qdither,wedit,e_plain,t_duo32,e_l0,e_l1t,e_l2t");
   EP P;
-  esetup(P, m, n, k, 0x5EED0000u + m + n + k, false, wants_old(names));
+  esetup(P, m, n, k, 0x5EED0000u + m + n + k, false);
   std::vector<std::function<void(EP&)>> arms;
   for (auto& a : names) arms.push_back(earm(a));
   const int NA = (int)arms.size();
@@ -586,7 +575,7 @@ static int ebench(int reps, int m, int n, int k) {
 static int eil(int reps, const std::string& arm, const std::string& base, int m, int n, int k) {
   Nv nv;
   EP P;
-  esetup(P, m, n, k, 0x5EED0000u + m + n + k, false, arm == "old" || base == "old");
+  esetup(P, m, n, k, 0x5EED0000u + m + n + k, false);
   auto fa = earm(arm), fb = earm(base);
   cudaEvent_t e[4];
   for (auto& x : e) CK(cudaEventCreate(&x));
