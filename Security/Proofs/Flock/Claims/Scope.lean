@@ -19,6 +19,7 @@ check (`Matches`). The relation's fields: block R1CS over GF(2) as one AND/XOR b
 relation (`Tables`: `relation`), the verifier's tables as that system, whose `RelS` is every table's model statement
 (`Layout.model` at `regionsOf`) satisfied by its share of the hidden values (`relS_relation`); at every statement the
 verifier parses, every table fits the first's blocks and has the verifier's layout (`Fit`: `tables_fit`,
-`relS_layout`). At the deployed parser and scope check (`FlockDeploy.parse`, `FlockDeploy.scopeCheck`): `ScopeMatches`
-exactly when no parsed, checked statement has `m < 22`, and under `--zk` always (`Deployed`). The tables' model
-witnesses as a readable witness that satisfies `RelS` (`Witness`: `relS_witOf`). -/
+`relS_layout`), and at the deployed parser (`FlockDeploy.parse`) a parsed statement's `RelS` is its tables' models
+satisfied (`Deployed`: `relS_deployed`). The tables' model witnesses as a readable witness that satisfies `RelS`
+(`Witness`: `relS_witOf`). `ScopeMatches` at the deployed records is `FlockDeploy.scopeMatches_zk` and
+`FlockDeploy.scopeMatches_plain_iff` (`DeployCode`), `Matches`' lemmas at the verifier's reading. -/
