@@ -113,6 +113,7 @@
         "Security/Models/Nci/",
         "Security/Proofs/Nci/",
         "benchmarks/pouw/",
+        "benchmarks/pouw/receipts/",
         "benchmarks/numerical/",
         "benchmarks/steiner_referee/",
         "benchmarks/fp4_sparse_tp/",
