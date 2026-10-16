@@ -59,7 +59,7 @@ def host(lib):
 
 
 @pytest.mark.parametrize("kind", R.KINDS)
-@pytest.mark.parametrize("nc", [R.XOR, R.DUO, R.RAM])
+@pytest.mark.parametrize("nc", [R.XOR, R.DUO, R.RAM, R.XIN])
 @pytest.mark.parametrize("steps", [1, 4, 8, 13])
 @pytest.mark.parametrize("tile", [0, 1, 1000003])
 def test_twin_equals_host_reference(host, nc, steps, tile, kind):
@@ -68,7 +68,7 @@ def test_twin_equals_host_reference(host, nc, steps, tile, kind):
 
 @pytest.mark.parametrize("kind", R.KINDS)
 @pytest.mark.parametrize("w", [2, 4])
-@pytest.mark.parametrize("nc", [R.DUO, R.RAM])
+@pytest.mark.parametrize("nc", [R.DUO, R.RAM, R.XIN])
 def test_narrow_phase_tile_equals_host_reference(lib, host, nc, w, kind):
     """dfill_p's tile at PF_PW = 2 or 4 warps (128 w columns) under a phase id; the width is in what a receipt binds, and
     dfill_ref takes PF_PW (8 unless built otherwise) for phase ids and the pump's 8 for every other id."""
@@ -80,10 +80,11 @@ def test_narrow_phase_tile_equals_host_reference(lib, host, nc, w, kind):
 
 
 @pytest.mark.parametrize("kind", R.KINDS)
-def test_twin_equals_host_reference_at_measured_depth(host, kind):
+@pytest.mark.parametrize("nc", [R.RAM, R.XIN])
+def test_twin_equals_host_reference_at_measured_depth(host, kind, nc):
     """S = 32, dgate's short depth, at a second pair of coins."""
     c0, c1 = 0x7F88ED5DFF52F729, 0xE9FECEAE8FAABB27
-    assert R.receipt(c0, c1, 77, R.RAM, 32, kind) == host(c0, c1, 77, R.RAM, 32, kind)
+    assert R.receipt(c0, c1, 77, nc, 32, kind) == host(c0, c1, 77, nc, 32, kind)
 
 
 def test_operands_are_balanced_noise(lib):
