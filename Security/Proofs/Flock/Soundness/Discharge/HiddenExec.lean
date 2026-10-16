@@ -9,6 +9,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Sites
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Ret
 import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteH
 import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Inst
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Headline
@@ -35,5 +36,6 @@ Since #757 main's prover writes the hidden-output statement (`verity/flock-circu
   site of a drawn unit (`BcSiteH`, every row's registered `b ‖ c` through `Hidden.bc_drawnW`).
 * `KeyH`: `lay` and `rs` at `keyProg`'s places (`keyLayoutH`, `keyRowsH`, `keyRowsH_computes`): every row a commit
   string, a unit's computed committed gates bits of its output rows.
+* `Inst`: the same at `instProg`'s places (`instLayoutH`, `instRowsH`, `instRowsH_computes`), from `InstKeysRow`.
 * `HeadlineExec`: `flock_headline_exec_hidden`, #828's `flock_headline_exec` for hidden-output sessions, `hdec` open.
 -/
