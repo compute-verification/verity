@@ -417,13 +417,35 @@ def show_margins(mg: dict) -> None:
           f"{', '.join(mg['no_margin']) or 'none'}")
 
 
+def fit_line(f: dict) -> str:
+    """`scoring.defer_fit`'s s and u as formulas."""
+    return "; ".join(f"{q} = {' / '.join(f'TP {t} {v:.3f}' for t, v in f[q]['intercept'].items())} x (B/32)^"
+                     f"{f[q]['batch']:.3f} x (L/2K)^{f[q]['context']:.3f} (rms {f[q]['rms']:.1%})" for q in ("s", "u"))
+
+
 def show_served_model(sm: dict) -> None:
     c = sm["constants"]
     print("  MODELLED served component (the harness serves plain int8): "
-          + ", ".join(f"{k} {fmt(v)}" for k, v in c.items()))
+          + ", ".join(f"{k} {fmt(v)}" for k, v in c.items() if k != "DEFER_FIT"))
+    if "DEFER_FIT" in c:
+        print(f"    deferred pass, TP: {fit_line(c['DEFER_FIT'])}")
     for k, src in sm["sources"].items():
         print(f"    {k}: {src}")
     print(f"    model: {sm['model']}")
+
+
+def show_defer_fit(res: dict) -> None:
+    print(f"the deferred pass at T = {res['T']}, {res['n']} TP points: {fit_line(res)}")
+    print(f"  the added time's largest error {res['slowdown_err_pts_max']:.2f} points of step slowdown; residual = fit ÷ "
+          "measured − 1 (positive: the model overstates)")
+    print("\n| TP | B | L | s | s fit | resid | u | u fit | resid | added ms | error ms | slowdown pts | error pts |\n"
+          "|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+    for p in res["points"]:
+        print(f"| {p['tp']} | {p['B']} | {p['L']} | {p['s']:.3f} | {p['s_fit']:.3f} | {p['s_resid']:+.1%} | "
+              f"{p['u']:.3f} | {p['u_fit']:.3f} | {p['u_resid']:+.1%} | {p['added_ms']:.2f} | {p['added_err_ms']:+.2f} | "
+              f"{p['slowdown_pts']:.1f} | {p['slowdown_err_pts']:+.2f} |")
+    print("\none GPU's shown share (STAGE-COST, B 32): " + ", ".join(f"T {t} {v:.3f}" for t, v in res["one_gpu"].items()))
+    print(f"runs: {res['runs']}")
 
 
 def show_v5(res: dict) -> None:
@@ -715,6 +737,16 @@ def main(argv=None) -> int:
         listings = {"tpcomm": nvdisasm(a.bin)} if a.bin else {"tpcomm": a.nvd.read_text()} if a.nvd else None
         res = tp_report(a.outs, listings, a.noise, a.fold, a.facts_from)
         print(json.dumps(res, indent=1, default=str)) if a.json else show_tp(res)
+        return 0
+    if argv and argv[0] == "defer-fit":
+        ap = argparse.ArgumentParser(prog="score.py defer-fit", description="the deferred pass's calibration "
+                                     "(scoring.defer_fit): s and u fitted to HC-COMM's TP points, each point's residual, "
+                                     "and one GPU's shown share by T")
+        ap.add_argument("--T", type=int, default=S.DEFER_T)
+        ap.add_argument("--json", action="store_true")
+        a = ap.parse_args(argv[1:])
+        res = {**S.defer_fit(a.T), "one_gpu": {t: S.defer_shown_1gpu(t) for t in S.DEFER_1GPU}, "runs": S.DEFER_TP_RUNS}
+        print(json.dumps(res, indent=1)) if a.json else show_defer_fit(res)
         return 0
     if argv and argv[0] == "check":
         ap = argparse.ArgumentParser(prog="score.py check", description="an arm against the contract and its record's "
