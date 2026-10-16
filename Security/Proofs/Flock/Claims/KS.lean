@@ -5,6 +5,7 @@ import Proofs.Flock.Claims.KS.Game
 import Proofs.Flock.Claims.KS.Deploy
 import Proofs.Flock.Claims.KS.Range
 import Proofs.Flock.Claims.KS.Cover
+import Proofs.Flock.Claims.KS.Radius
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -15,4 +16,8 @@ deployed plain and masked instances, from one wait's bound (`Deploy`, `FlockDepl
 `FlockDeploy.KS.zk_of_oneWait`), with `k ≥ 8` wherever the verifier accepts at SHA-512 (`Range`,
 `FlockDeploy.KS.plain_of_oneWait_sha512`, `FlockDeploy.KS.zk_of_oneWait_sha512`); and extraction from a filled word
 close to a codeword, with the coverage of `nMin` positions it needs and that a prover's accepted runs need not give
-(`Cover`, `Flock.extracts_of_fill`, `Flock.acc_le_of_KS`, `FlockDeploy.KS.plain_acc_le_of_KS`). -/
+(`Cover`, `Flock.extracts_of_fill`, `Flock.acc_le_of_KS`, `FlockDeploy.KS.plain_acc_le_of_KS`).
+
+The radius form (`Radius`): the extractor decodes the filled word, and the decoder lists every trace within `θ·N` of
+it, per whole column (`Flock.ListCompleteθ`, `Flock.ExtractsFill`, `Flock.OneWaitθ`, `Flock.KSθ`); KS from one wait's
+bound there (`Flock.KSθ_of_oneWaitθ`, `FlockDeploy.KS.plain_of_oneWaitθ_sha512`, `FlockDeploy.KS.zk_of_oneWaitθ_sha512`). -/
