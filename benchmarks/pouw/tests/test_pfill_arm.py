@@ -10,6 +10,8 @@ import sys
 from pathlib import Path
 
 FILLER = Path(__file__).resolve().parents[1] / "filler"
+sys.path.insert(0, str(FILLER.parent / "harness"))
+import ledger  # noqa: E402
 
 
 def _module(name):
@@ -36,7 +38,8 @@ ARMS = (("PFillRam", 4, "", 1), ("PFillDuo", 2, "", 1), ("PFillE2m1Ram", 4, "-DP
 
 
 def test_pfill_arms_meet_the_contract_and_place_as_fill_v1(monkeypatch):
-    """Each arm sets the tile kind score.py's build inherits (NVCC_APPEND_FLAGS), and says its products a slot."""
+    """Each arm sets the tile kind score.py's build inherits (NVCC_APPEND_FLAGS), says its products a slot, and has a
+    lineage score.py's ledger record takes (r20261016-070822-5f55 scored, then refused a 249-character hypothesis)."""
     A, S = _module("arms"), _module("scoring")
     P = _load_file("pfill_arm")
     monkeypatch.setenv("NVCC_APPEND_FLAGS", "unset")
@@ -44,6 +47,7 @@ def test_pfill_arms_meet_the_contract_and_place_as_fill_v1(monkeypatch):
     for attr, nc, flags, per_slot in ARMS:
         arm = A.load(f"benchmarks/pouw/filler/pfill_arm.py:{attr}")
         assert A.check_arm(arm) == []
+        assert ledger.one_line(arm.lineage["hypothesis"], "the hypothesis")
         assert __import__("os").environ["NVCC_APPEND_FLAGS"] == flags
         assert P.products_per_slot(arm.lineage) == per_slot
         assert arm.filler == A.Filler(W=8, NC=nc, S=256, chunk_log2=19)
