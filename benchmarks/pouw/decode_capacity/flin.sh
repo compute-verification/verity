@@ -15,7 +15,8 @@
 # attention filler blocks' PDL (FATT_PDL: 0 none, 1 with, 2 with their filler warps starting early), ANC their warps'
 # chains (FATT_NC, 4 unless set), APS 1 those blocks persistent on the step's SMs (FATT_PERSIST), FL_NCU ("M:FW:NC:THR ...", ncu over flin's first launches; "none" skips), FL_NCU_STEP
 # ("B:L:FW:NC:THR:AFW[:ANC[:APS]] ...", ncu's tensor-pipe counters over one step's attention blocks and first linear, each with
-# filler warps), FL_REPS, FL_GATE (0 skips CAP's gate)
+# filler warps; FL_NCU_SECTIONS adds those ncu sections and keeps the report with its details, raw and SASS pages), FL_REPS,
+# FL_GATE (0 skips CAP's gate)
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -61,10 +62,19 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
   done
   for c in ${FL_NCU_STEP:-}; do
     IFS=: read -r b l fw nc thr afw anc aps <<< "$c"
+    n="$O/ncu-fstep-$b-$l-$fw-$afw-${anc:-4}-${aps:-0}"
     # fstep first runs the attention blocks of layer 0 with their filler warps, then its first linear with filler warps
-    FATT_NC=${anc:-4} FATT_PERSIST=${aps:-0} ncu --clock-control none -k regex:"flin_k|fqk_k|fpv_k" --launch-count 3 \
+    nf() { FATT_NC=${anc:-4} FATT_PERSIST=${aps:-0} ncu --clock-control none -k regex:"flin_k|fqk_k|fpv_k" --launch-count 3 \
       --metrics gpu__time_duration.sum,dram__throughput.avg.pct_of_peak_sustained_elapsed,sm__inst_executed_pipe_tensor.sum,sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_elapsed \
-      --csv "$B/dcap" fstep "$b" "$l" "$fw" "$nc" "$thr" "$afw" 0 1 > "$O/ncu-fstep-$b-$l-$fw-$afw-${anc:-4}-${aps:-0}.csv" 2>&1
+      "$@" "$B/dcap" fstep "$b" "$l" "$fw" "$nc" "$thr" "$afw" 0 1; }
+    if [ -z "${FL_NCU_SECTIONS:-}" ]; then
+      nf --csv > "$n.csv" 2>&1
+    else
+      s=(); for x in $FL_NCU_SECTIONS; do s+=(--section "$x"); done
+      nf "${s[@]}" -o "$n" > "$n.log" 2>&1 && ncu --import "$n.ncu-rep" --csv --page details > "$n.csv" 2>&1 &&
+        ncu --import "$n.ncu-rep" --csv --page raw > "$n-raw.csv" 2>&1 &&
+        ncu --import "$n.ncu-rep" --csv --page source --print-source sass > "$n-sass.csv" 2>&1
+    fi
     echo "ncu fstep $c rc $?" >> "$O/rc.txt"
   done
   q
