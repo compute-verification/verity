@@ -13,7 +13,9 @@ prover by `κ + √(γ·Pr[B]) + β·Pr[Fe]`. Each kind of disjunct lands in one
   `B`'s term at `(√γ + 1)²` (`KS_of_parts`, `KSLin_of_parts`);
 * a collision read off records the verifier never hashes in the clear (a registrant's records, a read's openings, held
   salts, a registered value) is read off the extractor's output: one run, the extractor on it, then the pair
-  (`oneRunExt`), a finder of `Fe`, `Pr[Fe]` at most its calls over `2^256` under `ExpectedCR` (`oneRunExt_Pr_le`).
+  (`oneRunExt`), a finder of `Fe`, `Pr[Fe]` at most its calls over `2^256` under `ExpectedCR` (`oneRunExt_Pr_le`);
+* a collision between two runs forked at a round, each read through the extractor (the inner rounds' forks), is
+  `forkExt`'s: `B`'s two runs, `E` on each, then the pair (`forkExt_Pr_le`).
 -/
 
 namespace Claims
@@ -186,6 +188,69 @@ theorem oneRunExt_Pr_le {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Ex
   calc Ex (fun s => ((oneRunExt H V E pick P x).cost s : ℝ))
       ≤ Ex (fun _ : (oneRunExt H V E pick P x).S => ((T + Nh + c : ℕ) : ℝ)) :=
         Ex_mono fun s => by exact_mod_cast oneRunExt_cost_le H V E pick P x hT hE hc s
+    _ = _ := Ex_const _
+
+/-- **`B`'s fork, the extractor on both runs, then a pair**: guess a round `j`, run the prover twice from a shared start
+with fresh continuations after round `j` (`B`'s runs), run `E` on each, and compute a pair from both runs and both
+outputs by `pick`. Its cost is both runs' SHA-512 calls, both of `E`'s, and `pick`'s. -/
+def forkExt {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V)
+    (pick : Msg → Trace → Option W → Trace → Option W → OC (Option (Msg × Msg))) {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (P : Prover Ω) (x : Msg) (hk : 0 < V.k x) : Finder where
+  S := BCoins Ω Coin (V.k x) × E.C x × E.C x
+  ne := ⟨(⟨⟨0, hk⟩, Classical.arbitrary _, fun _ => default, fun _ => default⟩, Classical.arbitrary _,
+    Classical.arbitrary _)⟩
+  out s :=
+    let r₂ := forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2
+    ((pick x (run H P V x s.1.2.1 s.1.2.2.1) (E.eval H P x s.1.2.1 s.1.2.2.1 s.2.1).1 (run H P V x s.1.2.1 r₂)
+      (E.eval H P x s.1.2.1 r₂ s.2.2).1).eval H).1
+  cost s :=
+    let r₂ := forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2
+    let t₁ := run H P V x s.1.2.1 s.1.2.2.1
+    let t₂ := run H P V x s.1.2.1 r₂
+    t₁.pLog.length + t₁.vLog.length + t₂.pLog.length + t₂.vLog.length +
+      (E.eval H P x s.1.2.1 s.1.2.2.1 s.2.1).2.1 + (E.eval H P x s.1.2.1 r₂ s.2.2).2.1 +
+      ((pick x t₁ (E.eval H P x s.1.2.1 s.1.2.2.1 s.2.1).1 t₂ (E.eval H P x s.1.2.1 r₂ s.2.2).1).eval H).2.length
+
+omit [Nonempty Coin] in
+/-- An event on which `pick` outputs a collision has probability at most `forkExt`'s. -/
+theorem Pr_le_forkExt {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V)
+    (pick : Msg → Trace → Option W → Trace → Option W → OC (Option (Msg × Msg))) {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (P : Prover Ω) (x : Msg) (hk : 0 < V.k x) (Ev : (forkExt H V E pick P x hk).S → Prop)
+    (hEv : ∀ s, Ev s → ∃ u v, (forkExt H V E pick P x hk).out s = some (u, v) ∧ Collision H u v) :
+    Pr Ev ≤ (forkExt H V E pick P x hk).Pr H :=
+  Pr_mono hEv
+
+omit [Nonempty Coin] in
+/-- **`forkExt`'s cost**: two runs' calls `T` each, two of `E`'s `N_h` each, and `pick`'s `c`. -/
+theorem forkExt_cost_le {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V)
+    (pick : Msg → Trace → Option W → Trace → Option W → OC (Option (Msg × Msg))) {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (P : Prover Ω) (x : Msg) (hk : 0 < V.k x) {T Nh c : ℕ}
+    (hT : ∀ ω r, (run H P V x ω r).pLog.length + (run H P V x ω r).vLog.length ≤ T)
+    (hE : ∀ ω r₀ e, (E.eval H P x ω r₀ e).2.1 ≤ Nh) (hc : ∀ t w t' w', ((pick x t w t' w').eval H).2.length ≤ c)
+    (s : (forkExt H V E pick P x hk).S) : (forkExt H V E pick P x hk).cost s ≤ 2 * T + 2 * Nh + c := by
+  have h₁ := hT s.1.2.1 s.1.2.2.1
+  have h₂ := hT s.1.2.1 (forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2)
+  have h₃ := hE s.1.2.1 s.1.2.2.1 s.2.1
+  have h₄ := hE s.1.2.1 (forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2) s.2.2
+  have h₅ := hc (run H P V x s.1.2.1 s.1.2.2.1) (E.eval H P x s.1.2.1 s.1.2.2.1 s.2.1).1
+    (run H P V x s.1.2.1 (forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2))
+    (E.eval H P x s.1.2.1 (forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2) s.2.2).1
+  simp only [forkExt]
+  omega
+
+omit [Nonempty Coin] in
+/-- **`forkExt` under `ExpectedCR`**: it finds a collision with probability at most `(2T + 2N_h + c)/2^256`. -/
+theorem forkExt_Pr_le {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V)
+    (pick : Msg → Trace → Option W → Trace → Option W → OC (Option (Msg × Msg))) {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (P : Prover Ω) (x : Msg) (hk : 0 < V.k x) {T Nh c : ℕ}
+    (hT : ∀ ω r, (run H P V x ω r).pLog.length + (run H P V x ω r).vLog.length ≤ T)
+    (hE : ∀ ω r₀ e, (E.eval H P x ω r₀ e).2.1 ≤ Nh) (hc : ∀ t w t' w', ((pick x t w t' w').eval H).2.length ≤ c)
+    (hCR : ExpectedCR H (forkExt H V E pick P x hk)) :
+    (forkExt H V E pick P x hk).Pr H ≤ ((2 * T + 2 * Nh + c : ℕ) : ℝ) / 2 ^ (256 : ℝ) := by
+  refine hCR.trans (div_le_div_of_nonneg_right ?_ (by positivity))
+  calc Ex (fun s => ((forkExt H V E pick P x hk).cost s : ℝ))
+      ≤ Ex (fun _ : (forkExt H V E pick P x hk).S => ((2 * T + 2 * Nh + c : ℕ) : ℝ)) :=
+        Ex_mono fun s => by exact_mod_cast forkExt_cost_le H V E pick P x hk hT hE hc s
     _ = _ := Ex_const _
 
 end Transport
