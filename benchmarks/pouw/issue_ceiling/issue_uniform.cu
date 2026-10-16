@@ -50,8 +50,10 @@ __global__ void __launch_bounds__(1024) k_vec(int iters, uint32_t s0, uint32_t s
     }
 #pragma unroll
     for (int d = 0; d < D; d++) {
-      if (d & 1) u1 = u1 + u0 + (uint32_t)(0x9e37u + d);  // one UIADD3 (uniform, non-foldable mutual recurrence)
-      else       u0 = u0 + u1 + (uint32_t)(0x85ebu + d);
+      // mutual recurrence (non-foldable); the 3rd operand is the loop counter `it`, which already lives in a uniform
+      // register — so keeping u0,u1 in vector would cost a UMOV of `it` every step, tipping ptxas to the uniform datapath.
+      if (d & 1) u1 = u1 + u0 + (uint32_t)(it + d);  // UIADD3 (uniform)
+      else       u0 = u0 + u1 + (uint32_t)(it + d);
     }
   }
   CLK_END(rec)
