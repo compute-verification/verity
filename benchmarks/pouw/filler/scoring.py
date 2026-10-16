@@ -1203,7 +1203,8 @@ def score_v5(stats: dict, filler_fraction: float, coins: float = PREFILL_COINS) 
         if any(pt not in stats for pt in e["points"]):
             missing.append(e["entry"])
             continue
-        entries.append({"entry": e["entry"], "kind": e["kind"], **coverage_v5(entry_v5(e, stats, coins), filler_fraction)})
+        entries.append({"entry": e["entry"], "kind": e["kind"], **{k: e[k] for k in ("B", "L", "P", "D") if k in e},
+                        **coverage_v5(entry_v5(e, stats, coins), filler_fraction)})
     out = {"entries": entries, "missing": missing, "served_model": served_model({"PREFILL_COINS": coins})}
     if entries and not missing:
         w = [e["time"] for e in entries]

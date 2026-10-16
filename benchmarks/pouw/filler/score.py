@@ -4,7 +4,8 @@ the arm contract: `arms.py`; the device driver: `dscore.cu`.
 
   python3 benchmarks/pouw/filler/score.py ARM [--rounds 8] [--reps 3] [--no-robust]   build, lease one GPU, measure, report
   python3 benchmarks/pouw/filler/score.py measure ARM --bin DIR --out DIR             the measurement, inside a lease
-  python3 benchmarks/pouw/filler/score.py report OUT_DIR [--json] [--as v2]           score a measured run's out dir
+  python3 benchmarks/pouw/filler/score.py report OUT_DIR [--json] [--as v5] [--coins]  score a measured run's out dir
+  python3 benchmarks/pouw/filler/score.py tp-report OUT... --bin|--nvd X [--noise]    SCORE-TP of tpcomm.sh out dirs (v5)
   python3 benchmarks/pouw/filler/score.py check ARM                                   the arm's contract and record limits
   python3 benchmarks/pouw/filler/score.py --leaderboard [--refresh] [--local DIR ...] every filler attempt, best first
 
@@ -45,6 +46,13 @@ dscore's and the drivers' nvdisasm. The theorem entries' SASS checks read the `d
 filler warps run refuses the arm (gate `filler_paths`); other MMAs are serving's; a block's fixed work counts only from
 spot-checked public tiles of a binary the scorer read (`credit_fixed`); and the honest gate bounds the whole kernel's
 MACs, serving's and the filler warps', by its SMs' peak (`whole_of_peak`). `scoring.UNCHECKED_V4` is what it can't see.
+
+filler-scorer/v5 (prepared, not active: `report OUT --as v5`) keeps v4's gates, the slowdown gate on the measured step
+against clean serving. It reads the receipt's fold (`scoring.fold_reading`) from `Filler.fold` or the lineage's receipt
+tag and the build's `fold_facts`: ram halves a theorem entry, duo and XOR-in read in full where the build confirms
+them. Its SCORE is the measured filler part plus a MODELLED served part (`scoring.score_v5`): every served MAC at
+Theorem K's 0.9 over the wall time the edited design would take (`scoring.served_model`'s named constants and their
+sources; `--coins` sets prefill's coins factor). `tp-report` reads HC-COMM's TP suite (`scoring.tp_score`).
 """
 
 from __future__ import annotations
