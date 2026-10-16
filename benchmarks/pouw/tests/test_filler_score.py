@@ -438,6 +438,11 @@ def test_kernel_facts_decide_the_filler_entry_with_the_declaration():
             assert applies == "chained" and all(any("accumulate into an earlier word" in w for w in ws)
                                                 for ws in why.values())
     assert "outside the filler's kernel" in read("bits01", K_TILE, ("_Z6helperv", [K_TILE[1]]))[1]["theorem-k"][0]
+    phase = "_Z7dfill_pILi4EEvmmPyyiiPKiS0_Pj"  # the phase filler is read with dfill_k, launched or not
+    assert S.kernel_facts(sass((DFILL, K_TILE), (phase, K_TILE)))["functions"] == [DFILL, phase]
+    assert read("bits01", K_TILE, (phase, K_TILE)) == ("theorem-k", {})
+    assert read("bits01", K_TILE, (phase, [x.replace("COL, RZ", "COL, R28") for x in K_TILE]))[0] == "chained"
+    assert read("pm1", K_TILE, (phase, E2M1_TILE))[0] == "unproven"  # two kinds: no one L
     for noise in ("bits01", "pm1"):
         applies, why = read(noise, fixed_work=True)
         assert applies == "unproven" and "an arm-side driver's fixed work" in why["theorem-k"][-1]

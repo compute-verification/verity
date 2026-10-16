@@ -326,8 +326,9 @@ def score(stats: dict, certified: dict = CERTIFIED) -> dict:
 
 # ---- the filler's certified fraction (filler-scorer/v3) ---------------------------------------------------------------------
 
-#: the dfill ABI's kernel: the functions whose SASS `kernel_facts` reads as the filler
-FILLER_KERNEL = "dfill_k"
+#: the dfill ABI's kernels, the functions whose SASS `kernel_facts` reads as the filler: the split filler dfill_k and the
+#: phase filler dfill_p (dcap.cu's, for the leader's placement), read together whether or not the arm launches dfill_p
+FILLER_KERNELS = ("dfill_k", "dfill_p")
 #: SASS opcodes that compute in floating point or convert to or from it
 FP_OPS = frozenset("FADD FADD2 FADD32I FMUL FMUL2 FMUL32I FFMA FFMA2 FFMA32I FMNMX FMNMX3 FSET FSETP FSEL FRND FCHK "
                    "FSWZADD MUFU F2F F2I F2IP F2FP I2F I2FP HADD2 HADD2_32I HMUL2 HMUL2_32I HFMA2 HFMA2_32I HMNMX2 "
@@ -344,7 +345,7 @@ _CONST_HFMA2 = re.compile(r",\s*-?RZ\s*,\s*-?RZ\s*,")  # HFMA2.MMA Rd, -RZ, RZ, 
 
 def kernel_facts(sass: str) -> dict:
     """What the SASS of the binary the scorer built (``cuobjdump -sass``) says about its filler, the functions named
-    `FILLER_KERNEL`: their MMA mnemonics, their FP and conversion opcodes, the MMAs whose accumulator input (operand C,
+    `FILLER_KERNELS`: their MMA mnemonics, their FP and conversion opcodes, the MMAs whose accumulator input (operand C,
     the fourth) isn't RZ, and every other function with an MMA.
     - ``kind``: the one `MMA_KINDS` kind of every MMA there, or None (none, mixed, or a kind no entry covers: FP8, FP6,
       sparse, saturating, other scales).
@@ -353,17 +354,18 @@ def kernel_facts(sass: str) -> dict:
     - ``L``: each word's products, the one shape's k when every accumulator input is RZ (one MMA a word), else None.
     - ``accumulating_mma``: MMAs that add into an earlier word, a chain's accumulate.
     - ``mma_outside``: functions besides the filler's with an MMA (serving's GEMMs are cuBLASLt's, outside the binary)."""
-    fn, functions, mma, fp, acc, outside = None, [], {}, {}, 0, set()
+    fn, mine, functions, mma, fp, acc, outside = None, False, [], {}, {}, 0, set()
     for ln in sass.splitlines():
         if "Function : " in ln:
             fn = ln.split("Function : ", 1)[1].strip()
-            if FILLER_KERNEL in fn:
+            mine = any(k in fn for k in FILLER_KERNELS)
+            if mine:
                 functions.append(fn)
             continue
         m = _SASS.match(ln)
         if m is None or fn is None:
             continue
-        op, args, mine = m["op"], m["args"], FILLER_KERNEL in fn
+        op, args = m["op"], m["args"]
         base = op.split(".")[0]
         if base.endswith("MMA"):
             if not mine:
@@ -407,7 +409,8 @@ def _theorem_checks(e: dict, noise: str | None, facts: dict | None, fixed_work: 
                  if f.get("accumulating_mma") else "no one shape for every word" if L is None
                  else f"each word sums {L} products, past {kinds[kind]}" if kind in kinds
                  else f"each word sums {L} products of a kind the entry doesn't cover"),
-           "all_read": f"MMA outside the filler's kernel ({f.get('mma_outside')}) or an arm-side driver's fixed work"}
+           "all_read": f"MMA outside the filler's kernels {FILLER_KERNELS} ({f.get('mma_outside')}) or an arm-side "
+                       "driver's fixed work"}
     return checks, [why[c] for c, ok in checks.items() if not ok]
 
 

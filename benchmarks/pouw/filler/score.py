@@ -100,7 +100,7 @@ def build(bdir: Path, out: Path) -> dict:
     keep, lines = False, []
     for ln in sass.splitlines():
         if "Function : " in ln:
-            keep = "dfill_k" in ln
+            keep = any(k in ln for k in S.FILLER_KERNELS)
         if keep:
             lines.append(ln)
     (out / "sass-dfill.txt").write_text("\n".join(lines))
