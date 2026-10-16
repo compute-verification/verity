@@ -22,6 +22,7 @@ the kernel-engineering skill (`.agents/skills/kernel-engineering/SKILL.md`).
 | `gamma.py` | CPU | γ accounting: each scheme's honest reference priced term by term under W1, split into checked and unchecked work |
 | `pearlc_census.py` | CPU | TT_OUT's falsification census for Pearl-C's ticket chain, bit-exact, on the H100's atom or sm_120's (`--atom`) |
 | `machine_model/` | CPU | The sm_120 machine model's price vectors (VF … VF3j-16): the LP, the rows, census and attack families as data, and `machine-model solve NAME` (its own README, and its own suite) |
+| `exact_kit/` | CPU | `verity-exact-kit`, the theory and referee scripts' primitives (F_2 and F_p linear algebra, Möbius coefficients, kernel searches, SAT) and their one check registry with a JSON verdict; no theory, no folds (its own README) |
 | `workloads.json` | | The model and its linear shapes, the decode batches and prefill lengths, and the reference shapes (`gamma.py`) |
 | `run_result.py`, `tool.py` | | The runs' result record (`research/result/v0.1`) and the store's tool declaration |
 
