@@ -21,9 +21,9 @@ def solved(name):
 
 
 def test_every_named_vector_is_here():
-    assert NAMES[0] == "VF" and NAMES[-1] == "VF3k-16"
+    assert NAMES[0] == "VF" and NAMES[-1] == "VF3l-16"
     assert {"VF2", "VF3", "VF3c", "VF3d", "VF3e", "VF3f", "VF3g", "VF3h", "VF3i", "VF3i-strict", "VF3j", "VF3j-8",
-            "VF3j-16"} < set(NAMES)
+            "VF3j-16", "VF3k-16"} < set(NAMES)
 
 
 # τ, τ at 600 W, U/F_low and margin as the round notes published them
@@ -33,6 +33,7 @@ PUBLISHED = {
     "VF3j": (0.0634, 0.0495, 1.0938, 1.935),
     "VF3j-16": (0.0610, 0.0477, 1.1563, 2.000),
     "VF3k-16": (0.0603, 0.0472, 1.1563, 2.000),       # note:20261016T1912Z-draft-machine-model-vf3k
+    "VF3l-16": (0.0603, 0.0472, 1.1563, 2.000),       # note:20261016T2055Z-draft-machine-model-vf3l
 }
 
 
@@ -105,6 +106,7 @@ CLAIMED = {
     "VF3j": ([], ["LDS128 8.00 a word < 16", "LDG128 8.00 a word < 16", "LDC64 0.00 a word < 16"]),
     "VF3j-16": ([], []),
     "VF3k-16": ([], []),
+    "VF3l-16": ([], []),
 }
 
 
@@ -112,7 +114,7 @@ CLAIMED = {
 def test_claims(name):
     r = solved(name)
     assert (r.floors["pi32"][1], r.floors["loads16"][1]) == CLAIMED[name]
-    assert r.floors["loads16"][0] == 9 and r.floors["pi32"][0] == 84 + (r.vector.epoch == "VF3k-16")
+    assert r.floors["loads16"][0] == 9 and r.floors["pi32"][0] == 84 + ("ATOME32P" in r.census)
 
 
 def test_vf3j16_rested_on_slow_rows():
@@ -128,7 +130,7 @@ def test_vf3k16_loses_tau_on_atoms64_alone(tmp_path):
     data = tmp_path / "data"
     shutil.copytree(DATA, data)
     c = (data / "census.csv").read_text()
-    line = "ATOMS64,ROW_ATOMS64,0.480156,0.02,,,VF3k-16,,r20261016-183617-3914\n"
+    line = "ATOMS64,ROW_ATOMS64,0.480156,0.02,,,VF3k-16,VF3k-16,r20261016-183617-3914\n"
     assert c.count(line) == 1
     (data / "census.csv").write_text(c.replace(line, line.replace("0.480156", "0.29523")))
     assert resolve("VF3k-16", data).tau == pytest.approx(solved("VF3j-16").tau, rel=1e-6)

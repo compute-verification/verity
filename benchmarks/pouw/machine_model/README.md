@@ -2,7 +2,7 @@
 
 PoUW's price vectors for sm_120 (rs-machine-model §8): the LP that prices every warp instruction as a convex combination
 of the machine's rows, its inputs as data, the attack families, and `machine-model`, which re-solves a named vector and
-checks every attack against it. Each named vector (VF … VF3k-16) re-solves here to the τ, τ at 600 W, U/F_low and
+checks every attack against it. Each named vector (VF … VF3l-16) re-solves here to the τ, τ at 600 W, U/F_low and
 margin it was published with, at the vertex the legacy scripts landed on (`tests/test_vectors.py`), and `solve` says
 whether (π₃₂) and PRICES-32's load half hold at its prices (`data/floors.csv`).
 

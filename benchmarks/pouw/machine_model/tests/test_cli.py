@@ -48,7 +48,8 @@ def _epoch(data, rows=()):
     last = m.epochs[-1]
     (data / "model.toml").write_text((data / "model.toml").read_text().replace(f'"{last}"]', f'"{last}", "TEST"]'))
     t = (data / "vectors" / f"{m.current}.toml").read_text()
-    t = t.replace(f'name = "{m.current}"', 'name = "TEST"').replace(f'epoch = "{last}"', 'epoch = "TEST"')
+    t = t.replace(f'name = "{m.current}"', 'name = "TEST"').replace(f'epoch = "{vector(m.current, data).epoch}"',
+                                                                    'epoch = "TEST"')
     t = t.replace("rows = [\n", "rows = [\n" + "".join(f'    "{r}",\n' for r in rows)).split("[published]")[0]
     (data / "vectors" / "TEST.toml").write_text(t)
     return m.current, last

@@ -107,7 +107,10 @@ def test_adopted_lines_are_faster():
     with open(DATA / "census.csv", newline="") as f:
         lines = list(csv.DictReader(f))
     u = lambda d: u_of(M.cycle_u, d["rate"], d["noise"], d["cycles"], d["u"])
-    for d in (d for d in lines if d["since"] == "VF3k-16" and "r20261016-183617-3914" in d["runs"].split()):
-        old = [e for e in lines if (e["kind"], e["row"]) == (d["kind"], d["row"]) and e["until"] == "VF3j-8"]
-        assert old == [] or u(d) < u(old[0]), f"{d['kind']} on {d['row']}"
+    for epoch, before, run in [("VF3k-16", "VF3j-8", "r20261016-183617-3914"),
+                               ("VF3l-16", "VF3k-16", "r20261016-210926-d856")]:
+        for d in (d for d in lines if d["since"] == epoch and run in d["runs"].split()):
+            old = [e for e in lines if (e["kind"], e["row"]) == (d["kind"], d["row"]) and e["until"] == before]
+            assert old == [] or u(d) < u(old[0]), f"{d['kind']} on {d['row']}"
     assert sum(d["since"] == "VF3k-16" for d in lines) == 18 + 5
+    assert sum(d["since"] == "VF3l-16" for d in lines) == 6
