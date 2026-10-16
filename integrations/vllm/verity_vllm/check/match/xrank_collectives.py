@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import json
 from typing import Any
 
 import numpy as np
@@ -71,12 +72,19 @@ ROUTED_FAMILIES = ("AllReduceMnnvl_v1", "AllReduceMultimem_v1", "AllReduceCustom
 
 
 def _canon(v: Any) -> Any:
+    if isinstance(v, dict):
+        return tuple(sorted((str(k), _canon(x)) for k, x in v.items()))
+    if isinstance(v, (set, frozenset)):
+        return tuple(sorted(_canon(x) for x in v))
     return tuple(_canon(x) for x in v) if isinstance(v, (list, tuple)) else v
 
 
 def spec_key(spec: str) -> tuple[str, tuple]:
     """(family, sorted (static, value)) of a bound Definition id such as ``AllReduceMultimem_v1{WORLD=8,SIZE=..,TREES=((..),..),FTZ=False}``:
-    the statics split at top-level commas, each value a Python literal (nested tuples included)."""
+    the statics split at top-level commas, each value the descriptor's JSON (``EPS={"f64":"0x1.4f8b588e368f1p-17"}``, ``FMA=true``,
+    as a Program's rows spell it) or else a Python literal (``bind(..).id``'s ``EPS=1e-05``, nested tuples), so both spell one key."""
+    from verity_vllm.query.program_view import _static_value
+
     fam, _, rest = str(spec).partition("{")
     body = rest[:-1] if rest.endswith("}") else rest
     items, depth, cur = [], 0, ""
@@ -93,9 +101,12 @@ def spec_key(spec: str) -> tuple[str, tuple]:
     for it in items:
         k, _, v = it.partition("=")
         try:
-            val = ast.literal_eval(v.strip())
-        except (ValueError, SyntaxError):
-            val = v.strip()
+            val = _static_value(json.loads(v.strip()))
+        except ValueError:
+            try:
+                val = ast.literal_eval(v.strip())
+            except (ValueError, SyntaxError):
+                val = v.strip()
         out.append((k.strip(), _canon(val)))
     return fam.strip(), tuple(sorted(out))
 

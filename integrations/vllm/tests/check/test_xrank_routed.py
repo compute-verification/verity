@@ -81,6 +81,15 @@ def test_spec_key_reads_nested_statics_and_ignores_their_order() -> None:
     assert XC.spec_key("AllReduceMnnvl_v1{WORLD=8,N=96,SHOT=2}") != XC.spec_key("AllReduceMnnvl_v1{WORLD=8,N=96,SHOT=1}")
 
 
+def test_spec_key_of_the_glm53_fused_norm_as_its_program_spells_it() -> None:
+    """The GLM-5.3 Program's fused norm spec spells EPS as a JSON object: its key is hashable, so it can be a member of `known`."""
+    eps = float.fromhex("0x1.4f8b588e368f1p-17")
+    program = 'AllReduceRmsNormMnnvl_v1{WORLD=8,N=6144,SHOT=1,CLUSTER=8,EPS={"f64":"0x1.4f8b588e368f1p-17"},FMA=true}'
+    route = bind(TA.AllReduceRmsNormMnnvl, WORLD=8, N=6144, SHOT=1, CLUSTER=8, EPS=eps, FMA=True).id
+    assert XC.spec_key(route) in {XC.spec_key(program)}
+    assert XC.spec_key(route.replace("SHOT=1", "SHOT=2")) not in {XC.spec_key(program)}
+
+
 # --- check_picks over eight ranks' dumps -----------------------------------------------------------------------------------------
 
 def _dumps(family, statics, *, fused: bool = False, flip: int | None = None, spec_of=None, binds=lambda r: True, drop=None, route_why=None):
