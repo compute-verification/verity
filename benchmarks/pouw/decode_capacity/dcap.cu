@@ -15,9 +15,10 @@
 // dgate, dalone, done, dfill B L PLACE FILL_SMS W NC S: the DRAM-free filler (FILL; see "dfill" below): its receipts bit
 // for bit against the host, its rate alone, one chunk for ncu, and the step beside it, on a green split (PLACE split) or
 // co-resident on every SM at the lowest stream priority with the step at the highest (PLACE co).
-// fgate, flin M FW NC THR, fstep B L FW NC THR AFW: the decode linears as a warp-specialized GEMM whose filler warps run
-// the DRAM-free chain while the consumers wait on memory, and the attention blocks with AFW filler warps each (flin.cuh):
-// outputs and receipts bit for bit, each linear's 32 layers against cuBLASLt, and the step through both.
+// fgate, flin M FW NC THR, fstep B L FW NC THR AFW [FILL_SMS]: the decode linears as a warp-specialized GEMM whose filler
+// warps run the DRAM-free chain while the consumers wait on memory, and the attention blocks with AFW filler warps each
+// (flin.cuh): outputs and receipts bit for bit, each linear's 32 layers against cuBLASLt, and the step through both, on
+// the whole GPU or beside the dfill pump on FILL_SMS SMs of a green split.
 //
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a dcap.cu -lcublasLt -lnvidia-ml -ldl
 #include <cublasLt.h>
@@ -1196,13 +1197,15 @@ int main(int argc, char** argv) {
   if (argc < 2) {
     fprintf(stderr, "usage: dcap gate | bw GiB | lin M | att B L | step B L | fill B L FILL_SMS big|l2  [reps]\n"
                     "       dcap dgate | dalone W NC S | done W NC S | dfill B L split|co FILL_SMS W NC S [reps]\n"
-                    "       dcap fgate | flin M FW NC THR [reps] | fstep B L FW NC THR AFW [reps]   (M, B in 32 64 128 256)\n"
-                    "       (DFILL_COINS=<32 hex digits>: the round's coins for the d* modes)\n");
+                    "       dcap fgate | flin M FW NC THR [reps] | fstep B L FW NC THR AFW [FILL_SMS [reps]]   (M, B in 32 64 128 256)\n"
+                    "       (DFILL_COINS=<32 hex digits>: the round's coins for the d* and f* modes; FLIN_PDL=0: no programmatic\n"
+                    "       dependent launch; FLIN_LT=mask: fstep's linears that stay on cuBLASLt, 1 qkv 2 o 4 gate_up)\n");
     return 1;
   }
   const std::string mode = argv[1];
   g_graph = !(getenv("DCAP_NOGRAPH") && atoi(getenv("DCAP_NOGRAPH")));
   g_pdl = !(getenv("FLIN_PDL") && !atoi(getenv("FLIN_PDL")));
+  g_lt_mask = getenv("FLIN_LT") ? atoi(getenv("FLIN_LT")) : 0;
   if (const char* cs = getenv("DFILL_COINS")) {
     if (strlen(cs) != 32 || sscanf(cs, "%16llx%16llx", (unsigned long long*)&g_c0, (unsigned long long*)&g_c1) != 2) {
       fprintf(stderr, "DFILL_COINS must be 32 hex digits\n");
@@ -1314,13 +1317,13 @@ int main(int argc, char** argv) {
     if (!flin_m_ok(M)) { fprintf(stderr, "M in 32 64 128 256\n"); return 1; }
     rc = run_flin(d, M, atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), argc > 6 ? atoi(argv[6]) : 9);
   } else if (mode == "fstep") {
-    if (argc < 8) { fprintf(stderr, "fstep B L FW NC THR AFW [reps]\n"); return 1; }
-    const int B = atoi(argv[2]), L = atoi(argv[3]);
-    if ((size_t)B * L > maxBL || L % 512 || !flin_m_ok(B)) {
-      fprintf(stderr, "B*L <= %zu, L %% 512 == 0, B in 32 64 128 256\n", maxBL);
+    if (argc < 8) { fprintf(stderr, "fstep B L FW NC THR AFW [FILL_SMS [reps]]\n"); return 1; }
+    const int B = atoi(argv[2]), L = atoi(argv[3]), fsm = argc > 8 ? atoi(argv[8]) : 0;
+    if ((size_t)B * L > maxBL || L % 512 || !flin_m_ok(B) || fsm < 0 || fsm >= d.sms) {
+      fprintf(stderr, "B*L <= %zu, L %% 512 == 0, B in 32 64 128 256, 0 <= FILL_SMS < %d\n", maxBL, d.sms);
       return 1;
     }
-    rc = run_fstep(d, B, L, atoi(argv[4]), atoi(argv[5]), atoi(argv[6]), atoi(argv[7]), argc > 8 ? atoi(argv[8]) : 9);
+    rc = run_fstep(d, B, L, atoi(argv[4]), atoi(argv[5]), atoi(argv[6]), atoi(argv[7]), fsm, argc > 9 ? atoi(argv[9]) : 9);
   } else {
     fprintf(stderr, "unknown mode %s\n", mode.c_str());
     return 1;

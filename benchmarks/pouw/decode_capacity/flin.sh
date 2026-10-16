@@ -9,9 +9,10 @@
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=FILL \
 #     --send benchmarks/pouw/decode_capacity/flin.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/flin.sh"'
 #
-# FL_FLIN ("M:FW:NC:THR[:PDL] ..."), FL_STEP ("B:L:FW:NC:THR:AFW[:PDL] ..."), PDL 0 to launch each linear after the
-# previous grid finishes (FLIN_PDL), FL_NCU ("M:FW:NC:THR ...", ncu over flin's first launches; "none" skips), FL_REPS,
-# FL_GATE (0 skips CAP's gate)
+# FL_FLIN ("M:FW:NC:THR[:PDL] ..."; "none" skips), FL_STEP ("B:L:FW:NC:THR:AFW[:PDL[:FILL_SMS[:LT]]] ..."), PDL 0 to
+# launch each linear after the previous grid finishes (FLIN_PDL), FILL_SMS > 0 to run the fused step on a green split
+# beside the dfill pump on that many SMs, LT the linears that stay on cuBLASLt (FLIN_LT: 1 qkv, 2 o, 4 gate_up), FL_NCU
+# ("M:FW:NC:THR ...", ncu over flin's first launches; "none" skips), FL_REPS, FL_GATE (0 skips CAP's gate)
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -42,7 +43,7 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
     echo "gate rc $g" >> "$O/rc.txt"
     [ "$g" -eq 0 ] || exit 5
   fi
-  for c in $FL_FLIN; do
+  for c in ${FL_FLIN/none/}; do
     IFS=: read -r m fw nc thr pdl <<< "$c"
     FLIN_PDL=${pdl:-1} "$B/dcap" flin "$m" "$fw" "$nc" "$thr" "$FL_REPS" >> "$O/flin.jsonl" 2>> "$O/errors.txt" || echo "rc $? for flin $c" >> "$O/errors.txt"
   done
@@ -57,8 +58,9 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
   done
   q
   for c in $FL_STEP; do
-    IFS=: read -r b l fw nc thr afw pdl <<< "$c"
-    FLIN_PDL=${pdl:-1} "$B/dcap" fstep "$b" "$l" "$fw" "$nc" "$thr" "${afw:-0}" "$FL_REPS" >> "$O/fstep.jsonl" 2>> "$O/errors.txt" ||
+    IFS=: read -r b l fw nc thr afw pdl fsm lt <<< "$c"
+    FLIN_PDL=${pdl:-1} FLIN_LT=${lt:-0} "$B/dcap" fstep "$b" "$l" "$fw" "$nc" "$thr" "${afw:-0}" "${fsm:-0}" "$FL_REPS" \
+      >> "$O/fstep.jsonl" 2>> "$O/errors.txt" ||
       echo "rc $? for fstep $c" >> "$O/errors.txt"
     q
   done
