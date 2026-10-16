@@ -319,4 +319,262 @@ theorem mem_gsDecode {F T : Type} [Field F] [DecidableEq F] {s : ℕ} (C : IRS F
   · obtain ⟨i, hi, rfl⟩ := List.mem_map.1 hp
     rw [rowsPre, dite_eq_left (List.mem_range.1 hi), length_coeffList]
 
+/-! ## The pruning's lists, by Johnson's bound -/
+
+/-- Two distinct polynomials of degree below `k` agree on at most `k − 1` of distinct points. -/
+theorem card_agree_le {F : Type} [Field F] [DecidableEq F] {N : ℕ} (x : Fin N → F) (hx : Function.Injective x)
+    {f g : F[X]} (hfg : f ≠ g) {k : ℕ} (hf : f.natDegree < k) (hg : g.natDegree < k) :
+    (Finset.univ.filter fun j => f.eval (x j) = g.eval (x j)).card ≤ k - 1 := by
+  have hd : f - g ≠ 0 := sub_ne_zero.2 hfg
+  calc (Finset.univ.filter fun j => f.eval (x j) = g.eval (x j)).card ≤ (f - g).roots.toFinset.card := by
+        refine Finset.card_le_card_of_injOn x (fun j hj => ?_) (fun a _ b _ h => hx h)
+        simp only [Finset.coe_filter, Finset.mem_univ, true_and, Set.mem_ofPred_eq] at hj
+        rw [Finset.mem_coe, Multiset.mem_toFinset, mem_roots hd, IsRoot.def, eval_sub, hj, sub_self]
+    _ ≤ (f - g).roots.card := Multiset.toFinset_card_le _
+    _ ≤ (f - g).natDegree := card_roots' _
+    _ ≤ k - 1 := by
+        have := natDegree_sub_le f g
+        omega
+
+theorem lt_of_mem_cands {F : Type} [Field F] [DecidableEq F] {s : ℕ} {rf : RootFinder F} {k t : ℕ}
+    {cs : List (F × (Fin s → F))} {m : ℕ} {p : List F} (h : p ∈ cands rf k t cs m) : m < s := by
+  unfold cands at h
+  split_ifs at h with hm
+  · exact hm
+  · simp at h
+
+/-- **Every kept list has at most `N` prefixes**, in the regime, on distinct points: Johnson's bound on the kept
+prefixes' agreement sets. -/
+theorem length_kept_le {F : Type} [Field F] [DecidableEq F] {s : ℕ} (rf : RootFinder F) {k t : ℕ}
+    {cs : List (F × (Fin s → F))} (h : Reg k cs.length t) (hnd : (cs.map Prod.fst).Nodup) (m : ℕ) :
+    (kept rf k t cs m).length ≤ cs.length := by
+  have hN : 1 ≤ cs.length := by have := h.k_lt; omega
+  rcases Nat.eq_zero_or_pos m with rfl | hm
+  · simpa [kept, extendRows] using hN
+  rw [← List.toFinset_card_of_nodup (nodup_kept rf k t cs m)]
+  have hdiff : ∀ ps ∈ (kept rf k t cs m).toFinset, ∀ ps' ∈ (kept rf k t cs m).toFinset, ps ≠ ps' →
+      ∃ i, ∃ (hi : i < ps.length) (hi' : i < ps'.length), ps[i] ≠ ps'[i] := by
+    intro ps hps ps' hps' hne
+    rw [List.mem_toFinset] at hps hps'
+    by_contra hc
+    push Not at hc
+    exact hne (List.ext_getElem (by rw [(kept_spec rf k t cs m ps hps).1, (kept_spec rf k t cs m ps' hps').1])
+      fun i h1 h2 => hc i h1 h2)
+  rcases Nat.eq_zero_or_pos k with rfl | hk
+  · refine (Finset.card_le_one.2 fun a ha b hb => ?_).trans hN
+    by_contra hab
+    obtain ⟨i, hi, hi', hne⟩ := hdiff a ha b hb hab
+    rw [List.mem_toFinset] at ha hb
+    exact hne (by rw [List.length_eq_zero_iff.1 ((kept_spec rf 0 t cs m a ha).2.1 i hi),
+      List.length_eq_zero_iff.1 ((kept_spec rf 0 t cs m b hb).2.1 i hi')])
+  have hx : Function.Injective fun j : Fin cs.length => (cs.get j).1 := by
+    intro j j' hjj
+    have := (List.Nodup.getElem_inj_iff hnd (i := j.val) (j := j'.val) (hi := by simp) (hj := by simp)).1
+      (by simpa using hjj)
+    exact Fin.ext this
+  refine johnson_card_le _ (fun ps => Finset.univ.filter fun j => fitsC ps (cs.get j).1 (cs.get j).2 = true)
+    (t := t) (a := k - 1) (fun ps hps => ?_) (fun ps hps ps' hps' hne => ?_)
+    (by rw [show k - 1 + 2 = k + 1 by omega]; exact h.1) h.2
+  · rw [List.mem_toFinset] at hps
+    have e := card_filter_get (fun c : F × (Fin s → F) => fitsC ps c.1 c.2 = true) cs
+    simp only [Bool.decide_eq_true] at e
+    rw [e]
+    exact (kept_spec rf k t cs m ps hps).2.2 (by omega)
+  · obtain ⟨i, hi, hi', hdi⟩ := hdiff ps hps ps' hps' hne
+    rw [List.mem_toFinset] at hps hps'
+    have hik : ps[i].length = k := (kept_spec rf k t cs m ps hps).2.1 i hi
+    have hik' : ps'[i].length = k := (kept_spec rf k t cs m ps' hps').2.1 i hi'
+    have his : i < s := lt_of_mem_cands ((extendRows_spec _ _ m ps hps).2.1 i hi)
+    have hpne : toPolyL ps[i] ≠ toPolyL ps'[i] := fun he => hdi (toPolyL_inj (by rw [hik, hik']) he)
+    have hd : ∀ q : List F, q.length = k → (toPolyL q).natDegree < k := fun q hq => by
+      have := natDegree_toPolyL_lt q (List.ne_nil_of_length_pos (by omega))
+      rwa [hq] at this
+    refine le_trans (Finset.card_le_card fun j hj => ?_) (card_agree_le _ hx hpne (hd _ hik) (hd _ hik'))
+    simp only [Finset.mem_inter, Finset.mem_filter, Finset.mem_univ, true_and, fitsC, decide_eq_true_eq] at hj ⊢
+    have h1 := hj.1 ⟨i, his⟩ hi
+    have h2 := hj.2 ⟨i, his⟩ hi'
+    rw [List.getD_eq_getElem _ _ hi, horner_eq] at h1
+    rw [List.getD_eq_getElem _ _ hi', horner_eq] at h2
+    rw [h1, h2]
+
+/-! ## The count -/
+
+theorem degY_le_degX (k t : ℕ) : degY k t ≤ degX k t := by
+  unfold degY
+  split_ifs
+  · exact Nat.div_le_self _ _
+  · exact le_rfl
+
+/-- The `Y`-degree bound is below `3t`: `L + 1 ≤ 3t ≤ 3N`. -/
+theorem degY_succ_le {k N t : ℕ} (h : Reg k N t) : degY k t + 1 ≤ 3 * N := by
+  have ht := h.pos
+  have hD := degX_succ h
+  refine le_trans ?_ (Nat.mul_le_mul_left 3 h.2)
+  unfold degY
+  split_ifs with hk
+  · have hlt : degX k t / (k - 1) < 3 * t := by
+      rw [Nat.div_lt_iff_lt_mul (by omega)]
+      have : (k + 1) * t ≤ 3 * t * (k - 1) := by
+        rw [show 3 * t * (k - 1) = (3 * (k - 1)) * t by ring]
+        exact Nat.mul_le_mul_right t (by omega)
+      omega
+    omega
+  · have : (k + 1) * t ≤ 2 * t := Nat.mul_le_mul_right t (by omega)
+    omega
+
+/-- **One row's count**: at most `20·N^9 + 171·N^7 + 9·N^6 + 3·N²·ρ(3N)` in the regime. -/
+theorem rowCost_le {F : Type} [Field F] [DecidableEq F] {s : ℕ} (rf : RootFinder F) {k t : ℕ}
+    {cs : List (F × (Fin s → F))} (h : Reg k cs.length t) (r : Fin s) :
+    rowCost rf k t cs r ≤ 20 * cs.length ^ 9 + 171 * cs.length ^ 7 + 9 * cs.length ^ 6 +
+      3 * cs.length ^ 2 * rf.bound.eval (3 * cs.length) := by
+  have hlen : (rowPts cs r).length = cs.length := length_rowPts cs r
+  have hI := interpCost_le (show Reg k (rowPts cs r).length t by rwa [hlen])
+  rw [hlen] at hI
+  unfold rowCost
+  generalize cs.length = N at h hI ⊢
+  have hk := h.k_lt
+  have hkN : k ≤ N := by omega
+  have hD := degX_le h
+  have hL := degY_succ_le h
+  have hL4 : degY k t + 4 ≤ 6 * N := by omega
+  have hR := rrCost_le rf (degY_le_degX k t) (interpTab k t (rowPts cs r)) k
+  have hnv : nvars k N + 1 ≤ 3 * N ^ 3 := by
+    have := neqs_le hk
+    have : 1 ≤ N ^ 3 := Nat.one_le_pow _ _ (by omega)
+    unfold nvars
+    omega
+  have hT : (degX k t + 1) * (degY k t + 1) * (nvars k N + 1) ≤ 9 * N ^ 6 := by
+    calc _ ≤ (N * N) * (3 * N) * (3 * N ^ 3) := by gcongr
+      _ = 9 * N ^ 6 := by ring
+  have hρ : rf.bound.eval (degY k t + 1) ≤ rf.bound.eval (3 * N) := eval_mono_nat _ hL
+  have hRR : k * ((degY k t + 1) * ((degX k t + 1) * (degY k t + 1) + rf.bound.eval (degY k t + 1) +
+      childCost (degX k t) (degY k t))) ≤ 171 * N ^ 7 + 3 * N ^ 2 * rf.bound.eval (3 * N) := by
+    unfold childCost
+    have h57 : N ^ 5 ≤ N ^ 7 := Nat.pow_le_pow_right (by omega) (by norm_num)
+    calc _ ≤ N * ((3 * N) * ((N * N) * (3 * N) + rf.bound.eval (3 * N) +
+          (N * N) * (3 * N) * ((3 * N) * (6 * N)))) := by gcongr
+      _ = 9 * N ^ 5 + 162 * N ^ 7 + 3 * N ^ 2 * rf.bound.eval (3 * N) := by ring
+      _ ≤ _ := by omega
+  omega
+
+theorem keepCost_le {k N m s : ℕ} (hk : k + 1 < N) (hm : m < s) : keepCost k N m ≤ 4 * N ^ 2 * s := by
+  unfold keepCost
+  have h1 : (m + 1) * (2 * k + 1) + 1 ≤ 2 * N * s + 1 := by
+    have : (m + 1) * (2 * k + 1) ≤ s * (2 * N) := Nat.mul_le_mul (by omega) (by omega)
+    linarith
+  have h2 : N * ((m + 1) * (2 * k + 1) + 1) ≤ N * (2 * N * s + 1) := Nat.mul_le_mul_left N h1
+  have hN : 1 ≤ N := by omega
+  have hs : 1 ≤ s := by omega
+  have h3 : N ≤ N ^ 2 * s := by nlinarith
+  have h4 : 1 ≤ N ^ 2 * s := by nlinarith
+  nlinarith
+
+/-- **The pruning's count**: at most `12·N^4·s²` in the regime, on distinct points. -/
+theorem pruneCost_le {F : Type} [Field F] [DecidableEq F] {s : ℕ} (rf : RootFinder F) {k t : ℕ}
+    {cs : List (F × (Fin s → F))} (h : Reg k cs.length t) (hnd : (cs.map Prod.fst).Nodup) :
+    pruneCost rf k t cs ≤ 12 * cs.length ^ 4 * s ^ 2 := by
+  unfold pruneCost
+  have hk := h.k_lt
+  have hterm : ∀ m ∈ Finset.range s, (kept rf k t cs m).length * (cands rf k t cs m).length *
+      keepCost k cs.length m ≤ 12 * cs.length ^ 4 * s := by
+    intro m hm
+    rw [Finset.mem_range] at hm
+    have h1 := length_kept_le rf h hnd m
+    have h2 : (cands rf k t cs m).length ≤ 3 * cs.length := by
+      rw [cands, dite_eq_left hm]
+      exact (length_rr_le rf (degY_le_degX k t) _ k).trans (degY_succ_le h)
+    have h3 := keepCost_le hk hm
+    calc _ ≤ cs.length * (3 * cs.length) * (4 * cs.length ^ 2 * s) := by gcongr
+      _ = 12 * cs.length ^ 4 * s := by ring
+  calc _ ≤ (Finset.range s).card • (12 * cs.length ^ 4 * s) := Finset.sum_le_card_nsmul _ _ _ hterm
+    _ = 12 * cs.length ^ 4 * s ^ 2 := by rw [Finset.card_range, smul_eq_mul]; ring
+
+/-- **The complexity polynomial**, from the root finder's bound `ρ`, the reader's `β` and the cost `dc` of a point:
+`20·X^9 + 171·X^7 + 9·X^6 + 12·X^4 + X^2 + dc·X + 1 + 3·X^2·ρ(3·X) + (X + 1)·β(X)`. -/
+noncomputable def gsBound (ρ β : Polynomial ℕ) (dc : ℕ) : Polynomial ℕ :=
+  C 20 * X ^ 9 + C 171 * X ^ 7 + C 9 * X ^ 6 + C 12 * X ^ 4 + X ^ 2 + C dc * X + 1 +
+    C 3 * X ^ 2 * ρ.comp (C 3 * X) + (X + 1) * β
+
+theorem eval_gsBound (ρ β : Polynomial ℕ) (dc Q : ℕ) :
+    (gsBound ρ β dc).eval Q = 20 * Q ^ 9 + 171 * Q ^ 7 + 9 * Q ^ 6 + 12 * Q ^ 4 + Q ^ 2 + dc * Q + 1 +
+      3 * Q ^ 2 * ρ.eval (3 * Q) + (Q + 1) * β.eval Q := by
+  simp [gsBound, eval_comp]
+
+/-- **`gsCost` is at most `gsBound` at `N·s·w`**, for every input. -/
+theorem gsCost_le {F T : Type} [Field F] [DecidableEq F] {s : ℕ} (C : IRS F T s) (rf : RootFinder F)
+    (rd : Reader C) (agree : ℝ) (dc w : ℕ) (hw : 1 ≤ w) (os : List (ℕ × (Fin s → F))) :
+    gsCost C rf rd agree dc os ≤ (gsBound rf.bound rd.bound dc).eval (os.length * s * w) := by
+  rw [eval_gsBound]
+  have hβ0 : ∀ Q : ℕ, rd.bound.eval Q ≤ (Q + 1) * rd.bound.eval Q := fun Q => Nat.le_mul_of_pos_left _ (by omega)
+  unfold gsCost
+  by_cases hs : s = 0
+  · rw [ite_eq_left hs]
+    subst hs
+    have h1 := rd.cost_le
+    rw [zero_mul] at h1
+    have h2 := eval_mono_nat rd.bound (Nat.zero_le (os.length * 0 * w))
+    have h3 := hβ0 (os.length * 0 * w)
+    omega
+  rw [ite_eq_right hs]
+  generalize hQ : os.length * s * w = Q
+  have hs1 : 1 ≤ s := by omega
+  have hsN : os.length * s ≤ Q := by rw [← hQ]; exact Nat.le_mul_of_pos_right _ hw
+  have hNQ : os.length ≤ Q := le_trans (Nat.le_mul_of_pos_right _ hs1) hsN
+  have hsQ0 : 0 ≤ 3 * Q ^ 2 * rf.bound.eval (3 * Q) := Nat.zero_le _
+  have hdc : os.length * dc ≤ dc * Q := by rw [mul_comm]; exact Nat.mul_le_mul_left dc hNQ
+  have hNN : os.length * os.length ≤ Q ^ 2 := by rw [sq]; exact Nat.mul_le_mul hNQ hNQ
+  split_ifs with hr
+  swap
+  · have := hβ0 Q
+    omega
+  obtain ⟨hreg, hnd⟩ := hr
+  set t := IRS.threshold agree os
+  have hlen : (cols C os).length = os.length := length_cols C os
+  have hreg' : Reg C.k (cols C os).length t := by rwa [hlen]
+  have hrow : ∑ r : Fin s, rowCost rf C.k t (cols C os) r ≤
+      s * (20 * os.length ^ 9 + 171 * os.length ^ 7 + 9 * os.length ^ 6 +
+        3 * os.length ^ 2 * rf.bound.eval (3 * os.length)) := by
+    have := Finset.sum_le_card_nsmul Finset.univ (rowCost rf C.k t (cols C os)) _
+      fun r _ => rowCost_le rf hreg' r
+    rwa [Finset.card_univ, Fintype.card_fin, smul_eq_mul, hlen] at this
+  have hpr := pruneCost_le rf hreg' hnd
+  rw [hlen] at hpr
+  have hkept := length_kept_le rf hreg' hnd s
+  rw [hlen] at hkept
+  have hrd : rd.cost ≤ rd.bound.eval Q := by
+    refine rd.cost_le.trans (eval_mono_nat _ ?_)
+    have := hreg.k_lt
+    calc s * C.k ≤ os.length * s := by rw [mul_comm]; exact Nat.mul_le_mul_right s (by omega)
+      _ ≤ Q := hsN
+  generalize os.length = N at hsN hNQ hdc hNN hrow hpr hkept
+  have hpow : ∀ e : ℕ, s * N ^ (e + 1) ≤ Q ^ (e + 1) := fun e => by
+    calc s * N ^ (e + 1) = (N * s) * N ^ e := by ring
+      _ ≤ Q * Q ^ e := Nat.mul_le_mul hsN (Nat.pow_le_pow_left hNQ e)
+      _ = Q ^ (e + 1) := by ring
+  have h9 : s * N ^ 9 ≤ Q ^ 9 := hpow 8
+  have h7 : s * N ^ 7 ≤ Q ^ 7 := hpow 6
+  have h6 : s * N ^ 6 ≤ Q ^ 6 := hpow 5
+  have hρ : s * (3 * N ^ 2 * rf.bound.eval (3 * N)) ≤ 3 * Q ^ 2 * rf.bound.eval (3 * Q) := by
+    calc s * (3 * N ^ 2 * rf.bound.eval (3 * N)) = 3 * (s * N ^ 2) * rf.bound.eval (3 * N) := by ring
+      _ ≤ 3 * Q ^ 2 * rf.bound.eval (3 * Q) :=
+        Nat.mul_le_mul (Nat.mul_le_mul_left 3 (hpow 1)) (eval_mono_nat _ (by omega))
+  have h4 : 12 * N ^ 4 * s ^ 2 ≤ 12 * Q ^ 4 := by
+    calc 12 * N ^ 4 * s ^ 2 = 12 * ((N * s) ^ 2 * N ^ 2) := by ring
+      _ ≤ 12 * (Q ^ 2 * Q ^ 2) := Nat.mul_le_mul_left 12 (Nat.mul_le_mul (Nat.pow_le_pow_left hsN 2)
+          (Nat.pow_le_pow_left hNQ 2))
+      _ = 12 * Q ^ 4 := by ring
+  have hrd' : (kept rf C.k t (cols C os) s).length * rd.cost ≤ (Q + 1) * rd.bound.eval Q :=
+    Nat.mul_le_mul (by omega) hrd
+  have hsplit : s * (20 * N ^ 9 + 171 * N ^ 7 + 9 * N ^ 6 + 3 * N ^ 2 * rf.bound.eval (3 * N)) =
+      20 * (s * N ^ 9) + 171 * (s * N ^ 7) + 9 * (s * N ^ 6) +
+        s * (3 * N ^ 2 * rf.bound.eval (3 * N)) := by ring
+  omega
+
+/-- **The counted decoder's complexity**: its count is at most `gsBound` at the input size `N·s·w`. -/
+theorem gsDecode_complexity {F T : Type} [Field F] [DecidableEq F] {s : ℕ} (C : IRS F T s) (rf : RootFinder F)
+    (rd : Reader C) (agree : ℝ) (dc w : ℕ) (hw : 1 ≤ w) :
+    DecoderComplexity (gsDecode C rf rd agree) (gsCounted C rf rd agree dc)
+      (fun os => os.length * s * w) (gsBound rf.bound rd.bound dc) :=
+  fun os => ⟨rfl, gsCost_le C rf rd agree dc w hw os⟩
+
 end Claims.GS
