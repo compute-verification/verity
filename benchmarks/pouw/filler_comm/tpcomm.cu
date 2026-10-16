@@ -502,6 +502,10 @@ static uint64_t tp_defer_ref_warp(uint64_t c0, uint64_t c1, uint64_t chunk, int 
   for (int col = 0; col < PF_TN; col++)
     for (int k = 0; k < 32; k++) B[(size_t)col * 32 + k] = h_formed(TP_SB, TP_SBIAS, Bbase + (size_t)col * 32 + k);
   auto Aval = [&](int F, int row, int k) { return h_formed(TP_SA, TP_SU, Abase + (size_t)F * 512 + (size_t)row * 32 + k); };
+  // B's shared layout stores a column's s8 words in the order 0 4 1 5 2 6 3 7 (pf_tiles), so the 8-byte fragment load gives
+  // the IMMA its canonical B fragment; the deferred pass copies dB into shared byte for byte, so logical k reads physical
+  // offset bphys(k) (A is stored and read in canonical row order, so Aval stays by k).
+  auto bphys = [](int k) { const int m = k >> 2, r = k & 3; return ((m < 4 ? 2 * m : 2 * (m - 4) + 1) << 2) + r; };
   uint64_t h = 0;
   for (int lane = 0; lane < 32; lane++) {
     const int g = lane >> 2, t = lane & 3;
@@ -515,7 +519,8 @@ static uint64_t tp_defer_ref_warp(uint64_t c0, uint64_t c1, uint64_t chunk, int 
           const int c0col = 8 * j + 2 * t, c1col = 8 * j + 2 * t + 1;
           for (int k = 0; k < 32; k++) {
             const int rg = Aval(F, g, k), rg8 = Aval(F, g + 8, k);
-            const int b0 = B[(size_t)c0col * 32 + k], b1 = B[(size_t)c1col * 32 + k];
+            const int kb = bphys(k);
+            const int b0 = B[(size_t)c0col * 32 + kb], b1 = B[(size_t)c1col * 32 + kb];
             d[0] += rg * b0; d[1] += rg * b1; d[2] += rg8 * b0; d[3] += rg8 * b1;
           }
           pf_absorb<4>(y, z, (uint32_t)d[0], (uint32_t)d[1], (uint32_t)d[2], (uint32_t)d[3], key);
