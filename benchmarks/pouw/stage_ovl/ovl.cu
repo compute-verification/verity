@@ -47,6 +47,9 @@
 //   cgh, cgheq, cghrrW, cghonly: the same with layers 1..31's S records made by host threads (commit_gpu's host_salt,
 //             checked equal to the GPU's) and copied in by cudaMemcpyAsync where the cg arms run salt_small; layer 0's
 //             salts, F and the pads stay on the GPU at the chunk's start
+//   cgpre, cgpreeq, cgprerrW, cgpreonly: the same with all 32 layers' salts, F and the pads made by salt_small before the
+//             window (cg_pre, its time alone printed as mode salt_pre) into the committers' slots, so the window only
+//             reads them; cg_pre runs again after each poisoning, so their poisoned check still covers the salts
 //
 // env: ARMS, DRAW_US (300), PLAIN_RB (8192), MID (1: stage.cu's frame heads ahead), CARVE (unset: the commitments' and draws'
 // kernels at the driver's carveout; P: P% shared memory), BESIDE_C (367), CG_R (64), CG_DUMP, CG_SKIP (timing only: salts,
@@ -205,7 +208,8 @@ struct Sched {
   int lite;      // each commitment a stand-in of its stage's compressions a row (LITE_C) in 128-thread CTAs, no shared
                  // memory: 1 flat (LITE_N chained a thread), 2 chained as the tree (segments, the row, CTA levels, the top);
                  // 3: commit_gpu's small path, the real commitment; 4: the same with layers 1..31's S records made by host
-                 // threads and copied in (cudaMemcpyAsync on the chunk's salt stream) in place of salt_small
+                 // threads and copied in (cudaMemcpyAsync on the chunk's salt stream) in place of salt_small; 5: the
+                 // same with every slot's salts, F and the pads made before the graph (cg_pre), none in it
 };
 static Sched sched_of(const std::string& n) {
   if (n == "chunked") return {n, false, false, true, false, 0, 0, 0};
@@ -232,6 +236,10 @@ static Sched sched_of(const std::string& n) {
   if (n == "cgheq") return {n, true, true, true, false, 0, 0, 4};
   if (n == "cghonly") return {n, true, false, false, false, 1, 0, 4};
   if (n.rfind("cghrr", 0) == 0) return {n, true, true, true, false, 1, atoi(n.c_str() + 5), 4};
+  if (n == "cgpre") return {n, true, true, true, false, 1, 0, 5};
+  if (n == "cgpreeq") return {n, true, true, true, false, 0, 0, 5};
+  if (n == "cgpreonly") return {n, true, false, false, false, 1, 0, 5};
+  if (n.rfind("cgprerr", 0) == 0) return {n, true, true, true, false, 1, atoi(n.c_str() + 7), 5};
   if (n == "cg") return {n, true, true, true, false, 1, 0, 3};
   if (n == "cgeq") return {n, true, true, true, false, 0, 0, 3};
   if (n == "cgonly") return {n, true, false, false, false, 1, 0, 3};
@@ -353,6 +361,23 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
         CK(cudaMemset(m.F, 0xA5, m.n * 64));
       }
     CK(cudaDeviceSynchronize());
+  };
+  // the cgpre arms' salts: every slot of k chunks' committers, F and the pads, alone on d.st; returns its time
+  auto cg_pre = [&](int k) {
+    cudaEvent_t a, b;
+    CK(cudaEventCreate(&a));
+    CK(cudaEventCreate(&b));
+    CK(cudaEventRecord(a, d.st));
+    for (int c = 0; c < k; c++)
+      for (int t = 0; t < NSTAGE; t++) ch[c].cgc[t].salts<true>(nullptr, d.st);
+    CK(cudaEventRecord(b, d.st));
+    CK(cudaEventSynchronize(b));
+    CK(cudaGetLastError());
+    float ms;
+    CK(cudaEventElapsedTime(&ms, a, b));
+    CK(cudaEventDestroy(a));
+    CK(cudaEventDestroy(b));
+    return ms;
   };
   std::vector<uint8_t> cg_ref;
   cg::u64* cg_hs[NSTAGE] = {};
@@ -586,7 +611,7 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
           pool.join(sg[c], ss[c]);
           for (int t = 0; t < NSTAGE; t++) {
             if (S.lite >= 3) {
-              if (!skip_salts) ch[c].cgc[t].salts<true>(nullptr, ss[c], 0, 1);
+              if (!skip_salts && S.lite != 5) ch[c].cgc[t].salts<true>(nullptr, ss[c], 0, 1);
             }
             else commit_salt(ch[c].cm[t], LAYERS, ss[c]);
             salt_ev[c][t] = pool.get();
@@ -617,7 +642,7 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
                   if (l + 1 < LAYERS) {
                     pool.join(sh[c], ss[c]);
                     const cg::Committer& m = ch[c].cgc[t];
-                    if (skip_salts) {
+                    if (skip_salts || S.lite == 5) {
                     } else if (S.lite == 4) {
                       CK(cudaMemcpyAsync(m.S + 16 * m.n * (l + 1), cg_hs[t], m.n * 128, cudaMemcpyHostToDevice, ss[c]));
                     } else {
@@ -643,6 +668,17 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
         }
       });
       arms.push_back(a);
+    }
+    bool any_pre = false;
+    for (ArmRun& a : arms) any_pre |= a.cg && sched_of(a.name).lite == 5;
+    if (any_pre) {
+      cg_pre(k);
+      const float pre_ms = cg_pre(k);
+      cg::u64 leaves = 0;
+      for (int t = 0; t < NSTAGE; t++) leaves += cg_n[t];
+      printf("{\"mode\": \"salt_pre\", \"M\": %d, \"k\": %d, \"slots\": %d, \"leaves\": %llu, \"ms\": %.3f}\n", M, k, LAYERS,
+             (unsigned long long)(leaves * LAYERS * k), pre_ms);
+      fflush(stdout);
     }
     // two warm-ups each, then the reps interleaved arm by arm, each timed by events with the read SM clock and power
     for (ArmRun& a : arms)
@@ -696,6 +732,7 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
     for (size_t i = 0; use_cg && i < arms.size(); i++) {
       if (!arms[i].cg && arms[i].name.rfind("nohash", 0) != 0) continue;
       cg_poison(k);
+      if (arms[i].cg && sched_of(arms[i].name).lite == 5) cg_pre(k);
       CK(cudaGraphLaunch(arms[i].G.ge, sm));
       CK(cudaStreamSynchronize(sm));
       CK(cudaGetLastError());

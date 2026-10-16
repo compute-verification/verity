@@ -67,7 +67,12 @@ def is_cgh(name: str) -> bool:
     return name in ("cgh", "cgheq") or name.startswith("cghrr")
 
 
-KIND = {"cg": is_cg, "cgh": is_cgh}
+def is_cgpre(name: str) -> bool:
+    """the same with every layer's salt records made on the GPU before the window, so the window only reads them"""
+    return name in ("cgpre", "cgpreeq") or name.startswith("cgprerr")
+
+
+KIND = {"cg": is_cg, "cgh": is_cgh, "cgpre": is_cgpre}
 
 
 def main() -> int:
@@ -75,7 +80,7 @@ def main() -> int:
     ap.add_argument("out", nargs="+")
     ap.add_argument("--json")
     a = ap.parse_args()
-    gates, setups, ovl, thru, beside, checks, hosts = [], {}, [], [], [], {}, []
+    gates, setups, ovl, thru, beside, checks, hosts, pres = [], {}, [], [], [], {}, [], []
     for d in map(Path, a.out):
         gates += rows(d / "gate.jsonl")
         thru += rows(d / "shathru.jsonl")
@@ -93,6 +98,8 @@ def main() -> int:
                     setups[(rot, r["M"])] = r
                 elif r["mode"] == "host_salt":
                     hosts.append(r)
+                elif r["mode"] == "salt_pre":
+                    pres.append(r)
                 else:
                     ovl.append({**r, "fr_rot": rot})
     for name, s in checks.items():
@@ -102,6 +109,9 @@ def main() -> int:
         print(f"host salts, M = {h['M']}: {h['ns_leaf_core']:.0f} ns a leaf on one core, equal to the GPU's: {h['equal']}; "
               f"{h['leaves_a_layer']} leaves a layer, so layers 1..31 of a chunk take {per_chunk:.2f} core-s "
               f"({h['threads']} threads filled one layer in {h['fill_ms']:.1f} ms)")
+    for r in pres:
+        print(f"GPU salts ahead, M = {r['M']}, k = {r['k']}: {r['leaves']} leaves' records ({r['slots']} layers) in "
+              f"{r['ms']:.1f} ms alone, {r['leaves'] * 128 / 2**30:.2f} GiB held")
     for t in thru:
         c = t["compressions_a_s"]
         best = max(c, key=c.get)
@@ -156,7 +166,7 @@ def main() -> int:
                 cell["best_cost_sat"] = proto[b]["cost_sat"]
             if proto:
                 cell["best_cost_best"] = proto[cell["best"]]["cost_best"]
-            for kind in ("lite", "litec", "cg", "cgh"):
+            for kind in ("lite", "litec", "cg", "cgh", "cgpre"):
                 lite = {n: v for n, v in cell["arms"].items() if (KIND[kind](n) if kind in KIND else lite_kind(n) == kind)}
                 if lite:
                     b = min(lite, key=lambda n: lite[n]["ms"])
@@ -177,7 +187,8 @@ def main() -> int:
             for kind, only, what in (("lite", "liteonly", "stand-in committer, flat (small CTAs, same compressions)"),
                                      ("litec", "liteconly", "stand-in committer, chained (small CTAs, same compressions)"),
                                      ("cg", "cgonly", "commit_gpu's committer (small path, real roots)"),
-                                     ("cgh", "cghonly", "commit_gpu's committer, salts from host threads (real roots)")):
+                                     ("cgh", "cghonly", "commit_gpu's committer, salts from host threads (real roots)"),
+                                     ("cgpre", "cgpreonly", "commit_gpu's committer, salts made on the GPU before the window (real roots)")):
                 if f"best_{kind}" in cell:
                     lo = cell["arms"].get(only)
                     print(f"        {what}: best {cell[f'best_{kind}']} {100 * cell[f'best_{kind}_cost']:+.1f}% "
@@ -217,7 +228,8 @@ def main() -> int:
         for kind, what in (("lite", "the stand-in committer, flat: latency understated"),
                            ("litec", "the stand-in committer, chained as the tree: ~40 dependent compressions a stage"),
                            ("cg", "commit_gpu's committer, the real roots"),
-                           ("cgh", "commit_gpu's committer, salts from host threads, the real roots")):
+                           ("cgh", "commit_gpu's committer, salts from host threads, the real roots"),
+                           ("cgpre", "commit_gpu's committer, salts made on the GPU before the window, the real roots")):
             if not any(f"best_{kind}" in c for c in cs):
                 continue
             print(f"  with {what} (128-thread CTAs, no shared memory):")
@@ -238,6 +250,11 @@ def main() -> int:
                 lone[c["M"]] = c["arms"]["eq"]["ms"]
                 print(f"  lone TTFT M = {c['M']}: {c['arms']['eq']['ms']:.1f} ms against plain {c['plain_ms']:.1f} ms "
                       f"({100 * c['arms']['eq']['cost']:+.0f}%)")
+            for n in ("cgeq", "cgheq", "cgpreeq"):
+                if c["k"] == 1 and n in c["arms"]:
+                    v = c["arms"][n]
+                    print(f"  lone TTFT M = {c['M']}, {n}: {v['ms']:.2f} ms against plain {c['plain_ms']:.2f} ms ({100 * v['cost']:+.1f}%; "
+                          f"{100 * v['cost_best']:+.1f}% against the fastest plain {c['plain_best_ms']:.2f} ms)")
         print("  TTFT under load (ms): plain's makespan (every request's, batched); the best arm's median chunk end; "
               "hprio's first (top-priority) chunk end")
         for c in sorted(cs, key=lambda c: (c["M"], c["k"])):
