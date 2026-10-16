@@ -112,6 +112,47 @@ def main(argv: list[str]) -> int:
             c = row["co"]
             print(f"{'':16s} co-resident on all SMs: step {c['slowdown']:.3f}x, {c['watt']:.1f} W, {c['mhz']:.0f} MHz "
                   f"(min {c['mhz_min']:.0f}), pcap {c['pcap']:.2f}, filler share {c['fill_share']:.3f}")
+        if arms.get("att_co_fill"):
+            att = m("att", "step_ms")
+            row["att"] = dict(att_ms=att, att_watt=m("att", "watt_energy"), att_mhz=m("att", "mhz"),
+                              slowdown=m("att_co_fill", "step_ms") / att, watt=m("att_co_fill", "watt_energy"),
+                              watt_inst_max=max((d["watt_inst"] for d in arms["att_co_fill"]), default=None),
+                              mhz=m("att_co_fill", "mhz"), mhz_min=m("att_co_fill", "mhz_min"),
+                              pcap=m("att_co_fill", "frac_pcap"),
+                              fill_share=share(m("att_co_fill", "fill_mma_per_s"), m("att_co_fill", "mhz")))
+            a = row["att"]
+            print(f"{'':16s} attention alone {att:.3f} ms {a['att_watt']:.1f} W; beside the filler on all SMs: "
+                  f"{a['slowdown']:.3f}x, {a['watt']:.1f} W, {a['mhz']:.0f} MHz (min {a['mhz_min']:.0f}), pcap "
+                  f"{a['pcap']:.2f}, filler share {a['fill_share']:.3f}")
+    ps: dict = defaultdict(lambda: defaultdict(list))
+    for d in rs:
+        if d["mode"] == "ppsplit":
+            ps[(d["M"], d["fill_sms"], d["step_sms"], d.get("split_flags", 0), variant(d), d["_run"])][d["arm"]].append(d)
+    if ps:
+        print("\nprefill on a split (medians over rounds; ratios over the mean of pre_full and pre_full2):")
+        print(f"{'M':>5s} {'fSMs':>4s} {'step':>4s} {'flg':>3s} {'variant':16s} {'full ms':>8s} {'split':>6s} {'+fill':>6s} "
+              f"{'fill/sp':>7s} {'W full':>6s} {'W sp':>6s} {'W sp+f':>6s} {'MHz full':>8s} {'MHz sp':>6s} {'MHz sp+f':>8s} "
+              f"{'pcap full':>9s} {'pcap sp+f':>9s} {'f share':>7s} {'bad':>4s}")
+    for (mm, f, st, fl, var, run), arms in sorted(ps.items()):
+        def m3(arm: str, k: str) -> float:
+            v = [d[k] for d in arms.get(arm, [])]
+            return statistics.median(v) if v else float("nan")
+
+        full = statistics.mean([m3("pre_full", "step_ms"), m3("pre_full2", "step_ms")])
+        sp, spf = m3("pre_split", "step_ms") / full, m3("pre_split_fill", "step_ms") / full
+        fsh = share(m3("pre_split_fill", "fill_mma_per_s"), m3("pre_split_fill", "mhz"))
+        bad = sum(d["rec_bad"] for d in arms.get("pre_split_fill", []) if d["rec_bad"] > 0)
+        row = dict(M=mm, fill_sms=f, step_sms=st, split_flags=fl, variant=var, full_ms=full, split=sp, split_fill=spf,
+                   fill_over_split=spf / sp,
+                   watt={a: m3(a, "watt_energy") for a in ("pre_full", "pre_split", "pre_split_fill", "pre_full2")},
+                   mhz={a: m3(a, "mhz") for a in ("pre_full", "pre_split", "pre_split_fill", "pre_full2")},
+                   pcap={a: m3(a, "frac_pcap") for a in ("pre_full", "pre_split", "pre_split_fill", "pre_full2")},
+                   fill_share=fsh, rec_bad=bad, run=run)
+        out.setdefault("ppsplit", []).append(row)
+        print(f"{mm:5d} {f:4d} {st:4d} {fl:3d} {var:16s} {full:8.2f} {sp:6.3f} {spf:6.3f} {spf / sp:7.4f} "
+              f"{row['watt']['pre_full']:6.1f} {row['watt']['pre_split']:6.1f} {row['watt']['pre_split_fill']:6.1f} "
+              f"{row['mhz']['pre_full']:8.0f} {row['mhz']['pre_split']:6.0f} {row['mhz']['pre_split_fill']:8.0f} "
+              f"{row['pcap']['pre_full']:9.2f} {row['pcap']['pre_split_fill']:9.2f} {fsh:7.3f} {bad:4d}")
     pre: dict = defaultdict(lambda: defaultdict(list))
     for d in rs:
         if d["mode"] == "pprefill":
