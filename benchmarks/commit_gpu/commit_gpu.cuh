@@ -1,0 +1,851 @@
+// The GPU committer's device code and its host side (constants, Committer), included by commit_gpu.cu and by any
+// kernel that commits rows it produces (an epilogue calls hash_after_block or its own row digest, then
+// leaf_from_digest, after Committer::salts; Committer::nodes folds the tree). One translation unit: C is __constant__.
+//
+// A GPU committer for hm96-sha512/row/v2 and hm96-sha512/row-seg/v1 rows in frame-v3-sha512 trees, bit for bit the
+// reference's (verity.ml.commitments: hm96.SHA512, rowleaf, merkle.CommitmentDomain and tree_levels; reference.py here).
+//
+// Per position of a domain of n leaves (rank = position, the tree padded to width = 2^depth):
+//   x    = SHA-512(P(l) || row)                         the row's sha512/row/v2 digest
+//   y    = salt (192 bytes): given, or y_r = SHA-512(Ks || u64be(pos) || u64be(r)), r = 0, 1, 2 (reference.prf_salt)
+//   c    = SHA-512(salt_prefix || y);  b = x ^ M_key y;  h = SHA-512(leaf_prefix(key) || b || c)
+//   leaf = SHA-512(frame || "leaf" || domain id || uint(pos) || uint(pos) || "hm96-sha512/row/v2" || h)   (framed parts)
+//   pad  = SHA-512(frame || "pad" || domain id || uint(pos)) for n <= pos < width
+// then node(level, index, left, right) up the tree. Every 64-byte digest is kept as 8 u64 words, each the big-endian
+// value of its 8 bytes (the host swaps them back).
+//
+// Two phases: the salt phase (y, M_key y and c; salt_kernel) reads no data and can run before the operand exists; the data
+// phase (x, b, h, the leaf, the tree; leaf_kernel and the node kernels) is all that sits on the critical path. The tree's
+// narrow top can run on the CPU (Committer::host_tail), where a compression is far faster than on one GPU thread.
+//
+// M_key y uses M's Hankel form: column j of M is bits j .. j+511 of the key, so the reference's byte table (p, v) is bytes
+// [p, p+64) of T_v = xor of (key >> s) over the set bits s of v: one 64 KB table T (reference.t_table), in shared memory.
+//
+// Row sources: `e2e` (the e2e slice's leaf: 32 int8 of an operand as bf16 words twice, l = 1024, leaf pos at bytes
+// [32 pos, 32 pos + 32)), `rows` (n rows of l bits at a byte stride; an int8 operand's own memory is rows of 8 L bits) and
+// `seg` (the same rows under sha512/row-seg/v1 and schema hm96-sha512/row-seg/v1: 1 KiB segments hashed a thread each, then
+// the outer hash over their digests, so a long row's hash is not one serial chain; P is then Q(l)). `tile` and `tileseg`
+// (Decision 46) commit an M x K int8 operand in place as tile leaves: leaf pos is block (pos % ceil(M/R), pos / ceil(M/R))
+// of R rows x 32 values, its row the block's 32 R bytes in row-major order (rows past M zero), as sha512/row/v2 or
+// sha512/row-seg/v1 rows: the reference's commitment of the permuted operand (reference.permute).
+//
+#pragma once
+
+#include <cuda_runtime.h>
+
+#include <algorithm>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <string>
+#include <vector>
+
+#include "sha512.cuh"
+
+using u64 = uint64_t;
+using u32 = uint32_t;
+#define DEV __device__ __forceinline__
+
+#define CK(x)                                                                                   \
+  do {                                                                                          \
+    cudaError_t e_ = (x);                                                                       \
+    if (e_ != cudaSuccess) {                                                                    \
+      fprintf(stderr, "CUDA %s at %s:%d: %s\n", cudaGetErrorString(e_), __FILE__, __LINE__, #x); \
+      exit(3);                                                                                  \
+    }                                                                                           \
+  } while (0)
+
+#ifndef LEAF_THREADS
+#define LEAF_THREADS 256
+#endif
+constexpr int TSTRIDE = 272;                 // bytes a T row in shared memory: 256 + 16, so rows start in different bank groups
+constexpr int TSMEM = 256 * TSTRIDE;          // 69,632 bytes
+constexpr int NODE_THREADS = 256;             // a node pass covers 512 children a block, up to 9 levels
+constexpr int MAX_NB = 4;                     // positions and node indices below 2^32
+constexpr int MAX_NI = 4;
+
+struct Consts {
+  u64 mid_P[8];             // after P(l)
+  u64 kw_xpad[80];          // the row digest's last block when the row fills whole blocks (all padding)
+  u64 mid_salt[8];          // after the salt prefix
+  u64 mid_leaf[8];          // after leaf_prefix(key)
+  u64 kw_leafpad[80];       // the hm96 leaf's padding block
+  u64 ks[8];                // the salt key
+  u64 ks_m8[8];             // state after rounds 0..7 of a salt block (its words 0..7 are the key)
+  u64 fl_tpl[MAX_NB + 1][32];   // the frame leaf's two blocks per nb = len(uint(pos)), pos and h zero
+  u64 fl_m15[8];            // state after rounds 0..14 of its first block (words 0..14 don't depend on pos)
+  u64 node_mid[64][8];      // per level: the chaining value after a node message's first block (it fixes only the level)
+  u64 node_tpl[MAX_NI + 1][32];  // a node message's blocks 2 and 3 per ni = len(uint(index)), index and children zero
+  u64 pad_tpl[MAX_NB + 1][16];   // a pad's first block per nb, rank zero
+  u64 seg_mid[64][8];       // sha512/row-seg/v1: the chaining value after segment j's first block S(j, s, m_j)
+};
+__constant__ Consts C;
+
+DEV u32 bswap32(u32 x) { return __byte_perm(x, 0, 0x0123); }
+DEV u64 be64(u32 lo, u32 hi) { return (u64)bswap32(lo) << 32 | bswap32(hi); }   // 8 bytes loaded as two LE u32
+HD int nbytes(u64 x) { int n = 1; while (x >> (8 * n) && n < 8) ++n; return n; }
+
+// OR the low NB bytes of v, big-endian, into the message words W at byte offset OFF.
+template <int OFF, int NB>
+DEV void or_be(u64* W, u64 v) {
+  constexpr int END = OFF + NB, K = (END - 1) / 8, SH = 8 * (7 - (END - 1) % 8);
+  W[K] |= v << SH;
+  if constexpr (OFF < 8 * K) W[K - 1] |= v >> (64 - SH);
+}
+// OR a digest (8 words) into W at byte offset OFF.
+template <int OFF>
+DEV void or_digest(u64* W, const u64* d) {
+  constexpr int K0 = OFF / 8, S = 8 * (OFF % 8);
+#pragma unroll
+  for (int i = 0; i < 8; ++i) {
+    if constexpr (S == 0) {
+      W[K0 + i] |= d[i];
+    } else {
+      W[K0 + i] |= d[i] >> S;
+      W[K0 + i + 1] |= d[i] << (64 - S);
+    }
+  }
+}
+
+DEV void cpy8(u64* d, const u64* s) {
+#pragma unroll
+  for (int i = 0; i < 8; ++i) d[i] = s[i];
+}
+
+// --- the frame: leaf, pad, node ----------------------------------------------------------------------------------
+
+// SX: the schema's length beyond "hm96-sha512/row/v2" (0; 4 for "hm96-sha512/row-seg/v1").
+template <int NB, int SX>
+DEV void frame_leaf_nb(u64 pos, const u64* h, u64* out) {
+  u64 W[32];
+#pragma unroll
+  for (int i = 0; i < 32; ++i) W[i] = C.fl_tpl[NB][i];
+  or_be<121, NB>(W, pos);
+  or_be<129 + NB, NB>(W, pos);
+  or_digest<163 + 2 * NB + SX>(W, h);
+  sha::iv(out);
+  sha::compress_from<15>(out, C.fl_m15, W);
+  sha::compress(out, W + 16);
+}
+template <int SX>
+DEV void frame_leaf(u64 pos, const u64* h, u64* out) {
+  switch (nbytes(pos)) {
+    case 1: frame_leaf_nb<1, SX>(pos, h, out); break;
+    case 2: frame_leaf_nb<2, SX>(pos, h, out); break;
+    case 3: frame_leaf_nb<3, SX>(pos, h, out); break;
+    default: frame_leaf_nb<4, SX>(pos, h, out); break;
+  }
+}
+
+template <int NB>
+DEV void pad_nb(u64 rank, u64* out) {
+  u64 W[16];
+#pragma unroll
+  for (int i = 0; i < 16; ++i) W[i] = C.pad_tpl[NB][i];
+  or_be<120, NB>(W, rank);
+  sha::iv(out);
+  sha::compress(out, W);
+#pragma unroll
+  for (int i = 0; i < 15; ++i) W[i] = 0;
+  W[15] = (120 + NB) * 8;
+  sha::compress(out, W);
+}
+DEV void pad(u64 rank, u64* out) {
+  switch (nbytes(rank)) {
+    case 1: pad_nb<1>(rank, out); break;
+    case 2: pad_nb<2>(rank, out); break;
+    case 3: pad_nb<3>(rank, out); break;
+    default: pad_nb<4>(rank, out); break;
+  }
+}
+
+template <int NI>
+DEV void node_ni(int level, u64 index, const u64* L, const u64* R, u64* out) {
+  u64 W[32];
+#pragma unroll
+  for (int i = 0; i < 32; ++i) W[i] = C.node_tpl[NI][i];
+  or_be<2, NI>(W, index);
+  or_digest<10 + NI>(W, L);
+  or_digest<82 + NI>(W, R);
+  cpy8(out, C.node_mid[level]);
+  sha::compress(out, W);
+  sha::compress(out, W + 16);
+}
+DEV void node(int level, u64 index, const u64* L, const u64* R, u64* out) {
+  switch (nbytes(index)) {
+    case 1: node_ni<1>(level, index, L, R, out); break;
+    case 2: node_ni<2>(level, index, L, R, out); break;
+    case 3: node_ni<3>(level, index, L, R, out); break;
+    default: node_ni<4>(level, index, L, R, out); break;
+  }
+}
+
+// --- the leaf's parts ----------------------------------------------------------------------------------------------
+
+DEV uint4 ldg16(const uint8_t* p) { return __ldg(reinterpret_cast<const uint4*>(p)); }
+
+// x for the e2e leaf: the 32 int8 at A[32 pos ..] as bf16 words (little-endian), twice: one data block, then P(1024)'s
+// fixed padding block.
+DEV void row_e2e(const uint8_t* A, u64 pos, u64* x) {
+  const uint4 a0 = ldg16(A + 32 * pos), a1 = ldg16(A + 32 * pos + 16);
+  const u32 aw[8] = {a0.x, a0.y, a0.z, a0.w, a1.x, a1.y, a1.z, a1.w};
+  u64 W[16];
+#pragma unroll
+  for (int q = 0; q < 8; ++q) {
+    u32 h[4];
+#pragma unroll
+    for (int t = 0; t < 4; ++t) h[t] = __float_as_uint((float)(int8_t)(aw[q] >> (8 * t))) >> 16;
+    W[q] = W[q + 8] = be64(h[0] | h[1] << 16, h[2] | h[3] << 16);
+  }
+  cpy8(x, C.mid_P);
+  sha::compress(x, W);
+  sha::compress_kw(x, C.kw_xpad);
+}
+
+// A row's bytes as 16-byte loads: `Contig`, lb bytes at one 16-byte aligned address (reads may run up to 15 bytes past
+// the row, inside the buffer); `TileSrc`, a tile leaf's block of an int8 operand (rows K bytes apart, 32 bytes of each in
+// row-major order, rows at or past `rows` reading as zero).
+struct Contig {
+  const uint8_t* p;
+  DEV uint4 ld16(u32 off) const { return ldg16(p + off); }
+};
+struct TileSrc {
+  const uint8_t* base;
+  u64 K;
+  long long rows;
+  DEV uint4 ld16(u32 off) const { return (long long)(off >> 5) < rows ? ldg16(base + (off >> 5) * K + (off & 31)) : make_uint4(0, 0, 0, 0); }
+};
+
+// SHA-512 of a 128-byte first block (its chaining value cv) and lb row bytes from `src`.
+template <class Src>
+DEV void hash_after_block(const u64* cv, const Src& src, u32 lb, u64* x) {
+  cpy8(x, cv);
+  const u32 nblk = (lb + 17 + 127) / 128;
+  for (u32 b = 0; b < nblk; ++b) {
+    u64 W[16];
+#pragma unroll
+    for (int c = 0; c < 8; ++c) {
+      const u32 off = 128 * b + 16 * c;
+      const uint4 v = off < lb ? src.ld16(off) : make_uint4(0, 0, 0, 0);
+      W[2 * c] = be64(v.x, v.y);
+      W[2 * c + 1] = be64(v.z, v.w);
+    }
+#pragma unroll
+    for (int i = 0; i < 16; ++i) {
+      const u32 base = 128 * b + 8 * i;
+      if (base + 8 > lb) {
+        if (base <= lb) {
+          const u32 j = lb - base;
+          W[i] = (j ? W[i] & (~0ull << (64 - 8 * j)) : 0) | (0x80ull << (56 - 8 * j));
+        } else {
+          W[i] = 0;
+        }
+      }
+    }
+    if (b == nblk - 1) W[15] = (u64)(128 + lb) * 8;
+    sha::compress(x, W);
+  }
+}
+
+// The tile layout (Decision 46): an M x K int8 operand (row-major, K a multiple of 32) as ceil(M/R) x K/32 blocks of R rows
+// x 32 values; leaf pos is block (b_r, b_c) = (pos % ceil(M/R), pos / ceil(M/R)), its bytes the block's in row-major order
+// (32 R bytes; rows past M are zero), so a check's 128-row tile at one 32-step is 128/R adjacent leaves.
+struct TileGeom {
+  const uint8_t* A;
+  u64 M, K, mr;   // mr = ceil(M/R)
+  u32 R;
+  DEV TileSrc block(u64 pos, u32 row0 = 0) const {
+    const u64 br = pos % mr, bc = pos / mr, r = br * R + row0;
+    return TileSrc{A + r * K + 32 * bc, K, (long long)M - (long long)r};
+  }
+};
+
+// Segment sources for seg_kernel: rows at a byte stride, or tile leaves (segment j is the block's rows 32 j .. 32 j + 31).
+struct SegRows {
+  const uint8_t* rows;
+  u64 stride;
+  DEV Contig segment(u64 pos, u32 j) const { return Contig{rows + pos * stride + 1024ull * j}; }
+};
+struct SegTiles {
+  TileGeom g;
+  DEV TileSrc segment(u64 pos, u32 j) const { return g.block(pos, 32 * j); }
+};
+
+// sha512/row-seg/v1's segment digests: d_j = SHA-512(S(j, s, m_j) || segment j), a thread a segment, to D (64 bytes each,
+// in digest byte order, row pos's s digests contiguous: the outer hash then reads them as a row of 64 s bytes).
+template <class Segs>
+__global__ void __launch_bounds__(256) seg_kernel(Segs segs, u64 n, u32 s, u32 last_bytes, uint8_t* __restrict__ D) {
+  const u64 t = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  if (t >= n * s) return;
+  const u64 pos = t / s;
+  const u32 j = (u32)(t % s);
+  u64 x[8];
+  hash_after_block(C.seg_mid[j], segs.segment(pos, j), j + 1 < s ? 1024u : last_bytes, x);
+  uint4* o = reinterpret_cast<uint4*>(D + 64 * t);
+#pragma unroll
+  for (int i = 0; i < 4; ++i)
+    o[i] = make_uint4(bswap32((u32)(x[2 * i] >> 32)), bswap32((u32)x[2 * i]), bswap32((u32)(x[2 * i + 1] >> 32)),
+                      bswap32((u32)x[2 * i + 1]));
+}
+
+DEV void salt_prf(u64 pos, u64* Y) {
+#pragma unroll
+  for (int r = 0; r < 3; ++r) {
+    u64 w[16];
+#pragma unroll
+    for (int i = 0; i < 8; ++i) w[i] = C.ks[i];
+    w[8] = pos; w[9] = r; w[10] = 0x8000000000000000ull;
+    w[11] = w[12] = w[13] = w[14] = 0;
+    w[15] = 80 * 8;
+    sha::iv(Y + 8 * r);
+    sha::compress_from<8>(Y + 8 * r, C.ks_m8, w);
+  }
+}
+DEV void salt_given(const uint8_t* s, u64* Y) {
+#pragma unroll
+  for (int c = 0; c < 12; ++c) {
+    const uint4 v = ldg16(s + 16 * c);
+    Y[2 * c] = be64(v.x, v.y);
+    Y[2 * c + 1] = be64(v.z, v.w);
+  }
+}
+
+// c = SHA-512(salt_prefix || y)
+DEV void salt_digest(const u64* Y, u64* c) {
+  u64 w[16];
+  cpy8(c, C.mid_salt);
+#pragma unroll
+  for (int i = 0; i < 16; ++i) w[i] = Y[i];
+  sha::compress(c, w);
+#pragma unroll
+  for (int i = 0; i < 8; ++i) w[i] = Y[16 + i];
+  w[8] = 0x8000000000000000ull;
+#pragma unroll
+  for (int i = 9; i < 15; ++i) w[i] = 0;
+  w[15] = (128 + 192) * 8;
+  sha::compress(c, w);
+}
+
+// M_key y as 16 little-endian u32 (mask byte 4w + k is byte k of m[w]): for salt bytes p = 16 q + r, the 80 bytes
+// [16 q, 16 q + 80) of T_{y_p} are xored into A_r, and A_r shifted down r bytes into m.
+// T in shared memory (TS, rows TSTRIDE apart) or read from global memory through L1 (rows 256 apart).
+template <bool TS>
+DEV void hm96_mask(const uint8_t* T, const u64* Y, u32* m) {
+  constexpr int STRIDE = TS ? TSTRIDE : 256;
+#pragma unroll
+  for (int w = 0; w < 16; ++w) m[w] = 0;
+#pragma unroll
+  for (int r = 0; r < 16; ++r) {
+    u32 A[20];
+#pragma unroll
+    for (int i = 0; i < 20; ++i) A[i] = 0;
+#pragma unroll
+    for (int q = 0; q < 12; ++q) {
+      const int p = 16 * q + r;
+      const u32 v = (u32)(Y[p >> 3] >> (56 - 8 * (p & 7))) & 0xFFu;
+      const uint8_t* t = T + v * STRIDE + 16 * q;
+#pragma unroll
+      for (int i = 0; i < 5; ++i) {
+        const uint4 u = TS ? *reinterpret_cast<const uint4*>(t + 16 * i) : ldg16(t + 16 * i);
+        A[4 * i] ^= u.x; A[4 * i + 1] ^= u.y; A[4 * i + 2] ^= u.z; A[4 * i + 3] ^= u.w;
+      }
+    }
+    const int sw = r >> 2, s = 8 * (r & 3);
+#pragma unroll
+    for (int w = 0; w < 16; ++w) m[w] ^= s ? __funnelshift_r(A[w + sw], A[w + sw + 1], s) : A[w + sw];
+  }
+}
+
+struct RowE2E {
+  const uint8_t* A;
+  DEV void digest(u64 pos, u64* x) const { row_e2e(A, pos, x); }
+};
+struct RowBytes {
+  const uint8_t* base;
+  u64 stride;
+  u32 lb;
+  DEV void digest(u64 pos, u64* x) const { hash_after_block(C.mid_P, Contig{base + pos * stride}, lb, x); }
+};
+struct RowTile {
+  TileGeom g;
+  DEV void digest(u64 pos, u64* x) const { hash_after_block(C.mid_P, g.block(pos), 32 * g.R, x); }
+};
+
+DEV void ld8(const u64* p, u64* d) {
+  const uint4* q = reinterpret_cast<const uint4*>(p);
+#pragma unroll
+  for (int i = 0; i < 4; ++i) {
+    const uint4 v = q[i];
+    d[2 * i] = (u64)v.y << 32 | v.x;
+    d[2 * i + 1] = (u64)v.w << 32 | v.z;
+  }
+}
+DEV void st8(u64* p, const u64* d) {
+  uint4* q = reinterpret_cast<uint4*>(p);
+#pragma unroll
+  for (int i = 0; i < 4; ++i) q[i] = make_uint4((u32)d[2 * i], (u32)(d[2 * i] >> 32), (u32)d[2 * i + 1], (u32)(d[2 * i + 1] >> 32));
+}
+
+// The salt phase, a thread a position: M_key y and c = SHA-512(salt_prefix || y) to S[pos] (16 words). Nothing here reads
+// the data, so it can run before the operand exists; the data phase (leaf_kernel) then has only the row on its path.
+template <bool PRF, bool TS>
+__global__ void __launch_bounds__(LEAF_THREADS, 1)
+    salt_kernel(const uint8_t* __restrict__ salts, const uint4* __restrict__ Tg, u64 n, u64* __restrict__ S) {
+  extern __shared__ uint4 smem[];
+  if constexpr (TS) {
+    for (int i = threadIdx.x; i < 256 * 16; i += blockDim.x) smem[(i >> 4) * (TSTRIDE / 16) + (i & 15)] = Tg[i];
+    __syncthreads();
+  }
+  const u64 pos = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  if (pos >= n) return;
+  u64 Y[24], c[8], my[8];
+  u32 m[16];
+  if constexpr (PRF) salt_prf(pos, Y);
+  else salt_given(salts + 192 * pos, Y);
+#ifdef COMMIT_GPU_DIAG_NOMASK
+  for (int w = 0; w < 16; ++w) m[w] = (u32)Y[w];
+#else
+  hm96_mask<TS>(TS ? reinterpret_cast<const uint8_t*>(smem) : reinterpret_cast<const uint8_t*>(Tg), Y, m);
+#endif
+  salt_digest(Y, c);
+#pragma unroll
+  for (int i = 0; i < 8; ++i) my[i] = (u64)bswap32(m[2 * i]) << 32 | bswap32(m[2 * i + 1]);
+  st8(S + 16 * pos, my);
+  st8(S + 16 * pos + 8, c);
+}
+
+// The tree leaf at pos from its row digest x and the salt phase's S[pos]: b || c = (x ^ M_key y) || c (to bc when given),
+// h = SHA-512(leaf_prefix || b || c), then the frame leaf. A producer that hashes its own rows (an epilogue) ends here.
+template <int SX>
+DEV void leaf_from_digest(u64 pos, const u64* x, const u64* __restrict__ S, u64* out, u64* __restrict__ bc) {
+  u64 B[16];
+  ld8(S + 16 * pos, B);
+  ld8(S + 16 * pos + 8, B + 8);
+#pragma unroll
+  for (int i = 0; i < 8; ++i) B[i] ^= x[i];
+  if (bc) {
+    st8(bc + 16 * pos, B);
+    st8(bc + 16 * pos + 8, B + 8);
+  }
+  u64 h[8];
+#ifdef COMMIT_GPU_DIAG_MERGED
+  for (int i = 0; i < 8; ++i) h[i] = B[i] ^ B[8 + i];
+#else
+  cpy8(h, C.mid_leaf);
+  sha::compress(h, B);
+  sha::compress_kw(h, C.kw_leafpad);
+#endif
+  frame_leaf<SX>(pos, h, out);
+}
+
+// The data phase, a thread a position: the tree leaf (or pad) to lv0[pos] from the row and S[pos]; b || c to bc[pos]
+// when bc is given.
+template <class Row, int SX>
+__global__ void __launch_bounds__(LEAF_THREADS)
+    leaf_kernel(Row row, const u64* __restrict__ S, u64 n, u64 width, u64* __restrict__ lv0, u64* __restrict__ bc) {
+  const u64 pos = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  if (pos >= width) return;
+  u64 out[8];
+  if (pos < n) {
+    u64 x[8];
+    row.digest(pos, x);
+    leaf_from_digest<SX>(pos, x, S, out, bc);
+  } else {
+    pad(pos, out);
+  }
+  st8(lv0 + 8 * pos, out);
+}
+
+// Level d+1 from level d (n_in nodes), a thread a node.
+__global__ void __launch_bounds__(NODE_THREADS) level_kernel(const u64* __restrict__ in, u64* __restrict__ out, u64 n_in, int d) {
+  const u64 i = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n_in / 2) return;
+  u64 L[8], R[8], o[8];
+  ld8(in + 16 * i, L);
+  ld8(in + 16 * i + 8, R);
+  node(d, i, L, R, o);
+  st8(out + 8 * i, o);
+}
+
+// The top: levels d+1 .. d+nl from level d (n_in <= 512 nodes) in one block, the levels in shared memory.
+// out[l] is level d+1+l's array.
+struct LevelPtrs { u64* p[10]; };
+__global__ void __launch_bounds__(NODE_THREADS) node_kernel(const u64* __restrict__ in, LevelPtrs out, u64 n_in, int d, int nl) {
+  __shared__ u64 s[NODE_THREADS * 8];
+  const int t = threadIdx.x;
+  const u64 n1 = n_in / 2, i1 = (u64)blockIdx.x * NODE_THREADS + t;
+  u64 L[8], R[8], o[8];
+  if (i1 < n1) {
+    ld8(in + 16 * i1, L);
+    ld8(in + 16 * i1 + 8, R);
+    node(d, i1, L, R, o);
+    st8(s + 8 * t, o);
+    st8(out.p[0] + 8 * i1, o);
+  }
+  u64 cnt = n1 < NODE_THREADS ? n1 : NODE_THREADS;
+  for (int l = 1; l < nl && cnt > 1; ++l) {
+    __syncthreads();
+    cnt >>= 1;
+    if (t < (int)cnt) {
+      cpy8(L, s + 16 * t);
+      cpy8(R, s + 16 * t + 8);
+      node(d + l, (u64)blockIdx.x * cnt + t, L, R, o);
+    }
+    __syncthreads();
+    if (t < (int)cnt) {
+      cpy8(s + 8 * t, o);
+      st8(out.p[l] + 8 * ((u64)blockIdx.x * cnt + t), o);
+    }
+  }
+}
+
+#ifdef COMMIT_GPU_DIAG_QUAD
+// Timing only: a 4-ary node, 3 compressions after the level's midstate (children 0-1, children 2-3, then the index and
+// padding), as a 4-ary frame node's message would take; it stands for two binary levels' 2 + 2 serial compressions.
+DEV void quad(int level, u64 index, const u64* a, const u64* b, const u64* c, const u64* e, u64* out) {
+  u64 W[16];
+  cpy8(out, C.node_mid[level]);
+#pragma unroll
+  for (int i = 0; i < 8; ++i) { W[i] = a[i]; W[8 + i] = b[i]; }
+  sha::compress(out, W);
+#pragma unroll
+  for (int i = 0; i < 8; ++i) { W[i] = c[i]; W[8 + i] = e[i]; }
+  sha::compress(out, W);
+#pragma unroll
+  for (int i = 0; i < 16; ++i) W[i] = 0;
+  W[0] = index; W[1] = 0x8000000000000000ull; W[15] = (128 + 256 + 8) * 8;
+  sha::compress(out, W);
+}
+DEV void quad_from(const u64* p, int level, u64 index, u64* o) {
+  u64 a[8], b[8], c[8], e[8];
+  ld8(p, a); ld8(p + 8, b); ld8(p + 16, c); ld8(p + 24, e);
+  quad(level, index, a, b, c, e, o);
+}
+__global__ void __launch_bounds__(NODE_THREADS) quad_level_kernel(const u64* __restrict__ in, u64* __restrict__ out, u64 n_in, int d) {
+  const u64 i = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n_in / 4) return;
+  u64 o[8];
+  quad_from(in + 32 * i, d, i, o);
+  st8(out + 8 * i, o);
+}
+// The top in one block from level d (n_in <= 1024 nodes, nl levels): 4-ary steps, then a binary one if one level is left.
+__global__ void __launch_bounds__(NODE_THREADS) quad_node_kernel(const u64* __restrict__ in, LevelPtrs out, u64 n_in, int d, int nl) {
+  __shared__ u64 s[NODE_THREADS * 8];
+  const int t = threadIdx.x;
+  u64 L[8], R[8], o[8];
+  int l = nl >= 2 ? 2 : 1;
+  u64 cnt = n_in >> l;
+  if (t < (int)cnt) {
+    if (l == 2) {
+      quad_from(in + 32 * t, d, t, o);
+    } else {
+      ld8(in + 16 * t, L);
+      ld8(in + 16 * t + 8, R);
+      node(d, t, L, R, o);
+    }
+    st8(s + 8 * t, o);
+    st8(out.p[l - 1] + 8 * t, o);
+  }
+  while (l < nl && cnt > 1) {
+    __syncthreads();
+    const int step = nl - l >= 2 ? 2 : 1;
+    cnt >>= step;
+    if (t < (int)cnt) {
+      if (step == 2) {
+        quad(d + l, t, s + 32 * t, s + 32 * t + 8, s + 32 * t + 16, s + 32 * t + 24, o);
+      } else {
+        cpy8(L, s + 16 * t);
+        cpy8(R, s + 16 * t + 8);
+        node(d + l, t, L, R, o);
+      }
+    }
+    __syncthreads();
+    l += step;
+    if (t < (int)cnt) {
+      cpy8(s + 8 * t, o);
+      st8(out.p[l - 1] + 8 * t, o);
+    }
+  }
+}
+#endif
+// --- host --------------------------------------------------------------------------------------------------------
+
+static const char FRAME[] = "veritor/protocol/merkle/frame/v3";  // + its NUL: 33 bytes
+static const char SCHEMA[] = "hm96-sha512/row/v2";
+static const char SCHEMA_SEG[] = "hm96-sha512/row-seg/v1";   // 4 bytes longer: SX = 4
+static const char SEG_TAG[] = "verity/sha512-row-seg/v1/segment";   // + its NUL
+
+struct Params {
+  uint8_t P[128], salt_prefix[128], leaf_prefix[128], domain_id[64], ks[64];
+  std::vector<uint8_t> T;   // 256 x 256
+};
+
+static std::vector<uint8_t> readf(const std::string& path) {
+  FILE* f = fopen(path.c_str(), "rb");
+  if (!f) { fprintf(stderr, "cannot open %s\n", path.c_str()); exit(2); }
+  std::vector<uint8_t> v;
+  uint8_t buf[1 << 16];
+  size_t r;
+  while ((r = fread(buf, 1, sizeof buf, f)) > 0) v.insert(v.end(), buf, buf + r);
+  fclose(f);
+  return v;
+}
+static void writef(const std::string& path, const void* p, size_t n) {
+  FILE* f = fopen(path.c_str(), "wb");
+  if (!f || fwrite(p, 1, n, f) != n) { fprintf(stderr, "cannot write %s\n", path.c_str()); exit(2); }
+  fclose(f);
+}
+
+static Params read_params(const std::string& path) {
+  const auto v = readf(path);
+  const size_t want = 4 + 128 * 3 + 64 * 2 + 65536;
+  if (v.size() != want || memcmp(v.data(), "CGP1", 4)) { fprintf(stderr, "%s: not a CGP1 params file\n", path.c_str()); exit(2); }
+  Params p;
+  const uint8_t* q = v.data() + 4;
+  memcpy(p.P, q, 128); q += 128;
+  memcpy(p.salt_prefix, q, 128); q += 128;
+  memcpy(p.leaf_prefix, q, 128); q += 128;
+  memcpy(p.domain_id, q, 64); q += 64;
+  memcpy(p.ks, q, 64); q += 64;
+  p.T.assign(q, q + 65536);
+  return p;
+}
+
+// reference merkle._message: frame || u32be(len tag) || tag || (u64be(len part) || part)...
+static std::vector<uint8_t> message(const char* tag, const std::vector<std::vector<uint8_t>>& parts) {
+  std::vector<uint8_t> m(FRAME, FRAME + sizeof FRAME);
+  const size_t tl = strlen(tag);
+  for (int i = 3; i >= 0; --i) m.push_back((uint8_t)(tl >> (8 * i)));
+  m.insert(m.end(), tag, tag + tl);
+  for (const auto& p : parts) {
+    for (int i = 7; i >= 0; --i) m.push_back((uint8_t)((u64)p.size() >> (8 * i)));
+    m.insert(m.end(), p.begin(), p.end());
+  }
+  return m;
+}
+// the padded message's words (len + 17 rounded up to blocks), the length in the last block
+static std::vector<u64> padded_words(const std::vector<uint8_t>& msg) {
+  const size_t total = ((msg.size() + 17 + 127) / 128) * 128;
+  std::vector<uint8_t> b(total, 0);
+  memcpy(b.data(), msg.data(), msg.size());
+  b[msg.size()] = 0x80;
+  sha::put_be64(b.data() + total - 8, (u64)msg.size() * 8);
+  std::vector<u64> w(total / 8);
+  for (size_t i = 0; i < w.size(); ++i) w[i] = sha::be64(b.data() + 8 * i);
+  return w;
+}
+static std::vector<uint8_t> zeros(int n) { return std::vector<uint8_t>(n, 0); }
+static std::vector<uint8_t> bytes_of(const uint8_t* p, int n) { return std::vector<uint8_t>(p, p + n); }
+static void words_of(const uint8_t* block, u64* w, int n) { for (int i = 0; i < n; ++i) w[i] = sha::be64(block + 8 * i); }
+
+// seg: sha512/row-seg/v1 rows of seg_bits bits (P is then Q(seg_bits), the outer hash's first block).
+static Consts build_consts(const Params& p, u32 lb, bool seg, u64 seg_bits) {
+  Consts c{};
+  u64 w[16], st[8];
+  sha::iv(st); words_of(p.P, w, 16); sha::compress(st, w); memcpy(c.mid_P, st, 64);
+  {
+    u64 blk[16] = {0x8000000000000000ull};
+    blk[15] = (u64)(128 + lb) * 8;
+    sha::schedule_kw(blk, c.kw_xpad);
+  }
+  sha::iv(st); words_of(p.salt_prefix, w, 16); sha::compress(st, w); memcpy(c.mid_salt, st, 64);
+  sha::iv(st); words_of(p.leaf_prefix, w, 16); sha::compress(st, w); memcpy(c.mid_leaf, st, 64);
+  {
+    u64 blk[16] = {0x8000000000000000ull};
+    blk[15] = 256 * 8;
+    sha::schedule_kw(blk, c.kw_leafpad);
+  }
+  words_of(p.ks, c.ks, 8);
+  {
+    u64 blk[16] = {};
+    memcpy(blk, c.ks, 64);
+    sha::iv(st);
+    sha::rounds_prefix(st, blk, 8, c.ks_m8);
+  }
+  const auto did = bytes_of(p.domain_id, 64);
+  const char* sname = seg ? SCHEMA_SEG : SCHEMA;
+  const std::vector<uint8_t> schema(sname, sname + strlen(sname));
+  for (int nb = 1; nb <= MAX_NB; ++nb) {
+    const auto m = padded_words(message("leaf", {did, zeros(nb), zeros(nb), schema, zeros(64)}));
+    if (m.size() != 32) { fprintf(stderr, "frame leaf at nb %d is not two blocks\n", nb); exit(2); }
+    std::copy(m.begin(), m.end(), c.fl_tpl[nb]);
+    for (int i = 0; i < 15; ++i)
+      if (c.fl_tpl[nb][i] != c.fl_tpl[1][i]) { fprintf(stderr, "frame leaf word %d depends on nb\n", i); exit(2); }
+  }
+  sha::iv(st);
+  sha::rounds_prefix(st, c.fl_tpl[1], 15, c.fl_m15);
+  for (int ni = 1; ni <= MAX_NI; ++ni) {
+    const auto m = padded_words(message("node", {did, std::vector<uint8_t>{0}, zeros(ni), zeros(64), zeros(64)}));
+    if (m.size() != 48) { fprintf(stderr, "node at ni %d is not three blocks\n", ni); exit(2); }
+    std::copy(m.begin() + 16, m.end(), c.node_tpl[ni]);
+  }
+  for (int level = 0; level < 64; ++level) {
+    const auto m = padded_words(message("node", {did, std::vector<uint8_t>{(uint8_t)level}, zeros(1), zeros(64), zeros(64)}));
+    u64 blk[16];
+    std::copy(m.begin(), m.begin() + 16, blk);
+    sha::iv(c.node_mid[level]);
+    sha::compress(c.node_mid[level], blk);
+  }
+  for (int nb = 1; nb <= MAX_NB; ++nb) {
+    const auto m = padded_words(message("pad", {did, zeros(nb)}));
+    if (m.size() != 32) { fprintf(stderr, "pad at nb %d is not two blocks\n", nb); exit(2); }
+    std::copy(m.begin(), m.begin() + 16, c.pad_tpl[nb]);
+  }
+  if (seg) {   // S(j, s, m_j) = tag || u64be j || u64be s || u64be m_j, zero padded to 128 bytes
+    const u64 s = (seg_bits + 8191) / 8192;
+    if (s > 64) { fprintf(stderr, "row-seg rows of at most 64 segments\n"); exit(2); }
+    for (u64 j = 0; j < s; ++j) {
+      uint8_t blk[128] = {};
+      memcpy(blk, SEG_TAG, sizeof SEG_TAG);
+      sha::put_be64(blk + sizeof SEG_TAG, j);
+      sha::put_be64(blk + sizeof SEG_TAG + 8, s);
+      sha::put_be64(blk + sizeof SEG_TAG + 16, j + 1 < s ? 8192 : seg_bits - 8192 * (s - 1));
+      sha::iv(c.seg_mid[j]); words_of(blk, w, 16); sha::compress(c.seg_mid[j], w);
+    }
+  }
+  return c;
+}
+
+static int depth_of(u64 n) { int d = 0; while ((1ull << d) < n) ++d; return d; }
+
+// The tile layout's leaf count, after checking its geometry (K a multiple of 32; a leaf of at most 64 row-seg segments).
+static u64 tile_leaves(u64 M, u64 K, u64 R) {
+  if (!M || !K || K % 32 || !R || R > 2048) {
+    fprintf(stderr, "tiles: M, K > 0, K a multiple of 32, 1 <= R <= 2048, not %llu %llu %llu\n", (unsigned long long)M,
+            (unsigned long long)K, (unsigned long long)R);
+    exit(2);
+  }
+  return (M + R - 1) / R * (K / 32);
+}
+
+// The device's node() on the CPU, from the same constants: one GPU thread takes microseconds a compression, a CPU core a
+// fraction of one, so the narrow top of a tree is faster on the host, which needs the root anyway.
+static int nbytes_host(u64 v) { int k = 1; while (k < 8 && (v >> (8 * k))) ++k; return k; }
+static void or_byte(u64* W, int off, uint8_t b) { W[off >> 3] |= (u64)b << (56 - 8 * (off & 7)); }
+static uint8_t byte_of(const u64* d, int i) { return (uint8_t)(d[i >> 3] >> (56 - 8 * (i & 7))); }
+static void host_node(const Consts& c, int level, u64 index, const u64* L, const u64* R, u64* out) {
+  const int ni = nbytes_host(index);
+  u64 W[32];
+  memcpy(W, c.node_tpl[ni], sizeof W);
+  for (int i = 0; i < ni; ++i) or_byte(W, 2 + i, (uint8_t)(index >> (8 * (ni - 1 - i))));
+  for (int i = 0; i < 64; ++i) { or_byte(W, 10 + ni + i, byte_of(L, i)); or_byte(W, 82 + ni + i, byte_of(R, i)); }
+  memcpy(out, c.node_mid[level], 64);
+  sha::compress(out, W);
+  sha::compress(out, W + 16);
+}
+
+struct Committer {
+  u64 n = 0, width = 0;
+  int depth = 0;
+  u64* levels = nullptr;            // every level, leaves first: level d at offset 8 (2 width - 2 width >> d) words
+  u64* bc = nullptr;
+  u64* S = nullptr;                 // the salt phase's M_key y || c, 16 words a leaf
+  uint4* T = nullptr;
+  uint8_t* D = nullptr;             // row-seg: the segment digests
+  u32 segs = 0, seg_last = 0;
+  std::vector<u64*> lv;
+  Consts hc;                        // the host copy of C
+  // lb: the row bytes after P; seg: row-seg rows of seg_bits bits (lb is then the outer hash's 64 s bytes; the empty row
+  // has no segment)
+  void init(const Params& p, u64 n_, u32 lb, bool keep_bc, bool seg = false, u64 seg_bits = 0) {
+    n = n_; depth = depth_of(n); width = 1ull << depth;
+    if (n == 0 || n > (1ull << 32)) { fprintf(stderr, "1 to 2^32 leaves, not %llu\n", (unsigned long long)n); exit(2); }
+    if (seg) {
+      segs = (u32)((seg_bits + 8191) / 8192);
+      seg_last = segs ? (u32)((seg_bits - 8192ull * (segs - 1) + 7) / 8) : 0;
+      lb = 64 * segs;
+      CK(cudaMalloc(&D, n * lb + 16));
+    }
+    hc = build_consts(p, lb, seg, seg_bits);
+    CK(cudaMemcpyToSymbol(C, &hc, sizeof hc));
+    CK(cudaMalloc(&levels, (2 * width) * 64));
+    if (keep_bc) CK(cudaMalloc(&bc, n * 128));
+    CK(cudaMalloc(&S, n * 128));
+    CK(cudaMalloc(&T, 65536));
+    CK(cudaMemcpy(T, p.T.data(), 65536, cudaMemcpyHostToDevice));
+    u64 off = 0;
+    for (int d = 0; d <= depth; ++d) { lv.push_back(levels + 8 * off); off += width >> d; }
+  }
+  // The salt phase. Above 2^16 leaves T sits in shared memory (one block of LEAF_THREADS an SM); at or below, blocks of 64
+  // threads read T through L1, which spreads few leaves over the SMs and takes no shared memory.
+  template <bool PRF>
+  void salts(const uint8_t* given, cudaStream_t st) {
+    if (n > (1u << 16)) {
+      auto k = salt_kernel<PRF, true>;
+      static bool attr = false;
+      if (!attr) { CK(cudaFuncSetAttribute(k, cudaFuncAttributeMaxDynamicSharedMemorySize, TSMEM)); attr = true; }
+      k<<<(unsigned)((n + LEAF_THREADS - 1) / LEAF_THREADS), LEAF_THREADS, TSMEM, st>>>(given, T, n, S);
+    } else {
+      salt_kernel<PRF, false><<<(unsigned)((n + 63) / 64), 64, 0, st>>>(given, T, n, S);
+    }
+  }
+  // The data phase's leaves (after salts()): blocks of 64 threads up to 2^16 leaves, so few leaves still spread over the SMs.
+  template <class Row, int SX = 0>
+  void leaves(const Row& row, cudaStream_t st) {
+    const unsigned t = width > (1u << 16) ? LEAF_THREADS : 64;
+    leaf_kernel<Row, SX><<<(unsigned)((width + t - 1) / t), t, 0, st>>>(row, S, n, width, lv[0], bc);
+  }
+  // row-seg rows at `rows` (stride bytes apart, 16-byte aligned): the segment digests, then the leaves over them
+  void seg_leaves(const uint8_t* rows, u64 stride, cudaStream_t st) { seg_leaves_from(SegRows{rows, stride}, st); }
+  template <class Segs>
+  void seg_leaves_from(const Segs& sg, cudaStream_t st) {
+    if (segs) seg_kernel<<<(unsigned)((n * segs + 255) / 256), 256, 0, st>>>(sg, n, segs, seg_last, D);
+    leaves<RowBytes, 4>(RowBytes{D, 64ull * segs, 64u * segs}, st);
+  }
+  // The tile layout over an M x K int8 operand at A (init with n = tile_leaves(M, K, R) and rows of 256 R bits): as
+  // sha512/row/v2 rows, or (seg) as sha512/row-seg/v1 rows.
+  void tiles(const uint8_t* A, u64 M, u64 K, u32 R, bool seg, cudaStream_t st) {
+    const TileGeom g{A, M, K, (M + R - 1) / R, R};
+    if (seg) seg_leaves_from(SegTiles{g}, st);
+    else leaves<RowTile>(RowTile{g}, st);
+  }
+  // Levels 1 .. top (default the root): a level a launch while a level is wider than 512 nodes (blocks of 64 threads below
+  // 2^16 nodes), then the rest in one block (COMMIT_GPU_DIAG_QUAD: the same with 4-ary steps).
+  void nodes(cudaStream_t st, int top = -1) {
+    if (top < 0) top = depth;
+    int d = 0;
+#ifdef COMMIT_GPU_DIAG_QUAD
+    for (; d + 2 <= top && (width >> d) > 4 * NODE_THREADS; d += 2) {
+      const u64 n_out = width >> (d + 2);
+      const unsigned t = n_out >= (1u << 16) ? NODE_THREADS : 64;
+      quad_level_kernel<<<(unsigned)((n_out + t - 1) / t), t, 0, st>>>(lv[d], lv[d + 2], width >> d, d);
+    }
+    if (d + 1 == top && (width >> d) > 2 * NODE_THREADS) {
+      const u64 n_out = width >> (d + 1);
+      const unsigned t = n_out >= (1u << 16) ? NODE_THREADS : 64;
+      level_kernel<<<(unsigned)((n_out + t - 1) / t), t, 0, st>>>(lv[d], lv[d + 1], width >> d, d);
+      ++d;
+    }
+    if (d < top) {
+      LevelPtrs o{};
+      for (int l = 0; l < top - d; ++l) o.p[l] = lv[d + 1 + l];
+      quad_node_kernel<<<1, NODE_THREADS, 0, st>>>(lv[d], o, width >> d, d, top - d);
+    }
+#else
+    for (; d < top && (width >> d) > 2 * NODE_THREADS; ++d) {
+      const u64 n_out = width >> (d + 1);
+      const unsigned t = n_out >= (1u << 16) ? NODE_THREADS : 64;
+      level_kernel<<<(unsigned)((n_out + t - 1) / t), t, 0, st>>>(lv[d], lv[d + 1], width >> d, d);
+    }
+    if (d < top) {
+      LevelPtrs o{};
+      for (int l = 0; l < top - d; ++l) o.p[l] = lv[d + 1 + l];
+      node_kernel<<<1, NODE_THREADS, 0, st>>>(lv[d], o, width >> d, d, top - d);
+    }
+#endif
+  }
+  // Levels from+1 .. depth on the CPU from level `from` (cur: its nodes' words, replaced by the root's); each level's words
+  // are appended to `keep` when given.
+  void host_tail(int from, std::vector<u64>& cur, std::vector<std::vector<u64>>* keep = nullptr) const {
+    std::vector<u64> nxt;
+    for (int d = from; d < depth; ++d) {
+      const u64 m = (width >> d) / 2;
+      nxt.resize(8 * m);
+      for (u64 i = 0; i < m; ++i) host_node(hc, d, i, &cur[16 * i], &cur[16 * i + 8], &nxt[8 * i]);
+      if (keep) keep->push_back(nxt);
+      cur.swap(nxt);
+    }
+  }
+  void release() { cudaFree(levels); cudaFree(bc); cudaFree(S); cudaFree(T); cudaFree(D); lv.clear(); }
+};
