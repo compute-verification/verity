@@ -55,11 +55,24 @@
 //   NAME-f, NAME-p, NAME-fp (NAME a cg, cgh or cgpre arm): the same with commit_gpu's fuse_top (f: the last leaf CTA of
 //             each commitment folds the levels above the CTAs where top_small would be launched) and/or its prefetch (p:
 //             each leaf's next 128-byte block into L1 as its compression starts); held to the serial roots (made without)
+//   cgprend, cgprendeq: cgpre and cgpreeq without the draws
+//   E:NAME, ER:NAME, ERL:NAME (NAME chunked, chunkedrrW, nohash or a cgpre arm): NAME with every linear (QKV, o_proj,
+//             gate_up, down) EGEMM's edited GEMM (eg.cu: a call is qwe, the dithered quantizer writing the stage's operand
+//             from bf16 and W' = W + U under the call's key, then the GEMM with windowed duo receipts at EG_S segments a
+//             window, keyed by the call's seed, the draw's); ER also commits each GEMM's receipts (2 KiB rows, a window of a
+//             tile each, every slot's salts made before the window) on a stream a chunk at the highest priority (ERL: the
+//             lowest), the next layer's GEMM of that stage waiting for it. Their poisoned check holds the receipts' roots to
+//             the serial path's (E's are the control), EG_DUMP=DIR writes chunk 0's last call of each linear (X, W', the
+//             receipts, their levels) for eref.py and `reference.py verify`, and eg_gate holds each linear's Y to cuBLASLt's
+//             X W^T and w_d's receipts to w_d4q's
 //
 // env: ARMS, DRAW_US (300), PLAIN_RB (8192), MID (1: stage.cu's frame heads ahead), CARVE (unset: the commitments' and draws'
 // kernels at the driver's carveout; P: P% shared memory), BESIDE_C (367), CG_R (64), CG_DUMP, CG_SKIP (timing only: salts,
-// leaves, top dropped from the cg arms' graphs; with commit_gpu's -DCOMMIT_GPU_DIAG_* builds, run.sh's cgdiag breakdown)
-// Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a [-DFR_ROT=BITS] ovl.cu -lcublasLt -lnvidia-ml -ldl
+// leaves, top dropped from the cg arms' graphs; with commit_gpu's -DCOMMIT_GPU_DIAG_* builds, run.sh's cgdiag breakdown),
+// EG_S (16), EG_KERN (unset: w_d or w_d4q, whichever is faster alone at each linear), EG_GRID (sms: persistent; else a CTA a
+// tile), EG_DUMP
+// Build: nvcc -O3 -std=c++17 --no-compress -gencode arch=compute_120a,code=sm_120a [-DFR_ROT=BITS] ovl.cu eg.cu -lcuda
+//   -lcublasLt -lnvidia-ml -ldl
 #include <cublasLt.h>
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -93,6 +106,7 @@ namespace cg {
 #include "../../commit_gpu/commit_gpu.cuh"
 }
 #undef HD  // sha512.cuh's qualifier macro; HD below is stage.cu's head dimension
+#include "eg.h"
 // commit_gpu's timing-only builds (-DCOMMIT_GPU_DIAG_*), named in ovl_setup's cg_diag
 static const char* const CG_DIAG = ""
 #ifdef COMMIT_GPU_DIAG_NOOP
@@ -217,8 +231,23 @@ struct Sched {
                  // same with every slot's salts, F and the pads made before the graph (cg_pre), none in it
   bool fuse = false;  // a cg arm's NAME-f or NAME-fp: commit_gpu's fuse_top (the last leaf CTA folds the levels above the CTAs)
   bool pf = false;    // NAME-p or NAME-fp: commit_gpu's prefetch (each leaf's next block into L1)
+  bool eg = false;    // E, ER, ERL: the linears EGEMM's edited GEMM
+  int rc = 0;         // ER: the receipts committed at the highest priority, ERL: at the lowest
 };
 static Sched sched_of(const std::string& n) {
+  for (const char* pre : {"ERL:", "ER:", "E:"}) {
+    const size_t pl = strlen(pre);
+    if (n.compare(0, pl, pre) != 0) continue;
+    Sched s = sched_of(n.substr(pl));
+    if ((s.hash && s.lite != 5) || !s.gemm) {
+      fprintf(stderr, "arm %s: E, ER and ERL take chunked, chunkedrrW, nohash or a cgpre arm\n", n.c_str());
+      exit(1);
+    }
+    s.name = n;
+    s.eg = true;
+    s.rc = pre[1] != 'R' ? 0 : pre[2] == 'L' ? -1 : 1;
+    return s;
+  }
   const size_t dash = n.rfind('-');
   if (dash != std::string::npos && dash + 1 < n.size() && n.find_first_not_of("fp", dash + 1) == std::string::npos) {
     Sched s = sched_of(n.substr(0, dash));
@@ -256,6 +285,8 @@ static Sched sched_of(const std::string& n) {
   if (n == "cghonly") return {n, true, false, false, false, 1, 0, 4};
   if (n.rfind("cghrr", 0) == 0) return {n, true, true, true, false, 1, atoi(n.c_str() + 5), 4};
   if (n == "cgpre") return {n, true, true, true, false, 1, 0, 5};
+  if (n == "cgprend") return {n, true, false, true, false, 1, 0, 5};
+  if (n == "cgprendeq") return {n, true, false, true, false, 0, 0, 5};
   if (n.rfind("cgprelorr", 0) == 0) return {n, true, true, true, false, -1, atoi(n.c_str() + 9), 5};
   if (n == "cgprelo") return {n, true, true, true, false, -1, 0, 5};
   if (n == "cgpreeq") return {n, true, true, true, false, 0, 0, 5};
@@ -298,7 +329,7 @@ struct ArmRun {
   std::string name;
   Graph G;
   int k;
-  bool hash, stamps, cg = false;
+  bool hash, stamps, cg = false, eg = false, rc = false;
   double macs;
   std::vector<Rep> reps;
   unsigned long long* st = nullptr;  // k x (2 * 192 + 1) stamps and one start stamp at the end
@@ -321,6 +352,8 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
     fill_s8<<<1024, 256, 0, d.st>>>(Kb[l], kb_seq * K, 0x8000 + l);
   }
   const size_t mem_kb = mem_used();
+  const int GN[NSTAGE] = {QKV, M / 2, M / 2, HID, 2 * FF, HID}, GK[NSTAGE] = {HID, HID, HID, HID, HID, FF};
+  const int LJ[NSTAGE] = {0, -1, -1, 1, 2, 3};  // the stage's weight in d.W, or -1 for attention
   std::vector<OChunk> ch(K);
   for (int c = 0; c < K; c++) {
     for (int t = 0; t < NSTAGE; t++) {
@@ -400,6 +433,116 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
     CK(cudaEventDestroy(b));
     return ms;
   };
+  // the edited arms: a Lin a chunk's linear stage over its operand op[t] (qwe writes it), the weights in [-63, 63]; per-call
+  // keys (the dither and U) and seeds (the receipts', the draw's) a function of (layer, stage, chunk). Layer 31's call
+  // leaves op[t] and the receipts' tree, so the serial reference makes it, before commit_gpu's reference reads op[t]
+  bool use_eg = false, use_rc = false;
+  for (const std::string& nm : arm_names)
+    if (nm != "plain") {
+      const Sched s = sched_of(nm);
+      use_eg |= s.eg;
+      use_rc |= s.eg && s.rc;
+    }
+  const int EGS = getenv("EG_S") && *getenv("EG_S") ? atoi(getenv("EG_S")) : 16;
+  auto ekey = [](int l, int t, int c) { return (uint32_t)((l * NSTAGE + t) * 64 + c); };
+  auto eseed = [](int l, int t, int c) { return 0x9E3779B9u * (uint32_t)((l * NSTAGE + t) * 64 + c + 1) ^ 0x5EEDu; };
+  std::vector<std::vector<eg::Lin*>> lin(K, std::vector<eg::Lin*>(NSTAGE, nullptr));
+  std::vector<uint8_t> rc_ref;
+  int eg_fails = 0;
+  auto rc_roots = [&](int k) {
+    std::vector<uint8_t> r((size_t)k * NSTAGE * 64, 0);
+    for (int c = 0; c < k; c++)
+      for (int t = 0; t < NSTAGE; t++)
+        if (lin[c][t]) eg::lin_root(lin[c][t], r.data() + ((size_t)c * NSTAGE + t) * 64);
+    return r;
+  };
+  auto rc_poison_salt = [&](int k) {
+    for (int c = 0; c < k; c++)
+      for (int t = 0; t < NSTAGE; t++)
+        if (lin[c][t]) eg::lin_rpoison(lin[c][t]);
+    for (int c = 0; c < k; c++)
+      for (int t = 0; t < NSTAGE; t++)
+        if (lin[c][t]) eg::lin_rsalts(lin[c][t], d.st);
+    CK(cudaStreamSynchronize(d.st));
+    CK(cudaGetLastError());
+  };
+  if (use_eg) {
+    eg::init();
+    if (g_carve >= 0) eg::set_carve(g_carve);
+    for (int l = 0; l < LAYERS; l++)
+      for (int j = 0; j < 4; j++) eg::fill_w(d.W[l][j], (size_t)LN[j] * LK[j], 0x1000 + l * 4 + j);
+    CK(cudaDeviceSynchronize());
+    uint16_t* xs[NSTAGE] = {};
+    int es[NSTAGE] = {};
+    for (int t = 0; t < NSTAGE; t++) {
+      if (LJ[t] < 0) continue;
+      xs[t] = eg::make_x(M, GK[t], 0x7000 + t);
+      for (es[t] = EGS; es[t] > 4 && (GK[t] / 32) % es[t]; es[t] -= 4) {}   // down at S = 128: 112 (448 segments)
+    }
+    for (int c = 0; c < K; c++)
+      for (int t = 0; t < NSTAGE; t++)
+        if (LJ[t] >= 0)
+          lin[c][t] = eg::lin_new(M, GN[t], GK[t], es[t], reinterpret_cast<int8_t*>(ch[c].op[t]), xs[t], ch[c].D,
+                                  dir + "/eg-" + std::to_string(M) + "-" + std::to_string(EGS) + "-" + std::to_string(t) + ".bin",
+                                  LJ[t], LAYERS);
+    // each linear's kernel: the faster alone (EG_KERN fixes it)
+    double kt[NSTAGE][2] = {};
+    int kern[NSTAGE] = {};
+    for (int t = 0; t < NSTAGE; t++) {
+      if (!lin[0][t]) continue;
+      eg::lin_qwe(lin[0][t], d.W[0][LJ[t]], ekey(0, t, 0), d.st);
+      for (int q = 0; q < 2; q++) kt[t][q] = eg::lin_time(lin[0][t], q, 9, d.st);
+      kern[t] = getenv("EG_KERN") && *getenv("EG_KERN") ? atoi(getenv("EG_KERN")) : kt[t][1] < kt[t][0];
+      for (int c = 0; c < K; c++) eg::lin_kernel(lin[c][t], kern[t]);
+    }
+    rc_poison_salt(K);
+    // the gate on chunk 0's layer-31 call of each linear (and its dump for eref.py and reference.py verify)
+    const char* dump = getenv("EG_DUMP");
+    for (int t = 0; t < NSTAGE; t++) {
+      if (!lin[0][t]) continue;
+      const std::string w = dump && *dump ? std::string(dump) + "/M" + std::to_string(M) + "-S" + std::to_string(EGS) + "-" + SNAME[t] : "";
+      bool ok = false;
+      const uint32_t key = ekey(LAYERS - 1, t, 0), seed = eseed(LAYERS - 1, t, 0);
+      const std::string g = eg::lin_gate(lin[0][t], d.W[LAYERS - 1][LJ[t]], key, seed, LAYERS - 1, w, ok);
+      eg_fails += !ok;
+      printf("{\"mode\": \"eg_gate\", \"M\": %d, \"stage\": \"%s\", \"gate\": %s}\n", M, SNAME[t], g.c_str());
+      if (!w.empty()) {
+        const std::string meta = "{\"m\": " + std::to_string(M) + ", \"n\": " + std::to_string(GN[t]) + ", \"k\": " + std::to_string(GK[t]) +
+                                 ", \"S\": " + std::to_string(es[t]) + ", \"nw\": " + std::to_string(eg::lin_nw(lin[0][t])) +
+                                 ", \"seed\": " + std::to_string(seed) + ", \"row_bytes\": 2048, \"tree\": \"R-" + SNAME[t] +
+                                 "\", \"stage\": \"" + SNAME[t] + "\", \"layer_slot\": " + std::to_string(LAYERS - 1) + "}";
+        cg::writef(w + "/dump.json", meta.data(), meta.size());
+      }
+    }
+    // the serial reference: every chunk's layer-31 call of each linear and its receipts' tree
+    for (int c = 0; c < K; c++)
+      for (int t = 0; t < NSTAGE; t++) {
+        if (!lin[c][t]) continue;
+        eg::lin_qwe(lin[c][t], d.W[LAYERS - 1][LJ[t]], ekey(LAYERS - 1, t, c), d.st);
+        eg::lin_gemm(lin[c][t], eseed(LAYERS - 1, t, c), d.st);
+        eg::lin_rcommit(lin[c][t], LAYERS - 1, d.st);
+      }
+    CK(cudaStreamSynchronize(d.st));
+    CK(cudaGetLastError());
+    rc_ref = rc_roots(K);
+    size_t leaves = 0, rbytes = 0;
+    printf("{\"mode\": \"eg_setup\", \"M\": %d, \"S\": %d, \"grid\": \"%s\", \"stages\": [", M, EGS,
+           getenv("EG_GRID") && !strcmp(getenv("EG_GRID"), "sms") ? "sms" : "tiles");
+    bool first = true;
+    for (int t = 0; t < NSTAGE; t++) {
+      if (!lin[0][t]) continue;
+      leaves += eg::lin_leaves(lin[0][t]);
+      rbytes += eg::lin_rbytes(lin[0][t]);
+      printf("%s{\"stage\": \"%s\", \"n\": %d, \"k\": %d, \"S\": %d, \"nw\": %d, \"leaves\": %zu, \"receipt_bytes\": %zu, "
+             "\"ms_alone\": {\"w_d\": %.4f, \"w_d4q\": %.4f}, \"kernel\": \"%s\"}",
+             first ? "" : ", ", SNAME[t], GN[t], GK[t], es[t], eg::lin_nw(lin[0][t]), eg::lin_leaves(lin[0][t]),
+             eg::lin_rbytes(lin[0][t]), kt[t][0], kt[t][1], kern[t] ? "w_d4q" : "w_d");
+      first = false;
+    }
+    printf("], \"receipt_leaves_a_layer\": %zu, \"receipt_bytes_a_layer\": %zu, \"x_bytes_a_layer\": %zu, \"fails\": %d}\n", leaves, rbytes,
+           (size_t)M * (SK[0] + SK[3] + SK[4] + SK[5]), eg_fails);
+    fflush(stdout);
+  }
   std::vector<uint8_t> cg_ref;
   cg::u64* cg_hs[NSTAGE] = {};
   bool cg_host_equal = true;
@@ -488,8 +631,6 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
   LtCtx plt = lt_ctx();
   CK(cudaStreamSynchronize(d.st));
 
-  const int GN[NSTAGE] = {QKV, M / 2, M / 2, HID, 2 * FF, HID}, GK[NSTAGE] = {HID, HID, HID, HID, HID, FF};
-  const int LJ[NSTAGE] = {0, -1, -1, 1, 2, 3};  // the stage's weight in d.W, or -1 for attention
   auto wt = [&](int l, int t, int c) -> const int8_t* {
     if (LJ[t] >= 0) return d.W[l][LJ[t]];
     return Kb[t == 1 ? l : (l + 1) % LAYERS] + kb_seq * c;
@@ -572,7 +713,7 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
   printf("]}\n");
   fflush(stdout);
 
-  int fails = cg_host_equal ? 0 : 1;
+  int fails = (cg_host_equal ? 0 : 1) + eg_fails;
   for (int k : ks) {
     // plain's plans for this k
     const int rows = k * M, rb = std::min(rows, RB);
@@ -608,13 +749,19 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
       a.hash = S.hash && !S.lite;
       a.cg = S.hash && S.lite >= 3;
       a.stamps = S.draw;
+      a.eg = S.eg;
+      a.rc = S.eg && S.rc;
       if (a.cg)
         for (int c = 0; c < k; c++)
           for (int t = 0; t < NSTAGE; t++) {
             ch[c].cgc[t].fuse_top = S.fuse;
             ch[c].cgc[t].prefetch = S.pf;
           }
-      std::vector<cudaStream_t> sg(k), sh(k), ss(k);
+      if (a.rc)
+        for (int c = 0; c < k; c++)
+          for (int t = 0; t < NSTAGE; t++)
+            if (lin[c][t]) eg::lin_flags(lin[c][t], S.fuse, S.pf);
+      std::vector<cudaStream_t> sg(k), sh(k), ss(k), sr(k);
       for (int c = 0; c < k; c++) {
         const int pg = S.classes ? hi + std::min(levels - 1, c * levels / k) : S.hp < 0 ? hi : lo;
         sg[c] = prio_stream(pg);
@@ -623,6 +770,10 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
         a.streams.push_back(sg[c]);
         if (S.hp) a.streams.push_back(sh[c]);
         a.streams.push_back(ss[c]);
+        if (a.rc) {
+          sr[c] = prio_stream(S.rc > 0 ? hi : lo);
+          a.streams.push_back(sr[c]);
+        }
       }
       EvPool pool;
       std::vector<cudaEvent_t> gev(S.rr ? (size_t)k * NS : 0);
@@ -645,10 +796,14 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
             CK(cudaEventRecord(salt_ev[c][t], ss[c]));
           }
         }
+        // the receipts' commitment of (c, t)'s last GEMM: that stage's next GEMM overwrites them after it
+        std::vector<std::vector<cudaEvent_t>> rev(k, std::vector<cudaEvent_t>(NSTAGE, nullptr));
         for (int l = 0; l < LAYERS; l++)
           for (int t = 0; t < NSTAGE; t++)
             for (int c = 0; c < k; c++) {
               const int s = l * NSTAGE + t, idx = s * k + c;
+              eg::Lin* const el = S.eg ? lin[c][t] : nullptr;
+              if (el) eg::lin_qwe(el, d.W[l][LJ[t]], ekey(l, t, c), sg[c]);
               if (S.hash) {
                 if (sh[c] != sg[c]) pool.join(sg[c], sh[c]);
                 if (S.lite == 1) {
@@ -686,12 +841,24 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
               }
               if (S.draw) draw_stamp<<<1, 1, 0, sg[c]>>>((unsigned long long)draw_us * 1000ull, st + (size_t)c * NSTAMP + 2 * s);
               if (S.rr && idx >= S.rr) CK(cudaStreamWaitEvent(sg[c], gev[idx - S.rr], 0));
-              if (S.gemm) ltb_run(g[t], ch[c].lt, ch[c].A, wt(l, t, c), ch[c].D, sg[c]);
+              if (el) {
+                if (rev[c][t]) CK(cudaStreamWaitEvent(sg[c], rev[c][t], 0));
+                eg::lin_gemm(el, eseed(l, t, c), sg[c]);
+              } else if (S.gemm) {
+                ltb_run(g[t], ch[c].lt, ch[c].A, wt(l, t, c), ch[c].D, sg[c]);
+              }
               if (S.rr) CK(cudaEventRecord(gev[idx], sg[c]));
+              if (el && a.rc) {
+                pool.join(sg[c], sr[c]);
+                eg::lin_rcommit(el, l, sr[c]);
+                rev[c][t] = pool.get();
+                CK(cudaEventRecord(rev[c][t], sr[c]));
+              }
             }
         for (int c = 0; c < k; c++) {
           if (S.draw) stamp<<<1, 1, 0, sg[c]>>>(st + (size_t)c * NSTAMP + 2 * NS);
           pool.join(sg[c], sm);
+          if (a.rc) pool.join(sr[c], sm);
         }
       });
       arms.push_back(a);
@@ -767,9 +934,21 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
       cg_ok[i] = memcmp(got.data(), cg_ref.data(), got.size()) == 0;
       if (arms[i].cg ? !cg_ok[i] : cg_ok[i]) fails++;
     }
-    printf("{\"mode\": \"ovl\", \"M\": %d, \"k\": %d, \"draw_us\": %d, \"plain_rb\": %d, \"macs\": %.6e, \"rejected\": %d, "
+    // the receipts' roots of the edited arms against the serial path's (E's, which don't commit them, the control)
+    std::vector<int> rc_ok(arms.size(), -1);
+    for (size_t i = 0; use_rc && i < arms.size(); i++) {
+      if (!arms[i].eg) continue;
+      rc_poison_salt(k);
+      CK(cudaGraphLaunch(arms[i].G.ge, sm));
+      CK(cudaStreamSynchronize(sm));
+      CK(cudaGetLastError());
+      const std::vector<uint8_t> got = rc_roots(k);
+      rc_ok[i] = memcmp(got.data(), rc_ref.data(), got.size()) == 0;
+      if (arms[i].rc ? !rc_ok[i] : rc_ok[i]) fails++;
+    }
+    printf("{\"mode\": \"ovl\", \"M\": %d, \"k\": %d, \"eg_s\": %d, \"draw_us\": %d, \"plain_rb\": %d, \"macs\": %.6e, \"rejected\": %d, "
            "\"missing_algo\": %d, \"plain_gemms\": [",
-           M, k, draw_us, rb, macs_chunk * k, g_rejected_total, g_missing);
+           M, k, use_eg ? EGS : 0, draw_us, rb, macs_chunk * k, g_rejected_total, g_missing);
     for (int t = 0; t < NSTAGE; t++)
       printf("%s{\"stage\": \"%s\", \"m\": %d, \"batch\": %d, \"algo\": %d, \"ms_alone\": %.4f}", t ? ", " : "", SNAME[t], pl[t].m,
              pl[t].batch, pl[t].L.algo_id, pl[t].L.ms);
@@ -785,6 +964,13 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
     for (size_t i = 0; i < arms.size(); i++) {
       if (cg_ok[i] < 0) continue;
       printf("%s\"%s\": %s", first ? "" : ", ", arms[i].name.c_str(), cg_ok[i] ? "\"equal\"" : "\"differ\"");
+      first = false;
+    }
+    printf("}, \"eg_roots\": {");
+    first = true;
+    for (size_t i = 0; i < arms.size(); i++) {
+      if (rc_ok[i] < 0) continue;
+      printf("%s\"%s\": %s", first ? "" : ", ", arms[i].name.c_str(), rc_ok[i] ? "\"equal\"" : "\"differ\"");
       first = false;
     }
     // per chunk: its end (ms after the graph's start stamp), the mean commit + draw and GEMM + commit spans a stage
