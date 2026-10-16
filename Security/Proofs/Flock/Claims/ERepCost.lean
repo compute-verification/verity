@@ -9,6 +9,10 @@ run (probability `ε`) starts the `m` waits. A wait that stops at `k` accepted r
 the draws: `ε·N(K+1, a) = ε + ε·(ε·N(K, a+1)) + (1−ε)·(ε·N(K, a))`). So the waits add at most `ε · m · k/ε = m·k`, and
 `E^rep` reruns the prover at most `1 + m·k` times in expectation (`ERep_runs_exp`), the second half of `ERepCost`
 (`ERep_cost`).
+
+Between reruns, Flock's `assemble` checks each table's decoded list once (`Flock.assembleCounted`, the checks
+`find?` makes table by table): at most the lists' lengths summed (`Flock.assembleCounted_spec`), which `Flock.Efficient`
+bounds by `p(size)` per table (`Flock.assemble_checks_le`).
 -/
 
 namespace Claims
@@ -198,12 +202,91 @@ theorem ERep_cost (H : Msg → Msg) (V : Verifier Coin) (m k K : Msg → ℕ) (o
 end ERep
 
 /-- **Flock: efficiency rests on the decoder alone**: `ERepCost` holds at every deployment, so Flock's `Efficient` is a
-decoder that meets the list-decoding spec, with its stated complexity. -/
+decoder that meets the list-decoding spec, with its stated complexity and its lists at most that long. -/
 theorem Flock.Efficient_of_decoder {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
     [DecidableEq Col] [Zero Col] (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (decode : List (ℕ × Col) → List T)
     (counted : List (ℕ × Col) → List T × ℕ) (size : List (ℕ × Col) → ℕ) (p : Polynomial ℕ)
-    (hl : Flock.ListWithin D.len D.enc D.θ decode) (hd : DecoderComplexity decode counted size p) :
+    (hl : Flock.ListWithin D.len D.enc D.θ decode) (hd : DecoderComplexity decode counted size p)
+    (hlen : ∀ os, (decode os).length ≤ p.eval (size os)) :
     Flock.Efficient H D decode counted size p :=
-  ⟨ERep_cost H D.V D.waits D.k D.cap D.cols _ _, hl, hd⟩
+  ⟨ERep_cost H D.V D.waits D.k D.cap (fun v => [D.cols v]) _ _, hl, hd, hlen⟩
+
+/-! ## `assemble`'s checks -/
+
+/-- `find?` with the number of tests it makes: up to and including the first that passes, every one if none does. -/
+def findC {α : Type} (q : α → Bool) : List α → Option α × ℕ
+  | [] => (none, 0)
+  | a :: l => if q a then (some a, 1) else ((findC q l).1, (findC q l).2 + 1)
+
+theorem findC_fst {α : Type} (q : α → Bool) : ∀ l : List α, (findC q l).1 = l.find? q
+  | [] => rfl
+  | a :: l => by
+    by_cases h : q a
+    · simp [findC, List.find?_cons, h]
+    · simp [findC, List.find?_cons, h, findC_fst q l]
+
+theorem findC_snd_le {α : Type} (q : α → Bool) : ∀ l : List α, (findC q l).2 ≤ l.length
+  | [] => le_rfl
+  | a :: l => by
+    by_cases h : q a
+    · simp [findC, h]
+    · simp only [findC, h, Bool.false_eq_true, ↓reduceIte, List.length_cons]
+      exact Nat.succ_le_succ (findC_snd_le q l)
+
+/-- `assemble`'s step at table `j`, with its count: the first decoded trace of the table's columns whose read is in the
+relation of the table's own statement, and the checks `find?` makes for it. -/
+def Flock.assembleStep {Col T : Type} (table : Msg → ℕ → Option Flock.Stmt) (decode : List (ℕ × Col) → List T)
+    (read : List T → Flock.Wit) (x : Msg) (opens : List (ℕ → List (ℕ × Col))) (j : ℕ) : Option T × ℕ :=
+  match table x j with
+  | none => (none, 0)
+  | some t => findC (fun M => decide (Flock.RelS t (read [M]))) (decode (opens.flatMap fun o => o j))
+
+/-- **`assemble` with its count of relation checks**: every table's step, its checks summed over the statement's
+tables. -/
+def Flock.assembleCounted {Col T : Type} (parse : Msg → Option Flock.Stmt) (table : Msg → ℕ → Option Flock.Stmt)
+    (decode : List (ℕ × Col) → List T) (read : List T → Flock.Wit) (x : Msg) (opens : List (ℕ → List (ℕ × Col))) :
+    Option Flock.Wit × ℕ :=
+  match parse x with
+  | none => (none, 0)
+  | some s =>
+    (((List.range s.tables).mapM fun j => (Flock.assembleStep table decode read x opens j).1).map read,
+      ((List.range s.tables).map fun j => (Flock.assembleStep table decode read x opens j).2).sum)
+
+/-- **`assemble` checks each table's list once**: `assembleCounted` is `assemble`, and its checks are at most the
+tables' list lengths summed, so at most `p(size)` per table when every list is at most `p(size)` long. -/
+theorem Flock.assembleCounted_spec {Col T : Type} (parse : Msg → Option Flock.Stmt)
+    (table : Msg → ℕ → Option Flock.Stmt) (decode : List (ℕ × Col) → List T) (read : List T → Flock.Wit)
+    (size : List (ℕ × Col) → ℕ) (p : Polynomial ℕ) (hlen : ∀ os, (decode os).length ≤ p.eval (size os)) (x : Msg)
+    (opens : List (ℕ → List (ℕ × Col))) :
+    (Flock.assembleCounted parse table decode read x opens).1 = Flock.assemble parse table decode read x opens ∧
+      ∀ s, parse x = some s → (Flock.assembleCounted parse table decode read x opens).2 ≤
+        ((List.range s.tables).map fun j => p.eval (size (opens.flatMap fun o => o j))).sum := by
+  have hstep : (fun j => (Flock.assembleStep table decode read x opens j).1) = fun j => (table x j).bind fun t =>
+      (decode (opens.flatMap fun o => o j)).find? fun M => decide (Flock.RelS t (read [M])) := by
+    funext j
+    unfold Flock.assembleStep
+    cases table x j <;> simp [findC_fst]
+  refine ⟨?_, fun s hs => ?_⟩
+  · unfold Flock.assembleCounted Flock.assemble
+    cases parse x
+    · rfl
+    · simp only [hstep]
+  · simp only [Flock.assembleCounted, hs]
+    refine List.sum_le_sum fun j _ => ?_
+    unfold Flock.assembleStep
+    cases table x j
+    · exact Nat.zero_le _
+    · exact (findC_snd_le _ _).trans (hlen _)
+
+/-- **Flock's `Efficient` bounds `assemble`'s checks**: at most `p(size)` per table, summed over the statement's
+tables. -/
+theorem Flock.assemble_checks_le {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
+    [DecidableEq Col] [Zero Col] {H : Msg → Msg} {D : Flock.Deploy Coin Col T} {decode : List (ℕ × Col) → List T}
+    {counted : List (ℕ × Col) → List T × ℕ} {size : List (ℕ × Col) → ℕ} {p : Polynomial ℕ}
+    (hE : Flock.Efficient H D decode counted size p) (x : Msg) (opens : List (ℕ → List (ℕ × Col))) (s : Flock.Stmt)
+    (hs : D.parse x = some s) :
+    (Flock.assembleCounted D.parse D.table decode D.read x opens).2 ≤
+      ((List.range s.tables).map fun j => p.eval (size (opens.flatMap fun o => o j))).sum :=
+  (Flock.assembleCounted_spec D.parse D.table decode D.read size p hE.2.2.2 x opens).2 s hs
 
 end Claims
