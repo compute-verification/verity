@@ -1,5 +1,5 @@
-// A GPU committer for hm96-sha512/row/v2 rows in frame-v3-sha512 trees, bit for bit the reference's
-// (verity.ml.commitments: hm96.SHA512, rowleaf.sha512_row_v2_*, merkle.CommitmentDomain and tree_levels; reference.py here).
+// A GPU committer for hm96-sha512/row/v2 and hm96-sha512/row-seg/v1 rows in frame-v3-sha512 trees, bit for bit the
+// reference's (verity.ml.commitments: hm96.SHA512, rowleaf, merkle.CommitmentDomain and tree_levels; reference.py here).
 //
 // Per position of a domain of n leaves (rank = position, the tree padded to width = 2^depth):
 //   x    = SHA-512(P(l) || row)                         the row's sha512/row/v2 digest
@@ -9,6 +9,10 @@
 //   pad  = SHA-512(frame || "pad" || domain id || uint(pos)) for n <= pos < width
 // then node(level, index, left, right) up the tree. Every 64-byte digest is kept as 8 u64 words, each the big-endian
 // value of its 8 bytes (the host swaps them back).
+//
+// Two phases: the salt phase (y, M_key y and c; salt_kernel) reads no data and can run before the operand exists; the data
+// phase (x, b, h, the leaf, the tree; leaf_kernel and the node kernels) is all that sits on the critical path. The tree's
+// narrow top can run on the CPU (Committer::host_tail), where a compression is far faster than on one GPU thread.
 //
 // M_key y uses M's Hankel form: column j of M is bits j .. j+511 of the key, so the reference's byte table (p, v) is bytes
 // [p, p+64) of T_v = xor of (key >> s) over the set bits s of v: one 64 KB table T (reference.t_table), in shared memory.
@@ -29,6 +33,7 @@
 #include <nvml.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -332,56 +337,6 @@ struct RowBytes {
   DEV void digest(u64 pos, u64* x) const { hash_after_block(C.mid_P, base + pos * stride, lb, x); }
 };
 
-// One thread a position: the tree leaf (or pad) to lv0[pos]; b || c to bc[pos] when bc is given.
-template <class Row, bool PRF, bool TS, int SX>
-__global__ void __launch_bounds__(LEAF_THREADS, 1)
-    leaf_kernel(Row row, const uint8_t* __restrict__ salts, const uint4* __restrict__ Tg, u64 n, u64 width,
-                u64* __restrict__ lv0, u64* __restrict__ bc) {
-  extern __shared__ uint4 smem[];
-  if constexpr (TS) {
-    for (int i = threadIdx.x; i < 256 * 16; i += blockDim.x) smem[(i >> 4) * (TSTRIDE / 16) + (i & 15)] = Tg[i];
-    __syncthreads();
-  }
-  const u64 pos = (u64)blockIdx.x * blockDim.x + threadIdx.x;
-  if (pos >= width) return;
-  u64 out[8];
-  if (pos < n) {
-    u64 Y[24], c[8], x[8], B[16];
-    u32 m[16];
-    if constexpr (PRF) salt_prf(pos, Y);
-    else salt_given(salts + 192 * pos, Y);
-#ifdef COMMIT_GPU_DIAG_NOMASK
-    for (int w = 0; w < 16; ++w) m[w] = (u32)Y[w];
-#else
-    hm96_mask<TS>(TS ? reinterpret_cast<const uint8_t*>(smem) : reinterpret_cast<const uint8_t*>(Tg), Y, m);
-#endif
-    salt_digest(Y, c);
-    row.digest(pos, x);
-#pragma unroll
-    for (int i = 0; i < 8; ++i) {
-      B[i] = x[i] ^ ((u64)bswap32(m[2 * i]) << 32 | bswap32(m[2 * i + 1]));
-      B[8 + i] = c[i];
-    }
-    if (bc) {
-      uint4* o = reinterpret_cast<uint4*>(bc + 16 * pos);
-#pragma unroll
-      for (int i = 0; i < 8; ++i)
-        o[i] = make_uint4((u32)B[2 * i], (u32)(B[2 * i] >> 32), (u32)B[2 * i + 1], (u32)(B[2 * i + 1] >> 32));
-    }
-    u64 h[8];
-    cpy8(h, C.mid_leaf);
-    sha::compress(h, B);
-    sha::compress_kw(h, C.kw_leafpad);
-    frame_leaf<SX>(pos, h, out);
-  } else {
-    pad(pos, out);
-  }
-  uint4* o = reinterpret_cast<uint4*>(lv0 + 8 * pos);
-#pragma unroll
-  for (int i = 0; i < 4; ++i)
-    o[i] = make_uint4((u32)out[2 * i], (u32)(out[2 * i] >> 32), (u32)out[2 * i + 1], (u32)(out[2 * i + 1] >> 32));
-}
-
 DEV void ld8(const u64* p, u64* d) {
   const uint4* q = reinterpret_cast<const uint4*>(p);
 #pragma unroll
@@ -395,6 +350,64 @@ DEV void st8(u64* p, const u64* d) {
   uint4* q = reinterpret_cast<uint4*>(p);
 #pragma unroll
   for (int i = 0; i < 4; ++i) q[i] = make_uint4((u32)d[2 * i], (u32)(d[2 * i] >> 32), (u32)d[2 * i + 1], (u32)(d[2 * i + 1] >> 32));
+}
+
+// The salt phase, a thread a position: M_key y and c = SHA-512(salt_prefix || y) to S[pos] (16 words). Nothing here reads
+// the data, so it can run before the operand exists; the data phase (leaf_kernel) then has only the row on its path.
+template <bool PRF, bool TS>
+__global__ void __launch_bounds__(LEAF_THREADS, 1)
+    salt_kernel(const uint8_t* __restrict__ salts, const uint4* __restrict__ Tg, u64 n, u64* __restrict__ S) {
+  extern __shared__ uint4 smem[];
+  if constexpr (TS) {
+    for (int i = threadIdx.x; i < 256 * 16; i += blockDim.x) smem[(i >> 4) * (TSTRIDE / 16) + (i & 15)] = Tg[i];
+    __syncthreads();
+  }
+  const u64 pos = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  if (pos >= n) return;
+  u64 Y[24], c[8], my[8];
+  u32 m[16];
+  if constexpr (PRF) salt_prf(pos, Y);
+  else salt_given(salts + 192 * pos, Y);
+#ifdef COMMIT_GPU_DIAG_NOMASK
+  for (int w = 0; w < 16; ++w) m[w] = (u32)Y[w];
+#else
+  hm96_mask<TS>(TS ? reinterpret_cast<const uint8_t*>(smem) : reinterpret_cast<const uint8_t*>(Tg), Y, m);
+#endif
+  salt_digest(Y, c);
+#pragma unroll
+  for (int i = 0; i < 8; ++i) my[i] = (u64)bswap32(m[2 * i]) << 32 | bswap32(m[2 * i + 1]);
+  st8(S + 16 * pos, my);
+  st8(S + 16 * pos + 8, c);
+}
+
+// The data phase, a thread a position: the tree leaf (or pad) to lv0[pos] from the row and S[pos]; b || c to bc[pos]
+// when bc is given.
+template <class Row, int SX>
+__global__ void __launch_bounds__(LEAF_THREADS)
+    leaf_kernel(Row row, const u64* __restrict__ S, u64 n, u64 width, u64* __restrict__ lv0, u64* __restrict__ bc) {
+  const u64 pos = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  if (pos >= width) return;
+  u64 out[8];
+  if (pos < n) {
+    u64 x[8], B[16];
+    row.digest(pos, x);
+    ld8(S + 16 * pos, B);
+    ld8(S + 16 * pos + 8, B + 8);
+#pragma unroll
+    for (int i = 0; i < 8; ++i) B[i] ^= x[i];
+    if (bc) {
+      st8(bc + 16 * pos, B);
+      st8(bc + 16 * pos + 8, B + 8);
+    }
+    u64 h[8];
+    cpy8(h, C.mid_leaf);
+    sha::compress(h, B);
+    sha::compress_kw(h, C.kw_leafpad);
+    frame_leaf<SX>(pos, h, out);
+  } else {
+    pad(pos, out);
+  }
+  st8(lv0 + 8 * pos, out);
 }
 
 // Level d+1 from level d (n_in nodes), a thread a node.
@@ -595,15 +608,33 @@ static Consts build_consts(const Params& p, u32 lb, bool seg, u64 seg_bits) {
 
 static int depth_of(u64 n) { int d = 0; while ((1ull << d) < n) ++d; return d; }
 
+// The device's node() on the CPU, from the same constants: one GPU thread takes microseconds a compression, a CPU core a
+// fraction of one, so the narrow top of a tree is faster on the host, which needs the root anyway.
+static int nbytes_host(u64 v) { int k = 1; while (k < 8 && (v >> (8 * k))) ++k; return k; }
+static void or_byte(u64* W, int off, uint8_t b) { W[off >> 3] |= (u64)b << (56 - 8 * (off & 7)); }
+static uint8_t byte_of(const u64* d, int i) { return (uint8_t)(d[i >> 3] >> (56 - 8 * (i & 7))); }
+static void host_node(const Consts& c, int level, u64 index, const u64* L, const u64* R, u64* out) {
+  const int ni = nbytes_host(index);
+  u64 W[32];
+  memcpy(W, c.node_tpl[ni], sizeof W);
+  for (int i = 0; i < ni; ++i) or_byte(W, 2 + i, (uint8_t)(index >> (8 * (ni - 1 - i))));
+  for (int i = 0; i < 64; ++i) { or_byte(W, 10 + ni + i, byte_of(L, i)); or_byte(W, 82 + ni + i, byte_of(R, i)); }
+  memcpy(out, c.node_mid[level], 64);
+  sha::compress(out, W);
+  sha::compress(out, W + 16);
+}
+
 struct Committer {
   u64 n = 0, width = 0;
   int depth = 0;
   u64* levels = nullptr;            // every level, leaves first: level d at offset 8 (2 width - 2 width >> d) words
   u64* bc = nullptr;
+  u64* S = nullptr;                 // the salt phase's M_key y || c, 16 words a leaf
   uint4* T = nullptr;
   uint8_t* D = nullptr;             // row-seg: the segment digests
   u32 segs = 0, seg_last = 0;
   std::vector<u64*> lv;
+  Consts hc;                        // the host copy of C
   // lb: the row bytes after P; seg: row-seg rows of seg_bits bits (lb is then the outer hash's 64 s bytes; the empty row
   // has no segment)
   void init(const Params& p, u64 n_, u32 lb, bool keep_bc, bool seg = false, u64 seg_bits = 0) {
@@ -615,50 +646,69 @@ struct Committer {
       lb = 64 * segs;
       CK(cudaMalloc(&D, n * lb + 16));
     }
-    Consts c = build_consts(p, lb, seg, seg_bits);
-    CK(cudaMemcpyToSymbol(C, &c, sizeof c));
+    hc = build_consts(p, lb, seg, seg_bits);
+    CK(cudaMemcpyToSymbol(C, &hc, sizeof hc));
     CK(cudaMalloc(&levels, (2 * width) * 64));
     if (keep_bc) CK(cudaMalloc(&bc, n * 128));
+    CK(cudaMalloc(&S, n * 128));
     CK(cudaMalloc(&T, 65536));
     CK(cudaMemcpy(T, p.T.data(), 65536, cudaMemcpyHostToDevice));
     u64 off = 0;
     for (int d = 0; d <= depth; ++d) { lv.push_back(levels + 8 * off); off += width >> d; }
   }
-  // Above 2^16 leaves T sits in shared memory (one block of LEAF_THREADS an SM); at or below, where the rows dominate a
-  // leaf's work, blocks of 64 threads read T through L1, which spreads few leaves over the SMs and takes no shared memory.
-  template <class Row, bool PRF, int SX = 0>
-  void leaves(const Row& row, const uint8_t* salts, cudaStream_t st) {
-    if (width > (1u << 16)) {
-      auto k = leaf_kernel<Row, PRF, true, SX>;
+  // The salt phase. Above 2^16 leaves T sits in shared memory (one block of LEAF_THREADS an SM); at or below, blocks of 64
+  // threads read T through L1, which spreads few leaves over the SMs and takes no shared memory.
+  template <bool PRF>
+  void salts(const uint8_t* given, cudaStream_t st) {
+    if (n > (1u << 16)) {
+      auto k = salt_kernel<PRF, true>;
       static bool attr = false;
       if (!attr) { CK(cudaFuncSetAttribute(k, cudaFuncAttributeMaxDynamicSharedMemorySize, TSMEM)); attr = true; }
-      k<<<(unsigned)((width + LEAF_THREADS - 1) / LEAF_THREADS), LEAF_THREADS, TSMEM, st>>>(row, salts, T, n, width, lv[0], bc);
+      k<<<(unsigned)((n + LEAF_THREADS - 1) / LEAF_THREADS), LEAF_THREADS, TSMEM, st>>>(given, T, n, S);
     } else {
-      leaf_kernel<Row, PRF, false, SX><<<(unsigned)((width + 63) / 64), 64, 0, st>>>(row, salts, T, n, width, lv[0], bc);
+      salt_kernel<PRF, false><<<(unsigned)((n + 63) / 64), 64, 0, st>>>(given, T, n, S);
     }
   }
-  // row-seg rows at `rows` (stride bytes apart, 16-byte aligned): the segment digests, then the leaves over them
-  template <bool PRF>
-  void seg_leaves(const uint8_t* rows, u64 stride, const uint8_t* salts, cudaStream_t st) {
-    if (segs) seg_kernel<<<(unsigned)((n * segs + 255) / 256), 256, 0, st>>>(rows, stride, n, segs, seg_last, D);
-    leaves<RowBytes, PRF, 4>(RowBytes{D, 64ull * segs, 64u * segs}, salts, st);
+  // The data phase's leaves (after salts()): blocks of 64 threads up to 2^16 leaves, so few leaves still spread over the SMs.
+  template <class Row, int SX = 0>
+  void leaves(const Row& row, cudaStream_t st) {
+    const unsigned t = width > (1u << 16) ? LEAF_THREADS : 64;
+    leaf_kernel<Row, SX><<<(unsigned)((width + t - 1) / t), t, 0, st>>>(row, S, n, width, lv[0], bc);
   }
-  // A level a launch while a level is wider than 512 nodes (blocks of 64 threads below 2^16 nodes, so few nodes still spread
-  // over the SMs), then the top in one block.
-  void nodes(cudaStream_t st) {
+  // row-seg rows at `rows` (stride bytes apart, 16-byte aligned): the segment digests, then the leaves over them
+  void seg_leaves(const uint8_t* rows, u64 stride, cudaStream_t st) {
+    if (segs) seg_kernel<<<(unsigned)((n * segs + 255) / 256), 256, 0, st>>>(rows, stride, n, segs, seg_last, D);
+    leaves<RowBytes, 4>(RowBytes{D, 64ull * segs, 64u * segs}, st);
+  }
+  // Levels 1 .. top (default the root): a level a launch while a level is wider than 512 nodes (blocks of 64 threads below
+  // 2^16 nodes), then the rest in one block.
+  void nodes(cudaStream_t st, int top = -1) {
+    if (top < 0) top = depth;
     int d = 0;
-    for (; d < depth && (width >> d) > 2 * NODE_THREADS; ++d) {
+    for (; d < top && (width >> d) > 2 * NODE_THREADS; ++d) {
       const u64 n_out = width >> (d + 1);
       const unsigned t = n_out >= (1u << 16) ? NODE_THREADS : 64;
       level_kernel<<<(unsigned)((n_out + t - 1) / t), t, 0, st>>>(lv[d], lv[d + 1], width >> d, d);
     }
-    if (d < depth) {
+    if (d < top) {
       LevelPtrs o{};
-      for (int l = 0; l < depth - d; ++l) o.p[l] = lv[d + 1 + l];
-      node_kernel<<<1, NODE_THREADS, 0, st>>>(lv[d], o, width >> d, d, depth - d);
+      for (int l = 0; l < top - d; ++l) o.p[l] = lv[d + 1 + l];
+      node_kernel<<<1, NODE_THREADS, 0, st>>>(lv[d], o, width >> d, d, top - d);
     }
   }
-  void release() { cudaFree(levels); cudaFree(bc); cudaFree(T); cudaFree(D); lv.clear(); }
+  // Levels from+1 .. depth on the CPU from level `from` (cur: its nodes' words, replaced by the root's); each level's words
+  // are appended to `keep` when given.
+  void host_tail(int from, std::vector<u64>& cur, std::vector<std::vector<u64>>* keep = nullptr) const {
+    std::vector<u64> nxt;
+    for (int d = from; d < depth; ++d) {
+      const u64 m = (width >> d) / 2;
+      nxt.resize(8 * m);
+      for (u64 i = 0; i < m; ++i) host_node(hc, d, i, &cur[16 * i], &cur[16 * i + 8], &nxt[8 * i]);
+      if (keep) keep->push_back(nxt);
+      cur.swap(nxt);
+    }
+  }
+  void release() { cudaFree(levels); cudaFree(bc); cudaFree(S); cudaFree(T); cudaFree(D); lv.clear(); }
 };
 
 static int selftest() {
@@ -704,15 +754,14 @@ static int check(int argc, char** argv) {
   }
   Committer cm;
   cm.init(p, n, mode == "e2e" ? 128 : lb, true, mode == "seg", lbits);
+  prf ? cm.salts<true>(nullptr, 0) : cm.salts<false>(dsalts, 0);
   if (mode == "seg") {
-    prf ? cm.seg_leaves<true>(drows, stride, dsalts, 0) : cm.seg_leaves<false>(drows, stride, dsalts, 0);
+    cm.seg_leaves(drows, stride, 0);
   } else if (mode == "e2e") {
     if (lbits != 1024) { fprintf(stderr, "an e2e leaf is 1024 bits\n"); return 2; }
-    RowE2E r{drows};
-    prf ? cm.leaves<RowE2E, true>(r, dsalts, 0) : cm.leaves<RowE2E, false>(r, dsalts, 0);
+    cm.leaves<RowE2E>(RowE2E{drows}, 0);
   } else {
-    RowBytes r{drows, stride, lb};
-    prf ? cm.leaves<RowBytes, true>(r, dsalts, 0) : cm.leaves<RowBytes, false>(r, dsalts, 0);
+    cm.leaves<RowBytes>(RowBytes{drows, stride, lb}, 0);
   }
   cm.nodes(0);
   CK(cudaDeviceSynchronize());
@@ -728,6 +777,19 @@ static int check(int argc, char** argv) {
   u64 used = 0;
   for (int d = 0; d <= cm.depth; ++d) used += cm.width >> d;
   lv.resize(8 * used);
+  // the CPU tail over the GPU's level depth - k must give the GPU's levels above it (which the caller holds to the reference)
+  const int k = std::min(cm.depth, 6), from = cm.depth - k;
+  auto off = [&](int d) { return 8 * (2 * cm.width - 2 * (cm.width >> d)); };
+  if (k) {
+    std::vector<u64> cur(lv.begin() + off(from), lv.begin() + off(from + 1));
+    std::vector<std::vector<u64>> tail;
+    cm.host_tail(from, cur, &tail);
+    for (int l = 0; l < k; ++l)
+      if (!std::equal(tail[l].begin(), tail[l].end(), lv.begin() + off(from + 1 + l))) {
+        fprintf(stderr, "the CPU tail's level %d differs from the GPU's\n", from + 1 + l);
+        return 1;
+      }
+  }
   auto lb_ = to_bytes(lv), bb = to_bytes(bcv);
   writef(out_dir + "/levels.bin", lb_.data(), lb_.size());
   writef(out_dir + "/bc.bin", bb.data(), bb.size());
@@ -847,60 +909,95 @@ static int bench(int argc, char** argv) {
   Committer cm;
   cm.init(p, n, mode == "e2e" ? 128 : lb, false, mode == "seg", lbits);
   auto leaves = [&](cudaStream_t st) {
-    if (mode == "e2e") cm.leaves<RowE2E, true>(RowE2E{src}, nullptr, st);
-    else if (mode == "seg") cm.seg_leaves<true>(src, lb, nullptr, st);
-    else cm.leaves<RowBytes, true>(RowBytes{src, lb, lb}, nullptr, st);
+    if (mode == "e2e") cm.leaves<RowE2E>(RowE2E{src}, st);
+    else if (mode == "seg") cm.seg_leaves(src, lb, st);
+    else cm.leaves<RowBytes>(RowBytes{src, lb, lb}, st);
   };
-  auto commit = [&](cudaStream_t st) { leaves(st); cm.nodes(st); };
+  // the critical path is the data phase: the salt phase (salts()) ran before the operand existed
+  auto commit = [&](cudaStream_t st, int top) { leaves(st); cm.nodes(st, top); };
   cudaEvent_t e[6];
   for (auto& x : e) CK(cudaEventCreate(&x));
   auto ms = [](cudaEvent_t a, cudaEvent_t b) { float t; CK(cudaEventElapsedTime(&t, a, b)); return (double)t; };
   Nv nv;
   int dev; cudaDeviceProp prop;
   CK(cudaGetDevice(&dev)); CK(cudaGetDeviceProperties(&prop, dev));
-  for (int w = 0; w < 2; ++w) commit(sc);
+  for (int w = 0; w < 2; ++w) { cm.salts<true>(nullptr, sc); commit(sc, -1); }
   CK(cudaStreamSynchronize(sc));
   CK(cudaGetLastError());
-  // the same launches as one CUDA graph: a small commitment is a dozen short kernels, and their launch gaps count
-  cudaGraph_t graph;
-  cudaGraphExec_t gexec;
-  CK(cudaStreamBeginCapture(sc, cudaStreamCaptureModeThreadLocal));
-  commit(sc);
-  CK(cudaStreamEndCapture(sc, &graph));
-  CK(cudaGraphInstantiate(&gexec, graph, 0));
-  auto commit_graph = [&](cudaStream_t st) { CK(cudaGraphLaunch(gexec, st)); };
+  // the data phase as one CUDA graph (a small commitment is a dozen short kernels, and their launch gaps count): to the
+  // root, and to level depth - k for a CPU tail of k levels
+  std::vector<int> ks;
+  for (int k : {0, 3, 4, 5, 6, 8}) if (k <= cm.depth) ks.push_back(k);
+  std::vector<cudaGraph_t> graphs(ks.size());
+  std::vector<cudaGraphExec_t> gx(ks.size());
+  for (size_t i = 0; i < ks.size(); ++i) {
+    CK(cudaStreamBeginCapture(sc, cudaStreamCaptureModeThreadLocal));
+    commit(sc, cm.depth - ks[i]);
+    CK(cudaStreamEndCapture(sc, &graphs[i]));
+    CK(cudaGraphInstantiate(&gx[i], graphs[i], 0));
+  }
+  auto commit_graph = [&](cudaStream_t st) { CK(cudaGraphLaunch(gx[0], st)); };
   commit_graph(sc);
   CK(cudaStreamSynchronize(sc));
-  // alone: the whole commitment, its leaf pass alone, and the graph
-  std::vector<double> t_all, t_leaf, t_graph, mhz;
+  // alone: the salt phase, the data phase (its leaves, its nodes) and its graph
+  std::vector<double> t_salt, t_all, t_leaf, t_graph, mhz;
   for (int r = 0; r < reps; ++r) {
     CK(cudaEventRecord(e[0], sc));
-    leaves(sc);
+    cm.salts<true>(nullptr, sc);
     CK(cudaEventRecord(e[1], sc));
-    cm.nodes(sc);
+    leaves(sc);
     CK(cudaEventRecord(e[2], sc));
-    commit_graph(sc);
+    cm.nodes(sc);
     CK(cudaEventRecord(e[3], sc));
-    CK(cudaEventSynchronize(e[3]));
-    t_leaf.push_back(ms(e[0], e[1]));
-    t_all.push_back(ms(e[0], e[2]));
-    t_graph.push_back(ms(e[2], e[3]));
+    commit_graph(sc);
+    CK(cudaEventRecord(e[4], sc));
+    CK(cudaEventSynchronize(e[4]));
+    t_salt.push_back(ms(e[0], e[1]));
+    t_leaf.push_back(ms(e[1], e[2]));
+    t_all.push_back(ms(e[1], e[3]));
+    t_graph.push_back(ms(e[3], e[4]));
     mhz.push_back(nv.sm());
   }
-  const double tc = median(t_all), tgr = median(t_graph);
+  // the root on the host (host clock): the graph to level depth - k, that level's 2^k nodes to pinned memory, k levels on
+  // the CPU; the root is checked against the GPU's
+  u64* hbuf;
+  CK(cudaMallocHost(&hbuf, 64ull << 8));
+  u64 groot[8];
+  CK(cudaMemcpy(groot, cm.lv[cm.depth], 64, cudaMemcpyDeviceToHost));
+  std::vector<std::vector<double>> t_host(ks.size());
+  for (int r = 0; r < reps; ++r)
+    for (size_t i = 0; i < ks.size(); ++i) {
+      const int from = cm.depth - ks[i];
+      const auto t0 = std::chrono::steady_clock::now();
+      CK(cudaGraphLaunch(gx[i], sc));
+      CK(cudaMemcpyAsync(hbuf, cm.lv[from], 64ull << ks[i], cudaMemcpyDeviceToHost, sc));
+      CK(cudaStreamSynchronize(sc));
+      std::vector<u64> cur(hbuf, hbuf + (8ull << ks[i]));
+      cm.host_tail(from, cur);
+      t_host[i].push_back(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
+      if (!std::equal(cur.begin(), cur.begin() + 8, groot)) { fprintf(stderr, "the CPU tail's root differs (k %d)\n", ks[i]); return 1; }
+    }
+  size_t kb = 0;
+  for (size_t i = 1; i < ks.size(); ++i) if (median(t_host[i]) < median(t_host[kb])) kb = i;
+  const double tc = median(t_all), tgr = median(t_graph), ts = median(t_salt);
   auto blocks = [](u64 bytes) { return (double)((bytes + 17 + 127) / 128); };   // after a first block the host folded
   const double row_comps = mode == "e2e" ? 2
                            : mode == "seg" ? (cm.segs ? (cm.segs - 1) * blocks(1024) + blocks(cm.seg_last) : 0) + blocks(64ull * cm.segs)
                                            : blocks(lb);
-  // row, salt (3), c (2), hm96 leaf (2), frame leaf (2) a leaf; a node (2) a node; the pads' (2) are left out
-  const double comps = n * (row_comps + 9.0) + 2.0 * (cm.width - 1);
+  // the data phase: row, hm96 leaf (2), frame leaf (2) a leaf, and a node (2) a node (the pads' left out); the salt phase:
+  // salt (3) and c (2) a leaf
+  const double comps = n * (row_comps + 4.0) + 2.0 * (cm.width - 1), salt_comps = 5.0 * n;
   printf("{\"bench\": \"%s\", \"gpu\": \"%s\", \"sms\": %d, \"sha_add\": %d, \"sha_rot\": %d, \"leaf_threads\": %d, \"n\": %llu, \"lbits\": %llu, "
-         "\"depth\": %d, \"operand_bytes\": %llu, \"commit_ms\": %.5f, \"leaf_ms\": %.5f, \"nodes_ms\": %.5f, \"graph_ms\": %.5f, "
-         "\"mhz\": %.0f, \"compressions\": %.0f, \"gcomp_per_s\": %.3f, \"sha_gb_per_s\": %.2f, \"operand_gb_per_s\": %.2f, "
-         "\"operand_gb_per_s_graph\": %.2f, ",
+         "\"depth\": %d, \"operand_bytes\": %llu, \"salt_ms\": %.5f, \"salt_compressions\": %.0f, \"commit_ms\": %.5f, "
+         "\"leaf_ms\": %.5f, \"nodes_ms\": %.5f, \"graph_ms\": %.5f, \"mhz\": %.0f, \"compressions\": %.0f, \"gcomp_per_s\": %.3f, "
+         "\"sha_gb_per_s\": %.2f, \"operand_gb_per_s\": %.2f, \"operand_gb_per_s_graph\": %.2f, \"root_on_host_best_k\": %d, "
+         "\"root_on_host_best_ms\": %.5f, \"operand_gb_per_s_root_on_host\": %.2f, \"root_on_host_ms\": {",
          mode.c_str(), prop.name, prop.multiProcessorCount, SHA_ADD, SHA_ROT, LEAF_THREADS, (unsigned long long)n,
-         (unsigned long long)lbits, cm.depth, (unsigned long long)data, tc, median(t_leaf), tc - median(t_leaf), tgr,
-         median(mhz), comps, comps / tc * 1e-6, comps * 128 / tc * 1e-6, data / tc * 1e-6, data / tgr * 1e-6);
+         (unsigned long long)lbits, cm.depth, (unsigned long long)data, ts, salt_comps, tc, median(t_leaf), tc - median(t_leaf),
+         tgr, median(mhz), comps, comps / tc * 1e-6, comps * 128 / tc * 1e-6, data / tc * 1e-6, data / tgr * 1e-6, ks[kb],
+         median(t_host[kb]), data / median(t_host[kb]) * 1e-6);
+  for (size_t i = 0; i < ks.size(); ++i) printf("%s\"%d\": %.5f", i ? ", " : "", ks[i], median(t_host[i]));
+  printf("}, ");
   json_list("commit_ms_all", t_all);
   printf(", ");
   json_list("graph_ms_all", t_graph);
@@ -954,8 +1051,8 @@ static int bench(int argc, char** argv) {
     json_list("serial_wall_all", serial_wall);
     printf("}}\n");
   }
-  CK(cudaGraphExecDestroy(gexec));
-  CK(cudaGraphDestroy(graph));
+  for (size_t i = 0; i < ks.size(); ++i) { CK(cudaGraphExecDestroy(gx[i])); CK(cudaGraphDestroy(graphs[i])); }
+  CK(cudaFreeHost(hbuf));
   cm.release();
   return 0;
 }

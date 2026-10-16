@@ -24,6 +24,9 @@ def best(out: str) -> str:
 def bench_line(tag: str, r: dict) -> str:
     if "bench" in r:
         graph = f", graph {r['graph_ms']:.3f} ms ({r['operand_gb_per_s_graph']:.1f} GB/s)" if "graph_ms" in r else ""
+        if "salt_ms" in r:
+            graph += (f", root on the host {r['root_on_host_best_ms']:.3f} ms (CPU tail {r['root_on_host_best_k']} levels, "
+                      f"{r['operand_gb_per_s_root_on_host']:.1f} GB/s); salt phase {r['salt_ms']:.3f} ms before the data")
         return (f"{tag} {r['bench']} n={r['n']} bits={r['lbits']}: commit {r['commit_ms']:.3f} ms (leaves {r['leaf_ms']:.3f}, "
                 f"nodes {r['nodes_ms']:.3f}){graph}, {r['operand_gb_per_s']:.1f} GB/s of operand, "
                 f"{r['gcomp_per_s']:.2f} G compressions/s, {r['mhz']:.0f} MHz")
