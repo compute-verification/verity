@@ -1336,9 +1336,10 @@ static int gc_split2(int n_step, cudaStream_t* s_step, cudaStream_t* s_step2, cu
 }
 
 // The step beside FILL v1's partitioned filler (fill_sms SMs, W x NC x S, pumped as run_dfill; 0: no partition, the step
-// on every SM) and the phase filler on the step's SMs (pmode none|fixed|flag, PW x PNC x PS; fixed: `param` is the share
-// of the layer's attention time its tiles take, measured on the step's SMs alone; flag: `param` is the cap of tiles a
-// warp). Arms: full; split tuned; split tuned + FILL v1 (the baseline); the same + the phase filler; full again.
+// on every SM) and the phase filler on the step's SMs (pmode none|fixed|flag|tiles, PW x PNC x PS; fixed: `param` is the
+// share of the layer's attention time its tiles take, measured on the step's SMs alone; flag: `param` is the cap of tiles a
+// warp; tiles: `param` tiles a warp a layer, chosen before the run, as a scored arm must). Arms: full; split tuned; split
+// tuned + FILL v1 (the baseline); the same + the phase filler; full again.
 // PFILL_PRIO=0 drops the node priority, PFILL_JOIN=0 lets o start before the phase filler ends (it joins at the step's end).
 static int run_pfill(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, int pmode, int PW, int PNC, int PS,
                      double param, int reps) {
@@ -1397,6 +1398,8 @@ static int run_pfill(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, i
   }
   if (pmode == 1) pf.tiles = (int)std::floor(param * att_layer_ms / tile_ms);
   else if (pmode == 2) pf.tiles = std::max(1, (int)param);
+  else if (pmode == 3) pf.tiles = (int)param;
+  if (pmode == 3) pf.mode = 1;  // a fixed count chosen before the run: the same graph as fixed
   if (pmode && pf.tiles <= 0) pf.mode = 0;
   if (pf.mode == 0) pf.tiles = 1;
   pfill_alloc(pf);
@@ -1688,14 +1691,14 @@ int main(int argc, char** argv) {
     if (Ss.empty()) Ss.push_back(256);
     rc = pgate(d, Ss);
   } else if (mode == "pfill") {
-    if (argc < 13) { fprintf(stderr, "pfill B L FILL_SMS W NC S none|fixed|flag PW PNC PS PARAM [reps]\n"); return 1; }
+    if (argc < 13) { fprintf(stderr, "pfill B L FILL_SMS W NC S none|fixed|flag|tiles PW PNC PS PARAM [reps]\n"); return 1; }
     const int B = atoi(argv[2]), L = atoi(argv[3]), fsm = atoi(argv[4]), W = atoi(argv[5]), NC = atoi(argv[6]),
               S = atoi(argv[7]);
     const std::string pm = argv[8];
-    const int pmode = pm == "fixed" ? 1 : pm == "flag" ? 2 : 0, PW = atoi(argv[9]), PNC = atoi(argv[10]),
+    const int pmode = pm == "fixed" ? 1 : pm == "flag" ? 2 : pm == "tiles" ? 3 : 0, PW = atoi(argv[9]), PNC = atoi(argv[10]),
               PS = atoi(argv[11]);
     if ((size_t)B * L > maxBL || L % 512 || B > 256 || fsm < 0 || fsm >= d.sms || W < 1 || W > 16 || S % 8 || S <= 0 ||
-        PW < 1 || PW > 16 || PS % 8 || PS <= 0 || (pm != "none" && pm != "fixed" && pm != "flag")) {
+        PW < 1 || PW > 16 || PS % 8 || PS <= 0 || (pm != "none" && pm != "fixed" && pm != "flag" && pm != "tiles")) {
       fprintf(stderr, "B*L <= %zu, L %% 512 == 0, B <= 256, 0 <= FILL_SMS < %d, 1 <= W, PW <= 16, 8 | S, PS\n", maxBL,
               d.sms);
       return 1;
