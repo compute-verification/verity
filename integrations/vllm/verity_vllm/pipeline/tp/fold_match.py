@@ -72,8 +72,9 @@ def _link(dst: Path, src: Path) -> None:
 def fold_rank(py: str, log: Path, profile: str, out: Path, timeout: int | None) -> dict:
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
-    rc = _run([py, "-m", "verity_vllm.pipeline.cli", "match", "--worker", "fold", "--log", str(log), "--profile", profile,
-               "--out", str(out / "fold_summary.json"), "--persist-dir", str(out)], out / "fold.log", timeout)
+    done = os.environ.get("VERITY_FOLD_REUSE") == "1" and all((out / f).exists() for f in ("fold_summary.json", "program.json", "instances.jsonl"))
+    rc = 0 if done else _run([py, "-m", "verity_vllm.pipeline.cli", "match", "--worker", "fold", "--log", str(log), "--profile", profile,
+                              "--out", str(out / "fold_summary.json"), "--persist-dir", str(out)], out / "fold.log", timeout)
     fs = _load(out / "fold_summary.json") or {}
     ok = rc == 0 and (out / "program.json").exists() and (out / "instances.jsonl").exists() and int(fs.get("errors") or 0) == 0 and \
         int(fs.get("unresolved") or 0) == 0
