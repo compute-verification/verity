@@ -119,7 +119,7 @@ def measure(arm, bdir: Path, out: Path, rounds: int, reps: int, robust: bool) ->
         else:
             cmd = [str(bdir / "dscore"), "dscore", "step" if ph == "decode" else "prefill", str(b), str(l), p.place,
                    str(p.fill_sms), str(f.W), str(f.NC), str(f.S), str(rounds), str(reps), str(i)]
-        rc = SC.sh(cmd, out=out / "dscore.jsonl", err=err, env=at(f))
+        rc = SC.sh(cmd, out=out / "dscore.jsonl", err=err, env=dict(at(f), FLIN_STOP=str(q.ST)) if q else at(f))
         note(f"{cmd[1]} {ph} {b} {l} {p.place} {p.fill_sms} filler {dataclasses.astuple(f)} "
              f"fused {dataclasses.astuple(q) if q else None} rc {rc}")
         SC.smi(out)
