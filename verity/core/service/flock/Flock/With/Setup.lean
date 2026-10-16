@@ -216,34 +216,10 @@ def sectionsLoop (tags : Tags) (lines : Array String) (s : Array (String × Net)
       return .yield (nets.push (h[1]!, net), at_ + 1 + n)
     else return .done (nets, at_)
 
-/-- `parse` through the oracle. -/
-def parseWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := [])
-    (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) : M Circuit := do
-  let sha ← hs.sha512 bytes
-  let text ← match String.fromUTF8? bytes with
-    | some s => pure s
-    | none => throw "circuit: not UTF-8"
-  let lines0 := (text.splitOn "\n").toArray
-  let lines := if lines0.back? == some "" then lines0.pop else lines0
-  let head := (lines.getD 0 "").trimAsciiEnd.toString
-  if !head.startsWith (tags.fileFormat ++ " ") then throw s!"circuit: not a {tags.fileFormat} file"
-  let name := (head.drop (tags.fileFormat.length + 1)).toString
-  let metaLine := (lines.getD 1 "").trimAsciiEnd.toString
-  if !metaLine.startsWith "META " then throw "circuit: no META line"
-  let mj ← match Json.parse (metaLine.drop 5).toString with
-    | .ok j => pure j
-    | .error e => throw s!"META: {e}"
-  if (← J.str mj "format" ctx) != tags.fileFormat || (← J.str mj "statement" ctx) != tags.statement then
-    throw s!"META: not {tags.statement}"
-  let classSha ← if tags.bindings then do
-      if !isSha512Hex ((mj.getObjValAs? String "program_sha512").toOption.getD "") then
-        throw "META: program_sha512 (the Program the partition is over) is not a SHA-512 digest"
-      let part := (mj.getObjVal? "partition").toOption.getD Json.null
-      let rule := (part.getObjValAs? String "rule").toOption.getD ""
-      if !(rule == PARTITION_V1 || rule == PARTITION_PROVISIONAL) || !isSha512Hex ((part.getObjValAs? String "digest").toOption.getD "") then
-        throw s!"META: the partition is not a {PARTITION_V1} (or the provisional {PARTITION_PROVISIONAL}) SHA-512 digest"
-      classOfWith hs bytes head mj
-    else pure ByteArray.empty
+/-- `parse` after the class digest, which takes nothing from the oracle: the sections after META, the lookups, rows,
+ranges, wires and leaf scheme, from the circuit's digest `sha`, its lines, its name, META and its class digest. -/
+def parseRest (tags : Tags) (tables : List (String × ByteArray)) (tmpl : Option Typed.Template) (pre : Array (String × Net))
+    (sha : ByteArray) (lines : Array String) (name : String) (mj : Json) (classSha : ByteArray) : V Circuit := do
   let __s ← sectionsLoop tags lines ((match tmpl with
     | some t => #[("root", t.root)] ++ t.layouts.map fun (d, n, _) => (d, n)
     | none => pre), 2)
@@ -362,6 +338,36 @@ def parseWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (
   RecSparse.check c
   RecOpening.check c
   return c
+
+/-- `parse` through the oracle. -/
+def parseWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := [])
+    (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) : M Circuit := do
+  let sha ← hs.sha512 bytes
+  let text ← match String.fromUTF8? bytes with
+    | some s => pure s
+    | none => throw "circuit: not UTF-8"
+  let lines0 := (text.splitOn "\n").toArray
+  let lines := if lines0.back? == some "" then lines0.pop else lines0
+  let head := (lines.getD 0 "").trimAsciiEnd.toString
+  if !head.startsWith (tags.fileFormat ++ " ") then throw s!"circuit: not a {tags.fileFormat} file"
+  let name := (head.drop (tags.fileFormat.length + 1)).toString
+  let metaLine := (lines.getD 1 "").trimAsciiEnd.toString
+  if !metaLine.startsWith "META " then throw "circuit: no META line"
+  let mj ← match Json.parse (metaLine.drop 5).toString with
+    | .ok j => pure j
+    | .error e => throw s!"META: {e}"
+  if (← J.str mj "format" ctx) != tags.fileFormat || (← J.str mj "statement" ctx) != tags.statement then
+    throw s!"META: not {tags.statement}"
+  let classSha ← if tags.bindings then do
+      if !isSha512Hex ((mj.getObjValAs? String "program_sha512").toOption.getD "") then
+        throw "META: program_sha512 (the Program the partition is over) is not a SHA-512 digest"
+      let part := (mj.getObjVal? "partition").toOption.getD Json.null
+      let rule := (part.getObjValAs? String "rule").toOption.getD ""
+      if !(rule == PARTITION_V1 || rule == PARTITION_PROVISIONAL) || !isSha512Hex ((part.getObjValAs? String "digest").toOption.getD "") then
+        throw s!"META: the partition is not a {PARTITION_V1} (or the provisional {PARTITION_PROVISIONAL}) SHA-512 digest"
+      classOfWith hs bytes head mj
+    else pure ByteArray.empty
+  parseRest tags tables tmpl pre sha lines name mj classSha
 
 /-- `parseTyped` through the oracle. -/
 def parseTypedWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) :

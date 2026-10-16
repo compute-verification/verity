@@ -51,10 +51,11 @@ theorem publicDigestWith_std (header : Json) (pubs : ByteArray) :
     HmRow.publicDigestWith std header pubs = HmRow.publicDigest header pubs := rfl
 
 set_option maxRecDepth 20000 in
-set_option maxHeartbeats 4000000 in
+-- `rfl` compares the two whole bodies of `parse`, a few hundred binds each
+set_option maxHeartbeats 1000000 in
 theorem parseWith_std (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)) (tmpl : Option Typed.Template)
     (pre : Array (String × Net)) : HmRow.parseWith std tags bytes tables tmpl pre = HmRow.parse tags bytes tables tmpl pre := by
-  unfold HmRow.parseWith HmRow.parse
+  unfold HmRow.parseWith HmRow.parse HmRow.parseRest
   simp -zeta only [std_sha512, pure_bind, hmClassOfWith_std, monadLift_self]
   rfl
 
