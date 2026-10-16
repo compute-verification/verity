@@ -814,12 +814,14 @@ static DFill dfill_make(int grid, int W, int NC, int S, uint64_t c0, uint64_t c1
     W = PF_CO_W;
   } else {
     // the split tile's B and A live in L1, so its SMs (the filler's alone) take the smallest shared-memory carveout
+    // (env PF_CARVE: another carveout percent, for screens)
     uint8_t* sc = nullptr;
     CK(cudaMalloc(&sc, (size_t)grid * ctas * PF_SCRATCH));
     CK(cudaMemcpyToSymbol(pf_scratch, &sc, sizeof sc));
-    CK(cudaFuncSetAttribute(dfill_k<1>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxL1));
-    CK(cudaFuncSetAttribute(dfill_k<2>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxL1));
-    CK(cudaFuncSetAttribute(dfill_k<4>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxL1));
+    const int carve = getenv("PF_CARVE") ? atoi(getenv("PF_CARVE")) : (int)cudaSharedmemCarveoutMaxL1;
+    CK(cudaFuncSetAttribute(dfill_k<1>, cudaFuncAttributePreferredSharedMemoryCarveout, carve));
+    CK(cudaFuncSetAttribute(dfill_k<2>, cudaFuncAttributePreferredSharedMemoryCarveout, carve));
+    CK(cudaFuncSetAttribute(dfill_k<4>, cudaFuncAttributePreferredSharedMemoryCarveout, carve));
   }
   g_pf_tile_w = W;
 #endif
