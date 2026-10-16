@@ -39,8 +39,37 @@ def rows(path: Path) -> list[dict]:
     return out
 
 
-def prefill(r: dict) -> dict:
+PROVED = ["before", "mid", "mid_host", "cpu16", "cpu64", "s4", "s8", "s4_cpu16", "s8_cpu16", "s8_cpu64", "before_nd", "mid_nd",
+          "s8_nd", "cpu16_nd", "s8_cpu16_nd"]  # the arms of runs that don't list theirs (proved_arms)
+
+
+def proved(r: dict) -> dict:
+    """ARMS=r2: the proved forward by lever, its overhead over the GEMMs and its critical path a stage."""
     a = {k: v["ms"] for k, v in r["arms"].items()}
+    g, per = a["gemm"], LAYERS * STAGES
+    listed = r.get("proved_arms") or [{"name": nm, "k": int(nm[1]) if nm[0] == "s" else 1} for nm in PROVED]
+    arms = {}
+    for c in listed:
+        nm, k = c["name"], c["k"]
+        if nm not in a:
+            continue
+        gk = a.get(f"gemm_s{k}", g)
+        h = r.get("host", {}).get(nm, {})
+        arms[nm] = {"ms": a[nm], "over_gemm": a[nm] / g - 1, "crit_ms_a_stage": (a[nm] - g) / per,
+                    "over_slab_gemm_ms_a_stage": (a[nm] - gk) / per, "host_top_us": h.get("top_us_mean"),
+                    "host_ok": not h or (h["host_timeouts"] == 0 and h["gpu_timeouts"] == 0)}
+    return {"M": r["M"], "draw_us": r["draw_us"], "gemm_ms": g, "slab_gemm_over": {k: a[f"gemm_s{k}"] / g - 1 for k in (4, 8)
+                                                                                 if f"gemm_s{k}" in a},
+            "host_sha": r.get("host_sha"), "arms": arms,
+            "hash_latency_ms": {k: v["ms"] / LAYERS for k, v in r["hash_latency"].items()},
+            "segments_latency_ms": {k: v["ms"] / LAYERS for k, v in r.get("segments_latency", {}).items()},
+            "tree_latency_ms": {k: v["ms"] / LAYERS for k, v in r.get("tree_latency", {}).items()}}
+
+
+def prefill(r: dict) -> dict | None:
+    a = {k: v["ms"] for k, v in r["arms"].items()}
+    if "serial" not in a:
+        return None
     g = a["gemm"]
     per = LAYERS * STAGES
     lat = {k: v["ms"] / LAYERS for k, v in r["hash_latency"].items()}
@@ -124,14 +153,33 @@ def main() -> int:
     ap.add_argument("--json")
     a = ap.parse_args()
     d = Path(a.out)
+    pre = rows(d / "prefill.jsonl")
     res = {"gate": rows(d / "gate.jsonl"), "sha_latency": rows(d / "shalat.jsonl"),
-           "prefill": [prefill(r) for r in rows(d / "prefill.jsonl")],
+           "prefill": [p for p in (prefill(r) for r in pre) if p],
+           "proved": [proved(r) for r in pre if "before" in r["arms"]],
            "deferred": [deferred(r) for r in rows(d / "deferred.jsonl")], "beside": [beside(r) for r in rows(d / "beside.jsonl")]}
     pct = lambda x: "-" if x is None else f"{100 * x:+.1f}%"  # noqa: E731
-    print("gate:", [(g.get("what"), g.get("k"), g.get("R"), g.get("m"), g.get("ok"), g.get("fast_ok"), g.get("fast_tree_equal"),
-                     g.get("control_rejected")) for g in res["gate"]])
+    print("gate:", [(g.get("what"), g.get("k"), g.get("R"), g.get("m"), g.get("ok"), g.get("fast_ok"), g.get("mid_ok"),
+                     g.get("slab4_ok"), g.get("fast_tree_equal"), g.get("control_rejected"), g.get("host_top")) for g in res["gate"]])
     for s in res["sha_latency"]:
-        print(f"SHA-512 compression latency in a chain at {s['mhz']} MHz (us): {s['us_a_compression']}")
+        if s.get("mode") == "cpu_latency":
+            print(f"host SHA-512 compression (us): C++ {s['cpp_us_a_compression']:.3f}, libcrypto {s['ossl_us_a_compression']:.3f} "
+                  f"(equal {s['ossl_equal']}, uses {s['host_uses']}); GPU-host round trip through mapped memory "
+                  f"{s['mapped_round_trip_us']:.2f} us")
+        else:
+            print(f"SHA-512 compression latency in a chain at {s['mhz']} MHz (us): {s['us_a_compression']}"
+                  + (f", split equal {s['split_equal']}" if "split_equal" in s else ""))
+    for p in res["proved"]:
+        print(f"\nproved prefill M={p['M']} (draw {p['draw_us']} us): gemm {p['gemm_ms']:.2f} ms; slabbed gemm "
+              + ", ".join(f"k={k} {pct(v)}" for k, v in p["slab_gemm_over"].items()) + f"; host SHA {p['host_sha']}")
+        print("  arm          ms      over gemm   critical path a stage (ms)   over slabbed gemm   host top (us)")
+        for nm, x in p["arms"].items():
+            ht = "-" if x["host_top_us"] is None else f"{x['host_top_us']:.1f}"
+            print(f"  {nm:12s} {x['ms']:8.2f} {pct(x['over_gemm']):>10s}   {x['crit_ms_a_stage']:8.4f}"
+                  f"                   {x['over_slab_gemm_ms_a_stage']:8.4f}           {ht}" + ("" if x["host_ok"] else "  HOST FAILED"))
+        print("  commitment latency a stage (ms): " + ", ".join(f"{k} {v:.3f}" for k, v in p["hash_latency_ms"].items())
+              + "; segments " + ", ".join(f"{k} {v:.3f}" for k, v in p["segments_latency_ms"].items())
+              + "; leaves and tree " + ", ".join(f"{k} {v:.3f}" for k, v in p["tree_latency_ms"].items()))
     for p in res["prefill"]:
         print(f"\nprefill M={p['M']} hash={p['hash']}: gemm {p['gemm_ms']:.2f} ms ({100 * p['gemm_share']:.1f}% of peak), hash "
               f"{p['hash_ms']:.2f} ms ({p['hash_gb_s']:.0f} GB/s, {100 * p['hash_over_gemm']:.1f}% of gemm)"

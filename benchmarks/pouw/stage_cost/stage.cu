@@ -485,6 +485,93 @@ __device__ __noinline__ void fr_level(uint64_t (*sh)[8], int n, long long j0, lo
     for (int k = 0; k < 8; k++) sh[t][k] = v[k];
   __syncthreads();
 }
+// A compression split across a pair of warps, both holding the block w: role 0 the rounds (from st), role 1 the message
+// schedule, handing K + W[16..79] over 16 words a lane at a time through the pair's ring of 4 chunk slots; prod and cons
+// count the chunks the pair has produced and consumed (shared, zeroed by the caller), c0 the chunks before this compression.
+// The warps issue from different sub-partitions, so the rounds' warp issues only the rounds.
+__device__ __forceinline__ void fr_compress_pair(uint64_t st[8], const uint64_t w[16], int role, uint64_t (*ring)[16][32],
+                                                 volatile int* prod, volatile int* cons, int c0) {
+  const int lane = threadIdx.x & 31;
+  if (role == 0) {
+    uint64_t a = st[0], b = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7];
+#pragma unroll
+    for (int j = 0; j < 16; j++) fr_round<FR_ROT>(a, b, c, d, e, f, g, h, SHA512_K[j] + w[j]);
+#pragma unroll 1
+    for (int q = 0; q < 4; q++) {
+      const int cq = c0 + q;
+      while (*prod <= cq) {
+      }
+      uint64_t kw[16];
+#pragma unroll
+      for (int j = 0; j < 16; j++) kw[j] = ring[cq & 3][j][lane];
+      __threadfence_block();
+      __syncwarp();
+      if (lane == 0) *cons = cq + 1;
+#pragma unroll
+      for (int j = 0; j < 16; j++) fr_round<FR_ROT>(a, b, c, d, e, f, g, h, kw[j]);
+    }
+    st[0] += a; st[1] += b; st[2] += c; st[3] += d; st[4] += e; st[5] += f; st[6] += g; st[7] += h;
+  } else {
+    uint64_t x[16];
+#pragma unroll
+    for (int j = 0; j < 16; j++) x[j] = w[j];
+#pragma unroll 1
+    for (int q = 0; q < 4; q++) {
+      const int cq = c0 + q;
+      while (*cons < cq - 3) {
+      }
+#pragma unroll
+      for (int j = 0; j < 16; j++) {
+        x[j] += fr_s1<0>(x[(j + 14) & 15]) + x[(j + 9) & 15] + fr_s0<0>(x[(j + 1) & 15]);
+        ring[cq & 3][j][lane] = SHA512_K[16 * (q + 1) + j] + x[j];
+      }
+      __threadfence_block();
+      __syncwarp();
+      if (lane == 0) *prod = cq + 1;
+    }
+  }
+}
+// fr_level with each parent's two remaining blocks hashed by a warp pair (fr_compress_pair): parents 32p + lane by warps 2p
+// (rounds) and 2p + 1 (schedule), p < 2; needs the first-block states. ring: 2 pairs' slots (dynamic shared memory), ctr
+// their counters (zero on entry, zeroed on exit)
+__device__ __noinline__ void fr_level2(uint64_t (*sh)[8], int n, long long j0, long long lw, long long off, long long nb,
+                                       const uint8_t* ntpl, const uint32_t* noff, const uint64_t* nmid, uint8_t* tree,
+                                       uint64_t (*ring)[4][16][32], int* ctr) {
+  const int t = threadIdx.x, p = t >> 6, role = (t >> 5) & 1, lane = t & 31, jl = 32 * p + lane;
+  const bool on = 32 * p < n / 2, act = jl < n / 2;
+  uint64_t v[8];
+  if (on) {
+    uint64_t L[8], R[8];
+    const int js = act ? jl : 0;
+#pragma unroll
+    for (int k = 0; k < 8; k++) { L[k] = sh[2 * js][k]; R[k] = sh[2 * js + 1][k]; }
+    const long long idx = nb + j0 / 2 + js;
+    const int o = (int)noff[idx];
+#pragma unroll
+    for (int k = 0; k < 8; k++) v[k] = __ldg(nmid + 8 * idx + k);
+#pragma unroll 1
+    for (int b = 1; b < 3; b++) {
+      uint64_t w[16];
+      const uint4* tp = (const uint4*)(ntpl + idx * 384 + 128 * b);
+#pragma unroll
+      for (int j = 0; j < 8; j++) {
+        const uint4 u = __ldg(tp + j);
+        w[2 * j] = s512_be(u.x, u.y);
+        w[2 * j + 1] = s512_be(u.z, u.w);
+      }
+      fr_put(w, 16 * b, o, L);
+      fr_put(w, 16 * b, o + 72, R);
+      fr_compress_pair(v, w, role, ring[p], ctr + 2 * p, ctr + 2 * p + 1, 4 * (b - 1));
+    }
+    if (act && role == 0) s512_out(v, tree + (off + lw + j0 / 2 + jl) * 64);
+  }
+  __syncthreads();
+  if (on && act && role == 0)
+#pragma unroll
+    for (int k = 0; k < 8; k++) sh[jl][k] = v[k];
+  if (t < 4) ctr[t] = 0;
+  __syncthreads();
+}
 // the host's word v at f (mapped host memory), after everything this thread and the CTAs it synchronized with wrote
 __device__ __forceinline__ void fr_raise(uint32_t* f, uint32_t v) {
   __threadfence_system();
@@ -499,7 +586,8 @@ __device__ __forceinline__ void fr_raise(uint32_t* f, uint32_t v) {
 //    above.
 extern "C" __global__ void __launch_bounds__(128) fr_tree(Args a) {
   __shared__ uint64_t sh[128][8];
-  __shared__ int last;
+  __shared__ int last, ctr[4];
+  extern __shared__ uint64_t fr_ring[];  // i[8]: the levels in sh by warp pairs (fr_level2), 32 KB of ring
   const int tid = threadIdx.x, L = blockDim.x, s = a.i[1], total = a.i[4], E = a.i[5];
   const long long cta = blockIdx.x + (long long)a.i[3];
   const long long R = a.i[0], width = a.i[2], i = cta * L + tid;
@@ -510,6 +598,9 @@ extern "C" __global__ void __launch_bounds__(128) fr_tree(Args a) {
   const uint64_t* nmid = lmid ? lmid + 8 * R : nullptr;
   uint8_t* ex = (uint8_t*)a.p[14];
   uint32_t* flag = (uint32_t*)a.p[15];
+  const bool pair = a.i[8] && nmid && L == 128;
+  uint64_t(*ring)[4][16][32] = (uint64_t(*)[4][16][32])fr_ring;
+  if (tid < 4) ctr[tid] = 0;
   uint64_t v[8];
   if (i < R) {
     const uint64_t* q = (const uint64_t*)a.p[1];
@@ -573,7 +664,8 @@ extern "C" __global__ void __launch_bounds__(128) fr_tree(Args a) {
   long long lw = width, off = 0, nb = 0, j0 = cta * L;
   int n = L;
   for (; n > 1 && !(E && lw <= E); n >>= 1) {
-    fr_level(sh, n, j0, lw, off, nb, ntpl, noff, nmid, tree);
+    if (pair) fr_level2(sh, n, j0, lw, off, nb, ntpl, noff, nmid, tree, ring, ctr);
+    else fr_level(sh, n, j0, lw, off, nb, ntpl, noff, nmid, tree);
     nb += lw / 2; off += lw; lw /= 2; j0 /= 2;
   }
   const bool here = E && lw <= E;  // this CTA's nodes are the export's
@@ -627,7 +719,8 @@ extern "C" __global__ void __launch_bounds__(128) fr_tree(Args a) {
   __syncthreads();
   j0 = 0;
   for (; n > 1 && !(E && lw <= E); n >>= 1) {
-    fr_level(sh, n, j0, lw, off, nb, ntpl, noff, nmid, tree);
+    if (pair) fr_level2(sh, n, j0, lw, off, nb, ntpl, noff, nmid, tree, ring, ctr);
+    else fr_level(sh, n, j0, lw, off, nb, ntpl, noff, nmid, tree);
     nb += lw / 2; off += lw; lw /= 2;
   }
   if (E) {
@@ -676,6 +769,7 @@ __global__ void ping(uint32_t* up, const uint32_t* dn, int n, uint32_t* err) {
 }
 static bool g_fast = true;  // HASH=sz: served_zk's hm96_rows.cu as is
 static int g_mid = 1;       // the frame leaves' and nodes' first blocks compressed ahead (0: on the critical path, round 1's)
+static int g_pair = 0;      // the tree's levels in shared memory hashed by warp pairs (fr_level2)
 // the salt-only parts of `slots` layers' commitments from slot 0, in one launch
 static void commit_salt(const Commit& m, int slots, cudaStream_t st) {
   Args a{};
@@ -724,8 +818,8 @@ static void commit_frtree(const Commit& m, int slot, cudaStream_t st, int cta0 =
                                      (unsigned long long)(x ? x->ex : nullptr), (unsigned long long)(x ? x->flag : nullptr)};
   for (int j = 0; j < 16; j++) f.p[j] = ps[j];
   f.i[0] = m.R; f.i[1] = m.s; f.i[2] = m.width; f.i[3] = cta0; f.i[4] = total; f.i[5] = x ? x->E : 0;
-  f.i[6] = x ? (int)x->seq : 0; f.i[7] = g_mid;
-  fr_tree<<<(unsigned)n, L, 0, st>>>(f);
+  f.i[6] = x ? (int)x->seq : 0; f.i[7] = g_mid; f.i[8] = g_pair && g_mid;
+  fr_tree<<<(unsigned)n, L, f.i[8] ? 2 * 4 * 16 * 32 * 8 : 0, st>>>(f);
 }
 static void commit_tree(const Commit& m, int slot, const uint8_t* data, cudaStream_t st, const Export* x = nullptr) {
   commit_segs(m, data, st);
@@ -1717,17 +1811,19 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
   // and first-block states ahead on a side stream.
   struct Cfg {
     std::string name;
-    int mid, k, E, draw, dus;
+    int mid, k, E, draw, dus, pair;
   };
   std::vector<Cfg> cfgs;
   std::vector<int> ks;
   if (r2) {
     ks = {4, 8};
-    cfgs = {{"before", 0, 1, 0, 1, draw_us},  {"mid", 1, 1, 0, 1, draw_us},      {"mid_host", 1, 1, 1, 2, draw_us},
-            {"cpu16", 1, 1, 16, 2, draw_us},  {"cpu64", 1, 1, 64, 2, draw_us},   {"s4", 1, 4, 0, 1, draw_us},
-            {"s8", 1, 8, 0, 1, draw_us},      {"s4_cpu16", 1, 4, 16, 2, draw_us}, {"s8_cpu16", 1, 8, 16, 2, draw_us},
-            {"s8_cpu64", 1, 8, 64, 2, draw_us}, {"before_nd", 0, 1, 0, 0, 0},      {"mid_nd", 1, 1, 0, 0, 0},
-            {"s8_nd", 1, 8, 0, 0, 0},         {"cpu16_nd", 1, 1, 16, 2, 0},       {"s8_cpu16_nd", 1, 8, 16, 2, 0}};
+    cfgs = {{"before", 0, 1, 0, 1, draw_us, 0},    {"mid", 1, 1, 0, 1, draw_us, 0},       {"pair", 1, 1, 0, 1, draw_us, 1},
+            {"mid_host", 1, 1, 1, 2, draw_us, 0},  {"cpu16", 1, 1, 16, 2, draw_us, 0},    {"cpu64", 1, 1, 64, 2, draw_us, 0},
+            {"s4", 1, 4, 0, 1, draw_us, 0},        {"s8", 1, 8, 0, 1, draw_us, 0},        {"s4_cpu16", 1, 4, 16, 2, draw_us, 0},
+            {"s8_cpu16", 1, 8, 16, 2, draw_us, 0}, {"s8_cpu64", 1, 8, 64, 2, draw_us, 0}, {"s8_pair_cpu16", 1, 8, 16, 2, draw_us, 1},
+            {"before_nd", 0, 1, 0, 0, 0, 0},       {"mid_nd", 1, 1, 0, 0, 0, 0},          {"pair_nd", 1, 1, 0, 0, 0, 1},
+            {"s8_nd", 1, 8, 0, 0, 0, 0},           {"cpu16_nd", 1, 1, 16, 2, 0, 0},       {"s8_cpu16_nd", 1, 8, 16, 2, 0, 0},
+            {"s8_pair_cpu16_nd", 1, 8, 16, 2, 0, 1}};
   }
   for (int k : ks)
     for (int t = 0; t < NSTAGE; t++) plan(M / k, GN[t], GK[t], 1, 0, 0, 0, ch[0].A, P.W[0][t], ch[0].D, d.st);
@@ -1791,8 +1887,10 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
   }, macs);
   for (const Cfg& f : cfgs) {
     g_mid = f.mid;
+    g_pair = f.pair;
     const Graph G = capture(sm, [&] { proved(ch[0], sm, hs, as, f); });
     g_mid = 1;
+    g_pair = 0;
     HostStats st;
     std::thread th;
     if (f.draw == 2) {
@@ -1961,7 +2059,11 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
            h.st.timeouts, h.gpu_timeouts);
     bad += h.st.timeouts > 0 || h.gpu_timeouts > 0 || h.st.steps != (long)(reps + 2) * LAYERS * NSTAGE;
   }
-  printf("}, \"arms\": {");
+  printf("}, \"proved_arms\": [");
+  for (size_t i = 0; i < cfgs.size(); i++)
+    printf("%s{\"name\": \"%s\", \"k\": %d, \"E\": %d, \"draw\": %d}", i ? ", " : "", cfgs[i].name.c_str(), cfgs[i].k, cfgs[i].E,
+           cfgs[i].draw);
+  printf("], \"arms\": {");
   for (size_t i = 0; i < arms.size(); i++) print_reps(arms[i].first.c_str(), arms[i].second, arm_macs[i], d.sms, i + 1 < arms.size());
   printf("}}\n");
   fflush(stdout);
@@ -2396,12 +2498,17 @@ static int run_gate(Dev& d, const std::string& dir, const std::vector<int>& Ms) 
       const bool fast = commit_gate(m, 2, &t_fr);
       g_mid = 1;
       const bool mid = commit_gate(m, 2, &t_mid), slab = commit_gate(m, 2, &t_slab, 4), control = commit_gate(m, 0);
-      const bool same = t_sz == t_fr && t_sz == t_mid && t_sz == t_slab;
+      std::vector<uint8_t> t_pair;
+      g_pair = 1;
+      const bool pair = commit_gate(m, 2, &t_pair, 4), pair_host = commit_gate(m, 2, nullptr, 4, 16);
+      g_pair = 0;
+      const bool same = t_sz == t_fr && t_sz == t_mid && t_sz == t_slab && t_sz == t_pair;
       printf("{\"mode\": \"gate\", \"what\": \"hm96-sha512 row-seg frame-v3-sha512\", \"k\": %d, \"R\": %d, \"s\": %d, \"ok\": %s, "
-             "\"fast_ok\": %s, \"mid_ok\": %s, \"slab4_ok\": %s, \"fast_tree_equal\": %s, \"control_rejected\": %s, \"host_top\": {",
+             "\"fast_ok\": %s, \"mid_ok\": %s, \"slab4_ok\": %s, \"pair_slab4_ok\": %s, \"pair_slab4_E16_ok\": %s, "
+             "\"fast_tree_equal\": %s, \"control_rejected\": %s, \"host_top\": {",
              c.k, c.R, c.s, ok ? "true" : "false", fast ? "true" : "false", mid ? "true" : "false", slab ? "true" : "false",
-             same ? "true" : "false", control ? "false" : "true");
-      fails += !ok || !fast || !mid || !slab || !same || control;
+             pair ? "true" : "false", pair_host ? "true" : "false", same ? "true" : "false", control ? "false" : "true");
+      fails += !ok || !fast || !mid || !slab || !pair || !pair_host || !same || control;
       bool fe = true;
       for (int E : {1, 16, 32, 64, 128})
         for (int k : {1, 4}) {
