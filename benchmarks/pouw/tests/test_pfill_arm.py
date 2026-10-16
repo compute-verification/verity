@@ -80,6 +80,35 @@ def test_power_split_arms_have_a_split_at_every_scored_point(monkeypatch, attr, 
         assert A.placed(arm, "decode", b, l) == A.Placement("split", A.point_lookup(P.POWER_SPLIT, b, l))
 
 
+def test_k_phase_arm_runs_pfill_k_with_a_phase_filler_of_the_builds_width(monkeypatch):
+    """pfill-k-phase is pfill-k's pump with an exact table row at every suite point; each phase filler is a shape pscore
+    takes (8 | S > 8, tiles >= 1) at the width its build fixes (-DPF_PW, which plaunch holds dfill_p to), on a split
+    (psched_score refuses a phase point without one); prefill keeps pfill-k's 4-SM split and no phase filler."""
+    A, S = _module("arms"), _module("scoring")
+    P = _load_file("pfill_arm")
+    monkeypatch.setenv("NVCC_APPEND_FLAGS", "unset")
+    k = A.load("benchmarks/pouw/filler/pfill_arm.py:PFillK")
+    arm = A.load("benchmarks/pouw/filler/pfill_arm.py:PFillKPhase")
+    flags = __import__("os").environ["NVCC_APPEND_FLAGS"]
+    assert A.check_arm(arm) == []
+    assert ledger.one_line(arm.lineage["hypothesis"], "the hypothesis")
+    assert flags.split()[0] == "-DPFILL_BITS" and P.theorem_k_setting(arm.lineage)
+    pw = int(flags.split("-DPF_PW=")[1].split()[0])
+    assert arm.filler == k.filler
+    phased = 0
+    for ph, b, l in S.points(robust=True):
+        q = arm.phase(ph, b, l)
+        if ph == "prefill":
+            assert q is None and A.placed(arm, ph, b, l) == A.Placement("split", 4)
+            continue
+        assert (b, l) in P.PHASE_K
+        assert A.placed(arm, ph, b, l).place == "split"
+        if q is not None:
+            phased += 1
+            assert (q.W, q.NC) == (pw, 4) and q.S > 8 and q.S % 8 == 0 and q.tiles >= 1
+    assert phased
+
+
 def _row(kind, b, l, alone_ms, arm_ms):
     """A minimal `dscore` row with filler: 4 ABBA blocks, 3 reps each side, 10 chunks of 1e9 MACs a window."""
     blocks = [{"order": "alone,arm", "alone": {"window_ms": 3 * alone_ms, "reps": [[alone_ms, 2000.0, 300.0]] * 3},

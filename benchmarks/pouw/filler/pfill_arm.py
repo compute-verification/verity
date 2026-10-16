@@ -126,6 +126,71 @@ class PFillK(PFillPowerSplit):
     nvcc_flags: str = "-DPFILL_BITS"
 
 
+@dataclass(frozen=True)
+class PhaseFill:
+    """pfill-k's phase filler at a point (psched_score.py/pscore.cu's PW PNC PS PT): 4-warp blocks (the build's PF_PW) of
+    NC 4 ram tiles, one block a step SM, S fragments a warp a tile (16 W^2 S MMAs a tile) and `tiles` tiles a block a
+    layer, a fixed count chosen before the run."""
+
+    W: int = 4
+    NC: int = 4
+    S: int = 64
+    tiles: int = 1
+
+
+#: (B, L) -> (split SMs, phase filler or None) from pfill_phase_screen.py's s2 and s4 (r20261016-085255-cdd2,
+#: r20261016-090209-21c7; 8-warp blocks were 1.08-1.30 everywhere, 2-warp 1.12-2.0): at most ~1.04 at every scored point
+#: and at least a tile below each point's cliff (where the phase outlasts attention and o waits on it). The phase pays
+#: at B >= 128; at B 32-48 and 256/1K pfill-k's split alone does as well per slowdown, and 1/32K and 32/8K take lighter
+#: splits for margin (pfill-k's read 1.046 there).
+PHASE_K = {
+    (1, 2048): (108, None), (1, 8192): (108, None), (1, 32768): (100, None),
+    (8, 16384): (108, None),
+    (32, 1024): (92, None), (32, 2048): (108, None), (32, 8192): (108, PhaseFill(tiles=2)), (32, 24576): (132, None),
+    (48, 16384): (108, PhaseFill(tiles=8)),
+    (64, 4096): (92, None),
+    (128, 2048): (76, PhaseFill(tiles=3)), (128, 6144): (92, PhaseFill(tiles=10)),
+    (132, 5120): (60, PhaseFill(tiles=6)), (144, 5120): (60, PhaseFill(tiles=8)),
+    (192, 2048): (60, PhaseFill(tiles=4)),
+    (256, 1024): (60, None), (256, 2048): (60, PhaseFill(tiles=5)), (256, 3072): (60, PhaseFill(tiles=8)),
+}
+
+
+@dataclass
+class PFillKPhase(PFillK):
+    """pfill-k on the leader's placement (HC-SCHED's fill-v1-phase-att, SCORER's port): its split, re-chosen per point,
+    plus pfill-k's own dfill_p at 4 warps (-DPF_PW=4) forked into each decode layer's attention on the step's SMs, at the
+    graph's highest node priority, joined before o. Prefill keeps pfill-k's 4-SM split. Run through psched_score.py:
+
+      python3 benchmarks/pouw/filler/psched_score.py benchmarks/pouw/filler/pfill_arm.py:PFillKPhase
+    """
+
+    name: str = "pfill-k-phase"
+    lineage: dict = field(default_factory=lambda: {
+        "parent": "pfill-k", "approach": "pouw/filler-proved",
+        "mechanism": ["filler:fresh-noise-imma", "noise:sha512-coins-01", "receipt:ram-k32", "place:split",
+                      "split:per-point-table", "sched:phase-att", "sched:graph-fork-join", "sched:node-priority",
+                      "phase:pfill-tiles", "phase:4-warp-blocks", "prefill:split"],
+        "hypothesis": "decode attention leaves the step SMs' tensor pipe idle: pfill-k tiles in 4-warp blocks forked "
+                      "into it add ~0.1 coverage at B >= 128 under 1.04, where 8-warp blocks halve attention's occupancy"})
+    sources: tuple = SOURCES + ("benchmarks/pouw/filler/pscore.cu", "benchmarks/pouw/filler/psched_score.py")
+    choice: str = ("an offline table of 18 (B, L) points (split SMs, phase tiles) from pfill-k's phase screens s2 and s4; "
+                   "a lookup, a green split and one graph a step at serving time; run through psched_score.py/pscore.cu")
+    nvcc_flags: str = "-DPFILL_BITS -DPF_PW=4"
+    table = PHASE_K
+
+    def _row(self, b, l):
+        return point_lookup(self.table, b, l)
+
+    def placement(self, phase, b, l):
+        if phase == "prefill":
+            return Placement("split", 4)
+        return Placement("split", self._row(b, l)[0])
+
+    def phase(self, phase, b, l):
+        return None if phase == "prefill" else self._row(b, l)[1]
+
+
 def products_per_slot(lineage: dict) -> int:
     """Products the arm's filler does an int8 slot it reports: 2 for the e2m1 tile, else 1."""
     return 2 if "mma:e2m1-omma-k64" in (lineage.get("mechanism") or []) else 1
