@@ -265,6 +265,11 @@ __device__ __noinline__ void tp_dfill_k(uint64_t c0, uint64_t c1, const unsigned
       }
     }
     const uint64_t K = dseed(c0, c1, tile);
+#ifdef TPC_DBG
+    if (blockIdx.x == 0 && grp == 0 && w == 0 && lane == 0 && i == 0)
+      printf("DEVFOLD tile=%llu k0=%08x k1=%08x | c0 y=%08x z=%08x | c1 y=%08x z=%08x | q=%d full=%d S=%d\n",
+             (unsigned long long)tile, key.k0, key.k1, y[0], z[0], y[1], z[1], q, full, S);
+#endif
     uint64_t h = 0;
 #pragma unroll
     for (int c = 0; c < 4; c++)
@@ -487,6 +492,11 @@ static uint64_t kf_ref_warp(uint64_t c0, uint64_t c1, uint64_t tile, int S, int 
         }
       }
       h ^= pf_fold(K, pos, TP_NC == 2 ? ((uint64_t)z << 32 | y) : (uint64_t)y);
+#ifdef TPC_DBG
+      if (lane == 0 && c <= 1)
+        printf("REFFOLD tile=%llu k0=%08x k1=%08x | c%d y=%08x z=%08x | w=%d q=%d S=%d\n",
+               (unsigned long long)tile, key.k0, key.k1, c, y, z, w, q, S);
+#endif
     }
   }
   return h;
