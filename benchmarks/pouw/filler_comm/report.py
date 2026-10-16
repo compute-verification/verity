@@ -7,7 +7,8 @@ Every rank times the same lockstep step, so a time is the median over the arm's 
 phase are the medians over their (interleaved) repeats. Shares are of the tensor capacity of one GPU at the clock read:
 served = the step's int8 MACs, fill = the phase filler's; idle = 1 - served; comm = (base - nocomm) / base, the exposed
 collective time; slowdown = phase / base. The filler's certified fraction is not applied here (the filler spec's
-provisional 0.99 under CH, its proved floor otherwise).
+provisional 0.99 under CH, its proved floor otherwise). "KV wrapped": the batch's KV cache doesn't fit beside the shards,
+so the attention re-reads the pool: the point's time is the right size, but no server could hold it.
 """
 import argparse
 import glob
@@ -22,6 +23,7 @@ def rows(out_dir):
         settings = open(os.path.join(sd, "settings.txt")).read().strip() if os.path.exists(os.path.join(sd, "settings.txt")) else ""
         arms = defaultdict(lambda: defaultdict(list))  # (tp, B, L) -> arm -> [per-repeat [rank records]]
         gates = []
+        wrapped = set()
         for f in sorted(glob.glob(os.path.join(sd, "rank*.jsonl"))):
             seen = defaultdict(int)
             for line in open(f):
@@ -30,6 +32,8 @@ def rows(out_dir):
                 r = json.loads(line)
                 if r.get("mode") == "pf_gate":
                     gates.append(r["ok"])
+                if r.get("mode") == "point" and r.get("kv_wrapped"):
+                    wrapped.add((r["tp"], r["B"], r["L"]))
                 if r.get("mode") != "tp":
                     continue
                 key = (r["tp"], r["B"], r["L"])
@@ -57,7 +61,7 @@ def rows(out_dir):
             base, nocomm, comm, phase, commphase = (t(a) for a in ("base", "nocomm", "comm", "phase", "commphase"))
             row = {"set": os.path.basename(sd), "settings": settings, "tp": key[0], "B": key[1], "L": key[2],
                    "base_ms": base, "nocomm_ms": nocomm, "comm_ms": comm, "phase_ms": phase, "commphase_ms": commphase,
-                   "gates_ok": all(gates) if gates else None}
+                   "gates_ok": all(gates) if gates else None, "kv_wrapped": key in wrapped}
             if base:
                 mhz = first("base", "mhz")
                 macs = first("base", "served_macs")
@@ -96,7 +100,8 @@ def main():
     print("|" + "---|" * 16)
     for r in rs:
         tot = r["served_phase"] + r["fill"] if "fill" in r else None
-        print(f"| {r['set']} | {r['tp']} | {r['B']} | {r['L']} | {f(r['base_ms'], 2)} | {f(r['nocomm_ms'], 2)} | "
+        L = f"{r['L']} (KV wrapped)" if r["kv_wrapped"] else r["L"]
+        print(f"| {r['set']} | {r['tp']} | {r['B']} | {L} | {f(r['base_ms'], 2)} | {f(r['nocomm_ms'], 2)} | "
               f"{f(r['comm_ms'], 2)} | {f(r.get('comm_exposed'), 3)} | {f(r.get('served'), 4)} | {f(r.get('idle'), 3)} | "
               f"{f(r['phase_ms'], 2)} | {f(r.get('slowdown'), 4)} | {f(r.get('fill'), 4)} | {f(tot, 4)} | "
               f"{f(r.get('comm_slowdown'), 4)} | {r.get('rec_bad', '-')}/{r.get('rec_checked', '-')} |")
