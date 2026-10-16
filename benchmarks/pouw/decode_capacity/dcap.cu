@@ -874,14 +874,68 @@ __device__ __forceinline__ void dtiles_p(uint64_t c0, uint64_t c1, unsigned long
   const uint64_t h = dhash<NC, MAP>(pseed, g, t, pa);
   if (lane == 0) rec[base + tiles - 1] = h;
 }
-// The filler kernel. A chunk's receipt buffer holds per() receipts and then one mode word, map | DFILL_PIPE << 2, that
-// dfill_alloc writes, so dscore's direct launch of dfill_k<NC> runs the map the process chose. The pipelined loop is its
-// own kernel, dfill_kp, which only dfill_launch starts: in dfill_k it would raise every map's registers (NC 4: 88 to
-// 124) and with them the footprint a co-resident filler leaves its neighbours. dfill_k writes nothing in a pipe mode.
+// One filler block an SM (DFILL_ONE=SUB, maps 1 and 2, NC 4; HC-PREFILL, r20261016-081635-dcc5 and r20261016-082749-0590).
+// Beside the prefill GEMM (one CTA an SM, 224 registers x 128 threads, 96 KiB of shared memory) three co filler blocks
+// fit on an SM and more on one the GEMM has just left, and the dispatcher puts two to four of a chunk's blocks on a few
+// SMs: there a second filler warp on a sub-partition slows the GEMM's one warp ~1.4x for the whole chunk. Here a block
+// that finds another filler block running on its SM waits in place, asleep, until that one is done (exiting instead
+// frees the SM, and the dispatcher puts the next block there), and the running warps take SUB tiles of a warp range at
+// a time from the chunk's counter, so the chunk's work ends evenly over the SMs that run it. Every tile is run once,
+// as dtiles runs it, with its receipt at the same index. The counters are per chunk tag (tile0 / per, 64 slots); the
+// chunk's last block zeroes its slot, so a chunk launched again starts from zero.
+__device__ int dfill_one_lock[1024];
+__device__ unsigned long long dfill_one_next[64];
+__device__ unsigned dfill_one_fin[64];
+template <int NC, int MAP>
+__device__ __forceinline__ void dtiles_one(uint64_t c0, uint64_t c1, unsigned long long tile0, int tiles, int steps,
+                                           unsigned long long* __restrict__ rec, int sub) {
+  unsigned smid;
+  asm volatile("mov.u32 %0, %%smid;" : "=r"(smid));
+  smid &= 1023;
+  const int nw = blockDim.x >> 5, lane = threadIdx.x & 31;
+  const int m = sub < tiles ? sub : tiles, per_w = tiles / m;
+  const unsigned long long units = (unsigned long long)gridDim.x * nw * per_w;
+  const int slot = (int)((tile0 / ((unsigned long long)gridDim.x * nw * tiles)) & 63);
+  const long long wid = (long long)blockIdx.x * nw + (threadIdx.x >> 5);
+  if (threadIdx.x == 0)
+    while (atomicCAS(&dfill_one_lock[smid], 0, 1) != 0) __nanosleep(4000);
+  __syncthreads();
+  for (;;) {
+    unsigned long long u = 0;
+    if (lane == 0) u = atomicAdd(&dfill_one_next[slot], 1ull);
+    u = __shfl_sync(0xffffffffu, u, 0);
+    if (u >= units) break;
+    // dtiles runs tiles wid·m + i of its tile0 and rec: shift both so that those are the unit's
+    const long long off = (long long)((u / per_w) * tiles + (u % per_w) * m) - wid * m;
+    dtiles<NC, MAP>(c0, c1, tile0 + (unsigned long long)off, m, steps, rec + off);
+  }
+  __syncthreads();
+  if (threadIdx.x == 0) {
+    atomicExch(&dfill_one_lock[smid], 0);
+    __threadfence();
+    if (atomicAdd(&dfill_one_fin[slot], 1u) == gridDim.x - 1) {
+      dfill_one_next[slot] = 0;
+      dfill_one_fin[slot] = 0;
+      __threadfence();
+    }
+  }
+}
+// The filler kernel. A chunk's receipt buffer holds per() receipts and then one mode word, map | DFILL_PIPE << 2 |
+// DFILL_ONE << 8, that dfill_alloc writes, so dscore's direct launch of dfill_k<NC> runs the map the process chose. The
+// pipelined loop is its own kernel, dfill_kp, which only dfill_launch starts: in dfill_k it would raise every map's
+// registers (NC 4: 88 to 124) and with them the footprint a co-resident filler leaves its neighbours. dfill_k writes
+// nothing in a pipe mode.
 template <int NC>
 __global__ void __launch_bounds__(NC >= 8 ? 256 : 512) dfill_k(uint64_t c0, uint64_t c1, unsigned long long tile0, int tiles,
                                                                int steps, unsigned long long* __restrict__ rec) {
-  const unsigned long long mode = rec[(unsigned long long)gridDim.x * (blockDim.x >> 5) * tiles];
+  const unsigned long long word = rec[(unsigned long long)gridDim.x * (blockDim.x >> 5) * tiles];
+  const unsigned long long mode = word & 0xff;
+  if constexpr (NC == 4)
+    if (const int sub = (int)(word >> 8)) {
+      if (mode == 1) return dtiles_one<NC, 1>(c0, c1, tile0, tiles, steps, rec, sub);
+      if (mode == 2) return dtiles_one<NC, 2>(c0, c1, tile0, tiles, steps, rec, sub);
+      return;
+    }
   if constexpr (NC <= 4)
     if (mode == 0) return dtiles<NC, 0>(c0, c1, tile0, tiles, steps, rec);
   if (mode == 1) return dtiles<NC, 1>(c0, c1, tile0, tiles, steps, rec);
@@ -953,6 +1007,7 @@ static uint64_t dfill_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int s
 struct DFill {
   int W = 4, NC = 2, S = 2048, tiles = 1, grid = 0, map = 0;
   bool pipe = false;  // dtiles_p (DFILL_PIPE=1): maps 1, 2, NC 1, 2, 4, W <= 8
+  int one = 0;        // dtiles_one (DFILL_ONE=SUB): maps 1, 2, NC 4, not with DFILL_PIPE
   uint64_t c0 = 0, c1 = 0;
   unsigned long long base = 0;
   unsigned long long* rec = nullptr;
@@ -996,7 +1051,7 @@ static void dfill_prep() {
 }
 // f.rec: per() receipts, then dfill_k's mode word
 static void dfill_alloc(DFill& f) {
-  const unsigned long long mode = f.map | (f.pipe ? 4 : 0);
+  const unsigned long long mode = f.map | (f.pipe ? 4 : 0) | (unsigned long long)f.one << 8;
   CK(cudaMalloc(&f.rec, (f.per() + 1) * sizeof(unsigned long long)));
   CK(cudaMemcpy(f.rec + f.per(), &mode, sizeof mode, cudaMemcpyHostToDevice));
 }
@@ -1009,6 +1064,11 @@ static DFill dfill_make(int grid, int W, int NC, int S, uint64_t c0, uint64_t c1
   if (f.map == 0 && NC > 4) { fprintf(stderr, "map 0: NC 1, 2 or 4\n"); exit(1); }
   const int lg = getenv("DFILL_CHUNK_LOG2") ? atoi(getenv("DFILL_CHUNK_LOG2")) : 19;
   f.tiles = std::max(1, (int)((1LL << lg) / ((long long)W * NC * S)));
+  f.one = getenv("DFILL_ONE") ? atoi(getenv("DFILL_ONE")) : 0;
+  if (f.one && (f.one < 0 || f.map == 0 || f.pipe || NC != 4 || f.tiles % std::min(f.one, f.tiles))) {
+    fprintf(stderr, "DFILL_ONE=SUB needs map 1 or 2, NC 4, no DFILL_PIPE, and SUB dividing the %d tiles a warp\n", f.tiles);
+    exit(1);
+  }
   dfill_alloc(f);
   return f;
 }
