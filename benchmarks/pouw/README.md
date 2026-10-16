@@ -13,6 +13,7 @@ the kernel-engineering skill (`.agents/skills/kernel-engineering/SKILL.md`).
 | `served_zk/` | CPU | A served audit window committed in the ZK statement's format from a retained pass, and judged through the proof service (`served_commit.py`, `job.sh`) |
 | `hidden_zk/` | CPU | Pearl-C4's hidden-check units under C-Flock `--zk`, proved in Rust and verified by the Lean verifier (`job.sh`) |
 | `pearl_c4/` | RTX PRO 6000 | Pearl-C4 (NVFP4 and MXFP4) and its harness arms |
+| `fp4_nobits/` | RTX PRO 6000 | The measurement of premise NB (NOBITS): a `kind::mxf4nvf4` MMA's FP32 accumulator holds the exact integer but never the committed s32 word's bits, at 0 or at the binade constant, and the cheapest exact extraction is one F2I or one IADD3 a word (SASS-counted), against the int8 IMMA whose accumulator is the word; `run.sh` under `gpu-lease 1`, clocks read |
 | `nvfp4_sm120/` | RTX PRO 6000 | The plain NVFP4 GEMM as harness baseline entries (`nvf4_plain.cu` on `mainloop_nvf4.cuh`), and its standalone benches |
 | `pouw_hash/` | RTX PRO 6000 | The PoUW hash kernels' bench and check (`run.sh`, `check.py`) |
 | `kernels/` | RTX 4090 | NCP's native u8xs8 route-U GEMM and Pearl's e4m3 GEMM on the `ada` device (`pouw_gemm.cu`), JIT-built as a torch extension |
