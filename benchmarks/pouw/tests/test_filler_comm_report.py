@@ -109,6 +109,8 @@ def test_pfill_fill_counts_mmas_and_reads_k(tmp_path):
     (row,) = R.rows(str(tmp_path))
     assert row["fill"] == pytest.approx(4e7 * 4096 / 41e-3 / PEAK)
     assert row["fill_k"] == pytest.approx(0.9 * row["fill"])
+    assert row["coverage_base"] == pytest.approx(0.225 * row["served"])
+    assert row["coverage"] == pytest.approx(0.225 * row["served"] * 40 / 41 + row["fill_k"])
     assert row["fill_finished"] == pytest.approx(0.25 * row["fill"])
     assert row["idle_off_comm"] == pytest.approx(1 - row["served"] - 10 / 40)
     g = R.gates(str(tmp_path), [row])

@@ -8,7 +8,9 @@ Every rank times the same lockstep step, so a time is the median over the arm's 
 phase are the medians over their (interleaved) repeats. Shares are of the tensor capacity of one GPU at the clock read:
 served = the step's int8 MACs, fill = the phase filler's; idle = 1 - served; comm = (base - nocomm) / base, the exposed
 collective time; off-comm idle = idle - comm, the idle tensor time the collective windows don't reach; slowdown = phase /
-base. fill K = fill × K_FRACTION, pfill-k's proved fraction under Theorem K (c = 1 at φ = 0.9). The fill counts every MMA
+base. fill K = fill × K_FRACTION, pfill-k's proved fraction under Theorem K (c = 1 at φ = 0.9). coverage is filler-scorer
+v3's per GPU at the slowest rank's step: the scorer's serving fraction × served (at base alone, at phase with the
+filler) + fill K. The fill counts every MMA
 a warp ran (partial tiles included: each word is committed as it leaves its MMA); "fill (whole tiles)" counts only tiles
 all of whose warps finished. "KV wrapped": the batch's KV cache doesn't fit beside the shards, so the attention re-reads
 the pool: the point's time is the right size, but no server could hold it.
@@ -98,6 +100,9 @@ def rows(out_dir):
                     if p0.get(f"fill_{unit}_full_rep") is not None:
                         row["fill_finished"] = row["fill"] * first("phase", f"fill_{unit}_full_rep") / first("phase", f"fill_{unit}_rep")
                     row["served_phase"] = macs / (phase * 1e-3) / (1024 * 188 * pm * 1e6)
+                    cs = S.CERTIFIED["serving"]["fraction"]
+                    row["coverage_base"] = cs * row["served"]
+                    row["coverage"] = cs * row["served_phase"] + K_FRACTION * row["fill"]
                     pr = [r for ranks in by_arm["phase"] for r in ranks]
                     row["rec_bad"] = sum(r.get("rec_bad", 0) for r in pr)
                     row["rec_checked"] = sum(r.get("rec_checked", 0) for r in pr)
@@ -171,14 +176,14 @@ def main():
         return
     f = lambda v, p=4: "-" if v is None else (f"{v:.{p}f}" if isinstance(v, float) else str(v))
     print("| set | TP | B | L | base ms | comm exposed | served | idle | off-comm idle | phase ms | slowdown | fill | "
-          f"fill K (x{K_FRACTION}) | fill (whole tiles) | comm+filler/comm | receipts bad/checked |")
-    print("|" + "---|" * 16)
+          f"fill K (x{K_FRACTION}) | fill (whole tiles) | coverage base → phase | comm+filler/comm | receipts bad/checked |")
+    print("|" + "---|" * 17)
     for r in rs:
         L = f"{r['L']} (KV wrapped)" if r["kv_wrapped"] else r["L"]
         print(f"| {r['set']} | {r['tp']} | {r['B']} | {L} | {f(r['base_ms'], 2)} | {f(r.get('comm_exposed'), 3)} | "
               f"{f(r.get('served'), 4)} | {f(r.get('idle'), 3)} | {f(r.get('idle_off_comm'), 3)} | {f(r['phase_ms'], 2)} | "
               f"{f(r.get('slowdown'), 4)} | {f(r.get('fill'), 4)} | {f(r.get('fill_k'), 4)} | {f(r.get('fill_finished'), 4)} | "
-              f"{f(r.get('comm_slowdown'), 4)} | {r.get('rec_bad', '-')}/{r.get('rec_checked', '-')} |")
+              f"{f(r.get('coverage_base'), 4)} → {f(r.get('coverage'), 4)} | {f(r.get('comm_slowdown'), 4)} | {r.get('rec_bad', '-')}/{r.get('rec_checked', '-')} |")
     for s in sorted({(r["set"], r["settings"]) for r in rs}):
         print(f"- {s[0]}: `{s[1]}`")
     print(f"- gates {'all ok' if g['all_ok'] else 'NOT all ok'}: " + "; ".join(
