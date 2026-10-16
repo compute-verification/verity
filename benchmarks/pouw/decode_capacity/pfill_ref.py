@@ -34,7 +34,8 @@ DOM_BU = 0x5046494C4C2D6255  # "PFILL-bU": the bU tile
 CTR_B, CTR_KEY = 1 << 56, 2 << 56
 M32 = 0xFFFFFFFF
 RAM, DUO, XOR = 4, 2, 1
-XIN = 9  # XOR-in: NC 4's fold in a -DPFILL_XIN build
+LI, XIN13 = 10, 13  # P2-FF r9's folds: NC 4's in a -DPFILL_LI or -DPFILL_XIN13 build
+R9 = (LI, XIN13)
 S8, E2M1, BITS, BU = 0, 1, 2, 3  # pfill.cuh's PF_S8, PF_E2M1, PF_BITS, PF_BU
 KINDS = (S8, E2M1, BITS, BU)
 DOMS = {S8: DOM, E2M1: DOM4, BITS: DOM01, BU: DOM_BU}
@@ -81,15 +82,43 @@ def key_ok(a: int) -> bool:
     return bool(a & 1) and 256 < m < (1 << 24) - 256 and r not in (1, 31)
 
 
-def keys(rows: np.ndarray) -> tuple[int, int, int, int]:
-    """(a0, a1, k0, k1): the first two row words that pass key_ok, then rows 14 and 15."""
-    ok = [int(x) for x in rows if key_ok(int(x))]
+def key_ok_r9(a: int) -> bool:
+    """P2-FF r9's key condition (receipt_folds_r9.key_ok_r9, art:91c156a1): key_ok, and neither a nor -a an int8 ratio
+    mod 2^30, i.e. a b mod 2^30 outside [-128, 128] for every b in 1..128."""
+    return key_ok(a) and all((a * b + 128) % (1 << 30) > 256 for b in range(1, 129))
+
+
+def keys(rows: np.ndarray, r9: bool = False) -> tuple[int, int, int, int]:
+    """(a0, a1, k0, k1): the first two row words that pass key_ok (key_ok_r9 in an LI or XIN13 build), then rows 14 and
+    15."""
+    ok = [int(x) for x in rows if (key_ok_r9 if r9 else key_ok)(int(x))]
     a = ok + [0x9E3779B9, 0x7F4A7C15][len(ok[:2]):]
     return a[0], a[1], int(rows[14]), int(rows[15])
 
 
 def rotl(x: np.ndarray, r: int) -> np.ndarray:
     return (x << np.uint32(r)) | (x >> np.uint32(32 - r))
+
+
+def absorb(nc: int, y, z, d0, d1, d2, d3, a0, a1, k0, k1):
+    """One MMA's step of a lane's chain, (y, z) from its words (d0, d1, d2, d3) = rows (g, g + 8) x columns (2t, 2t + 1);
+    every argument uint32 (arrays or scalars)."""
+    if nc == RAM:
+        y = (rotl(y, 7) + d0) * a0 + d1
+        return (rotl(y, 19) + d2) * a1 + d3, z
+    if nc == LI:
+        y = (y ^ d0 ^ k0) * a0 + d1
+        return (y ^ d2 ^ k1) * a1 + d3, z
+    if nc == XIN13:
+        y = (rotl(y, 13) ^ d0) * a0 + d1
+        return (rotl(y, 19) ^ d2) * a1 + d3, z
+    if nc == DUO:
+        for p, k, a, r in ((d0, k0, a0, 5), (d1, k1, a1, 11), (d2, k0, a0, 17), (d3, k1, a1, 29)):
+            u = y ^ p ^ k
+            y = u * a + z
+            z = rotl(u, r) + y
+        return y, z
+    return y ^ d0 ^ d1 ^ d2 ^ d3, z
 
 
 def popcount(x: np.ndarray) -> np.ndarray:
@@ -136,19 +165,21 @@ def tile_words(c0: int, c1: int, tile: int, steps: int, kind: int = S8, w: int =
     return words(ar[:, :, None], b_cols(c0, c1, tile, kind, tn)[None, None, :], kind)
 
 
-def receipt(c0: int, c1: int, tile: int, nc: int, steps: int, kind: int = S8, w: int = W) -> int:
+def receipt(c0: int, c1: int, tile: int, nc: int, steps: int, kind: int = S8, w: int = W,
+            r9: bool | None = None) -> int:
     """The tile's receipt: warp v's fragments v S .. v S + S - 1 (16 rows each) against all 128 w columns (w warps: the
     pump's tile is 8, dfill_p's PF_PW), fragment f's outputs absorbed by chain f % 4 of each lane in order of f, then of
-    the B fragment j."""
-    return fold(c0, c1, tile, nc, steps, tile_words(c0, c1, tile, steps, kind, w), kind, w)
+    the B fragment j. r9: the keys of an LI or XIN13 build (by default, iff fold `nc` is one of those)."""
+    return fold(c0, c1, tile, nc, steps, tile_words(c0, c1, tile, steps, kind, w), kind, w, r9)
 
 
-def fold(c0: int, c1: int, tile: int, nc: int, steps: int, cw: np.ndarray, kind: int = S8, w: int = W) -> int:
+def fold(c0: int, c1: int, tile: int, nc: int, steps: int, cw: np.ndarray, kind: int = S8, w: int = W,
+         r9: bool | None = None) -> int:
     """The receipt that fold `nc` makes of the words `cw` ([v, 16 S, 128 w], as `tile_words`), with the tile's keys."""
     kind = int(kind)
     tn = 128 * w
     kb = block(c0, c1, tile, CTR_KEY, dom_of(kind))
-    a0, a1, k0, k1 = (np.uint32(v) for v in keys(kb))
+    a0, a1, k0, k1 = (np.uint32(v) for v in keys(kb, nc in R9 if r9 is None else r9))
     lane = np.arange(32)
     g, t = lane >> 2, lane & 3
     pos = (np.arange(w)[:, None, None] * 32 + lane[None, :, None]) * 4 + np.arange(4)[None, None, :]
@@ -164,20 +195,7 @@ def fold(c0: int, c1: int, tile: int, nc: int, steps: int, cw: np.ndarray, kind:
         i0 = 16 * fc[None, :] + g[:, None]  # [lane, c]: the lane's rows 16 f + g and 16 f + g + 8
         d0, d1, d2, d3 = (cw[ww, (i0 + h)[None, None], (n0 + n)[:, None, :, None]] for h in (0, 8) for n in (0, 1))
         for j in range(tn // 8):
-            ny, nz = y.copy(), z.copy()
-            if nc == RAM:
-                ny = (rotl(ny, 7) + d0[j]) * a0 + d1[j]
-                ny = (rotl(ny, 19) + d2[j]) * a1 + d3[j]
-            elif nc == XIN:
-                ny = (rotl(ny, 7) ^ d0[j]) * a0 + d1[j]
-                ny = (rotl(ny, 19) ^ d2[j]) * a1 + d3[j]
-            elif nc == DUO:
-                for p, k, a, r in ((d0[j], k0, a0, 5), (d1[j], k1, a1, 11), (d2[j], k0, a0, 17), (d3[j], k1, a1, 29)):
-                    u = ny ^ p ^ k
-                    ny = u * a + nz
-                    nz = rotl(u, r) + ny
-            else:
-                ny = ny ^ d0[j] ^ d1[j] ^ d2[j] ^ d3[j]
+            ny, nz = absorb(nc, y, z, d0[j], d1[j], d2[j], d3[j], a0, a1, k0, k1)
             y = np.where(live[None, None, :], ny, y)
             z = np.where(live[None, None, :], nz, z)
     key = dseed(c0, c1, tile)
@@ -186,6 +204,28 @@ def fold(c0: int, c1: int, tile: int, nc: int, steps: int, cw: np.ndarray, kind:
     for p, x in zip(pos.ravel().tolist(), v.ravel().tolist()):
         h ^= smix(smix(key ^ p) ^ x)
     return h
+
+
+def ho_ok(c0: int, c1: int, tile: int, steps: int, kind: int = S8, w: int = W) -> bool:
+    """(HO), LI's layout premise (note:20261016T1117Z-draft-fullfloor-s-r9): no hand-off of a lane's chain, (d1, d2) in a
+    step or (d3, the next step's d0), joins two words whose rows or columns are equal or complementary (either lets one
+    product make both words, the complement's through the other operand's sum). Rows: g and g + 8 of a fragment, and
+    g + 8 of fragment f with g of f + 4 (chain f % 4's next); columns: 8 j + 2 t with 8 j + 2 t + 1, and that with
+    8 (j + 1) + 2 t (column 2 t after the last j). Bit-coded rows and columns compare as bit vectors, bU's columns (on
+    {±1, ..., ±64}) as integer vectors, the complement of u being -u."""
+    kind, tn = int(kind), 128 * w
+    a = a_rows(c0, c1, tile, steps, kind, w).reshape(w, steps, 16)
+    full = np.uint64((1 << (64 if kind == E2M1 else 32)) - 1)
+    same = lambda x, y: ((x == y) | (x == (y ^ full))).any()  # noqa: E731
+    if same(a[:, :, :8], a[:, :, 8:]) or same(a[:, :-4, 8:], a[:, 4:, :8]):
+        return False
+    n = np.arange(tn // 8)[:, None] * 8 + 2 * np.arange(4)[None, :]  # [j, t]: column 8 j + 2 t
+    pairs = ((n, n + 1), (n + 1, np.roll(n, -1, axis=0)))
+    if kind == BU:
+        u = bu_columns(c0, c1, tile, tn).T
+        return not any(((u[x] == u[y]).all(-1) | (u[x] == -u[y]).all(-1)).any() for x, y in pairs)
+    bb = b_cols(c0, c1, tile, kind, tn)
+    return not any(same(bb[x], bb[y]) for x, y in pairs)
 
 
 def int_operands(c0: int, c1: int, tile: int, steps: int, kind: int = S8, w: int = W) -> tuple[np.ndarray, np.ndarray]:

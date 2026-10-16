@@ -170,16 +170,30 @@ class PFillBUDuo(PFillBU):
 
 
 @dataclass
-class PFillBUXin(PFillBU):
-    """pfill-bU with XOR-in receipts (NC 4 built with -DPFILL_XIN, three ops a pair: y <- (rotl(y, 7) ^ d0) a0 + d1):
-    its all-state kernel is a fixed group of 16 an MMA, each a bijection of every word, so no data-free representative
-    such as ram's (0, Q)."""
+class PFillBULi(PFillBU):
+    """pfill-bU with P2-FF r9's LOP3+IMAD receipts (NC 4 built with -DPFILL_LI, two ops a pair as ram's:
+    y <- (y ^ d0 ^ k0) a0 + d1;  y <- (y ^ d2 ^ k1) a1 + d3, keys under key_ok_r9;
+    note:20261016T1117Z-draft-fullfloor-s-r9). It reads every word given (HO), no hand-off sharing a row or column,
+    which bU's hashed rows give (pfill_ref.ho_ok). Provisional while RS-E-REF r7 referees r9 (`fold_status`)."""
 
-    name: str = "pfill-bu-xin"
+    name: str = "pfill-bu-li"
     lineage: dict = field(default_factory=lambda: _fold_lineage(
-        "pfill-bu", "noise:sha512-coins-bU", "receipt:xin-k32",
-        "pfill-bU with XOR-in for ram: every word certified at one op a pair more than ram, so K's c = 1 holds"))
-    nvcc_flags: str = "-DPFILL_BU -DPFILL_XIN -Xcompiler -mpopcnt"
+        "pfill-bu", "noise:sha512-coins-bU", "receipt:li-k32",
+        "pfill-bU with LOP3+IMAD for ram: every word certified at ram's op count, so K's c = 1 holds (r9, provisional)"))
+    nvcc_flags: str = "-DPFILL_BU -DPFILL_LI -Xcompiler -mpopcnt"
+
+
+@dataclass
+class PFillBUXin13(PFillBU):
+    """pfill-bU with P2-FF r9's XOR-in (13, 19) receipts (NC 4 built with -DPFILL_XIN13, three ops a pair:
+    y <- (rotl(y, 13) ^ d0) a0 + d1;  y <- (rotl(y, 19) ^ d2) a1 + d3, keys under key_ok_r9): every word read with no
+    layout premise, the served GEMM's fold. Provisional while RS-E-REF r7 referees r9 (`fold_status`)."""
+
+    name: str = "pfill-bu-xin13"
+    lineage: dict = field(default_factory=lambda: _fold_lineage(
+        "pfill-bu", "noise:sha512-coins-bU", "receipt:xin13-k32",
+        "pfill-bU with XOR-in (13, 19) for ram: every word certified at one op a pair more than ram (r9, provisional)"))
+    nvcc_flags: str = "-DPFILL_BU -DPFILL_XIN13 -Xcompiler -mpopcnt"
 
 
 @dataclass
@@ -193,22 +207,21 @@ class PFillKDuo(PFillK):
     filler: Filler | None = Filler(W=8, NC=2, S=256, chunk_log2=19, noise="bits01")
 
 
-@dataclass
-class PFillKXin(PFillK):
-    """pfill-k with XOR-in receipts (NC 4 built with -DPFILL_XIN)."""
-
-    name: str = "pfill-k-xin"
-    lineage: dict = field(default_factory=lambda: _fold_lineage(
-        "pfill-k", "noise:sha512-coins-01", "receipt:xin-k32",
-        "pfill-k with XOR-in for ram: every word certified at one op a pair more than ram, so K's c = 1 holds"))
-    nvcc_flags: str = "-DPFILL_BITS -DPFILL_XIN"
-
-
 def fold_share(lineage: dict) -> float:
     """The share of committed words the arm's receipt certifies: ½ for ram (it reads a pair only through Q = a0 d0 +
-    d1), 1 for duo and XOR-in (note:20261016T0917Z-draft-fullfloor-s-r8 §1.2)."""
+    d1), 1 for duo, LOP3+IMAD and XOR-in (13, 19) (note:20261016T0917Z-draft-fullfloor-s-r8 §1.2,
+    note:20261016T1117Z-draft-fullfloor-s-r9)."""
     mech = lineage.get("mechanism") or []
     return 0.5 if any(t.startswith("receipt:ram") for t in mech) else 1.0
+
+
+R9_RECEIPTS = ("receipt:li-k32", "receipt:xin13-k32")
+
+
+def fold_status(lineage: dict) -> str | None:
+    """'provisional' for a receipt fold whose argument is under referee: P2-FF r9's LOP3+IMAD and XOR-in (13, 19), until
+    RS-E-REF r7 rules."""
+    return "provisional" if set(lineage.get("mechanism") or []) & set(R9_RECEIPTS) else None
 
 
 def products_per_slot(lineage: dict) -> int:

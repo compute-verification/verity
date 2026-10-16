@@ -176,15 +176,15 @@ def test_k_arms_add_only_the_theorem_k_reading(tmp_path):
         assert k["theorem-k"]["SCORE"] > k["proved"]["SCORE"]
 
 
-@pytest.mark.parametrize(("attr", "base", "nc", "xin", "noise"), [("PFillBUDuo", "PFillBU", 2, False, "bitsU"),
-                                                                  ("PFillBUXin", "PFillBU", 4, True, "bitsU"),
-                                                                  ("PFillKDuo", "PFillK", 2, False, "bits01"),
-                                                                  ("PFillKXin", "PFillK", 4, True, "bits01")])
-def test_fold_arms_change_only_the_receipt_and_read_every_word(monkeypatch, tmp_path, attr, base, nc, xin, noise):
-    """pfill-bU's and pfill-k's duo (NC 2) and XOR-in (NC 4 built with -DPFILL_XIN) arms are their ram arm with only
-    the fold changed; ram's
-    receipt certifies word pairs (Q = a0 d0 + d1), so its count readings are half theirs: E 0.1125 against 0.225, K 0.45
-    against 0.9 (note:20261016T0917Z-draft-fullfloor-s-r8 §1.2)."""
+@pytest.mark.parametrize(("attr", "base", "nc", "flag", "noise"), [("PFillBUDuo", "PFillBU", 2, None, "bitsU"),
+                                                                   ("PFillBULi", "PFillBU", 4, "-DPFILL_LI", "bitsU"),
+                                                                   ("PFillBUXin13", "PFillBU", 4, "-DPFILL_XIN13", "bitsU"),
+                                                                   ("PFillKDuo", "PFillK", 2, None, "bits01")])
+def test_fold_arms_change_only_the_receipt_and_read_every_word(monkeypatch, tmp_path, attr, base, nc, flag, noise):
+    """pfill-bU's and pfill-k's duo (NC 2) arms and pfill-bU's r9 arms (NC 4 built with -DPFILL_LI or -DPFILL_XIN13) are
+    their ram arm with only the fold changed; ram's receipt certifies word pairs (Q = a0 d0 + d1), so its count readings
+    are half theirs: E 0.1125 against 0.225, K 0.45 against 0.9 (note:20261016T0917Z-draft-fullfloor-s-r8 §1.2). The r9
+    folds' readings are marked provisional while RS-E-REF r7 referees them."""
     A, S = _module("arms"), _module("scoring")
     P = _load_file("pfill_proved")
     monkeypatch.setenv("NVCC_APPEND_FLAGS", "unset")
@@ -193,7 +193,7 @@ def test_fold_arms_change_only_the_receipt_and_read_every_word(monkeypatch, tmp_
     arm = A.load(f"benchmarks/pouw/filler/pfill_arm.py:{attr}")
     assert A.check_arm(arm, record=True) == []
     got = __import__("os").environ["NVCC_APPEND_FLAGS"].split()
-    assert sorted(got) == sorted(flags.split() + (["-DPFILL_XIN"] if xin else []))
+    assert sorted(got) == sorted(flags.split() + ([flag] if flag else []))
     assert arm.filler == replace(ram.filler, NC=nc) and arm.filler.noise == noise
     assert arm.sources == ram.sources and arm.lineage["parent"] == ram.name
     for ph, b, l in S.points():
@@ -208,3 +208,5 @@ def test_fold_arms_change_only_the_receipt_and_read_every_word(monkeypatch, tmp_
     assert (f["proved"]["filler_fraction"], f["theorem-k"]["filler_fraction"]) == (0.225, 0.9)
     assert (r["proved"]["filler_fraction"], r["theorem-k"]["filler_fraction"]) == (0.1125, 0.45)
     assert r["provisional"] == f["provisional"] and f["theorem-k"]["SCORE"] > r["theorem-k"]["SCORE"]
+    assert f["proved"]["status"] == ("proved, fold provisional" if flag else "proved") and r["proved"]["status"] == "proved"
+    assert f["provisional"]["status"] == "provisional"
