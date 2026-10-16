@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.Recursion.Deploy
+import Proofs.Flock.Claims.DeployK
 
 /-!
 # The compiled verifier's structural code facts
@@ -18,7 +19,8 @@ stated as the analysis states it (`Refuses`, `InnerRounds`, `SessionNums`, `Sess
   run of replayed messages is the run of the messages it shows (`stepWith_replay`), so with no hypothesis on the
   witnesses.
 
-`zeroCommit_sha512`: the record's commit string to the zero digest is the deployed one at SHA-512.
+`nextO_acc_length` and `next_acc_length`: the outer verifier and the compiled verifier accept only at their last
+rounds, as `FlockDeploy.next_acc_length` has it for Flock's. `zeroCommit_sha512`: the record's commit string to the zero digest is the deployed one at SHA-512.
 -/
 
 namespace RecDeploy
@@ -202,6 +204,107 @@ theorem innerViewRun (H : Claims.Msg → Claims.Msg) (I : Claims.Recursion.Inner
       fun i => Claims.coinSeq r i.val).seen
   unfold innerView
   rw [run_replay_seen]
+
+/-! ## The outer verifier decides at its last round -/
+
+theorem actO_decide_length {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : FlockDeploy.Ins}
+    {spec : Flock.SessionSpec} {sts : Array Flock.Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
+    {mids : List (Claims.Msg × Coin)} {f : FlockDeploy.Final} (hcs : cs.length = as.length)
+    (h : actO x as cs = .decide s spec sts link c₁ mids f) : as.length = mids.length + 2 := by
+  unfold actO actAt at h
+  repeat' split at h
+  all_goals first | (cases h; done) | skip
+  rename_i a _ _ _ _ a₁ rest _ crest hfin hlast _ _ _ hlink
+  cases h
+  cases rest with
+  | nil =>
+    simp only [List.getLast?_singleton, Option.some.injEq] at hlast
+    subst hlast
+    have h1 := FlockDeploy.finalOf_head hfin
+    rw [FlockDeploy.linkOf_head hlink] at h1
+    cases h1
+  | cons b rest =>
+    simp only [List.length_cons] at hcs
+    simp only [List.length_cons, List.length_zip, List.length_map, List.length_dropLast]
+    omega
+
+/-- **The outer verifier accepts only at its last round** (`FlockDeploy.next_acc_length` at the recursive setup):
+wherever it accepts, against any oracle and with one coin per message, the prover sent `VO.k x` messages. -/
+theorem nextO_acc_length (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+    (hcs : cs.length = as.length) (h : ((nextO x as cs).eval H).1 = .acc) : as.length = VO.k x := by
+  cases ha : actO x as cs with
+  | rej => rw [nextO_rej H ha] at h; cases h
+  | coin c => rw [nextO_coin H ha] at h; cases h
+  | decide s spec sts link c₁ mids f =>
+  obtain ⟨hv, hc⟩ := (nextO_decide H ha).1 h
+  obtain ⟨lv, hlv, hcus⟩ := FlockDeploy.checks_custody hc
+  obtain ⟨hsz, hk⟩ := FlockDeploy.streams_size true (Flock.Hashes.ofSha512 (Claims.hOf H)) hv hlv
+  obtain ⟨i, hi, -⟩ := actO_decide ha
+  show as.length = (match setupO x with | some (_, spec, sts) => 2 + FlockDeploy.rounds true spec sts | none => 1)
+  rw [hi, actO_decide_length hcs ha, ← FlockDeploy.custody_length hcus]
+  dsimp only
+  rw [FlockDeploy.rounds_sum, List.length_flatMap,
+    Nat.add_comm _ 2, ← FlockDeploy.sum_pairs (fun i => FlockDeploy.repRounds true spec sts[i]!)]
+  congr 2
+  apply List.ext_getElem
+  · simp [hsz]
+  · intro k h₁ h₂
+    simp only [List.getElem_map, List.getElem_range, Array.getElem_toList, Array.length_toList]
+    exact hk k _
+
+/-! ## The compiled verifier decides at its last round -/
+
+theorem locate_sum : ∀ {ks : List ℕ} {i s j : ℕ}, locate ks i = some (s, j) → i = (ks.take s).sum + j
+  | [], _, _, _, h => by simp [locate] at h
+  | k :: ks, i, s, j, h => by
+    unfold locate at h
+    split_ifs at h with hi
+    · cases h
+      simp
+    · obtain ⟨⟨s', j'⟩, hl, he⟩ := Option.map_eq_some_iff.1 h
+      cases he
+      have := locate_sum hl
+      simp only [List.take_succ_cons, List.sum_cons]
+      omega
+
+theorem ract_sess_locate {IV : Claims.Verifier Coin} {st : Stage} {x : Claims.Msg} {as : List Claims.Msg}
+    {cs : List Coin} {s j : ℕ} {xO : Claims.Msg} {as' : List Claims.Msg} {cs' : List Coin}
+    (h : ract IV st x as cs = .sess s j xO as' cs') :
+    IV.k (xIOf x) < as.length ∧
+      locate ((vstar st x (innerPairs (IV.k (xIOf x)) as cs)).map VO.k) (as.length - 1 - IV.k (xIOf x)) =
+        some (s, j) ∧
+      xO = (vstar st x (innerPairs (IV.k (xIOf x)) as cs)).getD s [] := by
+  unfold ract at h
+  split at h
+  · cases h
+  split_ifs at h with hk
+  · split at h <;> cases h
+  dsimp only at h
+  split at h
+  · cases h
+  rename_i s' j' hl
+  split_ifs at h with hn hd
+  obtain ⟨rfl, rfl, rfl, -, -⟩ := RAct.sess.inj h
+  exact ⟨by omega, hl, rfl⟩
+
+/-- **The compiled verifier accepts only at its last round**: wherever it accepts, against any oracle, the prover sent
+`k(x)` messages, the inner rounds and every V* session's rounds. -/
+theorem next_acc_length (H : Claims.Msg → Claims.Msg) {IV : Claims.Verifier Coin} {st : Stage} {x : Claims.Msg}
+    {as : List Claims.Msg} {cs : List Coin} (h : ((next IV st x as cs).eval H).1 = .acc) :
+    as.length = (V IV st).k x := by
+  obtain ⟨s, j, xO, as', cs', hr, hs, hj, -⟩ := next_acc H h
+  obtain ⟨hlt, hl, hx⟩ := ract_sess_locate hr
+  have hsum := locate_sum hl
+  rw [vstar_map_k] at hsum
+  have hk : VO.k xO = (nums st x s).rounds := by
+    rw [hx, vstar_getD st x _ (by omega)]
+    exact congrArg Claims.Recursion.Nums.rounds (numsOf_vstarAt st x _ s)
+  show as.length = IV.k (xIOf x) + ((List.range (nS x)).map fun s => (nums st x s).rounds).sum
+  rw [← hs] at hsum ⊢
+  rw [List.range_succ, List.map_append, List.take_left' (by simp)] at hsum
+  rw [List.range_succ, List.map_append, List.sum_append]
+  simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero]
+  omega
 
 /-! ## The inner rounds' commit strings -/
 
