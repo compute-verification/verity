@@ -38,22 +38,22 @@ noncomputable def dropOwn {Q : VStmt} {Reg' : Type} (z : Q.Outer Reg') (p : Prop
     own := if p then freshOwn Q.c else z.own
     hown := fun ω R' o h => by
       by_cases hp : p
-      · rw [if_pos hp] at h
+      · rw [ite_eq_left hp] at h
         exact (not_acceptsZKR_fresh z.I z.ht z.hTags z.hcH _ h).elim
-      · rw [if_neg hp] at h ⊢
+      · rw [ite_eq_right hp] at h ⊢
         exact z.hown ω R' o h }
 
 open Classical in
 theorem own_dropOwn_pos {Q : VStmt} {Reg' : Type} (z : Q.Outer Reg') {p : Prop} (hp : p) :
     (dropOwn z p).own = freshOwn Q.c := by
   show (if p then freshOwn Q.c else z.own) = freshOwn Q.c
-  exact if_pos hp
+  exact ite_eq_left hp
 
 open Classical in
 theorem own_dropOwn_neg {Q : VStmt} {Reg' : Type} (z : Q.Outer Reg') {p : Prop} (hp : ¬ p) :
     (dropOwn z p).own = z.own := by
   show (if p then freshOwn Q.c else z.own) = z.own
-  exact if_neg hp
+  exact ite_eq_right hp
 
 /-- **A session refusing `p` accepts nothing where `p` holds.** -/
 theorem not_accepts_dropOwn {Q : VStmt} {Reg' : Type} (z : Q.Outer Reg') {p : Prop} (hp : p)
@@ -102,6 +102,7 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
   {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
 
 local notation "ℐ" => holoInnerAt T CT st hp
+local notation "ℐc" => holoInnerAt T (Flock.Guarantees.holoCTs st hp) st hp
 
 section transport
 
@@ -172,16 +173,16 @@ theorem rsRead_offZs {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ �
     h i hi R ω t R₂ τ o R' ω' t' R₂' τ' o' (accepted_offZs hS hA).2 (accepted_offZs hS hA').2
 
 theorem mapsAt_offZs {stmt : Fin S → VStar.Stmt}
-    {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
-    {Bad : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Prop} (hS : 0 < S) {dg : ByteArray → ByteArray} {N k Rw : ℕ}
+    {zs : Reg → L.Ω → List (Cm × (ℐc).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
+    {Bad : Reg → L.Ω → List (Cm × (ℐc).Coin) → Reg₂ → Prop} (hS : 0 < S) {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {M : FlockC3.Reps.StackedMaps stmt Vs} {sh : Flock.Shape} {unit : String}
-    {stp : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
-    {c3 : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → RecCoins.C3}
-    {w : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Array F128}
-    {kap : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Array (Array (Array F128))}
-    {e0 : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → ℕ → ByteArray}
-    {sb : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → ℕ → ℕ → ℕ → ByteArray}
-    {e : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → ℕ → ℕ → ByteArray} {cap₀ : Cap Dig}
+    {stp : Reg → L.Ω → List (Cm × (ℐc).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
+    {c3 : Reg → L.Ω → List (Cm × (ℐc).Coin) → ((j : Fin S) → (Vs j).Bits) → RecCoins.C3}
+    {w : Reg → L.Ω → List (Cm × (ℐc).Coin) → ((j : Fin S) → (Vs j).Bits) → Array F128}
+    {kap : Reg → L.Ω → List (Cm × (ℐc).Coin) → ((j : Fin S) → (Vs j).Bits) → Array (Array (Array F128))}
+    {e0 : Reg → L.Ω → List (Cm × (ℐc).Coin) → ((j : Fin S) → (Vs j).Bits) → ℕ → ByteArray}
+    {sb : Reg → L.Ω → List (Cm × (ℐc).Coin) → ((j : Fin S) → (Vs j).Bits) → ℕ → ℕ → ℕ → ByteArray}
+    {e : Reg → L.Ω → List (Cm × (ℐc).Coin) → ((j : Fin S) → (Vs j).Bits) → ℕ → ℕ → ByteArray} {cap₀ : Cap Dig}
     (h : MapsAt zs dg N k Rw M sh unit stp c3 w kap e0 sb e cap₀) :
     MapsAt (offZs zs Bad) dg N k Rw M sh unit stp c3 w kap e0 sb e cap₀ :=
   fun R ω t R₂ τ o hA => h R ω t R₂ τ o (accepted_offZs hS hA).2
