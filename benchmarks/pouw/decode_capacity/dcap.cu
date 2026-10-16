@@ -1202,7 +1202,8 @@ int main(int argc, char** argv) {
                     "       dependent launch; FLIN_LT=mask: fstep's linears that stay on cuBLASLt, 1 qkv 2 o 4 gate_up 8 down;\n"
                     "       FATT_PDL=1|2: the attention filler blocks under PDL, 2 with their filler warps starting early;\n"
                     "       FATT_NC=n: the attention filler warps' chains, 4 unless set; FATT_PERSIST=1: the attention filler\n"
-                    "       blocks persistent on the step's SMs)\n");
+                    "       blocks persistent on the step's SMs; FATT_LAZY=1|2: their filler warps test a read of done issued a\n"
+                    "       round earlier, stepping 8 or 16 at a time)\n");
     return 1;
   }
   const std::string mode = argv[1];
@@ -1212,6 +1213,7 @@ int main(int argc, char** argv) {
   g_fatt_pdl = getenv("FATT_PDL") ? atoi(getenv("FATT_PDL")) : 0;
   g_fatt_nc = getenv("FATT_NC") ? atoi(getenv("FATT_NC")) : 4;
   g_fatt_per = getenv("FATT_PERSIST") ? atoi(getenv("FATT_PERSIST")) : 0;
+  g_fatt_lazy = getenv("FATT_LAZY") ? atoi(getenv("FATT_LAZY")) : 0;
   if (const char* cs = getenv("DFILL_COINS")) {
     if (strlen(cs) != 32 || sscanf(cs, "%16llx%16llx", (unsigned long long*)&g_c0, (unsigned long long*)&g_c1) != 2) {
       fprintf(stderr, "DFILL_COINS must be 32 hex digits\n");

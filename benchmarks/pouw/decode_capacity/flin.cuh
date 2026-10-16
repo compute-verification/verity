@@ -49,7 +49,10 @@ __device__ __forceinline__ void mma_acc(int (&d)[4], const uint4& a, unsigned b0
 
 // One filler warp: dfill_k's tile `tile` (NC chains), stepping 8 at a time while *done < ndone (and, with thr, only while
 // *wait == ndone), then its receipt to rec and its step count to cnt. Every lane reads the flags through lane 0.
-template <int NC>
+// LAZY > 0 steps 8·LAZY at a time and tests a read of done issued a round earlier: the served warps' memory traffic can
+// hold a shared load in the MIO queue for hundreds of cycles, and a warp waiting on it stalls its chains (pv's filler
+// warps lost a third of their loop there). Such a warp runs up to two rounds past the last served warp.
+template <int NC, int LAZY = 0>
 __device__ __forceinline__ void filler_warp(uint64_t c0, uint64_t c1, unsigned long long tile, const int* done, const int* wait,
                                             int ndone, int thr, unsigned long long* rec, int* cnt) {
   const int lane = threadIdx.x & 31, g = lane >> 2, t = lane & 3;
@@ -73,10 +76,14 @@ __device__ __forceinline__ void filler_warp(uint64_t c0, uint64_t c1, unsigned l
   }
   const volatile int* vd = done;
   const volatile int* vw = wait;
-  int steps = 0;
+  int steps = 0, raw = LAZY && lane == 0 ? *vd : 0, d = 0;
   for (;;) {
-    const int d = __shfl_sync(0xffffffffu, lane == 0 ? *vd : 0, 0);
+    if constexpr (LAZY == 0) d = __shfl_sync(0xffffffffu, lane == 0 ? *vd : 0, 0);
     if (d >= ndone) break;
+    if constexpr (LAZY > 0) {
+      d = __shfl_sync(0xffffffffu, raw, 0);
+      raw = lane == 0 ? *vd : 0;
+    }
     if (thr) {
       const int w = __shfl_sync(0xffffffffu, lane == 0 ? *vw : 0, 0);
       if (w < ndone) {
@@ -85,10 +92,10 @@ __device__ __forceinline__ void filler_warp(uint64_t c0, uint64_t c1, unsigned l
       }
     }
 #pragma unroll
-    for (int u = 0; u < 8; u++)
+    for (int u = 0; u < 8 * (LAZY ? LAZY : 1); u++)
 #pragma unroll
       for (int ch = 0; ch < NC; ch++) dstep(st[ch], b[u & 1], c);
-    steps += 8;
+    steps += 8 * (LAZY ? LAZY : 1);
   }
   uint64_t h = 0;
 #pragma unroll
@@ -262,7 +269,16 @@ struct FattArgs {
   int early;
   long long items;
   int nx;
+  int lazy;  // the filler warps' LAZY (0, 1, 2)
 };
+template <int NC>
+__device__ __forceinline__ void att_filler(const FattArgs& fa, size_t slot, const int* done, int ndone) {
+  switch (fa.lazy) {
+    case 0: filler_warp<NC, 0>(fa.c0, fa.c1, fa.tile0 + slot, done, done, ndone, 0, fa.rec + slot, fa.cnt + slot); break;
+    case 1: filler_warp<NC, 1>(fa.c0, fa.c1, fa.tile0 + slot, done, done, ndone, 0, fa.rec + slot, fa.cnt + slot); break;
+    default: filler_warp<NC, 2>(fa.c0, fa.c1, fa.tile0 + slot, done, done, ndone, 0, fa.rec + slot, fa.cnt + slot);
+  }
+}
 template <int FW, int NC>
 __global__ void __launch_bounds__(QK_W * 32 + 32 * FW, 2) fqk_k(const int8_t* __restrict__ K, const int8_t* __restrict__ q,
                                                                  int* __restrict__ S, int L, int* __restrict__ O, int on,
@@ -275,8 +291,7 @@ __global__ void __launch_bounds__(QK_W * 32 + 32 * FW, 2) fqk_k(const int8_t* __
   const size_t blk = ((size_t)blockIdx.z * gridDim.y + blockIdx.y) * gridDim.x + blockIdx.x;
   if (w >= QK_W) {
     if (!fa.early) asm volatile("griddepcontrol.wait;" ::: "memory");
-    const size_t slot = blk * FW + (w - QK_W);
-    filler_warp<NC>(fa.c0, fa.c1, fa.tile0 + slot, &done, &done, QK_W, 0, fa.rec + slot, fa.cnt + slot);
+    att_filler<NC>(fa, blk * FW + (w - QK_W), &done, QK_W);
     return;
   }
   asm volatile("griddepcontrol.wait;" ::: "memory");
@@ -304,8 +319,8 @@ __global__ void __launch_bounds__(PV_W * 32 + 32 * FW, 2) fpv_k(const int8_t* __
   const int w = threadIdx.x >> 5, lane = threadIdx.x & 31;
   if (w >= PV_W) {
     if (!fa.early) asm volatile("griddepcontrol.wait;" ::: "memory");
-    const size_t slot = (((size_t)blockIdx.z * gridDim.y + blockIdx.y) * gridDim.x + blockIdx.x) * FW + (w - PV_W);
-    filler_warp<NC>(fa.c0, fa.c1, fa.tile0 + slot, &done, &done, PV_W, 0, fa.rec + slot, fa.cnt + slot);
+    att_filler<NC>(fa, (((size_t)blockIdx.z * gridDim.y + blockIdx.y) * gridDim.x + blockIdx.x) * FW + (w - PV_W), &done,
+                   PV_W);
     return;
   }
   asm volatile("griddepcontrol.wait;" ::: "memory");
@@ -557,9 +572,10 @@ static FlinTally flin_tally(const Flin& f, const std::vector<int>& ls, int n, ui
 
 // The attention blocks' filler: FW warps a block (0: dcap's own kernels), NC chains each, and every attention launch's
 // receipts (launch k = 2·layer is qk, 2·layer + 1 is pv; `per` slots each, qk's blocks · FW). Persistent on `sms` SMs
-// (sms > 0): qk's and pv's grids pg are as many blocks as fit on those SMs at once (at most their items).
+// (sms > 0): qk's and pv's grids pg are as many blocks as fit on those SMs at once (at most their items). lazy: the filler
+// warps' LAZY (filler_warp).
 struct Fatt {
-  int FW = 0, NC = 4, sms = 0;
+  int FW = 0, NC = 4, sms = 0, lazy = 0;
   size_t pg[2] = {0, 0};
   size_t per = 0;
   unsigned long long* rec = nullptr;
@@ -612,6 +628,7 @@ static size_t fatt_slots(const Fatt& a, int k, int B, int L) {
 static int g_fatt_pdl = 0;  // FATT_PDL: the attention filler blocks without PDL (0), with it (1), with early filler warps (2)
 static int g_fatt_nc = 4;   // FATT_NC: the attention filler warps' chains (fatt_built)
 static int g_fatt_per = 0;  // FATT_PERSIST: the attention blocks with filler warps persistent on the step's SMs
+static int g_fatt_lazy = 0;  // FATT_LAZY: the attention filler warps' LAZY (filler_warp)
 template <class... P, class... A>
 static void pdl_go(void (*k)(P...), dim3 grid, int threads, cudaStream_t st, A... args) {
   cudaLaunchConfig_t cfg = {};
@@ -634,10 +651,10 @@ static void fatt_go(Dev& d, const Fatt& a, int B, int L, const int8_t* K, const 
   pdl_go(fqk_k<FW, NC>, per ? dim3((unsigned)a.pg[0]) : gq, QK_W * 32 + 32 * FW, d.st, K, (const int8_t*)d.q, d.S, L, d.O,
          B * HQ * HD,
          FattArgs{g_c0, g_c1, fatt_tile0((int)kq), a.rec + kq * a.per, a.cnt + kq * a.per, early,
-                  per ? (long long)blocks(gq) : 0, (int)gq.x});
+                  per ? (long long)blocks(gq) : 0, (int)gq.x, a.lazy});
   pdl_go(fpv_k<FW, NC>, per ? dim3((unsigned)a.pg[1]) : gp, PV_W * 32 + 32 * FW, d.st, V, (const int8_t*)d.P, d.O, L,
          FattArgs{g_c0, g_c1, fatt_tile0((int)kp), a.rec + kp * a.per, a.cnt + kp * a.per, early,
-                  per ? (long long)blocks(gp) : 0, (int)gp.x});
+                  per ? (long long)blocks(gp) : 0, (int)gp.x, a.lazy});
 }
 // enqueue_att's work for `layer`, with the attention filler when a.FW > 0; false if (FW, NC) isn't built
 static bool enqueue_fatt(Dev& d, const Fatt& a, int B, int L, int layer, bool* wrapped) {
@@ -663,13 +680,16 @@ static FlinTally fatt_tally(const Fatt& a, int B, int L, int layers, int n, uint
 static int flin_gate(Dev& d) {
   int fails = 0;
   std::mt19937_64 rng(0xFA77);
-  for (const auto [fw, nc, sms] : {std::tuple{2, 4, 0}, {4, 2, 0}, {4, 4, 0}, {6, 2, 0}, {6, 4, 0}, {8, 2, 0}, {8, 4, 0},
-                                   {2, 4, 5}, {4, 2, 5}, {4, 4, 5}, {6, 2, 5}, {6, 4, 5}, {8, 2, 5}, {8, 4, 5}}) {
+  for (const auto [fw, nc, sms, lazy] :
+       {std::tuple{2, 4, 0, 0}, {4, 2, 0, 0}, {4, 4, 0, 0}, {6, 2, 0, 0}, {6, 4, 0, 0}, {8, 2, 0, 0}, {8, 4, 0, 0},
+        {2, 4, 5, 0}, {4, 2, 5, 0}, {4, 4, 5, 0}, {6, 2, 5, 0}, {6, 4, 5, 0}, {8, 2, 5, 0}, {8, 4, 5, 0},
+        {4, 2, 0, 1}, {8, 2, 0, 2}, {2, 4, 5, 1}, {4, 4, 5, 2}, {6, 2, 5, 1}, {6, 2, 5, 2}, {8, 2, 5, 1}, {8, 2, 5, 2}}) {
     Fatt a;
     fatt_prepare(a, fw, nc, 3, 1536, sms);  // persistent on 5 SMs: every block takes several items
+    a.lazy = lazy;
     CK(cudaMemset(a.rec, 0xA5, a.per * 2 * LAYERS * 8));
-    char what[64];
-    snprintf(what, sizeof what, sms ? "attention FW %d NC %d persistent" : "attention FW %d NC %d", fw, nc);
+    char what[80];
+    snprintf(what, sizeof what, "attention FW %d NC %d%s lazy %d", fw, nc, sms ? " persistent" : "", lazy);
     bool built = true;
     fails += att_gate(d, rng, "fgate", what, [&](int B, int L) {
       bool wr = false;
@@ -813,6 +833,7 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
     f.grid = got[0];
   }
   fatt_prepare(a, AFW, g_fatt_nc, B, L, g_fatt_per ? got[0] : 0);
+  a.lazy = g_fatt_lazy;
   DFill pf;
   if (fs) {
     dfill_prep();
@@ -880,7 +901,7 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
          (int)g_pdl, g_fatt_pdl, g_lt_mask, fill_sms, got[0], got[1], fs ? alone / (1024.0 * d.sms * amhz * 1e6) : 0.0, pump_share, nwin,
          fs ? pf.macs() : 0.0, fs ? 8 : 0, pbad, pump_share, lin_share + att_share + pump_share);
   printf("\"M\": %d, ", f.M);
-  printf("\"APS\": %d, \"att_grid\": [%zu, %zu], ", a.sms > 0, a.pg[0], a.pg[1]);
+  printf("\"APS\": %d, \"ALZ\": %d, \"att_grid\": [%zu, %zu], ", a.sms > 0, a.lazy, a.pg[0], a.pg[1]);
   printf("\"B\": %d, \"L\": %d, \"FW\": %d, \"NC\": %d, \"thr\": %d, \"AFW\": %d, \"ANC\": %d, "
          "\"coins\": [\"%016llx\", \"%016llx\"], \"kv_wrapped\": %s, \"step_macs\": %.6e, \"lin_macs\": %.6e, \"base_ms\": %.4f, "
          "\"base2_ms\": %.4f, \"fused0_ms\": %.4f, \"fused_ms\": %.4f, \"fused0_vs_base\": %.4f, \"slowdown\": %.4f, "
