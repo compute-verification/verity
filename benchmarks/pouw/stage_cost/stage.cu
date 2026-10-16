@@ -25,6 +25,9 @@
 //                                  commit its operands, wait DRAW_US for the draw, then the GEMM; C chunks' makespan
 //                                  against C x gemm. pipe1_draw: the draws without commitments; pipe1_hash: the
 //                                  commitments without draws
+//                         pipe_green C chunks in flight on a split: each stage's commitment and draw on an N-SM partition,
+//                                  its GEMM on the rest, ordered by events (host-launched), against C x gemm and against
+//                                  the C chunks' GEMMs alone on the split
 //                       Attention's QK^T and P.V are int8 GEMMs with the causal stage's MACs (m = M, n = M/2, k = 4096);
 //                       P.V's commitment is the per-row normalizers (256 bytes a token), since P is derived.
 //   deferred T COMP     the noised recompute of one layer's products batched over T tokens: QKV, o, gate_up, down (in row
@@ -311,12 +314,14 @@ __device__ __forceinline__ void fr_hash(const uint8_t* tpl, int nblk, int o, con
     fr_compress(st, w);
   }
 }
-// p: tables, salts, hm96 mids, my out, cs out, b || c (c written)   i: rows
+// p: tables, salts, hm96 mids, my out, cs out, b || c (c written)   i: rows (every layer's slot at once: R x slots), R (row i
+// takes salt i % R: the gate's salts stand in for each layer's)
 extern "C" __global__ void __launch_bounds__(128) fr_salt(Args a) {
   const long long i = blockIdx.x * (long long)blockDim.x + threadIdx.x;
   if (i >= a.i[0]) return;
+  const long long ri = i % a.i[1];
   const uint64_t* tables = (const uint64_t*)a.p[0];
-  const uint32_t* y = (const uint32_t*)a.p[1] + 48 * i;
+  const uint32_t* y = (const uint32_t*)a.p[1] + 48 * ri;
   const uint64_t* mid = (const uint64_t*)a.p[2];
   uint32_t yw[48];
 #pragma unroll
@@ -354,7 +359,7 @@ extern "C" __global__ void __launch_bounds__(128) fr_salt(Args a) {
   uint64_t* co = (uint64_t*)a.p[4] + 8 * i;
 #pragma unroll
   for (int k = 0; k < 8; k++) co[k] = cs[k];
-  s512_out(cs, (uint8_t*)a.p[5] + i * 128 + 64);
+  if (i < a.i[1]) s512_out(cs, (uint8_t*)a.p[5] + i * 128 + 64);
 }
 // one level of a subtree held in sh (big-endian words): threads t < n/2 hash sh[2t], sh[2t+1] into node j0/2 + t of the
 // level above, the current level being lw nodes wide at tree offset off with its parents' templates from nb
@@ -475,14 +480,15 @@ extern "C" __global__ void __launch_bounds__(128) fr_tree(Args a) {
   if (tid == 0) *counter = 0;
 }
 static bool g_fast = true;  // HASH=sz: served_zk's hm96_rows.cu as is
-static void commit_salt(const Commit& m, int slot, cudaStream_t st) {
+// the salt-only parts of `slots` layers' commitments from slot 0, in one launch
+static void commit_salt(const Commit& m, int slots, cudaStream_t st) {
   Args a{};
   const unsigned long long ps[6] = {(unsigned long long)g_tables, (unsigned long long)m.salts, (unsigned long long)g_hm_mid,
-                                    (unsigned long long)(m.my + (size_t)64 * m.R * slot),
-                                    (unsigned long long)(m.cs + (size_t)64 * m.R * slot), (unsigned long long)m.bc};
+                                    (unsigned long long)m.my, (unsigned long long)m.cs, (unsigned long long)m.bc};
   for (int j = 0; j < 6; j++) a.p[j] = ps[j];
-  a.i[0] = m.R;
-  fr_salt<<<(unsigned)((m.R + 127) / 128), 128, 0, st>>>(a);
+  const long long rows = (long long)m.R * slots;
+  a.i[0] = (int)rows; a.i[1] = m.R;
+  fr_salt<<<(unsigned)((rows + 127) / 128), 128, 0, st>>>(a);
 }
 static void commit_segs(const Commit& m, const uint8_t* data, cudaStream_t st) {
   Args a{};
@@ -555,12 +561,6 @@ static void sha_latency(Dev& d) {
   fflush(stdout);
   CK(cudaFree(out));
 }
-// a whole commitment on one stream: the salt-only part, then the rest (fast), or hm96_rows.cu's
-static void commit_full(const Commit& m, int slot, const uint8_t* data, cudaStream_t st) {
-  if (!g_fast) return commit_run(m, data, st);
-  commit_salt(m, slot, st);
-  commit_tree(m, slot, data, st);
-}
 // the commitment of the gate's rows into poisoned buffers by path (1 hm96_rows.cu, 2 fast; 0 the no-write control) equals
 // Python's leaves, b || c and root; the whole tree is copied out for the paths to be compared node by node
 static bool commit_gate(const Commit& m, int path, std::vector<uint8_t>* tree_out = nullptr) {
@@ -569,13 +569,13 @@ static bool commit_gate(const Commit& m, int path, std::vector<uint8_t>* tree_ou
   CK(cudaMemset(m.x, 0xA5, (size_t)64 * m.R));
   CK(cudaMemset(m.bc, 0xA5, (size_t)128 * m.R));
   CK(cudaMemset(m.tree, 0xA5, m.tree_bytes));
-  CK(cudaMemset(m.my, 0xA5, (size_t)64 * m.R));
-  CK(cudaMemset(m.cs, 0xA5, (size_t)64 * m.R));
+  CK(cudaMemset(m.my, 0xA5, (size_t)64 * m.R * LAYERS));
+  CK(cudaMemset(m.cs, 0xA5, (size_t)64 * m.R * LAYERS));
   if (!c.pads.empty()) CK(cudaMemcpy(m.tree + (size_t)64 * c.R, c.pads.data(), c.pads.size(), cudaMemcpyHostToDevice));
   if (path == 1) commit_run(m, rows, 0);
   if (path == 2) {
-    commit_salt(m, 0, 0);
-    commit_tree(m, 0, rows, 0);
+    commit_salt(m, LAYERS, 0);
+    commit_tree(m, LAYERS - 1, rows, 0);
   }
   CK(cudaDeviceSynchronize());
   CK(cudaGetLastError());
@@ -951,6 +951,56 @@ static void fork(cudaStream_t from, cudaStream_t to) {
   CK(cudaEventRecord(e, from));
   CK(cudaStreamWaitEvent(to, e, 0));
 }
+// gc_split's two partitions with C streams on each (stream c at priority prio + c), and n events made in each side's own
+// context (an event is recorded only on a stream of its context; any stream may wait on it); 1000 x the failing stage +
+// its error on failure
+struct Split {
+  int got[2] = {0, 0};
+  std::vector<cudaStream_t> s[2];
+  std::vector<cudaEvent_t> ev[2];
+};
+static int gc_split_n(int n_step, int C, int prio, int n, Split& g) {
+  auto dget = drv<decltype(&cuDeviceGet)>("cuDeviceGet");
+  auto res = drv<decltype(&cuDeviceGetDevResource)>("cuDeviceGetDevResource");
+  auto split = drv<decltype(&cuDevSmResourceSplitByCount)>("cuDevSmResourceSplitByCount");
+  auto gen = drv<decltype(&cuDevResourceGenerateDesc)>("cuDevResourceGenerateDesc");
+  auto mk = drv<decltype(&cuGreenCtxCreate)>("cuGreenCtxCreate");
+  auto mks = drv<decltype(&cuGreenCtxStreamCreate)>("cuGreenCtxStreamCreate");
+  auto conv = drv<decltype(&cuCtxFromGreenCtx)>("cuCtxFromGreenCtx");
+  auto push = drv<decltype(&cuCtxPushCurrent)>("cuCtxPushCurrent_v2");
+  auto pop = drv<decltype(&cuCtxPopCurrent)>("cuCtxPopCurrent_v2");
+  if (!dget || !res || !split || !gen || !mk || !mks || !conv || !push || !pop) return 1000;
+  CUdevice dev;
+  CUdevResource all{}, part[2]{};
+  unsigned nb = 1;
+  int e;
+  if ((e = dget(&dev, 0))) return 2000 + e;
+  if ((e = res(dev, &all, CU_DEV_RESOURCE_TYPE_SM))) return 2000 + e;
+  if ((e = split(&part[0], &nb, &all, &part[1], 0, (unsigned)n_step))) return 3000 + e;
+  for (int i = 0; i < 2; i++) {
+    g.got[i] = (int)part[i].sm.smCount;
+    CUdevResourceDesc desc;
+    CUgreenCtx gc;
+    CUcontext cx;
+    if ((e = gen(&desc, &part[i], 1))) return 4000 + e;
+    if ((e = mk(&gc, desc, dev, CU_GREEN_CTX_DEFAULT_STREAM))) return 5000 + e;
+    for (int c = 0; c < C; c++) {
+      CUstream s;
+      if ((e = mks(&s, gc, CU_STREAM_NON_BLOCKING, prio + c))) return 6000 + e;
+      g.s[i].push_back((cudaStream_t)s);
+    }
+    if ((e = conv(&cx, gc))) return 7000 + e;
+    if ((e = push(cx))) return 7000 + e;
+    int ee = 0;
+    for (int k = 0; k < n && !ee; k++) {
+      cudaEvent_t ev;
+      if (!(ee = cudaEventCreateWithFlags(&ev, cudaEventDisableTiming))) g.ev[i].push_back(ev);
+    }
+    if ((e = pop(&cx))) return 7000 + e;
+    if (ee) return 8000 + ee;
+  }
+  return 0;
+}
 
 // ---------------------------------------------------------------- prefill: the six stages of 32 layers of one chunk
 constexpr int NSTAGE = 6;
@@ -1012,33 +1062,39 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
     for (int l = 0; l < LAYERS; l++)
       for (int t = 0; t < NSTAGE; t++) stage_gemm(P, c, l, t, st);
   };
-  auto hashes = [&](Chunk& c, cudaStream_t st) {
-    for (int l = 0; l < LAYERS; l++)
-      for (int t = 0; t < NSTAGE; t++) commit_full(c.cm[t], l, c.op[t], st);
+  // the fast path's salt-only parts of a chunk's forward, a launch a stage for its 32 layers (salt), and a stage's
+  // commitment after it (commit); hm96_rows.cu's commitment has no such part
+  auto salt = [&](Chunk& c, int t, cudaStream_t st) { if (g_fast) commit_salt(c.cm[t], LAYERS, st); };
+  auto commit = [&](Chunk& c, int l, int t, cudaStream_t st) {
+    if (g_fast) commit_tree(c.cm[t], l, c.op[t], st);
+    else commit_run(c.cm[t], c.op[t], st);
   };
-  // ahead (the fast path): every salt-only part of the chunk's forward on a side stream at the start, each stage's
-  // commitment waiting only for its own, so they leave the critical path; otherwise each stage's whole commitment inline
+  auto hashes = [&](Chunk& c, cudaStream_t st) {
+    for (int t = 0; t < NSTAGE; t++) salt(c, t, st);
+    for (int l = 0; l < LAYERS; l++)
+      for (int t = 0; t < NSTAGE; t++) commit(c, l, t, st);
+  };
+  // ahead: the salt-only parts on a side stream at the start, each stage's first commitment waiting for its own, so they
+  // leave the critical path; otherwise inline at the start
   std::vector<cudaStream_t> side;
   for (int c = 0; c < NC; c++) side.push_back(prio_stream(std::min(hi + c, lo)));
   auto stage_seq = [&](Chunk& c, cudaStream_t st, bool hash, bool draw, cudaStream_t ahead) {
     std::vector<cudaEvent_t> ev;
-    if (hash && g_fast && ahead) {
-      fork(st, ahead);
-      for (int l = 0; l < LAYERS; l++)
-        for (int t = 0; t < NSTAGE; t++) {
-          commit_salt(c.cm[t], l, ahead);
-          cudaEvent_t e;
-          CK(cudaEventCreateWithFlags(&e, cudaEventDisableTiming));
-          CK(cudaEventRecord(e, ahead));
-          ev.push_back(e);
-        }
+    if (hash && g_fast) {
+      if (ahead) fork(st, ahead);
+      for (int t = 0; t < NSTAGE; t++) {
+        salt(c, t, ahead ? ahead : st);
+        cudaEvent_t e;
+        CK(cudaEventCreateWithFlags(&e, cudaEventDisableTiming));
+        CK(cudaEventRecord(e, ahead ? ahead : st));
+        ev.push_back(e);
+      }
     }
     for (int l = 0; l < LAYERS; l++)
       for (int t = 0; t < NSTAGE; t++) {
-        if (hash && ev.empty()) commit_full(c.cm[t], l, c.op[t], st);
-        if (hash && !ev.empty()) {
-          CK(cudaStreamWaitEvent(st, ev[(size_t)l * NSTAGE + t], 0));
-          commit_tree(c.cm[t], l, c.op[t], st);
+        if (hash) {
+          if (l == 0 && !ev.empty()) CK(cudaStreamWaitEvent(st, ev[t], 0));
+          commit(c, l, t, st);
         }
         if (draw) draw_wait<<<1, 1, 0, st>>>((unsigned long long)draw_us * 1000ull);
         stage_gemm(P, c, l, t, st);
@@ -1057,10 +1113,7 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
   add("gemm", sm, [&] { gemms(ch[0], sm); }, macs);
   add("hash", sm, [&] { hashes(ch[0], sm); }, 0);
   if (g_fast) {
-    add("salt", sm, [&] {
-      for (int l = 0; l < LAYERS; l++)
-        for (int t = 0; t < NSTAGE; t++) commit_salt(ch[0].cm[t], l, sm);
-    }, 0);
+    add("salt", sm, [&] { for (int t = 0; t < NSTAGE; t++) salt(ch[0], t, sm); }, 0);
     add("tree", sm, [&] {
       for (int l = 0; l < LAYERS; l++)
         for (int t = 0; t < NSTAGE; t++) commit_tree(ch[0].cm[t], l, ch[0].op[t], sm);
@@ -1096,7 +1149,7 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
     lat.push_back({SNAME[t], time_graph(d, G, sm, reps)});
     CK(cudaGraphExecDestroy(G.ge));
     if (!g_fast) continue;
-    const Graph S = capture(sm, [&] { for (int l = 0; l < LAYERS; l++) commit_salt(ch[0].cm[t], l, sm); });
+    const Graph S = capture(sm, [&] { salt(ch[0], t, sm); });
     salt_lat.push_back({SNAME[t], time_graph(d, S, sm, reps)});
     CK(cudaGraphExecDestroy(S.ge));
     const Graph Sg = capture(sm, [&] { for (int l = 0; l < LAYERS; l++) commit_segs(ch[0].cm[t], ch[0].op[t], sm); });
@@ -1120,7 +1173,7 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
   add("pipe1_hash", sm, [&] { stage_seq(ch[0], sm, true, false, side[0]); }, macs);
   // the commitments on a green partition of N SMs, the GEMMs on the rest (no graph: the two contexts' streams)
   std::vector<std::tuple<int, int, int, double, double, double>> green;  // N asked, gemm SMs, hash SMs, gemm alone, both, hash alone
-  for (int N : {16, 32}) {
+  for (int N : {28, 44}) {
     cudaStream_t sg = nullptr, sh = nullptr;
     int got[2] = {0, 0};
     const int e = gc_split(d.sms - N, &sg, &sh, got);
@@ -1142,6 +1195,66 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
     };
     const double ga = host_ms(true, false), both = host_ms(true, true), ha = host_ms(false, true);
     green.emplace_back(N, got[0], got[1], ga, both, ha);
+  }
+  // C chunks in flight on a split: each stage's commitment and draw on the hash partition's stream c, its GEMM on the
+  // rest's, the commitment after the stage before's GEMM (events; host-launched, against C x gemm)
+  std::vector<std::tuple<int, int, int, int, double, double>> pgreen;  // N asked, C, gemm SMs, hash SMs, GEMMs alone, pipelined
+  for (int N : {20, 28, 36, 44}) {
+    Split g;
+    int e = gc_split_n(d.sms - N, NC, hi, NC * LAYERS * NSTAGE, g);
+    if (e) {
+      fprintf(stderr, "gc_split_n(%d): %d\n", d.sms - N, e);
+      cudaGetLastError();
+      continue;
+    }
+    auto ev = [&](int side, int c, int l, int t) { return g.ev[side][(c * LAYERS + l) * NSTAGE + t]; };
+    for (int C = 2; C <= NC; C++) {
+      auto run = [&](bool hash) -> int {
+        int err;
+        if (hash)
+          for (int c = 0; c < C; c++)
+            for (int t = 0; t < NSTAGE; t++) salt(ch[c], t, g.s[1][c]);
+        for (int l = 0; l < LAYERS; l++)
+          for (int t = 0; t < NSTAGE; t++)
+            for (int c = 0; c < C; c++) {
+              cudaStream_t sh = g.s[1][c], sg = g.s[0][c];
+              if (hash) {
+                const int pl = t ? l : l - 1, pt = t ? t - 1 : NSTAGE - 1;
+                if (pl >= 0 && (err = cudaStreamWaitEvent(sh, ev(0, c, pl, pt), 0))) return err;
+                commit(ch[c], l, t, sh);
+                draw_wait<<<1, 1, 0, sh>>>((unsigned long long)draw_us * 1000ull);
+                if ((err = cudaEventRecord(ev(1, c, l, t), sh))) return err;
+                if ((err = cudaStreamWaitEvent(sg, ev(1, c, l, t), 0))) return err;
+              }
+              stage_gemm(P, ch[c], l, t, sg);
+              if (hash && (err = cudaEventRecord(ev(0, c, l, t), sg))) return err;
+            }
+        return 0;
+      };
+      auto host_ms = [&](bool hash, double* ms) -> int {
+        std::vector<double> v;
+        for (int r = 0; r < reps + 1; r++) {
+          CK(cudaDeviceSynchronize());
+          const double t0 = now_ms();
+          if (const int err = run(hash)) return err;
+          for (int c = 0; c < C; c++) {
+            CK(cudaStreamSynchronize(g.s[0][c]));
+            CK(cudaStreamSynchronize(g.s[1][c]));
+          }
+          if (r) v.push_back(now_ms() - t0);
+        }
+        std::sort(v.begin(), v.end());
+        *ms = v[v.size() / 2];
+        return 0;
+      };
+      double ga = 0, pp = 0;
+      if ((e = host_ms(false, &ga)) || (e = host_ms(true, &pp))) {
+        fprintf(stderr, "pipe_green N=%d C=%d: %d\n", N, C, e);
+        cudaGetLastError();
+        break;
+      }
+      pgreen.emplace_back(N, C, g.got[0], g.got[1], ga, pp);
+    }
   }
   printf("{\"mode\": \"prefill\", \"hash\": \"%s\", \"M\": %d, \"layers\": %d, \"draw_us\": %d, \"chunks_max\": %d, \"macs\": %.6e, "
          "\"op_bytes_token_layer\": %d, \"rejected\": %d, \"missing_algo\": %d, \"gemms\": [",
@@ -1165,6 +1278,12 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
   for (size_t i = 0; i < green.size(); i++) {
     const auto& g = green[i];
     printf("%s{\"N\": %d, \"gemm_sms\": %d, \"hash_sms\": %d, \"gemm_ms\": %.4f, \"both_ms\": %.4f, \"hash_ms\": %.4f}", i ? ", " : "",
+           std::get<0>(g), std::get<1>(g), std::get<2>(g), std::get<3>(g), std::get<4>(g), std::get<5>(g));
+  }
+  printf("], \"pipe_green\": [");
+  for (size_t i = 0; i < pgreen.size(); i++) {
+    const auto& g = pgreen[i];
+    printf("%s{\"N\": %d, \"C\": %d, \"gemm_sms\": %d, \"hash_sms\": %d, \"gemm_ms\": %.4f, \"ms\": %.4f}", i ? ", " : "",
            std::get<0>(g), std::get<1>(g), std::get<2>(g), std::get<3>(g), std::get<4>(g), std::get<5>(g));
   }
   printf("], \"node_priorities\": {");

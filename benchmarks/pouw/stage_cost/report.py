@@ -6,7 +6,8 @@
 Prefill, per chunk of M tokens (32 layers, 6 stages a layer, 192 commitments and draws a chunk):
 - serialized: (serial - gemm) / gemm, each stage's commitment then its GEMM on one stream;
 - overlapped: conc / gemm - 1, the commitments and GEMMs on two streams with no dependency (conc_lo: hashes at low priority),
-  and green N: on a partition of N SMs, against the GEMMs alone on the whole GPU;
+  and green N: on a partition of N SMs, against the GEMMs alone on the whole GPU; pipe_green: C chunks in flight with each
+  stage's commitment and draw on the N-SM partition and its GEMM on the rest, against C x gemm;
 - in flight: pipe C / (C x gemm) - 1, C chunks each committing, waiting DRAW_US, then multiplying, stage by stage; pipe 1 is a
   lone request's time to first token over the clean forward;
 - the critical path a stage: (pipe1 - gemm) / 192, and the commitment's own latency (hash_latency / 32) plus the draw;
@@ -58,6 +59,9 @@ def prefill(r: dict) -> dict:
         "green": [{"N": x["N"], "hash_sms": x["hash_sms"], "both_over_gemm_graph": x["both_ms"] / g - 1,
                    "both_over_gemm_split": x["both_ms"] / x["gemm_ms"] - 1, "gemm_split_over_full": x["gemm_ms"] / g - 1}
                   for x in r["green"]],
+        "pipe_green": [{"N": x["N"], "C": x["C"], "hash_sms": x["hash_sms"], "over_gemm_graph": x["ms"] / (x["C"] * g) - 1,
+                        "over_gemm_split": x["ms"] / x["gemm_ms"] - 1, "gemm_split_over_full": x["gemm_ms"] / (x["C"] * g) - 1}
+                       for x in r.get("pipe_green", [])],
         "pipe": {c: a[f"pipe{c}"] / (c * g) - 1 for c in (1, 2, 3) if f"pipe{c}" in a},
         "lone_ttft": a["pipe1"] / g - 1,
         "crit_ms_a_stage": (a["pipe1"] - g) / per,
@@ -137,6 +141,9 @@ def main() -> int:
             print(f"  green N={g['N']} ({g['hash_sms']} SMs): vs gemm(graph) {pct(g['both_over_gemm_graph'])}, vs gemm on split "
                   f"{pct(g['both_over_gemm_split'])}, split gemm vs full {pct(g['gemm_split_over_full'])}")
         print("  in flight: " + "  ".join(f"C={c}: {pct(v)}" for c, v in p["pipe"].items()) + f"   lone TTFT {pct(p['lone_ttft'])}")
+        for g in p["pipe_green"]:
+            print(f"  in flight on a split, C={g['C']} N={g['N']} ({g['hash_sms']} SMs): vs C x gemm(graph) {pct(g['over_gemm_graph'])}"
+                  f", vs C gemms on split {pct(g['over_gemm_split'])}, split gemms vs C x gemm {pct(g['gemm_split_over_full'])}")
         ho = p["hash_only_ms_a_stage"]
         print(f"  critical path a stage {p['crit_ms_a_stage']:.3f} ms (draw alone {p['draw_only_ms_a_stage']:.3f}"
               + (f", hash alone {ho:.3f}" if ho is not None else "") + "); hash latency: "
