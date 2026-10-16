@@ -454,7 +454,7 @@ def test_kernel_facts_decide_the_filler_entry_with_the_declaration():
     # an inactive entry that applies leaves SCORE at the next active one that does
     off = {**S.FILLER_ENTRIES, "theorem-k": {**S.FILLER_ENTRIES["theorem-k"], "active": False}}
     assert S.filler_entry("bits01", f, entries=off)["active"] == "unproven"
-    assert S.SCORER == S.V4 and all(e["active"] and e["status"] == "proved" for e in S.FILLER_ENTRIES.values())
+    assert S.SCORER == S.V5 and all(e["active"] and e["status"] == "proved" for e in S.FILLER_ENTRIES.values())
     stats = all_points()
     sc = {n: S.score(stats, S.certified(n)) for n in S.FILLER_ENTRIES}
     assert sc["chained"]["SCORE"] == sc["unproven"]["SCORE"] < sc["theorem-e"]["SCORE"] < sc["theorem-k"]["SCORE"]
@@ -648,7 +648,6 @@ def test_fixed_work_is_credited_from_checked_public_tiles_of_a_read_binary():
     h = S.honesty(v1, st, [], whole={"decode 32/2048": S.whole_of_peak(over)})
     assert not h["ok"] and h["over_peak_whole"] and not h["over_peak"]
     assert "over_peak_whole" not in S.honesty(v1, st, [])  # v3's honest gate is unchanged
-    assert S.SCORER == S.V4
 
 
 def test_record_limits_are_checked_when_the_arm_loads():
@@ -789,7 +788,7 @@ def test_the_fold_is_read_from_the_declaration_and_what_the_build_confirms():
     none = S.filler_entry_v5("bits01", split, S.fold_reading(None, 1, None, ff(1, xor1)))
     assert none["applies"] == "unproven" and none["fraction"] == 0.0 and any(
         w.startswith("fold: ") for w in none["failed"]["theorem-k"])
-    assert S.certified_v5(e)["filler"]["fraction"] == 0.45 and S.SCORER == S.V4
+    assert S.certified_v5(e)["filler"]["fraction"] == 0.45 and S.SCORER == S.V5
 
 
 def test_score_v5_is_the_measured_filler_part_plus_the_modelled_served_part():
@@ -799,14 +798,14 @@ def test_score_v5_is_the_measured_filler_part_plus_the_modelled_served_part():
     assert S.DEFER_SHOWN == pytest.approx(0.053 * 12.14 / (32 * 32 * 0.97e-3)) and 0.64 < S.DEFER_SHOWN < 0.66
     stats = all_points()
     sc = S.score_v5(stats, 0.45)
-    assert not sc["missing"] and sc["SCORE"] == pytest.approx(sc["filler_part"] + sc["served_part"])
+    assert not sc["missing"] and sc["SCORE"] == pytest.approx(sc["filler_part"] + sc["served_part_modelled"])
     assert sc["served_model"]["constants"] == {"fraction": 0.9, "EGEMM": 1.57, "DEFER_OF_PEAK": 0.71,
                                                "DEFER_SHOWN": S.DEFER_SHOWN, "DISPLACE": 1.57, "PREFILL_COINS": 0.13}
     assert set(sc["served_model"]["sources"]) == set(sc["served_model"]["constants"])
     by = {e["entry"]: e for e in sc["entries"]}
     for e in sc["entries"]:
         assert e["t1_ms"] > e["t1_measured_ms"] and e["filler_macs"] <= e["filler_measured_macs"]
-        assert e["served_part"] == pytest.approx(0.9 * e["serving_macs"] / e["capacity_macs"])
+        assert e["served_part_modelled"] == pytest.approx(0.9 * e["serving_macs"] / e["capacity_macs"])
     d = next(e for e in sc["entries"] if e["kind"] == "decode")
     v4 = S.decode_entry(stats[("decode", d["B"], d["L"])], d["B"], d["L"])
     pass_ms = 1.57 * v4["serving_macs"] / (0.71 * S.cap(v4["mhz"])) * 1e3
@@ -852,7 +851,7 @@ def test_score_tp_reads_the_slowest_rank_with_the_gates_per_rank():
     assert e["t1_ms"] == pytest.approx(42.0 + dp["added_ms"]) and e["filler_measured_macs"] == 1.5e12
     c = S.cap(2000.0) * e["t1_ms"] * 1e-3
     assert e["filler_part"] == pytest.approx(0.45 * (1.5e12 - dp["displaces"]) / c)
-    assert e["served_part"] == pytest.approx(0.9 * 1e12 / c) and e["time"] == pytest.approx(2 * e["t1_ms"] / 40.0)
+    assert e["served_part_modelled"] == pytest.approx(0.9 * 1e12 / c) and e["time"] == pytest.approx(2 * e["t1_ms"] / 40.0)
     sets = [{"dir": "a/set0", "settings": "NCCL_CGA_CLUSTER_SIZE=1 TPC_S=64", "rows": rows}]
     g = S.tp_gates(sets, {(2, 32, 2048): e}, None)
     assert all(g[k]["ok"] for k in ("slowdown", "pf_gate", "receipts", "nccl", "filler_paths")), g
