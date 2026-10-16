@@ -7,11 +7,15 @@
 // warp ranges it ran, for the map-1 tiles dfill_k runs (dtiles<NC, 1>, the same receipts):
 //   MODE 0: dfill_k's static assignment (warp w of block b runs warp range b * W + w);
 //   MODE 1: a block that finds another of the chunk's blocks on its SM exits at once, and the running blocks' warps take
-//           warp ranges from a counter until the chunk's are done.
+//           warp ranges from a counter until the chunk's are done (an exit frees the SM, and the dispatcher puts the
+//           next block there: r20261016-081635-dcc5 had 69 of 188 exit a chunk);
+//   MODE 2: a block that finds another on its SM keeps its place asleep until that one is done, and the running warps
+//           take SUB tiles of a warp range at a time from a counter (so no SM runs two filler blocks at once, and the
+//           chunk's work ends evenly over the SMs that run it).
 // The linears run on the highest-priority stream (dscore.cu's prefill workload, ABBA alone/arm over ROUNDS rounds), the
 // probe's chunks on the lowest, three queued. Each pump's last chunk has 16 receipts checked against dfill_ref.
 //
-//   hcpre_occ ROUNDS K W NC S MODE      one JSON line (map 1; DFILL_CHUNK_LOG2 sets the chunk as dfill_make does)
+//   hcpre_occ ROUNDS K W NC S MODE [SUB]   one JSON line (map 1; DFILL_CHUNK_LOG2 sets the chunk as dfill_make does)
 #include <sys/random.h>
 #define main dcap_main
 #include "../decode_capacity/dcap.cu"
@@ -78,7 +82,7 @@ __device__ unsigned long long occ_next;
 // log entry a block: smid, start ns, end ns, (ran ? 1 : 0) | warp ranges run << 1
 template <int NC, int MODE>
 __global__ void __launch_bounds__(512) occ_k(uint64_t c0, uint64_t c1, unsigned long long tile0, int tiles, int steps,
-                                             unsigned long long* __restrict__ rec, unsigned long long* lg) {
+                                             unsigned long long* __restrict__ rec, unsigned long long* lg, int sub) {
   unsigned smid;
   unsigned long long ts, te;
   asm volatile("mov.u32 %0, %%smid;" : "=r"(smid));
@@ -89,6 +93,31 @@ __global__ void __launch_bounds__(512) occ_k(uint64_t c0, uint64_t c1, unsigned 
   if (MODE == 0) {
     dtiles<NC, 1>(c0, c1, tile0, tiles, steps, rec);
     runs = 1 | ((unsigned long long)nw << 1);
+  } else if (MODE == 2) {
+    if (threadIdx.x == 0)
+      while (atomicCAS(&occ_sm[smid], 0, 1) != 0) __nanosleep(4000);
+    __syncthreads();
+    const int m = sub < tiles ? sub : tiles, per_w = tiles / m;
+    const unsigned long long units = (unsigned long long)gridDim.x * nw * per_w;
+    const unsigned long long wid = (unsigned long long)blockIdx.x * nw + w;
+    int done = 0;
+    for (;;) {
+      unsigned long long u = 0;
+      if (lane == 0) u = atomicAdd(&occ_next, 1ull);
+      u = __shfl_sync(0xffffffffu, u, 0);
+      if (u >= units) break;
+      const unsigned long long first = (u / per_w) * tiles + (u % per_w) * m;
+      const unsigned long long off = first - wid * m;
+      dtiles<NC, 1>(c0, c1, tile0 + off, m, steps, rec + off);
+      done++;
+    }
+    if (lane == 0 && done) atomicAdd(&e[3], (unsigned long long)done << 1);
+    __syncthreads();
+    if (threadIdx.x == 0) {
+      atomicOr(&e[3], (e[3] >> 1) ? 1ull : 0ull);
+      atomicExch(&occ_sm[smid], 0);
+    }
+    runs = 0;
   } else {
     if (threadIdx.x == 0) e[3] = atomicAdd(&occ_sm[smid], 1) == 0 ? 1 : 0;
     __syncthreads();
@@ -123,23 +152,24 @@ __global__ void __launch_bounds__(512) occ_k(uint64_t c0, uint64_t c1, unsigned 
 
 struct Occ {
   DFill f;
-  int mode;
+  int mode, sub;
   unsigned long long* log;  // NLOG chunks x grid x 4
 };
 static void occ_launch(const Occ& o, long long k, cudaStream_t s) {
   const unsigned long long t0 = o.f.base + (unsigned long long)k * o.f.per();
   unsigned long long* lg = o.log + (unsigned long long)(k % NLOG) * o.f.grid * 4;
   const dim3 gr(o.f.grid), bl(32 * o.f.W);
-  if (o.mode == 1) {
+  if (o.mode != 0) {
     CK(cudaMemsetAsync(lg, 0, (size_t)o.f.grid * 4 * sizeof(unsigned long long), s));
     void* p = nullptr;
     CK(cudaGetSymbolAddress(&p, occ_next));
     CK(cudaMemsetAsync(p, 0, sizeof(unsigned long long), s));
   }
-#define OCC_CASE(NC_)                                                                                      \
-  case NC_:                                                                                                \
-    if (o.mode == 0) occ_k<NC_, 0><<<gr, bl, 0, s>>>(o.f.c0, o.f.c1, t0, o.f.tiles, o.f.S, o.f.rec, lg);    \
-    else occ_k<NC_, 1><<<gr, bl, 0, s>>>(o.f.c0, o.f.c1, t0, o.f.tiles, o.f.S, o.f.rec, lg);                \
+#define OCC_CASE(NC_)                                                                                       \
+  case NC_:                                                                                                 \
+    if (o.mode == 0) occ_k<NC_, 0><<<gr, bl, 0, s>>>(o.f.c0, o.f.c1, t0, o.f.tiles, o.f.S, o.f.rec, lg, o.sub); \
+    else if (o.mode == 1) occ_k<NC_, 1><<<gr, bl, 0, s>>>(o.f.c0, o.f.c1, t0, o.f.tiles, o.f.S, o.f.rec, lg, o.sub); \
+    else occ_k<NC_, 2><<<gr, bl, 0, s>>>(o.f.c0, o.f.c1, t0, o.f.tiles, o.f.S, o.f.rec, lg, o.sub);         \
     break;
   switch (o.f.NC) {
     OCC_CASE(1) OCC_CASE(2) OCC_CASE(4)
@@ -229,9 +259,9 @@ static void print_stat(const char* key, const Stat& s, int sms) {
 }
 
 int main(int argc, char** argv) {
-  if (argc < 7) { fprintf(stderr, "hcpre_occ ROUNDS K W NC S MODE\n"); return 1; }
+  if (argc < 7) { fprintf(stderr, "hcpre_occ ROUNDS K W NC S MODE [SUB]\n"); return 1; }
   const int rounds = atoi(argv[1]), K = atoi(argv[2]), W = atoi(argv[3]), NC = atoi(argv[4]), S = atoi(argv[5]),
-            mode = atoi(argv[6]);
+            mode = atoi(argv[6]), sub = argc > 7 ? atoi(argv[7]) : 4;
   setenv("DFILL_MAP", "1", 1);
   Dev d;
   if (int rc = setup(d, true, (size_t)1 << 20)) return rc;
@@ -242,7 +272,8 @@ int main(int argc, char** argv) {
   CK(cudaStreamCreateWithPriority(&fs, cudaStreamNonBlocking, lo));
   uint64_t c[2];
   if (getrandom(c, sizeof c, 0) != (ssize_t)sizeof c) { fprintf(stderr, "getrandom\n"); return 2; }
-  Occ o{dfill_make(d.sms, W, NC, S, c[0], c[1]), mode, nullptr};
+  Occ o{dfill_make(d.sms, W, NC, S, c[0], c[1]), mode, sub, nullptr};
+  if (mode == 2 && (sub < 1 || o.f.tiles % std::min(sub, o.f.tiles))) { fprintf(stderr, "SUB must divide tiles\n"); return 1; }
   o.f.base = 1ull << 40;
   const size_t lgn = (size_t)NLOG * o.f.grid * 4;
   CK(cudaMalloc(&o.log, lgn * sizeof(unsigned long long)));
@@ -308,9 +339,9 @@ int main(int argc, char** argv) {
       al[r] = time_work(d, work, K);
     }
   }
-  printf("{\"mode\": \"occ\", \"occ_mode\": %d, \"sms\": %d, \"W\": %d, \"NC\": %d, \"S\": %d, \"tiles\": %d, \"grid\": %d, "
+  printf("{\"mode\": \"occ\", \"occ_mode\": %d, \"sub\": %d, \"sms\": %d, \"W\": %d, \"NC\": %d, \"S\": %d, \"tiles\": %d, \"grid\": %d, "
          "\"chunk_macs\": %.6e, \"receipts_checked\": %lld, \"receipts_bad\": %lld, \"alone_mac_per_s\": %.6e, ",
-         mode, d.sms, W, NC, S, o.f.tiles, o.f.grid, o.f.macs(), checked, bad, alone_rate);
+         mode, sub, d.sms, W, NC, S, o.f.tiles, o.f.grid, o.f.macs(), checked, bad, alone_rate);
   print_stat("alone_occ", sa, d.sms);
   printf(", \"rounds\": [");
   for (int r = 0; r < rounds; r++) {
