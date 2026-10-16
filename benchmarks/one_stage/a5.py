@@ -1,31 +1,41 @@
-"""One-stage audit, run A5: a deferred Commit's window, a stand-in. The registration is over serving rows of the Commit's own
-values, committed after serving from its sealed replay bundle opened against its record and bound to its vllm-v1 run root, and
-the drawn units go to M0's prover and the Lean verifier of record. Serving's commitment is the vllm-v1 roots, so the window is
-core's `stand-in`, its link to them provenance (`of`: the run root, the bundle's manifest digest and `verity-vllm serving-rows`):
-that the rows hold the values under the vllm-v1 roots is the committer's opening, not proved. It becomes `served` once serving's
-record is frame-v3-sha512 / hm96-sha512 itself, or once the circuit opens the vllm-v1 SHA-256 leaves (`pipeline.deferred_rows`).
+"""One-stage audit, run A5: a deferred Commit's window, a stand-in, or a TP Commit's windows, one per rank, each `served`. The
+registration is over serving rows of the Commit's own values, and the drawn units go to M0's prover and the Lean verifier of record.
+
+A deferred Commit's window is committed after serving from its sealed replay bundle opened against its record and bound to its
+vllm-v1 run root. Serving's commitment is the vllm-v1 roots, so the window is core's `stand-in`, its link to them provenance (`of`: the
+run root, the bundle's manifest digest and `verity-vllm serving-rows`): that the rows hold the values under the vllm-v1 roots is the
+committer's opening, not proved. It becomes `served` once serving's record is frame-v3-sha512 / hm96-sha512 itself, or once the circuit
+opens the vllm-v1 SHA-256 leaves (`pipeline.deferred_rows`).
+
+A TP Commit's windows (`tp-commit --serving-rows`, `pipeline.tp.serving_rows`) are `served`: each rank commits its window from its own
+committed store while serving, after every rank's root is final and before any draw, under ``run = <TP run root>/rank<r>``. Serving's
+own commitment, made before any draw, is what the audit holds; that those rows are the values under the ranks' vllm-v1 roots is
+the rank's claim, not proved (the profile makes no claim that they are, `pipeline.serving_rows`).
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm \\
-      python benchmarks/one_stage/a5.py --bundle DIR --row-dir DIR --partition F --window DIR --template-sets DIR \\
-      --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out DIR [--delta 0.5]
+      python benchmarks/one_stage/a5.py --bundle DIR --row-dir DIR --window DIR \\
+        --partition F --template-sets DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out DIR [--delta 0.5]
+      python benchmarks/one_stage/a5.py --tp-commit DIR --build-root DIR --workload F --windows DIR [--ranks 0,1,...] \\
+        --partition F --template-sets DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out DIR [--delta 0.5]
 
-* **Serving's files.** `--window DIR` is what `verity-vllm serving-rows` wrote: `registration.json` (core's v1 record, window
-  kind `stand-in`, its run the Commit's run root, its `of` and `link` `deferred_rows.stand_in`'s), `window.json`, and per member
-  k `m<k>-public.bin` and `m<k>-private.bin` (prover only). The prover wraps each member's bodies under the circuit for its
-  template (`serving_rows.flock_input_files`).
-* **The verifier's own copies.** `--bundle` and `--row-dir` are the deferred Commit's record and its Build's Programs of record;
-  the verifier derives its window from them alone (`deferred_rows.window_of_record`): the population program and partition
-  over the served Programs, the law, and the run root of record. It composes each member's circuit itself from an input set
-  of its template under `--template-sets` (the lowering is all it reads; the values are never used), bound to its partition
-  and program. It holds every public file to that circuit, its unit indices and classes, and the registered roots and served
-  domains. Then R1-R7 run over the one registration with the leaf layer over the public bodies it holds
-  (`serving_rows.leaf_layer`), and the window is held to its own link (`source`: a stand-in whose run, `of` and `link` are
-  `deferred_rows.stand_in` over the run root of record and the digest of the bundle's manifest it opened).
-* **One draw** by the registered law (the partition file's `subset:k`) over the whole population, made by the verifier's
-  Lean `flock-verify draw`. Each member's server
-  serves its share (`serve --draw-file`). The sessions are `--zk` (the masked protocol), because Lean accepts a subset draw
-  only under `--zk` (verifier PROTOCOL §16.15). Lean `verify --zk` holds each session with `--partition` and `--program`
-  (units derived).
+* **Serving's files.** `--window DIR` (a TP Commit: `--windows DIR`'s `rank<r>/`) is what serving wrote: `registration.json` (core's
+  v1 record), `window.json`, and per member k `m<k>-public.bin` and `m<k>-private.bin` (prover only). The prover wraps each member's
+  bodies under the circuit for its template (`serving_rows.flock_input_files`).
+* **The verifier's own copies.** A deferred Commit: `--bundle` and `--row-dir` are its record and its Build's Programs of record, and
+  the verifier derives its window from them alone (`deferred_rows.window_of_record`). A TP Commit: `--tp-commit` is its record (its
+  `--out`: `runs.jsonl`, `versions.json`), `--build-root` holds each rank's Programs of record in `rank<r>/`, and `--workload` is the
+  workload file the record served; the verifier derives rank r's window from them alone (`tp.serving_rows.window_of_record`). Either
+  window is the population program and partition over the served Programs, the law and the run of record. The verifier composes
+  each member's circuit itself from an input set of its template under `--template-sets` (the lowering is all it reads; the values
+  are never used), bound to its partition and program. It holds every public file to that circuit, its unit indices and classes, and
+  the registered roots and served domains. Then R1-R7 run over the registration with the leaf layer over the public bodies it holds
+  (`serving_rows.leaf_layer`), and the window is held to its own source (`source`: a stand-in whose run, `of` and `link` are
+  `deferred_rows.stand_in` over the run root of record and the digest of the bundle's manifest it opened; a TP rank's, `served`, its
+  run, `tp` and served Programs the record's, `tp.serving_rows.source`).
+* **One draw per window** by the registered law (the partition file's `subset:k`) over the window's whole population, made by the
+  verifier's Lean `flock-verify draw`; a TP Commit draws each rank's window on its own. Each member's server serves its share (`serve
+  --draw-file`). The sessions are `--zk` (the masked protocol), because Lean accepts a subset draw only under `--zk` (verifier
+  PROTOCOL §16.15). Lean `verify --zk` holds each session with `--partition` and `--program` (units derived).
 """
 from __future__ import annotations
 
@@ -37,6 +47,7 @@ import shutil
 import sys
 import time
 from pathlib import Path
+from typing import Callable
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -48,6 +59,9 @@ from verity.core.protocols.sampled_proofs.one_stage import partition as P, regis
 from verity_vllm.commit import serving_rows as CS  # noqa: E402
 from verity_vllm.pipeline import deferred_rows as DRW  # noqa: E402
 from verity_vllm.pipeline import replay_bundle as RB  # noqa: E402
+from verity_vllm.pipeline.tp import serving_rows as SRT  # noqa: E402
+
+RANK_PORTS = 16
 
 
 def template_sets(root: Path) -> dict[str, tuple[Path, object]]:
@@ -74,34 +88,19 @@ def link(src: Path, dst: Path) -> None:
         shutil.copyfile(src, dst)
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--bundle", required=True, help="the deferred Commit's sealed replay bundle (<commit out>/replay_bundle_p<pair>)")
-    ap.add_argument("--row-dir", required=True, help="the row dir of the Build's Programs of record")
-    ap.add_argument("--partition", required=True, help="the verifier's partition file: {templates, law, scope?}")
-    ap.add_argument("--window", required=True, help="serving's window (verity-vllm serving-rows --out)")
-    ap.add_argument("--template-sets", required=True, help="one input set per member template, for the lowering")
-    ap.add_argument("--m0-pythonpath", required=True)
-    ap.add_argument("--bin", required=True)
-    ap.add_argument("--lean", required=True)
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--delta", type=float, default=0.5)
-    ap.add_argument("--port", type=int, default=7551)
-    a = ap.parse_args()
-    out, served = Path(a.out), Path(a.window)
+def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served: Path, source: Callable[[dict], dict], port: int,
+          summary: dict, more_negatives: dict | None = None) -> tuple[dict, bool]:
+    """One window's audit: serving's window ``served`` held to the verifier's own ``mine`` (and its registration's ``window`` to
+    ``source``), one Lean draw by its law, a `--zk` session per member with drawn units on ports from ``port``, Lean's verdicts, the
+    audit record and the negatives (``more_negatives`` beside them), all under ``out``; -> its summary and whether it was accepted
+    with every negative refused."""
     out.mkdir(parents=True, exist_ok=True)
-
-    # the verifier's own window, from the Commit's record and the Build's Programs of record
-    t0 = time.time()
-    mine = DRW.window_of_record(a.bundle, a.row_dir, a.partition)
     program, query, part, pd, n_all, law = mine.program, mine.query, mine.partition, mine.partition_digest, mine.population, mine.law
     if law.get("law") != "subset":
         raise SystemExit(f"a5 draws by the subset law; the partition file's is {law}")
     want = CS.expected_ports(mine)
-    sets = template_sets(Path(a.template_sets))
-    summary: dict = {"run_root": mine.run, "population": n_all, "partition": pd, "law": law, "delta": a.delta,
-                     "members": [{"k": k, "template": m.template, "n": m.n, "base": m.base} for k, m in enumerate(mine.members)],
-                     "verifier_window_s": round(time.time() - t0, 2)}
+    summary.update({"run_root": mine.run, "population": n_all, "partition": pd, "law": law, "delta": a.delta,
+                    "members": [{"k": k, "template": m.template, "n": m.n, "base": m.base} for k, m in enumerate(mine.members)]})
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
     (out / "program.json").write_bytes(canonical_json(encode_program(program)))
 
@@ -115,7 +114,7 @@ def main() -> int:
             summary["refused"] = {"no-template-set": m.template}
             (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
             print("A5 " + json.dumps(summary["refused"]))
-            return 1
+            return summary, False
         set_dir, defn = sets[m.template]
         st_dir = out / f"m{k}"
         st_dir.mkdir(parents=True, exist_ok=True)
@@ -140,11 +139,11 @@ def main() -> int:
               "classes": header["units"].get("classes") == [made.get("class_sha512")] * m.n,
               "template_program": a0.template_program_ok(meta, defn),
               "no_shared_rows": "shared_rows" not in header}
-        for port in fv["roots"]:
-            name = m.port(port)
+        for p_name in fv["roots"]:
+            name = m.port(p_name)
             reg = next((r for r in rec["roots"] if r["port"] == name), None)
-            ok[f"root:{port}"] = (name in want and reg is not None and reg["root"] == fv["roots"][port]
-                                  and reg["domain"] == fv["domain_ids"][port] == want[name]["domain"])
+            ok[f"root:{p_name}"] = (name in want and reg is not None and reg["root"] == fv["roots"][p_name]
+                                    and reg["domain"] == fv["domain_ids"][p_name] == want[name]["domain"])
         checks[f"m{k}"] = {"ok": all(ok.values()), "codes": [c for c, v in ok.items() if not v], "detail": {}}
         publics[m.template] = body(st_dir / f"pub-{m.n}.bin")
         members.append({"k": k, "m": m, "defn": defn, "header": header,
@@ -153,13 +152,8 @@ def main() -> int:
                         "compose_s": compose_s, "pin": made["pin"], "class": made.get("class_sha512")})
     leaf_layer = CS.leaf_layer(publics)
     checks["registration"] = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer).to_json()
-    w = rec.get("window", {})
-    mine_link = DRW.stand_in(mine.run, hashlib.sha256((Path(a.bundle) / RB.MANIFEST).read_bytes()).hexdigest())
-    src = {"kind": w.get("kind") == "stand-in", "run": w.get("run") == mine.run, "of": w.get("of") == mine_link["of"],
-           "link": w.get("link") == mine_link["link"]}
-    checks["source"] = {"ok": all(src.values()), "codes": [c for c, v in src.items() if not v],
-                        "detail": {"kind": w.get("kind"), "run": w.get("run"), "of": w.get("of")}}
-    summary["source"] = w.get("kind")
+    checks["source"] = source(rec.get("window", {}))
+    summary["source"] = rec.get("window", {}).get("kind")
     receipt = R.receipt(rec, "one-stage-e2e verifier (a5.py)")
     (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
     summary.update(registration=R.digest(rec), leaf_layer=leaf_layer, checks_before_draw={c: v["ok"] for c, v in checks.items()},
@@ -170,7 +164,7 @@ def main() -> int:
         summary["checks"] = checks
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
         print("A5 " + json.dumps({"refused_before_draw": summary["checks_before_draw"], "checks": checks}, default=str))
-        return 1
+        return summary, False
 
     # one draw over the whole population; each member serves its share under --zk
     p = a0.run([a.lean, "draw", "--population", str(n_all), "--k", str(law["k"])], out / "draw.log")
@@ -187,12 +181,12 @@ def main() -> int:
         sdir.mkdir(parents=True, exist_ok=True)
         (sdir / "draw.json").write_text(json.dumps({"law": "subset", "population": m.n, "k": len(local), "units": local}, sort_keys=True))
         t = time.time()
-        record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", a.port + k, sdir, draw_file=sdir / "draw.json", zk=True)
+        record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + k, sdir, draw_file=sdir / "draw.json", zk=True)
         session_s = round(time.time() - t, 1)
         draw_t = (record or {}).get("unit_draw") or {}
         v = V.check_draw(draw_t, {"population": m.n}, {"law": "subset", "k": len(local)})
         served_units += [m.base + u for u in draw_t.get("units", [])]
-        session_roots.update({m.port(port): r for port, r in ((live or {}).get("roots") or {}).items()})
+        session_roots.update({m.port(p_name): r for p_name, r in ((live or {}).get("roots") or {}).items()})
         proved += a0.proved_units(mm["header"], live or {})
         instances += (live or {}).get("instances", 0)
         lean_u = a0.lean_draw_test(a.lean, [{"record": draw_t or None, "statement": (live or {}).get("unit_draw"),
@@ -215,7 +209,7 @@ def main() -> int:
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
 
     # negatives: each re-decides one input altered
-    neg: dict[str, dict] = {}
+    neg: dict[str, dict] = dict(more_negatives or {})
     defs = [(mm["defn"], mm["m"].n) for mm in members]
     fewer = P.mixed_population_program([(d, n - (1 if i == 0 else 0)) for i, (d, n) in enumerate(defs)]) if len(defs) > 1 \
         else P.population_program(defs[0][0], defs[0][1] - 1)
@@ -244,7 +238,85 @@ def main() -> int:
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     ok = bool(result.get("accepted")) and all(summary["negatives"].values())
     print("A5 " + json.dumps({x: summary[x] for x in ("source", "audit", "draw", "draw_counts", "negatives")}, sort_keys=True, default=str))
-    return 0 if ok else 1
+    return summary, ok
+
+
+def deferred(a: argparse.Namespace, sets: dict, out: Path) -> bool:
+    t0 = time.time()
+    mine = DRW.window_of_record(a.bundle, a.row_dir, a.partition)
+    mine_link = DRW.stand_in(mine.run, hashlib.sha256((Path(a.bundle) / RB.MANIFEST).read_bytes()).hexdigest())
+
+    def source(w: dict) -> dict:
+        src = {"kind": w.get("kind") == "stand-in", "run": w.get("run") == mine.run, "of": w.get("of") == mine_link["of"],
+               "link": w.get("link") == mine_link["link"]}
+        return {"ok": all(src.values()), "codes": [c for c, v in src.items() if not v],
+                "detail": {"kind": w.get("kind"), "run": w.get("run"), "of": w.get("of")}}
+
+    _summary, ok = audit(a, sets, out, mine, Path(a.window), source, a.port, {"verifier_window_s": round(time.time() - t0, 2)})
+    return ok
+
+
+def tp(a: argparse.Namespace, sets: dict, out: Path) -> bool:
+    """Every rank's window of the TP Commit ``--tp-commit`` (or the ranks ``--ranks``), each audited on its own under ``out/rank<r>``,
+    and ``out/summary.json`` over them; a rank's audit also refuses another rank's registration as its own."""
+    rec = SRT.record(a.tp_commit)
+    world = int(rec["world"])
+    ranks = [int(x) for x in a.ranks.split(",")] if a.ranks else list(range(world))
+    windows = Path(a.windows)
+    summary: dict = {"tp_run_root": rec["tp_run_root"], "world": world, "roots": rec["roots"], "ranks": {}}
+    ok_all = True
+    for r in ranks:
+        t0 = time.time()
+        mine, held = SRT.window_of_record(a.tp_commit, r, a.partition, a.build_root, a.workload)
+        more: dict[str, dict] = {}
+        theirs = windows / f"rank{(r + 1) % world}" / "registration.json"
+        if world > 1 and theirs.exists():
+            v = SRT.source(json.loads(theirs.read_text()).get("window"), mine, held)
+            more["registration-of-another-rank (source)"] = {"refused": not v["ok"], "codes": v["codes"]}
+        s, ok = audit(a, sets, out / f"rank{r}", mine, windows / f"rank{r}", lambda w, mine=mine, held=held: SRT.source(w, mine, held),
+                      a.port + RANK_PORTS * r, {"rank": r, "tp": held["tp"], "verifier_window_s": round(time.time() - t0, 2)}, more)
+        summary["ranks"][str(r)] = {"ok": ok, "seconds": round(time.time() - t0, 1),
+                                    **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused",
+                                                             "checks_before_draw", "audit", "draw", "draw_counts", "negatives",
+                                                             "verifier_window_s")}}
+        ok_all = ok_all and ok
+        (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+    summary["accepted"] = ok_all and sorted(summary["ranks"]) == sorted(str(r) for r in ranks)
+    (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+    print("A5-TP " + json.dumps({"tp_run_root": rec["tp_run_root"], "accepted": summary["accepted"],
+                                 "ranks": {r: {x: s.get(x) for x in ("ok", "population", "draw_counts", "seconds")} for r, s in summary["ranks"].items()}},
+                                sort_keys=True, default=str))
+    return summary["accepted"]
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--bundle", help="a deferred Commit's sealed replay bundle (<commit out>/replay_bundle_p<pair>)")
+    ap.add_argument("--row-dir", help="with --bundle: the row dir of the Build's Programs of record")
+    ap.add_argument("--window", help="with --bundle: serving's window (verity-vllm serving-rows --out)")
+    ap.add_argument("--tp-commit", help="a TP Commit's record (its --out: runs.jsonl, versions.json)")
+    ap.add_argument("--build-root", help="with --tp-commit: each rank's Programs of record in rank<r>/")
+    ap.add_argument("--workload", help="with --tp-commit: the workload file the Commit served")
+    ap.add_argument("--windows", help="with --tp-commit: serving's windows, rank<r>/ each (the --serving-rows request's dir)")
+    ap.add_argument("--ranks", default=None, help="with --tp-commit: the ranks to audit, comma-separated (default every rank)")
+    ap.add_argument("--partition", required=True, help="the verifier's partition file: {templates, law, scope?}")
+    ap.add_argument("--template-sets", required=True, help="one input set per member template, for the lowering")
+    ap.add_argument("--m0-pythonpath", required=True)
+    ap.add_argument("--bin", required=True)
+    ap.add_argument("--lean", required=True)
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--delta", type=float, default=0.5)
+    ap.add_argument("--port", type=int, default=7551)
+    a = ap.parse_args()
+    if bool(a.bundle) == bool(a.tp_commit):
+        ap.error("give either --bundle (a deferred Commit) or --tp-commit (a TP Commit)")
+    need = ("row_dir", "window") if a.bundle else ("build_root", "workload", "windows")
+    if missing := [f"--{x.replace('_', '-')}" for x in need if not getattr(a, x)]:
+        ap.error(f"{'--bundle' if a.bundle else '--tp-commit'} needs {' '.join(missing)}")
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    sets = template_sets(Path(a.template_sets))
+    return 0 if (deferred(a, sets, out) if a.bundle else tp(a, sets, out)) else 1
 
 
 if __name__ == "__main__":
