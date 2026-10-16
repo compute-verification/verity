@@ -516,4 +516,309 @@ theorem split {H : Msg → Msg} {D : Deploy Coin Col T} [DecidableEq Col] [Zero 
 
 end Split
 
+/-! ## The unions' sizes, against the waits' slack -/
+
+theorem sum_range_getD : ∀ l : List ℕ, ∑ v ∈ range l.length, l.getD v 0 = l.sum
+  | [] => by simp
+  | a :: l => by
+    rw [List.length_cons, sum_range_succ', List.sum_cons]
+    simp only [List.getD_cons_succ, List.getD_cons_zero, sum_range_getD l]
+    omega
+
+/-- The choices of one proof unit in each replay unit of `B` number at most `2^{n_PU}`. -/
+theorem card_choices_le {Pt : Partition} {B : Finset ℕ} (hB : B ⊆ range Pt.rus.length) :
+    Fintype.card ((v : B) → Fin (Pt.sizes.getD v 0)) ≤ 2 ^ Pt.sizes.sum := by
+  rw [Fintype.card_pi]
+  simp only [Fintype.card_fin]
+  have hlen : Pt.rus.length = Pt.sizes.length := by simp [Partition.sizes]
+  calc ∏ v : B, Pt.sizes.getD v 0 ≤ ∏ v : B, 2 ^ Pt.sizes.getD v 0 :=
+        Finset.prod_le_prod fun v _ => Nat.lt_two_pow_self.le
+    _ = 2 ^ ∑ v : B, Pt.sizes.getD v 0 := Finset.prod_pow_eq_pow_sum _ _ _
+    _ ≤ 2 ^ Pt.sizes.sum := by
+      refine Nat.pow_le_pow_right (by norm_num) ?_
+      rw [Finset.sum_coe_sort B (fun v => Pt.sizes.getD v 0), ← sum_range_getD, ← hlen]
+      exact sum_le_sum_of_subset hB
+
+theorem card_S₁_le (d : Design) (Pt : Partition) (δ : ℝ) : (S₁ d Pt δ).card ≤ 2 ^ Pt.rus.length :=
+  (card_filter_le _ _).trans (by rw [card_powerset, card_range])
+
+/-- At most `2^m` sets, `m ≤ M + 1`, spread over `k = 2^40·(M + 1)` accepted runs cost at most the slack. -/
+theorem card_rpow_le_slack {N m M : ℕ} (hN : N ≤ 2 ^ m) (hm : m ≤ M + 1) :
+    (N : ℝ) ^ (1 / ((2 ^ 40 * (M + 1) : ℕ) : ℝ)) ≤ slack := by
+  have hk : (0 : ℝ) < ((2 ^ 40 * (M + 1) : ℕ) : ℝ) := by positivity
+  calc (N : ℝ) ^ (1 / ((2 ^ 40 * (M + 1) : ℕ) : ℝ)) ≤ ((2 : ℝ) ^ m) ^ (1 / ((2 ^ 40 * (M + 1) : ℕ) : ℝ)) :=
+        Real.rpow_le_rpow (Nat.cast_nonneg _) (by exact_mod_cast hN) (by positivity)
+    _ = (2 : ℝ) ^ ((m : ℝ) * (1 / ((2 ^ 40 * (M + 1) : ℕ) : ℝ))) := by
+        rw [← Real.rpow_natCast, ← Real.rpow_mul (by norm_num)]
+    _ ≤ slack := by
+        unfold slack
+        refine Real.rpow_le_rpow_of_exponent_le (by norm_num) ?_
+        rw [Real.rpow_neg (by norm_num), mul_one_div, div_le_iff₀ hk]
+        have hm' : (m : ℝ) ≤ M + 1 := by exact_mod_cast hm
+        push_cast
+        norm_num
+        nlinarith
+
+/-! ## The failure event's probability -/
+
+section Bound
+
+variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+/-- The slack bound at the waits' `k`. -/
+theorem rpow_k_le_slack (D : Deploy Coin Col T) (x : Msg) {N m : ℕ} (hN : N ≤ 2 ^ m)
+    (hm : m ≤ nRU D x + nPU D x + 1) : (N : ℝ) ^ (1 / (D.k x : ℝ)) ≤ slack := by
+  unfold Deploy.k
+  exact card_rpow_le_slack hN hm
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+theorem nRU_eq {D : Deploy Coin Col T} {x : Msg} {s : Stmt} {Pt : Partition} (hs : D.parse x = some s)
+    (hPt : D.partition s.prog s.query = some Pt) : nRU D x = Pt.rus.length := by
+  simp only [nRU, hs, Deploy.part, hPt, Option.getD_some]
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+theorem nPU_eq {D : Deploy Coin Col T} {x : Msg} {s : Stmt} {Pt : Partition} (hs : D.parse x = some s)
+    (hPt : D.partition s.prog s.query = some Pt) : nPU D x = Pt.sizes.sum := by
+  simp only [nPU, hs, Deploy.part, hPt, Option.getD_some]
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+theorem γF_nonneg (D : Deploy Coin Col T) (x : Msg) : 0 ≤ γF D x := by
+  unfold γF; positivity
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+theorem k_pos (D : Deploy Coin Col T) (x : Msg) : 0 < D.k x := by
+  unfold Deploy.k; positivity
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+theorem cap_pos (D : Deploy Coin Col T) (x : Msg) : 0 < D.cap x := by
+  unfold Deploy.cap; exact Nat.mul_pos (by positivity) (k_pos D x)
+
+theorem Pr_or_le {α : Type} [Fintype α] {p q r : α → Prop} {a b : ℝ} (h : ∀ s, p s → q s ∨ r s)
+    (hq : Pr q ≤ a) (hr : Pr r ≤ b) : Pr p ≤ a + b :=
+  (Pr_mono h).trans ((Pr_union_le q r).trans (add_le_add hq hr))
+
+omit [Inhabited Coin] in
+/-- **One outer run's inner wait**: at first-stage coins `r` where the second stage misses a fixed proof unit of each
+replay unit of `B` with probability at most `esc`, and the checked unit any selection picks finds no witness with
+probability at most `κs`, the inner wait (times its acceptance) comes up short or keeps only runs that miss or fail,
+for some choice, with probability at most `2k/K + e^{−k/8} + c·(esc + κs)`. -/
+theorem inner_bad_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
+    (run' : (Fin (D.V.k x) → Coin) → Trace) (Pt : Partition) (hPU : nPU D x = Pt.sizes.sum) {B : Finset ℕ}
+    (hB : B ⊆ range Pt.rus.length) (r : Fin (D.V.k x) → Coin) {esc κs : ℝ} (hesc0 : 0 ≤ esc) (hκs0 : 0 ≤ κs)
+    (hesc : ∀ f : ℕ → ℕ, (∀ v ∈ B, f v < Pt.sizes.getD v 0) →
+      Pr (fun d : Fin (D.V.k x) → Coin => ∀ v ∈ B, ∀ p : Fin (nPU D x),
+        (D.checked x (forkOn (D.stage2 x) r d))[p.val]? ≠ some (v, f v)) ≤ esc)
+    (hsess : ∀ sel : List (ℕ × ℕ) → Option (Fin (nPU D x)),
+      Pr (fun p : (Fin (D.V.k x) → Coin) × (Fin (nPU D x) → D.UnitCoins x) =>
+        (run' (forkOn (D.stage2 x) r p.1)).out = .acc ∧
+          ∃ i, sel (D.checked x (forkOn (D.stage2 x) r p.1)) = some i ∧
+            ∃ u, (D.checked x (forkOn (D.stage2 x) r p.1))[i.val]? = some u ∧
+              unitWit H D decode x run' u (forkOn (D.stage2 x) r p.1) (p.2 i) = none) ≤ κs) :
+    Pr (fun d : Fin (D.V.k x) → Coin => (run' (forkOn (D.stage2 x) r d)).out = .acc) *
+        Pr (fun e : E1 D x => BadOuter H D decode x run' Pt B (forkOn (D.stage2 x) r) e) ≤
+      2 * (D.k x : ℝ) / D.cap x + Real.exp (-(D.k x : ℝ) / 8) + slack * (esc + κs) := by
+  have hy : ∀ f ∈ (univ : Finset ((v : B) → Fin (Pt.sizes.getD v 0))),
+      Pr (fun p : (Fin (D.V.k x) → Coin) × (Fin (nPU D x) → D.UnitCoins x) =>
+        (run' (forkOn (D.stage2 x) r p.1)).out = .acc ∧
+          ∀ v : B, ¬ Good H D decode x run' (forkOn (D.stage2 x) r p.1) v.1 (f v).1 p.2) ≤ esc + κs := by
+    intro f _
+    obtain ⟨f', hf'⟩ : ∃ f' : ℕ → ℕ, ∀ v (h : v ∈ B), f' v = (f ⟨v, h⟩).1 :=
+      ⟨fun v => if h : v ∈ B then (f ⟨v, h⟩).1 else 0, fun v h => by simp [h]⟩
+    obtain ⟨sel, hsel⟩ : ∃ sel : List (ℕ × ℕ) → Option (Fin (nPU D x)), ∀ l,
+        (∃ q : Fin (nPU D x), ∃ v ∈ B, l[q.val]? = some (v, f' v)) →
+          ∃ i, sel l = some i ∧ ∃ v ∈ B, l[i.val]? = some (v, f' v) := by
+      classical
+      refine ⟨fun l => (List.finRange (nPU D x)).find? fun q => decide (∃ v ∈ B, l[q.val]? = some (v, f' v)),
+        fun l ⟨q, hq⟩ => ?_⟩
+      obtain ⟨i, hi⟩ := Option.isSome_iff_exists.1
+        ((List.find?_isSome (p := fun q : Fin (nPU D x) => decide (∃ v ∈ B, l[q.val]? = some (v, f' v)))).2
+          ⟨q, List.mem_finRange q, decide_eq_true hq⟩)
+      have hpi := List.find?_some hi
+      exact ⟨i, hi, of_decide_eq_true hpi⟩
+    have hmiss := (Pr_fst (β := Fin (nPU D x) → D.UnitCoins x) (fun d : Fin (D.V.k x) → Coin =>
+      ∀ v ∈ B, ∀ q : Fin (nPU D x), (D.checked x (forkOn (D.stage2 x) r d))[q.val]? ≠ some (v, f' v))).trans_le
+      (hesc f' fun v hv => by rw [hf' v hv]; exact (f ⟨v, hv⟩).2)
+    refine Pr_or_le (fun p hp => ?_) hmiss (hsess sel)
+    by_cases hm : ∀ v ∈ B, ∀ q : Fin (nPU D x), (D.checked x (forkOn (D.stage2 x) r p.1))[q.val]? ≠ some (v, f' v)
+    · exact Or.inl hm
+    right
+    push Not at hm
+    obtain ⟨q, v, hv, hq⟩ : ∃ q : Fin (nPU D x), ∃ v ∈ B,
+        (D.checked x (forkOn (D.stage2 x) r p.1))[q.val]? = some (v, f' v) := by
+      obtain ⟨v, hv, q, hq⟩ := hm
+      exact ⟨q, v, hv, hq⟩
+    obtain ⟨i, hi, v', hv', hi'⟩ := hsel _ ⟨q, v, hv, hq⟩
+    rw [hf' v' hv'] at hi'
+    refine ⟨hp.1, i, hi, _, hi', ?_⟩
+    have hng := hp.2 ⟨v', hv'⟩
+    unfold Good at hng
+    push Not at hng
+    simpa using hng i hi'
+  have hw := wait_bad_le (fun d => (run' (forkOn (D.stage2 x) r d)).out = .acc) (D.k x) (D.cap x) (cap_pos D x)
+    (k_pos D x) (univ : Finset ((v : B) → Fin (Pt.sizes.getD v 0)))
+    (fun f d u => ∀ v : B, ¬ Good H D decode x run' (forkOn (D.stage2 x) r d) v.1 (f v).1 u)
+    (add_nonneg hesc0 hκs0) hy
+  have hcard : ((univ : Finset ((v : B) → Fin (Pt.sizes.getD v 0))).card : ℝ) ^ (1 / (D.k x : ℝ)) ≤ slack :=
+    rpow_k_le_slack D x (by rw [card_univ]; exact card_choices_le hB) (by rw [← hPU]; omega)
+  exact hw.trans (add_le_add le_rfl (mul_le_mul_of_nonneg_right hcard (add_nonneg hesc0 hκs0)))
+
+set_option synthInstance.maxSize 1024 in
+omit [Inhabited Coin] in
+/-- **One tape's outer wait**: on a statement in scope at `(s, P)`, where the draw law holds and the checked unit any
+selection picks at first-stage coins `r` finds no witness with probability at most `κs(r)`, the outer wait (times its
+acceptance) comes up short or, for some refused `B`, keeps only runs bad for `B`, with probability at most
+`T + c·(T + c·(δ + E[κs]))`, `T = 2k/K + e^{−k/8}`. -/
+theorem outer_bad_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) {δ : ℝ} (hδ : 0 ≤ δ)
+    (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Trace) (s : Stmt) (Pt : Partition) (hPU : nPU D x = Pt.sizes.sum)
+    (hRU : nRU D x = Pt.rus.length) (κs : (Fin (D.V.k x) → Coin) → ℝ) (hκs0 : ∀ r, 0 ≤ κs r)
+    (hdraw : ∀ B ⊆ range Pt.rus.length, ∃ esc : (Fin (D.V.k x) → Coin) → ℝ, (∀ r, 0 ≤ esc r) ∧
+      (∀ r (f : ℕ → ℕ), (∀ v ∈ B, f v < Pt.sizes.getD v 0) →
+        Pr (fun d : Fin (D.V.k x) → Coin => ∀ v ∈ B, ∀ p : Fin (nPU D x),
+          (D.checked x (forkOn (D.stage2 x) r d))[p.val]? ≠ some (v, f v)) ≤ esc r) ∧
+      Ex esc ≤ s.design.Pa Pt B)
+    (hsess : ∀ r (sel : List (ℕ × ℕ) → Option (Fin (nPU D x))),
+      Pr (fun p : (Fin (D.V.k x) → Coin) × (Fin (nPU D x) → D.UnitCoins x) =>
+        (run' (forkOn (D.stage2 x) r p.1)).out = .acc ∧
+          ∃ i, sel (D.checked x (forkOn (D.stage2 x) r p.1)) = some i ∧
+            ∃ u, (D.checked x (forkOn (D.stage2 x) r p.1))[i.val]? = some u ∧
+              unitWit H D decode x run' u (forkOn (D.stage2 x) r p.1) (p.2 i) = none) ≤ κs r) :
+    Pr (fun r : Fin (D.V.k x) → Coin => (run' r).out = .acc) *
+        Pr (fun c : (Fin (D.cap x) → Fin (D.V.k x) → Coin) × (Fin (D.k x) → E1 D x) =>
+          (accList (fun r => (run' r).out = .acc) (D.k x) ((List.finRange (D.cap x)).map c.1)).length < D.k x ∨
+            ∃ B ∈ S₁ s.design Pt δ, AllBad (fun r => (run' r).out = .acc) (D.k x)
+              (fun r e => BadOuter H D decode x run' Pt B (forkOn (D.stage2 x) r) e)
+              ((List.finRange (D.cap x)).map c.1) c.2) ≤
+      2 * (D.k x : ℝ) / D.cap x + Real.exp (-(D.k x : ℝ) / 8) +
+        slack * (2 * (D.k x : ℝ) / D.cap x + Real.exp (-(D.k x : ℝ) / 8) + slack * (δ + Ex κs)) := by
+  have hc := slack_pos
+  have hEκ : 0 ≤ Ex κs := Ex_nonneg hκs0
+  have hy : ∀ B ∈ S₁ s.design Pt δ,
+      Pr (fun p : (Fin (D.V.k x) → Coin) × E1 D x =>
+        (run' p.1).out = .acc ∧ BadOuter H D decode x run' Pt B (forkOn (D.stage2 x) p.1) p.2) ≤
+      2 * (D.k x : ℝ) / D.cap x + Real.exp (-(D.k x : ℝ) / 8) + slack * (δ + Ex κs) := by
+    intro B hB
+    obtain ⟨hBsub, hBδ⟩ := mem_filter.1 hB
+    obtain ⟨esc, hesc0, hesc, hEesc⟩ := hdraw B (mem_powerset.1 hBsub)
+    refine (Pr_acc_forkOn (D.stage2 x) (fun r => (run' r).out = .acc)
+      (fun r e => BadOuter H D decode x run' Pt B (forkOn (D.stage2 x) r) e)
+      fun r d e => by rw [forkOn_forkOn']).trans_le ?_
+    calc Ex (fun r => Pr (fun d => (run' (forkOn (D.stage2 x) r d)).out = .acc) *
+          Pr (fun e : E1 D x => BadOuter H D decode x run' Pt B (forkOn (D.stage2 x) r) e))
+        ≤ Ex (fun r => 2 * (D.k x : ℝ) / D.cap x + Real.exp (-(D.k x : ℝ) / 8) + slack * (esc r + κs r)) :=
+          Ex_mono fun r => inner_bad_le H D decode x run' Pt hPU (mem_powerset.1 hBsub) r (hesc0 r) (hκs0 r)
+            (hesc r) (hsess r)
+      _ = 2 * (D.k x : ℝ) / D.cap x + Real.exp (-(D.k x : ℝ) / 8) + slack * (Ex esc + Ex κs) := by
+          rw [Ex_add, Ex_const, Ex_mul_left, Ex_add]
+      _ ≤ 2 * (D.k x : ℝ) / D.cap x + Real.exp (-(D.k x : ℝ) / 8) + slack * (δ + Ex κs) := by
+          have := hEesc.trans hBδ
+          gcongr
+  have hy0 : 0 ≤ 2 * (D.k x : ℝ) / D.cap x + Real.exp (-(D.k x : ℝ) / 8) + slack * (δ + Ex κs) := by
+    positivity
+  have hw := wait_bad_le (fun r => (run' r).out = .acc) (D.k x) (D.cap x) (cap_pos D x) (k_pos D x)
+    (S₁ s.design Pt δ) (fun B r e => BadOuter H D decode x run' Pt B (forkOn (D.stage2 x) r) e) hy0 hy
+  have hcard : ((S₁ s.design Pt δ).card : ℝ) ^ (1 / (D.k x : ℝ)) ≤ slack :=
+    rpow_k_le_slack D x (card_S₁_le _ _ _) (by rw [← hRU]; omega)
+  exact hw.trans (add_le_add le_rfl (mul_le_mul_of_nonneg_right hcard hy0))
+
+end Bound
+
+/-! ## KS -/
+
+section KS
+
+variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
+
+set_option synthInstance.maxSize 1024 in
+/-- **The failure event's probability**: over tapes, judged coins and the extractor's coins, the judged run accepts
+and the extraction's failure event holds with probability at most `κ(δ) + √(γ·Pr[B])`. Out of scope the event is
+empty. In scope, it is independent of the judged coins; at each tape, the outer wait's bound (`outer_bad_le`) at
+Flock's error `κ_F + √(γ_F·β(ω, r))` averages, by Jensen, to `κ(δ) + c²·√(γ_F·E[β]) ≤ κ(δ) + √(γ·Pr[B])`. -/
+theorem Pr_fails_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T)
+    (hdec : Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) {δ : ℝ} (hδ : 0 ≤ δ) (hsess : SessionKS H D)
+    (hdraw : DrawLaw D) (x : Msg) (hε : 0 ≤ D.εtable x) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
+    Pr (fun s : Ω × (Fin (D.V.k x) → Coin) × ECoins D x =>
+      (run H P D.V x s.1 s.2.1).out = .acc ∧ Fails H D decode δ x (run H P D.V x s.1) s.2.2) ≤
+      κ D δ x + Real.sqrt (γ D x * PrB H D.V P x) := by
+  refine (Pr_indep (fun ω r => (run H P D.V x ω r).out = .acc)
+    (fun ω c => Fails H D decode δ x (run H P D.V x ω) c)).trans_le ?_
+  have hc := slack_pos
+  have hκ0 := κ_pos D hδ x hε
+  by_cases hsc : ∃ s Pt, D.parse x = some s ∧ D.partition s.prog s.query = some Pt ∧ InScope Pt s
+  swap
+  · have h0 : ∀ ω, Pr (fun c : ECoins D x => Fails H D decode δ x (run H P D.V x ω) c) = 0 := fun ω =>
+      (Pr_congr fun c => ⟨fun ⟨s, Pt, h1, h2, h3, _⟩ => hsc ⟨s, Pt, h1, h2, h3⟩, False.elim⟩).trans Pr_false
+    simp only [h0, mul_zero, Ex_const]
+    exact add_nonneg hκ0.le (Real.sqrt_nonneg _)
+  obtain ⟨s, Pt, hs, hPt, hin⟩ := hsc
+  obtain ⟨β, hβ0, hβ, hκs⟩ := hsess decode hdec x Ω P
+  have hper : ∀ ω, Pr (fun r => (run H P D.V x ω r).out = .acc) *
+      Pr (fun c : ECoins D x => Fails H D decode δ x (run H P D.V x ω) c) ≤
+      κ D δ x + slack ^ 2 * Ex (fun r => Real.sqrt (γF D x * β ω r)) := by
+    intro ω
+    have hF : Pr (fun c : ECoins D x => Fails H D decode δ x (run H P D.V x ω) c) =
+        Pr (fun c : (Fin (D.cap x) → Fin (D.V.k x) → Coin) × (Fin (D.k x) → E1 D x) =>
+          (accList (fun r => (run H P D.V x ω r).out = .acc) (D.k x)
+            ((List.finRange (D.cap x)).map c.1)).length < D.k x ∨
+            ∃ B ∈ S₁ s.design Pt δ, AllBad (fun r => (run H P D.V x ω r).out = .acc) (D.k x)
+              (fun r e => BadOuter H D decode x (run H P D.V x ω) Pt B (forkOn (D.stage2 x) r) e)
+              ((List.finRange (D.cap x)).map c.1) c.2) := by
+      refine Eq.trans ?_ (Pr_equiv (ecoinsEquiv D x) _)
+      refine Pr_congr fun c => ⟨fun ⟨s', Pt', hs', hPt', _, h⟩ => ?_, fun h => ⟨s, Pt, hs, hPt, hin, h⟩⟩
+      rw [hs, Option.some.injEq] at hs'
+      subst hs'
+      rw [hPt, Option.some.injEq] at hPt'
+      subst hPt'
+      exact h
+    rw [hF]
+    refine (outer_bad_le H D decode hδ x (run H P D.V x ω) s Pt (nPU_eq hs hPt) (nRU_eq hs hPt)
+      (fun r => κF D x + Real.sqrt (γF D x * β ω r)) (fun r => add_nonneg (κF_nonneg D x hε) (Real.sqrt_nonneg _))
+      (hdraw x s Pt hs hPt hin) (hκs ω)).trans (le_of_eq ?_)
+    rw [Ex_add, Ex_const]
+    unfold κ
+    ring
+  calc Ex (fun ω => Pr (fun r => (run H P D.V x ω r).out = .acc) *
+        Pr (fun c : ECoins D x => Fails H D decode δ x (run H P D.V x ω) c))
+      ≤ Ex (fun ω => κ D δ x + slack ^ 2 * Ex (fun r => Real.sqrt (γF D x * β ω r))) := Ex_mono hper
+    _ = κ D δ x + slack ^ 2 * Ex (fun p : Ω × (Fin (D.V.k x) → Coin) => Real.sqrt (γF D x * β p.1 p.2)) := by
+        rw [Ex_add, Ex_const, Ex_mul_left,
+          Ex_prod (fun p : Ω × (Fin (D.V.k x) → Coin) => Real.sqrt (γF D x * β p.1 p.2))]
+    _ ≤ κ D δ x + slack ^ 2 * Real.sqrt (γF D x * PrB H D.V P x) := by
+        refine add_le_add le_rfl (mul_le_mul_of_nonneg_left ?_ (by positivity))
+        refine (Ex_sqrt_le _ fun p => mul_nonneg (γF_nonneg D x) (hβ0 _ _)).trans (Real.sqrt_le_sqrt ?_)
+        rw [Ex_mul_left]
+        exact mul_le_mul_of_nonneg_left hβ (γF_nonneg D x)
+    _ = κ D δ x + Real.sqrt (γ D x * PrB H D.V P x) := by
+        rw [show γ D x = (slack ^ 2) ^ 2 * γF D x by unfold γ γF; ring, mul_assoc,
+          Real.sqrt_mul (pow_nonneg (pow_nonneg hc.le 2) 2) (γF D x * PrB H D.V P x),
+          Real.sqrt_sq (pow_nonneg hc.le 2)]
+
+set_option synthInstance.maxSize 1024 in
+/-- **Sampling: KS from Flock's KS.** Flock's KS at the checked units' sessions (`SessionKS`), the trace commitment's
+binding at `H`, and the deployed sampled verifier's named facts (the draw law, what a unit's Flock witness reveals,
+the interior commitments fixed by the first stage, the scope refusal) give the block's `KS`: the split
+(`split`) puts a failed extraction at an accepted run in the failure event or an own-call collision, and the failure
+event has probability at most `κ(δ) + √(γ·Pr[B])` (`Pr_fails_le`). -/
+theorem KS_of {H : Msg → Msg} {D : Deploy Coin Col T} (iroots : Msg → Seen → ℕ → List Msg)
+    (hbind : D.commit.Binds H) (hsess : SessionKS H D) (hopens : SessionOpens H D iroots)
+    (hfix : InteriorFixed H D iroots) (hdraw : DrawLaw D) (hrefuse : Refuses H D) (hε : ∀ x, 0 ≤ D.εtable x) :
+    KS H D := by
+  intro δ decode hδ hdec
+  exact KSLin_of_ownColl H D.V (R H D.commit D.parse D.partition δ) (E D decode) (κ D δ) (γ D)
+    (fun x Ω P s => (run H P D.V x s.1 s.2.1).out = .acc ∧ Fails H D decode δ x (run H P D.V x s.1) s.2.2)
+    (fun x Ω P s hacc hfail =>
+      (split decode δ iroots hbind hopens hfix hrefuse x P s.1 s.2.1 s.2.2 hacc hfail).imp_left fun h => ⟨hacc, h⟩)
+    fun x Ω _ _ P => Pr_fails_le H D decode hdec hδ hsess hdraw x (hε x) Ω P
+
+/-- **Sampling: bits from Flock's KS**: `KS_of`, with the extractor's expected reruns and own SHA-512 calls. -/
+theorem Bits_of {H : Msg → Msg} {D : Deploy Coin Col T} (iroots : Msg → Seen → ℕ → List Msg)
+    (hbind : D.commit.Binds H) (hsess : SessionKS H D) (hopens : SessionOpens H D iroots)
+    (hfix : InteriorFixed H D iroots) (hdraw : DrawLaw D) (hrefuse : Refuses H D) (hε : ∀ x, 0 ≤ D.εtable x)
+    (hruns : ∀ decode, ExtractRunsExpLe H (E D decode)
+      (fun x => 1 + D.k x + (D.k x : ℝ) ^ 2 * (1 + nPU D x * D.innerWaits x * D.innerK x)))
+    (hown : ∀ decode, ExtractOwnLe H (E D decode) (fun x => D.k x ^ 2 * nPU D x * D.openCalls x)) : Bits H D :=
+  Bits_of_KS (KS_of iroots hbind hsess hopens hfix hdraw hrefuse hε) hruns hown hε
+
+end KS
+
 end Claims.Sampling
