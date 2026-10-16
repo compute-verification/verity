@@ -263,3 +263,34 @@ def test_duo_has_no_kernel(n, words):
         same = ((gy == want[0][None, :]) & (gz == want[1][None, :])).all(axis=1)
         hits += int(same.sum()) - int(p0 == ds[0] and same[np.ravel_multi_index(ds[1:], [m] * (words - 1))])
     assert hits == 0
+
+
+@pytest.mark.parametrize(("n", "rots"), [(4, (5, 11, 17, 29, 7, 19, 13, 9)), (5, (11, 17, 29, 13, 7, 19))])
+def test_duo_has_no_kernel_over_six_and_eight_words(n, rots):
+    """Duo over 8 words (n = 4) and 6 (n = 5), every (y, z), met in the middle: each step is a bijection of the state,
+    so the first half's changes are permutations of the true middle state, matched against the second half's inverses.
+    The rotations are nonzero mod n, as pfill's 5, 11, 17, 29 are mod 32 (at r = 0 the top flips of two words cancel)."""
+    m, words = 1 << n, len(rots)
+    ks = [(k % m, a, r) for (k, a), r in zip([(9, 5), (6, 11), (9, 5), (6, 11), (3, 13), (10, 7), (5, 3), (12, 9)], rots)]
+    ds, h = [3, m - 1, 7, 0, 5, 9, 1, 12][:words], words // 2
+    y, z = (v.ravel() for v in np.meshgrid(np.arange(m), np.arange(m), indexing="ij"))
+    states = y * m + z
+    mid = _duo(y, z, ds[:h], ks[:h], n)
+    mid = mid[0] * m + mid[1]
+    end = np.empty(m * m, dtype=np.int64)
+    end[mid] = np.ravel_multi_index(_duo(*_duo(y, z, ds[:h], ks[:h], n), ds[h:], ks[h:], n), (m, m))
+    back = np.empty(m * m, dtype=np.int64)
+    back[mid] = states
+    first = {}
+    for ps in np.ndindex(*[m] * h):
+        gy, gz = _duo(y, z, list(ps), ks[:h], n)
+        first.setdefault((gy * m + gz)[back].astype(np.uint16).tobytes(), []).append(ps)
+    hits = []
+    for ps in np.ndindex(*[m] * (words - h)):
+        gy, gz = _duo(y, z, list(ps), ks[h:], n)
+        inv = np.full(m * m, -1, dtype=np.int64)
+        inv[gy * m + gz] = states
+        need = inv[end]
+        if (need >= 0).all():
+            hits += [(*f, *ps) for f in first.get(need.astype(np.uint16).tobytes(), ()) if (*f, *ps) != tuple(ds)]
+    assert hits == []
