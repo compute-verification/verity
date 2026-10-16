@@ -10,29 +10,41 @@ workload, the timing and its serving-alone controls, the gates and the arithmeti
   digest is the variant id, as `harness/ledger.variant_record` makes it.
 - ``filler``: the filler's chunk shape, a `Filler` (warps a block W, chains a warp NC, steps a tile S, chunk_log2), or
   None for no filler. v1's driver runs one filler ABI, dcap.cu's ``dfill_k`` (``DFill``, ``dfill_launch``,
-  ``dfill_check``, ``dfill_ref``): an arm with another kernel brings it behind that ABI.
+  ``dfill_check``, ``dfill_ref``): an arm with another kernel brings it behind that ABI. ``Filler.noise`` optionally
+  declares its operands (`NOISE`); filler-scorer/v3 reads it, with the facts of its own build, to pick the filler's
+  certified-fraction entry (`scoring.filler_entry`). It is not part of the variant's run-time config (`config`).
 - ``placement(phase, B, L)``: where the filler runs beside serving at a suite point, a `Placement`. ``phase`` is
   ``"decode"`` (the decode step at batch B, context L) or ``"prefill"`` (the 32 layers of linears at M = B rows, L = 0).
   It is a pure function of the point: the same placement on every call, chosen before the run (desideratum 5's fixed work
   per round), never from the run's own measurements.
 - ``choice``: one line saying how the policy was chosen and what choosing costs at serving time (a secondary metric).
 
-The scorer refuses an arm that breaks the contract (`check_arm`). Arms are named in `ARMS`, or loaded as
-``module:attribute`` from a file under ``benchmarks/pouw/filler/`` (a climber's arm), constructed with no arguments.
+The scorer refuses an arm that breaks the contract (`check_arm`), and from filler-scorer/v3 one whose record the ledger
+or the store would refuse (`record_problems`), when it loads: before the build and the GPU lease. Arms are named in
+`ARMS`, or loaded as ``module:attribute`` from a file under ``benchmarks/pouw/filler/`` (a climber's arm), constructed
+with no arguments.
 """
 
 from __future__ import annotations
 
 import importlib.util
 import re
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+REPO = HERE.parents[2]
 VERSION = "filler-arm/v1"
 PLACES = ("none", "split", "co")
 PHASES = ("decode", "prefill")
 SMS = 188  # the RTX PRO 6000's SMs
+#: a filler's declarable operands: its chain's own outputs, fresh uniform ±1, fresh uniform {0,1} bits on both sides,
+#: fresh bits A ∈ {0,1} with B = U uniform on {±1..±64} (pfill-bU, note:20261016T0710Z-draft-filler-floor-r2 §5), or
+#: the dither ⌊x/s⌋ + b (data quantized down plus a fresh uniform bit; note:20261016T0525Z-draft-fullfloor-s-r6 §2)
+NOISE = ("chained", "pm1", "bits01", "bitsU", "dither")
+#: the `Filler` fields the driver runs and the variant's run-time config carries
+SHAPE = ("W", "NC", "S", "chunk_log2")
 
 
 class ArmError(ValueError):
@@ -45,6 +57,12 @@ class Filler:
     NC: int = 4
     S: int = 2048
     chunk_log2: int = 19
+    noise: str | None = None
+
+
+def config(filler: Filler | None) -> dict[str, str]:
+    """The variant's run-time config (`ledger.variant_record`): the filler's shape, as the driver runs it."""
+    return {k: str(getattr(filler, k)) for k in SHAPE} if filler is not None else {}
 
 
 @dataclass(frozen=True)
@@ -64,8 +82,66 @@ class Placement:
 NONE = Placement()
 
 
-def check_arm(arm) -> list[str]:
-    """What is wrong with `arm` against the contract (empty when nothing is)."""
+def _record_rules():
+    """The attempt ledger (`harness/ledger.py`) and the evidence store's canonical form, ids and manifest model: the code
+    `score.record` and the store run on the record after the run."""
+    for p in (HERE.parent / "harness", REPO / "tools" / "research" / "src"):
+        if str(p) not in sys.path:
+            sys.path.append(str(p))
+    import ledger  # noqa: PLC0415
+    from research.store import canon, ids, model  # noqa: PLC0415
+    return ledger, canon, ids, model
+
+
+def record_problems(arm) -> list[str]:
+    """What the ledger or the store would refuse in the arm's record (`score.record`), by the code they run after the
+    run, so an arm that would lose its record fails when it loads, before a build or a GPU lease (filler-scorer/v3):
+    the hypothesis and the choice are one line of at most `ledger.ONE_LINE` characters (`ledger.one_line`); a parent
+    named as an ``art:`` id is a whole one, since it becomes the record's parent ref (`ids.is_art`); the mechanism is a
+    list of tags; the record's arm fields are canonical JSON within the store's meta limit (`canon`,
+    `model.META_MAX_BYTES`); and the sources make a variant (`ledger.source_sha256`: repository files, none twice, none
+    named the run-time config's entry)."""
+    L, canon, ids, model = _record_rules()
+    bad = []
+    lin = getattr(arm, "lineage", None)
+    lin = lin if isinstance(lin, dict) else {}
+    fields = {"parent": lin.get("parent"), "approach": lin.get("approach")}
+    for key, what, v in (("hypothesis", "lineage.hypothesis", lin.get("hypothesis")),
+                         ("choice", "choice", getattr(arm, "choice", None))):
+        try:
+            fields[key] = L.one_line(v, what)
+        except L.LedgerError as ex:
+            bad.append(f"{ex} (the ledger refuses the record after the run): shorten it")
+    par = fields["parent"]
+    if par is not None and not isinstance(par, str):
+        bad.append(f"lineage.parent {par!r} is a string (an art: id, an arm, a branch@sha) or None")
+    elif isinstance(par, str) and par.startswith("art:") and not ids.is_art(par):
+        bad.append(f"lineage.parent {par!r} becomes the record's parent ref, which the store takes only as a whole art: "
+                   "id (art: and 64 hex digits; `research data show` expands an abbreviation)")
+    mech = lin.get("mechanism")
+    if isinstance(mech, (list, tuple)) and all(isinstance(t, str) and t.strip() for t in mech):
+        fields["mechanism"] = sorted(set(mech))
+    else:
+        bad.append(f"lineage.mechanism {mech!r} is a list of tags (strings)")
+    try:
+        n = len(canon.dumps(L._clean(fields)))
+    except ValueError as ex:
+        bad.append(f"the record's arm fields aren't canonical JSON: {ex}")
+    else:
+        if n > model.META_MAX_BYTES:
+            bad.append(f"the record's arm fields are {n} canonical bytes, past the store's meta limit "
+                       f"{model.META_MAX_BYTES}")
+    srcs = getattr(arm, "sources", None) or ()
+    try:
+        L.source_sha256([REPO / s for s in srcs], REPO, config(getattr(arm, "filler", None)))
+    except (L.LedgerError, ValueError, OSError, TypeError) as ex:
+        bad.append(f"sources {srcs!r} don't make a variant: {ex}")
+    return bad
+
+
+def check_arm(arm, *, record: bool = False) -> list[str]:
+    """What is wrong with `arm` against the contract (empty when nothing is); with `record`, also what the ledger or the
+    store would refuse in its record (`record_problems`, filler-scorer/v3)."""
     bad = []
     name = getattr(arm, "name", None)
     if not isinstance(name, str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]*", name):
@@ -79,10 +155,14 @@ def check_arm(arm) -> list[str]:
     fl = getattr(arm, "filler", None)
     if fl is not None and not isinstance(fl, Filler):
         bad.append("filler is a Filler or None")
+    elif fl is not None and fl.noise is not None and fl.noise not in NOISE:
+        bad.append(f"filler.noise {fl.noise!r} is one of {NOISE} or None")
     if not isinstance(getattr(arm, "choice", None), str):
         bad.append("choice is one line")
     if not callable(getattr(arm, "placement", None)):
         bad.append("placement(phase, B, L) is callable")
+    if record:
+        bad += record_problems(arm)
     return bad
 
 
@@ -138,7 +218,7 @@ class FillV1:
         "mechanism": ["filler:chained-imma-registers", "place:split", "split:per-point-table", "prefill:none"],
         "hypothesis": "FILL v1 as measured: 0.35–0.62 certified ÷ capacity at ≤ 5% decode slowdown"})
     sources: tuple = ("benchmarks/pouw/decode_capacity/dcap.cu", "benchmarks/pouw/filler/arms.py")
-    filler: Filler | None = Filler(W=8, NC=4, S=2048, chunk_log2=19)
+    filler: Filler | None = Filler(W=8, NC=4, S=2048, chunk_log2=19, noise="chained")
     choice: str = "an offline table of 11 (B, L) splits from FILL's runs 2–5; a lookup and a green split at serving time"
 
     def placement(self, phase, b, l):
@@ -150,8 +230,9 @@ class FillV1:
 ARMS = {"idle": Idle, "fill-v1": FillV1}
 
 
-def load(spec: str):
-    """An arm by name (`ARMS`) or as ``path/to/file.py:Attr`` under benchmarks/pouw/filler/."""
+def load(spec: str, *, record: bool = False):
+    """An arm by name (`ARMS`) or as ``path/to/file.py:Attr`` under benchmarks/pouw/filler/, refused unless it meets
+    `check_arm` (with `record`, its record's limits too)."""
     if spec in ARMS:
         arm = ARMS[spec]()
     elif ":" in spec:
@@ -165,7 +246,7 @@ def load(spec: str):
         arm = getattr(mod, attr)()
     else:
         raise ArmError(f"unknown arm {spec!r}: one of {sorted(ARMS)} or path/to/arm.py:Class")
-    bad = check_arm(arm)
+    bad = check_arm(arm, record=record)
     if bad:
         raise ArmError(f"arm {spec}: " + "; ".join(bad))
     return arm

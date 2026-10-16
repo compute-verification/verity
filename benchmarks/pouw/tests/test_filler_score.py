@@ -351,6 +351,151 @@ def test_clock_gate():
     assert not S.clock_gate(stats, [])["ok"]
 
 
+def test_margin_per_point():
+    """filler-scorer/v3's margin readout: the limit less each point's slowdown, with its worst and best rounds', so a
+    point whose rounds reach the limit shows it has none even where its median passes (decode 32/1K, whose serving alone
+    reads 7.69 or 7.75 ms by process, r20261016-071637-cb1f)."""
+    stats = all_points(slow=1.02)
+    thin = row("step", 32, 1024, "split", alone_ms=10.0, arm_ms=10.41, fill_sms=92)
+    thin["blocks"][0]["arm"]["reps"] = [[10.6, 2000.0, 300.0]] * 3
+    stats[("decode", 32, 1024)] = S.point_stats(thin)
+    stats[("decode", 8, 16384)] = S.point_stats(row("step", 8, 16384, "split", alone_ms=10.0, arm_ms=10.8, fill_sms=124))
+    mg = S.margins(stats)
+    m = mg["points"]["decode 32/1024"]
+    assert m["margin"] == pytest.approx(0.009) and m["rounds"] == pytest.approx([-0.01, 0.009]) and m["scored"]
+    assert mg["points"]["decode 1/2048"]["margin"] == pytest.approx(0.03)
+    assert mg["min"] == {"at": "decode 32/1024", "margin": pytest.approx(0.009)} and mg["no_margin"] == ["decode 32/1024"]
+    robust = mg["points"]["decode 8/16384"]
+    assert not robust["scored"] and robust["margin"] == pytest.approx(-0.03)  # listed, never the minimum
+    assert ok_gates(stats, S.score(stats))["slowdown"]["worst"] == pytest.approx(S.LIMIT - mg["min"]["margin"])
+
+
+def sass(*functions):
+    """``cuobjdump -sass`` text: one block a (function name, its instructions), in its line format."""
+    out = []
+    for name, ins in functions:
+        out.append(f"\t\tFunction : {name}")
+        out += [f"        /*{16 * i:04x}*/                   {x} ;                      /* 0x000000280c1c7237 */"
+                for i, x in enumerate(ins)]
+    return "\n".join(out)
+
+
+DFILL = "_Z7dfill_kILi8EEvmmyiiPy"
+#: pfill-k's tile as cursor/hc-proved-ea24@fe2fdb5bf compiles it, abridged: fresh s32 words, folded by rotations
+K_TILE = ["LOP3.LUT R4, R2, 0x1010101, RZ, 0xc0, !PT", "IMMA.16832.S8.S8 R28, R12.ROW, R40.COL, RZ",
+          "SHF.L.W.U32.HI R9, R28, 0x7, R28", "IADD3 R9, R9, R10, RZ", "@P0 BRA 0x80d0", "EXIT"]
+
+
+E2M1_TILE = ["OMMA.SF.16864.F32.E2M1.E2M1.UE4M3.4X R28, R12, R40, RZ, R112, R112, URZ"] + K_TILE[2:]
+
+
+def test_kernel_facts_decide_the_filler_entry_with_the_declaration():
+    """filler-scorer/v3 reads a filler at Theorem K's 0.9 only when it declares noise K covers and the SASS of the
+    scorer's own build shows dense int8 IMMA with s32 words, no FP, one MMA a word at L ≤ 32, and every MMA in the read
+    kernel; at Theorem E's 0.225 for declared ±1 with the same checks, the e2m1 tile at L = 64 included; else at the
+    proved floor 0: chained when it declares a chain or an MMA accumulates. Never from the declaration alone."""
+    f = S.kernel_facts(sass((DFILL, K_TILE), ("_Z5stepv", ["FFMA R1, R2, R3, R4", "EXIT"])))
+    assert f["kind"] == "int8" and f["fp_free"] and f["L"] == 32 and f["mma_outside"] == [] and f["functions"] == [DFILL]
+    e = S.filler_entry("bits01", f)
+    assert (e["applies"], e["active"], e["fraction"], e["failed"]) == ("theorem-k", "theorem-k", 0.9, {})
+    assert e["unchecked"] == [*S.UNCHECKED, *S.FILLER_ENTRIES["theorem-k"]["unchecked"]] and len(e["unchecked"]) == 3
+    assert all(S.filler_entry(n, f)["applies"] == "theorem-k" for n in ("bitsU", "dither"))
+    e = S.filler_entry("pm1", f)  # ±1's coefficients are even, where K is vacuous: E's ¼
+    assert (e["applies"], e["fraction"]) == ("theorem-e", 0.225) and list(e["failed"]) == ["theorem-k"]
+    assert e["failed"]["theorem-k"][0].startswith("declared noise 'pm1'")
+    for noise, floor in (("chained", "chained"), (None, "unproven"), ("bits01", "theorem-k")):
+        assert S.filler_entry(noise, f)["applies"] == floor
+    assert S.filler_entry(None, f)["unchecked"] == [] and S.FILLER_ENTRIES["unproven"]["fraction"] == 0
+
+    def read(noise, tile=K_TILE, *extra, **kw):
+        e = S.filler_entry(noise, S.kernel_facts(sass((DFILL, tile), *extra)), **kw)
+        return e["applies"], e["failed"]
+
+    e2 = S.kernel_facts(sass((DFILL, E2M1_TILE)))
+    assert (e2["kind"], e2["L"], e2["accumulating_mma"]) == ("e2m1", 64, 0)
+    applies, why = read("pm1", E2M1_TILE)
+    assert applies == "theorem-e" and list(why) == ["theorem-k"] and len(why["theorem-k"]) == 3  # noise, kind, L
+    assert why["theorem-k"][2] == "each word sums 64 products of a kind the entry doesn't cover"
+    applies, why = read("bits01", E2M1_TILE)  # K covers integer words only, E ±1 only
+    assert applies == "unproven" and why["theorem-k"][0] == ("the filler's MMAs are ['OMMA.SF.16864.F32.E2M1.E2M1."
+                                                             "UE4M3.4X'], not all one of ['int8']")
+    assert why["theorem-e"] == ["declared noise 'bits01', not one of ('pm1',)"]
+    for mma in (E2M1_TILE[0], "IMMA.SP.16832.S8.S8 R28, R12.ROW, R40.COL, RZ",
+                "IMMA.16832.S8.S8.SAT R28, R12.ROW, R40.COL, RZ", "HMMA.16816.F32 R28, R12, R40, RZ",
+                "QMMA.16832.F32.E4M3.E4M3 R28, R12, R40, RZ"):
+        for noise in ("bits01", "pm1"):
+            applies, why = read(noise, K_TILE + [mma])
+            assert applies == "unproven" and all(any("not all one of" in w for w in ws) for ws in why.values())
+    assert read("bits01", K_TILE + ["I2F.S32 R9, R28"])[1]["theorem-k"] == ["FP or conversion ops in the filler's "
+                                                                            "kernel: {'I2F.S32': 1}"]
+    assert read("pm1", E2M1_TILE + ["FFMA R9, R28, 0.5, RZ"])[1]["theorem-e"][0].startswith("FP or conversion")
+    assert S.kernel_facts(sass((DFILL, K_TILE + ["HFMA2.MMA R3, -RZ, RZ, 0, 0"])))["fp_free"]  # a constant load
+    for tile in (K_TILE, E2M1_TILE):  # FILL v1's accumulate into the chain's register: chained, whatever it declares
+        chained = [x.replace("COL, RZ", "COL, R28").replace("R40, RZ", "R40, R28") for x in tile]
+        assert S.kernel_facts(sass((DFILL, chained)))["accumulating_mma"] == 1
+        for noise in ("bits01", "pm1", None):
+            applies, why = read(noise, chained)
+            assert applies == "chained" and all(any("accumulate into an earlier word" in w for w in ws)
+                                                for ws in why.values())
+    assert "outside the filler's kernel" in read("bits01", K_TILE, ("_Z6helperv", [K_TILE[1]]))[1]["theorem-k"][0]
+    phase = "_Z7dfill_pILi4EEvmmPyyiiPKiS0_Pj"  # the phase filler is read with dfill_k, launched or not
+    assert S.kernel_facts(sass((DFILL, K_TILE), (phase, K_TILE)))["functions"] == [DFILL, phase]
+    assert read("bits01", K_TILE, (phase, K_TILE)) == ("theorem-k", {})
+    assert read("bits01", K_TILE, (phase, [x.replace("COL, RZ", "COL, R28") for x in K_TILE]))[0] == "chained"
+    assert read("pm1", K_TILE, (phase, E2M1_TILE))[0] == "unproven"  # two kinds: no one L
+    for noise in ("bits01", "pm1"):
+        applies, why = read(noise, fixed_work=True)
+        assert applies == "unproven" and "an arm-side driver's fixed work" in why["theorem-k"][-1]
+    assert read("bits01", ["IADD3 R9, R9, R10, RZ", "EXIT"])[0] == "unproven"  # say-so, no MMA
+    none = S.filler_entry("bits01", None)
+    assert none["applies"] == "unproven" and none["failed"]["theorem-k"][0].startswith("the build recorded no kernel")
+    assert S.filler_entry("chained", None)["applies"] == "chained"
+    # an inactive entry that applies leaves SCORE at the next active one that does
+    off = {**S.FILLER_ENTRIES, "theorem-k": {**S.FILLER_ENTRIES["theorem-k"], "active": False}}
+    assert S.filler_entry("bits01", f, entries=off)["active"] == "unproven"
+    assert S.SCORER == S.V3 and all(e["active"] and e["status"] == "proved" for e in S.FILLER_ENTRIES.values())
+    stats = all_points()
+    sc = {n: S.score(stats, S.certified(n)) for n in S.FILLER_ENTRIES}
+    assert sc["chained"]["SCORE"] == sc["unproven"]["SCORE"] < sc["theorem-e"]["SCORE"] < sc["theorem-k"]["SCORE"]
+    assert all(s["flags"] == [] for s in sc.values())
+    ch = S.score(stats, S.certified(S.UNDER_CH))  # SCORE under CH is v2's SCORE, every filler at 0.99
+    assert ch["SCORE"] == pytest.approx(S.score(stats)["SCORE"]) and ch["SCORE"] > sc["theorem-k"]["SCORE"]
+    assert ch["flags"] == ["filler certified fraction 0.99 is under CH (withdrawn, decision 27)"]
+
+
+def test_record_limits_are_checked_when_the_arm_loads():
+    """filler-scorer/v3 refuses, before any build or lease, an arm whose record the ledger or the store would refuse
+    after the run (HC-PROVED's 249-character hypothesis reached `score.record` only after a scored run)."""
+    import dataclasses
+
+    v1 = A.FillV1()
+    assert A.check_arm(v1, record=True) == [] and A.check_arm(A.Idle(), record=True) == []
+    assert A.load("fill-v1", record=True).name == "fill-v1"
+
+    def problems(**kw):
+        lin = {k: v for k, v in kw.items() if k in v1.lineage}
+        return A.check_arm(dataclasses.replace(v1, lineage={**v1.lineage, **lin},
+                                               **{k: v for k, v in kw.items() if k not in lin}), record=True)
+
+    long = dataclasses.replace(v1, lineage={**v1.lineage, "hypothesis": "x " * 124 + "y"})
+    assert A.check_arm(long) == []  # v2's load check lets it through to the lease
+    assert any("at most 240 characters, not 249" in p for p in A.check_arm(long, record=True))
+    assert problems(hypothesis="x" * 240) == []
+    assert any("choice" in p and "not 300" in p for p in problems(choice="c" * 300))
+    assert any("whole art: id" in p for p in problems(parent="art:cc59294a"))
+    assert problems(parent="art:" + "0" * 64) == [] and problems(parent="fill-v1") == []
+    assert any("lineage.parent 5" in p for p in problems(parent=5))
+    assert any("list of tags" in p for p in problems(mechanism="place:split"))
+    assert any("canonical JSON" in p for p in problems(approach={1, 2}))
+    assert any("don't make a variant" in p for p in problems(sources=v1.sources + v1.sources[:1]))
+    assert any("don't make a variant" in p for p in problems(sources=("/etc/hostname",)))
+    assert any("filler.noise" in p for p in A.check_arm(dataclasses.replace(v1, filler=A.Filler(noise="gauss"))))
+    assert A.check_arm(dataclasses.replace(v1, filler=A.Filler(noise="bitsU"))) == [] and v1.filler.noise == "chained"
+    # the declared noise isn't run-time config: variant ids don't move
+    assert A.config(A.Filler(noise="bits01")) == A.config(A.Filler()) == {"W": "8", "NC": "4", "S": "2048",
+                                                                          "chunk_log2": "19"}
+
+
 def test_arms():
     v1, idle = A.load("fill-v1"), A.load("idle")
     assert A.placed(idle, "decode", 32, 2048) == A.NONE
