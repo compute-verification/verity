@@ -301,8 +301,12 @@ def breakdown(dirs: list[Path]) -> list[dict]:
             fast = arms.get("chunked")
             rr = f"; cgrr2 {100 * (arms['cgrr2'] / fast - 1):+.1f}% against chunked" if fast and "cgrr2" in arms else ""
             lrr = f" (litecrr2 {100 * (arms['litecrr2'] / fast - 1):+.1f}%)" if fast and "litecrr2" in arms and name == "base" else ""
+            pre = ""
+            if "cgpreonly" in arms and "cgpreonly" in base:
+                pre = (f"; cgpreonly {arms['cgpreonly']:6.1f} ms, saves {base['cgpreonly'] - arms['cgpreonly']:5.1f} ms"
+                       + (f", cgprerr2 {100 * (arms['cgprerr2'] / fast - 1):+.1f}%" if fast and "cgprerr2" in arms else ""))
             print(f"  {name:8s} {DIAG_WHAT.get(name, name):32s} cgonly {arms['cgonly']:6.1f} ms, saves "
-                  f"{base['cgonly'] - arms['cgonly']:5.1f} ms ({100 * (1 - arms['cgonly'] / base['cgonly']):4.1f}%){rr}{lrr}")
+                  f"{base['cgonly'] - arms['cgonly']:5.1f} ms ({100 * (1 - arms['cgonly'] / base['cgonly']):4.1f}%){rr}{lrr}{pre}")
     return out
 
 
