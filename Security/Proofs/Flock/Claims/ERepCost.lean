@@ -202,7 +202,7 @@ decoder that meets the list-decoding spec, with its stated complexity. -/
 theorem Flock.Efficient_of_decoder {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
     [DecidableEq Col] (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (decode : List (ℕ × Col) → List T)
     (counted : List (ℕ × Col) → List T × ℕ) (size : List (ℕ × Col) → ℕ) (p : Polynomial ℕ)
-    (hl : Flock.ListComplete D.enc D.agree D.nMin decode) (hd : DecoderComplexity decode counted size p) :
+    (hl : Flock.ListComplete D.enc D.len D.agree D.nMin decode) (hd : DecoderComplexity decode counted size p) :
     Flock.Efficient H D decode counted size p :=
   ⟨ERep_cost H D.V D.waits D.k D.cap D.cols _ _, hl, hd⟩
 
