@@ -34,7 +34,9 @@ grid unedited.  An edited side is quantized to top M - max|e|, so every edited i
 <= 16); `:wtopT` / `:atopT` caps that side's top at T (a peeled side's headroom, e.g. `int8_rot@-:wtop63`).  ALPHABET
 `dither` or `sr` replaces rounding instead (ENCODINGS: floor(x/s) plus a coin bit, uniform or unbiased).  The integer
 product is torch._int_mm (s8 x s8 -> s32, exact); x, W and the rotation are fp32 (EXACT_GRID_EDIT_DTYPE=float64:
-float64).  ALPHABETS lists the alphabets, drawn uniformly.
+float64).  ALPHABETS lists the alphabets, drawn uniformly.  A linear's bias (Qwen2's q, k, v) is added to the exact
+product after accumulation.  EXACT_GRID_WCACHE=0 recomputes each weight's integers on every call instead of keeping them
+(the same integers; for a model whose fp32 copies don't fit beside its weights, e.g. Llama-3.1-70B).
 
     python exact_grid.py MODEL_SNAPSHOT IDS.npy OUT_DIR METHOD...    # IDS: one window (T,) or several (N, T), `windows.py`
     python exact_grid.py --selftest
@@ -184,7 +186,7 @@ def nvfp4_dequant(m: torch.Tensor, levels: torch.Tensor) -> torch.Tensor:
     return (to_levels(b / bs, levels) * bs).reshape(r, k)
 
 
-_ROT: dict[int, torch.Tensor] = {}
+_ROT: dict[tuple, torch.Tensor] = {}
 
 
 def hadamard(n: int) -> torch.Tensor:
@@ -195,7 +197,8 @@ def hadamard(n: int) -> torch.Tensor:
 
 
 def rotation(k: int, device) -> torch.Tensor:
-    if k not in _ROT:
+    key = (k, str(torch.device(device)))
+    if key not in _ROT:
         g = torch.Generator().manual_seed(k)
         odd = k
         while odd % 2 == 0:
@@ -205,8 +208,8 @@ def rotation(k: int, device) -> torch.Tensor:
             r, _ = torch.linalg.qr(torch.randn(odd, odd, generator=g, dtype=torch.float64))
             h = torch.kron(h.contiguous(), r.contiguous())
         signs = torch.randint(0, 2, (k,), generator=g).double() * 2 - 1
-        _ROT[k] = (signs[:, None] * h).to(device)
-    return _ROT[k]
+        _ROT[key] = (signs[:, None] * h).to(device)
+    return _ROT[key]
 
 
 EXACT = ("int8", "e4m3i16", "e4m3ik", "e4m3ika", "e4m3i448", "e2m1i")
@@ -268,7 +271,8 @@ EDIT_GRIDS = {"int8": (127, S32_EXACT), "e4m3i16": (16, FP32_EXACT)}
 FUSED = {"self_attn.q_proj": "qkv", "self_attn.k_proj": "qkv", "self_attn.v_proj": "qkv",
          "mlp.gate_proj": "gate_up", "mlp.up_proj": "gate_up"}
 EDIT_DTYPE = getattr(torch, os.environ.get("EXACT_GRID_EDIT_DTYPE", "float32"))
-_ROT32: dict[int, torch.Tensor] = {}
+WCACHE = os.environ.get("EXACT_GRID_WCACHE", "1") != "0"
+_ROT32: dict[tuple, torch.Tensor] = {}
 
 
 def parse_edit(method: str) -> dict:
@@ -333,17 +337,20 @@ def edited_product(method: str, x: torch.Tensor, w: torch.Tensor, wcache: dict, 
     own noise."""
     e = parse_edit(method)
     k, dt = x.shape[1], x.dtype
+    rk = (k, dt, str(x.device))
     if e["rot"]:
-        if (k, dt) not in _ROT32:
-            _ROT32[k, dt] = rotation(k, x.device).to(dt)
-        x = x @ _ROT32[k, dt]
+        if rk not in _ROT32:
+            # built on the CPU: a float64 copy of k = 28,672's rotation per GPU would not fit beside a 70B's weights
+            _ROT32[rk] = rotation(k, "cpu").to(dt).to(x.device)
+        x = x @ _ROT32[rk]
     if "w" not in wcache:
-        wq = w @ _ROT32[k, dt] if e["rot"] else w
+        wq = w @ _ROT32[rk] if e["rot"] else w
         if "w" in e["edit"]:
             wcache["w"] = served(wq, e, e["top_w"], f"{e['seed']}/{tag}/w")
         else:
             wcache["w"] = quant_rows(wq, torch.arange(e["top_w"] + 1, dtype=dt, device=x.device), False)
-    bi, sb = wcache["w"]
+        del wq
+    bi, sb = wcache["w"] if WCACHE else wcache.pop("w")
     if "a" in e["edit"]:
         ai, sa = served(x, e, e["top_a"], f"{e['seed']}/{atag or tag}/a")
     else:
@@ -381,6 +388,8 @@ def attach(model, method: str, log: list) -> list:
                 rec.update(layer=i, linear=name, k=x.shape[1],
                            rel_err=float(torch.linalg.norm(y - ref) / torch.linalg.norm(ref)))
                 log.append(rec)
+                if mod.bias is not None:
+                    y = y + mod.bias.to(y.dtype)
                 return y.to(out.dtype).reshape(out.shape)
             hooks.append(mod.register_forward_hook(fn))
     return hooks
