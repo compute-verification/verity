@@ -10,9 +10,10 @@
 //   gate DIR M...           stage.cu's gate: every commitment file committed into 0xA5-poisoned buffers by both paths equals
 //                           Python's leaves, b || c and root, a no-write control doesn't; fused attention and cuBLASLt
 //                           against the host
-//   ovl DIR M K... [reps]   for each k, the arms below as CUDA graphs timed interleaved rep by rep (after two warm-ups each),
+//   ovl DIR M K... [rN]     for each k, the arms below as CUDA graphs timed interleaved rep by rep (after two warm-ups each),
 //                           then every hashing arm run once more into 0xA5-poisoned trees, its roots compared with the serial
 //                           path's, and nohash run the same way as the control that must differ
+//   shathru                 SHA-512 compressions a second on the whole GPU (stage.cu's sha_chain at 2-32 CTAs a SM)
 // Arms (k chunks of M tokens; the QK^T and P.V stand-ins are stage.cu's, m = M, n = M/2, k = 4096, against a sequence's own
 // distinct buffer a layer):
 //   plain     the k sequences plain int8 on one stream: the linears over all k * M tokens in row blocks of PLAIN_RB (8192),
@@ -419,9 +420,47 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
   return fails;
 }
 
+// SHA-512's throughput on the whole GPU: stage.cu's sha_chain (n chained compressions a thread, fr_compress rolled or
+// s512_compress unrolled) over CTAs a SM x 128 threads, (n = 33) - (n = 1) over 32 compressions a thread
+static void sha_throughput(Dev& d) {
+  uint64_t* out;
+  const int maxb = 32;
+  CK(cudaMalloc(&out, (size_t)maxb * d.sms * 128 * sizeof(uint64_t)));
+  cudaEvent_t e0, e1;
+  CK(cudaEventCreate(&e0));
+  CK(cudaEventCreate(&e1));
+  printf("{\"mode\": \"sha_throughput\", \"mhz\": %.0f, \"sms\": %d, \"compressions_a_s\": {", nvml_mhz(d), d.sms);
+  bool first = true;
+  for (int unrolled : {0, 1})
+    for (int b : {2, 4, 8, 16, 32}) {
+      double ms[2];
+      for (int k = 0; k < 2; k++) {
+        const int n = k ? 33 : 1;
+        std::vector<double> v;
+        for (int r = 0; r < 5; r++) {
+          CK(cudaEventRecord(e0, d.st));
+          sha_chain<<<b * d.sms, 128, 0, d.st>>>(n, unrolled, out);
+          CK(cudaEventRecord(e1, d.st));
+          CK(cudaEventSynchronize(e1));
+          float x;
+          CK(cudaEventElapsedTime(&x, e0, e1));
+          v.push_back(x);
+        }
+        std::sort(v.begin(), v.end());
+        ms[k] = v[2];
+      }
+      printf("%s\"%s_%dcta\": %.4e", first ? "" : ", ", unrolled ? "unrolled" : "rolled", b,
+             (double)b * d.sms * 128 * 32 / ((ms[1] - ms[0]) * 1e-3));
+      first = false;
+    }
+  printf("}}\n");
+  fflush(stdout);
+  CK(cudaFree(out));
+}
+
 int main(int argc, char** argv) {
-  if (argc < 3) {
-    fprintf(stderr, "usage: ovl gate DIR M... | ovl ovl DIR M K... [reps]   (ARMS: the arms, DRAW_US, PLAIN_RB)\n");
+  if (argc < 2) {
+    fprintf(stderr, "usage: ovl gate DIR M... | ovl ovl DIR M K... [rREPS] | ovl shathru   (ARMS: the arms, DRAW_US, PLAIN_RB)\n");
     return 1;
   }
   const std::string mode = argv[1];
@@ -471,6 +510,11 @@ int main(int argc, char** argv) {
   CK(cudaMalloc(&d.sink, 64));
   CK(cudaStreamSynchronize(d.st));
   CK(cudaGetLastError());
+  if (mode == "shathru") {
+    sha_throughput(d);
+    return 0;
+  }
+  if (argc < 3) return 1;
   hm_load(argv[2]);
   if (mode == "gate") {
     std::vector<int> Ms;
