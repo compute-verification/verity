@@ -13,7 +13,7 @@ Checked against each vocabulary a current Build derives under (the `TargetProfil
 
 1. a family the vocabulary binds is named by the fold only at versions the vocabulary binds;
 2. when the fold names what a role binds and the role's registered-values twin (`<role>_value`, `Profile.registered_values`) binds
-   another Definition, the fold names that one too.
+   another Definition at the same statics, the fold names that one too.
 
 `ALLOWED` holds the exceptions, one reason each.
 """
@@ -131,20 +131,35 @@ def _tries(p: inspect.Parameter) -> tuple:
 
 
 @lru_cache(maxsize=None)
+def _binds(profile: str, role: str) -> tuple[tuple[dict, CompositeDefinition], ...]:
+    """(statics, the Definition unspecialised) of every combination of `_tries` at which the role binds one."""
+    binder = PROFILES[profile].kinds[role]
+    params = list(inspect.signature(binder).parameters.values())
+    out = []
+    for combo in itertools.product(*(_tries(p) for p in params)):
+        kw = {p.name: v for p, v in zip(params, combo)}
+        try:
+            d = binder(**kw)
+        except (TypeError, KeyError, ValueError):
+            continue
+        out.append((kw, d.defn if isinstance(d, SpecializedDefinition) else d))
+    return tuple(out)
+
+
+@lru_cache(maxsize=None)
 def build_bindings(profile: str) -> dict[str, frozenset]:
     """Role -> the Definitions (unspecialised) the profile's vocabulary binds it to."""
-    out = {}
-    for role, binder in PROFILES[profile].kinds.items():
-        params = list(inspect.signature(binder).parameters.values())
-        defs = set()
-        for combo in itertools.product(*(_tries(p) for p in params)):
-            try:
-                d = binder(**{p.name: v for p, v in zip(params, combo)})
-            except (TypeError, KeyError, ValueError):
-                continue
-            defs.add(d.defn if isinstance(d, SpecializedDefinition) else d)
-        out[role] = frozenset(defs)
-    return out
+    return {role: frozenset(d for _, d in _binds(profile, role)) for role in PROFILES[profile].kinds}
+
+
+@lru_cache(maxsize=None)
+def twin_pairs(profile: str) -> dict[str, frozenset]:
+    """Role -> (Definition, its `<role>_value` twin) bound at the same values of the statics the two share: a role whose twin
+    exists only on some targets (`rmsnorm_fused_value` under batch invariance) pairs with it only there."""
+    kinds = PROFILES[profile].kinds
+    return {role: frozenset((d, t) for kw, d in _binds(profile, role) for tkw, t in _binds(profile, f"{role}_value")
+                            if all(kw[k] == v for k, v in tkw.items() if k in kw))
+            for role in kinds if f"{role}_value" in kinds}
 
 
 def violations(refs: dict[str, tuple[CompositeDefinition, str]], profile: str, allowed=ALLOWED) -> list[str]:
@@ -159,13 +174,11 @@ def violations(refs: dict[str, tuple[CompositeDefinition, str]], profile: str, a
         if d.name in versions and d.version not in versions[d.name] and i not in allowed:
             out.append(f"rule 1: {where} names {i}; the {profile} vocabulary binds {d.name} at "
                        f"{sorted(f'v{v}' for v in versions[d.name])}")
-    for role, defs in sorted(bound.items()):
-        twin = bound.get(f"{role}_value", frozenset())
-        for d in sorted(defs & named, key=lambda d: d.id):
-            for t in sorted(twin - named, key=lambda t: t.id):
-                if t.id not in allowed:
-                    out.append(f"rule 2: {refs[d.id][1]} names {d.id} (role {role!r}) but no fold pattern names {t.id}, which "
-                               f"{role}_value binds under registered_values")
+    for role, pairs in sorted(twin_pairs(profile).items()):
+        for d, t in sorted(pairs, key=lambda p: (p[0].id, p[1].id)):
+            if d in named and t not in named and t.id not in allowed:
+                out.append(f"rule 2: {refs[d.id][1]} names {d.id} (role {role!r}) but no fold pattern names {t.id}, which "
+                           f"{role}_value binds under registered_values")
     return out
 
 
