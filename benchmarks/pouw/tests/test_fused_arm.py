@@ -27,7 +27,7 @@ def _load(name):
 F = _load("fused_arm")
 FS = _load("fused_score")
 A = F.A  # the arms module fused_arm imported (the one test_filler_score loaded, when it ran first): one Placement class
-ARMS = [F.Fused(), F.FusedV2(), F.FusedPump(), F.FusedPumpK(), F.FusedWarpK()]
+ARMS = [F.Fused(), F.FusedV2(), F.FusedPump(), F.FusedPumpK(), F.FusedWarpK(), F.FusedPumpBU(), F.FusedPumpBUXin()]
 V1 = [a for a in ARMS if a.nvcc_flags == "-DDFILL_V1"]
 
 
@@ -50,9 +50,12 @@ def test_contract_and_record(arm):
     assert A.check_arm(arm, record=True) == []
     if arm in V1:  # FILL v1's chains, and flin's and attention's filler warps; dcap.cu's filler is pfill otherwise
         assert arm.filler.noise == F.CO_PREFILL.noise == "chained"
-    else:  # pfill-k's {0,1} tile, the setting filler-scorer/v3's Theorem K entry reads
-        assert (arm.nvcc_flags, arm.filler.noise) == ("-DPFILL_BITS", "bits01")
+    else:  # pfill-k's {0,1} tile or pfill-bU's, the settings filler-scorer/v3's Theorem K entry reads
+        kind = {"-DPFILL_BITS": "bits01", "-DPFILL_BU": "bitsU"}[arm.nvcc_flags.split()[0]]
+        assert arm.filler.noise == kind
         assert (arm.filler.W, arm.filler.S) == (8, 256)  # pfill's 8-warp blocks; S a multiple of 32
+        # a word-binding fold on bU: duo (NC 2), or NC 4 only as XOR-in
+        assert kind == "bits01" or arm.filler.NC == 2 or (arm.filler.NC == 4 and "-DPFILL_XIN" in arm.nvcc_flags)
 
 
 @pytest.mark.parametrize("arm", ARMS, ids=lambda a: a.name)
@@ -89,7 +92,7 @@ def test_pump_arm_has_no_fixed_work():
     """filler-scorer/v3 reads no theorem for a filler with an arm-side driver's fixed work, so FusedPump's rows carry no
     filler warps."""
     assert all(q.FW == 0 and q.AFW == 0 for _, q in F.FusedPump().table.values())
-    assert F.FusedPumpK().table == F.FusedPump().table
+    assert F.FusedPumpK().table == F.FusedPumpBU().table == F.FusedPumpBUXin().table == F.FusedPump().table
 
 
 def test_warp_arm_fills_through_dfill_k_warp():

@@ -195,6 +195,51 @@ class FusedPumpK(FusedPump):
         return self.filler
 
 
+#: pfill-bU's chunk (pfill_arm.PFillBU's shape) with duo's receipt (NC 2) or XOR-in's (NC 4 built with -DPFILL_XIN)
+BU_DUO_FILLER = A.Filler(W=8, NC=2, S=256, chunk_log2=19, noise="bitsU")
+BU_XIN_FILLER = A.Filler(W=8, NC=4, S=256, chunk_log2=19, noise="bitsU")
+
+
+@dataclass
+class FusedPumpBU(FusedPumpK):
+    """FusedPumpK's splits with FILL-SEC's pfill-bU pumped (-DPFILL_BU), the tile-reuse filler: a block's tile is the
+    GEMM C = A B with A (128 S x 32) on {0,1} and B (32 x 1024) on U = {±1..±64}, from the coins and the public tile
+    id; B sits in shared memory for the block's 8 warps and each A fragment, expanded once, meets all 128 B fragments,
+    so the hashing is ~1 issue slot an MMA (dfill_k_warp's ~10). Every k32 word goes into duo's receipt (NC 2, three
+    ops a word), which binds every word where ram's binds only pairs (P2-FF r8)."""
+
+    name: str = "fill-fused-pump-bu"
+    lineage: dict = field(default_factory=lambda: {
+        "parent": "fill-fused-pump-k", "approach": "pouw/filler-fused",
+        "mechanism": ["filler:fresh-noise-imma", "noise:sha512-coins-bU", "receipt:duo-k32", "place:split",
+                      "split:per-point-table", "fused:flin-serving", "fused:persistent-attention", "fused:lm-head-flin",
+                      "prefill:split"],
+        "hypothesis": "FusedPumpK's splits with a pfill-bU pump (Theorem K's served GEMM shape, every k32 word under "
+                      "duo's word-binding fold) score at duo's alone rate, 0.59 of peak against ram's 0.77"})
+    filler: A.Filler | None = BU_DUO_FILLER
+    choice: str = ("FusedPump's offline table of pump-only splits, a pfill-bU duo pump, pfill's 4-SM prefill split; at "
+                   "serving time a lookup, a green split and one graph a step")
+    nvcc_flags: str = "-DPFILL_BU -Xcompiler -mpopcnt"
+
+
+@dataclass
+class FusedPumpBUXin(FusedPumpBU):
+    """FusedPumpBU with FILL-SEC's XOR-in drop-in for the fold (NC 4 built with -DPFILL_XIN, three ops a pair)."""
+
+    name: str = "fill-fused-pump-bu-xin"
+    lineage: dict = field(default_factory=lambda: {
+        "parent": "fill-fused-pump-bu", "approach": "pouw/filler-fused",
+        "mechanism": ["filler:fresh-noise-imma", "noise:sha512-coins-bU", "receipt:xin-k32", "place:split",
+                      "split:per-point-table", "fused:flin-serving", "fused:persistent-attention", "fused:lm-head-flin",
+                      "prefill:split"],
+        "hypothesis": "XOR-in for duo in FusedPumpBU's pump (one op a pair over ram, not two a word) keeps ram's alone rate, "
+                      "0.78 of peak, if FILL-SEC's verdict has it bind every word"})
+    filler: A.Filler | None = BU_XIN_FILLER
+    choice: str = ("FusedPump's offline table of pump-only splits, a pfill-bU XOR-in pump, pfill's 4-SM prefill split; at "
+                   "serving time a lookup, a green split and one graph a step")
+    nvcc_flags: str = "-DPFILL_BU -DPFILL_XIN -Xcompiler -mpopcnt"
+
+
 def _warp(sms, fw, st=32, lm=1, aps=1):
     return sms, FusedStep(FW=fw, AFW=0, APS=aps, ALZ=0, LM=lm, ST=st)
 
