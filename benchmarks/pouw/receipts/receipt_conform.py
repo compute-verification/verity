@@ -113,6 +113,12 @@ def _key_cases() -> list[tuple[int, str]]:
              (0x2AAAAAAB, "3 a = 1 mod 2^30: an int8 ratio"), (1, "1"), (M32, "-1"), (3, "3"), (0x80000001, "1 + 2^31"),
              (0x20000001, "±1 + 2^29 (Part IX.2.1's j = 2 family)"), (0x10000001, "±1 + 2^28 (j = 3)"),
              (0x9E3779B8, "even")]
+    cases += [(0x5A0000FD, "m = 253: under key_ok's low bound"), (0x5A000103, "m = 259: the least m over it with r allowed"),
+              (0x5AFFFEFD, "m = 2^24 - 259: the greatest m under key_ok's high bound with r allowed"),
+              (0x5AFFFF03, "m = 2^24 - 253: over it"),
+              (0x5A123401, "r = 1"), (0x5A123403, "r = 3"), (0x5A12341D, "r = 29"), (0x5A12341F, "r = 31"),
+              (0x4000007F, "a = 127 mod 2^30: in lambda8's window at b = 1"), (0x40000081, "a = 129 mod 2^30: out of it at b = 1"),
+              (0x5A7FFFFF, "a = -1 mod 2^23: 128 a = -128 mod 2^30, in lambda8's window at b = 128")]
     cases += [(_kj19_only(j, s), f"KJ19 alone rejects it (bits {19 - j}..{30 - j} all {s})") for j in (0, 7, 14) for s in (0, 1)]
     for seed in (0, 0x10483):
         for rule in ("key_ok_r9", "key_ok_r11"):

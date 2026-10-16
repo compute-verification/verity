@@ -2657,6 +2657,105 @@
    "key_ok_r11": false
   },
   {
+   "a": "5a0000fd",
+   "why": "m = 253: under key_ok's low bound",
+   "key_ok": false,
+   "lambda8": true,
+   "key_ok_r9": false,
+   "kj19": false,
+   "key_ok_r11": false
+  },
+  {
+   "a": "5a000103",
+   "why": "m = 259: the least m over it with r allowed",
+   "key_ok": true,
+   "lambda8": true,
+   "key_ok_r9": true,
+   "kj19": false,
+   "key_ok_r11": false
+  },
+  {
+   "a": "5afffefd",
+   "why": "m = 2^24 - 259: the greatest m under key_ok's high bound with r allowed",
+   "key_ok": true,
+   "lambda8": true,
+   "key_ok_r9": true,
+   "kj19": false,
+   "key_ok_r11": false
+  },
+  {
+   "a": "5affff03",
+   "why": "m = 2^24 - 253: over it",
+   "key_ok": false,
+   "lambda8": true,
+   "key_ok_r9": false,
+   "kj19": false,
+   "key_ok_r11": false
+  },
+  {
+   "a": "5a123401",
+   "why": "r = 1",
+   "key_ok": false,
+   "lambda8": true,
+   "key_ok_r9": false,
+   "kj19": true,
+   "key_ok_r11": false
+  },
+  {
+   "a": "5a123403",
+   "why": "r = 3",
+   "key_ok": true,
+   "lambda8": true,
+   "key_ok_r9": true,
+   "kj19": true,
+   "key_ok_r11": true
+  },
+  {
+   "a": "5a12341d",
+   "why": "r = 29",
+   "key_ok": true,
+   "lambda8": true,
+   "key_ok_r9": true,
+   "kj19": true,
+   "key_ok_r11": true
+  },
+  {
+   "a": "5a12341f",
+   "why": "r = 31",
+   "key_ok": false,
+   "lambda8": true,
+   "key_ok_r9": false,
+   "kj19": true,
+   "key_ok_r11": false
+  },
+  {
+   "a": "4000007f",
+   "why": "a = 127 mod 2^30: in lambda8's window at b = 1",
+   "key_ok": false,
+   "lambda8": false,
+   "key_ok_r9": false,
+   "kj19": false,
+   "key_ok_r11": false
+  },
+  {
+   "a": "40000081",
+   "why": "a = 129 mod 2^30: out of it at b = 1",
+   "key_ok": false,
+   "lambda8": true,
+   "key_ok_r9": false,
+   "kj19": false,
+   "key_ok_r11": false
+  },
+  {
+   "a": "5a7fffff",
+   "why": "a = -1 mod 2^23: 128 a = -128 mod 2^30, in lambda8's window at b = 128",
+   "key_ok": false,
+   "lambda8": false,
+   "key_ok_r9": false,
+   "kj19": false,
+   "key_ok_r11": false
+  },
+  {
    "a": "80059cd7",
    "why": "KJ19 alone rejects it (bits 19..30 all 0)",
    "key_ok": true,
