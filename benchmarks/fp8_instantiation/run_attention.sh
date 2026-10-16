@@ -4,7 +4,7 @@
 # WikiText-2's test window 0 that must begin with those 2048).  Clocks are read, never set.
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd clone --custody-ttl 12h \
-#     --env GPU_LEASE_WHO=... --env D4A_CTX=2048 --env D4A_PLAN=grid|frontier|limbs|limbs2|limbsall|seeds|longseeds|wide|both|peel|peelabc|peeld [--env D4A_TAG=SUBDIR] [--env D4A_METHODS="..."] \
+#     --env GPU_LEASE_WHO=... --env D4A_CTX=2048 --env D4A_PLAN=grid|frontier|limbs|limbs2|limbsall|seeds|longseeds|wide|both|peel|peelabc|peeld|alph|alph8192a|alph8192b [--env D4A_TAG=SUBDIR] [--env D4A_METHODS="..."] \
 #     [--env D4A_IDS=ids8192.npy --send ids8192.npy] --send benchmarks/fp8_instantiation/run_attention.sh \
 #     -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/run_attention.sh"'
 # D4A_IDS may hold several windows (N x T, windows.py), whose window 0 must begin with those 2048 tokens.
@@ -105,7 +105,26 @@ peel_d_plan() {
   for s in ${SEEDS:-s0 s1 s2}; do for x in -eqp=w8-v=pm1 -eqp=w8-k=pm1; do m+=" int8-rot-lin8r$x-$s"; done; done
   echo "$m"
 }
+# Served {+-1, +-2, +-4, +-5} (outside E2M1) on K and V, V alone and K alone, over the w8 peel; and the peel widened to
+# {+-1..+-64} with Q on [-63, 63] and P served as P - 64 + E_P (`poff64`), without served noise (W64_SERVED none) and
+# with it (kv v k); seeds S.
+alph_w8_plan() {
+  m=""
+  for s in ${SEEDS:-s0 s1 s2}; do for x in kv v k; do m+=" int8-rot-lin8r-eqp=w8-$x=pm1245-$s"; done; done
+  echo "$m"
+}
+alph_w64_plan() {
+  m=""
+  for s in ${SEEDS:-s0 s1 s2}; do for x in ${W64_SERVED:-none kv v k}; do
+    if [ "$x" = none ]; then m+=" int8-rot-lin8r-eqp=w64-poff64-$s"; else m+=" int8-rot-lin8r-eqp=w64-poff64-$x=pm1245-$s"; fi
+  done; done
+  echo "$m"
+}
 case "${D4A_PLAN:-}" in
+  alph) D4A_METHODS="bf16 bf16-lin8r"; for s in ${SEEDS:-s0 s1 s2}; do D4A_METHODS+=" int8-rot-lin8r-$s int8-rot-lin8r-eqp=w8-$s"; done
+        D4A_METHODS+=" $(alph_w8_plan) $(alph_w64_plan)" ;;
+  alph8192a) D4A_METHODS="bf16 $(alph_w8_plan) $(W64_SERVED=none alph_w64_plan)" ;;
+  alph8192b) D4A_METHODS="$(W64_SERVED='kv v k' alph_w64_plan) int8-rot-lin8r-s0" ;;
   peel) D4A_METHODS="$(peel_abc_plan) $(peel_d_plan)" ;;
   peelabc) D4A_METHODS=$(peel_abc_plan) ;;
   peeld) D4A_METHODS=$(peel_d_plan) ;;

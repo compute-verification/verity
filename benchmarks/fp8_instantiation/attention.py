@@ -24,14 +24,17 @@ Method names are '-'-joined tokens:
     grid       `int8` (both matmuls), `e4m3` (both on E4M3's integers <= 16), `e4m3qk` (Q K^T on E4M3's integers, P V on int8)
     P, V, QK   `prow`/`pfix`/`prow2`, `vhead`/`vchan`/`vchan2`, `qk2`
     noise      an alphabet for all four operands: `none`, `pm1` {+-1}, `pm13` {+-1, +-3}, `pm57` {+-5, +-7}, `u1` ... `u16`
-               uniform {-k..k}, `w8` {+-1..+-8}, `dE` sparse (+-1 each with probability 2^-E / 2, else 0); `qk`/`pv`
-               limits it to that matmul's operands; `X=ALPHABET` sets the operands X (any of `q`, `k`, `p`, `v`) alone
+               uniform {-k..k}, `w8`/`w64` {+-1..+-k}, `pm1245` {+-1, +-2, +-4, +-5}, `dE` sparse (+-1 each with
+               probability 2^-E / 2, else 0); `qk`/`pv` limits it to that matmul's operands; `X=ALPHABET` sets the
+               operands X (any of `q`, `k`, `p`, `v`) alone
     peeled     `eX=ALPHABET` (X in `q`, `p`, `qp`): low-rank noise the server sees and the model doesn't
                (note:20261016T0001Z-draft-rs-d2-attention-lowrank-peel).  E_ik = U_{i, k mod L}, L = 32, with U (tokens x L)
                one draw per layer shared by its heads; P's E only where key <= query.  The served products are
                (P + E_P)(V + F_V) and (Q + E_Q)(K + F_K)^T, and the exact peels U (W^T (V + F_V)) (the causal prefix scan)
                and U (W^T (K + F_K))^T are subtracted, so the model gets P (V + F_V) and Q (K + F_K)^T exactly; the
-               peeled operand's top drops by max|E|.  One limb only (`prow`/`pfix`, no `qk2`)
+               peeled operand's top drops by max|E|.  One limb only (`prow`/`pfix`, no `qk2`).  `poffN`: P keeps its
+               full grid and is served as P - N + E_P on the causal support (within int8's [-128, 127]); the public
+               offset is peeled with E, N sum_{k <= i} (V + F_V)_k
     linears    `lin8r`: every linear on exact_grid.py's `int8_rot@-` (rotated, int8 per row, s8 x s8 -> s32)
     `rot`, `sN` (noise seed)
 
@@ -65,8 +68,8 @@ S32_EXACT = 2 ** 31 - 1
 GRIDS = {"int8": (127, S32_EXACT), "e4m3": (16, FP32_EXACT)}
 #: a method's grid token -> (Q K^T's grid, P V's grid)
 GRID_PAIRS = {"int8": ("int8", "int8"), "e4m3": ("e4m3", "e4m3"), "e4m3qk": ("e4m3", "int8")}
-ALPHABETS = {"none": [0], "pm1": [-1, 1], "pm13": [-3, -1, 1, 3], "pm57": [-7, -5, 5, 7],
-             "w8": [v for v in range(-8, 9) if v],
+ALPHABETS = {"none": [0], "pm1": [-1, 1], "pm13": [-3, -1, 1, 3], "pm57": [-7, -5, 5, 7], "pm1245": [-5, -4, -2, -1, 1, 2, 4, 5],
+             **{f"w{k}": [v for v in range(-k, k + 1) if v] for k in (8, 64)},
              **{f"u{k}": list(range(-k, k + 1)) for k in (1, 2, 4, 8, 16, 32, 64)}}
 OPERANDS = "qkpv"
 PEEL_L = 32
@@ -92,7 +95,7 @@ def alphabet_info(name: str) -> dict:
 
 def parse(method: str) -> dict:
     spec = {"method": method, "grid": None, "p": "prow", "v": "vchan", "qk2": False, "rot": False, "seed": 0,
-            "lin": "bf16", "e": {"q": "none", "p": "none"}}
+            "lin": "bf16", "e": {"q": "none", "p": "none"}, "poff": 0}
     default, where, over = "none", "both", {}
     for t in method.split("-"):
         ops, _, a = t.partition("=")
@@ -118,6 +121,8 @@ def parse(method: str) -> dict:
             where = t
         elif t == "lin8r":
             spec["lin"] = "int8_rot"
+        elif t[:4] == "poff" and t[4:].isdigit():
+            spec["poff"] = int(t[4:])
         elif t[0] == "s" and t[1:].isdigit():
             spec["seed"] = int(t[1:])
         else:
@@ -128,6 +133,8 @@ def parse(method: str) -> dict:
     spec["n"] = {x: over.get(x, default if x in on else "none") for x in OPERANDS}
     if spec["e"] != {"q": "none", "p": "none"} and (spec["grid"] not in GRID_PAIRS or spec["qk2"] or spec["p"] == "prow2"):
         raise ValueError(f"{method}: peeled noise needs a one-limb grid")
+    if spec["poff"] and (spec["e"]["p"] == "none" or GRID_PAIRS[spec["grid"]][1] != "int8"):
+        raise ValueError(f"{method}: P's offset needs P's peeled noise on int8")
     return spec
 
 
@@ -262,11 +269,17 @@ def edited_attention(module, query, key, value, attention_mask, scaling=None, dr
         gqk, gpv = (GRIDS[g] for g in GRID_PAIRS[spec["grid"]])
         nmax = {x: alphabet_info(n[x])["max"] for x in OPERANDS}
         emax = {x: alphabet_info(e.get(x, "none"))["max"] for x in OPERANDS}
-        m = {x: (gqk if x in "qk" else gpv)[0] - nmax[x] - emax[x] for x in OPERANDS}
+        poff = spec["poff"]
+        m = {x: (gqk if x in "qk" else gpv)[0] - nmax[x] - (0 if x == "p" and poff else emax[x]) for x in OPERANDS}
         if min(m.values()) < 1:
             raise ValueError(f"{spec['method']}: its noise does not fit the grid ({m})")
         two = {"q": spec["qk2"], "k": spec["qk2"], "p": spec["p"] == "prow2", "v": spec["v"] == "vchan2"}
         lmax = {x: (128 if x != "p" else 127) if two[x] else m[x] + nmax[x] + emax[x] for x in OPERANDS}
+        if poff:
+            lo, hi = -poff - nmax["p"] - emax["p"], m["p"] - poff + nmax["p"] + emax["p"]
+            if lo < -128 or hi > 127:
+                raise ValueError(f"{spec['method']}: P - {poff} + E spans [{lo}, {hi}], outside int8")
+            lmax["p"] = max(-lo, hi)
         STATE["record"] = {"tops": m, "acc_qk": gqk[1], "acc_pv": gpv[1], "bound_qk": d * lmax["q"] * lmax["k"],
                            "bound_pv": s * lmax["p"] * lmax["v"],
                            "int8_products": {"qk": (1 + two["q"]) * (1 + two["k"]), "pv": (1 + two["p"]) * (1 + two["v"])}}
@@ -299,11 +312,12 @@ def edited_attention(module, query, key, value, attention_mask, scaling=None, dr
             ql, kl = add_noise(ql, n["q"], gen, dev), add_noise(kl, n["k"], gen, dev)
             if uq is not None:
                 [(qi, _)], [(ki, _)] = ql, kl
-                served = exact_mm(qi + eq, ki.transpose(1, 2), 127 * 127)
+                term = lmax["q"] * lmax["k"]
+                served = exact_mm(qi + eq, ki.transpose(1, 2), term)
                 sint = served - fold_peel(uq, ki).double()
                 if first:
                     assert float((qi + eq).abs().max()) <= 127 and float(ki.abs().max()) <= 127
-                    STATE["peel"].append(bool(torch.equal(sint, exact_mm(qi, ki.transpose(1, 2), 127 * 127))))
+                    STATE["peel"].append(bool(torch.equal(sint, exact_mm(qi, ki.transpose(1, 2), term))))
                 sint = sint.float()
             else:
                 sint = limb_product(ql, [(x.transpose(1, 2), w) for x, w in kl], lmax["q"] * lmax["k"]).float()
@@ -317,11 +331,14 @@ def edited_attention(module, query, key, value, attention_mask, scaling=None, dr
             vl = add_noise([(x.expand(rep, s, d), w) for x, w in vl], n["v"], gen, dev)
             if up is not None:
                 [(pi, _)], [(vi, _)] = pl, vl
-                served = exact_mm(pi + ep, vi, 127 * 127)
-                oint = served - causal_peel(up, vi)
+                term = lmax["p"] * lmax["v"]
+                pt = pi + ep - poff * causal.float() if poff else pi + ep
+                oint = exact_mm(pt, vi, term) - causal_peel(up, vi)
+                if poff:
+                    oint = oint + poff * vi.double().cumsum(-2)
                 if first:
-                    assert float((pi + ep).abs().max()) <= 127 and float(vi.abs().max()) <= 127
-                    STATE["peel"].append(bool(torch.equal(oint, exact_mm(pi, vi, 127 * 127))))
+                    assert -128 <= float(pt.min()) and float(pt.max()) <= 127 and float(vi.abs().max()) <= 127
+                    STATE["peel"].append(bool(torch.equal(oint, exact_mm(pi, vi, term))))
             else:
                 oint = limb_product(pl, vl, lmax["p"] * lmax["v"])
             o = (oint * sp.double() * sv.double()).float()
@@ -487,7 +504,27 @@ def selftest() -> dict:
     assert two_w["windows"] == 2 and same(two_w["ppl_windows"][0], one_w["ppl"]) and two_w["peel_exact"], (two_w, one_w)
     assert not same(two_w["ppl_windows"][1], evaluate(model, ids2[1], "int8-rot-lin8r-eqp=w8-v=pm1")["ppl"])
     out["tiny_windows"] = two_w["ppl_windows"]
-    out["bit_identical"] = {"w8_vs_u8": w8 == u8, "window0": two_w["ppl_windows"][0] == one_w["ppl"]}
+    assert alphabet_info("pm1245")["bits"] == 3.0 and alphabet_info("pm1245")["max"] == 5 and alphabet_info("w64")["bits"] == 7.0
+    wide = {m: evaluate(model, ids, m) for m in ("int8-rot-eqp=w64-poff64", "int8-rot-eq=w64", "int8-rot-eqp=w8-kv=pm1245",
+                                                 "int8-rot-eqp=w64-poff64-kv=pm1245")}
+    out["tiny_wide"] = {m: {k: r.get(k) for k in ("ppl", "attn_rel_err", "peel_exact", "peel_checks")} for m, r in wide.items()}
+    tops = {m: r["tops"] for m, r in wide.items()}
+    assert tops["int8-rot-eqp=w64-poff64"] == {"q": 63, "k": 127, "p": 127, "v": 127}, tops
+    assert tops["int8-rot-eqp=w8-kv=pm1245"] == {"q": 119, "k": 122, "p": 119, "v": 122}, tops
+    assert tops["int8-rot-eqp=w64-poff64-kv=pm1245"] == {"q": 63, "k": 122, "p": 127, "v": 122}, tops
+    for m, r in wide.items():
+        assert r["exact"] and (r["peel_exact"] and r["peel_checks"] >= 4), (m, out["tiny_wide"])
+    assert wide["int8-rot-eqp=w64-poff64-kv=pm1245"]["bound_pv"] == 96 * 128 * 127
+    off, plain = wide["int8-rot-eqp=w64-poff64"]["ppl"], wide["int8-rot-eq=w64"]["ppl"]
+    assert same(off, plain), out["tiny_wide"]
+    for bad, where in (("int8-rot-ep=w64-poff32", evaluate), ("int8-poff64", parse)):
+        try:
+            where(model, ids, bad) if where is evaluate else where(bad)
+            raise AssertionError(f"{bad} must not fit")
+        except ValueError:
+            pass
+    out["bit_identical"] = {"w8_vs_u8": w8 == u8, "window0": two_w["ppl_windows"][0] == one_w["ppl"],
+                            "poff64_vs_unpeeled_p": off == plain}
     return out
 
 
@@ -504,7 +541,7 @@ def _key(r: dict, clean: bool = False, bare: bool = False) -> tuple:
     n = {x: "none" for x in OPERANDS} if clean or bare else operand_noise(r)
     e = {"q": "none", "p": "none"} if bare else r.get("e", {"q": "none", "p": "none"})
     return (r["grid"], r["p"], r["v"], r.get("qk2", False), r["rot"], n["q"], n["k"], n["p"], n["v"],
-            r.get("lin", "bf16"), e["q"], e["p"], r["ctx"])
+            r.get("lin", "bf16"), e["q"], e["p"], 0 if bare else r.get("poff", 0), r["ctx"])
 
 
 def noise_label(n: dict) -> str:
@@ -538,7 +575,7 @@ def rows(results: list[dict]) -> list[dict]:
         info = {x: alphabet_info(n[x]) for x in OPERANDS}
         lin = r.get("lin", "bf16")
         out.append({"ctx": r["ctx"], "grid": r["grid"], "p": r["p"], "v": r["v"], "qk2": r.get("qk2", False), "rot": r["rot"], "n": n,
-                    "products": r.get("int8_products"), "lin": lin, "e": e, "tops": r.get("tops"),
+                    "products": r.get("int8_products"), "lin": lin, "e": e, "poff": r.get("poff", 0), "tops": r.get("tops"),
                     "windows": r.get("windows", 1), "peel_exact": [x.get("peel_exact") for x in rs],
                     "label": noise_label(n), "info": info, "seeds": len(rs), "ppl": ppl, "min": min(ppls), "max": max(ppls),
                     "d_grid": 100 * (ppl / mean(base) - 1) if base and any(v != "none" for v in n.values()) else None,
@@ -562,13 +599,15 @@ def peel_table(results: list[dict]) -> str:
     fmt = lambda d: f"{d:+.2f}" if d is not None else "-"  # noqa: E731
     served_order = lambda x: ["qkpv", "kv", "v", "k"].index(  # noqa: E731
         "".join(o for o in OPERANDS if x["n"][o] != "none") or "qkpv") if x["label"] != "none" else 0
-    order = lambda x: (x["ctx"], x["grid"] in GRID_PAIRS, x["lin"] != "bf16", x["e"] != {"q": "none", "p": "none"},  # noqa: E731
-                       served_order(x))
+    order = lambda x: (x["ctx"], x["grid"] in GRID_PAIRS, x["lin"] != "bf16",  # noqa: E731
+                       max(alphabet_info(a)["max"] for a in x["e"].values()), x["poff"],
+                       max(x["info"][o]["max"] for o in OPERANDS), served_order(x))
     for x in sorted(rows(results), key=order):
         q = x["grid"] in GRID_PAIRS
         attn = (f"{x['grid']}{'-rot' if x['rot'] else ''} {x['p']}/{x['v']}" if q else x["grid"])
         tops = ", ".join(str(x["tops"][o]) for o in OPERANDS) if x["tops"] else "-"
         peeled = ", ".join(f"{o.upper()}: {a}" for o, a in x["e"].items() if a != "none") or "-"
+        peeled += f"; P offset -{x['poff']}" if x["poff"] else ""
         served = x["label"] if any(v != "none" for v in x["n"].values()) else "-"
         pe = x["peel_exact"]
         exact = "-" if all(v is None for v in pe) else "yes" if all(pe) else "NO"
