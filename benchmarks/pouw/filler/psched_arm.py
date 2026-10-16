@@ -7,6 +7,7 @@ with the locked `score.py report`.
   python3 benchmarks/pouw/filler/psched_score.py benchmarks/pouw/filler/psched_arm.py:PhaseSched
 """
 
+import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -60,6 +61,11 @@ class PhaseSched:
     filler: A.Filler | None = A.Filler(W=8, NC=4, S=2048, chunk_log2=19)
     choice: str = ("an offline table of 18 (B, L) points (split, phase W and tiles) from two psched runs; a lookup, a green "
                    "split and one graph a step at serving time; the phase filler runs through psched_score.py/pscore.cu")
+    #: dcap.cu builds pfill.cuh's filler unless -DDFILL_V1; these arms were chosen and scored on FILL v1's
+    nvcc_flags: str = "-DDFILL_V1"
+
+    def __post_init__(self):
+        os.environ["NVCC_APPEND_FLAGS"] = self.nvcc_flags
 
     def _row(self, b, l):
         return A.point_lookup(TABLE, b, l)
