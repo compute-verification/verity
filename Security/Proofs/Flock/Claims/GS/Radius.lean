@@ -5,9 +5,10 @@ import Proofs.Flock.Claims.GS.Flock
 
 The list-decoding spec in its radius form (`Flock.ListWithin`): the opened columns are written into the zero-filled
 word of the trace's codeword length `n` (`Flock.fill`: at each position the first opened column there, zero where none
-was opened, positions from `n` on ignored), and the decoder lists every trace whose encoding agrees with that word on at
-least `(1 − θ)·n` positions. Agreement is counted over all `n` positions, so a prover gains nothing by leaving positions
-unopened. `fill` and `ListWithin` are stated here in the shape `Definitions/Claims.lean` is to take.
+was opened, positions from `n` on ignored), and the decoder lists every trace `M` whose encoding agrees with that word
+on at least `(1 − θ M)·n` positions. The radius `θ`, like the length `n`, is read per trace. Agreement is counted over
+all `n` positions, so a prover gains nothing by leaving positions unopened. `fill` and `ListWithin` are stated here in
+the shape `Definitions/Claims.lean` is to take.
 
 At Flock's level-0 code (`n = 2^level₀.logLen`, rate `ρ = 2^logCols / 2^logLen`, `θ = 1 − √ρ − 1/200`):
 
@@ -28,11 +29,11 @@ def fill {Col : Type} [Zero Col] (n : ℕ) (os : List (ℕ × Col)) : Fin n → 
   fun i => ((os.find? fun p => p.1 == i.val).map Prod.snd).getD 0
 
 /-- **List decoding within radius `θ`**: `decode` lists every trace whose encoding agrees with the zero-filled word of
-its codeword length `len M` on at least `(1 - θ)·len M` positions. -/
-def ListWithin {Col T : Type} [DecidableEq Col] [Zero Col] (len : T → ℕ) (enc : T → ℕ → Col) (θ : ℝ)
+its codeword length `len M` on at least `(1 - θ M)·len M` positions. The radius is read per trace, like the length. -/
+def ListWithin {Col T : Type} [DecidableEq Col] [Zero Col] (len : T → ℕ) (enc : T → ℕ → Col) (θ : T → ℝ)
     (decode : List (ℕ × Col) → List T) : Prop :=
   ∀ (os : List (ℕ × Col)) (M : T),
-    (1 - θ) * len M ≤ ((Finset.univ : Finset (Fin (len M))).filter fun i => enc M i.val = fill (len M) os i).card →
+    (1 - θ M) * len M ≤ ((Finset.univ : Finset (Fin (len M))).filter fun i => enc M i.val = fill (len M) os i).card →
     M ∈ decode os
 
 end Claims.Flock
@@ -189,7 +190,7 @@ noncomputable def flockPolyR : Polynomial ℕ := flockPoly + X ^ 2 + X
 schedule. -/
 theorem listWithin_flockDecodeR {m : ℕ} {sch : Accounting.Schedule} (h : Accounting.fast100 m = some sch) :
     Flock.ListWithin (fun _ => 2 ^ sch.level₀.logLen) (Flock.levelZeroEnc execArith sch.k0 sch.level₀.logCols)
-      (1 - Real.sqrt ((2 : ℝ) ^ sch.level₀.logCols / 2 ^ sch.level₀.logLen) - 1 / 200) (flockDecodeR h) := by
+      (fun _ => 1 - Real.sqrt ((2 : ℝ) ^ sch.level₀.logCols / 2 ^ sch.level₀.logLen) - 1 / 200) (flockDecodeR h) := by
   intro os M hM
   refine mem_flockDecode h (agreeR_pos sch) _ (nodup_fillPts _ os) (fun p hp => lt_of_mem_fillPts hp)
     (by rw [length_fillPts]; exact johnsonCount_flock_le h) M ?_
