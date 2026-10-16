@@ -11,9 +11,14 @@ a pair per rep), each the Reed–Solomon encoding of `2^cols` message symbols `M
 `[0, t)`, `M` up to `2^cols`, and `μ` at `[2^cols, 2^cols + t)` (`zkCoeffs`, `lane_codeword`), so each lane is a codeword
 of `RS[2^d, 2^cols + t]` at the points `ω_q` (`PadCode.encAt`), and the masked code is an interleaved Reed–Solomon code
 (`zkLevelZero`): the plain level-0 code with `e` more lanes and `t` more coefficients per lane, on the same positions.
+At `t ≤ 2^cols` a masked lane is the plain lane of its message plus the padding's codeword
+`Σ_j μ_j·(c₀·X̂_j + X̂_{2^cols + j})` (`zkEnc_eq_add_pad`).
 A message (`ZkMessage`) is every lane's `M` and `μ`, a column every lane's symbol (`zkEnc`). #2104's decoder therefore
-meets `ListComplete` for it at every `agree` (`listComplete_zkLevelZero`), and on opened columns at distinct positions
-below `2^64` it is the Guruswami–Sudan path once `agree ≤ 1` is above `√((2^cols + t + 1)/N)` (`zkLevelZero_regime`).
+meets `ListComplete` for it at the Johnson count `johnsonCount (2^cols + t) agree = ⌊(2^cols + t + 1)/agree²⌋ + 1`, at
+every `agree > 0` (`listComplete_zkLevelZero`), and on opened columns at distinct positions below `2^64` it is the
+Guruswami–Sudan path once `agree ≤ 1` is above `√((2^cols + t + 1)/N)` (`zkLevelZero_regime`), and `[]` outside that
+regime (`zkLevelZero_decode_eq_nil`). One run's two reps open at most `t = 2·q₀` positions of the codeword, fewer than
+the count (`pad_lt_zkJohnsonCount`): it is reached only by `E^rep`'s columns, gathered over its accepted reruns.
 
 The read step (`zkRead`) drops the padding and the extra lanes, keeps the witness lanes' messages (`zkWitnessMsg`), and
 reads the packed trace (`Model.witnessOf`) as the hidden values, bit `a` of the trace being hidden value `a`
@@ -62,6 +67,35 @@ def zkEnc {F K : Type} [Field F] [Field K] (A : Arith F K) (d : ℕ) (c₀ : F) 
     (M : ZkMessage F s cols t) (q : ℕ) : Fin s → F :=
   fun ℓ => encAt A d (2 ^ cols + t) (zkCoeffs c₀ (M.1 ℓ) (M.2 ℓ)) q
 
+/-- **A masked lane is the plain lane plus the padding's codeword**: at `t ≤ 2^cols`, lane `ℓ`'s symbol at `q` is its
+`2^cols` message symbols on the first `2^cols` monomials, plus `Σ_j μ_j·(c₀·X̂_j + X̂_{2^cols + j})(ω_q)`, the
+padding term the model's level-0 row check corrects by (`Model.padCorr`). -/
+theorem zkEnc_eq_add_pad {F K : Type} [Field F] [Field K] (A : Arith F K) (d : ℕ) (c₀ : F) {s cols t : ℕ}
+    (ht : t ≤ 2 ^ cols) (M : ZkMessage F s cols t) (q : ℕ) (ℓ : Fin s) :
+    zkEnc A d c₀ M q ℓ = encAt A d (2 ^ cols) (M.1 ℓ) q +
+      ∑ j : Fin t, M.2 ℓ j * (c₀ * A.Xhat j.val d (A.omega q) + A.Xhat (2 ^ cols + j.val) d (A.omega q)) := by
+  have key : ∑ c : Fin (2 ^ cols), (if h : c.val < t then c₀ * M.2 ℓ ⟨c.val, h⟩ else 0) *
+      A.Xhat c.val d (A.omega q) = ∑ j : Fin t, M.2 ℓ j * (c₀ * A.Xhat j.val d (A.omega q)) := by
+    let g : ℕ → F := fun c => if h : c < t then c₀ * M.2 ℓ ⟨c, h⟩ * A.Xhat c d (A.omega q) else 0
+    have h1 : ∑ c : Fin (2 ^ cols), (if h : c.val < t then c₀ * M.2 ℓ ⟨c.val, h⟩ else 0) *
+        A.Xhat c.val d (A.omega q) = ∑ c ∈ Finset.range (2 ^ cols), g c := by
+      rw [← Fin.sum_univ_eq_sum_range]
+      refine Finset.sum_congr rfl fun c _ => ?_
+      simp only [g]
+      split_ifs <;> simp
+    have h2 : ∑ j : Fin t, M.2 ℓ j * (c₀ * A.Xhat j.val d (A.omega q)) = ∑ c ∈ Finset.range t, g c := by
+      rw [← Fin.sum_univ_eq_sum_range]
+      refine Finset.sum_congr rfl fun j _ => ?_
+      simp only [g, j.isLt, ↓reduceDIte]
+      ring
+    rw [h1, h2]
+    refine (Finset.sum_subset (Finset.range_subset_range.2 ht) fun c _ hc => ?_).symm
+    simp only [g, Finset.mem_range] at hc ⊢
+    simp [hc]
+  simp only [zkEnc, encAt, Fin.sum_univ_add, zkCoeffs_left, zkCoeffs_right, Fin.val_castAdd, Fin.val_natAdd,
+    add_mul, Finset.sum_add_distrib, key, mul_add]
+  ring
+
 /-- The lane polynomial determines the coefficients: the novel basis is linearly independent. -/
 theorem encPoly_injective {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
     [DecidableEq K] (A : Arith F K) (hA : A.Correct) (d k : ℕ) (hd : d ≤ 40) (hk : k ≤ 2 ^ d) :
@@ -106,25 +140,28 @@ theorem zkLevelZero_enc {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Fiel
   funext M q ℓ
   exact encPoly_eval A hA d _ hd hk _ q
 
-/-- **The masked level-0 decoder meets `ListComplete`** for the masked columns, at every `agree`. -/
-theorem listComplete_zkLevelZero {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
+/-- **The masked code's Johnson count** at `agree`: `⌊(2^cols + t + 1)/agree²⌋ + 1`. -/
+theorem zkLevelZero_nMin {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
     [DecidableEq K] (A : Arith F K) (hA : A.Correct) (s cols t d : ℕ) (c₀ : F) (hd : d ≤ 40)
     (hk : 2 ^ cols + t ≤ 2 ^ d) (agree : ℝ) :
-    ListComplete (zkEnc A d c₀ (s := s) (cols := cols) (t := t)) agree
+    (zkLevelZero A hA s cols t d c₀ hd hk).nMin agree = johnsonCount (2 ^ cols + t) agree := rfl
+
+/-- **The masked level-0 decoder meets `ListComplete`** for the masked columns, at the Johnson count
+`⌊(2^cols + t + 1)/agree²⌋ + 1`, at every `agree > 0`. -/
+theorem listComplete_zkLevelZero {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
+    [DecidableEq K] (A : Arith F K) (hA : A.Correct) (s cols t d : ℕ) (c₀ : F) (hd : d ≤ 40)
+    (hk : 2 ^ cols + t ≤ 2 ^ d) (agree : ℝ) (ha : 0 < agree) :
+    ListComplete (zkEnc A d c₀ (s := s) (cols := cols) (t := t)) agree (fun _ => johnsonCount (2 ^ cols + t) agree)
       ((zkLevelZero A hA s cols t d c₀ hd hk).decode agree) := by
   rw [← zkLevelZero_enc A hA s cols t d c₀ hd hk]
-  exact (zkLevelZero A hA s cols t d c₀ hd hk).listComplete_decode agree
+  exact (zkLevelZero A hA s cols t d c₀ hd hk).listComplete_decode agree ha
 
-/-- **The masked code's Johnson regime**: opened columns at distinct positions below `2^64`, and `agree ≤ 1`
-strictly above `√((2^cols + t + 1)/N)`. -/
-theorem zkLevelZero_regime {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
+/-- Opened masked columns at distinct positions below `2^64` sit at distinct points. -/
+theorem zkLevelZero_points_nodup {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
     [DecidableEq K] (A : Arith F K) (hA : A.Correct) (s cols t d : ℕ) (c₀ : F) (hd : d ≤ 40)
-    (hk : 2 ^ cols + t ≤ 2 ^ d) (agree : ℝ) (os : List (ℕ × (Fin s → F))) (hnd : (os.map Prod.fst).Nodup)
-    (hlt : ∀ p ∈ os, p.1 < 2 ^ 64) (ha : agree ≤ 1)
-    (hJ : Real.sqrt ((2 ^ cols + t + 1) * os.length) < agree * os.length) :
-    (zkLevelZero A hA s cols t d c₀ hd hk).Regime agree os := by
-  refine (zkLevelZero A hA s cols t d c₀ hd hk).regime_of_johnson agree os ?_ ha
-    (by simpa [zkLevelZero] using hJ)
+    (hk : 2 ^ cols + t ≤ 2 ^ d) (os : List (ℕ × (Fin s → F))) (hnd : (os.map Prod.fst).Nodup)
+    (hlt : ∀ p ∈ os, p.1 < 2 ^ 64) :
+    (os.map fun p => (zkLevelZero A hA s cols t d c₀ hd hk).dom p.1).Nodup := by
   have hpts : (os.map fun p => A.omega p.1) = (os.map Prod.fst).map A.omega := by rw [List.map_map]; rfl
   change (os.map fun p => A.omega p.1).Nodup
   rw [hpts]
@@ -133,6 +170,33 @@ theorem zkLevelZero_regime {F K : Type} [Field F] [Fintype F] [DecidableEq F] [F
     exact hlt p hp
   · obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hy
     exact hlt p hp
+
+/-- **The masked code's Johnson regime**: opened columns at distinct positions below `2^64`, and `agree ≤ 1`
+strictly above `√((2^cols + t + 1)/N)`. -/
+theorem zkLevelZero_regime {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
+    [DecidableEq K] (A : Arith F K) (hA : A.Correct) (s cols t d : ℕ) (c₀ : F) (hd : d ≤ 40)
+    (hk : 2 ^ cols + t ≤ 2 ^ d) (agree : ℝ) (os : List (ℕ × (Fin s → F))) (hnd : (os.map Prod.fst).Nodup)
+    (hlt : ∀ p ∈ os, p.1 < 2 ^ 64) (ha : agree ≤ 1)
+    (hJ : Real.sqrt ((2 ^ cols + t + 1) * os.length) < agree * os.length) :
+    (zkLevelZero A hA s cols t d c₀ hd hk).Regime agree os :=
+  (zkLevelZero A hA s cols t d c₀ hd hk).regime_of_johnson agree os
+    (zkLevelZero_points_nodup A hA s cols t d c₀ hd hk os hnd hlt) ha (by simpa [zkLevelZero] using hJ)
+
+/-- Outside the masked code's Johnson regime, on opened columns at distinct positions below `2^64`, the decoder
+returns `[]`. -/
+theorem zkLevelZero_decode_eq_nil {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
+    [DecidableEq K] (A : Arith F K) (hA : A.Correct) (s cols t d : ℕ) (c₀ : F) (hd : d ≤ 40)
+    (hk : 2 ^ cols + t ≤ 2 ^ d) (agree : ℝ) (os : List (ℕ × (Fin s → F))) (hnd : (os.map Prod.fst).Nodup)
+    (hlt : ∀ p ∈ os, p.1 < 2 ^ 64) (h : ¬ (zkLevelZero A hA s cols t d c₀ hd hk).Regime agree os) :
+    (zkLevelZero A hA s cols t d c₀ hd hk).decode agree os = [] :=
+  (zkLevelZero A hA s cols t d c₀ hd hk).decode_eq_nil agree os
+    (zkLevelZero_points_nodup A hA s cols t d c₀ hd hk os hnd hlt) h
+
+/-- **One masked run's level-0 openings are fewer than the Johnson count**: at `0 < agree ≤ 1`, the count is above
+`2^cols + t + 1`, so above the `t = 2·q₀` positions both reps open. -/
+theorem pad_lt_zkJohnsonCount {cols t : ℕ} {agree : ℝ} (ha0 : 0 < agree) (ha1 : agree ≤ 1) :
+    t < johnsonCount (2 ^ cols + t) agree := by
+  exact lt_of_le_of_lt (Nat.le_add_left t (2 ^ cols)) (Nat.lt_of_succ_lt (lt_johnsonCount ha0 ha1))
 
 /-- In the masked code's Johnson regime the decoder is the Guruswami–Sudan path. -/
 theorem zkLevelZero_decode_eq_gsPath {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
