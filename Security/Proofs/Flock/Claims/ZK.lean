@@ -7,6 +7,7 @@ import Proofs.Flock.Claims.ZK.Forced
 import Proofs.Flock.Claims.ZK.Rewind
 import Proofs.Flock.Claims.ZK.GKProof
 import Proofs.Flock.Claims.ZK.GKCost
+import Proofs.Flock.Claims.ZK.GKExp
 import Proofs.Flock.Claims.ZK.Flock
 
 /-!
@@ -32,8 +33,14 @@ import Proofs.Flock.Claims.ZK.Flock
   `PrefixHides`, `SHVZK` and `Binding`; a binding failure in the simulator is a collision among its own calls
   (`mm_coll`).
 * `GKCost`: its cost, `SimCost` at `simBound` under `CostLe` (`Proto.gk_cost`).
-* `Flock`: **`Flock.zkR_of_proto`**, the proposed `Flock.ZKR` for a masked deployed verifier whose coins a committed-coin
-  protocol commits at `Hello` (`D.V.k = G.K + 1`), with `S_Flock`'s cost (`Flock.simCost_of_proto`); what changes for a
-  malicious verifier, how the hypotheses map to the session analysis's Theorem GK (`gk_simulate_hm96`), and what the
-  `--zk` instance still needs.
+* `GKExp`: **`Proto.gkE_zk`**, the session analysis's simulator with estimation (`gk_simulate`, threshold `t`, cap `M`)
+  as a `Claims.Simulator` meets `ZKmalR` at `3·δ_A + 8t·δ_B + 3^{-t} + t/M` (`2·3^{-t}` for the last two at
+  `M = t·3^t`, `gkE_zk_pow`) from the same three facts, through the old `gk_close` on the protocol's `Model` at each
+  nonce; its cost is `(1 + 5t)` runs in expectation at every cap (`SimCostExp`, `gkE_costExp`) and `1 + 5M` at worst
+  (`gkE_cost`).
+* `Flock`: **`Flock.zkR_of_proto`**, the proposed `Flock.ZKR` for a masked deployed verifier that models the
+  committed-coin protocol's rounds, `Hello` among them (`D.V.k = G.k`); `Flock.ZKRHello`, the bridge at `D.V.k = G.K + 1`
+  for today's `FlockDeploy.V`, which leaves `Hello` out (`Flock.zkRHello_deployZk`); `S_Flock`'s cost
+  (`Flock.simCost_of_proto`) and the expected-cost simulator's; what changes for a malicious verifier, how the
+  hypotheses map to the session analysis's Theorem GK (`gk_simulate_hm96`), and what the `--zk` instance still needs.
 -/
