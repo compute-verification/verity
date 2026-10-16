@@ -183,7 +183,7 @@ def main() -> int:
               + "; segments " + ", ".join(f"{k} {v:.3f}" for k, v in p["segments_latency_ms"].items())
               + "; leaves and tree " + ", ".join(f"{k} {v:.3f}" for k, v in p["tree_latency_ms"].items()))
         for dr, lab in ((True, "with the draw"), (False, "without")):
-            ok = {nm: x for nm, x in p["arms"].items() if x["host_ok"] and nm.endswith("_nd") != dr}
+            ok = {nm: x for nm, x in p["arms"].items() if x["host_ok"] and ("nd" in nm.split("_")) != dr}
             if ok:
                 nm = min(ok, key=lambda n: ok[n]["ms"])
                 print(f"  best {lab}: {nm}, {ok[nm]['ms']:.2f} ms (lone-request TTFT), {pct(ok[nm]['over_gemm'])} over the GEMMs, "
