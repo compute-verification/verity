@@ -22,7 +22,8 @@
 // distinct buffer a layer):
 //   plain     the k sequences plain int8 on one stream: the linears over all k * M tokens in row blocks of PLAIN_RB (8192),
 //             attention a strided batch over the k sequences. The divisor.
-//   chunked   k streams, each one chunk's 192 GEMMs and nothing else
+//   chunked   k streams, each one chunk's 192 GEMMs and nothing else (chunkedrrW: in rrW's order); plain int8 too, so
+//             report.py also costs against the fastest of plain and these
 //   eq        k streams at one priority, per stage commit -> draw -> GEMM
 //   prio      eq with chunk c's stream at priority class floor(c * levels / k), chunk 0 highest
 //   hhi       eq with each chunk's commitments on a stream of its own at the highest priority
@@ -170,6 +171,7 @@ struct Sched {
 };
 static Sched sched_of(const std::string& n) {
   if (n == "chunked") return {n, false, false, true, false, 0, 0, 0};
+  if (n.rfind("chunkedrr", 0) == 0) return {n, false, false, true, false, 0, atoi(n.c_str() + 9), 0};
   if (n == "eq") return {n, true, true, true, false, 0, 0, 0};
   if (n == "prio") return {n, true, true, true, true, 0, 0, 0};
   if (n == "hhi") return {n, true, true, true, false, 1, 0, 0};

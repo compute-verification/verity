@@ -5,6 +5,8 @@
 
 For each chunk size M and depth k (k chunks of M tokens in flight, each its own commit -> draw -> GEMM chain):
 - cost: an arm's makespan over plain's (the same k sequences plain int8, linears batched over all k * M tokens) minus 1;
+  cost_best: over the fastest plain int8 schedule of the cell (plain, chunked or chunkedrrW, which run the k chunks'
+  GEMMs on k streams);
   cost_sat: over the plain rate at saturation, the best plain tokens/s at that M over every k measured;
 - the protocol arms are the ones that commit and draw (eq, prio, hhi, hprio, rrW); best is the fastest of them;
 - lone TTFT: k = 1's eq over plain at k = 1; under load: each chunk's end (from the draws' stamps) over plain's makespan;
@@ -109,27 +111,34 @@ def main() -> int:
             cell = {"fr_rot": rot, "M": M, "k": k, "plain_ms": p, "plain_mhz": arms["plain"]["mhz"], "plain_ktok_s": k * M / p,
                     "roots": r.get("roots", {}), "arms": {}}
             root_bad += [(rot, M, k, n, v) for n, v in cell["roots"].items() if v != ("differ" if n == "nohash" else "equal")]
+            pb = min(v["ms"] for n, v in arms.items() if n == "plain" or n.startswith("chunked"))
+            cell["plain_best_ms"] = pb
             for n, v in arms.items():
-                cell["arms"][n] = {"ms": v["ms"], "cost": v["ms"] / p - 1, "cost_sat": v["ms"] / sat - 1, "mhz": v["mhz"],
-                                   "share_of_peak": v["share_of_peak"]}
+                cell["arms"][n] = {"ms": v["ms"], "cost": v["ms"] / p - 1, "cost_sat": v["ms"] / sat - 1,
+                                   "cost_best": v["ms"] / pb - 1, "mhz": v["mhz"], "share_of_peak": v["share_of_peak"]}
             proto = {n: v for n, v in cell["arms"].items() if is_protocol(n)}
             if proto:
                 b = min(proto, key=lambda n: proto[n]["ms"])
                 cell["best"] = b
                 cell["best_cost"] = proto[b]["cost"]
                 cell["best_cost_sat"] = proto[b]["cost_sat"]
+            if proto:
+                cell["best_cost_best"] = proto[cell["best"]]["cost_best"]
             for kind in ("lite", "litec"):
                 lite = {n: v for n, v in cell["arms"].items() if lite_kind(n) == kind}
                 if lite:
                     b = min(lite, key=lambda n: lite[n]["ms"])
                     cell[f"best_{kind}"] = b
                     cell[f"best_{kind}_cost"] = lite[b]["cost"]
+                    cell[f"best_{kind}_cost_best"] = lite[b]["cost_best"]
             for n, c in r.get("chunks", {}).items():
                 e = sorted(c["end_ms"])
                 cell["arms"][n]["ends_over_plain"] = {"first": e[0] / p, "median": e[len(e) // 2] / p, "last": e[-1] / p}
                 cell["arms"][n]["stage_spans_ms"] = {"draw": c["draw_ms_mean"], "gemm_commit": c["gemm_commit_ms_mean"]}
             res["cells"].append(cell)
             line = "  ".join(f"{n} {100 * v['cost']:+.1f}%" for n, v in cell["arms"].items() if n != "plain")
+            if pb < p:
+                line += f"  (fastest plain {pb:.2f} ms)"
             print(f"  k={k:2d} plain {p:8.2f} ms ({cell['plain_ktok_s']:.1f} k tok/s, {arms['plain']['mhz']:.0f} MHz) | {line}")
             if "hashonly" in cell["arms"]:
                 print(f"        the commitments alone: {100 * cell['arms']['hashonly']['ms'] / p:.1f}% of plain's makespan")
@@ -151,6 +160,7 @@ def main() -> int:
     for rot in sorted({c["fr_rot"] for c in res["cells"]}):
         cs = [c for c in res["cells"] if c["fr_rot"] == rot]
         print(f"\nk x chunk, {rot}: the best protocol arm's cost against plain (against saturated plain)")
+        print("  (the stand-in tables: against plain (against the fastest plain of the cell: plain, chunked, chunkedrrW))")
         ks = sorted({c["k"] for c in cs})
         Ms = sorted({c["M"] for c in cs})
         print("  k \\ M " + "".join(f"{M:>24d}" for M in Ms))
@@ -170,13 +180,15 @@ def main() -> int:
             print(f"  with the stand-in committer, {what} (each commitment's compressions in 128-thread CTAs, no shared memory):")
             for k in ks:
                 cells = {c["M"]: c for c in cs if c["k"] == k}
-                out = [f"{100 * cells[M][f'best_{kind}_cost']:+.1f}% {cells[M][f'best_{kind}']}"
+                out = [f"{100 * cells[M][f'best_{kind}_cost']:+.1f}% ({100 * cells[M][f'best_{kind}_cost_best']:+.1f}%) {cells[M][f'best_{kind}']}"
                        if M in cells and f"best_{kind}" in cells[M] else "-" for M in Ms]
                 print(f"  {k:5d} " + "".join(f"{x:>24s}" for x in out))
             for M in Ms:
                 ok = [c for c in cs if c["M"] == M and f"best_{kind}" in c and c[f"best_{kind}_cost"] <= 0.05]
+                okb = [c for c in cs if c["M"] == M and f"best_{kind}" in c and c[f"best_{kind}_cost_best"] <= 0.05]
                 print(f"  smallest k at <= 5% with the {kind} stand-in, M = {M}: "
-                      + (f"{min(ok, key=lambda c: c['k'])['k']}" if ok else "none measured"))
+                      + (f"{min(ok, key=lambda c: c['k'])['k']}" if ok else "none measured")
+                      + "; against the fastest plain: " + (f"{min(okb, key=lambda c: c['k'])['k']}" if okb else "none measured"))
         lone = {}
         for c in cs:
             if c["k"] == 1 and "eq" in c["arms"]:
