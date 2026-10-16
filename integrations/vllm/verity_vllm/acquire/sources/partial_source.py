@@ -451,6 +451,18 @@ class TPPartialSource:
         self.ref, self.ref_in = {}, {}
         return res
 
+    def _norm_partials_under(self, layout: list, recorded: set) -> dict[str, list]:
+        """{recorded module: its all-reduce + norm sites' `<norm>/part_rank<r>` metas in commit order}, each partial under its nearest
+        recorded ancestor module (a decoder layer, not the model that holds every layer)."""
+        norms, tail = set(self.far.site_names()), f"/part_rank{self.rank}"
+        out: dict[str, list] = {}
+        for m in layout:
+            site = m.name[:-len(tail)] if m.name.endswith(tail) else None
+            owners = [o for o in recorded if o and site in norms and site.startswith(o + ".")] if site else []
+            if owners:
+                out.setdefault(max(owners, key=len), []).append(m)
+        return out
+
     def compare_match_oracle(self, capture_dir: str, reader: Any) -> dict[str, Any]:
         """[R15 coord M-0481 C2 form (B), TP family] Every committed TP partial (`<site>/part_rank<r>` | `/shard_rank<r>`) and received
         fused-MoE output (`<site>/out`) of THIS rank -- opened and verified against the rank's run root by `reader` (an
@@ -509,8 +521,13 @@ class TPPartialSource:
             # [TIP3] one oracle record per module per step, else refused for this step -- except a MID-module site (R19 moe: OlmoeAttention
             # gathers q then k), which is recorded exactly its static call count of times and paired by (step, module, occurrence j) with the
             # committer's j-th commit of the member (the binder's occurrence j); any other multiplicity is still refused
+            # an all-reduce + norm site's partial is `<norm>/part_rank<r>` while the recorder names the collective's enclosing module (a
+            # GLM decoder layer runs two: input_layernorm's and post_attention_layernorm's): such a module's records pair, in call order,
+            # with the norm-site partials whose nearest recorded ancestor it is, in commit order, when the two counts agree
             mods = [x.get("module") for x in xs]
-            dups = sorted({m for m in mods if mods.count(m) > 1 and mods.count(m) != mid_counts.get(m)})
+            under = self._norm_partials_under(self.c._layouts.get(step, []), set(mods))
+            dups = sorted({m for m in mods if mods.count(m) > 1 and mods.count(m) != mid_counts.get(m)
+                           and len(under.get(m, ())) != mods.count(m)})
             if dups:
                 res["duplicate_module_steps"].append({"step": step, "modules": dups[:6]})
                 continue
@@ -520,13 +537,17 @@ class TPPartialSource:
                 mod = x.get("module")
                 j = occ_of.get(mod, 0)
                 occ_of[mod] = j + 1
-                pairs = [(f"{mod}/{'part' if x['kind'] == 'all_reduce' else 'shard'}_rank{self.rank}", v["part"][k], "partial")]
+                pname = f"{mod}/{'part' if x['kind'] == 'all_reduce' else 'shard'}_rank{self.rank}"
+                if pname not in by_name and len(under.get(mod, ())) == mods.count(mod):
+                    pairs = [(under[mod][j].name, v["part"][k], "partial", under[mod][j])]
+                else:
+                    pairs = [(pname, v["part"][k], "partial", _nth(by_name, pname, j))]
                 if mod in received:
-                    pairs.append((f"{mod}/out", v["out"][k], "out"))
-                for member, oracle_t, what in pairs:
+                    pairs.append((f"{mod}/out", v["out"][k], "out", _nth(by_name, f"{mod}/out", j)))
+                for member, oracle_t, what, meta in pairs:
                     bm = res["by_member"].setdefault(what, {"tensors": 0, "equal": 0})
                     try:
-                        committed = _committed(reader, step, _nth(by_name, member, j))
+                        committed = _committed(reader, step, meta)
                     except OpeningNotVerified as e:
                         seen.add(member)
                         res["not_verified"].append((step, k, member, str(e)[:200]))

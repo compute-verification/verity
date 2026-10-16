@@ -170,3 +170,46 @@ def test_a_member_changed_in_the_retained_copy_after_the_commit_is_not_verified_
     assert r["verdict"] == "FAIL" and r["not_verified_n"] == 1 and r["equal"] == 2 and r["mismatch_n"] == 0 and r["not_in_oracle_n"] == 0
     assert r["not_verified"][0][:3] == (0, 1, f"{MOE}/out") and "does not verify against the run root" in r["why"]
     assert r["value_source"]["failed"] == 1 and r["value_source"]["failures"][0]["name"] == f"{MOE}/out"
+
+
+LAYER = "model.layers.1"
+NORMS = [f"{LAYER}.input_layernorm", f"{LAYER}.post_attention_layernorm"]
+
+
+def _layer_oracle(cap: Path, parts: list[torch.Tensor]) -> None:
+    cap.mkdir(parents=True, exist_ok=True)
+    with (cap / "coll.rank0.jsonl").open("w") as f:
+        for k, p in enumerate(parts):
+            f.write(json.dumps({"rank": 0, "step": 0, "k": k, "kind": "all_reduce", "module": LAYER, "shape": list(p.shape)}) + "\n")
+    torch.save({"step": 0, "part": parts, "out": []}, cap / "coll.rank0.step0.pt")
+
+
+def _norm_src(committed: list[tuple[str, torch.Tensor]]):
+    src, rd = _src({0: [_meta(f"{n}/part_rank0", t) for n, t in committed]})
+    src.far.site_names = lambda: list(NORMS)
+    return src, rd
+
+
+def test_a_layer_recorded_twice_pairs_with_its_norm_site_partials_in_commit_order(tmp_path):
+    """GLM: the recorder names both of a decoder layer's all-reduces by the layer, the Commit names them under its two norms."""
+    p0, p1, _o0, _o1 = _tensors()
+    _layer_oracle(tmp_path, [p0, p1])
+    src, rd = _norm_src([(NORMS[0], p0), (NORMS[1], p1)])
+    r = src.compare_match_oracle(str(tmp_path), rd)
+    assert r["verdict"] == "PASS" and r["tensors"] == r["equal"] == 2 and r["duplicate_module_steps"] == []
+
+
+def test_norm_site_partials_committed_out_of_call_order_are_mismatches(tmp_path):
+    p0, p1, _o0, _o1 = _tensors()
+    _layer_oracle(tmp_path, [p0, p1])
+    src, rd = _norm_src([(NORMS[1], p1), (NORMS[0], p0)])
+    r = src.compare_match_oracle(str(tmp_path), rd)
+    assert r["verdict"] == "FAIL" and r["mismatch_n"] == 2 and r["equal"] == 0
+
+
+def test_a_layer_recorded_more_often_than_its_norm_site_partials_is_still_refused(tmp_path):
+    p0, p1, _o0, _o1 = _tensors()
+    _layer_oracle(tmp_path, [p0, p1])
+    src, rd = _norm_src([(NORMS[0], p0)])
+    r = src.compare_match_oracle(str(tmp_path), rd)
+    assert r["verdict"] == "FAIL" and r["duplicate_module_steps"] == [{"step": 0, "modules": [LAYER]}]
