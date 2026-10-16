@@ -447,8 +447,8 @@ def test_a_private_inner_sessions_part_is_v_stars_holo_part_byte_for_byte(tmp_pa
     """At a private inner shape (Shape(22, 10, 2), whose one part reads h when holo) the verifier's list is V*'s holo
     statements, and the part as `rec_residuals.statement(..., holo=True)` writes it is V*'s file byte for byte as the
     statement after the levels: it passes, its own ports each `m<k>` under `rec-c<k>` at both reps' rows, h's round
-    (`rec_algebra.h_round`) among them. The same file without META's `holo` is refused at the private shape by the byte it
-    differs at, and the holo file at the plain shape as not V*'s (the plain part reads no h). About two minutes:
+    (`rec_algebra.h_round`) among them. The same file without META's `holo` is refused when it loads (its unit is not the
+    plain part's), and the holo file at the plain shape as not V*'s (the plain part reads no h). About two minutes:
     composing a holo part is the only way to reach `RecVStar.circuitFile`'s holo branch with a real part's unit, so no
     cheaper test catches the verifier's holo file drifting from the one the prover commits."""
     m, k, c = 22, 10, 2
@@ -473,9 +473,8 @@ def test_a_private_inner_sessions_part_is_v_stars_holo_part_byte_for_byte(tmp_pa
     assert _with_holo(text, True) == text and len(short) < len(text)
     (tmp_path / "plain-meta.txt").write_text(short)
     rc, line = _statements(hidden, "--circuit", str(tmp_path / "plain-meta.txt"), *flags)
-    assert rc == 1 and line["error"].startswith(
-        f"{name}: the circuit file ({len(short)} bytes) is not V*'s ({len(text)} bytes): they differ at byte "), line
-    assert line["error"].endswith(", line 2"), line
+    assert rc == 1 and line["error"].startswith(f"circuit {name}: unit {name} has "), line
+    assert "not its plain part's" in line["error"] and line["error"].endswith("(META holo: false)"), line
     rc, line = _statements(plain, "--circuit", str(tmp_path / "holo" / "circuit.txt"), *flags)
     assert rc == 1 and line["error"].startswith(f"{name}: the circuit file ({len(text)} bytes) is not V*'s"), line
 
