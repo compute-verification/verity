@@ -30,7 +30,7 @@ class PFillRam:
         "mechanism": ["filler:fresh-noise-imma", "noise:sha512-coins-pm1", "receipt:ram-k32", "place:split",
                       "split:per-point-table", "prefill:none"],
         "hypothesis": "fresh ±1 noise for every MMA with a ram receipt on every k32 prefix sum: Theorem E's floor "
-                      "(c/m = 1/4) without CH, at 0.78 of the int8 peak alone on its SMs"})
+                      "(c/m = 1/4) without CH, at 0.79 of the int8 peak alone on its SMs"})
     sources: tuple = SOURCES
     filler: Filler | None = Filler(W=8, NC=4, S=256, chunk_log2=19)
     choice: str = "FILL v1's offline table of 11 (B, L) splits; a lookup and a green split at serving time"
@@ -50,5 +50,5 @@ class PFillDuo(PFillRam):
         "parent": "pfill-ram", "approach": "pouw/filler-proved",
         "mechanism": ["filler:fresh-noise-imma", "noise:sha512-coins-pm1", "receipt:duo-k32", "place:split",
                       "split:per-point-table", "prefill:none"],
-        "hypothesis": "pfill with duo for ram: the same proved floor with the stronger receipt, at 0.60 of peak alone"})
+        "hypothesis": "pfill with duo for ram: the same proved floor with the stronger receipt, at 0.57 of peak alone"})
     filler: Filler | None = Filler(W=8, NC=2, S=256, chunk_log2=19)

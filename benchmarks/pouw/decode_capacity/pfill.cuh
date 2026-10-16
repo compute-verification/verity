@@ -40,7 +40,7 @@
 #define PF_CTAS 2  // blocks an SM: 2 x 48 KB, 4 warps an SMSP
 #endif
 #ifndef PF_SHA_ROLL
-#define PF_SHA_ROLL 0  // 1: pf_compress (16 rounds a loop iteration) for rs_compress (all 80 unrolled); same digests
+#define PF_SHA_ROLL 1  // pf_compress (16 rounds a loop iteration); 0: rs_compress (all 80 unrolled); same digests
 #endif
 #ifndef PF_DEFER
 #define PF_DEFER 0  // 1: absorb B fragment j's outputs after issuing j + 1's MMAs (same receipt; 16 more registers)
