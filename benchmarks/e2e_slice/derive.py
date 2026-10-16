@@ -85,19 +85,76 @@ def tile_receipts(seed: int, Ts: list[np.ndarray], tile: int) -> np.ndarray:
         return y ^ rotl(z, 16)
 
 
-def tile_check(A: np.ndarray, B: np.ndarray, sigma: bytes, c: int, tm: int, tn: int, k: int):
-    """The tile (tm, tn)'s duo receipts and served product A B'^T from A (m x k) and B (n x k) int8 and the coin alone."""
-    key = call_key(sigma, c)
-    m = A.shape[0]
-    U = u_noise64(key, m)[tm * TM:(tm + 1) * TM]
+#: the two-stage slice's public map from stage 1's served product to stage 2's A: clamp(floor(y / 2^PHI_SHIFT), -63, 63)
+PHI_SHIFT = 12
+
+
+def phi(Y: np.ndarray) -> np.ndarray:
+    return np.clip(np.asarray(Y, np.int64) >> PHI_SHIFT, -63, 63).astype(np.int8)
+
+
+def thread_entries() -> tuple[np.ndarray, np.ndarray]:
+    """Every thread's 32 entries' (row, col) in its tile, (NCT, 32) each: entry q = 4 t + e (segment.py's row_slot and
+    col_slot)."""
+    ctid = np.arange(NCT)
+    warp, lane = ctid // 32, ctid % 32
+    wm, wn, g, qq = warp // (BN // 32), warp % (BN // 32), lane >> 2, lane & 3
+    q = np.arange(32)
+    t, e = q // 4, q % 4
+    r = 2 * (t // 4) + (e >> 1)
+    c = 2 * (t % 4) + (e & 1)
+    rows = wm[:, None] * WM + g[:, None] + 8 * r[None, :]
+    cols = wn[:, None] * 32 + 2 * qq[:, None] + 8 * (c[None, :] >> 1) + (c[None, :] & 1)
+    return rows, cols
+
+
+def seg_keys(seed: int, tile: int, ks: int, segs=None, threads=None) -> tuple[np.ndarray, np.ndarray]:
+    """The DUOS chains' keys (y, z) at the given segments and threads, (segs, threads, 8) u32 (segment.init)."""
+    segs = np.arange(ks) if segs is None else np.asarray(segs)
+    threads = np.arange(NCT) if threads is None else np.asarray(threads)
+    with np.errstate(over="ignore"):
+        idx = (((np.uint32(tile) * np.uint32(NCT) + threads[None, :, None].astype(np.uint32)) * np.uint32(ks)
+                + segs[:, None, None].astype(np.uint32)) * np.uint32(8) + np.arange(8, dtype=np.uint32)[None, None, :])
+        y = mix32(np.uint32(seed) ^ mix32(idx))
+        return y, mix32(y + np.uint32(0x9E3779B9))
+
+
+def seg_receipts(seed: int, Ts: np.ndarray, tile: int) -> np.ndarray:
+    """fgemm.cu's DUOS receipts of one tile, (KS, NCT) u32: Ts (KS, 128, 128) the tile's u32 prefix words after each
+    32-step segment."""
+    ks = len(Ts)
+    rows, cols = thread_entries()
+    y, z = seg_keys(seed, tile, ks)
+    P = Ts[:, rows, cols]
+    with np.errstate(over="ignore"):
+        for t in range(8):
+            h = 4 * (t % 2)
+            u = y[:, :, h:h + 4] ^ P[:, :, 4 * t:4 * t + 4] ^ np.uint32(key_xor(0, t))
+            y[:, :, h:h + 4] = u * np.uint32(key_mul(0, t)) + z[:, :, h:h + 4]
+            z[:, :, h:h + 4] = rotl(u, rot_of(False, 0, t)) + y[:, :, h:h + 4]
+        return np.bitwise_xor.reduce(y ^ rotl(z, 16), axis=2)
+
+
+def tile_noised(A: np.ndarray, B: np.ndarray, key: bytes, tm: int, tn: int, k: int):
+    """The tile (tm, tn)'s A rows, U rows, B' rows and F rows, and its u32 prefix words after each segment (KS, 128, 128)."""
+    U = u_noise64(key, A.shape[0])[tm * TM:(tm + 1) * TM]
     F = f_rows(key, tn * BN, BN, k)
     Ar = A[tm * TM:(tm + 1) * TM].astype(np.int64)
     Bp = B[tn * BN:(tn + 1) * BN].astype(np.int64) + F
     Ap = Ar + np.tile(U, (1, k // 32))
-    T = np.zeros((TM, BN), np.int64)
-    Ts = []
-    for s in range(k // 32):
-        T += Ap[:, 32 * s:32 * s + 32] @ Bp[:, 32 * s:32 * s + 32].T
-        Ts.append((T & 0xFFFFFFFF).astype(np.uint32))
-    tiles_n = B.shape[0] // BN
-    return tile_receipts(receipt_seed(sigma, c), Ts, tm * tiles_n + tn), Ar @ Bp.T, U, F
+    inc = np.einsum("isk,jsk->sij", Ap.reshape(TM, k // 32, 32), Bp.reshape(BN, k // 32, 32))
+    Ts = (np.cumsum(inc, axis=0) & 0xFFFFFFFF).astype(np.uint32)
+    return Ar, U, Bp, F, Ts
+
+
+def tile_check(A: np.ndarray, B: np.ndarray, sigma: bytes, c: int, tm: int, tn: int, k: int, seg: bool = False,
+               key: bytes | None = None, rseed: int | None = None):
+    """The tile (tm, tn)'s duo receipts and served product A B'^T from A (m x k) and B (n x k) int8 and the coin alone:
+    the receipts over the whole of K (NCT, 8), or with ``seg`` a word a segment (KS, NCT). ``key`` and ``rseed`` replace
+    the call's noise key and receipt key."""
+    key = call_key(sigma, c) if key is None else key
+    rseed = receipt_seed(sigma, c) if rseed is None else rseed
+    Ar, U, Bp, F, Ts = tile_noised(A, B, key, tm, tn, k)
+    tile = tm * (B.shape[0] // BN) + tn
+    R = seg_receipts(rseed, Ts, tile) if seg else tile_receipts(rseed, list(Ts), tile)
+    return R, Ar @ Bp.T, U, F
