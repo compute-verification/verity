@@ -20,92 +20,156 @@ __device__ __forceinline__ uint32_t L3(uint32_t a, uint32_t b, uint32_t c) {
 // yl = &Ys[lane], term plane t at yl[t*BS_CSA_CB] (lane-interleaved shared); xb[t] = this warp's row X byte (shared)
 __device__ __forceinline__ void bs_csa_chunk(uint32_t* __restrict__ P, const uint32_t* __restrict__ yl,
                                              const int8_t* __restrict__ xb) {
-  uint32_t um0 = (uint32_t)(-(int)(xb[0] < 0));
-  uint32_t vm0 = (uint32_t)(-(int)(xb[1] < 0));
-  uint32_t t0 = L3<0x96>(0u, yl[0 * BS_CSA_CB] ^ um0, yl[1 * BS_CSA_CB] ^ vm0);
-  uint32_t t1 = L3<0xe8>(0u, yl[0 * BS_CSA_CB] ^ um0, yl[1 * BS_CSA_CB] ^ vm0);
-  uint32_t um1 = (uint32_t)(-(int)(xb[2] < 0));
-  uint32_t vm1 = (uint32_t)(-(int)(xb[3] < 0));
-  uint32_t t2 = L3<0x96>(t0, yl[2 * BS_CSA_CB] ^ um1, yl[3 * BS_CSA_CB] ^ vm1);
-  uint32_t t3 = L3<0xe8>(t0, yl[2 * BS_CSA_CB] ^ um1, yl[3 * BS_CSA_CB] ^ vm1);
+  uint32_t t0, t1;
+  switch ((int(xb[0] < 0) << 1) | int(xb[1] < 0)) {
+    case 0: t0 = L3<0x96>(0u, yl[0 * BS_CSA_CB], yl[1 * BS_CSA_CB]); t1 = L3<0xe8>(0u, yl[0 * BS_CSA_CB], yl[1 * BS_CSA_CB]); break;
+    case 1: t0 = L3<0x69>(0u, yl[0 * BS_CSA_CB], yl[1 * BS_CSA_CB]); t1 = L3<0xd4>(0u, yl[0 * BS_CSA_CB], yl[1 * BS_CSA_CB]); break;
+    case 2: t0 = L3<0x69>(0u, yl[0 * BS_CSA_CB], yl[1 * BS_CSA_CB]); t1 = L3<0xb2>(0u, yl[0 * BS_CSA_CB], yl[1 * BS_CSA_CB]); break;
+    case 3: t0 = L3<0x96>(0u, yl[0 * BS_CSA_CB], yl[1 * BS_CSA_CB]); t1 = L3<0x71>(0u, yl[0 * BS_CSA_CB], yl[1 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
+  uint32_t t2, t3;
+  switch ((int(xb[2] < 0) << 1) | int(xb[3] < 0)) {
+    case 0: t2 = L3<0x96>(t0, yl[2 * BS_CSA_CB], yl[3 * BS_CSA_CB]); t3 = L3<0xe8>(t0, yl[2 * BS_CSA_CB], yl[3 * BS_CSA_CB]); break;
+    case 1: t2 = L3<0x69>(t0, yl[2 * BS_CSA_CB], yl[3 * BS_CSA_CB]); t3 = L3<0xd4>(t0, yl[2 * BS_CSA_CB], yl[3 * BS_CSA_CB]); break;
+    case 2: t2 = L3<0x69>(t0, yl[2 * BS_CSA_CB], yl[3 * BS_CSA_CB]); t3 = L3<0xb2>(t0, yl[2 * BS_CSA_CB], yl[3 * BS_CSA_CB]); break;
+    case 3: t2 = L3<0x96>(t0, yl[2 * BS_CSA_CB], yl[3 * BS_CSA_CB]); t3 = L3<0x71>(t0, yl[2 * BS_CSA_CB], yl[3 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
   uint32_t t4 = L3<0x96>(0u, t1, t3);
   uint32_t t5 = L3<0xe8>(0u, t1, t3);
-  uint32_t um2 = (uint32_t)(-(int)(xb[4] < 0));
-  uint32_t vm2 = (uint32_t)(-(int)(xb[5] < 0));
-  uint32_t t6 = L3<0x96>(t2, yl[4 * BS_CSA_CB] ^ um2, yl[5 * BS_CSA_CB] ^ vm2);
-  uint32_t t7 = L3<0xe8>(t2, yl[4 * BS_CSA_CB] ^ um2, yl[5 * BS_CSA_CB] ^ vm2);
-  uint32_t um3 = (uint32_t)(-(int)(xb[6] < 0));
-  uint32_t vm3 = (uint32_t)(-(int)(xb[7] < 0));
-  uint32_t t8 = L3<0x96>(t6, yl[6 * BS_CSA_CB] ^ um3, yl[7 * BS_CSA_CB] ^ vm3);
-  uint32_t t9 = L3<0xe8>(t6, yl[6 * BS_CSA_CB] ^ um3, yl[7 * BS_CSA_CB] ^ vm3);
+  uint32_t t6, t7;
+  switch ((int(xb[4] < 0) << 1) | int(xb[5] < 0)) {
+    case 0: t6 = L3<0x96>(t2, yl[4 * BS_CSA_CB], yl[5 * BS_CSA_CB]); t7 = L3<0xe8>(t2, yl[4 * BS_CSA_CB], yl[5 * BS_CSA_CB]); break;
+    case 1: t6 = L3<0x69>(t2, yl[4 * BS_CSA_CB], yl[5 * BS_CSA_CB]); t7 = L3<0xd4>(t2, yl[4 * BS_CSA_CB], yl[5 * BS_CSA_CB]); break;
+    case 2: t6 = L3<0x69>(t2, yl[4 * BS_CSA_CB], yl[5 * BS_CSA_CB]); t7 = L3<0xb2>(t2, yl[4 * BS_CSA_CB], yl[5 * BS_CSA_CB]); break;
+    case 3: t6 = L3<0x96>(t2, yl[4 * BS_CSA_CB], yl[5 * BS_CSA_CB]); t7 = L3<0x71>(t2, yl[4 * BS_CSA_CB], yl[5 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
+  uint32_t t8, t9;
+  switch ((int(xb[6] < 0) << 1) | int(xb[7] < 0)) {
+    case 0: t8 = L3<0x96>(t6, yl[6 * BS_CSA_CB], yl[7 * BS_CSA_CB]); t9 = L3<0xe8>(t6, yl[6 * BS_CSA_CB], yl[7 * BS_CSA_CB]); break;
+    case 1: t8 = L3<0x69>(t6, yl[6 * BS_CSA_CB], yl[7 * BS_CSA_CB]); t9 = L3<0xd4>(t6, yl[6 * BS_CSA_CB], yl[7 * BS_CSA_CB]); break;
+    case 2: t8 = L3<0x69>(t6, yl[6 * BS_CSA_CB], yl[7 * BS_CSA_CB]); t9 = L3<0xb2>(t6, yl[6 * BS_CSA_CB], yl[7 * BS_CSA_CB]); break;
+    case 3: t8 = L3<0x96>(t6, yl[6 * BS_CSA_CB], yl[7 * BS_CSA_CB]); t9 = L3<0x71>(t6, yl[6 * BS_CSA_CB], yl[7 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
   uint32_t t10 = L3<0x96>(t4, t7, t9);
   uint32_t t11 = L3<0xe8>(t4, t7, t9);
   uint32_t t12 = L3<0x96>(0u, t5, t11);
   uint32_t t13 = L3<0xe8>(0u, t5, t11);
-  uint32_t um4 = (uint32_t)(-(int)(xb[8] < 0));
-  uint32_t vm4 = (uint32_t)(-(int)(xb[9] < 0));
-  uint32_t t14 = L3<0x96>(t8, yl[8 * BS_CSA_CB] ^ um4, yl[9 * BS_CSA_CB] ^ vm4);
-  uint32_t t15 = L3<0xe8>(t8, yl[8 * BS_CSA_CB] ^ um4, yl[9 * BS_CSA_CB] ^ vm4);
-  uint32_t um5 = (uint32_t)(-(int)(xb[10] < 0));
-  uint32_t vm5 = (uint32_t)(-(int)(xb[11] < 0));
-  uint32_t t16 = L3<0x96>(t14, yl[10 * BS_CSA_CB] ^ um5, yl[11 * BS_CSA_CB] ^ vm5);
-  uint32_t t17 = L3<0xe8>(t14, yl[10 * BS_CSA_CB] ^ um5, yl[11 * BS_CSA_CB] ^ vm5);
+  uint32_t t14, t15;
+  switch ((int(xb[8] < 0) << 1) | int(xb[9] < 0)) {
+    case 0: t14 = L3<0x96>(t8, yl[8 * BS_CSA_CB], yl[9 * BS_CSA_CB]); t15 = L3<0xe8>(t8, yl[8 * BS_CSA_CB], yl[9 * BS_CSA_CB]); break;
+    case 1: t14 = L3<0x69>(t8, yl[8 * BS_CSA_CB], yl[9 * BS_CSA_CB]); t15 = L3<0xd4>(t8, yl[8 * BS_CSA_CB], yl[9 * BS_CSA_CB]); break;
+    case 2: t14 = L3<0x69>(t8, yl[8 * BS_CSA_CB], yl[9 * BS_CSA_CB]); t15 = L3<0xb2>(t8, yl[8 * BS_CSA_CB], yl[9 * BS_CSA_CB]); break;
+    case 3: t14 = L3<0x96>(t8, yl[8 * BS_CSA_CB], yl[9 * BS_CSA_CB]); t15 = L3<0x71>(t8, yl[8 * BS_CSA_CB], yl[9 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
+  uint32_t t16, t17;
+  switch ((int(xb[10] < 0) << 1) | int(xb[11] < 0)) {
+    case 0: t16 = L3<0x96>(t14, yl[10 * BS_CSA_CB], yl[11 * BS_CSA_CB]); t17 = L3<0xe8>(t14, yl[10 * BS_CSA_CB], yl[11 * BS_CSA_CB]); break;
+    case 1: t16 = L3<0x69>(t14, yl[10 * BS_CSA_CB], yl[11 * BS_CSA_CB]); t17 = L3<0xd4>(t14, yl[10 * BS_CSA_CB], yl[11 * BS_CSA_CB]); break;
+    case 2: t16 = L3<0x69>(t14, yl[10 * BS_CSA_CB], yl[11 * BS_CSA_CB]); t17 = L3<0xb2>(t14, yl[10 * BS_CSA_CB], yl[11 * BS_CSA_CB]); break;
+    case 3: t16 = L3<0x96>(t14, yl[10 * BS_CSA_CB], yl[11 * BS_CSA_CB]); t17 = L3<0x71>(t14, yl[10 * BS_CSA_CB], yl[11 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
   uint32_t t18 = L3<0x96>(t10, t15, t17);
   uint32_t t19 = L3<0xe8>(t10, t15, t17);
-  uint32_t um6 = (uint32_t)(-(int)(xb[12] < 0));
-  uint32_t vm6 = (uint32_t)(-(int)(xb[13] < 0));
-  uint32_t t20 = L3<0x96>(t16, yl[12 * BS_CSA_CB] ^ um6, yl[13 * BS_CSA_CB] ^ vm6);
-  uint32_t t21 = L3<0xe8>(t16, yl[12 * BS_CSA_CB] ^ um6, yl[13 * BS_CSA_CB] ^ vm6);
-  uint32_t um7 = (uint32_t)(-(int)(xb[14] < 0));
-  uint32_t vm7 = (uint32_t)(-(int)(xb[15] < 0));
-  uint32_t t22 = L3<0x96>(t20, yl[14 * BS_CSA_CB] ^ um7, yl[15 * BS_CSA_CB] ^ vm7);
-  uint32_t t23 = L3<0xe8>(t20, yl[14 * BS_CSA_CB] ^ um7, yl[15 * BS_CSA_CB] ^ vm7);
+  uint32_t t20, t21;
+  switch ((int(xb[12] < 0) << 1) | int(xb[13] < 0)) {
+    case 0: t20 = L3<0x96>(t16, yl[12 * BS_CSA_CB], yl[13 * BS_CSA_CB]); t21 = L3<0xe8>(t16, yl[12 * BS_CSA_CB], yl[13 * BS_CSA_CB]); break;
+    case 1: t20 = L3<0x69>(t16, yl[12 * BS_CSA_CB], yl[13 * BS_CSA_CB]); t21 = L3<0xd4>(t16, yl[12 * BS_CSA_CB], yl[13 * BS_CSA_CB]); break;
+    case 2: t20 = L3<0x69>(t16, yl[12 * BS_CSA_CB], yl[13 * BS_CSA_CB]); t21 = L3<0xb2>(t16, yl[12 * BS_CSA_CB], yl[13 * BS_CSA_CB]); break;
+    case 3: t20 = L3<0x96>(t16, yl[12 * BS_CSA_CB], yl[13 * BS_CSA_CB]); t21 = L3<0x71>(t16, yl[12 * BS_CSA_CB], yl[13 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
+  uint32_t t22, t23;
+  switch ((int(xb[14] < 0) << 1) | int(xb[15] < 0)) {
+    case 0: t22 = L3<0x96>(t20, yl[14 * BS_CSA_CB], yl[15 * BS_CSA_CB]); t23 = L3<0xe8>(t20, yl[14 * BS_CSA_CB], yl[15 * BS_CSA_CB]); break;
+    case 1: t22 = L3<0x69>(t20, yl[14 * BS_CSA_CB], yl[15 * BS_CSA_CB]); t23 = L3<0xd4>(t20, yl[14 * BS_CSA_CB], yl[15 * BS_CSA_CB]); break;
+    case 2: t22 = L3<0x69>(t20, yl[14 * BS_CSA_CB], yl[15 * BS_CSA_CB]); t23 = L3<0xb2>(t20, yl[14 * BS_CSA_CB], yl[15 * BS_CSA_CB]); break;
+    case 3: t22 = L3<0x96>(t20, yl[14 * BS_CSA_CB], yl[15 * BS_CSA_CB]); t23 = L3<0x71>(t20, yl[14 * BS_CSA_CB], yl[15 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
   uint32_t t24 = L3<0x96>(t18, t21, t23);
   uint32_t t25 = L3<0xe8>(t18, t21, t23);
   uint32_t t26 = L3<0x96>(t12, t19, t25);
   uint32_t t27 = L3<0xe8>(t12, t19, t25);
   uint32_t t28 = L3<0x96>(0u, t13, t27);
   uint32_t t29 = L3<0xe8>(0u, t13, t27);
-  uint32_t um8 = (uint32_t)(-(int)(xb[16] < 0));
-  uint32_t vm8 = (uint32_t)(-(int)(xb[17] < 0));
-  uint32_t t30 = L3<0x96>(t22, yl[16 * BS_CSA_CB] ^ um8, yl[17 * BS_CSA_CB] ^ vm8);
-  uint32_t t31 = L3<0xe8>(t22, yl[16 * BS_CSA_CB] ^ um8, yl[17 * BS_CSA_CB] ^ vm8);
-  uint32_t um9 = (uint32_t)(-(int)(xb[18] < 0));
-  uint32_t vm9 = (uint32_t)(-(int)(xb[19] < 0));
-  uint32_t t32 = L3<0x96>(t30, yl[18 * BS_CSA_CB] ^ um9, yl[19 * BS_CSA_CB] ^ vm9);
-  uint32_t t33 = L3<0xe8>(t30, yl[18 * BS_CSA_CB] ^ um9, yl[19 * BS_CSA_CB] ^ vm9);
+  uint32_t t30, t31;
+  switch ((int(xb[16] < 0) << 1) | int(xb[17] < 0)) {
+    case 0: t30 = L3<0x96>(t22, yl[16 * BS_CSA_CB], yl[17 * BS_CSA_CB]); t31 = L3<0xe8>(t22, yl[16 * BS_CSA_CB], yl[17 * BS_CSA_CB]); break;
+    case 1: t30 = L3<0x69>(t22, yl[16 * BS_CSA_CB], yl[17 * BS_CSA_CB]); t31 = L3<0xd4>(t22, yl[16 * BS_CSA_CB], yl[17 * BS_CSA_CB]); break;
+    case 2: t30 = L3<0x69>(t22, yl[16 * BS_CSA_CB], yl[17 * BS_CSA_CB]); t31 = L3<0xb2>(t22, yl[16 * BS_CSA_CB], yl[17 * BS_CSA_CB]); break;
+    case 3: t30 = L3<0x96>(t22, yl[16 * BS_CSA_CB], yl[17 * BS_CSA_CB]); t31 = L3<0x71>(t22, yl[16 * BS_CSA_CB], yl[17 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
+  uint32_t t32, t33;
+  switch ((int(xb[18] < 0) << 1) | int(xb[19] < 0)) {
+    case 0: t32 = L3<0x96>(t30, yl[18 * BS_CSA_CB], yl[19 * BS_CSA_CB]); t33 = L3<0xe8>(t30, yl[18 * BS_CSA_CB], yl[19 * BS_CSA_CB]); break;
+    case 1: t32 = L3<0x69>(t30, yl[18 * BS_CSA_CB], yl[19 * BS_CSA_CB]); t33 = L3<0xd4>(t30, yl[18 * BS_CSA_CB], yl[19 * BS_CSA_CB]); break;
+    case 2: t32 = L3<0x69>(t30, yl[18 * BS_CSA_CB], yl[19 * BS_CSA_CB]); t33 = L3<0xb2>(t30, yl[18 * BS_CSA_CB], yl[19 * BS_CSA_CB]); break;
+    case 3: t32 = L3<0x96>(t30, yl[18 * BS_CSA_CB], yl[19 * BS_CSA_CB]); t33 = L3<0x71>(t30, yl[18 * BS_CSA_CB], yl[19 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
   uint32_t t34 = L3<0x96>(t24, t31, t33);
   uint32_t t35 = L3<0xe8>(t24, t31, t33);
-  uint32_t um10 = (uint32_t)(-(int)(xb[20] < 0));
-  uint32_t vm10 = (uint32_t)(-(int)(xb[21] < 0));
-  uint32_t t36 = L3<0x96>(t32, yl[20 * BS_CSA_CB] ^ um10, yl[21 * BS_CSA_CB] ^ vm10);
-  uint32_t t37 = L3<0xe8>(t32, yl[20 * BS_CSA_CB] ^ um10, yl[21 * BS_CSA_CB] ^ vm10);
-  uint32_t um11 = (uint32_t)(-(int)(xb[22] < 0));
-  uint32_t vm11 = (uint32_t)(-(int)(xb[23] < 0));
-  uint32_t t38 = L3<0x96>(t36, yl[22 * BS_CSA_CB] ^ um11, yl[23 * BS_CSA_CB] ^ vm11);
-  uint32_t t39 = L3<0xe8>(t36, yl[22 * BS_CSA_CB] ^ um11, yl[23 * BS_CSA_CB] ^ vm11);
+  uint32_t t36, t37;
+  switch ((int(xb[20] < 0) << 1) | int(xb[21] < 0)) {
+    case 0: t36 = L3<0x96>(t32, yl[20 * BS_CSA_CB], yl[21 * BS_CSA_CB]); t37 = L3<0xe8>(t32, yl[20 * BS_CSA_CB], yl[21 * BS_CSA_CB]); break;
+    case 1: t36 = L3<0x69>(t32, yl[20 * BS_CSA_CB], yl[21 * BS_CSA_CB]); t37 = L3<0xd4>(t32, yl[20 * BS_CSA_CB], yl[21 * BS_CSA_CB]); break;
+    case 2: t36 = L3<0x69>(t32, yl[20 * BS_CSA_CB], yl[21 * BS_CSA_CB]); t37 = L3<0xb2>(t32, yl[20 * BS_CSA_CB], yl[21 * BS_CSA_CB]); break;
+    case 3: t36 = L3<0x96>(t32, yl[20 * BS_CSA_CB], yl[21 * BS_CSA_CB]); t37 = L3<0x71>(t32, yl[20 * BS_CSA_CB], yl[21 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
+  uint32_t t38, t39;
+  switch ((int(xb[22] < 0) << 1) | int(xb[23] < 0)) {
+    case 0: t38 = L3<0x96>(t36, yl[22 * BS_CSA_CB], yl[23 * BS_CSA_CB]); t39 = L3<0xe8>(t36, yl[22 * BS_CSA_CB], yl[23 * BS_CSA_CB]); break;
+    case 1: t38 = L3<0x69>(t36, yl[22 * BS_CSA_CB], yl[23 * BS_CSA_CB]); t39 = L3<0xd4>(t36, yl[22 * BS_CSA_CB], yl[23 * BS_CSA_CB]); break;
+    case 2: t38 = L3<0x69>(t36, yl[22 * BS_CSA_CB], yl[23 * BS_CSA_CB]); t39 = L3<0xb2>(t36, yl[22 * BS_CSA_CB], yl[23 * BS_CSA_CB]); break;
+    case 3: t38 = L3<0x96>(t36, yl[22 * BS_CSA_CB], yl[23 * BS_CSA_CB]); t39 = L3<0x71>(t36, yl[22 * BS_CSA_CB], yl[23 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
   uint32_t t40 = L3<0x96>(t34, t37, t39);
   uint32_t t41 = L3<0xe8>(t34, t37, t39);
   uint32_t t42 = L3<0x96>(t26, t35, t41);
   uint32_t t43 = L3<0xe8>(t26, t35, t41);
-  uint32_t um12 = (uint32_t)(-(int)(xb[24] < 0));
-  uint32_t vm12 = (uint32_t)(-(int)(xb[25] < 0));
-  uint32_t t44 = L3<0x96>(t38, yl[24 * BS_CSA_CB] ^ um12, yl[25 * BS_CSA_CB] ^ vm12);
-  uint32_t t45 = L3<0xe8>(t38, yl[24 * BS_CSA_CB] ^ um12, yl[25 * BS_CSA_CB] ^ vm12);
-  uint32_t um13 = (uint32_t)(-(int)(xb[26] < 0));
-  uint32_t vm13 = (uint32_t)(-(int)(xb[27] < 0));
-  uint32_t t46 = L3<0x96>(t44, yl[26 * BS_CSA_CB] ^ um13, yl[27 * BS_CSA_CB] ^ vm13);
-  uint32_t t47 = L3<0xe8>(t44, yl[26 * BS_CSA_CB] ^ um13, yl[27 * BS_CSA_CB] ^ vm13);
+  uint32_t t44, t45;
+  switch ((int(xb[24] < 0) << 1) | int(xb[25] < 0)) {
+    case 0: t44 = L3<0x96>(t38, yl[24 * BS_CSA_CB], yl[25 * BS_CSA_CB]); t45 = L3<0xe8>(t38, yl[24 * BS_CSA_CB], yl[25 * BS_CSA_CB]); break;
+    case 1: t44 = L3<0x69>(t38, yl[24 * BS_CSA_CB], yl[25 * BS_CSA_CB]); t45 = L3<0xd4>(t38, yl[24 * BS_CSA_CB], yl[25 * BS_CSA_CB]); break;
+    case 2: t44 = L3<0x69>(t38, yl[24 * BS_CSA_CB], yl[25 * BS_CSA_CB]); t45 = L3<0xb2>(t38, yl[24 * BS_CSA_CB], yl[25 * BS_CSA_CB]); break;
+    case 3: t44 = L3<0x96>(t38, yl[24 * BS_CSA_CB], yl[25 * BS_CSA_CB]); t45 = L3<0x71>(t38, yl[24 * BS_CSA_CB], yl[25 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
+  uint32_t t46, t47;
+  switch ((int(xb[26] < 0) << 1) | int(xb[27] < 0)) {
+    case 0: t46 = L3<0x96>(t44, yl[26 * BS_CSA_CB], yl[27 * BS_CSA_CB]); t47 = L3<0xe8>(t44, yl[26 * BS_CSA_CB], yl[27 * BS_CSA_CB]); break;
+    case 1: t46 = L3<0x69>(t44, yl[26 * BS_CSA_CB], yl[27 * BS_CSA_CB]); t47 = L3<0xd4>(t44, yl[26 * BS_CSA_CB], yl[27 * BS_CSA_CB]); break;
+    case 2: t46 = L3<0x69>(t44, yl[26 * BS_CSA_CB], yl[27 * BS_CSA_CB]); t47 = L3<0xb2>(t44, yl[26 * BS_CSA_CB], yl[27 * BS_CSA_CB]); break;
+    case 3: t46 = L3<0x96>(t44, yl[26 * BS_CSA_CB], yl[27 * BS_CSA_CB]); t47 = L3<0x71>(t44, yl[26 * BS_CSA_CB], yl[27 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
   uint32_t t48 = L3<0x96>(t40, t45, t47);
   uint32_t t49 = L3<0xe8>(t40, t45, t47);
-  uint32_t um14 = (uint32_t)(-(int)(xb[28] < 0));
-  uint32_t vm14 = (uint32_t)(-(int)(xb[29] < 0));
-  uint32_t t50 = L3<0x96>(t46, yl[28 * BS_CSA_CB] ^ um14, yl[29 * BS_CSA_CB] ^ vm14);
-  uint32_t t51 = L3<0xe8>(t46, yl[28 * BS_CSA_CB] ^ um14, yl[29 * BS_CSA_CB] ^ vm14);
-  uint32_t um15 = (uint32_t)(-(int)(xb[30] < 0));
-  uint32_t vm15 = (uint32_t)(-(int)(xb[31] < 0));
-  uint32_t t52 = L3<0x96>(t50, yl[30 * BS_CSA_CB] ^ um15, yl[31 * BS_CSA_CB] ^ vm15);
-  uint32_t t53 = L3<0xe8>(t50, yl[30 * BS_CSA_CB] ^ um15, yl[31 * BS_CSA_CB] ^ vm15);
+  uint32_t t50, t51;
+  switch ((int(xb[28] < 0) << 1) | int(xb[29] < 0)) {
+    case 0: t50 = L3<0x96>(t46, yl[28 * BS_CSA_CB], yl[29 * BS_CSA_CB]); t51 = L3<0xe8>(t46, yl[28 * BS_CSA_CB], yl[29 * BS_CSA_CB]); break;
+    case 1: t50 = L3<0x69>(t46, yl[28 * BS_CSA_CB], yl[29 * BS_CSA_CB]); t51 = L3<0xd4>(t46, yl[28 * BS_CSA_CB], yl[29 * BS_CSA_CB]); break;
+    case 2: t50 = L3<0x69>(t46, yl[28 * BS_CSA_CB], yl[29 * BS_CSA_CB]); t51 = L3<0xb2>(t46, yl[28 * BS_CSA_CB], yl[29 * BS_CSA_CB]); break;
+    case 3: t50 = L3<0x96>(t46, yl[28 * BS_CSA_CB], yl[29 * BS_CSA_CB]); t51 = L3<0x71>(t46, yl[28 * BS_CSA_CB], yl[29 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
+  uint32_t t52, t53;
+  switch ((int(xb[30] < 0) << 1) | int(xb[31] < 0)) {
+    case 0: t52 = L3<0x96>(t50, yl[30 * BS_CSA_CB], yl[31 * BS_CSA_CB]); t53 = L3<0xe8>(t50, yl[30 * BS_CSA_CB], yl[31 * BS_CSA_CB]); break;
+    case 1: t52 = L3<0x69>(t50, yl[30 * BS_CSA_CB], yl[31 * BS_CSA_CB]); t53 = L3<0xd4>(t50, yl[30 * BS_CSA_CB], yl[31 * BS_CSA_CB]); break;
+    case 2: t52 = L3<0x69>(t50, yl[30 * BS_CSA_CB], yl[31 * BS_CSA_CB]); t53 = L3<0xb2>(t50, yl[30 * BS_CSA_CB], yl[31 * BS_CSA_CB]); break;
+    case 3: t52 = L3<0x96>(t50, yl[30 * BS_CSA_CB], yl[31 * BS_CSA_CB]); t53 = L3<0x71>(t50, yl[30 * BS_CSA_CB], yl[31 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
   uint32_t t54 = L3<0x96>(t48, t51, t53);
   uint32_t t55 = L3<0xe8>(t48, t51, t53);
   uint32_t t56 = L3<0x96>(t42, t49, t55);
@@ -114,92 +178,156 @@ __device__ __forceinline__ void bs_csa_chunk(uint32_t* __restrict__ P, const uin
   uint32_t t59 = L3<0xe8>(t28, t43, t57);
   uint32_t t60 = L3<0x96>(0u, t29, t59);
   uint32_t t61 = L3<0xe8>(0u, t29, t59);
-  uint32_t um16 = (uint32_t)(-(int)(xb[32] < 0));
-  uint32_t vm16 = (uint32_t)(-(int)(xb[33] < 0));
-  uint32_t t62 = L3<0x96>(t52, yl[32 * BS_CSA_CB] ^ um16, yl[33 * BS_CSA_CB] ^ vm16);
-  uint32_t t63 = L3<0xe8>(t52, yl[32 * BS_CSA_CB] ^ um16, yl[33 * BS_CSA_CB] ^ vm16);
-  uint32_t um17 = (uint32_t)(-(int)(xb[34] < 0));
-  uint32_t vm17 = (uint32_t)(-(int)(xb[35] < 0));
-  uint32_t t64 = L3<0x96>(t62, yl[34 * BS_CSA_CB] ^ um17, yl[35 * BS_CSA_CB] ^ vm17);
-  uint32_t t65 = L3<0xe8>(t62, yl[34 * BS_CSA_CB] ^ um17, yl[35 * BS_CSA_CB] ^ vm17);
+  uint32_t t62, t63;
+  switch ((int(xb[32] < 0) << 1) | int(xb[33] < 0)) {
+    case 0: t62 = L3<0x96>(t52, yl[32 * BS_CSA_CB], yl[33 * BS_CSA_CB]); t63 = L3<0xe8>(t52, yl[32 * BS_CSA_CB], yl[33 * BS_CSA_CB]); break;
+    case 1: t62 = L3<0x69>(t52, yl[32 * BS_CSA_CB], yl[33 * BS_CSA_CB]); t63 = L3<0xd4>(t52, yl[32 * BS_CSA_CB], yl[33 * BS_CSA_CB]); break;
+    case 2: t62 = L3<0x69>(t52, yl[32 * BS_CSA_CB], yl[33 * BS_CSA_CB]); t63 = L3<0xb2>(t52, yl[32 * BS_CSA_CB], yl[33 * BS_CSA_CB]); break;
+    case 3: t62 = L3<0x96>(t52, yl[32 * BS_CSA_CB], yl[33 * BS_CSA_CB]); t63 = L3<0x71>(t52, yl[32 * BS_CSA_CB], yl[33 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
+  uint32_t t64, t65;
+  switch ((int(xb[34] < 0) << 1) | int(xb[35] < 0)) {
+    case 0: t64 = L3<0x96>(t62, yl[34 * BS_CSA_CB], yl[35 * BS_CSA_CB]); t65 = L3<0xe8>(t62, yl[34 * BS_CSA_CB], yl[35 * BS_CSA_CB]); break;
+    case 1: t64 = L3<0x69>(t62, yl[34 * BS_CSA_CB], yl[35 * BS_CSA_CB]); t65 = L3<0xd4>(t62, yl[34 * BS_CSA_CB], yl[35 * BS_CSA_CB]); break;
+    case 2: t64 = L3<0x69>(t62, yl[34 * BS_CSA_CB], yl[35 * BS_CSA_CB]); t65 = L3<0xb2>(t62, yl[34 * BS_CSA_CB], yl[35 * BS_CSA_CB]); break;
+    case 3: t64 = L3<0x96>(t62, yl[34 * BS_CSA_CB], yl[35 * BS_CSA_CB]); t65 = L3<0x71>(t62, yl[34 * BS_CSA_CB], yl[35 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
   uint32_t t66 = L3<0x96>(t54, t63, t65);
   uint32_t t67 = L3<0xe8>(t54, t63, t65);
-  uint32_t um18 = (uint32_t)(-(int)(xb[36] < 0));
-  uint32_t vm18 = (uint32_t)(-(int)(xb[37] < 0));
-  uint32_t t68 = L3<0x96>(t64, yl[36 * BS_CSA_CB] ^ um18, yl[37 * BS_CSA_CB] ^ vm18);
-  uint32_t t69 = L3<0xe8>(t64, yl[36 * BS_CSA_CB] ^ um18, yl[37 * BS_CSA_CB] ^ vm18);
-  uint32_t um19 = (uint32_t)(-(int)(xb[38] < 0));
-  uint32_t vm19 = (uint32_t)(-(int)(xb[39] < 0));
-  uint32_t t70 = L3<0x96>(t68, yl[38 * BS_CSA_CB] ^ um19, yl[39 * BS_CSA_CB] ^ vm19);
-  uint32_t t71 = L3<0xe8>(t68, yl[38 * BS_CSA_CB] ^ um19, yl[39 * BS_CSA_CB] ^ vm19);
+  uint32_t t68, t69;
+  switch ((int(xb[36] < 0) << 1) | int(xb[37] < 0)) {
+    case 0: t68 = L3<0x96>(t64, yl[36 * BS_CSA_CB], yl[37 * BS_CSA_CB]); t69 = L3<0xe8>(t64, yl[36 * BS_CSA_CB], yl[37 * BS_CSA_CB]); break;
+    case 1: t68 = L3<0x69>(t64, yl[36 * BS_CSA_CB], yl[37 * BS_CSA_CB]); t69 = L3<0xd4>(t64, yl[36 * BS_CSA_CB], yl[37 * BS_CSA_CB]); break;
+    case 2: t68 = L3<0x69>(t64, yl[36 * BS_CSA_CB], yl[37 * BS_CSA_CB]); t69 = L3<0xb2>(t64, yl[36 * BS_CSA_CB], yl[37 * BS_CSA_CB]); break;
+    case 3: t68 = L3<0x96>(t64, yl[36 * BS_CSA_CB], yl[37 * BS_CSA_CB]); t69 = L3<0x71>(t64, yl[36 * BS_CSA_CB], yl[37 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
+  uint32_t t70, t71;
+  switch ((int(xb[38] < 0) << 1) | int(xb[39] < 0)) {
+    case 0: t70 = L3<0x96>(t68, yl[38 * BS_CSA_CB], yl[39 * BS_CSA_CB]); t71 = L3<0xe8>(t68, yl[38 * BS_CSA_CB], yl[39 * BS_CSA_CB]); break;
+    case 1: t70 = L3<0x69>(t68, yl[38 * BS_CSA_CB], yl[39 * BS_CSA_CB]); t71 = L3<0xd4>(t68, yl[38 * BS_CSA_CB], yl[39 * BS_CSA_CB]); break;
+    case 2: t70 = L3<0x69>(t68, yl[38 * BS_CSA_CB], yl[39 * BS_CSA_CB]); t71 = L3<0xb2>(t68, yl[38 * BS_CSA_CB], yl[39 * BS_CSA_CB]); break;
+    case 3: t70 = L3<0x96>(t68, yl[38 * BS_CSA_CB], yl[39 * BS_CSA_CB]); t71 = L3<0x71>(t68, yl[38 * BS_CSA_CB], yl[39 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
   uint32_t t72 = L3<0x96>(t66, t69, t71);
   uint32_t t73 = L3<0xe8>(t66, t69, t71);
   uint32_t t74 = L3<0x96>(t56, t67, t73);
   uint32_t t75 = L3<0xe8>(t56, t67, t73);
-  uint32_t um20 = (uint32_t)(-(int)(xb[40] < 0));
-  uint32_t vm20 = (uint32_t)(-(int)(xb[41] < 0));
-  uint32_t t76 = L3<0x96>(t70, yl[40 * BS_CSA_CB] ^ um20, yl[41 * BS_CSA_CB] ^ vm20);
-  uint32_t t77 = L3<0xe8>(t70, yl[40 * BS_CSA_CB] ^ um20, yl[41 * BS_CSA_CB] ^ vm20);
-  uint32_t um21 = (uint32_t)(-(int)(xb[42] < 0));
-  uint32_t vm21 = (uint32_t)(-(int)(xb[43] < 0));
-  uint32_t t78 = L3<0x96>(t76, yl[42 * BS_CSA_CB] ^ um21, yl[43 * BS_CSA_CB] ^ vm21);
-  uint32_t t79 = L3<0xe8>(t76, yl[42 * BS_CSA_CB] ^ um21, yl[43 * BS_CSA_CB] ^ vm21);
+  uint32_t t76, t77;
+  switch ((int(xb[40] < 0) << 1) | int(xb[41] < 0)) {
+    case 0: t76 = L3<0x96>(t70, yl[40 * BS_CSA_CB], yl[41 * BS_CSA_CB]); t77 = L3<0xe8>(t70, yl[40 * BS_CSA_CB], yl[41 * BS_CSA_CB]); break;
+    case 1: t76 = L3<0x69>(t70, yl[40 * BS_CSA_CB], yl[41 * BS_CSA_CB]); t77 = L3<0xd4>(t70, yl[40 * BS_CSA_CB], yl[41 * BS_CSA_CB]); break;
+    case 2: t76 = L3<0x69>(t70, yl[40 * BS_CSA_CB], yl[41 * BS_CSA_CB]); t77 = L3<0xb2>(t70, yl[40 * BS_CSA_CB], yl[41 * BS_CSA_CB]); break;
+    case 3: t76 = L3<0x96>(t70, yl[40 * BS_CSA_CB], yl[41 * BS_CSA_CB]); t77 = L3<0x71>(t70, yl[40 * BS_CSA_CB], yl[41 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
+  uint32_t t78, t79;
+  switch ((int(xb[42] < 0) << 1) | int(xb[43] < 0)) {
+    case 0: t78 = L3<0x96>(t76, yl[42 * BS_CSA_CB], yl[43 * BS_CSA_CB]); t79 = L3<0xe8>(t76, yl[42 * BS_CSA_CB], yl[43 * BS_CSA_CB]); break;
+    case 1: t78 = L3<0x69>(t76, yl[42 * BS_CSA_CB], yl[43 * BS_CSA_CB]); t79 = L3<0xd4>(t76, yl[42 * BS_CSA_CB], yl[43 * BS_CSA_CB]); break;
+    case 2: t78 = L3<0x69>(t76, yl[42 * BS_CSA_CB], yl[43 * BS_CSA_CB]); t79 = L3<0xb2>(t76, yl[42 * BS_CSA_CB], yl[43 * BS_CSA_CB]); break;
+    case 3: t78 = L3<0x96>(t76, yl[42 * BS_CSA_CB], yl[43 * BS_CSA_CB]); t79 = L3<0x71>(t76, yl[42 * BS_CSA_CB], yl[43 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
   uint32_t t80 = L3<0x96>(t72, t77, t79);
   uint32_t t81 = L3<0xe8>(t72, t77, t79);
-  uint32_t um22 = (uint32_t)(-(int)(xb[44] < 0));
-  uint32_t vm22 = (uint32_t)(-(int)(xb[45] < 0));
-  uint32_t t82 = L3<0x96>(t78, yl[44 * BS_CSA_CB] ^ um22, yl[45 * BS_CSA_CB] ^ vm22);
-  uint32_t t83 = L3<0xe8>(t78, yl[44 * BS_CSA_CB] ^ um22, yl[45 * BS_CSA_CB] ^ vm22);
-  uint32_t um23 = (uint32_t)(-(int)(xb[46] < 0));
-  uint32_t vm23 = (uint32_t)(-(int)(xb[47] < 0));
-  uint32_t t84 = L3<0x96>(t82, yl[46 * BS_CSA_CB] ^ um23, yl[47 * BS_CSA_CB] ^ vm23);
-  uint32_t t85 = L3<0xe8>(t82, yl[46 * BS_CSA_CB] ^ um23, yl[47 * BS_CSA_CB] ^ vm23);
+  uint32_t t82, t83;
+  switch ((int(xb[44] < 0) << 1) | int(xb[45] < 0)) {
+    case 0: t82 = L3<0x96>(t78, yl[44 * BS_CSA_CB], yl[45 * BS_CSA_CB]); t83 = L3<0xe8>(t78, yl[44 * BS_CSA_CB], yl[45 * BS_CSA_CB]); break;
+    case 1: t82 = L3<0x69>(t78, yl[44 * BS_CSA_CB], yl[45 * BS_CSA_CB]); t83 = L3<0xd4>(t78, yl[44 * BS_CSA_CB], yl[45 * BS_CSA_CB]); break;
+    case 2: t82 = L3<0x69>(t78, yl[44 * BS_CSA_CB], yl[45 * BS_CSA_CB]); t83 = L3<0xb2>(t78, yl[44 * BS_CSA_CB], yl[45 * BS_CSA_CB]); break;
+    case 3: t82 = L3<0x96>(t78, yl[44 * BS_CSA_CB], yl[45 * BS_CSA_CB]); t83 = L3<0x71>(t78, yl[44 * BS_CSA_CB], yl[45 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
+  uint32_t t84, t85;
+  switch ((int(xb[46] < 0) << 1) | int(xb[47] < 0)) {
+    case 0: t84 = L3<0x96>(t82, yl[46 * BS_CSA_CB], yl[47 * BS_CSA_CB]); t85 = L3<0xe8>(t82, yl[46 * BS_CSA_CB], yl[47 * BS_CSA_CB]); break;
+    case 1: t84 = L3<0x69>(t82, yl[46 * BS_CSA_CB], yl[47 * BS_CSA_CB]); t85 = L3<0xd4>(t82, yl[46 * BS_CSA_CB], yl[47 * BS_CSA_CB]); break;
+    case 2: t84 = L3<0x69>(t82, yl[46 * BS_CSA_CB], yl[47 * BS_CSA_CB]); t85 = L3<0xb2>(t82, yl[46 * BS_CSA_CB], yl[47 * BS_CSA_CB]); break;
+    case 3: t84 = L3<0x96>(t82, yl[46 * BS_CSA_CB], yl[47 * BS_CSA_CB]); t85 = L3<0x71>(t82, yl[46 * BS_CSA_CB], yl[47 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
   uint32_t t86 = L3<0x96>(t80, t83, t85);
   uint32_t t87 = L3<0xe8>(t80, t83, t85);
   uint32_t t88 = L3<0x96>(t74, t81, t87);
   uint32_t t89 = L3<0xe8>(t74, t81, t87);
   uint32_t t90 = L3<0x96>(t58, t75, t89);
   uint32_t t91 = L3<0xe8>(t58, t75, t89);
-  uint32_t um24 = (uint32_t)(-(int)(xb[48] < 0));
-  uint32_t vm24 = (uint32_t)(-(int)(xb[49] < 0));
-  uint32_t t92 = L3<0x96>(t84, yl[48 * BS_CSA_CB] ^ um24, yl[49 * BS_CSA_CB] ^ vm24);
-  uint32_t t93 = L3<0xe8>(t84, yl[48 * BS_CSA_CB] ^ um24, yl[49 * BS_CSA_CB] ^ vm24);
-  uint32_t um25 = (uint32_t)(-(int)(xb[50] < 0));
-  uint32_t vm25 = (uint32_t)(-(int)(xb[51] < 0));
-  uint32_t t94 = L3<0x96>(t92, yl[50 * BS_CSA_CB] ^ um25, yl[51 * BS_CSA_CB] ^ vm25);
-  uint32_t t95 = L3<0xe8>(t92, yl[50 * BS_CSA_CB] ^ um25, yl[51 * BS_CSA_CB] ^ vm25);
+  uint32_t t92, t93;
+  switch ((int(xb[48] < 0) << 1) | int(xb[49] < 0)) {
+    case 0: t92 = L3<0x96>(t84, yl[48 * BS_CSA_CB], yl[49 * BS_CSA_CB]); t93 = L3<0xe8>(t84, yl[48 * BS_CSA_CB], yl[49 * BS_CSA_CB]); break;
+    case 1: t92 = L3<0x69>(t84, yl[48 * BS_CSA_CB], yl[49 * BS_CSA_CB]); t93 = L3<0xd4>(t84, yl[48 * BS_CSA_CB], yl[49 * BS_CSA_CB]); break;
+    case 2: t92 = L3<0x69>(t84, yl[48 * BS_CSA_CB], yl[49 * BS_CSA_CB]); t93 = L3<0xb2>(t84, yl[48 * BS_CSA_CB], yl[49 * BS_CSA_CB]); break;
+    case 3: t92 = L3<0x96>(t84, yl[48 * BS_CSA_CB], yl[49 * BS_CSA_CB]); t93 = L3<0x71>(t84, yl[48 * BS_CSA_CB], yl[49 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
+  uint32_t t94, t95;
+  switch ((int(xb[50] < 0) << 1) | int(xb[51] < 0)) {
+    case 0: t94 = L3<0x96>(t92, yl[50 * BS_CSA_CB], yl[51 * BS_CSA_CB]); t95 = L3<0xe8>(t92, yl[50 * BS_CSA_CB], yl[51 * BS_CSA_CB]); break;
+    case 1: t94 = L3<0x69>(t92, yl[50 * BS_CSA_CB], yl[51 * BS_CSA_CB]); t95 = L3<0xd4>(t92, yl[50 * BS_CSA_CB], yl[51 * BS_CSA_CB]); break;
+    case 2: t94 = L3<0x69>(t92, yl[50 * BS_CSA_CB], yl[51 * BS_CSA_CB]); t95 = L3<0xb2>(t92, yl[50 * BS_CSA_CB], yl[51 * BS_CSA_CB]); break;
+    case 3: t94 = L3<0x96>(t92, yl[50 * BS_CSA_CB], yl[51 * BS_CSA_CB]); t95 = L3<0x71>(t92, yl[50 * BS_CSA_CB], yl[51 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
   uint32_t t96 = L3<0x96>(t86, t93, t95);
   uint32_t t97 = L3<0xe8>(t86, t93, t95);
-  uint32_t um26 = (uint32_t)(-(int)(xb[52] < 0));
-  uint32_t vm26 = (uint32_t)(-(int)(xb[53] < 0));
-  uint32_t t98 = L3<0x96>(t94, yl[52 * BS_CSA_CB] ^ um26, yl[53 * BS_CSA_CB] ^ vm26);
-  uint32_t t99 = L3<0xe8>(t94, yl[52 * BS_CSA_CB] ^ um26, yl[53 * BS_CSA_CB] ^ vm26);
-  uint32_t um27 = (uint32_t)(-(int)(xb[54] < 0));
-  uint32_t vm27 = (uint32_t)(-(int)(xb[55] < 0));
-  uint32_t t100 = L3<0x96>(t98, yl[54 * BS_CSA_CB] ^ um27, yl[55 * BS_CSA_CB] ^ vm27);
-  uint32_t t101 = L3<0xe8>(t98, yl[54 * BS_CSA_CB] ^ um27, yl[55 * BS_CSA_CB] ^ vm27);
+  uint32_t t98, t99;
+  switch ((int(xb[52] < 0) << 1) | int(xb[53] < 0)) {
+    case 0: t98 = L3<0x96>(t94, yl[52 * BS_CSA_CB], yl[53 * BS_CSA_CB]); t99 = L3<0xe8>(t94, yl[52 * BS_CSA_CB], yl[53 * BS_CSA_CB]); break;
+    case 1: t98 = L3<0x69>(t94, yl[52 * BS_CSA_CB], yl[53 * BS_CSA_CB]); t99 = L3<0xd4>(t94, yl[52 * BS_CSA_CB], yl[53 * BS_CSA_CB]); break;
+    case 2: t98 = L3<0x69>(t94, yl[52 * BS_CSA_CB], yl[53 * BS_CSA_CB]); t99 = L3<0xb2>(t94, yl[52 * BS_CSA_CB], yl[53 * BS_CSA_CB]); break;
+    case 3: t98 = L3<0x96>(t94, yl[52 * BS_CSA_CB], yl[53 * BS_CSA_CB]); t99 = L3<0x71>(t94, yl[52 * BS_CSA_CB], yl[53 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
+  uint32_t t100, t101;
+  switch ((int(xb[54] < 0) << 1) | int(xb[55] < 0)) {
+    case 0: t100 = L3<0x96>(t98, yl[54 * BS_CSA_CB], yl[55 * BS_CSA_CB]); t101 = L3<0xe8>(t98, yl[54 * BS_CSA_CB], yl[55 * BS_CSA_CB]); break;
+    case 1: t100 = L3<0x69>(t98, yl[54 * BS_CSA_CB], yl[55 * BS_CSA_CB]); t101 = L3<0xd4>(t98, yl[54 * BS_CSA_CB], yl[55 * BS_CSA_CB]); break;
+    case 2: t100 = L3<0x69>(t98, yl[54 * BS_CSA_CB], yl[55 * BS_CSA_CB]); t101 = L3<0xb2>(t98, yl[54 * BS_CSA_CB], yl[55 * BS_CSA_CB]); break;
+    case 3: t100 = L3<0x96>(t98, yl[54 * BS_CSA_CB], yl[55 * BS_CSA_CB]); t101 = L3<0x71>(t98, yl[54 * BS_CSA_CB], yl[55 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
   uint32_t t102 = L3<0x96>(t96, t99, t101);
   uint32_t t103 = L3<0xe8>(t96, t99, t101);
   uint32_t t104 = L3<0x96>(t88, t97, t103);
   uint32_t t105 = L3<0xe8>(t88, t97, t103);
-  uint32_t um28 = (uint32_t)(-(int)(xb[56] < 0));
-  uint32_t vm28 = (uint32_t)(-(int)(xb[57] < 0));
-  uint32_t t106 = L3<0x96>(t100, yl[56 * BS_CSA_CB] ^ um28, yl[57 * BS_CSA_CB] ^ vm28);
-  uint32_t t107 = L3<0xe8>(t100, yl[56 * BS_CSA_CB] ^ um28, yl[57 * BS_CSA_CB] ^ vm28);
-  uint32_t um29 = (uint32_t)(-(int)(xb[58] < 0));
-  uint32_t vm29 = (uint32_t)(-(int)(xb[59] < 0));
-  uint32_t t108 = L3<0x96>(t106, yl[58 * BS_CSA_CB] ^ um29, yl[59 * BS_CSA_CB] ^ vm29);
-  uint32_t t109 = L3<0xe8>(t106, yl[58 * BS_CSA_CB] ^ um29, yl[59 * BS_CSA_CB] ^ vm29);
+  uint32_t t106, t107;
+  switch ((int(xb[56] < 0) << 1) | int(xb[57] < 0)) {
+    case 0: t106 = L3<0x96>(t100, yl[56 * BS_CSA_CB], yl[57 * BS_CSA_CB]); t107 = L3<0xe8>(t100, yl[56 * BS_CSA_CB], yl[57 * BS_CSA_CB]); break;
+    case 1: t106 = L3<0x69>(t100, yl[56 * BS_CSA_CB], yl[57 * BS_CSA_CB]); t107 = L3<0xd4>(t100, yl[56 * BS_CSA_CB], yl[57 * BS_CSA_CB]); break;
+    case 2: t106 = L3<0x69>(t100, yl[56 * BS_CSA_CB], yl[57 * BS_CSA_CB]); t107 = L3<0xb2>(t100, yl[56 * BS_CSA_CB], yl[57 * BS_CSA_CB]); break;
+    case 3: t106 = L3<0x96>(t100, yl[56 * BS_CSA_CB], yl[57 * BS_CSA_CB]); t107 = L3<0x71>(t100, yl[56 * BS_CSA_CB], yl[57 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
+  uint32_t t108, t109;
+  switch ((int(xb[58] < 0) << 1) | int(xb[59] < 0)) {
+    case 0: t108 = L3<0x96>(t106, yl[58 * BS_CSA_CB], yl[59 * BS_CSA_CB]); t109 = L3<0xe8>(t106, yl[58 * BS_CSA_CB], yl[59 * BS_CSA_CB]); break;
+    case 1: t108 = L3<0x69>(t106, yl[58 * BS_CSA_CB], yl[59 * BS_CSA_CB]); t109 = L3<0xd4>(t106, yl[58 * BS_CSA_CB], yl[59 * BS_CSA_CB]); break;
+    case 2: t108 = L3<0x69>(t106, yl[58 * BS_CSA_CB], yl[59 * BS_CSA_CB]); t109 = L3<0xb2>(t106, yl[58 * BS_CSA_CB], yl[59 * BS_CSA_CB]); break;
+    case 3: t108 = L3<0x96>(t106, yl[58 * BS_CSA_CB], yl[59 * BS_CSA_CB]); t109 = L3<0x71>(t106, yl[58 * BS_CSA_CB], yl[59 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
   uint32_t t110 = L3<0x96>(t102, t107, t109);
   uint32_t t111 = L3<0xe8>(t102, t107, t109);
-  uint32_t um30 = (uint32_t)(-(int)(xb[60] < 0));
-  uint32_t vm30 = (uint32_t)(-(int)(xb[61] < 0));
-  uint32_t t112 = L3<0x96>(t108, yl[60 * BS_CSA_CB] ^ um30, yl[61 * BS_CSA_CB] ^ vm30);
-  uint32_t t113 = L3<0xe8>(t108, yl[60 * BS_CSA_CB] ^ um30, yl[61 * BS_CSA_CB] ^ vm30);
-  uint32_t um31 = (uint32_t)(-(int)(xb[62] < 0));
-  uint32_t vm31 = (uint32_t)(-(int)(xb[63] < 0));
-  uint32_t t114 = L3<0x96>(t112, yl[62 * BS_CSA_CB] ^ um31, yl[63 * BS_CSA_CB] ^ vm31);
-  uint32_t t115 = L3<0xe8>(t112, yl[62 * BS_CSA_CB] ^ um31, yl[63 * BS_CSA_CB] ^ vm31);
+  uint32_t t112, t113;
+  switch ((int(xb[60] < 0) << 1) | int(xb[61] < 0)) {
+    case 0: t112 = L3<0x96>(t108, yl[60 * BS_CSA_CB], yl[61 * BS_CSA_CB]); t113 = L3<0xe8>(t108, yl[60 * BS_CSA_CB], yl[61 * BS_CSA_CB]); break;
+    case 1: t112 = L3<0x69>(t108, yl[60 * BS_CSA_CB], yl[61 * BS_CSA_CB]); t113 = L3<0xd4>(t108, yl[60 * BS_CSA_CB], yl[61 * BS_CSA_CB]); break;
+    case 2: t112 = L3<0x69>(t108, yl[60 * BS_CSA_CB], yl[61 * BS_CSA_CB]); t113 = L3<0xb2>(t108, yl[60 * BS_CSA_CB], yl[61 * BS_CSA_CB]); break;
+    case 3: t112 = L3<0x96>(t108, yl[60 * BS_CSA_CB], yl[61 * BS_CSA_CB]); t113 = L3<0x71>(t108, yl[60 * BS_CSA_CB], yl[61 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
+  uint32_t t114, t115;
+  switch ((int(xb[62] < 0) << 1) | int(xb[63] < 0)) {
+    case 0: t114 = L3<0x96>(t112, yl[62 * BS_CSA_CB], yl[63 * BS_CSA_CB]); t115 = L3<0xe8>(t112, yl[62 * BS_CSA_CB], yl[63 * BS_CSA_CB]); break;
+    case 1: t114 = L3<0x69>(t112, yl[62 * BS_CSA_CB], yl[63 * BS_CSA_CB]); t115 = L3<0xd4>(t112, yl[62 * BS_CSA_CB], yl[63 * BS_CSA_CB]); break;
+    case 2: t114 = L3<0x69>(t112, yl[62 * BS_CSA_CB], yl[63 * BS_CSA_CB]); t115 = L3<0xb2>(t112, yl[62 * BS_CSA_CB], yl[63 * BS_CSA_CB]); break;
+    case 3: t114 = L3<0x96>(t112, yl[62 * BS_CSA_CB], yl[63 * BS_CSA_CB]); t115 = L3<0x71>(t112, yl[62 * BS_CSA_CB], yl[63 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
   uint32_t t116 = L3<0x96>(t110, t113, t115);
   uint32_t t117 = L3<0xe8>(t110, t113, t115);
   uint32_t t118 = L3<0x96>(t104, t111, t117);
@@ -210,92 +338,156 @@ __device__ __forceinline__ void bs_csa_chunk(uint32_t* __restrict__ P, const uin
   uint32_t t123 = L3<0xe8>(t60, t91, t121);
   uint32_t t124 = L3<0x96>(0u, t61, t123);
   uint32_t t125 = L3<0xe8>(0u, t61, t123);
-  uint32_t um32 = (uint32_t)(-(int)(xb[64] < 0));
-  uint32_t vm32 = (uint32_t)(-(int)(xb[65] < 0));
-  uint32_t t126 = L3<0x96>(t114, yl[64 * BS_CSA_CB] ^ um32, yl[65 * BS_CSA_CB] ^ vm32);
-  uint32_t t127 = L3<0xe8>(t114, yl[64 * BS_CSA_CB] ^ um32, yl[65 * BS_CSA_CB] ^ vm32);
-  uint32_t um33 = (uint32_t)(-(int)(xb[66] < 0));
-  uint32_t vm33 = (uint32_t)(-(int)(xb[67] < 0));
-  uint32_t t128 = L3<0x96>(t126, yl[66 * BS_CSA_CB] ^ um33, yl[67 * BS_CSA_CB] ^ vm33);
-  uint32_t t129 = L3<0xe8>(t126, yl[66 * BS_CSA_CB] ^ um33, yl[67 * BS_CSA_CB] ^ vm33);
+  uint32_t t126, t127;
+  switch ((int(xb[64] < 0) << 1) | int(xb[65] < 0)) {
+    case 0: t126 = L3<0x96>(t114, yl[64 * BS_CSA_CB], yl[65 * BS_CSA_CB]); t127 = L3<0xe8>(t114, yl[64 * BS_CSA_CB], yl[65 * BS_CSA_CB]); break;
+    case 1: t126 = L3<0x69>(t114, yl[64 * BS_CSA_CB], yl[65 * BS_CSA_CB]); t127 = L3<0xd4>(t114, yl[64 * BS_CSA_CB], yl[65 * BS_CSA_CB]); break;
+    case 2: t126 = L3<0x69>(t114, yl[64 * BS_CSA_CB], yl[65 * BS_CSA_CB]); t127 = L3<0xb2>(t114, yl[64 * BS_CSA_CB], yl[65 * BS_CSA_CB]); break;
+    case 3: t126 = L3<0x96>(t114, yl[64 * BS_CSA_CB], yl[65 * BS_CSA_CB]); t127 = L3<0x71>(t114, yl[64 * BS_CSA_CB], yl[65 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
+  uint32_t t128, t129;
+  switch ((int(xb[66] < 0) << 1) | int(xb[67] < 0)) {
+    case 0: t128 = L3<0x96>(t126, yl[66 * BS_CSA_CB], yl[67 * BS_CSA_CB]); t129 = L3<0xe8>(t126, yl[66 * BS_CSA_CB], yl[67 * BS_CSA_CB]); break;
+    case 1: t128 = L3<0x69>(t126, yl[66 * BS_CSA_CB], yl[67 * BS_CSA_CB]); t129 = L3<0xd4>(t126, yl[66 * BS_CSA_CB], yl[67 * BS_CSA_CB]); break;
+    case 2: t128 = L3<0x69>(t126, yl[66 * BS_CSA_CB], yl[67 * BS_CSA_CB]); t129 = L3<0xb2>(t126, yl[66 * BS_CSA_CB], yl[67 * BS_CSA_CB]); break;
+    case 3: t128 = L3<0x96>(t126, yl[66 * BS_CSA_CB], yl[67 * BS_CSA_CB]); t129 = L3<0x71>(t126, yl[66 * BS_CSA_CB], yl[67 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
   uint32_t t130 = L3<0x96>(t116, t127, t129);
   uint32_t t131 = L3<0xe8>(t116, t127, t129);
-  uint32_t um34 = (uint32_t)(-(int)(xb[68] < 0));
-  uint32_t vm34 = (uint32_t)(-(int)(xb[69] < 0));
-  uint32_t t132 = L3<0x96>(t128, yl[68 * BS_CSA_CB] ^ um34, yl[69 * BS_CSA_CB] ^ vm34);
-  uint32_t t133 = L3<0xe8>(t128, yl[68 * BS_CSA_CB] ^ um34, yl[69 * BS_CSA_CB] ^ vm34);
-  uint32_t um35 = (uint32_t)(-(int)(xb[70] < 0));
-  uint32_t vm35 = (uint32_t)(-(int)(xb[71] < 0));
-  uint32_t t134 = L3<0x96>(t132, yl[70 * BS_CSA_CB] ^ um35, yl[71 * BS_CSA_CB] ^ vm35);
-  uint32_t t135 = L3<0xe8>(t132, yl[70 * BS_CSA_CB] ^ um35, yl[71 * BS_CSA_CB] ^ vm35);
+  uint32_t t132, t133;
+  switch ((int(xb[68] < 0) << 1) | int(xb[69] < 0)) {
+    case 0: t132 = L3<0x96>(t128, yl[68 * BS_CSA_CB], yl[69 * BS_CSA_CB]); t133 = L3<0xe8>(t128, yl[68 * BS_CSA_CB], yl[69 * BS_CSA_CB]); break;
+    case 1: t132 = L3<0x69>(t128, yl[68 * BS_CSA_CB], yl[69 * BS_CSA_CB]); t133 = L3<0xd4>(t128, yl[68 * BS_CSA_CB], yl[69 * BS_CSA_CB]); break;
+    case 2: t132 = L3<0x69>(t128, yl[68 * BS_CSA_CB], yl[69 * BS_CSA_CB]); t133 = L3<0xb2>(t128, yl[68 * BS_CSA_CB], yl[69 * BS_CSA_CB]); break;
+    case 3: t132 = L3<0x96>(t128, yl[68 * BS_CSA_CB], yl[69 * BS_CSA_CB]); t133 = L3<0x71>(t128, yl[68 * BS_CSA_CB], yl[69 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
+  uint32_t t134, t135;
+  switch ((int(xb[70] < 0) << 1) | int(xb[71] < 0)) {
+    case 0: t134 = L3<0x96>(t132, yl[70 * BS_CSA_CB], yl[71 * BS_CSA_CB]); t135 = L3<0xe8>(t132, yl[70 * BS_CSA_CB], yl[71 * BS_CSA_CB]); break;
+    case 1: t134 = L3<0x69>(t132, yl[70 * BS_CSA_CB], yl[71 * BS_CSA_CB]); t135 = L3<0xd4>(t132, yl[70 * BS_CSA_CB], yl[71 * BS_CSA_CB]); break;
+    case 2: t134 = L3<0x69>(t132, yl[70 * BS_CSA_CB], yl[71 * BS_CSA_CB]); t135 = L3<0xb2>(t132, yl[70 * BS_CSA_CB], yl[71 * BS_CSA_CB]); break;
+    case 3: t134 = L3<0x96>(t132, yl[70 * BS_CSA_CB], yl[71 * BS_CSA_CB]); t135 = L3<0x71>(t132, yl[70 * BS_CSA_CB], yl[71 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
   uint32_t t136 = L3<0x96>(t130, t133, t135);
   uint32_t t137 = L3<0xe8>(t130, t133, t135);
   uint32_t t138 = L3<0x96>(t118, t131, t137);
   uint32_t t139 = L3<0xe8>(t118, t131, t137);
-  uint32_t um36 = (uint32_t)(-(int)(xb[72] < 0));
-  uint32_t vm36 = (uint32_t)(-(int)(xb[73] < 0));
-  uint32_t t140 = L3<0x96>(t134, yl[72 * BS_CSA_CB] ^ um36, yl[73 * BS_CSA_CB] ^ vm36);
-  uint32_t t141 = L3<0xe8>(t134, yl[72 * BS_CSA_CB] ^ um36, yl[73 * BS_CSA_CB] ^ vm36);
-  uint32_t um37 = (uint32_t)(-(int)(xb[74] < 0));
-  uint32_t vm37 = (uint32_t)(-(int)(xb[75] < 0));
-  uint32_t t142 = L3<0x96>(t140, yl[74 * BS_CSA_CB] ^ um37, yl[75 * BS_CSA_CB] ^ vm37);
-  uint32_t t143 = L3<0xe8>(t140, yl[74 * BS_CSA_CB] ^ um37, yl[75 * BS_CSA_CB] ^ vm37);
+  uint32_t t140, t141;
+  switch ((int(xb[72] < 0) << 1) | int(xb[73] < 0)) {
+    case 0: t140 = L3<0x96>(t134, yl[72 * BS_CSA_CB], yl[73 * BS_CSA_CB]); t141 = L3<0xe8>(t134, yl[72 * BS_CSA_CB], yl[73 * BS_CSA_CB]); break;
+    case 1: t140 = L3<0x69>(t134, yl[72 * BS_CSA_CB], yl[73 * BS_CSA_CB]); t141 = L3<0xd4>(t134, yl[72 * BS_CSA_CB], yl[73 * BS_CSA_CB]); break;
+    case 2: t140 = L3<0x69>(t134, yl[72 * BS_CSA_CB], yl[73 * BS_CSA_CB]); t141 = L3<0xb2>(t134, yl[72 * BS_CSA_CB], yl[73 * BS_CSA_CB]); break;
+    case 3: t140 = L3<0x96>(t134, yl[72 * BS_CSA_CB], yl[73 * BS_CSA_CB]); t141 = L3<0x71>(t134, yl[72 * BS_CSA_CB], yl[73 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
+  uint32_t t142, t143;
+  switch ((int(xb[74] < 0) << 1) | int(xb[75] < 0)) {
+    case 0: t142 = L3<0x96>(t140, yl[74 * BS_CSA_CB], yl[75 * BS_CSA_CB]); t143 = L3<0xe8>(t140, yl[74 * BS_CSA_CB], yl[75 * BS_CSA_CB]); break;
+    case 1: t142 = L3<0x69>(t140, yl[74 * BS_CSA_CB], yl[75 * BS_CSA_CB]); t143 = L3<0xd4>(t140, yl[74 * BS_CSA_CB], yl[75 * BS_CSA_CB]); break;
+    case 2: t142 = L3<0x69>(t140, yl[74 * BS_CSA_CB], yl[75 * BS_CSA_CB]); t143 = L3<0xb2>(t140, yl[74 * BS_CSA_CB], yl[75 * BS_CSA_CB]); break;
+    case 3: t142 = L3<0x96>(t140, yl[74 * BS_CSA_CB], yl[75 * BS_CSA_CB]); t143 = L3<0x71>(t140, yl[74 * BS_CSA_CB], yl[75 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
   uint32_t t144 = L3<0x96>(t136, t141, t143);
   uint32_t t145 = L3<0xe8>(t136, t141, t143);
-  uint32_t um38 = (uint32_t)(-(int)(xb[76] < 0));
-  uint32_t vm38 = (uint32_t)(-(int)(xb[77] < 0));
-  uint32_t t146 = L3<0x96>(t142, yl[76 * BS_CSA_CB] ^ um38, yl[77 * BS_CSA_CB] ^ vm38);
-  uint32_t t147 = L3<0xe8>(t142, yl[76 * BS_CSA_CB] ^ um38, yl[77 * BS_CSA_CB] ^ vm38);
-  uint32_t um39 = (uint32_t)(-(int)(xb[78] < 0));
-  uint32_t vm39 = (uint32_t)(-(int)(xb[79] < 0));
-  uint32_t t148 = L3<0x96>(t146, yl[78 * BS_CSA_CB] ^ um39, yl[79 * BS_CSA_CB] ^ vm39);
-  uint32_t t149 = L3<0xe8>(t146, yl[78 * BS_CSA_CB] ^ um39, yl[79 * BS_CSA_CB] ^ vm39);
+  uint32_t t146, t147;
+  switch ((int(xb[76] < 0) << 1) | int(xb[77] < 0)) {
+    case 0: t146 = L3<0x96>(t142, yl[76 * BS_CSA_CB], yl[77 * BS_CSA_CB]); t147 = L3<0xe8>(t142, yl[76 * BS_CSA_CB], yl[77 * BS_CSA_CB]); break;
+    case 1: t146 = L3<0x69>(t142, yl[76 * BS_CSA_CB], yl[77 * BS_CSA_CB]); t147 = L3<0xd4>(t142, yl[76 * BS_CSA_CB], yl[77 * BS_CSA_CB]); break;
+    case 2: t146 = L3<0x69>(t142, yl[76 * BS_CSA_CB], yl[77 * BS_CSA_CB]); t147 = L3<0xb2>(t142, yl[76 * BS_CSA_CB], yl[77 * BS_CSA_CB]); break;
+    case 3: t146 = L3<0x96>(t142, yl[76 * BS_CSA_CB], yl[77 * BS_CSA_CB]); t147 = L3<0x71>(t142, yl[76 * BS_CSA_CB], yl[77 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
+  uint32_t t148, t149;
+  switch ((int(xb[78] < 0) << 1) | int(xb[79] < 0)) {
+    case 0: t148 = L3<0x96>(t146, yl[78 * BS_CSA_CB], yl[79 * BS_CSA_CB]); t149 = L3<0xe8>(t146, yl[78 * BS_CSA_CB], yl[79 * BS_CSA_CB]); break;
+    case 1: t148 = L3<0x69>(t146, yl[78 * BS_CSA_CB], yl[79 * BS_CSA_CB]); t149 = L3<0xd4>(t146, yl[78 * BS_CSA_CB], yl[79 * BS_CSA_CB]); break;
+    case 2: t148 = L3<0x69>(t146, yl[78 * BS_CSA_CB], yl[79 * BS_CSA_CB]); t149 = L3<0xb2>(t146, yl[78 * BS_CSA_CB], yl[79 * BS_CSA_CB]); break;
+    case 3: t148 = L3<0x96>(t146, yl[78 * BS_CSA_CB], yl[79 * BS_CSA_CB]); t149 = L3<0x71>(t146, yl[78 * BS_CSA_CB], yl[79 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
   uint32_t t150 = L3<0x96>(t144, t147, t149);
   uint32_t t151 = L3<0xe8>(t144, t147, t149);
   uint32_t t152 = L3<0x96>(t138, t145, t151);
   uint32_t t153 = L3<0xe8>(t138, t145, t151);
   uint32_t t154 = L3<0x96>(t120, t139, t153);
   uint32_t t155 = L3<0xe8>(t120, t139, t153);
-  uint32_t um40 = (uint32_t)(-(int)(xb[80] < 0));
-  uint32_t vm40 = (uint32_t)(-(int)(xb[81] < 0));
-  uint32_t t156 = L3<0x96>(t148, yl[80 * BS_CSA_CB] ^ um40, yl[81 * BS_CSA_CB] ^ vm40);
-  uint32_t t157 = L3<0xe8>(t148, yl[80 * BS_CSA_CB] ^ um40, yl[81 * BS_CSA_CB] ^ vm40);
-  uint32_t um41 = (uint32_t)(-(int)(xb[82] < 0));
-  uint32_t vm41 = (uint32_t)(-(int)(xb[83] < 0));
-  uint32_t t158 = L3<0x96>(t156, yl[82 * BS_CSA_CB] ^ um41, yl[83 * BS_CSA_CB] ^ vm41);
-  uint32_t t159 = L3<0xe8>(t156, yl[82 * BS_CSA_CB] ^ um41, yl[83 * BS_CSA_CB] ^ vm41);
+  uint32_t t156, t157;
+  switch ((int(xb[80] < 0) << 1) | int(xb[81] < 0)) {
+    case 0: t156 = L3<0x96>(t148, yl[80 * BS_CSA_CB], yl[81 * BS_CSA_CB]); t157 = L3<0xe8>(t148, yl[80 * BS_CSA_CB], yl[81 * BS_CSA_CB]); break;
+    case 1: t156 = L3<0x69>(t148, yl[80 * BS_CSA_CB], yl[81 * BS_CSA_CB]); t157 = L3<0xd4>(t148, yl[80 * BS_CSA_CB], yl[81 * BS_CSA_CB]); break;
+    case 2: t156 = L3<0x69>(t148, yl[80 * BS_CSA_CB], yl[81 * BS_CSA_CB]); t157 = L3<0xb2>(t148, yl[80 * BS_CSA_CB], yl[81 * BS_CSA_CB]); break;
+    case 3: t156 = L3<0x96>(t148, yl[80 * BS_CSA_CB], yl[81 * BS_CSA_CB]); t157 = L3<0x71>(t148, yl[80 * BS_CSA_CB], yl[81 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
+  uint32_t t158, t159;
+  switch ((int(xb[82] < 0) << 1) | int(xb[83] < 0)) {
+    case 0: t158 = L3<0x96>(t156, yl[82 * BS_CSA_CB], yl[83 * BS_CSA_CB]); t159 = L3<0xe8>(t156, yl[82 * BS_CSA_CB], yl[83 * BS_CSA_CB]); break;
+    case 1: t158 = L3<0x69>(t156, yl[82 * BS_CSA_CB], yl[83 * BS_CSA_CB]); t159 = L3<0xd4>(t156, yl[82 * BS_CSA_CB], yl[83 * BS_CSA_CB]); break;
+    case 2: t158 = L3<0x69>(t156, yl[82 * BS_CSA_CB], yl[83 * BS_CSA_CB]); t159 = L3<0xb2>(t156, yl[82 * BS_CSA_CB], yl[83 * BS_CSA_CB]); break;
+    case 3: t158 = L3<0x96>(t156, yl[82 * BS_CSA_CB], yl[83 * BS_CSA_CB]); t159 = L3<0x71>(t156, yl[82 * BS_CSA_CB], yl[83 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
   uint32_t t160 = L3<0x96>(t150, t157, t159);
   uint32_t t161 = L3<0xe8>(t150, t157, t159);
-  uint32_t um42 = (uint32_t)(-(int)(xb[84] < 0));
-  uint32_t vm42 = (uint32_t)(-(int)(xb[85] < 0));
-  uint32_t t162 = L3<0x96>(t158, yl[84 * BS_CSA_CB] ^ um42, yl[85 * BS_CSA_CB] ^ vm42);
-  uint32_t t163 = L3<0xe8>(t158, yl[84 * BS_CSA_CB] ^ um42, yl[85 * BS_CSA_CB] ^ vm42);
-  uint32_t um43 = (uint32_t)(-(int)(xb[86] < 0));
-  uint32_t vm43 = (uint32_t)(-(int)(xb[87] < 0));
-  uint32_t t164 = L3<0x96>(t162, yl[86 * BS_CSA_CB] ^ um43, yl[87 * BS_CSA_CB] ^ vm43);
-  uint32_t t165 = L3<0xe8>(t162, yl[86 * BS_CSA_CB] ^ um43, yl[87 * BS_CSA_CB] ^ vm43);
+  uint32_t t162, t163;
+  switch ((int(xb[84] < 0) << 1) | int(xb[85] < 0)) {
+    case 0: t162 = L3<0x96>(t158, yl[84 * BS_CSA_CB], yl[85 * BS_CSA_CB]); t163 = L3<0xe8>(t158, yl[84 * BS_CSA_CB], yl[85 * BS_CSA_CB]); break;
+    case 1: t162 = L3<0x69>(t158, yl[84 * BS_CSA_CB], yl[85 * BS_CSA_CB]); t163 = L3<0xd4>(t158, yl[84 * BS_CSA_CB], yl[85 * BS_CSA_CB]); break;
+    case 2: t162 = L3<0x69>(t158, yl[84 * BS_CSA_CB], yl[85 * BS_CSA_CB]); t163 = L3<0xb2>(t158, yl[84 * BS_CSA_CB], yl[85 * BS_CSA_CB]); break;
+    case 3: t162 = L3<0x96>(t158, yl[84 * BS_CSA_CB], yl[85 * BS_CSA_CB]); t163 = L3<0x71>(t158, yl[84 * BS_CSA_CB], yl[85 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
+  uint32_t t164, t165;
+  switch ((int(xb[86] < 0) << 1) | int(xb[87] < 0)) {
+    case 0: t164 = L3<0x96>(t162, yl[86 * BS_CSA_CB], yl[87 * BS_CSA_CB]); t165 = L3<0xe8>(t162, yl[86 * BS_CSA_CB], yl[87 * BS_CSA_CB]); break;
+    case 1: t164 = L3<0x69>(t162, yl[86 * BS_CSA_CB], yl[87 * BS_CSA_CB]); t165 = L3<0xd4>(t162, yl[86 * BS_CSA_CB], yl[87 * BS_CSA_CB]); break;
+    case 2: t164 = L3<0x69>(t162, yl[86 * BS_CSA_CB], yl[87 * BS_CSA_CB]); t165 = L3<0xb2>(t162, yl[86 * BS_CSA_CB], yl[87 * BS_CSA_CB]); break;
+    case 3: t164 = L3<0x96>(t162, yl[86 * BS_CSA_CB], yl[87 * BS_CSA_CB]); t165 = L3<0x71>(t162, yl[86 * BS_CSA_CB], yl[87 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
   uint32_t t166 = L3<0x96>(t160, t163, t165);
   uint32_t t167 = L3<0xe8>(t160, t163, t165);
   uint32_t t168 = L3<0x96>(t152, t161, t167);
   uint32_t t169 = L3<0xe8>(t152, t161, t167);
-  uint32_t um44 = (uint32_t)(-(int)(xb[88] < 0));
-  uint32_t vm44 = (uint32_t)(-(int)(xb[89] < 0));
-  uint32_t t170 = L3<0x96>(t164, yl[88 * BS_CSA_CB] ^ um44, yl[89 * BS_CSA_CB] ^ vm44);
-  uint32_t t171 = L3<0xe8>(t164, yl[88 * BS_CSA_CB] ^ um44, yl[89 * BS_CSA_CB] ^ vm44);
-  uint32_t um45 = (uint32_t)(-(int)(xb[90] < 0));
-  uint32_t vm45 = (uint32_t)(-(int)(xb[91] < 0));
-  uint32_t t172 = L3<0x96>(t170, yl[90 * BS_CSA_CB] ^ um45, yl[91 * BS_CSA_CB] ^ vm45);
-  uint32_t t173 = L3<0xe8>(t170, yl[90 * BS_CSA_CB] ^ um45, yl[91 * BS_CSA_CB] ^ vm45);
+  uint32_t t170, t171;
+  switch ((int(xb[88] < 0) << 1) | int(xb[89] < 0)) {
+    case 0: t170 = L3<0x96>(t164, yl[88 * BS_CSA_CB], yl[89 * BS_CSA_CB]); t171 = L3<0xe8>(t164, yl[88 * BS_CSA_CB], yl[89 * BS_CSA_CB]); break;
+    case 1: t170 = L3<0x69>(t164, yl[88 * BS_CSA_CB], yl[89 * BS_CSA_CB]); t171 = L3<0xd4>(t164, yl[88 * BS_CSA_CB], yl[89 * BS_CSA_CB]); break;
+    case 2: t170 = L3<0x69>(t164, yl[88 * BS_CSA_CB], yl[89 * BS_CSA_CB]); t171 = L3<0xb2>(t164, yl[88 * BS_CSA_CB], yl[89 * BS_CSA_CB]); break;
+    case 3: t170 = L3<0x96>(t164, yl[88 * BS_CSA_CB], yl[89 * BS_CSA_CB]); t171 = L3<0x71>(t164, yl[88 * BS_CSA_CB], yl[89 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
+  uint32_t t172, t173;
+  switch ((int(xb[90] < 0) << 1) | int(xb[91] < 0)) {
+    case 0: t172 = L3<0x96>(t170, yl[90 * BS_CSA_CB], yl[91 * BS_CSA_CB]); t173 = L3<0xe8>(t170, yl[90 * BS_CSA_CB], yl[91 * BS_CSA_CB]); break;
+    case 1: t172 = L3<0x69>(t170, yl[90 * BS_CSA_CB], yl[91 * BS_CSA_CB]); t173 = L3<0xd4>(t170, yl[90 * BS_CSA_CB], yl[91 * BS_CSA_CB]); break;
+    case 2: t172 = L3<0x69>(t170, yl[90 * BS_CSA_CB], yl[91 * BS_CSA_CB]); t173 = L3<0xb2>(t170, yl[90 * BS_CSA_CB], yl[91 * BS_CSA_CB]); break;
+    case 3: t172 = L3<0x96>(t170, yl[90 * BS_CSA_CB], yl[91 * BS_CSA_CB]); t173 = L3<0x71>(t170, yl[90 * BS_CSA_CB], yl[91 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
   uint32_t t174 = L3<0x96>(t166, t171, t173);
   uint32_t t175 = L3<0xe8>(t166, t171, t173);
-  uint32_t um46 = (uint32_t)(-(int)(xb[92] < 0));
-  uint32_t vm46 = (uint32_t)(-(int)(xb[93] < 0));
-  uint32_t t176 = L3<0x96>(t172, yl[92 * BS_CSA_CB] ^ um46, yl[93 * BS_CSA_CB] ^ vm46);
-  uint32_t t177 = L3<0xe8>(t172, yl[92 * BS_CSA_CB] ^ um46, yl[93 * BS_CSA_CB] ^ vm46);
-  uint32_t um47 = (uint32_t)(-(int)(xb[94] < 0));
-  uint32_t vm47 = (uint32_t)(-(int)(xb[95] < 0));
-  uint32_t t178 = L3<0x96>(t176, yl[94 * BS_CSA_CB] ^ um47, yl[95 * BS_CSA_CB] ^ vm47);
-  uint32_t t179 = L3<0xe8>(t176, yl[94 * BS_CSA_CB] ^ um47, yl[95 * BS_CSA_CB] ^ vm47);
+  uint32_t t176, t177;
+  switch ((int(xb[92] < 0) << 1) | int(xb[93] < 0)) {
+    case 0: t176 = L3<0x96>(t172, yl[92 * BS_CSA_CB], yl[93 * BS_CSA_CB]); t177 = L3<0xe8>(t172, yl[92 * BS_CSA_CB], yl[93 * BS_CSA_CB]); break;
+    case 1: t176 = L3<0x69>(t172, yl[92 * BS_CSA_CB], yl[93 * BS_CSA_CB]); t177 = L3<0xd4>(t172, yl[92 * BS_CSA_CB], yl[93 * BS_CSA_CB]); break;
+    case 2: t176 = L3<0x69>(t172, yl[92 * BS_CSA_CB], yl[93 * BS_CSA_CB]); t177 = L3<0xb2>(t172, yl[92 * BS_CSA_CB], yl[93 * BS_CSA_CB]); break;
+    case 3: t176 = L3<0x96>(t172, yl[92 * BS_CSA_CB], yl[93 * BS_CSA_CB]); t177 = L3<0x71>(t172, yl[92 * BS_CSA_CB], yl[93 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
+  uint32_t t178, t179;
+  switch ((int(xb[94] < 0) << 1) | int(xb[95] < 0)) {
+    case 0: t178 = L3<0x96>(t176, yl[94 * BS_CSA_CB], yl[95 * BS_CSA_CB]); t179 = L3<0xe8>(t176, yl[94 * BS_CSA_CB], yl[95 * BS_CSA_CB]); break;
+    case 1: t178 = L3<0x69>(t176, yl[94 * BS_CSA_CB], yl[95 * BS_CSA_CB]); t179 = L3<0xd4>(t176, yl[94 * BS_CSA_CB], yl[95 * BS_CSA_CB]); break;
+    case 2: t178 = L3<0x69>(t176, yl[94 * BS_CSA_CB], yl[95 * BS_CSA_CB]); t179 = L3<0xb2>(t176, yl[94 * BS_CSA_CB], yl[95 * BS_CSA_CB]); break;
+    case 3: t178 = L3<0x96>(t176, yl[94 * BS_CSA_CB], yl[95 * BS_CSA_CB]); t179 = L3<0x71>(t176, yl[94 * BS_CSA_CB], yl[95 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
   uint32_t t180 = L3<0x96>(t174, t177, t179);
   uint32_t t181 = L3<0xe8>(t174, t177, t179);
   uint32_t t182 = L3<0x96>(t168, t175, t181);
@@ -304,92 +496,156 @@ __device__ __forceinline__ void bs_csa_chunk(uint32_t* __restrict__ P, const uin
   uint32_t t185 = L3<0xe8>(t154, t169, t183);
   uint32_t t186 = L3<0x96>(t122, t155, t185);
   uint32_t t187 = L3<0xe8>(t122, t155, t185);
-  uint32_t um48 = (uint32_t)(-(int)(xb[96] < 0));
-  uint32_t vm48 = (uint32_t)(-(int)(xb[97] < 0));
-  uint32_t t188 = L3<0x96>(t178, yl[96 * BS_CSA_CB] ^ um48, yl[97 * BS_CSA_CB] ^ vm48);
-  uint32_t t189 = L3<0xe8>(t178, yl[96 * BS_CSA_CB] ^ um48, yl[97 * BS_CSA_CB] ^ vm48);
-  uint32_t um49 = (uint32_t)(-(int)(xb[98] < 0));
-  uint32_t vm49 = (uint32_t)(-(int)(xb[99] < 0));
-  uint32_t t190 = L3<0x96>(t188, yl[98 * BS_CSA_CB] ^ um49, yl[99 * BS_CSA_CB] ^ vm49);
-  uint32_t t191 = L3<0xe8>(t188, yl[98 * BS_CSA_CB] ^ um49, yl[99 * BS_CSA_CB] ^ vm49);
+  uint32_t t188, t189;
+  switch ((int(xb[96] < 0) << 1) | int(xb[97] < 0)) {
+    case 0: t188 = L3<0x96>(t178, yl[96 * BS_CSA_CB], yl[97 * BS_CSA_CB]); t189 = L3<0xe8>(t178, yl[96 * BS_CSA_CB], yl[97 * BS_CSA_CB]); break;
+    case 1: t188 = L3<0x69>(t178, yl[96 * BS_CSA_CB], yl[97 * BS_CSA_CB]); t189 = L3<0xd4>(t178, yl[96 * BS_CSA_CB], yl[97 * BS_CSA_CB]); break;
+    case 2: t188 = L3<0x69>(t178, yl[96 * BS_CSA_CB], yl[97 * BS_CSA_CB]); t189 = L3<0xb2>(t178, yl[96 * BS_CSA_CB], yl[97 * BS_CSA_CB]); break;
+    case 3: t188 = L3<0x96>(t178, yl[96 * BS_CSA_CB], yl[97 * BS_CSA_CB]); t189 = L3<0x71>(t178, yl[96 * BS_CSA_CB], yl[97 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
+  uint32_t t190, t191;
+  switch ((int(xb[98] < 0) << 1) | int(xb[99] < 0)) {
+    case 0: t190 = L3<0x96>(t188, yl[98 * BS_CSA_CB], yl[99 * BS_CSA_CB]); t191 = L3<0xe8>(t188, yl[98 * BS_CSA_CB], yl[99 * BS_CSA_CB]); break;
+    case 1: t190 = L3<0x69>(t188, yl[98 * BS_CSA_CB], yl[99 * BS_CSA_CB]); t191 = L3<0xd4>(t188, yl[98 * BS_CSA_CB], yl[99 * BS_CSA_CB]); break;
+    case 2: t190 = L3<0x69>(t188, yl[98 * BS_CSA_CB], yl[99 * BS_CSA_CB]); t191 = L3<0xb2>(t188, yl[98 * BS_CSA_CB], yl[99 * BS_CSA_CB]); break;
+    case 3: t190 = L3<0x96>(t188, yl[98 * BS_CSA_CB], yl[99 * BS_CSA_CB]); t191 = L3<0x71>(t188, yl[98 * BS_CSA_CB], yl[99 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
   uint32_t t192 = L3<0x96>(t180, t189, t191);
   uint32_t t193 = L3<0xe8>(t180, t189, t191);
-  uint32_t um50 = (uint32_t)(-(int)(xb[100] < 0));
-  uint32_t vm50 = (uint32_t)(-(int)(xb[101] < 0));
-  uint32_t t194 = L3<0x96>(t190, yl[100 * BS_CSA_CB] ^ um50, yl[101 * BS_CSA_CB] ^ vm50);
-  uint32_t t195 = L3<0xe8>(t190, yl[100 * BS_CSA_CB] ^ um50, yl[101 * BS_CSA_CB] ^ vm50);
-  uint32_t um51 = (uint32_t)(-(int)(xb[102] < 0));
-  uint32_t vm51 = (uint32_t)(-(int)(xb[103] < 0));
-  uint32_t t196 = L3<0x96>(t194, yl[102 * BS_CSA_CB] ^ um51, yl[103 * BS_CSA_CB] ^ vm51);
-  uint32_t t197 = L3<0xe8>(t194, yl[102 * BS_CSA_CB] ^ um51, yl[103 * BS_CSA_CB] ^ vm51);
+  uint32_t t194, t195;
+  switch ((int(xb[100] < 0) << 1) | int(xb[101] < 0)) {
+    case 0: t194 = L3<0x96>(t190, yl[100 * BS_CSA_CB], yl[101 * BS_CSA_CB]); t195 = L3<0xe8>(t190, yl[100 * BS_CSA_CB], yl[101 * BS_CSA_CB]); break;
+    case 1: t194 = L3<0x69>(t190, yl[100 * BS_CSA_CB], yl[101 * BS_CSA_CB]); t195 = L3<0xd4>(t190, yl[100 * BS_CSA_CB], yl[101 * BS_CSA_CB]); break;
+    case 2: t194 = L3<0x69>(t190, yl[100 * BS_CSA_CB], yl[101 * BS_CSA_CB]); t195 = L3<0xb2>(t190, yl[100 * BS_CSA_CB], yl[101 * BS_CSA_CB]); break;
+    case 3: t194 = L3<0x96>(t190, yl[100 * BS_CSA_CB], yl[101 * BS_CSA_CB]); t195 = L3<0x71>(t190, yl[100 * BS_CSA_CB], yl[101 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
+  uint32_t t196, t197;
+  switch ((int(xb[102] < 0) << 1) | int(xb[103] < 0)) {
+    case 0: t196 = L3<0x96>(t194, yl[102 * BS_CSA_CB], yl[103 * BS_CSA_CB]); t197 = L3<0xe8>(t194, yl[102 * BS_CSA_CB], yl[103 * BS_CSA_CB]); break;
+    case 1: t196 = L3<0x69>(t194, yl[102 * BS_CSA_CB], yl[103 * BS_CSA_CB]); t197 = L3<0xd4>(t194, yl[102 * BS_CSA_CB], yl[103 * BS_CSA_CB]); break;
+    case 2: t196 = L3<0x69>(t194, yl[102 * BS_CSA_CB], yl[103 * BS_CSA_CB]); t197 = L3<0xb2>(t194, yl[102 * BS_CSA_CB], yl[103 * BS_CSA_CB]); break;
+    case 3: t196 = L3<0x96>(t194, yl[102 * BS_CSA_CB], yl[103 * BS_CSA_CB]); t197 = L3<0x71>(t194, yl[102 * BS_CSA_CB], yl[103 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
   uint32_t t198 = L3<0x96>(t192, t195, t197);
   uint32_t t199 = L3<0xe8>(t192, t195, t197);
   uint32_t t200 = L3<0x96>(t182, t193, t199);
   uint32_t t201 = L3<0xe8>(t182, t193, t199);
-  uint32_t um52 = (uint32_t)(-(int)(xb[104] < 0));
-  uint32_t vm52 = (uint32_t)(-(int)(xb[105] < 0));
-  uint32_t t202 = L3<0x96>(t196, yl[104 * BS_CSA_CB] ^ um52, yl[105 * BS_CSA_CB] ^ vm52);
-  uint32_t t203 = L3<0xe8>(t196, yl[104 * BS_CSA_CB] ^ um52, yl[105 * BS_CSA_CB] ^ vm52);
-  uint32_t um53 = (uint32_t)(-(int)(xb[106] < 0));
-  uint32_t vm53 = (uint32_t)(-(int)(xb[107] < 0));
-  uint32_t t204 = L3<0x96>(t202, yl[106 * BS_CSA_CB] ^ um53, yl[107 * BS_CSA_CB] ^ vm53);
-  uint32_t t205 = L3<0xe8>(t202, yl[106 * BS_CSA_CB] ^ um53, yl[107 * BS_CSA_CB] ^ vm53);
+  uint32_t t202, t203;
+  switch ((int(xb[104] < 0) << 1) | int(xb[105] < 0)) {
+    case 0: t202 = L3<0x96>(t196, yl[104 * BS_CSA_CB], yl[105 * BS_CSA_CB]); t203 = L3<0xe8>(t196, yl[104 * BS_CSA_CB], yl[105 * BS_CSA_CB]); break;
+    case 1: t202 = L3<0x69>(t196, yl[104 * BS_CSA_CB], yl[105 * BS_CSA_CB]); t203 = L3<0xd4>(t196, yl[104 * BS_CSA_CB], yl[105 * BS_CSA_CB]); break;
+    case 2: t202 = L3<0x69>(t196, yl[104 * BS_CSA_CB], yl[105 * BS_CSA_CB]); t203 = L3<0xb2>(t196, yl[104 * BS_CSA_CB], yl[105 * BS_CSA_CB]); break;
+    case 3: t202 = L3<0x96>(t196, yl[104 * BS_CSA_CB], yl[105 * BS_CSA_CB]); t203 = L3<0x71>(t196, yl[104 * BS_CSA_CB], yl[105 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
+  uint32_t t204, t205;
+  switch ((int(xb[106] < 0) << 1) | int(xb[107] < 0)) {
+    case 0: t204 = L3<0x96>(t202, yl[106 * BS_CSA_CB], yl[107 * BS_CSA_CB]); t205 = L3<0xe8>(t202, yl[106 * BS_CSA_CB], yl[107 * BS_CSA_CB]); break;
+    case 1: t204 = L3<0x69>(t202, yl[106 * BS_CSA_CB], yl[107 * BS_CSA_CB]); t205 = L3<0xd4>(t202, yl[106 * BS_CSA_CB], yl[107 * BS_CSA_CB]); break;
+    case 2: t204 = L3<0x69>(t202, yl[106 * BS_CSA_CB], yl[107 * BS_CSA_CB]); t205 = L3<0xb2>(t202, yl[106 * BS_CSA_CB], yl[107 * BS_CSA_CB]); break;
+    case 3: t204 = L3<0x96>(t202, yl[106 * BS_CSA_CB], yl[107 * BS_CSA_CB]); t205 = L3<0x71>(t202, yl[106 * BS_CSA_CB], yl[107 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
   uint32_t t206 = L3<0x96>(t198, t203, t205);
   uint32_t t207 = L3<0xe8>(t198, t203, t205);
-  uint32_t um54 = (uint32_t)(-(int)(xb[108] < 0));
-  uint32_t vm54 = (uint32_t)(-(int)(xb[109] < 0));
-  uint32_t t208 = L3<0x96>(t204, yl[108 * BS_CSA_CB] ^ um54, yl[109 * BS_CSA_CB] ^ vm54);
-  uint32_t t209 = L3<0xe8>(t204, yl[108 * BS_CSA_CB] ^ um54, yl[109 * BS_CSA_CB] ^ vm54);
-  uint32_t um55 = (uint32_t)(-(int)(xb[110] < 0));
-  uint32_t vm55 = (uint32_t)(-(int)(xb[111] < 0));
-  uint32_t t210 = L3<0x96>(t208, yl[110 * BS_CSA_CB] ^ um55, yl[111 * BS_CSA_CB] ^ vm55);
-  uint32_t t211 = L3<0xe8>(t208, yl[110 * BS_CSA_CB] ^ um55, yl[111 * BS_CSA_CB] ^ vm55);
+  uint32_t t208, t209;
+  switch ((int(xb[108] < 0) << 1) | int(xb[109] < 0)) {
+    case 0: t208 = L3<0x96>(t204, yl[108 * BS_CSA_CB], yl[109 * BS_CSA_CB]); t209 = L3<0xe8>(t204, yl[108 * BS_CSA_CB], yl[109 * BS_CSA_CB]); break;
+    case 1: t208 = L3<0x69>(t204, yl[108 * BS_CSA_CB], yl[109 * BS_CSA_CB]); t209 = L3<0xd4>(t204, yl[108 * BS_CSA_CB], yl[109 * BS_CSA_CB]); break;
+    case 2: t208 = L3<0x69>(t204, yl[108 * BS_CSA_CB], yl[109 * BS_CSA_CB]); t209 = L3<0xb2>(t204, yl[108 * BS_CSA_CB], yl[109 * BS_CSA_CB]); break;
+    case 3: t208 = L3<0x96>(t204, yl[108 * BS_CSA_CB], yl[109 * BS_CSA_CB]); t209 = L3<0x71>(t204, yl[108 * BS_CSA_CB], yl[109 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
+  uint32_t t210, t211;
+  switch ((int(xb[110] < 0) << 1) | int(xb[111] < 0)) {
+    case 0: t210 = L3<0x96>(t208, yl[110 * BS_CSA_CB], yl[111 * BS_CSA_CB]); t211 = L3<0xe8>(t208, yl[110 * BS_CSA_CB], yl[111 * BS_CSA_CB]); break;
+    case 1: t210 = L3<0x69>(t208, yl[110 * BS_CSA_CB], yl[111 * BS_CSA_CB]); t211 = L3<0xd4>(t208, yl[110 * BS_CSA_CB], yl[111 * BS_CSA_CB]); break;
+    case 2: t210 = L3<0x69>(t208, yl[110 * BS_CSA_CB], yl[111 * BS_CSA_CB]); t211 = L3<0xb2>(t208, yl[110 * BS_CSA_CB], yl[111 * BS_CSA_CB]); break;
+    case 3: t210 = L3<0x96>(t208, yl[110 * BS_CSA_CB], yl[111 * BS_CSA_CB]); t211 = L3<0x71>(t208, yl[110 * BS_CSA_CB], yl[111 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
   uint32_t t212 = L3<0x96>(t206, t209, t211);
   uint32_t t213 = L3<0xe8>(t206, t209, t211);
   uint32_t t214 = L3<0x96>(t200, t207, t213);
   uint32_t t215 = L3<0xe8>(t200, t207, t213);
   uint32_t t216 = L3<0x96>(t184, t201, t215);
   uint32_t t217 = L3<0xe8>(t184, t201, t215);
-  uint32_t um56 = (uint32_t)(-(int)(xb[112] < 0));
-  uint32_t vm56 = (uint32_t)(-(int)(xb[113] < 0));
-  uint32_t t218 = L3<0x96>(t210, yl[112 * BS_CSA_CB] ^ um56, yl[113 * BS_CSA_CB] ^ vm56);
-  uint32_t t219 = L3<0xe8>(t210, yl[112 * BS_CSA_CB] ^ um56, yl[113 * BS_CSA_CB] ^ vm56);
-  uint32_t um57 = (uint32_t)(-(int)(xb[114] < 0));
-  uint32_t vm57 = (uint32_t)(-(int)(xb[115] < 0));
-  uint32_t t220 = L3<0x96>(t218, yl[114 * BS_CSA_CB] ^ um57, yl[115 * BS_CSA_CB] ^ vm57);
-  uint32_t t221 = L3<0xe8>(t218, yl[114 * BS_CSA_CB] ^ um57, yl[115 * BS_CSA_CB] ^ vm57);
+  uint32_t t218, t219;
+  switch ((int(xb[112] < 0) << 1) | int(xb[113] < 0)) {
+    case 0: t218 = L3<0x96>(t210, yl[112 * BS_CSA_CB], yl[113 * BS_CSA_CB]); t219 = L3<0xe8>(t210, yl[112 * BS_CSA_CB], yl[113 * BS_CSA_CB]); break;
+    case 1: t218 = L3<0x69>(t210, yl[112 * BS_CSA_CB], yl[113 * BS_CSA_CB]); t219 = L3<0xd4>(t210, yl[112 * BS_CSA_CB], yl[113 * BS_CSA_CB]); break;
+    case 2: t218 = L3<0x69>(t210, yl[112 * BS_CSA_CB], yl[113 * BS_CSA_CB]); t219 = L3<0xb2>(t210, yl[112 * BS_CSA_CB], yl[113 * BS_CSA_CB]); break;
+    case 3: t218 = L3<0x96>(t210, yl[112 * BS_CSA_CB], yl[113 * BS_CSA_CB]); t219 = L3<0x71>(t210, yl[112 * BS_CSA_CB], yl[113 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
+  uint32_t t220, t221;
+  switch ((int(xb[114] < 0) << 1) | int(xb[115] < 0)) {
+    case 0: t220 = L3<0x96>(t218, yl[114 * BS_CSA_CB], yl[115 * BS_CSA_CB]); t221 = L3<0xe8>(t218, yl[114 * BS_CSA_CB], yl[115 * BS_CSA_CB]); break;
+    case 1: t220 = L3<0x69>(t218, yl[114 * BS_CSA_CB], yl[115 * BS_CSA_CB]); t221 = L3<0xd4>(t218, yl[114 * BS_CSA_CB], yl[115 * BS_CSA_CB]); break;
+    case 2: t220 = L3<0x69>(t218, yl[114 * BS_CSA_CB], yl[115 * BS_CSA_CB]); t221 = L3<0xb2>(t218, yl[114 * BS_CSA_CB], yl[115 * BS_CSA_CB]); break;
+    case 3: t220 = L3<0x96>(t218, yl[114 * BS_CSA_CB], yl[115 * BS_CSA_CB]); t221 = L3<0x71>(t218, yl[114 * BS_CSA_CB], yl[115 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
   uint32_t t222 = L3<0x96>(t212, t219, t221);
   uint32_t t223 = L3<0xe8>(t212, t219, t221);
-  uint32_t um58 = (uint32_t)(-(int)(xb[116] < 0));
-  uint32_t vm58 = (uint32_t)(-(int)(xb[117] < 0));
-  uint32_t t224 = L3<0x96>(t220, yl[116 * BS_CSA_CB] ^ um58, yl[117 * BS_CSA_CB] ^ vm58);
-  uint32_t t225 = L3<0xe8>(t220, yl[116 * BS_CSA_CB] ^ um58, yl[117 * BS_CSA_CB] ^ vm58);
-  uint32_t um59 = (uint32_t)(-(int)(xb[118] < 0));
-  uint32_t vm59 = (uint32_t)(-(int)(xb[119] < 0));
-  uint32_t t226 = L3<0x96>(t224, yl[118 * BS_CSA_CB] ^ um59, yl[119 * BS_CSA_CB] ^ vm59);
-  uint32_t t227 = L3<0xe8>(t224, yl[118 * BS_CSA_CB] ^ um59, yl[119 * BS_CSA_CB] ^ vm59);
+  uint32_t t224, t225;
+  switch ((int(xb[116] < 0) << 1) | int(xb[117] < 0)) {
+    case 0: t224 = L3<0x96>(t220, yl[116 * BS_CSA_CB], yl[117 * BS_CSA_CB]); t225 = L3<0xe8>(t220, yl[116 * BS_CSA_CB], yl[117 * BS_CSA_CB]); break;
+    case 1: t224 = L3<0x69>(t220, yl[116 * BS_CSA_CB], yl[117 * BS_CSA_CB]); t225 = L3<0xd4>(t220, yl[116 * BS_CSA_CB], yl[117 * BS_CSA_CB]); break;
+    case 2: t224 = L3<0x69>(t220, yl[116 * BS_CSA_CB], yl[117 * BS_CSA_CB]); t225 = L3<0xb2>(t220, yl[116 * BS_CSA_CB], yl[117 * BS_CSA_CB]); break;
+    case 3: t224 = L3<0x96>(t220, yl[116 * BS_CSA_CB], yl[117 * BS_CSA_CB]); t225 = L3<0x71>(t220, yl[116 * BS_CSA_CB], yl[117 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
+  uint32_t t226, t227;
+  switch ((int(xb[118] < 0) << 1) | int(xb[119] < 0)) {
+    case 0: t226 = L3<0x96>(t224, yl[118 * BS_CSA_CB], yl[119 * BS_CSA_CB]); t227 = L3<0xe8>(t224, yl[118 * BS_CSA_CB], yl[119 * BS_CSA_CB]); break;
+    case 1: t226 = L3<0x69>(t224, yl[118 * BS_CSA_CB], yl[119 * BS_CSA_CB]); t227 = L3<0xd4>(t224, yl[118 * BS_CSA_CB], yl[119 * BS_CSA_CB]); break;
+    case 2: t226 = L3<0x69>(t224, yl[118 * BS_CSA_CB], yl[119 * BS_CSA_CB]); t227 = L3<0xb2>(t224, yl[118 * BS_CSA_CB], yl[119 * BS_CSA_CB]); break;
+    case 3: t226 = L3<0x96>(t224, yl[118 * BS_CSA_CB], yl[119 * BS_CSA_CB]); t227 = L3<0x71>(t224, yl[118 * BS_CSA_CB], yl[119 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
   uint32_t t228 = L3<0x96>(t222, t225, t227);
   uint32_t t229 = L3<0xe8>(t222, t225, t227);
   uint32_t t230 = L3<0x96>(t214, t223, t229);
   uint32_t t231 = L3<0xe8>(t214, t223, t229);
-  uint32_t um60 = (uint32_t)(-(int)(xb[120] < 0));
-  uint32_t vm60 = (uint32_t)(-(int)(xb[121] < 0));
-  uint32_t t232 = L3<0x96>(t226, yl[120 * BS_CSA_CB] ^ um60, yl[121 * BS_CSA_CB] ^ vm60);
-  uint32_t t233 = L3<0xe8>(t226, yl[120 * BS_CSA_CB] ^ um60, yl[121 * BS_CSA_CB] ^ vm60);
-  uint32_t um61 = (uint32_t)(-(int)(xb[122] < 0));
-  uint32_t vm61 = (uint32_t)(-(int)(xb[123] < 0));
-  uint32_t t234 = L3<0x96>(t232, yl[122 * BS_CSA_CB] ^ um61, yl[123 * BS_CSA_CB] ^ vm61);
-  uint32_t t235 = L3<0xe8>(t232, yl[122 * BS_CSA_CB] ^ um61, yl[123 * BS_CSA_CB] ^ vm61);
+  uint32_t t232, t233;
+  switch ((int(xb[120] < 0) << 1) | int(xb[121] < 0)) {
+    case 0: t232 = L3<0x96>(t226, yl[120 * BS_CSA_CB], yl[121 * BS_CSA_CB]); t233 = L3<0xe8>(t226, yl[120 * BS_CSA_CB], yl[121 * BS_CSA_CB]); break;
+    case 1: t232 = L3<0x69>(t226, yl[120 * BS_CSA_CB], yl[121 * BS_CSA_CB]); t233 = L3<0xd4>(t226, yl[120 * BS_CSA_CB], yl[121 * BS_CSA_CB]); break;
+    case 2: t232 = L3<0x69>(t226, yl[120 * BS_CSA_CB], yl[121 * BS_CSA_CB]); t233 = L3<0xb2>(t226, yl[120 * BS_CSA_CB], yl[121 * BS_CSA_CB]); break;
+    case 3: t232 = L3<0x96>(t226, yl[120 * BS_CSA_CB], yl[121 * BS_CSA_CB]); t233 = L3<0x71>(t226, yl[120 * BS_CSA_CB], yl[121 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
+  uint32_t t234, t235;
+  switch ((int(xb[122] < 0) << 1) | int(xb[123] < 0)) {
+    case 0: t234 = L3<0x96>(t232, yl[122 * BS_CSA_CB], yl[123 * BS_CSA_CB]); t235 = L3<0xe8>(t232, yl[122 * BS_CSA_CB], yl[123 * BS_CSA_CB]); break;
+    case 1: t234 = L3<0x69>(t232, yl[122 * BS_CSA_CB], yl[123 * BS_CSA_CB]); t235 = L3<0xd4>(t232, yl[122 * BS_CSA_CB], yl[123 * BS_CSA_CB]); break;
+    case 2: t234 = L3<0x69>(t232, yl[122 * BS_CSA_CB], yl[123 * BS_CSA_CB]); t235 = L3<0xb2>(t232, yl[122 * BS_CSA_CB], yl[123 * BS_CSA_CB]); break;
+    case 3: t234 = L3<0x96>(t232, yl[122 * BS_CSA_CB], yl[123 * BS_CSA_CB]); t235 = L3<0x71>(t232, yl[122 * BS_CSA_CB], yl[123 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
   uint32_t t236 = L3<0x96>(t228, t233, t235);
   uint32_t t237 = L3<0xe8>(t228, t233, t235);
-  uint32_t um62 = (uint32_t)(-(int)(xb[124] < 0));
-  uint32_t vm62 = (uint32_t)(-(int)(xb[125] < 0));
-  uint32_t t238 = L3<0x96>(t234, yl[124 * BS_CSA_CB] ^ um62, yl[125 * BS_CSA_CB] ^ vm62);
-  uint32_t t239 = L3<0xe8>(t234, yl[124 * BS_CSA_CB] ^ um62, yl[125 * BS_CSA_CB] ^ vm62);
-  uint32_t um63 = (uint32_t)(-(int)(xb[126] < 0));
-  uint32_t vm63 = (uint32_t)(-(int)(xb[127] < 0));
-  uint32_t t240 = L3<0x96>(t238, yl[126 * BS_CSA_CB] ^ um63, yl[127 * BS_CSA_CB] ^ vm63);
-  uint32_t t241 = L3<0xe8>(t238, yl[126 * BS_CSA_CB] ^ um63, yl[127 * BS_CSA_CB] ^ vm63);
+  uint32_t t238, t239;
+  switch ((int(xb[124] < 0) << 1) | int(xb[125] < 0)) {
+    case 0: t238 = L3<0x96>(t234, yl[124 * BS_CSA_CB], yl[125 * BS_CSA_CB]); t239 = L3<0xe8>(t234, yl[124 * BS_CSA_CB], yl[125 * BS_CSA_CB]); break;
+    case 1: t238 = L3<0x69>(t234, yl[124 * BS_CSA_CB], yl[125 * BS_CSA_CB]); t239 = L3<0xd4>(t234, yl[124 * BS_CSA_CB], yl[125 * BS_CSA_CB]); break;
+    case 2: t238 = L3<0x69>(t234, yl[124 * BS_CSA_CB], yl[125 * BS_CSA_CB]); t239 = L3<0xb2>(t234, yl[124 * BS_CSA_CB], yl[125 * BS_CSA_CB]); break;
+    case 3: t238 = L3<0x96>(t234, yl[124 * BS_CSA_CB], yl[125 * BS_CSA_CB]); t239 = L3<0x71>(t234, yl[124 * BS_CSA_CB], yl[125 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
+  uint32_t t240, t241;
+  switch ((int(xb[126] < 0) << 1) | int(xb[127] < 0)) {
+    case 0: t240 = L3<0x96>(t238, yl[126 * BS_CSA_CB], yl[127 * BS_CSA_CB]); t241 = L3<0xe8>(t238, yl[126 * BS_CSA_CB], yl[127 * BS_CSA_CB]); break;
+    case 1: t240 = L3<0x69>(t238, yl[126 * BS_CSA_CB], yl[127 * BS_CSA_CB]); t241 = L3<0xd4>(t238, yl[126 * BS_CSA_CB], yl[127 * BS_CSA_CB]); break;
+    case 2: t240 = L3<0x69>(t238, yl[126 * BS_CSA_CB], yl[127 * BS_CSA_CB]); t241 = L3<0xb2>(t238, yl[126 * BS_CSA_CB], yl[127 * BS_CSA_CB]); break;
+    case 3: t240 = L3<0x96>(t238, yl[126 * BS_CSA_CB], yl[127 * BS_CSA_CB]); t241 = L3<0x71>(t238, yl[126 * BS_CSA_CB], yl[127 * BS_CSA_CB]); break;
+    default: __builtin_unreachable();
+  }
   uint32_t t242 = L3<0x96>(t236, t239, t241);
   uint32_t t243 = L3<0xe8>(t236, t239, t241);
   uint32_t t244 = L3<0x96>(t230, t237, t243);
