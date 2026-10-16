@@ -30,6 +30,11 @@ import Flock.With.Verify
 import Flock.With.Zk
 import Flock.With.Eq
 import Flock.With.ZkEq
+import Flock.With.Sim
+import Flock.With.SimWalk
+import Flock.With.SimVerify
+import Flock.With.SimZk
+import Flock.With.Log
 import Flock.Partition
 import Flock.HmNets
 import Flock.RecOpen
@@ -59,4 +64,7 @@ import Flock.Firewall.Contract
 import Flock.Firewall.Assumptions
 import Flock.Firewall.Released
 import Flock.Witness
+import Flock.With.Returns
+import Flock.With.ReturnsWalk
+import Flock.With.Deployed
 import Flock.RecOpeningCmd

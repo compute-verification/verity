@@ -578,7 +578,7 @@ class Driver:
         what = [f"landed #{landed.pr}"] if landed else []
         main = _out(self.repo, "rev-parse", "origin/main")
         running = sum(self.verdict(c, main, drive).state == "running" for c in drive["launched"])
-        for i in self.trains(len(members)):
+        for i in self.trains(len(members), self._cold(members)):
             m, prs = members[i], " ".join(f"#{x.pr}" for x in members[: i + 1])
             v = self.verdict(m.commit, main, drive)
             if v.state == "failed":
@@ -616,7 +616,17 @@ class Driver:
         q.log(f"research queue drive: {'; '.join(what) or 'nothing queued'}")
         return "; ".join(what) or "idle"
 
-    def trains(self, n: int) -> list[int]:
+    def trains(self, n: int, cold: frozenset[int] = frozenset()) -> list[int]:
         """The members whose commits get a check: every `train_size`-th one and the tip, each train stacked on the one below, so a
-        failure holds up only the PRs from its train up, and the trains below it still land."""
-        return sorted({*range(self.train_size - 1, n, self.train_size), n - 1}) if n else []
+        failure holds up only the PRs from its train up, and the trains below it still land; and the member just below each one
+        in ``cold`` (`queue.forces_cold`), so the PRs under a train whose circuit-check runs cold get a warm check of their own."""
+        if not n:
+            return []
+        return sorted({*range(self.train_size - 1, n, self.train_size), n - 1, *(i - 1 for i in cold if 0 < i < n)})
+
+    def _cold(self, members: list) -> frozenset[int]:
+        """The indices of ``members`` whose own merge onto `next` makes circuit-check run cold (`queue.forces_cold`)."""
+        from .queue import forces_cold
+
+        return frozenset(i for i, m in enumerate(members)
+                         if forces_cold(_out(self.repo, "diff", "--name-only", f"{m.commit}^1", m.commit).split()))

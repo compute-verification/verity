@@ -383,7 +383,8 @@ slack, and candidate 3's error.
 
 At a private inner shape (`ish.holo`), the verifier's list is V*'s holo statements (`FlockC3.VStarList.statements_holo`):
 each part's file is V*'s holo one (`RecVStar.circuitFile` at `ish.holo`), and the event counts those runs as it counts
-plain ones.
+plain ones. Every deployed candidate-3 run is at a private inner shape (`--holo`, `88-rec-c3-inner.sh`); at a plain
+shape no honest rep unit passes (`DrawnRounds`).
 
 Check 5's source `coins` is any: `--rec-inner-coins` is inside the guarantee. The verifier never accepts one at candidate
 3 anyway: the event's `AcceptsC3` names a RecSparse shape (`FlockC3.VStarList.sparse_of_acceptsC3`), where the

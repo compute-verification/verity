@@ -222,8 +222,8 @@
  },
  "guarantees": {},
  "dependencies": {
-  "Arklib": "dd87231a60935b888a323851a96eb3dc4d6b1dd859510a5eafccdaa0d1119015",
-  "CompPoly": "b35d6047fbdd4decc997b0e37de48c0a528d8b11b2d77c370bbc98b691cf572d",
+  "Arklib": "7c4b45148e1458d9396a5fc62071dab9f8831b356e34ce8f5035a494532dda33",
+  "CompPoly": "4c63e956dbb2f581eaa205b6bf1ed5c5d6a5c865c750087335fc21418124fcdf",
   "LeanSearchClient": "10aad9bd3954ead737fba8bd3b55709e5171edda2656068ad330158e6ad622c9",
   "PolyFun": "d6c4bf9613dfeab9b80598baff217484de34ac616a0475184a5ce2aefad5a502",
   "Qq": "7e75bb83a56f636baeb8e63ef3d44e1ac8b33e2ed4bf187462e0cc9bbdb55adf",
