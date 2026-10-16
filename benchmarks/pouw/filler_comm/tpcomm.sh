@@ -25,7 +25,7 @@ export TC_ON=${TC_ON:-4,5,6,7}
 BLS="32:2048 64:2048 128:2048 256:2048 32:8192 128:8192"
 [ "$TC_TP" = 2 ] && BLS="32:2048 64:2048 128:2048 256:2048 32:8192 64:8192"  # TP 2's KV wraps at B 128, 8K
 export TC_BLS=${TC_BLS:-$BLS}
-export TC_SETS=${TC_SETS:-"NCCL_CGA_CLUSTER_SIZE=1 TPC_S=64"}
+export TC_SETS=${TC_SETS:-"NCCL_CGA_CLUSTER_SIZE=1 TPC_S=64 TPC_DT=1024;NCCL_CGA_CLUSTER_SIZE=1 TPC_S=64 TPC_DT=4096"}
 export TC_NCU=${TC_NCU:-1}
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 export DFILL_COINS; DFILL_COINS=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
@@ -35,9 +35,16 @@ grep -m1 -E "define NCCL_(MAJOR|VERSION_CODE)" /usr/include/nccl.h >> "$O/nvcc.t
 nvidia-smi topo -m > "$O/topo.txt" 2>&1
 nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/tpcomm" $D/tpcomm.cu -lcublasLt -lnvidia-ml -ldl -lnccl \
   > "$O/build.log" 2>&1 || { grep -E "error" "$O/build.log" | head -40; tail -20 "$O/build.log"; exit 4; }
-grep -A3 "Compiling entry function '_Z7kfill_k" "$O/build.log" | grep -E "Compiling|Used|spill" > "$O/regs.txt"
-cuobjdump -sass "$B/tpcomm" | awk '/Function : /{p = ($0 ~ /kfill_k/)} p' | grep -oE "\b[A-Z]*MMA[.A-Z0-9_]*" | sort | uniq -c \
-  > "$O/sass.txt"
+grep -A3 -E "Compiling entry function '_Z(7kfill_k|10tp_dpass_k|10tp_drain_k)" "$O/build.log" | grep -E "Compiling|Used|spill" > "$O/regs.txt"
+# the filler path (tp_dfill_k) and the deferred kernels must be only IMMA.16832.S8.S8 with C = RZ (SCORER v4 / Theorem K):
+# tp_dfill_k inlines into kfill_k and tp_dpass_k, so record each launched kernel's MMAs
+: > "$O/sass.txt"
+for fn in kfill_k tp_dpass_k tp_drain_k; do
+  echo "== $fn ==" >> "$O/sass.txt"
+  cuobjdump -sass "$B/tpcomm" | awk -v f="$fn" '/Function : /{p = ($0 ~ f)} p' | grep -oE "\b[A-Z]*MMA[.A-Z0-9_]*" | sort | uniq -c >> "$O/sass.txt"
+  nonrz=$(cuobjdump -sass "$B/tpcomm" | awk -v f="$fn" '/Function : /{p = ($0 ~ f)} p' | grep -E "IMMA" | grep -vc "RZ")
+  echo "  non-RZ IMMA: $nonrz" >> "$O/sass.txt"
+done
 # shellcheck disable=SC2016
 WAIT=--wait; [ "${TC_WAIT:-1}" = 0 ] && WAIT=
 gpu-lease "$TC_TP" $WAIT --on "$TC_ON" --max-min "${MAXMIN:-12}" -- bash -c '

@@ -114,6 +114,27 @@ def rows(out_dir):
                 row["comm_slowdown"] = commphase / comm
                 fm = first("commphase", "fill_macs_rep")
                 row["fill_in_comm"] = fm / (commphase * 1e-3) / (1024 * 188 * first("commphase", "mhz") * 1e6)
+            # decision 36's deferred pass: defer (deferred work in the gaps, overflow drained after the step) and dalone (the
+            # whole step's deferred work drained with no gaps)
+            defer, dalone = t("defer"), t("dalone")
+            row["defer_ms"], row["dalone_ms"] = defer, dalone
+            if defer and base:
+                dm = first("defer", "defer_demand_macs")
+                gap = first("defer", "defer_gap_macs_rep")
+                drain = first("defer", "defer_drain_macs_rep")
+                pm = first("defer", "mhz")
+                row["defer_gap_share"] = gap / dm if dm else None      # the round's deferred work done free in the gaps
+                row["defer_overflow_share"] = drain / dm if dm else None  # the overflow, drained at step-time cost
+                row["defer_slowdown"] = defer / base
+                fm = first("defer", "fill_macs_rep")
+                row["defer_fill"] = fm / (defer * 1e-3) / (1024 * 188 * pm * 1e6)
+                row["defer_fill_k"] = row["defer_fill"] * K_FRACTION   # the filler's remaining proved fill
+                dr = [r for ranks in by_arm["defer"] for r in ranks]
+                row["dp_whole_bad"] = sum(r.get("dp_whole_bad", 0) for r in dr) + sum(r.get("dp_whole_control_equal", 0) for r in dr)
+                row["dp_whole_checked"] = sum(r.get("dp_whole_checked", 0) for r in dr)
+                row["dcap"], row["dSd"], row["dT"] = first("defer", "dcap"), first("defer", "dSd"), first("defer", "dT")
+            if dalone and base:
+                row["dalone_cost"] = dalone / base  # decision 36's decode cost a step without the gaps
             yield row
 
 
@@ -136,8 +157,20 @@ def gates(out_dir, rs):
                        "shape_bad": sum(r.get("shape_bad", 0) for r in ph)}
     worst = max((r["slowdown"] for r in ph), default=None)
     out["slowdown"] = {"ok": worst is not None and worst <= S.LIMIT, "worst": worst, "limit": S.LIMIT}
-    ops = {ln.split()[1] for ln in _read(os.path.join(out_dir, "sass.txt")).splitlines() if len(ln.split()) == 2}
-    out["sass"] = {"ok": bool(ops) and ops <= SASS_OK, "mma": sorted(ops)}
+    # decision 36's deferred pass: the pre-timing dp_gate on every rank, and the deferred receipts after the defer arm
+    dp = []
+    for fn in glob.glob(os.path.join(out_dir, "set*", "rank*.jsonl")):
+        dp += [json.loads(ln) for ln in open(fn) if ln.startswith("{") and '"dp_gate"' in ln]
+    if dp:
+        out["dp_gate"] = {"ok": all(r["ok"] for r in dp), "records": len(dp),
+                          "bad": sum(r["bad"] + r["control_equal"] + r["q_bad"] for r in dp)}
+        df = [r for r in rs if r.get("dp_whole_checked")]
+        out["defer_receipts"] = {"ok": bool(df) and all(r["dp_whole_bad"] == 0 and r["dp_whole_checked"] > 0 for r in df),
+                                 "checked": sum(r["dp_whole_checked"] for r in df), "bad": sum(r["dp_whole_bad"] for r in df)}
+    sass_lines = _read(os.path.join(out_dir, "sass.txt")).splitlines()
+    ops = {ln.split()[-1] for ln in sass_lines if len(ln.split()) == 2 and "MMA" in ln.split()[-1]}
+    nonrz = sum(int(ln.split()[-1]) for ln in sass_lines if "non-RZ IMMA:" in ln)
+    out["sass"] = {"ok": bool(ops) and ops <= SASS_OK and nonrz == 0, "mma": sorted(ops), "non_rz": nonrz}
     al = [json.loads(ln) for ln in _read(os.path.join(out_dir, "alone.jsonl")).splitlines() if ln.startswith("{")]
     out["alone"] = {"ok": bool(al) and all(r["ok"] for r in al), "share_gpu": al[0]["share_gpu"] if al else None,
                     "share_fill_sms": al[0]["share_fill_sms"] if al else None}
@@ -184,6 +217,21 @@ def main():
               f"{f(r.get('served'), 4)} | {f(r.get('idle'), 3)} | {f(r.get('idle_off_comm'), 3)} | {f(r['phase_ms'], 2)} | "
               f"{f(r.get('slowdown'), 4)} | {f(r.get('fill'), 4)} | {f(r.get('fill_k'), 4)} | {f(r.get('fill_finished'), 4)} | "
               f"{f(r.get('coverage_base'), 4)} → {f(r.get('coverage'), 4)} | {f(r.get('comm_slowdown'), 4)} | {r.get('rec_bad', '-')}/{r.get('rec_checked', '-')} |")
+    if any(r.get("defer_ms") for r in rs):
+        print()
+        print("Decision 36's deferred decode pass: demand a step = the step's served MACs; gap share = done free beside the "
+              "collectives; overflow = drained at step-time cost; dalone = the whole step's deferred work with no gaps.")
+        print("| set | TP | B | L | T | base ms | defer ms | defer slowdown | gap share | overflow share | rem. fill K "
+              f"(x{K_FRACTION}) | dalone ms | dalone cost (xbase) | dp bad/checked |")
+        print("|" + "---|" * 15)
+        for r in rs:
+            if not r.get("defer_ms"):
+                continue
+            L = f"{r['L']} (KV wrapped)" if r["kv_wrapped"] else r["L"]
+            print(f"| {r['set']} | {r['tp']} | {r['B']} | {L} | {f(r.get('dT'))} | {f(r['base_ms'], 2)} | "
+                  f"{f(r.get('defer_ms'), 2)} | {f(r.get('defer_slowdown'), 4)} | {f(r.get('defer_gap_share'), 4)} | "
+                  f"{f(r.get('defer_overflow_share'), 4)} | {f(r.get('defer_fill_k'), 4)} | {f(r.get('dalone_ms'), 2)} | "
+                  f"{f(r.get('dalone_cost'), 4)} | {r.get('dp_whole_bad', '-')}/{r.get('dp_whole_checked', '-')} |")
     for s in sorted({(r["set"], r["settings"]) for r in rs}):
         print(f"- {s[0]}: `{s[1]}`")
     print(f"- gates {'all ok' if g['all_ok'] else 'NOT all ok'}: " + "; ".join(
