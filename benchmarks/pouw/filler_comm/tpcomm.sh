@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
 # tpcomm.cu on TC_TP leased GPUs of one NUMA node (cwd = the source tree): the 70B tensor-parallel decode step's arms (base,
-# nocomm, comm, and the phase filler beside every collective) at TC_BLS, one process a rank. The phase filler's receipts are
-# gated against the host on every rank before anything is timed, and its finished tiles re-checked after each arm. Clocks
-# are read, never set.
+# nocomm, comm, and the phase filler, pfill-k, beside every collective) at TC_BLS, one process a rank. The filler's gates
+# run on every rank before anything is timed (fixed work against pfill's dfill_ref, the flag already up, a mid-tile cut
+# against kf_ref_warp), and its records are re-checked after each arm. Before the sets, on the first leased GPU: the filler
+# alone (its rate), and ncu's DRAM bytes for its launches against dcap's bw_read (1 GiB a launch) as the counter's control,
+# the filler scorer's DRAM gate. The SASS of kfill_k is recorded (sass.txt: its MMA opcodes). Clocks are read, never set:
+# gpu.txt has the scorer's clock fields (application clocks against their defaults) before and after each set.
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=HC-COMM \
 #     --env TC_TP=2 -- bash benchmarks/pouw/filler_comm/tpcomm.sh
 #
 # TC_TP (2), TC_ON (the GPUs gpu-lease may take, in order; default one NUMA node's), TC_BLS ("B:L ..."), TC_REPS, TC_SETS
-# (";"-separated sets of VAR=VALUE settings, each a full pass over TC_BLS, e.g. "TPC_S=256 TPC_POLL=16;TPC_S=512"), MAXMIN,
-# TC_WAIT (1; 0 takes the lease only if its GPUs are free now, so a TP 8 attempt never queues ahead of other jobs).
+# (";"-separated sets of VAR=VALUE settings, each a full pass over TC_BLS, e.g. "TPC_S=64;TPC_S=128"), MAXMIN, TC_WAIT
+# (1; 0 takes the lease only if its GPUs are free now, so a TP 8 attempt never queues ahead of other jobs), TC_NCU (1; 0
+# skips the alone probe and the DRAM gate).
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -18,8 +22,8 @@ export B; B=$(mktemp -d /tmp/tpcomm.XXXXXX); trap 'rm -rf "$B"' EXIT
 export TC_TP=${TC_TP:-2} TC_REPS=${TC_REPS:-9}
 export TC_ON=${TC_ON:-4,5,6,7}
 export TC_BLS=${TC_BLS:-"32:2048 64:2048 128:2048 256:2048 32:8192 128:8192"}
-export TC_SETS=${TC_SETS:-"TPC_S=256"}
-export DFILL_MAP=${DFILL_MAP:-2}
+export TC_SETS=${TC_SETS:-"NCCL_CGA_CLUSTER_SIZE=1 TPC_S=64"}
+export TC_NCU=${TC_NCU:-1}
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 export DFILL_COINS; DFILL_COINS=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
 echo "$DFILL_COINS" > "$O/coins.txt"
@@ -28,14 +32,25 @@ grep -m1 -E "define NCCL_(MAJOR|VERSION_CODE)" /usr/include/nccl.h >> "$O/nvcc.t
 nvidia-smi topo -m > "$O/topo.txt" 2>&1
 nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/tpcomm" $D/tpcomm.cu -lcublasLt -lnvidia-ml -ldl -lnccl \
   > "$O/build.log" 2>&1 || { grep -E "error" "$O/build.log" | head -40; tail -20 "$O/build.log"; exit 4; }
-grep -A2 "Compiling entry function '_Z7cfill_k" "$O/build.log" | grep -E "Compiling|Used|spill" > "$O/regs.txt"
+grep -A3 "Compiling entry function '_Z7kfill_k" "$O/build.log" | grep -E "Compiling|Used|spill" > "$O/regs.txt"
+cuobjdump -sass "$B/tpcomm" | awk '/Function : /{p = ($0 ~ /kfill_k/)} p' | grep -oE "\b[A-Z]*MMA[.A-Z0-9_]*" | sort | uniq -c \
+  > "$O/sass.txt"
 # shellcheck disable=SC2016
 WAIT=--wait; [ "${TC_WAIT:-1}" = 0 ] && WAIT=
 gpu-lease "$TC_TP" $WAIT --on "$TC_ON" --max-min "${MAXMIN:-12}" -- bash -c '
-  q() { nvidia-smi --query-gpu=index,uuid,pci.bus_id,clocks.sm,clocks.max.sm,power.draw,power.limit,temperature.gpu,clocks_event_reasons.active \
-    --format=csv,noheader -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1; }
+  q() { nvidia-smi --query-gpu=index,uuid,clocks.sm,clocks.max.sm,power.draw,power.limit,clocks.applications.graphics,clocks.default_applications.graphics,clocks_event_reasons.active \
+    --format=csv,noheader,nounits -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1; }
   q
   echo "CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES GPU_LEASE_UUID=$GPU_LEASE_UUID" > "$O/lease.txt"
+  if [ "$TC_NCU" = 1 ]; then
+    "$B/tpcomm" alone 9 > "$O/alone.jsonl" 2> "$O/alone.err"; echo "alone rc $?" >> "$O/rc.txt"
+    m=gpu__time_duration.sum,dram__bytes.sum
+    ncu --clock-control none -k regex:kfill_k --launch-count 3 --metrics $m --csv "$B/tpcomm" alone 3 \
+      > "$O/ncu-filler.csv" 2> "$O/ncu-filler.err"; echo "ncu filler rc $?" >> "$O/rc.txt"
+    ncu --clock-control none -k regex:bw_read --launch-count 3 --metrics $m --csv "$B/tpcomm" bw 1 3 \
+      > "$O/ncu-control.csv" 2> "$O/ncu-control.err"; echo "ncu control rc $?" >> "$O/rc.txt"
+    q
+  fi
   i=0
   IFS=";" read -ra sets <<< "$TC_SETS"
   for s in "${sets[@]}"; do
@@ -49,10 +64,8 @@ gpu-lease "$TC_TP" $WAIT --on "$TC_ON" --max-min "${MAXMIN:-12}" -- bash -c '
 '
 r=$?
 echo "lease rc $r" >> "$O/rc.txt"
-cat "$O/rc.txt"
-for f in "$O"/set*/rank0.jsonl; do
-  echo "== $f"
-  grep -E "pf_gate|\"tp\"" "$f" | cut -c1-330
-done
+cat "$O/rc.txt" "$O/regs.txt" "$O/sass.txt"
+cat "$O/alone.jsonl" 2>/dev/null
+python3 $D/report.py "$O" 2>&1 | tail -40
 grep -hE "error|failed|WARN" "$O"/set*/rank*.err 2>/dev/null | head -10
 exit "$r"

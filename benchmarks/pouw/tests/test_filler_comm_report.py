@@ -72,3 +72,53 @@ def test_wrapped_kv_is_flagged(tmp_path, capsys):
     sys.argv = ["report.py", str(tmp_path)]
     R.main()
     assert "2048 (KV wrapped)" in capsys.readouterr().out
+
+
+def _write_pfill(tmp_path, *, mma="IMMA.16832.S8.S8", app="2430", slow=41):
+    """A pfill-k run: MMA-counted fill, every run-level gate's file."""
+    d = tmp_path / "set0"
+    d.mkdir()
+    (d / "settings.txt").write_text("NCCL_CGA_CLUSTER_SIZE=1 TPC_S=64\n")
+    served = 1e11
+    for r in (0, 1):
+        def rec(arm, reps, **kw):
+            x = {"mode": "tp", "tp": 2, "rank": r, "B": 32, "L": 2048, "arm": arm, "mhz": MHZ, "served_macs": served,
+                 "reps": [[ms, MHZ, 300] for ms in reps], **kw}
+            return json.dumps(x)
+        lines = [json.dumps({"mode": "pf_gate", "kind": k, "rank": r, "ok": True}) for k in ("fixed", "up", "cut")]
+        lines += [rec("base", [40, 40, 40]), rec("nocomm", [30, 30, 30]), rec("comm", [8, 8, 8]),
+                  rec("phase", [slow] * 3, fill_mmas_rep=4e7, fill_macs_rep=4e7 * 4096.0, fill_mmas_full_rep=1e7,
+                      rec_checked=16, rec_bad=0, whole_checked=8, warps_checked=8, shape_bad=0, cut_warps=2000)]
+        (d / f"rank{r}.jsonl").write_text("\n".join(lines) + "\n")
+    (tmp_path / "sass.txt").write_text(f"     16 {mma}\n")
+    (tmp_path / "alone.jsonl").write_text(json.dumps({"mode": "alone", "ok": True, "share_gpu": 0.75,
+                                                      "share_fill_sms": 0.78}) + "\n")
+    hdr = '"ID","Kernel Name","Metric Name","Metric Unit","Metric Value"\n'
+    (tmp_path / "ncu-filler.csv").write_text(hdr + "".join(
+        f'"{i}","void kfill_k<4>(...)","dram__bytes.sum","Kbyte","20"\n'
+        f'"{i}","void kfill_k<4>(...)","gpu__time_duration.sum","msecond","2.4"\n' for i in range(3)))
+    (tmp_path / "ncu-control.csv").write_text(hdr + "".join(
+        f'"{i}","bw_read(...)","dram__bytes.sum","Gbyte","1.075"\n'
+        f'"{i}","bw_read(...)","gpu__time_duration.sum","msecond","0.7"\n' for i in range(3)))
+    (tmp_path / "gpu.txt").write_text(f"4, GPU-x, 2092, 2430, 300, 600, {app}, 2430, 0x0\n" * 2)
+    return served
+
+
+def test_pfill_fill_counts_mmas_and_reads_k(tmp_path):
+    _write_pfill(tmp_path)
+    (row,) = R.rows(str(tmp_path))
+    assert row["fill"] == pytest.approx(4e7 * 4096 / 41e-3 / PEAK)
+    assert row["fill_k"] == pytest.approx(0.9 * row["fill"])
+    assert row["fill_finished"] == pytest.approx(0.25 * row["fill"])
+    assert row["idle_off_comm"] == pytest.approx(1 - row["served"] - 10 / 40)
+    g = R.gates(str(tmp_path), [row])
+    assert g["all_ok"], g
+    assert g["dram"]["share_of_hbm"] == pytest.approx(20e3 / 2.4e-3 / (1.075e9 / 0.7e-3))
+
+
+@pytest.mark.parametrize("kw, gate", [({"mma": "HMMA.16816.F32"}, "sass"), ({"app": "1800"}, "clocks"),
+                                      ({"slow": 43}, "slowdown")])
+def test_pfill_gates_fail(tmp_path, kw, gate):
+    _write_pfill(tmp_path, **kw)
+    g = R.gates(str(tmp_path), list(R.rows(str(tmp_path))))
+    assert not g[gate]["ok"] and not g["all_ok"]
