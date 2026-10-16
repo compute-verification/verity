@@ -300,7 +300,8 @@ theorem plainQueryRound_verifyRepWith (hs : Hashes Flock.V) (spec : SessionSpec)
   obtain ⟨zc, t₁, h₁, hrun⟩ := bind_ok hrun
   obtain ⟨hr₁, hk₁⟩ := zerocheckWith_moves hs _ _ _ _ (by omega) h₁
   obtain ⟨lc, t₂, h₂, hrun⟩ := bind_ok hrun
-  obtain ⟨-, hr₂, hk₂⟩ := lincheckWith_moves hs _ _ _ hf h₂
+  obtain ⟨h6, hr₂, hk₂⟩ := lincheckWith_moves hs _ _ _ hf h₂
+  rw [hkl] at h6
   obtain ⟨⟨T, sws⟩, t₃, h₃, hrun⟩ := bind_ok hrun
   have hsz2 : (abcClaims st.m st.kLog zc lc).size = 2 := rfl
   obtain ⟨hr₃, hk₃⟩ := ringSwitchWith_moves hs _ _ _ (by rw [Array.size_append, hsz2]; omega) h₃
