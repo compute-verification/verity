@@ -356,7 +356,8 @@ def test_duo_has_no_kernel(n, words):
     assert hits == 0
 
 
-@pytest.mark.parametrize(("n", "rots"), [(4, (5, 11, 17, 29, 7, 19, 13, 9)), (5, (11, 17, 29, 13, 7, 19))])
+@pytest.mark.parametrize(("n", "rots"), [pytest.param(4, (5, 11, 17, 29, 7, 19, 13, 9), marks=pytest.mark.slow),
+                                         (5, (11, 17, 29, 13, 7, 19))])
 def test_duo_has_no_kernel_over_six_and_eight_words(n, rots):
     """Duo over 8 words (n = 4) and 6 (n = 5), every (y, z), met in the middle: each step is a bijection of the state,
     so the first half's changes are permutations of the true middle state, matched against the second half's inverses.
