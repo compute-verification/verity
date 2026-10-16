@@ -156,8 +156,8 @@ theorem challengeWith_moves (hs : Hashes Flock.V) (p : LigeritoProof) {st st' : 
   obtain ⟨rfl, rfl, rfl⟩ := lpure_ok h
   exact ⟨k₉.2.trans hrR, by rw [k₉.1, hkR]⟩
 
-/-- **Level 0's queries over the oracle**, plain: the Merkle check passes on the proof's level-0 rows at the positions of
-the query coins, round `t.k`'s. -/
+/-- **Level 0's queries over the oracle**, plain: the Merkle check passes on the proof's level-0 rows at the positions
+of the query coins, round `t.k`'s. -/
 theorem queryLevelWith_mc (hs : Hashes Flock.V) {ms : MerkleScheme} {p : LigeritoProof} {lv : Flock.Level}
     {cap : Array ByteArray} {rows : Array (Array F128)} {sibs salts : Array ByteArray} {fold : Array F256}
     (hq : lv.q ≠ 0) {β : Type} {f : Array ℕ × Array F128 × F256 → LM β} {st st' : LState} {t t' : Flock.Transcript}

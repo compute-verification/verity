@@ -72,7 +72,8 @@ theorem stepWith_prefix {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.
     simp only [Claims.stepWith]
     split
     · obtain ⟨ext, he⟩ := ih (hist ++ [(((P.next x hist ω).eval H).1, _)]) (as ++ [((P.next x hist ω).eval H).1])
-        { t with msgs := t.msgs ++ [(((P.next x hist ω).eval H).1, ((vnext (as ++ [((P.next x hist ω).eval H).1])).eval H).1)],
+        { t with msgs := t.msgs ++
+                   [(((P.next x hist ω).eval H).1, ((vnext (as ++ [((P.next x hist ω).eval H).1])).eval H).1)],
                  pLog := t.pLog ++ ((P.next x hist ω).eval H).2,
                  vLog := t.vLog ++ ((vnext (as ++ [((P.next x hist ω).eval H).1])).eval H).2 }
       rw [he]
@@ -92,7 +93,8 @@ theorem stepWith_head {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Pr
     split
     · obtain ⟨ext, he⟩ := stepWith_prefix H P x ω vnext n
         (hist ++ [(((P.next x hist ω).eval H).1, _)]) (as ++ [((P.next x hist ω).eval H).1])
-        { t with msgs := t.msgs ++ [(((P.next x hist ω).eval H).1, ((vnext (as ++ [((P.next x hist ω).eval H).1])).eval H).1)],
+        { t with msgs := t.msgs ++
+                   [(((P.next x hist ω).eval H).1, ((vnext (as ++ [((P.next x hist ω).eval H).1])).eval H).1)],
                  pLog := t.pLog ++ ((P.next x hist ω).eval H).2,
                  vLog := t.vLog ++ ((vnext (as ++ [((P.next x hist ω).eval H).1])).eval H).2 }
       rw [he]
