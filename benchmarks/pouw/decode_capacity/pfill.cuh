@@ -127,8 +127,16 @@ template <int NC>
 __host__ __device__ __forceinline__ void pf_absorb(uint32_t& y, uint32_t& z, uint32_t d0, uint32_t d1, uint32_t d2,
                                                    uint32_t d3, const PfKeys& k) {
   if (NC == 4 || NC == 5) {
+#ifdef PFILL_XIN
+    // XOR-in, three ops a pair: ram's step (rotl(y, 7) + d0) a0 + d1 = rotl(y, 7) a0 + Q reads a pair only through
+    // Q = a0 d0 + d1 (note:20261016T0917Z-draft-fullfloor-s-r8 §1.2), so ram certifies half the words. XOR-in's
+    // all-state kernel is a fixed group of word bijections, (d0 ^ 2^31, d1 + 2^31) its only one at a pair
+    y = (pf_rotl(y, 7) ^ d0) * k.a0 + d1;
+    y = (pf_rotl(y, 19) ^ d2) * k.a1 + d3;
+#else
     y = (pf_rotl(y, 7) + d0) * k.a0 + d1;
     y = (pf_rotl(y, 19) + d2) * k.a1 + d3;
+#endif
   } else if (NC == 6) {
     y = (pf_rotl(y, 7) + d0) * 0x9E3779B1u + d1;
     y = (pf_rotl(y, 19) + d2) * 0x85EBCA77u + d3;
