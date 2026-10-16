@@ -12,7 +12,7 @@ A request takes a slot of its pool (--pool, else LEAN_SLOT_POOL, else `audit`), 
 own; SLOTS listing neither refuses it, naming the fix. Slot I of pool P is a `flock` on `lean-P-I.lock` beside SLOTS, I < N.
 CMD inherits the descriptor, so the slot is held while CMD runs and freed when it exits, however it ends: the kernel drops a
 dead process's flocks, after SIGTERM (`research cancel`) or SIGKILL too. CMD runs with LEAN_SLOT=P/I, so a request nested in
-it (audit.py under check's step) runs at once instead of taking a second slot. Without SLOTS (a laptop) CMD runs as it is.
+it (check.py under check's step) runs at once instead of taking a second slot. Without SLOTS (a laptop) CMD runs as it is.
 
 With every slot of its pool taken, a request waits, and never gives up: it queues in arrival order in `lean-line-P` beside
 SLOTS (`slot.py`'s line), re-reads SLOTS every POLL_S, and prints each slot's holder (pid, since when, run, who, the time it

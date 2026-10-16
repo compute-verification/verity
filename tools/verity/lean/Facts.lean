@@ -3,10 +3,10 @@ import Lean
 /-!
 # The audit's facts, from the package's `.olean` files as data
 
-`lake env lean --run Facts.lean CONFIG` imports the roots named in `CONFIG` (a JSON file `audit.py` writes) with
+`lake env lean --run Facts.lean CONFIG` imports the roots named in `CONFIG` (a JSON file `check.py` writes) with
 initializers disabled and no environment extension loaded, so none of the package's code runs: no `initialize`, no
 attribute handler, no delaborator. It writes one JSON document to the path `CONFIG` names. It reports facts and makes no
-judgement; `audit.py` holds the policy.
+judgement; `check.py` holds the policy.
 
 - `modules`: the imported modules under the roots; `imports`: what each imports. `oleans`: the `.olean` file of every
   imported module, the roots' dependencies' included; `graph`: each one's `.olean` file and what it imports.
@@ -32,19 +32,19 @@ judgement; `audit.py` holds the policy.
   starting with `inst`, with that component as an identifier (`id`) and where its declaration's name is (`at`: line,
   codepoint column). An anonymous `instance` has its name there as the keyword `instance` itself.
 - `spans`: for each module under the roots, the first and last source line of each declaration range it holds, so that
-  `audit.py` can find a declaration in the source that the module does not hold.
+  `check.py` can find a declaration in the source that the module does not hold.
 
-The hashes in the document are Lean's `Expr.hash`, which has 32 bits; `audit.py` keeps them only to check records written
+The hashes in the document are Lean's `Expr.hash`, which has 32 bits; `check.py` keeps them only to check records written
 before SHA-256. When `CONFIG` names a `canon` path, the pins' statements and the definitions they read are also written
-there, one JSON line each, as `canon` texts, and `audit.py` hashes those with SHA-256. A pinned statement that is a
+there, one JSON line each, as `canon` texts, and `check.py` hashes those with SHA-256. A pinned statement that is a
 definition under `meaning` applied under binders (`∀ xs, G as`) is also written with that definition unfolded once
-(`liftOf`), with the definition and its module, so that `audit.py` can certify a statement lifted into a `Guarantees`
+(`liftOf`), with the definition and its module, so that `check.py` can certify a statement lifted into a `Guarantees`
 definition as the statement its record holds.
 
 With `moved` (pairs of a new name, a declaration or a namespace, and the old name it moved from), each of those texts is
 written once more with the names as they were before the move (the longest moved prefix renamed back), and a pinned
 statement that is such a definition also with that definition unfolded (`liftOf`), so that
-`audit.py` can compare them with records made before the move. `moved_conflicts` lists each constant of those texts (or
+`check.py` can compare them with records made before the move. `moved_conflicts` lists each constant of those texts (or
 pin) whose old name would be another one's too: there the comparison would not tell the two apart. A constant that keeps
 its name stands for itself, and an old name that only a declaration outside the texts still has (an old theorem kept as a
 lemma) is no conflict.
@@ -125,7 +125,7 @@ def nodeKey (rn : Name → Name) (e : Expr) (ix : Array Nat) : Option String :=
   | .fvar id => some s!"F{id.name}"
   | .mvar id => some s!"M{id.name}"
 
-/-- A canonical text of `e`, which `audit.py` hashes with SHA-256: one line per distinct node, its children given as the
+/-- A canonical text of `e`, which `check.py` hashes with SHA-256: one line per distinct node, its children given as the
 numbers of earlier lines, then the root. It keeps what `Expr.hash` keeps (constant names, universe levels, bound variable
 indices, projections, literals) and drops what it drops (binder names and binder info, `let` names, metadata), so it tells
 two terms apart exactly when `Expr.hash` would, collisions aside. The walk is iterative: Mathlib's terms are too deep for

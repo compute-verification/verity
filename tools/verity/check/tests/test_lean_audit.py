@@ -410,7 +410,7 @@ def test_a_moved_package_takes_the_build_it_left(tmp_path, monkeypatch):
 
 
 def test_a_cache_reached_through_a_symlink_keeps_every_report(tmp_path, monkeypatch):
-    """audit.py names each package by its resolved path. With the cache behind a symlink (node 1's `~/.cache/verity-check`),
+    """check.py names each package by its resolved path. With the cache behind a symlink (node 1's `~/.cache/verity-check`),
     the scratch tree's unresolved path matched no report, so a package that passed was failed as unreported
     (r20261001-060430-71e3)."""
     root = _tree(tmp_path, monkeypatch)

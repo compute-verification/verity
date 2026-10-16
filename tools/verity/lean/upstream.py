@@ -26,7 +26,7 @@ about, not on names or citations: names move, and a proof can arrive as a differ
   collects each hit's axioms. It also covers packages that keep no baseline (VCVio, CompPoly).
 
 A proved hit not under its entry's `ack` is new. Someone should check whether it discharges the assumption or replaces the
-hand proof, then acknowledge it. Exit 1 when a hit is new, 0 otherwise. `audit.py` runs the no-build pass at the pinned
+hand proof, then acknowledge it. Exit 1 when a hit is new, 0 otherwise. `check.py` runs the no-build pass at the pinned
 revisions, so a bump that brings a new proof about a watched statement fails until it is acknowledged.
 """
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""`audit.py`: the Lean audit, one run over every Lake package that carries a `lean-audit.json`.
+"""`check.py`: the Lean audit, one run over every Lake package that carries a `lean-audit.json`.
 
     python tools/verity/lean/check.py [--build] [--update [--owner @LANE] [--moved FILE]] [--out DIR] PACKAGE_DIR...
     python tools/verity/lean/check.py --all [--root DIR] [--build] [--out DIR]   the controls, then every package under DIR (default .)
@@ -314,7 +314,7 @@ def as_guarantees(policy: dict) -> dict:
               *((f"reads[{m}]", g) for m, g in (policy.get("reads") or {}).items() if isinstance(g, dict))]
     if both := [w for w, g in groups if "pins" in g and "guarantees" in g]:
         raise ValueError(f"{', '.join(both)} holds both `pins` and `guarantees` (a merge with a branch from before the "
-                         f"rename): move the `pins` entries under `guarantees` and run `audit.py --update`")
+                         f"rename): move the `pins` entries under `guarantees` and run `check.py --update`")
     if "pins" in policy:
         policy = {("guarantees" if k == "pins" else k): v for k, v in policy.items()}
     for group in (policy.get("reads") or {}).values():
@@ -716,7 +716,7 @@ def listings(pkg: Path, files: dict[str, str], policy: dict, facts: dict, update
             if not update:
                 state = "records no digest of" if recorded is None else "was reviewed against another version of"
                 fails.append(f"compile-time: the listing of {m} {state} {files[m]}: have its compile-time code reviewed, "
-                             f"then run `audit.py --update` to record the file's digest")
+                             f"then run `check.py --update` to record the file's digest")
     return fails, now, notes
 
 
@@ -1007,13 +1007,13 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     prefixes = assumed if isinstance(assumed, list) else []
     if prefixes and not update:
         fails.append(f"assumptions: the policy lists assumption modules ({', '.join(prefixes)}); list the assumptions by "
-                     f"name instead, each with its record: `audit.py --update` converts the list")
+                     f"name instead, each with its record: `check.py --update` converts the list")
     kept, premised = {}, {}
     for name, rec in sorted(policy.get("guarantees", {}).items()):
         who = (rec or {}).get("owner") or owner
         if not who:
             fails.append(f"guarantees: {name} has no owner: write \"owner\": \"@lane\" in its entry, the handle of the lane "
-                         f"that answers for it, or run `audit.py --update --owner @lane`")
+                         f"that answers for it, or run `check.py --update --owner @lane`")
             if update:
                 kept[name] = rec
                 continue
@@ -1041,13 +1041,13 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         if name.split(".")[0] in policy.get("four_names", []) and not four_named(name, f):
             fails.append(f"four names: {name} is a guarantee of {name.split('.')[0]}, which `four_names` lists, so it is "
                          f"stated as `X.SecurityProofs.G : X.Guarantees.G` with `G` a definition of a `Guarantees` module "
-                         f"(`audit.py --lift` writes it), or is not a guarantee")
+                         f"(`check.py --lift` writes it), or is not a guarantee")
         now = {"signature": f["signature"].splitlines(), "assumptions": sorted(set(named)), "type_hash": f["type_sha256"]}
         kept[name] = ({"owner": who} if who else {}) | now
         if update:
             continue
         if not unowned(rec):
-            fails.append(f"guarantees: {name} has no record; run `audit.py --update` and commit the record")
+            fails.append(f"guarantees: {name} has no record; run `check.py --update` and commit the record")
             continue
         for k in ("signature", "assumptions", "type_hash"):
             built = f["type_hash"] if k == "type_hash" and len(rec.get(k, "")) == OLD else now[k]
@@ -1075,7 +1075,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
                 fails.append(f"guarantees: definitions in {m} that {', '.join(b['guarantees'])} read changed ({change})")
             elif a.get("guarantees") != b["guarantees"]:
                 fails.append(f"guarantees: those that read {m} are {', '.join(b['guarantees'])}; the record lists "
-                             f"{', '.join(a.get('guarantees', [])) or 'none'}; run `audit.py --update`")
+                             f"{', '.join(a.get('guarantees', [])) or 'none'}; run `check.py --update`")
             elif a.get("digest") != b["digest"]:
                 fails.append(f"guarantees: the digest recorded for {m} is not the SHA-256 of its definitions; "
                              f"`python tools/verity/lean/merge.py --normalize` recomputes it")
@@ -1150,16 +1150,16 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
         m, h, _ = read[a]
         if not who:
             fails.append(f"assumptions: {a} has no owner: write \"owner\": \"@lane\" in its entry, or run "
-                         f"`audit.py --update --owner @lane`")
+                         f"`check.py --update --owner @lane`")
         elif not OWNER.fullmatch(who):
             fails.append(f"assumptions: {a}'s owner {who!r} is not a handle such as @proofs")
         out[a] = ({"owner": who} if who else {}) | {"digest": h}
         if update:
             continue
         if "digest" not in (rec or {}):
-            fails.append(f"assumptions: {a} has no record; run `audit.py --update` and commit the record")
+            fails.append(f"assumptions: {a} has no record; run `check.py --update` and commit the record")
         elif rec["digest"] != h:
-            fails.append(f"assumptions: {a}'s definition in {m} changed; run `audit.py --update` and commit the record "
+            fails.append(f"assumptions: {a}'s definition in {m} changed; run `check.py --update` and commit the record "
                          f"(Daniel's DM shows the change when it lands)")
     for d, by in sorted((premised or {}).items()):
         if d in assumed:
@@ -1472,7 +1472,7 @@ def spec_reads(policy: dict, facts: dict, home: dict[str, list[str]]) -> list[st
                          f"move the definitions into the spec, or list {m} under `reads_exempt` with the reason")
         else:
             fails.append(f"reads: {few(by)} read {few(defs)} in {m}, a spec module outside `meaning`, so the record holds "
-                         f"nothing of them: add {m} to `meaning` and run `audit.py --update`")
+                         f"nothing of them: add {m} to `meaning` and run `check.py --update`")
     for p in sorted(set(exempt) - used):
         fails.append(f"reads: `reads_exempt` lists {p}, under which no guarantee reads outside the spec; remove the entry")
     return fails
@@ -1988,7 +1988,7 @@ def tests(pkg: Path, policy: dict, files: dict[str, str], work: Path, repo: Path
             data[name] = sha256(paths[name])
             if data[name] != want and not update:
                 bad.append(f"runs: {mod}'s data {name} has SHA-256 {data[name]}, not the record's {want or '(none)'}: run "
-                           f"`audit.py --update` when the data changed on purpose")
+                           f"`check.py --update` when the data changed on purpose")
         now[mod] = entry | {"data": data} if update else entry
         if bad:
             fails += bad
@@ -2050,7 +2050,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     rep = {"package": str(pkg), "seconds": {}, "failures": []}
     if not (pkg / POLICY).exists():
         rep["failures"].append(f"policy: {pkg} has no {POLICY}. Start from this one, list the theorems your documents cite "
-                               f"(\"name\": {{\"owner\": \"@lane\"}} under \"guarantees\"), and run `audit.py --update {pkg}`:\n"
+                               f"(\"name\": {{\"owner\": \"@lane\"}} under \"guarantees\"), and run `check.py --update {pkg}`:\n"
                                f"{json.dumps(template(pkg))}")
         return rep
     try:
@@ -2128,7 +2128,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         anonymous = []
     fails += [f"instance: {i['file']}:{i['at'][0]} declares an instance without a name, which Lean names {i['name']} from its "
               f"type (and, when nothing in the type is the project's own, its project's root): a move or a split renames it, and "
-              f"with it every record whose definitions use it. Write `instance {i['id']}` there (`audit.py --name-instances` "
+              f"with it every record whose definitions use it. Write `instance {i['id']}` there (`check.py --name-instances` "
               f"writes each one)" for i in anonymous]
     if "upstream" in policy:
         s = time.monotonic()
@@ -2141,12 +2141,12 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     if update:
         new["dependencies"] = deps
     elif "dependencies" not in policy:
-        fails.append("dependencies: no record of the dependencies' .olean files; run `audit.py --update` and commit it")
+        fails.append("dependencies: no record of the dependencies' .olean files; run `check.py --update` and commit it")
     else:
         for d in sorted(set(policy["dependencies"]) | set(deps)):
             if policy["dependencies"].get(d) != deps.get(d):
                 fails.append(f"dependencies: the .olean files of the modules the package imports from {d} differ from the "
-                             f"record. After a change to the package's imports, or at a bump, run `audit.py --update` (and "
+                             f"record. After a change to the package's imports, or at a bump, run `check.py --update` (and "
                              f"review it at a bump); otherwise it is a different cache or toolchain, a build that is not "
                              f"reproducible, or tampering")
     if replayed:
@@ -2202,7 +2202,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     weak = sum(len((r or {}).get("type_hash", "")) == OLD for r in policy.get("guarantees", {}).values()) + \
         sum(old_group(g) for g in policy.get("reads", {}).values())
     if weak and not update:
-        rep["notes"] = [f"{weak} guarantee and read records use Lean's 32-bit hashes, checked as they are; `audit.py --update` "
+        rep["notes"] = [f"{weak} guarantee and read records use Lean's 32-bit hashes, checked as they are; `check.py --update` "
                         f"rewrites them with SHA-256, without review where the 32-bit hash still matches"]
     if unread := sorted(d for ds in rep["unread_spec"].values() for d in ds):
         more = f" and {len(unread) - 8} more" if len(unread) > 8 else ""
@@ -2468,7 +2468,7 @@ def main(argv: list[str]) -> int:
     if lifts and not reports[0]["failures"]:
         moved = Path(f"{a.lift}.moved.json")
         moved.write_text(json.dumps(reports[0]["moved"], indent=1) + "\n")
-        print(f"audit: lifted {len(lifts)} guarantees; build, then `audit.py --update --moved {moved} {pkgs[0]}` certifies each "
+        print(f"audit: lifted {len(lifts)} guarantees; build, then `check.py --update --moved {moved} {pkgs[0]}` certifies each "
               f"lift as the same statement or prints the change", flush=True)
     failed = by_controls + [str(r["package"]) for r in reports if r["failures"]]
     if changed := [r["package"] for r in reports if r.get("statement_changes")]:
