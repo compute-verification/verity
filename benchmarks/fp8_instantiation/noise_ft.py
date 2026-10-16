@@ -10,7 +10,8 @@ recovery.  The noise is drawn fresh at every forward from the global RNG:
     lin:EDIT:ALPHABET   every linear serves the exact int8 product of its Hadamard-rotated operands (`exact_grid.py`'s
                         `int8_rot@EDIT:ALPHABET`): activations per row and weights (base + LoRA) per row on the grid of
                         top 127 - max|e|, plus fresh noise in LSBs.  Straight-through: the forward value is the noisy
-                        product, the backward the clean linear's (dx = g W_eff; A and B get LoRA's clean gradients).
+                        product, the backward the clean linear's (dx = g W_eff; A and B get LoRA's clean gradients);
+                        NFT_LSQ=1 adds the gradient through both rows' scales (`NoisyBase`).
     attn:METHOD         every attention serves `attention.py`'s METHOD (its seed replaced by a fresh one each call, which
                         also draws a fresh Hadamard); straight-through as above, the gradient that of bf16 SDPA attention.
 
