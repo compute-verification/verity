@@ -3,11 +3,20 @@
   "PouwDuoSeg_v2": {
    "and": 8688
   },
+  "PouwI8AddBit_v2": {
+   "and": 7
+  },
   "PouwI8Add_v2": {
    "and": 7
   },
   "PouwI8Pm1_v2": {
    "and": 6
+  },
+  "PouwSegCheckDither_v1{KS=128}": {
+   "and": 161311
+  },
+  "PouwSegCheckDither_v1{KS=4}": {
+   "and": 153375
   },
   "PouwSegCheck_v1{KS=128}": {
    "and": 161055
