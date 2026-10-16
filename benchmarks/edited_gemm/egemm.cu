@@ -14,6 +14,7 @@
 //                    into the tail rows P_A = [S_hi | 0 | S_lo | 0], S = 256 S_hi + S_lo), so the dither is priced against
 //                    the quantizer plain serving runs anyway (k <= 4096: a warp's 4 rows hash their 32 patches at once)
 //   wedit            W' = W + U and the tail rows P_B = [U | 0 | U | 0], U's hashes in each block of 8 rows
+//   qwe              quant<true> and wedit in one launch (the quantizer's blocks, then the edit's)
 //   e_*              the GEMM: lpgemm.cu's 16-warp 128 x 128 TMA mainloop (fgemm.cu's ML) with the receipts' absorbs
 //                    interleaved with the MMAs, and the peel as a 2-atom tail (acc -= 256 S_hi U^T + S_lo U^T, the same
 //                    rows t_duo32's 4-atom tail reads). Interleaving: the absorb of tile j's running sum runs LAG MMAs
@@ -38,10 +39,14 @@
 constexpr uint32_t DITHER_TAG = 7;
 using MLW = ML<128, 128, 32, 3>;
 
-// d ^= z & zero in one LOP3 (LUT 0x78 = a ^ (b & c)); ptxas otherwise splits it into an AND and an XOR
-DEV void tie(int& d, uint32_t z, uint32_t zero) { asm("lop3.b32 %0, %0, %1, %2, 0x78;" : "+r"(d) : "r"(z), "r"(zero)); }
+// d ^= z & zero in one LOP3 (LUT 0x78 = a ^ (b & c); ptxas otherwise splits it into an AND and an XOR), or (FMA) d += z zero
+// in one IMAD, on the FMA pipe
+template <bool FMA> DEV void tie(int& d, uint32_t z, uint32_t zero) {
+  if constexpr (FMA) asm("mad.lo.u32 %0, %1, %2, %0;" : "+r"(d) : "r"(z), "r"(zero));
+  else asm("lop3.b32 %0, %0, %1, %2, 0x78;" : "+r"(d) : "r"(z), "r"(zero));
+}
 
-// TIE: a tie before every TIE-th MMA (0: none); IC: the issuer's tile place computed once a tile
+// TIE: a tie before every |TIE|-th MMA (0: none; negative: the IMAD tie); IC: the issuer's tile place computed once a tile
 template <int LAG, int TIE, bool IC = true> struct EL : MLW {
   static_assert(LAG >= 0 && LAG < MI * NI, "an absorb runs before its accumulator's next MMA");
   using MLW::MLW;
@@ -89,9 +94,9 @@ template <int LAG, int TIE, bool IC = true> struct EL : MLW {
       if constexpr (FIRST) {
         imma0(acc[mi][ni], fa[mi], fb[ni]);
       } else {
-        if constexpr (R && TIE > 0 && IDX % (TIE > 0 ? TIE : 1) == 0) {
+        if constexpr (R && TIE != 0 && IDX % (TIE > 0 ? TIE : TIE < 0 ? -TIE : 1) == 0) {
           constexpr int TP = (IDX - 1 - LAG + 2 * MI * NI) % (MI * NI);   // the tile the previous absorb took
-          tie(acc[mi][ni][0], ch[4 * (TP % 2) + 3].z, zero);
+          tie<(TIE < 0)>(acc[mi][ni][0], ch[4 * (TP % 2) + 3].z, zero);
         }
         imma(acc[mi][ni], fa[mi], fb[ni]);
       }
@@ -201,7 +206,7 @@ template <bool R, int LAG, int TIE, bool IC> DEV void e_body(const Args& a) {
     }
   }
 }
-// e_l<LAG><tie>: tie t every MMA, h every second, q every fourth, none if absent; _nc: ML's issuer (no cache)
+// e_l<LAG><tie>: tie h every second MMA, q every fourth, o every eighth, none if absent; m: the IMAD tie; _nc: ML's issuer
 #define EGEMM(NAME, R, LAG, TIE, IC) \
   __global__ void __launch_bounds__(MLW::NT, 1) NAME(const __grid_constant__ Args a) { e_body<R, LAG, TIE, IC>(a); }
 EGEMM(e_plain, false, 0, 0, true)
@@ -214,57 +219,51 @@ EGEMM(e_l2q, true, 2, 4, true)
 EGEMM(e_l3h, true, 3, 2, true)
 EGEMM(e_l3q, true, 3, 4, true)
 EGEMM(e_l4h, true, 4, 2, true)
+EGEMM(e_l2hm, true, 2, -2, true)
+EGEMM(e_l2qm, true, 2, -4, true)
+EGEMM(e_l3qm, true, 3, -4, true)
+EGEMM(e_l2o, true, 2, 8, true)
+EGEMM(e_l3o, true, 3, 8, true)
+EGEMM(e_l4q, true, 4, 4, true)
 
 // ---------------------------------------------------------------- the operands
 // x (rows x k bf16) to X (rows x k int8): a warp a group of 4 rows, its lanes 8 columns each (512 contiguous bytes of x a
-// step), blocks of QW warps; a row's loads are in flight while the warp hashes (DITHER) or quantizes the row before it.
-// DITHER: X = clamp(floor(x inv_s), -127, 126) + b and P_A's rows [S_hi | 0 | S_lo | 0] (lane c' of the warp ends with S
-// at c = 8 (c' % 4) + c' / 4 after a reduce-scatter over the 8 lanes holding that column's partial sums), else
-// X = clamp(rint(x inv_s), -127, 127)
-constexpr int QW = 2;
+// step), 8 warps a block (blk); DITHER: X = clamp(floor(x inv_s), -127, 126) + b and P_A's rows [S_hi | 0 | S_lo | 0]
+// (lane c' of the warp ends with S at c = 8 (c' % 4) + c' / 4 after a reduce-scatter over the 8 lanes holding that
+// column's partial sums), else X = clamp(rint(x inv_s), -127, 127). dgs: 8 x 512 words of shared memory (DITHER)
 template <bool DITHER>
-__global__ void __launch_bounds__(32 * QW) quant(const uint16_t* __restrict__ x, int8_t* __restrict__ X, int8_t* __restrict__ PA,
-                                                 int rows, int k, float inv_s, const __grid_constant__ Sig sg) {
-  __shared__ uint32_t dg[DITHER ? QW : 1][DITHER ? 32 * 16 : 1];   // a warp's 32 patch digests, digest byte order
-  const int warp = threadIdx.x / 32, lane = threadIdx.x % 32, grp = blockIdx.x * QW + warp;
+DEV void quant_blk(int blk, uint32_t* dgs, const uint16_t* __restrict__ x, int8_t* __restrict__ X, int8_t* __restrict__ PA, int rows,
+                   int k, float inv_s, const Sig& sg) {
+  const int warp = threadIdx.x / 32, lane = threadIdx.x % 32, grp = blk * 8 + warp;
   if (grp * 4 >= rows) return;
-  constexpr int MS = 16;   // k <= 4096
   const int kb = k / 128, steps = k / 256;
-  uint4 w[MS];
-  {
-    const uint4* src = reinterpret_cast<const uint4*>(x + (size_t)grp * 4 * k);
-#pragma unroll
-    for (int it = 0; it < MS; it++)
-      if (it < steps) w[it] = __ldg(src + it * 32 + lane);
-  }
+  uint32_t* dg = dgs + (DITHER ? 512 * warp : 0);   // the warp's 32 patch digests, digest byte order
   if constexpr (DITHER) {
     if (lane < kb) {
       uint64_t st[8];
       sha_block(sg.w, (uint64_t)DITHER_TAG << 56 | ((uint64_t)grp * kb + lane), st);
 #pragma unroll
       for (int i = 0; i < 8; i++) {
-        dg[warp][16 * lane + 2 * i] = __byte_perm((uint32_t)(st[i] >> 32), 0, 0x0123);
-        dg[warp][16 * lane + 2 * i + 1] = __byte_perm((uint32_t)st[i], 0, 0x0123);
+        dg[16 * lane + 2 * i] = __byte_perm((uint32_t)(st[i] >> 32), 0, 0x0123);
+        dg[16 * lane + 2 * i + 1] = __byte_perm((uint32_t)st[i], 0, 0x0123);
       }
     }
     __syncwarp();
   }
-  const uint8_t* bytes = reinterpret_cast<const uint8_t*>(dg[DITHER ? warp : 0]);
+  const uint8_t* bytes = reinterpret_cast<const uint8_t*>(dg);
 #pragma unroll 1
   for (int rr = 0; rr < 4; rr++) {
     const size_t r = (size_t)grp * 4 + rr;
-    const uint4* nxt = reinterpret_cast<const uint4*>(x + (r + 1) * k);
+    const uint4* src = reinterpret_cast<const uint4*>(x + r * k);
     uint2* dst = reinterpret_cast<uint2*>(X + r * k);
     int v[8] = {0, 0, 0, 0, 0, 0, 0, 0};   // S's partial sums at c = 8 (lane % 4) + i
-#pragma unroll
-    for (int it = 0; it < MS; it++) {
-      if (it >= steps) break;
+#pragma unroll 4
+    for (int it = 0; it < steps; it++) {
       const int ch = it * 32 + lane;   // columns 8 ch .. 8 ch + 7
-      const uint4 cur = w[it];
-      if (rr < 3) w[it] = __ldg(nxt + ch);
+      const uint4 w = __ldg(src + ch);
       uint32_t bits = 0;
       if constexpr (DITHER) bits = bytes[64 * (ch / 16) + 16 * rr + ch % 16];
-      const uint32_t ww[4] = {cur.x, cur.y, cur.z, cur.w};
+      const uint32_t ww[4] = {w.x, w.y, w.z, w.w};
       int qv[8];
 #pragma unroll
       for (int h = 0; h < 4; h++) {
@@ -307,13 +306,19 @@ __global__ void __launch_bounds__(32 * QW) quant(const uint16_t* __restrict__ x,
     }
   }
 }
+constexpr int QROWS = 32;   // rows a quant block
+template <bool DITHER>
+__global__ void __launch_bounds__(256) quant(const uint16_t* __restrict__ x, int8_t* __restrict__ X, int8_t* __restrict__ PA,
+                                             int rows, int k, float inv_s, const __grid_constant__ Sig sg) {
+  __shared__ uint32_t dg[DITHER ? 8 * 512 : 1];
+  quant_blk<DITHER>(blockIdx.x, dg, x, X, PA, rows, k, inv_s, sg);
+}
 
-// W' = W + U (W'_jk = W_jk + U_{j, k mod 32}) and P_B's rows [U | 0 | U | 0]: a block 8 rows, its threads loading W's
-// chunks while threads 0..3 hash U's blocks (rows 2j, 2j + 1); k <= 4096
-__global__ void __launch_bounds__(256) wedit(const uint8_t* __restrict__ W, uint8_t* __restrict__ Wp, uint8_t* __restrict__ PB,
-                                             int rows, int k, const __grid_constant__ Sig sg) {
-  __shared__ uint32_t us[8][8];
-  const int r0 = blockIdx.x * 8, t = threadIdx.x, cpr = k / 16, total = 8 * cpr;
+// W' = W + U (W'_jk = W_jk + U_{j, k mod 32}) and P_B's rows [U | 0 | U | 0]: a block (blk) 8 rows, its threads loading
+// W's chunks while threads 0..3 hash U's blocks (rows 2j, 2j + 1); k <= 4096. us: 64 words of shared memory
+DEV void wedit_blk(int blk, uint32_t* us, const uint8_t* __restrict__ W, uint8_t* __restrict__ Wp, uint8_t* __restrict__ PB, int k,
+                   const Sig& sg) {
+  const int r0 = blk * 8, t = threadIdx.x, cpr = k / 16, total = 8 * cpr;
   constexpr int MAXC = 8;
   uint4 w[MAXC];
   const uint4* src = reinterpret_cast<const uint4*>(W + (size_t)r0 * k);
@@ -333,25 +338,39 @@ __global__ void __launch_bounds__(256) wedit(const uint8_t* __restrict__ W, uint
           const int e = 32 * rr + 4 * q + b;
           v |= u_byte((uint32_t)(st[e / 8] >> (56 - 8 * (e % 8))) & 0xFFu) << (8 * b);
         }
-        us[2 * t + rr][q] = v;
+        us[8 * (2 * t + rr) + q] = v;
       }
   }
   __syncthreads();
   {
     const int rr = t / 32, wq = t % 32;
-    reinterpret_cast<uint32_t*>(PB + (size_t)(r0 + rr) * 128)[wq] = (wq / 8) % 2 ? 0u : us[rr][wq % 8];
+    reinterpret_cast<uint32_t*>(PB + (size_t)(r0 + rr) * 128)[wq] = (wq / 8) % 2 ? 0u : us[8 * rr + wq % 8];
   }
   uint4* dst = reinterpret_cast<uint4*>(Wp + (size_t)r0 * k);
 #pragma unroll
   for (int i = 0; i < MAXC; i++) {
     const int c = t + 256 * i;
     if (c < total) {
-      const int rr = c / cpr, u0 = (4 * (c % cpr)) % 8;
+      const uint32_t* u = us + 8 * (c / cpr) + (4 * (c % cpr)) % 8;
       const uint4 x = w[i];
-      dst[c] = make_uint4(add_noise<false>(x.x, us[rr][u0]), add_noise<false>(x.y, us[rr][u0 + 1]), add_noise<false>(x.z, us[rr][u0 + 2]),
-                          add_noise<false>(x.w, us[rr][u0 + 3]));
+      dst[c] = make_uint4(add_noise<false>(x.x, u[0]), add_noise<false>(x.y, u[1]), add_noise<false>(x.z, u[2]), add_noise<false>(x.w, u[3]));
     }
   }
+}
+__global__ void __launch_bounds__(256) wedit(const uint8_t* __restrict__ W, uint8_t* __restrict__ Wp, uint8_t* __restrict__ PB, int k,
+                                             const __grid_constant__ Sig sg) {
+  __shared__ uint32_t us[64];
+  wedit_blk(blockIdx.x, us, W, Wp, PB, k, sg);
+}
+// quant<true> and wedit in one launch under one key: blocks 0 .. qb - 1 quantize, the rest edit W 8 rows each, so the
+// edit's blocks fill the SMs the quantizer's 8-warp blocks leave idle (3 blocks an SM: wedit's 80 registers, not the 122
+// ptxas takes unbounded)
+__global__ void __launch_bounds__(256, 3) qwe(const uint16_t* __restrict__ x, int8_t* __restrict__ X, int8_t* __restrict__ PA, int rows,
+                                           int k, float inv_s, int qb, const uint8_t* __restrict__ W, uint8_t* __restrict__ Wp,
+                                           uint8_t* __restrict__ PB, const __grid_constant__ Sig sg) {
+  __shared__ uint32_t sm[8 * 512];
+  if ((int)blockIdx.x < qb) quant_blk<true>(blockIdx.x, sm, x, X, PA, rows, k, inv_s, sg);
+  else wedit_blk(blockIdx.x - qb, sm, W, Wp, PB, k, sg);
 }
 
 // x in bf16, (h / 2^24 * 2 - 1) 127.5 rounded to bf16; the gate's rows 0 and 1 at +200 and -200 (clamped)
@@ -391,12 +410,17 @@ struct EP {
   cudaStream_t st2;
   cudaEvent_t ef, ej;
   uint32_t ov = 0;
+  // the fused producer's (qwe's) own X, P_A, W', P_B, so the gate compares them with quant<true>'s and wedit's
+  int8_t *Xf, *PAf, *Wf, *PBf;
+  Maps* mF;
 };
 
 static const std::pair<const char*, Kern> EK[] = {
     {"e_plain", e_plain}, {"e_plain_nc", e_plain_nc}, {"e_l1h", e_l1h},
     {"e_l2", e_l2}, {"e_l2h", e_l2h}, {"e_l2h_nc", e_l2h_nc}, {"e_l2q", e_l2q},
-    {"e_l3h", e_l3h}, {"e_l3q", e_l3q}, {"e_l4h", e_l4h}, {"t_duo32", t_duo32}};
+    {"e_l3h", e_l3h}, {"e_l3q", e_l3q}, {"e_l4h", e_l4h}, {"e_l2hm", e_l2hm},
+    {"e_l2qm", e_l2qm}, {"e_l3qm", e_l3qm}, {"e_l2o", e_l2o}, {"e_l3o", e_l3o},
+    {"e_l4q", e_l4q}, {"t_duo32", t_duo32}};
 static Kern ekern(const std::string& n) {
   for (auto& [name, k] : EK) if (n == name) return k;
   fprintf(stderr, "no kernel %s\n", n.c_str());
@@ -404,6 +428,17 @@ static Kern ekern(const std::string& n) {
 }
 
 static Sig osig(const EP& P, uint32_t i) { return sigma(P.seed, 0x40000000u + i); }
+static void wedit_to(EP& P, cudaStream_t st, int8_t* Wp, int8_t* PB, const Sig& s) {
+  wedit<<<P.n / 8, 256, 0, st>>>(reinterpret_cast<const uint8_t*>(P.W), reinterpret_cast<uint8_t*>(Wp), reinterpret_cast<uint8_t*>(PB), P.k, s);
+}
+static void qd(EP& P, const Sig& s) { quant<true><<<(P.m + QROWS - 1) / QROWS, 256, 0, P.st>>>(P.x, P.X, P.PA, P.m, P.k, P.inv_s, s); }
+static void qp(EP& P, const Sig& s) { quant<false><<<(P.m + QROWS - 1) / QROWS, 256, 0, P.st>>>(P.x, P.Xq, nullptr, P.m, P.k, P.inv_s, s); }
+static void we(EP& P, const Sig& s) { wedit_to(P, P.st, P.Wp, P.PB, s); }
+static void qf(EP& P, const Sig& s) {
+  const int qb = (P.m + QROWS - 1) / QROWS;
+  qwe<<<qb + P.n / 8, 256, 0, P.st>>>(P.x, P.Xf, P.PAf, P.m, P.k, P.inv_s, qb, reinterpret_cast<const uint8_t*>(P.W),
+                                       reinterpret_cast<uint8_t*>(P.Wf), reinterpret_cast<uint8_t*>(P.PBf), s);
+}
 static void esetup(EP& P, int m, int n, int k, uint32_t seed, bool gate) {
   P.m = m; P.n = n; P.k = k; P.seed = seed;
   if (m % 128 || n % 128 || k % 256 || k > 4096) { fprintf(stderr, "shape %d %d %d: 128-tiled, k %% 256 == 0, k <= 4096\n", m, n, k); exit(2); }
@@ -421,17 +456,18 @@ static void esetup(EP& P, int m, int n, int k, uint32_t seed, bool gate) {
   CK(cudaMalloc(&P.R, P.nr * 4)); CK(cudaMalloc(&P.R2, P.nr * 4));
   CK(cudaMalloc(&P.bad, 8));
   for (int b = 0; b < 2; b++) { CK(cudaMalloc(&P.Wo[b], (size_t)n * k)); CK(cudaMalloc(&P.PBo[b], (size_t)n * 128)); }
+  CK(cudaMalloc(&P.Xf, (size_t)m * k)); CK(cudaMalloc(&P.PAf, (size_t)m * 128));
+  CK(cudaMalloc(&P.Wf, (size_t)n * k)); CK(cudaMalloc(&P.PBf, (size_t)n * 128));
   CK(cudaStreamCreate(&P.st2));
   CK(cudaEventCreateWithFlags(&P.ef, cudaEventDisableTiming)); CK(cudaEventCreateWithFlags(&P.ej, cudaEventDisableTiming));
   xfill<<<4096, 256, 0, P.st>>>(P.x, (size_t)m * k, mix32(seed ^ 0x3333u), k, gate);
   sfill<I8><<<4096, 256, 0, P.st>>>(reinterpret_cast<uint8_t*>(P.W), (size_t)n * k, mix32(seed ^ 0x4444u), -63, 127);
   if (gate) { CK(cudaMemsetAsync(P.W, 0x3F, k, P.st)); CK(cudaMemsetAsync(P.W + k, 0xC1, k, P.st)); }   // rows at +63, -63
-  quant<true><<<(m / 4 + QW - 1) / QW, 32 * QW, 0, P.st>>>(P.x, P.X, P.PA, m, k, P.inv_s, sigma(seed, 0xFFFFFFFFu));
-  quant<false><<<(m / 4 + QW - 1) / QW, 32 * QW, 0, P.st>>>(P.x, P.Xq, nullptr, m, k, P.inv_s, sigma(seed, 0xFFFFFFFFu));
-  wedit<<<n / 8, 256, 0, P.st>>>(reinterpret_cast<const uint8_t*>(P.W), reinterpret_cast<uint8_t*>(P.Wp), reinterpret_cast<uint8_t*>(P.PB),
-                                  n, k, sigma(seed, 0xFFFFFFFFu));
-  wedit<<<n / 8, 256, 0, P.st>>>(reinterpret_cast<const uint8_t*>(P.W), reinterpret_cast<uint8_t*>(P.Wo[0]),
-                                  reinterpret_cast<uint8_t*>(P.PBo[0]), n, k, osig(P, 0));
+  qd(P, sigma(seed, 0xFFFFFFFFu));
+  qp(P, sigma(seed, 0xFFFFFFFFu));
+  we(P, sigma(seed, 0xFFFFFFFFu));
+  wedit_to(P, P.st, P.Wo[0], P.PBo[0], osig(P, 0));
+  qf(P, sigma(seed, 0xFFFFFFFFu));
   CK(cudaStreamSynchronize(P.st));
   CK(cudaGetLastError());
   P.plain = ltg(I8, m, n, k, k, k, n, P.X, P.W, P.Yr, 0, P.st);
@@ -439,13 +475,14 @@ static void esetup(EP& P, int m, int n, int k, uint32_t seed, bool gate) {
   P.mE = upload_maps(Maps{tmap(P.X, k, m, 128), tmap(P.Wp, k, n, 128), tmap(P.PA, 128, m, 128), tmap(P.PB, 128, n, 128)});
   for (int b = 0; b < 2; b++)
     P.mO[b] = upload_maps(Maps{tmap(P.X, k, m, 128), tmap(P.Wo[b], k, n, 128), tmap(P.PA, 128, m, 128), tmap(P.PBo[b], 128, n, 128)});
+  P.mF = upload_maps(Maps{tmap(P.Xf, k, m, 128), tmap(P.Wf, k, n, 128), tmap(P.PAf, 128, m, 128), tmap(P.PBf, 128, n, 128)});
   for (auto& [name, kern] : EK) CK(cudaFuncSetAttribute(kern, cudaFuncAttributeMaxDynamicSharedMemorySize, CSMEM));
 }
 static void efree(EP& P) {
   CK(cudaDeviceSynchronize());
   for (void* p : {(void*)P.x, (void*)P.X, (void*)P.Xq, (void*)P.W, (void*)P.Wp, (void*)P.PA, (void*)P.PB, (void*)P.Y, (void*)P.Yr, (void*)P.Yr2,
                   (void*)P.R, (void*)P.R2, (void*)P.bad, (void*)P.mE, (void*)P.Wo[0], (void*)P.Wo[1], (void*)P.PBo[0],
-                  (void*)P.PBo[1], (void*)P.mO[0], (void*)P.mO[1]})
+                  (void*)P.PBo[1], (void*)P.mO[0], (void*)P.mO[1], (void*)P.Xf, (void*)P.PAf, (void*)P.Wf, (void*)P.PBf, (void*)P.mF})
     CK(cudaFree(p));
   CK(cudaEventDestroy(P.ef)); CK(cudaEventDestroy(P.ej));
   CK(cudaStreamDestroy(P.st2));
@@ -455,12 +492,6 @@ static void egemm_run(EP& P, Kern kern, int* Y, uint32_t* R, const Maps* maps = 
   Args a{maps ? maps : P.mE, Y, R, P.m, P.n, P.k, 8, P.seed, 0, 1, 0, 0, {0, 0, 0, 0}, nullptr, 0};
   kern<<<P.grid, MLW::NT, CSMEM, P.st>>>(a);
 }
-static void qd(EP& P, const Sig& s) { quant<true><<<(P.m / 4 + QW - 1) / QW, 32 * QW, 0, P.st>>>(P.x, P.X, P.PA, P.m, P.k, P.inv_s, s); }
-static void qp(EP& P, const Sig& s) { quant<false><<<(P.m / 4 + QW - 1) / QW, 32 * QW, 0, P.st>>>(P.x, P.Xq, nullptr, P.m, P.k, P.inv_s, s); }
-static void we(EP& P, const Sig& s) {
-  wedit<<<P.n / 8, 256, 0, P.st>>>(reinterpret_cast<const uint8_t*>(P.W), reinterpret_cast<uint8_t*>(P.Wp),
-                                    reinterpret_cast<uint8_t*>(P.PB), P.n, P.k, s);
-}
 // call i of the overlap arms: fork st2 off st, which builds W'_(i+1) under key i + 1 into buffer (i + 1) % 2 (call i - 1's,
 // whose GEMM st has finished) while st runs call i (the dither under key i if DITHER, then the GEMM on buffer i % 2); st
 // then waits for st2, so a call's time is the longer of the two and nothing spills into the next call
@@ -468,8 +499,7 @@ static void ov_call(EP& P, Kern k, bool dither) {
   const int b = P.ov & 1;
   CK(cudaEventRecord(P.ef, P.st));
   CK(cudaStreamWaitEvent(P.st2, P.ef));
-  wedit<<<P.n / 8, 256, 0, P.st2>>>(reinterpret_cast<const uint8_t*>(P.W), reinterpret_cast<uint8_t*>(P.Wo[b ^ 1]),
-                                     reinterpret_cast<uint8_t*>(P.PBo[b ^ 1]), P.n, P.k, osig(P, P.ov + 1));
+  wedit_to(P, P.st2, P.Wo[b ^ 1], P.PBo[b ^ 1], osig(P, P.ov + 1));
   if (dither) qd(P, osig(P, P.ov));
   egemm_run(P, k, P.Y, P.R, P.mO[b]);
   CK(cudaEventRecord(P.ej, P.st2));
@@ -477,15 +507,21 @@ static void ov_call(EP& P, Kern k, bool dither) {
   P.ov++;
 }
 
-// an arm: plain (cuBLASLt on X, W), plainq (the plain quantizer, then cuBLASLt on its X), qplain, qdither, wedit, a
-// GEMM kernel by name (EK), edited:KERN (wedit, then KERN), editedq:KERN (qdither, wedit, KERN: one key for both),
-// overlap:KERN and overlapq:KERN (ov_call without and with the dither)
+// an arm: plain (cuBLASLt on X, W), plainq (the plain quantizer, then cuBLASLt on its X), qplain, qdither, wedit, qwe
+// (the fused producer), a GEMM kernel by name (EK), edited:KERN (wedit, then KERN), editedq:KERN (qdither, wedit, KERN:
+// one key for both), editedf:KERN (qwe, then KERN on its operands), overlap:KERN and overlapq:KERN (ov_call without and
+// with the dither)
 static std::function<void(EP&)> earm(const std::string& a) {
   if (a == "plain") return [](EP& P) { ltg_run(P.plain, P.st); };
   if (a == "plainq") return [](EP& P) { qp(P, sigma(P.seed, P.inst++)); ltg_run(P.plainq, P.st); };
   if (a == "qplain") return [](EP& P) { qp(P, sigma(P.seed, P.inst++)); };
   if (a == "qdither") return [](EP& P) { qd(P, sigma(P.seed, P.inst++)); };
   if (a == "wedit") return [](EP& P) { we(P, sigma(P.seed, P.inst++)); };
+  if (a == "qwe") return [](EP& P) { qf(P, sigma(P.seed, P.inst++)); };
+  if (a.rfind("editedf:", 0) == 0) {
+    Kern k = ekern(a.substr(8));
+    return [k](EP& P) { qf(P, sigma(P.seed, P.inst++)); egemm_run(P, k, P.Y, P.R, P.mF); };
+  }
   if (a.rfind("edited:", 0) == 0) {
     Kern k = ekern(a.substr(7));
     return [k](EP& P) { we(P, sigma(P.seed, P.inst++)); egemm_run(P, k, P.Y, P.R); };
@@ -555,6 +591,22 @@ static int egate(const std::string& dir, int m, int n, int k, uint32_t seed) {
     const unsigned long long y = ecmp(P, P.Y, P.Yr, P.ny), r = rcp ? ecmp(P, P.R, P.R2, P.nr) : 0;
     rec(name, y, rcp ? (long long)r : -1);
     ok &= y == 0 && r == 0;
+  }
+  // the fused producer under the same key: its X, P_A, W', P_B bitwise those of quant<true> and wedit, and e_l2h on them
+  for (auto [p, b] : {std::pair<void*, size_t>{P.Xf, xb}, {P.PAf, (size_t)m * 128}, {P.Wf, wb}, {P.PBf, (size_t)n * 128},
+                      {P.Y, P.ny * 4}, {P.R, P.nr * 4}})
+    CK(cudaMemsetAsync(p, 0xA5, b, P.st));
+  qf(P, s);
+  egemm_run(P, e_l2h, P.Y, P.R, P.mF);
+  CK(cudaStreamSynchronize(P.st));
+  CK(cudaGetLastError());
+  {
+    const unsigned long long fx = ecmp(P, P.Xf, P.X, xb / 4) + ecmp(P, P.PAf, P.PA, (size_t)m * 32) + ecmp(P, P.Wf, P.Wp, wb / 4) +
+                                  ecmp(P, P.PBf, P.PB, (size_t)n * 32);
+    const unsigned long long y = ecmp(P, P.Y, P.Yr, P.ny), r = ecmp(P, P.R, P.R2, P.nr);
+    rec("qwe_operands", fx, -1);
+    rec("qwe_e_l2h", y, (long long)r);
+    ok &= fx == 0 && y == 0 && r == 0;
   }
   // the no-write control: poisoned, nothing run; both compares must fail
   CK(cudaMemsetAsync(P.Y, 0xA5, P.ny * 4, P.st)); CK(cudaMemsetAsync(P.R, 0xA5, P.nr * 4, P.st));

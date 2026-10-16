@@ -52,6 +52,9 @@ def main(o: Path) -> None:
             if g("qdither") and g("qplain"):
                 print(f"- the dither and S in the quantizer (qdither - qplain): {g('qdither') - g('qplain'):+.4f}"
                       f" (qplain {g('qplain'):.4f}, qdither {g('qdither'):.4f})")
+            if g("qwe") and g("qdither"):
+                print(f"- both producers in one launch (qwe): {g('qwe'):.4f}, against qdither + wedit"
+                      f" {g('qdither') + g('wedit'):.4f} ({g('qwe') - g('qdither') - g('wedit'):+.4f})")
     il = jl(o / "il.jsonl")
     if il:
         print("\n## per call, interleaved (41 reps, medians)\n\n| arm | base | ms | base ms | ratio | MHz (min-max) |\n|---|---|---|---|---|---|")
