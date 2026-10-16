@@ -483,8 +483,8 @@ of witness-lane columns. -/
 theorem zk_not_committed (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : (deployZk Readable.relation).parse x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (hone : sts.size = 1)
-    (L : FlockSoundness.Layout (sts[0]'(by omega))) (C : Fin (zkRadius.N x) → List 𝔽) (hw : ∀ q, wide true x (C q))
-    (hg : ¬ Claims.Flock.GoodTable H (deployZk Readable.relation) zkRadius x C) :
+    (L : FlockSoundness.Layout (sts[0]'(by omega))) (C : Fin (zkRadius.N x) → List 𝔽)
+    (hw : ∀ q, wide true x (C q)) (hg : ¬ Claims.Flock.GoodTable H (deployZk Readable.relation) zkRadius x C) :
     ¬ FlockSoundness.CommittedPad FlockSoundness.execArith
       (L.model (FlockSoundness.Refine.regionsOf (sts[0]'(by omega))))
       (FlockSoundness.Refine.schedOf (Claims.Flock.zkSched (sts[0]'(by omega)).m).1)
