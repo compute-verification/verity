@@ -621,7 +621,12 @@ def table(rows: list[dict]) -> str:
     lines = ["| config | eval | step | seeds | perplexity | Δ% vs int8 | Δ% vs bf16 | recovered |",
              "|---|---|---:|---:|---:|---:|---:|---:|"]
     groups: dict = {}
+    seen = set()
     for r in rows:
+        # the last step's baseline pass re-evaluates seed 0 of the seeded methods
+        if (r["config"], r["method"], r["step"]) in seen:
+            continue
+        seen.add((r["config"], r["method"], r["step"]))
         groups.setdefault((r["config"], r["family"], r["step"], r["seed"] is None), []).append(r)
     for (cfg, fam, step, is_base), rs in sorted(groups.items(), key=lambda kv: (kv[0][0], kv[0][3], kv[0][1], kv[0][2])):
         p = [r["ppl"] for r in rs]
