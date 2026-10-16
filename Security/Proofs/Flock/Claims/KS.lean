@@ -14,6 +14,7 @@ import Proofs.Flock.Claims.KS.PlainQueryRound
 import Proofs.Flock.Claims.KS.ConflictRun
 import Proofs.Flock.Claims.KS.ConflictTied
 import Proofs.Flock.Claims.KS.TableBound
+import Proofs.Flock.Claims.KS.Refit
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -62,4 +63,9 @@ parses in scope (`FlockDeploy.KS.acc_inScope`), so at both records it is its bou
 `FlockDeploy.KS.plain_KS_of_acc`, `FlockDeploy.KS.zk_KS_of_acc`); at the deployed relation, a table of
 full-width columns that does not extract is not committed to the plain record's table 0
 (`FlockDeploy.KS.plain_hwit`, `FlockDeploy.KS.plain_not_committed`), and under `--zk` at one table to the masked
-record's (`FlockDeploy.KS.zk_hwit`, `FlockDeploy.KS.zk_not_committed`). -/
+record's (`FlockDeploy.KS.zk_hwit`, `FlockDeploy.KS.zk_not_committed`). The old bound's terms at one table (`Refit`):
+an opening off the old oracle is a looked-up column off the word (`Flock.exists_ne_of_off`, `Flock.Pr_le_of_off`), the
+old table error is `ε_table` (`FlockDeploy.KS.εtable_one_plain`, `FlockDeploy.KS.bound_le_εtable_zk`), and the old
+fork and self-clash terms are escapes' (`Flock.oldEsc`, `Flock.oldEsc_term`) that fit the plain weight with the fork
+event of weight `k` (`FlockDeploy.KS.oldEsc_fitsFork_plain`), so the salted session's `ε_c⁻` is at most `ε_table`
+and their term (`FlockDeploy.KS.epsSL_le`). -/
