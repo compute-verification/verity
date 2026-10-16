@@ -487,16 +487,21 @@ theorem custody_length {spec : SessionSpec} {lv : Live} {link : List ByteArray �
 
 /-! ## The plain round count -/
 
-/-- **Each plain rep stream has its table's `repRounds`**: when the plain verdict accepts the record at any hashes and
-`liveOf` reads it, there are two rep streams per table, and stream `k` (table `k / 2`'s rep `k % 2`) has
-`repRounds false spec sts[k / 2]` rounds. -/
-theorem streams_size_plain (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record : String}
+/-- **Rep stream `k` of an accepted plain record** is table `k / 2`'s rep `k % 2`: when the plain verdict accepts the
+record at any hashes and `liveOf` reads it, there are two rep streams per table, and for stream `k` the verifier's rep
+check passes on proof file `k` at the table's `fast100` schedule, over the link points `liveOf` read, and its stream of
+that name has the rounds `liveOf` read, with the same coin counts and coins. -/
+theorem rep_plain (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record : String}
     {proofs : Array ByteArray} {lv : Live} (hv : verifyWithM hs spec (tabsOf sts) record proofs = .ok ())
     (hl : liveOf spec record = .ok lv) :
-    lv.streams.size = 2 * sts.size ∧
-      ∀ (k : ℕ) (hk : k < lv.streams.size), lv.streams[k].size = repRounds false spec sts[k / 2]! := by
+    lv.streams.size = 2 * sts.size ∧ ∀ (k : ℕ) (hk : k < lv.streams.size),
+      ∃ (sess : Session) (sch : Schedule) (stream : StreamRec) (c : ByteArray),
+        sess.points = lv.points ∧ sess.points.size = spec.points ∧ fast100 sts[k / 2]!.m = some sch ∧
+        verifyRepWith hs spec (Setup.ofCircuit sts[k / 2]!) sch sess (k / 2) (k % 2) proofs[k]! = .ok c ∧
+        sess.streams.find? (fun x => x.name == s!"{spec.tables[k / 2]!}/rep{k % 2}") = some stream ∧
+        List.Forall₂ (fun a b => a.n = b.n ∧ a.coins = b.coins) lv.streams[k].toList stream.rounds.toList := by
   obtain ⟨sess, schs, hdec, hsz, -, hall⟩ := verifyWithM_tables hs hv
-  obtain ⟨-, hpn, hlsz, hstr⟩ := liveOf_decodeWith hs hl hdec
+  obtain ⟨hpts, hpn, hlsz, hstr⟩ := liveOf_decodeWith hs hl hdec
   have hn : sts.size = spec.tables.size := by simpa [tabsOf] using hsz
   have hk₂ : ∀ k, k < lv.streams.size → k < spec.repStreams.size := fun k hk => hlsz ▸ hk
   rw [repStreams_size, ← hn] at hlsz
@@ -505,24 +510,174 @@ theorem streams_size_plain (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Arr
   have hi : k / 2 < (tabsOf sts).size := by simp only [tabsOf, Array.size_map]; omega
   have hi' : k / 2 < sts.size := by omega
   obtain ⟨_, c₀, c₁, hf, h₀, h₁⟩ := hall (k / 2) hi
-  have hrep : ∃ b c, verifyRepWith hs spec (tabsOf sts)[k / 2] schs[k / 2] sess (k / 2) (k % 2) b = .ok c := by
-    rcases Nat.mod_two_eq_zero_or_one k with h | h <;> rw [h]
-    · exact ⟨_, _, h₀⟩
-    · exact ⟨_, _, h₁⟩
-  obtain ⟨b, c, hrep⟩ := hrep
-  have htab : (tabsOf sts)[k / 2] = Setup.ofCircuit sts[k / 2] := Array.getElem_map ..
-  rw [htab] at hrep hf
-  obtain ⟨stream', extras, p, hfind', hex, -, hsize, -⟩ := verifyRepWith_rounds hs rfl hf hrep
+  have htab : (tabsOf sts)[k / 2] = Setup.ofCircuit sts[k / 2]! := by
+    rw [getElem!_pos sts (k / 2) hi']; exact Array.getElem_map ..
+  rw [htab] at h₀ h₁ hf
   simp only [repStreams_getElem spec (hk₂ k hk)] at hfind
+  refine ⟨sess, schs[k / 2], stream, ?_⟩
+  rcases Nat.mod_two_eq_zero_or_one k with h | h
+  · rw [show 2 * (k / 2) = k by omega] at h₀
+    rw [h] at hfind ⊢
+    exact ⟨c₀, hpts.symm, hpn, hf, h₀, hfind, hfa⟩
+  · rw [show 2 * (k / 2) + 1 = k by omega] at h₁
+    rw [h] at hfind ⊢
+    exact ⟨c₁, hpts.symm, hpn, hf, h₁, hfind, hfa⟩
+
+/-- **Each plain rep stream has its table's `repRounds`**: when the plain verdict accepts the record at any hashes and
+`liveOf` reads it, there are two rep streams per table, and stream `k` (table `k / 2`'s rep `k % 2`) has
+`repRounds false spec sts[k / 2]` rounds. -/
+theorem streams_size_plain (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record : String}
+    {proofs : Array ByteArray} {lv : Live} (hv : verifyWithM hs spec (tabsOf sts) record proofs = .ok ())
+    (hl : liveOf spec record = .ok lv) :
+    lv.streams.size = 2 * sts.size ∧
+      ∀ (k : ℕ) (hk : k < lv.streams.size), lv.streams[k].size = repRounds false spec sts[k / 2]! := by
+  obtain ⟨hsz, hall⟩ := rep_plain hs hv hl
+  refine ⟨hsz, fun k hk => ?_⟩
+  obtain ⟨sess, sch, stream, c, -, hpn, hf, hrep, hfind, hfa⟩ := hall k hk
+  obtain ⟨stream', extras, p, hfind', hex, -, hsize, -⟩ := verifyRepWith_rounds hs rfl hf hrep
   rw [hfind] at hfind'
   cases hfind'
-  have hx : extras.size = sts[k / 2].regions.size * sess.points.size := extraClaims_size hex
-  have hf' : fast100 sts[k / 2].m = some schs[k / 2] := hf
-  rw [← Array.length_toList, hfa.length_eq, Array.length_toList, hsize, getElem!_pos sts (k / 2) hi']
+  have hx : extras.size = sts[k / 2]!.regions.size * sess.points.size := extraClaims_size hex
+  rw [← Array.length_toList, hfa.length_eq, Array.length_toList, hsize]
   unfold repRounds
-  simp only [Bool.false_eq_true, ↓reduceIte, hf']
+  simp only [Bool.false_eq_true, ↓reduceIte, hf]
   rw [hx, hpn, Nat.mul_comm]
   rfl
+
+/-- The column reader's plain proof shape is the verifier's (`shapeOf`) at the table's `fast100` schedule. -/
+theorem plainProofShape_eq {tab : Setup} {sch : Schedule} (h : Claims.Flock.plainSched tab.m = sch) (n : ℕ) :
+    Claims.Flock.plainProofShape tab.m tab.kLog (2 + n) tab.merkle.digestLen (saltLenOf false tab) =
+      shapeOf tab sch n := by
+  subst h
+  rfl
+
+/-- **The plain query round is the round whose coins the shipped verifier queries level 0 at**: when the plain verdict
+accepts the record at any hashes and `liveOf` reads it, rep stream `k` (table `k / 2`'s rep `k % 2`, at its setup
+`tab`) has, at `plainQueryRound`, a round of level 0's `q₀` coins, and proof file `k` decodes at `plainProofShape` to
+the proof whose level-0 Merkle check the verifier passes at those coins' positions. -/
+theorem queryRound_plain (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record : String}
+    {proofs : Array ByteArray} {lv : Live} (hv : verifyWithM hs spec (tabsOf sts) record proofs = .ok ())
+    (hl : liveOf spec record = .ok lv) {k : ℕ} (hk : k < lv.streams.size) {tab : Setup}
+    (htab : tab = Setup.ofCircuit sts[k / 2]!) :
+    ∃ (extras : Array Flock.Claim) (p : Proof) (rd : Round),
+      tab.extra lv.points = .ok extras ∧
+      decodeProof (Claims.Flock.plainProofShape tab.m tab.kLog (2 + extras.size) tab.merkle.digestLen
+        (saltLenOf false tab)) proofs[k]! = .ok p ∧
+      lv.streams[k][Claims.Flock.plainQueryRound tab.m tab.kLog (Claims.Flock.plainSched tab.m).k0
+        (2 + extras.size)]? = some rd ∧
+      rd.n = (Claims.Flock.plainLevel0 tab.m).q ∧
+      merkleCheckWith (tab.merkle.opsWith hs) tab.merkle p.cap (Claims.Flock.plainLevel0 tab.m).cap
+        (Claims.Flock.plainLevel0 tab.m).d (positions (Claims.Flock.plainLevel0 tab.m) rd.coins)
+        p.ligerito.initialProof.rows p.ligerito.initialProof.siblings p.ligerito.initialProof.salts
+        (2 ^ (Claims.Flock.plainLevel0 tab.m).lanes) = .ok () := by
+  obtain ⟨-, hall⟩ := rep_plain hs hv hl
+  obtain ⟨sess, sch, stream, c, hpts, -, hf, hrep, hfind, hfa⟩ := hall k hk
+  obtain ⟨-, -, h2, -⟩ := fast100_rounds_ok hf
+  subst htab
+  obtain ⟨stream', extras, p, hfind', hex, hp, hsize, hn₀, hmc⟩ := verifyRepWith_rounds hs rfl hf hrep
+  rw [hfind] at hfind'
+  cases hfind'
+  have hsched : Claims.Flock.plainSched (Setup.ofCircuit sts[k / 2]!).m = sch := by
+    simp only [Claims.Flock.plainSched]
+    rw [show (Setup.ofCircuit sts[k / 2]!).m = sts[k / 2]!.m from rfl, hf]
+    rfl
+  have hlv0 : Claims.Flock.plainLevel0 (Setup.ofCircuit sts[k / 2]!).m = sch.levels.getD 0 default := by
+    rw [Claims.Flock.plainLevel0, hsched]
+  have hq : Claims.Flock.plainQueryRound (Setup.ofCircuit sts[k / 2]!).m (Setup.ofCircuit sts[k / 2]!).kLog
+      (Claims.Flock.plainSched (Setup.ofCircuit sts[k / 2]!).m).k0 (2 + extras.size) =
+      (3 + ((Setup.ofCircuit sts[k / 2]!).m - 6)) + (3 + ((Setup.ofCircuit sts[k / 2]!).kLog - 6)) +
+        ((2 + extras.size) + 1) + (sch.k0 + 6) := by
+    rw [Claims.Flock.plainQueryRound, hsched]
+  have hI : (3 + ((Setup.ofCircuit sts[k / 2]!).m - 6)) + (3 + ((Setup.ofCircuit sts[k / 2]!).kLog - 6)) +
+      ((2 + extras.size) + 1) + (sch.k0 + 6) < stream.rounds.size := by
+    rw [hsize]; omega
+  have hI' : (3 + ((Setup.ofCircuit sts[k / 2]!).m - 6)) + (3 + ((Setup.ofCircuit sts[k / 2]!).kLog - 6)) +
+      ((2 + extras.size) + 1) + (sch.k0 + 6) < lv.streams[k].size := by
+    rw [← Array.length_toList (xs := lv.streams[k]), hfa.length_eq, Array.length_toList]; exact hI
+  obtain ⟨hrn, hrc⟩ := hfa.get (by simpa using hI') (by simpa using hI)
+  simp only [List.get_eq_getElem, Array.getElem_toList] at hrn hrc
+  rw [getElem!_pos stream.rounds _ hI] at hn₀ hmc
+  refine ⟨extras, p, _, by rw [← hpts]; exact hex, ?_, by rw [hq]; exact Array.getElem?_eq_getElem hI', ?_, ?_⟩
+  · rw [plainProofShape_eq hsched]
+    exact hp
+  · rw [hlv0, hrn]; exact hn₀
+  · rw [hlv0, hrc]; exact hmc
+
+theorem getD_empty (a : Array ByteArray) (j : ℕ) : a.getD j ByteArray.empty = a[j]! := by
+  simp [Array.getD, getElem!_def]
+  split <;> simp_all
+  rfl
+
+/-- **The column reader reads the verifier's level-0 query round**: where the run's last message `f` sets up and the
+plain verdict accepts its record and proof files at any hashes, each of table 0's two reps that `runOf` takes has, at
+`plainQueryRound`, a round of level 0's `q₀` coins; its proof file decodes at the run's `plainShape` to the proof whose
+level-0 Merkle check the verifier passes at those coins' positions; and `plainRepColsOf` is that proof's level-0 rows at
+those coins. -/
+theorem runOf_queryRound_plain (hs : Hashes Flock.V) {s : Claims.Seen} {f : Final} {ins : Ins} {spec : SessionSpec}
+    {sts : Array Stmt} {r : Claims.Flock.ZkRun} (hf : lastFinal s = some f)
+    (hset : setupOf false f.stmt = some (ins, spec, sts))
+    (hv : verifyWithM hs spec (tabsOf sts) f.record f.proofs = .ok ()) (hr : runOf false s = some r) :
+    ∀ x ∈ r.reps, ∃ (p : Proof) (rd : Round),
+      decodeProof r.plainShape x.2 = .ok p ∧
+      x.1[Claims.Flock.plainQueryRound r.m r.kLog (Claims.Flock.plainSched r.m).k0 r.claims]? = some rd ∧
+      rd.n = (Claims.Flock.plainLevel0 r.m).q ∧
+      merkleCheckWith ((Setup.ofCircuit sts[0]!).merkle.opsWith hs) (Setup.ofCircuit sts[0]!).merkle p.cap
+        (Claims.Flock.plainLevel0 r.m).cap (Claims.Flock.plainLevel0 r.m).d
+        (positions (Claims.Flock.plainLevel0 r.m) rd.coins) p.ligerito.initialProof.rows
+        p.ligerito.initialProof.siblings p.ligerito.initialProof.salts (2 ^ (Claims.Flock.plainLevel0 r.m).lanes) =
+          .ok () ∧
+      Claims.Flock.plainRepColsOf r.plainShape x.1 x.2 =
+        Claims.Flock.zkRepCols (Claims.Flock.plainLevel0 r.m) rd.coins p.ligerito.initialProof.rows := by
+  unfold runOf at hr
+  simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at hr
+  obtain ⟨f', hf', ⟨ins', spec', sts'⟩, hset', st, hst, lv, hlv, extras, hex, rfl⟩ := hr
+  rw [hf] at hf'
+  cases hf'
+  rw [hset] at hset'
+  cases hset'
+  have hl : liveOf spec f.record = .ok lv := by
+    cases h : liveOf spec f.record <;> simp [h, Except.toOption] at hlv
+    rw [hlv]
+  have hex' : (Setup.ofCircuit st).extra lv.points = .ok extras := by
+    cases h : (Setup.ofCircuit st).extra lv.points <;> simp [h, Except.toOption] at hex
+    rw [hex]
+  have h0 : 0 < sts.size ∧ sts[0]! = st := by
+    rw [Array.getElem?_eq_some_iff] at hst
+    obtain ⟨h0, rfl⟩ := hst
+    exact ⟨h0, getElem!_pos sts 0 h0⟩
+  obtain ⟨hsz, -⟩ := rep_plain hs hv hl
+  intro x hx
+  have hj : ∃ j, j < 2 ∧ x = (lv.streams.getD j #[], f.proofs.getD j ByteArray.empty) := by
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
+    rcases hx with rfl | rfl
+    · exact ⟨0, by omega, rfl⟩
+    · exact ⟨1, by omega, rfl⟩
+  obtain ⟨j, hj2, rfl⟩ := hj
+  have hjk : j < lv.streams.size := by omega
+  have hj0 : j / 2 = 0 := by omega
+  obtain ⟨extras', p, rd, hex₂, hp, hrd, hn, hmc⟩ :=
+    queryRound_plain hs hv hl hjk (tab := Setup.ofCircuit st) (by rw [hj0, h0.2])
+  rw [hex'] at hex₂
+  cases hex₂
+  have hget : lv.streams.getD j #[] = lv.streams[j] := by simp [Array.getD, hjk]
+  rw [h0.2]
+  refine ⟨p, rd, ?_, ?_, hn, hmc, ?_⟩
+  · rw [getD_empty]; exact hp
+  · rw [hget]; exact hrd
+  · show Claims.Flock.plainRepColsOf
+        (Claims.Flock.plainProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog (2 + extras.size)
+          (Setup.ofCircuit st).merkle.digestLen (saltLenOf false (Setup.ofCircuit st)))
+        (lv.streams.getD j #[]) (f.proofs.getD j ByteArray.empty) =
+      Claims.Flock.zkRepCols (Claims.Flock.plainLevel0 (Setup.ofCircuit st).m) rd.coins p.ligerito.initialProof.rows
+    rw [hget, getD_empty f.proofs j]
+    unfold Claims.Flock.plainRepColsOf
+    rw [hp]
+    show Claims.Flock.zkRepCols (Claims.Flock.plainLevel0 (Setup.ofCircuit st).m)
+        ((lv.streams[j][Claims.Flock.plainQueryRound (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog
+          (Claims.Flock.plainSched (Setup.ofCircuit st).m).k0 (2 + extras.size)]?.map (·.coins)).getD #[])
+        p.ligerito.initialProof.rows = _
+    rw [hrd]
+    rfl
 
 /-- The session's recorded rounds, table by table. -/
 theorem rounds_sum (zk : Bool) (spec : SessionSpec) (sts : Array Stmt) :
