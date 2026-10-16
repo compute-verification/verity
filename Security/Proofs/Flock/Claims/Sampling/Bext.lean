@@ -6,9 +6,9 @@ import Proofs.Flock.Claims.Sampling.Cost
 
 The claims block (`Definitions.Claims.Sampling`) states `KS` with the linear term `1 · Pr[B_ext]`, where `Bext` forks
 like `B`, runs the extractor in each branch, and outputs the first collision among the `H` calls the two extractions
-make themselves: the openings' checks, `H(packBits(vals) ‖ salt)` and the path check. Commit strings opened inside the
-sessions' Flock proofs bind the boundary values because two accepted openings of one row to different values make
-such a collision. This file states that reduction at `Bext` and derives the block's `Bits` from its `KS`.
+make themselves: the commitment's checks of the openings it keeps. The trace's commitment binds (`Commitment.Binds`), so
+two kept openings of one position to different values make such a collision. This file states that reduction at `Bext`
+and derives the block's `Bits` from its `KS`.
 
 * `OwnColl`: one extraction's own calls hold two different inputs with one output.
 * `Pr_ownColl_le_Bext`: **the reduction's probability step**. `B_ext`'s first branch is the extraction on the judged
@@ -21,7 +21,8 @@ such a collision. This file states that reduction at `Bext` and derives the bloc
   runs of at most `t` calls.
 * `lamLin_bound`, `Bits_of_KSLin`: `κ + t·√γ·2^{−255.5} + t·2βc/2^256 ≤ t·2^{−lamLin κ γ β c}`, so `KSLin` with
   `StrictBirthday` for `B` and `ExpectedCR` for `Bext` gives `BitsLin` at `lamLin`.
-* `Bits_of_KS`: **the block's bits from its KS**, given `OpenCallsLe` and a nonnegative table error.
+* `Bits_of_KS`: **the block's bits from its KS**, given the extractor's expected reruns and own calls (`Efficient`'s)
+  and a nonnegative table error.
 -/
 
 namespace Claims.Sampling
@@ -331,50 +332,40 @@ end Bits
 
 section Block
 
-variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
+variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
-theorem escape_nonneg' (L : Law) (N : ℕ) (B : Finset ℕ) : 0 ≤ L.escape N B := by
-  cases L with
-  | subset k => exact div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)
-  | bernoulli num den => exact pow_nonneg (div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)) _
-  | stratified ss =>
-    refine List.prod_nonneg fun a ha => ?_
-    obtain ⟨p, -, rfl⟩ := List.mem_map.1 ha
-    exact div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
+theorem slack_pos : 0 < slack := by unfold slack; positivity
 
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
-theorem missAt_nonneg (D : Deploy Coin Col T) (t : ℕ) (x : Msg) : 0 ≤ missAt D t x := by
-  unfold missAt
-  split
-  · exact Real.iSup_nonneg fun B => escape_nonneg' _ _ _
-  · exact le_rfl
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
+theorem κF_nonneg (D : Deploy Coin Col T) (x : Msg) (hε : 0 ≤ D.εtable x) : 0 ≤ κF D x := by
+  unfold κF; positivity
 
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
-theorem κ_pos (D : Deploy Coin Col T) (t : ℕ) (x : Msg) (hε : 0 ≤ D.εtable x) : 0 < κ D t x := by
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
+theorem κ_pos (D : Deploy Coin Col T) {δ : ℝ} (hδ : 0 ≤ δ) (x : Msg) (hε : 0 ≤ D.εtable x) : 0 < κ D δ x := by
   unfold κ
-  have hκF : 0 ≤ κF D x := by unfold κF; positivity
-  have hcov : 0 ≤ cover D t x := by unfold cover; positivity
-  have := missAt_nonneg D t x
-  have h1 : 0 ≤ cover D t x * (missAt D t x + κF D x) := by positivity
-  have h2 : (0 : ℝ) ≤ 2 * D.k x / D.cap x := by positivity
-  have h3 : 0 < Real.exp (-(D.k x : ℝ) / 8) := Real.exp_pos _
+  have h1 : 0 ≤ slack ^ 2 * (δ + κF D x) := mul_nonneg (pow_nonneg slack_pos.le 2) (by linarith [κF_nonneg D x hε])
+  have h2 : 0 < (1 + slack) * (2 * D.k x / D.cap x + Real.exp (-(D.k x : ℝ) / 8)) :=
+    mul_pos (by linarith [slack_pos]) (by positivity)
   linarith
 
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
-theorem γ_nonneg (D : Deploy Coin Col T) (t : ℕ) (x : Msg) : 0 ≤ γ D t x := by
-  unfold γ; positivity
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
+theorem γ_nonneg (D : Deploy Coin Col T) (x : Msg) : 0 ≤ γ D x := by
+  unfold γ; have := slack_pos; positivity
 
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 theorem work_pos (D : Deploy Coin Col T) (x : Msg) : 0 < work D x := by
   unfold work; positivity
 
-/-- **Sampling: bits from KS**: the block's `KS`, with one rerun's openings checks bounded (`OpenCallsLe`) and the
-table error nonnegative, gives the block's `Bits`. -/
-theorem Bits_of_KS {H : Msg → Msg} {D : Deploy Coin Col T} (h : KS H D) (hopen : OpenCallsLe H D)
-    (hε : ∀ x, 0 ≤ D.εtable x) : Bits H D := fun t decode hdec =>
-  Bits_of_KSLin (h t decode hdec) (E_runs_exp H D decode) (E_own_le H D decode hopen) (fun x => κ_pos D t x (hε x))
-    (γ_nonneg D t) (work_pos D) fun x => le_of_eq (by unfold work; push_cast; ring)
+/-- **Sampling: bits from KS**: the block's `KS`, with the extractor's expected reruns and own SHA-512 calls the ones
+`Efficient` states and the table error nonnegative, gives the block's `Bits`. -/
+theorem Bits_of_KS {H : Msg → Msg} {D : Deploy Coin Col T} (h : KS H D)
+    (hruns : ∀ decode, ExtractRunsExpLe H (E D decode)
+      (fun x => 1 + D.k x + (D.k x : ℝ) ^ 2 * (1 + nPU D x * D.innerWaits x * D.innerK x)))
+    (hown : ∀ decode, ExtractOwnLe H (E D decode) (fun x => D.k x ^ 2 * nPU D x * D.openCalls x))
+    (hε : ∀ x, 0 ≤ D.εtable x) : Bits H D := fun δ decode hδ hdec =>
+  Bits_of_KSLin (h δ decode hδ hdec) (hruns decode) (hown decode) (fun x => κ_pos D hδ x (hε x)) (γ_nonneg D)
+    (work_pos D) fun x => le_of_eq (by unfold work; push_cast; ring)
 
 end Block
 

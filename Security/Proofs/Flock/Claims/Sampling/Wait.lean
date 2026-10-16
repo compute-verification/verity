@@ -1,4 +1,4 @@
-import Proofs.Flock.Claims.Sampling.Opens
+import Proofs.Flock.Claims.Sampling.Binding
 
 /-!
 # Waiting for accepted reruns: the truncation and the union over wrong sets

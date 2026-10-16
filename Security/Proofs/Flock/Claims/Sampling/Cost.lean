@@ -2,24 +2,16 @@ import Definitions.Claims.Sampling
 import Proofs.Flock.Claims.Sampling.Extract
 
 /-!
-# The sampling extractor's cost
+# The sampling extractor's rerun programs: reruns, own calls, and what they return
 
-The claims block's `Efficient` (`Definitions.Claims.Sampling`) states the sampling extractor `E`'s reruns: at most
-`1 + K + k·m′·K′`, and `1 + k·(1 + m′·k′)` in expectation. Both hold on every deployment, prover and tape.
+The claims block's extractor `E` (`Definitions.Claims.Sampling`) is built of `ofOC`, `flatMapRP`, `waitAccC` and
+`checkRevealed`. These are their laws, on every run.
 
-`E` replays the judged run; if it accepted, it waits for `k` accepted reruns among `K` fresh draws (`waitAccC`), and at
-each accepted rerun `r` runs the session's `E^rep` (`inner`): `m′` waits for `k′` accepted reruns among `K′` draws that
-keep `r`'s draw coin (`atDraw r`). The session's waits at `r` make `g(r) = m′·N′(r)` reruns in expectation, with
-`a(r)·N′(r) ≤ k′` for `a(r)` the acceptance probability of the runs at `r`'s draw (`waitRuns_exp`). The accepted reruns'
-weights `g`, from `a` accepted so far, average `G(K, a)` with `ε·G(K, a) ≤ (k − a)·μ` for `μ = 𝔼[1[acc]·g]`
-(`accExp_le`, the induction of `waitRuns_exp`), and `μ = 𝔼[a·g] ≤ m′·k′` since `g` reads only the draw coin
-(`Ex_acc_forkOn` off coin 0). So an accepted judged run (probability `ε`) adds at most `ε·(k/ε + k·m′k′/ε)`.
-
-* `E_runs_le`, `E_runs_exp`: the two bounds.
-* `OpenCallsLe`, `E_own_le`: `E`'s own SHA-512 calls are its openings' checks, at most `k·openCalls` when one rerun's
-  checks make at most `openCalls` (what the block's `Deploy.openCalls` describes, and does not state).
-* `Efficient_of_decoder`: under `OpenCallsLe`, `Efficient` is a decoder that meets Flock's `ListComplete`, with its
-  stated complexity.
+* `ofOC_runs`, `flatMapRP_runs`, `waitAccC_runs_eq`: their reruns. `ownLog_bind`, `ownLog_flatMapRP`, `ownLog_ofOC`,
+  `ownLog_of_noHash`: their own `H` calls.
+* `eval_ofOC`, `flatMapRP_mem`, `checkRevealed_mem`: what they return. Each opening `checkRevealed` returns passes the
+  commitment's check under its roots, and that check's calls are among its own.
+* `waitAccC_sum`, `accExp_le`: the weights of a wait's accepted draws, `ε · G(K, a) ≤ (k − a) · 𝔼[1[acc] · g]`.
 -/
 
 namespace Claims.Sampling
@@ -64,16 +56,6 @@ theorem ownLog_flatMapRP {R β γ : Type} (H : Msg → Msg) (run : R → Trace) 
     simp only [flatMapRP, List.map_cons, List.sum_cons]
     rw [ownLog_bind, ownLog_bind, List.length_append, List.length_append, ownLog_flatMapRP H run f bs]
     simp [ownLog]
-
-theorem checkOpens_runs {Coin Col T R : Type} (H : Msg → Msg) (run : R → Trace) (D : Deploy Coin Col T) (s : Stmt)
-    (os : List Opening) : ((checkOpens (R := R) D s os).eval H run).2.2 = 0 := by
-  unfold checkOpens
-  rw [flatMapRP_runs]
-  have h : ∀ o : Opening, (((ofOC (openOC D.path s o)).bind fun ok =>
-      (RP.ret (if ok then [o] else []) : RP R (List Opening))).eval H run).2.2 = 0 := fun o => by
-    rw [(RP.eval_bind H run _ _).2, ofOC_runs]
-    rfl
-  simp [h]
 
 theorem NoHash.waitAccC {R : Type} (k : ℕ) :
     ∀ (rs : List R) (acc : List (R × Seen)), NoHash (Sampling.waitAccC k rs acc) := by
@@ -220,108 +202,12 @@ theorem accExp_le {D : Type} [Fintype D] [Nonempty D] (run : D → Trace) (k : �
         _ = (k - a) * μ := by ring
     · simp [accExp, accSum, List.finRange_succ, Ex]
 
-/-! ## The session's reruns at an accepted rerun -/
-
-section Cost
-
-variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
-
-/-- The session's waits' reruns at an accepted rerun `r`: each wait over `K′` draws at `r`'s draw coin. -/
-def innerRuns {n : ℕ} (run : (Fin n → Coin) → Trace) (k' K' : ℕ) {m' : ℕ} (r : Fin n → Coin)
-    (ρ : Fin m' → Fin K' → Fin n → Coin) : ℕ :=
-  ∑ i, waitRuns (run ∘ atDraw r) k' ((List.finRange K').map (ρ i)) 0
-
 theorem waitRuns_map {R R' : Type} (run : R → Trace) (k : ℕ) (f : R' → R) :
     ∀ (l : List R') (a : ℕ), waitRuns run k (l.map f) a = waitRuns (run ∘ f) k l a := by
   intro l
   induction l with
   | nil => intro a; rfl
   | cons r l ih => intro a; simp only [List.map_cons, waitRuns, ih, Function.comp]
-
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-theorem inner_runs_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
-    (s : Stmt) (r : Fin (D.V.k x) → Coin) (v : Seen)
-    (ρ : Fin (D.innerWaits x) → Fin (D.innerCap x) → Fin (D.V.k x) → Coin) (run : (Fin (D.V.k x) → Coin) → Trace) :
-    ((inner H D decode x s r v ρ).eval H run).2.2 ≤ innerRuns run (D.innerK x) (D.innerCap x) r ρ := by
-  have hsum : (((List.finRange (D.innerWaits x)).map fun i =>
-      (List.finRange (D.innerCap x)).map fun j => atDraw r (ρ i j)).map fun rs => waitRuns run (D.innerK x) rs 0).sum =
-      innerRuns run (D.innerK x) (D.innerCap x) r ρ := by
-    rw [List.map_map, innerRuns, Fin.sum_univ_def]
-    congr 1
-    refine List.map_congr_left fun i _ => ?_
-    simp only [Function.comp_apply]
-    rw [← waitRuns_map, List.map_map]
-    rfl
-  unfold inner
-  split
-  · simp [RP.eval]
-  · next xS _ _ =>
-    rw [(RP.eval_bind H run _ _).2]
-    have hw := firstWait_runs_le_sum H run (D.innerK x) D.sessionCols
-      (Flock.assemble H D.flock.parse decode D.flock.read xS) (Flock.check H D.flock.parse xS)
-      ((List.finRange (D.innerWaits x)).map fun i => (List.finRange (D.innerCap x)).map fun j => atDraw r (ρ i j))
-    rw [hsum] at hw
-    split
-    · simpa [RP.eval] using hw
-    · rw [checkOpens_runs, Nat.add_zero]
-      exact hw
-
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-theorem inner_runs_le_cap (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
-    (s : Stmt) (r : Fin (D.V.k x) → Coin) (v : Seen)
-    (ρ : Fin (D.innerWaits x) → Fin (D.innerCap x) → Fin (D.V.k x) → Coin) (run : (Fin (D.V.k x) → Coin) → Trace) :
-    ((inner H D decode x s r v ρ).eval H run).2.2 ≤ D.innerWaits x * D.innerCap x := by
-  refine (inner_runs_le H D decode x s r v ρ run).trans ?_
-  unfold innerRuns
-  refine (Finset.sum_le_card_nsmul _ _ (D.innerCap x) fun i _ => ?_).trans_eq ?_
-  · exact (waitRuns_le_length _ _ _ _).trans_eq (by simp)
-  · simp
-
-/-! ## The extractor's reruns -/
-
-/-- **`E` reruns the prover at most `1 + K + k·m′·K′` times**, on every prover, tape and coin. -/
-theorem E_runs_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) :
-    ExtractRunsLe H (E H D decode) (fun x => 1 + D.cap x + D.k x * (D.innerWaits x * D.innerCap x)) := by
-  intro x Ω P ω r₀ c
-  simp only [Extractor.eval, E, RP.eval]
-  have key : ∀ n a b : ℕ, n ≤ a + b → n + 1 ≤ 1 + a + b := by omega
-  refine key _ _ _ ?_
-  split
-  · simp [RP.eval]
-  · split
-    · rw [(RP.eval_bind H _ _ _).2, (RP.eval_bind H _ _ _).2, flatMapRP_runs, waitAccC_runs_eq]
-      simp only [RP.eval, Nat.add_zero]
-      refine Nat.add_le_add ((waitRuns_le_length _ _ _ _).trans_eq (by simp)) ?_
-      refine (List.sum_le_length_nsmul _ (D.innerWaits x * D.innerCap x) fun n hn => ?_).trans ?_
-      · obtain ⟨p, -, rfl⟩ := List.mem_map.1 hn
-        exact inner_runs_le_cap H D decode x _ _ _ _ _
-      · rw [smul_eq_mul, List.length_map, List.length_zip, List.length_finRange]
-        exact Nat.mul_le_mul_right _ (min_le_left _ _)
-    · simp [RP.eval]
-
-/-- `E`'s reruns at one judged run and coin: the replay, and if it accepted, the wait's and each accepted rerun's
-session's. -/
-theorem E_runs_pt (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg) {Ω : Type}
-    (P : Prover Ω) (ω : Ω) (r₀ : Fin (D.V.k x) → Coin) (c : (E H D decode).C x) :
-    ((E H D decode).eval H P x ω r₀ c).2.2 ≤ 1 + if (run H P D.V x ω r₀).out = .acc then
-      waitRuns (run H P D.V x ω) (D.k x) ((List.finRange (D.cap x)).map c.1) 0 +
-        (((List.finRange (D.k x)).zip ((waitAccC (D.k x) ((List.finRange (D.cap x)).map c.1) []).eval H
-          (run H P D.V x ω)).1).map fun p => innerRuns (run H P D.V x ω) (D.innerK x) (D.innerCap x) p.2.1
-            (c.2 p.1)).sum
-      else 0 := by
-  simp only [Extractor.eval, E, RP.eval]
-  rw [Nat.add_comm]
-  refine Nat.add_le_add_left ?_ 1
-  split
-  · simp [RP.eval]
-  · by_cases h : (run H P D.V x ω r₀).out = .acc
-    · have hs : (run H P D.V x ω r₀).seen.out = .acc := h
-      simp only [hs, h, ↓reduceIte]
-      rw [(RP.eval_bind H _ _ _).2, (RP.eval_bind H _ _ _).2, flatMapRP_runs, waitAccC_runs_eq, List.length_nil]
-      simp only [RP.eval, Nat.add_zero]
-      exact Nat.add_le_add_left (List.sum_le_sum fun p _ => inner_runs_le H D decode x _ _ _ _ _) _
-    · have hs : ¬ (run H P D.V x ω r₀).seen.out = .acc := h
-      simp [hs, h, RP.eval]
 
 theorem Ex_listSum {α ι : Type} [Fintype α] (l : List ι) (f : ι → α → ℝ) :
     Ex (fun a => (l.map fun i => f i a).sum) = (l.map fun i => Ex (f i)).sum := by
@@ -331,160 +217,66 @@ theorem Ex_listSum {α ι : Type} [Fintype α] (l : List ι) (f : ι → α → 
     simp only [List.map_cons, List.sum_cons]
     rw [Ex_add (f i) (fun a => (l.map fun i => f i a).sum), ih]
 
-/-- The coins off the draw coin. -/
-def offDraw (n : ℕ) : Finset (Fin n) := Finset.univ.filter fun t => t.val ≠ 0
+/-! ## What they return -/
 
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-theorem forkOn_offDraw {n : ℕ} (r e : Fin n → Coin) : forkOn (offDraw n) r e = atDraw r e := by
-  funext t
-  by_cases h : t.val = 0 <;> simp [forkOn, atDraw, offDraw, h]
+theorem LogColl.mono {l l' : List (Msg × Msg)} (h : LogColl l) (hs : ∀ q ∈ l, q ∈ l') : LogColl l' := by
+  obtain ⟨p, hp, p', hp', hne, heq⟩ := h
+  exact ⟨p, hs p hp, p', hs p' hp', hne, heq⟩
 
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-theorem atDraw_forkOn {n : ℕ} (r e : Fin n → Coin) : atDraw (forkOn (offDraw n) r e) = atDraw r := by
-  funext ρ t
-  by_cases h : t.val = 0 <;> simp [forkOn, atDraw, offDraw, h]
+theorem ownLog_ofOC {R α : Type} (H : Msg → Msg) (run : R → Trace) :
+    ∀ c : OC α, ownLog H run (ofOC c : RP R α) = (c.eval H).2
+  | .ret _ => rfl
+  | .query q k => by
+    simp only [ofOC, ownLog, OC.eval]
+    rw [ownLog_ofOC H run (k (H q))]
 
-omit [Inhabited Coin] in
-/-- **The sampled waits' expected reruns**: over the judged run's coins and the extractor's, at most
-`1 + k·(1 + m′·k′)`. -/
-theorem sampled_runs_exp (H : Msg → Msg) {n : ℕ} (run' : (Fin n → Coin) → Trace) (k K m' k' K' : ℕ) :
-    Ex (fun s : (Fin n → Coin) × ((Fin K → Fin n → Coin) × (Fin k → Fin m' → Fin K' → Fin n → Coin)) =>
-      1 + (if (run' s.1).out = .acc then (1 : ℝ) else 0) *
-        ((waitRuns run' k ((List.finRange K).map s.2.1) 0 : ℝ) +
-          (((List.finRange k).zip ((waitAccC k ((List.finRange K).map s.2.1) []).eval H run').1).map
-            fun p => (innerRuns run' k' K' p.2.1 (s.2.2 p.1) : ℝ)).sum)) ≤ 1 + k * (1 + m' * k') := by
-  let g : (Fin n → Coin) → ℝ := fun r =>
-    Ex fun ρ : Fin m' → Fin K' → Fin n → Coin => (innerRuns run' k' K' r ρ : ℝ)
-  have hg0 : ∀ r, 0 ≤ g r := fun r => Ex_nonneg fun _ => Nat.cast_nonneg _
-  have hgW : ∀ r, g r = m' * waitExp (run' ∘ atDraw r) k' K' 0 := by
-    intro r
-    simp only [g, innerRuns, Nat.cast_sum]
-    exact Ex_sum_pi (fun σ => (waitRuns (run' ∘ atDraw r) k' ((List.finRange K').map σ) 0 : ℝ)) m'
-  have hgI : ∀ r e, g (forkOn (offDraw n) r e) = g r := by
-    intro r e
-    simp only [g, innerRuns, atDraw_forkOn]
-  have hμ : Ex (fun d => (if (run' d).out = .acc then (1 : ℝ) else 0) * g d) ≤ m' * k' := by
-    rw [Ex_acc_forkOn (offDraw n) (fun d => (run' d).out = .acc) g hgI]
-    refine (Ex_mono fun r => ?_).trans_eq (Ex_const (α := Fin n → Coin) _)
-    have hw := waitRuns_exp (run' ∘ atDraw r) k' K' 0 (Nat.zero_le _)
-    simp only [Nat.cast_zero, sub_zero, Function.comp_apply] at hw
-    simp only [forkOn_offDraw]
-    rw [hgW r]
-    calc Pr (fun e => (run' (atDraw r e)).out = .acc) * (m' * waitExp (run' ∘ atDraw r) k' K' 0)
-        = m' * (Pr (fun e => (run' (atDraw r e)).out = .acc) * waitExp (run' ∘ atDraw r) k' K' 0) := by ring
-      _ ≤ m' * k' := mul_le_mul_of_nonneg_left hw (Nat.cast_nonneg _)
-  have hS : ∀ c1 : Fin K → Fin n → Coin,
-      Ex (fun c2 : Fin k → Fin m' → Fin K' → Fin n → Coin =>
-        (((List.finRange k).zip ((waitAccC k ((List.finRange K).map c1) []).eval H run').1).map
-          fun p => (innerRuns run' k' K' p.2.1 (c2 p.1) : ℝ)).sum) =
-        accSum run' k g ((List.finRange K).map c1) 0 := by
-    intro c1
-    rw [Ex_listSum]
-    have hpi : ∀ p : Fin k × ((Fin n → Coin) × Seen),
-        Ex (fun c2 : Fin k → Fin m' → Fin K' → Fin n → Coin => (innerRuns run' k' K' p.2.1 (c2 p.1) : ℝ)) =
-          g p.2.1 := fun p => Ex_pi_eval p.1 fun ρ => (innerRuns run' k' K' p.2.1 ρ : ℝ)
-    simp only [hpi]
-    have hlen := waitAccC_length_le H run' k ((List.finRange K).map c1) [] (Nat.zero_le _)
-    have hz := List.map_snd_zip (l₁ := List.finRange k) (l₂ := ((waitAccC k ((List.finRange K).map c1) []).eval H run').1)
-      (by rw [List.length_finRange]; exact hlen)
-    have := waitAccC_sum H run' k g ((List.finRange K).map c1) []
-    simp only [List.map_nil, List.sum_nil, zero_add, List.length_nil] at this
-    rw [← this]
-    conv_rhs => rw [← hz]
-    rw [List.map_map]
+theorem eval_ofOC {R α : Type} (H : Msg → Msg) (run : R → Trace) :
+    ∀ c : OC α, ((ofOC c : RP R α).eval H run).1 = (c.eval H).1
+  | .ret _ => rfl
+  | .query q k => by
+    simp only [ofOC, RP.eval, OC.eval]
+    exact eval_ofOC H run (k (H q))
+
+/-- What `flatMapRP` returns comes from one element's program, whose own calls are among the whole program's. -/
+theorem flatMapRP_mem {R β γ : Type} (H : Msg → Msg) (run : R → Trace) (f : β → RP R (List γ)) :
+    ∀ (l : List β), ∀ c ∈ ((flatMapRP f l).eval H run).1,
+      ∃ b ∈ l, c ∈ ((f b).eval H run).1 ∧ ∀ q ∈ ownLog H run (f b), q ∈ ownLog H run (flatMapRP f l)
+  | [] => by simp [flatMapRP, RP.eval]
+  | b :: bs => by
+    intro c hc
+    simp only [flatMapRP] at hc ⊢
+    rw [(RP.eval_bind H run _ _).1, (RP.eval_bind H run _ _).1] at hc
+    simp only [RP.eval, List.mem_append] at hc
+    rw [ownLog_bind, ownLog_bind]
+    rcases hc with hc | hc
+    · exact ⟨b, by simp, hc, fun q hq => List.mem_append_left _ hq⟩
+    · obtain ⟨b', hb', hc', hq⟩ := flatMapRP_mem H run f bs c hc
+      exact ⟨b', List.mem_cons_of_mem _ hb', hc', fun q h => List.mem_append_right _ (List.mem_append_left _ (hq q h))⟩
+
+/-- **What `checkRevealed` returns passes its check**: each pair is one of `rs`, its opening passes the commitment's
+check under its roots, and that check's calls are among `checkRevealed`'s own. -/
+theorem checkRevealed_mem {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : Commitment Bool)
+    (rs : List (List Msg × Opening Bool)) :
+    ∀ p ∈ ((checkRevealed (R := R) Cm rs).eval H run).1, p ∈ rs ∧ Cm.Opens H p.1 p.2 = true ∧
+      ∀ q ∈ ((Cm.opens p.1 p.2).eval H).2, q ∈ ownLog H run (checkRevealed (R := R) Cm rs) := by
+  intro p hp
+  obtain ⟨p', hp', hc, hq⟩ := flatMapRP_mem H run _ rs p hp
+  rw [(RP.eval_bind H run _ _).1, eval_ofOC] at hc
+  rw [ownLog_bind, ownLog_ofOC] at hq
+  simp only [RP.eval] at hc
+  split_ifs at hc with hok
+  · obtain rfl := List.mem_singleton.1 hc
+    exact ⟨hp', hok, fun q h => hq q (List.mem_append_left _ h)⟩
+  · simp at hc
+
+theorem checkRevealed_runs {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : Commitment Bool)
+    (rs : List (List Msg × Opening Bool)) : ((checkRevealed (R := R) Cm rs).eval H run).2.2 = 0 := by
+  unfold checkRevealed
+  rw [flatMapRP_runs]
+  have h : ∀ p : List Msg × Opening Bool, (((ofOC (Cm.opens p.1 p.2)).bind fun ok =>
+      (RP.ret (if ok then [p] else []) : RP R (List (List Msg × Opening Bool)))).eval H run).2.2 = 0 := fun p => by
+    rw [(RP.eval_bind H run _ _).2, ofOC_runs]
     rfl
-  have hY : Ex (fun c : (Fin K → Fin n → Coin) × (Fin k → Fin m' → Fin K' → Fin n → Coin) =>
-      (waitRuns run' k ((List.finRange K).map c.1) 0 : ℝ) +
-        (((List.finRange k).zip ((waitAccC k ((List.finRange K).map c.1) []).eval H run').1).map
-          fun p => (innerRuns run' k' K' p.2.1 (c.2 p.1) : ℝ)).sum) =
-      waitExp run' k K 0 + accExp run' k g K 0 := by
-    rw [Ex_prod]
-    simp only [Ex_add, Ex_const, hS]
-    rfl
-  have hW := waitRuns_exp run' k K 0 (Nat.zero_le _)
-  simp only [Nat.cast_zero, sub_zero] at hW
-  have hA := accExp_le run' k g hg0 K 0 (Nat.zero_le _)
-  simp only [Nat.cast_zero, sub_zero] at hA
-  rw [Ex_add, Ex_const, Ex_prod]
-  have hin : ∀ r : Fin n → Coin, (Ex fun c : (Fin K → Fin n → Coin) × (Fin k → Fin m' → Fin K' → Fin n → Coin) =>
-      (if (run' r).out = .acc then (1 : ℝ) else 0) *
-        ((waitRuns run' k ((List.finRange K).map c.1) 0 : ℝ) +
-          (((List.finRange k).zip ((waitAccC k ((List.finRange K).map c.1) []).eval H run').1).map
-            fun p => (innerRuns run' k' K' p.2.1 (c.2 p.1) : ℝ)).sum)) =
-      (if (run' r).out = .acc then (1 : ℝ) else 0) * (waitExp run' k K 0 + accExp run' k g K 0) := by
-    intro r
-    rw [Ex_mul_left]
-    exact congrArg _ hY
-  rw [congrArg Ex (funext hin), Ex_mul_right, Ex_ind]
-  have hA' := hA.trans (mul_le_mul_of_nonneg_left hμ (Nat.cast_nonneg k))
-  have hexp : (Pr fun d : Fin n → Coin => (run' d).out = .acc) * (waitExp run' k K 0 + accExp run' k g K 0) =
-      (Pr fun d : Fin n → Coin => (run' d).out = .acc) * waitExp run' k K 0 +
-        (Pr fun d : Fin n → Coin => (run' d).out = .acc) * accExp run' k g K 0 := by ring
-  rw [hexp]
-  nlinarith
-
-/-- **`E` reruns the prover at most `1 + k·(1 + m′·k′)` times in expectation**, at every prover and tape. -/
-theorem E_runs_exp (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) :
-    ExtractRunsExpLe H (E H D decode) (fun x => 1 + D.k x * (1 + D.innerWaits x * D.innerK x)) := by
-  intro x Ω P ω
-  refine (Ex_mono fun s => ?_).trans (sampled_runs_exp H (run H P D.V x ω) (D.k x) (D.cap x) (D.innerWaits x)
-    (D.innerK x) (D.innerCap x))
-  have h := E_runs_pt H D decode x P ω s.1 s.2
-  split_ifs at h with hacc
-  · simp only [hacc, ↓reduceIte, one_mul]
-    refine (Nat.cast_le.2 h).trans_eq ?_
-    simp only [Nat.cast_add, Nat.cast_one, Nat.cast_list_sum, List.map_map]
-    rfl
-  · simp only [hacc, ↓reduceIte, zero_mul, add_zero]
-    exact_mod_cast h
-
-/-! ## The extractor's own calls -/
-
-/-- **One rerun's openings checks make at most `openCalls(x)` SHA-512 calls**: what `Deploy.openCalls` is described as. -/
-def OpenCallsLe (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
-  ∀ (x : Msg) (run : (Fin (D.V.k x) → Coin) → Trace) (s : Stmt) (v : Seen) (w : Flock.Wit),
-    (ownLog H run (checkOpens D s (D.openings s v w))).length ≤ D.openCalls x
-
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-theorem inner_own_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
-    (s : Stmt) (r : Fin (D.V.k x) → Coin) (v : Seen)
-    (ρ : Fin (D.innerWaits x) → Fin (D.innerCap x) → Fin (D.V.k x) → Coin) (run : (Fin (D.V.k x) → Coin) → Trace)
-    (h : OpenCallsLe H D) : (ownLog H run (inner H D decode x s r v ρ)).length ≤ D.openCalls x := by
-  unfold inner
-  split
-  · simp [ownLog]
-  · rw [ownLog_bind, ownLog_of_noHash H run (NoHash.firstWait _ _ _ _ _), List.nil_append]
-    split
-    · simp [ownLog]
-    · exact h x run s v _
-
-/-- **`E` makes at most `k·openCalls` SHA-512 calls of its own**, under `OpenCallsLe`. -/
-theorem E_own_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (h : OpenCallsLe H D) :
-    ExtractOwnLe H (E H D decode) (fun x => D.k x * D.openCalls x) := by
-  intro x Ω P ω r₀ c
-  simp only [E, ownLog]
-  split
-  · simp [ownLog]
-  · split
-    · rw [ownLog_bind, ownLog_bind, ownLog_of_noHash H _ (NoHash.waitAccC _ _ _), List.nil_append,
-        List.length_append, ownLog_flatMapRP]
-      simp only [ownLog, List.length_nil, Nat.add_zero]
-      refine (List.sum_le_length_nsmul _ (D.openCalls x) fun n hn => ?_).trans ?_
-      · obtain ⟨p, -, rfl⟩ := List.mem_map.1 hn
-        exact inner_own_le H D decode x _ _ _ _ _ h
-      · rw [smul_eq_mul, List.length_map, List.length_zip, List.length_finRange]
-        exact Nat.mul_le_mul_right _ (min_le_left _ _)
-    · simp [ownLog]
-
-/-- **Sampling: efficiency rests on the decoder**, once one rerun's openings checks are bounded (`OpenCallsLe`): a
-decoder that meets Flock's list-decoding spec, with its stated complexity. -/
-theorem Efficient_of_decoder [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin Col T)
-    (decode : List (ℕ × Col) → List T)
-    (counted : List (ℕ × Col) → List T × ℕ) (size : List (ℕ × Col) → ℕ) (p : Polynomial ℕ) (h : OpenCallsLe H D)
-    (hl : Flock.ListComplete D.flock.enc D.flock.agree D.flock.nMin decode)
-    (hd : DecoderComplexity decode counted size p) : Efficient H D decode counted size p :=
-  ⟨E_runs_le H D decode, E_runs_exp H D decode, E_own_le H D decode h, hl, hd⟩
-
-end Cost
+  simp [h]
 
 end Claims.Sampling

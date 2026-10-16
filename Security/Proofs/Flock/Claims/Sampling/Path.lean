@@ -1,4 +1,4 @@
-import Proofs.Flock.Claims.Sampling.Opens
+import Proofs.Flock.Claims.Sampling.Binding
 import Proofs.Flock.Verifier.Registered
 import Properties.Proofs.NetworkCertifier.Bytes
 
@@ -20,6 +20,9 @@ is as an oracle program that queries the code's own frames in the code's order (
   equal node frames have equal children of whatever length `H` answers.
 * `regPath_sha512`: at `H` = SHA-512 (`sha512Msg`), the program accepts exactly when the verifier's own
   `Flock.Registered.opensLeaf` does at that port.
+* `pathCommit`, `pathCommit_binds`: the trace's commitment by leaves and a path check binds (`Commitment.Binds`) when
+  its leaf binds the value (`LeafBinds`) and its path check binds the leaf (`PathBinds`). `Binding_of_regPath`: the
+  claims' `Binding` for a commitment whose path check is the registered one, from its leaf's binding.
 -/
 
 namespace Claims.Sampling
@@ -97,6 +100,14 @@ def regPath (own : Array Registered.Port) (root : Msg) (pos : ℕ) (leaf π : Ms
   | none => .ret false
 
 /-! ## Binding, for every `H` -/
+
+/-- **A path check binds its leaf**: two accepted checks at one root and position, of different leaves, make `H` calls
+that collide. What a Merkle path check gives: where the two walks to the root first meet, one hash has two different
+inputs. -/
+def PathBinds (H : Msg → Msg) (path : Msg → ℕ → Msg → Msg → OC Bool) : Prop :=
+  ∀ root pos leaf leaf' π π', leaf ≠ leaf' → ((path root pos leaf π).eval H).1 = true →
+    ((path root pos leaf' π').eval H).1 = true →
+      LogColl (((path root pos leaf π).eval H).2 ++ ((path root pos leaf' π').eval H).2)
 
 /-- Two climbs from different digests to one root, through 64-byte siblings of one count, make two different queries
 with one answer. -/
@@ -235,5 +246,63 @@ theorem regPath_sha512 (own : Array Registered.Port) (root : Msg) (pos : ℕ) (l
       · simp only [OC.eval, Bool.false_eq_true, false_iff]
         exact fun h => c h.1
     exact hiff.trans ⟨fun h => ⟨reg, rfl, h⟩, fun ⟨r, hr, h⟩ => by cases hr; exact h⟩
+
+/-! ## The trace's commitment by leaves and a path check -/
+
+/-- An oracle program, then another on its result. -/
+def ocBind {α β : Type} : OC α → (α → OC β) → OC β
+  | .ret a, f => f a
+  | .query q k, f => .query q fun h => ocBind (k h) f
+
+theorem ocBind_eval {α β : Type} (H : Msg → Msg) (p : OC α) (f : α → OC β) :
+    (ocBind p f).eval H = (((f (p.eval H).1).eval H).1, (p.eval H).2 ++ ((f (p.eval H).1).eval H).2) := by
+  induction p with
+  | ret a => simp [ocBind, OC.eval]
+  | query q k ih => simp [ocBind, OC.eval, ih]
+
+/-- **A commitment by leaves and a path check**: an opening at position `pos` is checked under the root and at the leaf
+index that the roots and `pos` name (`at_`); its leaf is computed from its value and data (`leaf`, its own hashing),
+then checked there through the path its data carries (`path`, `π`). -/
+def pathCommit (at_ : List Msg → ℕ → Option (Msg × ℕ)) (leaf : Opening Bool → OC Msg) (π : Opening Bool → Msg)
+    (path : Msg → ℕ → Msg → Msg → OC Bool) (layer : (Msg → Msg) → List Msg → List (Opening Bool) → List Msg) :
+    Commitment Bool where
+  opens roots o :=
+    match at_ roots o.pos with
+    | some ri => ocBind (leaf o) fun l => path ri.1 ri.2 l (π o)
+    | none => .ret false
+  layer := layer
+
+/-- **The leaf binds the value**: two openings at one position, of different values, whose leaves agree make `H` calls
+that collide (the hm96 leaf: its row's bits packed at one width, then hashed). -/
+def LeafBinds (H : Msg → Msg) (leaf : Opening Bool → OC Msg) : Prop :=
+  ∀ o o' : Opening Bool, o.pos = o'.pos → o.val ≠ o'.val → ((leaf o).eval H).1 = ((leaf o').eval H).1 →
+    LogColl (((leaf o).eval H).2 ++ ((leaf o').eval H).2)
+
+/-- **The commitment by leaves and a path check binds** when its leaf binds the value and its path check the leaf:
+where the leaves agree the leaves' calls collide, and otherwise the path checks'. -/
+theorem pathCommit_binds {H : Msg → Msg} {at_ : List Msg → ℕ → Option (Msg × ℕ)} {leaf : Opening Bool → OC Msg}
+    {π : Opening Bool → Msg} {path : Msg → ℕ → Msg → Msg → OC Bool}
+    {layer : (Msg → Msg) → List Msg → List (Opening Bool) → List Msg} (hleaf : LeafBinds H leaf)
+    (hpath : PathBinds H path) : (pathCommit at_ leaf π path layer).Binds H := by
+  intro roots o o' hpos hne h h'
+  unfold Commitment.Opens at h h'
+  simp only [pathCommit] at h h' ⊢
+  rw [← hpos] at h' ⊢
+  cases ha : at_ roots o.pos with
+  | none => simp [ha, OC.eval] at h
+  | some ri =>
+    simp only [ha, ocBind_eval] at h h' ⊢
+    by_cases hl : ((leaf o).eval H).1 = ((leaf o').eval H).1
+    · exact (hleaf o o' hpos hne hl).mono fun q hq => by simp only [List.mem_append] at hq ⊢; tauto
+    · exact (hpath ri.1 ri.2 _ _ (π o) (π o') hl h h').mono fun q hq => by
+        simp only [List.mem_append] at hq ⊢; tauto
+
+/-- **Sampling: binding, at the registered path check**: a deployment whose trace commitment checks its leaves with the
+verifier's own registered path check binds, at every `H` where its leaf binds the value. -/
+theorem Binding_of_regPath {Coin Col T : Type} (D : Deploy Coin Col T) (own : Array Registered.Port)
+    (at_ : List Msg → ℕ → Option (Msg × ℕ)) (leaf : Opening Bool → OC Msg) (π : Opening Bool → Msg)
+    (layer : (Msg → Msg) → List Msg → List (Opening Bool) → List Msg)
+    (hD : D.commit = pathCommit at_ leaf π (regPath own) layer) (hleaf : ∀ H, LeafBinds H leaf) : Binding D :=
+  fun H => hD ▸ pathCommit_binds (hleaf H) (regPath_binds H own)
 
 end Claims.Sampling
