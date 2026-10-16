@@ -484,10 +484,12 @@ static int pgate() {
           ctl_equal += h[i] == pref(f.c0, f.c1, tile, nc, S - 8, f.p);
           if (pat == 0) v1_diff += h[i] != dfill_ref(f.c0, f.c1, tile, nc, S);
         }
-        const bool ok = !bad && !ctl_equal && !v1_diff;
+        // PAT 3 (B = 0) freezes at D = C after one step, so S - 8 steps give the same receipt: it is the power control,
+        // never certified work, and only its exactness is gated
+        const bool ok = !bad && (pat == 3 || !ctl_equal) && !v1_diff;
         printf("{\"mode\": \"pgate\", \"kind\": 0, \"pat\": %d, \"NC\": %d, \"S\": %d, \"tiles\": %lld, \"mismatches\": %ld, "
-               "\"control_equal\": %ld, \"v1_diff\": %ld, \"ok\": %s}\n",
-               pat, nc, S, f.per(), bad, ctl_equal, v1_diff, ok ? "true" : "false");
+               "\"control_equal\": %ld, \"v1_diff\": %ld, \"certified\": %s, \"ok\": %s}\n",
+               pat, nc, S, f.per(), bad, ctl_equal, v1_diff, pat == 3 ? "false" : "true", ok ? "true" : "false");
         fails += !ok;
         CK(cudaFree(f.rec));
       }
