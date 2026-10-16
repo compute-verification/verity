@@ -66,7 +66,7 @@ if [ -n "${A5_TP:-}" ]; then
   audit glm $A5_TP/commit ${A5_BUILD:-$A5_TP/build} integrations/vllm/workloads/$ROW.json $A5_TP/serving-rows \
     benchmarks/one_stage/glm53_silu_mul_v2_tp8.json || rc=1
 else
-  for e in ${STANDIN:-256:subset:8 1536:subset:8}; do
+  for e in ${STANDIN:-256:subset:4 1536:subset:4}; do   # a rank's stand-in window holds 8 units; a draw of all leaves no negative
     I=${e%%:*}; LAW=${e#*:}; S=$W/served-i$I
     (cd integrations/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I $I --law $LAW) > $O/standin-i$I.json 2> $O/standin-i$I.err \
       || { tail -20 $O/standin-i$I.err; exit 8; }
