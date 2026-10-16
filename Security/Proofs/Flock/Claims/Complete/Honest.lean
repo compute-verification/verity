@@ -89,6 +89,11 @@ def traceOf (st : Flock.Stmt) (hid : Array Bool) (off : Nat) : Trace :=
   let z := (Array.range (2 ^ st.m)).map fun a => hid.getD (off + a) false
   { z, az := mulBlocks (entryA st) st.c.kLog z, bz := mulBlocks (entryB st) st.c.kLog z }
 
+/-- The session's traces: table `i`'s from the witness's bits at `i·2^m`. -/
+def tracesOf (sts : Array Flock.Stmt) (w : Claims.Flock.Wit) : Array Trace :=
+  let h := w.hid.toArray
+  (Array.range sts.size).map fun i => traceOf sts[i]! h (i * 2 ^ sts[i]!.m)
+
 /-- **The honest prover's program** on the statement `x`, the witness `w` and the tape `ω`: on the session the
 statement sets up, the honest session, then the last message. A statement that sets up no session, or a session the
 prover cannot run, gets the empty message, which the verifier refuses. -/
@@ -96,10 +101,7 @@ def prog (x : Claims.Msg) (w : Claims.Flock.Wit) (ω : Tape) : PI Claims.Msg :=
   match setupOf false x with
   | none => .ret []
   | some (_, spec, sts) => do
-    let h := w.hid.toArray
-    let trs := (Array.range sts.size).map fun i => traceOf sts[i]! h (i * 2 ^ sts[i]!.m)
-    let r ← (sessionP asks Hashes.pi spec (tabsOf sts) trs ω).run
-    match r with
+    match ← (sessionP asks Hashes.pi spec (tabsOf sts) (tracesOf sts w) ω).run with
     | .ok (record, proofs) => pure (Final.encode ⟨x, record, proofs⟩)
     | .error _ => pure []
 
