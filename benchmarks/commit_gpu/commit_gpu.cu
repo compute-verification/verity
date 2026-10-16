@@ -18,6 +18,7 @@
 // levels on registers, not through global memory): the same compressions without those loads and stores; all refuse
 // `check`)
 // COMMIT_GPU_SMALL=1: `check` takes the small path (no shared memory), from domain slot 1 and salt slot 1 of 2.
+// COMMIT_GPU_FUSE=1 with it: the last leaf CTA folds the levels above the CTAs (Committer::fuse_top).
 #include <cublasLt.h>
 #include <nvml.h>
 
@@ -99,6 +100,8 @@ static int check(int argc, char** argv) {
   const int slot = small ? 1 : 0;
   Committer cm;
   cm.init(p, n, mode == "e2e" ? 128 : lb, true, seg, lbits, small ? 1 : 0, small, small ? 2 : 1);
+  const char* fz = getenv("COMMIT_GPU_FUSE");
+  cm.fuse_top = small && fz && !strcmp(fz, "1");
   prf ? cm.salts<true>(nullptr, 0) : cm.salts<false>(dsalts, 0);
   if (tile) {
     cm.tiles(drows, a, b, (u32)c, seg, 0, slot);

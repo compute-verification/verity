@@ -57,18 +57,26 @@ def lite_kind(name: str) -> str | None:
     return "litec" if name.startswith("litec") else "lite"
 
 
+def unfused(name: str) -> str:
+    """a cg arm's name without -f (the same schedule with the top folded by the last leaf CTA)"""
+    return name.removesuffix("-f")
+
+
 def is_cg(name: str) -> bool:
     """the protocol's schedules with each commitment commit_gpu's small path (real roots)"""
+    name = unfused(name)
     return name in ("cg", "cgeq") or name.startswith("cgrr")
 
 
 def is_cgh(name: str) -> bool:
     """the same with layers 1..31's salt records made by host threads and copied in"""
+    name = unfused(name)
     return name in ("cgh", "cgheq") or name.startswith("cghrr")
 
 
 def is_cgpre(name: str) -> bool:
     """the same with every layer's salt records made on the GPU before the window, so the window only reads them"""
+    name = unfused(name)
     return name in ("cgpre", "cgpreeq") or name.startswith("cgprerr")
 
 
@@ -85,7 +93,7 @@ def main() -> int:
         gates += rows(d / "gate.jsonl")
         thru += rows(d / "shathru.jsonl")
         beside += rows(d / "beside.jsonl")
-        for name in ("check-small.jsonl", "verify.jsonl"):
+        for name in ("check-small.jsonl", "check-fused.jsonl", "check-default.jsonl", "verify.jsonl"):
             s = [r["summary"] for r in rows(d / name) if "summary" in r]
             if s:
                 checks[f"{d.name}/{name}"] = s[-1]
@@ -250,7 +258,7 @@ def main() -> int:
                 lone[c["M"]] = c["arms"]["eq"]["ms"]
                 print(f"  lone TTFT M = {c['M']}: {c['arms']['eq']['ms']:.1f} ms against plain {c['plain_ms']:.1f} ms "
                       f"({100 * c['arms']['eq']['cost']:+.0f}%)")
-            for n in ("cgeq", "cgheq", "cgpreeq"):
+            for n in ("cgeq", "cgheq", "cgpreeq", "cgeq-f", "cgheq-f", "cgpreeq-f"):
                 if c["k"] == 1 and n in c["arms"]:
                     v = c["arms"][n]
                     print(f"  lone TTFT M = {c['M']}, {n}: {v['ms']:.2f} ms against plain {c['plain_ms']:.2f} ms ({100 * v['cost']:+.1f}%; "

@@ -461,6 +461,16 @@ DEV void ld8(const u64* p, u64* d) {
     d[2 * i + 1] = (u64)v.w << 32 | v.z;
   }
 }
+// ld8 from L2 (ld.global.cg): nodes another CTA of the same kernel stored
+DEV void ld8cg(const u64* p, u64* d) {
+  const uint4* q = reinterpret_cast<const uint4*>(p);
+#pragma unroll
+  for (int i = 0; i < 4; ++i) {
+    const uint4 v = __ldcg(q + i);
+    d[2 * i] = (u64)v.y << 32 | v.x;
+    d[2 * i + 1] = (u64)v.w << 32 | v.z;
+  }
+}
 DEV void st8(u64* p, const u64* d) {
   uint4* q = reinterpret_cast<uint4*>(p);
 #pragma unroll
@@ -646,11 +656,12 @@ __global__ void __launch_bounds__(SMALL_THREADS, SMALL_MINB)
 // The small path's data phase over the CTAs that hold data (ceil(n / SMALL_THREADS)): each thread a leaf, then its CTA's
 // levels 1 .. min(SMALL_LEVELS, depth). g: thread t takes the CTA's leaf (t % g) * (SMALL_THREADS / g) + t / g, so with
 // tile leaves of mr = SMALL_THREADS / g row blocks a column (Committer::lanes) the g leaves of one row block at adjacent
-// columns sit in adjacent lanes and a warp's 16-byte loads touch 32 / g lines, not 32.
+// columns sit in adjacent lanes and a warp's 16-byte loads touch 32 / g lines, not 32. ctr (Committer::fused): the CTA
+// that finishes last also folds the nl levels above the CTAs.
 template <class Row, int SX>
 __global__ void __launch_bounds__(SMALL_THREADS, SMALL_MINB)
     leaf_small(int dom, Row row, const u64* __restrict__ S, const u64* __restrict__ F, u64 n, u64 width, u64* levels,
-               u64* __restrict__ bc, u32 g) {
+               u64* __restrict__ bc, u32 g, u32* ctr, int nl) {
   const u64 pos = (u64)blockIdx.x * SMALL_THREADS + (threadIdx.x % g) * (SMALL_THREADS / g) + threadIdx.x / g;
   const u32 cnt = (u32)(width < SMALL_THREADS ? width : SMALL_THREADS);
 #ifdef COMMIT_GPU_DIAG_NOTREE
@@ -675,6 +686,27 @@ __global__ void __launch_bounds__(SMALL_THREADS, SMALL_MINB)
   while ((1u << L) < cnt) ++L;
   fold_cta(dom, levels, width, cnt, L);
 #endif
+  if (!ctr) return;
+  // the levels above the CTAs (Committer::fused): the CTA that finishes last folds them, so no launch follows; its
+  // count goes back to 0 for the next launch
+  __threadfence();
+  u32 old = 0;
+  if (threadIdx.x == 0) old = atomicAdd(ctr, 1u);
+  if (!__syncthreads_or(threadIdx.x == 0 && old == gridDim.x - 1)) return;
+  __threadfence();
+  for (int l = 1; l <= nl; ++l) {
+    if (l > 1) __syncthreads();
+    const u64 m = (width >> SMALL_LEVELS) >> l;
+    if (threadIdx.x < m) {
+      const u64* in = level_at(levels, width, SMALL_LEVELS + l - 1);
+      u64 Lc[8], Rc[8], o[8];
+      ld8cg(in + 16 * threadIdx.x, Lc);
+      ld8cg(in + 16 * threadIdx.x + 8, Rc);
+      node(dom, SMALL_LEVELS + l - 1, threadIdx.x, Lc, Rc, o);
+      st8(level_at(levels, width, SMALL_LEVELS + l) + 8 * threadIdx.x, o);
+    }
+  }
+  if (threadIdx.x == 0) *ctr = 0;
 }
 
 // Levels d+1 .. d+nl from level d (at most SMALL_TOP nodes) in one CTA through global memory.
@@ -1011,6 +1043,8 @@ struct Committer {
   u64* F = nullptr;                 // the small path's frame-leaf first-block states, 8 words a leaf
   uint4* T = nullptr;
   uint4* Tn = nullptr;              // the small path's nibble table (hm96_mask's NIB layout), 8 KB
+  u32* ctr = nullptr;               // the small path's count of finished leaf CTAs (fused)
+  bool fuse_top = false;            // the small path: the last leaf CTA folds the levels above the CTAs (fused)
   uint8_t* D = nullptr;             // row-seg: the segment digests
   u32 segs = 0, seg_last = 0;
   std::vector<u64*> lv;
@@ -1045,6 +1079,8 @@ struct Committer {
           for (int u = 0; u < 16; ++u) memcpy(&tn[4096 * h + 256 * c + 16 * u], &p.T[256 * (h ? 16 * u : u) + 16 * c], 16);
       CK(cudaMalloc(&Tn, tn.size()));
       CK(cudaMemcpy(Tn, tn.data(), tn.size(), cudaMemcpyHostToDevice));
+      CK(cudaMalloc(&ctr, sizeof(u32)));
+      CK(cudaMemset(ctr, 0, sizeof(u32)));
     }
     u64 off = 0;
     for (int d = 0; d <= depth; ++d) { lv.push_back(levels + 8 * off); off += width >> d; }
@@ -1075,7 +1111,7 @@ struct Committer {
   void leaves(const Row& row, cudaStream_t st, int slot = 0, u32 g = 1) {
     if (small) {
       leaf_small<Row, SX><<<(unsigned)((n + SMALL_THREADS - 1) / SMALL_THREADS), SMALL_THREADS, 0, st>>>(
-          dom, row, S + 16 * n * slot, F, n, width, levels, bc, g);
+          dom, row, S + 16 * n * slot, F, n, width, levels, bc, g, fused() ? ctr : nullptr, depth - SMALL_LEVELS);
       return;
     }
     const unsigned t = width > (1u << 16) ? LEAF_THREADS : 64;
@@ -1096,6 +1132,9 @@ struct Committer {
     if (seg) seg_leaves_from(SegTiles{g}, st, slot);
     else leaves<RowTile>(RowTile{g}, st, slot, (u32)lanes(g.mr));
   }
+  // Small path with fuse_top: when the levels above the CTAs fit one CTA (top_small's case), leaf_small's last CTA folds
+  // them up to the root and nodes() launches nothing.
+  bool fused() const { return small && fuse_top && depth > SMALL_LEVELS && (width >> SMALL_LEVELS) <= (u64)SMALL_TOP; }
   // The small path's lane order for tile leaves of mr row blocks a column: when mr divides SMALL_THREADS, a CTA's leaves
   // are SMALL_THREADS / mr whole columns, and the leaves of one row block go to adjacent lanes.
   static u64 lanes(u64 mr) { return mr <= (u64)SMALL_THREADS && SMALL_THREADS % mr == 0 ? SMALL_THREADS / mr : 1; }
@@ -1107,6 +1146,7 @@ struct Committer {
     if (top < 0) top = depth;
     int d = 0;
     if (small) {
+      if (fused()) return;
       d = std::min(SMALL_LEVELS, depth);
       for (; d < top && (width >> d) > SMALL_TOP; ++d) {
         const u64 n_out = width >> (d + 1);
@@ -1158,5 +1198,5 @@ struct Committer {
       cur.swap(nxt);
     }
   }
-  void release() { cudaFree(levels); cudaFree(bc); cudaFree(S); cudaFree(F); cudaFree(T); cudaFree(Tn); cudaFree(D); lv.clear(); }
+  void release() { cudaFree(levels); cudaFree(bc); cudaFree(S); cudaFree(F); cudaFree(T); cudaFree(Tn); cudaFree(ctr); cudaFree(D); lv.clear(); }
 };

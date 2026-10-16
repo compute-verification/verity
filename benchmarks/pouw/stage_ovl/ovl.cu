@@ -50,6 +50,8 @@
 //   cgpre, cgpreeq, cgprerrW, cgpreonly: the same with all 32 layers' salts, F and the pads made by salt_small before the
 //             window (cg_pre, its time alone printed as mode salt_pre) into the committers' slots, so the window only
 //             reads them; cg_pre runs again after each poisoning, so their poisoned check still covers the salts
+//   NAME-f (NAME a cg, cgh or cgpre arm): the same with commit_gpu's fuse_top, the last leaf CTA of each commitment folding
+//             the levels above the CTAs where top_small would be launched; held to the serial roots (made without it)
 //
 // env: ARMS, DRAW_US (300), PLAIN_RB (8192), MID (1: stage.cu's frame heads ahead), CARVE (unset: the commitments' and draws'
 // kernels at the driver's carveout; P: P% shared memory), BESIDE_C (367), CG_R (64), CG_DUMP, CG_SKIP (timing only: salts,
@@ -210,8 +212,19 @@ struct Sched {
                  // 3: commit_gpu's small path, the real commitment; 4: the same with layers 1..31's S records made by host
                  // threads and copied in (cudaMemcpyAsync on the chunk's salt stream) in place of salt_small; 5: the
                  // same with every slot's salts, F and the pads made before the graph (cg_pre), none in it
+  bool fuse = false;  // a cg arm's NAME-f: commit_gpu's fuse_top (the last leaf CTA folds the levels above the CTAs)
 };
 static Sched sched_of(const std::string& n) {
+  if (n.size() > 2 && n.compare(n.size() - 2, 2, "-f") == 0) {
+    Sched s = sched_of(n.substr(0, n.size() - 2));
+    if (s.lite < 3) {
+      fprintf(stderr, "arm %s: -f takes a cg arm\n", n.c_str());
+      exit(1);
+    }
+    s.name = n;
+    s.fuse = true;
+    return s;
+  }
   if (n == "chunked") return {n, false, false, true, false, 0, 0, 0};
   if (n.rfind("chunkedrr", 0) == 0) return {n, false, false, true, false, 0, atoi(n.c_str() + 9), 0};
   if (n == "eq") return {n, true, true, true, false, 0, 0, 0};
@@ -587,6 +600,9 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
       a.hash = S.hash && !S.lite;
       a.cg = S.hash && S.lite >= 3;
       a.stamps = S.draw;
+      if (a.cg)
+        for (int c = 0; c < k; c++)
+          for (int t = 0; t < NSTAGE; t++) ch[c].cgc[t].fuse_top = S.fuse;
       std::vector<cudaStream_t> sg(k), sh(k), ss(k);
       for (int c = 0; c < k; c++) {
         const int pg = S.classes ? hi + std::min(levels - 1, c * levels / k) : S.hp < 0 ? hi : lo;
