@@ -369,10 +369,13 @@ def LcAt (o : Run H rel) (i r : ℕ) : Prop :=
       (Lc.tEnd o.tabs[i]!.fold o.tabs[i]!.m (o.trace i) (o.zcOut i r) (o.full i r) (o.lcCoins i r)
         (o.zcEnd i r)).rounds 0
 
-/-- **The lincheck's algebra** at every rep: the statement's folded circuit at the prover's coins is some `comb` of width
-64, and the rounds' claim from `α·v_A + v_B + β`, on the prover's messages, ends at `dot comb z_partial`. -/
+/-- **The lincheck's algebra** at every rep where the statement's circuit fold at the lincheck's `α` returns: the
+statement's folded circuit at the prover's coins is some `comb` of width 64, and the rounds' claim from
+`α·v_A + v_B + β`, on the prover's messages, ends at `dot comb z_partial`. -/
 def LcAlgebra (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
-  ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, ∃ comb : Array F128,
+  ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2,
+    o.tabs[i]!.fold.fold ((o.lcCoins i r).ca 0) (skipWeights (o.zcOut i r).z)
+      ((o.zcOut i r).rho.extract 0 (o.tabs[i]!.fold.kLog - 6)) = .ok (o.full i r) → ∃ comb : Array F128,
     o.tabs[i]!.fold.folded ((o.lcCoins i r).ca 0) ((o.lcCoins i r).cb 0) (skipWeights (o.zcOut i r).z)
       ((o.zcOut i r).rho.extract 0 (o.tabs[i]!.fold.kLog - 6)) (pushes (o.lcCoins i r).τ (o.tabs[i]!.fold.kLog - 6)) =
         .ok comb ∧
@@ -389,8 +392,8 @@ theorem lincheck_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed →
     (hR1 : TraceR1CS H rel) (hzc : ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, ZcAt o i r)
     (hlc : ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, LcAt o i r) (hal : LcAlgebra H rel) : Lincheck H rel := by
   intro o i hi r hr
-  obtain ⟨-, hp, hag⟩ := hlc o i hi r hr
-  obtain ⟨comb, hcomb, hsize, hcheck⟩ := hal o i hi r hr
+  obtain ⟨hfold, hp, hag⟩ := hlc o i hi r hr
+  obtain ⟨comb, hcomb, hsize, hcheck⟩ := hal o i hi r hr hfold
   refine ok_val ?_
   rw [o.zc_eq hR1 hi hr (hzc o i hi r hr), hp]
   exact ⟨_, lincheckWith_of o.hs o.tabs[i]!.fold o.tabs[i]!.m (o.trace i) (o.zcOut i r) (o.full i r) (o.lcCoins i r)

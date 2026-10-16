@@ -248,8 +248,8 @@ theorem _root_.FlockComplete.Run.lcEnd_k (o : Run H rel) (i r : ℕ) : (o.lcEnd 
 theorem _root_.FlockComplete.Run.lc_eq (hR1 : TraceR1CS H rel) (o : Run H rel) {i : ℕ} (hi : i < o.tabs.size)
     {r : ℕ} (hr : r < 2) (hzc : ZcAt o i r) (hlc : LcAt o i r) (hal : LcAlgebra H rel) :
     o.lc i r = (o.lcOut i r, ⟨(o.stream i r).rounds, (o.lcEnd i r).k, (o.lcEnd i r).pending⟩) := by
-  obtain ⟨-, hp, hag⟩ := hlc
-  obtain ⟨comb, hcomb, hsize, hcheck⟩ := hal o i hi r hr
+  obtain ⟨hfold, hp, hag⟩ := hlc
+  obtain ⟨comb, hcomb, hsize, hcheck⟩ := hal o i hi r hr hfold
   have h := lincheckWith_of o.hs o.tabs[i]!.fold o.tabs[i]!.m (o.trace i) (o.zcOut i r) (o.full i r) (o.lcCoins i r)
     (o.zcEnd i r) (o.zcEnd_k i r) (hag.mono (Nat.zero_le _)) hcomb hsize hcheck
   unfold Run.lc

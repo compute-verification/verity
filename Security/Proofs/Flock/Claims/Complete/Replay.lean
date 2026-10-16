@@ -6,6 +6,7 @@ import Proofs.Flock.Claims.Complete.Replay.Lincheck
 import Proofs.Flock.Claims.Complete.Replay.RingSwitch
 import Proofs.Flock.Claims.Complete.Replay.Trace
 import Proofs.Flock.Claims.Complete.Replay.Satisfies
+import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
 
 /-! The verifier's phases replayed on the honest prover's rounds: the steps of both sides (`Steps`: the prover's in the
 pure session, `squeezeP_go`, `forIn_go`; the verifier's on rounds that carry the prover's, `squeezeWith_sent`, `Agrees`),
@@ -20,4 +21,6 @@ ring switch (`RingSwitch`: the prover's in closed form, `ringSwitchP_go`, the ve
 `ringSwitch_goal`), and the honest trace at the deployed relation (`Trace`: the witness's bits are the trace, which
 satisfies the block R1CS by `RelS`, `traceR1CS`, so the goals hold there without it, `zerocheck_goal'`,
 `lincheck_goal'`, `ringSwitch_goal'`; `Satisfies`: the case's table is `stmtOf`'s, its matrices `matA`, `matB`,
-satisfied by the witness's bits, `Case.model`). -/
+satisfied by the witness's bits, `Case.model`; `LincheckAlgebra`: the lincheck's algebra there from `RelS`, the folded
+circuit the halved fold with `β` at the pin, `folded_ok`, the start `α·v_A + v_B + β = Σ comb·zr` and the honest rounds,
+`lcAlgebra`, so `Lincheck` holds without it, `lincheck_relation`). -/
