@@ -21,14 +21,16 @@ import arms as A
 import psched_arm as PS
 
 #: TABLE_V3's splits, with the phase filler re-sized for map 1 beside a W 16 S 8192 split filler on screens
-#: r20261016-060932-6357 and r20261016-061429-cef2 (0 bad receipts): each entry is the best row at ≤ 1.043 there, and
-#: the next tile count screened falls off the cliff where the phase work outlasts attention (32/24K: t 56 1.023, t 66
-#: 1.103), so these sit below it. NC 2 (56 registers against 88) at W 8 where it beat W 4 NC 4 at the same MACs.
+#: r20261016-060932-6357 and r20261016-061429-cef2, each row re-read on r20261016-062327-9c30 or r20261016-062823-ddcc
+#: (0 bad receipts): ≤ 1.043 on both reads, and a few tiles more falls off the cliff where the phase work outlasts
+#: attention (48/16K: t 58 1.009, t 63 1.050), so these sit below it. NC 2 (56 registers against 88) at W 8 where it
+#: beat W 4 NC 4 at the same MACs. 32/1K reads up to 0.014 higher on some GPUs than others (TABLE_V3's own row: 1.041
+#: on r20261016-054739-f4ec, 1.047-1.055 on these screens), so it takes the row that read 0.019 under that one.
 TABLE_K = {**PS.TABLE_V3,
-           (32, 1024): (92, PS.PhaseFill(S=256, tiles=2)),
+           (32, 1024): (92, PS.PhaseFill(W=4, S=256, tiles=2)),
            (32, 2048): (92, PS.PhaseFill(NC=2, S=512, tiles=5)),
            (32, 8192): (108, PS.PhaseFill(W=4, S=256, tiles=31)),
-           (32, 24576): (108, PS.PhaseFill(S=256, tiles=56)),
+           (32, 24576): (108, PS.PhaseFill(S=256, tiles=60)),
            (48, 16384): (92, PS.PhaseFill(S=256, tiles=58)),
            (128, 2048): (92, PS.PhaseFill(S=512, tiles=10)),
            (128, 6144): (92, PS.PhaseFill(S=256, tiles=59)),
