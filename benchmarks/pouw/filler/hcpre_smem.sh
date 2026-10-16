@@ -15,7 +15,7 @@ cat > "$B/inner.sh" <<EOF
 set -uo pipefail
 export DFILL_COINS=0123456789abcdef0123456789abcdef DFILL_CHUNK_LOG2=${CHUNK:-20}
 ncu --clock-control none -k regex:"${KREGEX:-cutlass|dfill_k}" --launch-count ${COUNT:-6} --metrics $M --csv \
-  "$B/dscore" dscore prefill 8192 0 co 0 ${SHAPE:-4 4 256} 1 1 0 > "$O/ncu.csv" 2> "$O/errors.txt"
+  "$B/dscore" dscore prefill 8192 0 co 0 ${SHAPE:-4 4 256} 2 1 0 > "$O/ncu.csv" 2> "$O/errors.txt"
 echo "ncu rc \$?" >> "$O/rc.txt"
 EOF
 gpu-lease 1 --wait --max-min "${MAXMIN:-8}" -- bash "$B/inner.sh"
