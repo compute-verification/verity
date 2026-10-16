@@ -163,6 +163,53 @@ def buildSession (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins)
     let st ← buildStmt tags circuitB pubB compB coins tables draw partition program registered publicInputs identifier
     return (st.spec, #[st])
 
+theorem buildStmt_named (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
+    (draw partition : Option Lean.Json) (program : Option ByteArray) (registered : Option (Array Registered.Port))
+    (publicInputs : Option ByteArray) (identifier : Option String) :
+    With.Returns (buildStmt tags circuitB pubB compB coins tables draw partition program registered publicInputs identifier)
+      fun st => st.merkle.Named := by
+  unfold buildStmt
+  returns_walk [With.setup_named _ _ _ _ _ _, With.setupHidden_named _ _ _ _ _ _ _ _ _,
+    With.setupH_named _ _ _ _ _ _ _ _]
+
+theorem buildSession_named (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins)
+    (tables : List (String × ByteArray)) (count : Nat) (draw partition : Option Lean.Json) (program : Option ByteArray)
+    (work : Option (Nat × Array (String × Nat × Nat))) (stratified : Option Nat)
+    (closure : Option (Std.HashMap Nat (Array Nat))) (registered : Option (Array Registered.Port))
+    (publicInputs : Option ByteArray) (identifier : Option String) :
+    With.Returns (buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure
+      registered publicInputs identifier) fun r => ∀ st ∈ r.2, st.merkle.Named := by
+  unfold buildSession
+  returns_walk [With.setupTables_named _ _ _ _ _ _ _ _ _ _ _ _ _, buildStmt_named _ _ _ _ _ _ _ _ _ _ _ _]
+
+/-- `verify`'s verdict on a session `buildSession` sets up, as `verifyCmd`'s `setupOf` hands its statements to it, is
+`verifyWith Sha512.hash`'s. -/
+theorem verify_eq_verifyWith_of_buildSession (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins)
+    (tables : List (String × ByteArray)) (count : Nat) (draw partition : Option Lean.Json) (program : Option ByteArray)
+    (work : Option (Nat × Array (String × Nat × Nat))) (stratified : Option Nat)
+    (closure : Option (Std.HashMap Nat (Array Nat))) (registered : Option (Array Registered.Port))
+    (publicInputs : Option ByteArray) (identifier : Option String) {spec : SessionSpec} {sts : Array Stmt}
+    (h : buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure registered
+      publicInputs identifier = .ok (spec, sts)) (record : String) (proofs : Array ByteArray) :
+    verify spec (sts.map Setup.ofCircuit) record proofs
+      = verifyWith Sha512.hash spec (sts.map Setup.ofCircuit) record proofs :=
+  verify_eq_verifyWith_of_returns (buildSession_named tags circuitB pubB compB coins tables count draw partition program
+    work stratified closure registered publicInputs identifier) h record proofs
+
+/-- `Zk.verify`'s verdict (`verify --zk`) on a session `buildSession` sets up, as `verifyCmd`'s `setupOf` hands its
+statements to it, is `Zk.verifyWith Sha512.hash`'s. -/
+theorem zk_verify_eq_verifyWith_of_buildSession (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins)
+    (tables : List (String × ByteArray)) (count : Nat) (draw partition : Option Lean.Json) (program : Option ByteArray)
+    (work : Option (Nat × Array (String × Nat × Nat))) (stratified : Option Nat)
+    (closure : Option (Std.HashMap Nat (Array Nat))) (registered : Option (Array Registered.Port))
+    (publicInputs : Option ByteArray) (identifier : Option String) {spec : SessionSpec} {sts : Array Stmt}
+    (h : buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure registered
+      publicInputs identifier = .ok (spec, sts)) (record : String) (proofs : Array ByteArray) :
+    Zk.verify spec (sts.map Setup.ofCircuit) record proofs
+      = Zk.verifyWith Sha512.hash spec (sts.map Setup.ofCircuit) record proofs :=
+  Zk.verify_eq_verifyWith_of_returns (buildSession_named tags circuitB pubB compB coins tables count draw partition program
+    work stratified closure registered publicInputs identifier) h record proofs
+
 /-- `--program F`: the verifier's own copy of the program's descriptor bytes (a path, or with `--archive` its SHA-512), from which
 it derives a template query's units. -/
 def programInput (args : List String) : IO (Except String (Option ByteArray)) := do
