@@ -11,6 +11,7 @@ import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
 import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
 import Proofs.Flock.Claims.Complete.Replay.LigeritoModel
 import Proofs.Flock.Claims.Complete.Replay.LigeritoRun
+import Proofs.Flock.Claims.Complete.Replay.LigeritoGoal
 
 /-! The verifier's phases replayed on the honest prover's rounds: the steps of both sides (`Steps`: the prover's in the
 pure session, `squeezeP_go`, `forIn_go`; the verifier's on rounds that carry the prover's, `squeezeWith_sent`, `Agrees`),
@@ -33,4 +34,7 @@ from `RelS`, every claim's value the witness's extension at its point, lincheck'
 `rsAlgebra`, so `RingSwitch` holds without it, `ringSwitch_relation`), and Ligerito (`LigeritoModel`: the verifier's
 steps on rounds that carry a model's coins, `Runs`, composing by `Runs.bind` and `Runs.loop`; `LigeritoRun`: the
 verifier's Ligerito in closed form, `out`, and its return on the model's rounds given the Merkle openings and the final
-identity, `ligeritoWith_of`). -/
+identity, `ligeritoWith_of`; `LigeritoGoal`: the skeleton's `Ligerito` at the rep's coins and decoded sizes, given the
+session walk's alignment of each rep's Ligerito, `LgAt`, each level's Merkle opening, `LgMerkle`, and the final
+identity, `LgFinal`, `ligerito_goal`, and `Consumed` once each rep's stream holds exactly the model's rounds, `LgCount`,
+`consumed_goal`). -/
