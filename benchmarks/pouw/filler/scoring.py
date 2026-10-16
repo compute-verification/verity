@@ -18,8 +18,12 @@ Each entry is one unit of serving-alone wall time. Per entry, with the arm:
   a SM a clock × 188) at the serving-alone SM clock, so a filler that throttles the clock gains nothing.
 
 SCORE is the time-weighted mean of the entries' coverage (weights: each entry's wall time with the arm, one unit alone),
-i.e. Σ certified ÷ Σ capacity × time. The c's are the PROVED certified fractions (`CERTIFIED`); the filler's is the
-spec's provisional 0.99 until FILL-SEC proves one, and every result with filler work carries that flag.
+i.e. Σ certified ÷ Σ capacity × time. The c's are the PROVED certified fractions. Under filler-scorer/v3 (the lock) the
+filler is read at the entry of `FILLER_ENTRIES` that `filler_entry` decides from its declared noise and its build's kernel
+facts (`kernel_facts`): Theorem K's 0.9, Theorem E's 0.225, or a proved floor of 0 (a chained filler's, or any filler no
+proved setting covers). SCORE under CH (`UNDER_CH`: every filler at 0.99, the withdrawn assumption's reading) is a
+secondary readout, comparable with filler-scorer/v2's SCORE, which read every filler at the spec's provisional 0.99
+(`CERTIFIED`) and flagged it.
 """
 
 from __future__ import annotations
@@ -27,6 +31,7 @@ from __future__ import annotations
 import csv
 import io
 import math
+import re
 import statistics
 import sys
 from pathlib import Path
@@ -35,10 +40,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "decode_capacity"))
 import share  # noqa: E402  CAP's constants: MACs a token, non-GEMM times, FA2, the int8 peak
 
 V2, V3 = "filler-scorer/v2", "filler-scorer/v3"
-#: the active lock. V3 is prepared and not active: the arm's record checked before its lease (`arms.record_problems`),
-#: each point's slowdown margin (`margins`), and the filler's certified-fraction entries (`FILLER_ENTRIES`,
-#: `filler_entry`). The coordinator activates it with SCORER = V3; until then `score.py report OUT --as v3` previews it
-SCORER = V2
+#: the active lock. V3 adds the arm's record checked before its lease (`arms.record_problems`), each point's slowdown
+#: margin (`margins`), and the filler read at its proved entry (`FILLER_ENTRIES`, `filler_entry`) with SCORE under CH
+#: beside it. `score.py report OUT --as v2` reads a run as v2 did
+SCORER = V3
 LIMIT = 1.05  # serving slowdown, every entry
 DRAM_LIMIT = 0.01  # of the HBM bandwidth the same run's validated counter measures
 CONTROL_BYTES = 1 << 30  # bw_read streams 1 GiB a launch: the DRAM counter's positive control
@@ -53,8 +58,44 @@ CERTIFIED = {
     "serving": {"fraction": 0.225, "status": "proved",
                 "source": "certifiedFraction120θ_half, (φ/4)·N at φ = 0.9 (note:20261015T2040Z-report-relative-security-decision)"},
     "filler": {"fraction": 0.99, "status": "provisional",
-               "source": "the spec's placeholder until FILL-SEC proves the filler's floor (note:20261016T0418Z-draft-filler-floor)"},
+               "source": "filler-scorer/v2's reading of every filler, the spec's placeholder (CH's 0.99, withdrawn in decision "
+                         "27; note:20261016T0418Z-draft-filler-floor); v3 reads it at FILLER_ENTRIES"},
 }
+#: the certified fractions a filler can be read at (filler-scorer/v3), in the order `filler_entry` tries them: the
+#: first that applies and is active is SCORE's, and an inactive one that applies ahead of it is reported with the SCORE
+#: it would give. ``noise`` is the declarations an entry covers and ``kinds`` its MMA kinds, each with the most products
+#: a word may sum; "chained" and "unproven" are the proved floor, 0, for what no theorem's setting covers
+#: (decisions of 16 Oct 08:35Z: the primary SCORE is the proved reading).
+FILLER_ENTRIES = {
+    "theorem-k": {
+        "fraction": 0.9, "status": "proved", "active": True, "noise": ("bits01", "bitsU", "dither"), "kinds": {"int8": 32},
+        "source": "Theorem K, c = 1 at φ = 0.9: every cell-pure run with integer affine operands and s32 words read "
+                  "unscaled, s32 wrap included, on uniform {0,1} bits, A ∈ {0,1} with B = U ∈ {±1..±64} (pfill-bU, "
+                  "note:20261016T0710Z-draft-filler-floor-r2 §5) or the dither ⌊x/s⌋ + b; FP kinds and scaled reads by "
+                  "Lemma W at VF2, at L = 32 (note:20261016T0525Z-draft-fullfloor-s-r6 §2, §4). Refereed: RS-E-REF r4 "
+                  "passed K (note:20261015T1931Z-draft-theorem-e-referee Part IV). Open: the luck share of non-affine "
+                  "bytes reused across products, ½ where (L) takes ¾ (IV.0 1)",
+        "unchecked": ("cell-purity: a condition on the runs Theorem K bounds (its model), not on the honest kernel",)},
+    "theorem-e": {
+        "fraction": 0.225, "status": "proved", "active": True, "noise": ("pm1",), "kinds": {"int8": 32, "e2m1": 64},
+        "source": "Theorem E, c/m = ¼ (c = ½, m_max = 2) at φ = 0.9, heads priced at 8 int8 slots: fresh i.i.d. ±1 "
+                  "operands for every MMA, every MMA's sum committed; 0.225 an int8 slot for the s8 tile (L = 32) and the "
+                  "e2m1 tile (L = 64, m = 2) alike (note:20261015T1845Z-draft-rs-d1e-edited-floor)",
+        "unchecked": ("an e2m1 tile's block scales' values (the OMMA's UE4M3 operands), held to the host reference by "
+                      "the receipts gate",)},
+    "chained": {
+        "fraction": 0.0, "status": "proved", "active": True,
+        "source": "a chained filler's proved floor: operands or accumulators that are earlier MMAs' outputs are heads "
+                  "(note:20261016T0418Z-draft-filler-floor)"},
+    "unproven": {
+        "fraction": 0.0, "status": "proved", "active": True,
+        "source": "the trivial floor: no proved setting covers this filler (its declaration or its build's SASS)"},
+}
+#: SCORE under CH, a secondary readout beside v3's SCORE: every filler at CH's 0.99, the reading of filler-scorer/v2's
+#: SCORE, so earlier results stay comparable. CH is withdrawn (decision 27), so this is never SCORE
+UNDER_CH = {"fraction": 0.99, "status": "under CH (withdrawn, decision 27)",
+            "source": "CH: a straight-line program that gets a filler tile's receipt right more often than chance pays at "
+                      "least (1 − ε) of its int8 MMAs, 0.99 at 2,759 checks a window (note:20261016T0418Z-draft-filler-floor)"}
 #: VF's honest MAC price over a MAC's tensor-peak time: τ = 0.2447 at 1.18 u (note:20261015T1814Z-draft-rs-machine-model §12)
 A_VF = 0.2447 * 1.18 / (300.08 / 256)
 
@@ -281,6 +322,142 @@ def score(stats: dict, certified: dict = CERTIFIED) -> dict:
             lm = min(mixes, key=lambda e: e["coverage"])
             out["min_mix"] = {"entry": lm["entry"], "coverage": lm["coverage"]}
     return out
+
+
+# ---- the filler's certified fraction (filler-scorer/v3) ---------------------------------------------------------------------
+
+#: the dfill ABI's kernels, the functions whose SASS `kernel_facts` reads as the filler: the split filler dfill_k and the
+#: phase filler dfill_p (dcap.cu's, for the leader's placement), read together whether or not the arm launches dfill_p
+FILLER_KERNELS = ("dfill_k", "dfill_p")
+#: SASS opcodes that compute in floating point or convert to or from it
+FP_OPS = frozenset("FADD FADD2 FADD32I FMUL FMUL2 FMUL32I FFMA FFMA2 FFMA32I FMNMX FMNMX3 FSET FSETP FSEL FRND FCHK "
+                   "FSWZADD MUFU F2F F2I F2IP F2FP I2F I2FP HADD2 HADD2_32I HMUL2 HMUL2_32I HFMA2 HFMA2_32I HMNMX2 "
+                   "HSET2 HSETP2 DADD DMUL DFMA DSETP DMNMX DSET".split())
+#: the MMA kinds an entry can cover, by mnemonic: dense int8 IMMA (S8/U8 operands, s32 accumulators, no sparsity .SP,
+#: saturation .SAT or other kind) and the block-scaled E2M1 OMMA (F32 words, UE4M3 scales a 16-element block)
+MMA_KINDS = {"int8": re.compile(r"IMMA\.(?P<shape>\d+)\.[SU]8\.[SU]8"),
+             "e2m1": re.compile(r"OMMA\.SF\.(?P<shape>\d+)\.F32\.E2M1\.E2M1\.UE4M3\.4X")}
+#: a shape's k (m16n8k32 is 16832): the products one MMA sums into each word
+MMA_K = {"8816": 16, "16816": 16, "16832": 32, "16864": 64}
+_SASS = re.compile(r"^\s*/\*[0-9a-f]{4,}\*/\s+(?:@!?U?P[T0-9]+\s+)?(?P<op>[A-Z][A-Z0-9_]*(?:\.[A-Z0-9_]+)*)\s*(?P<args>[^;]*);")
+_CONST_HFMA2 = re.compile(r",\s*-?RZ\s*,\s*-?RZ\s*,")  # HFMA2.MMA Rd, -RZ, RZ, imm, imm: the compiler's constant load
+
+
+def kernel_facts(sass: str) -> dict:
+    """What the SASS of the binary the scorer built (``cuobjdump -sass``) says about its filler, the functions named
+    `FILLER_KERNELS`: their MMA mnemonics, their FP and conversion opcodes, the MMAs whose accumulator input (operand C,
+    the fourth) isn't RZ, and every other function with an MMA.
+    - ``kind``: the one `MMA_KINDS` kind of every MMA there, or None (none, mixed, or a kind no entry covers: FP8, FP6,
+      sparse, saturating, other scales).
+    - ``fp_free``: no FP arithmetic or conversion (`FP_OPS`), so no word is scaled or converted through FP before the
+      receipt reads it.
+    - ``L``: each word's products, the one shape's k when every accumulator input is RZ (one MMA a word), else None.
+    - ``accumulating_mma``: MMAs that add into an earlier word, a chain's accumulate.
+    - ``mma_outside``: functions besides the filler's with an MMA (serving's GEMMs are cuBLASLt's, outside the binary)."""
+    fn, mine, functions, mma, fp, acc, outside = None, False, [], {}, {}, 0, set()
+    for ln in sass.splitlines():
+        if "Function : " in ln:
+            fn = ln.split("Function : ", 1)[1].strip()
+            mine = any(k in fn for k in FILLER_KERNELS)
+            if mine:
+                functions.append(fn)
+            continue
+        m = _SASS.match(ln)
+        if m is None or fn is None:
+            continue
+        op, args = m["op"], m["args"]
+        base = op.split(".")[0]
+        if base.endswith("MMA"):
+            if not mine:
+                outside.add(fn)
+                continue
+            mma[op] = mma.get(op, 0) + 1
+            a = [x.strip() for x in args.split(",")]
+            acc += len(a) < 4 or a[3] != "RZ"
+        elif mine and base in FP_OPS and not (base == "HFMA2" and _CONST_HFMA2.search(args)):
+            fp[op] = fp.get(op, 0) + 1
+    found = {next(((k, m["shape"]) for k, rx in MMA_KINDS.items() if (m := rx.fullmatch(op))), (None, None))
+             for op in mma}
+    kinds, shapes = {k for k, _ in found}, {s for _, s in found}
+    kind = next(iter(kinds)) if len(kinds) == 1 else None
+    return {"functions": functions, "mma": dict(sorted(mma.items())), "fp_ops": dict(sorted(fp.items())),
+            "accumulating_mma": acc, "mma_outside": sorted(outside), "kind": kind, "fp_free": not fp,
+            "L": MMA_K.get(next(iter(shapes))) if kind and len(shapes) == 1 and not acc else None}
+
+
+#: what `filler_entry` does not check when a theorem's entry applies, stated with the decision (each entry's own
+#: ``unchecked`` adds to it); a floor of 0 needs nothing
+UNCHECKED = (
+    "the operand bytes' values and freshness: the alphabet, and that no MMA's operands are earlier words, are the arm's "
+    "declaration (filler.noise), auditable in the variant's sources, whose host reference the receipts gate holds the "
+    "device to",
+    "that no word is scaled by a shift or merged with another word before the receipt: the receipt's own rotations and "
+    "folds are the same integer ops")
+
+
+def _theorem_checks(e: dict, noise: str | None, facts: dict | None, fixed_work: bool) -> tuple[dict, list[str]]:
+    f = facts or {}
+    kind, L, kinds = f.get("kind"), f.get("L"), e["kinds"]
+    checks = {"noise": noise in e["noise"], "kernel facts read": facts is not None, "kind": kind in kinds,
+              "fp_free": bool(f.get("fp_free")), "L": L is not None and kind in kinds and L <= kinds[kind],
+              "all_read": facts is not None and not f.get("mma_outside") and not fixed_work}
+    why = {"noise": f"declared noise {noise!r}, not one of {e['noise']}",
+           "kernel facts read": "the build recorded no kernel facts (a build from before v3)",
+           "kind": f"the filler's MMAs are {sorted(f.get('mma') or {}) or 'none'}, not all one of {sorted(kinds)}",
+           "fp_free": f"FP or conversion ops in the filler's kernel: {f.get('fp_ops')}",
+           "L": (f"{f['accumulating_mma']} MMAs accumulate into an earlier word, so a word may sum more than one MMA"
+                 if f.get("accumulating_mma") else "no one shape for every word" if L is None
+                 else f"each word sums {L} products, past {kinds[kind]}" if kind in kinds
+                 else f"each word sums {L} products of a kind the entry doesn't cover"),
+           "all_read": f"MMA outside the filler's kernels {FILLER_KERNELS} ({f.get('mma_outside')}) or an arm-side "
+                       "driver's fixed work"}
+    return checks, [why[c] for c, ok in checks.items() if not ok]
+
+
+def filler_entry(noise: str | None, facts: dict | None, *, fixed_work: bool = False,
+                 entries: dict = FILLER_ENTRIES) -> dict:
+    """Which certified-fraction entry the filler is read at (filler-scorer/v3), from its declared operand noise and the
+    kernel facts of the scorer's own build (`kernel_facts`), never the declaration alone. A theorem's entry (Theorem K's,
+    then Theorem E's) applies when every check holds:
+    - ``noise``: the arm declares noise the theorem covers: K's uniform {0,1} bits on both sides, bits A with U ∈
+      {±1..±64} B (bitsU) or the dither ⌊x/s⌋ + b; E's fresh ±1. ±1's coefficients are even, where K is vacuous;
+    - ``kind``: every MMA in the filler's kernel is one kind the theorem covers (K: dense int8 IMMA with s32 words; E:
+      that or the block-scaled E2M1 OMMA);
+    - ``fp_free``: no FP arithmetic or conversion there (words read unscaled, not through FP);
+    - ``L``: one MMA a word (every accumulator input RZ), its k at most the kind's in the entry: K's L = 32, the L Lemma
+      W prices the routes outside K at (they break even above 42.7); E's L = 32 int8 or 64 e2m1, every MMA's sum
+      committed. A design that accumulates and commits every MMA's prefix sum has L = k too, but its SASS can't show
+      that, so neither entry applies to it;
+    - ``all_read``: no other function of the build has an MMA, and no row counts work from an arm-side driver's kernel,
+      so every credited MAC is the read kernel's.
+    Otherwise the proved floor, 0: "chained" when the arm declares a chain or any MMA accumulates into an earlier word,
+    else "unproven". ``failed`` says why each theorem ahead of the one that applies doesn't; `UNCHECKED` and the entry's
+    own ``unchecked`` are what the checks can't see. ``active`` is the entry SCORE reads: the first that applies and is
+    active."""
+    f, checks, failed, order = facts or {}, {}, {}, []
+    for name, e in entries.items():
+        if "noise" in e:
+            checks[name], fails = _theorem_checks(e, noise, facts, fixed_work)
+            if fails:
+                failed[name] = fails
+            else:
+                order.append(name)
+        elif name == "unproven" or noise == "chained" or f.get("accumulating_mma"):
+            order.append(name)
+    applies = order[0]
+    unchecked = list(UNCHECKED) + list(entries[applies].get("unchecked", ())) if "noise" in entries[applies] else []
+    return {"applies": applies, "active": next(x for x in order if entries[x]["active"]), "noise": noise,
+            "fraction": entries[applies]["fraction"], "checks": checks,
+            "failed": {k: v for k, v in failed.items() if list(entries).index(k) < list(entries).index(applies)},
+            "unchecked": unchecked,
+            "kernel": {x: f.get(x) for x in ("mma", "fp_ops", "L", "accumulating_mma", "mma_outside")}
+            if facts is not None else None}
+
+
+def certified(entry: str | dict, entries: dict = FILLER_ENTRIES) -> dict:
+    """`CERTIFIED` with the filler read at `entry`: a name in `entries`, or an entry such as `UNDER_CH`."""
+    e = entries[entry] if isinstance(entry, str) else entry
+    return {"serving": CERTIFIED["serving"], "filler": {k: e[k] for k in ("fraction", "status", "source")}}
 
 
 # ---- the gates -------------------------------------------------------------------------------------------------------------
@@ -531,6 +708,23 @@ def secondary(stats: dict, sc: dict) -> dict:
         "robust": rob,
         "aa_slowdown": {f"{k[0]} {k[1]}/{k[2]}": v["slowdown"] for k, v in stats.items() if v["place"] == "none"},
     }
+
+
+def margins(stats: dict) -> dict:
+    """Each measured point's serving-slowdown margin (filler-scorer/v3): LIMIT less the point's slowdown, the number the
+    slowdown gate reads, and the margins of its worst and best rounds, so a point whose rounds already reach the limit
+    shows it has none (``no_margin``); ``min`` is the smallest over the scored points (robustness points are listed,
+    unscored)."""
+    scored = set(points(robust=False))
+    pts = {}
+    for k, v in stats.items():
+        r = [x for x in v.get("slowdown_rounds") or [] if isfinite(x)]
+        pts[f"{k[0]} {k[1]}/{k[2]}"] = {"slowdown": v["slowdown"], "margin": LIMIT - v["slowdown"],
+                                        "rounds": [LIMIT - max(r), LIMIT - min(r)] if r else None, "place": v["place"],
+                                        "fill_sms": v["fill_sms"], "scored": k in scored}
+    lo = min(((m["margin"], name) for name, m in pts.items() if m["scored"] and isfinite(m["margin"])), default=None)
+    return {"limit": LIMIT, "points": pts, "min": {"at": lo[1], "margin": lo[0]} if lo else None,
+            "no_margin": [name for name, m in pts.items() if m["scored"] and m["rounds"] and m["rounds"][0] <= 0]}
 
 
 def isfinite(x) -> bool:
