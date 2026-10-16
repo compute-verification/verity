@@ -9,7 +9,7 @@
 # MAXMIN (25), CUDA_DEVICE_MAX_CONNECTIONS (32: a hardware queue per chunk), FR_ROT (0: stage.cu's bits, the commitment's
 # rotations on the FMA pipe), PARTS (thru gate ovl: shathru's SHA-512 throughput, the gate, the grid; ovl needs gate;
 # beside: ovl.cu's beside at each M:K of BESIDE, 2048:4 2048:16 512:32; cgcheck: commit_gpu's case set (CHECK, full) on
-# its small path and on its default path, against verity.ml.commitments).
+# its small path and on its default path (CG_CHECK, small default), against verity.ml.commitments).
 # The cg arms (commit_gpu's committer): CG_RS (64), the tile heights; ovl runs with ARMS at the first and with CG_ARMS
 # (plain chunked chunkedrr2 chunkedrr4 cgrr2 cgrr4 cgonly nohashrr4) over CG_KS (8 16) at each further one. Every such
 # run dumps chunk 0's six commitments, which `reference.py verify` holds to verity.ml.commitments after the lease.
@@ -54,12 +54,11 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
   q
   gf=0
   if [[ " $PARTS " == *" cgcheck "* ]]; then
-    COMMIT_GPU_SMALL=1 python3 benchmarks/commit_gpu/reference.py check "$B/commit_gpu" "$B/cases" small > "$O/check-small.jsonl" \
-      2> "$O/check-small.err"; c=$?
-    echo "check small rc $c" >> "$O/rc.txt"; [ $c = 0 ] || gf=7
-    python3 benchmarks/commit_gpu/reference.py check "$B/commit_gpu" "$B/cases" default > "$O/check-default.jsonl" \
-      2> "$O/check-default.err"; c=$?
-    echo "check default rc $c" >> "$O/rc.txt"; [ $c = 0 ] || gf=7
+    for p in ${CG_CHECK:-small default}; do
+      COMMIT_GPU_SMALL=$([ "$p" = small ] && echo 1 || echo 0) python3 benchmarks/commit_gpu/reference.py check "$B/commit_gpu" \
+        "$B/cases" "$p" > "$O/check-$p.jsonl" 2> "$O/check-$p.err"; c=$?
+      echo "check $p rc $c" >> "$O/rc.txt"; [ $c = 0 ] || gf=7
+    done
   fi
   if [[ " $PARTS " == *" thru "* ]]; then
     "$B/ovl" shathru > "$O/shathru.jsonl" 2>> "$O/errors.txt"; echo "shathru rc $?" >> "$O/rc.txt"
