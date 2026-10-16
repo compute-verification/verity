@@ -4,6 +4,7 @@ import Proofs.Flock.Claims.ZK.GK
 import Proofs.Flock.Claims.ZK.Interact
 import Proofs.Flock.Claims.ZK.Coins
 import Proofs.Flock.Claims.ZK.Forced
+import Proofs.Flock.Claims.ZK.Rewind
 
 /-!
 # Flock's zero knowledge against a malicious verifier
