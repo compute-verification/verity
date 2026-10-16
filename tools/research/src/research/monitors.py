@@ -1487,7 +1487,7 @@ MONITORS: list[Monitor] = [
             "Read each lost check's failure.json; fix the cause on the machine (memory caps, disk, the runner) and tell its "
             "sender to resend it.", every_s=3600, events=True),
     Monitor("drift", "infra", "warn", "relay", deploy_drift,
-            "`research deploy drift --node N` for the detail; install main's version (`research deploy install N --by WHO "
+            "`research deploy drift --on N` for the detail; install main's version (`research deploy install N --by WHO "
             "PATH`), restart what runs old code, or move strays to the attic (`research deploy attic N PATH`).",
             every_s=3600, unread_s=4 * 3600),
     Monitor("unpreserved", "infra", "warn", "relay", unpreserved,
@@ -1952,7 +1952,7 @@ def slack_post(dry: bool) -> Callable[[dict, dict | None], dict]:
     def post(ev: dict, thread: dict | None) -> dict:
         """Post `ev`, recording each message in `thread` as soon as Slack has it, so a retry posts only what is still missing."""
         th = {} if thread is None else thread
-        ev = {**ev, "owners": list(dict.fromkeys([*ev["owners"], *sender_handles(reg, ev["text"])]))}
+        ev = {**ev, "owners": list(dict.fromkeys([*ev["owners"], *sender_handles(slack.with_routes(reg, routes), ev["text"])]))}
         if ev["event"] == "clear":
             done = th.setdefault("cleared", [])
             for k, ch in (("ts", alerts), ("pointer", front)):

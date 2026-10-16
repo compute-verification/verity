@@ -6,13 +6,20 @@
 //                    digest at position j: the driver's `receipts.hidden(payload_j, salt_j)` in `audit.payload_tree`
 //   gather           64-byte rows from a list of device addresses (a window's openings, across its passes' kept
 //                    levels, their recomputed subtrees and the payload tree)
-//   pass             a pass's receipts by one persistent grid on tensor cores, each chunk's leaves and subtree hashed on
-//                    a second stream while the later chunks are read (`rs_pass`), keeping the tree's levels from h0 up
+//   pass             one shard's part of a pass (its blocks at store positions base …): its receipts by one persistent
+//                    grid on tensor cores, each subtree's leaves and levels hashed by a persistent grid on a second
+//                    stream while the later blocks are read, keeping the shard's levels h0 … hc (hc: a chunk's subtree),
+//                    and the padding leaves past the store this GPU hashes up to level hc (`rs_pass`)
+//   top              the receipt tree's levels hc … H on one GPU, from every shard's and every padding share's level
+//                    hc read over P2P, the root then written to each GPU's root ring (`rs_top`)
 //   subtrees         the levels below h0 and the receipts of the subtrees a window's openings fall in, recomputed from
-//                    the store under the pass's constants (`rs_subtrees`)
+//                    a shard under the pass's constants (`rs_subtrees`)
 //
-// The pass constants are the library's own (__constant__), so a second copy of the library, loaded from another path,
-// recomputes openings under one pass's constants while the first runs the next passes under theirs.
+// A store spans the visible GPUs, a contiguous shard of whole chunks on each, and the receipt tree is the one over the
+// whole store in block order (`receipts.tree`): every position, leaf and node index is the store's. One library serves
+// every GPU, each with its own copy of the constants (__constant__ is per device; the runtime follows the caller's
+// current device). The pass constants are the library's own, so a second copy of the library, loaded from another
+// path, recomputes openings under one pass's constants while the first runs the next passes under theirs.
 //
 // rb_set takes the payload tree's constants as it takes a pass's: row_prefix = sha512_row_v2_prefix(32768), the
 // payload domain's id, salt_in = D(store salt) ‖ key ‖ label, positions = N.
@@ -319,15 +326,28 @@ __global__ void __launch_bounds__(32 * SK16_WARPS, 2) sketch16_receipts_kernel(c
     sk16_tile(data, j0, n, tile * 32, sg, st[warp], ys, lane);
 }
 
+// Tile `tile` of a shard's pass (its 32 blocks' receipts into ys, S the warp's staging, base the shard's first store
+// position), then counted in ready[its consumer group] (`tiles_per` tiles a group) once its receipts are visible to
+// every CTA.
+__device__ __forceinline__ void pass_tile(const uint4 *__restrict__ data, u64 n, u64 base, const u32 *sg, int *S,
+                                          u64 *ys, unsigned *ready, unsigned tile, unsigned tiles_per, int lane) {
+  sk16_tile(data, base, n, (u64)tile * 32, sg, S, ys, lane);
+  __threadfence();
+  __syncwarp();
+  if (!lane) atomicAdd(ready + tile / tiles_per, 1u);
+}
+
 // The whole pass's receipts by a persistent grid, a warp taking the next tile of 32 blocks from ctr[0] and, once its
-// receipts are stored, counting it in ctr[1 + its consumer group] (`tiles_per` tiles per group), so a retained subtree
-// can start while later receipts are read, with no kernel boundary on the reads between groups.
+// receipts are stored, counting it in ctr[1 + its consumer group], so a retained subtree can start while later
+// receipts are read, with no kernel boundary on the reads between groups. Each CTA first sets *started: from then on
+// its warps take tiles until none is left, so the consumer (`pass_consumer_kernel`) can wait on them.
 __global__ void __launch_bounds__(32 * SK16_WARPS, 2) sketch16_pass_kernel(const uint4 *__restrict__ data, u64 n,
-                                                                           const u32 *__restrict__ pk,
+                                                                           u64 base, const u32 *__restrict__ pk,
                                                                            u64 *__restrict__ ys, unsigned *ctr,
-                                                                           unsigned tiles_per) {
+                                                                           unsigned tiles_per, unsigned *started) {
   __shared__ u32 sg[SK16_PACK];
   __shared__ __align__(16) int st[SK16_WARPS][32 * SK_ROWS];
+  if (!threadIdx.x) atomicExch(started, 1u);
   sk16_prologue(sg, pk);
   const int lane = threadIdx.x & 31, warp = threadIdx.x >> 5;
   const u64 tiles = (n + 31) / 32;
@@ -336,10 +356,7 @@ __global__ void __launch_bounds__(32 * SK16_WARPS, 2) sketch16_pass_kernel(const
     if (!lane) tile = atomicAdd(ctr, 1u);
     tile = __shfl_sync(~0u, tile, 0);
     if (tile >= tiles) break;
-    sk16_tile(data, 0, n, (u64)tile * 32, sg, st[warp], ys, lane);
-    __threadfence();
-    __syncwarp();
-    if (!lane) atomicAdd(ctr + 1 + tile / tiles_per, 1u);
+    pass_tile(data, n, base, sg, st[warp], ys, ctr + 1, tile, tiles_per, lane);
   }
 }
 
@@ -351,6 +368,8 @@ __global__ void wait_kernel(const unsigned *flag, unsigned want) {
 
 // One full receipt-tree leaf from its 16 receipts. All pass leaves are full because the harness's store length is a
 // multiple of PER_LEAF. This is reader.cu's leaves_kernel specialized to that case, followed by the same hm96 leaf.
+// Y is read through the non-coherent cache: the consumer reads a group's receipts only once the group is counted, and
+// a tile's receipts are whole cache lines, so no line of them is cached before it is written.
 __device__ __forceinline__ void pass_leaf(const u64 *__restrict__ Y, u64 c, u64 (&d)[8]) {
   u64 x[8], w[16];
 #pragma unroll
@@ -360,7 +379,7 @@ __device__ __forceinline__ void pass_leaf(const u64 *__restrict__ Y, u64 c, u64 
 #pragma unroll
     for (int i = 0; i < 16; ++i) {
       const int q = 16 * blk + i;
-      w[i] = q < 8 * PER_LEAF ? Y[q] : q == 8 * PER_LEAF ? 0x80ULL << 56 : 0;
+      w[i] = q < 8 * PER_LEAF ? __ldg(Y + q) : q == 8 * PER_LEAF ? 0x80ULL << 56 : 0;
     }
     if (blk == 8) w[15] = (u64)(128 + 64 * PER_LEAF) * 8;
     sha512_compress(x, w);
@@ -374,82 +393,158 @@ __device__ __forceinline__ u64 pass_kept_at(u64 width, int h0, int h) {
   return at;
 }
 
-// A block owns one 2^h0-leaf subtree of a completed receipt chunk. The last subtree block of each chunk builds that
-// chunk's retained levels, and the last completed chunk builds the upper levels through the root. Thus the leaf and
-// every level follow the producer in one launch without serializing a chunk's leaves in one CTA.
-__global__ void __launch_bounds__(128) pass_consumer_kernel(const u64 *__restrict__ ys, const unsigned *__restrict__ ready,
-                                                            unsigned *__restrict__ subtree_done,
-                                                            unsigned *__restrict__ chunks_done, u64 *__restrict__ kept,
-                                                            u64 width, u64 chunk, u64 ready_blocks, int h0, int hc, int H,
-                                                            u64 chunks) {
-  const u64 lc = chunk / PER_LEAF, leaves = 1ULL << h0, groups = lc >> h0;
-  const u64 q = blockIdx.x, k = q / groups, first = (q - k * groups) * leaves, c0 = k * lc;
-  const u64 block0 = (c0 + first) * PER_LEAF;
+// A consumer warp's tile (`pass_consumer_kernel`): the next one from ctr[0], if any is left, by pass_tile. It is out
+// of line because inlined, its registers crowd the consumer's leaf loop, which then recomputes an address for every
+// receipt it loads.
+__device__ __noinline__ void help_tile(const uint4 *__restrict__ data, u64 n, u64 base, const u32 *pk, int *S, u64 *ys,
+                                       unsigned *ctr, unsigned tiles_per, int lane) {
+  unsigned tile = 0;
+  if (!lane) tile = atomicAdd(ctr, 1u);
+  tile = __shfl_sync(~0u, tile, 0);
+  if (tile < n / 32) pass_tile(data, n, base, pk, S, ys, ctr + 1, tile, tiles_per, lane);
+}
+
+// A shard's receipt tree behind its receipts, by persistent grids of CONSUMER_THREADS-thread CTAs sharing ctr
+// (rs_pass's layout): the next tile, each group's counted tiles, each chunk's completed subtrees, the next subtree to
+// claim and the receipt grid's started flag. A CTA claims the next 2^h0-leaf subtree in order, waits until the group
+// holding it is counted, hashes its leaves and its levels below h0 in shared memory and keeps its root. The CTA
+// completing a chunk's last subtree builds that chunk's retained levels up to hc, the chunk's root. Leaf and node
+// indices are the store's (the shard's first leaf is base_leaf); kept is the shard's own, level h at the sum of
+// nl >> g over h0 <= g < h, nl the shard's leaves.
+//
+// Progress needs no residency and no scheduling order. While its group is short, a warp waits only if every tile is
+// taken (by warps already running, which finish them without waiting) or a receipt CTA has started (whose warps take
+// tiles until none is left); otherwise it takes the next tile and computes it itself (`help_tile`, the signs read from
+// pk). So no wait depends on a CTA that isn't resident, whatever the stream priorities, the order the grids are placed
+// in or what a co-tenant holds, and a pass whose receipt grid never gets an SM still completes.
+constexpr int CONSUMER_THREADS = 128;
+constexpr size_t CONSUMER_STAGING = (size_t)CONSUMER_THREADS / 32 * 32 * SK_ROWS * sizeof(int);
+
+__global__ void __launch_bounds__(CONSUMER_THREADS) pass_consumer_kernel(const uint4 *__restrict__ data, u64 n,
+                                                                         u64 base_leaf, const u32 *__restrict__ pk,
+                                                                         u64 *ys, unsigned *ctr, u64 *__restrict__ kept,
+                                                                         u64 chunk, u64 ready_blocks, int h0, int hc,
+                                                                         u64 chunks) {
+  extern __shared__ __align__(16) u64 scratch[];
+  __shared__ unsigned claimed;
+  __shared__ int chunk_last;
+  const u64 lc = chunk / PER_LEAF, leaves = 1ULL << h0, groups = lc >> h0, subtrees = n / (PER_LEAF << h0);
+  const u64 tiles = n / 32, nl = n / PER_LEAF, base = base_leaf * PER_LEAF;
   const unsigned tiles_per = (unsigned)(ready_blocks / 32);
-  while (*(volatile const unsigned *)(ready + block0 / ready_blocks) < tiles_per) __nanosleep(256);
-  __threadfence();
-  extern __shared__ u64 scratch[];
-  u64 *in = scratch, *out = scratch + 8 * leaves;
-  for (u64 j = threadIdx.x; j < leaves; j += blockDim.x) {
-    u64 d[8];
-    pass_leaf(ys + 8 * PER_LEAF * (c0 + first + j), c0 + first + j, d);
-#pragma unroll
-    for (int x = 0; x < 8; ++x) in[8 * j + x] = d[x];
-  }
-  __syncthreads();
-  for (int h = 0; h < h0; ++h) {
-    const u64 m = leaves >> (h + 1), i0 = (c0 + first) >> (h + 1);
-    for (u64 j = threadIdx.x; j < m; j += blockDim.x) {
+  unsigned *ready = ctr + 1, *subtree_done = ready + n / ready_blocks;
+  unsigned *claim = subtree_done + chunks;
+  const unsigned *started = claim + 1;
+  const int lane = threadIdx.x & 31, warp = threadIdx.x >> 5;
+  bool live = false;   // a receipt CTA has started (lane 0's; it stays set for the pass)
+  for (;;) {
+    if (!threadIdx.x) claimed = atomicAdd(claim, 1u);
+    __syncthreads();
+    const u64 q = claimed;
+    if (q >= subtrees) return;
+    const u64 k = q / groups, first = (q - k * groups) * leaves, c0 = k * lc;
+    const unsigned *group = ready + (c0 + first) * PER_LEAF / ready_blocks;
+    for (;;) {
+      int act = 0;   // 0: the group is counted, 1: take a tile, 2: wait
+      if (!lane && *(volatile const unsigned *)group < tiles_per) {
+        live = live || *(volatile const unsigned *)started;
+        act = !live && *(volatile const unsigned *)ctr < tiles ? 1 : 2;
+      }
+      act = __shfl_sync(~0u, act, 0);
+      if (!act) break;
+      if (act == 2) {
+        __nanosleep(256);
+        continue;
+      }
+      help_tile(data, n, base, pk, reinterpret_cast<int *>(scratch) + warp * 32 * SK_ROWS, ys, ctr, tiles_per, lane);
+    }
+    __threadfence();
+    __syncthreads();   // the staging the warps computed tiles in is the leaves' buffer
+    u64 *in = scratch, *out = scratch + 8 * leaves;
+    for (u64 j = threadIdx.x; j < leaves; j += blockDim.x) {
       u64 d[8];
-      node_digest(kC.node_mid[h], i0 + j, in + 16 * j, in + 16 * j + 8, d);
+      pass_leaf(ys + 8 * PER_LEAF * (c0 + first + j), base_leaf + c0 + first + j, d);
 #pragma unroll
-      for (int x = 0; x < 8; ++x) out[8 * j + x] = d[x];
+      for (int x = 0; x < 8; ++x) in[8 * j + x] = d[x];
     }
     __syncthreads();
-    u64 *tmp = in;
-    in = out;
-    out = tmp;
-  }
-  if (!threadIdx.x) {
-    const u64 at = pass_kept_at(width, h0, h0) + ((c0 + first) >> h0);
+    for (int h = 0; h < h0; ++h) {
+      const u64 m = leaves >> (h + 1), i0 = (base_leaf + c0 + first) >> (h + 1);
+      for (u64 j = threadIdx.x; j < m; j += blockDim.x) {
+        u64 d[8];
+        node_digest(kC.node_mid[h], i0 + j, in + 16 * j, in + 16 * j + 8, d);
 #pragma unroll
-    for (int x = 0; x < 8; ++x) kept[8 * at + x] = in[x];
-  }
-  __threadfence();
-  __shared__ int last;
-  if (!threadIdx.x) last = atomicAdd(subtree_done + k, 1u) + 1 == groups;
-  __syncthreads();
-  if (!last) return;
-  __threadfence();
-  for (int h = h0; h < hc; ++h) {
-    const u64 m = lc >> (h + 1), i0 = c0 >> (h + 1);
-    const u64 *level_in = kept + 8 * (pass_kept_at(width, h0, h) + (c0 >> h));
-    u64 *level_out = kept + 8 * (pass_kept_at(width, h0, h + 1) + i0);
-    for (u64 j = threadIdx.x; j < m; j += blockDim.x) {
-      u64 d[8];
-      node_digest(kC.node_mid[h], i0 + j, level_in + 16 * j, level_in + 16 * j + 8, d);
-#pragma unroll
-      for (int x = 0; x < 8; ++x) level_out[8 * j + x] = d[x];
+        for (int x = 0; x < 8; ++x) out[8 * j + x] = d[x];
+      }
+      __syncthreads();
+      u64 *tmp = in;
+      in = out;
+      out = tmp;
     }
+    if (!threadIdx.x) {
+      const u64 at = pass_kept_at(nl, h0, h0) + ((c0 + first) >> h0);
+#pragma unroll
+      for (int x = 0; x < 8; ++x) kept[8 * at + x] = in[x];
+    }
+    __threadfence();
+    if (!threadIdx.x) chunk_last = atomicAdd(subtree_done + k, 1u) + 1 == groups;
     __syncthreads();
+    if (chunk_last) {
+      __threadfence();
+      for (int h = h0; h < hc; ++h) {
+        const u64 m = lc >> (h + 1), i0 = (base_leaf + c0) >> (h + 1);
+        const u64 *level_in = kept + 8 * (pass_kept_at(nl, h0, h) + (c0 >> h));
+        u64 *level_out = kept + 8 * (pass_kept_at(nl, h0, h + 1) + (c0 >> (h + 1)));
+        for (u64 j = threadIdx.x; j < m; j += blockDim.x) {
+          u64 d[8];
+          node_digest(kC.node_mid[h], i0 + j, level_in + 16 * j, level_in + 16 * j + 8, d);
+#pragma unroll
+          for (int x = 0; x < 8; ++x) level_out[8 * j + x] = d[x];
+        }
+        __syncthreads();
+      }
+    }
+    __syncthreads();   // before the next claim rewrites `claimed` and the staging
   }
-  __threadfence();
-  if (!threadIdx.x) last = atomicAdd(chunks_done, 1u) + 1 == chunks;
+}
+
+// The receipt tree's levels hc … H on one CTA: level hc is the segments' nodes in order (each shard's chunk roots,
+// then each GPU's share of the padding), read over P2P and copied into top, then each level above it from the one
+// below; top holds level h at the sum of 2^(H − g) over hc <= g < h, the root last, which goes to each of roots.
+// Peer reads bypass the caches, since a segment's buffer is new each pass but its address may not be.
+constexpr int TOP_SEGS = 32, TOP_ROOTS = 16, TOP_THREADS = 1024;
+
+struct TopSegs {
+  const u64 *ptr[TOP_SEGS];
+  u64 count[TOP_SEGS];
+  u64 *roots[TOP_ROOTS];
+  int n, nroots;
+};
+
+__global__ void __launch_bounds__(TOP_THREADS) top_kernel(const TopSegs s, u64 *__restrict__ top, int hc, int H) {
+  const u64 width = 1ULL << (H - hc);
+  for (u64 j = threadIdx.x; j < width; j += blockDim.x) {
+    u64 at = j;
+    int k = 0;
+    while (k + 1 < s.n && at >= s.count[k]) at -= s.count[k], ++k;
+    const u64 *src = s.ptr[k] + 8 * at;
+#pragma unroll
+    for (int x = 0; x < 8; ++x) top[8 * j + x] = __ldcv(src + x);
+  }
   __syncthreads();
-  if (!last) return;
-  __threadfence();
+  u64 in_at = 0, m = width;
   for (int h = hc; h < H; ++h) {
-    const u64 m = width >> (h + 1);
-    const u64 *level_in = kept + 8 * pass_kept_at(width, h0, h);
-    u64 *level_out = kept + 8 * pass_kept_at(width, h0, h + 1);
-    for (u64 i = threadIdx.x; i < m; i += blockDim.x) {
+    for (u64 j = threadIdx.x; j < m / 2; j += blockDim.x) {
       u64 d[8];
-      node_digest(kC.node_mid[h], i, level_in + 16 * i, level_in + 16 * i + 8, d);
+      node_digest(kC.node_mid[h], j, top + 8 * (in_at + 2 * j), top + 8 * (in_at + 2 * j + 1), d);
 #pragma unroll
-      for (int x = 0; x < 8; ++x) level_out[8 * i + x] = d[x];
+      for (int x = 0; x < 8; ++x) top[8 * (in_at + m + j) + x] = d[x];
     }
     __syncthreads();
+    in_at += m;
+    m /= 2;
   }
+  if (threadIdx.x < 8 * s.nroots) s.roots[threadIdx.x >> 3][threadIdx.x & 7] = top[8 * in_at + (threadIdx.x & 7)];
+  __threadfence_system();
 }
 
 // The subtrees' kernels behind rs_subtrees: subtree q's first leaf c[q], its 16 · 2^h0 receipts at ys + q · 16 · 2^h0
@@ -457,7 +552,7 @@ __global__ void __launch_bounds__(128) pass_consumer_kernel(const u64 *__restric
 constexpr int PER_LEAF_LOG2 = 4;
 static_assert(PER_LEAF == 1 << PER_LEAF_LOG2, "a leaf is 16 receipts");
 
-__global__ void __launch_bounds__(32 * SK16_WARPS, 2) subtree_receipts_kernel(const uint4 *__restrict__ data,
+__global__ void __launch_bounds__(32 * SK16_WARPS, 2) subtree_receipts_kernel(const uint4 *__restrict__ data, u64 base,
                                                                               const u64 *__restrict__ c, int h0,
                                                                               const u32 *__restrict__ pk,
                                                                               u64 *__restrict__ ys, u64 tiles) {
@@ -469,8 +564,8 @@ __global__ void __launch_bounds__(32 * SK16_WARPS, 2) subtree_receipts_kernel(co
   if (tile >= tiles) return;
   const int per_log2 = h0 + PER_LEAF_LOG2 - 5;   // tiles a subtree
   const u64 q = tile >> per_log2, b0 = (tile & ((1ULL << per_log2) - 1)) * 32, j0 = c[q] * PER_LEAF;
-  sk16_tile(data + j0 * (BLOCK / 16), j0, (u64)PER_LEAF << h0, b0, sg, st[warp], ys + (q << (h0 + PER_LEAF_LOG2)) * 8,
-            lane);
+  sk16_tile(data + (j0 - base) * (BLOCK / 16), j0, (u64)PER_LEAF << h0, b0, sg, st[warp],
+            ys + (q << (h0 + PER_LEAF_LOG2)) * 8, lane);
 }
 
 __global__ void __launch_bounds__(128) subtree_leaves_kernel(const u64 *__restrict__ ys, const u64 *__restrict__ c,
@@ -679,61 +774,94 @@ static uint64_t kept_at(uint64_t nl, int h0, int h) {
   return at;
 }
 
-// One pass over n blocks at data: its receipts by one persistent grid of ctas CTAs on sa (`sketch16_pass_kernel`, tensor
-// cores; 0: one an SM, so a consumer CTA fits beside each), and on sb, one persistent consumer CTA per chunk hashes its
-// leaves and tree as soon as the producer counts the chunk's tiles done. A final consumer CTA joins the chunk roots, so
-// the whole receipt tree follows the reads without a leaf or level kernel boundary. pk is the pass's packed signs
-// (`rs_signs16`); ctr is scratch for the next tile, each 2^h0-leaf group's completed receipt tiles, each chunk's
-// completed subtrees and completed chunks; ys
-// holds all n receipts (8 words each). dig and up remain fallback scratch for an unusually large h0. `pad` is two
-// digests per canonical padding leaf: the
-// leaves followed by scratch for their levels below h0. Padding is prepared on sb as soon as the pass starts, under
-// the tensor-core receipts, rather than as a tail after the real chunks. Levels h0 … H of the tree go to kept (level
-// h0 first, `kept_at`), the root last; levels below h0 are not kept. sa waits for the whole pass before anything
-// queued on it after.
-int rs_pass(const void *data, uint64_t n, const uint32_t *pk, unsigned *ctr, uint64_t *ys, uint64_t *dig, uint64_t *up,
-            uint64_t *pad, uint64_t *kept, int h0, uint64_t chunk, int ctas, cudaStream_t sa, cudaStream_t sb) {
-  static cudaEvent_t go, end;
-  static bool made = false;
-  if (!made) {
-    if (cudaEventCreateWithFlags(&go, cudaEventDisableTiming) || cudaEventCreateWithFlags(&end, cudaEventDisableTiming))
+// The consumer CTAs of a pass beside a receipt grid of ctas CTAs, by both kernels' occupancy (an SM holds occ_p receipt
+// CTAs or occ_c consumer CTAs): `side` as many as fit in what the receipt grid leaves of the device, at least one an SM,
+// and `tail` the rest of a full device, which take the slots the receipt grid frees when it ends. Neither count bounds
+// progress (`pass_consumer_kernel`); together they are what the device holds once the reads are done.
+static int pass_consumers(int ctas, size_t shared, uint64_t subtrees, uint64_t *side, uint64_t *tail) {
+  int dev, sms, occ_p, occ_c;
+  if (cudaGetDevice(&dev) || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev) ||
+      cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ_p, sketch16_pass_kernel, 32 * SK16_WARPS, 0) ||
+      cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ_c, pass_consumer_kernel, CONSUMER_THREADS, shared) ||
+      occ_p < 1 || occ_c < 1)
+    return 4;
+  const int64_t all = (int64_t)sms * occ_c, fit = all - ((int64_t)ctas * occ_c + occ_p - 1) / occ_p;
+  const int64_t s = fit > sms ? fit : sms;
+  *side = (uint64_t)s < subtrees ? (uint64_t)s : subtrees;
+  const uint64_t rest = all > s ? (uint64_t)(all - s) : 0, left = subtrees - *side;
+  *tail = rest < left ? rest : left;
+  return 0;
+}
+
+// One shard's part of a pass: the n blocks at data, the store's blocks base … base + n − 1 (both whole chunks). Its
+// receipts by one persistent grid of ctas CTAs on sa (`sketch16_pass_kernel`, tensor cores; 0: one an SM), and for
+// h0 <= 8 persistent consumer grids (`pass_consumer_kernel`, `pass_consumers`), one on sb beside the receipt grid and
+// one behind it on sa, that build each 2^h0-leaf subtree as soon as the receipt grid counts its group's tiles done and
+// each chunk's levels up to its root at hc once its subtrees are, so the shard's tree follows the reads without a leaf
+// or level kernel boundary, and the tree hashing left when the reads end has the whole device. pk is the pass's packed
+// signs (`rs_chain_prepare`); ctr is scratch of 3 + n / min(chunk, CONSUMER_READY_BLOCKS) + n / chunk words: the next
+// tile, each group's counted tiles, each chunk's completed subtrees, the next subtree to claim and whether a receipt CTA
+// has started. ys holds the shard's n receipts (8 words each). dig and up are scratch for h0 > 8, whose tree is built
+// chunk by chunk behind one waiting thread. Levels h0 … hc of the shard go to kept (level h0 first, `kept_at` over the
+// shard's n / 16 leaves); levels below h0 are not kept. The padding leaves pad_r0 … pad_r0 + pad_n − 1 (whole chunks'
+// worth, at the store's leaf positions) are hashed on sb from the start, under the tensor-core receipts, up to their
+// pad_n / lc nodes at hc in pad_out, `pad` scratch of 2 · pad_n digests. The levels above hc are `rs_top`'s. sa waits
+// for the whole shard pass before anything queued on it after. consumers > 0 is the one consumer grid's CTAs on sb, for
+// a shard read beside another on the same device (pinned host memory over PCIe, whose few receipt CTAs leave it the
+// device but whose consumers would otherwise fill it).
+int rs_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, unsigned *ctr, uint64_t *ys, uint64_t *dig,
+            uint64_t *up, uint64_t *kept, int h0, uint64_t chunk, int ctas, uint64_t pad_r0, uint64_t pad_n,
+            uint64_t *pad, uint64_t *pad_out, cudaStream_t sa, cudaStream_t sb, int consumers) {
+  constexpr int DEVICES = 64;
+  static cudaEvent_t go[DEVICES], end[DEVICES];
+  static bool made[DEVICES];
+  int dev;
+  if (cudaGetDevice(&dev) || dev < 0 || dev >= DEVICES) return 4;
+  if (!made[dev]) {
+    if (cudaEventCreateWithFlags(&go[dev], cudaEventDisableTiming) ||
+        cudaEventCreateWithFlags(&end[dev], cudaEventDisableTiming))
       return 4;
-    made = true;
+    made[dev] = true;
   }
-  if (!data || !pk || !ctr || !ys || !dig || !up || !pad || !kept || n % PER_LEAF || chunk % 32 ||
-      chunk % PER_LEAF || !chunk || n % chunk || ctas < 0)
+  if (!data || !pk || !ctr || !ys || !dig || !up || !kept || !n || n % PER_LEAF || chunk % 32 || chunk % PER_LEAF ||
+      !chunk || n % chunk || base % chunk || ctas < 0 || consumers < 0)
     return 1;
-  const uint64_t nl = n / PER_LEAF, lc = chunk / PER_LEAF;
-  if (nl < 2) return 1;
-  const uint64_t width = 1ULL << (64 - __builtin_clzll(nl - 1));
-  const uint64_t chunks = n / chunk;
-  const int H = log2_exact(width), hc = log2_exact(lc);
-  if (H < 0 || hc < 0 || h0 < 1 || h0 > hc || n / 32 >= (1ULL << 32)) return 1;
+  const uint64_t lc = chunk / PER_LEAF, chunks = n / chunk, base_leaf = base / PER_LEAF, nl = n / PER_LEAF;
+  const int hc = log2_exact(lc);
+  if (hc < 0 || h0 < 1 || h0 > hc || n / 32 >= (1ULL << 32)) return 1;
+  if (pad_n && (!pad || !pad_out || pad_n % lc || pad_r0 % lc)) return 1;
   const bool fused = h0 <= 8;
   const uint64_t group_blocks = (uint64_t)PER_LEAF << h0;
   const uint64_t groups = n / group_blocks;
   const uint64_t ready_blocks = chunk < CONSUMER_READY_BLOCKS ? chunk : CONSUMER_READY_BLOCKS;
   const uint64_t ready_groups = n / ready_blocks;
-  if (!ctas) {
-    int dev;
-    if (cudaGetDevice(&dev) || cudaDeviceGetAttribute(&ctas, cudaDevAttrMultiProcessorCount, dev)) return 4;
-  }
+  if (!ctas && cudaDeviceGetAttribute(&ctas, cudaDevAttrMultiProcessorCount, dev)) return 4;
+  const size_t tree_shared = 2 * (1ULL << h0) * 8 * sizeof(uint64_t);
+  const size_t shared = tree_shared > CONSUMER_STAGING ? tree_shared : CONSUMER_STAGING;
+  uint64_t side = 0, tail = 0;
   int rc;
-  if (cudaMemsetAsync(ctr, 0, 4 * (2 + ready_groups + chunks), sa) || cudaEventRecord(go, sa) ||
-      cudaStreamWaitEvent(sb, go, 0))
+  if (fused) {
+    if (consumers)
+      side = (uint64_t)consumers < groups ? (uint64_t)consumers : groups;
+    else if ((rc = pass_consumers(ctas, shared, groups, &side, &tail)))
+      return rc;
+    if (groups + side + tail >= (1ULL << 32)) return 1;
+  }
+  unsigned *started = ctr + 2 + ready_groups + chunks;
+  if (cudaMemsetAsync(ctr, 0, 4 * (3 + ready_groups + chunks), sa) || cudaEventRecord(go[dev], sa) ||
+      cudaStreamWaitEvent(sb, go[dev], 0))
     return 4;
   const unsigned ready_tiles = (unsigned)((fused ? ready_blocks : chunk) / 32);
-  sketch16_pass_kernel<<<ctas, 32 * SK16_WARPS, 0, sa>>>((const uint4 *)data, n, pk, ys, ctr, ready_tiles);
+  sketch16_pass_kernel<<<ctas, 32 * SK16_WARPS, 0, sa>>>((const uint4 *)data, n, base, pk, ys, ctr, ready_tiles,
+                                                         started);
   if (cudaGetLastError()) return 4;
-  // These nodes depend on this pass's seed, but not on its receipts. Compute each once at the start and reuse the
-  // retained subtree roots when the real and padded halves are joined above hc.
-  const uint64_t pads = width - nl;
-  if (pads) {
-    uint64_t *pin = pad, *scratch = pad + 8 * pads;
-    if ((rc = rb_pads(nl, pads, pin, sb))) return rc;
+  // These nodes depend on this pass's seed, but not on its receipts: hashed at the start, under the reads.
+  if (pad_n) {
+    uint64_t *pin = pad, *scratch = pad + 8 * pad_n;
+    if ((rc = rb_pads(pad_r0, pad_n, pin, sb))) return rc;
     for (int h = 0; h < hc; ++h) {
-      const uint64_t m = pads >> (h + 1), i0 = nl >> (h + 1);
-      uint64_t *out = h + 1 >= h0 ? kept + 8 * (kept_at(width, h0, h + 1) + i0) : scratch;
+      const uint64_t m = pad_n >> (h + 1), i0 = pad_r0 >> (h + 1);
+      uint64_t *out = h + 1 == hc ? pad_out : scratch;
       level_kernel<<<grid(m, 128), 128, 0, sb>>>(pin, out, h, i0, m);
       if (out == scratch) scratch += 8 * m;
       pin = out;
@@ -742,50 +870,93 @@ int rs_pass(const void *data, uint64_t n, const uint32_t *pk, unsigned *ctr, uin
   // h0 <= 8 fits the consumer's two 2^h0-digest reduction buffers in CUDA's default dynamic-shared-memory limit. Keep the old exact path
   // for diagnostic configurations with larger retained subtrees.
   if (fused) {
-    const size_t shared = 2 * (1ULL << h0) * 8 * sizeof(uint64_t);
-    if (groups > 0xFFFFFFFFULL) return 1;
-    pass_consumer_kernel<<<groups, 128, shared, sb>>>(ys, ctr + 1, ctr + 1 + ready_groups,
-                                                     ctr + 1 + ready_groups + chunks, kept, width, chunk, ready_blocks,
-                                                     h0, hc, H, chunks);
+    pass_consumer_kernel<<<(unsigned)side, CONSUMER_THREADS, shared, sb>>>((const uint4 *)data, n, base_leaf, pk, ys,
+                                                                           ctr, kept, chunk, ready_blocks, h0, hc,
+                                                                           chunks);
+    if (tail)
+      pass_consumer_kernel<<<(unsigned)tail, CONSUMER_THREADS, shared, sa>>>((const uint4 *)data, n, base_leaf, pk, ys,
+                                                                             ctr, kept, chunk, ready_blocks, h0, hc,
+                                                                             chunks);
   } else {
     for (uint64_t k = 0; k < chunks; ++k) {
       const int slot = k & 1;
       uint64_t *dig_k = dig + slot * lc * 8, *up_k = up + slot * lc * 8;
       wait_kernel<<<1, 1, 0, sb>>>(ctr + 1 + k, (unsigned)(chunk / 32));
-      if ((rc = rb_leaves(ys + k * chunk * 8, k * lc, lc, dig_k, nullptr, sb))) return rc;
+      if ((rc = rb_leaves(ys + k * chunk * 8, base_leaf + k * lc, lc, dig_k, nullptr, sb))) return rc;
       const uint64_t *in = dig_k;
       uint64_t *scratch = up_k;
       for (int h = 0; h < hc; ++h) {
-        const uint64_t m = lc >> (h + 1), i0 = (k * lc) >> (h + 1);
-        uint64_t *out = h + 1 >= h0 ? kept + 8 * (kept_at(width, h0, h + 1) + i0) : scratch;
+        const uint64_t m = lc >> (h + 1), i0 = (base_leaf + k * lc) >> (h + 1);
+        uint64_t *out = h + 1 >= h0 ? kept + 8 * (kept_at(nl, h0, h + 1) + ((k * lc) >> (h + 1))) : scratch;
         level_kernel<<<grid(m, 128), 128, 0, sb>>>(in, out, h, i0, m);
         if (out == scratch) scratch += 8 * m;
         in = out;
       }
     }
-    const uint64_t *in = kept + 8 * kept_at(width, h0, hc);
-    for (int h = hc; h < H; ++h) {
-      const uint64_t m = width >> (h + 1);
-      uint64_t *out = kept + 8 * kept_at(width, h0, h + 1);
-      level_kernel<<<grid(m, 128), 128, 0, sb>>>(in, out, h, 0, m);
-      in = out;
+  }
+  if (cudaEventRecord(end[dev], sb) || cudaStreamWaitEvent(sa, end[dev], 0)) return 4;
+  return cudaGetLastError() ? 4 : 0;
+}
+
+// The receipt tree's levels hc … H on this GPU (`top_kernel`, one CTA on s): level hc is the nsegs segments in order,
+// counts[k] nodes at ptrs[k] (each shard's chunk roots at its kept level hc, then each GPU's padding nodes at hc, on any
+// GPU this one can read), 2^(H − hc) in all; top gets level h at the sum of 2^(H − g) over hc <= g < h, the root last,
+// which is also written to each of the nroots roots (a slot of each GPU's root ring, or any memory this GPU can write).
+int rs_top(const uint64_t *const *ptrs, const uint64_t *counts, int nsegs, uint64_t *top, int hc, int H,
+           uint64_t *const *roots, int nroots, cudaStream_t s) {
+  if (!ptrs || !counts || !top || nsegs < 1 || nsegs > TOP_SEGS || nroots < 0 || nroots > TOP_ROOTS || (nroots && !roots) ||
+      hc < 0 || H < hc || H - hc > 20)
+    return 1;
+  TopSegs S{};
+  uint64_t sum = 0;
+  for (int k = 0; k < nsegs; ++k) {
+    if (counts[k] && !ptrs[k]) return 1;
+    S.ptr[k] = ptrs[k], S.count[k] = counts[k], sum += counts[k];
+  }
+  for (int r = 0; r < nroots; ++r) {
+    if (!roots[r]) return 1;
+    S.roots[r] = roots[r];
+  }
+  if (sum != 1ULL << (H - hc)) return 1;
+  S.n = nsegs, S.nroots = nroots;
+  top_kernel<<<1, TOP_THREADS, 0, s>>>(S, top, hc, H);
+  return cudaGetLastError() ? 4 : 0;
+}
+
+// Peer access between every pair of visible GPUs that supports it, for rs_top's reads and writes; 5 if some pair can't.
+int rs_enable_peers(void) {
+  int count, here, rc = 0;
+  if (cudaGetDeviceCount(&count) || cudaGetDevice(&here)) return 4;
+  for (int i = 0; i < count; ++i) {
+    if (cudaSetDevice(i)) return 4;
+    for (int j = 0; j < count; ++j) {
+      int ok = 0;
+      if (i == j) continue;
+      if (cudaDeviceCanAccessPeer(&ok, i, j)) return 4;
+      if (!ok) {
+        rc = 5;
+        continue;
+      }
+      const cudaError_t e = cudaDeviceEnablePeerAccess(j, 0);
+      if (e == cudaErrorPeerAccessAlreadyEnabled) cudaGetLastError();
+      else if (e) return 4;
     }
   }
-  if (cudaEventRecord(end, sb) || cudaStreamWaitEvent(sa, end, 0)) return 4;
-  return cudaGetLastError() ? 4 : 0;
+  return cudaSetDevice(here) ? 4 : rc;
 }
 
 // What the openings of a pass need below its kept levels, recomputed from the store under the pass constants set: for
 // each first leaf c[q] (a multiple of 2^h0, c on the device), the subtree's 16 · 2^h0 receipts into
 // ys + q · 16 · 2^h0 · 8 and its levels 0 … h0 − 1 into nodes + q · (2^(h0+1) − 2) · 8, level 0 first, in one launch for
 // the receipts, one for the leaves and one a level; pk is the pass's packed signs. Every leaf of the pass must be whole
-// (positions a multiple of 16).
-int rs_subtrees(const void *data, const uint32_t *pk, const uint64_t *c, uint64_t count, int h0, uint64_t *ys,
-                uint64_t *nodes, cudaStream_t s) {
+// (positions a multiple of 16). data is a shard whose first block is the store's block base, which holds every
+// subtree in c.
+int rs_subtrees(const void *data, uint64_t base, const uint32_t *pk, const uint64_t *c, uint64_t count, int h0,
+                uint64_t *ys, uint64_t *nodes, cudaStream_t s) {
   if (!data || !pk || !c || !ys || !nodes || h0 < 1 || h0 > 20 || h0 + 1 > NODE_LEVELS) return 1;
   if (!count) return 0;
   const uint64_t tiles = count << (h0 + PER_LEAF_LOG2 - 5);
-  subtree_receipts_kernel<<<grid(tiles, SK16_WARPS) , 32 * SK16_WARPS, 0, s>>>((const uint4 *)data, c, h0,
+  subtree_receipts_kernel<<<grid(tiles, SK16_WARPS) , 32 * SK16_WARPS, 0, s>>>((const uint4 *)data, base, c, h0,
                                                                                pk, ys, tiles);
   subtree_leaves_kernel<<<grid(count << h0, 128), 128, 0, s>>>(ys, c, h0, count << h0, nodes);
   for (int h = 0; h + 1 < h0; ++h)

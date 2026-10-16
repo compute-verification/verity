@@ -2335,7 +2335,7 @@ def test_n2_commit_records_the_queues_placement_and_keeps_a_refused_row_on_node_
     (src / "src" / "cluster" / "__init__.py").write_text("")
     (src / "src" / "cluster" / "__main__.py").write_text(
         "import json, sys\na = sys.argv[1:]\nv = lambda k: a[a.index(k) + 1]\n"
-        "assert a[0] == 'submit' and a[1].endswith('descriptions/nebius.toml') and v('--node') == 'vy-nebius-2'\n"
+        "assert a[0] == 'submit' and a[1].endswith('descriptions/nebius.toml') and v('--on') == 'vy-nebius-2'\n"
         "if int(v('--gpus')) > 8:\n    print(json.dumps({'refused': 'vy-nebius-2 has 8 GPUs'}))\n    sys.exit(3)\n"
         "print(json.dumps({'node': 'vy-nebius-2', 'why': 'starts now', 'question': v('--question'), 'max_s': int(v('--max-s'))}))\n")
 

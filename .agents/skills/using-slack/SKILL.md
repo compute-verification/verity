@@ -24,9 +24,10 @@ The coordination API has one place, three interactions and one lifecycle.
   `@old-accounting` and `@old-circuits-and-proofs`, who advise their successors and relay their old workers' results. Since
   14 Oct each coordinator but `@console` is a plain cloud agent that owns a vertical slice and runs its own subagents.
   `@console` is Daniel's desktop agent on his laptop, which holds no Slack inbox: reach it through its Linear team CON (an
-  ask to `@console` files there, and `send` says so where it would ring an inbox). The registry names
-  each handle's holder, and during a handover both the successor and its predecessor, until the predecessor posts
-  "stopped" in their pairing thread and a registry PR drops it. One agent may hold several handles, and posts as whichever
+  ask to `@console` files there, and `send` says so where it would ring an inbox). A handle's current holder is its
+  inbox's holder: `names open --succeeds` records the successor's agent id and its working branch's suffix in the route,
+  and routing reads them (`--as`, the owners of PRs and runs). Run `names open --as HANDLE` again on a new branch: it
+  adds that branch's suffix. So a handover edits nothing in the repo; the registry's `holder` is a description. One agent may hold several handles, and posts as whichever
   it acts for (`--as`). Handles with a user group are Slack user groups, so a human's composer autocompletes them, and
   Daniel is a member of each, so a tag notifies him too.
 - **Only handle holders and the named humans are on Slack.** Workers never post, read or subscribe; a worker asks its own
@@ -126,7 +127,8 @@ subscribe_linear_issue(options={"scope": "team", "teamId": <your registry `linea
    - a Slack subscription: call the same subscribe again. It renews in place (same id, new `expiresAt`).
    - a timer: it lapses 7 days after it was made. Subscribing again under the same name changes nothing: it answers
      `created: false` and keeps the old prompt and schedule. So a timer's name carries a version (`...-v7`). To renew it or
-     change its prompt, create `...-v8` first, then `unsubscribe` the old id, so there's no gap and no double fire.
+     change its prompt, create `...-v8` first, then `unsubscribe` the old id, so there's no gap and no double fire. A name
+     you've unsubscribed can't be reused either: it answers `created: false` too.
 
    Unsubscribe from threads that are finished.
 2. **Filter.** Save the event as delivered to a file. If it arrives as prose, write its `channel`, `ts`, `thread_ts`, `text`,

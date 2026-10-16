@@ -196,7 +196,7 @@ def test_hourly_reports_the_last_h_hours_per_node_and_exits_1_when_a_node_is_sta
     assert [(r["hour"][11:13], r["node"]) for r in rep["rows"]] == [
         (h, n) for h in ("09", "08", "07") for n in ("vy-nebius-2", "vy-nebius-1")]
     assert rep["rows"][0]["busy_pct"] == 50.0 and rep["targets"] == {"busy_pct": 95.0, "useful_pct": 90.0}
-    rc, out = run(capsys, "hourly", "--node", "nebius-2", "--hours", "3", "--file", f)
+    rc, out = run(capsys, "hourly", "--on", "nebius-2", "--hours", "3", "--file", f)
     assert rc == 0 and "vy-nebius-1" not in out and "useful today:" in out
     monkeypatch.setattr(usage, "clock", lambda: epoch("2026-10-03T12:30:00Z"))   # 09Z ended 2.5 h ago
     rc, out = run(capsys, "hourly", "--file", f, "--json")
@@ -260,7 +260,7 @@ def test_wasters_say_the_hours_they_cover_and_a_day_short_of_the_hours_that_ende
 
 
 def test_bad_arguments_exit_2_and_an_unreadable_record_exits_1(tmp_path, capsys):
-    for argv in (["wasters", "--day", "2026-10-32"], ["hourly", "--hours", "0"], ["wasters"], ["hourly", "--node", "n3"]):
+    for argv in (["wasters", "--day", "2026-10-32"], ["hourly", "--hours", "0"], ["wasters"], ["hourly", "--on", "n3"]):
         with pytest.raises(SystemExit) as e:
             cli.main(["usage", *argv])
         assert e.value.code == 2

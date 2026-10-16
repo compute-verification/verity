@@ -933,6 +933,26 @@ def test_a_closed_hypothesis_must_be_a_named_assumption():
     assert A.judge(POLICY, facts(pins={"P.t": fact(hyps=elsewhere)}), FILES, update=True)[0][0].startswith("guarantees: P.t assumes (h : Q.Hyp)")
 
 
+def test_a_premise_the_lock_does_not_list_fails():
+    """A statement that takes an assumption applied to its own variables (`h : Premises.Hyp n`, an open hypothesis the
+    hypotheses rule never names; `Facts.lean`'s `premises` sees through the abbrev and the `Guarantees` definitions to
+    `P.Hyp`) fails while the lock doesn't list it, and an update adds it with the guarantee's owner; on 14 Oct a merge
+    dropped `Flock.Assumptions.RegistrantCovers`' entry this way and the check passed. A premise outside an assumptions
+    module is not an assumption."""
+    applied = [{"binder": "h", "type": "P.Premises.Hyp n", "closed": False, "named": None, "module": None}]
+    pin = fact(signature="P.t (n : Nat) (h : P.Premises.Hyp n) : P.f n = n", hyps=applied)
+    pin["premises"] = [{"binder": "h", "head": "P.Hyp", "module": "P.Assumptions"},
+                       {"binder": "hn", "head": "P.f", "module": "P.Defs"}]
+    f = facts(pins={"P.t": pin})
+    fails, pol = A.judge({**POLICY, "assumptions": {}}, f, FILES, update=True)
+    assert fails == [] and pol["assumptions"] == {
+        "P.Hyp": {"owner": "@lean", "digest": pol["reads"]["P.Assumptions"]["definitions"]["P.Hyp"]}}
+    assert A.judge(pol, f, FILES)[0] == []
+    assert A.judge({**pol, "assumptions": {}}, f, FILES)[0] == [
+        "assumptions: P.Hyp is a premise of P.t, an assumption the lock doesn't list; run `check.py --update` to add it "
+        "with its guarantees' owner and commit the record (Daniel's DM shows it when it lands)"]
+
+
 def test_an_assumption_is_listed_by_name_with_its_record():
     """Each assumption has an owner and the digest of its definition as `reads` holds it, so a changed assumption is its own
     record; an entry no guarantee reads fails; an update converts a list of assumption modules into the definitions read

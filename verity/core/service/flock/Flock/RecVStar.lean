@@ -493,21 +493,83 @@ def rowPorts : VStar.Stmt → List String
 def msgUnnamed (s : VStar.Stmt) (c : Circuit) : Option String :=
   (c.ports.toList.map (·.name)).find? fun nm => (mIndex nm).isSome && !((ownPorts s).any (·.1 == nm))
 
+/-- One round of a stream's schedule (`rec_live.rep_rounds`' tuples): its coin count, the node counts of the tops it
+commits, its copies of level 0's top, and whether it absorbs a message (one row when it absorbs any elements). -/
+abbrev SchedRound := Nat × Array Nat × Nat × Bool
+
+/-- Python's `int.bit_length`. -/
+def bitLength (n : Nat) : Nat := if n == 0 then 0 else Nat.log2 n + 1
+
+/-- `rec_live.rep_rounds`: one fast100 rep's rounds for a table of `2^m` packed elements, `2^k_log` a block, with `claims`
+claims, in `rec_algebra.run`'s order of draws: the zerocheck, the lincheck, each claim's ring switch, then Ligerito. -/
+def repRounds (m kLog claims : Nat) : Option (Array SchedRound) := do
+  let sch ← fast100 m
+  let lv := sch.levels
+  let r := lv.size - 1
+  let cap := fun (l : Nat) => #[2 ^ (lv.getD l default).cap]
+  let one := fun (n : Nat) (absorbs : Bool) => ((n, #[], 0, absorbs) : SchedRound)
+  let level := fun (i split : Nat) =>
+    let q := (lv.getD i default).q
+    #[((split, cap (i + 1), 0, true) : SchedRound), one 1 true, one split false, one 1 true, one q false,
+      one (bitLength (q - 1)) false, one 1 true]
+  let mut out : Array SchedRound := #[(6, #[], 1, false), one (m - 13) false, one 1 true] ++
+    Array.replicate (m - 5) (one 1 true) ++ #[one 1 false] ++ Array.replicate (kLog - 6) (one 1 true) ++ #[one 1 true] ++
+    Array.replicate claims (one 7 true) ++ #[one claims false]
+  let mut split := sch.n - sch.k0 + 1
+  out := out ++ #[(sch.n, #[], 1, true), one 1 true] ++ Array.replicate sch.k0 (one 2 true) ++ level 0 split
+  for i in [0:r] do
+    if split < 4 then none
+    out := out ++ #[one 2 false] ++ Array.replicate 3 (one 2 true)
+    let ext := split - 4
+    if i + 1 < r then
+      split := ext + 1
+      out := out ++ level (i + 1) split
+    else
+      let q := (lv.getD r default).q
+      out := out ++ #[one q true, one (bitLength (q - 1)) false, one 1 false]
+  return out
+
+/-- The rounds of `rs` that absorb a message, in order: the `i`-th is a stream's `i`-th message round, whose `c_k` the
+inner transcript records. -/
+def commitRounds (rs : Array SchedRound) : List Nat :=
+  (List.range rs.size).filter fun k => (rs.getD k default).2.2.2
+
+/-- The message rounds a part may name: its rep's (`commitRounds (repRounds …)`), Ligerito's included, whose `k`-th is
+`rec-c<k>`'s and V*'s port `m<k>` (`VStar.Algebra.rounds`). At a shape with no fast100 schedule, none: every `m<k>` is
+refused. -/
+def innerMsgRounds : VStar.Stmt → Option Nat
+  | .inner _ name _ => do
+    let (m, kLog, claims, _) ← RecResiduals.params name
+    pure (((repRounds m kLog claims).map fun rs => (commitRounds rs).length).getD 0)
+  | _ => none
+
+/-- The first circuit port naming a message round past the part's rep's message rounds. -/
+def msgRoundOutOfRange (rounds : Nat) (c : Circuit) : Option String :=
+  (c.ports.toList.map (·.name)).find? fun nm =>
+    match mIndex nm with
+    | some k => decide (rounds ≤ k)
+    | none => false
+
 /-- **A statement's circuit names each port once, and a part's circuit, and a part of R's opening's, names only its
 statement's message-round ports**: the verifier finds a registered port by its name (`Registered.checkPort`, the first
 port of the name), so each name is one port's; and each port `m<k>` of a part's circuit is one of the statement's
 (`ownPorts`: a part's `m<k>` under `rec-c<k>`, R's opening's under `rec-opening-c<k>`), so the verifier's reads file
 reads it under the statement's value (`checkOwn`). The circuit file is V*'s for the statement (`checkFile`), whose ports
-are the statement's, each name once (`HmRow.checkRows` refuses a name twice), so an honest session passes. -/
+are the statement's, each name once (`HmRow.checkRows` refuses a name twice), so an honest session passes. A part also
+refuses an `m<k>` at or past its rep's message rounds (`innerMsgRounds`): its inner transcript has no round `rec-c<k>`. -/
 def checkMsgNames (s : VStar.Stmt) (c : Circuit) : V Unit :=
   if !decide (c.ports.toList.map (·.name)).Nodup then
     throw s!"{s.name}: the circuit names a port twice"
-  else match s with
-  | .inner .. | .opening .. =>
-    match msgUnnamed s c with
-    | some nm => throw s!"{s.name}: the circuit's port {nm} is named as a message round's, and the statement has no such port"
-    | none => pure ()
-  | _ => pure ()
+  else do
+    match s with
+    | .inner .. | .opening .. =>
+      match msgUnnamed s c with
+      | some nm => throw s!"{s.name}: the circuit's port {nm} is named as a message round's, and the statement has no such port"
+      | none => pure ()
+    | _ => pure ()
+    if let some rounds := innerMsgRounds s then
+      if let some nm := msgRoundOutOfRange rounds c then
+        throw s!"{s.name}: the circuit's port {nm} names message round {(mIndex nm).getD 0}, not below its rep's {rounds} message rounds"
 
 def showReads (r : Array (Option Nat)) : String := toString (r.toList.map fun x => (x.map toString).getD "null")
 
@@ -758,42 +820,6 @@ def stackedShapeOf (hdr : Json) : V (Option StackedShape) := do
     | throw s!"rec inner circuit: META's {STACKED_SHAPE_KEY} is not R's shape (m, claims)"
   return some { m, claims }
 
-/-- One round of a stream's schedule (`rec_live.rep_rounds`' tuples): its coin count, the node counts of the tops it
-commits, its copies of level 0's top, and whether it absorbs a message (one row when it absorbs any elements). -/
-abbrev SchedRound := Nat × Array Nat × Nat × Bool
-
-/-- Python's `int.bit_length`. -/
-def bitLength (n : Nat) : Nat := if n == 0 then 0 else Nat.log2 n + 1
-
-/-- `rec_live.rep_rounds`: one fast100 rep's rounds for a table of `2^m` packed elements, `2^k_log` a block, with `claims`
-claims, in `rec_algebra.run`'s order of draws: the zerocheck, the lincheck, each claim's ring switch, then Ligerito. -/
-def repRounds (m kLog claims : Nat) : Option (Array SchedRound) := do
-  let sch ← fast100 m
-  let lv := sch.levels
-  let r := lv.size - 1
-  let cap := fun (l : Nat) => #[2 ^ (lv.getD l default).cap]
-  let one := fun (n : Nat) (absorbs : Bool) => ((n, #[], 0, absorbs) : SchedRound)
-  let level := fun (i split : Nat) =>
-    let q := (lv.getD i default).q
-    #[((split, cap (i + 1), 0, true) : SchedRound), one 1 true, one split false, one 1 true, one q false,
-      one (bitLength (q - 1)) false, one 1 true]
-  let mut out : Array SchedRound := #[(6, #[], 1, false), one (m - 13) false, one 1 true] ++
-    Array.replicate (m - 5) (one 1 true) ++ #[one 1 false] ++ Array.replicate (kLog - 6) (one 1 true) ++ #[one 1 true] ++
-    Array.replicate claims (one 7 true) ++ #[one claims false]
-  let mut split := sch.n - sch.k0 + 1
-  out := out ++ #[(sch.n, #[], 1, true), one 1 true] ++ Array.replicate sch.k0 (one 2 true) ++ level 0 split
-  for i in [0:r] do
-    if split < 4 then none
-    out := out ++ #[one 2 false] ++ Array.replicate 3 (one 2 true)
-    let ext := split - 4
-    if i + 1 < r then
-      split := ext + 1
-      out := out ++ level (i + 1) split
-    else
-      let q := (lv.getD r default).q
-      out := out ++ #[one q true, one (bitLength (q - 1)) false, one 1 false]
-  return out
-
 /-- `rec_live.stacked_rounds` at `claims` claims: R's one stream, the opening-only prover's rep at `Shape(m, 6, claims)`. Its
 binding round commits R's level-0 top (R has no root at `Commit`) and absorbs the first claim's s_hat_v; then the other
 claims' ring switches, the gammas and Ligerito at `fast100 m` (`repRounds m 6 claims` past its first ring switch). -/
@@ -820,11 +846,6 @@ def sparsePhaseRounds (sh : RecSparse.Shape) : Array SchedRound :=
   #[one RecSparse.PRE_ROUNDS false] ++ Array.replicate RecSparse.PRE_ROUNDS (one 1 true) ++ #[one 0 true] ++
     (sh.degrees.map fun _ => one 1 true).toArray ++ #[one sh.pLog true] ++
     (if sh.stacked then #[one sh.tLog true] else #[]) ++ #[one 0 true]
-
-/-- The rounds of `rs` that absorb a message, in order: the `i`-th is a stream's `i`-th message round, whose `c_k` the
-inner transcript records. -/
-def commitRounds (rs : Array SchedRound) : List Nat :=
-  (List.range rs.size).filter fun k => (rs.getD k default).2.2.2
 
 /-- The node counts of the tops `rs` commits, in round order: the `l`-th is a stream's `l`-th top's. -/
 def topCounts (rs : Array SchedRound) : List Nat :=
@@ -1093,12 +1114,14 @@ def checkCovers (i : Inner) (cs : InnerCommits) : V Unit := do
   checkCommitRounds i cs
 
 /-- **Candidate 3's inner shape is its inner statement's**: it names the bucket's RecSparse shape (`rec-inner --sparse`),
-and its `m`, `k_log` and region count are those of the inner statement check 5 sets up (`m`, `kLog`, `regions`), as
-`innerOf` reads them, so V*'s list, the streams it holds and the class the sparse phase is weighed at are one table's. -/
+whose one type makes every private `τ` entry uniquely zero, and its `m`, `k_log` and region count are those of the inner
+statement check 5 sets up (`m`, `kLog`, `regions`), as `innerOf` reads them, so V*'s list, the streams it holds and the
+class the sparse phase is weighed at are one table's. -/
 def checkInnerShape (i : Inner) (m kLog regions : Nat) : Except String Unit := do
-  if i.sparse.isNone then
-    throw ("rec-inner: candidate 3's inner shape names no RecSparse shape (rec-inner --sparse): its V* list would have no " ++
-      "RecSparse statement, level of R's or part of R's opening")
+  let some sp := i.sparse | throw ("rec-inner: candidate 3's inner shape names no RecSparse shape (rec-inner --sparse): " ++
+    "its V* list would have no RecSparse statement, level of R's or part of R's opening")
+  if sp.tLog != 0 then
+    throw s!"rec-inner: candidate 3 supports one sparse type (T_LOG 0), not T_LOG {sp.tLog}"
   if i.m != m || i.kLog != kLog || i.regions != regions then
     throw (s!"rec-inner: the verifier's inner shape (m {i.m}, k_log {i.kLog}, regions {i.regions}) is not the inner " ++
       s!"statement's (m {m}, k_log {kLog}, regions {regions})")

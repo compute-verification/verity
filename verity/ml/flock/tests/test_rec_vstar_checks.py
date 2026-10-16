@@ -19,10 +19,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+import keyed
 import pytest
+from test_rec_opening_unit import opening
 from test_rec_outer import BIN, staged  # noqa: F401
 from verity_flock import rec_algebra as A
 from verity_flock import rec_bindings as RB
+from verity_flock import rec_outer as O
 from verity_flock import rec_residuals as RR
 
 pytestmark = [pytest.mark.slow,
@@ -230,27 +233,25 @@ def test_the_registered_reads_message_round_ports_are_the_statements(tmp_path):
                                          f"the statement's: the statement has no port {m0} (0 message-round ports)"), line
 
 
-@pytest.fixture(scope="module")
-def l16_h1(once) -> tuple[bytes, Path]:
-    """`rec-open/l16-h1` (V*'s statement 2 at m = 23, its last level, over 142 openings) as `compose` writes it under its
-    population program's partition, and the verifier's own bindings of it, from that partition object and program."""
-    from verity.ml.circuits.codec import canonical_json, encode_program
+def _l16_h1(d: Path, n: int, name: str | None = None) -> Path:
+    """`RecOpen{16, 1}` over ``n`` openings (under ``name``, else `rec-open/l16-h1`) as `compose` writes it under its population
+    program's partition, staged in ``d`` (`_staged`): the verifier's own bindings of it."""
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
     from verity_flock import circuit as FC
     from verity_flock import rec_open as R
-    from verity_flock import rec_outer as O
 
-    def make(d):
-        defn = R.definition(16, 1)
-        program = P.population_program(defn, 142)
-        part = P.partition(program, P.template_instance_query(defn))
-        (d / "circuit.txt").write_bytes(FC.compose(O.lowering(16, 1), O.subcircuit(16, 1), partition=P.digest(part),
-                                                   program=P.program_sha512(program)).encode())
-        (d / "partition.json").write_text(json.dumps(part))
-        (d / "program.json").write_bytes(canonical_json(encode_program(program)))
-        _bindings(d, d / "bindings.json")
+    defn = R.definition(16, 1)
+    program = P.population_program(defn, n)
+    part = P.partition(program, P.template_instance_query(defn))
+    return _staged(d, FC.compose(O.lowering(16, 1, name), O.subcircuit(16, 1, name), partition=P.digest(part),
+                                 program=P.program_sha512(program)), part, program)
 
-    d = once("vstar-l16-h1", make)
+
+@pytest.fixture(scope="module")
+def l16_h1(once) -> tuple[bytes, Path]:
+    """`rec-open/l16-h1` (V*'s statement 2 at m = 23, its last level, over 142 openings) as `_l16_h1` stages it, once on the
+    machine, and the verifier's own bindings of it, from its partition object and program."""
+    d = once("vstar-l16-h1", lambda d: _l16_h1(d, 142), lambda: keyed.key(code=[__name__]))
     return (d / "circuit.txt").read_bytes(), d / "bindings.json"
 
 
@@ -445,7 +446,6 @@ R_SHAPE = (23, 2)
 def _c3(m: int, k: int, c: int, sparse: tuple, r: tuple) -> list[list]:
     """Candidate 3's V* list, as `rec_vstage.stage --sparse` names its units: V*'s, then RecSparse over the two reps, R's levels
     over its one stream's openings (`rec_vstage.stage_stacked`), and the parts of R's opening (`rec_residuals.stage_opening`)."""
-    from verity_flock import rec_outer as O
     from verity_flock import rec_sparse as SP
 
     sh = A.Shape(r[0], 6, r[1], salt_len=0, opening_only=True)
@@ -522,7 +522,7 @@ def test_a_rec_sparse_reads_file_holds_every_message_port(tmp_path):
 def _staged(d: Path, text: str, part: dict, program) -> Path:
     from verity.ml.circuits.codec import canonical_json, encode_program
 
-    d.mkdir()
+    d.mkdir(exist_ok=True)
     (d / "circuit.txt").write_text(text)
     (d / "partition.json").write_text(json.dumps(part))
     (d / "program.json").write_bytes(canonical_json(encode_program(program)))
@@ -533,18 +533,8 @@ def test_r_levels_circuit_file_is_v_stars_under_its_own_name(l16_h1, tmp_path):
     """R's last level at m 23 (`rec-open-stacked/l16-h1` over 71 openings) as `rec_outer.stage` writes it with
     `stacked_name` is V*'s file byte for byte, as candidate 3's statement 9; the circuit table's `rec-open/l16-h1` file is
     refused at candidate 3's shape as R's level under the table's name."""
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
-    from verity_flock import circuit as FC
-    from verity_flock import rec_open as R
-    from verity_flock import rec_outer as O
-
     name = O.stacked_name(16, 1)
-    defn = R.definition(16, 1)
-    program = P.population_program(defn, 71)
-    part = P.partition(program, P.template_instance_query(defn))
-    text = FC.compose(O.lowering(16, 1, name), O.subcircuit(16, 1, name), partition=P.digest(part),
-                      program=P.program_sha512(program))
-    own = _staged(tmp_path / "level", text, part, program)
+    own = _l16_h1(tmp_path / "level", 71, name)
     inner = _inner(tmp_path / "c3.json", *C3, sparse=SPARSE, stacked=R_SHAPE)
     assert _c3(*C3, SPARSE, R_SHAPE)[9] == [name, 71]
     rc, line = _statements(inner, "--circuit", str(tmp_path / "level" / "circuit.txt"), "--instances", "71", "--rec-part",
@@ -585,18 +575,18 @@ def test_rec_sparses_circuit_file_is_v_stars(tmp_path):
         "rec-sparse/n1-e6-s1-t0: a RecSparse unit, and the bucket's is rec-sparse/n1-e6-s2-t0 (rec-inner --sparse)"), line
 
 
-def test_r_openings_circuit_file_is_v_stars(tmp_path):
+def test_r_openings_circuit_file_is_v_stars(once, tmp_path):
     """R's opening at m 23 (`rec-opening/m23-c2-p0`, one part), as `rec_residuals.stage_opening` writes it, is V*'s file byte
     for byte as candidate 3's statement 10, its own ports each `m<i>` under `rec-opening-c<i>` at R's one row. About two
-    minutes and 2.2 GB (each side builds the opening's unit): no cheaper test writes Lean's opening unit, so none
-    other catches its bytes drifting from the one the prover commits and the Lean verifier recomputes."""
+    minutes and 2.2 GB (each side builds the opening's unit; Python's is `test_rec_opening_unit.opening`'s, made once): no
+    cheaper test writes Lean's opening unit, so none other catches its bytes drifting from the one the prover commits and
+    the Lean verifier recomputes."""
     sh = A.Shape(R_SHAPE[0], 6, R_SHAPE[1], salt_len=0, opening_only=True)
     [p] = RR.parts(RR.spec(sh))
-    st = RR.statement(p.S, "rec-opening/m23-c2-p0", 1)
-    own = _staged(tmp_path / "open", st.text, st.part, st.program)
-    rc, line = _statements(_inner(tmp_path / "c3.json", *C3, sparse=SPARSE, stacked=R_SHAPE), "--circuit",
-                           str(tmp_path / "open" / "circuit.txt"), "--instances", "1", "--rec-part", "10",
-                           "--rec-bindings", str(own))
+    [f] = opening(once, R_SHAPE[0])
+    rc, line = _statements(_inner(tmp_path / "c3.json", *C3, sparse=SPARSE, stacked=R_SHAPE), "--circuit", str(f),
+                           "--instances", "1", "--rec-part", "10", "--rec-bindings",
+                           str(_bindings(f.parent, tmp_path / "bindings.json")))
     nr = len([nm for nm, _ in p.S["ports"] if nm.startswith("m")])
     assert rc == 0 and line["checked"] == ["rec-opening/m23-c2-p0", 1], line
     assert line["own"] == ([[f"m{i}", f"rec-opening-c{i}", [0]] for i in range(nr)]

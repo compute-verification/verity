@@ -56,7 +56,7 @@
   research env --source TREE [--rev REV] [--json]  # `export PYTHONPATH=...` from TREE's [tool.uv.workspace] members (research.pythonpath)
   research doctor [--role lane|coordinator|infra] [--json]   # can this VM do its job: secrets by name, tokens by status-only probes,
                                                  # ssh, the venv against uv.lock, notes pushes, disk, clock; exit 1 on a finding (research/doctor.py)
-  research deploy drift [--node N ...] [--json] | install NODE --by WHO [--ref REF] [PATH ...] [--apply]   # what runs on the Nebius
+  research deploy drift [--on N ...] [--json] | install NODE --by WHO [--ref REF] [PATH ...] [--apply]   # what runs on the Nebius
                                                  # nodes (pods/nebius/deploy.toml) against main; installs from a pushed commit, restarting its units (`ops deploy`, verity_ops/deploy.py)
   research monitors list|check|run|relay ...     # invariants with an owner, a threshold and an action: node 1's service writes each
                                                  # incident once and its clear once; the relay posts them (research/monitors.py)
@@ -71,8 +71,8 @@
   research notes watch [--every 10] [--pods]     # a line each time a lane goes STALE or comes back
   research launch-request <request.json>         # machine side: claim the run dir, start the detached runner (idempotent per id)
   research mem [--ramlock DIR] [--json]           # machine side: cgroup limit, in use, live reservations, available (research.mem)
-  research msg send|close|list|read|names|subscribe|traffic|ask-daniel|... [--dry-run]
-                                                 # messages between agents, on Slack (`research slack` too; research/slack.py; skill using-slack)
+  research msg send|close|read|names|traffic|ask-daniel|... [--dry-run]
+                                                 # messages between agents, on Slack (research/slack.py; skill using-slack)
 
 `run` allocates a run id, writes the v0.2 job record, gives the workload RESEARCH_RUN_ID / RESEARCH_RUN_DIR, and hands execution
 to the telemetry harness (timeout, sampler, cancel evidence, classifier, tee'd logs).  The workload's cwd is its run dir, locally and
@@ -190,6 +190,11 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--job-user", default=None, metavar="USER",
                     help="run the workload as USER (an unprivileged system user) in a transient system unit, with no sudo, no home and "
                          "a clean environment; the runner keeps its records as itself (research.jobuser)")
+    ap.add_argument("--pool", default=None, metavar="NAME",
+                    help="with --on --source: run in the machine's NAME pool (`research`: any lane's research runs on vy-nebius-cpu-1, "
+                         "at nice 19 beside the merge checks; `proofs`): the run takes a slot there and its cwd is its source")
+    ap.add_argument("--as", dest="lane", default=os.environ.get("RESEARCH_LANE"), metavar="LANE",
+                    help="with --pool: the lane the slot names (default $RESEARCH_LANE)")
     q = ap.add_argument_group("the queue (--queue): the one queue over the shared nodes (infra/cluster) places and runs the job; "
                                    "--on then pins its node, and --mem-gb is its memory")
     q.add_argument("--queue", action="store_true", help="hand the job to the queue instead of running it on a named machine (needs --source)")
@@ -257,6 +262,24 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     if (ns.on or ns.queue) and (why := remote.pss_bound_problem(harness_opts, Path(ns.source).expanduser() if ns.source else None)):
         print(f"research run: refused: {why}", file=sys.stderr)
         return 3
+    if ns.pool:
+        from .pods.nebius import slot_only  # noqa: PLC0415
+
+        cwd = remote.flag_value(harness_opts, "--cwd")
+        why = ("is for --on, not --queue" if ns.queue
+               else "needs --on MACHINE and --source (slot.py runs from the shipped tree)" if not (ns.on and ns.source)
+               else "needs a lane: --as LANE or $RESEARCH_LANE" if not ns.lane
+               else f"runs from its source, not --cwd {cwd}" if cwd not in (None, "source") else None)
+        if why:
+            print(f"research run: --pool {why}", file=sys.stderr)
+            return 2
+        try:
+            command = slot_only.in_pool(ns.pool, ns.lane, command)
+        except ValueError as e:
+            print(f"research run: --pool: {e}", file=sys.stderr)
+            return 2
+        if cwd is None:
+            harness_opts = [*harness_opts, "--cwd", "source"]
     if ns.queue:
         try:
             harness_opts = _normalize_timeout(harness_opts)
@@ -1578,7 +1601,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd in ("msg", "slack"):
         from .slack import main as slack_main
 
-        return slack_main(rest, prog=f"research {cmd}")
+        if cmd == "slack":
+            print("research: `research slack` is `research msg`; use `research msg`", file=sys.stderr)
+        return slack_main(rest, prog="research msg")
     if cmd == "usage":
         return cmd_usage(rest)
     age = checkout_age()

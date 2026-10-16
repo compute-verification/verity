@@ -26,6 +26,25 @@ def test_a_run_may_name_a_pool_of_its_own_under_the_locks_directory_and_nothing_
     assert not S.through_slot([*pool, "python3", "tools/verity/check/slot.py", "--status"])
 
 
+def test_research_run_pool_wraps_the_command_in_a_named_pool_that_the_launcher_accepts(capsys):
+    """INF-27/28: a lane's run on cpu-1 takes the `research` pool with one flag, not a five-layer command line."""
+    c = S.in_pool("research", "compute-accounting", ["python3", "search.py", "--n", "4"])
+    assert c == ["env", "CHECK_SLOTS=/workspace/research/locks/research/slots", "python3", "tools/verity/check/slot.py", "--by",
+                 "compute-accounting", "--", "nice", "-n", "19", "python3", "search.py", "--n", "4"]
+    assert S.through_slot(c) and all(S.through_slot(S.in_pool(p, "x", ["true"])) for p in S.POOLS)
+    try:
+        S.in_pool("gpu", "x", ["true"])
+        raise AssertionError("an unknown pool must be refused")
+    except ValueError as e:
+        assert "the pools are proofs, research" in str(e)
+    from research.cli import main
+    for argv, why in ((["--pool", "research", "--", "true"], "needs --on MACHINE and --source"),
+                      (["--on", "m", "--source", ".", "--pool", "research", "--", "true"], "needs a lane"),
+                      (["--on", "m", "--source", ".", "--pool", "research", "--as", "x", "--cwd", "clone", "--", "true"], "not --cwd clone"),
+                      (["--on", "m", "--source", ".", "--pool", "gpu", "--as", "x", "--", "true"], "no pool 'gpu'")):
+        assert main(["run", *argv]) == 2 and why in capsys.readouterr().err, argv
+
+
 def _run(runs, rid, state, command, *, pgid=None, runner=None):
     d = runs / rid
     d.mkdir(parents=True)

@@ -154,8 +154,10 @@ def test_the_cli_prints_the_placement_or_the_refusal(capsys):
                      "--kind", "lean-audit"]) == 0
     assert json.loads(capsys.readouterr().out)["max_s"] == 1200
     assert cli.main(["submit", NEBIUS, "--run-id", "r3", "--now", str(T), "--project", "verity", "--submitter", "w",
-                     "--kind", "lean-audit", "--node", "vy-nebius-1", "--gpu-host"]) == 0
-    out = json.loads(capsys.readouterr().out)
+                     "--kind", "lean-audit", "--node", "vy-nebius-1", "--gpu-host"]) == 0   # the old spelling, a hidden alias
+    cap = capsys.readouterr()
+    out = json.loads(cap.out)
+    assert cap.err == "cluster: --node is now --on\n"
     assert out["gpu_host"] is True and "CPUWeight=idle" not in out["wrap"]
 
 

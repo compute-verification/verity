@@ -414,6 +414,41 @@ def shapeInfo (env : Environment) (meaning : Array Name) (moduleOf : Name → Op
     return toJson (← (conjuncts stmt).mapM (shapeOf env meaning moduleOf))
   catch e => return Json.mkObj [("error", toJson (← e.toMessageData.toString))]
 
+/-- A premise's head constant: past its binders, after reducible unfolding, again past the binders an abbrev unfolds to
+(`Premises.P x := ∀ y, Assumptions.P x y`), at most `n` times; an assumptions module's constant is the head as it
+stands, never unfolded. -/
+partial def premiseHead (moduleOf : Name → Option Name) (n : Nat) (t : Expr) : MetaM (Option Name) :=
+  forallTelescope t fun _ b => do
+    let head (e : Expr) : Option Name := match e.getAppFn with | .const h _ => some h | _ => none
+    if let some h := head b then
+      if ((moduleOf h).map (·.components.contains `Assumptions)).getD false then return some h
+    let b ← whnfR b
+    if b.isForall && n > 0 then premiseHead moduleOf (n - 1) b else return head b
+
+/-- The premises a statement takes: the `Prop` hypotheses of each conjunct, also under the statement definitions (a
+`Guarantees` namespace's) its conjuncts apply, unfolded at most `depth` deep, each named by its head after reducible
+unfolding, so a `Premises` abbrev names the assumption it stands for. A conclusion is never unfolded. -/
+partial def premisesOf (env : Environment) (moduleOf : Name → Option Name) (depth : Nat) (e : Expr) : MetaM (Array Json) := do
+  let mut out := #[]
+  for c in conjuncts e do
+    out := out ++ (← forallTelescope c fun xs body => do
+      let mut ps := #[]
+      for x in xs do
+        let t ← inferType x
+        unless ← isProp t do continue
+        let head ← premiseHead moduleOf 4 t
+        if let some h := head then
+          ps := ps.push <| Json.mkObj [("binder", toJson (← x.fvarId!.getDecl).userName.toString),
+            ("head", toJson h.toString), ("module", toJson ((moduleOf h).map toString))]
+      if depth > 0 then
+        if let .const d us := body.getAppFn then
+          if d.components.contains `Guarantees then
+            if let some (.defnInfo dv) := env.find? d then
+              ps := ps ++ (← premisesOf env moduleOf (depth - 1)
+                ((dv.value.instantiateLevelParams dv.levelParams us).beta body.getAppArgs))
+      return ps)
+  return out
+
 def pinInfo (env : Environment) (meaning : Array Name) (axioms : Std.HashMap Name NameSet)
     (ranges : Std.HashMap Name DeclarationRanges) (rs : Array (Name × Name × ConstantInfo) × Array (Name × Name)) (n : Name) :
     MetaM Json := do
@@ -442,6 +477,7 @@ def pinInfo (env : Environment) (meaning : Array Name) (axioms : Std.HashMap Nam
     ("at", toJson (ranges[n]?.map fun (d : DeclarationRanges) => #[d.range.pos.line, d.range.pos.column])),
     ("signature", toJson signature), ("axioms", toJson ((axioms.getD n {}).toArray.qsort Name.lt |>.map toString)),
     ("hypotheses", toJson hypotheses), ("shape", ← shapeInfo env meaning moduleOf ci.type),
+    ("premises", ← (do return toJson (← premisesOf env moduleOf 3 ci.type)) <|> pure Json.null),
     ("type_hash", toJson (hex ci.type.hash)),
     ("reads", toJson (rs.1.map readJson)),
     ("outside", toJson (rs.2.map fun (c, m) => #[c.toString, m.toString]))]

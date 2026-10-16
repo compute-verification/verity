@@ -1,5 +1,5 @@
 """Asks as Linear issues (the trial from 8 Oct): `research msg ask` (and `send --to` one handle) files the ask in its owner's
-team, the registry's `linear` key, and rings on Slack with the issue's link; `close` and `decline` move the issue to done or
+team, the registry's `linear` key, and rings on Slack with the issue's link; `close` and `close --declined` move the issue to done or
 canceled.
 
 Credentials come from the environment only. LINEAR_CLIENT_ID and LINEAR_CLIENT_SECRET are an OAuth app's client-credentials

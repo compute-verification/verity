@@ -1163,7 +1163,7 @@ def test_train_sh_prints_every_twins_run_id(tmp_path, twins):
 
 
 #: the stubbed `uv`'s answer to train.sh's post to the merge thread: the post's body is copied to {posted}, and nothing launches
-_POST_STUB = ('case "$*" in *"slack reply"*) f=; p=; for a; do [ "$p" = --file ] && f=$a; p=$a; done; cp "$f" {posted}; exit 0;; '
+_POST_STUB = ('case "$*" in *"msg reply"*) f=; p=; for a; do [ "$p" = --file ] && f=$a; p=$a; done; cp "$f" {posted}; exit 0;; '
               'esac\n')
 
 
