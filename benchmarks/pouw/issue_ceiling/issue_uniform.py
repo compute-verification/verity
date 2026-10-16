@@ -102,6 +102,13 @@ def main():
             continue
         base = next((r for r in vr if r["density"] == 0), None)
         warps_smsp = (base["warps"] if base else vr[0]["warps"]) / 4.0  # warps a SMSP (4 SMSPs a SM)
+
+        def uget_of(dd):  # UIADD3 in the largest loop body of the k_vec<vk,dd> SASS
+            lls = by_tmpl(funcs, "k_vec", [vk, dd])
+            if not lls:
+                return None
+            return max(lls, key=lambda x: x[0])[1].get("UIADD3", 0)
+        base_u0 = uget_of(0)  # loop-control UIADD3 at D=0; the chain adds D more on top
         md.append(f"## Vector = {VK_NAME[vk].upper()}\n")
         md.append("| density D (uni/SMSP-it) | vec/SMSP-cyc | uni/SMSP-cyc | cyc/outer-it | slots/uni (vs D=0) | SASS (vec / uni) | promoted? |")
         md.append("|---|---|---|---|---|---|---|")
@@ -121,9 +128,11 @@ def main():
                 uget = body.get("UIADD3", 0)
                 uni_other = sum(c for k, c in body.items() if (k.startswith("U") and k != "UIADD3") or k in ("R2UR", "CS2UR"))
             slots = ((cyc_it - base["cyc"] / base["iters"]) / n_uni_it) if (base and D > 0) else None
-            # the chain is D fully-unrolled UIADD3; promotion succeeded iff the SASS body has D of them
-            promoted = (uget == D) if D > 0 else (uget == 0)
-            prom = "ok" if promoted else f"NO ({uget}≠{D})"
+            # the chain is D fully-unrolled UIADD3 on top of the loop-control UIADD3 (base_u0); promotion succeeded iff
+            # the body has base_u0 + D of them.
+            chain_u = (uget - base_u0) if base_u0 is not None else None
+            promoted = (chain_u == D) if chain_u is not None else False
+            prom = "ok" if promoted else f"NO (chain {chain_u}≠{D})"
             sass = f"{vget}×{VK_SASS[vk]} / {uget}×UIADD3" + (f" (+{uni_other} U-other)" if uni_other else "")
             md.append(f"| {D} ({n_uni_it:.0f}) | {r['vec_per_smsp_per_cyc']:.4f} | {r['uni_per_smsp_per_cyc']:.4f} | "
                       f"{cyc_it:.1f} | {('%.3f' % slots) if slots is not None else '—'} | {sass} | {prom} |")
@@ -142,12 +151,17 @@ def main():
         slots_all = slope_all / warps_smsp
         sat = base["vec_per_smsp_per_cyc"] if base else 0.0
         saturated = sat > 0.9
+        all_promoted = all(ro["promoted"] for ro in rowsout if ro["density"] > 0)
         md.append("")
+        md.append(f"- Uniform chain promoted to UIADD3: **{'yes' if all_promoted else 'NO — chain stayed vector, result INVALID'}** "
+                  f"(loop-control UIADD3 at D=0 = {base_u0}).")
         md.append(f"- Dispatch saturation (D=0): **{sat:.4f}** {VK_NAME[vk].upper()} a SMSP-cycle"
                   f" ({'saturated ~1/cyc' if saturated else 'below 1/cyc — NOT a full saturator, low-density test confounded'}).")
         md.append(f"- **Low-density slots/uni = {slots_lo:.3f}** (D≤{nacc//2}, the discriminating regime; slope {slope_lo:.3f} cyc/iter a unit D, /{warps_smsp:.0f} warps a SMSP).")
         md.append(f"- Full-range slots/uni = {slots_all:.3f} (slope {slope_all:.3f}); high D saturates any port, so this over-states co-issue cost.")
-        if not saturated:
+        if not all_promoted:
+            verdict = "INVALID — the chain did not promote to UIADD3 (it ran on the vector datapath), so this measures vector cost, not uniform cost"
+        elif not saturated:
             verdict = f"inconclusive — the vector saturator only reached {sat:.3f}/cyc, so spare dispatch could hide uniforms for free"
         elif slots_lo > 0.9:
             verdict = f"takes a full dispatch slot (~{slots_lo:.2f}) — VF2's {A_UNI} is a valid lower bound (SOUND)"
@@ -158,6 +172,7 @@ def main():
         md.append(f"- Verdict ({VK_NAME[vk].upper()} saturator): a uniform UIADD3 {verdict}.")
         md.append("")
         result["by_vk"][VK_NAME[vk]] = {"saturation_d0": sat, "saturated": saturated, "warps_smsp": warps_smsp,
+                                        "all_promoted": all_promoted, "loop_control_uiadd3": base_u0,
                                         "slots_per_uni_low_density": slots_lo, "slots_per_uni_full": slots_all,
                                         "slope_low": slope_lo, "slope_full": slope_all, "rows": rowsout}
 

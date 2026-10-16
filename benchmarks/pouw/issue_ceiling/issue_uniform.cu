@@ -59,7 +59,9 @@ __global__ void __launch_bounds__(1024) k_vec(int iters, uint32_t s0, uint32_t s
 #pragma unroll
   for (int c = 0; c < NACC; c++) vs ^= acc[c];
   vsink[blockIdx.x * blockDim.x + tid] = vs;
-  if (tid == 0) usink[blockIdx.x] = u0 ^ u1;  // uniform consumer: keeps u0,u1 on the uniform datapath
+  // u0,u1's ONLY live-out is this warp-uniform predicate (UISETP). With no vector consumer, ptxas keeps the whole
+  // recurrence in uniform registers (UIADD3) instead of UMOV-ing it out to feed a store — the trap v2 fell into.
+  if (u0 + u1 == 0x1234567u) usink[blockIdx.x] = tid;
 }
 
 // ---- host ----------------------------------------------------------------------------------------------------------
