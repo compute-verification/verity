@@ -81,8 +81,8 @@ ALPHABETS = {"none": [0], "pm1": [-1, 1], "pm13": [-3, -1, 1, 3], "pm57": [-7, -
 OPERANDS = "qkpv"
 PEEL_L = 32
 LINS = {"int8_rot": "int8_rot@-", "int8_rot_dith63": "int8_rot@a:dither:wtop63:s{seed}"}
-#: P's blocks: each block's integer product (B max|P| max|V| <= 1024 * 128 * 128 = 2^24) is exact in one FP32 GEMM
-PBLK_MAX = 1024
+#: P's blocks: each block's s32 read is exact while B max|P| max|V| = B 128 128 < 2^31 (exact_mm chunks it in FP32)
+PBLK_MAX = 2 ** 16
 #: K or V served as floor(x / s) + b, b a fresh bit (note:20261016T0525Z-draft-fullfloor-s-r6)
 DITHER = "dith"
 
@@ -631,7 +631,7 @@ def selftest() -> dict:
     assert same(off, plain), out["tiny_wide"]
     for bad, where in (("int8-rot-ep=w64-poff32", evaluate), ("int8-prow2-poff64", parse), ("int8-ptop255", evaluate),
                        ("int8-rot-eqp=w64-ptop255-poff128", evaluate), ("int8-pblk48", parse), ("int8-p=pm1-pnorm", parse),
-                       ("e4m3-psink", parse), ("int8-pfix-pblk32", parse), ("int8-pblk2048", parse)):
+                       ("e4m3-psink", parse), ("int8-pfix-pblk32", parse), ("int8-pblk131072", parse)):
         try:
             where(model, ids, bad) if where is evaluate else where(bad)
             raise AssertionError(f"{bad} must not fit")
