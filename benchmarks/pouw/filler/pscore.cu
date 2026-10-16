@@ -8,7 +8,8 @@
 //        the decode step at batch B, context L as `dscore dscore step B L split FILL_SMS W NC S ROUNDS K` (ROUNDS rounds in
 //        ABBA order of K reps of serving alone on the whole GPU and K reps under the arm), the arm's step also forking PT
 //        tiles a warp of dfill_p<PNC> (PW warps a block, one block a step SM, PS steps a tile) off each layer's qkv onto a
-//        second stream of the step's green context, at the highest node priority, joined before o. PT is the arm's, chosen
+//        second stream of the step's green context, at the highest node priority, joined before o (PFILL_PRIO=0: the
+//        lowest; PFILL_JOIN=0: joined at the step's end, so it runs on through the linears). PT is the arm's, chosen
 //        before the run. An arm block's "chunks" is its filler work in FILL chunks: the split's chunks seen done inside the
 //        block's window + the phase tiles of its K timed steps x tile MACs / chunk MACs; the device counts every tile, and
 //        the count must equal K + 2 steps' worth (time_work's 2 warm-ups run the graph too). "alone_fill" is both fillers
@@ -146,7 +147,8 @@ static int run_pscore(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, 
   const double alone_split = dfill_alone(d, f, fs, 30, &amhz, &awatt);
   PFill pf;
   pf.mode = 1; pf.W = PW; pf.NC = PNC; pf.S = PS; pf.tiles = PT; pf.grid = got[0]; pf.c0 = g_c0; pf.c1 = g_c1;
-  pf.prio = hi; pf.join = true;
+  pf.prio = (getenv("PFILL_PRIO") && !atoi(getenv("PFILL_PRIO"))) ? lo : hi;
+  pf.join = !(getenv("PFILL_JOIN") && !atoi(getenv("PFILL_JOIN")));
   double alone_phase = 0, pmhz = 0;
   {
     PFill cal = pf;
@@ -217,13 +219,13 @@ static int run_pscore(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, 
          "\"fill\": %d, \"step2_graph\": %d, \"phase_sms\": %d}, \"W\": %d, \"NC\": %d, \"S\": %d, \"tiles\": %d, "
          "\"grid\": %d, \"chunk_macs\": %.6e, \"coins\": [\"%016llx\", \"%016llx\"], \"prio\": [%d, %d], "
          "\"kv_wrapped\": %s, \"setup_ms\": %.3f, \"rounds\": %d, \"K\": %d, "
-         "\"phase\": {\"W\": %d, \"NC\": %d, \"S\": %d, \"tiles\": %d, \"grid\": %d, \"node_prio\": %d, "
+         "\"phase\": {\"W\": %d, \"NC\": %d, \"S\": %d, \"tiles\": %d, \"grid\": %d, \"node_prio\": %d, \"join\": %s, "
          "\"tile_macs\": %.6e, \"tiles_a_step\": %lld, \"tiles_short\": %lld, \"alone_mac_per_s\": %.6e, \"alone_mhz\": %.1f}, "
          "\"alone_fill\": {\"mac_per_s\": %.6e, \"mhz\": %.1f, \"watt\": %.1f, \"split_mac_per_s\": %.6e, "
          "\"phase_mac_per_s\": %.6e}, \"rec_checked\": %d, \"rec_bad\": %d, \"algos\": [",
          B, L, fill_sms, d.sms, got[0], got[1], sp_step, sp_fill, sp_step2, psms, W, NC, S, f.tiles, f.grid, f.macs(),
          (unsigned long long)g_c0, (unsigned long long)g_c1, lo, hi, wrapped ? "true" : "false", setup_ms, rounds, K, PW,
-         PNC, PS, PT, pf.grid, pf.prio, pf.tile_macs(), per_step, tiles_short, alone_phase, pmhz, alone_split + alone_phase,
+         PNC, PS, PT, pf.grid, pf.prio, pf.join ? "true" : "false", pf.tile_macs(), per_step, tiles_short, alone_phase, pmhz, alone_split + alone_phase,
          amhz, awatt, alone_split, alone_phase, checked, bad);
   for (size_t j = 0; j < p.size(); j++) printf("%s[%d, %d]", j ? ", " : "", p[j].algo_id, p2[j].algo_id);
   printf("], \"blocks\": [");
