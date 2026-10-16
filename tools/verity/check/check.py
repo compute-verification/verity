@@ -906,8 +906,8 @@ GATHER = 12
 
 
 def gather_verdicts(d: Path, store=None, limit: int = GATHER, given: Path | None = None) -> Path | None:
-    """One pack (`verdicts.py combine`) of the verdicts the newest ``limit`` recorded checks stored, for `--record` to send with
-    `--verdicts-in`: a suite whose key one of them earned is reused on any machine, and names the run that earned it.  Only
+    """One pack (`verdicts.py combine`) of the verdicts the ``limit`` recorded checks that ended last stored, for `--record` to
+    send with `--verdicts-in`: a suite whose key one of them earned is reused on any machine, and names the run that earned it.  Only
     recorded runs' packs are taken, a failed or cancelled run's too: its pack holds only the passes its steps stored, each
     under a key of everything it read.  A pack ``given`` (`--record --verdicts-in`) is added to them, never in their place, so no
     flag turns reuse off but `--no-cache`.  A recorded run's pack that `combine` would refuse is passed over by name, so its
@@ -924,7 +924,7 @@ def gather_verdicts(d: Path, store=None, limit: int = GATHER, given: Path | None
         store = store or LocalStore()
         if store.remote is not None:
             store.refresh(attempts_only=True)
-        rows = store.index.sql("SELECT id FROM attempts WHERE tool = 'check' AND state IN ('done', 'failed', 'cancelled') ORDER BY start_utc DESC LIMIT ?",
+        rows = store.index.sql("SELECT id FROM attempts WHERE tool = 'check' AND state IN ('done', 'failed', 'cancelled') ORDER BY julianday(start_utc) + COALESCE(wall_s, 0) / 86400.0 DESC LIMIT ?",
                                (4 * limit,))
         for (rid,) in rows:
             art = ((store.get_attempt(rid) or {}).get("outputs") or {}).get("run_files")

@@ -1,10 +1,11 @@
 import Mathlib
+import Definitions.Claims.Hm96
 
 /-!
 # Claims: the shared definitions and Flock's claim statements (frozen before any proof work)
 
 The definitions every protocol's claims read, and Flock's claims, in the condensed spec's names, with the rulings of
-15 Oct applied:
+15 and 16 Oct applied:
 
 * `R(x, ⊥) := False` (`Rel.ext`); a protocol with no witness takes `W = Unit` and `R(x, ()) :⇔ x ∈ L` (`Rel.ofLang`).
 * The extractor receives the judged run's coins (`Extractor.ext`'s second argument) and uses the prover only by
@@ -15,17 +16,28 @@ The definitions every protocol's claims read, and Flock's claims, in the condens
 * `t` counts both parties' SHA-512 calls, so the hash side's constant is `255.5` (`lamOf`).
 * The scope is a hypothesis of completeness, in readable form (`Flock.InScope`), never part of `R`; `ScopeMatches`
   states that it is the verifier's own scope check. KS needs no scope: the verifier refuses what is out of scope.
-* Zero knowledge is against a malicious verifier (`ZKmal`), with a black-box simulator.
+* (16 Oct) Zero knowledge is against a malicious verifier of the protocol's rounds, with a black-box simulator
+  (`ZKmalR`), and its bound adds the probability that the simulator's own SHA-512 calls hold a collision (`simLog`):
+  the coin commitment binds only computationally. The form first frozen, `ZKmal`, held only at `ε_zk ≥ 1`. The
+  simulator's cost is its expected calls over its coins (`SimCost`).
 * Efficiency is the structural cost claims (`ExtractRunsLe`, `ExtractRunsExpLe`, `ERepCost`: reruns of the prover;
   `RP.eval` also counts SHA-512 calls) and a separate stated complexity claim for the decoder's pure computation
   (`DecoderComplexity`).
 * Nontriviality is a recorded honest transcript that the verifier accepts (`Nontrivial`).
+* (16 Oct) List decoding is in its radius form (`Flock.ListWithin`): the opened columns are written into the
+  zero-filled word of the trace's codeword length (`Flock.fill`: at each position the first opened column there, the
+  positions from the length on ignored), and the decoder lists every trace whose encoding agrees with that word on at
+  least `(1 − θ)·len` positions, so leaving positions unopened or opening one twice gains a prover nothing. The radius
+  is read per trace, like the length (`Flock.Deploy.len`, `Flock.Deploy.θ`; TOP-48): the plain level-0 rate is `1/2`
+  at every schedule, but the masked code's varies with `m`, so one `θ` would cost bits. It replaces the form that
+  listed a trace from `nMin` opened columns above the Johnson bound, under which a prover that avoids positions was
+  accepted at about `2^{−8}`, so `KS` was false. `Flock.Efficient` asks it of the decoder it costs.
 
 Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed verifier, its parser and the hash:
 binding them to the compiled verifier (`Flock.verifyWith Sha512.hash`, `Flock.ProvedScope.check`) is the code side's.
 
-The named assumptions (each read once, in a claim's hypothesis): `StrictBirthday`, `ExpectedCR`, `CommitHides`. What the
-claims rest on and no Lean statement can say is `trustedBase`.
+The named assumptions: `StrictBirthday`, `ExpectedCR`, and hm96's hiding, `Hm96Hiding` (`Definitions/Claims/Hm96.lean`,
+which the soundness proofs read). What the claims rest on and no Lean statement can say is `trustedBase`.
 
 Frozen by `Flock.Guarantees.ClaimsStated` (`Models/Flock/Guarantees/Claims.lean`), whose statement reads every claim
 here: the lock records each one's text under `reads`, so a changed claim is a changed record.
@@ -297,17 +309,12 @@ noncomputable def PrB {Ω Coin : Type} [Fintype Ω] [Nonempty Ω] [Fintype Coin]
     (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (x : Msg) : ℝ :=
   if hk : 0 < V.k x then (B H V P x hk).Pr H else 0
 
-/-- **`CommitHides` (`statistical-hiding`): hiding**, at one commitment: for messages of one length, `commit(u; s)`
-and `commit(u′; s)` at a uniform salt of `saltLen` bytes differ by at most `δ` on every event. -/
-def CommitHides (H : Msg → Msg) (saltLen : ℕ) (δ : ℝ) : Prop :=
-  ∀ u u' : Msg, u.length = u'.length → ∀ Ev : Msg → Prop,
-    |Pr (fun s : Fin saltLen → UInt8 => Ev (commit H u (List.ofFn s))) -
-      Pr (fun s : Fin saltLen → UInt8 => Ev (commit H u' (List.ofFn s)))| ≤ δ
-
 /-- **The trusted base**: what the claims rest on that no Lean statement here can say. -/
 def trustedBase : List String :=
   ["the Lean compiler and runtime: the compiled verifier computes what its Lean definition says",
-   "the live coins: the auditor's randomness is uniform and drawn after the prover commits",
+   "the live coins: the auditor's coins are uniform, and each is hidden from the prover until the verifier opens it: " ++
+     "the prover sees nothing that depends on a coin before the round that opens it, except the commitment to every " ++
+     "coin that the --zk verifier sends at Hello and opens round by round",
    "trusted-nebius-host: the auditor's devices and their host provider"]
 
 /-! ## The claims -/
@@ -368,6 +375,12 @@ def SP.eval {α : Type} (H : Msg → Msg) (ask : List Msg → Out) : SP α → �
   | .hash q k => let e := SP.eval H ask (k (H q)); (e.1, e.2 + 1)
   | .ask as k => let e := SP.eval H ask (k (ask as)); (e.1, e.2 + 1)
 
+/-- The `H` calls of a simulator program, in order, against `H` and the verifier `ask`. -/
+def spLog {α : Type} (H : Msg → Msg) (ask : List Msg → Out) : SP α → List (Msg × Msg)
+  | .ret _ => []
+  | .hash q k => (q, H q) :: spLog H ask (k (H q))
+  | .ask as k => spLog H ask (k (ask as))
+
 /-- A simulator: its coins and its program, which outputs a transcript. -/
 structure Simulator where
   C : Msg → Type
@@ -382,16 +395,26 @@ def Simulator.out {Θ : Type} (H : Msg → Msg) (S : Simulator) (Vs : VStar Θ) 
     List (Msg × Out) :=
   ((S.prog x c).eval H fun as => ((Vs.next x as θ).eval H).1).1
 
-/-- `ZK(P, R, S, ε_zk)` against a malicious verifier: for `(x, w) ∈ R`, every verifier `V*` and tape `θ`, the transcript
-of `P(w)` against `V*` is within `ε_zk(x)` of `S`'s, on every event. -/
-def ZKmal {Ω : Type} [Fintype Ω] (H : Msg → Msg) (P : W → Prover Ω) (R : Rel W) (S : Simulator) (εzk : Msg → ℝ) :
-    Prop :=
-  ∀ x w, R x w → ∀ (Θ : Type) (Vs : VStar Θ) (θ : Θ) (Ev : List (Msg × Out) → Prop),
-    |Pr (fun ω : Ω => Ev (runStar H (P w) Vs x ω θ).msgs) - Pr (fun c : S.C x => Ev (S.out H Vs θ x c))| ≤ εzk x
+/-- The simulator's `H` calls against `V*` at `θ`. -/
+def simLog {Θ : Type} (H : Msg → Msg) (S : Simulator) (Vs : VStar Θ) (θ : Θ) (x : Msg) (c : S.C x) :
+    List (Msg × Msg) :=
+  spLog H (fun as => ((Vs.next x as θ).eval H).1) (S.prog x c)
 
-/-- The simulator makes at most `bound(x)` calls (hash and ask) against every verifier. -/
-def SimCost (H : Msg → Msg) (S : Simulator) (bound : Msg → ℕ) : Prop :=
-  ∀ x (c : S.C x) (ask : List Msg → Out), ((S.prog x c).eval H ask).2 ≤ bound x
+/-- `ZK(k, P, R, S, ε_zk)` against a malicious verifier: for `(x, w) ∈ R`, every verifier `V*` of the protocol's `k(x)`
+rounds and tape `θ`, the transcript of `P(w)` against `V*` is within `ε_zk(x)` of `S`'s on every event, plus the
+probability that `S`'s SHA-512 calls hold a collision. The simulator is not told `V*`'s rounds, so the real run lasts
+the protocol's; a `V*` holding a collision could open a committed coin two ways, and the collision term charges that
+to the simulator's own calls. -/
+def ZKmalR {Ω : Type} [Fintype Ω] (H : Msg → Msg) (k : Msg → ℕ) (P : W → Prover Ω) (R : Rel W) (S : Simulator)
+    (εzk : Msg → ℝ) : Prop :=
+  ∀ x w, R x w → ∀ (Θ : Type) (Vs : VStar Θ) (θ : Θ), Vs.k x = k x → ∀ (Ev : List (Msg × Out) → Prop),
+    |Pr (fun ω : Ω => Ev (runStar H (P w) Vs x ω θ).msgs) - Pr (fun c : S.C x => Ev (S.out H Vs θ x c))|
+      ≤ εzk x + Pr (fun c : S.C x => findColl (simLog H S Vs θ x c) ≠ none)
+
+/-- **The simulator's cost, expected**: over its coins, the simulator makes at most `bound(x)` calls (hash and ask) in
+expectation, against every verifier. -/
+def SimCost (H : Msg → Msg) (S : Simulator) (bound : Msg → ℝ) : Prop :=
+  ∀ x (ask : List Msg → Out), Ex (fun c : S.C x => (((S.prog x c).eval H ask).2 : ℝ)) ≤ bound x
 
 /-- `λ = min(log₂(1/κ), 255.5 − ½ log₂ γ) − 1`. -/
 noncomputable def lamOf (κ γ : ℝ) : ℝ := min (Real.logb 2 (1 / κ)) (255.5 - Real.logb 2 γ / 2) - 1
@@ -527,15 +550,23 @@ def InScope (zk : Bool) (s : Stmt) : Prop :=
     s.form.unitInputGroups = 1 ∧ ¬ s.form.tail ∧ s.form.unitLog ≤ 32 ∧ s.form.readsOnlyPortBits ∧
     (s.form.rowsV1 ∨ (s.form.hiddenOutputs ∧ s.form.rowsV2OrSeg))
 
-/-- **List decoding, the spec a decoder meets**: from opened columns at distinct positions, `decode` lists every trace
-whose encoding agrees with at least a fraction `agree` of them. -/
-def ListComplete {Col T : Type} [DecidableEq Col] (enc : T → ℕ → Col) (agree : ℝ)
-    (decode : List (ℕ × Col) → List T) : Prop :=
-  ∀ (os : List (ℕ × Col)) (M : T), (os.map Prod.fst).Nodup →
-    agree * os.length ≤ (os.filter fun p => decide (enc M p.1 = p.2)).length → M ∈ decode os
+/-- **The zero-filled word** of length `n`: at each position the first opened column there, zero where none was opened.
+Positions from `n` on are ignored. -/
+def fill {Col : Type} [Zero Col] (n : ℕ) (os : List (ℕ × Col)) : Fin n → Col :=
+  fun i => ((os.find? fun p => p.1 == i.val).map Prod.snd).getD 0
 
-/-- **Flock's assemble step**: the opened columns, decoded to candidate traces, each read for its witness; the first
-candidate in the relation. -/
+/-- **List decoding within radius `θ`, the spec a decoder meets**: `decode` lists every trace `M` whose encoding agrees
+with the zero-filled word of its codeword length `len M` (`fill`) on at least `(1 − θ M)·len M` positions. Agreement is
+counted over all `len M` positions, so a prover gains nothing by leaving positions unopened. The radius is read per
+trace, like the length. -/
+def ListWithin {Col T : Type} [DecidableEq Col] [Zero Col] (len : T → ℕ) (enc : T → ℕ → Col) (θ : T → ℝ)
+    (decode : List (ℕ × Col) → List T) : Prop :=
+  ∀ (os : List (ℕ × Col)) (M : T),
+    (1 - θ M) * len M ≤ ((Finset.univ : Finset (Fin (len M))).filter fun i => enc M i.val = fill (len M) os i).card →
+    M ∈ decode os
+
+/-- **Flock's assemble step**: the opened columns as they were opened, decoded to candidate traces, each read for its
+witness; the first candidate in the relation. A position opened twice needs no step here: `fill` reads the first. -/
 def assemble {Col T : Type} (H : Msg → Msg) (parse : Msg → Option Stmt) (decode : List (ℕ × Col) → List T)
     (read : T → Wit) (x : Msg) (opens : List (ℕ × Col)) : Option Wit :=
   match parse x with
@@ -543,8 +574,9 @@ def assemble {Col T : Type} (H : Msg → Msg) (parse : Msg → Option Stmt) (dec
   | some s => ((decode opens).map read).find? fun w => decide (RelS H s w)
 
 /-- What the deployed verifier brings, read by Flock's claims: the verifier and whether it is the masked (`--zk`) one,
-its parser and scope check, the opened columns of the first committed codeword in a run (`cols`), the code (`enc`), the
-decoding threshold (`agree`), how a trace is read as a witness, and the numbers the errors read: the table's error
+its parser and scope check, the opened columns of the first committed codeword in a run (`cols`), the code (`enc`),
+each trace's codeword length (`len`) and decoding radius (`θ`), functions of the trace because one `T` holds the traces
+of every statement's code, how a trace is read as a witness, and the numbers the errors read: the table's error
 `ε_table`, `N₀`, the weight `C` of `γ`, `E^rep`'s waits `m′` and its truncation `K`. -/
 structure Deploy (Coin Col T : Type) where
   zk : Bool
@@ -553,7 +585,8 @@ structure Deploy (Coin Col T : Type) where
   scopeCheck : Msg → Bool
   cols : Seen → List (ℕ × Col)
   enc : T → ℕ → Col
-  agree : ℝ
+  len : T → ℕ
+  θ : T → ℝ
   read : T → Wit
   εtable : Msg → ℝ
   N₀ : Msg → ℝ
@@ -585,8 +618,8 @@ noncomputable def γ (D : Deploy Coin Col T) (x : Msg) : ℝ :=
 def Scope (D : Deploy Coin Col T) (x : Msg) : Prop := ∃ s, D.parse x = some s ∧ InScope D.zk s
 
 /-- **Flock: KS**, at `E^rep` and every decoder that meets the list-decoding spec. -/
-def KS (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
-  ∀ decode, ListComplete D.enc D.agree decode → Claims.KS H D.V (R H D.parse) (E H D decode) (κ D) (γ D)
+def KS [Zero Col] (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
+  ∀ decode, ListWithin D.len D.enc D.θ decode → Claims.KS H D.V (R H D.parse) (E H D decode) (κ D) (γ D)
 
 /-- **Flock: Complete**, on the statements in scope. -/
 def Complete {Ω : Type} (H : Msg → Msg) (D : Deploy Coin Col T) (P : Wit → Prover Ω) (δc : Msg → ℝ) : Prop :=
@@ -595,21 +628,23 @@ def Complete {Ω : Type} (H : Msg → Msg) (D : Deploy Coin Col T) (P : Wit → 
 /-- **Flock: the readable scope is the verifier's.** -/
 def ScopeMatches (D : Deploy Coin Col T) : Prop := Claims.ScopeMatches (Scope D) D.scopeCheck
 
-/-- **Flock: zero knowledge** of the masked verifier's honest prover, against every malicious verifier. -/
+/-- **Flock: zero knowledge** of the masked verifier's honest prover, against every malicious verifier of the deployed
+verifier's rounds `D.V.k`: `Hello`, answered by the commitment to every coin, then the rounds that open them. -/
 def ZK {Ω : Type} [Fintype Ω] (H : Msg → Msg) (D : Deploy Coin Col T) (P : Wit → Prover Ω) (S : Simulator)
     (εzk : Msg → ℝ) : Prop :=
-  D.zk = true ∧ ZKmal H P (R H D.parse) S εzk
+  D.zk = true ∧ ZKmalR H D.V.k P (R H D.parse) S εzk
 
 /-- **Flock: bits**, `λ = min(log₂(1/κ), 255.5 − ½ log₂ γ) − 1`, at every decoder that meets the spec. -/
-def Bits (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
-  ∀ decode, ListComplete D.enc D.agree decode →
+def Bits [Zero Col] (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
+  ∀ decode, ListWithin D.len D.enc D.θ decode →
     Claims.Bits H D.V (R H D.parse) (E H D decode) fun x => lamOf (κ D x) (γ D x)
 
-/-- **Flock: efficiency**: `E^rep`'s reruns at every decoder, and the decoder's stated complexity. -/
-def Efficient (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T)
+/-- **Flock: efficiency**: `E^rep`'s reruns at every decoder, and a decoder that meets the list-decoding spec, with its
+stated complexity. -/
+def Efficient [Zero Col] (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T)
     (counted : List (ℕ × Col) → List T × ℕ) (size : List (ℕ × Col) → ℕ) (p : Polynomial ℕ) : Prop :=
   ERepCost H D.V D.waits D.k D.cap D.cols (assemble H D.parse decode D.read) (check H D.parse) ∧
-    DecoderComplexity decode counted size p
+    ListWithin D.len D.enc D.θ decode ∧ DecoderComplexity decode counted size p
 
 /-- **Flock: nontriviality**: recorded honest runs, each of a statement the scope check takes, that the verifier
 accepts. -/
