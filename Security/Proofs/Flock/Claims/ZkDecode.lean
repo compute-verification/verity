@@ -11,6 +11,8 @@ a pair per rep), each the Reed–Solomon encoding of `2^cols` message symbols `M
 `[0, t)`, `M` up to `2^cols`, and `μ` at `[2^cols, 2^cols + t)` (`zkCoeffs`, `lane_codeword`), so each lane is a codeword
 of `RS[2^d, 2^cols + t]` at the points `ω_q` (`PadCode.encAt`), and the masked code is an interleaved Reed–Solomon code
 (`zkLevelZero`): the plain level-0 code with `e` more lanes and `t` more coefficients per lane, on the same positions.
+At `t ≤ 2^cols` a masked lane is the plain lane of its message plus the padding's codeword
+`Σ_j μ_j·(c₀·X̂_j + X̂_{2^cols + j})` (`zkEnc_eq_add_pad`).
 A message (`ZkMessage`) is every lane's `M` and `μ`, a column every lane's symbol (`zkEnc`). #2104's decoder therefore
 meets `ListComplete` for it at the Johnson count `johnsonCount (2^cols + t) agree = ⌊(2^cols + t + 1)/agree²⌋ + 1`, at
 every `agree > 0` (`listComplete_zkLevelZero`), and on opened columns at distinct positions below `2^64` it is the
@@ -64,6 +66,35 @@ theorem zkCoeffs_inj {F : Type} [Field F] (c₀ : F) {cols t : ℕ} {M M' : Fin 
 def zkEnc {F K : Type} [Field F] [Field K] (A : Arith F K) (d : ℕ) (c₀ : F) {s cols t : ℕ}
     (M : ZkMessage F s cols t) (q : ℕ) : Fin s → F :=
   fun ℓ => encAt A d (2 ^ cols + t) (zkCoeffs c₀ (M.1 ℓ) (M.2 ℓ)) q
+
+/-- **A masked lane is the plain lane plus the padding's codeword**: at `t ≤ 2^cols`, lane `ℓ`'s symbol at `q` is its
+`2^cols` message symbols on the first `2^cols` monomials, plus `Σ_j μ_j·(c₀·X̂_j + X̂_{2^cols + j})(ω_q)`, the
+padding term the model's level-0 row check corrects by (`Model.padCorr`). -/
+theorem zkEnc_eq_add_pad {F K : Type} [Field F] [Field K] (A : Arith F K) (d : ℕ) (c₀ : F) {s cols t : ℕ}
+    (ht : t ≤ 2 ^ cols) (M : ZkMessage F s cols t) (q : ℕ) (ℓ : Fin s) :
+    zkEnc A d c₀ M q ℓ = encAt A d (2 ^ cols) (M.1 ℓ) q +
+      ∑ j : Fin t, M.2 ℓ j * (c₀ * A.Xhat j.val d (A.omega q) + A.Xhat (2 ^ cols + j.val) d (A.omega q)) := by
+  have key : ∑ c : Fin (2 ^ cols), (if h : c.val < t then c₀ * M.2 ℓ ⟨c.val, h⟩ else 0) *
+      A.Xhat c.val d (A.omega q) = ∑ j : Fin t, M.2 ℓ j * (c₀ * A.Xhat j.val d (A.omega q)) := by
+    let g : ℕ → F := fun c => if h : c < t then c₀ * M.2 ℓ ⟨c, h⟩ * A.Xhat c d (A.omega q) else 0
+    have h1 : ∑ c : Fin (2 ^ cols), (if h : c.val < t then c₀ * M.2 ℓ ⟨c.val, h⟩ else 0) *
+        A.Xhat c.val d (A.omega q) = ∑ c ∈ Finset.range (2 ^ cols), g c := by
+      rw [← Fin.sum_univ_eq_sum_range]
+      refine Finset.sum_congr rfl fun c _ => ?_
+      simp only [g]
+      split_ifs <;> simp
+    have h2 : ∑ j : Fin t, M.2 ℓ j * (c₀ * A.Xhat j.val d (A.omega q)) = ∑ c ∈ Finset.range t, g c := by
+      rw [← Fin.sum_univ_eq_sum_range]
+      refine Finset.sum_congr rfl fun j _ => ?_
+      simp only [g, j.isLt, ↓reduceDIte]
+      ring
+    rw [h1, h2]
+    refine (Finset.sum_subset (Finset.range_subset_range.2 ht) fun c _ hc => ?_).symm
+    simp only [g, Finset.mem_range] at hc ⊢
+    simp [hc]
+  simp only [zkEnc, encAt, Fin.sum_univ_add, zkCoeffs_left, zkCoeffs_right, Fin.val_castAdd, Fin.val_natAdd,
+    add_mul, Finset.sum_add_distrib, key, mul_add]
+  ring
 
 /-- The lane polynomial determines the coefficients: the novel basis is linearly independent. -/
 theorem encPoly_injective {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]

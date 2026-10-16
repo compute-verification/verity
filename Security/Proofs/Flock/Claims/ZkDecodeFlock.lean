@@ -60,6 +60,11 @@ abbrev zkWidth (i : ZkIdx) : ℕ := 2 ^ zkLanes i + Flock.Zk.EXTRA_LANES
 theorem zkShape_fits : ∀ i : ZkIdx, zkLen i ≤ 40 ∧ 2 ^ zkCols i + zkPad i ≤ 2 ^ zkLen i := by
   decide +kernel
 
+/-- The padding fits under the message, `t ≤ 2^cols`, so a deployed masked lane is the plain lane plus the padding's
+codeword (`zkEnc_eq_add_pad`). -/
+theorem zkPad_le : ∀ i : ZkIdx, zkPad i ≤ 2 ^ zkCols i := by
+  decide +kernel
+
 /-- **The masked shapes**: `Zk.schedule` accepts every `m = 25 + i`; level 0 has `k0` lanes (log), `m − 7 − k0`
 columns (log), rate `1/2` of the unpadded message (`d = cols + 1`), `q₀` queries, and padding `t = 2·q₀`. -/
 theorem zkShape_table : ∀ i : ZkIdx,
