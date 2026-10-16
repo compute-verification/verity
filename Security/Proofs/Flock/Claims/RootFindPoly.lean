@@ -24,7 +24,7 @@ structure Counted (α : Type) where
   val : α
   ops : ℕ
 
-instance : Monad Counted where
+instance instMonadCounted : Monad Counted where
   pure a := ⟨a, 0⟩
   bind x f := ⟨(f x.val).val, x.ops + (f x.val).ops⟩
 
