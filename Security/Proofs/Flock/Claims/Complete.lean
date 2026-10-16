@@ -10,6 +10,7 @@ import Proofs.Flock.Claims.Complete.Shape
 import Proofs.Flock.Claims.Complete.Link
 import Proofs.Flock.Claims.Complete.Count
 import Proofs.Flock.Claims.Complete.Json
+import Proofs.Flock.Claims.Complete.Custody
 
 /-! Flock's completeness at the deployed plain verifier: the honest prover (`Honest`: `honestP`, on the session prover
 of `Prover/`: the transcript, the PIOP, Ligerito and the session record), its run against the verifier (`Run`:
