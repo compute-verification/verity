@@ -51,3 +51,11 @@ def test_pick_drops_configs_over_the_limit_and_splits_unless_asked():
     split = S.fstep_pick(rows, split=True)[(32, 2048)]
     assert split[0][5] == 108
     assert split[1] == pytest.approx(0.22) and split[2] == pytest.approx(0.52) and split[3] == pytest.approx(1.0025)
+
+
+def test_attention_chains_are_part_of_the_config():
+    four, two = _row(132, 5120, 4, 4, 0, 0.50, 0.0, 1.01), {**_row(132, 5120, 4, 4, 0, 0.60, 0.0, 1.02), "ANC": 2}
+    pts = S.fstep_points([four, two])
+    assert len(pts) == 2
+    k, fused, _, _ = S.fstep_pick([four, two], split=False)[(132, 5120)]
+    assert k[10] == 2 and fused == pytest.approx(0.60)
