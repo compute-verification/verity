@@ -1110,7 +1110,8 @@ def is_full_check(req: dict) -> bool:
 
 def lost_checks(ctx: Ctx) -> list[Finding]:
     """Yesterday's (UTC) line: of the full checks that started on this machine, how many infrastructure ended (LOST_CLASSES, or
-    a run that never ended), against the CI page's target of under LOST_TARGET_PCT%."""
+    a run that never ended), against the CI page's target of under LOST_TARGET_PCT%. A run the machine refused before it started
+    (refused.json: no slot, no memory, a bad command line) never started, so it counts in neither."""
     day = time.strftime("%Y%m%d", time.gmtime(ctx.now - 86400))
     total, lost, live = 0, [], {v["run"] for v in run_scopes(ctx).values()}
     for d in sorted(ctx.path(RUNS).glob(f"r{day}-*")):
@@ -1118,7 +1119,7 @@ def lost_checks(ctx: Ctx) -> list[Finding]:
             req = json.loads(_read(ctx.path(REQUESTS) / d.name / "request.json") or "{}")
         except ValueError:
             continue
-        if not is_full_check(req):
+        if not is_full_check(req) or (d / "refused.json").exists():
             continue
         total += 1
         try:

@@ -7,6 +7,7 @@ import Proofs.Flock.Claims.ERep
 import Proofs.Flock.Claims.ERepCost
 import Proofs.Flock.Claims.Decode
 import Proofs.Flock.Claims.DecodeFlock
+import Proofs.Flock.Claims.RootFindGF128
 
 /-! `Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated`, by reflexivity: the guarantee is there for its
 record, which holds the claims' text.

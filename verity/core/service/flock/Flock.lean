@@ -24,6 +24,12 @@ import Flock.Verify
 import Flock.ZkProof
 import Flock.ZkLigerito
 import Flock.Zk
+import Flock.With.Hashes
+import Flock.With.Transcript
+import Flock.With.Verify
+import Flock.With.Zk
+import Flock.With.Eq
+import Flock.With.ZkEq
 import Flock.Partition
 import Flock.HmNets
 import Flock.RecOpen

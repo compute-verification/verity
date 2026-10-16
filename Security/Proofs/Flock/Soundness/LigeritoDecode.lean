@@ -7,8 +7,8 @@ import Proofs.Flock.Soundness.ListSize
 
 A level's queries check the fold of its table against the next level's claimed fold. When the
 folds were no MCA event (`MCAGood`) and the fold agrees with the encoding of a `K` message `G` on
-at least a `1 − γ` fraction of the positions, `G` is the fold of a message in the level's list
-(`decode`). Three facts carry it: every row then agrees with a `K` codeword on those positions
+at least a `1 − δ` fraction of the positions, for any `δ` within the level's radius, `G` is the
+fold of a message `δ`-close to the table (`decode`). Three facts carry it: every row then agrees with a `K` codeword on those positions
 (`rowsAgreeOn_of_foldAll`); a `K` codeword agreeing with `F` values is an `F` codeword there, by
 the limbs `K = F ⊕ F·u` (`poly_limbs`) and the novel basis spanning (`xP_span`); and the `K`
 encoding is injective on that many positions (`encK_eq_zero`).
@@ -230,18 +230,20 @@ theorem encK_eq_zero (A : Arith F K) (hA : A.Correct) (l : Level) (hf : l.Fits) 
 /-! ## Decoding -/
 
 /-- **Decoding a fold.** If the folds of a level's table by `ch` were no MCA event and the fold
-agrees with the encoding of `G` on a set `T` of at least `(1 − γ)·2^d` positions, then `G` is the
-fold of a message in the level's list. -/
+agrees with the encoding of `G` on a set `T` of at least `(1 − δ)·2^d` positions, for a radius
+`δ` within the level's, then `G` is the fold of a message `δ`-close to the table. -/
 theorem decode (A : Arith F K) (hA : A.Correct) (l : Level) (hf : l.Fits) (lanes : ℕ)
     (C : Oracle F) (ch : List K) (hch : ch.length = lanes)
     (hgood : MCAGood (codeK A hA l hf) l.radius lanes ch (rowsK A lanes l.logLen C))
-    (G : ℕ → K) (T : Finset (Fin (2 ^ l.logLen)))
-    (hT : (T.card : ℝ) ≥ Fintype.card (Fin (2 ^ l.logLen)) * (1 - l.radius))
+    (δ : ℝ) (hδ : δ ≤ l.radius) (G : ℕ → K) (T : Finset (Fin (2 ^ l.logLen)))
+    (hT : (T.card : ℝ) ≥ Fintype.card (Fin (2 ^ l.logLen)) * (1 - δ))
     (hag : ∀ q ∈ T, foldColumn A ch (fun ℓ => C ℓ q.val) = encK A l.logCols G q.val) :
-    ∃ M ∈ closeL A l.radius lanes l.logCols l.logLen C,
+    ∃ M ∈ closeL A δ lanes l.logCols l.logLen C,
       ∀ x < 2 ^ l.logCols, G x = foldMsg A ch M x := by
   classical
   haveI : CharP K 2 := hA.charTwoK
+  have hTJ : (T.card : ℝ) ≥ Fintype.card (Fin (2 ^ l.logLen)) * (1 - l.radius) :=
+    le_trans (mul_le_mul_of_nonneg_left (by linarith) (Nat.cast_nonneg _)) hT
   have hfold : ∀ q : Fin (2 ^ l.logLen), foldAllRows lanes ch (rowsK A lanes l.logLen C) q =
       foldColumn A ch (fun ℓ => C ℓ q.val) := by
     intro q
@@ -249,7 +251,7 @@ theorem decode (A : Arith F K) (hA : A.Correct) (l : Level) (hf : l.Fits) (lanes
       ← Fin.sum_univ_eq_sum_range (fun ℓ => eqList ch ℓ * A.embed (C ℓ q.val))]
     rfl
   -- every row agrees with a `K` codeword on `T`
-  have hrows := rowsAgreeOn_of_foldAll (codeK A hA l hf) l.radius lanes ch _ hgood T hT
+  have hrows := rowsAgreeOn_of_foldAll (codeK A hA l hf) l.radius lanes ch _ hgood T hTJ
     ⟨_, encK_mem A hA l hf G, fun q hq => by rw [hfold q, hag q hq]⟩
   -- which is an `F` codeword there
   have hmsg : ∀ ℓ : Fin (2 ^ lanes), ∃ m : Fin (2 ^ l.logCols) → F,
@@ -270,7 +272,7 @@ theorem decode (A : Arith F K) (hA : A.Correct) (l : Level) (hf : l.Fits) (lanes
     exact (ofLimbs_inj A hA h1).1
   choose m hm using hmsg
   let M : Message F lanes l.logCols := fun ℓ x => m ℓ x
-  have hclose : M ∈ closeL A l.radius lanes l.logCols l.logLen C := by
+  have hclose : M ∈ closeL A δ lanes l.logCols l.logLen C := by
     rw [closeL, Finset.mem_filter]
     refine ⟨Finset.mem_univ _, ?_⟩
     unfold Close
@@ -300,6 +302,6 @@ theorem decode (A : Arith F K) (hA : A.Correct) (l : Level) (hf : l.Fits) (lanes
     unfold encK
     exact sub_self _
   intro x hx
-  exact sub_eq_zero.1 (encK_eq_zero A hA l hf _ T (card_gt_of_agree l T hT).le hdiff x hx)
+  exact sub_eq_zero.1 (encK_eq_zero A hA l hf _ T (card_gt_of_agree l T hTJ).le hdiff x hx)
 
 end FlockSoundness
