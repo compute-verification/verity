@@ -45,7 +45,9 @@ Method names are '-'-joined tokens:
                q mu is the same for every key of q's row), so a part of K constant over tokens (Qwen2.5's k bias) no
                longer sets K's scale
     linears    `lin8r`: every linear on exact_grid.py's `int8_rot@-` (rotated, int8 per row, s8 x s8 -> s32); `lin8rd`
-               on `int8_rot@a:dither:wtop63:sN` (the activations served as floor(x / s) + b, the weights on [-63, 63])
+               on `int8_rot@a:dither:wtop63:sN` (the activations served as floor(x / s) + b, the weights on [-63, 63]);
+               its two parts apart: `lin8r63` (rounded, weights on [-63, 63]) and `lin8rd127` (dithered, weights on
+               [-127, 127])
     `rot`, `sN` (noise seed, also the linears' under `lin8rd`)
 
 `bf16` is the model's own eager attention (Q K^T rounded to bf16 before the scale), `sdpa` its bf16 attention through
@@ -93,7 +95,8 @@ ALPHABETS = {"none": [0], "pm1": [-1, 1], "pm13": [-3, -1, 1, 3], "pm57": [-7, -
              **{f"u{k}": list(range(-k, k + 1)) for k in (1, 2, 4, 8, 16, 32, 64)}}
 OPERANDS = "qkpv"
 PEEL_L = 32
-LINS = {"int8_rot": "int8_rot@-", "int8_rot_dith63": "int8_rot@a:dither:wtop63:s{seed}"}
+LINS = {"int8_rot": "int8_rot@-", "int8_rot_dith63": "int8_rot@a:dither:wtop63:s{seed}", "int8_rot_w63": "int8_rot@-:wtop63",
+        "int8_rot_dith": "int8_rot@a:dither:s{seed}"}
 #: P's blocks: each block's s32 read is exact while B max|P| max|V| = B 128 128 < 2^31 (exact_mm chunks it in FP32)
 PBLK_MAX = 2 ** 16
 #: K or V served as floor(x / s) + b, b a fresh bit (note:20261016T0525Z-draft-fullfloor-s-r6)
@@ -160,6 +163,10 @@ def parse(method: str) -> dict:
             spec["lin"] = "int8_rot"
         elif t == "lin8rd":
             spec["lin"] = "int8_rot_dith63"
+        elif t == "lin8r63":
+            spec["lin"] = "int8_rot_w63"
+        elif t == "lin8rd127":
+            spec["lin"] = "int8_rot_dith"
         elif t[:4] == "poff" and t[4:].isdigit():
             spec["poff"] = int(t[4:])
         elif t in ("pnorm", "psink", "kc"):
