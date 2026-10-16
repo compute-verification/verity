@@ -49,8 +49,12 @@
 #include "../pearl_c/sha512.cuh"
 
 #ifdef PFILL_CO
-#define PF_W 4
-#define PF_CTAS 4  // blocks an SM on a split: 4 x 2 KB, 4 warps an SMSP; co runs one an SM
+#ifndef PF_CO_W
+#define PF_CO_W 4
+#endif
+static_assert(PF_CO_W == 2 || PF_CO_W == 4, "the co tile is 2 or 4 warps");
+#define PF_W PF_CO_W
+#define PF_CTAS (16 / PF_CO_W)  // blocks an SM on a split: 16 warps, 4 an SMSP; co runs one an SM
 #if defined(PFILL_E2M1)
 #error "pfill: the co tile (-DPFILL_CO) is the s8 or bits tile"
 #endif
