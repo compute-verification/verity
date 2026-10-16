@@ -1575,6 +1575,9 @@
    "assumptions": [],
    "type_hash": "444c06834fcb5e3f93c0a11fe5912b8345f27f03f6e8b816b86488ca566ed779"
   },
+  "Flock.SecurityProofs.SamplingClaimsStated": {
+   "owner": "@proofs"
+  },
   "Flock.SecurityProofs.ZeroKnowledgeHidden": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.ZeroKnowledgeHidden : Flock.Guarantees.ZeroKnowledgeHidden"],
@@ -5170,7 +5173,8 @@
    "Flock.SecurityProofs.RecursiveAuditC3": "restatable: PublicAudit at candidate 3's table (holoInnerAt); (i), a probability statement whose event is its acceptance, takes beside its premises (_hCust, _hIC, _hA3, _hbr) the recursive model's input fields Vs.hU, Vs.hscope, zr.hDraw, zr.hTags and zr.hown, the count curve's _hk, _hRw, _hM, _hρ and _hr, the obligations _hob (VStarParses, over the verifier's own list) and _hF (TagsFound), and R's registration, its cap and the record's stacked entry (_hstk), none a premise; it fits once the recursive model's inputs and count curve, those two obligations and the registration are restated as premises (constants of Proofs.Flock.Recursive.Premises). Its hidden statement is the word the prover's runs open at R's level 0 against the cap (regStmt), no registrant's openings taken. V*'s list at candidate 3's inner shape is circuits' gap 2's eleven statements (#1847). It says nothing about a private inner session: at a private inner shape (ish.holo) RecVStar.statements refuses (statements_holo), so no run the verifier accepts has one until V*'s holo parts land (#1896).",
    "Accounting.SecurityProofs.RemoteSessionConservationSketch": "frozen (no-function,hash): It composes the verbatim-sector tensor-sketch rank bound at every candidate pass with a causal session's pooled draws; the one shared store and every device read, link sector, rebuild and correct receipt are explicit, but the random-oracle game is not the rate audit's code.",
    "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservationSketchSum at the deployed 16-row, 4 KiB-tile and draw parameters, with the two draw terms bounded by 2^-40 and each pass's grinding candidates' queries priced once by the named per-pass hash budget (Accounting.Assumptions.SketchHashBudget): its query term (n P) qtot/2^96 stays explicit, non-vacuous at the measured caps where the product form's was 2^14.",
-   "Flock.SecurityProofs.ClaimsStated": "frozen (no-function): It states no property of the verifier: it reads each claim of Security/Definitions/Claims.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed verifier."
+   "Flock.SecurityProofs.ClaimsStated": "frozen (no-function): It states no property of the verifier: it reads each claim of Security/Definitions/Claims.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed verifier.",
+   "Flock.SecurityProofs.SamplingClaimsStated": "frozen (no-function): It states no property of the verifier: it reads each claim of Security/Definitions/Claims/Sampling.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed sampled verifier."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {

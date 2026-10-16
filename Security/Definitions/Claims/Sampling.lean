@@ -1,7 +1,7 @@
 import Definitions.Claims
 
 /-!
-# Claims: the sampling compiler (draft, not frozen)
+# Claims: the sampling compiler (frozen before any proof work)
 
 The claims block of the sampled-proofs one-stage audit (`verity/core/protocols/sampled_proofs/`), on the shared
 definitions of `Definitions.Claims`, in the template's eight items. Parametric in the deployed sampled verifier
@@ -25,10 +25,13 @@ definitions of `Definitions.Claims`, in the template's eight items. Parametric i
    strings opened inside Flock proofs are bound); `Complete`; `ZK`; `Nontrivial`; `Bits`; and `Efficient`.
 7. **Assumptions used**: `StrictBirthday` (for `B`), `ExpectedCR` (for `Bext`), `CommitHides` (for zero knowledge,
    through Flock's), and `trustedBase`.
-8. **Status**: stated, as a draft for review; no claim is proved.
+8. **Status**: stated; no claim is proved.
 
-Generic pieces this block adds, which belong with the shared definitions when it freezes: `ownLog`, `ofOC`,
-`flatMapRP`, `waitAccC`, `Bext`, `lamLin`, `BitsLin`, `ExtractOwnLe`, `SimAux` and `ZKaux`.
+Generic pieces this block adds, which belong with the shared definitions: `ownLog`, `ofOC`, `flatMapRP`, `waitAccC`,
+`Bext`, `lamLin`, `BitsLin`, `ExtractOwnLe`, `SimAux` and `ZKaux`.
+
+Frozen by `Flock.Guarantees.SamplingClaimsStated` (`Models/Flock/Guarantees/SamplingClaims.lean`), whose statement
+reads every claim here: the lock records each one's text under `reads`, so a changed claim is a changed record.
 -/
 
 namespace Claims.Sampling
