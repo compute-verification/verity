@@ -542,6 +542,8 @@ static int pf_gate(Rank& R) {
   unsigned long long ep;
   CK(cudaMemcpy(&ep, f.epoch, sizeof ep, cudaMemcpyDeviceToHost));
   std::mt19937_64 rng(0x5EED0000ull + R.r);
+  raise_after_k<<<1, 32, 0, R.d.st>>>(f.flags + slot, 0);
+  CK(cudaDeviceSynchronize());
   for (const char* kind : {"fixed", "up", "cut"}) {
     const std::string kd = kind;
     f.poll = kd == "fixed" ? -1 : KF_PJ;
@@ -717,6 +719,12 @@ static int pf_setup(PFill& f) {
   CK(cudaEventCreateWithFlags(&f.join, cudaEventDisableTiming));
   CK(cudaFuncSetAttribute(kfill_k<4>, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)KF_SMEM));
   CK(cudaFuncSetAttribute(kfill_k<4>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
+  // loaded now: under lazy loading a kernel's first launch can wait for the running kernels, so the cut gate's flag
+  // would rise only after the filler it should cut had finished
+  cudaFuncAttributes fa;
+  CK(cudaFuncGetAttributes(&fa, raise_after_k));
+  CK(cudaFuncGetAttributes(&fa, glue_k));
+  CK(cudaFuncGetAttributes(&fa, prolog_k));
   f.on = true;
   return 0;
 }

@@ -47,7 +47,7 @@ gpu-lease "$TC_TP" $WAIT --on "$TC_ON" --max-min "${MAXMIN:-12}" -- bash -c '
     m=gpu__time_duration.sum,dram__bytes.sum
     ncu --clock-control none -k regex:kfill_k --launch-count 3 --metrics $m --csv "$B/tpcomm" alone 3 \
       > "$O/ncu-filler.csv" 2> "$O/ncu-filler.err"; echo "ncu filler rc $?" >> "$O/rc.txt"
-    ncu --clock-control none -k regex:bw_read --launch-count 3 --metrics $m --csv "$B/tpcomm" bw 1 3 \
+    GPU_LEASE_UUID=${GPU_LEASE_UUID%%,*} ncu --clock-control none -k regex:bw_read --launch-count 3 --metrics $m --csv "$B/tpcomm" bw 1 3 \
       > "$O/ncu-control.csv" 2> "$O/ncu-control.err"; echo "ncu control rc $?" >> "$O/rc.txt"
     q
   fi
