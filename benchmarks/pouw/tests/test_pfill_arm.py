@@ -77,6 +77,7 @@ def test_proved_readings_rescore_with_only_the_filler_fraction(tmp_path):
     scores = [res[k]["SCORE"] for k in order]
     assert scores == sorted(scores) and scores[0] < scores[-1]
     assert res["proved"]["filler_fraction"] == 0.225
+    assert res["in-model"]["status"] == "in-model"
 
 
 def test_e2m1_arm_adds_only_the_conditional_l64_reading(tmp_path):
