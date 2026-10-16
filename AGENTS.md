@@ -121,7 +121,11 @@ Daniel's, current. `.agents/skills/friction/SKILL.md` has the dated rulings behi
 - **One hash: SHA-512 with its whole output, everywhere.**
   - Commitments are hm96 rows in frame-v3-sha512 trees.
   - Signatures are hash-based (LMS, n = 64).
-  - BLAKE3 leaves the served path for `archive/`. The one exception is Pearl's FP8 scheme, as Pearl defines it.
+  - BLAKE3 leaves the served path for `archive/`. There are two named exceptions:
+    - Pearl's FP8 scheme, as Pearl defines it.
+    - Duo receipts, PoUW's per-step receipts: keyed u32 mul/xor/rotl folds over committed accumulator words. They
+      bind under the named premise H-μ⁺, which is the premise ledger's row R1
+      (`note:20261016T0219Z-report-premise-ledger`) and not yet in a lock.
 - **Live coins only.** Fiat–Shamir is out. The one exception is the remote bandwidth audit's pass seeds inside a
   window, derived from the window's live challenge and the previous pass's root (Daniel, 12 Oct). There are no
   retries: a failed proof is a visible failure, and a retry never redraws. Outer proofs go through the firewall one at a
