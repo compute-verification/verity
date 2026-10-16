@@ -12,6 +12,7 @@ import Proofs.Flock.Claims.DecodeFamily
 import Proofs.Flock.Claims.ZkDecodeFlock
 import Proofs.Flock.Claims.ZkCols
 import Proofs.Flock.Claims.Scope
+import Proofs.Flock.Claims.DeployOC
 
 /-! `Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated`, by reflexivity: the guarantee is there for its
 record, which holds the claims' text.
