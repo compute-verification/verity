@@ -125,12 +125,14 @@ class TPPartialSource:
         self._cur_in: Any = None
         # the collective-issuing modules of THIS rank's model = the expected sites (one partial each per step)
         self.sites: list[tuple[str, str]] = []
+        self.reexec_sites: list[str] = []                                    # the sites the value check's (R) re-executes
         for n, m in model.named_modules():
             cls = type(m).__name__
-            if (cls == "RowParallelLinear" and getattr(m, "reduce_results", True) and int(getattr(m, "tp_size", self.world)) > 1) \
-                    or cls in ("VocabParallelEmbedding", "LogitsProcessor") \
-                    or (cls in MOE_SITE_CLASSES and _moe_reduces(m, self.world)):
+            row = cls == "RowParallelLinear" and getattr(m, "reduce_results", True) and int(getattr(m, "tp_size", self.world)) > 1
+            if row or cls in ("VocabParallelEmbedding", "LogitsProcessor") or (cls in MOE_SITE_CLASSES and _moe_reduces(m, self.world)):
                 self.sites.append((n, cls))
+            if row:
+                self.reexec_sites.append(n)
         # [R15 rev-cb M-0359 T6-1 / moe M-0386] one fused-MoE site per block: when a fused-MoE wrapper holds a fused-MoE runner submodule
         # (SharedFusedMoE -> .runner), the block's all-reduce is attributed to the OUTERMOST hooked MoE module = the Program's module path
         # (tp_links: 'layers.N.mlp.experts (MoERunner)'; the MoeSum row's path), never to both.  On Qwen3-30B-A3B / OLMoE the runner IS
@@ -448,7 +450,7 @@ class TPPartialSource:
         res["wall_s"] = time.perf_counter() - t0
         # (R) exists only for RowParallelLinear sites; a rank whose partials are all norm sites, the embedding or the logits shard
         # (GLM-5.3: o_proj / MoE leave their output un-reduced for fused_allreduce_rms_norm) has no GEMM here to re-execute
-        res["reexec_due"] = any(c == "RowParallelLinear" for _n, c in self.sites)
+        res["reexec_due"] = bool(self.reexec_sites)
         res["verdict"] = "PASS" if (res["tensors"] > 0 and res["tap_mismatch_n"] == 0 and res["reexec_mismatch_n"] == 0 and res["missing_n"] == 0
                                     and res["not_verified_n"] == 0 and (res["reexec_tensors"] > 0 or not res["reexec_due"])) else "FAIL"
         self.ref, self.ref_in = {}, {}
