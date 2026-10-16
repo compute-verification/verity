@@ -19,7 +19,7 @@ Each entry is one unit of serving-alone wall time. Per entry, with the arm:
 
 SCORE is the time-weighted mean of the entries' coverage (weights: each entry's wall time with the arm, one unit alone),
 i.e. Σ certified ÷ Σ capacity × time. The c's are the PROVED certified fractions (`CERTIFIED`); the filler's is the
-spec's provisional 0.99 until FILL-SEC proves one, and every result carries that flag.
+spec's provisional 0.99 until FILL-SEC proves one, and every result with filler work carries that flag.
 """
 
 from __future__ import annotations
@@ -200,7 +200,7 @@ def score(stats: dict, certified: dict = CERTIFIED) -> dict:
         entries.append({"entry": e["entry"], "kind": e["kind"], **coverage(r, certified)})
     out = {"entries": entries, "missing": missing, "certified": certified,
            "flags": [f"filler certified fraction {certified['filler']['fraction']} is {certified['filler']['status']}"]
-           if certified["filler"]["status"] != "proved" else []}
+           if certified["filler"]["status"] != "proved" and any(e["filler_share"] > 0 for e in entries) else []}
     if entries and not missing:
         w = [e["time"] for e in entries]
         out["SCORE"] = sum(e["coverage"] * x for e, x in zip(entries, w)) / sum(w)

@@ -236,7 +236,8 @@ def show(res: dict) -> None:
                  "receipts": lambda: v.get("why") or f"timed {v.get('timed_checked')} checked, {v.get('timed_bad')} bad",
                  "dram": lambda: v.get("why") if not v.get("share_of_hbm") else
                  f"{v['share_of_hbm']:.3%} of HBM, counter control {fmt(v.get('control_bytes_ratio'))}",
-                 "clocks": lambda: f"{v.get('reps')} reps, MHz {v.get('mhz')}, W {v.get('watt')}",
+                 "clocks": lambda: f"{v.get('reps')} reps read; nvidia-smi between points: MHz {v.get('mhz')}, W "
+                                   f"{v.get('watt')}",
                  }.get(name, lambda: "")()
         print(f"  gate {name}: {'pass' if v.get('ok') else 'FAIL'}  {extra}")
     print("\n| entry | coverage | filler share | time | slowdowns | τ (VF) |\n|---|---|---|---|---|---|")
