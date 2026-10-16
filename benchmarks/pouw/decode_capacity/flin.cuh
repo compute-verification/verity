@@ -47,16 +47,39 @@ __device__ __forceinline__ void mma_acc(int (&d)[4], const uint4& a, unsigned b0
       : "r"(a.x), "r"(a.y), "r"(a.z), "r"(a.w), "r"(b0), "r"(b1));
 }
 
-// One filler warp: dfill_k's tile `tile` (NC chains), stepping 8 at a time while *done < ndone (and, with thr, only while
-// *wait == ndone), then its receipt to rec and its step count to cnt. Every lane reads the flags through lane 0.
+// The filler warps' round, on the device so that one captured graph serves every step of a round: its coins, the tile id
+// of the step's first filler slot (the round's first id, tag included, plus step · per) and the step's index, which
+// fadv_k advances once a step.
+struct FState {
+  uint64_t c0, c1;
+  unsigned long long base, step;
+};
+// A launch's filler slots: slot s runs tile base + off + s and leaves its receipt and step count at (step % ring) · per +
+// off + s of a ring of ring · per, so a block of up to `ring` steps keeps every step's.
+struct FSlots {
+  const FState* st;
+  unsigned long long* rec;
+  int* cnt;
+  unsigned long long off, per;
+  unsigned ring;
+};
+__global__ void fadv_k(FState* s, unsigned long long per) {
+  s->base += per;
+  s->step++;
+}
+
+// One filler warp: dfill_k's tile for its slot (NC chains), stepping 8 at a time while *done < ndone (and, with thr, only
+// while *wait == ndone), then its receipt and its step count to the ring. Every lane reads the flags through lane 0.
 // LAZY > 0 steps 8·LAZY at a time and tests a read of done issued a round earlier: the served warps' memory traffic can
 // hold a shared load in the MIO queue for hundreds of cycles, and a warp waiting on it stalls its chains (pv's filler
 // warps lost a third of their loop there). Such a warp runs up to two rounds past the last served warp.
 template <int NC, int LAZY = 0>
-__device__ __forceinline__ void filler_warp(uint64_t c0, uint64_t c1, unsigned long long tile, const int* done, const int* wait,
-                                            int ndone, int thr, unsigned long long* rec, int* cnt) {
+__device__ __forceinline__ void filler_warp(const FSlots& fs, size_t slot, const int* done, const int* wait, int ndone,
+                                            int thr) {
   const int lane = threadIdx.x & 31, g = lane >> 2, t = lane & 3;
-  const uint64_t seed = dseed(c0, c1, tile);
+  const FState rs = *fs.st;
+  const size_t at = (size_t)(rs.step % fs.ring) * fs.per + fs.off + slot;
+  const uint64_t seed = dseed(rs.c0, rs.c1, rs.base + fs.off + slot);
   uint32_t b[2][2], c[4], st[NC][4];
 #pragma unroll
   for (int j = 0; j < 2; j++) {
@@ -105,8 +128,8 @@ __device__ __forceinline__ void filler_warp(uint64_t c0, uint64_t c1, unsigned l
 #pragma unroll
   for (int o = 16; o; o >>= 1) h ^= __shfl_xor_sync(0xffffffffu, h, o);
   if (lane == 0) {
-    *rec = h;
-    *cnt = steps;
+    fs.rec[at] = h;
+    fs.cnt[at] = steps;
   }
 }
 
@@ -117,10 +140,7 @@ struct FlinArgs {
   int* Z;           // the next linear's output, zeroed here
   long long zn;
   int N, K;
-  uint64_t c0, c1;
-  unsigned long long tile0;  // filler warp `slot` (blockIdx.x · FW + fw) runs dfill tile tile0 + slot
-  unsigned long long* rec;   // [gridDim.x · FW]
-  int* cnt;
+  FSlots fs;  // filler warp `slot` = blockIdx.x · FW + fw
   int thr;
 };
 
@@ -176,7 +196,7 @@ __global__ void __launch_bounds__(32 * (CWN * CWM + 1 + FW), 1) flin_k(const Fli
   if (warp > CW) {
     if constexpr (FW > 0) {
       const int slot = blockIdx.x * FW + (warp - CW - 1);
-      filler_warp<NC>(a.c0, a.c1, a.tile0 + slot, &flag[0], &flag[1], CW, a.thr, a.rec + slot, a.cnt + slot);
+      filler_warp<NC>(a.fs, slot, &flag[0], &flag[1], CW, a.thr);
     }
     return;
   }
@@ -255,17 +275,14 @@ __global__ void __launch_bounds__(32 * (CWN * CWM + 1 + FW), 1) flin_k(const Fli
 // ---------------------------------------------------------------- attention blocks with filler warps
 // qk_dec's and pv_dec's blocks, unchanged in what their 8 warps do, each with FW filler warps more that run the chain
 // until the block's attention warps are done (the hardware still schedules the blocks, so the load stays balanced).
-// Filler warp f of block blk (x fastest) runs tile tile0 + blk·FW + f. Launched with programmatic stream serialization
+// Filler warp f of block blk (x fastest) is slot blk·FW + f (FSlots). Launched with programmatic stream serialization
 // (FATT_PDL 1 or 2), a block's attention warps wait for the previous grid, and so do its filler warps unless `early`
 // (FATT_PDL 2), which starts them as soon as the block is resident. The qk blocks also zero pv's output O (on ints),
 // which dcap's step does with a memset between the two kernels. Persistent (items > 0, a 1-D grid that fits on the SMs at
 // once): a block's attention warps take items blockIdx.x, blockIdx.x + gridDim.x, ... of the 3-D grid's blocks (bx
 // fastest, nx of them, then g, then b) and its filler warps run for the whole launch.
 struct FattArgs {
-  uint64_t c0, c1;
-  unsigned long long tile0;
-  unsigned long long* rec;
-  int* cnt;
+  FSlots fs;
   int early;
   long long items;
   int nx;
@@ -274,9 +291,9 @@ struct FattArgs {
 template <int NC>
 __device__ __forceinline__ void att_filler(const FattArgs& fa, size_t slot, const int* done, int ndone) {
   switch (fa.lazy) {
-    case 0: filler_warp<NC, 0>(fa.c0, fa.c1, fa.tile0 + slot, done, done, ndone, 0, fa.rec + slot, fa.cnt + slot); break;
-    case 2: filler_warp<NC, 2>(fa.c0, fa.c1, fa.tile0 + slot, done, done, ndone, 0, fa.rec + slot, fa.cnt + slot); break;
-    default: filler_warp<NC, 4>(fa.c0, fa.c1, fa.tile0 + slot, done, done, ndone, 0, fa.rec + slot, fa.cnt + slot);
+    case 0: filler_warp<NC, 0>(fa.fs, slot, done, done, ndone, 0); break;
+    case 2: filler_warp<NC, 2>(fa.fs, slot, done, done, ndone, 0); break;
+    default: filler_warp<NC, 4>(fa.fs, slot, done, done, ndone, 0);
   }
 }
 template <int FW, int NC>
@@ -455,21 +472,62 @@ static const char* flin_built(int M) {
                     : "0, 2:2, 2:4";
 }
 
+// The filler warps' ring on the host (FSlots): the round's coins and first tile id (its tag included), the slots a step
+// and the ring's depth in steps.
+struct FRing {
+  FState* st = nullptr;
+  unsigned long long* rec = nullptr;
+  int* cnt = nullptr;
+  unsigned long long per = 0, lo = 0;
+  unsigned ring = 1;
+  uint64_t c0 = 0, c1 = 0;
+  size_t cap = 0;
+};
+// opens a round on the ring: `ring` steps of `per` slots, the first step's slots at tiles lo, lo + 1, ..., coins (c0, c1),
+// every receipt poisoned and every count 0
+static void fring_open(FRing& r, unsigned long long per, unsigned ring, uint64_t c0, uint64_t c1, unsigned long long lo,
+                       cudaStream_t st) {
+  const size_t n = (size_t)std::max(per, 1ull) * ring;
+  if (n > r.cap) {
+    if (r.rec) {
+      CK(cudaFree(r.rec));
+      CK(cudaFree(r.cnt));
+    }
+    CK(cudaMalloc(&r.rec, n * sizeof(unsigned long long)));
+    CK(cudaMalloc(&r.cnt, n * sizeof(int)));
+    r.cap = n;
+  }
+  if (!r.st) CK(cudaMalloc(&r.st, sizeof(FState)));
+  r.per = per;
+  r.ring = ring;
+  r.c0 = c0;
+  r.c1 = c1;
+  r.lo = lo;
+  const FState s{c0, c1, lo, 0};
+  CK(cudaMemcpy(r.st, &s, sizeof s, cudaMemcpyHostToDevice));
+  CK(cudaMemsetAsync(r.rec, 0xA5, n * sizeof(unsigned long long), st));
+  CK(cudaMemsetAsync(r.cnt, 0, n * sizeof(int), st));
+  CK(cudaStreamSynchronize(st));
+}
+static FState fring_state(const FRing& r) {
+  FState s;
+  CK(cudaMemcpy(&s, r.st, sizeof s, cudaMemcpyDeviceToHost));
+  return s;
+}
+static FSlots fslots(const FRing& r, unsigned long long off) { return {r.st, r.rec, r.cnt, off, r.per, r.ring}; }
+
 // The step's linears through flin: every layer's weights tiled for M, X tiled for K = HID and K = FF, two output buffers
-// (a sequence's k-th flin launch writes Db[k & 1] and zeroes Db[(k + 1) & 1] for the next; a sequence has an even count),
-// and the filler's receipts a launch.
+// (a sequence's k-th flin launch writes Db[k & 1] and zeroes Db[(k + 1) & 1] for the next; a sequence has an even count).
+// Launch i's filler slots are [i · stride, i · stride + grid · FW) of the step's layout (stride: grid · the configured FW).
 struct Flin {
   int M = 0, BK = 0, FW = 0, NC = 2, thr = 0, grid = 0;
   int8_t* Wt[LAYERS][4] = {};
   int8_t *XtH = nullptr, *XtF = nullptr;
   int* Db[2] = {};
-  unsigned long long* rec = nullptr;
-  int* cnt = nullptr;
-  int slots = 0;  // a launch's filler slots, grid · FW
+  const FRing* ring = nullptr;
+  unsigned long long stride = 0;
   static constexpr int LAUNCHES = LAYERS * 4;
 };
-// launch i's filler warp `slot` (blockIdx.x · FW + fw) runs tile flin_tile0(i) + slot
-static unsigned long long flin_tile0(int i) { return (0x5ull << 56) | ((unsigned long long)i << 24); }
 static void flin_tile_x(const Dev& d, Flin& f) {
   const size_t h = (size_t)f.M * HID, ff = (size_t)f.M * FF;
   if (!f.XtH) CK(cudaMalloc(&f.XtH, h));
@@ -490,11 +548,6 @@ static void flin_prepare(Dev& d, Flin& f, int M, bool all_layers) {
   flin_tile_x(d, f);
   f.Db[0] = reinterpret_cast<int*>(reinterpret_cast<char*>(d.D) + ((size_t)256 << 20));
   f.Db[1] = reinterpret_cast<int*>(reinterpret_cast<char*>(d.D) + ((size_t)512 << 20));
-  if (!f.rec) {
-    const size_t mx = (size_t)Flin::LAUNCHES * d.sms * 16;
-    CK(cudaMalloc(&f.rec, mx * sizeof(unsigned long long)));
-    CK(cudaMalloc(&f.cnt, mx * sizeof(int)));
-  }
   CK(cudaMemsetAsync(f.Db[0], 0, (size_t)M * 2 * FF * sizeof(int), d.st));
   CK(cudaMemsetAsync(f.Db[1], 0, (size_t)M * 2 * FF * sizeof(int), d.st));
   CK(cudaStreamSynchronize(d.st));
@@ -511,80 +564,76 @@ static bool flin_one(Dev& d, const Flin& f, int i, int k, int next_j) {
   a.zn = (long long)f.M * LN[next_j];
   a.N = LN[j];
   a.K = LK[j];
-  a.c0 = g_c0;
-  a.c1 = g_c1;
-  a.tile0 = flin_tile0(i);
-  a.rec = f.rec + (size_t)i * f.grid * 16;
-  a.cnt = f.cnt + (size_t)i * f.grid * 16;
+  a.fs = fslots(*f.ring, (unsigned long long)i * f.stride);
   a.thr = f.thr;
   return flin_launch(f.M, a, f.grid, f.FW, f.NC, d.st);
 }
-// A launch's filler receipts: n slots from rec/cnt on the device, slot s ran tile tile0 + s.
+// A launch's filler slots in the ring: n of them from ring index `at`, slot s ran tile tile0 + s with NC chains.
 struct FillLaunch {
-  const unsigned long long* rec;
-  const int* cnt;
-  size_t n;
+  size_t at, n;
   unsigned long long tile0;
+  int NC;
 };
-// the filler's MACs over `ls` (counts from the last run of each), and up to n receipts checked on the host against
-// dfill_ref, each with the steps − 8 control that must differ
+// the filler's MACs over `ls`, and up to n receipts drawn from the slots that stepped, checked on the host against
+// dfill_ref at the ring's coins, each with the steps − 8 control that must differ; `ids` collects the checked tiles less
+// `tag`
 struct FlinTally {
   double macs = 0;
   long long steps = 0, slots = 0, idle = 0;
   int checked = 0, bad = 0, ctl_equal = 0;
 };
-static FlinTally fill_tally(const std::vector<FillLaunch>& ls, int NC, int n, uint64_t salt) {
-  FlinTally r;
-  std::vector<std::pair<int, size_t>> cand;
-  std::vector<std::vector<unsigned long long>> recs(ls.size());
-  std::vector<std::vector<int>> cnts(ls.size());
-  for (size_t q = 0; q < ls.size(); q++) {
-    recs[q].resize(ls[q].n);
-    cnts[q].resize(ls[q].n);
-    CK(cudaMemcpy(recs[q].data(), ls[q].rec, ls[q].n * 8, cudaMemcpyDeviceToHost));
-    CK(cudaMemcpy(cnts[q].data(), ls[q].cnt, ls[q].n * 4, cudaMemcpyDeviceToHost));
-    for (size_t s = 0; s < ls[q].n; s++) {
-      r.steps += cnts[q][s];
-      r.slots++;
-      r.idle += cnts[q][s] == 0;
-      if (cnts[q][s] > 0) cand.push_back({(int)q, s});
-    }
+static FlinTally fill_tally(const FRing& r, const std::vector<FillLaunch>& ls, int n, uint64_t salt,
+                            std::vector<unsigned long long>* ids = nullptr, unsigned long long tag = 0) {
+  FlinTally t;
+  if (ls.empty()) return t;
+  size_t lo = SIZE_MAX, hi = 0;
+  for (const FillLaunch& l : ls) {
+    lo = std::min(lo, l.at);
+    hi = std::max(hi, l.at + l.n);
   }
-  r.macs = (double)r.steps * NC * 4096.0;
+  std::vector<unsigned long long> rec(hi - lo);
+  std::vector<int> cnt(hi - lo);
+  CK(cudaMemcpy(rec.data(), r.rec + lo, rec.size() * 8, cudaMemcpyDeviceToHost));
+  CK(cudaMemcpy(cnt.data(), r.cnt + lo, cnt.size() * 4, cudaMemcpyDeviceToHost));
+  std::vector<std::pair<int, size_t>> cand;
+  for (size_t q = 0; q < ls.size(); q++)
+    for (size_t s = 0; s < ls[q].n; s++) {
+      const int c = cnt[ls[q].at - lo + s];
+      t.steps += c;
+      t.macs += (double)c * ls[q].NC * 4096.0;
+      t.slots++;
+      t.idle += c == 0;
+      if (c > 0) cand.push_back({(int)q, s});
+    }
   std::mt19937_64 rng(salt);
   for (int k = 0; k < n && !cand.empty(); k++) {
     const auto [q, s] = cand[rng() % cand.size()];
     const unsigned long long tile = ls[q].tile0 + s;
-    const int steps = cnts[q][s];
-    r.bad += recs[q][s] != dfill_ref(g_c0, g_c1, tile, NC, steps);
-    if (steps >= 8) r.ctl_equal += recs[q][s] == dfill_ref(g_c0, g_c1, tile, NC, steps - 8);
-    r.checked++;
+    const size_t i = ls[q].at - lo + s;
+    t.bad += rec[i] != dfill_ref(r.c0, r.c1, tile, ls[q].NC, cnt[i]);
+    if (cnt[i] >= 8) t.ctl_equal += rec[i] == dfill_ref(r.c0, r.c1, tile, ls[q].NC, cnt[i] - 8);
+    t.checked++;
+    if (ids) ids->push_back(tile & ~tag);
   }
-  return r;
-}
-static FlinTally flin_tally(const Flin& f, const std::vector<int>& ls, int n, uint64_t salt) {
-  if (f.FW == 0) return {};
-  std::vector<FillLaunch> v;
-  for (int i : ls)
-    v.push_back({f.rec + (size_t)i * f.grid * 16, f.cnt + (size_t)i * f.grid * 16, (size_t)f.grid * f.FW, flin_tile0(i)});
-  return fill_tally(v, f.NC, n, salt);
+  return t;
 }
 
-// The attention blocks' filler: FW warps a block (0: dcap's own kernels), NC chains each, and every attention launch's
-// receipts (launch k = 2·layer is qk, 2·layer + 1 is pv; `per` slots each, qk's blocks · FW). Persistent on `sms` SMs
-// (sms > 0): qk's and pv's grids pg are as many blocks as fit on those SMs at once (at most their items). lazy: the filler
-// warps' LAZY (filler_warp).
+// The attention blocks' filler: FW warps a block (0: dcap's own kernels), NC chains each. Launch k = 2·layer is qk,
+// 2·layer + 1 is pv; their filler slots are sl[k & 1] each (blocks · FW), at fatt_off(k) of the step's layout. Persistent
+// on `sms` SMs (sms > 0): qk's and pv's grids pg are as many blocks as fit on those SMs at once (at most their items).
+// lazy: the filler warps' LAZY (filler_warp).
 struct Fatt {
   int FW = 0, NC = 4, sms = 0, lazy = 0;
-  size_t pg[2] = {0, 0};
-  size_t per = 0;
-  unsigned long long* rec = nullptr;
-  int* cnt = nullptr;
+  size_t pg[2] = {0, 0}, sl[2] = {0, 0};
+  unsigned long long off0 = 0;
+  const FRing* ring = nullptr;
 };
+static unsigned long long fatt_off(const Fatt& a, int k) {
+  return a.off0 + (unsigned long long)(k / 2) * (a.sl[0] + a.sl[1]) + (k & 1) * a.sl[0];
+}
 static dim3 qk_grid(int B, int L) { return dim3((L + QK_W * QK_KW - 1) / (QK_W * QK_KW), HKV, B); }
 static dim3 pv_grid(int B, int L) { return dim3((L / 4 + PV_W * PV_GW - 1) / (PV_W * PV_GW), HKV, B); }
 static size_t blocks(dim3 g) { return (size_t)g.x * g.y * g.z; }
-static unsigned long long fatt_tile0(int k) { return (0x6ull << 56) | ((unsigned long long)k << 32); }
 template <int FW_, int NC_>
 struct FwNc {
   static constexpr int FW = FW_, NC = NC_;
@@ -608,10 +657,8 @@ static void fatt_prepare(Fatt& a, int FW, int NC, int B, int L, int sms = 0) {
   a.FW = FW;
   a.NC = NC;
   a.sms = sms;
+  a.sl[0] = a.sl[1] = 0;
   if (FW == 0) return;
-  a.per = blocks(qk_grid(B, L)) * FW;
-  CK(cudaMalloc(&a.rec, a.per * 2 * LAYERS * sizeof(unsigned long long)));
-  CK(cudaMalloc(&a.cnt, a.per * 2 * LAYERS * sizeof(int)));
   if (sms > 0)
     fatt_with(FW, NC, [&](auto t) {
       using T = decltype(t);
@@ -621,9 +668,28 @@ static void fatt_prepare(Fatt& a, int FW, int NC, int B, int L, int sms = 0) {
       a.pg[0] = std::min(blocks(qk_grid(B, L)), (size_t)occ[0] * sms);
       a.pg[1] = std::min(blocks(pv_grid(B, L)), (size_t)occ[1] * sms);
     });
+  a.sl[0] = (sms > 0 ? a.pg[0] : blocks(qk_grid(B, L))) * FW;
+  a.sl[1] = (sms > 0 ? a.pg[1] : blocks(pv_grid(B, L))) * FW;
 }
-static size_t fatt_slots(const Fatt& a, int k, int B, int L) {
-  return (a.sms > 0 ? a.pg[k & 1] : blocks(k & 1 ? pv_grid(B, L) : qk_grid(B, L))) * a.FW;
+// the step's filler layout: flin's launches 0 … LAUNCHES (the last reserved for lm_head), grid · fw slots each, then every
+// layer's attention launches; the slots a step
+static unsigned long long fused_layout(Flin& f, int fw, Fatt& a) {
+  f.stride = (unsigned long long)f.grid * fw;
+  a.off0 = (Flin::LAUNCHES + 1) * f.stride;
+  return a.off0 + (unsigned long long)LAYERS * (a.sl[0] + a.sl[1]);
+}
+// step s's filler launches in the ring: flin's launches `lin` (with f and its FW > 0) and the first `layers` layers'
+// attention launches (with a and its FW > 0)
+static std::vector<FillLaunch> fused_launches(const FRing& r, const Flin* f, const std::vector<int>& lin, const Fatt* a,
+                                              int layers, unsigned long long s) {
+  const size_t at0 = (size_t)(s % r.ring) * r.per;
+  const unsigned long long t0 = r.lo + s * r.per;
+  std::vector<FillLaunch> v;
+  if (f && f->FW)
+    for (int i : lin) v.push_back({at0 + i * f->stride, (size_t)f->grid * f->FW, t0 + i * f->stride, f->NC});
+  if (a && a->FW)
+    for (int k = 0; k < 2 * layers; k++) v.push_back({at0 + fatt_off(*a, k), a->sl[k & 1], t0 + fatt_off(*a, k), a->NC});
+  return v;
 }
 static int g_fatt_pdl = 0;  // FATT_PDL: the attention filler blocks without PDL (0), with it (1), with early filler warps (2)
 static int g_fatt_nc = 4;   // FATT_NC: the attention filler warps' chains (fatt_built)
@@ -644,17 +710,15 @@ static void pdl_go(void (*k)(P...), dim3 grid, int threads, cudaStream_t st, A..
 }
 template <int FW, int NC>
 static void fatt_go(Dev& d, const Fatt& a, int B, int L, const int8_t* K, const int8_t* V, int layer) {
-  const size_t kq = (size_t)2 * layer, kp = kq + 1;
+  const int kq = 2 * layer, kp = kq + 1;
   const int early = g_fatt_pdl == 2;
   const dim3 gq = qk_grid(B, L), gp = pv_grid(B, L);
   const bool per = a.sms > 0;
   pdl_go(fqk_k<FW, NC>, per ? dim3((unsigned)a.pg[0]) : gq, QK_W * 32 + 32 * FW, d.st, K, (const int8_t*)d.q, d.S, L, d.O,
          B * HQ * HD,
-         FattArgs{g_c0, g_c1, fatt_tile0((int)kq), a.rec + kq * a.per, a.cnt + kq * a.per, early,
-                  per ? (long long)blocks(gq) : 0, (int)gq.x, a.lazy});
+         FattArgs{fslots(*a.ring, fatt_off(a, kq)), early, per ? (long long)blocks(gq) : 0, (int)gq.x, a.lazy});
   pdl_go(fpv_k<FW, NC>, per ? dim3((unsigned)a.pg[1]) : gp, PV_W * 32 + 32 * FW, d.st, V, (const int8_t*)d.P, d.O, L,
-         FattArgs{g_c0, g_c1, fatt_tile0((int)kp), a.rec + kp * a.per, a.cnt + kp * a.per, early,
-                  per ? (long long)blocks(gp) : 0, (int)gp.x, a.lazy});
+         FattArgs{fslots(*a.ring, fatt_off(a, kp)), early, per ? (long long)blocks(gp) : 0, (int)gp.x, a.lazy});
 }
 // enqueue_att's work for `layer`, with the attention filler when a.FW > 0; false if (FW, NC) isn't built
 static bool enqueue_fatt(Dev& d, const Fatt& a, int B, int L, int layer, bool* wrapped) {
@@ -665,13 +729,6 @@ static bool enqueue_fatt(Dev& d, const Fatt& a, int B, int L, int layer, bool* w
   const int8_t* K = kv_layer(d, B, L, layer, false, wrapped);
   const int8_t* V = kv_layer(d, B, L, layer, true, wrapped);
   return fatt_with(a.FW, a.NC, [&](auto t) { fatt_go<decltype(t)::FW, decltype(t)::NC>(d, a, B, L, K, V, layer); });
-}
-static FlinTally fatt_tally(const Fatt& a, int B, int L, int layers, int n, uint64_t salt) {
-  if (a.FW == 0) return {};
-  std::vector<FillLaunch> v;
-  for (int k = 0; k < 2 * layers; k++)
-    v.push_back({a.rec + (size_t)k * a.per, a.cnt + (size_t)k * a.per, fatt_slots(a, k, B, L), fatt_tile0(k)});
-  return fill_tally(v, a.NC, n, salt);
 }
 
 // fgate: flin bit for bit against ref_rows (every row) for each linear's shape at M = 32, 64, 128, 160, 192, 256, alone and
@@ -685,37 +742,54 @@ static int flin_gate(Dev& d) {
         {2, 4, 5, 0}, {4, 2, 5, 0}, {4, 4, 5, 0}, {6, 2, 5, 0}, {6, 4, 5, 0}, {8, 2, 5, 0}, {8, 4, 5, 0},
         {4, 2, 0, 2}, {8, 2, 0, 4}, {2, 4, 5, 4}, {4, 4, 5, 2}, {6, 2, 5, 2}, {6, 2, 5, 4}, {8, 2, 5, 2}, {8, 2, 5, 4}}) {
     Fatt a;
+    FRing r;
     fatt_prepare(a, fw, nc, 3, 1536, sms);  // persistent on 5 SMs: every block takes several items
     a.lazy = lazy;
-    CK(cudaMemset(a.rec, 0xA5, a.per * 2 * LAYERS * 8));
+    a.ring = &r;
+    // three steps on a ring of four: the gated one, then two more past fadv_k, every step's receipts checked at its tiles
+    const unsigned long long lo = 0x7ull << 56, per = a.sl[0] + a.sl[1];
+    fring_open(r, per, 4, g_c0, g_c1, lo, d.st);
     char what[80];
     snprintf(what, sizeof what, "attention FW %d NC %d%s lazy %d", fw, nc, sms ? " persistent" : "", lazy);
     bool built = true;
     fails += att_gate(d, rng, "fgate", what, [&](int B, int L) {
       bool wr = false;
       built = enqueue_fatt(d, a, B, L, 0, &wr);
+      for (int s = 1; s < 3; s++) {
+        fadv_k<<<1, 1, 0, d.st>>>(r.st, r.per);
+        enqueue_fatt(d, a, B, L, 0, &wr);
+      }
     });
     if (!built) { fprintf(stderr, "fatt: FW %d NC %d not built (%s)\n", fw, nc, fatt_built()); return fails + 1; }
-    const FlinTally t = fatt_tally(a, 3, 1536, 1, 16, 0xA77 + fw * 8 + nc);
-    const bool ok = t.bad == 0 && t.ctl_equal == 0 && t.checked > 0;
-    printf("{\"mode\": \"fgate\", \"what\": \"%s receipts\", \"slots\": %lld, \"filler_steps\": %lld, \"idle_slots\": %lld, "
-           "\"rec_checked\": %d, \"rec_bad\": %d, \"ctl_equal\": %d, \"ok\": %s}\n",
-           what, t.slots, t.steps, t.idle, t.checked, t.bad, t.ctl_equal, ok ? "true" : "false");
+    const FState st = fring_state(r);
+    std::vector<FillLaunch> ls;
+    for (int s = 0; s < 3; s++) {
+      const auto v = fused_launches(r, nullptr, {}, &a, 1, s);
+      ls.insert(ls.end(), v.begin(), v.end());
+    }
+    const FlinTally t = fill_tally(r, ls, 24, 0xA77 + fw * 8 + nc);
+    const bool adv = st.step == 2 && st.base == lo + 2 * per;
+    const bool ok = t.bad == 0 && t.ctl_equal == 0 && t.checked > 0 && adv;
+    printf("{\"mode\": \"fgate\", \"what\": \"%s receipts\", \"steps\": 3, \"advanced\": %s, \"slots\": %lld, "
+           "\"filler_steps\": %lld, \"idle_slots\": %lld, \"rec_checked\": %d, \"rec_bad\": %d, \"ctl_equal\": %d, "
+           "\"ok\": %s}\n",
+           what, adv ? "true" : "false", t.slots, t.steps, t.idle, t.checked, t.bad, t.ctl_equal, ok ? "true" : "false");
     fflush(stdout);
     fails += !ok;
-    CK(cudaFree(a.rec));
-    CK(cudaFree(a.cnt));
   }
   for (int M : {32, 64, 128, 160, 192, 256}) {
     Flin f;
+    FRing r;
     flin_prepare(d, f, M, false);
+    f.ring = &r;
     for (int j = 0; j < 4; j++)
       for (int fw : {0, M == 256 ? 2 : 4}) {
         f.FW = fw;
         f.NC = M == 160 || M == 192 ? 4 : 2;
+        f.stride = (unsigned long long)f.grid * fw;
+        fring_open(r, (Flin::LAUNCHES + 1) * f.stride, 1, g_c0, g_c1, 0x5ull << 56, d.st);
         const int i = j;  // layer 0's linear j
         CK(cudaMemsetAsync(f.Db[0], 0, (size_t)M * LN[j] * 4, d.st));
-        CK(cudaMemsetAsync(f.rec + (size_t)i * f.grid * 16, 0xA5, (size_t)f.grid * 16 * 8, d.st));
         if (!flin_one(d, f, i, 0, (j + 1) % 4)) { fprintf(stderr, "flin: M %d FW %d not built\n", M, fw); return 1; }
         ref_rows<<<(unsigned)(((size_t)M * LN[j] + 255) / 256), 256, 0, d.st>>>(d.X, d.W[0][j], g_ref, M, 1, LN[j], LK[j]);
         CK(cudaMemsetAsync(g_cnt, 0, sizeof *g_cnt, d.st));
@@ -724,7 +798,7 @@ static int flin_gate(Dev& d) {
         CK(cudaMemcpyAsync(&bad, g_cnt, sizeof bad, cudaMemcpyDeviceToHost, d.st));
         CK(cudaStreamSynchronize(d.st));
         CK(cudaGetLastError());
-        const FlinTally t = flin_tally(f, {i}, 8, 0x6A7E + M * 16 + j);
+        const FlinTally t = fill_tally(r, fused_launches(r, &f, {i}, nullptr, 0, 0), 8, 0x6A7E + M * 16 + j);
         const bool ok = bad == 0 && t.bad == 0 && t.ctl_equal == 0 && (fw == 0 || t.checked > 0);
         printf("{\"mode\": \"fgate\", \"M\": %d, \"linear\": \"%s\", \"N\": %d, \"K\": %d, \"FW\": %d, \"NC\": %d, "
                "\"mismatches\": %llu, \"rec_checked\": %d, \"rec_bad\": %d, \"ctl_equal\": %d, \"filler_steps\": %lld, "
@@ -740,8 +814,12 @@ static int flin_gate(Dev& d) {
 // flin M FW NC THR: each linear's 32 layers (distinct weights) as one graph: cuBLASLt, flin alone, flin with filler warps
 static int run_flin(Dev& d, int M, int FW, int NC, int thr, int reps) {
   Flin f;
+  FRing r;
   flin_prepare(d, f, M, true);
   f.thr = thr;
+  f.ring = &r;
+  f.stride = (unsigned long long)f.grid * FW;
+  fring_open(r, (Flin::LAUNCHES + 1) * f.stride, 1, g_c0, g_c1, 0x5ull << 56, d.st);
   std::vector<Lt> p(4);
   for (int j = 0; j < 4; j++) p[j] = lt_make(M, LN[j], LK[j], d.X, d.W[0][j], d.D, d.st);
   for (int j = 0; j < 4; j++) {
@@ -761,7 +839,7 @@ static int run_flin(Dev& d, int M, int FW, int NC, int thr, int reps) {
     const auto vf = time_work(d, [&] { fl(FW); }, reps);
     const auto vb2 = time_work(d, [&] { for (int l = 0; l < LAYERS; l++) lt_run(p[j], d.X, d.W[l][j], d.D, d.st); }, reps);
     f.FW = FW;
-    const FlinTally t = flin_tally(f, ls, 8, 0xF11 + M * 4 + j);
+    const FlinTally t = fill_tally(r, fused_launches(r, &f, ls, nullptr, 0, 0), 8, 0xF11 + M * 4 + j);
     const Rep mb = median(vb), m0 = median(v0), mf = median(vf), mb2 = median(vb2);
     const double base = (mb.ms + mb2.ms) / 2, cap = 1024.0 * d.sms * mf.mhz * 1e6;
     const double macs = (double)LAYERS * M * LN[j] * LK[j], bytes = (double)LAYERS * LN[j] * LK[j];
@@ -785,8 +863,8 @@ static int run_flin(Dev& d, int M, int FW, int NC, int thr, int reps) {
 // attention, both with filler warps, the cuBLASLt step again. With FILL_SMS > 0 the two flin arms run on a green split's
 // other SMs and the last beside round 1's pump (W 8, NC 4, S 2048) on FILL_SMS SMs, whose window share and receipts are
 // reported with the rest. A batch B ≤ 256 runs flin at the next tile height (flin_m_for), attention and the cuBLASLt
-// step at B. The filler warps' MACs are their step counts over the last rep's launches; the last linear's output is
-// checked on every row when down runs through flin.
+// step at B. The filler warps' MACs are their step counts over the last rep's launches (each step's tiles are the next
+// `per` ids, fused_layout); the last linear's output is checked on every row when down runs through flin.
 static int g_lt_mask = 0;
 static std::vector<int> fstep_seq() {
   std::vector<int> s;
@@ -812,6 +890,7 @@ static void enqueue_fstep(Dev& d, const Flin& f, const Fatt& a, const std::vecto
     for (int j = 1; j < 4; j++) lin(4 * l + j);
   }
   if (B <= 256 && p[4].algo_id != -2) lt_run(p[4], d.X, d.Wlm, d.D, d.st);
+  fadv_k<<<1, 1, 0, d.st>>>(f.ring->st, f.ring->per);
 }
 static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int fill_sms, int reps) {
   if (g_lt_mask & ~15) { fprintf(stderr, "FLIN_LT: bits 1 qkv, 2 o, 4 gate_up, 8 down\n"); exit(1); }
@@ -834,6 +913,9 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
   }
   fatt_prepare(a, AFW, g_fatt_nc, B, L, g_fatt_per ? got[0] : 0);
   a.lazy = g_fatt_lazy;
+  FRing r;
+  f.ring = a.ring = &r;
+  fring_open(r, fused_layout(f, FW, a), 1, g_c0, g_c1, 0x5ull << 56, d.st);
   DFill pf;
   if (fs) {
     dfill_prep();
@@ -876,7 +958,9 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
   d.st = full;
   const auto vb2 = time_work(d, base, reps);
   f.FW = FW;
-  const FlinTally t = flin_tally(f, seq, 16, 0xF57E + B * 8 + L), ta = fatt_tally(a, B, L, LAYERS, 16, 0xA57E + B * 8 + L);
+  const unsigned long long last = fring_state(r).step - 1;  // vf's last step
+  const FlinTally t = fill_tally(r, fused_launches(r, &f, seq, nullptr, 0, last), 16, 0xF57E + B * 8 + L),
+                  ta = fill_tally(r, fused_launches(r, nullptr, {}, &a, LAYERS, last), 16, 0xA57E + B * 8 + L);
   // the last flin launch is down's of the last layer unless FLIN_LT keeps down on cuBLASLt, whose output lm_head overwrites
   const int out_rows = g_lt_mask & 8 ? 0 : B, N = LN[3], K = LK[3];
   unsigned long long out_bad = 0;
