@@ -828,10 +828,15 @@ static void dfill_launch(const DFill& f, long long chunk, cudaStream_t st) {
     default: fprintf(stderr, "NC must be 1, 2 or 4\n"); exit(1);
   }
 }
+// the fillers' preferred shared-memory carveout, a percentage (DFILL_CARVEOUT; -1 the driver's default; unset: max shared)
+static int dfill_carveout() {
+  return getenv("DFILL_CARVEOUT") ? atoi(getenv("DFILL_CARVEOUT")) : (int)cudaSharedmemCarveoutMaxShared;
+}
 static void dfill_prep() {
-  CK(cudaFuncSetAttribute(dfill_k<1>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
-  CK(cudaFuncSetAttribute(dfill_k<2>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
-  CK(cudaFuncSetAttribute(dfill_k<4>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
+  const int c = dfill_carveout();
+  CK(cudaFuncSetAttribute(dfill_k<1>, cudaFuncAttributePreferredSharedMemoryCarveout, c));
+  CK(cudaFuncSetAttribute(dfill_k<2>, cudaFuncAttributePreferredSharedMemoryCarveout, c));
+  CK(cudaFuncSetAttribute(dfill_k<4>, cudaFuncAttributePreferredSharedMemoryCarveout, c));
 }
 // tiles a warp so that a chunk is about 2^DFILL_CHUNK_LOG2 (default 19) MMAs an SM, ~1 ms at the tensor peak
 static DFill dfill_make(int grid, int W, int NC, int S, uint64_t c0, uint64_t c1) {
@@ -1344,9 +1349,9 @@ static int gc_split2(int n_step, cudaStream_t* s_step, cudaStream_t* s_step2, cu
 static int run_pfill(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, int pmode, int PW, int PNC, int PS,
                      double param, int reps) {
   dfill_prep();
-  CK(cudaFuncSetAttribute(dfill_p<1>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
-  CK(cudaFuncSetAttribute(dfill_p<2>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
-  CK(cudaFuncSetAttribute(dfill_p<4>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
+  CK(cudaFuncSetAttribute(dfill_p<1>, cudaFuncAttributePreferredSharedMemoryCarveout, dfill_carveout()));
+  CK(cudaFuncSetAttribute(dfill_p<2>, cudaFuncAttributePreferredSharedMemoryCarveout, dfill_carveout()));
+  CK(cudaFuncSetAttribute(dfill_p<4>, cudaFuncAttributePreferredSharedMemoryCarveout, dfill_carveout()));
   const std::vector<Lt> p = lin_plans(d, B);
   bool wrapped = false;
   int lo, hi;
