@@ -1263,16 +1263,16 @@ static int run_dfill(Dev& d, int B, int L, int place, int fill_sms, int W, int N
 // ---------------------------------------------------------------- pfill: the filler in decode's attention phase (HC-SCHED)
 // Decode's attention (qk_dec, pv_dec) runs on the CUDA cores and leaves the tensor pipe idle, and a co-resident filler
 // slows it ≤ 0.2% (FILL); only the linears suffer from a shared tensor pipe. So the step's graph forks a phase filler
-// (dfill_p, the same tile as dfill_k) on decode's own SMs after each layer's qkv, at the graph's highest node priority so
+// (dfill_p, the same tile as dfill_k, in the process's map) on decode's own SMs after each layer's qkv, at the graph's highest node priority so
 // its blocks are resident before attention's, and joins it before the o linear. Either fixed work a layer (mode fixed:
 // `tiles` a warp, sized from the measured attention time) or capped work (mode flag: tiles until a one-thread kernel after
 // pv_dec raises the layer's stop flag, `tiles` the cap). Tile ids are PBIT | (base + slot); base, on the device, advances
 // once a step, so no step repeats a tile. Each slot keeps (tile id, receipt); st[1] counts the tiles done.
 constexpr unsigned long long PBIT = 1ull << 62;
-template <int NC>
-__global__ void __launch_bounds__(512) dfill_p(uint64_t c0, uint64_t c1, unsigned long long* __restrict__ st,
-                                              unsigned long long off, int tiles, int steps, const int* stop,
-                                              unsigned long long* __restrict__ rec, unsigned* smbits) {
+template <int NC, int MAP>
+__device__ __forceinline__ void ptiles(uint64_t c0, uint64_t c1, unsigned long long* __restrict__ st, unsigned long long off,
+                                       int tiles, int steps, const int* stop, unsigned long long* __restrict__ rec,
+                                       unsigned* smbits) {
   const int lane = threadIdx.x & 31, g = lane >> 2, t = lane & 3;
   const unsigned long long wid = (unsigned long long)blockIdx.x * (blockDim.x >> 5) + (threadIdx.x >> 5);
   const unsigned long long base = *(volatile unsigned long long*)st;
@@ -1287,38 +1287,17 @@ __global__ void __launch_bounds__(512) dfill_p(uint64_t c0, uint64_t c1, unsigne
       if (__shfl_sync(0xffffffffu, v, 0)) break;
     }
     const unsigned long long slot = off + wid * tiles + i, tile = PBIT | (base + slot);
-    const uint64_t seed = dseed(c0, c1, tile);
+    const DSeed seed = dseed_x(c0, c1, tile, MAP);
     uint32_t b[2][2], c[4], a[NC][4];
-#pragma unroll
-    for (int j = 0; j < 2; j++) {
-      b[j][0] = dword(seed, 1 + j, g, t);
-      b[j][1] = dword(seed, 1 + j, g, 4 + t);
-    }
-    c[0] = (uint32_t)dcval(seed, g, 2 * t);
-    c[1] = (uint32_t)dcval(seed, g, 2 * t + 1);
-    c[2] = (uint32_t)dcval(seed, g + 8, 2 * t);
-    c[3] = (uint32_t)dcval(seed, g + 8, 2 * t + 1);
-#pragma unroll
-    for (int ch = 0; ch < NC; ch++) {
-      a[ch][0] = dword(seed, 16 + ch, g, t);
-      a[ch][1] = dword(seed, 16 + ch, g + 8, t);
-      a[ch][2] = dword(seed, 16 + ch, g, 4 + t);
-      a[ch][3] = dword(seed, 16 + ch, g + 8, 4 + t);
-    }
+    dgen<NC, MAP>(seed, g, t, b, c, a);
 #pragma unroll 1
     for (int s = 0; s < steps; s += 8) {
 #pragma unroll
       for (int u = 0; u < 8; u++)
 #pragma unroll
-        for (int ch = 0; ch < NC; ch++) dstep(a[ch], b[u & 1], c);
+        for (int ch = 0; ch < NC; ch++) dstep<MAP>(a[ch], b[u & 1], c);
     }
-    uint64_t h = 0;
-#pragma unroll
-    for (int ch = 0; ch < NC; ch++)
-      h ^= drec(seed, ch, g, t, a[ch][0]) ^ drec(seed, ch, g + 8, t, a[ch][1]) ^ drec(seed, ch, g, 4 + t, a[ch][2]) ^
-           drec(seed, ch, g + 8, 4 + t, a[ch][3]);
-#pragma unroll
-    for (int o = 16; o; o >>= 1) h ^= __shfl_xor_sync(0xffffffffu, h, o);
+    const uint64_t h = dhash<NC, MAP>(seed, g, t, a);
     if (lane == 0) {
       rec[2 * slot] = tile;
       rec[2 * slot + 1] = h;
@@ -1326,12 +1305,21 @@ __global__ void __launch_bounds__(512) dfill_p(uint64_t c0, uint64_t c1, unsigne
     }
   }
 }
+// map: PFill::map, the process's DFILL_MAP
+template <int NC>
+__global__ void __launch_bounds__(512) dfill_p(uint64_t c0, uint64_t c1, unsigned long long* __restrict__ st,
+                                              unsigned long long off, int tiles, int steps, const int* stop,
+                                              unsigned long long* __restrict__ rec, unsigned* smbits, int map) {
+  if (map == 2) return ptiles<NC, 2>(c0, c1, st, off, tiles, steps, stop, rec, smbits);
+  if (map == 1) return ptiles<NC, 1>(c0, c1, st, off, tiles, steps, stop, rec, smbits);
+  ptiles<NC, 0>(c0, c1, st, off, tiles, steps, stop, rec, smbits);
+}
 __global__ void pstop_k(int* stop) { *stop = 1; }
 __global__ void padv_k(unsigned long long* st, unsigned long long n) { st[0] += n; }
 
 struct PFill {
   int mode = 0;  // 0 none, 1 fixed, 2 flag
-  int W = 8, NC = 4, S = 256, tiles = 1, grid = 0, prio = 0;
+  int W = 8, NC = 4, S = 256, tiles = 1, grid = 0, prio = 0, map = dfill_map();
   bool join = true;
   uint64_t c0 = 0, c1 = 0;
   unsigned long long* st = nullptr;  // [0] tile base, [1] tiles done
@@ -1352,7 +1340,8 @@ static void plaunch_nc(const PFill& f, unsigned long long off, int tiles, const 
   at[0].val.priority = f.prio;
   cfg.attrs = at;
   cfg.numAttrs = 1;
-  CK(cudaLaunchKernelEx(&cfg, dfill_p<NC>, (uint64_t)f.c0, (uint64_t)f.c1, f.st, off, tiles, f.S, stop, f.rec, f.smbits));
+  CK(cudaLaunchKernelEx(&cfg, dfill_p<NC>, (uint64_t)f.c0, (uint64_t)f.c1, f.st, off, tiles, f.S, stop, f.rec, f.smbits,
+                        f.map));
 }
 static void plaunch(const PFill& f, unsigned long long off, int tiles, const int* stop, cudaStream_t st) {
   switch (f.NC) {
@@ -1400,7 +1389,7 @@ static int pfill_check(const PFill& f, int n, int* checked, int* skipped) {
   for (int i = 0; i < n && !w.empty(); i++) {
     const size_t s = w[((size_t)i * w.size() / n + ((size_t)i * 7919) % std::max((size_t)1, w.size() / n)) % w.size()];
     ++*checked;
-    bad += h[2 * s + 1] != dfill_ref(f.c0, f.c1, h[2 * s], f.NC, f.S);
+    bad += h[2 * s + 1] != dfill_ref(f.c0, f.c1, h[2 * s], f.NC, f.S, f.map);
   }
   return bad;
 }
@@ -1428,8 +1417,8 @@ static int pgate(Dev& d, const std::vector<int>& Ss) {
         for (long long i = 0; i < f.per_layer(); i++) {
           const size_t slot = (size_t)rep * f.per_layer() + i;
           const unsigned long long want = PBIT | (1000ull * rep + slot);
-          bad += h[2 * slot] != want || h[2 * slot + 1] != dfill_ref(f.c0, f.c1, want, nc, s);
-          ctl_equal += h[2 * slot + 1] == dfill_ref(f.c0, f.c1, want, nc, s - 8);
+          bad += h[2 * slot] != want || h[2 * slot + 1] != dfill_ref(f.c0, f.c1, want, nc, s, f.map);
+          ctl_equal += h[2 * slot + 1] == dfill_ref(f.c0, f.c1, want, nc, s - 8, f.map);
           n++;
         }
       }
