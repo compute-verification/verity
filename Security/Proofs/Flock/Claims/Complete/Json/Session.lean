@@ -8,8 +8,8 @@ import Proofs.Flock.Claims.Complete.Shape
 honest record (`recordObj`'s `compress`) of a non-empty `root_B` under `2^64` bytes, the link's points off the first
 reply's coin (`ptsOf`), and one well-formed stream per rep stream (`RoundsOk`); the table's extra claims evaluate at
 those points; and its first send is the link of that `root_B` and no public words (`SessionFacts`). It rests on two facts
-about the prover's pieces, taken as hypotheses: the commitment's cap is non-empty and under `2^64` bytes, and each rep
-records rounds of `1 ≤ n ≤ 65536` coins, at least one.
+about the prover's pieces, taken as hypotheses: the commitment's cap, at the schedule's first level, is non-empty and
+under `2^64` bytes, and each rep records rounds of `1 ≤ n ≤ 65536` coins, at least one.
 
 * **Returns through `throw`, `monadLift`, `mapM` and a `for` loop with membership** (`Ret.throw'`, `Ret.monadLift`,
   `Ret.mapM_array`, `Ret.forIn_array_mem`), on top of `Shape`'s `Ret`.
@@ -280,8 +280,9 @@ def SessionFacts (h : ByteArray → ByteArray) (resp : ℕ → Claims.Msg) (spec
 /-- **The one-table session's facts**, given a non-empty commitment cap under `2^64` bytes and well-formed rep rounds. -/
 theorem sessionP_facts (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) {spec : SessionSpec} {t : String}
     (ht : spec.tables = #[t]) (hct : spec.coinTree = none) (st : Setup) (trs : Array Trace) (tape : Tape)
-    (hC : ∀ lv g salt cm, commitP (Hashes.ofSha512 (Claims.hOf H) : Hashes V) st.merkle lv g salt = .ok cm →
-      0 < (flat cm.cap).size ∧ (flat cm.cap).size < 2 ^ 64)
+    (hC : ∀ sch, fast100 st.m = some sch → ∀ g salt cm,
+      commitP (Hashes.ofSha512 (Claims.hOf H) : Hashes V) st.merkle (sch.levels.getD 0 default) g salt = .ok cm →
+        0 < (flat cm.cap).size ∧ (flat cm.cap).size < 2 ^ 64)
     (hR : ∀ sch, fast100 st.m = some sch → ∀ tr tb cm₀ extras salt nonce d,
       Ret ((repP (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) st sch tr tb cm₀ extras salt nonce).run
         (Transcript.init #[] d)) fun pt => RoundsOk pt.2.rounds)
@@ -309,7 +310,7 @@ theorem sessionP_facts (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Ms
     fun i hi => by
       have : i = 0 := by simpa using hi
       subst this
-      exact Ret.of_pureS (commitP_pureS _ _ _ _ _) fun cm e => hC _ _ _ cm (by simpa using e)) hB
+      exact Ret.of_pureS (commitP_pureS _ _ _ _ _) fun cm e => hC sch hsch _ _ cm (by simpa using e)) hB
   have hl2 := Still.go (Still.mapM_array (fun i => by
     exact Still.of_pureS (commitP_pureS _ _ _ _ _)) _) hB
   subst hl2
