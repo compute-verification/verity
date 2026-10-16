@@ -7,6 +7,7 @@ import Proofs.Flock.Claims.Recursion.CostExp
 import Proofs.Flock.Claims.Recursion.Finders
 import Proofs.Flock.Claims.Recursion.Hybrid
 import Proofs.Flock.Claims.Recursion.KS
+import Proofs.Flock.Claims.Recursion.OuterKS
 
 /-! The ZK-recursion compiler's claims proofs: serving one rerun program's reruns by another's (`Serve`), `E^rep`'s
 weighted reruns by Wald's identity (`Wald`), the composed extractor, `E^rep` served by the outer extractor, with its
@@ -15,4 +16,5 @@ among `KS`'s error terms (`Transport`), the recursion's cost claim from the oute
 extractor's expected reruns by Wald's argument over forks, which proves the cost claim (`CostExp`), its
 extraction-based finder `Be` as a fork finder (`Finders`), the composed extractor's failure with the outer extractor
 charged at every rerun (`Hybrid`), and the recursion's `KS` from the outer Flock's KS at each session and the inner
-protocol's KS at the served runs (`KS`). -/
+protocol's KS at the served runs (`KS`), and that outer KS at each session from Flock's own KS at the outer deployment,
+the session's prover simulating the rest of the compiled verifier around it (`OuterKS`). -/

@@ -345,4 +345,301 @@ theorem unifMap_castCoins {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabite
   subst hK
   exact UnifMap.pi (UnifMap.pi (unifMap_sessCoins o n h) _) _
 
+theorem Pr_prod {A B : Type} [Fintype A] [Fintype B] (q : A × B → Prop) :
+    Pr q = Ex fun a => Pr fun b => q (a, b) := by
+  classical
+  rw [← Ex_ind, Ex_prod]
+  congr 1
+  funext a
+  exact Ex_ind _
+
+/-! ## Each prefix: the outer Flock's KS at the session prover -/
+
+theorem Nums.κ_nonneg (n : Nums) (h : 0 ≤ n.εtable) : 0 ≤ n.κ := by
+  unfold Nums.κ
+  have h1 : (0 : ℝ) ≤ 2 ^ (-(n.waits : ℝ)) := Real.rpow_nonneg (by norm_num) _
+  have h2 : (0 : ℝ) ≤ 2 * n.k / n.cap := by positivity
+  have h3 := Real.exp_pos (-(n.k : ℝ) / 8)
+  linarith
+
+open Classical in
+/-- **Session `s`'s collision probability at the prefix of `r`**: the outer Flock's `Pr[B]` at the session prover and
+statement, where some continuation of the prefix accepts; `0` where none does. -/
+noncomputable def sessPrB {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg)
+    (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
+    (s : ℕ) (r : Fin (D.V.k x) → Coin) : ℝ :=
+  if ∃ d, (run H P D.V x ω (fork (offO H D I DO P x ω s r) r d)).out = .acc then
+    PrB H DO.V (sessP H D I DO P x ω s r) (sessStmt H D I P x ω s r)
+  else 0
+
+theorem sessPrB_nonneg {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg)
+    (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
+    (s : ℕ) (r : Fin (D.V.k x) → Coin) : 0 ≤ sessPrB H D I DO P x ω s r := by
+  unfold sessPrB
+  split_ifs
+  · exact PrB_nonneg _ _ _ _
+  · exact le_rfl
+
+/-- **One prefix**: over the forks of `r` at session `s`'s first round and `E_O`'s coins, session `s`'s extraction
+fails at most as often as the outer Flock's `E^rep` at the session prover (`bad_fork`, the coins read uniformly), which
+Flock's KS bounds at the session's numbers; it never fails where no fork accepts. -/
+theorem prefix_bad_le {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
+    {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T} (hF : Flock.KS H DO)
+    (hN : SessionNums D DO) (hε : TableErrNonneg D) (hRd : SessionRounds D I DO) (hS : SessionAccepts D)
+    (hR : SessionRuns H D I DO) (decO : List (ℕ × Col) → List T) (hdec : decOK DO decO) (x : Msg)
+    (s : Fin (D.nS x)) {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin) :
+    Pr (fun p : (Fin (D.V.k x) → Coin) × (EOs H D I DO decO s).C x =>
+      (run H P D.V x ω (fork (offO H D I DO P x ω s r) r p.1)).out = .acc ∧
+        ¬ (sessR H DO).ext x ((EOs H D I DO decO s).eval H P x ω (fork (offO H D I DO P x ω s r) r p.1) p.2).1) ≤
+      (D.nums x s).κ + Real.sqrt ((D.nums x s).γ * sessPrB H D I DO P x ω s r) := by
+  classical
+  obtain ⟨hk', hW, hK, hN₀, hεt, hwt⟩ := hN x s ((run H P D.V x ω r).msgs.take (I.V.k (xI D x)))
+  change DO.V.k (sessStmt H D I P x ω s r) = _ at hk'
+  change DO.waits (sessStmt H D I P x ω s r) = _ at hW
+  change DO.cap (sessStmt H D I P x ω s r) = _ at hK
+  change DO.N₀ (sessStmt H D I P x ω s r) = _ at hN₀
+  change DO.εtable (sessStmt H D I P x ω s r) = _ at hεt
+  change DO.weight (sessStmt H D I P x ω s r) = _ at hwt
+  have hkk : DO.k (sessStmt H D I P x ω s r) = (D.nums x s).k := by
+    unfold Flock.Deploy.k Nums.k
+    rw [hN₀]
+  have hle : offO H D I DO P x ω s r + DO.V.k (sessStmt H D I P x ω s r) ≤ D.V.k x := hRd x s _
+  unfold sessPrB
+  split_ifs with hA
+  · have hφ : UnifMap (fun p : (Fin (D.V.k x) → Coin) × (EOs H D I DO decO s).C x =>
+        ((), sessCoins (offO H D I DO P x ω s r) p.1 (DO.V.k (sessStmt H D I P x ω s r)),
+          castCoins hW hK (offO H D I DO P x ω s r) (DO.V.k (sessStmt H D I P x ω s r)) p.2)) :=
+      UnifMap.comp ((unifMap_sessCoins _ _ hle).prod (unifMap_castCoins hW hK _ _ hle)) UnifMap.unit
+    have hκ : Flock.κ DO (sessStmt H D I P x ω s r) = (D.nums x s).κ := by
+      unfold Flock.κ Nums.κ
+      rw [hεt, hW, hK, hkk]
+    have hγ : Flock.γ DO (sessStmt H D I P x ω s r) = (D.nums x s).γ := by
+      unfold Flock.γ Nums.γ
+      rw [hk', hwt]
+    calc _ ≤ _ := Pr_mono fun p hp => bad_fork hS hR decO x s P ω r p.1 p.2 hW hK hkk hp
+      _ = PrBad H DO.V (Flock.R H DO.parse) (Flock.E H DO decO) (sessStmt H D I P x ω s r)
+            (sessP H D I DO P x ω s r) :=
+          hφ.Pr fun t : Unit × (Fin (DO.V.k (sessStmt H D I P x ω s r)) → Coin) ×
+              (Flock.E H DO decO).C (sessStmt H D I P x ω s r) =>
+            (run H (sessP H D I DO P x ω s r) DO.V (sessStmt H D I P x ω s r) t.1 t.2.1).out = .acc ∧
+              ¬ (Flock.R H DO.parse).ext (sessStmt H D I P x ω s r)
+                ((Flock.E H DO decO).eval H (sessP H D I DO P x ω s r) (sessStmt H D I P x ω s r) t.1 t.2.1
+                  t.2.2).1
+      _ ≤ _ := hF decO hdec _ Unit _
+      _ = _ := by rw [hκ, hγ]
+  · rw [mul_zero, Real.sqrt_zero, add_zero]
+    calc _ ≤ Pr (fun _ : (Fin (D.V.k x) → Coin) × (EOs H D I DO decO s).C x => False) :=
+          Pr_mono fun p hp => hA ⟨p.1, hp.1⟩
+      _ = 0 := Pr_false
+      _ ≤ _ := (D.nums x s).κ_nonneg (hε x s)
+
+/-- **Every prefix, averaged**: a draw is a fork of a draw at session `s`'s first round (`Ex_fork`), so session `s`'s
+failure is the average over prefixes of `prefix_bad_le`'s. -/
+theorem PrBad_EOs_le {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
+    {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T} (hF : Flock.KS H DO)
+    (hN : SessionNums D DO) (hε : TableErrNonneg D) (hRd : SessionRounds D I DO) (hS : SessionAccepts D)
+    (hR : SessionRuns H D I DO) (decO : List (ℕ × Col) → List T) (hdec : decOK DO decO) (x : Msg)
+    (s : Fin (D.nS x)) {Ω : Type} [Fintype Ω] (P : Prover Ω) :
+    PrBad H D.V (sessR H DO) (EOs H D I DO decO s) x P ≤
+      Ex (fun p : Ω × (Fin (D.V.k x) → Coin) =>
+        (D.nums x s).κ + Real.sqrt ((D.nums x s).γ * sessPrB H D I DO P x p.1 s p.2)) := by
+  unfold PrBad
+  rw [Pr_prod]
+  conv_rhs => rw [Ex_prod]
+  refine Ex_mono fun ω => ?_
+  rw [Pr_prod, ← Ex_fork (offO_prefixDet H D I DO P x ω s), Ex_prod]
+  refine Ex_mono fun r => le_trans (le_of_eq ?_) (prefix_bad_le hF hN hε hRd hS hR decO hdec x s P ω r)
+  rw [Pr_prod]
+
+/-! ## The collision term: the session's forks are the compiled verifier's -/
+
+/-- Two runs of `P` at the tape `ω`, the second forked from the first at round `j`, collide among the verifier's
+SHA-512 calls. -/
+def vForkColl {Ω Coin : Type} [Inhabited Coin] (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (x : Msg) (ω : Ω)
+    (j : ℕ) (R R' : Fin (V.k x) → Coin) : Prop :=
+  (findColl ((run H P V x ω R).vLog ++ (run H P V x ω (fork j R R')).vLog)).isSome
+
+/-- The collision probability of `B`'s fork at round `j`, for any `j`. -/
+noncomputable def forkPrN {Ω Coin : Type} [Fintype Ω] [Fintype Coin] [Inhabited Coin] (H : Msg → Msg)
+    (V : Verifier Coin) (P : Prover Ω) (x : Msg) (j : ℕ) : ℝ :=
+  Pr fun t : Ω × (Fin (V.k x) → Coin) × (Fin (V.k x) → Coin) => vForkColl H V P x t.1 j t.2.1 t.2.2
+
+/-- **`k(x)·Pr[B]` is the sum of its forks' collision probabilities.** -/
+theorem PrB_mul_eq {Ω Coin : Type} [Fintype Ω] [Nonempty Ω] [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
+    (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (x : Msg) :
+    PrB H V P x * V.k x = ∑ j ∈ Finset.range (V.k x), forkPrN H V P x j := by
+  by_cases hk : 0 < V.k x
+  · rw [PrB_eq_avg H V P x hk, div_mul_cancel₀ _ (by exact_mod_cast hk.ne'), ← Fin.sum_univ_eq_sum_range]
+    rfl
+  · simp [PrB, show V.k x = 0 by omega]
+
+/-- A collision among calls that are all in a list of evaluations of `H` is one `findColl` finds there. -/
+theorem findColl_isSome_of_sub (H : Msg → Msg) {l l' : List (Msg × Msg)} (hl' : ∀ p ∈ l', H p.1 = p.2)
+    (hsub : ∀ p ∈ l, p ∈ l') (h : (findColl l).isSome) : (findColl l').isSome := by
+  obtain ⟨⟨u, v⟩, huv⟩ := Option.isSome_iff_exists.1 h
+  have hc := findColl_spec H l (fun p hp => hl' p (hsub p hp)) u v huv
+  obtain ⟨hu, hv⟩ := findColl_mem l u v huv
+  have hm : ∀ w ∈ l.map Prod.fst, w ∈ l'.map Prod.fst := fun w hw => by
+    obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hw
+    exact List.mem_map.2 ⟨p, hsub p hp, rfl⟩
+  exact findColl_isSome H l' hl' u v (hm u hu) (hm v hv) hc
+
+theorem sum_range_shift_le (f : ℕ → ℝ) (hf : ∀ j, 0 ≤ f j) {o m k : ℕ} (h : o + m ≤ k) :
+    ∑ j ∈ Finset.range m, f (o + j) ≤ ∑ j ∈ Finset.range k, f j := by
+  have he := Finset.sum_Ico_eq_sum_range f o (o + m)
+  rw [Nat.add_sub_cancel_left] at he
+  rw [← he]
+  refine Finset.sum_le_sum_of_subset_of_nonneg (fun j hj => ?_) fun j _ _ => hf j
+  simp only [Finset.mem_Ico, Finset.mem_range] at hj ⊢
+  omega
+
+/-- **The session's forks are the compiled verifier's**: at a prefix some continuation of which accepts, the outer
+Flock's fork at round `j` of the session prover collides only where the compiled verifier's fork at round `off + j`
+does, on the same coins from the session's first round on. -/
+theorem sessPrB_mul_le {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
+    {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
+    (hN : SessionNums D DO) (hRd : SessionRounds D I DO) (hR : SessionRuns H D I DO) (x : Msg)
+    (s : Fin (D.nS x)) {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin) :
+    sessPrB H D I DO P x ω s r * (D.nums x s).rounds ≤
+      ∑ j ∈ Finset.range (D.nums x s).rounds, Pr fun p : (Fin (D.V.k x) → Coin) × (Fin (D.V.k x) → Coin) =>
+        vForkColl H D.V P x ω (offO H D I DO P x ω s r + j) (fork (offO H D I DO P x ω s r) r p.1) p.2 := by
+  unfold sessPrB
+  split_ifs with hA
+  · obtain ⟨d₁, hacc⟩ := hA
+    have hk' := (hN x s ((run H P D.V x ω r).msgs.take (I.V.k (xI D x)))).1
+    change DO.V.k (sessStmt H D I P x ω s r) = _ at hk'
+    have hle : offO H D I DO P x ω s r + DO.V.k (sessStmt H D I P x ω s r) ≤ D.V.k x := hRd x s _
+    rw [← hk', PrB_mul_eq]
+    refine Finset.sum_le_sum fun j _ => ?_
+    have hφ : UnifMap (fun p : (Fin (D.V.k x) → Coin) × (Fin (D.V.k x) → Coin) =>
+        ((), sessCoins (offO H D I DO P x ω s r) p.1 (DO.V.k (sessStmt H D I P x ω s r)),
+          sessCoins (offO H D I DO P x ω s r) p.2 (DO.V.k (sessStmt H D I P x ω s r)))) :=
+      UnifMap.comp ((unifMap_sessCoins _ _ hle).prod (unifMap_sessCoins _ _ hle)) UnifMap.unit
+    unfold forkPrN
+    rw [← hφ.Pr fun t => vForkColl H DO.V (sessP H D I DO P x ω s r) (sessStmt H D I P x ω s r) t.1 j t.2.1 t.2.2]
+    refine Pr_mono fun p hp => ?_
+    dsimp only [vForkColl] at hp ⊢
+    rw [fork_sessCoins] at hp
+    rw [← fork_add_fork]
+    refine findColl_isSome_of_sub H (fun e he => ?_) (fun e he => ?_) hp
+    · rcases List.mem_append.1 he with he | he
+      · exact (run_logs H P D.V x ω _).2 e he
+      · exact (run_logs H P D.V x ω _).2 e he
+    · rcases List.mem_append.1 he with he | he
+      · exact List.mem_append_left _ ((sessionRuns_fork hR x s P ω r d₁ p.1 hacc).2 e he)
+      · exact List.mem_append_right _ ((sessionRuns_fork hR x s P ω r d₁ _ hacc).2 e he)
+  · rw [zero_mul]
+    exact Finset.sum_nonneg fun j _ => Pr_nonneg _
+
+/-- **The collision term, averaged**: `𝔼[Pr[B] at the session prover]·k_s ≤ k(x)·Pr[B]`. A draw's prefix is a fork of
+a draw (`Ex_fork`), so the session's forks at rounds `off + j`, `j < k_s`, are among the compiled verifier's `k(x)`
+round guesses (`SessionRounds`). -/
+theorem Ex_sessPrB_le {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
+    {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
+    (hN : SessionNums D DO) (hRd : SessionRounds D I DO) (hR : SessionRuns H D I DO) (x : Msg)
+    (s : Fin (D.nS x)) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
+    Ex (fun p : Ω × (Fin (D.V.k x) → Coin) => sessPrB H D I DO P x p.1 s p.2) * (D.nums x s).rounds ≤
+      PrB H D.V P x * D.V.k x := by
+  rw [← Ex_mul_right, PrB_mul_eq, Ex_prod]
+  have hω : ∀ ω : Ω, Ex (fun r : Fin (D.V.k x) → Coin => sessPrB H D I DO P x ω s r * (D.nums x s).rounds) ≤
+      Ex fun R : Fin (D.V.k x) → Coin => ∑ j ∈ Finset.range (D.V.k x),
+        Pr fun d' : Fin (D.V.k x) → Coin => vForkColl H D.V P x ω j R d' := by
+    intro ω
+    let G : (Fin (D.V.k x) → Coin) → ℝ := fun R => ∑ j ∈ Finset.range (D.nums x s).rounds,
+      Pr fun d' : Fin (D.V.k x) → Coin => vForkColl H D.V P x ω (offO H D I DO P x ω s R + j) R d'
+    calc Ex (fun r : Fin (D.V.k x) → Coin => sessPrB H D I DO P x ω s r * (D.nums x s).rounds)
+        ≤ Ex fun r : Fin (D.V.k x) → Coin => ∑ j ∈ Finset.range (D.nums x s).rounds,
+            Pr fun p : (Fin (D.V.k x) → Coin) × (Fin (D.V.k x) → Coin) =>
+              vForkColl H D.V P x ω (offO H D I DO P x ω s r + j) (fork (offO H D I DO P x ω s r) r p.1) p.2 :=
+          Ex_mono fun r => sessPrB_mul_le hN hRd hR x s P ω r
+      _ = Ex fun p : (Fin (D.V.k x) → Coin) × (Fin (D.V.k x) → Coin) =>
+            G (fork (offO H D I DO P x ω s p.1) p.1 p.2) := by
+          rw [Ex_prod]
+          congr 1
+          funext r
+          simp only [G, offO_fork]
+          rw [Ex_sum]
+          exact Finset.sum_congr rfl fun j _ => Pr_prod _
+      _ = Ex G := Ex_fork (offO_prefixDet H D I DO P x ω s) G
+      _ ≤ _ := Ex_mono fun R => ?_
+    have hk' := (hN x s ((run H P D.V x ω R).msgs.take (I.V.k (xI D x)))).1
+    have hle : offO H D I DO P x ω s R + DO.V.k (sessStmt H D I P x ω s R) ≤ D.V.k x := hRd x s _
+    change DO.V.k (sessStmt H D I P x ω s R) = _ at hk'
+    rw [hk'] at hle
+    exact sum_range_shift_le (fun j => Pr fun d' : Fin (D.V.k x) → Coin => vForkColl H D.V P x ω j R d')
+      (fun j => Pr_nonneg _) hle
+  calc _ ≤ Ex fun ω : Ω => Ex fun R : Fin (D.V.k x) → Coin => ∑ j ∈ Finset.range (D.V.k x),
+          Pr fun d' : Fin (D.V.k x) → Coin => vForkColl H D.V P x ω j R d' := Ex_mono fun ω => hω ω
+    _ = ∑ j ∈ Finset.range (D.V.k x), forkPrN H D.V P x j := by
+      simp only [Ex_sum]
+      refine Finset.sum_congr rfl fun j _ => ?_
+      unfold forkPrN
+      rw [Pr_prod]
+      congr 1
+      funext ω
+      rw [Pr_prod]
+
+/-! ## The outer Flock's KS at each session, from Flock's own -/
+
+/-- **`OuterKS`'s inequality with the exact collision term**: session `s`'s extraction fails with probability at most
+`κ_s + √(γ_s·(k(x)/k_s)·Pr[B])`, `k_s` the session's rounds. Each prefix's failure is the outer Flock's at the session
+prover (`prefix_bad_le`); Jensen moves the average under the root, and the session's `k_s` round guesses are `k_s` of
+the compiled verifier's `k(x)` (`Ex_sessPrB_le`). -/
+theorem outerKS_sharp {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
+    {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T} (hF : Flock.KS H DO)
+    (hN : SessionNums D DO) (hε : TableErrNonneg D) (hRd : SessionRounds D I DO) (hS : SessionAccepts D)
+    (hR : SessionRuns H D I DO) (decO : List (ℕ × Col) → List T) (hdec : decOK DO decO) (x : Msg) (Ω : Type)
+    [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (s : Fin (D.nS x)) :
+    PrBad H D.V (sessR H DO) (EOs H D I DO decO s) x P ≤
+      (D.nums x s).κ + Real.sqrt ((D.nums x s).γ * (D.V.k x / (D.nums x s).rounds) * PrB H D.V P x) := by
+  have hZ0 : ∀ p : Ω × (Fin (D.V.k x) → Coin), 0 ≤ sessPrB H D I DO P x p.1 s p.2 := fun p =>
+    sessPrB_nonneg H D I DO P x p.1 s p.2
+  have hγ := (D.nums x s).γ_nonneg
+  have hZ : Ex (fun p : Ω × (Fin (D.V.k x) → Coin) => sessPrB H D I DO P x p.1 s p.2) ≤
+      D.V.k x / (D.nums x s).rounds * PrB H D.V P x := by
+    rcases Nat.eq_zero_or_pos (D.nums x s).rounds with h0 | hpos
+    · have hz : ∀ p : Ω × (Fin (D.V.k x) → Coin), sessPrB H D I DO P x p.1 s p.2 = 0 := by
+        intro p
+        unfold sessPrB
+        split_ifs
+        · have hk' := (hN x s ((run H P D.V x p.1 p.2).msgs.take (I.V.k (xI D x)))).1
+          change DO.V.k (sessStmt H D I P x p.1 s p.2) = _ at hk'
+          simp [PrB, hk', h0]
+        · rfl
+      simp only [hz, h0, Nat.cast_zero, div_zero, zero_mul]
+      exact (Ex_const 0).le
+    · rw [div_mul_eq_mul_div, le_div_iff₀ (by exact_mod_cast hpos), mul_comm (D.V.k x : ℝ)]
+      exact Ex_sessPrB_le hN hRd hR x s P
+  calc PrBad H D.V (sessR H DO) (EOs H D I DO decO s) x P
+      ≤ Ex fun p : Ω × (Fin (D.V.k x) → Coin) =>
+          (D.nums x s).κ + Real.sqrt ((D.nums x s).γ * sessPrB H D I DO P x p.1 s p.2) :=
+        PrBad_EOs_le hF hN hε hRd hS hR decO hdec x s P
+    _ = (D.nums x s).κ + Ex fun p : Ω × (Fin (D.V.k x) → Coin) =>
+          Real.sqrt ((D.nums x s).γ * sessPrB H D I DO P x p.1 s p.2) := by
+        rw [Ex_add, Ex_const]
+    _ ≤ (D.nums x s).κ + Real.sqrt (Ex fun p : Ω × (Fin (D.V.k x) → Coin) =>
+          (D.nums x s).γ * sessPrB H D I DO P x p.1 s p.2) :=
+        add_le_add le_rfl (Ex_sqrt_le _ fun p => mul_nonneg hγ (hZ0 p))
+    _ ≤ _ := by
+        rw [Ex_mul_left, mul_assoc]
+        exact add_le_add le_rfl (Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left hZ hγ))
+
+/-- **The outer `--zk` Flock's KS at each session, from Flock's own KS** (`Claims.Flock.KS` at `DO`) and the code
+facts that say how the compiled verifier runs each session: the session's numbers are the outer Flock's at its V*
+statement (`SessionNums`), its rounds end by `k(x)` (`SessionRounds`), its table error is nonnegative
+(`TableErrNonneg`), an accepted run shows each session accepting (`SessionAccepts`), and each fork at the session's
+first round shows the outer verifier's run of the session prover, whose calls are the compiled verifier's
+(`SessionRuns`). `outerKS_sharp`'s `k(x)/k_s` is at most `OuterKS`'s `k(x)`. -/
+theorem outerKS_of_flockKS {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
+    {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T} (hF : Flock.KS H DO)
+    (hN : SessionNums D DO) (hε : TableErrNonneg D) (hRd : SessionRounds D I DO) (hS : SessionAccepts D)
+    (hR : SessionRuns H D I DO) : OuterKS H D I DO := by
+  intro decO hdec x Ω _ _ P s
+  refine (outerKS_sharp hF hN hε hRd hS hR decO hdec x Ω P s).trans (add_le_add le_rfl (Real.sqrt_le_sqrt ?_))
+  have hm : (D.V.k x : ℝ) / (D.nums x s).rounds ≤ D.V.k x := by
+    rcases Nat.eq_zero_or_pos (D.nums x s).rounds with h0 | hpos
+    · simp [h0]
+    · exact div_le_self (Nat.cast_nonneg _) (by exact_mod_cast hpos)
+  exact mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_left hm (D.nums x s).γ_nonneg) (PrB_nonneg H D.V P x)
+
 end Claims.Recursion
