@@ -67,18 +67,20 @@ __device__ __forceinline__ int ld_flag(const int* p) {
   return v;
 }
 // Warp wid of collective `slot` runs tiles tile0 + wid·tiles + i, i < tiles, tile0 = (epoch·nslots + slot)·warps·maxcap (a
-// public range a collective, never reused), the tiles and receipts of dcap.cu's dtiles; cnt[wid] is how many it finished, and
-// total sums them over warps and launches.
+// public range a collective, never reused), the tiles and receipts of dcap.cu's dtiles. cnt[wid] is how many it finished; a
+// tile the flag interrupts after s steps (a multiple of the poll) writes the receipt of its state after s steps at the next
+// index, and part[wid] = s (0 if none), so the verifier recomputes exactly s steps. total sums the steps run (finished tiles
+// times S plus interrupted steps) over warps and launches.
 template <int NC, int MAP>
 __global__ void __launch_bounds__(512) cfill_k(uint64_t c0, uint64_t c1, const unsigned long long* __restrict__ epoch, int slot,
                                                int nslots, int tiles, int maxcap, int steps, int poll, const int* flag,
-                                               unsigned long long* __restrict__ rec, int* __restrict__ cnt,
+                                               unsigned long long* __restrict__ rec, int* __restrict__ cnt, int* __restrict__ part,
                                                unsigned long long* total) {
   const int lane = threadIdx.x & 31, g = lane >> 2, t = lane & 3;
   const unsigned long long nw = (unsigned long long)gridDim.x * (blockDim.x >> 5);
   const unsigned long long wid = (unsigned long long)blockIdx.x * (blockDim.x >> 5) + (threadIdx.x >> 5);
   const unsigned long long tile0 = (*epoch * (unsigned long long)nslots + slot) * nw * maxcap;
-  int done = 0;
+  int done = 0, cut = 0;
   int fr = poll >= 0 ? ld_flag(flag) : 0;  // tested a poll later, so its latency overlaps MMAs
   for (int i = 0; i < tiles; i++) {
     if (poll >= 0) {
@@ -98,19 +100,20 @@ __global__ void __launch_bounds__(512) cfill_k(uint64_t c0, uint64_t c1, const u
 #pragma unroll
         for (int ch = 0; ch < NC; ch++) dstep<MAP>(a[ch], b[u & 1], c);
       if (poll > 0 && (left -= 8) == 0) {
-        if (__shfl_sync(0xffffffffu, fr, 0)) { stop = true; break; }
+        if (__shfl_sync(0xffffffffu, fr, 0) && s + 8 < steps) { stop = true; cut = s + 8; break; }
         fr = ld_flag(flag);
         left = poll;
       }
     }
-    if (stop) break;
     const uint64_t h = dhash<NC, MAP>(seed, g, t, a);
     if (lane == 0) rec[idx] = h;
+    if (stop) break;
     done++;
   }
   if (lane == 0) {
     cnt[wid] = done;
-    atomicAdd(total, (unsigned long long)done);
+    part[wid] = cut;
+    atomicAdd(total, (unsigned long long)done * steps + cut);
   }
 }
 
@@ -123,7 +126,8 @@ struct PFill {  // the phase filler
   unsigned long long* epoch = nullptr;
   unsigned long long* total = nullptr;
   unsigned long long* rec = nullptr;  // nslots x warps x max(tiles, tiles_g)
-  int* cnt = nullptr;                 // nslots x warps
+  int* cnt = nullptr;                 // nslots x warps: finished tiles
+  int* part = nullptr;                // nslots x warps: the interrupted tile's steps, 0 if none
   cudaStream_t side = nullptr;
   cudaEvent_t fork = nullptr, join = nullptr;
   long long warps() const { return (long long)grid * W; }
@@ -173,12 +177,13 @@ static void cfill_launch(const PFill& f, int slot, uint64_t c0, uint64_t c1, cud
   const dim3 gr(f.grid), bl(32 * f.W);
   unsigned long long* rec = f.rec + (size_t)slot * f.stride();
   int* cnt = f.cnt + (size_t)slot * f.warps();
+  int* part = f.part + (size_t)slot * f.warps();
   const int* flag = f.flags + slot;
   const int cap = f.cap(slot);
 #define CF_CASE(NC_, MAP_)                                                                                                 \
   if (f.NC == NC_ && f.map == MAP_) {                                                                                      \
     cfill_k<NC_, MAP_><<<gr, bl, 0, st>>>(c0, c1, f.epoch, slot, f.nslots, cap, f.maxcap(), f.S, f.poll, flag, rec, cnt,   \
-                                          f.total);                                                                       \
+                                          part, f.total);                                                                       \
     return;                                                                                                                \
   }
   CF_CASE(1, 1) CF_CASE(2, 1) CF_CASE(4, 1) CF_CASE(1, 2) CF_CASE(2, 2) CF_CASE(4, 2)
@@ -290,13 +295,14 @@ static int pf_gate(Rank& R) {
     unsigned long long ep;
     CK(cudaMemcpy(&ep, f.epoch, sizeof ep, cudaMemcpyDeviceToHost));
     std::vector<unsigned long long> h(f.stride());
-    std::vector<int> c(f.warps());
+    std::vector<int> c(f.warps()), pt(f.warps());
     CK(cudaMemcpy(h.data(), f.rec + (size_t)slot * f.stride(), h.size() * 8, cudaMemcpyDeviceToHost));
     CK(cudaMemcpy(c.data(), f.cnt + (size_t)slot * f.warps(), c.size() * 4, cudaMemcpyDeviceToHost));
+    CK(cudaMemcpy(pt.data(), f.part + (size_t)slot * f.warps(), pt.size() * 4, cudaMemcpyDeviceToHost));
     long bad = 0, ctl = 0, checked = 0, cnt_bad = 0, untouched_bad = 0;
     for (long long w = 0; w < f.warps(); w++) {
       const int want = poll < 0 ? f.tiles : 0;
-      cnt_bad += c[w] != want;
+      cnt_bad += c[w] != want || pt[w] != 0;
       for (int i = 0; i < f.tiles; i++) {
         const unsigned long long v = h[w * f.tiles + i];
         if (i >= c[w]) { untouched_bad += v != 0xA5A5A5A5A5A5A5A5ull; continue; }
@@ -319,44 +325,62 @@ static int pf_gate(Rank& R) {
   return fails;
 }
 
-// after an arm: `n` finished tiles of the last rep spread over the collectives, checked against dfill_ref
-static void pf_check(Rank& R, int n, long* checked, long* bad, long* cnt_over) {
+// after an arm: `n` finished and `n` interrupted tiles of the last rep spread over the collectives, each checked against
+// dfill_ref at the steps it ran; *cuts counts the last rep's interrupted tiles
+static void pf_check(Rank& R, int n, long* checked, long* bad, long* cnt_over, long* cuts) {
   PFill& f = R.pf;
   unsigned long long ep;
   CK(cudaMemcpy(&ep, f.epoch, sizeof ep, cudaMemcpyDeviceToHost));
-  std::vector<int> c((size_t)f.nslots * f.warps());
+  std::vector<int> c((size_t)f.nslots * f.warps()), pt(c.size());
   CK(cudaMemcpy(c.data(), f.cnt, c.size() * 4, cudaMemcpyDeviceToHost));
-  *checked = *bad = *cnt_over = 0;
+  CK(cudaMemcpy(pt.data(), f.part, pt.size() * 4, cudaMemcpyDeviceToHost));
+  *checked = *bad = *cnt_over = *cuts = 0;
   for (int s = 0; s < f.nslots; s++)
-    for (long long w = 0; w < f.warps(); w++) *cnt_over += c[(size_t)s * f.warps() + w] > f.cap(s);
+    for (long long w = 0; w < f.warps(); w++) {
+      const size_t k = (size_t)s * f.warps() + w;
+      *cnt_over += c[k] + (pt[k] > 0) > f.cap(s) || pt[k] < 0 || pt[k] >= f.S || pt[k] % 8;
+      *cuts += pt[k] > 0;
+    }
   std::mt19937_64 rng(ep * 7919 + R.r);
-  for (int k = 0; k < 40 * n && *checked < n; k++) {
+  long full = 0, cut = 0;
+  for (int k = 0; k < 400 * n && (full < n || cut < n); k++) {
     const int s = (int)(rng() % f.nslots);
     const long long w = (long long)(rng() % f.warps());
-    const int done = c[(size_t)s * f.warps() + w];
-    if (done <= 0) continue;
-    const int i = (int)(rng() % done);
+    const size_t ix = (size_t)s * f.warps() + w;
+    const bool want_cut = full >= n;
+    int i, steps;
+    if (want_cut) {
+      if (pt[ix] <= 0) continue;
+      i = c[ix];
+      steps = pt[ix];
+      cut++;
+    } else {
+      if (c[ix] <= 0) continue;
+      i = (int)(rng() % c[ix]);
+      steps = f.S;
+      full++;
+    }
     unsigned long long v;
     CK(cudaMemcpy(&v, f.rec + (size_t)s * f.stride() + w * f.cap(s) + i, 8, cudaMemcpyDeviceToHost));
-    *bad += v != dfill_ref(g_tc0, g_tc1, f.tile(ep, s, w, i), f.NC, f.S, f.map);
+    *bad += v != dfill_ref(g_tc0, g_tc1, f.tile(ep, s, w, i), f.NC, steps, f.map);
     (*checked)++;
   }
 }
 
 static int getenv_i(const char* k, int dflt) { return getenv(k) ? atoi(getenv(k)) : dflt; }
 
-static void emit(Rank& R, const char* arm, int B, int L, const std::vector<Rep>& v, double served_macs, double fill_tiles_rep,
+static void emit(Rank& R, const char* arm, int B, int L, const std::vector<Rep>& v, double served_macs, double fill_steps_rep,
                  const char* extra) {
   std::vector<Rep> s = v;
   std::sort(s.begin(), s.end(), [](const Rep& a, const Rep& b) { return a.ms < b.ms; });
   const Rep& m = s[s.size() / 2];
   const double peak = 1024.0 * R.d.sms * m.mhz * 1e6;
-  const double fill_macs = fill_tiles_rep * R.pf.NC * R.pf.S * 4096.0;
+  const double fill_macs = fill_steps_rep * R.pf.NC * 4096.0;
   printf("{\"mode\": \"tp\", \"tp\": %d, \"rank\": %d, \"B\": %d, \"L\": %d, \"arm\": \"%s\", \"ms\": %.4f, \"ms_min\": %.4f, "
-         "\"ms_max\": %.4f, \"mhz\": %.1f, \"watt\": %.1f, \"served_macs\": %.6e, \"served_share\": %.5f, \"fill_tiles_rep\": %.1f, "
+         "\"ms_max\": %.4f, \"mhz\": %.1f, \"watt\": %.1f, \"served_macs\": %.6e, \"served_share\": %.5f, \"fill_steps_rep\": %.1f, "
          "\"fill_macs_rep\": %.6e, \"fill_share\": %.5f%s, \"reps\": [",
          R.tp, R.r, B, L, arm, m.ms, s.front().ms, s.back().ms, m.mhz, m.watt, served_macs,
-         served_macs / (m.ms * 1e-3) / peak, fill_tiles_rep, fill_macs, fill_macs / (m.ms * 1e-3) / peak, extra);
+         served_macs / (m.ms * 1e-3) / peak, fill_steps_rep, fill_macs, fill_macs / (m.ms * 1e-3) / peak, extra);
   for (size_t i = 0; i < v.size(); i++) printf("%s[%.4f, %.0f, %.0f]", i ? ", " : "", v[i].ms, v[i].mhz, v[i].watt);
   printf("]}\n");
   fflush(stdout);
@@ -392,19 +416,20 @@ static int run_point(Rank& R, int B, int L, int reps) {
     barrier(R);
     if (pf) CK(cudaMemset(R.pf.total, 0, 8));
     const std::vector<Rep> v = time_work(R.d, [&] { enqueue_step(R, p, lm, kind, pf, B, L, &wrapped); }, reps);
-    double tiles_rep = 0;
+    double steps_rep = 0;
     char extra[256] = "";
     if (pf) {
       unsigned long long tot;
       CK(cudaMemcpy(&tot, R.pf.total, 8, cudaMemcpyDeviceToHost));
-      tiles_rep = (double)tot / (reps + 2);  // time_work's 2 warm-ups ran it too
-      long checked, bad, over;
-      pf_check(R, 12, &checked, &bad, &over);
-      snprintf(extra, sizeof extra, ", \"rec_checked\": %ld, \"rec_bad\": %ld, \"cnt_over_cap\": %ld, \"pf\": [%d, %d, %d, %d, %d, %d, %d]",
-               checked, bad, over, R.pf.W, R.pf.NC, R.pf.S, R.pf.tiles, R.pf.poll, R.pf.grid, R.pf.map);
+      steps_rep = (double)tot / (reps + 2);  // time_work's 2 warm-ups ran it too
+      long checked, bad, over, cuts;
+      pf_check(R, 8, &checked, &bad, &over, &cuts);
+      snprintf(extra, sizeof extra, ", \"rec_checked\": %ld, \"rec_bad\": %ld, \"cnt_over_cap\": %ld, \"cuts\": %ld, "
+               "\"pf\": [%d, %d, %d, %d, %d, %d, %d]",
+               checked, bad, over, cuts, R.pf.W, R.pf.NC, R.pf.S, R.pf.tiles, R.pf.poll, R.pf.grid, R.pf.map);
       if (bad || over) rc = 8;
     }
-    emit(R, a.c_str(), B, L, v, kind == 2 ? 0 : served, tiles_rep, extra);
+    emit(R, a.c_str(), B, L, v, kind == 2 ? 0 : served, steps_rep, extra);
   }
   printf("{\"mode\": \"point\", \"tp\": %d, \"rank\": %d, \"B\": %d, \"L\": %d, \"kv_wrapped\": %s, \"lin_macs\": %.6e, "
          "\"att_macs\": %.6e, \"algos\": [%d, %d, %d, %d, %d], \"lt_ms\": [%.4f, %.4f, %.4f, %.4f, %.4f]}\n",
@@ -481,6 +506,7 @@ static int rank_main(int r, int tp, const ncclUniqueId& id, int argc, char** arg
     CK(cudaMalloc(&f.total, 8));
     CK(cudaMalloc(&f.rec, (size_t)f.nslots * f.stride() * 8));
     CK(cudaMalloc(&f.cnt, (size_t)f.nslots * f.warps() * 4));
+    CK(cudaMalloc(&f.part, (size_t)f.nslots * f.warps() * 4));
     CK(cudaStreamCreateWithFlags(&f.side, cudaStreamNonBlocking));
     CK(cudaEventCreateWithFlags(&f.fork, cudaEventDisableTiming));
     CK(cudaEventCreateWithFlags(&f.join, cudaEventDisableTiming));
