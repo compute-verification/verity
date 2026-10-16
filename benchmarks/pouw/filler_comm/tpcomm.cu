@@ -131,9 +131,10 @@ __device__ __forceinline__ int kf_bar_or(int id, int v) {
 // poll that reads the flag up. Records (slot, gid, i, w) hold warp w's receipt of tile i, the XOR over its lanes and chains
 // of pf_fold(dseed(c0, c1, tile), pos, y) at the state it stopped in, and q, the (fragment group, B fragment) pairs it ran
 // (4 MMAs each; KF_PAIRS_J S / 4 when whole). cnt[slot, gid] is the tiles the group started; every one but the last is
-// whole. total is 2 u64 a warp (gw = gid·PF_W + w): total[2 gw] the pairs the warp ran, total[2 gw + 1] its group's
-// whole-tile pairs once (w == 0, else 0). The host sums them (pf_total_sum). A launch overwrites a warp's slots (a
-// store-only put can't accumulate), so the count is one launch's, not the sum over time_work's repeats.
+// whole. total is 2 u64 a warp of a collective (gw = (slot·groups + gid)·PF_W + w): total[2 gw] the pairs the warp ran,
+// total[2 gw + 1] its group's whole-tile pairs once (w == 0, else 0). The host sums them (pf_total_sum). A store-only put
+// can't accumulate, so each collective's launch overwrites its own slots: the sum is the last step's work over every
+// collective (it must equal the records' kf_shape sums), not the sum over time_work's repeats.
 //
 // The body is tp_dfill_k, SCORER's filler path: a `__noinline__` device function whose name holds tp_dfill_k, so the
 // scorer reads it as the proved fill (its SASS is only IMMA.16832.S8.S8 with C = RZ). kfill_k is its thin wrapper. The
@@ -299,10 +300,10 @@ __device__ __noinline__ void tp_dfill_k(uint64_t c0, uint64_t c1, const unsigned
     qlast = q;
   }
   const int part = kf_bar_or(bar, started > 0 && qlast < full);
-  // the two counters as per-warp plain stores (a store-only put holds no atomic): this warp's pairs, and its group's
-  // whole-tile pairs once (w == 0). The host sums over warps (pf_total_sum)
+  // the two counters as per-warp plain stores (a store-only put holds no atomic): this warp's pairs at this collective,
+  // and its group's whole-tile pairs once (w == 0). The host sums over collectives and warps (pf_total_sum)
   if (lane == 0)
-    tp_dfill_k_put_total(total, 2 * ((size_t)gid * PF_W + w), mine,
+    tp_dfill_k_put_total(total, 2 * (((size_t)slot * ng + gid) * PF_W + w), mine,
                          w == 0 ? (unsigned long long)(started - part) * PF_W * full : 0ull);
   if (threadIdx.x % (32 * PF_W) == 0) tp_dfill_k_put_cnt(cnt, (size_t)slot * ng + gid, started);
 }
@@ -657,9 +658,10 @@ static void kfill_launch(const PFill& f, int slot, uint64_t c0, uint64_t c1, cud
                                                         f.flags + slot, f.rec, f.qrec, f.cnt, f.total);
 }
 
-// the filler's per-warp counter buffer (f.total): 2 u64 a warp, gw = (block·KF_G + grp)·PF_W + w. A store-only put can't
-// atomic-accumulate, so each warp overwrites its two slots a launch and the host sums them (over warps, one launch's work)
-static size_t pf_total_slots(const PFill& f) { return 2 * (size_t)f.grid * KF_G * PF_W; }
+// the filler's per-warp counter buffer (f.total): 2 u64 a warp of a collective, gw = (slot·groups + gid)·PF_W + w. A
+// store-only put can't atomic-accumulate, so each collective's launch overwrites its own slots and the host sums them
+// (over collectives and warps: the last step's work, one launch's when nslots is 1)
+static size_t pf_total_slots(const PFill& f) { return 2 * (size_t)f.nslots * f.groups() * PF_W; }
 static size_t pf_total_bytes(const PFill& f) { return pf_total_slots(f) * sizeof(unsigned long long); }
 static void pf_total_sum(const PFill& f, unsigned long long tot[2]) {
   const size_t n = pf_total_slots(f);
@@ -965,12 +967,13 @@ static int pf_gate(Rank& R) {
 
 // after an arm, on the last rep's records: every collective's shape (kf_shape) and n whole tiles and n cut warps drawn
 // over the collectives
-static void pf_check(Rank& R, int n, long* shape_bad, long* cut_warps, KCheck* ck, unsigned long long* pairs_last) {
+static void pf_check(Rank& R, int n, long* shape_bad, long* cut_warps, KCheck* ck, unsigned long long* pairs_last,
+                     unsigned long long* whole_last) {
   PFill& f = R.pf;
-  unsigned long long ep, whole;
+  unsigned long long ep;
   CK(cudaMemcpy(&ep, f.epoch, sizeof ep, cudaMemcpyDeviceToHost));
   const KRecs k = kf_fetch(f, 0, f.nslots);
-  *shape_bad = kf_shape(f, k, 0, f.nslots, cut_warps, pairs_last, &whole);
+  *shape_bad = kf_shape(f, k, 0, f.nslots, cut_warps, pairs_last, whole_last);
   std::mt19937_64 rng(ep * 7919 + R.r);
   *ck = kf_sample(f, k, 0, f.nslots, ep, n, rng);
 }
@@ -1071,12 +1074,18 @@ static int run_point(Rank& R, int B, int L, int reps) {
     double mmas_rep = 0;
     char extra[1024] = "";
     if (sidework == 1) {
-      unsigned long long tot[2], pairs_last;
-      pf_total_sum(R.pf, tot);  // one launch's pairs (per-warp overwrite), not the sum over time_work's repeats
+      unsigned long long tot[2], pairs_last, whole_last;
+      pf_total_sum(R.pf, tot);  // the last step's pairs over every collective, not the sum over time_work's repeats
       mmas_rep = 4.0 * tot[0];
       long shape_bad, cut_warps;
       KCheck ck;
-      pf_check(R, 8, &shape_bad, &cut_warps, &ck, &pairs_last);
+      pf_check(R, 8, &shape_bad, &cut_warps, &ck, &pairs_last, &whole_last);
+      // the counters the fill is read from must equal the records' sums, as pf_gate and alone require of one launch
+      if (tot[0] != pairs_last || tot[1] != whole_last) {
+        fprintf(stderr, "rank %d %s B %d L %d: filler counters %llu/%llu != records %llu/%llu (pf_total_sum must cover "
+                "every collective's slots)\n", R.r, a.c_str(), B, L, tot[0], tot[1], pairs_last, whole_last);
+        shape_bad++;
+      }
       snprintf(extra, sizeof extra, ", \"fill_mmas_full_rep\": %.1f, \"fill_mmas_last\": %.1f, \"rec_checked\": %ld, "
                "\"rec_bad\": %ld, \"whole_checked\": %ld, \"whole_bad\": %ld, \"whole_control_equal\": %ld, "
                "\"warps_checked\": %ld, \"warps_bad\": %ld, \"warps_control_equal\": %ld, \"shape_bad\": %ld, "
@@ -1091,10 +1100,20 @@ static int run_point(Rank& R, int B, int L, int reps) {
       unsigned long long dtot[2];
       CK(cudaMemcpy(dtot, R.dp.dtotal, 16, cudaMemcpyDeviceToHost));
       const double gap_pairs = (double)dtot[0] / (reps + 2), drain_pairs = (double)dtot[1] / (reps + 2);
+      long fill_bad = 0;
+      unsigned long long fpairs = 0;
       if (defer) {  // the filler fill left after the deferred quota took its share of the gaps
-        unsigned long long ft[2];
-        pf_total_sum(R.pf, ft);  // one launch's pairs (per-warp overwrite)
+        unsigned long long ft[2], fwhole;
+        long fcut;
+        pf_total_sum(R.pf, ft);  // the last step's pairs over every collective
         mmas_rep = 4.0 * ft[0];
+        const KRecs k = kf_fetch(R.pf, 0, R.pf.nslots);
+        fill_bad = kf_shape(R.pf, k, 0, R.pf.nslots, &fcut, &fpairs, &fwhole);
+        if (ft[0] != fpairs || ft[1] != fwhole) {
+          fprintf(stderr, "rank %d defer B %d L %d: filler counters %llu/%llu != records %llu/%llu\n", R.r, B, L, ft[0],
+                  ft[1], fpairs, fwhole);
+          fill_bad++;
+        }
       }
       const DCheck dc = dp_sample(R, 8);
       snprintf(extra, sizeof extra, ", \"defer_gap_pairs_rep\": %.1f, \"defer_drain_pairs_rep\": %.1f, "
@@ -1105,7 +1124,12 @@ static int run_point(Rank& R, int B, int L, int reps) {
                gap_pairs, drain_pairs, gap_pairs * 4 * 4096.0, drain_pairs * 4 * 4096.0, served, R.dp.dcap,
                R.dp.chunk_pairs(), R.dp.Sd, R.dp.T, R.dp.dwrap, R.dp.dmaxc, defer ? R.dp.grid : R.dp.dgrid,
                defer_store, R.pf.NC, R.pf.S, TP_XIN, dc.whole, dc.whole_bad, dc.whole_ctl);
-      if (!dc.clean()) rc = 8;
+      if (defer) {
+        const size_t used = strlen(extra);
+        snprintf(extra + used, sizeof extra - used, ", \"fill_mmas_last\": %.1f, \"fill_shape_bad\": %ld", 4.0 * fpairs,
+                 fill_bad);
+      }
+      if (!dc.clean() || fill_bad) rc = 8;
     }
     emit(R, a.c_str(), B, L, v, (dalone || kind == 2) ? 0 : served, mmas_rep, extra);
   }

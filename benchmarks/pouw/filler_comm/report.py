@@ -176,6 +176,8 @@ def rows(out_dir):
                 dr = [r for ranks in by_arm["defer"] for r in ranks]
                 row["dp_whole_bad"] = sum(r.get("dp_whole_bad", 0) for r in dr) + sum(r.get("dp_whole_control_equal", 0) for r in dr)
                 row["dp_whole_checked"] = sum(r.get("dp_whole_checked", 0) for r in dr)
+                # the remaining fill's counters against its records (kf_shape); a record without the field wasn't checked
+                row["defer_fill_bad"] = sum(r.get("fill_shape_bad", 1) for r in dr)
                 row["dcap"], row["dSd"], row["dT"] = first("defer", "dcap"), first("defer", "dSd"), first("defer", "dT")
             if dalone and base:
                 row["dalone_cost"] = dalone / base  # decision 36's decode cost a step without the gaps
@@ -209,8 +211,10 @@ def gates(out_dir, rs):
         out["dp_gate"] = {"ok": all(r["ok"] for r in dp), "records": len(dp),
                           "bad": sum(r["bad"] + r["control_equal"] + r["q_bad"] for r in dp)}
         df = [r for r in rs if r.get("dp_whole_checked")]
-        out["defer_receipts"] = {"ok": bool(df) and all(r["dp_whole_bad"] == 0 and r["dp_whole_checked"] > 0 for r in df),
-                                 "checked": sum(r["dp_whole_checked"] for r in df), "bad": sum(r["dp_whole_bad"] for r in df)}
+        out["defer_receipts"] = {"ok": bool(df) and all(r["dp_whole_bad"] == 0 and r["dp_whole_checked"] > 0
+                                                        and r.get("defer_fill_bad") == 0 for r in df),
+                                 "checked": sum(r["dp_whole_checked"] for r in df), "bad": sum(r["dp_whole_bad"] for r in df),
+                                 "fill_bad": sum(r.get("defer_fill_bad", 0) for r in df)}
     sass_lines = _read(os.path.join(out_dir, "sass.txt")).splitlines()
     ops = {ln.split()[-1] for ln in sass_lines if len(ln.split()) == 2 and "MMA" in ln.split()[-1]}
     nonrz = sum(int(ln.split()[-1]) for ln in sass_lines if "non-RZ IMMA:" in ln)
