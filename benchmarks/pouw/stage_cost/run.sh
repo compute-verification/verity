@@ -24,6 +24,7 @@ lscpu > "$O/lscpu.txt" 2>&1
 nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -DFR_ROT="${FR_ROT:-0}" -Xptxas -v -o "$B/stage" $D/stage.cu \
   -lcublasLt -lnvidia-ml -ldl > "$O/build.log" 2>&1 || { grep -E "error" "$O/build.log" | head -40; tail -20 "$O/build.log"; exit 4; }
 sha256sum "$B/stage" | cut -c1-64 > "$O/stage.sha256"
+"$B/stage" pooltest 32 > "$O/pooltest.jsonl" 2>&1 || { cat "$O/pooltest.jsonl"; exit 7; }
 python3 $D/prep.py "$B/c" --rows "${PREFILL// /,}" > "$O/prep.log" 2>&1 || { tail -20 "$O/prep.log"; exit 6; }
 # shellcheck disable=SC2016
 gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '

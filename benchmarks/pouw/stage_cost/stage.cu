@@ -1250,28 +1250,37 @@ static const std::vector<uint64_t>& h_nmid(const HostConst& c) {
 // n nodes (64 bytes each, at v) from position j0 of a level lw wide, hashed up to their root. In node-head order the parents
 // of a level of lw nodes start at width - lw; a node is its template's last two blocks with L at o and R at o + 72, from its
 // first block's state
+static void h_node(const HostConst& c, const std::vector<uint64_t>& nmid, long long idx, const uint8_t* L,
+                   const uint8_t* R, uint8_t* out) {
+  uint8_t m[256];
+  uint32_t o;
+  memcpy(&o, &c.noff[4 * idx], 4);
+  memcpy(m, &c.ntpl[384 * idx + 128], 256);
+  memcpy(m + o - 128, L, 64);
+  memcpy(m + o + 72 - 128, R, 64);
+  uint64_t st[8];
+  memcpy(st, &nmid[8 * idx], 64);
+  h_compress(st, m);
+  h_compress(st, m + 128);
+  for (int k = 0; k < 8; k++)
+    for (int b = 0; b < 8; b++) out[8 * k + b] = (uint8_t)(st[k] >> (56 - 8 * b));
+}
+// node idx's template blocks, offset and first-block state into this core's cache
+static inline void h_warm_node(const HostConst& c, const std::vector<uint64_t>& nmid, long long idx) {
+  const char* t = (const char*)&c.ntpl[384 * idx + 128];
+  for (int k = 0; k < 256; k += 64) _mm_prefetch(t + k, _MM_HINT_T0);
+  _mm_prefetch(t + 255, _MM_HINT_T0);
+  _mm_prefetch((const char*)&c.noff[4 * idx], _MM_HINT_T0);
+  _mm_prefetch((const char*)&nmid[8 * idx], _MM_HINT_T0);
+}
 static void h_sub(const HostConst& c, const std::vector<uint64_t>& nmid, const uint8_t* v, long long n, long long lw,
                   long long j0, uint8_t root[64]) {
   static thread_local std::vector<uint8_t> cur, nxt;
   cur.assign(v, v + 64 * n);
-  uint8_t m[256];
   while (n > 1) {
     nxt.resize((size_t)32 * n);
     const long long nb = c.width - lw + j0 / 2;
-    for (long long j = 0; j < n / 2; j++) {
-      const long long idx = nb + j;
-      uint32_t o;
-      memcpy(&o, &c.noff[4 * idx], 4);
-      memcpy(m, &c.ntpl[384 * idx + 128], 256);
-      memcpy(m + o - 128, &cur[128 * j], 64);
-      memcpy(m + o + 72 - 128, &cur[128 * j + 64], 64);
-      uint64_t st[8];
-      memcpy(st, &nmid[8 * idx], 64);
-      h_compress(st, m);
-      h_compress(st, m + 128);
-      for (int k = 0; k < 8; k++)
-        for (int b = 0; b < 8; b++) nxt[64 * j + 8 * k + b] = (uint8_t)(st[k] >> (56 - 8 * b));
-    }
+    for (long long j = 0; j < n / 2; j++) h_node(c, nmid, nb + j, &cur[128 * j], &cur[128 * j + 64], &nxt[64 * j]);
     n /= 2;
     lw /= 2;
     j0 /= 2;
@@ -1279,63 +1288,102 @@ static void h_sub(const HostConst& c, const std::vector<uint64_t>& nmid, const u
   }
   memcpy(root, cur.data(), 64);
 }
-// P - 1 spinning helpers: for an export of E >= 2P nodes the caller and each helper hash a subtree of E / P of them to its
-// root, then the caller the P - 1 nodes above those (P a power of 2)
+// P - 1 spinning helpers (P a power of 2). For an export of E >= 2P nodes the caller (w = 0) and each helper w hash a
+// subtree of E / P of them to its root, then combine pairwise up the top log2 P levels: at the level of P / h roots, w
+// (a multiple of 2h) takes w + h's root once w + h's flag says it is in. Before a step's export arrives, h_warm has each
+// thread pull the nodes it will hash into its cache (the six stage shapes take turns, so their templates are cold).
+// go = command << 1 | warm, from the caller alone
 struct HostPool {
   int P = 1;
   std::vector<std::thread> th;
   alignas(64) std::atomic<uint32_t> go{0};
-  alignas(64) std::atomic<int> done{0};
+  uint32_t cmd = 0;
   const HostConst* c = nullptr;
   const std::vector<uint64_t>* nmid = nullptr;
   const uint8_t* ex = nullptr;
   long long E = 0;
   std::atomic<bool> quit{false};
+  struct alignas(64) Flag {
+    std::atomic<uint32_t> v{0};  // command << 3 | the levels above its subtree w has combined
+  };
+  Flag ready[64];
   alignas(64) uint8_t roots[64 * 64];
 };
 static HostPool g_pool;
-static void pool_part(int w) {
-  const long long S = g_pool.E / g_pool.P;
-  h_sub(*g_pool.c, *g_pool.nmid, g_pool.ex + 64 * S * w, S, g_pool.E, S * w, g_pool.roots + 64 * w);
+static void pool_share(int w, bool warm, uint32_t cmd) {
+  const HostConst& c = *g_pool.c;
+  const std::vector<uint64_t>& nm = *g_pool.nmid;
+  const int P = g_pool.P;
+  const long long E = g_pool.E, S = E / P;
+  if (warm) {
+    for (long long n = S, lw = E, j0 = S * w; n > 1; n /= 2, lw /= 2, j0 /= 2)
+      for (long long j = 0; j < n / 2; j++) h_warm_node(c, nm, c.width - lw + j0 / 2 + j);
+    for (int h = 1; h < P && w % (2 * h) == 0; h *= 2) h_warm_node(c, nm, c.width - P / h + w / (2 * h));
+    return;
+  }
+  uint8_t* mine = g_pool.roots + 64 * w;
+  h_sub(c, nm, g_pool.ex + 64 * S * w, S, E, S * w, mine);
+  g_pool.ready[w].v.store(cmd << 3, std::memory_order_release);
+  for (int h = 1, lv = 1; h < P && w % (2 * h) == 0; h *= 2, lv++) {
+    while (g_pool.ready[w + h].v.load(std::memory_order_acquire) < (cmd << 3 | (lv - 1))) _mm_pause();
+    uint8_t up[64];
+    h_node(c, nm, c.width - P / h + w / (2 * h), mine, g_pool.roots + 64 * (w + h), up);
+    memcpy(mine, up, 64);
+    g_pool.ready[w].v.store(cmd << 3 | lv, std::memory_order_release);
+  }
 }
-static void pool_worker(int w) {
-  uint32_t seen = 0;
+// seen: go when the pool started (read before the helper's thread exists, so it misses no command)
+static void pool_worker(int w, uint32_t seen) {
   for (;;) {
     uint32_t g;
     while ((g = g_pool.go.load(std::memory_order_acquire)) == seen) _mm_pause();
     seen = g;
     if (g_pool.quit.load(std::memory_order_acquire)) return;
-    pool_part(w);
-    g_pool.done.fetch_add(1, std::memory_order_acq_rel);
+    pool_share(w, g & 1, g >> 1);
   }
 }
 static void pool_start(int P) {
   if (P > 64 || (P & (P - 1))) { fprintf(stderr, "a host pool of %d: at most 64, a power of 2\n", P); exit(2); }
   g_pool.P = P;
   g_pool.quit = false;
-  for (int w = 1; w < P; w++) g_pool.th.emplace_back(pool_worker, w);
+  const uint32_t g0 = g_pool.go.load(std::memory_order_acquire);
+  for (int w = 1; w < P; w++) g_pool.th.emplace_back(pool_worker, w, g0);
 }
 static void pool_stop() {
   g_pool.quit = true;
-  g_pool.go.fetch_add(1, std::memory_order_acq_rel);
+  g_pool.go.store(++g_pool.cmd << 1, std::memory_order_release);
   for (auto& t : g_pool.th) t.join();
   g_pool.th.clear();
   g_pool.P = 1;
+}
+// warm the pool's caches for an export of E nodes of shape c (h_top's next call, same c and E)
+static void h_warm(const HostConst& c, const std::vector<uint64_t>& nmid, int E) {
+  if (g_pool.P == 1 || E < 2 * g_pool.P) {
+    for (long long n = E, lw = E; n > 1; n /= 2, lw /= 2)
+      for (long long j = 0; j < n / 2; j++) h_warm_node(c, nmid, c.width - lw + j);
+    return;
+  }
+  g_pool.c = &c;
+  g_pool.nmid = &nmid;
+  g_pool.E = E;
+  const uint32_t cmd = ++g_pool.cmd;
+  g_pool.go.store(cmd << 1 | 1, std::memory_order_release);
+  pool_share(0, true, cmd);
 }
 // the levels above an exported level of E nodes (ex) to the root, by the pool when it has helpers and E >= 2P (h_nmid(c)
 // computed before: the helpers read it)
 static void h_top(const HostConst& c, const std::vector<uint64_t>& nmid, const uint8_t* ex, int E, uint8_t root[64]) {
   const int P = g_pool.P;
   if (P == 1 || E < 2 * P) return h_sub(c, nmid, ex, E, E, 0, root);
-  g_pool.c = &c;
-  g_pool.nmid = &nmid;
+  // a helper still warming reads c, nmid and E: rewritten only when they change (never right after h_warm)
+  if (g_pool.c != &c) g_pool.c = &c;
+  if (g_pool.nmid != &nmid) g_pool.nmid = &nmid;
+  if (g_pool.E != E) g_pool.E = E;
   g_pool.ex = ex;
-  g_pool.E = E;
-  g_pool.done.store(0, std::memory_order_relaxed);
-  g_pool.go.fetch_add(1, std::memory_order_acq_rel);
-  pool_part(0);
-  while (g_pool.done.load(std::memory_order_acquire) != P - 1) _mm_pause();
-  h_sub(c, nmid, g_pool.roots, P, P, 0, root);
+  const uint32_t cmd = ++g_pool.cmd;
+  g_pool.go.store(cmd << 1, std::memory_order_release);
+  pool_share(0, false, cmd);
+  memcpy(root, g_pool.roots, 64);
 }
 // mapped host memory the GPU and the host's thread meet in: the exported level, the GPU's flag (up) and the host's (dn)
 struct Link {
@@ -1370,13 +1418,15 @@ struct HostStats {
   long steps = 0, timeouts = 0;
   double top_us = 0, top_max_us = 0;
 };
-// the host's side of `iters` passes over a step list: wait for step q's flag (q + 1), hash the levels above its export,
-// wait draw_us (the verifier's round trip for the coins), then raise the GEMM's flag; stops after 5 s without a flag
+// the host's side of `iters` passes over a step list: warm the caches for step q's top, wait for its flag (q + 1), hash
+// the levels above its export, wait draw_us (the verifier's round trip for the coins), then raise the GEMM's flag; stops
+// after 5 s without a flag
 static void host_loop(std::vector<HostStep> steps, int iters, int draw_us, HostStats* out) {
   uint8_t root[64];
   for (int it = 0; it < iters; it++)
     for (size_t q = 0; q < steps.size(); q++) {
       const uint32_t v = (uint32_t)q + 1;
+      if (steps[q].E > 1) h_warm(*steps[q].c, h_nmid(*steps[q].c), steps[q].E);
       const double t0 = h_us();
       while (h_load(g_link.up_h) != v)
         if (h_us() - t0 > 5e6) {
@@ -2231,6 +2281,8 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
                             {"c8_cpu512p16_nd", 1, 8, 512, 2, 0, 0, 16, 1},
                             {"c16_cpu512p16_nd", 1, 16, 512, 2, 0, 0, 16, 1},
                             {"c8_pair_cpu512p16_nd", 1, 8, 512, 2, 0, 1, 16, 1},
+                            {"pair_cpu1024p32", 1, 1, 1024, 2, du, 1, 32, 0},
+                            {"pair_cpu512p16_nd", 1, 1, 512, 2, 0, 1, 16, 0},
                             {"cpu256p8_nopdl", 1, 1, 256, 2, du, 0, 8, 0, 1},
                             {"cpu512p16_nd_nopdl", 1, 1, 512, 2, 0, 0, 16, 0, 1}};
     for (const Cfg& f : all)
@@ -2987,12 +3039,62 @@ static int run_gate(Dev& d, const std::string& dir, const std::vector<int>& Ms) 
   return fails + gate(d);
 }
 
+// the host pool's roots (h_warm, h_top) against one thread's (h_sub) over random templates and exports, on the host alone
+static int pool_test(int maxP) {
+  for (const char* lib : {"libcrypto.so.3", "libcrypto.so.1.1", "libcrypto.so"})
+    if (void* h = dlopen(lib, RTLD_NOW | RTLD_LOCAL)) {
+      g_ossl = (void (*)(void*, const unsigned char*))dlsym(h, "SHA512_Transform");
+      if (g_ossl) break;
+    }
+  if (!g_ossl) { fprintf(stderr, "pooltest: no libcrypto SHA512_Transform\n"); return 2; }
+  g_use_ossl = true;
+  uint64_t z = 7;
+  auto rnd = [&] {
+    z += 0x9E3779B97F4A7C15ull;
+    uint64_t x = z;
+    x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull;
+    x = (x ^ (x >> 27)) * 0x94D049BB133111EBull;
+    return x ^ (x >> 31);
+  };
+  HostConst c{};
+  c.width = 4096;
+  c.ntpl.resize((size_t)384 * (c.width - 1));
+  c.noff.resize((size_t)4 * (c.width - 1));
+  for (auto& b : c.ntpl) b = (uint8_t)rnd();
+  for (long long j = 0; j < c.width - 1; j++) {
+    const uint32_t o = 139 + (uint32_t)(j & 1);
+    memcpy(&c.noff[4 * j], &o, 4);
+  }
+  std::vector<uint64_t> nmid((size_t)8 * (c.width - 1));
+  for (auto& x : nmid) x = rnd();
+  std::vector<uint8_t> ex(64 * 1024);
+  int cases = 0, bad = 0;
+  for (int P = 2; P <= maxP; P *= 2) {
+    pool_start(P);
+    for (int E : {2 * P, 256, 512, 1024}) {
+      if (E < 2 * P) continue;
+      for (int it = 0; it < 200; it++) {
+        for (int b = 0; b < 64 * E; b++) ex[b] = (uint8_t)rnd();
+        uint8_t want[64], got[64];
+        h_sub(c, nmid, ex.data(), E, E, 0, want);
+        if (it & 1) h_warm(c, nmid, E);
+        h_top(c, nmid, ex.data(), E, got);
+        bad += memcmp(want, got, 64) != 0;
+        cases++;
+      }
+    }
+    pool_stop();
+  }
+  printf("{\"mode\": \"pooltest\", \"cases\": %d, \"bad\": %d}\n", cases, bad);
+  return bad != 0;
+}
 int main(int argc, char** argv) {
   if (argc < 2) {
-    fprintf(stderr, "usage: stage gate DIR | prefill DIR M | deferred T seq500|b32 | beside T seq500|b32 B L FILL_SMS form|gemm  [reps]\n");
+    fprintf(stderr, "usage: stage gate DIR | prefill DIR M | deferred T seq500|b32 | beside T seq500|b32 B L FILL_SMS form|gemm  [reps] | pooltest [maxP]\n");
     return 1;
   }
   const std::string mode = argv[1];
+  if (mode == "pooltest") return pool_test(argc > 2 ? atoi(argv[2]) : 32);
   g_fast = !(getenv("HASH") && strcmp(getenv("HASH"), "sz") == 0);
   g_att_fused = !(getenv("ATT") && strcmp(getenv("ATT"), "lt") == 0);
   Dev d;
