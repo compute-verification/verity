@@ -191,6 +191,7 @@ class Lib:
         L.hf_start.argtypes = [ctypes.c_uint64, ctypes.c_uint64, ctypes.c_ulonglong]
         L.hf_done.restype = ctypes.c_longlong
         L.hf_stop.restype = ctypes.c_longlong
+        L.hf_launched.restype = ctypes.c_longlong
         L.hf_count.argtypes = [ctypes.c_double, ctypes.c_double, ctypes.POINTER(ctypes.c_double)]
         L.hf_count.restype = ctypes.c_longlong
         L.hf_check.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.c_ulonglong)]
@@ -234,15 +235,21 @@ def round_open(point, slot):
 
 
 def round_close(lib, rd, n=4):
-    launched = lib.L.hf_stop()
-    tiles = (ctypes.c_ulonglong * n)()
+    """Stops the pumps and checks n receipts of each one's last chunk; with two pumps the second's tiles are the upper
+    half of the range (`tiles2`), and each pump must stay inside its half."""
+    lib.L.hf_stop()
+    np_ = lib.L.hf_pumps()
+    lo, hi = rd["range"]
+    half = (hi - lo) // np_
+    spans = [[lo + j * half, lo + j * half + lib.L.hf_launched(j) * lib.L.hf_per()] for j in range(np_)]
+    tiles = (ctypes.c_ulonglong * (n * np_))()
     bad = lib.L.hf_check(n, tiles)
-    lo = rd["range"][0]
-    end = lo + launched * lib.L.hf_per()
-    rec = {"id": rd["id"], "slot": rd["slot"], "range": rd["range"], "tiles": [lo, end],
+    rec = {"id": rd["id"], "slot": rd["slot"], "range": rd["range"], "tiles": spans[0],
            "coins": [f"{rd['c0']:016x}", f"{rd['c1']:016x}"], "seed0": f"{lib.L.hf_seed(rd['c0'], rd['c1'], lo):016x}",
            "checked": list(tiles)}
-    if end > rd["range"][1]:
+    if np_ > 1:
+        rec["tiles2"] = spans[1]
+    if any(e > lo + (j + 1) * half for j, (_, e) in enumerate(spans)):
         raise SystemExit(f"round {rd['id']} ran past its range")
     return rec, bad
 
@@ -265,7 +272,7 @@ def measure(lib, part, gr, stream, point, rounds, reps, fill):
     n = lib.L.hf_count(ta, tb, ctypes.byref(sp))
     cal = (n - 1) * lib.L.hf_chunk_macs() / (sp.value * 1e-3)
     r0, b = round_close(lib, rd0)
-    bad, checked = bad + b, checked + 4
+    bad, checked = bad + b, checked + 4 * lib.L.hf_pumps()
     blocks = []
     for r in range(rounds):
         blk = {"order": "alone,arm,solo" if r % 2 == 0 else "arm,solo,alone"}
@@ -279,7 +286,7 @@ def measure(lib, part, gr, stream, point, rounds, reps, fill):
         t1 = lib.L.hf_now_ms()
         n = lib.L.hf_count(t0, t1, ctypes.byref(sp))
         rec, b = round_close(lib, rd)
-        bad, checked = bad + b, checked + 4
+        bad, checked = bad + b, checked + 4 * lib.L.hf_pumps()
         blk["arm"] = {"window_ms": t1 - t0, "chunks": n, "span_ms": sp.value, "round": rec, "reps": arm}
         rd = round_open(point, 1 + rounds + r)
         lib.L.hf_start(rd["c0"], rd["c1"], rd["range"][0])
@@ -290,16 +297,16 @@ def measure(lib, part, gr, stream, point, rounds, reps, fill):
         s1 = lib.L.hf_now_ms()
         n = lib.L.hf_count(s0, s1, ctypes.byref(sp))
         rec, b = round_close(lib, rd)
-        bad, checked = bad + b, checked + 4
+        bad, checked = bad + b, checked + 4 * lib.L.hf_pumps()
         blk["solo"] = {"window_ms": s1 - s0, "chunks": n, "span_ms": sp.value, "round": rec, "reps": []}
         if r % 2 == 1:
             blk["alone"] = {"window_ms": 0, "reps": timed(lib, gr, stream, reps)}
         blocks.append(blk)
     return {"mode": "dscore", "kind": f"phase-{part}", "B": T, "L": 0, "place": "co", "sms": 188, "fill_sms": 188,
-            "W": W, "NC": NC, "S": S, "chunk_log2": LOG2, "map": MAP, "chunk_macs": lib.L.hf_chunk_macs(),
-            "point": point, "slots": POINT_SLOTS, "rounds": rounds, "K": reps, "kv_wrapped": False, "setup_ms": 0.0,
-            "spread": {}, "alone_fill": {"mac_per_s": cal, "round": r0}, "rec_checked": checked, "rec_bad": bad,
-            "blocks": blocks}
+            "W": W, "NC": NC, "S": S, "chunk_log2": LOG2, "map": MAP, "pumps": lib.L.hf_pumps(),
+            "chunk_macs": lib.L.hf_chunk_macs(), "point": point, "slots": POINT_SLOTS, "rounds": rounds, "K": reps,
+            "kv_wrapped": False, "setup_ms": 0.0, "spread": {}, "alone_fill": {"mac_per_s": cal, "round": r0},
+            "rec_checked": checked, "rec_bad": bad, "blocks": blocks}
 
 
 def main(argv=None):
@@ -309,7 +316,8 @@ def main(argv=None):
     ap.add_argument("--parts", default="both,att,ng")
     ap.add_argument("--rounds", type=int, default=4)
     ap.add_argument("--reps", type=int, default=3)
-    ap.add_argument("--fill", action="append", default=[], help="W,NC,S,LOG2,MAP (repeatable; one filler a process)")
+    ap.add_argument("--fill", action="append", default=[],
+                    help="W,NC,S,LOG2,MAP[,PUMPS] (one filler a process; PUMPS 2 sets HF_PUMPS)")
     ap.add_argument("--point0", type=int, default=0)
     ap.add_argument("--probe", action="store_true", help="time each kernel category alone and stop")
     a = ap.parse_args(argv)
@@ -321,6 +329,9 @@ def main(argv=None):
     fills = [tuple(int(x) for x in f.split(",")) for f in a.fill] or [(4, 4, 512, 17, 1)]
     if len(fills) > 1:
         raise SystemExit("one filler shape a process (hf_init allocates once)")
+    if len(fills[0]) == 6:
+        os.environ["HF_PUMPS"] = str(fills[0][5])
+    fills[0] = fills[0][:5]
     W, NC, S, LOG2, MAP = fills[0]
     prio = (ctypes.c_int * 2)()
     lib.L.hf_init(188, W, NC, S, LOG2, MAP, prio)

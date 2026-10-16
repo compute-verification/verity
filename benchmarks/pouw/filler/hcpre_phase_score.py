@@ -49,7 +49,7 @@ def main(argv=None):
             if r.get("mode") != "dscore":
                 continue
             p = r["kind"].removeprefix("phase-")
-            shape = f"W{r['W']} NC{r['NC']} S{r['S']} 2^{r['chunk_log2']} map {r['map']}"
+            shape = f"W{r['W']} NC{r['NC']} S{r['S']} 2^{r['chunk_log2']} map {r['map']} x{r.get('pumps', 1)}"
             s = by.setdefault(shape, {})[p] = S.point_stats(r)
             fp = s["fill_rate"] / S.cap(s["alone_mhz"])
             bo = s["beside_over_alone"]
