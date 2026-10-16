@@ -13,7 +13,8 @@ the pin, the level-0 matrices `placedA`, `placedB`, the regions `regionsOf`). `T
 * `tab_iff`: a table's rows, pin and fixed bits hold in every block exactly when the model's statement is satisfied.
 * `sysOf_iff`: the system holds in every block exactly when every table fits the blocks (`Tab.Fits`: its own `m` and
   `k_log`, `6 ≤ k_log ≤ m`, its pin in the block) and its model statement is satisfied by its share of the hidden
-  values (`zOf`: table `c`'s bit `a` is hidden value `c·2^m + a`). A table that does not fit is unsatisfiable.
+  values (`zOf`: of `J` tables, table `c`'s bit `a` is hidden value `a·J + c`). A table that does not fit is
+  unsatisfiable.
 * `relS_relation`: `Claims.Flock.RelS` of `toReadable relation p` is that, for every table of `p`.
 * `toModel_ofStmt`: at a table whose statement has the verifier's layout, the model statement is `Layout.model` at
   `regionsOf`, the one the soundness proof reads.
@@ -156,19 +157,18 @@ theorem ok_ofStmt {st : Stmt} (L : FlockSoundness.Layout st) : (ofStmt st).Ok :=
 
 end Tab
 
-/-- Table `c`'s share of the hidden values, `T` bits per table, as a model witness. -/
-def zOf (T : ℕ) (w : Claims.Flock.Wit) (c m : ℕ) : Model.Witness m := fun a => toZ (w.hid.getD (c * T + a.val) false)
+/-- Table `c`'s share of the hidden values of `J` tables, interleaved (its bit `a` is hidden value `a·J + c`), as a model
+witness. -/
+def zOf (J : ℕ) (w : Claims.Flock.Wit) (c m : ℕ) : Model.Witness m := fun a => toZ (w.hid.getD (a.val * J + c) false)
 
 /-- A table's fixed bits in the system: its regions' when it fits the blocks, else bit 0 fixed to `0` (against the pin,
 which is bit 0 then: no witness satisfies it). -/
 def fixedOf (m kLog : ℕ) (t : Tab) : List (ℕ × (ℕ → Bool)) := if t.Fits m kLog then t.fixed else [(0, fun _ => false)]
 
-/-- **The tables as one system**, in blocks of `2^kLog` bits, `2^(m − kLog)` of them, `2^(m − kLog)·2^kLog` hidden bits
-per table. -/
+/-- **The tables as one system**, in blocks of `2^kLog` bits, `2^(m − kLog)` of them. -/
 def sysOf (m kLog : ℕ) (ts : List Tab) : Sys where
   J := ts.length
   N := 2 ^ kLog
-  T := 2 ^ (m - kLog) * 2 ^ kLog
   nB := 2 ^ (m - kLog)
   A c := (ts.getD c default).a
   B c := (ts.getD c default).b
@@ -201,7 +201,7 @@ satisfies its model statement. -/
 theorem sysOf_iff (m kLog : ℕ) (ts : List Tab) (w : Claims.Flock.Wit) :
     (∀ b < (sysOf m kLog ts).nB, (sysOf m kLog ts).Holds w b) ↔
       ∀ c < ts.length, ∃ h : (ts.getD c default).Fits m kLog,
-        ((ts.getD c default).toModel h.2.2).Satisfies (zOf (2 ^ (m - kLog) * 2 ^ kLog) w c (ts.getD c default).m) := by
+        ((ts.getD c default).toModel h.2.2).Satisfies (zOf ts.length w c (ts.getD c default).m) := by
   have hslots : ∀ b, (∀ s ∈ (sysOf m kLog ts).slots, (sysOf m kLog ts).bit w s.1 b s.2.1 = s.2.2 b) ↔
       ∀ c < ts.length, ∀ f ∈ fixedOf m kLog (ts.getD c default), (sysOf m kLog ts).bit w c b f.1 = f.2 b := by
     intro b
@@ -231,9 +231,9 @@ theorem sysOf_iff (m kLog : ℕ) (ts : List Tab) (w : Claims.Flock.Wit) :
     have hfix : fixedOf m kLog (ts.getD c default) = (ts.getD c default).fixed := ite_eq_left hf
     rw [hpin, hfix]
     obtain ⟨hm, hk, hok⟩ := hf
-    have key := Tab.tab_iff (ts.getD c default) hok (zOf (2 ^ (m - kLog) * 2 ^ kLog) w c (ts.getD c default).m)
+    have key := Tab.tab_iff (ts.getD c default) hok (zOf ts.length w c (ts.getD c default).m)
       (fun o => (sysOf m kLog ts).bit w c o) (fun o i => by
-        simp only [Model.Statement.block, Model.Statement.addr, zOf, Sys.bit, sysOf, hk, Nat.add_assoc])
+        simp only [Model.Statement.block, Model.Statement.addr, zOf, Sys.bit, sysOf, hk])
     constructor
     · intro H
       exact ⟨⟨hm, hk, hok⟩, key.1 (by subst hm hk; exact H)⟩
@@ -260,9 +260,7 @@ statement. -/
 theorem relS_relation (p : Parsed) (w : Claims.Flock.Wit) :
     Claims.Flock.RelS (toReadable relation p) w ↔
       ∀ c < p.sts.size, ∃ h : (Tab.ofStmt p.sts[c]!).Fits (toReadable relation p).m (toReadable relation p).kLog,
-        ((Tab.ofStmt p.sts[c]!).toModel h.2.2).Satisfies
-          (zOf (2 ^ ((toReadable relation p).m - (toReadable relation p).kLog) * 2 ^ (toReadable relation p).kLog) w c
-            p.sts[c]!.m) := by
+        ((Tab.ofStmt p.sts[c]!).toModel h.2.2).Satisfies (zOf p.sts.size w c p.sts[c]!.m) := by
   rw [Sys.relS_iff (sysOf_wf _ _ _) (toReadable relation p) w rfl rfl rfl rfl rfl, sysOf_iff]
   simp only [List.length_map, Array.length_toList]
   refine forall₂_congr fun c hc => ?_
