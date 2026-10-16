@@ -52,7 +52,7 @@ TABLE = {
 }
 #: prefill is HC-SCHED's (fill-v1-phase-att-co2, psched_arm.py's CO_PREFILL_V3): FILL v1's filler co-scheduled at the
 #: lowest stream priority in 4-warp blocks of 2^16 MMAs, 1.042 / 0.195 on its three screens
-CO_PREFILL = A.Filler(W=4, NC=4, S=128, chunk_log2=16)
+CO_PREFILL = A.Filler(W=4, NC=4, S=128, chunk_log2=16, noise="chained")
 
 
 @dataclass
@@ -71,7 +71,7 @@ class Fused:
     sources: tuple = ("benchmarks/pouw/decode_capacity/dcap.cu", "benchmarks/pouw/decode_capacity/flin.cuh",
                       "benchmarks/pouw/filler/fscore.cu", "benchmarks/pouw/filler/fused_arm.py",
                       "benchmarks/pouw/filler/fused_score.py")
-    filler: A.Filler | None = A.Filler(W=8, NC=4, S=2048, chunk_log2=19)
+    filler: A.Filler | None = A.Filler(W=8, NC=4, S=2048, chunk_log2=19, noise="chained")
     choice: str = ("an offline table of 22 (B, L) points (split SMs, flin and attention filler warps) from FILL's round-2 "
                    "picks and holdouts, HC-SCHED's prefill co shape; at serving time a lookup, a green split and one "
                    "graph a step")
@@ -93,8 +93,8 @@ class Fused:
 
 
 #: round 3's picks over TABLE (screens r20261016-081436-04e3, -082545-6a39 and -083352-fc74): lm_head through flin at
-#: B <= 64 (+0.003-0.022 of peak, the step no slower: flin's lm_head beats cuBLASLt's at M = 32) but B 32 L 1K (1.05-1.06
-#: with it, and 1.061 under the scorer, r20261016-083352-4e81), not at M = 128 (<= +0.004 for +0.002-0.006 slowdown);
+#: B <= 64 (+0.003-0.022 of peak, the step no slower: flin's lm_head beats cuBLASLt's at M = 32) but B 32 L 1K (+0.005
+#: slowdown at 1.024-1.030 without it, r20261016-085926-5760, where prefill's 1.043 already sits), not at M = 128 (<= +0.004 for +0.002-0.006 slowdown);
 #: B 1 L 32K its own row, persistent attention and the pump on 100 SMs (the 2K row read 1.045 under the scorer there, this
 #: one 0.999). Not taken: FLIN_LAZY 2/4 (+2-10% slowdown) and flin's filler warps at B >= 132 (1:4, 2:2, 2:4: +0.008-0.015
 #: of peak for +2.3-4.5%, the pump's trade is ~4x better).

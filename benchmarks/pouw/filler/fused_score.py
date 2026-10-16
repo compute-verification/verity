@@ -218,6 +218,8 @@ def report(out: Path, arm) -> dict:
     g["ok"] = all(g[k]["ok"] for k in ("fused_receipts", "fused_dram", "fused_exact", "sgates")) and g["ok"]
     res["scored"] = g["ok"] and res["score_if_gated"] is not None
     res["SCORE"] = res["score_if_gated"] if res["scored"] else None
+    if "score_under_ch_if_gated" in res:
+        res["score_under_ch"] = res["score_under_ch_if_gated"] if res["scored"] else None
     res["driver"] = "fused_score.py (arm-side: fscore.cu for the fused points, the locked dscore elsewhere)"
     res["fused_points"] = {
         f"decode {r['B']}/{r['L']}": {
@@ -225,6 +227,8 @@ def report(out: Path, arm) -> dict:
             "split_mac_per_s": (sp := S.fill_parts([b["arm"] for b in r["blocks"]], r["chunk_macs"]))[0],
             "fixed_mac_per_s": sp[1]} for r in frows}
     res["harness"] = harness_accounting(rows, stats) if not res["missing"] else None
+    if "score_under_ch_if_gated" in res and not res["missing"]:
+        res["entries_under_ch"] = {e["entry"]: e["coverage"] for e in S.score(stats, S.certified(S.UNDER_CH))["entries"]}
     (out / "score.json").write_text(json.dumps(res, indent=1))
     return res
 
@@ -237,13 +241,16 @@ def show(res: dict) -> None:
         print(f"  gate {k}: {'pass' if res['gates'][k]['ok'] else 'FAIL'}  {v}")
     h = res.get("harness")
     if h:
-        print(f"\nharness accounting (fused filler over the measured step only; the pump over non-GEMM too): SCORE "
+        print(f"\nharness accounting (every filler at 0.99, as SCORE under CH; fused filler over the measured step only, the "
+              f"pump over non-GEMM too): SCORE "
               f"{SC.fmt(h['SCORE'])}, min {SC.fmt((h['min'] or {}).get('coverage'))} at {(h['min'] or {}).get('entry')}; "
               f"at 0.99 for all {SC.fmt(h['score_at_target'])}")
-        print("| entry | coverage (scorer) | coverage (harness) | serving 0.99 (harness) |\n|---|---|---|---|")
+        ch = res.get("entries_under_ch")
+        print("| entry | coverage (scorer) |" + (" scorer under CH |" if ch else "")
+              + " coverage (harness) | serving 0.99 (harness) |\n|---|---|" + ("---|" if ch else "") + "---|---|")
         for e in res["entries"]:
-            print(f"| {e['entry']} | {SC.fmt(e['coverage'])} | {SC.fmt(h['entries'][e['entry']]['coverage'])} | "
-                  f"{SC.fmt(h['entries_serving_099'][e['entry']])} |")
+            print(f"| {e['entry']} | {SC.fmt(e['coverage'])} |" + (f" {SC.fmt(ch[e['entry']])} |" if ch else "")
+                  + f" {SC.fmt(h['entries'][e['entry']]['coverage'])} | {SC.fmt(h['entries_serving_099'][e['entry']])} |")
 
 
 def main(argv=None) -> int:

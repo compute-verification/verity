@@ -47,6 +47,7 @@ def _flin_key(b):
 @pytest.mark.parametrize("arm", ARMS, ids=lambda a: a.name)
 def test_contract_and_record(arm):
     assert A.check_arm(arm, record=True) == []
+    assert arm.filler.noise == F.CO_PREFILL.noise == "chained"  # FILL v1's chains, and flin's and attention's filler warps
 
 
 @pytest.mark.parametrize("arm", ARMS, ids=lambda a: a.name)
