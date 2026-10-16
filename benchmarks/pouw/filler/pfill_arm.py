@@ -297,6 +297,28 @@ class PFillKFused3(PFillKFused2):
     table = FUSED_K3
 
 
+#: FUSED_K3 with the next pump size where its slowdown repeats inside prefill's margin (s8-s10, r20261016-103903-fd41):
+#: 128/2K 116 (1.034 x2), 128/6K 116 on FILL's step (1.035, 1.030), 32/24K 140 (1.040 x2), 144/5K 92 (1.039). B 256
+#: stays on cuBLASLt's 60: FILL's step there reads 1.08-1.11 with flin's linears and gains nothing with cuBLASLt's.
+FUSED_K4 = {**FUSED_K3, (128, 2048): _flin(116, lm=0), (128, 6144): _flin(116, lm=0), (32, 24576): _flin(140),
+            (144, 5120): _flin(92, lm=0)}
+
+
+@dataclass
+class PFillKFused4(PFillKFused3):
+    """pfill-k-fused3 with 8 more pump SMs at 128/2K, 128/6K, 32/24K and 144/5K."""
+
+    name: str = "pfill-k-fused4"
+    lineage: dict = field(default_factory=lambda: {
+        "parent": "pfill-k-fused3", "approach": "pouw/filler-proved",
+        "mechanism": ["filler:fresh-noise-imma", "noise:sha512-coins-01", "receipt:ram-k32", "place:split",
+                      "split:per-point-table", "fused:flin-serving", "fused:persistent-attention", "fused:lm-head-flin",
+                      "prefill:split"],
+        "hypothesis": "FILL's step holds 128/2K and 128/6K on 72 SMs, 32/24K on 48 and 144/5K on 96 at 1.030-1.040, so "
+                      "the pump's next 8 SMs there add ~0.035 coverage a point inside the gate"})
+    table = FUSED_K4
+
+
 def products_per_slot(lineage: dict) -> int:
     """Products the arm's filler does an int8 slot it reports: 2 for the e2m1 tile, else 1."""
     return 2 if "mma:e2m1-omma-k64" in (lineage.get("mechanism") or []) else 1

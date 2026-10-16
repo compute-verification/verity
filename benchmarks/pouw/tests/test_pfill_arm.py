@@ -114,7 +114,7 @@ def test_k_phase_arm_runs_pfill_k_with_a_phase_filler_of_the_builds_width(monkey
 
 
 @pytest.mark.parametrize("attr, table", [("PFillKFused", "FUSED_K"), ("PFillKFused2", "FUSED_K2"),
-                                         ("PFillKFused3", "FUSED_K3")])
+                                         ("PFillKFused3", "FUSED_K3"), ("PFillKFused4", "FUSED_K4")])
 def test_k_fused_arm_runs_pfill_k_beside_fills_step_with_no_filler_warps(monkeypatch, attr, table):
     """pfill-k-fused is pfill-k's pump (bits01, the build's -DPFILL_BITS) with an exact table row at every suite point; a
     fused point runs FILL's step with no filler warps (FW = AFW = 0: fscore counts no fixed work, which filler-scorer/v3's
