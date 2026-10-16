@@ -95,7 +95,7 @@
   "Pouw.Assumptions.KScopeAffine": {
    "owner": "@compute-accounting"
   },
-  "Pouw.Assumptions.KScopeOverlap": {
+  "Pouw.Assumptions.KScopeOverlapAffine": {
    "owner": "@compute-accounting"
   },
   "Pouw.Assumptions.ServiceSoundOverlap": {
@@ -251,6 +251,12 @@
   "Pouw.PearlC.pearlCTilesDevChainCap": {
    "owner": "@compute-accounting",
    "digest": "2170dd5823cfd9a6272b9ce11cf29f7de11dce337c0926e307ab60d0f8dd34b6"
+  },
+  "Pouw.Assumptions.KScopeOneSided": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.Assumptions.KScopeOverlapOneSided": {
+   "owner": "@compute-accounting"
   }
  },
  "meaning": [
@@ -4569,6 +4575,12 @@
    "signature": ["Pouw.SecurityProofs.WorkWeightedSampling : Pouw.Guarantees.WorkWeightedSampling"],
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
+  },
+  "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSided": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSided": {
+   "owner": "@compute-accounting"
   }
  },
  "shape": {
@@ -5139,7 +5151,9 @@
    "Pouw.SecurityProofs.RelativeSecurity.TheoremSStaged": "frozen (no-function): It is a theorem about every staged spot-check play (StagedPlay, its game's acceptance and deficiency) over any finite cells and bits and any ring, not about a Lean function: the service's staged check has no Lean code yet, and once it has, this is restated as that check's property.",
    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorK": "frozen (no-function,world-unlisted,scope): It is stated over an arbitrary Machine and Service and an analysis map (RunMap), not the service's code, and takes three premises about that map: ServiceSoundStaged (live coins, and the proof layer's binding and zero knowledge, with the seed identified with the staged window's coins), KScopeAffine (Theorem K's scope, K1 and E3, which no check of the service refuses a run outside of) and ChargeVF3f (VF3f's prices with B_theta complete, for stages that don't overlap).",
    "Pouw.SecurityProofs.RelativeSecurity.TheoremSOverlap": "frozen (no-function): It is a theorem about every play over a round's overlapping draws (OvPlay, its game's acceptance and per-draw deficiency ovDef) over any finite cell-blocks and bits per draw and any ring, not about a Lean function: the service's check over a round's overlapping draws has no Lean code yet, and once it has, this is restated as that check's property.",
-   "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK": "frozen (no-function,world-unlisted,scope): It is stated over an arbitrary Machine and Service and an analysis map (ORunMap), not the service's code, and takes three premises about that map: ServiceSoundOverlap (live coins, and the proof layer's binding and zero knowledge, with the seed identified with the overlapped window's coins and each round's run fixed before its first draw, E3), KScopeOverlap (Theorem K's scope across draws, K1 with operands affine in each draw's own bits at every bit point of the other draws' (AffMulAt) and E3, which no check of the service refuses a run outside of) and ChargeVF3fOverlap (VF3f's prices with B_theta complete, each product counted once)."
+   "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK": "frozen (no-function,world-unlisted,scope): It is stated over an arbitrary Machine and Service and an analysis map (ORunMap), not the service's code, and takes three premises about that map: ServiceSoundOverlap (live coins, and the proof layer's binding and zero knowledge, with the seed identified with the overlapped window's coins and each round's run fixed before its first draw, E3), KScopeOverlapAffine (Theorem K's scope across draws, K1 with operands affine in each draw's own bits at every bit point of the other draws' (AffMulAt) and E3, which no check of the service refuses a run outside of) and ChargeVF3fOverlap (VF3f's prices with B_theta complete, each product counted once).",
+   "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSided": "frozen (no-function,world-unlisted,scope): It is stated over an arbitrary Machine and Service and an analysis map (RunMap), not the service's code, and takes three premises about that map: ServiceSoundStaged (live coins, and the proof layer's binding and zero knowledge, with the seed identified with the staged window's coins), KScopeOneSided (Theorem K's scope for one-sided operands of any form: K1's operands with no form asked of either side, charging purity mod 2 at the cell-blocks' frames in place of row purity, and E3, which no check of the service refuses a run outside of) and ChargeVF3f (VF3f's prices with B_theta complete, for stages that don't overlap).",
+   "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSided": "frozen (no-function,world-unlisted,scope): It is stated over an arbitrary Machine and Service and an analysis map (ORunMap), not the service's code, and takes three premises about that map: ServiceSoundOverlap (live coins, and the proof layer's binding and zero knowledge, with the seed identified with the overlapped window's coins, the check's cell-block uniform among every stage's, and each round's run fixed before its first draw, E3), KScopeOverlapOneSided (Theorem K's scope across draws for one-sided operands of any form per draw at every bit point of the other draws' (OneSidedAt), charging purity across draws in place of row purity, and E3, which no check of the service refuses a run outside of) and ChargeVF3fOverlap (VF3f's prices with B_theta complete, each product counted once)."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {

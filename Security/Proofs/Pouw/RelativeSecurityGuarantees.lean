@@ -11,7 +11,9 @@ supermartingale at the luck ¾ (`RoundGame.expBound_of_staged`, `StagedPlay.game
 `roundsHyp_of_staged` with the chain bound at factor 1 from Lemma G over F₂ (`chainBound_gProd`, `toF2`) and
 `serviceFloor_of_rounds` at `D = 160 ln 2`. With overlapping stages, Theorem S by the per-draw luck's `PassBound (3/4)`
 (`OvPlay.passBound_game`, `RoundGame.pathBound_of_passBound`), and the floor by `roundsHyp_of_overlap` with the same
-chain bound on every stage's shape.
+chain bound on every stage's shape. For one-sided operands of any form, the floors by `roundsHyp_of_stagedP` and
+`roundsHyp_of_overlapP` (the parity luck 427/500 in the product deficit, charging purity) at `toF2_wRe_zero`, and
+`serviceFloor_of_rounds` at `D = 274 ln 2` (`ModelB.exp_parity_274`).
 -/
 
 namespace Pouw.SecurityProofs.RelativeSecurity
@@ -67,5 +69,35 @@ theorem OverlapFloorK : Pouw.Guarantees.RelativeSecurity.OverlapFloorK := by
     rw [show (1 - 3 / 4 : ℝ) * (160 * Real.log 2) = ((40 : ℕ) : ℝ) * Real.log 2 by push_cast; ring, Real.exp_neg,
       Real.exp_nat_mul, Real.exp_log two_pos]
   rwa [h40, mul_zero, sub_zero, card_oCells] at h
+
+theorem StagedFloorKOneSided : Pouw.Guarantees.RelativeSecurity.StagedFloorKOneSided := by
+  intro Mc S R St n L B n' e run δb δz κ Vmax hSt hκ hC hδb hδz hS hK hP
+  have hKSt : RoundsHypKStP Mc S R St Vmax δb δz κ n L 7 B n' wRe toF2 0 := ⟨e, fun Ω' _ M hcom r => by
+    obtain ⟨hB, hZ, hacc⟩ := hS Ω' M hcom r
+    exact ⟨(run Ω' M r).play, (run Ω' M r).Bind, (run Ω' M r).ZK, (run Ω' M r).V, hB, hZ, hacc,
+      fun x => (hP Ω' M hcom r x).1, fun x =>
+        ⟨(run Ω' M r).N x, (run Ω' M r).prog x, (run Ω' M r).pc x, (run Ω' M r).vq x, (run Ω' M r).word x,
+          (hK Ω' M hcom r x).1, (hK Ω' M hcom r x).2.1, (hK Ω' M hcom r x).2.2, (hP Ω' M hcom r x).2⟩⟩⟩
+  have hF₀ : 0 < (St : ℝ) * (κ * L * ((n * n' * B : ℕ) : ℝ)) := by
+    rw [mul_assoc]; exact mul_pos (by exact_mod_cast hSt) (mul_pos hκ (by exact_mod_cast hC))
+  have h := serviceFloor_of_rounds (roundsHyp_of_stagedP hKSt toF2_wRe_zero hSt hκ.le) (by norm_num) hF₀ hδb hδz
+    (274 * Real.log 2)
+  rw [mul_zero, sub_zero] at h
+  exact ModelB.ServiceFloor.mono h (by linarith [ModelB.exp_parity_274])
+
+theorem OverlapFloorKOneSided : Pouw.Guarantees.RelativeSecurity.OverlapFloorKOneSided := by
+  intro Mc S R St L n B n' e run δb δz κ Vmax hκ hC hδb hδz hS hK hP
+  have hKOv : RoundsHypKOvP Mc S R St Vmax δb δz κ n L 7 B n' wRe toF2 0 := ⟨e, fun Ω' _ M hcom r => by
+    obtain ⟨hB, hZ, hacc⟩ := hS Ω' M hcom r
+    exact ⟨(run Ω' M r).play, (run Ω' M r).Bind, (run Ω' M r).ZK, (run Ω' M r).V, hB, hZ, hacc,
+      fun x => (hP Ω' M hcom r x).1, fun x =>
+        ⟨(run Ω' M r).N x, (run Ω' M r).prog x, (run Ω' M r).pc x, (run Ω' M r).vq x, (run Ω' M r).word x,
+          (hK Ω' M hcom r x).1, (hK Ω' M hcom r x).2.1, (hK Ω' M hcom r x).2.2, (hP Ω' M hcom r x).2⟩⟩⟩
+  have hF₀ : 0 < κ * L * (Fintype.card (OCells St n n' B) : ℝ) := by
+    rw [mul_assoc, card_oCells]; exact mul_pos hκ (by exact_mod_cast hC)
+  have h := serviceFloor_of_rounds (roundsHyp_of_overlapP hKOv toF2_wRe_zero hκ.le) (by norm_num) hF₀ hδb hδz
+    (274 * Real.log 2)
+  rw [mul_zero, sub_zero, card_oCells] at h
+  exact ModelB.ServiceFloor.mono h (by linarith [ModelB.exp_parity_274])
 
 end Pouw.SecurityProofs.RelativeSecurity
