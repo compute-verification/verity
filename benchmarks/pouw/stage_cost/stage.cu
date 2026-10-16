@@ -138,7 +138,7 @@ static Commit make_commit(const HostConst& c) {
   if (!g_fr.count(key))
     g_fr[key] = {dput(c.ltpl.data(), c.ltpl.size()), dput(c.loff.data(), c.loff.size()), dput(c.ntpl.data(), c.ntpl.size()),
                  dput(c.noff.data(), c.noff.size())};
-  if (c.s < 1 || c.width > 128 * 128) { fprintf(stderr, "fr_tree takes s >= 1 and at most 128 CTAs of 128 leaves\n"); exit(2); }
+  if (c.s < 1 || c.width > 128 * 1024) { fprintf(stderr, "fr_tree takes s >= 1 and at most 1024 CTAs of 128 leaves\n"); exit(2); }
   const FrConst& f = g_fr[key];
   m.ltpl = f.ltpl; m.loff = f.loff; m.ntpl = f.ntpl; m.noff = f.noff;
   CK(cudaMalloc(&m.my, (size_t)64 * c.R * LAYERS));
@@ -383,7 +383,8 @@ __device__ __noinline__ void fr_level(uint64_t (*sh)[8], int n, long long j0, lo
   __syncthreads();
 }
 // p: digests, q_mid, my, cs (the layer's slot), hm96 mids, leaf tpl, leaf off, node tpl, node off, hm96 leaves out, b || c
-//    (b written), tree, counter   i: rows, s, width.  Grid width / L CTAs of L = min(width, 128) leaves, at most 128 CTAs.
+//    (b written), tree, counter   i: rows, s, width.  Grid width / L CTAs of L = min(width, 128) leaves, at most 1024 CTAs;
+//    the last CTA to finish hashes the levels above their roots.
 extern "C" __global__ void __launch_bounds__(128) fr_tree(Args a) {
   __shared__ uint64_t sh[128][8];
   __shared__ int last;
@@ -466,14 +467,31 @@ extern "C" __global__ void __launch_bounds__(128) fr_tree(Args a) {
   if (!last) return;
   __threadfence();
   const int n0 = (int)gridDim.x;  // == lw: the CTAs' subtree roots
-  if (tid < n0) {
+  int n = n0;
+  // levels wider than sh from the tree in memory, the last of them into sh
+  for (; n > L; n >>= 1) {
+    for (int t = tid; t < n / 2; t += L) {
+      uint64_t l[8], r[8], u[8];
+      const uint64_t* pd = (const uint64_t*)(tree + (off + 2 * t) * 64);
+#pragma unroll
+      for (int k = 0; k < 8; k++) { l[k] = s512_bswap(__ldcg(pd + k)); r[k] = s512_bswap(__ldcg(pd + 8 + k)); }
+      fr_hash<true>(ntpl + (nb + t) * 384, 3, (int)noff[nb + t], l, r, u);
+      s512_out(u, tree + (off + lw + t) * 64);
+      if (n / 2 <= L)
+#pragma unroll
+        for (int k = 0; k < 8; k++) sh[t][k] = u[k];
+    }
+    __syncthreads();
+    nb += lw / 2; off += lw; lw /= 2;
+  }
+  if (n == n0 && tid < n0) {
     const uint64_t* pd = (const uint64_t*)(tree + (off + tid) * 64);
 #pragma unroll
     for (int k = 0; k < 8; k++) sh[tid][k] = s512_bswap(__ldcg(pd + k));
   }
   __syncthreads();
   j0 = 0;
-  for (int n = n0; n > 1; n >>= 1) {
+  for (; n > 1; n >>= 1) {
     fr_level(sh, n, j0, lw, off, nb, ntpl, noff, tree);
     nb += lw / 2; off += lw; lw /= 2;
   }
