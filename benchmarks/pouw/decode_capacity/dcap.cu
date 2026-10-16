@@ -747,15 +747,11 @@ __device__ __forceinline__ void dstep(uint32_t (&a)[4], const uint32_t (&b)[2], 
 // Warp `wid` runs tiles tile0 + wid·tiles + i, i < tiles, S steps each (S a multiple of 8), and writes tile i's receipt to
 // rec[wid·tiles + i]. Lane (g, t) holds A rows g and g + 8, words t and 4 + t; B column g, words t and 4 + t; C rows g
 // and g + 8, columns 2t and 2t + 1 (the PTX fragment layout of m16n8k32 .s8).
-// Maps 1 and 2 let the next chunk launch at once (griddepcontrol.launch_dependents; it takes effect only when the chunk
-// is launched with programmatic stream serialization, DFILL_PDL=1) and store a receipt only after the previous chunk has
-// finished and its stores are visible (griddepcontrol.wait), so a chunk's receipts are still the last ones written.
 template <int NC, int MAP>
 __global__ void __launch_bounds__(NC >= 8 ? 256 : 512) dfill_k(uint64_t c0, uint64_t c1, unsigned long long tile0, int tiles, int steps,
                                               unsigned long long* __restrict__ rec) {
   const int lane = threadIdx.x & 31, g = lane >> 2, t = lane & 3;
   const unsigned long long wid = (unsigned long long)blockIdx.x * (blockDim.x >> 5) + (threadIdx.x >> 5);
-  if constexpr (MAP >= 1) asm volatile("griddepcontrol.launch_dependents;");
   for (int i = 0; i < tiles; i++) {
     const unsigned long long idx = wid * tiles + i;
     const DSeed seed = dseed_x(c0, c1, tile0 + idx, MAP);
@@ -790,7 +786,6 @@ __global__ void __launch_bounds__(NC >= 8 ? 256 : 512) dfill_k(uint64_t c0, uint
            drec_x(seed, MAP, ch, g, 4 + t, a[ch][2]) ^ drec_x(seed, MAP, ch, g + 8, 4 + t, a[ch][3]);
 #pragma unroll
     for (int o = 16; o; o >>= 1) h ^= __shfl_xor_sync(0xffffffffu, h, o);
-    if constexpr (MAP >= 1) asm volatile("griddepcontrol.wait;" ::: "memory");
     if (lane == 0) rec[idx] = h;
   }
 }
@@ -853,33 +848,17 @@ static uint64_t dfill_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int s
 // one chunk: `grid` blocks of W warps, each warp `tiles` tiles of NC chains x S steps; chunk k covers tiles from k·per on
 struct DFill {
   int W = 4, NC = 2, S = 2048, tiles = 1, grid = 0, map = 0;
-  bool pdl = false;  // maps 1, 2: launch with programmatic stream serialization (DFILL_PDL=1)
   uint64_t c0 = 0, c1 = 0;
   unsigned long long* rec = nullptr;
   long long per() const { return (long long)grid * W * tiles; }
   double macs() const { return (double)per() * NC * S * 4096.0; }
 };
-template <int NC, int MAP> static void dfill_go(const DFill& f, unsigned long long t0, cudaStream_t st) {
-  if (!f.pdl || MAP == 0) {
-    dfill_k<NC, MAP><<<f.grid, 32 * f.W, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec);
-    return;
-  }
-  cudaLaunchAttribute at;
-  at.id = cudaLaunchAttributeProgrammaticStreamSerialization;
-  at.val.programmaticStreamSerializationAllowed = 1;
-  cudaLaunchConfig_t cfg = {};
-  cfg.gridDim = dim3(f.grid);
-  cfg.blockDim = dim3(32 * f.W);
-  cfg.stream = st;
-  cfg.attrs = &at;
-  cfg.numAttrs = 1;
-  CK(cudaLaunchKernelEx(&cfg, dfill_k<NC, MAP>, (uint64_t)f.c0, (uint64_t)f.c1, t0, f.tiles, f.S, f.rec));
-}
 static void dfill_launch(const DFill& f, long long chunk, cudaStream_t st) {
   const unsigned long long t0 = (unsigned long long)chunk * f.per();
+  const dim3 gr(f.grid), bl(32 * f.W);
   switch (f.NC * 4 + f.map) {
 #define DFILL_CASE(NC_, MAP_) \
-  case NC_ * 4 + MAP_: dfill_go<NC_, MAP_>(f, t0, st); break;
+  case NC_ * 4 + MAP_: dfill_k<NC_, MAP_><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
     DFILL_CASE(1, 0) DFILL_CASE(2, 0) DFILL_CASE(4, 0)
     DFILL_CASE(1, 1) DFILL_CASE(2, 1) DFILL_CASE(4, 1) DFILL_CASE(8, 1)
     DFILL_CASE(1, 2) DFILL_CASE(2, 2) DFILL_CASE(4, 2) DFILL_CASE(8, 2)
@@ -899,7 +878,6 @@ static void dfill_prep() {
 static DFill dfill_make(int grid, int W, int NC, int S, uint64_t c0, uint64_t c1) {
   DFill f;
   f.grid = grid; f.W = W; f.NC = NC; f.S = S; f.c0 = c0; f.c1 = c1; f.map = dfill_map();
-  f.pdl = getenv("DFILL_PDL") && atoi(getenv("DFILL_PDL"));
   const int lg = getenv("DFILL_CHUNK_LOG2") ? atoi(getenv("DFILL_CHUNK_LOG2")) : 19;
   f.tiles = std::max(1, (int)((1LL << lg) / ((long long)W * NC * S)));
   CK(cudaMalloc(&f.rec, f.per() * sizeof(unsigned long long)));
@@ -1003,30 +981,6 @@ static int dgate(Dev& d) {
       fails += bad != 0 || ctl_equal != 0;
       CK(cudaFree(f.rec));
     }
-  // DFILL_PDL: chunks 4 and 5 back to back, programmatically serialized; every receipt must be chunk 5's, none chunk 4's
-  for (int map : {1, 2})
-    for (int S : {8, 2048}) {
-      DFill f;
-      f.grid = 3; f.W = 4; f.NC = 4; f.S = S; f.tiles = 2; f.c0 = g_c0; f.c1 = g_c1; f.map = map; f.pdl = true;
-      CK(cudaMalloc(&f.rec, f.per() * sizeof(unsigned long long)));
-      CK(cudaMemset(f.rec, 0xA5, f.per() * sizeof(unsigned long long)));
-      dfill_launch(f, 4, d.st);
-      dfill_launch(f, 5, d.st);
-      CK(cudaStreamSynchronize(d.st));
-      CK(cudaGetLastError());
-      std::vector<unsigned long long> h(f.per());
-      CK(cudaMemcpy(h.data(), f.rec, h.size() * sizeof h[0], cudaMemcpyDeviceToHost));
-      long bad = 0, ctl_equal = 0;
-      for (long long i = 0; i < f.per(); i++) {
-        bad += h[i] != dfill_ref(f.c0, f.c1, 5ull * f.per() + i, 4, S, map);
-        ctl_equal += h[i] == dfill_ref(f.c0, f.c1, 4ull * f.per() + i, 4, S, map);
-      }
-      printf("{\"mode\": \"dgate\", \"map\": %d, \"pdl\": true, \"NC\": 4, \"S\": %d, \"tiles\": %lld, \"mismatches\": %ld, "
-             "\"control_equal\": %ld, \"ok\": %s}\n",
-             map, S, f.per(), bad, ctl_equal, bad || ctl_equal ? "false" : "true");
-      fails += bad != 0 || ctl_equal != 0;
-      CK(cudaFree(f.rec));
-    }
   fflush(stdout);
   return fails;
 }
@@ -1041,11 +995,10 @@ static void run_dalone(Dev& d, int W, int NC, int S) {
   const int n = getenv("DFILL_ALONE_N") ? atoi(getenv("DFILL_ALONE_N")) : 40;
   const double r = dfill_alone(d, f, d.st, n, &mhz, &watt, &last);
   const int bad = dfill_check(f, last, 8);
-  printf("{\"mode\": \"dalone\", \"map\": %d, \"pdl\": %s, \"W\": %d, \"NC\": %d, \"S\": %d, \"tiles\": %d, \"grid\": %d, "
-         "\"chunks\": %d, \"chunk_macs\": %.6e, \"mac_per_s\": %.6e, \"share\": %.5f, \"mhz\": %.1f, \"watt\": %.1f, "
-         "\"rec_checked\": 8, \"rec_bad\": %d}\n",
-         f.map, f.pdl ? "true" : "false", W, NC, S, f.tiles, f.grid, n, f.macs(), r, r / (1024.0 * d.sms * mhz * 1e6), mhz,
-         watt, bad);
+  printf("{\"mode\": \"dalone\", \"map\": %d, \"W\": %d, \"NC\": %d, \"S\": %d, \"tiles\": %d, \"grid\": %d, \"chunks\": %d, "
+         "\"chunk_macs\": %.6e, \"mac_per_s\": %.6e, \"share\": %.5f, \"mhz\": %.1f, \"watt\": %.1f, \"rec_checked\": 8, "
+         "\"rec_bad\": %d}\n",
+         f.map, W, NC, S, f.tiles, f.grid, n, f.macs(), r, r / (1024.0 * d.sms * mhz * 1e6), mhz, watt, bad);
   fflush(stdout);
   CK(cudaFree(f.rec));
 }

@@ -1,16 +1,14 @@
 #!/usr/bin/env bash
-# The filler kernel's arms (HC-KERN) on one leased GPU (cwd = the source tree): dcap's d* modes with DFILL_MAP 0 (FILL v1),
-# 1 (the accumulator quad in register order) and 2 (map 1 hardened), DFILL_PDL 0 or 1 (chunks launched programmatically
-# serialized, maps 1 and 2). The receipt gate (every map, and PDL) and CAP's gate run first under the same
+# The filler kernel's arms (HC-KERN) on one leased GPU (cwd = the source tree): dcap's d* modes with DFILL_MAP 0 (FILL v1)
+# and 1 (the accumulator quad in register order). The receipt gate (both maps) and CAP's gate run first under the same
 # lease, and nothing is timed unless both pass. Then each arm's rate alone, a run of seconds per arm for board power, ncu's
 # tensor-pipe and issue counters, and the decode step beside each map on a green split. Clocks are read, never set.
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=HC-KERN \
 #     --send benchmarks/pouw/decode_capacity/hckern.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/hckern.sh"'
 #
-# HK_ALONE ("MAP:W:NC[:S[:CHUNK_LOG2[:PDL]]] ..."), HK_POWER (the same, DFILL_ALONE_N=HK_POWER_N chunks each), HK_NCU (the
-# same), HK_ARMS ("MAP:FILL_SMS:W:NC[:S[:CHUNK_LOG2[:PDL]]] ...") at HK_BLS ("B:L ..."), HK_S (the default steps a tile),
-# HK_REPS, HK_ALONE_N (chunks a dalone times).
+# HK_ALONE ("MAP:W:NC[:S[:CHUNK_LOG2]] ..."), HK_POWER (the same, DFILL_ALONE_N=HK_POWER_N chunks each), HK_NCU (the same),
+# HK_ARMS ("MAP:FILL_SMS:W:NC[:S[:CHUNK_LOG2]] ...") at HK_BLS ("B:L ..."), HK_S (the default steps a tile), HK_REPS.
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -45,30 +43,30 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-20}" -- bash -c '
   echo "gate rc $g" >> "$O/rc.txt"
   [ "$g" -eq 0 ] || exit 5
   for a in $HK_ALONE; do
-    IFS=: read -r m w nc st lg pdl <<< "$a"
-    DFILL_MAP=$m DFILL_CHUNK_LOG2=${lg:-19} DFILL_PDL=${pdl:-0} DFILL_ALONE_N=${HK_ALONE_N:-40} "$B/dcap" dalone "$w" "$nc" "${st:-$HK_S}" >> "$O/dalone.jsonl" 2>> "$O/errors.txt" ||
+    IFS=: read -r m w nc st lg <<< "$a"
+    DFILL_MAP=$m DFILL_CHUNK_LOG2=${lg:-19} "$B/dcap" dalone "$w" "$nc" "${st:-$HK_S}" >> "$O/dalone.jsonl" 2>> "$O/errors.txt" ||
       echo "rc $? for dalone $a" >> "$O/errors.txt"
   done
   q
   for a in $HK_POWER; do
-    IFS=: read -r m w nc st lg pdl <<< "$a"
+    IFS=: read -r m w nc st lg <<< "$a"
     ( sleep 1.5; q; sleep 0.5; q ) &
-    DFILL_MAP=$m DFILL_CHUNK_LOG2=${lg:-19} DFILL_PDL=${pdl:-0} DFILL_ALONE_N=$HK_POWER_N "$B/dcap" dalone "$w" "$nc" "${st:-$HK_S}" >> "$O/power.jsonl" 2>> "$O/errors.txt" ||
+    DFILL_MAP=$m DFILL_CHUNK_LOG2=${lg:-19} DFILL_ALONE_N=$HK_POWER_N "$B/dcap" dalone "$w" "$nc" "${st:-$HK_S}" >> "$O/power.jsonl" 2>> "$O/errors.txt" ||
       echo "rc $? for power $a" >> "$O/errors.txt"
     wait
     echo "power $a done" >> "$O/gpu.txt"
   done
   M=gpu__time_duration.sum,sm__inst_executed_pipe_tensor.sum,sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_elapsed,smsp__issue_active.avg.pct_of_peak_sustained_active,smsp__inst_executed.sum,sm__cycles_elapsed.avg,lts__t_bytes.sum,launch__registers_per_thread
   for a in $HK_NCU; do
-    IFS=: read -r m w nc st lg pdl <<< "$a"
-    DFILL_MAP=$m DFILL_CHUNK_LOG2=${lg:-19} DFILL_PDL=${pdl:-0} ncu --clock-control none -k regex:dfill_k --launch-count 2 --metrics $M --section WarpStateStats \
-      --csv "$B/dcap" done "$w" "$nc" "${st:-$HK_S}" > "$O/ncu-m$m-w$w-nc$nc-s${st:-$HK_S}-lg${lg:-19}-p${pdl:-0}.csv" 2>&1; echo "ncu $a rc $?" >> "$O/rc.txt"
+    IFS=: read -r m w nc st lg <<< "$a"
+    DFILL_MAP=$m DFILL_CHUNK_LOG2=${lg:-19} ncu --clock-control none -k regex:dfill_k --launch-count 2 --metrics $M --section WarpStateStats \
+      --csv "$B/dcap" done "$w" "$nc" "${st:-$HK_S}" > "$O/ncu-m$m-w$w-nc$nc-s${st:-$HK_S}.csv" 2>&1; echo "ncu $a rc $?" >> "$O/rc.txt"
   done
   q
   for arm in $HK_ARMS; do
-    IFS=: read -r m f w nc st lg pdl <<< "$arm"
+    IFS=: read -r m f w nc st lg <<< "$arm"
     for bl in $HK_BLS; do
-      DFILL_MAP=$m DFILL_CHUNK_LOG2=${lg:-19} DFILL_PDL=${pdl:-0} "$B/dcap" dfill "${bl%:*}" "${bl#*:}" split "$f" "$w" "$nc" "${st:-$HK_S}" "$HK_REPS" \
+      DFILL_MAP=$m DFILL_CHUNK_LOG2=${lg:-19} "$B/dcap" dfill "${bl%:*}" "${bl#*:}" split "$f" "$w" "$nc" "${st:-$HK_S}" "$HK_REPS" \
         >> "$O/dfill.jsonl" 2>> "$O/errors.txt" ||
         echo "rc $? for dfill $bl $arm" >> "$O/errors.txt"
     done
