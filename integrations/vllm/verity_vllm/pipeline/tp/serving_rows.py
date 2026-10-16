@@ -12,10 +12,11 @@ or whose root is not the one the TP run root combines, exits the Commit before i
 The verifier's own window of rank ``r`` (`window_of_record`) comes from the Commit's record alone, no committed value read: the TP run
 root and every rank's root of its first instrumented run (`record`: ``runs.jsonl``, refused unless the TP run root combines those
 roots), and the population over rank ``r``'s Programs of record (`rank_replay.load`, under the Build's ``rank<r>/``, refused unless of
-record for the rank in ``versions.json`` and the rank's).  `source` holds a registration's window to it: ``served``, its run
+record for the rank in ``versions.json`` and the rank's) for the workload the record served.  `source` holds a registration's window to it: ``served``, its run
 ``<TP run root>/rank<r>``, its ``tp`` the record's and its served Programs the ones the verifier loaded."""
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import traceback
@@ -126,14 +127,15 @@ def record(commit_dir: str | os.PathLike) -> dict[str, Any]:
     argv = [str(x) for x in v.get("argv") or []]
     return {"world": world, "tp_run_root": c["tp_run_root"], "roots": {str(r): roots[r] for r in range(world)}, "root_tag": v["root_tag"],
             "of_record": (v.get("sampled_replay") or {}).get("of_record") or {}, "label": row.get("label"),
-            "workload": argv[argv.index("--workload") + 1] if "--workload" in argv[:-1] else None}
+            "workload": argv[argv.index("--workload") + 1] if "--workload" in argv[:-1] else None, "workload_sha256": row.get("workload_sha256")}
 
 
 def window_of_record(commit_dir: str | os.PathLike, rank: int, partition_file: str | os.PathLike, build_root: str | os.PathLike,
                      workload_file: str | os.PathLike) -> tuple[Any, dict[str, Any]]:
     """The verifier's own window of rank ``rank`` (`pipeline.serving_rows.population` over the rank's Programs of record under
     ``<build_root>/rank<r>``, its run ``<TP run root>/rank<r>`` of `record`), and what `source` holds the rank's registration to.
-    The requests are the workload's in order, ``r<position>``, as ``tp-commit`` names them."""
+    The requests are the workload's in order, ``r<position>``, as ``tp-commit`` names them, from a workload file refused unless the
+    one the record served (its ``workload_sha256``, `vllm_adapter.load_workload`'s digest)."""
     from verity_vllm.pipeline import serving_rows as SRW
     from verity_vllm.pipeline.tp import rank_replay as RR
 
@@ -142,6 +144,9 @@ def window_of_record(commit_dir: str | os.PathLike, rank: int, partition_file: s
     if not 0 <= rank < world:
         raise ValueError(f"rank {rank} is not a rank of the world of {world}")
     doc = json.loads(Path(workload_file).read_text())
+    got = hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    if got != rec["workload_sha256"]:
+        raise ValueError(f"{workload_file}: workload sha256 {got[:16]} is not the record's {str(rec['workload_sha256'])[:16]}")
     reqs = [{"request_id": f"r{i}", "arrive_step": int(q.get("arrive_step") or 0), "prompt_len": len(q["prompt_token_ids"]),
              "max_tokens": int(q["max_tokens"])} for i, q in enumerate(doc["requests"])]
     p = RR.load({"programs": {str(rank): str(Path(build_root) / f"rank{rank}")}, "of_record": rec["of_record"], "requests": reqs}, rank, world)
