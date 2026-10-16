@@ -738,13 +738,13 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
   }
   CK(cudaStreamSynchronize(ss));
   auto base = [&] { enqueue_step(d, p, 2, B, L, &wrapped); };
-  auto fused = [&](int fw) { f.FW = fw; enqueue_fstep(d, f, fw ? a : a0, p, B, L, &wrapped); };
+  auto fused = [&](int fw, const Fatt& at) { f.FW = fw; enqueue_fstep(d, f, at, p, B, L, &wrapped); };
   double amhz = 0, awatt = 0, alone = 0;
   if (fs) alone = dfill_alone(d, pf, fs, 20, &amhz, &awatt);
   d.st = full;
   const auto vb = time_work(d, base, reps);
   d.st = ss;
-  const auto v0 = time_work(d, [&] { fused(0); }, reps);
+  const auto v0 = time_work(d, [&] { fused(0, a0); }, reps);
   DPump pump;
   if (fs) {
     dpump_start(pump, pf, fs, 3);
@@ -752,7 +752,7 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
     }
   }
   double w0 = 0, w1 = 0;
-  const auto vf = time_work(d, [&] { fused(FW); }, reps, &w0, &w1);
+  const auto vf = time_work(d, [&] { fused(FW, a); }, reps, &w0, &w1);
   long long nwin = 0;
   int pbad = 0;
   if (fs) {

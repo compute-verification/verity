@@ -3,10 +3,14 @@
 Reads one run's dcap.jsonl and prints the tables of note:20261016T0215Z-draft-capacity-share: τ for the honest kernels,
 nominal ÷ capacity over the decode grid, and the serving mixes with and without certified filler. Writes them as JSON.
 
-  python3 share.py RUN_OUT_DIR [--fill FILL_RUN_OUT_DIR] [--dfill DFILL_RUN_OUT_DIR ...] [--json OUT.json]
+  python3 share.py RUN_OUT_DIR [--fill FILL_RUN_OUT_DIR] [--dfill DFILL_RUN_OUT_DIR ...] [--fstep FLIN_RUN_OUT_DIR ...]
+                   [--json OUT.json]
 
 With --dfill, FILL's DRAM-free filler (dfill.sh) joins the fillers, read at each step's own (batch, context) point
 (`PointFiller`), and the adaptive split takes, at each measured point, the most filler SMs whose decode slowdown is ≤ 5%.
+With --fstep, FILL's fused filler (flin.sh: filler warps inside the decode linears and attention blocks) joins them, on
+the whole GPU and beside the dfill pump on a split's other SMs, each the measured configuration with the largest filler
+share at ≤ 5% slowdown (`StepFiller`, which credits the filler warps over the core step only).
 
 With --fill, the filler is the one fill.sh measured (T2's chained int8 GEMM at m = k = 8192 on a green-context split, beside
 dcap's decode step): its share of the GPU's peak and the decode slowdown at L = 2048, by batch, the share divided by
@@ -192,6 +196,20 @@ class PointFiller:
         return self.pts[(pb, pl)]
 
 
+class StepFiller(PointFiller):
+    """fstep's points {(B, L): (fused share, pump share, core slowdown)}: the fused filler (filler warps inside flin's
+    linears and the attention blocks) runs only while the measured core step does, so it is credited over the core step's
+    time alone; the pump on a split's other SMs runs through the non-GEMM time too, which a split charges max(1, slowdown)
+    (those kernels then have fewer SMs) and which is unchanged without one."""
+
+    def apply(self, m, b, l, ms):
+        fused, pump, slow = self.at(b, l)
+        other = max(DEC_OTHER_MS, PRE_OTHER_MS_TOK * b)
+        tc = (ms - other) * slow
+        to = other * (max(1.0, slow) if pump else 1.0)
+        return tc + to, ((fused + pump) * tc + pump * to) * m.cap * 1e-3
+
+
 FILLER = {  # W11 (note:20261015T0713Z-draft-filler-issue-slack): 0.70 x the SM share, worst slowdown at batch ≤ 32
     "60 SMs": Filler([(1, 0.222, 1.047)], dsms=128),
     "92 SMs": Filler([(1, 0.34, 1.106)], dsms=96),
@@ -256,6 +274,43 @@ def adaptive_pick(rows, tuned):
     return best
 
 
+def fstep_key(r):
+    return (r["B"], r["L"], r["FW"], r["NC"], r.get("AFW", 0), r.get("fill_sms", 0), r.get("lt_mask", 0), r["pdl"])
+
+
+def fstep_points(rows):
+    """{config: (fused share, pump share, slowdown)}, each averaged over the runs that measured it (fstep_key)."""
+    acc = {}
+    for r in rows:
+        acc.setdefault(fstep_key(r), []).append((r["fill_share"], r.get("fill_share_pump", 0.0), r["slowdown"]))
+    return {k: tuple(sum(x[i] for x in v) / len(v) for i in range(3)) for k, v in acc.items()}
+
+
+def fstep_pick(rows, split):
+    """Per measured (B, L), the fstep configuration with the largest filler share (fused, plus the pump's when `split`)
+    among those whose core-step slowdown is ≤ LIMIT: {(B, L): (config, fused share, pump share, slowdown)}; whole-GPU
+    configurations only unless `split`."""
+    best = {}
+    for k, (fused, pump, slow) in fstep_points(rows).items():
+        if (k[5] and not split) or slow > LIMIT:
+            continue
+        cur = best.get(k[:2])
+        if cur is None or fused + pump > cur[1] + cur[2]:
+            best[k[:2]] = (k, fused, pump, slow)
+    return best
+
+
+def fstep_fillers(rows):
+    """FILL's fused filler (flin.sh's fstep): the adaptive choice at ≤ LIMIT on the whole GPU, and with the dfill pump on
+    a split's other SMs. Receipts are 8 bytes a tile of NC·S MMAs, as dfill's, so no commitment factor."""
+    out = {}
+    for split, name in ((False, "fused"), (True, "fused + pump")):
+        pick = fstep_pick(rows, split)
+        if pick:
+            out[f"{name} ≤ {LIMIT - 1:.0%}"] = StepFiller({bl: v[1:] for bl, v in pick.items()})
+    return out
+
+
 HEADLINE = [("decode", 1, 2048), ("decode", 32, 8192), ("decode", 128, 2048), ("decode", 256, 2048),
             ("chat", 32, None), ("chat", 256, None), ("RAG", 144, None), ("code / agents", 48, None),
             ("reasoning", 132, None)]
@@ -282,6 +337,8 @@ def headline(res, names):
 
 def with_filler(m, b, ms, lin_ms, name, l=None):
     fl = FILLER[name]
+    if isinstance(fl, StepFiller):
+        return fl.apply(m, b, l, ms)
     share, slow = fl.at(b, l)
     t = ms * slow
     if fl.dsms:
@@ -375,6 +432,8 @@ def main():
     ap.add_argument("--fill", type=pathlib.Path)
     ap.add_argument("--dfill", type=pathlib.Path, action="append", default=[],
                     help="a dfill.sh run's out dir (repeatable): FILL's DRAM-free filler")
+    ap.add_argument("--fstep", type=pathlib.Path, action="append", default=[],
+                    help="a flin.sh run's out dir (repeatable): FILL's fused filler, alone and beside the pump")
     ap.add_argument("--json", type=pathlib.Path)
     args = ap.parse_args()
     rows = [json.loads(line) for line in (args.out / "dcap.jsonl").read_text().splitlines() if line.strip()]
@@ -388,16 +447,22 @@ def main():
                   if line.strip()]
     dfillers = dfill_fillers(dfill_rows)
     FILLER.update(dfillers)
+    fstep_rows = [json.loads(line) for d in args.fstep for line in (d / "fstep.jsonl").read_text().splitlines()
+                  if line.strip()]
+    FILLER.update(fstep_fillers(fstep_rows))
     res = {"read_mhz": m.mhz, "dram_read_gb_s": m.bw / 1e9, "att_fit": {"gb_s": m.att_bw / 1e9, "c0_ms": m.att_c0},
            "step_delta_ms": m.delta, "eta_fa2": m.eta_fa2, "A_v99": A_V99, "pool_tokens": POOL_TOK,
            "model_check": [{"B": b, "L": l, "measured": r["ms"], "model": m.lin(b) + m.att_ms(b, l) + m.delta}
                            for (b, l), r in sorted(m.step.items())],
            "tau": tau_table(m), "grid": grid(m), "mixes": mixes(m),
            "a_ladder": [{"what": w, "A": a} for w, a in A_LADDER],
-           "filler": "measured (--fill)" if args.fill else "W11 (assumed)", "fill": fill_rows, "dfill": dfill_rows}
+           "filler": "measured (--fill)" if args.fill else "W11 (assumed)", "fill": fill_rows, "dfill": dfill_rows,
+           "fstep": fstep_rows}
     res["headline"] = headline(res, list(FILLER))
     res["adaptive"] = {("tuned" if t else "as tuned for the whole GPU"):
                        {f"{b}:{l}": v for (b, l), v in adaptive_pick(dfill_rows, t).items()} for t in (False, True)}
+    res["fstep_pick"] = {("fused + pump" if s else "fused"): {f"{b}:{l}": v for (b, l), v in fstep_pick(fstep_rows, s).items()}
+                         for s in (False, True)}
     print(f"read clock {m.mhz:.0f} MHz, C = {m.cap / 1e12:.1f} TMAC/s (C_2430 = {m.cap_max / 1e12:.1f}); "
           f"DRAM read {m.bw / 1e9:.0f} GB/s; attention fit {m.att_bw / 1e9:.0f} GB/s + {m.att_c0:.3f} ms; "
           f"step δ {m.delta:.3f} ms; FA2 η {m.eta_fa2:.3f}; A(V99) {A_V99:.4f}; pool {POOL_TOK} tokens")
@@ -429,6 +494,24 @@ def main():
             print(f"\nadaptive split ≤ {LIMIT - 1:.0%}{', cuBLASLt tuned on the partition' if tuned else ''}: "
                   + "; ".join(f"B {b} L {l}: {sms} SMs, share {share:.3f}, slowdown {slow:.3f}"
                               for (b, l), (sms, share, slow) in sorted(pick.items())))
+    if fstep_rows:
+        print("\n| fused step | B | L | FW | AFW | pump SMs | cuBLASLt mask | slowdown | split only | filler warps "
+              "(linears + attention) | pump | total | receipts checked (bad) | outputs bad |\n"
+              "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+        for r in sorted(fstep_rows, key=fstep_key):
+            parts = [r.get(k, {}) for k in ("lin", "att", "pump")]
+            nchk = sum(p.get("rec_checked", 0) for p in parts) or r.get("rec_checked", 0)
+            nbad = sum(p.get("rec_bad", 0) for p in parts) + r.get("rec_bad", 0)
+            print(f"| NC {r['NC']}{'' if r['pdl'] else ', no PDL'} | {r['B']} | {r['L']} | {r['FW']} | {r.get('AFW', 0)} | "
+                  f"{r.get('fill_sms', 0)} | {r.get('lt_mask', 0)} | {fmt(r['slowdown'])} | {fmt(r['fused0_vs_base'])} | "
+                  f"{fmt(r['fill_share'])} ({fmt(r.get('fill_share_lin', r['fill_share']))} + "
+                  f"{fmt(r.get('fill_share_att', 0.0))}) | "
+                  f"{fmt(r.get('fill_share_pump', 0.0))} | {fmt(r.get('fill_share_total', r['fill_share']))} | "
+                  f"{nchk} ({nbad}) | {r['out_mismatches']} |")
+        for split in (False, True):
+            print(f"\nfstep pick ≤ {LIMIT - 1:.0%}{' with the pump' if split else ', whole GPU'}: "
+                  + "; ".join(f"B {b} L {l}: FW {k[2]} AFW {k[4]} pump {k[5]} LT {k[6]}, filler {fu:.3f} + {pu:.3f}, "
+                              f"slowdown {s:.3f}" for (b, l), (k, fu, pu, s) in sorted(fstep_pick(fstep_rows, split).items())))
     names = [n for n in FILLER if not n.startswith("dfree-") or n == "dfree-split-w8-nc4-t8 92 SMs tuned"]
     print("\nHeadline: N/C, cert/C (= 0.99 N/C) and time with each filler (decode rows: the step's slowdown; mixes: the "
           "mix's time over its time without filler)\n")
