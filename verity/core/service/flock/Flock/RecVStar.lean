@@ -191,7 +191,8 @@ def checkCandidate3 (i : Inner) (ss : Array VStar.Stmt) : Except String Unit := 
 circuits are private, `i.holo`), at a shape `RecResiduals.check` accepts a part's name at, whose claims are two and two
 per region of the inner statement (an extra claim per region at each of two link points), and where V*'s parts
 (`VStar.parts (specOf vsh i.holo)`, `VStar/Parts.lean`) are as many as the verifier's own packing of its algebra
-(`RecResiduals.groups (structureOf sh) (portSizes sh)`, `RecResiduals.lean:119-139`) at the same holo flag. A part's
+(`RecResiduals.groups (structureOf sh) (portSizes sh)`, `RecResiduals.lean:119-139`) at the same holo flag, at a holo
+shape one of whose groups holds h's round (`hRound`) as a row port. A part's
 circuit file, compared byte for byte (`checkFile`), carries `i.holo` as its META holo (`RecResiduals.HOLO_KEY`,
 `circuitFile`). Candidate 3's statements follow the table's (`candidate3Statements`), and the list must hold every one
 its session needs (`checkCandidate3`). -/
@@ -208,6 +209,9 @@ def statements (i : Inner) : Except String (Array VStar.Stmt) := do
     (s!"the verifier's groups: " ++ ·)
   if ps.size != gs.size then
     throw s!"at the inner session's shape (m {i.m}, k_log {i.kLog}, claims {i.claims}): V* has {ps.size} parts, the verifier's algebra {gs.size} groups"
+  if i.holo && !(gs.any fun g => g.2.1.contains (hRound i.m i.kLog)) then
+    throw (s!"at the holo inner session's shape (m {i.m}, k_log {i.kLog}, claims {i.claims}): no group of the " ++
+      s!"verifier's algebra holds h's round m{hRound i.m i.kLog} as a row port")
   let ss := (← VStar.statementsOf vsh i.holo) ++ (← candidate3Statements i)
   checkCandidate3 i ss
   pure ss

@@ -66,6 +66,8 @@ theorem list_ok {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.state
   split at h
   · cases h
   rename_i hsz
+  split at h
+  · cases h
   obtain ⟨A, hA, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨C, hC, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨u, -, h⟩ := FlockC3.VStarList.eok_bind h

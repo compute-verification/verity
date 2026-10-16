@@ -1254,6 +1254,8 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
     `verity/rec-inner/v1`, `RecVStar.Inner.holo`), so a file's META `holo` must equal it, and every `VERDICT` line
     carries it as `private_circuit`. At `holo` true V*'s statements are its holo ones (`VStar.statementsHolo`: the parts
     of `specHolo`, whose files carry META `holo`), and a part's message rounds are `holoRepRounds`', `h`'s among them;
+    an inner shape at which no group of the verifier's algebra (below) holds `h`'s round `m<hRound>` as a row port
+    (`RecVStar.hRound`, the round RecSparse reads as its port `h`) is refused before V*'s statements are built;
   - the verifier computes `GfResiduals`' S at that shape (`Flock.RecAlgebra.structureOf`, `rec_algebra.structure`) and
     its row ports (`rec_residuals.spec`: one per round that absorbs elements, then `acc0` and `acc1` of 2), groups its
     residuals as `rec_residuals.parts` does, each residual in the first part of at most 64 regions, 160 `sha512x3`
@@ -1267,6 +1269,9 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
     `ir_lower.layout` lays it out, one 16-bit port per word;
   - its computed rows must read each row-port element in all 128 bits or in none (`RecResiduals.partlyRead`), refused
     by the first element read in part and how many of its bits are;
+  - its computed rows must read each element of `h` (`.h l`, at a holo shape) the part holds in all 128 bits
+    (`RecResiduals.hUnread`), refused by the first that is not and how many of its bits are, so the algebra unit's
+    decoded `h` is the registered row RecSparse reads as its port `h`;
   - at copy 0 and each copy below `units_per_vu`, a circuit port that keys a bit of an element of `w` (its leaf at the
     column's word, `HmRow.delta`'s copy) must be named `m<r>` for each round `r` that holds the element's key
     (`RecResiduals.misnamed`, `roundNames`), refused by the first copy, element, bit and port that is not.

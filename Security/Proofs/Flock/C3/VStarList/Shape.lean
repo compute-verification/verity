@@ -43,6 +43,8 @@ theorem statements_ok {i : Flock.RecVStar.Inner} {ss : Array VStar.Stmt} (h : Fl
   obtain ⟨gs, hgs, h⟩ := eok_bind h
   split at h
   · cases h
+  split at h
+  · cases h
   obtain ⟨A, hA, h⟩ := eok_bind h
   obtain ⟨C, hC, h⟩ := eok_bind h
   obtain ⟨u, hu, h⟩ := eok_bind h
