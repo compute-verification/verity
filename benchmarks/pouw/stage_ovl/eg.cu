@@ -1,8 +1,8 @@
 // ovl.cu's edited arms (eg.h): EGEMM's edited GEMM (benchmarks/edited_gemm/egemm.cu, cursor/egemm-ea24@63f78c35a) with
 // its windowed duo receipts, and the receipts' commitment under commit_gpu's small path.
 //
-// The GEMM is hashed_gemm's w_d (benchmarks/hashed_gemm/hgemm.cu's WL, E2E's w_l3qm_s16 ported to egemm.cu's EL) with the
-// window a launch argument: sw stages of BK = 128 (4 32-step segments) a window, so S = 4 sw segments
+// The GEMM is hashed_gemm's w_d (benchmarks/hashed_gemm/hgemm.cu's WL, E2E's w_l3qm_s16 ported to egemm.cu's EL), a kernel
+// for each window built: sw stages of BK = 128 (4 32-step segments) a window, so S = 4 sw segments
 // (segment.PouwSegCheck_v2{S, duo}); thread ctid of tile t keys window w's chains with
 // y_j = mix32(seed ^ mix32(((t 512 + ctid) nw + w) 8 + j)), z_j = mix32(y_j + 0x9E3779B9), absorbs T_(wS-1) first and each of
 // the window's segments after, and stores R[(t nw + w) 512 + ctid] = xor_j (y_j ^ rotl(z_j, 16)). Two schedules of the same
@@ -95,37 +95,35 @@ template <int LAG, int TIE> struct WL : EL<DUO, LAG, TIE> {
     key(ch, seed, kb + 8u * (w + 1));
     ab_range<0, U>(acc, ch);
   }
-  // K / BK stages, a window every sw (hgemm.cu's tile_w with its SW counted down)
-  DEV void tile_w(int K, int sw, int (&acc)[MI][NI][4], St (&ch)[8], uint32_t zero, uint32_t* rp, uint32_t seed, uint32_t kb) {
+  // K / BK stages, a window every SW (hgemm.cu's tile_w; SW a constant, as there: counted at run time it spills more)
+  template <int SW>
+  DEV void tile_w(int K, int (&acc)[MI][NI][4], St (&ch)[8], uint32_t zero, uint32_t* rp, uint32_t seed, uint32_t kb) {
     const int KT = K / EB::BK;
     uint32_t fa[2][MI][4], fb[2][NI][2];
     mbar_wait_warp(this->full(this->s), this->ph);
     this->load(fa[0], fb[0], this->stage(this->s), 0);
     wstage<true, false, false>(acc, ch, fa, fb, zero);
-    int w = 0, c = 1;
 #pragma unroll 1
     for (int kt = 1; kt < KT - 1; kt++) {
-      if (c == sw) {
-        boundary(acc, ch, rp, w++, seed, kb);
-        c = 0;
+      if (kt % SW == 0) {
+        boundary(acc, ch, rp, kt / SW - 1, seed, kb);
         wstage<false, true, false>(acc, ch, fa, fb, zero);
       } else {
         wstage<false, false, false>(acc, ch, fa, fb, zero);
       }
-      c++;
     }
-    if (c == sw) {
-      boundary(acc, ch, rp, w++, seed, kb);
+    if ((KT - 1) % SW == 0) {
+      boundary(acc, ch, rp, (KT - 1) / SW - 1, seed, kb);
       wstage<false, true, true>(acc, ch, fa, fb, zero);
     } else {
       wstage<false, false, true>(acc, ch, fa, fb, zero);
     }
     ab_range<U - LAG, U>(acc, ch);
-    rp[(size_t)w * NCT] = fold(ch);
+    rp[(size_t)(KT / SW - 1) * NCT] = fold(ch);
   }
 };
 
-template <int LAG, int TIE, bool THREE> DEV void w_body(const Args& a, int sw) {
+template <int LAG, int TIE, bool THREE, int SW> DEV void w_body(const Args& a) {
   using L = WL<LAG, TIE>;
   constexpr int MI = L::MI, NI = L::NI, U = L::U;
   extern __shared__ __align__(1024) uint8_t smem[];
@@ -134,7 +132,7 @@ template <int LAG, int TIE, bool THREE> DEV void w_body(const Args& a, int sw) {
   const int warp = threadIdx.x / 32, lane = threadIdx.x % 32;
   ml.prologue();
   ml.consumer_init(warp, lane);
-  const int tiles_m = a.M / 128, tiles_n = a.N / 128, nw = a.K / (L::BK * sw);
+  const int tiles_m = a.M / 128, tiles_n = a.N / 128, nw = a.K / (L::BK * SW);
   const int wm = warp / L::WARPS_N, wn = warp % L::WARPS_N, g = lane >> 2, q = lane & 3, ctid = threadIdx.x;
   const uint32_t zero = (uint32_t)a.KR;
   typename L::Place pl{0, 0};
@@ -150,7 +148,7 @@ template <int LAG, int TIE, bool THREE> DEV void w_body(const Args& a, int sw) {
       L::template ab_range<0, U>(z0, ch);
     }
     int acc[MI][NI][4];
-    ml.tile_w(a.K, sw, acc, ch, zero, a.R + (size_t)tile_id * nw * L::NCT + ctid, a.seed, kb);
+    ml.template tile_w<SW>(a.K, acc, ch, zero, a.R + (size_t)tile_id * nw * L::NCT + ctid, a.seed, kb);
     ml.template peel<THREE>(acc);
     const int row0 = tm * 128 + wm * 32 + g, col0 = tn * 128 + wn * 32 + 2 * q;
 #pragma unroll
@@ -163,14 +161,21 @@ template <int LAG, int TIE, bool THREE> DEV void w_body(const Args& a, int sw) {
       }
   }
 }
-typedef void (*WKern)(const Args, int);
-#define WKERN(NAME, LAG, TIE)                                                                                          \
-  __global__ void __launch_bounds__(MLW::NT, 1) NAME(const __grid_constant__ Args a, int sw) { w_body<LAG, TIE, false>(a, sw); } \
-  __global__ void __launch_bounds__(MLW::NT, 1) NAME##_k3(const __grid_constant__ Args a, int sw) { w_body<LAG, TIE, true>(a, sw); }
-WKERN(w_d, 3, -4)
-WKERN(w_d4q, 4, 4)
-struct WK { const char* name; WKern k, k3; };
-static const WK WKS[2] = {{"w_d", w_d, w_d_k3}, {"w_d4q", w_d4q, w_d4q_k3}};
+typedef void (*WKern)(const Args);
+template <int LAG, int TIE, bool THREE, int SW>
+__global__ void __launch_bounds__(MLW::NT, 1) w_kern(const __grid_constant__ Args a) { w_body<LAG, TIE, THREE, SW>(a); }
+// the windows built: S = 4 SW segments of 16, 32, 64, 128 and down's 112 (k = 14336: 448 segments, so 4 windows)
+#define WSW(LAG, TIE, THREE) {w_kern<LAG, TIE, THREE, 4>, w_kern<LAG, TIE, THREE, 8>, w_kern<LAG, TIE, THREE, 16>, \
+                              w_kern<LAG, TIE, THREE, 28>, w_kern<LAG, TIE, THREE, 32>}
+static const int WSWS[5] = {4, 8, 16, 28, 32};
+// w_d: lag 3, the IMAD tie every fourth MMA (hgemm.cu's); w_d4q: lag 4, the LOP3 tie every fourth (e_l4q's)
+struct WK { const char* name; WKern k[5], k3[5]; };
+static const WK WKS[2] = {{"w_d", WSW(3, -4, false), WSW(3, -4, true)}, {"w_d4q", WSW(4, 4, false), WSW(4, 4, true)}};
+static int sw_slot(int sw) {
+  for (int i = 0; i < 5; i++)
+    if (WSWS[i] == sw) return i;
+  return -1;
+}
 
 namespace eg {
 struct Lin {
@@ -178,7 +183,7 @@ struct Lin {
   int8_t* X;
   const uint16_t* x;
   int* Y;
-  int8_t *Wp, *PA, *PB;
+  int8_t *Wp, *PA, *PB, *Xq;
   uint32_t* R;
   Maps* maps;
   cgr::Committer rc;
@@ -196,7 +201,8 @@ void init() {
   CK(cudaMalloc(&g_ws, g_wsz));
   CK(cudaMalloc(&g_bad, 8));
   for (const WK& w : WKS)
-    for (WKern f : {w.k, w.k3}) CK(cudaFuncSetAttribute(f, cudaFuncAttributeMaxDynamicSharedMemorySize, CSMEM));
+    for (int i = 0; i < 5; i++)
+      for (WKern f : {w.k[i], w.k3[i]}) CK(cudaFuncSetAttribute(f, cudaFuncAttributeMaxDynamicSharedMemorySize, CSMEM));
   g_init = true;
 }
 void set_carve(int p) {
@@ -216,8 +222,9 @@ void fill_w(int8_t* W, size_t count, uint32_t seed) {
 }
 Lin* lin_new(int m, int n, int k, int S, int8_t* X, const uint16_t* x, int* Y, const std::string& rparams, int dom, int slots) {
   init();
-  if (m % 1024 || n % 128 || k % 256 || k > 16128 || S % 4 || (k / 32) % S) {
-    fprintf(stderr, "eg: shape %d %d %d S %d: m %% 1024, n %% 128, k %% 256 == 0, k <= 16128, S %% 4 == 0, S | k / 32\n", m, n, k, S);
+  if (m % 1024 || n % 128 || k % 256 || k > 16128 || S % 4 || (k / 32) % S || sw_slot(S / 4) < 0) {
+    fprintf(stderr, "eg: shape %d %d %d S %d: m %% 1024, n %% 128, k %% 256 == 0, k <= 16128, S | k / 32, S one of 16 32 64 112 128\n",
+            m, n, k, S);
     exit(2);
   }
   Lin* L = new Lin;
@@ -231,6 +238,7 @@ Lin* lin_new(int m, int n, int k, int S, int8_t* X, const uint16_t* x, int* Y, c
   CK(cudaMalloc(&L->Wp, (size_t)n * k));
   CK(cudaMalloc(&L->PA, (size_t)m * 128));
   CK(cudaMalloc(&L->PB, (size_t)n * 128));
+  CK(cudaMalloc(&L->Xq, (size_t)m * k));
   CK(cudaMalloc(&L->R, lin_rbytes(L)));
   L->maps = upload_maps(Maps{tmap(X, k, m, 128), tmap(L->Wp, k, n, 128), tmap(L->PA, 128, m, 128), tmap(L->PB, 128, n, 128)});
   L->rparams = rparams;
@@ -263,9 +271,13 @@ void lin_qwe(Lin* L, const int8_t* W, uint32_t key, cudaStream_t st) {
 static void gemm_with(Lin* L, int kern, uint32_t seed, cudaStream_t st) {
   const Args a{L->maps, L->Y, L->R, L->m, L->n, L->k, 8, seed, 0, 1, 0, 0, {0, 0, 0, 0}, nullptr, 0};
   const WK& w = WKS[kern];
-  (L->k > PEEL2_MAXK ? w.k3 : w.k)<<<L->grid, MLW::NT, CSMEM, st>>>(a, L->sw);
+  const int i = sw_slot(L->sw);
+  (L->k > PEEL2_MAXK ? w.k3[i] : w.k[i])<<<L->grid, MLW::NT, CSMEM, st>>>(a);
 }
 void lin_gemm(Lin* L, uint32_t seed, cudaStream_t st) { gemm_with(L, L->kern, seed, st); }
+void lin_quant(Lin* L, cudaStream_t st) {
+  quant<false><<<(L->m + QROWS - 1) / QROWS, 256, 0, st>>>(L->x, L->Xq, nullptr, L->m, L->k, L->inv_s, sigma(0x5EED0000u, 0));
+}
 void lin_rsalts(Lin* L, cudaStream_t st) { L->rc.salts<true>(nullptr, st); }
 void lin_rcommit(Lin* L, int slot, cudaStream_t st) {
   L->rc.leaves(cgr::RowBytes{reinterpret_cast<const uint8_t*>(L->R), RROW, RROW}, st, slot);
