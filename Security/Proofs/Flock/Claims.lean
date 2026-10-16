@@ -25,7 +25,8 @@ level-0 code (`DecodeFlock`), and at the masked (`--zk`) level-0 code, with its 
 such decoders read as one (`DecodeFamily`), the masked verifier's deployed code at each `m` it serves
 (`ZkDecodeFlock`), and a masked run's opened level-0 columns (`ZkCols`). A counted Guruswami–Sudan decoder with its
 `DecoderComplexity`, over Berlekamp's root finder in GF(2^128) (`RootFindGF128`), is `GS`; `GS.Radius` states the
-list-decoding spec in its radius form (`Flock.ListWithin`) and proves that decoder meets it at Flock's level-0 code. -/
+list-decoding spec in its radius form (`Flock.ListWithin`) and proves that decoder meets it at Flock's level-0 code,
+and `GS.ZkRadius` at the masked level-0 code. -/
 
 /-- **The claims are stated** (`Flock.Guarantees.ClaimsStated`). -/
 theorem Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated := rfl
