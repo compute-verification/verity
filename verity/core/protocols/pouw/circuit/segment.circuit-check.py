@@ -6,10 +6,10 @@ from typing import Any
 
 
 def _pouw_roots() -> list[Any]:
-    """The checkpointed spot check under duo at every spacing the slice measures (S = 1, 4, 8, 16, 32), under XOR-in at S = 1,
-    8 and 32, and with decision 29's dither on the served side at S = 8."""
+    """The checkpointed spot check under duo at the spacings in use (S = 1, 4, 8, 16; S = 32 isn't adopted, and its lowering
+    alone takes ~650 GB), under XOR-in at S = 1 and 8, and with decision 29's dither on the served side at S = 8."""
     from verity.core.protocols.pouw.circuit import segment as SG
     from verity.ml.circuits.defs import bind
 
-    return ([bind(SG.PouwSegCheck, S=s, FOLD="duo") for s in (1, 4, 8, 16, 32)]
-            + [bind(SG.PouwSegCheck, S=s, FOLD="xin") for s in (1, 8, 32)] + [bind(SG.PouwSegCheckDither, S=8, FOLD="duo")])
+    return ([bind(SG.PouwSegCheck, S=s, FOLD="duo") for s in (1, 4, 8, 16)]
+            + [bind(SG.PouwSegCheck, S=s, FOLD="xin") for s in (1, 8)] + [bind(SG.PouwSegCheckDither, S=8, FOLD="duo")])
