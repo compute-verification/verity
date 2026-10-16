@@ -116,19 +116,18 @@ def test_arm_places_a_phase_filler_only_beside_a_split():
     assert S.honesty(arm, {}, S.points())["ok"]
 
 
-CO = "benchmarks/pouw/filler/psched_arm.py:PhaseSchedCo"
-
-
-def test_co_arm_runs_its_prefill_shape_and_needs_an_sgate_for_it(tmp_path):
-    arm = A.load(CO)
+@pytest.mark.parametrize("cls, co_tiles", [("PhaseSchedCo", (8, 4, 128, 8)), ("PhaseSchedCo2", (4, 4, 128, 32))])
+def test_co_arm_runs_its_prefill_shape_and_needs_an_sgate_for_it(tmp_path, cls, co_tiles):
+    spec = f"benchmarks/pouw/filler/psched_arm.py:{cls}"
+    arm = A.load(spec)
     assert not A.check_arm(arm)
     assert A.placed(arm, "prefill", 8192, 0) == A.Placement("co")
     co = P.filler_of(arm, "prefill", 8192, 0)
     assert co != arm.filler and co.chunk_log2 < arm.filler.chunk_log2
     assert all(P.filler_of(arm, ph, b, l) == arm.filler for ph, b, l in S.points() if P.phase_of(arm, ph, b, l))
-    res = P.report(*write_run(tmp_path / "two", spec=CO))
+    res = P.report(*write_run(tmp_path / "two", spec=spec))
     assert res["scored"] and res["gates"]["sgates"] == {"ok": True, "rows": 2, "shapes": 2,
-                                                        "ran": sorted({(8, 4, 2048, 8), (8, 4, 128, 8)}, key=str)}
-    res = P.report(*write_run(tmp_path / "one", spec=CO, sgates=[{"mode": "sgate", "W": 8, "NC": 4, "S": 2048,
-                                                                     "tiles": 8, "ok": True}]))
+                                                        "ran": sorted({(8, 4, 2048, 8), co_tiles}, key=str)}
+    res = P.report(*write_run(tmp_path / "one", spec=spec, sgates=[{"mode": "sgate", "W": 8, "NC": 4, "S": 2048,
+                                                                       "tiles": 8, "ok": True}]))
     assert not res["gates"]["sgates"]["ok"] and res["SCORE"] is None and res["score_if_gated"] is not None
