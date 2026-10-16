@@ -21,9 +21,10 @@ The definitions every protocol's claims read, and Flock's claims, in the condens
   (`DecoderComplexity`).
 * Nontriviality is a recorded honest transcript that the verifier accepts (`Nontrivial`).
 * (16 Oct) The decoder must list a trace only from at least `nMin` opened columns, the smallest count above the Johnson
-  bound of the trace's code (`Flock.ListComplete`, `Flock.Deploy.nMin`). As first frozen, `ListComplete` put every trace
-  in the list of the empty input, so a decoder's cost was at least `|T|`; `Flock.Efficient` now asks it of the decoder
-  it costs.
+  bound of the trace's code (`Flock.ListComplete`, `Flock.Deploy.nMin`). One run opens fewer (`fast100_level₀_queries_lt`
+  in the proofs): `E^rep` reaches `nMin` only with the columns it gathers over a wait's accepted reruns. As first
+  frozen, `ListComplete` put every trace in the list of the empty input, so a decoder's cost was at least `|T|`;
+  `Flock.Efficient` now asks it of the decoder it costs.
 
 Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed verifier, its parser and the hash:
 binding them to the compiled verifier (`Flock.verifyWith Sha512.hash`, `Flock.ProvedScope.check`) is the code side's.
@@ -533,7 +534,8 @@ def InScope (zk : Bool) (s : Stmt) : Prop :=
 
 /-- **List decoding, the spec a decoder meets**: from opened columns at distinct positions, at least `nMin M` of them,
 `decode` lists every trace `M` whose encoding agrees with at least a fraction `agree` of them. `nMin M` is the smallest
-count above the Johnson bound of `M`'s code. -/
+count above the Johnson bound of `M`'s code. It is more than one run opens: `E^rep` reaches it with the columns it
+gathers over a wait's accepted reruns, which `assemble` decodes together. -/
 def ListComplete {Col T : Type} [DecidableEq Col] (enc : T → ℕ → Col) (agree : ℝ) (nMin : T → ℕ)
     (decode : List (ℕ × Col) → List T) : Prop :=
   ∀ (os : List (ℕ × Col)) (M : T), (os.map Prod.fst).Nodup → nMin M ≤ os.length →
@@ -550,7 +552,8 @@ def assemble {Col T : Type} (H : Msg → Msg) (parse : Msg → Option Stmt) (dec
 /-- What the deployed verifier brings, read by Flock's claims: the verifier and whether it is the masked (`--zk`) one,
 its parser and scope check, the opened columns of the first committed codeword in a run (`cols`), the code (`enc`), the
 decoding threshold (`agree`) and the count of opened columns from which a trace is decoded (`nMin`, a function of the
-trace because one `T` holds the traces of every statement's code), how a trace is read as a witness, and the numbers the
+trace because one `T` holds the traces of every statement's code, and reached by the columns of a wait's accepted
+reruns together, not by one run's), how a trace is read as a witness, and the numbers the
 errors read: the table's error `ε_table`, `N₀`, the weight `C` of `γ`, `E^rep`'s waits `m′` and its truncation `K`. -/
 structure Deploy (Coin Col T : Type) where
   zk : Bool
