@@ -7,7 +7,9 @@ import ArkLib.Data.CodingTheory.GuruswamiSudan.GuruswamiSudan
 `ListComplete` asks a decoder to list, from at least `nMin M` opened columns at distinct positions, every message `M`
 whose encoding agrees with at least a fraction `agree` of them. For an interleaved Reed–Solomon code (`IRS`: `s` rows,
 each a polynomial of degree below `k`, the column at position `i` their values at the point `dom i`), `IRS.decode` does
-so at the code's Johnson count `IRS.nMin`, at every `agree > 0` (`IRS.listComplete_decode`).
+so at the code's Johnson count `IRS.nMin`, at every `agree > 0` (`IRS.listComplete_decode`). So the hypothesis `KS`
+and `Bits` put on the decoder can be met (`IRS.listComplete_exists`), and, the count being positive (`IRS.nMin_pos`),
+it asks nothing of the empty input.
 
 The Johnson count is `johnsonCount k agree = ⌊(k+1)/agree²⌋ + 1`, the smallest `N` with `√((k+1)·N) < agree·N`
 (`johnsonCount_le_iff`). At `agree = a/b` it is `(k+1)·b²/a² + 1` in natural division (`johnsonCount_div`), and at
@@ -46,6 +48,9 @@ open Polynomial
 noncomputable def johnsonCount (k : ℕ) (agree : ℝ) : ℕ := ⌊((k : ℝ) + 1) / agree ^ 2⌋₊ + 1
 
 theorem one_le_johnsonCount (k : ℕ) (agree : ℝ) : 1 ≤ johnsonCount k agree := Nat.le_add_left 1 _
+
+/-- **The Johnson count is positive**, at every `agree`: `ListComplete` at it asks nothing of the empty input. -/
+theorem johnsonCount_pos (k : ℕ) (agree : ℝ) : 0 < johnsonCount k agree := one_le_johnsonCount k agree
 
 /-- **`johnsonCount k agree` is the smallest `N` with `√((k+1)·N) < agree·N`**, at `agree > 0`. -/
 theorem johnsonCount_le_iff {k N : ℕ} {agree : ℝ} (ha : 0 < agree) :
@@ -199,6 +204,10 @@ def Regime {F T : Type} [Field F] {s : ℕ} (C : IRS F T s) (agree : ℝ) (os : 
 /-- **The code's Johnson count** at `agree`: the `nMin` at which its decoder meets `ListComplete`. -/
 noncomputable def nMin {F T : Type} [Field F] {s : ℕ} (C : IRS F T s) (agree : ℝ) : ℕ := johnsonCount C.k agree
 
+/-- **The code's Johnson count is positive**, so the empty input is not one `ListComplete` asks a list of. -/
+theorem nMin_pos {F T : Type} [Field F] {s : ℕ} (C : IRS F T s) (agree : ℝ) : 0 < C.nMin agree :=
+  johnsonCount_pos C.k agree
+
 open Classical in
 /-- Every message that agrees with at least `agree·N` opened columns, by exhaustive search. -/
 noncomputable def exhaustive {F T : Type} [Field F] [DecidableEq F] [Fintype T] {s : ℕ} (C : IRS F T s)
@@ -333,6 +342,12 @@ theorem listComplete_decode {F T : Type} [Field F] [DecidableEq F] [Fintype T] {
     unfold exhaustive
     rw [Finset.mem_toList, Finset.mem_filter]
     exact ⟨Finset.mem_univ M, hM⟩
+
+/-- **Non-vacuity**: an interleaved Reed–Solomon code with finitely many messages has a decoder that meets
+`ListComplete` at its Johnson count, at every `agree > 0` (`IRS.decode`). -/
+theorem listComplete_exists {F T : Type} [Field F] [DecidableEq F] [Fintype T] {s : ℕ} (C : IRS F T s)
+    (agree : ℝ) (ha : 0 < agree) : ∃ decode, Flock.ListComplete C.enc agree (fun _ => C.nMin agree) decode :=
+  ⟨C.decode agree, C.listComplete_decode agree ha⟩
 
 end IRS
 

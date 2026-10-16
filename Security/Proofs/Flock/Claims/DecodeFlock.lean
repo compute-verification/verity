@@ -11,13 +11,15 @@ basis, at the points `ω_q` (`Arith.encodeAt`), at rate `1/2`. `levelZero` is th
 meeting `Arith.Correct`: a message is a `Message F lanes cols`, a column is `Fin (2^lanes) → F`, and the column at
 position `q` is every lane's symbol there (`levelZeroEnc`, `levelZero_enc`). So its decoder meets `ListComplete` for
 those columns at the Johnson count `johnsonCount (2^cols) agree = ⌊(2^cols + 1)/agree²⌋ + 1`, at every `agree > 0`
-(`listComplete_levelZero`), and on opened columns at distinct positions below `2^64` it is the Guruswami–Sudan path
-once `agree ≤ 1` is strictly above `√((2^cols + 1)/N)` (`levelZero_decode_eq_gsPath`), so from the Johnson count on,
-and `[]` below it unless two positions share a point (`levelZero_decode_eq_nil`).
+(`listComplete_levelZero`; such a decoder exists, `listComplete_exists_levelZero`), and on opened columns at distinct
+positions below `2^64` it is the Guruswami–Sudan path once `agree ≤ 1` is strictly above `√((2^cols + 1)/N)`
+(`levelZero_decode_eq_gsPath`), so from the Johnson count on, and `[]` below it unless two positions share a point
+(`levelZero_decode_eq_nil`).
 
 `flockLevelZero` is that code for the executable's arithmetic (`execArith`, `F = GF(2^128)`) at level 0 of a `fast100`
 schedule: `2^k0` lanes of `2^level₀.logCols` columns, positions below `2^level₀.logLen`
-(`listComplete_flockLevelZero`, `flockLevelZero_decode_eq_gsPath`, `flockLevelZero_decode_eq_nil`).
+(`listComplete_flockLevelZero`, `listComplete_exists_flockLevelZero`, `flockLevelZero_decode_eq_gsPath`,
+`flockLevelZero_decode_eq_nil`).
 
 One run opens fewer level-0 columns than the Johnson count: every `fast100` schedule makes `218` level-0 queries on at
 least `2^9` message columns, and at `agree ≤ 1` the count is above `2^9 + 1` (`fast100_level₀_queries_lt`). The count
@@ -74,6 +76,14 @@ theorem listComplete_levelZero {F K : Type} [Field F] [Fintype F] [DecidableEq F
       ((levelZero A hA lanes cols hcols).decode agree) := by
   rw [← levelZero_enc A hA lanes cols hcols]
   exact (levelZero A hA lanes cols hcols).listComplete_decode agree ha
+
+/-- **Non-vacuity at Flock's level 0**: a decoder meets `ListComplete` for the level's columns at the Johnson count, at
+every `agree > 0`. -/
+theorem listComplete_exists_levelZero {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
+    [DecidableEq K] (A : Arith F K) (hA : A.Correct) (lanes cols : ℕ) (hcols : cols ≤ 40) (agree : ℝ)
+    (ha : 0 < agree) :
+    ∃ decode, ListComplete (levelZeroEnc A lanes cols) agree (fun _ => johnsonCount (2 ^ cols) agree) decode :=
+  ⟨_, listComplete_levelZero A hA lanes cols hcols agree ha⟩
 
 /-- Opened level-0 columns at distinct positions below `2^64` sit at distinct points. -/
 theorem levelZero_points_nodup {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
@@ -137,6 +147,14 @@ theorem listComplete_flockLevelZero {m : ℕ} {sch : Schedule} (h : fast100 m = 
     ListComplete (levelZeroEnc execArith sch.k0 sch.level₀.logCols) agree
       (fun _ => johnsonCount (2 ^ sch.level₀.logCols) agree) ((flockLevelZero h).decode agree) :=
   listComplete_levelZero execArith execArith_correct sch.k0 sch.level₀.logCols (fast100_level₀_fits h).1 agree ha
+
+/-- **Non-vacuity at the executable's level 0**: for every `fast100` schedule and every `agree > 0`, a decoder meets
+`ListComplete` for the level's columns at the Johnson count `⌊(2^level₀.logCols + 1)/agree²⌋ + 1`. -/
+theorem listComplete_exists_flockLevelZero {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) (agree : ℝ)
+    (ha : 0 < agree) :
+    ∃ decode, ListComplete (levelZeroEnc execArith sch.k0 sch.level₀.logCols) agree
+      (fun _ => johnsonCount (2 ^ sch.level₀.logCols) agree) decode :=
+  ⟨_, listComplete_flockLevelZero h agree ha⟩
 
 /-- On opened level-0 columns at distinct positions of the codeword, with `agree ≤ 1` strictly above
 `√((2^level₀.logCols + 1)/N)`, the executable's level-0 decoder is the Guruswami–Sudan path. -/
