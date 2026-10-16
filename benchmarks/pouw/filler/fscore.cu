@@ -6,20 +6,21 @@
 // `score.py report` scores.
 //
 // Modes (one JSON line each; DFILL_COINS = the gates' coins, DFILL_CHUNK_LOG2 = the pump's chunk size, as dscore):
-//   fscore B L FILL_SMS W NC S FW FNC AFW ANC APS ALZ LT FLZ ROUNDS K POINT
+//   fscore B L FILL_SMS W NC S FW FNC AFW ANC APS ALZ LT FLZ LM ROUNDS K POINT
 //        the decode step at batch B, context L as `dscore dscore step B L split FILL_SMS W NC S ROUNDS K POINT` (ROUNDS
 //        rounds in ABBA order of K reps of serving alone, dcap's cuBLASLt step on the whole GPU, and K reps under the arm),
 //        the arm's step the fused one (enqueue_fstep): flin at the next tile height with FW filler warps of FNC chains a
 //        block, but the linears whose bit is set in LT (1 qkv, 2 o, 4 gate_up, 8 down), which stay on cuBLASLt, and the
 //        attention blocks with AFW filler warps of ANC chains (APS 1 persistent on the step's SMs; ALZ their lazy done
-//        test; FLZ flin's filler warps'); lm_head on cuBLASLt. The filler warps stop when their block's serving work is
+//        test; FLZ flin's filler warps'); lm_head on cuBLASLt, or with LM 1 through flin. The filler warps stop when their block's serving work is
 //        done, so a step's work is what the device counted: every slot's steps, its receipt the chain at that count.
 //        Each fused round's tiles come from the scorer's range for its slot (rounds.cuh), tagged FBIT; the device keeps
 //        the round's coins and tile base (flin.cuh's FState), so each launch of the captured step takes the next `per`
 //        ids, and its receipts a row of a ring of K + 2 steps. An arm block's fixed work is its K timed steps' filler
 //        MACs (`fixed_macs`) over the block's window (`fixed_ms`), on the step's SMs (`fixed_sms`); 16 receipts over its
 //        K + 2 steps (warm-ups included) are checked against dfill_ref with the steps − 8 control, the device's step count
-//        must be K + 2, and the last linear's output (down, when it runs through flin) on every row against the host's.
+//        must be K + 2, and the last linear's output (down, when it runs through flin) and lm_head's (with LM 1) on every
+//        row against the host's.
 //        Any failure counts in rec_bad. Slots: dscore's (0 the pump's calibration, 1 + r and 1 + R + r round r's arm and
 //        standalone blocks, 2R + 1 and 2R + 2 the pump's power windows), then 2R + 3 the fused step's eager warm-up,
 //        2R + 4 + r round r's fused work, 3R + 4 the fused power window (3R + 5 <= POINT_SLOTS).
@@ -122,7 +123,7 @@ static bool flin_has(int M, int FW, int NC) {
 }
 
 struct FusedCfg {
-  int FW, FNC, AFW, ANC, APS, ALZ, LT, FLZ;
+  int FW, FNC, AFW, ANC, APS, ALZ, LT, FLZ, LM;
 };
 
 static int run_fscore(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, const FusedCfg& c, int rounds, int K,
@@ -155,6 +156,7 @@ static int run_fscore(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, 
   fl.NC = c.FNC;
   fl.FW = c.FW;
   fl.lazy = c.FLZ;
+  if (c.LM && !seq.empty()) flin_prepare_lm(d, fl);
   Fatt fa;
   fatt_prepare(fa, c.AFW, c.ANC, B, L, c.APS ? got[0] : 0);
   fa.lazy = c.ALZ;
@@ -197,7 +199,7 @@ static int run_fscore(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, 
                     FlinTally* tl, FlinTally* ta) {
     std::vector<FillLaunch> ll, la, cl;
     for (unsigned long long s = s0; s < s1; s++) {
-      const auto vl = fused_launches(ring, &fl, seq, nullptr, 0, s), va = fused_launches(ring, nullptr, {}, &fa, LAYERS, s);
+      const auto vl = fused_launches(ring, &fl, flin_lin(fl, seq), nullptr, 0, s), va = fused_launches(ring, nullptr, {}, &fa, LAYERS, s);
       cl.insert(cl.end(), vl.begin(), vl.end());
       cl.insert(cl.end(), va.begin(), va.end());
       if (s >= m0) {
@@ -212,19 +214,33 @@ static int run_fscore(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, 
     ctl_equal += ck.ctl_equal;
     checked += ck.checked;
   };
-  // the last linear's output on every row, when down runs through flin (its last launch writes Db[(launches - 1) & 1])
+  // the last linear's output on every row, when down runs through flin (its last launch writes Db[(launches - 1) & 1]),
+  // and lm_head's when it does (against a reference computed once)
   const int out_rows = c.LT & 8 || seq.empty() ? 0 : B;
+  int* ref_lm = nullptr;
+  if (fl.lm) {
+    CK(cudaMalloc(&ref_lm, (size_t)B * VOCAB * sizeof(int)));
+    ref_rows<<<(unsigned)(((size_t)B * VOCAB + 255) / 256), 256, 0, full>>>(d.X, d.Wlm, ref_lm, B, 1, VOCAB, HID);
+  }
+  long long lm_bad_total = 0;
   auto out_check = [&]() -> long long {
-    if (!out_rows) return 0;
-    const int N = LN[3], Kd = LK[3];
-    ref_rows<<<(unsigned)(((size_t)B * N + 255) / 256), 256, 0, full>>>(d.X, d.W[LAYERS - 1][3], g_ref, B, 1, N, Kd);
-    CK(cudaMemsetAsync(g_cnt, 0, sizeof *g_cnt, full));
-    count_neq_rows<<<(unsigned)(((size_t)B * N + 255) / 256), 256, 0, full>>>(fl.Db[(seq.size() - 1) & 1], g_ref, B, 1, N,
-                                                                              g_cnt);
-    unsigned long long nb = 0;
-    CK(cudaMemcpyAsync(&nb, g_cnt, sizeof nb, cudaMemcpyDeviceToHost, full));
+    unsigned long long nb = 0, nl = 0;
+    if (out_rows) {
+      const int N = LN[3], Kd = LK[3];
+      ref_rows<<<(unsigned)(((size_t)B * N + 255) / 256), 256, 0, full>>>(d.X, d.W[LAYERS - 1][3], g_ref, B, 1, N, Kd);
+      CK(cudaMemsetAsync(g_cnt, 0, sizeof *g_cnt, full));
+      count_neq_rows<<<(unsigned)(((size_t)B * N + 255) / 256), 256, 0, full>>>(fl.Db[(seq.size() - 1) & 1], g_ref, B, 1, N,
+                                                                                g_cnt);
+      CK(cudaMemcpyAsync(&nb, g_cnt, sizeof nb, cudaMemcpyDeviceToHost, full));
+    }
+    if (fl.lm) {
+      CK(cudaMemsetAsync(g_cnt, 0, sizeof *g_cnt, full));
+      count_neq_rows<<<(unsigned)(((size_t)B * VOCAB + 255) / 256), 256, 0, full>>>(fl.Dlm, ref_lm, B, 1, VOCAB, g_cnt);
+      CK(cudaMemcpyAsync(&nl, g_cnt, sizeof nl, cudaMemcpyDeviceToHost, full));
+    }
     CK(cudaStreamSynchronize(full));
-    return (long long)nb;
+    lm_bad_total += (long long)nl;
+    return (long long)(nb + nl);
   };
   auto w_full = [&] { enqueue_step(d, p, 2, B, L, &wrapped); };
   auto w_arm = [&] { enqueue_fstep(d, fl, fa, p2, B, L, &wrapped); };
@@ -346,10 +362,11 @@ static int run_fscore(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, 
          B, L, fill_sms, d.sms, got[0], got[1], sp_step, sp_fill, W, NC, S, f.tiles, f.grid, f.macs(), got[0], point,
          POINT_SLOTS, lo, hi, wrapped ? "true" : "false", setup_ms, rounds, K);
   printf("\"fused\": {\"M\": %d, \"FW\": %d, \"FNC\": %d, \"AFW\": %d, \"ANC\": %d, \"APS\": %d, \"ALZ\": %d, \"LT\": %d, \"FLZ\": %d, "
-         "\"pdl\": %d, \"flin_launches\": %zu, \"att_grid\": [%zu, %zu], \"slots_a_step\": %llu, \"tag\": \"%016llx\", "
-         "\"out_rows\": %d, \"out_mismatches\": %lld, \"steps_bad\": %lld, \"ctl_equal\": %lld, \"lin_macs\": %.6e}, ",
-         fl.M, c.FW, c.FNC, c.AFW, c.ANC, c.APS, c.ALZ, c.LT, c.FLZ, (int)g_pdl, seq.size(), fa.pg[0], fa.pg[1], per, FBIT,
-         out_rows, out_bad_total, steps_bad, ctl_equal, lin_macs);
+         "\"LM\": %d, \"pdl\": %d, \"flin_launches\": %zu, \"att_grid\": [%zu, %zu], \"slots_a_step\": %llu, \"tag\": \"%016llx\", "
+         "\"out_rows\": %d, \"out_mismatches\": %lld, \"lm_mismatches\": %lld, \"steps_bad\": %lld, \"ctl_equal\": %lld, "
+         "\"lin_macs\": %.6e}, ",
+         fl.M, c.FW, c.FNC, c.AFW, c.ANC, c.APS, c.ALZ, c.LT, c.FLZ, (int)fl.lm, (int)g_pdl, flin_lin(fl, seq).size(), fa.pg[0],
+         fa.pg[1], per, FBIT, out_rows, out_bad_total, lm_bad_total, steps_bad, ctl_equal, lin_macs);
   printf("\"alone_fill\": {\"mac_per_s\": %.6e, \"mhz\": %.1f, \"watt\": %.1f, ", alone, amhz, awatt);
   print_round(r0);
   printf(", ");
@@ -374,12 +391,13 @@ static int run_fscore(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, 
   printf("]}\n");
   fflush(stdout);
   CK(cudaFree(f.rec));
+  if (ref_lm) CK(cudaFree(ref_lm));
   return bad ? 8 : 0;
 }
 
 int main(int argc, char** argv) {
-  const char* use = "fscore B L FILL_SMS W NC S FW FNC AFW ANC APS ALZ LT FLZ ROUNDS K POINT";
-  if (argc < 2 || std::string(argv[1]) != "fscore" || argc < 19) {
+  const char* use = "fscore B L FILL_SMS W NC S FW FNC AFW ANC APS ALZ LT FLZ LM ROUNDS K POINT";
+  if (argc < 2 || std::string(argv[1]) != "fscore" || argc < 20) {
     fprintf(stderr, "usage: fscore %s\n", use);
     return 1;
   }
@@ -391,15 +409,15 @@ int main(int argc, char** argv) {
       return 1;
     }
   }
-  int v[17];
-  for (int i = 0; i < 17; i++) v[i] = atoi(argv[2 + i]);
-  const int B = v[0], L = v[1], fsm = v[2], W = v[3], NC = v[4], S = v[5], rounds = v[14], K = v[15], point = v[16];
-  const FusedCfg c{v[6], v[7], v[8], v[9], v[10], v[11], v[12], v[13]};
+  int v[18];
+  for (int i = 0; i < 18; i++) v[i] = atoi(argv[2 + i]);
+  const int B = v[0], L = v[1], fsm = v[2], W = v[3], NC = v[4], S = v[5], rounds = v[15], K = v[16], point = v[17];
+  const FusedCfg c{v[6], v[7], v[8], v[9], v[10], v[11], v[12], v[13], v[14]};
   if ((size_t)B * L > MAX_BL || L % 512 || L <= 0 || B < 1 || B > 256 || rounds < 2 || 3 * rounds + 5 > POINT_SLOTS ||
       K < 1 || W < 1 || W > 16 || S % 8 || S <= 0 || point < 0 || c.FW < 0 || c.AFW < 0 || (c.LT & ~15) ||
-      !(c.ALZ == 0 || c.ALZ == 2 || c.ALZ == 4) || !(c.FLZ == 0 || c.FLZ == 2 || c.FLZ == 4) || (c.APS != 0 && c.APS != 1)) {
+      !(c.ALZ == 0 || c.ALZ == 2 || c.ALZ == 4) || !(c.FLZ == 0 || c.FLZ == 2 || c.FLZ == 4) || (c.APS != 0 && c.APS != 1) || (c.LM != 0 && c.LM != 1)) {
     fprintf(stderr, "%s: B*L <= %zu, L %% 512 == 0, 1 <= B <= 256, ROUNDS >= 2, 3 ROUNDS + 5 <= %d, K >= 1, "
-                    "1 <= W <= 16, 8 | S, LT in [0, 16), ALZ and FLZ 0|2|4, APS 0|1\n", use, MAX_BL, POINT_SLOTS);
+                    "1 <= W <= 16, 8 | S, LT in [0, 16), ALZ and FLZ 0|2|4, APS and LM 0|1\n", use, MAX_BL, POINT_SLOTS);
     return 1;
   }
   Dev d;

@@ -20,8 +20,8 @@ import arms as A
 class FusedStep:
     """The fused step at a point: FW filler warps a flin block with FNC chains (0: flin's GEMM alone), AFW a block of the
     attention kernels with ANC chains, those blocks persistent on the step's SMs (APS) with the lazy done test ALZ
-    (0, 2 or 4: every 8, 16 or 32 steps a check), LT the linears kept on cuBLASLt (1 qkv, 2 o, 4 gate_up, 8 down), and
-    FLZ flin's filler warps' lazy done test."""
+    (0, 2 or 4: every 8, 16 or 32 steps a check), LT the linears kept on cuBLASLt (1 qkv, 2 o, 4 gate_up, 8 down),
+    FLZ flin's filler warps' lazy done test, and LM 1 lm_head through flin too (with its filler warps)."""
 
     FW: int = 8
     FNC: int = 4
@@ -31,6 +31,7 @@ class FusedStep:
     ALZ: int = 4
     LT: int = 0
     FLZ: int = 0
+    LM: int = 0
 
 
 #: (B, L) -> (split SMs, fused step): FILL's round-2 picks (note:20261016T0420Z-draft-filler-in-decode §0), each at

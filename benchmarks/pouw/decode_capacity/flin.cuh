@@ -389,6 +389,12 @@ __global__ void repack_x(const int8_t* __restrict__ X, int8_t* __restrict__ Xt, 
   }
 }
 
+__global__ void count_nz(const int* __restrict__ p, size_t n, unsigned long long* c) {
+  unsigned long long k = 0;
+  for (size_t e = blockIdx.x * (size_t)blockDim.x + threadIdx.x; e < n; e += (size_t)gridDim.x * blockDim.x) k += p[e] != 0;
+  if (k) atomicAdd(c, k);
+}
+
 // ---------------------------------------------------------------- host side
 struct FlinCfg {
   int BK, ST, CW;
@@ -407,6 +413,7 @@ static int flin_smem(int M) {
 }
 static bool g_pdl = true;  // FLIN_PDL=0 launches each linear only after the previous grid has finished
 static int g_flin_lazy = 0;  // FLIN_LAZY: flin's filler warps' LAZY (0, 2, 4; filler_warp)
+static int g_flin_lm = 0;    // FLIN_LM=1: fstep's lm_head through flin (Flin.lm) when any linear is
 template <int M, int BK, int ST, int CWN, int CWM, int FW, int NC>
 static void flin_go(const FlinArgs& a, int grid, cudaStream_t st) {
   static bool attr = false;
@@ -528,11 +535,15 @@ static FSlots fslots(const FRing& r, unsigned long long off) { return {r.st, r.r
 // The step's linears through flin: every layer's weights tiled for M, X tiled for K = HID and K = FF, two output buffers
 // (a sequence's k-th flin launch writes Db[k & 1] and zeroes Db[(k + 1) & 1] for the next; a sequence has an even count).
 // Launch i's filler slots are [i · stride, i · stride + grid · FW) of the step's layout (stride: grid · the configured FW).
+// With lm (flin_prepare_lm), lm_head is launch LAUNCHES: weights Wlm tiled, output Dlm, which the sequence's last launch
+// zeroes, and it zeroes Db[0] for the next step's first.
 struct Flin {
   int M = 0, BK = 0, FW = 0, NC = 2, thr = 0, grid = 0, lazy = 0;
+  bool lm = false;
   int8_t* Wt[LAYERS][4] = {};
-  int8_t *XtH = nullptr, *XtF = nullptr;
+  int8_t *XtH = nullptr, *XtF = nullptr, *Wlm = nullptr;
   int* Db[2] = {};
+  int* Dlm = nullptr;
   const FRing* ring = nullptr;
   unsigned long long stride = 0;
   static constexpr int LAUNCHES = LAYERS * 4;
@@ -562,21 +573,53 @@ static void flin_prepare(Dev& d, Flin& f, int M, bool all_layers) {
   CK(cudaStreamSynchronize(d.st));
   CK(cudaGetLastError());
 }
+// lm_head's weights tiled for f.M and its output Dlm (d.D past cuBLASLt's outputs and Db), zeroed for the first step
+static void flin_prepare_lm(Dev& d, Flin& f) {
+  f.lm = true;
+  if (!f.Wlm) CK(cudaMalloc(&f.Wlm, (size_t)VOCAB * HID));
+  repack_w<<<4096, 256, 0, d.st>>>(d.Wlm, f.Wlm, VOCAB, HID, f.BK);
+  f.Dlm = reinterpret_cast<int*>(reinterpret_cast<char*>(d.D) + ((size_t)768 << 20));
+  CK(cudaMemsetAsync(f.Dlm, 0, (size_t)f.M * VOCAB * sizeof(int), d.st));
+  CK(cudaStreamSynchronize(d.st));
+  CK(cudaGetLastError());
+}
 // launch i (0 ≤ i < 128: layer i / 4, linear i % 4) as its sequence's k-th flin launch, the next one linear next_j
+// (4: lm_head, whose output Dlm it zeroes)
 static bool flin_one(Dev& d, const Flin& f, int i, int k, int next_j) {
   const int l = i / 4, j = i % 4;
   FlinArgs a;
   a.W = f.Wt[l][j];
   a.X = j == 3 ? f.XtF : f.XtH;
   a.D = f.Db[k & 1];
-  a.Z = f.Db[(k + 1) & 1];
-  a.zn = (long long)f.M * LN[next_j];
+  a.Z = next_j == 4 ? f.Dlm : f.Db[(k + 1) & 1];
+  a.zn = (long long)f.M * (next_j == 4 ? VOCAB : LN[next_j]);
   a.N = LN[j];
   a.K = LK[j];
   a.fs = fslots(*f.ring, (unsigned long long)i * f.stride);
   a.thr = f.thr;
   a.lazy = f.lazy;
   return flin_launch(f.M, a, f.grid, f.FW, f.NC, d.st);
+}
+// lm_head as launch LAUNCHES into Dlm, zeroing Db[0] for the next step's first launch (linear next_j)
+static bool flin_lm(Dev& d, const Flin& f, int next_j) {
+  FlinArgs a;
+  a.W = f.Wlm;
+  a.X = f.XtH;
+  a.D = f.Dlm;
+  a.Z = f.Db[0];
+  a.zn = (long long)f.M * LN[next_j];
+  a.N = VOCAB;
+  a.K = HID;
+  a.fs = fslots(*f.ring, (unsigned long long)Flin::LAUNCHES * f.stride);
+  a.thr = f.thr;
+  a.lazy = f.lazy;
+  return flin_launch(f.M, a, f.grid, f.FW, f.NC, d.st);
+}
+// the flin launches of a step whose linears `seq` run through flin: seq, then lm_head's when f.lm
+static std::vector<int> flin_lin(const Flin& f, const std::vector<int>& seq) {
+  std::vector<int> v = seq;
+  if (f.lm && !seq.empty()) v.push_back(Flin::LAUNCHES);
+  return v;
 }
 // A launch's filler slots in the ring: n of them from ring index `at`, slot s ran tile tile0 + s with NC chains.
 struct FillLaunch {
@@ -822,6 +865,38 @@ static int flin_gate(Dev& d) {
         fflush(stdout);
         fails += !ok;
       }
+    // lm_head after layer 0's down (as a step's last two launches): down zeroes a poisoned Dlm, lm_head fills it and
+    // zeroes a poisoned Db[0]
+    flin_prepare_lm(d, f);
+    ref_rows<<<(unsigned)(((size_t)M * VOCAB + 255) / 256), 256, 0, d.st>>>(d.X, d.Wlm, g_ref, M, 1, VOCAB, HID);
+    for (const auto [fw, nc, lazy] : {std::tuple{0, nc0, 0}, {fw0, nc0, 4}}) {
+      f.FW = fw;
+      f.lazy = lazy;
+      f.NC = nc;
+      f.stride = (unsigned long long)f.grid * fw;
+      fring_open(r, (Flin::LAUNCHES + 1) * f.stride, 1, g_c0, g_c1, 0x5ull << 56, d.st);
+      CK(cudaMemsetAsync(f.Db[1], 0, (size_t)M * LN[3] * 4, d.st));
+      CK(cudaMemsetAsync(f.Dlm, 0xA5, (size_t)M * VOCAB * 4, d.st));
+      CK(cudaMemsetAsync(f.Db[0], 0x5A, (size_t)M * LN[0] * 4, d.st));
+      if (!flin_one(d, f, 3, 1, 4) || !flin_lm(d, f, 0)) { fprintf(stderr, "flin: M %d FW %d not built\n", M, fw); return 1; }
+      CK(cudaMemsetAsync(g_cnt, 0, sizeof *g_cnt, d.st));
+      count_neq_rows<<<(unsigned)(((size_t)M * VOCAB + 255) / 256), 256, 0, d.st>>>(f.Dlm, g_ref, M, 1, VOCAB, g_cnt);
+      unsigned long long bad = 0, nz = 0;
+      CK(cudaMemcpyAsync(&bad, g_cnt, sizeof bad, cudaMemcpyDeviceToHost, d.st));
+      CK(cudaMemsetAsync(g_cnt, 0, sizeof *g_cnt, d.st));
+      count_nz<<<1024, 256, 0, d.st>>>(f.Db[0], (size_t)M * LN[0], g_cnt);
+      CK(cudaMemcpyAsync(&nz, g_cnt, sizeof nz, cudaMemcpyDeviceToHost, d.st));
+      CK(cudaStreamSynchronize(d.st));
+      CK(cudaGetLastError());
+      const FlinTally t = fill_tally(r, fused_launches(r, &f, {3, Flin::LAUNCHES}, nullptr, 0, 0), 8, 0x6A7F + M * 16);
+      const bool ok = bad == 0 && nz == 0 && t.bad == 0 && t.ctl_equal == 0 && (fw == 0 || t.checked > 0);
+      printf("{\"mode\": \"fgate\", \"M\": %d, \"linear\": \"lm_head\", \"N\": %d, \"K\": %d, \"FW\": %d, \"NC\": %d, "
+             "\"lazy\": %d, \"mismatches\": %llu, \"next_nonzero\": %llu, \"rec_checked\": %d, \"rec_bad\": %d, "
+             "\"ctl_equal\": %d, \"filler_steps\": %lld, \"idle_slots\": %lld, \"ok\": %s}\n",
+             M, VOCAB, HID, fw, nc, lazy, bad, nz, t.checked, t.bad, t.ctl_equal, t.steps, t.idle, ok ? "true" : "false");
+      fflush(stdout);
+      fails += !ok;
+    }
   }
   return fails;
 }
@@ -875,12 +950,13 @@ static int run_flin(Dev& d, int M, int FW, int NC, int thr, int reps) {
 
 // fstep B L FW NC THR AFW [FILL_SMS]: the decode step (enqueue_step's order) with its linears through flin, but those whose
 // bit is set in FLIN_LT (1 qkv, 2 o, 4 gate_up, 8 down), which stay on cuBLASLt, and its attention blocks with AFW filler warps
-// each (0: dcap's kernels); lm_head stays on cuBLASLt. Arms: the cuBLASLt step on the whole GPU, flin alone with dcap's
+// each (0: dcap's kernels); lm_head stays on cuBLASLt unless FLIN_LM=1 runs it through flin too. Arms: the cuBLASLt step on the whole GPU, flin alone with dcap's
 // attention, both with filler warps, the cuBLASLt step again. With FILL_SMS > 0 the two flin arms run on a green split's
 // other SMs and the last beside round 1's pump (W 8, NC 4, S 2048) on FILL_SMS SMs, whose window share and receipts are
 // reported with the rest. A batch B ≤ 256 runs flin at the next tile height (flin_m_for), attention and the cuBLASLt
 // step at B. The filler warps' MACs are their step counts over the last rep's launches (each step's tiles are the next
-// `per` ids, fused_layout); the last linear's output is checked on every row when down runs through flin.
+// `per` ids, fused_layout); the last linear's output is checked on every row when down runs through flin, and so is
+// lm_head's when it does.
 static int g_lt_mask = 0;
 static std::vector<int> fstep_seq() {
   std::vector<int> s;
@@ -890,6 +966,7 @@ static std::vector<int> fstep_seq() {
 }
 static void enqueue_fstep(Dev& d, const Flin& f, const Fatt& a, const std::vector<Lt>& p, int B, int L, bool* wrapped) {
   static const std::vector<int> seq = fstep_seq();
+  const bool lm = f.lm && !seq.empty();
   int k = 0;
   auto lin = [&](int i) {
     const int j = i % 4;
@@ -897,7 +974,7 @@ static void enqueue_fstep(Dev& d, const Flin& f, const Fatt& a, const std::vecto
       lt_run(p[j], d.X, d.W[i / 4][j], d.D, d.st);
       return;
     }
-    flin_one(d, f, i, k, seq[(k + 1) % seq.size()] % 4);
+    flin_one(d, f, i, k, lm && k + 1 == (int)seq.size() ? 4 : seq[(k + 1) % seq.size()] % 4);
     k++;
   };
   for (int l = 0; l < LAYERS; l++) {
@@ -905,7 +982,10 @@ static void enqueue_fstep(Dev& d, const Flin& f, const Fatt& a, const std::vecto
     enqueue_fatt(d, a, B, L, l, wrapped);
     for (int j = 1; j < 4; j++) lin(4 * l + j);
   }
-  if (B <= 256 && p[4].algo_id != -2) lt_run(p[4], d.X, d.Wlm, d.D, d.st);
+  if (lm)
+    flin_lm(d, f, seq[0] % 4);
+  else if (B <= 256 && p[4].algo_id != -2)
+    lt_run(p[4], d.X, d.Wlm, d.D, d.st);
   fadv_k<<<1, 1, 0, d.st>>>(f.ring->st, f.ring->per);
 }
 static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int fill_sms, int reps) {
@@ -914,6 +994,7 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
   const std::vector<Lt> p = lin_plans(d, B);
   Flin f;
   flin_prepare(d, f, flin_m_for(B), true);
+  if (g_flin_lm && !seq.empty()) flin_prepare_lm(d, f);
   f.thr = thr;
   f.NC = NC;
   f.lazy = g_flin_lazy;
@@ -976,9 +1057,10 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
   const auto vb2 = time_work(d, base, reps);
   f.FW = FW;
   const unsigned long long last = fring_state(r).step - 1;  // vf's last step
-  const FlinTally t = fill_tally(r, fused_launches(r, &f, seq, nullptr, 0, last), 16, 0xF57E + B * 8 + L),
+  const FlinTally t = fill_tally(r, fused_launches(r, &f, flin_lin(f, seq), nullptr, 0, last), 16, 0xF57E + B * 8 + L),
                   ta = fill_tally(r, fused_launches(r, nullptr, {}, &a, LAYERS, last), 16, 0xA57E + B * 8 + L);
-  // the last flin launch is down's of the last layer unless FLIN_LT keeps down on cuBLASLt, whose output lm_head overwrites
+  // the last flin launch is down's of the last layer unless FLIN_LT keeps down on cuBLASLt, whose output lm_head overwrites;
+  // lm_head's through flin is checked too
   const int out_rows = g_lt_mask & 8 ? 0 : B, N = LN[3], K = LK[3];
   unsigned long long out_bad = 0;
   if (out_rows) {
@@ -986,6 +1068,13 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
     CK(cudaMemsetAsync(g_cnt, 0, sizeof *g_cnt, d.st));
     count_neq_rows<<<(unsigned)(((size_t)B * N + 255) / 256), 256, 0, d.st>>>(f.Db[(seq.size() - 1) & 1], g_ref, B, 1, N, g_cnt);
     CK(cudaMemcpyAsync(&out_bad, g_cnt, sizeof out_bad, cudaMemcpyDeviceToHost, d.st));
+  }
+  unsigned long long lm_bad = 0;
+  if (f.lm) {
+    ref_rows<<<(unsigned)(((size_t)B * VOCAB + 255) / 256), 256, 0, d.st>>>(d.X, d.Wlm, g_ref, B, 1, VOCAB, HID);
+    CK(cudaMemsetAsync(g_cnt, 0, sizeof *g_cnt, d.st));
+    count_neq_rows<<<(unsigned)(((size_t)B * VOCAB + 255) / 256), 256, 0, d.st>>>(f.Dlm, g_ref, B, 1, VOCAB, g_cnt);
+    CK(cudaMemcpyAsync(&lm_bad, g_cnt, sizeof lm_bad, cudaMemcpyDeviceToHost, d.st));
   }
   CK(cudaStreamSynchronize(d.st));
   CK(cudaGetLastError());
@@ -1002,7 +1091,8 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
          (int)g_pdl, g_fatt_pdl, g_lt_mask, fill_sms, got[0], got[1], fs ? alone / (1024.0 * d.sms * amhz * 1e6) : 0.0, pump_share, nwin,
          fs ? pf.macs() : 0.0, fs ? 8 : 0, pbad, pump_share, lin_share + att_share + pump_share);
   printf("\"M\": %d, ", f.M);
-  printf("\"APS\": %d, \"ALZ\": %d, \"FLZ\": %d, \"att_grid\": [%zu, %zu], ", a.sms > 0, a.lazy, f.lazy, a.pg[0], a.pg[1]);
+  printf("\"APS\": %d, \"ALZ\": %d, \"FLZ\": %d, \"LM\": %d, \"lm_mismatches\": %llu, \"att_grid\": [%zu, %zu], ", a.sms > 0,
+         a.lazy, f.lazy, (int)f.lm, lm_bad, a.pg[0], a.pg[1]);
   printf("\"B\": %d, \"L\": %d, \"FW\": %d, \"NC\": %d, \"thr\": %d, \"AFW\": %d, \"ANC\": %d, "
          "\"coins\": [\"%016llx\", \"%016llx\"], \"kv_wrapped\": %s, \"step_macs\": %.6e, \"lin_macs\": %.6e, \"base_ms\": %.4f, "
          "\"base2_ms\": %.4f, \"fused0_ms\": %.4f, \"fused_ms\": %.4f, \"fused0_vs_base\": %.4f, \"slowdown\": %.4f, "
@@ -1022,5 +1112,5 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
   print_arm("base2", vb2, false);
   printf("}}\n");
   fflush(stdout);
-  return t.bad || t.ctl_equal || ta.bad || ta.ctl_equal || out_bad || pbad ? 8 : 0;
+  return t.bad || t.ctl_equal || ta.bad || ta.ctl_equal || out_bad || lm_bad || pbad ? 8 : 0;
 }

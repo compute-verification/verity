@@ -68,7 +68,7 @@ def filler_of(arm, ph, b, l):
 
 
 def fused_args(q) -> list[str]:
-    return [str(x) for x in (q.FW, q.FNC, q.AFW, q.ANC, q.APS, q.ALZ, q.LT, q.FLZ)]
+    return [str(x) for x in (q.FW, q.FNC, q.AFW, q.ANC, q.APS, q.ALZ, q.LT, q.FLZ, q.LM)]
 
 
 def measure(arm, bdir: Path, out: Path, rounds: int, reps: int, robust: bool) -> int:
@@ -276,7 +276,7 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     if a.out is None:
         ap.error("--out (or $OUT, as research run sets it)")
-    arm = A.load(a.arm)
+    arm = A.load(a.arm, record=True)
     if not callable(getattr(arm, "fused", None)) or arm.filler is None:
         ap.error(f"{a.arm} has no fused(phase, B, L) or no filler: score it with score.py")
     out = a.out / arm.name
