@@ -71,9 +71,17 @@ proof workers' results land here as theorems or as named hypotheses.
   projected onto bit pairs mod 2 (`projF2`, zero diagonal), has F₂ rank at most twice its products (`theoremK`,
   `Slp.rank_projF2_le`). On the re-encoded design X = ⌊x/s⌋ + b (`note:20261016T0525Z-draft-fullfloor-s-r6`; `dP`,
   `dX`, `dIncr`) a cell-block's target has F₂ rank 2L (`rank_projF2_dIncr`), so a certified cell-block needs L
-  products (`Slp.dIncr_products_ge`) and cell-pure blocks add up (`Slp.card_mul_le`). `RoundsHypK` puts that in
-  `RoundsHyp`'s cost line, F₀ = κ L n n' B with no slack (`roundsHyp_of_K`), and the certified fraction follows
-  (`certifiedFraction120θ_K`, `_K_40`, at w = (1, 2, 4, 8, 16, 32, 65) `certifiedFraction120θ_reEncoded_40`).
+  products (`Slp.dIncr_products_ge`) and cell-blocks whose pieces are disjoint add up (`Slp.card_mul_le`).
+* The chain lemma (RS-E-REF r4, `note:20261015T1931Z-draft-theorem-e-referee` IV.2): with stacked identities every
+  k-block reads the same U bits, so the per-block count needs the chain. A product of a function of U's bits and a
+  function of the coins, of any form (`OneSided`), has a cross block of rank 1 (`OneSided.crossRankLe`), and `T`
+  committed prefix words of one cell have a stacked cross block of rank `T L` (`rank_cross_dPrefix`), so they need
+  `T L` one-sided products (`chain_products_ge`, `chainBound_oneSided`); with mixed affine products, `T L / 2`
+  (`chainBound_two`), and `T L` is the named `MixedChain` (open). A round's run is a straight-line program with
+  products of any form (`SlpG`), cell-pure across cells only (`SlpG.cells_card_le`). `RoundsHypK` puts that in
+  `RoundsHyp`'s cost line, F₀ = κ L n n' B / c with no slack (`roundsHyp_of_K`, `_one`), and the certified fraction
+  follows (`certifiedFraction120θ_K`, `_K_40`; at w = (1, 2, 4, 8, 16, 32, 65) for one-sided products with no chain
+  hypothesis, `certifiedFraction120θ_reEncoded_40`, and for mixed ones under `MixedChain`, `_reEncodedMixed_40`).
   Route (c) then needs no `EditFloor` on this design: the window's floor is B's service floor, and the edited
   protocol is relatively secure from it (`relativelySecure_edited120θ_K`; in exact arithmetic `_H`, below).
 * Theorem H (round 6 §6, merges priced): in the quad model, with merges at `h ≥ 2K/3` slots, each useful cell costs
@@ -2635,8 +2643,10 @@ difference mod 2 (`projF2`) is a symmetric form with zero diagonal. Each product
 at most 2, whose diagonal `2 a_u b_u` vanishes mod 2. So a word that agrees with a target needs at least half the
 target's `F₂` rank in products (`theoremK`, `Slp.rank_projF2_le`). On the re-encoded design, a cell-block's target
 has `F₂` rank `2L` (`rank_projF2_dIncr`). Each certified cell-block therefore needs `L` products
-(`Slp.dIncr_products_ge`), and a cell-pure run needs `L` per certified cell-block (`Slp.card_mul_le`): `c = 1`.
-That gives the window's cost line with `F₀ = κ L n n' B` (`RoundsHypK`, `roundsHyp_of_K`). -/
+(`Slp.dIncr_products_ge`), and a run whose cell-blocks have disjoint pieces needs `L` per certified cell-block
+(`Slp.card_mul_le`). Disjoint pieces forbid
+sharing along a cell's prefix chain; the chain lemma, after the quad runs, lifts that, and gives the window's cost
+line (`RoundsHypK`, `roundsHyp_of_K`). -/
 
 
 /-- An operand affine in the bits `z : V → R`: `c + Σ_v α_v z_v`. -/
@@ -3057,65 +3067,6 @@ theorem toF2_wRe_zero : toF2 (wRe 0) = 1 := by
 
 /-- A round's cell-blocks: cells `(i, l)` and blocks `t`. -/
 abbrev DCells (n n' B : ℕ) : Type := Fin n × Fin n' × Fin B
-
-/-- **The window's rounds with Theorem K's cost line** (the re-encoded design), a named hypothesis. It is
-`RoundsHyp` with the cost line derived rather than assumed. Along every play `x`:
-- round `w`'s run is a straight-line program over `Z/2³²` on the round's bits (`prog w`: s32 wrap, integer operands,
-  unscaled reads), on committed constants `pc w` (`P − 128`) and `vq w` (`⌊x/s⌋`);
-- at each cell-block it certifies (`cor w`), the increment from the cell's previous committed word (`prev w c`) to its
-  word (`cur w c`) agrees with the cell-block's target at every bit pair;
-- certified cell-blocks share no product (cell-pure);
-- it certifies at least `(1 − d_w) C` of the round's `C = n n' B` cell-blocks, `d_w` the game's round-`w` deficiency;
-- the run is charged at least `κ` a product, less the noise reads `V`. -/
-def RoundsHypK (Mc : Machine) (S : Service) (Ω : Type) [Fintype Ω] (R : ℕ) (p Vmax δb δz κ : ℝ)
-    (n L np B n' : ℕ) (wt : Fin np → ZMod (2 ^ 32)) : Prop :=
-  ∃ e : S.Seed ≃ Paths Ω R, ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
-    (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ r : Ω',
-    ∃ (G : RoundGame Ω R) (Bind ZK : Fin R → Paths Ω R → Prop) (V : Paths Ω R → ℝ),
-      G.PathBound p ∧ (∀ w, prob (Bind w) ≤ δb) ∧ (∀ w, prob (ZK w) ≤ δz) ∧
-      (∀ x, S.verify (Mc.eval M (e.symm x, r)).1 (e.symm x) (Mc.eval M (e.symm x, r)).2 = true →
-        G.accepts x ∨ ∃ w, Bind w x ∨ ZK w x) ∧
-      (∀ x, V x ≤ Vmax) ∧
-      ∀ x, ∃ (N : Fin R → ℕ) (prog : ∀ w, Slp (DBits n L np B n') (ZMod (2 ^ 32)) (N w))
-        (pc : Fin R → Fin n → Fin B → Fin L → ZMod (2 ^ 32))
-        (vq : Fin R → Fin B → Fin L → Fin n' → ZMod (2 ^ 32))
-        (cur : ∀ w, DCells n n' B → Fin (N w)) (prev : ∀ w, DCells n n' B → Option (Fin (N w)))
-        (cor : Fin R → Finset (DCells n n' B)),
-        (∀ w, ∀ c ∈ cor w, ∀ U : Finset (DBits n L np B n'), U.card ≤ 2 →
-          (prog w).val (bitInd U) (cur w c) - (prev w c).elim 0 (fun k => (prog w).val (bitInd U) k) =
-            dIncr (pc w) (vq w) wt c.1 c.2.1 c.2.2 (bitInd U)) ∧
-        (∀ w, ((cor w : Finset (DCells n n' B)) : Set (DCells n n' B)).PairwiseDisjoint
-          fun c => (prog w).pieces (cur w c) (prev w c)) ∧
-        (∀ w, ((n * n' * B : ℕ) : ℝ) * (1 - G.dAt x w) ≤ (cor w).card) ∧
-        κ * ∑ w, ((univ.filter fun j => (prog w).isProd j = true).card : ℝ) - V x ≤ Mc.charge M (e.symm x, r)
-
-/-- **Theorem K gives the window's cost line**: under `RoundsHypK` with a plane of odd weight, `RoundsHyp` holds with
-`F₀ = κ L n n' B`, the round's `n × LB × n'` GEMM at `κ` a product (`c = 1`), and no slack. -/
-theorem roundsHyp_of_K {Mc : Machine} {S : Service} {Ω : Type} [Fintype Ω] {R : ℕ} {p Vmax δb δz κ : ℝ}
-    {n L np B n' : ℕ} {wt : Fin np → ZMod (2 ^ 32)} {p₀ : Fin np}
-    (h : RoundsHypK Mc S Ω R p Vmax δb δz κ n L np B n' wt) (hwt : toF2 (wt p₀) = 1) (hκ : 0 ≤ κ) :
-    RoundsHyp Mc S Ω R p (κ * L * ((n * n' * B : ℕ) : ℝ)) 0 Vmax δb δz := by
-  obtain ⟨e, h⟩ := h
-  refine ⟨e, fun Ω' _ M hc r => ?_⟩
-  obtain ⟨G, Bind, ZK, V, hG, hB, hZ, hacc, hV, hK⟩ := h Ω' M hc r
-  refine ⟨G, Bind, ZK, V, hG, hB, hZ, hacc, hV, fun x => ?_⟩
-  obtain ⟨N, prog, pc, vq, cur, prev, cor, hT, hpure, hcor, hcharge⟩ := hK x
-  have hprod : ∀ w, (L : ℝ) * (cor w).card ≤ ((univ.filter fun j => (prog w).isProd j = true).card : ℝ) :=
-    fun w => by
-      exact_mod_cast (prog w).card_mul_le (cor w) (cur w) (prev w) L
-        (fun c hc => (prog w).dIncr_products_ge toF2 (pc w) (vq w) wt hwt (cur w c) (prev w c) c.1 c.2.1 c.2.2
-          (hT w c hc)) (hpure w)
-  set C : ℝ := ((n * n' * B : ℕ) : ℝ)
-  have hsum : ((R : ℝ) - G.deficiency x) * (κ * L * C) = κ * ∑ w, (L : ℝ) * (C * (1 - G.dAt x w)) := by
-    rw [G.deficiency_eq_sum, ← Finset.mul_sum, ← Finset.mul_sum, Finset.sum_sub_distrib, Finset.sum_const,
-      Finset.card_univ, Fintype.card_fin, nsmul_eq_mul, mul_one]
-    ring
-  calc ((R : ℝ) - G.deficiency x) * (κ * L * C) - V x - R * 0
-      = κ * ∑ w, (L : ℝ) * (C * (1 - G.dAt x w)) - V x := by rw [hsum]; ring
-    _ ≤ κ * ∑ w, ((univ.filter fun j => (prog w).isProd j = true).card : ℝ) - V x := by
-      gcongr with w
-      exact (mul_le_mul_of_nonneg_left (hcor w) (Nat.cast_nonneg L)).trans (hprod w)
-    _ ≤ Mc.charge M (e.symm x, r) := hcharge
 
 end TheoremK
 
@@ -3650,6 +3601,477 @@ theorem QuadRun.cost_ge_reEncoded_32 {Q M : Type} [Fintype Q] [Fintype M] [Decid
     linarith)
 
 end QuadRuns
+
+/-! ### The chain lemma (RS-E-REF r4, `note:20261015T1931Z-draft-theorem-e-referee` IV.2)
+
+With stacked identities every k-block reads the same U bits, so the last committed prefix word has `F₂` rank `2L`
+only, and Theorem K on increments does not add up when one product changes parity at several blocks. The chain lemma
+reads the cross block instead. The bits split into U's side and the coins' side (`Vl ⊕ Vr`). A product `g · h` of a
+function of U's bits and a function of the coins, of any form (table lookups, OR, wrapped arithmetic: `OneSided`), has
+a `(β, b)` block of rank 1 (`OneSided.crossRankLe`), and an affine product, mixed or not, of rank at most 2
+(`AffProd.crossRankLe`). Stack `T` committed prefix words of one cell and flatten along `b`: mod 2 the products give
+rank at most their count (`rank_cross_le`), and the targets give rank `T L`, since the column of `b(t′, j, l)` is
+`Σ_{t ≥ t′} e_t ⊗ e_j`, triangular in `t` (`rank_cross_dPrefix`). So `T` committed prefix words of a cell need `T L`
+one-sided products (`chainBound_oneSided`), and `T L / 2` once mixed affine ones are allowed (`chainBound_two`); the
+mixed case at factor 1 is open (`MixedChain`). Only the cross block is read, so the bound holds whatever a product's
+`β–β` or `b–b` part. A round's run is a straight-line program with products of any form (`SlpG`), and the count adds
+up over cells that share no product, with partners, merges and sharing along a cell's prefix chain free
+(`SlpG.cells_card_le`). That gives the window's cost line (`RoundsHypK`, `roundsHyp_of_K`). -/
+
+section Chain
+
+variable {Vl Vr R : Type} [Fintype Vl] [Fintype Vr] [DecidableEq Vl] [DecidableEq Vr] [CommRing R]
+
+/-- A function of the bits that reads only U's side (`Vl`). -/
+def LeftOnly (g : (Vl ⊕ Vr → R) → R) : Prop :=
+  ∀ z z' : Vl ⊕ Vr → R, (∀ a, z (.inl a) = z' (.inl a)) → g z = g z'
+
+/-- A function of the bits that reads only the coins' side (`Vr`). -/
+def RightOnly (h : (Vl ⊕ Vr → R) → R) : Prop :=
+  ∀ z z' : Vl ⊕ Vr → R, (∀ b, z (.inr b) = z' (.inr b)) → h z = h z'
+
+/-- **A one-sided product**: a function of U's bits times a function of the coins, each of any form. -/
+def OneSided (π : (Vl ⊕ Vr → R) → R) : Prop :=
+  ∃ g h, LeftOnly g ∧ RightOnly h ∧ ∀ z, π z = g z * h z
+
+/-- A product of two bit-affine operands, mixed or not. -/
+def AffProd (π : (Vl ⊕ Vr → R) → R) : Prop :=
+  ∃ A B : BitAff (Vl ⊕ Vr) R, ∀ z, π z = A.eval z * B.eval z
+
+/-- A product's cross block (its second differences on the pairs `(U bit, coin)`) is a sum of `m` rank-one terms. -/
+def CrossRankLe (π : (Vl ⊕ Vr → R) → R) (m : ℕ) : Prop :=
+  ∃ (a : Fin m → Vl → R) (b : Fin m → Vr → R), ∀ u v, pairDiff π (.inl u) (.inr v) = ∑ s, a s u * b s v
+
+omit [Fintype Vl] [Fintype Vr] in
+/-- A one-sided product's cross block is the outer product of its factors' first differences: rank 1. -/
+theorem OneSided.crossRankLe {π : (Vl ⊕ Vr → R) → R} (hπ : OneSided π) : CrossRankLe π 1 := by
+  obtain ⟨g, h, hg, hh, hgh⟩ := hπ
+  refine ⟨fun _ u => g (bitInd {.inl u}) - g (bitInd ∅), fun _ v => h (bitInd {.inr v}) - h (bitInd ∅),
+    fun u v => ?_⟩
+  have e1 : g (bitInd {.inl u, .inr v}) = g (bitInd {.inl u}) := hg _ _ fun a => by simp [bitInd]
+  have e2 : g (bitInd {.inr v}) = g (bitInd ∅) := hg _ _ fun a => by simp [bitInd]
+  have e3 : h (bitInd {.inl u, .inr v}) = h (bitInd {.inr v}) := hh _ _ fun b => by simp [bitInd]
+  have e4 : h (bitInd {.inl u}) = h (bitInd ∅) := hh _ _ fun b => by simp [bitInd]
+  simp only [pairDiff, hgh, e1, e2, e3, e4, Fin.sum_univ_one]
+  ring
+
+/-- An affine product's cross block has rank at most 2. -/
+theorem AffProd.crossRankLe {π : (Vl ⊕ Vr → R) → R} (hπ : AffProd π) : CrossRankLe π 2 := by
+  obtain ⟨A, B, hAB⟩ := hπ
+  refine ⟨![fun u => A.α (.inl u), fun u => B.α (.inl u)], ![fun v => B.α (.inr v), fun v => A.α (.inr v)],
+    fun u v => ?_⟩
+  have : pairDiff π (.inl u) (.inr v) = pairDiff (fun z => A.eval z * B.eval z) (.inl u) (.inr v) := by
+    simp only [pairDiff, hAB]
+  rw [this, pairDiff_mul A B Sum.inl_ne_inr, Fin.sum_univ_two]
+  simp only [Matrix.cons_val_zero, Matrix.cons_val_one]
+  ring
+
+/-- **The flattened cross block of a stack of words**: words `T_t`, each a combination of the products in `S` plus a
+bit-affine word at every bit point with at most two ones, have a stacked cross block (rows `(t, U bit)`, columns
+coins) of `F₂` rank at most the products' summed cross ranks. -/
+theorem rank_cross_le (φ : R →+* ZMod 2) {ι τ : Type} [Fintype τ] (S : Finset ι)
+    (π : ι → (Vl ⊕ Vr → R) → R) (m : ι → ℕ) (hπ : ∀ k ∈ S, CrossRankLe (π k) (m k)) (c : τ → ι → R)
+    (r : τ → BitAff (Vl ⊕ Vr) R) (T : τ → (Vl ⊕ Vr → R) → R)
+    (hT : ∀ t (U : Finset (Vl ⊕ Vr)), U.card ≤ 2 →
+      T t (bitInd U) = ∑ k ∈ S, c t k * π k (bitInd U) + (r t).eval (bitInd U)) :
+    (Matrix.of fun (x : τ × Vl) (v : Vr) => φ (pairDiff (T x.1) (.inl x.2) (.inr v))).rank ≤ ∑ k ∈ S, m k := by
+  classical
+  choose a b hab using hπ
+  let U : Matrix (τ × Vl) (Σ k : S, Fin (m k)) (ZMod 2) := fun x s => φ (c x.1 s.1) * φ (a s.1 s.1.2 s.2 x.2)
+  let W : Matrix (Σ k : S, Fin (m k)) Vr (ZMod 2) := fun s v => φ (b s.1 s.1.2 s.2 v)
+  have hUW : (Matrix.of fun (x : τ × Vl) (v : Vr) => φ (pairDiff (T x.1) (.inl x.2) (.inr v))) = U * W := by
+    ext x v
+    have h1 : pairDiff (T x.1) (.inl x.2) (.inr v) =
+        pairDiff (fun z => ∑ k ∈ S, c x.1 k * π k z + (r x.1).eval z) (.inl x.2) (.inr v) := by
+      simp only [pairDiff]
+      rw [hT x.1 {.inl x.2, .inr v} ((Finset.card_insert_le _ _).trans (by simp)), hT x.1 {.inl x.2} (by simp),
+        hT x.1 {.inr v} (by simp), hT x.1 ∅ (by simp)]
+    have hpd : pairDiff (T x.1) (.inl x.2) (.inr v) = ∑ k ∈ S, c x.1 k * pairDiff (π k) (.inl x.2) (.inr v) := by
+      rw [h1, pairDiff_add (fun z => ∑ k ∈ S, c x.1 k * π k z) (fun z => (r x.1).eval z),
+        pairDiff_aff _ Sum.inl_ne_inr, add_zero, pairDiff_sum S (fun k z => c x.1 k * π k z)]
+      exact Finset.sum_congr rfl fun k _ => pairDiff_mul_left _ _ _ _
+    rw [Matrix.of_apply, hpd, Matrix.mul_apply, Fintype.sum_sigma, ← Finset.sum_coe_sort S, map_sum]
+    refine Finset.sum_congr rfl fun k _ => ?_
+    rw [hab k.1 k.2, Finset.mul_sum, map_sum]
+    refine Finset.sum_congr rfl fun s _ => ?_
+    simp only [U, W, map_mul]
+    ring
+  rw [hUW]
+  refine (Matrix.rank_mul_le_left U W).trans ((Matrix.rank_le_card_width U).trans ?_)
+  rw [Fintype.card_sigma]
+  simp only [Fintype.card_fin]
+  exact (Finset.sum_coe_sort S m).le
+
+end Chain
+
+section ChainDesign
+
+variable {R : Type} [CommRing R] {n L np B n' : ℕ}
+
+/-- A committed prefix word pairs `β_p(i, j)` with every `b(t′, j, l)`, `t′ ≤ t`, at weight `w_p`. -/
+theorem pairDiff_dPrefix_inl_inr (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R)
+    (w : Fin np → R) (i : Fin n) (l : Fin n') (t : ℕ) (a : Fin n × Fin L × Fin np) (b : Fin B × Fin L × Fin n') :
+    pairDiff (dPrefix pc vq w i l t) (.inl a) (.inr b) =
+      if a.1 = i ∧ b.2 = (a.2.1, l) ∧ b.1.val ≤ t then w a.2.2 else 0 := by
+  have h : dPrefix pc vq w i l t = fun z => ∑ t' : Fin B, (if t'.val ≤ t then 1 else 0) * dIncr pc vq w i l t' z := by
+    funext z
+    simp only [dPrefix, ite_mul, one_mul, zero_mul]
+  rw [h, pairDiff_sum univ (fun t' z => (if t'.val ≤ t then 1 else 0) * dIncr pc vq w i l t' z)]
+  simp_rw [pairDiff_mul_left, pairDiff_dIncr_inl_inr]
+  rw [Finset.sum_eq_single b.1]
+  · obtain ⟨t₁, j₁, l₁⟩ := b
+    simp only [Prod.mk.injEq, true_and]
+    by_cases h3 : t₁.val ≤ t
+    · simp [h3]
+    · simp [h3]
+  · intro t' _ ht'
+    have : ¬(b = (t', a.2.1, l)) := fun h => ht' (by rw [h])
+    simp [this]
+  · simp
+
+/-- Differencing consecutive coin blocks undoes the prefix sum. -/
+theorem sum_prefix_diff (T S : Fin B) :
+    ∑ t' : Fin B, (if t'.val ≤ T.val then (1 : ZMod 2) else 0) *
+      ((if t' = S then 1 else 0) - (if t'.val = S.val + 1 then 1 else 0)) = if S = T then 1 else 0 := by
+  simp only [mul_sub, Finset.sum_sub_distrib, mul_ite, mul_one, mul_zero]
+  rw [Finset.sum_ite_eq']
+  have h2 : (∑ t' : Fin B, if t'.val = S.val + 1 then (if t'.val ≤ T.val then (1 : ZMod 2) else 0) else 0) =
+      if S.val + 1 ≤ T.val then 1 else 0 := by
+    by_cases hS : S.val + 1 ≤ T.val
+    · rw [Finset.sum_eq_single ⟨S.val + 1, by omega⟩]
+      · simp [hS]
+      · intro t' _ ht'
+        have : t'.val ≠ S.val + 1 := fun h => ht' (Fin.ext h)
+        simp [this]
+      · simp
+    · simp only [hS, ↓reduceIte]
+      refine Finset.sum_eq_zero fun t' _ => ?_
+      by_cases h : t'.val = S.val + 1
+      · have : ¬t'.val ≤ T.val := by omega
+        simp only [h, hS, ↓reduceIte]
+      · simp only [h, ↓reduceIte]
+  rw [h2]
+  simp only [Finset.mem_univ, ↓reduceIte]
+  by_cases hST : S = T
+  · subst hST
+    simp
+  · have : S.val ≠ T.val := fun h => hST (Fin.ext h)
+    by_cases h1 : S.val ≤ T.val
+    · have h1' : S.val + 1 ≤ T.val := by omega
+      simp [h1, h1', hST]
+    · have h1' : ¬S.val + 1 ≤ T.val := by omega
+      simp [h1, h1', hST]
+
+/-- **The prefix words' stacked cross block** (RS-E-REF r4 IV.2): with a plane of odd weight, `T` prefix words of
+one cell (blocks `tt`, distinct) have a flattened cross block of `F₂` rank at least `T L`. On the rows `β_p₀(i, j)`
+it is `[j = j′][t′ ≤ t]`, and differencing consecutive coin blocks (`Q`) turns it into the identity. -/
+theorem rank_cross_dPrefix (φ : R →+* ZMod 2) (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R)
+    (w : Fin np → R) {p₀ : Fin np} (hw : φ (w p₀) = 1) (i : Fin n) (l : Fin n') {τ : Type} [Fintype τ]
+    [DecidableEq τ] (tt : τ → Fin B) (htt : Function.Injective tt) :
+    L * Fintype.card τ ≤ (Matrix.of fun (x : τ × (Fin n × Fin L × Fin np)) (v : Fin B × Fin L × Fin n') =>
+      φ (pairDiff (dPrefix pc vq w i l (tt x.1).val) (.inl x.2) (.inr v))).rank := by
+  set M := Matrix.of fun (x : τ × (Fin n × Fin L × Fin np)) (v : Fin B × Fin L × Fin n') =>
+    φ (pairDiff (dPrefix pc vq w i l (tt x.1).val) (.inl x.2) (.inr v)) with hMdef
+  let ρ : τ × Fin L → τ × (Fin n × Fin L × Fin np) := fun y => (y.1, (i, y.2, p₀))
+  let Q : Matrix (Fin B × Fin L × Fin n') (τ × Fin L) (ZMod 2) := fun v y =>
+    if v.2 = (y.2, l) then ((if v.1 = tt y.1 then 1 else 0) - (if v.1.val = (tt y.1).val + 1 then 1 else 0)) else 0
+  have hM : ∀ y v, M.submatrix ρ id y v = if v.2 = (y.2, l) ∧ v.1.val ≤ (tt y.1).val then 1 else 0 := by
+    intro y v
+    simp only [Matrix.submatrix_apply, id, hMdef, Matrix.of_apply, ρ, pairDiff_dPrefix_inl_inr, true_and]
+    split_ifs <;> simp [hw]
+  have hMQ : M.submatrix ρ id * Q = 1 := by
+    ext y y'
+    rw [Matrix.mul_apply, Matrix.one_apply]
+    simp_rw [hM]
+    rw [Fintype.sum_prod_type]
+    have hin : ∀ t' : Fin B, (∑ v2 : Fin L × Fin n', (if (v2 = (y.2, l) ∧ t'.val ≤ (tt y.1).val) then (1 : ZMod 2) else 0) *
+        Q (t', v2) y') = (if y.2 = y'.2 then 1 else 0) * ((if t'.val ≤ (tt y.1).val then (1 : ZMod 2) else 0) *
+          ((if t' = tt y'.1 then 1 else 0) - (if t'.val = (tt y'.1).val + 1 then 1 else 0))) := by
+      intro t'
+      rw [Finset.sum_eq_single (y.2, l)]
+      · simp only [Q, true_and, Prod.mk.injEq, and_true]
+        by_cases hj : y.2 = y'.2 <;> by_cases ht : t'.val ≤ (tt y.1).val <;> simp [hj, ht]
+      · intro v2 _ hv2
+        simp [hv2]
+      · simp
+    simp only [hin]
+    rw [← Finset.mul_sum, sum_prefix_diff]
+    obtain ⟨s, j⟩ := y
+    obtain ⟨s', j'⟩ := y'
+    simp only [Prod.mk.injEq]
+    by_cases hj : j = j' <;> by_cases hs : s = s'
+    · simp [hj, hs]
+    · have : tt s' ≠ tt s := fun h => hs (htt h).symm
+      simp [hj, hs, this]
+    · simp [hj, hs]
+    · have : tt s' ≠ tt s := fun h => hs (htt h).symm
+      simp [hj, hs, this]
+  calc L * Fintype.card τ = (1 : Matrix (τ × Fin L) (τ × Fin L) (ZMod 2)).rank := by
+        rw [Matrix.rank_one, Fintype.card_prod, Fintype.card_fin, mul_comm]
+    _ = (M.submatrix ρ id * Q).rank := by rw [hMQ]
+    _ ≤ (M.submatrix ρ id).rank := Matrix.rank_mul_le_left _ _
+    _ ≤ M.rank := Matrix.rank_submatrix_le M ρ id
+
+/-- **The chain lemma** (RS-E-REF r4 IV.2): `T` committed prefix words of one cell, each a combination of the
+products in `S` plus a bit-affine word and right at every bit point with at most two ones, have `T L` at most the
+products' summed cross ranks. -/
+theorem chain_products_ge (φ : R →+* ZMod 2) (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R)
+    (w : Fin np → R) {p₀ : Fin np} (hw : φ (w p₀) = 1) (i : Fin n) (l : Fin n') {ι τ : Type} [Fintype τ]
+    [DecidableEq τ] (tt : τ → Fin B) (htt : Function.Injective tt) (S : Finset ι)
+    (π : ι → (DBits n L np B n' → R) → R) (m : ι → ℕ) (hπ : ∀ k ∈ S, CrossRankLe (π k) (m k)) (c : τ → ι → R)
+    (r : τ → BitAff (DBits n L np B n') R)
+    (hT : ∀ t (U : Finset (DBits n L np B n')), U.card ≤ 2 →
+      ∑ k ∈ S, c t k * π k (bitInd U) + (r t).eval (bitInd U) = dPrefix pc vq w i l (tt t).val (bitInd U)) :
+    L * Fintype.card τ ≤ ∑ k ∈ S, m k :=
+  (rank_cross_dPrefix φ pc vq w hw i l tt htt).trans
+    (rank_cross_le (Vl := Fin n × Fin L × Fin np) (Vr := Fin B × Fin L × Fin n') φ S π m hπ c r
+      (fun t => dPrefix pc vq w i l (tt t).val) fun t U hU => (hT t U hU).symm)
+
+/-- **The chain bound** for a class `Ok` of products at factor `c`, on the re-encoded design: `T` committed prefix
+words of one cell, each a combination of products in `Ok` plus a bit-affine word, and each right at every bit point
+with at most two ones, use at least `T L / c` products. -/
+def ChainBound (R : Type) [CommRing R] (n L np B n' : ℕ) (w : Fin np → R)
+    (Ok : ((DBits n L np B n' → R) → R) → Prop) (c : ℕ) : Prop :=
+  ∀ (ι τ : Type) [Fintype τ] [DecidableEq τ] (S : Finset ι) (π : ι → (DBits n L np B n' → R) → R),
+    (∀ k ∈ S, Ok (π k)) → ∀ (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R) (i : Fin n)
+    (l : Fin n') (tt : τ → Fin B), Function.Injective tt → ∀ (coef : τ → ι → R)
+    (r : τ → BitAff (DBits n L np B n') R),
+    (∀ t (U : Finset (DBits n L np B n')), U.card ≤ 2 →
+      ∑ k ∈ S, coef t k * π k (bitInd U) + (r t).eval (bitInd U) = dPrefix pc vq w i l (tt t).val (bitInd U)) →
+    L * Fintype.card τ ≤ c * S.card
+
+/-- **The chain lemma for one-sided products** (RS-E-REF r4 IV.2): with a plane of odd weight, `T` committed prefix
+words of a cell need `T L` one-sided products of any form, in any arithmetic with a map to `F₂`. -/
+theorem chainBound_oneSided (φ : R →+* ZMod 2) {w : Fin np → R} {p₀ : Fin np} (hw : φ (w p₀) = 1) :
+    ChainBound R n L np B n' w OneSided 1 := by
+  intro ι τ _ _ S π hπ pc vq i l tt htt coef r hT
+  have := chain_products_ge φ pc vq w hw i l tt htt S π (fun _ => 1) (fun k hk => (hπ k hk).crossRankLe) coef r hT
+  simpa using this
+
+/-- With affine mixed products allowed, the cross block gives factor 2: each counts twice. -/
+theorem chainBound_two (φ : R →+* ZMod 2) {w : Fin np → R} {p₀ : Fin np} (hw : φ (w p₀) = 1) :
+    ChainBound R n L np B n' w (fun π => OneSided π ∨ AffProd π) 2 := by
+  classical
+  intro ι τ _ _ S π hπ pc vq i l tt htt coef r hT
+  have h := chain_products_ge φ pc vq w hw i l tt htt S π (fun k => if OneSided (π k) then 1 else 2)
+    (fun k hk => by
+      by_cases h1 : OneSided (π k)
+      · simpa [h1] using h1.crossRankLe
+      · simpa [h1] using ((hπ k hk).resolve_left h1).crossRankLe) coef r hT
+  refine h.trans ?_
+  calc ∑ k ∈ S, (if OneSided (π k) then 1 else 2) ≤ ∑ _k ∈ S, 2 :=
+        Finset.sum_le_sum fun k _ => by split_ifs <;> omega
+    _ = 2 * S.card := by rw [Finset.sum_const, smul_eq_mul, mul_comm]
+
+/-- **The mixed chain**, a named hypothesis (open; RS-E-REF r5): the chain bound at factor 1 for products that are
+one-sided or affine, mixed operands included. Exact search finds nothing below `T L` at `L = 2, T = 3`, the
+flattening of alternating forms gives `(T + 1) L / 2`, and the cross block alone factor 2 (`chainBound_two`); MX
+prices forming a mixed byte at ≥ 8 MAC-units. -/
+def MixedChain (R : Type) [CommRing R] (n L np B n' : ℕ) (w : Fin np → R) : Prop :=
+  ChainBound R n L np B n' w (fun π => OneSided π ∨ AffProd π) 1
+
+end ChainDesign
+
+/-- **A straight-line program with products of any form**: as `Slp`, but slot `j`'s product is any function of the
+bits (`prod j`: a product of bytes the run formed, affine or not). -/
+structure SlpG (V R : Type) (N : ℕ) where
+  isProd : Fin N → Bool
+  prod : Fin N → (V → R) → R
+  lin : (j : Fin N) → Fin j.val → R
+  off : Fin N → BitAff V R
+
+namespace SlpG
+
+variable {V R : Type} [Fintype V] [CommRing R] {N : ℕ}
+
+/-- The slots' values at the bits `z`. -/
+def val (P : SlpG V R N) (z : V → R) (j : Fin N) : R :=
+  if P.isProd j then P.prod j z
+  else ∑ k : Fin j.val, P.lin j k * P.val z ⟨k.val, k.isLt.trans j.isLt⟩ + (P.off j).eval z
+termination_by j.val
+decreasing_by exact k.isLt
+
+/-- The program's linear structure, as an `Slp` (its products' operands dropped). -/
+def toSlp (P : SlpG V R N) : Slp V R N := ⟨P.isProd, fun _ => ⟨0, 0⟩, fun _ => ⟨0, 0⟩, P.lin, P.off⟩
+
+/-- Each slot's coefficients on the products. -/
+def coef (P : SlpG V R N) : Fin N → Fin N → R := P.toSlp.coef
+
+/-- Each slot's bit-affine part. -/
+def aff (P : SlpG V R N) : Fin N → BitAff V R := P.toSlp.aff
+
+/-- **The closed form**: every slot is a combination of the program's products plus a bit-affine word. -/
+theorem val_eq (P : SlpG V R N) (z : V → R) (j : Fin N) :
+    P.val z j = ∑ i, P.coef j i * P.prod i z + (P.aff j).eval z := by
+  obtain ⟨n, hn⟩ := j
+  induction n using Nat.strong_induction_on with
+  | _ n ih =>
+    rw [val, coef, aff, Slp.coef, Slp.aff_eval]
+    have hP : P.toSlp.isProd = P.isProd := rfl
+    have hL : P.toSlp.lin = P.lin := rfl
+    have hO : P.toSlp.off = P.off := rfl
+    rw [hP, hL, hO]
+    by_cases hp : P.isProd ⟨n, hn⟩ = true
+    · simp only [hp, ↓reduceIte, Pi.single_apply, ite_mul, one_mul, zero_mul, Finset.sum_ite_eq',
+        Finset.mem_univ, add_zero]
+    · simp only [hp, Bool.false_eq_true, ↓reduceIte]
+      have hk : ∀ k : Fin n, P.val z ⟨k.val, k.isLt.trans hn⟩ =
+          ∑ i, P.toSlp.coef ⟨k.val, k.isLt.trans hn⟩ i * P.prod i z +
+            (P.toSlp.aff ⟨k.val, k.isLt.trans hn⟩).eval z := fun k => ih k.val k.isLt _
+      simp only [hk, mul_add, Finset.sum_add_distrib, Finset.mul_sum, Finset.sum_apply, Pi.smul_apply,
+        smul_eq_mul, Finset.sum_mul, mul_assoc]
+      rw [Finset.sum_comm (s := (Finset.univ : Finset (Fin n))) (t := (Finset.univ : Finset (Fin N)))]
+      ring
+
+omit [Fintype V] in
+/-- Only products carry coefficients. -/
+theorem isProd_of_coef_ne_zero (P : SlpG V R N) (j i : Fin N) (h : P.coef j i ≠ 0) : P.isProd i = true :=
+  P.toSlp.isProd_of_coef_ne_zero j i h
+
+end SlpG
+
+section ChainRound
+
+variable {R : Type} [CommRing R] {n L np B n' : ℕ}
+
+open Classical in
+/-- **Cell-pure runs add up** (the chain lemma, per round): if certified prefix words of distinct cells share no
+product, and the products are in a class with chain factor `c`, the program has at least `L / c` products per
+certified cell-block. Sharing inside a cell, along its prefix chain included, is free. -/
+theorem SlpG.cells_card_le {w : Fin np → R} {Ok : ((DBits n L np B n' → R) → R) → Prop} {c : ℕ}
+    (hc : ChainBound R n L np B n' w Ok c) {N : ℕ} (P : SlpG (DBits n L np B n') R N)
+    (hOk : ∀ j, P.isProd j = true → Ok (P.prod j)) (pc : Fin n → Fin B → Fin L → R)
+    (vq : Fin B → Fin L → Fin n' → R) (word : DCells n n' B → Fin N) (cor : Finset (DCells n n' B))
+    (hT : ∀ e ∈ cor, ∀ U : Finset (DBits n L np B n'), U.card ≤ 2 →
+      P.val (bitInd U) (word e) = dPrefix pc vq w e.1 e.2.1 e.2.2.val (bitInd U))
+    (hpure : ∀ e ∈ cor, ∀ e' ∈ cor, (e.1, e.2.1) ≠ (e'.1, e'.2.1) → ∀ k,
+      P.coef (word e) k ≠ 0 → P.coef (word e') k = 0) :
+    L * cor.card ≤ c * (univ.filter fun j => P.isProd j = true).card := by
+  let cell : DCells n n' B → Fin n × Fin n' := fun e => (e.1, e.2.1)
+  let fib : Fin n × Fin n' → Finset (DCells n n' B) := fun q => cor.filter fun e => cell e = q
+  let used : Fin n × Fin n' → Finset (Fin N) := fun q =>
+    univ.filter fun k => ∃ e ∈ fib q, P.coef (word e) k ≠ 0
+  have hq : ∀ q, L * (fib q).card ≤ c * (used q).card := by
+    intro q
+    have := hc (Fin N) (fib q) (used q) P.prod
+      (fun k hk => by
+        obtain ⟨e, -, he⟩ := (Finset.mem_filter.mp hk).2
+        exact hOk k (P.isProd_of_coef_ne_zero _ _ he))
+      pc vq q.1 q.2 (fun e => e.1.2.2)
+      (fun e e' h => by
+        have h1 := (Finset.mem_filter.mp e.2).2
+        have h2 := (Finset.mem_filter.mp e'.2).2
+        apply Subtype.ext
+        simp only [cell, Prod.ext_iff] at h1 h2
+        exact Prod.ext (h1.1.trans h2.1.symm) (Prod.ext (h1.2.trans h2.2.symm) h))
+      (fun e k => P.coef (word e.1) k) (fun e => P.aff (word e.1))
+      (fun e U hU => by
+        have h1 := Finset.mem_filter.mp e.2
+        have hq1 : q.1 = e.1.1 := (congrArg Prod.fst h1.2).symm
+        have hq2 : q.2 = e.1.2.1 := (congrArg Prod.snd h1.2).symm
+        rw [hq1, hq2, ← hT e.1 h1.1 U hU, P.val_eq]
+        congr 1
+        refine (Finset.sum_subset (Finset.subset_univ (used q))
+          (f := fun k => P.coef (word e.1) k * P.prod k (bitInd U)) fun k _ hk => ?_)
+        have : P.coef (word e.1) k = 0 := by
+          by_contra hne
+          exact hk (Finset.mem_filter.mpr ⟨Finset.mem_univ _, e.1, e.2, hne⟩)
+        rw [this, zero_mul])
+    simpa [Fintype.card_coe] using this
+  have hdisj : ((cor.image cell : Finset _) : Set (Fin n × Fin n')).PairwiseDisjoint used := by
+    intro q _ q' _ hqq'
+    refine Finset.disjoint_left.mpr fun k hk hk' => ?_
+    obtain ⟨e, he, hek⟩ := (Finset.mem_filter.mp hk).2
+    obtain ⟨e', he', hek'⟩ := (Finset.mem_filter.mp hk').2
+    have h1 := Finset.mem_filter.mp he
+    have h2 := Finset.mem_filter.mp he'
+    exact hek' (hpure e h1.1 e' h2.1 (by rw [show (e.1, e.2.1) = cell e from rfl, h1.2,
+      show (e'.1, e'.2.1) = cell e' from rfl, h2.2]; exact hqq') k hek)
+  calc L * cor.card = L * ∑ q ∈ cor.image cell, (fib q).card := by
+        rw [Finset.card_eq_sum_card_image cell cor]
+    _ = ∑ q ∈ cor.image cell, L * (fib q).card := by rw [Finset.mul_sum]
+    _ ≤ ∑ q ∈ cor.image cell, c * (used q).card := Finset.sum_le_sum fun q _ => hq q
+    _ = c * ((cor.image cell).biUnion used).card := by rw [Finset.card_biUnion hdisj, Finset.mul_sum]
+    _ ≤ c * (univ.filter fun j => P.isProd j = true).card := by
+        refine Nat.mul_le_mul_left _ (Finset.card_le_card fun k hk => ?_)
+        obtain ⟨q, -, hk⟩ := Finset.mem_biUnion.mp hk
+        obtain ⟨e, -, hek⟩ := (Finset.mem_filter.mp hk).2
+        exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, P.isProd_of_coef_ne_zero _ _ hek⟩
+
+end ChainRound
+
+/-- **The window's rounds with Theorem K's cost line** (the re-encoded design, chain form), a named hypothesis. It is
+`RoundsHyp` with the cost line derived rather than assumed. Along every play `x`:
+- round `w`'s run is a straight-line program over `Z/2³²` on the round's bits (`prog w`: s32 wrap, unscaled reads)
+  whose products are in the class `Ok` (`OneSided`, of any form; or also `AffProd`, mixed operands), on committed
+  constants `pc w` (`P − 128`) and `vq w` (`⌊x/s⌋`);
+- each cell-block `(i, l, t)` it certifies (`cor w`) has its committed prefix word `T_t(i, l)` (`word w`) right at
+  every bit point with at most two ones;
+- certified words of distinct cells share no product (cell-pure); partners, merges and sharing along a cell's
+  prefix chain are free;
+- it certifies at least `(1 − d_w) C` of the round's `C = n n' B` cell-blocks, `d_w` the game's round-`w` deficiency;
+- the run is charged at least `κ` a product, less the noise reads `V`. -/
+def RoundsHypK (Mc : Machine) (S : Service) (Ω : Type) [Fintype Ω] (R : ℕ) (p Vmax δb δz κ : ℝ)
+    (n L np B n' : ℕ) (wt : Fin np → ZMod (2 ^ 32))
+    (Ok : ((DBits n L np B n' → ZMod (2 ^ 32)) → ZMod (2 ^ 32)) → Prop) : Prop :=
+  ∃ e : S.Seed ≃ Paths Ω R, ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
+    (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ r : Ω',
+    ∃ (G : RoundGame Ω R) (Bind ZK : Fin R → Paths Ω R → Prop) (V : Paths Ω R → ℝ),
+      G.PathBound p ∧ (∀ w, prob (Bind w) ≤ δb) ∧ (∀ w, prob (ZK w) ≤ δz) ∧
+      (∀ x, S.verify (Mc.eval M (e.symm x, r)).1 (e.symm x) (Mc.eval M (e.symm x, r)).2 = true →
+        G.accepts x ∨ ∃ w, Bind w x ∨ ZK w x) ∧
+      (∀ x, V x ≤ Vmax) ∧
+      ∀ x, ∃ (N : Fin R → ℕ) (prog : ∀ w, SlpG (DBits n L np B n') (ZMod (2 ^ 32)) (N w))
+        (pc : Fin R → Fin n → Fin B → Fin L → ZMod (2 ^ 32))
+        (vq : Fin R → Fin B → Fin L → Fin n' → ZMod (2 ^ 32))
+        (word : ∀ w, DCells n n' B → Fin (N w)) (cor : Fin R → Finset (DCells n n' B)),
+        (∀ w j, (prog w).isProd j = true → Ok ((prog w).prod j)) ∧
+        (∀ w, ∀ c ∈ cor w, ∀ U : Finset (DBits n L np B n'), U.card ≤ 2 →
+          (prog w).val (bitInd U) (word w c) = dPrefix (pc w) (vq w) wt c.1 c.2.1 c.2.2.val (bitInd U)) ∧
+        (∀ w, ∀ c ∈ cor w, ∀ c' ∈ cor w, (c.1, c.2.1) ≠ (c'.1, c'.2.1) → ∀ k,
+          (prog w).coef (word w c) k ≠ 0 → (prog w).coef (word w c') k = 0) ∧
+        (∀ w, ((n * n' * B : ℕ) : ℝ) * (1 - G.dAt x w) ≤ (cor w).card) ∧
+        κ * ∑ w, ((univ.filter fun j => (prog w).isProd j = true).card : ℝ) - V x ≤ Mc.charge M (e.symm x, r)
+
+/-- **The chain lemma gives the window's cost line**: under `RoundsHypK` for a product class with chain factor
+`c`, `RoundsHyp` holds with `F₀ = κ L n n' B / c` and no slack. -/
+theorem roundsHyp_of_K {Mc : Machine} {S : Service} {Ω : Type} [Fintype Ω] {R : ℕ} {p Vmax δb δz κ : ℝ}
+    {n L np B n' : ℕ} {wt : Fin np → ZMod (2 ^ 32)}
+    {Ok : ((DBits n L np B n' → ZMod (2 ^ 32)) → ZMod (2 ^ 32)) → Prop} {c : ℕ}
+    (h : RoundsHypK Mc S Ω R p Vmax δb δz κ n L np B n' wt Ok) (hc : ChainBound (ZMod (2 ^ 32)) n L np B n' wt Ok c)
+    (hc0 : 0 < c) (hκ : 0 ≤ κ) :
+    RoundsHyp Mc S Ω R p (κ * L * ((n * n' * B : ℕ) : ℝ) / c) 0 Vmax δb δz := by
+  obtain ⟨e, h⟩ := h
+  refine ⟨e, fun Ω' _ M hcom r => ?_⟩
+  obtain ⟨G, Bind, ZK, V, hG, hB, hZ, hacc, hV, hK⟩ := h Ω' M hcom r
+  refine ⟨G, Bind, ZK, V, hG, hB, hZ, hacc, hV, fun x => ?_⟩
+  obtain ⟨N, prog, pc, vq, word, cor, hOk, hT, hpure, hcor, hcharge⟩ := hK x
+  have hcR : (0 : ℝ) < c := by exact_mod_cast hc0
+  have hprod : ∀ w, (L : ℝ) / c * (cor w).card ≤ ((univ.filter fun j => (prog w).isProd j = true).card : ℝ) :=
+    fun w => by
+      have := (prog w).cells_card_le hc (hOk w) (pc w) (vq w) (word w) (cor w) (hT w) (hpure w)
+      rw [div_mul_eq_mul_div, div_le_iff₀ hcR, mul_comm _ (c : ℝ)]
+      exact_mod_cast this
+  set C : ℝ := ((n * n' * B : ℕ) : ℝ)
+  have hsum : ((R : ℝ) - G.deficiency x) * (κ * L * C / c) = κ * ∑ w, (L : ℝ) / c * (C * (1 - G.dAt x w)) := by
+    rw [G.deficiency_eq_sum, ← Finset.mul_sum, ← Finset.mul_sum, Finset.sum_sub_distrib, Finset.sum_const,
+      Finset.card_univ, Fintype.card_fin, nsmul_eq_mul, mul_one]
+    field_simp
+  calc ((R : ℝ) - G.deficiency x) * (κ * L * C / c) - V x - R * 0
+      = κ * ∑ w, (L : ℝ) / c * (C * (1 - G.dAt x w)) - V x := by rw [hsum]; ring
+    _ ≤ κ * ∑ w, ((univ.filter fun j => (prog w).isProd j = true).card : ℝ) - V x := by
+      gcongr with w
+      exact (mul_le_mul_of_nonneg_left (hcor w) (by positivity)).trans (hprod w)
+    _ ≤ Mc.charge M (e.symm x, r) := hcharge
+
+/-- At chain factor 1 (one-sided products, `chainBound_oneSided`; mixed ones under `MixedChain`): `F₀ = κ L n n' B`,
+the round's `n × LB × n'` GEMM at `κ` a product (`c = 1`). -/
+theorem roundsHyp_of_K_one {Mc : Machine} {S : Service} {Ω : Type} [Fintype Ω] {R : ℕ} {p Vmax δb δz κ : ℝ}
+    {n L np B n' : ℕ} {wt : Fin np → ZMod (2 ^ 32)}
+    {Ok : ((DBits n L np B n' → ZMod (2 ^ 32)) → ZMod (2 ^ 32)) → Prop}
+    (h : RoundsHypK Mc S Ω R p Vmax δb δz κ n L np B n' wt Ok) (hc : ChainBound (ZMod (2 ^ 32)) n L np B n' wt Ok 1)
+    (hκ : 0 ≤ κ) : RoundsHyp Mc S Ω R p (κ * L * ((n * n' * B : ℕ) : ℝ)) 0 Vmax δb δz := by
+  simpa using roundsHyp_of_K h hc one_pos hκ
 
 /-- **The window's rounds with Theorem H's cost line** (the re-encoded design in exact arithmetic over a field `F`:
 FP8 operands or scaled reads, with exact sums), a named hypothesis. It is `RoundsHyp` with the cost line derived
@@ -4523,26 +4945,29 @@ theorem certifiedFraction120θ_rounds_40 (kd : K120 → Kind) (S : Service) {Ω 
   exact certifiedFraction120θ_rounds kd S h hp.le hF₀ hδb hδz _
 
 /-- **The certified fraction from Theorem K** (the re-encoded design, in place of the paper's cost line): under
-`RoundsHypK` in Model B with a plane of odd weight, every adversary in B_θ that commits first has its accepted runs
-charged below `0.8 ((R − D) κ L n n' B − Vmax)` with probability at most `e^{−(1−p) D} + R (δb + δz)`. That is
-`c = 1` of the window's `R` GEMMs of `n × LB × n'` at `κ` a product, less `D` rounds of luck and the noise reads. -/
+`RoundsHypK` in Model B for a product class with chain factor 1, every adversary in B_θ that commits first has its
+accepted runs charged below `0.8 ((R − D) κ L n n' B − Vmax)` with probability at most `e^{−(1−p) D} + R (δb + δz)`.
+That is `c = 1` of the window's `R` GEMMs of `n × LB × n'` at `κ` a product, less `D` rounds of luck and the noise
+reads. -/
 theorem certifiedFraction120θ_K (kd : K120 → Kind) (S : Service) {Ω : Type} [Fintype Ω] {R : ℕ}
-    {p Vmax δb δz κ : ℝ} {n L np B n' : ℕ} {wt : Fin np → ZMod (2 ^ 32)} {p₀ : Fin np}
-    (h : RoundsHypK (machine kd (.ofNat price120)) S Ω R p Vmax δb δz κ n L np B n' wt) (hwt : toF2 (wt p₀) = 1)
-    (hp : p ≤ 1) (hκ : 0 < κ) (hC : 0 < L * (n * n' * B)) (hδb : 0 ≤ δb) (hδz : 0 ≤ δz) (D : ℝ) :
+    {p Vmax δb δz κ : ℝ} {n L np B n' : ℕ} {wt : Fin np → ZMod (2 ^ 32)}
+    {Ok : ((DBits n L np B n' → ZMod (2 ^ 32)) → ZMod (2 ^ 32)) → Prop}
+    (h : RoundsHypK (machine kd (.ofNat price120)) S Ω R p Vmax δb δz κ n L np B n' wt Ok)
+    (hc : ChainBound (ZMod (2 ^ 32)) n L np B n' wt Ok 1) (hp : p ≤ 1) (hκ : 0 < κ) (hC : 0 < L * (n * n' * B)) (hδb : 0 ≤ δb) (hδz : 0 ≤ δz) (D : ℝ) :
     ServiceFloor (machine (kdθ kd) priceθ) S (4 / 5 * ((R - D) * (κ * L * ((n * n' * B : ℕ) : ℝ)) - Vmax))
       (Real.exp (-((1 - p) * D)) + R * (δb + δz)) := by
   have hF₀ : 0 < κ * L * ((n * n' * B : ℕ) : ℝ) := by
     rw [mul_assoc]
     exact mul_pos hκ (by exact_mod_cast hC)
   simpa only [mul_zero, sub_zero] using
-    certifiedFraction120θ_rounds kd S (roundsHyp_of_K h hwt hκ.le) hp hF₀ hδb hδz D
+    certifiedFraction120θ_rounds kd S (roundsHyp_of_K_one h hc hκ.le) hp hF₀ hδb hδz D
 
 /-- ... at `κ = 2⁻⁴⁰ + R (δb + δz)` (`D₀ = 40 ln 2 / (1 − p)`). -/
 theorem certifiedFraction120θ_K_40 (kd : K120 → Kind) (S : Service) {Ω : Type} [Fintype Ω] {R : ℕ}
-    {p Vmax δb δz κ : ℝ} {n L np B n' : ℕ} {wt : Fin np → ZMod (2 ^ 32)} {p₀ : Fin np}
-    (h : RoundsHypK (machine kd (.ofNat price120)) S Ω R p Vmax δb δz κ n L np B n' wt) (hwt : toF2 (wt p₀) = 1)
-    (hp : p < 1) (hκ : 0 < κ) (hC : 0 < L * (n * n' * B)) (hδb : 0 ≤ δb) (hδz : 0 ≤ δz) :
+    {p Vmax δb δz κ : ℝ} {n L np B n' : ℕ} {wt : Fin np → ZMod (2 ^ 32)}
+    {Ok : ((DBits n L np B n' → ZMod (2 ^ 32)) → ZMod (2 ^ 32)) → Prop}
+    (h : RoundsHypK (machine kd (.ofNat price120)) S Ω R p Vmax δb δz κ n L np B n' wt Ok)
+    (hc : ChainBound (ZMod (2 ^ 32)) n L np B n' wt Ok 1) (hp : p < 1) (hκ : 0 < κ) (hC : 0 < L * (n * n' * B)) (hδb : 0 ≤ δb) (hδz : 0 ≤ δz) :
     ServiceFloor (machine (kdθ kd) priceθ) S
       (4 / 5 * ((R - 40 * Real.log 2 / (1 - p)) * (κ * L * ((n * n' * B : ℕ) : ℝ)) - Vmax))
       (((2 : ℝ) ^ 40)⁻¹ + R * (δb + δz)) := by
@@ -4550,18 +4975,30 @@ theorem certifiedFraction120θ_K_40 (kd : K120 → Kind) (S : Service) {Ω : Typ
     rw [mul_assoc]
     exact mul_pos hκ (by exact_mod_cast hC)
   simpa only [mul_zero, sub_zero] using
-    certifiedFraction120θ_rounds_40 kd S (roundsHyp_of_K h hwt hκ.le) hp hF₀ hδb hδz
+    certifiedFraction120θ_rounds_40 kd S (roundsHyp_of_K_one h hc hκ.le) hp hF₀ hδb hδz
 
 /-- **The re-encoded design's certified fraction** (`X = ⌊x/s⌋ + b`, U's planes at `w = (1, 2, 4, 8, 16, 32, 65)`),
-at `κ = 2⁻⁴⁰ + R (δb + δz)`. -/
+at `κ = 2⁻⁴⁰ + R (δb + δz)`, for runs whose products are one-sided, of any form: the chain lemma
+(`chainBound_oneSided`) discharges the chain bound. -/
 theorem certifiedFraction120θ_reEncoded_40 (kd : K120 → Kind) (S : Service) {Ω : Type} [Fintype Ω] {R : ℕ}
     {p Vmax δb δz κ : ℝ} {n L B n' : ℕ}
-    (h : RoundsHypK (machine kd (.ofNat price120)) S Ω R p Vmax δb δz κ n L 7 B n' wRe) (hp : p < 1) (hκ : 0 < κ)
-    (hC : 0 < L * (n * n' * B)) (hδb : 0 ≤ δb) (hδz : 0 ≤ δz) :
+    (h : RoundsHypK (machine kd (.ofNat price120)) S Ω R p Vmax δb δz κ n L 7 B n' wRe OneSided) (hp : p < 1)
+    (hκ : 0 < κ) (hC : 0 < L * (n * n' * B)) (hδb : 0 ≤ δb) (hδz : 0 ≤ δz) :
     ServiceFloor (machine (kdθ kd) priceθ) S
       (4 / 5 * ((R - 40 * Real.log 2 / (1 - p)) * (κ * L * ((n * n' * B : ℕ) : ℝ)) - Vmax))
       (((2 : ℝ) ^ 40)⁻¹ + R * (δb + δz)) :=
-  certifiedFraction120θ_K_40 kd S h toF2_wRe_zero hp hκ hC hδb hδz
+  certifiedFraction120θ_K_40 kd S h (chainBound_oneSided toF2 toF2_wRe_zero) hp hκ hC hδb hδz
+
+/-- ... with mixed affine products allowed too, under the named `MixedChain` (RS-E-REF r5's open case). -/
+theorem certifiedFraction120θ_reEncodedMixed_40 (kd : K120 → Kind) (S : Service) {Ω : Type} [Fintype Ω] {R : ℕ}
+    {p Vmax δb δz κ : ℝ} {n L B n' : ℕ}
+    (h : RoundsHypK (machine kd (.ofNat price120)) S Ω R p Vmax δb δz κ n L 7 B n' wRe
+      fun π => OneSided π ∨ AffProd π) (hmix : MixedChain (ZMod (2 ^ 32)) n L 7 B n' wRe) (hp : p < 1)
+    (hκ : 0 < κ) (hC : 0 < L * (n * n' * B)) (hδb : 0 ≤ δb) (hδz : 0 ≤ δz) :
+    ServiceFloor (machine (kdθ kd) priceθ) S
+      (4 / 5 * ((R - 40 * Real.log 2 / (1 - p)) * (κ * L * ((n * n' * B : ℕ) : ℝ)) - Vmax))
+      (((2 : ℝ) ^ 40)⁻¹ + R * (δb + δz)) :=
+  certifiedFraction120θ_K_40 kd S h hmix hp hκ hC hδb hδz
 
 /-- **The certified fraction from Theorem H** (the re-encoded design in exact arithmetic, merges priced at
 `h ≥ 2L/3` slots): under `RoundsHypH` in Model B, the same floor as from Theorem K. -/
@@ -4597,7 +5034,8 @@ theorem certifiedFraction120θ_reEncodedExact_40 (kd : K120 → Kind) (S : Servi
     certifiedFraction120θ_rounds_40 kd S (roundsHyp_of_H hH wReQ_zero hκ.le hh) hp hF₀ hδb hδz
 
 /-- **Route (c) in B_θ from Theorem K**, with no edit-floor hypothesis: on the int8 grid, if the window's rounds
-satisfy `RoundsHypK` on B for the grid service (the re-encoded design, a plane of odd weight), then the window's floor
+satisfy `RoundsHypK` on B for the grid service (the re-encoded design, a product class with chain factor 1:
+one-sided products by `chainBound_oneSided`, mixed ones under `MixedChain`), then the window's floor
 `F_B = (R − D) κ L m n' B − Vmax` (positive, at most `n³`) is B's service floor at `κf = e^{−(1−p) D} + R (δb + δz)`,
 and the edited protocol is relatively secure with `ε = U / (0.8 F_B) − 1` for every `δ > κf`. Over `Z/2³²`, Theorem K
 takes the place of the field-only bit-pair projection behind `EditFloor`. -/
@@ -4617,8 +5055,8 @@ theorem relativelySecure_edited120θ_K (kd : K120 → Kind) (G : MatGates kd (.o
           ((ω.1, x, ω.2), (gridMatMachine120θ kd G I).eval ((gridMatMachine120θ kd G I).mulG n n n)
             (E.edit ω.1 x))).2 = true)
     {Ω : Type} [Fintype Ω] {R : ℕ} {p Vmax δb δz κ : ℝ} {m L np B n' : ℕ} {wt : Fin np → ZMod (2 ^ 32)}
-    {p₀ : Fin np} (hK : RoundsHypK (machine kd (.ofNat price120)) S.toService Ω R p Vmax δb δz κ m L np B n' wt)
-    (hwt : toF2 (wt p₀) = 1) (hp : p ≤ 1) (hκ : 0 < κ) (hC : 0 < L * (m * n' * B)) (hδb : 0 ≤ δb)
+    {Ok : ((DBits m L np B n' → ZMod (2 ^ 32)) → ZMod (2 ^ 32)) → Prop} (hK : RoundsHypK (machine kd (.ofNat price120)) S.toService Ω R p Vmax δb δz κ m L np B n' wt Ok)
+    (hc : ChainBound (ZMod (2 ^ 32)) m L np B n' wt Ok 1) (hp : p ≤ 1) (hκ : 0 < κ) (hC : 0 < L * (m * n' * B)) (hδb : 0 ≤ δb)
     (hδz : 0 ≤ δz) (D : ℝ) {FB : ℝ} (hFBdef : FB = (R - D) * (κ * L * ((m * n' * B : ℕ) : ℝ)) - Vmax)
     (hFB : 0 < FB) (hFBn : FB ≤ (n : ℝ) ^ 3) (hκδ : Real.exp (-((1 - p) * D)) + R * (δb + δz) < δ) :
     RelativelySecure ((gridMatMachine120θ kd G I).edited S.toService E ((gridMatMachine120θ kd G I).mulG n n n) prove (InGrid (127 - s)))
@@ -4628,7 +5066,7 @@ theorem relativelySecure_edited120θ_K (kd : K120 → Kind) (G : MatGates kd (.o
   have hF₀ : 0 < κ * L * ((m * n' * B : ℕ) : ℝ) := by
     rw [mul_assoc]
     exact mul_pos hκ (by exact_mod_cast hC)
-  have hfl := serviceFloor_of_rounds (roundsHyp_of_K hK hwt hκ.le) hp hF₀ hδb hδz D
+  have hfl := serviceFloor_of_rounds (roundsHyp_of_K_one hK hc hκ.le) hp hF₀ hδb hδz D
   rw [mul_zero, sub_zero, ← hFBdef] at hfl
   exact relativelySecure_edited120θ_of_floor kd G I S hn h32 h17 E hE prove hcom hacc hfl hκδ hFB hFBn
 
