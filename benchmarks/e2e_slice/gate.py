@@ -3,8 +3,8 @@
 Two calls (B's side as two passes, then fused) on seeded operands under a fresh coin: P_A against hashlib's U (LP_UW 64),
 and on three tiles (the first, the last, one drawn) the duo receipts (KIND duo: a thread's 8 words; duos: a word a thread
 and segment) and the served product A (B + F)^T recomputed from A, B and the coin alone. Then the second stage (its own B):
-the first call's served product through the public map (derive.phi) loaded as its A, one call, the same checks. Prints one
-JSON line; exits 0 only if every check passes.
+the first call's served product through the public map (derive.phi) loaded as its A (m x n, so stage 2's k is n), one call,
+the same checks. Prints one JSON line; exits 0 only if every check passes.
 """
 from __future__ import annotations
 
@@ -29,6 +29,7 @@ def main() -> int:
     checks, calls = {}, []
 
     def check(E, stage: int, slot: int, A: np.ndarray, B: np.ndarray, sigma: bytes, c: int, tag: str) -> None:
+        k = A.shape[1]
         R = np.fromfile(d / f"R{tag}.bin", np.uint32)
         R = R.reshape(-1, k // 32, derive.NCT) if seg else R.reshape(-1, derive.NCT, 8)
         tiles_n = n // 128
@@ -42,11 +43,11 @@ def main() -> int:
 
     with open(d / "engine.err", "w") as log:
         E = Engine(binary, log)
-        setup = [E.cmd("setup", m, n, k, 0x5EED, d / "B.bin", kind, 0), E.cmd("setup", m, n, k, 0x5EEE, d / "B2.bin", kind, 1)]
+        setup = [E.cmd("setup", m, n, k, 0x5EED, d / "B.bin", kind, 0), E.cmd("setup", m, n, n, 0x5EEE, d / "B2.bin", kind, 1)]
         B = np.fromfile(d / "B.bin", np.int8).reshape(n, k)
-        B2 = np.fromfile(d / "B2.bin", np.int8).reshape(n, k)
+        B2 = np.fromfile(d / "B2.bin", np.int8).reshape(n, n)
         checks["B_range"] = bool(np.abs(B.astype(int)).max() <= 119 and np.abs(B2.astype(int)).max() <= 119)
-        checks["B2_differs"] = bool((B != B2).any())
+        checks["B2_differs"] = bool((B[:, :min(n, k)] != B2[:, :min(n, k)]).any())
         for slot, fused in ((0, 0), (1, 1)):
             E.cmd("opnds", slot, 1000 + slot, d / f"A{slot}.bin")
             A = np.fromfile(d / f"A{slot}.bin", np.int8).reshape(m, k)
