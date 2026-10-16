@@ -139,11 +139,11 @@ proof workers' results land here as theorems or as named hypotheses. The definit
   games meet Theorem S's bounds at `0.854` whatever the errors (`StagedPlay.game_stagedP`, `OvPlay.passBound_gameP`),
   and with charging purity in place of row purity (`SlpG.ChargePure`, `SlpG.ChargePureAt`) `RoundsHypKStP` and
   `RoundsHypKOvP` give `RoundsHyp` at `p = 0.854` with K's `F₀` (`roundsHyp_of_stagedP`, `roundsHyp_of_overlapP`;
-  `certifiedFraction120θ_stagedP_40`, `_overlapP_40` at `D₀ = 274 ln 2`). The affine route is the sharper corollary,
-  at ¾. These two are K's proved scopes (one-sided of any form and charge-pure at 0.854; affine and row-pure at ¾).
-  Outside them `c = 1` is false even within the ledger's K1 (RS-E-REF r8 VIII): a factor `∏(1 − z_u)` in one operand
-  leaves a word wrong only at `U = 0`, so it is uncertified and passes almost always, and K's count binds certified
-  words only.
+  `certifiedFraction120θ_stagedP_40`, `_overlapP_40` at `D₀ = 274 ln 2`). The affine route is their sibling, proved
+  on its own scope at ¾. These two are K's proved scopes (one-sided of any form and charge-pure at 0.854; affine and
+  row-pure at ¾). Outside them `c = 1` is false even within the ledger's K1 (RS-E-REF r8 VIII): a factor
+  `∏(1 − z_u)` in one operand leaves a word wrong only at `U = 0`, so it is uncertified and passes almost always, and
+  K's count binds certified words only.
 * Theorem H (round 6 §6, merges priced) is not needed for the re-encoded design: the chain lemma covers it in every
   arithmetic (RS-E-REF r4 IV.3). It stays proved as the alternative with merges priced, including `_H` of route (c).
   In the quad model, with merges at `h ≥ 2K/3` slots, each useful cell costs

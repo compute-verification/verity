@@ -10,9 +10,9 @@ The premises of the floors of record, `Models.Pouw.Guarantees.RelativeSecurity.S
 what the service and its proof layer give (`ServiceSoundStaged`), what an adversary's run is (`KScopeOneSided`:
 one-sided operands of any form, charge-pure), and what the machine charges for it (`ChargeVF3j16`).
 `OverlapFloorKOneSided`'s three are the same split of `RoundsHypKOvP` (`ServiceSoundOverlap`, `KScopeOverlapOneSided`,
-`ChargeVF3j16Overlap`). `KScopeAffine` and `KScopeOverlapAffine` are the affine scopes, row-pure, which the sharper
-corollaries `StagedFloorK` and `OverlapFloorK` take for the luck ¾ (`RoundsHypKSt`, `RoundsHypKOv`). The ledger ids
-are the premise ledger's.
+`ChargeVF3j16Overlap`). `KScopeAffine` and `KScopeOverlapAffine` are the affine scopes, row-pure, which the sibling
+floors `StagedFloorK` and `OverlapFloorK`, proved on their own scope, take for the luck ¾ (`RoundsHypKSt`,
+`RoundsHypKOv`). The ledger ids are the premise ledger's.
 
 These are K's two proved scopes, and the floors' constant is `c = 1` in them. The one-sided scope is a sibling of the
 ledger's K1, not a narrowing of it. **K1 is not claimed outside the two proved scopes.** There the ledger's K1 at
@@ -54,7 +54,7 @@ bits (E3, straight-line; integer MMAs with s32 wrap and unscaled reads, so ring 
   the check reads the prefix word);
 - certified words of distinct rows of a stage share no product (row-pure).
 
-On this scope `c = 1` is proved at the luck ¾, the sharper corollary `StagedFloorK`'s. K1 is not claimed outside
+On this scope `c = 1` is proved at the luck ¾, the sibling floor `StagedFloorK`'s. K1 is not claimed outside
 the two proved scopes, this one and `KScopeOneSided`'s (one-sided operands of any form, charge-pure, at the parity luck
 0.854: the floor of record's), and the verifier can't observe which case applies: no check of the service refuses a
 run outside a scope (the ledger's "priced, not prevented"). -/
@@ -155,7 +155,7 @@ straight-line program over `Ar` on every draw's bits (E3), and:
   across draws; a word is certified at `W` where its error vanishes on its own draw's bits with at most two ones, the
   other draws' at `W`).
 
-On this scope `c = 1` is proved at the luck ¾ per draw, the sharper corollary `OverlapFloorK`'s. K1 is not claimed
+On this scope `c = 1` is proved at the luck ¾ per draw, the sibling floor `OverlapFloorK`'s. K1 is not claimed
 outside the two proved scopes across draws, this one and `KScopeOverlapOneSided`'s (one-sided operands of any form
 per draw, charge-pure across draws, at the parity luck 0.854: the floor of record's), and the verifier can't observe
 which case applies: no check of the service refuses a run outside a scope. -/

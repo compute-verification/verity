@@ -11,9 +11,9 @@ hypotheses (`Models.Pouw.Assumptions.RelativeSecurity`). Its proof is the theore
 The four floors are `c = 1` on K's two proved scopes:
 - the floors of record, one-sided operands of any form, charge-pure, at the parity luck 0.854
   (`StagedFloorKOneSided`, `OverlapFloorKOneSided`);
-- their sharper corollaries, affine operands, row-pure, at ¾ (`StagedFloorK`, `OverlapFloorK`). The affine scope is
-  not inside the one-sided one (`(x + y)²`, for `x` one of U's bits and `y` a coin, is `AffProd` and not `OneSided`),
-  so these are proved by the same chain on their own scope, not derived from the floors of record.
+- their siblings, affine operands, row-pure, at ¾ (`StagedFloorK`, `OverlapFloorK`), proved on their own scope. The
+  affine scope is not inside the one-sided one (`(x + y)²`, for `x` one of U's bits and `y` a coin, is `AffProd` and
+  not `OneSided`), so these are not derived from the floors of record: the same chain proves each on its scope.
 
 K1 is not claimed outside the two proved scopes, and no guarantee here covers a run outside them. Theorem O's priced
 floor holds there on paper only. The verifier can't observe which case a run is in.
@@ -38,8 +38,8 @@ mod 2), the luck ¾ and the stage floors summed. In every machine `Mc` and for e
 rounds of `St` stage draws on the re-encoded design (7 planes at `wRe`, integers mod `2^32`), under the three
 premises, every adversary that commits first has its accepted runs charged below
 `(R − 160 ln 2) · St · κ L n n' B − Vmax` with probability at most `2^{−40} + R (δb + δz)`: `c = 1` on K's proved
-affine scope (`KScopeAffine`: affine operands, mixed included, row-pure). It is the sharper corollary of the floor of
-record `StagedFloorKOneSided`, on a scope that isn't its, at the sharper luck. -/
+affine scope (`KScopeAffine`: affine operands, mixed included, row-pure). It is a sibling of the floor of record
+`StagedFloorKOneSided`, proved on its own scope, which isn't that floor's, at the sharper luck. -/
 def StagedFloorK : Prop :=
   ∀ (Mc : Machine) (S : Service) (R St n L B n' : ℕ) (e : S.Seed ≃ Paths (DStage St n L 7 B n') R)
     (run : RunMap Mc S R St n L 7 B n' (ZMod (2 ^ 32))) (δb δz κ Vmax : ℝ),
@@ -81,8 +81,8 @@ draws of any shapes (stage `t`: `n t` rows, `B t` blocks of `L`, `n' t` columns,
 `2^32`) overlapping at any depth, its check's cell-block drawn uniformly among every stage's (`ServiceSoundOverlap`'s
 deployment requirement), under the three premises, every adversary that commits first has its accepted runs charged
 below `(R − 160 ln 2) · κ L Σ_t n_t n'_t B_t − Vmax` with probability at most `2^{−40} + R (δb + δz)`: `c = 1` on
-K∥'s proved affine scope (`KScopeOverlapAffine`). It is the sharper corollary of the floor of record
-`OverlapFloorKOneSided`, on a scope that isn't its, at the sharper luck. -/
+K∥'s proved affine scope (`KScopeOverlapAffine`). It is a sibling of the floor of record `OverlapFloorKOneSided`,
+proved on its own scope, which isn't that floor's, at the sharper luck. -/
 def OverlapFloorK : Prop :=
   ∀ (Mc : Machine) (S : Service) (R St L : ℕ) (n B n' : Fin St → ℕ) (e : S.Seed ≃ Paths (OSpot St n L 7 B n') R)
     (run : ORunMap Mc S R St n L 7 B n' (ZMod (2 ^ 32))) (δb δz κ Vmax : ℝ),
