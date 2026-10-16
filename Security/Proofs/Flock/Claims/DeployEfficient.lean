@@ -10,9 +10,9 @@ import Proofs.Flock.Claims.DeployCode
 `D.enc` and `D.θ` (`ListWithin`), its count at most `p` at the opened word's encoded length (`Flock.wordLen`), and its
 lists that long at most, which bounds `assemble`'s checks. The first holds at every deployment (`Claims.ERep_cost`,
 `Flock.Efficient_of_decoder`). Both records name the counted radius decoder (`GS.plainCountedRD`, `GS.zkCountedRD`),
-whose count and lists are at most `14·(flockPolyR + X)` (`11·(zkPolyR + X)` masked) at its family's size; that size is at
-most its value on no columns times one more than their number (`GS.plainSizeRD_le`), and their number is at most the
-word's encoded length (`Flock.length_le_wordLen`). So, at every `H`:
+whose count and lists are at most `14·(flockPolyR + X)` (`11·(zkPolyR + X)` masked) at its family's size; that size
+is at most its value on no columns times one more than their number (`GS.plainSizeRD_le`), and their number is at most
+the word's encoded length (`Flock.length_le_wordLen`). So, at every `H`:
 
 * `efficient_plain`: the plain record `deployPlain rel` at `plainStepPoly`, `14·(flockPolyR + X)` composed with
   `plainSizeRD [] · (X + 1)`;
@@ -48,7 +48,7 @@ theorem Flock.Efficient_of_size {Coin F T : Type} [Fintype Coin] [Nonempty Coin]
 /-- **A size at most `c·(L + 1)`** at `L` opened columns is at most `c·(X + 1)` at the word's encoded length. -/
 theorem Flock.le_eval_wordLen {F : Type} [Fintype F] (size : List (ℕ × List F) → ℕ) (c : ℕ)
     (h : ∀ os, size os ≤ c * (os.length + 1)) (os : List (ℕ × List F)) :
-    size os ≤ (C c * (X + 1)).eval (Flock.wordLen os) := by
+    size os ≤ (C c * (Polynomial.X + 1)).eval (Flock.wordLen os) := by
   simp only [eval_mul, eval_C, eval_add, eval_X, eval_one]
   exact (h os).trans (Nat.mul_le_mul_left c (Nat.add_le_add_right (Flock.length_le_wordLen os) 1))
 
@@ -92,12 +92,12 @@ theorem listWithin_zk (rel : Readable.Parsed → Readable.Relation) :
 /-- **The plain record's step polynomial**: `14·(flockPolyR + X)`, the plain family's bound at its size, composed with
 `plainSizeRD [] · (X + 1)`, that size's bound at the word's encoded length. -/
 noncomputable def plainStepPoly : Polynomial ℕ :=
-  (C 14 * (Claims.GS.flockPolyR + X)).comp (C (Claims.GS.plainSizeRD []) * (X + 1))
+  (C 14 * (Claims.GS.flockPolyR + Polynomial.X)).comp (C (Claims.GS.plainSizeRD []) * (Polynomial.X + 1))
 
 /-- **The masked record's step polynomial**: `11·(zkPolyR + X)`, the masked family's bound at its size, composed with
 `zkSizeRD [] · (X + 1)`. -/
 noncomputable def zkStepPoly : Polynomial ℕ :=
-  (C 11 * (Claims.GS.zkPolyR + X)).comp (C (Claims.GS.zkSizeRD []) * (X + 1))
+  (C 11 * (Claims.GS.zkPolyR + Polynomial.X)).comp (C (Claims.GS.zkSizeRD []) * (Polynomial.X + 1))
 
 /-- **Flock: efficiency at the deployed plain verifier**, at every `H`: `E^rep`'s reruns, and the record's decoder, the
 counted plain radius decoder, meets `ListWithin` at the record's `len`, `enc` and `θ`, with its count and its lists at
@@ -129,19 +129,19 @@ theorem efficient_zk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → 
 `0`, so it is not `Efficient` at any `p` with `p(0) = 0`. -/
 theorem not_efficient_plain (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (p : Polynomial ℕ) (hp : p.eval 0 = 0) : ¬ Claims.Flock.Efficient H (deployPlain rel) p :=
-  Claims.Flock.not_efficient_of_nil H _ p (hp ▸ Claims.GS.plainCountedRD_nil_pos)
+  Claims.Flock.not_efficient_of_nil H _ p (by rw [hp]; exact Claims.GS.plainCountedRD_nil_pos)
 
 /-- **A bound too small fails at the masked record**: not `Efficient` at any `p` with `p(0) = 0`. -/
 theorem not_efficient_zk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (p : Polynomial ℕ) (hp : p.eval 0 = 0) : ¬ Claims.Flock.Efficient H (deployZk rel) p :=
-  Claims.Flock.not_efficient_of_nil H _ p (hp ▸ Claims.GS.zkCountedRD_nil_pos)
+  Claims.Flock.not_efficient_of_nil H _ p (by rw [hp]; exact Claims.GS.zkCountedRD_nil_pos)
 
 /-- **Neither record is `Efficient` at `0` or at `X`.** -/
 theorem not_efficient_zero_X (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
-    ¬ Claims.Flock.Efficient H (deployPlain rel) 0 ∧ ¬ Claims.Flock.Efficient H (deployPlain rel) X ∧
-      ¬ Claims.Flock.Efficient H (deployZk rel) 0 ∧ ¬ Claims.Flock.Efficient H (deployZk rel) X :=
-  ⟨not_efficient_plain H rel 0 (eval_zero), not_efficient_plain H rel X (eval_X),
-    not_efficient_zk H rel 0 (eval_zero), not_efficient_zk H rel X (eval_X)⟩
+    ¬ Claims.Flock.Efficient H (deployPlain rel) 0 ∧ ¬ Claims.Flock.Efficient H (deployPlain rel) Polynomial.X ∧
+      ¬ Claims.Flock.Efficient H (deployZk rel) 0 ∧ ¬ Claims.Flock.Efficient H (deployZk rel) Polynomial.X :=
+  ⟨not_efficient_plain H rel 0 (eval_zero), not_efficient_plain H rel Polynomial.X (eval_X),
+    not_efficient_zk H rel 0 (eval_zero), not_efficient_zk H rel Polynomial.X (eval_X)⟩
 
 /-- **`E^rep`'s reruns at the deployed plain verifier**, at every decoder: at most `1 + 210·2^256`, and
 `1 + 210·⌈4·N₀/e⌉` in expectation. -/
