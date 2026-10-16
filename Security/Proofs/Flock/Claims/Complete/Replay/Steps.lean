@@ -220,6 +220,13 @@ theorem Agrees.at_push {R B A : Array Round} {k₀ : ℕ} {x : Round} (h : Agree
     simp
   exact e ▸ h A.size hlt hk
 
+/-- Rounds that carry the prover's final rounds carry every earlier stage's. -/
+theorem Agrees.of_prefix {R P P' : Array Round} {k₀ : ℕ} (h : Agrees R P k₀) (hp : Prefix P' P) : Agrees R P' k₀ := by
+  obtain ⟨C, rfl⟩ := hp
+  intro j hj hk
+  have := h j (by simp; omega) hk
+  rwa [Array.getElem_append_left hj] at this
+
 /-- **A squeeze of a retained round of one coin**, read through `t.rounds[t.k]!`. -/
 theorem sampleWith_of (hs : Hashes V) {t : Transcript} (hN : (t.rounds[t.k]!).n = 1)
     (hb : (t.rounds[t.k]!).bytes = some (framed t 1 1)) :

@@ -18,4 +18,4 @@ B's checks accepting when each of their checks passes (`Verdict`: `verifyRepWith
 The skeleton (`Skeleton`: `complete_of_goals`) composes them, from one named goal per check (`Goals`); `Discharge`
 proves the goals that follow from the scope alone (`tables_goal`, `schedules_goal`), and `Shape` those that read what
 the pure session returns (`Ret`, `proofCount_goal`). `Replay` replays the verifier's phases on the honest prover's
-rounds (`zerocheckWith_of`). -/
+rounds (`zerocheckWith_of`, and the goal `zerocheck_goal`). -/
