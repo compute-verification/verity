@@ -31,9 +31,9 @@ Unpeeled edits (note:20261015T1826Z-draft-d4-perplexity), `GRID[_rot]@EDIT:ALPHA
 EDIT `w` adds one draw from ALPHABET (in LSBs) to each weight integer, fresh per matrix; `a` to each activation integer,
 fresh per token and per linear (`:f`: per fused input, q/k/v and gate/up sharing one draw); `wa` both; `GRID@-` is the
 grid unedited.  An edited side is quantized to top M - max|e|, so every edited integer stays on the grid (|q| <= 127, or
-<= 16).  The integer product is torch._int_mm (s8 x s8 -> s32,
-exact); x, W and the rotation are fp32 (EXACT_GRID_EDIT_DTYPE=float64: float64).  ALPHABETS lists the alphabets, drawn
-uniformly.
+<= 16); `:wtopT` / `:atopT` caps that side's top at T (a peeled side's headroom, e.g. `int8_rot@-:wtop63`).  The integer
+product is torch._int_mm (s8 x s8 -> s32, exact); x, W and the rotation are fp32 (EXACT_GRID_EDIT_DTYPE=float64:
+float64).  ALPHABETS lists the alphabets, drawn uniformly.
 
     python exact_grid.py MODEL_SNAPSHOT IDS.npy OUT_DIR METHOD...    # IDS: one window (T,) or several (N, T), `windows.py`
     python exact_grid.py --selftest
@@ -256,7 +256,7 @@ def product(method: str, x: torch.Tensor, w: torch.Tensor, wcache: dict) -> tupl
 
 
 ALPHABETS = {"pm1": [-1, 1], "pm12": [-2, -1, 1, 2], "pm13": [-3, -1, 1, 3], "pm45": [-5, -4, 4, 5],
-             "pm57": [-7, -5, 5, 7],
+             "pm57": [-7, -5, 5, 7], "pm1245": [-5, -4, -2, -1, 1, 2, 4, 5],
              **{f"u{k}": list(range(-k, k + 1)) for k in (1, 2, 3, 4, 5, 6, 8, 16)}}
 EDIT_GRIDS = {"int8": (127, S32_EXACT), "e4m3i16": (16, FP32_EXACT)}
 #: `:f`: one activation draw per fused GEMM input (q, k, v share the attention input; gate, up the MLP's)
@@ -271,19 +271,24 @@ def parse_edit(method: str) -> dict:
     grid_name, rot = head.split("_rot")[0], head.endswith("_rot")
     parts = spec.split(":")
     edit = parts[0]
-    if grid_name not in EDIT_GRIDS or edit not in ("-", "w", "a", "wa") or (edit == "-") != (len(parts) == 1):
+    if grid_name not in EDIT_GRIDS or edit not in ("-", "w", "a", "wa"):
         raise KeyError(method)
-    alphabet = ALPHABETS[parts[1]] if edit != "-" else [0]
-    seed = next((int(p[1:]) for p in parts[2:] if p.startswith("s")), 0)
-    fused = "f" in parts[2:]
+    name, opts = (parts[1], parts[2:]) if edit != "-" else ("-", parts[1:])
+    alphabet = ALPHABETS[name] if edit != "-" else [0]
+    seed = next((int(p[1:]) for p in opts if p.startswith("s")), 0)
+    fused = "f" in opts
+    caps = {p[0]: int(p[4:]) for p in opts if p[1:4] == "top"}
+    if any(p != "f" and not p.startswith("s") and p[1:4] != "top" for p in opts) or set(caps) - {"w", "a"}:
+        raise KeyError(method)
     top = EDIT_GRIDS[grid_name][0]
     room = top - max(abs(v) for v in alphabet)
-    if room < 1:
+    tops = {side: min(room if side in edit else top, caps.get(side, top)) for side in "wa"}
+    if min(tops.values()) < 1:
         raise ValueError(f"{method}: alphabet does not fit on {grid_name} (|q| <= {top})")
-    return {"grid": grid_name, "rot": rot, "edit": edit, "values": alphabet, "fused": fused,
-            "alphabet": (parts[1] + (" fused" if fused else "")) if edit != "-" else "-",
-            "seed": seed, "top_w": room if "w" in edit else top, "top_a": room if "a" in edit else top,
-            "acc": EDIT_GRIDS[grid_name][1], "bits": math.log2(len(alphabet))}
+    label = name + (" fused" if fused else "") + "".join(f" {side}<={caps[side]}" for side in "wa" if side in caps)
+    return {"grid": grid_name, "rot": rot, "edit": edit, "values": alphabet, "fused": fused, "alphabet": label,
+            "seed": seed, "top_w": tops["w"], "top_a": tops["a"], "acc": EDIT_GRIDS[grid_name][1],
+            "bits": math.log2(len(alphabet))}
 
 
 def draw(shape: tuple[int, int], values: list[int], tag: str, device, dtype=torch.float32) -> torch.Tensor:
@@ -439,6 +444,13 @@ def selftest() -> dict:
     assert evaluate(model, torch.cat([ids, ids]), "int8@-")["windows"] == 2
     lin, xin = model.model.layers[0].self_attn.q_proj, torch.randn(1, 64, 256, device=dev).to(torch.bfloat16)
     assert parse_edit("int8_rot@wa:pm1:f:s2")["fused"] and parse_edit("int8_rot@wa:pm1:f:s2")["seed"] == 2
+    e = parse_edit("int8_rot@a:pm1245:wtop119:s1")
+    assert (e["top_a"], e["top_w"], e["seed"], e["bits"]) == (122, 119, 1, 3.0), e
+    assert (parse_edit("int8@-:atop63")["top_a"], parse_edit("int8@-:atop63")["top_w"]) == (63, 127)
+    ya, _ = edited_product("int8@-:wtop63", xf, wf, {}, "t")
+    b63, s63 = quant_rows(wf, torch.arange(64, dtype=torch.float32, device=dev), False)
+    a127, s127 = quant_rows(xf, torch.arange(128, dtype=torch.float32, device=dev), False)
+    assert torch.equal(ya, (a127.double() @ b63.double().T) * s127.double()[:, None] * s63.double()[None, :])
     for m, same in (("int8@-", True), ("int8@w:u2", True), ("int8@a:u2", False)):
         hooks = attach(model, m, [])
         with torch.no_grad():
