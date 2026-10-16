@@ -69,7 +69,8 @@ def _module(node: TreeNode) -> str:
 
 def _root(ctx: StepContext, v: ViewDesc) -> str | None:
     """The checkpoint parameter a weight view reads (`Compute.roots`): GLM-5.3's Triton launches carry no module, so the hint alone
-    names one layer's norm weight like every other layer's and the Match's weight map fuses all of them into one overlapping range."""
+    names one layer's norm weight like every other layer's and the Match's weight map fuses all of them into one overlapping range;
+    unnamed, the rotary table's reads (k_pe, q_pe, index-K / Q) map under the hint's `k_pe`, a name the Build has no field for."""
     rs = ctx.roots_of(v)
     return rs[0].name if rs else None
 
@@ -197,7 +198,7 @@ class DsaNormRope:
             Compute(bind(DsaRMSNorm, N=512, EPS=kveps), M, (PerRow(kv), Shared(kvw)), (Gather(kv_cache, slots),), (),
                     hint=f"{_module(node)}/kv_a_layernorm", pattern=self.name, roots=(None, _root(ctx, kvw))),
             Compute(bind(RoPEHeadGptJV2, D=64), M, (PerRow(kpe), Gather(cs, pos)), (Gather(kpe_cache, slots),), (),
-                    hint=f"{_module(node)}/k_pe", pattern=self.name),
+                    hint=f"{_module(node)}/k_pe", pattern=self.name, roots=(None, _root(ctx, cs))),
         ]
         has = c.get("HAS_INDEXER") is True
         ms = _module_state(ctx, node)
@@ -222,7 +223,7 @@ class DsaNormRope:
             parts.append(Compute(bind(dsa.DsaIndexerKRow, D=128, ROPE=64, EPS=ieps), M,
                                  (PerRow(ik), Shared(iw), Shared(ib), Gather(ics, pos)),
                                  (Gather(ik_rows, slots), Gather(is_rows, slots)), (), hint=f"{_module(node)}/indexer_k",
-                                 pattern=self.name, roots=(None, _root(ctx, iw), _root(ctx, ib), None)))
+                                 pattern=self.name, roots=(None, _root(ctx, iw), _root(ctx, ib), _root(ctx, ics))))
             ms.update({"index_k": ik_rows, "index_scale": is_rows})
         else:
             if c.get("INDEX_K_DIM") != 1 or c.get("INDEX_K_BLOCK_SIZE") != 1:
@@ -264,7 +265,8 @@ class DsaQ:
             return unsupported(node, "fused-q RoPE views differ from bf16 [M,8,64]", q=repr(q), q_out=repr(qo), cs=repr(cs))
         parts: list[Compute] = [
             Compute(bind(RoPEGptJV2, NHEADS=8, D=64), M, (PerRow(q), Gather(cs, pos)), (PerRow(qo),), (node.id,),
-                    hint=f"{_module(node)}/q_pe", kernels=(Q_KERNEL,), attribution=tuple(ctx.start.rows), pattern=self.name)
+                    hint=f"{_module(node)}/q_pe", kernels=(Q_KERNEL,), attribution=tuple(ctx.start.rows), pattern=self.name,
+                    roots=(None, _root(ctx, cs)))
         ]
         ms = _module_state(ctx, node)
         ms.update({"q_rope": qo, "q_v": a.get("ql_nope_ptr")})
@@ -282,7 +284,7 @@ class DsaQ:
                 return unsupported(node, "index-Q scales differ from D^-0.5 and H^-0.5", softmax_scale=ss, head_scale=hs)
             parts.append(Compute(bind(dsa.DsaIndexerQ, H=32, D=128, ROPE=64), M,
                                  (PerRow(iq), Gather(ics, pos), PerRow(iw)), (PerRow(iqo), PerRow(iwo)), (),
-                                 hint=f"{_module(node)}/indexer_q", pattern=self.name))
+                                 hint=f"{_module(node)}/indexer_q", pattern=self.name, roots=(None, _root(ctx, ics), None)))
             ms.update({"index_q": iqo, "index_weights": iwo, "mqa_after": node.id})
         else:
             if c.get("NUM_INDEX_Q_HEADS") != 1 or c.get("INDEX_Q_HEAD_DIM") != 1:
