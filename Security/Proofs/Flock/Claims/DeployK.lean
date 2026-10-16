@@ -357,4 +357,208 @@ theorem liveOf_decodeWith (hs : Hashes Flock.V) {spec : SessionSpec} {text : Str
   · exact Except.ok.inj (ha.1.symm.trans hb.1)
   · exact Except.ok.inj (ha.2.symm.trans hb.2)
 
+/-! ## Counting -/
+
+section Count
+
+variable {α β : Type}
+
+theorem flatMap_pairs (g : ℕ → ℕ → β) :
+    ∀ n, (List.range n).flatMap (fun i => [g i 0, g i 1]) = (List.range (2 * n)).map fun k => g (k / 2) (k % 2)
+  | 0 => rfl
+  | n + 1 => by
+    have h0 : 2 * n / 2 = n := by omega
+    have h1 : 2 * n % 2 = 0 := by omega
+    have h2 : (2 * n + 1) / 2 = n := by omega
+    have h3 : (2 * n + 1) % 2 = 1 := by omega
+    rw [show 2 * (n + 1) = 2 * n + 1 + 1 by omega]
+    simp only [List.range_succ, List.flatMap_append, flatMap_pairs g n, List.map_append, List.append_assoc,
+      List.flatMap_cons, List.flatMap_nil, List.append_nil, List.map_cons, List.map_nil, List.cons_append,
+      List.nil_append, h0, h1, h2, h3]
+
+theorem sum_pairs (G : ℕ → ℕ) :
+    ∀ n, ((List.range (2 * n)).map fun k => G (k / 2)).sum = ((List.range n).map fun i => 2 * G i).sum
+  | 0 => rfl
+  | n + 1 => by
+    have h0 : 2 * n / 2 = n := by omega
+    have h2 : (2 * n + 1) / 2 = n := by omega
+    rw [show 2 * (n + 1) = 2 * n + 1 + 1 by omega]
+    simp only [List.range_succ, List.map_append, List.sum_append, sum_pairs G n, List.map_cons, List.map_nil,
+      List.sum_cons, List.sum_nil, h0, h2]
+    omega
+
+theorem foldl_add_sum (f : α → ℕ) :
+    ∀ (l : List α) (acc : ℕ), l.foldl (fun acc a => acc + f a) acc = acc + (l.map f).sum
+  | [], acc => by simp
+  | a :: l, acc => by rw [List.foldl_cons, foldl_add_sum f l, List.map_cons, List.sum_cons, Nat.add_assoc]
+
+end Count
+
+/-- The session's rep streams are table `k / 2`'s rep `k % 2`, for `k < 2 · tables`. -/
+theorem repStreams_toList (spec : SessionSpec) :
+    spec.repStreams.toList =
+      (List.range (2 * spec.tables.size)).map fun k => (k / 2, k % 2, s!"{spec.tables[k / 2]!}/rep{k % 2}") := by
+  unfold SessionSpec.repStreams
+  rw [Array.toList_flatMap, Array.toList_range]
+  simp only [Array.toList_map]
+  exact flatMap_pairs (fun i r => (i, r, s!"{spec.tables[i]!}/rep{r}")) _
+
+theorem repStreams_size (spec : SessionSpec) : spec.repStreams.size = 2 * spec.tables.size := by
+  rw [← Array.length_toList, repStreams_toList, List.length_map, List.length_range]
+
+theorem repStreams_getElem (spec : SessionSpec) {k : ℕ} (hk : k < spec.repStreams.size) :
+    spec.repStreams[k] = (k / 2, k % 2, s!"{spec.tables[k / 2]!}/rep{k % 2}") := by
+  rw [← Array.getElem_toList]
+  simp only [repStreams_toList, List.getElem_map, List.getElem_range]
+
+/-- One extra claim per region and link point. -/
+theorem extraClaims_size {st : Stmt} {pts : Array (Array F128)} {extras : Array Flock.Claim}
+    (h : st.extraClaims pts = .ok extras) : extras.size = st.regions.size * pts.size := by
+  obtain ⟨ess, hess, heq⟩ := extraClaims_ok st pts extras h
+  rw [← Array.length_toList, heq, List.length_flatten, ← Array.length_toList (xs := st.regions),
+    ← Array.length_toList (xs := pts)]
+  clear heq
+  generalize st.regions.toList = rs at hess ⊢
+  generalize pts.toList = ps at hess ⊢
+  induction hess with
+  | nil => simp
+  | cons hes _ ih => rw [List.map_cons, List.sum_cons, ih, List.length_cons, ← hes.length_eq, Nat.succ_mul]; omega
+
+/-! ## The decision's messages -/
+
+theorem finalOf_head {a : Claims.Msg} {f : Final} (h : finalOf a = some f) : a.head? = some 1 := by
+  unfold finalOf at h
+  split at h
+  · rfl
+  · cases h
+
+theorem linkOf_head {a : Claims.Msg} {link : List ByteArray × List ByteArray} (h : linkOf a = some link) :
+    a.head? = some 0 := by
+  unfold linkOf at h
+  split at h
+  · rfl
+  · cases h
+
+/-- **A decision's round messages are all the messages but the link message and the last**, with one coin per
+message. -/
+theorem act_decide_length {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
+    {mids : List (Claims.Msg × Coin)} {f : Final} (hcs : cs.length = as.length)
+    (h : act zk x as cs = .decide s spec sts link c₁ mids f) : as.length = mids.length + 2 := by
+  unfold act at h
+  repeat' split at h
+  all_goals first | (cases h; done) | skip
+  rename_i a _ _ _ _ a₁ rest _ crest hfin hlast _ _ _ hlink
+  cases h
+  cases rest with
+  | nil =>
+    simp only [List.getLast?_singleton, Option.some.injEq] at hlast
+    subst hlast
+    have h1 := finalOf_head hfin
+    rw [linkOf_head hlink] at h1
+    cases h1
+  | cons b rest =>
+    simp only [List.length_cons] at hcs
+    simp only [List.length_cons, List.length_zip, List.length_map, List.length_dropLast]
+    omega
+
+/-- The checks pass only on the live session's custody. -/
+theorem checks_custody {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+    (h : checks zk s spec x link c₁ mids f = .ok ()) :
+    ∃ lv, liveOf spec f.record = .ok lv ∧ custody spec lv link c₁ mids = .ok () := by
+  unfold checks at h
+  obtain ⟨_, _, h⟩ := ebind_ok h
+  obtain ⟨_, _, h⟩ := ebind_ok h
+  obtain ⟨lv, hlv, h⟩ := ebind_ok h
+  obtain ⟨_, hc, _⟩ := ebind_ok h
+  exact ⟨lv, hlv, hc⟩
+
+/-- Custody holds only when the record's rounds are the round messages, one each. -/
+theorem custody_length {spec : SessionSpec} {lv : Live} {link : List ByteArray × List ByteArray} {c₁ : Coin}
+    {mids : List (Claims.Msg × Coin)} (h : custody spec lv link c₁ mids = .ok ()) :
+    (lv.streams.toList.flatMap (·.toList)).length = mids.length := by
+  unfold custody at h
+  obtain ⟨_, _, h⟩ := ebind_ok h
+  obtain ⟨_, _, h⟩ := ebind_ok h
+  obtain ⟨_, _, h⟩ := ebind_ok h
+  obtain ⟨_, hc, _⟩ := ebind_ok h
+  simpa using check_ok_iff.1 hc
+
+/-! ## The plain round count -/
+
+/-- **Each plain rep stream has its table's `repRounds`**: when the plain verdict accepts the record at any hashes and
+`liveOf` reads it, there are two rep streams per table, and stream `k` (table `k / 2`'s rep `k % 2`) has
+`repRounds false spec sts[k / 2]` rounds. -/
+theorem streams_size_plain (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record : String}
+    {proofs : Array ByteArray} {lv : Live} (hv : verifyWithM hs spec (tabsOf sts) record proofs = .ok ())
+    (hl : liveOf spec record = .ok lv) :
+    lv.streams.size = 2 * sts.size ∧
+      ∀ (k : ℕ) (hk : k < lv.streams.size), lv.streams[k].size = repRounds false spec sts[k / 2]! := by
+  obtain ⟨sess, schs, hdec, hsz, -, hall⟩ := verifyWithM_tables hs hv
+  obtain ⟨-, hpn, hlsz, hstr⟩ := liveOf_decodeWith hs hl hdec
+  have hn : sts.size = spec.tables.size := by simpa [tabsOf] using hsz
+  have hk₂ : ∀ k, k < lv.streams.size → k < spec.repStreams.size := fun k hk => hlsz ▸ hk
+  rw [repStreams_size, ← hn] at hlsz
+  refine ⟨hlsz, fun k hk => ?_⟩
+  obtain ⟨stream, hfind, hfa⟩ := hstr k (hk₂ k hk) hk
+  have hi : k / 2 < (tabsOf sts).size := by simp only [tabsOf, Array.size_map]; omega
+  have hi' : k / 2 < sts.size := by omega
+  obtain ⟨_, c₀, c₁, hf, h₀, h₁⟩ := hall (k / 2) hi
+  have hrep : ∃ b c, verifyRepWith hs spec (tabsOf sts)[k / 2] schs[k / 2] sess (k / 2) (k % 2) b = .ok c := by
+    rcases Nat.mod_two_eq_zero_or_one k with h | h <;> rw [h]
+    · exact ⟨_, _, h₀⟩
+    · exact ⟨_, _, h₁⟩
+  obtain ⟨b, c, hrep⟩ := hrep
+  have htab : (tabsOf sts)[k / 2] = Setup.ofCircuit sts[k / 2] := Array.getElem_map ..
+  rw [htab] at hrep hf
+  obtain ⟨stream', extras, p, hfind', hex, -, hsize, -⟩ := verifyRepWith_rounds hs rfl hf hrep
+  simp only [repStreams_getElem spec (hk₂ k hk)] at hfind
+  rw [hfind] at hfind'
+  cases hfind'
+  have hx : extras.size = sts[k / 2].regions.size * sess.points.size := extraClaims_size hex
+  have hf' : fast100 sts[k / 2].m = some schs[k / 2] := hf
+  rw [← Array.length_toList, hfa.length_eq, Array.length_toList, hsize, getElem!_pos sts (k / 2) hi']
+  unfold repRounds
+  simp only [Bool.false_eq_true, ↓reduceIte, hf']
+  rw [hx, hpn, Nat.mul_comm]
+  rfl
+
+/-- The session's recorded rounds, table by table. -/
+theorem rounds_sum (zk : Bool) (spec : SessionSpec) (sts : Array Stmt) :
+    rounds zk spec sts = ((List.range sts.size).map fun i => 2 * repRounds zk spec sts[i]!).sum := by
+  unfold rounds
+  rw [← Array.foldl_toList, foldl_add_sum, Nat.zero_add]
+  congr 1
+  apply List.ext_getElem
+  · simp
+  · intro i h₁ h₂
+    simp only [List.getElem_map, List.getElem_range, Array.getElem_toList]
+    rw [getElem!_pos sts i (by simpa using h₁)]
+
+/-- **`Deploy.V`'s plain round count is the rounds the shipped verifier reads**: wherever the plain verifier accepts,
+against any oracle `H` and with one coin per message, the prover sent `(V false).k x` messages: the link message, one
+message per round the shipped verifier's reps read from the record (`verifyRepWith_rounds`: each table's two reps,
+each `repRounds false` rounds), and the last message. -/
+theorem next_acc_length (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+    (hcs : cs.length = as.length) (h : ((next false x as cs).eval H).1 = .acc) : as.length = (V false).k x := by
+  cases ha : act false x as cs with
+  | rej => rw [next_rej H ha] at h; cases h
+  | coin c => rw [next_coin H ha] at h; cases h
+  | decide s spec sts link c₁ mids f =>
+  obtain ⟨hv, hc⟩ := (next_decide H ha).1 h
+  obtain ⟨lv, hlv, hcus⟩ := checks_custody hc
+  obtain ⟨hsz, hk⟩ := streams_size_plain (Hashes.ofSha512 (Claims.hOf H)) hv hlv
+  show as.length = (match setupOf false x with | some (_, spec, sts) => 2 + rounds false spec sts | none => 1)
+  rw [act_decide ha, act_decide_length hcs ha, ← custody_length hcus]
+  dsimp only
+  rw [rounds_sum, List.length_flatMap,
+    Nat.add_comm _ 2, ← sum_pairs (fun i => repRounds false spec sts[i]!)]
+  congr 2
+  apply List.ext_getElem
+  · simp [hsz]
+  · intro k h₁ h₂
+    simp only [List.getElem_map, List.getElem_range, Array.getElem_toList, Array.length_toList]
+    exact hk k _
+
 end FlockDeploy
