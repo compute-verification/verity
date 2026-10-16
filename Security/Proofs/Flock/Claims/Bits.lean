@@ -152,7 +152,7 @@ every decoder that meets the spec. -/
 theorem Bits_ge {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
     {H : Msg → Msg} {D : Deploy Coin Col T} (h : KS H D) (hε : ∀ x, 0 ≤ D.εtable x) {a b : Msg → ℝ}
     (hκ : ∀ x, κ D x ≤ 2 ^ (-a x)) (hγ0 : ∀ x, 0 < γ D x) (hγ : ∀ x, γ D x ≤ 2 ^ b x) (decode : List (ℕ × Col) → List T)
-    (hdec : ListComplete D.enc D.agree decode) :
+    (hdec : ListComplete D.enc D.agree D.nMin decode) :
     Claims.Bits H D.V (R H D.parse) (E H D decode) fun x => min (a x) (255.5 - b x / 2) - 1 :=
   Claims.Bits_mono (Bits_of_KS h hε decode hdec) fun x => lamOf_ge (κ_pos D x (hε x)) (hκ x) (hγ0 x) (hγ x)
 
