@@ -29,8 +29,9 @@ a line counts once it is pushed, whatever the clone's working tree holds.
 
 `research pods create NAME ... --max-hours H` passes `gate` against the guard's own state, read from its host with one ssh call
 ($RESEARCH_GUARD_HOST, default GUARD_HOST; `local` reads the file here; the file is $RESEARCH_GUARD_STATE, default GUARD_STATE): it
-refuses when the guard has not completed a poll in STALE_S, when the guard's budgets have no live, untripped line covering NAME, or
-when H is over the line's max_pod_hours.  The guard's view is the one that counts: a line the guard has not read yet is not a line.
+refuses when the guard has not completed a poll in STALE_S, when its last read of budgets.toml failed (it enforces the last good
+budgets, but nothing new starts on them), when the guard's budgets have no live, untripped line covering NAME, or when H is over the
+line's max_pod_hours.  The guard's view is the one that counts: a line the guard has not read yet is not a line.
 """
 from __future__ import annotations
 
@@ -237,11 +238,14 @@ def gate(name: str, max_hours: float, state: dict[str, Any], now: float, *, host
         return (f"the budgets guard on {host} last completed a poll {ago} (limit {STALE_S // 60} min): it is down or failing, and nothing "
                 f"new starts unguarded (`research pods guard status` there)")
     b = state.get("budgets") or {}
+    if b.get("error"):
+        return (f"the budgets guard on {host} cannot read budgets.toml ({b['error']}); its last good read is {b.get('read_utc') or 'none'} "
+                f"from {b.get('source') or '?'}, and nothing new starts on budgets it can't refresh: fix that read on {host} (a notes clone "
+                f"whose HEAD is on its branch and whose origin it can fetch), then retry once a poll succeeds")
     lines = b.get("lines") or {}
     hits = [p for p in lines if name.startswith(p)]
     if not hits:
-        err = f"; the guard's last read of budgets.toml failed: {b.get('error')}" if b.get("error") else ""
-        return (f"no budget line covers {name!r} in the guard's budgets ({b.get('source') or '?'}){err}. Commit one to budgets.toml in the "
+        return (f"no budget line covers {name!r} in the guard's budgets ({b.get('source') or '?'}). Commit one to budgets.toml in the "
                 f"notes repo and push it, e.g. '\"{name.split('-veritor-campaign')[0]}-\" = {{ cap_usd = 5, expires = \"{iso(now + 86400)}\", "
                 f"max_pod_hours = 12, by = \"...\" }}', then retry once the guard has read it (it re-reads every poll)")
     p = max(hits, key=len)

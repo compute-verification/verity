@@ -2,7 +2,7 @@
 computation usage readers take their numbers from: the console computes the rows (`hourly`) and records them on vy-nebius-1
 (`RECORD`), its held-idle file is derived from them (`held_idle`), and `cluster usage` (`research usage`) reads the record.
 
-    cluster usage hourly [--node nebius-1|nebius-2|all] [--hours H] [--json] [--file PATH]
+    cluster usage hourly [--on nebius-1|nebius-2|all] [--hours H] [--json] [--file PATH]
     cluster usage wasters --day YYYY-MM-DD [--top N] [--json] [--file PATH]   # held-but-idle GPU-hours by holder, most first
 
 **Inputs** are per-minute readings of each GPU and, on a node with lease pools, the leases they granted (`Lease`, from
@@ -279,7 +279,7 @@ def add_parser(sub: Any) -> None:
     u = sub.add_parser("usage", help="GPU-hours held, busy and useful per node and hour, from the console's record on vy-nebius-1")
     us = u.add_subparsers(dest="ucmd", required=True)
     h = us.add_parser("hourly", help="per node and UTC hour: busy and useful shares against the targets, held idle, unmeasured")
-    h.add_argument("--node", choices=(*NODES, "all"), default="all")
+    h.add_argument("--on", dest="node", choices=(*NODES, "all"), default="all")
     h.add_argument("--hours", type=_positive, default=24, help="the last H complete UTC hours")
     w = us.add_parser("wasters", help="the holdings with the most held-but-idle GPU-hours on one UTC day")
     w.add_argument("--day", type=_day, required=True)

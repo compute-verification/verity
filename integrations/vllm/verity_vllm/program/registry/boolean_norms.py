@@ -67,7 +67,6 @@ from verity.ml.circuits.boolean.forms import NOT, ONE, ZERO
 from verity.ml.circuits.boolean.trace import word_of
 from verity.ml.circuits.ops.prims import const
 from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import cuda_rmsnorm as CR
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.sampling import bit_at
 
@@ -79,8 +78,10 @@ F32 = Array(32, BIT)
 BF16 = Array(16, BIT)
 F32W, BF16W = Value(32), Value(16)
 
-#: lanes per warp, columns per Triton thread, Triton threads per chunk
-WARP, TRITON_COLS, TRITON_THREADS = 32, 8, 128
+#: lanes per warp, columns per CUDA vector / Triton thread, Triton threads per chunk
+WARP, CUDA_VECTOR, TRITON_COLS, TRITON_THREADS = 32, 8, 8, 128
+CUDA_LARGE_BLOCK = 1024
+_CUDA_VECTOR8_WORDS: dict[str, CompositeDefinition] = {}
 
 
 def _f32(x: float) -> int:
@@ -230,6 +231,27 @@ def _word_view(word, statics: tuple[str, ...], mufu: tuple[str, ...] = ()) -> Ca
         _check_mufu(b, mufu)
         return bind(word, **{k: b[k] for k in statics})
     return view
+
+
+def _set_cuda_vector8_words(pure: CompositeDefinition, fused: CompositeDefinition) -> None:
+    """Link these family Definitions to the CUDA word Definitions without importing that non-family module."""
+    _CUDA_VECTOR8_WORDS.update(pure=pure, fused=fused)
+
+
+def _cuda_vector8_word(kind: str) -> Callable[[dict], object]:
+    def view(b: dict):
+        _check_mufu(b, ("RSQRT",))
+        return bind(_CUDA_VECTOR8_WORDS[kind], **{k: b[k] for k in ("N", "EPS", "BLOCK")})
+    return view
+
+
+def _check_cuda_vector8(S, *, fused: bool) -> None:
+    N, block = int(S.N), int(S.BLOCK)
+    if N < CUDA_VECTOR or N % CUDA_VECTOR:
+        raise ValueError(f"N must be a positive multiple of {CUDA_VECTOR}, not {N}")
+    limit = N if fused else N // CUDA_VECTOR
+    if block < 1 or block > min(limit, CUDA_LARGE_BLOCK):
+        raise ValueError(f"BLOCK={block} is outside 1..{min(limit, CUDA_LARGE_BLOCK)} for N={N}")
 
 
 def _on_bits(name: str, version: int, statics: list[str], signature: Callable, word: Callable[[dict], object],
@@ -549,8 +571,8 @@ def _vector_runs(vectors: int, block: int) -> list[tuple[int, int, int]]:
 
 
 @composite("RMSNormVectorLaneCuda", 1, ["J"],
-           lambda S: ((("x", Array(CR.VECTOR * S.J, BF16)),),
-                      Tuple(Array(CR.VECTOR * S.J, _bits(_dec_bits("cuda"))), F32)),
+           lambda S: ((("x", Array(CUDA_VECTOR * S.J, BF16)),),
+                      Tuple(Array(CUDA_VECTOR * S.J, _bits(_dec_bits("cuda"))), F32)),
            conformance="exact-model-tested")
 def RMSNormVectorLaneCuda(B, S, x):
     """One `rms_norm_kernel` thread's J vectors: one FMA square chain over their elements, and each element's output decode."""
@@ -563,8 +585,8 @@ def RMSNormVectorLaneCuda(B, S, x):
 
 
 @composite("RMSNormFusedVectorLaneCuda", 1, ["J"],
-           lambda S: ((("x", Array(CR.VECTOR * S.J, BF16)), ("res", Array(CR.VECTOR * S.J, BF16))),
-                      Tuple(Array(CR.VECTOR * S.J, BF16), Array(CR.VECTOR * S.J, _bits(_dec_bits("cuda"))), F32)),
+           lambda S: ((("x", Array(CUDA_VECTOR * S.J, BF16)), ("res", Array(CUDA_VECTOR * S.J, BF16))),
+                      Tuple(Array(CUDA_VECTOR * S.J, BF16), Array(CUDA_VECTOR * S.J, _bits(_dec_bits("cuda"))), F32)),
            conformance="exact-model-tested")
 def RMSNormFusedVectorLaneCuda(B, S, x, res):
     """One width-8 fused thread: native BF16 residual adds, four adjacent pair sums per vector, then vector sums in visit order."""
@@ -572,8 +594,8 @@ def RMSNormFusedVectorLaneCuda(B, S, x, res):
     dec, acc = [], None
     for v in range(S.J):
         pairs = []
-        for j in range(0, CR.VECTOR, 2):
-            a, b = B.call(RMSNormSquare, r[CR.VECTOR * v + j]), B.call(RMSNormSquare, r[CR.VECTOR * v + j + 1])
+        for j in range(0, CUDA_VECTOR, 2):
+            a, b = B.call(RMSNormSquare, r[CUDA_VECTOR * v + j]), B.call(RMSNormSquare, r[CUDA_VECTOR * v + j + 1])
             dec += [a[1], b[1]]
             pairs.append(B.call(EW.F32Add, a[0], b[0]))
         part = pairs[0]
@@ -587,29 +609,29 @@ def RMSNormFusedVectorLaneCuda(B, S, x, res):
            lambda S: ((("x", Array(S.N, BF16)),)
                       if not S.FUSED else (("x", Array(S.N, BF16)), ("res", Array(S.N, BF16))),
                       Tuple(Array(S.N, BF16), Array(S.N, _bits(_dec_bits("cuda"))),
-                            Array(min(S.N // CR.VECTOR, S.BLOCK), F32))),
+                            Array(min(S.N // CUDA_VECTOR, S.BLOCK), F32))),
            conformance="exact-model-tested")
 def RMSNormVectorLanesCuda(B, S, x, res=None):
     """All active vector-8 threads.  FUSED selects the residual-add lane; pure lanes return x unchanged as their output row."""
-    vectors, T = S.N // CR.VECTOR, min(S.N // CR.VECTOR, S.BLOCK)
+    vectors, T = S.N // CUDA_VECTOR, min(S.N // CUDA_VECTOR, S.BLOCK)
     row: dict[int, Coll] = {}
     dec: dict[int, Coll] = {}
     partials: list[Coll] = []
     for t0, t1, J in _vector_runs(vectors, S.BLOCK):
         M = t1 - t0
-        els = [CR.VECTOR * (t0 + m + k * S.BLOCK) + j for m in range(M) for k in range(J) for j in range(CR.VECTOR)]
-        shape = Array(M, Array(CR.VECTOR * J, BF16))
+        els = [CUDA_VECTOR * (t0 + m + k * S.BLOCK) + j for m in range(M) for k in range(J) for j in range(CUDA_VECTOR)]
+        shape = Array(M, Array(CUDA_VECTOR * J, BF16))
         xx = coll_concat(shape, [x[e] for e in els])
         out = (B.batch(bind(RMSNormFusedVectorLaneCuda, J=J), xx, coll_concat(shape, [res[e] for e in els]), axes=(0, 0))
                if S.FUSED else B.batch(bind(RMSNormVectorLaneCuda, J=J), xx, axes=(0,)))
         for m in range(M):
             values, decoded, partial = (out[m][0], out[m][1], out[m][2]) if S.FUSED else (
-                coll_concat(Array(CR.VECTOR * J, BF16), [x[els[m * CR.VECTOR * J + q]] for q in range(CR.VECTOR * J)]),
+                coll_concat(Array(CUDA_VECTOR * J, BF16), [x[els[m * CUDA_VECTOR * J + q]] for q in range(CUDA_VECTOR * J)]),
                 out[m][0], out[m][1])
             for k in range(J):
-                for j in range(CR.VECTOR):
-                    e = CR.VECTOR * (t0 + m + k * S.BLOCK) + j
-                    q = CR.VECTOR * k + j
+                for j in range(CUDA_VECTOR):
+                    e = CUDA_VECTOR * (t0 + m + k * S.BLOCK) + j
+                    q = CUDA_VECTOR * k + j
                     row[e], dec[e] = values[q], decoded[q]
             partials.append(partial)
     return tuple_of(array_of([row[e] for e in range(S.N)]), array_of([dec[e] for e in range(S.N)]), array_of(partials))
@@ -617,10 +639,10 @@ def RMSNormVectorLanesCuda(B, S, x, res=None):
 
 def _vector8_calls(B, S, x, w, res=None):
     fused = res is not None
-    CR._check(S, fused=fused)
+    _check_cuda_vector8(S, fused=fused)
     lanes_spec = bind(RMSNormVectorLanesCuda, N=S.N, BLOCK=S.BLOCK, FUSED=fused)
     lanes = B.call(lanes_spec, x, res) if fused else B.call(lanes_spec, x)
-    T = min(S.N // CR.VECTOR, S.BLOCK)
+    T = min(S.N // CUDA_VECTOR, S.BLOCK)
     sums = B.call(bind(RMSNormWarpsCuda, T=T), lanes[2])
     arg = B.call(bind(RMSNormArgCuda, N=S.N, EPS=S.EPS, NW=-(-T // WARP)), sums)
     scale = _mufu(B, S.RSQRT, _F32(B, bits=arg)).bits()
@@ -630,7 +652,7 @@ def _vector8_calls(B, S, x, w, res=None):
 
 @_on_bits("RMSNormCudaVector8", 2, ["N", "EPS", "BLOCK", "RSQRT"],
           lambda S: ((("x", Array(S.N, BF16)), ("w", Array(S.N, BF16))), Array(S.N, BF16)),
-          _word_view(CR.RMSNormCudaVector8, ("N", "EPS", "BLOCK"), ("RSQRT",)), word_statics=CUDA_WORD)
+          _cuda_vector8_word("pure"), word_statics=CUDA_WORD)
 def RMSNormCudaVector8(B, S, x, w):
     """`RMSNormCudaVector8_v1` on bits, with RSQRT computing `RsqrtApprox_v1`."""
     return _vector8_calls(B, S, x, w)
@@ -639,7 +661,7 @@ def RMSNormCudaVector8(B, S, x, w):
 @_on_bits("RMSNormFusedCudaVector8", 2, ["N", "EPS", "BLOCK", "RSQRT"],
           lambda S: ((("x", Array(S.N, BF16)), ("res", Array(S.N, BF16)), ("w", Array(S.N, BF16))),
                      Tuple(Array(S.N, BF16), Array(S.N, BF16))),
-          _word_view(CR.RMSNormFusedCudaVector8, ("N", "EPS", "BLOCK"), ("RSQRT",)), word_statics=CUDA_WORD)
+          _cuda_vector8_word("fused"), word_statics=CUDA_WORD)
 def RMSNormFusedCudaVector8(B, S, x, res, w):
     """`RMSNormFusedCudaVector8_v1` on bits, including both in-place output rows."""
     return _vector8_calls(B, S, x, w, res)

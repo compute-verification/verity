@@ -5,6 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 
 import pytest
+from verity_numerical.security import accounting as acc
 from verity_numerical.security.accounting import (
     BABYBEAR,
     GOLDILOCKS,
@@ -478,3 +479,30 @@ def test_union_refuses_sharding_and_repetitions():
                                        lookup_mode="union", depth=DepthOptions(table_shard_bits=1)))
     with pytest.raises(AccountingError, match="lookup_mode"):
         account_candidate_a(CandidateA(K=1536, B=64, trace_field=GL, challenge_field=Fc3, ligero=LIGERO_128, lookup_mode="x"))
+
+
+def test_fri_zk_requirements():
+    r = acc.fri_zk_requirements(19, 393_216, 189, ood_points=2)
+    assert r["padding_rows"] == 131_072 and r["padding_covers"]
+    small = acc.fri_zk_requirements(10, 1000, 189, ood_points=2)
+    assert not small["padding_covers"] and small["extra_trace_rows_if_not"] == 1024
+    with pytest.raises(acc.AccountingError):
+        acc.fri_zk_requirements(10, 2000, 1, 0)
+    assert acc.zk_sumcheck_masking_error(0, acc.Field.prime("p", 97)) == 0
+
+
+def test_libra_masking_option_pinned():
+    GL = acc.Field.prime("GL", acc.GOLDILOCKS)
+    Fc = GL.extension(3)
+    lig = acc.LigeroParams(n=2**14, k=2**12, l=3840, t=192)
+
+    def mk(**kw):
+        return acc.account_candidate_a(acc.CandidateA(K=1536, B=64, trace_field=GL, challenge_field=Fc, ligero=lig,
+                                                      hash_queries=2**60, **kw))
+
+    base, lib = mk(), mk(sumcheck_masking="libra")
+    assert base.parameters["masked_sumcheck_instances"] == lib.parameters["masked_sumcheck_instances"] > 6
+    assert any("libra" in tm.name for tm in lib.terms) and not any("libra" in tm.name for tm in base.terms)
+    assert lib.total() > base.total() and lib.meets(-128) and base.meets(-128)
+    with pytest.raises(acc.AccountingError):
+        mk(sumcheck_masking="cfs17")

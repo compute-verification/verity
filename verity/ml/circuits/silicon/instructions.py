@@ -27,6 +27,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from .integer import BLACKWELL_SM120_S8_M16N8K32
 from .models import (
     ADA_BF16_M16N8K16,
     ADA_E4M3_M16N8K32,
@@ -328,6 +329,22 @@ INSTRUCTIONS: dict[str, Instruction] = {
             dossier="art:27fbc67eed97901502f646218cf25d8fe4db2fe2d65d30eefd9efb77923b02a3",
             evidence=(_H100_WGMMA_E5M2, "model = sm90.wgmma.m64n8k32.e4m3's pipeline (groups (32,), width 14, floor -139) with e5m2 products"),
         ),
+        # --- TF32 Hopper -----------------------------------------------------------------------------------------
+        _i(
+            # DeepSeek-V4's mHC prenorm GEMM (DeepGEMM 8b1392b9, sm90_tf32_hc_prenorm_gemm.cuh) issues CUTLASS's
+            # MMA_64x32x8_F32TF32TF32_RS_TN: A from registers, B the FP32 weight from shared memory, read as TF32.
+            id="sm90.wgmma.m64n8k8.tf32",
+            sm="sm_90",
+            ptx="wgmma.mma_async.sync.aligned.m64n8k8.f32.tf32.tf32",
+            shape=(64, 8, 8),
+            a_dtype="tf32", b_dtype="tf32", acc_dtype="f32", scale=None,
+            model=None,
+            status="unprobed",
+            evidence=("r20261013-115825-580e on an H200 fitted HopperTf32WgmmaDot8_v1 alone: one group of 8 exact TF32 products, "
+                      "a 26-bit adder and floor -133; B is rounded RNE from FP32 to TF32 (A was widened BF16 and exact in TF32). "
+                      "The end-to-end mHC capture was NO-GO because the old Definition truncated B and used the wrong NaN word in "
+                      "the separate squared sum; integrations/vllm/tests/properties/dsv4_mhc_capture_gpu.py reruns the gate",),
+        ),
         _i(
             # Measured 2026-09-22 (D14 resolved): on sm_90a this PTX op is NOT a tensor-core FP8 instruction.  ptxas lowers
             # it to two HMMA.16816.F32 (the BF16 K=16 pipeline, HOPPER_BF16_M16N8K16) over the two k-halves with zero
@@ -419,6 +436,25 @@ INSTRUCTIONS: dict[str, Instruction] = {
                       "the same adder as nvf4 with the UE8M0 scale 2^(code-127) written as mantissa 8 at 2^(code-130) (D18); a "
                       "nonzero sum below the subnormal grid is +0 (D13: BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED refuted); the "
                       "accumulator window anchors on the exponent field and the grid never drops below 2^-174 (D19)"),
+        ),
+        _i(
+            # The int8 grid's instruction (lane compute-accounting, 2026-10-15).  Exact integer arithmetic, so the model has
+            # no adder parameters to fit.  benchmarks/tc_probe/trust.py computed PINNED (P1-P5) from the store on 2026-10-15
+            # before this flip (registry <= computed level).  Measured on one RTX PRO 6000 only, and anchors there.
+            id="sm120.mma.m16n8k32.s8",
+            sm="sm_120",
+            ptx="mma.sync.aligned.m16n8k32.row.col.satfinite.s32.s8.s8.s32",
+            shape=(16, 8, 32),
+            a_dtype="s8", b_dtype="s8", acc_dtype="s32", scale=None,
+            model=BLACKWELL_SM120_S8_M16N8K32,
+            status="pinned",
+            dossier="art:86f39a17b5a0c8a8c92e5e25dcdfbee95d6f65408130bc1db6c54d440dfd8474",
+            anchor_device="NVIDIA RTX PRO 6000 Blackwell Server Edition",
+            evidence=(BLACKWELL_SM120_S8_M16N8K32.validated,
+                      "SASS IMMA.16832.S8.S8.SAT, one per tile kernel; 0 mismatches over 10,243,968 elements: "
+                      "r20261015-084000-06d8 (tc-evidence art:67b817fc8b2237694c271a97110f6a9881644c4d7701cdd4abcc090b3d220148)",
+                      "census r20261015-062626-f65b: IMMA.16832 at 1,023.6 MACs/SM/clk (QMMA.16832: 1,023.8), 16 SMSP cycles "
+                      "per warp MMA, dependent latency 27.2 cycles"),
         ),
         # --- Blackwell datacenter (sm_100, tcgen05) ---------------------------------------------------------------
         _i(

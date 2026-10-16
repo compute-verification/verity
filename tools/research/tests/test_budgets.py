@@ -105,6 +105,13 @@ def test_the_gate_refuses_while_the_guard_is_down():
     assert "never" in B.gate("vy-a-1", 1, {**guard_state(), "last_ok_poll": None}, T0)
 
 
+def test_the_gate_refuses_while_the_guard_cannot_refresh_its_budgets():
+    state = guard_state()
+    state["budgets"] |= {"read_utc": "2026-10-09T08:12:43Z", "error": "OSError: git symbolic-ref --short HEAD: fatal: ref HEAD is not a symbolic ref"}
+    why = B.gate("vy-a-1-veritor-campaign", 1, state, T0 + 60, host="vy-control-verity")
+    assert "cannot read budgets.toml" in why and "2026-10-09T08:12:43Z" in why and "HEAD is on its branch" in why
+
+
 def test_the_gate_refuses_a_name_no_line_covers_and_says_how_to_add_one():
     why = B.gate("vy-b-1-veritor-campaign", 1, guard_state(), T0)
     assert "no budget line covers 'vy-b-1-veritor-campaign'" in why and '"vy-b-1-" = { cap_usd = 5' in why and "push it" in why

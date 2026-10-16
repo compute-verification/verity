@@ -1,0 +1,12 @@
+# The certified tag fused into the FP8 decode GEMM, and its tests. Not a package: `tf.cu` runs on a GPU node (`run.sh`),
+# and the block map and the kernel's order of work run here as a suite (`uv run tools/verity/check/suites.py benchmarks/tag_fast`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# tests/ reads tf.cu's text (its constants) and imports layout.py, the bandwidth tags, PoUS's Merkle tree and BLAKE3.
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/claims/__init__.py",
+          "verity/core/protocols/__init__.py", "verity/core/protocols/bandwidth", "verity/core/protocols/pous",
+          "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto",
+          "verity/ml/randomness"]

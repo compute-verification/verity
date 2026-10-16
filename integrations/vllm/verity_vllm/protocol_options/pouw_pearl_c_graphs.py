@@ -111,9 +111,6 @@ class GraphCalls:
         pass's, the copies to its stage); otherwise its own graph replayed after its slot.  vLLM's warm-up forward before each
         capture runs outside it, and makes the graphs and stages."""
         if self._whole is not None and _capturing():
-            if self.hashing and m != sh.m16:
-                raise RuntimeError(f"{self.entry}: a call of {m} rows inside vLLM's whole-forward capture, whose screen would "
-                                   f"run at offsets fixed at capture: only calls without filler rows are captured whole")
             self._whole.append(WholeCall(w, m, sh.k, sh.n, sh.m16, tiles))
             out = self._into(w, sh, pipe, raw, tiles, m)
             if self._whole_retained:
@@ -298,8 +295,8 @@ class GraphCalls:
     def _replay(self, w: int, sh: Any, pipe: Any, raw: int, tiles: int, m: int) -> tuple[Any, bool]:
         """The call's steps as one CUDA graph on the caller's stream (`graphs`): captured at the pipeline's first call, after
         one eager run of the same steps (their first use syncs: the GEMMs' shared-memory probes), on buffers of the graph's
-        own for y and the leaves.  Returns y, and whether the graph screened the call (with hashing, when it has no filler
-        rows); the leaves, and the flags when it did, go to the pass's buffers at the call's offsets."""
+        own for y and the leaves.  Returns y, and whether the graph screened the call (`_graph_key`); the leaves, and the
+        flags when it did, go to the pass's buffers at the call's offsets."""
         import torch
         key, screen = self._graph_key(w, sh, m)
         g = self._graphs.get(key)
@@ -338,8 +335,11 @@ class GraphCalls:
         return g.y.clone(), screen
 
     def _graph_key(self, w: int, sh: Any, m: int) -> tuple[tuple, bool]:
-        screen = self.hashing and m == sh.m16
-        return (w, sh.m16, self.omit, self.hashing, self.schedule.name, screen), screen
+        """A call's graph and whether it screens the call's rows (with hashing).  A graph of m₁₆ rows serves every m it rounds
+        up from, so it screens only when there are no filler rows, and `_after` screens the rest; inside a whole capture
+        (from its warm-up on) vLLM's batch fixes m, so the graph is m's own and screens it, as no `_after` runs at replay."""
+        rows = m if self.hashing and (m == sh.m16 or self._whole is not None) else 0
+        return (w, sh.m16, self.omit, self.hashing, self.schedule.name, rows), rows > 0
 
     def _into(self, w: int, sh: Any, pipe: Any, raw: int, tiles: int, m: int) -> tuple[Any, bool]:
         """The call's graph steps launched on `raw`, the stream vLLM is capturing, over the graph's own buffers.  The graph

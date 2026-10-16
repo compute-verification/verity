@@ -1,0 +1,9 @@
+# The filler beside the decode step. Not a package: fill.cu runs on a GPU node (run.sh, serve.sh), and its receipt's
+# reference and the receipt kernel's index arithmetic run here as a suite (`uv run tools/verity/check/suites.py
+# benchmarks/fill_compute`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.verity.tests]
+# tests/ imports receipt.py, which imports the randomness derivation; vectors.json is sketch_receipt.py's.
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "verity/ml/randomness"]

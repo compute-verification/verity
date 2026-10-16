@@ -40,7 +40,7 @@ campaign: nebius-monitoring
 lane: infra
 kind: finding
 status: open
-repo: danielreuter/verity
+repo: compute-verification/verity
 origin: vy-disk-guard on vy-nebius-1 (pods/nebius/sky/disk_guard.sh)
 ---
 

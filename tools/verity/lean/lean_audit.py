@@ -36,7 +36,7 @@ package its `proved_in` names, which requires it, read the same files, so they m
 don't run here: they test
 the auditor, so the `tools/verity/lean` suite runs them, cached on `tools/verity/lean/`, not again on every package's miss. Each pass is
 stored under its key, and a failure is never stored. One read is outside the scratch tree: a package test's `generate` (`runs`
-in `lean-audit.json`) reads this checkout (`audit.py --repo`). Its output is used only with the SHA-256 the record holds for
+in `lean-audit.json`) reads this checkout (`check.py --repo`). Its output is used only with the SHA-256 the record holds for
 it, and the key covers the record, so it cannot pass a test on other data. The package's own Python tests check that the
 generator still writes that data.
 
@@ -49,7 +49,7 @@ lakefile less the paths to what it requires (`build_key`), not under its path: L
 hashes, not paths or mtimes, so a moved package rebuilds nothing. The audit's `dependencies` check still compares their
 `.olean` files with the package's record, and the kernel replay still covers the package's own modules: each one whose
 `.olean` files, and those of every module it imports, transitively, passed an earlier replay here is reused
-(`audit.py --replay-cache`, `lean-replay/` beside the passes; not with `--fresh`), so a change to a few modules replays
+(`check.py --replay-cache`, `lean-replay/` beside the passes; not with `--fresh`), so a change to a few modules replays
 those and what imports them. Lean gets this
 machine's CPUs (`LEAN_NUM_THREADS`): inside a pod, its default counts the host's.
 
@@ -895,7 +895,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
     """Audit ``missed`` on a scratch tree of their inputs (the packages they require by path included), and store each pass.
     Returns (the failed, the audited)."""
     deps.mkdir(parents=True, exist_ok=True)
-    # beside the dependencies: moves, not copies. Resolved, because audit.py names each package by its resolved path, and a
+    # beside the dependencies: moves, not copies. Resolved, because check.py names each package by its resolved path, and a
     # cache reached through a symlink would otherwise match no report to its package
     sweep(deps.parent, log)
     work = Path(tempfile.mkdtemp(prefix=f"{SCRATCH}{os.getpid()}-", dir=deps.parent)).resolve()
@@ -926,7 +926,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
                                                 "--artifacts", str(artifacts.store)]),
                             "--repo", str(ROOT), "--out", str(out)], cwd=work, env=env)
         log(f"lean-audit: {', '.join(audited)} audited in {time.monotonic() - t0:.0f} s (exit {r.returncode})")
-        doc = json.loads((out / "audit.json").read_text()) if (out / "audit.json").exists() else {"failed": ["audit.py"]}
+        doc = json.loads((out / "audit.json").read_text()) if (out / "audit.json").exists() else {"failed": ["check.py"]}
         failed = [os.path.relpath(f, work) if f.startswith(str(work)) else f for f in doc.get("failed", [])]
         for rep in doc.get("packages", []):
             p = os.path.relpath(rep["package"], work)
@@ -939,7 +939,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
                                            "components": (comps or {}).get(p)}))
                 os.replace(tmp, cache / f"{keys[p]}.json")
         if r.returncode not in (0, 1) and not failed:
-            failed = [f"audit.py exit {r.returncode}"]
+            failed = [f"check.py exit {r.returncode}"]
         # a pass vouches for its dependencies; so does a failure only in fetching them (Lake clones every dependency, each at
         # the revision the manifest pins, before it compiles anything): keeping those, a retry fetches only what is missing
         passed = {work / p for p in audited if p in reports and (not reports[p].get("failures") or transient(reports[p]))}

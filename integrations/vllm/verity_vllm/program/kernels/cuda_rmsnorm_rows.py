@@ -97,3 +97,91 @@ def fused_add_rms_norm_rows(x, res, w, eps: float, block: int) -> dict[str, np.n
     r = D.f2fp_bf16(D.add_rn(D.bf16_to_f32_words(x), D.bf16_to_f32_words(res)))
     out, scale = _finish(r, w, _fused_partials(D.bf16_to_f32_words(r), block), eps)
     return {"out": out, "residual": r, "scale": scale}
+
+
+class _RMSNormCudaVector8Twin:
+    twin_id = "rmsnorm.cuda.vector8.v1"
+    base_id = "RMSNormCudaVector8_v1"
+    covers = ("RMSNormCudaVector8_v1{N,EPS,BLOCK}: vLLM's aligned BF16 width-8 rms_norm_kernel path; each thread visits "
+              "vectors t, t+BLOCK, ... and accumulates one f32 FMA square chain, followed by CUB BlockReduce, rsqrtf, "
+              "two f32 products and RNE to BF16.")
+
+    @classmethod
+    def accepts(cls, st: dict) -> str | None:
+        try:
+            C._check(type("S", (), st), fused=False)
+        except ValueError as e:
+            return str(e)
+        return None
+
+    def __call__(self, args: list[np.ndarray]) -> np.ndarray:
+        N = int(self.s.N)
+        x, w = _bf16(args[0]), _bf16(args[1])
+        if x.size != N or w.size != N:
+            raise ValueError(f"{self.spec.id}: operands {x.size}, {w.size} words")
+        return rms_norm_rows(x.reshape(1, N), w, float(self.s.EPS), int(self.s.BLOCK))["out"].reshape(-1).astype(np.uint64)
+
+    @classmethod
+    def small_statics(cls, rng: np.random.Generator) -> dict:
+        N = int(rng.choice([8, 16, 24, 64, 72, 256]))
+        return {"N": N, "EPS": float(rng.choice([1e-5, 1e-6])),
+                "BLOCK": int(rng.integers(1, N // C.VECTOR + 1))}
+
+    @classmethod
+    def random_args(cls, st: dict, rng: np.random.Generator, kind: str) -> list[np.ndarray]:
+        N = int(st["N"])
+        wk = "gauss" if kind in cls._random_kinds else kind
+        return [cls._rand_bf16(rng, N, kind).astype(np.uint64),
+                cls._rand_bf16(rng, N, wk).astype(np.uint64)]
+
+
+class _RMSNormFusedCudaVector8Twin(_RMSNormCudaVector8Twin):
+    twin_id = "rmsnorm.fused_cuda.vector8.v1"
+    base_id = "RMSNormFusedCudaVector8_v1"
+    covers = ("RMSNormFusedCudaVector8_v1{N,EPS,BLOCK}: vLLM's aligned BF16 width-8 fused_add_rms_norm_kernel path; "
+              "native BF16 residual add, four adjacent square-pair sums per vector, CUB BlockReduce, rsqrtf, output and residual.")
+
+    @classmethod
+    def accepts(cls, st: dict) -> str | None:
+        try:
+            C._check(type("S", (), st), fused=True)
+        except ValueError as e:
+            return str(e)
+        return None
+
+    def __call__(self, args: list[np.ndarray]) -> np.ndarray:
+        N = int(self.s.N)
+        x, res, w = (_bf16(a) for a in args)
+        if x.size != N or res.size != N or w.size != N:
+            raise ValueError(f"{self.spec.id}: operands {x.size}, {res.size}, {w.size} words")
+        got = fused_add_rms_norm_rows(
+            x.reshape(1, N), res.reshape(1, N), w, float(self.s.EPS), int(self.s.BLOCK))
+        return np.concatenate([got["out"].reshape(-1), got["residual"].reshape(-1)]).astype(np.uint64)
+
+    @classmethod
+    def small_statics(cls, rng: np.random.Generator) -> dict:
+        N = int(rng.choice([8, 16, 24, 64, 72, 256]))
+        return {"N": N, "EPS": float(rng.choice([1e-5, 1e-6])),
+                "BLOCK": int(rng.integers(1, min(N, C.LARGE_BLOCK) + 1))}
+
+    @classmethod
+    def random_args(cls, st: dict, rng: np.random.Generator, kind: str) -> list[np.ndarray]:
+        N = int(st["N"])
+        wk = "gauss" if kind in cls._random_kinds else kind
+        return [cls._rand_bf16(rng, N, kind).astype(np.uint64),
+                cls._rand_bf16(rng, N, kind).astype(np.uint64),
+                cls._rand_bf16(rng, N, wk).astype(np.uint64)]
+
+
+def twin_families(twin_base, rand_bf16, random_kinds: tuple[str, ...]) -> dict:
+    """Twin classes for these rows, completed with the shared twin harness."""
+    attrs = {"_rand_bf16": staticmethod(rand_bf16), "_random_kinds": random_kinds}
+    pure = type("RMSNormCudaVector8Twin", (_RMSNormCudaVector8Twin, twin_base), attrs)
+    fused = type("RMSNormFusedCudaVector8Twin", (_RMSNormFusedCudaVector8Twin, twin_base), attrs)
+    return {pure.base_id: pure, fused.base_id: fused}
+
+
+TWIN_DEFINITIONS = {
+    "RMSNormCudaVector8_v1": C.RMSNormCudaVector8,
+    "RMSNormFusedCudaVector8_v1": C.RMSNormFusedCudaVector8,
+}

@@ -117,7 +117,7 @@ the zerocheck's `3 + (m − 6)` rounds, the lincheck's `3 + (k_log − 6)` and r
 (Structure.lean:532–539). -/
 theorem ligerito_of_residuals_at {sh : Shape} {w comb : Array F128} {cons : Nat → Nat → F128}
     {rounds : Array (Array F128)} {extras : Array Claim} {v : Array F128} {info : Info RecAlgebra.Lin}
-    {kappa : Array (Array (Array F128))} {S : GfS} {rs : Array F128} (hm : 14 ≤ sh.m) (hpl : sh.holo = false)
+    {kappa : Array (Array (Array F128))} {S : GfS} {rs : Array F128} (hm : 14 ≤ sh.m)
     (hrows : verifierRows sh rounds extras comb = .ok (v, info, kappa)) (hS : structureOf sh = .ok S)
     (hw : w.size = S.nw) (hc : comb.size = 64)
     (hacc : ∀ r < 2, valOf sh w comb cons (.acc1 r) + valOf sh w comb cons (.acc0 r) = kapSum kappa r cons)
@@ -132,7 +132,7 @@ theorem ligerito_of_residuals_at {sh : Shape} {w comb : Array F128} {cons : Nat 
       (Coins.ofRounds rounds).drawnAll k' = true ∧ st.msg = (decoded sh w comb cons).msgs.size ∧
       st.ood = (decoded sh w comb cons).ood.size ∧ info.lg.conss = st.conss ∧
       FinalOK sh.sched info.rs.sws (decoded sh w comb cons).yr info.lg.initCh info.lg.levels ext st := by
-  obtain ⟨rs', k, hrun, hres'⟩ := RecAlgebra.residuals_eq_run w comb cons hpl hrows hS hw hc hacc
+  obtain ⟨rs', k, hrun, hres'⟩ := RecAlgebra.residuals_eq_run w comb cons hrows hS hw hc hacc
   rw [hres] at hres'
   cases hres'
   obtain ⟨-, r0, r1, rsr, lgr, k1, k2, k3, h1, h2, h3, h4, hrs⟩ := RecAlgebra.run_stages hrun
@@ -190,7 +190,7 @@ theorem hlg_of_residuals {sh : Shape} {d : Compiled.RepData} {st : Setup} {sch :
     (hsws : rsSws claims rpp gamma = info.rs.sws)
     -- the record
     (hcoins : d.rounds = t.rounds.map (·.coins)) (hne : RecAlgebra.NoEmpty d.rounds) (hwf : RoundsWF t.rounds)
-    (htk : t.k = 0) (hpl : sh.holo = false)
+    (htk : t.k = 0)
     {k₁ k₂ : ℕ} (hk₁ : k₁ = t.k + 3 + (st.m - 6)) (hk₂ : k₂ = k₁ + 2 + (st.fold.kLog - 6) + 1) :
     ∃ (F : ℕ → ByteArray) (P' : ByteArray),
       (∀ j, k₂ + claims.size + 1 ≤ j → j < t.rounds.size → (t.rounds[j]!).bytes = some (F j)) →
@@ -199,7 +199,7 @@ theorem hlg_of_residuals {sh : Shape} {d : Compiled.RepData} {st : Setup} {sch :
           .ok ((), ⟨t.rounds, t.rounds.size, P'⟩) := by
   subst hsch
   obtain ⟨ext, stV, k', hl, hd, hmsg, hood, hlc, hfin⟩ :=
-    ligerito_of_residuals_at (by omega) hpl hrows hS hw hc hacc hres hzero
+    ligerito_of_residuals_at (by omega) hrows hS hw hc hacc hres hzero
   have : Fact (RecAlgebra.NoEmpty d.rounds) := ⟨hne⟩
   have hk' : k' = t.rounds.size := by
     have e : (k' == (d.rounds.filter (·.size ≠ 0)).size) = true := hd
@@ -281,7 +281,7 @@ theorem hlg_of_frames {sh : Shape} {d : Compiled.RepData} {st : Setup} {sch : Fl
     (hsws : rsSws claims rpp gamma = info.rs.sws)
     -- the record
     (hcoins : d.rounds = t.rounds.map (·.coins)) (hne : RecAlgebra.NoEmpty d.rounds) (hwf : RoundsWF t.rounds)
-    (htk : t.k = 0) (hpl : sh.holo = false)
+    (htk : t.k = 0)
     {k₁ k₂ : ℕ} (hk₁ : k₁ = t.k + 3 + (st.m - 6)) (hk₂ : k₂ = k₁ + 2 + (st.fold.kLog - 6) + 1)
     -- the Ligerito rounds' frames
     (hfr : ∀ i < (chunks (ligFrames sch (valOf sh d.w d.comb d.cons .T) p.cap p.ligerito)).1.length,
@@ -293,7 +293,7 @@ theorem hlg_of_frames {sh : Shape} {d : Compiled.RepData} {st : Setup} {sch : Fl
         .ok ((), ⟨t.rounds, t.rounds.size, P'⟩) := by
   subst hsch
   obtain ⟨ext, stV, k', hl, hd, hmsg, hood, hlc, hfin⟩ :=
-    ligerito_of_residuals_at (by omega) hpl hrows hS hw hc hacc hres hzero
+    ligerito_of_residuals_at (by omega) hrows hS hw hc hacc hres hzero
   have : Fact (RecAlgebra.NoEmpty d.rounds) := ⟨hne⟩
   have hk' : k' = t.rounds.size := by
     have e : (k' == (d.rounds.filter (·.size ≠ 0)).size) = true := hd

@@ -113,6 +113,47 @@ def test_since_a_snapshot_a_pack_holds_only_what_the_run_stored(tmp_path, monkey
         assert sorted(tar.getnames()) == ["check/lean-audit/k2.json", "tests/k4.json"]
 
 
+def test_snapshot_and_export_read_only_what_the_index_does_not_know(tmp_path, monkeypatch):
+    """The caches run to hundreds of GB; re-reading every entry at both ends of a check held a finished run for an hour of
+    disk reads once another job had evicted the page cache (14 Oct, r20261014-032950-9e49).  The per-root index memoizes each
+    entry's sha256 by (size, mtime_ns): a second snapshot reads nothing, and a closing export reads only the run's own writes."""
+    r = _machine(tmp_path, monkeypatch, "a")
+    _fill(r)
+    reads = []
+    real = V._read
+    monkeypatch.setattr(V, "_read", lambda p: reads.append(p) or real(p))
+    before = V.snapshot()
+    assert len(reads) == len(VERDICTS) and (r["check"] / V.INDEX).is_file() and (r["tests"] / V.INDEX).is_file()
+    reads.clear()
+    assert V.snapshot() == before and reads == []                     # every entry answered by the index
+    _write(r["tests"] / "k4.json", '{"suite": "new"}')
+    pack = tmp_path / "run.tar.gz"
+    assert V.export(pack, before) == 1 and {p.name for p in reads} == {"k4.json"}   # hashed, then streamed into the pack
+    with tarfile.open(pack) as tar:
+        assert tar.getnames() == ["tests/k4.json"]
+
+
+def test_a_garbled_or_stale_index_only_costs_the_reread(tmp_path, monkeypatch):
+    r = _machine(tmp_path, monkeypatch, "a")
+    _fill(r)
+    before = V.snapshot()
+    (r["tests"] / V.INDEX).write_text("not json")
+    (r["check"] / V.INDEX).write_text(json.dumps({"lean-audit/k2.json": [1, 2, "0" * 64]}))   # wrong size and mtime: stale
+    assert V.snapshot() == before                                     # recomputed from the files, and the index rewritten
+    assert json.loads((r["tests"] / V.INDEX).read_text())
+    assert V.export(tmp_path / "none.tar.gz", before) == 0
+
+
+def test_the_index_is_never_listed_or_packed(tmp_path, monkeypatch):
+    r = _machine(tmp_path, monkeypatch, "a")
+    _fill(r)
+    V.snapshot()
+    assert (r["check"] / V.INDEX).is_file() and sorted(V.entries()) == VERDICTS
+    assert V.export(pack := tmp_path / "pack.tar.gz") == 4
+    with tarfile.open(pack) as tar:
+        assert sorted(tar.getnames()) == VERDICTS
+
+
 def test_an_entry_that_goes_away_while_it_is_read_is_left_out(tmp_path, monkeypatch):
     """Another slot's suites prune a module's older passes, or its audit removes its scratch tree, after this one lists them."""
     r = _machine(tmp_path, monkeypatch, "a")
@@ -220,21 +261,24 @@ def test_the_agreement_key_leaves_out_what_names_the_machine(monkeypatch):
 
 
 class _Store:
-    """The store as `gather_verdicts` reads it: recorded checks, newest first, each with its run files."""
+    """The store as `gather_verdicts` reads it: recorded checks, each an hour after the next one listed and running ``walls`` seconds
+    (none: one), with their run files."""
 
     remote = None
 
-    def __init__(self, tmp: Path, runs: dict[str, Path | None], states: dict[str, str] | None = None):
-        self.tmp, self.runs, self.states = tmp, runs, states or {}
+    def __init__(self, tmp: Path, runs: dict[str, Path | None], states: dict[str, str] | None = None,
+                 walls: dict[str, float] | None = None):
+        self.tmp, self.runs, self.states, self.walls = tmp, runs, states or {}, walls or {}
         self.index = self
 
     def sql(self, query: str, params: tuple = ()) -> list[tuple]:
         import sqlite3
 
         db = sqlite3.connect(":memory:")
-        db.execute("CREATE TABLE attempts (id TEXT, tool TEXT, state TEXT, start_utc TEXT)")
-        db.executemany("INSERT INTO attempts VALUES (?, 'check', ?, ?)",
-                       [(rid, self.states.get(rid, "done"), f"2026-10-12T{99 - i:02d}") for i, rid in enumerate(self.runs)])
+        db.execute("CREATE TABLE attempts (id TEXT, tool TEXT, state TEXT, start_utc TEXT, wall_s REAL)")
+        db.executemany("INSERT INTO attempts VALUES (?, 'check', ?, ?, ?)",
+                       [(rid, self.states.get(rid, "done"), f"2026-10-12T{23 - i:02d}:00:00Z", self.walls.get(rid, 1.0))
+                        for i, rid in enumerate(self.runs)])
         return db.execute(query, params).fetchall()
 
     def get_attempt(self, rid: str) -> dict:
@@ -267,6 +311,20 @@ def test_a_recorded_check_gathers_the_newest_recorded_checks_packs_into_one(tmp_
     assert V.import_(got) == (3, 0)
     assert (V.roots()["tests"] / "k1.json").read_text() == "new"
     assert check.gather_verdicts(tmp_path / "none", _Store(tmp_path, {"r-none": None})) is None
+
+
+def test_the_checks_gathered_are_the_ones_that_ended_last_so_a_long_ones_passes_reach_the_next_check(tmp_path, monkeypatch, capsys):
+    """16 Oct: a pre-warm of #2113's cold circuit-check ran 4.5 h while drive started more than twelve warm checks; ordered by
+    start, its pack was out of the window when the train it warmed ran."""
+    check = _load("check")
+    packs = {}
+    for name in ("short", "long"):
+        r = _machine(tmp_path, monkeypatch, name)
+        _write(r["tests"] / f"{name}.json", name)
+        V.export(packs.setdefault(name, tmp_path / f"{name}.tar.gz"))
+    store = _Store(tmp_path, {"r-short": packs["short"], "r-long": packs["long"]}, walls={"r-long": 3 * 3600.0})
+    check.gather_verdicts(tmp_path / "out", store, limit=1)
+    assert "1 entries gathered from 1 recorded checks (r-long)" in capsys.readouterr().out
 
 
 def test_a_recorded_checks_pack_import_refuses_is_passed_over_by_name_and_a_refused_pack_given_is_an_error(tmp_path, monkeypatch,

@@ -123,6 +123,21 @@ theorem prob_auditLive_liveOfZJ_mono {n : ℕ} {L : Law n} {Reg : Type} {mPts : 
   rw [prob_map, prob_map]
   exact prob_mono (fun o' => h ω o') _ _
 
+/-- **Every outcome of `liveOfZJ`'s live audit is one `wr` writes**: at the registration the prover sends, some draw of
+the law and some output of the live session. -/
+theorem outcome_auditLive_liveOfZJ {n : ℕ} {L : Law n} {Reg : Type} {mPts : ℕ} (dg : ByteArray → ByteArray) (N : ℕ)
+    {planZ : Finset (Fin n) → Reg → List (TabZK FlockLevel3.GF128 mPts)}
+    (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZ S R).length mPts → Exec.Transcript)
+    (τ : Strategy (auditLive L Reg (liveOfZJ dg planZ N wr))) {o : Reg × Finset (Fin n) × Exec.Transcript}
+    (h : Game.Outcome (auditLive L Reg (liveOfZJ dg planZ N wr)) τ o) :
+    ∃ ω x, o = (τ.1, L.draw ω, wr (L.draw ω) τ.1 x) := by
+  have h' : ∃ ω, Game.Outcome ((liveOfZJ dg planZ N wr (L.draw ω) τ.1).map fun t => (τ.1, L.draw ω, t)) (τ.2 ω) o := h
+  obtain ⟨ω, hω⟩ := h'
+  obtain ⟨t, ht, rfl⟩ := Game.Outcome.of_map _ _ _ hω
+  obtain ⟨x, -, rfl⟩ := Game.Outcome.of_map (wr (L.draw ω) τ.1)
+    (liveSession dg (planZ (L.draw ω) τ.1).length mPts N) _ ht
+  exact ⟨ω, x, rfl⟩
+
 namespace ZkOuterD
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
@@ -175,6 +190,12 @@ theorem ofBase_surj (τ : Strategy (zo.game dg N)) : ∃ τ₀, zo.ofBase dg N �
         (Strategy.ofMap (zo.wr (Lv.draw ω) R) _ (Strategy.ofMap (fun t => (R, Lv.draw ω, t))
           (liveOfZJ dg (planZHJ zo.dj zo.y₀) N zo.wr (Lv.draw ω) R) (s ω)))))) = s ω
   rw [castLive_castLive, h1, h2]
+
+/-- **Every outcome of V*'s session is a transcript `wr` writes** at the registration the prover sends: some draw of
+the law and some output of the live session (`outcome_auditLive_liveOfZJ`). -/
+theorem outcome_writes (τ : Strategy (zo.game dg N)) {o : Reg' × Finset (Fin nv) × Exec.Transcript}
+    (h : Game.Outcome (zo.game dg N) τ o) : ∃ ω x, o = (τ.1, Lv.draw ω, zo.wr (Lv.draw ω) τ.1 x) :=
+  outcome_auditLive_liveOfZJ dg N zo.wr τ h
 
 /-- The prover's strategy in V*'s session, simulated in the compiled batched session (`simZHJ`). -/
 noncomputable def sim (τ : Strategy (zo.game dg N)) :=
@@ -456,6 +477,13 @@ def Accepts (zs : (j : Fin S) → (Vs j).Outer Reg') {dg : ByteArray → ByteArr
     Prop :=
   ∀ j, LiveAcceptsZKR (zs j).I (zs j).own (b j).2
 
+/-- **An outcome of V*'s sessions plays each session's game to its recorded outcome, against the strategy its recorded
+name stands for** (`outcome_seqC`). -/
+theorem outcome_sessions (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
+    (s : Strategy (sessions zs dg N)) {b : VRec Vs Reg' dg N} (h : Game.Outcome (sessions zs dg N) s b) :
+    ∀ j, Game.Outcome ((zs j).game dg N) ((zs j).ofBase dg N (b j).1) (b j).2 :=
+  outcome_seqC S (fun j => (zs j).game dg N) (fun j => (zs j).ofBase dg N) s h
+
 /-- **V*'s layers** at the strategies the record names. -/
 noncomputable def layers (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (b : VRec Vs Reg' dg N) : (j : Fin S) → (Vs j).Bits :=
@@ -477,18 +505,21 @@ theorem sessions_le
     (qF qS qW qR : ℝ) (Q : ((j : Fin S) → (Vs j).Bits) → Prop)
     (hQ : ∀ (τ : (j : Fin S) → Strategy ((zs j).game dg N))
       (o : (j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript),
+      (∀ j, Game.Outcome ((zs j).game dg N) (τ j) (o j)) →
       (∀ j, LiveAcceptsZKR (zs j).I (zs j).own (o j) ∧ (zs j).Good ((zs j).layer dg N k Rw (τ j))) →
       Q fun j => (zs j).layer dg N k Rw (τ j))
     (s : Strategy (sessions zs dg N)) :
     prob (fun b => Accepts zs b ∧ ¬ Q (layers zs dg N k Rw b)) (sessions zs dg N) s ≤
       sumS zs dg N (fun j τ => (zs j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s := by
   classical
-  have hmono : ∀ b : VRec Vs Reg' dg N, Accepts zs b ∧ ¬ Q (layers zs dg N k Rw b) →
+  have hmono : ∀ b : VRec Vs Reg' dg N, Game.Outcome (sessions zs dg N) s b →
+      Accepts zs b ∧ ¬ Q (layers zs dg N k Rw b) →
       ∃ j, LiveAcceptsZKR (zs j).I (zs j).own (b j).2 ∧
         ¬ (zs j).Good ((zs j).layer dg N k Rw ((zs j).ofBase dg N (b j).1)) := by
-    rintro b ⟨hacc, hnq⟩
+    rintro b hout ⟨hacc, hnq⟩
     by_contra hno
-    refine hnq (hQ (fun j => (zs j).ofBase dg N (b j).1) (fun j => (b j).2) fun j => ⟨hacc j, ?_⟩)
+    refine hnq (hQ (fun j => (zs j).ofBase dg N (b j).1) (fun j => (b j).2)
+      (outcome_sessions zs dg N s hout) fun j => ⟨hacc j, ?_⟩)
     by_contra hg
     exact hno ⟨j, hacc j, hg⟩
   have hB : ∀ j τ₀, prob (fun a => LiveAcceptsZKR (zs j).I (zs j).own a ∧
@@ -499,7 +530,7 @@ theorem sessions_le
     split_ifs with hc
     · exact ZkOuter.accepts_le (Vs j).law.Lb (Vs j).law.src (hA3 j) (zs j) dg N hk hRw hM hρ (hr j) ht' _ hc
     · exact prob_le_one _ _ _
-  exact (prob_mono hmono _ _).trans
+  exact (Game.prob_mono_outcome _ s hmono).trans
     (prob_seqC_exists_le S _ _ (fun j r => LiveAcceptsZKR (zs j).I (zs j).own r.2 ∧
         ¬ (zs j).Good ((zs j).layer dg N k Rw ((zs j).ofBase dg N r.1)))
       (fun j τ₀ => (zs j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR ((zs j).ofBase dg N τ₀)) hB s)
@@ -545,6 +576,7 @@ theorem outerV_le
     (ht' : 0 ≤ t') (qF qS qW qR : ℝ) (Q : ((j : Fin S) → (Vs j).Bits) → Prop)
     (hQ : ∀ R₂ (τ : (j : Fin S) → Strategy ((zs R₂ j).game dg N))
       (o : (j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript),
+      (∀ j, Game.Outcome ((zs R₂ j).game dg N) (τ j) (o j)) →
       (∀ j, LiveAcceptsZKR (zs R₂ j).I (zs R₂ j).own (o j) ∧ (zs R₂ j).Good ((zs R₂ j).layer dg N k Rw (τ j))) →
       Q fun j => (zs R₂ j).layer dg N k Rw (τ j))
     (s : Strategy (outerV zs dg N)) :
@@ -617,7 +649,8 @@ theorem zk_sessions_recursive_upto
     ?_ ?_ htr hCR hin
   · rwa [add_zero] at h
   · exact avg_mono fun ω => leafAvg_mono (fun t s => outerV_le hA3 (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht'
-      qF qS qW qR (fun Xs => I.accepts (x σ.1 ω) ((wmsg Xs).zip (t.map Prod.snd))) (hbr σ.1 ω t) _) _
+      qF qS qW qR (fun Xs => I.accepts (x σ.1 ω) ((wmsg Xs).zip (t.map Prod.snd)))
+      (fun R₂ τ o _ => hbr σ.1 ω t R₂ τ o) _) _
   · refine le_of_eq ((congrArg avg (funext fun ω => ?_)).trans (avg_const 0))
     refine (leafAvg_congr_len (G := fun _ _ => 0) (fun t s _ => ?_) _).trans (leafAvg_const 0 _)
     exact le_antisymm ((prob_mono (fun b hb => hb.2 rfl) _ _).trans (prob_false _ _).le) zero_le

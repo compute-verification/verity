@@ -9,6 +9,8 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.ops.boolean import mufu as BM
 from verity_vllm.program.kernels import twins as TW
+from verity_vllm.program.frontend import targets as TG
+from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.registry import boolean_norms as BN
 from verity_vllm.program.registry import cuda_rmsnorm as C
 
@@ -32,6 +34,22 @@ def test_launch_policy_refuses_shapes_outside_the_width_8_path() -> None:
         C.launch_block(0, 6144, fused=False)
     with pytest.raises(ValueError, match="multiple of 8"):
         C.launch_block(1, 6145, fused=True)
+
+
+@pytest.mark.parametrize("M,N,pure,fused", [(1, 6144, 768, 1024), (256, 6144, 256, 256), (1, 7168, 896, 1024)])
+def test_target_selectors_keep_batch_invariant_definitions_and_bind_default_launch_blocks(
+    M: int, N: int, pure: int, fused: int
+) -> None:
+    batch_invariant = TargetProfile.default()
+    default = batch_invariant.with_overrides(batch_invariant=False)
+
+    assert TG.rmsnorm_spec(batch_invariant, N, 1e-5, M).base_id == "RMSNormTriton_v1"
+    assert TG.rmsnorm_fused_spec(batch_invariant, N, 1e-5, M=M).base_id == "RMSNormFusedCuda_v2"
+
+    pure_spec = TG.rmsnorm_spec(default, N, 1e-5, M)
+    fused_spec = TG.rmsnorm_fused_spec(default, N, 1e-5, M=M)
+    assert pure_spec.base_id == "RMSNormCudaVector8_v1" and pure_spec.bindings["BLOCK"] == pure
+    assert fused_spec.base_id == "RMSNormFusedCudaVector8_v1" and fused_spec.bindings["BLOCK"] == fused
 
 
 @pytest.mark.parametrize("cls", [TW.RMSNormCudaVector8Twin, TW.RMSNormFusedCudaVector8Twin])

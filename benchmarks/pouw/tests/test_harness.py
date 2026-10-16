@@ -1170,7 +1170,7 @@ class FakeGemm:
         if phases == "groups":
             self.phases = {"a_tree": cost(before / 4), "forming": cost(before * 3 / 4), "gemm": self._gemm,
                            "cleanup": cost(0.1), "tile_hash": cost(after / 3), "screen": cost(after * 2 / 3)}
-            self.launch = lambda s: [self.phases[g](s) for g in A.GROUPS]
+            self.launch = lambda s: [self.phases[g](s) for g in A.GROUPS if g in self.phases]
         elif phases:
             self.phases = {"before": cost(before), "gemm": self._gemm, "after": cost(after)}
             self.launch = lambda s: [self.phases[p](s) for p in CH.PHASES]

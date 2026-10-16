@@ -254,4 +254,46 @@ Frozen (no-function, hash): it relates two ring-model statements about the abstr
 def P2RingAuditSecureOfReduces : Prop :=
   ∀ D Q L, Pous.P2.Assumptions.P2RingReducesToM1p D Q L → Pous.P2.Assumptions.P2RingAuditSecure D Q L
 
+/-! ## From the per-round conjecture: the deployed whole-audit form and the graded bound -/
+
+/-- **The per-round form gives today's whole-audit form at `2^19` blocks.** If P2 in the ring model holds per round
+with floor `p` and bad-event mass `ε₀` per round (`P2RingRoundSecure p ε₀ D Q L`), and
+`(1 − p)^105 + 105·ε₀ ≤ 1% + 2^-129 + 2^-130`, then every `⌊ρ·|C|⌋`-bit, `(D, Q, L)`-bounded responder against
+`p2ring (2^19) 16448 (2^16448 − 21065) 16432` at 105 challenges is accepted with probability at most
+`1% + 2^-129 + 2^-130` (`P2RingAuditSecure D Q L`). A responder of today's game holds `⌊ρ·|C|⌋` bits at all 105
+boundaries, so it is `P2RingGradedOfRoundSecure` at `m = k = 105`. With `ε₀ = 2^-137` the condition holds at
+`p = 0.043` (`PousP2Rounds.floor_043_eps`); with any `105·ε₀ ≤ 2^-130` it fails for `p < 1 − 0.01^(1/105) ≈ 0.04291`.
+
+Frozen (no-function, hash): it relates two ring-model statements about the abstract P2, not the setup check's code. -/
+def P2RingAuditSecureOfRoundSecure : Prop :=
+  ∀ (p ε₀ : ℝ≥0∞) (D Q L : ℕ),
+    (1 - p) ^ 105 + 105 * ε₀ ≤ ENNReal.ofReal Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130) →
+    Pous.P2.Assumptions.P2RingRoundSecure p ε₀ D Q L → Pous.P2.Assumptions.P2RingAuditSecure D Q L
+
+/-- **The graded bound: below `S₀` at `m` of `k` boundaries passes with probability at most `(1 − p)^m + k·ε₀`.** If
+P2 in the ring model holds per round with floor `p` and bad-event mass `ε₀` per round
+(`P2RingRoundSecure p ε₀ D Q L`), then for
+every block count `N` from `2^19` to `2^25`, every `k`, every payload `W` and every responder against
+`p2ring N 16448 (2^16448 − 21065) 16432` holding `Sz j` bits at boundary `j` (`VarResponderOn`, each round within
+`(D, Q, L)`), all `k` answers are correct with probability at most `(1 − p)^m + k·ε₀`, where `m` is the number of
+boundaries `j < k` at which the state is at most `S₀ = ⌊ρ·|C|⌋` bits (`lowBoundaries`). The game has no times, so
+the share of low boundaries is not a time average: reading it as one needs a statement about when challenges arrive,
+which this one doesn't make (PoUS sends each challenge when the last answer arrives).
+
+It covers schedules `Sz` fixed in advance, before the coins and the challenges are drawn, and not schedules chosen from
+the history. A server whose state size adapts to the challenges so far, or to the coins, is covered only through its
+padded schedule, `Sz j` the largest size it may hold at boundary `j` over every history, which counts fewer low
+boundaries. Adapting doesn't help a cheater pass, since later challenges are independent of the history, but a
+consumer that needs `E[(1 − p)^M]` for a random number `M` of low boundaries can't read it off this bound.
+
+Frozen (no-function, hash): it relates two ring-model statements about the abstract P2, not the setup check's code. -/
+def P2RingGradedOfRoundSecure : Prop :=
+  ∀ (p ε₀ : ℝ≥0∞) (D Q L : ℕ), Pous.P2.Assumptions.P2RingRoundSecure p ε₀ D Q L →
+    ∀ (N : ℕ) [NeZero N], 2 ^ 19 ≤ N → N ≤ 2 ^ 25 →
+      ∀ (Sz : ℕ → ℕ) (k : ℕ) (W : Bits (p2ring N 16448 (2 ^ 16448 - 21065) 16432).n)
+        (A₁ : Preprocessor (p2ring N 16448 (2 ^ 16448 - 21065) 16432) (Sz 0))
+        (A₂ : VarResponderOn (p2ring N 16448 (2 ^ 16448 - 21065) 16432) Sz D Q L),
+        pr (varPassesOn _ k k W A₁ A₂) ≤
+          (1 - p) ^ lowBoundaries Sz ((p2ring N 16448 (2 ^ 16448 - 21065) 16432).stateBound Params.ρ) k + k * ε₀
+
 end Pous.Guarantees

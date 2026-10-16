@@ -22,7 +22,7 @@ from verity_numerical.bench.input_sets import InputSet  # noqa: E402
 
 SLICES = Path(__file__).resolve().parents[4] / "benchmarks" / "numerical" / "tests" / "bench" / "data" / "captured-101" / "slices"
 REG = lowerings.registry("C-Flock")
-LOWERED = {"rope-head": {"D": 64}, "silu-mul": {"I": 8192}}
+LOWERED = {"rope-head": {"D": 64}, "silu-mul": {"I": 8192}, "silu-mul-v2": {"I": 256}}
 
 
 SPECIAL = [0, 0x80000000, 0x7F800000, 0xFF800000, 1, 0x80000001, 0x7FFFFF, 0x800000, 0x7F7FFFFF, 0x3F800000, 0xBF800000,
@@ -475,6 +475,56 @@ def test_silu_unit_covers_the_whole_table():
     assert [int(x) for x in out] == [P.SiluMulBf16.evaluate(*v) for v in vecs]
 
 
+#: up words where `SiluMulBf16_v2` is not a plain product: -0 (``+ 0.0f`` makes it +0), +-inf, NaNs of either sign, a subnormal
+SILU_V2_UPS = (0x3F80, 0x0000, 0x8000, 0xBF80, 0x7F80, 0xFF80, 0x7FC0, 0xFFC1, 0x7F81, 0x0001, 0x4049)
+
+
+def test_silu_v2_unit_is_the_served_function_on_every_gate_word():
+    """`SiluMul_v2`'s unit against `SiluMulBf16_v2`, the primitive the template's Definition registers, on every gate word at
+    each of :data:`SILU_V2_UPS`, then on random (g, u). The two versions differ on NaN, -inf, -0 and the gates whose
+    ``expf(-g)`` overflows, so a unit with `SiluMul_v1`'s semantics fails here."""
+    low = REG.module("silu-mul-v2").lowering(TM.subcircuit("silu-mul-v2", I=4))
+    served = REGISTRY["SiluMulBf16_v2"].evaluate
+    assert low.units.n == 4 and low.layout.counts["ands"] == 1380
+    g = list(range(1 << 16))
+    differs = {w for w in g if served(w, 0x3F80) != P.SiluMulBf16.evaluate(w, 0x3F80)}
+    assert {0x7FC0, 0xFF80, 0x8000, 0xC2B2} <= differs        # NaN, -inf, -0, -89
+    for u in SILU_V2_UPS:
+        (out,), ok = IL.evaluate_layout(low.layout, [g, [u] * len(g)], len(g))
+        assert ok == (1 << len(g)) - 1
+        assert [w for w, x in zip(g, out) if int(x) != served(w, u)] == [], hex(u)
+    rng = random.Random(7)
+    vecs = [bf16_words(rng, 2) for _ in range(8000)]
+    (out,), ok = IL.evaluate_layout(low.layout, [[v[0] for v in vecs], [v[1] for v in vecs]], len(vecs))
+    assert ok == (1 << len(vecs)) - 1
+    assert [int(x) for x in out] == [served(*v) for v in vecs]
+
+
+def test_silu_v2_circuit_units_are_a_power_of_two():
+    """`verity/flock-circuit` holds a power-of-two number of units an instance (both verifiers refuse another count), so at
+    GLM-5.3's dense I = 1536 a `silu-mul-v2` unit is three elements, 512 units, each still `SiluMulBf16_v2`; at I = 256 it is
+    the circuit-checked unit."""
+    import json
+
+    from verity_flock import circuit as FC
+
+    mod = REG.module("silu-mul-v2")
+    assert mod.circuit_lowering(TM.subcircuit("silu-mul-v2", I=256)).sha256 == mod.PINS[256]
+    sub = TM.subcircuit("silu-mul-v2", I=1536)
+    low = mod.circuit_lowering(sub)
+    served = REGISTRY["SiluMulBf16_v2"].evaluate
+    assert low.sha256 == mod.CIRCUIT_PINS[1536]
+    assert (low.name, low.units.n, low.layout.counts["ands"]) == ("silu-mul-v2/bf16/element/x3", 512, 3 * 1380)
+    rng = random.Random(11)
+    fin = np.array([bf16_words(rng, 2 * 1536) for _ in range(4)], dtype=np.uint64)
+    got, _, ok = low.evaluate(fin)
+    assert ok == (1 << (4 * 512)) - 1
+    assert got.tolist() == [[served(int(r[i]), int(r[1536 + i])) for i in range(1536)] for r in fin]
+    meta = json.loads(FC.compose(low, sub).split("\n", 2)[1].removeprefix("META "))
+    (unit,) = [r for r in meta["ranges"] if r["net"] == "unit"]
+    assert unit["count"] == meta["vus_per_block"] * 512 and unit["count"] & (unit["count"] - 1) == 0
+
+
 @pytest.mark.parametrize("which", ["gemm-tc-step", "silu-mul"])
 def test_a_units_nonzeros_are_its_netlist_rows_inside_its_slot(which):
     """`Layout.nonzeros` on a GEMM coordinate's tensor-core step and on SiLU·mul (its table read's rows): the (row, column)
@@ -778,9 +828,10 @@ def test_rmsnorm_captured_slices_and_pins(template):
     assert REG.module(template).lowering(s.subcircuit).sha256 == REG.module(template).PINS[(int(p["N"]), float(p["EPS"]))]
 
 
-#: The served workloads' other parameters (#73 Qwen3-4B on the H100, #60 Mistral-7B on the L40S): the same units read off the
-#: IR, so RoPE and SiLU·mul keep the granted rows and only their leaf maps (the LEAVES line) differ; the RMSNorm warps widen.
-WORKLOAD = [("rope-head", {"D": 128}), ("silu-mul", {"I": 9728}), ("silu-mul", {"I": 14336})]
+#: The served workloads' other parameters (#73 Qwen3-4B on the H100, #60 Mistral-7B on the L40S, GLM-5.3's dense layers at TP8
+#: for `silu-mul-v2`): the same units read off the IR, so RoPE and SiLU·mul keep the granted rows and only their leaf maps (the
+#: LEAVES line) differ; the RMSNorm warps widen.
+WORKLOAD = [("rope-head", {"D": 128}), ("silu-mul", {"I": 9728}), ("silu-mul", {"I": 14336}), ("silu-mul-v2", {"I": 1536})]
 WORKLOAD_RMS = [("rmsnorm-fused-cuda", {"N": 4096, "EPS": 1e-05}), ("rmsnorm-triton", {"N": 4096, "EPS": 1e-05}),
                 ("rmsnorm-triton", {"N": 128, "EPS": 1e-06})]
 
@@ -813,6 +864,130 @@ def test_rmsnorm_warp_widths():
     assert REG.supports(TM.subcircuit("rmsnorm-triton", N=128, EPS=1e-06), "frame-v3/blake3-keyed") is None
     for template in ("rmsnorm-triton", "rmsnorm-fused-cuda"):
         assert "not N = 2560" in REG.supports(TM.subcircuit(template, N=2560, EPS=1e-06), "frame-v3/blake3-keyed")
+
+
+# --- RMSNorm's width-8 CUDA kernels (GLM-5.3): whole warps a unit, a power-of-two count of them -----------------------------
+
+VEC8 = ("rmsnorm-fused-cuda-vec8", "rmsnorm-cuda-vec8")
+#: GLM-5.3's launches at hidden 6144 (``cuda_rmsnorm.launch_block``: under 256 tokens min(N, 1024) threads fused and N / 8
+#: plain, else 256): 24 warps of one vector, or 8 warps of three
+VEC8_GLM = [("rmsnorm-fused-cuda-vec8", 1024), ("rmsnorm-fused-cuda-vec8", 256), ("rmsnorm-cuda-vec8", 768), ("rmsnorm-cuda-vec8", 256)]
+#: the scheme of ``verity/flock-circuit`` (``verity_flock.circuit.SCHEME``), the only one these templates are proved under
+CIRCUIT_SCHEME = "frame-v3-sha512/hm96-sha512"
+
+
+@pytest.mark.parametrize("template,block", VEC8_GLM)
+def test_vec8_glm_launches_are_eight_units_of_whole_warps(template, block):
+    """At N = 6144 each launch splits into 8 identical units of 768 elements, each reading the row scalar and computing its
+    warps' aggregates (cut words), whatever the warp count: the odd part of 24 warps (three) is a unit. The tail is the warp
+    aggregates' sum, ``/ N``, ``+ eps`` and RsqrtApprox."""
+    from collections import Counter
+
+    mod = REG.module(template)
+    sub = TM.subcircuit(template, N=6144, EPS=1e-5, BLOCK=block)
+    count, per_thread = mod.warps(6144, block)
+    width, group = mod.cut(6144, block)
+    assert (count, per_thread, group) == ((24, 1, 3) if block > 256 else (8, 3, 1))
+    assert width == (2 if mod.FUSED else 1) * 256 * per_thread
+    U = IL.units(sub.definition(), IL.reduction_cut(width), group)
+    ports = 3 if mod.FUSED else 2
+    assert U.n == 8 and len(U.cut) == count + 1
+    tail = Counter(g.prim.id for g in U.tail if not g.prim.id.startswith("Const"))
+    assert tail == {"F32Add_v1": count, "F32Div_v1": 1, "RsqrtApprox_v1": 1}
+    assert all(Counter(k for k, _ in src) == {"leaf": ports * 768, "cut": 1} for src in U.in_src)
+    assert all(Counter(k for k, _ in src) == {"ret": (ports - 1) * 768, "cut": group} for src in U.out_src)
+    leaves = sorted(p for src in U.in_src for k, p in src if k == "leaf")
+    assert leaves == list(range(ports * 6144))
+    assert REG.supports(sub, CIRCUIT_SCHEME) is None and REG.relation(sub, CIRCUIT_SCHEME) == "verity/flock-circuit"
+    assert "verity/flock-circuit" in REG.supports(sub, "frame-v3/blake3-keyed")
+
+
+def test_vec8_warps_refuse_unequal_threads():
+    """Identical warps need min(BLOCK, N / 8) threads in whole warps, each holding as many vectors: DeepSeek-V4-Pro's hidden
+    7168 at BLOCK 256 gives some threads three vectors and others four; the fused kernel's threads beyond N / 8 hold nothing."""
+    fused, plain = (REG.module(t) for t in VEC8)
+    assert fused.warps(7168, 1024) == (28, 1) and fused.cut(7168, 1024) == (512, 7) and plain.cut(7168, 896) == (256, 7)
+    assert fused.warps(7168, 256) is None and plain.warps(6144, 512) is None and fused.warps(6144, 1000) == (24, 1)
+    assert fused.warps(6144 + 8, 1024) is None and fused.warps(128, 1024) is None
+    for template in VEC8:
+        why = REG.supports(TM.subcircuit(template, N=7168, EPS=1e-5, BLOCK=256), CIRCUIT_SCHEME)
+        assert "not N = 7168, BLOCK = 256" in why
+
+
+def _vec8_rows(fused: bool, n: int, rng: random.Random) -> np.ndarray:
+    """Rows (x, res, w), or (x, w), where the norm's special cases decide the outputs: an all-zero row, x + res cancelling to
+    +0, -0 everywhere, a NaN or an infinity in the second warp, a residual add overflowing to inf, a square overflowing f32,
+    subnormal x (squares underflow to 0), a subnormal variance, one dominant element (the summation order rounds it), w's
+    special words; then finite random rows over a wide exponent range."""
+    def finite(lo=100, hi=150):
+        return [(rng.getrandbits(1) << 15) | (rng.randint(lo, hi) << 7) | rng.getrandbits(7) for _ in range(n)]
+
+    rows = []
+    for case in range(13):
+        x, res, w = finite(), finite(), finite(120, 134)
+        if case == 0:
+            x, res = [0] * n, [0] * n
+        elif case == 1:
+            res = [v ^ 0x8000 for v in x]
+        elif case == 2:
+            x, res = [0x8000] * n, [0x8000] * n
+        elif case == 3:
+            x[300] = 0x7FC1
+        elif case == 4:
+            x[5] = 0x7F80
+        elif case == 5:
+            res[400] = 0xFF80
+        elif case == 6:
+            x[7] = res[7] = 0x7F7F
+        elif case == 7:
+            x[9], res[9] = 0x5F80, 0
+        elif case == 8:
+            x, res = [0x0001 | (rng.getrandbits(1) << 15) for _ in range(n)], [0] * n
+        elif case == 9:
+            x, res = [0x1F80] * n, [0] * n
+        elif case == 10:
+            x, res = [0x4B80] + [0x3F80] * (n - 1), [0] * n
+        elif case == 11:
+            w[3:8] = [0x7FC0, 0x7F80, 0x0000, 0x8000, 0x0001]
+        rows.append(x + res + w if fused else x + w)
+    for _ in range(8):
+        rows.append(finite() + finite() + finite(120, 134) if fused else finite() + finite(120, 134))
+    rows.append(bf16_words(rng, (3 if fused else 2) * n))
+    return np.array(rows, dtype=np.uint64)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("template", VEC8)
+def test_vec8_units_are_the_definition_on_edge_and_random_rows(template):
+    """The lowered units with the IR's cut words against the Definition's gate reference, outputs and warp aggregates, on
+    :func:`_vec8_rows`; every honest lane satisfied. Builds a 1.2M-row unit (about 30 s): a vec8 warp is 256 elements, and
+    nothing smaller exercises the width-8 thread partials, the square-pair sums or the FMA chain."""
+    from verity.ml.circuits.evaluation import evaluate_batch
+
+    sub = TM.subcircuit(template, N=512, EPS=1e-5, BLOCK=64)            # two warps of one vector a thread, a unit each
+    low = REG.module(template).lowering(sub)
+    fused = REG.module(template).FUSED
+    assert low.units.n == 2 and len(low.units.cut) == 3
+    fin = _vec8_rows(fused, 512, random.Random(20261016))
+    want = np.asarray(evaluate_batch(sub.definition(), *np.split(fin, 3 if fused else 2, axis=1), kernel="reference"),
+                      dtype=np.uint64).reshape(len(fin), -1)
+    cuts = IL.cut_words(low, fin)
+    got, cut_out, ok = low.evaluate(fin, cuts)
+    assert ok == (1 << (len(fin) * low.units.n)) - 1
+    assert [i for i in range(len(fin)) if (got[i] != want[i]).any() or (cut_out[i] != cuts[i]).any()] == []
+    normed = want[:, :512]
+    assert (normed[0] & 0x7FFF == 0).all()                                 # the zero row: +-0 out
+    assert ((normed[3] & 0x7F80 == 0x7F80) & (normed[3] & 0x7F != 0)).all()  # one NaN: every output NaN
+
+
+@SLOW
+@pytest.mark.parametrize("template,block", VEC8_GLM)
+def test_vec8_glm_pins(template, block):
+    """The GLM-5.3 units (about 3.5M rows each): their pins (``PINS``, keyed (N, EPS, BLOCK)) and rows of 768 elements."""
+    mod = REG.module(template)
+    low = mod.lowering(TM.subcircuit(template, N=6144, EPS=1e-5, BLOCK=block))
+    assert low.sha256 == mod.PINS[(6144, 1e-5, block)] and low.units.n == 8
+    assert low.layout.useful < 1 << 22
 
 
 def test_units_refuse_components_of_different_shapes():

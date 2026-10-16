@@ -16,6 +16,8 @@ the row ports are asked for `w` only at the columns some computed row reads, and
   column set to its bit of `w`, still satisfy the rows, and agree with the copy's past the inputs.
 * `ResZeroAtL`, `partCols_of_resZeroAtL`, `algebraHolds_of_decodeL`: `ResZeroAt` with the row ports registered at the
   read columns and the outputs 0 in the layer, and `AlgebraHolds` from it as from `ResZeroAt`.
+* `decode_checkR_holo`, `decode_partR_holo`, `ResZeroAtLH`, `partCols_of_resZeroAtLH`, `algebraHolds_of_decodeLH`: the
+  same on a holo statement (META `holo: true`), at the holo form of the shape the verifier accepts.
 -/
 
 namespace FlockVBridge.OfVStar
@@ -240,6 +242,53 @@ theorem decode_partR {bits : Fin (Layout.keyN c hU nU) → Bool} (hA : zo.RegAgr
   obtain ⟨hwI, hV⟩ := part_sizes hS hg hpg hpart
   exact ⟨hS', decode_checkR zo hA u hj hone hc hp hsh hpart hu hh rounds extras comb w _ _ hwI.le hV.le hw hv⟩
 
+/-- **`decode_checkR` on a holo statement** (`decode_resUnitR`, `check_part_holo`): `sh` the holo form of the shape
+the verifier accepts. -/
+theorem decode_checkR_holo {bits : Fin (Layout.keyN c hU nU) → Bool} (hA : zo.RegAgree bits) (u : Fin nU) {j : ℕ}
+    (hj : j < c.upv) (hone : bits (Const.Prog.oneAt (Placed.keyProg c hU nU) u) = true)
+    (hc : RecResiduals.check c = .ok ()) {m k cl p : ℕ} (hp : RecResiduals.params c.unit.name = some (m, k, cl, p))
+    {sh0 sh : Flock.Shape} (hsh : RecResiduals.shape? m k cl = some sh0) (hho : sh = { sh0 with holo := true })
+    {S : Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ}
+    (hpart : RecResiduals.part sh p = .ok (S, ns, nv)) (hu : c.unit.unitLog ≤ 32)
+    (hh : RecResiduals.holoOf c = .ok true)
+    (rounds : Array (Array Flock.F128)) (extras : Array Flock.Claim) (comb : Array Flock.F128)
+    (w : ℕ → Flock.F128) (wI V : Array ℕ) (hwI : wI.size ≤ ns.sum) (hV : V.size ≤ nv)
+    (hw : ∀ q < 128 * ns.sum, ReadCol (Rows.ofNet hU) (rowCol (partRep ns nv).ports 0 q) →
+      RegBit zo u j (rowCol (partRep ns nv).ports 0 q) (wbit (sub wI w) q))
+    (hv : ∀ q < 128 * nv, RegBit zo u j (vBase (partRep ns nv) + q) (wbit (sub V (vOf sh rounds extras comb)) q)) :
+    ∃ w' v' : ℕ → Flock.F128, (∀ k (hk : k < wI.size), w' k = w wI[k]) ∧
+      (∀ k (hk : k < V.size), v' k = vOf sh rounds extras comb V[k]) ∧
+      PartCols S w' v' (copyVal (keyInst hU nU (Layout.outsOf c hU nU) u) bits hj) (partBase S ns nv) := by
+  subst hho
+  obtain ⟨S', ns', nv', hpart', hn⟩ := check_part_holo hc hp hsh hh
+  rw [hpart] at hpart'
+  cases hpart'
+  exact ⟨sub wI w, sub V (vOf _ rounds extras comb), sub_lt wI w, sub_lt V _,
+    decode_resUnitR zo hA u hj hone S ns nv (part_small hpart) hn hu _ _ (sub_ge w hwI) (sub_ge _ hV) hw hv⟩
+
+/-- **`decode_partR` on a holo statement** (`decode_checkR_holo` at `part_sizes`). -/
+theorem decode_partR_holo {bits : Fin (Layout.keyN c hU nU) → Bool} (hA : zo.RegAgree bits) (u : Fin nU) {j : ℕ}
+    (hj : j < c.upv) (hone : bits (Const.Prog.oneAt (Placed.keyProg c hU nU) u) = true)
+    (hc : RecResiduals.check c = .ok ()) {m k cl p : ℕ} (hp : RecResiduals.params c.unit.name = some (m, k, cl, p))
+    {sh0 sh : Flock.Shape} (hsh : RecResiduals.shape? m k cl = some sh0) (hho : sh = { sh0 with holo := true })
+    {S0 : RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hS : structureOf sh = .ok S0)
+    (hg : groups S0 (portSizes sh) = .ok gs) (hpg : p < gs.size) {S : Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ}
+    (hpart : RecResiduals.part sh p = .ok (S, ns, nv)) (hu : c.unit.unitLog ≤ 32)
+    (hh : RecResiduals.holoOf c = .ok true)
+    (rounds : Array (Array Flock.F128)) (extras : Array Flock.Claim) (comb : Array Flock.F128) (w : ℕ → Flock.F128)
+    (hw : ∀ q < 128 * ns.sum, ReadCol (Rows.ofNet hU) (rowCol (partRep ns nv).ports 0 q) →
+      RegBit zo u j (rowCol (partRep ns nv).ports 0 q) (wbit (sub (wIdx (portSizes sh) gs[p].2.1) w) q))
+    (hv : ∀ q < 128 * nv,
+      RegBit zo u j (vBase (partRep ns nv) + q) (wbit (sub gs[p].2.2 (vOf sh rounds extras comb)) q)) :
+    partS S0 (portSizes sh) gs[p].1 gs[p].2.1 gs[p].2.2 = .ok S ∧
+    ∃ w' v' : ℕ → Flock.F128,
+      (∀ k (hk : k < (wIdx (portSizes sh) gs[p].2.1).size), w' k = w (wIdx (portSizes sh) gs[p].2.1)[k]) ∧
+      (∀ k (hk : k < gs[p].2.2.size), v' k = vOf sh rounds extras comb gs[p].2.2[k]) ∧
+      PartCols S w' v' (copyVal (keyInst hU nU (Layout.outsOf c hU nU) u) bits hj) (partBase S ns nv) := by
+  obtain ⟨hS', -, -⟩ := part_eq hS hg hpg hpart
+  obtain ⟨hwI, hV⟩ := part_sizes hS hg hpg hpart
+  exact ⟨hS', decode_checkR_holo zo hA u hj hone hc hp hsh hho hpart hu hh rounds extras comb w _ _ hwI.le hV.le hw hv⟩
+
 /-- **Copy `j` of unit `u` is part `p` of the groups `gs`, its outputs 0 in the layer**: `ResZeroAt`'s facts, with the
 row ports registered bits of `w` only at the columns some computed row of the unit reads (`ReadCol`), and every output
 column of the part (`16 · RES_OUT_WORDS` bits) a 0 of copy `j` in the layer (`copyVal`) in place of a registered 0
@@ -274,6 +323,40 @@ theorem partCols_of_resZeroAtL {bits : Fin (Layout.keyN c hU nU) → Bool} (hG :
   have hsmall := part_small hpart
   exact ⟨hpg, S, hS', w', v', _, _, hw', hv', hcols, fun t ht => hz t (by omega)⟩
 
+/-- **`ResZeroAtL` on a holo statement**: copy `j` of unit `u` is part `p` of the groups `gs` of `sh`, the holo form
+of the shape the verifier accepts (META `holo: true`), its row ports registered at the read columns and its outputs 0
+in the layer. -/
+def ResZeroAtLH (bits : Fin (Layout.keyN c hU nU) → Bool) (u : Fin nU) (j : ℕ) (sh : Shape)
+    (gs : Array (Array ℕ × Array ℕ × Array ℕ)) (p : ℕ) (w : ℕ → F128) (rounds : Array (Array F128))
+    (extras : Array Claim) (comb : Array F128) : Prop :=
+  ∃ (hpg : p < gs.size) (hj : j < c.upv), bits (Const.Prog.oneAt (Placed.keyProg c hU nU) u) = true ∧
+    RecResiduals.check c = .ok () ∧ RecResiduals.holoOf c = .ok true ∧ c.unit.unitLog ≤ 32 ∧
+    ∃ m k cl, RecResiduals.params c.unit.name = some (m, k, cl, p) ∧
+    ∃ sh0, RecResiduals.shape? m k cl = some sh0 ∧ sh = { sh0 with holo := true } ∧
+    ∃ S ns nv, RecResiduals.part sh p = .ok (S, ns, nv) ∧
+      (∀ q < 128 * ns.sum, ReadCol (Rows.ofNet hU) (rowCol (partRep ns nv).ports 0 q) →
+        RegBit zo u j (rowCol (partRep ns nv).ports 0 q) (wbit (sub (wIdx (portSizes sh) gs[p].2.1) w) q)) ∧
+      (∀ q < 128 * nv,
+        RegBit zo u j (vBase (partRep ns nv) + q) (wbit (sub gs[p].2.2 (vOf sh rounds extras comb)) q)) ∧
+      ∀ t < 16 * RecResiduals.RES_OUT_WORDS,
+        copyVal (keyInst hU nU (Layout.outsOf c hU nU) u) bits hj (partBase S ns nv + t) = false
+
+/-- **`partCols_of_resZeroAtL` on a holo statement** (`decode_partR_holo`). -/
+theorem partCols_of_resZeroAtLH {bits : Fin (Layout.keyN c hU nU) → Bool} (hG : zo.Good bits) {u : Fin nU} {j : ℕ}
+    {sh : Shape} {S0 : RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hS : structureOf sh = .ok S0)
+    (hg : groups S0 (portSizes sh) = .ok gs) {p : ℕ} {w : ℕ → F128} {rounds : Array (Array F128)}
+    {extras : Array Claim} {comb : Array F128} (h : ResZeroAtLH zo bits u j sh gs p w rounds extras comb) :
+    ∃ hpg : p < gs.size, ∃ S', partS S0 (portSizes sh) gs[p].1 gs[p].2.1 gs[p].2.2 = .ok S' ∧
+      ∃ (w' v' : ℕ → F128) (col : ℕ → Bool) (base : ℕ),
+        (∀ k (hk : k < (wIdx (portSizes sh) gs[p].2.1).size), w' k = w (wIdx (portSizes sh) gs[p].2.1)[k]) ∧
+        (∀ k (hk : k < gs[p].2.2.size), v' k = vOf sh rounds extras comb gs[p].2.2[k]) ∧
+        PartCols S' w' v' col base ∧ ∀ t < 128 * S'.res.length, col (base + t) = false := by
+  obtain ⟨hpg, hj, hone, hc, hh, hu, m, k, cl, hp, sh0, hsh, hho, S, ns, nv, hpart, hw, hv, hz⟩ := h
+  obtain ⟨hS', w', v', hw', hv', hcols⟩ :=
+    decode_partR_holo zo hG.2 u hj hone hc hp hsh hho hS hg hpg hpart hu hh rounds extras comb w hw hv
+  have hsmall := part_small hpart
+  exact ⟨hpg, S, hS', w', v', _, _, hw', hv', hcols, fun t ht => hz t (by omega)⟩
+
 end Decode
 
 section Sessions
@@ -297,6 +380,24 @@ theorem algebraHolds_of_decodeL (zs : (s : Fin T) → (Vs s).Outer Reg') (L : (s
   refine algebraHolds_of_parts hS hbits hvr hw hc hv hg fun p hp => ?_
   obtain ⟨_, S', hS', w', v', col, base, hw', hv', hcols, h0⟩ :=
     partCols_of_resZeroAtL (zs (sess p)) (hG (sess p)) hS hg (h p hp)
+  rw [vOf_eq hvr] at hv'
+  exact ⟨S', hS', w', v', col, base, hw', hv', hcols, h0⟩
+
+/-- **`algebraHolds_of_decodeL` at a holo shape**: `algebraHolds_of_decode` at `ResZeroAtLH`, each part the hidden
+units'. -/
+theorem algebraHolds_of_decodeLH (zs : (s : Fin T) → (Vs s).Outer Reg') (L : (s : Fin T) → (Vs s).Bits)
+    (hG : ∀ s, (zs s).Good (L s)) {sh : Shape} {d : RepData} {S : RecAlgebra.GfS} (hS : structureOf sh = .ok S)
+    (hbits : S.BitsOk) {v : Array F128} {info kappa}
+    (hvr : verifierRows sh d.rounds d.extras d.comb = .ok (v, info, kappa))
+    (hw : d.w.size = S.nw) (hc : d.comb.size = 64) (hv : v.size = S.nv)
+    {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hg : groups S (portSizes sh) = .ok gs)
+    (sess : ℕ → Fin T) (un : (p : ℕ) → Fin (Vs (sess p)).nv) (cp : ℕ → ℕ)
+    (h : ∀ p < gs.size,
+      ResZeroAtLH (zs (sess p)) (L (sess p)) (un p) (cp p) sh gs p (el d.w) d.rounds d.extras d.comb) :
+    AlgebraHolds sh d := by
+  refine algebraHolds_of_parts hS hbits hvr hw hc hv hg fun p hp => ?_
+  obtain ⟨_, S', hS', w', v', col, base, hw', hv', hcols, h0⟩ :=
+    partCols_of_resZeroAtLH (zs (sess p)) (hG (sess p)) hS hg (h p hp)
   rw [vOf_eq hvr] at hv'
   exact ⟨S', hS', w', v', col, base, hw', hv', hcols, h0⟩
 

@@ -34,6 +34,7 @@ LAYER = {
     "verity_vllm.protocol_options": "acquire",                 # installs beside the taps; imports engine.hooks, commit, config
     "verity_vllm.observe": "observe|commit",
     "verity_vllm.commit": "observe|commit",
+    "verity_vllm.store": "observe|commit",                     # the node's store: registry, codecs, receipts, vLLM binder
     "verity_vllm.engine": "engine",
     "verity_vllm.query": "query|correspondence",
     "verity_vllm.correspondence": "query|correspondence",

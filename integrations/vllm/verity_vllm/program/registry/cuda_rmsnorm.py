@@ -129,6 +129,11 @@ def RMSNormFusedCudaVector8(B, S, x, res, w):
     return tuple_of(_out(B, r, w, scale), r)
 
 
+from verity_vllm.program.registry import boolean_norms as _boolean_norms  # noqa: E402
+
+_boolean_norms._set_cuda_vector8_words(RMSNormCudaVector8, RMSNormFusedCudaVector8)
+
+
 __all__ = [
     "LARGE_BLOCK",
     "RMSNormCudaVector8",

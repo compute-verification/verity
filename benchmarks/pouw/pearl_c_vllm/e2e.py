@@ -299,13 +299,11 @@ def whole_check(run, weights: dict) -> dict:
     want = ended(forward())
     run.graphs = True
     run.begin()
-    forward()
-    run.end()
-    run.begin()
     graph, side = torch.cuda.CUDAGraph(), torch.cuda.Stream(device=dev)
-    side.wait_stream(torch.cuda.current_stream(dev))
     run.whole_capture_begin()
     try:
+        forward()
+        side.wait_stream(torch.cuda.current_stream(dev))
         with torch.cuda.graph(graph, stream=side):
             outs = forward()
     finally:
@@ -1007,9 +1005,9 @@ def main() -> None:
     args = ap.parse_args()
     if args.batch < 1 or args.prompt < 1:
         ap.error("--batch and --prompt are positive")
-    if args.whole_step and (args.batch > PPD.GRAPH_ROWS or args.batch % PPD.ROW_ALIGN):
-        ap.error(f"--whole-step captures the decode batch whole: --batch {args.batch} is not a multiple of {PPD.ROW_ALIGN} "
-                 f"of at most {PPD.GRAPH_ROWS} rows (pouw_pearl_c_whole)")
+    if args.whole_step and -(-args.batch // PPD.ROW_ALIGN) * PPD.ROW_ALIGN > PPD.GRAPH_ROWS:
+        ap.error(f"--whole-step captures the decode batch whole: --batch {args.batch}'s calls, filler rows to a multiple of "
+                 f"{PPD.ROW_ALIGN} included, are over {PPD.GRAPH_ROWS} rows (pouw_pearl_c_whole)")
     configure(args)
     args.graphs = args.graphs or args.whole_step
     if args.whole_defer and not args.whole_step:

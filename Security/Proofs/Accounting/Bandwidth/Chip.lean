@@ -64,6 +64,48 @@ theorem replay_trace (w : World N b h) (c : Chip N b h α) (l : List Bool) :
       simp
     rw [hb, hs, ih]
 
+/-- The side-source bits a run read, in order. -/
+def sideTrace (w : World N b h) : Chip N b h α → List Bool
+  | done _ => []
+  | tag x k => (k (w.oracle x)).sideTrace w
+  | ingress a k => (k (w.mem a)).sideTrace w
+  | side a k => w.side a :: (k (w.side a)).sideTrace w
+  | regen j k => (k (w.block j)).sideTrace w
+
+/-- A run's value, recomputed from an oracle, device memory, the store and a stream of the side-source bits it read. -/
+def runSide (O : Oracle N b h) (mem : ℕ → Bool) (blk : Store N b) : Chip N b h α → (ℕ → Bool) → α
+  | done a, _ => a
+  | tag x k, f => (k (O x)).runSide O mem blk f
+  | ingress a k, f => (k (mem a)).runSide O mem blk f
+  | side _ k, f => (k (f 0)).runSide O mem blk (fun n => f (n + 1))
+  | regen j k, f => (k (blk j)).runSide O mem blk f
+
+theorem sideTrace_length (w : World N b h) (c : Chip N b h α) : (c.sideTrace w).length = c.sideBits w := by
+  induction c with
+  | done a => simp [sideTrace, sideBits]
+  | tag x k ih => simp [sideTrace, sideBits, ih]
+  | ingress a k ih => simp [sideTrace, sideBits, ih]
+  | side a k ih => simp [sideTrace, sideBits, ih]
+  | regen j k ih => simp [sideTrace, sideBits, ih]
+
+/-- Given device memory and the store, the run is a function of the oracle at its queries and the side bits it read:
+any oracle that agrees with the world's at the run's queries recomputes it from those bits. -/
+theorem runSide_sideTrace (w : World N b h) (O' : Oracle N b h) (c : Chip N b h α)
+    (ho : ∀ x ∈ c.queries w, O' x = w.oracle x) :
+    c.runSide O' w.mem w.block (fun n => (c.sideTrace w).getD n false) = c.run w := by
+  induction c with
+  | done a => simp [runSide, run]
+  | tag x k ih =>
+    simp only [queries, List.mem_cons, forall_eq_or_imp] at ho
+    obtain ⟨hx, ho⟩ := ho
+    simp only [runSide, run, sideTrace, hx]
+    exact ih _ ho
+  | ingress a k ih => exact ih _ ho
+  | side a k ih =>
+    simp only [runSide, run, sideTrace, List.getD_cons_zero, List.getD_cons_succ]
+    exact ih _ ho
+  | regen j k ih => exact ih _ ho
+
 /-- Changing the oracle off the points a run queries changes neither the run nor its queries. -/
 theorem run_congr (w : World N b h) (O' : Oracle N b h) (c : Chip N b h α)
     (ho : ∀ x ∈ c.queries w, O' x = w.oracle x) :

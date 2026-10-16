@@ -10,6 +10,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import keyed
 import pytest
 from verity_flock import rec_algebra as A
 from verity_flock import rec_residuals as RR
@@ -38,13 +39,18 @@ def _shape(m: int, c: int) -> A.Shape:
 
 @pytest.mark.parametrize("m,c", [(m, 2) for m in range(22, 36)] + [(22, 1), (27, 8)])
 def test_the_verifiers_opening_algebra_is_rec_residuals_spec_and_parts(m, c):
+    """The verifier's S, row ports and parts are Python's, and some part holds each running sum (``acc0``, ``acc1``) in
+    both (`RecOpening.accHeld`, without which `RecCoins.opening` refuses R's opening)."""
     S = RR.spec(_shape(m, c))
     rc, [line] = _run("structure", str(m), str(c))
     assert rc == 0, line
     assert line["gf"] == S["gf"]
     assert line["ports"] == [n for _, n in S["ports"]]
+    parts = RR.parts(S)
     assert [{"ports": [n for _, n in p.S["ports"]], "nv": p.S["gf"]["nv"], "ops": p.S["gf"]["ops"], "res": p.S["gf"]["res"]}
-            for p in RR.parts(S)] == line["parts"]
+            for p in parts] == line["parts"]
+    assert all(any(acc in {nm for nm, _ in p.S["ports"]} for p in parts) for acc in ("acc0", "acc1"))
+    assert line["acc_held"] is True
 
 
 def test_an_opening_whose_residual_fits_no_part_is_refused_as_parts_refuses_it():
@@ -56,38 +62,64 @@ def test_an_opening_whose_residual_fits_no_part_is_refused_as_parts_refuses_it()
     assert rc == 1 and str(e.value) in line["stderr"], line
 
 
-@pytest.fixture(scope="module")
-def staged(tmp_path_factory):
-    """`stage_opening`'s circuit file of each part at claims 2 (`rec_residuals.statement` over one instance), by m, each
-    staged once."""
-    @functools.cache
-    def stage(m: int) -> list[Path]:
-        d = tmp_path_factory.mktemp(f"rec-opening-m{m}")
-        out = []
+def opening(once, m: int) -> list[Path]:
+    """`stage_opening`'s circuit file of each part at claims 2 (`rec_residuals.statement` over one instance) at m, staged once
+    on the machine (`once`; `test_rec_vstar_checks` reads it too), with its partition object and program beside it."""
+    from verity.ml.circuits.codec import canonical_json, encode_program
+
+    def make(d):
         for j, p in enumerate(RR.parts(RR.spec(_shape(m, 2)))):
-            f = d / f"p{j}.txt"
-            f.write_text(RR.statement(p.S, f"rec-opening/m{m}-c2-p{j}", 1).text)
-            out.append(f)
-        return out
-    return stage
+            st, part = RR.statement(p.S, f"rec-opening/m{m}-c2-p{j}", 1), d / f"p{j}"
+            part.mkdir()
+            (part / "circuit.txt").write_text(st.text)
+            (part / "partition.json").write_text(json.dumps(st.part))
+            (part / "program.json").write_bytes(canonical_json(encode_program(st.program)))
+
+    d = once(f"rec-opening-m{m}", make, lambda: keyed.key(code=[__name__]))
+    return sorted(d.glob("p*/circuit.txt"), key=lambda f: int(f.parent.name[1:]))
 
 
 @pytest.mark.parametrize("m,rows", [(22, 1_839_105), (23, None)])
-def test_the_verifiers_opening_unit_is_the_one_stage_opening_writes(m, rows, staged):
+def test_the_verifiers_opening_unit_is_the_one_stage_opening_writes(m, rows, once):
     """The staged shapes: claims 2 at m = 22 (1,839,105 unit rows) and m = 23, every part. About 1.5 minutes per m, most of it
     Python's lowering: the only test that compares the verifier's net with the unit a prover is handed."""
-    files = staged(m)
+    files = opening(once, m)
     if rows is not None:
         assert len(files) == 1 and f"\nflock-ir-unit/v2 rec-opening/m{m}-c2-p0 {rows} ".encode() in files[0].read_bytes()
     rc, lines = _run("check", *map(str, files))
     assert rc == 0 and all(ln["ok"] for ln in lines) and len(lines) == len(files), lines
 
 
-def test_a_unit_off_the_verifiers_opening_is_refused_by_what_it_differs_in(staged, tmp_path):
+def test_the_staged_opening_unit_reads_each_element_whole(once):
+    """`RecResiduals.partlyRead` and `RecOpening.rsUnread` in Python, on m = 22's file: its computed rows read each row-port
+    element in all 128 bits or in none, and each element of a claim's ring switch (ports ``m0``, ``m1``) and of the
+    running sums (``acc0``, ``acc1``) in all 128. The unit's inputs are its part's ports and ``v``, the bits the check
+    holds its unit to. The check refuses the verifier's own net, so this is where a builder change that reads an element
+    in part shows by the element."""
+    [f] = opening(once, 22)
+    lines = f.read_bytes().split(b"\n")
+    const = int(lines[3].split()[3])
+    [p] = RR.parts(RR.spec(_shape(22, 2)))
+    n_in = min(16 * (sum(RR.port_words(n) for _, n in p.S["ports"]) + RR.v_words(p.S)), const)
+    read = set()
+    for r in range(n_in, const):
+        row = list(map(int, lines[4 + r].split()))
+        read.update(c for c in row[1:1 + row[0]] + row[2 + row[0]:] if c < n_in)
+    col, counts = 0, {}
+    for name, n in p.S["ports"]:
+        for e in range(n):
+            counts[name, e] = sum(col + 128 * e + b in read for b in range(128))
+        col += 16 * RR.port_words(n)
+    assert {k for k in counts.values()} <= {0, 128}, {e: k for e, k in counts.items() if k not in (0, 128)}
+    assert all(counts[f"m{k}", e] == 128 for k in range(2) for e in range(128))
+    assert all(counts[acc, e] == 128 for acc in ("acc0", "acc1") for e in range(2))
+
+
+def test_a_unit_off_the_verifiers_opening_is_refused_by_what_it_differs_in(once, tmp_path):
     """m = 22's unit renamed to another claim count, part, form and m, and with one row's operand moved: each is refused by
     the value it differs in. About 1.5 minutes, the verifier building m = 22's net for each: only a unit as large as the
     staged one shows that a net one row off is refused, not passed as the verifier's."""
-    [f] = staged(22)
+    [f] = opening(once, 22)
     lines = f.read_bytes().split(b"\n")
     name = b"rec-opening/m22-c2-p0"
     assert lines[3].startswith(b"flock-ir-unit/v2 " + name + b" ")

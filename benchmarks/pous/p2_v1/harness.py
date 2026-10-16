@@ -6,12 +6,14 @@ The kernels take a setup's key prefix, so one arm runs either framing, both on v
 - `V3` (`p2-16448/v4`, `p2-v3-gpu`): `verity`'s registered scheme, whose commitment, 24-byte salt, key prefix and leaves are
   the protocol's (`schemes.p2`, `setup`, `verifier`), audited by `protocol.TimedAudit` through `band_gpu/memory_challenger.py --strict`, which
   refuses any `k` or `Δ + RTT` the certificate does not cover.  Its extra gate (`codec`) decodes segment 0 of the device's `C`
-  with the scheme's own codec back to `W`'s, when that segment is wholly encoded.
+  with the scheme's own codec back to `W`'s, when that segment is wholly encoded.  A joint run's `--bandwidth-salt GPU` sets
+  `C` up under the bandwidth audit's salt for that GPU instead (`V3.bind_device`), so the bandwidth verifier audits the same `C`.
 - `MC` (`p2-v3-mc-gpu`): `V3`'s blocks audited by the memory challenger (`memory_challenger/live.py`) at `Δ` plus the RTT
   cap, with two more controls: a tampered block (the top bit of its last byte flipped, one block in ten), which only a hash
   of the whole answer catches, and the honest sessions with a signature bit flipped or a receipt time edited after signing.
-  Its sessions are signed with S1's LMS key in `--mc-lms-key DIR` (made there when absent), else with the PoUS tests'
-  test signer, whose sessions the verdict rejects (its `fail_closed` gate).
+  Its sessions are signed with S1's LMS key in `--mc-lms-key DIR` (made there when absent), every session's id in the
+  session log `--mc-session-log FILE`, else with the PoUS tests' test signer, whose sessions the verdict rejects (its
+  `fail_closed` gate).
 
 1. **Kernel gates.** The pinned vector of the width (`vectors.json`, the P2 kit's): its keys expanded on the device, its `m`
    encoded and its `c` decoded, all bit-exact. Then the run's own blocks: the encoded ones decode back to their payloads (the
@@ -73,6 +75,10 @@ class V1:
     memory_challenger_args: tuple[str, ...] = ()
     accepted = "audits_accepted"
     """The audit document's count of accepted audits that the gates read."""
+    device: bytes | None = None
+    """The GPU whose bandwidth salt the store is set up under (`V3.bind_device`), else None: PoUS's own salt."""
+    setup_source = SETUP_SOURCE
+    """What the setup salt is drawn from, which a bandwidth verifier checks the store's salt against."""
 
     @property
     def c_of(self) -> str:
@@ -127,6 +133,17 @@ class V3(V1):
         self.prefix = p2.expand_prefix(self.params, self.salt)
         self.memory_challenger_args = () if research else ("--strict",)
 
+    def bind_device(self, device: bytes) -> None:
+        """Set `C` up under the bandwidth audit's salt for `device` (`bandwidth.audit.draw_salt` over the commitment to `W`
+        from the same setup source, the GPU's 16-byte id bound in) in place of `protocol.draw_salt`'s, for a joint run
+        (`--bandwidth-salt`): the bandwidth verifier then accepts `C` as this device's store, and P2's audit runs over the
+        same `C`, its key prefix and leaves under that salt."""
+        from verity.core.protocols.bandwidth import audit
+
+        self.salt = audit.draw_salt(SETUP_SOURCE, self.model, device)
+        self.prefix = self.p2.expand_prefix(self.params, self.salt)
+        self.device = device
+
     def manifest(self) -> dict[str, Any]:
         return self.params.manifest()
 
@@ -169,9 +186,13 @@ class MC(V3):
     c_of = V3.impl
     lms_key = ""
 
-    def sign_with(self, lms_key: str) -> None:
+    def sign_with(self, lms_key: str, session_log: str = "") -> None:
+        if lms_key and not session_log:
+            raise ValueError("--mc-lms-key takes --mc-session-log FILE: the memory challenger's used-session log")
         self.lms_key = lms_key
-        self.memory_challenger_args = (*self.memory_challenger_args, *(("--signer", "lms", "--lms-key", lms_key) if lms_key else ("--signer", "test")))
+        self.memory_challenger_args = (*self.memory_challenger_args,
+                                       *(("--signer", "lms", "--lms-key", lms_key, "--session-log", session_log) if lms_key
+                                         else ("--signer", "test")))
 
     def leaf(self, i: int, block: bytes) -> bytes:
         from verity.core.protocols.pous.memory_challenger import block_digest
@@ -377,10 +398,12 @@ def _failed(gates: dict[str, Any], facts: dict[str, Any], P: R.Params, segments:
 
 def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int, int, int], bytes], framing: type[V1] = V1,
         backend: Backend | None = None, params: R.Params | None = None, vectors: dict[str, Any] | None = None,
-        research: bool = False) -> dict[str, Any]:
+        research: bool = False, load: Callable[[Any, V1], Callable[[], Any] | None] | None = None) -> dict[str, Any]:
     """One run of P2's arm under `framing` (`V1`, the v4 spec's, or `V3`, `p2-16448/v4`'s).  `backend`, `params` and
     `vectors` replace the GPU kernels, the deployment point and the pinned vectors, and `research` lets `V3`'s memory
-    challenger audit where P2 has no certificate (the CPU tests)."""
+    challenger audit where P2 has no certificate (the CPU tests).  `load(c, framing)`, from a caller hosting this harness in
+    its own process, is called once `C` is on the device and before the limit is calibrated, and gives the honest audit's load
+    in place of `--load-tokens`' POUS forwards (None: no load)."""
     import torch
 
     base = params or R.DEPLOYMENT
@@ -396,8 +419,14 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
 
     w_host = b"".join(w_segment(ws["id"], s, bps * payload, used) for s in range(segments))
     fr = framing(P, w_host, research)
+    if getattr(a, "bandwidth_salt", ""):
+        if not isinstance(fr, V3):
+            raise SystemExit(f"--bandwidth-salt sets up a registered P2 store (p2-v3-gpu, p2-v3-mc-gpu), not {fr.impl}'s")
+        from verity.core.protocols.bandwidth import audit as bandwidth
+
+        fr.bind_device(bandwidth.read_device(a.bandwidth_salt))
     if isinstance(fr, MC):
-        fr.sign_with(getattr(a, "mc_lms_key", "") or "")
+        fr.sign_with(getattr(a, "mc_lms_key", "") or "", getattr(a, "mc_session_log", "") or "")
     bound = backend.bind(P, fr.prefix)
     pad = nb - payload
     m_dev = torch.zeros(blocks, nb, dtype=torch.uint8, device=backend.device)
@@ -469,7 +498,8 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
                                    "memory_challenger": str(fr.live.relative_to(HERE.parent)), "memory_challenger_args": list(fr.memory_challenger_args)},
                 "device": facts, "segments": segments, "segments_of_weight_set": total, "blocks": blocks, "weight_bytes": used,
                 "setup": {"scheme": fr.scheme, "manifest": fr.manifest(), "w_commitment": fr.model.hex(), "salt": fr.salt.hex(),
-                          "keys_version": keys_version(bound)},
+                          "salt_from": "pous" if fr.device is None else "bandwidth",
+                          "device": None if fr.device is None else fr.device.hex(), "keys_version": keys_version(bound)},
                 **({} if a.audits else H.UNTIMED), "gates": gates, "metrics": metrics, "profile": prof,
                 "measurements": [{"name": n, "value": v, "unit": u} for n, v, u in rows_ if v is not None]}
 
@@ -494,10 +524,10 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     H.leave_reserved(a)
     native_start = lambda: backend.responder(c, a.responder_cpu)  # noqa: E731
     sync = torch.cuda.synchronize if backend.device != "cpu" and torch.cuda.is_available() else None
+    honest_load = load(c, fr) if load is not None else (lambda: pous_forward(a.load_tokens)) if a.load_tokens else None
     cal = H.calibrate_limit(native_start, fields, live, out, a, leaves, "p2-calibrate")
     limit = int(cal.get("limit_ns") or 0)
-    honest = H.audit_round(native_start, fields, live, leaves, out, "p2-honest", a,
-                           (lambda: pous_forward(a.load_tokens)) if a.load_tokens else None, limit, sync, extra)
+    honest = H.audit_round(native_start, fields, live, leaves, out, "p2-honest", a, honest_load, limit, sync, extra)
 
     def control(tag: str, answer: Callable[[int], tuple[bytes, int, int, int]]) -> dict[str, Any]:
         start = lambda: H.ControlResponder(nb, answer, real_delay=a.clock == "wall")  # noqa: E731

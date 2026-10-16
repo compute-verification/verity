@@ -107,7 +107,7 @@ class FusedAddRMSNorm:
         eps = self.eps if self.eps is not None else eps
         registered = getattr(ctx.profile, "registered_values", False)
         try:
-            spec = _targets().rmsnorm_fused_spec(target_of(ctx)[0], N, eps, eps_input=registered)
+            spec = _targets().rmsnorm_fused_spec(target_of(ctx)[0], N, eps, eps_input=registered, M=M)
         except _targets().UnregisteredTarget as e:
             return unsupported(node, f"target has no registered fused_add_rms_norm binding: {e}")
         operands = (PerRow(x), PerRow(res), Shared(w)) + ((eps_input(eps),) if registered else ())

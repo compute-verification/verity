@@ -1,6 +1,7 @@
 import Proofs.Flock.VBridge.Top
 import VStar.Stage
 import VStar.Compose
+import Flock.RecVStar
 
 /-!
 # VBridge G at V*'s statement family
@@ -129,8 +130,8 @@ theorem vbridge_of_reps
       (files R ω t (layers zs dg N k Rw R ω t R₂ τ)).Runs)
     (hcm : VCommits zs Sk cmt) (hdec : VDecodesR wmsg (fun _ _ a b => a = b) Sk msg) (hfull : VFullR (ℐ).r Sk) :
     Flock.Assumptions.VBridge (I := ℐ) zs dg N k Rw x wmsg Sk cmt msg :=
-  ⟨fun R ω t R₂ hc τ o h₀ =>
-    have h : Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o := ⟨h₀, hc⟩
+  ⟨fun R ω t R₂ hc τ o hout h₀ =>
+    have h : Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o := ⟨h₀, hc, hout⟩
     (files R ω t (layers zs dg N k Rw R ω t R₂ τ)).accepts regs (x R ω) T CT sch (hsch R ω t _) _
       (hfiles R ω t R₂ τ o h) (hruns R ω t R₂ τ o h fun r => by
         obtain ⟨v, info, kappa, hv, hvs⟩ := hvr R ω t R₂ τ o h r
@@ -159,8 +160,9 @@ local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 InnerAccepts.lea
 /-- **V*'s statement family over one inner session.** The objects `vbridge_of_vstar` reads, each tied to V*'s code by
 an equation: the statements `VStar.statements` lists at V*'s shape `vsh` (`hstmts`), the verifier's shape `sh` the one
 `RecResiduals.shape?` gives at `vsh` (`hsh`), each session reading the circuit file `vstar stage` writes for its
-statement at its bindings (`hfile`) over one unit per instance (`hnv`), and the units of each part and opening
-(`hsess`, `hun`, `hsessO`, `hunO`). The values the stages read off the layers (`rep₀`, `rows`, `alpha`, `acc`, `wmsg`)
+statement at its bindings (`hfile`), whose parse carries V*'s META (`hparsed`) and whose parts are the verifier's
+(`hpart`), over one unit per instance (`hnv`), and the units of each part and opening (`hsess`, `hun`, `hsessO`,
+`hunO`). The values the stages read off the layers (`rep₀`, `rows`, `alpha`, `acc`, `wmsg`)
 and V*'s registered data (`files`, `Sk`, `cmt`, `msg`) are the remaining fields. -/
 structure VStarFamily where
   /-- The inner session's shape as V* takes it: `m`, `k_log` and claims (`rec_vstage.shape`). -/
@@ -177,6 +179,13 @@ structure VStarFamily where
   /-- V*'s sessions at each history and registration. -/
   zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin stmts.size) → (Vs j).Outer Reg'
   hfile : ∀ R ω t R₂ j, circuitFile stmts[j] (bind j) = .ok (zs R ω t R₂ j).I.circuitFile
+  /-- Each statement's circuit carries V*'s META (`RecVStar.checkParsed`, which `checkCircuit` runs on every session it
+  accepts after `checkFile`, `checkCircuit_ok`): what `HmRow.parse` reads through `Lean.Json.parse`, which no proof
+  unfolds, stated as the check's verdict. -/
+  hparsed : ∀ j, RecVStar.checkParsed stmts[j] (Vs j).c = .ok ()
+  /-- Each part's statement's row ports and v elements are the verifier's part's (`RecVStar.checkPart`, which
+  `checkCircuit` runs after `checkParsed`, `checkCircuit_ok`), stated as the check's verdict. -/
+  hpart : ∀ j, RecVStar.checkPart stmts[j] (Vs j).c = .ok ()
   hnv : ∀ j, (Vs j).nv = stmts[j].instances
   /-- Each statement's circuit is over plain parts: its META carries no `holo` (`VStar.metaHead` writes none, so
   `hfile`'s bytes say so, but no META parse is stated here). -/

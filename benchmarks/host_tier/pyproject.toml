@@ -1,0 +1,5 @@
+# The host tier's measurement code and its tests. Not a package: `loop.cu`, `pcie.cu` and `dram.c` run on a GPU node
+# (`run_*.sh`), and the CPU receipts' C++ is checked here against `reference.py` as a suite
+# (`uv run tools/verity/check/suites.py benchmarks/host_tier`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]

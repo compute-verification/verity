@@ -272,7 +272,7 @@ check on the ring switches w holds (`decoded`), and the `T` w holds, Ligerito's,
 (Opening.lean:81–86) at the coins `verifierRows` returns. -/
 theorem ringSwitch_of_residuals {sh : Shape} {w comb : Array F128} {cons : Nat → Nat → F128}
     {rounds : Array (Array F128)} {extras : Array Claim} {v : Array F128} {info : Info Lin}
-    {kappa : Array (Array (Array F128))} {S : GfS} {rs : Array F128} (hpl : sh.holo = false)
+    {kappa : Array (Array (Array F128))} {S : GfS} {rs : Array F128}
     (hrows : verifierRows sh rounds extras comb = .ok (v, info, kappa)) (hS : structureOf sh = .ok S)
     (hw : w.size = S.nw) (hc : comb.size = 64)
     (hacc : ∀ r < 2, valOf sh w comb cons (.acc1 r) + valOf sh w comb cons (.acc0 r) = kapSum kappa r cons)
@@ -283,7 +283,7 @@ theorem ringSwitch_of_residuals {sh : Shape} {w comb : Array F128} {cons : Nat �
       valOf sh w comb cons .T = dot info.rs.gamma
         ((List.range sh.claims).map fun j =>
           dot (eqTable (info.rs.sws[j]!).rpp) (tOf (decoded sh w comb cons).rs[j]!)).toArray := by
-  obtain ⟨rs', k, hrun, hres'⟩ := residuals_eq_run w comb cons hpl hrows hS hw hc hacc
+  obtain ⟨rs', k, hrun, hres'⟩ := residuals_eq_run w comb cons hrows hS hw hc hacc
   rw [hres] at hres'
   cases hres'
   obtain ⟨hcl, r0, r1, rsr, lgr, k1, k2, k3, -, -, h3, -, hrs⟩ := run_stages hrun

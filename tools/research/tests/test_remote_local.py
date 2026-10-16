@@ -160,6 +160,26 @@ def test_a_machine_that_takes_runs_through_its_check_slots_refuses_any_other(tmp
     _wait_terminal(runs_root / "slot")
 
 
+def test_the_machines_deployed_slot_rule_decides_not_the_shipped_trees(tmp_path, monkeypatch):
+    """With /usr/local/lib/vy-monitoring/slot_only.py installed (deploy.toml, cpu-1), its `through_slot` judges the command: a lane
+    whose branch predates a rule change (proofs' C3 branches and the `env CHECK_SLOTS=` pool, 13 Oct) is held to the deployed rule."""
+    marker = tmp_path / "runs-via-slot"
+    marker.write_text("")
+    monkeypatch.setenv("RUNS_VIA_SLOT_FILE", str(marker))
+    node = tmp_path / "slot_only.py"
+    node.write_text("def through_slot(command):\n    return command[:1] == ['echo']\n\n"
+                    "def refusal(marker):\n    return f'node rule ({marker})'\n")
+    monkeypatch.setenv("NODE_SLOT_ONLY_FILE", str(node))
+    req, runs_root = _request(tmp_path, "node-off", ["python3", "tools/verity/check/slot.py", "--", "true"])
+    out = remote.launch_request(req)
+    assert out["started"] is False and out["refused"] == f"node rule ({marker})"
+    req, _ = _request(tmp_path, "node-on", ["echo", "ok"])
+    assert remote.launch_request(req)["started"]
+    _wait_terminal(runs_root / "node-on")
+    node.unlink()
+    assert remote.node_slot_only().through_slot(["python3", "tools/verity/check/slot.py", "--", "true"])
+
+
 def test_tool_tarball_is_deterministic_and_excludes_caches():
     d1, s1 = remote.tool_tarball()
     d2, s2 = remote.tool_tarball()

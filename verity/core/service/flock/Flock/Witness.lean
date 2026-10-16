@@ -228,6 +228,13 @@ def line (check : String) (r : V Unit) (extra : List (String × Json) := []) : I
   IO.println s!"WITNESS {j.compress}"
   return r.toBool
 
+/-- `f ()` started now on a thread of its own. `IO.lazyPure` keeps `f ()` from being evaluated before the task starts. -/
+def spawn {α : Type} (f : Unit → α) : BaseIO (Task (Except IO.Error α)) :=
+  IO.asTask (IO.lazyPure f) (prio := .dedicated)
+
+def await {α : Type} (t : Task (Except IO.Error α)) : IO α := do
+  IO.ofExcept (← IO.wait t)
+
 /-- The Σ a session record's `hello` names (`link.sigma`). -/
 def recordSigma (record : Json) : V String := do
   let h ← Json.parse (← record.getObjValAs? String "hello")
@@ -283,36 +290,47 @@ def sessionCmd (args : List String) : IO UInt32 := do
   let publicFile ← IO.FS.readBinFile pf
   let tables ← readTables args
   let I : Inputs := { tags, circuitFile, publicFile, count, tables, partition, program }
+  let t0 ← IO.monoMsNow
+  -- The statement checks and each session's setup parse the circuit apart and take minutes on a large one, so they run at
+  -- once; the lines keep their order.
+  let scopeZ ← spawn fun _ => scope I false
+  let scopeZR ← spawn fun _ => scope I true
+  let scopeC ← spawn fun _ =>
+    let c := scopeOk I
+    ((c.map fun _ => (), match c with
+      | .ok c => (ProvedScope.publicOf (zkTags I) c I.publicFile).toOption.map (·.n)
+      | .error _ => none) : V Unit × Option Nat)
+  let mut sessions : Array (String × String × Task (Except IO.Error (V (SessionSpec × Array Stmt)))) := #[]
+  for dir in (args.dropWhile (· != "--session")).drop 1 do
+    let record ← IO.FS.readFile (dir ++ "/session.json")
+    sessions := sessions.push (dir, record, ← spawn fun _ => setupOf I record)
   let mut all ← line "tags_ok" (tagsOk I)
   all := (← line "tags_ok_zhj" (tagsOkZHJ I)) && all
-  all := (← line "scope_z" (scope I false)) && all
-  all := (← line "scope_zr" (scope I true)) && all
-  let c := scopeOk I
-  all := (← line "scope_ok" (c.map fun _ => ())) && all
-  let n : Option Nat := match c with
-    | .ok c => (ProvedScope.publicOf (zkTags I) c I.publicFile).toOption.map (·.n)
-    | .error _ => none
-  for dir in (args.dropWhile (· != "--session")).drop 1 do
-    let t1 ← IO.monoMsNow
-    let record ← IO.FS.readFile (dir ++ "/session.json")
+  all := (← line "scope_z" (← await scopeZ)) && all
+  all := (← line "scope_zr" (← await scopeZR)) && all
+  let (c, n) ← await scopeC
+  all := (← line "scope_ok" c) && all
+  for (dir, record, setup) in sessions do
     let draw : V Unit := match n with
       | some n => fullDraw n record
       | none => throw "the public file does not load"
     all := (← line "full_draw" draw [("session", Json.str dir), ("population", Lean.toJson n)]) && all
-    let s := setupOf I record
-    let verdict ← match s with
-      | .error e => pure (Except.error s!"setup: {e}" : V Unit)
+    let s : V (SessionSpec × Array Stmt) ← await setup
+    let verdict : Task (Except IO.Error (V Unit)) ← match s with
+      | .error e => spawn fun _ => (Except.error s!"setup: {e}" : V Unit)
       | .ok (spec, _) => do
         let proofs ← spec.repStreams.mapM fun (_, _, w) => IO.FS.readBinFile s!"{dir}/{w.replace "/" "."}.bin"
-        pure (acceptsZKRAt s own record proofs)
+        spawn fun _ => acceptsZKRAt s own record proofs
+    let zkv ← vstar.mapM fun (i, j, f, rows) => return (j, ← spawn fun _ => checkZKV I s i j f rows own)
+    let verdict ← await verdict
     all := (← line "accepts_zkr" verdict ([("session", Json.str dir)] ++ scheduleOf s)) && all
-    if let some (i, j, f, rows) := vstar then
-      let c := checkZKV I s i j f rows own
+    if let some (j, c) := zkv then
+      let c ← await c
       let why : List (String × Json) := match c with
         | .ok () => []
         | .error e => [("check_stmt", Json.str e)]
       all := (← line "accepts_zkv" (verdict >>= fun _ => c) ([("session", Json.str dir), ("part", Lean.toJson j)] ++ why)) && all
-    IO.eprintln s!"{dir}: {(← IO.monoMsNow) - t1} ms"
+    IO.eprintln s!"{dir}: {(← IO.monoMsNow) - t0} ms"
   return (if all then 0 else 1)
 
 def cmd : List String → IO UInt32

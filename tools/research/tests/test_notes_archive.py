@@ -87,7 +87,7 @@ def test_archive_by_day_while_another_machine_edits_and_writes_loses_nothing(mac
     with (b / one).open("a") as f:
         f.write("b's reply, written before it saw the move\n")
     _write(b, f"{C}/20260928T0640Z-handoff-from-b.md")
-    assert notes.main(["archive", "coordinator", "--by", "day", "--apply", "--root", str(a)]) == 0
+    assert notes.main(["archive", "coordinator", "--bucket", "day", "--apply", "--root", str(a)]) == 0
     assert NS.sync(a, secrets=[])["pushed"]
     rep = NS.sync(b, secrets=[])
     assert (rep["rc"], rep["pushed"]) == (0, True)
@@ -149,3 +149,10 @@ def test_archive_keeps_mail_the_lane_has_not_been_shown(machines, capsys, monkey
     (a / "lanes" / "x" / notes.SEEN).write_text(f"{t}\n")
     moves, kept = NA.plan(a, "x", NOW)
     assert moves == [(shown, "lanes/x/2026-09/20260920T0100Z-handoff-from-y.md")] and kept["unseen mail"] == [Path(unseen).name]
+
+
+def test_the_old_by_spelling_still_buckets_and_says_to_use_bucket(tmp_path, capsys):
+    (tmp_path / "lanes" / "x").mkdir(parents=True)
+    assert NA.main(["x", "--by", "day", "--root", str(tmp_path)], tmp_path) == 0
+    out = capsys.readouterr()
+    assert "--by is --bucket now" in out.err and "nothing stamped before" in out.out

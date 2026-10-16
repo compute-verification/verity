@@ -24,7 +24,8 @@ keyed by the source's tick: the sender chooses what crosses, to whom and when) a
 (`CausalFrom`) when what `X` does during `[t, u)` is a function of its state's content at `t` and of what it reads from
 outside during `[t, u)`; the state is the run's own, so fixing coins keeps it. What `X` can tell at `t` (`history`:
 its inputs, its gates before `t` and what it read from outside before `t`) and links as alphabets (`Alphabet`, by
-`signal`) are further hypotheses on a strategy.
+`signal`) are further hypotheses on a strategy. `portSignals` is what a list of ports (a link and the leaf it delivers
+to) carries at a tick.
 
 The *runtime* `t_A(P)` (v2.8, section 7; `Actual.runtime`) reads the strategy too: the least `t` for which some
 positions before `t` (leaf of the developer's, cell, tick), the same for every value of `P`'s inputs put in place of
@@ -42,20 +43,12 @@ namespace Accounting
 
 open Finset
 
-/-- **Holding** (v2.3): `held y t` is the gates the leaf `y` holds at the start of tick `t`. A held gate is `y`'s own
-and an input or placed before `t`; `y`'s inputs are held at tick 0; and a gate of `y` that `y` reads at a later tick is
-held at `y` at the start of every tick from the one after its placement (from 0 for an input) to the reading one. -/
-def Placed.Holding {L : Type*} (A : Placed L) (held : L → ℕ → Finset (Fin A.N)) : Prop :=
-  (∀ y t, ∀ a ∈ held y t, A.x a = y ∧ (A.isInput a = true ∨ A.t a < t)) ∧
-  (∀ a, A.isInput a = true → a ∈ held (A.x a) 0) ∧
-  ∀ g, ∀ a ∈ A.reads g, A.x a = A.x g → ∀ s, (A.isInput a = true ∨ A.t a < s) → s ≤ A.t g → a ∈ held (A.x g) s
-
-/-- **A run**: an actual circuit and its gates' values, each computed gate's its operation on what it reads, and what
-each leaf holds at the start of each tick. -/
+/-- **A run**: an actual circuit and its gates' values, each computed gate's its operation on what it reads
+(`Placed.Faithful`), and what each leaf holds at the start of each tick (`Placed.Holding`). -/
 structure Actual.Run (L : Type*) where
   A : Placed L
   val : A.Transcript
-  faithful : ∀ g, A.isInput g = false → val g = A.op g val
+  faithful : A.Faithful val
   held : L → ℕ → Finset (Fin A.N)
   holding : A.Holding held
 
@@ -172,6 +165,11 @@ noncomputable def Actual.runtime {L : Type*} {P : Verity.Circuit} (S : P.Transcr
 def Alphabet {Ω L E : Type*} (S : Ω → Actual.Run L) (β : E → ℕ) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → E) :
     Prop :=
   ∀ e y u, (Set.range fun r => (S r).signal (link r) e y u).encard ≤ ((2 ^ β e : ℕ) : ℕ∞)
+
+/-- The signals a list of ports (a link and the leaf it delivers to) carries at tick `u`, in the run of `S` at `r`. -/
+def portSignals {Ω L E : Type*} (S : Ω → Actual.Run L) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → E)
+    (ports : List (E × L)) (r : Ω) (u : ℕ) : List (Set (ℕ × L × ℕ × ℕ × ℕ)) :=
+  ports.map fun p => (S r).signal (link r) p.1 p.2 u
 
 open Classical in
 /-- **`E` is sound at `δ`** against the feasible runs `𝓕`, for the verifier at `V` accepting on `acc` of its view with

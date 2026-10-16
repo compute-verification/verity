@@ -1,0 +1,38 @@
+[project]
+name = "verity-bench"
+version = "0.1.0"
+description = "Shared benchmark harnesses for Verity integrations and backends."
+requires-python = ">=3.12"
+dependencies = ["verity-config", "verity-vllm"]
+
+[project.scripts]
+verity-bench = "verity_bench.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["verity_bench"]
+
+[tool.uv.sources]
+verity-config = { workspace = true }
+verity-vllm = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q -p no:cacheprovider"
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# The harness is a user of the vLLM integration. Its fake-engine tests import
+# the public hook set and exercise the integration-facing arm contract, and
+# `build_bound` reads the protocol options' `requires_build` to refuse CUDA
+# graphs for arms whose served kernels are bound to a row Build. Dispatch names
+# a queue kind from benchmarks' kinds file, which a test checks every spec has.
+inputs = [
+    "benchmarks/specs",
+    "infra/cluster/kinds/benchmarks.toml",
+    "integrations/vllm/verity_vllm/engine/hooks.py",
+    "integrations/vllm/verity_vllm/protocol_options",
+]

@@ -17,13 +17,11 @@ from __future__ import annotations
 import collections
 import os
 import time
-from dataclasses import dataclass
 from typing import Any
 
 from verity_vllm.check.match import batch_decomp as BD
 from verity_vllm.check.match import program_compare as C
 
-from verity_vllm.config import option
 from verity_vllm.observe import contract as OB
 from verity_vllm.correspondence import resolve as RS
 
@@ -235,38 +233,3 @@ def compare_with_record(v2: dict[str, Any], record: dict[str, Any]) -> dict[str,
         out["equal"] = False
         out["differences"].append(f"verdict record {record.get('verdict')!r} != v2 {v2.get('verdict')!r}")
     return out
-
-
-@dataclass(frozen=True, kw_only=True)
-class Options:
-    "X-09 decomposition of a fold record via observe + resolve; compared with the record's match_decomp.json when given"
-
-    match_dir: str = option("match_dir",
-                            help="<row>/match (program.json + instances.jsonl + capture/log.jsonl.gz) or the row dir")
-    programs_root: str = option("programs_root", help="a dir holding build_request*/instances.json.gz")
-    record: str | None = option("--record", default=None, help="the row's match_decomp.json to compare with")
-    out: str | None = option("--out", default=None, help="write the v2 document (+ comparison) here (never inside the record)")
-
-
-def main(a: Options) -> int:
-    import glob
-    import json
-    import sys
-    dirs = sorted(d for d in glob.glob(os.path.join(a.programs_root, "build_request*")) if os.path.isfile(os.path.join(d, "instances.json.gz")))
-    if not dirs:
-        dirs = sorted(d for d in glob.glob(os.path.join(a.programs_root, "build", "rank*", "build_request*")) if os.path.isfile(os.path.join(d, "instances.json.gz")))
-    doc = decompose(a.match_dir, dirs)
-    out: dict[str, Any] = {"v2": doc}
-    if a.record:
-        out["comparison"] = compare_with_record(doc, json.load(open(a.record)))
-    if a.out:
-        with open(a.out, "w") as f:
-            json.dump(out, f, indent=1, default=str)
-    summary = {"verdict": doc["verdict"], "requests": len(doc["requests"]), "attribution": doc["attribution"]["how"], "unattributed": doc["attribution"]["unattributed"],
-               "faults": doc["attribution"]["faults"], "seconds": doc["seconds"], "timing": doc["timing"],
-               "hashes": {e["request_id"][:8]: (e.get("canonical_sha256") or {}).get("equal") for e in doc["requests"]}}
-    if "comparison" in out:
-        summary["record_equal"] = out["comparison"]["equal"]
-        summary["differences"] = out["comparison"]["differences"][:20]
-    print(json.dumps(summary, default=str))
-    return 0 if doc["verdict"] == "PASS" and out.get("comparison", {}).get("equal", True) else 1

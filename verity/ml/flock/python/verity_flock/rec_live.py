@@ -458,12 +458,13 @@ def stacked_rounds(m: int) -> list[tuple[int, list[int], int, int]]:
 
 def sparse_rounds(sh) -> list[tuple[int, list[int], int, int]]:
     """A rep's sparse phase at `verity_flock.rec_sparse`'s shape ``sh`` (`rec_sparse.prove`'s draws, each message one row): ζ_c,
-    H2's rounds, v2's (no coins), H3's, u's (ζ_p), and with T > 1 vt's (ρ_t)."""
+    H2's rounds, v2's (no coins), H3's, u's (ζ_p), with T > 1 vt's (ρ_t), and last the registered claim's (no coins), whose
+    ``c_k`` fixes ``rec-claim``'s row."""
     from .rec_sparse import PRE_ROUNDS
 
     out = [(PRE_ROUNDS, [], 0, 0)] + [(1, [], 0, 2)] * PRE_ROUNDS + [(0, [], 0, 1)]
     out += [(1, [], 0, d) for d in sh.degrees] + [(sh.P_LOG, [], 0, sh.PP)]
-    return out + ([(sh.T_LOG, [], 0, sh.T)] if sh.stacked else [])
+    return out + ([(sh.T_LOG, [], 0, sh.T)] if sh.stacked else []) + [(0, [], 0, 1)]
 
 
 def schedule_for(statement: dict, holo: bool = False, stacked: int | None = None, sparse=None) -> dict:

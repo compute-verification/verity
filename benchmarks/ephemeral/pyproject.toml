@@ -1,0 +1,6 @@
+# The ephemeral-reads profiles' attribution and its tests. Not a package: `run.sh` and `encode.sh` run on a GPU node, and
+# the split of Nsight Compute's DRAM bytes (`attribute.py`, `attn_bytes.py attribute`) runs here as a suite
+# (`uv run tools/verity/check/suites.py benchmarks/ephemeral`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]

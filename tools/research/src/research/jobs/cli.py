@@ -45,7 +45,7 @@ from .client import WORKER_TOKEN_ENV, HTTPClient, Unreachable, load_token, worke
 from .dispatch import AUDIT_TIMEOUT_S, DEFAULT_TIMEOUT_S, EMPTY_TREE, SHA, WORKDIR, Dispatcher, DispatchError, ResearchRunner, lease_needed
 from .dispatch import KINDS as DISPATCH_KINDS
 
-REPO = "danielreuter/verity"
+REPO = "compute-verification/verity"
 LEAN_TOOL = "tools/verity/lean/"
 LEAN_KEY_SCHEMA = "lean-regen-inputs/v1"
 

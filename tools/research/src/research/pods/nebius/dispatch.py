@@ -434,7 +434,7 @@ def place(item: dict, key: str, job: dict) -> dict:
            "--run-id", row["job"], "--now", str(int(time.time())), "--project", "verity", "--submitter", "circuits",
            "--question", question, "--gpus", str(int(quantity(req.get("nvidia.com/gpu", 0), 1))),
            "--cpus", str(max(1, round(quantity(req.get("cpu", 1), 1)))),
-           "--mem-gb", str(max(1, round(quantity(req.get("memory", "1G"), 1e9)))), "--preempt", "requeue", "--node", SERVER]
+           "--mem-gb", str(max(1, round(quantity(req.get("memory", "1G"), 1e9)))), "--preempt", "requeue", "--on", SERVER]
     if kind:
         cmd += ["--kind", kind["name"]]
     if job["spec"].get("activeDeadlineSeconds"):
@@ -567,7 +567,7 @@ def stop_model(model: str, key: str, run: str | None, reason: str, **extra) -> N
     stem = f"{stamp}-alert-pack-stop-{dns(model, 40)}-{hashlib.sha256(key.encode()).hexdigest()[:8]}"
     facts = "\n".join(f"- **{k}:** {v}" for k, v in (("Item", f"`{key}`"), ("Runs", f"replay `{run}`, Commit `{extra.get('commit_run')}`"),
                                                        ("Pack pod", f"`{extra.get('pod')}`"), ("Replay Job", f"`{extra.get('job')}`")))
-    note = (f"---\nid: {stem}\ncampaign: one-pool\nlane: node1-dispatcher\nkind: finding\nstatus: open\nrepo: danielreuter/verity\n"
+    note = (f"---\nid: {stem}\ncampaign: one-pool\nlane: node1-dispatcher\nkind: finding\nstatus: open\nrepo: compute-verification/verity\n"
             f"origin: node 1's dispatcher (dispatch.py stop_model; MPS Commit packing, circuits' rule of 10:55 PM PDT Sep 30)\n---\n\n"
             f"# MPS packing stopped for {model}: a packed Commit's replay failed\n\n{facts}\n- **Why:** {reason}\n"
             f"- **Effect:** the item ended failed, and `packable` refuses {model} from now on (`{stops_file()}`). Other models still pack.\n"

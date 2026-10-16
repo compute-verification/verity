@@ -3,10 +3,11 @@
     research run --tool check --project verity --cwd source -- uv run --locked --extra torch-cpu python tools/verity/check/check.py
 
 No key params and no closure: the attempt's source (a clean commit) is the whole input, and `research merge` reads the attempt by
-that commit.  A merge that changes verity/ml/flock/, other than a README.md or PROTOCOL.md (which nothing the agreement runs
-reads), needs an attempt whose `lean-agreement` step passed (`merge_requires`; the step runs when the run has the pinned
-upstream build, which `check.py --record` sends then).  `research run --on` refuses a machine that fails `preflight.py` (the pod
-setup, the Lean dependencies, a store read, AVX-512 when needed, free disk) before the run is claimed.  Once `research merge --push`
+that commit.  A merge that changes verity/ml/flock/ or the Lean verifier's package verity/core/service/flock/, other than a
+README.md or PROTOCOL.md (which nothing the agreement runs reads), needs an attempt whose `lean-agreement` step passed
+(`merge_requires`; the step runs when the run has the pinned upstream build, which `check.py --record` sends then).
+`research run --on` refuses a machine that fails `preflight.py` (the pod setup, the Lean dependencies, a store read, AVX-512
+when needed, free disk) before the run is claimed.  Once `research merge --push`
 has pushed a landing, it starts `post_train.py` on it, detached (`after_land`): the vLLM reference regression's manifest rebuilds,
 which check leaves out, and their label on the attempt.  Nothing here imports anything but `research.store.tool`.
 """

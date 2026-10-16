@@ -107,6 +107,19 @@ def indexer_rows(cache: Any, slots: Any, head: int) -> tuple[Any, Any] | None:
     return keys, scale.contiguous().view(torch.float32)
 
 
+def pitched_2d(t: Any) -> bool:
+    """Whether the native collector stages `t` as it lies (`native_collect.cpp` `pitched_2d`): contiguous, or equally spaced
+    contiguous rows.  The W_UK_T product `ql_nope`, a transposed bmm output [T, H, L] with strides (L, T * L, 1), is neither."""
+    dims = [(int(n), int(s)) for n, s in zip(t.shape, t.stride()) if int(n) != 1]
+    k, expect = len(dims) - 1, 1
+    while k >= 0 and dims[k][1] == expect:
+        expect *= dims[k][0]
+        k -= 1
+    if k < 0:
+        return True
+    return all(dims[j][1] == dims[j + 1][1] * dims[j + 1][0] for j in range(k)) and dims[k][1] >= expect
+
+
 class AttentionSource:
     short_name = "attention"
 
@@ -169,8 +182,8 @@ class AttentionSource:
     def begin_run(self) -> None:
         self._held = set()
         self.stats = {"layers": len(self.layers), "on_target": self.on_target, "calls": 0, "bound": 0, "unpaired": 0, "layout_refused": 0,
-                      "mha_unbound": 0, "by_tap": {}, "call_boundaries": sum(len(v) for v in self.boundaries.values()),
-                      "call_boundaries_held": 0}
+                      "mha_unbound": 0, "by_tap": {}, "copied_by_tap": {},
+                      "call_boundaries": sum(len(v) for v in self.boundaries.values()), "call_boundaries_held": 0}
 
     def _hold_boundary(self, layer: int, t: Any, job: Any) -> None:
         """The `attn` tensor of `layer` at the job's step, held to the step's sparse MLA call boundaries of that layer: every request's
@@ -221,9 +234,10 @@ class AttentionSource:
         name = self.names.get(tid, {}).get(layer)
         if name is None or t is None:
             return
-        if not t.is_contiguous():   # e.g. ql_nope, bmm(...).transpose(0, 1): [M, NH, L] over strides no 2-D pitch describes
+        if not pitched_2d(t):
             t = t.contiguous()
             self._copies.append(t)  # alive until the step ends: the committer may stage it asynchronously
+            self.stats["copied_by_tap"][tid] = self.stats["copied_by_tap"].get(tid, 0) + 1
         self.c._acquire(name, t, job)
         self.stats["bound"] += 1
         self.stats["by_tap"][tid] = self.stats["by_tap"].get(tid, 0) + 1

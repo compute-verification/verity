@@ -10,8 +10,8 @@ vLLM, and restores nothing because each mode runs in a fresh engine.  Modes:
 - ``w7a7``: int7 weights per output channel and int7 activations per token, one plain int8 GEMM (``torch._int_mm``):
   NCP's useful workload without the protocol;
 - ``ncp``: the same int7 operands through NCP: X = [A + E₁ | A + E₂ | −(A + E₃)], Y = [B + F₁ ; B + F₂ ; B + F₃] with the
-  word-granular production P, one (m, 3k, n) s8 GEMM that reads every accumulator once per 16-deep step (the kernel gated
-  by ``gemm_bench.py``).  X·Yᵀ = A·Bᵀ exactly, so its tokens must equal ``w7a7``'s.  Both operands are formed in every call
+  word-granular production P, one (m, 3k, n) s8 GEMM that reads every accumulator once per 16-deep step (the kernel in
+  ``kernels/pouw_gemm.cu``).  X·Yᵀ = A·Bᵀ exactly, so its tokens must equal ``w7a7``'s.  Both operands are formed in every call
   (`ncp_x`, `ncp_y`, F₁ drawn anew) and dropped after its GEMM: the layer keeps only its int7 weight, as ``w7a7`` does, and
   no weight-derived copy stays resident across forwards;
 - ``pearl``: Pearl's noisy quantization to e4m3 (rank-32 noise lines of norm 256, δ = 1), the windowed e4m3 GEMM of the

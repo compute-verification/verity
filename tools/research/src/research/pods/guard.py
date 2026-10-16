@@ -36,8 +36,8 @@ pod's disk filled, every guard died on its state write, and nothing enforced any
   * `--detach` starts a supervisor that runs the guard and starts it again one poll after any exit but a stop (0), bad arguments (2)
     or another live guard (3).  A guard with no RunPod key refuses to loop (EXIT_NO_KEY, 4); supervised, it is tried again each poll,
     so a key file that comes back brings it back.
-  * `research pods create` refuses while the guard has not completed a poll in budgets.STALE_S (research.pods.budgets.gate): nothing
-    new starts unguarded.
+  * `research pods create` refuses while the guard has not completed a poll in budgets.STALE_S, or while its last read of
+    budgets.toml failed (research.pods.budgets.gate): nothing new starts unguarded or on budgets the guard can't refresh.
 
 Files: $RESEARCH_GUARD_DIR (default ~/.research/pods)/guard-budgets[.dry-run].{json,log,pid}.  One guard per machine: a start refuses
 (exit 3) while the recorded pid is alive.  `stop` signals exactly the recorded pid.  The guard's own host is `--self-pod ID`, else

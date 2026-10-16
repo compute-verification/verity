@@ -83,9 +83,15 @@ def test_hash_format_reads_a_name_an_id_or_a_scheme_object():
 
 
 def test_the_serial_and_deferred_schedules_run_under_every_format():
-    assert set(SCHEDULES) == {"serial", "deferred", "deferred-caller"}
+    assert set(SCHEDULES) == {"serial", "deferred", "deferred-caller", "deferred-a"}
     for f in HASH_FORMATS.values():
-        assert all(schedule_refusals(f, s) == [] for s in SCHEDULES.values())
+        for s in SCHEDULES.values():
+            if s.name == "deferred-a":
+                continue
+            assert schedule_refusals(f, s) == []
+    assert schedule_refusals(HASH_FORMATS["h3"], SCHEDULES["deferred-a"]) == []
+    (why,) = schedule_refusals(HASH_FORMATS["h0"], SCHEDULES["deferred-a"])
+    assert "a_tree can't leave the main lane" in why
 
 
 def test_the_deferred_schedule_is_the_measured_one():
@@ -100,6 +106,14 @@ def test_a_trees_leave_the_main_lane_only_where_forming_seeds_per_row():
     assert schedule_refusals(HASH_FORMATS["h3"], early) == []
     (why,) = schedule_refusals(HASH_FORMATS["h0"], early)
     assert "a_tree can't leave the main lane" in why and "seed_A from A's root" in why
+
+
+def test_row_seeds_never_leave_the_main_lane():
+    """Forming reads each row's digest and seed (h3's per-row keying), so `row_seeds` is pinned under every format."""
+    early = Schedule("rs", frozenset({"row_seeds", "tile_hash"}), ring=2)
+    for f in HASH_FORMATS.values():
+        (why,) = schedule_refusals(f, early)
+        assert "row_seeds can't leave the main lane" in why and "each row's digest and seed" in why
 
 
 def test_a_schedule_is_refused_for_each_thing_wrong_with_it():

@@ -1,4 +1,4 @@
-"""CPU checks for the H200 CUDA RMSNorm capture's models, verdict and orchestration."""
+"""CPU checks for the cc 9.0 CUDA RMSNorm capture's models, verdict and orchestration."""
 from __future__ import annotations
 
 import json
@@ -20,6 +20,20 @@ def _case(kind: str = "rms_norm", m: int = 1, n: int = 6144) -> dict:
 def _doc() -> dict:
     return {"gate": {"ok": True}, "sass": {"ok": True},
             "cases": [_case(kind, m, n) for n in X.WIDTHS for m in X.MS for kind in X.KINDS], "errors": {}}
+
+
+def _through_torch(words: np.ndarray) -> np.ndarray:
+    import torch
+
+    tensor = torch.from_numpy(np.ascontiguousarray(words).view(np.int16)).view(torch.bfloat16)
+    return X._u16(tensor)
+
+
+def test_capture_bitcasts_real_torch_bf16_tensors_to_words() -> None:
+    words = np.array([[0x0000, 0x8000, 0x0001, 0x7F80], [0xFF80, 0x7FC1, 0x3F80, 0xBF80]], np.uint16)
+    got = _through_torch(words)
+    assert got.dtype == np.uint16
+    assert np.array_equal(got, words)
 
 
 def test_verdict_requires_all_shapes_words_launches_determinism_and_probes() -> None:
@@ -53,7 +67,13 @@ def test_planted_rows_and_numpy_models_include_both_in_place_outputs() -> None:
 def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> None:
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
     monkeypatch.setattr(X, "sass", lambda out: {"ok": True})
-    monkeypatch.setattr(X, "one_case", lambda work, kind, m, n: _case(kind, m, n))
+
+    def stub_case(work, kind, m, n):
+        words = np.array([[0x0000, 0x8000, 0x7FC1, 0x3F80]], np.uint16)
+        assert np.array_equal(_through_torch(words), words)
+        return _case(kind, m, n)
+
+    monkeypatch.setattr(X, "one_case", stub_case)
     out = tmp_path / "out"
     assert X.main(["--out", str(out), "--scratch", str(tmp_path)]) == 0
     doc = json.loads((out / X.RECORD).read_text())

@@ -4,7 +4,7 @@ a train's tip regenerated onto that tip, as one commit.
 
 Two pull requests each right on its side of a train can leave a `lean-audit.json` whose records no longer match the merged build
 (one changes a definition that a guarantee the other adds reads).  The Lean check then fails with only record differences, and
-writes the record `audit.py --update` would write beside its report (`tools/verity/lean/check.py`: the report's `regenerated`
+writes the record `check.py --update` would write beside its report (`tools/verity/lean/check.py`: the report's `regenerated`
 names `audit-TAG/lean-audit.json` under the run's `lean-audit/`).  This takes those files from the runs' records in the store and
 commits each over its package's `lean-audit.json` on the train's prep branch, so the pull requests keep their heads and ready
 marks and the next check of the tip passes on the regenerated records (the lander's friction pass, 10 Oct).  The landing still
@@ -119,7 +119,7 @@ def commit(repo: Path, tip: str, files: dict[str, bytes], runs: list[str]) -> st
                 (wt / path).write_bytes(data)
             _git(wt, "add", "--", *files)
             msg = (f"Regenerate the Lean records at the train's tip from {', '.join(runs)}\n\n"
-                   f"Each is the record `audit.py --update` writes on this tree; the check found only record differences.\n\n"
+                   f"Each is the record `check.py --update` writes on this tree; the check found only record differences.\n\n"
                    f"Regenerated: {', '.join(files)}\n")
             _git(wt, "commit", "-q", "-m", msg)
             return _git(wt, "rev-parse", "HEAD").strip()

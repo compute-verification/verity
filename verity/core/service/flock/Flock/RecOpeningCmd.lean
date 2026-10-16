@@ -9,8 +9,9 @@ import Flock.RecOpening
     flock-rec-opening check CIRCUIT ...      `RecOpening.check` on each circuit file, one JSON line each
 
 `structure` prints S as `rec_algebra.structure` writes it (`{"nw", "nv", "ops", "res"}`), each row port's elements
-(`rec_residuals.spec`'s ports, unnamed) and each part's S, row ports' elements and v elements' number. `check` parses each
-file as `verity/flock-circuit` and prints `{"circuit", "ok"}`, with `"error"` when refused.
+(`rec_residuals.spec`'s ports, unnamed), each part's S, row ports' elements and v elements' number, and whether some
+part holds each running sum (`acc_held`, `RecOpening.accHeld`, which `RecCoins.opening` refuses without). `check`
+parses each file as `verity/flock-circuit` and prints `{"circuit", "ok"}`, with `"error"` when refused.
 -/
 
 namespace Flock.RecOpeningCmd
@@ -46,7 +47,8 @@ def structureJ (m c : Nat) : Except String Json := do
   let parts ← (List.range n).mapM fun j => do
     let (P, ns, nv) ← RecOpening.part sh j
     pure (partJ P ns nv)
-  pure (Json.mkObj [("gf", wholeJ S), ("ports", toJson (RecOpening.portSizes sh)), ("parts", .arr parts.toArray)])
+  pure (Json.mkObj [("gf", wholeJ S), ("ports", toJson (RecOpening.portSizes sh)), ("parts", .arr parts.toArray),
+    ("acc_held", .bool (RecOpening.accHeld sh S))])
 
 def checkOne (path : String) : IO (Bool × Json) := do
   let b ← IO.FS.readBinFile path

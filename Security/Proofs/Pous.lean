@@ -30,6 +30,8 @@ import Proofs.Pous.P2.Domain
 import Proofs.Pous.P2.RingBasic
 import Proofs.Pous.P2.RingTight
 import Proofs.Pous.P2.RingTrunc
+import Proofs.Pous.P2.Rounds
+import Proofs.Pous.P2.RoundTests
 import Proofs.Pous.P2.Rows
 import Proofs.Pous.P3.Column.BandComb
 import Proofs.Pous.P3.Column.BandTwoWay
@@ -211,6 +213,10 @@ theorem P2RingAuditSecureOfReduces : Pous.Guarantees.P2RingAuditSecureOfReduces 
         add_le_add (PousP2Bridge.pr_seqAccepts_le _ (by norm_num) W' A₁' A₂') le_rfl
     _ ≤ ENNReal.ofReal Params.δ + (2⁻¹ : ENNReal) ^ 129 + (2⁻¹ : ENNReal) ^ 130 := add_le_add h104 le_rfl
     _ = _ := add_assoc _ _ _
+
+theorem P2RingAuditSecureOfRoundSecure : Pous.Guarantees.P2RingAuditSecureOfRoundSecure :=
+  PousP2Rounds.auditSecure_of_roundSecure
+theorem P2RingGradedOfRoundSecure : Pous.Guarantees.P2RingGradedOfRoundSecure := PousP2Rounds.graded
 
 /-! ## Proved results cited outside the package (`Security/Models/Pous/Guarantees.lean`, `Statements.lean`) -/
 

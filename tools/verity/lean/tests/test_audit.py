@@ -86,8 +86,8 @@ def test_a_recorded_package_passes_and_its_record_is_the_statement():
     assert list(pol["reads"]["P.Defs"]["definitions"]) == ["P.f"] and pol["reads"]["P.Defs"]["guarantees"] == ["P.t"]
     assert all(g["digest"] == A.module_digest(g["definitions"]) for g in pol["reads"].values())
     assert A.judge(pol, facts(), FILES) == ([], pol)
-    assert A.judge(POLICY, facts(), FILES)[0] == ["guarantees: P.t has no record; run `audit.py --update` and commit the record",
-                                                  "assumptions: P.Hyp has no record; run `audit.py --update` and commit the record"]
+    assert A.judge(POLICY, facts(), FILES)[0] == ["guarantees: P.t has no record; run `check.py --update` and commit the record",
+                                                  "assumptions: P.Hyp has no record; run `check.py --update` and commit the record"]
 
 
 def test_every_field_of_a_reads_record_is_checked():
@@ -98,14 +98,14 @@ def test_every_field_of_a_reads_record_is_checked():
                                                  "`python tools/verity/lean/merge.py --normalize` recomputes it"]
     readers = pol | {"reads": pol["reads"] | {"P.Defs": group | {"guarantees": ["P.t", "P.u"]}}}
     assert A.judge(readers, facts(), FILES)[0] == ["guarantees: those that read P.Defs are P.t; the record lists "
-                                                   "P.t, P.u; run `audit.py --update`"]
+                                                   "P.t, P.u; run `check.py --update`"]
 
 
 def test_every_guarantee_has_an_owner_and_an_update_keeps_it():
     pol = recorded()
     bare = {**POLICY, "guarantees": {"P.t": {}}}
     no_owner = ('guarantees: P.t has no owner: write "owner": "@lane" in its entry, the handle of the lane that answers for '
-                'it, or run `audit.py --update --owner @lane`')
+                'it, or run `check.py --update --owner @lane`')
     fails, written = A.judge(bare, facts(), FILES, update=True)
     assert fails == [no_owner] and written["guarantees"] == {"P.t": {}}, "no record is written for a guarantee without an owner"
     assert A.judge(bare, facts(), FILES, update=True, owner="@proofs")[1]["guarantees"]["P.t"]["owner"] == "@proofs"
@@ -145,7 +145,7 @@ def test_a_guarantee_reads_only_spec_definitions_and_pinned_dependencies():
     unlocked = pol | {"meaning": ["P.Assumptions"]}
     assert A.spec_reads(unlocked, spec_facts(outside=[("P.f", "P.Defs")]), home) == [
         "reads: P.t read P.f in P.Defs, a spec module outside `meaning`, so the record holds nothing of them: add P.Defs to "
-        "`meaning` and run `audit.py --update`"]
+        "`meaning` and run `check.py --update`"]
     exempt = pol | {"reads_exempt": {"P.Proofs": "until its spec is extracted", "P.Old": "stale"}}
     assert A.spec_reads(exempt, spec_facts(reads=fact()["reads"] + extra), home) == [
         "reads: `reads_exempt` lists P.Old, under which no guarantee reads outside the spec; remove the entry"]
@@ -166,7 +166,7 @@ def test_a_reads_exemption_names_a_prefix_and_a_reason_and_covers_only_reads_out
     spec_only = pol | {"reads_exempt": {"P.Defs": "hides a spec module outside meaning"}}
     assert A.spec_reads(spec_only, spec_facts(outside=[("P.f", "P.Defs")]), home) == [
         "reads: P.t read P.f in P.Defs, a spec module outside `meaning`, so the record holds nothing of them: add P.Defs to "
-        "`meaning` and run `audit.py --update`",
+        "`meaning` and run `check.py --update`",
         "reads: `reads_exempt` lists P.Defs, under which no guarantee reads outside the spec; remove the entry"]
     whole = pol | {"meaning": ["P"], "reads_exempt": {"P": "covers spec modules only"}}
     assert A.spec_reads(whole, spec_facts(outside=[("P.f", "P.Defs")]), home) == [
@@ -230,6 +230,36 @@ def test_sorry_native_decide_and_other_axioms_are_named():
     assert "native_decide: Lean.ofReduceBool is used by P.c" in fails and "axiom: Foo.ax is used by P.d" in fails
     assert [f for f in fails if f.startswith("declared:")] == [
         "declared: `axiom P.magic` in P.Defs; state an assumption as a named Prop, taken as a hypothesis"]
+
+
+def test_a_sorry_for_an_unreported_error_is_named_apart_from_a_written_one():
+    """A build that passes on a `sorryAx _ true` (the `unreported` control's local-notation binder) never ran its proofs; a
+    spec package's fast path audits no proving package, so `proved` names those of each one it reads."""
+    off = [{"name": "P.stub", "module": "P.Thms", "axioms": ["sorryAx"]}, {"name": "P.unrun", "module": "P.Thms", "axioms": ["sorryAx"]}]
+    fails = A.judge(recorded(), facts(offenders=off, unreported_errors=[{"name": "P.unrun", "module": "P.Thms"}]), FILES)[0]
+    assert "sorry: sorryAx is used by P.stub, P.unrun" in fails
+    (u,) = [f for f in fails if f.startswith("unreported:")]
+    assert u.startswith("unreported: P.unrun hold a `sorry` Lean made for an elaboration error it did not report")
+    assert A.unreported(facts(), "../Proofs's ") == []
+    assert A.unreported(facts(unreported_errors=[{"name": "Q.x", "module": "Q"}]), "../Proofs's ")[0].startswith(
+        "unreported: ../Proofs's Q.x hold")
+
+
+def test_a_declaration_the_olean_does_not_hold_is_dropped(tmp_path):
+    """Lean can drop a declaration with no error (PartRead at a1b479d26: the theorems after a `variable` using a local
+    notation are in no `.olean`), so no axiom shows it: the source's declaration lines are matched to the module's spans.
+    Keywords in comments, docstrings and strings, indented ones and `example` start none."""
+    (tmp_path / "P").mkdir()
+    (tmp_path / "P" / "Thms.lean").write_text(
+        "/-- A doc.\ntheorem in_doc : True := trivial -/\n@[simp] theorem kept : True :=\n  trivial\n"
+        "-- def in_comment\nexample : True := trivial\nprivate noncomputable def gone := 1\n"
+        "structure S where\n  def_like : Nat\ninstance : Inhabited S := ⟨⟨0⟩⟩\n")
+    files = {"P.Thms": "P/Thms.lean"}
+    held = {"P.Thms": [[1, 4], [8, 9]]}
+    (d,) = A.dropped(tmp_path, files, {"spans": held}, "../Proofs's ")
+    assert d.startswith("dropped: ../Proofs's P/Thms.lean:7 (def), P/Thms.lean:10 (instance) start a declaration")
+    assert A.dropped(tmp_path, files, {"spans": held | {"P.Thms": [[1, 4], [7, 7], [8, 10]]}}) == []
+    assert A.dropped(tmp_path, files, {}) == []
 
 
 def test_escapes_must_be_listed_and_listed_ones_must_exist():
@@ -569,7 +599,7 @@ def test_naming_the_anonymous_instances_keeps_their_names_and_the_record(tmp_pat
     assert audit(update=True)["failures"] == [
         f"instance: Control/Inst.lean:{line} declares an instance without a name, which Lean names Control.{n} from its type "
         f"(and, when nothing in the type is the project's own, its project's root): a move or a split renames it, and with it "
-        f"every record whose definitions use it. Write `instance {n}` there (`audit.py --name-instances` writes each one)"
+        f"every record whose definitions use it. Write `instance {n}` there (`check.py --name-instances` writes each one)"
         for line, n in ((6, "instInhabitedBox"), (7, "instToStringBox"), (9, "instInhabitedNat_control"),
                         (10, "instInhabitedFinOfNatNat_control"))]
     record = (pkg / A.POLICY).read_text()
@@ -903,6 +933,48 @@ def test_a_closed_hypothesis_must_be_a_named_assumption():
     assert A.judge(POLICY, facts(pins={"P.t": fact(hyps=elsewhere)}), FILES, update=True)[0][0].startswith("guarantees: P.t assumes (h : Q.Hyp)")
 
 
+def test_a_premise_the_lock_does_not_list_fails():
+    """A statement that takes an assumption applied to its own variables (`h : Premises.Hyp n`, an open hypothesis the
+    hypotheses rule never names; `Facts.lean`'s `premises` sees through the abbrev and the `Guarantees` definitions to
+    `P.Hyp`) fails while the lock doesn't list it, and an update adds it with the guarantee's owner; on 14 Oct a merge
+    dropped `Flock.Assumptions.RegistrantCovers`' entry this way and the check passed. A premise outside an assumptions
+    module is not an assumption."""
+    applied = [{"binder": "h", "type": "P.Premises.Hyp n", "closed": False, "named": None, "module": None}]
+    pin = fact(signature="P.t (n : Nat) (h : P.Premises.Hyp n) : P.f n = n", hyps=applied)
+    pin["premises"] = [{"binder": "h", "head": "P.Hyp", "module": "P.Assumptions"},
+                       {"binder": "hn", "head": "P.f", "module": "P.Defs"}]
+    f = facts(pins={"P.t": pin})
+    fails, pol = A.judge({**POLICY, "assumptions": {}}, f, FILES, update=True)
+    assert fails == [] and pol["assumptions"] == {
+        "P.Hyp": {"owner": "@lean", "digest": pol["reads"]["P.Assumptions"]["definitions"]["P.Hyp"]}}
+    assert A.judge(pol, f, FILES)[0] == []
+    assert A.judge({**pol, "assumptions": {}}, f, FILES)[0] == [
+        "assumptions: P.Hyp is a premise of P.t, an assumption the lock doesn't list; run `check.py --update` to add it "
+        "with its guarantees' owner and commit the record (Daniel's DM shows it when it lands)"]
+
+
+def test_the_verifiers_path_has_no_unlisted_compiled_code_and_hashes_through_its_parameter():
+    """Daniel's checks (a) and (b) on the verifier's path (`verifier` in the policy): an `@[extern]` or `@[implemented_by]`
+    constant its entries reach fails unless `allow` names it (a name prefix, or `module:` for a module), and so does each
+    entry into the `hash` namespace that bypasses `stop`, naming its path; a missing entry is named; no rule, no checks."""
+    path = {"missing": ["P.gone"], "reached": 40,
+            "implemented_by": [{"name": "P.fast", "module": "P.Defs", "by": "P.fastImpl"}],
+            "extern": [{"name": "Nat.add", "module": "Init.Prelude"}, {"name": "ByteArray.push", "module": "Init.Data.ByteArray"}],
+            "hash": [{"name": "P.Sha512.hash", "module": "P.Hash", "path": ["P.verify", "P.tag", "P.Sha512.hash"]}]}
+    rule = {"entries": ["P.verify", "P.gone"], "stop": ["P.key"], "hash": "P.Sha512", "allow": ["Nat.add", "module:Init.Data"]}
+    fails = A.verifier_failures(rule, path)
+    assert fails == [
+        "verifier: entry P.gone is not a constant of the build; fix `verifier.entries`",
+        "verifier: P.fast (@[implemented_by], in P.Defs) is on the path from P.verify, P.gone: compiled code no proof sees; "
+        "add it to `verifier.allow` only if it is a core primitive",
+        "verifier: P.verify, P.gone reach P.Sha512.hash outside the hash parameter, by P.verify -> P.tag -> P.Sha512.hash; "
+        "route it through the parameter, or add the public constant it serves to `verifier.stop`"]
+    assert A.verifier_failures(None, path) == []
+    assert A.verifier_failures(rule, None)[0].startswith("verifier: `Facts.lean` reported no verifier path")
+    f = facts(); f["verifier"] = {**path, "missing": [], "implemented_by": [], "hash": []}
+    assert A.judge({**POLICY, "verifier": rule}, f, FILES, update=True)[0] == []
+
+
 def test_an_assumption_is_listed_by_name_with_its_record():
     """Each assumption has an owner and the digest of its definition as `reads` holds it, so a changed assumption is its own
     record; an entry no guarantee reads fails; an update converts a list of assumption modules into the definitions read
@@ -911,14 +983,14 @@ def test_an_assumption_is_listed_by_name_with_its_record():
     assert pol["assumptions"] == {"P.Hyp": {"owner": "@lean", "digest": pol["reads"]["P.Assumptions"]["definitions"]["P.Hyp"]}}
     changed = facts(pins={"P.t": fact(reads=[{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "1" * 32},
                                              {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "4" * 32}])})
-    assert "assumptions: P.Hyp's definition in P.Assumptions changed; run `audit.py --update` and commit the record " \
+    assert "assumptions: P.Hyp's definition in P.Assumptions changed; run `check.py --update` and commit the record " \
            "(Daniel's DM shows the change when it lands)" in A.judge(pol, changed, FILES)[0]
     unread = {**pol, "assumptions": pol["assumptions"] | {"P.Other": {"owner": "@lean", "digest": "0" * 64}}}
     assert A.judge(unread, facts(), FILES)[0] == ["assumptions: P.Other is listed, but no guarantee reads it; remove the entry"]
     assert A.judge(unread, facts(), FILES, update=True)[1]["assumptions"] == pol["assumptions"]
     unowned = {**pol, "assumptions": {"P.Hyp": {"digest": pol["assumptions"]["P.Hyp"]["digest"]}}}
     assert A.judge(unowned, facts(), FILES)[0] == ['assumptions: P.Hyp has no owner: write "owner": "@lane" in its entry, or '
-                                                   'run `audit.py --update --owner @lane`']
+                                                   'run `check.py --update --owner @lane`']
     unlisted = {**pol, "assumptions": {}}
     assert A.judge(unlisted, facts(), FILES)[0][0] == ("guarantees: P.t assumes (h : P.Hyp), a closed Prop that is not a "
                                                        "named assumption: a Prop constant listed under `assumptions`")
@@ -944,6 +1016,28 @@ def test_the_source_scan_refuses_kernel_bypasses_but_not_prose(tmp_path):
     (tmp_path / "lakefile.toml").write_text("# debug.skipKernelTC in a comment\n[leanOptions]\ndebug.byAsSorry = true\n")
     hits = A.scans(tmp_path, A.lean_modules(tmp_path), {})
     assert [h.split(" names ")[0] for h in hits] == ["unchecked: P/A.lean:2", "unchecked: lakefile.toml:3"]
+
+
+def test_each_heartbeat_override_is_listed_with_its_value_reason_and_module_build_time_and_none_is_refused(tmp_path):
+    """`heartbeats` (Daniel, 2026-10-09: not banned, listed): an override with its reason ending its line, one with the
+    comments just above as its reason, one with none, `synthInstance`'s, and one in a comment, which is not an override;
+    each with its module's time from the audit's build log (`build_seconds`, which skips a non-module like `:c.o`), or
+    None for a module the build didn't build."""
+    (tmp_path / "P").mkdir()
+    (tmp_path / "P" / "A.lean").write_text(
+        "set_option maxHeartbeats 400000 in -- the `omega` over 40 cases\ntheorem a : True := trivial\n\n"
+        "-- unfolding `step` twice;\n-- measured 9 s\nset_option maxHeartbeats 0 in\ntheorem b : True := trivial\n")
+    (tmp_path / "P" / "B.lean").write_text("theorem c : True := trivial\nset_option synthInstance.maxHeartbeats 100000\n"
+                                           "/- set_option maxHeartbeats 1 in -/\n")
+    log = tmp_path / "build.log"
+    log.write_text("✔ [1/3] Built P.A (1m 2.5s)\n✔ [2/3] Built P.A:c.o (900ms)\n✔ [3/3] Built P.C (250ms)\n")
+    assert A.build_seconds([log, tmp_path / "missing.log"]) == {"P.A": 62.5, "P.C": 0.2}
+    got = A.heartbeats(tmp_path, A.lean_modules(tmp_path), A.build_seconds([log]))
+    assert [(h["file"], h["line"], h["option"], h["value"], h["reason"], h["module_seconds"]) for h in got] == [
+        ("P/A.lean", 1, "maxHeartbeats", 400000, "the `omega` over 40 cases", 62.5),
+        ("P/A.lean", 6, "maxHeartbeats", 0, "unfolding `step` twice; measured 9 s", 62.5),
+        ("P/B.lean", 2, "synthInstance.maxHeartbeats", 100000, None, None)]
+    assert A.scans(tmp_path, A.lean_modules(tmp_path), {}) == []
 
 
 def test_the_dependency_scan_reads_what_the_build_takes_from_fetched_packages(tmp_path):

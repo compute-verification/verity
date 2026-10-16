@@ -477,7 +477,7 @@ lane had approved the deletion, so the passes were lost. Here that `rm` is refus
 
 ### Slack
 
-`research msg` (`slack.py`; `research slack` is the same command) is the coordination API on Slack: a handle posts with
+`research msg` (`slack.py`) is the coordination API on Slack: a handle posts with
 `send` (`--to` names lead it and are woken; `--kind announce` for an announcement, `--kind fyi` or `--quiet` for a note that
 needs no reply) and closes a thread it was asked in with `close` (a status line, ✅, or ❌ with `--declined WHY`). The
 conventions (only handle holders are on Slack, who subscribes to what, the norms) are the `using-slack` skill, and
@@ -573,7 +573,7 @@ which returns once the machine has started the workload detached, so a pass wait
 for the run. It prints `LAUNCHED <name> <run id> on <machine>`, or `RUN-FAILED <name> <run id>: <why>`, and the next launch is
 the next period's; an invalid entry is one `RUN-FAILED <name>: <why>` line. The run's Attempt records what ran and how it
 ended (`research inspect <run id>`). The Lean runs it schedules are declared in `tools/verity/lean/tool.py`: `lean_audit`
-(`audit.py --all --build --fresh`, nightly on `main`) and `lean_upstream` (the entry above, weekly).
+(`check.py --all --build --fresh`, nightly on `main`) and `lean_upstream` (the entry above, weekly).
 
 ### A lane's older notes
 

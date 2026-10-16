@@ -21,8 +21,8 @@ what `verify --zk` sets up at the draw (`zkInputs I`):
   symbols, `Q` queries at `w.lo mod innerN`, and the unique-decoding radius.
 
 `DrawSetupZK` is a draw `verify --zk` sets up (`DrawSetup` at `zkInputs I`) with its schedule and the facts the table
-needs of it; at a draw with none the table is a reference setup's statement with `contra`'s regions, which no witness
-satisfies (as `tableAt`'s `refused`).
+needs of it; at a draw with none the table is a reference setup's statement with `contra`'s two regions alone, which no
+witness satisfies (as `tableAt`'s `refusedC`).
 
 * `RecordsLiveZK`, `DrawOkZK`: #862's `RecordsLive` and `DrawOk` at `--zk` (`AcceptsZK`, `zkInputs I`).
 * `TablesAtZKLive`: wherever flock-verify accepts what `wr` writes, the draw's `--zk` table is the executable's: its
@@ -231,9 +231,9 @@ noncomputable def tabAt (regs : List (Model.Region y.x.st.c.kLog (y.x.st.m - y.x
 /-- The draw's `--zk` table: setupH's statement at its regions. -/
 noncomputable def table : TabZK 𝔽 mPts := y.tabAt (regionsOf y.x.st) (stmtOf_linkLayout y.x.st y.x.wf.1 y.x.wf.2).1
 
-/-- A refused draw's `--zk` table: the statement with `contra`'s regions, which no witness satisfies. -/
+/-- A refused draw's `--zk` table: the statement with `contra`'s two regions alone, which no witness satisfies. -/
 noncomputable def refused : TabZK 𝔽 mPts :=
-  y.tabAt (regionsOf y.x.st ++ DrawSetup.contra y.x.st.c.kLog (y.x.st.m - y.x.st.c.kLog)) y.x.refused_wf
+  y.tabAt (DrawSetup.contra y.x.st.c.kLog (y.x.st.m - y.x.st.c.kLog)) DrawSetup.contra_wf
 
 end DrawSetupZK
 
@@ -268,7 +268,7 @@ theorem drawSetupZK_of (ht : I.tags.typed = false) (x : Integrate.DrawSetup (ZkE
   obtain ⟨hshape, hmsch, hpad⟩ := schedule_zk hz
   obtain ⟨-, hm35, -⟩ := schedule_spec hz
   have ht' : (ZkExec.zkInputs I).tags.typed = false := (ZkExec.zkTags_typed I).trans ht
-  have hk := (setupH_spec ht' x.h).2.2.2.2.2
+  have hk := (setupH_spec ht' x.h).2.2.2.2.2.1
   have h0 : sch.k0 ≤ 35 := by
     have := hshape.2.2.1
     simp only [schedOf] at this hmsch

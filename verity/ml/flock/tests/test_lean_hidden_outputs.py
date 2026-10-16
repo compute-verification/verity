@@ -90,6 +90,28 @@ def test_it_gives_the_provers_sessions_their_verdicts(store, form, name, tmp_pat
     assert all(not v["why"].startswith("S2") for c, v in got.items() if c != "honest"), {c: v["why"] for c, v in got.items()}
 
 
+def test_a_session_past_the_proved_range_is_refused_naming_it(store, tmp_path):
+    """A session whose statement is past the range the soundness bound covers (`Stmt.InRange`, PROTOCOL.md §16.5) is refused
+    at setup, its reason naming the value: flat RoPE's honest session, replayed first (it passes every check and meets the
+    draw-less refusal), then the same session under its circuit with `k_log` 28, one past the cap. `k_log` is the one cap a
+    session can cross: past 1024 regions takes over 1022 row ports, whose hm96 slots outgrow a `2^27` block, and
+    `m_pts = 24 + nbl` is at most 53 once `m ≤ 35`."""
+    d = store / "flat" / "rope-head"
+    subprocess.run([sys.executable, str(VERIFIER / "selftest_records.py"), str(d / "records-cpu"), str(tmp_path)], check=True,
+                   capture_output=True)
+    head, meta, rest = (d / "stage" / "circuit.txt").read_text().split("\n", 2)
+    m = json.loads(meta[len("META "):])
+    assert m["k_log"] <= 27
+    over = tmp_path / "circuit.txt"
+    over.write_text(head + "\nMETA " + json.dumps(dict(m, k_log=28), sort_keys=True, separators=(",", ":")) + "\n" + rest)
+    why = []
+    for circuit in (d / "stage" / "circuit.txt", over):
+        p = subprocess.run([str(BIN), "verify", "--statement", SETS["flat", "rope-head"], "--circuit", str(circuit), "--public",
+                            str(d / "stage" / "pub-4.bin"), "--session", str(tmp_path / "honest")], capture_output=True, text=True)
+        why += [json.loads(ln[8:])["why"] for ln in p.stdout.splitlines() if ln.startswith("VERDICT ")]
+    assert why == [DRAWLESS, "setup: META: k_log 28 is over 27: no fast100 schedule"], why
+
+
 def test_a_tail_with_no_unit_is_refused(store, tmp_path):
     """`units_per_vu = 0` is refused as the circuit is read (PROTOCOL.md §16.10, D8; the Rust side is `circuit.rs`'s
     `a_tail_with_no_unit_is_refused`). Flat GEMM's tail returns the outputs, so its unit count need not be a power of two;

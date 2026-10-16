@@ -59,7 +59,8 @@ tables, under their laws `(Vs j).law`, each the full draw (`--draw subset:<units
 `zs R ω t R₂ j`, whose fields carry `flock-verify verify --zk --registered`'s setup, the `live-verifier` record custody
 (`ZkOuter.hRec`) and the registrant's record of the registered reads (`ZkOuter.rd`: the hidden circuit's rows, `R₂`'s
 values, and the verifier's own). For every prover `σ` of the recursive audit, given V*'s bridge
-(`Flock.Assumptions.VBridge`) and the inner protocol's soundness at `ε_in`, one of four holds.
+(`Flock.Assumptions.VBridge`) and the inner protocol's soundness at `ε_in`, one of four holds. It needs `VBridge` in
+full, which a protocol whose last round isn't committed (candidate 3 today) doesn't give.
 
 * A registrant fork (`regFinder`): one run of `σ` reaches an outcome at whose history and registration two of V*'s
   sessions' registrant records clash (`RegColl`: two registered reads whose openings or hm96 leaves are a SHA-512
@@ -83,7 +84,15 @@ values, and the verifier's own). For every prover `σ` of the recursive audit, g
 
 Every `∃` in a fork ranges over `σ`'s own runs and what they output, never over arbitrary strings. The bound is exact
 for a prover that never collides on a fork, and says nothing for one that collides on a single pair: no term counts
-SHA-512 evaluations. -/
+SHA-512 evaluations.
+
+**A nearly empty event** (vacuity sweep, 16 Oct, LEAN-19): Its event asks that the inner statement have no witness (`¬
+holds`, with `holds` = `∃ z, Satisfies z`). The inner statement pins each row only by its hm96 commit string `b ‖ c`,
+with the salt a free witness wire, so a commitment to a wrong row under a fresh salt also opens to the right row except
+with probability at most `4·hidingGap` (`VacuityProbes.Hm96Opens.opens_to_any_row`, `shift_reachable`, on
+cursor/vacuity-sweep-c7a9). For any cheater the event is then nearly empty, and the bound bounds it, not a wrong
+computation. The fix is the knowledge form Daniel's claims API states recursion in (PRF-40); `EndToEndHidden` avoids
+this by extraction. -/
 def RecursiveSound : Prop :=
   ∀ {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
     -- V*'s laws: A3
@@ -364,7 +373,8 @@ read some of the rows, never necessarily all of them: on a run `o` whose session
 read row `i`, and `row o i` and `op o i` are the row and the opening of `rt` at `i` the run carries (`_hop`; the run's
 output holds the strategy the prover names for each session, and with it the registered reads), and the hidden
 statement the inner verifier ran on is the statement at the draw of every private circuit that has the rows the run read
-(`_hx`: `x R ω = stmt q ω` for every such `q`). Then one of five holds.
+(`_hx`: `x R ω = stmt q ω` for every such `q`). Then one of five holds. It needs `VBridge` in full, which a protocol
+whose last round isn't committed (candidate 3 today) doesn't give.
 
 * `RecursiveSound`'s registrant fork (`regFinder`), round fork (`RoundFork`) or session fork (`SessionFork`).
 * A registration break: some outcome `o` that `σ` reaches has all of V*'s sessions accepting, having read at some
@@ -373,7 +383,15 @@ statement the inner verifier ran on is the statement at the draw of every privat
 * $$\Pr[\text{every session of V* accepts} \wedge \neg\,\text{the statement of } p \text{ holds}]$$
   is at most `RecursiveSound`'s bound, unchanged.
 
-Every `∃` ranges over `σ`'s own runs and what they output; nothing is assumed of SHA-512. -/
+Every `∃` ranges over `σ`'s own runs and what they output; nothing is assumed of SHA-512.
+
+**A nearly empty event** (vacuity sweep, 16 Oct, LEAN-19): its event, as `RecursiveSound`'s, asks that the inner
+statement have no witness (`¬ holds`, with `holds` = `∃ z, Satisfies z`). The inner statement pins each row only by its
+hm96 commit string `b ‖ c`, with the salt a free witness wire, so a commitment to a wrong row under a fresh salt also
+opens to the right row except with probability at most `4·hidingGap` (`VacuityProbes.Hm96Opens.opens_to_any_row`,
+`shift_reachable`, on cursor/vacuity-sweep-c7a9). For any cheater the event is then nearly empty, and the bound bounds
+it, not a wrong computation. The fix is the knowledge form Daniel's claims API states recursion in (PRF-40);
+`EndToEndHidden` avoids this by extraction. -/
 def RecursiveRanRegistered : Prop :=
   ∀ {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
     (_hA3 : ∀ j, FlockSoundness.Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)

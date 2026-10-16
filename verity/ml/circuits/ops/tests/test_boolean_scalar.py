@@ -1,5 +1,5 @@
 """`verity.ml.circuits.ops.boolean.scalar`: the bf16 comparator, the selects and the bit AND agree with their word primitives on every input
-(the comparator on all 2^32 pairs of words, each select over its whole truth table); the f32 arithmetic, max / min and casts
+(the comparator on all 2^32 pairs of words, each select over its whole truth table); the f32 equality, arithmetic, max / min and casts
 agree with theirs (`trace.word_of`) on every tuple of special words and on random words (the bf16 and E4M3 widenings on every
 word, the E4M3 cast on every exponent around its range, the E2M1 cast on every boundary of its grid and on all 2^32 words);
 each carries exactly its builder's live ANDs and is pinned by gate count and program digest."""
@@ -26,7 +26,7 @@ from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import Circuit
 from verity.ml.circuits.silicon.cast import E2M1_UP
 
-DEFS = [BSC.Bf16GtStrict, BSC.SelectBf16, BSC.SelectI32, BSC.F32Add, BSC.F32Mul, BSC.F32Fma, BSC.F32Div, BSC.F32Fabs, BSC.F32Fmaxf,
+DEFS = [BSC.Bf16GtStrict, BSC.SelectBf16, BSC.SelectI32, BSC.SelectF32, BSC.F32Eq, BSC.F32Add, BSC.F32Mul, BSC.F32Fma, BSC.F32Div, BSC.F32Fabs, BSC.F32Fmaxf,
         BSC.F32Fminf, BSC.Bf16ToF32, BSC.F32ToE4m3Sat, BSC.E4m3ToF32, BSC.F32ToE2m1Sat, BSC.BitAnd]
 
 #: id -> (And, Xor, Not gates, standalone program digest)
@@ -34,6 +34,8 @@ PINS = {
     "Bf16GtStrict_v2": (56, 133, 19, "7ca8aa49ba9b7baa4b9ab176868a7bc0058d4542ae0f5fbb1b37f63ca777f7fc5b557901e21cd9162de35ca12f357e7ed09a88b2003ded3937c1bce272695d11"),
     "SelectBf16_v2": (16, 32, 0, "efa9f34e83b477709aa8b5b53fec1075a9ccc7998289a509a2f87920952af8e79ba3600c02c27f2626e96f6c06d703e9c4d27fe7700a0a65837ec3057df3a229"),
     "SelectI32_v2": (32, 64, 0, "e53a00a25c382116e2bfb11d8a7ab94f5971edf1c1097fa23d3caf0645fdb94e32829ec00a373c914990cb11dfd8cf95dff3203be82bcd414d4aab063733cc9f"),
+    "SelectF32_v2": (32, 64, 0, "b0bf84c463743b8d27735050199b1506b2581be38eaf57feb6d106bee380a01128bad22589e018f3a69447ce03028f14744149f66b7d058dbe87a319d093f150"),
+    "F32Eq_v2": (117, 168, 35, "fdd60d0a71241f98066d0cd765d466cc77f4bb31437dd499f4aeb4a100410a94585c1a2a59b9d5a1cd60107794ae9434478c1398b9e2b14f7725f4aebacede64"),
     "F32Add_v3": (812, 1395, 115, "f977f860eaea446464733b3698a68a80a1cfa359ff3c49e2db1ea4fc4256cc80e02821083af0702261b52ecd0905809a8945acabd5ee299c9949005d6890a17b"),
     "F32Mul_v3": (2430, 4650, 110, "460ec851f41d5b72ef4d1b3db8fa735af47da1e623aac240bb9b88000baf47ffa4c2640ad4ce655e7d10a7ee93a77c6eca86a9156f5a509170da1af6f44bc8fa"),
     "F32Fma_v3": (4485, 7863, 267, "ca2f047972f3e47ee47974f7630c5c06bc0ed20cd310752b26b45f37914f812242a37dc85949a0a7c21a9c452240f0d0b69e7e40100728183cb4cd4a65476d39"),
@@ -104,7 +106,7 @@ def _inputs(d, rng) -> list[np.ndarray]:
     if d is BSC.Bf16GtStrict:
         grid = np.array(list(itertools.product(range(len(BF16_SPECIALS)), repeat=2)), np.int64).T
         return [np.concatenate([BF16_SPECIALS[g], _words(16, 60_000, rng)]) for g in grid]
-    if d in (BSC.SelectBf16, BSC.SelectI32):
+    if d in (BSC.SelectBf16, BSC.SelectI32, BSC.SelectF32):
         w = 16 if d is BSC.SelectBf16 else 32
         return [rng.integers(0, 2, 60_000, dtype=np.uint8), _words(w, 60_000, rng), _words(w, 60_000, rng)]
     if d is BSC.Bf16ToF32:
@@ -293,7 +295,7 @@ def _supports(c: BS.Compiled) -> list[frozenset[int]]:
     return sup
 
 
-@pytest.mark.parametrize("d", [BSC.SelectBf16, BSC.SelectI32], ids=lambda d: d.name)
+@pytest.mark.parametrize("d", [BSC.SelectBf16, BSC.SelectI32, BSC.SelectF32], ids=lambda d: d.name)
 def test_select_on_its_whole_truth_table(d) -> None:
     """Output bit j of the compiled body reads only c, a_j and b_j, so the 8 assignments of (c, a_j, b_j), made on every bit at
     once, are each output bit's whole truth table; the word primitive (``a if c else b``) is bitwise, and both agree on all 8."""

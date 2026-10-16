@@ -252,6 +252,53 @@ def test_a_failure_two_changes_reach_rings_ci_and_ejects_nothing(world, monkeypa
     assert [m.pr for m in h.q.chain()] == [1, 2]
 
 
+LINT_LOG = """..........F........                                                      [100%]
+=================================== FAILURES ===================================
+___________________________ test_markdown_size_caps ____________________________
+
+>       assert not offenders, "maintained documents are small:\\n" + "\\n".join(offenders)
+E       AssertionError: maintained documents are small:
+E         tools/research/src/research/store/README.md: 48 KB > 48 KB, 17 bytes over; move detail to the notes store
+
+tests/test_repository.py:180: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_repository.py::test_markdown_size_caps - AssertionError: ma...
+1 failed, 18 passed in 17.49s
+"""
+
+
+def _lint_run(tmp_path, log: str = LINT_LOG):
+    d = tmp_path / "run"
+    d.mkdir(parents=True)
+    (d / "steps.jsonl").write_text('{"step": "preflight-lock", "status": "passed"}\n'
+                                   '{"step": "preflight-lints", "status": "failed", "rc": 1, "log": "preflight-lints.log"}\n')
+    (d / "preflight-lints.log").write_text(log)
+    return d
+
+
+def test_a_lint_failure_only_one_trains_change_reaches_ejects_that_pr(world, monkeypatch, tmp_path):
+    """13 Oct 07:35Z: 898eae8a1f74 failed `preflight-lints` because the store README one PR edited was 17 bytes over its cap,
+    and drive rang ci: the offender is named in the lint's assertion, and drive read only the suites' tracebacks."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size = 2
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"tools/research/src/research/store/README.md": "big\n"}))
+    h.tick()
+    _check(world, monkeypatch, _tip(world), ("false",))
+    h.evidence = [_lint_run(tmp_path)]
+    h.tick()
+    assert len(h.posts) == 1 and "Ejected #2" in h.posts[0] and "store/README.md" in h.posts[0], h.posts
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [1]
+
+
+def test_a_failed_pytest_step_points_at_its_tests_and_the_paths_its_failures_name(tmp_path):
+    from research.drive import implicated
+
+    assert implicated(_lint_run(tmp_path)) == {"tests/test_repository.py", "tools/research/src/research/store/README.md"}
+    assert implicated(_lint_run(tmp_path / "b", "error: lock is stale\n")) is None
+
+
 def test_a_failure_outside_the_suites_or_without_a_failing_test_points_at_no_file(tmp_path):
     from research.drive import implicated, touches
 
@@ -259,6 +306,31 @@ def test_a_failure_outside_the_suites_or_without_a_failing_test_points_at_no_fil
     assert implicated(d) >= {"pkg/tests/test_x.py", "/x/site/pkg/conftest.py"}
     assert touches({"conftest.py", "pkg/conftest.py"}, {"/x/site/pkg/conftest.py"}) == {"pkg/conftest.py"}
     (d / "steps.jsonl").write_text('{"step": "circuit-check", "status": "failed"}\n')
+    assert implicated(d) is None
+
+
+def test_a_guard_failed_suite_with_no_failing_test_points_at_its_outside_reads_and_their_readers(tmp_path):
+    """Train 21b3d26fe1a6 (14 Oct 21:08Z): verity-lean-audit failed with 146/146 tests passing — the read guard alone — and
+    drive said "the failure names no file", so attribution took an agent's archaeology. The suite's record names the files
+    read outside the inputs and the test module that read each (`outside`, path -> module; a child's reads in
+    `child_outside`), and those implicate the PR that added the reading test or changed the file read."""
+    import json
+
+    from research.drive import implicated, touches
+
+    d = tmp_path / "run"
+    (d / "suites").mkdir(parents=True)
+    (d / "steps.jsonl").write_text('{"step": "lean-suites", "status": "failed"}\n')
+    record = {"name": "verity-lean-audit", "suite": "tools/verity/lean", "status": "failed", "failed_tests": [],
+              "outside": {"tools/verity/check/lean_slot.py": "tools/verity/lean/tests/test_lean_changed.py",
+                          "tools/verity/check/slot.py": "*"},
+              "child_outside": {"tools/verity/lean/tests/test_cache.py": ["elsewhere/data.txt"]}, "log": None}
+    (d / "suites-lean.json").write_text(json.dumps([record]))
+    got = implicated(d)
+    assert got == {"tools/verity/check/lean_slot.py", "tools/verity/check/slot.py",
+                   "tools/verity/lean/tests/test_lean_changed.py", "tools/verity/lean/tests/test_cache.py", "elsewhere/data.txt"}
+    assert touches({"tools/verity/lean/tests/test_lean_changed.py", "a.txt"}, got) == {"tools/verity/lean/tests/test_lean_changed.py"}
+    (d / "suites-lean.json").write_text(json.dumps([{**record, "outside": {}, "child_outside": {}}]))
     assert implicated(d) is None
 
 
@@ -327,6 +399,36 @@ def test_next_is_checked_in_stacked_trains_and_a_failed_train_holds_up_only_the_
     h.tick()
     assert _git(world.origin, "rev-parse", "main") == members[1].commit       # the train below the failure lands
     assert len(h.posts) == 1 and f"{members[3].commit[:12]} on `next` (#3 #4) failed" in h.posts[0]
+
+
+def test_a_pr_that_makes_circuit_check_run_cold_goes_above_the_warm_ones_and_they_get_a_check_of_their_own(world, monkeypatch):
+    """15 Oct: Lean-only PRs from proofs sat for hours in trains with a circuits change, whose check ran circuit-check cold."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size = 6
+    for n, f in ((1, "a.txt"), (2, "verity/ml/circuits/library.py"), (3, "Security/X.lean")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    h.tick()
+    members = h.q.chain()
+    assert [m.pr for m in members] == [1, 3, 2]
+    assert [c for c, _, _ in h.launched] == [members[1].commit, members[2].commit]
+
+
+def test_two_cold_prs_side_by_side_share_one_cold_train(world, monkeypatch):
+    """16 Oct 06:38Z: #2113 and #2115, both cold, were cut into two trains, and two nodes each ran circuit-check cold."""
+    h = Harness(world, monkeypatch)
+    assert h.d.trains(6, frozenset({4, 5})) == [3, 5]
+    assert h.d.trains(6, frozenset({2, 4})) == [1, 3, 5]
+
+
+def test_forces_cold_reads_the_paths_that_move_most_circuit_check_keys():
+    from research.queue import forces_cold
+
+    assert forces_cold(["verity/ml/circuits/library.py"]) and forces_cold(["uv.lock"]) and forces_cold(["x/y.circuit-check.py"])
+    assert forces_cold(["tools/verity/circuit_check/src/circuit_check/cache.py"])
+    assert forces_cold(["integrations/vllm/verity_vllm/pipeline/serving_rows.py"])          # #2114: 907 targets rerun
+    assert not forces_cold(["integrations/vllm/tests/pipeline/test_row.py", "tools/research/src/research/drive.py"])
+    assert not forces_cold(["Security/Proofs/X.lean", "verity/ml/circuits/README.md", "verity/ml/circuits/tests/test_x.py"])
+    assert not forces_cold([])
 
 
 def test_shadow_launches_lands_and_tells_nothing(world, monkeypatch):
@@ -468,3 +570,48 @@ def test_a_conflict_is_told_to_ci_and_the_lane_that_owns_the_pr(world, monkeypat
                      (dataclasses.replace(world.gh.prs[2], body="Lane `infra`.", branch=""), "infra"),
                      (dataclasses.replace(world.gh.prs[2], branch="cursor/x-0000"), None)):
         assert q.handle(pr) == want
+
+
+def test_a_notice_reaches_the_merge_thread_without_naming_its_sender_and_a_refused_post_is_retried(world, monkeypatch):
+    """13 Oct: `research msg send` refuses a `--to` naming the sender, and drive posted as ci to @ci, so from 05:07Z no notice
+    was posted. The sender is also selectable (`queue eject --by lean`), so its handle, not always @ci, must be dropped."""
+    from research import drive
+
+    argv = []
+    monkeypatch.setattr(drive.subprocess, "run", lambda cmd, **kw: argv.append(cmd) or
+                        drive.subprocess.CompletedProcess(cmd, 0))
+    assert drive.merge_thread_post("x", ("@ci", "@memory-accounting"))
+    assert argv[-1][argv[-1].index("--as") + 1] == "ci"
+    assert argv[-1][argv[-1].index("--to"):argv[-1].index("--quiet")] == ["--to", "@memory-accounting"]
+    assert drive.merge_thread_post("x", ("@ci",)) and "--to" not in argv[-1]
+    assert drive.merge_thread_post("x", ("@ci", "@lean"), sender="lean")
+    assert argv[-1][argv[-1].index("--as") + 1] == "lean"
+    assert argv[-1][argv[-1].index("--to"):argv[-1].index("--quiet")] == ["--to", "@ci"]
+
+    h = Harness(world, monkeypatch)
+    logged = []
+    h.q.log = logged.append
+    ok = [False]
+    h.d.post = lambda text, to: ok[0]
+    state = {"told": []}
+    h.d.refuse(state, "k", "#1 conflicts", "circuits")
+    assert state["told"] == [] and "could not post" in logged[-1]
+    ok[0] = True
+    h.d.refuse(state, "k", "#1 conflicts", "circuits")
+    assert state["told"] == ["k"] and logged[-1].startswith("research queue drive: told @ci @circuits")
+
+
+@pytest.mark.parametrize("to, sender", [(("@ci",), "ci"), (("@ci", "@circuits"), "ci"), (("@ci", "@lean"), "lean")])
+def test_every_notice_drive_sends_passes_msg_sends_own_refusals(monkeypatch, to, sender):
+    """13 Oct 17:41Z: train b22a's failure, for @ci alone, started `@ci queue:`, and `msg send` refused it as a post that wakes
+    only its author.  A stand-in for `msg send` had hidden that refusal, so here each post goes through `msg send` itself."""
+    from research import drive, slack
+
+    monkeypatch.setattr(slack, "acting_as", lambda ns, reg, name: slack.name_entry(ns, reg, name))
+
+    def run(cmd, **kw):
+        assert cmd[1:5] == ["-m", "research", "msg", "send"]
+        return drive.subprocess.CompletedProcess(cmd, slack.main([*cmd[4:], "--dry-run"]))
+
+    monkeypatch.setattr(drive.subprocess, "run", run)
+    assert drive.merge_thread_post(f"{' '.join(to)} queue: b22a0c54d29e on `next` (#1 #2) failed its check", to, sender=sender)

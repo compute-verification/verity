@@ -56,10 +56,10 @@ class WholeStep:
         if mgr is None or not mgr.graphs:
             raise ValueError("vLLM captured no CUDA graphs at start: whole-step replay needs its FULL decode graphs "
                              "(cudagraph_mode FULL_DECODE_ONLY, enforce_eager off)")
-        bad = sorted({d.num_tokens for d in mgr.graphs if d.num_tokens > GRAPH_ROWS or d.num_tokens % ROW_ALIGN})
+        bad = sorted({d.num_tokens for d in mgr.graphs if -(-d.num_tokens // ROW_ALIGN) * ROW_ALIGN > GRAPH_ROWS})
         if bad:
             raise ValueError(f"vLLM's graphs of {bad} tokens: a forward is captured whole only when its calls run as graphs "
-                             f"(at most {GRAPH_ROWS} rows) without filler rows (a multiple of {ROW_ALIGN})")
+                             f"(at most {GRAPH_ROWS} rows, filler rows to a multiple of {ROW_ALIGN} included)")
         self.run, self.stack, self.runner, self.mgr = run, stack, runner, mgr
         self.sets: dict[tuple, dict] = {VLLM: mgr.graphs}
         self.calls: dict[tuple, tuple] = {}

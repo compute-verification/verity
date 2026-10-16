@@ -151,7 +151,8 @@ theorem vbridge_exec
     (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → (ℐ).Msg)
     (sh : Shape) (rep : ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData)
     -- G items 1–3 and 4
-    (halg : AlgebraDecodes (I := ℐ) zs dg N k Rw sh rep) (hacc : AccChains (I := ℐ) zs dg N k Rw sh rep)
+    (halg : AlgebraDecodes (I := ℐ) zs dg N k Rw sh fun _ _ _ => rep)
+    (hacc : AccChains (I := ℐ) zs dg N k Rw sh fun _ _ _ => rep)
     -- G item 5: one table's files and both reps' runs
     (files : ((j : Fin S) → (Vs j).Bits) → TableFiles cls) (hsch : ∀ l, (files l).sch = sch)
     (hfiles : ∀ R ω t R₂ τ o, Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o →

@@ -1110,7 +1110,8 @@ def is_full_check(req: dict) -> bool:
 
 def lost_checks(ctx: Ctx) -> list[Finding]:
     """Yesterday's (UTC) line: of the full checks that started on this machine, how many infrastructure ended (LOST_CLASSES, or
-    a run that never ended), against the CI page's target of under LOST_TARGET_PCT%."""
+    a run that never ended), against the CI page's target of under LOST_TARGET_PCT%. A run the machine refused before it started
+    (refused.json: no slot, no memory, a bad command line) never started, so it counts in neither."""
     day = time.strftime("%Y%m%d", time.gmtime(ctx.now - 86400))
     total, lost, live = 0, [], {v["run"] for v in run_scopes(ctx).values()}
     for d in sorted(ctx.path(RUNS).glob(f"r{day}-*")):
@@ -1118,7 +1119,7 @@ def lost_checks(ctx: Ctx) -> list[Finding]:
             req = json.loads(_read(ctx.path(REQUESTS) / d.name / "request.json") or "{}")
         except ValueError:
             continue
-        if not is_full_check(req):
+        if not is_full_check(req) or (d / "refused.json").exists():
             continue
         total += 1
         try:
@@ -1139,7 +1140,7 @@ def lost_checks(ctx: Ctx) -> list[Finding]:
 
 MERGE_THREAD = "1790957906.278529"      # #agent-coordination's merge thread, where the lander and the lanes follow the trains
 LANDER = "old-circuits-and-proofs"
-REPO_SLUG = "danielreuter/verity"
+REPO_SLUG = "compute-verification/verity"
 # Node 2 too without N2_GUARD: its check slots run whole checks at any time, so one niced read of their run files a minute is
 # nothing they don't already bear (and its guard refuses everything while its fill runner is stopped)
 CHECK_MACHINES = (("vy-nebius-1", "n1"), ("vy-nebius-2", "vy-n2"), ("vy-nebius-cpu-1", "vy-nebius-cpu-1"))
@@ -1487,7 +1488,7 @@ MONITORS: list[Monitor] = [
             "Read each lost check's failure.json; fix the cause on the machine (memory caps, disk, the runner) and tell its "
             "sender to resend it.", every_s=3600, events=True),
     Monitor("drift", "infra", "warn", "relay", deploy_drift,
-            "`research deploy drift --node N` for the detail; install main's version (`research deploy install N --by WHO "
+            "`research deploy drift --on N` for the detail; install main's version (`research deploy install N --by WHO "
             "PATH`), restart what runs old code, or move strays to the attic (`research deploy attic N PATH`).",
             every_s=3600, unread_s=4 * 3600),
     Monitor("unpreserved", "infra", "warn", "relay", unpreserved,
@@ -1532,7 +1533,7 @@ def note(ev: dict, now: float) -> tuple[str, str]:
     """An open as alert_sink.py's note: (file name, markdown), the lane contract's front matter plus the monitor's own fields."""
     name = f"{time.strftime('%Y%m%dT%H%MZ', time.gmtime(now))}-alert-{_slug(ev['monitor'])}-{hashlib.sha256(ev['key'].encode()).hexdigest()[:8]}.md"
     lines = ["---", f"id: {name[:-3]}", "campaign: nebius-monitoring", "lane: infra", "kind: finding", "status: open",
-             f"tags: [{ev['severity']}]", "repo: danielreuter/verity", f"origin: {ev['by']} (research monitors, research/monitors.py)",
+             f"tags: [{ev['severity']}]", "repo: compute-verification/verity", f"origin: {ev['by']} (research monitors, research/monitors.py)",
              f"monitor: {ev['monitor']}", f"key: {json.dumps(ev['key'])}", f"owners: [{', '.join(ev['owners'])}]",
              f"severity: {ev['severity']}", "---", "", f"# {title(ev['text'])}", "", ev["text"], "", f"What to do: {ev['action']}", ""]
     return name, "\n".join(lines)
@@ -1952,7 +1953,7 @@ def slack_post(dry: bool) -> Callable[[dict, dict | None], dict]:
     def post(ev: dict, thread: dict | None) -> dict:
         """Post `ev`, recording each message in `thread` as soon as Slack has it, so a retry posts only what is still missing."""
         th = {} if thread is None else thread
-        ev = {**ev, "owners": list(dict.fromkeys([*ev["owners"], *sender_handles(reg, ev["text"])]))}
+        ev = {**ev, "owners": list(dict.fromkeys([*ev["owners"], *sender_handles(slack.with_routes(reg, routes), ev["text"])]))}
         if ev["event"] == "clear":
             done = th.setdefault("cleared", [])
             for k, ch in (("ts", alerts), ("pointer", front)):

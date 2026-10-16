@@ -18,16 +18,17 @@ from waits import wait_runner
 REPO = Path(__file__).resolve().parents[3]
 SRC = str(Path(remote.__file__).resolve().parents[1])
 PY = sys.executable
-REAL_ROOTS = ["tools/research/src", "infra/cluster/src", "infra/ops", "archive/sp1/python", "benchmarks/numerical/python", "integrations/vllm",
-              "verity/ml/flock/python", "tools/verity/circuit_check/src", "tools/verity/cli", "verity/core/difftest/python"]
+REAL_ROOTS = ["tools/research/src", "tools/config", "infra/cluster/src", "infra/ops", "archive/sp1/python", "benchmarks/numerical/python",
+              "benchmarks/harness", "integrations/vllm", "verity/ml/flock/python", "tools/verity/circuit_check/src",
+              "tools/verity/cli", "verity/core/difftest/python"]
 
 
 def test_this_repository_resolves_every_workspace_package_inside_the_tree(tmp_path):
     d = P.import_roots_dir(REPO)
     assert d["roots"] == REAL_ROOTS and d["missing"] == [] and d["shim"] == ["verity"] and d["source"] == "pyproject.toml [tool.uv.workspace]"
-    names = ["research", "cluster", "verity_ops", "verity", "verity.core.protocols.sampled_proofs", "verity_vllm", "verity_sp1",
-             "verity_numerical", "verity_flock", "circuit_check", "verity.ml.circuits", "verity.ml.kernels", "verity.core",
-             "verity_difftest"]
+    names = ["research", "verity_config", "cluster", "verity_ops", "verity", "verity.core.protocols.sampled_proofs", "verity_vllm", "verity_sp1",
+             "verity_numerical", "verity_bench", "verity_flock", "circuit_check", "verity.ml.circuits", "verity.ml.kernels",
+             "verity.core", "verity_difftest"]
     probe = "import importlib.util as u, sys; [print(n, u.find_spec(n).origin) for n in sys.argv[1:]]"
     # -S: no site-packages, so an editable install elsewhere cannot answer; find_spec locates without importing (no torch)
     r = subprocess.run([PY, "-S", "-c", probe, *names], cwd=tmp_path, env={"PYTHONPATH": P.pythonpath(str(REPO), d)}, capture_output=True, text=True)

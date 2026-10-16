@@ -42,15 +42,17 @@ url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [tool.uv.workspace]
-members = ["tools/research", "infra/cluster", "infra/ops", "archive/sp1", "benchmarks/numerical", "integrations/vllm", "verity/ml/flock", "tools/verity/circuit_check", "tools/verity/check", "tools/verity/lean", "benchmarks/native_peak", "benchmarks/tc_probe", "benchmarks/tc_probe_fp4", "benchmarks/commitments", "archive/gkr", "archive/direct", "benchmarks/pouw", "benchmarks/network_traces", "tools/verity/cli", "verity/core/difftest", "verity/core/protocols/pous/check", "verity/core/primitives/identity", "verity/core/protocols/composition", "verity/core/primitives/evaluate", "verity/core/service/firewall", "verity/core/service/sampled_proofs", "verity/core/protocols/pouw/lean/window", "verity/core/protocols/pouw/lean/check", "verity/core/devices/memory_challenger/lean"]
+members = ["tools/research", "tools/config", "infra/cluster", "infra/ops", "archive/sp1", "benchmarks/numerical", "benchmarks/harness", "integrations/vllm", "verity/ml/flock", "tools/verity/circuit_check", "tools/verity/check", "tools/verity/lean", "benchmarks/native_peak", "benchmarks/tc_probe", "benchmarks/tc_probe_fp4", "benchmarks/commitments", "archive/gkr", "archive/direct", "benchmarks/pouw", "benchmarks/network_traces", "tools/verity/cli", "verity/core/difftest", "verity/core/protocols/pous/check", "verity/core/primitives/identity", "verity/core/protocols/composition", "verity/core/primitives/evaluate", "verity/core/service/firewall", "verity/core/service/sampled_proofs", "verity/core/protocols/pouw/lean/window", "verity/core/protocols/pouw/lean/check", "verity/core/devices/memory_challenger/lean"]
 
 [tool.uv.sources]
 research = { workspace = true }
+verity-config = { workspace = true }
 verity-ops = { workspace = true }
 cluster = { workspace = true }
 verity = { workspace = true }
 verity-sp1 = { workspace = true }
 verity-numerical = { workspace = true }
+verity-bench = { workspace = true }
 verity-vllm = { workspace = true }
 verity-flock = { workspace = true }
 verity-circuit-check = { workspace = true }
@@ -62,7 +64,7 @@ verity-difftest = { workspace = true }
 # pyyaml: the tests of node 1's dispatcher and pack pilot (research/pods/nebius), which render Job templates with it on the
 # node's own venv; without it those test modules skip. Not a dependency of `research`, which stays stdlib only. editables:
 # hatch's exact editable mode, which uv doesn't install by itself.
-dev = ["editables>=0.5", "jsonschema>=4.26", "pytest>=8", "pytest-xdist>=3.6", "pyyaml>=6", "research", "cluster", "verity-ops", "verity-sp1", "verity-numerical", "verity-vllm", "verity-flock", "verity-circuit-check", "verity", "numpy", "verity-cli", "verity-difftest"]
+dev = ["editables>=0.5", "jsonschema>=4.26", "pytest>=8", "pytest-xdist>=3.6", "pyyaml>=6", "research", "verity-config", "cluster", "verity-ops", "verity-sp1", "verity-numerical", "verity-bench", "verity-vllm", "verity-flock", "verity-circuit-check", "verity", "numpy", "verity-cli", "verity-difftest"]
 
 [tool.pytest.ini_options]
 # The repository's own suite: invariants of the whole tree. Every other directory with tests configures its own suite in its

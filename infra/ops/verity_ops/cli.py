@@ -7,7 +7,7 @@ import sys
 
 USAGE = """usage: ops COMMAND [ARGS...]
 
-  ops deploy drift [--node N ...] [--json] | install NODE --by WHO [--ref REF] [PATH ...] [--apply]
+  ops deploy drift [--on N ...] [--json] | install NODE --by WHO [--ref REF] [PATH ...] [--apply]
                     # what runs on the Nebius nodes (deploy.toml) against main; installs from a pushed commit (verity_ops/deploy.py)
   ops keeper set|stop|status ...                     # keep a job running on a node until a time (verity_ops/keeper.py)
 """

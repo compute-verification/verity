@@ -13,9 +13,11 @@ what the part sessions' reads files and registered reads say there:
 * `OwnNamesRows`, `PartPortsOne`: each part's reads file names its row ports, and two parts' entries at a row port of
   one name are one entry (`rec_vstage.py:356-357`, `rec_residuals.py:446-449`). Not at every port: each part's `v` and
   `out` entries are its own (`rec_residuals.py:451-461`);
-* `ReadsOwn`: a part session's registered read at a row port is at `own`'s entry of that name, at the position it
-  gives the unit (`OwnReads`, at a part's labels);
-* `nv_part`: a part's statement has two instances (`Stmt.instances`);
+* `ReadsOwn`: a part session's registered read is at `own`'s entry of its port's name, at the position it gives the
+  unit (`OwnReads`, at a part's labels);
+* `nv_part`, `un_val`: a part's statement has two instances (`Stmt.instances`), so rep `r`'s unit is instance `r`;
+* `OwnNamesOne`, `readOne_of`: each part's reads file names each port once, so a read's port is its one entry of that
+  name, read at the unit's position (`Recursion.vRows_tie`'s and `zero_tie`'s `hone` and `hpos`);
 * `rowColKeys_of`, `sameRow_of`: `RowColKeys` and `SameRow` from those and `HCover`.
 -/
 
@@ -100,15 +102,15 @@ def PartPortsOne : Prop :=
         ∀ reg' ∈ (F.zs R ω t R₂ j').own, reg'.name = (F.Vs j').c.ports[q'].name → reg = reg'
 
 /-- Obligation: discharged by the family's construction of `rd`, with `RowsRegistered` (the transfer's extraction, else
-record custody). **A part's registered read at a row port is at `own`'s entry of that name, at the position it gives
-the unit.** At every accepted outer proof, a registered read `(u, q)` of part `p`'s session at a row port `q` has as its
-port an entry of `own` named as `q`, whose position for unit `u` is the read's. `ZkOuter.hown` (`OwnReads`) says it at
-the drawn outcomes, at the drawn statement's label of `u`, which is `u` at a part's units; acceptance of an arbitrary
-outcome does not give it, and `rd` is the family's field. -/
+record custody). **A part's registered read is at `own`'s entry of its port's name, at the position it gives the
+unit.** At every accepted outer proof, a registered read `(u, q)` of part `p`'s session (at a row port, `v` or `out`)
+has as its port an entry of `own` named as `q`, whose position for unit `u` is the read's. `ZkOuter.hown`
+(`OwnReads`) says it at the drawn outcomes, at the drawn statement's label of `u`, which is `u` at a part's units;
+acceptance of an arbitrary outcome does not give it, and `rd` is the family's field. -/
 def ReadsOwn : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o →
     ∀ (p : ℕ) (j : Fin F.stmts.size) (nm : String) (pt : VStar.Part), F.stmts[j] = .inner p nm pt →
-      ∀ (u : Fin (F.Vs j).nv) (q : Fin (F.Vs j).c.ports.size), F.RowPort p j q →
+      ∀ (u : Fin (F.Vs j).nv) (q : Fin (F.Vs j).c.ports.size),
         (F.zs R ω t R₂ j).rd.isRead (.inl (u, q)) →
         (F.zs R ω t R₂ j).rd.port (.inl (u, q)) ∈ (F.zs R ω t R₂ j).own ∧
           ((F.zs R ω t R₂ j).rd.port (.inl (u, q))).name = (F.Vs j).c.ports[q].name ∧
@@ -120,6 +122,36 @@ theorem nv_part {p : ℕ} {j : Fin F.stmts.size} {nm : String} {pt : VStar.Part}
     (F.Vs j).nv = 2 := by
   rw [F.hnv j, hj]
   rfl
+
+/-- **Rep `r`'s unit of part `p` is instance `r`** (`nv_part` at the statement `HCover` gives, `hun`). -/
+theorem un_val (hcov : F.HCover) {p : ℕ} (hp : p < (partsOf F.sh).size) (r : Fin 2) : (F.un p r).val = r.val := by
+  obtain ⟨j, nm, pt, hj⟩ := hcov p hp
+  have hsj : F.sess p = j := F.hsess p j ⟨nm, pt, hj⟩
+  exact F.hun p r (by rw [hsj, F.nv_part hj]; exact r.isLt)
+
+/-- Obligation: discharged by a check that the verifier writes each part's reads file itself, of `HOwn`'s kind (lane
+hv), as `OwnNamesRows`. **Each part's reads file names each port once.** At every accepted outer proof, two entries
+of part `p`'s reads file of one name are one entry. V* writes one entry per port of the part (`rec_vstage.py:356-363`);
+check 5 reads `find?`'s first entry of a name (`RecCoins.checkRows`), so it does not refuse a second. -/
+def OwnNamesOne : Prop :=
+  ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o →
+    ∀ (p : ℕ) (j : Fin F.stmts.size) (nm : String) (pt : VStar.Part), F.stmts[j] = .inner p nm pt →
+      ∀ reg ∈ (F.zs R ω t R₂ j).own, ∀ reg' ∈ (F.zs R ω t R₂ j).own, reg.name = reg'.name → reg = reg'
+
+/-- **`Recursion.vRows_tie`'s and `zero_tie`'s `hone` and `hpos` at a part's read** (`ReadsOwn`, `OwnNamesOne`): the
+read's port is `own`'s one entry of its name, read at the unit's position. -/
+theorem readOne_of (hrd : F.ReadsOwn dg N k Rw) (hnd : F.OwnNamesOne dg N k Rw) {R : Reg} {ω : L.Ω}
+    {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o} (hacc : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) {p : ℕ}
+    {j : Fin F.stmts.size} {nm : String} {pt : VStar.Part} (hj : F.stmts[j] = .inner p nm pt) {u : Fin (F.Vs j).nv}
+    {q : Fin (F.Vs j).c.ports.size} (hread : (F.zs R ω t R₂ j).rd.isRead (.inl (u, q))) :
+    (∀ reg ∈ (F.zs R ω t R₂ j).own, reg.name = ((F.Vs j).c.ports[q.val]!).name →
+      reg = (F.zs R ω t R₂ j).rd.port (.inl (u, q))) ∧
+    ((F.zs R ω t R₂ j).rd.port (.inl (u, q))).reads[u.val]? =
+      some (some ((F.zs R ω t R₂ j).rd.readAt (.inl (u, q)))) := by
+  obtain ⟨hm, hn, hr⟩ := hrd R ω t R₂ τ o hacc p j nm pt hj u q hread
+  refine ⟨fun reg hreg hname => hnd R ω t R₂ τ o hacc p j nm pt hj reg hreg _ hm ?_, hr⟩
+  simp only [getElem!_pos (F.Vs j).c.ports q.val q.isLt] at hname
+  exact hname.trans hn.symm
 
 /-- **A part's row columns are inputs**: its circuit passes `RecResiduals.check` (`ParseFacts.recResiduals`), so its
 unit is the verifier's part `p` (`HUnitName`, `check_part`, `part_eq` at `HStruct`), whose row columns are below its
@@ -172,14 +204,12 @@ theorem sameRow_of (hcov : F.HCover) (hbits : F.PartRowBits) (hrd : F.ReadsOwn d
   have hrow : F.RowPort p (F.sess p) q := ⟨128 * a + e, by omega, b, hb, hkey⟩
   have hrow' : F.RowPort p' (F.sess p') q' := ⟨128 * a' + e, by omega, b', hb', hkey'⟩
   obtain ⟨rfl, hname⟩ := hbits p p' _ _ nm pt nm' pt' hj hj' a a' e ha ha' heq he q b q' b' hkey hkey' hb hb'
-  obtain ⟨hm, hn, hr⟩ := hrd R ω t R₂ τ o hacc p _ nm pt hj (F.un p r) q hrow hread
-  obtain ⟨hm', hn', hr'⟩ := hrd R ω t R₂ τ o hacc p' _ nm' pt' hj' (F.un p' r) q' hrow' hread'
+  obtain ⟨hm, hn, hr⟩ := hrd R ω t R₂ τ o hacc p _ nm pt hj (F.un p r) q hread
+  obtain ⟨hm', hn', hr'⟩ := hrd R ω t R₂ τ o hacc p' _ nm' pt' hj' (F.un p' r) q' hread'
   have hport := hone R ω t R₂ τ o hacc p p' _ _ nm pt nm' pt' hj hj' q q' hrow hrow' hname _ hm hn _ hm' hn'
   refine ⟨rfl, hport, ?_⟩
-  have hu : (F.un p r).val = r.val := F.hun p r (by rw [F.nv_part hj]; exact r.isLt)
-  have hu' : (F.un p' r).val = r.val := F.hun p' r (by rw [F.nv_part hj']; exact r.isLt)
-  rw [hu, hport] at hr
-  rw [hu'] at hr'
+  rw [F.un_val hcov hp r, hport] at hr
+  rw [F.un_val hcov hp' r] at hr'
   exact Option.some.inj (Option.some.inj (hr.symm.trans hr'))
 
 end VStarFamily

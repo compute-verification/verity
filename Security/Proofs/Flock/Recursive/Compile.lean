@@ -203,8 +203,11 @@ theorem zk_sessions_recursive_fork_inner
   by_cases hf : InnerForkRec zs dg N k Rw σ x wmsg H pick
   · exact Or.inr (Or.inr (Or.inr (Or.inl hf)))
   rcases zk_sessions_recursive_fork_on hA3 zs dg N hk hRw hM hρ hr σ x wmsg hbr.1 (fun _ _ a b => a = b)
-      (fun _ _ _ _ h => h) Sk cmt msg hbr.2.1 hbr.2.2.1 hbr.2.2.2
-      (innerAtLeavesV_of_forkOn zs dg N k Rw σ x wmsg H pick hin hf) with h | h | h | h
+      (fun ref ω t u => u = relabel (ref ω) t)
+      (fun ref ω t l ht h => zip_eq_relabel (ref ω) t l fun k hk =>
+        option_eq_of_rel (R := fun a b => a = b) (fun _ _ e => e) (h k (by omega))) Sk cmt msg hbr.2.1 hbr.2.2.1
+      hbr.2.2.2 (fun ref => InnerAtLeaves.toZ (innerAtLeavesV_of_forkOn zs dg N k Rw σ x wmsg H pick hin hf ref))
+      with h | h | h | h
   · exact Or.inl h
   · exact Or.inr (Or.inl h)
   · exact Or.inr (Or.inr (Or.inl h))

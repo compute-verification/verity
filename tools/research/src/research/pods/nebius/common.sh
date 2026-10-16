@@ -1,8 +1,11 @@
 # shellcheck shell=bash disable=SC2034
 # Sourced by launch.sh and teardown.sh: the one Nebius server's names and sizes, and service-account auth.
 #
-# Auth reads the Cursor secrets NEBIUS_SA_ID, NEBIUS_SA_PUBLIC_KEY_ID and NEBIUS_SA_PRIVATE_KEY_B64 (the PEM as one line of base64,
-# `base64 -w0 key.pem`).  The key must be one line: a multi-line secret's body lines pass through `env | cut -d= -f1` and escape
+# Auth reads the Cursor secrets NEBIUS_SA_ID, NEBIUS_SA_PUBLIC_KEY_ID and NEBIUS_SA_PRIVATE_KEY_B64: one line of base64 holding
+# either the key's PEM file (`base64 -w0 key.pem`) or its DER (`openssl pkey -in key.pem -outform DER | base64 -w0`).  The DER
+# form exists because Cursor caps a secret at 4096 bytes: an RSA-4096 key's PEM is ~3272 bytes, whose base64 (~4364) is refused,
+# while its DER (~2348 bytes) encodes to ~3132.  The two decode unambiguously: PEM text starts `-----BEGIN`, DER starts byte 0x30.
+# The key must be one line: a multi-line secret's body lines pass through `env | cut -d= -f1` and escape
 # Cursor's redaction, which is how the old multi-line NEBIUS_SA_PRIVATE_KEY leaked six times by 2 Oct and again on 3 Oct. It is
 # refused, so that nobody keeps it as a Cursor secret.
 # The key is written to a mode-600 file in a mode-700 directory made for this process and removed when it exits; the CLI's profile
@@ -14,7 +17,7 @@ NEBIUS_PROJECT_ID=${NEBIUS_PROJECT_ID-project-e05mvq7kln00dvsa5xj2mg}   # defaul
 NEBIUS_PROJECT_NAME=${NEBIUS_PROJECT_NAME:-vy-nebius}                    # only when NEBIUS_PROJECT_ID is set empty
 VM_NAME=${NEBIUS_VM_NAME:-vy-nebius-1}
 PRESET=${NEBIUS_PRESET:-8gpu-192vcpu-1744gb}
-PLATFORM_PREFIX=gpu-rtx6000                        # uk-south2 lists it as gpu-rtx6000-a; NEBIUS_PLATFORM pins one
+PLATFORM_PREFIX=${NEBIUS_PLATFORM_PREFIX:-gpu-rtx6000}   # uk-south2 lists it as gpu-rtx6000-a; NEBIUS_PLATFORM pins one
 IMAGE_FAMILY=${NEBIUS_IMAGE_FAMILY:-ubuntu24.04-cuda13.0}   # driver preset cuda13.0: NVIDIA 580.x
 BOOT_GIB=${NEBIUS_BOOT_GIB:-256}
 BOOT_TYPE=network_ssd
@@ -24,7 +27,10 @@ DATA_DEVICE_ID=data                                # the guest sees /dev/disk/by
 SG_NAME=${VM_NAME}-ssh
 SSH_CIDRS=${NEBIUS_SSH_CIDRS:-0.0.0.0/0}           # comma-separated, at most 8; port 22 only either way
 SSH_USER=research                                  # Nebius reserves root and admin: neither may log in over ssh
-RATE_USD_PER_HOUR=14.40
+RATE_USD_PER_HOUR=${NEBIUS_RATE_USD_PER_HOUR:-14.40}   # the RTX PRO 6000 preset's; any other shape states its own
+FS_ID=${NEBIUS_FILESYSTEM_ID:-}                    # a shared filesystem to attach read-write, mounted at /workspace/fs
+PREEMPTIBLE=${NEBIUS_PREEMPTIBLE:-}                # 1: a preemptible VM, stopped on preemption (its disks are kept)
+SPOT_POLICY_ID=${NEBIUS_SPOT_POLICY_ID:-}          # a preemptible VM's price cap (`nebius billing pricing-policy`), else the spot price
 MACHINE=${VM_NAME}
 PROJECT=verity
 
@@ -45,18 +51,28 @@ nebius_auth() {
   done
   if [ -z "${NEBIUS_SA_PRIVATE_KEY_B64:-}" ]; then
     [ -z "${NEBIUS_SA_PRIVATE_KEY:-}" ] || die "NEBIUS_SA_PRIVATE_KEY (the multi-line key) is no longer read: store the key as \
-NEBIUS_SA_PRIVATE_KEY_B64 (\`base64 -w0 key.pem\`) and delete NEBIUS_SA_PRIVATE_KEY (Dashboard -> Cloud Agents -> Secrets)"
+NEBIUS_SA_PRIVATE_KEY_B64 (\`base64 -w0 key.pem\`, or \`openssl pkey -in key.pem -outform DER | base64 -w0\` when that exceeds \
+Cursor's 4096-byte secret cap) and delete NEBIUS_SA_PRIVATE_KEY (Dashboard -> Cloud Agents -> Secrets)"
     case ",${CLOUD_AGENT_INJECTED_SECRET_NAMES:-}," in
       *",NEBIUS_SA_PRIVATE_KEY_B64,"*)
         die "the Nebius key is not in this shell though this VM injects it: rerun from a fresh tmux login shell" ;;
-      *) die "NEBIUS_SA_PRIVATE_KEY_B64 is not set (a Cursor secret, \`base64 -w0 key.pem\`: Dashboard -> Cloud Agents -> Secrets)" ;;
+      *) die "NEBIUS_SA_PRIVATE_KEY_B64 is not set (a Cursor secret, \`base64 -w0 key.pem\` or \`openssl pkey -in key.pem -outform DER | base64 -w0\`: Dashboard -> Cloud Agents -> Secrets)" ;;
     esac
   fi
   NB_DIR=$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/nebius-auth.XXXXXX") || die "mktemp failed"
   chmod 700 "$NB_DIR"
   trap 'rm -rf "$NB_DIR"' EXIT
-  (umask 077 && printf '%s' "$NEBIUS_SA_PRIVATE_KEY_B64" | base64 -d > "$NB_DIR/key.pem" 2>/dev/null) \
+  (umask 077 && printf '%s' "$NEBIUS_SA_PRIVATE_KEY_B64" | base64 -d > "$NB_DIR/key.raw" 2>/dev/null) \
     || die "NEBIUS_SA_PRIVATE_KEY_B64 is not base64"
+  if head -c 10 "$NB_DIR/key.raw" | grep -q -e '-----BEGIN'; then
+    mv "$NB_DIR/key.raw" "$NB_DIR/key.pem"            # base64 of the PEM file itself
+  else                                                # base64 of the DER (the form that fits Cursor's secret cap for RSA-4096)
+    command -v openssl > /dev/null 2>&1 || die "openssl is needed to read a DER-format key"
+    (umask 077 && openssl pkey -inform DER -in "$NB_DIR/key.raw" -out "$NB_DIR/key.pem" 2>/dev/null) \
+      || die "NEBIUS_SA_PRIVATE_KEY_B64 decodes to neither a PEM file nor a DER private key: store \
+\`openssl pkey -in key.pem -outform DER | base64 -w0\` (or \`base64 -w0 key.pem\` for a key whose base64 fits Cursor's 4096-byte secret cap)"
+    rm -f "$NB_DIR/key.raw"
+  fi
   "$NEBIUS_BIN" --no-check-update -c "$NB_DIR/config.yaml" profile create sa --endpoint api.nebius.cloud \
     --service-account-id "$NEBIUS_SA_ID" --public-key-id "$NEBIUS_SA_PUBLIC_KEY_ID" \
     --private-key-file-path "$NB_DIR/key.pem" --skip-auth > /dev/null 2>&1 || die "could not write the CLI profile"

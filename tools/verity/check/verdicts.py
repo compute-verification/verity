@@ -19,6 +19,10 @@ tree holds a package's dependencies, some 170k files (`lean_changed.py`'s `lean-
 reads it), the suites' `logs/` and `durations.json`, and any file that isn't a finished `.json` entry. An entry that goes away while
 it is read (`suites.py` keeps only a module's newest passes) is left out.
 
+Each root keeps a hidden index, `.verdicts-index.json`, memoizing its entries' sha256 by (size, mtime_ns), so `snapshot` and a
+check's closing `export` stat the cache instead of re-reading it (hundreds of GB once grown); only new or changed entries are
+read.  Hidden files are never listed and never packed, and a missing or garbled index only costs the re-read.
+
 A pack is a gzipped tar of regular files under `check/` and `tests/`. `import` refuses a pack holding anything else (a link, an
 absolute or `..` path, a device, another prefix, a hidden file), and it never overwrites an entry that exists here. A member in a
 part of the caches that is never packed is left out, not refused, so a pack written before that part was is still taken.
@@ -76,8 +80,62 @@ def _read(p: Path) -> bytes | None:
         return None
 
 
+#: each root's memo of its entries' digests, `{rel path: [size, mtime_ns, sha256]}`: hidden, so `entries()` never lists it and
+#: no pack carries it
+INDEX = ".verdicts-index.json"
+
+
+def _index_load(base: Path) -> dict:
+    try:
+        d = json.loads((base / INDEX).read_text())
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _digests(found: dict[str, Path] | None = None) -> dict[str, str]:
+    """`{pack path: sha256}` of every entry, reading only the files the root's index doesn't know by (size, mtime_ns).  The
+    caches run to hundreds of GB, and re-reading every entry at both ends of a check held a finished run for an hour of disk
+    reads once another job had evicted the page cache (14 Oct, r20261014-032950-9e49).  A stale or garbled index only costs the
+    re-read; an entry rewritten in place with its size and mtime_ns unchanged is the one change it would miss, and every writer
+    replaces entries atomically."""
+    found = entries() if found is None else found
+    out: dict[str, str] = {}
+    for prefix, base in roots().items():
+        index = _index_load(base)
+        fresh: dict[str, list] = {}
+        dirty = False
+        for k, p in found.items():
+            if not k.startswith(prefix + "/"):
+                continue
+            rel = k.split("/", 1)[1]
+            try:
+                st = p.stat()
+            except OSError:
+                continue
+            known = index.get(rel)
+            if isinstance(known, list) and len(known) == 3 and known[0] == st.st_size and known[1] == st.st_mtime_ns:
+                sha = known[2]
+            else:
+                data = _read(p)
+                if data is None:
+                    continue
+                sha = hashlib.sha256(data).hexdigest()
+                dirty = True
+            fresh[rel] = [st.st_size, st.st_mtime_ns, sha]
+            out[k] = sha
+        if dirty or set(fresh) != set(index):
+            try:                                   # concurrent slots race here; a lost update only costs a later re-read
+                tmp = base / f"{INDEX}.{os.getpid()}.tmp"
+                tmp.write_text(json.dumps(fresh))
+                os.replace(tmp, base / INDEX)
+            except OSError:
+                pass
+    return out
+
+
 def snapshot() -> dict[str, str]:
-    return {k: hashlib.sha256(data).hexdigest() for k, p in entries().items() if (data := _read(p)) is not None}
+    return _digests()
 
 
 def _write(out: Path, items) -> int:
@@ -104,12 +162,25 @@ def _write(out: Path, items) -> int:
 
 
 def export(out: Path, since: dict[str, str] | None = None) -> int:
-    """Write the entries new or changed since `since` (all when None) as a pack at `out`; the number written."""
-    def items():
-        for k, p in sorted(entries().items()):
-            data = _read(p)
-            if data is not None and (since is None or since.get(k) != hashlib.sha256(data).hexdigest()):
-                yield k, data
+    """Write the entries new or changed since `since` (all when None) as a pack at `out`; the number written.  With `since`,
+    only the new or changed entries are read (`_digests`), so a check's closing export costs what the run stored, not the
+    whole cache."""
+    found = entries()
+    if since is None:
+        def items():
+            for k, p in sorted(found.items()):
+                data = _read(p)
+                if data is not None:
+                    yield k, data
+    else:
+        digests = _digests(found)
+
+        def items():
+            for k in sorted(digests):
+                if since.get(k) != digests[k]:
+                    data = _read(found[k])
+                    if data is not None:
+                        yield k, data
     return _write(out, items())
 
 

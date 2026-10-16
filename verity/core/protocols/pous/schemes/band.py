@@ -36,7 +36,8 @@ CHAIN_CLAIMS = ("ideal-permutation", "random-oracle", "feistel-indifferentiabili
 """What the overwrite-chain certificates rest on: the ideal-permutation model for `Π₂`, instantiated by Feistel10 over
 SHAKE256 (its round functions random oracles, the composition a named heuristic, now refuted:
 `feistel-indifferentiability`); the step floor of at least 241.5 µs per 64 KiB `Π₂` call in a chain
-(`primitives.pi2_keccak_f`), which bounds an adversary only in the ideal-permutation model; perfect isolation; SHA-256
+(`primitives.pi2_keccak_f`), which bounds an adversary only in the ideal-permutation model; the help-accounted row
+(`perfect-isolation`, the earlier model's id: what the audited location held plus the help it received); SHA-256
 collision resistance for the commitment to `W` and for `vk`; and a live, designated verifier.  At the reference
 Feistel-SHAKE256 `Π₂` the certificates do not hold: a prover rebuilds a label from 1.53% of `C` in 481 Keccak-f, about
 24 µs, with no chain call (red team, 4 Oct 2026, art:7617c8017e80)."""

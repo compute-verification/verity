@@ -223,9 +223,9 @@ def test_notes_push_needs_a_clone_and_pushes_through_the_token_s_helper(monkeypa
     c = doctor.check_notes_push()
     assert "RESEARCH_NOTES_TOKEN was refused" in c.fix
     argv = runs_.calls[-1][0]
-    assert argv[-2] == "https://x-access-token@github.com/danielreuter/research-notes.git" and "credential.helper=" in argv
+    assert argv[-2] == "https://x-access-token@github.com/compute-verification/research-notes.git" and "credential.helper=" in argv
     assert not any("not-to-be-printed" in a for a in argv)                         # the helper reads it from the environment
-    assert "push --dry-run --no-verify https://x-access-token@github.com/danielreuter/research-notes.git HEAD:" in c.fix
+    assert "push --dry-run --no-verify https://x-access-token@github.com/compute-verification/research-notes.git HEAD:" in c.fix
     assert "credential.helper=" in c.fix and "not-to-be-printed" not in c.fix      # the hint is the command the probe ran
     runs_.answers["git"] = (0, "")
     assert doctor.check_notes_push().status == OK

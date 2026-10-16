@@ -1,0 +1,11 @@
+# /etc/systemd/system/vy-store-evict.service on vy-nebius-1 and vy-nebius-2 (`research deploy` and cluster_up.sh install it): the job
+# pods' store eviction, as ubuntu, the job store's owner.
+[Unit]
+Description=store eviction: drop local copies the remote store holds
+
+[Service]
+Type=oneshot
+User=ubuntu
+Nice=19
+IOSchedulingClass=idle
+ExecStart=/usr/local/bin/vy-store-evict

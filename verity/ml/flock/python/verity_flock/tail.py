@@ -166,15 +166,13 @@ def _div_scale_a(C, a, b):
 
 
 def _f32_div(C, a, b):
-    """``RN(a / b)`` (``div.rn.f32``) for a constant divisor that is a normal power of two: ``RN(a * 2^-k)`` with an exact
-    reciprocal, a NaN result canonical."""
-    if not all(w.is_const() for w in b):
-        raise NotImplementedError("F32Div by a non-constant divisor has no piece yet")
-    k = sum(w.c << i for i, w in enumerate(b))
-    e, m = (k >> 23) & 0xFF, k & 0x7FFFFF
-    if m or e in (0, 0xFF) or not 1 <= 254 - e <= 254:
-        raise NotImplementedError(f"f32 division by 0x{k:08x}: only by a normal power of two whose reciprocal is normal")
-    return fp.f32_mul(C, a, fp.f32_const((k & 0x80000000) | ((254 - e) << 23)))
+    """``RN(a / b)`` (``div.rn.f32``), a NaN result canonical: by a constant normal power of two whose reciprocal is normal,
+    ``RN(a * 2^-k)`` with that exact reciprocal; by any other divisor (GLM-5.3's ``/ 6144``), the IEEE divider
+    :func:`fp.f32_div`, the circuit-checked Boolean ``F32Div_v3`` / ``F32Div_v4``'s builder."""
+    k = sum(w.c << i for i, w in enumerate(b)) if all(w.is_const() for w in b) else None
+    if k is not None and not k & 0x7FFFFF and 1 <= (k >> 23) & 0xFF <= 253:
+        return fp.f32_mul(C, a, fp.f32_const((k & 0x80000000) | ((254 - ((k >> 23) & 0xFF)) << 23)))
+    return fp.f32_div(C, a, b)
 
 
 def _ftz(C, x):
@@ -328,8 +326,8 @@ def _fold_constant_mufu(prog: list) -> list:
 
 
 def forge(prog: list) -> list:
-    """Every positive finite f32 constant of a tail program x 4 (a swapped tail, for the negatives: eps changes, and a constant
-    divisor stays a power of two)."""
+    """Every positive finite f32 constant of a tail program x 4 (a swapped tail, for the negatives: eps and a constant divisor
+    change)."""
     import struct
 
     out = []

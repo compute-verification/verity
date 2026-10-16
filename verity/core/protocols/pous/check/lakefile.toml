@@ -1,9 +1,10 @@
-# The PoUS check as a program: what the verifier checks at setup and in the timed audit, in executable Lean, reading the
-# formats the Python reference writes. It imports Lean core, Flock's executable primitives, the core protocol interface and
-# the core primitives (the identity hash, randomness's `frame`) only. Its properties are stated in `Security/Properties/Pous.lean`; it moves into `verity/core/protocols/pous` once
-# they are proved.
+# The PoUS check as a program: what the verifier checks at setup and in the timed audit, and a run composed of the setup
+# and a memory challenger's session (`PousCheck.Run`), in executable Lean, reading the formats the Python reference
+# writes. It imports Lean core, Flock's executable primitives, the core protocol interface, the core primitives (the
+# identity hash, randomness's `frame`) and the memory challenger's verdict only. Its properties are stated in
+# `Security/Properties/Pous.lean`; it moves into `verity/core/protocols/pous` once they are proved.
 name = "pous_check"
-defaultTargets = ["PousCheck", "pous-setup", "pous-setup-difftest", "pous-audit-difftest", "pous-timed-audit"]
+defaultTargets = ["PousCheck", "pous-setup", "pous-setup-difftest", "pous-audit-difftest", "pous-timed-audit", "pous-run"]
 
 [leanOptions]
 autoImplicit = false
@@ -29,6 +30,10 @@ path = "../../../primitives/randomness"
 name = "verity_difftest"
 path = "../../../difftest/lean"
 
+[[require]]
+name = "core_memory_challenger"
+path = "../../../devices/memory_challenger/lean"
+
 [[lean_lib]]
 name = "PousCheck"
 
@@ -47,3 +52,7 @@ root = "PousCheck.DifftestMain"
 [[lean_exe]]
 name = "pous-timed-audit"
 root = "PousCheck.TimedAuditMain"
+
+[[lean_exe]]
+name = "pous-run"
+root = "PousCheck.RunMain"

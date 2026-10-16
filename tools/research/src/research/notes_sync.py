@@ -65,7 +65,9 @@ from .secret_hint import FRESH_SHELL, lost
 
 SYNC_ENV = "RESEARCH_NOTES_SYNC"
 TOKEN_ENV = "RESEARCH_NOTES_TOKEN"
-NOTES_URL = "https://github.com/danielreuter/research-notes.git"
+NOTES_URL = "https://github.com/compute-verification/research-notes.git"
+#: a clone made before the notes moved into the organization still names the old address; the token is the organization's
+MOVED = {"danielreuter/research-notes": "compute-verification/research-notes"}
 GITHUB_URL_RE = re.compile(r"^(?:https://(?:[^@/]+@)?github\.com/|(?:(?:git\+)?ssh://)?git@github\.com(?::22)?[:/])"
                            r"(?P<repo>[\w.-]+/[\w.-]+?)(?:\.git)?/?$")
 #: the shell expands the variable when git asks for the password: the token's value is never in git's arguments or config
@@ -120,7 +122,8 @@ def token_url(url: str) -> tuple[list[str], str] | None:
     m = GITHUB_URL_RE.match(url.strip())
     if not (os.environ.get(TOKEN_ENV) and m):
         return None
-    return ["-c", "credential.helper=", "-c", f"credential.helper={CREDENTIAL_HELPER}"], f"https://x-access-token@github.com/{m['repo']}.git"
+    repo = MOVED.get(m["repo"], m["repo"])
+    return ["-c", "credential.helper=", "-c", f"credential.helper={CREDENTIAL_HELPER}"], f"https://x-access-token@github.com/{repo}.git"
 
 
 def remote_target(root: Path, remote: str = "origin") -> tuple[list[str], str]:

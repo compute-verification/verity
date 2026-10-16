@@ -151,7 +151,7 @@ def notes(payload: dict[str, Any], now: float, ctx: Context | None = None) -> li
         name = f"{stamp}-alert-{_slug(tag or rule)}-{ident}.md"
         head = f"# {rule}{' [replay-on-gpu]' if tag else ''}: {len(group)} firing on vy-nebius-1"
         lines = ["---", f"id: {name[:-3]}", "campaign: nebius-monitoring", f"lane: {LANE}", "kind: finding", "status: open",
-                 *([f"tags: [{tag}]"] if tag else []), "repo: danielreuter/verity",
+                 *([f"tags: [{tag}]"] if tag else []), "repo: compute-verification/verity",
                  "origin: grafana on vy-nebius-1 (alert_sink.py; rules in pods/nebius/monitoring/alerting.yaml)", "---", "", head, ""]
         if tag:
             lines += [f"These Commits are in `{REPLAY}`: the CPU replay runs while the pod still holds its GPU, by design until Daniel rules "

@@ -24,6 +24,7 @@ from verity.ml.circuits.program import Program
 
 from . import rec_open as _rec_open  # noqa: F401  (registers RecOpen)
 from . import rec_residuals as _rec_residuals  # noqa: F401  (registers InnerRepCheck)
+from . import rec_sparse as _rec_sparse  # noqa: F401  (registers RecSparse)
 
 POPULATION = re.compile(r"TemplateInstances_v0\{N=([1-9][0-9]*)\}")
 

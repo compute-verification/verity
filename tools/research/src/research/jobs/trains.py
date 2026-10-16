@@ -26,7 +26,7 @@ both sides (one small commit on the train, one on top of the PR's head, through 
 identical records and merges every other file as usual.  When `merge()` refuses, both sides get the train's record instead, the
 build carries on, and the train is `regenerating`: a `lean-regen` job rebuilds the refused packages' records on the train's tip,
 and the service commits the regenerated `lean-audit.json` files from the run's record in the store onto the train before its
-merge check.  `merge_record` here is a stand-in for `merge()` on records without `reads`, with `record_text` for audit.py's
+merge check.  `merge_record` here is a stand-in for `merge()` on records without `reads`, with `record_text` for check.py's
 `text()`; the site ports the real ones, and the train cases pin their output byte for byte.
 
 `FakeGitHub` and `FakeStore` stand in for GitHub and the store's R2 bucket; `train_vectors.json` pins every rule against them,
@@ -42,10 +42,10 @@ from dataclasses import dataclass, field
 from ..merge import REFUSED_KINDS, rule_touches
 from .model import DEFAULT_MAX_ATTEMPTS, JobService, Refused, check_line
 
-REPO = "danielreuter/verity"
+REPO = "compute-verification/verity"
 HOLD = "hold"
 RECORD = "lean-audit.json"
-#: audit.py's ORDER and merge.py's SORTED / NESTED, for the stand-in record merge
+#: check.py's ORDER and merge.py's SORTED / NESTED, for the stand-in record merge
 ORDER = ("roots", "exempt", "axioms", "assumptions", "meaning", "escapes", "compile_time", "dependency_unchecked", "layers",
          "upstream", "guarantees", "reads", "dependencies")
 SORTED = {"guarantees", "reads", "dependencies", "compile_time"}
@@ -212,7 +212,7 @@ def _layout(v, pad: str = "") -> str:
 
 
 def record_text(record: dict) -> str:
-    """audit.py's `text()`: the sections in ORDER, then the rest, laid out one entry per line."""
+    """check.py's `text()`: the sections in ORDER, then the rest, laid out one entry per line."""
     return _layout({k: record[k] for k in ORDER if k in record} | {k: v for k, v in record.items() if k not in ORDER}) + "\n"
 
 

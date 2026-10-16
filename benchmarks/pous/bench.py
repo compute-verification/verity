@@ -41,8 +41,9 @@ Implementations (`IMPLS`), each adding one class:
   certificate (`band_gpu/memory_challenger.py --strict`), which refuses any `k` or `Δ + RTT` the certificate does not cover.
 * `p2-v3-mc-gpu`: `p2-v3-gpu` audited by the memory challenger (`memory_challenger/live.py`, `p2_v1/harness.py`'s `MC`) at
   `Δ + RTT_ALLOWANCE_CAP_NS`, with a tampered-block and a bad-signature control beside the others.  Its sessions are signed
-  with S1's LMS key in `--mc-lms-key DIR`; without one they are test-signed, so the verdict rejects them all (its
-  `fail_closed` gate), and it issues no storage profile.
+  with S1's LMS key in `--mc-lms-key DIR`, every session's id in the session log `--mc-session-log FILE` (a file of its
+  own); without a key they are test-signed, so the verdict rejects them all (its `fail_closed` gate), and it issues no
+  storage profile.
 * `band-gpu`: the same kernels, moved into `band_gpu/` with no vLLM dependency, the whole-chain decode on lane pairs
   (`harness.KERNELS`), run by the POUS-only harness (`band_gpu/harness.py`): kernel gates that stop the run when they fail,
   encode GB/s, `C` resident, decode overhead on a synthetic loop of the weight set's GEMMs (CUDA-graphed where capturable),
@@ -532,7 +533,9 @@ class P2Gpu:
 IMPLS = {c.name: c for c in (Reference, VllmGpu, BandGpu, P2V1Gpu, P2V3Gpu, P2V3McGpu, P2Gpu)}
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, **kw: Any) -> int:
+    """`kw` goes to the implementation's `run` (the P2 arms: `p2_v1.harness.run`'s `load`, from a caller hosting this harness
+    in its own process)."""
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--scheme", default="band-chain/d12/v1", help="a registered name (verity.core.protocols.pous.schemes)")
     ap.add_argument("--impl", required=True, choices=sorted(IMPLS))
@@ -577,6 +580,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--mc-lms-key", default="",
                     help="p2-v3-mc-gpu: sign the memory challenger's sessions with S1's LMS key in this directory (made "
                          "there when absent); without one they are test-signed and the verdict rejects them all")
+    ap.add_argument("--bandwidth-salt", default="",
+                    help="p2-v3-gpu, p2-v3-mc-gpu, joint runs only: set C up under the bandwidth audit's salt for this GPU (as "
+                         "nvidia-smi's -i takes it), bandwidth.audit.draw_salt over W's commitment and the id the challenger "
+                         "reads (audit.read_device), so the bandwidth verifier accepts C as the device's store; without it, "
+                         "PoUS's own salt (protocol.draw_salt)")
+    ap.add_argument("--mc-session-log", default="",
+                    help="p2-v3-mc-gpu with --mc-lms-key: the memory challenger's used-session log, a file of its own outside "
+                         "the key's directory (made with a new key; for a key that exists, a missing log is refused)")
     ap.add_argument("--band-d", type=int, default=0,
                     help="band-gpu: the band's in-degree d (0: the registered scheme's, 12); d >= 5, where the certificate "
                          "holds with its cliff at d")
@@ -610,7 +621,7 @@ def main(argv: list[str] | None = None) -> int:
                            "experimental": experimental,
                            "source_commit": os.environ.get("RESEARCH_SOURCE_COMMIT"), "run_id": os.environ.get("RESEARCH_RUN_ID"),
                            "gates": {"conformance": conformance}}
-    body = impl.run(a, ws, out)
+    body = impl.run(a, ws, out, **kw)
     measurements = body.pop("measurements", [])
     doc["gates"].update(body.pop("gates"))
     doc.update(body)

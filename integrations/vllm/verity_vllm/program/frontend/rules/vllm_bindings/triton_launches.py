@@ -83,7 +83,7 @@ class TritonRmsNormRule(InPlaceRule):
         xc, wc = ctx.coll(x), ctx.coll(w)
         rows, lead = rows_of(xc)
         N, eps = rows[0].type.n, float(sc["eps"])
-        fn, extra = norm_kind(ctx, "rmsnorm", node, N, eps)
+        fn, extra = norm_kind(ctx, "rmsnorm", node, N, eps, TARGET=active_target_profile(), M=len(rows))
         outs = [ctx.call(fn, r, wc, *extra, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
         ctx.rebind(out, from_rows(outs, lead), self, what="output")
         ctx.bind_weight_role(w, self, "rmsnorm.weight", N=N, EPS=eps)

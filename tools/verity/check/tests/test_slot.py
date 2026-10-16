@@ -32,6 +32,12 @@ def any_core(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def own_ramlock(monkeypatch, tmp_path):
+    """A slot with mem= writes its research.mem reservation here, never into the machine's /workspace/ramlock."""
+    monkeypatch.setattr(SLOT, "RAMLOCK", tmp_path / "ramlock")
+
+
+@pytest.fixture(autouse=True)
 def outside_a_run(monkeypatch):
     """A check runs these tests inside its own `research run`: main() must not write that run's slot record."""
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
@@ -734,3 +740,35 @@ def test_twin_is_parsed_and_shown_and_a_bad_pair_is_refused(tmp_path, capsys):
     with pytest.raises(SystemExit, match="is not PAIR or PAIR@HOME"):
         SLOT.options(["--twin", "p;rm -rf /"])
     assert "twin p1" in SLOT.describe({"run": "r1", "twin": "p1"})
+
+
+def test_a_slot_with_mem_holds_a_research_mem_reservation_that_research_mem_counts_while_the_check_runs(tmp_path, monkeypatch):
+    """Node 1, 8:21Z on 10 Oct: a check slot checked free memory once, at its start, and reserved nothing, so research.mem
+    admitted work beside two full checks until the node ran out of memory. A slot with mem=GB writes `check-NAME.json` in
+    research.mem's format, naming the check's own pid (CMD's, after the exec) and run; research.mem counts it as live, the GB in
+    its 10^9-byte units less what the process tree holds, and not once the run has ended. A slot without mem= reserves nothing."""
+    from research import mem
+
+    (tmp_path / "slots").write_text("a 0 mem=500\nb 1\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setattr(SLOT, "memory_gb", lambda: 1000)
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run_dir))
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20261010-170000-abcd")
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    monkeypatch.setattr(SLOT.os, "execvpe", lambda f, argv, env: (_ for _ in ()).throw(Exec(env["CHECK_SLOT"])))
+    with pytest.raises(Exec, match="a"):
+        SLOT.main(["--", "check.py"], now=lambda: NOW, sleep=lambda _s: pytest.fail("slot a is free"))
+    doc = json.loads((tmp_path / "ramlock" / "check-a.json").read_text())
+    assert doc["owner"] == "check" and doc["pid"] == os.getpid() and doc["gb"] == 536.9 and doc["run_id"] == "r20261010-170000-abcd"
+    (row,) = mem.reservations(tmp_path / "ramlock")
+    assert row["live"] and row["pid"] == os.getpid() and 0 < row["outstanding"] <= 536.9e9, row
+    (run_dir / "status.json").write_text(json.dumps({"state": "done"}))
+    (row,) = mem.reservations(tmp_path / "ramlock")
+    assert not row["live"] and row["why"] == "run r20261010-170000-abcd ended"
+
+    (tmp_path / "slots").write_text("b 1\n")
+    with pytest.raises(Exec, match="b"):
+        SLOT.main(["--", "check.py"], now=lambda: NOW, sleep=lambda _s: pytest.fail("slot b is free"))
+    assert [f.name for f in (tmp_path / "ramlock").glob("*.json")] == ["check-a.json"]

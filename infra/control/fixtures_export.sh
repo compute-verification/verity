@@ -13,7 +13,7 @@ export GIT_SSH_COMMAND="ssh -i /data/state/secrets/verity-deploy -o IdentitiesOn
 export GIT_TERMINAL_PROMPT=0 LC_ALL=C.UTF-8
 while :; do
   (
-    [ -d "$REPO/.git" ] || git clone -q --filter=blob:none --no-checkout git@github.com:danielreuter/verity.git "$REPO" || exit 1
+    [ -d "$REPO/.git" ] || git clone -q --filter=blob:none --no-checkout git@github.com:compute-verification/verity.git "$REPO" || exit 1
     git -C "$REPO" fetch -q origin main && git -C "$REPO" checkout -q -f --detach FETCH_HEAD || exit 1
     set -a; . /root/.config/verity/r2.env; set +a
     cd "$REPO/tools/research" && PYTHONPATH=src RESEARCH_EXPORT_BUCKET=verity-public timeout 3000 \
