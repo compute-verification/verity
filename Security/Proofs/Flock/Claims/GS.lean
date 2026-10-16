@@ -3,6 +3,7 @@ import Proofs.Flock.Claims.GS.Flock
 import Proofs.Flock.Claims.GS.Radius
 import Proofs.Flock.Claims.GS.ZkRadius
 import Proofs.Flock.Claims.GS.RadiusFamily
+import Proofs.Flock.Claims.GS.RadiusDeploy
 
 /-!
 # A counted Guruswami–Sudan decoder, and `DecoderComplexity` at Flock's level-0 code
@@ -33,4 +34,9 @@ The decoder computes on coefficient lists and tables, and counts its field opera
   with each trace's length and radius its index's (`listWithin_famDecodeR`), its count the sum over the indices
   (`famDecodeR_complexity`); at the masked verifier's deployed code, `zkDecodeRD` (`listWithin_zkDecodeRD`,
   `zkDecodeRD_complexity`).
+* `GS.RadiusDeploy`: the plain level-0 code at each `m` in the radius form (`plainDecodeR`), and both families at
+  the deployed instances' codes, the length and radius read off the trace's `m`: `radius_deployPlain`
+  (`ListWithin plainLenD (deployPlain rel).enc plainThetaD plainDecodeRD`, complexity `14·(flockPolyR + X)` at
+  `plainSizeRD`) and `radius_deployZk` (`ListWithin zkLenD (deployZk rel).enc zkThetaD zkDecodeRD`, complexity
+  `11·(zkPolyR + X)` at `zkSizeRD`).
 -/
