@@ -88,7 +88,8 @@ private def lawKeys (kind : String) : Array String :=
 
 private def ascending (xs : Array Int) : Bool := (List.range (xs.size - 1)).all fun i => xs[i]! < xs[i + 1]!
 
-private def digits (s : String) : Bool := !s.isEmpty && s.all Char.isDigit
+/-- One or more ASCII digits (`draw.digits`). -/
+def digits (s : String) : Bool := !s.isEmpty && s.all Char.isDigit
 
 /-- `NUM/DEN` in ASCII digits with `0 < DEN` and `NUM ≤ DEN`. -/
 def probability? (p : String) : Option (Nat × Nat) :=
@@ -242,8 +243,8 @@ private def take (src : ByteArray) (need : Nat) : StateT Nat (Except String) Byt
 from `src` read in order: `subset` and `bernoulli` (at its `NUM/DEN` as written) on one stream, `stratified` and `work` one
 stream per stratum, each extended and rerun when it runs out. An error when the law is not exactly a one-stage law's keys
 (`two_stage._law_problem`), a subset exceeds the population, a stratified or work law isn't well formed over it
-(`strataProblem`), or `src` runs out. -/
-def drawFirst (law : Json) (population : Nat) (src : ByteArray) : Except String Json := do
+(`strataProblem`), or `src` runs out. With the draw, the number of bytes of `src` it read. -/
+def drawFirstRead (law : Json) (population : Nat) (src : ByteArray) : Except String (Json × Nat) := do
   let kind := match getD law "law" with | .str s => s | _ => ""
   let flock ← match kind with
     | "subset" =>
@@ -264,8 +265,13 @@ def drawFirst (law : Json) (population : Nat) (src : ByteArray) : Except String 
       let some strata := ss.mapM (stratum? (kind == "work")) | throw s!"the {kind} law's strata"
       pure (if kind == "work" then .work k strata else .stratified k (strata.map (·.toStratum)))
     | _ => throw "a one-stage law is subset, bernoulli, stratified or work"
-  let (some d, _) ← (Flock.Draw.drawWith (fun _ need => take src need) flock population).run 0
+  let (some d, read) ← (Flock.Draw.drawWith (fun _ need => take src need) flock population).run 0
     | throw "the draw did not end"
-  return Json.mkObj (entries law |>.toList |>.append [("population", Lean.toJson population), ("units", natsJson d.units)])
+  return (Json.mkObj (entries law |>.toList |>.append [("population", Lean.toJson population), ("units", natsJson d.units)]),
+    read)
+
+/-- `drawFirstRead`'s draw. -/
+def drawFirst (law : Json) (population : Nat) (src : ByteArray) : Except String Json :=
+  (·.1) <$> drawFirstRead law population src
 
 end SampledProofs.Draw
