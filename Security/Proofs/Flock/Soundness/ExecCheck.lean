@@ -31,6 +31,11 @@ structure CheckFacts (c : Circuit) : Prop where
   one_range : ∀ n < c.nets.size, (c.ranges.filter (·.kind == Kind.net n)).size = 1
   wires : ∀ w ∈ c.wires.toList, w.dst.1 < c.nets.size ∧ w.dst.2.1 < c.perVu.getD w.dst.1 0 ∧
     w.dst.2.2 < (portCols (c.nets.getD w.dst.1 default).2.inGroups).size
+  /-- each wire's source is an output port of a slot, as wide as the input port it fills -/
+  wire_src : ∀ w ∈ c.wires.toList, w.src.1 < c.nets.size ∧ w.src.2.1 < c.perVu.getD w.src.1 0 ∧
+    w.src.2.2 < (portCols (c.nets.getD w.src.1 default).2.outGroups).size ∧
+    (portCols (c.nets.getD w.dst.1 default).2.inGroups)[w.dst.2.2]!.2 =
+      (portCols (c.nets.getD w.src.1 default).2.outGroups)[w.src.2.2]!.2
   cuts : ∀ e ∈ c.leafCuts.toList, e.1 < c.upv ∧ e.2.1 < (portCols c.unit.inGroups).size
   leaves : c.leavesIn.size = c.upv ∧
     ∀ u < c.upv, (c.leavesIn[u]!).size = (c.unit.inGroups.getD 0 default).bits.size
@@ -366,6 +371,17 @@ theorem check_facts {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed =
       refine ⟨⟨_, rfl⟩, ?_⟩
       simp only [Bool.or_eq_true, decide_eq_true_eq, not_or, not_le] at hc
       exact ⟨hc.1.1.1.1.1.1, hc.1.1.1.1.2, hc.1.1.2⟩) hwires
+  have wire_src := forIn_array_forall (P := fun w : Wire => w.src.1 < c.nets.size ∧
+      w.src.2.1 < c.perVu.getD w.src.1 0 ∧ w.src.2.2 < (portCols (c.nets.getD w.src.1 default).2.outGroups).size ∧
+      (portCols (c.nets.getD w.dst.1 default).2.inGroups)[w.dst.2.2]!.2 =
+        (portCols (c.nets.getD w.src.1 default).2.outGroups)[w.src.2.2]!.2)
+    (fun w _ s t hs => by
+      obtain ⟨hc, hs⟩ := ite_throw_ok' hs
+      obtain ⟨-, hs⟩ := ite_throw_ok' hs
+      cases hs
+      refine ⟨⟨_, rfl⟩, ?_⟩
+      simp only [Bool.or_eq_true, decide_eq_true_eq, not_or, not_le, bne_iff_ne, ne_eq, not_not] at hc
+      exact ⟨hc.1.1.1.1.1.2, hc.1.1.1.2, hc.1.2, hc.2⟩) hwires
   have cuts := forIn_array_forall (P := fun e : ℕ × ℕ × ℕ => e.1 < c.upv ∧ e.2.1 < (portCols c.unit.inGroups).size)
     (fun e _ s t hs => by
       obtain ⟨hc, hs⟩ := ite_throw_ok' hs
@@ -411,6 +427,7 @@ theorem check_facts {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed =
     count := count
     one_range := fun n hn => one_range n (Nat.zero_le _) hn
     wires := wires
+    wire_src := wire_src
     cuts := cuts
     leaves := ⟨hlv.1, fun u hu => leaves u (Nat.zero_le _) hu⟩
     leavesOut := ⟨hlv.2, fun u hu => leavesOut u (Nat.zero_le _) hu⟩
