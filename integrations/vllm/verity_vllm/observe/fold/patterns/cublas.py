@@ -66,6 +66,28 @@ def _permuted(v: ViewDesc, order: tuple[int, ...]) -> ViewDesc:
     return ViewDesc(v.alloc, v.offset, tuple(v.shape[i] for i in order), tuple(v.strides[i] for i in order), v.dtype, v.device)
 
 
+def _holds(r: ViewDesc, v: ViewDesc) -> bool:
+    """`v` is a sub-box of `r`'s axes: its first element is an in-bounds index of `r`, and each of its axes runs in bounds along one of
+    `r`'s.  W_UK_T and W_UV interleave in kv_b's one allocation, so the allocation's Roots alone do not say which one a read is."""
+    axes = sorted((d for d in range(r.rank) if r.shape[d] > 1), key=lambda d: -r.strides[d])
+    coord, rem = {}, v.offset - r.offset
+    if rem < 0 or r.dtype != v.dtype:
+        return False
+    for d in axes:
+        coord[d], rem = divmod(rem, r.strides[d])
+    if rem or any(coord[d] >= r.shape[d] for d in axes):
+        return False
+    used: set[int] = set()
+    for n, st in zip(v.shape, v.strides):
+        if n == 1:
+            continue
+        d = next((d for d in axes if d not in used and r.strides[d] == st), None)
+        if d is None or coord[d] + n > r.shape[d]:
+            return False
+        used.add(d)
+    return True
+
+
 @dataclass
 class MlaAbsorbBmm:
     """`aten.bmm(x [B,M,K] bf16, W [B,K,N] bf16 parameter view)` / `aten.bmm.out(..., out=)`, MLA's latent absorptions (`W_UK_T`,
@@ -97,6 +119,10 @@ class MlaAbsorbBmm:
         roots = ctx.roots_of(w)
         if not roots:
             return unsupported(node, "the absorbed weight is not a view of a parameter's storage (no Root)", w=repr(w))
+        held = [r for r in roots if _holds(r.view, w)]
+        if len(roots) > 1 and len(held) != 1:
+            return unsupported(node, "the absorbed weight lies in no single Root of its storage", w=repr(w), roots=[r.name for r in roots])
+        root = held[0] if held else roots[0]
         T = _targets()
         try:
             dot = T.tensor_core_dot(tp)
@@ -104,5 +130,5 @@ class MlaAbsorbBmm:
             return unsupported(node, str(e))
         spec = bind(cublas_bf16.BatchedGemmWord, B=B, K=K, N=N, DOT=dot)
         return Compute(spec, M, (PerRow(_permuted(x, (1, 0, 2))), Shared(_permuted(w, (0, 2, 1)))), (PerRow(_permuted(out, (1, 0, 2))),),
-                       tuple(sorted(node.ids())), hint=hint_of(node, roots[0].name), kernels=("gemm", "cutlass"),
+                       tuple(sorted(node.ids())), hint=hint_of(node, root.name), kernels=("gemm", "cutlass"),
                        attribution=attribution_for(ctx, M, node.phase), pattern=self.name)
