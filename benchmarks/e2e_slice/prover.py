@@ -51,6 +51,23 @@ import statement as ST  # noqa: E402
 from wire import connect  # noqa: E402
 
 
+class Tunnel:
+    """Local forwards to the challenger's machine over one ssh connection (``ssh -M``), for nodes whose security group admits
+    TCP 22 alone: ``forward(host, port)`` is the local address that reaches host:port there."""
+
+    def __init__(self, target: str, sock: Path):
+        self.target, self.sock = target.split(), str(sock)
+        subprocess.run(["ssh", "-M", "-S", self.sock, "-f", "-N", "-o", "BatchMode=yes", *self.target], check=True)
+
+    def forward(self, host: str, port: int) -> tuple[str, int]:
+        subprocess.run(["ssh", "-S", self.sock, "-O", "forward", "-L", f"127.0.0.1:{port}:{host}:{port}", *self.target],
+                       check=True, capture_output=True)
+        return "127.0.0.1", port
+
+    def close(self) -> None:
+        subprocess.run(["ssh", "-S", self.sock, "-O", "exit", *self.target], capture_output=True)
+
+
 class Prover:
     def __init__(self, a):
         self.a = a
@@ -100,7 +117,9 @@ class Prover:
         t2 = time.time()
         self.st = ST.Stager(self.scratch / "circuit.txt", self.ks, self.dither, a.window, a.fold)
         t3 = time.time()
-        self.wire = connect(a.port, a.host, a.connect_tries)
+        self.tunnel = Tunnel(a.tunnel, self.scratch / "ssh.sock") if a.tunnel else None
+        host, port = self.tunnel.forward(a.host, a.port) if self.tunnel else (a.host, a.port)
+        self.wire = connect(port, host, a.connect_tries)
         self.wire.start_reader()
         self.wire.send("hello", m=self.km, n=self.kn, k=a.k, calls=a.calls, stages=a.stages, coins=a.coins, served=a.served,
                        window=a.window, fold=a.fold, session=self.session, b_roots=[t.root.hex() for t in self.tb],
@@ -250,6 +269,9 @@ class Prover:
         t3 = time.time()
         rc, prove_cpu, rss = None, None, None
         if addr is not None and a.flock != "none":
+            if self.tunnel:
+                vh, vp = addr.rsplit(":", 1)
+                addr = "%s:%d" % self.tunnel.forward(vh, int(vp))
             cmd = [a.flock, "prove", "--zk", "--verifier", addr, "--instances", str(rd / "inst.bin"), "--circuit",
                    str(self.st.circuit), "--runs", "1", "--warm", "0"]
             env = {**os.environ, "RAYON_NUM_THREADS": str(a.prove_threads)}
@@ -281,6 +303,8 @@ def main() -> int:
     ap.add_argument("--port", type=int, required=True)
     ap.add_argument("--host", default="127.0.0.1", help="the challenger's machine (its --listen)")
     ap.add_argument("--connect-tries", type=int, default=1, help="attempts a second apart (a remote challenger may still be staging)")
+    ap.add_argument("--tunnel", default="", help="ssh arguments that reach --host: the link and each round's verifier through "
+                                                 "local forwards (`Tunnel`), where only ssh crosses between the machines")
     ap.add_argument("--out", required=True)
     ap.add_argument("--scratch", required=True)
     ap.add_argument("--rounds", type=int, default=24)
@@ -332,6 +356,8 @@ def main() -> int:
                     window=closed and closed.get("window"))
         (P.out / "prover.json").write_text(json.dumps(info, indent=1))
         print(json.dumps({k: info[k] for k in ("rounds", "wall_s", "errors", "window")}), flush=True)
+        if P.tunnel:
+            P.tunnel.close()
     return 0 if not P.errors else 1
 
 

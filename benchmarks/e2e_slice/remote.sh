@@ -11,6 +11,7 @@
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env ROLE=prover \
 #     --env HOST=10.80.0.18 -- bash benchmarks/e2e_slice/remote.sh
 # PORT (47613), WINDOW (8), FOLD (duo), ROUNDS (4), CADENCE (0), SHAPE (--m 256 --n 256 --k 4096), K (4096), THREADS (48).
+# The Nebius nodes' security group admits TCP 22 alone, so between them the prover takes TUNNEL=peer (ssh forwards).
 set -uo pipefail
 export O=${OUT:?} D=benchmarks/e2e_slice
 : "${ROLE:?challenger or prover}" "${HOST:?the address of the challenger machine}"
@@ -28,9 +29,18 @@ if [ "$ROLE" = challenger ]; then
   $PY $D/challenger.py --flock "$FLOCK" --out "$O/challenger" --scratch "$S/c" --port-file "$S/port" --listen "$HOST" \
     --port "$PORT" --cadence "$CADENCE" --served dither --window "$WINDOW" --fold "$FOLD" --k "$K" > "$O/challenger.log" 2>&1
 else
-  ping -c 20 -i 0.2 "$HOST" >> "$O/net.txt" 2>&1
+  # the security group admits TCP 22 alone (and drops ICMP): a TCP handshake with HOST's sshd is one round trip
+  $PY -c 'import socket, sys, time
+t = []
+for _ in range(20):
+    s = time.perf_counter(); socket.create_connection((sys.argv[1], 22), 5).close(); t.append(1e3 * (time.perf_counter() - s))
+t.sort(); print(f"tcp connect {sys.argv[1]}:22 ms: min {t[0]:.3f} median {t[10]:.3f} max {t[-1]:.3f}")' "$HOST" >> "$O/net.txt" 2>&1
+  # TUNNEL=peer: the link and each round's verifier through ssh forwards, as research/pods/nebius/peers reaches HOST
+  [ "${TUNNEL:-}" = peer ] && TUNNEL=$(awk -v h="@$HOST" 'substr($NF, length($NF) - length(h) + 1) == h {$1 = ""; print}' \
+    tools/research/src/research/pods/nebius/peers)
   # shellcheck disable=SC2086
   $PY $D/prover.py --engine fake --flock "$FLOCK" --host "$HOST" --port "$PORT" --connect-tries 2400 --out "$O/prover" \
+    --tunnel "${TUNNEL:-}" \
     --scratch "$S/p" --rounds "$ROUNDS" --calls 1 --served dither --window "$WINDOW" --fold "$FOLD" $SHAPE \
     --prove-threads "${THREADS:-48}" --workers 8 > "$O/prover.log" 2>&1
 fi
