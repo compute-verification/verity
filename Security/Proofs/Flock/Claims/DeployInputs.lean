@@ -1,4 +1,4 @@
-import Proofs.Flock.Claims.Scope.Readable
+import Proofs.Flock.Claims.Scope.Matches
 import Flock.Registered
 import Flock.RecSetup
 
@@ -16,9 +16,10 @@ injective (`decode_injective`).
 The verifier's own parsers then run on those bytes, as `Main.verifyCmd` runs them (`Raw.ins`): `Tags.find?` on the
 statement id, the refusals of plain-leaf statements and of `--zk` with `--coins`, the coins (`--zk`'s keyed coin tree,
 else `--coins`), `Json.parse` then `Draw.workTableOfJson`, `Draw.closureMapOfJson` and `Registered.ofJson` on the files.
-The result is C's `Readable.Read`, so the claims' parser is C's (`parse`: `Read.parse`, `Stmt.setupTables` and under
-`--zk` every table's `Zk.shapeOk`, read as `Claims.Flock.Stmt` by `toReadable`), and the scope check is the verifier's
-own `ProvedScope.check` (`scopeCheck`).
+The result is C's `Readable.Read` (`readOf`), so the claims' parser is C's `parseOf` (`parse`: `Read.parse`,
+`Stmt.setupTables` and under `--zk` every table's `Zk.shapeOk`, read as `Claims.Flock.Stmt` by `toReadable`), and the
+scope check C's `scopeCheckOf`, the verifier's own `ProvedScope.check` (`scopeCheck`); `readOf_zk` is the agreement on
+`--zk` that C's `scope_iff` and `scopeMatches_zk` take.
 
 `Ins.setup` is `verifyCmd`'s `setupOf` at the statement's draw, with no recursive input and no `--identifier`: the
 session's statement (`Stmt.setupTables`), each table's registered reads (`checkRegistered`) and the identifier's absence
@@ -235,17 +236,38 @@ def setupOf (zk : Bool) (x : Claims.Msg) : Option (Ins × SessionSpec × Array S
   let (spec, sts) ← s.setup.toOption
   pure (s, spec, sts)
 
-/-- **The claims' parser**: the statement's inputs, C's `Read.parse` (the verifier's setup of the session's statement),
-read as `Claims.Flock.Stmt` (`toReadable`, with the relation's fields `rel`). -/
-def parse (zk : Bool) (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) : Option Claims.Flock.Stmt := do
-  let s ← insOf zk x
-  let p ← s.read.parse
-  pure (Readable.toReadable rel p)
+/-- What the verifier reads of the statement's bytes (`Readable.Read`). -/
+def readOf (zk : Bool) (x : Claims.Msg) : Option Readable.Read := (insOf zk x).map Ins.read
 
-/-- **The claims' scope check**: the statement parses and passes the verifier's own `ProvedScope.check`. -/
-def scopeCheck (zk : Bool) (x : Claims.Msg) : Bool :=
-  match insOf zk x with
-  | some s => s.read.parse.isSome && s.read.check.toBool
-  | none => false
+theorem Raw.ins_zk {w : Raw} {s : Ins} (h : w.ins = .ok s) : s.read.zk = w.zk := by
+  unfold Raw.ins at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  repeat' split at h
+  all_goals first | (cases h; done) | (cases h; rfl)
+
+/-- A statement of the verifier that is masked exactly when `zk` is read as masked exactly when `zk`. -/
+theorem readOf_zk {zk : Bool} {x : Claims.Msg} {r : Readable.Read} (h : readOf zk x = some r) : r.zk = zk := by
+  unfold readOf insOf at h
+  obtain ⟨s, hs, rfl⟩ := Option.map_eq_some_iff.1 h
+  obtain ⟨w, -, hw⟩ := Option.bind_eq_some_iff.1 hs
+  split_ifs at hw with hz
+  · cases hw
+  change w.ins.toOption = some s at hw
+  rw [← not_not.1 hz]
+  cases hi : w.ins with
+  | error e => rw [hi] at hw; cases hw
+  | ok s' =>
+    rw [hi] at hw
+    cases hw
+    exact Raw.ins_zk hi
+
+/-- **The claims' parser**: C's `parseOf` at the verifier's reading of the bytes: `Read.parse` (the verifier's setup of
+the session's statement), read as `Claims.Flock.Stmt` (`toReadable`, with the relation's fields `rel`). -/
+def parse (zk : Bool) (rel : Readable.Parsed → Readable.Relation) : Claims.Msg → Option Claims.Flock.Stmt :=
+  Readable.parseOf rel (readOf zk)
+
+/-- **The claims' scope check**: C's `scopeCheckOf`, the statement parses and passes the verifier's own
+`ProvedScope.check`. -/
+def scopeCheck (zk : Bool) : Claims.Msg → Bool := Readable.scopeCheckOf (readOf zk)
 
 end FlockDeploy
