@@ -179,6 +179,19 @@ class Row:
         doc = _read_json(self.path("EXPORT.json"))
         return (doc.get("commit") or "") if isinstance(doc, dict) else ""
 
+    def serving_rows_request(self, partition: str) -> str:
+        """The Commit's serving-rows request (`pipeline.serving_rows`, `pipeline.tp.serving_rows`): its directory inside the research
+        run dir when there is one, so the run's custody preserves it, the verifier's partition file, and the run id and source the
+        registration names (its domains bind the run root)."""
+        rd = self.env.research_run_dir
+        d = os.path.join(rd, "serving-rows", self.row) if rd else f"{self.d}/serving-rows"
+        os.makedirs(d, exist_ok=True)
+        req = os.path.join(d, "request.json")
+        with open(req, "w") as f:
+            json.dump({"dir": d, "partition": partition, "run": self.env.environ.get("RESEARCH_RUN_ID") or self.row,
+                       "committer": {"source": self.env.environ.get("RESEARCH_SOURCE_SHA")}}, f)
+        return req
+
     # ------------------------------------------------------------------------------------------------ records
     def log(self, msg: str) -> None:
         line = f"{utc()} [row {self.row}] {msg}"

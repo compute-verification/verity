@@ -35,6 +35,7 @@ from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline.tp import c2 as C2
 from verity_vllm.pipeline.tp import config_run as TPC
 from verity_vllm.pipeline.tp import phases as PH
+from verity_vllm.pipeline.tp import serving_rows as SRT
 from verity_vllm.pipeline.tp import warmup as WU
 from verity_vllm.pipeline.tp.import_path import write_import_path_runtime
 
@@ -253,12 +254,13 @@ class Options:
     replay_target: list[str] | None = option("--replay-target", action="append", default=None, help="<op_path>[@<step>]: add every VU of a module to every rank's sample")
     replay_k: int | None = option("--replay-k", type=int, default=None, help="the config run's sampled replay: k units over the world, split across the ranks (rank r: k // W, one more for r < k %% W), each rank's share stratified by family, in place of the per-stratum sample")
     only_arm: str | None = option("--only-arm", choices=["control", "instrumented"], default=None, help="run only this arm (`--pairs` runs of it; the config run: one instrumented run)")
+    serving_rows: str | None = option("--serving-rows", default=None, metavar="REQUEST_JSON", help="opt-in, not on the record: in the first instrumented run, once every rank's root is final and the TP run root fixed and before the challenge, each rank commits its units of the verifier's partition in M0's serving row format (verity_vllm.pipeline.tp.serving_rows; the row stage writes the request); needs --required-manifest and --replay-deferred")
 
 
 def main(args: Options) -> int:
     from verity_vllm.engine import engine_profile as prof, env as engine_env
     prof.apply_env()
-    from verity_vllm.pipeline.tp import lease as TPL
+    from verity_vllm.pipeline.tp import lease as TPL, match as TPM
     from vllm import LLM
     from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline.commit import git_head, run_workload
@@ -374,25 +376,7 @@ def main(args: Options) -> int:
     request_ids = {str(r.get("request_id")): f"r{int(r.get('index', i))}" for i, r in enumerate(reqs)}
     arrivals = {f"r{int(r.get('index', i))}": int(r.get("arrive_step") or 0) for i, r in enumerate(reqs)}
     caps = {f"r{int(r.get('index', i))}": int(r.get("max_tokens") or sampling.get("max_tokens") or 1) for i, r in enumerate(reqs)}
-    # [rev-cb M-0359 T6-3] the Match record's per-request generated ids (tp2_match capture arm), keyed by the workload's logical r<i>
-    match_tokens = None
-    match_rec = None
-    if args.match_dir:
-        mp = Path(args.match_dir) / "capture" / "tokens.json"
-        mdoc = json.loads(mp.read_text())
-        match_tokens = {}
-        for q in mdoc["requests"]:
-            lg = request_ids.get(str(q["request_id"]))
-            if lg is None:
-                raise SystemExit(f"fail-closed: Match record request {q['request_id']} is not a request of this workload")
-            match_tokens[lg] = [int(t) for t in q["generated_token_ids"]]
-        if set(match_tokens) != set(request_ids.values()):
-            raise SystemExit(f"fail-closed: Match record covers {sorted(match_tokens)} but the workload declares {sorted(set(request_ids.values()))}")
-        match_rec = {"path": str(mp), "requests": len(match_tokens), "generated_total": sum(len(v) for v in match_tokens.values()),
-                     "tp2_match_verdict": (json.loads((Path(args.match_dir) / "tp2_match.json").read_text()).get("pass") if (Path(args.match_dir) / "tp2_match.json").exists() else None),
-                     # [coord M-0481 form (B)] the capture recorder's stored collectives (coll.rank<r>.jsonl + coll.rank<r>.step<s>.pt) = the
-                     # independent oracle for every committed TP partial / MoE received output, compared per rank at finalize
-                     "capture_dir": str(mp.parent), "stored_steps_per_rank": {r: len(list(mp.parent.glob(f"coll.rank{r}.step*.pt"))) for r in range(world)}}
+    match_tokens, match_rec = TPM.match_record(args.match_dir, request_ids, world) if args.match_dir else (None, None)
     versions["match_record"] = match_rec
     match_capture_dir = (str(Path(args.match_dir) / "capture") if (args.match_dir and not args.no_match_oracle) else None)
     # [TP-08 / manbind MAN-06 form (A), per rank] the sampled exact replay's Programs OF RECORD per rank: the manifest's per-rank Program
@@ -427,6 +411,7 @@ def main(args: Options) -> int:
                                       "challenge": args.replay_challenge, "rule": "manbind MAN-06 O1-O6 per rank: the rank's Programs of record x the rank's map x the rank's committed members + weight shards"}
         if args.replay_k:
             replay_cfg["k_per_rank"] = versions["sampled_replay"]["k_per_rank"] = TPC.replay_k_per_rank(args.replay_k, world)
+    SRT.require(args, replay_cfg)
     # [MAN-09 per rank] the weights of record: each rank composes its record from ITS rank Program + the pinned checkpoint shards
     weights_pin_cfg = None
     if args.checkpoint_dir:
@@ -575,6 +560,7 @@ def main(args: Options) -> int:
                     roots = {int(f["rank"]): bytes.fromhex(f["run_root"]) for f in fin}
                     root = tp_run_root(world, roots)
                     claimed = {str(int(f["rank"])): f["run_root"] for f in fin}
+                    served = SRT.commit(llm, args, root, claimed, world, TP_ROOT_TAG) if args.serving_rows and pair == 0 else None
                     per_rank = {}
                     reasons = []
                     # every rank's root is fixed; the challenge of every rank derives from the COMBINED root (one RPC: each rank opens its own)
@@ -751,7 +737,7 @@ def main(args: Options) -> int:
                                      "leaves": sum(c["leaves"] for c in per_rank.values()), "bytes_bound": sum(c["bytes_bound"] for c in per_rank.values()),
                                      "tensors": sum(c["tensors"] for c in per_rank.values()),
                                      "openings": {"n": sum(c["openings"]["n"] for c in per_rank.values()), "verified": sum(c["openings"]["verified"] for c in per_rank.values())},
-                                     "t_ready_after_run_s": t_ready, "commit_pass": False if reasons else (None if pending else True),
+                                     "t_ready_after_run_s": t_ready, "serving_rows": served, "commit_pass": False if reasons else (None if pending else True),
                                      "commit_fail_reason": "; ".join(reasons) if reasons else (RB.PENDING if pending else "PASS")}
                     if reasons:
                         all_pass = False

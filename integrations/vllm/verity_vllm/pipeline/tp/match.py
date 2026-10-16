@@ -352,6 +352,26 @@ def _write(run: Path, res: dict) -> None:
     (run / "tp2_match.json").write_text(json.dumps(res, indent=1, default=str) + "\n")
 
 
+def match_record(match_dir: str, request_ids: dict[str, str], world: int) -> tuple[dict[str, list[int]], dict[str, Any]]:
+    """The Match record a TP Commit compares against (``tp-commit --match-dir``): the capture arm's generated ids per request, keyed by
+    the workload's logical ``r<i>`` (``request_ids``: workload request id -> ``r<i>``), every request of the workload and no other; and
+    its record: the check's verdict and the capture recorder's stored collectives per rank, the independent oracle every committed TP
+    partial and MoE received output is compared against at finalize."""
+    mp = Path(match_dir) / "capture" / "tokens.json"
+    tokens: dict[str, list[int]] = {}
+    for q in json.loads(mp.read_text())["requests"]:
+        lg = request_ids.get(str(q["request_id"]))
+        if lg is None:
+            raise SystemExit(f"fail-closed: Match record request {q['request_id']} is not a request of this workload")
+        tokens[lg] = [int(t) for t in q["generated_token_ids"]]
+    if set(tokens) != set(request_ids.values()):
+        raise SystemExit(f"fail-closed: Match record covers {sorted(tokens)} but the workload declares {sorted(set(request_ids.values()))}")
+    verdict = Path(match_dir) / "tp2_match.json"
+    return tokens, {"path": str(mp), "requests": len(tokens), "generated_total": sum(len(v) for v in tokens.values()),
+                    "tp2_match_verdict": json.loads(verdict.read_text()).get("pass") if verdict.exists() else None,
+                    "capture_dir": str(mp.parent), "stored_steps_per_rank": {r: len(list(mp.parent.glob(f"coll.rank{r}.step*.pt"))) for r in range(world)}}
+
+
 @dataclass(frozen=True, kw_only=True)
 class Options:
     arm: str = option("--arm", choices=("capture", "control", "check"))
