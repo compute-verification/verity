@@ -93,13 +93,14 @@ class Fused:
         return CO_PREFILL if phase == "prefill" else self.filler
 
 
-#: round 3's picks over TABLE (screens r20261016-081436-04e3 and r20261016-082545-6a39): lm_head through flin at B <= 64
-#: (+0.007-0.022 of peak, the step no slower: flin's lm_head beats cuBLASLt's at M = 32), not at M = 128 (<= +0.004 for
-#: +0.002-0.006 slowdown); B 1 L 32K its own row, persistent attention and the pump on 104 SMs (the 2K row read 1.045 under
-#: the scorer there; persistent attention ran 0.02 faster at +0.025 of peak). Not taken: FLIN_LAZY 2/4 (+2-10% slowdown) and
-#: flin's filler warps at B >= 132 (1:4, 2:2, 2:4: +0.008-0.015 of peak for +2.3-4.5%, the pump's trade is ~4x better).
-TABLE_V2 = {k: (sms, replace(q, LM=1) if k[0] <= 64 else q) for k, (sms, q) in TABLE.items()}
-TABLE_V2[(1, 32768)] = (104, FusedStep(LM=1))
+#: round 3's picks over TABLE (screens r20261016-081436-04e3, -082545-6a39 and -083352-fc74): lm_head through flin at
+#: B <= 64 (+0.003-0.022 of peak, the step no slower: flin's lm_head beats cuBLASLt's at M = 32) but B 32 L 1K (1.05-1.06
+#: with it, and 1.061 under the scorer, r20261016-083352-4e81), not at M = 128 (<= +0.004 for +0.002-0.006 slowdown);
+#: B 1 L 32K its own row, persistent attention and the pump on 100 SMs (the 2K row read 1.045 under the scorer there, this
+#: one 0.999). Not taken: FLIN_LAZY 2/4 (+2-10% slowdown) and flin's filler warps at B >= 132 (1:4, 2:2, 2:4: +0.008-0.015
+#: of peak for +2.3-4.5%, the pump's trade is ~4x better).
+TABLE_V2 = {k: (sms, replace(q, LM=1) if k[0] <= 64 and k != (32, 1024) else q) for k, (sms, q) in TABLE.items()}
+TABLE_V2[(1, 32768)] = (100, FusedStep(LM=1))
 
 
 @dataclass
@@ -112,8 +113,8 @@ class FusedV2(Fused):
         "mechanism": ["filler:chained-imma-registers", "place:split", "split:per-point-table", "fused:flin-filler-warps",
                       "fused:attention-filler-warps", "fused:persistent-attention", "fused:lazy-done",
                       "fused:lm-head-flin", "prefill:co", "sched:prio-short-blocks"],
-        "hypothesis": "lm_head through flin at B <= 64 and persistent attention at B 1 L 32K add 0.01-0.04 of peak to "
+        "hypothesis": "lm_head through flin at B <= 64 and persistent attention at B 1 L 32K add 0.01-0.02 of peak to "
                       "fill-fused's decode points (0.624, r20261016-081018-591c) at no more slowdown"})
-    choice: str = ("fill-fused's table with lm_head through flin at B <= 64 and a B 1 L 32K row, from FILL's round-3 "
-                   "screens")
+    choice: str = ("fill-fused's table with lm_head through flin at B <= 64 (but B 32 L 1K) and a B 1 L 32K row, from "
+                   "FILL's round-3 screens")
     table: dict = field(default_factory=lambda: TABLE_V2, repr=False)
