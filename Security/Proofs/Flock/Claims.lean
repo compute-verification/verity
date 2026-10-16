@@ -16,6 +16,8 @@ import Proofs.Flock.Claims.Sampling.Bext
 import Proofs.Flock.Claims.Sampling.Opens
 import Proofs.Flock.Claims.Sampling.Path
 import Proofs.Flock.Claims.Sampling.Count
+import Proofs.Flock.Claims.Sampling.Wait
+import Proofs.Flock.Claims.Sampling.KS
 import Proofs.Flock.Claims.Decode
 import Proofs.Flock.Claims.DecodeFlock
 
@@ -36,7 +38,9 @@ block's `Bits` from its `KS` (`Sampling.Bext`), and the block's openings binding
 openings an own-call collision when the path check binds (`Sampling.Opens`), and the registered frame-v3-sha512 path
 check binding for every `H`, the verifier's own check at SHA-512 (`Sampling.Path`), and the deployed
 `SampledProofs.Bound.countBound` sound at the stratified and subset laws, `miss(countBound + 1) < δ`
-(`Sampling.Count`). -/
+(`Sampling.Count`), the wait's truncation `2k/K + e^{−k/8}` and its union over wrong sets `C(N, t)^{1/k}·y`
+(`Sampling.Wait`), and the block's `KS` at a general deployment, from `PathBinds`, Flock's KS at the sessions and the
+sampled verifier's draw, refusals and session openings (`Sampling.KS`). -/
 
 /-- **The claims are stated** (`Flock.Guarantees.ClaimsStated`). -/
 theorem Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated := rfl
