@@ -1197,9 +1197,9 @@ int main(int argc, char** argv) {
   if (argc < 2) {
     fprintf(stderr, "usage: dcap gate | bw GiB | lin M | att B L | step B L | fill B L FILL_SMS big|l2  [reps]\n"
                     "       dcap dgate | dalone W NC S | done W NC S | dfill B L split|co FILL_SMS W NC S [reps]\n"
-                    "       dcap fgate | flin M FW NC THR [reps] | fstep B L FW NC THR AFW [FILL_SMS [reps]]   (M in 32 64 128 256, B <= 256)\n"
+                    "       dcap fgate | flin M FW NC THR [reps] | fstep B L FW NC THR AFW [FILL_SMS [reps]]   (M in 32 64 128 160 192 256, B <= 256)\n"
                     "       (DFILL_COINS=<32 hex digits>: the round's coins for the d* and f* modes; FLIN_PDL=0: no programmatic\n"
-                    "       dependent launch; FLIN_LT=mask: fstep's linears that stay on cuBLASLt, 1 qkv 2 o 4 gate_up;\n"
+                    "       dependent launch; FLIN_LT=mask: fstep's linears that stay on cuBLASLt, 1 qkv 2 o 4 gate_up 8 down;\n"
                     "       FATT_PDL=1|2: the attention filler blocks under PDL, 2 with their filler warps starting early)\n");
     return 1;
   }
@@ -1316,7 +1316,7 @@ int main(int argc, char** argv) {
   } else if (mode == "flin") {
     if (argc < 6) { fprintf(stderr, "flin M FW NC THR [reps]\n"); return 1; }
     const int M = atoi(argv[2]);
-    if (!flin_m_ok(M)) { fprintf(stderr, "M in 32 64 128 256\n"); return 1; }
+    if (!flin_m_ok(M)) { fprintf(stderr, "M in 32 64 128 160 192 256\n"); return 1; }
     rc = run_flin(d, M, atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), argc > 6 ? atoi(argv[6]) : 9);
   } else if (mode == "fstep") {
     if (argc < 8) { fprintf(stderr, "fstep B L FW NC THR AFW [FILL_SMS [reps]]\n"); return 1; }
