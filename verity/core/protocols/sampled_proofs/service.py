@@ -38,7 +38,9 @@ checked, so there is no second draw. The outcome accepts only when both registra
 is the first stage's law over the RUs (one-stage's profile of the boundary registration).
 
 **The salt and the registration deadline.** `Stream.salt` issues the epoch's salt coin once, from the challenger's own
-coins, and reads its release on the challenger's clock (`salted_at`). Under `Check.registration_deadline` (seconds on
+coins, and reads its release on the challenger's clock (`salted_at`). `Stream.salt_released` instead records a salt
+released elsewhere (PoUW's epoch coin, shared by one stream per level) with its release on the same clock, which can't
+be later than the clock's reading now (`released-later`); either is the epoch's one salt. Under `Check.registration_deadline` (seconds on
 that clock from the release), `register` reads the receipt (`received_at`) first and refuses a registration received
 later than the deadline, or before any salt, as `late-registration`, whatever it holds. That is one visible failure,
 never retried, and it ends the epoch: the stream receives no registration after it (`epoch-ended`) and never reissues
@@ -46,7 +48,7 @@ the salt (`salted`). It is the rule of `Pouw.AcceptsBy` (`Security/Definitions/P
 `salted_at`, `tr` = `received_at` and `td` = `ts` + the deadline. The readings are the challenger's own: the stream's
 epoch log (`Stream.epoch_log`) and each `Registration` carry them, and neither the receipt nor an outcome's record does.
 
-**No retries.** The salt is issued once (`salt`). A registration is drawn once, after its receipt (`select`); its
+**No retries.** The salt is issued or recorded once (`salt`, `salt_released`). A registration is drawn once, after its receipt (`select`); its
 interiors are registered once; its proof is delivered once (`deliver`); its outcome is final (`outcome`), and nothing
 redraws. A proof delivered after `Check.proof_deadline` (seconds on the challenger's clock, from the draw) is a reject.
 Each failure is one visible symbol, `reject` or `late`, or a late registration's refusal, `late-registration`.
@@ -57,6 +59,7 @@ It holds one open registration at a time, so it never ends with more than `budge
 from __future__ import annotations
 
 import hashlib
+import math
 import os
 import re
 import time
@@ -216,9 +219,9 @@ class Check:
     Program's SHA-512, proved once per window over the committed layout. `public_outputs`: what the verifier reports that
     the auditor reads. `deadline`: a timed session's (PoUS's rounds). `proof_deadline`: seconds on the challenger's clock
     from the draw; a proof delivered later is a reject. `registration_deadline`: seconds on the challenger's clock from
-    the salt coin's release (`Stream.salt`); a registration received later, or before any salt, is refused
-    (`late-registration`) and ends the epoch. The interiors' registration is not held to it: it follows the draw, which
-    `proof_deadline` bounds."""
+    the salt coin's release (`Stream.salt`, or `Stream.salt_released`'s `released_at`); a registration received later,
+    or before any salt, is refused (`late-registration`) and ends the epoch. The interiors' registration is not held to
+    it: it follows the draw, which `proof_deadline` bounds."""
 
     program: str
     query: Mapping[str, Any]
@@ -491,9 +494,10 @@ class Stream:
     tests inject both. `sampler`, when given, draws instead of the coins (`flock-verify draw` in a process of its own,
     say): it takes the challenger's law and N, and its draw is held to them like any other.
 
-    A stream runs one epoch: `salt` issues its salt coin, once, and under `Check.registration_deadline` every
-    registration is received within the deadline of that salt's release, or the epoch ends (`ended`) at the first that
-    isn't. `epoch_log` holds the challenger's clock readings.
+    A stream runs one epoch with one salt: `salt` issues it from the coins, or `salt_released` records one released
+    elsewhere with its release, and under `Check.registration_deadline` every registration is received within the
+    deadline of that release, or the epoch ends (`ended`) at the first that isn't. `epoch_log` holds the challenger's
+    clock readings.
     """
 
     def __init__(self, spec: Spec, unit: SpecializedDefinition, *, budget: int, delta: float, challenger: str,
@@ -540,8 +544,8 @@ class Stream:
 
     @property
     def epoch_log(self) -> tuple[dict[str, Any], ...]:
-        """The epoch's clock readings, in order: the salt's release, `{"event": "salt", "salt": <hex>, "salted_at"}`,
-        and under `Check.registration_deadline` each registration received, `{"event": "registration", "order",
+        """The epoch's clock readings, in order: the salt's release, `{"event": "salt", "salt": <hex>, "salted_at"}`
+        (with `"external": true` from `salt_released`, `salted_at` being its `released_at`), and under `Check.registration_deadline` each registration received, `{"event": "registration", "order",
         "registration": <digest>, "salted_at", "received_at"}`, or refused as late, `{"event": "late-registration",
         "salted_at", "received_at"}` (`salted_at` null when no salt was issued). A registration refused on what it holds
         is not received, and not logged."""
@@ -572,21 +576,43 @@ class Stream:
         if self._entries and self._entries[-1].outcome is None:
             raise _refuse("open", {"order": self._entries[-1].registration.order})
 
-    def salt(self, n: int = 64) -> bytes:
-        """The epoch's salt coin: `n` bytes of the challenger's own coins (`OwnRandomness`, in order with the draws'
-        reads), issued once. Its release is read on the challenger's clock (`salted_at`) and logged (`epoch_log`);
-        `Check.registration_deadline` counts from it. Raises `Refused`: `salted` (a second salt: nothing redraws it) or
-        `epoch-ended` (the epoch ended before any salt)."""
-        if not (type(n) is int and n >= 1):
-            raise ValueError(f"a salt is a positive number of bytes, not {n!r}")
+    def _unsalted(self) -> None:
         if self._salted_at is not None:
             raise _refuse("salted", {"salted_at": self._salted_at})
         if self._ended is not None:
             raise _refuse("epoch-ended", dict(self._ended))
+
+    def salt(self, n: int = 64) -> bytes:
+        """The epoch's salt coin: `n` bytes of the challenger's own coins (`OwnRandomness`, in order with the draws'
+        reads), issued once. Its release is read on the challenger's clock (`salted_at`) and logged (`epoch_log`);
+        `Check.registration_deadline` counts from it. Raises `Refused`: `salted` (the epoch has a salt, from `salt` or
+        `salt_released`: nothing redraws it) or `epoch-ended` (the epoch ended before any salt)."""
+        if not (type(n) is int and n >= 1):
+            raise ValueError(f"a salt is a positive number of bytes, not {n!r}")
+        self._unsalted()
         salt = OwnRandomness(self._coins).read(n)
         self._salted_at = self._clock()
         self._epoch_log.append({"event": "salt", "salt": salt.hex(), "salted_at": self._salted_at})
         return salt
+
+    def salt_released(self, salt: bytes, released_at: float) -> None:
+        """The epoch's salt when it was released elsewhere (PoUW's epoch coin, shared by one stream per level):
+        `released_at` is its release, read on this stream's clock. It is then the epoch's salt as `salt`'s is, and
+        `Check.registration_deadline` counts from `released_at`, so a stream created after the release (a level's, at
+        its first registration) still measures from it. Logged with `"external": true`. Raises `ValueError` for a salt
+        that isn't non-empty bytes or a release that isn't a finite number, and `Refused`: `salted` (the epoch has a
+        salt), `epoch-ended`, or `released-later` (`released_at` after the clock's reading now: a release is never in
+        the future)."""
+        if not (isinstance(salt, bytes) and salt):
+            raise ValueError(f"a released salt is non-empty bytes, not {salt!r}")
+        if not (isinstance(released_at, (int, float)) and not isinstance(released_at, bool) and math.isfinite(released_at)):
+            raise ValueError(f"a salt's release is a finite reading of the clock, not {released_at!r}")
+        self._unsalted()
+        now = self._clock()
+        if released_at > now:
+            raise _refuse("released-later", {"released_at": released_at, "now": now})
+        self._salted_at = released_at
+        self._epoch_log.append({"event": "salt", "salt": salt.hex(), "salted_at": released_at, "external": True})
 
     def register(self, record: Mapping[str, Any], ports: Mapping[str, Mapping[str, Any]], *, leaf_layer: str | None = None,
                  anchors: Sequence[Any] = (), registered: Mapping[str, int] | None = None,
@@ -607,7 +633,7 @@ class Stream:
         received_at = None
         if d is not None:
             received_at = self._clock()
-            if self._salted_at is None or received_at - self._salted_at > d:
+            if self._salted_at is None or not received_at - self._salted_at <= d:
                 self._ended = {"salted_at": self._salted_at, "received_at": received_at, "registration_deadline": d}
                 self._epoch_log.append({"event": "late-registration", "salted_at": self._salted_at,
                                         "received_at": received_at})
