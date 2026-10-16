@@ -57,6 +57,11 @@ theorem pushes_congr {α : Type} {f g : ℕ → α} {n : ℕ} (h : ∀ i < n, f 
   | zero => rfl
   | succ n ih => rw [pushes, pushes, ih fun i hi => h i (by omega), h n (by omega)]
 
+theorem pushes_eq_map {α : Type} (f : ℕ → α) (n : ℕ) : pushes f n = ((List.range n).map f).toArray := by
+  induction n with
+  | zero => rfl
+  | succ n ih => rw [pushes, ih, List.range_succ, List.map_append]; simp
+
 /-! ## The prover's steps in the pure session -/
 
 theorem liftTM_go {α : Type} (x : TM α) (t : Transcript) (l : Array Claims.Msg) :
@@ -188,6 +193,16 @@ theorem sampleVecWith_sent (hs : Hashes V) {n : ℕ} (hn : n ≠ 0) {R : Array R
     {coin : ℕ → F128} (hc : Carries R t.k (sent t 2 n coin)) :
     sampleVecWith hs n ⟨R, t.k, t.pending⟩ = .ok ((Array.range n).map coin, ⟨R, t.k + 1, ByteArray.empty⟩) :=
   squeezeWith_sent hs 2 hn hc
+
+/-- `sampleVecWith_sent` at a transcript `u` given field by field. -/
+theorem sampleVecWith_sent_at (hs : Hashes V) {n : ℕ} (hn : n ≠ 0) {R : Array Round} {t : Transcript}
+    {coin : ℕ → F128} (u : Transcript) (hR : u.rounds = R) (hk : u.k = t.k) (hp : u.pending = t.pending)
+    (hc : Carries R t.k (sent t 2 n coin)) :
+    sampleVecWith hs n u = .ok ((Array.range n).map coin, ⟨R, t.k + 1, ByteArray.empty⟩) := by
+  obtain ⟨R', k, P⟩ := u
+  dsimp only at hR hk hp
+  subst hR hk hp
+  exact sampleVecWith_sent hs hn hc
 
 theorem sampleKWith_sent (hs : Hashes V) {R : Array Round} {t : Transcript} {coin : ℕ → F128}
     (hc : Carries R t.k (sent t 2 2 coin)) :
