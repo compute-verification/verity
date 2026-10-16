@@ -35,6 +35,7 @@ constexpr int F_TAG = 1;   // pm1, B's side
   }
 GEMML(t_plain, 0, NONE, 0, 0)
 GEMML(t_duo32, 32, DUO, 0, 0)
+GEMML(t_duos32, 32, DUOS, 0, 0)
 GEMML(f_plain, 0, NONE, 1, -2)
 GEMML(f_duo32, 32, DUO, 1, -2)
 GEMML(o_plain, 0, NONE, 2, -2)
@@ -369,8 +370,8 @@ static void lsetup(LProb& P, int m, int n, int k, int batch, uint32_t seed, int 
   P.mAB = upload_maps(Maps{tmap(P.A, k, batch * m, 128), tmap(P.B, k, batch * n, 128), tmap(P.A, k, batch * m, 128), tmap(P.B, k, batch * n, 128)});
   P.mT = upload_maps(Maps{tmap_ld(P.XA, k, P.Kp, batch * m), tmap_ld(P.XB, k, P.Kp, batch * n), pa, pbm});
   P.mF = upload_maps(Maps{tmap(P.A, k, batch * m, 128), tmap_ld(P.XB, k, P.Kp, batch * n), pa, pbm});
-  for (Kern kern : {RCK[0][0], RCK[0][1], (Kern)t_plain, (Kern)t_duo32, (Kern)f_plain, (Kern)f_duo32, (Kern)o_plain, (Kern)o_duo32,
-                     (Kern)r_plain, (Kern)r_duo32})
+  for (Kern kern : {RCK[0][0], RCK[0][1], (Kern)t_plain, (Kern)t_duo32, (Kern)t_duos32, (Kern)f_plain, (Kern)f_duo32,
+                     (Kern)o_plain, (Kern)o_duo32, (Kern)r_plain, (Kern)r_duo32})
     CK(cudaFuncSetAttribute(kern, cudaFuncAttributeMaxDynamicSharedMemorySize, CSMEM));
 }
 static void lfree(LProb& P) {

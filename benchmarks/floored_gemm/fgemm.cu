@@ -87,9 +87,12 @@ __host__ __device__ constexpr uint32_t mix32(uint32_t x) {
 // TB2W and TB1W pack the same bytes into m16n8k32 operands: TB2W the two low bytes of tiles (mi, 2j) and (mi, 2j + 1)
 // (k 2c + i of tile 2j's word column c, 16 + 2c + i of tile 2j + 1's), one m16n8k32 a pair; TB1W byte 1 of the four tiles
 // (mi, 0..3), TB1's two pair operands side by side in k, one m16n8k32 a row block. TB2WC and TB1WC are them chained.
+// DUOS is DUO with a receipt word a 32-step segment: after segment s each thread folds its chains into R_s, stores it at
+// R[(tile KS + s) NCT + thread] (KS = K / 32) and re-keys them from (seed, tile, thread, s + 1)
+// (verity/core/protocols/pouw/circuit/segment.py)
 enum Kind { NONE = 0, DUO = 1, DUO2 = 2, ADD3 = 3, MUL2 = 4, TB4 = 5, TB2 = 6, TB1 = 7, TB4C = 8, TB1C = 9, TB2W = 10, TB1W = 11,
-            TB2WC = 12, TB1WC = 13 };
-__host__ __device__ constexpr bool is_tb(int k) { return k >= TB4; }
+            TB2WC = 12, TB1WC = 13, DUOS = 14 };
+__host__ __device__ constexpr bool is_tb(int k) { return k >= TB4 && k <= TB1WC; }
 __host__ __device__ constexpr bool tb_chained(int k) { return k == TB4C || k == TB1C || k == TB2WC || k == TB1WC; }
 __host__ __device__ constexpr int tb_base(int k) {
   return k == TB4C ? TB4 : k == TB1C ? TB1 : k == TB2WC ? TB2W : k == TB1WC ? TB1W : k;
@@ -287,6 +290,9 @@ template <int TM, int BN, int WM, int STAGES, bool F8 = false, int NZ = 0, int N
   const uint64_t* sg = nullptr;   // NS > 0: the noise from SHA-512 (sha_noise.cuh) instead of nz_hash
   const uint8_t* eb = nullptr;    // NS < 0: A's noise from this buffer (Args::eb), B unedited here; tiles heads-innermost
   int eM = 0, pa_rows = 0;
+  // DUOS: the receipt words, this tile's id, the chains' key and the segments a tile
+  uint32_t* sr = nullptr;
+  uint32_t sr_tile = 0, sr_seed = 0, sr_ks = 0;
 
   DEV ML(uint8_t* smem, const Maps* m, int M, int N, int K, int grp, bool tail, int nb = 1)
       : maps(m), tiles_m(M / TM), tiles_n(N / BN), KT(K / BK), steps(K / BK + tail), group(grp), pt(blockIdx.x),
@@ -403,6 +409,24 @@ template <int TM, int BN, int WM, int STAGES, bool F8 = false, int NZ = 0, int N
   }
   template <int KIND, int IDX> DEV static void absorb_at(St (&ch)[NCH<KIND>], const int (&w)[4]) {
     absorb<KIND, IDX / NI, IDX % NI>(ch, w);
+  }
+  // DUOS: the chains' keys at segment s, and the end of segment s (its receipt word stored, the chains re-keyed)
+  DEV void seg_key(St (&ch)[8], uint32_t s) const {
+    const uint32_t b = ((sr_tile * NCT + threadIdx.x) * sr_ks + s) * 8u;
+#pragma unroll
+    for (int j = 0; j < 8; j++) {
+      ch[j].y = mix32(sr_seed ^ mix32(b + j));
+      ch[j].z = mix32(ch[j].y + 0x9E3779B9u);
+    }
+  }
+  template <int KIND> DEV void seg_end(St (&ch)[NCH<KIND>], int s) const {
+    if constexpr (KIND == DUOS) {
+      uint32_t r = 0;
+#pragma unroll
+      for (int j = 0; j < 8; j++) r ^= ch[j].y ^ rotl(ch[j].z, 16);
+      sr[((size_t)sr_tile * sr_ks + s) * NCT + threadIdx.x] = r;
+      seg_key(ch, s + 1);
+    }
   }
   // key registers a thread: TB4 two a tile, TB2 one a tile, TB1 one a pair of tiles; key t's registers start at KB * t;
   // a chained kind's K_R (position 63) is its last two
@@ -534,6 +558,7 @@ template <int TM, int BN, int WM, int STAGES, bool F8 = false, int NZ = 0, int N
     const int sn = s + 1 == STAGES ? 0 : s + 1;
     load(fa[1], fb[1], sb, 1);
     mma<FIRST, absorbs(RS, 0), KIND>(acc, ch, kr, fa[0], fb[0]);
+    if constexpr (RS != 0) seg_end<KIND>(ch, 4 * kt);
     load(fa[0], fb[0], sb, 2);
     if constexpr (OV) {
       mbar_wait_warp(full(sn), s + 1 == STAGES ? ph ^ 1 : ph);
@@ -545,12 +570,14 @@ template <int TM, int BN, int WM, int STAGES, bool F8 = false, int NZ = 0, int N
       }
     }
     mma<false, absorbs(RS, 1), KIND>(acc, ch, kr, fa[1], fb[1]);
+    if constexpr (RS != 0) seg_end<KIND>(ch, 4 * kt + 1);
     load(fa[1], fb[1], sb, 3);
     if constexpr (OV && NS == 0) {
       edit_chunk(stage(sn), kt + 1, 2);
       edit_chunk(stage(sn), kt + 1, 3);
     }
     mma<false, absorbs(RS, 2), KIND>(acc, ch, kr, fa[0], fb[0]);
+    if constexpr (RS != 0) seg_end<KIND>(ch, 4 * kt + 2);
     advance();
     if (!LAST) {
       if constexpr (OV) {
@@ -562,6 +589,7 @@ template <int TM, int BN, int WM, int STAGES, bool F8 = false, int NZ = 0, int N
       load(fa[0], fb[0], stage(s), 0);
     }
     mma<false, absorbs(RS, 3), KIND>(acc, ch, kr, fa[1], fb[1]);
+    if constexpr (RS != 0) seg_end<KIND>(ch, 4 * kt + 3);
     release(done);
   }
   // receipts at stride RS over the first KR columns (0: all of K), then the rest of K without
@@ -624,6 +652,7 @@ template <int TM, int BN, int WM, int STAGES, bool TAIL, int RS, int KIND, bool 
 DEV void gemm_body(const Args& a) {
   using L = ML<TM, BN, WM, STAGES, F8, NZ, NS>;
   constexpr int MI = L::MI, NI = L::NI;
+  static_assert(KIND != DUOS || (RS == 32 && MI * NI == 8), "DUOS: a word a 32-step segment, 8 tiles a thread");
   extern __shared__ __align__(1024) uint8_t smem[];
   const int nb = a.batch > 0 ? a.batch : 1;
   L ml(smem, a.maps, a.M, a.N, a.K, a.group, TAIL, nb);
@@ -643,13 +672,18 @@ DEV void gemm_body(const Args& a) {
     ml.nz_rowA = (bi * tiles_m + tm) * TM; ml.nz_rowB = (bi * tiles_n + tn) * BN;
     if constexpr (NS == -3) ml.load_u(warp, lane);
     St ch[NCH<KIND>];
+    if constexpr (KIND == DUOS) {
+      ml.sr = a.R; ml.sr_tile = tile_id; ml.sr_seed = a.seed; ml.sr_ks = (uint32_t)(a.K / 32);
+      ml.seg_key(ch, 0);
+    } else {
 #pragma unroll
-    for (int e = 0; e < NCH<KIND>; e++) {
-      if constexpr (is_tb(KIND)) {
-        ch[e].y = ch[e].z = 0;
-      } else {
-        ch[e].y = mix32(a.seed ^ mix32((tile_id * L::NCT + ctid) * NCH<KIND> + e));
-        ch[e].z = mix32(ch[e].y + 0x9E3779B9u);
+      for (int e = 0; e < NCH<KIND>; e++) {
+        if constexpr (is_tb(KIND)) {
+          ch[e].y = ch[e].z = 0;
+        } else {
+          ch[e].y = mix32(a.seed ^ mix32((tile_id * L::NCT + ctid) * NCH<KIND> + e));
+          ch[e].z = mix32(ch[e].y + 0x9E3779B9u);
+        }
       }
     }
     int acc[MI][NI][4];
@@ -668,7 +702,7 @@ DEV void gemm_body(const Args& a) {
       uint4* r = reinterpret_cast<uint4*>(a.R) + ((size_t)tile_id * L::NCT + ctid) * 2;
       r[0] = make_uint4(ch[0].y, ch[0].z, ch[1].y, ch[1].z);
       r[1] = make_uint4(0, 0, 0, 0);
-    } else if constexpr (RS != 0) {
+    } else if constexpr (RS != 0 && KIND != DUOS) {
       uint4* r = reinterpret_cast<uint4*>(a.R) + ((size_t)tile_id * L::NCT + ctid) * 2;
       r[0] = make_uint4(finish<KIND>(ch, 0), finish<KIND>(ch, 1), finish<KIND>(ch, 2), finish<KIND>(ch, 3));
       r[1] = make_uint4(finish<KIND>(ch, 4), finish<KIND>(ch, 5), finish<KIND>(ch, 6), finish<KIND>(ch, 7));
