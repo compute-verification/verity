@@ -8,17 +8,30 @@
 #     [--env D4A_IDS=ids8192.npy --send ids8192.npy] --send benchmarks/fp8_instantiation/run_attention.sh \
 #     -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/run_attention.sh"'
 # D4A_IDS may hold several windows (N x T, windows.py), whose window 0 must begin with those 2048 tokens.
+# D4A_MODEL: llama8b (the default), qwen7b (Qwen/Qwen2.5-7B: D4A_IDS its own windows, `windows.py SNAP WIKITEXT -:T N`,
+# so no prefix check) or llama70b (Llama-3.1-70B, whose tokenizer gives the 8B's windows; D4A_GPUS=2, split by layers,
+# with --env EXACT_GRID_WCACHE=0).  D4A_GPUS: GPUs leased (1).
 set -uo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out${D4A_TAG:+/$D4A_TAG}
 mkdir -p "$O"
 export PY=/workspace/jobs/venv312/bin/python
-export SNAP=/workspace/hf/hub/models--unsloth--Llama-3.1-8B/snapshots/3f0d51f8e5640f98f1a96ea9044a0e55c0a83814
+case "${D4A_MODEL:-llama8b}" in
+  llama8b) SNAP=/workspace/hf/hub/models--unsloth--Llama-3.1-8B/snapshots/3f0d51f8e5640f98f1a96ea9044a0e55c0a83814 ;;
+  qwen7b) SNAP=/workspace/hf/hub/models--Qwen--Qwen2.5-7B/snapshots/d149729398750b98c0af14eb82c78cfe92750796 ;;
+  llama70b) SNAP=/workspace/hf/hub/models--unsloth--Meta-Llama-3.1-70B/snapshots/1b7306651142d0cc65d993076a250a6a82cf046c ;;
+  *) echo "D4A_MODEL is llama8b, qwen7b or llama70b" >&2; exit 2 ;;
+esac
+export SNAP
 export IDS=/workspace/pouw/fp8-security/llama8b-w0/ids.npy
 export HF_HOME=/workspace/hf HF_HUB_OFFLINE=1
 export CTX=${D4A_CTX:-2048}
 # D4A_IDS (an ids file sent with the run, e.g. window 0 at 8192) replaces IDS, whose 2048 tokens it must begin with.
 PREFIX=()
-if [ -n "${D4A_IDS:-}" ]; then PREFIX=(--prefix "$IDS"); IDS=$RESEARCH_RUN_DIR/inputs/$D4A_IDS; fi
+[ "${D4A_MODEL:-llama8b}" != qwen7b ] || [ -n "${D4A_IDS:-}" ] || { echo "qwen7b needs D4A_IDS, its own windows" >&2; exit 2; }
+if [ -n "${D4A_IDS:-}" ]; then
+  [ "${D4A_MODEL:-llama8b}" = qwen7b ] || PREFIX=(--prefix "$IDS")
+  IDS=$RESEARCH_RUN_DIR/inputs/$D4A_IDS
+fi
 export IDS
 grid_plan() {
   m="bf16 ref ref-rot"
@@ -182,7 +195,7 @@ case "${D4A_PLAN:-}" in
 esac
 [ -n "${D4A_METHODS:-}" ] || { echo "set D4A_PLAN or D4A_METHODS" >&2; exit 2; }
 export D4A_METHODS PREFIX_ARGS="${PREFIX[*]}"
-LEASE=(gpu-lease 1 --wait --max-min "${D4A_MAX_MIN:-60}" --)
+LEASE=(gpu-lease "${D4A_GPUS:-1}" --wait --max-min "${D4A_MAX_MIN:-60}" --)
 [ -n "${GPU_LEASE_UUID:-}" ] && LEASE=()
 # shellcheck disable=SC2016
 "${LEASE[@]}" bash -c '

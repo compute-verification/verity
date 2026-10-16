@@ -47,7 +47,13 @@ Method names are '-'-joined tokens:
 
 `bf16` is the model's own eager attention and `ref` this file's attention in FP32 with no edit (`ref-rot` checks the
 rotation).  IDS is one window (T,) or several (N, T) (`windows.py`); perplexity is over every token of every window, and
-window w draws its own noise (window 0's is the single-window runs').
+window w draws its own noise (window 0's is the single-window runs').  On window 0 every peel is checked on every layer:
+Q K^T's per KV group, and P V's per KV group and key block.
+
+The models are Llama's and Qwen2's (eager attention patched in both; Qwen2.5 has no BOS, so its key 0 is an ordinary
+token).  Past 8K the s x s work runs on chunks of query rows (ROWS_WHOLE), and so do bf16's eager attention and the loss;
+the rows are independent, so the chunks change no bit of the edited methods (the selftest).  With several GPUs visible
+the model is split over them by layers (Llama-3.1-70B on two).
 
     python attention.py MODEL_SNAPSHOT IDS.npy OUT_DIR --ctx N [--prefix IDS2.npy] METHOD...
     python attention.py --selftest
@@ -58,6 +64,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import sys
 import time
 from pathlib import Path
@@ -66,6 +73,7 @@ import numpy as np
 import torch
 import transformers
 from transformers.models.llama import modeling_llama
+from transformers.models.qwen2 import modeling_qwen2
 
 import exact_grid
 
@@ -86,7 +94,16 @@ PBLK_MAX = 2 ** 16
 #: K or V served as floor(x / s) + b, b a fresh bit (note:20261016T0525Z-draft-fullfloor-s-r6)
 DITHER = "dith"
 
-ORIG = modeling_llama.eager_attention_forward
+#: the models whose eager attention is patched, and their own
+EAGER = (modeling_llama, modeling_qwen2)
+ORIG = {m.__name__: m.eager_attention_forward for m in EAGER}
+#: a KV group's s x s work runs on all query rows at once while a (rep, s, s) float64 tensor is within ROWS_WHOLE bytes,
+#: else on chunks of ROWS_BYTES (32K); the rows are independent, so the chunks give the same products (the selftest)
+ROWS_WHOLE, ROWS_BYTES = 2 ** 32, 2 ** 31
+#: bf16 attention is the model's own eager while its (heads, s, s) FP32 weights are within EAGER_BYTES, else row chunks
+EAGER_BYTES = 2 ** 34
+#: tokens per chunk of the head and loss beyond 8192 (the logits of 32K tokens would not fit beside the model)
+LOSS_ROWS = 4096
 STATE: dict = {"spec": None}
 
 
@@ -300,15 +317,17 @@ def p_edges(s: int, spec: dict) -> list[int]:
 
 
 def blocked_pv(p, vi, top: int, vmax: int, edges: list[int], term: int, poff: int, up, ep, causal,
-               check_range: bool, check_peel: bool, norm: bool) -> torch.Tensor:
+               check_range: bool, check_peel: bool, norm: bool, r0: int = 0, checks: dict | None = None) -> torch.Tensor:
     """O's integer rows times P's scales for P on one int8 limb with one scale per (query row, key block): block b serves
     P_b = round(p_b / s_b) in 0..top (s_b its row's max over the block, over top), its product P_b V_b read exactly and
-    scaled by s_b, summed over blocks; `norm` divides by sum_b s_b rowsum(P_b) instead.  check_range: every served
-    block P_b - poff + E_b is within int8; check_peel: each one's product, peeled and offset back, is P_b V_b."""
+    scaled by s_b, summed over blocks; `norm` divides by sum_b s_b rowsum(P_b) instead.  p, ep and causal hold the query
+    rows r0.. (all of them unless chunked); check_range: every served block P_b - poff + E_b is within int8; check_peel:
+    each one's product, peeled and offset back, is P_b V_b (one verdict per block in `checks`, AND over row chunks)."""
     rep, s, d = vi.shape
-    num = torch.zeros(rep, s, d, dtype=torch.float64, device=vi.device)
-    den = torch.zeros(rep, s, 1, dtype=torch.float64, device=vi.device)
-    for a, b in zip(edges, edges[1:]):
+    rows = p.shape[-2]
+    num = torch.zeros(rep, rows, d, dtype=torch.float64, device=vi.device)
+    den = torch.zeros(rep, rows, 1, dtype=torch.float64, device=vi.device)
+    for i, (a, b) in enumerate(zip(edges, edges[1:])):
         sb = p[..., a:b].amax(-1, keepdim=True).clamp(min=1e-30) / top
         pi = torch.round(p[..., a:b] / sb).clamp(0, top)
         vb = vi[..., a:b, :]
@@ -322,21 +341,59 @@ def blocked_pv(p, vi, top: int, vmax: int, edges: list[int], term: int, poff: in
                 mask[a:b] = 1
                 served = exact_mm(pt, vb, term)
                 if up is not None:
-                    served = served - causal_peel(up, vi * mask)
+                    served = served - causal_peel(up, vi * mask)[:, r0:r0 + rows]
                 if poff:
-                    served = served + poff * (vi * mask).double().cumsum(-2)
-                STATE["peel"].append(bool(torch.equal(served, ob)))
+                    served = served + poff * (vi * mask).double().cumsum(-2)[:, r0:r0 + rows]
+                ok = bool(torch.equal(served, ob))
+                if checks is None:
+                    STATE["peel"].append(ok)
+                else:
+                    checks[i] = checks.get(i, True) and ok
         num += sb.double() * ob
         den += sb.double() * pi.double().sum(-1, keepdim=True)
     return num / den if norm else num
 
 
+def row_chunk(rep: int, s: int) -> int:
+    """Query rows per chunk of a KV group's s x s work: all of them while one (rep, s, s) float64 tensor is within
+    ROWS_WHOLE bytes (every 2K and 8K run so far), else ROWS_BYTES' worth; STATE["rows"] overrides (the selftest)."""
+    if STATE.get("rows"):
+        return STATE["rows"]
+    if rep * s * s * 8 <= ROWS_WHOLE:
+        return s
+    return max(1, ROWS_BYTES // (rep * s * 8))
+
+
+def chunked_eager(module, query, key, value, attention_mask, scaling):
+    """The model's own eager attention (repeat_kv, bf16 Q K^T times the scale plus the mask, FP32 softmax cast to bf16,
+    bf16 P V) over chunks of query rows, for contexts whose (heads, s, s) weights don't fit at once."""
+    assert attention_mask is not None, "eager's causal mask"
+    rep = module.num_key_value_groups
+    k = key[:, :, None].expand(-1, -1, rep, -1, -1).reshape(key.shape[0], -1, *key.shape[2:])
+    v = value[:, :, None].expand(-1, -1, rep, -1, -1).reshape(value.shape[0], -1, *value.shape[2:])
+    b, H, s, d = query.shape
+    rows = STATE.get("rows") or max(1, ROWS_BYTES // (H * s * 4))
+    out = torch.empty(b, s, H, d, dtype=query.dtype, device=query.device)
+    for r0 in range(0, s, rows):
+        w = torch.matmul(query[:, :, r0:r0 + rows], k.transpose(2, 3)) * scaling
+        if attention_mask is not None:
+            w = w + attention_mask[:, :, r0:r0 + rows, :s]
+        w = torch.nn.functional.softmax(w, dim=-1, dtype=torch.float32).to(query.dtype)
+        out[:, r0:r0 + rows] = torch.matmul(w, v).transpose(1, 2)
+        del w
+    return out, None
+
+
 def edited_attention(module, query, key, value, attention_mask, scaling=None, dropout=0.0, **kwargs):
     spec = STATE["spec"]
-    if spec is None or spec["grid"] == "bf16":
-        return ORIG(module, query, key, value, attention_mask, scaling=scaling, dropout=dropout, **kwargs)
-    STATE["calls"] += 1
     b, H, s, d = query.shape
+    assert kwargs.get("sliding_window") is None or kwargs["sliding_window"] >= s, "full causal attention only"
+    if spec is None or spec["grid"] == "bf16":
+        if H * s * s * 4 <= EAGER_BYTES and not STATE.get("rows"):
+            return ORIG[type(module).__module__](module, query, key, value, attention_mask, scaling=scaling,
+                                                 dropout=dropout, **kwargs)
+        return chunked_eager(module, query, key, value, attention_mask, scaling)
+    STATE["calls"] += 1
     G = key.shape[1]
     rep = H // G
     assert b == 1, "one unpadded sequence"
@@ -346,7 +403,10 @@ def edited_attention(module, query, key, value, attention_mask, scaling=None, dr
     noise_seed = (spec["seed"] + 1) * 1_000_003 + layer + STATE["window"] * 7_919_003
     gen = torch.Generator(device=dev).manual_seed(noise_seed)
     R = hadamard_rotation(d, 7919 * (spec["seed"] + 1) + layer, dev) if spec["rot"] else None
-    causal = torch.ones(s, s, dtype=torch.bool, device=dev).tril()
+    rows = row_chunk(rep, s)
+    if rows < s and quantized and spec["n"]["p"] != "none":
+        raise ValueError(f"{spec['method']}: P's served noise is drawn over whole rows (no row chunks)")
+    keys = torch.arange(s, device=dev)
     uq = up = None
     if quantized:
         n, e = spec["n"], spec["e"]
@@ -371,7 +431,7 @@ def edited_attention(module, query, key, value, attention_mask, scaling=None, dr
         STATE["record"] = {"tops": m, "acc_qk": gqk[1], "acc_pv": gpv[1], "bound_qk": d * lmax["q"] * lmax["k"],
                            "bound_pv": s * lmax["p"] * lmax["v"],
                            "int8_products": {"qk": (1 + two["q"]) * (1 + two["k"]), "pv": (1 + two["p"]) * (1 + two["v"])},
-                           "p_blocks": len(edges) - 1}
+                           "p_blocks": len(edges) - 1, "row_chunk": rows}
         # U has its own stream, so the served noise is the same draw with or without a peel.
         ugen = torch.Generator(device=dev).manual_seed(noise_seed + 104_729 * 10 ** 9)
         if e["q"] != "none":
@@ -380,7 +440,6 @@ def edited_attention(module, query, key, value, attention_mask, scaling=None, dr
             eq = uq[:, torch.arange(d, device=dev) % PEEL_L]
         if e["p"] != "none":
             up = draw(e["p"], (s, PEEL_L), ugen, dev)
-            ep = up[:, torch.arange(s, device=dev) % PEEL_L] * causal
         if uq is not None or up is not None:
             STATE["record"]["peel"] = {"L": PEEL_L, "qk_macs_over_product": PEEL_L / d if uq is not None else 0,
                                        "pv_macs_over_causal_product": 2 * PEEL_L / s if up is not None else 0}
@@ -388,10 +447,8 @@ def edited_attention(module, query, key, value, attention_mask, scaling=None, dr
     for g in range(G):
         qg = query[0, g * rep:(g + 1) * rep].float()
         kg, vg = key[0, g].float(), value[0, g].float()
-        ref = None
-        if quantized and first:
-            sc = (qg @ kg.T) * scaling
-            ref = torch.softmax(sc.masked_fill(~causal, float("-inf")), dim=-1) @ vg
+        ref = torch.empty(rep, s, d, device=dev) if quantized and first else None
+        q0, k0, v0 = qg, kg, vg
         if R is not None:
             qg, kg, vg = qg @ R, kg @ R, vg @ R
         if quantized:
@@ -403,58 +460,87 @@ def edited_attention(module, query, key, value, attention_mask, scaling=None, dr
                 kl, sk = signed_limbs(kg, m["k"], -1, two["k"])
             kl = [(x.expand(rep, s, d), w) for x, w in kl]
             ql, kl = add_noise(ql, n["q"], gen, dev), add_noise(kl, n["k"], gen, dev)
-            if uq is not None:
-                [(qi, _)], [(ki, _)] = ql, kl
-                term = lmax["q"] * lmax["k"]
-                served = exact_mm(qi + eq, ki.transpose(1, 2), term)
-                sint = served - fold_peel(uq, ki).double()
-                if first:
-                    assert float((qi + eq).abs().max()) <= 127 and in_int8(ki)
-                    STATE["peel"].append(bool(torch.equal(sint, exact_mm(qi, ki.transpose(1, 2), term))))
-                sint = sint.float()
-            else:
-                sint = limb_product(ql, [(x.transpose(1, 2), w) for x, w in kl], lmax["q"] * lmax["k"]).float()
-            scores = sint * (sq * sk.T[None]) * scaling
-        else:
-            scores = (qg @ kg.T) * scaling
-        p = torch.softmax(scores.masked_fill(~causal, float("-inf")), dim=-1)
-        if quantized:
-            pl, sp = edit_p(p, spec["p"], n["p"], m["p"], causal, gen, dev)
             vdims = (0, 1) if spec["v"] == "vhead" else 0
             if n["v"] == DITHER:
                 vq, sv = floor_quant(vg, vdims)
-                vl = [(vq, 1)]
+                vl0 = [(vq, 1)]
             else:
-                vl, sv = signed_limbs(vg, m["v"], vdims, two["v"])
-            vl = add_noise([(x.expand(rep, s, d), w) for x, w in vl], n["v"], gen, dev)
-            if len(edges) > 2:
-                [(vi, _)] = vl
-                o = (blocked_pv(p, vi, m["p"], lmax["v"], edges, lmax["p"] * lmax["v"], poff, up,
-                                ep if up is not None else None, causal, first, first and layer == 0, spec["pnorm"])
-                     * sv.double()).float()
-            else:
-                if up is not None or poff:
-                    [(pi, _)], [(vi, _)] = pl, vl
-                    term = lmax["p"] * lmax["v"]
-                    pt = pi - poff * causal.float() if poff else pi
-                    pt = pt + ep if up is not None else pt
-                    oint = exact_mm(pt, vi, term)
-                    if up is not None:
-                        oint = oint - causal_peel(up, vi)
-                    if poff:
-                        oint = oint + poff * vi.double().cumsum(-2)
+                vl0, sv = signed_limbs(vg, m["v"], vdims, two["v"])
+            # V's noise is drawn after P's (the generator's order with one chunk), so at the first chunk
+            vl = None
+            qk_ok = pv_ok = True
+            blk_ok: dict = {}
+        o = torch.empty(rep, s, d, device=dev)
+        for r0 in range(0, s, rows):
+            r1 = min(s, r0 + rows)
+            causal = keys[None, :] <= torch.arange(r0, r1, device=dev)[:, None]
+            if ref is not None:
+                sc = (q0[:, r0:r1] @ k0.T) * scaling
+                ref[:, r0:r1] = torch.softmax(sc.masked_fill(~causal, float("-inf")), dim=-1) @ v0
+                del sc
+            if quantized:
+                if uq is not None:
+                    [(qi, _)], [(ki, _)] = ql, kl
+                    term = lmax["q"] * lmax["k"]
+                    qe = qi[:, r0:r1] + eq[r0:r1]
+                    served = exact_mm(qe, ki.transpose(1, 2), term)
+                    sint = served - fold_peel(uq[r0:r1], ki).double()
+                    del served
                     if first:
-                        assert in_int8(pt) and in_int8(vi)
-                        STATE["peel"].append(bool(torch.equal(oint, exact_mm(pi, vi, m["p"] * lmax["v"]))))
+                        assert float(qe.abs().max()) <= 127 and in_int8(ki)
+                        qk_ok = qk_ok and bool(torch.equal(sint, exact_mm(qi[:, r0:r1], ki.transpose(1, 2), term)))
+                    sint = sint.float()
                 else:
-                    oint = limb_product(pl, vl, lmax["p"] * lmax["v"])
-                if spec["pnorm"]:
-                    [(pi, _)] = pl
-                    o = (oint / pi.double().sum(-1, keepdim=True) * sv.double()).float()
+                    sint = limb_product([(x[:, r0:r1], w) for x, w in ql], [(x.transpose(1, 2), w) for x, w in kl],
+                                        lmax["q"] * lmax["k"]).float()
+                scores = sint * (sq[:, r0:r1] * sk.T[None]) * scaling
+                del sint
+            else:
+                scores = (qg[:, r0:r1] @ kg.T) * scaling
+            p = torch.softmax(scores.masked_fill(~causal, float("-inf")), dim=-1)
+            del scores
+            if quantized:
+                pl, sp = edit_p(p, spec["p"], n["p"], m["p"], causal, gen, dev)
+                if vl is None:
+                    vl = add_noise([(x.expand(rep, s, d), w) for x, w in vl0], n["v"], gen, dev)
+                ep = up[r0:r1][:, keys % PEEL_L] * causal if up is not None else None
+                if len(edges) > 2:
+                    [(vi, _)] = vl
+                    o[:, r0:r1] = (blocked_pv(p, vi, m["p"], lmax["v"], edges, lmax["p"] * lmax["v"], poff, up, ep, causal,
+                                              first, first, spec["pnorm"], r0, blk_ok) * sv.double()).float()
                 else:
-                    o = (oint * sp.double() * sv.double()).float()
-        else:
-            o = p @ vg
+                    if up is not None or poff:
+                        [(pi, _)], [(vi, _)] = pl, vl
+                        term = lmax["p"] * lmax["v"]
+                        pt = pi - poff * causal.float() if poff else pi
+                        pt = pt + ep if up is not None else pt
+                        oint = exact_mm(pt, vi, term)
+                        if up is not None:
+                            oint = oint - causal_peel(up, vi)[:, r0:r1]
+                        if poff:
+                            oint = oint + poff * vi.double().cumsum(-2)[:, r0:r1]
+                        if first:
+                            assert in_int8(pt) and in_int8(vi)
+                            pv_ok = pv_ok and bool(torch.equal(oint, exact_mm(pi, vi, m["p"] * lmax["v"])))
+                        del pt
+                    else:
+                        oint = limb_product(pl, vl, lmax["p"] * lmax["v"])
+                    if spec["pnorm"]:
+                        [(pi, _)] = pl
+                        o[:, r0:r1] = (oint / pi.double().sum(-1, keepdim=True) * sv.double()).float()
+                    else:
+                        o[:, r0:r1] = (oint * sp.double() * sv.double()).float()
+                    del oint
+                del pl, ep
+            else:
+                o[:, r0:r1] = p @ vg
+            del p, causal
+        if quantized and first:
+            if uq is not None:
+                STATE["peel"].append(qk_ok)
+            if len(edges) <= 2 and (up is not None or poff):
+                STATE["peel"].append(pv_ok)
+            STATE["peel"].extend(blk_ok[i] for i in sorted(blk_ok))
         if R is not None:
             o = o @ R.T
         if ref is not None:
@@ -464,7 +550,8 @@ def edited_attention(module, query, key, value, attention_mask, scaling=None, dr
     return out, None
 
 
-modeling_llama.eager_attention_forward = edited_attention
+for _m in EAGER:
+    _m.eager_attention_forward = edited_attention
 
 
 def evaluate(model, ids: torch.Tensor, method: str) -> dict:
@@ -482,9 +569,18 @@ def evaluate(model, ids: torch.Tensor, method: str) -> dict:
         with torch.no_grad():
             for w, row in enumerate(ids):
                 STATE["window"] = w
-                logits = model(row[None], use_cache=False).logits[0]
-                nlls.append(torch.nn.functional.cross_entropy(logits[:-1].float(), row[1:], reduction="none"))
-                del logits
+                if len(row) <= 8192:
+                    logits = model(row[None], use_cache=False).logits[0]
+                    nlls.append(torch.nn.functional.cross_entropy(logits[:-1].float(), row[1:].to(logits.device),
+                                                                  reduction="none"))
+                    del logits
+                else:
+                    h = model.model(row[None], use_cache=False).last_hidden_state[0]
+                    tgt = row[1:].to(h.device)
+                    nlls.append(torch.cat([torch.nn.functional.cross_entropy(
+                        model.lm_head(h[i:min(i + LOSS_ROWS, len(tgt))]).float(), tgt[i:i + LOSS_ROWS], reduction="none")
+                        for i in range(0, len(tgt), LOSS_ROWS)]))
+                    del h
     finally:
         STATE["spec"] = None
         for h in hooks:
@@ -510,8 +606,12 @@ def evaluate(model, ids: torch.Tensor, method: str) -> dict:
 
 
 def load(snapshot: str):
-    model = transformers.AutoModelForCausalLM.from_pretrained(snapshot, dtype=torch.bfloat16, attn_implementation="eager")
-    return model.cuda().eval()
+    """The model on one GPU, or split by layers over every visible GPU (Llama-3.1-70B on two), each holding at most
+    D4A_GPU_GIB of weights so the rest stays free for the edits' work."""
+    n = torch.cuda.device_count()
+    kw = {"device_map": "auto", "max_memory": {i: f"{os.environ.get('D4A_GPU_GIB', '68')}GiB" for i in range(n)}} if n > 1 else {}
+    model = transformers.AutoModelForCausalLM.from_pretrained(snapshot, dtype=torch.bfloat16, attn_implementation="eager", **kw)
+    return (model if n > 1 else model.cuda()).eval()
 
 
 def selftest() -> dict:
@@ -610,7 +710,14 @@ def selftest() -> dict:
               "int8-rot-ep=w8-v=pm1"):
         assert peel[m]["peel_exact"] and peel[m]["exact"], (m, out)
     assert peel["int8-rot-eqp=w8-kv=pm1"]["peel_checks"] == 2 * 2 * 2 and peel["int8-rot-eq=w8-k=pm1"]["peel_checks"] == 4
-    same = lambda a, b: abs(a / b - 1) < 1e-6  # noqa: E731
+    # The CPU's bf16 GEMMs can round with the buffers' alignment, which earlier tests' allocations move, so on the CPU
+    # equal perplexities agree to 1e-5; on the GPU `exactly` is bit equality
+    same = lambda a, b: abs(a / b - 1) < (1e-5 if dev == "cpu" else 1e-6)  # noqa: E731
+
+    def exactly(a, b) -> bool:
+        if dev != "cpu":
+            return a == b
+        return all(same(x, y) for x, y in zip(a, b)) if isinstance(a, list) else same(a, b)
     w8, u8 = peel["int8-rot-eqp=w8-kv=pm1"]["ppl"], peel["int8-rot-eqp=u8-kv=pm1"]["ppl"]
     assert same(w8, u8), out
     ids2 = torch.cat([ids, torch.randint(0, 512, (1, 96), device=dev)])
@@ -697,12 +804,71 @@ def selftest() -> dict:
     top = pb["int8-rot-ptop255-poff128"]
     assert top["tops"]["p"] == 255 and top["bound_pv"] == 96 * 128 * 127 and top["peel_checks"] == 4, top
     assert top["attn_rel_err"] < pb["int8-rot"]["attn_rel_err"], out["tiny_pbase"]
-    assert pb["int8-rot-eqp=w64-poff64-pblk32-kv=dith"]["peel_checks"] == 2 * 2 + 2 * 3, out["tiny_pbase"]
+    # Q K^T's peel per (layer, KV group), and each of P's 3 blocks' on every layer too
+    assert pb["int8-rot-eqp=w64-poff64-pblk32-kv=dith"]["peel_checks"] == 2 * 2 + 2 * 2 * 3, out["tiny_pbase"]
     for a_, b_ in (("eqp=w64-poff64-pblk32", "eq=w64-pblk32"), ("eqp=w64-poff64-pnorm", "eq=w64-pnorm"),
                    ("eqp=w64-poff64-psink-pnorm", "eq=w64-psink-pnorm")):
-        assert pb[f"int8-rot-{a_}-kv=dith"]["ppl"] == pb[f"int8-rot-{b_}-kv=dith"]["ppl"], (a_, out["tiny_pbase"])
+        assert exactly(pb[f"int8-rot-{a_}-kv=dith"]["ppl"], pb[f"int8-rot-{b_}-kv=dith"]["ppl"]), (a_, out["tiny_pbase"])
     assert len({pb[m]["ppl"] for m in ("bf16-lin8rd", "bf16-lin8rd-s1", "bf16-lin8r")}) == 3, out["tiny_pbase"]
     assert pb["int8-rot-lin8rd-eqp=w64-poff64-kv=dith-s1"]["lin_exact_all"], out["tiny_pbase"]
+    chunk_methods = ("bf16", "int8-rot-lin8r", "int8-rot-psink", "int8-rot-eq=w8-k=pm1", "int8-rot-eqp=w64-poff64-kv=dith",
+                     "int8-rot-eqp=w64-poff64-psink-kv=dith", "int8-rot-eqp=w64-poff64-pblk32-kv=dith",
+                     "int8-rot-ptop255-poff128", "int8-prow2-vchan2-qk2-none-rot", "int8-rot-pnorm",
+                     "int8-rot-lin8rd-eqp=w64-poff64-psink-kv=dith-s1")
+    whole = {m: evaluate(model, ids2, m) for m in chunk_methods}
+    STATE["rows"] = 20
+    try:
+        chunked = {m: evaluate(model, ids2, m) for m in chunk_methods}
+        try:
+            evaluate(model, ids, "int8-p=u4")
+            raise AssertionError("P's served noise must not run in row chunks")
+        except ValueError:
+            pass
+    finally:
+        STATE["rows"] = 0
+    out["tiny_chunks"] = {m: [whole[m]["ppl"], chunked[m]["ppl"], chunked[m].get("peel_checks")] for m in chunk_methods}
+    assert abs(chunked["bf16"]["ppl"] / whole["bf16"]["ppl"] - 1) < 1e-3, out["tiny_chunks"]
+    for m in chunk_methods[1:]:
+        w_, c_ = whole[m], chunked[m]
+        assert c_["row_chunk"] == 20 and w_["row_chunk"] == 96, (m, c_["row_chunk"], w_["row_chunk"])
+        assert exactly(c_["ppl_windows"], w_["ppl_windows"]) and c_.get("peel_checks") == w_.get("peel_checks"), (m, out["tiny_chunks"])
+        assert c_.get("peel_exact", True) and c_["exact"], (m, out["tiny_chunks"])
+    assert chunked["int8-rot-eqp=w64-poff64-psink-kv=dith"]["peel_checks"] == 2 * 2 * 3
+    exact_grid.WCACHE = False
+    try:
+        nocache = {m: evaluate(model, ids, m)["ppl"] for m in ("bf16-lin8rd-s1", "int8-rot-lin8r")}
+    finally:
+        exact_grid.WCACHE = True
+    cached = {m: evaluate(model, ids, m)["ppl"] for m in nocache}
+    assert all(exactly(nocache[m], cached[m]) for m in nocache), (nocache, cached)
+    out["bit_identical"].update(chunks=all(chunked[m]["ppl_windows"] == whole[m]["ppl_windows"] for m in chunk_methods[1:]),
+                                wcache_off=nocache == cached)
+    Q2 = modeling_qwen2
+    torch.manual_seed(1)
+    qcfg = Q2.Qwen2Config(vocab_size=512, hidden_size=256, intermediate_size=512, num_hidden_layers=2, num_attention_heads=8,
+                          num_key_value_heads=2, max_position_embeddings=1024, tie_word_embeddings=False,
+                          use_sliding_window=False, attn_implementation="eager")
+    qm = Q2.Qwen2ForCausalLM(qcfg).to(torch.bfloat16).to(dev).eval()
+    with torch.no_grad():
+        for mod in qm.modules():
+            if isinstance(mod, torch.nn.Linear) and mod.bias is not None:
+                mod.bias.normal_(0, 1)
+        plain = qm(ids, use_cache=False).logits.float()
+        hooks = exact_grid.attach(qm, "int8_rot@-", [])
+        try:
+            hooked = qm(ids, use_cache=False).logits.float()
+        finally:
+            for h in hooks:
+                h.remove()
+    lin_err = float(torch.linalg.norm(hooked - plain) / torch.linalg.norm(plain))
+    qw = {m: evaluate(qm, ids, m) for m in ("bf16", "ref", "int8-rot-lin8r", "int8-rot-lin8rd-eqp=w64-poff64-psink-kv=dith-s1")}
+    out["tiny_qwen2"] = {"lin_rel_err": lin_err, **{m: {k: r.get(k) for k in ("ppl", "attn_rel_err", "peel_exact", "peel_checks")}
+                                                    for m, r in qw.items()}}
+    assert lin_err < 0.05, out["tiny_qwen2"]
+    assert abs(qw["ref"]["ppl"] / qw["bf16"]["ppl"] - 1) < 1e-2, out["tiny_qwen2"]
+    e2e = qw["int8-rot-lin8rd-eqp=w64-poff64-psink-kv=dith-s1"]
+    assert e2e["exact"] and e2e["peel_exact"] and e2e["peel_checks"] == 2 * 2 * 3 and e2e["lin_exact_all"], out["tiny_qwen2"]
+    assert qw["int8-rot-lin8r"]["attn_rel_err"] < 0.1, out["tiny_qwen2"]
     return out
 
 
