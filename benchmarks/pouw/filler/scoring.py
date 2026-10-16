@@ -34,7 +34,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "decode_capacity"))
 import share  # noqa: E402  CAP's constants: MACs a token, non-GEMM times, FA2, the int8 peak
 
-SCORER = "filler-scorer/v2"
+V2, V3 = "filler-scorer/v2", "filler-scorer/v3"
+#: the active lock. V3 is prepared and not active: the arm's record checked before its lease (`arms.record_problems`),
+#: each point's slowdown margin (`margins`), and the filler's certified-fraction entries (`FILLER_ENTRIES`,
+#: `filler_entry`). The coordinator activates it with SCORER = V3; until then `score.py report OUT --as v3` previews it
+SCORER = V2
 LIMIT = 1.05  # serving slowdown, every entry
 DRAM_LIMIT = 0.01  # of the HBM bandwidth the same run's validated counter measures
 CONTROL_BYTES = 1 << 30  # bw_read streams 1 GiB a launch: the DRAM counter's positive control

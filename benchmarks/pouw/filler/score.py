@@ -5,6 +5,7 @@ the arm contract: `arms.py`; the device driver: `dscore.cu`.
   python3 benchmarks/pouw/filler/score.py ARM [--rounds 8] [--reps 3] [--no-robust]   build, lease one GPU, measure, report
   python3 benchmarks/pouw/filler/score.py measure ARM --bin DIR --out DIR             the measurement, inside a lease
   python3 benchmarks/pouw/filler/score.py report OUT_DIR [--json]                     score a measured run's out dir
+  python3 benchmarks/pouw/filler/score.py check ARM                                   the arm's contract and record limits
   python3 benchmarks/pouw/filler/score.py --leaderboard [--refresh] [--local DIR ...] every filler attempt, best first
 
 A climber's run, from a clean pushed checkout:
@@ -29,6 +30,9 @@ After the lease it scores the run (`report`), writes `score.json` and one `kerne
 (`ledger/<arm>/filler-suite.json`, declared in the run's `outputs.json` so `research run --on` publishes it).
 
 An arm that fails a gate isn't scored: its SCORE is null and `score_if_gated` keeps the number for diagnosis.
+
+filler-scorer/v3 (prepared, not active: `scoring.SCORER`) refuses at load, before the build and the lease, an arm whose
+record the ledger or the store would refuse (`arms.record_problems`); `check ARM` runs that check alone, under either.
 """
 
 from __future__ import annotations
@@ -71,10 +75,10 @@ def arm_doc(arm) -> dict:
     sys.path.insert(0, str(HERE.parent / "harness"))
     import ledger  # noqa: PLC0415
 
-    fl = dataclasses.asdict(arm.filler) if arm.filler else None
+    fl = {k: v for k, v in dataclasses.asdict(arm.filler).items() if v is not None} if arm.filler else None
     variant = ledger.variant_record(family=f"filler-{arm.name}", device="sm120", schemes=["dfill-receipt"],
                                     sources=[REPO / s for s in arm.sources], root=REPO, loader="dscore",
-                                    config={k: str(v) for k, v in (fl or {}).items()})
+                                    config=A.config(arm.filler))
     pts = {f"{ph} {b}/{l}": dataclasses.asdict(A.placed(arm, ph, b, l)) for ph, b, l in S.points()}
     return {"interface": A.VERSION, "name": arm.name, "lineage": arm.lineage, "filler": fl, "choice": arm.choice,
             "sources": list(arm.sources), "variant": variant, "placements": pts}
@@ -237,13 +241,15 @@ def record(res: dict, doc: dict, run_dir: Path, by: str | None) -> dict:
 
     lin = doc["lineage"]
     g = res["gates"]
+    v3 = res["scorer"] == S.V3
     meta = {
         "schema": ledger.KIND, "time": ledger.now(), "run": res["run"], "run_id": res["run"], "harness": res["commit"],
-        "tier": "2a", "by": by, "arm": res["arm"], "shape": SHAPE, "phase": "serving-suite", "scorer": S.SCORER,
+        "tier": "2a", "by": by, "arm": res["arm"], "shape": SHAPE, "phase": "serving-suite", "scorer": res["scorer"],
         "variant": res["variant"], "variant_record": doc["variant"], "parent": lin.get("parent"),
         "approach": lin.get("approach"), "mechanism": sorted(set(lin.get("mechanism") or [])),
-        "hypothesis": ledger.one_line(lin.get("hypothesis"), "the hypothesis"), "choice": res["choice"],
-        "gates": {"version": S.SCORER, "arm_interface": doc["interface"]},
+        "hypothesis": ledger.one_line(lin.get("hypothesis"), "the hypothesis"),
+        "choice": ledger.one_line(res["choice"], "choice") if v3 else res["choice"],
+        "gates": {"version": res["scorer"], "arm_interface": doc["interface"]},
         "gate": {k: bool(v.get("ok")) for k, v in g.items() if isinstance(v, dict)} | {"ok": g["ok"]},
         "metrics": {"SCORE": res["SCORE"], "score_if_gated": res["score_if_gated"], "min": res["min"],
                     "min_mix": res["min_mix"], "score_nominal": res["score_nominal"],
@@ -385,6 +391,18 @@ def main(argv=None) -> int:
         res = report(a.out)
         print(json.dumps(res, indent=1)) if a.json else show(res)
         return 0
+    if argv and argv[0] == "check":
+        ap = argparse.ArgumentParser(prog="score.py check", description="an arm against the contract and its record's "
+                                     "limits (filler-scorer/v3's load check), with no build or lease")
+        ap.add_argument("arm")
+        a = ap.parse_args(argv[1:])
+        try:
+            arm = A.load(a.arm, record=True)
+        except A.ArmError as ex:
+            print(f"refused: {ex}")
+            return 2
+        print(f"{arm.name}: the contract and the record's limits hold")
+        return 0
     if argv and argv[0] == "measure":
         ap = argparse.ArgumentParser(prog="score.py measure")
         ap.add_argument("arm")
@@ -408,7 +426,7 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     if a.out is None:
         ap.error("--out (or $OUT, as research run sets it)")
-    arm = A.load(a.arm)
+    arm = A.load(a.arm, record=S.SCORER == S.V3)
     out = a.out / arm.name
     out.mkdir(parents=True, exist_ok=True)
     doc = {**arm_doc(arm), "spec": a.arm}

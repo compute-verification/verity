@@ -351,6 +351,38 @@ def test_clock_gate():
     assert not S.clock_gate(stats, [])["ok"]
 
 
+def test_record_limits_are_checked_when_the_arm_loads():
+    """filler-scorer/v3 refuses, before any build or lease, an arm whose record the ledger or the store would refuse
+    after the run (HC-PROVED's 249-character hypothesis reached `score.record` only after a scored run)."""
+    import dataclasses
+
+    v1 = A.FillV1()
+    assert A.check_arm(v1, record=True) == [] and A.check_arm(A.Idle(), record=True) == []
+    assert A.load("fill-v1", record=True).name == "fill-v1"
+
+    def problems(**kw):
+        lin = {k: v for k, v in kw.items() if k in v1.lineage}
+        return A.check_arm(dataclasses.replace(v1, lineage={**v1.lineage, **lin},
+                                               **{k: v for k, v in kw.items() if k not in lin}), record=True)
+
+    long = dataclasses.replace(v1, lineage={**v1.lineage, "hypothesis": "x " * 124 + "y"})
+    assert A.check_arm(long) == []  # v2's load check lets it through to the lease
+    assert any("at most 240 characters, not 249" in p for p in A.check_arm(long, record=True))
+    assert problems(hypothesis="x" * 240) == []
+    assert any("choice" in p and "not 300" in p for p in problems(choice="c" * 300))
+    assert any("whole art: id" in p for p in problems(parent="art:cc59294a"))
+    assert problems(parent="art:" + "0" * 64) == [] and problems(parent="fill-v1") == []
+    assert any("lineage.parent 5" in p for p in problems(parent=5))
+    assert any("list of tags" in p for p in problems(mechanism="place:split"))
+    assert any("canonical JSON" in p for p in problems(approach={1, 2}))
+    assert any("don't make a variant" in p for p in problems(sources=v1.sources + v1.sources[:1]))
+    assert any("don't make a variant" in p for p in problems(sources=("/etc/hostname",)))
+    assert any("filler.noise" in p for p in A.check_arm(dataclasses.replace(v1, filler=A.Filler(noise="gauss"))))
+    # the declared noise isn't run-time config: variant ids don't move
+    assert A.config(A.Filler(noise="bits01")) == A.config(A.Filler()) == {"W": "8", "NC": "4", "S": "2048",
+                                                                          "chunk_log2": "19"}
+
+
 def test_arms():
     v1, idle = A.load("fill-v1"), A.load("idle")
     assert A.placed(idle, "decode", 32, 2048) == A.NONE
