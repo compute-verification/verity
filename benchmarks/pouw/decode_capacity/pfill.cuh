@@ -33,12 +33,12 @@
 // ±1 mod 32 (a0, a1); duo's k0, k1 are its rows 14 and 15. A tile's receipt is the XOR over its chains of
 // smix(smix(K ^ pos) ^ v), K = dseed(c0, c1, tile), pos = (32 w + lane) 4 + c, v the chain's state (duo: z << 32 | y).
 //
-// PFILL_MMA=e2m1 (read by dfill_make, which sets the kernels' flag, and by dfill_ref) runs the e2m1 tile instead: K = L =
-// 64 on OMMA m16n8k64 (kind::mxf4nvf4, every ue4m3 block scale 1), the same noise as e2m1 codes (+1 = 0x2, -1 = 0xA) in
-// the domain PF_DOM4, each fragment and B block two SHA blocks (ctr 2 F + h and 2^56 + 2 b + h for k in 32 h .. 32 h + 31),
-// and each word the bits of the exact f32 sum 64 - 2 popcount(a ^ b). The chains, keys and fold are the s8 tile's. An
-// OMMA holds the tensor pipe as long as an IMMA and does twice the products, each half an int8 slot, so DFill::macs()
-// counts int8 slots in both kinds (the e2m1 tile's products / 2).
+// PFILL_MMA=e2m1 (read by dfill_prep and dfill_make, which set the kernels' flag, and by dfill_ref) runs the e2m1 tile
+// instead: K = L = 64 on OMMA m16n8k64 (kind::mxf4nvf4, every ue4m3 block scale 1), the same noise as e2m1 codes (+1 =
+// 0x2, -1 = 0xA) in the domain PF_DOM4, each fragment and B block two SHA blocks (ctr 2 F + h and 2^56 + 2 b + h for k in
+// 32 h .. 32 h + 31), and each word the bits of the exact f32 sum 64 - 2 popcount(a ^ b). The chains, keys and fold are the
+// s8 tile's. An OMMA holds the tensor pipe as long as an IMMA and does twice the products, each half an int8 slot, so
+// DFill::macs() counts int8 slots in both kinds (the e2m1 tile's products / 2).
 #pragma once
 #include <cstdlib>
 #include <cstring>
@@ -443,7 +443,12 @@ static void dfill_launch(const DFill& f, long long chunk, cudaStream_t st) {
     default: fprintf(stderr, "pfill: NC must be 1 (xor), 2 (duo), 4 (ram), or the probes 3, 5, 6, 7, 8\n"); exit(1);
   }
 }
+static void pf_set_kind() {
+  const int f4 = pf_e2m1();
+  CK(cudaMemcpyToSymbol(pf_f4_flag, &f4, sizeof f4));
+}
 static void dfill_prep() {
+  pf_set_kind();
   CK(cudaFuncSetAttribute(dfill_k<1>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
   CK(cudaFuncSetAttribute(dfill_k<2>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
   CK(cudaFuncSetAttribute(dfill_k<3>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
@@ -465,8 +470,7 @@ static DFill dfill_make(int grid, int W, int NC, int S, uint64_t c0, uint64_t c1
   const int lg = getenv("DFILL_CHUNK_LOG2") ? atoi(getenv("DFILL_CHUNK_LOG2")) : 19;
   f.tiles = std::max(1, (int)((1LL << lg) / ((long long)PF_CTAS * W * S * (PF_TN / 8))));
   CK(cudaMalloc(&f.rec, f.per() * sizeof(unsigned long long)));
-  const int f4 = pf_e2m1();
-  CK(cudaMemcpyToSymbol(pf_f4_flag, &f4, sizeof f4));
+  pf_set_kind();
   return f;
 }
 static int dfill_check(const DFill& f, long long chunk, int n) {
