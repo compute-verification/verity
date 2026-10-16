@@ -21,6 +21,7 @@
 //   lpgemm gate DIR M N K BATCH SEED GRID   every arm at one small shape, inputs and outputs to DIR for lpref.py
 //   lpgemm bench REPS SHAPE...              interleaved timing, one JSON line a shape (SHAPE = name:m:n:k:batch); LP_ARMS
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a lpgemm.cu -lcuda -lcublasLt -lnvidia-ml
+// -DLP_UW=64: U in {±1..±64} (u_byte's comment), A then in [-63, 63]; -DLP_LIB: no main (benchmarks/e2e_slice/slice.cu)
 #define MG_LIB
 #include "mgemm.cu"
 #include "sha_pass.cuh"
@@ -42,14 +43,44 @@ GEMML(r_plain, 0, NONE, 0, -3)
 GEMML(r_duo32, 32, DUO, 0, -3)
 static_assert(ML<128, 128, 32, 3, false, 2, -2>::SMEM == CSMEM, "one shared-memory size");
 
+// LP_UW 64: U in {±1..±64} (A in [-63, 63]), one digest byte an entry: block j = rows 2j, 2j + 1, entry e = (row % 2) 32 + l
+// digest byte e, u = (v & 63) + 1, negated if v & 64 (bit 7 unread)
+#ifndef LP_UW
+#define LP_UW 8
+#endif
+static_assert(LP_UW == 8 || LP_UW == 64, "U's magnitude bound: 8 or 64");
 DEV uint32_t u_byte(uint32_t v) {
-  const uint32_t u = (v & 7u) + 1u;
-  return (v & 8u ? 0u - u : u) & 0xFFu;
+  const uint32_t u = (v & (LP_UW - 1u)) + 1u;
+  return (v & (uint32_t)LP_UW ? 0u - u : u) & 0xFFu;
 }
-// U's block j into P_A's rows 4j..4j+3 (m x 128, a row [U U U U]). B's passes run it in their first blocks, so U's few
+// U's rows 4j..4j+3 into P_A (m x 128, a row [U U U U]). B's passes run it in their first blocks, so U's few
 // hashes hide under B's pass; gen_u is it alone
 DEV void gen_u_blk(uint8_t* __restrict__ PA, uint32_t j, uint32_t blocks, const Sig& sg) {
   if (j >= blocks) return;
+#if LP_UW == 64
+#pragma unroll
+  for (int h = 0; h < 2; h++) {
+    uint64_t st[8];
+    sha_block(sg.w, (uint64_t)U_TAG << 56 | (2 * j + h), st);
+#pragma unroll
+    for (int rr = 0; rr < 2; rr++) {
+      uint32_t w[8];
+#pragma unroll
+      for (int q = 0; q < 8; q++) {
+        uint32_t v = 0;
+#pragma unroll
+        for (int t = 0; t < 4; t++) {
+          const int e = 32 * rr + 4 * q + t;
+          v |= u_byte((uint32_t)(st[e / 8] >> (56 - 8 * (e % 8))) & 0xFFu) << (8 * t);
+        }
+        w[q] = v;
+      }
+      uint4* row = reinterpret_cast<uint4*>(PA + (size_t)(4 * j + 2 * h + rr) * 128);
+#pragma unroll
+      for (int c = 0; c < 8; c++) row[c] = make_uint4(w[4 * (c & 1)], w[4 * (c & 1) + 1], w[4 * (c & 1) + 2], w[4 * (c & 1) + 3]);
+    }
+  }
+#else
   uint64_t st[8];
   sha_block(sg.w, (uint64_t)U_TAG << 56 | j, st);
 #pragma unroll
@@ -64,6 +95,7 @@ DEV void gen_u_blk(uint8_t* __restrict__ PA, uint32_t j, uint32_t blocks, const 
 #pragma unroll
     for (int h = 0; h < 8; h++) row[h] = make_uint4(w[4 * (h & 1)], w[4 * (h & 1) + 1], w[4 * (h & 1) + 2], w[4 * (h & 1) + 3]);
   }
+#endif
 }
 __global__ void __launch_bounds__(256) gen_u(uint8_t* __restrict__ PA, uint32_t blocks, const __grid_constant__ Sig sg) {
   gen_u_blk(PA, blockIdx.x * blockDim.x + threadIdx.x, blocks, sg);
@@ -575,6 +607,7 @@ static int lbench(int reps, const std::vector<std::string>& shapes) {
   return 0;
 }
 
+#ifndef LP_LIB
 int main(int argc, char** argv) {
   CL(cublasLtCreate(&g_lt));
   CK(cudaMalloc(&g_ws, g_wsz));
@@ -587,3 +620,4 @@ int main(int argc, char** argv) {
   fprintf(stderr, "usage: lpgemm gate DIR M N K BATCH SEED GRID | bench REPS name:m:n:k[:batch]...\n");
   return 2;
 }
+#endif
