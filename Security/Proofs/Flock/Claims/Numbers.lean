@@ -12,8 +12,8 @@ The numbers Flock's claims read (`Claims.Flock.κ`, `γ`, `lamOf`) at the deploy
 * `κ ≤ 2^{−203} + 2^{−210} + 2^{−231} + 2^{−250} ≤ 2^{−202.98}` once `ε_table ≤ 2^{−205}`, `m′ ≥ 210`, `K = 2^256` and
   `2^10 ≤ N₀ ≤ 2^23` (`κ_le_sum`, `κ_le`);
 * `λ = lamOf κ γ ≥ 201.98` whenever moreover `γ ≤ 2^105` (`lam_ge`): the hash side, `255.5 − ½ log₂ γ`, is then at
-  least `203`, so the table error binds and `γ`'s exact value doesn't move the bits. `γ` at the deployed weight is below
-  `2^47` at every schedule (`NumbersWeight`).
+  least `203`, so the table error binds and `γ`'s exact value doesn't move the bits. `γ` at the deployed weight is at
+  most `2^48` at every schedule and up to `768` rounds (`NumbersGamma`).
 
 Each is stated over a `Deploy`'s fields, so it applies to the deployed record once its fields are pinned to these values.
 -/

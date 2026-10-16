@@ -7,6 +7,9 @@ import Proofs.Flock.Claims.ERep
 import Proofs.Flock.Claims.ERepCost
 import Proofs.Flock.Claims.Numbers
 import Proofs.Flock.Claims.NumbersTable
+import Proofs.Flock.Claims.NumbersPads
+import Proofs.Flock.Claims.NumbersGamma
+import Proofs.Flock.Claims.NumbersNMin
 import Proofs.Flock.Claims.Decode
 import Proofs.Flock.Claims.DecodeFlock
 
@@ -15,10 +18,10 @@ record, which holds the claims' text.
 
 The claims' lemmas sit under `Proofs.Flock.Claims`: uniform-coin probability (`Prob`), `B`'s soundness and the
 finders' Cauchy–Schwarz aggregation (`Finder`, `Aggregate`), the `Bits` corollary of `KS` (`Bits`), `E^rep`'s
-reruns and amplification (`ERep`), `ERepCost` (`ERepCost`), Flock's numbers at the deployed parameters (`Numbers`, and the
-table error `NumbersTable`),
-and a decoder that meets `ListComplete` at the Johnson count for interleaved Reed–Solomon codes, from ArkLib's
-Guruswami–Sudan decoder (`Decode`), and that decoder at Flock's level-0 code (`DecodeFlock`). -/
+reruns and amplification (`ERep`), `ERepCost` (`ERepCost`), a decoder that meets `ListComplete` at the Johnson count
+for interleaved Reed–Solomon codes, from ArkLib's Guruswami–Sudan decoder (`Decode`), and that decoder at Flock's
+level-0 code (`DecodeFlock`), and Flock's numbers at the deployed parameters: `k`, `κ` and `λ` (`Numbers`), `ε_table`
+(`NumbersTable`), the pads' domain (`NumbersPads`), the weight and `γ` (`NumbersGamma`), and `nMin` (`NumbersNMin`). -/
 
 /-- **The claims are stated** (`Flock.Guarantees.ClaimsStated`). -/
 theorem Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated := rfl
