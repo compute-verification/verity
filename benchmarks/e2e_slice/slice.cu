@@ -2,11 +2,15 @@
 // (A' = A + U W^T with U in {±1..±64} and A in [-63, 63], B' = B + F with F ±1, both SHA-512 of the call's sigma; duo receipts
 // over A' B'^T; A B'^T served after the tail's peel), and a second stage on its own B (the two-stage slice), driven line by
 // line on stdin by prover.py. STAGE (0 or 1, default 0) names the stage's problem, its B and its slots:
-//   setup M N K BSEED BPATH [KIND [STAGE]]   the stage's B (n x k int8 in [-119, 119], seeded) on the device and to BPATH;
-//                                    plans for every slot; KIND duo (a thread's 8 words over the whole of K, R [tile][thread][8])
-//                                    or duos (a word a thread and 32-step segment, R [tile][K / 32][thread], fgemm.cu's DUOS)
-//   opnds SLOT ASEED APATH [STAGE]   slot's A (m x k int8 in [-63, 63], seeded) on the device and to APATH, before its sigma
-//   aload SLOT APATH [STAGE]         slot's A from APATH (m x k int8)
+//   setup M N K BSEED BPATH [KIND [STAGE [SIDE]]]   the stage's B (n x k int8 in [-119, 119], seeded) on the device and to
+//                                    BPATH; plans for every slot; KIND duo (a thread's 8 words over the whole of K, R
+//                                    [tile][thread][8]) or duos (a word a thread and 32-step segment, R [tile][K / 32][thread],
+//                                    fgemm.cu's DUOS). SIDE a (the default): a slot holds A, the peeled side; SIDE b: a slot
+//                                    holds B, the served side, and the stage's fixed operand is A (m x k in [-63, 63], seeded,
+//                                    to BPATH), so the per-call operand carries F (or, built -DLP_DITHER, the dither b)
+//   opnds SLOT ASEED APATH [STAGE]   slot's operand (SIDE a: m x k int8 in [-63, 63]; SIDE b: n x k in [-119, 119], seeded) on
+//                                    the device and to APATH, before its sigma
+//   aload SLOT APATH [STAGE]         slot's operand from APATH
 //   call SLOT S0 S1 S2 S3 RSEED RPATH FUSED [STAGE]   the edited GEMM on slot's A with sigma S0..S3 (hex u64, big-endian
 //                                    words) and the receipts' key RSEED; receipts to RPATH; plain cuBLASLt on the same A, the
 //                                    order alternating
@@ -16,10 +20,16 @@
 // each answered by one JSON line on stdout. Other modes, outside the slice:
 //   slice bench REPS SHAPE...        lpgemm.cu's interleaved timing (LP_ARMS)
 //   slice commit REPS M K            the operand commitment's SHA-512 work per call on the GPU (commit_cost)
-// Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a slice.cu -lcuda -lcublasLt -lnvidia-ml
+// Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a slice.cu -lcuda -lcublasLt -lnvidia-ml; with -DLP_DITHER
+// B's noise is decision 29's dither b = (1 - F) / 2 in {0, 1} (lpgemm.cu's fb_word), for SIDE b's served activations
 #define LP_LIB
 #define LP_UW 64
 #include "../masked_gemm/lpgemm.cu"
+#ifdef LP_DITHER
+constexpr int LP_DITHER_ON = 1;
+#else
+constexpr int LP_DITHER_ON = 0;
+#endif
 
 #include <iostream>
 #include <sstream>
@@ -28,14 +38,14 @@ constexpr int SLOTS = 8, STAGES_ = 2;
 
 struct Stage {
   LProb P;
-  bool on = false, duos = false;
-  size_t rb = 0;
-  uint8_t* A[SLOTS] = {};
+  bool on = false, duos = false, sb = false;   // sb: a slot holds B (SIDE b)
+  size_t rb = 0, slot_bytes = 0;
+  uint8_t* A[SLOTS] = {};   // the slots' operands, A or (sb) B
   int* Y[SLOTS] = {};
   uint32_t* R[SLOTS] = {};
   LtG plain[SLOTS];
   int* Yp = nullptr;
-  uint8_t* A0 = nullptr;
+  uint8_t *A0 = nullptr, *B0 = nullptr;
   int* U0 = nullptr;
   uint32_t* R0 = nullptr;
 };
@@ -47,22 +57,26 @@ struct Slice {
   int calls = 0;
 };
 
-static void setup(Slice& S, Stage& G, int m, int n, int k, uint32_t bseed, const std::string& bpath, bool duos) {
+static void setup(Slice& S, Stage& G, int m, int n, int k, uint32_t bseed, const std::string& bpath, bool duos, bool sb) {
   LProb& P = G.P;
   lsetup(P, m, n, k, 1, bseed, 0, false);
-  sfill<I8><<<4096, 256, 0, P.st>>>(P.B, P.nb, mix32(bseed ^ 0x2222u));
+  if (sb) sfill<I8><<<4096, 256, 0, P.st>>>(P.A, P.na, mix32(bseed ^ 0x2222u), -63, 127);
+  else sfill<I8><<<4096, 256, 0, P.st>>>(P.B, P.nb, mix32(bseed ^ 0x2222u));
   G.duos = duos;
+  G.sb = sb;
+  G.slot_bytes = sb ? P.nb : P.na;
   G.rb = duos ? (size_t)(m / 128) * (n / 128) * CNT * (k / 32) * 4 : P.rb;
   CK(cudaMalloc(&G.Yp, P.ub));
   for (int s = 0; s < SLOTS; s++) {
-    CK(cudaMalloc(&G.A[s], P.na)); CK(cudaMalloc(&G.Y[s], P.ub)); CK(cudaMalloc(&G.R[s], G.rb));
-    G.plain[s] = ltg(I8, m, n, k, k, k, n, G.A[s], P.B, G.Yp, 0, P.st, 1);
+    CK(cudaMalloc(&G.A[s], G.slot_bytes)); CK(cudaMalloc(&G.Y[s], P.ub)); CK(cudaMalloc(&G.R[s], G.rb));
+    G.plain[s] = sb ? ltg(I8, m, n, k, k, k, n, P.A, G.A[s], G.Yp, 0, P.st, 1) : ltg(I8, m, n, k, k, k, n, G.A[s], P.B, G.Yp, 0, P.st, 1);
   }
   if (!S.events) for (auto& ev : S.e) CK(cudaEventCreate(&ev));
   S.events = true;
   CK(cudaStreamSynchronize(P.st));
-  dump("", bpath.c_str(), P.B, P.nb, true);
-  G.A0 = P.A; G.U0 = P.U; G.R0 = P.R;
+  if (sb) dump("", bpath.c_str(), P.A, P.na, true);
+  else dump("", bpath.c_str(), P.B, P.nb, true);
+  G.A0 = P.A; G.B0 = P.B; G.U0 = P.U; G.R0 = P.R;
   G.on = true;
 }
 
@@ -75,7 +89,8 @@ static double ms_between(cudaEvent_t a, cudaEvent_t b) {
 // the td route (lrun's R_T with duo 32, or DUOS) on slot s, with the given sigma and receipt key
 static void edited(Stage& G, int s, const Sig& sg, uint32_t rseed, bool fused) {
   LProb& P = G.P;
-  P.A = G.A[s]; P.U = G.Y[s]; P.R = G.R[s]; P.seed = rseed;
+  (G.sb ? P.B : P.A) = G.A[s];
+  P.U = G.Y[s]; P.R = G.R[s]; P.seed = rseed;
   bside(P, fused, false, sg);
   formA(P, false);
   lgemm(P, G.duos ? (Kern)t_duos32 : (Kern)t_duo32, P.mT, sg);
@@ -106,32 +121,36 @@ static void serve(Slice& S) {
     in >> cmd;
     if (cmd == "quit") break;
     if (cmd == "setup") {
-      int m, n, k; uint32_t bs; std::string bp, kind = "duo";
+      int m, n, k; uint32_t bs; std::string bp, kind = "duo", side = "a";
       in >> m >> n >> k >> bs >> bp;
       if (!(in >> kind)) kind = "duo";
       Stage* G = stage_of(S, in, false);
-      if (!G || G->on || (kind != "duo" && kind != "duos")) { printf("{\"error\": \"setup: a fresh stage, KIND duo or duos\"}\n"); fflush(stdout); continue; }
-      setup(S, *G, m, n, k, bs, bp, kind == "duos");
+      if (!(in >> side)) side = "a";
+      if (!G || G->on || (kind != "duo" && kind != "duos") || (side != "a" && side != "b")) {
+        printf("{\"error\": \"setup: a fresh stage, KIND duo or duos, SIDE a or b\"}\n"); fflush(stdout); continue;
+      }
+      setup(S, *G, m, n, k, bs, bp, kind == "duos", side == "b");
       int nsm; cudaDeviceProp prop;
       CK(cudaDeviceGetAttribute(&nsm, cudaDevAttrMultiProcessorCount, 0));
       CK(cudaGetDeviceProperties(&prop, 0));
       printf("{\"ok\": \"setup\", \"m\": %d, \"n\": %d, \"k\": %d, \"grid\": %d, \"sms\": %d, \"gpu\": \"%s\", \"CNT\": %d, "
-             "\"receipt_bytes\": %zu, \"kind\": \"%s\", \"lt_algo\": %d}\n", m, n, k, G->P.grid, nsm, prop.name, CNT, G->rb,
-             kind.c_str(), G->plain[0].algo_id);
+             "\"receipt_bytes\": %zu, \"kind\": \"%s\", \"side\": \"%s\", \"dither\": %d, \"lt_algo\": %d}\n", m, n, k, G->P.grid, nsm,
+             prop.name, CNT, G->rb, kind.c_str(), side.c_str(), LP_DITHER_ON, G->plain[0].algo_id);
     } else if (cmd == "opnds") {
       int s; uint32_t seed; std::string ap;
       in >> s >> seed >> ap;
       Stage* G = stage_of(S, in);
       if (!G) { printf("{\"error\": \"opnds: no such stage\"}\n"); fflush(stdout); continue; }
-      sfill<I8><<<4096, 256, 0, G->P.st>>>(G->A[s], G->P.na, mix32(seed ^ 0x1111u), -63, 127);
+      if (G->sb) sfill<I8><<<4096, 256, 0, G->P.st>>>(G->A[s], G->slot_bytes, mix32(seed ^ 0x1111u));
+      else sfill<I8><<<4096, 256, 0, G->P.st>>>(G->A[s], G->slot_bytes, mix32(seed ^ 0x1111u), -63, 127);
       CK(cudaStreamSynchronize(G->P.st));
-      dump("", ap.c_str(), G->A[s], G->P.na, true);
+      dump("", ap.c_str(), G->A[s], G->slot_bytes, true);
       printf("{\"ok\": \"opnds\", \"slot\": %d}\n", s);
     } else if (cmd == "aload") {
       int s; std::string ap;
       in >> s >> ap;
       Stage* G = stage_of(S, in);
-      if (!G || !load(ap, G->A[s], G->P.na)) { printf("{\"error\": \"aload: no such stage or file\"}\n"); fflush(stdout); continue; }
+      if (!G || !load(ap, G->A[s], G->slot_bytes)) { printf("{\"error\": \"aload: no such stage or file\"}\n"); fflush(stdout); continue; }
       printf("{\"ok\": \"aload\", \"slot\": %d}\n", s);
     } else if (cmd == "call") {
       int s; std::string w[4]; uint32_t rseed; std::string rp; int fused = 0;
@@ -182,7 +201,7 @@ static void serve(Slice& S) {
     fflush(stdout);
   }
   for (Stage& G : S.G)
-    if (G.on) { G.P.A = G.A0; G.P.U = G.U0; G.P.R = G.R0; }
+    if (G.on) { G.P.A = G.A0; G.P.B = G.B0; G.P.U = G.U0; G.P.R = G.R0; }
 }
 
 // The operand commitment's per-call SHA-512 work, as an hm96-sha512/row/v2 committer would do it (its work, not its

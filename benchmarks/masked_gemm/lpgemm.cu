@@ -28,6 +28,13 @@
 
 constexpr uint32_t U_TAG = 6;
 constexpr int F_TAG = 1;   // pm1, B's side
+// B's noise word from F's pm1 word: F, or with -DLP_DITHER decision 29's dither b = (1 - F) / 2 in {0, 1} from the same coin
+// bits (B' = B + b, the served X = floor(x / s) + b)
+#ifdef LP_DITHER
+DEV uint32_t fb_word(uint32_t w) { return (w >> 1) & 0x01010101u; }
+#else
+DEV uint32_t fb_word(uint32_t w) { return w; }
+#endif
 
 #define GEMML(NAME, RS, KIND, NZ, NS)                                                                                  \
   __global__ void __launch_bounds__(ML<128, 128, 32, 3, false, NZ, NS>::NT, 1) NAME(const __grid_constant__ Args a) { \
@@ -151,7 +158,8 @@ __global__ void __launch_bounds__(256) edit_b(const uint8_t* __restrict__ B, uin
     const size_t r = row0 + c / 8, col = col0 + (c % 8) * 16;
     const uint4 x = *reinterpret_cast<const uint4*>(B + r * k + col);
     *reinterpret_cast<uint4*>(XB + r * ld + col) =
-        make_uint4(add_noise<false>(x.x, n[0]), add_noise<false>(x.y, n[1]), add_noise<false>(x.z, n[2]), add_noise<false>(x.w, n[3]));
+        make_uint4(add_noise<false>(x.x, fb_word(n[0])), add_noise<false>(x.y, fb_word(n[1])), add_noise<false>(x.z, fb_word(n[2])),
+                   add_noise<false>(x.w, fb_word(n[3])));
   });
 }
 
@@ -264,8 +272,10 @@ __global__ void __launch_bounds__(256) bsp(const uint8_t* __restrict__ B, uint8_
       const uint32_t bits = (b16 >> 8) | ((b16 & 0xFF) << 8);
       const size_t off = (size_t)(t0 + t) * 128;
       const uint4 x = *reinterpret_cast<const uint4*>(src + off);
-      const uint4 y = make_uint4(add_noise<false>(x.x, pm1_word(bits & 0xF)), add_noise<false>(x.y, pm1_word((bits >> 4) & 0xF)),
-                                 add_noise<false>(x.z, pm1_word((bits >> 8) & 0xF)), add_noise<false>(x.w, pm1_word(bits >> 12)));
+      const uint4 y = make_uint4(add_noise<false>(x.x, fb_word(pm1_word(bits & 0xF))),
+                                 add_noise<false>(x.y, fb_word(pm1_word((bits >> 4) & 0xF))),
+                                 add_noise<false>(x.z, fb_word(pm1_word((bits >> 8) & 0xF))),
+                                 add_noise<false>(x.w, fb_word(pm1_word(bits >> 12))));
       *reinterpret_cast<uint4*>(dst + off) = y;
       acc16(s, y);
     }
@@ -293,7 +303,8 @@ __global__ void __launch_bounds__(256) bsp1(const uint8_t* __restrict__ B, uint8
       for (int e = 0; e < 16; e++) s0[e] = s1[e] = 0;
     }
     const uint4 x = *reinterpret_cast<const uint4*>(B + row * 128 + (c % 8) * 16);
-    const uint4 y = make_uint4(add_noise<false>(x.x, n[0]), add_noise<false>(x.y, n[1]), add_noise<false>(x.z, n[2]), add_noise<false>(x.w, n[3]));
+    const uint4 y = make_uint4(add_noise<false>(x.x, fb_word(n[0])), add_noise<false>(x.y, fb_word(n[1])), add_noise<false>(x.z, fb_word(n[2])),
+                               add_noise<false>(x.w, fb_word(n[3])));
     *reinterpret_cast<uint4*>(XB + row * ld + (c % 8) * 16) = y;
     if (c % 2 == 0) acc16(s0, y); else acc16(s1, y);
     if (c % 8 == 7) {
