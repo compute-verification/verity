@@ -176,7 +176,7 @@ noncomputable def unitWit (H : Msg → Msg) (D : Deploy Coin Col T) (decode : Li
   match D.session x u (run' r).seen with
   | none => none
   | some (xS, _) =>
-    ((firstWait (D.innerK x) (D.sessionCols x u) (Flock.assemble D.flock.parse decode D.flock.read xS)
+    ((firstWait (D.innerK x) (D.sessionCols x u) (Flock.assemble D.flock.parse D.flock.table decode D.flock.read xS)
         (Flock.check D.flock.parse xS)
         ((List.finRange (D.innerWaits x)).map fun i =>
           (List.finRange (D.innerCap x)).map fun j => forkOn (D.rounds x u) r (ρ i j))).eval H run').1

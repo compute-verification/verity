@@ -396,7 +396,7 @@ theorem fiber_bound {H : Msg → Msg} {D : Deploy Coin Col T} (hKS : Claims.Floc
     have hcorr : ∀ rs ∈ Ls, ∀ r ∈ rs,
         ((run H P D.V x ω r).seen.out = .acc ↔ (run H P' D.flock.V xS () (g r)).seen.out = .acc) ∧
           ((run H P D.V x ω r).seen.out = .acc →
-            D.sessionCols x u (run H P D.V x ω r).seen = D.flock.cols (run H P' D.flock.V xS () (g r)).seen) := by
+            D.sessionCols x u (run H P D.V x ω r).seen = [D.flock.cols (run H P' D.flock.V xS () (g r)).seen]) := by
       intro rs hrs r hr
       obtain ⟨i, -, rfl⟩ := List.mem_map.1 hrs
       obtain ⟨j, -, rfl⟩ := List.mem_map.1 hr
@@ -416,8 +416,9 @@ theorem fiber_bound {H : Msg → Msg} {D : Deploy Coin Col T} (hKS : Claims.Floc
       refine List.map_congr_left fun j _ => ?_
       funext t
       simp [g, forkOn, hS t]
-    have hfw := firstWait_map H (run H P D.V x ω) (run H P' D.flock.V xS ()) g (D.sessionCols x u) D.flock.cols
-      (D.innerK x) (Flock.assemble D.flock.parse decode D.flock.read xS) (Flock.check D.flock.parse xS) Ls hcorr
+    have hfw := firstWait_map H (run H P D.V x ω) (run H P' D.flock.V xS ()) g (D.sessionCols x u)
+      (fun v => [D.flock.cols v]) (D.innerK x) (Flock.assemble D.flock.parse D.flock.table decode D.flock.read xS)
+      (Flock.check D.flock.parse xS) Ls hcorr
     have ha' : (run H P' D.flock.V xS () fun i => σ (emb i)).seen.out = .acc := ha
     simp only [Extractor.eval, Claims.Flock.E, ERep, RP.eval]
     rw [ite_eq_left ha', hk, hL, ← hfw, h2]
