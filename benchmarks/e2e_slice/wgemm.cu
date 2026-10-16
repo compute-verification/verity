@@ -11,7 +11,10 @@
 //                                   and its receipts to DIR for wgate.py (derive.win_receipts recomputes them)
 //   wgemm il REPS ARM BASE M N K    egemm's il with the w_ kernels (ARM: w_NAME, edited:w_NAME, editedf:w_NAME, or any of
 //                                   egemm's arms)
-// Build: nvcc -O3 -std=c++17 --no-compress -gencode arch=compute_120a,code=sm_120a wgemm.cu -lcuda -lcublasLt -lnvidia-ml
+//   wgemm pipe REPS ARM BASE M N K PARAMS S   ARM's calls with their commitments beside the next call (cgpipe.cu; PARAMS
+//                                   COMMIT-GPU's params file for 16,384-bit rows), against BASE
+// Build: nvcc -O3 -std=c++17 --no-compress -gencode arch=compute_120a,code=sm_120a wgemm.cu cgpipe.cu -lcuda -lcublasLt
+//        -lnvidia-ml
 #define main egemm_main
 #include "../edited_gemm/egemm.cu"
 #undef main
@@ -264,11 +267,82 @@ static int wil(int reps, const std::string& arm, const std::string& base, int m,
   return 0;
 }
 
+// cgpipe.cu
+void* cgp_new(const char* params, const uint8_t* X, uint64_t m, uint64_t k, const uint8_t* R, uint64_t rows);
+void cgp_salts(void* h, cudaStream_t st);
+void cgp_data(void* h, cudaStream_t st);
+
+// a call with its commitments, the slice's GPU side: 8 calls of ARM on st, each call's commitments (X's tile tree and its
+// receipts' tree, S segments a window: salts, then data) on a stream at the device's highest priority once its GEMM has
+// ended, so they run beside the next call's GEMM (pipe); against BASE alone, ARM alone, the commitments alone, and ARM then
+// its commitments on one stream (serial). The commitments read X and the receipts while the next call rewrites them: a
+// timing, not a commitment of each call's own values.
+static int wpipe(int reps, const std::string& arm, const std::string& base, int m, int n, int k, const char* params, int S) {
+  Nv nv;
+  EP P;
+  wsetup(P, m, n, k, 0x5EED0000u + m + n + k, false);
+  auto fa = warm(arm), fb = warm(base);
+  void* h = cgp_new(params, reinterpret_cast<const uint8_t*>(P.X), m, k, reinterpret_cast<const uint8_t*>(g_rw), rw_words(P, S) / 512);
+  int lo, hi;
+  CK(cudaDeviceGetStreamPriorityRange(&lo, &hi));
+  cudaStream_t sp;
+  CK(cudaStreamCreateWithPriority(&sp, cudaStreamNonBlocking, hi));
+  constexpr int calls = 8;
+  std::vector<cudaEvent_t> ev(calls);
+  for (auto& x : ev) CK(cudaEventCreateWithFlags(&x, cudaEventDisableTiming));
+  cudaEvent_t e0, e1, ej;
+  CK(cudaEventCreate(&e0)); CK(cudaEventCreate(&e1)); CK(cudaEventCreateWithFlags(&ej, cudaEventDisableTiming));
+  auto timed = [&](const std::function<void()>& f) {
+    CK(cudaEventRecord(e0, P.st));
+    f();
+    CK(cudaEventRecord(e1, P.st));
+    CK(cudaEventSynchronize(e1));
+    float t;
+    CK(cudaEventElapsedTime(&t, e0, e1));
+    return (double)t / calls;
+  };
+  auto base_only = [&] { for (int i = 0; i < calls; i++) fb(P); };
+  auto arm_only = [&] { for (int i = 0; i < calls; i++) fa(P); };
+  auto commits = [&] { for (int i = 0; i < calls; i++) { cgp_salts(h, P.st); cgp_data(h, P.st); } };
+  auto serial = [&] { for (int i = 0; i < calls; i++) { fa(P); cgp_salts(h, P.st); cgp_data(h, P.st); } };
+  auto piped = [&] {
+    CK(cudaEventRecord(ej, P.st));
+    CK(cudaStreamWaitEvent(sp, ej));
+    for (int i = 0; i < calls; i++) {
+      fa(P);
+      CK(cudaEventRecord(ev[i], P.st));
+      CK(cudaStreamWaitEvent(sp, ev[i]));
+      cgp_salts(h, sp);
+      cgp_data(h, sp);
+    }
+    CK(cudaEventRecord(ej, sp));
+    CK(cudaStreamWaitEvent(P.st, ej));
+  };
+  std::vector<double> tb, ta, tc, ts, tp, mz;
+  for (int r = -2; r < reps; r++) {
+    const double b = timed(base_only), a = timed(arm_only), c = timed(commits), s = timed(serial), p = timed(piped);
+    if (r < 0) continue;
+    tb.push_back(b); ta.push_back(a); tc.push_back(c); ts.push_back(s); tp.push_back(p);
+    mz.push_back(nv.sm());
+  }
+  CK(cudaGetLastError());
+  const double b = median(tb), a = median(ta), c = median(tc), s = median(ts), p = median(tp);
+  printf("{\"pipe\": \"%s\", \"base\": \"%s\", \"S\": %d, \"m\": %d, \"n\": %d, \"k\": %d, \"calls\": %d, \"reps\": %d, "
+         "\"receipt_mib\": %.1f, \"base_ms\": %.6f, \"arm_ms\": %.6f, \"commit_ms\": %.6f, \"serial_ms\": %.6f, \"pipe_ms\": %.6f, "
+         "\"arm_ratio\": %.4f, \"serial_ratio\": %.4f, \"pipe_ratio\": %.4f, \"mhz\": %.0f, \"mhz_min\": %.0f}\n",
+         arm.c_str(), base.c_str(), S, m, n, k, calls, reps, rw_words(P, S) * 4.0 / (1 << 20), b, a, c, s, p, a / b, s / b, p / b,
+         median(mz), *std::min_element(mz.begin(), mz.end()));
+  fflush(stdout);
+  return 0;
+}
+
 int main(int argc, char** argv) {
   CL(cublasLtCreate(&g_lt));
   CK(cudaMalloc(&g_ws, g_wsz));
   if (argc >= 7 && !strcmp(argv[1], "gate")) return wgate(argv[2], atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), (uint32_t)strtoul(argv[6], 0, 0));
   if (argc >= 8 && !strcmp(argv[1], "il")) return wil(atoi(argv[2]), argv[3], argv[4], atoi(argv[5]), atoi(argv[6]), atoi(argv[7]));
-  fprintf(stderr, "usage: wgemm gate DIR M N K SEED | il REPS ARM BASE M N K\n");
+  if (argc >= 10 && !strcmp(argv[1], "pipe"))
+    return wpipe(atoi(argv[2]), argv[3], argv[4], atoi(argv[5]), atoi(argv[6]), atoi(argv[7]), argv[8], atoi(argv[9]));
+  fprintf(stderr, "usage: wgemm gate DIR M N K SEED | il REPS ARM BASE M N K | pipe REPS ARM BASE M N K PARAMS S\n");
   return 2;
 }
