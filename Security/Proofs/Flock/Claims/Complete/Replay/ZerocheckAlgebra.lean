@@ -162,6 +162,18 @@ theorem r_size (m : ℕ) (hm : 13 ≤ m) (cs : Coins) : (cs.r m).size = m - 6 :=
   simp only [Coins.r, Array.size_append, pinned_size, Array.size_map, Array.size_range]
   omega
 
+theorem r1c_eq (tr : Trace) (n : ℕ) (r : Array F128) (hrs : r.size = n) (a b : ℕ → 𝔽) (rho : Array F128)
+    (z : F128) : r1c tr n r = (honest n a b (bitF tr.z) r rho z).round1c := by
+  unfold r1c
+  simp only [honest]
+  congr 1
+  funext i
+  apply eq_of_of
+  rw [of_sumF, of_val]
+  refine Finset.sum_congr rfl fun x hx => ?_
+  rw [of_mul, of_eqTable _ x (by rw [hrs]; exact Finset.mem_range.mp hx), hrs, of_skipHat]
+  rfl
+
 /-- **The prover's zerocheck passes the final check** (Piop.lean:98): for a trace satisfying the block R1CS bitwise and
 `r_outer` coins other than `1`, the residual fold ends at `final_a · final_b`. -/
 theorem fold_final {m : ℕ} (hm : 14 ≤ m) (cs : Coins) (tr : Trace)
@@ -196,17 +208,7 @@ theorem fold_final {m : ℕ} (hm : 14 ≤ m) (cs : Coins) (tr : Trace)
     rw [of_mul, of_mul, of_eqTable _ x (by rw [hrs]; exact Finset.mem_range.mp hx), hrs, of_skipHat, of_skipHat,
       mul_assoc]
     rfl
-  have h2 : (proof m cs tr).round1c = H.round1c := by
-    show r1c tr n (cs.r m) = H.round1c
-    unfold r1c
-    simp only [H, honest]
-    congr 1
-    funext i
-    apply eq_of_of
-    rw [of_sumF, of_val]
-    refine Finset.sum_congr rfl fun x hx => ?_
-    rw [of_mul, of_eqTable _ x (by rw [hrs]; exact Finset.mem_range.mp hx), hrs, of_skipHat]
-    rfl
+  have h2 : (proof m cs tr).round1c = H.round1c := r1c_eq tr n (cs.r m) hrs _ _ rho cs.z
   have h3 : ∀ j < n, (proof m cs tr).rounds[j]! = H.rounds[j]! := by
     intro j hj
     show (pushes (msg tr n (cs.r m) cs.z cs.ρ) n)[j]! = H.rounds[j]!
