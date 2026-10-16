@@ -250,6 +250,31 @@ class PFillKFused(PFillK):
         return None if phase == "prefill" else self._row(b, l)[1]
 
 
+#: FUSED_K with the pump on 84 SMs at 132/5K and 144/5K and 108 at 128/2K: screens s8 and s9 (r20261016-095959-2f47,
+#: r20261016-100916-3701), 1.032-1.033 at 132/5K and 144/5K on 104 step SMs over four rows, 0.998 at 128/2K on 80. The
+#: step's SMs come in eights, so the next pump size, 92 at 132/5K (1.041 twice) and 116 at 128/2K (1.034), sits closer
+#: to the gate than prefill's split; lm_head through flin (1.032) and the linears on cuBLASLt (1.088) gain nothing there.
+FUSED_K2 = {**FUSED_K, (128, 2048): _flin(108, lm=0), (132, 5120): _flin(84, lm=0), (144, 5120): _flin(84, lm=0)}
+
+
+@dataclass
+class PFillKFused2(PFillKFused):
+    """pfill-k-fused on FUSED_K2: 8 more pump SMs at the reasoning and RAG mixes' decode points (132/5K, 144/5K) and at
+    128/2K."""
+
+    name: str = "pfill-k-fused2"
+    lineage: dict = field(default_factory=lambda: {
+        "parent": "pfill-k-fused", "approach": "pouw/filler-proved",
+        "mechanism": ["filler:fresh-noise-imma", "noise:sha512-coins-01", "receipt:ram-k32", "place:split",
+                      "split:per-point-table", "fused:flin-serving", "fused:persistent-attention", "fused:lm-head-flin",
+                      "prefill:split"],
+        "hypothesis": "FILL's step on 104 SMs holds 132/5K and 144/5K at 1.033 (pfill-k-fused's 112: 1.020), so 8 more "
+                      "pump SMs there lift the reasoning mix, about half of SCORE's time, by 0.03"})
+    choice: str = ("an offline table of 18 (B, L) points (split SMs, FILL's step or cuBLASLt's) from FILL's FusedPump rows, "
+                   "POWER_SPLIT and screens s8-s9; a lookup, a green split and one graph a step at serving time")
+    table = FUSED_K2
+
+
 def products_per_slot(lineage: dict) -> int:
     """Products the arm's filler does an int8 slot it reports: 2 for the e2m1 tile, else 1."""
     return 2 if "mma:e2m1-omma-k64" in (lineage.get("mechanism") or []) else 1

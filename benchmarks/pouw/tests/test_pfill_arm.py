@@ -113,7 +113,8 @@ def test_k_phase_arm_runs_pfill_k_with_a_phase_filler_of_the_builds_width(monkey
     assert phased
 
 
-def test_k_fused_arm_runs_pfill_k_beside_fills_step_with_no_filler_warps(monkeypatch):
+@pytest.mark.parametrize("attr, table", [("PFillKFused", "FUSED_K"), ("PFillKFused2", "FUSED_K2")])
+def test_k_fused_arm_runs_pfill_k_beside_fills_step_with_no_filler_warps(monkeypatch, attr, table):
     """pfill-k-fused is pfill-k's pump (bits01, the build's -DPFILL_BITS) with an exact table row at every suite point; a
     fused point runs FILL's step with no filler warps (FW = AFW = 0: fscore counts no fixed work, which filler-scorer/v3's
     Theorem K entry refuses), always on a split; prefill keeps pfill-k's 4-SM split; its sources carry fscore's build."""
@@ -121,7 +122,8 @@ def test_k_fused_arm_runs_pfill_k_beside_fills_step_with_no_filler_warps(monkeyp
     P = _load_file("pfill_arm")
     monkeypatch.setenv("NVCC_APPEND_FLAGS", "unset")
     k = A.load("benchmarks/pouw/filler/pfill_arm.py:PFillK")
-    arm = A.load("benchmarks/pouw/filler/pfill_arm.py:PFillKFused")
+    arm = A.load(f"benchmarks/pouw/filler/pfill_arm.py:{attr}")
+    assert arm.table == getattr(P, table)
     assert A.check_arm(arm) == [] and A.record_problems(arm) == []
     assert __import__("os").environ["NVCC_APPEND_FLAGS"] == "-DPFILL_BITS"
     assert arm.filler == k.filler and arm.filler.noise == "bits01" and P.theorem_k_setting(arm.lineage)
@@ -132,7 +134,7 @@ def test_k_fused_arm_runs_pfill_k_beside_fills_step_with_no_filler_warps(monkeyp
         if ph == "prefill":
             assert q is None and A.placed(arm, ph, b, l) == A.Placement("split", 4)
             continue
-        assert (b, l) in P.FUSED_K and A.placed(arm, ph, b, l).place == "split"
+        assert (b, l) in getattr(P, table) and A.placed(arm, ph, b, l).place == "split"
         if q is not None:
             fused += 1
             assert (q.FW, q.AFW) == (0, 0)
