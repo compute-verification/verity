@@ -226,6 +226,7 @@ def show(res: dict) -> None:
     print(f"\n{res['arm']} ({res['variant']}), {S.SCORER}: SCORE {fmt(res['SCORE'])}"
           + ("" if res["scored"] else f" (not scored; {fmt(res['score_if_gated'])} if gated)")
           + f", min {fmt((res['min'] or {}).get('coverage'))} at {(res['min'] or {}).get('entry')}"
+          + f" (mixes: {fmt((res['min_mix'] or {}).get('coverage'))} at {(res['min_mix'] or {}).get('entry')})"
           + f"; nominal ÷ capacity {fmt(res['score_nominal'])}, at 0.99 for all {fmt(res['score_at_target'])}")
     for f in res["flags"]:
         print(f"  FLAG: {f}")
@@ -243,8 +244,15 @@ def show(res: dict) -> None:
         print(f"| {e['entry']} | {fmt(e['coverage'])} | {fmt(e['filler_share'])} | {fmt(e['time'])} | "
               + ", ".join(f"{k} {fmt(s)}" for k, s in e["slowdowns"].items()) + f" | {fmt(e['tau_vf'])} |")
     sec = res["secondary"]
-    print(f"\nsecondary: work CV max {fmt(sec['work_cv_max'])}; robust " +
-          "; ".join(f"B {r['B']} L {r['L']}: {fmt(r['slowdown'])}x, cov {fmt(r['coverage'])}" for r in sec["robust"]))
+    pw = [v for v in sec["power"].values() if all(S.isfinite(x) for x in v)]
+    ck = [v for v in sec["clock"].values() if all(S.isfinite(x) for x in v)]
+    setup = sorted(sec["placement_setup_ms"].values())
+    print(f"\nsecondary: work CV max {fmt(sec['work_cv_max'])}; board W alone/arm, max "
+          f"{fmt(max((a for a, _ in pw), default=None), 0)}/{fmt(max((b for _, b in pw), default=None), 0)}; SM MHz "
+          f"alone/arm, min {fmt(min((a for a, _ in ck), default=None), 0)}/{fmt(min((b for _, b in ck), default=None), 0)}"
+          f"; placement setup ms median {fmt(setup[len(setup) // 2] if setup else None, 0)}; choice: {res['choice']}")
+    print("robust (not scored): " + ("; ".join(f"B {r['B']} L {r['L']}: {fmt(r['slowdown'])}x, coverage "
+                                               f"{fmt(r['coverage'])}" for r in sec["robust"]) or "–"))
     if res["missing"]:
         print(f"missing entries: {res['missing']}")
 
