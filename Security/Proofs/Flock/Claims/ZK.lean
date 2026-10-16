@@ -1,6 +1,8 @@
 import Proofs.Flock.Claims.ZK.Vacuous
 import Proofs.Flock.Claims.ZK.Statement
 import Proofs.Flock.Claims.ZK.GK
+import Proofs.Flock.Claims.ZK.Interact
+import Proofs.Flock.Claims.ZK.Coins
 
 /-!
 # Flock's zero knowledge against a malicious verifier
@@ -11,4 +13,9 @@ import Proofs.Flock.Claims.ZK.GK
   simulator's own SHA-512 collisions as the binding term; ZK bits under `StrictBirthday` at `Bzk` (`ZKmalR.bits`).
 * `GK`: a committed-coin protocol (`Proto`), its honest prover, its Goldreich–Kahan simulator with `N` rewinds
   (`Proto.simulator`), and the three facts the theorem reads (`PrefixHides`, `SHVZK`, `Binding`).
+* `Interact`: what the programs evaluate to: `runStar` and the simulator's runs as one interaction (`runStar_msgs`,
+  `spRun_eval`), and two provers that agree on a transcript's histories give it to both (`interact_take_congr`).
+* `Coins`: what the coin checks evaluate to: a transcript opens `c` exactly when every opening is answered and passes
+  the check (`cls_eq_some_iff`), the forced walk agrees (`cls_eq_some_iff_fcls`), and a mismatch is two checked
+  openings within the walk's calls (`fcls_eq_mism`).
 -/

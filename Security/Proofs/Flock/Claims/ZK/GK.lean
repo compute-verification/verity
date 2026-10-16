@@ -202,11 +202,13 @@ def rewindSP (G : Proto W) (x : Msg) (ν : G.Nonce) (c : Fin (G.K x) → G.Coin)
   spBind (spRun (G.forced x ν c v) (G.k x) []) fun τ =>
   spBind (ocSP (fclsOC (G.K x) (G.chk x ν) G.dec c τ)) fun st => .ret (st, τ)
 
-/-- The rewinds in order, up to the first that opens all of `c`'s coins; the empty transcript if none does. -/
-def rewindsSP (G : Proto W) {N : ℕ} (x : Msg) (ν : G.Nonce) (c : Fin (G.K x) → G.Coin) (s : Fin N → G.SimRand x) :
-    List (Fin N) → SP (List (Msg × Out))
-  | [] => .ret []
-  | i :: is => spBind (G.rewindSP x ν c (s i)) fun r => if r.1 = .succ then .ret r.2 else G.rewindsSP x ν c s is
+/-- The rewinds in order, each on its own SHVZK tape, up to the first that opens all of `c`'s coins; the empty
+transcript if none does. -/
+def rewindsSP (G : Proto W) (x : Msg) (ν : G.Nonce) (c : Fin (G.K x) → G.Coin) :
+    (N : ℕ) → (Fin N → G.SimRand x) → SP (List (Msg × Out))
+  | 0, _ => .ret []
+  | N + 1, s => spBind (G.rewindSP x ν c (s 0)) fun r =>
+      if r.1 = .succ then .ret r.2 else G.rewindsSP x ν c N fun i => s i.succ
 
 /-- **The Goldreich–Kahan simulator with `N` rewinds** (`S_GK`): its coins are the dummy run's tape (nonce and the rest)
 and one SHVZK tape per rewind. It uses `V*` only through `SP.ask`. -/
@@ -217,7 +219,7 @@ def simulator (G : Proto W) (N : ℕ) : Simulator where
     spBind (ocSP (clsOC (G.K x) (G.chk x c.1) G.dec τ₀)) fun o =>
     match o with
     | none => .ret τ₀
-    | some cs => G.rewindsSP x c.1 cs c.2.2 (List.finRange N)
+    | some cs => G.rewindsSP x c.1 cs N c.2.2
 
 /-! ## What the theorem needs of the protocol -/
 
