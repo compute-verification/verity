@@ -382,7 +382,10 @@ is at most the checked sessions' expected statistical errors under the full draw
 slack, and candidate 3's error.
 
 At a private inner shape (`ish.holo`), `RecVStar.statements` refuses (`statements_holo`), so no run the verifier accepts
-has a private inner session, and the guarantee says nothing about one until V*'s holo parts land (#1896).
+has a private inner session, and the guarantee says nothing about one until V*'s holo parts land (#1896). Every deployed
+candidate-3 run is at a private inner shape (`--holo`, `88-rec-c3-inner.sh`), and at a plain shape no honest rep unit
+passes (`DrawnRounds`), so (i) covers no deployed run until those parts land (PRF-25, cursor/holo-parts-c7a9; vacuity
+sweep, LEAN-19).
 
 Check 5's source `coins` is any: `--rec-inner-coins` is inside the guarantee. The verifier never accepts one at candidate
 3 anyway: the event's `AcceptsC3` names a RecSparse shape (`FlockC3.VStarList.sparse_of_acceptsC3`), where the

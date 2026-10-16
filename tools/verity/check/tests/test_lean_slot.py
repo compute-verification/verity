@@ -136,7 +136,7 @@ def test_without_the_steward_s_file_there_is_no_cap(tmp_path, monkeypatch):
 
 
 def test_a_request_inside_a_slot_takes_no_second_one(slots, monkeypatch):
-    """audit.py under check's lean-audit step: the step holds the slot, so the nested request neither waits nor counts."""
+    """check.py under check's lean-audit step: the step holds the slot, so the nested request neither waits nor counts."""
     held = [_hold(slots / f"lean-audit-{i}.lock") for i in range(2)]
     monkeypatch.setenv(LS.HELD, "check/0")
     assert LS.hold("audit") is None

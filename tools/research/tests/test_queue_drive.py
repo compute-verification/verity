@@ -401,6 +401,27 @@ def test_next_is_checked_in_stacked_trains_and_a_failed_train_holds_up_only_the_
     assert len(h.posts) == 1 and f"{members[3].commit[:12]} on `next` (#3 #4) failed" in h.posts[0]
 
 
+def test_a_pr_that_makes_circuit_check_run_cold_goes_above_the_warm_ones_and_they_get_a_check_of_their_own(world, monkeypatch):
+    """15 Oct: Lean-only PRs from proofs sat for hours in trains with a circuits change, whose check ran circuit-check cold."""
+    h = Harness(world, monkeypatch)
+    h.d.train_size = 6
+    for n, f in ((1, "a.txt"), (2, "verity/ml/circuits/library.py"), (3, "Security/X.lean")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    h.tick()
+    members = h.q.chain()
+    assert [m.pr for m in members] == [1, 3, 2]
+    assert [c for c, _, _ in h.launched] == [members[1].commit, members[2].commit]
+
+
+def test_forces_cold_reads_the_paths_that_move_most_circuit_check_keys():
+    from research.queue import forces_cold
+
+    assert forces_cold(["verity/ml/circuits/library.py"]) and forces_cold(["uv.lock"]) and forces_cold(["x/y.circuit-check.py"])
+    assert forces_cold(["tools/verity/circuit_check/src/circuit_check/cache.py"])
+    assert not forces_cold(["Security/Proofs/X.lean", "verity/ml/circuits/README.md", "verity/ml/circuits/tests/test_x.py"])
+    assert not forces_cold([])
+
+
 def test_shadow_launches_lands_and_tells_nothing(world, monkeypatch):
     h = Harness(world, monkeypatch, shadow=True)
     world.gh.put(1, world.change({"a.txt": "1\n"}))
