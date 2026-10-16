@@ -15,6 +15,8 @@
 // B's side: the edit pass then a pass for S's digits (bsep), or one pass doing both (bfus: a warp a row group of 4 rows,
 // its lanes hashing 32 patches at once; at k = 128 a thread a patch); U's hashes run in the first blocks of B's pass.
 // Receipts: duo at L = 32 over the first k columns (td, fd, od, rd), the tail outside.
+// Reference (bonly): F's pass and cuBLASLt on A and B' at k, no U and no peel: the served product without A' B'^T, which only
+// the receipts need.
 // A and B in [-119, 119], so A' and B' can't saturate and every product is exact in s32.
 //   lpgemm gate DIR M N K BATCH SEED GRID   every arm at one small shape, inputs and outputs to DIR for lpref.py
 //   lpgemm bench REPS SHAPE...              interleaved timing, one JSON line a shape (SHAPE = name:m:n:k:batch); LP_ARMS
@@ -294,7 +296,7 @@ struct LProb {
   int* U;
   uint32_t *R, *G;
   size_t na, nb, nxa, nxb, ub, rb;
-  LtG plain, ltk;
+  LtG plain, ltk, ltb;
   Maps *mAB, *mT, *mF;
   uint32_t seed, inst = 0;
   cudaStream_t st;
@@ -330,6 +332,7 @@ static void lsetup(LProb& P, int m, int n, int k, int batch, uint32_t seed, int 
   CK(cudaStreamSynchronize(P.st));
   P.plain = ltg(I8, m, n, k, k, k, n, P.A, P.B, P.U, 0, P.st, batch);
   P.ltk = ltg(I8, m, n, P.Kp, P.Kp, P.Kp, n, P.XA, P.XB, P.U, 0, P.st, batch);
+  P.ltb = ltg(I8, m, n, k, k, P.Kp, n, P.A, P.XB, P.U, 0, P.st, batch);
   const CUtensorMap pa = tmap(P.PA, 128, m, 128), pbm = tmap(P.PB, 128, batch * n, 128);
   P.mAB = upload_maps(Maps{tmap(P.A, k, batch * m, 128), tmap(P.B, k, batch * n, 128), tmap(P.A, k, batch * m, 128), tmap(P.B, k, batch * n, 128)});
   P.mT = upload_maps(Maps{tmap_ld(P.XA, k, P.Kp, batch * m), tmap_ld(P.XB, k, P.Kp, batch * n), pa, pbm});
@@ -347,14 +350,15 @@ static void lfree(LProb& P) {
 }
 
 enum { L_PLAIN, L_CPLAIN, L_CDUO, L_GENU, L_GENF, L_FORMA, L_FORMAX, L_FORMB, L_SPEEL, L_SPEELX, L_BSP, L_BSPX, L_LTK, L_TK, L_FK,
-       L_OK, L_RK, L_ROUTE };
+       L_OK, L_RK, L_BONLY, L_ROUTE };
 enum { R_LT, R_T, R_F, R_O, R_R };
 static const char* RN[5] = {"lt", "t", "f", "o", "r"};
 struct LArm { std::string name; int kind, route, bfus, duo; };
 static std::vector<LArm> lall() {
   std::vector<LArm> v{{"plain", L_PLAIN}, {"cplain", L_CPLAIN}, {"cduo", L_CDUO}, {"genU", L_GENU}, {"genF", L_GENF},
                       {"formA", L_FORMA}, {"formAx", L_FORMAX}, {"formB", L_FORMB}, {"speel", L_SPEEL}, {"speelx", L_SPEELX},
-                      {"bsp", L_BSP}, {"bspx", L_BSPX}, {"ltK", L_LTK}, {"tK", L_TK}, {"fK", L_FK}, {"oK", L_OK}, {"rK", L_RK}};
+                      {"bsp", L_BSP}, {"bspx", L_BSPX}, {"ltK", L_LTK}, {"tK", L_TK}, {"fK", L_FK}, {"oK", L_OK}, {"rK", L_RK},
+                      {"bonly", L_BONLY}};
   for (int r = 0; r < 5; r++)
     for (int d = 0; d < (r == R_LT ? 1 : 2); d++)
       for (int bf = 0; bf < 2; bf++) v.push_back({std::string(RN[r]) + (d ? "d" : "") + (bf ? "_bfus" : "_bsep"), L_ROUTE, r, bf, d});
@@ -368,6 +372,7 @@ static const std::pair<const char*, const char*> COVER[] = {{"formA", "t_bsep"},
 static bool larm_ok(const LProb& P, const LArm& a) {
   if (a.kind == L_PLAIN) return P.plain.algo_id != -2;
   if (a.kind == L_LTK || (a.kind == L_ROUTE && a.route == R_LT)) return P.ltk.algo_id != -2;
+  if (a.kind == L_BONLY) return P.ltb.algo_id != -2;
   return true;
 }
 static UJob ujob(LProb& P) { return UJob{P.PA, (uint32_t)(P.m / 4 + 255) / 256, (uint32_t)(P.m / 4)}; }
@@ -434,6 +439,10 @@ static void lrun(LProb& P, const LArm& a) {
     case L_FK: lgemm(P, f_plain, P.mF, s); break;
     case L_OK: lgemm(P, o_plain, P.mF, s); break;
     case L_RK: lgemm(P, r_plain, P.mF, s); break;
+    case L_BONLY:
+      edit_b<<<(P.pb + 255) / 256, 256, 0, P.st>>>(P.B, P.XB, P.pb, P.KB, P.Kp, UJob{P.PA, 0, 0}, s);
+      ltg_run(P.ltb, P.st);
+      break;
     case L_ROUTE:
       bside(P, a.bfus, a.route == R_LT, s);
       if (a.route == R_LT) {
@@ -477,6 +486,7 @@ static int lgate(const std::string& dir, int m, int n, int k, int batch, uint32_
     } else {
       dump(dir, ("U_" + a.name + ".bin").c_str(), P.U, P.ub, true);
       if (a.kind == L_CDUO || a.duo) dump(dir, ("R_" + a.name + ".bin").c_str(), P.R, P.rb, true);
+      if (a.kind == L_BONLY) dump(dir, "XB_bonly.bin", P.XB, P.nxb, true);
       if (a.kind == L_ROUTE) {
         dump(dir, ("PA_" + a.name + ".bin").c_str(), P.PA, (size_t)m * 128, true);
         dump(dir, ("XB_" + a.name + ".bin").c_str(), P.XB, P.nxb, true);

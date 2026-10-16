@@ -1,7 +1,7 @@
 """The table of lpgemm.cu's bench: the one-side-peeled noise's 1 + gamma over cuBLASLt's plain int8 GEMM, per shape, for
 each route (the peel by cuBLASLt's K extension, or the custom mainloop's tail stage with A' from a pass or added in shared
 memory; B's edit and S's digits as two passes or one), with no receipts and with duo at L = 32, gamma_gen (U and F), the
-peel's own cost, and every arm; the gate's verdict for each arm.
+peel's own cost, the reference A (B + F) without U (bonly), and every arm; the gate's verdict for each arm.
 
 python3 lptable.py BENCH.jsonl GATE.jsonl > table.md
 """
@@ -121,6 +121,16 @@ def main(bench, gate):
     for lab, pats in [("cheapest, no receipts", NONE), ("cheapest, duo 32", DUO)]:
         out.append(row(f"**{lab}**", lambda j, pats=pats: (best(j, pats) or (None,))[0]))
         out.append(row(f"({lab}: route)", lambda j, pats=pats: (best(j, pats) or (None, "–"))[1], geom=False))
+
+    def ref(j):
+        return value(j["arms"], [("bonly", 1)]) if verdict.get("bonly") == "pass" else None
+
+    def u_share(j):
+        b, r = best(j, NONE), ref(j)
+        return None if b is None or r is None else b[0] - r
+
+    out.append(row("reference, no U and no peel: F's pass, cuBLASLt on A and B' at k (bonly)", ref))
+    out.append(row("U's and the peel's share, no receipts (cheapest − reference)", u_share, geom=False))
     out += ["", "## The parts, over plain", ""] + hdr
     for label, parts in PARTS:
         out.append(row(label, lambda j, parts=parts: value(j["arms"], parts), geom=False))

@@ -7,8 +7,8 @@ from SHA-512 blocks with tag 6 (block j = rows 4j..4j+3, entry e = (row % 4) 32 
 first, u = (v & 7) + 1 negated if v & 8), F (sref.py's pm1 noise with B's tag, fresh for every problem), A' = A + U W^T,
 B' = B + F, S = W^T B'^T, P_A = [U U U U] and P_B = [S_h1 | S_h2 | S_l | 0] (the tail's peel), the extension's columns
 (A's -U and -15 U; B's b0 and Sh's mx parts, from the definition (Sh + c - 1) // mx), the served product A B'^T (with
-A' B'^T - U S^T and the extended product checked equal to it), the duo receipts of A' B'^T at L = 32, and the
-generation-only kernel's folded words of F. A component arm is checked through the route that runs it (meta's cover).
+A' B'^T - U S^T and the extended product checked equal to it), the duo receipts of A' B'^T at L = 32, the
+generation-only kernel's folded words of F, and the reference arm's A B'^T (bonly: F's pass and cuBLASLt, no U). A component arm is checked through the route that runs it (meta's cover).
 """
 
 import hashlib
@@ -130,6 +130,10 @@ def main(d: Path, receipts: bool) -> int:
             checks[f"XA_{name}"] = bool((XA == XAx).all()) if route == "lt" else bool((XA[:, :k] == Ap).all())
         if route in ("td", "fd", "od", "rd"):
             check_r(name, Ap, Bp)
+    seen.add("bonly")
+    if "bonly" in arms:
+        checks["U_bonly"] = bool((got("U", "bonly", np.int32, (batch * m, n)) == want).all())
+        checks["XB_bonly"] = bool((got("XB", "bonly", np.int8, (batch * n, Kp))[:, :k] == Bp).all())
     for comp, by in cover.items():
         seen.add(comp)
         checks[f"cover_{comp}"] = by in arms and all(v for key_, v in checks.items() if key_.endswith(f"_{by}"))
