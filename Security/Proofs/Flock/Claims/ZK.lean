@@ -17,7 +17,7 @@ import Proofs.Flock.Claims.ZK.Hypotheses
 # Flock's zero knowledge against a malicious verifier
 
 * `Statement`: what the proofs add to the spec's `ZKmalR` and `Claims.Flock.ZK`: ZK bits under `StrictBirthday` at `Bzk`
-  (`ZKmalR.bits`), the bridge `Flock.ZKRHello` at `D.V.k + 1` rounds, and the worst-case cost `SimCostLe`.
+  (`ZKmalR.bits`) and the worst-case cost `SimCostLe`.
 * `GK`: a committed-coin protocol (`Proto`), its honest prover, its Goldreich–Kahan simulator with `N` rewinds
   (`Proto.simulator`), and the three facts the theorem reads (`PrefixHides`, `SHVZK`, `Binding`).
 * `Interact`: what the programs evaluate to: `runStar` and the simulator's runs as one interaction (`runStar_msgs`,
@@ -50,12 +50,12 @@ import Proofs.Flock.Claims.ZK.Hypotheses
 * `Shvzk`: `SHVZK` at every coin vector: from Lemma B where the prover goes on (`Proto.shvzk_at_hm96`, `2·n_hid·δ₁`,
   with `InnerHolds`), and from Lemma C at fixed answers where it refuses, the simulator sending the dummy-witness
   prover's messages (`Proto.shvzk_refused_hm96`, `2·|L|·δ₁`).
-* `Flock`: **`Flock.zkR_of_proto`**, the spec's `Claims.Flock.ZK` for a masked deployed verifier that models the
-  committed-coin protocol's rounds, `Hello` among them (`D.V.k = G.k`); `Flock.ZKRHello`, the bridge at `D.V.k = G.K + 1`
-  for today's `FlockDeploy.V`, which leaves `Hello` out (`deployZk_proto_k`, `Flock.zkRHello_deployZk`); `S_Flock`'s cost
-  (`Flock.simCost_of_proto`) and the expected-cost simulator's; what changes for a malicious verifier, how the
-  hypotheses map to the session analysis's Theorem GK (`gk_simulate_hm96`), and what the `--zk` instance still needs.
+* `Flock`: **`Flock.zkR_of_proto`**, the spec's `Claims.Flock.ZK` for a masked deployed verifier whose rounds with
+  `Hello` are the committed-coin protocol's (`D.V.k + 1 = G.k`), which `FlockDeploy.deployZk`'s are (`deployZk_proto_k`,
+  `Flock.zkR_deployZk`); `S_Flock`'s cost (`Flock.simCost_of_proto`) and the expected-cost simulator's; what changes
+  for a malicious verifier, how the hypotheses map to the session analysis's Theorem GK (`gk_simulate_hm96`), and what
+  the `--zk` instance still needs.
 * `Hypotheses`: what the `--zk` instance still needs, as five Props about models of the masked prover (`MsgLink`,
   `SimLink`, `NonDegenerate`, `InnerHolds`, `CoinCheck`), and the claim from them under `Claims.Hm96Hiding`
-  (**`Flock.zk_of_models`**; `Flock.zkRHello_deployZk_of_models` at `FlockDeploy.deployZk`).
+  (`Flock.zk_of_models`; **`Flock.zk_deployZk_of_models`** at `FlockDeploy.deployZk`).
 -/

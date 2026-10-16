@@ -5,12 +5,10 @@ import Proofs.Flock.Claims.Prob
 
 The claim is the spec's `Claims.ZKmalR` (the real run lasts the protocol's `k(x)` rounds, and the bound adds the
 probability that the simulator's own SHA-512 calls, `simLog`, hold a collision), and Flock's is `Claims.Flock.ZK`, at the
-deployed verifier's rounds `D.V.k`. This module adds:
+masked verifier's rounds `D.V.k` plus the `Hello` that commits every coin. This module adds:
 
 * **ZK bits** (`ZKmalR.bits`): under `StrictBirthday` at the finder `Bzk` (the simulator, with every call `V*` makes in
   the answers it is asked) the collision term is at most `q²/2^513`.
-* **The bridge `Flock.ZKRHello`**: `Claims.Flock.ZK` with `D.V.k + 1` rounds, `Hello` first, for a `D.V` in public-coin
-  form, which has no `Hello` round (`FlockDeploy.V`).
 * **The worst-case cost** (`SimCostLe`), beside the spec's expected `SimCost`, which it implies (`SimCostLe.simCost`).
 -/
 
@@ -55,12 +53,6 @@ theorem SimCostLe.simCost {H : Msg → Msg} {S : Simulator} {bound : Msg → ℕ
         Finset.sum_le_sum fun c _ => by exact_mod_cast h x c ask
     _ = (bound x : ℝ) * Fintype.card (S.C x) := by
         rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul, mul_comm]
-
-/-- **`Claims.Flock.ZK` for a `D.V` in public-coin form**: the rounds are `Hello`, answered by the coin commitment, then
-the public-coin form's `D.V.k`, each but the last answered by an opened coin. -/
-def Flock.ZKRHello {Coin Col T Ω : Type} [Fintype Ω] (H : Msg → Msg) (D : Flock.Deploy Coin Col T)
-    (P : Flock.Wit → Prover Ω) (S : Simulator) (εzk : Msg → ℝ) : Prop :=
-  D.zk = true ∧ ZKmalR H (fun x => D.V.k x + 1) P (Flock.R D.parse) S εzk
 
 /-! ## What `findColl` finds -/
 
