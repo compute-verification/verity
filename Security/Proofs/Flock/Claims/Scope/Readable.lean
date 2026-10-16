@@ -17,7 +17,7 @@ relation's fields, and the `Form` the scope check reads, each field the value `P
 * `Read.form`: the `Form` of `ProvedScope.check`'s tests, on the circuit and public file as it reads them
   (`ProvedScope.circuitOf`, `ProvedScope.publicOf`).
 * `Relation`: the readable relation's fields (`C`, `inp`, `out`, `pub`, `cs`, `grp`), which `toReadable` takes as a
-  function of the parsed statement; the scope reads none of them.
+  function of the parsed statement; the scope reads none of them. The deployed one is `relation` (`Scope.Tables`).
 -/
 
 namespace Flock.Readable

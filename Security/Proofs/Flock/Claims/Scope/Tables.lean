@@ -202,8 +202,6 @@ theorem sysOf_iff (m kLog : ℕ) (ts : List Tab) (w : Claims.Flock.Wit) :
     (∀ b < (sysOf m kLog ts).nB, (sysOf m kLog ts).Holds w b) ↔
       ∀ c < ts.length, ∃ h : (ts.getD c default).Fits m kLog,
         ((ts.getD c default).toModel h.2.2).Satisfies (zOf (2 ^ (m - kLog) * 2 ^ kLog) w c (ts.getD c default).m) := by
-  have hx : ∀ c b, (sysOf m kLog ts).bit w c b = fun a => w.hid.getD (c * (2 ^ (m - kLog) * 2 ^ kLog) + b * 2 ^ kLog + a)
-      false := fun _ _ => rfl
   have hslots : ∀ b, (∀ s ∈ (sysOf m kLog ts).slots, (sysOf m kLog ts).bit w s.1 b s.2.1 = s.2.2 b) ↔
       ∀ c < ts.length, ∀ f ∈ fixedOf m kLog (ts.getD c default), (sysOf m kLog ts).bit w c b f.1 = f.2 b := by
     intro b
