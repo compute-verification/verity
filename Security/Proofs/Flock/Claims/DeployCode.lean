@@ -13,22 +13,27 @@ the record Flock's claims read, at the relation's fields `rel` (C's `Readable.Re
 
 * `V`, `parse`, `scopeCheck`: the verifier in public-coin form (`FlockDeploy.V`), the verifier's own parser and scope
   check on the statement's bytes (`FlockDeploy.parse`, `FlockDeploy.scopeCheck`).
-* `cols`: the opened level-0 columns of table 0's two reps, read off the run's last message (its statement, record and
-  proof files) with no hash: the record's rep streams give the level-0 query round's coins, the proof files the opened
-  rows (`runOf`, `Claims.Flock.plainRunCols`, `Claims.Flock.zkRunCols`).
+* `cols`: table `j`'s opened level-0 columns, its two reps', read off the run's last message (its statement, record
+  and proof files) with no hash: the record's rep streams `2j` and `2j + 1` give the level-0 query round's coins, the
+  proof files at the same places the opened rows (`runOf`, `Claims.Flock.plainRunCols`, `Claims.Flock.zkRunCols`).
+  The masked record reads every table of the session; the plain one table `0` only (`plainTableCols`), the one table
+  its scope admits.
 * `enc`, `len`, `θ`, `read`: the level-0 code at each `m` the verifier serves, read as one (`IRS.famEnc`): the plain
   one (`plainEncD`, `22 ≤ m ≤ 35`) and the masked one (`zkEncD`, `25 ≤ m ≤ 35`), each trace's codeword length `2^d`
-  and radius `1 − √ρ − 1/200` at its `m` (`plainLenD`, `plainThetaD`, `zkLenD`, `zkThetaD`), and its read step. A
-  decoder meeting `ListWithin` at them exists for each (`GS.listWithin_deployPlain`, `GS.listWithin_deployZk`).
+  and radius `1 − √ρ − 1/200` at its `m` (`plainLenD`, `plainThetaD`, `zkLenD`, `zkThetaD`), and its read step, the
+  tables' traces read in table order as one witness (`Claims.Flock.readTables`, table `c`'s from `c·2^m`:
+  `deployZk_read_getD`). A decoder meeting `ListWithin` at them exists for each (`GS.listWithin_deployPlain`,
+  `GS.listWithin_deployZk`). At one table both records read as before (`deployPlain_one`, `deployZk_one`,
+  `Claims.Flock.assemble_of_tables_eq_one`).
 * The list-decoding spec's earlier `nMin` form (`ListComplete`) is met at one agreement, `√ρ + 1/200`, at rate `1/2`
   without `--zk` (`Numbers.agree₀`) and at the masked code's largest rate `(2^12 + 554)/2^13` (`m = 25`) with it
   (`zkAgree`, `zkRate_le`): `listComplete_plain`, `listComplete_zk`.
 * `εtable`: the tables' errors summed: `tableError` at the table's `fast100` schedule, or under `--zk` the padded
   table's `padLinkError + (padRepError + ε_inner)²` at `m1Schedule` with `ε_inner`'s bound at the inner proof's
-  parameters (`Numbers.innerUp`). `N₀`: table 0's level-0 codeword length `2^{d₀}`. `weight`: the tables' weights
-  summed (`Numbers.weightOf`, at the pads' domain `Numbers.padDomain` under `--zk`). `waits`, `cap`: `Numbers.waits`
-  (`210`) and `Numbers.cap` (`2^256`). A statement that does not set up has no tables: `εtable`, `N₀` and `weight` are
-  `0` there, where the verifier refuses every run.
+  parameters (`Numbers.innerUp`). `N₀`: the tables' level-0 codeword lengths `2^{d₀}`, summed, since one wait's
+  reruns open every table (`tableLen`). `weight`: the tables' weights summed (`Numbers.weightOf`, at the pads' domain
+  `Numbers.padDomain` under `--zk`). `waits`, `cap`: `Numbers.waits` (`210`) and `Numbers.cap` (`2^256`). A statement
+  that does not set up has no tables: `εtable`, `N₀` and `weight` are `0` there, where the verifier refuses every run.
 
 One run opens fewer level-0 columns than `nMin` of every trace (`cols_length_lt_nMin_plain`, `_zk`): ruling 2's count
 is reached only by `E^rep`'s columns, gathered over its accepted reruns.
@@ -253,6 +258,51 @@ theorem zkRunCols_length_lt_zkNMinD' {agree : ℝ} (ha0 : 0 < agree) (ha1 : agre
   rw [zkNMinD_eq]
   omega
 
+/-! ## The tables read as one witness -/
+
+/-- **The tables' traces read as one witness**: each trace's read, concatenated in table order (the units' order). -/
+def readTables {T : Type} (read : T → Wit) (Ms : List T) : Wit where
+  hid := Ms.flatMap fun M => (read M).hid
+  salts := Ms.flatMap fun M => (read M).salts
+
+/-- **One table's trace reads as before.** -/
+theorem readTables_singleton {T : Type} (read : T → Wit) (M : T) : readTables read [M] = read M := by
+  simp [readTables]
+
+/-- **Table `c`'s hidden value `a` is the witness's `c·n + a`** when every trace reads `n` hidden values. -/
+theorem readTables_hid_getD {T : Type} (read : T → Wit) (n : ℕ) :
+    ∀ (Ms : List T), (∀ M ∈ Ms, (read M).hid.length = n) → ∀ (c : ℕ) (hc : c < Ms.length) (a : ℕ), a < n →
+      (readTables read Ms).hid.getD (c * n + a) false = (read Ms[c]).hid.getD a false
+  | [], _, c, hc, _, _ => absurd hc (Nat.not_lt_zero c)
+  | M :: Ms, hl, c, hc, a, ha => by
+    have hM : (read M).hid.length = n := hl M List.mem_cons_self
+    have hrest : (readTables read (M :: Ms)).hid = (read M).hid ++ (readTables read Ms).hid := rfl
+    rw [hrest]
+    cases c with
+    | zero =>
+      rw [Nat.zero_mul, Nat.zero_add, List.getD_append _ _ _ _ (by omega)]
+      rfl
+    | succ c =>
+      rw [List.getD_append_right _ _ _ _ (by rw [hM]; nlinarith), hM,
+        show (c + 1) * n + a - n = c * n + a by rw [Nat.succ_mul]; omega]
+      exact readTables_hid_getD read n Ms (fun M' h => hl M' (List.mem_cons_of_mem _ h)) c
+        (Nat.lt_of_succ_lt_succ hc) a ha
+
+/-- **At one table, `assemble` is the single-table step**: the decoded traces of table `0`'s columns, each read alone. -/
+theorem assemble_of_tables_eq_one {Col T : Type} (H : Msg → Msg) (parse : Msg → Option Claims.Flock.Stmt)
+    (decode : List (ℕ × Col) → List T) (read : List T → Wit) (x : Msg) (opens : List (ℕ → List (ℕ × Col)))
+    (s : Claims.Flock.Stmt) (hp : parse x = some s) (h1 : s.tables = 1) :
+    assemble H parse decode read x opens =
+      ((decode (opens.flatMap fun o => o 0)).map fun M => read [M]).find? fun w => decide (RelS H s w) := by
+  simp only [assemble, hp, h1, List.range_one, List.map_cons, List.map_nil, List.sections, List.flatMap_singleton,
+    List.map_map]
+  rfl
+
+/-- A statement has one table exactly when its count is at most one. -/
+theorem Stmt.tables_eq_one_iff (s : Claims.Flock.Stmt) : s.tables = 1 ↔ s.form.tables ≤ 1 := by
+  unfold Claims.Flock.Stmt.tables
+  omega
+
 end Claims.Flock
 
 namespace FlockDeploy
@@ -272,41 +322,51 @@ def saltLenOf (zk : Bool) (tab : Setup) : Option ℕ :=
   if zk then (if tab.merkle.saltBytes = 0 then none else some tab.merkle.saltBytes)
   else if tab.merkle.saltBytes = 0 && !tab.openedSalts then none else some tab.merkle.saltBytes
 
-/-- **What the column reader takes of a run**, with no hash: from the last message's statement, record and proof files,
-table 0's `m`, `kLog`, claim count and Merkle widths (its setup's), and its two reps' recorded rounds (the record's
-streams `<t>/rep0`, `<t>/rep1`, the first two in `spec.repStreams` order) and proof files (the first two). -/
-def runOf (zk : Bool) (s : Claims.Seen) : Option Claims.Flock.ZkRun := do
+/-- **What the column reader takes of a run's table `j`**, with no hash: from the last message's statement, record and
+proof files, table `j`'s `m`, `kLog`, claim count and Merkle widths (its setup's, its claims at the session's link
+points), and its two reps' recorded rounds (the record's streams `<t>/rep0`, `<t>/rep1`, at `2j` and `2j + 1` in
+`spec.repStreams` order) and proof files (at the same two places, as `verify` reads them). -/
+def runOf (zk : Bool) (s : Claims.Seen) (j : ℕ) : Option Claims.Flock.ZkRun := do
   let f ← lastFinal s
   let (_, spec, sts) ← setupOf zk f.stmt
-  let st ← sts[0]?
+  let st ← sts[j]?
   let tab := Setup.ofCircuit st
   let lv ← (liveOf spec f.record).toOption
   let extras ← (tab.extra lv.points).toOption
   pure { m := tab.m, kLog := tab.kLog, claims := 2 + extras.size, hashLen := tab.merkle.digestLen,
          saltLen := saltLenOf zk tab,
-         reps := [(lv.streams.getD 0 #[], f.proofs.getD 0 ByteArray.empty),
-                  (lv.streams.getD 1 #[], f.proofs.getD 1 ByteArray.empty)] }
+         reps := [(lv.streams.getD (2 * j) #[], f.proofs.getD (2 * j) ByteArray.empty),
+                  (lv.streams.getD (2 * j + 1) #[], f.proofs.getD (2 * j + 1) ByteArray.empty)] }
 
-/-- **The opened level-0 columns of a run**: table 0's two reps' (`plainRunCols`, `zkRunCols`); none where the run's
-last message does not set up. -/
-def cols (zk : Bool) (s : Claims.Seen) : List (ℕ × List 𝔽) :=
-  match runOf zk s with
+/-- **The opened level-0 columns of a run's table `j`**: its two reps' (`plainRunCols`, `zkRunCols`); none where the
+run's last message does not set up table `j`. -/
+def cols (zk : Bool) (s : Claims.Seen) (j : ℕ) : List (ℕ × List 𝔽) :=
+  match runOf zk s j with
   | some r => if zk then Claims.Flock.zkRunCols r else Claims.Flock.plainRunCols r
   | none => []
 
-theorem runOf_reps {zk : Bool} {s : Claims.Seen} {r : Claims.Flock.ZkRun} (h : runOf zk s = some r) :
+/-- **The plain record's columns**: table `0`'s, none at another table. The plain verifier's scope admits one table. -/
+def plainTableCols (s : Claims.Seen) (j : ℕ) : List (ℕ × List 𝔽) := if j = 0 then cols false s 0 else []
+
+theorem runOf_reps {zk : Bool} {s : Claims.Seen} {j : ℕ} {r : Claims.Flock.ZkRun} (h : runOf zk s j = some r) :
     r.reps.length = 2 := by
   unfold runOf at h
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at h
   obtain ⟨_, _, ⟨_, _, _⟩, _, _, _, _, _, _, _, rfl⟩ := h
   rfl
 
-theorem cols_nodup (zk : Bool) (s : Claims.Seen) : ((cols zk s).map Prod.fst).Nodup := by
+theorem cols_nodup (zk : Bool) (s : Claims.Seen) (j : ℕ) : ((cols zk s j).map Prod.fst).Nodup := by
   unfold cols
   split
   · split
     · exact Claims.Flock.zkRunCols_nodup _
     · exact Claims.Flock.plainRunCols_nodup _
+  · exact List.nodup_nil
+
+theorem plainTableCols_nodup (s : Claims.Seen) (j : ℕ) : ((plainTableCols s j).map Prod.fst).Nodup := by
+  unfold plainTableCols
+  split
+  · exact cols_nodup false s 0
   · exact List.nodup_nil
 
 /-! ## The numbers -/
@@ -333,11 +393,12 @@ noncomputable def tableErr (zk : Bool) (spec : SessionSpec) (st : Stmt) : ℝ :=
 /-- **`ε_table`**: the session's tables' errors, summed. -/
 noncomputable def εtable (zk : Bool) (x : Claims.Msg) : ℝ := ((tables zk x).map fun p => tableErr zk p.1 p.2).sum
 
-/-- **`N₀`**: the length of the first committed codeword, table 0's level 0, `2^{d₀}`. -/
-noncomputable def N₀ (zk : Bool) (x : Claims.Msg) : ℝ :=
-  match (tables zk x).head? with
-  | some (_, st) => 2 ^ (if zk then Claims.Flock.zkLevel0 st.m else Claims.Flock.plainLevel0 st.m).d
-  | none => 0
+/-- A table's level-0 codeword length, `2^{d₀}`. -/
+noncomputable def tableLen (zk : Bool) (st : Stmt) : ℝ :=
+  2 ^ (if zk then Claims.Flock.zkLevel0 st.m else Claims.Flock.plainLevel0 st.m).d
+
+/-- **`N₀`**: the session's tables' level-0 codeword lengths, summed: table 0's `2^{d₀}` at one table. -/
+noncomputable def N₀ (zk : Bool) (x : Claims.Msg) : ℝ := ((tables zk x).map fun p => tableLen zk p.2).sum
 
 /-- A table's weight: `Numbers.weightOf` at its schedule, and under `--zk` at its pads' domain. -/
 noncomputable def tableWeight (zk : Bool) (st : Stmt) : ℝ :=
@@ -358,11 +419,11 @@ noncomputable def deployPlain (rel : Readable.Parsed → Readable.Relation) :
   V := V false
   parse := parse false rel
   scopeCheck := scopeCheck false
-  cols := cols false
+  cols := plainTableCols
   enc := Claims.Flock.plainEncD
   len := Claims.Flock.plainLenD
   θ := Claims.Flock.plainThetaD
-  read := Claims.Flock.plainReadD
+  read := Claims.Flock.readTables Claims.Flock.plainReadD
   εtable := εtable false
   N₀ := N₀ false
   weight := weight false
@@ -380,7 +441,7 @@ noncomputable def deployZk (rel : Readable.Parsed → Readable.Relation) :
   enc := Claims.Flock.zkEncD
   len := Claims.Flock.zkLenD
   θ := Claims.Flock.zkThetaD
-  read := Claims.Flock.zkReadD
+  read := Claims.Flock.readTables Claims.Flock.zkReadD
   εtable := εtable true
   N₀ := N₀ true
   weight := weight true
@@ -413,37 +474,57 @@ theorem scopeMatches_plain_iff (rel : Readable.Parsed → Readable.Relation) :
       ∀ x p, Readable.parseBytes (readOf false) x = some p → p.check = .ok () → 22 ≤ (Readable.toReadable rel p).m :=
   Readable.scopeMatches_iff (deployPlain rel) rel (readOf false) rfl rfl (fun _ _ h => readOf_zk h)
 
-/-- The opened columns of a plain run sit at distinct positions. -/
-theorem cols_nodup_plain (rel : Readable.Parsed → Readable.Relation) (s : Claims.Seen) :
-    (((deployPlain rel).cols s).map Prod.fst).Nodup := cols_nodup false s
+/-- The opened columns of a plain run's table sit at distinct positions. -/
+theorem cols_nodup_plain (rel : Readable.Parsed → Readable.Relation) (s : Claims.Seen) (j : ℕ) :
+    (((deployPlain rel).cols s j).map Prod.fst).Nodup := plainTableCols_nodup s j
 
-/-- The opened columns of a masked run sit at distinct positions. -/
-theorem cols_nodup_zk (rel : Readable.Parsed → Readable.Relation) (s : Claims.Seen) :
-    (((deployZk rel).cols s).map Prod.fst).Nodup := cols_nodup true s
+/-- The opened columns of a masked run's table sit at distinct positions. -/
+theorem cols_nodup_zk (rel : Readable.Parsed → Readable.Relation) (s : Claims.Seen) (j : ℕ) :
+    (((deployZk rel).cols s j).map Prod.fst).Nodup := cols_nodup true s j
 
-/-- **A plain run opens fewer level-0 columns than `nMin`** of every trace: ruling 2's count is never reached by one
-run. -/
-theorem cols_length_lt_nMin_plain (rel : Readable.Parsed → Readable.Relation) (s : Claims.Seen)
+/-- **A plain run opens fewer level-0 columns than `nMin`** of every trace, at every table: ruling 2's count is never
+reached by one run. -/
+theorem cols_length_lt_nMin_plain (rel : Readable.Parsed → Readable.Relation) (s : Claims.Seen) (j : ℕ)
     (M : Claims.Flock.PlainTrace) :
-    ((deployPlain rel).cols s).length < Claims.Flock.plainNMinD Claims.Flock.Numbers.agree₀ M := by
-  show (cols false s).length < Claims.Flock.plainNMinD Claims.Flock.Numbers.agree₀ M
-  unfold cols
+    ((deployPlain rel).cols s j).length < Claims.Flock.plainNMinD Claims.Flock.Numbers.agree₀ M := by
+  show (plainTableCols s j).length < Claims.Flock.plainNMinD Claims.Flock.Numbers.agree₀ M
+  unfold plainTableCols cols
   split
-  · rename_i r hr
-    exact Claims.Flock.plainRunCols_length_lt_plainNMinD Claims.Flock.Numbers.agree₀_pos
-      Claims.Flock.Numbers.agree₀_le_one r (runOf_reps hr).le M
+  · split
+    · rename_i r hr
+      exact Claims.Flock.plainRunCols_length_lt_plainNMinD Claims.Flock.Numbers.agree₀_pos
+        Claims.Flock.Numbers.agree₀_le_one r (runOf_reps hr).le M
+    · exact Claims.one_le_johnsonCount _ _
   · exact Claims.one_le_johnsonCount _ _
 
-/-- **A masked run opens fewer level-0 columns than `nMin`** of every trace: ruling 2's count is never reached by one
-run. -/
-theorem cols_length_lt_nMin_zk (rel : Readable.Parsed → Readable.Relation) (s : Claims.Seen)
-    (M : Claims.Flock.ZkTrace) : ((deployZk rel).cols s).length < Claims.Flock.zkNMinD Claims.Flock.zkAgree M := by
-  show (cols true s).length < Claims.Flock.zkNMinD Claims.Flock.zkAgree M
+/-- **A masked run opens fewer level-0 columns than `nMin`** of every trace, at every table: ruling 2's count is never
+reached by one run. -/
+theorem cols_length_lt_nMin_zk (rel : Readable.Parsed → Readable.Relation) (s : Claims.Seen) (j : ℕ)
+    (M : Claims.Flock.ZkTrace) : ((deployZk rel).cols s j).length < Claims.Flock.zkNMinD Claims.Flock.zkAgree M := by
+  show (cols true s j).length < Claims.Flock.zkNMinD Claims.Flock.zkAgree M
   unfold cols
   split
   · rename_i r hr
     exact Claims.Flock.zkRunCols_length_lt_zkNMinD' Claims.Flock.zkAgree_pos Claims.Flock.zkAgree_le_one r
       (runOf_reps hr).le M
   · exact Claims.one_le_johnsonCount _ _
+
+/-- **The plain record at one table reads as before**: table `0`'s columns, one trace read alone. -/
+theorem deployPlain_one (rel : Readable.Parsed → Readable.Relation) (s : Claims.Seen) (M : Claims.Flock.PlainTrace) :
+    (deployPlain rel).cols s 0 = cols false s 0 ∧ (deployPlain rel).read [M] = Claims.Flock.plainReadD M :=
+  ⟨rfl, Claims.Flock.readTables_singleton _ _⟩
+
+/-- **The masked record at one table reads as before**: table `0`'s columns, one trace read alone. -/
+theorem deployZk_one (rel : Readable.Parsed → Readable.Relation) (s : Claims.Seen) (M : Claims.Flock.ZkTrace) :
+    (deployZk rel).cols s 0 = cols true s 0 ∧ (deployZk rel).read [M] = Claims.Flock.zkReadD M :=
+  ⟨rfl, Claims.Flock.readTables_singleton _ _⟩
+
+/-- **The masked record reads table `c`'s hidden value `a` at `c·2^m + a`**, when every table's trace is at `m`: the
+session's tables in one witness, in table order. -/
+theorem deployZk_read_getD (rel : Readable.Parsed → Readable.Relation) (m : ℕ) (Ms : List Claims.Flock.ZkTrace)
+    (hm : ∀ M ∈ Ms, M.1.m = m) (c : ℕ) (hc : c < Ms.length) (a : ℕ) (ha : a < 2 ^ m) :
+    ((deployZk rel).read Ms).hid.getD (c * 2 ^ m + a) false = (Claims.Flock.zkReadD Ms[c]).hid.getD a false :=
+  Claims.Flock.readTables_hid_getD _ (2 ^ m) Ms
+    (fun M h => (Claims.Flock.zkReadD_hid_length M).trans (by rw [hm M h])) c hc a ha
 
 end FlockDeploy

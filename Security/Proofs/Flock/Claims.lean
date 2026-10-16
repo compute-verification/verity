@@ -21,6 +21,7 @@ import Proofs.Flock.Claims.DeployOC
 import Proofs.Flock.Claims.DeployInputs
 import Proofs.Flock.Claims.Deploy
 import Proofs.Flock.Claims.DeployCode
+import Proofs.Flock.Claims.DeployTables
 import Proofs.Flock.Claims.RootFindGF128
 import Proofs.Flock.Claims.GS
 
@@ -39,11 +40,12 @@ parameters: `k`, `κ` and `λ` (`Numbers`), `ε_table` (`NumbersTable`), the pad
 `γ` (`NumbersGamma`), and `nMin` (`NumbersNMin`). The deployed instance of `Claims.Flock.Deploy`: the hash-parametric
 verdict over the oracle (`DeployOC`), the statement's bytes, parser and setup (`DeployInputs`), the verifier in
 public-coin form (`Deploy`), and the code with each trace's length and radius, the columns and the numbers that
-complete the plain and masked instances (`DeployCode`: `FlockDeploy.deployPlain`, `FlockDeploy.deployZk`). A counted
-Guruswami–Sudan decoder with its `DecoderComplexity`, over Berlekamp's root finder in GF(2^128) (`RootFindGF128`), is
-`GS`; `GS.Radius` proves that decoder meets the spec's list decoding (`Flock.ListWithin`) at Flock's level-0 code,
-`GS.ZkRadius` at the masked level-0 code, and `GS.RadiusDeploy` at both deployed instances' codes, lengths and
-radii. -/
+complete the plain and masked instances, the masked one at every table of a session (`DeployCode`:
+`FlockDeploy.deployPlain`, `FlockDeploy.deployZk`), with the parsed statement's table count the setup's
+(`DeployTables`). A counted Guruswami–Sudan decoder with its `DecoderComplexity`, over Berlekamp's root finder in
+GF(2^128) (`RootFindGF128`), is `GS`; `GS.Radius` proves that decoder meets the spec's list decoding
+(`Flock.ListWithin`) at Flock's level-0 code, `GS.ZkRadius` at the masked level-0 code, and `GS.RadiusDeploy` at both
+deployed instances' codes, lengths and radii. -/
 
 /-- **The claims are stated** (`Flock.Guarantees.ClaimsStated`). -/
 theorem Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated := rfl

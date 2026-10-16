@@ -204,6 +204,6 @@ theorem Flock.Efficient_of_decoder {Coin Col T : Type} [Fintype Coin] [Nonempty 
     (counted : List (ℕ × Col) → List T × ℕ) (size : List (ℕ × Col) → ℕ) (p : Polynomial ℕ)
     (hl : Flock.ListWithin D.len D.enc D.θ decode) (hd : DecoderComplexity decode counted size p) :
     Flock.Efficient H D decode counted size p :=
-  ⟨ERep_cost H D.V D.waits D.k D.cap D.cols _ _, hl, hd⟩
+  ⟨ERep_cost H D.V D.waits D.k D.cap (fun v => [D.cols v]) _ _, hl, hd⟩
 
 end Claims
