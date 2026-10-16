@@ -642,4 +642,23 @@ theorem outerKS_of_flockKS {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] 
     · exact div_le_self (Nat.cast_nonneg _) (by exact_mod_cast hpos)
   exact mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_left hm (D.nums x s).γ_nonneg) (PrB_nonneg H D.V P x)
 
+/-- **The recursion's KS from Flock's KS at the outer deployment**: `KS_of`, its `OuterKS` from `outerKS_of_flockKS`.
+It rests on `Claims.Flock.KS` at `DO`, `InnerKS` and code facts only. -/
+theorem KS_of_flockKS {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
+    (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) (hF : Flock.KS H DO)
+    (hRef : Refuses H D) (hRounds : InnerRounds D I) (hN : SessionNums D DO) (hε : TableErrNonneg D)
+    (hRd : SessionRounds D I DO) (hS : SessionAccepts D) (hR : SessionRuns H D I DO) (hI : InnerKS H D I DO) :
+    KS H D I DO :=
+  KS_of H D I DO hRef hRounds (outerKS_of_flockKS hF hN hε hRd hS hR) hI
+
+/-- **KS of the recursion over Flock, from Flock's KS at the outer deployment**: `KSFlock_of`, each inner decoder's
+`OuterKS` from `outerKS_of_flockKS`. -/
+theorem KSFlock_of_flockKS {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
+    (H : Msg → Msg) (D : Deploy Coin) (DI DO : Flock.Deploy Coin Col T) (hF : Flock.KS H DO) (hRef : Refuses H D)
+    (hRounds : ∀ x, DI.V.k (xI D x) ≤ D.V.k x) (hN : SessionNums D DO) (hε : TableErrNonneg D)
+    (hRd : ∀ decI, SessionRounds D (Inner.ofFlock H DI decI) DO) (hS : SessionAccepts D)
+    (hR : ∀ decI, SessionRuns H D (Inner.ofFlock H DI decI) DO)
+    (hI : ∀ decI, decOK DI decI → InnerKS H D (Inner.ofFlock H DI decI) DO) : KSFlock H D DI DO :=
+  KSFlock_of H D DI DO hRef hRounds (fun decI _ => outerKS_of_flockKS hF hN hε (hRd decI) hS (hR decI)) hI
+
 end Claims.Recursion

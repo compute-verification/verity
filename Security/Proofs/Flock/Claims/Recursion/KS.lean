@@ -23,8 +23,9 @@ The recursion's `KS` (`Claims.Recursion.KS`) at a general inner protocol `I`, pr
 **Hypotheses, each a named `Prop`:**
 
 * `OuterKS`: the outer `--zk` Flock's KS at each V* session, the extraction `E_O` makes there (`EOs`) at the compiled
-  verifier, in `Claims.KS`'s inequality at that session's numbers. It is what `Claims.Flock.KS` gives once the session
-  is embedded in the compiled verifier's run, as `SessionKS` is for sampling.
+  verifier, in `Claims.KS`'s inequality at that session's numbers. `outerKS_of_flockKS` (`OuterKS`'s module) proves
+  it from `Claims.Flock.KS` at the outer deployment and code facts about how the compiled verifier runs each session,
+  and `KS_of_flockKS` is `KS_of` with it.
 * `InnerKS`: the inner protocol's KS (`Inner.KS`) carried to the served runs. Its proof from `Inner.KS` needs an inner
   prover that is rerun at the inner coins while the outer coins and `E_O`'s are drawn afresh at each rerun, which the
   claims' prover (a tape fixed across reruns) is not. That embedding is open, and this hypothesis names it, with the
