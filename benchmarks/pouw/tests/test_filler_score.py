@@ -370,6 +370,64 @@ def test_margin_per_point():
     assert ok_gates(stats, S.score(stats))["slowdown"]["worst"] == pytest.approx(S.LIMIT - mg["min"]["margin"])
 
 
+def sass(*functions):
+    """``cuobjdump -sass`` text: one block a (function name, its instructions), in its line format."""
+    out = []
+    for name, ins in functions:
+        out.append(f"\t\tFunction : {name}")
+        out += [f"        /*{16 * i:04x}*/                   {x} ;                      /* 0x000000280c1c7237 */"
+                for i, x in enumerate(ins)]
+    return "\n".join(out)
+
+
+DFILL = "_Z7dfill_kILi8EEvmmyiiPy"
+#: pfill-k's tile as cursor/hc-proved-ea24@fe2fdb5bf compiles it, abridged: fresh s32 words, folded by rotations
+K_TILE = ["LOP3.LUT R4, R2, 0x1010101, RZ, 0xc0, !PT", "IMMA.16832.S8.S8 R28, R12.ROW, R40.COL, RZ",
+          "SHF.L.W.U32.HI R9, R28, 0x7, R28", "IADD3 R9, R9, R10, RZ", "@P0 BRA 0x80d0", "EXIT"]
+
+
+def test_kernel_facts_decide_the_filler_entry_with_the_declaration():
+    """filler-scorer/v3 reads Theorem K's entry for a filler only when it declares noise K covers and the SASS of the
+    scorer's own build shows dense int8 IMMA with s32 words, no FP, one MMA a word at L ≤ 32, and every MMA in the read
+    kernel: never from the declaration alone. The entry is off until the coordinator activates it."""
+    f = S.kernel_facts(sass((DFILL, K_TILE), ("_Z5stepv", ["FFMA R1, R2, R3, R4", "EXIT"])))
+    assert f["int8_imma"] and f["fp_free"] and f["L"] == 32 and f["mma_outside"] == [] and f["functions"] == [DFILL]
+    e = S.filler_entry("bits01", f)
+    assert e["applies"] == "theorem-k" and e["active"] == "placeholder" and not e["failed"] and len(e["unchecked"]) == 3
+    assert S.filler_entry("dither", f)["applies"] == "theorem-k"
+
+    def refused(noise, tile=K_TILE, *extra, **kw):
+        e = S.filler_entry(noise, S.kernel_facts(sass((DFILL, tile), *extra)), **kw)
+        assert e["applies"] == "placeholder"
+        return e["failed"]
+
+    for noise in ("pm1", "chained", None):  # ±1's coefficients are even; a chain's operands are its own outputs
+        assert refused(noise)[0].startswith("declared noise")
+    omma = "OMMA.SF.16864.F32.E2M1.E2M1.UE4M3.4X R28, R12, R40, RZ, R112, R112, URZ"
+    assert "not all dense int8 IMMA" in refused("bits01", [omma] + K_TILE)[0]
+    for imma in ("IMMA.SP.16832.S8.S8 R28, R12.ROW, R40.COL, RZ", "IMMA.16832.S8.S8.SAT R28, R12.ROW, R40.COL, RZ",
+                 "HMMA.16816.F32 R28, R12, R40, RZ", "QMMA.16832.F32.E4M3.E4M3 R28, R12, R40, RZ"):
+        assert "not all dense int8 IMMA" in refused("bits01", K_TILE + [imma])[0]
+    assert "FP or conversion" in refused("bits01", K_TILE + ["I2F.S32 R9, R28"])[0]
+    assert "FP or conversion" in refused("bits01", K_TILE + ["FFMA R9, R28, 0.5, RZ"])[0]
+    assert S.kernel_facts(sass((DFILL, K_TILE + ["HFMA2.MMA R3, -RZ, RZ, 0, 0"])))["fp_free"]  # a constant load
+    chained = [x.replace("COL, RZ", "COL, R28") for x in K_TILE]  # FILL v1's accumulate into the chain's register
+    assert "accumulate into a register" in refused("bits01", chained)[0]
+    assert "outside the filler's kernel" in refused("bits01", K_TILE, ("_Z6helperv", [K_TILE[1]]))[0]
+    assert "outside the filler's kernel" in refused("bits01", fixed_work=True)[0]
+    assert "not all dense int8 IMMA" in refused("bits01", ["IADD3 R9, R9, R10, RZ", "EXIT"])[0]  # say-so, no IMMA
+    assert S.filler_entry("bits01", None)["failed"][0].startswith("the build recorded no kernel facts")
+    # activation (the coordinator's, after the referee) moves SCORE to K's fraction; until then the placeholder's
+    on = {**S.FILLER_ENTRIES, "theorem-k": {**S.FILLER_ENTRIES["theorem-k"], "active": True}}
+    assert S.filler_entry("bits01", f, entries=on)["active"] == "theorem-k"
+    assert S.filler_entry("pm1", f, entries=on)["active"] == "placeholder"
+    assert not S.FILLER_ENTRIES["theorem-k"]["active"] and S.certified("placeholder") == S.CERTIFIED
+    stats = all_points()
+    k = S.score(stats, S.certified("theorem-k", on))
+    assert k["certified"]["filler"]["fraction"] == 0.9 and k["SCORE"] < S.score(stats)["SCORE"]
+    assert k["flags"] == ["filler certified fraction 0.9 is pending referee"]
+
+
 def test_record_limits_are_checked_when_the_arm_loads():
     """filler-scorer/v3 refuses, before any build or lease, an arm whose record the ledger or the store would refuse
     after the run (HC-PROVED's 249-character hypothesis reached `score.record` only after a scored run)."""

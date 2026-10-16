@@ -103,6 +103,8 @@ def build(bdir: Path, out: Path) -> dict:
     (out / "sass-dfill.txt").write_text("\n".join(lines))
     rec["dfill_sass"] = {"imma": sum("IMMA" in ln for ln in lines),
                          "memory_ops": sum(any(op in ln for op in ("LDG", "STG", "LDS", "STS", "LDL", "STL")) for ln in lines)}
+    rec["nvcc_append_flags"] = os.environ.get("NVCC_APPEND_FLAGS") or None
+    rec["kernel_facts"] = S.kernel_facts(sass)
     (out / "build.json").write_text(json.dumps(rec, indent=1))
     return rec
 
@@ -209,8 +211,15 @@ def report(out: Path, arm=None, version: str | None = None) -> dict:
     drows = rows(out / "dscore.jsonl")
     for r in drows:
         stats[("decode" if r["kind"] == "step" else "prefill", r["B"], r["L"])] = S.point_stats(r)
-    sc = S.score(stats)
     has_filler = doc["filler"] is not None
+    entry = None
+    if version == S.V3 and has_filler:
+        build = json.loads((out / "build.json").read_text()) if (out / "build.json").is_file() else {}
+        fixed = any((b.get(side) or {}).get("fixed_ms") for r in drows for b in r["blocks"] for side in ("arm", "solo"))
+        entry = S.filler_entry(doc["filler"].get("noise"), build.get("kernel_facts"), fixed_work=fixed)
+    sc = S.score(stats, S.certified(entry["active"]) if entry else S.CERTIFIED)
+    if entry and entry["applies"] != entry["active"]:
+        entry["score_if_active"] = S.score(stats, S.certified(entry["applies"])).get("SCORE")
     sg = rows(out / "sgate.jsonl")
     def read(p):
         return p.read_text().strip() if p.is_file() else None
@@ -237,6 +246,7 @@ def report(out: Path, arm=None, version: str | None = None) -> dict:
            "points": {f"{k[0]} {k[1]}/{k[2]}": v for k, v in stats.items()}}
     if version == S.V3:
         res["margins"] = S.margins(stats)
+        res["filler_entry"] = entry
     if version == S.SCORER:
         (out / "score.json").write_text(json.dumps(res, indent=1))
     return res
@@ -272,6 +282,9 @@ def record(res: dict, doc: dict, run_dir: Path, by: str | None) -> dict:
         mg = res["margins"]
         meta["metrics"] |= {"margin_min": mg["min"], "no_margin": mg["no_margin"],
                             "margins": {k: m["margin"] for k, m in mg["points"].items() if m["scored"]}}
+        fe = res["filler_entry"]
+        meta["filler_entry"] = fe and {k: fe.get(k) for k in ("applies", "active", "noise", "checks", "failed", "kernel",
+                                                              "score_if_active")}
     rec = {"kind": ledger.KIND, "meta": ledger._clean(meta), "refs": {"parent": lin["parent"]}
            if str(lin.get("parent") or "").startswith("art:") else {}, "labels": [(ledger.KERNEL_OUTCOME, "screened")]}
     ledger.write(run_dir, [rec])
@@ -315,6 +328,13 @@ def show(res: dict) -> None:
           + f"; nominal ÷ capacity {fmt(res['score_nominal'])}, at 0.99 for all {fmt(res['score_at_target'])}")
     for f in res["flags"]:
         print(f"  FLAG: {f}")
+    fe = res.get("filler_entry")
+    if fe:
+        print(f"  filler entry: {fe['applies']} applies, declared noise {fe['noise']}"
+              + ("" if fe["applies"] == fe["active"] else
+                 f"; inactive, so SCORE reads {fe['active']} ({fmt(fe.get('score_if_active'))} once it is active)")
+              + "".join(f"\n    not Theorem K's: {w}" for w in fe["failed"])
+              + "\n    unchecked: " + "; ".join(fe["unchecked"]))
     for name in GATES:
         v = g.get(name, {})
         extra = {"slowdown": lambda: f"worst {fmt(v.get('worst'))} at {v.get('at')} ({v.get('phase')})",
