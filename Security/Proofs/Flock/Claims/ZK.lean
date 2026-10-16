@@ -9,6 +9,8 @@ import Proofs.Flock.Claims.ZK.GKProof
 import Proofs.Flock.Claims.ZK.GKCost
 import Proofs.Flock.Claims.ZK.GKExp
 import Proofs.Flock.Claims.ZK.CoinCheck
+import Proofs.Flock.Claims.ZK.Prefix
+import Proofs.Flock.Claims.ZK.Shvzk
 import Proofs.Flock.Claims.ZK.Flock
 
 /-!
@@ -42,6 +44,14 @@ import Proofs.Flock.Claims.ZK.Flock
 * `CoinCheck`: the coin-tree check (`coin-tree/hm96-sha512/v2`) as an oracle program that logs its hash calls
   (`treeChk`); a protocol whose check it is meets `Binding` with no hypothesis on `H` (`Proto.binding_of_tree`), T6's
   aligned hash inputs being among the two walks' calls (`coinPairs_mem`).
+* `Prefix`: runs of a Claims `V*` as runs of the session analysis's model: the committed-coin prover's first `K + 1`
+  messages as a causal strategy (`Proto.preStrat`) against `V*`'s responder (`vResp`), whose run is a transcript's
+  first `K + 1` messages (`run_prefix`) and determines what the extraction run passes on (`view0_run`); so
+  `PrefixHides` follows from a bound on the strategy's runs (`Proto.prefixHides_of_runs`), which Lemma C gives at
+  `2·|L|·δ₁` (`Proto.runs_close_hm96`).
+* `Shvzk`: `SHVZK` at every coin vector: from Lemma B where the prover goes on (`Proto.shvzk_at_hm96`, `2·n_hid·δ₁`,
+  with `InnerHolds`), and from Lemma C at fixed answers where it refuses, the simulator sending the dummy-witness
+  prover's messages (`Proto.shvzk_refused_hm96`, `2·|L|·δ₁`).
 * `Flock`: **`Flock.zkR_of_proto`**, the proposed `Flock.ZKR` for a masked deployed verifier that models the
   committed-coin protocol's rounds, `Hello` among them (`D.V.k = G.k`); `Flock.ZKRHello`, the bridge at `D.V.k = G.K + 1`
   for today's `FlockDeploy.V`, which leaves `Hello` out (`Flock.zkRHello_deployZk`); `S_Flock`'s cost
