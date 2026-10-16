@@ -903,9 +903,12 @@ static int bench(int argc, char** argv) {
   uint8_t* src;
   CK(cudaMalloc(&src, data + 64));
   fill<<<1024, 256>>>(src, data + 64, 7u);
-  cudaStream_t sc, sg;
+  cudaStream_t sc, sg, sp;
   CK(cudaStreamCreateWithFlags(&sc, cudaStreamNonBlocking));
   CK(cudaStreamCreateWithFlags(&sg, cudaStreamNonBlocking));
+  int prio_lo, prio_hi;
+  CK(cudaDeviceGetStreamPriorityRange(&prio_lo, &prio_hi));
+  CK(cudaStreamCreateWithPriority(&sp, cudaStreamNonBlocking, prio_hi));
   Committer cm;
   cm.init(p, n, mode == "e2e" ? 128 : lb, false, mode == "seg", lbits);
   auto leaves = [&](cudaStream_t st) {
@@ -1006,9 +1009,11 @@ static int bench(int argc, char** argv) {
   if (gemm) {
     Gemm G;
     G.init(atoi(argv[7]), atoi(argv[8]), atoi(argv[9]), sg);
-    // GEMM alone, then the same GEMMs with the commitment (its graph) beside them on another stream, then both on one stream
+    // GEMM alone, then the same GEMMs with the commitment (its graph) beside them on another stream, then both on one
+    // stream, then beside again with the commitment's stream at the device's highest priority (a graph launched into a
+    // stream takes its priority), so its blocks are dispatched ahead of the GEMM's queued CTAs
     const int ng = std::max(1, (int)(tgr / G.best_ms + 0.5));
-    std::vector<double> g_alone, both_wall, both_commit, both_gemm, serial_wall, mz;
+    std::vector<double> g_alone, both_wall, both_commit, both_gemm, serial_wall, mz, hi_wall, hi_commit, hi_gemm;
     for (int r = 0; r < reps; ++r) {
       CK(cudaEventRecord(e[0], sg));
       for (int i = 0; i < ng; ++i) CL(G.run(sg));
@@ -1036,19 +1041,34 @@ static int bench(int argc, char** argv) {
       CK(cudaEventRecord(e[4], sg));
       CK(cudaEventSynchronize(e[4]));
       serial_wall.push_back(ms(e[3], e[4]));
+      CK(cudaEventRecord(e[0], sg));
+      CK(cudaStreamWaitEvent(sp, e[0]));
+      for (int i = 0; i < ng; ++i) CL(G.run(sg));
+      CK(cudaEventRecord(e[1], sg));
+      commit_graph(sp);
+      CK(cudaEventRecord(e[5], sp));
+      CK(cudaEventSynchronize(e[1]));
+      CK(cudaEventSynchronize(e[5]));
+      hi_gemm.push_back(ms(e[0], e[1]));
+      hi_commit.push_back(ms(e[0], e[5]));
+      hi_wall.push_back(std::max(hi_gemm.back(), hi_commit.back()));
     }
-    const double ga = median(g_alone), bw = median(both_wall), sw = median(serial_wall);
+    const double ga = median(g_alone), bw = median(both_wall), sw = median(serial_wall), hw = median(hi_wall);
     // the share of the shorter side that concurrency hides, against both on one stream measured in the same loop
-    const double hidden = (sw - bw) / std::min(ng * ga, tgr);
+    const double hidden = (sw - bw) / std::min(ng * ga, tgr), hi_hidden = (sw - hw) / std::min(ng * ga, tgr);
     printf("{\"beside_gemm\": {\"m\": %d, \"n\": %d, \"k\": %d, \"lt_algo_index\": %d, \"gemm_ms\": %.5f, \"gemms\": %d, "
            "\"graph\": true, \"commit_alone_ms\": %.5f, \"both_wall_ms\": %.5f, \"both_commit_ms\": %.5f, \"both_gemm_ms\": %.5f, "
            "\"serial_wall_ms\": %.5f, \"hidden_fraction\": %.4f, \"commit_over_gemm\": %.4f, \"commit_gb_per_s_beside\": %.2f, "
-           "\"mhz\": %.0f, ",
+           "\"mhz\": %.0f, \"priority\": {\"stream_priority\": %d, \"wall_ms\": %.5f, \"commit_ms\": %.5f, \"gemm_ms\": %.5f, "
+           "\"hidden_fraction\": %.4f, \"commit_gb_per_s_beside\": %.2f}, ",
            G.m, G.n, G.k, G.algo_index, ga, ng, tgr, bw, median(both_commit), median(both_gemm), sw, hidden, tgr / ga,
-           data / median(both_commit) * 1e-6, median(mz));
+           data / median(both_commit) * 1e-6, median(mz), prio_hi, hw, median(hi_commit), median(hi_gemm), hi_hidden,
+           data / median(hi_commit) * 1e-6);
     json_list("both_wall_all", both_wall);
     printf(", ");
     json_list("serial_wall_all", serial_wall);
+    printf(", ");
+    json_list("priority_wall_all", hi_wall);
     printf("}}\n");
   }
   for (size_t i = 0; i < ks.size(); ++i) { CK(cudaGraphExecDestroy(gx[i])); CK(cudaGraphDestroy(graphs[i])); }

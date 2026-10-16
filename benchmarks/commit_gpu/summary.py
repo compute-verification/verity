@@ -31,9 +31,15 @@ def bench_line(tag: str, r: dict) -> str:
                 f"nodes {r['nodes_ms']:.3f}){graph}, {r['operand_gb_per_s']:.1f} GB/s of operand, "
                 f"{r['gcomp_per_s']:.2f} G compressions/s, {r['mhz']:.0f} MHz")
     g = r["beside_gemm"]
-    return (f"  beside GEMM {g['m']}x{g['n']}x{g['k']} ({g['gemm_ms']:.3f} ms, x{g['gemms']}): commit/GEMM {g['commit_over_gemm']:.2f}; "
+    line = (f"  beside GEMM {g['m']}x{g['n']}x{g['k']} ({g['gemm_ms']:.3f} ms, x{g['gemms']}): commit/GEMM {g['commit_over_gemm']:.2f}; "
             f"both {g['both_wall_ms']:.3f} ms vs serial {g['serial_wall_ms']:.3f}; hidden {g['hidden_fraction']:.2f}; "
-            f"commit beside {g['both_commit_ms']:.3f} ms ({g['commit_gb_per_s_beside']:.1f} GB/s)")
+            f"commit beside {g['both_commit_ms']:.3f} ms ({g['commit_gb_per_s_beside']:.1f} GB/s), GEMMs {g['both_gemm_ms']:.3f} ms")
+    if "priority" in g:
+        p = g["priority"]
+        line += (f"\n  beside GEMM, commitment at stream priority {p['stream_priority']}: both {p['wall_ms']:.3f} ms; "
+                 f"hidden {p['hidden_fraction']:.2f}; commit beside {p['commit_ms']:.3f} ms "
+                 f"({p['commit_gb_per_s_beside']:.1f} GB/s), GEMMs {p['gemm_ms']:.3f} ms")
+    return line
 
 
 def main(out: str) -> None:
