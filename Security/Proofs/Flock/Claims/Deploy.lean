@@ -21,8 +21,9 @@ SHA-512 call an oracle query.
 * **The decision** (`decision`): the shipped verdict over `OC` (`verifyWithM Hashes.oc`, or `Zk.verifyWithM`), whose
   every SHA-512 call is an `OC.query`, the live coins' digests among them (S12's `msg_sha512`, `dgWith`); then, with no
   hash, the live session's custody (`checks`): the last message's statement is `x`, the record's draw is the statement's
-  (`drawEq`: equal as Lean values), the record's link and rounds are the live messages and coins (`custody`); then the
-  scope (`ProvedScope.check`) and a draw-less session's refusal (`drawLaw zk none`), as `verifyCmd` orders them.
+  whatever its key order (`drawEq`: `JsonEquiv`, objects as finite maps, as the service's dict equality), the record's
+  link and rounds are the live messages and coins (`custody`); then the scope (`ProvedScope.check`) and a draw-less
+  session's refusal (`drawLaw zk none`), as `verifyCmd` orders them.
 * **Rounds.** `k(x) = 2 + Σ_tables 2 · repRounds`, the link, every recorded round and the last message (`rounds`).
 
 `next_rej`, `next_coin` and `next_decide` are the verifier's three steps: a refusal and a coin make no query; a decision
@@ -164,7 +165,8 @@ def shaCallsOf (zk : Bool) (h : ByteArray → ByteArray) (spec : SessionSpec) (t
   if zk then Zk.shaCalls h spec tabs record proofs else shaCalls h spec tabs record proofs
 
 /-- **The checks after the verdict**, with no hash: the last message's statement is `x`, the record's draw is the
-statement's, the live session's custody, the verifier's scope check, and a draw-less session's refusal. -/
+statement's up to key order, the live session's custody, the verifier's scope check, and a draw-less session's
+refusal. -/
 def checks (zk : Bool) (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link : List ByteArray × List ByteArray)
     (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (f : Final) : V Unit := do
   Record.check (f.stmt == x) "live: the last message's statement is not the statement"
