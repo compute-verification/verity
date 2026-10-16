@@ -176,12 +176,13 @@ def test_k_arms_add_only_the_theorem_k_reading(tmp_path):
         assert k["theorem-k"]["SCORE"] > k["proved"]["SCORE"]
 
 
-@pytest.mark.parametrize(("attr", "base", "nc", "noise"), [("PFillBUDuo", "PFillBU", 2, "bitsU"),
-                                                           ("PFillBUXin", "PFillBU", 9, "bitsU"),
-                                                           ("PFillKDuo", "PFillK", 2, "bits01"),
-                                                           ("PFillKXin", "PFillK", 9, "bits01")])
-def test_fold_arms_change_only_the_receipt_and_read_every_word(monkeypatch, tmp_path, attr, base, nc, noise):
-    """pfill-bU's and pfill-k's duo (NC 2) and XOR-in (NC 9) arms are their ram arm with only the fold changed; ram's
+@pytest.mark.parametrize(("attr", "base", "nc", "xin", "noise"), [("PFillBUDuo", "PFillBU", 2, False, "bitsU"),
+                                                                  ("PFillBUXin", "PFillBU", 4, True, "bitsU"),
+                                                                  ("PFillKDuo", "PFillK", 2, False, "bits01"),
+                                                                  ("PFillKXin", "PFillK", 4, True, "bits01")])
+def test_fold_arms_change_only_the_receipt_and_read_every_word(monkeypatch, tmp_path, attr, base, nc, xin, noise):
+    """pfill-bU's and pfill-k's duo (NC 2) and XOR-in (NC 4 built with -DPFILL_XIN) arms are their ram arm with only
+    the fold changed; ram's
     receipt certifies word pairs (Q = a0 d0 + d1), so its count readings are half theirs: E 0.1125 against 0.225, K 0.45
     against 0.9 (note:20261016T0917Z-draft-fullfloor-s-r8 §1.2)."""
     A, S = _module("arms"), _module("scoring")
@@ -191,7 +192,8 @@ def test_fold_arms_change_only_the_receipt_and_read_every_word(monkeypatch, tmp_
     flags = __import__("os").environ["NVCC_APPEND_FLAGS"]
     arm = A.load(f"benchmarks/pouw/filler/pfill_arm.py:{attr}")
     assert A.check_arm(arm, record=True) == []
-    assert __import__("os").environ["NVCC_APPEND_FLAGS"] == flags
+    got = __import__("os").environ["NVCC_APPEND_FLAGS"].split()
+    assert sorted(got) == sorted(flags.split() + (["-DPFILL_XIN"] if xin else []))
     assert arm.filler == replace(ram.filler, NC=nc) and arm.filler.noise == noise
     assert arm.sources == ram.sources and arm.lineage["parent"] == ram.name
     for ph, b, l in S.points():

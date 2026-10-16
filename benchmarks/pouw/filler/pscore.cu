@@ -89,9 +89,6 @@ static void pfill_prep() {
   CK(cudaFuncSetAttribute(dfill_p<1>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
   CK(cudaFuncSetAttribute(dfill_p<2>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
   CK(cudaFuncSetAttribute(dfill_p<4>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
-#ifndef DFILL_V1
-  CK(cudaFuncSetAttribute(dfill_p<9>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
-#endif
 }
 
 // the phase filler's last step: every slot holds the tile id that step owed it, and `n` receipts, spread, equal the host's
@@ -410,7 +407,7 @@ int main(int argc, char** argv) {
   }
   Dev d;
   auto phase_ok = [](int PW, int PNC, int PS, int PT) {
-    return PW >= 1 && PW <= 16 && (PNC == 1 || PNC == 2 || PNC == 4 || PNC == 9) && PS % 8 == 0 && PS > 8 && PT >= 1;
+    return PW >= 1 && PW <= 16 && (PNC == 1 || PNC == 2 || PNC == 4) && PS % 8 == 0 && PS > 8 && PT >= 1;
   };
   if (mode == "pncu") {
     if (argc < 6) { fprintf(stderr, "pncu PW PNC PS PT\n"); return 1; }

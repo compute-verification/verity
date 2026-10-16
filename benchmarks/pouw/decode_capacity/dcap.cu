@@ -862,9 +862,6 @@ static int dfill_check(const DFill& f, long long chunk, int n) {
 #define DFILL_GATE_W 4
 #define DFILL_GATE_S {8, 2048}
 #endif
-#ifndef DFILL_GATE_NC
-#define DFILL_GATE_NC {1, 2, 4}
-#endif
 
 // A host thread keeps `depth` chunks queued on `fs` and notes when each is seen done.
 struct DPump {
@@ -927,7 +924,7 @@ static uint64_t g_c0 = 0x0123456789abcdefull, g_c1 = 0xfedcba9876543210ull;  // 
 static int dgate(Dev& d) {
   int fails = 0;
   dfill_prep();
-  for (int nc : DFILL_GATE_NC)
+  for (int nc : {1, 2, 4})
     for (int S : DFILL_GATE_S) {
       DFill f;
       f.grid = 3; f.W = DFILL_GATE_W; f.NC = nc; f.S = S; f.tiles = 2; f.c0 = g_c0; f.c1 = g_c1;
@@ -1213,10 +1210,7 @@ static void plaunch(const PFill& f, unsigned long long off, int tiles, const int
     case 1: plaunch_nc<1>(f, off, tiles, stop, st); break;
     case 2: plaunch_nc<2>(f, off, tiles, stop, st); break;
     case 4: plaunch_nc<4>(f, off, tiles, stop, st); break;
-#ifndef DFILL_V1
-    case 9: plaunch_nc<9>(f, off, tiles, stop, st); break;
-#endif
-    default: fprintf(stderr, "NC must be 1, 2 or 4 (pfill: or 9)\n"); exit(1);
+    default: fprintf(stderr, "NC must be 1, 2 or 4\n"); exit(1);
   }
 }
 static void pfill_alloc(PFill& f) {
@@ -1268,7 +1262,7 @@ static int pgate(Dev& d, const std::vector<int>& Ss) {
   int fails = 0;
   std::vector<int> all = {8};
   all.insert(all.end(), Ss.begin(), Ss.end());
-  for (int nc : DFILL_GATE_NC)
+  for (int nc : {1, 2, 4})
     for (int s : all) {
       PFill f;
       f.mode = 1; f.W = DFILL_P_W; f.NC = nc; f.S = s; f.tiles = 2; f.grid = 3; f.c0 = g_c0; f.c1 = g_c1;
@@ -1381,9 +1375,6 @@ static int run_pfill(Dev& d, int B, int L, int fill_sms, int W, int NC, int S, i
   CK(cudaFuncSetAttribute(dfill_p<1>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
   CK(cudaFuncSetAttribute(dfill_p<2>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
   CK(cudaFuncSetAttribute(dfill_p<4>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
-#ifndef DFILL_V1
-  CK(cudaFuncSetAttribute(dfill_p<9>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
-#endif
   const std::vector<Lt> p = lin_plans(d, B);
   bool wrapped = false;
   int lo, hi;

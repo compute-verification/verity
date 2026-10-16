@@ -171,14 +171,15 @@ class PFillBUDuo(PFillBU):
 
 @dataclass
 class PFillBUXin(PFillBU):
-    """pfill-bU with XOR-in receipts (NC 9, three ops a pair: y <- (rotl(y, 7) ^ d0) a0 + d1): its all-state kernel is a
-    fixed group of 16 an MMA, each a bijection of every word, so no data-free representative such as ram's (0, Q)."""
+    """pfill-bU with XOR-in receipts (NC 4 built with -DPFILL_XIN, three ops a pair: y <- (rotl(y, 7) ^ d0) a0 + d1):
+    its all-state kernel is a fixed group of 16 an MMA, each a bijection of every word, so no data-free representative
+    such as ram's (0, Q)."""
 
     name: str = "pfill-bu-xin"
     lineage: dict = field(default_factory=lambda: _fold_lineage(
         "pfill-bu", "noise:sha512-coins-bU", "receipt:xin-k32",
         "pfill-bU with XOR-in for ram: every word certified at one op a pair more than ram, so K's c = 1 holds"))
-    filler: Filler | None = Filler(W=8, NC=9, S=256, chunk_log2=19, noise="bitsU")
+    nvcc_flags: str = "-DPFILL_BU -DPFILL_XIN -Xcompiler -mpopcnt"
 
 
 @dataclass
@@ -194,13 +195,13 @@ class PFillKDuo(PFillK):
 
 @dataclass
 class PFillKXin(PFillK):
-    """pfill-k with XOR-in receipts (NC 9)."""
+    """pfill-k with XOR-in receipts (NC 4 built with -DPFILL_XIN)."""
 
     name: str = "pfill-k-xin"
     lineage: dict = field(default_factory=lambda: _fold_lineage(
         "pfill-k", "noise:sha512-coins-01", "receipt:xin-k32",
         "pfill-k with XOR-in for ram: every word certified at one op a pair more than ram, so K's c = 1 holds"))
-    filler: Filler | None = Filler(W=8, NC=9, S=256, chunk_log2=19, noise="bits01")
+    nvcc_flags: str = "-DPFILL_BITS -DPFILL_XIN"
 
 
 def fold_share(lineage: dict) -> float:

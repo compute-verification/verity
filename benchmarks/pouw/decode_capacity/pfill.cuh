@@ -25,11 +25,11 @@
 // the same of row 16F+g+8. NC picks the fold:
 //   4  ram  y <- (rotl(y, 7) + d0) a0 + d1;  y <- (rotl(y, 19) + d2) a1 + d3   (two ops a pair). Not a receipt of
 //           both words: a step is rotl(y, 7) a0 + Q, so it reads a pair only through Q = a0 d0 + d1, which one product a
-//           pair computes (note:20261016T0917Z-draft-fullfloor-s-r8 §1.2; pfill_ref.q_receipt)
-//   9  xin  y <- (rotl(y, 7) ^ d0) a0 + d1;  y <- (rotl(y, 19) ^ d2) a1 + d3   (three ops a pair). Its only change of a
-//           pair that every state y maps alike is the joint flip (d0 ^ 2^31, d1 + 2^31); across an MMA's two pairs
-//           also (d0 ^ 2^31, d2 ^ 2^18) and (~d0, a0 - 1 - d1, ~d2), each a fixed bijection of the words
-//           (tests/test_pfill_fold.py). duo has none
+//           pair computes (note:20261016T0917Z-draft-fullfloor-s-r8 §1.2; pfill_ref.q_receipt). Built with -DPFILL_XIN,
+//           NC 4 is XOR-in instead, y <- (rotl(y, 7) ^ d0) a0 + d1;  y <- (rotl(y, 19) ^ d2) a1 + d3 (three ops a
+//           pair), on the device and in dfill_ref alike. Its all-state kernel is the joint flip (d0 ^ 2^31, d1 + 2^31)
+//           at a pair, and across an MMA's two pairs also (d0 ^ 2^31, d2 ^ 2^18) and (~d0, a0 - 1 - d1, ~d2): each a
+//           fixed bijection of the words (tests/test_pfill_fold.py). duo has none
 //   2  duo  per word p, keys (k, a, r): u = y ^ p ^ k;  y <- u a + z;  z <- rotl(u, r) + y   (three ops a word)
 //   1  xor  y <- y ^ d0 ^ d1 ^ d2 ^ d3, the cheapest fold that reads every word: a cost reference, not a receipt (it is
 //           linear, so it binds nothing)
@@ -77,7 +77,6 @@
 static_assert(PF_PW == 2 || PF_PW == 4 || PF_PW == 8, "PF_PW is 2, 4 or 8");
 #define DFILL_GATE_W PF_W
 #define DFILL_GATE_S {32, 512}
-#define DFILL_GATE_NC {1, 2, 4, 9}
 constexpr uint64_t PF_DOM = 0x5046494C4C2D7631ull;   // "PFILL-v1": the s8 tile
 constexpr uint64_t PF_DOM4 = 0x5046494C4C2D6634ull;  // "PFILL-f4": the e2m1 tile
 constexpr uint64_t PF_DOM01 = 0x5046494C4C2D6231ull; // "PFILL-b1": the s8 tile on {0,1} bits
@@ -160,11 +159,16 @@ template <int NC>
 __host__ __device__ __forceinline__ void pf_absorb(uint32_t& y, uint32_t& z, uint32_t d0, uint32_t d1, uint32_t d2,
                                                    uint32_t d3, const PfKeys& k) {
   if (NC == 4 || NC == 5) {
-    y = (pf_rotl(y, 7) + d0) * k.a0 + d1;
-    y = (pf_rotl(y, 19) + d2) * k.a1 + d3;
-  } else if (NC == 9) {
+#ifdef PFILL_XIN
+    // XOR-in, three ops a pair: ram's step (rotl(y, 7) + d0) a0 + d1 = rotl(y, 7) a0 + Q reads a pair only through
+    // Q = a0 d0 + d1 (note:20261016T0917Z-draft-fullfloor-s-r8 §1.2), so ram certifies half the words. XOR-in's
+    // all-state kernel is a fixed group of word bijections, (d0 ^ 2^31, d1 + 2^31) its only one at a pair
     y = (pf_rotl(y, 7) ^ d0) * k.a0 + d1;
     y = (pf_rotl(y, 19) ^ d2) * k.a1 + d3;
+#else
+    y = (pf_rotl(y, 7) + d0) * k.a0 + d1;
+    y = (pf_rotl(y, 19) + d2) * k.a1 + d3;
+#endif
   } else if (NC == 6) {
     y = (pf_rotl(y, 7) + d0) * 0x9E3779B1u + d1;
     y = (pf_rotl(y, 19) + d2) * 0x85EBCA77u + d3;
@@ -247,7 +251,7 @@ __device__ __forceinline__ void pf_omma(uint32_t (&d)[4], const uint32_t (&a)[4]
 template <int NC, int KD, int W = PF_W>
 __device__ __forceinline__ uint64_t pf_tile(uint8_t* Bs, uint32_t (*Ab)[32 * 16], uint64_t c0, uint64_t c1,
                                             unsigned long long tile, int steps) {
-  constexpr bool regen = NC == 1 || NC == 2 || NC == 4 || NC == 9, F4 = KD == PF_E2M1;
+  constexpr bool regen = NC == 1 || NC == 2 || NC == 4, F4 = KD == PF_E2M1;
   constexpr int KH = F4 ? 2 : 1, P = 32 / KH, TN = 128 * W;
   constexpr uint64_t dom = pf_dom(KD);
   const int lane = threadIdx.x & 31, w = threadIdx.x >> 5, g = lane >> 2, t = lane & 3;
@@ -567,7 +571,6 @@ static uint64_t pf_ref_nc(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int s
     case 1: return pf_ref<1, KD>(c0, c1, tile, steps, W);
     case 2: return pf_ref<2, KD>(c0, c1, tile, steps, W);
     case 4: return pf_ref<4, KD>(c0, c1, tile, steps, W);
-    case 9: return pf_ref<9, KD>(c0, c1, tile, steps, W);
     default: return 0;
   }
 }
@@ -682,8 +685,7 @@ static void dfill_launch(const DFill& f, long long chunk, cudaStream_t st) {
     case 6: dfill_k<6><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
     case 7: dfill_k<7><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
     case 8: dfill_k<8><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
-    case 9: dfill_k<9><<<gr, bl, 0, st>>>(f.c0, f.c1, t0, f.tiles, f.S, f.rec); break;
-    default: fprintf(stderr, "pfill: NC must be 1 (xor), 2 (duo), 4 (ram), 9 (xin), or the probes 3, 5, 6, 7, 8\n"); exit(1);
+    default: fprintf(stderr, "pfill: NC must be 1 (xor), 2 (duo), 4 (ram), or the probes 3, 5, 6, 7, 8\n"); exit(1);
   }
 }
 static void dfill_prep() {
@@ -695,7 +697,6 @@ static void dfill_prep() {
   CK(cudaFuncSetAttribute(dfill_k<6>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
   CK(cudaFuncSetAttribute(dfill_k<7>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
   CK(cudaFuncSetAttribute(dfill_k<8>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
-  CK(cudaFuncSetAttribute(dfill_k<9>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
 }
 // PF_CTAS blocks for each of `grid` SMs, and tiles a block so that a chunk is about 2^DFILL_CHUNK_LOG2 (default 19) MMAs
 // an SM
@@ -712,7 +713,7 @@ static DFill dfill_make(int grid, int W, int NC, int S, uint64_t c0, uint64_t c1
   return f;
 }
 static int dfill_check(const DFill& f, long long chunk, int n) {
-  if (f.NC != 1 && f.NC != 2 && f.NC != 4 && f.NC != 9) return -1;  // a probe: not checked
+  if (f.NC != 1 && f.NC != 2 && f.NC != 4) return -1;  // a probe: not checked
   std::vector<unsigned long long> h(f.per());
   CK(cudaMemcpy(h.data(), f.rec, h.size() * sizeof h[0], cudaMemcpyDeviceToHost));
   int bad = 0;

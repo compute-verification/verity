@@ -4,7 +4,7 @@
 Ram's step (rotl(y, 7) + d0) a0 + d1 = rotl(y, 7) a0 + Q reads a pair only through Q = a0 d0 + d1, so a receipt from Q
 alone (one product a pair) is the tile's ram receipt. A fold binds both words of a pair when no change of them maps every
 state alike: exhaustively on small analogs of each fold (n-bit words, the rotations mod n), ram's such changes are the
-2^n - 1 of the line (d0 + δ, d1 - a0 δ) at a pair; XOR-in's (xin, NC 9) the one joint flip of both words' top bit
+2^n - 1 of the line (d0 + δ, d1 - a0 δ) at a pair; XOR-in's (-DPFILL_XIN) the one joint flip of both words' top bit
 (2^(n-1) (a0 + 1) = 0 mod 2^n for odd a0) at a pair, and at an MMA's four words a group of 16 that holds at every width,
 32 included (`_xin_group`), each element a fixed bijection of every word; duo's none, at a pair and at an MMA."""
 
@@ -32,16 +32,25 @@ INT_KINDS = (R.S8, R.BITS, R.BU)
 
 @pytest.fixture(scope="module")
 def host(tmp_path_factory):
+    """pfill_host's reference, R.XIN from its -DPFILL_XIN build (NC 4 there)."""
     gxx = shutil.which("g++")
     if not gxx:
         pytest.skip("no g++ for the host build of pfill.cuh")
-    so = tmp_path_factory.mktemp("pfill-host") / "pfill_host.so"
-    subprocess.run([gxx, "-O2", "-std=c++17", "-shared", "-fPIC", "-Wall", "-Wextra", "-Werror", "-Wno-unknown-pragmas",
-                    "-o", str(so), str(HERE / "pfill_host.cpp")], check=True)
-    cdll = ctypes.CDLL(str(so))
-    cdll.pfill_ref.restype = ctypes.c_uint64
-    cdll.pfill_ref.argtypes = [ctypes.c_uint64] * 3 + [ctypes.c_int] * 4
-    return lambda c0, c1, tile, nc, steps, kind=R.S8, w=R.W: cdll.pfill_ref(c0, c1, tile, nc, steps, int(kind), w)
+    d, libs = tmp_path_factory.mktemp("pfill-host"), []
+    for flags in ([], ["-DPFILL_XIN"]):
+        so = d / f"pfill_host{len(libs)}.so"
+        subprocess.run([gxx, "-O2", "-std=c++17", "-shared", "-fPIC", "-Wall", "-Wextra", "-Werror", "-Wno-unknown-pragmas",
+                        *flags, "-o", str(so), str(HERE / "pfill_host.cpp")], check=True)
+        cdll = ctypes.CDLL(str(so))
+        cdll.pfill_ref.restype = ctypes.c_uint64
+        cdll.pfill_ref.argtypes = [ctypes.c_uint64] * 3 + [ctypes.c_int] * 4
+        libs.append(cdll)
+
+    def ref(c0, c1, tile, nc, steps, kind=R.S8, w=R.W):
+        lib, nc = (libs[1], R.RAM) if nc == R.XIN else (libs[0], nc)
+        return lib.pfill_ref(c0, c1, tile, nc, steps, int(kind), w)
+
+    return ref
 
 
 @pytest.mark.parametrize("kind", INT_KINDS)
