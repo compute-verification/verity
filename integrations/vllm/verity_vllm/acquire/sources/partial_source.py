@@ -479,6 +479,8 @@ class TPPartialSource:
 
         import torch
 
+        from verity_vllm.collectives import fused_norm as FN
+
         t0 = time.perf_counter()
         cap = Path(capture_dir)
         res: dict[str, Any] = {"rank": self.rank, "oracle": str(cap), "steps_compared": 0, "steps_without_oracle": [], "oracle_steps_not_committed": [],
@@ -537,11 +539,13 @@ class TPPartialSource:
                 mod = x.get("module")
                 j = occ_of.get(mod, 0)
                 occ_of[mod] = j + 1
-                pname = f"{mod}/{'part' if x['kind'] == 'all_reduce' else 'shard'}_rank{self.rank}"
+                fused = x["kind"] == FN.KIND                   # its recorded part is stack([partial, residual])
+                part_t = v["part"][k][0] if fused else v["part"][k]
+                pname = f"{mod}/{'part' if fused or x['kind'] == 'all_reduce' else 'shard'}_rank{self.rank}"
                 if pname not in by_name and len(under.get(mod, ())) == mods.count(mod):
-                    pairs = [(under[mod][j].name, v["part"][k], "partial", under[mod][j])]
+                    pairs = [(under[mod][j].name, part_t, "partial", under[mod][j])]
                 else:
-                    pairs = [(pname, v["part"][k], "partial", _nth(by_name, pname, j))]
+                    pairs = [(pname, part_t, "partial", _nth(by_name, pname, j))]
                 if mod in received:
                     pairs.append((f"{mod}/out", v["out"][k], "out", _nth(by_name, f"{mod}/out", j)))
                 for member, oracle_t, what, meta in pairs:

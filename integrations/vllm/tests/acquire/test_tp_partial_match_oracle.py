@@ -176,12 +176,24 @@ LAYER = "model.layers.1"
 NORMS = [f"{LAYER}.input_layernorm", f"{LAYER}.post_attention_layernorm"]
 
 
-def _layer_oracle(cap: Path, parts: list[torch.Tensor]) -> None:
+def _layer_oracle(cap: Path, parts: list[torch.Tensor], kind: str = "all_reduce") -> None:
     cap.mkdir(parents=True, exist_ok=True)
     with (cap / "coll.rank0.jsonl").open("w") as f:
         for k, p in enumerate(parts):
-            f.write(json.dumps({"rank": 0, "step": 0, "k": k, "kind": "all_reduce", "module": LAYER, "shape": list(p.shape)}) + "\n")
+            f.write(json.dumps({"rank": 0, "step": 0, "k": k, "kind": kind, "module": LAYER, "shape": list(p.shape)}) + "\n")
     torch.save({"step": 0, "part": parts, "out": []}, cap / "coll.rank0.step0.pt")
+
+
+def test_a_fused_norm_record_compares_its_partial_not_the_stacked_residual(tmp_path):
+    """The recorder stores a `fused_allreduce_rms_norm` call's part as stack([partial, residual]); the Commit's member is the partial."""
+    p0, p1, r0, r1 = _tensors()
+    _layer_oracle(tmp_path, [torch.stack([p0, r0]), torch.stack([p1, r1])], kind="fused_allreduce_rms_norm")
+    src, rd = _norm_src([(NORMS[0], p0), (NORMS[1], p1)])
+    r = src.compare_match_oracle(str(tmp_path), rd)
+    assert r["verdict"] == "PASS" and r["tensors"] == r["equal"] == 2
+    src, rd = _norm_src([(NORMS[0], r0), (NORMS[1], p1)])
+    r = src.compare_match_oracle(str(tmp_path), rd)
+    assert r["verdict"] == "FAIL" and r["mismatch_n"] == 1
 
 
 def _norm_src(committed: list[tuple[str, torch.Tensor]]):
