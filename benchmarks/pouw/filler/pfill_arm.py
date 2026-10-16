@@ -341,29 +341,6 @@ class PFillBUDuoFused4(PFillKFused4):
     nvcc_flags: str = "-DPFILL_BU -Xcompiler -mpopcnt"
 
 
-@dataclass
-class PFillBUXinFused4(PFillKFused4):
-    """pfill-k-fused4's placement pumping pfill-bU with XOR-in receipts (PFillBUXin's tile, NC 4 with -DPFILL_XIN)."""
-
-    name: str = "pfill-bu-xin-fused4"
-    lineage: dict = field(default_factory=lambda: _fused_lineage(
-        "noise:sha512-coins-bU", "receipt:xin-k32",
-        "pfill-bU with XOR-in on fused4's pump: every word certified at about ram's rate, so K's 0.9 holds unhalved"))
-    filler: Filler | None = Filler(W=8, NC=4, S=256, chunk_log2=19, noise="bitsU")
-    nvcc_flags: str = "-DPFILL_BU -DPFILL_XIN -Xcompiler -mpopcnt"
-
-
-@dataclass
-class PFillKXinFused4(PFillKFused4):
-    """pfill-k-fused4 with XOR-in receipts (PFillKXin's tile): bU's contrast at the same fold and placement."""
-
-    name: str = "pfill-k-xin-fused4"
-    lineage: dict = field(default_factory=lambda: _fused_lineage(
-        "noise:sha512-coins-01", "receipt:xin-k32",
-        "pfill-k's bits with XOR-in on fused4's pump: bU's contrast, the packed route still on COINC"))
-    nvcc_flags: str = "-DPFILL_BITS -DPFILL_XIN"
-
-
 #: FUSED_K4 rows as (split SMs, FILL's step or None, phase filler or None), with pfill-k-phase's phase filler at the two
 #: B 256 points where it beat fused4's pump (r20261016-091121-7bfc against r20261016-104450-c197): on cuBLASLt's 60-SM
 #: split, 256/2K with 5 tiles a block read 1.41e14 MAC/s at 1.038 and 256/3K with 8 read 1.48e14 at 1.023, the split
@@ -377,31 +354,12 @@ FP_SOURCES = PFillKFused4.__dataclass_fields__["sources"].default + (
 
 
 @dataclass
-class PFillBUXinFPhase(PFillBUXinFused4):
-    """pfill-bu-xin-fused4 with pfill-k-phase's 4-warp phase filler (-DPF_PW=4; the build's bU tile and XOR-in fold) in
-    decode attention at 256/2K and 256/3K. Run through pfill_fp_score.py:
-
-      python3 benchmarks/pouw/filler/pfill_fp_score.py benchmarks/pouw/filler/pfill_arm.py:PFillBUXinFPhase
-    """
-
-    name: str = "pfill-bu-xin-fphase"
-    lineage: dict = field(default_factory=lambda: _fused_lineage(
-        "noise:sha512-coins-bU", "receipt:xin-k32",
-        "the phase filler beat fused4's pump at 256/2K and 256/3K by 40-48% in round 3; both together lift B 256",
-        parent="pfill-bu-xin-fused4", extra=PHASE_TAGS))
-    sources: tuple = FP_SOURCES
-    choice: str = ("an offline table of 18 (B, L) points (split SMs, FILL's step or cuBLASLt's, phase tiles) from FUSED_K4 "
-                   "and pfill-k-phase's B 256 rows; a lookup, a green split and one graph a step at serving time")
-    nvcc_flags: str = "-DPFILL_BU -DPFILL_XIN -DPF_PW=4 -Xcompiler -mpopcnt"
-    table = FUSED_PHASE_K4
-
-    def phase(self, phase, b, l):
-        return None if phase == "prefill" else self._row(b, l)[2]
-
-
-@dataclass
 class PFillBUDuoFPhase(PFillBUDuoFused4):
-    """pfill-bu-duo-fused4 with the phase filler of PFillBUXinFPhase's points on duo tiles (NC 2)."""
+    """pfill-bu-duo-fused4 with pfill-k-phase's 4-warp phase filler (-DPF_PW=4) on duo tiles (NC 2) in decode attention
+    at 256/2K and 256/3K, the points where it beat fused4's pump. Run through pfill_fp_score.py:
+
+      python3 benchmarks/pouw/filler/pfill_fp_score.py benchmarks/pouw/filler/pfill_arm.py:PFillBUDuoFPhase3
+    """
 
     name: str = "pfill-bu-duo-fphase"
     lineage: dict = field(default_factory=lambda: _fused_lineage(
@@ -409,7 +367,8 @@ class PFillBUDuoFPhase(PFillBUDuoFused4):
         "pfill-bu-xin-fphase's B 256 phase filler on duo, the fold proved now",
         parent="pfill-bu-duo-fused4", extra=PHASE_TAGS))
     sources: tuple = FP_SOURCES
-    choice: str = PFillBUXinFPhase.choice
+    choice: str = ("an offline table of 18 (B, L) points (split SMs, FILL's step or cuBLASLt's, phase tiles) from FUSED_K4 "
+                   "and pfill-k-phase's B 256 rows; a lookup, a green split and one graph a step at serving time")
     nvcc_flags: str = "-DPFILL_BU -DPF_PW=4 -Xcompiler -mpopcnt"
     table = {k: (s, q, p and PhaseFill(NC=2, tiles=p.tiles)) for k, (s, q, p) in FUSED_PHASE_K4.items()}
 

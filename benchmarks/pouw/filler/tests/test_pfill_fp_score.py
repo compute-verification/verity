@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pfill_fp_score as F
 
 A, S, SC = F.A, F.S, F.SC
-ARM = "benchmarks/pouw/filler/pfill_arm.py:PFillBUXinFPhase"
+ARM = "benchmarks/pouw/filler/pfill_arm.py:PFillBUDuoFPhase3"
 PBIT = 1 << 62  # dcap.cu's: the phase filler's tile ids carry it, its rounds' tag
 
 

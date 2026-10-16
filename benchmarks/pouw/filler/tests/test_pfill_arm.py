@@ -145,8 +145,7 @@ def test_k_fused_arm_runs_pfill_k_beside_fills_step_with_no_filler_warps(monkeyp
     assert fused
 
 
-@pytest.mark.parametrize(("attr", "fold"), [("PFillBUDuoFused4", "PFillBUDuo"), ("PFillBUXinFused4", "PFillBUXin"),
-                                            ("PFillKXinFused4", "PFillKXin")])
+@pytest.mark.parametrize(("attr", "fold"), [("PFillBUDuoFused4", "PFillBUDuo")])
 def test_fused4_fold_arms_are_fused4_with_only_the_filler_changed(monkeypatch, attr, fold):
     """Each fold arm on fused4's placement is pfill-k-fused4's table, fused steps, sources and prefill split with the
     fold arm's filler, build flags and receipt, so v4 reads the tile it pumps and pfill_proved its fold share."""
@@ -167,8 +166,7 @@ def test_fused4_fold_arms_are_fused4_with_only_the_filler_changed(monkeypatch, a
         assert A.placed(arm, ph, b, l) == A.placed(f4, ph, b, l) and arm.fused(ph, b, l) == f4.fused(ph, b, l)
 
 
-@pytest.mark.parametrize(("attr", "base", "nc", "tiles"), [("PFillBUXinFPhase", "PFillBUXinFused4", 4, {2048: 5, 3072: 8}),
-                                                          ("PFillBUDuoFPhase", "PFillBUDuoFused4", 2, {2048: 5, 3072: 8}),
+@pytest.mark.parametrize(("attr", "base", "nc", "tiles"), [("PFillBUDuoFPhase", "PFillBUDuoFused4", 2, {2048: 5, 3072: 8}),
                                                           ("PFillBUDuoFPhase2", "PFillBUDuoFused4", 2, {2048: 5, 3072: 6}),
                                                           ("PFillBUDuoFPhase3", "PFillBUDuoFused4", 2, {2048: 5, 3072: 7})])
 def test_fphase_arms_add_a_phase_filler_at_b256_only(monkeypatch, attr, base, nc, tiles):
