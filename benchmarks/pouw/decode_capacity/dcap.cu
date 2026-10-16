@@ -1196,6 +1196,10 @@ static void plaunch_nc(const PFill& f, unsigned long long off, int tiles, const 
   CK(cudaLaunchKernelEx(&cfg, dfill_p<NC>, (uint64_t)f.c0, (uint64_t)f.c1, f.st, off, tiles, f.S, stop, f.rec, f.smbits));
 }
 static void plaunch(const PFill& f, unsigned long long off, int tiles, const int* stop, cudaStream_t st) {
+#ifdef PFILL_NO_PHASE
+  fprintf(stderr, "this build has no phase filler (-DPFILL_NO_PHASE)\n");
+  exit(1);
+#endif
 #ifndef DFILL_V1
   if (f.W != PF_PW || f.S < 4 || f.S % 4) {
     fprintf(stderr, "pfill's dfill_p: W must be PF_PW = %d (-DPF_PW=W) and S a positive multiple of 4 (W %d, S %d)\n", PF_PW,

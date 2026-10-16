@@ -48,14 +48,22 @@
 #pragma once
 #include "../pearl_c/sha512.cuh"
 
+#ifdef PFILL_CO
+#define PF_W 4
+#define PF_CTAS 4  // blocks an SM on a split: 4 x 2 KB, 4 warps an SMSP; co runs one an SM
+#if defined(PFILL_E2M1)
+#error "pfill: the co tile (-DPFILL_CO) is the s8 or bits tile"
+#endif
+#else
 #define PF_W 8
 #ifndef PF_CTAS
 #define PF_CTAS 2  // blocks an SM: 2 x 48 KB, 4 warps an SMSP
 #endif
+#endif
 #ifndef PF_SHA_ROLL
 #define PF_SHA_ROLL 1  // pf_compress (16 rounds a loop iteration); 0: rs_compress (all 80 unrolled); same digests
 #endif
-#define PF_TN 1024
+#define PF_TN (128 * PF_W)
 #ifndef PF_PW
 #define PF_PW 8  // the phase filler's warps a block (dfill_p): its tile is PF_PW warps x 128 PF_PW columns
 #endif
@@ -340,6 +348,194 @@ __device__ __forceinline__ void pf_tiles(uint8_t* Bs, uint32_t (*Ab)[32 * 16], u
     if (threadIdx.x == 0) rec[idx] = x;
   }
 }
+#ifdef PFILL_CO
+// The co tile (-DPFILL_CO): pf_tile's math at W = 4 (B 32 x 512, the receipts dfill_ref's 4-warp tile), laid out to fit
+// beside the prefill GEMM's CTA (cutlass 128x128x64, 96 KiB + 1 KiB of an SM's 100 KB, 224 x 128 registers): B as bits in
+// 2 KB of shared memory (column n's 32 entries in word n), and a pass's A blocks in registers, lane l holding fragment f0 +
+// l's 16 row words, each fragment shuffled to the warp once and swept over B's 64 fragments.
+template <int NC, int KD>
+__device__ __forceinline__ uint64_t pf_tile_co(uint32_t* Bw, uint64_t c0, uint64_t c1, unsigned long long tile, int steps) {
+  constexpr int W = PF_W, TN = 128 * W, P = 32;
+  constexpr uint64_t dom = pf_dom(KD);
+  const int lane = threadIdx.x & 31, w = threadIdx.x >> 5, g = lane >> 2, t = lane & 3;
+  const int S = steps;
+  __syncthreads();
+  PfKeys key{0, 0, 0, 0};
+  if (lane <= 8) {
+    uint64_t st[8];
+    const int bb = w * 8 + (lane & 7);
+    pf_block(dom, c0, c1, tile, lane < 8 ? PF_B + (uint64_t)bb : PF_KEY, st);
+    if (lane < 8) {
+#pragma unroll
+      for (int nn = 0; nn < 16; nn++) Bw[16 * bb + nn] = pf_row(st, nn);
+    } else {
+      key = pf_keys(st);
+    }
+  }
+  key.a0 = __shfl_sync(~0u, key.a0, 8);
+  key.a1 = __shfl_sync(~0u, key.a1, 8);
+  key.k0 = __shfl_sync(~0u, key.k0, 8);
+  key.k1 = __shfl_sync(~0u, key.k1, 8);
+  __syncthreads();
+  uint32_t R[16];
+  auto agen = [&](int f0) {
+    if (f0 + lane < S) {
+      uint64_t st[8];
+      pf_block(dom, c0, c1, tile, (uint64_t)w * S + f0 + lane, st);
+#pragma unroll
+      for (int q = 0; q < 16; q++) R[q] = pf_row(st, q);
+    }
+  };
+  uint32_t y[4], z[4];
+#pragma unroll
+  for (int c = 0; c < 4; c++) {
+    const uint32_t pos = (uint32_t)((w * 32 + lane) * 4 + c);
+    y[c] = pf_y0(pos);
+    z[c] = pf_z0(pos);
+  }
+  int f0 = 0, next = P;
+  agen(0);
+  const uint32_t* bp = Bw + g;
+#pragma unroll 1
+  for (int f = 0; f < S; f += 4) {
+    if (f == next) {
+      f0 = f;
+      agen(f0);
+      next = f + P;
+    }
+    uint32_t a[4][4];
+#pragma unroll
+    for (int c = 0; c < 4; c++) {
+      const int src = f - f0 + c;
+      uint32_t r0 = 0, r1 = 0;
+#pragma unroll
+      for (int q = 0; q < 8; q++) {
+        const uint32_t v0 = __shfl_sync(~0u, R[q], src), v1 = __shfl_sync(~0u, R[q + 8], src);
+        if (g == q) {
+          r0 = v0;
+          r1 = v1;
+        }
+      }
+      a[c][0] = pf_s8x4<KD>((r0 >> (4 * t)) & 15);
+      a[c][1] = pf_s8x4<KD>((r1 >> (4 * t)) & 15);
+      a[c][2] = pf_s8x4<KD>((r0 >> (16 + 4 * t)) & 15);
+      a[c][3] = pf_s8x4<KD>((r1 >> (16 + 4 * t)) & 15);
+    }
+#pragma unroll 4
+    for (int j = 0; j < TN / 8; j++) {
+      const uint32_t rb = bp[8 * j];
+      const uint2 b = make_uint2(pf_s8x4<KD>((rb >> (4 * t)) & 15), pf_s8x4<KD>((rb >> (16 + 4 * t)) & 15));
+#pragma unroll
+      for (int c = 0; c < 4; c++) {
+        uint32_t d[4];
+        pf_mma(d, a[c], b);
+        pf_absorb<NC>(y[c], z[c], d[0], d[1], d[2], d[3], key);
+      }
+    }
+  }
+  const uint64_t K = dseed(c0, c1, tile);
+  uint64_t h = 0;
+#pragma unroll
+  for (int c = 0; c < 4; c++)
+    h ^= pf_fold(K, (uint32_t)((w * 32 + lane) * 4 + c), NC == 2 ? (uint64_t)z[c] << 32 | y[c] : (uint64_t)y[c]);
+#pragma unroll
+  for (int o = 16; o; o >>= 1) h ^= __shfl_xor_sync(~0u, h, o);
+  __syncthreads();
+  if (lane == 0) {
+    Bw[2 * w] = (uint32_t)h;
+    Bw[2 * w + 1] = (uint32_t)(h >> 32);
+  }
+  __syncthreads();
+  uint64_t x = 0;
+  if (threadIdx.x == 0) {
+#pragma unroll
+    for (int v = 0; v < W; v++) x ^= (uint64_t)Bw[2 * v] | (uint64_t)Bw[2 * v + 1] << 32;
+  }
+  return x;
+}
+// Co (pf_co_one, dfill_make's: a chunk over every SM): one block running an SM, since a second block's 3 KB would keep the
+// GEMM's next CTA off that SM. A block takes the SM's lock and the chunk's tiles from a counter until none is left; a block
+// that lands on a locked SM leaves at once if a block of its chunk is running, and otherwise runs (so every chunk
+// finishes) until a block of its chunk holds a lock. The last block of a chunk resets the chunk's counters. A split runs
+// pf_tiles' static tiles.
+__device__ int pf_co_one;
+__device__ int pf_lock[1024];
+__device__ unsigned long long pf_next[64];
+__device__ unsigned pf_fin[64], pf_run[64], pf_held[64];
+// n / d by shifts and subtractions: the compiler's integer division goes through MUFU.RCP and F2I, FP ops in the filler
+__device__ __forceinline__ unsigned long long pf_udiv(unsigned long long n, unsigned long long d) {
+  unsigned long long q = 0, r = 0;
+#pragma unroll 1
+  for (int i = 63; i >= 0; i--) {
+    r = r << 1 | (n >> i & 1);
+    if (r >= d) {
+      r -= d;
+      q |= 1ull << i;
+    }
+  }
+  return q;
+}
+template <int NC>
+__global__ void __launch_bounds__(32 * PF_W, PF_CTAS) dfill_k(uint64_t c0, uint64_t c1, unsigned long long tile0, int tiles,
+                                                       int steps, unsigned long long* __restrict__ rec) {
+  __shared__ __align__(16) uint32_t Bw[PF_TN];
+  if (!pf_co_one) {
+    for (int i = 0; i < tiles; i++) {
+      const unsigned long long idx = (unsigned long long)blockIdx.x * tiles + i;
+      const uint64_t x = pf_tile_co<NC, PF_KIND>(Bw, c0, c1, tile0 + idx, steps);
+      if (threadIdx.x == 0) rec[idx] = x;
+    }
+    return;
+  }
+  const unsigned long long units = (unsigned long long)gridDim.x * tiles;
+  unsigned smid = 0;
+  int role = 0, slot = 0;  // role 1 holds the SM's lock, 2 runs without it, 0 leaves
+  if (threadIdx.x == 0) {
+    slot = (int)(pf_udiv(tile0, units) & 63);
+    asm volatile("mov.u32 %0, %%smid;" : "=r"(smid));
+    smid &= 1023;
+    if (atomicCAS(&pf_lock[smid], 0, 1) == 0) {
+      atomicAdd(&pf_run[slot], 1u);
+      atomicAdd(&pf_held[slot], 1u);
+      role = 1;
+    } else if (atomicAdd(&pf_run[slot], 1u) == 0) {
+      role = 2;
+    } else {
+      atomicSub(&pf_run[slot], 1u);
+    }
+  }
+  for (;;) {
+    __syncthreads();
+    if (threadIdx.x == 0) {
+      unsigned long long u = ~0ull;
+      if (role == 1 || (role == 2 && *(volatile unsigned*)&pf_held[slot] == 0)) u = atomicAdd(&pf_next[slot], 1ull);
+      Bw[0] = (uint32_t)u;
+      Bw[1] = (uint32_t)(u >> 32);
+    }
+    __syncthreads();
+    const unsigned long long u = (unsigned long long)Bw[0] | (unsigned long long)Bw[1] << 32;
+    if (u >= units) break;
+    const uint64_t x = pf_tile_co<NC, PF_KIND>(Bw, c0, c1, tile0 + u, steps);
+    if (threadIdx.x == 0) rec[u] = x;
+  }
+  if (threadIdx.x == 0) {
+    if (role == 1) {
+      atomicSub(&pf_held[slot], 1u);
+      atomicSub(&pf_run[slot], 1u);
+      __threadfence();
+      atomicExch(&pf_lock[smid], 0);
+    } else if (role == 2) {
+      atomicSub(&pf_run[slot], 1u);
+    }
+    __threadfence();
+    if (atomicAdd(&pf_fin[slot], 1u) == gridDim.x - 1) {
+      pf_next[slot] = 0;
+      pf_fin[slot] = 0;
+      __threadfence();
+    }
+  }
+}
+#else
 template <int NC>
 __global__ void __launch_bounds__(32 * PF_W, PF_CTAS) dfill_k(uint64_t c0, uint64_t c1, unsigned long long tile0, int tiles,
                                                        int steps, unsigned long long* __restrict__ rec) {
@@ -347,6 +543,7 @@ __global__ void __launch_bounds__(32 * PF_W, PF_CTAS) dfill_k(uint64_t c0, uint6
   __shared__ __align__(16) uint32_t Ab[PF_W][32 * 16];
   pf_tiles<NC, PF_KIND>(Bs, Ab, c0, c1, tile0, tiles, steps, rec);
 }
+#endif
 
 // The phase filler (dcap.cu's PFill, HC-SCHED's placement): the same tile at PF_PW warps under the phase ids PBIT | (base +
 // slot), a tile a block at a time, so a slot is a block's tile (slot off + blockIdx.x tiles + i) and `steps` is a warp's
@@ -361,6 +558,10 @@ template <int NC>
 __global__ void __launch_bounds__(32 * PF_PW, PF_CTAS * PF_W / PF_PW)
     dfill_p(uint64_t c0, uint64_t c1, unsigned long long* __restrict__ st, unsigned long long off, int tiles, int steps,
             const int* stop, unsigned long long* __restrict__ rec, unsigned* smbits) {
+#ifdef PFILL_NO_PHASE
+  // a build with no phase filler (plaunch refuses it on the host), so the filler's MMAs are dfill_k's alone
+  __trap();
+#else
   __shared__ __align__(16) uint8_t Bs[128 * PF_PW * 32];
   __shared__ __align__(16) uint32_t Ab[PF_PW][32 * 16];
   const unsigned long long base = *(volatile unsigned long long*)st;
@@ -379,6 +580,7 @@ __global__ void __launch_bounds__(32 * PF_PW, PF_CTAS * PF_W / PF_PW)
       atomicAdd(st + 1, 1ull);
     }
   }
+#endif
 }
 
 #endif
@@ -534,9 +736,19 @@ static DFill dfill_make(int grid, int W, int NC, int S, uint64_t c0, uint64_t c1
     exit(1);
   }
   DFill f;
-  f.grid = grid * PF_CTAS; f.W = W; f.NC = NC; f.S = S; f.c0 = c0; f.c1 = c1;
+  int ctas = PF_CTAS;
+#ifdef PFILL_CO
+  // a chunk over every SM is co: one block an SM (dfill_k's lock), the device's mode for this process
+  int dev = 0, sms = 0;
+  CK(cudaGetDevice(&dev));
+  CK(cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev));
+  const int one = grid >= sms;
+  CK(cudaMemcpyToSymbol(pf_co_one, &one, sizeof one));
+  if (one) ctas = 1;
+#endif
+  f.grid = grid * ctas; f.W = W; f.NC = NC; f.S = S; f.c0 = c0; f.c1 = c1;
   const int lg = getenv("DFILL_CHUNK_LOG2") ? atoi(getenv("DFILL_CHUNK_LOG2")) : 19;
-  f.tiles = std::max(1, (int)((1LL << lg) / ((long long)PF_CTAS * W * S * (PF_TN / 8))));
+  f.tiles = std::max(1, (int)((1LL << lg) / ((long long)ctas * W * S * (PF_TN / 8))));
   CK(cudaMalloc(&f.rec, f.per() * sizeof(unsigned long long)));
   return f;
 }
