@@ -71,6 +71,9 @@ constexpr int MAX_NI = 4;
 constexpr int SMALL_THREADS = 128;            // the small path's CTAs (no shared memory): a CTA folds its 128 leaves' 7 levels
 constexpr int SMALL_LEVELS = 7;
 constexpr int SMALL_TOP = 256;                // the small path's top CTA takes a level of at most 256 nodes
+#ifndef SMALL_MINB
+#define SMALL_MINB 5                   // the small path's CTAs an SM by registers (5: <= 102 a thread), so they fit beside a GEMM's
+#endif
 
 struct Consts {
   u64 mid_P[8];             // after P(l)
@@ -557,28 +560,29 @@ DEV void fold_cta(int dom, u64* levels, u64 width, u32 cnt, int L) {
   }
 }
 
-// The small path's salt phase for `slots` commitments of the same domain (S_k = S + 16 n k): S, the frame leaves' first
-// blocks F, and the pads (positions n .. width) into level 0 with every CTA subtree that holds only pads, so the data
-// phase computes only what the data decides. F and the pads are the same for every slot (each slot computes them, as each
-// commitment would).
+// The small path's salt phase for slots s0 .. s0 + gridDim.y - 1 of the commitments of one domain (S_k = S + 16 n k), and
+// with slot 0 the frame leaves' first blocks F and the pads (positions n .. width) into level 0 with every CTA subtree that
+// holds only pads, so the data phase computes only what the data decides (F and the pads don't depend on the slot).
 template <bool PRF>
-__global__ void __launch_bounds__(SMALL_THREADS)
+__global__ void __launch_bounds__(SMALL_THREADS, SMALL_MINB)
     salt_small(int dom, const uint8_t* __restrict__ salts, const uint4* __restrict__ Tg, u64 n, u64 width, u64* __restrict__ S,
-               u64* __restrict__ F, u64* levels) {
+               u64* __restrict__ F, u64* levels, int s0) {
   const u64 pos = (u64)blockIdx.x * SMALL_THREADS + threadIdx.x;
   const u32 cnt = (u32)(width < SMALL_THREADS ? width : SMALL_THREADS);
-  const u64 slot = blockIdx.y;
+  const u64 slot = s0 + blockIdx.y;
   if (pos < n) {
     salt_one<PRF, false>(pos, salts, reinterpret_cast<const uint8_t*>(Tg), S + 16 * n * slot);
-    u64 f[8];
-    frame_first(dom, pos, f);
-    st8(F + 8 * pos, f);
-  } else if (pos < width) {
+    if (slot == 0) {
+      u64 f[8];
+      frame_first(dom, pos, f);
+      st8(F + 8 * pos, f);
+    }
+  } else if (pos < width && slot == 0) {
     u64 o[8];
     pad(dom, pos, o);
     st8(levels + 8 * pos, o);
   }
-  if ((u64)blockIdx.x * cnt >= n) {
+  if (slot == 0 && (u64)blockIdx.x * cnt >= n) {
     int L = 0;
     while ((1u << L) < cnt) ++L;
     fold_cta(dom, levels, width, cnt, L);
@@ -588,7 +592,7 @@ __global__ void __launch_bounds__(SMALL_THREADS)
 // The small path's data phase over the CTAs that hold data (ceil(n / SMALL_THREADS)): each thread a leaf, then its CTA's
 // levels 1 .. min(SMALL_LEVELS, depth).
 template <class Row, int SX>
-__global__ void __launch_bounds__(SMALL_THREADS)
+__global__ void __launch_bounds__(SMALL_THREADS, SMALL_MINB)
     leaf_small(int dom, Row row, const u64* __restrict__ S, const u64* __restrict__ F, u64 n, u64 width, u64* levels,
                u64* __restrict__ bc) {
   const u64 pos = (u64)blockIdx.x * SMALL_THREADS + threadIdx.x;
@@ -605,7 +609,7 @@ __global__ void __launch_bounds__(SMALL_THREADS)
 }
 
 // Levels d+1 .. d+nl from level d (at most SMALL_TOP nodes) in one CTA through global memory.
-__global__ void __launch_bounds__(SMALL_TOP / 2) top_small(int dom, u64* levels, u64 width, int d, int nl) {
+__global__ void __launch_bounds__(SMALL_TOP / 2, SMALL_MINB) top_small(int dom, u64* levels, u64 width, int d, int nl) {
   const u32 t = threadIdx.x;
   for (int l = 1; l <= nl; ++l) {
     if (l > 1) __syncthreads();
@@ -933,11 +937,13 @@ struct Committer {
   // The salt phase. Small path: every slot's S, F and the pads in CTAs of SMALL_THREADS, T read through L1/L2. Otherwise,
   // above 2^16 leaves T sits in shared memory (one block of LEAF_THREADS an SM); at or below, blocks of 64 threads read T
   // through L1, which spreads few leaves over the SMs and takes no shared memory.
+  // Small path: slots s0 .. s0 + ns - 1 (default all); F and the pads come with slot 0, which runs first.
   template <bool PRF>
-  void salts(const uint8_t* given, cudaStream_t st) {
+  void salts(const uint8_t* given, cudaStream_t st, int s0 = 0, int ns = -1) {
     if (small) {
-      const dim3 g((unsigned)((width + SMALL_THREADS - 1) / SMALL_THREADS), (unsigned)slots);
-      salt_small<PRF><<<g, SMALL_THREADS, 0, st>>>(dom, given, T, n, width, S, F, levels);
+      if (ns < 0) ns = slots - s0;
+      const dim3 g((unsigned)((width + SMALL_THREADS - 1) / SMALL_THREADS), (unsigned)ns);
+      salt_small<PRF><<<g, SMALL_THREADS, 0, st>>>(dom, given, T, n, width, S, F, levels, s0);
     } else if (n > (1u << 16)) {
       auto k = salt_kernel<PRF, true>;
       static bool attr = false;
