@@ -3,8 +3,9 @@
 
 Saturate the SMSP dispatch with a vector kind (FFMA/IADD3) at ~1 instr a SMSP-cycle, add a live UIADD3 chain at
 densities D (uniform a SMSP-iter). slots a uniform = Δ(cycles a outer-iter) / Δ(#uniform a outer-iter), i.e. the slope of
-cycles-per-iter vs D, /4 (4 warps a SMSP). ~1 => uniform takes a full slot (VF2's 0.594 is a valid lower bound); ~0 =>
-uniform takes no slot (0.594 exceeds real cost => VF2 unsound).
+cycles-per-iter vs D, / warps-a-SMSP. ~1 => uniform takes a full slot (VF2's 0.594 is a valid lower bound); ~0 =>
+uniform takes no slot (0.594 exceeds real cost => VF2 unsound). The LOW-density points (D < NACC, the uniform pipe not
+yet saturated) are the discriminator: high density saturates any port, so it can't separate co-issue from slot-sharing.
 
 $OUT/issue_uniform.jsonl, $OUT/sass/issue_uniform.sass -> $OUT/uniform.md, $OUT/uniform.json
 """
@@ -26,6 +27,17 @@ A_UNI = 0.594  # VF2 §13 price of a uniform-datapath instruction (SMSP-cycles)
 
 def tmpl_ints(mangled):
     return [int(n) for n in TMPL_INT.findall(mangled)]
+
+
+def lin_slope(pts):
+    """Least-squares slope of y vs x over pts=[(x,y),...]."""
+    n = len(pts)
+    if n < 2:
+        return 0.0
+    sx = sum(x for x, _ in pts); sy = sum(y for _, y in pts)
+    sxx = sum(x * x for x, _ in pts); sxy = sum(x * y for x, y in pts)
+    den = n * sxx - sx * sx
+    return (n * sxy - sx * sy) / den if den else 0.0
 
 
 def funcs_with_lines(path):
@@ -83,21 +95,23 @@ def main():
     md.append("(#uniform a outer-iter) — ~1 means it takes a full dispatch slot, ~0 means it takes none.\n")
     result = {"a_uni": A_UNI, "by_vk": {}}
 
+    nacc = next((r["nacc"] for r in rows if "nacc" in r), 32)
     for vk in (0, 1):
         vr = sorted([r for r in rows if r["vk"] == VK_NAME[vk]], key=lambda r: r["density"])
         if not vr:
             continue
         base = next((r for r in vr if r["density"] == 0), None)
+        warps_smsp = (base["warps"] if base else vr[0]["warps"]) / 4.0  # warps a SMSP (4 SMSPs a SM)
         md.append(f"## Vector = {VK_NAME[vk].upper()}\n")
-        md.append("| density (uni/SMSP-it) | vec/SMSP-cyc | uni/SMSP-cyc | cyc/outer-it | slots/uni (vs D=0) | SASS (vec / uni) |")
-        md.append("|---|---|---|---|---|---|")
-        pts = []  # (D, cyc_per_iter, n_uni_per_iter)
+        md.append("| density D (uni/SMSP-it) | vec/SMSP-cyc | uni/SMSP-cyc | cyc/outer-it | slots/uni (vs D=0) | SASS (vec / uni) | promoted? |")
+        md.append("|---|---|---|---|---|---|---|")
+        pts = []  # (D, cyc_per_iter)
         rowsout = []
         for r in vr:
             D = r["density"]
             cyc_it = r["cyc"] / r["iters"]
-            n_uni_it = r["n_uni_smsp"] / r["iters"]  # = 4*D
-            pts.append((D, cyc_it, n_uni_it))
+            n_uni_it = r["n_uni_smsp"] / r["iters"]  # = warps_smsp*D, uniform instrs a SMSP a outer-iter
+            pts.append((D, cyc_it))
             ls = by_tmpl(funcs, "k_vec", [vk, D])
             vget = uget = 0
             uni_other = 0
@@ -107,31 +121,45 @@ def main():
                 uget = body.get("UIADD3", 0)
                 uni_other = sum(c for k, c in body.items() if (k.startswith("U") and k != "UIADD3") or k in ("R2UR", "CS2UR"))
             slots = ((cyc_it - base["cyc"] / base["iters"]) / n_uni_it) if (base and D > 0) else None
+            # the chain is D fully-unrolled UIADD3; promotion succeeded iff the SASS body has D of them
+            promoted = (uget == D) if D > 0 else (uget == 0)
+            prom = "ok" if promoted else f"NO ({uget}≠{D})"
             sass = f"{vget}×{VK_SASS[vk]} / {uget}×UIADD3" + (f" (+{uni_other} U-other)" if uni_other else "")
             md.append(f"| {D} ({n_uni_it:.0f}) | {r['vec_per_smsp_per_cyc']:.4f} | {r['uni_per_smsp_per_cyc']:.4f} | "
-                      f"{cyc_it:.1f} | {('%.3f' % slots) if slots is not None else '—'} | {sass} |")
+                      f"{cyc_it:.1f} | {('%.3f' % slots) if slots is not None else '—'} | {sass} | {prom} |")
             rowsout.append({"density": D, "cyc_per_iter": cyc_it, "vec_per_smsp_per_cyc": r["vec_per_smsp_per_cyc"],
                             "uni_per_smsp_per_cyc": r["uni_per_smsp_per_cyc"], "slots_per_uni_vs0": slots,
-                            "sass_vec": vget, "sass_uiadd3": uget, "sass_uni_other": uni_other, "iters": r["iters"]})
-        # linear fit cyc_per_iter = a + slope*D  => slots/uni = slope/4 (4 warps a SMSP)
-        n = len(pts)
-        sx = sum(d for d, _, _ in pts); sy = sum(c for _, c, _ in pts)
-        sxx = sum(d * d for d, _, _ in pts); sxy = sum(d * c for d, c, _ in pts)
-        slope = (n * sxy - sx * sy) / (n * sxx - sx * sx) if (n * sxx - sx * sx) else 0.0
-        slots_fit = slope / 4.0
+                            "sass_vec": vget, "sass_uiadd3": uget, "sass_uni_other": uni_other,
+                            "promoted": promoted, "iters": r["iters"]})
+        # slots a uniform = slope of cyc/outer-it vs D, / warps_smsp (each unit D is warps_smsp uni a SMSP a iter).
+        # LOW density (D < nacc, uniform pipe unsaturated) is the discriminator: with the vector pipe the bottleneck,
+        #   co-issue => flat (slope~0, slots~0); a shared slot => cycles rise at once (slots~1). HIGH density saturates
+        #   either way, so it can't tell them apart.
+        lo = [(d, c) for d, c in pts if d <= nacc // 2]
+        slope_lo = lin_slope(lo)
+        slope_all = lin_slope(pts)
+        slots_lo = slope_lo / warps_smsp
+        slots_all = slope_all / warps_smsp
         sat = base["vec_per_smsp_per_cyc"] if base else 0.0
+        saturated = sat > 0.9
         md.append("")
         md.append(f"- Dispatch saturation (D=0): **{sat:.4f}** {VK_NAME[vk].upper()} a SMSP-cycle"
-                  f" ({'saturated ~1/cyc' if sat > 0.9 else 'below 1/cyc — not a full saturator'}).")
-        md.append(f"- **Linear fit: {slots_fit:.3f} dispatch slots a uniform instruction** (slope {slope:.3f} cyc/iter a"
-                  f" unit density, /4 warps a SMSP).")
-        verdict = ("takes a full slot — VF2's 0.594 is a valid lower bound (sound)" if slots_fit > 0.9 else
-                   f"takes ~{slots_fit:.2f} slot — compare to VF2's {A_UNI}: "
-                   + ("below the price, VF2 OVER-prices (unsound)" if slots_fit < A_UNI - 0.05 else "consistent with VF2"))
-        md.append(f"- Verdict: a uniform UIADD3 {verdict}.")
+                  f" ({'saturated ~1/cyc' if saturated else 'below 1/cyc — NOT a full saturator, low-density test confounded'}).")
+        md.append(f"- **Low-density slots/uni = {slots_lo:.3f}** (D≤{nacc//2}, the discriminating regime; slope {slope_lo:.3f} cyc/iter a unit D, /{warps_smsp:.0f} warps a SMSP).")
+        md.append(f"- Full-range slots/uni = {slots_all:.3f} (slope {slope_all:.3f}); high D saturates any port, so this over-states co-issue cost.")
+        if not saturated:
+            verdict = f"inconclusive — the vector saturator only reached {sat:.3f}/cyc, so spare dispatch could hide uniforms for free"
+        elif slots_lo > 0.9:
+            verdict = f"takes a full dispatch slot (~{slots_lo:.2f}) — VF2's {A_UNI} is a valid lower bound (SOUND)"
+        elif slots_lo < A_UNI - 0.05:
+            verdict = f"takes ~{slots_lo:.2f} slot, below VF2's {A_UNI} — VF2 OVER-prices a uniform instruction (UNSOUND)"
+        else:
+            verdict = f"takes ~{slots_lo:.2f} slot — consistent with VF2's {A_UNI}"
+        md.append(f"- Verdict ({VK_NAME[vk].upper()} saturator): a uniform UIADD3 {verdict}.")
         md.append("")
-        result["by_vk"][VK_NAME[vk]] = {"saturation_d0": sat, "slots_per_uni_fit": slots_fit,
-                                        "slope_cyc_per_iter_per_density": slope, "rows": rowsout}
+        result["by_vk"][VK_NAME[vk]] = {"saturation_d0": sat, "saturated": saturated, "warps_smsp": warps_smsp,
+                                        "slots_per_uni_low_density": slots_lo, "slots_per_uni_full": slots_all,
+                                        "slope_low": slope_lo, "slope_full": slope_all, "rows": rowsout}
 
     (out / "uniform.md").write_text("\n".join(md) + "\n")
     (out / "uniform.json").write_text(json.dumps(result, indent=2))
