@@ -2,18 +2,22 @@ import Proofs.Flock.Claims.Complete.Json.Decode
 import Proofs.Flock.Claims.Complete.Shape
 
 /-!
-# What the one-table honest session returns
+# What the one-table honest session returns and sends first
 
-`sessionP_record`: at one table, with no keyed coin tree, the pure session's record is the printed honest record
-(`recordObj`'s `compress`) of a non-empty `root_B`, the link's points off its coin (`ptsOf`), and one well-formed stream
-per rep stream (`RoundsOk`), and the table's extra claims evaluate at those points (`RecordFacts`). It rests on two
-facts about the prover's pieces, taken as hypotheses: the commitment's cap is non-empty, and each rep records rounds of
-`1 ≤ n ≤ 65536` coins, at least one.
+`sessionP_facts`: at one table, with no keyed coin tree, a run of the pure session from no sends returns the printed
+honest record (`recordObj`'s `compress`) of a non-empty `root_B` under `2^64` bytes, the link's points off the first
+reply's coin (`ptsOf`), and one well-formed stream per rep stream (`RoundsOk`); the table's extra claims evaluate at
+those points; and its first send is the link of that `root_B` and no public words (`SessionFacts`). It rests on two facts
+about the prover's pieces, taken as hypotheses: the commitment's cap is non-empty and under `2^64` bytes, and each rep
+records rounds of `1 ≤ n ≤ 65536` coins, at least one.
 
 * **Returns through `throw`, `monadLift`, `mapM` and a `for` loop with membership** (`Ret.throw'`, `Ret.monadLift`,
   `Ret.mapM_array`, `Ret.forIn_array_mem`), on top of `Shape`'s `Ret`.
 * **The record's JSON is `recordObj`** (`recordJson_eq`): `recordJson` through `Hashes.ofSha512 h` returns its
   `compress`.
+* **The sends**: the schedules and the commitment send nothing (`Still`; `pureS` runs a computation of `V` in `PS`, so
+  `commitP` there is `commitP` in `V`, `commitP_pureS`), the link pushes its body (`link_go`), and the reps and the
+  record only append (`Grows`, from `Sim`'s `repP_sim`).
 -/
 
 namespace FlockComplete.JsonRT
@@ -115,12 +119,6 @@ def RoundsOk (rs : Array Round) : Prop := 0 < rs.size ∧ ∀ r ∈ rs, 1 ≤ r.
 def ptsOf (spec : SessionSpec) (c : ℕ → F128) : Array (Array F128) :=
   (Array.range spec.points).map fun p => (Array.range spec.mPts).map fun j => c (p * spec.mPts + j)
 
-/-- **What the one-table session returns**: its record is the honest record of a non-empty `root_B`, the link's points
-off some coin, and one well-formed stream per rep stream, and the table's extra claims evaluate at those points. -/
-def RecordFacts (h : ByteArray → ByteArray) (spec : SessionSpec) (st : Setup) (r : String × Array ByteArray) : Prop :=
-  ∃ rb c₁ streams, r.1 = (recordObj spec h #[rb] (ptsOf spec c₁) streams r.2).compress ∧ 0 < rb.size ∧
-    streams.size = spec.repStreams.size ∧ (∀ rs ∈ streams, RoundsOk rs) ∧ ∃ e, st.extra (ptsOf spec c₁) = .ok e
-
 /-- One table's two rep streams. -/
 theorem repStreams_one {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) :
     spec.repStreams = #[(0, 0, s!"{t}/rep{(0 : Nat)}"), (0, 1, s!"{t}/rep{(1 : Nat)}")] := by
@@ -136,57 +134,235 @@ theorem eq_singleton_of {α : Type} {xs : Array α} (h : xs.size = 1) : xs = #[x
     subst this
     rfl
 
-/-- **The one-table session returns `RecordFacts`**, given a non-empty commitment cap and well-formed rep rounds. -/
-theorem sessionP_record (h : ByteArray → ByteArray) (resp : ℕ → Claims.Msg) {spec : SessionSpec} {t : String}
+/-! ## The sends -/
+
+/-- A computation that leaves the sends as they were. -/
+def Still {α : Type} (y : PS α) : Prop := ∀ l, (y.go l).2 = l
+
+/-- A computation that only appends sends. -/
+def Grows {α : Type} (y : PS α) : Prop := ∀ l, ∃ bs : List Claims.Msg, (y.go l).2 = l ++ bs.toArray
+
+theorem go_pure {α : Type} (a : α) (l : Array Claims.Msg) : (Pure.pure a : PS α).go l = (.ok a, l) := rfl
+
+theorem go_bind_ok {α β : Type} {y : PS α} {g : α → PS β} {l l'' : Array Claims.Msg} {b : β}
+    (h : (y >>= g).go l = (.ok b, l'')) : ∃ a l', y.go l = (.ok a, l') ∧ (g a).go l' = (.ok b, l'') := by
+  rw [go_bind] at h
+  rcases e : y.go l with ⟨r, l'⟩
+  rw [e] at h
+  cases r with
+  | error _ => cases h
+  | ok a => exact ⟨a, l', rfl, h⟩
+
+theorem Still.pure {α : Type} (a : α) : Still (Pure.pure a : PS α) := fun _ => rfl
+
+theorem Still.throw {α : Type} (e : String) : Still (throw e : PS α) := fun _ => rfl
+
+theorem Still.bind {α β : Type} {x : PS α} {f : α → PS β} (hx : Still x) (hf : ∀ a, Still (f a)) :
+    Still (x >>= f) := by
+  intro l
+  rw [go_bind]
+  rcases e : x.go l with ⟨r, l'⟩
+  have := hx l
+  rw [e] at this
+  subst this
+  cases r with
+  | error _ => rfl
+  | ok a => exact hf a _
+
+theorem Still.mapM_list {α β : Type} {f : α → PS β} (hf : ∀ a, Still (f a)) : ∀ l : List α, Still (l.mapM f)
+  | [] => Still.pure _
+  | a :: l => by
+    rw [List.mapM_cons]
+    exact Still.bind (hf a) fun _ => Still.bind (Still.mapM_list hf l) fun _ => Still.pure _
+
+theorem Still.mapM_array {α β : Type} {f : α → PS β} (hf : ∀ a, Still (f a)) (xs : Array α) : Still (xs.mapM f) := by
+  rw [Array.mapM_eq_mapM_toList, map_eq_pure_bind]
+  exact Still.bind (Still.mapM_list hf _) fun _ => Still.pure _
+
+theorem Still.go {α : Type} {y : PS α} (hy : Still y) {l l' : Array Claims.Msg} {r : Except String α}
+    (h : y.go l = (r, l')) : l' = l := by
+  have := hy l
+  rw [h] at this
+  exact this
+
+theorem Grows.pure {α : Type} (a : α) : Grows (Pure.pure a : PS α) := fun l => ⟨[], by simp [go_pure]⟩
+
+theorem Grows.bind {α β : Type} {x : PS α} {f : α → PS β} (hx : Grows x) (hf : ∀ a, Grows (f a)) :
+    Grows (x >>= f) := by
+  intro l
+  rw [go_bind]
+  rcases e : x.go l with ⟨r, l'⟩
+  obtain ⟨bs, hbs⟩ := hx l
+  rw [e] at hbs
+  dsimp only at hbs
+  subst hbs
+  cases r with
+  | error _ => exact ⟨bs, rfl⟩
+  | ok a =>
+    obtain ⟨bs', hbs'⟩ := hf a (l ++ bs.toArray)
+    exact ⟨bs ++ bs', by rw [hbs']; simp⟩
+
+theorem Grows.monadLift {α : Type} (v : V α) : Grows (monadLift v : PS α) := fun l => ⟨[], by
+  cases v <;> rfl⟩
+
+theorem Grows.forIn_list {α β : Type} {f : α → β → PS (ForInStep β)} (hf : ∀ a b, Grows (f a b)) :
+    ∀ (l : List α) (b : β), Grows (forIn l b f)
+  | [], b => Grows.pure b
+  | a :: l, b => by
+    rw [List.forIn_cons]
+    refine Grows.bind (hf a b) fun r => ?_
+    cases r with
+    | done b => exact Grows.pure b
+    | yield b => exact Grows.forIn_list hf l b
+
+theorem Grows.forIn_array {α β : Type} {f : α → β → PS (ForInStep β)} (hf : ∀ a b, Grows (f a b)) (xs : Array α)
+    (b : β) : Grows (forIn xs b f) := by
+  rw [← Array.forIn_toList]
+  exact Grows.forIn_list hf _ b
+
+theorem Grows.of_simS {H : Claims.Msg → Claims.Msg} {resp : ℕ → Claims.Msg} {α : Type} {x : PV α} {y : PS α}
+    (h : (simS H resp).R x y) : Grows y := fun l => by
+  obtain ⟨bs, -, hl⟩ := h l
+  exact ⟨bs, hl⟩
+
+theorem Grows.go {α : Type} {y : PS α} (hy : Grows y) {l l' : Array Claims.Msg} {r : Except String α}
+    (h : y.go l = (r, l')) : ∃ bs : List Claims.Msg, l' = l ++ bs.toArray := by
+  obtain ⟨bs, hbs⟩ := hy l
+  rw [h] at hbs
+  exact ⟨bs, hbs⟩
+
+theorem Ret.go {α : Type} {y : PS α} {P : α → Prop} (hy : Ret y P) {l l' : Array Claims.Msg} {a : α}
+    (h : y.go l = (.ok a, l')) : P a := hy l a l' h
+
+/-- The pure computations of `V`, run in `PS`: each leaves the sends as they were. -/
+def pureS : With.Sim V PS where
+  R x y := ∀ l, y.go l = (x, l)
+  pure _ _ := rfl
+  bind {α β x y f g} hxy hfg l := by
+    rw [go_bind, hxy l]
+    cases x with
+    | error e => rfl
+    | ok a => exact hfg a l
+  throw _ _ := rfl
+  lift v _ := by cases v <;> rfl
+
+theorem pureS_hashes (h : ByteArray → ByteArray) :
+    pureS.Hashes (Hashes.ofSha512 h : Hashes V) (Hashes.ofSha512 h : Hashes PS) where
+  sha512 _ _ := rfl
+  sha256 _ _ := rfl
+  blake3 _ _ := rfl
+  blake3Keyed _ _ _ := rfl
+
+theorem commitP_pureS (h : ByteArray → ByteArray) (ms : MerkleScheme) (lv : Level) (g : Array F128)
+    (salt : ℕ → ByteArray) :
+    pureS.R (commitP (Hashes.ofSha512 h : Hashes V) ms lv g salt) (commitP (Hashes.ofSha512 h : Hashes PS) ms lv g salt) := by
+  have ho := With.opsWith_sim pureS (pureS_hashes h) ms
+  unfold commitP
+  sim_walk [ho.leaf, ho.node]
+
+theorem link_go (resp : ℕ → Claims.Msg) (a b : Array ByteArray) (l : Array Claims.Msg) :
+    ((asksS resp).link a b).go l = (.ok (coinOf (resp l.size)), l.push (linkBody a.toList b.toList)) := rfl
+
+theorem Ret.of_pureS {α : Type} {x : V α} {y : PS α} (h : pureS.R x y) {P : α → Prop} (hp : ∀ a, x = .ok a → P a) :
+    Ret y P := fun l a l' e => hp a (by rw [h l] at e; exact (Prod.mk.inj e).1)
+
+theorem Still.of_pureS {α : Type} {x : V α} {y : PS α} (h : pureS.R x y) : Still y := fun l => by rw [h l]
+
+/-- **What the one-table session returns and sends first**: its record is the honest record of a non-empty `root_B`,
+the link's points off the first reply's coin, and one well-formed stream per rep stream; the table's extra claims
+evaluate at those points; and its first send is the link of that `root_B` and no public words. -/
+def SessionFacts (h : ByteArray → ByteArray) (resp : ℕ → Claims.Msg) (spec : SessionSpec) (st : Setup)
+    (r : String × Array ByteArray) (bodies : Array Claims.Msg) : Prop :=
+  ∃ rb streams, r.1 = (recordObj spec h #[rb] (ptsOf spec (coinOf (resp 0))) streams r.2).compress ∧
+    0 < rb.size ∧ rb.size < 2 ^ 64 ∧ streams.size = spec.repStreams.size ∧ (∀ rs ∈ streams, RoundsOk rs) ∧
+    (∃ e, st.extra (ptsOf spec (coinOf (resp 0))) = .ok e) ∧ bodies[0]? = some (linkBody [rb] [ByteArray.empty])
+
+/-- **The one-table session's facts**, given a non-empty commitment cap under `2^64` bytes and well-formed rep rounds. -/
+theorem sessionP_facts (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) {spec : SessionSpec} {t : String}
     (ht : spec.tables = #[t]) (hct : spec.coinTree = none) (st : Setup) (trs : Array Trace) (tape : Tape)
-    (hC : ∀ lv g salt, Ret (commitP (Hashes.ofSha512 h : Hashes PS) st.merkle lv g salt)
-      fun cm => 0 < (flat cm.cap).size)
+    (hC : ∀ lv g salt cm, commitP (Hashes.ofSha512 (Claims.hOf H) : Hashes V) st.merkle lv g salt = .ok cm →
+      0 < (flat cm.cap).size ∧ (flat cm.cap).size < 2 ^ 64)
     (hR : ∀ sch, fast100 st.m = some sch → ∀ tr tb cm₀ extras salt nonce d,
-      Ret ((repP (asksS resp) (Hashes.ofSha512 h) st sch tr tb cm₀ extras salt nonce).run (Transcript.init #[] d))
-        fun pt => RoundsOk pt.2.rounds) :
-    Ret (sessionP (asksS resp) (Hashes.ofSha512 h) spec #[st] trs tape) (RecordFacts h spec st) := by
-  unfold sessionP
-  refine Ret.bind (Ret.mapM_array _ (fun st' sch => fast100 st'.m = some sch) _ fun a _ => ?_) fun schs hschs => ?_
-  · cases hf : fast100 a.m with
+      Ret ((repP (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) st sch tr tb cm₀ extras salt nonce).run
+        (Transcript.init #[] d)) fun pt => RoundsOk pt.2.rounds)
+    {r : String × Array ByteArray} {bodies : Array Claims.Msg}
+    (hrun : (sessionP (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec #[st] trs tape).go #[] = (.ok r, bodies)) :
+    SessionFacts (Claims.hOf H) resp spec st r bodies := by
+  unfold sessionP at hrun
+  obtain ⟨schs, l1, hA, hrun⟩ := go_bind_ok hrun
+  have hschs := Ret.go (Ret.mapM_array _ (fun st' sch => fast100 st'.m = some sch) _ fun a _ => by
+    cases hf : fast100 a.m with
     | none => exact Ret.throw' _
-    | some sch => exact Ret.pure rfl
+    | some sch => exact Ret.pure rfl) hA
+  have hl1 := Still.go (Still.mapM_array (fun a => by
+    split
+    · exact Still.pure _
+    · exact Still.throw _) _) hA
+  subst hl1
   obtain ⟨sch, rfl, hsch⟩ : ∃ sch, schs = #[sch] ∧ fast100 st.m = some sch := by
     obtain ⟨hsz, hf⟩ := hschs
     have h1 : schs.size = 1 := by simpa using hsz
     exact ⟨schs[0], eq_singleton_of h1, by simpa using hf 0 (by simp) (by omega)⟩
+  dsimp only at hrun
+  obtain ⟨cms, l2, hB, hrun⟩ := go_bind_ok hrun
+  have hcms := Ret.go (Ret.mapM_array _ (fun _ cm => 0 < (flat cm.cap).size ∧ (flat cm.cap).size < 2 ^ 64) _
+    fun i hi => by
+      have : i = 0 := by simpa using hi
+      subst this
+      exact Ret.of_pureS (commitP_pureS _ _ _ _ _) fun cm e => hC _ _ _ cm (by simpa using e)) hB
+  have hl2 := Still.go (Still.mapM_array (fun i => by
+    exact Still.of_pureS (commitP_pureS _ _ _ _ _)) _) hB
+  subst hl2
+  obtain ⟨cm, rfl, hcm⟩ : ∃ cm, cms = #[cm] ∧ 0 < (flat cm.cap).size ∧ (flat cm.cap).size < 2 ^ 64 := by
+    obtain ⟨hsz, hf⟩ := hcms
+    have h1 : cms.size = 1 := by simpa using hsz
+    exact ⟨cms[0], eq_singleton_of h1, hf 0 (by simp) (by omega)⟩
+  obtain ⟨c₁, l₃, hL, hrun⟩ := go_bind_ok hrun
+  rw [link_go] at hL
+  simp only [Prod.mk.injEq, Except.ok.injEq, Array.size_empty] at hL
+  obtain ⟨rfl, rfl⟩ := hL
   have hrs1 := repStreams_one ht
-  refine Ret.bind (Ret.mapM_array _ (fun _ cm => 0 < (flat cm.cap).size) _ fun i hi => ?_) fun cms hcms => ?_
-  · have : i = 0 := by simpa using hi
-    subst this
-    exact hC _ _ _
-  refine Ret.bind (Ret.true _) fun c₁ _ => ?_
-  refine Ret.bind (Ret.forIn_array_mem _ _ _ (fun k (b : Array (Array Round) × Array ByteArray) =>
-    b.1.size = k ∧ b.2.size = k ∧ (∀ rs ∈ b.1, RoundsOk rs) ∧ (0 < k → ∃ e, st.extra (ptsOf spec c₁) = .ok e))
-    ⟨rfl, rfl, by simp, by simp⟩ ?_) ?_
-  · rintro k ⟨i, r, name⟩ ⟨ss, ps⟩ hmem ⟨h₁, h₂, h₃, -⟩
-    have hi : i = 0 := by
-      rw [hrs1] at hmem
-      simp at hmem
-      omega
-    subst hi
-    refine Ret.bind (Ret.monadLift _) fun extras hex => ?_
-    refine Ret.bind (hR sch hsch _ _ _ _ _ _ _) fun ⟨pf, tr'⟩ hpt => ?_
-    refine Ret.pure ⟨_, rfl, by simp [h₁], by simp [h₂], fun rs hrs => ?_,
-      fun _ => ⟨extras, by simpa [ptsOf] using hex⟩⟩
-    rcases Array.mem_push.1 hrs with hrs | rfl
-    · exact h₃ rs hrs
-    · exact hpt
-  · rintro ⟨ss, ps⟩ ⟨h₁, h₂, h₃, h₄⟩
-    obtain ⟨cm, rfl, hcm⟩ : ∃ cm, cms = #[cm] ∧ 0 < (flat cm.cap).size := by
-      obtain ⟨hsz, hf⟩ := hcms
-      have h1 : cms.size = 1 := by simpa using hsz
-      exact ⟨cms[0], eq_singleton_of h1, hf 0 (by simp) (by omega)⟩
-    dsimp only
-    rw [recordJson_eq h hct]
-    refine Ret.bind (Ret.pure rfl) fun rec hrec => Ret.pure ⟨flat cm.cap, c₁, ss, ?_, hcm, h₁, h₃, ?_⟩
-    · rw [← hrec]
+  obtain ⟨bs, hbs⟩ := Grows.go (by
+    refine Grows.bind (Grows.forIn_array (fun a b => ?_) _ _) fun b => ?_
+    · obtain ⟨i, r, name⟩ := a
+      obtain ⟨ss, ps⟩ := b
+      exact Grows.bind (Grows.monadLift _) fun extras => Grows.bind
+        (Grows.of_simS (With.Sim.run _ (repP_sim H resp _ _ _ _ _ _ _ _) _)) fun _ => Grows.pure _
+    · obtain ⟨ss, ps⟩ := b
+      dsimp only
+      rw [recordJson_eq _ hct]
+      exact Grows.bind (Grows.pure _) fun _ => Grows.pure _) hrun
+  have hv := Ret.go (P := fun r : String × Array ByteArray => ∃ streams,
+      r.1 = (recordObj spec (Claims.hOf H) #[flat cm.cap] (ptsOf spec (coinOf (resp 0))) streams r.2).compress ∧
+      streams.size = spec.repStreams.size ∧ (∀ rs ∈ streams, RoundsOk rs) ∧
+      ∃ e, st.extra (ptsOf spec (coinOf (resp 0))) = .ok e) (by
+    refine Ret.bind (Ret.forIn_array_mem _ _ _ (fun k (b : Array (Array Round) × Array ByteArray) =>
+      b.1.size = k ∧ b.2.size = k ∧ (∀ rs ∈ b.1, RoundsOk rs) ∧
+        (0 < k → ∃ e, st.extra (ptsOf spec (coinOf (resp 0))) = .ok e))
+      ⟨rfl, rfl, by simp, by simp⟩ ?_) ?_
+    · rintro k ⟨i, r, name⟩ ⟨ss, ps⟩ hmem ⟨h₁, h₂, h₃, -⟩
+      have hi : i = 0 := by
+        rw [hrs1] at hmem
+        simp at hmem
+        omega
+      subst hi
+      refine Ret.bind (Ret.monadLift _) fun extras hex => ?_
+      refine Ret.bind (hR sch hsch _ _ _ _ _ _ _) fun ⟨pf, tr'⟩ hpt => ?_
+      refine Ret.pure ⟨_, rfl, by simp [h₁], by simp [h₂], fun rs hrs => ?_,
+        fun _ => ⟨extras, by simpa [ptsOf] using hex⟩⟩
+      rcases Array.mem_push.1 hrs with hrs | rfl
+      · exact h₃ rs hrs
+      · exact hpt
+    · rintro ⟨ss, ps⟩ ⟨h₁, h₂, h₃, h₄⟩
+      dsimp only
+      rw [recordJson_eq _ hct]
+      refine Ret.bind (Ret.pure rfl) fun rec hrec => Ret.pure ⟨ss, ?_, h₁, h₃, h₄ (by rw [hrs1]; simp)⟩
+      rw [← hrec]
       simp only [List.map_toArray, List.map_cons, List.map_nil]
-      rfl
-    · exact h₄ (by rw [hrs1]; simp)
+      rfl) hrun
+  obtain ⟨streams, h₁, h₂, h₃, h₄⟩ := hv
+  refine ⟨flat cm.cap, streams, h₁, hcm.1, hcm.2, h₂, h₃, h₄, ?_⟩
+  rw [hbs]
+  simp
 
 end FlockComplete.JsonRT
