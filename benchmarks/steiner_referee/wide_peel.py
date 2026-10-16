@@ -26,7 +26,8 @@ Part 7. Prices per route: B_1/5 (ρ = 1/32), a ρ = 1/4 vector, and a real-time 
 Part 8. The three-piece drops, bounded from both sides with scales chosen per 16-block (NVF4's scale block): a lower
 bound over every real scale of each piece (a group of 4 with no zero entry and ≥ 3 entries no single piece holds
 overflows 6 slots), and an achievable count from part 6's exact packing over every integer UE4M3 scale up to 2n.
-`8` runs the cross-checks (the bound is never above either router on the same windows); `8.N` prices {±1..±N}.
+`8` runs the cross-checks (the bound is never above either router on the same windows); `8.N` prices {±1..±N};
+`8w.N` does the same with one scale per piece per 32-entry window (sparse NVFP4's 4X scales at k128).
 
 Usage: wide_peel.py SEED [PART ...]
 """
@@ -619,14 +620,15 @@ def router_block(tabs, b):
     return min(sum(group_drops(tuple(sorted(t[v] for v in b[g:g + 4]))) for g in range(0, len(b), 4)) for t in tabs)
 
 
-def router_all_scales(rng, n, nwin):
+def router_all_scales(rng, n, nwin, block=16):
     """Part 6's exact group packing (caps of 2 per piece, sums of integer piece values), with the three pieces' scales
-    chosen per 16-block from every integer UE4M3 scale up to 2n: an achievable drop count."""
+    chosen per block (16 entries, or 32: one scale per 32 logical K) from every integer UE4M3 scale up to 2n: an
+    achievable drop count."""
     tabs = router_tables(n)
     tot = 0
     for _ in range(nwin):
         p = [int(v) for v in rng.choice(alphabet(n), 32)]
-        tot += router_block(tabs, p[:16]) + router_block(tabs, p[16:])
+        tot += sum(router_block(tabs, p[b:b + block]) for b in range(0, 32, block))
     return Fr(tot, nwin), len(tabs)
 
 
@@ -651,7 +653,7 @@ def router_tables(n):
     return tabs
 
 
-def part8(rng, ns=(8, 16, 24, 32, 64), nwin=400, nwin_router=200, check=True):
+def part8(rng, ns=(8, 16, 24, 32, 64), nwin=400, nwin_router=200, check=True, block=16):
     rows, kc = [], Fr(15, 2) * Fr(5, 4) / 8 / Fr(4, 5) + 1
     for n in ns:
         S = alphabet(n)
@@ -661,12 +663,12 @@ def part8(rng, ns=(8, 16, 24, 32, 64), nwin=400, nwin_router=200, check=True):
             tot = 0
             for _ in range(nwin):
                 p = c + rng.choice(S, 32)
-                tot += block_drops_lb(p[:16], tab) + block_drops_lb(p[16:], tab)
+                tot += sum(block_drops_lb(p[b:b + block], tab) for b in range(0, 32, block))
             d = Fr(tot, nwin)
             if best is None or d < best[0]:
                 best = (d, c)
         d, c = best
-        dr, ntrip = router_all_scales(rng, n, nwin_router)
+        dr, ntrip = router_all_scales(rng, n, nwin_router, block)
 
         def rt_lb(st):
             return max(24, (16 + 8 * float(d)) / FP32_RATE, 18.5 + 8 * float(d) + st) / 32
@@ -674,7 +676,7 @@ def part8(rng, ns=(8, 16, 24, 32, 64), nwin=400, nwin_router=200, check=True):
         def priced(ext, st):
             return real_time(mma=1.5, fp32=8 * float(ext), alu=8 * float(dr), lsu=1 + 1.3 * float(dr), stores=st)
 
-        rows.append({"part": 8, "alphabet": f"{{±1..±{n}}}", "headroom": 127 - n,
+        rows.append({"part": 8, "alphabet": f"{{±1..±{n}}}", "scale_block": block, "headroom": 127 - n,
                      "lb": {"shift": c, "windows": nwin, "E_drops_per_window": round(float(d), 4),
                             "B_1/5_kappa1": round(float(Fr(3, 4) + Fr(2, 32) + d / 32), 4),
                             "rho_quarter": round(float(Fr(3, 4) + Fr(2, 4) + d / 4), 4),
@@ -734,8 +736,8 @@ def main():
     if "8" in parts:
         for row in part8(rng, ns=()):
             print(json.dumps(row, default=str), flush=True)
-    for p in sorted(p for p in parts if p.startswith("8.")):
-        for row in part8(rng, ns=(int(p[2:]),), check=False):
+    for p in sorted(p for p in parts if p.startswith(("8.", "8w."))):
+        for row in part8(rng, ns=(int(p.split(".")[1]),), check=False, block=32 if p.startswith("8w.") else 16):
             print(json.dumps(row, default=str), flush=True)
 
 
