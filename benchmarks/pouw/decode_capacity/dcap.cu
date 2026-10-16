@@ -695,6 +695,9 @@ __host__ __device__ inline uint64_t smix(uint64_t x) {
   return x ^ (x >> 31);
 }
 __host__ __device__ inline uint64_t dseed(uint64_t c0, uint64_t c1, uint64_t tile) { return smix(smix(c0 ^ smix(tile)) ^ c1); }
+#ifdef DFILL_PROVED
+#include "pfill.cuh"
+#else
 // word (i, j) of the generated matrix `tag`: 1 + b is B_b (i = column n, j = word of k), 3 is C, 16 + c chain c's A_0
 // (i = row, j = word of k); four s8 elements, element 4j + q in byte q
 __host__ __device__ inline uint32_t dword(uint64_t seed, uint32_t tag, uint32_t i, uint32_t j) {
@@ -852,6 +855,11 @@ static int dfill_check(const DFill& f, long long chunk, int n) {
   }
   return bad;
 }
+#endif
+#ifndef DFILL_GATE_W
+#define DFILL_GATE_W 4
+#define DFILL_GATE_S {8, 2048}
+#endif
 
 // A host thread keeps `depth` chunks queued on `fs` and notes when each is seen done.
 struct DPump {
@@ -909,15 +917,15 @@ static double dfill_alone(Dev& d, const DFill& f, cudaStream_t fs, int n, double
 
 static uint64_t g_c0 = 0x0123456789abcdefull, g_c1 = 0xfedcba9876543210ull;  // the round's coins (DFILL_COINS)
 
-// the receipts of a few tiles for each NC at S = 8 and the timed S, every receipt checked; then a control (S - 8 on the
-// host) that must differ everywhere
+// the receipts of a few tiles for each NC at a short S and the timed S (DFILL_GATE_S), every receipt checked; then a
+// control (S - 8 on the host) that must differ everywhere
 static int dgate(Dev& d) {
   int fails = 0;
   dfill_prep();
   for (int nc : {1, 2, 4})
-    for (int S : {8, 2048}) {
+    for (int S : DFILL_GATE_S) {
       DFill f;
-      f.grid = 3; f.W = 4; f.NC = nc; f.S = S; f.tiles = 2; f.c0 = g_c0; f.c1 = g_c1;
+      f.grid = 3; f.W = DFILL_GATE_W; f.NC = nc; f.S = S; f.tiles = 2; f.c0 = g_c0; f.c1 = g_c1;
       CK(cudaMalloc(&f.rec, f.per() * sizeof(unsigned long long)));
       CK(cudaMemset(f.rec, 0xA5, f.per() * sizeof(unsigned long long)));
       dfill_launch(f, 5, d.st);
