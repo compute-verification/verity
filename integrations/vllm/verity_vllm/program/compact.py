@@ -102,6 +102,13 @@ class _Acc:
         self.out[-1] = (sp, b0, d0, c0 + (count - 5))         # runs 4 .. count-2 closed into it
         self.open = (space,) + _add(base, delta, count - 1)     # the last run stays open
 
+    def splice(self, progs: list[Prog]) -> None:
+        """A finished greedy list pushed into an EMPTY accumulator, in one list copy: by the prefix property pushing its runs one by one
+        leaves the list without its last run closed and that run open (its runs are maximal: no two consecutive ones are contiguous)."""
+        sp, base, delta, c = progs[-1]
+        self.out = progs[:-1] + ([(sp, base, delta if c > 2 else (0,) * len(base), c - 1)] if c > 1 else [])
+        self.open = (sp,) + _add(base, delta, c - 1)
+
     def finish(self) -> list[Prog]:
         if self.open is not None:
             self._close()
@@ -128,7 +135,11 @@ def _walk(acc: _Acc, j, alias: Callable[[int, int], list[Prog]] | None) -> None:
         k, a = j["alias"]
         if alias is None:
             raise ValueError("alias reference without an alias resolver")
-        for space, base, delta, c in alias(k, a):
+        src = alias(k, a)
+        if src and not acc.out and acc.open is None:   # [GLM-5.3] an operand opening with an alias of a ~2048-progression weight read
+            acc.splice(src)
+            return
+        for space, base, delta, c in src:
             acc.progression(space, base, delta, c)
     else:
         for r in j["explicit"]:

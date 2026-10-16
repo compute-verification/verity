@@ -98,6 +98,8 @@ def test_alias_splices_the_aliased_operand_like_the_codec():
         a = K.from_json({"concat": [j1, {"alias": [0, 0]}, j2]}, alias=lambda k, a_: node0)
         R = runs(refs_from_json({"concat": [j1, j0, j2]}))
         assert a == K.from_runs(R) and K.expand(a) == R
+        for j, plain in (({"alias": [0, 0]}, j0), ({"concat": [{"alias": [0, 0]}, j2]}, {"concat": [j0, j2]})):   # spliced: empty accumulator
+            assert K.from_json(j, alias=lambda k, a_: node0) == K.from_runs(runs(refs_from_json(plain)))
 
 
 def test_rle_of_mapped_progressions_equals_rle_of_the_mapped_runs():
