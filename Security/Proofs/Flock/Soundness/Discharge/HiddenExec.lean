@@ -14,6 +14,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Headline
 import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
+import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineInst
 
 /-!
 # flock-verify's acceptance under hidden outputs, and the headline over hidden-output sessions
@@ -38,4 +39,6 @@ Since #757 main's prover writes the hidden-output statement (`verity/flock-circu
   string, a unit's computed committed gates bits of its output rows.
 * `Inst`: the same at `instProg`'s places (`instLayoutH`, `instRowsH`, `instRowsH_computes`), from `InstKeysRow`.
 * `HeadlineExec`: `flock_headline_exec_hidden`, #828's `flock_headline_exec` for hidden-output sessions, `hdec` open.
+* `HeadlineInst`: `flock_headline_exec_hidden_inst`, the same at `instProg`, with no condition on the unit's input
+  groups or on where the outputs are returned.
 -/
