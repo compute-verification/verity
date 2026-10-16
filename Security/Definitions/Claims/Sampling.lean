@@ -665,10 +665,13 @@ noncomputable def κ (D : Deploy Coin Col T) (δ : ℝ) (x : Msg) : ℝ :=
 noncomputable def γ (D : Deploy Coin Col T) (x : Msg) : ℝ :=
   slack ^ 4 * (16 * (Real.sqrt (2 * D.V.k x * D.weight x) + D.V.k x) ^ 2)
 
-/-- The design's miss at `t` at `x`, `0` on a statement that doesn't parse. -/
+/-- The design's miss at `t` at `x`, clamped at `0`; `0` on a statement that doesn't parse. The clamp matters only
+outside scope: a well-formed design's `P_a` is a probability, so its miss is `≥ 0`, but a Bernoulli rule with
+`num > den` checking part of each replay unit makes `Rule.Pa`, and so the miss, negative, and `KSCount`'s bound must stay
+`≥ 0` at the statements the verifier refuses. -/
 noncomputable def missAt (D : Deploy Coin Col T) (t : ℕ) (x : Msg) : ℝ :=
   match D.parse x with
-  | some s => s.design.miss (D.part s) t
+  | some s => max 0 (s.design.miss (D.part s) t)
   | none => 0
 
 /-- The extractor's expected work in runs, `1 + k + k²·(1 + n_PU·m′·k′) + k²·n_PU·openCalls`: its expected reruns, and
@@ -688,8 +691,8 @@ def KS (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
     Claims.KSLin H D.V (R H D.commit D.parse D.partition δ) (E D decode) (κ D δ) (γ D) (fun _ => 1)
       (Bext H D.V (E D decode))
 
-/-- **Sampling: KS, the count form** (a corollary of `KS` at `δ = miss(t)`): fewer than `t` units are faulty, except
-with probability `miss(t) + ε_ks + ε_bind`. -/
+/-- **Sampling: KS, the count form** (a corollary of `KS` at `δ = max(0, miss(t))`, `missAt`): fewer than `t` units are
+faulty, except with probability `max(0, miss(t)) + ε_ks + ε_bind`. -/
 def KSCount (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
   ∀ t decode, Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode →
     Claims.KSLin H D.V (RCount H D.commit D.parse D.partition t) (E D decode) (fun x => κ D (missAt D t x) x)
