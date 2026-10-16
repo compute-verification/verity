@@ -31,7 +31,7 @@ The distributions (`DISTS`) are:
 - an edge: maximal products first, then 0 or the minimal product, so a firing's sum is odd about half the time. This
   is the draw that lands a partial on an odd value just past 2^24, or past C0's binade.
 
-K runs from one firing to 16384, then 65536, 131072 and 262144.
+K runs over every power of two from one firing to 262144.
 
 Each value of C0 (`c0_words`) has a role:
 

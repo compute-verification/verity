@@ -90,7 +90,7 @@ def test_sweep_spans_k32_to_16384_and_beyond_for_every_format():
     cs = fx.configs()
     for fmt in fx.FMTS:
         k = {c.K for c in cs if c.fmt == fmt}
-        assert min(k) == fx.KSTEP[fmt] and {16384, 65536, 131072, 262144} <= k
+        assert sorted(k) == [fx.KSTEP[fmt] << j for j in range(len(k))] and max(k) == 262144
     assert len({c.name for c in cs}) == len(cs) and len({c.seed for c in cs}) == len(cs)
     assert {c.name for c in fx.configs(quick=True)} < {c.name for c in cs}
 

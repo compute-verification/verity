@@ -112,10 +112,9 @@ def c0_words(g: GridDef) -> dict[str, int]:
 
 def ks(fmt: str, quick: bool) -> list[int]:
     k, out = KSTEP[fmt], []
-    while k <= 16384:
+    while k <= 262144:
         out.append(k)
         k *= 2
-    out += [65536, 131072, 262144]
     return out[::3] if quick else out
 
 
