@@ -1177,7 +1177,7 @@ static int gate(Dev& d) {
 int main(int argc, char** argv) {
   if (argc < 2) {
     fprintf(stderr, "usage: dcap gate | bw GiB | lin M | att B L | step B L | fill B L FILL_SMS big|l2  [reps]\n"
-                    "       dcap dgate | dalone W NC S | done W NC S | dfill B L split|co FILL_SMS W NC S [reps]\n"
+                    "       dcap dgate | dpin | dalone W NC S | done W NC S | dfill B L split|co FILL_SMS W NC S [reps]\n"
                     "       (DFILL_COINS=<32 hex digits>: the round's coins for the d* modes)\n");
     return 1;
   }
@@ -1265,6 +1265,12 @@ int main(int argc, char** argv) {
     rc = run_fill(d, B, L, fsm, strcmp(argv[5], "big") == 0, argc > 6 ? atoi(argv[6]) : 9);
   } else if (mode == "dgate") {
     rc = dgate(d);
+  } else if (mode == "dpin") {
+    for (int nc : {1, 2, 4})
+      for (int S : {4, 8, 32})
+        for (unsigned long long tile : {0ull, 1ull, 1000003ull})
+          printf("{\"mode\": \"dpin\", \"NC\": %d, \"S\": %d, \"tile\": %llu, \"receipt\": \"0x%016llX\"}\n", nc, S, tile,
+                 (unsigned long long)dfill_ref(g_c0, g_c1, tile, nc, S));
   } else if (mode == "dalone" || mode == "done") {
     if (argc < 5) { fprintf(stderr, "%s W NC S\n", mode.c_str()); return 1; }
     const int W = atoi(argv[2]), NC = atoi(argv[3]), S = atoi(argv[4]);

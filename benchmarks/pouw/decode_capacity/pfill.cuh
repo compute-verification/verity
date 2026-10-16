@@ -98,6 +98,7 @@ __host__ __device__ inline uint32_t pf_y0(uint32_t pos) { return pos; }
 __host__ __device__ inline uint32_t pf_z0(uint32_t pos) { return pos * 0x9E3779B9u; }
 __host__ __device__ inline uint64_t pf_fold(uint64_t K, uint32_t pos, uint64_t v) { return smix(smix(K ^ pos) ^ v); }
 
+#ifdef __CUDACC__
 __device__ __forceinline__ void pf_block(uint64_t c0, uint64_t c1, uint64_t tile, uint64_t ctr, uint64_t* st) {
   uint64_t w[16];
   w[0] = c0; w[1] = c1; w[2] = tile; w[3] = PF_DOM; w[4] = ctr; w[5] = 0x8000000000000000ull;
@@ -216,11 +217,18 @@ __global__ void __launch_bounds__(32 * PF_W, 1) dfill_k(uint64_t c0, uint64_t c1
   }
 }
 
-// ---------------------------------------------------------------- the host's tile, from the matrices
+#endif
+
+// ---------------------------------------------------------------- the host's tile, from the matrices (pfill_host.cpp builds
+// this part with g++ for tests/test_pfill_ref.py, RS_K a host array there)
 static uint64_t pf_K[80];
 static void pf_host_k() {
   static bool ok = false;
+#ifdef __CUDACC__
   if (!ok) CK(cudaMemcpyFromSymbol(pf_K, RS_K, sizeof pf_K));
+#else
+  if (!ok) memcpy(pf_K, RS_K, sizeof pf_K);
+#endif
   ok = true;
 }
 static inline uint64_t pf_rotr64(uint64_t x, int n) { return (x >> n) | (x << (64 - n)); }
@@ -290,6 +298,7 @@ static uint64_t dfill_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int s
   }
 }
 
+#ifdef __CUDACC__
 // one chunk: `grid` blocks of PF_W warps, each `tiles` tiles of PF_W S fragments x PF_TN columns
 struct DFill {
   int W = PF_W, NC = 4, S = 512, tiles = 1, grid = 0;
@@ -342,3 +351,4 @@ static int dfill_check(const DFill& f, long long chunk, int n) {
   }
   return bad;
 }
+#endif
