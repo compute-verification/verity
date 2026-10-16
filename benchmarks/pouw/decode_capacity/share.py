@@ -181,6 +181,48 @@ def measured_fillers(rows, shape="big"):
     return out
 
 
+def dfill_name(r):
+    return f"{r['shape']} {r['fill_sms']} SMs"
+
+
+def dfill_fillers(rows):
+    """FILL's DRAM-free filler (dfill.sh): one filler per (shape, SMs), from its L = 2048 points, and on a split also
+    the arm with cuBLASLt re-tuned on the decode partition (" tuned"). Its whole output is an 8-byte receipt a tile of
+    NC·S MMAs, so it has no commitment factor (COMMIT applies to T2's X only)."""
+    out = {}
+    for name in sorted({dfill_name(r) for r in rows}):
+        sel = [r for r in rows if dfill_name(r) == name and r["L"] == 2048]
+        if sel:
+            out[name] = Filler([(r["B"], r["window"]["fill_share"], r["slowdown"]) for r in sel])
+        if sel and all("tuned" in r for r in sel):
+            out[name + " tuned"] = Filler([(r["B"], r["tuned"]["fill_share"], r["tuned"]["slowdown"]) for r in sel])
+    return out
+
+
+HEADLINE = [("decode", 1, 2048), ("decode", 32, 8192), ("decode", 128, 2048), ("decode", 256, 2048),
+            ("chat", 32, None), ("chat", 256, None), ("RAG", 144, None), ("code / agents", 48, None),
+            ("reasoning", 132, None)]
+
+
+def headline(res, names):
+    """Rows of note §0's table: N/C, cert/C and the time factor, without filler and with each named filler."""
+    out = []
+    for what, b, l in HEADLINE:
+        if what == "decode":
+            r = next(g for g in res["grid"] if (g["B"], g["L"]) == (b, l))
+            base, label = r["ms"], f"decode B = {b}, L = {l // 1024}K"
+            cols = {n: (r[f"filler {n}"], r[f"filler {n}"]["ms"] / base) for n in names}
+        else:
+            r = next(x for x in res["mixes"] if x["mix"] == what and x["B"] == b and x["schedule"] == "separate"
+                     and x["attention"] == "FA2")
+            label = f"{what}, B = {b}"
+            cols = {n: (r[f"filler {n}"], r[f"filler {n}"].get("time", float("nan"))) for n in names}
+        out.append({"row": label, "N/C": r["nominal/capacity"], "cert/C": r["certified/capacity"],
+                    **{n: {"N/C": c["nominal/capacity"], "cert/C": c["certified/capacity"], "time": t}
+                       for n, (c, t) in cols.items()}})
+    return out
+
+
 def with_filler(m, b, ms, lin_ms, name):
     fl = FILLER[name]
     share, slow = fl.at(b)
@@ -248,7 +290,8 @@ def mixes(m):
                     t, f = with_filler(m, b, step, m.lin(b), fname)
                     td = d * t / b
                     fm = f * d / b
-                    r[f"filler {fname}"] = m.row(n + fm, t_pre + td, fm / (m.cap * (t_pre + td) * 1e-3))
+                    r[f"filler {fname}"] = {**m.row(n + fm, t_pre + td, fm / (m.cap * (t_pre + td) * 1e-3)),
+                                            "time": (t_pre + td) / (t_pre + t_dec)}
                 out.append(r)
                 c = b * p / d
                 mrows = b + c
@@ -273,6 +316,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("out", type=pathlib.Path)
     ap.add_argument("--fill", type=pathlib.Path)
+    ap.add_argument("--dfill", type=pathlib.Path, action="append", default=[],
+                    help="a dfill.sh run's out dir (repeatable): FILL's DRAM-free filler")
     ap.add_argument("--json", type=pathlib.Path)
     args = ap.parse_args()
     rows = [json.loads(line) for line in (args.out / "dcap.jsonl").read_text().splitlines() if line.strip()]
@@ -282,13 +327,18 @@ def main():
         fill_rows = [json.loads(line) for line in (args.fill / "fill.jsonl").read_text().splitlines() if line.strip()]
         FILLER.clear()
         FILLER.update(measured_fillers(fill_rows))
+    dfill_rows = [json.loads(line) for d in args.dfill for line in (d / "dfill.jsonl").read_text().splitlines()
+                  if line.strip()]
+    dfillers = dfill_fillers(dfill_rows)
+    FILLER.update(dfillers)
     res = {"read_mhz": m.mhz, "dram_read_gb_s": m.bw / 1e9, "att_fit": {"gb_s": m.att_bw / 1e9, "c0_ms": m.att_c0},
            "step_delta_ms": m.delta, "eta_fa2": m.eta_fa2, "A_v99": A_V99, "pool_tokens": POOL_TOK,
            "model_check": [{"B": b, "L": l, "measured": r["ms"], "model": m.lin(b) + m.att_ms(b, l) + m.delta}
                            for (b, l), r in sorted(m.step.items())],
            "tau": tau_table(m), "grid": grid(m), "mixes": mixes(m),
            "a_ladder": [{"what": w, "A": a} for w, a in A_LADDER],
-           "filler": "measured (--fill)" if args.fill else "W11 (assumed)", "fill": fill_rows}
+           "filler": "measured (--fill)" if args.fill else "W11 (assumed)", "fill": fill_rows, "dfill": dfill_rows}
+    res["headline"] = headline(res, list(FILLER))
     print(f"read clock {m.mhz:.0f} MHz, C = {m.cap / 1e12:.1f} TMAC/s (C_2430 = {m.cap_max / 1e12:.1f}); "
           f"DRAM read {m.bw / 1e9:.0f} GB/s; attention fit {m.att_bw / 1e9:.0f} GB/s + {m.att_c0:.3f} ms; "
           f"step δ {m.delta:.3f} ms; FA2 η {m.eta_fa2:.3f}; A(V99) {A_V99:.4f}; pool {POOL_TOK} tokens")
@@ -304,6 +354,25 @@ def main():
                   f"{fmt(r['alone']['share'])} | {fmt(r['window']['fill_share'])} | "
                   f"{fmt(r['window']['fill_share'] / COMMIT)} | {fmt(r['slowdown'])} | {fmt(split)} | "
                   f"{r['window']['fill_gb_per_s']:.0f} |")
+    if dfill_rows:
+        print("\n| DRAM-free filler | B | L | alone share | share beside decode | decode slowdown | split only | "
+              "tuned: share, slowdown, split only | receipts checked (bad) |\n|---|---|---|---|---|---|---|---|---|")
+        for r in sorted(dfill_rows, key=lambda r: (dfill_name(r), r["B"], r["L"])):
+            a = r["arms"]
+            split = a["split"]["ms"] / ((a["full"]["ms"] + a["full2"]["ms"]) / 2) if "split" in a else None
+            tu = r.get("tuned")
+            tus = f"{fmt(tu['fill_share'])}, {fmt(tu['slowdown'])}, {fmt(tu['split_only'])}" if tu else "–"
+            print(f"| {dfill_name(r)} | {r['B']} | {r['L']} | {fmt(r['alone']['share'])} | "
+                  f"{fmt(r['window']['fill_share'])} | {fmt(r['slowdown'])} | {fmt(split)} | {tus} | "
+                  f"{r['rec_checked']} ({r['rec_bad']}) |")
+    names = list(FILLER)
+    print("\nHeadline: N/C, cert/C (= 0.99 N/C) and time with each filler (decode rows: the step's slowdown; mixes: the "
+          "mix's time over its time without filler)\n")
+    print("| phase or mix | N/C | cert/C | " + " | ".join(f"{n}: N/C, cert/C, time" for n in names) + " |")
+    print("|---|---|---|" + "---|" * len(names))
+    for h in res["headline"]:
+        print(f"| {h['row']} | {fmt(h['N/C'])} | {fmt(h['cert/C'])} | "
+              + " | ".join(f"{fmt(h[n]['N/C'])}, {fmt(h[n]['cert/C'])}, {fmt(h[n]['time'])}" for n in names) + " |")
     print(f"\nfiller: {res['filler']}")
     print("\n| kernel | η (read clock) | τ (V99) |\n|---|---|---|")
     for r in res["tau"]:

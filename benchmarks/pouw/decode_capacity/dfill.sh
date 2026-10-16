@@ -7,15 +7,17 @@
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=FILL \
 #     --send benchmarks/pouw/decode_capacity/dfill.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/dfill.sh"'
 #
-# DF_ALONE ("W:NC ..."), DF_ARMS ("split|co:FILL_SMS:W:NC ..."), DF_BLS ("B:L ..."), DF_S (steps a tile), DF_REPS, NCU (0|1)
+# DF_ALONE ("W:NC ..."), DF_ARMS ("split|co:FILL_SMS:W:NC[:CHUNK_LOG2] ..."), DF_BLS and DF_CO_BLS ("B:L ...", for split
+# and co arms), DF_S (steps a tile), DF_REPS, NCU (0|1)
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
 D=benchmarks/pouw/decode_capacity
 export B; B=$(mktemp -d /tmp/dfill.XXXXXX); trap 'rm -rf "$B"' EXIT
 export DF_ALONE=${DF_ALONE:-"4:1 4:2 4:4 8:1 8:2 8:4"}
-export DF_ARMS=${DF_ARMS:-"split:92:4:2 split:60:4:2 co:0:4:1 co:0:4:2"}
+export DF_ARMS=${DF_ARMS:-"split:92:8:4 split:60:8:4 split:44:8:4 split:28:8:4 co:0:4:4 co:0:2:4 co:0:4:4:15"}
 export DF_BLS=${DF_BLS:-"1:2048 32:2048 32:8192 128:2048 256:2048"}
+export DF_CO_BLS=${DF_CO_BLS:-"32:2048 256:2048"}
 export DF_S=${DF_S:-2048} DF_REPS=${DF_REPS:-15} NCU=${NCU:-1}
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 export DFILL_COINS; DFILL_COINS=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
@@ -42,17 +44,26 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
   done
   q
   if [ "$NCU" = 1 ]; then
-    M=gpu__time_duration.sum,dram__bytes_read.sum,dram__bytes_write.sum,lts__t_bytes.sum,sm__inst_executed_pipe_tensor.sum,sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_elapsed,smsp__issue_active.avg.pct_of_peak_sustained_active,sm__warps_active.avg.pct_of_peak_sustained_active
+    ncu --query-metrics 2>&1 | grep -iE "^(dram|fbpa)" > "$O/ncu-dram-metrics.txt"
+    M=gpu__time_duration.sum,lts__t_bytes.sum,sm__inst_executed_pipe_tensor.sum,sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_elapsed,smsp__issue_active.avg.pct_of_peak_sustained_active,sm__warps_active.avg.pct_of_peak_sustained_active
     for a in 4:2 8:4; do
-      ncu --clock-control none -k regex:dfill_k --launch-count 3 --metrics $M --csv "$B/dcap" done "${a%:*}" "${a#*:}" "$DF_S" \
-        > "$O/ncu-dfill-w${a%:*}-nc${a#*:}.csv" 2>&1; echo "ncu $a rc $?" >> "$O/rc.txt"
+      for m in $M dram__throughput.avg.pct_of_peak_sustained_elapsed dram__bytes.sum dram__sectors_read.sum,dram__sectors_write.sum; do
+        ncu --clock-control none -k regex:dfill_k --launch-count 3 --metrics $m --csv "$B/dcap" done "${a%:*}" "${a#*:}" "$DF_S" \
+          >> "$O/ncu-dfill-w${a%:*}-nc${a#*:}.csv" 2>&1; echo "ncu $a $m rc $?" >> "$O/rc.txt"
+      done
+    done
+    L=launch__grid_size,launch__block_size,launch__registers_per_thread,launch__shared_mem_per_block_static,launch__shared_mem_per_block_dynamic,launch__occupancy_limit_registers,launch__occupancy_limit_shared_mem,launch__occupancy_limit_warps,launch__occupancy_limit_blocks
+    for bl in 32:2048 256:2048; do
+      DCAP_NOGRAPH=1 ncu --clock-control none --nvtx --nvtx-include "timed/" --launch-count 200 --metrics $L --csv "$B/dcap" step "${bl%:*}" "${bl#*:}" 1 \
+        > "$O/ncu-step-${bl%:*}-${bl#*:}.csv" 2>&1; echo "ncu step $bl rc $?" >> "$O/rc.txt"
     done
   fi
   for arm in $DF_ARMS; do
-    IFS=: read -r place f w nc <<< "$arm"
-    for bl in $DF_BLS; do
-      "$B/dcap" dfill "${bl%:*}" "${bl#*:}" "$place" "$f" "$w" "$nc" "$DF_S" "$DF_REPS" >> "$O/dfill.jsonl" 2>> "$O/errors.txt" ||
-        echo "rc $? for dfill $bl $arm" >> "$O/errors.txt"
+    IFS=: read -r place f w nc lg <<< "$arm"
+    bls=$DF_BLS; [ "$place" = co ] && bls=$DF_CO_BLS
+    for bl in $bls; do
+      DFILL_CHUNK_LOG2=${lg:-19} "$B/dcap" dfill "${bl%:*}" "${bl#*:}" "$place" "$f" "$w" "$nc" "$DF_S" "$DF_REPS" \
+        >> "$O/dfill.jsonl" 2>> "$O/errors.txt" || echo "rc $? for dfill $bl $arm" >> "$O/errors.txt"
     done
     q
   done

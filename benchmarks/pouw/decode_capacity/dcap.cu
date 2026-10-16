@@ -22,6 +22,7 @@
 #include <cuda_runtime.h>
 #include <dlfcn.h>
 #include <nvml.h>
+#include <nvtx3/nvToolsExt.h>
 
 #include <algorithm>
 #include <atomic>
@@ -407,7 +408,9 @@ static void run_step(Dev& d, int kind, int M, int L, int reps) {
   std::vector<Lt> p;
   if (kind != 1) p = lin_plans(d, M);
   bool wrapped = false;
+  nvtxRangePushA("timed");  // ncu --nvtx --nvtx-include timed/ profiles the step's own kernels, not cuBLASLt's tuning
   const std::vector<Rep> v = time_work(d, [&] { enqueue_step(d, p, kind, M, L, &wrapped); }, reps);
+  nvtxRangePop();
   double lin_macs = 0, lin_bytes = 0;
   bool missing = false;
   if (kind != 1) {
@@ -829,11 +832,12 @@ static void dfill_prep() {
   CK(cudaFuncSetAttribute(dfill_k<2>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
   CK(cudaFuncSetAttribute(dfill_k<4>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
 }
-// tiles a warp so that a chunk is about 2^17 MMAs a scheduler, ~1 ms at the tensor peak
+// tiles a warp so that a chunk is about 2^DFILL_CHUNK_LOG2 (default 19) MMAs an SM, ~1 ms at the tensor peak
 static DFill dfill_make(int grid, int W, int NC, int S, uint64_t c0, uint64_t c1) {
   DFill f;
   f.grid = grid; f.W = W; f.NC = NC; f.S = S; f.c0 = c0; f.c1 = c1;
-  f.tiles = std::max(1, (int)((4LL << 17) / ((long long)W * NC * S)));
+  const int lg = getenv("DFILL_CHUNK_LOG2") ? atoi(getenv("DFILL_CHUNK_LOG2")) : 19;
+  f.tiles = std::max(1, (int)((1LL << lg) / ((long long)W * NC * S)));
   CK(cudaMalloc(&f.rec, f.per() * sizeof(unsigned long long)));
   return f;
 }
@@ -989,28 +993,47 @@ static int run_dfill(Dev& d, int B, int L, int place, int fill_sms, int W, int N
   }
   DFill f = dfill_make(got[1], W, NC, S, g_c0, g_c1);
   const int sp_step = sm_spread(d, ss, true), sp_fill = sm_spread(d, fs, false);
+  // split only: cuBLASLt re-tuned on the step's partition (p2), as an operator who runs the split would tune it
+  std::vector<Lt> p2;
+  if (place == 0) {
+    d.st = ss;
+    p2 = lin_plans(d, B);
+  }
   double amhz, awatt;
   const double alone = dfill_alone(d, f, fs, 30, &amhz, &awatt);
   auto work = [&] { enqueue_step(d, p, 2, B, L, &wrapped); };
+  auto work2 = [&] { enqueue_step(d, p2, 2, B, L, &wrapped); };
   d.st = full;
   const std::vector<Rep> a_full = time_work(d, work, reps);
-  std::vector<Rep> a_split;
+  std::vector<Rep> a_split, a_split2, a_fill2;
   if (place == 0) {
     d.st = ss;
     a_split = time_work(d, work, reps);
+    a_split2 = time_work(d, work2, reps);
   }
-  DPump pump;
-  dpump_start(pump, f, fs, 3);
-  while (pump.done.load() < 2) {
-  }
-  double t0 = 0, t1 = 0;
-  d.st = ss;
-  const std::vector<Rep> a_fill = time_work(d, work, reps, &t0, &t1);
-  dpump_stop(pump);
-  long long nwin = 0;
-  for (double x : pump.t) nwin += x > t0 && x <= t1;
-  const double rate = (double)nwin * f.macs() / ((t1 - t0) * 1e-3);
-  const int bad = dfill_check(f, pump.launched.load() - 1, 8);
+  // the step on `ss` beside the pumped filler: its reps, and the filler's MACs/s over the window
+  int bad = 0;
+  auto beside = [&](const std::function<void()>& w, double* rate, long long* nwin, double* wms) {
+    DPump pump;
+    dpump_start(pump, f, fs, 3);
+    while (pump.done.load() < 2) {
+    }
+    double t0 = 0, t1 = 0;
+    d.st = ss;
+    const std::vector<Rep> v = time_work(d, w, reps, &t0, &t1);
+    dpump_stop(pump);
+    *nwin = 0;
+    for (double x : pump.t) *nwin += x > t0 && x <= t1;
+    *rate = (double)*nwin * f.macs() / ((t1 - t0) * 1e-3);
+    *wms = t1 - t0;
+    bad += dfill_check(f, pump.launched.load() - 1, 8);
+    return v;
+  };
+  double rate, rate2 = 0, wms, wms2 = 0;
+  long long nwin, nwin2 = 0;
+  const std::vector<Rep> a_fill = beside(work, &rate, &nwin, &wms);
+  if (place == 0) a_fill2 = beside(work2, &rate2, &nwin2, &wms2);
+  const double t0 = 0, t1 = wms;
   d.st = full;
   const std::vector<Rep> a_full2 = time_work(d, work, reps);
   double step_macs = 0;
@@ -1019,21 +1042,35 @@ static int run_dfill(Dev& d, int B, int L, int place, int fill_sms, int W, int N
   const Rep mf = median(a_fill), m0 = median(a_full), m2 = median(a_full2);
   const double peak = 1024.0 * d.sms * mf.mhz * 1e6;
   char shape[64];
-  snprintf(shape, sizeof shape, "dfree-%s-w%d-nc%d", place ? "co" : "split", W, NC);
+  snprintf(shape, sizeof shape, "dfree-%s-w%d-nc%d-t%d", place ? "co" : "split", W, NC, f.tiles);
   printf("{\"mode\": \"dfill\", \"place\": \"%s\", \"shape\": \"%s\", \"B\": %d, \"L\": %d, \"W\": %d, \"NC\": %d, \"S\": %d, "
          "\"tiles\": %d, \"grid\": %d, \"coins\": [\"%016llx\", \"%016llx\"], \"prio\": [%d, %d], \"fill_sms_req\": %d, "
          "\"step_sms\": %d, \"fill_sms\": %d, \"spread\": {\"step_graph\": %d, \"fill\": %d}, \"kv_wrapped\": %s, "
          "\"step_macs\": %.6e, \"chunk_macs\": %.6e, \"alone\": {\"mac_per_s\": %.6e, \"share\": %.5f, \"mhz\": %.1f, "
          "\"watt\": %.1f}, \"window\": {\"ms\": %.3f, \"fill_chunks\": %lld, \"fill_mac_per_s\": %.6e, \"fill_share\": %.5f, "
-         "\"fill_gb_per_s\": %.6f}, \"rec_checked\": 8, \"rec_bad\": %d, \"slowdown\": %.4f, \"step_share_full\": %.5f, "
-         "\"step_share_fill\": %.5f, \"arms\": {",
+         "\"fill_gb_per_s\": %.6f}, \"rec_checked\": %d, \"rec_bad\": %d, \"slowdown\": %.4f, \"step_share_full\": %.5f, "
+         "\"step_share_fill\": %.5f, ",
          place ? "co" : "split", shape, B, L, W, NC, S, f.tiles, f.grid, (unsigned long long)g_c0, (unsigned long long)g_c1,
          lo, hi, place ? d.sms : fill_sms, place ? d.sms : got[0], got[1], sp_step, sp_fill, wrapped ? "true" : "false",
          step_macs, f.macs(), alone, alone / (1024.0 * d.sms * amhz * 1e6), amhz, awatt, t1 - t0, nwin, rate, rate / peak,
-         (double)nwin * f.per() * 8 / ((t1 - t0) * 1e-3) / 1e9, bad, mf.ms / ((m0.ms + m2.ms) / 2),
+         (double)nwin * f.per() * 8 / ((t1 - t0) * 1e-3) / 1e9, place ? 8 : 16, bad, mf.ms / ((m0.ms + m2.ms) / 2),
          step_macs / (m0.ms * 1e-3) / (1024.0 * d.sms * m0.mhz * 1e6), step_macs / (mf.ms * 1e-3) / peak);
+  if (place == 0) {
+    const Rep mf2 = median(a_fill2);
+    printf("\"tuned\": {\"window_ms\": %.3f, \"fill_chunks\": %lld, \"fill_mac_per_s\": %.6e, \"fill_share\": %.5f, "
+           "\"slowdown\": %.4f, \"split_only\": %.4f, \"algos\": [",
+           wms2, nwin2, rate2, rate2 / (1024.0 * d.sms * mf2.mhz * 1e6), mf2.ms / ((m0.ms + m2.ms) / 2),
+           median(a_split2).ms / ((m0.ms + m2.ms) / 2));
+    for (size_t j = 0; j < p2.size(); j++) printf("%s[%d, %d]", j ? ", " : "", p[j].algo_id, p2[j].algo_id);
+    printf("]}, ");
+  }
+  printf("\"arms\": {");
   print_arm("full", a_full, true);
-  if (place == 0) print_arm("split", a_split, true);
+  if (place == 0) {
+    print_arm("split", a_split, true);
+    print_arm("split_tuned", a_split2, true);
+    print_arm("split_tuned_fill", a_fill2, true);
+  }
   print_arm(place ? "co_fill" : "split_fill", a_fill, true);
   print_arm("full2", a_full2, false);
   printf("}}\n");
