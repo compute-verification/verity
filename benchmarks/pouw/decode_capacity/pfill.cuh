@@ -23,14 +23,20 @@
 // The receipt: lane (g, t) of warp w keeps one chain per fragment in flight, c < 4, fragment f's outputs going to chain f
 // % 4 in order of f and then of B fragment j; each MMA gives the chain (d0, d1) = C[16F+g][8j+2t, 8j+2t+1] and (d2, d3) =
 // the same of row 16F+g+8. NC picks the fold:
-//   4  ram  y <- (rotl(y, 7) + d0) a0 + d1;  y <- (rotl(y, 19) + d2) a1 + d3   (two ops a pair)
+//   4  ram  y <- (rotl(y, 7) + d0) a0 + d1;  y <- (rotl(y, 19) + d2) a1 + d3   (two ops a pair). Built with -DPFILL_LI
+//           or -DPFILL_XIN13, NC 4 is one of P2-FF r9's folds instead (note:20261016T1117Z-draft-fullfloor-s-r9), on the
+//           device and in dfill_ref alike, each committing the whole y:
+//      LI     y <- (y ^ d0 ^ k0) a0 + d1;  y <- (y ^ d2 ^ k1) a1 + d3   (LOP3, IMAD: two ops a pair). Sound only while no
+//             free operand is shared across a hand-off (d1, d2) or (d3, the next d0): the filler's rows are hashed
+//      XIN13  y <- (rotl(y, 13) ^ d0) a0 + d1;  y <- (rotl(y, 19) ^ d2) a1 + d3   (SHF, LOP3, IMAD: three ops a pair)
 //   2  duo  per word p, keys (k, a, r): u = y ^ p ^ k;  y <- u a + z;  z <- rotl(u, r) + y   (three ops a word)
 //   1  xor  y <- y ^ d0 ^ d1 ^ d2 ^ d3, the cheapest fold that reads every word: a cost reference, not a receipt (it is
 //           linear, so it binds nothing)
 //   5, 3    ram, xor with A made once a tile and reused (a probe of the SHA's cost; its receipts are not dfill_ref's)
 //   6, 7, 8 probes of the fold's pipes, A made once: ram with immediate keys, LEA.HI only, IMAD only (none a receipt)
 // Keys are the key block's row words in order, the first two that are odd, at least 2^8 + 1 away from 0 mod 2^24 and not
-// ±1 mod 32 (a0, a1); duo's k0, k1 are its rows 14 and 15. A tile's receipt is the XOR over its chains of
+// ±1 mod 32 (a0, a1), and in an LI or XIN13 build (every fold's keys there) with no a b within 128 of 0 mod 2^30 for
+// b in 1..128 (pf_key_ok_r9); k0, k1 (duo's and LI's) are its rows 14 and 15. A tile's receipt is the XOR over its chains of
 // smix(smix(K ^ pos) ^ v), K = dseed(c0, c1, tile), pos = (32 w + lane) 4 + c, v the chain's state (duo: z << 32 | y).
 //
 // Built with -DPFILL_E2M1 (score.py's build takes no flags, so an arm passes it through NVCC_APPEND_FLAGS, which nvcc
@@ -73,6 +79,17 @@ constexpr int PF_KIND = PF_BITS;
 #else
 constexpr int PF_KIND = PF_S8;
 #endif
+#if defined(PFILL_XIN)
+#error "pfill: -DPFILL_XIN (XOR-in, rotl 7) is retired: ±128 is an int8 ratio at its step boundary (note:20261016T1117Z-draft-fullfloor-s-r9). Build -DPFILL_XIN13"
+#endif
+#if defined(PFILL_LI) && defined(PFILL_XIN13)
+#error "pfill: one receipt fold a build, -DPFILL_LI or -DPFILL_XIN13"
+#endif
+#if defined(PFILL_LI) || defined(PFILL_XIN13)
+constexpr bool PF_R9 = true;
+#else
+constexpr bool PF_R9 = false;
+#endif
 __host__ __device__ constexpr uint64_t pf_dom(int kd) { return kd == PF_E2M1 ? PF_DOM4 : kd == PF_BITS ? PF_DOM01 : PF_DOM; }
 
 __host__ __device__ inline uint32_t pf_bswap(uint32_t x) {
@@ -106,6 +123,18 @@ __host__ __device__ inline bool pf_key_ok(uint32_t a) {
   const uint32_t m = a & 0xFFFFFFu, r = a & 31u;
   return (a & 1u) && m > 256u && m < (1u << 24) - 256u && r != 1u && r != 31u;
 }
+// receipt_folds_r9.key_ok_r9: pf_key_ok, and neither a nor -a an int8 ratio mod 2^30, i.e. a b mod 2^30 outside
+// [-128, 128] for every b in 1..128
+__host__ __device__ inline bool pf_key_ok_r9(uint32_t a) {
+  if (!pf_key_ok(a)) return false;
+  uint32_t t = 0;
+#pragma unroll 1
+  for (int b = 1; b <= 128; b++) {
+    t += a;
+    if (((t + 128u) & 0x3FFFFFFFu) <= 256u) return false;
+  }
+  return true;
+}
 struct PfKeys {
   uint32_t a0, a1, k0, k1;
 };
@@ -115,9 +144,9 @@ __host__ __device__ inline PfKeys pf_keys(const uint64_t* st) {
 #pragma unroll
   for (int r = 0; r < 16; r++) {
     const uint32_t a = pf_row(st, r);
-    if (pf_key_ok(a)) {
+    if (n < 2 && (PF_R9 ? pf_key_ok_r9(a) : pf_key_ok(a))) {
       if (n == 0) k.a0 = a;
-      else if (n == 1) k.a1 = a;
+      else k.a1 = a;
       n++;
     }
   }
@@ -127,11 +156,11 @@ template <int NC>
 __host__ __device__ __forceinline__ void pf_absorb(uint32_t& y, uint32_t& z, uint32_t d0, uint32_t d1, uint32_t d2,
                                                    uint32_t d3, const PfKeys& k) {
   if (NC == 4 || NC == 5) {
-#ifdef PFILL_XIN
-    // XOR-in, three ops a pair: ram's step (rotl(y, 7) + d0) a0 + d1 = rotl(y, 7) a0 + Q reads a pair only through
-    // Q = a0 d0 + d1 (note:20261016T0917Z-draft-fullfloor-s-r8 §1.2), so ram certifies half the words. XOR-in's
-    // all-state kernel is a fixed group of word bijections, (d0 ^ 2^31, d1 + 2^31) its only one at a pair
-    y = (pf_rotl(y, 7) ^ d0) * k.a0 + d1;
+#if defined(PFILL_LI)
+    y = (y ^ d0 ^ k.k0) * k.a0 + d1;
+    y = (y ^ d2 ^ k.k1) * k.a1 + d3;
+#elif defined(PFILL_XIN13)
+    y = (pf_rotl(y, 13) ^ d0) * k.a0 + d1;
     y = (pf_rotl(y, 19) ^ d2) * k.a1 + d3;
 #else
     y = (pf_rotl(y, 7) + d0) * k.a0 + d1;

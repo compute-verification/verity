@@ -28,7 +28,8 @@ DOM01 = 0x5046494C4C2D6231  # "PFILL-b1": the s8 tile on {0,1} bits
 CTR_B, CTR_KEY = 1 << 56, 2 << 56
 M32 = 0xFFFFFFFF
 RAM, DUO, XOR = 4, 2, 1
-XIN = 9  # XOR-in: NC 4's fold in a -DPFILL_XIN build
+LI, XIN13 = 10, 13  # P2-FF r9's folds: NC 4's in a -DPFILL_LI or -DPFILL_XIN13 build
+R9 = (LI, XIN13)
 S8, E2M1, BITS = 0, 1, 2  # pfill.cuh's PF_S8, PF_E2M1, PF_BITS
 KINDS = (S8, E2M1, BITS)
 DOMS = {S8: DOM, E2M1: DOM4, BITS: DOM01}
@@ -54,15 +55,43 @@ def key_ok(a: int) -> bool:
     return bool(a & 1) and 256 < m < (1 << 24) - 256 and r not in (1, 31)
 
 
-def keys(rows: np.ndarray) -> tuple[int, int, int, int]:
-    """(a0, a1, k0, k1): the first two row words that pass key_ok, then rows 14 and 15."""
-    ok = [int(x) for x in rows if key_ok(int(x))]
+def key_ok_r9(a: int) -> bool:
+    """P2-FF r9's key condition (receipt_folds_r9.key_ok_r9, art:91c156a1): key_ok, and neither a nor -a an int8 ratio
+    mod 2^30, i.e. a b mod 2^30 outside [-128, 128] for every b in 1..128."""
+    return key_ok(a) and all((a * b + 128) % (1 << 30) > 256 for b in range(1, 129))
+
+
+def keys(rows: np.ndarray, r9: bool = False) -> tuple[int, int, int, int]:
+    """(a0, a1, k0, k1): the first two row words that pass key_ok (key_ok_r9 in an LI or XIN13 build), then rows 14 and
+    15."""
+    ok = [int(x) for x in rows if (key_ok_r9 if r9 else key_ok)(int(x))]
     a = ok + [0x9E3779B9, 0x7F4A7C15][len(ok[:2]):]
     return a[0], a[1], int(rows[14]), int(rows[15])
 
 
 def rotl(x: np.ndarray, r: int) -> np.ndarray:
     return (x << np.uint32(r)) | (x >> np.uint32(32 - r))
+
+
+def absorb(nc: int, y, z, d0, d1, d2, d3, a0, a1, k0, k1):
+    """One MMA's step of a lane's chain, (y, z) from its words (d0, d1, d2, d3) = rows (g, g + 8) x columns (2t, 2t + 1);
+    every argument uint32 (arrays or scalars)."""
+    if nc == RAM:
+        y = (rotl(y, 7) + d0) * a0 + d1
+        return (rotl(y, 19) + d2) * a1 + d3, z
+    if nc == LI:
+        y = (y ^ d0 ^ k0) * a0 + d1
+        return (y ^ d2 ^ k1) * a1 + d3, z
+    if nc == XIN13:
+        y = (rotl(y, 13) ^ d0) * a0 + d1
+        return (rotl(y, 19) ^ d2) * a1 + d3, z
+    if nc == DUO:
+        for p, k, a, r in ((d0, k0, a0, 5), (d1, k1, a1, 11), (d2, k0, a0, 17), (d3, k1, a1, 29)):
+            u = y ^ p ^ k
+            y = u * a + z
+            z = rotl(u, r) + y
+        return y, z
+    return y ^ d0 ^ d1 ^ d2 ^ d3, z
 
 
 def popcount(x: np.ndarray) -> np.ndarray:
@@ -82,12 +111,29 @@ def words(a: np.ndarray, b: np.ndarray, kind: int) -> np.ndarray:
     return ((32 - 2 * popcount(a ^ b)) & M32).astype(np.uint32)
 
 
-def receipt(c0: int, c1: int, tile: int, nc: int, steps: int, kind: int = S8) -> int:
+def ho_ok(c0: int, c1: int, tile: int, steps: int, kind: int = S8) -> bool:
+    """(HO), LI's layout premise (note:20261016T1117Z-draft-fullfloor-s-r9): no hand-off of a lane's chain, (d1, d2) in a
+    step or (d3, the next step's d0), joins two words whose rows or columns are equal or complementary bit vectors (either
+    lets one product make both words, the complement's through the other operand's sum). Rows: g and g + 8 of a fragment,
+    and g + 8 of fragment f with g of f + 4 (chain f % 4's next); columns: 8 j + 2 t with 8 j + 2 t + 1, and that with
+    8 (j + 1) + 2 t (column 2 t after the last j)."""
+    ar = np.stack([np.concatenate([rows(c0, c1, tile, 0, w * steps + f, kind) for f in range(steps)]) for w in range(W)])
+    bb = np.concatenate([rows(c0, c1, tile, CTR_B, b, kind) for b in range(TN // 16)])
+    full = np.uint64((1 << (64 if kind == E2M1 else 32)) - 1)
+    a = ar.reshape(W, steps, 16)
+    n = np.arange(TN // 8)[:, None] * 8 + 2 * np.arange(4)[None, :]  # [j, t]: column 8 j + 2 t
+    pairs = ((a[:, :, :8], a[:, :, 8:]), (a[:, :-4, 8:], a[:, 4:, :8]), (bb[n], bb[n + 1]),
+             (bb[n + 1], bb[np.roll(n, -1, axis=0)]))
+    return not any(((x == y) | (x == (y ^ full))).any() for x, y in pairs)
+
+
+def receipt(c0: int, c1: int, tile: int, nc: int, steps: int, kind: int = S8, r9: bool | None = None) -> int:
     """The tile's receipt: warp w's fragments w S .. w S + S - 1 (16 rows each) against all TN columns, fragment f's
-    outputs absorbed by chain f % 4 of each lane in order of f, then of the B fragment j."""
+    outputs absorbed by chain f % 4 of each lane in order of f, then of the B fragment j. r9: the keys of an LI or
+    XIN13 build (by default, iff fold `nc` is one of those)."""
     bb = np.concatenate([rows(c0, c1, tile, CTR_B, b, kind) for b in range(TN // 16)])  # bit k of bb[n]: entry (k, n)
     kb = block(c0, c1, tile, CTR_KEY, DOMS[kind])
-    a0, a1, k0, k1 = (np.uint32(v) for v in keys(kb))
+    a0, a1, k0, k1 = (np.uint32(v) for v in keys(kb, nc in R9 if r9 is None else r9))
     lane = np.arange(32)
     g, t = lane >> 2, lane & 3
     pos = (np.arange(W)[:, None, None] * 32 + lane[None, :, None]) * 4 + np.arange(4)[None, None, :]
@@ -106,20 +152,7 @@ def receipt(c0: int, c1: int, tile: int, nc: int, steps: int, kind: int = S8) ->
         r1 = ar[:, 16 * fc[None, :] + g[:, None] + 8]
         d0, d1, d2, d3 = (words(r[None], b[:, None, :, None], kind) for r in (r0, r1) for b in (b0, b1))  # [j, w, lane, c]
         for j in range(TN // 8):
-            ny, nz = y.copy(), z.copy()
-            if nc == RAM:
-                ny = (rotl(ny, 7) + d0[j]) * a0 + d1[j]
-                ny = (rotl(ny, 19) + d2[j]) * a1 + d3[j]
-            elif nc == XIN:
-                ny = (rotl(ny, 7) ^ d0[j]) * a0 + d1[j]
-                ny = (rotl(ny, 19) ^ d2[j]) * a1 + d3[j]
-            elif nc == DUO:
-                for p, k, a, r in ((d0[j], k0, a0, 5), (d1[j], k1, a1, 11), (d2[j], k0, a0, 17), (d3[j], k1, a1, 29)):
-                    u = ny ^ p ^ k
-                    ny = u * a + nz
-                    nz = rotl(u, r) + ny
-            else:
-                ny = ny ^ d0[j] ^ d1[j] ^ d2[j] ^ d3[j]
+            ny, nz = absorb(nc, y, z, d0[j], d1[j], d2[j], d3[j], a0, a1, k0, k1)
             y = np.where(live[None, None, :], ny, y)
             z = np.where(live[None, None, :], nz, z)
     key = dseed(c0, c1, tile)
