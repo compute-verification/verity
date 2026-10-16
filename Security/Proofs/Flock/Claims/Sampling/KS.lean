@@ -2,6 +2,26 @@ import Proofs.Flock.Claims.Sampling.Bext
 import Proofs.Flock.Claims.Sampling.Escape
 import Proofs.Flock.Claims.Aggregate
 
+/-!
+# The sampling block's KS from Flock's KS
+
+The claims block (`Definitions.Claims.Sampling`) states `KS` at its nested extractor `E`: replay; `k` accepted reruns
+among `K`; at each, `k` accepted reruns of the second stage only; at each, Flock's `E^rep` on every checked unit's
+session; keep the openings that pass. This file proves it from Flock's KS at the units' sessions and named facts about
+the deployed sampled verifier, each a hypothesis to discharge there.
+
+* `SessionKS`, `DrawLaw`, `Refuses`, `InteriorFixed`, `SessionOpens`: **the hypotheses**. Flock's KS at the session a
+  selection picks among the checked units; the draw law over `Design.Pa`; the scope refusal; the interior commitments
+  fixed by the first stage; and that a checked unit's Flock witness reveals openings making its proof unit correct.
+* `split`: **the deterministic half**. At an accepted run whose extraction fails, the failure event `Fails` holds or
+  the extractor's own calls collide (`Commitment.Binds`).
+* `inner_bad_le`, `outer_bad_le`, `Pr_fails_le`: **the probabilistic half**. Each wait's truncation and union bound
+  (`wait_bad_le`), its union's size against the slack `c` (`k = 2^40·(n_RU + n_PU + 1)`), the draw law and Flock's
+  error at the inner wait, averaged over the first stage and the tapes: `Pr[Fails] ≤ κ(δ) + √(γ·Pr[B])`.
+* `KS_of`, `Bits_of`, `KSCount_of_KS`: **the claims**: `KS` through `KSLin_of_ownColl`; `Bits` with the extractor's
+  costs; and the count form where the design's miss is nonnegative.
+-/
+
 namespace Claims.Sampling
 
 open Claims Finset
@@ -818,6 +838,36 @@ theorem Bits_of {H : Msg → Msg} {D : Deploy Coin Col T} (iroots : Msg → Seen
       (fun x => 1 + D.k x + (D.k x : ℝ) ^ 2 * (1 + nPU D x * D.innerWaits x * D.innerK x)))
     (hown : ∀ decode, ExtractOwnLe H (E D decode) (fun x => D.k x ^ 2 * nPU D x * D.openCalls x)) : Bits H D :=
   Bits_of_KS (KS_of iroots hbind hsess hopens hfix hdraw hrefuse hε) hruns hown hε
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
+/-- A set of at least `t` replay units has acceptance probability at most the design's miss at `t`. -/
+theorem Pa_le_miss (d : Design) (P : Partition) {t : ℕ} {B : Finset ℕ} (hB : B ⊆ range P.rus.length)
+    (ht : t ≤ B.card) : d.Pa P B ≤ d.miss P t := by
+  have : Finite {B : Finset ℕ // B ⊆ range P.rus.length ∧ t ≤ B.card} :=
+    Finite.of_injective (fun B => (⟨B.1, mem_powerset.2 B.2.1⟩ : (range P.rus.length).powerset))
+      fun a b h => Subtype.ext (congrArg (fun z : (range P.rus.length).powerset => z.1) h)
+  exact le_ciSup (f := fun B : {B : Finset ℕ // B ⊆ range P.rus.length ∧ t ≤ B.card} => d.Pa P B.1)
+    (Set.finite_range _).bddAbove ⟨B, hB, ht⟩
+
+/-- **Sampling: the count form from KS**, where the design's miss is nonnegative: `KS` at `δ = miss(t)`, a faulty
+set in `M_δ` having fewer than `t` units (`Pa_le_miss`). -/
+theorem KSCount_of_KS {H : Msg → Msg} {D : Deploy Coin Col T} (h : KS H D) (hmiss : ∀ t x, 0 ≤ missAt D t x) :
+    KSCount H D := by
+  intro t decode hdec x Ω _ _ P
+  have hk := h (missAt D t x) decode (hmiss t x) hdec x Ω P
+  unfold PrBad at hk ⊢
+  refine le_trans (Pr_mono fun s hs => ⟨hs.1, fun hR => hs.2 ?_⟩) hk
+  revert hR
+  cases ((E D decode).eval H P x s.1 s.2.1 s.2.2).1 with
+  | none => exact id
+  | some w =>
+    rintro ⟨s', Pt, hs, hPt, hM⟩
+    refine ⟨s', Pt, hs, hPt, lt_of_not_ge fun ht => ?_⟩
+    have hmx : missAt D t x = s'.design.miss Pt t := by
+      simp only [missAt, hs, Deploy.part, hPt, Option.getD_some]
+    have hM' : missAt D t x < s'.design.Pa Pt (faulty H D.commit s' Pt w) := hM
+    rw [hmx] at hM'
+    exact absurd (Pa_le_miss s'.design Pt (by classical exact filter_subset _ _) ht) (not_le.2 hM')
 
 end KS
 

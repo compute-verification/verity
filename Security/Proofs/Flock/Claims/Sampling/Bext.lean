@@ -315,7 +315,8 @@ theorem Bits_of_KSLin {H : Msg → Msg} {V : Verifier Coin} {R : Rel W} {E : Ext
       rw [h0]
       have := hc0 x
       positivity
-  have hp : PrBad H V R E x P ≤ κ x + t * (Real.sqrt (γ x) * 2 ^ (-(255.5 : ℝ))) + t * (2 * 1 * c x / 2 ^ (256 : ℝ)) := by
+  have hp : PrBad H V R E x P ≤
+      κ x + t * (Real.sqrt (γ x) * 2 ^ (-(255.5 : ℝ))) + t * (2 * 1 * c x / 2 ^ (256 : ℝ)) := by
     rw [← sqrt_birthday (hγ x) (by linarith)]
     refine hks.trans ?_
     rw [one_mul]

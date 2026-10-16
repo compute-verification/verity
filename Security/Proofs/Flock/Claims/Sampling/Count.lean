@@ -370,7 +370,8 @@ theorem countBound_good (strata : Array Core.Stratum) (n k : ℕ → ℕ)
   unfold countBound
   simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel,
     Nat.div_one, hpop]
-  refine good_of_loop Good _ _ _ _ _ (fun K (b : Option ℕ × Array (Core.Stratum × ℕ) × ℕ × ℕ) => b.1 = none ∧ ∃ m : ℕ → ℕ, b.2.1 = state strata m ∧
+  refine good_of_loop Good _ _ _ _ _ (fun K (b : Option ℕ × Array (Core.Stratum × ℕ) × ℕ × ℕ) =>
+      b.1 = none ∧ ∃ m : ℕ → ℕ, b.2.1 = state strata m ∧
       ∑ i ∈ range S, m i = K ∧ 0 < b.2.2.2 ∧ (b.2.2.1 : ℝ) / b.2.2.2 = V S n k m ∧
       ∀ i < S, ∀ j < S, ∀ l < m i, fac (n j) (k j) (m j) ≤ fac (n i) (k i) l) ?_ (fun _ _ h => h.1) ?_
       (fun b K h => by simp only [h]; rfl) (fun b h => by simp only [h]; rfl) ?_

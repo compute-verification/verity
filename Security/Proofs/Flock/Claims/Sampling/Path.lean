@@ -200,7 +200,8 @@ def sha512Msg (m : Msg) : Msg := bs (Sha512.hash (bytes m))
 
 theorem climbOC_sha512 (dom : ByteArray) (root : Msg) :
     ∀ (sibs : List ByteArray) (cur : Msg) (idx d : ℕ),
-      ((climbOC dom root cur idx d sibs).eval sha512Msg).1 = decide (bs (climbL dom (bytes cur) idx d sibs) = root) := by
+      ((climbOC dom root cur idx d sibs).eval sha512Msg).1 =
+        decide (bs (climbL dom (bytes cur) idx d sibs) = root) := by
   intro sibs
   induction sibs with
   | nil => intro cur idx d; simp [climbOC, OC.eval, climbL, bs_bytes]
@@ -219,7 +220,8 @@ theorem climbOC_sha512 (dom : ByteArray) (root : Msg) :
 `root` opens `leaf` at `pos` through `π` (`Flock.Registered.opensLeaf`). -/
 theorem regPath_sha512 (own : Array Registered.Port) (root : Msg) (pos : ℕ) (leaf π : Msg) :
     ((regPath own root pos leaf π).eval sha512Msg).1 = true ↔
-      ∃ reg, own.find? (fun p => decide (bs p.root = root)) = some reg ∧ opensLeaf reg (bytes leaf) pos (bytes π) = true := by
+      ∃ reg, own.find? (fun p => decide (bs p.root = root)) = some reg ∧
+        opensLeaf reg (bytes leaf) pos (bytes π) = true := by
   unfold regPath
   cases hf : own.find? fun p => decide (bs p.root = root) with
   | none => simp [OC.eval]

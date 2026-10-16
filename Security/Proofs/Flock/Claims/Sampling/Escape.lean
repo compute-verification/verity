@@ -14,8 +14,9 @@ Here each is the `Claims.Pr` that a model draw misses `B`:
 * `stratum_miss_eq`, `strataPa_eq_Pr`: **independent uniform `k_s`-subsets of consecutive strata** (`StrataΩ`,
   `strataDraw`) miss `B` with probability `strataPa`; `strataPa_append`, `strataPa_window`.
 * `OneStage.Pa_all`, `Pa_subset`, `Pa_bernoulli`: the `all`, uniform-subset and Bernoulli draws miss `B` with
-  probability `P_a(B)`; `OneStage.Pa_strata`: every design but Bernoulli's is a strata draw (`OneStage.strata`: the stratified and
-  work laws by definition, `all` and `subset` one stratum), with `OneStage.strata_sum`, `OneStage.strata_le`.
+  probability `P_a(B)`; `OneStage.Pa_strata`: every design but Bernoulli's is a strata draw (`OneStage.strata`: the
+  stratified and work laws by definition, `all` and `subset` one stratum), with `OneStage.strata_sum`,
+  `OneStage.strata_le`.
 * `nested_escape`, `Rule.Pa_nested`: **the nested escape**: a Bernoulli first stage over a class's replay units, then a
   uniform `min(k, n_v)`-subset of each drawn one's `n_v` proof units, misses a faulty proof unit of every member of `B`
   with probability `∏_{v ∈ B} (1 − p·min(k, n_v)/n_v)`, whichever faulty proof unit each first draw fixes (the interior

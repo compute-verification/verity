@@ -9,10 +9,10 @@ import Proofs.Flock.Claims.Sampling.Path
 import Proofs.Flock.Claims.Sampling.Wait
 
 /-! The sampling compiler's lemmas: each registered draw law's miss bound in `Claims.Pr` (`Sampling.Draws`), the
-executable Bernoulli draw's bound (`Sampling.ExecBernoulli`) and every law's live draw's (`Sampling.Live`); each design's
-acceptance probability as its model draw's miss probability, the nested escape and the classes' product
+executable Bernoulli draw's bound (`Sampling.ExecBernoulli`) and every law's live draw's (`Sampling.Live`); each
+design's acceptance probability as its model draw's miss probability, the nested escape and the classes' product
 (`Sampling.Escape`), and the deployed count bound at the claims' designs (`Sampling.Count`); the extractor's rerun
 programs (`Sampling.Extract`, `Sampling.Cost`); the commitment's binding at the openings the extractor checks
 (`Sampling.Binding`) and at the registered path check (`Sampling.Path`); `B_ext` and the block's bits from its KS
-(`Sampling.Bext`); the waits' truncation and union bound (`Sampling.Wait`); and the block's KS from Flock's KS at the
-checked units' sessions and the deployed sampled verifier's named facts (`Sampling.KS`). -/
+(`Sampling.Bext`); the waits' truncation and union bound (`Sampling.Wait`); and the block's KS, its count form and its
+bits from Flock's KS at the checked units' sessions and the deployed sampled verifier's named facts (`Sampling.KS`). -/
