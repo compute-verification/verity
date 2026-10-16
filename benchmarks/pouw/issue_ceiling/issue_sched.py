@@ -18,6 +18,7 @@ FUNC = re.compile(r"Function\s*:\s*(\S+)")
 TMPL_INT = re.compile(r"Li(\d+)E")
 
 # enum orders must match issue_sched.cu
+M_IMMA, M_OMMA = 0, 1
 M_NAME = ["imma_s8_16832", "omma_nvf4_16864"]
 M_SASS = ["IMMA", "OMMA"]
 X_NAME = ["iadd3", "idp4a", "hfma2", "mov", "sel", "ffma", "ldg", "mix3"]
@@ -131,8 +132,10 @@ def main():
         R = int(round(r["ops_per_mma"] * 8))
         frac = r["mma_macs_frac_of_alone"]
         total_min_smsp = (r["mma_calls_per_sm_per_clk"] + r["op_calls_per_sm_per_clk"]) / 4.0
-        # SASS confirmation
+        # SASS confirmation. intended op count in the loop body: R (spec lane warp) or 8*R (mixu body = 8 sub x R).
+        intended = R if mode == "spec" else 8 * R
         confirmed = "—"
+        got = 0
         total_sass_smsp = None
         s = sass_for(mode, M, X, R)
         if s:
@@ -141,26 +144,30 @@ def main():
                 mma_len, mma_h = loop_containing(ls, [M_SASS[M]])
                 alu_len, alu_h = loop_containing(ls, X_SASS[X])
                 got = sum(alu_h.get(x, 0) for x in X_SASS[X])
-                confirmed = f"{got}×{'/'.join(X_SASS[X])}" if got else "**absent**"
                 mw, aw = r["mma_warps"], r["alu_warps"]
-                total_sass = (mw * mma_len + aw * alu_len)  # per SM per iter-warp (iters & cyc cancel in ratio below)
-                # per SMSP per clk = (mw*mma_len + aw*alu_len)*iters / cyc / 4
-                total_sass_smsp = total_sass * r["iters"] / r["cyc"] / 4.0
+                total_sass_smsp = (mw * mma_len + aw * alu_len) * r["iters"] / r["cyc"] / 4.0
             else:
                 body_len, body_h = ls[0] if ls else (0, {})
                 got = sum(body_h.get(x, 0) for x in X_SASS[X])
-                confirmed = f"{got}×{'/'.join(X_SASS[X])}" if got else "**absent**"
                 total_sass_smsp = body_len * r["warps"] * r["iters"] / r["cyc"] / 4.0
+        eliminated = got < 0.5 * intended  # ptxas removed most of the op (e.g. MOV copy-propagated)
+        confirmed = (f"{got}/{intended}×{'/'.join(X_SASS[X])}"
+                     + (" **eliminated**" if eliminated else ""))
         row = dict(r)
         row["total_warp_instr_smsp_min"] = total_min_smsp
         if total_sass_smsp is not None:
             row["total_warp_instr_smsp_sass"] = total_sass_smsp
         row["op_sass_confirmed"] = confirmed
+        row["op_sass_got"] = got
+        row["op_sass_intended"] = intended
+        row["op_eliminated"] = eliminated
         result[mode].append(row)
         md.append(f"| {mode} | {r['mma']} | {r['op']} | {r['ops_per_mma']:.0f} | {frac:.3f} | {1-frac:.3f} | "
                   f"{total_min_smsp:.4f} | {confirmed} |")
-        # best (highest frac) per ratio, IMMA only
-        if r["mma"] == M_NAME[M_IMMA] and r["ops_per_mma"] in (8.0, 16.0):
+        # best (lowest displacement = highest frac) per ratio, IMMA only, over ops that genuinely issued and aren't
+        # memory-latency-bound (LDG)
+        if (r["mma"] == M_NAME[M_IMMA] and r["ops_per_mma"] in (8.0, 16.0)
+                and not eliminated and r["op"] != "ldg"):
             key = int(r["ops_per_mma"])
             if key not in best or frac > best[key][0]:
                 best[key] = (frac, f"{mode} IMMA+{r['op']}", row)
