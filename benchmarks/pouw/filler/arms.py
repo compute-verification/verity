@@ -29,6 +29,7 @@ with no arguments.
 from __future__ import annotations
 
 import importlib.util
+import os
 import re
 import sys
 from dataclasses import dataclass, field
@@ -228,6 +229,11 @@ class FillV1:
     sources: tuple = ("benchmarks/pouw/filler/dcap.cu", "benchmarks/pouw/filler/arms.py")
     filler: Filler | None = Filler(W=8, NC=4, S=2048, chunk_log2=19, noise="chained")
     choice: str = "an offline table of 11 (B, L) splits from FILL's runs 2–5; a lookup and a green split at serving time"
+    #: dcap.cu builds pfill.cuh's filler unless -DDFILL_V1; score.py's nvcc reads NVCC_APPEND_FLAGS after the arm loads
+    nvcc_flags: str = "-DDFILL_V1"
+
+    def __post_init__(self):
+        os.environ["NVCC_APPEND_FLAGS"] = self.nvcc_flags
 
     def placement(self, phase, b, l):
         if phase == "prefill":
