@@ -6,6 +6,7 @@ import Proofs.Flock.Claims.KS.Deploy
 import Proofs.Flock.Claims.KS.Range
 import Proofs.Flock.Claims.KS.Cover
 import Proofs.Flock.Claims.KS.Radius
+import Proofs.Flock.Claims.KS.Joint
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -20,4 +21,8 @@ close to a codeword, with the coverage of `nMin` positions it needs and that a p
 
 The radius form (`Radius`): the extractor decodes the filled word, and the decoder lists every trace within `θ·N` of
 it, per whole column (`Flock.ListCompleteθ`, `Flock.ExtractsFill`, `Flock.OneWaitθ`, `Flock.KSθ`); KS from one wait's
-bound there (`Flock.KSθ_of_oneWaitθ`, `FlockDeploy.KS.plain_of_oneWaitθ_sha512`, `FlockDeploy.KS.zk_of_oneWaitθ_sha512`). -/
+bound there (`Flock.KSθ_of_oneWaitθ`, `FlockDeploy.KS.plain_of_oneWaitθ_sha512`, `FlockDeploy.KS.zk_of_oneWaitθ_sha512`).
+One wait's bound from a fixed table's bound (`Joint`): the old theorems' `joint_acc_le` on the deployed verifier's own
+run law (`Flock.runGame`, `Flock.oneWait_lhs_eq`), with a fixed table's bound and conflicts tied to collisions as the
+two obligations (`Flock.TableBoundθ`, `Flock.ConflictTied`, `Flock.oneWaitθ_of_tableBound`,
+`FlockDeploy.KS.plain_KSθ_of_tableBound`, `FlockDeploy.KS.zk_KSθ_of_tableBound`). -/
