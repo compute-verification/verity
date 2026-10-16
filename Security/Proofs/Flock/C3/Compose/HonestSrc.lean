@@ -40,6 +40,8 @@ back off `Bad` (`atAcceptedOff_offZs`). What the verifier's checks give is disch
   `holoSel_opening_at`); `hshape` from `SparseIs` (`shape_holoAt`);
 * the pub read at `scOf` (`srcSparsePub_scOf`), the layout factors passing where check 5's range verdict says
   (`SparseRangeOk`, which also gives `ℓ`'s range, `ellOk_of_sparseRange`);
+* the values' parts at `vals := (b …).vals` (`hvals`) from `HoloSrc.OK` at each rep (`hbok`): `hpr`, `hsv` and `hf`
+  (`proofOfVals_holoVals`, `setupOfVals_holoVals`, `framesOfVals_holoVals`);
 * V*'s sessions and copies at the RecSparse session `sI` (`sparseSessionAt_of_checks`, `unit` and `sw` pinned), off
   `ValueColl` (`hVB`), the rows the reads files name registered by `RegistrantCovers` (`rowsCovered_checked`);
 * `hrread`, `hsread`, `horead`, `hlread` and `hfr` at the fixed decoder (`repsRead_c3DecOf`, `sparseRead_c3DecOf`,
@@ -48,8 +50,8 @@ back off `Bad` (`atAcceptedOff_offZs`). What the verifier's checks give is disch
   at `own := ownAt ss` (`ownIn_checked`), `hheld` at the map's `sel` (`heldIs_of_custody`), and `_htop` from the
   guarantee's `_hstk`.
 
-What stays a hypothesis no check gives at this source: G's items 1–4 off `Bad` (`halg`, `hacc`), the values' parts
-(`hpr`, `hsv`, `hf`, `hvcap`) at every accepted proof, the reps' held rounds (`hrd`), at `sI` the layer's constant
+What stays a hypothesis no check gives at this source: G's items 1–4 off `Bad` (`halg`, `hacc`), `HoloSrc.OK` and the
+proof file's cap at each rep (`hbok`, `hvcap`), the reps' held rounds (`hrd`), at `sI` the layer's constant
 (`hone`, G's `OneInLayer`), `v`'s registered row (`hv`) and the unit's output layout (`hlaid`), R's opening at the maps
 (`hmaps`, `hot`), the other parts' read facts (`hrp`, `hsm`, `hlg`, `hos`, `hall`, `hk`, `hx`, `hts`), the named
 `HCols` and `HAlgRows`, and the commit strings' custody (`hbc`).
@@ -129,6 +131,8 @@ theorem hbr_honest_src {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Arr
     {stp0 : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → C3Run (holoAt st hp)}
     {rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → Fin 2 → RepData}
     {vals : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → Fin 2 → UnitVals}
+    {b : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → Fin 2 →
+      FlockC3.Reps.HoloSrc}
     {sw : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → Fin 2 → Array F128}
     {sc : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin (vstarCount ish)) → (Vs j).Bits) → Fin 2 →
       FlockVBridge.Sparse.SCoins}
@@ -174,10 +178,10 @@ theorem hbr_honest_src {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Arr
     (hrs : RecVStar.stackedRounds shR = some rs) (hcO : ClassOk (shapeOf st))
     (hi : RecVStar.checkInnerStmt ish st = .ok ()) (hcl2 : ish.claims = 2 * ish.regions + 2)
     (halg : AlgebraDecodesOff zs dg N k Rw Bad sh rep) (hacc : AccChainsOff zs dg N k Rw Bad sh rep)
-    (hpr : ProofOfVals zs dg N k Rw sh rep vals)
-    (hsv : SetupOfVals zs dg N k Rw
-      (tiedSrc (repsOfVals (FlockC3.Sparse.sparseOf (histPts ish tbl bcM stp0) sw sc) sh rep vals)) sh rep vals)
-    (hf : FramesOfVals zs dg N k Rw sh rep vals)
+    (hvals : vals = fun R ω t Lb i => (b R ω t Lb i).vals sh (rep R ω t Lb i))
+    (hbok : AtRep zs dg N k Rw sh rep fun R ω t Lb i =>
+      (b R ω t Lb i).OK ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (holoAt st hp).cls.ptLocal
+        (holoAt st hp).cls.mPts (histPts ish tbl bcM stp0 R ω t Lb).pts sh (rep R ω t Lb i))
     (hvcap : AtRep zs dg N k Rw sh rep fun R ω t Lb i => capDig (vals R ω t Lb i).p.cap = (stp0 R ω t Lb).cap₀)
     (hrd : ∀ R ω t Lb i, (rep R ω t Lb i).rounds =
       FlockC3.Reps.heldRounds (innerCommitsAt (wr t).1 (wr t).2 st reg) ((HoloStream.rep i).name tbl))
@@ -342,6 +346,16 @@ theorem hbr_honest_src {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Arr
   have halgZ : AlgebraDecodes (I := ℐ) (offZs zs Bad) dg N k Rw sh rep := algebraDecodes_offZs hS halg
   have haccZ : AccChains (I := ℐ) (offZs zs Bad) dg N k Rw sh rep := accChains_offZs hS hacc
   have hleafZ : HLeafC3 (offZs zs Bad) dg N k Rw := hLeafC3_offZs hS hleaf
+  have hpr : ProofOfVals zs dg N k Rw sh rep vals := by
+    rw [hvals]
+    exact FlockC3.Reps.proofOfVals_holoVals hbok
+  have hsv : SetupOfVals zs dg N k Rw
+      (tiedSrc (repsOfVals (FlockC3.Sparse.sparseOf (histPts ish tbl bcM stp0) sw sc) sh rep vals)) sh rep vals := by
+    rw [hvals]
+    exact FlockC3.Reps.setupOfVals_holoVals hcO hbok
+  have hf : FramesOfVals zs dg N k Rw sh rep vals := by
+    rw [hvals]
+    exact FlockC3.Reps.framesOfVals_holoVals hbok
   have hprZ : ProofOfVals (offZs zs Bad) dg N k Rw sh rep vals := atRep_offZs hS hpr
   have hsvZ : SetupOfVals (offZs zs Bad) dg N k Rw
       (tiedSrc (repsOfVals (FlockC3.Sparse.sparseOf (histPts ish tbl bcM stp0) sw sc) sh rep vals)) sh rep vals :=
