@@ -14,11 +14,11 @@ import Proofs.Flock.Claims.DeployCode
   `√ρ + 1/200`. It meets `ListWithin` at `θ = 1 − √ρ − 1/200` (`listWithin_plainDecodeR`; the Johnson count fits,
   `plainShape_nk`, least `n·k = 2^10·2^9` at `m = 22`), with `DecoderComplexity` `flockPolyR` at
   `(os.length + n)·2^k0·128` (`plainDecodeR_complexity`).
-* `plainDecodeRD`, the plain family (`famDecodeR`): `ListWithin` at `deployPlain rel`'s `len`, `enc` and `θ`
-  (`listWithin_deployPlain`), with `DecoderComplexity` `14·(flockPolyR + X)` at the schedules' sizes summed
-  (`plainSizeRD`, `plainDecodeRD_complexity`).
-* `zkDecodeRD`, the masked family: `ListWithin` at `deployZk rel`'s `len`, `enc` and `θ` (`listWithin_deployZk`), with
-  `DecoderComplexity` `11·(zkPolyR + X)` at `zkSizeRD` (`zkDecodeRD_complexity`).
+* `plainDecodeRD`, the plain family (`famDecodeR`): `ListWithin` at the claims' record `deployPlainTrim rel`'s `len`,
+  `enc` (trimmed of trailing zeros) and `θ` (`listWithin_deployPlain`), with `DecoderComplexity` `14·(flockPolyR + X)`
+  at the schedules' sizes summed (`plainSizeRD`, `plainDecodeRD_complexity`).
+* `zkDecodeRD`, the masked family: `ListWithin` at `deployZkTrim rel`'s `len`, `enc` and `θ` (`listWithin_deployZk`),
+  with `DecoderComplexity` `11·(zkPolyR + X)` at `zkSizeRD` (`zkDecodeRD_complexity`).
 
 `radius_deployPlain` and `radius_deployZk` state each record's pair, `ListWithin` and `DecoderComplexity`.
 -/
@@ -139,15 +139,15 @@ noncomputable def plainCountedRD (os : List (ℕ × List GF128)) : List Flock.Pl
 def plainSizeRD (os : List (ℕ × List GF128)) : ℕ :=
   ∑ i : Flock.PlainIdx, (os.length + 2 ^ Flock.plainLen i) * 2 ^ Flock.plainLanes i * 128
 
-/-- **The plain verifier's radius decoder meets `ListWithin`** at the deployed plain code, with the length `2^d` and
-the radius `1 − √ρ − 1/200` read off the trace's `m`. -/
-theorem listWithin_plainDecodeRD :
-    Flock.ListWithin Flock.plainLenD Flock.plainEncD Flock.plainThetaD plainDecodeRD :=
+/-- **The plain verifier's radius decoder meets `ListWithin`** at the deployed plain code read through any `t` that
+keeps a column's lanes, with the length `2^d` and the radius `1 − √ρ − 1/200` read off the trace's `m`. -/
+theorem listWithin_plainDecodeRD (t : List GF128 → List GF128) (ht : ∀ u ℓ, (t u).getD ℓ 0 = u.getD ℓ 0) :
+    Flock.ListWithin Flock.plainLenD (fun M q => t (Flock.plainEncD M q)) Flock.plainThetaD plainDecodeRD :=
   listWithin_famDecodeR (s := fun i => 2 ^ Flock.plainLanes i)
     (T := fun i => Message GF128 (Flock.plainLanes i) (Flock.plainCols i))
     (fun i _ => 2 ^ Flock.plainLen i) (fun i => (Flock.flockPlainLevelZero i).enc)
     (fun i _ => 1 - Real.sqrt ((2 : ℝ) ^ Flock.plainCols i / 2 ^ Flock.plainLen i) - 1 / 200) plainDecodeR
-    fun i => by
+    t ht fun i => by
       rw [Flock.flockPlainLevelZero, Flock.levelZero_enc]
       exact listWithin_plainDecodeR i
 
@@ -177,31 +177,31 @@ theorem plainDecodeRD_complexity :
 
 /-! ## At the deployed instances -/
 
-/-- **The plain verifier's radius decoder meets `ListWithin`** at the deployed plain instance's code, length and
-radius: the spec `Flock.KS` and `Flock.Bits` ask of a decoder at that instance. -/
+/-- **The plain verifier's radius decoder meets `ListWithin`** at the plain record Flock's claims read, its code
+trimmed of trailing zeros: the spec `Flock.KS` and `Flock.Bits` ask of a decoder at that record. -/
 theorem listWithin_deployPlain (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
-    Flock.ListWithin (FlockDeploy.deployPlain rel).len (FlockDeploy.deployPlain rel).enc
-      (FlockDeploy.deployPlain rel).θ plainDecodeRD :=
-  listWithin_plainDecodeRD
+    Flock.ListWithin (FlockDeploy.deployPlainTrim rel).len (FlockDeploy.deployPlainTrim rel).enc
+      (FlockDeploy.deployPlainTrim rel).θ plainDecodeRD :=
+  listWithin_plainDecodeRD FlockDeploy.trimCol FlockDeploy.trimCol_getD
 
-/-- **The masked verifier's radius decoder meets `ListWithin`** at the deployed masked instance's code, length and
-radius. -/
+/-- **The masked verifier's radius decoder meets `ListWithin`** at the masked record Flock's claims read, its code
+trimmed of trailing zeros. -/
 theorem listWithin_deployZk (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
-    Flock.ListWithin (FlockDeploy.deployZk rel).len (FlockDeploy.deployZk rel).enc (FlockDeploy.deployZk rel).θ
-      zkDecodeRD :=
-  listWithin_zkDecodeRD
+    Flock.ListWithin (FlockDeploy.deployZkTrim rel).len (FlockDeploy.deployZkTrim rel).enc
+      (FlockDeploy.deployZkTrim rel).θ zkDecodeRD :=
+  listWithin_zkDecodeRD FlockDeploy.trimCol FlockDeploy.trimCol_getD
 
-/-- **The plain instance's radius decoder**: `ListWithin` at its code, and `DecoderComplexity`. -/
+/-- **The plain record's radius decoder**: `ListWithin` at its code, and `DecoderComplexity`. -/
 theorem radius_deployPlain (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
-    Flock.ListWithin (FlockDeploy.deployPlain rel).len (FlockDeploy.deployPlain rel).enc
-        (FlockDeploy.deployPlain rel).θ plainDecodeRD ∧
+    Flock.ListWithin (FlockDeploy.deployPlainTrim rel).len (FlockDeploy.deployPlainTrim rel).enc
+        (FlockDeploy.deployPlainTrim rel).θ plainDecodeRD ∧
       DecoderComplexity plainDecodeRD plainCountedRD plainSizeRD (C 14 * (flockPolyR + Polynomial.X)) :=
   ⟨listWithin_deployPlain rel, plainDecodeRD_complexity⟩
 
-/-- **The masked instance's radius decoder**: `ListWithin` at its code, and `DecoderComplexity`. -/
+/-- **The masked record's radius decoder**: `ListWithin` at its code, and `DecoderComplexity`. -/
 theorem radius_deployZk (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
-    Flock.ListWithin (FlockDeploy.deployZk rel).len (FlockDeploy.deployZk rel).enc (FlockDeploy.deployZk rel).θ
-        zkDecodeRD ∧
+    Flock.ListWithin (FlockDeploy.deployZkTrim rel).len (FlockDeploy.deployZkTrim rel).enc
+      (FlockDeploy.deployZkTrim rel).θ zkDecodeRD ∧
       DecoderComplexity zkDecodeRD zkCountedRD zkSizeRD (C 11 * (zkPolyR + Polynomial.X)) :=
   ⟨listWithin_deployZk rel, zkDecodeRD_complexity⟩
 
