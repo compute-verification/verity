@@ -25,7 +25,7 @@ attention `attention.evaluate` per window with LoRA unmerged.  16 WikiText-2 tes
 
 Environment: NFT_STEPS (max optimizer steps), NFT_TRAIN_MIN (training wall budget, evaluations excluded), NFT_EVAL_AT
 (steps to evaluate at), NFT_SEEDS (noise seeds per evaluation), NFT_ACCUM (sequences per step), NFT_LR, NFT_SCHED (const, or cos: cosine to lr/10 at NFT_STEPS), NFT_RANK, NFT_TAG
-(a suffix for the config's output directory and label).
+(a suffix for the config's output directory and label), NFT_LSQ=1 (the linears' backward also through both scales).
 """
 from __future__ import annotations
 
@@ -105,33 +105,71 @@ def quant(m: torch.Tensor, top: int) -> tuple[torch.Tensor, torch.Tensor]:
     return torch.round(m / s[:, None]).clamp(-top, top), s
 
 
+_QDENSE: dict = {}
+
+
+def qdense(k: int, device) -> torch.Tensor:
+    if (k, str(device)) not in _QDENSE:
+        _QDENSE[k, str(device)] = eg.rotation(k, device).float()
+    return _QDENSE[k, str(device)]
+
+
 class NoisyBase(torch.autograd.Function):
     """Value: the noisy int8 product of x and W_eff = W + scale B A minus the clean LoRA term (added back with its
-    gradient outside); gradient: dx = g W (LoRA's share of dx comes from its own path)."""
+    gradient outside); gradient: dx = g W (LoRA's share of dx comes from its own path).
+
+    With MODE["lsq"], also the gradient through both scales (LSQ's, with the noise held fixed in LSBs): x_hat = xr +
+    s_a d_a with d_a = a - xr / s_a and s_a = max|xr| / top, so dL/ds_a = sum_k (dL/dx_hat) d_a, which flows to the row's
+    largest entry; the same for each weight row's s_w, which flows into A and B through W_eff = W + scale B A.  To first
+    order in the noise, dL/dx_hat ~ (g W) Q and sum_k x_hat d_w ~ xr d_w^T."""
 
     @staticmethod
-    def forward(ctx, x, lin):
+    def forward(ctx, x, A, B, lin):
         e = MODE["lin"]
-        ctx.lin = lin
+        ctx.lin, ctx.lsq = lin, bool(MODE.get("lsq"))
         with torch.no_grad():
             k = x.shape[-1]
             x2 = x.reshape(-1, k)
-            ai, sa = quant(rotate(x2), e["top_a"])
+            xr = rotate(x2)
+            ai, sa = quant(xr, e["top_a"])
             if "a" in e["edit"]:
                 ai = ai + noise_like(ai.shape, e["values"], x.device)
-            weff = lin.wrot.float() + lin.scale * (lin.B @ rotate(lin.A))
+            aq = rotate(A)
+            weff = lin.wrot.float() + lin.scale * (B @ aq)
             bi, sb = quant(weff, e["top_w"])
-            del weff
             if "w" in e["edit"]:
                 bi = bi + noise_like(bi.shape, e["values"], x.device)
+            if ctx.lsq:
+                da = (ai - xr / sa[:, None]).to(torch.bfloat16)
+                ma = xr.abs().argmax(1)
+                ga = torch.sign(xr.gather(1, ma[:, None])[:, 0]) / e["top_a"]
+                dw = (bi - weff / sb[:, None]).to(torch.bfloat16)
+                mw = weff.abs().argmax(1)
+                gw = torch.sign(weff.gather(1, mw[:, None])[:, 0]) / e["top_w"]
+                nw = xr.to(torch.bfloat16) @ dw.T
+                del dw
+                ctx.save_for_backward(da, ma, ga, mw, gw, nw, aq, B)
+            del weff
             y = torch._int_mm(ai.to(torch.int8), bi.to(torch.int8).T).float() * sa[:, None] * sb[None, :]
-            y = y - lin.scale * ((x2.float() @ lin.A.T) @ lin.B.T)
+            y = y - lin.scale * ((x2.float() @ A.T) @ B.T)
         return y.reshape(*x.shape[:-1], -1)
 
     @staticmethod
     def backward(ctx, g):
         w = ctx.lin.base.weight
-        return (g.to(w.dtype) @ w), None
+        gx = g.to(w.dtype) @ w
+        if not ctx.lsq:
+            return gx, None, None, None
+        da, ma, ga, mw, gw, nw, aq, B = ctx.saved_tensors
+        k, s = gx.shape[-1], ctx.lin.scale
+        q = qdense(k, gx.device)
+        g2, gx2 = g.reshape(-1, g.shape[-1]).float(), gx.reshape(-1, k)
+        ca = (rotate(gx2) * da.float()).sum(1) * ga
+        gx = (gx2.float() + ca[:, None] * q[:, ma].T).to(gx.dtype).reshape(gx.shape)
+        cw = (g2 * nw.float()).sum(0) * gw
+        gB = s * cw[:, None] * aq[:, mw].T
+        gaq = torch.zeros_like(aq).index_add_(1, mw, (s * cw[:, None] * B).T)
+        return gx, gaq @ q.T, gB, None
 
 
 class LoRALinear(torch.nn.Module):
@@ -163,7 +201,7 @@ class LoRALinear(torch.nn.Module):
             return self.eval_forward(x)
         if MODE["lin"] is None:
             return (self.base(x).float() + self.lora(x)).to(x.dtype)
-        return (NoisyBase.apply(x, self) + self.lora(x)).to(x.dtype)
+        return (NoisyBase.apply(x, self.A, self.B, self) + self.lora(x)).to(x.dtype)
 
     def eval_forward(self, x):
         """`exact_grid.attach`'s hook on the merged fp32 weights (same tags, so the same draws)."""
@@ -332,6 +370,7 @@ def train(snapshot: str, windows: str, corpus: str, out_dir: str, config: str) -
     rank = int(os.environ.get("NFT_RANK", "16"))
     warm = 20
     sched = os.environ.get("NFT_SCHED", "const")
+    MODE["lsq"] = os.environ.get("NFT_LSQ", "0") == "1"
     noise = CONFIGS[config][0]
     torch.manual_seed(1234)
     model = transformers.AutoModelForCausalLM.from_pretrained(snapshot, dtype=torch.bfloat16, attn_implementation="sdpa")
@@ -345,7 +384,7 @@ def train(snapshot: str, windows: str, corpus: str, out_dir: str, config: str) -
     params = [p for m in mods for p in (m.A, m.B)]
     opt = torch.optim.AdamW(params, lr=lr, betas=(0.9, 0.999), weight_decay=0.0)
     meta = {"config": config, "tag": os.environ.get("NFT_TAG", ""), "noise": noise, "steps": steps, "budget_s": budget, "eval_at": eval_at, "seeds": seeds,
-            "accum": accum, "lr": lr, "sched": sched, "rank": rank, "alpha": 2 * rank, "warmup": warm, "seq": int(data.shape[1]),
+            "accum": accum, "lr": lr, "sched": sched, "lsq": MODE["lsq"], "rank": rank, "alpha": 2 * rank, "warmup": warm, "seq": int(data.shape[1]),
             "corpus_sequences": int(data.shape[0]), "lora_params": sum(p.numel() for p in params),
             "gpu": torch.cuda.get_device_name(), "torch": torch.__version__, "transformers": transformers.__version__}
     (out / "meta.json").write_text(json.dumps(meta, indent=1))
@@ -433,6 +472,69 @@ def tiny(dev, attn="sdpa"):
     return L.LlamaForCausalLM(cfg).to(torch.bfloat16).to(dev).eval()
 
 
+def lsq_reference(lin: LoRALinear, x: torch.Tensor, gy: torch.Tensor, seed: int) -> tuple:
+    """NoisyBase's scale terms by fp64 autograd from the same draws: d/d(x, A, B) of sum_t (g W Q)_t . d_a,t s_a,t +
+    sum_j (sum_t g_tj xr_t . d_w,j) s_w,j, with s_a = |xr_t at its argmax| / top_a and s_w = |W_eff,j at its argmax| /
+    top_w (the argmaxes NoisyBase picks)."""
+    e = MODE["lin"]
+    k = x.shape[-1]
+    x2 = x.detach().reshape(-1, k)
+    g2 = gy.reshape(-1, gy.shape[-1]).double()
+    torch.manual_seed(seed)
+    with torch.no_grad():
+        xr = rotate(x2)
+        ai, sa = quant(xr, e["top_a"])
+        ai = ai + noise_like(ai.shape, e["values"], x.device)
+        weff = lin.wrot.float() + lin.scale * (lin.B @ rotate(lin.A))
+        bi, sb = quant(weff, e["top_w"])
+        bi = bi + noise_like(bi.shape, e["values"], x.device)
+        da, dw = (ai - xr / sa[:, None]).double(), (bi - weff / sb[:, None]).double()
+        ma, mw = xr.abs().argmax(1, keepdim=True), weff.abs().argmax(1, keepdim=True)
+    q = eg.rotation(k, x.device).double()
+    w = lin.base.weight.double()
+    xs = x2.double().requires_grad_(True)
+    A = lin.A.detach().double().requires_grad_(True)
+    B = lin.B.detach().double().requires_grad_(True)
+    s_a = (xs @ q).gather(1, ma)[:, 0].abs() / e["top_a"]
+    s_w = (w @ q + lin.scale * (B @ (A @ q))).gather(1, mw)[:, 0].abs() / e["top_w"]
+    loss = ((g2 @ w @ q) * da).sum(1) @ s_a + (g2 * (xr.double() @ dw.T)).sum(0) @ s_w
+    loss.backward()
+    return xs.grad.reshape(x.shape), A.grad, B.grad
+
+
+def lsq_check(dev, g: torch.Generator) -> dict:
+    """NFT_LSQ's gradient minus the plain straight-through one equals `lsq_reference` (fp32 linears, so bf16 rounding
+    of dx doesn't swamp the scale terms, which are a few percent of it); the forward value doesn't change."""
+    out = {}
+    for k, n in ((256, 448), (448, 256)):
+        base = torch.nn.Linear(k, n, bias=False).to(dev)
+        lin = LoRALinear(base, 4, 0, "mlp.down_proj")
+        lin.build_wrot()
+        with torch.no_grad():
+            lin.B.copy_(torch.randn(n, 4, generator=g) * 0.05)
+        x = torch.randn(1, 50, k, generator=g).to(dev).requires_grad_(True)
+        gy = torch.randn(1, 50, n, generator=g).to(dev)
+        set_noise("lin:wa:u5")
+        grads, ys = {}, {}
+        for lsq in (True, False):
+            MODE["lsq"] = lsq
+            torch.manual_seed(7)
+            y = lin(x)
+            (y.float() * gy).sum().backward()
+            ys[lsq], grads[lsq] = y.detach(), (x.grad.clone(), lin.A.grad.clone(), lin.B.grad.clone())
+            x.grad = lin.A.grad = lin.B.grad = None
+        MODE["lsq"] = False
+        assert torch.equal(ys[True], ys[False]), "NFT_LSQ changed the forward value"
+        ref = lsq_reference(lin, x, gy, 7)
+        set_noise(None)
+        for name, a, b, r in zip("xAB", grads[True], grads[False], ref):
+            d = a.double() - b.double()
+            out[f"lsq_{k}x{n}_{name}"] = [float(torch.linalg.norm(d - r) / torch.linalg.norm(r)),
+                                          float(torch.linalg.norm(r) / torch.linalg.norm(b.double()))]
+            assert out[f"lsq_{k}x{n}_{name}"][0] < 2e-2, out
+    return out
+
+
 def selftest() -> dict:
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     out: dict = {"device": dev}
@@ -471,6 +573,7 @@ def selftest() -> dict:
     for name, a, b in (("x", gx, x.grad), ("A", ga, lin.A.grad), ("B", gb, lin.B.grad)):
         out[f"ste_grad_{name}"] = float(torch.linalg.norm(a.float() - b.float()) / torch.linalg.norm(b.float()))
         assert out[f"ste_grad_{name}"] < 2e-2, out
+    out.update(lsq_check(dev, g))
     with torch.no_grad():
         lin.A.grad = lin.B.grad = None
         merged_ppl = eval_linears(model, mods, ids, "int8_rot@-")["ppl"]
