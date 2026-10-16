@@ -18,8 +18,11 @@ written as, every SHA-512 call an oracle query (`Hashes.oc`, `DeployOC`):
   simulated strategy, whenever every table's decoder is right on the outcomes flock-verify accepts (`hdec`; at the
   deployed decoders and the writer `Custody.wrD`, `Custody.decodesOnZKJ_wrD`).
 
-The setup reads `setupOf`'s pure SHA-512 (the circuit's and tables' digests), which are not oracle queries: they are
-functions of what the verifier reads (`x`), not of the prover's messages.
+The setup's SHA-512 (`setupOf`'s statement digest and Σ) is not an oracle query. It reads `I x` and the draw of the
+record `wr x o`, and a drawn statement's digest covers its draw (`HmRow.drawn`'s public statement), so it is a function
+of `x` only where that draw is. At `Deploy.V` it is: the checks pin the record's draw to the statement's
+(`Custody.checks_draw`), so the setup of a record it accepts is the one it made of `x` before the first message
+(`Custody.setupOf_record`).
 -/
 
 namespace Claims.Bridge.LiveZk
