@@ -82,7 +82,7 @@ seed is the window's live coins (`e`): `R` rounds, each one draw a stage of the 
 overlapping at any depth, and one check of a cell-block drawn among every stage's (S4, round protocol with C1 (i)–(ii)
 and C4 per draw; S5, live coins on `trusted-nebius-host`). For every adversary in `Mc` that commits first and every
 value `r` of its own coins, its run's play fixes each round's error tables, every stage's, before the round's first
-draw (the play's form, `SpotPlay`; this is E3, the round's run straight-line over every draw's bits, which K∥ reads in
+draw (the play's form, `OvPlay`; this is E3, the round's run straight-line over every draw's bits, which K∥ reads in
 place of C1 (iii) and (iv), and which the service doesn't check); every run the verifier accepts is accepted by the
 play's game or breaks binding or zero knowledge in some round (N1, X-RO commitments; F1 and F2, C-Flock's binding and
 zero knowledge), at most `δb` and `δz` a round. -/
@@ -94,26 +94,31 @@ def ServiceSoundOverlap (Mc : Machine) (S : Service) (run : ORunMap Mc S R St n 
       ∀ x, S.verify (Mc.eval M (e.symm x, r)).1 (e.symm x) (Mc.eval M (e.symm x, r)).2 = true →
         (run Ω' M r).play.game.accepts x ∨ ∃ w, (run Ω' M r).Bind w x ∨ (run Ω' M r).ZK w x
 
-/-- `pouw-rs-k-scope-overlap` (proposed). **Theorem K∥'s scope, operands affine on the round's bits.** For every
-adversary that commits first, every value of its coins and every play `x`, each round's run is one straight-line
-program over `Ar` on every draw's bits (E3), and:
-- every product slot is a product of two operands affine in every draw's bits together (K1's operands, narrowed to
-  affine on the round's bits: K∥ reads them per draw, affine in draw `t`'s bits at every value of the other draws',
-  and the luck ¾ is proved here for degree-2 errors on the round's bits, so a later stage's operand may depend on an
-  earlier draw only affinely, as the served operand's dither does);
+/-- `pouw-rs-k-scope-overlap` (proposed). **Theorem K∥'s scope, operands affine per draw.** For every adversary that
+commits first, every value of its coins and every play `x`, each round's run is one straight-line program over `Ar` on
+every draw's bits (E3), and:
+- every product slot is, at every bit point of the other draws', a product of two operands affine in draw `t`'s bits,
+  for every draw `t` (`AffMulAt`: K1's operands, narrowed to affine in each draw's own bits, as `KScopeAffine` narrows
+  them; an operand may depend on the other draws' bits in any way, nonlinear included, as the served operands' later
+  stages do on earlier draws);
 - stage `t`'s error table is its committed prefix words (`word`) minus their targets at the plane weights `wt`, read
   on draw `t`'s bits (S4);
-- certified words of distinct rows, of any stages, share no product (K1, row-pure across draws).
+- at every bit point `W` of the draws, certified words of distinct rows, of any stages, share no product (K1,
+  row-pure across draws; a word is certified at `W` where its error vanishes on its own draw's bits with at most two
+  ones, the other draws' at `W`).
 
 K1 is unobservable, as for `KScopeAffine`. -/
 def KScopeOverlap (Mc : Machine) (S : Service) (run : ORunMap Mc S R St n L np B n' Ar) (wt : Fin np → Ar) : Prop :=
   ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ (r : Ω') x,
-      (∀ w j, ((run Ω' M r).prog x w).isProd j = true → AffMul (((run Ω' M r).prog x w).prod j)) ∧
+      (∀ w j, ((run Ω' M r).prog x w).isProd j = true → AffMulAt (((run Ω' M r).prog x w).prod j)) ∧
       (∀ w c, (run Ω' M r).play.errAt x w c = fun z => ((run Ω' M r).prog x w).val z ((run Ω' M r).word x w c) -
         dPrefix ((run Ω' M r).pc x w c.1) ((run Ω' M r).vq x w c.1) wt c.2.1 c.2.2.1 c.2.2.2.val fun v => z ⟨c.1, v⟩) ∧
-      ∀ w c c', (∀ U : Finset (OBits St n L np B n'), U.card ≤ 2 → (run Ω' M r).play.errAt x w c (bitInd U) = 0) →
-        (∀ U : Finset (OBits St n L np B n'), U.card ≤ 2 → (run Ω' M r).play.errAt x w c' (bitInd U) = 0) →
+      ∀ w (W : ODraws St n L np B n') c c',
+        (∀ U : Finset (DBits (n c.1) L np (B c.1) (n' c.1)), U.card ≤ 2 →
+          (run Ω' M r).play.errAt x w c (mergeAt W c.1 (bitInd U)) = 0) →
+        (∀ U : Finset (DBits (n c'.1) L np (B c'.1) (n' c'.1)), U.card ≤ 2 →
+          (run Ω' M r).play.errAt x w c' (mergeAt W c'.1 (bitInd U)) = 0) →
         (⟨c.1, c.2.1⟩ : Σ t, Fin (n t)) ≠ ⟨c'.1, c'.2.1⟩ → ∀ k,
           ((run Ω' M r).prog x w).coef ((run Ω' M r).word x w c) k ≠ 0 →
             ((run Ω' M r).prog x w).coef ((run Ω' M r).word x w c') k = 0

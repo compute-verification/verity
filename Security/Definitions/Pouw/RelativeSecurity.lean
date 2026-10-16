@@ -11,11 +11,12 @@ follow them into the spec:
   and deficiency) and a round's stages (`StageGame`);
 * the machine model (`Machine`, a run's `charge`), the service (`Service`) and its adversary floor (`ServiceFloor`);
 * Theorem K's runs (`BitAff`, `bitInd`, `Slp`, `SlpG`), the re-encoded design's prefix words (`DBits`, `dPrefix`,
-  `wRe`, `DCells`), affine products (`AffProd`, and `AffMul` on any bits), degree-2 errors (`CubeQuad`, `pairDiff`)
-  and the spot check's deficiency (`spotDef`);
+  `wRe`, `DCells`), affine products (`AffProd`), degree-2 errors (`CubeQuad`, `pairDiff`) and the spot check's
+  deficiency (`spotDef`);
 * the staged spot check (`StagePlay`, `StagedPlay`, `DStage`) and an adversary's window run on it (`StagedRun`);
-* the spot check over a round's overlapping draws (`SpotPlay`, `OBits`, `OCells`, `OSpot`) and an adversary's window
-  run on it (`OverlapRun`).
+* the spot check over a round's overlapping draws: its bit points (`drawInd`, `mergeAt`), K∥'s products (`AffMulAt`),
+  the per-draw deficiency (`ovDef`), the play (`OvPlay`, its game and errors), the round's bits, cell-blocks, draws
+  and coins (`OBits`, `OCells`, `ODraws`, `OSpot`), and an adversary's window run on it (`OverlapRun`).
 -/
 
 namespace Pouw.RelativeSecurity
@@ -264,12 +265,63 @@ end Chain
 
 section Overlap
 
-variable {R : Type} [CommRing R]
+variable {St : ℕ} {ι : Fin St → Type} [∀ t, Fintype (ι t)] [∀ t, DecidableEq (ι t)] {R : Type} [CommRing R]
 
-/-- A product of two bit-affine operands on any bits (`AffProd` on bits that are not split in two). -/
-def AffMul {V : Type} [Fintype V] (π : (V → R) → R) : Prop := ∃ A B : BitAff V R, ∀ z, π z = A.eval z * B.eval z
+/-- The round's bit point at draws `U`: draw `s`'s bits are ones on `U s`. -/
+def drawInd (U : ∀ s, Finset (ι s)) : (Σ s, ι s) → R := fun v => bitInd (U v.1) v.2
+
+/-- The round's bit point at draws `U` with draw `t`'s bits replaced by `z`. -/
+def mergeAt (U : ∀ s, Finset (ι s)) (t : Fin St) (z : ι t → R) : (Σ s, ι s) → R :=
+  fun v => Function.update (fun s => (bitInd (U s) : ι s → R)) t z v.1 v.2
+
+/-- **K∥'s operands**: a product of two operands affine in draw `t`'s bits at every bit point of the other draws',
+for every draw `t`. -/
+def AffMulAt (π : ((Σ s, ι s) → R) → R) : Prop :=
+  ∀ (U : ∀ s, Finset (ι s)) (t : Fin St), ∃ A B : BitAff (ι t) R, ∀ z, π (mergeAt U t z) = A.eval z * B.eval z
 
 end Overlap
+
+section OverlapLuck
+
+variable {St : ℕ} {κ ι : Fin St → Type} [∀ t, Fintype (κ t)] [∀ t, Fintype (ι t)] [∀ t, DecidableEq (ι t)]
+  {R : Type} [CommRing R]
+
+/-- A round's deficiency with overlapping draws (RS-D1E r2 §2.5): the share of cells and draws at which the cell's
+error, on its own draw's bits with every other draw's at theirs, is nonzero at some bit point with at most two
+ones. -/
+noncomputable def ovDef (e : (Σ t, κ t) → ((Σ s, ι s) → R) → R) : ℝ :=
+  prob fun a : (Σ t, κ t) × (∀ s, Finset (ι s)) =>
+    ∃ S : Finset (ι a.1.1), S.card ≤ 2 ∧ e a.1 (mergeAt a.2 a.1.1 (bitInd S)) ≠ 0
+
+/-- **A prover's play with overlapping draws** over `n` rounds: per round, its error table on every draw's bits, fixed
+before the round's first draw (the round's run straight-line over every draw's bits), then the rest of the play,
+which may depend on the round's draws and its check. -/
+inductive OvPlay (κ ι : Fin St → Type) (A : Type) : ℕ → Type
+  | done : OvPlay κ ι A 0
+  | round {n : ℕ} (e : (Σ t, κ t) → ((Σ s, ι s) → A) → A) (next : (Σ t, κ t) × (∀ s, Finset (ι s)) → OvPlay κ ι A n) :
+      OvPlay κ ι A (n + 1)
+
+namespace OvPlay
+
+variable {A : Type} [CommRing A]
+
+/-- **The window's game** of a play with overlapping draws: round `w`'s deficiency is `ovDef` of its errors, and its
+check passes where the drawn cell's error vanishes at the drawn bits of every draw. -/
+noncomputable def game : {n : ℕ} → OvPlay κ ι A n → RoundGame ((Σ t, κ t) × (∀ s, Finset (ι s))) n
+  | _, .done => .done
+  | _, .round e next => .round (fun _ => ovDef e) (fun a => e a.1 (drawInd a.2) = 0) fun a => (next a).game
+
+omit [∀ t, Fintype (κ t)] [∀ t, Fintype (ι t)] [∀ t, DecidableEq (ι t)] [CommRing A] in
+/-- Round `w`'s error table along the realized coins. -/
+def errAt : {n : ℕ} → OvPlay κ ι A n → Paths ((Σ t, κ t) × (∀ s, Finset (ι s))) n → Fin n → (Σ t, κ t) →
+    ((Σ s, ι s) → A) → A
+  | _, .done, _, w => w.elim0
+  | _, .round e next, x, w =>
+    Fin.cases (motive := fun _ => (Σ t, κ t) → ((Σ s, ι s) → A) → A) e (fun w' => (next x.1).errAt x.2 w') w
+
+end OvPlay
+
+end OverlapLuck
 
 /-- **A straight-line program with products of any form**: as `Slp`, but slot `j`'s product is any function of the
 bits (`prod j`: a product of bytes the run formed, affine or not). -/
@@ -321,32 +373,6 @@ noncomputable def spotDef (e : C → (V → R) → R) : ℝ :=
   prob fun c : C => ∃ U : Finset V, U.card ≤ 2 ∧ e c (bitInd U) ≠ 0
 
 end Spot
-
-/-- **A prover's spot-check play** over `n` rounds: per round, its error table (its committed word minus the target,
-per cell, as a function of the round's bits), fixed before the round's coins, then the rest of the play, which may
-depend on them. -/
-inductive SpotPlay (C V A : Type) : ℕ → Type
-  | done : SpotPlay C V A 0
-  | round {n : ℕ} (e : C → (V → A) → A) (next : C × Finset V → SpotPlay C V A n) : SpotPlay C V A (n + 1)
-
-namespace SpotPlay
-
-variable {C V A : Type} [Fintype C] [Fintype V] [DecidableEq V] [CommRing A]
-
-/-- **The window's game** of a play: round `w`'s deficiency is the share of uncertified cells (`spotDef`), and its
-check passes where the drawn cell's error vanishes at the drawn bits. -/
-noncomputable def game : {n : ℕ} → SpotPlay C V A n → RoundGame (C × Finset V) n
-  | _, .done => .done
-  | _, .round e next => .round (fun _ => spotDef e) (fun a => e a.1 (bitInd a.2) = 0) fun a => (next a).game
-
-omit [Fintype C] [Fintype V] [DecidableEq V] [CommRing A] in
-/-- Round `w`'s error table along the realized coins. -/
-def errAt : {n : ℕ} → SpotPlay C V A n → Paths (C × Finset V) n → Fin n → C → (V → A) → A
-  | _, .done, _, w => w.elim0
-  | _, .round e next, x, w =>
-    Fin.cases (motive := fun _ => C → (V → A) → A) e (fun w' => (next x.1).errAt x.2 w') w
-
-end SpotPlay
 
 /-- **A round's staged spot play** (per-stage draws: decision 36 as RS-E-REF r5 V.3 repaired it): per stage, its
 error table (its committed words minus their targets, per cell, as functions of the stage's bits, both noise blocks
@@ -421,10 +447,13 @@ abbrev OBits (St : ℕ) (n : Fin St → ℕ) (L np : ℕ) (B n' : Fin St → ℕ
 /-- A round's cell-blocks, over all its stages. -/
 abbrev OCells (St : ℕ) (n n' B : Fin St → ℕ) : Type := Σ t, DCells (n t) (n' t) (B t)
 
-/-- A round's coins with overlapping draws: the check's cell-block, among every stage's, and every draw's bits. -/
-abbrev OSpot (St : ℕ) (n : Fin St → ℕ) (L np : ℕ) (B n' : Fin St → ℕ) : Type :=
-  OCells St n n' B × Finset (OBits St n L np B n')
+/-- A round's draws with overlapping stages: draw `t`'s bits. -/
+abbrev ODraws (St : ℕ) (n : Fin St → ℕ) (L np : ℕ) (B n' : Fin St → ℕ) : Type :=
+  ∀ t, Finset (DBits (n t) L np (B t) (n' t))
 
+/-- A round's coins with overlapping stages: the check's cell-block, among every stage's, and every stage's draw. -/
+abbrev OSpot (St : ℕ) (n : Fin St → ℕ) (L np : ℕ) (B n' : Fin St → ℕ) : Type :=
+  OCells St n n' B × ODraws St n L np B n'
 
 /-- **An adversary's window run on the staged design**, as the analysis reads it: its staged play (per round and
 stage, the error table fixed by the stage's operand commitment before its draw), the per-round binding and
@@ -447,13 +476,13 @@ service `S` and each value `r` of its own coins, its run. -/
 abbrev RunMap (Mc : Machine) (S : Service) (R St n L np B n' : ℕ) (Ar : Type) [CommRing Ar] : Type 1 :=
   ∀ (Ω' : Type) [Fintype Ω'], Mc.Alg (S.Seed × Ω') (S.Com × S.Ans) → Ω' → StagedRun R St n L np B n' Ar
 
-/-- **An adversary's window run with overlapping stages**, as the analysis reads it: its spot-check play over every
-draw's bits (per round, the error tables of every stage fixed before the round's first draw), the per-round binding
+/-- **An adversary's window run with overlapping stages**, as the analysis reads it: its play over the round's draws
+(per round, the error tables of every stage fixed before the round's first draw), the per-round binding
 and zero-knowledge break events, the noise reads `V`, and along every play `x` each round's run as one straight-line
 program over `Ar` on every draw's bits (`prog x w`), on committed constants per stage (`pc x w t`, `vq x w t`), with
 the slot of each cell's committed prefix word (`word x w`). -/
 structure OverlapRun (R St : ℕ) (n : Fin St → ℕ) (L np : ℕ) (B n' : Fin St → ℕ) (Ar : Type) [CommRing Ar] where
-  play : SpotPlay (OCells St n n' B) (OBits St n L np B n') Ar R
+  play : OvPlay (fun t => DCells (n t) (n' t) (B t)) (fun t => DBits (n t) L np (B t) (n' t)) Ar R
   Bind : Fin R → Paths (OSpot St n L np B n') R → Prop
   ZK : Fin R → Paths (OSpot St n L np B n') R → Prop
   V : Paths (OSpot St n L np B n') R → ℝ

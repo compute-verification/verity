@@ -9,9 +9,9 @@ import Proofs.Pouw.RelativeSecurity
 `Models.Pouw.Guarantees.RelativeSecurity`, from `Proofs.Pouw.RelativeSecurity`: Theorem S by the stages'
 supermartingale at the luck ¾ (`RoundGame.expBound_of_staged`, `StagedPlay.game_staged`), and the floor by
 `roundsHyp_of_staged` with the chain bound at factor 1 from Lemma G over F₂ (`chainBound_gProd`, `toF2`) and
-`serviceFloor_of_rounds` at `D = 160 ln 2`. With overlapping stages, Theorem S by the spot check's `PathBound (3/4)`
-(`RoundGame.pathBound_spot`, `SpotPlay.game_spot`), and the floor by `roundsHyp_of_overlap` with the same chain
-bound on every stage's shape.
+`serviceFloor_of_rounds` at `D = 160 ln 2`. With overlapping stages, Theorem S by the per-draw luck's `PassBound (3/4)`
+(`OvPlay.passBound_game`, `RoundGame.pathBound_of_passBound`), and the floor by `roundsHyp_of_overlap` with the same
+chain bound on every stage's shape.
 -/
 
 namespace Pouw.SecurityProofs.RelativeSecurity
@@ -43,9 +43,9 @@ theorem StagedFloorK : Pouw.Guarantees.RelativeSecurity.StagedFloorK := by
       Real.exp_nat_mul, Real.exp_log two_pos]
   rwa [h40, mul_zero, sub_zero] at h
 
-theorem TheoremSSpot : Pouw.Guarantees.RelativeSecurity.TheoremSSpot := by
-  intro C V A _ _ _ _ R P hP D
-  have hE := RoundGame.expBound_of_pathBound _ (P.game.pathBound_spot (P.game_spot hP))
+theorem TheoremSOverlap : Pouw.Guarantees.RelativeSecurity.TheoremSOverlap := by
+  intro St κ ι _ _ _ A _ R P hP D
+  have hE := RoundGame.expBound_of_pathBound _ (P.game.pathBound_of_passBound (P.passBound_game hP))
   have := P.game.prob_accepts_le (by norm_num : (0 : ℝ) ≤ 1 - 3 / 4) hE D
   convert this using 3
   ring
