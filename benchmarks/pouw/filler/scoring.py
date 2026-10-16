@@ -831,7 +831,8 @@ def whole_of_peak(row: dict) -> float | None:
 
 #: the receipt folds filler-scorer/v5 reads (decision 43): ``share`` is the part of a filler's committed words its
 #: receipt binds, which multiplies a theorem entry's fraction; ``nc`` the NC pfill.cuh runs the fold at, ``flag`` the
-#: build flag that selects it, ``sass`` how its MMA words enter the state (`fold_facts`)
+#: build flag that selects it, ``sass`` how its MMA words enter the state (`fold_facts`; ``rotations`` the state's
+#: rotations into each word's XOR, 0 none), ``provisional`` why a full reading isn't settled (the record flags it)
 FOLDS = {
     "ram": {"share": 0.5, "nc": (4,), "flag": None, "sass": "d0 added (LEA.HI, IADD3), d1 an IMAD addend",
             "source": "y <- (rotl(y, 7) + d0)·a0 + d1 = rotl(y, 7)·a0 + Q reads a pair only through Q = a0·d0 + d1, "
@@ -839,12 +840,30 @@ FOLDS = {
     "duo": {"share": 1.0, "nc": (2,), "flag": None, "sass": "every word into an XOR (LOP3)",
             "source": "u = y ⊕ d ⊕ k; y <- u·a + z; z <- rotl(u, r) + y: no all-state kernel at 2, 4, 6 or 8 words "
                       "(note:20261016T1013Z-draft-pfill-fold §2)"},
-    "xor-in": {"share": 1.0, "nc": (4,), "flag": "-DPFILL_XIN", "sass": "d0 into an XOR (LOP3), d1 an IMAD addend",
+    "xor-in": {"share": 1.0, "nc": (4,), "flag": "-DPFILL_XIN", "rotations": (7, 19),
+               "sass": "d0 into an XOR (LOP3) with the state rotated by 7 and 19 (SHF.L.W), d1 an IMAD addend",
                "source": "y <- (rotl(y, 7) ⊕ d0)·a0 + d1 (-DPFILL_XIN, 5e3b88559): its all-state kernel is a fixed group "
-                         "of word bijections (note:20261016T1013Z-draft-pfill-fold §2.1); read in full by decision 43"},
+                         "of word bijections (note:20261016T1013Z-draft-pfill-fold §2.1); read in full by decision 43",
+               "provisional": "superseded by xor-in-13: rotation 7 puts the step boundary's bad merge ratio ±128 in Λ8 "
+                              "(note:20261016T1117Z-draft-fullfloor-s-r9 §1); still read in full (coordinator 12:10Z)"},
+    "xor-in-13": {"share": 1.0, "nc": (4,), "flag": "-DPFILL_XIN13", "rotations": (13, 19),
+                  "sass": "d0 into an XOR (LOP3) with the state rotated by 13 and 19 (SHF.L.W), d1 an IMAD addend",
+                  "source": "y <- (rotl(y, 13) ⊕ d0)·a0 + d1; y <- (rotl(y, 19) ⊕ d2)·a1 + d3 (-DPFILL_XIN13): duo's "
+                            "luck under (H-μ⁺) and key_ok_r9, no layout condition (note:20261016T1117Z-draft-fullfloor-s-r9 "
+                            "§1, P2-FF's served-path pick)",
+                  "provisional": "P2-FF r9's DP_M ≈ 0 over Λ8 is measured, not proved, and pairwise only; read in full "
+                                 "like XOR-in (coordinator 12:10Z)"},
+    "lop3-imad": {"share": 1.0, "nc": (4,), "flag": "-DPFILL_LI", "rotations": (0,),
+                  "sass": "d0 into a three-input XOR (LOP3) with the unrotated state and a key, d1 an IMAD addend",
+                  "source": "y <- (y ⊕ d0 ⊕ k0)·a0 + d1; y <- (y ⊕ d2 ⊕ k1)·a1 + d3 (-DPFILL_LI): duo's luck under "
+                            "(H-μ⁺), key_ok_r9 and (HO), which a filler's hashed rows meet "
+                            "(note:20261016T1117Z-draft-fullfloor-s-r9 §2, P2-FF's filler pick)",
+                  "provisional": "P2-FF r9's DP_M ≈ 0 over Λ8 is measured, not proved, and pairwise only; (HO) is the "
+                                 "rows' hashing, not a check; read in full like XOR-in (coordinator 12:10Z)"},
 }
-#: the lineage tags FILL-SEC's arms declare their fold with (pfill_arm.py: receipt:ram-k32, receipt:duo-k32, receipt:xin-k32)
-RECEIPT_TAGS = {"ram": "ram", "duo": "duo", "xin": "xor-in"}
+#: the lineage tags FILL-SEC's arms declare their fold with (pfill_arm.py: receipt:ram-k32, receipt:duo-k32,
+#: receipt:xin-k32; r5's -DPFILL_XIN13 and -DPFILL_LI arms as receipt:xin13-… and receipt:li-…)
+RECEIPT_TAGS = {"ram": "ram", "duo": "duo", "xin": "xor-in", "xin13": "xor-in-13", "li": "lop3-imad"}
 #: what `fold_reading` can't confirm from the SASS, stated with every reading
 FOLD_UNCHECKED = (
     "the fold's keys and rotations (odd, screened multipliers; the rotation amounts): the receipts gate holds the "
@@ -854,6 +873,9 @@ FOLD_UNCHECKED = (
     "XORed first, a (δ, δ) kernel) shows only where both are an MMA's outputs at the same instruction",
     "XOR-in's binding: its complement elements flip three words' low bits jointly, P2-FF's open question "
     "(note:20261016T1013Z-draft-pfill-fold §2.2); decision 43 reads it in full",
+    "the r9 folds' premises (note:20261016T1117Z-draft-fullfloor-s-r9): key_ok_r9 on a0 and a1 (the receipts gate's "
+    "host reference draws the keys), (HO) for LOP3+IMAD (the filler's rows are SHA-512 output), DP_M ≈ 0 over Λ8 "
+    "(measured, pairwise); the SASS shows the rotations, not the keys",
     "which instantiation ran: a templated dfill_k<NC> or dfill_p<NC> is read at the arm's declared NC, the one its "
     "driver selects; a filler function no NC selects (a fused or TP filler's) is read in every clone")
 _NC_ARG = re.compile(r"(?:^|\$)_Z\d+dfill_[kp]ILi(?P<nc>\d+)E")
@@ -901,7 +923,21 @@ def _entry(base: str, sfx: list[str], pos: list[int], srcs: list[str]) -> str:
     return f"other:{base}"
 
 
-def fold_words(fn: dict) -> list[str]:
+def _rotation(writer: dict, regs: list[str]) -> int | None:
+    """The rotation (0-31) a funnel shift of one register by itself (SHF.L.W or SHF.R.W, an immediate amount) applied
+    to the value in `regs`, by the instruction that last wrote it (through moves): 0 where no such shift wrote any, None
+    where two did."""
+    found = set()
+    for r in regs:
+        op, args = writer.get(r) or ("", "")
+        parts, o = op.split("."), _operands(args)
+        if parts[0] == "SHF" and "W" in parts and len(o) == 4 and o[1] == o[3] and o[2].startswith("0x"):
+            n = int(o[2], 16) % 32
+            found.add(n if "L" in parts else (32 - n) % 32)
+    return found.pop() if len(found) == 1 else 0 if not found else None
+
+
+def fold_words(fn: dict, rotations: list | None = None) -> list[str]:
     """How each MMA output word of fn first enters the fold, in the order the MMAs write them: by the first instruction
     that reads it (or a copy of it, MOV or IMAD.MOV), in listing order, before its register is written again:
     - ``xor``: an operand of a LOP3 whose table is an XOR in it (duo's u = y ⊕ d ⊕ k, XOR-in's rotl(y) ⊕ d0);
@@ -910,8 +946,10 @@ def fold_words(fn: dict) -> list[str]:
     - ``mul``: an IMAD's or IMUL's multiplicand (a word scaled by a key, as Q = a0·d0 + d1 computes it);
     - ``combined``: read with another MMA word by one instruction, other than an IMAD that multiplies one and adds
       the other (Q's form): e.g. pfill's NC 1 fold, y ^= d0 ^ d1 ^ ..., whose LOP3 reads two words;
-    - ``mma``: an operand of another MMA (a chain's); ``unread``: never read; ``other:<op>`` any other first reader."""
-    live, cls = {}, []
+    - ``mma``: an operand of another MMA (a chain's); ``unread``: never read; ``other:<op>`` any other first reader.
+    `rotations`, when given, gets each word's state rotation where it enters an XOR (`_rotation` of that LOP3's other
+    inputs: XOR-in's rotl(y, 7) or rotl(y, 13), 0 for LOP3+IMAD's unrotated y), None for any other entry."""
+    live, cls, writer, rot = {}, [], {}, {}
 
     def kill(regs):
         for r in regs:
@@ -933,6 +971,7 @@ def fold_words(fn: dict) -> list[str]:
             for r in dest:
                 live[r] = len(cls)
                 cls.append(None)
+                writer[r] = (op, args)
             continue
         d = 1 if base in ("LOP3", "PLOP3") and ops and _PRED.match(ops[0]) else 0
         has_dest = bool(ops) and base not in STORE_OPS and base not in ("STS", "STL", "BRA", "EXIT", "RET") \
@@ -944,12 +983,13 @@ def fold_words(fn: dict) -> list[str]:
                 if r in live:
                     words.setdefault(live[r], []).append(p)
         dest = _reads(ops[d], _width(op)) if has_dest else []
-        copy = len(words) == 1 and (base == "MOV" or (base == "IMAD" and "MOV" in sfx and srcs[:2] == ["RZ", "RZ"])) \
-            and _RREG.match(srcs[-1]) and not srcs[-1].startswith(("-", "~", "|"))
-        if copy:
+        move = (base == "MOV" or (base == "IMAD" and "MOV" in sfx and srcs[:2] == ["RZ", "RZ"])) and bool(srcs) \
+            and bool(_RREG.match(srcs[-1])) and not srcs[-1].startswith(("-", "~", "|"))
+        if move and len(words) == 1:
             w = next(iter(words))
             kill(dest)
             live.update({r: w for r in dest})
+            writer.update({r: writer.get(_reads(srcs[-1])[0]) for r in dest})
             continue
         q_form = (len(words) == 2 and base == "IMAD" and not set(sfx) - {"WIDE", "U32"}
                   and sorted(len(p) for p in words.values()) == [1, 1]
@@ -957,15 +997,23 @@ def fold_words(fn: dict) -> list[str]:
         for w, pos in words.items():
             if cls[w] is None:
                 cls[w] = "combined" if len(words) > 1 and not q_form else _entry(base, sfx, pos, srcs)
+                if cls[w] == "xor":
+                    rot[w] = _rotation(writer, [r for p, o in enumerate(srcs[:3]) if p not in pos for r in _reads(o)])
         kill(dest)
+        src = writer.get(_reads(srcs[-1])[0]) if move else (op, args)
+        writer.update({r: src for r in dest})
+    if rotations is not None:
+        rotations.extend(rot.get(i) for i in range(len(cls)))
     return [c or "unread" for c in cls]
 
 
-def _signature(counts: dict) -> str:
-    """The fold a function's word entries show (`fold_words`): duo (every word an XOR), xor-in (XORs and IMAD addends,
-    one each a pair), ram (one word of a pair added, or scaled as Q = a0·d0 + d1 computes it, the other an IMAD
-    addend), or what refutes every fold v5 reads: ``combined`` or ``unread`` words; else ``unrecognised`` (dcap's
-    probe folds, NC 7's adds alone or NC 8's addends alone)."""
+def _signature(counts: dict, rotations: dict | None = None) -> str:
+    """The fold a function's word entries show (`fold_words`): duo (every word an XOR); XORs and IMAD addends, one each
+    a pair, are xor-in, xor-in-13 or lop3-imad by the state's rotations into the XORs (`rotations`, a count a rotation:
+    7 and 19, 13 and 19, or none, as `FOLDS` lists them, each on half the XORs), else ``xor-addend``; ram (one word of
+    a pair added, or scaled as Q = a0·d0 + d1 computes it, the other an IMAD addend); or what refutes every fold v5
+    reads: ``combined`` or ``unread`` words; else ``unrecognised`` (dcap's probe folds, NC 7's adds alone or NC 8's
+    addends alone)."""
     ks = set(counts)
     if not counts:
         return "none"
@@ -975,7 +1023,12 @@ def _signature(counts: dict) -> str:
     if ks == {"xor"}:
         return "duo"
     if ks == {"xor", "addend"} and counts["xor"] == counts["addend"]:
-        return "xor-in"
+        rs = {str(k): v for k, v in (rotations or {}).items()}
+        for name, f in FOLDS.items():
+            want = {str(r) for r in f.get("rotations", ())}
+            if want and set(rs) == want and len({rs[r] for r in want}) == 1:
+                return name
+        return "xor-addend"
     if ks <= {"add", "addend", "mul"} and "addend" in ks and counts["addend"] == counts.get("add", 0) + counts.get("mul", 0):
         return "ram"
     return "unrecognised"
@@ -997,12 +1050,16 @@ def fold_facts(listings: dict[str, str], nc: int, names: tuple = FILLER_KERNELS)
                 skipped.append(f"{b}: {f['name']}")
                 continue
             templated |= bool(m)
-            words = fold_words(f)
+            rot = []
+            words = fold_words(f, rot)
             if words:
-                counts = {}
-                for c in words:
+                counts, rots = {}, {}
+                for c, r in zip(words, rot):
                     counts[c] = counts.get(c, 0) + 1
-                fns[f"{b}: {f['name']}"] = {"words": dict(sorted(counts.items())), "signature": _signature(counts)}
+                    if c == "xor":
+                        rots[str(r)] = rots.get(str(r), 0) + 1
+                fns[f"{b}: {f['name']}"] = {"words": dict(sorted(counts.items())), "rotations": dict(sorted(rots.items())),
+                                            "signature": _signature(counts, rots)}
     sigs = {v["signature"] for v in fns.values()}
     sig = next((s for s in ("combined", "unread") if s in sigs), None) or \
         (next(iter(sigs)) if len(sigs) == 1 else "mixed" if sigs else "none")
@@ -1024,10 +1081,11 @@ def declared_fold(filler: dict | None, lineage: dict | None) -> tuple[str | None
 
 def fold_reading(declared: str | None, nc: int | None, flags: str | None, ff: dict | None,
                  how: str = "Filler.fold") -> dict:
-    """The fold filler-scorer/v5 reads the filler at (decision 43): duo or XOR-in, in full, only when the arm declares
-    it and the build confirms it (`_fold_problems`). Otherwise ram, halved: an undeclared fold, a declared ram, or a
-    declaration the build doesn't confirm, provided the build shows a fold that binds at least ram's half (ram's, duo's
-    or XOR-in's entries, at an NC dcap checks receipts at). No fold at all (``share`` None, so no theorem entry
+    """The fold filler-scorer/v5 reads the filler at (decision 43): duo, XOR-in (7, 19; superseded), XOR-in (13, 19) or
+    LOP3+IMAD, in full, only when the arm declares it and the build confirms it (`_fold_problems`). Otherwise ram,
+    halved: an undeclared fold, a declared ram, or a declaration the build doesn't confirm, provided the build shows a
+    fold that binds at least ram's half (any `FOLDS` entry's word entries, or XORs and addends at other rotations, at an
+    NC dcap checks receipts at). No fold at all (``share`` None, so no theorem entry
     applies) where it doesn't: a word combined with another before it enters the state, one the filler never reads,
     or a probe fold (NC 3, 5-8). ``unchecked`` is what the reading can't confirm."""
     out = {"declared": declared, "declared_by": how, "nc": nc, "flags": flags,
@@ -1045,22 +1103,24 @@ def fold_reading(declared: str | None, nc: int | None, flags: str | None, ff: di
         fold = None
         why = why + (ram if claim != "ram" else []) + ["the build shows no fold v5 reads: no theorem entry applies"]
     return out | {"fold": fold, "share": FOLDS[fold]["share"] if fold else None, "why": list(dict.fromkeys(why)),
-                  "source": FOLDS[fold]["source"] if fold else None}
+                  "source": FOLDS[fold]["source"] if fold else None,
+                  "provisional": FOLDS[fold].get("provisional") if fold else None}
 
 
 def _fold_problems(fold: str, nc: int | None, flags: str | None, ff: dict) -> list[str]:
     """Why the build doesn't confirm `fold`: the SASS shows other entries (`fold_facts`' signature; ram's reading takes
-    any fold v5 reads, each binding at least ram's half), a templated filler runs at another NC (ram and XOR-in 4,
-    duo 2), or the build's recorded NVCC_APPEND_FLAGS lack the fold's flag (XOR-in's -DPFILL_XIN, which the receipts
-    gate's host reference is built with)."""
+    any fold v5 reads, or XORs and addends at rotations no fold lists, each binding at least ram's half), a templated
+    filler runs at another NC (ram, the XOR-ins and LOP3+IMAD 4, duo 2), or the build's recorded NVCC_APPEND_FLAGS lack
+    the fold's flag (-DPFILL_XIN, -DPFILL_XIN13, -DPFILL_LI, which the receipts gate's host reference is built with)."""
     f, out, sig = FOLDS[fold], [], ff["signature"]
     if sig in ("combined", "unread"):
         bad = [f"{k} ({v['words']})" for k, v in ff["functions"].items() if v["signature"] == sig]
         return [f"the SASS shows {'a word combined with another before the fold' if sig == 'combined' else 'an MMA word the filler never reads'}: "
                 + "; ".join(bad[:2])]
     if sig != fold and not (fold == "ram" and ff["functions"]
-                            and all(v["signature"] in FOLDS for v in ff["functions"].values())):
-        words = {k: v["words"] for k, v in list(ff["functions"].items())[:2]}
+                            and all(v["signature"] in (*FOLDS, "xor-addend") for v in ff["functions"].values())):
+        words = {k: {**v["words"], **({"rotations": v["rotations"]} if v.get("rotations") else {})}
+                 for k, v in list(ff["functions"].items())[:2]}
         out.append(f"the SASS shows {sig} ({words}), not {fold}'s entries ({f['sass']})")
     ncs = f["nc"] if fold != "ram" else tuple(n for g in FOLDS.values() for n in g["nc"])
     if ff["templated"] and nc not in ncs:
@@ -1098,11 +1158,15 @@ def filler_entry_v5(noise: str | None, pf: dict | None, fold: dict, *, unread=()
 
 
 def certified_v5(e: dict, which: str = "active") -> dict:
-    """`CERTIFIED` with the filler read at a v5 entry (`filler_entry_v5`), its fraction folded."""
+    """`CERTIFIED` with the filler read at a v5 entry (`filler_entry_v5`), its fraction folded; a provisional fold
+    (`FOLDS`) makes the filler's status provisional, which `score` flags."""
     name = e[which]
     c = certified(name)
+    fold, why = e["fold"]["fold"], e["fold"].get("provisional")
     c["filler"] = {**c["filler"], "fraction": e["active_fraction" if which == "active" else "fraction"],
-                   "fold": e["fold"]["fold"], "unfolded": FILLER_ENTRIES[name]["fraction"]}
+                   "fold": fold, "unfolded": FILLER_ENTRIES[name]["fraction"]}
+    if why and "noise" in FILLER_ENTRIES[name]:
+        c["filler"]["status"] = f"provisional (fold {fold}: {why})"
     return c
 
 

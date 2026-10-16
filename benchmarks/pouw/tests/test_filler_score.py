@@ -708,6 +708,12 @@ XIN = [IMMA4, "SHF.L.W.U32.HI R9, R9, 0x7, R9", "LOP3.LUT R9, R9, R28, RZ, 0x3c,
        "SHF.L.W.U32.HI R9, R9, 0x13, R9", "LOP3.LUT R9, R9, R30, RZ, 0x3c, !PT", "IMAD R9, R9, R21, R31", "EXIT"]
 DUO = [IMMA4] + [x for w in (28, 29, 30, 31) for x in (f"LOP3.LUT R9, R9, R{w}, R22, 0x96, !PT", "IMAD R9, R9, R20, R10",
                                                      "IADD3 R10, R9, R11, RZ")] + ["EXIT"]
+#: P2-FF r9's folds (note:20261016T1117Z-draft-fullfloor-s-r9) as the scratch -DPFILL_XIN13 and -DPFILL_LI builds of
+#: c259a89b5's pfill.cuh compile them: XOR-in at rotations 13 and 19; LOP3+IMAD's y ^ d0 ^ k0 in one LOP3, no shift
+XIN13 = [IMMA4, "SHF.L.W.U32.HI R9, R9, 0xd, R9", "LOP3.LUT R9, R9, R28, RZ, 0x3c, !PT", "IMAD R9, R9, R20, R29",
+         "SHF.L.W.U32.HI R9, R9, 0x13, R9", "LOP3.LUT R9, R9, R30, RZ, 0x3c, !PT", "IMAD R9, R9, R21, R31", "EXIT"]
+LI = [IMMA4, "LOP3.LUT R9, R22, R28, R9, 0x96, !PT", "IMAD R9, R20, R9, R29", "LOP3.LUT R9, R23, R30, R9, 0x96, !PT",
+      "IMAD R9, R21, R9, R31", "EXIT"]
 K4, K2, K1, K7 = (f"_Z7dfill_kILi{n}EEvmmyiiPy" for n in (4, 2, 1, 7))
 
 
@@ -721,7 +727,7 @@ def test_the_fold_reads_from_the_sass_of_the_instantiation_that_runs():
     assert S.fold_words(S.parse_nvdisasm(nvd((K4, True, RAM)))[0]) == ["add", "addend", "add", "addend"]
     ff = facts(4, (K4, RAM), (K2, DUO))
     assert (ff["signature"], ff["templated"], ff["not_run"]) == ("ram", True, 1)
-    assert ff["functions"] == {f"dscore: {K4}": {"words": {"add": 2, "addend": 2}, "signature": "ram"}}
+    assert ff["functions"] == {f"dscore: {K4}": {"words": {"add": 2, "addend": 2}, "rotations": {}, "signature": "ram"}}
     assert facts(2, (K4, RAM), (K2, DUO))["signature"] == "duo" and facts(4, (K4, XIN))["signature"] == "xor-in"
     q = [IMMA4, "MOV R40, R28", "IMAD R11, R40, R20, R29", "IMAD R9, R9, R20, R11", "LEA.HI R9, R9, R30, R9, 0x13",
          "IMAD R9, R9, R21, R31", "EXIT"]
@@ -789,6 +795,51 @@ def test_the_fold_is_read_from_the_declaration_and_what_the_build_confirms():
     assert none["applies"] == "unproven" and none["fraction"] == 0.0 and any(
         w.startswith("fold: ") for w in none["failed"]["theorem-k"])
     assert S.certified_v5(e)["filler"]["fraction"] == 0.45 and S.SCORER == S.V5
+
+
+def test_the_r9_folds_are_told_apart_by_the_rotation_into_their_xor_and_read_provisionally():
+    """P2-FF r9's folds (coordinator 12:10Z): XOR-in (13, 19) and LOP3+IMAD read in full at 0.9 where declared and
+    confirmed, told apart from the superseded XOR-in (7, 19) by the state's funnel-shift rotation into each XOR
+    (through a move); XORs and addends at rotations no fold lists read as ram; each of the three is provisional, which
+    the filler's certified status and the score's flags carry."""
+    def ff(nc, body):
+        return S.fold_facts({"dscore": nvd((f"_Z7dfill_kILi{nc}EEvmmyiiPy", True, body))}, nc)
+
+    for body, sig, rots in ((XIN, "xor-in", {"7": 1, "19": 1}), (XIN13, "xor-in-13", {"13": 1, "19": 1}),
+                            (LI, "lop3-imad", {"0": 2})):
+        f = ff(4, body)
+        assert f["signature"] == sig and next(iter(f["functions"].values()))["rotations"] == rots
+    moved = [IMMA4, "SHF.L.W.U32.HI R40, R9, 0xd, R9", "MOV R41, R40", "LOP3.LUT R9, R41, R28, RZ, 0x3c, !PT",
+             *XIN13[3:]]
+    assert ff(4, moved)["signature"] == "xor-in-13"
+    right = [x.replace("SHF.L.W.U32.HI R9, R9, 0xd, R9", "SHF.R.W.U32.HI R9, R9, 0x13, R9") for x in XIN13]
+    assert ff(4, right)["signature"] == "xor-in-13"  # rotr 19 = rotl 13
+    odd = [x.replace("0xd", "0x5") for x in XIN13]
+    assert ff(4, odd)["signature"] == "xor-addend"
+    assert S.fold_words(S.parse_nvdisasm(nvd((K4, True, LI)))[0], rot := []) == ["xor", "addend"] * 2 and rot == [0, None, 0, None]
+
+    def read(declared, flags, body):
+        r = S.fold_reading(declared, 4, flags, ff(4, body))
+        return r["fold"], r["share"], r["provisional"] is not None
+
+    assert read("xor-in-13", "-DPFILL_XIN13", XIN13) == ("xor-in-13", 1.0, True)
+    assert read("lop3-imad", "-DPFILL_LI", LI) == ("lop3-imad", 1.0, True)
+    assert read("xor-in", "-DPFILL_XIN", XIN) == ("xor-in", 1.0, True)  # superseded, still read in full
+    assert read("xor-in-13", "-DPFILL_XIN", XIN) == ("ram", 0.5, False)  # the SASS shows rotation 7
+    assert read("lop3-imad", "-DPFILL_LI", XIN13) == ("ram", 0.5, False)
+    assert read("xor-in-13", "-DPFILL_LI", XIN13) == ("ram", 0.5, False)  # the flags lack -DPFILL_XIN13
+    assert read(None, None, LI) == ("ram", 0.5, False) and read("ram", None, odd) == ("ram", 0.5, False)
+    assert S.declared_fold({}, {"mechanism": ["receipt:xin13-k32"]})[0] == "xor-in-13"
+    assert S.declared_fold({}, {"mechanism": ["receipt:li-k32"]})[0] == "lop3-imad"
+    import dataclasses
+    assert A.check_arm(dataclasses.replace(A.FillV1(), filler=A.Filler(fold="lop3-imad"))) == []
+    split = S.program_facts({"dscore": nvd((DFILL, True, K_TILE))})
+    e = S.filler_entry_v5("bits01", split, S.fold_reading("lop3-imad", 4, "-DPFILL_LI", ff(4, LI)))
+    c = S.certified_v5(e)
+    assert c["filler"]["fraction"] == 0.9 and c["filler"]["status"].startswith("provisional (fold lop3-imad: ")
+    assert any("provisional (fold lop3-imad" in f for f in S.score(all_points(), c)["flags"])
+    ram = S.certified_v5(S.filler_entry_v5("bits01", split, S.fold_reading("ram", 4, None, ff(4, RAM))))
+    assert ram["filler"]["status"] == "proved" and not S.score(all_points(), ram)["flags"]
 
 
 def test_score_v5_is_the_measured_filler_part_plus_the_modelled_served_part():
