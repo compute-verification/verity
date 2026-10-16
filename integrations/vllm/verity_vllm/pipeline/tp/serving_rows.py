@@ -7,10 +7,17 @@ deferred (`require`), since an in-process replay draws its seed inside finalize.
 
 Rank ``r``'s window binds ``run = <TP run root hex>/rank<r>`` (`run_of`): the TP run root fixes every rank's vllm-v1 root, and the rank
 keeps two ranks' ports, whose population, partition and leaf counts can coincide, in distinct domains.  A rank that writes no window,
-or whose root is not the one the TP run root combines, exits the Commit before its challenge."""
+or whose root is not the one the TP run root combines, exits the Commit before its challenge.
+
+The verifier's own window of rank ``r`` (`window_of_record`) comes from the Commit's record alone, no committed value read: the TP run
+root and every rank's root of its first instrumented run (`record`: ``runs.jsonl``, refused unless the TP run root combines those
+roots), and the population over rank ``r``'s Programs of record (`rank_replay.load`, under the Build's ``rank<r>/``, refused unless of
+record for the rank in ``versions.json`` and the rank's).  `source` holds a registration's window to it: ``served``, its run
+``<TP run root>/rank<r>``, its ``tp`` the record's and its served Programs the ones the verifier loaded."""
 from __future__ import annotations
 
 import json
+import os
 import traceback
 from pathlib import Path
 from typing import Any
@@ -93,3 +100,63 @@ def write(st: dict[str, Any], request: dict[str, Any], tp: dict[str, Any]) -> di
                            tp={"world": world, "rank": rank, "tp_run_root": tp["tp_run_root"], "run_root": rc.run_root.hex(), "root_tag": tp["root_tag"]},
                            index={"attention_paths": p.attn_paths, "tp": p.tp})
     return {k: res.get(k) for k in ("run", "population", "partition_digest", "registration_digest", "seconds")}
+
+
+def record(commit_dir: str | os.PathLike) -> dict[str, Any]:
+    """The TP Commit's record (its ``--out``): the world, TP run root and every rank's root of its pair-0 instrumented run, the one
+    whose windows `commit` wrote (``runs.jsonl``), refused unless the TP run root combines exactly those roots; the root tag, each
+    rank's Programs of record and the workload (``versions.json``)."""
+    from verity_vllm.pipeline.tp.commit import TP_ROOT_TAG, tp_run_root
+
+    d = Path(commit_dir)
+    rows = [json.loads(x) for x in (d / "runs.jsonl").read_text().splitlines() if x.strip()]
+    row = next((r for r in rows if r.get("arm") != "control" and r.get("pair") == 0 and (r.get("commit") or {}).get("tp_run_root")), None)
+    if row is None:
+        raise LookupError(f"{d / 'runs.jsonl'}: no pair-0 instrumented run with a TP run root (the Commit failed before its roots)")
+    c = row["commit"]
+    world = int(c["world"])
+    roots = {int(k): str(v["run_root"]) for k, v in (c.get("per_rank") or {}).items()}
+    if sorted(roots) != list(range(world)):
+        raise ValueError(f"the record's ranks {sorted(roots)} are not the world of {world}")
+    if tp_run_root(world, {r: bytes.fromhex(x) for r, x in roots.items()}).hex() != c["tp_run_root"]:
+        raise ValueError(f"the record's TP run root {c['tp_run_root'][:16]} does not combine its ranks' roots")
+    v = json.loads((d / "versions.json").read_text())
+    if v.get("root_tag") != TP_ROOT_TAG.decode():
+        raise ValueError(f"the record's root tag {v.get('root_tag')!r} is not {TP_ROOT_TAG.decode()!r}")
+    argv = [str(x) for x in v.get("argv") or []]
+    return {"world": world, "tp_run_root": c["tp_run_root"], "roots": {str(r): roots[r] for r in range(world)}, "root_tag": v["root_tag"],
+            "of_record": (v.get("sampled_replay") or {}).get("of_record") or {}, "label": row.get("label"),
+            "workload": argv[argv.index("--workload") + 1] if "--workload" in argv[:-1] else None}
+
+
+def window_of_record(commit_dir: str | os.PathLike, rank: int, partition_file: str | os.PathLike, build_root: str | os.PathLike,
+                     workload_file: str | os.PathLike) -> tuple[Any, dict[str, Any]]:
+    """The verifier's own window of rank ``rank`` (`pipeline.serving_rows.population` over the rank's Programs of record under
+    ``<build_root>/rank<r>``, its run ``<TP run root>/rank<r>`` of `record`), and what `source` holds the rank's registration to.
+    The requests are the workload's in order, ``r<position>``, as ``tp-commit`` names them."""
+    from verity_vllm.pipeline import serving_rows as SRW
+    from verity_vllm.pipeline.tp import rank_replay as RR
+
+    rec = record(commit_dir)
+    rank, world = int(rank), int(rec["world"])
+    if not 0 <= rank < world:
+        raise ValueError(f"rank {rank} is not a rank of the world of {world}")
+    doc = json.loads(Path(workload_file).read_text())
+    reqs = [{"request_id": f"r{i}", "arrive_step": int(q.get("arrive_step") or 0), "prompt_len": len(q["prompt_token_ids"]),
+             "max_tokens": int(q["max_tokens"])} for i, q in enumerate(doc["requests"])]
+    p = RR.load({"programs": {str(rank): str(Path(build_root) / f"rank{rank}")}, "of_record": rec["of_record"], "requests": reqs}, rank, world)
+    window, _rows = SRW.population(p.progs, json.loads(Path(partition_file).read_text()), run_of(bytes.fromhex(rec["tp_run_root"]), rank),
+                                   p.dirs, {"attention_paths": p.attn_paths, "tp": p.tp})
+    held = {"tp": {"world": world, "rank": rank, "tp_run_root": rec["tp_run_root"], "run_root": rec["roots"][str(rank)], "root_tag": rec["root_tag"]},
+            "served_programs": {str(k): str(x) for k, x in sorted(p.digs.items())}}
+    return window, held
+
+
+def source(registered: dict[str, Any] | None, mine: Any, held: dict[str, Any]) -> dict[str, Any]:
+    """A rank's registration's ``window`` held to the verifier's own (`window_of_record`): ``served`` with no stand-in link, its run
+    the rank's of record, its ``tp`` the record's and its served Programs the ones the verifier loaded."""
+    w = registered or {}
+    ok = {"kind": w.get("kind") == "served", "run": w.get("run") == mine.run, "tp": w.get("tp") == held["tp"],
+          "served_programs": w.get("served_programs") == held["served_programs"], "no_link": "of" not in w and "link" not in w}
+    return {"ok": all(ok.values()), "codes": [c for c, v in ok.items() if not v],
+            "detail": {"kind": w.get("kind"), "run": w.get("run"), "tp": w.get("tp")}}

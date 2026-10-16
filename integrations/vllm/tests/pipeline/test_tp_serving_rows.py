@@ -6,7 +6,11 @@
   whose windows could not come before every draw is refused.
 * A rank's window over real committed values: `write` on the served toy Commit (`tests.pipeline.served_rope`, its SiluMul rows: the
   "row's own Definition" port rule) is ``served``, its run the TP run root and the rank, its domains core's served domains over that
-  run, and its hidden rows the single-GPU hook's (whose window, run the vllm-v1 root, is unchanged); two ranks' domains differ."""
+  run, and its hidden rows the single-GPU hook's (whose window, run the vllm-v1 root, is unchanged); two ranks' domains differ.
+* The verifier's side (`window_of_record`, `source`) on a TP Commit of two ranks served on CPU (`tests.pipeline.served_tp`): each
+  rank's registration is held to the verifier's own window of that rank from the Commit's record alone, and refused for another
+  rank, another TP run root, other served Programs, a stand-in, a record whose TP run root does not combine its ranks' roots, and a
+  rank Program not of record."""
 from __future__ import annotations
 
 import dataclasses
@@ -212,3 +216,81 @@ def test_a_ranks_window_over_its_committed_values_binds_the_tp_run_root(tmp_path
     n, words = 8, 64 + 64
     rows = [np.frombuffer((tmp_path / d / "m0-private.bin").read_bytes()[:n * words * 2], dtype="<u2") for d in ("tp/rank0", "hook")]
     assert np.array_equal(*rows) and rows[0].any()
+
+
+@pytest.fixture(scope="module")
+def served_tp(tmp_path_factory):
+    pytest.importorskip("torch")
+    from tests.pipeline import served_tp as ST
+
+    return ST.commit(tmp_path_factory.mktemp("served-tp"), world=2, I=256, law="subset:2")
+
+
+def _registered(c, rank: int) -> dict:
+    return json.loads((c["windows"] / f"rank{rank}" / "registration.json").read_text())
+
+
+def _mine(c, rank: int, commit_dir=None):
+    return SRT.window_of_record(commit_dir or c["commit"], rank, c["partition"], c["build"], c["workload"])
+
+
+def test_each_ranks_registration_is_held_to_the_verifiers_window_of_that_rank(served_tp):
+    c = served_tp
+    for r in range(2):
+        mine, held = _mine(c, r)
+        rec = _registered(c, r)
+        assert mine.run == f"{c['tp_run_root']}/rank{r}" and mine.law == {"law": "subset", "k": 2}
+        assert [(m.template, m.n) for m in mine.members] == [("SiluMul_v2{I=256}", 8)]
+        assert SRT.source(rec["window"], mine, held) == {"ok": True, "codes": [], "detail": {"kind": "served", "run": mine.run, "tp": held["tp"]}}
+        assert {x["port"]: {"leaves": x["leaves"], "domain": x["domain"]} for x in rec["roots"]} == CS.expected_ports(mine)
+        assert held["tp"]["run_root"] == SRT.record(c["commit"])["roots"][str(r)]
+    other, held1 = _mine(c, 1)
+    assert SRT.source(_registered(c, 0)["window"], other, held1)["codes"] == ["run", "tp"]
+
+
+@pytest.mark.parametrize("alter, codes", [
+    (lambda w: {**w, "kind": "stand-in", "of": {"run_root": "00" * 32}, "link": "verity-vllm serving-rows"}, ["kind", "no_link"]),
+    (lambda w: {**w, "run": "00" * 32 + "/rank0", "tp": {**w["tp"], "tp_run_root": "00" * 32}}, ["run", "tp"]),
+    (lambda w: {**w, "tp": {**w["tp"], "run_root": "00" * 32}}, ["tp"]),
+    (lambda w: {**w, "served_programs": {**w["served_programs"], "r0": "00" * 32}}, ["served_programs"]),
+    (lambda w: None, ["kind", "run", "tp", "served_programs"]),
+], ids=["stand-in", "other-tp-run-root", "other-rank-root", "other-served-program", "no-window"])
+def test_a_registration_that_is_not_the_ranks_served_window_of_record_is_refused(served_tp, alter, codes):
+    mine, held = _mine(served_tp, 0)
+    got = SRT.source(alter(_registered(served_tp, 0)["window"]), mine, held)
+    assert (got["ok"], got["codes"]) == (False, codes)
+
+
+def _copy_commit(c, tmp_path: Path, runs=None, versions=None) -> Path:
+    d = tmp_path / "commit"
+    d.mkdir()
+    rows = [json.loads(x) for x in (c["commit"] / "runs.jsonl").read_text().splitlines()]
+    v = json.loads((c["commit"] / "versions.json").read_text())
+    (d / "runs.jsonl").write_text("".join(json.dumps(x) + "\n" for x in (runs(rows) if runs else rows)))
+    (d / "versions.json").write_text(json.dumps(versions(v) if versions else v))
+    return d
+
+
+def _rank_root(rows, rank, root):
+    rows[1]["commit"]["per_rank"][str(rank)]["run_root"] = root
+    return rows
+
+
+@pytest.mark.parametrize("runs, versions, why", [
+    (lambda rows: _rank_root(rows, 1, "00" * 32), None, "does not combine its ranks' roots"),
+    (lambda rows: [rows[1] | {"pair": 1}], None, "no pair-0 instrumented run"),
+    (lambda rows: [rows[0]], None, "no pair-0 instrumented run"),
+    (lambda rows: [rows[1] | {"commit": {**rows[1]["commit"], "world": 3}}], None, "are not the world of 3"),
+    (None, lambda v: {**v, "root_tag": "verity/tp-run-root/v0"}, "root tag"),
+    (None, lambda v: {**v, "sampled_replay": {"of_record": {"0": ["00" * 32], "1": v["sampled_replay"]["of_record"]["1"]}}},
+     "REFUSED \\(not the Program of record\\)"),
+], ids=["root-not-combined", "pair-1-only", "control-only", "world-not-the-ranks", "root-tag", "program-not-of-record"])
+def test_the_verifiers_window_is_refused_on_a_record_it_cannot_hold(served_tp, tmp_path, runs, versions, why):
+    d = _copy_commit(served_tp, tmp_path, runs, versions)
+    with pytest.raises((LookupError, ValueError, RuntimeError), match=why):
+        _mine(served_tp, 0, d)
+
+
+def test_a_rank_outside_the_world_has_no_window(served_tp):
+    with pytest.raises(ValueError, match="rank 2 is not a rank of the world of 2"):
+        _mine(served_tp, 2)
