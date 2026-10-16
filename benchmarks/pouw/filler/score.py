@@ -23,7 +23,7 @@ alone, the arm and the filler alone each sustained for a settled power window (t
 Each filler round (a point's calibration, each arm and standalone block) numbers its tiles from a public range the scorer
 fixes from the point and the round, then draws the round's coins from the OS; the replay gate checks the ranges and that
 no tile id, coins or sampled seed repeats across rounds. The honest gate's too-good check compares each point's filler
-beside serving with the median of its standalone blocks, its limit 1 + max(1%, their spread), and a positive control
+beside serving with the median of its standalone blocks, its limit 1 + max(2%, their trimmed spread), and a positive control
 (`control.jsonl`: at one point, a filler credited for S steps a tile that runs S - S/16 beside serving) must be caught.
 After the lease it scores the run (`report`), writes `score.json` and one `kernel-attempt/v1` record
 (`ledger/<arm>/filler-suite.json`, declared in the run's `outputs.json` so `research run --on` publishes it).

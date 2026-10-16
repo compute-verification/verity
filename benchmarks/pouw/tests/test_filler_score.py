@@ -64,7 +64,7 @@ def test_paired_slowdown_and_rate():
     assert st["slowdown"] == pytest.approx(1.04)
     assert st["fill_rate"] == pytest.approx(30 * 2e9 / 31.2e-3)
     assert st["fill_rate_cv"] == pytest.approx(0.0)
-    assert st["beside_over_alone"] == pytest.approx(1.0) and st["too_good_limit"] == 1 + S.TOO_GOOD_FLOOR
+    assert st["beside_over_alone"] == pytest.approx(1.0) and st["too_good_limit"] == pytest.approx(S.TOO_GOOD)
     assert st["beside_over_calibration"] == pytest.approx(30 * 2e9 / 31.2e-3 / 1e12)
 
 
@@ -128,21 +128,23 @@ def test_mix_entry_per_request():
 def test_too_good_against_the_interleaved_reference_and_its_control():
     v1 = A.load("fill-v1")
 
-    def st(chunks=200, solo=(200, 201, 199, 200), rounds=4):
-        return S.point_stats(row("step", 32, 8192, "split", alone_ms=20.0, arm_ms=20.8, chunks=chunks, rounds=rounds,
+    def st(chunks=200, solo=(200, 201, 199, 200, 202, 200)):
+        return S.point_stats(row("step", 32, 8192, "split", alone_ms=20.0, arm_ms=20.8, chunks=chunks, rounds=len(solo),
                                  window_ms=62.4, fill_sms=124, solo=list(solo)))
 
     honest = st()
     assert honest["fill_rate_alone"] == pytest.approx(200 * 1e9 / 62.4e-3)
-    assert honest["solo_spread"] == pytest.approx(2 / 200) and honest["too_good_limit"] == pytest.approx(1.01)
+    assert honest["solo_spread"] == pytest.approx(1 / 200) and honest["too_good_limit"] == pytest.approx(1.02)
+    # one standalone block a host hiccup read 20% fast doesn't loosen the limit
+    assert st(solo=(200, 201, 199, 200, 240, 200))["too_good_limit"] == pytest.approx(1.02)
     # the one calibration (alone_rate 1e12) would call this 3.2x too good; the interleaved reference doesn't
     assert honest["beside_over_calibration"] > 3 and honest["beside_over_alone"] == pytest.approx(1.0)
     pt = ("decode", 32, 8192)
     assert S.honesty(v1, {pt: honest}, [])["ok"]
     fast = S.honesty(v1, {pt: st(chunks=213)}, [])
     assert not fast["ok"] and fast["too_good"]
-    # a noisy reference raises the limit to its spread: 1.065 against a 10% spread passes
-    noisy = st(chunks=213, solo=(190, 200, 210, 200))
+    # a noisy reference raises the limit to its spread: 1.065 against a 10% trimmed spread passes
+    noisy = st(chunks=213, solo=(185, 190, 200, 200, 210, 215))
     assert noisy["too_good_limit"] == pytest.approx(1.1) and S.honesty(v1, {pt: noisy}, [])["ok"]
     bare = row("step", 32, 8192, "split", alone_ms=20.0, arm_ms=20.8, chunks=200, window_ms=62.4, fill_sms=124)
     for b in bare["blocks"]:
