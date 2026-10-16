@@ -493,6 +493,9 @@ def selftest() -> dict:
         xi, sx = served(xs[:64, :256], parse_edit(m), top, "0/t/a")
         yi = (xi.double() @ b63.double().T) * sx.double()[:, None] * s63.double()[None, :]
         assert rec["exact"] and torch.equal(ya, yi), m
+    fake = [{"method": m, "ppl": 6.5, "mean_rel_err": 0.0}
+            for m in ("bf16", "int8@-", "int8_rot@a:sr", "int8_rot@a:sr:s1", "int8_rot@a:pm1:wtop63:s2")]
+    assert [r.split(" | ")[9] for r in edit_table(fake).splitlines()[2:]] == ["1", "2", "1"], edit_table(fake)
     for m, same in (("int8@-", True), ("int8@w:u2", True), ("int8@a:u2", False), ("int8@a:dither", False),
                     ("int8@a:sr", False), ("int8@w:dither", True)):
         hooks = attach(model, m, [])
@@ -537,7 +540,8 @@ def edit_table(results: list[dict]) -> str:
     for m, r in ppl.items():
         if "@" in m:
             e = parse_edit(m)
-            groups.setdefault(m.split(":s")[0] if e["edit"] != "-" else m, {})[e["seed"]] = r
+            unseeded = ":".join(p for p in m.split(":") if not (p[:1] == "s" and p[1:].isdigit()))
+            groups.setdefault(unseeded, {})[e["seed"]] = r
     order = {g: i for i, g in enumerate(("int8", "int8_rot", "e4m3i16", "e4m3i16_rot"))}
 
     def key(g: str):
