@@ -63,9 +63,10 @@ def _meta(circuit: bytes) -> dict:
     return json.loads(circuit.split(b"\n", 2)[1][5:])
 
 
-def _v_star(m: int, k: int, c: int) -> list[list]:
-    """V*'s statements at the shape, as `rec_vstage.stage` names them and `rec_shape.levels` counts their instances."""
-    sh = A.Shape(m, k, c)
+def _v_star(m: int, k: int, c: int, holo: bool = False) -> list[list]:
+    """V*'s statements at the shape (holo: over a private inner session), as `rec_vstage.stage` names them and
+    `rec_shape.levels` counts their instances."""
+    sh = A.Shape(m, k, c, holo=holo)
     out = [[f"rec-open/l{1 << lv.lanes}-h{lv.d - lv.cap}", 2 * lv.q] for lv in sh.sched.levels]
     return out + [[f"rec-residuals/m{m}-k{k}-c{c}-p{j}", 2] for j in range(len(RR.parts(RR.spec(sh))))]
 
@@ -398,14 +399,10 @@ def test_the_verifiers_bindings_are_its_own_partition_objects(staged, tmp_path):
         f"{mine['partition']}"), p.stdout
 
 
-PRIVATE = "the inner session's circuits are private (rec-inner holo): V*'s circuit writer does not write holo parts yet"
-
-
-def test_a_private_inner_session_is_refused_and_the_verdict_says_whether_the_circuit_is_private(staged, tmp_path):  # noqa: F811
+def test_the_verdict_says_whether_the_inner_sessions_circuit_is_private(staged, tmp_path):  # noqa: F811
     """`rec-inner`'s `holo` (the verifier's own `--hide`) is the verdict's `private_circuit`, on every VERDICT line verified
-    with `--rec-inner` and on no other. V*'s circuit writer does not write holo parts yet, so a private inner session is
-    refused by name (`verify`, `statement` and `rec-statements`) however its circuit file reads; a `holo` that is not a
-    boolean is refused as the verifier's file reads."""
+    with `--rec-inner` and on no other, and the private shape's list is V*'s holo statements, so `rec_outer`'s staged level
+    is refused at either shape as none of them; a `holo` that is not a boolean is refused as the verifier's file reads."""
     d = staged[0]
     files = ["--statement", "verity/flock-circuit", "--circuit", str(d / "circuit.txt"), "--public", str(d / "pub.bin"),
              "--partition", str(d / "partition.json"), "--program", str(d / "program.json"),
@@ -422,19 +419,65 @@ def test_a_private_inner_session_is_refused_and_the_verdict_says_whether_the_cir
 
     rc, v = verdict()
     assert rc == 1 and "private_circuit" not in v, v
-    for holo in (None, False):
-        rc, v = verdict("--rec-inner", str(_inner(tmp_path / "plain.json", 25, 22, 8, holo=holo)))
-        assert rc == 1 and v["private_circuit"] is False and PRIVATE not in v["why"], v
+    unlisted = "setup: rec-open/l8-h1: not one of V*'s statements at the inner session's shape (m 25, k_log 22, claims 8)"
     hidden = _inner(tmp_path / "hidden.json", 25, 22, 8, holo=True)
-    rc, v = verdict("--rec-inner", str(hidden))
-    assert rc == 1 and v["private_circuit"] is True and v["why"] == f"setup: {PRIVATE}", v
+    for holo, f in ((False, _inner(tmp_path / "absent.json", 25, 22, 8)),
+                    (False, _inner(tmp_path / "plain.json", 25, 22, 8, holo=False)), (True, hidden)):
+        rc, v = verdict("--rec-inner", str(f))
+        assert rc == 1 and v["private_circuit"] is holo and v["why"].startswith(unlisted), (holo, v)
     p = subprocess.run([str(BIN), "statement", *files, "--rec-inner", str(hidden)], capture_output=True, text=True)
-    assert p.returncode == 1 and p.stdout.strip() == f"setup: {PRIVATE}", p.stdout
+    assert p.returncode == 1 and p.stdout.startswith(unlisted), p.stdout
     rc, line = _statements(hidden)
-    assert rc == 1 and line["error"] == PRIVATE, line
+    assert rc == 0 and line["statements"] == _v_star(25, 22, 8, holo=True), line
     p = subprocess.run([str(BIN), "rec-statements", "--rec-inner", str(_inner(tmp_path / "bad.json", 25, 22, 8, holo=1))],
                        capture_output=True, text=True)
     assert p.returncode == 2 and p.stderr.strip() == "rec-inner: holo is not a boolean", p.stderr
+
+
+def _with_holo(text: str, holo: bool) -> str:
+    """``text`` with META's `RR.HOLO_KEY` as `RR.statement` writes it for ``holo`` (present only when true)."""
+    head, meta, rest = text.split("\n", 2)
+    m = {k: v for k, v in json.loads(meta[5:]).items() if k != RR.HOLO_KEY}
+    if holo:
+        m[RR.HOLO_KEY] = True
+    return f"{head}\nMETA {json.dumps(m, sort_keys=True, separators=(',', ':'))}\n{rest}"
+
+
+def test_a_private_inner_sessions_part_is_v_stars_holo_part_byte_for_byte(tmp_path):
+    """At a private inner shape (Shape(22, 10, 2), whose one part reads h when holo) the verifier's list is V*'s holo
+    statements, and the part as `rec_residuals.statement(..., holo=True)` writes it is V*'s file byte for byte as the
+    statement after the levels: it passes, its own ports each `m<k>` under `rec-c<k>` at both reps' rows, h's round
+    (`rec_algebra.h_round`) among them. The same file without META's `holo` is refused at the private shape by the byte it
+    differs at, and the holo file at the plain shape as not V*'s (the plain part reads no h). About two minutes:
+    composing a holo part is the only way to reach `RecVStar.circuitFile`'s holo branch with a real part's unit, so no
+    cheaper test catches the verifier's holo file drifting from the one the prover commits."""
+    m, k, c = 22, 10, 2
+    sh = A.Shape(m, k, c, holo=True)
+    [p] = RR.parts(RR.spec(sh))
+    name = f"rec-residuals/m{m}-k{k}-c{c}-p0"
+    st = RR.statement(p.S, name, 2, holo=True)
+    own = _staged(tmp_path / "holo", st.text, st.part, st.program)
+    hidden = _inner(tmp_path / "hidden.json", m, k, c, holo=True)
+    plain = _inner(tmp_path / "plain.json", m, k, c)
+    ss = _v_star(m, k, c, holo=True)
+    assert ss[-1] == [name, 2] and len(ss) == len(_v_star(m, k, c))
+    rc, line = _statements(hidden)
+    assert rc == 0 and line["statements"] == ss, line
+    flags = ["--instances", "2", "--rec-part", str(len(ss) - 1), "--rec-bindings", str(own)]
+    rc, line = _statements(hidden, "--circuit", str(tmp_path / "holo" / "circuit.txt"), *flags)
+    nr = len([nm for nm, _ in p.S["ports"] if nm.startswith("m")])
+    assert rc == 0 and line["checked"] == [name, 2], line
+    assert line["own"] == [[f"m{i}", f"rec-c{i}", [0, 1]] for i in range(nr)] and nr == len(A.rounds(sh)), line
+    assert any(nm == f"m{A.h_round(sh)}" for nm, _ in p.S["ports"]), p.S["ports"]
+    text, short = st.text, _with_holo(st.text, False)
+    assert _with_holo(text, True) == text and len(short) < len(text)
+    (tmp_path / "plain-meta.txt").write_text(short)
+    rc, line = _statements(hidden, "--circuit", str(tmp_path / "plain-meta.txt"), *flags)
+    assert rc == 1 and line["error"].startswith(
+        f"{name}: the circuit file ({len(short)} bytes) is not V*'s ({len(text)} bytes): they differ at byte "), line
+    assert line["error"].endswith(", line 2"), line
+    rc, line = _statements(plain, "--circuit", str(tmp_path / "holo" / "circuit.txt"), *flags)
+    assert rc == 1 and line["error"].startswith(f"{name}: the circuit file ({len(text)} bytes) is not V*'s"), line
 
 
 # candidate 3's session (`3f97`'s e2e): the circuit table's shape, the bucket's RecSparse shape and R at `table_m` of it

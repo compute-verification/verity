@@ -2,7 +2,8 @@
 V*'s statements over one inner session, checked by the verifier against V*'s own executable Lean (`VStar`, in this
 package so that the verifier can read it): `VStar.statements` at the inner session's shape (`VStar/Stage.lean:48-58`: one
 statement per Ligerito level of `fast100(m)`, `rec-open/l<2^lanes>-h<d − cap>` over that level's `2 q` openings, then one
-per part of the rep's algebra, `rec-residuals/m<m>-k<k_log>-c<claims>-p<j>` over the two reps), and for candidate 3's
+per part of the rep's algebra, `rec-residuals/m<m>-k<k_log>-c<claims>-p<j>` over the two reps; over a private inner
+session, `VStar.statementsHolo`, the parts `specHolo`'s and each part's file saying `holo` in META), and for candidate 3's
 session its RecSparse (`rec-sparse/n<NU>-e<ELL>-s<S_LOG>-t<T_LOG>` over the two reps), R's levels under names of their own
 (`rec-open-stacked/l<2^lanes>-h<d − cap>`, never the circuit table's) and the parts of R's opening
 (`rec-opening/m<m>-c<claims>-p<j>`, at META's `stacked`; `candidate3Statements`). A circuit whose unit is one
@@ -186,17 +187,15 @@ def checkCandidate3 (i : Inner) (ss : Array VStar.Stmt) : Except String Unit := 
         if m != r.m || c != r.claims then
           throw s!"candidate 3's V* list: {s.name} opens R at (m {m}, claims {c}), not at R's shape (m {r.m}, claims {r.claims}, META's {STACKED_SHAPE_KEY})"
 
-/-- V*'s statements at the inner shape (`VStar.statements`), at a shape `RecResiduals.check` accepts a part's name at,
-whose claims are two and two per region of the inner statement (an extra claim per region at each of two link points), and
-where V*'s parts (`VStar.parts (spec vsh)`, `VStar/Parts.lean`) are as many as the verifier's own packing of its algebra
-(`RecResiduals.groups (structureOf sh) (portSizes sh)`, `RecResiduals.lean:119-139`). The shape is holo as `i` says, so a
-part's circuit file, compared byte for byte (`checkFile`), carries `i.holo` as its META holo (`RecResiduals.HOLO_KEY`). V*'s
-circuit writer does not write holo parts yet, so a private inner session (`i.holo`) has no statements: the verifier
-accepts no form ahead of its proof. Candidate 3's statements follow the table's (`candidate3Statements`), and the list
-must hold every one its session needs (`checkCandidate3`). -/
+/-- V*'s statements at the inner shape (`VStar.statementsOf`: `VStar.statements`, or `VStar.statementsHolo` when its
+circuits are private, `i.holo`), at a shape `RecResiduals.check` accepts a part's name at, whose claims are two and two
+per region of the inner statement (an extra claim per region at each of two link points), and where V*'s parts
+(`VStar.parts (specOf vsh i.holo)`, `VStar/Parts.lean`) are as many as the verifier's own packing of its algebra
+(`RecResiduals.groups (structureOf sh) (portSizes sh)`, `RecResiduals.lean:119-139`) at the same holo flag. A part's
+circuit file, compared byte for byte (`checkFile`), carries `i.holo` as its META holo (`RecResiduals.HOLO_KEY`,
+`circuitFile`). Candidate 3's statements follow the table's (`candidate3Statements`), and the list must hold every one
+its session needs (`checkCandidate3`). -/
 def statements (i : Inner) : Except String (Array VStar.Stmt) := do
-  if i.holo then
-    throw "the inner session's circuits are private (rec-inner holo): V*'s circuit writer does not write holo parts yet"
   let some sh0 := RecResiduals.shape? i.m i.kLog i.claims
     | throw (s!"the inner session's shape (m {i.m}, k_log {i.kLog}, claims {i.claims}) is not V*'s: a fast100 schedule, " ++
         "k_log at least 6, claims at least 2")
@@ -204,12 +203,12 @@ def statements (i : Inner) : Except String (Array VStar.Stmt) := do
   if i.claims != 2 + 2 * i.regions then
     throw s!"the inner session's claims {i.claims}, not two and two per region of its {i.regions} ({2 + 2 * i.regions})"
   let vsh : VStar.Algebra.Shape := { m := i.m, kLog := i.kLog, claims := i.claims }
-  let ps ← (do VStar.parts (← VStar.Algebra.spec vsh)).mapError (s!"V*'s parts: " ++ ·)
+  let ps ← (do VStar.parts (← VStar.Algebra.specOf vsh i.holo)).mapError (s!"V*'s parts: " ++ ·)
   let gs ← (do RecResiduals.groups (← RecAlgebra.structureOf sh) (RecResiduals.portSizes sh)).mapError
     (s!"the verifier's groups: " ++ ·)
   if ps.size != gs.size then
     throw s!"at the inner session's shape (m {i.m}, k_log {i.kLog}, claims {i.claims}): V* has {ps.size} parts, the verifier's algebra {gs.size} groups"
-  let ss := (← VStar.statements vsh) ++ (← candidate3Statements i)
+  let ss := (← VStar.statementsOf vsh i.holo) ++ (← candidate3Statements i)
   checkCandidate3 i ss
   pure ss
 
@@ -265,12 +264,12 @@ def check (i : Inner) (name : String) (n : Nat) (part : Option Nat := none) : V 
   | ss => throw s!"{name}: {ss.length} of V*'s statements have this name"
 
 /-- **V*'s circuit file of a statement**: the bytes `vstar stage` writes to `<dir>/circuit.txt` (`VStar.Cli.write`,
-`VStar/Cli.lean:38-47`): the statement's unit, laid out, emitted with its subcircuit and the statement's bindings
-(`VStar.emitCircuit`). -/
-def circuitFile (s : VStar.Stmt) (b : VStar.Bindings) : Except String ByteArray := do
+`VStar/Cli.lean:43-52`): the statement's unit, laid out, emitted with its subcircuit and the statement's bindings, a
+part's META saying `holo` over a holo inner session (`VStar.emitCircuitOf`, as `vstar stage --holo` writes it). -/
+def circuitFile (s : VStar.Stmt) (b : VStar.Bindings) (holo : Bool := false) : Except String ByteArray := do
   let u ← s.unit
   let l ← u.laid
-  let e ← VStar.emitCircuit (m := StateM String) (fun x => modify (· ++ x)) u l s.sub b
+  let e ← VStar.emitCircuitOf (m := StateM String) (holo && s matches .inner ..) (fun x => modify (· ++ x)) u l s.sub b
   pure (Id.run (e.run "")).2.toUTF8
 
 /-- The first position at which two byte strings differ, if they do: the byte and its line (1-based). -/
@@ -281,9 +280,10 @@ def firstDiff? (a b : ByteArray) : Option (Nat × Nat) := Id.run do
     if a[k]! == 10 then line := line + 1
   if a.size == b.size then none else some (min a.size b.size, line)
 
-/-- The circuit file is V*'s for `s` under the bindings `b`, the verifier's own (`circuitFile`). -/
-def checkFile (s : VStar.Stmt) (b : VStar.Bindings) (circuitB : ByteArray) : V Unit := do
-  let f ← match circuitFile s b with
+/-- The circuit file is V*'s for `s` under the bindings `b`, the verifier's own, over an inner session holo or not
+(`circuitFile`). -/
+def checkFile (s : VStar.Stmt) (b : VStar.Bindings) (circuitB : ByteArray) (holo : Bool := false) : V Unit := do
+  let f ← match circuitFile s b holo with
     | .ok f => pure f
     | .error e => throw s!"{s.name}: V*'s circuit file: {e}"
   if let some (k, line) := firstDiff? circuitB f then
@@ -408,12 +408,12 @@ def checkMeta (c : Circuit) (f : VStar.Bindings) : V Unit := do
 
 /-- `checkMeta` of the circuit `c`, parsed from the circuit file `circuitB`, against the verifier's own bindings `f`, then
 `check` on its unit over `n` instances at the inner shape `i` as V*'s statement `part`, `checkFile` on `circuitB` under
-`f`, and `checkParsed` and `checkPart` on `c`. -/
+`f` at `i`'s holo flag, and `checkParsed` and `checkPart` on `c`. -/
 def checkCircuit (i : Inner) (part : Nat) (c : Circuit) (n : Nat) (circuitB : ByteArray) (f : VStar.Bindings) :
     V VStar.Stmt := do
   checkMeta c f
   let s ← check i c.unit.name n (some part)
-  checkFile s f circuitB
+  checkFile s f circuitB i.holo
   checkParsed s c
   checkPart s c
   pure s
@@ -534,13 +534,23 @@ inner transcript records. -/
 def commitRounds (rs : Array SchedRound) : List Nat :=
   (List.range rs.size).filter fun k => (rs.getD k default).2.2.2
 
-/-- The message rounds a part may name: its rep's (`commitRounds (repRounds …)`), Ligerito's included, whose `k`-th is
-`rec-c<k>`'s and V*'s port `m<k>` (`VStar.Algebra.rounds`). At a shape with no fast100 schedule, none: every `m<k>` is
-refused. -/
-def innerMsgRounds : VStar.Stmt → Option Nat
+/-- `rec_live.holo_rounds`: `repRounds` with hidden unit circuits (`Inner.holo`). z_partial's round (`rec_live.zp_round`,
+`m + k_log - 7`) squeezes nothing, and a round of its own absorbs h and squeezes r′. None where that round is not
+z_partial's. -/
+def holoRepRounds (m kLog claims : Nat) : Option (Array SchedRound) := do
+  let out ← repRounds m kLog claims
+  let k := m + kLog - 7
+  if out[k]? != some ((1, #[], 0, true) : SchedRound) then none
+  return out.extract 0 k ++ #[((0, #[], 0, true) : SchedRound), (1, #[], 0, true)] ++ out.extract (k + 1) out.size
+
+/-- The message rounds a part may name: its rep's (`commitRounds (repRounds …)`, `holoRepRounds` over a holo inner
+session, whose h round is one more), Ligerito's included, whose `k`-th is `rec-c<k>`'s and V*'s port `m<k>`
+(`VStar.Algebra.rounds`). At a shape with no fast100 schedule, none: every `m<k>` is refused. -/
+def innerMsgRounds (s : VStar.Stmt) (holo : Bool := false) : Option Nat :=
+  match s with
   | .inner _ name _ => do
     let (m, kLog, claims, _) ← RecResiduals.params name
-    pure (((repRounds m kLog claims).map fun rs => (commitRounds rs).length).getD 0)
+    pure ((((if holo then holoRepRounds else repRounds) m kLog claims).map fun rs => (commitRounds rs).length).getD 0)
   | _ => none
 
 /-- The first circuit port naming a message round past the part's rep's message rounds. -/
@@ -556,8 +566,9 @@ port of the name), so each name is one port's; and each port `m<k>` of a part's 
 (`ownPorts`: a part's `m<k>` under `rec-c<k>`, R's opening's under `rec-opening-c<k>`), so the verifier's reads file
 reads it under the statement's value (`checkOwn`). The circuit file is V*'s for the statement (`checkFile`), whose ports
 are the statement's, each name once (`HmRow.checkRows` refuses a name twice), so an honest session passes. A part also
-refuses an `m<k>` at or past its rep's message rounds (`innerMsgRounds`): its inner transcript has no round `rec-c<k>`. -/
-def checkMsgNames (s : VStar.Stmt) (c : Circuit) : V Unit :=
+refuses an `m<k>` at or past its rep's message rounds (`innerMsgRounds`, at the inner session's `holo`): its inner
+transcript has no round `rec-c<k>`. -/
+def checkMsgNames (s : VStar.Stmt) (c : Circuit) (holo : Bool := false) : V Unit :=
   if !decide (c.ports.toList.map (·.name)).Nodup then
     throw s!"{s.name}: the circuit names a port twice"
   else do
@@ -567,7 +578,7 @@ def checkMsgNames (s : VStar.Stmt) (c : Circuit) : V Unit :=
       | some nm => throw s!"{s.name}: the circuit's port {nm} is named as a message round's, and the statement has no such port"
       | none => pure ()
     | _ => pure ()
-    if let some rounds := innerMsgRounds s then
+    if let some rounds := innerMsgRounds s holo then
       if let some nm := msgRoundOutOfRange rounds c then
         throw s!"{s.name}: the circuit's port {nm} names message round {(mIndex nm).getD 0}, not below its rep's {rounds} message rounds"
 
@@ -828,15 +839,6 @@ def stackedRounds (sh : StackedShape) : Option (Array SchedRound) := do
   if sh.claims < 1 then none
   let rep ← repRounds sh.m 6 sh.claims
   return #[(7, #[2 ^ (sch.levels.getD 0 default).cap], 0, true)] ++ rep.extract (sh.m + 1) rep.size
-
-/-- `rec_live.holo_rounds`: `repRounds` with hidden unit circuits (`Inner.holo`). z_partial's round (`rec_live.zp_round`,
-`m + k_log - 7`) squeezes nothing, and a round of its own absorbs h and squeezes r′. None where that round is not
-z_partial's. -/
-def holoRepRounds (m kLog claims : Nat) : Option (Array SchedRound) := do
-  let out ← repRounds m kLog claims
-  let k := m + kLog - 7
-  if out[k]? != some ((1, #[], 0, true) : SchedRound) then none
-  return out.extract 0 k ++ #[((0, #[], 0, true) : SchedRound), (1, #[], 0, true)] ++ out.extract (k + 1) out.size
 
 /-- `rec_live.sparse_rounds`: a rep's sparse phase at `sh`, in `rec_sparse.prove`'s draws: ζ_c, H2's rounds, v2's (no
 coins), H3's, u's (ζ_p), at T > 1 vt's (ρ_t), and last the registered claim's (no coins). Each absorbs one message but
@@ -1321,7 +1323,7 @@ def checkStmt (inner : Option Inner) (tags : Tags) (tables : List (String × Byt
       throw s!"{name}: one of V*'s statements, whose circuits are in ProvedScope.scopeOk (every row sha512/row/v1, VStmt.hscope), not scopeOkH's bit rows: {ProvedScope.scopeWhy false st.c}"
     checkOwnBindings name f obj prog
     let s ← checkCircuit i j st.c (population st) circuitB f
-    checkMsgNames s st.c
+    checkMsgNames s st.c i.holo
     if let some r := registered then
       checkOwn s r
       checkRows s r rows
