@@ -3265,6 +3265,385 @@ theorem theoremH {Q M : Type} [Fintype Q] [Fintype M] [DecidableEq M] (lane : Q 
 
 end TheoremH
 
+/-! ### Theorem J and the rank bounds on quad runs, in exact arithmetic (P2-FF round 5 §3)
+
+Over a field, a word made of `S` products of bit-affine operands has a bit-pair form `Σ a bᵀ + b aᵀ` of rank at most
+`2 |S|`, and its diagonal is free. So it reaches at most `2 |S|` of the target's free-diagonal rank floor
+(`PairRankGe`, `products_ge_of_pairRankGe`). Two lanes of a quad share each slice's `A` operand, so their summed word
+has the quad's `s` products, and two distinct cells' summed target has floor `2K` (Theorem J, `QuadRun.theoremJ`);
+one cell's target has floor `K` (`QuadRun.full_ge`, `QuadRun.merged_ge`). The floors come from a block-triangular
+submatrix of determinant 1 (`pairRankGe_of_blocks`), on the re-encoded design from plane 0's weight 1
+(`pairRankGe_dIncr`, `pairRankGe_dIncr_two`). Theorem H then holds on every quad run of the design
+(`QuadRun.cost_ge_reEncoded`, at VF2's merge price `_32`). -/
+
+section QuadRuns
+
+/-- The sum of two bit-affine operands. -/
+def BitAff.add {V R : Type} [CommRing R] (A B : BitAff V R) : BitAff V R := ⟨A.c + B.c, fun v => A.α v + B.α v⟩
+
+theorem BitAff.eval_add {V R : Type} [Fintype V] [CommRing R] (A B : BitAff V R) (z : V → R) :
+    (A.add B).eval z = A.eval z + B.eval z := by
+  simp only [BitAff.add, BitAff.eval, add_mul, Finset.sum_add_distrib]
+  ring
+
+theorem pairDiff_comm {V R : Type} [DecidableEq V] [CommRing R] (f : (V → R) → R) (u v : V) :
+    pairDiff f u v = pairDiff f v u := by
+  simp only [pairDiff, Finset.pair_comm]
+  ring
+
+variable {V F : Type} [Fintype V] [DecidableEq V] [Field F]
+
+/-- **The free-diagonal rank floor** of a target `T`: every matrix that agrees with `T`'s bit-pair second differences
+off the diagonal has rank at least `k`. In exact arithmetic a product's form `a bᵀ + b aᵀ` has diagonal `2 a_u b_u`,
+which correctness on bits does not fix (`z_u² = z_u`), so this is what a correct word's products must reach. -/
+def PairRankGe (T : (V → F) → F) (k : ℕ) : Prop :=
+  ∀ M : Matrix V V F, (∀ u v, u ≠ v → M u v = pairDiff T u v) → k ≤ M.rank
+
+/-- **The rank bound in exact arithmetic**: a word that agrees with `T` at every bit point with at most two ones, and
+is a combination of the products of the bit-affine operands in `S` plus a word that projects to 0, has `2 |S|` at least
+`T`'s free-diagonal rank floor. -/
+theorem products_ge_of_pairRankGe {ι : Type} (S : Finset ι) (lam : ι → F) (A B : ι → BitAff V F)
+    (r : (V → F) → F) (hr : ∀ u v, u ≠ v → pairDiff r u v = 0) (T : (V → F) → F) {k : ℕ}
+    (hk : PairRankGe T k)
+    (hT : ∀ U : Finset V, U.card ≤ 2 →
+      T (bitInd U) = ∑ j ∈ S, lam j * ((A j).eval (bitInd U) * (B j).eval (bitInd U)) + r (bitInd U)) :
+    k ≤ 2 * S.card := by
+  set M : Matrix V V F := ∑ j ∈ S, (Matrix.vecMulVec (fun u => lam j * (A j).α u) (B j).α +
+    Matrix.vecMulVec (B j).α (fun v => lam j * (A j).α v)) with hM
+  have hoff : ∀ u v, u ≠ v → M u v = pairDiff T u v := by
+    intro u v huv
+    have h : pairDiff T u v =
+        pairDiff (fun z => ∑ j ∈ S, lam j * ((A j).eval z * (B j).eval z) + r z) u v := by
+      simp only [pairDiff]
+      rw [hT {u, v} ((Finset.card_insert_le u {v}).trans (by simp)), hT {u} (by simp), hT {v} (by simp),
+        hT ∅ (by simp)]
+    rw [h, pairDiff_add (fun z => ∑ j ∈ S, lam j * ((A j).eval z * (B j).eval z)) r, hr u v huv, add_zero,
+      pairDiff_sum S (fun j z => lam j * ((A j).eval z * (B j).eval z))]
+    simp only [hM, Matrix.sum_apply, Matrix.add_apply, Matrix.vecMulVec_apply]
+    refine Finset.sum_congr rfl fun j _ => ?_
+    rw [pairDiff_mul_left (lam j) (fun z => (A j).eval z * (B j).eval z), pairDiff_mul (A j) (B j) huv]
+    ring
+  refine (hk M hoff).trans ?_
+  rw [hM, ← Finset.sum_coe_sort S]
+  exact (rank_sum_vecMulVec_le_card _ _ _ _).trans (by simp)
+
+/-- A free-diagonal rank floor from an identity block off the diagonal. -/
+theorem pairRankGe_of_one {ι : Type} [Fintype ι] [DecidableEq ι] (T : (V → F) → F) (ρ γ : ι → V)
+    (hne : ∀ a b, ρ a ≠ γ b) (hT : ∀ a b, pairDiff T (ρ a) (γ b) = if a = b then 1 else 0) :
+    PairRankGe T (Fintype.card ι) := by
+  intro M hM
+  have hsub : M.submatrix ρ γ = 1 := by
+    ext a b
+    rw [Matrix.submatrix_apply, hM _ _ (hne a b), hT, Matrix.one_apply]
+  calc Fintype.card ι = (1 : Matrix ι ι F).rank := Matrix.rank_one.symm
+    _ ≤ M.rank := by rw [← hsub]; exact Matrix.rank_submatrix_le M ρ γ
+
+/-- **Two cells' free-diagonal rank floor** (Theorem J's step 3): identity blocks on rows `ρ₁` against columns `γ₁`
+and on `ρ₂` against `γ₂`, with a zero block on `ρ₁` against `γ₂`, give rank `2k` whatever the rest, the diagonal
+included: that submatrix is block-triangular with determinant 1. -/
+theorem pairRankGe_of_blocks {ι : Type} [Fintype ι] [DecidableEq ι] (T : (V → F) → F) (ρ₁ ρ₂ γ₁ γ₂ : ι → V)
+    (h11 : ∀ a b, ρ₁ a ≠ γ₁ b) (h12 : ∀ a b, ρ₁ a ≠ γ₂ b) (h22 : ∀ a b, ρ₂ a ≠ γ₂ b)
+    (hT11 : ∀ a b, pairDiff T (ρ₁ a) (γ₁ b) = if a = b then 1 else 0)
+    (hT12 : ∀ a b, pairDiff T (ρ₁ a) (γ₂ b) = 0)
+    (hT22 : ∀ a b, pairDiff T (ρ₂ a) (γ₂ b) = if a = b then 1 else 0) :
+    PairRankGe T (2 * Fintype.card ι) := by
+  intro M hM
+  have hsub : M.submatrix (Sum.elim ρ₁ ρ₂) (Sum.elim γ₁ γ₂) =
+      Matrix.fromBlocks (1 : Matrix ι ι F) 0 (M.submatrix ρ₂ γ₁) (1 : Matrix ι ι F) := by
+    ext a b
+    rcases a with a | a <;> rcases b with b | b
+    · rw [Matrix.submatrix_apply, Sum.elim_inl, Sum.elim_inl, Matrix.fromBlocks_apply₁₁, hM _ _ (h11 a b), hT11,
+        Matrix.one_apply]
+    · rw [Matrix.submatrix_apply, Sum.elim_inl, Sum.elim_inr, Matrix.fromBlocks_apply₁₂, hM _ _ (h12 a b), hT12,
+        Matrix.zero_apply]
+    · rw [Matrix.submatrix_apply, Sum.elim_inr, Sum.elim_inl, Matrix.fromBlocks_apply₂₁, Matrix.submatrix_apply]
+    · rw [Matrix.submatrix_apply, Sum.elim_inr, Sum.elim_inr, Matrix.fromBlocks_apply₂₂, hM _ _ (h22 a b), hT22,
+        Matrix.one_apply]
+  have hunit : IsUnit (Matrix.fromBlocks (1 : Matrix ι ι F) 0 (M.submatrix ρ₂ γ₁) (1 : Matrix ι ι F)) := by
+    rw [Matrix.isUnit_iff_isUnit_det, Matrix.det_fromBlocks_zero₁₂]
+    simp
+  calc 2 * Fintype.card ι = Fintype.card (ι ⊕ ι) := by rw [Fintype.card_sum]; ring
+    _ = _ := (Matrix.rank_of_isUnit _ hunit).symm
+    _ ≤ M.rank := by rw [← hsub]; exact Matrix.rank_submatrix_le M _ _
+
+section DesignRank
+
+variable {n L np B n' : ℕ}
+
+theorem pairDiff_dIncr {R : Type} [CommRing R] (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R)
+    (w : Fin np → R) (i : Fin n) (l : Fin n') (t : Fin B) {u v : DBits n L np B n'} (huv : u ≠ v) :
+    pairDiff (dIncr pc vq w i l t) u v =
+      ∑ j, ((dP pc w i t j).α u * (dX vq t j l).α v + (dP pc w i t j).α v * (dX vq t j l).α u) := by
+  unfold dIncr
+  rw [pairDiff_sum univ (fun j z => (dP pc w i t j).eval z * (dX vq t j l).eval z)]
+  exact Finset.sum_congr rfl fun j _ => pairDiff_mul _ _ huv
+
+/-- A cell-block's target pairs `β_p(i, j)` with `b(t, j, l)` at weight `w_p`, and nothing else. -/
+theorem pairDiff_dIncr_inl_inr {R : Type} [CommRing R] (pc : Fin n → Fin B → Fin L → R)
+    (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R) (i : Fin n) (l : Fin n') (t : Fin B)
+    (a : Fin n × Fin L × Fin np) (b : Fin B × Fin L × Fin n') :
+    pairDiff (dIncr pc vq w i l t) (.inl a) (.inr b) = if a.1 = i ∧ b = (t, a.2.1, l) then w a.2.2 else 0 := by
+  rw [pairDiff_dIncr pc vq w i l t Sum.inl_ne_inr]
+  simp only [dP_α_inl, dP_α_inr, dX_α_inl, dX_α_inr, mul_zero, add_zero, ite_mul, zero_mul]
+  rw [Finset.sum_eq_single a.2.1]
+  · by_cases h1 : a.1 = i <;> by_cases h2 : b = (t, a.2.1, l) <;> simp [h1, h2]
+  · intro j _ hj
+    simp [Ne.symm hj]
+  · simp
+
+theorem pairDiff_dIncr_inl_inl {R : Type} [CommRing R] (pc : Fin n → Fin B → Fin L → R)
+    (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R) (i : Fin n) (l : Fin n') (t : Fin B)
+    {a a' : Fin n × Fin L × Fin np} (h : a ≠ a') :
+    pairDiff (dIncr pc vq w i l t) (.inl a) (.inl a' : DBits n L np B n') = 0 := by
+  rw [pairDiff_dIncr pc vq w i l t (fun h' => h (Sum.inl_injective h'))]
+  simp [dX_α_inl]
+
+theorem pairDiff_dIncr_inr_inr {R : Type} [CommRing R] (pc : Fin n → Fin B → Fin L → R)
+    (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R) (i : Fin n) (l : Fin n') (t : Fin B)
+    {b b' : Fin B × Fin L × Fin n'} (h : b ≠ b') :
+    pairDiff (dIncr pc vq w i l t) (.inr b) (.inr b' : DBits n L np B n') = 0 := by
+  rw [pairDiff_dIncr pc vq w i l t (fun h' => h (Sum.inr_injective h'))]
+  simp [dP_α_inr]
+
+/-- **A cell-block's free-diagonal rank floor** in exact arithmetic: `L`, from plane `p₀`'s weight 1. -/
+theorem pairRankGe_dIncr (pc : Fin n → Fin B → Fin L → F) (vq : Fin B → Fin L → Fin n' → F) (w : Fin np → F)
+    {p₀ : Fin np} (hw : w p₀ = 1) (i : Fin n) (l : Fin n') (t : Fin B) :
+    PairRankGe (dIncr pc vq w i l t) L := by
+  have := pairRankGe_of_one (dIncr pc vq w i l t) (fun j : Fin L => (.inl (i, j, p₀) : DBits n L np B n'))
+    (fun j => .inr (t, j, l)) (fun _ _ => Sum.inl_ne_inr) (fun a b => by
+      rw [pairDiff_dIncr_inl_inr]
+      rcases eq_or_ne a b with rfl | hab
+      · simp [hw]
+      · simp [hab, Ne.symm hab])
+  simpa using this
+
+/-- **Two cell-blocks' free-diagonal rank floor** (Theorem J's step 3 on the design): `2L` for distinct cell-blocks.
+Sharing a row `i` makes each `j` a path centred at `β_p₀(i, j)`, sharing `(t, l)` one centred at `b(t, j, l)`, and
+otherwise the two edges are disjoint. -/
+theorem pairRankGe_dIncr_two (pc : Fin n → Fin B → Fin L → F) (vq : Fin B → Fin L → Fin n' → F) (w : Fin np → F)
+    {p₀ : Fin np} (hw : w p₀ = 1) (c c' : DCells n n' B) (hne : c ≠ c') :
+    PairRankGe (fun z => dIncr pc vq w c.1 c.2.1 c.2.2 z + dIncr pc vq w c'.1 c'.2.1 c'.2.2 z) (2 * L) := by
+  obtain ⟨i, l, t⟩ := c
+  obtain ⟨i', l', t'⟩ := c'
+  set T := fun z => dIncr pc vq w i l t z + dIncr pc vq w i' l' t' z with hTdef
+  have hadd : ∀ u v, pairDiff T u v =
+      pairDiff (dIncr pc vq w i l t) u v + pairDiff (dIncr pc vq w i' l' t') u v := fun u v =>
+    pairDiff_add (dIncr pc vq w i l t) (dIncr pc vq w i' l' t') u v
+  suffices h : PairRankGe T (2 * Fintype.card (Fin L)) by simpa using h
+  by_cases hi : i = i'
+  · subst hi
+    have htl : ¬(t = t' ∧ l = l') := fun h => hne (by rw [h.1, h.2])
+    refine pairRankGe_of_blocks T (fun j => .inr (t, j, l)) (fun j => .inl (i, j, p₀)) (fun j => .inl (i, j, p₀))
+      (fun j => .inr (t', j, l')) (fun _ _ => Sum.inr_ne_inl) (fun a b h => htl ?_) (fun _ _ => Sum.inl_ne_inr)
+      (fun a b => ?_) (fun a b => ?_) (fun a b => ?_)
+    · simp only [Sum.inr.injEq, Prod.mk.injEq] at h
+      exact ⟨h.1, h.2.2⟩
+    · rw [hadd, pairDiff_comm, pairDiff_dIncr_inl_inr, pairDiff_comm, pairDiff_dIncr_inl_inr]
+      by_cases hab : a = b
+      · subst hab
+        have : ¬((t, a, l) = (t', a, l')) := fun h => htl (by simp only [Prod.mk.injEq] at h; exact ⟨h.1, h.2.2⟩)
+        simp [hw, this]
+      · have : ¬((t, a, l) = (t', b, l')) := fun h => htl (by simp only [Prod.mk.injEq] at h; exact ⟨h.1, h.2.2⟩)
+        simp [hab, this]
+    · have hne' : (t, a, l) ≠ (t', b, l') := fun h => htl (by simp only [Prod.mk.injEq] at h; exact ⟨h.1, h.2.2⟩)
+      rw [hadd, pairDiff_dIncr_inr_inr _ _ _ _ _ _ hne', pairDiff_dIncr_inr_inr _ _ _ _ _ _ hne', add_zero]
+    · rw [hadd, pairDiff_dIncr_inl_inr, pairDiff_dIncr_inl_inr]
+      by_cases hab : a = b
+      · subst hab
+        have : ¬((t', a, l') = (t, a, l)) := fun h => htl (by simp only [Prod.mk.injEq] at h; exact ⟨h.1.symm, h.2.2.symm⟩)
+        simp [hw, this]
+      · have : ¬((t', b, l') = (t, a, l)) := fun h => htl (by simp only [Prod.mk.injEq] at h; exact ⟨h.1.symm, h.2.2.symm⟩)
+        simp [hab, this, Ne.symm hab]
+  · by_cases htl : t = t' ∧ l = l'
+    · obtain ⟨rfl, rfl⟩ := htl
+      refine pairRankGe_of_blocks T (fun j => .inl (i, j, p₀)) (fun j => .inr (t, j, l)) (fun j => .inr (t, j, l))
+        (fun j => .inl (i', j, p₀)) (fun _ _ => Sum.inl_ne_inr) (fun a b h => hi ?_) (fun _ _ => Sum.inr_ne_inl)
+        (fun a b => ?_) (fun a b => ?_) (fun a b => ?_)
+      · simp only [Sum.inl.injEq, Prod.mk.injEq] at h
+        exact h.1
+      · rw [hadd, pairDiff_dIncr_inl_inr, pairDiff_dIncr_inl_inr]
+        rcases eq_or_ne a b with rfl | hab
+        · simp [hi, hw]
+        · simp [hab, hi, Ne.symm hab]
+      · have hne' : (i, a, p₀) ≠ (i', b, p₀) := fun h => hi (by simp only [Prod.mk.injEq] at h; exact h.1)
+        rw [hadd, pairDiff_dIncr_inl_inl _ _ _ _ _ _ hne', pairDiff_dIncr_inl_inl _ _ _ _ _ _ hne', add_zero]
+      · rw [hadd, pairDiff_comm, pairDiff_dIncr_inl_inr, pairDiff_comm, pairDiff_dIncr_inl_inr]
+        rcases eq_or_ne a b with rfl | hab
+        · simp [Ne.symm hi, hw]
+        · simp [hab, Ne.symm hi]
+    · refine pairRankGe_of_blocks T (fun j => .inl (i, j, p₀)) (fun j => .inl (i', j, p₀)) (fun j => .inr (t, j, l))
+        (fun j => .inr (t', j, l')) (fun _ _ => Sum.inl_ne_inr) (fun _ _ => Sum.inl_ne_inr)
+        (fun _ _ => Sum.inl_ne_inr) (fun a b => ?_) (fun a b => ?_) (fun a b => ?_)
+      · rw [hadd, pairDiff_dIncr_inl_inr, pairDiff_dIncr_inl_inr]
+        rcases eq_or_ne a b with rfl | hab
+        · simp [hi, hw]
+        · simp [hab, hi, Ne.symm hab]
+      · rw [hadd, pairDiff_dIncr_inl_inr, pairDiff_dIncr_inl_inr]
+        have : ¬((t', b, l') = (t, a, l)) := fun h => htl (by simp only [Prod.mk.injEq] at h; exact ⟨h.1.symm, h.2.2.symm⟩)
+        simp [hi, this]
+      · rw [hadd, pairDiff_dIncr_inl_inr, pairDiff_dIncr_inl_inr]
+        rcases eq_or_ne a b with rfl | hab
+        · simp [Ne.symm hi, hw]
+        · simp [hab, Ne.symm hi, Ne.symm hab]
+
+end DesignRank
+
+/-- **A quad run** in exact arithmetic over a field `F` (round 5 §3, the persistent quads of Theorem J″): quad `q` runs
+`s q` slices, and slice `j` has one operand `A` for the whole quad and an operand `B` for each lane, so lane `ℓ`'s word
+is `Σ_j A_j B_jℓ` plus a bit-affine word. Each lane is a full cell, a piece of a merged cell, or junk (`lane`), and
+merged cell `m`'s word is a combination of its pieces' words plus a bit-affine word. -/
+structure QuadRun (Q M V F : Type) where
+  s : Q → ℕ
+  A : (q : Q) → Fin (s q) → BitAff V F
+  B : (q : Q) → Fin (s q) → Fin 4 → BitAff V F
+  off : Q → Fin 4 → BitAff V F
+  lane : Q → Fin 4 → QLane M
+  lam : Q → Fin 4 → F
+  offM : M → BitAff V F
+
+namespace QuadRun
+
+variable {Q M C : Type} [Fintype Q] [Fintype M] [DecidableEq M]
+
+/-- Lane `ℓ`'s word. -/
+def word (P : QuadRun Q M V F) (q : Q) (ℓ : Fin 4) (z : V → F) : F :=
+  ∑ j, (P.A q j).eval z * (P.B q j ℓ).eval z + (P.off q ℓ).eval z
+
+/-- Merged cell `m`'s word. -/
+def mword (P : QuadRun Q M V F) (m : M) (z : V → F) : F :=
+  ∑ q, ∑ ℓ, (if P.lane q ℓ = .piece m then P.lam q ℓ else 0) * P.word q ℓ z + (P.offM m).eval z
+
+/-- The run computes cells `tgt` on its full lanes (`cell q ℓ`, distinct within a quad) and `tgtM` on its merged
+cells, at every bit point with at most two ones. -/
+structure Computes (P : QuadRun Q M V F) (cell : Q → Fin 4 → C) (tgt : C → (V → F) → F)
+    (tgtM : M → (V → F) → F) : Prop where
+  full : ∀ q ℓ, P.lane q ℓ = .full → ∀ U : Finset V, U.card ≤ 2 →
+    P.word q ℓ (bitInd U) = tgt (cell q ℓ) (bitInd U)
+  merged : ∀ m (U : Finset V), U.card ≤ 2 → P.mword m (bitInd U) = tgtM m (bitInd U)
+  distinct : ∀ q ℓ ℓ', ℓ ≠ ℓ' → P.lane q ℓ = .full → P.lane q ℓ' = .full → cell q ℓ ≠ cell q ℓ'
+
+variable {P : QuadRun Q M V F} {cell : Q → Fin 4 → C} {tgt : C → (V → F) → F} {tgtM : M → (V → F) → F}
+
+omit [Fintype M] in
+/-- **The rank bound on one full lane**: a quad holding a cell with free-diagonal floor `K` has `2 s ≥ K`. -/
+theorem full_ge (hC : P.Computes cell tgt tgtM) {K : ℕ} (hone : ∀ c, PairRankGe (tgt c) K) (q : Q) (ℓ : Fin 4)
+    (hℓ : P.lane q ℓ = .full) : K ≤ 2 * P.s q := by
+  have := products_ge_of_pairRankGe univ (fun _ => (1 : F)) (P.A q) (fun j => P.B q j ℓ)
+    (fun z => (P.off q ℓ).eval z) (fun u v huv => pairDiff_aff _ huv) (tgt (cell q ℓ)) (hone _)
+    (fun U hU => by rw [← hC.full q ℓ hℓ U hU, word]; simp)
+  simpa using this
+
+omit [Fintype M] in
+/-- **Theorem J** (P2-FF round 5 §3) on a quad run: a quad with two full lanes, holding distinct cells whose summed
+targets have free-diagonal floor `2K`, has `s ≥ K`. The two lanes' words share each slice's `A`, so their sum is
+`Σ_j A_j (B_jℓ + B_jℓ')` plus a bit-affine word: `s` products. -/
+theorem theoremJ (hC : P.Computes cell tgt tgtM) {K : ℕ}
+    (hpair : ∀ c c', c ≠ c' → PairRankGe (fun z => tgt c z + tgt c' z) (2 * K)) (q : Q)
+    (h2 : 2 ≤ (univ.filter fun ℓ => P.lane q ℓ = .full).card) : K ≤ P.s q := by
+  obtain ⟨ℓ, hℓ, ℓ', hℓ', hne⟩ := Finset.one_lt_card.1 h2
+  simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hℓ hℓ'
+  have := products_ge_of_pairRankGe univ (fun _ => (1 : F)) (P.A q) (fun j => (P.B q j ℓ).add (P.B q j ℓ'))
+    (fun z => (P.off q ℓ).eval z + (P.off q ℓ').eval z)
+    (fun u v huv => by
+      rw [pairDiff_add (fun z => (P.off q ℓ).eval z) (fun z => (P.off q ℓ').eval z), pairDiff_aff _ huv,
+        pairDiff_aff _ huv, add_zero])
+    _ (hpair _ _ (hC.distinct q ℓ ℓ' hne hℓ hℓ'))
+    (fun U hU => by
+      rw [← hC.full q ℓ hℓ U hU, ← hC.full q ℓ' hℓ' U hU, word, word]
+      simp only [BitAff.eval_add, one_mul, mul_add, Finset.sum_add_distrib]
+      ring)
+  simp only [Finset.card_univ, Fintype.card_fin] at this
+  omega
+
+omit [Fintype M] in
+/-- **The rank bound on a merged cell**: its pieces carry `2 Σ s ≥ K` slices, for a target of floor `K`. -/
+theorem merged_ge (hC : P.Computes cell tgt tgtM) {K : ℕ} (hM : ∀ m, PairRankGe (tgtM m) K) (m : M) :
+    K ≤ 2 * ∑ q, ∑ ℓ, if P.lane q ℓ = .piece m then P.s q else 0 := by
+  classical
+  let S : Finset (Σ q : Q, Fin 4 × Fin (P.s q)) := univ.filter fun x => P.lane x.1 x.2.1 = .piece m
+  have hcard : S.card = ∑ q, ∑ ℓ, if P.lane q ℓ = .piece m then P.s q else 0 := by
+    simp only [S, Finset.card_filter, Fintype.sum_sigma, Fintype.sum_prod_type]
+    refine Finset.sum_congr rfl fun q _ => Finset.sum_congr rfl fun ℓ _ => ?_
+    split_ifs <;> simp
+  rw [← hcard]
+  refine products_ge_of_pairRankGe S (fun x => P.lam x.1 x.2.1) (fun x => P.A x.1 x.2.2)
+    (fun x => P.B x.1 x.2.2 x.2.1)
+    (fun z => ∑ q, ∑ ℓ, (if P.lane q ℓ = .piece m then P.lam q ℓ else 0) * (P.off q ℓ).eval z + (P.offM m).eval z)
+    (fun u v huv => ?_) (tgtM m) (hM m) (fun U hU => ?_)
+  · rw [pairDiff_add (fun z => ∑ q, ∑ ℓ, (if P.lane q ℓ = .piece m then P.lam q ℓ else 0) * (P.off q ℓ).eval z)
+      (fun z => (P.offM m).eval z), pairDiff_aff _ huv, add_zero,
+      pairDiff_sum univ (fun q z => ∑ ℓ, (if P.lane q ℓ = .piece m then P.lam q ℓ else 0) * (P.off q ℓ).eval z)]
+    refine Finset.sum_eq_zero fun q _ => ?_
+    rw [pairDiff_sum univ (fun ℓ z => (if P.lane q ℓ = .piece m then P.lam q ℓ else 0) * (P.off q ℓ).eval z)]
+    refine Finset.sum_eq_zero fun ℓ _ => ?_
+    rw [pairDiff_mul_left _ (fun z => (P.off q ℓ).eval z), pairDiff_aff _ huv, mul_zero]
+  · rw [← hC.merged m U hU, mword]
+    have hS : ∀ g : (Σ q : Q, Fin 4 × Fin (P.s q)) → F, ∑ x ∈ S, g x =
+        ∑ q, ∑ ℓ, ∑ j, if P.lane q ℓ = .piece m then g ⟨q, (ℓ, j)⟩ else 0 := fun g => by
+      simp only [S, Finset.sum_filter, Fintype.sum_sigma, Fintype.sum_prod_type]
+    rw [hS]
+    simp only [word]
+    have h : ∀ q ℓ, (if P.lane q ℓ = .piece m then P.lam q ℓ else 0) *
+        (∑ j, (P.A q j).eval (bitInd U) * (P.B q j ℓ).eval (bitInd U) + (P.off q ℓ).eval (bitInd U)) =
+        (∑ j, if P.lane q ℓ = .piece m then
+          P.lam q ℓ * ((P.A q j).eval (bitInd U) * (P.B q j ℓ).eval (bitInd U)) else 0) +
+        (if P.lane q ℓ = .piece m then P.lam q ℓ else 0) * (P.off q ℓ).eval (bitInd U) := fun q ℓ => by
+      split_ifs <;> simp [mul_add, Finset.mul_sum]
+    simp only [h, Finset.sum_add_distrib]
+    ring
+
+/-- **Theorem H on a quad run** (round 5 §3 and round 6 §6, in exact arithmetic): with merges at `h ≥ 2K/3` slots, a
+run whose cells have free-diagonal floor `K`, and pairs of distinct cells `2K`, pays at least `K` slots a useful cell
+(a full lane or a merged cell). Theorem J and the rank bounds are `theoremJ`, `full_ge` and `merged_ge`. -/
+theorem cost_ge (hC : P.Computes cell tgt tgtM) {K : ℕ} (hone : ∀ c, PairRankGe (tgt c) K)
+    (hpair : ∀ c c', c ≠ c' → PairRankGe (fun z => tgt c z + tgt c' z) (2 * K))
+    (hM : ∀ m, PairRankGe (tgtM m) K) (h : ℝ) (hh : 2 * (K : ℝ) / 3 ≤ h) :
+    (K : ℝ) * (∑ q, ((univ.filter fun ℓ => P.lane q ℓ = .full).card : ℝ) + Fintype.card M) ≤
+      ∑ q, 4 * (P.s q : ℝ) + h * Fintype.card M := by
+  refine theoremH P.lane (fun q => (P.s q : ℝ)) K h (fun q => Nat.cast_nonneg _) (Nat.cast_nonneg _) hh
+    (fun q h2 => by exact_mod_cast QuadRun.theoremJ hC hpair q h2) (fun q h1 => ?_) (fun m => ?_)
+  · obtain ⟨ℓ, hℓ⟩ := Finset.card_eq_one.1 h1
+    have hmem : ℓ ∈ univ.filter fun ℓ => P.lane q ℓ = .full := by rw [hℓ]; exact Finset.mem_singleton_self ℓ
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hmem
+    have h1' : (K : ℝ) ≤ 2 * (P.s q : ℝ) := by exact_mod_cast QuadRun.full_ge hC hone q ℓ hmem
+    linarith
+  · have h1' : (K : ℝ) ≤ 2 * ∑ q, ∑ ℓ, if P.lane q ℓ = .piece m then (P.s q : ℝ) else 0 := by
+      exact_mod_cast QuadRun.merged_ge hC hM m
+    linarith
+
+end QuadRun
+
+/-- **Theorem H on the re-encoded design**, in exact arithmetic over a field (FP8 operands and scaled reads
+included): a quad run whose full lanes and merged cells hold cell-blocks pays `L` slots a useful cell-block once a
+merged cell costs `h ≥ 2L/3` slots. Theorem J and the rank bounds come from the design's free-diagonal floors
+(`pairRankGe_dIncr`, `pairRankGe_dIncr_two`). -/
+theorem QuadRun.cost_ge_reEncoded {Q M : Type} [Fintype Q] [Fintype M] [DecidableEq M] {n L np B n' : ℕ}
+    {P : QuadRun Q M (DBits n L np B n') F} (pc : Fin n → Fin B → Fin L → F) (vq : Fin B → Fin L → Fin n' → F)
+    (w : Fin np → F) {p₀ : Fin np} (hw : w p₀ = 1) (cell : Q → Fin 4 → DCells n n' B) (cellM : M → DCells n n' B)
+    (hC : P.Computes cell (fun c => dIncr pc vq w c.1 c.2.1 c.2.2)
+      (fun m => dIncr pc vq w (cellM m).1 (cellM m).2.1 (cellM m).2.2))
+    (h : ℝ) (hh : 2 * (L : ℝ) / 3 ≤ h) :
+    (L : ℝ) * (∑ q, ((univ.filter fun ℓ => P.lane q ℓ = .full).card : ℝ) + Fintype.card M) ≤
+      ∑ q, 4 * (P.s q : ℝ) + h * Fintype.card M :=
+  QuadRun.cost_ge hC (fun _ => pairRankGe_dIncr pc vq w hw _ _ _) (fun c c' hne => pairRankGe_dIncr_two pc vq w hw c c' hne)
+    (fun _ => pairRankGe_dIncr pc vq w hw _ _ _) h hh
+
+/-- At VF2's merge price, 32 MAC-units a merged word on int8-rate kinds (round 6 §6), every `L ≤ 48` qualifies:
+`c = 1` at the adopted `L = 32`. -/
+theorem QuadRun.cost_ge_reEncoded_32 {Q M : Type} [Fintype Q] [Fintype M] [DecidableEq M] {n L np B n' : ℕ}
+    {P : QuadRun Q M (DBits n L np B n') F} (pc : Fin n → Fin B → Fin L → F) (vq : Fin B → Fin L → Fin n' → F)
+    (w : Fin np → F) {p₀ : Fin np} (hw : w p₀ = 1) (cell : Q → Fin 4 → DCells n n' B) (cellM : M → DCells n n' B)
+    (hC : P.Computes cell (fun c => dIncr pc vq w c.1 c.2.1 c.2.2)
+      (fun m => dIncr pc vq w (cellM m).1 (cellM m).2.1 (cellM m).2.2))
+    (hL : L ≤ 48) :
+    (L : ℝ) * (∑ q, ((univ.filter fun ℓ => P.lane q ℓ = .full).card : ℝ) + Fintype.card M) ≤
+      ∑ q, 4 * (P.s q : ℝ) + 32 * Fintype.card M :=
+  QuadRun.cost_ge_reEncoded pc vq w hw cell cellM hC 32 (by
+    have : (L : ℝ) ≤ 48 := by exact_mod_cast hL
+    linarith)
+
+end QuadRuns
+
 section ModelB
 
 /-! ## The Model B bridge (RS-MODEL: note:20261015T1814Z-draft-rs-machine-model, `gpu-model/rs-model.lean`)
