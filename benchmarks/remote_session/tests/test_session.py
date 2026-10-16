@@ -69,9 +69,12 @@ class PassClock:
 
 
 class TickingBackend(prover.CpuBackend):
-    def __init__(self, clock: PassClock, *args, **kw) -> None:
+    def __init__(self, clock: PassClock, *args, tiers: dict | None = None, **kw) -> None:
         super().__init__(*args, **kw)
-        self.clock = clock
+        self.clock, self.tiers = clock, tiers
+
+    def calibrate(self) -> dict:
+        return {**super().calibrate(), **({"read_tiers": self.tiers} if self.tiers else {})}
 
     def run_pass(self, seed: bytes):
         out = super().run_pass(seed)
@@ -80,11 +83,11 @@ class TickingBackend(prover.CpuBackend):
 
 
 def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sessions: int = 1, checks=None,
-        read_bytes_per_s: float = 1e20):
+        read_bytes_per_s: float = 1e20, tiers: dict | None = None):
     clock = PassClock()
     a, b = socket.socketpair()
     vconn, pconn = wire.Conn(a, clock=clock.now), wire.Conn(b)
-    backend = TickingBackend(clock, blocks, random.Random(7), read_bytes_per_s=read_bytes_per_s)
+    backend = TickingBackend(clock, blocks, random.Random(7), read_bytes_per_s=read_bytes_per_s, tiers=tiers)
     p = prover.ProverSide(pconn, backend, b"test-node", prover.parse_plan(plan), seed=11, log=lambda m: None)
     results = []
 
@@ -148,6 +151,39 @@ def test_the_ledgers_are_the_nodes_whatever_share_of_it_the_store_is_on(monkeypa
     assert lg["inputs"]["chip_bytes"] == timing.GPUS * timing.GPU_CHIP_BYTES + timing.HOST_CHIP_BYTES == 3_045_746_688
     assert lg["inputs"]["squarings_per_s"] == timing.GPUS * timing.GPU_SQUARINGS_PER_S["p512"]
     assert lg["spec"]["certified_bytes"] == pytest.approx(lg["measured"]["certified_bytes"], rel=1e-9)
+
+
+def test_the_timing_parts_reproduce_the_whole_node_sessions_split_and_sum_to_its_timing_term():
+    """r20261015-203743-d101 (15 Oct), 8 GPUs' HBM and a host tier, every pass the whole store: its parts are #2089's
+    split, and at either R they sum to the ledger's timing term."""
+    d101 = {"span_ns": 420_074_057_129, "passes": 6430, "reads_bytes": 4_888_145_229_250_560, "pass_ns": 65_259_603,
+            "tiers": {"hbm": {"bytes": 751_619_276_800, "ms": 61.502974},
+                      "host": {"bytes": 8_589_934_592, "ms": 25.468371}}}
+    for r in (timing.READ_BYTES_PER_S, timing.SPEC_BYTES_PER_S):
+        parts = verifier.timing_parts(capacity_bytes_per_s=r, **d101)
+        assert sum(parts.values()) == pytest.approx(1 - d101["reads_bytes"] / (r * d101["span_ns"] / 1e9), abs=1e-12)
+    parts = verifier.timing_parts(capacity_bytes_per_s=timing.READ_BYTES_PER_S, **d101)
+    assert sum(parts.values()) == pytest.approx(0.09926702029063428, abs=1e-12)
+    assert {k: round(v * 100, 2) for k, v in parts.items()} == {
+        "above_stated_tiers": 0.0, "host_dram_idle": 3.68, "hbm_below_stated": 0.66, "receipts_beyond_read": 5.48,
+        "boundaries_and_allowance": 0.10, "blocks_left_out": 0.0}
+    spec = verifier.timing_parts(capacity_bytes_per_s=timing.SPEC_BYTES_PER_S, **d101)
+    assert spec["above_stated_tiers"] == pytest.approx(1 - timing.READ_BYTES_PER_S / timing.SPEC_BYTES_PER_S)
+
+
+def test_a_sessions_ledgers_carry_the_timing_parts_when_its_calibration_reads_each_tier(monkeypatch):
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    block = rcodec.BLOCK_BYTES
+    tiers = {"hbm": {"bytes": 12 * block, "ms": 1e-6}, "host": {"bytes": 4 * block, "ms": 1e-6}}
+    (r,), _ = run("honest", read_bytes_per_s=1.0, tiers=tiers)
+    lg = r["ledger"]
+    assert lg["inputs"]["timing_parts"]["tiers"] == tiers and lg["inputs"]["timing_parts"]["pass_ns"] >= 0
+    for name in ("spec", "measured"):
+        assert sum(lg[name]["timing_parts"].values()) == pytest.approx(lg[name]["terms"]["timing"], abs=1e-12)
+    assert lg["measured"]["timing_parts"]["above_stated_tiers"] == pytest.approx(0, abs=1e-15)
+    for short in ({"hbm": {"bytes": 15 * block, "ms": 1e-6}}, None):
+        (r,), _ = run("honest", read_bytes_per_s=1.0, tiers=short)
+        assert "timing_parts" not in r["ledger"]["measured"] and "timing_parts" not in r["ledger"]["inputs"]
 
 
 def test_a_second_session_waits_out_the_first_and_is_accepted():
