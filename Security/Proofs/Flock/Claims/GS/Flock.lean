@@ -22,8 +22,10 @@ there:
 
 `mem_flockDecode`: on opened columns at distinct positions of the codeword (below `2^level₀.logLen`, where the points
 `ω_q` are distinct), from the Johnson count on, at `agree > 0`, every message agreeing with at least `agree·N` of them is
-listed. `ListComplete` asks the same at every distinct position, and positions `q` and `q + 2^64` share their point, so
-no decoder whose count bounds its output's length meets it at a polynomial (`Flock.ListComplete.card_le_eval_of_agree`).
+listed. `ListComplete` asks the same at every distinct position, and positions `q` and `q + 2^64` share their point: on
+`nMin` columns at one point a decoder that meets it lists every message with those values there, and if its count bounds
+its output's length its polynomial is at least their number, `2^(128·s·(k−1))`
+(`Flock.ListComplete.card_le_eval_of_agree`).
 -/
 
 namespace Claims.GS

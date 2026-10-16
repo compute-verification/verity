@@ -6,8 +6,8 @@ import Proofs.Flock.Claims.GS.Johnson
 # The counted Guruswami–Sudan decoder for interleaved Reed–Solomon codes
 
 `gsDecode C rf rd agree` decodes the interleaved Reed–Solomon code `C` (`IRS`: `s` rows of degree below `k`) from opened
-columns `os`, computing on coefficient lists and tables only, and `gsCost` counts its field operations along the same
-computation. With `N` opened columns and threshold `t = ⌈agree·N⌉` (`IRS.threshold`):
+columns `os`, computing on coefficient lists and tables only, and `gsCost` counts its field operations (comparisons
+included) along the same computation. With `N` opened columns and threshold `t = ⌈agree·N⌉` (`IRS.threshold`):
 
 1. Each opened position's point `C.dom q` (`cols`, `dc` operations each), and a check that the points are distinct
    (`N²` comparisons) and that `(k+1)·N < t² ∧ t ≤ N` (`Reg`); outside that, `[]`.
@@ -15,7 +15,7 @@ computation. With `N` opened columns and threshold `t = ⌈agree·N⌉` (`IRS.th
    (`interpTab`, Gaussian elimination, at most `20·N^9` operations, `interpCost_le`), written as a table, and its
    `Y`-roots of degree below `k` by Roth–Ruckenstein (`rr`, with the root finder `rf`) (`cands`).
 3. The rows' candidates joined row by row, keeping the prefixes that agree with at least `t` opened columns (`kept`,
-   `extendRows`), each test by Horner's rule (`jcC`). Every kept list after the first row has at most `N` prefixes
+   `extendRows`), each test by Horner's rule (`jcC`). Every kept list has at most `N` prefixes
    (`length_kept_le`): two kept prefixes differ in a row, two distinct polynomials of degree below `k` agree on at most
    `k − 1` of the distinct points, and at `(k+1)·N < t²` Johnson's bound (`johnson_card_le`) caps the family at `N`.
 4. Each full prefix read back as a message (`Reader`, `rd.cost` operations each).
