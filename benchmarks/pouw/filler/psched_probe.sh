@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # HC-SCHED's screens through the scorer's own driver: builds the locked dscore.cu and pscore.cu, then under one lease runs
-# each of PROBES (';'-separated "dscore|pscore MODE ARGS...", as the binaries take them) and appends its row to
+# each of PROBES (';'-separated "[NAME=V ...] dscore|pscore MODE ARGS...", as the binaries take them, with NAME=V set in
+# that probe's environment, such as DFILL_CHUNK_LOG2) and appends its row to
 # $OUT/probe.jsonl; psched_probe.py summarizes the rows with the locked scoring.point_stats. A screen, not a score: no
 # gates beyond each row's own receipts. Run from the repository root (research run --cwd source).
 set -uo pipefail
@@ -24,9 +25,11 @@ nvidia-smi --query-gpu=\$q --format=csv,noheader,nounits \${GPU_LEASE_UUID:+-i \
 IFS=';' read -ra P <<< "\$PROBES"
 for p in "\${P[@]}"; do
   set -- \$p
+  envs=()
+  while [[ "\$1" == *=* ]]; do envs+=("\$1"); shift; done
   bin=\$1; shift
-  "$B/\$bin" "\$@" >> "$O/probe.jsonl" 2>> "$O/errors.txt"
-  echo "\$bin \$* rc \$?" >> "$O/rc.txt"
+  env "\${envs[@]}" "$B/\$bin" "\$@" >> "$O/probe.jsonl" 2>> "$O/errors.txt"
+  echo "\${envs[*]} \$bin \$* rc \$?" >> "$O/rc.txt"
   nvidia-smi --query-gpu=\$q --format=csv,noheader,nounits \${GPU_LEASE_UUID:+-i \$GPU_LEASE_UUID} >> "$O/smi.csv"
 done
 EOF
