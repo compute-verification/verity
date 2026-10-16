@@ -488,8 +488,12 @@ def nvd(*functions):
 SERVE = "_Z6flin_kv"
 WARP = f"${SERVE}$_Z12dfill_k_warpmmyy"
 CONSUMER = ["IMMA.16832.S8.S8 R8, R12.ROW, R16.COL, R8", "STG.E desc[UR4][R6.64], R8"]
-#: dfill_k_warp's clone in a serving kernel: K's tile, its receipt stored inside it
-WARP_BODY = [*K_TILE[:4], "STG.E.64 desc[UR4][R2.64], R28", f"RET.REL.NODEC R2 `({SERVE})"]
+#: dfill_k_warp's clone in a serving kernel: K's tile, returning its receipt
+WARP_BODY = [*K_TILE[:4], f"RET.REL.NODEC R2 `({SERVE})"]
+#: dfill_k_put's clone, as FILL's arm B (2c2a61827) compiles it: the receipt and step count stored through the pointers
+PUT = f"${SERVE}$_Z11dfill_k_putPyPimi"
+PUT_BODY = ["LDCU.64 UR4, c[0x0][0x358]", "MOV R9, 0x0", "STG.E.64 desc[UR4][R2.64], R6", "STG.E desc[UR4][R4.64], R11",
+            f"RET.REL.NODEC R8 `({SERVE})"]
 
 
 def serving(*, before=(), after=(), consumer=CONSUMER, role="@P1 BRA `(.L_x_1)", tail=("EXIT",)):
@@ -570,6 +574,32 @@ def test_program_facts_read_the_filler_wherever_it_is_called_from():
     assert e["applies"] == "unproven" and any("drivers the scorer didn't build" in w for w in e["failed"]["theorem-k"])
     none = S.filler_entry_v4("bits01", None)
     assert none["applies"] == "unproven" and none["kernel"] is None and S.paths_gate(None)["ok"]
+
+
+def test_a_store_only_dfill_k_function_may_take_the_receipt_pointers():
+    """A dfill_k device function that writes global memory (dfill_k_put, coordinator 11:05Z) holds stores and address
+    arithmetic only and stores its arguments as they came; an MMA function that stores, a put that computes, combines or
+    calls, is refused. A dfill_k kernel (the split filler) is its own driver's and isn't held to it."""
+    def facts(put_body=PUT_BODY, warp_body=WARP_BODY):
+        return S.program_facts({"fscore": nvd(serving(after=[f"CALL.REL.NOINC `({PUT})"]), (WARP, False, warp_body),
+                                              (PUT, False, put_body))})
+
+    pf = facts()
+    assert pf["violations"] == [] and pf["filler"]["stores"] == [f"fscore: {PUT}"] and S.paths_gate(pf)["ok"]
+    assert (pf["filler"]["kind"], pf["filler"]["L"], pf["filler"]["fp_free"]) == ("int8", 32, True)
+    assert S.filler_entry_v4("bits01", pf)["applies"] == "theorem-k"
+    v = facts(warp_body=[*WARP_BODY[:-1], "STG.E.64 desc[UR4][R2.64], R28", WARP_BODY[-1]])["violations"]
+    assert any("IMMA.16832.S8.S8 at" in x for x in v) and all("writes global memory" in x for x in v)
+    for body, why in ((["IADD3 R6, R6, 0x1, RZ", *PUT_BODY[2:]], "stores a value the function computes"),
+                      (["MOV R7, 0x0", *PUT_BODY[2:]], "stores a value the function computes"),
+                      (["LOP3.LUT R11, R11, 0xff, RZ, 0xc0, !PT", *PUT_BODY], "LOP3.LUT at 0000"),
+                      ([PUT_BODY[0], "RED.E.ADD desc[UR4][R2.64], R6", PUT_BODY[-1]], "RED.E.ADD at 0010"),
+                      ([f"CALL.REL.NOINC `({WARP})", *PUT_BODY], "CALL.REL.NOINC at 0000")):
+        v = facts(put_body=body)["violations"]
+        assert v and all("writes global memory" in x for x in v) and any(why in x for x in v), (body, v)
+        assert not S.paths_gate(facts(put_body=body))["ok"]
+    split = S.program_facts({"dscore": nvd((DFILL, True, [*K_TILE[:-1], "STG.E desc[UR4][R2.64], R9", "EXIT"]))})
+    assert split["violations"] == [] and split["filler"]["stores"] == []
 
 
 def fixed_row(*, driver="fscore", checked=True, rec_bad=0, fixed_macs=1e12, fixed_ms=20.0, mhz=2000.0, b=1, l=2048):

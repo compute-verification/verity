@@ -474,6 +474,11 @@ def certified(entry: str | dict, entries: dict = FILLER_ENTRIES) -> dict:
 #: opcodes (their base) that can write global memory, where receipts are: stores (global, generic, surface), reductions,
 #: atomics, and the TMA and bulk copies out of shared memory. Shared memory's (STS, ATOMS) and the stack's (STL) can't
 STORE_OPS = frozenset("ST STG RED REDG ATOM ATOMG SUST SURED SUATOM UTMASTG UTMAREDG UBLKCP UBLKRED".split())
+#: what a dfill_k device function that writes global memory may run (coordinator 11:05Z: a store-only __noinline__
+#: dfill_k function, `dfill_k_put`, may take the receipt and step-count pointers if its body holds stores and address
+#: arithmetic only): plain stores, address arithmetic and moves, constant-bank loads (parameters, the memory descriptor)
+#: and its return. Reductions and atomics combine values, so they aren't stores here
+PUT_OPS = frozenset("ST STG IADD IADD3 IADD32I LEA IMAD SHF MOV MOV32I UMOV UIADD3 ULEA LDC LDCU ULDC RET NOP".split())
 #: branches whose target the listing doesn't name: a caller with one has no control-flow graph to bound
 INDIRECT_OPS = frozenset("BRX JMX JMP".split())
 TERMINAL_OPS = frozenset("EXIT RET BPT KILL".split())
@@ -587,6 +592,33 @@ def _bad(fn: dict, idx, where: str) -> list[str]:
     return out
 
 
+def _width(op: str) -> int:
+    return 4 if ".128" in op else 2 if ".64" in op or ".WIDE" in op else 1
+
+
+def _regs(operand: str, n: int) -> set[str]:
+    m = re.match(r"-?(?P<u>U?)R(?P<i>\d+)\b", operand.strip())
+    return {f"{m['u']}R{int(m['i']) + j}" for j in range(n)} if m else set()
+
+
+def _put_bad(fn: dict, where: str) -> list[str]:
+    """Why fn, a dfill_k device function with a store, isn't store-only: an opcode outside `PUT_OPS`, or a store whose
+    value an instruction of the body computes (a store-only function stores its arguments as they came)."""
+    out, written, stored = [], set(), []
+    for addr, _, op, args in fn["insns"]:
+        base, ops = op.split(".")[0], [a.strip() for a in re.split(r",(?![^\[]*\])", args)] if args else []
+        if base not in PUT_OPS:
+            out.append(f"{where}: {op} at {addr} (a dfill_k function that writes global memory holds only stores and "
+                       "address arithmetic)")
+        elif base in ("ST", "STG"):
+            stored.append((addr, op, _regs(ops[-1], _width(op)) if ops else set()))
+        elif ops and base != "RET":
+            written |= _regs(ops[0], _width(op))
+    out += [f"{where}: {op} at {addr} stores a value the function computes, not its argument"
+            for addr, op, regs in stored if regs & written]
+    return out
+
+
 def program_facts(listings: dict[str, str]) -> dict:
     """filler-scorer/v4's reading of the scorer's own build: `listings` maps each binary that ran scored rows (dscore,
     and each driver an arm brings, `score.build`) to its cubins' ``nvdisasm -c`` text.
@@ -600,8 +632,11 @@ def program_facts(listings: dict[str, str]) -> dict:
       filler warps' region (`_region`): the instructions on a path from its entry to such a CALL or after one returns.
     - ``violations``, which refuse the arm (`paths_gate`): in a region, or in any function a region or the filler calls
       that isn't the filler, an MMA, a store that can write global memory (`STORE_OPS`: a receipt's), or a call through
-      a register; and a caller with a branch whose target isn't named. A guarded instruction counts as run: a warp-role
-      split by predication instead of a branch is refused.
+      a register; a caller with a branch whose target isn't named; and a dfill_k device function (not a kernel) that
+      writes global memory, itself or through what it calls, unless it is store-only (``stores``, `_put_bad`: stores,
+      address arithmetic and moves alone, storing its arguments unmodified; such a function, `dfill_k_put`, may take
+      the receipt and step-count pointers, coordinator 11:05Z), so an MMA function's inputs stay coins, tile and step.
+      A guarded instruction counts as run: a warp-role split by predication instead of a branch is refused.
     - ``serving_mma``: every other function's MMAs (a serving kernel's consumer warps, kernels with no filler), outside
       the filler warps' paths, credited at the serving reading.
     - ``fixed_from``: each binary's functions that fixed work can come from, its callers and its dfill_p phase kernels
@@ -624,7 +659,12 @@ def program_facts(listings: dict[str, str]) -> dict:
         return out
 
     own = below(c for k in filler for c in calls[k])
-    violations, callers, regions, todo = [], {}, {}, []
+    violations, callers, regions, todo, puts = [], {}, {}, [], []
+    for k in sorted(filler):
+        if not fns[k]["entry"] and any(op.split(".")[0] in STORE_OPS for g in [k, *below(calls[k])]
+                                       for _, _, op, _ in fns[g]["insns"]):
+            puts.append(f"{k[0]}: {k[1]}")
+            violations += _put_bad(fns[k], f"{k[1]} ({k[0]}), a dfill_k function that writes global memory")
     for k in sorted(reach - filler):
         f = fns[k]
         reg, at, ok = _region(f, {n for b, n in reach if b == k[0]})
@@ -650,7 +690,8 @@ def program_facts(listings: dict[str, str]) -> dict:
     fixed_from = {b: sum(k[0] == b for k in (reach - filler) | {k for k in filler if "dfill_p" in k[1]})
                   for b in listings}
     return {"version": V4, "binaries": sorted(listings), "fixed_from": fixed_from, "filler": {
-        "functions": sorted(f"{b}: {n}" for b, n in filler), "helpers": sorted(f"{b}: {n}" for b, n in own),
+        "functions": sorted(f"{b}: {n}" for b, n in filler), "stores": puts,
+        "helpers": sorted(f"{b}: {n}" for b, n in own),
         "path_helpers": sorted(f"{b}: {n}" for b, n in helpers - own),
         "mma": dict(sorted(mma.items())), "fp_ops": dict(sorted(fp.items())), "accumulating_mma": acc, "kind": kind,
         "fp_free": not fp, "L": L}, "callers": callers, "serving_mma": serving, "violations": violations}
@@ -665,7 +706,9 @@ UNCHECKED_V4 = (
     "that a filler warp only calls dfill_k: a path from the warp-role branch that never reaches the CALL looks like the "
     "serving warps' path, so its MMAs read as serving",
     "the filler function's inputs (only the coins, the public tile id and the step, besides its stop flag): the "
-    "INTERFACE's, with the receipts gate holding its outputs to the host reference's function of (coins, tile, steps)",
+    "INTERFACE's, with the receipts gate holding its outputs to the host reference's function of (coins, tile, steps); "
+    "a dfill_k function that writes memory is held to stores of its arguments (`_put_bad`), but the values the filler "
+    "warps pass it are computed on their path, where integer ops aren't refused",
     "the fixed work's MACs: the driver's count over its receipts (the device's step counts, each sampled one held to "
     "the host reference by its receipt and the steps - 8 control) times the driver's MACs a step",
     "the filler warps' DRAM traffic: the scorer's dram gate measures the split filler's kernels; the fused runner's "
