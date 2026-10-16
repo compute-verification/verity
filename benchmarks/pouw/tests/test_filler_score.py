@@ -85,6 +85,7 @@ def test_score_is_time_weighted_and_missing_entries_void_it():
     assert sc["SCORE"] == pytest.approx(sum(e["coverage"] * x for e, x in zip(sc["entries"], w)) / sum(w))
     assert sc["min"]["coverage"] == min(e["coverage"] for e in sc["entries"])
     assert sc["flags"] == ["filler certified fraction 0.99 is provisional"]
+    assert S.score(all_points(slow=1.0, place="none"))["flags"] == []
     del stats[("decode", 132, 5120)]
     sc = S.score(stats)
     assert "SCORE" not in sc and sc["missing"] == ["reasoning 1K/8192 B 132"]
