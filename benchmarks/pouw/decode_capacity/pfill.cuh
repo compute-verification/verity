@@ -67,6 +67,7 @@
 // the host generators that dfill_ref (and so dgate's receipts) holds the GPU to.
 #pragma once
 #include "../pearl_c/sha512.cuh"
+#include "../receipts/receipt_folds.cuh"
 
 #define PF_W 8
 #ifndef PF_CTAS
@@ -118,13 +119,7 @@ __host__ __device__ constexpr uint64_t pf_dom(int kd) {
 __host__ __device__ inline uint32_t pf_bswap(uint32_t x) {
   return (x >> 24) | ((x >> 8) & 0xFF00u) | ((x << 8) & 0xFF0000u) | (x << 24);
 }
-__host__ __device__ inline uint32_t pf_rotl(uint32_t x, int r) {
-#ifdef __CUDA_ARCH__
-  return __funnelshift_l(x, x, r);
-#else
-  return (x << r) | (x >> (32 - r));
-#endif
-}
+__host__ __device__ inline uint32_t pf_rotl(uint32_t x, int r) { return rf_rotl(x, r); }
 // row word r of a digest: digest bytes 4r..4r+3 as a little-endian u32, so bit k is entry 32 r + k's bit
 __host__ __device__ inline uint32_t pf_row(const uint64_t* st, int r) {
   return pf_bswap((r & 1) ? (uint32_t)st[r >> 1] : (uint32_t)(st[r >> 1] >> 32));
@@ -150,22 +145,10 @@ __host__ __device__ inline uint32_t pf_e2m1x8(uint32_t byte) {
   x = (x | (x << 3)) & 0x11111111u;
   return 0x22222222u | (x << 3);
 }
-__host__ __device__ inline bool pf_key_ok(uint32_t a) {
-  const uint32_t m = a & 0xFFFFFFu, r = a & 31u;
-  return (a & 1u) && m > 256u && m < (1u << 24) - 256u && r != 1u && r != 31u;
-}
-// receipt_folds_r9.key_ok_r9: pf_key_ok, and neither a nor -a an int8 ratio mod 2^30, i.e. a b mod 2^30 outside
-// [-128, 128] for every b in 1..128
-__host__ __device__ inline bool pf_key_ok_r9(uint32_t a) {
-  if (!pf_key_ok(a)) return false;
-  uint32_t t = 0;
-#pragma unroll 1
-  for (int b = 1; b <= 128; b++) {
-    t += a;
-    if (((t + 128u) & 0x3FFFFFFFu) <= 256u) return false;
-  }
-  return true;
-}
+// the receipts reference's key rules (receipt_folds.cuh): key_ok, and key_ok_r9 = key_ok with neither a nor -a an int8
+// ratio mod 2^30
+__host__ __device__ inline bool pf_key_ok(uint32_t a) { return rf_key_ok(a); }
+__host__ __device__ inline bool pf_key_ok_r9(uint32_t a) { return rf_key_ok_r9(a); }
 struct PfKeys {
   uint32_t a0, a1, k0, k1;
 };
@@ -188,14 +171,11 @@ __host__ __device__ __forceinline__ void pf_absorb(uint32_t& y, uint32_t& z, uin
                                                    uint32_t d3, const PfKeys& k) {
   if (NC == 4 || NC == 5) {
 #if defined(PFILL_LI)
-    y = (y ^ d0 ^ k.k0) * k.a0 + d1;
-    y = (y ^ d2 ^ k.k1) * k.a1 + d3;
+    y = rf_li_step(y, d0, d1, d2, d3, k.a0, k.a1, k.k0, k.k1);
 #elif defined(PFILL_XIN13)
-    y = (pf_rotl(y, 13) ^ d0) * k.a0 + d1;
-    y = (pf_rotl(y, 19) ^ d2) * k.a1 + d3;
+    y = rf_xin13_step(y, d0, d1, d2, d3, k.a0, k.a1);
 #else
-    y = (pf_rotl(y, 7) + d0) * k.a0 + d1;
-    y = (pf_rotl(y, 19) + d2) * k.a1 + d3;
+    y = rf_ram_step(y, d0, d1, d2, d3, k.a0, k.a1);
 #endif
   } else if (NC == 6) {
     y = (pf_rotl(y, 7) + d0) * 0x9E3779B1u + d1;
@@ -205,17 +185,13 @@ __host__ __device__ __forceinline__ void pf_absorb(uint32_t& y, uint32_t& z, uin
   } else if (NC == 8) {
     y = y * k.a0 + d0; y = y * k.a1 + d1; y = y * k.a0 + d2; y = y * k.a1 + d3;
   } else if (NC == 2) {
-    uint32_t u;
-    u = y ^ d0 ^ k.k0; y = u * k.a0 + z; z = pf_rotl(u, 5) + y;
-    u = y ^ d1 ^ k.k1; y = u * k.a1 + z; z = pf_rotl(u, 11) + y;
-    u = y ^ d2 ^ k.k0; y = u * k.a0 + z; z = pf_rotl(u, 17) + y;
-    u = y ^ d3 ^ k.k1; y = u * k.a1 + z; z = pf_rotl(u, 29) + y;
+    rf_duo_step(y, z, d0, d1, d2, d3, k.a0, k.a1, k.k0, k.k1);
   } else {
     y ^= d0 ^ d1 ^ d2 ^ d3;
   }
 }
-__host__ __device__ inline uint32_t pf_y0(uint32_t pos) { return pos; }
-__host__ __device__ inline uint32_t pf_z0(uint32_t pos) { return pos * 0x9E3779B9u; }
+__host__ __device__ inline uint32_t pf_y0(uint32_t pos) { return rf_pfill_y0(pos); }
+__host__ __device__ inline uint32_t pf_z0(uint32_t pos) { return rf_pfill_z0(pos); }
 __host__ __device__ inline uint64_t pf_fold(uint64_t K, uint32_t pos, uint64_t v) { return smix(smix(K ^ pos) ^ v); }
 
 #ifdef __CUDACC__

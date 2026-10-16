@@ -19,12 +19,14 @@ from pathlib import Path
 
 import numpy as np
 
-_name = "dfill_ref"
-if _name not in sys.modules:
-    _spec = importlib.util.spec_from_file_location(_name, Path(__file__).with_name("dfill_ref.py"))
-    sys.modules[_name] = importlib.util.module_from_spec(_spec)
-    _spec.loader.exec_module(sys.modules[_name])
-smix, dseed = sys.modules[_name].smix, sys.modules[_name].dseed
+for _name, _path in (("dfill_ref", Path(__file__).with_name("dfill_ref.py")),
+                     ("receipt_folds", Path(__file__).resolve().parents[1] / "receipts" / "receipt_folds.py")):
+    if _name not in sys.modules:
+        _spec = importlib.util.spec_from_file_location(_name, _path)
+        sys.modules[_name] = importlib.util.module_from_spec(_spec)
+        _spec.loader.exec_module(sys.modules[_name])
+smix, dseed = sys.modules["dfill_ref"].smix, sys.modules["dfill_ref"].dseed
+RF = sys.modules["receipt_folds"]  # the receipts reference: the folds' steps, key rules and pfill's lane starts
 
 W, TN = 8, 1024
 DOM = 0x5046494C4C2D7631  # "PFILL-v1": the s8 tile
@@ -77,47 +79,26 @@ def bu_columns(c0: int, c1: int, tile: int, tn: int = TN) -> np.ndarray:
     return u_of(t).T
 
 
-def key_ok(a: int) -> bool:
-    m, r = a & 0xFFFFFF, a & 31
-    return bool(a & 1) and 256 < m < (1 << 24) - 256 and r not in (1, 31)
-
-
-def key_ok_r9(a: int) -> bool:
-    """P2-FF r9's key condition (receipt_folds_r9.key_ok_r9, art:91c156a1): key_ok, and neither a nor -a an int8 ratio
-    mod 2^30, i.e. a b mod 2^30 outside [-128, 128] for every b in 1..128."""
-    return key_ok(a) and all((a * b + 128) % (1 << 30) > 256 for b in range(1, 129))
+key_ok, key_ok_r9, rotl = RF.key_ok, RF.key_ok_r9, RF.rotl
 
 
 def keys(rows: np.ndarray, r9: bool = False) -> tuple[int, int, int, int]:
     """(a0, a1, k0, k1): the first two row words that pass key_ok (key_ok_r9 in an LI or XIN13 build), then rows 14 and
-    15."""
-    ok = [int(x) for x in rows if (key_ok_r9 if r9 else key_ok)(int(x))]
-    a = ok + [0x9E3779B9, 0x7F4A7C15][len(ok[:2]):]
-    return a[0], a[1], int(rows[14]), int(rows[15])
-
-
-def rotl(x: np.ndarray, r: int) -> np.ndarray:
-    return (x << np.uint32(r)) | (x >> np.uint32(32 - r))
+    15 (receipt_folds.pfill_keys)."""
+    return RF.pfill_keys(rows, r9)
 
 
 def absorb(nc: int, y, z, d0, d1, d2, d3, a0, a1, k0, k1):
-    """One MMA's step of a lane's chain, (y, z) from its words (d0, d1, d2, d3) = rows (g, g + 8) x columns (2t, 2t + 1);
-    every argument uint32 (arrays or scalars)."""
+    """One MMA's step of a lane's chain, (y, z) from its words (d0, d1, d2, d3) = rows (g, g + 8) x columns (2t, 2t + 1),
+    by the receipts reference's steps; every argument uint32 (arrays or scalars)."""
     if nc == RAM:
-        y = (rotl(y, 7) + d0) * a0 + d1
-        return (rotl(y, 19) + d2) * a1 + d3, z
+        return RF.ram_step(y, d0, d1, d2, d3, a0, a1), z
     if nc == LI:
-        y = (y ^ d0 ^ k0) * a0 + d1
-        return (y ^ d2 ^ k1) * a1 + d3, z
+        return RF.li_step(y, d0, d1, d2, d3, a0, a1, k0, k1), z
     if nc == XIN13:
-        y = (rotl(y, 13) ^ d0) * a0 + d1
-        return (rotl(y, 19) ^ d2) * a1 + d3, z
+        return RF.xin13_step(y, d0, d1, d2, d3, a0, a1), z
     if nc == DUO:
-        for p, k, a, r in ((d0, k0, a0, 5), (d1, k1, a1, 11), (d2, k0, a0, 17), (d3, k1, a1, 29)):
-            u = y ^ p ^ k
-            y = u * a + z
-            z = rotl(u, r) + y
-        return y, z
+        return RF.duo_step(y, z, d0, d1, d2, d3, a0, a1, k0, k1)
     return y ^ d0 ^ d1 ^ d2 ^ d3, z
 
 
@@ -183,8 +164,7 @@ def fold(c0: int, c1: int, tile: int, nc: int, steps: int, cw: np.ndarray, kind:
     lane = np.arange(32)
     g, t = lane >> 2, lane & 3
     pos = (np.arange(w)[:, None, None] * 32 + lane[None, :, None]) * 4 + np.arange(4)[None, None, :]
-    y = pos.astype(np.uint32)
-    z = (pos.astype(np.uint64) * 0x9E3779B9 & M32).astype(np.uint32)
+    y, z = (v.astype(np.uint32) for v in RF.pfill_start(pos.astype(np.uint64)))
     jj = np.arange(tn // 8)
     n0 = 8 * jj[:, None] + 2 * t[None, :]  # [j, lane]: the lane's columns 8 j + 2 t and 8 j + 2 t + 1
     ww = np.arange(w)[None, :, None, None]
