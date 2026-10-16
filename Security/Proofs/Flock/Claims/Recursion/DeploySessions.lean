@@ -13,10 +13,11 @@ analysis states them (`outMsg`, `sessProver`, `sessCoins`, `sessStmt`, `offO`, `
 accepts only at its last round (`OuterAtEnd`), which SHA-512 is (`sessionRuns_sha512`, by `nextO_acc_length_sha512`):
 
 * the fork's first `offO` rounds are the judged run's (`stepWith_agree`), so `offO` is the compiled verifier's session
-  offset: the inner rounds' messages are the judged run's (`take_inner`) and the V* statements read off them are its;
-* at each round of session `s` the compiled verifier's step is the outer verifier's (`ract_at`, `next_sess`): its
+  offset: the inner rounds' messages are the judged run's (`innerPairs_run`) and the V* statements read off them are
+  its;
+* at each round of session `s` the compiled verifier's step is the outer verifier's (`ract_eq`, `next_sess`): its
   numbers and `decided` checks read only the inner rounds and the rounds before the session, where the judged run,
-  which accepts, passed them (`sessChecks`);
+  which accepts, passed them (`run_round`);
 * the session's answers are the outer verifier's as `sessOut` gives them, which `D.session` reads back (`sim`): an
   acceptance at the session's last round, `.msg []` before the last session, as `.acc` (the outer verifier's other
   answers are coins' bytes, never empty, `coin_bytes_ne_nil`), and a session that ends on a coin refused at the next
@@ -25,7 +26,8 @@ accepts only at its last round (`OuterAtEnd`), which SHA-512 is (`sessionRuns_sh
   compiled verifier's.
 
 At an oracle where the outer verifier can accept before its last round, the compiled verifier refuses that round while
-the session's own run accepts, so `OuterAtEnd` is the hypothesis `FlockDeploy.next_acc_length` takes (`hr`).
+the session's own run accepts, so `sessionRuns` takes `OuterAtEnd`, which `nextO_acc_length` gives wherever Flock's
+setup at `H` has its recursive setup's rounds (`hr`).
 -/
 
 namespace RecDeploy
@@ -802,5 +804,196 @@ theorem run_round (hacc : (run H P (V IV st) x ω r).out = .acc) {s off : ℕ} {
     exact h2 ⟨rfl, hs0, by simpa using hd⟩
 
 end Runs
+
+/-! ## Each session's run -/
+
+/-- **The outer verifier accepts only at its last round** at the oracle `H`, with one coin per message. -/
+def OuterAtEnd (H : Msg → Msg) : Prop :=
+  ∀ (xO : Msg) (as : List Msg) (cs : List Coin), cs.length = as.length → ((nextO xO as cs).eval H).1 = .acc →
+    as.length = VO.k xO
+
+theorem outerAtEnd_sha512 : OuterAtEnd FlockDeploy.sha512 := fun _ _ _ hcs h => nextO_acc_length_sha512 hcs h
+
+open Classical in
+/-- **Session `s` of an accepted run, run alone**: at its first round `off` and its V* statement `xO`, read off the
+judged run's inner rounds, the outer verifier's run against `P` after the judged run's first `off` messages, at the
+second draw's coins from `off` on, is `session`'s view of the fork at `off`, and its oracle calls are the fork's. -/
+theorem session_core (H : Msg → Msg) (hO : OuterAtEnd H) (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) {s : ℕ}
+    (hs : s < nS x) {Ω : Type} (P : Prover Ω) (ω : Ω) (r d : Fin ((V IV st).k x) → Coin)
+    (hacc : (run H P (V IV st) x ω r).out = .acc) {off : ℕ} {xs : List Msg} {xO : Msg}
+    (hxs : xs = vstar st x ((run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x))))
+    (hoff : off = IV.k (xIOf x) + ((xs.take s).map VO.k).sum) (hxO : xO = xs.getD s []) :
+    (run H (sessProver P x ω ((run H P (V IV st) x ω r).msgs.take off)) VO xO ()
+        (sessCoins off d (VO.k xO))).seen =
+      session IV st x s (run H P (V IV st) x ω (Claims.Recursion.fork off r d)).seen ∧
+    ∀ e ∈ (run H (sessProver P x ω ((run H P (V IV st) x ω r).msgs.take off)) VO xO ()
+        (sessCoins off d (VO.k xO))).vLog,
+      e ∈ (run H P (V IV st) x ω (Claims.Recursion.fork off r d)).vLog := by
+  obtain ⟨xr, hx⟩ := run_acc_readX H IV st x P ω r hacc
+  have hK := run_acc_length H IV st x P ω r hacc
+  obtain ⟨hnum, hdec⟩ := run_round H IV st x P ω r hacc hs hxs hoff
+  have hxl : xs.length = nS x := by rw [hxs, vstar_length]
+  have hpos := VO_k_pos xO
+  have hthrough := rounds_through xs (s := s) (by omega)
+  rw [← hxO] at hthrough
+  have hKeq : (V IV st).k x = IV.k (xIOf x) + (xs.map VO.k).sum := by
+    show _ + _ = _
+    rw [hxs, vstar_map_k]
+  have hsum := take_sum_le (xs.map VO.k) (s + 1)
+  rw [← List.map_take] at hsum
+  have hend : s + 1 = nS x → off + VO.k xO = (V IV st).k x := by
+    intro h
+    rw [hKeq, hoff, Nat.add_assoc, hthrough, h, ← hxl, List.take_length]
+  have hkoff : IV.k (xIOf x) ≤ off := by omega
+  have hml : (((run H P (V IV st) x ω r).msgs.take off).map Prod.fst).length = off := by
+    simp only [List.length_map, List.length_take]
+    omega
+  have hM : ((run H P (V IV st) x ω r).msgs.take off).length = off := by
+    rw [List.length_take]
+    omega
+  have hip : ∀ (bs : List Msg) (cs : List Coin),
+      cs.take (IV.k (xIOf x)) = (List.range (IV.k (xIOf x))).map (coinSeq r) →
+      innerPairs (IV.k (xIOf x)) (((run H P (V IV st) x ω r).msgs.take off).map Prod.fst ++ bs) cs =
+        (run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x)) :=
+    fun bs cs hc => innerPairs_run H IV st x P ω r hacc hkoff (by omega) bs hc
+  have hcI : ∀ b, ((List.range (off + b)).map (coinSeq (Claims.Recursion.fork off r d))).take (IV.k (xIOf x)) =
+      (List.range (IV.k (xIOf x))).map (coinSeq r) := fun b => by
+    rw [range_map_take _ (by omega), fork_take_coins off r d hkoff]
+  have hag := stepWith_agree H P x ω (vnOf IV st x r) (vnOf IV st x (Claims.Recursion.fork off r d))
+    ((V IV st).k x) off [] [] ⟨[], [], [], .rej⟩ ⟨[], [], [], .rej⟩ rfl (fun bs hb => by
+      simp only [List.length_nil, Nat.zero_add] at hb
+      simp only [vnOf]
+      rw [fork_take_coins off r d hb])
+  simp only [List.length_nil, Nat.zero_add] at hag
+  rw [← run_eq H IV st x P ω r, ← run_eq H IV st x P ω (Claims.Recursion.fork off r d)] at hag
+  obtain ⟨hpre, hoffF⟩ := hag
+  have hltF : off < (run H P (V IV st) x ω (Claims.Recursion.fork off r d)).msgs.length := hoffF.1 (by omega)
+  have hpreI : (run H P (V IV st) x ω (Claims.Recursion.fork off r d)).msgs.take (IV.k (xIOf x)) =
+      (run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x)) := by
+    have := congrArg (List.take (IV.k (xIOf x))) hpre
+    rw [List.take_take, List.take_take, Nat.min_eq_left hkoff] at this
+    exact this.symm
+  obtain ⟨t', -, ht'm, -, hRFeq⟩ := stepWith_reach H P x ω (vnOf IV st x (Claims.Recursion.fork off r d)) off
+    ((V IV st).k x) [] [] ⟨[], [], [], .rej⟩ (by show 0 + off < _; rw [Nat.zero_add]; exact hltF)
+  simp only [List.length_nil, List.drop_zero, List.nil_append] at ht'm hRFeq
+  rw [← run_eq H IV st x P ω (Claims.Recursion.fork off r d)] at ht'm hRFeq
+  rw [← hpre] at ht'm hRFeq
+  obtain ⟨e, he⟩ : ∃ e, (V IV st).k x - off = VO.k xO + e := ⟨(V IV st).k x - off - VO.k xO, by omega⟩
+  rw [he] at hRFeq
+  have hV : ∀ bs : List Msg, 0 < bs.length → bs.length ≤ VO.k xO →
+      (vnOf IV st x (Claims.Recursion.fork off r d)
+          (((run H P (V IV st) x ω r).msgs.take off).map Prod.fst ++ bs)).eval H =
+        (sessOut (s + 1 == nS x) (bs.length == VO.k xO)
+          ((nextO xO bs ((List.range bs.length).map (coinSeq (sessCoins off d (VO.k xO))))).eval H).1,
+          ((nextO xO bs ((List.range bs.length).map (coinSeq (sessCoins off d (VO.k xO))))).eval H).2) := by
+    intro bs hb0 hbn
+    have hlen : (((run H P (V IV st) x ω r).msgs.take off).map Prod.fst ++ bs).length = off + bs.length := by
+      rw [List.length_append, hml]
+    have hk' : IV.k (xIOf x) < (((run H P (V IV st) x ω r).msgs.take off).map Prod.fst ++ bs).length := by
+      rw [hlen]
+      omega
+    have hl : locate ((vstar st x (innerPairs (IV.k (xIOf x))
+        (((run H P (V IV st) x ω r).msgs.take off).map Prod.fst ++ bs)
+        ((List.range (off + bs.length)).map (coinSeq (Claims.Recursion.fork off r d))))).map VO.k)
+        ((((run H P (V IV st) x ω r).msgs.take off).map Prod.fst ++ bs).length - 1 - IV.k (xIOf x)) =
+        some (s, bs.length - 1) := by
+      rw [hip bs _ (hcI bs.length), ← hxs, hlen,
+        show off + bs.length - 1 - IV.k (xIOf x) = ((xs.map VO.k).take s).sum + (bs.length - 1) by
+          rw [← List.map_take]; omega]
+      exact locate_eq _ (by simp only [List.length_map]; omega)
+        (by rw [getD_map_k xs (s := s) (by omega), ← hxO]; omega)
+    have hract : ract IV st x (((run H P (V IV st) x ω r).msgs.take off).map Prod.fst ++ bs)
+        ((List.range (off + bs.length)).map (coinSeq (Claims.Recursion.fork off r d))) =
+        .sess s (bs.length - 1) xO bs ((List.range bs.length).map (coinSeq (sessCoins off d (VO.k xO)))) := by
+      rw [ract_eq (st := st) hx hk' hl, hip bs _ (hcI bs.length), ← hxs, hlen,
+        show off + bs.length - 1 - (bs.length - 1) = off by omega, ← hxO, List.take_left' hml,
+        List.drop_left' hml, range_map_take (coinSeq (Claims.Recursion.fork off r d)) (Nat.le_add_right off bs.length),
+        fork_take_coins off r d (le_refl off), fork_drop_coins off r d hbn]
+      split_ifs with h1 h2
+      · exact absurd hnum h1
+      · have := hdec h2.2.1
+        rw [h2.2.2] at this
+        exact absurd this Bool.false_ne_true
+      · rfl
+    rw [vnOf, hlen, next_sess H hract, show bs.length - 1 + 1 = bs.length by omega]
+  have hnext : 0 < e → ∀ (bs : List Msg) (a m : Msg), bs.length = VO.k xO →
+      ((nextO xO bs ((List.range bs.length).map (coinSeq (sessCoins off d (VO.k xO))))).eval H).1 = .msg m →
+      ((vnOf IV st x (Claims.Recursion.fork off r d)
+        (((run H P (V IV st) x ω r).msgs.take off).map Prod.fst ++ bs ++ [a])).eval H).1 = .rej := by
+    intro he0 bs a m hbn hm
+    have hs1 : s + 1 < nS x := by
+      rcases Nat.lt_or_ge (s + 1) (nS x) with h | h
+      · exact h
+      · have := hend (by omega)
+        omega
+    have hml2 : (((run H P (V IV st) x ω r).msgs.take off).map Prod.fst ++ bs).length = off + VO.k xO := by
+      rw [List.length_append, hml, hbn]
+    have hlen : (((run H P (V IV st) x ω r).msgs.take off).map Prod.fst ++ (bs ++ [a])).length =
+        off + (VO.k xO + 1) := by
+      rw [← List.append_assoc, List.length_append, hml2, List.length_singleton, Nat.add_assoc]
+    have hk' : IV.k (xIOf x) < (((run H P (V IV st) x ω r).msgs.take off).map Prod.fst ++ (bs ++ [a])).length := by
+      rw [hlen]
+      omega
+    have hpos1 := VO_k_pos (xs.getD (s + 1) [])
+    have hl : locate ((vstar st x (innerPairs (IV.k (xIOf x))
+        (((run H P (V IV st) x ω r).msgs.take off).map Prod.fst ++ (bs ++ [a]))
+        ((List.range (off + (VO.k xO + 1))).map (coinSeq (Claims.Recursion.fork off r d))))).map VO.k)
+        ((((run H P (V IV st) x ω r).msgs.take off).map Prod.fst ++ (bs ++ [a])).length - 1 - IV.k (xIOf x)) =
+        some (s + 1, 0) := by
+      rw [hip (bs ++ [a]) _ (hcI (VO.k xO + 1)), ← hxs, hlen,
+        show off + (VO.k xO + 1) - 1 - IV.k (xIOf x) = ((xs.map VO.k).take (s + 1)).sum + 0 by
+          rw [← List.map_take]; omega]
+      exact locate_eq _ (by simp only [List.length_map]; omega)
+        (by rw [getD_map_k xs (s := s + 1) (by omega)]; exact hpos1)
+    rw [hbn] at hm
+    have hd := decided_of_msg H hm
+    have hrej : ract IV st x (((run H P (V IV st) x ω r).msgs.take off).map Prod.fst ++ (bs ++ [a]))
+        ((List.range (off + (VO.k xO + 1))).map (coinSeq (Claims.Recursion.fork off r d))) = .rej := by
+      rw [ract_eq (st := st) hx hk' hl, hip (bs ++ [a]) _ (hcI (VO.k xO + 1)), ← hxs, hlen,
+        show off + (VO.k xO + 1) - 1 - 0 = off + VO.k xO by omega, show s + 1 - 1 = s by omega,
+        getD_map_k xs (s := s) (by omega), ← hxO, show off + VO.k xO - VO.k xO = off by omega,
+        ← List.append_assoc, List.take_left' hml2, List.drop_left' hml,
+        range_map_take (coinSeq (Claims.Recursion.fork off r d)) (show off + VO.k xO ≤ off + (VO.k xO + 1) by omega),
+        fork_drop_coins off r d (le_refl (VO.k xO))]
+      split_ifs with h1 h2
+      · rfl
+      · rfl
+      · exact absurd ⟨rfl, Nat.succ_pos s, hd⟩ h2
+    rw [List.append_assoc, vnOf, hlen, next_rej H hrej]
+  have hacc' : ∀ bs, ((nextO xO bs ((List.range bs.length).map (coinSeq (sessCoins off d (VO.k xO))))).eval H).1 =
+      .acc → bs.length = VO.k xO := fun bs h => hO xO bs _ (by simp) h
+  have hlast : (s + 1 == nS x) = true → e = 0 := fun h => by
+    have := hend (beq_iff_eq.1 h)
+    omega
+  have key := sim H P x ω (sessProver P x ω ((run H P (V IV st) x ω r).msgs.take off)) xO
+    (fun bs => nextO xO bs ((List.range bs.length).map (coinSeq (sessCoins off d (VO.k xO)))))
+    (vnOf IV st x (Claims.Recursion.fork off r d)) (s + 1 == nS x) (VO.k xO) e
+    (((run H P (V IV st) x ω r).msgs.take off).map histOf) (((run H P (V IV st) x ω r).msgs.take off).map Prod.fst)
+    ((run H P (V IV st) x ω r).msgs.take off) (fun _ => rfl) hV hacc' (fun _ _ h => nextO_msg_ne_nil H h) hlast
+    hnext (VO.k xO) [] [] ⟨[], [], [], .rej⟩ t' hpos (by simp) (by rw [ht'm]; simp) rfl rfl (by simp) (by simp)
+  simp only [List.append_nil] at key
+  rw [← hRFeq, hM] at key
+  have hsess : session IV st x s (run H P (V IV st) x ω (Claims.Recursion.fork off r d)).seen =
+      sview (s + 1 == nS x) off (VO.k xO) (run H P (V IV st) x ω (Claims.Recursion.fork off r d)).seen := by
+    show sview (s + 1 == nS x) (IV.k (xIOf x) + (((vstar st x ((run H P (V IV st) x ω
+        (Claims.Recursion.fork off r d)).msgs.take (IV.k (xIOf x)))).take s).map VO.k).sum)
+      (VO.k ((vstar st x ((run H P (V IV st) x ω (Claims.Recursion.fork off r d)).msgs.take
+        (IV.k (xIOf x)))).getD s [])) (run H P (V IV st) x ω (Claims.Recursion.fork off r d)).seen = _
+    rw [hpreI, ← hxs, ← hoff, ← hxO]
+  rw [hsess]
+  exact key
+
+/-- **`SessionRuns` at the compiled verifier** and the outer record, at every oracle where the outer verifier accepts
+only at its last round. -/
+theorem sessionRuns {W : Type} (Hr H : Msg → Msg) (hO : OuterAtEnd H) (I : Claims.Recursion.Inner Coin W)
+    (ivScope : Msg → Bool) (st : Stage) (rd : Readers) (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :
+    SessionRuns H (deployRec Hr I.V ivScope st rd) I (deployZkRec rel) :=
+  fun x s _ P ω r d hacc => session_core H hO I.V st x s.2 P ω r d hacc rfl rfl rfl
+
+/-- **`SessionRuns` at SHA-512.** -/
+theorem sessionRuns_sha512 {W : Type} (Hr : Msg → Msg) (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool)
+    (st : Stage) (rd : Readers) (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :
+    SessionRuns FlockDeploy.sha512 (deployRec Hr I.V ivScope st rd) I (deployZkRec rel) :=
+  sessionRuns Hr FlockDeploy.sha512 outerAtEnd_sha512 I ivScope st rd rel
 
 end RecDeploy
