@@ -18,7 +18,8 @@ finders' Cauchy–Schwarz aggregation (`Finder`, `Aggregate`), the `Bits` coroll
 reruns and amplification (`ERep`), `ERepCost` (`ERepCost`), and a decoder that meets `ListComplete` at the Johnson
 count for interleaved Reed–Solomon codes, from ArkLib's Guruswami–Sudan decoder (`Decode`), and that decoder at Flock's
 level-0 code (`DecodeFlock`). A counted Guruswami–Sudan decoder with its `DecoderComplexity`, over Berlekamp's root
-finder in GF(2^128) (`RootFindGF128`), is `GS`. -/
+finder in GF(2^128) (`RootFindGF128`), is `GS`; `GS.Radius` states the list-decoding spec in its radius form
+(`Flock.ListWithin`) and proves that decoder meets it at Flock's level-0 code. -/
 
 /-- **The claims are stated** (`Flock.Guarantees.ClaimsStated`). -/
 theorem Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated := rfl

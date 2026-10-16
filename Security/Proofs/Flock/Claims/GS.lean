@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.GS.Decode
 import Proofs.Flock.Claims.GS.Flock
+import Proofs.Flock.Claims.GS.Radius
 
 /-!
 # A counted Guruswami–Sudan decoder, and `DecoderComplexity` at Flock's level-0 code
@@ -18,4 +19,8 @@ The decoder computes on coefficient lists and tables, and counts its field opera
   Johnson count on (`mem_gsDecode`), and its `DecoderComplexity` at the opened data's size (`gsDecode_complexity`).
 * `GS.Flock`: that decoder at Flock's level-0 code, with Berlekamp's trace root finder over GF(2^128)
   (`flockDecode_complexity`, `mem_flockDecode`).
+* `GS.Radius`: the list-decoding spec in its radius form (`Flock.fill`, `Flock.ListWithin`: every trace whose encoding
+  agrees with the zero-filled word of its codeword length on at least `(1 − θ)·n` positions), and the decoder that
+  meets it at Flock's level-0 code at `θ = 1 − √ρ − 1/200` (`flockDecodeR`, `listWithin_flockDecodeR`), with its
+  `DecoderComplexity` at `(os.length + n)·2^k0·128` (`flockDecodeR_complexity`).
 -/
