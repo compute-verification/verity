@@ -14,6 +14,7 @@ import Proofs.Flock.Claims.Complete.Custody
 import Proofs.Flock.Claims.Complete.Files
 import Proofs.Flock.Claims.Complete.Runs
 import Proofs.Flock.Claims.Complete.Reps
+import Proofs.Flock.Claims.Complete.Replay
 
 /-! Flock's completeness at the deployed plain verifier: the honest prover (`Honest`: `honestP`, on the session prover
 of `Prover/`: the transcript, the PIOP, Ligerito and the session record), its run against the verifier (`Run`:
@@ -24,4 +25,6 @@ B's checks accepting when each of their checks passes (`Verdict`: `verifyRepWith
 The skeleton (`Skeleton`: `complete_of_goals`) composes them, from one named goal per check (`Goals`); `Discharge`
 proves the goals that follow from the scope alone (`tables_goal`, `schedules_goal`), `Shape` those that read what
 the pure session returns (`Ret`, `proofCount_goal`), `Link` the first send (`linkFirst_goal`), and `Count`
-the sends (`sendCount_goal`). -/
+the sends (`sendCount_goal`). `Replay` replays the verifier's phases on the honest prover's rounds
+(`zerocheckWith_of`, `lincheckWith_of`, `ringSwitchWith_of`, and the goals `zerocheck_goal`, `lincheck_goal`,
+`ringSwitch_goal`). -/
