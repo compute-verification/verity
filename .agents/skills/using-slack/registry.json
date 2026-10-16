@@ -120,6 +120,7 @@
         "benchmarks/masked_gemm/",
         "benchmarks/floored_gemm/",
         "benchmarks/e2e_slice/",
+        "benchmarks/edited_gemm/",
         ".agents/skills/kernel-engineering/"
       ]
     },
