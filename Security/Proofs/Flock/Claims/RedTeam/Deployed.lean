@@ -3,6 +3,7 @@ import Proofs.Flock.Claims.RedTeam.Complete
 import Proofs.Flock.Claims.RedTeam.Efficient
 import Proofs.Flock.Claims.DeployCode
 import Proofs.Flock.Claims.GS.RadiusDeploy
+import Proofs.Flock.Claims.Assembled
 import Proofs.Flock.Verifier.Hash
 
 /-!
@@ -15,6 +16,8 @@ readable relation `rel`:
 * `flockZK_deployZk`: Flock's `ZK` holds at `ε_zk = 0` for every honest prover, at a simulator of cost `2`.
 * `flockComplete_deployPlain`, `flockComplete_deployZk`: Flock's `Complete` holds at `δ_c = 0` at an empty tape.
 * `efficient_deployPlain`, `efficient_deployZk`: Flock's `Efficient` holds at `p = 0` at the deployed decoders.
+* `flock_plain_assembled_of_KS`, `flock_zk_assembled_of_KS`: the assembled claims (`FlockDeploy.Assembled`) from `KS`
+  alone, their completeness hypothesis met at the empty tape.
 -/
 
 namespace Claims.RedTeam.Deployed
@@ -53,5 +56,37 @@ theorem efficient_deployPlain (rel : _root_.Flock.Readable.Parsed → _root_.Flo
 theorem efficient_deployZk (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (H : Msg → Msg) :
     Flock.Efficient H (FlockDeploy.deployZk rel) GS.zkDecodeRD (fun os => (GS.zkDecodeRD os, 0)) (fun _ => 0) 0 :=
   efficient_zero H _ _ (GS.listWithin_deployZk rel)
+
+/-- **The assembled `--zk` claims rest on `KS` alone**: `FlockDeploy.Assembled.flock_zk_assembled`'s completeness
+hypothesis, which no branch owns, is met at the empty-tape prover at `δ_c = 0`. -/
+theorem flock_zk_assembled_of_KS (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
+    (H : Msg → Msg) (hKS : Flock.KS H (FlockDeploy.deployZk rel)) :
+    Flock.ScopeMatches (FlockDeploy.deployZk rel) ∧
+      Flock.KS H (FlockDeploy.deployZk rel) ∧
+      Flock.Bits H (FlockDeploy.deployZk rel) ∧
+      (∀ a b : Msg → ℝ, (∀ x, Flock.κ (FlockDeploy.deployZk rel) x ≤ 2 ^ (-a x)) →
+        (∀ x, Flock.γ (FlockDeploy.deployZk rel) x ≤ 2 ^ b x) →
+        Claims.Bits H (FlockDeploy.deployZk rel).V (Flock.R (FlockDeploy.deployZk rel).parse)
+          (Flock.E (FlockDeploy.deployZk rel) GS.zkDecodeRD) fun x => min (a x) (255.5 - b x / 2) - 1) ∧
+      Flock.Efficient H (FlockDeploy.deployZk rel) GS.zkDecodeRD GS.zkCountedRD GS.zkSizeRD
+        (Polynomial.C 11 * (GS.zkPolyR + Polynomial.X)) ∧
+      Flock.Complete H (FlockDeploy.deployZk rel) noTape 0 :=
+  FlockDeploy.Assembled.flock_zk_assembled rel H hKS noTape 0 (flockComplete_deployZk rel H)
+
+/-- **The assembled plain claims rest on `KS` alone**, as at `--zk`: `flock_plain_assembled`'s completeness hypothesis
+is met at the empty-tape prover. -/
+theorem flock_plain_assembled_of_KS (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
+    (H : Msg → Msg) (hKS : Flock.KS H (FlockDeploy.deployPlain rel)) :
+    Flock.ScopeMatches (FlockDeploy.deployPlain rel) ∧
+      Flock.KS H (FlockDeploy.deployPlain rel) ∧
+      Flock.Bits H (FlockDeploy.deployPlain rel) ∧
+      (∀ a b : Msg → ℝ, (∀ x, Flock.κ (FlockDeploy.deployPlain rel) x ≤ 2 ^ (-a x)) →
+        (∀ x, Flock.γ (FlockDeploy.deployPlain rel) x ≤ 2 ^ b x) →
+        Claims.Bits H (FlockDeploy.deployPlain rel).V (Flock.R (FlockDeploy.deployPlain rel).parse)
+          (Flock.E (FlockDeploy.deployPlain rel) GS.plainDecodeRD) fun x => min (a x) (255.5 - b x / 2) - 1) ∧
+      Flock.Efficient H (FlockDeploy.deployPlain rel) GS.plainDecodeRD GS.plainCountedRD GS.plainSizeRD
+        (Polynomial.C 14 * (GS.flockPolyR + Polynomial.X)) ∧
+      Flock.Complete H (FlockDeploy.deployPlain rel) noTape 0 :=
+  FlockDeploy.Assembled.flock_plain_assembled rel H hKS noTape 0 (flockComplete_deployPlain rel H)
 
 end Claims.RedTeam.Deployed
