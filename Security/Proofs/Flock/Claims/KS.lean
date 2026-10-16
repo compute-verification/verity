@@ -44,9 +44,9 @@ table extracts (`FlockDeploy.KS.good_of_committed_zk`, `FlockDeploy.KS.not_commi
 full-width columns at both records (`Width`, `FlockDeploy.KS.plain_colsOk`, `FlockDeploy.KS.zk_colsOk`), and
 conflicts are tied to collisions at both (`ConflictTied`, `FlockDeploy.KS.plain_conflictTied`,
 `FlockDeploy.KS.zk_conflictTied`), which leaves `TableBoundθ` for KS at SHA-512 (`FlockDeploy.KS.plain_KSθ_of_table`,
-`FlockDeploy.KS.zk_KSθ_of_table`). Toward `ConflictTied`: a run over `OC` within a log, peeled step by step, with the shipped step's verdict alongside
-(`ConflictOC`, `FlockDeploy.KS.Runs`, `FlockDeploy.KS.shadow`); the shipped `hm96-sha512/v1` Merkle check logs every
-SHA-512 input of each opening (`ConflictMerkle`, `FlockDeploy.KS.merkleCheck_logs`), and two accepted openings of one
+`FlockDeploy.KS.zk_KSθ_of_table`). Toward `ConflictTied`: a run over `OC` within a log, peeled step by step, with the
+shipped step's verdict alongside (`ConflictOC`, `FlockDeploy.KS.Runs`, `FlockDeploy.KS.shadow`); the shipped
+`hm96-sha512/v1` Merkle check logs every SHA-512 input of each opening (`ConflictMerkle`, `FlockDeploy.KS.merkleCheck_logs`), and two accepted openings of one
 position against one cap with different rows collide in the two logs (`FlockDeploy.KS.tiedColl_of_opens`). SHA-512
 answered only within a log (`ConflictWithin`, `FlockDeploy.KS.hashesIn`) carries a run within its log to a verdict in
 `V` and back (`FlockDeploy.KS.within`, `FlockDeploy.KS.back`), so the verifier's lemmas under every oracle hold of it:
@@ -58,10 +58,11 @@ So an accepted run's column at `q` is an opening of `q` against table 0's `root_
 every SHA-512 input in the run's log (`FlockDeploy.KS.Opening`, `FlockDeploy.KS.plain_opening`,
 `FlockDeploy.KS.zk_opening`), and two runs at one tape opening different columns at `q` collide
 (`FlockDeploy.KS.tiedColl_of_openings`). `TableBoundθ` statement by statement (`TableBound`,
-`Flock.TableBoundθAt`): where the verifier accepts no run it holds with no escapes (`Flock.tableBoundθAt_of_noAcc`), as
-at every statement the deployed verifier does not set up, so at both records it is its bound at the statements that set
-up (`FlockDeploy.KS.plain_tableBoundθ_of_setup`, `FlockDeploy.KS.zk_tableBoundθ_of_setup`,
-`FlockDeploy.KS.plain_KSθ_of_setup`, `FlockDeploy.KS.zk_KSθ_of_setup`); at the deployed relation, a table of
+`Flock.TableBoundθAt`): where the verifier accepts no run it holds with no escapes (`Flock.tableBoundθAt_of_noAcc`),
+the weight covering `k` at every statement (`FlockDeploy.KS.k_le_weight`), and a statement some run accepts at SHA-512
+parses in scope (`FlockDeploy.KS.acc_inScope`), so at both records it is its bound at the accepted statements
+(`FlockDeploy.KS.plain_tableBoundθ_of_acc`, `FlockDeploy.KS.zk_tableBoundθ_of_acc`,
+`FlockDeploy.KS.plain_KSθ_of_acc`, `FlockDeploy.KS.zk_KSθ_of_acc`); at the deployed relation, a table of
 full-width columns that does not extract is not committed to the plain record's table 0
 (`FlockDeploy.KS.plain_hwit`, `FlockDeploy.KS.plain_not_committed`), and under `--zk` `hwit` holds at one table
 (`FlockDeploy.KS.zk_hwit`). -/
