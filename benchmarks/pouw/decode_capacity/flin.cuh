@@ -80,8 +80,9 @@ __global__ void fadv_k(FState* s, unsigned long long per) {
 // entry held by the one lane that loads it, so no bit crosses lanes: lane (g, t)'s word q of A_i is the four entries
 // A_i[g + 8 (q & 1)][16 (q >> 1) + 4 t + e], e < 4, bits 16 (i & 1) + 4 q + e of R[i >> 1]; its B_j words are
 // B_j[16 h + 4 t + e][g], bits 8 (j & 3) + 4 h + e of R[8 + j / 4]. The keys (a0, a1) are the first two pf_key_ok words
-// among R[15] of lanes 0..31 (pfill's defaults if fewer), bits no operand reads. Lane (g, t) keeps chains c < 4 with y =
-// 4 lane + c; chain c absorbs A_{4 a + c} B_j for a < 4, then j < 28 (pf_absorb<4>, pfill's ram), and the lane returns
+// (pf_key_ok_r9 on a -DPFILL_LI or -DPFILL_XIN13 build) among R[15] of lanes 0..31 (pfill's defaults if fewer), bits no
+// operand reads. Lane (g, t) keeps chains c < 4 with y = 4 lane + c; chain c absorbs A_{4 a + c} B_j for a < 4, then
+// j < 28 (pf_absorb<4>: pfill's ram, or the build's r9 fold), and the lane returns
 // the XOR over c of pf_fold(smix(dseed(c0, c1, tile) ^ step), 4 lane + c, y). pw_ref is the same step on the host, from
 // the matrices. A step is 448 MMAs from one SHA block a lane (pfill: 4 bits an MMA; here 36, so the hashing is a third
 // of a step's issue slots).
@@ -99,7 +100,7 @@ __device__ __noinline__ uint64_t dfill_k_warp(uint64_t c0, uint64_t c1, unsigned
     for (int r = 0; r < 16; r++) R[r] = pf_row(st, r);
   }
   PfKeys key{0x9E3779B9u, 0x7F4A7C15u, 0, 0};
-  const unsigned ok = __ballot_sync(~0u, pf_key_ok(R[15])), ok1 = ok & (ok - 1);
+  const unsigned ok = __ballot_sync(~0u, PF_R9 ? pf_key_ok_r9(R[15]) : pf_key_ok(R[15])), ok1 = ok & (ok - 1);
   const uint32_t k0 = __shfl_sync(~0u, R[15], ok ? __ffs(ok) - 1 : 0), k1 = __shfl_sync(~0u, R[15], ok1 ? __ffs(ok1) - 1 : 0);
   if (ok) key.a0 = k0;
   if (ok1) key.a1 = k1;
@@ -149,7 +150,7 @@ static uint64_t pw_step_ref(uint64_t c0, uint64_t c1, uint64_t tile, uint64_t st
   }
   PfKeys key{0x9E3779B9u, 0x7F4A7C15u, 0, 0};
   for (int l = 0, n = 0; l < 32 && n < 2; l++)
-    if (pf_key_ok(R[l][15])) (n++ ? key.a1 : key.a0) = R[l][15];
+    if (PF_R9 ? pf_key_ok_r9(R[l][15]) : pf_key_ok(R[l][15])) (n++ ? key.a1 : key.a0) = R[l][15];
   uint32_t Ar[PW_NA][16] = {}, Bc[PW_NB][8] = {};  // bit k of Ar[i][row] is A_i[row][k], of Bc[j][n] B_j[k][n]
   for (int l = 0; l < 32; l++) {
     const int g = l >> 2, t = l & 3;
