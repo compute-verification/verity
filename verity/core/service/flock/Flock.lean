@@ -67,4 +67,5 @@ import Flock.Witness
 import Flock.With.Returns
 import Flock.With.ReturnsWalk
 import Flock.With.Deployed
+import Flock.With.Setup
 import Flock.RecOpeningCmd
