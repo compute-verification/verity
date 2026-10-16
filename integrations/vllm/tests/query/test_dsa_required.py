@@ -116,6 +116,20 @@ def test_the_indexers_logits_and_top_k_are_unreturned_and_not_required(glm):
     assert not [r for r in man["identities"] if r["family"] == "call_boundaries"]
 
 
+def test_the_word_check_skips_the_unreturned_indexer_calls(glm):
+    from verity_vllm.pipeline import manifest as M
+    P, corr, _man = glm
+    res = {"program": {"digest": "d0", "function": "f"}, "target": {"declared": {"compute_capability": [9, 0]}},
+           "attention_impls_observed": {f"{m}.attn": {"kind": "mla", "impl": T.IMPL} for m in MODULE.values()}}
+    r = request_manifest(P, corr, res, request_id="r0")
+    assert r.unreturned == Population(P, corr).unreturned and r.unreturned
+    dsa = ("DsaMqaLogits_v3", "DsaTopKShortRow_v1")
+    def flagged(unreturned):
+        wc = M.word_check(P, corr, r.required, "16/32", strict=False, unreturned=unreturned)
+        return {v["definition"].split("{")[0] for v in wc["violations"]} & set(dsa)
+    assert flagged(frozenset()) == set(dsa) and flagged(r.unreturned) == set()
+
+
 def test_without_the_runtime_record_the_logits_stay_required():
     """The fallback correspondence records no return slots: nothing is unreturned, and the hinted logits stay return slots."""
     P, _doc = _served(*_derived())

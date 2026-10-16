@@ -297,6 +297,7 @@ class BridgeResult:
     manifest: dict[str, Any]
     required: RequiredValues
     residual_counts: Counter = field(default_factory=Counter)
+    unreturned: frozenset[int] = frozenset()     # `Population.unreturned`: dead Calls, which the word check skips like literals
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
@@ -776,4 +777,4 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
                            "required_values": len(req.values), "literal_calls": len(literals)},
            "complete": not unmodelled, "unmodelled": dict(unmodelled),
            "manifest_digest": fmt.manifest_digest(identities), "identities": identities}
-    return BridgeResult(man, req, residual_counts)
+    return BridgeResult(man, req, residual_counts, pop.unreturned)
