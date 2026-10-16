@@ -1,0 +1,762 @@
+import Definitions.Claims
+
+/-!
+# Claims: the sampling compiler (frozen before any proof work)
+
+The claims block of sampled proofs (`verity/core/protocols/sampled_proofs/`), one-stage and two-stage sampling, on the
+shared definitions of `Definitions.Claims`, in the template's eight items and the README glossary's terms. Parametric in
+the deployed sampled verifier (`Deploy`), as Flock's block is in `Flock.Deploy`: binding it to the compiled verifier is
+the code side's.
+
+1. **Statement** (`Stmt`): the program `C` (named by its digest; both parties hold it), the partition query `Q` (named,
+   versioned, with its parameters), the sampling design, and the roots the trace is committed under. The partition is
+   public: `P = Q(C)`, which the verifier evaluates itself (`Deploy.partition`), gives the proof units (gate intervals of
+   `C`, every gate in exactly one, input gates and constants included), the replay units, the strata and the classes, and
+   so every replay unit's size `n_v`. `x` is the canonical bytes of what the verifier reads before it draws, and `parse`
+   is its own.
+2. **Witness** (`Wit`): openings of the committed values of `C`'s gates under the roots.
+3. **Relation** (`R δ`): the set of faulty units of the committed trace is in the confidence set
+   `M_δ = {B : P_a(B) > δ}`. A unit is faulty when its committed outputs differ from its gates applied to its committed
+   inputs, or a value it reads or writes is unopened. Under two-stage sampling the units are the replay units, whose
+   interiors are committed after the first draw: one is faulty unless some interior makes every proof unit of it correct,
+   which on a topologically ordered program is the glossary's form on the boundary trace (`FaultyBoundary`); `P_a` is
+   then its effective form `P̄_a`.
+4. **Scope** (`InScope`, `ScopeMatches`): a topologically ordered program; a partition of all its gates into proof units,
+   each of at most 16 output bits (the literal limit), each replay unit's proof units consecutive; and a well-formed
+   design, one rule per class.
+5. **Named pieces**: the commitment (`Commitment`, `Commitment.Binds`, and its published leaf layer `Commitment.layer`);
+   the program and its units (`BGate`, `Prog`, `Partition`, `Prog.Correct`); the universal unit (`Netlist`,
+   `Universal`), a fact about the programs private circuits run as; the acceptance probabilities (`OneStage.Pa`,
+   `Rule.Pa`, `Design.Pa`); the extractor (`E`): `k` accepted runs, in each `k` accepted reruns of the second stage, in
+   each Flock's `E^rep` on every checked unit's session; the expected-time finder (`Bext`); and the parameters
+   (`Deploy`, with the Flock verifier its sessions run as a `Flock.Deploy`).
+6. **Claims**: `KS` at every `δ ≥ 0`, with error `δ + ε_ks + ε_bind`, `ε_ks` Flock's at the units' sessions and
+   `ε_bind = Pr[B_ext]`; its count form `KSCount`; `Binding`; `Universal`; `FaultyBoundary`; `Complete`; `ScopeMatches`;
+   `ZK`, relative to the trace's published leaf layer; `Bits`; `Efficient`; and `Nontrivial`.
+7. **Assumptions used**: `StrictBirthday` (for `B`), `ExpectedCR` (for `Bext`), and `trustedBase`. `ZK` gives the
+   simulator the leaf layer the protocol publishes, so it reads no hiding assumption of the leaves.
+8. **Status**: stated; `FaultyBoundary` is proved (`Proofs.Flock.SamplingBoundary`), no other claim is.
+
+Generic pieces this block adds, which move to `Definitions.Claims` in a later change: `LogColl`, `ofOC`, `ownLog`,
+`flatMapRP`, `waitAccC`, `forkOn`, `Bext`, `lamLin`, `BitsLin`, `ExtractOwnLe` and `SimLeak`. Zero knowledge is the
+spec's `ZKmalR` and the decoder spec Flock's radius form, `Flock.ListWithin` at `Flock.Deploy`'s `len` and `θ`; nothing
+here reads Flock's former decoding threshold or count (`agree`, `nMin`).
+
+Frozen by `Flock.Guarantees.SamplingClaimsStated` (`Models/Flock/Guarantees/SamplingClaims.lean`), whose statement
+reads every claim here: the lock records each one's text under `reads`, so a changed claim is a changed record.
+-/
+
+namespace Claims.Sampling
+
+/-! ## The commitment -/
+
+/-- Two different inputs with one output in a log of `H` calls. -/
+def LogColl (l : List (Msg × Msg)) : Prop := ∃ p ∈ l, ∃ p' ∈ l, p.1 ≠ p'.1 ∧ p.2 = p'.2
+
+/-- An opening: the committed value `val` at position `pos`, and the opening's data. -/
+structure Opening (α : Type) where
+  pos : ℕ
+  val : α
+  data : Msg
+
+/-- **The commitment**, a named primitive: a hiding commitment to values at positions under public roots, with its
+opening check `opens` and its published leaf layer: `layer H roots os`, the leaves under `roots` of the values the
+openings `os` open. The deployed instance is hm96 leaves in frame-v3-sha512 trees, its layer every hm96 leaf under the
+roots in tree order; its storage layout is behind `opens`. -/
+structure Commitment (α : Type) where
+  opens : List Msg → Opening α → OC Bool
+  layer : (Msg → Msg) → List Msg → List (Opening α) → List Msg
+
+/-- Whether `o` opens under `roots`. -/
+def Commitment.Opens {α : Type} (H : Msg → Msg) (Cm : Commitment α) (roots : List Msg) (o : Opening α) : Bool :=
+  ((Cm.opens roots o).eval H).1
+
+/-- **Binding, as a collision reduction**: two openings that pass at one position under the same roots, of different
+values, make `H` calls that collide. -/
+def Commitment.Binds {α : Type} (H : Msg → Msg) (Cm : Commitment α) : Prop :=
+  ∀ (roots : List Msg) (o o' : Opening α), o.pos = o'.pos → o.val ≠ o'.val → Cm.Opens H roots o = true →
+    Cm.Opens H roots o' = true → LogColl (((Cm.opens roots o).eval H).2 ++ ((Cm.opens roots o').eval H).2)
+
+/-! ## The program and its partition -/
+
+/-- **A gate** of the Boolean profile (`verity/ml/circuits/PROTOCOL.md` §9): an input (`Input1_v1` or
+`RegisteredInput1_v1`, its value committed under the roots), a constant bit (`Const1`), `Not_v1` of a wire, or
+`And<n>_v1` or `Xor<n>_v1` of wires. -/
+inductive BGate where
+  | input
+  | const (b : Bool)
+  | not (i : ℕ)
+  | and (ws : List ℕ)
+  | xor (ws : List ℕ)
+  deriving DecidableEq
+
+/-- The wires a gate reads. -/
+def BGate.reads : BGate → List ℕ
+  | .input => []
+  | .const _ => []
+  | .not i => [i]
+  | .and ws => ws
+  | .xor ws => ws
+
+/-- A gate's value from the values `rd` of the wires it reads, and an input's from its committed value `own`; `none`
+when a value it needs is. -/
+def BGate.val (rd : ℕ → Option Bool) (own : Option Bool) : BGate → Option Bool
+  | .input => own
+  | .const b => some b
+  | .not i => (rd i).map (!·)
+  | .and ws => (ws.mapM rd).map fun bs => bs.all id
+  | .xor ws => (ws.mapM rd).map fun bs => bs.foldl Bool.xor false
+
+/-- **A program** `C`, flattened to its gates in layout order (wire `g` is gate `g`'s value), and the gates it
+returns. -/
+structure Prog where
+  gates : List BGate
+  outs : List ℕ
+
+/-- Topologically ordered: every gate reads only earlier gates, and every returned gate is one of its gates. -/
+def Prog.Topological (C : Prog) : Prop :=
+  (∀ g (x : BGate), C.gates[g]? = some x → ∀ i ∈ x.reads, i < g) ∧ ∀ o ∈ C.outs, o < C.gates.length
+
+/-- `C` run on inputs `x`, gate by gate: its input gates read `x` in order; a wire at or past the reading gate's own
+reads `0`. -/
+def Prog.wires (C : Prog) (x : List Bool) : List Bool :=
+  (C.gates.foldl (fun (st : List Bool × ℕ) g =>
+    match g with
+    | .input => (st.1 ++ [x.getD st.2 false], st.2 + 1)
+    | g => (st.1 ++ [(g.val (fun i => some (st.1.getD i false)) none).getD false], st.2)) ([], 0)).1
+
+/-- `C`'s returned values on inputs `x`. -/
+def Prog.eval (C : Prog) (x : List Bool) : List Bool := C.outs.map fun o => (C.wires x).getD o false
+
+/-- Whether gate `g`'s value is committed, as the gate interval `[lo, hi)` sees it: `g` is returned, is an input, or is
+read by a gate outside the interval. -/
+def Prog.Boundary (C : Prog) (lo hi g : ℕ) : Bool :=
+  C.outs.contains g || decide (C.gates[g]? = some .input) ||
+    (List.range C.gates.length).any fun g' =>
+      (decide (g' < lo) || decide (hi ≤ g')) && ((C.gates[g']?.map BGate.reads).getD []).contains g
+
+/-- Gate `g`'s value computed in a gate interval from `lo`, on the committed values `ref`: from the values of the wires
+it reads, one before `lo` read as its committed value, one from `lo` on as computed, a later one as `none`; an input's,
+its committed value. -/
+def Prog.runAt (C : Prog) (ref : ℕ → Option Bool) (lo g : ℕ) : Option Bool :=
+  C.gates[g]?.bind fun x =>
+    x.val (fun i => if i < lo then ref i else if _h : i < g then C.runAt ref lo i else none) (ref g)
+termination_by g
+
+/-- **The gate interval `[lo, hi)` of `C` is correct** on the committed values `ref`: every value it reads from before
+`lo` is opened, and every gate of it whose value is committed (`Boundary`) has a committed value, the one the interval
+computes. -/
+def Prog.Correct (C : Prog) (ref : ℕ → Option Bool) (lo hi : ℕ) : Prop :=
+  ∀ g, lo ≤ g → g < hi →
+    (∀ x : BGate, C.gates[g]? = some x → ∀ i ∈ x.reads, i < lo → ref i ≠ none) ∧
+      (C.Boundary lo hi g = true → ∃ b, ref g = some b ∧ C.runAt ref lo g = some b)
+
+/-- **A replay unit**: its proof units, each a gate interval `[a, b)`. Under one-stage sampling it is one proof
+unit. -/
+abbrev RU := List (ℕ × ℕ)
+
+/-- Where a replay unit's gates start: its first proof unit's start. -/
+def RU.lo (r : RU) : ℕ := (r.head?.map Prod.fst).getD 0
+
+/-- Where a replay unit's gates stop: its last proof unit's stop. -/
+def RU.hi (r : RU) : ℕ := (r.getLast?.map Prod.snd).getD 0
+
+/-- Its proof units are non-empty gate intervals, each starting where the one before it stops. -/
+def RU.Consecutive (r : RU) : Prop :=
+  r ≠ [] ∧ (∀ u ∈ r, u.1 < u.2) ∧ ∀ i (h : i + 1 < r.length), r[i].2 = r[i + 1].1
+
+/-- **The values a replay unit's proof units read and write**: a gate of `r` whose value `r`'s boundary doesn't commit
+has its interior value `ι`, committed after the first draw; every other, its committed value `val`. -/
+def RU.ref (C : Prog) (r : RU) (val : ℕ → Option Bool) (ι : ℕ → Bool) (g : ℕ) : Option Bool :=
+  if RU.lo r ≤ g ∧ g < RU.hi r ∧ C.Boundary (RU.lo r) (RU.hi r) g = false then some (ι g) else val g
+
+/-- A proof unit's gates. -/
+def unitGates (u : ℕ × ℕ) : List ℕ := List.range' u.1 (u.2 - u.1)
+
+/-- **A partition** `P = Q(C)`, as the verifier evaluates it: its classes, each its strata, each its replay units, in
+population order. -/
+structure Partition where
+  classes : List (List (List RU))
+
+/-- The replay units, slot by slot. -/
+def Partition.rus (P : Partition) : List RU := P.classes.flatten.flatten
+
+/-- Each replay unit's count of proof units, `n_v`, slot by slot. -/
+def Partition.sizes (P : Partition) : List ℕ := P.rus.map List.length
+
+/-- **`P` partitions `C`**: every gate is in exactly one proof unit, input gates and constants included; each replay
+unit's proof units are consecutive; and each proof unit has at most 16 output bits, its committed values. -/
+def Partition.Partitions (P : Partition) (C : Prog) : Prop :=
+  (P.rus.flatten.flatMap unitGates).Perm (List.range C.gates.length) ∧ (∀ r ∈ P.rus, RU.Consecutive r) ∧
+    ∀ r ∈ P.rus, ∀ u ∈ r, ((unitGates u).filter fun g => C.Boundary u.1 u.2 g).length ≤ 16
+
+/-! ## Proof units and the universal unit -/
+
+/-- A size class `(G, N_IN, N_OUT)`: `G` gates over `N_IN` inputs, and `N_OUT` output bits. -/
+structure SizeClass where
+  G : ℕ
+  nIn : ℕ
+  nOut : ℕ
+
+/-- `K`: the bits of a wire index, enough for the `W = N_IN + G` wires, at least one. -/
+def SizeClass.indexBits (c : SizeClass) : ℕ := Nat.log2 (c.nIn + c.G - 1) + 1
+
+/-- **A private circuit's gates**, as the universal unit takes them (`verity.ml.private_circuits.universal`): SSA wires,
+the `nIn` inputs and then one per gate. Gate `(op, a, b)` reads wires `a` and `b` and computes XOR, AND, XNOR or NAND
+(`op`'s bit 0 picks AND, bit 1 negates); a wire at or past the reading gate's own reads `0`, as does an output past the
+last wire. -/
+structure Netlist where
+  nIn : ℕ
+  gates : List (Fin 4 × ℕ × ℕ)
+  outs : List ℕ
+
+/-- The netlist run gate by gate on `x` (`interpret`). -/
+def Netlist.eval (n : Netlist) (x : List Bool) : List Bool :=
+  let ws := n.gates.foldl (fun ws g =>
+    let a := ws.getD g.2.1 false
+    let b := ws.getD g.2.2 false
+    ws ++ [xor (if g.1.val % 2 = 1 then a && b else xor a b) (decide (g.1.val / 2 = 1))]) x
+  n.outs.map fun o => ws.getD o false
+
+/-- The netlist is of class `c`: `G` gates over `N_IN` inputs, `N_OUT` outputs, every index in `K` bits. -/
+def Netlist.Fits (c : SizeClass) (n : Netlist) : Prop :=
+  n.nIn = c.nIn ∧ n.gates.length = c.G ∧ n.outs.length = c.nOut ∧
+    (∀ g ∈ n.gates, g.2.1 < 2 ^ c.indexBits ∧ g.2.2 < 2 ^ c.indexBits) ∧ ∀ o ∈ n.outs, o < 2 ^ c.indexBits
+
+/-- `v` in `k` bits, low bit first. -/
+def bitsLE (k v : ℕ) : List Bool := (List.range k).map v.testBit
+
+/-- The netlist as the universal unit's `(op, src, out)` arguments, in leaf order (`arguments`). -/
+def Netlist.args (c : SizeClass) (n : Netlist) : List Bool :=
+  n.gates.flatMap (fun g => bitsLE 2 g.1.val) ++
+    n.gates.flatMap (fun g => bitsLE c.indexBits g.2.1 ++ bitsLE c.indexBits g.2.2) ++
+    n.outs.flatMap (bitsLE c.indexBits)
+
+/-! ## Sampling designs -/
+
+/-- **A one-stage sampling design** over a population in strata: every member (`all`); a uniform `K`-subset
+(`subset:K`); each member independently at rate `num/den` (`bernoulli:NUM/DEN`); a uniform `k_s`-subset of each
+stratum, independently, with `k_s = max(1, round(K·n_s/N))` (`stratified:K`), or
+`k_s = min(n_s, max(f_s, ⌈K·w_s·n_s/W⌉))` from each stratum's work `w_s` and floor `f_s`, `W = Σ w_s·n_s` (`work:K`). -/
+inductive OneStage where
+  | all
+  | subset (K : ℕ)
+  | bernoulli (num den : ℕ)
+  | stratified (K : ℕ)
+  | work (K : ℕ) (w f : List ℕ)
+
+/-- `B`'s members in `[o, o + n)`, shifted to `[0, n)`. -/
+def window (o n : ℕ) (B : Finset ℕ) : Finset ℕ := (B.filter fun v => o ≤ v ∧ v < o + n).image (· - o)
+
+/-- The probability that a uniform `k_s`-subset of each stratum `(n_s, k_s)`, from offset `o`, misses `B`:
+`∏_s C(n_s − |B ∩ s|, k_s)/C(n_s, k_s)`. -/
+noncomputable def strataPa : List (ℕ × ℕ) → ℕ → Finset ℕ → ℝ
+  | [], _, _ => 1
+  | (n, k) :: ss, o, B => ((n - (window o n B).card).choose k : ℝ) / (n.choose k : ℝ) * strataPa ss (o + n) B
+
+/-- **The acceptance probability** `P_a(B)` of a one-stage design over strata of sizes `ns`: the probability that its
+sample holds no member of `B`. -/
+noncomputable def OneStage.Pa (ns : List ℕ) : OneStage → Finset ℕ → ℝ
+  | .all, B => if B = ∅ then 1 else 0
+  | .subset K, B => ((ns.sum - B.card).choose K : ℝ) / (ns.sum.choose K : ℝ)
+  | .bernoulli num den, B => (((den - num : ℕ) : ℝ) / den) ^ B.card
+  | .stratified K, B => strataPa (ns.map fun n => (n, max 1 ((2 * K * n + ns.sum) / (2 * ns.sum)))) 0 B
+  | .work K w f, B =>
+    let W := ((ns.zip w).map fun p => p.1 * p.2).sum
+    strataPa ((ns.zip (w.zip f)).map fun p => (p.1, min p.1 (max p.2.2 ((K * p.2.1 * p.1 + W - 1) / W)))) 0 B
+
+/-- **A class's sampling rule**: the first stage's design over the class's replay units, and how many proof units of
+each drawn replay unit are checked (`none`: all of them). One-stage sampling is a class whose replay units are each one
+proof unit; the input stratum is a class drawn `all`. -/
+structure Rule where
+  first : OneStage
+  check : Option ℕ
+
+/-- A class's strata sizes, in replay units. -/
+def strataSizes (c : List (List RU)) : List ℕ := c.map List.length
+
+/-- A class's replay units' sizes, in proof units. -/
+def ruSizes (c : List (List RU)) : List ℕ := c.flatten.map List.length
+
+/-- **The effective acceptance probability** `P̄_a(B)` of a class with strata of sizes `ns` and replay units of sizes
+`sz`, over a set `B` of its replay units (`effEscape`). A faulty replay unit has a faulty proof unit under every
+interior the prover commits after the first draw, so a drawn one escapes when no faulty proof unit is checked: under a
+Bernoulli first stage at rate `p` checking `k` of a replay unit's `n_v`, `∏_{v ∈ B} (1 − p·min(k, n_v)/n_v)`
+(`nested_escape`); when every proof unit of a drawn replay unit is checked, the first stage's `P_a(B)`
+(`effEscape_full`). -/
+noncomputable def Rule.Pa (r : Rule) (ns sz : List ℕ) (B : Finset ℕ) : ℝ :=
+  match r.first, r.check with
+  | .bernoulli num den, some k =>
+    ∏ v ∈ B, (1 - (num : ℝ) / den * ((min k (sz.getD v 0) : ℕ) : ℝ) / (sz.getD v 0 : ℝ))
+  | d, _ => d.Pa ns B
+
+/-- **The sampling design**: one rule per class of the partition, the classes drawn independently. -/
+structure Design where
+  rules : List Rule
+
+/-- The classes' effective acceptance probabilities, from slot `o`, multiplied. -/
+noncomputable def classesPa : List Rule → List (List (List RU)) → ℕ → Finset ℕ → ℝ
+  | r :: rs, c :: cs, o, B =>
+    r.Pa (strataSizes c) (ruSizes c) (window o c.flatten.length B) * classesPa rs cs (o + c.flatten.length) B
+  | _, _, _, _ => 1
+
+/-- **The acceptance probability** `P_a(B)` of the design on the partition `P`, over a set `B` of replay-unit slots; under
+two-stage sampling its effective form `P̄_a`. -/
+noncomputable def Design.Pa (d : Design) (P : Partition) (B : Finset ℕ) : ℝ := classesPa d.rules P.classes 0 B
+
+/-- **The confidence set** `M_δ`: every set `B` with `P_a(B) > δ`. -/
+def Design.M (d : Design) (P : Partition) (δ : ℝ) : Set (Finset ℕ) := {B | δ < d.Pa P B}
+
+/-- **The miss at `t`**: the largest acceptance probability of `t` or more of the units. -/
+noncomputable def Design.miss (d : Design) (P : Partition) (t : ℕ) : ℝ :=
+  ⨆ B : {B : Finset ℕ // B ⊆ Finset.range P.rus.length ∧ t ≤ B.card}, d.Pa P B.1
+
+/-! ## 1. Statement -/
+
+/-- A partition query, named and versioned (`Q_call` v1 with `X`; `Q_word` v1 with `X` and `W`), with its parameters as
+canonical bytes. -/
+structure Query where
+  name : String
+  version : ℕ
+  params : Msg
+
+/-- **The sampling statement**: the program (named by its digest; both parties hold it), the partition query, the
+sampling design, and the roots the trace is committed under. -/
+structure Stmt where
+  prog : Prog
+  query : Query
+  design : Design
+  roots : List Msg
+
+/-! ## 2. Witness -/
+
+/-- **The sampling witness**: openings of committed values, at their gates' positions. -/
+structure Wit where
+  vals : List (Opening Bool)
+
+/-! ## 3. Relation -/
+
+/-- The committed value `w` opens at gate `g`'s position: its first opening there that passes. -/
+def Wit.val (H : Msg → Msg) (Cm : Commitment Bool) (s : Stmt) (w : Wit) (g : ℕ) : Option Bool :=
+  (w.vals.find? fun o => o.pos == g && Cm.Opens H s.roots o).map (·.val)
+
+/-- **A faulty unit** at slot `v` of the partition `P` under `w`: unless some interior values make every proof unit of
+the replay unit there correct on its committed values. For a proof unit (one-stage) that is its committed outputs
+differing from its gates applied to its committed inputs, or a value it reads or writes unopened. -/
+def Faulty (H : Msg → Msg) (Cm : Commitment Bool) (s : Stmt) (P : Partition) (w : Wit) (v : ℕ) : Prop :=
+  ¬ ∃ r, P.rus[v]? = some r ∧ ∃ ι : ℕ → Bool, ∀ u ∈ r, s.prog.Correct (RU.ref s.prog r (w.val H Cm s) ι) u.1 u.2
+
+/-- **A faulty unit, on the boundary trace** (the glossary's form): the replay unit's committed boundary outputs differ
+from its gates applied to its committed boundary inputs. -/
+def BoundaryFaulty (H : Msg → Msg) (Cm : Commitment Bool) (s : Stmt) (P : Partition) (w : Wit) (v : ℕ) : Prop :=
+  ¬ ∃ r, P.rus[v]? = some r ∧ s.prog.Correct (w.val H Cm s) (RU.lo r) (RU.hi r)
+
+open Classical in
+/-- **The faulty set** of the trace `w`'s openings define. -/
+noncomputable def faulty (H : Msg → Msg) (Cm : Commitment Bool) (s : Stmt) (P : Partition) (w : Wit) : Finset ℕ :=
+  (Finset.range P.rus.length).filter (Faulty H Cm s P w)
+
+/-- **The sampling relation** at `δ`, on a parsed statement and its partition: the faulty set is in `M_δ`. -/
+def RelS (H : Msg → Msg) (Cm : Commitment Bool) (δ : ℝ) (s : Stmt) (P : Partition) (w : Wit) : Prop :=
+  faulty H Cm s P w ∈ s.design.M P δ
+
+/-- **The sampling relation** at `δ`, on the statement's bytes: it parses (`parse`, the verifier's own), its query
+evaluates on its program (`partition`, the verifier's own), and `RelS` holds. -/
+def R (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option Stmt) (partition : Prog → Query → Option Partition)
+    (δ : ℝ) : Rel Wit :=
+  fun x w => ∃ s P, parse x = some s ∧ partition s.prog s.query = some P ∧ RelS H Cm δ s P w
+
+/-- The count form: fewer than `t` units are faulty. -/
+def RCount (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option Stmt)
+    (partition : Prog → Query → Option Partition) (t : ℕ) : Rel Wit :=
+  fun x w => ∃ s P, parse x = some s ∧ partition s.prog s.query = some P ∧ (faulty H Cm s P w).card < t
+
+/-- The honest relation: no unit is faulty. -/
+def Rhon (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option Stmt)
+    (partition : Prog → Query → Option Partition) : Rel Wit :=
+  fun x w => ∃ s P, parse x = some s ∧ partition s.prog s.query = some P ∧ faulty H Cm s P w = ∅
+
+/-! ## 4. Scope -/
+
+/-- A one-stage design is well formed over strata of sizes `ns`. -/
+def OneStage.WellFormed (ns : List ℕ) : OneStage → Prop
+  | .all => True
+  | .subset K => 1 ≤ K ∧ K ≤ ns.sum
+  | .bernoulli num den => 0 < den ∧ num ≤ den
+  | .stratified K => 1 ≤ K ∧ K ≤ ns.sum ∧ ∀ n ∈ ns, 1 ≤ n
+  | .work _ w f => w.length = ns.length ∧ f.length = ns.length ∧ (∀ x ∈ f, 1 ≤ x) ∧
+      0 < ((ns.zip w).map fun p => p.1 * p.2).sum ∧ ∀ n ∈ ns, 1 ≤ n
+
+/-- A rule is well formed on its class: a well-formed first stage over the class's strata, and a check of `k ≥ 1` proof
+units only under a Bernoulli first stage. -/
+def Rule.WellFormed (r : Rule) (c : List (List RU)) : Prop :=
+  r.first.WellFormed (strataSizes c) ∧ ∀ k, r.check = some k → 1 ≤ k ∧ ∃ num den, r.first = .bernoulli num den
+
+/-- The design is well formed on the partition: one well-formed rule per class. -/
+def Design.WellFormed (d : Design) (P : Partition) : Prop :=
+  d.rules.length = P.classes.length ∧ ∀ p ∈ d.rules.zip P.classes, p.1.WellFormed p.2
+
+/-- **The sampling scope, readable**, at the statement's partition: a topologically ordered program, partitioned into
+proof units of at most 16 output bits with each replay unit's consecutive, and a well-formed design.
+
+The query: whatever its own width parameter, every unit, input units included, has at most 16 committed values, the
+literal limit. Served partitions are `Q_word` v1 at `X = 16`; `Q_call` v1 is in scope at `X ≤ 16`. Its `X = 32`, which
+circuit-check records beside `Q_word`, is not served, and a unit with more than 16 committed values is out of scope. -/
+def InScope (P : Partition) (s : Stmt) : Prop :=
+  s.prog.Topological ∧ P.Partitions s.prog ∧ s.design.WellFormed P
+
+/-! ## 5. Named pieces -/
+
+/-- What the deployed sampled verifier brings, read by the claims: the verifier, its parser and scope check, its own
+evaluation of a partition query on a program (`partition`, `P = Q(C)`), the trace's commitment, the universal unit of
+each size class (the program a private circuit's units run, its arguments the private netlist), and the Flock verifier
+its sessions run (`flock`): whether it is the masked one, its parser, the opened columns of a run, the code, each
+trace's codeword length and decoding radius, and how a trace is read as a witness.
+
+The draw is `V`'s, from its coins, in this layout: `stage2` holds the rounds after the first stage (the proof units'
+draw under two-stage sampling, and the sessions), so runs that keep the other rounds make the same first draw and see the
+same interior commitments; `checked` is the proof units the run checks, each as its replay unit's slot and its index
+there; `rounds` is each one's session's rounds; `session` is its Flock statement and what its session showed; `reveal`
+is what its Flock witness reveals: committed values, each with the roots it is committed under (the statement's, or the
+interior roots the run showed).
+
+The numbers: the session's `E^rep` makes `m′` waits (`innerWaits`) of `K′` reruns (`innerCap`) with `N₀` (`innerN₀`),
+`ε_table` and the weight `C` of `γ`, each good for every session at `x`; `openCalls` bounds the SHA-512 calls of checking
+what one session's witness reveals. -/
+structure Deploy (Coin Col T : Type) where
+  V : Verifier Coin
+  parse : Msg → Option Stmt
+  scopeCheck : Msg → Bool
+  partition : Prog → Query → Option Partition
+  commit : Commitment Bool
+  universal : SizeClass → Prog
+  flock : Flock.Deploy Coin Col T
+  stage2 : (x : Msg) → Finset (Fin (V.k x))
+  checked : (x : Msg) → (Fin (V.k x) → Coin) → List (ℕ × ℕ)
+  rounds : (x : Msg) → ℕ × ℕ → Finset (Fin (V.k x))
+  session : Msg → ℕ × ℕ → Seen → Option (Msg × Seen)
+  reveal : Stmt → ℕ × ℕ → Seen → Flock.Wit → List (List Msg × Opening Bool)
+  innerWaits : Msg → ℕ
+  innerN₀ : Msg → ℝ
+  innerCap : Msg → ℕ
+  εtable : Msg → ℝ
+  weight : Msg → ℝ
+  openCalls : Msg → ℕ
+
+/-- The statement's partition, as the verifier evaluates its query; empty when the query doesn't apply. -/
+def Deploy.part {Coin Col T : Type} (D : Deploy Coin Col T) (s : Stmt) : Partition :=
+  (D.partition s.prog s.query).getD ⟨[]⟩
+
+/-! ### Rerun programs -/
+
+/-- An oracle program as a rerun program: its `H` calls are the extractor's own. -/
+def ofOC {R α : Type} : OC α → RP R α
+  | .ret a => .ret a
+  | .query q k => .hash q fun a => ofOC (k a)
+
+/-- The `H` calls a rerun program makes itself, in order, as `(query, answer)`: not its reruns'. -/
+def ownLog {R α : Type} (H : Msg → Msg) (run : R → Trace) : RP R α → List (Msg × Msg)
+  | .ret _ => []
+  | .hash q k => (q, H q) :: ownLog H run (k (H q))
+  | .rerun r k => ownLog H run (k (run r).seen)
+
+/-- Run `f` on each element in order, concatenating the results. -/
+def flatMapRP {R β γ : Type} (f : β → RP R (List γ)) : List β → RP R (List γ)
+  | [] => .ret []
+  | b :: bs => (f b).bind fun cs => (flatMapRP f bs).bind fun ds => .ret (cs ++ ds)
+
+/-- `waitAcc`, keeping each accepted rerun's coins with what it showed. -/
+def waitAccC {R : Type} (k : ℕ) : List R → List (R × Seen) → RP R (List (R × Seen))
+  | [], acc => .ret acc
+  | r :: rs, acc =>
+    if k ≤ acc.length then .ret acc
+    else .rerun r fun v => waitAccC k rs (if v.out = .acc then acc ++ [(r, v)] else acc)
+
+/-- The coins `d` on the rounds `I`, and `r₀`'s elsewhere. -/
+def forkOn {k : ℕ} {Coin : Type} (I : Finset (Fin k)) (r₀ d : Fin k → Coin) : Fin k → Coin :=
+  fun t => if t ∈ I then d t else r₀ t
+
+/-! ### The extractor -/
+
+section Extract
+
+variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
+
+/-- The session's `E^rep` waits for `k′ = ⌈4·N₀/e⌉` accepted reruns. -/
+noncomputable def Deploy.innerK (D : Deploy Coin Col T) (x : Msg) : ℕ := ⌈4 * D.innerN₀ x / Real.exp 1⌉₊
+
+/-- The replay units at `x`, `0` on a statement that doesn't parse. -/
+def nRU (D : Deploy Coin Col T) (x : Msg) : ℕ :=
+  match D.parse x with
+  | some s => (D.part s).rus.length
+  | none => 0
+
+/-- The proof units at `x`, `0` on a statement that doesn't parse. -/
+def nPU (D : Deploy Coin Col T) (x : Msg) : ℕ :=
+  match D.parse x with
+  | some s => (D.part s).sizes.sum
+  | none => 0
+
+/-- **The extractor's waits** stop at `k = 2^40·(n_RU + n_PU + 1)` accepted runs. A union over the minimal sets of the
+complement of `M_δ`, at most `2^n` for `n` units, spread over `k` accepted runs, costs the factor `2^{n/k}`; this `k`
+makes it at most `2^{2^{−40}}`, while `k` enters the extractor's cost, and so the hash side of `Bits`, only through
+`log₂ k`. -/
+def Deploy.k (D : Deploy Coin Col T) (x : Msg) : ℕ := 2 ^ 40 * (nRU D x + nPU D x + 1)
+
+/-- The waits give up after `K = 2^128·k` reruns. -/
+def Deploy.cap (D : Deploy Coin Col T) (x : Msg) : ℕ := 2 ^ 128 * D.k x
+
+/-- The opened columns of a checked unit's session. -/
+def Deploy.sessionCols (D : Deploy Coin Col T) (x : Msg) (u : ℕ × ℕ) (v : Seen) : List (ℕ × Col) :=
+  match D.session x u v with
+  | some (_, vS) => D.flock.cols vS
+  | none => []
+
+/-- The coins of one session's `E^rep`. -/
+abbrev Deploy.UnitCoins (D : Deploy Coin Col T) (x : Msg) := Fin (D.innerWaits x) → Fin (D.innerCap x) → Fin (D.V.k x) → Coin
+
+/-- What passes its opening check among `rs`, each checked by the commitment under its roots, its `H` calls the
+extractor's own. -/
+def checkRevealed {R : Type} (Cm : Commitment Bool) :
+    List (List Msg × Opening Bool) → RP R (List (List Msg × Opening Bool)) :=
+  flatMapRP fun p => (ofOC (Cm.opens p.1 p.2)).bind fun ok => .ret (if ok then [p] else [])
+
+/-- **A checked unit's extraction at an accepted run** `(r, v)`: Flock's `E^rep` on the unit's session, at a decoder,
+without its replay (the run accepted), its reruns fresh on the session's rounds and `r`'s elsewhere, so the prover makes
+the same session; then what its witness reveals that passes its opening check. -/
+noncomputable def unitExt (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
+    (s : Stmt) (u : ℕ × ℕ) (r : Fin (D.V.k x) → Coin) (v : Seen) (ρ : D.UnitCoins x) :
+    RP (Fin (D.V.k x) → Coin) (List (List Msg × Opening Bool)) :=
+  match D.session x u v with
+  | none => .ret []
+  | some (xS, _) =>
+    (firstWait (D.innerK x) (D.sessionCols x u) (Flock.assemble D.flock.parse decode D.flock.read xS)
+        (Flock.check D.flock.parse xS)
+        ((List.finRange (D.innerWaits x)).map fun i =>
+          (List.finRange (D.innerCap x)).map fun j => forkOn (D.rounds x u) r (ρ i j))).bind fun
+      | none => .ret []
+      | some wF => checkRevealed D.commit (D.reveal s u v wF)
+
+/-- **The assemble step**: the openings of committed values under the statement's roots. -/
+def assemble (s : Stmt) (found : List (List Msg × Opening Bool)) : Wit where
+  vals := found.filterMap fun p => if p.1 = s.roots then some p.2 else none
+
+/-- The extractor's coins: the outer wait's `K` coin vectors; for each of its `k` accepted runs, the inner wait's `K`
+(used fresh on the second stage); and for each accepted inner run and each of at most `n_PU` checked units, its
+`E^rep`'s. -/
+abbrev ECoins (D : Deploy Coin Col T) (x : Msg) :=
+  (Fin (D.cap x) → Fin (D.V.k x) → Coin) × (Fin (D.k x) → Fin (D.cap x) → Fin (D.V.k x) → Coin) ×
+    (Fin (D.k x) × Fin (D.k x) × Fin (nPU D x) → D.UnitCoins x)
+
+/-- **The sampling extractor** at a decoder: replay the judged run; if it accepted, rerun on fresh coins until `k`
+accepted runs are in hand; at each, rerun fresh on the second stage until `k` accepted runs are in hand (each wait giving
+up after `K`); at each of those, extract every checked unit; and assemble. -/
+noncomputable def E (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) :
+    Extractor Coin Wit D.V where
+  C x := ECoins D x
+  ext x r₀ c := .rerun r₀ fun v₀ =>
+    match D.parse x with
+    | none => .ret none
+    | some s =>
+      if v₀.out = .acc then
+        (waitAccC (D.k x) ((List.finRange (D.cap x)).map c.1) []).bind fun outer =>
+          (flatMapRP (fun jo : Fin (D.k x) × ((Fin (D.V.k x) → Coin) × Seen) =>
+              (waitAccC (D.k x) ((List.finRange (D.cap x)).map fun l => forkOn (D.stage2 x) jo.2.1 (c.2.1 jo.1 l))
+                  []).bind fun inner =>
+                flatMapRP (fun li : Fin (D.k x) × ((Fin (D.V.k x) → Coin) × Seen) =>
+                    flatMapRP (fun iu : Fin (nPU D x) × (ℕ × ℕ) =>
+                        unitExt D decode x s iu.2 li.2.1 li.2.2 (c.2.2 (jo.1, li.1, iu.1)))
+                      ((List.finRange (nPU D x)).zip (D.checked x li.2.1)))
+                  ((List.finRange (D.k x)).zip inner))
+            ((List.finRange (D.k x)).zip outer)).bind fun found => .ret (some (assemble s found))
+      else .ret none
+
+end Extract
+
+/-! ### The expected-time finder, bits with `β > 0`, and the extractor's own hashing -/
+
+section Finder
+
+variable {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
+
+/-- **`B_ext`** (expected time): `B`'s fork, the extractor run in each branch on that branch's run, and the first
+collision among the `H` calls the two extractions make themselves (the openings they check). Its cost is both
+extractions' SHA-512 calls, their reruns' included. -/
+noncomputable def Bext (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V) : FinderFamily :=
+  fun Ω _ _ P x =>
+    if hk : 0 < V.k x then
+      { S := BCoins Ω Coin (V.k x) × E.C x × E.C x
+        ne := ⟨(⟨⟨0, hk⟩, Classical.arbitrary _, fun _ => default, fun _ => default⟩, Classical.arbitrary _,
+          Classical.arbitrary _)⟩
+        out := fun s =>
+          findColl (ownLog H (run H P V x s.1.2.1) (E.ext x s.1.2.2.1 s.2.1) ++
+            ownLog H (run H P V x s.1.2.1) (E.ext x (forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2) s.2.2))
+        cost := fun s =>
+          (E.eval H P x s.1.2.1 s.1.2.2.1 s.2.1).2.1 +
+            (E.eval H P x s.1.2.1 (forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2) s.2.2).2.1 }
+    else { S := Unit, out := fun _ => none, cost := fun _ => 0 }
+
+/-- `λ` with `β > 0`: `min(log₂(1/κ), 255.5 − ½ log₂ γ, 256 − log₂(2βc)) − log₂ 3`, where `c` is the extractor's expected
+work in runs. -/
+noncomputable def lamLin (κ γ β c : ℝ) : ℝ :=
+  min (min (Real.logb 2 (1 / κ)) (255.5 - Real.logb 2 γ / 2)) (256 - Real.logb 2 (2 * β * c)) - Real.logb 2 3
+
+/-- `λ` bits with an extraction-based finder `Fe`: as `Bits`, where `Fe` also obeys the expected-time bound. -/
+def BitsLin (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) (E : Extractor Coin W V) (Fe : FinderFamily)
+    (lam : Msg → ℝ) : Prop :=
+  ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (t : ℕ), 1 ≤ t →
+    (∀ ω r, (run H P V x ω r).pLog.length + (run H P V x ω r).vLog.length ≤ t) →
+    (∀ hk : 0 < V.k x, StrictBirthday H (B H V P x hk)) →
+    ExpectedCR H (Fe Ω P x) →
+    PrBad H V R E x P ≤ t * (2 : ℝ) ^ (-lam x)
+
+/-- **Cost, the extractor's own hashing**: `E` makes at most `calls(x)` SHA-512 calls itself, not counting its reruns',
+on every prover, tape and coin. -/
+def ExtractOwnLe (H : Msg → Msg) {V : Verifier Coin} (E : Extractor Coin W V) (calls : Msg → ℕ) : Prop :=
+  ∀ (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r₀ : Fin (V.k x) → Coin) (c : E.C x),
+    (ownLog H (run H P V x ω) (E.ext x r₀ c)).length ≤ calls x
+
+end Finder
+
+/-! ### Zero knowledge given the published leaf layer -/
+
+/-- **A simulator given the leakage**: its coins, and its program, which also receives what the protocol publishes
+beyond `x` (here the trace's leaf layer). -/
+structure SimLeak where
+  C : Msg → Type
+  [fin : ∀ x, Fintype (C x)]
+  [ne : ∀ x, Nonempty (C x)]
+  prog : (x : Msg) → List Msg → C x → SP (List (Msg × Out))
+
+attribute [instance] SimLeak.fin SimLeak.ne
+
+/-- The simulator given the leakage `l x` at each statement `x`, as the spec's `Simulator`. -/
+def SimLeak.given (S : SimLeak) (l : Msg → List Msg) : Simulator where
+  C := S.C
+  prog x c := S.prog x (l x) c
+
+/-- **The published leaf layer** at `(x, w)`: the leaves under the statement's roots of the values `w` opens, empty on a
+statement that doesn't parse. A fixed function of `(x, w)`. -/
+def leafLayer (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option Stmt) (x : Msg) (w : Wit) : List Msg :=
+  match parse x with
+  | some s => Cm.layer H s.roots w.vals
+  | none => []
+
+/-! ## 6. Claims -/
+
+section Claims
+
+variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
+
+/-- The sessions' knowledge error, Flock's at the inner numbers: `κ_F = 4·ε_table + 2^{−m′} + 2k′/K′ + e^{−k′/8}`. -/
+noncomputable def κF (D : Deploy Coin Col T) (x : Msg) : ℝ :=
+  4 * D.εtable x + 2 ^ (-(D.innerWaits x : ℝ)) + 2 * D.innerK x / D.innerCap x + Real.exp (-(D.innerK x : ℝ) / 8)
+
+/-- The waits' slack factor, `c = 2^{2^{−40}} < 1 + 2^{−40}`: each wait's (`Deploy.k`). -/
+noncomputable def slack : ℝ := 2 ^ ((2 : ℝ) ^ (-40 : ℝ))
+
+/-- **The knowledge error at `δ`**: `δ + ε_ks`, with
+`ε_ks = (c² − 1)·δ + c²·κ_F + (1 + c)·(2k/K + e^{−k/8})`: the outer wait's factor `c` times the inner wait's bound
+`c·(P_a(B) + κ_F) + 2k/K + e^{−k/8}` at a minimal set `B` with `P_a(B) ≤ δ`, plus the outer truncation. -/
+noncomputable def κ (D : Deploy Coin Col T) (δ : ℝ) (x : Msg) : ℝ :=
+  slack ^ 2 * (δ + κF D x) + (1 + slack) * (2 * D.k x / D.cap x + Real.exp (-(D.k x : ℝ) / 8))
+
+/-- **`γ`**: `c⁴·16·(√(2·k(x)·C) + k(x))²`, with `k(x)` the sampled verifier's rounds. -/
+noncomputable def γ (D : Deploy Coin Col T) (x : Msg) : ℝ :=
+  slack ^ 4 * (16 * (Real.sqrt (2 * D.V.k x * D.weight x) + D.V.k x) ^ 2)
+
+/-- The design's miss at `t` at `x`, `0` on a statement that doesn't parse. -/
+noncomputable def missAt (D : Deploy Coin Col T) (t : ℕ) (x : Msg) : ℝ :=
+  match D.parse x with
+  | some s => s.design.miss (D.part s) t
+  | none => 0
+
+/-- The extractor's expected work in runs, `1 + k + k²·(1 + n_PU·m′·k′) + k²·n_PU·openCalls`: its expected reruns, and
+its own SHA-512 calls. -/
+noncomputable def work (D : Deploy Coin Col T) (x : Msg) : ℝ :=
+  1 + D.k x + (D.k x : ℝ) ^ 2 * (1 + nPU D x * D.innerWaits x * D.innerK x) + (D.k x : ℝ) ^ 2 * nPU D x * D.openCalls x
+
+/-- The sampling scope, on the statement's bytes. -/
+def Scope (D : Deploy Coin Col T) (x : Msg) : Prop :=
+  ∃ s P, D.parse x = some s ∧ D.partition s.prog s.query = some P ∧ InScope P s
+
+/-- **Sampling: KS**, at every `δ ≥ 0`, at the sampling extractor and every decoder that lists every trace within Flock's
+radius: `Pr[acc ∧ faulty ∉ M_δ] ≤ δ + ε_ks + ε_bind`, with `ε_ks = κ − δ + √(γ·Pr[B])` (Flock's error at the units'
+sessions) and `ε_bind = Pr[B_ext]` (the openings an accepted extraction checks disagree). -/
+def KS (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
+  ∀ (δ : ℝ) decode, 0 ≤ δ → Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode →
+    Claims.KSLin H D.V (R H D.commit D.parse D.partition δ) (E D decode) (κ D δ) (γ D) (fun _ => 1)
+      (Bext H D.V (E D decode))
+
+/-- **Sampling: KS, the count form** (a corollary of `KS` at `δ = miss(t)`): fewer than `t` units are faulty, except
+with probability `miss(t) + ε_ks + ε_bind`. -/
+def KSCount (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
+  ∀ t decode, Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode →
+    Claims.KSLin H D.V (RCount H D.commit D.parse D.partition t) (E D decode) (fun x => κ D (missAt D t x) x)
+      (γ D) (fun _ => 1) (Bext H D.V (E D decode))
+
+/-- **Sampling: binding** of the trace's commitment, as a collision reduction, at every `H`. -/
+def Binding (D : Deploy Coin Col T) : Prop := ∀ H, D.commit.Binds H
+
+/-- **Sampling: the universal unit**: the program of class `c` (`UniversalUnit_v1{G, N_IN, N_OUT}`) maps every netlist
+of the class, as its arguments, and inputs `x` to the netlist's outputs on `x`. A private circuit runs as a program
+built of universal units, its netlist committed values like any other input. -/
+def Universal (D : Deploy Coin Col T) : Prop :=
+  ∀ (c : SizeClass) (n : Netlist) (x : List Bool), n.Fits c → x.length = c.nIn →
+    (D.universal c).eval (n.args c ++ x) = n.eval x
+
+/-- **Sampling: the faulty set is the boundary form's**: on a topologically ordered program, a replay unit whose proof
+units are consecutive gate intervals is faulty exactly when its committed boundary outputs differ from its gates applied
+to its committed boundary inputs. -/
+def FaultyBoundary : Prop :=
+  ∀ (H : Msg → Msg) (Cm : Commitment Bool) (s : Stmt) (P : Partition) (w : Wit) (v : ℕ) (r : RU),
+    s.prog.Topological → P.rus[v]? = some r → RU.Consecutive r → RU.hi r ≤ s.prog.gates.length →
+    (Faulty H Cm s P w v ↔ BoundaryFaulty H Cm s P w v)
+
+/-- **Sampling: Complete**, on the statements in scope, when no unit is faulty. It needs the verifier to check before
+the draw that every unit's session has a form Flock proves (`Flock.InScope`); that check waits for the reference prover
+(ruling 4). -/
+def Complete {Ω : Type} (H : Msg → Msg) (D : Deploy Coin Col T) (P : Wit → Prover Ω) (δc : Msg → ℝ) : Prop :=
+  Claims.Complete H D.V P (Rhon H D.commit D.parse D.partition) (Scope D) δc
+
+/-- **Sampling: the readable scope is the verifier's.** -/
+def ScopeMatches (D : Deploy Coin Col T) : Prop := Claims.ScopeMatches (Scope D) D.scopeCheck
+
+/-- **Sampling: zero knowledge, relative to the published leaf layer**, of the honest prover with masked sessions when
+no unit is faulty, against every malicious verifier of the sampled verifier's rounds. This is `ZKmalR` with the
+simulator given the trace's leaf layer under the roots (`leafLayer`), which the protocol publishes: the leakage is that
+whole layer, a fixed function of `(x, w)`. `ZKmalR` runs one simulator per statement, so the claim holds at every
+assignment `l` of a leaf layer to each statement, on the honest pairs whose layer is `l x`. -/
+def ZK {Ω : Type} [Fintype Ω] (H : Msg → Msg) (D : Deploy Coin Col T) (P : Wit → Prover Ω) (S : SimLeak)
+    (εzk : Msg → ℝ) : Prop :=
+  D.flock.zk = true ∧ ∀ l : Msg → List Msg,
+    ZKmalR H D.V.k P (fun x w => Rhon H D.commit D.parse D.partition x w ∧ leafLayer H D.commit D.parse x w = l x)
+      (S.given l) εzk
+
+/-- **Sampling: bits** at every `δ ≥ 0`, `λ_δ = min(log₂(1/κ_δ), 255.5 − ½ log₂ γ, 256 − log₂(2c)) − log₂ 3`, at every
+decoder that lists every trace within Flock's radius. -/
+def Bits (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
+  ∀ (δ : ℝ) decode, 0 ≤ δ → Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode →
+    BitsLin H D.V (R H D.commit D.parse D.partition δ) (E D decode) (Bext H D.V (E D decode))
+      fun x => lamLin (κ D δ x) (γ D x) 1 (work D x)
+
+/-- **Sampling: efficiency**: the extractor's reruns, at most `1 + K + k·(K + k·n_PU·m′·K′)` and
+`1 + k + k²·(1 + n_PU·m′·k′)` expected; its own SHA-512 calls, at most `k²·n_PU·openCalls`; and a decoder that lists
+every trace within Flock's radius, with its stated complexity. -/
+def Efficient (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T)
+    (counted : List (ℕ × Col) → List T × ℕ) (size : List (ℕ × Col) → ℕ) (p : Polynomial ℕ) : Prop :=
+  ExtractRunsLe H (E D decode)
+      (fun x => 1 + D.cap x + D.k x * (D.cap x + D.k x * (nPU D x * (D.innerWaits x * D.innerCap x)))) ∧
+    ExtractRunsExpLe H (E D decode)
+      (fun x => 1 + D.k x + (D.k x : ℝ) ^ 2 * (1 + nPU D x * D.innerWaits x * D.innerK x)) ∧
+    ExtractOwnLe H (E D decode) (fun x => D.k x ^ 2 * nPU D x * D.openCalls x) ∧
+    Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode ∧ DecoderComplexity decode counted size p
+
+/-- **Sampling: nontriviality**: recorded honest runs, each of a statement the scope check takes, that the verifier
+accepts. -/
+def Nontrivial (H : Msg → Msg) (D : Deploy Coin Col T) (recs : List (Recorded D.V)) : Prop :=
+  Claims.Nontrivial H D.V recs ∧ ∀ e ∈ recs, D.scopeCheck e.x = true
+
+end Claims
+
+end Claims.Sampling
