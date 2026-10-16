@@ -40,3 +40,20 @@ class PFillKCo(PFillK):
         if phase == "prefill":
             return Placement("co")
         return Placement("split", point_lookup(POWER_SPLIT, b, l))
+
+
+@dataclass
+class PFillKCoDep(PFillKCo):
+    """PFillKCo with each co MMA waiting on the fold before it (-DPF_CO_DEP=2), one MMA in flight a warp: the co tile's
+    ~7 instructions an MMA take the GEMM's issue slots, so the full-rate tile costs the prefill linears about 1.15 of
+    slowdown a unit of share, and one in flight holds it to the gate."""
+
+    name: str = "hcpre-pfill-k-co-dep"
+    lineage: dict = field(default_factory=lambda: {
+        "parent": "hcpre-pfill-k-co", "approach": "pouw/filler-prefill",
+        "mechanism": ["filler:fresh-noise-imma", "noise:sha512-coins-01", "receipt:ram-k32", "tile:co-w4-bits-b-regs-a",
+                      "place:split", "split:per-point-table", "split:every-scored-point", "prefill:co",
+                      "co:one-block-an-sm", "co:one-mma-in-flight", "chunk:2^20"],
+        "hypothesis": "the co tile's ALU work takes the GEMM's issue slots, so with one MMA in flight a warp it fills "
+                      "prefill at the gate"})
+    nvcc_flags: str = "-DPFILL_BITS -DPFILL_CO -DPFILL_NO_PHASE -DPF_CO_DEP=2"

@@ -8,6 +8,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
+
 FILLER = Path(__file__).resolve().parents[1] / "filler"
 
 
@@ -24,14 +26,15 @@ def _module(name):
     return mod
 
 
-def test_pfill_k_co_arm(monkeypatch):
+@pytest.mark.parametrize("cls,extra", [("PFillKCo", []), ("PFillKCoDep", ["-DPF_CO_DEP=2"])])
+def test_pfill_k_co_arm(monkeypatch, cls, extra):
     monkeypatch.setenv("NVCC_APPEND_FLAGS", "")
     monkeypatch.syspath_prepend(str(FILLER))
     A, S = _module("arms"), _module("scoring")
-    arm = A.load(str(FILLER / "hcpre_proved.py") + ":PFillKCo", record=True)
+    arm = A.load(str(FILLER / "hcpre_proved.py") + ":" + cls, record=True)
     assert A.check_arm(arm, record=True) == []
     import os
-    assert os.environ["NVCC_APPEND_FLAGS"].split() == ["-DPFILL_BITS", "-DPFILL_CO", "-DPFILL_NO_PHASE"]
+    assert os.environ["NVCC_APPEND_FLAGS"].split() == ["-DPFILL_BITS", "-DPFILL_CO", "-DPFILL_NO_PHASE"] + extra
     assert arm.filler.noise == "bits01" and arm.filler.W == 4 and arm.filler.NC == 4
     assert "bits01" in S.FILLER_ENTRIES["theorem-k"]["noise"]
     split = _module("pfill_arm").POWER_SPLIT
