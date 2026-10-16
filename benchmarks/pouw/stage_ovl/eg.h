@@ -26,6 +26,8 @@ void lin_flags(Lin* L, bool fuse, bool pf);
 // a call: X, P_A from x (dither) and W', P_B from W, under key; the GEMM under seed (the receipts' keys, the draw's)
 void lin_qwe(Lin* L, const int8_t* W, uint32_t key, cudaStream_t st);
 void lin_gemm(Lin* L, uint32_t seed, cudaStream_t st);
+// plain serving's activation quantizer (quant<false>: round, no dither, no P_A) from x into a scratch operand of L's own
+void lin_quant(Lin* L, cudaStream_t st);
 void lin_rsalts(Lin* L, cudaStream_t st);              // every slot's salts, F and the pads (ahead)
 void lin_rcommit(Lin* L, int slot, cudaStream_t st);   // the receipts' leaves and tree
 void lin_rpoison(Lin* L);

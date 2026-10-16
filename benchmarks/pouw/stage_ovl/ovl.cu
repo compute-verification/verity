@@ -65,6 +65,9 @@
 //             the serial path's (E's are the control), EG_DUMP=DIR writes chunk 0's last call of each linear (X, W', the
 //             receipts, their levels) for eref.py and `reference.py verify`, and eg_gate holds each linear's Y to cuBLASLt's
 //             X W^T and w_d's receipts to w_d4q's
+//   EN:NAME   E:NAME without qwe: every layer's GEMM over the X and W' the serial reference left (the GEMMs' own cost)
+//   Q:NAME    (NAME chunked or chunkedrrW) plain's GEMMs, each linear's after plain serving's activation quantizer
+//             (egemm.cu's quant<false> from the same bf16 activations into a scratch operand)
 //
 // env: ARMS, DRAW_US (300), PLAIN_RB (8192), MID (1: stage.cu's frame heads ahead), CARVE (unset: the commitments' and draws'
 // kernels at the driver's carveout; P: P% shared memory), BESIDE_C (367), CG_R (64), CG_DUMP, CG_SKIP (timing only: salts,
@@ -231,21 +234,28 @@ struct Sched {
                  // same with every slot's salts, F and the pads made before the graph (cg_pre), none in it
   bool fuse = false;  // a cg arm's NAME-f or NAME-fp: commit_gpu's fuse_top (the last leaf CTA folds the levels above the CTAs)
   bool pf = false;    // NAME-p or NAME-fp: commit_gpu's prefetch (each leaf's next block into L1)
-  bool eg = false;    // E, ER, ERL: the linears EGEMM's edited GEMM
+  bool eg = false;    // E, ER, ERL, EN: the linears EGEMM's edited GEMM
   int rc = 0;         // ER: the receipts committed at the highest priority, ERL: at the lowest
+  bool noqwe = false; // EN: no qwe in the graph (every layer's GEMM over the operands the serial reference left)
+  bool quant = false; // Q: plain's GEMMs, each linear's after plain serving's activation quantizer
 };
 static Sched sched_of(const std::string& n) {
-  for (const char* pre : {"ERL:", "ER:", "E:"}) {
+  for (const char* pre : {"ERL:", "ER:", "EN:", "E:", "Q:"}) {
     const size_t pl = strlen(pre);
     if (n.compare(0, pl, pre) != 0) continue;
     Sched s = sched_of(n.substr(pl));
-    if ((s.hash && s.lite != 5) || !s.gemm) {
-      fprintf(stderr, "arm %s: E, ER and ERL take chunked, chunkedrrW, nohash or a cgpre arm\n", n.c_str());
+    if ((s.hash && s.lite != 5) || !s.gemm || s.eg || s.quant || (pre[0] == 'Q' && s.hash)) {
+      fprintf(stderr, "arm %s: E, ER, ERL and EN take chunked, chunkedrrW, nohash or a cgpre arm, Q chunked or chunkedrrW\n", n.c_str());
       exit(1);
     }
     s.name = n;
+    if (pre[0] == 'Q') {
+      s.quant = true;
+      return s;
+    }
     s.eg = true;
     s.rc = pre[1] != 'R' ? 0 : pre[2] == 'L' ? -1 : 1;
+    s.noqwe = pre[1] == 'N';
     return s;
   }
   const size_t dash = n.rfind('-');
@@ -440,7 +450,7 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
   for (const std::string& nm : arm_names)
     if (nm != "plain") {
       const Sched s = sched_of(nm);
-      use_eg |= s.eg;
+      use_eg |= s.eg || s.quant;
       use_rc |= s.eg && s.rc;
     }
   const int EGS = getenv("EG_S") && *getenv("EG_S") ? atoi(getenv("EG_S")) : 16;
@@ -803,7 +813,8 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
             for (int c = 0; c < k; c++) {
               const int s = l * NSTAGE + t, idx = s * k + c;
               eg::Lin* const el = S.eg ? lin[c][t] : nullptr;
-              if (el) eg::lin_qwe(el, d.W[l][LJ[t]], ekey(l, t, c), sg[c]);
+              if (el && !S.noqwe) eg::lin_qwe(el, d.W[l][LJ[t]], ekey(l, t, c), sg[c]);
+              if (S.quant && lin[c][t]) eg::lin_quant(lin[c][t], sg[c]);
               if (S.hash) {
                 if (sh[c] != sg[c]) pool.join(sg[c], sh[c]);
                 if (S.lite == 1) {
