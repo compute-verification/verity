@@ -15,6 +15,7 @@ import Proofs.Flock.Claims.Complete.Files
 import Proofs.Flock.Claims.Complete.Runs
 import Proofs.Flock.Claims.Complete.Reps
 import Proofs.Flock.Claims.Complete.Replay
+import Proofs.Flock.Claims.Complete.Shaped.Walk
 
 /-! Flock's completeness at the deployed plain verifier: the honest prover (`Honest`: `honestP`, on the session prover
 of `Prover/`: the transcript, the PIOP, Ligerito and the session record), its run against the verifier (`Run`:
