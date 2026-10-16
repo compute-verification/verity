@@ -291,6 +291,20 @@ def test_the_verifiers_window_is_refused_on_a_record_it_cannot_hold(served_tp, t
         _mine(served_tp, 0, d)
 
 
+def test_the_record_is_the_last_commits_into_the_same_out(served_tp, tmp_path):
+    def earlier(rows):
+        old = json.loads(json.dumps(rows[1]))
+        old["commit"]["per_rank"]["0"]["run_root"] = "11" * 32
+        old["commit"]["tp_run_root"] = tp_run_root(2, {r: bytes.fromhex(x["run_root"]) for r, x in
+                                                       ((int(k), v) for k, v in old["commit"]["per_rank"].items())}).hex()
+        return [rows[0], old, old | {"pair": 1}, *rows]
+
+    d = _copy_commit(served_tp, tmp_path, earlier)
+    assert SRT.record(d)["tp_run_root"] == served_tp["tp_run_root"]
+    mine, held = _mine(served_tp, 0, d)
+    assert SRT.source(_registered(served_tp, 0)["window"], mine, held)["ok"]
+
+
 def test_a_rank_outside_the_world_has_no_window(served_tp):
     with pytest.raises(ValueError, match="rank 2 is not a rank of the world of 2"):
         _mine(served_tp, 2)
