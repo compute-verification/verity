@@ -139,6 +139,7 @@ class AttentionSource:
             if (layer := sparse_mla_layer(r)) is not None:
                 self.boundaries.setdefault((int(r.get("engine_step", r.get("step"))), layer), []).append(r)
         self._held: set[tuple[int, int]] = set()
+        self._copies: list[Any] = []
         self._hooks = Hooks()
         self._pending: tuple[Any, Mapping[str, Any]] | None = None
         self._active: int | None = None
@@ -163,6 +164,7 @@ class AttentionSource:
 
     def on_step_begin(self) -> None:
         self._pending, self._active = None, None
+        self._copies = []
 
     def begin_run(self) -> None:
         self._held = set()
@@ -219,6 +221,9 @@ class AttentionSource:
         name = self.names.get(tid, {}).get(layer)
         if name is None or t is None:
             return
+        if not t.is_contiguous():   # e.g. ql_nope, bmm(...).transpose(0, 1): [M, NH, L] over strides no 2-D pitch describes
+            t = t.contiguous()
+            self._copies.append(t)  # alive until the step ends: the committer may stage it asynchronously
         self.c._acquire(name, t, job)
         self.stats["bound"] += 1
         self.stats["by_tap"][tid] = self.stats["by_tap"].get(tid, 0) + 1

@@ -319,3 +319,23 @@ def test_the_binding_map_covers_each_held_call_boundary_exactly_and_names_the_re
 
 def split_attn(name: str) -> str:
     return B.split_name(name)[0]
+
+
+def test_a_non_contiguous_tap_is_staged_as_a_contiguous_copy_held_for_the_step():
+    """[GLM-5.3] ql_nope is bmm(q_nope^T, W_UK_T).transpose(0, 1): [M, NH, L] over strides no 2-D pitch describes, which the native
+    committer refuses ("layout is not 2-D pitched"); the source stages its contiguous copy, the same values in row-major order."""
+    import torch
+    from verity_vllm.acquire.sources import attention_source as AS
+    got = []
+    src = object.__new__(AS.AttentionSource)
+    src.c = type("C", (), {"_acquire": lambda self, name, t, job: got.append((name, t))})()
+    src.names, src.stats, src._copies = {"ql": {0: "model.layers.0.self_attn/ql"}}, {"bound": 0, "by_tap": {}}, []
+    x = torch.arange(2 * 3 * 4, dtype=torch.float32).reshape(3, 2, 4).transpose(0, 1)
+    assert not x.is_contiguous()
+    src._bind("ql", 0, x, job=None)
+    (name, t), = got
+    assert name == "model.layers.0.self_attn/ql" and t.is_contiguous() and torch.equal(t, x) and src._copies == [t]
+    src.on_step_begin = AS.AttentionSource.on_step_begin.__get__(src)
+    src._pending = src._active = None
+    src.on_step_begin()
+    assert src._copies == []
