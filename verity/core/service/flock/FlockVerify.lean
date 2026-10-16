@@ -163,6 +163,53 @@ def buildSession (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins)
     let st ← buildStmt tags circuitB pubB compB coins tables draw partition program registered publicInputs identifier
     return (st.spec, #[st])
 
+theorem buildStmt_named (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
+    (draw partition : Option Lean.Json) (program : Option ByteArray) (registered : Option (Array Registered.Port))
+    (publicInputs : Option ByteArray) (identifier : Option String) :
+    With.Returns (buildStmt tags circuitB pubB compB coins tables draw partition program registered publicInputs identifier)
+      fun st => st.merkle.Named := by
+  unfold buildStmt
+  returns_walk [With.setup_named _ _ _ _ _ _, With.setupHidden_named _ _ _ _ _ _ _ _ _,
+    With.setupH_named _ _ _ _ _ _ _ _]
+
+theorem buildSession_named (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins)
+    (tables : List (String × ByteArray)) (count : Nat) (draw partition : Option Lean.Json) (program : Option ByteArray)
+    (work : Option (Nat × Array (String × Nat × Nat))) (stratified : Option Nat)
+    (closure : Option (Std.HashMap Nat (Array Nat))) (registered : Option (Array Registered.Port))
+    (publicInputs : Option ByteArray) (identifier : Option String) :
+    With.Returns (buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure
+      registered publicInputs identifier) fun r => ∀ st ∈ r.2, st.merkle.Named := by
+  unfold buildSession
+  returns_walk [With.setupTables_named _ _ _ _ _ _ _ _ _ _ _ _ _, buildStmt_named _ _ _ _ _ _ _ _ _ _ _ _]
+
+/-- `verify`'s verdict on a session `buildSession` sets up, as `verifyCmd`'s `setupOf` hands its statements to it, is
+`verifyWith Sha512.hash`'s. -/
+theorem verify_eq_verifyWith_of_buildSession (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins)
+    (tables : List (String × ByteArray)) (count : Nat) (draw partition : Option Lean.Json) (program : Option ByteArray)
+    (work : Option (Nat × Array (String × Nat × Nat))) (stratified : Option Nat)
+    (closure : Option (Std.HashMap Nat (Array Nat))) (registered : Option (Array Registered.Port))
+    (publicInputs : Option ByteArray) (identifier : Option String) {spec : SessionSpec} {sts : Array Stmt}
+    (h : buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure registered
+      publicInputs identifier = .ok (spec, sts)) (record : String) (proofs : Array ByteArray) :
+    verify spec (sts.map Setup.ofCircuit) record proofs
+      = verifyWith Sha512.hash spec (sts.map Setup.ofCircuit) record proofs :=
+  verify_eq_verifyWith_of_returns (buildSession_named tags circuitB pubB compB coins tables count draw partition program
+    work stratified closure registered publicInputs identifier) h record proofs
+
+/-- `Zk.verify`'s verdict (`verify --zk`) on a session `buildSession` sets up, as `verifyCmd`'s `setupOf` hands its
+statements to it, is `Zk.verifyWith Sha512.hash`'s. -/
+theorem zk_verify_eq_verifyWith_of_buildSession (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins)
+    (tables : List (String × ByteArray)) (count : Nat) (draw partition : Option Lean.Json) (program : Option ByteArray)
+    (work : Option (Nat × Array (String × Nat × Nat))) (stratified : Option Nat)
+    (closure : Option (Std.HashMap Nat (Array Nat))) (registered : Option (Array Registered.Port))
+    (publicInputs : Option ByteArray) (identifier : Option String) {spec : SessionSpec} {sts : Array Stmt}
+    (h : buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure registered
+      publicInputs identifier = .ok (spec, sts)) (record : String) (proofs : Array ByteArray) :
+    Zk.verify spec (sts.map Setup.ofCircuit) record proofs
+      = Zk.verifyWith Sha512.hash spec (sts.map Setup.ofCircuit) record proofs :=
+  Zk.verify_eq_verifyWith_of_returns (buildSession_named tags circuitB pubB compB coins tables count draw partition program
+    work stratified closure registered publicInputs identifier) h record proofs
+
 /-- `--program F`: the verifier's own copy of the program's descriptor bytes (a path, or with `--archive` its SHA-512), from which
 it derives a template query's units. -/
 def programInput (args : List String) : IO (Except String (Option ByteArray)) := do
@@ -546,7 +593,8 @@ Each DIR holds `session.json`
 and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order.
 A session whose draw is by a law no soundness claim draws by is refused at setup (`ProvedScope.drawLaw`: a bernoulli or
 work draw, whatever flags it holds, or a subset draw without `--zk`). Every session of a statement whose form the
-soundness proof does not cover (`ProvedScope.check`, §16.15) is refused, and so is a session without a draw, both after
+soundness proof does not cover (`ProvedScope.check`, then its tables' `m`, `ProvedScope.sizesOk`, §16.15) is refused, and
+so is a session without a draw, both after
 every check has passed (so the reason is the refusal only when nothing else fails; the form's first). Exit 0 iff every
 session is accepted. `--zk`: the sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree;
 none is on `os` or `seed` coins (the live build reads no `FC_COINS` under `--zk`), so `--zk` takes no `--coins`. -/
@@ -683,8 +731,10 @@ def verifyCmd (args : List String) : IO UInt32 := do
       if let some k := coinKey then CoinTree.checkFresh coinKeys k
       let (spec, tabs, _) ← st
       if zk then Zk.verify spec tabs record proofs else verify spec tabs record proofs
-      -- last, so a session that fails a check keeps that check's reason: the form's refusal, then a draw-less session's
+      -- last, so a session that fails a check keeps that check's reason: the form's refusal (its statement's, then its
+      -- tables' sizes), then a draw-less session's
       scope
+      ProvedScope.sizesOk zk (tabs.map Setup.m)
       if draw.isNone then ProvedScope.drawLaw zk draw
     if let some k := coinKey then coinKeys := coinKeys.push k
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)

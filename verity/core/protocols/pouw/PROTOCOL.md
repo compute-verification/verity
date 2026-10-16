@@ -42,6 +42,12 @@ Everything else is the protocol's (`audit`), the same for every scheme.
    and the index. The scheme derives its noise from (salt, matmul, roots); every tile yields checked values and a digest.
    The useful output is assembled from the tiles.
 4. **Transcript.** A tree over every tile's digest, in matmul order then tile order, bound to (salt, weights_root).
+   Its root must reach the challenger within the deadline of the salt coin's release: the verifier's rule at the
+   deadline in `Security/Definitions/Pouw/Game/Deadline.lean`, which `WorkBetweenSaltAndDeadline` reads. The served
+   window states it as `Check.registration_deadline`, seconds on the
+   challenger's clock, and the proof service refuses a later registration, or one before the salt, as
+   `late-registration`. That ends the epoch, and the window earns no credit (`served_zk`'s challenger,
+   `registration_deadline` in its parameters).
 5. **Selection.** Served accounting uses only the sampled audit.
    - `Sampled(t)`: `derive(source, "verity/pouw/audit/v1", {"transcript": root, "salt": salt})`, the source
      being the epoch's draw coin, opened after the verifier recorded the transcript's root (`draw_coin`); draw j is

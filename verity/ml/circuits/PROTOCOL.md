@@ -280,7 +280,7 @@ own bits, and a Program holds no data.
   lists it.
 
 `verity.ml.circuits` names no operations and no library tables, so the guard is `verity.ml.circuits.operations.program_data`. It passes in the
-pinned list `verity/operations` v1 (`verity.ml.circuits.operations.OPERATIONS`, `digest()`) and the tables of `verity/library` v1. An
+pinned list `verity/operations` v2 (`verity.ml.circuits.operations.OPERATIONS`, `digest()`) and the tables of `verity/library` v2. An
 operation is a listed composite as the registry holds it, bound only to functions that hold no data, so a decoded Program's
 composites are no operations and their constants are listed.
 

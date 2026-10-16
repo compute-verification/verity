@@ -1,11 +1,14 @@
 """The serving rows of a Commit: the units of the verifier's partition, read exactly as the replay reads them (committed members
 through an opened reader, registered weights for weight slices), committed in M0's serving row format by
-:mod:`verity_vllm.commit.serving_rows`, with core's one-stage registration over them.  Two ways in, one window, two kinds:
+:mod:`verity_vllm.commit.serving_rows`, with core's one-stage registration over them.  Three ways in, one window, two kinds:
 
 * **In the Commit** (opt-in, ``commit --serving-rows``): the row stage writes a request ``{"dir", "partition", "run",
   "committer"}``, and the in-process C2 replay commits the window after the vllm-v1 roots are final and before its seed (``readers``).
   The window is ``served``: its roots are serving's own commitment, made before any draw.  The profile makes no claim that they
   hold the values under the vllm-v1 roots.
+* **In a TP Commit** (``tp-commit --serving-rows``, `pipeline.tp.serving_rows`): one ``served`` window per rank, committed in the
+  rank's process once every rank's root is final and the TP run root fixed, before the challenge; its run is the TP run root and
+  the rank.
 * **From a deferred Commit's bundle** (``verity-vllm serving-rows BUNDLE --row-dir D --partition F --out O``,
   `pipeline.deferred_rows`): the sealed replay bundle opened against the Commit's record as the CPU replay opens it, and the same
   window written into ``O`` as a ``stand-in``: serving's commitment is the vllm-v1 roots, and these rows are committed afterwards
@@ -113,15 +116,17 @@ Row = tuple[str, Any, dict, dict]
 
 
 def member_rows(programs: dict[str, dict[str, Any]], tmpls: Sequence[str], scope: str | None = None,
-                program_dirs: dict[str, str] | None = None) -> tuple[list[list[Row]], list[Any], list[int]]:
+                program_dirs: dict[str, str] | None = None,
+                index: Mapping[str, Any] | None = None) -> tuple[list[list[Row]], list[Any], list[int]]:
     """Per template, its rows in order (request, its ProgramIndex, the row, its description), restricted to ``scope`` (an op_path
-    prefix); each template's Definition; and its instance count.  Fixed by the Build's Programs before serving."""
+    prefix); each template's Definition; and its instance count.  Fixed by the Build's Programs before serving.  ``index``: the
+    ProgramIndex's ``attention_paths`` and ``tp`` for a rank Program (`pipeline.tp.serving_rows`)."""
     want = {t: k for k, t in enumerate(tmpls)}
     out: list[list[Row]] = [[] for _ in tmpls]
     defs: list[Any] = [None] * len(tmpls)
     counts = [0] * len(tmpls)
     for rid, inst in programs.items():
-        pi = ProgramIndex(inst, program_dir=(program_dirs or {}).get(str(rid)))
+        pi = ProgramIndex(inst, program_dir=(program_dirs or {}).get(str(rid)), **(index or {}))
         for i in sorted(pi.by_i):
             r = pi.by_i[i]
             hits = [(want[t], fn, n) for t, fn, n in unit_templates(r["spec"]) if t in want]
@@ -170,11 +175,11 @@ def law_of(law: str | Mapping[str, Any]) -> dict[str, Any]:
 
 
 def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any], run_root: str,
-               program_dirs: dict[str, str] | None = None) -> tuple[CS.Window, list[list[Row]]]:
+               program_dirs: dict[str, str] | None = None, index: Mapping[str, Any] | None = None) -> tuple[CS.Window, list[list[Row]]]:
     """The verifier's window over the run's Programs (``partition``: the partition file's ``templates``, ``law`` and ``scope``) and
     each member's rows; refused when the file names a ``partition_digest`` that is not the window's."""
     tmpls = list(partition["templates"])
-    rows, defs, counts = member_rows(programs, tmpls, (partition.get("scope") or {}).get("op_path_prefix"), program_dirs)
+    rows, defs, counts = member_rows(programs, tmpls, (partition.get("scope") or {}).get("op_path_prefix"), program_dirs, index)
     ms = members(tmpls, rows, counts)
     program, query = CS.population_program([(fn, m.n) for fn, m in zip(defs, ms, strict=True)])
     window = CS.Window(program, query, law_of(partition["law"]), run_root, tuple(ms))
@@ -307,26 +312,29 @@ def _operand(pi: Any, store: Any, weights: Callable, rid: str, arrive: int, grou
 
 
 def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[str, Any]], bmap: dict[str, Any], committed: Callable,
-                 weights: Callable, manifest: dict[str, Any] | None, run_root: bytes, run: str | None = None, row: Any = None,
+                 weights: Callable, manifest: dict[str, Any] | None, run_root: bytes | str, run: str | None = None, row: Any = None,
                  arrivals: dict[str, int] | None = None, program_dirs: dict[str, str] | None = None,
                  digests: Mapping[str, str] | None = None, committer: dict[str, Any] | None = None,
-                 workers: int | None = None, stand_in: Mapping[str, Any] | None = None) -> dict[str, Any]:
+                 workers: int | None = None, stand_in: Mapping[str, Any] | None = None, tp: Mapping[str, Any] | None = None,
+                 index: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Commit the verifier's partition's units of a run whose vllm-v1 roots are final and write the window's files into ``out_dir``:
     the registration (core's v1 record, its window the run root ``run_root`` and the provenance: the research run ``run``, the row,
     the committer and the served Programs' ``digests``), ``partition.json``, the index and M0's bodies.  The window is ``served``;
-    with ``stand_in`` (its ``of`` and ``link``), a ``stand-in`` with them in its provenance.  It reads the committed values and writes
-    only ``out_dir``."""
+    with ``stand_in`` (its ``of`` and ``link``), a ``stand-in`` with them in its provenance.  A TP rank's window (`pipeline.tp.
+    serving_rows`) gives its run as a string, its world and roots as ``tp`` and its ProgramIndex arguments as ``index``.  It reads
+    the committed values and writes only ``out_dir``."""
     t0 = time.perf_counter()
     dirs = {str(k): v for k, v in (program_dirs or {}).items()}
     pf = json.loads(Path(partition_file).read_text())
-    window, rows = population(programs, pf, bytes(run_root).hex(), dirs)
+    window, rows = population(programs, pf, run_root if isinstance(run_root, str) else bytes(run_root).hex(), dirs, index)
     ms = window.members
     store = CommittedStore.of_record(bmap, committed, manifest)
     got = [read(m, r, store, weights, arrivals) for m, r in zip(ms, rows, strict=True)]
     t_read = time.perf_counter()
     c = CS.commit(window, [g[0] for g in got], workers=workers or min(16, os.cpu_count() or 1))
     prov = {"commitment": "vllm-v1", "row": row, "research_run": run, "committer": dict(committer or {}, module=CS.__name__),
-            "served_programs": {str(k): str(v) for k, v in sorted((digests or {}).items())}, "scope": pf.get("scope"), **(stand_in or {})}
+            "served_programs": {str(k): str(v) for k, v in sorted((digests or {}).items())}, "scope": pf.get("scope"),
+            **({"tp": dict(tp)} if tp else {}), **(stand_in or {})}
     c.seconds["read_s"] = round(t_read - t0, 3)
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     (Path(out_dir) / "partition.json").write_text(json.dumps(partition_doc(window, pf), indent=1) + "\n")
