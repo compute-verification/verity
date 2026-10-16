@@ -106,3 +106,36 @@ class PhaseSchedCo(PhaseSched):
 
     def filler_at(self, phase, b, l):
         return CO_PREFILL if phase == "prefill" else self.filler
+
+
+#: TABLE_V2 with the phase fillers that screened below their cliff on r20261016-053942-7ea0 and r20261016-054329-880b
+TABLE_V3 = {**TABLE_V2, (32, 1024): (92, PhaseFill(tiles=4)), (32, 8192): (108, PhaseFill(W=4, tiles=52)),
+            (48, 16384): (92, PhaseFill(tiles=99)), (128, 6144): (92, PhaseFill(tiles=100)),
+            (132, 5120): (60, PhaseFill(tiles=84)), (144, 5120): (60, PhaseFill(tiles=90))}
+#: the co shape that spends prefill's slowdown budget: 4-warp blocks of 2^16 MMAs, 1.042 / 0.195 on three screens
+#: (r20261016-052231-a839, r20261016-053450-31f8, r20261016-053942-7ea0); every co shape screened lies near
+#: coverage 0.135 + 1.5 × (slowdown − 1), and W 5–8 at 2^17 fall off a cliff (1.08–1.25)
+CO_PREFILL_V3 = A.Filler(W=4, NC=4, S=128, chunk_log2=16)
+
+
+@dataclass
+class PhaseSchedCo2(PhaseSchedCo):
+    """PhaseSchedCo on TABLE_V3, with 4-warp co blocks of 2^16 MMAs in prefill."""
+
+    name: str = "fill-v1-phase-att-co2"
+    lineage: dict = field(default_factory=lambda: {
+        "parent": "art:a1f1ae67595dd8e4fc28eb4d4a1758ae2c5bc7c2cf858e26856663015769a21e", "approach": "pouw/filler-sched",
+        "mechanism": ["filler:chained-imma-registers", "place:split", "split:per-point-table", "sched:phase-att",
+                      "sched:graph-fork-join", "sched:node-priority", "prefill:co", "sched:prio-short-blocks",
+                      "co:small-blocks"],
+        "hypothesis": "4-warp co blocks fit beside the prefill GEMMs' blocks, so twice the chunk costs 1.042 for 0.195 "
+                      "(8 warps at 2^15: 1.027 for 0.180); with six phase fillers sized up to their cliff, ~+0.007"})
+    choice: str = ("TABLE_V3 (18 decode points: split, phase W and tiles) from five screens, and one co shape for "
+                   "prefill (W 4, 2^16); a lookup, a green split and one graph a step at serving time, a low-priority "
+                   "stream in prefill; run through psched_score.py/pscore.cu")
+
+    def _row(self, b, l):
+        return A.point_lookup(TABLE_V3, b, l)
+
+    def filler_at(self, phase, b, l):
+        return CO_PREFILL_V3 if phase == "prefill" else self.filler
