@@ -31,6 +31,8 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-20}" -- bash -c '
     done
   done
 '
-echo "lease rc $?" >> "$O/rc.txt"
+r=$?
+echo "lease rc $r" >> "$O/rc.txt"
 cat "$O/gate.jsonl" "$O/rc.txt"
-grep -v "^device" "$O/errors.txt" | tail -5
+grep -v "^device" "$O/errors.txt" | tail -5 || true
+exit "$r"
