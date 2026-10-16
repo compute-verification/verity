@@ -102,7 +102,7 @@ if os.path.exists(pipe):
           " | arm / base | serial / base | pipe / base | MHz |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for l in open(pipe):
         r = json.loads(l)
-        res = "tiles" if r["reserve"] < 0 else f"green {r['commit_sms']}" if r.get("green") else r["reserve"]
+        res = "-" if r["reserve"] < 0 else f"green {r['commit_sms']}" if r.get("green") else r["reserve"]
         print(f"| {r['pipe']} | {r['S']} | {res} | {r['grid']} | {r['prio']} | {'small' if r['small'] else 'default'} |"
               f" {r['base_ms']:.4f} | {r['arm_ms']:.4f} | {r['commit_ms']:.4f} | {r['serial_ms']:.4f} | {r['pipe_ms']:.4f} |"
               f" {r['arm_ratio']:.3f} | {r['serial_ratio']:.3f} | {r['pipe_ratio']:.3f} | {r['mhz']:.0f} |")
