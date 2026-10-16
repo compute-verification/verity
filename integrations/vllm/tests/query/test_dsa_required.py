@@ -9,6 +9,7 @@ each step closed by an `o_proj` reading the W_UV product and a sampling event:
 from __future__ import annotations
 
 import copy
+import json
 from collections import defaultdict
 
 import pytest
@@ -32,6 +33,8 @@ SHARED_LAYER = min(i for i in CM.layer_set(CMAP, "shared_topk", ENV) if i > INDE
 MODULE = {"layers.0": f"model.layers.{INDEXER_LAYER}.self_attn", "layers.1": f"model.layers.{SHARED_LAYER}.self_attn"}
 ATTENTION = {"q_c", "kv_c", "k_pe", "ql_nope", "q_pe", "attn_mqa", "out"}
 INDEX = {"index_q", "index_weights", "index_k", "index_k_scale"}
+RES = {"program": {"digest": "d0", "function": "f"}, "target": {"declared": {"compute_capability": [9, 0]}},
+       "attention_impls_observed": {f"{m}.attn": {"kind": "mla", "impl": T.IMPL} for m in MODULE.values()}}
 
 
 def _derived():
@@ -98,9 +101,7 @@ def _served(P0: ProgramView, doc: dict) -> tuple[ProgramView, dict]:
 def glm():
     P, doc = _served(*_derived())
     corr = Correspondence(P, document=doc)
-    res = {"program": {"digest": "d0", "function": "f"}, "target": {"declared": {"compute_capability": [9, 0]}},
-           "attention_impls_observed": {f"{m}.attn": {"kind": "mla", "impl": T.IMPL} for m in MODULE.values()}}
-    return P, corr, request_manifest(P, corr, res, request_id="r0").manifest
+    return P, corr, request_manifest(P, corr, RES, request_id="r0").manifest
 
 
 def test_the_indexers_logits_and_top_k_are_unreturned_and_not_required(glm):
@@ -119,15 +120,30 @@ def test_the_indexers_logits_and_top_k_are_unreturned_and_not_required(glm):
 def test_the_word_check_skips_the_unreturned_indexer_calls(glm):
     from verity_vllm.pipeline import manifest as M
     P, corr, _man = glm
-    res = {"program": {"digest": "d0", "function": "f"}, "target": {"declared": {"compute_capability": [9, 0]}},
-           "attention_impls_observed": {f"{m}.attn": {"kind": "mla", "impl": T.IMPL} for m in MODULE.values()}}
-    r = request_manifest(P, corr, res, request_id="r0")
+    r = request_manifest(P, corr, RES, request_id="r0")
     assert r.unreturned == Population(P, corr).unreturned and r.unreturned
     dsa = ("DsaMqaLogits_v3", "DsaTopKShortRow_v1")
     def flagged(unreturned):
         wc = M.word_check(P, corr, r.required, "16/32", strict=False, unreturned=unreturned)
         return {v["definition"].split("{")[0] for v in wc["violations"]} & set(dsa)
     assert flagged(frozenset()) == set(dsa) and flagged(r.unreturned) == set()
+
+
+def test_the_manifest_build_word_check_flags_no_indexer_call(glm, tmp_path, monkeypatch):
+    """`manifest.build` as each rank's check runs it, its `16/32` word check included, over the GLM Program: the check it runs names no
+    DSA Call (strict, it raised output-not-committed on the unreturned indexer logits and top-k at the end of every rank's check).  The
+    fixture's own stand-ins (o_proj's `Gemm_v1{N=4}`, the argmax) are no registered Definitions, so the check runs unstrict here."""
+    from verity_vllm.pipeline import manifest as M
+    P, corr, _man = glm
+    (tmp_path / "result.json").write_text(json.dumps(RES))
+    monkeypatch.setattr(M, "from_instances", lambda _path: P)
+    monkeypatch.setattr(M.Correspondence, "of", classmethod(lambda cls, *_a, **_k: corr))
+    checks, word_check = [], M.word_check
+    monkeypatch.setattr(M, "word_check", lambda *a, **k: checks.append(word_check(*a, **{**k, "strict": False})) or checks[-1])
+    man = M.build(str(tmp_path), request_id="r0", word="16/32")
+    (wc,) = checks
+    assert wc["calls"] and man["complete"] is True
+    assert not [v for v in wc["violations"] if v["definition"].startswith(("Dsa", "SparseMla"))], wc["violations"]
 
 
 def test_without_the_runtime_record_the_logits_stay_required():
