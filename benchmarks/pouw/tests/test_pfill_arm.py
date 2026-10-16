@@ -75,6 +75,25 @@ def test_power_split_arm_has_a_split_at_every_scored_point(monkeypatch):
         assert A.placed(arm, "decode", b, l) == A.Placement("split", A.point_lookup(P.POWER_SPLIT, b, l))
 
 
+def test_bu_arm_is_power_split_on_the_bu_tile(monkeypatch):
+    """pfill-bu is pfill-power-split's filler and placement with only the tile's kind changed (-DPFILL_BU), in Theorem
+    K's setting and no other arm."""
+    A, S = _module("arms"), _module("scoring")
+    P = _load_file("pfill_arm")
+    monkeypatch.setenv("NVCC_APPEND_FLAGS", "unset")
+    split = A.load("benchmarks/pouw/filler/pfill_arm.py:PFillPowerSplit")
+    arm = A.load("benchmarks/pouw/filler/pfill_arm.py:PFillBU")
+    assert A.check_arm(arm) == []
+    assert ledger.one_line(arm.lineage["hypothesis"], "the hypothesis")
+    assert __import__("os").environ["NVCC_APPEND_FLAGS"].split() == ["-DPFILL_BU", "-Xcompiler", "-mpopcnt"]
+    assert (arm.filler, arm.sources, arm.lineage["approach"]) == (split.filler, split.sources, "pouw/filler-proved")
+    assert P.products_per_slot(arm.lineage) == 1 and P.theorem_k_setting(arm.lineage)
+    assert not any(P.theorem_k_setting(getattr(P, c).__dataclass_fields__["lineage"].default_factory())
+                   for c in ("PFillRam", "PFillDuo", "PFillPowerSplit", "PFillE2m1Ram"))
+    for ph, b, l in S.points():
+        assert A.placed(arm, ph, b, l) == A.placed(split, ph, b, l)
+
+
 def _row(kind, b, l, alone_ms, arm_ms):
     """A minimal `dscore` row with filler: 4 ABBA blocks, 3 reps each side, 10 chunks of 1e9 MACs a window."""
     blocks = [{"order": "alone,arm", "alone": {"window_ms": 3 * alone_ms, "reps": [[alone_ms, 2000.0, 300.0]] * 3},
@@ -119,3 +138,21 @@ def test_e2m1_arm_adds_only_the_conditional_l64_reading(tmp_path):
     assert f4["priced-l64"]["filler_fraction"] == 2 * s8["proved"]["filler_fraction"]
     assert f4["priced-l64"]["status"] == "conditional"
     assert f4["priced-l64"]["SCORE"] > s8["proved"]["SCORE"]
+
+
+def test_bu_arm_adds_only_the_projected_k_reading(tmp_path):
+    """A pfill-bU run keeps every s8 reading (E's proved 0.225 among them) and adds Theorem K's c = 1 at φ = 0.9,
+    marked projected; no other kind's run gets it."""
+    S = _module("scoring")
+    P = _load_file("pfill_proved")
+    A = _load_file("pfill_arm")
+    rows = [_row("step" if ph == "decode" else "prefill", b, l, 10.0, 10.2) for ph, b, l in S.points()]
+    (tmp_path / "dscore.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+    s8 = P.readings(tmp_path)
+    assert "theorem-k" not in s8
+    (tmp_path / "arm.json").write_text(json.dumps({"lineage": A.PFillBU.__dataclass_fields__["lineage"]
+                                                   .default_factory()}))
+    bu = P.readings(tmp_path)
+    assert {k: bu[k] for k in s8} == s8 and set(bu) - set(s8) == {"theorem-k"}
+    assert (bu["theorem-k"]["filler_fraction"], bu["theorem-k"]["status"]) == (0.9, "projected")
+    assert bu["theorem-k"]["SCORE"] > s8["proved"]["SCORE"]

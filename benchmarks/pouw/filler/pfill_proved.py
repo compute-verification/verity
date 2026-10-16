@@ -18,7 +18,12 @@ scorer's proved 0.225; the filler is read at
   the model, beside the chained filler's 0.99 under CH;
 - priced-l64, e2m1 arms only (pfill_arm.products_per_slot, read from the run's arm.json): 0.45, Theorem E's priced form
   at L = 64 with heads priced at cL/m_max = 16 int8 slots, twice a CUDA word op's ≈ 8. That price is a claim, not a
-  measurement, so the reading is conditional.
+  measurement, so the reading is conditional;
+- theorem-k, pfill-bU arms only (pfill_arm.theorem_k_setting): 0.9, Theorem K's c = 1 at φ = 0.9 for straight-line,
+  cell-pure runs on int MMAs with unscaled s32 reads, operands affine in their bits and every prefix word committed, as
+  RS-E-REF r4 refereed it (note:20261015T1931Z-draft-theorem-e-referee Part IV, with G₂ over all bit pairs and the luck
+  lemma on the integer alphabet, ≈ ½ a missing product). The guarantee isn't in the Lean lock yet, so the reading is
+  projected.
 
   python3 benchmarks/pouw/filler/pfill_proved.py OUT_DIR [--json]
 """
@@ -31,7 +36,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import scoring as S
-from pfill_arm import products_per_slot
+from pfill_arm import products_per_slot, theorem_k_setting
 
 READINGS = {
     "proved": (0.225, "proved", "Theorem E c/m = 1/4 at phi = 0.9, heads at 8 int8 slots"),
@@ -44,6 +49,10 @@ READINGS = {
 E2M1_READINGS = {
     "priced-l64": (0.45, "conditional", "Theorem E's priced form at L = 64: heads priced at cL/m_max = 16 int8 slots"),
 }
+K_READINGS = {
+    "theorem-k": (0.9, "projected", "Theorem K c = 1 at phi = 0.9 (RS-E-REF r4: straight-line, cell-pure, int MMAs, "
+                                    "unscaled s32 reads, affine operands, every prefix word committed)"),
+}
 
 
 def certified(fraction: float, status: str, source: str) -> dict:
@@ -55,14 +64,16 @@ def stats_of(out: Path) -> dict:
     return {("decode" if r["kind"] == "step" else "prefill", r["B"], r["L"]): S.point_stats(r) for r in rows}
 
 
-def slot_products(out: Path) -> int:
+def lineage_of(out: Path) -> dict:
     doc = out / "arm.json"
-    return products_per_slot(json.loads(doc.read_text()).get("lineage") or {}) if doc.is_file() else 1
+    return (json.loads(doc.read_text()).get("lineage") or {}) if doc.is_file() else {}
 
 
 def readings(out: Path) -> dict:
     st = stats_of(out)
-    table = {**READINGS, **(E2M1_READINGS if slot_products(out) == 2 else {})}
+    lin = lineage_of(out)
+    table = {**READINGS, **(E2M1_READINGS if products_per_slot(lin) == 2 else {}),
+             **(K_READINGS if theorem_k_setting(lin) else {})}
     res = {}
     for name, (f, status, src) in table.items():
         sc = S.score(st, certified(f, status, src))
