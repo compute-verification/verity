@@ -14,6 +14,7 @@ import Proofs.Flock.Claims.KS.ConflictMerkle
 import Proofs.Flock.Claims.KS.ConflictWithin
 import Proofs.Flock.Claims.KS.PlainQueryRound
 import Proofs.Flock.Claims.KS.ConflictRun
+import Proofs.Flock.Claims.KS.ConflictTied
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -39,9 +40,10 @@ deployed plain code, read step, schedule and radius as the old model's, so an ol
 (`FlockDeploy.KS.good_of_committed_plain`, `FlockDeploy.KS.not_committed_plain`), and the masked code and read step as
 the old padded ones (`Flock.zkEnc_eq_encAt`, `Flock.zkReadD_eq_padWit`, `Flock.radius_zk`), so an old `CommittedPad`
 table extracts (`FlockDeploy.KS.good_of_committed_zk`, `FlockDeploy.KS.not_committed_zk`). Accepted runs open only
-full-width columns at both records (`Width`, `FlockDeploy.KS.plain_colsOk`, `FlockDeploy.KS.zk_colsOk`), which leaves
-`TableBoundθ` and `ConflictTied` for KS at SHA-512 (`FlockDeploy.KS.plain_KSθ_sha512`, `FlockDeploy.KS.zk_KSθ_sha512`).
-Toward `ConflictTied`: a run over `OC` within a log, peeled step by step, with the shipped step's verdict alongside
+full-width columns at both records (`Width`, `FlockDeploy.KS.plain_colsOk`, `FlockDeploy.KS.zk_colsOk`), and
+conflicts are tied to collisions at both (`ConflictTied`, `FlockDeploy.KS.plain_conflictTied`,
+`FlockDeploy.KS.zk_conflictTied`), which leaves `TableBoundθ` for KS at SHA-512 (`FlockDeploy.KS.plain_KSθ_of_table`,
+`FlockDeploy.KS.zk_KSθ_of_table`). Toward `ConflictTied`: a run over `OC` within a log, peeled step by step, with the shipped step's verdict alongside
 (`ConflictOC`, `FlockDeploy.KS.Runs`, `FlockDeploy.KS.shadow`); the shipped `hm96-sha512/v1` Merkle check logs every
 SHA-512 input of each opening (`ConflictMerkle`, `FlockDeploy.KS.merkleCheck_logs`), and two accepted openings of one
 position against one cap with different rows collide in the two logs (`FlockDeploy.KS.tiedColl_of_opens`). SHA-512
@@ -50,4 +52,8 @@ answered only within a log (`ConflictWithin`, `FlockDeploy.KS.hashesIn`) carries
 among them where level 0's query coins sit in a plain rep's stream, as `ZkQueryRound` has it for the masked one
 (`PlainQueryRound`, `FlockDeploy.KS.plainQueryRound_verifyWithM`). An accepted run decides within its own verifier
 log, so its verdict accepts with SHA-512 answered only within that log, on the link of the tape's first message and
-on tables committed under `hm96-sha512/v1` (`ConflictRun`, `FlockDeploy.KS.acc_within`, `FlockDeploy.KS.checks_hm96`). -/
+on tables committed under `hm96-sha512/v1` (`ConflictRun`, `FlockDeploy.KS.acc_within`, `FlockDeploy.KS.checks_hm96`).
+So an accepted run's column at `q` is an opening of `q` against table 0's `root_B` in the tape's link message, with
+every SHA-512 input in the run's log (`FlockDeploy.KS.Opening`, `FlockDeploy.KS.plain_opening`,
+`FlockDeploy.KS.zk_opening`), and two runs at one tape opening different columns at `q` collide
+(`FlockDeploy.KS.tiedColl_of_openings`). -/

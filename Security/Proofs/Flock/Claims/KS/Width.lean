@@ -11,7 +11,7 @@ import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 `decodeProof` (`Zk.decode`) reads each opened level-0 row with exactly `2^lanes` (`2^lanes + EXTRA_LANES`) symbols
 (`decodeProof_rows`, `zkDecode_rows`), so each column has the `2^lanes` witness lanes (under `--zk`, a row's first
 `2^lanes` symbols), the zero column's width (`plain_colsOk`, `zk_colsOk`). That leaves `TableBoundθ`
-and `ConflictTied` for `KSθ` at SHA-512 (`plain_KSθ_sha512`, `zk_KSθ_sha512`).
+and `ConflictTied` for `KSθ` at SHA-512 (`plain_KSθ_sha512`, `zk_KSθ_sha512`); `KS.ConflictTied` proves the second.
 -/
 
 namespace FlockDeploy.KS
