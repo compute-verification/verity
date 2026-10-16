@@ -59,6 +59,9 @@ static_assert(PF_CO_W == 2 || PF_CO_W == 4, "the co tile is 2 or 4 warps");
 #ifndef PF_CO_THR
 #define PF_CO_THR 0  // cycles that make 16 MMAs slow (env PF_CO_THR overrides; 0: every 16)
 #endif
+#ifndef PF_CO_DEP
+#define PF_CO_DEP 0  // pf_tile_co's DEP in co, NC 4 (env PF_CO_DEP overrides)
+#endif
 #define PF_W PF_CO_W
 #define PF_CTAS (16 / PF_CO_W)  // blocks an SM on a split: 16 warps, 4 an SMSP; co runs one an SM
 #if defined(PFILL_E2M1)
@@ -364,10 +367,14 @@ __device__ __forceinline__ void pf_tiles(uint8_t* Bs, uint32_t (*Ab)[32 * 16], u
 // 2 KB of shared memory (column n's 32 entries in word n), and a pass's A blocks in registers, lane l holding fragment f0 +
 // l's 16 row words, each fragment shuffled to the warp once and swept over B's 64 fragments.
 // In co a warp sleeps `gap` ns after 16 MMAs that took more than `thr` cycles (the GEMM held the tensor pipe), so it fills
-// the GEMM's idle stretches and leaves it the busy ones; gap 0 (a split) never sleeps.
-template <int NC, int KD>
+// the GEMM's idle stretches and leaves it the busy ones; gap 0 (a split) never sleeps. DEP > 0 makes each MMA wait on a
+// fold through `zero` (pf_zero, always 0, so no operand changes): DEP 1 on its own chain's previous fold (4 MMAs in
+// flight a warp, like FILL v1's chains), DEP 2 on the fold just before it (one in flight).
+__device__ int pf_zero;
+template <int NC, int KD, int DEP = 0>
 __device__ __forceinline__ uint64_t pf_tile_co(uint32_t* Bw, uint64_t c0, uint64_t c1, unsigned long long tile, int steps,
                                                unsigned gap, long long thr) {
+  const uint32_t zero = DEP ? (uint32_t)*(volatile int*)&pf_zero : 0u;
   constexpr int W = PF_W, TN = 128 * W, P = 32;
   constexpr uint64_t dom = pf_dom(KD);
   const int lane = threadIdx.x & 31, w = threadIdx.x >> 5, g = lane >> 2, t = lane & 3;
@@ -447,6 +454,8 @@ __device__ __forceinline__ uint64_t pf_tile_co(uint32_t* Bw, uint64_t c0, uint64
 #pragma unroll
       for (int c = 0; c < 4; c++) {
         uint32_t d[4];
+        if (DEP == 1) a[c][0] ^= y[c] & zero;
+        if (DEP == 2) a[c][0] ^= y[(c + 3) & 3] & zero;
         pf_mma(d, a[c], b);
         pf_absorb<NC>(y[c], z[c], d[0], d[1], d[2], d[3], key);
       }
@@ -477,7 +486,7 @@ __device__ __forceinline__ uint64_t pf_tile_co(uint32_t* Bw, uint64_t c0, uint64
 // that lands on a locked SM leaves at once if a block of its chunk is running, and otherwise runs (so every chunk
 // finishes) until a block of its chunk holds a lock. The last block of a chunk resets the chunk's counters. A split runs
 // pf_tiles' static tiles.
-__device__ int pf_co_one, pf_co_gap, pf_co_thr;
+__device__ int pf_co_one, pf_co_gap, pf_co_thr, pf_co_dep;
 __device__ int pf_lock[1024];
 __device__ unsigned long long pf_next[64];
 __device__ unsigned pf_fin[64], pf_run[64], pf_held[64];
@@ -509,6 +518,7 @@ __global__ void __launch_bounds__(32 * PF_W, PF_CTAS) dfill_k(uint64_t c0, uint6
   const unsigned long long units = (unsigned long long)gridDim.x * tiles;
   const unsigned gap = (unsigned)pf_co_gap;
   const long long thr = pf_co_thr;
+  const int dep = pf_co_dep;
   unsigned smid = 0;
   int role = 0, slot = 0;  // role 1 holds the SM's lock, 2 runs without it, 0 leaves
   if (threadIdx.x == 0) {
@@ -536,7 +546,14 @@ __global__ void __launch_bounds__(32 * PF_W, PF_CTAS) dfill_k(uint64_t c0, uint6
     __syncthreads();
     const unsigned long long u = (unsigned long long)Bw[0] | (unsigned long long)Bw[1] << 32;
     if (u >= units) break;
-    const uint64_t x = pf_tile_co<NC, PF_KIND>(Bw, c0, c1, tile0 + u, steps, gap, thr);
+    uint64_t x;
+    if constexpr (NC == 4) {
+      x = dep == 2   ? pf_tile_co<NC, PF_KIND, 2>(Bw, c0, c1, tile0 + u, steps, gap, thr)
+          : dep == 1 ? pf_tile_co<NC, PF_KIND, 1>(Bw, c0, c1, tile0 + u, steps, gap, thr)
+                     : pf_tile_co<NC, PF_KIND>(Bw, c0, c1, tile0 + u, steps, gap, thr);
+    } else {
+      x = pf_tile_co<NC, PF_KIND>(Bw, c0, c1, tile0 + u, steps, gap, thr);
+    }
     if (threadIdx.x == 0) rec[u] = x;
   }
   if (threadIdx.x == 0) {
@@ -770,6 +787,8 @@ static DFill dfill_make(int grid, int W, int NC, int S, uint64_t c0, uint64_t c1
   CK(cudaMemcpyToSymbol(pf_co_gap, &gap, sizeof gap));
   const int thr = getenv("PF_CO_THR") ? atoi(getenv("PF_CO_THR")) : PF_CO_THR;
   CK(cudaMemcpyToSymbol(pf_co_thr, &thr, sizeof thr));
+  const int dep = one ? (getenv("PF_CO_DEP") ? atoi(getenv("PF_CO_DEP")) : PF_CO_DEP) : 0;
+  CK(cudaMemcpyToSymbol(pf_co_dep, &dep, sizeof dep));
 #endif
   f.grid = grid * ctas; f.W = W; f.NC = NC; f.S = S; f.c0 = c0; f.c1 = c1;
   const int lg = getenv("DFILL_CHUNK_LOG2") ? atoi(getenv("DFILL_CHUNK_LOG2")) : 19;
