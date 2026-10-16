@@ -32,19 +32,19 @@ def _load_file(name):
     return mod
 
 
-ARMS = (("PFillRam", 4, "s8", 1), ("PFillDuo", 2, "s8", 1), ("PFillE2m1Ram", 4, "e2m1", 2))
+ARMS = (("PFillRam", 4, "", 1), ("PFillDuo", 2, "", 1), ("PFillE2m1Ram", 4, "-DPFILL_E2M1", 2))
 
 
 def test_pfill_arms_meet_the_contract_and_place_as_fill_v1(monkeypatch):
-    """Each arm sets the tile kind its gates and dscore inherit (PFILL_MMA), and says its products a slot."""
+    """Each arm sets the tile kind score.py's build inherits (NVCC_APPEND_FLAGS), and says its products a slot."""
     A, S = _module("arms"), _module("scoring")
     P = _load_file("pfill_arm")
-    monkeypatch.setenv("PFILL_MMA", "unset")
+    monkeypatch.setenv("NVCC_APPEND_FLAGS", "unset")
     v1 = A.load("fill-v1")
-    for attr, nc, mma, per_slot in ARMS:
+    for attr, nc, flags, per_slot in ARMS:
         arm = A.load(f"benchmarks/pouw/filler/pfill_arm.py:{attr}")
         assert A.check_arm(arm) == []
-        assert __import__("os").environ["PFILL_MMA"] == mma
+        assert __import__("os").environ["NVCC_APPEND_FLAGS"] == flags
         assert P.products_per_slot(arm.lineage) == per_slot
         assert arm.filler == A.Filler(W=8, NC=nc, S=256, chunk_log2=19)
         assert arm.filler.S % 32 == 0  # pfill's dfill_make refuses any other S

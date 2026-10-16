@@ -2,8 +2,8 @@
 proved without CH (note:20261016T0456Z-draft-hc-proved). Every MMA's operands are fresh i.i.d. ±1 noise expanded on chip
 from the round's coins and the tile id (A_M = B_M = 0), each MMA's output is a whole prefix sum (k32 on IMMA, k64 on the
 e2m1 tile's OMMA), and every one is folded at once into the receipt. The kernel is `pfill.cuh` behind dcap.cu's dfill ABI
-(dcap.cu's default filler on this branch); an arm picks the tile's kind through PFILL_MMA, which the scorer's gates and
-dscore inherit. Placement is FILL v1's per-point split: on a green split the filler adds ≤ 0.4% to the split's own cost,
+(dcap.cu's default filler on this branch); an arm picks the tile's kind at build time through NVCC_APPEND_FLAGS
+(-DPFILL_E2M1 or nothing), which score.py's nvcc inherits, since it builds after loading the arm. Placement is FILL v1's per-point split: on a green split the filler adds ≤ 0.4% to the split's own cost,
 so decode's slowdown is the split's, whatever runs on the filler's SMs.
 
   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=HC-PROVED \\
@@ -36,10 +36,10 @@ class PFillRam:
     sources: tuple = SOURCES
     filler: Filler | None = Filler(W=8, NC=4, S=256, chunk_log2=19)
     choice: str = "FILL v1's offline table of 11 (B, L) splits; a lookup and a green split at serving time"
-    mma: str = "s8"
+    nvcc_flags: str = ""
 
     def __post_init__(self):
-        os.environ["PFILL_MMA"] = self.mma
+        os.environ["NVCC_APPEND_FLAGS"] = self.nvcc_flags
 
     def placement(self, phase, b, l):
         if phase == "prefill":
@@ -75,7 +75,7 @@ class PFillE2m1Ram(PFillRam):
         "hypothesis": "the floor is in int8 slots and an E2M1 OMMA does two products a slot, so the same tile on OMMA "
                       "certifies 1/2 a slot against s8's 1/4 at the same receipt cost an MMA, if heads are priced at "
                       "16 slots (L = 64); at 8 a head both tiles certify 1/4 a slot"})
-    mma: str = "e2m1"
+    nvcc_flags: str = "-DPFILL_E2M1"
 
 
 def products_per_slot(lineage: dict) -> int:

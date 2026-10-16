@@ -1,5 +1,5 @@
 """pfill's tile (pfill.cuh's `dfill_k<NC>`, dcap.cu's filler unless built with -DDFILL_V1) in Python: the receipt a tile writes, from
-the round's coins (c0, c1) and the tile's id, for the s8 tile (K = 32) and the e2m1 tile (K = 64, PFILL_MMA=e2m1). Written
+the round's coins (c0, c1) and the tile's id, for the s8 tile (K = 32) and the e2m1 tile (K = 64, -DPFILL_E2M1). Written
 from the matrices with hashlib's SHA-512, as pfill.cuh's host `dfill_ref` is with its own; `dcap dgate` holds the GPU to
 that `dfill_ref`, and tests/test_pfill_ref.py holds this file to that reference built with g++ (pfill_host.cpp)."""
 

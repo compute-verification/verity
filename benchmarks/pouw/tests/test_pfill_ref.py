@@ -1,6 +1,6 @@
 """pfill's Python twin (decode_capacity/pfill_ref.py, hashlib's SHA-512) against pfill.cuh's host `dfill_ref` built with g++
 (decode_capacity/pfill_host.cpp), the reference `dcap dgate` holds the GPU kernel to bit for bit, in both tiles (s8, and
-e2m1 under PFILL_MMA=e2m1); and the properties the filler's proved floor reads: the operands are uniform {±1} noise on
+e2m1 under -DPFILL_E2M1); and the properties the filler's proved floor reads: the operands are uniform {±1} noise on
 both sides with nothing else in them, every k32 (e2m1: k64) product is exactly 32 - 2 popcount(a ^ b) (64 - ...), and the
 receipt depends on every fragment, on the tile id, on the coins and on the tile's kind."""
 

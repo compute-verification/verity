@@ -33,15 +33,15 @@
 // ±1 mod 32 (a0, a1); duo's k0, k1 are its rows 14 and 15. A tile's receipt is the XOR over its chains of
 // smix(smix(K ^ pos) ^ v), K = dseed(c0, c1, tile), pos = (32 w + lane) 4 + c, v the chain's state (duo: z << 32 | y).
 //
-// PFILL_MMA=e2m1 (read by dfill_prep and dfill_make, which set the kernels' flag, and by dfill_ref) runs the e2m1 tile
-// instead: K = L = 64 on OMMA m16n8k64 (kind::mxf4nvf4, every ue4m3 block scale 1), the same noise as e2m1 codes (+1 =
-// 0x2, -1 = 0xA) in the domain PF_DOM4, each fragment and B block two SHA blocks (ctr 2 F + h and 2^56 + 2 b + h for k in
-// 32 h .. 32 h + 31), and each word the bits of the exact f32 sum 64 - 2 popcount(a ^ b). The chains, keys and fold are the
-// s8 tile's. An OMMA holds the tensor pipe as long as an IMMA and does twice the products, each half an int8 slot, so
-// DFill::macs() counts int8 slots in both kinds (the e2m1 tile's products / 2).
+// Built with -DPFILL_E2M1 (score.py's build takes no flags, so an arm passes it through NVCC_APPEND_FLAGS, which nvcc
+// reads), dfill_k and dfill_ref run the e2m1 tile instead: K = L = 64 on OMMA m16n8k64 (kind::mxf4nvf4, every ue4m3
+// block scale 1), the same noise as e2m1 codes (+1 = 0x2, -1 = 0xA) in the domain PF_DOM4, each fragment and B block two
+// SHA blocks (ctr 2 F + h and 2^56 + 2 b + h for k in 32 h .. 32 h + 31), and each word the bits of the exact f32 sum
+// 64 - 2 popcount(a ^ b). The chains, keys and fold are the s8 tile's. An OMMA holds the tensor pipe as long as an IMMA
+// and does twice the products, each half an int8 slot, so DFill::macs() counts int8 slots in both kinds (the e2m1 tile's
+// products / 2). One build holds one kind: with both in dfill_k, the s8 tile kept 0.96 of its alone rate beside decode
+// instead of 0.99.
 #pragma once
-#include <cstdlib>
-#include <cstring>
 #include "../pearl_c/sha512.cuh"
 
 #define PF_W 8
@@ -58,10 +58,11 @@ constexpr uint64_t PF_DOM = 0x5046494C4C2D7631ull;   // "PFILL-v1": the s8 tile
 constexpr uint64_t PF_DOM4 = 0x5046494C4C2D6634ull;  // "PFILL-f4": the e2m1 tile
 constexpr uint64_t PF_B = 1ull << 56, PF_KEY = 2ull << 56;
 static_assert(PF_TN == 16 * 8 * PF_W, "lanes 0..7 (e2m1: 0..15) of every warp make B's blocks");
-static inline bool pf_e2m1() {
-  const char* m = getenv("PFILL_MMA");
-  return m && !strcmp(m, "e2m1");
-}
+#ifdef PFILL_E2M1
+constexpr bool PF_F4 = true;
+#else
+constexpr bool PF_F4 = false;
+#endif
 
 __host__ __device__ inline uint32_t pf_bswap(uint32_t x) {
   return (x >> 24) | ((x >> 8) & 0xFF00u) | ((x << 8) & 0xFF0000u) | (x << 24);
@@ -308,14 +309,12 @@ __device__ __forceinline__ void pf_tiles(uint8_t* Bs, uint32_t (*Ab)[32 * 16], u
     }
   }
 }
-__device__ int pf_f4_flag;  // dfill_make's PFILL_MMA: 1 runs the e2m1 tile
 template <int NC>
 __global__ void __launch_bounds__(32 * PF_W, PF_CTAS) dfill_k(uint64_t c0, uint64_t c1, unsigned long long tile0, int tiles,
                                                        int steps, unsigned long long* __restrict__ rec) {
   __shared__ __align__(16) uint8_t Bs[PF_TN * 32];
   __shared__ __align__(16) uint32_t Ab[PF_W][32 * 16];
-  if (pf_f4_flag) pf_tiles<NC, true>(Bs, Ab, c0, c1, tile0, tiles, steps, rec);
-  else pf_tiles<NC, false>(Bs, Ab, c0, c1, tile0, tiles, steps, rec);
+  pf_tiles<NC, PF_F4>(Bs, Ab, c0, c1, tile0, tiles, steps, rec);
 }
 
 #endif
@@ -416,7 +415,7 @@ static uint64_t dfill_ref_kind(uint64_t c0, uint64_t c1, uint64_t tile, int nc, 
   }
 }
 static inline uint64_t dfill_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int steps) {
-  return dfill_ref_kind(c0, c1, tile, nc, steps, pf_e2m1());
+  return dfill_ref_kind(c0, c1, tile, nc, steps, PF_F4);
 }
 
 #ifdef __CUDACC__
@@ -443,12 +442,7 @@ static void dfill_launch(const DFill& f, long long chunk, cudaStream_t st) {
     default: fprintf(stderr, "pfill: NC must be 1 (xor), 2 (duo), 4 (ram), or the probes 3, 5, 6, 7, 8\n"); exit(1);
   }
 }
-static void pf_set_kind() {
-  const int f4 = pf_e2m1();
-  CK(cudaMemcpyToSymbol(pf_f4_flag, &f4, sizeof f4));
-}
 static void dfill_prep() {
-  pf_set_kind();
   CK(cudaFuncSetAttribute(dfill_k<1>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
   CK(cudaFuncSetAttribute(dfill_k<2>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
   CK(cudaFuncSetAttribute(dfill_k<3>, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared));
@@ -470,7 +464,6 @@ static DFill dfill_make(int grid, int W, int NC, int S, uint64_t c0, uint64_t c1
   const int lg = getenv("DFILL_CHUNK_LOG2") ? atoi(getenv("DFILL_CHUNK_LOG2")) : 19;
   f.tiles = std::max(1, (int)((1LL << lg) / ((long long)PF_CTAS * W * S * (PF_TN / 8))));
   CK(cudaMalloc(&f.rec, f.per() * sizeof(unsigned long long)));
-  pf_set_kind();
   return f;
 }
 static int dfill_check(const DFill& f, long long chunk, int n) {
