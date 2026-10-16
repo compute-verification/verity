@@ -105,13 +105,15 @@ def write(st: dict[str, Any], request: dict[str, Any], tp: dict[str, Any]) -> di
 
 def record(commit_dir: str | os.PathLike) -> dict[str, Any]:
     """The TP Commit's record (its ``--out``): the world, TP run root and every rank's root of its pair-0 instrumented run, the one
-    whose windows `commit` wrote (``runs.jsonl``), refused unless the TP run root combines exactly those roots; the root tag, each
-    rank's Programs of record and the workload (``versions.json``)."""
+    whose windows `commit` wrote (``runs.jsonl``, which each Commit into the same ``--out`` appends to: the last such row, the run
+    ``versions.json`` is of), refused unless the TP run root combines exactly those roots; the root tag, each rank's Programs of
+    record and the workload (``versions.json``)."""
     from verity_vllm.pipeline.tp.commit import TP_ROOT_TAG, tp_run_root
 
     d = Path(commit_dir)
     rows = [json.loads(x) for x in (d / "runs.jsonl").read_text().splitlines() if x.strip()]
-    row = next((r for r in rows if r.get("arm") != "control" and r.get("pair") == 0 and (r.get("commit") or {}).get("tp_run_root")), None)
+    row = next((r for r in reversed(rows) if r.get("arm") != "control" and r.get("pair") == 0 and (r.get("commit") or {}).get("tp_run_root")),
+               None)
     if row is None:
         raise LookupError(f"{d / 'runs.jsonl'}: no pair-0 instrumented run with a TP run root (the Commit failed before its roots)")
     c = row["commit"]
