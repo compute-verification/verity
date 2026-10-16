@@ -26,7 +26,7 @@ open FlockVBridge.Runs (rhoOf tsOf)
 open FlockVBridge.Compiled (RepData)
 open FlockC3.HoloValues (RepUnit holoRows_coins)
 
-/-- **The layout factors refuse only on the points' sizes**: at points of the sizes of points they pass at, they pass. -/
+/-- **The layout factors refuse only on the points' sizes**: they pass at points the size of points they pass at. -/
 theorem layoutFactors_ok_of_size {sh : RecSparse.Shape} {xs ys xs' ys' : Array Flock.F128} {rng : Flock.Range}
     (h : (RecCoins.layoutFactors sh xs' ys' rng).isOk = true) (hx : xs.size = xs'.size) (hy : ys.size = ys'.size) :
     ∃ U, RecCoins.layoutFactors sh xs ys rng = .ok U := by
@@ -59,9 +59,9 @@ theorem points_size_of_unit {S : Model.Statement} {sch₀ : Accounting.Schedule}
   have hT : (tsOf U.t (U.t.k + 3 + (S.m - 6)) S.kLog).size = S.kLog - 6 := by simp [tsOf]
   exact ⟨by rw [hrin, hrho]; simp [rhoOf]; omega, by rw [hrIn, hts', Array.size_reverse, hT]⟩
 
-/-- **The sparse coins at a rep's values `d`**: `verifierRows`' points at `d`'s rounds, extra claims and comb at the shape
-`sh` (`rec_sparse.inner_points`), the layout factors at those points and the unit range `rng` for `U`, and `cs` for the
-phase's own coins. -/
+/-- **The sparse coins at a rep's values `d`**: `verifierRows`' points at `d`'s rounds, extra claims and comb at the
+shape `sh` (`rec_sparse.inner_points`), the layout factors at those points and the unit range `rng` for `U`, and `cs`
+for the phase's own coins. -/
 def scOf (e : ExecHolo) (rng : Flock.Range) (sh : Flock.Shape) (cs : Array Flock.F128) (d : RepData) : SCoins :=
   match verifierRows sh d.rounds d.extras d.comb with
   | .ok (_, info, _) => ⟨info.lc.fold.alpha, info.zc.z, info.lc.fold.rhoIn, info.lc.rIn,
@@ -73,9 +73,9 @@ theorem scOf_cs (e : ExecHolo) (rng : Flock.Range) (sh : Flock.Shape) (cs : Arra
   unfold scOf
   split <;> rfl
 
-/-- **`SparsePubRead` at `scOf`**: at a rep's unit, `verifierRows` accepts its values at its shape (`AlgebraHolds`), at the
-statement's `m` and `k_log`, and its points have `k_log − 6` coordinates, so the layout factors pass there where they
-pass at zero points of that size (`hok`). -/
+/-- **`SparsePubRead` at `scOf`**: at a rep's unit, `verifierRows` accepts its values at its shape (`AlgebraHolds`),
+at the statement's `m` and `k_log`, and its points have `k_log − 6` coordinates, so the layout factors pass there where
+they pass at zero points of that size (`hok`). -/
 theorem sparsePubRead_scOf {e : ExecHolo} {sch₀ : Accounting.Schedule}
     {extra : List (Model.Claim 𝔽 (e.cls.pubStatement e.regs).m)} {cap₀ : Model.Cap Refine.Dig}
     {os : Model.Opens 𝔽 Refine.Dig} {r : ℕ} {ts : List Game.Step}
@@ -122,7 +122,8 @@ theorem srcSparsePub_scOf {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Typ
     (cs : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 →
       Array Flock.F128) :
     AtRep zs dg N k Rw sh rep fun R ω t Lb i =>
-      SparsePubRead (holoAt st hp) rng (rep R ω t Lb i) (scOf (holoAt st hp) rng sh (cs R ω t Lb i) (rep R ω t Lb i)) := by
+      SparsePubRead (holoAt st hp) rng (rep R ω t Lb i)
+        (scOf (holoAt st hp) rng sh (cs R ω t Lb i) (rep R ω t Lb i)) := by
   intro R ω t R₂ τ o hA i ha hc
   obtain ⟨U, hsh, hd⟩ := hU R ω t R₂ τ o hA i ha hc
   have h := sparsePubRead_scOf U hok (cs R ω t (layers zs dg N k Rw R ω t R₂ τ) i)

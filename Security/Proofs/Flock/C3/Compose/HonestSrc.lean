@@ -17,8 +17,8 @@ import Proofs.Flock.C3.Sparse.PubCoins
 `hbr_honest_src`: the guarantee's `_hbr` in its form (`hbr_honest_reg`) at the checked family and the fixed decoder
 `c3DecOf` over the honest source, `tiedSrc (normSrc (repsOfVals (sparseOf (histPts ish tbl bcM stp0) sw sc) sh rep
 vals))`: the run's points the history's first coin (`histPts`), each rep's sparse stage the steps of the session's
-words `sw` at its coins `sc` (`sparseOf`), the reps' steps and openings their values' (`repsOfVals`). `sc` is `scOf`: the
-points `verifierRows` gives at the rep's own values, the layout factors there, and check 5's phase coins (`csOf`).
+words `sw` at its coins `sc` (`sparseOf`), the reps' steps and openings their values' (`repsOfVals`). `sc` is `scOf`:
+the points `verifierRows` gives at the rep's own values, the layout factors there, and check 5's phase coins (`csOf`).
 
 G's items 1–4 (`halg`, `hacc`) are needed only off a bad event `Bad` inside `hbr_honest_reg`'s (`hBad`; at
 `Bad := ValueColl …`, where the value ties hold): the decoder, `SrcOK` and every read fact are built at V*'s sessions
