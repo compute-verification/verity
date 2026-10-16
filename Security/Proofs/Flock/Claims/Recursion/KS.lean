@@ -4,35 +4,38 @@ import Proofs.Flock.Claims.Recursion.Hybrid
 /-!
 # The recursion: KS
 
-The recursion's `KS` (`Claims.Recursion.KS`) at a general inner protocol `I`, proved in the claims' format from the outer
-`--zk` Flock's KS at each session and the inner protocol's KS at the served runs. `E*` is the composed extractor of
-`Compose` (`served_eq`), so `servedERep_bad_le_good` splits its failure on an accepted run in two:
+The recursion's `KS` at a general inner protocol `I`, proved in the claims' format from the outer `--zk` Flock's KS at
+each session and the inner protocol's KS at the served runs, at the errors that derivation gives: `KSA`, the draft's
+`KS` (`Claims.Recursion.KS`) with its `κ` and the weights `γ_A`, `γ_eA`. `E*` is the composed extractor of `Compose`
+(`served_eq`), so `servedERep_bad_le_good` splits its failure on an accepted run in two:
 
 * **`E_O` fails at one of the inner stage's draws**, at most `N_I = 1 + m′_I·k_I` times as often as `E_O` fails
   (Wald). `E_O` gives up only when one session's `E^rep` does (`EO_none_session`), so `E_O`'s failure is at most the sum
   of the sessions' (`PrBad_EO_le`), each bounded by the outer Flock's KS at its session (`OuterKS`):
-  `κ_O,s + √(γ_O,s·k(x)·Pr[B])`. That is `N_I·Σ_s κ_O,s` and, summed under one root, `√((N_I·Σ_s √(γ_O,s·k(x)))²·Pr[B])`.
+  `κ_O,s + √(γ_O,s·k(x)·Pr[B])`. That is `N_I·Σ_s κ_O,s` and, summed under one root, `√(γ_A·Pr[B])` with
+  `γ_A = (N_I·Σ_s √(γ_O,s·k(x)))²`.
 * **The inner stage fails though every outer extraction succeeds**: what the inner protocol's KS bounds once it is
-  carried to the served runs (`InnerKS`): `κ_I + √(γ_I·Pr[B_I]) + Pr[a collision among the verifier's calls in one
-  run] + (N_I + 1)·Pr[Be]`. `B_I` is `Be` at the inner rounds' forks only (`BI`), so `Pr[B_I] ≤ k(x)·Pr[Be]`
-  (`PrBI_le`, since the inner rounds are the compiled verifier's first, `InnerRounds`).
+  carried to the served runs (`InnerKS`): `κ_I + √(γ_I·Pr[B_I]) + N_I·√(k_I·k(x)·Pr[Be])`. `B_I` is `Be` at the inner
+  rounds' forks only (`BI`), so `Pr[B_I] ≤ k(x)·Pr[Be]` (`PrBI_le`, since the inner rounds are the compiled verifier's
+  first, `InnerRounds`).
 
-`sqrt_add_lin` folds the one-run collision (`Pr_VColl_le_PrB'`) into `γ`'s `+1` and the linear terms into `γ_e`:
-`KS_of`. `KSFlock_of` is the instance with Flock as the inner protocol.
+`Be`'s two roots are one, `√(γ_eA·Pr[Be])` with `γ_eA = (√(γ_I·k(x)) + N_I·√(k_I·k(x)))²`: `KS_of`. `KSFlock_of` is
+the instance with Flock as the inner protocol. The draft's `γ` is `γ_A` with a `+1` to spare (`γA_le_γ`); its `γ_e`,
+`(√(γ_I·k(x)) + N_I + 1)²`, is below `γ_eA` wherever `N_I·√(k_I·k(x)) > N_I + 1`, so the draft's `KS` isn't proved.
 
 **Hypotheses, each a named `Prop`:**
 
 * `OuterKS`: the outer `--zk` Flock's KS at each V* session, the extraction `E_O` makes there (`EOs`) at the compiled
   verifier, in `Claims.KS`'s inequality at that session's numbers. `outerKS_of_flockKS` (`OuterKS`'s module) proves
-  it from `Claims.Flock.KS` at the outer deployment and code facts about how the compiled verifier runs each session,
-  and `KS_of_flockKS` is `KS_of` with it.
-* `InnerKS`: the inner protocol's KS (`Inner.KS`) carried to the served runs, with the linear terms the carriage costs
-  (an inner view two extractions open differently, a collision among one run's recorded calls) in `γ_e`'s budget. It
-  doesn't follow from `Inner.KS` and the code facts of `Recursion/Inner.lean`: `E*` sees each inner rerun through `E_O`
-  at fresh outer coins, rejected wherever the compiled run rejects there, so the outer sessions' coins thin its inner
-  reruns, and `Inner.KS` bounds `E^rep` only against runs whose acceptance is the inner verifier's. `innerKS_gap`
-  (`Recursion/Gap.lean`) is a deployment with all of them, and every other hypothesis of `KS_of_flockKS`, whose `KS`
-  fails.
+  it from `Claims.Flock.KS` at the outer deployment and code facts about how the compiled verifier runs each session.
+* `InnerKS`: the inner protocol's KS carried to the served runs, with the term the carriage costs (an inner view two
+  extractions open differently, at any of the inner `E^rep`'s reruns) in `γ_eA`'s budget. `innerKS_of_KSAbort`
+  (`Recursion/InnerAbort.lean`) proves it from the inner protocol's KS against provers that may abort
+  (`Inner.KSAbort`) and code facts about the inner session, and `KS_of_flockKS` there is `KS_of` with both. It doesn't
+  follow from `Inner.KS`: `E*` sees each inner rerun through `E_O` at fresh outer coins, rejected wherever the compiled
+  run rejects there, so the outer sessions' coins thin its inner reruns, and `Inner.KS` bounds `E^rep` only against
+  runs whose acceptance is the inner verifier's. `innerKS_gap` (`Recursion/Gap.lean`) is a deployment with every code
+  fact and `Inner.KS` but not `Inner.KSAbort`, whose `KS` fails.
 * Code facts, which bind `D`'s readers to the compiled verifier: `Refuses` (the compiled verifier accepts only a
   statement that parses with no circuit commitment) and `InnerRounds` (its first rounds are the inner session's).
 -/
@@ -40,25 +43,6 @@ The recursion's `KS` (`Claims.Recursion.KS`) at a general inner protocol `I`, pr
 namespace Claims.Recursion
 
 open Claims
-
-/-! ## One run's collision, at any number of rounds -/
-
-theorem Pr_VColl_le_PrB' {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {Ω : Type} [Fintype Ω]
-    [Nonempty Ω] (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (x : Msg) :
-    Pr (fun s : Ω × (Fin (V.k x) → Coin) => VColl H (run H P V x s.1 s.2)) ≤ PrB H V P x := by
-  by_cases hk : 0 < V.k x
-  · exact Pr_VColl_le_PrB H V P x hk
-  · have h0 : ∀ (n : ℕ) (vnext : List Msg → OC Out) (ω : Ω), n = 0 →
-        (stepWith H P x ω vnext n [] [] ⟨[], [], [], .rej⟩).vLog = [] := by
-      rintro n vnext ω rfl; rfl
-    have hv : ∀ s : Ω × (Fin (V.k x) → Coin), ¬ VColl H (run H P V x s.1 s.2) := by
-      rintro s ⟨u, v, hu, _, _⟩
-      rw [run, h0 _ _ _ (by omega)] at hu
-      simp at hu
-    calc Pr (fun s : Ω × (Fin (V.k x) → Coin) => VColl H (run H P V x s.1 s.2))
-        = Pr (fun _ : Ω × (Fin (V.k x) → Coin) => False) := Pr_congr fun s => iff_false_intro (hv s)
-      _ = 0 := Pr_false
-      _ ≤ PrB H V P x := PrB_nonneg H V P x
 
 section KS
 
@@ -278,17 +262,16 @@ def Refuses (H : Msg → Msg) (D : Deploy Coin) : Prop :=
 /-- **The inner protocol's KS, carried to the served runs**: at every outer decoder that meets the list-decoding spec,
 the inner stage of `E*` (the inner `E^rep` at the inner statement, each rerun served by `E_O`) fails on an accepted run,
 when `E_O` succeeds at every draw it reruns at, with probability at most
-`κ_I + √(γ_I·Pr[B_I]) + Pr[a collision among the verifier's calls in one run] + (N_I + 1)·Pr[Be]`: `Inner.KS`'s bound
-with `B_I` for the inner `B` (the inner verifier's calls are recorded in the outer witnesses only), and the terms the
-carriage costs. -/
+`κ_I + √(γ_I·Pr[B_I]) + N_I·√(k_I·k(x)·Pr[Be])`: the inner protocol's bound with `B_I` for the inner `B` (the inner
+verifier's calls are recorded in the outer witnesses only), and, at each of the inner `E^rep`'s `N_I` expected reruns,
+the inner rounds' differing openings, each at most `√(Pr[a differing opening at a fork at that round])`. -/
 def InnerKS [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ decO, decOK DO decO → ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
     PrBadGood H D.V (innerR D I) outR (EO D I DO decO) (dec D) (fun x => I.waits (xI D x))
         (fun x => I.k (xI D x)) (fun x => I.cap (xI D x)) I.opens (fun x => I.assemble (xI D x))
         (fun x => I.check (xI D x)) x P ≤
       I.κ (xI D x) + Real.sqrt (I.γ (xI D x) * PrBI H D I DO decO P x) +
-        Pr (fun s : Ω × (Fin (D.V.k x) → Coin) => VColl H (run H P D.V x s.1 s.2)) +
-        (NI D I x + 1) * PrBe H D I DO decO P x
+        NI D I x * Real.sqrt (I.V.k (xI D x) * D.V.k x * PrBe H D I DO decO P x)
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
 /-- On an accepted run of a statement the compiled verifier parses with no circuit commitment, the inherited relation
@@ -304,14 +287,38 @@ theorem R_of_innerR (D : Deploy Coin) (I : Inner Coin W) {x : Msg} {s : Stmt} (h
 
 /-! ## The recursion's KS -/
 
+/-- **`B`'s weight, as `KS_of` proves it**: `γ_A = (N_I · Σ_s √(γ_O,s · k(x)))²`. -/
+noncomputable def γA (D : Deploy Coin) (I : Inner Coin W) (x : Msg) : ℝ :=
+  (NI D I x * ∑ s : Fin (D.nS x), Real.sqrt ((D.nums x s).γ * D.V.k x)) ^ 2
+
+/-- **`Be`'s weight, as `KS_of` proves it**: `γ_eA = (√(γ_I(x_I) · k(x)) + N_I · √(k_I(x_I) · k(x)))²`: the inner `B`'s
+term, whose collisions are among calls only the outer witnesses record, and the inner rounds' differing openings at
+each of the inner `E^rep`'s `N_I` expected reruns. -/
+noncomputable def γeA (D : Deploy Coin) (I : Inner Coin W) (x : Msg) : ℝ :=
+  (Real.sqrt (I.γ (xI D x) * D.V.k x) + NI D I x * Real.sqrt (I.V.k (xI D x) * D.V.k x)) ^ 2
+
+/-- **The recursion's KS at the errors its proof gives**: the draft's `KS` with `γ_A` and `γ_eA` for `γ` and `γ_e`. -/
+def KSA [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
+  ∀ decO, decOK DO decO → ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
+    PrBad H D.V (R D I) (E D I DO decO) x P ≤
+      κ D I x + Real.sqrt (γA D I x * PrB H D.V P x) + Real.sqrt (γeA D I x * PrBe H D I DO decO P x)
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
+/-- The draft's `γ` is `γ_A`'s with a `+1` to spare. -/
+theorem γA_le_γ (D : Deploy Coin) (I : Inner Coin W) (x : Msg) : γA D I x ≤ γ D I x := by
+  have h : 0 ≤ (NI D I x : ℝ) * ∑ s : Fin (D.nS x), Real.sqrt ((D.nums x s).γ * D.V.k x) :=
+    mul_nonneg (Nat.cast_nonneg _) (Finset.sum_nonneg fun s _ => Real.sqrt_nonneg _)
+  unfold γA γ
+  nlinarith
+
 theorem Nums.γ_nonneg (n : Nums) : 0 ≤ n.γ := by unfold Nums.γ; positivity
 
 /-- **The recursion's KS**, at a general inner protocol: from the outer `--zk` Flock's KS at each session (`OuterKS`),
 the inner protocol's KS at the served runs (`InnerKS`), and the code facts `Refuses` and `InnerRounds`, `E*` fails on
-an accepted run with probability at most `κ(x) + √(γ(x)·Pr[B]) + √(γ_e(x)·Pr[Be])`. -/
+an accepted run with probability at most `κ(x) + √(γ_A(x)·Pr[B]) + √(γ_eA(x)·Pr[Be])`. -/
 theorem KS_of [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (hRef : Refuses H D) (hRounds : InnerRounds D I) (hO : OuterKS H D I DO) (hI : InnerKS H D I DO) :
-    KS H D I DO := by
+    KSA H D I DO := by
   intro decO hdec x Ω _ _ P
   set A : ℝ := (NI D I x : ℝ)
   set p := PrB H D.V P x
@@ -320,9 +327,7 @@ theorem KS_of [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) 
   have hA : (1 + (I.waits (xI D x) : ℝ) * (I.k (xI D x) : ℝ)) = A := by simp only [A, NI]; push_cast; ring
   have hA0 : 0 ≤ A := Nat.cast_nonneg _
   have hp0 : 0 ≤ p := PrB_nonneg H D.V P x
-  have hp1 : p ≤ 1 := PrB_le_one H D.V P x
   have hq0 : 0 ≤ q := PrBe_nonneg H D I DO decO P x
-  have hq1 : q ≤ 1 := PrBe_le_one H D I DO decO P x
   have hG0 : 0 ≤ G := Finset.sum_nonneg fun s _ => Real.sqrt_nonneg _
   -- the split: `E_O` fails at one of the inner stage's draws, or the inner stage fails
   have hsplit := servedERep_bad_le_good H D.V (R D I) outR (EO D I DO decO) (dec D) (fun x => I.waits (xI D x))
@@ -346,15 +351,10 @@ theorem KS_of [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) 
     rw [Finset.sum_mul, ← Finset.sum_add_distrib]
     refine Finset.sum_le_sum fun s _ => (hO decO hdec x Ω P s).trans (le_of_eq ?_)
     rw [Real.sqrt_mul (mul_nonneg (Nums.γ_nonneg _) (Nat.cast_nonneg _))]
-  -- `B`'s terms under one root, the one-run collision in its `+1`
-  have hv := Pr_VColl_le_PrB' H D.V P x
-  have hB : A * (G * Real.sqrt p) + Pr (fun s : Ω × (Fin (D.V.k x) → Coin) => VColl H (run H P D.V x s.1 s.2)) ≤
-      Real.sqrt (γ D I x * p) := by
-    have h := sqrt_add_lin (C := (A * G) ^ 2) (sq_nonneg _) zero_le_one hp0 hp1
-    rw [Real.sqrt_mul (sq_nonneg _), Real.sqrt_sq (mul_nonneg hA0 hG0), one_mul] at h
-    have hγ : γ D I x = (A * G + 1) ^ 2 := rfl
-    rw [hγ]
-    nlinarith [h]
+  -- `B`'s terms under one root
+  have hB : A * (G * Real.sqrt p) = Real.sqrt (γA D I x * p) := by
+    have hγ : γA D I x = (A * G) ^ 2 := rfl
+    rw [hγ, Real.sqrt_mul' _ hp0, Real.sqrt_sq (mul_nonneg hA0 hG0), mul_assoc]
   -- `Be`'s terms under one root
   have hBI : Real.sqrt (I.γ (xI D x) * PrBI H D I DO decO P x) ≤ Real.sqrt (I.γ (xI D x) * D.V.k x * q) := by
     by_cases hγI : 0 ≤ I.γ (xI D x)
@@ -369,12 +369,13 @@ theorem KS_of [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) 
         · exact le_rfl
       rw [Real.sqrt_eq_zero'.2 h1]
       exact Real.sqrt_nonneg _
-  have hBe : Real.sqrt (I.γ (xI D x) * D.V.k x * q) + (A + 1) * q ≤ Real.sqrt (γe D I x * q) := by
-    have h := sqrt_add_lin_any (C := I.γ (xI D x) * D.V.k x) (add_nonneg hA0 zero_le_one) hq0 hq1
-    have hγe : γe D I x = (Real.sqrt (I.γ (xI D x) * D.V.k x) + (A + 1)) ^ 2 := by
-      simp only [γe, A]; ring
-    rw [hγe]
-    exact h
+  have hBe : Real.sqrt (I.γ (xI D x) * D.V.k x * q) + A * Real.sqrt (I.V.k (xI D x) * D.V.k x * q) =
+      Real.sqrt (γeA D I x * q) := by
+    have hγe : γeA D I x = (Real.sqrt (I.γ (xI D x) * D.V.k x) + A * Real.sqrt (I.V.k (xI D x) * D.V.k x)) ^ 2 :=
+      rfl
+    rw [hγe, Real.sqrt_mul' (I.γ (xI D x) * D.V.k x) hq0, Real.sqrt_mul' ((I.V.k (xI D x) : ℝ) * D.V.k x) hq0,
+      Real.sqrt_mul' (_ ^ 2) hq0, Real.sqrt_sq (add_nonneg (Real.sqrt_nonneg _) (mul_nonneg hA0 (Real.sqrt_nonneg _)))]
+    ring
   have hκ : κ D I x = I.κ (xI D x) + A * ∑ s : Fin (D.nS x), (D.nums x s).κ := rfl
   show PrBad H D.V (R D I) (served D.V (EO D I DO decO) (dec D) (fun x => I.waits (xI D x))
     (fun x => I.k (xI D x)) (fun x => I.cap (xI D x)) I.opens (fun x => I.assemble (xI D x))
@@ -391,12 +392,17 @@ section AtFlock
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
 
+/-- **The recursion's KS over Flock at the errors its proof gives**: `KSA` at every inner decoder that meets the
+spec, as `KSFlock` is `KS`. -/
+def KSFlockA [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (DI DO : Flock.Deploy Coin Col T) : Prop :=
+  ∀ decI, decOK DI decI → KSA H D (Inner.ofFlock DI decI) DO
+
 /-- **KS of the recursion over Flock**: `KS_of` with Flock as the inner protocol, at every inner decoder that meets the
 spec. -/
 theorem KSFlock_of [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (DI DO : Flock.Deploy Coin Col T) (hRef : Refuses H D)
     (hRounds : ∀ x, DI.V.k (xI D x) ≤ D.V.k x)
     (hO : ∀ decI, decOK DI decI → OuterKS H D (Inner.ofFlock DI decI) DO)
-    (hI : ∀ decI, decOK DI decI → InnerKS H D (Inner.ofFlock DI decI) DO) : KSFlock H D DI DO :=
+    (hI : ∀ decI, decOK DI decI → InnerKS H D (Inner.ofFlock DI decI) DO) : KSFlockA H D DI DO :=
   fun decI h => KS_of H D _ DO hRef hRounds (hO decI h) (hI decI h)
 
 end AtFlock

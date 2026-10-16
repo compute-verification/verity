@@ -3,18 +3,20 @@ import Proofs.Flock.Claims.Recursion.OuterKS
 /-!
 # The inner stage: its code facts and binding
 
-`KS_of` reads the inner protocol's KS at the served runs (`InnerKS`). Its route from `Inner.KS` is an inner prover whose
-tape holds one fill (outer coins and `E_O`'s) per inner-coin prefix, against `E*`'s fresh fill at each rerun; the two
-agree on every inner message unless two extractions open one commit string differently. This file states the code
-facts that route reads and proves its binding step. The route doesn't reach `InnerKS` from `Inner.KS` alone: the outer
-sessions' coins also decide whether `E*` sees an inner rerun accepted, which `Inner.KS` doesn't cover, and
-`Recursion/Gap.lean` gives a deployment with every code fact here where `InnerKS` fails (`innerKS_gap`).
+`KS_of` reads the inner protocol's KS at the served runs (`InnerKS`). `Recursion/InnerAbort.lean` derives it from the
+inner protocol's KS against provers that may abort (`Inner.KSAbort`), at an inner prover that sends, at each inner-coin
+prefix, the message most extractions open there; `E*`'s view agrees with that prover's run unless two extractions open
+one commit string differently. This file states the code facts about the inner session that derivation reads and
+proves its binding step. `Inner.KS` alone doesn't reach `InnerKS`: the outer sessions' coins also decide whether `E*`
+sees an inner rerun accepted, which `Inner.KS` doesn't cover, and `Recursion/Gap.lean` gives a deployment with every
+code fact here where `InnerKS` fails (`innerKS_gap`).
 
 * Code facts (`Prop`s about `D`): the inner view `E_O`'s witnesses give on an accepted run is the inner verifier's run
-  of its own messages at the inner coins (`InnerViewRun`), which `coinOf` decodes from the compiled verifier's first
-  `k_I` coins (`CoinOfInverts`); the witnesses record the inner verifier's SHA-512 calls in that run, every recorded
-  call a true evaluation (`CallsRecord`), and at each inner round the call that opens the run's commit string to the
-  inner view's message (`CallsOpen`).
+  of its own messages at the compiled verifier's first `k_I` coins (`InnerViewRun`, `innerCoins`); the witnesses record
+  the inner verifier's SHA-512 calls in that run, every recorded call a true evaluation (`CallsRecord`), and at each
+  inner round the call that opens the run's commit string to the inner view's message (`CallsOpen`); that inner view
+  is accepted (`InnerAccepts`); no witnesses record only true evaluations (`CallsNil`); and the inner verifier's
+  messages show its coins (`PublicCoin`).
 * Binding: two extractions whose runs agree on inner round `j`'s commit string and whose inner views differ there give
   a collision among their recorded calls (`opening_coll`), at a fork at `j` one of `Be`'s (`forkColl_of_opening`). So
   the inner rounds' differing openings cost at most `k(x)·Pr[Be]` (`sum_opensDiffer_le`).
@@ -36,37 +38,32 @@ def EOGives (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.D
     (c : (EO D I DO decO).C x) (ws : List Flock.Wit) : Prop :=
   (run H P D.V x ω r).out = .acc ∧ ((EO D I DO decO).eval H P x ω r c).1 = some ws
 
-/-- The inner view's run: the inner verifier's run, at the inner coins `coinOf` reads off the compiled verifier's, of
-the prover that sends the inner view's messages. -/
-def innerRun (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
-    (coinOf : (x : Msg) → (Fin (D.V.k x) → Coin) → Fin (I.V.k (xI D x)) → Coin) (x : Msg)
-    (r : Fin (D.V.k x) → Coin) (ws : List Flock.Wit) : Trace :=
-  run H (replay ((D.innerView x r ws).msgs.map Prod.fst)) I.V (xI D x) () (coinOf x r)
+/-- The inner coins: the compiled verifier's first `k_I`, whose rounds are the inner session's. -/
+def innerCoins (D : Deploy Coin) (I : Inner Coin W) (x : Msg) (r : Fin (D.V.k x) → Coin) :
+    Fin (I.V.k (xI D x)) → Coin :=
+  fun i => coinSeq r i.val
+
+/-- The inner view's run: the inner verifier's run, at the inner coins, of the prover that sends the inner view's
+messages. -/
+def innerRun (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (x : Msg) (r : Fin (D.V.k x) → Coin)
+    (ws : List Flock.Wit) : Trace :=
+  run H (replay ((D.innerView x r ws).msgs.map Prod.fst)) I.V (xI D x) () (innerCoins D I x r)
 
 /-- **The inner view at `r` and `E_O`'s witnesses is the inner verifier's run** (a code fact): wherever `E_O` gives
-witnesses on an accepted run, the inner view read off them is `I.V`'s run of its own messages at the inner coins
-`coinOf` reads off `r`, so its answers and its decision are the inner verifier's. -/
-def InnerViewRun (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
-    (coinOf : (x : Msg) → (Fin (D.V.k x) → Coin) → Fin (I.V.k (xI D x)) → Coin) : Prop :=
+witnesses on an accepted run, the inner view read off them is `I.V`'s run of its own messages at the compiled
+verifier's first `k_I` coins, so its answers and its decision are the inner verifier's. -/
+def InnerViewRun (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ (decO : List (ℕ × Col) → List T) (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin)
     (c : (EO D I DO decO).C x) (ws : List Flock.Wit), EOGives H D I DO decO P x ω r c ws →
-    D.innerView x r ws = (innerRun H D I coinOf x r ws).seen
-
-/-- **`coinOf` inverts the coin encoding** (a code fact): the inner coins are the compiled verifier's first `k_I`
-coins, decoded by a bijection. -/
-def CoinOfInverts (D : Deploy Coin) (I : Inner Coin W)
-    (coinOf : (x : Msg) → (Fin (D.V.k x) → Coin) → Fin (I.V.k (xI D x)) → Coin) : Prop :=
-  ∀ x, ∃ e : (Fin (I.V.k (xI D x)) → Coin) ≃ (Fin (I.V.k (xI D x)) → Coin),
-    ∀ r, coinOf x r = e fun i => coinSeq r i.val
+    D.innerView x r ws = (innerRun H D I x r ws).seen
 
 /-- **`D.calls` records the inner verifier's SHA-512 calls** (a code fact): wherever `E_O` gives witnesses on an
 accepted run, `I.V`'s calls in the inner view's run are among the calls the witnesses record, and every recorded call
 is a true evaluation. -/
-def CallsRecord (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
-    (coinOf : (x : Msg) → (Fin (D.V.k x) → Coin) → Fin (I.V.k (xI D x)) → Coin) : Prop :=
+def CallsRecord (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ (decO : List (ℕ × Col) → List T) (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin)
     (c : (EO D I DO decO).C x) (ws : List Flock.Wit), EOGives H D I DO decO P x ω r c ws →
-    (∀ e ∈ (innerRun H D I coinOf x r ws).vLog, e ∈ D.calls x ws) ∧ ∀ e ∈ D.calls x ws, H e.1 = e.2
+    (∀ e ∈ (innerRun H D I x r ws).vLog, e ∈ D.calls x ws) ∧ ∀ e ∈ D.calls x ws, H e.1 = e.2
 
 /-- **`D.calls` records each inner message's opening** (a code fact): wherever `E_O` gives witnesses on an accepted
 run, at each inner round `j` a recorded call answers the run's message `j`, its commit string, at a query that
@@ -77,6 +74,23 @@ def CallsOpen (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock
     (c : (EO D I DO decO).C x) (ws : List Flock.Wit), EOGives H D I DO decO P x ω r c ws →
     ∀ j < I.V.k (xI D x), ∃ q, (q, ((run H P D.V x ω r).msgs.map Prod.fst).getD j []) ∈ D.calls x ws ∧
       opening q = ((D.innerView x r ws).msgs.map Prod.fst).getD j []
+
+/-- **The compiled verifier accepts only where the inner view does** (a code fact): wherever `E_O` gives witnesses on
+an accepted run, the inner view read off them is accepted. -/
+def InnerAccepts (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
+  ∀ (decO : List (ℕ × Col) → List T) (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin)
+    (c : (EO D I DO decO).C x) (ws : List Flock.Wit), EOGives H D I DO decO P x ω r c ws →
+    (D.innerView x r ws).out = .acc
+
+/-- **The inner verifier is public-coin** (a code fact about `I`): its message at a round shows that round's coin,
+which `decC` reads off it. -/
+def PublicCoin (H : Msg → Msg) (I : Inner Coin W) (decC : Msg → Msg → Coin) : Prop :=
+  ∀ (x : Msg) (as : List Msg) (cs : List Coin) (c : Coin) (m : Msg), as.length = cs.length + 1 →
+    ((I.V.next x as (cs ++ [c])).eval H).1 = .msg m → decC x m = c
+
+/-- **No witnesses record only true evaluations** (a code fact): the calls `D.calls` reads off no witnesses, what `Be`
+reads where `E_O` gives up, are true evaluations of `H`. -/
+def CallsNil (H : Msg → Msg) (D : Deploy Coin) : Prop := ∀ x, ∀ e ∈ D.calls x [], H e.1 = e.2
 
 end CodeFacts
 
@@ -100,8 +114,8 @@ variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 /-- **Binding**: two extractions on accepted runs whose messages at inner round `j` agree (one commit string) and whose
 inner views differ there give a collision among the calls their witnesses record. -/
 theorem opening_coll {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
-    {coinOf : (x : Msg) → (Fin (D.V.k x) → Coin) → Fin (I.V.k (xI D x)) → Coin} {opening : Msg → Msg}
-    (hO : CallsOpen H D I DO opening) (hC : CallsRecord H D I DO coinOf) (decO : List (ℕ × Col) → List T)
+    {opening : Msg → Msg}
+    (hO : CallsOpen H D I DO opening) (hC : CallsRecord H D I DO) (decO : List (ℕ × Col) → List T)
     (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω) {r r' : Fin (D.V.k x) → Coin} {c c' : (EO D I DO decO).C x}
     {ws ws' : List Flock.Wit} (h : EOGives H D I DO decO P x ω r c ws) (h' : EOGives H D I DO decO P x ω r' c' ws')
     {j : ℕ} (hj : j < I.V.k (xI D x))
@@ -193,8 +207,8 @@ def OpensDiffer (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flo
 /-- **Binding at a fork**: a differing opening at inner round `j` is a collision `Be` finds at its fork at `j`, since
 the two runs share their coins before `j` and so their message `j`. -/
 theorem forkColl_of_opening {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
-    {coinOf : (x : Msg) → (Fin (D.V.k x) → Coin) → Fin (I.V.k (xI D x)) → Coin} {opening : Msg → Msg}
-    (hO : CallsOpen H D I DO opening) (hC : CallsRecord H D I DO coinOf) (decO : List (ℕ × Col) → List T)
+    {opening : Msg → Msg}
+    (hO : CallsOpen H D I DO opening) (hC : CallsRecord H D I DO) (decO : List (ℕ × Col) → List T)
     (x : Msg) {Ω : Type} (P : Prover Ω) {j : ℕ} (hj : j < I.V.k (xI D x))
     (t : Ω × (Fin (D.V.k x) → Coin) × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x × (EO D I DO decO).C x)
     (h : OpensDiffer H D I DO decO P x j t) : forkColl H D I DO decO P x j t := by
@@ -208,8 +222,8 @@ theorem forkColl_of_opening {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin 
 /-- **The inner rounds' differing openings cost at most `k(x)·Pr[Be]`**: each is a collision at `Be`'s fork at its
 round (`forkColl_of_opening`), and the inner rounds are among the compiled verifier's (`InnerRounds`). -/
 theorem sum_opensDiffer_le {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
-    {coinOf : (x : Msg) → (Fin (D.V.k x) → Coin) → Fin (I.V.k (xI D x)) → Coin} {opening : Msg → Msg}
-    (hO : CallsOpen H D I DO opening) (hC : CallsRecord H D I DO coinOf) (hR : InnerRounds D I)
+    {opening : Msg → Msg}
+    (hO : CallsOpen H D I DO opening) (hC : CallsRecord H D I DO) (hR : InnerRounds D I)
     (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
     ∑ j : Fin (I.V.k (xI D x)), Pr (OpensDiffer H D I DO decO P x j) ≤ D.V.k x * PrBe H D I DO decO P x := by
   have hq : ∀ j, 0 ≤ Pr (forkColl H D I DO decO P x j) := fun j => Pr_nonneg _

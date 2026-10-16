@@ -10,6 +10,7 @@ import Proofs.Flock.Claims.Recursion.KS
 import Proofs.Flock.Claims.Recursion.OuterKS
 import Proofs.Flock.Claims.Recursion.Inner
 import Proofs.Flock.Claims.Recursion.Abort
+import Proofs.Flock.Claims.Recursion.InnerAbort
 import Proofs.Flock.Claims.Recursion.Gap
 
 /-! The ZK-recursion compiler's claims proofs: serving one rerun program's reruns by another's (`Serve`), `E^rep`'s

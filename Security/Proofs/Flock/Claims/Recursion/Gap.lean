@@ -1,18 +1,21 @@
 import Proofs.Flock.Claims.Recursion.Inner
+import Proofs.Flock.Claims.Recursion.Abort
 
 /-!
-# `InnerKS` does not follow from `Inner.KS` and the code facts
+# `InnerKS` does not follow from `Inner.KS` and the code facts; `Inner.KSAbort` excludes the deployment
 
-A compiled verifier `gD` over an inner protocol `gI` and an outer `--zk` Flock deployment `gDO` with every hypothesis of
-`KS_of_flockKS` but `InnerKS`, every code fact of `Recursion/Inner.lean`, `Inner.KS` at `κ_I = γ_I = 0` and
-`Claims.Flock.KS` at `gDO`, whose recursion's `KS` fails, so `InnerKS` fails (`innerKS_gap`).
+A compiled verifier `gD` over an inner protocol `gI` and an outer `--zk` Flock deployment `gDO` with every code fact
+`KS_of_flockKS` reads, `Inner.KS` at `κ_I = γ_I = 0` and `Claims.Flock.KS` at `gDO`, whose recursion's `KS` fails at
+the errors its proof gives (`KSA`) and at the draft's (`KS`), so `InnerKS` fails (`innerKS_gap`).
 
 The inner verifier accepts whatever it is sent, in one round; the inner `E^rep` makes one wait of one rerun and needs it
 accepted. The compiled verifier's one outer session is a round that rejects at its own coin half the time. `E*` reruns
 the inner stage at fresh outer coins, so its one inner rerun is seen rejected half the time, whatever the inner
 verifier decides, and `E*` fails on a quarter of the draws while `κ = 2·κ_O < 1/4` and `B`, `Be` find nothing. No
 inner prover makes the inner verifier reject on a coin it never reads, so `Inner.KS` cannot bound that failure:
-`Inner.KS` bounds `E^rep` against runs whose acceptance is the inner verifier's alone.
+`Inner.KS` bounds `E^rep` against runs whose acceptance is the inner verifier's alone. A prover that aborts at a
+fresh coin of its own does make `gI`'s one rerun rejected half the time, so `gI` fails `Inner.KSAbort`
+(`gI_not_KSAbort`), the one hypothesis of `KS_of_flockKS` the deployment lacks.
 -/
 
 namespace Claims.Recursion
@@ -173,11 +176,6 @@ theorem UnifMap.coord {ι A : Type} [Fintype ι] [DecidableEq ι] [Fintype A] [N
 
 /-! ## The code facts hold -/
 
-/-- The inner coins: the compiled verifier's first. -/
-noncomputable def gCoinOf (H : Msg → Msg) (x : Msg) (r : Fin ((gD H).V.k x) → Bool) :
-    Fin (gI.V.k (xI (gD H) x)) → Bool :=
-  fun i => coinSeq r i.val
-
 theorem gRefuses (H : Msg → Msg) : Refuses H (gD H) := fun _ _ _ _ _ _ => ⟨gStmt, rfl, rfl⟩
 
 theorem gInnerRounds (H : Msg → Msg) : InnerRounds (gD H) gI := fun _ => by show 1 ≤ 2; omega
@@ -193,19 +191,29 @@ theorem gSessionRounds (H : Msg → Msg) : SessionRounds (gD H) gI gDO := by
   have hs : (s : ℕ) = 0 := Nat.lt_one_iff.1 s.isLt
   simp [hs, gI, gD, gDO, gVO, gV, xI]
 
-theorem gCoinOfInverts (H : Msg → Msg) : CoinOfInverts (gD H) gI (gCoinOf H) := fun _ => ⟨Equiv.refl _, fun _ => rfl⟩
-
-theorem gInnerViewRun (H : Msg → Msg) : InnerViewRun H (gD H) gI gDO (gCoinOf H) := by
+theorem gInnerViewRun (H : Msg → Msg) : InnerViewRun H (gD H) gI gDO := by
   intro decO x Ω P ω r c ws _
   simp [innerRun, run, stepWith, replay, gI, gD, OC.eval, Trace.seen]
 
-theorem gCallsRecord (H : Msg → Msg) : CallsRecord H (gD H) gI gDO (gCoinOf H) := by
+theorem gCallsRecord (H : Msg → Msg) : CallsRecord H (gD H) gI gDO := by
   intro decO x Ω P ω r c ws _
   refine ⟨fun e he => ?_, fun e he => ?_⟩
   · simp [innerRun, run, stepWith, replay, gI, OC.eval] at he
   · simp only [gD, List.mem_singleton] at he
     subst he
     rfl
+
+theorem gInnerAccepts (H : Msg → Msg) : InnerAccepts H (gD H) gI gDO := fun _ _ _ _ _ _ _ _ _ => rfl
+
+/-- The inner verifier never answers with a message, so it is public-coin at any reading of its messages. -/
+theorem gPublicCoin (H : Msg → Msg) : PublicCoin H gI fun _ _ => false := by
+  intro x as cs c m _ h
+  simp [gI, OC.eval] at h
+
+theorem gCallsNil (H : Msg → Msg) : CallsNil H (gD H) := fun _ e he => by
+  simp only [gD, List.mem_singleton] at he
+  subst he
+  rfl
 
 theorem gCallsOpen (H : Msg → Msg) : CallsOpen H (gD H) gI gDO id := by
   intro decO x Ω P ω r c ws hg j hj
@@ -448,21 +456,70 @@ theorem gNotKS (H : Msg → Msg) : ¬ KS H (gD H) gI gDO := by
   rw [gPrB, gPrBe, mul_zero, mul_zero, Real.sqrt_zero, add_zero, add_zero, gκ] at h
   linarith [gPrBad_ge H gDecO, gNums_κ_lt]
 
-/-- **`InnerKS` does not follow from `Inner.KS` and the code facts.** At every hash, a compiled verifier with every
-code fact `KS_of_flockKS` reads and those of `Recursion/Inner.lean`, over an inner protocol with `Inner.KS` and an
-outer deployment with `Claims.Flock.KS`, whose recursion's `KS` fails: so `InnerKS` fails there, as `KS_of_flockKS`
-would otherwise prove `KS`. -/
+/-- **The recursion's KS fails at the errors its proof gives**, as `B` and `Be` find nothing there either. -/
+theorem gNotKSA (H : Msg → Msg) : ¬ KSA H (gD H) gI gDO := by
+  intro hK
+  have h := hK gDecO gDecOK [] Unit (gP H)
+  rw [gPrB, gPrBe, mul_zero, mul_zero, Real.sqrt_zero, add_zero, add_zero, gκ] at h
+  linarith [gPrBad_ge H gDecO, gNums_κ_lt]
+
+/-! ## `Inner.KSAbort` fails -/
+
+/-- A prover's aborts: each run is kept at its fresh coin `false`. -/
+def gKeep : Unit → (Fin (gI.V.k []) → Bool) → Bool → Bool := fun _ _ a => !a
+
+/-- **`gI` fails `Inner.KSAbort`**: at the prover that keeps each run at its own fresh coin `false`, the judged run is
+kept and accepted, and `E^rep`'s one rerun aborted, on a quarter of the draws, while `κ_I = γ_I = 0`. -/
+theorem gI_not_KSAbort (H : Msg → Msg) : ¬ gI.KSAbort H := by
+  intro h
+  have hx := h [] Unit (gP H) Bool gKeep
+  have hr : gI.κ [] + Real.sqrt (gI.γ [] * PrBAbort H gI.V (gP H) [] gKeep) = 0 := by simp [gI]
+  rw [hr] at hx
+  let φ : Unit × ((Fin (gI.V.k []) → Bool) × Bool) ×
+      (Fin (gI.waits []) → Fin (gI.cap []) → (Fin (gI.V.k []) → Bool) × Bool) → Bool × Bool :=
+    fun s => (s.2.1.2, (at00 s.2.2).2)
+  have hφ : UnifMap φ := UnifMap.snd.comp (UnifMap.prod UnifMap.snd
+    (((UnifMap.coord (0 : Fin 1)).comp (UnifMap.coord (0 : Fin 1))).comp UnifMap.snd))
+  have hq : (1 : ℝ) / 4 ≤ gI.PrBadAbort H [] (gP H) gKeep := by
+    calc (1 : ℝ) / 4 = Pr (fun s => (φ s).1 = false ∧ (φ s).2 = true) := by
+          rw [hφ.Pr (fun b => b.1 = false ∧ b.2 = true), gPr_quarter]
+      _ ≤ _ := Pr_mono fun s hs => by
+          obtain ⟨h1, h2⟩ := hs
+          change s.2.1.2 = false at h1
+          change (at00 s.2.2).2 = true at h2
+          refine ⟨?_, ?_⟩
+          · show (abortRun H (gP H) gI.V [] gKeep s.1 s.2.1).out = .acc
+            simp [abortRun, gKeep, h1, gI_run_out]
+          · have hrej : (abortRun H (gP H) gI.V [] gKeep s.1 (at00 s.2.2)).out ≠ .acc := by
+              simp [abortRun, gKeep, h2, abortTrace]
+            have hnone : ((erep (gI.waits []) (gI.k []) (gI.cap []) gI.opens (gI.assemble []) (gI.check [])
+                s.2.1 s.2.2).eval H (abortRun H (gP H) gI.V [] gKeep s.1)).1 = none :=
+              erep_one_none H _ gI.opens (gI.assemble []) (gI.check []) rfl s.2.1 s.2.2 hrej
+            show ¬ gI.R.ext [] ((erep (gI.waits []) (gI.k []) (gI.cap []) gI.opens (gI.assemble []) (gI.check [])
+                s.2.1 s.2.2).eval H (abortRun H (gP H) gI.V [] gKeep s.1)).1
+            rw [hnone]
+            exact id
+  linarith
+
+/-! ## The gap -/
+
+/-- **`InnerKS` does not follow from `Inner.KS` and the code facts, and `Inner.KSAbort` excludes the deployment.** At
+every hash, a compiled verifier with every code fact `KS_of_flockKS` reads, over an inner protocol with `Inner.KS` and
+an outer deployment with `Claims.Flock.KS`, whose recursion's KS fails at the errors its proof gives (`KSA`) and at the
+draft's (`KS`): so `InnerKS` fails there, as `KS_of` with `outerKS_of_flockKS` would otherwise prove `KSA`. Its inner
+protocol fails `Inner.KSAbort`, the one hypothesis of `KS_of_flockKS` it lacks. -/
 theorem innerKS_gap (H : Msg → Msg) :
-    ∃ (D : Deploy Bool) (I : Inner Bool Unit) (DO : Flock.Deploy Bool ℕ Unit)
-      (coinOf : (x : Msg) → (Fin (D.V.k x) → Bool) → Fin (I.V.k (xI D x)) → Bool) (opening : Msg → Msg),
-      Inner.KS H I ∧ Flock.KS H DO ∧ Refuses H D ∧ InnerRounds D I ∧ SessionNums D DO ∧ TableErrNonneg D ∧
-        SessionRounds D I DO ∧ SessionAccepts D ∧ SessionRuns H D I DO ∧ CoinOfInverts D I coinOf ∧
-        InnerViewRun H D I DO coinOf ∧ CallsRecord H D I DO coinOf ∧ CallsOpen H D I DO opening ∧
-        ¬ KS H D I DO ∧ ¬ InnerKS H D I DO :=
-  ⟨gD H, gI, gDO, gCoinOf H, id, gInnerKS H, gFlockKS H, gRefuses H, gInnerRounds H, gSessionNums H,
-    gTableErrNonneg H, gSessionRounds H, gSessionAccepts H, gSessionRuns H, gCoinOfInverts H, gInnerViewRun H,
-    gCallsRecord H, gCallsOpen H, gNotKS H, fun hI => gNotKS H (KS_of_flockKS H (gD H) gI gDO (gFlockKS H)
-      (gRefuses H) (gInnerRounds H) (gSessionNums H) (gTableErrNonneg H) (gSessionRounds H) (gSessionAccepts H)
-      (gSessionRuns H) hI)⟩
+    ∃ (D : Deploy Bool) (I : Inner Bool Unit) (DO : Flock.Deploy Bool ℕ Unit) (opening : Msg → Msg)
+      (decC : Msg → Msg → Bool),
+      Inner.KS H I ∧ ¬ I.KSAbort H ∧ Flock.KS H DO ∧ Refuses H D ∧ InnerRounds D I ∧ SessionNums D DO ∧
+        TableErrNonneg D ∧ SessionRounds D I DO ∧ SessionAccepts D ∧ SessionRuns H D I DO ∧
+        InnerViewRun H D I DO ∧ CallsRecord H D I DO ∧ CallsOpen H D I DO opening ∧ InnerAccepts H D I DO ∧
+        PublicCoin H I decC ∧ CallsNil H D ∧ ¬ KSA H D I DO ∧ ¬ KS H D I DO ∧ ¬ InnerKS H D I DO :=
+  ⟨gD H, gI, gDO, id, fun _ _ => false, gInnerKS H, gI_not_KSAbort H, gFlockKS H, gRefuses H, gInnerRounds H,
+    gSessionNums H, gTableErrNonneg H, gSessionRounds H, gSessionAccepts H, gSessionRuns H, gInnerViewRun H,
+    gCallsRecord H, gCallsOpen H, gInnerAccepts H, gPublicCoin H, gCallsNil H, gNotKSA H, gNotKS H,
+    fun hI => gNotKSA H (KS_of H (gD H) gI gDO (gRefuses H) (gInnerRounds H)
+      (outerKS_of_flockKS (gFlockKS H) (gSessionNums H) (gTableErrNonneg H) (gSessionRounds H) (gSessionAccepts H)
+        (gSessionRuns H)) hI)⟩
 
 end Claims.Recursion
