@@ -159,21 +159,24 @@ def main() -> int:
     print(f"\npoisoned root check: {len(root_bad)} cells off" + (f": {root_bad}" if root_bad else " (hashing arms equal, nohash differs)"))
     for rot in sorted({c["fr_rot"] for c in res["cells"]}):
         cs = [c for c in res["cells"] if c["fr_rot"] == rot]
-        print(f"\nk x chunk, {rot}: the best protocol arm's cost against plain (against saturated plain)")
+        print(f"\nk x chunk, {rot}: the best protocol arm's cost against plain (against saturated plain; against the fastest plain)")
         print("  (the stand-in tables: against plain (against the fastest plain of the cell: plain, chunked, chunkedrrW))")
         ks = sorted({c["k"] for c in cs})
         Ms = sorted({c["M"] for c in cs})
-        print("  k \\ M " + "".join(f"{M:>24d}" for M in Ms))
+        print("  k \\ M " + "".join(f"{M:>32d}" for M in Ms))
         for k in ks:
             cells = {c["M"]: c for c in cs if c["k"] == k}
             out = []
             for M in Ms:
                 c = cells.get(M)
-                out.append(f"{100 * c['best_cost']:+.1f}% ({100 * c['best_cost_sat']:+.1f}%) {c['best']}" if c and "best" in c else "-")
-            print(f"  {k:5d} " + "".join(f"{x:>24s}" for x in out))
+                out.append(f"{100 * c['best_cost']:+.1f}% ({100 * c['best_cost_sat']:+.1f}%; {100 * c['best_cost_best']:+.1f}%) {c['best']}"
+                           if c and "best" in c else "-")
+            print(f"  {k:5d} " + "".join(f"{x:>32s}" for x in out))
         for M in Ms:
             ok = [c for c in cs if c["M"] == M and "best" in c and c["best_cost"] <= 0.05]
-            print(f"  smallest k at <= 5% for M = {M}: " + (f"{min(ok, key=lambda c: c['k'])['k']}" if ok else "none measured"))
+            okb = [c for c in cs if c["M"] == M and "best" in c and c["best_cost_best"] <= 0.05]
+            print(f"  smallest k at <= 5% for M = {M}: " + (f"{min(ok, key=lambda c: c['k'])['k']}" if ok else "none measured")
+                  + "; against the fastest plain: " + (f"{min(okb, key=lambda c: c['k'])['k']}" if okb else "none measured"))
         for kind, what in (("lite", "flat: latency understated"), ("litec", "chained as the tree: ~40 dependent compressions a stage")):
             if not any(f"best_{kind}" in c for c in cs):
                 continue
