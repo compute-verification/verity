@@ -6,13 +6,22 @@
 // layout: a 2 KiB row is one window of one tile). At a window's end the lagged absorbs are flushed, R_w stored, the chains
 // re-keyed and the whole accumulator absorbed; the next stage's first atom then absorbs nothing of the previous atom's.
 // Kernels w_l<LAG><tie>_s<S> (EGEMM's e_l2q, e_l3qm with windows).
+// The swapped launch (arms s:, sedited:, seditedf:) gives the same kernel a = W' (n x k), b = X (m x k), pa = P_B and
+// pb = P_A, with M = n and N = m: it stores Y^T and its receipts are over C^T = W' X^T, so W' = W + U is the a-side edit
+// and X = floor(x / s) + b the b-side dither, as in PouwSegCheckDither_v2 (the peel's tail, U S^T, is the transpose of
+// S U^T).
 // Modes:
-//   wgemm gate DIR M N K SEED       each w_ kernel once on poisoned buffers: its output against cuBLASLt's X W^T, and X, W'
-//                                   and its receipts to DIR for wgate.py (derive.win_receipts recomputes them)
-//   wgemm il REPS ARM BASE M N K    egemm's il with the w_ kernels (ARM: w_NAME, edited:w_NAME, editedf:w_NAME, or any of
-//                                   egemm's arms)
+//   wgemm gate DIR M N K SEED       each w_ kernel once on poisoned buffers, unswapped and swapped: its output against
+//                                   cuBLASLt's X W^T (the swapped one transposed), and x, W, X, W' and its receipts to DIR
+//                                   for wgate.py (derive.win_receipts recomputes them)
+//   wgemm il REPS ARM BASE M N K    egemm's il with the w_ kernels (ARM: [s:]w_NAME, [s]edited:w_NAME,
+//                                   [s]editedf:w_NAME, or any of egemm's arms)
 //   wgemm pipe REPS ARM BASE M N K PARAMS S   ARM's calls with their commitments beside the next call (cgpipe.cu; PARAMS
-//                                   COMMIT-GPU's params file for 16,384-bit rows), against BASE
+//                                   COMMIT-GPU's params file for 16,384-bit rows), against BASE. env: WG_RESERVE=k (the
+//                                   GEMM's persistent grid on SMs - k), WG_GRID=tiles (a CTA a tile, not persistent),
+//                                   WG_PRIO=gemm (the GEMM's stream at the highest priority and the commitments' at the
+//                                   lowest, so their CTAs go only where the GEMM's don't fit; default: the commitments'
+//                                   at the highest)
 // Build: nvcc -O3 -std=c++17 --no-compress -gencode arch=compute_120a,code=sm_120a wgemm.cu cgpipe.cu -lcuda -lcublasLt
 //        -lnvidia-ml
 #define main egemm_main
@@ -156,6 +165,7 @@ static const WK WKS[] = {{"w_l2q_s4", w_l2q_s4, 4}, {"w_l2q_s8", w_l2q_s8, 8}, {
                          {"w_l2q_s32", w_l2q_s32, 32}, {"w_l3qm_s8", w_l3qm_s8, 8}, {"w_l3qm_s16", w_l3qm_s16, 16}};
 static uint32_t* g_rw = nullptr;   // the windowed receipts, room for S = 4: (m / 128)(n / 128) 512 (k / 128) words
 static size_t rw_words(const EP& P, int S) { return (size_t)(P.m / 128) * (P.n / 128) * 512 * (P.k / (32 * S)); }
+static Maps *g_mS = nullptr, *g_mSF = nullptr;   // the swapped launch's maps over W', X, P_B, P_A (and qwe's fused ones)
 static void wsetup(EP& P, int m, int n, int k, uint32_t seed, bool gate) {
   esetup(P, m, n, k, seed, gate);
   CK(cudaMalloc(&g_rw, rw_words(P, 4) * 4));
@@ -163,13 +173,25 @@ static void wsetup(EP& P, int m, int n, int k, uint32_t seed, bool gate) {
     if (k % (32 * w.S)) { fprintf(stderr, "k %d: not whole windows of %d segments\n", k, w.S); exit(2); }
     CK(cudaFuncSetAttribute(w.k, cudaFuncAttributeMaxDynamicSharedMemorySize, CSMEM));
   }
+  g_mS = upload_maps(Maps{tmap(P.Wp, k, n, 128), tmap(P.X, k, m, 128), tmap(P.PB, 128, n, 128), tmap(P.PA, 128, m, 128)});
+  g_mSF = upload_maps(Maps{tmap(P.Wf, k, n, 128), tmap(P.Xf, k, m, 128), tmap(P.PBf, 128, n, 128), tmap(P.PAf, 128, m, 128)});
+}
+static void wfree(EP& P) {
+  CK(cudaDeviceSynchronize());
+  CK(cudaFree(g_rw)); CK(cudaFree(g_mS)); CK(cudaFree(g_mSF));
+  efree(P);
+}
+// the swapped launch: Y^T (n x m) to Y, receipts over C^T
+static void srun(EP& P, Kern kern, const Maps* maps) {
+  Args a{maps, P.Y, g_rw, P.n, P.m, P.k, 8, P.seed, 0, 1, 0, 0, {0, 0, 0, 0}, nullptr, 0};
+  kern<<<P.grid, MLW::NT, CSMEM, P.st>>>(a);
 }
 static const WK* wfind(const std::string& n) {
   for (auto& w : WKS) if (n == w.name) return &w;
   return nullptr;
 }
 static std::function<void(EP&)> warm(const std::string& a) {
-  for (const char* pre : {"", "edited:", "editedf:"}) {
+  for (const char* pre : {"", "edited:", "editedf:", "s:", "sedited:", "seditedf:"}) {
     const std::string p = pre;
     if (a.rfind(p, 0) != 0) continue;
     const WK* w = wfind(a.substr(p.size()));
@@ -177,9 +199,25 @@ static std::function<void(EP&)> warm(const std::string& a) {
     Kern k = w->k;
     if (p.empty()) return [k](EP& P) { egemm_run(P, k, P.Y, g_rw); };
     if (p == "edited:") return [k](EP& P) { we(P, sigma(P.seed, P.inst++)); egemm_run(P, k, P.Y, g_rw); };
-    return [k](EP& P) { qf(P, sigma(P.seed, P.inst++)); egemm_run(P, k, P.Y, g_rw, P.mF); };
+    if (p == "editedf:") return [k](EP& P) { qf(P, sigma(P.seed, P.inst++)); egemm_run(P, k, P.Y, g_rw, P.mF); };
+    if (p == "s:") return [k](EP& P) { srun(P, k, g_mS); };
+    if (p == "sedited:") return [k](EP& P) { we(P, sigma(P.seed, P.inst++)); srun(P, k, g_mS); };
+    return [k](EP& P) { qf(P, sigma(P.seed, P.inst++)); srun(P, k, g_mSF); };
   }
   return earm(a);
+}
+__global__ void tcmp(const int* __restrict__ Yt, const int* __restrict__ Y, int m, int n, unsigned long long* bad) {
+  const size_t i = blockIdx.x * (size_t)blockDim.x + threadIdx.x;
+  if (i >= (size_t)m * n) return;
+  if (Yt[(i % n) * m + i / n] != Y[i]) atomicAdd(bad, 1ull);
+}
+static unsigned long long tcount(EP& P) {
+  CK(cudaMemsetAsync(P.bad, 0, 8, P.st));
+  tcmp<<<(unsigned)((P.ny + 255) / 256), 256, 0, P.st>>>(P.Y, P.Yr, P.m, P.n, P.bad);
+  unsigned long long b;
+  CK(cudaMemcpyAsync(&b, P.bad, 8, cudaMemcpyDeviceToHost, P.st));
+  CK(cudaStreamSynchronize(P.st));
+  return b;
 }
 
 static int wgate(const std::string& dir, int m, int n, int k, uint32_t seed) {
@@ -197,27 +235,34 @@ static int wgate(const std::string& dir, int m, int n, int k, uint32_t seed) {
   CK(cudaGetLastError());
   dump(dir, "X.bin", P.X, xb, true);
   dump(dir, "Wp.bin", P.Wp, wb, true);
+  dump(dir, "x.bin", P.x, xb * 2, true);
+  dump(dir, "W.bin", P.W, wb, true);
   bool ok = true;
   std::string res;
-  for (auto& w : WKS) {
-    CK(cudaMemsetAsync(P.Y, 0xA5, P.ny * 4, P.st));
-    CK(cudaMemsetAsync(g_rw, 0xA5, rw_words(P, 4) * 4, P.st));
-    egemm_run(P, w.k, P.Y, g_rw);
-    CK(cudaStreamSynchronize(P.st));
-    CK(cudaGetLastError());
-    const unsigned long long y = ecmp(P, P.Y, P.Yr, P.ny);
-    dump(dir, (std::string("R_") + w.name + ".bin").c_str(), g_rw, rw_words(P, w.S) * 4, true);
-    res += (res.empty() ? "" : ", ") + std::string("\"") + w.name + "\": {\"S\": " + std::to_string(w.S) + ", \"y_bad\": " + std::to_string(y) + "}";
-    ok &= y == 0;
-  }
+  for (const bool sw : {false, true})
+    for (auto& w : WKS) {
+      CK(cudaMemsetAsync(P.Y, 0xA5, P.ny * 4, P.st));
+      CK(cudaMemsetAsync(g_rw, 0xA5, rw_words(P, 4) * 4, P.st));
+      if (sw) srun(P, w.k, g_mS);
+      else egemm_run(P, w.k, P.Y, g_rw);
+      CK(cudaStreamSynchronize(P.st));
+      CK(cudaGetLastError());
+      const unsigned long long y = sw ? tcount(P) : ecmp(P, P.Y, P.Yr, P.ny);
+      const std::string name = (sw ? "s_" : "") + std::string(w.name);
+      dump(dir, ("R_" + name + ".bin").c_str(), g_rw, rw_words(P, w.S) * 4, true);
+      res += (res.empty() ? "" : ", ") + std::string("\"") + name + "\": {\"S\": " + std::to_string(w.S) + ", \"swap\": " +
+             (sw ? "true" : "false") + ", \"y_bad\": " + std::to_string(y) + "}";
+      ok &= y == 0;
+    }
+  uint32_t inv_bits;
+  memcpy(&inv_bits, &P.inv_s, 4);
   FILE* fp = fopen((dir + "/meta.json").c_str(), "w");
-  fprintf(fp, "{\"m\": %d, \"n\": %d, \"k\": %d, \"seed\": %u, \"device\": {%s}, \"device_ok\": %s}\n", m, n, k, seed, res.c_str(),
-          ok ? "true" : "false");
+  fprintf(fp, "{\"m\": %d, \"n\": %d, \"k\": %d, \"seed\": %u, \"inv_s_bits\": %u, \"device\": {%s}, \"device_ok\": %s}\n", m, n, k,
+          seed, inv_bits, res.c_str(), ok ? "true" : "false");
   fclose(fp);
   printf("{\"gate\": \"%s\", \"m\": %d, \"n\": %d, \"k\": %d, \"device_ok\": %s, \"device\": {%s}}\n", dir.c_str(), m, n, k,
          ok ? "true" : "false", res.c_str());
-  CK(cudaFree(g_rw));
-  efree(P);
+  wfree(P);
   return ok ? 0 : 1;
 }
 
@@ -262,8 +307,7 @@ static int wil(int reps, const std::string& arm, const std::string& base, int m,
   fflush(stdout);
   for (auto& x : e) CK(cudaEventDestroy(x));
   if (fl) CK(cudaFree(fl));
-  CK(cudaFree(g_rw));
-  efree(P);
+  wfree(P);
   return 0;
 }
 
@@ -271,6 +315,7 @@ static int wil(int reps, const std::string& arm, const std::string& base, int m,
 void* cgp_new(const char* params, const uint8_t* X, uint64_t m, uint64_t k, const uint8_t* R, uint64_t rows);
 void cgp_salts(void* h, cudaStream_t st);
 void cgp_data(void* h, cudaStream_t st);
+bool cgp_small();
 
 // a call with its commitments, the slice's GPU side: 8 calls of ARM on st, each call's commitments (X's tile tree and its
 // receipts' tree, S segments a window: salts, then data) on a stream at the device's highest priority once its GEMM has
@@ -281,12 +326,24 @@ static int wpipe(int reps, const std::string& arm, const std::string& base, int 
   Nv nv;
   EP P;
   wsetup(P, m, n, k, 0x5EED0000u + m + n + k, false);
+  int nsm;
+  CK(cudaDeviceGetAttribute(&nsm, cudaDevAttrMultiProcessorCount, 0));
+  const int tiles = (m / 128) * (n / 128), reserve = getenv("WG_RESERVE") ? atoi(getenv("WG_RESERVE")) : 0;
+  const bool per_tile = getenv("WG_GRID") && !strcmp(getenv("WG_GRID"), "tiles");
+  const bool gemm_first = getenv("WG_PRIO") && !strcmp(getenv("WG_PRIO"), "gemm");
+  if (reserve < 0 || reserve >= nsm) { fprintf(stderr, "WG_RESERVE %d of %d SMs\n", reserve, nsm); exit(2); }
+  P.grid = per_tile ? tiles : std::min(tiles, nsm - reserve);
   auto fa = warm(arm), fb = warm(base);
   void* h = cgp_new(params, reinterpret_cast<const uint8_t*>(P.X), m, k, reinterpret_cast<const uint8_t*>(g_rw), rw_words(P, S) / 512);
   int lo, hi;
   CK(cudaDeviceGetStreamPriorityRange(&lo, &hi));
+  if (gemm_first) {
+    CK(cudaStreamSynchronize(P.st));
+    CK(cudaStreamDestroy(P.st));
+    CK(cudaStreamCreateWithPriority(&P.st, cudaStreamDefault, hi));
+  }
   cudaStream_t sp;
-  CK(cudaStreamCreateWithPriority(&sp, cudaStreamNonBlocking, hi));
+  CK(cudaStreamCreateWithPriority(&sp, cudaStreamNonBlocking, gemm_first ? lo : hi));
   constexpr int calls = 8;
   std::vector<cudaEvent_t> ev(calls);
   for (auto& x : ev) CK(cudaEventCreateWithFlags(&x, cudaEventDisableTiming));
@@ -328,10 +385,12 @@ static int wpipe(int reps, const std::string& arm, const std::string& base, int 
   CK(cudaGetLastError());
   const double b = median(tb), a = median(ta), c = median(tc), s = median(ts), p = median(tp);
   printf("{\"pipe\": \"%s\", \"base\": \"%s\", \"S\": %d, \"m\": %d, \"n\": %d, \"k\": %d, \"calls\": %d, \"reps\": %d, "
+         "\"reserve\": %d, \"grid\": %d, \"sms\": %d, \"prio\": \"%s\", \"small\": %s, "
          "\"receipt_mib\": %.1f, \"base_ms\": %.6f, \"arm_ms\": %.6f, \"commit_ms\": %.6f, \"serial_ms\": %.6f, \"pipe_ms\": %.6f, "
          "\"arm_ratio\": %.4f, \"serial_ratio\": %.4f, \"pipe_ratio\": %.4f, \"mhz\": %.0f, \"mhz_min\": %.0f}\n",
-         arm.c_str(), base.c_str(), S, m, n, k, calls, reps, rw_words(P, S) * 4.0 / (1 << 20), b, a, c, s, p, a / b, s / b, p / b,
-         median(mz), *std::min_element(mz.begin(), mz.end()));
+         arm.c_str(), base.c_str(), S, m, n, k, calls, reps, per_tile ? -1 : reserve, P.grid, nsm, gemm_first ? "gemm" : "commit",
+         cgp_small() ? "true" : "false", rw_words(P, S) * 4.0 / (1 << 20), b, a, c, s, p, a / b, s / b, p / b, median(mz),
+         *std::min_element(mz.begin(), mz.end()));
   fflush(stdout);
   return 0;
 }

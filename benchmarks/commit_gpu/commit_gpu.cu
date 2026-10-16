@@ -14,11 +14,13 @@
 // that skips h's two compressions (the frame leaf takes b ^ c), the timing of a format whose one leaf hash takes b || c and
 // pos after a constant midstate (2 compressions where h and the frame leaf take 4); -DCOMMIT_GPU_DIAG_QUAD: one whose tree
 // is 4-ary, 3 compressions a node, the timing of a 4-ary node format; all three refuse `check`)
+// COMMIT_GPU_SMALL=1: `check` takes the small path (no shared memory), from domain slot 1 and salt slot 1 of 2.
 #include <cublasLt.h>
 #include <nvml.h>
 
 #include <chrono>
 
+#define COMMIT_GPU_DOMS 2
 #include "commit_gpu.cuh"
 
 #define CL(x)                                                                         \
@@ -89,18 +91,21 @@ static int check(int argc, char** argv) {
     CK(cudaMalloc(&dsalts, s.size() + 16));
     CK(cudaMemcpy(dsalts, s.data(), s.size(), cudaMemcpyHostToDevice));
   }
+  const char* sm = getenv("COMMIT_GPU_SMALL");
+  const bool small = sm && !strcmp(sm, "1");
+  const int slot = small ? 1 : 0;
   Committer cm;
-  cm.init(p, n, mode == "e2e" ? 128 : lb, true, seg, lbits);
+  cm.init(p, n, mode == "e2e" ? 128 : lb, true, seg, lbits, small ? 1 : 0, small, small ? 2 : 1);
   prf ? cm.salts<true>(nullptr, 0) : cm.salts<false>(dsalts, 0);
   if (tile) {
-    cm.tiles(drows, a, b, (u32)c, seg, 0);
+    cm.tiles(drows, a, b, (u32)c, seg, 0, slot);
   } else if (mode == "seg") {
-    cm.seg_leaves(drows, stride, 0);
+    cm.seg_leaves_from(SegRows{drows, stride}, 0, slot);
   } else if (mode == "e2e") {
     if (lbits != 1024) { fprintf(stderr, "an e2e leaf is 1024 bits\n"); return 2; }
-    cm.leaves<RowE2E>(RowE2E{drows}, 0);
+    cm.leaves<RowE2E>(RowE2E{drows}, 0, slot);
   } else {
-    cm.leaves<RowBytes>(RowBytes{drows, stride, lb}, 0);
+    cm.leaves<RowBytes>(RowBytes{drows, stride, lb}, 0, slot);
   }
   cm.nodes(0);
   CK(cudaDeviceSynchronize());
@@ -132,7 +137,8 @@ static int check(int argc, char** argv) {
   auto lb_ = to_bytes(lv), bb = to_bytes(bcv);
   writef(out_dir + "/levels.bin", lb_.data(), lb_.size());
   writef(out_dir + "/bc.bin", bb.data(), bb.size());
-  printf("{\"check\": \"%s\", \"n\": %llu, \"depth\": %d}\n", mode.c_str(), (unsigned long long)n, cm.depth);
+  printf("{\"check\": \"%s\", \"n\": %llu, \"depth\": %d, \"small\": %s}\n", mode.c_str(), (unsigned long long)n, cm.depth,
+         small ? "true" : "false");
   cm.release();
   return 0;
 }
