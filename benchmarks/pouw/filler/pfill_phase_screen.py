@@ -79,6 +79,11 @@ SCREENS = {
         (256, 1024, 60, 64, 2), (256, 2048, 60, 64, 6), (256, 2048, 60, 64, 7),
         (256, 3072, 60, 64, 10), (256, 3072, 60, 64, 11),
     ]),
+    # the split alone (dscore's own driver, which filler-scorer/v3 reads; it reads pscore's phase rows as an arm-side
+    # driver's work), larger than POWER_SPLIT at B >= 128, where pfill-k read 1.018-1.027 (r20261016-080414-aac8)
+    "s7": [(b, l, f, 0, 0, 0) for b, l, fs in (
+        (128, 2048, (100, 108, 116)), (128, 6144, (116, 124, 132)), (132, 5120, (68, 76, 84)),
+        (144, 5120, (68, 76, 84)), (256, 2048, (68, 76)), (256, 3072, (68, 76, 84))) for f in fs],
 }
 
 
