@@ -7,8 +7,9 @@
 #     -- bash benchmarks/pouw/stage_cost/run.sh
 # env: PREFILL (2048 8192), DEFERRED_T, BESIDE_T (1024 4096 16384 32768), DEC_B, DEC_L (32 4096), FILL_SMS (92), DRAW_US
 # (300), PARTS (gate prefill deferred beside), HASHES (fr sz: stage.cu's commitment paths for prefill), MAXMIN (25),
-# PIPE_GREEN (1; 0 skips prefill's pipe_green arms), ARMS (r1 r2: prefill's round-1 arms, the proved forward's), FR_ROT (0:
-# the commitment's rotations on the FMA pipe, stage.cu's bits)
+# PIPE_GREEN (1; 0 skips prefill's pipe_green arms), ARMS (r1 r2: prefill's round-1 arms, the proved forward's), CFGS (the
+# proved forward's arms by name, comma-separated; all by default), FR_ROT (0: the commitment's rotations on the FMA pipe,
+# stage.cu's bits)
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
