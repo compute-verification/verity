@@ -52,7 +52,7 @@ theorem agree_of_close {F : Type} [Field F] [DecidableEq F] {lanes d N : ℕ} (h
   refine Nat.cast_le.2 (Finset.card_le_card fun q => ?_)
   simp only [Finset.mem_filter, Finset.mem_univ, true_and]
   intro hall
-  rw [hf q, extTab, dif_pos q.isLt]
+  rw [hf q, extTab, dite_eq_left q.isLt]
   refine List.ext_getElem (by simp [hw q]) fun n h1 h2 => ?_
   have e := hall ⟨n, by simpa using h1⟩
   simp only [oracleOf, q.isLt, ↓reduceDIte, Fin.eta, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem h2,
@@ -336,8 +336,7 @@ theorem good_of_committed_zk (rel : Readable.Parsed → Readable.Relation)
     subst hk hl
     simp only [padList, Finset.mem_filter, Finset.mem_univ, true_and] at hR
     refine good_of_close_zk rel x s hs i hN C hw R ?_ (hwit _ hsat)
-    rw [logLen_zk, show (levelOf (zkLevel0 i.m)).padRadius (zkPad i) = zkThetaD ⟨i, zkOfRows padC R⟩ from
-      (radius_zk _).symm] at hR
+    rw [logLen_zk, ← radius_zk ⟨i, zkOfRows padC R⟩] at hR
     unfold CloseRows at hR ⊢
     convert hR using 5 with q
     simp only [padRows, padLane_zero]

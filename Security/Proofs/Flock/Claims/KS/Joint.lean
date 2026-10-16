@@ -148,8 +148,6 @@ theorem fill_eq_lookCol [Zero Col] (n : ℕ) (os : List (ℕ × Col)) (i : Fin n
     fill n os i = (lookCol os i.val).getD 0 := by
   unfold fill lookCol
   congr 3
-  funext p
-  exact Bool.eq_iff_iff.2 (by simp)
 
 /-- **A table read at a position**: its column there, `0` past it. -/
 def extTab [Zero Col] {n : ℕ} (C : Fin n → Col) (q : ℕ) : Col := if h : q < n then C ⟨q, h⟩ else 0
@@ -214,8 +212,11 @@ omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem extracts_of_good (D : Deploy Coin Col T) (N : Msg → ℕ) (x : Msg) (vs : List Seen)
     (h : GoodTable D N x fun p => (lookCol (vs.flatMap D.cols) p.val).getD 0) : Extracts D x vs := by
   obtain ⟨M, s, hs, hrel, hle, hag⟩ := h
-  refine ⟨M, s, hs, hrel, hag.trans_eq (congrArg _ (Finset.filter_congr fun i _ => ?_))⟩
-  rw [fill_eq_lookCol, extTab, dif_pos (lt_of_lt_of_le i.isLt hle)]
+  have e : ((Finset.univ : Finset (Fin (D.len M))).filter fun i => D.enc M i.val =
+        extTab (fun p : Fin (N x) => (lookCol (vs.flatMap D.cols) p.val).getD 0) i.val) =
+      (Finset.univ.filter fun i => D.enc M i.val = fill (D.len M) (vs.flatMap D.cols) i) :=
+    Finset.filter_congr fun i _ => by rw [fill_eq_lookCol, extTab, dite_eq_left (lt_of_lt_of_le i.isLt hle)]
+  exact ⟨M, s, hs, hrel, hag.trans_eq (by rw [e])⟩
 
 end Table
 
@@ -441,7 +442,7 @@ theorem oneWait_of_tableBound (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg
 /-- **`Ok`, or a position no rerun opened** (`0`). -/
 def orZero (Ok : Msg → Col → Prop) : Msg → Col → Prop := fun x u => u = 0 ∨ Ok x u
 
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
+omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
 theorem colsOk_orZero (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ) (Ok : Msg → Col → Prop)
     (h : ColsOk H D N Ok) : ColsOk H D N (orZero Ok) :=
   fun x Ω P ω r q u ha hq hu => .inr (h x Ω P ω r q u ha hq hu)
@@ -452,7 +453,7 @@ def Extendθ (D : Deploy Coin Col T) (N : Msg → ℕ) (Ok : Msg → Col → Pro
   ∀ (x : Msg) (C : Fin (N x) → Col), (∀ p, orZero Ok x (C p)) → ¬ GoodTable D N x C →
     ∃ C' : Fin (N x) → Col, (∀ p, Ok x (C' p)) ∧ (∀ p, C p ≠ 0 → C' p = C p) ∧ ¬ GoodTable D N x C'
 
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+omit [Nonempty Coin] in
 /-- **The fixed-table bound at tables with unopened positions**, from the bound at tables of `Ok` columns and
 `Extendθ`, when accepted runs open only `Ok` columns and `Ok` admits no `0` on a nonempty word. -/
 theorem tableBoundθ_of_extend (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ) (Ok : Msg → Col → Prop)
@@ -462,7 +463,7 @@ theorem tableBoundθ_of_extend (H : Msg → Msg) (D : Deploy Coin Col T) (N : Ms
   obtain ⟨e, hfit, hb⟩ := htab x Ω P
   refine ⟨e, hfit, fun ω C hC hg => ?_⟩
   obtain ⟨C', hC', hkeep, hg'⟩ := hext x C hC hg
-  refine (hb ω C' hC' hg').trans (add_le_add_left (Pr_mono fun r ⟨ha, p, u, hu, hne'⟩ => ⟨ha, p, u, hu, ?_⟩) _)
+  refine (hb ω C' hC' hg').trans (add_le_add le_rfl (Pr_mono fun r ⟨ha, p, u, hu, hne'⟩ => ⟨ha, p, u, hu, ?_⟩))
   by_cases h0 : C p = 0
   · rw [h0]
     exact hne x u (Nat.lt_of_le_of_lt (Nat.zero_le _) p.isLt) (hok x Ω P ω r p.val u ha p.isLt hu)
@@ -525,7 +526,8 @@ theorem wide_ne_zero (zk : Bool) (x : Claims.Msg) (u : List 𝔽) (hN : 0 < word
   | some p =>
     obtain ⟨_, _⟩ := p
     rw [hh] at h
-    simp [Claims.Flock.zero_list_eq] at h
+    simp only [List.length_replicate] at h
+    exact absurd h.symm (pow_ne_zero _ two_ne_zero)
 
 /-- **The deployed plain verifier: one wait's bound from the table's bound**, at SHA-512. -/
 theorem plain_oneWait_of_tableBound (rel : Readable.Parsed → Readable.Relation)
