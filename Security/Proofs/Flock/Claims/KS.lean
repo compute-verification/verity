@@ -7,6 +7,7 @@ import Proofs.Flock.Claims.KS.Range
 import Proofs.Flock.Claims.KS.Cover
 import Proofs.Flock.Claims.KS.Radius
 import Proofs.Flock.Claims.KS.Joint
+import Proofs.Flock.Claims.KS.Trace
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -23,6 +24,11 @@ The radius form (`Radius`): the extractor decodes the filled word, and the decod
 it, per whole column (`Flock.ListCompleteθ`, `Flock.ExtractsFill`, `Flock.OneWaitθ`, `Flock.KSθ`); KS from one wait's
 bound there (`Flock.KSθ_of_oneWaitθ`, `FlockDeploy.KS.plain_of_oneWaitθ_sha512`, `FlockDeploy.KS.zk_of_oneWaitθ_sha512`).
 One wait's bound from a fixed table's bound (`Joint`): the old theorems' `joint_acc_le` on the deployed verifier's own
-run law (`Flock.runGame`, `Flock.oneWait_lhs_eq`), with a fixed table's bound and conflicts tied to collisions as the
-two obligations (`Flock.TableBoundθ`, `Flock.ConflictTied`, `Flock.oneWaitθ_of_tableBound`,
-`FlockDeploy.KS.plain_KSθ_of_tableBound`, `FlockDeploy.KS.zk_KSθ_of_tableBound`). -/
+run law (`Flock.runGame`, `Flock.oneWait_lhs_eq`), with three obligations: a fixed table's bound over tables of
+well-formed columns, accepted runs opening only well-formed columns, and conflicts tied to collisions
+(`Flock.TableBoundθ`, `Flock.ColsOk`, `Flock.ConflictTied`, `Flock.oneWaitθ_of_tableBound`,
+`FlockDeploy.KS.plain_KSθ_of_tableBound`, `FlockDeploy.KS.zk_KSθ_of_tableBound`). The old table at the filled word
+(`Trace`): a word as the old oracle, `Close` bounding the distance per whole column (`Flock.hdist_le_of_close`), the
+deployed plain code, read step, schedule and radius as the old model's, so an old `Committed` table extracts
+(`FlockDeploy.KS.good_of_committed_plain`, `FlockDeploy.KS.not_committed_plain`), and the masked code and read step as
+the old padded ones (`Flock.zkEnc_eq_encAt`, `Flock.zkReadD_eq_padWit`, `Flock.radius_zk`). -/
