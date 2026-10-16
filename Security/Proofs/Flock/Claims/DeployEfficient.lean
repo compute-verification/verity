@@ -12,7 +12,8 @@ two are the radius decoders' (`Claims.GS.radius_deployPlain`, `Claims.GS.radius_
 * `efficient_plain`: the plain record `deployPlain rel` with `plainDecodeRD`, its count at most `14·(flockPolyR + X)`
   at `plainSizeRD`;
 * `efficient_zk`: the masked record `deployZk rel` with `zkDecodeRD`, its count at most `11·(zkPolyR + X)` at
-  `zkSizeRD`.
+  `zkSizeRD`. The masked columns and code are the `2^k0` witness lanes of each opened row (`zkRepColsOf`,
+  `Flock.zkWidth i = 2^k0`), so `zkDecodeRD` decodes those lanes only.
 
 At the deployed numbers (`erepRuns_plain`, `erepRuns_zk`), `E^rep` makes `Numbers.waits = 210` waits of at most
 `Numbers.cap = 2^256` draws, so it reruns the prover at most `1 + 210·2^256` times, and `1 + 210·k` times in
