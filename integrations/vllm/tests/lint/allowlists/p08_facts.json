@@ -136,7 +136,6 @@
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "layer-class", "symbol": "TP2CaptureWorkerExtension.tp2_coll_install", "detail": "ParallelLMHead"},
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "layer-class", "symbol": "TP2CaptureWorkerExtension.tp2_coll_install", "detail": "RowParallelLinear"},
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "layer-class", "symbol": "TP2CaptureWorkerExtension.tp2_coll_install", "detail": "VocabParallelEmbedding"},
-    {"file": "verity_vllm/engine/rank_worker.py", "kind": "layer-class", "symbol": "TP2CaptureWorkerExtension.tp2_commit_xrank_dump", "detail": "VocabParallelEmbedding"},
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "layer-class", "symbol": "TP2CaptureWorkerExtension.tp2_param_hashes", "detail": "LogitsProcessor"},
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "layer-class", "symbol": "TP2CaptureWorkerExtension.tp2_param_hashes", "detail": "ParallelLinear"},
     {"file": "verity_vllm/engine/run_facts.py", "kind": "gpu", "symbol": "<module>", "detail": "rtx4090"},

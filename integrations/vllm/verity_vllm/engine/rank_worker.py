@@ -1118,101 +1118,14 @@ class TP2CaptureWorkerExtension:
         return dict(repo_modules_loaded(), rank=int(self._tp2_commit["rank"]) if getattr(self, "_tp2_commit", None) else None)
 
     def tp2_commit_xrank_dump(self, *, out_dir: str, seed_hex: str, pair: int, per_stratum: int = 2, max_rows: int = 16) -> dict[str, Any]:
-        """[R16 tp TP-12, rev F-r16-18] THIS rank's picks for the cross-rank collective-output pass, from the COMMITTED bytes (every member opened
-        and verified against this rank's run root, the same reader as the value check and the sampled replay; a member that does not verify
-        is a pick without bytes, named -> the driver's check FAILs it): per pick the rank's partial rows and the
-        rows of the received collective output as this rank committed it (`<site>/0` dense module output, `<site>/out` MoE block).  Picks are
-        drawn identically on every rank from the pair's combined root (fixed after commitment) -> xrank_pair<k>_rank<r>.pt; the driver pairs
-        the ranks and evaluates the definition (xrank_collectives.check_picks)."""
-        import time as _t
+        """[TP-12] THIS rank's picks for the cross-rank collective-output pass, from the COMMITTED bytes (`pipeline.tp.xrank_dump`),
+        each world-8 all-reduce under the route the engine's all-reduce switches take."""
+        from verity_vllm.engine import env as engine_env
+        from verity_vllm.pipeline.tp import xrank_dump as XD
+        from verity_vllm.program.registry.tp_allreduce import settings_of
 
-        import torch
-
-        from verity_vllm.check import oracle_compare as OC
-        from verity_vllm.check.match import xrank_collectives as XC
-        from verity_vllm.acquire.sources.partial_source import _committed
-
-        st = self._tp2_commit
-        com, rank = st["com"], int(st["rank"])
-        t0 = _t.perf_counter()
-        layouts = {int(s): [(m.name, tuple(m.shape)) for m in ms] for s, ms in getattr(com, "_layouts", {}).items()}
-        plan = XC.pick_strata(layouts, rank, bytes.fromhex(seed_hex), per_stratum=int(per_stratum), max_rows=int(max_rows), world=int(st["world"]))
-        picks, missing, nbytes = [], 0, 0
-        rd = OC.OpenedReader(com, st["rc"]) if st.get("rc") is not None else None
-        unverified: dict[tuple[int, str], str] = {}
-
-        def tensor_of(step: int, meta) -> Any:
-            if rd is None:
-                unverified[(step, meta.name)] = "no run commitment on this rank (not finalized)"
-                return None
-            try:
-                b = _committed(rd, step, meta)
-            except OC.OpeningNotVerified as e:
-                unverified[(step, meta.name)] = f"opened value not verified: {e}"[:200]
-                return None
-            if b is None:
-                return None
-            dt = getattr(torch, str(meta.dtype).replace("torch.", ""))
-            return torch.frombuffer(bytearray(b), dtype=dt).reshape(tuple(meta.shape)).clone()
-
-        for pk in plan["picks"]:
-            step = int(pk["step"])
-            metas = {m.name: m for m in com._layouts.get(step, [])}
-            pm = metas.get(pk["member"])
-            rname = next((n for n in pk["recv_candidates"] if n in metas), None)
-            rm = metas.get(rname) if rname else None
-            rows = torch.tensor(pk["rows"], dtype=torch.long)
-            part = tensor_of(step, pm) if pm is not None else None
-            recv = tensor_of(step, rm) if rm is not None else None
-            why = None
-            if part is None or recv is None:
-                def _gone(meta) -> str:
-                    return unverified.get((step, meta.name), "bytes not retained")
-                why = ("partial " + ("not in this step's layout" if pm is None else _gone(pm)) if part is None else "") + \
-                      ("; " if part is None and recv is None else "") + \
-                      (("received output " + ("not committed under any of " + "/".join(pk["recv_candidates"]) if rm is None else _gone(rm))) if recv is None else "")
-                missing += 1
-            else:
-                if part.dim() >= 2 and recv.dim() >= 2 and part.shape[0] == recv.shape[0] == pk["rows_total"]:
-                    part, recv = part[rows], recv[rows]
-                elif part.dim() >= 2 and recv.dim() >= 2 and part.shape[0] != recv.shape[0]:
-                    why = f"row counts differ: partial {tuple(part.shape)} vs received {tuple(recv.shape)}"
-                nbytes += part.numel() * part.element_size() + recv.numel() * recv.element_size()
-            emb = None
-            if pk["kind"] == "all_reduce" and XC.is_embedding_site(pk["site"]):
-                # EmbeddingShard_v1 leg (ruling 27): this rank's committed partial rows == masked gather of the committed ids from ITS vocab shard
-                # (the live parameter, which the per-rank weights pin ties to the checkpoint of record); rows outside the rank's range are zero
-                try:
-                    im = metas.get(f"{pk['site']}/in")
-                    ids_t = tensor_of(step, im) if im is not None else None
-                    mod = dict(st["eng"].model.named_modules()).get(pk["site"])
-                    si = getattr(mod, "shard_indices", None)
-                    if ids_t is None or mod is None or si is None or part is None:
-                        emb = {"ok": None, "why": (((unverified.get((step, im.name)) if im is not None else None) or "no committed ids member <site>/in") if ids_t is None
-                                                   else "no VocabParallelEmbedding shard_indices on the module" if si is None else "partial not committed")}
-                    else:
-                        lo, hi = int(si.org_vocab_start_index), int(si.org_vocab_end_index)
-                        idx = ids_t.reshape(-1)
-                        idx = idx[rows] if (idx.numel() == pk["rows_total"] and part.shape[0] == len(pk["rows"])) else idx
-                        mask = (idx >= lo) & (idx < hi)
-                        local = torch.where(mask, idx - lo, torch.zeros_like(idx)).long()
-                        W = mod.weight
-                        exp = W[local.to(W.device)].masked_fill((~mask).unsqueeze(-1).to(W.device), 0).to("cpu")
-                        ok = bool(exp.shape == part.shape and exp.dtype == part.dtype and torch.equal(exp, part))
-                        emb = {"ok": ok, "n_diff": (int((exp.view(torch.int16) != part.view(torch.int16)).sum()) if (exp.shape == part.shape and exp.dtype == torch.bfloat16) else None),
-                               "vocab_range": [lo, hi], "masked_rows": int((~mask).sum()), "rows": int(idx.numel()), "why": None if ok else "committed partial != masked gather from this rank's shard"}
-                except Exception as e:  # noqa: BLE001
-                    emb = {"ok": None, "why": f"embedding-shard leg error: {e!r}"[:200]}
-            picks.append(dict(pk, part=part, recv=recv, recv_member=rname, why=why, emb=emb))
-        rec = {"schema": "verity/tp2/xrank-picks/v1", "rank": rank, "pair": int(pair), "seed": seed_hex, "strata": plan["strata"], "picks": picks,
-               "per_stratum": int(per_stratum), "max_rows": int(max_rows), "steps_in_layout": len(layouts)}
-        fn = Path(out_dir) / f"xrank_pair{int(pair)}_rank{rank}.pt"
-        torch.save(rec, fn)
-        return {"rank": rank, "file": str(fn), "picks": len(picks), "strata": len(plan["strata"]), "missing": missing, "bytes": nbytes,
-                "value_source": rd.record() if rd is not None else {"source": "opened", "reads": 0, "why": "no run commitment on this rank"},
-                "unreplayable_sites": st.get("xrank_unreplayable_sites"), "strata_sites": sorted({v["site"] for v in plan["strata"].values()}),
-                "families": sorted({p["family"] for p in picks}), "flipped_collective_inputs": int(getattr(st.get("tps"), "flipped", 0) or 0),
-                "wall_s": round(_t.perf_counter() - t0, 3)}
+        settings = settings_of(self.vllm_config.parallel_config.disable_custom_all_reduce, engine_env.snapshot())
+        return XD.dump(self._tp2_commit, settings=settings, out_dir=out_dir, seed_hex=seed_hex, pair=pair, per_stratum=per_stratum, max_rows=max_rows)
 
     def tp2_commit_binding_map_dump(self, *, out_dir: str) -> dict[str, Any]:
         """[R15 TP-04] write THIS rank's binding map of the last finalized run (identity -> commitment location, fixed at finalize before any

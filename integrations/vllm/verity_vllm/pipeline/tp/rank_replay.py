@@ -114,13 +114,25 @@ def unreplayable_sites(p: Loaded) -> dict[str, Any]:
         xr_fams = collective_kinds.cross_rank_families(p.world)     # [lane vllm-tp-n] from the registry's composites at this world, not typed
         for r_ in p.index.rows:
             fam_ = RM.spec_family(r_["spec"])
-            if fam_ in xr_fams:
+            if fam_ in xr_fams or collective_kinds.collective_kind(fam_) == "all_reduce":   # the routed world-8 all-reduces too
                 d_ = p.index.describe(r_)
                 if d_ and d_.get("members"):
                     xs.setdefault(fam_, set()).add(str(d_["op_path"]))
         return {f_: sorted(v_) for f_, v_ in xs.items()}
     except Exception as e:  # noqa: BLE001
         return {"error": repr(e)[:200]}
+
+
+def xrank_facts(st: dict[str, Any], p: Loaded) -> None:
+    """What the cross-rank pass reads off the rank's Programs (`tp2_commit_xrank_dump`): the unreplayable collective sites and the
+    routed all-reduce specs the Programs bind (None when they cannot be read: every routed pick is then not evaluable, by name)."""
+    from verity_vllm.pipeline.tp import xrank_dump
+
+    st["xrank_unreplayable_sites"] = unreplayable_sites(p)
+    try:
+        st["xrank_program_specs"] = xrank_dump.program_specs(p.progs)
+    except Exception as e:  # noqa: BLE001
+        st["xrank_program_specs"], st["xrank_program_specs_error"] = None, repr(e)[:200]
 
 
 def seed_of(cfg: dict[str, Any], run_root: bytes) -> tuple[int, str]:
@@ -208,7 +220,7 @@ def in_process(st: dict[str, Any], rc: Any) -> dict[str, Any]:
 
         com = st["com"]
         p = load(cfg, rank, st.get("world"))
-        st["xrank_unreplayable_sites"] = unreplayable_sites(p)
+        xrank_facts(st, p)
         rd = OC.OpenedReader(com, rc)
         # [O5] the shards the relations consume must be the COMMITTED shards: re-register the live parameters now vs the run's weights root
         try:
@@ -253,7 +265,7 @@ def defer(st: dict[str, Any], rc: Any, to: dict[str, Any]) -> dict[str, Any]:
         from verity_vllm.check.replay.driver import engine_facts_of_record
 
         p = load(cfg, rank, st.get("world"))
-        st["xrank_unreplayable_sites"] = unreplayable_sites(p)
+        xrank_facts(st, p)
         hashed: dict[str, str] = {}
         part = RB.write_store(out, pair, st["com"], rc, digests=hashed, rank=rank)
         (part / "binding_map.json").write_text(json.dumps(bmap, default=str) + "\n")
