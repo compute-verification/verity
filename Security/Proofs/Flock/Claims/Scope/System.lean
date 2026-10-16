@@ -9,7 +9,7 @@ A `Sys` is `J` tables of block R1CS over GF(2), each block `N` bits: table `c`'s
 `Sys.rel` is that system as `Relation`'s fields: the block circuit `circ` recomputes every row of every table's block
 (`rowGates`) and reads every pin and fixed bit; block `b`'s inputs and outputs are the hidden bits of every table's block
 `b` (table `c`'s bit `a` of block `b` is hidden value `c·T + b·N + a`), then the public `1` for each pin and the public
-value of each fixed bit. No commit strings.
+value of each fixed bit.
 
 `relS_iff`: a witness satisfies `Claims.Flock.RelS` of a statement with these fields exactly when, in every block, every
 table's rows hold (`Sys.Holds`).
@@ -65,8 +65,6 @@ def rel : Relation where
   out b := (List.range (S.J * S.N)).map (fun q => .hid (S.idx b q)) ++ (List.range S.J).map (fun _ => .pub 0) ++
     (List.range S.slots.length).map fun k => .pub (1 + b * S.slots.length + k)
   pub := S.pubs
-  cs := []
-  grp := fun _ => []
 
 /-- Table `c`'s bit `a` of block `b` in `w`. -/
 def bit (w : Claims.Flock.Wit) (c b a : ℕ) : Bool := w.hid.getD (c * S.T + b * S.N + a) false
@@ -268,13 +266,11 @@ theorem block_iff (hw : S.WF) (s : Claims.Flock.Stmt) (w : Claims.Flock.Wit) (hC
 
 /-- **The relation**: a witness satisfies `RelS` of a statement with the system's fields and `nB` blocks exactly when
 the system holds in every block. -/
-theorem relS_iff (H : Claims.Msg → Claims.Msg) (hw : S.WF) (s : Claims.Flock.Stmt) (w : Claims.Flock.Wit)
-    (hC : s.C = S.circ) (hinp : s.inp = S.rel.inp) (hout : s.out = S.rel.out) (hpub : s.pub = S.pubs)
-    (hcs : s.cs = []) (hnb : s.nBlocks = S.nB) :
-    Claims.Flock.RelS H s w ↔ ∀ b < S.nB, S.Holds w b := by
+theorem relS_iff (hw : S.WF) (s : Claims.Flock.Stmt) (w : Claims.Flock.Wit) (hC : s.C = S.circ)
+    (hinp : s.inp = S.rel.inp) (hout : s.out = S.rel.out) (hpub : s.pub = S.pubs) (hnb : s.nBlocks = S.nB) :
+    Claims.Flock.RelS s w ↔ ∀ b < S.nB, S.Holds w b := by
   unfold Claims.Flock.RelS
-  rw [hcs, hnb]
-  simp only [List.length_nil, Nat.not_lt_zero, IsEmpty.forall_iff, implies_true, true_and]
+  rw [hnb]
   exact forall₂_congr fun b hb => block_iff hw s w hC hinp hout hpub hb
 
 end Sys

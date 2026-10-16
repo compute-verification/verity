@@ -161,7 +161,7 @@ theorem pr_bad_le (x : Claims.Msg) {k : ℕ} : Claims.Pr (fun r : Fin k → Coin
 and every witness in the relation, the honest prover is accepted at every tape and every coin outside `Bad`, then Flock's
 plain verifier is complete for `honestP` with error `δc`. -/
 theorem complete_of (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
-    (hacc : ∀ x w, Claims.Flock.Scope (deployPlain rel) x → Claims.Flock.R H (deployPlain rel).parse x w →
+    (hacc : ∀ x w, Claims.Flock.Scope (deployPlain rel) x → Claims.Flock.R (deployPlain rel).parse x w →
       ready x = true → ∀ (ω : Tape) (r : Fin ((V false).k x) → Coin), ¬ Bad x r →
         (Claims.run H (honestP w) (V false) x ω r).out = .acc) :
     Claims.Flock.Complete H (deployPlain rel) honestP δc := by
