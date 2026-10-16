@@ -8,6 +8,7 @@ import Proofs.Flock.Claims.ZK.Rewind
 import Proofs.Flock.Claims.ZK.GKProof
 import Proofs.Flock.Claims.ZK.GKCost
 import Proofs.Flock.Claims.ZK.GKExp
+import Proofs.Flock.Claims.ZK.CoinCheck
 import Proofs.Flock.Claims.ZK.Flock
 
 /-!
@@ -38,6 +39,9 @@ import Proofs.Flock.Claims.ZK.Flock
   `M = t·3^t`, `gkE_zk_pow`) from the same three facts, through the old `gk_close` on the protocol's `Model` at each
   nonce; its cost is `(1 + 5t)` runs in expectation at every cap (`SimCostExp`, `gkE_costExp`) and `1 + 5M` at worst
   (`gkE_cost`).
+* `CoinCheck`: the coin-tree check (`coin-tree/hm96-sha512/v2`) as an oracle program that logs its hash calls
+  (`treeChk`); a protocol whose check it is meets `Binding` with no hypothesis on `H` (`Proto.binding_of_tree`), T6's
+  aligned hash inputs being among the two walks' calls (`coinPairs_mem`).
 * `Flock`: **`Flock.zkR_of_proto`**, the proposed `Flock.ZKR` for a masked deployed verifier that models the
   committed-coin protocol's rounds, `Hello` among them (`D.V.k = G.k`); `Flock.ZKRHello`, the bridge at `D.V.k = G.K + 1`
   for today's `FlockDeploy.V`, which leaves `Hello` out (`Flock.zkRHello_deployZk`); `S_Flock`'s cost
