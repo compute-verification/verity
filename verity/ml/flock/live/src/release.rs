@@ -25,14 +25,15 @@
 //!
 //! What the rules read of the record is kept beside it in `index/` ([`Index`]: each recursive session's open, stop, finish
 //! and releases, each stream's first open and failures, the last `slot`, the counts), and a call reads only what was
-//! appended to the record since the index last read it, by whichever process. The index is rebuilt from the record's start
-//! when the record was replaced, cut shorter or no longer holds the last bytes the index read, when the machine has booted
-//! since the index was written, or when a writer of it ended mid-write; an edit further back that leaves the record no
-//! shorter isn't seen. Since the firewall only appends, the verdicts are the ones a read of the whole record gives. A record
-//! the index can't answer is read whole at every call, as before, and each rule's read is a scan of it ([`Events`]): one
-//! whose last line has no newline yet, or one holding a line the firewall doesn't write or a name over [`KEY_MAX`] bytes.
-//! A torn last line (a writer killed inside its append) fails every call, so the firewall serves nothing until the
-//! developer repairs the record: it fails closed, never by skipping an event it can't read.
+//! appended to the record since the index last read it, by whichever process; `verity_flock.firewall` keeps its own, in
+//! `index-py/`. The index is rebuilt from the record's start when the record was replaced, cut shorter or no longer holds
+//! the last bytes the index read, when the machine has booted since the index was written, when a writer of it ended
+//! mid-write, or when a file of it won't read; an edit further back that leaves the record no shorter isn't seen, nor is a
+//! file of the index edited by hand that still reads. Since the firewall only appends, the verdicts are the ones a read of
+//! the whole record gives. A record the index can't answer is read whole at every call, as before, and each rule's read is
+//! a scan of it ([`Events`]): one whose last line has no newline yet, or one holding a line the firewall doesn't write or a
+//! name over [`KEY_MAX`] bytes. A torn last line (a writer killed inside its append) fails every call, so the firewall
+//! serves nothing until the developer repairs the record: it fails closed, never by skipping an event it can't read.
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::fs::{File, OpenOptions, TryLockError};
@@ -399,6 +400,10 @@ impl Head {
 }
 
 fn put(dir: &Path, name: &str, v: &Value) -> io::Result<()> {
+    #[cfg(test)]
+    if name != "head.json" && PROBE.with(|p| p.borrow().ends) {
+        return Err(io::Error::other("the writer ended"));
+    }
     let tmp = dir.join(format!(".{name}"));
     std::fs::write(&tmp, serde_json::to_vec(v)?)?;
     std::fs::rename(tmp, dir.join(name))
@@ -468,15 +473,23 @@ impl Index {
         let next = format!("r{:04}", self.head.opens);
         let orphan = self.head.slot.clone().filter(|_| !self.head.slot_done).map(|s| s.1);
         for s in sessions.iter().copied().chain([next.as_str()]).chain(orphan.as_deref()) {
-            let member: Vec<String> = self.session(s)?.member.iter().map(|m| m.stream.clone()).collect();
-            for t in &member {
-                self.stream(t)?;
-            }
+            self.members(s)?;
         }
         for t in streams {
             self.stream(t)?;
         }
         Ok(())
+    }
+
+    /// The streams the session was opened on, each loaded.
+    fn members(&mut self, s: &str) -> io::Result<Vec<String>> {
+        let member: Vec<String> = self.session(s)?.member.iter().map(|m| m.stream.clone()).collect();
+        for t in &member {
+            if self.stream(t)?.is_none() {
+                return Err(bad(&format!("session {s}'s stream {t} is missing")));
+            }
+        }
+        Ok(member)
     }
 
     /// The record's next event, `e`, is in the index. Everything it changes is loaded first, so a load that fails changes
@@ -490,9 +503,9 @@ impl Index {
                                e["part"].as_str().unwrap_or_default());
         let stream = e["stream"].as_str().unwrap_or_default();
         if kind != "wait" && kind != "slot" {
-            let member: Vec<String> = self.session(s)?.member.iter().map(|m| m.stream.clone()).collect();
-            for t in member.iter().map(String::as_str).chain((kind == "open").then_some(stream)) {
-                self.stream(t)?;
+            self.members(s)?;
+            if kind == "open" {
+                self.stream(stream)?;
             }
         }
         (self.head.count, self.moved) = (self.head.count + 1, true);
@@ -629,6 +642,8 @@ struct Probe {
     /// the calls, and those the index answered
     calls: u64,
     indexed: u64,
+    /// a writer of the index ends at its first file other than the head
+    ends: bool,
 }
 
 #[cfg(test)]
@@ -1414,6 +1429,109 @@ mod tests {
         }
     }
 
+    /// A writer of the index marks its head dirty before it touches a file of it, so one that ends mid-write leaves an
+    /// index the next call rebuilds from the record, even once the record is back as the head from before read it: here
+    /// the record is cut by its last line, a rebuild of the index ends after removing its files, and the record is
+    /// restored.
+    #[test]
+    fn a_rebuild_that_ends_mid_write_is_not_trusted() {
+        let rec = scratch("mid-write");
+        let sid = opened(&rec, None, Some(5));
+        assert!(rec.stop(&sid, "L0", "cut").unwrap());
+        rec.finish(&sid).unwrap();
+        let log = rec.state.join("record.jsonl");
+        let data = std::fs::read(&log).unwrap();
+        let cut = data[..data.len() - 1].iter().rposition(|&b| b == b'\n').unwrap() + 1;
+        std::fs::write(&log, &data[..cut]).unwrap();
+        PROBE.with(|p| p.borrow_mut().ends = true);
+        assert_eq!(rec.failures("s").unwrap(), 1);
+        PROBE.with(|p| p.borrow_mut().ends = false);
+        std::fs::write(&log, &data).unwrap();
+        assert_eq!(rec.failures("s").unwrap(), 1);
+        assert_eq!(rec.open("s", &PARTS, Some(5), None).unwrap(), Ok("r0001".to_string()));
+    }
+
+    /// A call loads every file of the index it may read or append for before it decides anything ([`Index::load`]), so a
+    /// file that won't read sends it to the whole record, never into an error after it appended: the file of the session
+    /// an open names (which has events before its open), that of the session whose holder of the slot ended before its
+    /// outcome, which the next to take the slot stops, and a stream's (here one no session it loads was opened on). The
+    /// call after rebuilds the index, and the one after that reads nothing of the record. A session whose stream has no
+    /// file in the index sends the call to the whole record too.
+    #[test]
+    fn what_a_call_reads_of_the_index_is_loaded_before_it_decides() {
+        let rec = scratch("loaded");
+        let sid = opened(&rec, None, None);
+        drop(rec.slot(&sid, "L0", || {}).unwrap());
+        appended(&rec, json!({"event": "finish", "session": "r0001", "part": INNER}));
+        assert_eq!(rec.failures("s").unwrap(), 0);
+        let index = rec.state.join("index");
+        let torn = |kind: &str, name: &str| std::fs::write(index.join(format!("{kind}{}.json", hex(name.as_bytes()))), b"{\"v\": ").unwrap();
+        let rebuilt = |stream: &str, failures: u64| {
+            for parsed in [rec.events().unwrap().len() as u64, 0] {
+                let before = probe();
+                assert_eq!(rec.failures(stream).unwrap(), failures);
+                let after = probe();
+                assert_eq!((after.parsed - before.parsed, after.indexed - before.indexed), (parsed, 1));
+            }
+        };
+        torn("s", "r0001");
+        let before = probe();
+        assert_eq!(rec.open("s", &["L0"], None, None).unwrap(), Ok("r0001".to_string()));
+        assert_eq!(probe().indexed - before.indexed, 0);
+        rebuilt("s", 0);
+        torn("s", &sid);
+        let before = probe();
+        drop(rec.slot("r0001", "L0", || {}).unwrap());
+        assert_eq!(probe().indexed - before.indexed, 0);
+        rebuilt("s", 1);
+        let tail: Vec<(String, String)> = rec.events().unwrap().iter().rev().take(3).rev()
+            .map(|e| (e["event"].as_str().unwrap().into(), e["session"].as_str().unwrap().into())).collect();
+        assert_eq!(tail, [("open".into(), "r0001".into()), ("stop".into(), sid.clone()), ("slot".into(), "r0001".to_string())]);
+        assert_eq!(rec.open("u", &["L0"], Some(3), None).unwrap(), Ok("r0002".to_string()));
+        torn("t", "u");
+        let before = probe();
+        assert_eq!(rec.failures("u").unwrap(), 0);
+        assert_eq!(probe().indexed - before.indexed, 0);
+        rebuilt("s", 1);
+        std::fs::remove_file(index.join(format!("t{}.json", hex(b"u")))).unwrap();
+        let before = probe();
+        assert!(rec.admit("r0002", "L0").unwrap().unwrap_err().contains("has not finished"));
+        assert_eq!(probe().indexed - before.indexed, 0);
+    }
+
+    /// The index reads the record again from its start when the record no longer holds the last bytes the index read (its
+    /// last line, a stop, edited in place as a `wait` of its length), or when it was replaced (by a record of its length
+    /// whose stop, further back than those bytes, is such a `wait`).
+    #[test]
+    fn a_record_edited_at_its_end_or_replaced_is_read_again() {
+        for replaced in [false, true] {
+            let rec = scratch(&format!("edited-{replaced}"));
+            let sid = opened(&rec, None, Some(5));
+            assert!(rec.stop(&sid, "L0", "cut").unwrap());
+            if replaced {
+                for k in 0..8 {
+                    appended(&rec, json!({"event": "refused", "session": format!("r{}", 9000 + k), "part": "L0"}));
+                }
+            }
+            let log = rec.state.join("record.jsonl");
+            let data = std::fs::read(&log).unwrap();
+            let lines: Vec<&[u8]> = data.split_inclusive(|&b| b == b'\n').collect();
+            assert_eq!(rec.failures("s").unwrap(), 1);
+            let k = lines.iter().position(|l| l.starts_with(b"{\"event\": \"stop\"")).unwrap();
+            let edited = [lines[..k].concat(), waits(&lines[k..k + 1], &sid).concat(), lines[k + 1..].concat()].concat();
+            assert_eq!(edited.len(), data.len());
+            assert!(!replaced || lines[k + 1..].concat().len() > LAST);
+            if replaced {
+                std::fs::write(rec.state.join("record.tmp"), &edited).unwrap();
+                std::fs::rename(rec.state.join("record.tmp"), &log).unwrap();
+            } else {
+                OpenOptions::new().write(true).open(&log).unwrap().write_all(&edited).unwrap();
+            }
+            assert_eq!(rec.failures("s").unwrap(), 0);
+            assert!(rec.events().unwrap().iter().all(|e| e["event"] != "stop"));
+        }
+    }
+
     /// splitmix64: the differential test's fixed stream of choices.
     struct Draw(u64);
 
@@ -1434,10 +1552,21 @@ mod tests {
         }
     }
 
+    /// Each line rewritten in place as a `wait` of its length, where one fits.
+    fn waits(lines: &[impl AsRef<[u8]>], sid: &str) -> Vec<Vec<u8>> {
+        lines.iter().enumerate().map(|(k, line)| {
+            let line = line.as_ref();
+            let wait = |pad: usize| json!({"event": "wait", "part": "x".repeat(pad), "seq": k, "session": sid});
+            let pad = (line.len() - 1).checked_sub(py_json(&wait(0)).len());
+            pad.map_or(line.to_vec(), |p| format!("{}\n", py_json(&wait(p))).into_bytes())
+        }).collect()
+    }
+
     /// Damage to the record, or to its index, between two calls: a blank line, a torn line, a line without its newline, a
-    /// line the firewall doesn't write, the record replaced or rewritten as it was, cut by its last lines, those lines
-    /// rewritten in place as others of their length, or halved; the index removed, or its head or every other file of it
-    /// torn. `mark` is the record's length before a damage that a later `repair` undoes.
+    /// line the firewall doesn't write, the record replaced as it was or by one of its length whose first open is another
+    /// event, rewritten as it was, cut by its last lines, those lines rewritten in place as others of their length, or
+    /// halved; the index removed, or its head or every other file of it torn. `mark` is the record's length before a
+    /// damage that a later `repair` undoes.
     fn damage(state: &Path, kind: &str, mark: &mut Option<usize>, sid: &str) {
         let log = state.join("record.jsonl");
         let data = std::fs::read(&log).unwrap_or_default();
@@ -1463,8 +1592,15 @@ mod tests {
                     OpenOptions::new().write(true).open(&log).unwrap().set_len(m as u64).unwrap();
                 }
             }
-            "replace" => {
-                std::fs::write(state.join("record.tmp"), &data).unwrap();
+            "replace" | "swap" => {
+                // a swap's record has its first open rewritten as a `wait`
+                let mut lines: Vec<Vec<u8>> = data.split_inclusive(|&b| b == b'\n').map(<[u8]>::to_vec).collect();
+                if kind == "swap" {
+                    if let Some(k) = lines.iter().position(|l| l.windows(15).any(|w| w == br#""event": "open""#)) {
+                        lines[k] = waits(&lines[k..k + 1], sid).remove(0);
+                    }
+                }
+                std::fs::write(state.join("record.tmp"), lines.concat()).unwrap();
                 std::fs::rename(state.join("record.tmp"), &log).unwrap();
             }
             "rewrite" => std::fs::write(&log, &data).unwrap(),
@@ -1472,12 +1608,7 @@ mod tests {
                 let lines: Vec<&[u8]> = data.split_inclusive(|&b| b == b'\n').collect();
                 let mut kept = lines[..if kind == "halve" { lines.len() / 2 } else { lines.len() - 3 }].concat();
                 if kind == "edit" {
-                    // each of the last lines rewritten in place as a `wait` of the same length, where one fits
-                    for (k, line) in lines[lines.len() - 3..].iter().enumerate() {
-                        let wait = |pad: usize| json!({"event": "wait", "part": "x".repeat(pad), "seq": k, "session": sid});
-                        let pad = (line.len() - 1).checked_sub(py_json(&wait(0)).len());
-                        kept.extend(pad.map_or(line.to_vec(), |p| format!("{}\n", py_json(&wait(p))).into_bytes()));
-                    }
+                    kept.extend(waits(&lines[lines.len() - 3..], sid).concat());
                 }
                 std::fs::write(&log, kept).unwrap();
             }
@@ -1511,8 +1642,9 @@ mod tests {
         };
         let long_sid = "r".repeat(KEY_MAX + 1);
         for _ in 0..steps {
+            let next = format!("r{:04}", sids.len() - 1);
             let mut recent: Vec<&str> = sids.iter().rev().take(4).map(String::as_str).collect();
-            recent.push("r9999");
+            recent.extend(["r9999", next.as_str()]);
             if long {
                 recent.push(&long_sid);
             }
@@ -1521,8 +1653,8 @@ mod tests {
             let stream = draw.pick(&["s", "t"]);
             let r = draw.below(100);
             if r < 4 {
-                let kind = draw.pick(&["blank", "torn", "unterminated", "foreign", "replace", "rewrite", "cut", "edit", "halve",
-                                       "index-gone", "index-head", "index-entries"]);
+                let kind = draw.pick(&["blank", "torn", "unterminated", "foreign", "replace", "swap", "rewrite", "cut", "edit",
+                                       "halve", "index-gone", "index-head", "index-entries"]);
                 damage(state, kind, &mut mark, &sid);
                 out.push(format!("damage {kind}"));
             } else if r < 7 {
@@ -1590,6 +1722,7 @@ mod tests {
     #[test]
     fn the_index_answers_as_the_whole_record_does() {
         let base = std::env::temp_dir().join(format!("flock-release-drive-{}", std::process::id()));
+        let mut damaged = HashSet::new();
         for (seed, long) in [(20261016, false), (7, false), (11, true)] {
             let before = probe();
             let got = drive(&base.join("index"), false, seed, 1500, long);
@@ -1603,11 +1736,16 @@ mod tests {
             for op in ["open", "finish", "admit", "release", "stop", "failures", "slot", "events", "appended", "damage"] {
                 assert!(ops.contains(op), "seed {seed}: no {op}");
             }
+            damaged.extend(got.iter().filter_map(|s| s.strip_prefix("damage ")).map(String::from));
             assert!(got.iter().any(|s| s.contains("error InvalidData")), "seed {seed}: no torn record");
             if !long {
                 let (calls, indexed) = (after.calls - before.calls, after.indexed - before.indexed);
                 assert!(indexed * 2 > calls, "seed {seed}: the index answered {indexed} of {calls} calls");
             }
+        }
+        for kind in ["blank", "torn", "unterminated", "foreign", "replace", "swap", "rewrite", "cut", "edit", "halve",
+                     "index-gone", "index-head", "index-entries", "repair"] {
+            assert!(damaged.contains(kind), "no {kind}");
         }
         let _ = std::fs::remove_dir_all(base);
     }
