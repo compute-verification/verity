@@ -1,5 +1,6 @@
 """A gpu.sh run's outputs, one line a measurement: `python3 summary.py OUT`; `python3 summary.py best OUT` prints the tag of
-the checked build whose e2e commitment was fastest."""
+the checked build whose e2e commitment was fastest; `python3 summary.py table OUT` renders the best build's measurements as
+the README's Markdown table."""
 from __future__ import annotations
 
 import json
@@ -42,6 +43,30 @@ def bench_line(tag: str, r: dict) -> str:
     return line
 
 
+def size(n_bytes: int) -> str:
+    return f"{n_bytes >> 10} KiB" if n_bytes >= 1024 else f"{n_bytes} B"
+
+
+def table(out: str) -> None:
+    tag = best(out)
+    print("| leaf | row digest | leaves | critical path ms | GB/s | x GEMM | salt phase ms | beside: commit done ms (GB/s) "
+          "| GEMMs beside | hidden | high priority: commit done ms (GB/s) | GEMMs beside |")
+    print("|" + "---|" * 12)
+    for prefix, digest in (("bench-e2e-", "row/v2"), ("bench-sweep-", "row/v2"), ("bench-seg-", "row-seg/v1")):
+        rows = lines(os.path.join(out, f"{prefix}{tag}.jsonl"))
+        for b, s in zip(rows[::2], rows[1::2]):
+            g = s["beside_gemm"]
+            leaf = "e2e (32 int8, 1024-bit row)" if b["bench"] == "e2e" else size(b["lbits"] // 8)
+            cells = [leaf, digest, f"2^{b['n'].bit_length() - 1}", f"{b['graph_ms']:.3f}", f"{b['operand_gb_per_s_graph']:.1f}",
+                     f"{g['commit_over_gemm']:.2f}", f"{b['salt_ms']:.3f}",
+                     f"{g['both_commit_ms']:.3f} ({g['commit_gb_per_s_beside']:.1f})",
+                     f"{g['both_gemm_ms'] / (g['gemms'] * g['gemm_ms']):.2f}x of {g['gemms']}", f"{g['hidden_fraction']:.2f}"]
+            p = g.get("priority")
+            cells += ([f"{p['commit_ms']:.3f} ({p['commit_gb_per_s_beside']:.1f})",
+                       f"{p['gemm_ms'] / (g['gemms'] * g['gemm_ms']):.2f}x"] if p else ["", ""])
+            print("| " + " | ".join(cells) + " |")
+
+
 def main(out: str) -> None:
     for tag, rows in tagged(out, "check-"):
         done = [r for r in rows if "summary" not in r]
@@ -58,4 +83,4 @@ def main(out: str) -> None:
 
 
 if __name__ == "__main__":
-    print(best(sys.argv[2])) if sys.argv[1] == "best" else main(sys.argv[1])
+    {"best": lambda: print(best(sys.argv[2])), "table": lambda: table(sys.argv[2])}.get(sys.argv[1], lambda: main(sys.argv[1]))()
