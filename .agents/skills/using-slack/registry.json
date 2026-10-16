@@ -115,6 +115,7 @@
         "benchmarks/pouw/",
         "benchmarks/numerical/",
         "benchmarks/steiner_referee/",
+        "benchmarks/fp4_sparse_tp/",
         ".agents/skills/kernel-engineering/"
       ]
     },
