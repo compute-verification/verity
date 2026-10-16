@@ -82,6 +82,18 @@ SCREENS = {
 }
 
 
+#: prefill 8192 with pfill-k's pump (W 8, NC 4) in the co placement (every SM, the lowest stream priority: its 48 KB
+#: blocks can't sit beside the linears' 98 KB CTAs, so they take the wave tails), at three chunk sizes, against its split
+PREFILL = {
+    "s6": [("split", 4, 256, 19), ("co", 0, 32, 14), ("co", 0, 32, 15), ("co", 0, 64, 16)],
+}
+
+
+def prefill_probes(rows):
+    return ";".join(f"DFILL_CHUNK_LOG2={c} dscore dscore prefill 8192 0 {p} {f} 8 4 {s} {ROUNDS} {K} {40 + i}"
+                    for i, (p, f, s, c) in enumerate(rows))
+
+
 def probes(rows):
     def row(i, b, l, f, w, s, t):
         if w == 0:
@@ -91,4 +103,5 @@ def probes(rows):
 
 
 if __name__ == "__main__":
-    print(probes(SCREENS[sys.argv[1]]))
+    name = sys.argv[1]
+    print(prefill_probes(PREFILL[name]) if name in PREFILL else probes(SCREENS[name]))
