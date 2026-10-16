@@ -3,7 +3,11 @@
 Reads one run's dcap.jsonl and prints the tables of note:20261016T0215Z-draft-capacity-share: τ for the honest kernels,
 nominal ÷ capacity over the decode grid, and the serving mixes with and without certified filler. Writes them as JSON.
 
-  python3 share.py RUN_OUT_DIR [--json OUT.json]
+  python3 share.py RUN_OUT_DIR [--fill FILL_RUN_OUT_DIR] [--json OUT.json]
+
+With --fill, the filler is the one fill.sh measured (T2's chained int8 GEMM at m = k = 8192 on a green-context split, beside
+dcap's decode step): its share of the GPU's peak and the decode slowdown at L = 2048, by batch, the share divided by
+COMMIT = 1.09 for committing X every 4 steps. Without it, the filler is W11's register-resident one (below).
 
 Definitions:
 - capacity C: the int8 IMMA peak, 1024 MACs/SM/clk × 188 SMs × f; f is the read SM clock unless a column says 2430.
@@ -21,7 +25,7 @@ Constants not measured by dcap.cu, each from a note of record:
   tokens (note:20261015T0417Z-draft-saturation-budget). A served decode step adds max(1.09 ms, 4.684 µs × tokens).
 - prefill attention: FlashAttention-2 (BF16), 73.11 ms for causal 8,192, η = 0.30 of the int8 peak; an int8 kernel at
   FA2's efficiency of its own peak would be 0.60 (assumed, ETA_FA_INT8).
-- certified filler beside decode on a green-context split: 0.70 × its SM share of the tensor peak; 60 filler SMs give
+- without --fill, certified filler beside decode on a green-context split: 0.70 × its SM share of the tensor peak; 60 filler SMs give
   0.222 at ≤ 4.7% decode slowdown, 92 give 0.34 at ≤ 10.6% (note:20261015T0713Z-draft-filler-issue-slack, measured at
   batch ≤ 32). The chained int8 GEMM (note:20261015T1622Z-draft-chained-tensor-work) is 0.81 alone, 0.74 committing every
   4 steps.
@@ -53,7 +57,7 @@ POOL_TOK = int(80e9 // KV_TOK)
 CERT = 0.99
 DEC_OTHER_MS, PRE_OTHER_MS_TOK = 1.09, 38.37 / 8192
 FA2_MS_8192, ETA_FA_INT8 = 73.11, 0.60
-FILLER = {"60 SMs": (0.222, 1.047, 128), "92 SMs": (0.34, 1.106, 96)}  # share at read clock, decode slowdown, decode SMs
+COMMIT = 1.09  # T2: committing X every 4 steps on a high-priority stream costs 1.09x the bare chain step at 8192²
 MIXES = [("chat", 1024, 256), ("RAG", 8192, 256), ("code / agents", 24576, 512), ("reasoning", 1024, 8192)]
 
 
@@ -139,11 +143,51 @@ def decode_n(b, l):
     return b * (LIN_TOK + LM_TOK + ATT_TOK_L * l)
 
 
+class Filler:
+    """A certified filler beside decode: (batch, share of the GPU's peak at the read clock, decode slowdown) points,
+    interpolated in log batch. `dsms`: the decode partition's SMs, for the linears' compute floor a batch ≤ 32 run never
+    reached (W11's); None when the points were measured at every batch used."""
+
+    def __init__(self, pts, dsms=None):
+        pts = sorted(pts)
+        self.lb = [math.log(b) for b, _, _ in pts]
+        self.f = [f for _, f, _ in pts]
+        self.s = [s for _, _, s in pts]
+        self.dsms = dsms
+
+    def at(self, b):
+        x = math.log(b)
+        if x <= self.lb[0] or len(self.lb) == 1:
+            return self.f[0], self.s[0]
+        if x >= self.lb[-1]:
+            return self.f[-1], self.s[-1]
+        i = next(j for j in range(len(self.lb) - 1) if self.lb[j] <= x <= self.lb[j + 1])
+        t = (x - self.lb[i]) / (self.lb[i + 1] - self.lb[i])
+        return self.f[i] + t * (self.f[i + 1] - self.f[i]), self.s[i] + t * (self.s[i + 1] - self.s[i])
+
+
+FILLER = {  # W11 (note:20261015T0713Z-draft-filler-issue-slack): 0.70 x the SM share, worst slowdown at batch ≤ 32
+    "60 SMs": Filler([(1, 0.222, 1.047)], dsms=128),
+    "92 SMs": Filler([(1, 0.34, 1.106)], dsms=96),
+}
+
+
+def measured_fillers(rows, shape="big"):
+    out = {}
+    for sms in sorted({r["fill_sms"] for r in rows if r["shape"] == shape}):
+        pts = [(r["B"], r["window"]["fill_share"] / COMMIT, r["slowdown"]) for r in rows
+               if r["shape"] == shape and r["fill_sms"] == sms and r["L"] == 2048]
+        out[f"{sms} SMs"] = Filler(pts)
+    return out
+
+
 def with_filler(m, b, ms, lin_ms, name):
-    share, slow, dsms = FILLER[name]
-    lin_macs = b * (LIN_TOK + LM_TOK)
-    floor = lin_macs / (0.88 * m.cap * dsms / SMS) * 1e3
-    t = ms * slow + max(0.0, floor - lin_ms * slow)
+    fl = FILLER[name]
+    share, slow = fl.at(b)
+    t = ms * slow
+    if fl.dsms:
+        floor = b * (LIN_TOK + LM_TOK) / (0.88 * m.cap * fl.dsms / SMS) * 1e3
+        t += max(0.0, floor - lin_ms * slow)
     return t, share * m.cap * t * 1e-3
 
 
@@ -228,21 +272,39 @@ def fmt_in(r, key):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("out", type=pathlib.Path)
+    ap.add_argument("--fill", type=pathlib.Path)
     ap.add_argument("--json", type=pathlib.Path)
     args = ap.parse_args()
     rows = [json.loads(line) for line in (args.out / "dcap.jsonl").read_text().splitlines() if line.strip()]
     m = Model(rows)
+    fill_rows = []
+    if args.fill:
+        fill_rows = [json.loads(line) for line in (args.fill / "fill.jsonl").read_text().splitlines() if line.strip()]
+        FILLER.clear()
+        FILLER.update(measured_fillers(fill_rows))
     res = {"read_mhz": m.mhz, "dram_read_gb_s": m.bw / 1e9, "att_fit": {"gb_s": m.att_bw / 1e9, "c0_ms": m.att_c0},
            "step_delta_ms": m.delta, "eta_fa2": m.eta_fa2, "A_v99": A_V99, "pool_tokens": POOL_TOK,
            "model_check": [{"B": b, "L": l, "measured": r["ms"], "model": m.lin(b) + m.att_ms(b, l) + m.delta}
                            for (b, l), r in sorted(m.step.items())],
            "tau": tau_table(m), "grid": grid(m), "mixes": mixes(m),
-           "a_ladder": [{"what": w, "A": a} for w, a in A_LADDER]}
+           "a_ladder": [{"what": w, "A": a} for w, a in A_LADDER],
+           "filler": "measured (--fill)" if args.fill else "W11 (assumed)", "fill": fill_rows}
     print(f"read clock {m.mhz:.0f} MHz, C = {m.cap / 1e12:.1f} TMAC/s (C_2430 = {m.cap_max / 1e12:.1f}); "
           f"DRAM read {m.bw / 1e9:.0f} GB/s; attention fit {m.att_bw / 1e9:.0f} GB/s + {m.att_c0:.3f} ms; "
           f"step δ {m.delta:.3f} ms; FA2 η {m.eta_fa2:.3f}; A(V99) {A_V99:.4f}; pool {POOL_TOK} tokens")
     worst = max(abs(c["model"] / c["measured"] - 1) for c in res["model_check"])
     print(f"step model vs measured: worst {worst:.1%}")
+    if fill_rows:
+        print("\n| chain | filler SMs | B | L | alone share | share beside decode | certified (÷ COMMIT) | "
+              "decode slowdown | split only | filler GB/s |\n|---|---|---|---|---|---|---|---|---|---|")
+        for r in sorted(fill_rows, key=lambda r: (r["shape"], r["fill_sms"], r["B"], r["L"])):
+            a = r["arms"]
+            split = a["split"]["ms"] / ((a["full"]["ms"] + a["full2"]["ms"]) / 2)
+            print(f"| {r['shape']} {r['m']}×{r['n']}×{r['k']} | {r['fill_sms']} | {r['B']} | {r['L']} | "
+                  f"{fmt(r['alone']['share'])} | {fmt(r['window']['fill_share'])} | "
+                  f"{fmt(r['window']['fill_share'] / COMMIT)} | {fmt(r['slowdown'])} | {fmt(split)} | "
+                  f"{r['window']['fill_gb_per_s']:.0f} |")
+    print(f"\nfiller: {res['filler']}")
     print("\n| kernel | η (read clock) | τ (V99) |\n|---|---|---|")
     for r in res["tau"]:
         print(f"| {r['kernel']} | {fmt(r['eta'])} | {fmt(r['tau'])} |")
