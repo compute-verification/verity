@@ -1,0 +1,43 @@
+{
+ "definitions": {
+  "MarlinMoeSchedule_v2{KT=4,NT=3,GRID=7}": {
+   "and": 9519
+  },
+  "MarlinMoeSchedule_v2{KT=5,NT=2,GRID=132}": {
+   "and": 6893
+  },
+  "MarlinMxfp4CoordinateW_v2{K=128,TK=64,DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 53603
+  },
+  "MarlinMxfp4Coordinate_v2{K=128,TK=64,DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 52804
+  },
+  "MarlinMxfp4Group_v2": {
+   "and": 829
+  },
+  "MarlinMxfp4StepActivation_v1{DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 49
+  },
+  "MarlinMxfp4StepColumn_v1{DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 11133
+  },
+  "MarlinMxfp4StepFromZeroActivation_v1{DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 49
+  },
+  "MarlinMxfp4StepFromZeroColumn_v1{DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 10834
+  },
+  "MarlinMxfp4StepFromZero_v2{DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 12402
+  },
+  "MarlinMxfp4Step_v2{DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 12701
+  },
+  "MoeExpertE2m1Row_v2{E=3,K=64}": {
+   "and": 8448
+  },
+  "MoeExpertE8m0Row_v2{E=3,K=4}": {
+   "and": 1056
+  }
+ }
+}

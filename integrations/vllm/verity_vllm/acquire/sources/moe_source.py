@@ -35,6 +35,26 @@ record, 320/320 MoeExpertGemm_v1 VUs).  The source therefore asks the committer 
 (`committer.flush_after_plane("up")`: one gather launch per MoE layer per step on the gather collector, a no-op on the arena committer);
 `act`, `down`, `sum` are overwritten only by the next layer, after that layer's pre-flush, and the router outputs are fresh allocations.
 
+The Marlin experts (`MarlinExperts.apply` -> `fused_marlin_moe`, experts/marlin_moe.py: DeepSeek-V4's MXFP4 experts on Hopper)
+launch `ops.moe_wna16_marlin_gemm(input, output, ...)` twice, the first with `mul_topk_weights` False:
+
+    moe_wna16_marlin_gemm(hidden_states, cache1!, w13, ..., top_k=TOPK, mul_topk_weights=False) -> moe/L<k>/up   (bf16 [M*TOPK, 2I])
+    moe_wna16_marlin_gemm(cache2, cache3!, w2, ..., a_scales, ..., top_k=1, mul_topk_weights=True) -> moe/L<k>/act (bf16 [M*TOPK, I])
+                                                                    moe/L<k>/down (bf16 [M*TOPK, H])
+
+and the sum is `MarlinExperts.moe_sum`'s `ops.moe_sum(input, output)`.  A launch is the w2 one only with `mul_topk_weights` True and
+`top_k` 1, so a model that applies the router weight on the input (which swaps the flags) is refused, not bound under swapped names.
+cache1 and cache3 are one buffer, as in TritonExperts, and
+the modular kernel carves the block's output, which `moe_sum` writes, out of the workspace that holds cache2
+(`MarlinExperts.workspace_shapes` swaps the two), so the source also flushes after the w2 launch (`flush_after_plane("act")`).
+
+DeepSeek-V4's router (`FusedTopKBiasRouter._compute_routing`) calls `fused_topk_bias`, the name its module holds, with
+`scoring_func` "sqrtsoftplus": on a layer with a hash table (`hash_indices_table`, the first `num_hash_layers`) it launches
+`ops.topk_hash_softplus_sqrt`, elsewhere `dsv4_topk`'s Triton kernel when `can_use_dsv4_topk` holds.  Its return (topk_weights
+f32 [M, TOPK], topk_ids i32 [M, TOPK]) is bound as router_w, router_ids, the kernel recorded per step.  A call without a hash
+table that does not take `dsv4_topk` is refused (the scored router's Program is that kernel's); a call with another scoring
+function is left to the launches it reaches (`topk_softmax`).
+
 `<k>` is the layer index of the MoE module whose forward is executing (forward pre-hooks on every `MoERunner`-family module set it).  Exactly
 six tensors per MoE layer per step are expected (seven with a scaled activation); `NativeHostCommitter.identity_check` verifies that count per layer per step (fail closed:
 a launch site that was not hit -- another kernel path, a fused variant -- is a missing tensor, never a silently smaller stream).  The
@@ -45,6 +65,7 @@ whatever the tokens chose (`rules/vllm_moe.py`; the sorted block schedule never 
 from __future__ import annotations
 
 import importlib
+import inspect
 import time
 from typing import Any
 
@@ -59,6 +80,9 @@ COVERS_FAMILIES = ["MoeRouterTopK_v1", "MoeExpertGemm_v1", "MoeExpertGemm_v2", "
 # e_score_correction_bias) with its defaults: the pinned signature, which `_compute_routing` calls by keyword
 GROUPED_TOPK_PARAMS = (("hidden_states", None), ("gating_output", None), ("topk", None), ("renormalize", None), ("num_expert_group", 0),
                        ("topk_group", 0), ("scoring_func", "softmax"), ("routed_scaling_factor", 1.0), ("e_score_correction_bias", None))
+TOPK_BIAS_MODULE = "vllm.model_executor.layers.fused_moe.router.fused_topk_bias_router"
+#: moe_wna16_marlin_gemm's positional index of each argument the source reads, after (input, output)
+MARLIN_ARGS = {"a_scales": 3, "top_k": 14, "mul_topk_weights": 15}
 
 
 def grouped_topk_args(a: tuple, k: dict) -> dict[str, Any]:
@@ -110,8 +134,11 @@ class MoeBlockSource:
         # `dispatch_fused_moe_kernel` looks it up in its module globals) and the engine's `experts.triton_moe` module, which imported the
         # name (TritonExperts.apply).  One binding per launch either way.
         sites: list[tuple[Any, str]] = [(ops, "topk_softmax"), (ops, "moe_sum"), (fm, "invoke_fused_moe_triton_kernel")]
+        if hasattr(ops, "moe_wna16_marlin_gemm"):
+            sites.append((ops, "moe_wna16_marlin_gemm"))
         for modname, attr in (("vllm.model_executor.layers.fused_moe.experts.triton_moe", "invoke_fused_moe_triton_kernel"),
-                              ("vllm.model_executor.layers.fused_moe.router.grouped_topk_router", "grouped_topk")):
+                              ("vllm.model_executor.layers.fused_moe.router.grouped_topk_router", "grouped_topk"),
+                              (TOPK_BIAS_MODULE, "fused_topk_bias")):
             try:
                 mod = importlib.import_module(modname)
             except Exception:  # noqa: BLE001
@@ -138,7 +165,7 @@ class MoeBlockSource:
 
             self._handles.append(m.register_forward_pre_hook(pre_hook))
         for mod, attr in self._sites():
-            self._hooks.wrap(mod, attr, lambda orig, attr=attr: self._wrap(attr, orig))
+            self._hooks.wrap(mod, attr, lambda orig, attr=attr, mod=mod: self._wrap(attr, orig, mod))
         self.active = True
 
     def uninstall(self) -> None:
@@ -207,8 +234,61 @@ class MoeBlockSource:
         if scaled:
             self._bind("act_scale", scale)
 
-    def _wrap(self, attr: str, orig):
+    def _bind_sqrtsoftplus(self, args: dict[str, Any], r: Any, mod: Any) -> None:
+        """One `fused_topk_bias` call with `scoring_func` "sqrtsoftplus": its (topk_weights, topk_ids) as router_w / router_ids, and the
+        kernel it launched (per step); a call without a hash table that `dsv4_topk` would not take is refused."""
+        job = getattr(self.c, "_cur", None)
+        if job is None or args["scoring_func"] != "sqrtsoftplus":
+            return
+        if args["hash_indices_table"] is not None:
+            kernel = "topk_hash_softplus_sqrt"
+        else:
+            idx = self.torch.int32 if args["indices_type"] is None else args["indices_type"]
+            if not mod.can_use_dsv4_topk(args["gating_output"], args["e_score_correction_bias"], args["topk"], args["renormalize"], idx):
+                self.c.errors.append("moe source: fused_topk_bias (sqrtsoftplus, no hash table) did not take dsv4_topk; router not bound")
+                self.c.x03_expected = getattr(self.c, "x03_expected", 0) + 1
+                return
+            kernel = "dsv4_topk"
+        key = f"sqrtsoftplus:{kernel}"
+        self.stats["router"][key] = self.stats["router"].get(key, 0) + 1
+        steps = self.router_steps.setdefault(kernel, [])
+        step = int(getattr(job, "step", -1))
+        if not steps or steps[-1] != step:
+            steps.append(step)
+        self._bind("router_w", r[0])
+        self._bind("router_ids", r[1])
+
+    def _wrap(self, attr: str, orig, mod: Any = None):
         me = self
+        if attr == "moe_wna16_marlin_gemm":
+            def moe_wna16_marlin_gemm(input, output, *a, **k):
+                r = orig(input, output, *a, **k)
+                def arg(name: str, i: int) -> Any:
+                    return k[name] if name in k else (a[i] if len(a) > i else None)
+                mtw, top_k = arg("mul_topk_weights", MARLIN_ARGS["mul_topk_weights"]), arg("top_k", MARLIN_ARGS["top_k"])
+                if mtw is True and top_k == 1:
+                    me._bind("act", input)
+                    me._bind_act_scale(arg("a_scales", MARLIN_ARGS["a_scales"]))
+                    me._bind("down", r)
+                    # the block's output, which moe_sum writes next, is carved from the workspace that holds act
+                    if getattr(me.c, "_cur", None) is not None and me._flush_after_plane is not None and me._flush_after_plane("act"):
+                        me.stats["plane_flushes"] += 1
+                elif mtw is False:
+                    me._bind("up", r)
+                else:
+                    me.c.errors.append(f"moe source: a Marlin launch with mul_topk_weights {mtw!r}, top_k {top_k!r}; not bound"[:200])
+                    me.c.x03_expected = getattr(me.c, "x03_expected", 0) + 1
+                return r
+            return moe_wna16_marlin_gemm
+        if attr == "fused_topk_bias":
+            sig = inspect.signature(orig)
+            def fused_topk_bias(*a, **k):
+                r = orig(*a, **k)
+                b = sig.bind(*a, **k)
+                b.apply_defaults()
+                me._bind_sqrtsoftplus(b.arguments, r, mod)
+                return r
+            return fused_topk_bias
         if attr == "topk_softmax":
             def topk_softmax(topk_weights, topk_ids, token_expert_indices, gating_output, *a, **k):
                 r = orig(topk_weights, topk_ids, token_expert_indices, gating_output, *a, **k)
@@ -254,11 +334,13 @@ class MoeBlockSource:
                  "bytes": self.stats["bytes"], "tensors": self.stats["launches"], "layers": self.stats["layers"], "tensors_per_layer": per_layer,
                  "plane_flushes": self.stats["plane_flushes"], "act_scaled": self.act_scaled, "router": dict(self.stats["router"]),
                  "router_kernel_steps": {k: list(v) for k, v in self.router_steps.items()},
-                 "evidence": ("MOE-03 source: wraps vllm._custom_ops.topk_softmax / moe_sum, fused_moe.invoke_fused_moe_triton_kernel (also "
-                              "at experts.triton_moe) and grouped_topk_router.grouped_topk; per MoE layer per step router_w, router_ids, up, "
+                 "evidence": ("MOE-03 source: wraps vllm._custom_ops.topk_softmax / moe_sum / moe_wna16_marlin_gemm, "
+                              "fused_moe.invoke_fused_moe_triton_kernel (also at experts.triton_moe), grouped_topk_router.grouped_topk and "
+                              "fused_topk_bias_router.fused_topk_bias; per MoE layer per step router_w, router_ids, up, "
                               "act (+ act_scale under block FP8), down, sum "
                               "snapshotted into the packed step stream (same run root) right after each kernel; [FLUSH-03] the up plane is "
-                              "flushed off the device right after staging (its workspace is the block's own w2 output: cache1/cache3 alias) -- "
+                              "flushed off the device right after staging (its workspace is the block's own w2 output: cache1/cache3 alias), "
+                              "and on Marlin act and down after the w2 launch (moe_sum's output is carved from act's workspace) -- "
                               f"{self.stats['plane_flushes']} flushes; identity_check requires exactly "
                               f"{per_layer} per layer per step; value correspondence: verity_vllm/ops/moe_kernel_xcheck.py (cp-moe, "
                               f"registry.moe Definitions bit-exact vs the same kernels); shapes seen {self.stats['shapes']}")}]

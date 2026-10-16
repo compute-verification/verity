@@ -317,12 +317,13 @@ def test_every_registered_gather_family_is_specified_with_its_own_extension():
     assert lg.evaluate(INV32, 1, 2, 3, 4) == L.inv(32) and lg.evaluate(1, 1, INV32, 3, 4) == L.inv(32)
     # the two registered families have different extensions and never collide: (16, N) ↔ GatherBf16x, (32, N) ↔ GatherF32x
     assert L.l_gather_row(16, 4).oor_payload == 0x7FFF != L.l_gather_row(32, 4).oor_payload
-    # a same-(w, N) original with a different extension cannot take the id
+    # a same-(w, N) original with a different extension cannot take the id: its own names the extension
     fake = PrimitiveDefinition("GatherFakex4", 1, (("token", Value(32)), ("column", Array(4, Value(32)))), Value(32),
                                lambda tok, *col: col[tok] if 0 <= tok < 4 else 0x12345678)
     assert L.registered_oor_extension(fake) == 0x12345678
-    with pytest.raises(TypeError, match="differs from GatherF32x4_v1's 0x7fc00000 already lifted under this id"):
-        L.l_gather_row_of(fake)
+    lf = L.l_gather_row_of(fake)
+    assert lf.id == "LGatherRow32x4o12345678_v1" and lf.oor_payload == 0x12345678 and lf.lifted_from_id == "GatherFakex4_v1"
+    assert L.l_gather_row(32, 4) is lg and lg.oor_payload == 0x7FC00000
     # an original whose out-of-range behaviour is not ONE constant has no registered total extension: nothing is invented
     two = PrimitiveDefinition("GatherTwox4", 1, (("token", Value(32)), ("column", Array(4, Value(32)))), Value(32),
                               lambda tok, *col: col[tok] if 0 <= tok < 4 else (tok & 0xFFFFFFFF))
@@ -361,7 +362,7 @@ def _check_specified_list():
     `Lifted[…]` is the strict wrapper.  The Continuation members and LFixedSelect are materialised here so the list is checked with them in it."""
     import re
     L.l_is_eos(1), L.l_emit_next(1), L.l_emit_next(0), L.l_fixed_select(4, 16), L.l_enable()  # + LEnable_v1 (v0.6 B7; moe M-1226 one-liner)
-    allowed = re.compile(r"^(LSelect\d+|LIsActive\d+|LBot\d+|LGatherRow\d+x\d+|LStepLive\d+|LSplitsForSMS\d+|LIsEOS\d+|LEmitNext\[H=\d+\]|LFixedSelect\d+x\d+|LEnable)_v1$")
+    allowed = re.compile(r"^(LSelect\d+|LIsActive\d+|LBot\d+|LGatherRow\d+x\d+(?:o[0-9a-f]+)?|LStepLive\d+|LSplitsForSMS\d+|LIsEOS\d+|LEmitNext\[H=\d+\]|LFixedSelect\d+x\d+|LEnable)_v1$")
     for fid in L.specified_ids():
         assert allowed.match(fid), fid
     for fid, d in list(REGISTRY.defs.items()):
