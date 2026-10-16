@@ -52,14 +52,15 @@ def main(o: Path) -> None:
             if g("qdither") and g("qplain"):
                 print(f"- the dither and S in the quantizer (qdither - qplain): {g('qdither') - g('qplain'):+.4f}"
                       f" (qplain {g('qplain'):.4f}, qdither {g('qdither'):.4f})")
-            if g("qwe") and g("qdither"):
-                print(f"- both producers in one launch (qwe): {g('qwe'):.4f}, against qdither + wedit"
-                      f" {g('qdither') + g('wedit'):.4f} ({g('qwe') - g('qdither') - g('wedit'):+.4f})")
+            for q in ("qwe", "qwe_w", "qwe_i"):
+                if g(q) and g("qdither"):
+                    print(f"- both producers in one launch ({q}): {g(q):.4f}, against qdither + wedit"
+                          f" {g('qdither') + g('wedit'):.4f} ({g(q) - g('qdither') - g('wedit'):+.4f})")
     il = jl(o / "il.jsonl")
     if il:
-        print("\n## per call, interleaved (41 reps, medians)\n\n| arm | base | ms | base ms | ratio | MHz (min-max) |\n|---|---|---|---|---|---|")
+        print(f"\n## per call, interleaved ({il[0]['reps']} reps, medians)\n\n| arm | base | ms | base ms | ratio | MHz (min-max) |\n|---|---|---|---|---|---|")
         for r in il:
-            print(f"| {r['il']} | {r['base']} | {r['ms']:.4f} | {r['base_ms']:.4f} | {r['ratio']:.4f} | {r['mhz']:.0f} ({r['mhz_min']:.0f}-{r['mhz_max']:.0f}) |")
+            print(f"| {r['il']}{' (cold L2)' if r.get('cold') else ''} | {r['base']} | {r['ms']:.4f} | {r['base_ms']:.4f} | {r['ratio']:.4f} | {r['mhz']:.0f} ({r['mhz_min']:.0f}-{r['mhz_max']:.0f}) |")
     for p in sorted(o.glob("ncu-*.csv")):
         d = ncu(p)
         if d:

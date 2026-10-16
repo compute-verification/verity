@@ -3,7 +3,8 @@
 # (cwd = the source tree's root). Builds egemm.cu outside the lease and runs the SASS gate on it; then, gates before
 # timing: lease 1 runs the device gates (a small shape and o_proj, poisoned buffers, a no-write control) and dumps tiles;
 # egemm_ref.py recomputes them on the CPU from x, W and the key; only if both pass, lease 2 times hot items (EG_ARMS), the
-# slice's per-call interleaving (IL pairs ARM:BASE) and ncu's issue and pipe counters. Clocks are read, never set.
+# slice's per-call interleaving (IL pairs ARM:BASE; IL_COLD the same pairs with L2 flushed before each call) and ncu's
+# issue and pipe counters. Clocks are read, never set.
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=EGEMM \
 #     -- bash benchmarks/edited_gemm/run.sh
@@ -61,9 +62,10 @@ echo "ref rc $ref" | tee -a "$O/rc.txt"
 if [ "$ref" != 0 ] || grep -q 'rc [1-9]' "$O/rc.txt"; then
   echo "a gate failed: nothing timed"; cat "$O/rc.txt"; cat "$O/gate.jsonl" "$O/ref.jsonl"; exit 5
 fi
-export REPS=${REPS:-9}
-export EG_ARMS=${EG_ARMS:-plain,plainq,qplain,qdither,wedit,qwe,e_plain,t_duo32,e_l2,e_l2h,e_l2q,e_l3h,e_l3q,e_l4h,e_l4q,e_l2o,e_l3o,e_l2hm,e_l2qm,e_l3qm,edited:e_l2q,editedq:e_l2q,editedf:e_l2q,overlapq:e_l2q}
-export IL=${IL:-"editedf:e_l2q:plainq editedq:e_l2q:plainq overlapq:e_l2q:plainq edited:e_l2q:plain e_l2q:plain e_plain:plain qwe:qplain"}
+export REPS=${REPS:-15} IL_REPS=${IL_REPS:-41}
+export EG_ARMS=${EG_ARMS:-plain,plainq,qplain,qdither,wedit,qwe,qwe_w,qwe_i,e_plain,t_duo32,e_l2h,e_l2q,e_l3h,e_l3qm,e_l2o,e_l4q,edited:e_l2q,editedq:e_l2q,editedf:e_l2q,editedf_w:e_l2q,editedf_i:e_l2q,editedf:e_l3qm}
+export IL=${IL:-"editedf:e_l2q:plainq editedf_i:e_l2q:plainq editedf_w:e_l2q:plainq editedq:e_l2q:plainq editedf:e_l3qm:plainq edited:e_l2q:plain e_l2q:plain e_l3qm:plain e_plain:plain"}
+export IL_COLD=${IL_COLD:-"editedf:e_l2q:plainq editedq:e_l2q:plainq edited:e_l2q:plain e_l2q:plain"}
 export NCU=${NCU:-"e_plain e_l2q qwe"}
 # shellcheck disable=SC2016
 gpu-lease 1 --wait --max-min 12 -- bash -c '
@@ -72,7 +74,11 @@ gpu-lease 1 --wait --max-min 12 -- bash -c '
   "$BIN/egemm" bench "$REPS" 8192 4096 4096 > "$O/bench.jsonl" 2> "$O/bench.err"; echo "bench rc $?" >> "$O/rc.txt"
   for p in $IL; do
     base=${p##*:}; arm=${p%:*}
-    "$BIN/egemm" il 41 "$arm" "$base" 8192 4096 4096 >> "$O/il.jsonl" 2>> "$O/il.err"; echo "il $p rc $?" >> "$O/rc.txt"
+    "$BIN/egemm" il "$IL_REPS" "$arm" "$base" 8192 4096 4096 >> "$O/il.jsonl" 2>> "$O/il.err"; echo "il $p rc $?" >> "$O/rc.txt"
+  done
+  for p in $IL_COLD; do
+    base=${p##*:}; arm=${p%:*}
+    EG_COLD=1 "$BIN/egemm" il "$IL_REPS" "$arm" "$base" 8192 4096 4096 >> "$O/il.jsonl" 2>> "$O/il.err"; echo "il cold $p rc $?" >> "$O/rc.txt"
   done
   kill $smi
   M=gpu__time_duration.sum,sm__cycles_elapsed.avg,sm__inst_executed.sum,sm__inst_executed_pipe_tensor.sum,sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_active,sm__pipe_alu_cycles_active.avg.pct_of_peak_sustained_active,sm__pipe_fmaheavy_cycles_active.avg.pct_of_peak_sustained_active,smsp__issue_active.avg.pct_of_peak_sustained_active,smsp__warps_eligible.avg.per_cycle_active
