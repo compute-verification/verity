@@ -953,6 +953,28 @@ def test_a_premise_the_lock_does_not_list_fails():
         "with its guarantees' owner and commit the record (Daniel's DM shows it when it lands)"]
 
 
+def test_the_verifiers_path_has_no_unlisted_compiled_code_and_hashes_through_its_parameter():
+    """Daniel's checks (a) and (b) on the verifier's path (`verifier` in the policy): an `@[extern]` or `@[implemented_by]`
+    constant its entries reach fails unless `allow` names it (a name prefix, or `module:` for a module), and so does each
+    entry into the `hash` namespace that bypasses `stop`, naming its path; a missing entry is named; no rule, no checks."""
+    path = {"missing": ["P.gone"], "reached": 40,
+            "implemented_by": [{"name": "P.fast", "module": "P.Defs", "by": "P.fastImpl"}],
+            "extern": [{"name": "Nat.add", "module": "Init.Prelude"}, {"name": "ByteArray.push", "module": "Init.Data.ByteArray"}],
+            "hash": [{"name": "P.Sha512.hash", "module": "P.Hash", "path": ["P.verify", "P.tag", "P.Sha512.hash"]}]}
+    rule = {"entries": ["P.verify", "P.gone"], "stop": ["P.key"], "hash": "P.Sha512", "allow": ["Nat.add", "module:Init.Data"]}
+    fails = A.verifier_failures(rule, path)
+    assert fails == [
+        "verifier: entry P.gone is not a constant of the build; fix `verifier.entries`",
+        "verifier: P.fast (@[implemented_by], in P.Defs) is on the path from P.verify, P.gone: compiled code no proof sees; "
+        "add it to `verifier.allow` only if it is a core primitive",
+        "verifier: P.verify, P.gone reach P.Sha512.hash outside the hash parameter, by P.verify -> P.tag -> P.Sha512.hash; "
+        "route it through the parameter, or add the public constant it serves to `verifier.stop`"]
+    assert A.verifier_failures(None, path) == []
+    assert A.verifier_failures(rule, None)[0].startswith("verifier: `Facts.lean` reported no verifier path")
+    f = facts(); f["verifier"] = {**path, "missing": [], "implemented_by": [], "hash": []}
+    assert A.judge({**POLICY, "verifier": rule}, f, FILES, update=True)[0] == []
+
+
 def test_an_assumption_is_listed_by_name_with_its_record():
     """Each assumption has an owner and the digest of its definition as `reads` holds it, so a changed assumption is its own
     record; an entry no guarantee reads fails; an update converts a list of assumption modules into the definitions read

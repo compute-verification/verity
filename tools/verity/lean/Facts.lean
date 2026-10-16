@@ -503,6 +503,57 @@ def names (j : Json) (k : String) : Array Name :=
 end LeanAudit
 
 open LeanAudit in
+/-- The verifier's path: the constants its `entries` reach through definitions' values and `implemented_by` targets, in
+every imported module, expanding nothing in `stop`. Reported: each reached `@[implemented_by]` and `@[extern]` constant,
+and each constant of the `hash` namespace the walk enters from outside it, with the path from an entry. -/
+unsafe def verifierInfo (env : Environment) (entries stop : Array Name) (hash : Name) : Json := Id.run do
+  let moduleOf (c : Name) : Option Name := (env.getModuleIdxFor? c).map fun i => moduleName env i
+  let mut impl : Std.HashMap Name Name := {}
+  let mut ext : NameSet := {}
+  for data in env.header.moduleData do
+    for (n, t) in entriesOf Name data Compiler.implementedByAttr.ext.name do
+      impl := impl.insert n t
+    for (n, _) in entriesOf Unit data externAttr.ext.name do
+      ext := ext.insert n
+  let stops := stop.foldl NameSet.insert {}
+  let mut seen : NameSet := {}
+  let mut parent : Std.HashMap Name Name := {}
+  let mut stack := #[]
+  for e in entries do
+    if env.contains e then
+      seen := seen.insert e
+      stack := stack.push e
+  while !stack.isEmpty do
+    let n := stack.back!
+    stack := stack.pop
+    if stops.contains n then continue
+    let next := (match env.find? n with
+      | some (.defnInfo d) => d.value.getUsedConstants
+      | some (.opaqueInfo d) => d.value.getUsedConstants
+      | _ => #[]) ++ (impl[n]?.toArray)
+    for c in next do
+      if !seen.contains c then
+        seen := seen.insert c
+        parent := parent.insert c n
+        stack := stack.push c
+  let pathTo (c : Name) : Array String := Id.run do
+    let mut p := #[c.toString]
+    let mut x := c
+    for _ in [0:16] do
+      match parent[x]? with
+      | some y => p := p.push y.toString; x := y
+      | none => break
+    return p.reverse
+  let reached := seen.toArray.qsort Name.lt
+  let locOf (c : Name) : List (String × Json) := [("name", toJson c.toString), ("module", toJson ((moduleOf c).map toString))]
+  return Json.mkObj [
+    ("missing", toJson ((entries.filter (!env.contains ·)).map toString)), ("reached", toJson reached.size),
+    ("implemented_by", toJson (reached.filterMap fun c => impl[c]?.map fun t => Json.mkObj (locOf c ++ [("by", toJson t.toString)]))),
+    ("extern", toJson (reached.filter ext.contains |>.map fun c => Json.mkObj (locOf c))),
+    ("hash", toJson (reached.filter (fun c => hash.isPrefixOf c && !(parent[c]?.map hash.isPrefixOf).getD true)
+      |>.map fun c => Json.mkObj (locOf c ++ [("path", toJson (pathTo c))])))]
+
+open LeanAudit in
 unsafe def main (args : List String) : IO UInt32 := do
   initSearchPath (← findSysroot)
   let some cfgPath := args.head? | throw <| IO.userError "usage: Facts.lean CONFIG"
@@ -639,5 +690,9 @@ unsafe def main (args : List String) : IO UInt32 := do
     ("unreported_errors", toJson unreportedErrors), ("declared_axioms", toJson declared), ("escapes", toJson escapes), ("spec_definitions", toJson specDefs),
     ("instances", toJson instances), ("pins", Json.mkObj pinned.toList),
     ("moved_conflicts", toJson conflicts)]
+  let vcfg := cfg.getObjValD "verifier"
+  let doc := if (names vcfg "entries").isEmpty then doc else
+    doc.setObjVal! "verifier" (verifierInfo env (names vcfg "entries") (names vcfg "stop")
+      (((vcfg.getObjValD "hash").getStr?.toOption.getD "").toName))
   IO.FS.writeFile out doc.compress
   return 0

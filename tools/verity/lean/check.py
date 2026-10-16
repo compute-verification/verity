@@ -182,7 +182,7 @@ FIXTURES = HERE / "tests" / "fixtures"
 #: name components of the declarations Lean generates for a definition (listed under `reads` with it, not by name)
 GENERATED = re.compile(r"^(_.*|match_\d+|proof_\d+|eq_\d+|eq_def|mk|rec|recOn|casesOn|noConfusion|noConfusionType|below|brecOn"
                        r"|binductionOn|ibelow|ctorIdx|inj|injEq|sizeOf_spec)$")
-ORDER = ("roots", "proved_in", "exempt", "runs", "axioms", "assumptions", "meaning", "escapes", "compile_time",
+ORDER = ("roots", "proved_in", "exempt", "runs", "axioms", "assumptions", "meaning", "escapes", "verifier", "compile_time",
          "dependency_unchecked", "layers", "reads_exempt", "upstream", "four_names", "guarantees", "shape", "reads", "dependencies")
 #: a guarantee's `owner`: the handle of the lane that answers for it (`@proofs`)
 OWNER = re.compile(r"@[a-z0-9][a-z0-9-]*")
@@ -774,6 +774,7 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
     config.write_text(json.dumps({"roots": policy["roots"], "meaning": policy.get("meaning", policy["roots"]),
                                   "allowed": policy.get("axioms", STANDARD), "pins": sorted(policy.get("guarantees", {})),
                                   "spec": spec_of(policy),
+                                  "verifier": {k: v for k, v in policy.get("verifier", {}).items() if k in ("entries", "stop", "hash")},
                                   "moved": sorted([new, old] for old, new in (moved or {}).items()),
                                   "out": str(out), "canon": str(canon)}))
     rc, text = run(["lake", "env", "lean", "--run", str(TOOL / "Facts.lean"), str(config)], pkg, work / "facts.log")
@@ -974,6 +975,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
                          f"`escapes` with the reason, or remove it")
     for n in sorted(set(listed_escapes) - set(found)):
         fails.append(f"escape: {n} is listed under `escapes` but is not one; remove the entry")
+    fails += verifier_failures(policy.get("verifier"), facts.get("verifier"))
     modules = set(facts["modules"])
     exempt = policy.get("exempt", {})
     for m, rel in sorted(files.items()):
@@ -1085,6 +1087,37 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     if update and (records or "assumptions" in policy):
         out["assumptions"] = records
     return fails, out
+
+
+def verifier_failures(rule: dict | None, found: dict | None) -> list[str]:
+    """The verifier's path (`verifier` in the policy: its `entries`, the constants it may reach without being expanded,
+    `stop`, and the `hash` namespace): every `@[implemented_by]` or `@[extern]` constant the entries reach is compiled code
+    no proof sees, so one fails unless `allow` names it (a name, or a name prefix; `module:M` for every constant of a module
+    under `M`), and the entries reach the `hash` namespace only through `stop`, so the verifier hashes through its
+    parameter (Daniel's checks (a) and (b), LEAN-18)."""
+    if not rule:
+        return []
+    if found is None:
+        return ["verifier: `Facts.lean` reported no verifier path; is the audit tool older than the policy?"]
+    allow = rule.get("allow", [])
+    names = [a for a in allow if not a.startswith("module:")]
+    modules = [a[len("module:"):] for a in allow if a.startswith("module:")]
+
+    def allowed(e: dict) -> bool:
+        n = e["name"]
+        return any(n == a or n.startswith(a + ".") for a in names) or under(modules, e.get("module") or "")
+
+    entries = ", ".join(rule.get("entries", []))
+    fails = [f"verifier: entry {m} is not a constant of the build; fix `verifier.entries`" for m in found.get("missing", [])]
+    for kind in ("implemented_by", "extern"):
+        for e in found.get(kind, []):
+            if not allowed(e):
+                fails.append(f"verifier: {e['name']} (@[{kind}], in {e.get('module')}) is on the path from {entries}: compiled "
+                             f"code no proof sees; add it to `verifier.allow` only if it is a core primitive")
+    for h in found.get("hash", []):
+        fails.append(f"verifier: {entries} reach {h['name']} outside the hash parameter, by {' -> '.join(h['path'])}; route "
+                     f"it through the parameter, or add the public constant it serves to `verifier.stop`")
+    return fails
 
 
 def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str | None,
