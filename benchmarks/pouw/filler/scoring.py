@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import math
 import re
 import statistics
@@ -39,10 +40,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "decode_capacity"))
 import share  # noqa: E402  CAP's constants: MACs a token, non-GEMM times, FA2, the int8 peak
 
-V2, V3 = "filler-scorer/v2", "filler-scorer/v3"
+V2, V3, V4 = "filler-scorer/v2", "filler-scorer/v3", "filler-scorer/v4"
 #: the active lock. V3 adds the arm's record checked before its lease (`arms.record_problems`), each point's slowdown
 #: margin (`margins`), and the filler read at its proved entry (`FILLER_ENTRIES`, `filler_entry`) with SCORE under CH
-#: beside it. `score.py report OUT --as v2` reads a run as v2 did
+#: beside it. `score.py report OUT --as v2` reads a run as v2 did. V4 (prepared, not active: `report OUT --as v4`
+#: previews it) reads the filler wherever it's called from, filler warps inside serving kernels included
+#: (`program_facts`, `filler_entry_v4`, `credit_fixed`, `paths_gate`, `whole_of_peak`)
 SCORER = V3
 LIMIT = 1.05  # serving slowdown, every entry
 DRAM_LIMIT = 0.01  # of the HBM bandwidth the same run's validated counter measures
@@ -376,13 +379,19 @@ def kernel_facts(sass: str) -> dict:
             acc += len(a) < 4 or a[3] != "RZ"
         elif mine and base in FP_OPS and not (base == "HFMA2" and _CONST_HFMA2.search(args)):
             fp[op] = fp.get(op, 0) + 1
+    kind, L = _kind_l(mma, acc)
+    return {"functions": functions, "mma": dict(sorted(mma.items())), "fp_ops": dict(sorted(fp.items())),
+            "accumulating_mma": acc, "mma_outside": sorted(outside), "kind": kind, "fp_free": not fp, "L": L}
+
+
+def _kind_l(mma: dict, acc: int) -> tuple[str | None, int | None]:
+    """The one `MMA_KINDS` kind of the MMA mnemonics `mma`, or None; and each word's products, the one shape's k when no
+    MMA accumulates (`acc` 0), else None."""
     found = {next(((k, m["shape"]) for k, rx in MMA_KINDS.items() if (m := rx.fullmatch(op))), (None, None))
              for op in mma}
     kinds, shapes = {k for k, _ in found}, {s for _, s in found}
     kind = next(iter(kinds)) if len(kinds) == 1 else None
-    return {"functions": functions, "mma": dict(sorted(mma.items())), "fp_ops": dict(sorted(fp.items())),
-            "accumulating_mma": acc, "mma_outside": sorted(outside), "kind": kind, "fp_free": not fp,
-            "L": MMA_K.get(next(iter(shapes))) if kind and len(shapes) == 1 and not acc else None}
+    return kind, MMA_K.get(next(iter(shapes))) if kind and len(shapes) == 1 and not acc else None
 
 
 #: what `filler_entry` does not check when a theorem's entry applies, stated with the decision (each entry's own
@@ -415,7 +424,7 @@ def _theorem_checks(e: dict, noise: str | None, facts: dict | None, fixed_work: 
 
 
 def filler_entry(noise: str | None, facts: dict | None, *, fixed_work: bool = False,
-                 entries: dict = FILLER_ENTRIES) -> dict:
+                 entries: dict = FILLER_ENTRIES, check=None) -> dict:
     """Which certified-fraction entry the filler is read at (filler-scorer/v3), from its declared operand noise and the
     kernel facts of the scorer's own build (`kernel_facts`), never the declaration alone. A theorem's entry (Theorem K's,
     then Theorem E's) applies when every check holds:
@@ -433,11 +442,11 @@ def filler_entry(noise: str | None, facts: dict | None, *, fixed_work: bool = Fa
     Otherwise the proved floor, 0: "chained" when the arm declares a chain or any MMA accumulates into an earlier word,
     else "unproven". ``failed`` says why each theorem ahead of the one that applies doesn't; `UNCHECKED` and the entry's
     own ``unchecked`` are what the checks can't see. ``active`` is the entry SCORE reads: the first that applies and is
-    active."""
+    active. ``check(entry)`` replaces these checks (filler-scorer/v4's, `filler_entry_v4`)."""
     f, checks, failed, order = facts or {}, {}, {}, []
     for name, e in entries.items():
         if "noise" in e:
-            checks[name], fails = _theorem_checks(e, noise, facts, fixed_work)
+            checks[name], fails = check(e) if check else _theorem_checks(e, noise, facts, fixed_work)
             if fails:
                 failed[name] = fails
             else:
@@ -458,6 +467,350 @@ def certified(entry: str | dict, entries: dict = FILLER_ENTRIES) -> dict:
     """`CERTIFIED` with the filler read at `entry`: a name in `entries`, or an entry such as `UNDER_CH`."""
     e = entries[entry] if isinstance(entry, str) else entry
     return {"serving": CERTIFIED["serving"], "filler": {k: e[k] for k in ("fraction", "status", "source")}}
+
+
+# ---- filler-scorer/v4: the filler read wherever it's called from -----------------------------------------------------
+
+#: opcodes (their base) that can write global memory, where receipts are: stores (global, generic, surface), reductions,
+#: atomics, and the TMA and bulk copies out of shared memory. Shared memory's (STS, ATOMS) and the stack's (STL) can't
+STORE_OPS = frozenset("ST STG RED REDG ATOM ATOMG SUST SURED SUATOM UTMASTG UTMAREDG UBLKCP UBLKRED".split())
+#: what a dfill_k device function that writes global memory may run (coordinator 11:05Z: a store-only __noinline__
+#: dfill_k function, `dfill_k_put`, may take the receipt and step-count pointers if its body holds stores and address
+#: arithmetic only): plain stores, address arithmetic and moves, constant-bank loads (parameters, the memory descriptor)
+#: and its return. Reductions and atomics combine values, so they aren't stores here
+PUT_OPS = frozenset("ST STG IADD IADD3 IADD32I LEA IMAD SHF MOV MOV32I UMOV UIADD3 ULEA LDC LDCU ULDC RET NOP".split())
+#: branches whose target the listing doesn't name: a caller with one has no control-flow graph to bound
+INDIRECT_OPS = frozenset("BRX JMX JMP".split())
+TERMINAL_OPS = frozenset("EXIT RET BPT KILL".split())
+_INSN = re.compile(r"^\s*/\*(?P<addr>[0-9a-f]{4,})\*/\s+(?P<guard>@!?U?P[T0-9]+\s+)?"
+                   r"(?P<op>[A-Z][A-Z0-9_]*(?:\.[A-Z0-9_]+)*)\s*(?P<args>[^;]*);")
+_FUNC = re.compile(r"^\s*\.type\s+(?P<name>[^\s,]+)\s*,\s*@function")
+_ENTRY = re.compile(r'^\s*\.other\s+(?P<name>[^\s,]+)\s*,\s*@"STO_CUDA_ENTRY')
+_LABEL = re.compile(r"^(?P<name>[^\s:/][^\s:]*):\s*$")
+_REF = re.compile(r"`\((?P<name>[^)\s]+)\)")
+
+
+def parse_nvdisasm(text: str) -> list[dict]:
+    """The functions of an ``nvdisasm -c`` listing, in order, each {name, entry, insns: [(address, guarded, op, args)],
+    labels: {label: index of the instruction it marks}}. A kernel is an entry; nvcc compiles a __noinline__ device
+    function into each kernel that calls it as its own function ``$<kernel>$<callee>`` (cuobjdump -sass prints it inside
+    the kernel, unnamed), and every CALL and branch names its target."""
+    lines = text.splitlines()
+    declared = {m["name"] for ln in lines if (m := _FUNC.match(ln))}
+    entries = {m["name"] for ln in lines if (m := _ENTRY.match(ln))}
+    fns, cur = [], None
+    for ln in lines:
+        if ln.startswith("//--") or ln.lstrip().startswith(".section"):
+            cur = None
+        elif m := _LABEL.match(ln):
+            if m["name"] in declared:
+                cur = {"name": m["name"], "entry": m["name"] in entries, "insns": [], "labels": {}}
+                fns.append(cur)
+            elif cur is not None:
+                cur["labels"][m["name"]] = len(cur["insns"])
+        elif cur is not None and (m := _INSN.match(ln)):
+            cur["insns"].append((m["addr"], bool(m["guard"]), m["op"], m["args"].strip()))
+    return fns
+
+
+def _step(fn: dict, i: int) -> tuple[list[int], str | None, bool]:
+    """Instruction i's successors in fn, the symbol it calls (None if it calls none or an unnamed target), and whether
+    its control transfer resolved. A guarded or predicated branch, EXIT or RET also falls through."""
+    _, guard, op, args = fn["insns"][i]
+    base, nxt = op.split(".")[0], [i + 1] if i + 1 < len(fn["insns"]) else []
+    ref = _REF.search(args)
+    if base == "BRA":
+        t = fn["labels"].get(ref["name"]) if ref else None
+        if t is None:
+            return nxt, None, False
+        cond = guard or bool(args.replace(ref.group(0), "").strip(" ,"))
+        return [t] + nxt if cond else [t], None, True
+    if base in INDIRECT_OPS:
+        return nxt, None, False
+    if base == "CALL":
+        return nxt, ref["name"] if ref else None, True
+    if base in TERMINAL_OPS:
+        return nxt if guard else [], None, True
+    return nxt, None, True
+
+
+def _reach(starts, edges: dict) -> set:
+    seen, todo = set(), list(starts)
+    while todo:
+        i = todo.pop()
+        if i not in seen:
+            seen.add(i)
+            todo.extend(edges.get(i, ()))
+    return seen
+
+
+def _region(fn: dict, into: set) -> tuple[set, list[int], bool]:
+    """The instructions of fn a warp that calls into `into` may run besides those CALLs: every one on a path from fn's
+    entry to such a CALL, and every one reachable after it returns; the CALLs; whether fn's branches all resolved."""
+    n, fwd, rev, calls, ok = len(fn["insns"]), {}, {}, [], True
+    for i in range(n):
+        s, callee, resolved = _step(fn, i)
+        ok &= resolved
+        fwd[i] = s
+        for j in s:
+            rev.setdefault(j, []).append(i)
+        if callee in into:
+            calls.append(i)
+    before = _reach(calls, rev) & _reach([0], fwd) if n else set()
+    after = _reach([i + 1 for i in calls if i + 1 < n], fwd)
+    return (before | after) - set(calls), calls, ok
+
+
+def _mma_read(insns) -> tuple[dict, dict, int]:
+    """(MMA mnemonics, FP and conversion opcodes, MMAs whose accumulator input isn't RZ) over `insns`, as
+    `kernel_facts` counts them."""
+    mma, fp, acc = {}, {}, 0
+    for _, _, op, args in insns:
+        base = op.split(".")[0]
+        if base.endswith("MMA"):
+            mma[op] = mma.get(op, 0) + 1
+            a = [x.strip() for x in args.split(",")]
+            acc += len(a) < 4 or a[3] != "RZ"
+        elif base in FP_OPS and not (base == "HFMA2" and _CONST_HFMA2.search(args)):
+            fp[op] = fp.get(op, 0) + 1
+    return mma, fp, acc
+
+
+def _bad(fn: dict, idx, where: str) -> list[str]:
+    """What refuses an arm among fn's instructions `idx`, all outside the filler: an MMA, a store that can write global
+    memory, a call to an unnamed target."""
+    out = []
+    for i in sorted(idx):
+        addr, _, op, args = fn["insns"][i]
+        base = op.split(".")[0]
+        if base.endswith("MMA"):
+            out.append(f"{where}: {op} at {addr}")
+        elif base in STORE_OPS:
+            out.append(f"{where}: {op} at {addr} (a store that can write a receipt)")
+        elif base == "CALL" and not _REF.search(args):
+            out.append(f"{where}: {op} {args} at {addr} (a call through a register)")
+    return out
+
+
+def _width(op: str) -> int:
+    return 4 if ".128" in op else 2 if ".64" in op or ".WIDE" in op else 1
+
+
+def _regs(operand: str, n: int) -> set[str]:
+    m = re.match(r"-?(?P<u>U?)R(?P<i>\d+)\b", operand.strip())
+    return {f"{m['u']}R{int(m['i']) + j}" for j in range(n)} if m else set()
+
+
+def _put_bad(fn: dict, where: str) -> list[str]:
+    """Why fn, a dfill_k device function with a store, isn't store-only: an opcode outside `PUT_OPS`, or a store whose
+    value an instruction of the body computes (a store-only function stores its arguments as they came)."""
+    out, written, stored = [], set(), []
+    for addr, _, op, args in fn["insns"]:
+        base, ops = op.split(".")[0], [a.strip() for a in re.split(r",(?![^\[]*\])", args)] if args else []
+        if base not in PUT_OPS:
+            out.append(f"{where}: {op} at {addr} (a dfill_k function that writes global memory holds only stores and "
+                       "address arithmetic)")
+        elif base in ("ST", "STG"):
+            stored.append((addr, op, _regs(ops[-1], _width(op)) if ops else set()))
+        elif ops and base != "RET":
+            written |= _regs(ops[0], _width(op))
+    out += [f"{where}: {op} at {addr} stores a value the function computes, not its argument"
+            for addr, op, regs in stored if regs & written]
+    return out
+
+
+def program_facts(listings: dict[str, str]) -> dict:
+    """filler-scorer/v4's reading of the scorer's own build: `listings` maps each binary that ran scored rows (dscore,
+    and each driver an arm brings, `score.build`) to its cubins' ``nvdisasm -c`` text.
+    - ``filler``: the functions whose symbol has a `FILLER_KERNELS` name (dfill_k, dfill_p), whether a kernel or a
+      __noinline__ device function's clone in a serving kernel (``$<kernel>$dfill_k...``), wherever it's called from.
+      The theorem entries' checks read their bodies and what they call (``helpers``) alone, as `kernel_facts` reads a
+      kernel: ``mma``, ``fp_ops``, ``accumulating_mma``, ``kind``, ``fp_free``, ``L``. The functions the filler warps'
+      paths call outside the filler (``path_helpers``, e.g. the u64 remainder a ring index takes, whose reciprocal is FP)
+      aren't read there: they're held to no MMA and no store.
+    - ``callers``: each other function that calls into the filler, directly or through a function that does, with its
+      filler warps' region (`_region`): the instructions on a path from its entry to such a CALL or after one returns.
+    - ``violations``, which refuse the arm (`paths_gate`): in a region, or in any function a region or the filler calls
+      that isn't the filler, an MMA, a store that can write global memory (`STORE_OPS`: a receipt's), or a call through
+      a register; a caller with a branch whose target isn't named; and a dfill_k device function (not a kernel) that
+      writes global memory, itself or through what it calls, unless it is store-only (``stores``, `_put_bad`: stores,
+      address arithmetic and moves alone, storing its arguments unmodified; such a function, `dfill_k_put`, may take
+      the receipt and step-count pointers, coordinator 11:05Z), so an MMA function's inputs stay coins, tile and step.
+      A guarded instruction counts as run: a warp-role split by predication instead of a branch is refused.
+    - ``serving_mma``: every other function's MMAs (a serving kernel's consumer warps, kernels with no filler), outside
+      the filler warps' paths, credited at the serving reading.
+    - ``fixed_from``: each binary's functions that fixed work can come from, its callers and its dfill_p phase kernels
+      (a dfill_k kernel is the split filler, counted in chunks): none, and its rows' fixed work isn't credited."""
+    fns = {(b, f["name"]): f for b, text in listings.items() for f in parse_nvdisasm(text)}
+    calls = {k: {(k[0], m["name"]) for _, _, op, args in f["insns"] if op.startswith("CALL") and (m := _REF.search(args))}
+             for k, f in fns.items()}
+    filler = {k for k in fns if any(x in k[1] for x in FILLER_KERNELS)}
+    reach = set(filler)
+    while grow := {k for k in fns if k not in reach and calls[k] & reach}:
+        reach |= grow
+
+    def below(starts):
+        out, todo = set(), list(starts)
+        while todo:
+            k = todo.pop()
+            if k not in out and k not in reach and k in fns:
+                out.add(k)
+                todo.extend(calls[k])
+        return out
+
+    own = below(c for k in filler for c in calls[k])
+    violations, callers, regions, todo, puts = [], {}, {}, [], []
+    for k in sorted(filler):
+        if not fns[k]["entry"] and any(op.split(".")[0] in STORE_OPS for g in [k, *below(calls[k])]
+                                       for _, _, op, _ in fns[g]["insns"]):
+            puts.append(f"{k[0]}: {k[1]}")
+            violations += _put_bad(fns[k], f"{k[1]} ({k[0]}), a dfill_k function that writes global memory")
+    for k in sorted(reach - filler):
+        f = fns[k]
+        reg, at, ok = _region(f, {n for b, n in reach if b == k[0]})
+        regions[k] = reg
+        if not ok:
+            violations.append(f"{k[1]} ({k[0]}): a branch whose target isn't named, so its filler warps' paths can't be "
+                              "bounded")
+        violations += _bad(f, reg, f"{k[1]} ({k[0]}), on its filler warps' path")
+        todo += [(k[0], m["name"]) for i in reg if f["insns"][i][2].startswith("CALL")
+                 and (m := _REF.search(f["insns"][i][3]))]
+        callers[f"{k[0]}: {k[1]}"] = {"calls": sorted({f["insns"][i][3] for i in at}), "region": len(reg)}
+    helpers = own | below(todo)
+    for k in sorted(helpers):
+        violations += _bad(fns[k], range(len(fns[k]["insns"])), f"{k[1]} ({k[0]}), called on the filler warps' path")
+    mma, fp, acc = _mma_read(i for k in filler | own for i in fns[k]["insns"])
+    kind, L = _kind_l(mma, acc)
+    serving = {}
+    for k, f in fns.items():
+        n = sum(op.split(".")[0].endswith("MMA") for i, (_, _, op, _) in enumerate(f["insns"])
+                if i not in regions.get(k, ())) if k not in filler | helpers else 0
+        if n:
+            serving[f"{k[0]}: {k[1]}"] = n
+    fixed_from = {b: sum(k[0] == b for k in (reach - filler) | {k for k in filler if "dfill_p" in k[1]})
+                  for b in listings}
+    return {"version": V4, "binaries": sorted(listings), "fixed_from": fixed_from, "filler": {
+        "functions": sorted(f"{b}: {n}" for b, n in filler), "stores": puts,
+        "helpers": sorted(f"{b}: {n}" for b, n in own),
+        "path_helpers": sorted(f"{b}: {n}" for b, n in helpers - own),
+        "mma": dict(sorted(mma.items())), "fp_ops": dict(sorted(fp.items())), "accumulating_mma": acc, "kind": kind,
+        "fp_free": not fp, "L": L}, "callers": callers, "serving_mma": serving, "violations": violations}
+
+
+#: what filler-scorer/v4 does not check, beside `UNCHECKED`, when a theorem's entry applies
+UNCHECKED_V4 = (
+    "that every receipt is written by the filler: v4 sees what code can store on the filler warps' paths, not what "
+    "address another path's store hits, so in a binary that calls dfill_k (without one, its fixed work isn't "
+    "credited) a serving warp, or filler warps inlined into another kernel instead of calling it (FILL r3's form), "
+    "could write one; the receipts gate holds every sampled receipt to the host reference whoever wrote it",
+    "that a filler warp only calls dfill_k: a path from the warp-role branch that never reaches the CALL looks like the "
+    "serving warps' path, so its MMAs read as serving",
+    "the filler function's inputs (only the coins, the public tile id and the step, besides its stop flag): the "
+    "INTERFACE's, with the receipts gate holding its outputs to the host reference's function of (coins, tile, steps); "
+    "a dfill_k function that writes memory is held to stores of its arguments (`_put_bad`), but the values the filler "
+    "warps pass it are computed on their path, where integer ops aren't refused",
+    "the fixed work's MACs: the driver's count over its receipts (the device's step counts, each sampled one held to "
+    "the host reference by its receipt and the steps - 8 control) times the driver's MACs a step",
+    "the filler warps' DRAM traffic: the scorer's dram gate measures the split filler's kernels; the fused runner's "
+    "own gate (fused_score.py fused_dram) measures the serving kernels with and without their filler warps",
+    "that a driver binary that ran is the scorer's compile: an arm's runner may rebuild it from the same source and "
+    "flags into the scorer's build directory (fused_score.py does)")
+
+
+def _theorem_checks_v4(e: dict, noise: str | None, pf: dict | None, unread) -> tuple[dict, list[str]]:
+    f = (pf or {}).get("filler") or {}
+    kind, L, kinds = f.get("kind"), f.get("L"), e["kinds"]
+    checks = {"noise": noise in e["noise"], "program facts read": pf is not None, "kind": kind in kinds,
+              "fp_free": bool(f.get("fp_free")), "L": L is not None and kind in kinds and L <= kinds[kind],
+              "confined": pf is not None and not pf["violations"], "drivers read": not unread}
+    why = {"noise": f"declared noise {noise!r}, not one of {e['noise']}",
+           "program facts read": "the build recorded no program facts (a build from before v4)",
+           "kind": f"the filler's MMAs are {sorted(f.get('mma') or {}) or 'none'}, not all one of {sorted(kinds)}",
+           "fp_free": f"FP or conversion ops in the filler's code: {f.get('fp_ops')}",
+           "L": (f"{f['accumulating_mma']} MMAs accumulate into an earlier word, so a word may sum more than one MMA"
+                 if f.get("accumulating_mma") else "no one shape for every word" if L is None
+                 else f"each word sums {L} products, past {kinds[kind]}" if kind in kinds
+                 else f"each word sums {L} products of a kind the entry doesn't cover"),
+           "confined": f"work outside dfill_k on the filler warps' paths: {'; '.join((pf or {}).get('violations', [])[:3])}",
+           "drivers read": f"rows from drivers the scorer didn't build and read: {sorted(unread)}"}
+    return checks, [why[c] for c, ok in checks.items() if not ok]
+
+
+def filler_entry_v4(noise: str | None, pf: dict | None, *, unread=(), entries: dict = FILLER_ENTRIES) -> dict:
+    """The entry the filler is read at under filler-scorer/v4: `filler_entry`'s order and floors, its theorem checks on
+    `program_facts` (the filler's code wherever it's called from, kernels and in-kernel functions alike), with
+    ``confined`` (no violation on the filler warps' paths) and ``drivers read`` (every row's binary is one the scorer
+    built and read, `unread` the others) in place of v3's ``all_read``: MMAs elsewhere are serving's, and fixed work is
+    credited as `credit_fixed` decides."""
+    e = filler_entry(noise, pf and pf["filler"], entries=entries,
+                     check=lambda x: _theorem_checks_v4(x, noise, pf, unread))
+    f = (pf or {}).get("filler") or {}
+    e["kernel"] = {"functions": f.get("functions"), **{x: f.get(x) for x in ("mma", "fp_ops", "L", "accumulating_mma")},
+                   "callers": pf["callers"], "serving_mma": pf["serving_mma"], "violations": pf["violations"]} \
+        if pf else None
+    if e["unchecked"]:
+        e["unchecked"] += list(UNCHECKED_V4)
+    return e
+
+
+def credit_fixed(rows: list[dict], pf: dict | None) -> tuple[list[dict], dict]:
+    """filler-scorer/v4: the rows with each block's fixed work credited only from receipts of public filler tiles that
+    pass the spot checks: its row's binary is one the scorer built and read (``driver``, else dscore), with a function
+    that work can come from (``fixed_from``: a caller of dfill_k, whose filler warps v4 reads, or a dfill_p kernel; not
+    filler warps inlined into serving code), the filler warps' paths there are confined (no violation), the block's
+    fixed round (a ``*_round`` besides the split filler's ``round``, whose range, tag and coins the replay gate holds to
+    the scorer's) has spot-checked tiles, and its row has no bad receipt. Any other block's ``fixed_macs`` becomes 0.
+    Returns (rows, {credited, dropped})."""
+    read = set(pf["binaries"]) if pf else set()
+    out, credited, dropped = [], 0, []
+    for r in rows:
+        r = json.loads(json.dumps(r))
+        d = r.get("driver", "dscore")
+        for i, b in enumerate(r["blocks"]):
+            for side in ("arm", "solo"):
+                x = b.get(side) or {}
+                if not x.get("fixed_ms"):
+                    continue
+                fr = [v for k, v in x.items() if k.endswith("_round") and k != "round" and isinstance(v, dict)]
+                why = ("the build recorded no program facts" if pf is None
+                       else f"its driver {d} wasn't built and read" if d not in read
+                       else f"no function in {d} it can come from (no dfill_k caller, no dfill_p kernel)"
+                       if not pf["fixed_from"].get(d)
+                       else "the filler warps' paths aren't confined" if pf["violations"]
+                       else "no round for its tiles" if not fr
+                       else "none of its tiles' receipts was spot-checked" if not any(v.get("checked") for v in fr)
+                       else f"{r['rec_bad']} bad receipts in its row" if r.get("rec_bad") else None)
+                if why:
+                    x["fixed_macs"] = 0.0
+                    dropped.append(f"{r['kind']} {r['B']}/{r['L']} {side} block {i}: {why}")
+                else:
+                    credited += 1
+        out.append(r)
+    return out, {"credited": credited, "dropped": dropped}
+
+
+def paths_gate(pf: dict | None) -> dict:
+    """filler-scorer/v4 refuses an arm whose filler warps' paths do work outside dfill_k (`program_facts`' violations),
+    so filler work can't hide in serving code; without program facts nothing past the floor is credited."""
+    if pf is None:
+        return {"ok": True, "why": "no program facts: the filler reads its floor"}
+    v = pf["violations"]
+    return {"ok": not v, "callers": len(pf["callers"]), "violations": v,
+            "why": None if not v else f"{len(v)} on the filler warps' paths: " + "; ".join(v[:3])}
+
+
+def whole_of_peak(row: dict) -> float | None:
+    """filler-scorer/v4's too-good bound on a row whose arm blocks count fixed work, over the whole kernel: serving's
+    MACs a step times the blocks' steps plus the fixed work's credited MACs, over the fixed SMs' int8 peak at each
+    block's clock for its window (serving runs on those SMs beside the filler warps). Above 1 no honest arm reaches."""
+    blocks = [b["arm"] for b in row["blocks"] if b["arm"].get("fixed_ms")]
+    if not blocks:
+        return None
+    n = share.decode_n(row["B"], row["L"]) if row["kind"] == "step" else PREFILL_M * share.LIN_TOK
+    sms = row.get("fixed_sms") or row["fill_sms"]
+    work = sum(n * len(b["reps"]) + b["fixed_macs"] for b in blocks)
+    peak = sum(PER_SM * sms * _med([r[1] for r in b["reps"]]) * 1e6 * b["fixed_ms"] * 1e-3 for b in blocks)
+    return work / peak if peak > 0 else None
 
 
 # ---- the gates -------------------------------------------------------------------------------------------------------------
@@ -628,14 +981,16 @@ def _too_good(v: dict) -> bool:
     return bool(v.get("beside_over_alone")) and v["beside_over_alone"] > v["too_good_limit"]
 
 
-def honesty(arm, stats: dict, phases_points, *, control: dict | None = None, has_filler: bool = False) -> dict:
+def honesty(arm, stats: dict, phases_points, *, control: dict | None = None, has_filler: bool = False,
+            whole: dict | None = None) -> dict:
     """The arm's placement is a pure function of the point (asked twice, the same answer); no filler ran faster beside
     serving than alone on the same SMs (its split's chunks beside ÷ the median of the round-interleaved standalone
     blocks' above 1 + max(TOO_GOOD_FLOOR, their trimmed spread, `solo_spread`); such a result goes to the assessor), and
     every filler point has that reference;
     none ran above its SMs' int8 tensor peak at the clock its blocks read; and, with a filler, the positive control (a
     filler credited for S steps a tile that runs S - S/CHEAT beside serving and S alone, `control`) is caught as too good,
-    so the check can see a dishonest arm at the run's own spread."""
+    so the check can see a dishonest arm at the run's own spread. filler-scorer/v4 passes `whole`, each point's
+    `whole_of_peak` (the kernel's serving and filler MACs together over its SMs' peak), and refuses any above 1."""
     import arms as A  # noqa: PLC0415
 
     unstable = [f"{ph} {b}/{l}" for ph, b, l in phases_points if A.placed(arm, ph, b, l) != A.placed(arm, ph, b, l)]
@@ -649,8 +1004,13 @@ def honesty(arm, stats: dict, phases_points, *, control: dict | None = None, has
             "point": control.get("at"), "cheat_S": control.get("cheat_S"), "S": control.get("S"),
             "beside_over_alone": control["beside_over_alone"], "limit": control["too_good_limit"],
             "solo_spread": control["solo_spread"], "of_peak": control["of_peak"], "caught": _too_good(control)}
-    return {"ok": not unstable and not fast and not peak and not noref and (ctl is None or ctl["caught"]),
-            "unstable_placement": unstable, "too_good": fast, "over_peak": peak, "no_reference": noref, "control": ctl}
+    out = {"ok": not unstable and not fast and not peak and not noref and (ctl is None or ctl["caught"]),
+           "unstable_placement": unstable, "too_good": fast, "over_peak": peak, "no_reference": noref, "control": ctl}
+    if whole is not None:
+        out["over_peak_whole"] = [f"{k}: {v:.3f}" for k, v in whole.items() if v is not None and v > 1.0]
+        out["whole_of_peak_max"] = max((v for v in whole.values() if v is not None), default=None)
+        out["ok"] = out["ok"] and not out["over_peak_whole"]
+    return out
 
 
 def clock_gate(stats: dict, smi: list[dict]) -> dict:
