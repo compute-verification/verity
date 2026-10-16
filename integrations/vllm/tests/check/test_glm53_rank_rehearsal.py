@@ -4,8 +4,8 @@ strided W_UV view at 131,072 runs a read) folded with the GLM53 profile and pers
 `tp-fold-match` does:
 
 * the Match's weight map has no overlapping fields and names every weight read by its checkpoint Root, each layer apart;
-* `compare_steps` in progressions form (`--operands progressions`) reaches the runs form's verdict, equal and on a changed W_UV window,
-  without expanding the strided weight reads (hash, canon, load or GM-01's trie).
+* `compare_steps` in progressions form (`--operands progressions`) reaches the runs form's verdict, equal and on a wrong-layer W_UV
+  read, without expanding the strided weight reads (hash, canon, load or GM-01's trie).
 """
 from __future__ import annotations
 
@@ -39,11 +39,6 @@ NORM_ROPE_PINS = {"Q_DIM": 2048, "Q_BLOCK_SIZE": 2048, "KV_DIM": 512, "KPE_HALF_
                   "MLA_CACHE_FP8": False, "MLA_CACHE_DS_MLA": False, "MLA_NUM_TILES": 1, "MLA_TILE_DIM": 1, "TOPK": 2048,
                   "TOPK_BLOCK_SIZE": 1024, "INDEX_ROPE_INTERLEAVE": True, "HAS_INDEXER": True, "INDEX_K_DIM": 128,
                   "INDEX_K_BLOCK_SIZE": 128, "INDEX_K_HALF_ROT_DIM": 32}
-
-
-@pytest.fixture(scope="module")
-def profile():
-    return G.build_profile("GLM53", 8, hf_config=CFG, repo="zai-org/GLM-5.3-FP8", revision="aca966e4")
 
 
 def _log(profile, crossed: bool = False) -> list:
@@ -140,26 +135,44 @@ def _log(profile, crossed: bool = False) -> list:
     return ev
 
 
-@pytest.fixture(scope="module")
-def folds(profile, tmp_path_factory):
-    """{(log, stored form): fold dir}, for the served log ("served") and the one whose layer 1 reads layer 0's W_UV ("crossed")."""
-    out = {}
-    for which in ("served", "crossed"):
-        r = fold(_log(profile, which == "crossed"), profile, strict=False, with_program=True)
-        assert not r.report.unsupported, r.report.unsupported
-        for form in ("runs", "progressions"):
-            d = tmp_path_factory.mktemp(f"{which}-{form}")
+class _Rank:
+    """The served and the crossed ("crossed": layer 1 reads layer 0's W_UV) folds, each persisted per stored form and loaded as
+    tp-fold-match's compare leg loads it (compact for progressions, runs for the record form), built on first use: session-wide, since
+    `--dist worksteal` interleaves this module's tests with others' and a module fixture would rebuild per test."""
+
+    def __init__(self, tmp):
+        self.tmp, self.dirs, self.progs, self.results = tmp, {}, {}, {}
+        self.profile = G.build_profile("GLM53", 8, hf_config=CFG, repo="zai-org/GLM-5.3-FP8", revision="aca966e4")
+
+    def dir(self, which: str, form: str) -> str:
+        if (which, form) not in self.dirs:
+            if which not in self.results:
+                r = self.results[which] = fold(_log(self.profile, which == "crossed"), self.profile, strict=False, with_program=True)
+                assert not r.report.unsupported, r.report.unsupported
+            d = self.tmp.mktemp(f"{which}-{form}")
             with pytest.MonkeyPatch.context() as mp:
                 mp.setenv(INSTANCES_FORM_ENV, form)
-                persist_program(r, d, profile_name=profile.id, log_path="log.jsonl.gz")
-            out[which, form] = str(d)
-    return out
+                persist_program(self.results[which], d, profile_name=self.profile.id, log_path="log.jsonl.gz")
+            self.dirs[which, form] = str(d)
+        return self.dirs[which, form]
+
+    def load(self, which: str, form: str, compact: bool | None = None) -> CMP.Prog:
+        """A fresh load (`compact` defaults to the form's); its `LOAD_NOTES` entry is dropped, which global-match documents carry whole."""
+        d = self.dir(which, form)
+        try:
+            return CMP.load_oracle(d, f"{which}-{form}", compact=form == "progressions" if compact is None else compact)
+        finally:
+            CMP.LOAD_NOTES.pop(d, None)
+
+    def prog(self, which: str, form: str) -> CMP.Prog:
+        if (which, form) not in self.progs:
+            self.progs[which, form] = self.load(which, form)
+        return self.progs[which, form]
 
 
-@pytest.fixture(scope="module")
-def loaded(folds):
-    """Each fold dir loaded as tp-fold-match's compare leg loads it: compact for the progressions form, runs for the record form."""
-    return {k: CMP.load_oracle(d, f"{k[0]}-{k[1]}", compact=k[1] == "progressions") for k, d in folds.items()}
+@pytest.fixture(scope="session")
+def rank(tmp_path_factory):
+    return _Rank(tmp_path_factory)
 
 
 def _root_names(profile) -> set[str]:
@@ -167,10 +180,10 @@ def _root_names(profile) -> set[str]:
 
 
 @pytest.mark.parametrize("form", ["runs", "progressions"])
-def test_a_moduleless_rank_fold_maps_each_layers_weights_apart(loaded, profile, form):
+def test_a_moduleless_rank_fold_maps_each_layers_weights_apart(rank, form):
     """[04f0af376] Without Root names the moduleless launches hinted every layer's q_a / kv_a / index-K norm and the CUDA norms alike:
     the weight map unioned them into ranges spanning the model, overlapping (GM-01 C5) and sending every weight read per run."""
-    P = loaded["served", form]
+    P = rank.prog("served", form)
     assert P.oracle_wmap and not P.oracle_wmap_overlaps, P.oracle_wmap_overlaps[:4]
     names = [nm for _lo, _hi, nm in P.oracle_wmap]
     assert len(names) == len(set(names))
@@ -179,7 +192,7 @@ def test_a_moduleless_rank_fold_maps_each_layers_weights_apart(loaded, profile, 
         assert {f"{p}.input_layernorm.weight", f"{p}.post_attention_layernorm.weight", f"{p}.self_attn.q_a_layernorm.weight",
                 f"{p}.self_attn.kv_a_layernorm.weight", f"{p}.self_attn.indexer.k_norm.weight", f"{p}.self_attn.indexer.k_norm.bias",
                 f"{p}.self_attn.W_UV"} <= set(names), names
-    assert set(names) <= _root_names(profile), sorted(set(names) - _root_names(profile))
+    assert set(names) <= _root_names(rank.profile), sorted(set(names) - _root_names(rank.profile))
 
 
 def _verdict(res: dict) -> tuple:
@@ -188,12 +201,12 @@ def _verdict(res: dict) -> tuple:
             sorted(collections.Counter(k for s in res["steps"] for k in (s.get("wiring") or {}).get("different_by_spec_arg", {})).items()))
 
 
-def test_the_progressions_compare_reaches_the_runs_verdict(loaded):
+def test_the_progressions_compare_reaches_the_runs_verdict(rank):
     """`--operands progressions` (both sides compact, stored as progressions) against the record form: the same verdict on the served
     fold against itself and against the fold whose layer 1 reads layer 0's W_UV (each of its token rows' W_UV operand, and only it,
     differs)."""
-    same = {f: CMP.compare_steps(loaded["served", f], loaded["served", f]) for f in ("runs", "progressions")}
-    crossed = {f: CMP.compare_steps(loaded["served", f], loaded["crossed", f]) for f in ("runs", "progressions")}
+    same = {f: CMP.compare_steps(rank.prog("served", f), rank.prog("served", f)) for f in ("runs", "progressions")}
+    crossed = {f: CMP.compare_steps(rank.prog("served", f), rank.prog("crossed", f)) for f in ("runs", "progressions")}
     assert _verdict(same["runs"]) == _verdict(same["progressions"])
     assert same["runs"]["totals"]["operands_different"] == 0 and same["runs"]["canonical_sha256"]["equal"]
     assert _verdict(crossed["runs"]) == _verdict(crossed["progressions"])
@@ -202,10 +215,10 @@ def test_the_progressions_compare_reaches_the_runs_verdict(loaded):
     assert key.startswith("BatchedGemm_v1{B=8,K=64,N=256,") and key.endswith("#arg1"), key
 
 
-def test_the_progressions_compare_never_expands_a_strided_weight_read(loaded, monkeypatch):
+def test_the_progressions_compare_never_expands_a_strided_weight_read(rank, monkeypatch):
     """[8c01ad3dc, 04f0af376] The compact compare hashes and canons a W_UV read as its progressions: neither `_canonical_hash` nor the
     weight map's per-run fallback (an overlapping map) expands its 131,072 runs (the record-form leg held ~1e6 run tuples a read)."""
-    P = loaded["served", "progressions"]
+    P = rank.prog("served", "progressions")
     expanded, expand_into = [0], K._expand_into
 
     def counting(out, head, base, delta, c):
@@ -218,7 +231,7 @@ def test_the_progressions_compare_never_expands_a_strided_weight_read(loaded, mo
     assert expanded[0] < UV_RUNS, expanded[0]
 
 
-def test_the_compact_load_splices_each_aliased_weight_read(folds, monkeypatch):
+def test_the_compact_load_splices_each_aliased_weight_read(rank, monkeypatch):
     """[799e16bad] Each token row's W_UV read after the first is an alias of the first: the compact load splices it in one list copy,
     so `_Acc.progression` runs once per progression of each layer's first read, not again for every alias (51 % of GM-01's fold load)."""
     calls, progression = [0], K._Acc.progression
@@ -227,23 +240,24 @@ def test_the_compact_load_splices_each_aliased_weight_read(folds, monkeypatch):
         calls[0] += 1
         return progression(self, *a)
 
+    rank.dir("served", "progressions")
     monkeypatch.setattr(K._Acc, "progression", counting)
-    P = CMP.load_oracle(folds["served", "progressions"], "served", compact=True)
+    P = rank.load("served", "progressions")
     uv = [i for i, x in enumerate(P.inst) if x["spec"].startswith("BatchedGemm")]
     assert len(uv) == len(LAYERS) * M and all(K.n_runs(P.inst[i]["args"][1]) == UV_RUNS for i in uv)
     first_reads = sum(len(P.inst[i]["args"][1]) for i in uv[::M])
     assert calls[0] <= first_reads, (calls[0], first_reads)
 
 
-def test_the_dag_hashes_take_one_trie_step_per_weight_progression(loaded):
+def test_the_dag_hashes_take_one_trie_step_per_weight_progression(rank):
     """[8dec947cf] GM-01's fast DAG hashes walk a compact W_UV read in one trie step per progression (~2048), not per run (131,072 a
     read, ~5e9 steps a rank), and partition the instances as the runs-form load does."""
     try:
         GF.reset()
-        h = GF._dag_hashes_intern(loaded["served", "progressions"])
+        h = GF._dag_hashes_intern(rank.prog("served", "progressions"))
         trie = len(GF._trie)
         GF.reset()
-        r = GF._dag_hashes_intern(loaded["served", "runs"])
+        r = GF._dag_hashes_intern(rank.prog("served", "runs"))
     finally:
         GF.reset()
     assert trie < UV_RUNS, trie
