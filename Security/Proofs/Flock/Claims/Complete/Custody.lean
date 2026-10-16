@@ -3,7 +3,7 @@ import Proofs.Flock.Claims.Complete.Json
 /-!
 # Custody's round count at the honest run
 
-`custodyCount_goal`: the goal `CustodyCount`, under the hypotheses of the record's goals (`JsonSpec`, `Out64`, `StmtOk`,
+`custodyCount_goal`: the goal `CustodyCount`, under the hypotheses of the record's goals (`Claims.JsonSpec`, `Claims.Out64`, `StmtOk`,
 `ProverOk`). The round messages are the sends after the link, each with its coin (`Run.mids_eq`), and those sends are
 the live session's rounds, one each (`Run.json`, `Recs.length_eq`).
 -/
@@ -33,8 +33,8 @@ theorem Run.mids_eq {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → R
   simp [Function.comp_def]
 
 /-- **Custody: the record has one round per round message**: the goal `CustodyCount`. -/
-theorem custodyCount_goal {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (S : JsonSpec)
-    (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel) : CustodyCount H rel := by
+theorem custodyCount_goal {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (S : Claims.JsonSpec Flock.canon)
+    (h64 : Claims.Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel) : CustodyCount H rel := by
   intro o
   obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, ⟨bs, hbs, hrecs⟩, hrec, hdec, hsess, hlv, hlive⟩ :=
     Run.json S h64 hS hP o
