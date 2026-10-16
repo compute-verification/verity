@@ -6,10 +6,10 @@ import Proofs.Flock.Claims.Scope.Matches
 /-!
 # The completeness proof's skeleton
 
-`complete_of_goals`: Flock's plain verifier is complete for `honestP` with error `δc`
-(`Claims.Flock.Complete H (deployPlain rel) honestP δc`), given one goal per check the honest run must pass.
+`complete_of_goals`: Flock's plain verifier is complete for `honestP` with error `δc H`
+(`Claims.Flock.Complete H (deployPlain rel) honestP (δc H)`), given one goal per check the honest run must pass.
 
-* **The setting.** A good case (`Case`): a statement in scope that the verifier can accept (`ready`), at its setup, a
+* **The setting.** A good case (`Case`): a statement in scope that the verifier can accept (`ready H`), at its setup, a
   witness in the relation, a tape, and coins outside `Bad`. The honest run at it (`Run`): the pure session's record,
   proof files and sends' bodies (`sessionS`, which is the honest run, `honestRun_eq`).
 * **What the verifier computes** on that run (`Run.sess`, `Run.proof`, `Run.zc`, …): each step's value where it returns
@@ -44,7 +44,7 @@ structure Case (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readab
   sts : Array Flock.Stmt
   scope : Claims.Flock.Scope (deployPlain rel) x
   rel_w : Claims.Flock.R (deployPlain rel).parse x w
-  ready : ready x = true
+  ready : ready H x = true
   good : ¬ Bad x r
   setup : setupOf false x = some (s, spec, sts)
 
@@ -323,13 +323,15 @@ structure Goals (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Reada
 
 /-! ## The checks proved here -/
 
-/-- `ready` at the case's setup: the session draws a unit and the statement is under `2^56` bytes. -/
+/-- `ready` at the case's setup: the session draws a unit, the statement is under `2^56` bytes, and the setup against
+`H` is the case's. -/
 theorem Case.ready_parts {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (c : Case H rel) :
-    c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 56 := by
+    c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 56 ∧
+      setupWith (Claims.hOf H) c.s.read = .ok (c.spec, c.sts) := by
   have h := c.ready
   unfold FlockComplete.ready at h
   rw [c.setup] at h
-  simpa using h
+  simpa [and_assoc] using h
 
 /-- **A drawn session**: `checks` never reaches `drawLaw zk none`. -/
 theorem Case.drawn {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (c : Case H rel) : c.s.read.draw.isNone = false := by
@@ -373,7 +375,7 @@ theorem Run.link_ok {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → R
 theorem Run.final_ok {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (hF : FinalFits H rel) (o : Run H rel) :
     finalOf o.final.encode = some o.final := by
   obtain ⟨h1, h2, h3⟩ := hF o
-  exact finalOf_encode (o.ready_parts.2.trans (by norm_num)) h1 h2 h3
+  exact finalOf_encode (o.ready_parts.2.1.trans (by norm_num)) h1 h2 h3
 
 theorem bytes_eq_of_bne {a b : ByteArray} (h : (a != b) = false) : a = b := by
   have h' : (a.data == b.data) = true := by
@@ -421,7 +423,8 @@ theorem Run.acc {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Reada
     rw [o.setup]
   have hlen : (honestRun H o.x o.w o.ω o.r).1.length = o.bodies.size := by
     rw [he]; simp
-  refine run_acc_of H o.w o.x o.ω o.r (link := o.link) (F := o.final) o.setup ?_ ?_ ?_ ?_ ?_ (o.verdict_ok g) ?_
+  refine run_acc_of H o.w o.x o.ω o.r (link := o.link) (F := o.final) o.setup o.ready_parts.2.2 ?_ ?_ ?_ ?_ ?_
+    (o.verdict_ok g) ?_
   · rw [hlen, hk]
     have := g.sends o
     omega
@@ -448,7 +451,7 @@ theorem Run.acc {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Reada
 /-- **Completeness from the goals**: Flock's plain verifier is complete for `honestP` with error `δc`, given each
 goal. -/
 theorem complete_of_goals (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) (g : Goals H rel) :
-    Claims.Flock.Complete H (deployPlain rel) honestP δc := by
+    Claims.Flock.Complete H (deployPlain rel) honestP (δc H) := by
   refine complete_of H rel fun x w hsc hr hready ω r hgood => ?_
   have hset : ∃ s spec sts, setupOf false x = some (s, spec, sts) := by
     unfold ready at hready

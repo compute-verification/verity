@@ -9,6 +9,7 @@ METRIC_LABELS = {
     "time_to_first_token_s": "time to first token",
     "tokens_per_s": "output tokens / second",
     "peak_gpu_memory_bytes": "peak GPU memory",
+    "decode_time_per_token_s": "decode time / token",
 }
 
 
@@ -29,8 +30,7 @@ def render(doc: Mapping[str, Any]) -> str:
     metrics = tuple(METRIC_LABELS)
     rows: list[tuple[dict, str]] = []
     for point in points:
-        order = metrics if point["point"].get("headline") else metrics
-        rows.extend((point, metric) for metric in order)
+        rows.extend((point, m) for m in metrics if all(m in point["arms"][arm]["metrics"] for arm in arms))
     rows.sort(key=lambda x: (
         not (x[0]["point"].get("headline", False) and x[1] == "time_per_output_token_s"),
         not x[0]["point"].get("headline", False),

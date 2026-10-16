@@ -17,6 +17,7 @@
   "Flock.Test.Part",
   "Flock.Test.TopReads",
   "Flock.Test.SharedRows",
+  "Flock.Test.Wires",
   "VStar"
  ],
  "exempt": {
@@ -59,6 +60,30 @@
   "_private.Flock.Program.0.Flock.Program.staticFns": "partial def: static_of, decoding the functions a static value names (descriptor §4); no proof is about it, and qword_program_agree.py covers it",
   "_private.Flock.Program.0.Flock.Program.gateIn": "partial def: a gate's inputs in an activation, resolving references through scopes (descriptor §6, §7); no proof is about it, and qword_program_agree.py covers it",
   "Flock.Extract.evalDef": "partial def: cut.evaluate_definition with its memo, recursing through a separable body's members (PROTOCOL.md 16.7); no proof is about it, and qword_program_agree.py covers it"
+ },
+ "verifier": {
+  "entries": ["Flock.verifyWith", "Flock.Zk.verifyWith", "Flock.Stmt.setupTablesWith"],
+  "stop": [
+   "Flock.Hm96.Default512.cols",
+   "Flock.Hm96.Default512.key",
+   "Flock.Hm96.Default512.leafPrefix",
+   "Flock.Hm96.Default512.mask",
+   "Flock.Hm96.Default512.saltPrefix",
+   "Flock.Hm96.Default512.tables",
+   "Flock.HmNets.kAt",
+   "Flock.HmNets.saltMid",
+   "Flock.HmOut.rowBcZeroSalt",
+   "Flock.HmRow.midstateOf",
+   "Flock.HmRow.segMidstate",
+   "Flock.HmRow.zeroRowBc",
+   "Flock.MerkleScheme.hm96Sha512",
+   "Flock.MerkleScheme.sha512",
+   "Flock.Pinned.rowKey",
+   "Flock.Pinned.tableSha",
+   "Flock.RecOpen.ivW"
+  ],
+  "hash": "Flock.Sha512",
+  "allow": ["module:Init"]
  },
  "compile_time": {
   "Flock.With.ReturnsWalk": {
@@ -479,18 +504,5 @@
  },
  "dependencies": {
   "toolchain": "513be6f65da6a790e2509328291cf6b3b0a116c63fe0c492f467adf0b068c114"
- },
- "verifier": {
-  "entries": ["Flock.verifyWith", "Flock.Zk.verifyWith"],
-  "stop": [
-   "Flock.Hm96.Default512.cols",
-   "Flock.Hm96.Default512.key",
-   "Flock.Hm96.Default512.leafPrefix",
-   "Flock.Hm96.Default512.mask",
-   "Flock.Hm96.Default512.saltPrefix",
-   "Flock.Hm96.Default512.tables"
-  ],
-  "hash": "Flock.Sha512",
-  "allow": ["module:Init"]
  }
 }
