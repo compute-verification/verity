@@ -6,9 +6,9 @@ import Proofs.Flock.Soundness.Discharge.Composed.RegWords
 /-!
 # The returned outputs at the output net's slots, a tail's included
 
-`Layout/Out*` pin the returned outputs where the unit returns them (`c.outNet = c.unitNet`). A tail returns them from its
-last stage (GLM's tailed RMSNorm): `HmRow.regions` then ends with a region "out" over the out range's slots, one per VU,
-each the VU's instance's `nOut` output words, two bytes each, at the last stage's only output group (`tailRegion`,
+`Layout/Out*` pin the returned outputs where the unit returns them (`c.outNet = c.unitNet`). A tail returns them from
+its last stage (GLM's tailed RMSNorm): `HmRow.regions` then ends with a region "out" over the out range's slots, one per
+VU, each the VU's instance's `nOut` output words, two bytes each, at the last stage's only output group (`tailRegion`,
 `regions_outT`). Here both are read at the output net's group `(netOf c c.outNet).outGroups` (`outGrp`) and at its
 slots' columns `slotCol c.outNet g i + outColT c j t`:
 
@@ -28,10 +28,15 @@ namespace FlockSoundness.Discharge.Inst
 
 open Flock FlockLevel3
 
+/-! ## Region "out" at a tail -/
+
+/-- The output net's returned-output group: its first output group (a tail's only one). -/
 abbrev outGrp (c : Circuit) : Group := (netOf c c.outNet).outGroups.getD 0 default
 
+/-- `HmRow.regions`' `tz`: the trailing zeros of `x` below 64 (0 when there are none). -/
 def tz (x : ℕ) : ℕ := ((List.range 64).find? fun i => x % 2 ^ (i + 1) != 0).getD 0
 
+/-- `tz` of a power of two below `2^64` is its log. -/
 theorem tz_two_pow {a : ℕ} (ha : a < 64) : tz (2 ^ a) = a := by
   have h : (List.range 64).find? (fun i => 2 ^ a % 2 ^ (i + 1) != 0) = some a := by
     rw [List.find?_range_eq_some]
@@ -44,24 +49,32 @@ theorem tz_two_pow {a : ℕ} (ha : a < 64) : tz (2 ^ a) = a := by
   rw [h]
   rfl
 
+/-- Output word `o` at VU `g` of block `b`, as a tail's region "out" holds it: the VU's instance's, or the pinned
+dummy past the population. -/
 def tailVal (c : Circuit) (pub : Public) (b g o : ℕ) : ℕ :=
   match c.instOf pub.n b g with
   | some i => pub.outputs.getD (i * c.outWords + o) 0
   | none => c.dummyOutputs.getD o 0
 
+/-- A tail's region "out" bytes at block `b`: each VU's output words in order, two bytes each, low byte first. -/
 def tailBytes (c : Circuit) (pub : Public) (b : ℕ) : ByteArray :=
   (Array.range c.g).foldl (fun acc g => (Array.range c.outWords).foldl (fun acc o =>
     (acc.push (tailVal c pub b g o % 256).toUInt8).push (tailVal c pub b g o / 256).toUInt8) acc) ByteArray.empty
 
+/-- **A tail's region "out"**, as `HmRow.regions` builds it: `tz (16 · nOut)` column bits and `tz count` slot bits
+above the out range's slot bits, at the output group's first column. -/
 def tailRegion (c : Circuit) (pub : Public) : V Region :=
   mkRegion c.kLog "out" ((Array.range (tz (16 * c.outWords))).map (0 + ·) ++
       (Array.range (tz (c.rangeOf c.outNet).count)).map ((c.rangeOf c.outNet).slotLog + ·))
     ((c.rangeOf c.outNet).start + (outGrp c).col * WORD) (tailBytes c pub)
 
+/-- Region "out": the unit's (`Circuit.outRegion`) where the unit returns the outputs, else the tail's. -/
 def outRegionT (c : Circuit) (pub : Public) : V Region :=
   if c.outNet = c.unitNet then c.outRegion pub else tailRegion c pub
 
 set_option maxHeartbeats 2000000 in
+/-- **`HmRow.regions` ends with region "out"** in an untyped circuit (`Layout.regions_out` without
+`c.outNet = c.unitNet`), walked with `Ret`. -/
 theorem regions_outT {c : Circuit} {pub : Public} {regs : Array Region} (h : HmRow.regions c pub = .ok regs)
     (ht : c.typed = none) : ∃ r ∈ regs.toList, outRegionT c pub = .ok r := by
   revert regs
@@ -81,6 +94,7 @@ theorem regions_outT {c : Circuit} {pub : Public} {regs : Array Region} (h : HmR
     rw [outRegionT, ite_eq_left heq]
     exact hr
 
+/-- Pushing two bytes per element appends them in order. -/
 theorem foldl_push2 (x y : ℕ → UInt8) : ∀ (L : List ℕ) (A : ByteArray),
     (L.foldl (fun acc o => (acc.push (x o)).push (y o)) A).data.toList =
       A.data.toList ++ (L.map fun o => [x o, y o]).flatten
@@ -89,6 +103,7 @@ theorem foldl_push2 (x y : ℕ → UInt8) : ∀ (L : List ℕ) (A : ByteArray),
       rw [List.foldl_cons, foldl_push2 x y L]
       simp
 
+/-- `foldl_push2`, nested: per outer element, two bytes per inner element. -/
 theorem foldl_push2_outer (N : ℕ) (x y : ℕ → ℕ → UInt8) : ∀ (L : List ℕ) (A : ByteArray),
     (L.foldl (fun acc g => (List.range N).foldl (fun acc o => (acc.push (x g o)).push (y g o)) acc) A).data.toList =
       A.data.toList ++ (L.map fun g => ((List.range N).map fun o => [x g o, y g o]).flatten).flatten
@@ -97,6 +112,7 @@ theorem foldl_push2_outer (N : ℕ) (x y : ℕ → ℕ → UInt8) : ∀ (L : Lis
       rw [List.foldl_cons, foldl_push2_outer N x y L, foldl_push2]
       simp
 
+/-- A tail's region "out" bytes as a list: per VU, per output word, its low and high byte. -/
 theorem tailBytes_data (c : Circuit) (pub : Public) (b : ℕ) :
     (tailBytes c pub b).data.toList = ((List.range c.g).map fun g => ((List.range c.outWords).map fun o =>
       [(tailVal c pub b g o % 256).toUInt8, (tailVal c pub b g o / 256).toUInt8]).flatten).flatten := by
@@ -105,9 +121,11 @@ theorem tailBytes_data (c : Circuit) (pub : Public) (b : ℕ) :
   rw [foldl_push2_outer]
   rfl
 
+/-- `Nat.toUInt8` keeps the low byte. -/
 theorem toUInt8_toNat (n : ℕ) : n.toUInt8.toNat = n % 256 := by
   rw [Nat.toUInt8, UInt8.toNat_ofNat']
 
+/-- **Bit `t` of output word `j` at VU `g`** is bit `t % 8` of byte `2 (g · nOut + j) + t / 8` of the bytes. -/
 theorem tailBytes_bit (c : Circuit) (pub : Public) (b : ℕ) {g j t : ℕ} (hg : g < c.g) (hj : j < c.outWords)
     (ht : t < 16) :
     ((tailBytes c pub b).data.toList.getD (g * (2 * c.outWords) + (2 * j + t / 8)) default).toNat.testBit (t % 8) =
@@ -138,6 +156,7 @@ theorem tailBytes_bit (c : Circuit) (pub : Public) (b : ℕ) {g j t : ℕ} (hg :
     simp only [Nat.mod_lt _ (by norm_num : 0 < 8), decide_true, Bool.true_and]
 
 
+/-- `2 ^ tz x = x` for a power of two below `2^64` (`HmRow.check`'s `isPow2`). -/
 theorem tz_of_pow2 {x : ℕ} (h : isPow2 x = true) (hx : x < 2 ^ 64) : 2 ^ tz x = x := by
   simp only [isPow2, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at h
   have hl : x.log2 < 64 := (Nat.log2_lt (by omega)).2 hx
@@ -204,6 +223,7 @@ theorem lookup_outGroups {name : String} {table : ByteArray} {n lo bits : ℕ} {
   cases h
   exact ⟨_, rfl⟩
 
+/-- An array of one element is that element's singleton. -/
 theorem eq_singleton_getD {α : Type} [Inhabited α] {a : Array α} (h : a.size = 1) : a = #[a.getD 0 default] := by
   obtain ⟨l⟩ := a
   match l, h with
@@ -214,6 +234,7 @@ theorem eq_singleton_getD {α : Type} [Inhabited α] {a : Array α} (h : a.size 
 def outsOf (c : Circuit) (i : ℕ) : Array ℕ :=
   if c.outNet = c.unitNet then c.leavesOut.getD i #[] else Array.range c.outWords
 
+/-- Where the unit returns the outputs, `outGrp` is the unit's first output group. -/
 theorem outGrp_unit {c : Circuit} (ho : c.outNet = c.unitNet) : outGrp c = c.unit.outGroups.getD 0 default := by
   unfold outGrp netOf Circuit.unit
   rw [ho]
@@ -376,6 +397,7 @@ theorem setupH_wholeT {tags : Tags} {circuitFile publicFile : ByteArray} {coins 
 /-- Column `16 j + t` of the output net's returned-output group, in its slot. -/
 def outColT (c : Circuit) (j t : ℕ) : ℕ := (outGrp c).col * WORD + (16 * j + t)
 
+/-- Slot `i`'s column `outColT c j t` at VU `g`, spelled out over the out range. -/
 theorem slotCol_outColT (c : Circuit) (g i j t : ℕ) :
     c.slotCol c.outNet g i + outColT c j t = (c.rangeOf c.outNet).start + (outGrp c).col * WORD + (16 * j + t) +
       (g * c.perVu.getD c.outNet 0 + i) * 2 ^ (c.rangeOf c.outNet).slotLog := by
@@ -468,6 +490,7 @@ def outValT (c : Circuit) (pub : Public) (b g i j : ℕ) : ℕ :=
   | some k => pub.outputs.getD (k * c.outWords + (outsOf c i)[j]!) 0
   | none => c.dummyOutputs.getD (outsOf c i)[j]! 0
 
+/-- Where the unit returns the outputs, `outValT` at slot `i` is `Layout.outVal` at the VU's unit copy `g · upv + i`. -/
 theorem outValT_unit {c : Circuit} {pub : Public} {b g i j : ℕ} (ho : c.outNet = c.unitNet) (hi : i < c.upv) :
     outValT c pub b g i j = Layout.outVal c pub b (g * c.upv + i) j := by
   have hm : (g * c.upv + i) % c.upv = i := by rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hi]
@@ -478,6 +501,7 @@ theorem outValT_unit {c : Circuit} {pub : Public} {b g i j : ℕ} (ho : c.outNet
   rw [hm, hd, e]
   cases c.instOf pub.n b g <;> rfl
 
+/-- At a tail, `outValT`'s output `j` is output word `j` of the VU's instance (`tailVal`). -/
 theorem outValT_tail {c : Circuit} {pub : Public} {b g i j : ℕ} (ho : c.outNet ≠ c.unitNet) (hj : j < c.outWords) :
     outValT c pub b g i j = tailVal c pub b g j := by
   have e : outsOf c i = Array.range c.outWords := ite_eq_right ho
@@ -499,6 +523,7 @@ def PinShape (c : Circuit) : Prop :=
   (c.outNet ≠ c.unitNet → c.perVu.getD c.outNet 0 = 1 ∧ 2 ^ tz (16 * c.outWords) = 16 * c.outWords ∧
     2 ^ tz (c.rangeOf c.outNet).count = c.g)
 
+/-- A net with an output group is one of the circuit's nets. -/
 theorem outNet_lt {c : Circuit} (h1 : (netOf c c.outNet).outGroups.size = 1) : c.outNet < c.nets.size := by
   by_contra hn
   have h0 : (netOf c c.outNet).outGroups.size = 0 := by
@@ -543,6 +568,7 @@ theorem pinShape_of {tags : Tags} {bytes : ByteArray} {tables : List (String × 
       have h3 := Nat.le_mul_of_pos_right st.c.g (Nat.two_pow_pos (st.c.rangeOf st.c.outNet).slotLog)
       omega
 
+/-- Under `PinShape`, a slot's returned output words are below `nOut`. -/
 theorem outsOf_lt {c : Circuit} (hP : PinShape c) {i : ℕ} (hi : i < c.perVu.getD c.outNet 0) :
     ∀ j < (outsOf c i).size, (outsOf c i)[j]! < c.outWords := by
   intro j hj
@@ -652,8 +678,8 @@ variable {T : Model.Statement}
 statement of an untyped circuit, at a site (`BcSite`: block `o`, template instance `g`, proved unit `u`), the bit at
 column `16 j + t` of the returned-output group of the output net's slot `i` is bit `t` of the population's output word
 `(outsOf c i)[j]` of `u`, under `PinShape`. -/
-theorem out_siteT (a : Placed.Accepted T) {pop : Public} {o : Fin (2 ^ T.nbl)} {g u : ℕ} (hs : Layout.BcSite a pop o g u)
-    (hty : a.st.c.typed = none) {z : Witness T.m} (hz : T.Satisfies z) (hg : g < a.st.c.g) {i j t : ℕ}
+theorem out_siteT (a : Placed.Accepted T) {pop : Public} {o : Fin (2 ^ T.nbl)} {g u : ℕ}
+    (hs : Layout.BcSite a pop o g u) (hty : a.st.c.typed = none) {z : Witness T.m} (hz : T.Satisfies z) (hg : g < a.st.c.g) {i j t : ℕ}
     (hi : i < a.st.c.perVu.getD a.st.c.outNet 0) (hP : PinShape a.st.c) (hj : j < (outsOf a.st.c i).size)
     (ht : t < 16) :
     bit (z (Layout.siteAddr a o (a.st.c.slotCol a.st.c.outNet g i + outColT a.st.c j t))) =
