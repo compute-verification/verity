@@ -10,8 +10,9 @@ import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 `Bridge.Custody.checks_ok`), so the run's columns are read at the statement's own table 0 (`acc_last`, `runOf_m`).
 `decodeProof` (`Zk.decode`) reads each opened level-0 row with exactly `2^lanes` (`2^lanes + EXTRA_LANES`) symbols
 (`decodeProof_rows`, `zkDecode_rows`), so each column has the `2^lanes` witness lanes (under `--zk`, a row's first
-`2^lanes` symbols), the zero column's width (`plain_colsOk`, `zk_colsOk`). That leaves `TableBoundθ`
-and `ConflictTied` for `Flock.KS` at SHA-512 (`plain_KS_sha512`, `zk_KS_sha512`); `KS.ConflictTied` proves the second.
+`2^lanes` symbols), the zero column's width (`plain_colsOk`, `zk_colsOk`). That leaves `TableBoundθ`,
+`ConflictTied` and one table at every accepted statement for `Flock.KS` at SHA-512 (`plain_KS_sha512`, `zk_KS_sha512`);
+`KS.ConflictTied` proves the second.
 -/
 
 namespace FlockDeploy.KS
@@ -146,9 +147,9 @@ theorem exists_of_lookCol {os : List (ℕ × List 𝔽)} {q : ℕ} {u : List �
   obtain ⟨p, hp, rfl⟩ := Option.map_eq_some_iff.1 h
   exact ⟨p, List.mem_of_find?_eq_some hp, rfl⟩
 
-/-- **The run's reader sits at its last message's table 0**: its `m` is that table's. -/
-theorem runOf_m {zk : Bool} {s : Claims.Seen} {r : Claims.Flock.ZkRun} (h : runOf zk s = some r) :
-    ∃ f s' spec sts st, lastFinal s = some f ∧ setupOf zk f.stmt = some (s', spec, sts) ∧ sts[0]? = some st ∧
+/-- **The run's reader sits at its last message's table `j`**: its `m` is that table's. -/
+theorem runOf_m {zk : Bool} {s : Claims.Seen} {j : ℕ} {r : Claims.Flock.ZkRun} (h : runOf zk s j = some r) :
+    ∃ f s' spec sts st, lastFinal s = some f ∧ setupOf zk f.stmt = some (s', spec, sts) ∧ sts[j]? = some st ∧
       r.m = st.m := by
   unfold runOf at h
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at h
@@ -229,7 +230,7 @@ theorem tables_head {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} 
 /-- **An accepted run opens columns of the reader's table 0**: each has the statement's table 0's level-0 width. -/
 theorem acc_cols {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V zk).k x) → Coin} (h : (Claims.run H P (V zk) x ω r).out = .acc) {q : ℕ} {u : List 𝔽}
-    (hu : Claims.Flock.lookCol (cols zk (Claims.run H P (V zk) x ω r).seen) q = some u) :
+    (hu : Claims.Flock.lookCol (cols zk (Claims.run H P (V zk) x ω r).seen 0) q = some u) :
     ∃ spec st, (tables zk x).head? = some (spec, st) ∧
       u.length = 2 ^ (if zk then Claims.Flock.zkLevel0 st.m else Claims.Flock.plainLevel0 st.m).lanes := by
   obtain ⟨s, spec, sts, f, hs, hf, hx⟩ := acc_last h
@@ -277,17 +278,21 @@ theorem zk_colsOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Rea
 
 /-- **The deployed plain verifier: KS**, at SHA-512, from a fixed table's bound and conflicts tied to collisions. -/
 theorem plain_KS_sha512 (rel : Readable.Parsed → Readable.Relation)
+    (hone : ∀ x, (∃ s, (deployPlain rel).parse x = some s ∧ s.tables = 1) ∨
+      Claims.Flock.NoAcc sha512 (deployPlain rel).V x)
     (hconf : Claims.Flock.ConflictTied sha512 (deployPlain rel) (wordLen false))
     (htab : Claims.Flock.TableBoundθ sha512 (deployPlain rel) (wordLen false) (Claims.Flock.orZero (wide false))) :
     Claims.Flock.KS sha512 (deployPlain rel) :=
-  plain_KS_of_tableBound rel (plain_colsOk sha512 rel) hconf htab
+  plain_KS_of_tableBound rel hone (plain_colsOk sha512 rel) hconf htab
 
 /-- **The deployed masked (`--zk`) verifier: KS**, at SHA-512, from a fixed table's bound and conflicts tied to
 collisions. -/
 theorem zk_KS_sha512 (rel : Readable.Parsed → Readable.Relation)
+    (hone : ∀ x, (∃ s, (deployZk rel).parse x = some s ∧ s.tables = 1) ∨
+      Claims.Flock.NoAcc sha512 (deployZk rel).V x)
     (hconf : Claims.Flock.ConflictTied sha512 (deployZk rel) (wordLen true))
     (htab : Claims.Flock.TableBoundθ sha512 (deployZk rel) (wordLen true) (Claims.Flock.orZero (wide true))) :
     Claims.Flock.KS sha512 (deployZk rel) :=
-  zk_KS_of_tableBound rel (zk_colsOk sha512 rel) hconf htab
+  zk_KS_of_tableBound rel hone (zk_colsOk sha512 rel) hconf htab
 
 end FlockDeploy.KS

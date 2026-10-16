@@ -40,7 +40,8 @@ old model's (`Flock.radius_plain`), so an old `Committed` table extracts (`Flock
 (`FlockDeploy.KS.good_of_committed_zk`, `FlockDeploy.KS.not_committed_zk`). Accepted runs open only full-width columns
 at both records (`Width`, `FlockDeploy.KS.plain_colsOk`, `FlockDeploy.KS.zk_colsOk`), and conflicts are tied to
 collisions at both (`ConflictTied`, `FlockDeploy.KS.plain_conflictTied`, `FlockDeploy.KS.zk_conflictTied`), which
-leaves `TableBoundθ` for KS at SHA-512 (`FlockDeploy.KS.plain_KS_of_table`, `FlockDeploy.KS.zk_KS_of_table`). Toward
+leaves `TableBoundθ` and one table at every accepted statement for KS at SHA-512 (`FlockDeploy.KS.plain_KS_of_table`,
+`FlockDeploy.KS.zk_KS_of_table`); the plain scope has one (`FlockDeploy.KS.plain_hone`). Toward
 `ConflictTied`: a run over `OC` within a log, peeled step by step, with the
 shipped step's verdict alongside (`ConflictOC`, `FlockDeploy.KS.Runs`, `FlockDeploy.KS.shadow`); the shipped
 `hm96-sha512/v1` Merkle check logs every SHA-512 input of each opening (`ConflictMerkle`,

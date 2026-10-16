@@ -86,11 +86,11 @@ theorem Pr_le_of_off {Coin T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited C
     (w d : ℕ) (hN : N x = 2 ^ d) (C : Fin (N x) → List F)
     (op : (Fin (D.V.k x) → Coin) → Fin (2 ^ d) → Option (Fin w → F))
     (hlink : ∀ r p v, (run H P D.V x ω r).out = .acc → op r p = some v →
-      ∃ u, lookCol (D.cols (run H P D.V x ω r).seen) p.val = some u ∧ (fun lane : Fin w => u.getD lane.val 0) = v) :
+      ∃ u, lookCol (D.cols (run H P D.V x ω r).seen 0) p.val = some u ∧ (fun lane : Fin w => u.getD lane.val 0) = v) :
     (Pr fun r : Fin (D.V.k x) → Coin => (run H P D.V x ω r).out = .acc ∧
       ∃ p, (op r p).isSome ∧ op r p ≠ some fun lane : Fin w => oracleOf C lane.val p.val) ≤
     Pr fun r : Fin (D.V.k x) → Coin => (run H P D.V x ω r).out = .acc ∧
-      ∃ (p : Fin (N x)) (u : List F), lookCol (D.cols (run H P D.V x ω r).seen) p.val = some u ∧ u ≠ C p :=
+      ∃ (p : Fin (N x)) (u : List F), lookCol (D.cols (run H P D.V x ω r).seen 0) p.val = some u ∧ u ≠ C p :=
   Pr_mono fun r ⟨ha, hoff⟩ => ⟨ha, exists_ne_of_off w d hN C (op r) _ (fun p v => hlink r p v ha) hoff⟩
 
 /-! ## The fork and self-clash terms -/
@@ -373,6 +373,21 @@ theorem tableWeight_le_weight {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} 
         exact tableWeight_nonneg zk q.2
     linarith
 
+/-- **Table 0's weight and the other tables' share of `k`** fit in the weight (`lens_le_weights`). -/
+theorem weight_split {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
+    (h0 : (tables zk x).head? = some (spec, st)) :
+    tableWeight zk st + 4 * (N₀ zk x - tableLen zk st) / Real.exp 1 ≤ weight zk x := by
+  unfold weight N₀
+  cases ht : tables zk x with
+  | nil => rw [ht] at h0; cases h0
+  | cons p rest =>
+    rw [ht, List.head?_cons, Option.some.injEq] at h0
+    subst h0
+    simp only [List.map_cons, List.sum_cons, add_sub_cancel_left]
+    have := (lens_le_weights zk rest).1
+    have : (0 : ℝ) ≤ rest.length := Nat.cast_nonneg _
+    linarith
+
 /-- **The old escapes fit the plain weight with the fork event of weight `k`**, at a statement whose table 0 has
 schedule `sch`, when no two of them share a round: the fork events' weights are `2·Σ_{ℓ ≥ 1} 2^{d_ℓ}·Q_ℓ`, within the
 weight's `2·Σ_ℓ 2^{d_ℓ}·Q_ℓ`, and `k < 4·N₀/e + 1` within its `2 + 4·2^{d₀}/e` (`kFits_all`). -/
@@ -408,13 +423,9 @@ theorem oldEsc_fitsFork_plain (rel : Readable.Parsed → Readable.Relation) {Ω 
     have hd : (default : FlockSoundness.Accounting.Level).queries = 0 := rfl
     have hhead := Claims.Flock.head_add_sum_shift f (by simp [hf, hd]) sch.levels
     have hf0 : 0 ≤ f (sch.levels.headD default) := by simp only [hf]; positivity
-    have hw := tableWeight_le_weight h0
     have htw : tableWeight false st = Claims.Flock.Numbers.weightOf sch 0 := by
       simp only [tableWeight, Bool.false_eq_true, ↓reduceIte, hgs]
-    have hN : N₀ false x = 2 ^ (Claims.Flock.plainLevel0 st.m).d := by
-      unfold N₀
-      rw [h0]
-      rfl
+    have hlen : tableLen false st = 2 ^ (Claims.Flock.plainLevel0 st.m).d := rfl
     have hfits := kFits_all false st.m
     simp only [level0, wSched, Bool.false_eq_true, ↓reduceIte, hgs] at hfits
     have he := Real.exp_pos 1
@@ -423,15 +434,18 @@ theorem oldEsc_fitsFork_plain (rel : Readable.Parsed → Readable.Relation) {Ω 
     have hdiv : 4 * (2 : ℝ) ^ (Claims.Flock.plainLevel0 st.m).d / Real.exp 1 ≤
         4 * 2 ^ (sch.levels.headD default).logLen / Real.exp 1 := by
       gcongr
-    have hceil := Nat.ceil_lt_add_one (show (0 : ℝ) ≤ 4 * N₀ false x / Real.exp 1 by rw [hN]; positivity)
-    rw [hN] at hceil
+    have hceil := Nat.ceil_lt_add_one (div_nonneg (mul_nonneg (by norm_num : (0 : ℝ) ≤ 4) (N₀_nonneg false x)) he.le)
     have hk : ((deployPlain rel).k x : ℝ) = (⌈4 * N₀ false x / Real.exp 1⌉₊ : ℝ) := rfl
-    rw [hN] at hk
+    have hsplit := weight_split h0
+    rw [hlen] at hsplit
+    have e : 4 * (N₀ false x - 2 ^ (Claims.Flock.plainLevel0 st.m).d) / Real.exp 1 =
+        4 * N₀ false x / Real.exp 1 - 4 * 2 ^ (Claims.Flock.plainLevel0 st.m).d / Real.exp 1 := by ring
+    rw [e] at hsplit
     show ((2 : ℕ) : ℝ) * ((deployPlain rel).k x + ∑ i : Fin 2 × Fin sch.levels.length,
       Claims.Flock.cOf sch (i.2.val + 1)) ≤ 2 * weight false x
     rw [hsum, hk]
-    rw [htw, Claims.Flock.Numbers.weightOf, weightNat_cast] at hw
-    push_cast at hw ⊢
+    rw [htw, Claims.Flock.Numbers.weightOf, weightNat_cast] at hsplit
+    push_cast at hsplit ⊢
     linarith
   · show ∑ _l : Unit, (1 : ℝ) ≤ (V false).k x
     rw [Fintype.sum_unique]
@@ -589,7 +603,6 @@ theorem oldEscZ_fitsFork_zk (rel : Readable.Parsed → Readable.Relation) {Ω : 
       have h1 : (1 : ℝ) ≤ 2 ^ (sch.levels.headD default).logLen := one_le_pow₀ (by norm_num)
       have h2 : (1 : ℝ) ≤ (sch.levels.headD default).queries := by exact_mod_cast hq0
       nlinarith
-    have hw := tableWeight_le_weight h0
     set pd := Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.m).1.k0)
     have htw : tableWeight true st = Claims.Flock.Numbers.weightOf sch pd := by
       simp only [tableWeight, ↓reduceIte, hsch, pd]
@@ -597,10 +610,7 @@ theorem oldEscZ_fitsFork_zk (rel : Readable.Parsed → Readable.Relation) {Ω : 
       have := Nat.mul_le_mul hNp hNp
       rw [sq]
       exact_mod_cast this
-    have hN : N₀ true x = 2 ^ (Claims.Flock.zkLevel0 st.m).d := by
-      unfold N₀
-      rw [h0]
-      rfl
+    have hlen : tableLen true st = 2 ^ (Claims.Flock.zkLevel0 st.m).d := rfl
     have hfits := kFits_all true st.m
     simp only [level0, wSched, ↓reduceIte, ← hsch] at hfits
     have he := Real.exp_pos 1
@@ -609,15 +619,18 @@ theorem oldEscZ_fitsFork_zk (rel : Readable.Parsed → Readable.Relation) {Ω : 
     have hdiv : 4 * (2 : ℝ) ^ (Claims.Flock.zkLevel0 st.m).d / Real.exp 1 ≤
         4 * 2 ^ (sch.levels.headD default).logLen / Real.exp 1 := by
       gcongr
-    have hceil := Nat.ceil_lt_add_one (show (0 : ℝ) ≤ 4 * N₀ true x / Real.exp 1 by rw [hN]; positivity)
-    rw [hN] at hceil
+    have hceil := Nat.ceil_lt_add_one (div_nonneg (mul_nonneg (by norm_num : (0 : ℝ) ≤ 4) (N₀_nonneg true x)) he.le)
     have hk : ((deployZk rel).k x : ℝ) = (⌈4 * N₀ true x / Real.exp 1⌉₊ : ℝ) := rfl
-    rw [hN] at hk
+    have hsplit := weight_split h0
+    rw [hlen] at hsplit
+    have e : 4 * (N₀ true x - 2 ^ (Claims.Flock.zkLevel0 st.m).d) / Real.exp 1 =
+        4 * N₀ true x / Real.exp 1 - 4 * 2 ^ (Claims.Flock.zkLevel0 st.m).d / Real.exp 1 := by ring
+    rw [e] at hsplit
     show ((2 : ℕ) : ℝ) * ((deployZk rel).k x + ∑ i : Claims.Flock.IZ sch.levels.length, Claims.Flock.cZ sch Np i) ≤
       2 * weight true x
     rw [hsum, hk]
-    rw [htw, Claims.Flock.Numbers.weightOf, weightNat_cast] at hw
-    push_cast at hw ⊢
+    rw [htw, Claims.Flock.Numbers.weightOf, weightNat_cast] at hsplit
+    push_cast at hsplit ⊢
     linarith
   · show ∑ _l : Unit, (1 : ℝ) ≤ (V true).k x
     rw [Fintype.sum_unique]
