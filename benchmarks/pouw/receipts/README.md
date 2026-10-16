@@ -5,7 +5,8 @@ of the schedules that run it, and what is proved about it. Every implementation 
 PouwSegCheck statements, P2-FF's twin, the filler scorer's fold table) is held to it by its published vectors.
 
 - `receipt_folds.py`: the reference, stdlib only (its steps also take numpy uint32 arrays).
-- `receipt_folds.cuh`: the same in C++, `__host__ __device__` under nvcc, plain inline under g++.
+- `receipt_folds.cuh`: the same in C++, `__host__ __device__` under nvcc, plain inline under g++. The steps are
+  force-inlined and the key rules aren't, so a kernel that moves onto the header keeps its SASS (pfill's did).
 - `vectors.json`: the published test vectors (inputs, keys, the expected chain), made by
   `python receipt_conform.py --write`. A vector that moves is a receipt that moves: say why in the PR.
 - `receipt_conform.py`: the checks, and `python receipt_conform.py` to run them on the reference and the header.
@@ -71,7 +72,9 @@ C.check_header("my_folds.cuh")                          # a header defining rece
 ```
 
 `p2ff_r9`, `pfill_ref`, `egemm_ref`, `e2e_segment` and `scorer_folds` check the existing implementations whole, each
-against the schedule it runs. `e2e_definitions` evaluates E2E's Boolean Definitions (PouwDuoAbsorb_v2, PouwXinAbsorb_v2
+against the schedule it runs. `pfill_cuh` builds pfill.cuh for the host with g++, as pfill_host.cpp does, once a fold build
+(default, `-DPFILL_LI`, `-DPFILL_XIN13`) and runs `pf_absorb`, the build's key rule, `pf_keys` and the lane starts over
+the vectors. `e2e_definitions` evaluates E2E's Boolean Definitions (PouwDuoAbsorb_v2, PouwXinAbsorb_v2
 and their finals) on bits over the same vectors. `benchmarks/pouw/tests/test_receipts_adopters.py` runs them on the ones under
 `benchmarks/pouw` and on E2E's, and skips each until it lands. For any module, run
 `python receipt_conform.py --adopter NAME PATH`. A kernel is held to its host twin by its own gate, and the twin is held
