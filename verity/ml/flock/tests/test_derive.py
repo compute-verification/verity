@@ -246,7 +246,7 @@ def test_flat_units_are_ir_lowers_netlists():
     from verity_flock import ir_lower as IL
     from verity_numerical.bench import lowerings, templates as TM
 
-    for template, params in (("rope-head", {"D": 64}), ("silu-mul", {"I": 8192})):
+    for template, params in (("rope-head", {"D": 64}), ("silu-mul", {"I": 8192}), ("silu-mul-v2", {"I": 256})):
         low = lowerings.registry("C-Flock").module(template).lowering(TM.subcircuit(template, **params))
         U, C = low.units, low.circuit
         ins = [b for j in range(len(U.in_widths)) for b in C.inputs[f"in{j}"]]
