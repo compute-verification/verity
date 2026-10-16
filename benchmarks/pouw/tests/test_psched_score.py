@@ -40,10 +40,11 @@ def block(alone_ms, arm_ms, chunks):
             "arm": arm}
 
 
-def write_run(tmp: Path, *, phase_dram=("Kbyte", "20"), tiles_short=0, phase_bad=0) -> tuple[Path, object]:
-    arm = A.load(ARM)
+def write_run(tmp: Path, *, phase_dram=("Kbyte", "20"), tiles_short=0, phase_bad=0, spec=ARM,
+              sgates=None) -> tuple[Path, object]:
+    arm = A.load(spec)
     out = tmp / arm.name
-    out.mkdir()
+    out.mkdir(parents=True)
     (out / "arm.json").write_text(json.dumps({**SC.arm_doc(arm), "spec": ARM}))
     (out / "coins.txt").write_text("ab" * 16)
     (out / "commit.txt").write_text("c" * 40)
@@ -61,7 +62,11 @@ def write_run(tmp: Path, *, phase_dram=("Kbyte", "20"), tiles_short=0, phase_bad
                   "phase": {"W": q.W, "NC": q.NC, "S": q.S, "tiles": q.tiles, "tiles_short": tiles_short}}
         rows.append(r)
     (out / "dscore.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
-    (out / "sgate.jsonl").write_text(json.dumps({"mode": "sgate", "ok": True}) + "\n")
+    fillers = [arm.filler] + sorted({P.filler_of(arm, ph, b, l) for ph, b, l in S.points()
+                                     if A.placed(arm, ph, b, l).place != "none"} - {arm.filler}, key=str)
+    sg = [{"mode": "sgate", "W": f.W, "NC": f.NC, "S": f.S, "tiles": (1 << f.chunk_log2) // (f.W * f.NC * f.S), "ok": True}
+          for f in fillers] if sgates is None else sgates
+    (out / "sgate.jsonl").write_text("".join(json.dumps(r) + "\n" for r in sg))
     (out / "dgate.jsonl").write_text(json.dumps({"mode": "dgate", "NC": 4, "S": 2048, "ok": True}) + "\n" + json.dumps(
         {"mode": "pgate", "NC": 4, "S": 128, "mismatches": 0, "control_equal": 0, "ok": True}) + "\n")
     (out / "gate.jsonl").write_text(json.dumps({"mode": "gate", "ok": True}) + "\n")
@@ -109,3 +114,21 @@ def test_arm_places_a_phase_filler_only_beside_a_split():
     assert A.placed(arm, "prefill", 8192, 0) == A.NONE and arm.phase("prefill", 8192, 0) is None
     assert arm.phase("decode", 1, 2048) is None and A.placed(arm, "decode", 1, 2048) == A.Placement("split", 108)
     assert S.honesty(arm, {}, S.points())["ok"]
+
+
+CO = "benchmarks/pouw/filler/psched_arm.py:PhaseSchedCo"
+
+
+def test_co_arm_runs_its_prefill_shape_and_needs_an_sgate_for_it(tmp_path):
+    arm = A.load(CO)
+    assert not A.check_arm(arm)
+    assert A.placed(arm, "prefill", 8192, 0) == A.Placement("co")
+    co = P.filler_of(arm, "prefill", 8192, 0)
+    assert co != arm.filler and co.chunk_log2 < arm.filler.chunk_log2
+    assert all(P.filler_of(arm, ph, b, l) == arm.filler for ph, b, l in S.points() if P.phase_of(arm, ph, b, l))
+    res = P.report(*write_run(tmp_path / "two", spec=CO))
+    assert res["scored"] and res["gates"]["sgates"] == {"ok": True, "rows": 2, "shapes": 2,
+                                                        "ran": sorted({(8, 4, 2048, 8), (8, 4, 128, 8)}, key=str)}
+    res = P.report(*write_run(tmp_path / "one", spec=CO, sgates=[{"mode": "sgate", "W": 8, "NC": 4, "S": 2048,
+                                                                     "tiles": 8, "ok": True}]))
+    assert not res["gates"]["sgates"]["ok"] and res["SCORE"] is None and res["score_if_gated"] is not None

@@ -71,3 +71,38 @@ class PhaseSched:
 
     def phase(self, phase, b, l):
         return None if phase == "prefill" else self._row(b, l)[1]
+
+
+#: TABLE with the larger phase fillers that screened ≤ 1.04 through pscore itself (r20261016-052231-a839); 48/16K keeps
+#: TABLE's (108 W8 t90 screened 1.037 for +0.017 there, +0.0003 SCORE)
+TABLE_V2 = {**TABLE, (32, 8192): (108, PhaseFill(W=4, tiles=47)), (32, 24576): (108, PhaseFill(tiles=95)),
+            (128, 2048): (92, PhaseFill(tiles=28)), (256, 3072): (60, PhaseFill(tiles=98))}
+#: FILL's filler in prefill at the lowest stream priority, in blocks short enough (8 tiles a warp of S 128, ~90 µs) that
+#: the GEMMs' blocks, at the highest, take each SM back within one: it fills their wave tails (r20261016-051913-f189,
+#: r20261016-052231-a839: 1.027, coverage 0.180 against 0.135 alone; 2^16 a chunk 1.083)
+CO_PREFILL = A.Filler(W=8, NC=4, S=128, chunk_log2=15)
+
+
+@dataclass
+class PhaseSchedCo(PhaseSched):
+    """PhaseSched on TABLE_V2, and in prefill FILL's filler co-scheduled at the lowest priority in short blocks."""
+
+    name: str = "fill-v1-phase-att-co"
+    lineage: dict = field(default_factory=lambda: {
+        "parent": "fill-v1-phase-att", "approach": "pouw/filler-sched",
+        "mechanism": ["filler:chained-imma-registers", "place:split", "split:per-point-table", "sched:phase-att",
+                      "sched:graph-fork-join", "sched:node-priority", "prefill:co", "sched:prio-short-blocks"],
+        "hypothesis": "prefill's GEMMs leave wave tails idle: FILL's filler at the lowest stream priority in ~90 us "
+                      "blocks fills them at <= 3% slowdown, adding ~0.045 to prefill and to the mixes' prefill share"})
+    choice: str = ("TABLE_V2 (18 decode points: split, phase W and tiles) from three screens, and one co shape for "
+                   "prefill; a lookup, a green split and one graph a step at serving time, a low-priority stream in "
+                   "prefill; run through psched_score.py/pscore.cu")
+
+    def _row(self, b, l):
+        return A.point_lookup(TABLE_V2, b, l)
+
+    def placement(self, phase, b, l):
+        return A.Placement("co") if phase == "prefill" else super().placement(phase, b, l)
+
+    def filler_at(self, phase, b, l):
+        return CO_PREFILL if phase == "prefill" else self.filler
