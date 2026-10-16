@@ -31,7 +31,8 @@ Unpeeled edits (note:20261015T1826Z-draft-d4-perplexity), `GRID[_rot]@EDIT:ALPHA
 EDIT `w` adds one draw from ALPHABET (in LSBs) to each weight integer, fresh per matrix; `a` to each activation integer,
 fresh per token and per linear (`:f`: per fused input, q/k/v and gate/up sharing one draw); `wa` both; `GRID@-` is the
 grid unedited.  An edited side is quantized to top M - max|e|, so every edited integer stays on the grid (|q| <= 127, or
-<= 16); `:wtopT` / `:atopT` caps that side's top at T (a peeled side's headroom, e.g. `int8_rot@-:wtop63`).  The integer
+<= 16); `:wtopT` / `:atopT` caps that side's top at T (a peeled side's headroom, e.g. `int8_rot@-:wtop63`).  ALPHABET
+`dither` or `sr` replaces rounding instead (ENCODINGS: floor(x/s) plus a coin bit, uniform or unbiased).  The integer
 product is torch._int_mm (s8 x s8 -> s32, exact); x, W and the rotation are fp32 (EXACT_GRID_EDIT_DTYPE=float64:
 float64).  ALPHABETS lists the alphabets, drawn uniformly.
 
@@ -258,6 +259,10 @@ def product(method: str, x: torch.Tensor, w: torch.Tensor, wcache: dict) -> tupl
 ALPHABETS = {"pm1": [-1, 1], "pm12": [-2, -1, 1, 2], "pm13": [-3, -1, 1, 3], "pm45": [-5, -4, 4, 5],
              "pm57": [-7, -5, 5, 7], "pm1245": [-5, -4, -2, -1, 1, 2, 4, 5],
              **{f"u{k}": list(range(-k, k + 1)) for k in (1, 2, 3, 4, 5, 6, 8, 16)}}
+#: Encodings of the edited side that replace rounding (note:20261016T0525Z-draft-fullfloor-s-r6, §2): `dither` serves
+#: floor(x/s) + b with b a uniform coin bit (the side quantized to top M - 1), `sr` floor(x/s) + [u < frac(x/s)] with u
+#: uniform on [0, 1) (unbiased stochastic rounding, top M).  Value: (headroom, bits per entry, served MSE in LSB^2).
+ENCODINGS = {"dither": (1, 1.0, 1 / 3), "sr": (0, 1 / (2 * math.log(2)), 1 / 6)}
 EDIT_GRIDS = {"int8": (127, S32_EXACT), "e4m3i16": (16, FP32_EXACT)}
 #: `:f`: one activation draw per fused GEMM input (q, k, v share the attention input; gate, up the MLP's)
 FUSED = {"self_attn.q_proj": "qkv", "self_attn.k_proj": "qkv", "self_attn.v_proj": "qkv",
@@ -274,21 +279,24 @@ def parse_edit(method: str) -> dict:
     if grid_name not in EDIT_GRIDS or edit not in ("-", "w", "a", "wa"):
         raise KeyError(method)
     name, opts = (parts[1], parts[2:]) if edit != "-" else ("-", parts[1:])
-    alphabet = ALPHABETS[name] if edit != "-" else [0]
+    mode = name if name in ENCODINGS else "round"
+    alphabet = [0, 1] if mode != "round" else ALPHABETS[name] if edit != "-" else [0]
     seed = next((int(p[1:]) for p in opts if p.startswith("s")), 0)
     fused = "f" in opts
     caps = {p[0]: int(p[4:]) for p in opts if p[1:4] == "top"}
     if any(p != "f" and not p.startswith("s") and p[1:4] != "top" for p in opts) or set(caps) - {"w", "a"}:
         raise KeyError(method)
     top = EDIT_GRIDS[grid_name][0]
-    room = top - max(abs(v) for v in alphabet)
+    room = top - (ENCODINGS[mode][0] if mode != "round" else max(abs(v) for v in alphabet))
     tops = {side: min(room if side in edit else top, caps.get(side, top)) for side in "wa"}
     if min(tops.values()) < 1:
         raise ValueError(f"{method}: alphabet does not fit on {grid_name} (|q| <= {top})")
     label = name + (" fused" if fused else "") + "".join(f" {side}<={caps[side]}" for side in "wa" if side in caps)
+    bits, mse = (ENCODINGS[mode][1:] if mode != "round"
+                 else (math.log2(len(alphabet)), 1 / 12 + float(np.mean(np.square(alphabet)))))
     return {"grid": grid_name, "rot": rot, "edit": edit, "values": alphabet, "fused": fused, "alphabet": label,
-            "seed": seed, "top_w": tops["w"], "top_a": tops["a"], "acc": EDIT_GRIDS[grid_name][1],
-            "bits": math.log2(len(alphabet))}
+            "seed": seed, "top_w": tops["w"], "top_a": tops["a"], "acc": EDIT_GRIDS[grid_name][1], "bits": bits,
+            "mode": mode, "mse": float(mse)}
 
 
 def draw(shape: tuple[int, int], values: list[int], tag: str, device, dtype=torch.float32) -> torch.Tensor:
@@ -296,6 +304,22 @@ def draw(shape: tuple[int, int], values: list[int], tag: str, device, dtype=torc
     g.manual_seed(zlib.crc32(tag.encode()))
     v = torch.tensor(values, dtype=dtype, device=device)
     return v[torch.randint(len(values), shape, generator=g, device=device)]
+
+
+def served(m: torch.Tensor, e: dict, top: int, tag: str) -> tuple[torch.Tensor, torch.Tensor]:
+    """An edited side's integer rows and per-row scales: rounded to [-top, top] plus a draw from the alphabet, or
+    ENCODINGS' floor plus a coin bit (s = absmax / top, so |X| <= top + 1 for `dither` and <= top for `sr`)."""
+    if e["mode"] == "round":
+        q, s = quant_rows(m, torch.arange(top + 1, dtype=m.dtype, device=m.device), False)
+        return q + draw(tuple(q.shape), e["values"], tag, m.device, m.dtype), s
+    s = m.abs().amax(dim=1).clamp(min=1e-30) / top
+    v = (m / s[:, None]).clamp(-top, top)
+    q = torch.floor(v)
+    if e["mode"] == "dither":
+        return q + draw(tuple(q.shape), [0, 1], tag, m.device, m.dtype), s
+    g = torch.Generator(device=m.device)
+    g.manual_seed(zlib.crc32(tag.encode()))
+    return q + (torch.rand(tuple(q.shape), generator=g, device=m.device, dtype=m.dtype) < v - q).to(m.dtype), s
 
 
 def int_product(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
@@ -315,14 +339,15 @@ def edited_product(method: str, x: torch.Tensor, w: torch.Tensor, wcache: dict, 
         x = x @ _ROT32[k, dt]
     if "w" not in wcache:
         wq = w @ _ROT32[k, dt] if e["rot"] else w
-        bi, sb = quant_rows(wq, torch.arange(e["top_w"] + 1, dtype=dt, device=x.device), False)
         if "w" in e["edit"]:
-            bi = bi + draw(tuple(bi.shape), e["values"], f"{e['seed']}/{tag}/w", x.device, dt)
-        wcache["w"] = bi, sb
+            wcache["w"] = served(wq, e, e["top_w"], f"{e['seed']}/{tag}/w")
+        else:
+            wcache["w"] = quant_rows(wq, torch.arange(e["top_w"] + 1, dtype=dt, device=x.device), False)
     bi, sb = wcache["w"]
-    ai, sa = quant_rows(x, torch.arange(e["top_a"] + 1, dtype=dt, device=x.device), False)
     if "a" in e["edit"]:
-        ai = ai + draw(tuple(ai.shape), e["values"], f"{e['seed']}/{atag or tag}/a", x.device, dt)
+        ai, sa = served(x, e, e["top_a"], f"{e['seed']}/{atag or tag}/a")
+    else:
+        ai, sa = quant_rows(x, torch.arange(e["top_a"] + 1, dtype=dt, device=x.device), False)
     top = EDIT_GRIDS[e["grid"]][0]
     assert float(ai.abs().max()) <= top and float(bi.abs().max()) <= top
     s = int_product(ai, bi)
@@ -451,7 +476,25 @@ def selftest() -> dict:
     b63, s63 = quant_rows(wf, torch.arange(64, dtype=torch.float32, device=dev), False)
     a127, s127 = quant_rows(xf, torch.arange(128, dtype=torch.float32, device=dev), False)
     assert torch.equal(ya, (a127.double() @ b63.double().T) * s127.double()[:, None] * s63.double()[None, :])
-    for m, same in (("int8@-", True), ("int8@w:u2", True), ("int8@a:u2", False)):
+    e = parse_edit("int8_rot@a:dither:wtop63:s1")
+    assert (e["top_a"], e["top_w"], e["seed"], e["bits"], e["mode"]) == (126, 63, 1, 1.0, "dither"), e
+    assert (parse_edit("int8@a:sr")["top_a"], parse_edit("int8@a:pm1")["mse"]) == (127, 1 / 12 + 1)
+    xs = torch.randn(256, 4096, generator=g, dtype=torch.float64).to(dev).float()
+    for m, top, mse in (("int8@a:dither", 126, 1 / 3), ("int8@a:sr", 127, 1 / 6)):
+        xi, sx = served(xs, parse_edit(m), top, "0/t/a")
+        v = (xs / sx[:, None]).clamp(-top, top)
+        b, err = (xi - torch.floor(v)).double(), xi.double() - v.double()
+        assert float(xi.abs().max()) <= 127 and set(b.unique().tolist()) == {0.0, 1.0}, m
+        mse_seen = float((err ** 2).mean())
+        assert abs(float(err.mean())) < 0.01 and abs(mse_seen - mse) < 0.01, (m, mse_seen)
+        if m.endswith("dither"):
+            assert abs(float(b.mean()) - 0.5) < 0.01
+        ya, rec = edited_product(m + ":wtop63", xs[:64, :256], wf, {}, "t")
+        xi, sx = served(xs[:64, :256], parse_edit(m), top, "0/t/a")
+        yi = (xi.double() @ b63.double().T) * sx.double()[:, None] * s63.double()[None, :]
+        assert rec["exact"] and torch.equal(ya, yi), m
+    for m, same in (("int8@-", True), ("int8@w:u2", True), ("int8@a:u2", False), ("int8@a:dither", False),
+                    ("int8@a:sr", False), ("int8@w:dither", True)):
         hooks = attach(model, m, [])
         with torch.no_grad():
             y1, y2 = lin(xin), lin(xin)
@@ -499,7 +542,7 @@ def edit_table(results: list[dict]) -> str:
 
     def key(g: str):
         e = parse_edit(g)
-        return order[g.split("@")[0]], ("-", "w", "a", "wa").index(e["edit"]), e["bits"], max(e["values"])
+        return order[g.split("@")[0]], ("-", "w", "a", "wa").index(e["edit"]), e["bits"], max(e["values"]), e["mode"]
 
     def pct(d: float) -> str:
         return f"{d:+.2f}" if abs(d) < 1000 else f"x{1 + d / 100:,.0f}"
@@ -507,18 +550,20 @@ def edit_table(results: list[dict]) -> str:
     def under(d: float) -> str:
         return "<1%" if d < 1 else "<10%" if d < 10 else "-"
 
-    rows = ["| grid | edit | alphabet | max abs e | entropy, bits/entry | e std, LSB | mean linear rel. error | perplexity | seeds "
-            "| Δ% vs int8 | Δ% vs bf16 | under (int8 / bf16) |", "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|"]
+    rows = ["| grid | edit | alphabet | max abs e | entropy, bits/entry | e std, LSB | served MSE, LSB^2 "
+            "| mean linear rel. error | perplexity | seeds | Δ% vs int8 | Δ% vs bf16 | under (int8 / bf16) |",
+            "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|"]
     for g in sorted(groups, key=key):
         e, runs = parse_edit(g), groups[g]
         p = [r["ppl"] for r in runs.values()]
         mean = float(np.mean(p))
         spread = f" ({min(p):.3f}-{max(p):.3f})" if len(p) > 1 else ""
         di, db = 100 * (mean / base["int8"] - 1), 100 * (mean / base["bf16"] - 1)
-        std = math.sqrt(float(np.mean(np.square(e["values"]))))
+        std = f"{math.sqrt(float(np.mean(np.square(e['values'])))):.2f}" if e["mode"] == "round" else "-"
         rel = float(np.mean([r["mean_rel_err"] for r in runs.values()]))
-        rows.append(f"| {g.split('@')[0]} | {e['edit']} | {e['alphabet']} | {max(e['values'])} | {e['bits']:.2f} | {std:.2f} "
-                    f"| {rel:.4f} | {mean:.4g}{spread} | {len(p)} | {pct(di)} | {pct(db)} | {under(di)} / {under(db)} |")
+        rows.append(f"| {g.split('@')[0]} | {e['edit']} | {e['alphabet']} | {max(e['values'])} | {e['bits']:.2f} | {std} "
+                    f"| {e['mse']:.3f} | {rel:.4f} | {mean:.4g}{spread} | {len(p)} | {pct(di)} | {pct(db)} "
+                    f"| {under(di)} / {under(db)} |")
     return "\n".join(rows)
 
 
