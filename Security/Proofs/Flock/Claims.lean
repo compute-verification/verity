@@ -16,6 +16,7 @@ import Proofs.Flock.Claims.ZkDecode
 import Proofs.Flock.Claims.DecodeFamily
 import Proofs.Flock.Claims.ZkDecodeFlock
 import Proofs.Flock.Claims.ZkCols
+import Proofs.Flock.Claims.ZkQueryRound
 import Proofs.Flock.Claims.Scope
 import Proofs.Flock.Claims.DeployOC
 import Proofs.Flock.Claims.DeployInputs
