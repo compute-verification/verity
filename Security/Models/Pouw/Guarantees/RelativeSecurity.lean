@@ -44,7 +44,7 @@ def StagedFloorK : Prop :=
   ∀ (Mc : Machine) (S : Service) (R St n L B n' : ℕ) (e : S.Seed ≃ Paths (DStage St n L 7 B n') R)
     (run : RunMap Mc S R St n L 7 B n' (ZMod (2 ^ 32))) (δb δz κ Vmax : ℝ),
     0 < St → 0 < κ → 0 < L * (n * n' * B) → 0 ≤ δb → 0 ≤ δz →
-    ServiceSoundStaged Mc S run e δb δz → KScopeAffine Mc S run wRe → ChargeVF3f Mc S run e κ Vmax →
+    ServiceSoundStaged Mc S run e δb δz → KScopeAffine Mc S run wRe → ChargeVF3j16 Mc S run e κ Vmax →
     ServiceFloor Mc S ((R - 160 * Real.log 2) * (St * (κ * L * ((n * n' * B : ℕ) : ℝ))) - Vmax)
       (((2 : ℝ) ^ 40)⁻¹ + R * (δb + δz))
 
@@ -59,7 +59,7 @@ def StagedFloorKOneSided : Prop :=
   ∀ (Mc : Machine) (S : Service) (R St n L B n' : ℕ) (e : S.Seed ≃ Paths (DStage St n L 7 B n') R)
     (run : RunMap Mc S R St n L 7 B n' (ZMod (2 ^ 32))) (δb δz κ Vmax : ℝ),
     0 < St → 0 < κ → 0 < L * (n * n' * B) → 0 ≤ δb → 0 ≤ δz →
-    ServiceSoundStaged Mc S run e δb δz → KScopeOneSided Mc S run wRe toF2 0 → ChargeVF3f Mc S run e κ Vmax →
+    ServiceSoundStaged Mc S run e δb δz → KScopeOneSided Mc S run wRe toF2 0 → ChargeVF3j16 Mc S run e κ Vmax →
     ServiceFloor Mc S ((R - 274 * Real.log 2) * (St * (κ * L * ((n * n' * B : ℕ) : ℝ))) - Vmax)
       (((2 : ℝ) ^ 40)⁻¹ + R * (δb + δz))
 
@@ -88,7 +88,7 @@ def OverlapFloorK : Prop :=
     (run : ORunMap Mc S R St n L 7 B n' (ZMod (2 ^ 32))) (δb δz κ Vmax : ℝ),
     0 < κ → 0 < L * ∑ t, n t * n' t * B t → 0 ≤ δb → 0 ≤ δz →
     ServiceSoundOverlap Mc S run e δb δz → KScopeOverlapAffine Mc S run wRe →
-      ChargeVF3fOverlap Mc S run e κ Vmax →
+      ChargeVF3j16Overlap Mc S run e κ Vmax →
     ServiceFloor Mc S ((R - 160 * Real.log 2) * (κ * L * ((∑ t, n t * n' t * B t : ℕ) : ℝ)) - Vmax)
       (((2 : ℝ) ^ 40)⁻¹ + R * (δb + δz))
 
@@ -105,7 +105,7 @@ def OverlapFloorKOneSided : Prop :=
     (run : ORunMap Mc S R St n L 7 B n' (ZMod (2 ^ 32))) (δb δz κ Vmax : ℝ),
     0 < κ → 0 < L * ∑ t, n t * n' t * B t → 0 ≤ δb → 0 ≤ δz →
     ServiceSoundOverlap Mc S run e δb δz → KScopeOverlapOneSided Mc S run wRe toF2 0 →
-      ChargeVF3fOverlap Mc S run e κ Vmax →
+      ChargeVF3j16Overlap Mc S run e κ Vmax →
     ServiceFloor Mc S ((R - 274 * Real.log 2) * (κ * L * ((∑ t, n t * n' t * B t : ℕ) : ℝ)) - Vmax)
       (((2 : ℝ) ^ 40)⁻¹ + R * (δb + δz))
 

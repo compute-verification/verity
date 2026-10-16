@@ -8,9 +8,9 @@ The premises of the floors of record, `Models.Pouw.Guarantees.RelativeSecurity.S
 (`RunMap` on the staged design, `ORunMap` for stages that overlap). `StagedFloorKOneSided`'s three together are
 `RoundsHypKStP` (`Proofs.Pouw.RelativeSecurity`) at `φ = toF2` and plane 0, split so that each is judged on its own:
 what the service and its proof layer give (`ServiceSoundStaged`), what an adversary's run is (`KScopeOneSided`:
-one-sided operands of any form, charge-pure), and what the machine charges for it (`ChargeVF3f`).
+one-sided operands of any form, charge-pure), and what the machine charges for it (`ChargeVF3j16`).
 `OverlapFloorKOneSided`'s three are the same split of `RoundsHypKOvP` (`ServiceSoundOverlap`, `KScopeOverlapOneSided`,
-`ChargeVF3fOverlap`). `KScopeAffine` and `KScopeOverlapAffine` are the affine scopes, row-pure, which the sharper
+`ChargeVF3j16Overlap`). `KScopeAffine` and `KScopeOverlapAffine` are the affine scopes, row-pure, which the sharper
 corollaries `StagedFloorK` and `OverlapFloorK` take for the luck ¾ (`RoundsHypKSt`, `RoundsHypKOv`). The ledger ids
 are the premise ledger's.
 
@@ -98,13 +98,15 @@ def KScopeOneSided (Mc : Machine) (S : Service) (run : RunMap Mc S R St n L np B
           dPrefix ((run Ω' M r).pc x w s) ((run Ω' M r).vq x w s) wt c.1 c.2.1 c.2.2.val z) ∧
       ∀ w s, ((run Ω' M r).prog x w s).ChargePure φ p₀ ((run Ω' M r).word x w s)
 
-/-- `pouw-rs-charge-vf3f` (proposed). **The machine charges a run at least `κ` a product.** For every adversary that
-commits first, every value of its coins and every play `x`, the run's charge (`max(|M|, cost)`) is at least `κ`
+/-- `pouw-rs-charge-vf3j16` (proposed). **The machine charges a run at least `κ` a product.** For every adversary
+that commits first, every value of its coins and every play `x`, the run's charge (`max(|M|, cost)`) is at least `κ`
 times its products over every stage of every round, less its noise reads `V x ≤ Vmax`. With `Mc` the sm_120 machine
-B_θ this is P1 at VF3f's prices (τ 0.1349, margin 1.935) with P4 (B_θ complete), and it sums the stages' products,
-so it holds when a stage's interval, from its draw to its outputs' commitment, holds no other draw. Stages that
-overlap are `ChargeVF3fOverlap`'s. -/
-def ChargeVF3f (Mc : Machine) (S : Service) (run : RunMap Mc S R St n L np B n' Ar)
+B_θ this is P1 at the active price vector VF3j-16's prices (decision 17: τ 0.0610, margin 2.000, every price at most
+its measured cost, (π₃₂) closed for the whole census, every register load credited 16 a word;
+note:20261016T1640Z-draft-rs-vf3j-strict-closure) with P4 (B_θ complete), and it sums the stages' products, so it
+holds when a stage's interval, from its draw to its outputs' commitment, holds no other draw. Stages that overlap are
+`ChargeVF3j16Overlap`'s. -/
+def ChargeVF3j16 (Mc : Machine) (S : Service) (run : RunMap Mc S R St n L np B n' Ar)
     (e : S.Seed ≃ Paths (DStage St n L np B n') R) (κ Vmax : ℝ) : Prop :=
   ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ (r : Ω') x,
@@ -198,12 +200,12 @@ def KScopeOverlapOneSided (Mc : Machine) (S : Service) (run : ORunMap Mc S R St 
         dPrefix ((run Ω' M r).pc x w c.1) ((run Ω' M r).vq x w c.1) wt c.2.1 c.2.2.1 c.2.2.2.val fun v => z ⟨c.1, v⟩) ∧
       ∀ w, ((run Ω' M r).prog x w).ChargePureAt φ p₀ ((run Ω' M r).word x w)
 
-/-- `pouw-rs-charge-vf3f-overlap` (proposed). **The machine charges an overlapped run at least `κ` a product.** For
-every adversary that commits first, every value of its coins and every play `x`, the run's charge is at least `κ`
+/-- `pouw-rs-charge-vf3j16-overlap` (proposed). **The machine charges an overlapped run at least `κ` a product.**
+For every adversary that commits first, every value of its coins and every play `x`, the run's charge is at least `κ`
 times the products of every round's run, less its noise reads `V x ≤ Vmax`. With `Mc` the sm_120 machine B_θ this is
-P1 at VF3f's prices with P4, as `ChargeVF3f`; it counts each product once, whatever draws' intervals it lies in, so
-it reads nothing of the schedule. -/
-def ChargeVF3fOverlap (Mc : Machine) (S : Service) (run : ORunMap Mc S R St n L np B n' Ar)
+P1 at VF3j-16's prices with P4, as `ChargeVF3j16`; it counts each product once, whatever draws' intervals it lies in,
+so it reads nothing of the schedule. -/
+def ChargeVF3j16Overlap (Mc : Machine) (S : Service) (run : ORunMap Mc S R St n L np B n' Ar)
     (e : S.Seed ≃ Paths (OSpot St n L np B n') R) (κ Vmax : ℝ) : Prop :=
   ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ (r : Ω') x,
