@@ -10,7 +10,10 @@ TEMPLATE = "rmsnorm-cuda-vec8"
 FAMILY = "RMSNormCudaVector8_v1"
 UNIT = "rmsnorm-cuda-vec8/bf16/warps"
 FUSED = False
-PINS: dict[tuple[int, float, int], str] = {}
+PINS: dict[tuple[int, float, int], str] = {
+    (6144, 1e-05, 768): "99450d152d1f7b873818ab34274db51bfcc6de20e936c31abc51c0bb745c235b",
+    (6144, 1e-05, 256): "a643807263670eceb928209cec9fe7d7dab7f8e197cfc5a572b71e72883f467e",
+}
 SCHEMES = _fused.SCHEMES
 warps = _fused.warps
 

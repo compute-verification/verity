@@ -20,6 +20,26 @@
    "not": 1159,
    "xor": 44455
   },
+  "rmsnorm-cuda-vec8/n6144-b256-eps1e-05/bf16": {
+   "and": 3568261,
+   "not": 541086,
+   "xor": 24958189
+  },
+  "rmsnorm-cuda-vec8/n6144-b768-eps1e-05/bf16": {
+   "and": 3530127,
+   "not": 544986,
+   "xor": 24510663
+  },
+  "rmsnorm-fused-cuda-vec8/n6144-b1024-eps1e-05/bf16": {
+   "and": 3730671,
+   "not": 783258,
+   "xor": 23435751
+  },
+  "rmsnorm-fused-cuda-vec8/n6144-b256-eps1e-05/bf16": {
+   "and": 3732389,
+   "not": 783838,
+   "xor": 23448397
+  },
   "rmsnorm-fused-cuda/n2048-eps1e-05/bf16": {
    "and": 328453,
    "not": 62814,

@@ -22,7 +22,10 @@ FAMILY = "RMSNormFusedCudaVector8_v1"
 UNIT = "rmsnorm-fused-cuda-vec8/bf16/warps"
 FUSED = True
 VECTOR = 8
-PINS: dict[tuple[int, float, int], str] = {}
+PINS: dict[tuple[int, float, int], str] = {
+    (6144, 1e-05, 1024): "08346ff85c92817c6f29b4cd358cef09930a9aeaae0112eb5da81316bc4c0eee",
+    (6144, 1e-05, 256): "fb72ffc60d5acaa81904d0a2574b8939fad634e76183d70cad3b9c8b31b049af",
+}
 #: ``verity_flock.circuit.SCHEME``, the commitment scheme of ``verity/flock-circuit``
 SCHEMES = ("frame-v3-sha512/hm96-sha512",)
 
