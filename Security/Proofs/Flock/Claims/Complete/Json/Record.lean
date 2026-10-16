@@ -26,23 +26,34 @@ open Lean (Json JsonNumber)
 /-! ## The record's parts -/
 
 /-- A recorded round `k` as the record writes it (`roundJ` through `Hashes.ofSha512 h`). -/
-def roundObj (spec : SessionSpec) (h : ByteArray → ByteArray) (k : Nat) (r : Round) : Json :=
-  Json.mkObj [("k", Lean.toJson k), ("n", Lean.toJson r.n),
+def roundList (spec : SessionSpec) (h : ByteArray → ByteArray) (k : Nat) (r : Round) : List (String × Json) :=
+  [("k", Lean.toJson k), ("n", Lean.toJson r.n),
     (s!"msg_{spec.dk}", hexJ (dgOf spec h (r.bytes.getD ByteArray.empty))),
     ("coins", Json.arr (r.coins.map f128J)), ("msg", hexJ (r.bytes.getD ByteArray.empty)),
     ("msg_len", Lean.toJson (r.bytes.getD ByteArray.empty).size)]
 
+def roundObj (spec : SessionSpec) (h : ByteArray → ByteArray) (k : Nat) (r : Round) : Json :=
+  Json.mkObj (roundList spec h k r)
+
 /-- A rep stream `(i, r, name)` with its recorded rounds. -/
-def streamObj (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array ByteArray)
-    (q : (Nat × Nat × String) × Array Round) : Json :=
-  Json.mkObj [("stream", Json.str q.1.2.2), ("parent", Json.str ""),
+def streamList (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array ByteArray)
+    (q : (Nat × Nat × String) × Array Round) : List (String × Json) :=
+  [("stream", Json.str q.1.2.2), ("parent", Json.str ""),
     ("label", Json.str (spec.domain spec.tables[q.1.1]! q.1.2.1)), ("at", Lean.toJson (0 : Nat)),
     (s!"root_{spec.dk}", hexJ (dgOf spec h rootB[q.1.1]!)),
     ("rounds", Json.arr ((Array.range q.2.size).map fun k => roundObj spec h k q.2[k]!))]
 
+def streamObj (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array ByteArray)
+    (q : (Nat × Nat × String) × Array Round) : Json :=
+  Json.mkObj (streamList spec h rootB q)
+
 /-- A rep stream's proof file digest. -/
+def proofList (spec : SessionSpec) (h : ByteArray → ByteArray) (q : (Nat × Nat × String) × ByteArray) :
+    List (String × Json) :=
+  [("stream", Json.str q.1.2.2), (spec.dk, hexJ (dgOf spec h q.2))]
+
 def proofObj (spec : SessionSpec) (h : ByteArray → ByteArray) (q : (Nat × Nat × String) × ByteArray) : Json :=
-  Json.mkObj [("stream", Json.str q.1.2.2), (spec.dk, hexJ (dgOf spec h q.2))]
+  Json.mkObj (proofList spec h q)
 
 /-- The link's `y`: zero, one per point and table. -/
 def yOf (spec : SessionSpec) : Array F128 := Array.replicate (spec.points * spec.tables.size) 0
@@ -53,25 +64,37 @@ def lbOf (spec : SessionSpec) (rootB : Array ByteArray) (points : Array (Array F
     (points.foldl (fun lb p => p.foldl F128.pushBytes lb)
       (((spec.tables.zip rootB).qsort (·.1 < ·.1)).foldl (fun lb q => lb ++ q.2) spec.sigma))
 
+/-- Each table's `root_B` (or its digest), by table. -/
+def rootBList (spec : SessionSpec) (f : ByteArray → ByteArray) (rootB : Array ByteArray) : List (String × Json) :=
+  (spec.tables.zip rootB).toList.map fun q => (q.1, hexJ (f q.2))
+
 /-- The exchange link: `Σ` as `root_F`, each `root_B`, no public words, the points, `y = 0`. -/
-def linkObj (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array ByteArray)
-    (points : Array (Array F128)) : Json :=
-  Json.mkObj [("mode", Json.str "exchange"), ("sigma", hexJ spec.sigma),
-    ("root_b", Json.mkObj ((spec.tables.zip rootB).toList.map fun q => (q.1, hexJ q.2))),
-    (s!"root_b_{spec.dk}", Json.mkObj ((spec.tables.zip rootB).toList.map fun q => (q.1, hexJ (dgOf spec h q.2)))),
+def linkList (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array ByteArray)
+    (points : Array (Array F128)) : List (String × Json) :=
+  [("mode", Json.str "exchange"), ("sigma", hexJ spec.sigma),
+    ("root_b", Json.mkObj (rootBList spec id rootB)),
+    (s!"root_b_{spec.dk}", Json.mkObj (rootBList spec (dgOf spec h) rootB)),
     ("root_f", hexJ spec.sigma), (s!"root_f_{spec.dk}", hexJ (dgOf spec h spec.sigma)),
     ("publics", Json.mkObj []), (s!"publics_{spec.dk}", Json.mkObj []),
     ("points", Json.arr (points.map fun p => Json.arr (p.map f128J))), ("y", Json.arr ((yOf spec).map f128J))]
 
+def linkObj (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array ByteArray)
+    (points : Array (Array F128)) : Json :=
+  Json.mkObj (linkList spec h rootB points)
+
 /-- **The honest session record**, with no keyed coin tree. -/
-def recordObj (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array ByteArray)
-    (points : Array (Array F128)) (streams : Array (Array Round)) (proofs : Array ByteArray) : Json :=
-  Json.mkObj [("kind", Json.str "flock-live-session/v1"), ("aborted", Json.null), ("hello", Json.str spec.hello),
+def recordList (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array ByteArray)
+    (points : Array (Array F128)) (streams : Array (Array Round)) (proofs : Array ByteArray) : List (String × Json) :=
+  [("kind", Json.str "flock-live-session/v1"), ("aborted", Json.null), ("hello", Json.str spec.hello),
     ("config", Json.mkObj [("require_link", Json.bool true)]), ("link_mode", Json.str "exchange"),
     ("link", linkObj spec h rootB points), ("unit_draw", spec.unitDraw.getD Json.null),
     ("streams", Json.arr ((spec.repStreams.zip streams).map (streamObj spec h rootB))),
     (s!"link_{spec.dk}", hexJ (dgOf spec h (lbOf spec rootB points))),
     (s!"proof_{spec.dk}", Json.arr ((spec.repStreams.zip proofs).map (proofObj spec h)))]
+
+def recordObj (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array ByteArray)
+    (points : Array (Array F128)) (streams : Array (Array Round)) (proofs : Array ByteArray) : Json :=
+  Json.mkObj (recordList spec h rootB points streams proofs)
 
 /-! ## Objects of distinct keys -/
 
@@ -117,6 +140,78 @@ theorem good_arr_str (a : Array F128) : Good (Json.arr (a.map f128J)) :=
   .arr fun x hx => by
     obtain ⟨y, -, rfl⟩ := Array.mem_map.1 hx
     exact .str _
+
+theorem good_arr_of {a : Array Json} (h : ∀ x ∈ a, Good x) : Good (Json.arr a) := .arr h
+
+/-! ## The record's objects have distinct keys, and the record is printable -/
+
+theorem dk_cases (spec : SessionSpec) : spec.dk = "sha512" ∨ spec.dk = "sha256" := by
+  unfold SessionSpec.dk
+  split <;> simp
+
+theorem roundList_distinct (spec : SessionSpec) (h : ByteArray → ByteArray) (k : Nat) (r : Round) :
+    Distinct (roundList spec h k r) := by
+  rcases dk_cases spec with e | e <;> simp [roundList, e, toString]
+
+theorem streamList_distinct (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array ByteArray)
+    (q : (Nat × Nat × String) × Array Round) : Distinct (streamList spec h rootB q) := by
+  rcases dk_cases spec with e | e <;> simp [streamList, e, toString]
+
+theorem proofList_distinct (spec : SessionSpec) (h : ByteArray → ByteArray) (q : (Nat × Nat × String) × ByteArray) :
+    Distinct (proofList spec h q) := by
+  rcases dk_cases spec with e | e <;> simp [proofList, e]
+
+theorem rootBList_one {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) (f : ByteArray → ByteArray)
+    (rb : ByteArray) : rootBList spec f #[rb] = [(t, hexJ (f rb))] := by
+  simp [rootBList, ht]
+
+theorem linkList_distinct (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array ByteArray)
+    (points : Array (Array F128)) : Distinct (linkList spec h rootB points) := by
+  rcases dk_cases spec with e | e <;> simp [linkList, e, toString]
+
+theorem recordList_distinct (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array ByteArray)
+    (points : Array (Array F128)) (streams : Array (Array Round)) (proofs : Array ByteArray) :
+    Distinct (recordList spec h rootB points streams proofs) := by
+  rcases dk_cases spec with e | e <;> simp [recordList, e, toString]
+
+theorem good_roundObj (spec : SessionSpec) (h : ByteArray → ByteArray) (k : Nat) (r : Round) :
+    Good (roundObj spec h k r) :=
+  good_mkObj (roundList_distinct spec h k r) (by simp [roundList, good_toJson, good_hexJ, good_arr_str])
+
+theorem good_streamObj (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array ByteArray)
+    (q : (Nat × Nat × String) × Array Round) : Good (streamObj spec h rootB q) := by
+  refine good_mkObj (streamList_distinct spec h rootB q) ?_
+  simp only [streamList, List.mem_cons, List.mem_nil_iff, or_false, forall_eq_or_imp, forall_eq]
+  refine ⟨.str _, .str _, .str _, good_toJson _, good_hexJ _, good_arr_of fun x hx => ?_⟩
+  obtain ⟨k, -, rfl⟩ := Array.mem_map.1 hx
+  exact good_roundObj _ _ _ _
+
+theorem good_proofObj (spec : SessionSpec) (h : ByteArray → ByteArray) (q : (Nat × Nat × String) × ByteArray) :
+    Good (proofObj spec h q) :=
+  good_mkObj (proofList_distinct spec h q) (by simp [proofList, good_hexJ]; exact .str _)
+
+theorem good_linkObj {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) (h : ByteArray → ByteArray)
+    (rb : ByteArray) (points : Array (Array F128)) : Good (linkObj spec h #[rb] points) := by
+  refine good_mkObj (linkList_distinct spec h _ points) ?_
+  simp only [linkList, rootBList_one ht, List.mem_cons, List.mem_nil_iff, or_false, forall_eq_or_imp, forall_eq]
+  refine ⟨.str _, good_hexJ _, good_mkObj (by simp) (by simp [good_hexJ]),
+    good_mkObj (by simp) (by simp [good_hexJ]), good_hexJ _, good_hexJ _, good_mkObj (by simp) (by simp),
+    good_mkObj (by simp) (by simp), good_arr_of fun x hx => ?_, good_arr_str _⟩
+  obtain ⟨p, -, rfl⟩ := Array.mem_map.1 hx
+  exact good_arr_str _
+
+/-- **The record is printable** when the statement's draw is. -/
+theorem good_recordObj {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) (h : ByteArray → ByteArray)
+    (rb : ByteArray) (points : Array (Array F128)) (streams : Array (Array Round)) (proofs : Array ByteArray)
+    (hd : Good (spec.unitDraw.getD Json.null)) : Good (recordObj spec h #[rb] points streams proofs) := by
+  refine good_mkObj (recordList_distinct spec h _ points streams proofs) ?_
+  simp only [recordList, List.mem_cons, List.mem_nil_iff, or_false, forall_eq_or_imp, forall_eq]
+  refine ⟨.str _, .null, .str _, good_mkObj (by simp) (by simp; exact .bool true), .str _, good_linkObj ht h rb points,
+    hd, good_arr_of fun x hx => ?_, good_hexJ _, good_arr_of fun x hx => ?_⟩
+  · obtain ⟨q, -, rfl⟩ := Array.mem_map.1 hx
+    exact good_streamObj _ _ _ _
+  · obtain ⟨q, -, rfl⟩ := Array.mem_map.1 hx
+    exact good_proofObj _ _ _
 
 /-! ## A value with no object parses back to itself -/
 
