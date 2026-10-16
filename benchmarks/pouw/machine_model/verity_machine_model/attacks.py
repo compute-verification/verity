@@ -40,6 +40,15 @@ def under_floor(census: Census, sol: Solution, floors: list[Floor]) -> dict[str,
     return out
 
 
+def priced(census: Census, sol: Solution, floors: list[Floor], claim: str) -> list[tuple[str, int, float, float, str]]:
+    """A claim's kinds the census has, cheapest a word first: (kind, words, price a word, measured cost a word, what),
+    in MACs at the vector's MAC price. The measured cost a word is the most a sound price can charge."""
+    mac = price(census, sol.lam, "MMA") / sol.sigma / MACS
+    mc = measured_cost(census)
+    return sorted(((f.kind, f.words, per_word(census, sol, f.kind, f.words), mc[f.kind] / mac / f.words, f.what)
+                   for f in floors if f.claim == claim and f.kind in census), key=lambda t: (round(t[2], 2), t[0]))
+
+
 def cheapest(census: Census, sol: Solution, attacks: list[Attack], design: str, n: int = 3):
     """The `n` cheapest (X, family, name) of `design`, and the cheapest three-piece (iv) attack's X (None without one)."""
     xs = sorted((x_of(census, sol, a.program), a.family, a.name) for a in attacks

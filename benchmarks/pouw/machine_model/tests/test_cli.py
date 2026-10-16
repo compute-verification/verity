@@ -21,6 +21,8 @@ def test_solve_prints_the_numbers_and_the_check(capsys):
     assert "(reproduced)" in out and "1306 attacks in 13 families at X ≥ 1.0: pass" in out
     assert "superseded by VF3k-16" in out
     assert "(π₃₂): every root-writing kind at ≥ 32 MACs a word: 84 kinds, holds (not split out at VF3j-8: ATOME32P)" in out
+    assert "a UR word at the 32 lanes it serves) at ≥ 16 MACs a word: 62 kinds, fails: UNI 2.00 a word < 16;" in out
+    assert "copy routes, MACs a word (price/measured), cheapest first: UNI64 1.00/" in out
 
 
 def test_solve_defaults_to_the_current_vector(capsys):
@@ -28,7 +30,12 @@ def test_solve_defaults_to_the_current_vector(capsys):
     d = json.loads(capsys.readouterr().out)
     assert d["vector"] == "VF3k-16" and round(d["tau"], 4) == 0.0603 and d["failures"] == [] and d["unreproduced"] == []
     assert d["floors"] == {"pi32": {"kinds": 85, "below": [], "absent": []},
-                           "loads16": {"kinds": 9, "below": [], "absent": []}}
+                           "loads16": {"kinds": 9, "below": [], "absent": []},
+                           "copy16": {"kinds": 63, "below": ["UNI 2.00 a word < 16", "UNI64 1.00 a word < 16"],
+                                      "absent": []}}
+    uni = d["copies"][1]
+    assert [c["kind"] for c in d["copies"][:2]] == ["UNI64", "UNI"] and uni["words"] == 32
+    assert round(uni["price"], 2) == 2.0 and uni["measured"] > 32 and uni["what"].startswith("UR fan-out")
 
 
 def test_list_census_attacks(capsys):

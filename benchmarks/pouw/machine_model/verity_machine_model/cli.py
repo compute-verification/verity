@@ -3,7 +3,8 @@
     machine-model list                        the named vectors: epoch, rows, credits and published τ
     machine-model solve [NAME] [--json]       re-solve NAME (default: model.toml's `current`): τ, τ at 600 W, U/F_low and
                                               margin against what was published, θ, the cheapest attacks, the check,
-                                              then whether (π₃₂) and PRICES-32's load half hold (data/floors.csv)
+                                              then whether (π₃₂), PRICES-32's load half and π_c ≥ 16 hold
+                                              (data/floors.csv), and every copy route's price and measured cost a word
     machine-model census [EPOCH] [--kind K]   each instruction class's u on each row at EPOCH (default: the last)
     machine-model attacks [NAME] [--design D] [-n N]
                                               the N cheapest attacks of each design (or of D) at NAME's prices
@@ -18,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import textwrap
 from pathlib import Path
 
 from verity_machine_model import attacks as atk
@@ -45,7 +47,9 @@ def _solve(args) -> int:
         print(json.dumps({"vector": name, "epoch": v.epoch, **r.numbers(), "tau_max": s.tau_max, "theta": s.theta,
                           "cheapest": r.cheapest, "three_piece": r.three_piece, "attacks": len(r.attacks),
                           "published": v.published, "unreproduced": bad, "failures": r.failures,
-                          "floors": {k: {"kinds": n, "below": b, "absent": ab} for k, (n, b, ab) in r.floors.items()}},
+                          "floors": {k: {"kinds": n, "below": b, "absent": ab} for k, (n, b, ab) in r.floors.items()},
+                          "copies": [{"kind": k, "words": w, "price": p, "measured": mc, "what": what}
+                                     for k, w, p, mc, what in r.copies]},
                          ensure_ascii=False,
                          indent=1))
         return 1 if bad or r.failures else 0
@@ -74,6 +78,9 @@ def _solve(args) -> int:
     for claim, (n, below, absent) in r.floors.items():
         print(f"  {CLAIMS[claim]}: {n} kinds, " + ("holds" if not below else "fails: " + "; ".join(below))
               + (f" (not split out at {v.epoch}: {', '.join(absent)})" if absent else ""))
+    print(textwrap.fill("copy routes, MACs a word (price/measured), cheapest first: "
+                        + ", ".join(f"{k} {p:.2f}/{mc:.4g}" for k, _w, p, mc, _ in r.copies),
+                        width=120, initial_indent="  ", subsequent_indent="    "))
     return 1 if bad or r.failures else 0
 
 

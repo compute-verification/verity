@@ -4,7 +4,8 @@ PoUW's price vectors for sm_120 (rs-machine-model §8): the LP that prices every
 of the machine's rows, its inputs as data, the attack families, and `machine-model`, which re-solves a named vector and
 checks every attack against it. Each named vector (VF … VF3l-16) re-solves here to the τ, τ at 600 W, U/F_low and
 margin it was published with, at the vertex the legacy scripts landed on (`tests/test_vectors.py`), and `solve` says
-whether (π₃₂) and PRICES-32's load half hold at its prices (`data/floors.csv`).
+whether (π₃₂), PRICES-32's load half and π_c ≥ 16 hold at its prices (`data/floors.csv`), and lists every copy route's
+price a word beside its measured cost.
 
 ~~~bash
 uv run machine-model list                 # the named vectors
@@ -23,9 +24,9 @@ uv run machine-model --data /tmp/candidate solve VF3l   # a copy of data/ with a
 | `data/census.csv` | One line per instruction class on a row: its measured rate (warp instructions/SM/clk, with `noise` its derating), or the SMSP-cycles it holds the row, or a derived u; the epochs it holds (`since`, `until`) and its runs |
 | `data/vectors/NAME.toml` | A named vector: its epoch, the rows and credits it uses in LP order, its note, and the numbers it was published with |
 | `data/attacks/FAMILY.jsonl` | An attack family: one program a line, its design, and the epochs it holds |
-| `data/floors.csv` | What the claims read: each root-writing kind at 32 MACs a word ((π₃₂)) and each load into registers at 16 (PRICES-32's load half), with the words a warp instruction of it writes |
+| `data/floors.csv` | What the claims read: each root-writing kind at 32 MACs a word ((π₃₂)), each load into registers at 16 (PRICES-32's load half) and each copy route at 16 (π_c ≥ 16, `copy16`: every kind that writes registers, a UR word at the 32 lanes it serves), with the words a warp instruction of it writes |
 | `verity_machine_model/lp.py` | The LP (Charnes–Cooper; stage 1 U/F_low, stage 2 τ), as the legacy `rs-price-99.py` `solve` computes it |
-| `verity_machine_model/attacks.py` | An attack's X, the cheapest of a design, and the check: every price at or below measured cost, ρ, every credit, every attack at X ≥ 1; a kind's price a word, and what is under its floor |
+| `verity_machine_model/attacks.py` | An attack's X, the cheapest of a design, and the check: every price at or below measured cost, ρ, every credit, every attack at X ≥ 1; a kind's price a word, what is under its floor, and a claim's kinds priced a word beside their measured cost |
 | `verity_machine_model/adopt.py` | Merging a measured census into `data/` at the last epoch, each (kind, row) at the faster of its two lines |
 | `verity_machine_model/resolve.py`, `cli.py` | Re-solving a named vector from the data, and the command |
 
@@ -52,7 +53,17 @@ A new measurement is lines of data and a vector file, not a script:
 
 A new attack family is a new `data/attacks/FAMILY.jsonl` (`since` the epoch it joins); the check prices every attack of
 every vector's epoch. A new root-writing kind or register load also needs its line in `data/floors.csv`, which `solve`
-reads for the claims.
+reads for the claims, and a new kind that writes registers its `copy16` line (`tests/test_data.py`'s `MEMORY_ONLY`
+lists the kinds that write none).
+
+## Copy routes
+
+Per-row keys close (RT) only if every copy route costs π_c ≥ 16 MACs a word (note:20261016T1747Z-draft-fullfloor-s-r12):
+MOV, any landed word, UR fan-out, every SHFL mode, and any kind whose output can equal an input word. The `copy16`
+claim reads every kind that writes registers, a superset of those, so a route can't be missed. VF3k-16 and VF3l-16 fail
+it on the UR fan-out alone (UNI 2 and UNI64 1 MACs a lane-word); the candidates `VF3l-16-copy16`,
+`VF3l-16-copy16-fan32`, `VF3l-16-copy32-fan16` and `VF3l-16-copy32` credit the routes they name, each at or below its
+measured cost.
 
 ## Adopt a probe's census
 
