@@ -6,6 +6,7 @@ import Proofs.Flock.Claims.ZK.Coins
 import Proofs.Flock.Claims.ZK.Forced
 import Proofs.Flock.Claims.ZK.Rewind
 import Proofs.Flock.Claims.ZK.GKProof
+import Proofs.Flock.Claims.ZK.GKCost
 
 /-!
 # Flock's zero knowledge against a malicious verifier
@@ -29,4 +30,5 @@ import Proofs.Flock.Claims.ZK.GKProof
 * `GKProof`: **`Proto.gk_zk`**, the Goldreich–Kahan simulator meets `ZKmalR` at `1/(N+1) + 2·δ_A + 2·N·δ_B` from
   `PrefixHides`, `SHVZK` and `Binding`; a binding failure in the simulator is a collision among its own calls
   (`mm_coll`).
+* `GKCost`: its cost, `SimCost` at `simBound` under `CostLe` (`Proto.gk_cost`).
 -/
