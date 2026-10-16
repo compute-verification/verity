@@ -39,7 +39,7 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Discharge.Tables FlockSou
 /-- A round's coin: `nMax` field elements. -/
 abbrev LCoin (nMax : ℕ) := Fin nMax → FlockLevel3.GF128
 
-noncomputable instance (nMax : ℕ) : Inhabited (LCoin nMax) := ⟨fun _ => 0⟩
+noncomputable instance instInhabitedLCoin (nMax : ℕ) : Inhabited (LCoin nMax) := ⟨fun _ => 0⟩
 
 /-- `nMax` field elements as the first `n` and the rest. -/
 def splitE (nMax n : ℕ) (h : n ≤ nMax) :
