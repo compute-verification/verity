@@ -77,6 +77,17 @@ def test_the_fused_allreduce_norm_is_one_collective_compute_writing_the_residual
     assert [o.view.alloc for o in r.outputs] == [5624, 5623]
 
 
+def test_the_norms_name_their_weight_root_so_the_match_maps_each_layer_apart():
+    gamma = Root(view(23, (H,)), "weight", "model.layers.3.post_attention_layernorm.weight")
+    r = TpFusedAllReduceRmsNorm(world=8).match(_far(), _ctx(1, roots=(gamma,)))
+    assert isinstance(r, Compute) and r.roots == (None, None, gamma.name)
+    fa = _node("_C.fused_add_rms_norm.default",
+               "_C::fused_add_rms_norm(Tensor($0! -> ) input, Tensor($1! -> ) residual, Tensor? weight, float epsilon) -> ()",
+               [view(2315, (256, H)), view(2284, (256, H)), view(23, (H,)), 1e-05], module="")
+    r = CudaFusedAddRmsNorm().match(fa, _ctx(256, roots=(gamma,)))
+    assert isinstance(r, Compute) and r.hint == gamma.name
+
+
 @pytest.mark.parametrize("kw", [{"world": 4}, {"code": 2}, {"fp32": False}])
 def test_another_fused_allreduce_norm_configuration_is_refused(kw):
     assert isinstance(TpFusedAllReduceRmsNorm(world=8).match(_far(**kw), _ctx(1)), Unsupported)

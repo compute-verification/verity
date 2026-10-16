@@ -67,6 +67,13 @@ def _module(node: TreeNode) -> str:
     return getattr(node.enter, "module", None) or ""
 
 
+def _root(ctx: StepContext, v: ViewDesc) -> str | None:
+    """The checkpoint parameter a weight view reads (`Compute.roots`): GLM-5.3's Triton launches carry no module, so the hint alone
+    names one layer's norm weight like every other layer's and the Match's weight map fuses all of them into one overlapping range."""
+    rs = ctx.roots_of(v)
+    return rs[0].name if rs else None
+
+
 def _state(ctx: StepContext) -> dict:
     return ctx.scratch.setdefault("glm53_dsa", {"modules": {}, "topk": None})
 
@@ -185,9 +192,10 @@ class DsaNormRope:
             return unsupported(node, "norm epsilons are not static floats", q_eps=repr(a.get("q_rms_eps")), kv_eps=repr(a.get("kv_rms_eps")))
         parts: list[Compute] = [
             Compute(bind(DsaRMSNorm, N=2048, EPS=qeps), M, (PerRow(q), Shared(qw)), (PerRow(qo),), (node.id,),
-                    hint=f"{_module(node)}/q_a_layernorm", kernels=(NORM_KERNEL,), attribution=tuple(ctx.start.rows), pattern=self.name),
+                    hint=f"{_module(node)}/q_a_layernorm", kernels=(NORM_KERNEL,), attribution=tuple(ctx.start.rows), pattern=self.name,
+                    roots=(None, _root(ctx, qw))),
             Compute(bind(DsaRMSNorm, N=512, EPS=kveps), M, (PerRow(kv), Shared(kvw)), (Gather(kv_cache, slots),), (),
-                    hint=f"{_module(node)}/kv_a_layernorm", pattern=self.name),
+                    hint=f"{_module(node)}/kv_a_layernorm", pattern=self.name, roots=(None, _root(ctx, kvw))),
             Compute(bind(RoPEHeadGptJV2, D=64), M, (PerRow(kpe), Gather(cs, pos)), (Gather(kpe_cache, slots),), (),
                     hint=f"{_module(node)}/k_pe", pattern=self.name),
         ]
@@ -214,7 +222,7 @@ class DsaNormRope:
             parts.append(Compute(bind(dsa.DsaIndexerKRow, D=128, ROPE=64, EPS=ieps), M,
                                  (PerRow(ik), Shared(iw), Shared(ib), Gather(ics, pos)),
                                  (Gather(ik_rows, slots), Gather(is_rows, slots)), (), hint=f"{_module(node)}/indexer_k",
-                                 pattern=self.name))
+                                 pattern=self.name, roots=(None, _root(ctx, iw), _root(ctx, ib), None)))
             ms.update({"index_k": ik_rows, "index_scale": is_rows})
         else:
             if c.get("INDEX_K_DIM") != 1 or c.get("INDEX_K_BLOCK_SIZE") != 1:

@@ -130,4 +130,5 @@ class TpFusedAllReduceRmsNorm:
                     EPS=eps, FMA=fma.pop())
         return Compute(spec, M, (Collective(x, FUSED_KIND, site), PerRow(res), Shared(w)), (PerRow(out), PerRow(x)), tuple(sorted(node.ids())),
                        hint=hint_of(node, FUSED_KIND), kernels=("allreduce_fusion", "oneshot", "twoshot", "rmsNormLamport"),
-                       attribution=attribution_for(ctx, M, node.phase), pattern=self.name)
+                       attribution=attribution_for(ctx, M, node.phase), pattern=self.name,
+                       roots=(None, None, next((r.name for r in ctx.roots_of(w)), None)))

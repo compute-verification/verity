@@ -143,7 +143,8 @@ class CudaRmsNorm:
             return unsupported(node, "rms_norm off batch invariance takes row-major bf16 [M,N] out / x and a [N] bf16 weight", out=repr(out), x=repr(x), w=repr(w))
         M, N = x.shape
         spec = bind(C.RMSNormCudaVector8, N=N, EPS=eps, BLOCK=C.launch_block(M, N, fused=False))
-        return Compute(spec, M, (PerRow(x), Shared(w)), (PerRow(out),), tuple(sorted(node.ids())), hint=hint_of(node, "rms_norm"),
+        roots = ctx.roots_of(w)
+        return Compute(spec, M, (PerRow(x), Shared(w)), (PerRow(out),), tuple(sorted(node.ids())), hint=hint_of(node, roots[0].name if roots else "rms_norm"),
                        kernels=("rms_norm_kernel",), attribution=attribution_for(ctx, M, node.phase), pattern=self.name)
 
 
@@ -169,8 +170,9 @@ class CudaFusedAddRmsNorm:
                                x=repr(x), residual=repr(res), w=repr(w))
         M, N = x.shape
         spec = bind(C.RMSNormFusedCudaVector8, N=N, EPS=eps, BLOCK=C.launch_block(M, N, fused=True))
+        roots = ctx.roots_of(w)
         return Compute(spec, M, (PerRow(x), PerRow(res), Shared(w)), (PerRow(x), PerRow(res)), tuple(sorted(node.ids())),
-                       hint=hint_of(node, "fused_add_rms_norm"), kernels=("fused_add_rms_norm_kernel",),
+                       hint=hint_of(node, roots[0].name if roots else "fused_add_rms_norm"), kernels=("fused_add_rms_norm_kernel",),
                        attribution=attribution_for(ctx, M, node.phase), pattern=self.name)
 
 
