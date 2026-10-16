@@ -7,6 +7,7 @@ import Proofs.Flock.Claims.ZK.Forced
 import Proofs.Flock.Claims.ZK.Rewind
 import Proofs.Flock.Claims.ZK.GKProof
 import Proofs.Flock.Claims.ZK.GKCost
+import Proofs.Flock.Claims.ZK.Flock
 
 /-!
 # Flock's zero knowledge against a malicious verifier
@@ -31,4 +32,8 @@ import Proofs.Flock.Claims.ZK.GKCost
   `PrefixHides`, `SHVZK` and `Binding`; a binding failure in the simulator is a collision among its own calls
   (`mm_coll`).
 * `GKCost`: its cost, `SimCost` at `simBound` under `CostLe` (`Proto.gk_cost`).
+* `Flock`: **`Flock.zkR_of_proto`**, the proposed `Flock.ZKR` for a masked deployed verifier whose coins a committed-coin
+  protocol commits at `Hello` (`D.V.k = G.K + 1`), with `S_Flock`'s cost (`Flock.simCost_of_proto`); what changes for a
+  malicious verifier, how the hypotheses map to the session analysis's Theorem GK (`gk_simulate_hm96`), and what the
+  `--zk` instance still needs.
 -/

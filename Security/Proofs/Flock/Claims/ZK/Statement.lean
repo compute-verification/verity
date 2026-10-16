@@ -8,7 +8,8 @@ ruling; `Claims.lean` is unchanged.
 
 * **The protocol's rounds.** The real run lasts the honest protocol's `k(x)` rounds (`Vs.k x = k x`). A verifier that
   stops early still can (it decides), and the honest prover has nothing to send after its last message. The simulator
-  is not told `Vs.k`, so it could not otherwise match the run's length.
+  is not told `Vs.k`, so it could not otherwise match the run's length. Flock's are the live protocol's, `Hello` (the
+  coin commitment) and then `D.V`'s, one more than the public-coin form's (`Flock.ZKR`).
 * **Binding, tied to the simulator's run.** The deployed coin commitment binds only computationally: a `V*` holding a
   SHA-512 collision opens a coin two ways. The bound adds the probability that the simulator's own SHA-512 calls
   (`simLog`) hold a collision. `ZKmalR.bits`: under `StrictBirthday` at the finder `Bzk` (the simulator, with every call
@@ -65,10 +66,11 @@ def ZKmalBits {W Ω : Type} [Fintype Ω] (H : Msg → Msg) (k : Msg → ℕ) (P 
       ≤ εzk x + q ^ 2 / 2 ^ (513 : ℝ)
 
 /-- **Flock: zero knowledge, proposed**: the masked verifier's honest prover, against every malicious verifier of the
-deployed verifier's rounds. -/
+live protocol's rounds: `Hello`, answered by the coin commitment, then the deployed verifier's `D.V.k`, each of whose
+coins is opened from the commitment. `D.V` is the public-coin form, which has no commitment round. -/
 def Flock.ZKR {Coin Col T Ω : Type} [Fintype Ω] (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (P : Flock.Wit → Prover Ω)
     (S : Simulator) (εzk : Msg → ℝ) : Prop :=
-  D.zk = true ∧ ZKmalR H D.V.k P (Flock.R H D.parse) S εzk
+  D.zk = true ∧ ZKmalR H (fun x => D.V.k x + 1) P (Flock.R H D.parse) S εzk
 
 /-! ## What `findColl` finds -/
 
