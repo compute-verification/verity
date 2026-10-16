@@ -660,14 +660,14 @@ theorem getD_empty (a : Array ByteArray) (j : ℕ) : a.getD j ByteArray.empty = 
   rfl
 
 /-- **The column reader reads the verifier's level-0 query round**: where the run's last message `f` sets up and the
-plain verdict accepts its record and proof files at any hashes, each of table 0's two reps that `runOf` takes has, at
-`plainQueryRound`, a round of level 0's `q₀` coins; its proof file decodes at the run's `plainShape` to the proof whose
-level-0 Merkle check the verifier passes at those coins' positions; and `plainRepColsOf` is that proof's level-0 rows at
-those coins. -/
+plain verdict accepts its record and proof files at any hashes, each of table 0's two reps that `runOf … 0` takes has,
+at `plainQueryRound`, a round of level 0's `q₀` coins; its proof file decodes at the run's `plainShape` to the proof
+whose level-0 Merkle check the verifier passes at those coins' positions; and `plainRepColsOf` is that proof's level-0
+rows at those coins. -/
 theorem runOf_queryRound_plain (hs : Hashes Flock.V) {s : Claims.Seen} {f : Final} {ins : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {r : Claims.Flock.ZkRun} (hf : lastFinal s = some f)
     (hset : setupOf false f.stmt = some (ins, spec, sts))
-    (hv : verifyWithM hs spec (tabsOf sts) f.record f.proofs = .ok ()) (hr : runOf false s = some r) :
+    (hv : verifyWithM hs spec (tabsOf sts) f.record f.proofs = .ok ()) (hr : runOf false s 0 = some r) :
     ∀ x ∈ r.reps, ∃ (p : Proof) (rd : Round),
       decodeProof r.plainShape x.2 = .ok p ∧
       x.1[Claims.Flock.plainQueryRound r.m r.kLog (Claims.Flock.plainSched r.m).k0 r.claims]? = some rd ∧
