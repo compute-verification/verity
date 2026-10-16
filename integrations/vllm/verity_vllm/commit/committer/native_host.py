@@ -221,10 +221,10 @@ class _DeviceArena:
 #    deterministic (BI) execution of the same committed inputs reproduces the same bytes and the same roots (`open(..., values_from=other)`),
 #    verified against the ORIGINAL run's roots.  One-stage binding is untouched: the leaves are hashed from the arena block before any copy.
 RETAIN_MODES = ("device", "host", "none", "sample")
-# [R13 hopper] the attention hidden-value rows of either FlashAttention tap (FA2 v8 `fa2.m1/L<k>/...`, FA3 v9 `fa3.m1/L<k>/...`): one identity
-# family for the X-03 identity check, the step trace and the footprint families
+# [R13 hopper] either FlashAttention tap's hidden-value rows (`fa2.m1/L<k>/...`, `fa3.m1/L<k>/...`): one family for X-03, the trace and the footprint
 HIDDEN_M1_PREFIXES = ("fa2.m1/", "fa3.m1/")
 TP_PARTIAL_RE = re.compile(r"/(part|shard)_rank\d+$")   # [R14 TP-03] <module path>/part_rank<r>: the rank-local input of that module's collective
+CALL_DEPENDENT_RE = re.compile(r"/(all_reduce|x_q|x_s)$")   # bound only on the calls whose token count takes that path; the manifest requires them
 
 
 def hazard_of_record(name: str, HAZARD_LEAVES: "tuple[str, ...] | frozenset[str] | set[str]") -> bool:
@@ -232,8 +232,8 @@ def hazard_of_record(name: str, HAZARD_LEAVES: "tuple[str, ...] | frozenset[str]
     (True) or batch at step end (False).  Encodes vLLM's aliasing by leaf name (`NativeHostCommitter.HAZARD_LEAVES` + the two name rules) --
     a by-name lifetime table (F-r19-int-20, Draft 3 §11.3.1), owned HERE; `verity_vllm.acquire.plan` names it as a RESIDUAL through this one
     function rather than restating it."""
-    if TP_PARTIAL_RE.search(name):
-        return True          # [R14 TP-03] a collective's input partial: snapshot now, before the NCCL call consumes it
+    if TP_PARTIAL_RE.search(name) or CALL_DEPENDENT_RE.search(name):
+        return True          # [R14 TP-03] a collective's input partial (or a value overwritten or freed right after): snapshot now
     if name.startswith("moe/") and name.endswith("/up"):
         return True          # [R16 moe FLUSH-03] the fused-MoE up plane: its workspace is the block's own w2 output (cache1/cache3 alias)
     base, _, idx = name.partition("/")
@@ -2020,9 +2020,9 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 padding_only_steps.append(int(step))
             names_all = Counter(m.name for m in metas_all) if cols is None else Counter(cols)   # fa2 per-layer uniformity reads every plane of the step (rule (a) planes included)
             names = Counter(m.name for m in metas) if cols is None else names_all
-            mod_names = Counter({n: c for n, c in names.items() if not n.startswith(HIDDEN_M1_PREFIXES) and not n.startswith("moe/") and not TP_PARTIAL_RE.search(n)})
+            mod_names = Counter({n: c for n, c in names.items() if not n.startswith(HIDDEN_M1_PREFIXES) and not n.startswith("moe/") and not TP_PARTIAL_RE.search(n) and not CALL_DEPENDENT_RE.search(n)})
             pad_ident = Counter(_identity_of_padding(m.name) for m in pad_metas)
-            pad_mod_names = Counter({n: 1 for n in pad_ident if not n.startswith(HIDDEN_M1_PREFIXES) and not n.startswith("moe/") and not TP_PARTIAL_RE.search(n)})
+            pad_mod_names = Counter({n: 1 for n in pad_ident if not n.startswith(HIDDEN_M1_PREFIXES) and not n.startswith("moe/") and not TP_PARTIAL_RE.search(n) and not CALL_DEPENDENT_RE.search(n)})
             if padding_only:
                 mod_names = pad_mod_names                                # the identities materialized as ⊥, one each (set semantics below)
             # [R14 TP-03] rank-local collective inputs: exactly one `tp/<site>/{part,shard}_rank<r>` per expected site, none from elsewhere

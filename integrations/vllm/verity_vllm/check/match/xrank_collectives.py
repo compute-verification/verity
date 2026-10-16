@@ -15,11 +15,23 @@ rank (the rank suffix is stripped from the stratum key), with a row subset per p
 rank dumps its picks (partial rows + received rows, from the committed bytes) to `xrank_rank<r>.pt`; the driver pairs them.  Any pick whose
 received member is not committed on a rank, or whose partial is not committed, is a named FAIL (the population of record requires both).
 Negative: `--flip-partial <rank>:<site suffix>` makes that rank commit a partial that is not the collective's input -> this pass fails by name.
+
+A world-8 all-reduce is evaluated with the routed Definition the rank Program binds at the call (`registry.tp_allreduce`): the rank
+names it per pick (`spec`, `statics`, `pipeline.tp.xrank_dump.route_of`) and the driver evaluates it with `tp_allreduce_check`'s models,
+which tests/program/test_tp_allreduce.py holds to the Definitions:
+
+    AllReduceMultimem_v1 / AllReduceCustom_v1 : the received rows == each flat element's owner sum (row * N + col of the M * N words)
+    AllReduceMnnvl_v1                         : the received rows == the elementwise FTZ sum, ranks ascending
+    AllReduceRmsNormMnnvl_v1                  : committed <norm>/0 == normed and <norm>/1 == bf16(a + res), from the committed partials,
+                                                the committed residual (`res`) and the norm's weight (`w`), each rank its own
 """
 from __future__ import annotations
 
+import ast
 import hashlib
 from typing import Any
+
+import numpy as np
 
 FAMILY = {"all_reduce": "AllReduce2_v1", "all_gather": "AllGather2_v1"}           # the two-rank identities (world 2)
 
@@ -52,6 +64,122 @@ def family_of(site: str, kind: str, world: int = 2) -> str:
 
 def is_embedding_site(site: str) -> bool:
     return any(m in site for m in EMBED_MARKERS)
+
+
+FUSED_FAMILY = "AllReduceRmsNormMnnvl_v1"
+ROUTED_FAMILIES = ("AllReduceMnnvl_v1", "AllReduceMultimem_v1", "AllReduceCustom_v1", FUSED_FAMILY)
+
+
+def _canon(v: Any) -> Any:
+    return tuple(_canon(x) for x in v) if isinstance(v, (list, tuple)) else v
+
+
+def spec_key(spec: str) -> tuple[str, tuple]:
+    """(family, sorted (static, value)) of a bound Definition id such as ``AllReduceMultimem_v1{WORLD=8,SIZE=..,TREES=((..),..),FTZ=False}``:
+    the statics split at top-level commas, each value a Python literal (nested tuples included)."""
+    fam, _, rest = str(spec).partition("{")
+    body = rest[:-1] if rest.endswith("}") else rest
+    items, depth, cur = [], 0, ""
+    for ch in body:
+        if ch == "," and depth == 0:
+            items.append(cur)
+            cur = ""
+            continue
+        depth += (ch in "([{") - (ch in ")]}")
+        cur += ch
+    if cur.strip():
+        items.append(cur)
+    out = []
+    for it in items:
+        k, _, v = it.partition("=")
+        try:
+            val = ast.literal_eval(v.strip())
+        except (ValueError, SyntaxError):
+            val = v.strip()
+        out.append((k.strip(), _canon(val)))
+    return fam.strip(), tuple(sorted(out))
+
+
+def words(t: Any) -> np.ndarray:
+    """The uint16 words of a bf16 CPU tensor."""
+    import torch
+
+    return t.contiguous().view(torch.int16).numpy().view(np.uint16)
+
+
+def routed_expected(family: str, statics: dict[str, Any], parts: np.ndarray, rows: list[int], res: np.ndarray | None = None,
+                    w: np.ndarray | None = None) -> tuple[np.ndarray, ...]:
+    """The routed Definition's words at the picked rows: `parts` (WORLD, R, N) the ranks' partial rows `rows` of an M x N call (the flat
+    M * N words a Multimem / Custom call reads, row-major).  Returns (out,), or (normed, r) for the fused norm (`res` (R, N), `w` (N))."""
+    from verity_vllm.program.kernels import derived_rows as DR
+    from verity_vllm.program.registry import tp_allreduce as T
+    from verity_vllm.program.registry import tp_allreduce_check as TC
+
+    parts = np.asarray(parts, np.uint16)
+    W, R, N = parts.shape
+    if family == "AllReduceMnnvl_v1":
+        return (TC.mnnvl_rows(parts, int(statics["SHOT"])),)
+    if family == FUSED_FAMILY:
+        if res is None or w is None:
+            raise ValueError("the fused all-reduce norm reads the residual and the weight")
+        return TC.mnnvl_norm_rows(parts, np.asarray(res, np.uint16), np.asarray(w, np.uint16), int(statics["SHOT"]), int(statics["CLUSTER"]),
+                                  float(statics["EPS"]), bool(statics["FMA"]))
+    size = int(statics["SIZE"])
+    flat = np.asarray(rows, np.int64)[:, None] * N + np.arange(N, dtype=np.int64)[None, :]
+    if int(flat.max(initial=0)) >= size:
+        raise ValueError(f"rows {max(rows)} x N={N} past SIZE={size}")
+    out = np.empty((R, N), np.uint16)
+    if family == "AllReduceMultimem_v1":
+        trees = T.multimem_trees(statics["TREES"], W)
+        for lo, hi, owner in T.multimem_owners(W, size):
+            m = (flat >= lo) & (flat < hi)
+            if m.any():
+                out[m] = DR.f2fp_bf16(TC.tree_sum(parts[:, m], trees[owner], bool(statics["FTZ"])))
+        return (out,)
+    if family == "AllReduceCustom_v1":
+        for lo, hi, owner in T.custom_owners(W, size, int(statics["STAGE"])):
+            m = (flat >= lo) & (flat < hi)
+            if m.any():
+                order = T.custom_order(W, owner)
+                acc = DR.bf16_to_f32_words(parts[order[0]][m])
+                for r in order[1:]:
+                    acc = DR.add_rn(acc, DR.bf16_to_f32_words(parts[r][m]))
+                out[m] = DR.f2fp_bf16(acc)
+        return (out,)
+    raise ValueError(f"{family}: not a routed all-reduce")
+
+
+def _check_routed(ps: list[dict[str, Any]], ranks: list[int]) -> tuple[bool | None, dict[str, Any]]:
+    """One routed pick over every rank's dump: (True | False | None = not evaluable, detail)."""
+    specs = {str(p.get("spec")) for p in ps}
+    if len(specs) != 1:
+        return None, {"why": f"the ranks bind different Definitions at the call: {sorted(s[:80] for s in specs)}"}
+    unbound = {r: p.get("program_binds") for p, r in zip(ps, ranks) if p.get("program_binds") is not True}
+    if unbound:
+        return None, {"why": "; ".join(f"rank {r}: " + ("the rank Program binds no " + next(iter(specs))[:120] if b is False else
+                                                         "the rank Programs' routed specs were not read") for r, b in unbound.items())}
+    p0 = ps[0]
+    fam, st, fused = spec_key(p0["spec"])[0], dict(p0["statics"]), p0["spec"].startswith(FUSED_FAMILY)
+    need = ("part", "recv", "recv1", "res", "w") if fused else ("part", "recv")
+    gone = [f"rank {r}: {k}" for p, r in zip(ps, ranks) for k in need if p.get(k) is None]
+    if gone:
+        return None, {"why": "; ".join(gone[:6]) + " not committed" + "".join(f" ({p['why']})" for p in ps if p.get("why"))[:300]}
+    parts = np.stack([words(p["part"]) for p in ps])
+    if parts.ndim != 3:
+        return None, {"why": f"partials of shape {parts.shape[1:]}; expected [rows, N]"}
+    try:
+        if fused:
+            exps = [routed_expected(fam, st, parts, p0["rows"], words(p["res"]), words(p["w"]).reshape(-1)) for p in ps]
+        else:
+            exps = [routed_expected(fam, st, parts, p0["rows"])] * len(ps)
+    except ValueError as e:
+        return None, {"why": f"{fam}: {e}"}
+    got = [(words(p["recv"]),) + ((words(p["recv1"]),) if fused else ()) for p in ps]
+    eq = [all(g.shape == e.shape and np.array_equal(g, e) for g, e in zip(gs, es)) for gs, es in zip(got, exps)]
+    same = all(all(np.array_equal(a, b) for a, b in zip(got[0], g)) for g in got[1:])
+    diffs = [sum(int((g != e).sum()) if g.shape == e.shape else -1 for g, e in zip(gs, es)) for gs, es in zip(got, exps)]
+    return bool(all(eq) and same), {"received_equals_definition_per_rank": dict(zip([str(r) for r in ranks], eq)), "received_equal_across_ranks": same,
+                                     "n_diff_per_rank": dict(zip([str(r) for r in ranks], diffs)), "elements": int(exps[0][0].size), "spec": p0["spec"][:160]}
 
 
 def _h(*parts: str | bytes) -> int:
@@ -112,7 +240,9 @@ def check_picks(dumps: dict[int, dict[str, Any]], world: int = 2) -> dict[str, A
 
     res: dict[str, Any] = {"result": None, "world": world, "picks": 0, "equal": 0, "mismatches": [], "missing": [], "by_family": {}, "by_stratum": {},
                            "rule": ("per pick (site, step, row subset): all_reduce -> committed received (each rank) == bf16(f32(part_rank0) + f32(part_rank1)) elementwise "
-                                    "and equal across ranks; all_gather -> committed received == concat(shard_rank0, shard_rank1) on the last dim; "
+                                    "and equal across ranks (world > 2: the AllReduce_v2 chain); a routed world-8 all-reduce (the pick's `spec`) -> "
+                                    "the routed Definition's model over the committed partials (fused norm: <norm>/0 and <norm>/1 from the partials, "
+                                    "the committed residual and the norm weight); all_gather -> committed received == concat(shard_rank0, shard_rank1) on the last dim; "
                                     "embedding site additionally (EmbeddingShard_v1) -> each rank's committed partial == masked gather of the committed ids (<site>/in) "
                                     "from the rank's pinned vocab shard (rows outside the rank's vocab range are zero); "
                                     "partials and received are the ranks' COMMITTED bytes (bound + under the run roots), never the hook-time clone")}
@@ -131,7 +261,10 @@ def check_picks(dumps: dict[int, dict[str, Any]], world: int = 2) -> dict[str, A
             res["missing"].append({"pick": i, "why": f"pick {i} names different (site, step, kind) across ranks", "keys": [(p["site"], p["step"], p["kind"]) for p in ps]})
             continue
         fam = res["by_family"].setdefault(p0["family"], {"picks": 0, "equal": 0, "mismatch": 0, "missing": 0})
-        st = res["by_stratum"].setdefault(p0["stratum"], {"picks": 0, "equal": 0})
+        st = res["by_stratum"].setdefault(p0["stratum"], {"picks": 0, "equal": 0, "families": []})
+        for f_ in (p0["family"],) + (("EmbeddingShard_v1",) if p0["kind"] == "all_reduce" and is_embedding_site(p0["site"]) else ()):
+            if f_ not in st["families"]:
+                st["families"].append(f_)
         fam["picks"] += 1
         st["picks"] += 1
         res["picks"] += 1
@@ -154,6 +287,25 @@ def check_picks(dumps: dict[int, dict[str, Any]], world: int = 2) -> dict[str, A
                 res["mismatches"].append({"pick": i, "site": p0["site"], "step": p0["step"], "kind": "embedding_shard", "family": "EmbeddingShard_v1", "rows": p0["rows"][:8],
                                           "received_equals_definition_per_rank": {str(r): bool(embs[j].get("ok")) for j, r in enumerate(ranks)}, "received_equal_across_ranks": None,
                                           "n_diff_per_rank": {str(r): embs[j].get("n_diff") for j, r in enumerate(ranks)}, "vocab_range_per_rank": {str(r): embs[j].get("vocab_range") for j, r in enumerate(ranks)}})
+        route_whys = [f"rank {r}: {p['route_why']}" for p, r in zip(ps, ranks) if p.get("route_why")]
+        if p0["kind"] == "all_reduce" and route_whys:
+            fam["missing"] += 1
+            res["missing"].append({"pick": i, "site": p0["site"], "step": p0["step"], "kind": p0["kind"], "family": p0["family"],
+                                   "why": ("no routed Definition for the call: " + "; ".join(route_whys[:4]))[:400]})
+            continue
+        if p0["kind"] == "all_reduce" and p0.get("spec"):
+            ok, d = _check_routed(ps, ranks)
+            if ok is None:
+                fam["missing"] += 1
+                res["missing"].append({"pick": i, "site": p0["site"], "step": p0["step"], "kind": p0["kind"], "family": p0["family"], "why": d["why"]})
+            elif ok:
+                fam["equal"] += 1
+                st["equal"] += 1
+                res["equal"] += 1
+            else:
+                fam["mismatch"] += 1
+                res["mismatches"].append({"pick": i, "site": p0["site"], "step": p0["step"], "kind": p0["kind"], "family": p0["family"], "rows": p0["rows"][:8], **d})
+            continue
         parts = [p.get("part") for p in ps]
         recvs = [p.get("recv") for p in ps]
         if any(x is None for x in parts) or any(x is None for x in recvs):
@@ -231,14 +383,20 @@ def coverage_of_unreplayable(res: dict[str, Any], dumps_meta: list[dict[str, Any
             continue
         for f, ss in us.items():
             sites_by_fam.setdefault(f, set()).update(str(x) for x in (ss or []))
-    strata_sites = {k.split("|")[0] for k in (res.get("by_stratum") or {})}
+    strata = {k.split("|")[0]: set() for k in (res.get("by_stratum") or {})}
+    for k, v in (res.get("by_stratum") or {}).items():
+        strata[k.split("|")[0]].update(v.get("families") or ())
+    strata_sites = set(strata)
 
-    def covered(site: str) -> bool:
-        return site in strata_sites or any(x.endswith("." + site) or site.endswith("." + x) for x in strata_sites)
+    def covered(site: str, fam: str) -> bool:
+        # a Program site is covered by a stratum of its family (strata recorded without families: any) at the site, a suffix of it, or a
+        # module under it (the fused all-reduce norms of a decoder layer are named by the norm, the Program's rows by the layer)
+        xs = [x for x, fs in strata.items() if not fs or fam in fs]
+        return any(x == site or x.endswith("." + site) or site.endswith("." + x) or x.startswith(site + ".") for x in xs)
 
     fams = {}
     for f, ss in sorted(sites_by_fam.items()):
-        miss = sorted(x for x in ss if not covered(x))
+        miss = sorted(x for x in ss if not covered(x, f))
         fams[f] = {"sites": len(ss), "covered": len(ss) - len(miss), "missing": miss,
                    "picks": ((res.get("by_family") or {}).get(f) or {}).get("picks"), "equal": ((res.get("by_family") or {}).get(f) or {}).get("equal")}
     complete = bool(sites_by_fam) and not errors and all(not v["missing"] for v in fams.values())
