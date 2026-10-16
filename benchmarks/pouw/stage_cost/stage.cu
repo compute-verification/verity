@@ -57,6 +57,8 @@
 #undef main
 #include "../served_zk/hm96_rows.cu"
 
+#include <immintrin.h>
+
 #include <fstream>
 #include <map>
 #include <tuple>
@@ -306,41 +308,64 @@ __device__ __forceinline__ void fr_pad_block(uint64_t st[8], uint64_t len) {
   w[15] = len * 8;
   fr_compress(st, w);
 }
-// sz_segments with fr_compress (the same digests)
-extern "C" __global__ void fr_segments(Args a) {
+// sz_segments with fr_compress (the same digests): a lane a segment, a warp's 32 segments' blocks staged through shared
+// memory (coalesced), the next block's loads issued before this one's compression. 4 warps a CTA, so a small stage's
+// segments take one warp a sub-partition (two issue-bound warps on one each run at half speed)
+constexpr int FR_SEG_THREADS = 128;
+// the phase probe's clocks (null outside it): fr_tree's thread 0 a CTA stamps FR_TP_SLOTS phases (fr_tp), fr_segments its
+// first warp's start and last warp's end (fr_tps[0], [1])
+__device__ unsigned long long* fr_tp = nullptr;
+__device__ unsigned long long* fr_tps = nullptr;
+constexpr int FR_TP_SLOTS = 32;
+__device__ __forceinline__ unsigned long long fr_now() {
+  unsigned long long t;
+  asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t));
+  return t;
+}
+extern "C" __global__ void __launch_bounds__(FR_SEG_THREADS) fr_segments(Args a) {
+  if (fr_tps && (threadIdx.x & 31) == 0) atomicMin(fr_tps, fr_now());
   extern __shared__ uint32_t fr_sw[];
   const uint8_t* data = (const uint8_t*)a.p[0];
   const uint64_t* mids = (const uint64_t*)a.p[1];
   uint8_t* out = (uint8_t*)a.p[2];
-  long long rows = a.i[0], stride = a.i[1];
-  int s = a.i[2], last = a.i[3];
-  long long total = rows * s;
-  int wid = threadIdx.x >> 5, lane = threadIdx.x & 31;
+  const long long rows = a.i[0], stride = a.i[1];
+  const int s = a.i[2], last = a.i[3];
+  const long long total = rows * s;
+  const int wid = threadIdx.x >> 5, lane = threadIdx.x & 31;
   uint32_t* sh = fr_sw + wid * (32 * 33);
-  long long warp0 = ((long long)blockIdx.x * (blockDim.x >> 5) + wid) * 32;
+  const long long warp0 = ((long long)blockIdx.x * (blockDim.x >> 5) + wid) * 32;
   if (warp0 >= total) return;
-  long long g = warp0 + lane;
-  int j = (int)(g % s);
-  int bytes = j == s - 1 ? last : 1024;
+  const long long g = warp0 + lane;
+  const int j = (int)(g % s);
+  const int bytes = j == s - 1 ? last : 1024;
+  // the lane's piece it of each block: 16 bytes at (lane & 7) * 16 of the warp's segment it * 4 + lane / 8
+  const uint8_t* src[8];
+  int pb[8];
+#pragma unroll
+  for (int it = 0; it < 8; it++) {
+    const long long pg = warp0 + it * 4 + (lane >> 3);
+    const int pj = (int)(pg % s);
+    pb[it] = pg < total ? (pj == s - 1 ? last : 1024) : 0;
+    src[it] = data + (pg / s) * stride + (long long)pj * 1024 + (lane & 7) * 16;
+  }
   uint64_t st[8];
   if (g < total)
     for (int q = 0; q < 8; q++) st[q] = mids[8 * j + q];
+  uint4 v[8];
+#pragma unroll
+  for (int it = 0; it < 8; it++) v[it] = pb[it] > 0 ? *(const uint4*)src[it] : make_uint4(0, 0, 0, 0);
 #pragma unroll 1
   for (int c = 0; c < 8; c++) {
 #pragma unroll
     for (int it = 0; it < 8; it++) {
-      int idx = it * 32 + lane, piece = idx >> 3, off = idx & 7;
-      long long pg = warp0 + piece;
-      uint4 v = make_uint4(0, 0, 0, 0);
-      if (pg < total) {
-        int pj = (int)(pg % s);
-        int pb = pj == s - 1 ? last : 1024;
-        if (c * 128 < pb) v = *(const uint4*)(data + (pg / s) * stride + (long long)pj * 1024 + c * 128 + off * 16);
-      }
-      uint32_t* d = sh + piece * 33 + off * 4;
-      d[0] = v.x; d[1] = v.y; d[2] = v.z; d[3] = v.w;
+      uint32_t* d = sh + (it * 4 + (lane >> 3)) * 33 + (lane & 7) * 4;
+      d[0] = v[it].x; d[1] = v[it].y; d[2] = v[it].z; d[3] = v[it].w;
     }
     __syncwarp();
+    if (c + 1 < 8)
+#pragma unroll
+      for (int it = 0; it < 8; it++)
+        v[it] = (c + 1) * 128 < pb[it] ? *(const uint4*)(src[it] + (c + 1) * 128) : make_uint4(0, 0, 0, 0);
     if (g < total && c * 128 < bytes) {
       uint64_t w[16];
 #pragma unroll
@@ -352,6 +377,7 @@ extern "C" __global__ void fr_segments(Args a) {
   if (g >= total) return;
   fr_pad_block(st, (uint64_t)(128 + bytes));
   s512_out(st, out + g * 64);
+  if (fr_tps) atomicMax(fr_tps + 1, fr_now());
 }
 // value V (8 big-endian words) into the big-endian message words w = words [base, base + 16) at byte offset o
 __device__ __forceinline__ void fr_put(uint64_t w[16], int base, int o, const uint64_t V[8]) {
@@ -368,12 +394,75 @@ __device__ __forceinline__ void fr_put(uint64_t w[16], int base, int o, const ui
     w[i] |= u;
   }
 }
+// fr_put with o and base compile-time constants: the shifts and word selects fold away (the generic one spends ~300
+// instructions a value, a twelfth of a compression)
+template <int O>
+__device__ __forceinline__ void fr_put_c(uint64_t w[16], int base, const uint64_t V[8]) {
+  constexpr int q = O >> 3, r = (O & 7) * 8;
+#pragma unroll
+  for (int i = 0; i < 16; i++) {
+    const int d = base + i - q;
+    if (d >= 0 && d <= 8) {
+      uint64_t u = d < 8 ? V[d] >> r : 0;
+      if (r && d > 0) u |= V[d - 1] << ((64 - r) & 63);
+      w[i] |= u;
+    }
+  }
+}
+// a node's children into its block B (B = 1, 2) at the head length o
+template <int B>
+__device__ __forceinline__ void fr_put_node(uint64_t w[16], int o, const uint64_t L[8], const uint64_t R[8]) {
+  if (o == 139) {
+    fr_put_c<139>(w, 16 * B, L);
+    fr_put_c<211>(w, 16 * B, R);
+  } else if (o == 140) {
+    fr_put_c<140>(w, 16 * B, L);
+    fr_put_c<212>(w, 16 * B, R);
+  } else {
+    fr_put(w, 16 * B, o, L);
+    fr_put(w, 16 * B, o + 72, R);
+  }
+}
+__device__ __forceinline__ void fr_pf(const void* p) { asm volatile("prefetch.global.L1 [%0];" ::"l"(p)); }
+// fr_hash from the first-block state with a head of O bytes (blocks 1.. unrolled)
+template <bool NODE, int O>
+__device__ __forceinline__ void fr_hash_mid(const uint8_t* tpl, const uint64_t* mid, const uint64_t L[8], const uint64_t R[8],
+                                            uint64_t st[8]) {
+  constexpr int nblk = NODE ? 3 : 2;
+  if constexpr (NODE) fr_pf(tpl + 256);
+#pragma unroll
+  for (int k = 0; k < 8; k++) st[k] = __ldg(mid + k);
+#pragma unroll
+  for (int b = 1; b < nblk; b++) {
+    uint64_t w[16];
+    const uint4* t = (const uint4*)(tpl + 128 * b);
+#pragma unroll
+    for (int j = 0; j < 8; j++) {
+      const uint4 v = __ldg(t + j);
+      w[2 * j] = s512_be(v.x, v.y);
+      w[2 * j + 1] = s512_be(v.z, v.w);
+    }
+    fr_put_c<O>(w, 16 * b, L);
+    if constexpr (NODE) fr_put_c<O + 72>(w, 16 * b, R);
+    fr_compress(st, w);
+  }
+}
 // SHA-512 of a padded template of nblk blocks, value L at byte o (and R at o + 72, a node's right child), from the IV or (mid
 // given) from the state after the first block: a frame leaf's or node's head is longer than a block, so its first block is a
-// constant of the tree, its compression done ahead (fr_mid0)
+// constant of the tree, its compression done ahead (fr_mid0). The heads' lengths (nodes 139-140 bytes, leaves 169-171) take
+// fr_hash_mid
 template <bool NODE>
 __device__ __forceinline__ void fr_hash(const uint8_t* tpl, const uint64_t* mid, int nblk, int o, const uint64_t L[8],
                                         const uint64_t R[8], uint64_t st[8]) {
+  if (mid) {
+    if constexpr (NODE) {
+      if (o == 139) return fr_hash_mid<true, 139>(tpl, mid, L, R, st);
+      if (o == 140) return fr_hash_mid<true, 140>(tpl, mid, L, R, st);
+    } else {
+      if (o == 169) return fr_hash_mid<false, 169>(tpl, mid, L, R, st);
+      if (o == 171) return fr_hash_mid<false, 171>(tpl, mid, L, R, st);
+    }
+  }
   int b0 = 0;
   if (mid) {
 #pragma unroll
@@ -549,7 +638,8 @@ __device__ __noinline__ void fr_level2(uint64_t (*sh)[8], int n, long long j0, l
     const int o = (int)noff[idx];
 #pragma unroll
     for (int k = 0; k < 8; k++) v[k] = __ldg(nmid + 8 * idx + k);
-#pragma unroll 1
+    fr_pf(ntpl + idx * 384 + 256);
+#pragma unroll
     for (int b = 1; b < 3; b++) {
       uint64_t w[16];
       const uint4* tp = (const uint4*)(ntpl + idx * 384 + 128 * b);
@@ -559,8 +649,8 @@ __device__ __noinline__ void fr_level2(uint64_t (*sh)[8], int n, long long j0, l
         w[2 * j] = s512_be(u.x, u.y);
         w[2 * j + 1] = s512_be(u.z, u.w);
       }
-      fr_put(w, 16 * b, o, L);
-      fr_put(w, 16 * b, o + 72, R);
+      if (b == 1) fr_put_node<1>(w, o, L, R);
+      else fr_put_node<2>(w, o, L, R);
       fr_compress_pair(v, w, role, ring[p], ctr + 2 * p, ctr + 2 * p + 1, 4 * (b - 1));
     }
     if (act && role == 0) s512_out(v, tree + (off + lw + j0 / 2 + jl) * 64);
@@ -601,13 +691,23 @@ extern "C" __global__ void __launch_bounds__(128) fr_tree(Args a) {
   const bool pair = a.i[8] && nmid && L == 128;
   uint64_t(*ring)[4][16][32] = (uint64_t(*)[4][16][32])fr_ring;
   if (tid < 4) ctr[tid] = 0;
+#define FR_TP(k)                                                          \
+  do {                                                                    \
+    if (fr_tp && tid == 0) fr_tp[cta * FR_TP_SLOTS + (k)] = fr_now();     \
+  } while (0)
+  FR_TP(0);
   uint64_t v[8];
   if (i < R) {
     const uint64_t* q = (const uint64_t*)a.p[1];
     uint64_t st[8], w[16];
+    const uint4* dg = (const uint4*)((const uint8_t*)a.p[0] + i * (long long)s * 64);
+    for (int t = 0; t < s; t += 2) fr_pf(dg + 4 * t);
+    fr_pf((const uint64_t*)a.p[2] + 8 * i);
+    fr_pf((const uint64_t*)a.p[3] + 8 * i);
+    fr_pf((const uint8_t*)a.p[5] + i * 256 + 128);
+    if (lmid) fr_pf(lmid + 8 * i);
 #pragma unroll
     for (int t = 0; t < 8; t++) st[t] = q[t];
-    const uint4* dg = (const uint4*)((const uint8_t*)a.p[0] + i * (long long)s * 64);
     int j = 0;
 #pragma unroll 1
     for (; j + 1 < s; j += 2) {
@@ -634,6 +734,7 @@ extern "C" __global__ void __launch_bounds__(128) fr_tree(Args a) {
     } else {
       fr_pad_block(st, 128 + 64 * (uint64_t)s);
     }
+    FR_TP(1);
     const uint64_t* my = (const uint64_t*)a.p[2] + 8 * i;
     const uint64_t* cs = (const uint64_t*)a.p[3] + 8 * i;
     uint64_t* bo = (uint64_t*)((uint8_t*)a.p[10] + i * 128);
@@ -650,9 +751,11 @@ extern "C" __global__ void __launch_bounds__(128) fr_tree(Args a) {
     fr_compress(lt, w);
     fr_pad_block(lt, 256);
     s512_out(lt, (uint8_t*)a.p[9] + i * 64);
+    FR_TP(2);
     fr_hash<false>((const uint8_t*)a.p[5] + i * 256, lmid ? lmid + 8 * i : nullptr, 2, (int)((const uint32_t*)a.p[6])[i], lt,
                    lt, v);
     s512_out(v, tree + i * 64);
+    FR_TP(3);
   } else {
     const uint64_t* pd = (const uint64_t*)(tree + i * 64);
 #pragma unroll
@@ -661,12 +764,14 @@ extern "C" __global__ void __launch_bounds__(128) fr_tree(Args a) {
 #pragma unroll
   for (int k = 0; k < 8; k++) sh[tid][k] = v[k];
   __syncthreads();
+  FR_TP(4);
   long long lw = width, off = 0, nb = 0, j0 = cta * L;
-  int n = L;
+  int n = L, lev = 0;
   for (; n > 1 && !(E && lw <= E); n >>= 1) {
     if (pair) fr_level2(sh, n, j0, lw, off, nb, ntpl, noff, nmid, tree, ring, ctr);
     else fr_level(sh, n, j0, lw, off, nb, ntpl, noff, nmid, tree);
     nb += lw / 2; off += lw; lw /= 2; j0 /= 2;
+    FR_TP(5 + lev++);
   }
   const bool here = E && lw <= E;  // this CTA's nodes are the export's
   if (here) {
@@ -676,6 +781,7 @@ extern "C" __global__ void __launch_bounds__(128) fr_tree(Args a) {
   }
   if (total == 1) {
     if (here && tid == 0) fr_raise(flag, (uint32_t)a.i[6]);
+    FR_TP(27);
     return;
   }
   int* counter = (int*)a.p[12];
@@ -685,14 +791,17 @@ extern "C" __global__ void __launch_bounds__(128) fr_tree(Args a) {
   }
   __syncthreads();
   if (!last) return;
+  FR_TP(13);
   __threadfence();
   if (here) {
     if (tid == 0) {
       *counter = 0;
       fr_raise(flag, (uint32_t)a.i[6]);
     }
+    FR_TP(27);
     return;
   }
+  int tl = 0;
   const int n0 = total;  // == lw: the CTAs' subtree roots
   n = n0;
   // levels wider than sh from the tree in memory, the last of them into sh
@@ -710,6 +819,7 @@ extern "C" __global__ void __launch_bounds__(128) fr_tree(Args a) {
     }
     __syncthreads();
     nb += lw / 2; off += lw; lw /= 2;
+    FR_TP(15 + tl++);
   }
   if (n == n0 && tid < n0) {
     const uint64_t* pd = (const uint64_t*)(tree + (off + tid) * 64);
@@ -717,11 +827,13 @@ extern "C" __global__ void __launch_bounds__(128) fr_tree(Args a) {
     for (int k = 0; k < 8; k++) sh[tid][k] = s512_bswap(__ldcg(pd + k));
   }
   __syncthreads();
+  FR_TP(14);
   j0 = 0;
   for (; n > 1 && !(E && lw <= E); n >>= 1) {
     if (pair) fr_level2(sh, n, j0, lw, off, nb, ntpl, noff, nmid, tree, ring, ctr);
     else fr_level(sh, n, j0, lw, off, nb, ntpl, noff, nmid, tree);
     nb += lw / 2; off += lw; lw /= 2;
+    FR_TP(15 + tl++);
   }
   if (E) {
     if (tid < n) s512_out(sh[tid], ex + tid * 64);
@@ -732,6 +844,8 @@ extern "C" __global__ void __launch_bounds__(128) fr_tree(Args a) {
     *counter = 0;
     if (E) fr_raise(flag, (uint32_t)a.i[6]);
   }
+  FR_TP(27);
+#undef FR_TP
 }
 // the GEMM's stream waits for the host to write v at f (the draw's coins are in): one thread polls the mapped word; after
 // 5 s it gives up and records v in err, so a lost host thread fails the run instead of hanging it
@@ -795,7 +909,7 @@ static void commit_segs(const Commit& m, const uint8_t* data, cudaStream_t st, l
   a.p[2] = (unsigned long long)(m.digests + row0 * m.s * 64);
   a.i[0] = (int)rows; a.i[1] = m.k; a.i[2] = m.s; a.i[3] = m.last;
   const long long total = rows * m.s;
-  fr_segments<<<(unsigned)((total + 255) / 256), 256, 8 * 32 * 33 * 4, st>>>(a);
+  fr_segments<<<(unsigned)((total + FR_SEG_THREADS - 1) / FR_SEG_THREADS), FR_SEG_THREADS, FR_SEG_THREADS * 33 * 4, st>>>(a);
 }
 // where a tree stops for the host: its level of E nodes into ex, then flag = seq (device views of mapped host memory)
 struct Export {
@@ -989,16 +1103,18 @@ static const std::vector<uint64_t>& h_nmid(const HostConst& c) {
   }
   return v;
 }
-// the levels above an exported level of E nodes (ex, 64 bytes each) to the root. In node-head order the parents of a level
-// of lw nodes start at width - lw; a node is its template's last two blocks with L at o and R at o + 72, from its first
-// block's state
-static void h_top(const HostConst& c, const std::vector<uint64_t>& nmid, const uint8_t* ex, int E, uint8_t root[64]) {
-  std::vector<uint8_t> cur(ex, ex + 64 * (size_t)E), nxt;
-  long long lw = E, nb = c.width - E;
+// n nodes (64 bytes each, at v) from position j0 of a level lw wide, hashed up to their root. In node-head order the parents
+// of a level of lw nodes start at width - lw; a node is its template's last two blocks with L at o and R at o + 72, from its
+// first block's state
+static void h_sub(const HostConst& c, const std::vector<uint64_t>& nmid, const uint8_t* v, long long n, long long lw,
+                  long long j0, uint8_t root[64]) {
+  static thread_local std::vector<uint8_t> cur, nxt;
+  cur.assign(v, v + 64 * n);
   uint8_t m[256];
-  while (lw > 1) {
-    nxt.resize((size_t)32 * lw);
-    for (long long j = 0; j < lw / 2; j++) {
+  while (n > 1) {
+    nxt.resize((size_t)32 * n);
+    const long long nb = c.width - lw + j0 / 2;
+    for (long long j = 0; j < n / 2; j++) {
       const long long idx = nb + j;
       uint32_t o;
       memcpy(&o, &c.noff[4 * idx], 4);
@@ -1012,11 +1128,70 @@ static void h_top(const HostConst& c, const std::vector<uint64_t>& nmid, const u
       for (int k = 0; k < 8; k++)
         for (int b = 0; b < 8; b++) nxt[64 * j + 8 * k + b] = (uint8_t)(st[k] >> (56 - 8 * b));
     }
-    nb += lw / 2;
+    n /= 2;
     lw /= 2;
+    j0 /= 2;
     std::swap(cur, nxt);
   }
   memcpy(root, cur.data(), 64);
+}
+// P - 1 spinning helpers: for an export of E >= 2P nodes the caller and each helper hash a subtree of E / P of them to its
+// root, then the caller the P - 1 nodes above those (P a power of 2)
+struct HostPool {
+  int P = 1;
+  std::vector<std::thread> th;
+  alignas(64) std::atomic<uint32_t> go{0};
+  alignas(64) std::atomic<int> done{0};
+  const HostConst* c = nullptr;
+  const std::vector<uint64_t>* nmid = nullptr;
+  const uint8_t* ex = nullptr;
+  long long E = 0;
+  std::atomic<bool> quit{false};
+  alignas(64) uint8_t roots[64 * 64];
+};
+static HostPool g_pool;
+static void pool_part(int w) {
+  const long long S = g_pool.E / g_pool.P;
+  h_sub(*g_pool.c, *g_pool.nmid, g_pool.ex + 64 * S * w, S, g_pool.E, S * w, g_pool.roots + 64 * w);
+}
+static void pool_worker(int w) {
+  uint32_t seen = 0;
+  for (;;) {
+    uint32_t g;
+    while ((g = g_pool.go.load(std::memory_order_acquire)) == seen) _mm_pause();
+    seen = g;
+    if (g_pool.quit.load(std::memory_order_acquire)) return;
+    pool_part(w);
+    g_pool.done.fetch_add(1, std::memory_order_acq_rel);
+  }
+}
+static void pool_start(int P) {
+  if (P > 64 || (P & (P - 1))) { fprintf(stderr, "a host pool of %d: at most 64, a power of 2\n", P); exit(2); }
+  g_pool.P = P;
+  g_pool.quit = false;
+  for (int w = 1; w < P; w++) g_pool.th.emplace_back(pool_worker, w);
+}
+static void pool_stop() {
+  g_pool.quit = true;
+  g_pool.go.fetch_add(1, std::memory_order_acq_rel);
+  for (auto& t : g_pool.th) t.join();
+  g_pool.th.clear();
+  g_pool.P = 1;
+}
+// the levels above an exported level of E nodes (ex) to the root, by the pool when it has helpers and E >= 2P (h_nmid(c)
+// computed before: the helpers read it)
+static void h_top(const HostConst& c, const std::vector<uint64_t>& nmid, const uint8_t* ex, int E, uint8_t root[64]) {
+  const int P = g_pool.P;
+  if (P == 1 || E < 2 * P) return h_sub(c, nmid, ex, E, E, 0, root);
+  g_pool.c = &c;
+  g_pool.nmid = &nmid;
+  g_pool.ex = ex;
+  g_pool.E = E;
+  g_pool.done.store(0, std::memory_order_relaxed);
+  g_pool.go.fetch_add(1, std::memory_order_acq_rel);
+  pool_part(0);
+  while (g_pool.done.load(std::memory_order_acquire) != P - 1) _mm_pause();
+  h_sub(c, nmid, g_pool.roots, P, P, 0, root);
 }
 // mapped host memory the GPU and the host's thread meet in: the exported level, the GPU's flag (up) and the host's (dn)
 struct Link {
@@ -1803,27 +1978,87 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
     tree_lat.push_back({SNAME[t], time_graph(d, Tr, sm, reps)});
     CK(cudaGraphExecDestroy(Tr.ge));
   }
+  // the phase probe: one commitment of qkv's and of down's operands after warm ones, every tree CTA's phase clocks (fr_tp)
+  // from the segments' first start
+  if (g_fast) {
+    const int S = FR_TP_SLOTS, maxc = 1024;
+    unsigned long long *tp, *tps, *null = nullptr;
+    CK(cudaMalloc(&tp, sizeof(unsigned long long) * maxc * S));
+    CK(cudaMalloc(&tps, 2 * sizeof(unsigned long long)));
+    for (int t : {0, 5}) {
+      const Commit& m = ch[0].cm[t];
+      commit_salt(m, LAYERS, sm);
+      for (int r = 0; r < 3; r++) commit_tree(m, 0, ch[0].op[t], sm);
+      CK(cudaStreamSynchronize(sm));
+      CK(cudaMemset(tp, 0, sizeof(unsigned long long) * maxc * S));
+      const unsigned long long init[2] = {~0ull, 0};
+      CK(cudaMemcpy(tps, init, sizeof init, cudaMemcpyHostToDevice));
+      CK(cudaMemcpyToSymbol(fr_tp, &tp, sizeof tp));
+      CK(cudaMemcpyToSymbol(fr_tps, &tps, sizeof tps));
+      commit_tree(m, 0, ch[0].op[t], sm);
+      CK(cudaStreamSynchronize(sm));
+      CK(cudaMemcpyToSymbol(fr_tp, &null, sizeof null));
+      CK(cudaMemcpyToSymbol(fr_tps, &null, sizeof null));
+      std::vector<unsigned long long> h((size_t)maxc * S), hs(2);
+      CK(cudaMemcpy(h.data(), tp, h.size() * sizeof(unsigned long long), cudaMemcpyDeviceToHost));
+      CK(cudaMemcpy(hs.data(), tps, 2 * sizeof(unsigned long long), cudaMemcpyDeviceToHost));
+      const int total = m.width / std::min(m.width, 128);
+      const unsigned long long t0 = hs[0];
+      auto us = [&](unsigned long long x) { return x ? (double)(long long)(x - t0) / 1e3 : -1.0; };
+      int lastc = -1;
+      unsigned long long first = ~0ull;
+      std::vector<double> sub;
+      for (int c = 0; c < total; c++) {
+        if (h[(size_t)c * S + 13]) lastc = c;
+        first = std::min(first, h[(size_t)c * S]);
+        unsigned long long dn = 0;
+        for (int k = 4; k <= 12; k++) dn = std::max(dn, h[(size_t)c * S + k]);
+        sub.push_back(us(dn));
+      }
+      std::sort(sub.begin(), sub.end());
+      printf("{\"mode\": \"phases\", \"M\": %d, \"stage\": \"%s\", \"ctas\": %d, \"seg_end_us\": %.2f, \"tree_start_us\": %.2f, "
+             "\"subtree_done_us\": [%.2f, %.2f, %.2f], \"cta0_us\": [",
+             M, SNAME[t], total, us(hs[1]), us(first), sub.front(), sub[sub.size() / 2], sub.back());
+      for (int k = 0; k < S; k++) printf("%s%.2f", k ? ", " : "", us(h[k]));
+      printf("], \"last_cta\": %d, \"last_us\": [", lastc);
+      for (int k = 0; k < S; k++) printf("%s%.2f", k ? ", " : "", lastc >= 0 ? us(h[(size_t)lastc * S + k]) : -1.0);
+      printf("]}\n");
+      fflush(stdout);
+    }
+    CK(cudaFree(tp));
+    CK(cudaFree(tps));
+  }
   // the proved forward, lockstep: a stage's operands committed, the draw, then its GEMM, stage by stage. k > 1: every GEMM
   // in k row slabs, the next stage's operands hashed slab by slab behind it on h (the producing kernel's epilogue, emulated:
   // cuBLASLt's can't be fused), so at its end only the last slab's leaves and the top are left; the first stage's operands
   // (the embedding's) whole. draw 0: none; 1: DRAW_US on the GPU; 2: the host's (the tree stops at E nodes for the host to
   // hash the top, E = 1 the GPU's root; then the host waits its draw, dus, and raises the GEMM's flag). The salt-only parts
   // and first-block states ahead on a side stream.
+  // P: the host's threads for the top (h_top's pool)
   struct Cfg {
     std::string name;
-    int mid, k, E, draw, dus, pair;
+    int mid, k, E, draw, dus, pair, P;
   };
   std::vector<Cfg> cfgs;
   std::vector<int> ks;
   if (r2) {
-    ks = {4, 8};
-    cfgs = {{"before", 0, 1, 0, 1, draw_us, 0},    {"mid", 1, 1, 0, 1, draw_us, 0},       {"pair", 1, 1, 0, 1, draw_us, 1},
-            {"mid_host", 1, 1, 1, 2, draw_us, 0},  {"cpu16", 1, 1, 16, 2, draw_us, 0},    {"cpu64", 1, 1, 64, 2, draw_us, 0},
-            {"s4", 1, 4, 0, 1, draw_us, 0},        {"s8", 1, 8, 0, 1, draw_us, 0},        {"s4_cpu16", 1, 4, 16, 2, draw_us, 0},
-            {"s8_cpu16", 1, 8, 16, 2, draw_us, 0}, {"s8_cpu64", 1, 8, 64, 2, draw_us, 0}, {"s8_pair_cpu16", 1, 8, 16, 2, draw_us, 1},
-            {"before_nd", 0, 1, 0, 0, 0, 0},       {"mid_nd", 1, 1, 0, 0, 0, 0},          {"pair_nd", 1, 1, 0, 0, 0, 1},
-            {"s8_nd", 1, 8, 0, 0, 0, 0},           {"cpu16_nd", 1, 1, 16, 2, 0, 0},       {"s8_cpu16_nd", 1, 8, 16, 2, 0, 0},
-            {"s8_pair_cpu16_nd", 1, 8, 16, 2, 0, 1}};
+    ks = {4};
+    const int du = draw_us;
+    cfgs = {{"mid", 1, 1, 0, 1, du, 0, 1},
+            {"pair", 1, 1, 0, 1, du, 1, 1},
+            {"cpu64", 1, 1, 64, 2, du, 0, 1},
+            {"cpu256p8", 1, 1, 256, 2, du, 0, 8},
+            {"cpu512p16", 1, 1, 512, 2, du, 0, 16},
+            {"cpu1024p32", 1, 1, 1024, 2, du, 0, 32},
+            {"pair_cpu512p16", 1, 1, 512, 2, du, 1, 16},
+            {"s4", 1, 4, 0, 1, du, 0, 1},
+            {"s4_cpu512p16", 1, 4, 512, 2, du, 0, 16},
+            {"mid_nd", 1, 1, 0, 0, 0, 0, 1},
+            {"pair_nd", 1, 1, 0, 0, 0, 1, 1},
+            {"cpu512p16_nd", 1, 1, 512, 2, 0, 0, 16},
+            {"cpu1024p32_nd", 1, 1, 1024, 2, 0, 0, 32},
+            {"pair_cpu1024p32_nd", 1, 1, 1024, 2, 0, 1, 32},
+            {"s4_cpu512p16_nd", 1, 4, 512, 2, 0, 0, 16}};
   }
   for (int k : ks)
     for (int t = 0; t < NSTAGE; t++) plan(M / k, GN[t], GK[t], 1, 0, 0, 0, ch[0].A, P.W[0][t], ch[0].D, d.st);
@@ -1833,6 +2068,8 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
     ltb_run(B, c.lt, c.A + r0 * GK[t], P.W[l][t], c.D + r0 * GN[t], st);
   };
   cudaStream_t hs = prio_stream(hi), as = prio_stream(lo);
+  std::vector<cudaStream_t> hsl;  // a hash stream a slab, so the slabs' latency-bound chains overlap
+  for (int i = 0; i < 8; i++) hsl.push_back(prio_stream(hi));
   auto proved = [&](Chunk& c, cudaStream_t g, cudaStream_t h, cudaStream_t ahead, const Cfg& f) {
     std::vector<cudaEvent_t> ev;
     fork(g, ahead);
@@ -1863,15 +2100,17 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
       const Commit& m = c.cm[tn];
       const int L = std::min(m.width, 128), rk = M / f.k;
       const Export xn{g_link.ex_d, g_link.up_d, f.E, (uint32_t)qn + 1};
-      if (qn < NSTAGE) CK(cudaStreamWaitEvent(h, ev[tn], 0));
       for (int i = 0; i < f.k; i++) {
         slab_gemm(c, l, t, f.k, i, g);
-        fork(g, h);
-        commit_segs(m, c.op[tn], h, (long long)i * rk, rk);
-        commit_frtree(m, ln, h, i * rk / L, i == f.k - 1 ? m.width / L - i * rk / L : rk / L, f.draw == 2 ? &xn : nullptr);
+        fork(g, hsl[i]);
+        if (qn < NSTAGE) CK(cudaStreamWaitEvent(hsl[i], ev[tn], 0));
+        commit_segs(m, c.op[tn], hsl[i], (long long)i * rk, rk);
+        commit_frtree(m, ln, hsl[i], i * rk / L, i == f.k - 1 ? m.width / L - i * rk / L : rk / L, f.draw == 2 ? &xn : nullptr);
+        if (f.draw != 2) fork(hsl[i], h);
       }
     }
     fork(h, g);
+    for (int i = 0; f.k > 1 && i < f.k; i++) fork(hsl[i], g);
     fork(ahead, g);
   };
   struct HostArm {
@@ -1896,9 +2135,11 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
     if (f.draw == 2) {
       std::vector<HostStep> steps;
       for (int q = 0; q < LAYERS * NSTAGE; q++) steps.push_back({&hc[q % NSTAGE], f.E});
+      for (int t = 0; t < NSTAGE; t++) h_nmid(hc[t]);
       h_store(g_link.up_h, 0);
       h_store(g_link.dn_h, 0);
       CK(cudaMemset(g_link.err_d, 0, 4));
+      if (f.P > 1) pool_start(f.P);
       th = std::thread(host_loop, steps, reps + 2, f.dus, &st);
     }
     arms.push_back({f.name, time_graph(d, G, sm, reps)});
@@ -1909,6 +2150,7 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
       uint32_t err = 0;
       CK(cudaMemcpy(&err, g_link.err_d, 4, cudaMemcpyDeviceToHost));
       host_arms.push_back({f.name, st, err});
+      if (f.P > 1) pool_stop();
     }
     CK(cudaGraphExecDestroy(G.ge));
   }
@@ -2061,8 +2303,8 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
   }
   printf("}, \"proved_arms\": [");
   for (size_t i = 0; i < cfgs.size(); i++)
-    printf("%s{\"name\": \"%s\", \"k\": %d, \"E\": %d, \"draw\": %d}", i ? ", " : "", cfgs[i].name.c_str(), cfgs[i].k, cfgs[i].E,
-           cfgs[i].draw);
+    printf("%s{\"name\": \"%s\", \"k\": %d, \"E\": %d, \"draw\": %d, \"P\": %d, \"pair\": %d}", i ? ", " : "",
+           cfgs[i].name.c_str(), cfgs[i].k, cfgs[i].E, cfgs[i].draw, cfgs[i].P, cfgs[i].pair);
   printf("], \"arms\": {");
   for (size_t i = 0; i < arms.size(); i++) print_reps(arms[i].first.c_str(), arms[i].second, arm_macs[i], d.sms, i + 1 < arms.size());
   printf("}}\n");
@@ -2517,6 +2759,15 @@ static int run_gate(Dev& d, const std::string& dir, const std::vector<int>& Ms) 
           fe = false;
           fails += !h;
         }
+      for (const auto& ep : {std::make_pair(256, 8), std::make_pair(512, 16), std::make_pair(1024, 32)}) {
+        pool_start(ep.second);
+        for (int k : {1, 4}) {
+          const bool h = commit_gate(m, 2, nullptr, k, ep.first);
+          printf(", \"E%d_P%d_k%d\": %s", ep.first, ep.second, k, h ? "true" : "false");
+          fails += !h;
+        }
+        pool_stop();
+      }
       printf("}}\n");
     }
   fflush(stdout);
