@@ -114,10 +114,18 @@ The built-in steps (`run.py steps` prints their parameters and docs):
 | `attention.center_keys()` | real | kc | D4-ATTN |
 | `attention.int8(q_top, k, k_top, p_top, p_block, p_sink, v, v_top, v_scale)` | quantize | one limb; K and V rounded or dithered; P per row or per key block, `p_sink` | D4-ATTN |
 | `attention.peel(operand, width, offset)` | integer | low-rank noise on Q or P, peeled exactly | D4-ATTN |
+| `linear.grid(grid, act, weight)` | quantize | both operands on a low-bit grid (`fp4c`, `fp4`, `int5`), per token and per row, each rounded or dithered | D4-LOWBIT |
+| `attention.grid(grid, q, k, p, v, p_sink)` | quantize | Q, K, P and V on a low-bit grid, each rounded or dithered (P's bits only where key ≤ query) | D4-LOWBIT |
 
 `specs/` holds the arms in use: the three plain int8 arms, and the adopted design (`adopted`) with its halves
 (`adopted-linears`, tonight's `d63-sm50-smkv`; `adopted-attention`, tonight's `int8-rot-eqp=w64-poff64-psink-kc-kv=dith`)
-and `adopted-no-smooth` (tonight's WikiText end to end). Any other file passes as a path.
+and `adopted-no-smooth` (tonight's WikiText end to end). The low-bit arms put the adopted design's linears (SmoothQuant
+0.5, rotated) on a grid, as integers: `fp4c` is E2M1's contiguous region (±2 in steps of 0.5, times 2: −4..4), `fp4`
+E2M1's every value (times 2: 0, ±1, ±2, ±3, ±4, ±6, ±8, ±12) and `int5` the integers −16..16 that E4M3 holds exactly.
+`GRID-MODE` (`fp4c-dither`, …, `int5-round`) keeps the adopted int8 attention; `GRID-MODE-all` puts attention on the
+grid too, with no key blocks; `fp4c-dither-all-kv` dithers only K and V there, as the adopted attention does, with
+`p_sink`. A dithered operand serves the level below x / s or the one above it by a fresh fair bit (on a uniform grid,
+floor(x / s) + b), the weights' bits drawn once per seed and layer. Any other file passes as a path.
 
 ## Adding an intervention
 

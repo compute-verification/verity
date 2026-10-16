@@ -4,13 +4,15 @@ token, rounded or dithered; weights one scale per output row or per group of inp
 by GPTQ). Attention (from `attention.py`): `rotate` (one random Hadamard R of the head dimension on Q, K, V and R^T on
 the output), `center_keys` (K minus its per-channel mean), `int8` (one limb: Q, K per (head, token), P per query row or
 per key block, `p_sink` putting key 0 alone, V per channel; K and V rounded or dithered) and `peel` (a low-rank noise
-E the server adds and peels exactly, on Q or on P, with P served as P - offset + E).
+E the server adds and peels exactly, on Q or on P, with P served as P - offset + E). Low-bit grids (`GRIDS`): `grid`
+on linears and on attention puts both operands of every matmul on FP4's or FP8's integers, each rounded or dithered.
 
 A new intervention is one more function here (or in any module `run.py --plugin` imports) under `@linear_step` or
 `@attention_step`; `spec.py` says what it receives."""
 from __future__ import annotations
 
 import math
+import zlib
 
 import torch
 
@@ -404,3 +406,106 @@ def peel(mm, nxt, *, operand: str, width: int, offset: int = 0):
             got = got + offset * (vi * mask).double().cumsum(-2)[:, r0:r1]
     mm.gate("peel", bool(torch.equal(got, acc)))
     return acc
+
+
+# ================================================================ low-bit grids
+
+#: each grid's levels as integers: E2M1's contiguous region (+-2 in steps of 0.5) and its every value, both times 2,
+#: and the integers E4M3 holds exactly. Every product of two of them is exact (k max^2 < 2^24).
+GRIDS = {"fp4c": tuple(range(-4, 5)), "fp4": (-12, -8, -6, -4, -3, -2, -1, 0, 1, 2, 3, 4, 6, 8, 12),
+         "int5": tuple(range(-16, 17))}
+GRID_MODES = ("round", "dither")
+
+
+def bracket(v: torch.Tensor, grid: str) -> tuple[torch.Tensor, torch.Tensor]:
+    """The grid's levels lo <= v < hi around each v in [min, max) (hi = max at v = max)."""
+    levels = GRIDS[grid]
+    if levels == tuple(range(levels[0], levels[-1] + 1)):
+        lo = torch.floor(v).clamp(levels[0], levels[-1] - 1)
+        return lo, lo + 1
+    table = torch.tensor(levels, dtype=v.dtype, device=v.device)
+    i = (torch.searchsorted(table, v.contiguous(), right=True) - 1).clamp(0, len(levels) - 2)
+    return table[i], table[i + 1]
+
+
+def on_grid(x: torch.Tensor, grid: str, mode: str, bits: torch.Tensor | None, dims) -> tuple[torch.Tensor, torch.Tensor]:
+    """Integers on the grid and scales s (one per slice over `dims`, kept) with x ~ q s: `round` the nearest level,
+    s = absmax / top; `dither` the level below v = x / s or the one above it by the fair bit b, s = absmax / top
+    (1 + 2^-20) so that |v| < top (on a uniform grid, floor(v) + b)."""
+    top = GRIDS[grid][-1]
+    a = x.abs().amax(dim=dims, keepdim=True).clamp(min=1e-30)
+    if mode == "round":
+        s = a / top
+        v = x / s
+        lo, hi = bracket(v, grid)
+        return torch.where(v - lo <= hi - v, lo, hi), s
+    s = a * (1 + 2 ** -20) / top
+    lo, hi = bracket(x / s, grid)
+    return lo + bits * (hi - lo), s
+
+
+def weight_bits(mm, shape) -> torch.Tensor:
+    """The weight's dither bits: one draw per (seed, layer, linear), so every window (and shard) serves one weight."""
+    g = torch.Generator(device=mm.device)
+    g.manual_seed(zlib.crc32(f"w/{mm.seed}/{mm.layer}/{mm.name}".encode()))
+    return torch.randint(0, 2, tuple(shape), generator=g, device=mm.device).float()
+
+
+def _check_grid(p, operands):
+    if p["grid"] not in GRIDS:
+        raise ValueError(f"grid.grid is one of {sorted(GRIDS)}")
+    for o in operands:
+        if p[o] not in GRID_MODES:
+            raise ValueError(f"grid.{o} is round or dither")
+
+
+@linear_step("grid", phase="quantize", seeded=lambda p: "dither" in (p["act"], p["weight"]),
+             check=lambda p: _check_grid(p, ("act", "weight")))
+def grid_linear(mm, nxt, *, grid: str, act: str = "dither", weight: str = "dither"):
+    """Both operands on a low-bit grid (`GRIDS`: fp4c, fp4, int5): activations one scale per token, weights one per
+    output row, both applied after the exact integer product (no block scales over k); each `round`ed or `dither`ed
+    (`on_grid`), the weight's bits drawn once per seed and layer (`weight_bits`)."""
+    def weights():
+        w = mm.weight()
+        q, s = on_grid(w, grid, weight, weight_bits(mm, w.shape) if weight == "dither" else None, 1)
+        return q.to(torch.int8), s[:, 0]
+
+    wq, sw = mm.cached("grid", weights)
+    xq, sa = on_grid(mm.x, grid, act, mm.coins(mm.x.shape) if act == "dither" else None, 1)
+    return nxt(mm.integer(xq, wq)).float() * sa * sw[None, :]
+
+
+@attention_step("grid", phase="quantize", seeded=lambda p: "dither" in (p["q"], p["k"], p["p"], p["v"]),
+                check=lambda p: _check_grid(p, ("q", "k", "p", "v")))
+def grid_attention(mm, nxt, *, grid: str, q: str = "dither", k: str = "dither", p: str = "dither", v: str = "dither",
+                   p_sink: bool = False):
+    """Both attention matmuls on a low-bit grid (`GRIDS`), each operand `round`ed or `dither`ed (`on_grid`): Q and K one
+    scale per (head, token), P one per query row (`p_sink`: key 0 in a block of its own, read and scaled on its own),
+    V one per (KV head, channel). K's and V's bits are fresh for every query head; P's are drawn only where key <= query
+    (the mask is structure), so a dithered P serves no future key."""
+    rep = mm.extra["rep"]
+    if mm.kind == "qk":
+        qi, sq = on_grid(mm.x, grid, q, mm.coins(mm.x.shape) if q == "dither" else None, -1)
+
+        def keys():
+            kg = mm.weight().expand(rep, -1, -1)
+            return on_grid(kg, grid, k, mm.coins(kg.shape) if k == "dither" else None, -1)
+        ki, sk = mm.cached("k", keys)
+        return nxt(mm.integer(qi, ki)).float() * (sq * sk.transpose(-1, -2))
+    pr = mm.x
+    s = pr.shape[-1]
+
+    def values():
+        vg = mm.weight().expand(rep, -1, -1)
+        return on_grid(vg, grid, v, mm.coins(vg.shape) if v == "dither" else None, -2)
+    vi, sv = mm.cached("v", values)
+    edges = p_edges(s, 0, p_sink)
+    num = None
+    for a, b in zip(edges, edges[1:]):
+        blk = pr[..., a:b]
+        pi, sb = on_grid(blk, grid, p, mm.coins(blk.shape) if p == "dither" else None, -1)
+        if p == "dither":
+            pi = pi * mm.extra["causal"][:, a:b]
+        part = sb.double() * nxt(mm.integer(pi, vi[..., a:b, :], keys=(a, b), v_full=vi))
+        num = part if num is None else num + part
+    return (num * sv.double()).float()

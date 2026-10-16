@@ -15,6 +15,10 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
             "int8-all": ("all", "int8-all", True), "adopted-linears": ("linears", "int8-linears", True),
             "adopted-attention": ("attention", "int8-attention", True), "adopted": ("all", "int8-all", True),
             "adopted-no-smooth": ("all", "int8-all", True)}
+    for g in ("fp4c", "fp4", "int5"):
+        for m in ("dither", "round"):
+            want[f"{g}-{m}"] = want[f"{g}-{m}-all"] = ("all", "int8-all", True)
+    want["fp4c-dither-all-kv"] = ("all", "int8-all", True)
     got = {p.stem: spec.load(str(p)) for p in spec.SPECS.glob("*.toml")}
     assert set(got) == set(want)
     for name, (scope, plain, seeded) in want.items():
