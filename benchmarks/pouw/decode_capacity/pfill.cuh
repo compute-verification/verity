@@ -39,6 +39,9 @@
 #ifndef PF_CTAS
 #define PF_CTAS 2  // blocks an SM: 2 x 48 KB, 4 warps an SMSP
 #endif
+#ifndef PF_SHA_ROLL
+#define PF_SHA_ROLL 0  // 1: pf_compress (16 rounds a loop iteration) for rs_compress (all 80 unrolled); same digests
+#endif
 #ifndef PF_DEFER
 #define PF_DEFER 0  // 1: absorb B fragment j's outputs after issuing j + 1's MMAs (same receipt; 16 more registers)
 #endif
@@ -114,6 +117,29 @@ __host__ __device__ inline uint32_t pf_z0(uint32_t pos) { return pos * 0x9E3779B
 __host__ __device__ inline uint64_t pf_fold(uint64_t K, uint32_t pos, uint64_t v) { return smix(smix(K ^ pos) ^ v); }
 
 #ifdef __CUDACC__
+// rs_compress's rounds, 16 a loop iteration: a fifth of its code, so the hashing phases fetch fewer instructions
+__device__ __forceinline__ void pf_round(uint64_t& a, uint64_t& b, uint64_t& c, uint64_t& d, uint64_t& e, uint64_t& f,
+                                         uint64_t& g, uint64_t& h, uint64_t k, uint64_t wi) {
+  const uint64_t t1 = h + (rs_rotr(e, 14) ^ rs_rotr(e, 18) ^ rs_rotr(e, 41)) + ((e & f) ^ (~e & g)) + k + wi;
+  const uint64_t t2 = (rs_rotr(a, 28) ^ rs_rotr(a, 34) ^ rs_rotr(a, 39)) + ((a & b) ^ (a & c) ^ (b & c));
+  h = g; g = f; f = e; e = d + t1; d = c; c = b; b = a; a = t1 + t2;
+}
+__device__ __forceinline__ void pf_compress(uint64_t* st, uint64_t* w) {
+  uint64_t a = st[0], b = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7];
+#pragma unroll
+  for (int i = 0; i < 16; ++i) pf_round(a, b, c, d, e, f, g, h, RS_K[i], w[i]);
+#pragma unroll 1
+  for (int r = 16; r < 80; r += 16) {
+#pragma unroll
+    for (int i = 0; i < 16; ++i) {
+      const uint64_t w15 = w[(i + 1) & 15], w2 = w[(i + 14) & 15];
+      w[i] += (rs_rotr(w2, 19) ^ rs_rotr(w2, 61) ^ (w2 >> 6)) + w[(i + 9) & 15] +
+              (rs_rotr(w15, 1) ^ rs_rotr(w15, 8) ^ (w15 >> 7));
+      pf_round(a, b, c, d, e, f, g, h, RS_K[r + i], w[i]);
+    }
+  }
+  st[0] += a; st[1] += b; st[2] += c; st[3] += d; st[4] += e; st[5] += f; st[6] += g; st[7] += h;
+}
 __device__ __forceinline__ void pf_block(uint64_t c0, uint64_t c1, uint64_t tile, uint64_t ctr, uint64_t* st) {
   uint64_t w[16];
   w[0] = c0; w[1] = c1; w[2] = tile; w[3] = PF_DOM; w[4] = ctr; w[5] = 0x8000000000000000ull;
@@ -121,7 +147,11 @@ __device__ __forceinline__ void pf_block(uint64_t c0, uint64_t c1, uint64_t tile
   for (int i = 6; i < 15; i++) w[i] = 0;
   w[15] = 320;
   rs_iv(st);
+#if PF_SHA_ROLL
+  pf_compress(st, w);
+#else
   rs_compress(st, w);
+#endif
 }
 
 __device__ __forceinline__ void pf_mma(uint32_t (&d)[4], const uint32_t (&a)[4], uint2 b) {
