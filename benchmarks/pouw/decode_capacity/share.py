@@ -212,6 +212,10 @@ def fmt(x):
     return "–" if x is None else f"{x:.3f}" if x < 10 else f"{x:.1f}"
 
 
+def fmt_in(r, key):
+    return fmt(r[key]) if r else "–"
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("out", type=pathlib.Path)
@@ -246,11 +250,23 @@ def main():
     print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for r in res["mixes"]:
         f6, f9 = r.get("filler 60 SMs"), r.get("filler 92 SMs")
-        g = lambda f, k: fmt(f[k]) if f else "–"  # noqa: E731
         print(f"| {r['mix']} | {r['P']} / {r['D']} | {r['B']} | {r['attention']} | {r['schedule']} | "
               f"{fmt(r['prefill_time_share'])} | {fmt(r['nominal/capacity'])} | {fmt(r['tau'])} | "
-              f"{fmt(r['certified/capacity'])} | {fmt(r['forced_share'])} | {g(f6, 'nominal/capacity')} | "
-              f"{g(f6, 'tau')} | {g(f9, 'nominal/capacity')} | {g(f9, 'tau')} |")
+              f"{fmt(r['certified/capacity'])} | {fmt(r['forced_share'])} | {fmt_in(f6, 'nominal/capacity')} | "
+              f"{fmt_in(f6, 'tau')} | {fmt_in(f9, 'nominal/capacity')} | {fmt_in(f9, 'tau')} |")
+    picks = [("linears m = 8192", res["tau"][4]["tau"]), ("prefill step 8192 (FA2)", res["tau"][9]["tau"])]
+    for b, l in [(32, 8192), (256, 2048)]:
+        r = next(g for g in res["grid"] if (g["B"], g["L"]) == (b, l))
+        picks += [(f"decode {b} / {l}", r["tau"]), (f"decode {b} / {l} + 92-SM filler", r["filler 92 SMs"]["tau"])]
+    for name, b in [("chat", 256), ("reasoning", 132)]:
+        r = next(x for x in res["mixes"] if x["mix"] == name and x["B"] == b and x["schedule"] == "separate"
+                 and x["attention"] == "FA2")
+        picks += [(f"{name} B = {b}", r["tau"]), (f"{name} B = {b} + 92-SM filler", r["filler 92 SMs"]["tau"])]
+    res["tau_ladder"] = [{"row": n, **{w: t * a / A_V99 for w, a in A_LADDER}} for n, t in picks]
+    print("\n| row | " + " | ".join(f"{w} (A = {a:.3f})" for w, a in A_LADDER) + " |")
+    print("|---|" + "---|" * len(A_LADDER))
+    for n, t in picks:
+        print(f"| {n} | " + " | ".join(fmt(t * a / A_V99) for _, a in A_LADDER) + " |")
     if args.json:
         args.json.write_text(json.dumps(res, indent=1))
 
