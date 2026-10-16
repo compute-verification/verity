@@ -5,6 +5,7 @@ import Proofs.Flock.Claims.ZK.Interact
 import Proofs.Flock.Claims.ZK.Coins
 import Proofs.Flock.Claims.ZK.Forced
 import Proofs.Flock.Claims.ZK.Rewind
+import Proofs.Flock.Claims.ZK.GKProof
 
 /-!
 # Flock's zero knowledge against a malicious verifier
@@ -23,4 +24,9 @@ import Proofs.Flock.Claims.ZK.Rewind
 * `Forced`: the forced run at `c` with the honest prover's messages at `c` opens all of `c` exactly when the real run
   opens `c`, and is then the real run (`fcls_succ_iff`, `forced_eq_of_cls`, `real_eq_of_fcls`); one that stops before a
   binding failure is a real run that opens no coin vector (`cls_none_of_abort`).
+* `Rewind`: the rewinding argument over abstract runs: the first run is within `1/(N+1)` plus a binding failure of the
+  first successful rewind (`rewind_close`), and `N` independent samples are within `N·δ` (`Pr_hybrid`).
+* `GKProof`: **`Proto.gk_zk`**, the Goldreich–Kahan simulator meets `ZKmalR` at `1/(N+1) + 2·δ_A + 2·N·δ_B` from
+  `PrefixHides`, `SHVZK` and `Binding`; a binding failure in the simulator is a collision among its own calls
+  (`mm_coll`).
 -/
