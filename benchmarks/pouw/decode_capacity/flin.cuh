@@ -562,6 +562,7 @@ static void fatt_prepare(Fatt& a, int FW, int NC, int B, int L) {
   CK(cudaMalloc(&a.cnt, a.per * 2 * LAYERS * sizeof(int)));
 }
 static int g_fatt_pdl = 0;  // FATT_PDL: the attention filler blocks without PDL (0), with it (1), with early filler warps (2)
+static int g_fatt_nc = 4;   // FATT_NC: the attention filler warps' chains (fatt_built)
 template <class... P, class... A>
 static void pdl_go(void (*k)(P...), dim3 grid, int threads, cudaStream_t st, A... args) {
   cudaLaunchConfig_t cfg = {};
@@ -596,11 +597,13 @@ static bool enqueue_fatt(Dev& d, const Fatt& a, int B, int L, int layer, bool* w
     case 24: fatt_go<2, 4>(d, a, B, L, K, V, layer); return true;
     case 42: fatt_go<4, 2>(d, a, B, L, K, V, layer); return true;
     case 44: fatt_go<4, 4>(d, a, B, L, K, V, layer); return true;
+    case 62: fatt_go<6, 2>(d, a, B, L, K, V, layer); return true;
+    case 64: fatt_go<6, 4>(d, a, B, L, K, V, layer); return true;
     case 84: fatt_go<8, 4>(d, a, B, L, K, V, layer); return true;
   }
   return false;
 }
-static const char* fatt_built() { return "0, 2:4, 4:2, 4:4, 8:4"; }
+static const char* fatt_built() { return "0, 2:4, 4:2, 4:4, 6:2, 6:4, 8:4"; }
 static FlinTally fatt_tally(const Fatt& a, int B, int L, int layers, int n, uint64_t salt) {
   if (a.FW == 0) return {};
   std::vector<FillLaunch> v;
@@ -616,7 +619,7 @@ static FlinTally fatt_tally(const Fatt& a, int B, int L, int layers, int n, uint
 static int flin_gate(Dev& d) {
   int fails = 0;
   std::mt19937_64 rng(0xFA77);
-  for (const auto [fw, nc] : {std::pair{2, 4}, {4, 2}, {4, 4}, {8, 4}}) {
+  for (const auto [fw, nc] : {std::pair{2, 4}, {4, 2}, {4, 4}, {6, 2}, {6, 4}, {8, 4}}) {
     Fatt a;
     fatt_prepare(a, fw, nc, 3, 1536);
     CK(cudaMemset(a.rec, 0xA5, a.per * 2 * LAYERS * 8));
@@ -754,7 +757,7 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
   f.thr = thr;
   f.NC = NC;
   Fatt a0, a;
-  fatt_prepare(a, AFW, 4, B, L);
+  fatt_prepare(a, AFW, g_fatt_nc, B, L);
   cudaStream_t full = d.st, ss = d.st, fs = nullptr;
   int got[2] = {d.sms, 0};
   if (fill_sms > 0) {
@@ -772,7 +775,7 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
   }
   bool wrapped = false;
   d.st = ss;
-  if (!enqueue_fatt(d, a, B, L, 0, &wrapped)) { fprintf(stderr, "fatt: FW %d NC 4 not built (%s)\n", AFW, fatt_built()); exit(1); }
+  if (!enqueue_fatt(d, a, B, L, 0, &wrapped)) { fprintf(stderr, "fatt: FW %d NC %d not built (%s)\n", AFW, g_fatt_nc, fatt_built()); exit(1); }
   for (int fw : {FW, 0}) {  // the kernels' attributes, outside capture
     f.FW = fw;
     if (!seq.empty() && !flin_one(d, f, seq[0], 0, seq[1] % 4)) {
@@ -832,7 +835,7 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
          (int)g_pdl, g_fatt_pdl, g_lt_mask, fill_sms, got[0], got[1], fs ? alone / (1024.0 * d.sms * amhz * 1e6) : 0.0, pump_share, nwin,
          fs ? pf.macs() : 0.0, fs ? 8 : 0, pbad, pump_share, lin_share + att_share + pump_share);
   printf("\"M\": %d, ", f.M);
-  printf("\"B\": %d, \"L\": %d, \"FW\": %d, \"NC\": %d, \"thr\": %d, \"AFW\": %d, "
+  printf("\"B\": %d, \"L\": %d, \"FW\": %d, \"NC\": %d, \"thr\": %d, \"AFW\": %d, \"ANC\": %d, "
          "\"coins\": [\"%016llx\", \"%016llx\"], \"kv_wrapped\": %s, \"step_macs\": %.6e, \"lin_macs\": %.6e, \"base_ms\": %.4f, "
          "\"base2_ms\": %.4f, \"fused0_ms\": %.4f, \"fused_ms\": %.4f, \"fused0_vs_base\": %.4f, \"slowdown\": %.4f, "
          "\"step_share_base\": %.5f, \"step_share_fused\": %.5f, \"fill_macs\": %.6e, \"fill_share\": %.5f, "
@@ -840,7 +843,7 @@ static int run_fstep(Dev& d, int B, int L, int FW, int NC, int thr, int AFW, int
          "\"lin\": {\"filler_steps\": %lld, \"slots\": %lld, \"idle_slots\": %lld, \"rec_checked\": %d, \"rec_bad\": %d, \"ctl_equal\": %d}, "
          "\"att\": {\"filler_steps\": %lld, \"slots\": %lld, \"idle_slots\": %lld, \"rec_checked\": %d, \"rec_bad\": %d, \"ctl_equal\": %d}, "
          "\"out_rows\": %d, \"out_mismatches\": %llu, \"arms\": {",
-         B, L, FW, NC, thr, AFW, (unsigned long long)g_c0, (unsigned long long)g_c1, wrapped ? "true" : "false",
+         B, L, FW, NC, thr, AFW, a.NC, (unsigned long long)g_c0, (unsigned long long)g_c1, wrapped ? "true" : "false",
          step_macs, lin_macs, mb.ms, mb2.ms, m0.ms, mf.ms, m0.ms / bms, mf.ms / bms,
          step_macs / (bms * 1e-3) / (1024.0 * d.sms * mb.mhz * 1e6), step_macs / (mf.ms * 1e-3) / cap, t.macs + ta.macs,
          lin_share + att_share, lin_share, att_share, mf.mhz, mf.watt, t.steps, t.slots, t.idle, t.checked, t.bad, t.ctl_equal,

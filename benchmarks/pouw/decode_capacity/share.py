@@ -276,7 +276,11 @@ def adaptive_pick(rows, tuned):
 
 def fstep_key(r):
     return (r["B"], r["L"], r["FW"], r["NC"], r.get("AFW", 0), r.get("fill_sms", 0), r.get("lt_mask", 0), r["pdl"],
-            r.get("fatt_pdl", 0), r["thr"])
+            r.get("fatt_pdl", 0), r["thr"], r.get("ANC", 4))
+
+
+def afw_name(afw, anc):
+    return f"{afw}" if anc == 4 else f"{afw} NC {anc}"
 
 
 def fstep_points(rows):
@@ -503,7 +507,8 @@ def main():
             parts = [r.get(k, {}) for k in ("lin", "att", "pump")]
             nchk = sum(p.get("rec_checked", 0) for p in parts) or r.get("rec_checked", 0)
             nbad = sum(p.get("rec_bad", 0) for p in parts) + r.get("rec_bad", 0)
-            print(f"| NC {r['NC']}{'' if r['pdl'] else ', no PDL'} | {r['B']} | {r['L']} | {r['FW']} | {r.get('AFW', 0)} | "
+            print(f"| NC {r['NC']}{'' if r['pdl'] else ', no PDL'} | {r['B']} | {r['L']} | {r['FW']} | "
+                  f"{afw_name(r.get('AFW', 0), r.get('ANC', 4))} | "
                   f"{r.get('fill_sms', 0)} | {r.get('lt_mask', 0)} | {fmt(r['slowdown'])} | {fmt(r['fused0_vs_base'])} | "
                   f"{fmt(r['fill_share'])} ({fmt(r.get('fill_share_lin', r['fill_share']))} + "
                   f"{fmt(r.get('fill_share_att', 0.0))}) | "
@@ -511,7 +516,7 @@ def main():
                   f"{nchk} ({nbad}) | {r['out_mismatches']} |")
         for split in (False, True):
             print(f"\nfstep pick ≤ {LIMIT - 1:.0%}{' with the pump' if split else ', whole GPU'}: "
-                  + "; ".join(f"B {b} L {l}: FW {k[2]} AFW {k[4]} pump {k[5]} LT {k[6]}, filler {fu:.3f} + {pu:.3f}, "
+                  + "; ".join(f"B {b} L {l}: FW {k[2]} AFW {afw_name(k[4], k[10])} pump {k[5]} LT {k[6]}, filler {fu:.3f} + {pu:.3f}, "
                               f"slowdown {s:.3f}" for (b, l), (k, fu, pu, s) in sorted(fstep_pick(fstep_rows, split).items())))
     names = [n for n in FILLER if not n.startswith("dfree-") or n == "dfree-split-w8-nc4-t8 92 SMs tuned"]
     print("\nHeadline: N/C, cert/C (= 0.99 N/C) and time with each filler (decode rows: the step's slowdown; mixes: the "
