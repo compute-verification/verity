@@ -51,6 +51,7 @@ NVCC = os.environ.get("NVCC", "/usr/local/cuda-13.0/bin/nvcc")
 os.environ["PATH"] = f"{Path(NVCC).parent}:{os.environ.get('PATH', '')}"  # cuobjdump and ncu beside nvcc, as dfill.sh
 NVFLAGS = ["-O3", "-std=c++17", "-gencode", "arch=compute_120a,code=sm_120a", "-Xptxas", "-v"]
 LIBS = ["-lcublasLt", "-lnvidia-ml", "-ldl"]
+GATES = ("slowdown", "receipts", "replay", "honest", "dram", "clocks", "serving_exact")
 SMI_FIELDS = ("clocks.sm,clocks.max.sm,power.draw,power.limit,clocks.applications.graphics,"
               "clocks.default_applications.graphics,clocks_event_reasons.active")
 SHAPE = "filler-suite"
@@ -235,7 +236,7 @@ def show(res: dict) -> None:
           + f"; nominal ÷ capacity {fmt(res['score_nominal'])}, at 0.99 for all {fmt(res['score_at_target'])}")
     for f in res["flags"]:
         print(f"  FLAG: {f}")
-    for name in ("slowdown", "receipts", "replay", "honest", "dram", "clocks", "serving_exact"):
+    for name in GATES:
         v = g.get(name, {})
         extra = {"slowdown": lambda: f"worst {fmt(v.get('worst'))} at {v.get('at')} ({v.get('phase')})",
                  "replay": lambda: v.get("why") or f"{v.get('rounds')} rounds, {v.get('tiles'):.3g} tiles, ranges the "
@@ -289,21 +290,26 @@ def leaderboard(local: list[Path], refresh: bool, as_json: bool) -> int:
         if key not in seen:
             seen.add(key)
             uniq.append((art, m))
-    uniq.sort(key=lambda x: (not (x[1].get("gate") or {}).get("ok"), -((x[1]["metrics"].get("SCORE") or
-                                                                         x[1]["metrics"].get("score_if_gated") or 0))))
+
+    def gated(m):  # a record from a scorer without one of today's gates (replay came at 6d10838ff) isn't gated
+        gt = m.get("gate") or {}
+        return bool(gt.get("ok")) and all(k in gt for k in GATES)
+
+    uniq.sort(key=lambda x: (not gated(x[1]), -((x[1]["metrics"].get("SCORE") or
+                                                  x[1]["metrics"].get("score_if_gated") or 0))))
     if as_json:
-        print(json.dumps([{"record": a, **m} for a, m in uniq]))
+        print(json.dumps([{"record": a, "gated": gated(m), **m} for a, m in uniq]))
         return 0
-    print("| # | arm | variant | SCORE | min (entry) | worst slowdown | gates | run | parent | mechanism | flags |")
-    print("|---|---|---|---|---|---|---|---|---|---|---|")
+    print("| # | arm | variant | SCORE | min (entry) | worst slowdown | gates | run | scorer | parent | mechanism | flags |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|")
     for i, (art, m) in enumerate(uniq, 1):
         mt, gt = m["metrics"], m.get("gate") or {}
-        sc = fmt(mt.get("SCORE")) if gt.get("ok") else f"({fmt(mt.get('score_if_gated'))})"
-        failed = [k for k, v in gt.items() if k != "ok" and not v]
+        sc = fmt(mt.get("SCORE")) if gated(m) else f"({fmt(mt.get('score_if_gated'))})"
+        failed = [k for k, v in gt.items() if k != "ok" and not v] + [f"no {k}" for k in GATES if k not in gt]
         print(f"| {i} | {m['arm']} | {m.get('variant')} | {sc} | {fmt((mt.get('min') or {}).get('coverage'))} "
               f"({(mt.get('min') or {}).get('entry')}) | {fmt(mt.get('slowdown_worst'))} | "
-              f"{'pass' if gt.get('ok') else 'FAIL ' + ','.join(failed)} | {m.get('run')} | {m.get('parent')} | "
-              f"{','.join(m.get('mechanism') or [])} | {'provisional' if m.get('flags') else ''} |")
+              f"{'pass' if gated(m) else 'FAIL ' + ','.join(failed)} | {m.get('run')} | {(m.get('harness') or '')[:9]} | "
+              f"{m.get('parent')} | {','.join(m.get('mechanism') or [])} | {'provisional' if m.get('flags') else ''} |")
     return 0
 
 
