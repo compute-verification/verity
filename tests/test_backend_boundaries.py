@@ -40,6 +40,8 @@ KNOWN = {
     ("verity/ml/flock/python/verity_flock/partition_units.py", "verity_vllm.program.registry"),
     ("verity/ml/flock/python/verity_flock/tail.py", "verity_vllm.program.registry"),
     ("verity/ml/flock/python/verity_flock/tail_pieces.py", "verity_vllm.program.registry"),
+    # SiluMul_v2's unit is the registry's Boolean SiluMulBf16_v4, which only this import registers; core has no SiluMulBf16_v2
+    ("verity/ml/flock/python/verity_flock/templates/silu_mul_v2.py", "verity_vllm.program.registry.boolean_silu"),
     ("verity/ml/flock/python/verity_flock/topp_word.py", "verity_vllm.program.registry.topp_keep_builder"),
     ("verity/ml/flock/python/verity_flock/topp_word.py", "verity_vllm.program.registry.topp_word_gates"),
     ("verity/ml/flock/tests/test_boolean_export.py", "verity_vllm.program.registry"),

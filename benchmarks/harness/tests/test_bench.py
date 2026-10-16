@@ -400,3 +400,43 @@ def test_ratio_table_puts_the_headline_cell_first():
     lines = [line for line in render(doc).splitlines() if line.startswith("| b")]
     assert lines[0].startswith("| b32-p512-mixed **headline** | time / output token |")
     assert "2.000×" in lines[0]
+
+
+def test_decode_time_per_token_counts_only_decode_only_forwards():
+    from verity_bench.vllm.runner import decode_time_per_token
+
+    steps = [
+        {"forward": True, "s": 0.9, "prefill_tokens": 512, "decode_tokens": 0},
+        {"forward": True, "s": 0.5, "prefill_tokens": 64, "decode_tokens": 7},
+        {"forward": True, "s": 0.2, "prefill_tokens": 0, "decode_tokens": 8},
+        {"forward": True, "s": 0.2, "prefill_tokens": 0, "decode_tokens": 8},
+        {"forward": False, "s": 0.01, "prefill_tokens": 0, "decode_tokens": 0},
+    ]
+    assert decode_time_per_token(steps) == pytest.approx(0.4 / 16)
+    assert decode_time_per_token([{**s, "prefill_tokens": None, "decode_tokens": None} for s in steps]) is None
+    assert decode_time_per_token([]) is None
+
+
+def test_the_decode_metric_is_reported_only_where_every_rep_has_it():
+    from verity_bench.vllm.runner import _aggregate
+
+    arms = (Arm("stock"), Arm("candidate", control="stock"))
+    point = expand_sweep("quick")[0]
+
+    def rep(i, tpot, decode):
+        metrics = {"time_per_output_token_s": tpot, "time_to_first_token_s": 0.1, "tokens_per_s": 1 / tpot,
+                   "peak_gpu_memory_bytes": 1.0}
+        return {"rep": i, "metrics": metrics if decode is None else {**metrics, "decode_time_per_token_s": decode}}
+
+    full = {("stock", point.id): [rep(0, 1.0, 0.5), rep(1, 1.0, 0.5)],
+            ("candidate", point.id): [rep(0, 2.0, 1.5), rep(1, 2.0, 1.5)]}
+    [row] = _aggregate(arms, (point,), "stock", full)
+    assert row["arms"]["candidate"]["metrics"]["decode_time_per_token_s"]["ratio_to_stock"]["mean"] == 3
+    doc = {"baseline": "stock", "identity": {"arms": [{"id": "stock"}, {"id": "candidate"}]}, "points": [row]}
+    assert "decode time / token" in render(doc)
+
+    partial = {**full, ("candidate", point.id): [rep(0, 2.0, 1.5), rep(1, 2.0, None)]}
+    [row] = _aggregate(arms, (point,), "stock", partial)
+    assert "decode_time_per_token_s" not in row["arms"]["candidate"]["metrics"]
+    doc["points"] = [row]
+    assert "decode time / token" not in render(doc)
