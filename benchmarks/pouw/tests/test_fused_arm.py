@@ -27,7 +27,7 @@ def _load(name):
 F = _load("fused_arm")
 FS = _load("fused_score")
 A = F.A  # the arms module fused_arm imported (the one test_filler_score loaded, when it ran first): one Placement class
-ARMS = [F.Fused(), F.FusedV2(), F.FusedPump(), F.FusedPumpK()]
+ARMS = [F.Fused(), F.FusedV2(), F.FusedPump(), F.FusedPumpK(), F.FusedWarpK()]
 V1 = [a for a in ARMS if a.nvcc_flags == "-DDFILL_V1"]
 
 
@@ -90,3 +90,16 @@ def test_pump_arm_has_no_fixed_work():
     filler warps."""
     assert all(q.FW == 0 and q.AFW == 0 for _, q in F.FusedPump().table.values())
     assert F.FusedPumpK().table == F.FusedPump().table
+
+
+def test_warp_arm_fills_through_dfill_k_warp():
+    """FusedWarpK's filler warps are flin's alone, each stopped before its block's end, and on a pfill build flin's filler
+    step is the `__noinline__` dfill_k_warp the scorer's check reads (coins, tile id and step its only inputs)."""
+    rows = F.FusedWarpK().table
+    assert all(q.AFW == 0 and (q.FW == 0) == (q.ST == 0) for _, q in rows.values())
+    assert sum(q.FW > 0 for _, q in rows.values()) >= 16
+    assert all(rows[k] == F.TABLE_PUMP[k] for k, (_, q) in rows.items() if q.FW == 0)
+    src = (DCAP / "flin.cuh").read_text()
+    assert re.search(r"__device__ __noinline__ uint64_t dfill_k_warp\(uint64_t c0, uint64_t c1, unsigned long long tile, "
+                     r"unsigned long long step\)", src)
+    assert re.search(r"h \^= dfill_k_warp\(rs\.c0, rs\.c1, tile, \(unsigned long long\)steps\);", src)

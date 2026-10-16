@@ -193,3 +193,45 @@ class FusedPumpK(FusedPump):
 
     def filler_at(self, phase, b, l):
         return self.filler
+
+
+def _warp(sms, fw, st=32, lm=1, aps=1):
+    return sms, FusedStep(FW=fw, AFW=0, APS=aps, ALZ=0, LM=lm, ST=st)
+
+
+#: pfill-k's filler warps (dfill_k_warp) in flin's blocks with FLIN_STOP 32, beside the pfill-k pump, at every point where
+#: they fit (screened <= 1.02, the linears' filler >= 0.005 of peak), else FusedPump's pump-only row: screens
+#: r20261016-101145-5599, -101145-9539, -101929-96e9, -101809-f488, -102445-ba19 and -102552-0fce. No attention filler
+#: warps (a pfill-k step outlasts an attention launch: 32/2K FW 8 + AFW 8 2.02 against FW 8 alone 1.37, r20261016-100011-22d1);
+#: none at 96/8K (stop 32 1.021, stop 64 never steps) or B >= 132 (1.04-1.07 at 2 warps, stops 32-64, on 44-76 SMs).
+TABLE_WARP_K = {
+    (1, 2048): _warp(100, 4, aps=0), (1, 32768): _warp(100, 4), (8, 2048): _warp(108, 4), (8, 32768): _warp(116, 4),
+    (32, 1024): _warp(116, 2, lm=0), (32, 2048): _warp(116, 4), (32, 5120): _warp(116, 4), (32, 8192): _warp(116, 4),
+    (32, 16384): _warp(116, 2), (32, 24576): _warp(108, 2), (48, 2048): _warp(92, 2), (48, 16384): _warp(84, 2),
+    (64, 2048): _warp(92, 2), (64, 12288): _warp(100, 2), (96, 8192): TABLE_PUMP[(96, 8192)],
+    (128, 2048): _warp(68, 2, lm=0), (128, 4096): _warp(76, 2, lm=0),
+    **{k: TABLE_PUMP[k] for k in [(132, 5120), (144, 5120), (192, 2048), (256, 1024), (256, 2048), (256, 3072)]},
+}
+
+
+@dataclass
+class FusedWarpK(FusedPumpK):
+    """FusedV2's in-kernel filler warps on pfill-k's arithmetic: each flin block's filler warps call `dfill_k_warp`
+    (flin.cuh, a `__noinline__` step that holds every filler MMA and reads only the coins, the slot's public tile id and
+    the step), each k32 word into the ram receipt, beside FusedPumpK's pump and prefill. A step hashes one SHA-512 block a
+    lane (~17 issue slots an MMA against FILL v1's ~1), so the warps fit only on narrower splits than the pump alone's,
+    and stop with 32 units of their block left (FLIN_STOP) rather than outlast its last unit."""
+
+    name: str = "fill-fused-warp-k"
+    lineage: dict = field(default_factory=lambda: {
+        "parent": "fill-fused-pump-k", "approach": "pouw/filler-fused",
+        "mechanism": ["filler:fresh-noise-imma", "noise:sha512-coins-01", "receipt:ram-k32", "place:split",
+                      "split:per-point-table", "fused:flin-filler-warps", "fused:filler-stop", "fused:persistent-attention",
+                      "fused:lm-head-flin", "prefill:split"],
+        "hypothesis": "pfill-k's step as flin's filler warps (dfill_k_warp), stopped 32 units before their block's end, "
+                      "fit decode's step at <= 1.02 on 68-116 pump SMs at B <= 128: a Theorem K filler inside serving's "
+                      "kernels, below FusedPumpK"})
+    choice: str = ("an offline table of splits, flin filler warps and stops from FILL's round-4 screens (FusedPump's pump-only "
+                   "rows where no filler warp fits), pfill-k's 4-SM prefill split; at serving time a lookup, a green split "
+                   "and one graph a step")
+    table: dict = field(default_factory=lambda: TABLE_WARP_K, repr=False)
