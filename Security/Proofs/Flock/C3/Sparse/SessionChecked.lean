@@ -114,7 +114,7 @@ theorem sparseSessionAt_of_checks (F : C3Family T CT st hp xR L Reg Cm Reg' Reg�
         some (some ((F.zs R ω t R₂ s).rd.readAt (.inl (⟨i.val, hu⟩, ⟨_, hq⟩)))) ∧
       ((F.Vs s).c.ports[HmOut.nIn (F.Vs s).c]!).segs = none := by
     intro hq
-    obtain ⟨-, hnm, -⟩ := hlaid.2.2
+    obtain ⟨_, hnm, -⟩ := hlaid.2.2
     have hnm' : ((F.Vs s).c.ports[(⟨HmOut.nIn (F.Vs s).c, hq⟩ : Fin (F.Vs s).c.ports.size)]).name = "out" := hnm
     obtain ⟨pt, hpt, hpn⟩ : ∃ pt ∈ (F.zs R ω t R₂ s).own, pt.name = "out" := by
       obtain ⟨inn, -, hck'⟩ := sparseCheck_of_check hck (by rw [hc, hname]; exact stackedParams_sparse _)
@@ -130,7 +130,7 @@ theorem sparseSessionAt_of_checks (F : C3Family T CT st hp xR L Reg Cm Reg' Reg�
   have hw : wSparseAt F.Vs (holoAt st hp).cls.shape (Flock.RecSparse.messagePorts (unitShape (holoAt st hp)))
       (layers F.zs dg N k Rw R ω t R₂ τ) s i =
       wSparse F.Vs (holoAt st hp).cls.shape (Flock.RecSparse.messagePorts (unitShape (holoAt st hp)))
-        (layers F.zs dg N k Rw R ω t R₂ τ) s ⟨i.val, hu⟩ := dif_pos hu
+        (layers F.zs dg N k Rw R ω t R₂ τ) s ⟨i.val, hu⟩ := dite_eq_left hu
   rw [hw]
   exact sparseSessionAt_of_zero F hchk hsp hell hs hA i ⟨i.val, hu⟩ rfl hC hcs
     (by rw [FlockVBridge.Family.oneAt_keyProg]; exact hone)
