@@ -11,7 +11,7 @@ export PATH="$(dirname "$NVCC"):$PATH"
 B=$(mktemp -d /tmp/psched-probe.XXXXXX)
 FL=(-O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v)
 LIBS=(-lcublasLt -lnvidia-ml -ldl)
-for n in dscore pscore; do
+for n in ${PROBE_BINS:-dscore pscore}; do
   "$NVCC" "${FL[@]}" -o "$B/$n" "benchmarks/pouw/filler/$n.cu" "${LIBS[@]}" >> "$O/build.log" 2>&1 || { echo "build $n failed"; exit 4; }
 done
 git rev-parse HEAD > "$O/commit.txt"

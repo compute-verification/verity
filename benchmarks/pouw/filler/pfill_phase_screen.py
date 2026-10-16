@@ -87,6 +87,20 @@ SCREENS = {
 }
 
 
+#: (B, L, pump SMs, LM): pfill-k's pump beside FILL's step with no filler warps (fscore, FW = AFW = 0; PROBE_BINS has
+#: fscore) on more SMs than FusedPump's rows where those read <= 1.0 or near it (r20261016-092208-bbfb: 48/16K 116 0.995,
+#: 128/6K 92 0.992, 128/2K 100 0.962, 32/24K 132 1.005, 132/5K and 144/5K 76 1.019)
+FUSED = {
+    "s8": [(48, 16384, 124, 0), (48, 16384, 132, 0), (48, 16384, 140, 0), (128, 6144, 100, 0), (128, 6144, 108, 0),
+           (128, 6144, 116, 0), (128, 2048, 108, 0), (32, 24576, 140, 1), (132, 5120, 84, 0), (144, 5120, 84, 0)],
+}
+
+
+def fused_probes(rows):
+    return ";".join(f"DFILL_CHUNK_LOG2=19 fscore fscore {b} {l} {f} 8 4 256 0 4 0 2 1 0 0 {lm} {ROUNDS} {K} {i}"
+                    for i, (b, l, f, lm) in enumerate(rows))
+
+
 #: prefill 8192 with pfill-k's pump (W 8, NC 4) in the co placement (every SM, the lowest stream priority: its 48 KB
 #: blocks can't sit beside the linears' 98 KB CTAs, so they take the wave tails), at three chunk sizes, against its split
 PREFILL = {
@@ -109,4 +123,5 @@ def probes(rows):
 
 if __name__ == "__main__":
     name = sys.argv[1]
-    print(prefill_probes(PREFILL[name]) if name in PREFILL else probes(SCREENS[name]))
+    print(prefill_probes(PREFILL[name]) if name in PREFILL else fused_probes(FUSED[name]) if name in FUSED
+          else probes(SCREENS[name]))
