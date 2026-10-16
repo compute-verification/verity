@@ -8,7 +8,8 @@
 #     --env TC_TP=2 -- bash benchmarks/pouw/filler_comm/tpcomm.sh
 #
 # TC_TP (2), TC_ON (the GPUs gpu-lease may take, in order; default one NUMA node's), TC_BLS ("B:L ..."), TC_REPS, TC_SETS
-# (";"-separated sets of VAR=VALUE settings, each a full pass over TC_BLS, e.g. "TPC_S=256 TPC_POLL=16;TPC_S=512"), MAXMIN.
+# (";"-separated sets of VAR=VALUE settings, each a full pass over TC_BLS, e.g. "TPC_S=256 TPC_POLL=16;TPC_S=512"), MAXMIN,
+# TC_WAIT (1; 0 takes the lease only if its GPUs are free now, so a TP 8 attempt never queues ahead of other jobs).
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -29,7 +30,8 @@ nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/tp
   > "$O/build.log" 2>&1 || { grep -E "error" "$O/build.log" | head -40; tail -20 "$O/build.log"; exit 4; }
 grep -A2 "Compiling entry function '_Z7cfill_k" "$O/build.log" | grep -E "Compiling|Used|spill" > "$O/regs.txt"
 # shellcheck disable=SC2016
-gpu-lease "$TC_TP" --wait --on "$TC_ON" --max-min "${MAXMIN:-12}" -- bash -c '
+WAIT=--wait; [ "${TC_WAIT:-1}" = 0 ] && WAIT=
+gpu-lease "$TC_TP" $WAIT --on "$TC_ON" --max-min "${MAXMIN:-12}" -- bash -c '
   q() { nvidia-smi --query-gpu=index,uuid,pci.bus_id,clocks.sm,clocks.max.sm,power.draw,power.limit,temperature.gpu,clocks_event_reasons.active \
     --format=csv,noheader -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1; }
   q
