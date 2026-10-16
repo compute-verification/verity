@@ -224,9 +224,30 @@ Include `commit_gpu.cuh`. Before the producer runs: `Committer::init(params, n, 
 `salts<true>(nullptr, stream)` (or `salts<false>` with given salts). In the epilogue, for each whole block a CTA holds
 (R divides its rows, 32 divides its columns): `hash_after_block(C.mid_P, src, 32 * R, x)` with `src` any type whose
 `ld16(off)` returns the block's bytes [off, off + 16) in row-major order (from shared memory, or `TileGeom::block(pos)` from
-global memory), then `leaf_from_digest<0>(pos, x, S, levels + 8 * pos, bc)` (row-seg: the segments' digests, then the outer
-hash, as `seg_kernel` and `RowBytes` do, `SX = 4`). After the producer: `nodes(stream)`. `check` holds the result to the
-reference: write `levels.bin` and `bc.bin` as `check()` does and run `reference.py check`.
+global memory), then `leaf_from_digest<0>(cm.dom, pos, x, S, levels + 8 * pos, bc)` (row-seg: the segments' digests, then
+the outer hash, as `seg_kernel` and `RowBytes` do, `SX = 4`; on the small path pass its `F` last). After the producer:
+`nodes(stream)`. `check` holds the result to the reference: write `levels.bin` and `bc.bin` as `check()` does and run
+`reference.py check`.
+
+### The small path (beside the GEMMs: STAGE-OVL)
+
+`init(..., dom, small = true, slots)` puts a committer on kernels that can share an SM with cuBLASLt's GEMM CTAs: every
+CTA is 128 threads with no shared memory (M_key y reads T through L1/L2; a CTA's 7 levels pass through global memory
+between `__syncthreads`), and a consumer sets their preferred carveout to the GEMMs' (`ovl.cu`'s `CARVE=100`).
+- `salts`: one launch for `slots` commitments of the domain: each slot's S (y, M_key y, c), the frame leaf's first block
+  per position (`F`: it holds the position but not h, so it compresses ahead; r2's precomputed first blocks, applied to
+  this format), and the pads with every 128-leaf subtree that holds only pads. Node messages start from per-level
+  midstates, as on the default path.
+- `tiles(..., slot)`: one launch: each thread its leaf (R/4 + 1 row blocks, h 2, the frame leaf's second block), then
+  its CTA's 7 levels.
+- `nodes`: a launch a level while a level is wider than 256 nodes, then one CTA for the rest. STAGE-COST r2's 2-warp
+  split isn't used: it passes the message schedule between warps in shared memory, and bought 1.17x on about 5 levels.
+- The domain id is a `Dom` in `CD[dom]` (`COMMIT_GPU_DOMS` slots), so committers of different leaf counts share one
+  binary while their `Consts` agree (one Ks, key and row size).
+
+`COMMIT_GPU_SMALL=1` puts `check` on it (domain slot 1, salt slot 1 of 2), so `reference.py check` holds the small path
+to the reference on the same cases. `benchmarks/pouw/stage_ovl/` runs it in STAGE-OVL's schedule (its cg arms), dumps
+chunk 0's commitments, and `reference.py verify` checks them.
 
 What fusing buys, from the latency anatomy above: the leaf kernel's launch and its re-read of A (the same-run gap between
 contiguous and gathered leaves is at most 5 us, so the re-read is cheap). It doesn't shorten one leaf's chain (R/4 + 5
