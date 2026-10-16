@@ -8,8 +8,8 @@ A `Sys` is `J` tables of block R1CS over GF(2), each block `N` bits: table `c`'s
 `B c i` select, its pin is `pin c`, and each `slots` entry `(c, a, v)` fixes bit `a` of table `c`'s block `b` to `v b`.
 `Sys.rel` is that system as `Relation`'s fields: the block circuit `circ` recomputes every row of every table's block
 (`rowGates`) and reads every pin and fixed bit; block `b`'s inputs and outputs are the hidden bits of every table's block
-`b` (table `c`'s bit `a` of block `b` is hidden value `c·T + b·N + a`), then the public `1` for each pin and the public
-value of each fixed bit. No commit strings.
+`b` (table `c`'s bit `a` of block `b` is hidden value `(b·N + a)·J + c`: the tables' bits interleaved, so where table
+`c`'s bits sit depends on no other table's), then the public `1` for each pin and the public value of each fixed bit.
 
 `relS_iff`: a witness satisfies `Claims.Flock.RelS` of a statement with these fields exactly when, in every block, every
 table's rows hold (`Sys.Holds`).
@@ -19,12 +19,11 @@ namespace Flock.Readable
 
 open Claims
 
-/-- `J` tables of block R1CS over GF(2) with `N`-bit blocks, `T` hidden bits per table and `nB` blocks: rows `A c i`,
-`B c i`, pins, and fixed bits `(table, address, value in each block)`. -/
+/-- `J` tables of block R1CS over GF(2) with `N`-bit blocks and `nB` blocks: rows `A c i`, `B c i`, pins, and fixed bits
+`(table, address, value in each block)`. -/
 structure Sys where
   J : ℕ
   N : ℕ
-  T : ℕ
   nB : ℕ
   A : ℕ → ℕ → ℕ → Bool
   B : ℕ → ℕ → ℕ → Bool
@@ -51,7 +50,7 @@ def circ : Claims.Circuit where
     S.slots.map fun s => s.1 * S.N + s.2.1
 
 /-- Hidden value of table `q / N`'s bit `q % N` of block `b`. -/
-def idx (b q : ℕ) : ℕ := q / S.N * S.T + b * S.N + q % S.N
+def idx (b q : ℕ) : ℕ := (b * S.N + q % S.N) * S.J + q / S.N
 
 /-- The public values: `1`, then each block's fixed bits (value `1 + b·L + k` is block `b`'s fixed bit `k`). -/
 def pubs : List Bool :=
@@ -65,11 +64,9 @@ def rel : Relation where
   out b := (List.range (S.J * S.N)).map (fun q => .hid (S.idx b q)) ++ (List.range S.J).map (fun _ => .pub 0) ++
     (List.range S.slots.length).map fun k => .pub (1 + b * S.slots.length + k)
   pub := S.pubs
-  cs := []
-  grp := fun _ => []
 
 /-- Table `c`'s bit `a` of block `b` in `w`. -/
-def bit (w : Claims.Flock.Wit) (c b a : ℕ) : Bool := w.hid.getD (c * S.T + b * S.N + a) false
+def bit (w : Claims.Flock.Wit) (c b a : ℕ) : Bool := w.hid.getD ((b * S.N + a) * S.J + c) false
 
 /-- **The system holds in block `b`**: every table's rows, pins and fixed bits. -/
 def Holds (w : Claims.Flock.Wit) (b : ℕ) : Prop :=
@@ -268,13 +265,11 @@ theorem block_iff (hw : S.WF) (s : Claims.Flock.Stmt) (w : Claims.Flock.Wit) (hC
 
 /-- **The relation**: a witness satisfies `RelS` of a statement with the system's fields and `nB` blocks exactly when
 the system holds in every block. -/
-theorem relS_iff (H : Claims.Msg → Claims.Msg) (hw : S.WF) (s : Claims.Flock.Stmt) (w : Claims.Flock.Wit)
-    (hC : s.C = S.circ) (hinp : s.inp = S.rel.inp) (hout : s.out = S.rel.out) (hpub : s.pub = S.pubs)
-    (hcs : s.cs = []) (hnb : s.nBlocks = S.nB) :
-    Claims.Flock.RelS H s w ↔ ∀ b < S.nB, S.Holds w b := by
+theorem relS_iff (hw : S.WF) (s : Claims.Flock.Stmt) (w : Claims.Flock.Wit) (hC : s.C = S.circ)
+    (hinp : s.inp = S.rel.inp) (hout : s.out = S.rel.out) (hpub : s.pub = S.pubs) (hnb : s.nBlocks = S.nB) :
+    Claims.Flock.RelS s w ↔ ∀ b < S.nB, S.Holds w b := by
   unfold Claims.Flock.RelS
-  rw [hcs, hnb]
-  simp only [List.length_nil, Nat.not_lt_zero, IsEmpty.forall_iff, implies_true, true_and]
+  rw [hnb]
   exact forall₂_congr fun b hb => block_iff hw s w hC hinp hout hpub hb
 
 end Sys

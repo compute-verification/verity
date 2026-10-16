@@ -5,11 +5,14 @@ import Proofs.Flock.Claims.Aggregate
 import Proofs.Flock.Claims.Bits
 import Proofs.Flock.Claims.ERep
 import Proofs.Flock.Claims.ERepCost
+import Proofs.Flock.Claims.Bridge
 import Proofs.Flock.Claims.Numbers
 import Proofs.Flock.Claims.NumbersTable
 import Proofs.Flock.Claims.NumbersPads
 import Proofs.Flock.Claims.NumbersGamma
 import Proofs.Flock.Claims.NumbersNMin
+import Proofs.Flock.Claims.NumbersDeploy
+import Proofs.Flock.Claims.NumbersRadius
 import Proofs.Flock.Claims.Decode
 import Proofs.Flock.Claims.DecodeFlock
 import Proofs.Flock.Claims.ZkDecode
@@ -22,11 +25,14 @@ import Proofs.Flock.Claims.DeployOC
 import Proofs.Flock.Claims.DeployInputs
 import Proofs.Flock.Claims.Deploy
 import Proofs.Flock.Claims.DeployCode
+import Proofs.Flock.Claims.DeployTables
 import Proofs.Flock.Claims.RootFindGF128
 import Proofs.Flock.Claims.GS
 import Proofs.Flock.Claims.DeployRounds
 import Proofs.Flock.Claims.DeployRoundsZk
 import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.DeployEfficient
+import Proofs.Flock.Claims.Assembled
 
 /-! `Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated`, by reflexivity: the guarantee is there for its
 record, which holds the claims' text.

@@ -14,6 +14,10 @@ TEMPLATE_PARAMS = {
     "rmsnorm-fused-cuda": [{"N": 2048, "EPS": 1e-05}],
     "rmsnorm-triton": [{"N": 128, "EPS": 1e-06}],
     "silu-mul": [{"I": 8192}],
+    "silu-mul-v2": [{"I": 256}, {"I": 1536}],
+    # GLM-5.3's hidden 6144 at both launches of each kernel (fewer than 256 tokens, then 256 or more)
+    "rmsnorm-fused-cuda-vec8": [{"N": 6144, "EPS": 1e-05, "BLOCK": 1024}, {"N": 6144, "EPS": 1e-05, "BLOCK": 256}],
+    "rmsnorm-cuda-vec8": [{"N": 6144, "EPS": 1e-05, "BLOCK": 768}, {"N": 6144, "EPS": 1e-05, "BLOCK": 256}],
     "gumbel-top-p-token-select": [{"V": 64}],
     "token-select-greedy": [{"V": 64}],
     "embedding-row": [{"V": 64, "H": 16}],
