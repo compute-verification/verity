@@ -1230,10 +1230,12 @@ static int pfill_check(const PFill& f, int n, int* checked, int* skipped) {
 
 // dfill_p's receipts for each NC at S = 8 and the phase S, over two launches (the base advanced between them), every slot
 // checked; the S − 8 control must differ everywhere; the flag mode with the stop raised before launch writes nothing.
-static int pgate(Dev& d, int S) {
+static int pgate(Dev& d, const std::vector<int>& Ss) {
   int fails = 0;
+  std::vector<int> all = {8};
+  all.insert(all.end(), Ss.begin(), Ss.end());
   for (int nc : {1, 2, 4})
-    for (int s : {8, S}) {
+    for (int s : all) {
       PFill f;
       f.mode = 1; f.W = 4; f.NC = nc; f.S = s; f.tiles = 2; f.grid = 3; f.c0 = g_c0; f.c1 = g_c1;
       pfill_alloc(f);
@@ -1679,7 +1681,12 @@ int main(int argc, char** argv) {
     }
     rc = run_dfill(d, B, L, place, fsm, W, NC, S, argc > 9 ? atoi(argv[9]) : 9);
   } else if (mode == "pgate") {
-    rc = pgate(d, argc > 2 ? atoi(argv[2]) : 256);
+    std::vector<int> Ss;
+    for (int i = 2; i < argc; i++) Ss.push_back(atoi(argv[i]));
+    for (int s : Ss)
+      if (s <= 8 || s % 8) { fprintf(stderr, "pgate S ...: each S a multiple of 8 above 8\n"); return 1; }
+    if (Ss.empty()) Ss.push_back(256);
+    rc = pgate(d, Ss);
   } else if (mode == "pfill") {
     if (argc < 13) { fprintf(stderr, "pfill B L FILL_SMS W NC S none|fixed|flag PW PNC PS PARAM [reps]\n"); return 1; }
     const int B = atoi(argv[2]), L = atoi(argv[3]), fsm = atoi(argv[4]), W = atoi(argv[5]), NC = atoi(argv[6]),

@@ -8,14 +8,18 @@
 #     --send benchmarks/pouw/decode_capacity/psched.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/psched.sh"'
 #
 # PS_ARMS: "B:L:FILL_SMS:PMODE:PW:PNC:PS:PARAM[:ENV=V,ENV=V]" (dcap pfill's arguments; FILL v1's filler is W 8, NC 4,
-# S 2048), PS_REPS, PS_PGATE_S (the phase S the gate checks, besides 8).
+# S 2048), PS_REPS, PS_PGATE_S (the phase S values the gate checks, besides 8; every PS in PS_ARMS must be among them).
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
 D=benchmarks/pouw/decode_capacity
 export B; B=$(mktemp -d /tmp/psched.XXXXXX); trap 'rm -rf "$B"' EXIT
 export PS_ARMS=${PS_ARMS:-"32:2048:92:fixed:8:4:256:0.8"}
-export PS_REPS=${PS_REPS:-15} PS_PGATE_S=${PS_PGATE_S:-256}
+export PS_REPS=${PS_REPS:-15} PS_PGATE_S=${PS_PGATE_S:-"128 256"}
+for arm in $PS_ARMS; do
+  ps=$(cut -d: -f7 <<< "$arm")
+  [[ " $PS_PGATE_S " == *" $ps "* ]] || { echo "arm $arm: PS $ps is not among PS_PGATE_S ($PS_PGATE_S)"; exit 1; }
+done
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 export DFILL_COINS; DFILL_COINS=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
 echo "$DFILL_COINS" > "$O/coins.txt"
