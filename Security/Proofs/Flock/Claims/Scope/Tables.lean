@@ -257,13 +257,13 @@ def relation (p : Parsed) : Relation :=
 /-- **`RelS` at the deployed relation**: a witness satisfies the readable statement exactly when every table of the
 verifier's statement fits the first table's blocks and its share of the hidden values satisfies its model
 statement. -/
-theorem relS_relation (H : Claims.Msg → Claims.Msg) (p : Parsed) (w : Claims.Flock.Wit) :
-    Claims.Flock.RelS H (toReadable relation p) w ↔
+theorem relS_relation (p : Parsed) (w : Claims.Flock.Wit) :
+    Claims.Flock.RelS (toReadable relation p) w ↔
       ∀ c < p.sts.size, ∃ h : (Tab.ofStmt p.sts[c]!).Fits (toReadable relation p).m (toReadable relation p).kLog,
         ((Tab.ofStmt p.sts[c]!).toModel h.2.2).Satisfies
           (zOf (2 ^ ((toReadable relation p).m - (toReadable relation p).kLog) * 2 ^ (toReadable relation p).kLog) w c
             p.sts[c]!.m) := by
-  rw [Sys.relS_iff H (sysOf_wf _ _ _) (toReadable relation p) w rfl rfl rfl rfl rfl rfl, sysOf_iff]
+  rw [Sys.relS_iff (sysOf_wf _ _ _) (toReadable relation p) w rfl rfl rfl rfl rfl, sysOf_iff]
   simp only [List.length_map, Array.length_toList]
   refine forall₂_congr fun c hc => ?_
   have : (p.sts.toList.map Tab.ofStmt).getD c default = Tab.ofStmt p.sts[c]! := by

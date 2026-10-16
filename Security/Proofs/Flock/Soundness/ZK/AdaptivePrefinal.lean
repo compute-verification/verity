@@ -170,7 +170,7 @@ the tables' randomness read from `(ω, (U, y))` through `e c`, whose fibers have
 theorem adaptive_prefinal_hm96 {n : ℕ} {Cn M Cc Ω L : Type} [Inhabited M] [DecidableEq M] [Fintype Ω] [Nonempty Ω]
     [Fintype L] [DecidableEq L] (T : (Fin n → Cn) → Fin J → Table F K W Salt (B × Salt) D Hi VL)
     (rep : ∀ c j, Fin (T c j).nC → Fin 2) (My : Salt → B) (cs : Salt → Cc) {δ₁ : ℝ≥0∞}
-    (hT1 : Assumptions.Hm96Hiding My cs δ₁) (H : B × Cc → D)
+    (hT1 : Claims.Hm96Hiding My cs δ₁) (H : B × Cc → D)
     (msgs : (Fin J → W) → Ω → (Fin n → Cn) → (L → D) → Fin n → M) (dig : (Fin J → W) → Ω → (Fin n → Cn) → L → B)
     (P : (Fin J → W) → Strategy (Ω × (L → B × Cc)) M Cn n)
     (hP : ∀ w ω p c, (P w).msg (ω, p) c = msgs w ω c fun l => H (dig w ω c l + (p l).1, (p l).2))
@@ -227,7 +227,7 @@ theorem adaptive_prefinal_hm96_tape {n : ℕ} {Cn M Cc Ω L Tp : Type} [Inhabite
     [Nonempty Ω] [Fintype L] [DecidableEq L] [Fintype Tp] [Nonempty Tp]
     (T : (Fin n → Cn) → Fin J → Table F K W Salt (B × Salt) D Hi VL)
     (rep : ∀ c j, Fin (T c j).nC → Fin 2) (My : Salt → B) (cs : Salt → Cc) {δ₁ : ℝ≥0∞}
-    (hT1 : Assumptions.Hm96Hiding My cs δ₁) (H : B × Cc → D)
+    (hT1 : Claims.Hm96Hiding My cs δ₁) (H : B × Cc → D)
     (msgs : (Fin J → W) → Ω → (Fin n → Cn) → (L → D) → Fin n → M) (dig : (Fin J → W) → Ω → (Fin n → Cn) → L → B)
     (P : (Fin J → W) → Strategy (Ω × (L → B × Cc)) M Cn n)
     (hP : ∀ w ω p c, (P w).msg (ω, p) c = msgs w ω c fun l => H (dig w ω c l + (p l).1, (p l).2))
