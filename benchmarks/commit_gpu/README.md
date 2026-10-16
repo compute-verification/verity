@@ -232,13 +232,16 @@ the outer hash, as `seg_kernel` and `RowBytes` do, `SX = 4`; on the small path p
 ### The small path (beside the GEMMs: STAGE-OVL)
 
 `init(..., dom, small = true, slots)` puts a committer on kernels that can share an SM with cuBLASLt's GEMM CTAs: every
-CTA is 128 threads with no shared memory (M_key y reads T through L1/L2; a CTA's 7 levels pass through global memory
-between `__syncthreads`) and at most 102 registers a thread (`SMALL_MINB`, 5 CTAs an SM; the leaf kernel then takes 96
+CTA is 128 threads with no shared memory (a CTA's 7 levels pass through global memory between `__syncthreads`) and at
+most 102 registers a thread (`SMALL_MINB`, 5 CTAs an SM; the leaf kernel then takes 96
 without spilling, where it took 156 uncapped), and a consumer sets their preferred carveout to the GEMMs' (`ovl.cu`'s
 `CARVE=100`).
 - `salts(given, stream, s0, ns)`: slots s0 .. s0 + ns - 1 of the domain's commitments, each slot's S (y, M_key y, c);
   with slot 0, the frame leaf's first block per position (`F`: it holds the position but not h, so it compresses ahead;
   r2's precomputed first blocks, applied to this format) and the pads with every 128-leaf subtree that holds only pads.
+  M_key y reads T from global memory, and only 31 of its rows: T is linear in the byte, so T_v = T_(v & 15) xor
+  T_(v & 0xF0), 8 KB that stays in L1 at a 100% carveout, where all 256 rows (64 KB) came from L2 at about 19
+  compression-equivalents a leaf.
   Node messages start from per-level midstates, as on the default path. A slot's salts can run any time before its
   commitment: `ovl.cu` runs layer l+1's behind layer l's commitment, beside the GEMMs.
 - `tiles(..., slot)`: one launch: each thread its leaf (R/4 + 1 row blocks, h 2, the frame leaf's second block), then
