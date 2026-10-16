@@ -97,7 +97,15 @@ slack, and the compiled table's error.
 (ii) `RecursiveFirewallPrivate`, `RecursiveAudit`'s (ii), named rather than restated. At a public unit it is read at
 no registration rows (`nr = 0`) and the public circuit `P` as the simulator's `p₀`: the registration's term
 `2 n_r·δ_{K*}` is zero, the bound is `ε_V(δ_{K*}) + n_h·δ_{K*}`, and the simulator reads `P`, the schedule's transcript
-and the owed outputs. -/
+and the owed outputs.
+
+**A nearly empty event** (vacuity sweep, 16 Oct, LEAN-19): (i)'s event asks that the inner statement have no witness
+(`¬ holds`, with `holds` = `∃ z, Satisfies z`). The inner statement pins each row only by its hm96 commit string
+`b ‖ c`, with the salt a free witness wire, so a commitment to a wrong row under a fresh salt also opens to the right
+row except with probability at most `4·hidingGap` (`VacuityProbes.Hm96Opens.opens_to_any_row`, `shift_reachable`, on
+cursor/vacuity-sweep-c7a9). For any cheater the event is then nearly empty, and (i) bounds it, not a wrong
+computation. The fix is the knowledge form Daniel's claims API states recursion in (PRF-40); `EndToEndHidden` avoids
+this by extraction. -/
 def PublicAudit : Prop :=
   (∀ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Inhabited (CT k)]
     -- the registration's draws, a finite space with an element, and the units each draws

@@ -4,7 +4,7 @@ import Mathlib
 # Claims: the shared definitions and Flock's claim statements (frozen before any proof work)
 
 The definitions every protocol's claims read, and Flock's claims, in the condensed spec's names, with the rulings of
-15 Oct applied:
+15 and 16 Oct applied:
 
 * `R(x, ⊥) := False` (`Rel.ext`); a protocol with no witness takes `W = Unit` and `R(x, ()) :⇔ x ∈ L` (`Rel.ofLang`).
 * The extractor receives the judged run's coins (`Extractor.ext`'s second argument) and uses the prover only by
@@ -20,6 +20,10 @@ The definitions every protocol's claims read, and Flock's claims, in the condens
   `RP.eval` also counts SHA-512 calls) and a separate stated complexity claim for the decoder's pure computation
   (`DecoderComplexity`).
 * Nontriviality is a recorded honest transcript that the verifier accepts (`Nontrivial`).
+* (16 Oct) The decoder must list a trace only from at least `nMin` opened columns, the smallest count above the Johnson
+  bound of the trace's code (`Flock.ListComplete`, `Flock.Deploy.nMin`). As first frozen, `ListComplete` put every trace
+  in the list of the empty input, so a decoder's cost was at least `|T|`; `Flock.Efficient` now asks it of the decoder
+  it costs.
 
 Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed verifier, its parser and the hash:
 binding them to the compiled verifier (`Flock.verifyWith Sha512.hash`, `Flock.ProvedScope.check`) is the code side's.
@@ -527,11 +531,12 @@ def InScope (zk : Bool) (s : Stmt) : Prop :=
     s.form.unitInputGroups = 1 ∧ ¬ s.form.tail ∧ s.form.unitLog ≤ 32 ∧ s.form.readsOnlyPortBits ∧
     (s.form.rowsV1 ∨ (s.form.hiddenOutputs ∧ s.form.rowsV2OrSeg))
 
-/-- **List decoding, the spec a decoder meets**: from opened columns at distinct positions, `decode` lists every trace
-whose encoding agrees with at least a fraction `agree` of them. -/
-def ListComplete {Col T : Type} [DecidableEq Col] (enc : T → ℕ → Col) (agree : ℝ)
+/-- **List decoding, the spec a decoder meets**: from opened columns at distinct positions, at least `nMin M` of them,
+`decode` lists every trace `M` whose encoding agrees with at least a fraction `agree` of them. `nMin M` is the smallest
+count above the Johnson bound of `M`'s code. -/
+def ListComplete {Col T : Type} [DecidableEq Col] (enc : T → ℕ → Col) (agree : ℝ) (nMin : T → ℕ)
     (decode : List (ℕ × Col) → List T) : Prop :=
-  ∀ (os : List (ℕ × Col)) (M : T), (os.map Prod.fst).Nodup →
+  ∀ (os : List (ℕ × Col)) (M : T), (os.map Prod.fst).Nodup → nMin M ≤ os.length →
     agree * os.length ≤ (os.filter fun p => decide (enc M p.1 = p.2)).length → M ∈ decode os
 
 /-- **Flock's assemble step**: the opened columns, decoded to candidate traces, each read for its witness; the first
@@ -544,8 +549,9 @@ def assemble {Col T : Type} (H : Msg → Msg) (parse : Msg → Option Stmt) (dec
 
 /-- What the deployed verifier brings, read by Flock's claims: the verifier and whether it is the masked (`--zk`) one,
 its parser and scope check, the opened columns of the first committed codeword in a run (`cols`), the code (`enc`), the
-decoding threshold (`agree`), how a trace is read as a witness, and the numbers the errors read: the table's error
-`ε_table`, `N₀`, the weight `C` of `γ`, `E^rep`'s waits `m′` and its truncation `K`. -/
+decoding threshold (`agree`) and the count of opened columns from which a trace is decoded (`nMin`, a function of the
+trace because one `T` holds the traces of every statement's code), how a trace is read as a witness, and the numbers the
+errors read: the table's error `ε_table`, `N₀`, the weight `C` of `γ`, `E^rep`'s waits `m′` and its truncation `K`. -/
 structure Deploy (Coin Col T : Type) where
   zk : Bool
   V : Verifier Coin
@@ -554,6 +560,7 @@ structure Deploy (Coin Col T : Type) where
   cols : Seen → List (ℕ × Col)
   enc : T → ℕ → Col
   agree : ℝ
+  nMin : T → ℕ
   read : T → Wit
   εtable : Msg → ℝ
   N₀ : Msg → ℝ
@@ -586,7 +593,7 @@ def Scope (D : Deploy Coin Col T) (x : Msg) : Prop := ∃ s, D.parse x = some s 
 
 /-- **Flock: KS**, at `E^rep` and every decoder that meets the list-decoding spec. -/
 def KS (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
-  ∀ decode, ListComplete D.enc D.agree decode → Claims.KS H D.V (R H D.parse) (E H D decode) (κ D) (γ D)
+  ∀ decode, ListComplete D.enc D.agree D.nMin decode → Claims.KS H D.V (R H D.parse) (E H D decode) (κ D) (γ D)
 
 /-- **Flock: Complete**, on the statements in scope. -/
 def Complete {Ω : Type} (H : Msg → Msg) (D : Deploy Coin Col T) (P : Wit → Prover Ω) (δc : Msg → ℝ) : Prop :=
@@ -602,14 +609,15 @@ def ZK {Ω : Type} [Fintype Ω] (H : Msg → Msg) (D : Deploy Coin Col T) (P : W
 
 /-- **Flock: bits**, `λ = min(log₂(1/κ), 255.5 − ½ log₂ γ) − 1`, at every decoder that meets the spec. -/
 def Bits (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
-  ∀ decode, ListComplete D.enc D.agree decode →
+  ∀ decode, ListComplete D.enc D.agree D.nMin decode →
     Claims.Bits H D.V (R H D.parse) (E H D decode) fun x => lamOf (κ D x) (γ D x)
 
-/-- **Flock: efficiency**: `E^rep`'s reruns at every decoder, and the decoder's stated complexity. -/
+/-- **Flock: efficiency**: `E^rep`'s reruns at every decoder, and a decoder that meets the list-decoding spec, with its
+stated complexity. -/
 def Efficient (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T)
     (counted : List (ℕ × Col) → List T × ℕ) (size : List (ℕ × Col) → ℕ) (p : Polynomial ℕ) : Prop :=
   ERepCost H D.V D.waits D.k D.cap D.cols (assemble H D.parse decode D.read) (check H D.parse) ∧
-    DecoderComplexity decode counted size p
+    ListComplete D.enc D.agree D.nMin decode ∧ DecoderComplexity decode counted size p
 
 /-- **Flock: nontriviality**: recorded honest runs, each of a statement the scope check takes, that the verifier
 accepts. -/
