@@ -29,6 +29,7 @@ def _module(name):
 @pytest.mark.parametrize("cls,flags,w", [
     ("PFillKCo", ["-DPFILL_BITS", "-DPFILL_CO", "-DPFILL_NO_PHASE"], 4),
     ("PFillKCoDep", ["-DPFILL_BITS", "-DPFILL_CO", "-DPFILL_NO_PHASE", "-DPF_CO_DEP=2"], 4),
+    ("PFillKCoDepC19", ["-DPFILL_BITS", "-DPFILL_CO", "-DPFILL_NO_PHASE", "-DPF_CO_DEP=2"], 4),
     ("PFillKDual", ["-DPFILL_BITS", "-DPFILL_DUAL", "-DPFILL_NO_PHASE", "-DPF_CO_DEP=2"], 8),
 ])
 def test_pfill_k_co_arm(monkeypatch, cls, flags, w):

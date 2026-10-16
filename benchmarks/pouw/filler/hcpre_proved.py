@@ -60,6 +60,21 @@ class PFillKCoDep(PFillKCo):
 
 
 @dataclass
+class PFillKCoDepC19(PFillKCoDep):
+    """PFillKCoDep in 2^19-MMA chunks: at 2^20 its prefill point sits at the gate (1.0496 and 1.0499, a round past it),
+    and a co chunk half as long ends nearer each GEMM's tail."""
+
+    name: str = "hcpre-pfill-k-co-dep-c19"
+    lineage: dict = field(default_factory=lambda: {
+        "parent": "hcpre-pfill-k-co-dep", "approach": "pouw/filler-prefill",
+        "mechanism": ["filler:fresh-noise-imma", "noise:sha512-coins-01", "receipt:ram-k32", "tile:co-w4-bits-b-regs-a",
+                      "place:split", "split:per-point-table", "split:every-scored-point", "prefill:co",
+                      "co:one-block-an-sm", "co:one-mma-in-flight", "chunk:2^19"],
+        "hypothesis": "2^19-MMA chunks take prefill's slowdown off the gate (1.047 in screens) for a share 0.004 lower"})
+    filler: Filler | None = Filler(W=4, NC=4, S=256, chunk_log2=19, noise="bits01")
+
+
+@dataclass
 class PFillKDual(PFillKCoDep):
     """pfill-k itself on its decode splits (the 8-warp tile, its B and A moved from shared memory to L1, -DPFILL_DUAL) and
     the co tile at one MMA in flight for prefill co: the kernel's only shared memory is the co tile's 2 KB, so one build
