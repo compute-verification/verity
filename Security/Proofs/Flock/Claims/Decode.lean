@@ -4,30 +4,99 @@ import ArkLib.Data.CodingTheory.GuruswamiSudan.GuruswamiSudan
 /-!
 # A list decoder for interleaved Reed–Solomon codes, from Guruswami–Sudan
 
-`ListComplete` asks a decoder to list, from opened columns at distinct positions, every message whose encoding agrees
-with at least a fraction `agree` of them. For an interleaved Reed–Solomon code (`IRS`: `s` rows, each a polynomial of
-degree below `k`, the column at position `i` their values at the point `dom i`), `IRS.decode` does so at every `agree`
-(`IRS.listComplete_decode`):
+`ListComplete` asks a decoder to list, from at least `nMin M` opened columns at distinct positions, every message `M`
+whose encoding agrees with at least a fraction `agree` of them. For an interleaved Reed–Solomon code (`IRS`: `s` rows,
+each a polynomial of degree below `k`, the column at position `i` their values at the point `dom i`), `IRS.decode` does
+so at the code's Johnson count `IRS.nMin`, at every `agree > 0` (`IRS.listComplete_decode`).
+
+The Johnson count is `johnsonCount k agree = ⌊(k+1)/agree²⌋ + 1`, the smallest `N` with `√((k+1)·N) < agree·N`
+(`johnsonCount_le_iff`). At `agree = a/b` it is `(k+1)·b²/a² + 1` in natural division (`johnsonCount_div`), and at
+`agree ≤ 1` it is above `k + 1` (`lt_johnsonCount`).
 
 * On an input in the Johnson regime (`IRS.Regime`: the opened positions' points are distinct, and the radius
   `e = N − ⌈agree·N⌉` at `N` opened columns is below ArkLib's Guruswami–Sudan bound `N − √((k+1)·N)`, which holds once
-  `agree ≤ 1` is strictly above `√((k+1)/N)`, `IRS.regime_of_johnson`), it runs `IRS.gsPath`: ArkLib's
-  Guruswami–Sudan decoder (`GuruswamiSudan.decoder`) on each row of the code punctured to the opened points, then the
-  rows' candidates joined row by row, keeping only the prefixes whose joint agreement with the opened columns stays at
-  least `⌈agree·N⌉` (`extendRows`). Each row of a message that agrees with that many columns is within the radius of
-  its row word, so ArkLib's completeness (`GuruswamiSudan.mem_decoder_of_dist`) puts it in its row's list, and the
-  message's prefixes survive every pruning (`IRS.mem_gsPath`).
-* Elsewhere (too few opened columns for the Johnson regime, or two positions on one point) it lists those messages by
-  exhaustive search (`IRS.exhaustive`).
+  `agree ≤ 1` is strictly above `√((k+1)/N)`, `IRS.regime_of_johnson`, so at `N ≥ nMin`, `IRS.regime_of_nMin_le`), it
+  runs `IRS.gsPath`: ArkLib's Guruswami–Sudan decoder (`GuruswamiSudan.decoder`) on each row of the code punctured to
+  the opened points, then the rows' candidates joined row by row, keeping only the prefixes whose joint agreement with
+  the opened columns stays at least `⌈agree·N⌉` (`extendRows`). Each row of a message that agrees with that many
+  columns is within the radius of its row word, so ArkLib's completeness (`GuruswamiSudan.mem_decoder_of_dist`) puts it
+  in its row's list, and the message's prefixes survive every pruning (`IRS.mem_gsPath`).
+* On opened columns at distinct points outside the regime it returns `[]` (`IRS.decode_eq_nil`): `ListComplete` asks
+  for nothing there, since from `nMin` columns on the regime holds at `agree ≤ 1`, and no message agrees with more than
+  all of them at `agree > 1`.
+* On at least `nMin` opened columns two of which share a point, it lists those messages by exhaustive search
+  (`IRS.exhaustive`). This branch is still forced: positions are any naturals and a finite field has finitely many
+  points, so `ListComplete` covers inputs whose columns all sit at one point, and a complete decoder lists there every
+  message that agrees with all of them, at a cost at least their number
+  (`Flock.ListComplete.card_le_eval_of_agree`).
 
-The exhaustive branch is forced: `ListComplete` puts every message in the list of the empty input
-(`Flock.ListComplete.mem_nil`), so a `DecoderComplexity` whose step count is at least its output's length has
-`|T| ≤ p(size [])` (`Flock.ListComplete.card_le_eval`).
+Before ruling 2 (16 Oct) `ListComplete` had no `nMin`, which is `nMin = 0`: it put every message in the list of the
+empty input (`Flock.ListComplete.mem_nil`), so a `DecoderComplexity` whose step count is at least its output's length
+had `|T| ≤ p(size [])` (`Flock.ListComplete.card_le_eval`).
 -/
 
 namespace Claims
 
 open Polynomial
+
+/-! ## The Johnson count -/
+
+/-- **The Johnson count**: `⌊(k+1)/agree²⌋ + 1`, the smallest number `N` of opened columns with
+`√((k+1)·N) < agree·N` (`johnsonCount_le_iff`). -/
+noncomputable def johnsonCount (k : ℕ) (agree : ℝ) : ℕ := ⌊((k : ℝ) + 1) / agree ^ 2⌋₊ + 1
+
+theorem one_le_johnsonCount (k : ℕ) (agree : ℝ) : 1 ≤ johnsonCount k agree := Nat.le_add_left 1 _
+
+/-- **`johnsonCount k agree` is the smallest `N` with `√((k+1)·N) < agree·N`**, at `agree > 0`. -/
+theorem johnsonCount_le_iff {k N : ℕ} {agree : ℝ} (ha : 0 < agree) :
+    johnsonCount k agree ≤ N ↔ Real.sqrt (((k : ℝ) + 1) * N) < agree * N := by
+  have ha2 : 0 < agree ^ 2 := by positivity
+  have hk : (0 : ℝ) ≤ (k : ℝ) + 1 := by positivity
+  constructor
+  · intro h
+    have hN : ((k : ℝ) + 1) / agree ^ 2 < N := by
+      have hl := Nat.lt_floor_add_one (((k : ℝ) + 1) / agree ^ 2)
+      have h' : (johnsonCount k agree : ℝ) ≤ N := by exact_mod_cast h
+      unfold johnsonCount at h'
+      push_cast at h'
+      linarith
+    have hN0 : (0 : ℝ) < N := lt_of_le_of_lt (by positivity) hN
+    rw [div_lt_iff₀ ha2] at hN
+    rw [Real.sqrt_lt' (by positivity)]
+    have := mul_lt_mul_of_pos_right hN hN0
+    nlinarith
+  · intro h
+    have hN0 : (0 : ℝ) < N := by
+      rcases (Nat.cast_nonneg (α := ℝ) N).lt_or_eq with h0 | h0
+      · exact h0
+      · rw [← h0] at h; simp at h
+    have hsq := (Real.sqrt_lt' (by positivity)).1 h
+    have hlt : ((k : ℝ) + 1) / agree ^ 2 < N := by
+      rw [div_lt_iff₀ ha2]
+      have : ((k : ℝ) + 1) * N < (N * agree ^ 2) * N := by nlinarith
+      exact lt_of_mul_lt_mul_right this hN0.le
+    have := (Nat.floor_lt (div_nonneg hk ha2.le)).2 hlt
+    unfold johnsonCount
+    omega
+
+/-- **The Johnson count at a ratio**: at `agree = a/b`, `(k+1)·b²/a² + 1` in natural division. -/
+theorem johnsonCount_div (k a b : ℕ) : johnsonCount k ((a : ℝ) / b) = (k + 1) * b ^ 2 / a ^ 2 + 1 := by
+  unfold johnsonCount
+  congr 1
+  rw [div_pow, div_div_eq_mul_div]
+  have : ((k : ℝ) + 1) * (b : ℝ) ^ 2 / (a : ℝ) ^ 2 = (((k + 1) * b ^ 2 : ℕ) : ℝ) / ((a ^ 2 : ℕ) : ℝ) := by
+    push_cast; ring
+  rw [this, Nat.floor_div_eq_div]
+
+/-- **At `agree ≤ 1` the Johnson count is above `k + 1`.** -/
+theorem lt_johnsonCount {k : ℕ} {agree : ℝ} (ha0 : 0 < agree) (ha1 : agree ≤ 1) : k + 1 < johnsonCount k agree := by
+  have ha2 : agree ^ 2 ≤ 1 := pow_le_one₀ ha0.le ha1
+  have hle : ((k + 1 : ℕ) : ℝ) ≤ ((k : ℝ) + 1) / agree ^ 2 := by
+    push_cast
+    exact le_div_self (by positivity) (by positivity) ha2
+  have := Nat.le_floor hle
+  unfold johnsonCount
+  omega
 
 /-- `p` holds at as many positions of `l` as `l.filter p` has entries. -/
 theorem card_filter_get {α : Type} (p : α → Prop) [DecidablePred p] :
@@ -127,6 +196,9 @@ def Regime {F T : Type} [Field F] {s : ℕ} (C : IRS F T s) (agree : ℝ) (os : 
   (os.map fun p => C.dom p.1).Nodup ∧
     (((os.length - threshold agree os : ℕ) : ℝ) < os.length - Real.sqrt ((C.k + 1) * os.length))
 
+/-- **The code's Johnson count** at `agree`: the `nMin` at which its decoder meets `ListComplete`. -/
+noncomputable def nMin {F T : Type} [Field F] {s : ℕ} (C : IRS F T s) (agree : ℝ) : ℕ := johnsonCount C.k agree
+
 open Classical in
 /-- Every message that agrees with at least `agree·N` opened columns, by exhaustive search. -/
 noncomputable def exhaustive {F T : Type} [Field F] [DecidableEq F] [Fintype T] {s : ℕ} (C : IRS F T s)
@@ -134,10 +206,12 @@ noncomputable def exhaustive {F T : Type} [Field F] [DecidableEq F] [Fintype T] 
   (Finset.univ.filter fun M => agree * os.length ≤ C.agreeCount M os).toList
 
 open Classical in
-/-- **The decoder**: the Guruswami–Sudan path in the Johnson regime, exhaustive search elsewhere. -/
+/-- **The decoder**: the Guruswami–Sudan path in the Johnson regime; `[]` elsewhere on opened columns at distinct
+points, and on fewer than `nMin` columns; exhaustive search on at least `nMin` columns two of which share a point. -/
 noncomputable def decode {F T : Type} [Field F] [DecidableEq F] [Fintype T] {s : ℕ} (C : IRS F T s)
     (agree : ℝ) (os : List (ℕ × (Fin s → F))) : List T :=
-  if h : C.Regime agree os then C.gsPath agree os h.1 else C.exhaustive agree os
+  if h : C.Regime agree os then C.gsPath agree os h.1
+  else if (os.map fun p => C.dom p.1).Nodup ∨ os.length < C.nMin agree then [] else C.exhaustive agree os
 
 /-- A message's row `r` is within `N − agreeCount` of its row word. -/
 theorem hammingDist_rowWord_le {F T : Type} [Field F] [DecidableEq F] {s : ℕ} (C : IRS F T s)
@@ -226,13 +300,35 @@ theorem regime_of_johnson {F T : Type} [Field F] {s : ℕ} (C : IRS F T s) (agre
   unfold threshold
   linarith
 
-/-- **The decoder meets `ListComplete` at every `agree`.** -/
+/-- **From the Johnson count on, the regime holds**: distinct points, `0 < agree ≤ 1` and at least `nMin` opened
+columns. -/
+theorem regime_of_nMin_le {F T : Type} [Field F] {s : ℕ} (C : IRS F T s) (agree : ℝ)
+    (os : List (ℕ × (Fin s → F))) (hnd : (os.map fun p => C.dom p.1).Nodup) (ha0 : 0 < agree) (ha1 : agree ≤ 1)
+    (hN : C.nMin agree ≤ os.length) : C.Regime agree os :=
+  C.regime_of_johnson agree os hnd ha1 ((johnsonCount_le_iff ha0).1 hN)
+
+/-- On opened columns at distinct points outside the regime the decoder returns `[]`. -/
+theorem decode_eq_nil {F T : Type} [Field F] [DecidableEq F] [Fintype T] {s : ℕ} (C : IRS F T s)
+    (agree : ℝ) (os : List (ℕ × (Fin s → F))) (hnd : (os.map fun p => C.dom p.1).Nodup) (h : ¬ C.Regime agree os) :
+    C.decode agree os = [] := by
+  rw [decode, dite_eq_right h, ite_eq_left (Or.inl hnd)]
+
+/-- **The decoder meets `ListComplete` at the code's Johnson count**, at every `agree > 0`. -/
 theorem listComplete_decode {F T : Type} [Field F] [DecidableEq F] [Fintype T] {s : ℕ} (C : IRS F T s)
-    (agree : ℝ) : Flock.ListComplete C.enc agree (C.decode agree) := by
-  intro os M _ hM
+    (agree : ℝ) (ha : 0 < agree) : Flock.ListComplete C.enc agree (fun _ => C.nMin agree) (C.decode agree) := by
+  intro os M _ hN hM
   unfold decode
-  split_ifs with h
+  split_ifs with h h'
   · exact C.mem_gsPath agree os h.1 h.2 M hM
+  · exfalso
+    rcases h' with hnd | hlt
+    · rcases le_or_gt agree 1 with ha1 | ha1
+      · exact h (C.regime_of_nMin_le agree os hnd ha ha1 hN)
+      · have hN1 : (1 : ℝ) ≤ os.length := by exact_mod_cast (one_le_johnsonCount C.k agree).trans hN
+        have hc : ((os.filter fun p => decide (C.enc M p.1 = p.2)).length : ℝ) ≤ os.length := by
+          exact_mod_cast List.length_filter_le _ _
+        nlinarith
+    · exact absurd hN (not_le.2 hlt)
   · classical
     unfold exhaustive
     rw [Finset.mem_toList, Finset.mem_filter]
@@ -242,15 +338,43 @@ end IRS
 
 namespace Flock
 
-/-- `ListComplete` lists every message on the empty input: `agree · 0 ≤ 0` holds at every `agree`. -/
-theorem ListComplete.mem_nil {Col T : Type} [DecidableEq Col] {enc : T → ℕ → Col} {agree : ℝ}
-    {decode : List (ℕ × Col) → List T} (h : ListComplete enc agree decode) (M : T) : M ∈ decode [] :=
-  h [] M List.nodup_nil (by simp)
+/-- **A complete decoder lists every message that agrees with every opened column**, at `agree ≤ 1`, from `nMin` of
+them on. -/
+theorem ListComplete.mem_of_agree {Col T : Type} [DecidableEq Col] {enc : T → ℕ → Col} {agree : ℝ} {nMin : T → ℕ}
+    {decode : List (ℕ × Col) → List T} (h : ListComplete enc agree nMin decode) (ha : agree ≤ 1)
+    (os : List (ℕ × Col)) (hnd : (os.map Prod.fst).Nodup) (M : T) (hN : nMin M ≤ os.length)
+    (hM : ∀ q ∈ os, enc M q.1 = q.2) : M ∈ decode os := by
+  refine h os M hnd hN ?_
+  rw [List.filter_eq_self.2 fun q hq => decide_eq_true (hM q hq)]
+  exact mul_le_of_le_one_left (Nat.cast_nonneg _) ha
 
-/-- **A complete decoder's complexity polynomial is at least `|T|` at the empty input**, when its step count is at
-least the length of its output there. -/
+/-- **A complete decoder's complexity polynomial is at least the number of messages that agree with every opened
+column** of an input of distinct positions, each message from its `nMin` on, at `agree ≤ 1`, when its step count is at
+least the length of its output there. With every column at one point (distinct positions can share one: a finite field
+has finitely many), those are all the messages with one value there. -/
+theorem ListComplete.card_le_eval_of_agree {Col T : Type} [DecidableEq Col] {enc : T → ℕ → Col} {agree : ℝ}
+    {nMin : T → ℕ} {decode : List (ℕ × Col) → List T} (h : ListComplete enc agree nMin decode) (ha : agree ≤ 1)
+    {counted : List (ℕ × Col) → List T × ℕ} {size : List (ℕ × Col) → ℕ} {p : Polynomial ℕ}
+    (hd : DecoderComplexity decode counted size p) (os : List (ℕ × Col)) (hnd : (os.map Prod.fst).Nodup)
+    (hc : (decode os).length ≤ (counted os).2) (S : Finset T)
+    (hS : ∀ M ∈ S, nMin M ≤ os.length ∧ ∀ q ∈ os, enc M q.1 = q.2) : S.card ≤ p.eval (size os) := by
+  classical
+  calc S.card ≤ (decode os).toFinset.card := Finset.card_le_card fun M hM =>
+        List.mem_toFinset.2 (h.mem_of_agree ha os hnd M (hS M hM).1 (hS M hM).2)
+    _ ≤ (decode os).length := List.toFinset_card_le _
+    _ ≤ (counted os).2 := hc
+    _ ≤ p.eval (size os) := (hd os).2
+
+/-- Under the spec as first frozen (`nMin = 0`), a complete decoder lists every message on the empty input:
+`agree · 0 ≤ 0` holds at every `agree`. -/
+theorem ListComplete.mem_nil {Col T : Type} [DecidableEq Col] {enc : T → ℕ → Col} {agree : ℝ}
+    {decode : List (ℕ × Col) → List T} (h : ListComplete enc agree (fun _ => 0) decode) (M : T) : M ∈ decode [] :=
+  h [] M List.nodup_nil le_rfl (by simp)
+
+/-- **The reason for ruling 2**: under the spec as first frozen (`nMin = 0`), a complete decoder's complexity polynomial
+is at least `|T|` at the empty input, when its step count is at least the length of its output there. -/
 theorem ListComplete.card_le_eval {Col T : Type} [DecidableEq Col] [Fintype T] {enc : T → ℕ → Col} {agree : ℝ}
-    {decode : List (ℕ × Col) → List T} (h : ListComplete enc agree decode)
+    {decode : List (ℕ × Col) → List T} (h : ListComplete enc agree (fun _ => 0) decode)
     {counted : List (ℕ × Col) → List T × ℕ} {size : List (ℕ × Col) → ℕ} {p : Polynomial ℕ}
     (hd : DecoderComplexity decode counted size p) (hc : (decode []).length ≤ (counted []).2) :
     Fintype.card T ≤ p.eval (size []) := by
