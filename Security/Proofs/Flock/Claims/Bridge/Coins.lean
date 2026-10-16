@@ -131,6 +131,71 @@ theorem Ex_comm {α γ : Type} [Fintype α] [Fintype γ] (f : α → γ → ℝ)
 
 theorem Ex_const' {α : Type} [Fintype α] [Nonempty α] (c : ℝ) : Ex (fun _ : α => c) = c := Ex_const c
 
+theorem Ex_equiv {α γ : Type} [Fintype α] [Fintype γ] (e : α ≃ γ) (f : γ → ℝ) :
+    Ex (fun a => f (e a)) = Ex f := by
+  unfold Ex
+  rw [Fintype.sum_equiv e (fun a => f (e a)) f (fun _ => rfl), Fintype.card_congr e]
+
+/-- **A uniform projection through an equivalence**: the round coin is a pair, and the game coin its first part. -/
+def CoinIf.ofEquiv {C D : Type} [Fintype C] [Fintype D] [Nonempty D] (e : Coin ≃ C × D) (enc : C → Msg)
+    (dec : Msg → C) (dec_enc : ∀ c, dec (enc c) = c) : CoinIf Coin C where
+  proj u := (e u).1
+  unif h := by
+    rw [Ex_equiv e (fun p => h p.1), Ex_prod]
+    simp only [Ex_const]
+  enc := enc
+  dec := dec
+  dec_enc := dec_enc
+
+section Mk
+
+variable {M C : Type} [Fintype C] [Nonempty C]
+
+/-- The interface at a `send` node. -/
+def Iface.mkSend {k : M → Game β} (dec : Msg → M) (next : (a : Msg) → Iface Coin (k (dec a))) :
+    Iface Coin (.send M k) :=
+  ⟨dec, next⟩
+
+/-- The interface at a `coin` node. -/
+def Iface.mkCoin {k : C → Game β} (ci : CoinIf Coin C) (next : (c : C) → Iface Coin (k c)) :
+    Iface Coin (.coin C k) :=
+  (ci, next)
+
+/-- The interface at the end. -/
+def Iface.mkRet (b : β) : Iface Coin (.ret b) := PUnit.unit
+
+end Mk
+
+/-- More rounds do. -/
+theorem RoundsLe.mono : ∀ (g : Game β) (I : Iface Coin g) (s : RStrat Coin g I) (p : Bool) (n m : ℕ),
+    RoundsLe g I s p n → n ≤ m → RoundsLe g I s p m := by
+  intro g
+  induction g with
+  | ret b =>
+    intro I s p n m h hnm
+    cases p
+    · exact Nat.lt_of_lt_of_le h hnm
+    · trivial
+  | send M k ih =>
+    intro I s p n m h hnm
+    cases n with
+    | zero => cases p <;> exact h.elim
+    | succ n =>
+      cases m with
+      | zero => omega
+      | succ m => cases p <;> exact ih _ _ _ true n m h (by omega)
+  | coin C k ih =>
+    intro I s p n m h hnm
+    cases p with
+    | true => exact fun c => ih c _ _ false n m (h c) hnm
+    | false =>
+      cases n with
+      | zero => exact h.elim
+      | succ n =>
+        cases m with
+        | zero => omega
+        | succ m => exact fun c => ih c _ _ false n m (h c) (by omega)
+
 variable [Inhabited Coin]
 
 omit [Fintype Coin] in

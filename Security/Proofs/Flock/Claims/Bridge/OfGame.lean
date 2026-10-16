@@ -63,9 +63,10 @@ def walk (d : β → OC Bool) (P : Pos Coin β) (l : List (Msg × Coin)) : OC Ou
   | none => .ret .rej
   | some e => reply d (opn (pos P l.dropLast) e.1) e.2
 
-/-- **The public-coin verifier of the game `g x`**, deciding by `d x` on the game's outcome, in `k x` rounds. -/
-def ofGame (k : Msg → ℕ) (g : Msg → Game β) (I : ∀ x, Iface Coin (g x)) (d : Msg → β → OC Bool) :
-    Verifier Coin where
+/-- **The public-coin verifier of the game `g x`**, deciding by `d x` on the game's outcome, in `k x` rounds. The
+outcome's type may depend on the statement. -/
+def ofGame {β : Msg → Type} (k : Msg → ℕ) (g : (x : Msg) → Game (β x)) (I : ∀ x, Iface Coin (g x))
+    (d : (x : Msg) → β x → OC Bool) : Verifier Coin where
   k := k
   next x as rs := walk (d x) ⟨g x, I x⟩ (as.zip rs)
 
@@ -267,14 +268,15 @@ theorem inv_all : ∀ n, Inv H P x ω d P0 cs n := by
 end Run
 
 /-- **The outcome of the run**: the game played by the prover's bytes (`stratOf`) on the run's coins. -/
-def outcome [Inhabited Coin] (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (k : Msg → ℕ) (g : Msg → Game β)
-    (I : ∀ x, Iface Coin (g x)) (x : Msg) (ω : Ω) (r : Fin (k x) → Coin) : β :=
+def outcome [Inhabited Coin] {β : Msg → Type} (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (k : Msg → ℕ)
+    (g : (x : Msg) → Game (β x)) (I : ∀ x, Iface Coin (g x)) (x : Msg) (ω : Ω) (r : Fin (k x) → Coin) : β x :=
   playOn (g x) (I x) (stratOf H P x ω (g x) (I x) [] none) none (coinSeq r)
 
 /-- **The run is the game, path by path**: whenever the game ends within `k x` rounds, the run's decision is `d x` on
 the outcome, the verifier's `H` calls are `d x`'s, and replaying the run's messages gives back the outcome. -/
-theorem run_ofGame [Inhabited Coin] (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (k : Msg → ℕ) (g : Msg → Game β)
-    (I : ∀ x, Iface Coin (g x)) (d : Msg → β → OC Bool) (x : Msg) (ω : Ω) (r : Fin (k x) → Coin)
+theorem run_ofGame [Inhabited Coin] {β : Msg → Type} (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (k : Msg → ℕ)
+    (g : (x : Msg) → Game (β x)) (I : ∀ x, Iface Coin (g x)) (d : (x : Msg) → β x → OC Bool) (x : Msg) (ω : Ω)
+    (r : Fin (k x) → Coin)
     (hR : RoundsLe (g x) (I x) (stratOf H P x ω (g x) (I x) [] none) false (k x)) :
     (run H P (ofGame k g I d) x ω r).out = toOut ((d x (outcome H P k g I x ω r)).eval H).1 ∧
       (run H P (ofGame k g I d) x ω r).vLog = ((d x (outcome H P k g I x ω r)).eval H).2 ∧
