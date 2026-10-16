@@ -615,20 +615,31 @@ def _regs(operand: str, n: int) -> set[str]:
 
 
 def _put_bad(fn: dict, where: str) -> list[str]:
-    """Why fn, a dfill_k device function with a store, isn't store-only: an opcode outside `PUT_OPS`, or a store whose
-    value an instruction of the body computes (a store-only function stores its arguments as they came)."""
-    out, written, stored = [], set(), []
-    for addr, _, op, args in fn["insns"]:
+    """Why fn, a dfill_k device function with a store, isn't store-only: an instruction reachable from its entry (not
+    nvcc's self-branch after the last RET) with an opcode outside `PUT_OPS`, or a store whose value an instruction of
+    the body computes before it (a store-only function stores its arguments as they came; a register-to-register move,
+    which the compiler places arguments with, copies one)."""
+    seen, todo = set(), [0] if fn["insns"] else []
+    while todo:
+        i = todo.pop()
+        if i not in seen:
+            seen.add(i)
+            todo += _step(fn, i)[0]
+    out, computed = [], set()
+    for i in sorted(seen):
+        addr, _, op, args = fn["insns"][i]
         base, ops = op.split(".")[0], [a.strip() for a in re.split(r",(?![^\[]*\])", args)] if args else []
         if base not in PUT_OPS:
             out.append(f"{where}: {op} at {addr} (a dfill_k function that writes global memory holds only stores and "
                        "address arithmetic)")
         elif base in ("ST", "STG"):
-            stored.append((addr, op, _regs(ops[-1], _width(op)) if ops else set()))
+            if ops and _regs(ops[-1], _width(op)) & computed:
+                out.append(f"{where}: {op} at {addr} stores a value the function computes, not its argument")
         elif ops and base != "RET":
-            written |= _regs(ops[0], _width(op))
-    out += [f"{where}: {op} at {addr} stores a value the function computes, not its argument"
-            for addr, op, regs in stored if regs & written]
+            dest, src = _regs(ops[0], _width(op)), ops[-1]
+            copy = (base in ("MOV", "UMOV") or (base == "IMAD" and "MOV" in op.split(".") and ops[1:3] == ["RZ", "RZ"])) \
+                and bool(_RREG.match(src)) and not src.startswith(("-", "~", "|"))
+            computed = (computed - dest) | (dest if not copy or _regs(src, _width(op)) & computed else set())
     return out
 
 

@@ -599,6 +599,16 @@ def test_a_store_only_dfill_k_function_may_take_the_receipt_pointers():
         v = facts(put_body=body)["violations"]
         assert v and all("writes global memory" in x for x in v) and any(why in x for x in v), (body, v)
         assert not S.paths_gate(facts(put_body=body))["ok"]
+    # the put as nvcc places its arguments (HC-COMM's tp_dfill_k_put split of c286d4f81): register-to-register moves
+    # copy an argument, and the self-branch after the last RET never runs
+    placed = ["LDCU.64 UR4, c[0x0][0x358]", "MOV R20, R27", "MOV R27, 0x0", "MOV R21, R28", "IMAD.MOV.U32 R5, RZ, RZ, R11",
+              "STG.E.64 desc[UR4][R2.64], R20", "STG.E desc[UR4][R4.64], R5", f"RET.REL.NODEC R8 `({SERVE})", ".L_x_9:",
+              "BRA `(.L_x_9)", "NOP"]
+    assert facts(put_body=placed)["violations"] == []
+    for body, why in ((["IADD3 R27, R27, 0x1, RZ", *placed[1:]], "STG.E.64 at 0050 stores a value the function computes"),
+                      ([*placed[:2], "BRA `(.L_x_9)", *placed[2:]], "BRA at 0020")):
+        v = facts(put_body=body)["violations"]
+        assert v and any(why in x for x in v), (body, v)
     split = S.program_facts({"dscore": nvd((DFILL, True, [*K_TILE[:-1], "STG.E desc[UR4][R2.64], R9", "EXIT"]))})
     assert split["violations"] == [] and split["filler"]["stores"] == []
 
