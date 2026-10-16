@@ -13,8 +13,11 @@
 //                                          the uniform pipe saturate and cycles grow — so HIGH density can't tell the two
 //                                          apart, LOW density can.
 //
-// To put the chain on the uniform datapath, u0,u1 are seeded from blockIdx (warp-uniform), updated only with uniform
-// values, and consumed uniformly (one store by lane 0) — so ptxas keeps them in uniform registers and emits UIADD3.
+// To put the chain on the uniform datapath, u0,u1 are seeded from kernel PARAMETERS (s0,s1): a parameter loads via LDCU
+// into a uniform register, so a recurrence over it stays uniform and ptxas emits UIADD3 — exactly as the loop counter
+// `it` (from the `iters` parameter) already does. (blockIdx is read by S2R into a vector register, so seeding from it
+// keeps the chain vector — the trap the first version fell into.) The chain is updated only with uniform values and
+// consumed by one lane-0 store, so it stays live and uniform.
 // issue_uniform.py confirms the FFMA (vector) and UIADD3 (uniform) counts from the SASS and flags if promotion failed.
 #include "common.cuh"
 
@@ -25,13 +28,13 @@ static const char* VK_NAME[] = {"ffma", "iadd3"};
 static const char* VK_SASS[] = {"FFMA", "IADD3"};
 
 template <int VK, int D>
-__global__ void __launch_bounds__(1024) k_vec(int iters, uint32_t* vsink, uint32_t* usink, BlockClk* rec) {
+__global__ void __launch_bounds__(1024) k_vec(int iters, uint32_t s0, uint32_t s1, uint32_t* vsink, uint32_t* usink, BlockClk* rec) {
   const uint32_t tid = threadIdx.x;
   uint32_t acc[NACC];  // one array; FFMA path reinterprets, so 1024 threads fit without spilling
 #pragma unroll
   for (int c = 0; c < NACC; c++) acc[c] = tid * 0x9e3779b9u + c * 0x85ebca6bu + 1u;  // lane-dependent => vector regs
-  // uniform accumulators: blockIdx-seeded, uniform-only updates, uniform consumer => uniform datapath (UIADD3)
-  uint32_t u0 = blockIdx.x + 0x1234u, u1 = blockIdx.x + 0x89abu;
+  // uniform accumulators: parameter-seeded (LDCU => uniform reg), uniform-only updates, uniform consumer => UIADD3
+  uint32_t u0 = s0, u1 = s1;
   CLK_BEGIN
 #pragma unroll 1
   for (int it = 0; it < iters; it++) {
@@ -72,7 +75,9 @@ template <int VK, int D>
 static void vec_case() {
   auto kern = k_vec<VK, D>;
   CK(cudaFuncSetAttribute(kern, cudaFuncAttributeMaxDynamicSharedMemorySize, ONE_BLOCK_SMEM));
-  auto launch = [&](int it) { return run_timed([&] { kern<<<g_sms, WSM * 32, ONE_BLOCK_SMEM>>>(it, g_vsink, g_usink, g_rec); }, g_sms, g_rec); };
+  // s0,s1 are runtime args (ptxas sees them as parameters => LDCU into uniform regs, non-foldable)
+  const uint32_t s0 = 0x1234u + (uint32_t)g_sms, s1 = 0x89abu;
+  auto launch = [&](int it) { return run_timed([&] { kern<<<g_sms, WSM * 32, ONE_BLOCK_SMEM>>>(it, s0, s1, g_vsink, g_usink, g_rec); }, g_sms, g_rec); };
   Timing w = launch(64);
   int iters = size_iters(w.cyc_med, 64);
   Timing t = launch(iters);
