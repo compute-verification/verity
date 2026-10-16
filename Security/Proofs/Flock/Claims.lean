@@ -27,6 +27,7 @@ import Proofs.Flock.Claims.JsonEq
 import Proofs.Flock.Claims.Deploy
 import Proofs.Flock.Claims.DeployCode
 import Proofs.Flock.Claims.DeployTables
+import Proofs.Flock.Claims.KS
 import Proofs.Flock.Claims.RootFindGF128
 import Proofs.Flock.Claims.GS
 import Proofs.Flock.Claims.DeployRounds
