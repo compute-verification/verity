@@ -62,9 +62,9 @@ if [ "$ref" != 0 ] || grep -q 'rc [1-9]' "$O/rc.txt"; then
   echo "a gate failed: nothing timed"; cat "$O/rc.txt"; cat "$O/gate.jsonl" "$O/ref.jsonl"; exit 5
 fi
 export REPS=${REPS:-9}
-export EG_ARMS=${EG_ARMS:-plain,plainq,qplain,qdither,wedit,e_plain,t_duo32,e_l0,e_l0t,e_l1,e_l1t,e_l2t,e_l4t,e_l1h,e_l2h,e_l3h}
-export IL=${IL:-"edited:e_l1t:plain edited:e_l2t:plain edited:e_l2h:plain editedq:e_l2t:plainq editedq:e_l2h:plainq e_plain:plain"}
-export NCU=${NCU:-"t_duo32 e_l1t e_l2t e_l2h"}
+export EG_ARMS=${EG_ARMS:-plain,plainq,qplain,qdither,wedit,e_plain,e_plain_nc,t_duo32,e_l1t,e_l1h,e_l2,e_l2h,e_l2h_nc,e_l2q,e_l3h,e_l3q,e_l4h,edited:e_l2h,overlap:e_l2h,editedq:e_l2h,overlapq:e_l2h}
+export IL=${IL:-"edited:e_l2h:plain overlap:e_l2h:plain editedq:e_l2h:plainq overlapq:e_l2h:plainq edited:e_l2q:plain edited:e_l3q:plain e_plain:plain e_plain_nc:plain"}
+export NCU=${NCU:-"e_plain e_plain_nc e_l2h e_l2h_nc"}
 # shellcheck disable=SC2016
 gpu-lease 1 --wait --max-min 12 -- bash -c '
   nvidia-smi --query-gpu=timestamp,clocks.sm,power.draw,temperature.gpu --format=csv -lms 500 -i "$GPU_LEASE_UUID" > "$O/smi.csv" 2>&1 &

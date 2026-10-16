@@ -45,6 +45,9 @@ def main(o: Path) -> None:
                 if g(v):
                     print(f"- receipts in {v} ({v} - e_plain): {g(v) - g('e_plain'):+.4f}; wedit + {v} = {g('wedit') + g(v):.4f}"
                           f" = {(g('wedit') + g(v)) / pl:.3f}x plain")
+            for v in ("e_plain", "e_l2h"):
+                if g(v) and g(v + "_nc"):
+                    print(f"- the issuer's tile place once a tile in {v} ({v} - {v}_nc): {g(v) - g(v + '_nc'):+.4f}")
             print(f"- weights + U and P_B (wedit): {g('wedit'):.4f}")
             if g("qdither") and g("qplain"):
                 print(f"- the dither and S in the quantizer (qdither - qplain): {g('qdither') - g('qplain'):+.4f}"
