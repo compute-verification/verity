@@ -25,11 +25,13 @@ import Proofs.Flock.Claims.DeployOC
 import Proofs.Flock.Claims.DeployInputs
 import Proofs.Flock.Claims.Deploy
 import Proofs.Flock.Claims.DeployCode
+import Proofs.Flock.Claims.DeployTables
 import Proofs.Flock.Claims.RootFindGF128
 import Proofs.Flock.Claims.GS
 import Proofs.Flock.Claims.DeployRounds
 import Proofs.Flock.Claims.DeployRoundsZk
 import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.DeployEfficient
 import Proofs.Flock.Claims.Assembled
 import Proofs.Flock.Claims.ZK
 
