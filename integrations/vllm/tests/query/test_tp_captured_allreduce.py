@@ -78,7 +78,8 @@ def test_no_decoder_layer_requires_token_ids_and_every_all_reduce_binds_its_peer
         ids = [(x["op_path"], x["rows"]) for x in m["identities"] if x["family"] == "input_token_ids"]
         assert ids == [(f"{W}.embed_tokens", M)], ids
         partials = sorted((x["op_path"], x["output_member"], x["element_range"]) for x in m["identities"] if x["family"] == "tp_rank_partials")
-        assert partials == [(f"{W}.embed_tokens", f"part_rank{rank}", [0, M * N]), (f"{W}.layers.0", f"part_rank{rank}", [0, M * N])], partials
+        assert partials == [(f"{W}.embed_tokens", f"part_rank{rank}", [0, M * N]),
+                            (f"{W}.layers.0.post_attention_layernorm", f"part_rank{rank}", [0, M * N])], partials
     g = merge_ranks(ms)
     b = g["tp_peer_binding"]
     assert g["complete"] and b["n_unbound"] == 0 and b["collective_outputs"] == 3 * WORLD, b

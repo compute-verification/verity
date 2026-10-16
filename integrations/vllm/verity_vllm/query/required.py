@@ -30,8 +30,9 @@ The POLICY (`Policy`, explicit, listed in the header as `query.policy`):
 
 What this module cannot derive and therefore RECORDS (`NAMED_RESIDUALS`, emitted in the header, counted per row):
 
-* v1 member spellings that come from vLLM's Python return convention, not from the Definition or the recorded hint (`Gemm_v1`
-  under a Linear -> `"0"`: `LinearBase.forward` returns `(output, output_bias)`; `RoPE_v1` hint `query` -> `"0"`, `key` -> `"1"`);
+* v1 member spellings that come from vLLM's Python return convention, not from the Definition or the recorded hint (any linear
+  route under a Linear -> `"0"`: `LinearBase.forward` returns `(output, output_bias)`; `RoPE_v1` hint `query` -> `"0"`, `key` -> `"1"`);
+* the `<norm site>` encoding: a collective that `fused_allreduce_rms_norm` issues for a norm is spelt under that norm;
 * v1 identity ENCODINGS: the sampler rows under the fixed path `runner.sampler`, the token ids under the consuming module as `in`,
   the attention hidden stream under `fa2.m1/L<k>`, the weights as `<field>/weight`.
 
@@ -57,6 +58,7 @@ from verity_vllm.query.manifest import format as fmt
 from verity_vllm.program.sampling_event import SAMPLING_EVENT_FAMILIES
 from verity_vllm.correspondence.reader_for_query import CallName, Correspondence
 from verity_vllm.query import word as word_query
+from verity_vllm.query.collective_names import NORM_SITE_MEMBER, NORM_SITE_WHY, collective_sites, norm_sites
 from verity_vllm.query.module_body import (Q_MODULE_BODY_ID, Q_MODULE_BODY_TEXT, Q_module_body_v1, boundary_without_literals, literal_calls,
                                            module_body_boundary)
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView, param_reads, reads_any_of
@@ -139,6 +141,12 @@ _INDEX_K_WHY = ("the indexer cache row `fused_norm_rope` writes is the e4m3 key 
                 "under the hint `index_k` (the attention binder commits them as `index_k` / `index_k_scale`)")
 _MLA_INTERIOR_WHY = ("a Value the MLA attention body exchanges between its Calls, which `_sparse_indexer_and_attn` hands over under vLLM's name "
                      "and the attention binder commits under the body's module: its fx node's name differs per layer and step")
+#: the linear routes GLM-5.3 serves that return one array (`DeepGemmFp8Linear_v1`, which returns three, is below)
+_LINEAR_ROUTES = (("FlashInferFp8Linear_v1", "the M < 32 block-FP8 linear"), ("CublasSplitKGemm_v1", "cuBLAS split-K BF16 linear"),
+                  ("GemmF32Out_v1", "cuBLAS BF16-to-F32 MoE gate"), ("CublasSplitKGemmF32Out_v1", "cuBLAS split-K BF16-to-F32 MoE gate"),
+                  ("LlBf16DotprodGemm_v1", "cuteDSL MoE gate, M <= 4"), ("LlBf16SplitKGemm_v1", "cuteDSL MoE gate, 5 <= M <= 16"))
+_DEEPGEMM_QUANT_WHY = ("`DeepGemmFp8Linear_v1` returns (q, s, y), its input's ue8m0 group quant (`per_token_group_fp8_quant`'s x_q, x_s) "
+                       "before y: its ports `0` / `1` are not the linear's return slots, so they are spelt `<linear>/x_q`, `<linear>/x_s`")
 NAMED_RESIDUALS: tuple[Residual, ...] = (
     Residual("Gemm_v1", "out", "0", _LINEAR_WHY, condition="own_parameter"),
     Residual("Gemm_v2", "out", "0", _LINEAR_WHY, condition="own_parameter"),
@@ -149,6 +157,11 @@ NAMED_RESIDUALS: tuple[Residual, ...] = (
     Residual("ScaledMmFp8BlockSharedScale_v1", "out", "0", _LINEAR_WHY + " (blockwise-FP8 linear)", condition="own_parameter"),
     Residual("NcpLinearRow_v1", "out", "0", _LINEAR_WHY + " (the `pouw:ncp-v2` linear's served y)", condition="own_parameter"),
     Residual("NcpLinearRowBias_v1", "out", "0", _LINEAR_WHY + " (the fused-bias `pouw:ncp-v2` linear's served y)", condition="own_parameter"),
+    *(Residual(f, "out", "0", _LINEAR_WHY + f" ({why})", condition="own_parameter") for f, why in _LINEAR_ROUTES),
+    Residual("DeepGemmFp8Linear_v1", "2", "0", _LINEAR_WHY + " (the M >= 32 block-FP8 linear: its third port y is the op's one output)",
+             condition="own_parameter"),
+    Residual("DeepGemmFp8Linear_v1", "0", "x_q", _DEEPGEMM_QUANT_WHY),
+    Residual("DeepGemmFp8Linear_v1", "1", "x_s", _DEEPGEMM_QUANT_WHY),
     Residual("<all_reduce>", "out", "0", _LINEAR_WHY + " (the row-parallel linear returns the all-reduced tensor as slot 0: an all-reduce of any "
              "world takes the slot of its rank-local operand when that operand is a Linear's reading its own weight)", condition="operand_own_parameter"),
     Residual("RoPE_v1", "query", "0", "the Build records RoPE's return slots by keyword (`query` / `key`); v1 spells them as the tuple index of "
@@ -175,7 +188,10 @@ NAMED_RESIDUALS: tuple[Residual, ...] = (
              "enclosing module and commits its k-th collective of the step as occurrence k, so the site's identities live at (enclosing module, k) "
              "-- k in Program order, from 1 when the enclosing module has required Values of its own -- and the site path is an "
              "`op_path_aliases` entry", kind="encoding"),
+    Residual("*", "<norm site>", "<norm> @ invocation 0: 0 / 1 / all_reduce / part_rank<r>", NORM_SITE_WHY + ", so it is spelt under the "
+             "norm, not its enclosing module: its outputs keep their ports (`0`, `1`) or, one output, `all_reduce`", kind="encoding"),
 )
+_NORM_SITE = NAMED_RESIDUALS[-1]
 
 
 def _residual_for(family: str, structural: str, own_parameter: bool, collective: str | None = None, interior: bool = False) -> Residual | None:
@@ -253,30 +269,6 @@ def shared_instances(P: ProgramView, corr: Correspondence, record_fields: Mappin
         for k, m in enumerate([c0] + rest):
             out[m] = (c0, k)
     return out, faults
-
-
-def collective_sites(pop: Population) -> dict[str, tuple[str, int]]:
-    """site path -> (enclosing module, invocation) for the collective SITES of a rank Program (the `<collective site>` encoding): the
-    collectives whose rank-local operand another body produced (`pop.carries`), each at its site path `<enclosing module>.<fx node>`
-    (`pop.site`).  k = the site's order among its enclosing module's sites in the same step (Program order of their first Call), from 1
-    when the enclosing module's own body -- its Calls other than sites -- produces required Values that step."""
-    if not pop.site:
-        return {}
-    bodies = {u.id: u.calls for u in pop.B.units}
-    ports = pop._ports()
-    first: dict[str, int] = {}
-    for cid, path in pop.site.items():
-        first[path] = min(cid, first.get(path, cid))
-    out: dict[str, tuple[str, int]] = {}
-    next_k: dict[tuple[str, int], int] = {}
-    for f, path in sorted((f, path) for path, f in first.items()):
-        parent, step = path.rsplit(".", 1)[0], pop.step_of(f)
-        k = next_k.get((parent, step))
-        if k is None:
-            k = 1 if any(c in ports and c not in pop.site and pop.step_of(c) == step for c in bodies.get(parent, ())) else 0
-        out[path] = (parent, k)
-        next_k[(parent, step)] = k + 1
-    return out
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
@@ -377,6 +369,7 @@ class Population:
         self.partial_of: dict[ValueRef, int] = {}          # an operand produced in its collective's own body -> that collective
         self.carries: set[int] = set()                     # collectives naming their partial themselves (the operand is another body's)
         self.site: dict[int, str] = {}                     # a carried collective -> its site path (`Correspondence.site_path`)
+        self.norm_site: dict[int, str] = {}                # a carried collective that is a norm's -> the norm module (`<norm site>`)
         self.peer_inputs: frozenset[ValueRef] = frozenset()
         self.tp_faults: list[str] = []
         if self.world > 1:
@@ -480,6 +473,17 @@ class Population:
                 self.carries.add(c.id)
                 self.site[c.id] = corr.site_path(c.id)
         self.peer_inputs = frozenset(v for v, only in collective_only.items() if only)
+        self._norm_sites()
+
+    def _norm_sites(self) -> None:
+        """The carried collectives that are a norm's (`collective_names.norm_sites`) leave the collective sites: their identities are
+        the norm's, at invocation 0.  A carried collective it refuses is a fault."""
+        self.norm_site, refused = norm_sites(self.P, self.corr, self.record_fields, self.carries, self.collectives, collective_trailing, self.step_of)
+        for cid in self.norm_site:
+            del self.site[cid]
+        for cid in refused:
+            self.tp_faults.append(f"{self.P.call(cid).family} at {self.corr.implementation_path(self.site[cid])}: not one norm's collective "
+                                  f"(one `<norm>.weight` read, and no other collective of the step for that norm, expected)")
 
     def _partial(self, port: str, kind: str, width: int, dtype: str) -> CallMember:
         member = (fmt.TP_SHARD_MEMBER if kind == "all_gather" else fmt.TP_PARTIAL_MEMBER).format(rank=self.rank)
@@ -495,7 +499,7 @@ class Population:
         `collective_sites` aliases a site path to its (enclosing module, k)."""
         if cid in self.interior_calls:
             return f"{self.corr.module_of(cid)}/{self.corr.name(cid).node}"
-        return self.site.get(cid) or self.corr.module_of(cid)
+        return self.norm_site.get(cid) or self.site.get(cid) or self.corr.module_of(cid)
 
     @functools.cached_property
     def interior_calls(self) -> frozenset[int]:
@@ -513,6 +517,10 @@ class Population:
             structural = member_name(c, port, self.corr.name(c.id), own_parameter=False)[1]
             return CallMember(port.name, structural, port.elems, _dtype(port.width), structural, None, "call_boundaries")
         kind = self.collectives.get(c.id)
+        if c.id in self.norm_site:
+            structural = port.name if len(c.port_table) > 1 else (self.corr.name(c.id).hint or "out")
+            member = port.name if len(c.port_table) > 1 else NORM_SITE_MEMBER
+            return CallMember(port.name, member, port.elems, _dtype(port.width), structural, _NORM_SITE)
         own = self.own_param[c.id]
         if kind is not None:
             own = False
