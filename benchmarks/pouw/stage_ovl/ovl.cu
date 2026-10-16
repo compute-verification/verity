@@ -40,8 +40,9 @@
 //   cg, cgeq, cgrrW, cgonly: hhi, eq, rrW and hashonly with each commitment commit_gpu's small path (benchmarks/commit_gpu: CTAs of 128
 //             threads, no shared memory) over the stage's operand as tile leaves of CG_R rows x 32 values (Decision 46),
 //             sha512/row/v2 rows, hm96-sha512 leaves with derived salts in a frame-v3-sha512 tree of the stage's own domain
-//             (the CGP1 files DIR/cg-M-R-t.bin); salts, frame-leaf first blocks and pads for all 32 layers at the chunk's
-//             start. Their poisoned check holds them to commit_gpu's serial roots, and CG_DUMP=DIR writes chunk 0's six
+//             (the CGP1 files DIR/cg-M-R-t.bin); layer 0's salts with the frame-leaf first blocks and pads at the chunk's
+//             start, layer l+1's salts for stage t on the chunk's salt stream after layer l's commitment of stage t.
+//             Their poisoned check holds them to commit_gpu's serial roots, and CG_DUMP=DIR writes chunk 0's six
 //             operands, levels and params for `reference.py verify` (benchmarks/commit_gpu) after the lease
 //
 // env: ARMS, DRAW_US (300), PLAIN_RB (8192), MID (1: stage.cu's frame heads ahead), CARVE (unset: the commitments' and draws'
@@ -502,16 +503,17 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
       unsigned long long* st = a.st;
       a.G = capture(sm, [&] {
         stamp<<<1, 1, 0, sm>>>(st + (size_t)K * NSTAMP);
-        std::vector<std::vector<cudaEvent_t>> salt_ev(k);
+        // salt_ev[c][s]: stage.cu's salts for all layers at s < NSTAGE; commit_gpu's for stage s's own layer and stage
+        std::vector<std::vector<cudaEvent_t>> salt_ev(k, std::vector<cudaEvent_t>(NS));
         for (int c = 0; c < k; c++) {
           pool.join(sm, sg[c]);
           if (!S.hash || (S.lite && S.lite != 3)) continue;
           pool.join(sg[c], ss[c]);
           for (int t = 0; t < NSTAGE; t++) {
-            if (S.lite == 3) ch[c].cgc[t].salts<true>(nullptr, ss[c]);
+            if (S.lite == 3) ch[c].cgc[t].salts<true>(nullptr, ss[c], 0, 1);
             else commit_salt(ch[c].cm[t], LAYERS, ss[c]);
-            salt_ev[c].push_back(pool.get());
-            CK(cudaEventRecord(salt_ev[c].back(), ss[c]));
+            salt_ev[c][t] = pool.get();
+            CK(cudaEventRecord(salt_ev[c][t], ss[c]));
           }
         }
         for (int l = 0; l < LAYERS; l++)
@@ -530,9 +532,17 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
                   lite_levels<<<(unsigned)((M + 127) / 128), 128, 0, sh[c]>>>(M, 2, lite_out);
                   if (M > 128) lite_levels<<<1, std::min(M / 128, 1024), 0, sh[c]>>>(M / 128, 2, lite_out);
                 } else if (S.lite == 3) {
-                  if (l == 0) CK(cudaStreamWaitEvent(sh[c], salt_ev[c][t], 0));
+                  // the next layer's salts for this stage on the chunk's salt stream, behind this commitment: they run
+                  // beside the GEMMs, NSTAGE stages ahead of their use
+                  CK(cudaStreamWaitEvent(sh[c], salt_ev[c][s], 0));
                   ch[c].cgc[t].tiles(ch[c].op[t], M, SK[t], CGR, false, sh[c], l);
                   ch[c].cgc[t].nodes(sh[c]);
+                  if (l + 1 < LAYERS) {
+                    pool.join(sh[c], ss[c]);
+                    ch[c].cgc[t].salts<true>(nullptr, ss[c], l + 1, 1);
+                    salt_ev[c][s + NSTAGE] = pool.get();
+                    CK(cudaEventRecord(salt_ev[c][s + NSTAGE], ss[c]));
+                  }
                 } else {
                   if (l == 0) CK(cudaStreamWaitEvent(sh[c], salt_ev[c][t], 0));
                   commit_tree(ch[c].cm[t], l, ch[c].op[t], sh[c]);
