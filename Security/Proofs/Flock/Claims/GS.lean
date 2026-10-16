@@ -22,10 +22,11 @@ The decoder computes on coefficient lists and tables, and counts its field opera
   Johnson count on (`mem_gsDecode`), and its `DecoderComplexity` at the opened data's size (`gsDecode_complexity`).
 * `GS.Flock`: that decoder at Flock's level-0 code, with Berlekamp's trace root finder over GF(2^128)
   (`flockDecode_complexity`, `mem_flockDecode`).
-* `GS.Radius`: the list-decoding spec in its radius form (`Flock.fill`, `Flock.ListWithin`: every trace `M` whose
-  encoding agrees with the zero-filled word of its codeword length `n` on at least `(1 − θ M)·n` positions, the radius
-  read per trace), and the decoder that meets it at Flock's level-0 code at `θ = 1 − √ρ − 1/200` (`flockDecodeR`,
-  `listWithin_flockDecodeR`), with its `DecoderComplexity` at `(os.length + n)·2^k0·128` (`flockDecodeR_complexity`).
+* `GS.Radius`: the decoder that meets the spec's list decoding (`Flock.fill`, `Flock.ListWithin` in
+  `Definitions/Claims.lean`: every trace `M` whose encoding agrees with the zero-filled word of its codeword length `n`
+  on at least `(1 − θ M)·n` positions, the radius read per trace) at Flock's level-0 code at `θ = 1 − √ρ − 1/200`
+  (`flockDecodeR`, `listWithin_flockDecodeR`), with its `DecoderComplexity` at `(os.length + n)·2^k0·128`
+  (`flockDecodeR_complexity`).
 * `GS.ZkRadius`: the masked (`--zk`) level-0 code in the radius form at each `m` the masked verifier serves: a masked
   message read from its lanes' coefficients (`zkReader`), and the decoder (`zkDecodeR`) that meets `ListWithin` at
   `θ = 1 − √ρ_zk − 1/200`, `ρ_zk = (2^cols + t)/2^d` (`listWithin_zkDecodeR`), with its `DecoderComplexity` at
@@ -35,8 +36,7 @@ The decoder computes on coefficient lists and tables, and counts its field opera
   (`famDecodeR_complexity`); at the masked verifier's deployed code, `zkDecodeRD` (`listWithin_zkDecodeRD`,
   `zkDecodeRD_complexity`).
 * `GS.RadiusDeploy`: the plain level-0 code at each `m` in the radius form (`plainDecodeR`), and both families at
-  the deployed instances' codes, the length and radius read off the trace's `m`: `radius_deployPlain`
-  (`ListWithin plainLenD (deployPlain rel).enc plainThetaD plainDecodeRD`, complexity `14·(flockPolyR + X)` at
-  `plainSizeRD`) and `radius_deployZk` (`ListWithin zkLenD (deployZk rel).enc zkThetaD zkDecodeRD`, complexity
-  `11·(zkPolyR + X)` at `zkSizeRD`).
+  the deployed instances, at each one's `len`, `enc` and `θ` (the length and radius read off the trace's `m`):
+  `radius_deployPlain` (`ListWithin` with `plainDecodeRD`, complexity `14·(flockPolyR + X)` at `plainSizeRD`) and
+  `radius_deployZk` (`ListWithin` with `zkDecodeRD`, complexity `11·(zkPolyR + X)` at `zkSizeRD`).
 -/

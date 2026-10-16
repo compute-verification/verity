@@ -18,9 +18,9 @@ decoder (`famDecodeR`): each runs on the opened columns read at its width (`IRS.
   `card ι · (p + X)` at `Q`, `p` the indices' common polynomial.
 
 At the masked verifier's code (`Flock.zkEncD`, its traces `Flock.ZkTrace`, `m = 25..35`): `zkDecodeRD` meets
-`ListWithin zkLenD zkEncD zkThetaD`, the length `2^d` and the radius `1 − √ρ_zk − 1/200` read off the trace's `m`
-(`listWithin_zkDecodeRD`), with its count at most `11·(zkPolyR + X)` at the schedules' sizes summed (`zkSizeRD`,
-`zkDecodeRD_complexity`).
+`ListWithin Flock.zkLenD zkEncD Flock.zkThetaD`, the length `2^d` and the radius `1 − √ρ_zk − 1/200` read off the
+trace's `m` (`listWithin_zkDecodeRD`), with its count at most `11·(zkPolyR + X)` at the schedules' sizes summed
+(`zkSizeRD`, `zkDecodeRD_complexity`).
 -/
 
 namespace Claims.Flock
@@ -105,13 +105,6 @@ theorem famDecodeR_complexity {F ι : Type} [Zero F] [Fintype ι] {s : ι → �
 
 /-! ## The masked verifier's radius decoder -/
 
-/-- **The masked code's length** at a candidate: `2^d` at its `m`. -/
-def zkLenD (M : Flock.ZkTrace) : ℕ := 2 ^ Flock.zkLen M.1
-
-/-- **The masked code's radius** at a candidate: `1 − √ρ_zk − 1/200` at its `m`, `ρ_zk = (2^cols + t)/2^d`. -/
-noncomputable def zkThetaD (M : Flock.ZkTrace) : ℝ :=
-  1 - Real.sqrt (((2 : ℝ) ^ Flock.zkCols M.1 + Flock.zkPad M.1) / 2 ^ Flock.zkLen M.1) - 1 / 200
-
 /-- **The masked verifier's radius decoder**: each `m`'s masked radius decoder (`zkDecodeR`) on the opened columns read
 at its width. -/
 noncomputable def zkDecodeRD (os : List (ℕ × List GF128)) : List Flock.ZkTrace :=
@@ -127,7 +120,7 @@ def zkSizeRD (os : List (ℕ × List GF128)) : ℕ :=
 
 /-- **The masked verifier's radius decoder meets `ListWithin`** at the deployed masked code, with the length `2^d`
 and the radius `1 − √ρ_zk − 1/200` read off the trace's `m`. -/
-theorem listWithin_zkDecodeRD : Flock.ListWithin zkLenD Flock.zkEncD zkThetaD zkDecodeRD :=
+theorem listWithin_zkDecodeRD : Flock.ListWithin Flock.zkLenD Flock.zkEncD Flock.zkThetaD zkDecodeRD :=
   listWithin_famDecodeR (s := Flock.zkWidth)
     (T := fun i => Flock.ZkMessage GF128 (Flock.zkWidth i) (Flock.zkCols i) (Flock.zkPad i))
     (fun i _ => 2 ^ Flock.zkLen i) (fun i => (Flock.flockZkLevelZero i).enc)
