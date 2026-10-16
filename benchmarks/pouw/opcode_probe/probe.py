@@ -7,7 +7,8 @@ gate's regression test: it must be refused, by that check. `run` gates first and
 the one declared; then it times the passed probes interleaved (gpu_kit/bench.cuh, after each sink's poisoned pass and
 its no-write control) and writes, under --out:
 
-- `census.csv`: one line a probe with a `kind`, in RS-W′'s census schema (rows.py), its `runs` the run id;
+- `census.csv`: in RS-W′'s census schema (rows.py), a line for each (kind, row) a timed probe prices, the fastest of
+  its probes (the class costs what its cheapest form does), its `runs` the run id;
 - `rows.jsonl`: one line a timed probe: class, rate, MACs a word, run id, SASS hash, its census line, clocks and tags;
 - `gate.json`, the verdicts, and `times.jsonl`, the binary's own lines (every block's cycles, every rep).
 
@@ -89,9 +90,10 @@ def judge(binary: Path, probes: list[dict], fns: list | None = None, tools: dict
     fns = G.functions(binary, tools) if fns is None else fns
     out = []
     for p in probes:
-        v = G.gate(binary, [p["name"]], expects(p), smem=p["smem"] if p["smem_ops"] else None, fns=fns)
-        rec = v["kernels"][0] if v["kernels"] else {"kernel": p["name"], "ok": False, "sass_sha256": None,
-                                                     "reasons": [f"no kernel {p['name']} in {binary}"]}
+        fn = p.get("fn") or p["name"]
+        v = G.gate(binary, [fn], expects(p), smem=p["smem"] if p["smem_ops"] else None, fns=fns)
+        rec = v["kernels"][0] if v["kernels"] else {"kernel": fn, "ok": False, "sass_sha256": None,
+                                                     "reasons": [f"no kernel {fn} in {binary}"]}
         if p["refuse"]:
             correct = not rec["ok"] and any(r.startswith(p["refuse"] + ":") for r in rec["reasons"])
         else:
@@ -141,9 +143,10 @@ def rate_of(p: dict, times: list[dict]) -> dict:
 
 
 def make_rows(binary: Path, probes: list[dict], verdicts: list[dict], lines: list[dict], run_id: str,
-              since: str) -> tuple[list[dict], list[dict]]:
-    by = {v["probe"]: v for v in verdicts}
-    census, side = [], []
+              since: str) -> list[dict]:
+    """A sidecar row a timed probe, each with the census line it would write (`census`; None for a joint point)."""
+    by = {v["probe"]: v for v in verdicts if v["binary"] == binary.name}
+    side = []
     gates = {ln["probe"]: ln for ln in lines if ln.get("op") == "gate"}
     for p in probes:
         times = [ln for ln in lines if ln.get("op") == "time" and ln["probe"] == p["name"]]
@@ -157,8 +160,6 @@ def make_rows(binary: Path, probes: list[dict], verdicts: list[dict], lines: lis
                 line = rows.census_line(kind, row, r["rate"], run_id, since)
             except rows.RowError as e:
                 r["census_refused"] = str(e)
-        if line:
-            census.append(line)
         tags = [t for t, on in (("throttled", r["throttled"]), ("spread", r["spread"] > 0.005),
                                 ("sms", r["distinct_sms"] < r["blocks"])) if on]
         side.append({"class": kind or None, "rate": r["rate"],
@@ -166,8 +167,24 @@ def make_rows(binary: Path, probes: list[dict], verdicts: list[dict], lines: lis
                      "run": run_id or None, "sass_sha256": by[p["name"]]["sass_sha256"], "probe": p["name"],
                      "binary": binary.name, "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
                      "row": row or None, "words": p["words"] or None, "census": line, "tags": tags,
-                     "sink": gates.get(p["name"]), "note": p["note"] or None, **r})
-    return census, side
+                     "sink": gates.get(p["name"]), "note": p["note"] or None, "blocks_asked": p.get("blocks") or None,
+                     **r})
+    return side
+
+
+def one_a_row(side: list[dict]) -> list[dict[str, str]]:
+    """The census: a line for each (kind, row), since machine_model refuses two at one epoch. Of the probes that price
+    one, the fastest form's (the class costs what its cheapest form does); each sidecar row names it (`census_by`)."""
+    best: dict[tuple[str, str], dict] = {}
+    for s in side:
+        if s["census"]:
+            k = (s["census"]["kind"], s["census"]["row"])
+            if k not in best or s["rate"] > best[k]["rate"]:
+                best[k] = s
+    for s in side:
+        if s["census"]:
+            s["census_by"] = best[(s["census"]["kind"], s["census"]["row"])]["probe"]
+    return [b["census"] for b in best.values()]
 
 
 def row_line(s: dict) -> str:
@@ -223,7 +240,7 @@ def main(argv: list[str] | None = None) -> int:
     if wrong:
         print(f"probe: {len(wrong)} verdicts are not the declared ones; nothing timed", file=sys.stderr)
         return EXIT_FAIL
-    census, side = [], []
+    side = []
     with (a.out / "times.jsonl").open("w") as raw:
         for binary in a.binaries:
             names = [v["probe"] for v in verdicts if v["binary"] == binary.name and v["passed"]]
@@ -238,9 +255,8 @@ def main(argv: list[str] | None = None) -> int:
                       "control)", file=sys.stderr)
                 return EXIT_FAIL
             lines = [json.loads(ln) for ln in res.stdout.splitlines() if ln.startswith("{")]
-            c, s = make_rows(binary, tables[binary], verdicts, lines, a.run_id, a.since)
-            census += c
-            side += s
+            side += make_rows(binary, tables[binary], verdicts, lines, a.run_id, a.since)
+    census = one_a_row(side)
     (a.out / "census.csv").write_text(rows.census_csv(census))
     (a.out / "rows.jsonl").write_text("".join(json.dumps(s) + "\n" for s in side))
     for s in side:

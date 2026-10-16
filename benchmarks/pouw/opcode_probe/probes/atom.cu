@@ -1,8 +1,8 @@
 // Atomics and reductions, uncontended (each lane its own word): RS-W′'s atom.cu (round 7, pi_32,
 // note:20261016T1500Z-draft-rs-pi32-atomics) on probe.cuh, its mode 0 forms that lower to one instruction. One
-// 1024-thread block an SM, 8 an iteration on 8 words a lane (shared: lane-consecutive words, no bank conflict). CAS is made
-// to succeed: each lane compares against what it last saw. A returning form XORs its result into the sink; a reduction's
-// side effect is its sink.
+// 1024-thread block an SM (a global form: on 16 SMs for its row, on every SM for L2red), 8 an iteration on 8 words a
+// lane (shared: lane-consecutive words, no bank conflict). CAS is made to succeed: each lane compares against what it
+// last saw. A returning form XORs its result into the sink; a reduction's side effect is its sink.
 //
 // Spaces: S shared (ATOMS), G global (ATOMG/REDG), GS generic to shared and GG generic to global (ATOM.E). The 64-bit
 // shared forms other than CAS and EXCH, and the 64-bit generic ones, lower to a CAS loop (ATOMS.CAST.SPIN.64) inside the
@@ -158,10 +158,17 @@ AT_KERNEL(atome_gg_add32, gg_add32, SP_GG, 32, false)
 #define AT_S(nm, K, SASS, W, OFF)                                                                                  \
   {.name = #nm, .kernel = (const void*)nm, .tpb = TPB, .kind = K, .row = "ROW_" K, .expect = SASS "=8",         \
    .words = W, .smem_ops = SASS "*8", .smem = OFF, .dyn_smem = SMEM, .iters = 256}
-#define AT_GN(nm, K, SASS, N, W, IT)                                                                               \
-  {.name = #nm, .kernel = (const void*)nm, .tpb = TPB, .kind = K, .row = "ROW_" K, .expect = SASS "=" #N,        \
-   .words = W, .dyn_smem = SMEM, .iters = IT}
+#define AT_GX(nm, k, K, ROW, SASS, N, W, IT, BLOCKS)                                                               \
+  {.name = nm, .kernel = (const void*)k, .tpb = TPB, .kind = K, .row = ROW, .expect = SASS "=" #N, .words = W,    \
+   .dyn_smem = SMEM, .iters = IT, .fn = #k, .blocks = BLOCKS}
+// A global form twice, one kernel: on 16 SMs its own row (the SM's path, as RS-W′'s rows were measured), and on every SM
+// L2red, the L2's atomic throughput every SM shares (16 SMs don't reach it; 188 are bound by it).
+#define AT_GN(nm, K, SASS, N, W, IT) \
+  AT_GX(#nm, nm, K, "ROW_" K, SASS, N, W, IT, 16), AT_GX(#nm "_l2", nm, K, "L2red", SASS, N, W, IT, 0)
 #define AT_G(nm, K, SASS, W, IT) AT_GN(nm, K, SASS, 8, W, IT)
+#define AT_E(nm, SASS, IT)                                                                                         \
+  {.name = #nm, .kernel = (const void*)nm, .tpb = TPB, .kind = "ATOME32", .row = "ROW_ATOME32", .expect = SASS "=8", \
+   .words = 32, .dyn_smem = SMEM, .iters = IT}
 
 static const OpProbe PROBES[] = {
     AT_S(atoms_add32, "ATOMS32", "ATOMS.ADD", 32, at_soff32),
@@ -185,13 +192,15 @@ static const OpProbe PROBES[] = {
     AT_G(atomg_add64, "ATOMG64", "ATOMG.E.ADD.64.STRONG.GPU", 64, 128),
     AT_G(atomg_exch64, "ATOMG64", "ATOMG.E.EXCH.64.STRONG.GPU", 64, 128),
     AT_GN(atomg_cas64, "ATOMG64", "ATOMG.E.CAS.64.STRONG.GPU", 4, 64, 256),
-    AT_G(redg_add32, "RED32", "REDG.E.ADD.STRONG.GPU", 32, 128),
-    AT_G(redg_min32, "RED32", "REDG.E.MIN.S32.STRONG.GPU", 32, 128),
-    AT_G(redg_add64, "RED64", "REDG.E.ADD.64.STRONG.GPU", 64, 128),
-    AT_G(redg_xor64, "RED64", "REDG.E.XOR.64.STRONG.GPU", 64, 128),
-    AT_G(atome_gs_add32, "ATOME32", "ATOM.E.ADD.STRONG.GPU", 32, 256),
-    AT_G(atome_gs_cas32, "ATOME32", "ATOM.E.CAS.STRONG.GPU", 32, 256),
-    AT_G(atome_gg_add32, "ATOME32", "ATOM.E.ADD.STRONG.GPU", 32, 128),
+    AT_G(redg_add32, "REDG32", "REDG.E.ADD.STRONG.GPU", 32, 128),
+    AT_G(redg_min32, "REDG32", "REDG.E.MIN.S32.STRONG.GPU", 32, 128),
+    AT_G(redg_add64, "REDG64", "REDG.E.ADD.64.STRONG.GPU", 64, 128),
+    AT_G(redg_xor64, "REDG64", "REDG.E.XOR.64.STRONG.GPU", 64, 128),
+    AT_E(atome_gs_add32, "ATOM.E.ADD.STRONG.GPU", 256),
+    AT_E(atome_gs_cas32, "ATOM.E.CAS.STRONG.GPU", 256),
+    {.name = "atome_gg_add32", .kernel = (const void*)atome_gg_add32, .tpb = TPB, .expect = "ATOM.E.ADD.STRONG.GPU=8",
+     .words = 32, .dyn_smem = SMEM, .iters = 128,
+     .note = "ATOM.E to a global address takes the L2's path; ROW_ATOME32 is the shared window's, so no census line"},
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }

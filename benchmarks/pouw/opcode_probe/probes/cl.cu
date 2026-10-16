@@ -65,18 +65,23 @@ CL_KERNEL(dsm_atom_cas_self, D_ATOM_CAS, false)
 CL_KERNEL(dsm_red_add_peer, D_RED_ADD, true)
 CL_KERNEL(dsm_red_add_self, D_RED_ADD, false)
 
-#define CL_ROW(nm, K, SASS, IT)                                                                                     \
-  {.name = #nm, .kernel = (const void*)nm, .tpb = TPB, .kind = K, .row = "ROW_" K, .expect = SASS "=8", .words = 32, \
-   .dyn_smem = SMEM, .cluster = 2, .iters = IT}
+// The own CTA through its cluster address is ATOM.E on ROW_ATOME32 ("generic or DSMEM address"). RS-W′'s rows have none
+// for the peer CTA's shared memory, so the peer forms are joint points (rows.jsonl only) until one is added.
+#define CL_SELF(nm, SASS)                                                                                           \
+  {.name = #nm, .kernel = (const void*)nm, .tpb = TPB, .kind = "ATOME32", .row = "ROW_ATOME32", .expect = SASS "=8", \
+   .words = 32, .dyn_smem = SMEM, .cluster = 2, .iters = 256}
+#define CL_PEER(nm, SASS)                                                                                           \
+  {.name = #nm, .kernel = (const void*)nm, .tpb = TPB, .expect = SASS "=8", .words = 32, .dyn_smem = SMEM,         \
+   .cluster = 2, .iters = 16, .note = "the peer CTA's shared memory: no row in RS-W′'s rows.csv yet"}
 
 static const OpProbe PROBES[] = {
-    CL_ROW(dsm_atom_add_peer, "DSMATOM32P", "ATOM.E.ADD.STRONG.GPU", 16),
-    CL_ROW(dsm_atom_add_self, "DSMATOM32", "ATOM.E.ADD.STRONG.GPU", 256),
-    CL_ROW(dsm_atom_cas_peer, "DSMATOM32P", "ATOM.E.CAS.STRONG.GPU", 16),
-    CL_ROW(dsm_atom_cas_self, "DSMATOM32", "ATOM.E.CAS.STRONG.GPU", 256),
+    CL_PEER(dsm_atom_add_peer, "ATOM.E.ADD.STRONG.GPU"),
+    CL_SELF(dsm_atom_add_self, "ATOM.E.ADD.STRONG.GPU"),
+    CL_PEER(dsm_atom_cas_peer, "ATOM.E.CAS.STRONG.GPU"),
+    CL_SELF(dsm_atom_cas_self, "ATOM.E.CAS.STRONG.GPU"),
     // red.shared::cluster lowers to the same ATOM.E as the returning form, its result unused
-    CL_ROW(dsm_red_add_peer, "DSMRED32P", "ATOM.E.ADD.STRONG.GPU", 16),
-    CL_ROW(dsm_red_add_self, "DSMRED32", "ATOM.E.ADD.STRONG.GPU", 256),
+    CL_PEER(dsm_red_add_peer, "ATOM.E.ADD.STRONG.GPU"),
+    CL_SELF(dsm_red_add_self, "ATOM.E.ADD.STRONG.GPU"),
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }

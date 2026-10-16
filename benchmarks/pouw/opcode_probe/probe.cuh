@@ -63,6 +63,8 @@ struct OpProbe {
   int iters = 2048;
   const char* refuse = "";     // a known-invalid probe: the gate check that must refuse it (loops, smem, sink, forbid)
   const char* note = "";
+  const char* fn = "";         // the kernel's name when the probe shares another's kernel ("": `name`)
+  int blocks = 0;              // blocks, one an SM (0: every SM, a whole number of clusters)
 };
 
 namespace op {
@@ -85,11 +87,11 @@ inline void list(const OpProbe* p, size_t n) {
     const OpProbe& q = p[i];
     printf(" {\"name\": %s, \"tpb\": %d, \"kind\": %s, \"row\": %s, \"expect\": %s, \"counted\": %s, \"warps\": %s, "
            "\"words\": %.17g, \"smem_ops\": %s, \"dyn_smem\": %d, \"cluster\": %d, \"mode\": %d, \"iters\": %d, "
-           "\"refuse\": %s, \"note\": %s",
+           "\"refuse\": %s, \"note\": %s, \"fn\": %s, \"blocks\": %d",
            json_str(q.name).c_str(), q.tpb, json_str(q.kind).c_str(), json_str(q.row).c_str(),
            json_str(q.expect).c_str(), json_str(q.counted).c_str(), json_str(q.warps).c_str(), q.words,
            json_str(q.smem_ops).c_str(), q.dyn_smem, q.cluster, q.mode, q.iters, json_str(q.refuse).c_str(),
-           json_str(q.note).c_str());
+           json_str(q.note).c_str(), json_str(*q.fn ? q.fn : q.name).c_str(), q.blocks);
     printf(", \"smem\": [");
     if (q.smem && *q.smem_ops) {
       std::vector<std::string> ops;
@@ -149,7 +151,7 @@ inline int time(const OpProbe* all, size_t n, const std::vector<std::string>& na
   int failed = 0;
   for (const OpProbe* q : ps) {
     Buf b;
-    b.blocks = prop.multiProcessorCount / q->cluster * q->cluster;
+    b.blocks = q->blocks ? q->blocks : prop.multiProcessorCount / q->cluster * q->cluster;
     GK_CK(cudaMalloc(&b.rec, sizeof(OpClk) * b.blocks));
     GK_CK(cudaMalloc(&b.sink, sizeof(unsigned) * b.blocks * q->tpb));
     if (q->dyn_smem)
