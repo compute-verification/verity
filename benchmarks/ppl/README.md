@@ -122,7 +122,8 @@ The built-in steps (`run.py steps` prints their parameters and docs):
 and `adopted-no-smooth` (tonight's WikiText end to end). The low-bit arms put the adopted design's linears (SmoothQuant
 0.5, rotated) on a grid, as integers: `fp4c` is E2M1's contiguous region (±2 in steps of 0.5, times 2: −4..4), `fp4`
 E2M1's every value (times 2: 0, ±1, ±2, ±3, ±4, ±6, ±8, ±12) and `int5` the integers −16..16 that E4M3 holds exactly.
-`GRID-MODE` (`fp4c-dither`, …, `int5-round`) keeps the adopted int8 attention; `GRID-MODE-all` puts attention on the
+`GRID-MODE` (`fp4c-dither`, …, `int5-round`) keeps the adopted int8 attention, and `GRID-dither-act` dithers only the
+activations, rounding the weights as the adopted linears do; `GRID-MODE-all` puts attention on the
 grid too, with no key blocks; `fp4c-dither-all-kv` dithers only K and V there, as the adopted attention does, with
 `p_sink`. A dithered operand serves the level below x / s or the one above it by a fresh fair bit (on a uniform grid,
 floor(x / s) + b), the weights' bits drawn once per seed and layer. Any other file passes as a path.
