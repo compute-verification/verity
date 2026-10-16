@@ -228,7 +228,9 @@ struct Args {
   int batch;         // problems stacked in rows: A (batch M x K), B (batch N x K), U (batch x M x N); 0 is 1
   uint32_t nzA, nzB; // the fused edit's noise keys (ML's NZ)
   uint64_t sg[4];    // sigma, the SHA-512 noise's key (ML's NS), big-endian words
-  const uint8_t* eb; // NS < 0: A's noise, an M x K int8 buffer shared by the batch (row mod M)
+  const uint8_t* eb; // NS < 0: A's noise, an M x K int8 buffer shared by the batch (row mod M); NS -2: M x 128, a row's
+                     // noise at column k its byte k % 128 (the one-side peel's [U U U U])
+  int pa_rows;       // the tail's pa map has this many rows, shared by the batch (0: stacked as a)
 };
 
 // the edit's noise (benchmarks/masked_gemm/egemm.cu): 16 bytes of a row from one hash h, element j's index into
@@ -284,7 +286,7 @@ template <int TM, int BN, int WM, int STAGES, bool F8 = false, int NZ = 0, int N
   uint32_t nz_rowA = 0, nz_rowB = 0, nz_keyA = 0, nz_keyB = 0;
   const uint64_t* sg = nullptr;   // NS > 0: the noise from SHA-512 (sha_noise.cuh) instead of nz_hash
   const uint8_t* eb = nullptr;    // NS < 0: A's noise from this buffer (Args::eb), B unedited here; tiles heads-innermost
-  int eM = 0;
+  int eM = 0, pa_rows = 0;
 
   DEV ML(uint8_t* smem, const Maps* m, int M, int N, int K, int grp, bool tail, int nb = 1)
       : maps(m), tiles_m(M / TM), tiles_n(N / BN), KT(K / BK), steps(K / BK + tail), group(grp), pt(blockIdx.x),
@@ -325,7 +327,7 @@ template <int TM, int BN, int WM, int STAGES, bool F8 = false, int NZ = 0, int N
       tma_load(stage(ps), &maps->a, full(ps), pkt * BK, tm * TM);
       tma_load(stage(ps) + A_BYTES, &maps->b, full(ps), pkt * BK, tn * BN);
     } else {
-      tma_load(stage(ps), &maps->pa, full(ps), 0, tm * TM);
+      tma_load(stage(ps), &maps->pa, full(ps), 0, pa_rows ? (tm * TM) % pa_rows : tm * TM);
       tma_load(stage(ps) + A_BYTES, &maps->pb, full(ps), 0, tn * BN);
     }
     if (++pkt == steps) { pkt = 0; pt += gridDim.x; }
@@ -462,7 +464,8 @@ template <int TM, int BN, int WM, int STAGES, bool F8 = false, int NZ = 0, int N
     uint32_t v0, v1, v2, v3;
     if constexpr (NS < 0) {
       if (!isA) return;
-      const uint4 e = __ldg(reinterpret_cast<const uint4*>(eb + (size_t)((nz_rowA + row) % eM) * (KT * BK) + kt * BK + lc * 16));
+      const size_t er = (size_t)((nz_rowA + row) % eM);
+      const uint4 e = __ldg(reinterpret_cast<const uint4*>(eb + (NS == -2 ? er * BK : er * (KT * BK) + kt * BK) + lc * 16));
       asm volatile("ld.shared.v4.u32 {%0, %1, %2, %3}, [%4];" : "=r"(v0), "=r"(v1), "=r"(v2), "=r"(v3) : "r"(addr));
       v0 = add_noise<F8>(v0, e.x); v1 = add_noise<F8>(v1, e.y); v2 = add_noise<F8>(v2, e.z); v3 = add_noise<F8>(v3, e.w);
     } else {
@@ -603,7 +606,7 @@ DEV void gemm_body(const Args& a) {
   extern __shared__ __align__(1024) uint8_t smem[];
   const int nb = a.batch > 0 ? a.batch : 1;
   L ml(smem, a.maps, a.M, a.N, a.K, a.group, TAIL, nb);
-  ml.nz_keyA = a.nzA; ml.nz_keyB = a.nzB; ml.sg = a.sg; ml.eb = a.eb; ml.eM = a.M;
+  ml.nz_keyA = a.nzA; ml.nz_keyB = a.nzB; ml.sg = a.sg; ml.eb = a.eb; ml.eM = a.M; ml.pa_rows = a.pa_rows;
   ml.init(threadIdx.x);
   const int warp = threadIdx.x / 32, lane = threadIdx.x % 32;
   ml.prologue();
