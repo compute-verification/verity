@@ -1018,7 +1018,7 @@ class TP2CaptureWorkerExtension:
         if n_req > 1 and not step_rows:
             return {"skipped": f"B={n_req} > 1 but the rank's collector recorded no step_rows ({getattr(com, 'step_rows_why', None)}) -- no coverage verdict"}
         try:
-            bmap = bd.build_binding_map(com._layouts, rc.steps, rc.run_root, pd, rank=rank, weight_registration=rc.weight_registration, request_rows=request_rows,
+            bmap = bd.build_binding_map(com._layouts, rc.steps, rc.run_root, pd, rank=rank, weight_registration=rc.weight_registration, request_rows=request_rows, name_bindings=bd.source_name_bindings(com.sources),
                                         collector={"committer": com.name, "layout": "chunk-leaf-v1", "retain": getattr(com, "retain", None), "windowed": bool(getattr(com, "windowed", False))})
             struct = bd.structure_of(com)
             tps = st.get("tps")
