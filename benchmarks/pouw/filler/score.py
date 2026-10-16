@@ -226,6 +226,7 @@ def show(res: dict) -> None:
     print(f"\n{res['arm']} ({res['variant']}), {S.SCORER}: SCORE {fmt(res['SCORE'])}"
           + ("" if res["scored"] else f" (not scored; {fmt(res['score_if_gated'])} if gated)")
           + f", min {fmt((res['min'] or {}).get('coverage'))} at {(res['min'] or {}).get('entry')}"
+          + f" (mixes: {fmt((res['min_mix'] or {}).get('coverage'))} at {(res['min_mix'] or {}).get('entry')})"
           + f"; nominal ÷ capacity {fmt(res['score_nominal'])}, at 0.99 for all {fmt(res['score_at_target'])}")
     for f in res["flags"]:
         print(f"  FLAG: {f}")
@@ -235,7 +236,8 @@ def show(res: dict) -> None:
                  "receipts": lambda: v.get("why") or f"timed {v.get('timed_checked')} checked, {v.get('timed_bad')} bad",
                  "dram": lambda: v.get("why") if not v.get("share_of_hbm") else
                  f"{v['share_of_hbm']:.3%} of HBM, counter control {fmt(v.get('control_bytes_ratio'))}",
-                 "clocks": lambda: f"{v.get('reps')} reps, MHz {v.get('mhz')}, W {v.get('watt')}",
+                 "clocks": lambda: f"{v.get('reps')} reps read; nvidia-smi between points: MHz {v.get('mhz')}, W "
+                                   f"{v.get('watt')}",
                  }.get(name, lambda: "")()
         print(f"  gate {name}: {'pass' if v.get('ok') else 'FAIL'}  {extra}")
     print("\n| entry | coverage | filler share | time | slowdowns | τ (VF) |\n|---|---|---|---|---|---|")
@@ -243,8 +245,15 @@ def show(res: dict) -> None:
         print(f"| {e['entry']} | {fmt(e['coverage'])} | {fmt(e['filler_share'])} | {fmt(e['time'])} | "
               + ", ".join(f"{k} {fmt(s)}" for k, s in e["slowdowns"].items()) + f" | {fmt(e['tau_vf'])} |")
     sec = res["secondary"]
-    print(f"\nsecondary: work CV max {fmt(sec['work_cv_max'])}; robust " +
-          "; ".join(f"B {r['B']} L {r['L']}: {fmt(r['slowdown'])}x, cov {fmt(r['coverage'])}" for r in sec["robust"]))
+    pw = [v for v in sec["power"].values() if all(S.isfinite(x) for x in v)]
+    ck = [v for v in sec["clock"].values() if all(S.isfinite(x) for x in v)]
+    setup = sorted(sec["placement_setup_ms"].values())
+    print(f"\nsecondary: work CV max {fmt(sec['work_cv_max'])}; board W alone/arm, max "
+          f"{fmt(max((a for a, _ in pw), default=None), 0)}/{fmt(max((b for _, b in pw), default=None), 0)}; SM MHz "
+          f"alone/arm, min {fmt(min((a for a, _ in ck), default=None), 0)}/{fmt(min((b for _, b in ck), default=None), 0)}"
+          f"; placement setup ms median {fmt(setup[len(setup) // 2] if setup else None, 0)}; choice: {res['choice']}")
+    print("robust (not scored): " + ("; ".join(f"B {r['B']} L {r['L']}: {fmt(r['slowdown'])}x, coverage "
+                                               f"{fmt(r['coverage'])}" for r in sec["robust"]) or "–"))
     if res["missing"]:
         print(f"missing entries: {res['missing']}")
 
@@ -317,7 +326,9 @@ def main(argv=None) -> int:
         ap.add_argument("--no-robust", action="store_true")
         a = ap.parse_args(argv[1:])
         return measure(A.load(a.arm), a.bin, a.out, a.rounds, a.reps, not a.no_robust)
-    ap = argparse.ArgumentParser(prog="score.py", description="score a filler arm: build, lease one GPU, measure, report")
+    ap = argparse.ArgumentParser(prog="score.py", description="score a filler arm: build, lease one GPU, measure, report",
+                                 epilog="\n\n".join(__doc__.split("\n\n")[1:4]),
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("arm", help=f"one of {sorted(A.ARMS)}, or benchmarks/pouw/filler/FILE.py:Class")
     ap.add_argument("--out", type=Path, default=Path(os.environ["OUT"]) if os.environ.get("OUT") else None)
     ap.add_argument("--rounds", type=int, default=8)
