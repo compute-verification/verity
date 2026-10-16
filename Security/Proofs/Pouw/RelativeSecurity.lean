@@ -4996,6 +4996,183 @@ end SpotPlay
 /-- A round's spot coins on the re-encoded design: a cell-block and the round's bits. -/
 abbrev DSpot (n L np B n' : ℕ) : Type := DCells n n' B × Finset (DBits n L np B n')
 
+open Classical in
+/-- The certified cells, those whose error is zero at every bit point with at most two ones, are at least the
+share `1 − d` of the cells. -/
+theorem card_certified_ge {C V A : Type} [Fintype C] [Fintype V] [DecidableEq V] [CommRing A]
+    (e : C → (V → A) → A) :
+    (Fintype.card C : ℝ) * (1 - spotDef e) ≤
+      (univ.filter fun c => ∀ U : Finset V, U.card ≤ 2 → e c (bitInd U) = 0).card := by
+  classical
+  rw [spotDef, prob_eq_card]
+  have hsplit := Finset.card_filter_add_card_filter_not (s := (univ : Finset C))
+    (fun c => ∃ U : Finset V, U.card ≤ 2 ∧ e c (bitInd U) ≠ 0)
+  have hnot : (univ.filter fun c => ¬∃ U : Finset V, U.card ≤ 2 ∧ e c (bitInd U) ≠ 0) =
+      univ.filter fun c => ∀ U : Finset V, U.card ≤ 2 → e c (bitInd U) = 0 :=
+    Finset.filter_congr fun c _ => by simp only [not_exists, not_and, not_not]
+  rw [hnot, Finset.card_univ] at hsplit
+  rcases Nat.eq_zero_or_pos (Fintype.card C) with h0 | h0
+  · rw [h0]
+    simp
+  · have hpos : (0 : ℝ) < Fintype.card C := by exact_mod_cast h0
+    have hs : ((univ.filter fun c => ∃ U : Finset V, U.card ≤ 2 ∧ e c (bitInd U) ≠ 0).card : ℝ) +
+        ((univ.filter fun c => ∀ U : Finset V, U.card ≤ 2 → e c (bitInd U) = 0).card : ℝ) = Fintype.card C := by
+      exact_mod_cast hsplit
+    rw [mul_sub, mul_one, mul_div_cancel₀ _ hpos.ne']
+    linarith
+
+/-- **A round's staged spot play** (per-stage draws: decision 36 as RS-E-REF r5 V.3 repaired it): per stage, its
+error table (its committed words minus their targets, per cell, as functions of the stage's bits, both noise blocks
+of the stage's products drawn in its draw), fixed by the stage's operand commitment before its draw, then the rest of
+the round, which may depend on the draw. -/
+inductive StagePlay (C V A : Type) : ℕ → Type
+  | done : StagePlay C V A 0
+  | stage {m : ℕ} (e : C → (V → A) → A) (next : Finset V → StagePlay C V A m) : StagePlay C V A (m + 1)
+
+namespace StagePlay
+
+variable {C V A : Type} [Fintype C] [Fintype V] [DecidableEq V] [CommRing A]
+
+omit [Fintype C] [Fintype V] [DecidableEq V] [CommRing A] in
+/-- Stage `s`'s error table along the round's draws. -/
+def errAt : {m : ℕ} → StagePlay C V A m → Paths (Finset V) m → Fin m → C → (V → A) → A
+  | _, .done, _, s => s.elim0
+  | _, .stage e next, x, s =>
+    Fin.cases (motive := fun _ => C → (V → A) → A) e (fun s' => (next x.1).errAt x.2 s') s
+
+omit [Fintype C] [Fintype V] in
+/-- The round's check at stage `s` and cell `c`: the error vanishes at the stage's drawn bits. -/
+def ok : {m : ℕ} → StagePlay C V A m → Paths (Finset V) m → Fin m → C → Prop
+  | _, .done, _, s, _ => s.elim0
+  | _, .stage e next, x, s, c =>
+    Fin.cases (motive := fun _ => Prop) (e c (bitInd x.1) = 0) (fun s' => (next x.1).ok x.2 s' c) s
+
+/-- **The round's stage game**, `M` stages in all: stage `s`'s step is `1/M` of its share of uncertified cells,
+and its draw adds `1/M` of the share of cells it finds wrong. -/
+noncomputable def sgame (M : ℕ) : {m : ℕ} → StagePlay C V A m → StageGame (Finset V) m
+  | _, .done => .done
+  | _, .stage e next =>
+    .stage ((M : ℝ)⁻¹ * spotDef e) (fun S => (M : ℝ)⁻¹ * prob fun c => e c (bitInd S) ≠ 0) fun S => (next S).sgame M
+
+omit [Fintype V] in
+theorem defi_sgame (M : ℕ) : ∀ {m : ℕ} (P : StagePlay C V A m) (x : Paths (Finset V) m),
+    (P.sgame M).defi x = ∑ s, (M : ℝ)⁻¹ * spotDef (P.errAt x s)
+  | _, .done, _ => by simp [sgame, StageGame.defi]
+  | _, .stage e next, x => by
+    rw [Fin.sum_univ_succ]
+    simp only [sgame, StageGame.defi, errAt, Fin.cases_zero, Fin.cases_succ]
+    rw [defi_sgame M (next x.1) x.2]
+
+omit [Fintype V] in
+theorem wrong_sgame (M : ℕ) : ∀ {m : ℕ} (P : StagePlay C V A m) (x : Paths (Finset V) m),
+    (P.sgame M).wrong x = ∑ s, (M : ℝ)⁻¹ * prob fun c => ¬P.ok x s c
+  | _, .done, _ => by simp [sgame, StageGame.wrong]
+  | _, .stage e next, x => by
+    rw [Fin.sum_univ_succ]
+    simp only [sgame, StageGame.wrong, ok, Fin.cases_zero, Fin.cases_succ]
+    rw [wrong_sgame M (next x.1) x.2]
+
+omit [Fintype V] in
+/-- **The round's check passes with probability at most `1 − U`**: the check's stage and cell are uniform. -/
+theorem prob_ok_le {m : ℕ} (P : StagePlay C V A m) (x : Paths (Finset V) m) :
+    prob (fun j : Fin m × C => P.ok x j.1 j.2) ≤ 1 - (P.sgame m).wrong x := by
+  classical
+  rw [prob_eq_expect, expect_prod, wrong_sgame]
+  calc expect (fun s => expect fun c => if P.ok x (s, c).1 (s, c).2 then (1 : ℝ) else 0)
+      ≤ expect (fun s => 1 + -1 * prob fun c => ¬P.ok x s c) := expect_mono fun s => by
+        rw [← prob_eq_expect (fun c => P.ok x s c)]
+        linarith [prob_add_not_le (fun c => P.ok x s c)]
+    _ ≤ 1 + -1 * expect (fun s => prob fun c => ¬P.ok x s c) := expect_affine_le zero_le_one _ _
+    _ = 1 - ∑ s, (m : ℝ)⁻¹ * prob fun c => ¬P.ok x s c := by
+        rw [← Finset.mul_sum]
+        unfold expect
+        rw [Fintype.card_fin]
+        ring
+
+/-- **The stage game is valid at `p = ¾`** when every stage's errors have degree 2 (`prob_spot_le`, per stage). -/
+theorem valid_sgame (M : ℕ) : ∀ {m : ℕ} (P : StagePlay C V A m), (∀ x s c, CubeQuad (P.errAt x s c)) →
+    (P.sgame M).Valid (3 / 4)
+  | _, .done, _ => trivial
+  | _, .stage e next, h => by
+    classical
+    have he : ∀ c, CubeQuad (e c) := fun c => by simpa [errAt] using h (Paths.const ∅ _) 0 c
+    refine ⟨mul_nonneg (inv_nonneg.mpr (Nat.cast_nonneg _)) (prob_nonneg _),
+      fun S => mul_nonneg (inv_nonneg.mpr (Nat.cast_nonneg _)) (prob_nonneg _), ?_,
+      fun S => valid_sgame M (next S) fun x s c => by simpa [errAt] using h (S, x) s.succ c⟩
+    rw [expect_mul_left, mul_left_comm]
+    refine mul_le_mul_of_nonneg_left ?_ (inv_nonneg.mpr (Nat.cast_nonneg _))
+    rcases isEmpty_or_nonempty C with hC | hC
+    · have h0 : spotDef e = 0 := by
+        unfold spotDef prob
+        simp
+      rw [h0, mul_zero]
+      unfold expect
+      exact div_nonneg (Finset.sum_nonneg fun S _ => prob_nonneg _) (Nat.cast_nonneg _)
+    · have h1 : expect (fun S : Finset V => prob fun c => e c (bitInd S) ≠ 0) =
+          prob fun a : C × Finset V => e a.1 (bitInd a.2) ≠ 0 := by
+        rw [prob_eq_expect (fun a : C × Finset V => e a.1 (bitInd a.2) ≠ 0), expect_prod_swap]
+        congr 1
+        funext S
+        exact prob_eq_expect _
+      rw [h1]
+      have h2 := prob_add_not (fun a : C × Finset V => e a.1 (bitInd a.2) = 0)
+      have h3 := prob_spot_le e he
+      linarith
+
+end StagePlay
+
+/-- **A prover's staged play** over `n` rounds of `M` stages: per round, its stage play, then the rest of the play,
+which may depend on the round's draws and its check. -/
+inductive StagedPlay (C V A : Type) (M : ℕ) : ℕ → Type
+  | done : StagedPlay C V A M 0
+  | round {n : ℕ} (P : StagePlay C V A M) (next : Paths (Finset V) M × (Fin M × C) → StagedPlay C V A M n) :
+      StagedPlay C V A M (n + 1)
+
+namespace StagedPlay
+
+variable {C V A : Type} [Fintype C] [Fintype V] [DecidableEq V] [CommRing A] {M : ℕ}
+
+/-- **The window's game** of a staged play: round `w`'s deficiency is its stage game's, and its check passes where
+the drawn stage's error at the drawn cell vanishes at that stage's bits. -/
+noncomputable def game : {n : ℕ} → StagedPlay C V A M n → RoundGame (Paths (Finset V) M × (Fin M × C)) n
+  | _, .done => .done
+  | _, .round P next =>
+    .round (fun a => (P.sgame M).defi a.1) (fun a => P.ok a.1 a.2.1 a.2.2) fun a => (next a).game
+
+omit [Fintype C] [Fintype V] [DecidableEq V] [CommRing A] in
+/-- Round `w`'s stage `s` error table along the realized coins. -/
+def errAt : {n : ℕ} → StagedPlay C V A M n → Paths (Paths (Finset V) M × (Fin M × C)) n → Fin n → Fin M → C →
+    (V → A) → A
+  | _, .done, _, w => w.elim0
+  | _, .round P next, x, w =>
+    Fin.cases (motive := fun _ => Fin M → C → (V → A) → A) (P.errAt x.1.1) (fun w' => (next x.1).errAt x.2 w') w
+
+omit [Fintype V] in
+theorem dAt_game : ∀ {n : ℕ} (P : StagedPlay C V A M n) (x : Paths (Paths (Finset V) M × (Fin M × C)) n)
+    (w : Fin n), P.game.dAt x w = ∑ s, (M : ℝ)⁻¹ * spotDef (P.errAt x w s)
+  | _, .done, _, w => w.elim0
+  | _, .round P next, x, w => by
+    induction w using Fin.cases with
+    | zero =>
+      simp only [game, errAt, RoundGame.dAt, Fin.cases_zero]
+      exact P.defi_sgame M x.1.1
+    | succ w' =>
+      simp only [game, errAt, RoundGame.dAt, Fin.cases_succ]
+      exact dAt_game (next x.1) x.2 w'
+
+/-- **Degree-2 errors along every play make the game a staged window at `p = ¾`.** -/
+theorem game_staged : ∀ {n : ℕ} (P : StagedPlay C V A M n), (∀ x w s c, CubeQuad (P.errAt x w s c)) →
+    P.game.Staged (3 / 4) M
+  | _, .done, _ => trivial
+  | _, .round P next, h => by
+    simp only [game]
+    refine ⟨⟨P.sgame M, P.valid_sgame M fun x s c => ?_, fun x j => rfl, fun x => P.prob_ok_le x⟩,
+      fun a => game_staged (next a) fun x w s c => ?_⟩
+    · simpa [errAt] using h ((x, (s, c)), Paths.const (x, (s, c)) _) 0 s c
+    · simpa [errAt] using h (a, x) w.succ s c
+
+end StagedPlay
+
 theorem ChainBound.mono {R : Type} [CommRing R] {n L np B n' : ℕ} {w : Fin np → R}
     {Ok Ok' : ((DBits n L np B n' → R) → R) → Prop} {c : ℕ} (h : ChainBound R n L np B n' w Ok c)
     (hOk : ∀ π, Ok' π → Ok π) : ChainBound R n L np B n' w Ok' c :=
@@ -5150,6 +5327,106 @@ theorem roundsHypK_of_spot {Mc : Machine} {S : Service} {R : ℕ} {Vmax δb δz 
           exact_mod_cast hsplit
         rw [mul_sub, mul_one, mul_div_cancel₀ _ hpos.ne']
         linarith
+
+/-- A round's coins with `St` stages on the re-encoded design: each stage's bits, then the check's stage and
+cell-block. -/
+abbrev DStage (St n L np B n' : ℕ) : Type := Paths (Finset (DBits n L np B n')) St × (Fin St × DCells n n' B)
+
+/-- **The window's staged rounds** (per-stage draws: decision 36, `note:20261016T0750Z-draft-rs-d1e-stage-coins` §2,
+as RS-E-REF r5 V.3 repaired it; the re-encoded design, chain form, the luck derived), a named hypothesis. Each round
+is `St` stages: stage `s` commits its operands, then draws both noise blocks of its products together (keyed by the
+draw: the stage's bits), then commits its outputs; one check at the round's end draws a stage and a cell-block. The
+window's game is the staged spot-check game of the prover's play (`StagedPlay.game`). Along every play `x`:
+- round `w`'s stage `s` is a straight-line program over a ring `Ar` on the stage's bits (`prog w s`) whose products
+  are in `Ok`, on committed constants `pc w s` and `vq w s`, and its error table is its committed prefix words
+  (`word w s`) minus their targets;
+- certified words of distinct rows of a stage share no product (row-pure);
+- the run is charged at least `κ` a product over every stage of every round (cost additivity: a stage's interval,
+  from its draw to its outputs' commitment, holds no other draw), less the noise reads `V`.
+
+Decode's deferred edit, every operand of the round's products committed before one draw, is the case `St = 1`. -/
+def RoundsHypKSt (Mc : Machine) (S : Service) (R St : ℕ) (Vmax δb δz κ : ℝ) (n L np B n' : ℕ) {Ar : Type}
+    [CommRing Ar] (wt : Fin np → Ar) (Ok : ((DBits n L np B n' → Ar) → Ar) → Prop) : Prop :=
+  ∃ e : S.Seed ≃ Paths (DStage St n L np B n') R, ∀ (Ω' : Type) [Fintype Ω']
+    (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)), (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) →
+    ∀ r : Ω', ∃ (P : StagedPlay (DCells n n' B) (DBits n L np B n') Ar St R)
+      (Bind ZK : Fin R → Paths (DStage St n L np B n') R → Prop) (V : Paths (DStage St n L np B n') R → ℝ),
+      (∀ w, prob (Bind w) ≤ δb) ∧ (∀ w, prob (ZK w) ≤ δz) ∧
+      (∀ x, S.verify (Mc.eval M (e.symm x, r)).1 (e.symm x) (Mc.eval M (e.symm x, r)).2 = true →
+        P.game.accepts x ∨ ∃ w, Bind w x ∨ ZK w x) ∧
+      (∀ x, V x ≤ Vmax) ∧
+      ∀ x, ∃ (N : Fin R → Fin St → ℕ) (prog : ∀ w s, SlpG (DBits n L np B n') Ar (N w s))
+        (pc : Fin R → Fin St → Fin n → Fin B → Fin L → Ar)
+        (vq : Fin R → Fin St → Fin B → Fin L → Fin n' → Ar)
+        (word : ∀ w s, DCells n n' B → Fin (N w s)),
+        (∀ w s j, (prog w s).isProd j = true → Ok ((prog w s).prod j)) ∧
+        (∀ w s c, P.errAt x w s c =
+          fun z => (prog w s).val z (word w s c) - dPrefix (pc w s) (vq w s) wt c.1 c.2.1 c.2.2.val z) ∧
+        (∀ w s c c', (∀ U : Finset (DBits n L np B n'), U.card ≤ 2 → P.errAt x w s c (bitInd U) = 0) →
+          (∀ U : Finset (DBits n L np B n'), U.card ≤ 2 → P.errAt x w s c' (bitInd U) = 0) →
+          c.1 ≠ c'.1 → ∀ k, (prog w s).coef (word w s c) k ≠ 0 → (prog w s).coef (word w s c') k = 0) ∧
+        κ * ∑ w, ∑ s, ((univ.filter fun j => (prog w s).isProd j = true).card : ℝ) - V x ≤ Mc.charge M (e.symm x, r)
+
+/-- **Staged rounds give the window's cost line with stage-wise floors summed**: under `RoundsHypKSt` with products
+of affine operands and chain factor 1, `RoundsHyp` holds at `p = ¾` with `F₀ = St κ L n n' B`, the round's `St`
+stage floors summed, and no slack. The round's deficiency is the mean of its stages' (`StagedPlay.dAt_game`), its
+exponential bound comes from the stages' supermartingale (`RoundGame.expBound_of_staged`, `StagedPlay.game_staged`),
+and each stage's certified count from its own errors. -/
+theorem roundsHyp_of_staged {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n L np B n' : ℕ}
+    {Ar : Type} [CommRing Ar] {wt : Fin np → Ar} {Ok : ((DBits n L np B n' → Ar) → Ar) → Prop}
+    (h : RoundsHypKSt Mc S R St Vmax δb δz κ n L np B n' wt Ok) (hc : ChainBound Ar n L np B n' wt Ok 1)
+    (hOk : ∀ π, Ok π → AffProd π) (hSt : 0 < St) (hκ : 0 ≤ κ) :
+    RoundsHyp Mc S (DStage St n L np B n') R (3 / 4) (St * (κ * L * ((n * n' * B : ℕ) : ℝ))) 0 Vmax δb δz := by
+  classical
+  obtain ⟨e, h⟩ := h
+  refine ⟨e, fun Ω' _ M hcom r => ?_⟩
+  obtain ⟨P, Bind, ZK, V, hB, hZ, hacc, hV, hK⟩ := h Ω' M hcom r
+  refine ⟨P.game, Bind, ZK, V, P.game.expBound_of_staged (by norm_num) (P.game_staged fun x w s c => ?_), hB, hZ,
+    hacc, hV, fun x => ?_⟩
+  · obtain ⟨N, prog, pc, vq, word, hOk', hE, -, -⟩ := hK x
+    rw [hE w s c]
+    exact (prog w s).cubeQuad_err (fun j hj => hOk _ (hOk' w s j hj)) (word w s c) (pc w s) (vq w s) wt c.1 c.2.1
+      c.2.2.val
+  · obtain ⟨N, prog, pc, vq, word, hOk', hE, hpure, hcharge⟩ := hK x
+    let cor : Fin R → Fin St → Finset (DCells n n' B) := fun w s =>
+      univ.filter fun c => ∀ U : Finset (DBits n L np B n'), U.card ≤ 2 → P.errAt x w s c (bitInd U) = 0
+    have hprod : ∀ w s, (L : ℝ) * (cor w s).card ≤
+        ((univ.filter fun j => (prog w s).isProd j = true).card : ℝ) := fun w s => by
+      have := (prog w s).cells_card_le hc (hOk' w s) (pc w s) (vq w s) (word w s) (cor w s)
+        (fun c hc U hU => by
+          have := (Finset.mem_filter.mp hc).2 U hU
+          rw [hE w s c] at this
+          exact sub_eq_zero.mp this)
+        fun c hc c' hc' hne k hk =>
+          hpure w s c c' (Finset.mem_filter.mp hc).2 (Finset.mem_filter.mp hc').2 hne k hk
+      rw [one_mul] at this
+      exact_mod_cast this
+    have hC : ((n * n' * B : ℕ) : ℝ) = (Fintype.card (DCells n n' B) : ℝ) := by
+      simp [Fintype.card_prod, mul_assoc]
+    have hcor : ∀ w s, ((n * n' * B : ℕ) : ℝ) * (1 - spotDef (P.errAt x w s)) ≤ (cor w s).card := fun w s => by
+      rw [hC]
+      convert card_certified_ge (P.errAt x w s)
+    set C : ℝ := ((n * n' * B : ℕ) : ℝ)
+    have hSt' : (St : ℝ) ≠ 0 := by exact_mod_cast hSt.ne'
+    have hdef : P.game.deficiency x = (St : ℝ)⁻¹ * ∑ w, ∑ s, spotDef (P.errAt x w s) := by
+      rw [P.game.deficiency_eq_sum, Finset.mul_sum]
+      refine Finset.sum_congr rfl fun w _ => ?_
+      rw [P.dAt_game x w, Finset.mul_sum]
+    have hsum : ((R : ℝ) - P.game.deficiency x) * (St * (κ * L * C)) =
+        κ * ∑ w, ∑ s, (L : ℝ) * (C * (1 - spotDef (P.errAt x w s))) := by
+      have e2 : ∑ w : Fin R, ∑ s : Fin St, (L : ℝ) * (C * (1 - spotDef (P.errAt x w s))) =
+          L * C * (R * St - ∑ w, ∑ s, spotDef (P.errAt x w s)) := by
+        simp only [mul_sub, mul_one, Finset.sum_sub_distrib, Finset.sum_const, Finset.card_univ, Fintype.card_fin,
+          nsmul_eq_mul, ← Finset.mul_sum]
+        ring
+      rw [hdef, e2]
+      field_simp
+    calc ((R : ℝ) - P.game.deficiency x) * (St * (κ * L * C)) - V x - R * 0
+        = κ * ∑ w, ∑ s, (L : ℝ) * (C * (1 - spotDef (P.errAt x w s))) - V x := by rw [hsum]; ring
+      _ ≤ κ * ∑ w, ∑ s, ((univ.filter fun j => (prog w s).isProd j = true).card : ℝ) - V x := by
+        gcongr with w _ s
+        exact (mul_le_mul_of_nonneg_left (hcor w s) (Nat.cast_nonneg L)).trans (hprod w s)
+      _ ≤ Mc.charge M (e.symm x, r) := hcharge
 
 /-- **The window's rounds with Theorem H's cost line** (the re-encoded design in exact arithmetic over a field `F`:
 FP8 operands or scaled reads, with exact sums), a named hypothesis. It is `RoundsHyp` with the cost line derived
