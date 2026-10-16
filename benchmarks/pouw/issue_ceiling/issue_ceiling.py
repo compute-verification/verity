@@ -26,8 +26,18 @@ def demangle(name):
         return name
 
 
+TMPL_INT = re.compile(r"Li(\d+)E")
+
+
+def tmpl_ints(mangled):
+    """The integer template arguments in a mangled name, in order (k_mix<M,X,R> -> [M,X,R])."""
+    return [int(n) for n in TMPL_INT.findall(mangled)]
+
+
 def parse_sass(path):
-    """Return {demangled_function: {opcode: count_in_hottest_loop}} plus the full-body histogram as a fallback."""
+    """Return {mangled_function: info} where info has the hottest loop's opcode histogram, its length and the
+    whole-function length. Keyed by the mangled name so the template arguments (M,X,R) join to the JSONL exactly;
+    demangling turns the template ints into enum values and loses that join (combiner bug fixed 16 Oct)."""
     if not path.exists():
         return {}
     funcs = {}
@@ -55,7 +65,7 @@ def parse_sass(path):
         # hottest loop: the backward BRA whose body (target..bra) has the most instructions
         best = None
         for i, (addr, op, raw) in enumerate(instrs):
-            if op != "BRA":
+            if op.split(".")[0] != "BRA":  # the back-edge is BRA.U; match the base opcode
                 continue
             mt = BRA.search(raw)
             if not mt:
@@ -70,22 +80,23 @@ def parse_sass(path):
         for _, op, _ in (best or instrs):
             base = op.split(".")[0]
             hist[base] = hist.get(base, 0) + 1
-        funcs[demangle(raw_name)] = {"loop": hist, "loop_len": len(best or []), "whole": len(instrs)}
+        funcs[raw_name] = {
+            "mangled": raw_name,
+            "demangled": demangle(raw_name),
+            "tmpl": tmpl_ints(raw_name),
+            "loop": hist,
+            "loop_len": len(best or []),
+            "whole": len(instrs),
+        }
     return funcs
 
 
-def find_func(funcs, *needles):
-    for name, info in funcs.items():
-        if all(n in name for n in needles):
-            return name, info
-    return None, None
-
-
-MMA_OP = {"imma": "IMMA", "omma": "OMMA"}
-XOP_SASS_OP = {
-    "iadd3": "IADD3", "lop3": "LOP3", "prmt": "PRMT", "shfl": "SHFL", "imad": "IMAD",
-    "idp4a": "IDP4A", "hfma2": "HFMA2", "lds128": "LDS", "bra": "BRA",
-}
+def by_tmpl(funcs, stem, tmpl):
+    """The function whose mangled name is `stem` with template ints `tmpl` (e.g. ('k_mix',[0,8,64]))."""
+    for info in funcs.values():
+        if info["mangled"].startswith(f"_Z{len(stem)}{stem}I") and info["tmpl"] == list(tmpl):
+            return info
+    return None
 
 
 def main():
@@ -102,22 +113,30 @@ def main():
                     pass
     funcs = parse_sass(out / "sass" / "issue_ceiling.sass")
 
-    # per-call SASS: the whole MMA / op expansion, from the alone microkernels (loop body has 8 calls)
-    mma_sass, op_sass = {}, {}
-    for key in ("imma", "omma"):
-        _, info = find_func(funcs, "k_mma", key) if funcs else (None, None)
-        if info:
-            n = info["loop"].get(MMA_OP[key], 0)
-            mma_sass[key] = n / 8.0  # 8 MMAs an iteration
-    for key in XOP_SASS_OP:
-        _, info = find_func(funcs, "k_op", f"X_{key.upper()}") if funcs else (None, None)
-        if info is None and funcs:
-            # demangled template arg is the numeric enum value, not the name; fall back to total loop length / 8
-            _, info = find_func(funcs, "k_op", key)
-        if info:
-            op_sass[key] = info["loop_len"] / 8.0  # best-effort: whole loop body / 8 calls
+    # Enum orders must match issue_ceiling.cu: M_IMMA=0, M_OMMA=1; X_NAME below.
+    M_NAME = ["imma_s8_16832", "omma_nvf4_16864"]
+    M_SASS = ["IMMA", "OMMA"]
+    X_NAME = ["iadd3", "lop3", "prmt", "shfl", "imad", "idp4a", "hfma2", "lds128", "bra"]
+    X_SASS = ["IADD3", "LOP3", "PRMT", "SHFL", "IMAD", "IDP", "HFMA2", "LDS", "BRA"]
+    m_idx = {n: i for i, n in enumerate(M_NAME)}
+    x_idx = {n: i for i, n in enumerate(X_NAME)}
 
-    result = {"mma_sass_per_call": mma_sass, "op_sass_per_call": op_sass, "mix": []}
+    # SASS of each alone kernel: confirm the opcode that issued and the per-call (loop_len/8) instruction count.
+    mma_sass, op_sass, op_sass_confirm = {}, {}, {}
+    for m, key in enumerate(M_NAME):
+        info = by_tmpl(funcs, "k_mma", [m])
+        if info:
+            mma_sass[key] = {"per_call": info["loop"].get(M_SASS[m], 0) / 8.0,
+                             "loop_len": info["loop_len"], "loop": info["loop"]}
+    for x, key in enumerate(X_NAME):
+        info = by_tmpl(funcs, "k_op", [x])
+        if info:
+            op_sass[key] = {"per_call_true": info["loop_len"] / 8.0,
+                            "intended_per_call": info["loop"].get(X_SASS[x], 0) / 8.0,
+                            "loop_len": info["loop_len"], "loop": info["loop"]}
+            op_sass_confirm[key] = info["loop"].get(X_SASS[x], 0)
+
+    result = {"mma_sass": mma_sass, "op_sass": op_sass, "mix": []}
 
     md = ["# Mixed-stream issue ceiling (sm_120, RTX PRO 6000)\n"]
     # alone rates
@@ -135,25 +154,81 @@ def main():
             md.append(f"| {r['mma']} (MMA) | {v:.4f} | {v/4:.4f} | {r['mma_macs_per_sm_per_clk']:.1f} |")
 
     md.append("\n## Mixed (MMA interleaved with a single-pipe op)\n")
-    md.append("| MMA | op | ops/MMA | warp instr/SM/clk (min) | per SMSP | MMA MAC/SM/clk | MMA frac of alone |")
-    md.append("|---|---|---|---|---|---|---|")
+    md.append("The *min* columns count one SASS instruction per MMA call and per op call (a lower bound on issue). "
+              "The *SASS-exact* columns count every instruction in the loop body cuobjdump emits (address generation, "
+              "operand moves and the back-edge BRA included): the true warp-instructions the SM issued.")
+    md.append("")
+    md.append("| MMA | op | ops/MMA | min /SM/clk | min /SMSP | SASS-exact /SM/clk | SASS-exact /SMSP | "
+              "MMA MAC/SM/clk | MMA frac of alone |")
+    md.append("|---|---|---|---|---|---|---|---|---|")
     peak_smsp = 0.0
+    peak_true_smsp = 0.0
+    peak_true_row = None
     for r in rows:
         if r.get("mode") != "mix":
             continue
         wi = r["warp_instr_min_per_sm_per_clk"]
         smsp = r["warp_instr_min_per_smsp_per_clk"]
         peak_smsp = max(peak_smsp, smsp)
+        warps = r.get("warps", 16)
+        M = m_idx.get(r["mma"])
+        X = x_idx.get(r["op"])
+        R = int(round(r["ops_per_mma"] * 8))
+        info = by_tmpl(funcs, "k_mix", [M, X, R]) if funcs else None
+        if info:
+            true_sm = info["loop_len"] * r["iters"] * warps / r["cyc"]
+            true_smsp = true_sm / 4.0
+            if true_smsp > peak_true_smsp:
+                peak_true_smsp = true_smsp
+                peak_true_row = (r["mma"], r["op"], r["ops_per_mma"], info["loop_len"], true_smsp)
+            true_sm_s = f"{true_sm:.3f}"
+            true_smsp_s = f"{true_smsp:.4f}"
+        else:
+            true_sm = true_smsp = None
+            true_sm_s = true_smsp_s = "—"
         md.append(f"| {r['mma']} | {r['op']} | {r['ops_per_mma']:.0f} | {wi:.3f} | {smsp:.4f} | "
+                  f"{true_sm_s} | {true_smsp_s} | "
                   f"{r['mma_macs_per_sm_per_clk']:.1f} | {r['mma_macs_frac_of_alone']:.3f} |")
-        result["mix"].append({k: r[k] for k in r if k not in ("probe",)})
-    md.append(f"\n**Peak warp instr/SMSP/cycle over every mix: {peak_smsp:.4f}** (ceiling 1.0 = single-issue).\n")
+        row = {k: r[k] for k in r if k not in ("probe",)}
+        if true_smsp is not None:
+            row["warp_instr_sass_per_sm_per_clk"] = true_sm
+            row["warp_instr_sass_per_smsp_per_clk"] = true_smsp
+            row["loop_len_sass"] = info["loop_len"]
+        result["mix"].append(row)
+    md.append(f"\n**Peak warp instr/SMSP/cycle over every mix — min bound: {peak_smsp:.4f}; "
+              f"SASS-exact: {peak_true_smsp:.4f}** (ceiling 1.0 = one warp instruction per SMSP per cycle).")
+    if peak_true_row:
+        md.append(f"SASS-exact peak at {peak_true_row[0]} + {peak_true_row[1]} @ {peak_true_row[2]:.0f} ops/MMA "
+                  f"(loop body {peak_true_row[3]} instructions).\n")
     result["peak_warp_instr_per_smsp_min"] = peak_smsp
+    result["peak_warp_instr_per_smsp_sass"] = peak_true_smsp
 
-    # SASS confirmation
-    md.append("## SASS (cuobjdump) per-call instruction counts\n")
-    md.append(f"MMA per call: {mma_sass}")
-    md.append(f"\nop per loop-body/8: {op_sass}\n")
+    # SASS confirmation: did the opcode I intended issue?
+    md.append("## SASS (cuobjdump): did the intended opcode issue?\n")
+    md.append("| op | intended SASS | count in loop (alone, ÷8 = per call) | loop body len | verdict |")
+    md.append("|---|---|---|---|---|")
+    for x, key in enumerate(X_NAME):
+        s = op_sass.get(key)
+        if not s:
+            md.append(f"| {key} | {X_SASS[x]} | — | — | no SASS |")
+            continue
+        n = op_sass_confirm.get(key, 0)
+        if n >= 8:
+            verdict = "issued as intended"
+        elif key == "bra":
+            verdict = "**if-converted to predicated op** (only the loop back-edge BRA remains)"
+        elif n == 0:
+            verdict = "**if-converted / not emitted**"
+        else:
+            verdict = "partial"
+        md.append(f"| {key} | {X_SASS[x]} | {n} | {s['loop_len']} | {verdict} |")
+    md.append("")
+    for m, key in enumerate(M_NAME):
+        s = mma_sass.get(key)
+        if s:
+            md.append(f"- `{key}`: {s['loop'].get(M_SASS[m], 0)}× {M_SASS[m]} in the loop body "
+                      f"(÷8 = {s['per_call']:.2f} per MMA call), loop body {s['loop_len']} instructions.")
+    md.append("")
 
     # CE7
     ce = out / "ce7.jsonl"
