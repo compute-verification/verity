@@ -75,7 +75,12 @@ proof workers' results land here as theorems or as named hypotheses.
   `RoundsHyp`'s cost line, F₀ = κ L n n' B with no slack (`roundsHyp_of_K`), and the certified fraction follows
   (`certifiedFraction120θ_K`, `_K_40`, at w = (1, 2, 4, 8, 16, 32, 65) `certifiedFraction120θ_reEncoded_40`).
 * Theorem H (round 6 §6, merges priced): in the quad model, with merges at `h ≥ 2K/3` slots, each useful cell costs
-  `K` slots (`theoremH`), with Theorem J and the rank bounds named.
+  `K` slots (`theoremH`, from Theorem J and the rank bounds). Those premises hold on quad runs in exact arithmetic
+  over a field (`QuadRun`; `QuadRun.theoremJ`, `full_ge`, `merged_ge`, from free-diagonal rank floors `PairRankGe`).
+  On the re-encoded design, every quad run pays `L` slots a useful cell-block (`QuadRun.cost_ge_reEncoded`; at VF2's
+  `h = 32`, for `L ≤ 48`, `_32`). `RoundsHypH` puts that in the cost line in exact arithmetic, with the same
+  `F₀ = κ L n n' B` (`roundsHyp_of_H`, `certifiedFraction120θ_H`; over ℚ at `h = 32`,
+  `certifiedFraction120θ_reEncodedExact_40`).
 -/
 
 namespace Pouw.RelativeSecurity
@@ -3644,6 +3649,64 @@ theorem QuadRun.cost_ge_reEncoded_32 {Q M : Type} [Fintype Q] [Fintype M] [Decid
 
 end QuadRuns
 
+/-- **The window's rounds with Theorem H's cost line** (the re-encoded design in exact arithmetic over a field `F`:
+FP8 operands or scaled reads, with exact sums), a named hypothesis. It is `RoundsHyp` with the cost line derived
+rather than assumed. Along every play `x`:
+- round `w`'s run is a quad run over `F` on the round's bits (`P w`: Theorem J″'s persistent quads, cell-pure), on
+  committed constants `pc w` and `vq w`, whose full lanes and merged cells hold cell-blocks (`cell w`, `cellM w`);
+- its full lanes and merged cells number at least `(1 − d_w) C`, `C = n n' B` the round's cell-blocks;
+- the run is charged at least `κ` a slot, at 4 slots a quad's slice and `h` a merged cell, less the noise reads. -/
+def RoundsHypH (Mc : Machine) (S : Service) (Ω : Type) [Fintype Ω] (R : ℕ) (p Vmax δb δz κ h : ℝ)
+    (F : Type) [Field F] (n L np B n' : ℕ) (wt : Fin np → F) : Prop :=
+  ∃ e : S.Seed ≃ Paths Ω R, ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
+    (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ r : Ω',
+    ∃ (G : RoundGame Ω R) (Bind ZK : Fin R → Paths Ω R → Prop) (V : Paths Ω R → ℝ),
+      G.PathBound p ∧ (∀ w, prob (Bind w) ≤ δb) ∧ (∀ w, prob (ZK w) ≤ δz) ∧
+      (∀ x, S.verify (Mc.eval M (e.symm x, r)).1 (e.symm x) (Mc.eval M (e.symm x, r)).2 = true →
+        G.accepts x ∨ ∃ w, Bind w x ∨ ZK w x) ∧
+      (∀ x, V x ≤ Vmax) ∧
+      ∀ x, ∃ (nq nm : Fin R → ℕ) (P : ∀ w, QuadRun (Fin (nq w)) (Fin (nm w)) (DBits n L np B n') F)
+        (pc : Fin R → Fin n → Fin B → Fin L → F) (vq : Fin R → Fin B → Fin L → Fin n' → F)
+        (cell : ∀ w, Fin (nq w) → Fin 4 → DCells n n' B) (cellM : ∀ w, Fin (nm w) → DCells n n' B),
+        (∀ w, (P w).Computes (cell w) (fun c => dIncr (pc w) (vq w) wt c.1 c.2.1 c.2.2)
+          (fun m => dIncr (pc w) (vq w) wt (cellM w m).1 (cellM w m).2.1 (cellM w m).2.2)) ∧
+        (∀ w, ((n * n' * B : ℕ) : ℝ) * (1 - G.dAt x w) ≤
+          ∑ q, ((univ.filter fun ℓ => (P w).lane q ℓ = .full).card : ℝ) + nm w) ∧
+        κ * ∑ w, (∑ q, 4 * ((P w).s q : ℝ) + h * nm w) - V x ≤ Mc.charge M (e.symm x, r)
+
+/-- **Theorem H gives the window's cost line** in exact arithmetic: under `RoundsHypH` with plane `p₀` at weight 1
+and merges at `h ≥ 2L/3` slots, `RoundsHyp` holds with `F₀ = κ L n n' B` and no slack, as from Theorem K. -/
+theorem roundsHyp_of_H {Mc : Machine} {S : Service} {Ω : Type} [Fintype Ω] {R : ℕ} {p Vmax δb δz κ h : ℝ}
+    {F : Type} [Field F] {n L np B n' : ℕ} {wt : Fin np → F} {p₀ : Fin np}
+    (hH : RoundsHypH Mc S Ω R p Vmax δb δz κ h F n L np B n' wt) (hwt : wt p₀ = 1) (hκ : 0 ≤ κ)
+    (hh : 2 * (L : ℝ) / 3 ≤ h) :
+    RoundsHyp Mc S Ω R p (κ * L * ((n * n' * B : ℕ) : ℝ)) 0 Vmax δb δz := by
+  obtain ⟨e, hH⟩ := hH
+  refine ⟨e, fun Ω' _ M hc r => ?_⟩
+  obtain ⟨G, Bind, ZK, V, hG, hB, hZ, hacc, hV, hK⟩ := hH Ω' M hc r
+  refine ⟨G, Bind, ZK, V, hG, hB, hZ, hacc, hV, fun x => ?_⟩
+  obtain ⟨nq, nm, P, pc, vq, cell, cellM, hC, hcor, hcharge⟩ := hK x
+  have hcost : ∀ w, (L : ℝ) * (∑ q, ((univ.filter fun ℓ => (P w).lane q ℓ = .full).card : ℝ) + nm w) ≤
+      ∑ q, 4 * ((P w).s q : ℝ) + h * nm w := fun w => by
+    have := QuadRun.cost_ge_reEncoded (pc w) (vq w) wt hwt (cell w) (cellM w) (hC w) h hh
+    rwa [Fintype.card_fin] at this
+  set C : ℝ := ((n * n' * B : ℕ) : ℝ)
+  have hsum : ((R : ℝ) - G.deficiency x) * (κ * L * C) = κ * ∑ w, (L : ℝ) * (C * (1 - G.dAt x w)) := by
+    rw [G.deficiency_eq_sum, ← Finset.mul_sum, ← Finset.mul_sum, Finset.sum_sub_distrib, Finset.sum_const,
+      Finset.card_univ, Fintype.card_fin, nsmul_eq_mul, mul_one]
+    ring
+  calc ((R : ℝ) - G.deficiency x) * (κ * L * C) - V x - R * 0
+      = κ * ∑ w, (L : ℝ) * (C * (1 - G.dAt x w)) - V x := by rw [hsum]; ring
+    _ ≤ κ * ∑ w, (∑ q, 4 * ((P w).s q : ℝ) + h * nm w) - V x := by
+      gcongr with w
+      exact (mul_le_mul_of_nonneg_left (hcor w) (Nat.cast_nonneg L)).trans (hcost w)
+    _ ≤ Mc.charge M (e.symm x, r) := hcharge
+
+/-- The re-encoded design's plane weights over `ℚ` (exact arithmetic). -/
+def wReQ : Fin 7 → ℚ := ![1, 2, 4, 8, 16, 32, 65]
+
+theorem wReQ_zero : wReQ 0 = 1 := rfl
+
 section ModelB
 
 /-! ## The Model B bridge (RS-MODEL: note:20261015T1814Z-draft-rs-machine-model, `gpu-model/rs-model.lean`)
@@ -4497,6 +4560,39 @@ theorem certifiedFraction120θ_reEncoded_40 (kd : K120 → Kind) (S : Service) {
       (4 / 5 * ((R - 40 * Real.log 2 / (1 - p)) * (κ * L * ((n * n' * B : ℕ) : ℝ)) - Vmax))
       (((2 : ℝ) ^ 40)⁻¹ + R * (δb + δz)) :=
   certifiedFraction120θ_K_40 kd S h toF2_wRe_zero hp hκ hC hδb hδz
+
+/-- **The certified fraction from Theorem H** (the re-encoded design in exact arithmetic, merges priced at
+`h ≥ 2L/3` slots): under `RoundsHypH` in Model B, the same floor as from Theorem K. -/
+theorem certifiedFraction120θ_H (kd : K120 → Kind) (S : Service) {Ω : Type} [Fintype Ω] {R : ℕ}
+    {p Vmax δb δz κ h : ℝ} {F : Type} [Field F] {n L np B n' : ℕ} {wt : Fin np → F} {p₀ : Fin np}
+    (hH : RoundsHypH (machine kd (.ofNat price120)) S Ω R p Vmax δb δz κ h F n L np B n' wt) (hwt : wt p₀ = 1)
+    (hh : 2 * (L : ℝ) / 3 ≤ h) (hp : p ≤ 1) (hκ : 0 < κ) (hC : 0 < L * (n * n' * B)) (hδb : 0 ≤ δb)
+    (hδz : 0 ≤ δz) (D : ℝ) :
+    ServiceFloor (machine (kdθ kd) priceθ) S (4 / 5 * ((R - D) * (κ * L * ((n * n' * B : ℕ) : ℝ)) - Vmax))
+      (Real.exp (-((1 - p) * D)) + R * (δb + δz)) := by
+  have hF₀ : 0 < κ * L * ((n * n' * B : ℕ) : ℝ) := by
+    rw [mul_assoc]
+    exact mul_pos hκ (by exact_mod_cast hC)
+  simpa only [mul_zero, sub_zero] using
+    certifiedFraction120θ_rounds kd S (roundsHyp_of_H hH hwt hκ.le hh) hp hF₀ hδb hδz D
+
+/-- **The re-encoded design's certified fraction in exact arithmetic** over `ℚ`, at VF2's merge price (32 slots a
+merged word, so any `L ≤ 48`) and `κ = 2⁻⁴⁰ + R (δb + δz)`. -/
+theorem certifiedFraction120θ_reEncodedExact_40 (kd : K120 → Kind) (S : Service) {Ω : Type} [Fintype Ω] {R : ℕ}
+    {p Vmax δb δz κ : ℝ} {n L B n' : ℕ}
+    (hH : RoundsHypH (machine kd (.ofNat price120)) S Ω R p Vmax δb δz κ 32 ℚ n L 7 B n' wReQ) (hL : L ≤ 48)
+    (hp : p < 1) (hκ : 0 < κ) (hC : 0 < L * (n * n' * B)) (hδb : 0 ≤ δb) (hδz : 0 ≤ δz) :
+    ServiceFloor (machine (kdθ kd) priceθ) S
+      (4 / 5 * ((R - 40 * Real.log 2 / (1 - p)) * (κ * L * ((n * n' * B : ℕ) : ℝ)) - Vmax))
+      (((2 : ℝ) ^ 40)⁻¹ + R * (δb + δz)) := by
+  have hF₀ : 0 < κ * L * ((n * n' * B : ℕ) : ℝ) := by
+    rw [mul_assoc]
+    exact mul_pos hκ (by exact_mod_cast hC)
+  have hh : 2 * (L : ℝ) / 3 ≤ 32 := by
+    have : (L : ℝ) ≤ 48 := by exact_mod_cast hL
+    linarith
+  simpa only [mul_zero, sub_zero] using
+    certifiedFraction120θ_rounds_40 kd S (roundsHyp_of_H hH wReQ_zero hκ.le hh) hp hF₀ hδb hδz
 
 /-! ### Model A (RS-MODEL §3, over ℚ) and `B_θ ≤ A` -/
 
