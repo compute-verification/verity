@@ -65,16 +65,16 @@ class Fused:
         "mechanism": ["filler:chained-imma-registers", "place:split", "split:per-point-table", "fused:flin-filler-warps",
                       "fused:attention-filler-warps", "fused:persistent-attention", "fused:lazy-done",
                       "prefill:co", "sched:prio-short-blocks"],
-        "hypothesis": "decode's kernels leave the tensor pipe idle while they wait on memory: filler warps inside the "
-                      "linears and attention blocks, beside the pump on the rest, cover 0.70-0.82 of the int8 peak on "
-                      "the decode points at <= 5% slowdown (round 2's harness, serving at 0.99)"})
+        "hypothesis": "decode's kernels leave the tensor pipe idle while they wait on memory: filler warps in the "
+                      "linears and attention blocks, beside the pump on the rest, cover 0.70-0.82 of int8 peak on "
+                      "decode at <= 5% slowdown"})
     sources: tuple = ("benchmarks/pouw/decode_capacity/dcap.cu", "benchmarks/pouw/decode_capacity/flin.cuh",
                       "benchmarks/pouw/filler/fscore.cu", "benchmarks/pouw/filler/fused_arm.py",
                       "benchmarks/pouw/filler/fused_score.py")
     filler: A.Filler | None = A.Filler(W=8, NC=4, S=2048, chunk_log2=19)
     choice: str = ("an offline table of 22 (B, L) points (split SMs, flin and attention filler warps) from FILL's round-2 "
-                   "selection and holdouts, and HC-SCHED's prefill co shape; a lookup, a green split and one graph a "
-                   "step at serving time; run through fused_score.py/fscore.cu")
+                   "picks and holdouts, HC-SCHED's prefill co shape; at serving time a lookup, a green split and one "
+                   "graph a step")
 
     def _row(self, b, l):
         return A.point_lookup(TABLE, b, l)
