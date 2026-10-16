@@ -273,7 +273,7 @@ theorem N₀_le {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts
 /-- **`N₀` at one table** is that table's level-0 length, `2^{d₀}`. -/
 theorem N₀_one {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupOf zk x = some (s, spec, sts)) (h1 : sts.size = 1) :
-    N₀ zk x = 2 ^ (if zk then zkLevel0 (sts[0]'(by omega)).m else plainLevel0 (sts[0]'(by omega)).m).d := by
+    N₀ zk x = (2 : ℝ) ^ (if zk then zkLevel0 (sts[0]'(by omega)).m else plainLevel0 (sts[0]'(by omega)).m).d := by
   have hl : sts.toList = [sts[0]'(by omega)] := by
     apply List.ext_getElem (by simp [h1])
     intro i hi _
