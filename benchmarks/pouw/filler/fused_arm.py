@@ -196,9 +196,9 @@ class FusedPumpK(FusedPump):
 
 
 #: pfill-bU's chunk (pfill_arm.PFillBU's shape) with duo's receipt (NC 2), or one of P2-FF r9's at NC 4: XOR-in (13, 19)
-#: (-DPFILL_XIN13) or LOP3+IMAD (-DPFILL_LI). The r9 pumps take 1024 fragments a warp a tile: a tile's B hashing and its
+#: (-DPFILL_XIN13) or LOP3+IMAD (-DPFILL_LI). Each takes 1024 fragments a warp a tile: a tile's B hashing and its
 #: barriers then stall a block a quarter as often, 0.772 of peak alone at S 256, 0.795 at 1024 (r20261016-131052-7d48)
-BU_DUO_FILLER = A.Filler(W=8, NC=2, S=256, chunk_log2=19, noise="bitsU", fold="duo")
+BU_DUO_FILLER = A.Filler(W=8, NC=2, S=1024, chunk_log2=19, noise="bitsU", fold="duo")
 BU_XIN13_FILLER = A.Filler(W=8, NC=4, S=1024, chunk_log2=19, noise="bitsU", fold="xor-in-13")
 BU_LI_FILLER = A.Filler(W=8, NC=4, S=1024, chunk_log2=19, noise="bitsU", fold="lop3-imad")
 
