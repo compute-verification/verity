@@ -6,9 +6,9 @@ from typing import Any
 
 
 def _pouw_roots() -> list[Any]:
-    """The per-segment spot check at the e2e slice's k = 4,096 (128 segments) and at 4 segments, the smallest receipt row
-    with a segment that is neither first nor last."""
+    """The per-segment spot check, with F ±1 and with decision 29's dither on the served side, at the e2e slice's k = 4,096
+    (128 segments) and at 4 segments, the smallest receipt row with a segment that is neither first nor last."""
     from verity.core.protocols.pouw.circuit import segment as SG
     from verity.ml.circuits.defs import bind
 
-    return [bind(SG.PouwSegCheck, KS=4), bind(SG.PouwSegCheck, KS=128)]
+    return [bind(D, KS=ks) for D in (SG.PouwSegCheck, SG.PouwSegCheckDither) for ks in (4, 128)]

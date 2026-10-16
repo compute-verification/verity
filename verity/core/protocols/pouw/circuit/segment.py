@@ -16,6 +16,7 @@ so every prefix word is committed, a word a (thread, segment). Absorbing p at po
 
     PouwI8Add_v1     (a, u: Value<8>) -> Value<8>                  a + u mod 2^8 (A' from A and U)
     PouwI8Pm1_v1     (b: Value<8>, f: Value<1>) -> Value<8>        b + 1 - 2 f mod 2^8 (B' from B and F's sign bit)
+    PouwI8AddBit_v1  (b: Value<8>, d: Value<1>) -> Value<8>        b + d mod 2^8 (B' from B and decision 29's dither bit)
     PouwSegDot_v1    (acc: Value<32>, a, b: Array<32, Value<8>>) -> Value<32>      acc + sum_k a_k b_k mod 2^32, int8 a and b
     PouwDuoSeg_v1    (y, z: Array<8, Value<32>>, p: Array<32, Value<32>>) -> Value<32>   the receipt word of p from y, z
     PouwSel32_v1     (s: Value<1>, w: Value<32>) -> Value<32>      w if s else 0
@@ -37,11 +38,23 @@ holds ``a``, ``b`` and ``rc`` to the trees committed before and after the coin, 
 ``sel`` from the coin and the draw, and reads the result through a row of known content: so a proof says the thread's
 committed receipt words j - 1 and j are those of the committed operands' noised product, and through the chain of
 prefix words the last one, T_(KS-1), is the noised product itself (the served Y is it less the peel U S^T).
+
+    PouwSegCheckDither_v1{KS}   the same with decision 29's dither on the served side: B' = B + d (`PouwI8AddBit_v2`), d in
+                                {0, 1} the coin bit ``f`` carries (the served X = floor(x / s) + b), in place of B + 1 - 2 f
 """
 from __future__ import annotations
 
 from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, ONE, add, and_reduce, compress_columns, const_bits, or_reduce
+from verity.ml.circuits.boolean.forms import (
+    NOT,
+    ONE,
+    ZERO,
+    add,
+    and_reduce,
+    compress_columns,
+    const_bits,
+    or_reduce,
+)
 from verity.ml.circuits.boolean.trace import definition
 from verity.ml.circuits.defs import composite, primitive
 from verity.ml.circuits.refs import array_of
@@ -49,9 +62,38 @@ from verity.ml.circuits.types import Array, Value
 
 from .boolean import PouwXor32
 
-__all__ = ["KA", "KK", "MI", "NCH", "NCT", "NI", "PouwDuoSeg", "PouwDuoSegWord", "PouwI8Add", "PouwI8AddWord", "PouwI8Pm1",
-           "PouwI8Pm1Word", "PouwSegCheck", "PouwSegDot", "PouwSegDotWord", "PouwSegOk", "PouwSegOkWord", "PouwSel32",
-           "PouwSel32Word", "ROT", "col_slot", "duo_seg", "init", "mix32", "row_slot", "seg_check", "seg_dot"]
+__all__ = [
+    "KA",
+    "KK",
+    "MI",
+    "NCH",
+    "NCT",
+    "NI",
+    "ROT",
+    "PouwDuoSeg",
+    "PouwDuoSegWord",
+    "PouwI8Add",
+    "PouwI8AddBit",
+    "PouwI8AddBitWord",
+    "PouwI8AddWord",
+    "PouwI8Pm1",
+    "PouwI8Pm1Word",
+    "PouwSegCheck",
+    "PouwSegCheckDither",
+    "PouwSegDot",
+    "PouwSegDotWord",
+    "PouwSegOk",
+    "PouwSegOkWord",
+    "PouwSel32",
+    "PouwSel32Word",
+    "col_slot",
+    "duo_seg",
+    "init",
+    "mix32",
+    "row_slot",
+    "seg_check",
+    "seg_dot",
+]
 
 BIT = BL.BIT
 U32 = Array(32, BIT)
@@ -124,11 +166,11 @@ def duo_seg(y, z, p) -> int:
     return out
 
 
-def seg_check(a, u, b, f, prev, st, rc, sel) -> int:
-    """`PouwSegCheck_v1` on words: a, u (4 x 32), b (8 x 32) int8 encodings, f (8 x 32) bits, prev (32), st (2 x 16), rc and
-    sel (KS each)."""
+def seg_check(a, u, b, f, prev, st, rc, sel, dither: bool = False) -> int:
+    """`PouwSegCheck_v1` (``dither``: `PouwSegCheckDither_v1`) on words: a, u (4 x 32), b (8 x 32) int8 encodings, f (8 x 32)
+    bits, prev (32), st (2 x 16), rc and sel (KS each)."""
     ap = [[(x + v) & 0xFF for x, v in zip(a[r], u[r])] for r in range(4)]
-    bp = [[(x + 1 - 2 * (s & 1)) & 0xFF for x, s in zip(b[c], f[c])] for c in range(8)]
+    bp = [[(x + ((s & 1) if dither else 1 - 2 * (s & 1))) & 0xFF for x, s in zip(b[c], f[c])] for c in range(8)]
     tj = [seg_dot(prev[q], ap[row_slot(q)], bp[col_slot(q)]) for q in range(32)]
     wj = wp = 0
     for i, s in enumerate(sel):
@@ -153,6 +195,12 @@ def PouwI8AddWord(a: int, u: int) -> int:
 def PouwI8Pm1Word(b: int, f: int) -> int:
     """B'_lk = B_lk + F_lk mod 2^8, F = +1 for a clear sign bit f, -1 for a set one."""
     return (b + 1 - 2 * (f & 1)) & 0xFF
+
+
+@primitive("PouwI8AddBit", 1, [("b", V8), ("d", V1)], V8, conformance="protocol-defined")
+def PouwI8AddBitWord(b: int, d: int) -> int:
+    """B'_lk = B_lk + d_lk mod 2^8, d decision 29's dither bit."""
+    return (b + (d & 1)) & 0xFF
 
 
 @primitive("PouwSegDot", 1, [("acc", V32), ("a", Array(32, V8)), ("b", Array(32, V8))], V32, conformance="protocol-defined")
@@ -190,6 +238,10 @@ def _i8_add(C, a, u):
 
 def _i8_pm1(C, b, f):
     return add(C, b, [ONE] + [f[0]] * 7, width=8)
+
+
+def _i8_add_bit(C, b, d):
+    return add(C, b, [d[0]] + [ZERO] * 7, width=8)
 
 
 def _seg_dot(C, acc, *ab):
@@ -260,6 +312,8 @@ PouwI8Add = definition("PouwI8Add", 2, _i8_add, (("a", I8), ("u", I8)), I8, word
                        conformance="protocol-defined", doc="a + u mod 2^8 on bits: PouwI8Add_v1")
 PouwI8Pm1 = definition("PouwI8Pm1", 2, _i8_pm1, (("b", I8), ("f", BIT)), I8, word=PouwI8Pm1Word,
                        conformance="protocol-defined", doc="b + 1 - 2 f mod 2^8 on bits: PouwI8Pm1_v1")
+PouwI8AddBit = definition("PouwI8AddBit", 2, _i8_add_bit, (("b", I8), ("d", BIT)), I8, word=PouwI8AddBitWord,
+                          conformance="protocol-defined", doc="b + d mod 2^8 on bits: PouwI8AddBit_v1")
 PouwSegDot = definition("PouwSegDot", 2, _seg_dot, (("acc", U32), ("a", Array(32, I8)), ("b", Array(32, I8))), U32,
                         word=PouwSegDotWord, conformance="protocol-defined",
                         doc="acc + sum_k a_k b_k mod 2^32 (int8) on bits: PouwSegDot_v1")
@@ -279,19 +333,31 @@ def _xor_tree(B, words: list):
     return words[0]
 
 
-@composite("PouwSegCheck", 1, ["KS"],
-           lambda S: ((("a", Array(4, Array(32, I8))), ("u", Array(4, Array(32, I8))), ("b", Array(8, Array(32, I8))),
-                       ("f", Array(8, Array(32, BIT))), ("prev", Array(32, U32)), ("st", Array(2, Array(2 * NCH, U32))),
-                       ("rc", Array(S.KS, U32)), ("sel", Array(S.KS, BIT))), BIT),
-           conformance="protocol-defined")
+def _check_signature(S):
+    return ((("a", Array(4, Array(32, I8))), ("u", Array(4, Array(32, I8))), ("b", Array(8, Array(32, I8))),
+             ("f", Array(8, Array(32, BIT))), ("prev", Array(32, U32)), ("st", Array(2, Array(2 * NCH, U32))),
+             ("rc", Array(S.KS, U32)), ("sel", Array(S.KS, BIT))), BIT)
+
+
+@composite("PouwSegCheck", 1, ["KS"], _check_signature, conformance="protocol-defined")
 def PouwSegCheck(B, S, a, u, b, f, prev, st, rc, sel):
     """One thread's spot check at the segment ``sel`` names: T_j = prev + A'_j B'_j^T (`PouwSegDot_v2` an entry, on A' and B'
     formed once a row), R(prev) and R(T_j) (`PouwDuoSeg_v2`), the receipt row's words j - 1 and j (`PouwSel32_v2`, an xor
     tree of `PouwXor32_v2`), and `PouwSegOk_v2`."""
+    return _seg_check_body(B, S, PouwI8Pm1, a, u, b, f, prev, st, rc, sel)
+
+
+@composite("PouwSegCheckDither", 1, ["KS"], _check_signature, conformance="protocol-defined")
+def PouwSegCheckDither(B, S, a, u, b, f, prev, st, rc, sel):
+    """`PouwSegCheck_v1` with the served side under decision 29's dither: B' = B + f (`PouwI8AddBit_v2`), f the coin bit."""
+    return _seg_check_body(B, S, PouwI8AddBit, a, u, b, f, prev, st, rc, sel)
+
+
+def _seg_check_body(B, S, served, a, u, b, f, prev, st, rc, sel):
     if S.KS < 2:
         raise ValueError("PouwSegCheck: at least two segments")
     ap = [B.batch(PouwI8Add, a[r], u[r], axes=(0, 0)) for r in range(4)]
-    bp = [B.batch(PouwI8Pm1, b[c], f[c], axes=(0, 0)) for c in range(8)]
+    bp = [B.batch(served, b[c], f[c], axes=(0, 0)) for c in range(8)]
     tj = array_of([B.call(PouwSegDot, prev[q], ap[row_slot(q)], bp[col_slot(q)]) for q in range(32)])
     rp = B.call(PouwDuoSeg, st[0][0:NCH], st[0][NCH:2 * NCH], prev)
     rj = B.call(PouwDuoSeg, st[1][0:NCH], st[1][NCH:2 * NCH], tj)
