@@ -54,7 +54,7 @@ structure Tab where
   B : Matrix (Fin (2 ^ kLog)) (Fin (2 ^ kLog)) (ZMod 2)
   regions : List (Model.Region kLog (m - kLog))
 
-instance : Inhabited Tab := ⟨⟨0, 0, 0, 0, 0, []⟩⟩
+instance instInhabitedTab : Inhabited Tab := ⟨⟨0, 0, 0, 0, 0, []⟩⟩
 
 namespace Tab
 
@@ -67,9 +67,9 @@ def Ok (t : Tab) : Prop := 6 ≤ t.kLog ∧ t.kLog ≤ t.m ∧ t.pin < 2 ^ t.kLo
 /-- The table fits blocks of `2^kLog` bits, `2^(m − kLog)` of them. -/
 def Fits (t : Tab) (m kLog : ℕ) : Prop := t.m = m ∧ t.kLog = kLog ∧ t.Ok
 
-instance (t : Tab) : Decidable t.Ok := by unfold Ok; infer_instance
+instance instDecidableOk (t : Tab) : Decidable t.Ok := by unfold Ok; infer_instance
 
-instance (t : Tab) (m kLog : ℕ) : Decidable (t.Fits m kLog) := by unfold Fits; infer_instance
+instance instDecidableFits (t : Tab) (m kLog : ℕ) : Decidable (t.Fits m kLog) := by unfold Fits; infer_instance
 
 /-- **The model's statement** of a table that has what it needs. -/
 abbrev toModel (t : Tab) (h : t.Ok) : Model.Statement where
