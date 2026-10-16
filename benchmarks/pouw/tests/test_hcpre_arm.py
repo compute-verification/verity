@@ -56,3 +56,20 @@ def test_prefill_co_one_arm(monkeypatch):
         if ph == "decode":
             assert P.filler_of(arm, ph, b, l) == P.filler_of(base, ph, b, l)
     assert S.honesty(arm, {}, S.points())["ok"]
+
+
+def test_prefill_co_one_s2048_arm(monkeypatch):
+    """PrefillCoOneS2048 differs from PrefillCoOne only in its prefill tiles' length."""
+    monkeypatch.setenv("DFILL_MAP", "0")
+    monkeypatch.delenv("DFILL_ONE", raising=False)
+    arm = A.load("benchmarks/pouw/filler/hcpre_arm.py:PrefillCoOneS2048")
+    base = A.load("benchmarks/pouw/filler/hcpre_arm.py:PrefillCoOne")
+    assert not A.check_arm(arm) and arm.name == "hcpre-m1-co-one-s2048" and arm.lineage["parent"] == base.name
+    assert P.os.environ["DFILL_ONE"] == "4"
+    assert P.filler_of(arm, "prefill", 8192, 0) == A.Filler(W=4, NC=4, S=2048, chunk_log2=20)
+    for ph, b, l in S.points():
+        assert A.placed(arm, ph, b, l) == A.placed(base, ph, b, l)
+        assert P.phase_of(arm, ph, b, l) == P.phase_of(base, ph, b, l)
+        if ph == "decode":
+            assert P.filler_of(arm, ph, b, l) == P.filler_of(base, ph, b, l)
+    assert S.honesty(arm, {}, S.points())["ok"]

@@ -82,3 +82,29 @@ class PrefillCoOne(PrefillCo):
 
     def filler_at(self, phase, b, l):
         return CO_PREFILL_ONE if phase == "prefill" else self.filler
+
+
+CO_PREFILL_ONE_S2048 = A.Filler(W=4, NC=4, S=2048, chunk_log2=20)
+
+
+@dataclass
+class PrefillCoOneS2048(PrefillCoOne):
+    """PrefillCoOne with S 2048 tiles in prefill: the same coverage with more room under the slowdown gate. On dscore's
+    prefill point with DFILL_ONE=4 at 2^20 (r20261016-084725-105c): S 512 1.045-1.046 / 0.255 (two repeats), S 1024
+    1.044 / 0.253, S 2048 1.042 (rounds max 1.043) / 0.255; 2^21 adds nothing (1.047 / 0.255), and 2^19 stays at
+    0.227 whatever S."""
+
+    name: str = "hcpre-m1-co-one-s2048"
+    lineage: dict = field(default_factory=lambda: {
+        "parent": "hcpre-m1-co-one", "approach": "pouw/filler-prefill",
+        "mechanism": ["filler:chained-imma-registers", "kernel:map-in-register-order", "kernel:w16-s8192", "chunk:2^20",
+                      "place:split", "split:per-point-table", "sched:phase-att", "sched:graph-fork-join",
+                      "sched:node-priority", "prefill:co", "sched:prio-short-blocks", "co:small-blocks",
+                      "phase:s256-512", "phase:nc2", "co:s2048-2^20", "kernel:one-block-an-sm"],
+        "hypothesis": "S 2048 tiles pay a tile's seed, hash and receipt a quarter as often as S 512: the prefill point "
+                      "keeps 0.255 at ~1.042 instead of ~1.046"})
+    choice: str = ("PrefillCoOne with S 2048 prefill tiles, from a dscore screen of S 256-2048, units of 4 and 16 and "
+                   "2^19-2^21 under DFILL_ONE; DFILL_MAP=1; run through psched_score.py/pscore.cu")
+
+    def filler_at(self, phase, b, l):
+        return CO_PREFILL_ONE_S2048 if phase == "prefill" else self.filler
