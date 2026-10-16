@@ -1163,7 +1163,8 @@ def test_train_sh_prints_every_twins_run_id(tmp_path, twins):
 
 
 #: the stubbed `uv`'s answer to train.sh's post to the merge thread: the post's body is copied to {posted}, and nothing launches
-_POST_STUB = ('case "$*" in *"msg reply"*) f=; p=; for a; do [ "$p" = --file ] && f=$a; p=$a; done; cp "$f" {posted}; exit 0;; '
+_POST_STUB = ('case "$*" in *"msg reply"*) f=; p=; for a; do [ "$p" = --file ] && f=$a; p=$a; done; cp "$f" {posted}; '
+              'echo "$*" > {posted}.args; exit 0;; '
               'esac\n')
 
 
@@ -1256,6 +1257,7 @@ def test_train_sh_posts_a_launch_that_registered_nothing_and_stays_quiet_on_one_
     posted = (tmp_path / "posted").read_text()
     assert p.returncode == 1 and "git fetch origin failed" in p.stderr, p.stderr
     assert "registered no run (exit 1)" in posted and "git fetch origin failed" in posted, posted
+    assert posted.startswith("@ci ") and "--quiet" in (tmp_path / "posted.args").read_text().split(), "it rings only @ci"
     (tmp_path / "gone.git").rename(tmp_path / "origin.git")
 
     (tmp_path / "bin" / "uv").write_text(f"#!/bin/sh\n{_POST_STUB.format(posted=tmp_path / 'posted')}"
