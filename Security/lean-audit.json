@@ -86,6 +86,15 @@
    "owner": "@memory-accounting",
    "digest": "98fbba3bae29f20560d86a31473797edc89dc0b1e28c7cde20737d9bf6e4254a"
   },
+  "Pouw.Assumptions.ChargeVF3f": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.Assumptions.KScopeAffine": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.Assumptions.ServiceSoundStaged": {
+   "owner": "@compute-accounting"
+  },
   "Pouw.Assumptions.TT": {
    "owner": "@compute-accounting",
    "digest": "6fc4a19042b6bbf0c1774bcd962e5804ae3d01752eea790c9954960ef3b7c2b7"
@@ -4528,6 +4537,12 @@
    "assumptions": [],
    "type_hash": "e57381cb5ec70754de5727e83fd659312830ca151e3abe1da5c28e8c03580b3b"
   },
+  "Pouw.SecurityProofs.RelativeSecurity.StagedFloorK": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.RelativeSecurity.TheoremSStaged": {
+   "owner": "@compute-accounting"
+  },
   "Pouw.SecurityProofs.Theorem1": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.Theorem1 : Pouw.Guarantees.Theorem1"],
@@ -5105,7 +5120,9 @@
    "Accounting.SecurityProofs.SketchRankFiber": "frozen (premise): Like Accounting.SecurityProofs.SketchBinds, it is a property of Accounting.RateSketch.sketch under a hypothesis on the window's signs (every sector's block has rank at least r over Q), which is neither an acceptance of the sketch nor a premise under shape.premises; Accounting.SecurityProofs.RateAuditTensorSketchRank prices the hypothesis as Pr_sigma[exists u, rank < r].",
    "Flock.SecurityProofs.RecursiveAuditC3": "restatable: PublicAudit at candidate 3's table (holoInnerAt); (i), a probability statement whose event is its acceptance, takes beside its premises (_hCust, _hIC, _hA3, _hbr) the recursive model's input fields Vs.hU, Vs.hscope, zr.hDraw, zr.hTags and zr.hown, the count curve's _hk, _hRw, _hM, _hρ and _hr, the obligations _hob (VStarParses, over the verifier's own list) and _hF (TagsFound), and R's registration, its cap and the record's stacked entry (_hstk), none a premise; it fits once the recursive model's inputs and count curve, those two obligations and the registration are restated as premises (constants of Proofs.Flock.Recursive.Premises). Its hidden statement is the word the prover's runs open at R's level 0 against the cap (regStmt), no registrant's openings taken. V*'s list at candidate 3's inner shape is circuits' gap 2's eleven statements (#1847). It says nothing about a private inner session: at a private inner shape (ish.holo) RecVStar.statements refuses (statements_holo), so no run the verifier accepts has one until V*'s holo parts land (#1896).",
    "Accounting.SecurityProofs.RemoteSessionConservationSketch": "frozen (no-function,hash): It composes the verbatim-sector tensor-sketch rank bound at every candidate pass with a causal session's pooled draws; the one shared store and every device read, link sector, rebuild and correct receipt are explicit, but the random-oracle game is not the rate audit's code.",
-   "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservationSketch at the deployed 16-row, 4 KiB-tile and draw parameters, with the two draw terms bounded by 2^-40; its q/2^96 query term remains explicit."
+   "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservationSketch at the deployed 16-row, 4 KiB-tile and draw parameters, with the two draw terms bounded by 2^-40; its q/2^96 query term remains explicit.",
+   "Pouw.SecurityProofs.RelativeSecurity.TheoremSStaged": "frozen (no-function): It is a theorem about every staged spot-check play (StagedPlay, its game's acceptance and deficiency) over any finite cells and bits and any ring, not about a Lean function: the service's staged check has no Lean code yet, and once it has, this is restated as that check's property.",
+   "Pouw.SecurityProofs.RelativeSecurity.StagedFloorK": "frozen (no-function,world-unlisted,scope): It is stated over an arbitrary Machine and Service and an analysis map (RunMap), not the service's code, and takes three premises about that map: ServiceSoundStaged (live coins, and the proof layer's binding and zero knowledge, with the seed identified with the staged window's coins), KScopeAffine (Theorem K's scope, K1 and E3, which no check of the service refuses a run outside of) and ChargeVF3f (VF3f's prices with B_theta complete, for stages that don't overlap)."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
