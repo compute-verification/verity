@@ -22,16 +22,13 @@
    "owner": "@memory-accounting",
    "digest": "9191da3bbab04e2c655d21d45cd15f7b317e9cc5cfe9b93627e1b050b7203aec"
   },
-  "Claims.CommitHides": {
-   "owner": "@proofs",
-   "digest": "d410f5628a047976165d48eb4e0b68d0de0af6a61c82f05b2a2f86e40e6afac1"
-  },
   "Claims.ExpectedCR": {
    "owner": "@proofs",
    "digest": "ccb0737889852a6df27bfbac4afc86597d213f0c77267a6c81a44e5c1dd7479e"
   },
   "Claims.Hm96Hiding": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "digest": "6c8f345d2254fc1cff51121b293ab6364de0ff01476d75d7dddc94df14080cd2"
   },
   "Claims.StrictBirthday": {
    "owner": "@proofs",
@@ -6441,7 +6438,7 @@
    ]
   },
   "Definitions.Claims": {
-   "digest": "f540a05da25c1e19f14a7f161f36eb679d159f5f25524da0754942933bfadff8",
+   "digest": "89ea1fdda276263d1f34a433155a7b130cb0e988e074d1679d8da247584beb92",
    "definitions": {
     "Claims.B": "fb3801991ccf043f813b846a36059903571dff8141ca0f402abb8a11582fa105",
     "Claims.BCoins": "dfd5aa495abff4c66b0bfe023034e60f7c9119d9087c0c2f068e5fc89defd0e3",
@@ -6452,7 +6449,6 @@
     "Claims.Circuit.outs": "1705a77b16b689aceee74f743004da62a7fe5be6b596df9bd4119221c5c1e350",
     "Claims.Circuit.wires": "f8708ac3ad38967a4248946a259ff63e30df7d1d730160a15a61e761c9d9f289",
     "Claims.Collision": "684d79c833f61a382736de6bea1d4837fddfeb6034c8b058487e8be7cf2d85ba",
-    "Claims.CommitHides": "d410f5628a047976165d48eb4e0b68d0de0af6a61c82f05b2a2f86e40e6afac1",
     "Claims.Complete": "f12a5418b67ac90c4028f4df8b1744008ac190f5bc8788afbd0107bc0466327f",
     "Claims.DecoderComplexity": "7d9c2440e204e779ad1e1a7e4e84d5e6e11036903723079059d47c266645e600",
     "Claims.ERep": "cb016a5be2414cfa68d56c1f414a90a708a20cc10ad9298cdc1fe447ff4d0a14",
@@ -6473,17 +6469,16 @@
     "Claims.Finder.fin": "1b06b4fe8a3ad95a1a707b4e6b8cd1621884d7da8a367f1a224894e00fec2675",
     "Claims.Finder.out": "1f2e96ba2d94703b13797de2b60b1089e0014df7842a3a3beef4d8d4d62558e2",
     "Claims.FinderFamily": "b34378ab00437b7c914dbf9fe528236e47b352b1d1757ccdc0710cf9db9fb99d",
-    "Claims.Flock.Bits": "939f310dd3958a4981d6d2f8a0f25e01a852df8950b940b777bb1fa6bd4fa3b8",
+    "Claims.Flock.Bits": "6b48ee0ad7af4222e025ff893feb3f0786657a6f564e4deeb90df933a3751ecd",
     "Claims.Flock.Complete": "5b7aa9104836e492ef5eebf5b8cc533974e97d874e4bd5f966a602480cb0a90d",
-    "Claims.Flock.Deploy": "b9ee0c994816e43b57eeb34d45469e9a6e86ce32c3f580748dd88d20c50a6621",
+    "Claims.Flock.Deploy": "200ce44ff969b2b268fa722ce2bfc8335b2e03cc4afd9f9b3480da1fc166c2d1",
     "Claims.Flock.Deploy.N₀": "d74c48c7b802f9d91933daa9e3dd41797847abe4e60ccd96f921fa1271f070ee",
     "Claims.Flock.Deploy.V": "0b350ec7263373349bf9be4853fd8272796175d552093987f0b4ce2e48653ea7",
-    "Claims.Flock.Deploy.agree": "b7ae7806ffd3824f70c1372a1b099014b4d348f4956e4a819a6c9d252a1308fb",
     "Claims.Flock.Deploy.cap": "853a487d33c3e10a00a2d65d390b43c7dcf8f917b5f734ae28d9e592f99b5f2f",
     "Claims.Flock.Deploy.cols": "1a915d114a79e7962cad7ff317afa99a3272ca187d3dc56636bac3f084d0e4f5",
     "Claims.Flock.Deploy.enc": "983a51b7d2db2d0f7a63289909eaacbf719b498a0006879317fe34dedb3fe4fb",
     "Claims.Flock.Deploy.k": "6d4b0cfa748b3f6de583d28b4f1fc36564ed5070373a394045ecf5de7c2cb432",
-    "Claims.Flock.Deploy.nMin": "c9d9cece4053e43ac13b38fef27479a835f7c0407f70fc0493b661466e6d360e",
+    "Claims.Flock.Deploy.len": "560e21dbd9d26969b68d1654615c23f5cf9a04bd38b9cc12bdf4a5efe649c9b6",
     "Claims.Flock.Deploy.parse": "725b883d5e45f4f6a6f9c3ced6ecb3f8eaf89647a9fb03b1d725b5b01171c68d",
     "Claims.Flock.Deploy.read": "090add4032e32c999d06cee6c751273347561c93442b29c6151f72c8d309ba71",
     "Claims.Flock.Deploy.scopeCheck": "73dda7843513e5f4d4d40c04e0d99319ff4094cd2862581c53850bb84f27a9a2",
@@ -6491,8 +6486,9 @@
     "Claims.Flock.Deploy.weight": "8a9008512106e5267d01ea95ff6ffb9668aeb668e16b39cbc09254d54c9e6d71",
     "Claims.Flock.Deploy.zk": "c2131611066cde3249a7c846fa27178f05da223efd134cba65ca3bef11fd9d5e",
     "Claims.Flock.Deploy.εtable": "83cd18dc36edf8a003a38be75da40a7b51beb65c0f5f446e08590af94bc9f8ef",
+    "Claims.Flock.Deploy.θ": "c6ed76936c93197f967ac3d4ca15f8083ad5ef8619d657262366320fe3196987",
     "Claims.Flock.E": "535edba9cadcfa1c03c40f0b291dc62274fd335dabcf1a9e76319f64c47a5e3f",
-    "Claims.Flock.Efficient": "f607f40538b4f6eb60100b6dcfbcd1c699cc2be85870a29d5057fa010d057eb7",
+    "Claims.Flock.Efficient": "93712f6b5aa341213be2a90604e496b982ce90be16fca1811ecc2a207adacf03",
     "Claims.Flock.Form": "4552fbc9fdd748d92f4f0ff9718a9ac58844f134d47f21625ea6e65ea974321e",
     "Claims.Flock.Form.hiddenOutputs": "2faf0d999c87c176f6c3a032b81eeccebc9737dd609a5b7f97803327d0bca676",
     "Claims.Flock.Form.hm96Rows": "7986891e1d143d19c65baf028830c513d417d081cbcde01ff013c3c9ff7cb78a",
@@ -6510,8 +6506,8 @@
     "Claims.Flock.Form.unitInputGroups": "34c1be23523393eb04e937bb0e62eee61ab71d8d5a25d74fb9f0a6481c0409d4",
     "Claims.Flock.Form.unitLog": "42d4d124f85e858735727483ba1d4986d7566a2f46074062fc6789ebbff23da9",
     "Claims.Flock.InScope": "b29616305c3bac855dc49ea3a61632a9782c5939a392809a6914a55113015a89",
-    "Claims.Flock.KS": "3a88f6ea79d8d860b84af58da79578a167552b59ddd756ce18c059379aaee35f",
-    "Claims.Flock.ListComplete": "cae99ae7889eb6d5d8a304b84ec417cc3313aeb6cb497e0c8bd9a6e48ffd7f3c",
+    "Claims.Flock.KS": "24f9e606ea80350ae57b63f484b9ecd9e653abf7af2bd04695a10727e3b235a7",
+    "Claims.Flock.ListWithin": "3a7f082e2c4b81ae0fc5a8c6aa76db542e596e0367016205f82198b482939425",
     "Claims.Flock.Nontrivial": "45b0e6b272f66e67734add25de33fa2ff3f0f23d6657c55c60a00b3befa86517",
     "Claims.Flock.R": "e0d2928db890c971906106c5b4ad6591aa6db86b67fe6429dc9fc18bc84ca05f",
     "Claims.Flock.RelS": "f2142e8595058f636d8bd1b809386189aa8ccadb0e05fd8907089a568676d9ef",
@@ -6536,9 +6532,10 @@
     "Claims.Flock.Wit": "da8fa0213f357b43a9a2a127a4d4c1d8ecdef5ffcd348ea6d515cb176367ac1f",
     "Claims.Flock.Wit.hid": "83d7a615a437c984bc9ef72151740cbc66355923d12122c8a13225198acd3b49",
     "Claims.Flock.Wit.salts": "31f0d4c2078e6daac60cd65b09faf15f217b076d69f0e4c2609b6132c1e1eec6",
-    "Claims.Flock.ZK": "b16ceff4079f2005a090f9ccb7c89e0c843931dc71d784a9454fde61097e4916",
+    "Claims.Flock.ZK": "6d2c631461f30a6decce54273e6e9e942dbfdc805c839446c42ca39aea99b49f",
     "Claims.Flock.assemble": "fd23c0a85d5e851ee18d070bdf8b41c54244ebb4e1018957365c560896c34acc",
     "Claims.Flock.check": "0c2959805d290da409cc2362999093e58b893f1973f04942996b23ea48bab46b",
+    "Claims.Flock.fill": "e3948f202943921678211f42856d40267e32f070ffeb931c66b21cbc8d1e2dac",
     "Claims.Flock.instDecidableRelS": "d72002c00ad5eccfb28f37d07a9cca3f356ca180bfbe71c9eb4609e4055c0ad3",
     "Claims.Flock.val": "3d8a56ec8168f2ce7b2b970db481919ff80fe688258c826e1e747ec30f954244",
     "Claims.Flock.γ": "279e2e201c67c6f3ffb317fe80791b93cb7c7af1a3d6ddbfe1267afaec2cfd8e",
@@ -6602,7 +6599,7 @@
     "Claims.ScopeMatches": "538116d92383dc3ca64a56e414f5c194316a39ca450d8f8be7637010c20646b8",
     "Claims.Seen": "a5a26fcf9d19ac1d8786011d3c64460317e7aae403a4244fe48b2aee8e809ca1",
     "Claims.Seen.out": "ef0ddab850d3a2fd046517dc3440b26ced80bc8a31cff7b5a7d36288e8eed6ff",
-    "Claims.SimCost": "644ca1a4014b1b2ca9e1463a17982c2f9b728924de188f13bb5f7a0715dcad56",
+    "Claims.SimCost": "245c07fe2b8f5d02b57370522f16dee53ae2eb4def1a417305a7bfec3a2101d5",
     "Claims.Simulator": "ad414bff06799b7771fe988885dda054869cec5c2ff1023135956edfe6f15735",
     "Claims.Simulator.C": "d495c0b7450bf667299acf0e2d5b7b2b00e3a30f03a261c59e603e50ef493de5",
     "Claims.Simulator.fin": "bbb5bce7beb6fa6210b5e236e3ec551df1662fe9f2096d48d6f93c1c54679279",
@@ -6621,7 +6618,7 @@
     "Claims.Verifier": "dbfceca0fe9e4682ceaf2c145e93800086d8196f616b38e7100c68809a61d8f8",
     "Claims.Verifier.k": "ce7ee1bf3ba0fcb27e4198fa7b6a7ecdcb13e6f7be6dedc831ed9404030f71d1",
     "Claims.Verifier.next": "c8cfcfa41bdaa7d4099cf568a4f5454b49782ff4b3073ea88467af77682299cd",
-    "Claims.ZKmal": "0f4f66ea5f2a354cd522c4ee8bfc06bfd9b3e1457f70b4c4bdb3e9175136533b",
+    "Claims.ZKmalR": "64a53c55cad7312e4793480d52a50e0772bf6bac493084386aeee3232388426e",
     "Claims.coinSeq": "aef2718cd2a53d2a311bb90edc9fb65614312a27c53c7c0aea27c25766bf217d",
     "Claims.commit": "2ef614a178b7037918b785b6e4352a80153ae9d6f150d98dfcc036c44c12767d",
     "Claims.findColl": "91eb2cda582aad3ff3bebd649ad71847502a9b4ba4ab58b7917d2dea8856884c",
@@ -6634,9 +6631,19 @@
     "Claims.replay": "65303099f6063fd6d7c7190a4d02fa63afdcd31a0d50cc61f312f29bea80e3a5",
     "Claims.run": "2ba785854da4b812a030ee1d2a767f08c2880c9632891a1810d0ffd2b2742c5f",
     "Claims.runStar": "3a577125ddd331d3fd7ad8f460dc8b8f15982f01a371562139d5b5f122adb107",
+    "Claims.simLog": "da94de7afe7e94406a00ed6a9b7cc26e6431c392f48c9d776f1192eea66fee0e",
+    "Claims.spLog": "1bb8dbc44a69253634bd2c32ca2c3c842aaf09a50a92116901916451ee14d40a",
     "Claims.stepWith": "530977e19848dbb40e78746a5c30960924c320f3492d4c9199c2dad7083c268f",
-    "Claims.trustedBase": "f32aad040b857fc316ccd0a8c15cc708ff43cb888e803ab909087fe6ac04183b",
+    "Claims.trustedBase": "da78771f74000413bb27b7edf566b5e665954850e41c535e8fc45d2f283842fb",
     "Claims.waitAcc": "85b751a4e882d0ce61736041f2349297297bc4eb996b472d6a6191513053bca7"
+   },
+   "guarantees": ["Flock.SecurityProofs.ClaimsStated"]
+  },
+  "Definitions.Claims.Hm96": {
+   "digest": "1a0af7a4f0c55c58b023c3336ffdfb726648ac202948524990a2c2b96840ec44",
+   "definitions": {
+    "Claims.Hm96Hiding": "6c8f345d2254fc1cff51121b293ab6364de0ff01476d75d7dddc94df14080cd2",
+    "Claims.PrENNReal": "5e884d85245e6c7c79ae257dff1612fbe5d048d84926996eb79d469f11340473"
    },
    "guarantees": ["Flock.SecurityProofs.ClaimsStated"]
   },
@@ -16200,9 +16207,9 @@
    ]
   },
   "Models.Flock.Guarantees.Claims": {
-   "digest": "496af82936436d8c3f8e4d06d20898d9d794cabb282115d30f984d5b8282386d",
+   "digest": "e1681404ab37f81066073ef443a455160b019a26ad18acc8aab7f92f8313969c",
    "definitions": {
-    "Flock.Guarantees.ClaimsStated": "d9016d23fd55ebfa190a70273e669ba0643c39cb05523e23f8fcc8708b0f971b"
+    "Flock.Guarantees.ClaimsStated": "8523fe9b3cb103b14efac2583c8ba523975cd19e11414a36d2a09b260e87e265"
    },
    "guarantees": ["Flock.SecurityProofs.ClaimsStated"]
   },
