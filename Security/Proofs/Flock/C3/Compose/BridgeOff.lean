@@ -9,11 +9,12 @@ event `Bad` fails (`C3Family.AtAcceptedOff`): the guarantee's `_hbr` is off a re
 verifier registers itself (`ValueColl`) and off a read's leaf off the table's (`LeafColl`), and those read facts are
 where the value ties enter (`value_tie_coll` at `coef`, `dirs`, `v`), which hold only off `ValueColl`.
 
-* `C3Family.AtAcceptedOff`, `RepsReadOff`, `OpeningReadOff`, `RegLevelsReadOff`: `AtAccepted`, `RepsRead`,
-  `OpeningRead` and `RegLevelsRead` off `Bad`;
+* `C3Family.AtAcceptedOff`, `RepsReadOff`, `OpeningReadOff`, `RegLevelsReadOff`, `SparseReadOff`, `HFrameOff`:
+  `AtAccepted`, `RepsRead`, `OpeningRead`, `RegLevelsRead`, `SparseRead` and `HFrame` off `Bad`;
 * `opening_of_readAt`: `hOpening_of_decode` at one tape and run;
 * `vbridgeOff_c3_off`: `vbridgeOff_c3` from those, giving `VBridgeOff` off `RegColl ∨ Bad`, the first field of
-  `Flock.Assumptions.VBridgeCOff Bad`.
+  `Flock.Assumptions.VBridgeCOff Bad`. Every read fact and the frame enter off `Bad`, so a decoder need only read the
+  source where `Bad` fails (`offZs`).
 -/
 
 namespace FlockC3.Compose
@@ -58,6 +59,26 @@ def RegLevelsReadOff (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
     RegTape xR.cap (holoAt st hp).rsch.sch (F.run R ω t Lb).opened
       (tapeR (schedSteps T CT 0 ((F.wmsg Lb).zip (t.map Prod.snd))) (F.run R ω t Lb))
 
+/-- **The reps' sparse phases' read fact off `Bad`** (`SparseRead`). -/
+def SparseReadOff (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
+    (Bad : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → Prop) (dg : ByteArray → ByteArray)
+    (N k Rw : ℕ) : Prop :=
+  F.AtAcceptedOff Bad dg N k Rw fun R ω t Lb =>
+    SparseReadAt (holoAt st hp) (schedSteps T CT 0 ((F.wmsg Lb).zip (t.map Prod.snd))) (F.run R ω t Lb)
+
+/-- **The inner transcript's frame off `Bad`** (`HFrame`). -/
+def HFrameOff (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
+    (Bad : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → Prop) (dg : ByteArray → ByteArray)
+    (N k Rw : ℕ) : Prop :=
+  F.AtAcceptedOff Bad dg N k Rw fun R ω t Lb =>
+    Framed (F.run R ω t Lb) (schedSteps T CT 0 ((F.wmsg Lb).zip (t.map Prod.snd)))
+
+/-- **The tape is the run's steps where the run is its decode and framed on it** (`holoSteps_of_framed`). -/
+theorem tape_of_framed {e : ExecHolo} {l : List Step} {u : C3Run e} (hu : u = decodeRun e l) (h : Framed u l) :
+    l = holoSteps u.cap₀ u.pts (u.ts 0) (u.ts 1) (u.sp 0) (u.sp 1) u.op u.lg u.os := by
+  subst hu
+  exact holoSteps_of_framed h
+
 /-- **R's opening plays from its read fact at one tape `l`**, where the run is `l`'s decode. -/
 theorem opening_of_readAt {l : List Step} {u : C3Run (holoAt st hp)} (hu : u = decodeRun (holoAt st hp) l)
     (h : OpeningReadAt l u) :
@@ -68,15 +89,16 @@ theorem opening_of_readAt {l : List Step} {u : C3Run (holoAt st hp)} (hu : u = d
   exact ⟨seven_le_mReg _, opening_of_steps _ _ (fun i => FlockSoundness.Refine.vecOf 128 M.rs[i.val]!) ρ γ hpre
     fun i => packed_check (seven_le_mReg _) (hrel i) (checks_of_run hop hz i)⟩
 
-/-- **(b) VBridge's acceptance part off `Bad`**: `vbridgeOff_c3` with the reps', R's opening's and levels' read facts
-off `Bad` (the reps' plays from theirs, `reps_of_readAt`, where the run decodes them as `decodeRun` does, `hrst`), at
-a family whose run decodes the tape (`hrun`) and R's Ligerito and openings as `decodeRun` does (`hst`). -/
+/-- **(b) VBridge's acceptance part off `Bad`**: `vbridgeOff_c3` with the reps', the sparse phases', R's opening's and
+levels' read facts and the frame off `Bad` (the reps' plays from theirs, `reps_of_readAt`, where the run decodes them
+as `decodeRun` does, `hrst`; the tape from the frame, `tape_of_framed`), at a family whose run decodes the tape
+(`hrun`) and R's Ligerito and openings as `decodeRun` does (`hst`). -/
 theorem vbridgeOff_c3_off (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
     (Bad : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → Prop) (dg : ByteArray → ByteArray)
     (N k Rw : ℕ) (hrun : ∀ R ω t Lb,
       F.run R ω t Lb = decodeRun (holoAt st hp) (schedSteps T CT 0 ((F.wmsg Lb).zip (t.map Prod.snd))))
-    (htape : HTape F dg N k Rw) (hrst : HRepStages F dg N k Rw) (hrr : RepsReadOff F Bad dg N k Rw)
-    (hsp : HSparse F dg N k Rw)
+    (hfr : HFrameOff F Bad dg N k Rw) (hrst : HRepStages F dg N k Rw) (hrr : RepsReadOff F Bad dg N k Rw)
+    (hsr : SparseReadOff F Bad dg N k Rw)
     (hst : HLgStages F dg N k Rw) (hop : OpeningReadOff F Bad dg N k Rw) (hlv : RegLevelsReadOff F Bad dg N k Rw) :
     VBridgeOff (I := holoInnerAt T CT st hp) (fun R ω t R₂ => RegColl F.zs R ω t R₂ ∨ Bad R ω t R₂) F.zs dg N k Rw
       (fun _ _ => xR) F.wmsg := by
@@ -84,12 +106,13 @@ theorem vbridgeOff_c3_off (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
   have ha : Accepted (I := holoInnerAt T CT st hp) F.zs dg N k Rw R ω t R₂ τ o :=
     ⟨h₀, fun h => hc (Or.inl h), hout⟩
   have hb : ¬ Bad R ω t R₂ := fun h => hc (Or.inr h)
-  have ht := htape R ω t R₂ τ o ha
+  have ht := tape_of_framed (hrun R ω t _) (hfr R ω t R₂ τ o ha hb)
   have hreps := reps_of_readAt (hrst R ω t R₂ τ o ha) (hrr R ω t R₂ τ o ha hb)
   obtain ⟨hr₀, hv₀, hk₀⟩ := hreps 0
   obtain ⟨hr₁, hv₁, hk₁⟩ := hreps 1
-  have hs₀ := hsp R ω t R₂ τ o ha 0
-  have hs₁ := hsp R ω t R₂ τ o ha 1
+  have hsp := sparse_of_readAt (by rw [hrun]; exact sparseStages_decodeRun _ _) (hsr R ω t R₂ τ o ha hb)
+  have hs₀ := hsp 0
+  have hs₁ := hsp 1
   obtain ⟨hR, ho⟩ := opening_of_readAt (hrun R ω t (layers F.zs dg N k Rw R ω t R₂ τ))
     (hop R ω t R₂ τ o ha hb)
   obtain ⟨hl, hvR, hkR⟩ := regLevels_of_readAt (hst R ω t R₂ τ o ha) (hlv R ω t R₂ τ o ha hb)

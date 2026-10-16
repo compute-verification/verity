@@ -619,10 +619,12 @@ class Driver:
     def trains(self, n: int, cold: frozenset[int] = frozenset()) -> list[int]:
         """The members whose commits get a check: every `train_size`-th one and the tip, each train stacked on the one below, so a
         failure holds up only the PRs from its train up, and the trains below it still land; and the member just below each one
-        in ``cold`` (`queue.forces_cold`), so the PRs under a train whose circuit-check runs cold get a warm check of their own."""
+        in ``cold`` (`queue.forces_cold`) but not itself cold, so the PRs under a run of cold ones get a warm check of their own and
+        the run pays one cold circuit-check."""
         if not n:
             return []
-        return sorted({*range(self.train_size - 1, n, self.train_size), n - 1, *(i - 1 for i in cold if 0 < i < n)})
+        return sorted({*range(self.train_size - 1, n, self.train_size), n - 1,
+                       *(i - 1 for i in cold if 0 < i < n and i - 1 not in cold)})
 
     def _cold(self, members: list) -> frozenset[int]:
         """The indices of ``members`` whose own merge onto `next` makes circuit-check run cold (`queue.forces_cold`)."""
