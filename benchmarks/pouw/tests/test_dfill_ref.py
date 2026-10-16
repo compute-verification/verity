@@ -49,6 +49,20 @@ PINNED_MAP1 = [
     (8, 0, 0, 0xE54F09F395158AC1), (8, 1, 1, 0x0B92403DEF87EDB7), (8, 8, 1000003, 0x00A6D2D6A88307D0),
 ]
 
+# Map 2 (map 1 with a 128-bit tile seed and C in [-2^15, 2^15)), the same way.
+PINNED_MAP2 = [
+    (1, 1, 0, 0x1F9FFB3C6248561A), (1, 1, 1, 0x77664C2C57CC7BAF), (1, 1, 1000003, 0xDBB0FCA6999BE468),
+    (1, 8, 0, 0xB1542D8E9E5DB457), (1, 8, 1, 0xF83DDEA3FA3BC5D1), (1, 8, 1000003, 0x7083D301AEA058FA),
+    (1, 64, 0, 0x147D372ED2A3B46F), (1, 64, 1, 0x96B0D740670F418C), (1, 64, 1000003, 0xB84279785AF357AD),
+    (2, 1, 0, 0x396EFA04345A6A1B), (2, 1, 1, 0xC9012FEF6C5699BD), (2, 1, 1000003, 0x6580A9DCC31C15CD),
+    (2, 8, 0, 0x8B9233B0AC98DBFB), (2, 8, 1, 0xC04B66EB0F9A6484), (2, 8, 1000003, 0x8BE3B53625CC81B4),
+    (2, 64, 0, 0x4CA4E4805E180E48), (2, 64, 1, 0x235653D2343479C8), (2, 64, 1000003, 0x0BC409AAAE6A3979),
+    (4, 1, 0, 0xFACFE34FB21D66FA), (4, 1, 1, 0xB6844FE30DCAC360), (4, 1, 1000003, 0x7B12B3614B328393),
+    (4, 8, 0, 0xAC9BC9D9FB683117), (4, 8, 1, 0xC5CF212E0FF64F00), (4, 8, 1000003, 0xCC25E313269D13D9),
+    (4, 64, 0, 0x16FBABA3508A1290), (4, 64, 1, 0x86BD6EC8032E094F), (4, 64, 1000003, 0xFC574456BF6CA0E3),
+    (8, 0, 0, 0x4CF999BE53C0B196), (8, 1, 1, 0x917215AF1F5D4638), (8, 8, 1000003, 0x582E31C63A3A1440),
+]
+
 
 @pytest.mark.parametrize("nc,steps,tile,want", PINNED)
 def test_receipt_equals_dcap_reference(nc, steps, tile, want):
@@ -60,10 +74,24 @@ def test_map1_receipt_equals_dcap_reference(nc, steps, tile, want):
     assert R.receipt(C0, C1, tile, nc, steps, 1) == want
 
 
+@pytest.mark.parametrize("nc,steps,tile,want", PINNED_MAP2)
+def test_map2_receipt_equals_dcap_reference(nc, steps, tile, want):
+    assert R.receipt(C0, C1, tile, nc, steps, 2) == want
+
+
+def test_map2_seed_and_c_range():
+    """Map 2's tile seed has a second 64-bit half that every operand word reads, and its C lies in [-2^15, 2^15)."""
+    s = R.dseed_x(C0, C1, 7, 2)
+    assert s[1] != 0 and R.dword_x(s, 2, 1, 0, 0) != R.dword_x((s[0], s[1] ^ 1), 2, 1, 0, 0)
+    cs = [R.dcval_x(s, 2, r, n) for r in range(16) for n in range(8)]
+    assert all(-(1 << 15) <= v < (1 << 15) for v in cs) and max(map(abs, cs)) > (1 << 13)
+
+
 def test_receipt_at_measured_depth():
     """S = 2048, the depth every timed point ran, at a second pair of coins."""
     assert R.receipt(0x7F88ED5DFF52F729, 0xE9FECEAE8FAABB27, 77, 2, 2048) == 0x2F39A861AAA55C8D
     assert R.receipt(0x7F88ED5DFF52F729, 0xE9FECEAE8FAABB27, 77, 2, 2048, 1) == 0xB26B98B1DA78C728
+    assert R.receipt(0x7F88ED5DFF52F729, 0xE9FECEAE8FAABB27, 77, 2, 2048, 2) == 0x712EB12C70404971
 
 
 @pytest.mark.parametrize("map_", [0, 1])
@@ -90,7 +118,7 @@ def test_byte_map_is_a_bijection(map_):
     assert got.tolist() == [[int(by.reshape(-1)[i]) for i in row] for row in a.tolist()]
 
 
-@pytest.mark.parametrize("map_", [0, 1])
+@pytest.mark.parametrize("map_", [0, 1, 2])
 def test_receipt_depends_on_every_step_block(map_):
     """dgate's control: a tile cut short by one 8-step block writes a different receipt."""
     for nc in (1, 2, 4):
