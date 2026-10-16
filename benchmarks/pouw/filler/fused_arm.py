@@ -164,7 +164,7 @@ class FusedPump(Fused):
 
 
 #: pfill-k's chunk (pfill_arm.PFillK's: 8 warps a block, 256 fragments a warp a tile, about 2^19 MMAs an SM a chunk)
-K_FILLER = A.Filler(W=8, NC=4, S=256, chunk_log2=19, noise="bits01")
+K_FILLER = A.Filler(W=8, NC=4, S=256, chunk_log2=19, noise="bits01", fold="ram")
 
 
 @dataclass
@@ -196,8 +196,8 @@ class FusedPumpK(FusedPump):
 
 
 #: pfill-bU's chunk (pfill_arm.PFillBU's shape) with duo's receipt (NC 2) or XOR-in's (NC 4 built with -DPFILL_XIN)
-BU_DUO_FILLER = A.Filler(W=8, NC=2, S=256, chunk_log2=19, noise="bitsU")
-BU_XIN_FILLER = A.Filler(W=8, NC=4, S=256, chunk_log2=19, noise="bitsU")
+BU_DUO_FILLER = A.Filler(W=8, NC=2, S=256, chunk_log2=19, noise="bitsU", fold="duo")
+BU_XIN_FILLER = A.Filler(W=8, NC=4, S=256, chunk_log2=19, noise="bitsU", fold="xor-in")
 
 
 @dataclass

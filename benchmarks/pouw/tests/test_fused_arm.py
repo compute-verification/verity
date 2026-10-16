@@ -56,6 +56,9 @@ def test_contract_and_record(arm):
         assert (arm.filler.W, arm.filler.S) == (8, 256)  # pfill's 8-warp blocks; S a multiple of 32
         # a word-binding fold on bU: duo (NC 2), or NC 4 only as XOR-in
         assert kind == "bits01" or arm.filler.NC == 2 or (arm.filler.NC == 4 and "-DPFILL_XIN" in arm.nvcc_flags)
+        # the fold filler-scorer/v5 reads, declared as the NC and build make it (pf_absorb)
+        xin = "-DPFILL_XIN" in arm.nvcc_flags
+        assert arm.filler.fold == {2: "duo", 4: "xor-in" if xin else "ram"}[arm.filler.NC]
 
 
 @pytest.mark.parametrize("arm", ARMS, ids=lambda a: a.name)
