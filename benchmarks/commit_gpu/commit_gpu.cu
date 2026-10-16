@@ -19,6 +19,7 @@
 // `check`)
 // COMMIT_GPU_SMALL=1: `check` takes the small path (no shared memory), from domain slot 1 and salt slot 1 of 2.
 // COMMIT_GPU_FUSE=1 with it: the last leaf CTA folds the levels above the CTAs (Committer::fuse_top).
+// COMMIT_GPU_PREFETCH=1: tile leaves prefetch their next block into L1 (Committer::prefetch).
 #include <cublasLt.h>
 #include <nvml.h>
 
@@ -102,6 +103,8 @@ static int check(int argc, char** argv) {
   cm.init(p, n, mode == "e2e" ? 128 : lb, true, seg, lbits, small ? 1 : 0, small, small ? 2 : 1);
   const char* fz = getenv("COMMIT_GPU_FUSE");
   cm.fuse_top = small && fz && !strcmp(fz, "1");
+  const char* pz = getenv("COMMIT_GPU_PREFETCH");
+  cm.prefetch = pz && !strcmp(pz, "1");
   prf ? cm.salts<true>(nullptr, 0) : cm.salts<false>(dsalts, 0);
   if (tile) {
     cm.tiles(drows, a, b, (u32)c, seg, 0, slot);

@@ -261,23 +261,33 @@ DEV void row_e2e(const uint8_t* A, u64 pos, u64* x) {
 // A row's bytes as 16-byte loads: `Contig`, lb bytes at one 16-byte aligned address (reads may run up to 15 bytes past
 // the row, inside the buffer); `TileSrc`, a tile leaf's block of an int8 operand (rows K bytes apart, 32 bytes of each in
 // row-major order, rows at or past `rows` reading as zero).
+// pf(off): an L1 prefetch of the 128 bytes at off (hash_after_block's next block)
+DEV void pf_l1(const uint8_t* p) { asm volatile("prefetch.global.L1 [%0];" ::"l"(p)); }
 struct Contig {
   const uint8_t* p;
   DEV uint4 ld16(u32 off) const { return ldg16(p + off); }
+  DEV void pf(u32 off) const { pf_l1(p + off); }
 };
 struct TileSrc {
   const uint8_t* base;
   u64 K;
   long long rows;
   DEV uint4 ld16(u32 off) const { return (long long)(off >> 5) < rows ? ldg16(base + (off >> 5) * K + (off & 31)) : make_uint4(0, 0, 0, 0); }
+  DEV void pf(u32 off) const {
+#pragma unroll
+    for (u32 r = off >> 5; r < (off >> 5) + 4; ++r)
+      if ((long long)r < rows) pf_l1(base + r * K);
+  }
 };
 
-// SHA-512 of a 128-byte first block (its chaining value cv) and lb row bytes from `src`.
+// SHA-512 of a 128-byte first block (its chaining value cv) and lb row bytes from `src`. pf: each block's compression
+// starts with an L1 prefetch of the next block's bytes, so their loads don't wait in the chain.
 template <class Src>
-DEV void hash_after_block(const u64* cv, const Src& src, u32 lb, u64* x) {
+DEV void hash_after_block(const u64* cv, const Src& src, u32 lb, u64* x, bool pf = false) {
   cpy8(x, cv);
   const u32 nblk = (lb + 17 + 127) / 128;
   for (u32 b = 0; b < nblk; ++b) {
+    if (pf && 128 * (b + 1) < lb) src.pf(128 * (b + 1));
     u64 W[16];
 #pragma unroll
     for (int c = 0; c < 8; ++c) {
@@ -441,14 +451,16 @@ struct RowBytes {
 struct FakeSrc {
   u32 seed;
   DEV uint4 ld16(u32 off) const { return make_uint4(seed ^ off, seed + off, seed * 3u ^ off, off); }
+  DEV void pf(u32) const {}
 };
 #endif
 struct RowTile {
   TileGeom g;
+  bool pf = false;  // hash_after_block's prefetch of the next block (Committer::prefetch)
 #ifdef COMMIT_GPU_DIAG_NOOP
   DEV void digest(u64 pos, u64* x) const { hash_after_block(C.mid_P, FakeSrc{(u32)pos}, 32 * g.R, x); }
 #else
-  DEV void digest(u64 pos, u64* x) const { hash_after_block(C.mid_P, g.block(pos), 32 * g.R, x); }
+  DEV void digest(u64 pos, u64* x) const { hash_after_block(C.mid_P, g.block(pos), 32 * g.R, x, pf); }
 #endif
 };
 
@@ -688,10 +700,13 @@ __global__ void __launch_bounds__(SMALL_THREADS, SMALL_MINB)
 #endif
   if (!ctr) return;
   // the levels above the CTAs (Committer::fused): the CTA that finishes last folds them, so no launch follows; its
-  // count goes back to 0 for the next launch
-  __threadfence();
+  // count goes back to 0 for the next launch. Thread 0 stored the CTA's root (level SMALL_LEVELS), the one node another
+  // CTA reads, so it alone fences before counting.
   u32 old = 0;
-  if (threadIdx.x == 0) old = atomicAdd(ctr, 1u);
+  if (threadIdx.x == 0) {
+    __threadfence();
+    old = atomicAdd(ctr, 1u);
+  }
   if (!__syncthreads_or(threadIdx.x == 0 && old == gridDim.x - 1)) return;
   __threadfence();
   for (int l = 1; l <= nl; ++l) {
@@ -1045,6 +1060,7 @@ struct Committer {
   uint4* Tn = nullptr;              // the small path's nibble table (hm96_mask's NIB layout), 8 KB
   u32* ctr = nullptr;               // the small path's count of finished leaf CTAs (fused)
   bool fuse_top = false;            // the small path: the last leaf CTA folds the levels above the CTAs (fused)
+  bool prefetch = false;            // tiles(): each leaf prefetches its next block into L1 (RowTile::pf)
   uint8_t* D = nullptr;             // row-seg: the segment digests
   u32 segs = 0, seg_last = 0;
   std::vector<u64*> lv;
@@ -1130,7 +1146,7 @@ struct Committer {
   void tiles(const uint8_t* A, u64 M, u64 K, u32 R, bool seg, cudaStream_t st, int slot = 0) {
     const TileGeom g{A, M, K, (M + R - 1) / R, R};
     if (seg) seg_leaves_from(SegTiles{g}, st, slot);
-    else leaves<RowTile>(RowTile{g}, st, slot, (u32)lanes(g.mr));
+    else leaves<RowTile>(RowTile{g, prefetch}, st, slot, (u32)lanes(g.mr));
   }
   // Small path with fuse_top: when the levels above the CTAs fit one CTA (top_small's case), leaf_small's last CTA folds
   // them up to the root and nodes() launches nothing.

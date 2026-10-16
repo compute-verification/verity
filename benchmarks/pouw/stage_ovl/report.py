@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 PROTOCOL = ("eq", "prio", "hhi", "hprio", "hlo")
@@ -58,8 +59,9 @@ def lite_kind(name: str) -> str | None:
 
 
 def unfused(name: str) -> str:
-    """a cg arm's name without -f (the same schedule with the top folded by the last leaf CTA)"""
-    return name.removesuffix("-f")
+    """a cg arm's name without -f, -p or -fp (the same schedule with the top folded by the last leaf CTA, the next block
+    prefetched)"""
+    return re.sub(r"-[fp]+$", "", name)
 
 
 def is_cg(name: str) -> bool:
@@ -258,8 +260,8 @@ def main() -> int:
                 lone[c["M"]] = c["arms"]["eq"]["ms"]
                 print(f"  lone TTFT M = {c['M']}: {c['arms']['eq']['ms']:.1f} ms against plain {c['plain_ms']:.1f} ms "
                       f"({100 * c['arms']['eq']['cost']:+.0f}%)")
-            for n in ("cgeq", "cgheq", "cgpreeq", "cgeq-f", "cgheq-f", "cgpreeq-f"):
-                if c["k"] == 1 and n in c["arms"]:
+            for n in c["arms"]:
+                if c["k"] == 1 and unfused(n) in ("cgeq", "cgheq", "cgpreeq"):
                     v = c["arms"][n]
                     print(f"  lone TTFT M = {c['M']}, {n}: {v['ms']:.2f} ms against plain {c['plain_ms']:.2f} ms ({100 * v['cost']:+.1f}%; "
                           f"{100 * v['cost_best']:+.1f}% against the fastest plain {c['plain_best_ms']:.2f} ms)")
