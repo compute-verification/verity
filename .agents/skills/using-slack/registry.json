@@ -116,6 +116,7 @@
         "benchmarks/numerical/",
         "benchmarks/steiner_referee/",
         "benchmarks/fp4_sparse_tp/",
+        "benchmarks/fp4_nobits/",
         ".agents/skills/kernel-engineering/"
       ]
     },
