@@ -12,6 +12,7 @@ import Proofs.Flock.Claims.ZK.Prefix
 import Proofs.Flock.Claims.ZK.Shvzk
 import Proofs.Flock.Claims.ZK.Flock
 import Proofs.Flock.Claims.ZK.Hypotheses
+import Proofs.Flock.Claims.ZK.NonVacuous
 
 /-!
 # Flock's zero knowledge against a malicious verifier
@@ -60,4 +61,8 @@ import Proofs.Flock.Claims.ZK.Hypotheses
 * `Hypotheses`: what the `--zk` instance still needs, as five Props about models of the masked prover (`MsgLink`,
   `SimLink`, `NonDegenerate`, `InnerHolds`, `CoinCheck`), and the claim from them under `Claims.Hm96Hiding`
   (`Flock.zk_of_models`; **`Flock.zk_deployZk_of_models`** at `FlockDeploy.deployZk`).
+* `NonVacuous`: the claim is not vacuous. A prover that makes no calls has `Fork.Pr = 0`, so the simulator that hashes a
+  collision and outputs the empty transcript fails `ZKmalR` at every `ε_zk < 1` and every `γ` (`not_zkmalR_collSim`),
+  a prover that sends its witness has no simulator at `ε_zk < 1/2` (`not_zkmalR_leak`), and both fail Flock's `ZK` at
+  a masked record whose relation holds everywhere (`toyD`).
 -/
