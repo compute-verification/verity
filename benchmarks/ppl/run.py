@@ -3,6 +3,7 @@
     run.py eval --model M --set c4|wikitext2 --ctx 2048|8192|32768 --out DIR [--gpus N] [--seeds 0,1,2]
                 [--data DIR] [--hf-home DIR] [--plugin FILE.py]... SPEC...     on a GPU node: one results.json
     run.py submit (eval's flags but --out) [--max-min M] [--dry-run]        the same as a `research run` on vy-nebius-2
+                                                                            (job.sh), the datasets sent with it
     run.py report RESULTS.json...                                           the tables
     run.py baseline [RESULTS.json...]                                       the locked baseline (against new results)
     run.py steps | specs                                                    the registered steps; the arms in specs/
@@ -36,6 +37,7 @@ import windows  # noqa: E402
 
 ROOT = HERE.parents[1]
 DATA = Path(os.environ.get("PPL_DATA", "/workspace/ppl-data"))
+LOCAL_DATA = Path.home() / ".cache" / "verity-ppl"
 HF_HOME = Path(os.environ.get("HF_HOME", "/workspace/hf"))
 NODE = "vy-nebius-2"
 
@@ -204,9 +206,10 @@ def cmd_shard(task_path: str) -> int:
     return 0
 
 
-def submit_command(a) -> list[str]:
+def submit_command(a, data: Path) -> list[str]:
     """The `research run` that runs this eval on vy-nebius-2 under a gpu-lease of the model's GPUs, from the
-    checkout's pushed commit."""
+    checkout's pushed commit, with the datasets (staged under `data`) sent along. A plugin or SPEC file must be in
+    the commit (paths relative to the repository's root)."""
     gpus = a.gpus or models.get(a.model)["gpus"]
     if gpus > 2:
         raise SystemExit("a run leases at most 2 GPUs")
@@ -214,17 +217,21 @@ def submit_command(a) -> list[str]:
     flags += "".join(f" --plugin {shlex.quote(p)}" for p in a.plugin or [])
     flags += " " + " ".join(shlex.quote(s) for s in a.spec)
     who = os.environ.get("GPU_LEASE_WHO", "ppl-bench")
+    sends = [x for d in windows.DATASETS.values() for x in ("--send", str(Path(data) / d["file"]))]
     return ["research", "run", "--on", NODE, "--project", "verity", "--campaign", a.campaign, "--source", str(ROOT),
-            "--cwd", "source", "--custody-ttl", "12h", "--env", f"GPU_LEASE_WHO={who}", "--env", f"PPL_GPUS={gpus}",
-            "--env", f"PPL_MAX_MIN={a.max_min}", "--env", f"PPL_ARGS={flags}", "--", "bash", "benchmarks/ppl/job.sh"]
+            "--cwd", "source", "--custody-ttl", "12h", *sends, "--env", f"GPU_LEASE_WHO={who}",
+            "--env", f"PPL_GPUS={gpus}", "--env", f"PPL_MAX_MIN={a.max_min}", "--env", f"PPL_ARGS={flags}",
+            "--", "bash", "benchmarks/ppl/job.sh"]
 
 
 def cmd_submit(a) -> int:
+    load_plugins(a.plugin)
     arms_for(a.spec)
-    cmd = submit_command(a)
+    cmd = submit_command(a, Path(a.data))
     print(shlex.join(cmd))
     if a.dry_run:
         return 0
+    stage(Path(a.data))
     return subprocess.run(cmd).returncode
 
 
@@ -251,9 +258,12 @@ def cmd_windows(a) -> int:
 
 
 def cmd_setup(a) -> int:
-    """Each dataset in datasets.json under --data: kept if its sha256 is the pinned one, else fetched from the
+    return stage(Path(a.data))
+
+
+def stage(data: Path) -> int:
+    """Each dataset in datasets.json under `data`: kept if its sha256 is the pinned one, else fetched from the
     evidence store by its art id."""
-    data = Path(a.data)
     data.mkdir(parents=True, exist_ok=True)
     for name, d in windows.DATASETS.items():
         path = data / d["file"]
@@ -329,6 +339,7 @@ def main(argv: list[str]) -> int:
     run_flags(sub.add_parser("eval"), True)
     q = sub.add_parser("submit")
     run_flags(q, False)
+    q.add_argument("--data", default=str(LOCAL_DATA), help="where the datasets are staged to be sent")
     q.add_argument("--max-min", type=int, default=120)
     q.add_argument("--campaign", default="cmp-13")
     q.add_argument("--dry-run", action="store_true")
