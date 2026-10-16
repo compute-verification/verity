@@ -8,7 +8,8 @@ The recursion's extractor `E*` (`Claims.Recursion.E`) is the served `E^rep` of `
 claim (`Claims.Recursion.Efficient`) is the composed extractor's at the outer extractor `E_O`'s own reruns:
 `(1 + m′_I·K_I)·(1 + Σ_s m′_s·K_s)` in the worst case and `N_I·(1 + Σ_s m′_s·k_s)` in expectation, for `E_O` within
 `1 + Σ_s m′_s·K_s` and `1 + Σ_s m′_s·k_s` (`efficient_of_EO`). `E_O`'s worst case holds on every coin (`EO_runs_le`),
-so the worst-case half of `Efficient` is proved (`efficient_le`); its expected half waits on `E_O`'s expectation.
+so the worst-case half of `Efficient` is proved (`efficient_le`); `CostExp` proves `E_O`'s expectation, and so
+`Efficient` (`efficient`).
 -/
 
 namespace Claims.Recursion
