@@ -55,6 +55,20 @@ theorem splits_of_inScope {Coin Col Tr : Type} {zk : Bool} (r : Tr → Claims.Fl
   rw [Readable.tableWit_getD hj, ← hlen, Claims.Flock.readTables_getD r Ms (by omega),
     Claims.Flock.readTables_singleton]
 
+/-- **At one table the relation splits**: table 0's own statement is the statement (`table_zero_of_tables_eq_one`). -/
+theorem splits_of_one {Coin Col Tr : Type} {zk : Bool} {rel : Readable.Parsed → Readable.Relation}
+    (D : Claims.Flock.Deploy Coin Col Tr) (hp : D.parse = parse zk rel) (ht : D.table = table zk rel)
+    {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : D.parse x = some s) (h1 : s.tables = 1) :
+    Claims.Flock.Splits D x := by
+  intro s' hs' Ms hlen hall
+  rw [hs, Option.some.injEq] at hs'
+  subst hs'
+  obtain ⟨M, rfl⟩ := List.length_eq_one_iff.1 (hlen.trans h1)
+  obtain ⟨t, ht', hR⟩ := hall 0 (by simp)
+  rw [ht, table_zero_of_tables_eq_one (hp ▸ hs) h1, Option.some.injEq] at ht'
+  subst ht'
+  simpa using hR
+
 /-- **The deployed plain verifier: KS from one wait's bound.** -/
 theorem plain_of_oneWait (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (hk : ∀ x, (8 ≤ (deployPlain rel).k x ∧ Claims.Flock.Splits (deployPlain rel) x) ∨

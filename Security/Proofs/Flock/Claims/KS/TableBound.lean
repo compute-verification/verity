@@ -7,11 +7,12 @@ import Proofs.Flock.Claims.Scope.Deployed
 
 `TableBoundθ` (`KS.Joint`) is a bound at each statement (`TableBoundθAt`). Where the verifier accepts no run and the
 weight covers the fork event's `k`, it holds with no escapes (`tableBoundθAt_of_noAcc`, `Escapes.nil`). At the deployed
-records the weight covers `k` at every statement (`k_le_weight`: table 0's schedule in the weight has the verifier's
-level 0, `kFits_all`), and a statement some run accepts at SHA-512 parses in scope and sets up (`acc_inScope`: the
-checks after the verdict run the scope check, `checks_scope`). So at both records `TableBoundθ` is its bound at the
-accepted statements (`plain_tableBoundθ_of_acc`, `zk_tableBoundθ_of_acc`), and KS at SHA-512 rests on that alone
-(`plain_KS_of_acc`, `zk_KS_of_acc`).
+records the weight covers `k` at every statement (`k_le_weight`: each table's schedule in the weight has the
+verifier's level 0, `kFits_all`), and a statement some run accepts at SHA-512 parses in scope and sets up
+(`acc_inScope`: the checks after the verdict run the scope check, `checks_scope`). So at both records `TableBoundθ` is
+its bound at the accepted statements (`plain_tableBoundθ_of_acc`, `zk_tableBoundθ_of_acc`). KS at SHA-512 rests on
+that alone at the plain record, whose scope has one table (`plain_KS_of_acc`, `plain_hone`), and on that and one table
+at every accepted statement at the masked record (`zk_KS_of_acc`).
 
 At a statement that sets up, the old theorems bound a table of table 0's level-0 code that is not `Committed` to table
 0's model statement (`Layout.model` at `regionsOf`). At the deployed relation, when the setup has one table, a message
@@ -70,7 +71,7 @@ def TableBoundθAt {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited
       ¬ GoodTable D N x C →
       accPr H D.V P x ω ≤ D.εtable x + e.term ω +
         Pr fun r : Fin (D.V.k x) → Coin => (run H P D.V x ω r).out = .acc ∧
-          ∃ (p : Fin (N x)) (u : Col), lookCol (D.cols (run H P D.V x ω r).seen) p.val = some u ∧ u ≠ C p
+          ∃ (p : Fin (N x)) (u : Col), lookCol (D.cols (run H P D.V x ω r).seen 0) p.val = some u ∧ u ≠ C p
 
 theorem tableBoundθ_iff {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
     [Zero Col] (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ) (Ok : Msg → Col → Prop) :
@@ -90,7 +91,7 @@ theorem tableBoundθAt_of_noAcc {Coin Col T : Type} [Fintype Coin] [Nonempty Coi
     rw [Pr_congr (q := fun _ => False) fun r => ⟨fun h => hno Ω P ω r h, False.elim⟩, Pr_false]
   rw [h0, Escapes.term_nil]
   have := Pr_nonneg fun r : Fin (D.V.k x) → Coin => (run H P D.V x ω r).out = .acc ∧
-    ∃ (p : Fin (N x)) (u : Col), lookCol (D.cols (run H P D.V x ω r).seen) p.val = some u ∧ u ≠ C p
+    ∃ (p : Fin (N x)) (u : Col), lookCol (D.cols (run H P D.V x ω r).seen 0) p.val = some u ∧ u ≠ C p
   linarith
 
 end Claims.Flock
@@ -160,29 +161,50 @@ theorem weight_nonneg (zk : Bool) (x : Claims.Msg) : 0 ≤ weight zk x := by
   obtain ⟨p, -, rfl⟩ := List.mem_map.1 ha
   exact tableWeight_nonneg zk p.2
 
-/-- **`k ≤ weight`** at every statement: `k = ⌈4N₀/e⌉ < 4N₀/e + 1`, and the weight holds table 0's
-`2 + 4·2^{d₀}/e`, its schedule's level 0 as long as the verifier's (`kFits_all`). -/
+/-- **A table's weight covers its length's share of `k`**: `2 + 4·2^{d₀}/e`, its schedule's level 0 as long as the
+verifier's (`kFits_all`). -/
+theorem tableLen_le_weight (zk : Bool) (st : Stmt) : 4 * tableLen zk st / Real.exp 1 + 2 ≤ tableWeight zk st := by
+  have hw := tableWeight_ge zk st
+  have hpow : tableLen zk st ≤ 2 ^ ((wSched zk st.m).levels.headD default).logLen :=
+    pow_le_pow_right₀ (by norm_num) (kFits_all zk st.m)
+  have hdiv : 4 * tableLen zk st / Real.exp 1 ≤ 4 * 2 ^ ((wSched zk st.m).levels.headD default).logLen /
+      Real.exp 1 := by
+    gcongr
+  linarith
+
+theorem tableLen_nonneg (zk : Bool) (st : Stmt) : 0 ≤ tableLen zk st := by
+  unfold tableLen
+  positivity
+
+/-- **Tables' weights cover their lengths' share of `k`**, and `2` more each (`tableLen_le_weight`). -/
+theorem lens_le_weights (zk : Bool) (l : List (SessionSpec × Stmt)) :
+    4 * (l.map fun p => tableLen zk p.2).sum / Real.exp 1 + 2 * l.length ≤ (l.map fun p => tableWeight zk p.2).sum ∧
+      0 ≤ (l.map fun p => tableLen zk p.2).sum := by
+  induction l with
+  | nil => simp
+  | cons a l ih =>
+    simp only [List.map_cons, List.sum_cons, List.length_cons, Nat.cast_add, Nat.cast_one]
+    have h1 := tableLen_le_weight zk a.2
+    have h2 := tableLen_nonneg zk a.2
+    have e : 4 * (tableLen zk a.2 + (l.map fun p => tableLen zk p.2).sum) / Real.exp 1 =
+        4 * tableLen zk a.2 / Real.exp 1 + 4 * (l.map fun p => tableLen zk p.2).sum / Real.exp 1 := by ring
+    rw [e]
+    constructor <;> linarith [ih.1, ih.2]
+
+theorem N₀_nonneg (zk : Bool) (x : Claims.Msg) : 0 ≤ N₀ zk x := (lens_le_weights zk (tables zk x)).2
+
+/-- **`k ≤ weight`** at every statement: `k = ⌈4N₀/e⌉ < 4N₀/e + 1`, and each table's weight holds its length's share
+and `2` more (`lens_le_weights`). -/
 theorem k_le_weight (zk : Bool) (x : Claims.Msg) : (⌈4 * N₀ zk x / Real.exp 1⌉₊ : ℝ) ≤ weight zk x := by
+  have he := Real.exp_pos 1
   unfold N₀ weight
   cases ht : tables zk x with
   | nil => simp
   | cons p rest =>
-    obtain ⟨spec, st⟩ := p
-    simp only [List.head?_cons, List.map_cons, List.sum_cons]
-    have hw := tableWeight_ge zk st
-    have hrest : 0 ≤ (rest.map fun p => tableWeight zk p.2).sum :=
-      List.sum_nonneg fun a ha => by
-        obtain ⟨q, -, rfl⟩ := List.mem_map.1 ha
-        exact tableWeight_nonneg zk q.2
-    have he := Real.exp_pos 1
-    have hpow : (2 : ℝ) ^ (if zk then Claims.Flock.zkLevel0 st.m else Claims.Flock.plainLevel0 st.m).d ≤
-        2 ^ ((wSched zk st.m).levels.headD default).logLen :=
-      pow_le_pow_right₀ (by norm_num) (kFits_all zk st.m)
-    have hdiv : 4 * (2 : ℝ) ^ (if zk then Claims.Flock.zkLevel0 st.m else Claims.Flock.plainLevel0 st.m).d /
-        Real.exp 1 ≤ 4 * 2 ^ ((wSched zk st.m).levels.headD default).logLen / Real.exp 1 := by
-      gcongr
-    have hceil := Nat.ceil_lt_add_one (show (0 : ℝ) ≤ 4 * 2 ^ (if zk then Claims.Flock.zkLevel0 st.m
-      else Claims.Flock.plainLevel0 st.m).d / Real.exp 1 by positivity)
+    obtain ⟨h1, h2⟩ := lens_le_weights zk (p :: rest)
+    have hceil := Nat.ceil_lt_add_one (div_nonneg (mul_nonneg (by norm_num : (0 : ℝ) ≤ 4) h2) he.le)
+    simp only [List.length_cons, Nat.cast_add, Nat.cast_one] at h1
+    have : (0 : ℝ) ≤ rest.length := Nat.cast_nonneg _
     linarith
 
 theorem plain_k_le (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :
@@ -273,6 +295,15 @@ theorem acc_inScope (rel : Readable.Parsed → Readable.Relation) {zk : Bool} {x
     rw [getElem!_pos sts 0 h0] at h22
     simpa only [Readable.toReadable, Array.getElem?_eq_getElem h0, Option.map_some, Option.getD_some] using h22
 
+/-- **The plain verifier accepts only at one table**, at SHA-512: the plain scope admits one (`acc_inScope`). -/
+theorem plain_hone (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :
+    (∃ s, (deployPlain rel).parse x = some s ∧ s.tables = 1) ∨ Claims.Flock.NoAcc sha512 (deployPlain rel).V x := by
+  by_cases hno : Claims.Flock.NoAcc sha512 (V false) x
+  · exact .inr hno
+  · obtain ⟨s, hs, hin⟩ := acc_inScope rel hno
+    obtain ⟨-, -, -, -, -, -, -, -, ht, -⟩ := hin
+    exact .inl ⟨s, hs, (Claims.Flock.Stmt.tables_eq_one_iff s).2 (ht.resolve_left Bool.false_ne_true)⟩
+
 /-! ## Down to the accepted statements -/
 
 /-- **The plain record: `TableBoundθ` from its bound at the statements some run accepts**, which parse in scope and
@@ -309,28 +340,31 @@ theorem plain_KS_of_acc (rel : Readable.Parsed → Readable.Relation)
       Claims.Flock.InScope false s → setupOf false x = some (ins, spec, sts) →
       Claims.Flock.TableBoundθAt sha512 (deployPlain rel) (wordLen false) (Claims.Flock.orZero (wide false)) x) :
     Claims.Flock.KS sha512 (deployPlain rel) :=
-  plain_KS_of_table rel (plain_tableBoundθ_of_acc rel _ h)
+  plain_KS_of_table rel (plain_hone rel) (plain_tableBoundθ_of_acc rel _ h)
 
 /-- **The deployed masked (`--zk`) verifier: KS**, at SHA-512, from a fixed table's bound at the statements some run
 accepts. -/
 theorem zk_KS_of_acc (rel : Readable.Parsed → Readable.Relation)
+    (hone : ∀ x, (∃ s, (deployZk rel).parse x = some s ∧ s.tables = 1) ∨
+      Claims.Flock.NoAcc sha512 (deployZk rel).V x)
     (h : ∀ x s ins spec sts, ¬ Claims.Flock.NoAcc sha512 (V true) x → parse true rel x = some s →
       Claims.Flock.InScope true s → setupOf true x = some (ins, spec, sts) →
       Claims.Flock.TableBoundθAt sha512 (deployZk rel) (wordLen true) (Claims.Flock.orZero (wide true)) x) :
     Claims.Flock.KS sha512 (deployZk rel) :=
-  zk_KS_of_table rel (zk_tableBoundθ_of_acc rel _ h)
+  zk_KS_of_table rel hone (zk_tableBoundθ_of_acc rel _ h)
 
 /-! ## `hwit` at one table -/
 
 theorem toZ_decide : ∀ z : ZMod 2, Readable.toZ (decide (z = 1)) = z := by decide
 
-/-- **Table 0's share of a read trace is the trace's witness.** -/
-theorem zOf_readTrace (m lanes cols : ℕ) (M : FlockSoundness.Model.Message 𝔽 lanes cols) :
-    Readable.zOf (2 ^ m) (Claims.Flock.readTrace FlockSoundness.execArith m lanes cols M) 0 m =
+/-- **At one table, table 0's share of a read trace is the trace's witness.** -/
+theorem zOf_readTrace {J : ℕ} (hJ : J = 1) (m lanes cols : ℕ) (M : FlockSoundness.Model.Message 𝔽 lanes cols) :
+    Readable.zOf J (Claims.Flock.readTrace FlockSoundness.execArith m lanes cols M) 0 m =
       FlockSoundness.Model.witnessOf FlockSoundness.execArith m lanes cols M := by
+  subst hJ
   funext a
   unfold Readable.zOf
-  rw [zero_mul, zero_add, Claims.Flock.readTrace_hid]
+  rw [mul_one, add_zero, Claims.Flock.readTrace_hid]
   exact toZ_decide _
 
 /-- **The parser reads the setup's statement**: its tables are the setup's, read off the setup's `Read`. -/
@@ -389,10 +423,8 @@ theorem relS_of_table0 {zk : Bool} {x : Claims.Msg} {s : Claims.Flock.Stmt}
   have hc0 : c = 0 := by omega
   subst hc0
   refine ⟨L, ?_⟩
-  have hm' : (Readable.toReadable Readable.relation p).m = p.sts[0].m := by
-    simp only [Readable.toReadable, Array.getElem?_eq_getElem (show 0 < p.sts.size by omega), Option.map_some,
-      Option.getD_some]
-  rw [hm', hm, zOf_readTrace]
+  subst hm
+  rw [zOf_readTrace hone]
   exact hsat
 
 /-- **The plain setup has one table** at a statement in scope. -/
@@ -454,6 +486,15 @@ theorem parse_m {zk : Bool} {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse
   subst hpst
   simp only [Readable.toReadable, Array.getElem?_eq_getElem h0, Option.map_some, Option.getD_some]
 
+/-- **Table 0's statement is the parsed one** where the verifier sets up one table. -/
+theorem table_zero_of_setup {zk : Bool} {x : Claims.Msg} {s : Claims.Flock.Stmt}
+    (hs : parse zk Readable.relation x = some s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hset : setupOf zk x = some (ins, spec, sts)) (hone : sts.size = 1) :
+    table zk Readable.relation x 0 = some s := by
+  obtain ⟨p, hp, -, -, hsz, -⟩ := parsed_of_parse hs
+  obtain ⟨hpst, -, -⟩ := parseBytes_setup hp hset
+  exact table_zero_of_tables_eq_one hs (hsz.symm.trans (hpst ▸ hone))
+
 /-- **At the plain record, a table that does not extract is not committed** to table 0's model statement, at the
 old theorems' schedule (`not_committed_plain` at `plain_hwit`): at a statement in scope that the deployed plain
 parser reads at the deployed relation and the verifier sets up, for every table of full-width columns. -/
@@ -470,7 +511,7 @@ theorem plain_not_committed {x : Claims.Msg} {s : Claims.Flock.Stmt}
   have hi : Claims.Flock.PlainIdx.m ⟨sts[0].m - 22, by omega⟩ = sts[0].m := by
     simp only [Claims.Flock.PlainIdx.m]
     omega
-  have := not_committed_plain Readable.relation x s hs
+  have := not_committed_plain Readable.relation x s (table_zero_of_setup hs hset (plain_one hs hin hset))
     (tables_head hset (Array.getElem?_eq_getElem h0)) ⟨sts[0].m - 22, by omega⟩ hi C hw
     (L.model (FlockSoundness.Refine.regionsOf sts[0])) (plain_hwit hs hin hset h0 L _ hi) hg
   rwa [hi] at this
@@ -495,7 +536,7 @@ theorem zk_not_committed {x : Claims.Msg} {s : Claims.Flock.Stmt}
   have hi : Claims.Flock.ZkIdx.m ⟨sts[0].m - 25, by omega⟩ = sts[0].m := by
     simp only [Claims.Flock.ZkIdx.m]
     omega
-  have := not_committed_zk Readable.relation x s hs
+  have := not_committed_zk Readable.relation x s (table_zero_of_setup hs hset hone)
     (tables_head hset (Array.getElem?_eq_getElem h0)) ⟨sts[0].m - 25, by omega⟩ hi C hw
     (L.model (FlockSoundness.Refine.regionsOf sts[0])) (zk_hwit hs hin hset hone L _ hi) hg
   unfold Claims.Flock.zkPad at this

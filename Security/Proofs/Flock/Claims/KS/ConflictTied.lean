@@ -129,7 +129,7 @@ theorem tabsOf_fold (sts : Array Stmt) : ∀ st ∈ tabsOf sts,
 live session. -/
 theorem runOf_eq {zk : Bool} {seen : Claims.Seen} {f : Final} {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {lv : Live} {rr : Claims.Flock.ZkRun} (hf : lastFinal seen = some f) (hx : f.stmt = x)
-    (hs : setupOf zk x = some (s, spec, sts)) (hlv : liveOf spec f.record = .ok lv) (hr : runOf zk seen = some rr) :
+    (hs : setupOf zk x = some (s, spec, sts)) (hlv : liveOf spec f.record = .ok lv) (hr : runOf zk seen 0 = some rr) :
     ∃ st extras, sts[0]? = some st ∧ (Setup.ofCircuit st).extra lv.points = .ok extras ∧
       rr = { m := (Setup.ofCircuit st).m, kLog := (Setup.ofCircuit st).kLog, claims := 2 + extras.size,
              hashLen := (Setup.ofCircuit st).merkle.digestLen, saltLen := saltLenOf zk (Setup.ofCircuit st),
@@ -157,7 +157,7 @@ reader opens at `q` is an opened row whose opening against `root_B[0]` of the li
 in the run's verifier log. -/
 theorem plain_opening {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {r : Fin ((V false).k x) → Coin}
     {q : ℕ} {u : List 𝔽} (h : (Claims.run sha512 P (V false) x ω r).out = .acc)
-    (hu : Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen) q = some u) :
+    (hu : Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen 0) q = some u) :
     ∃ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (st : Stmt) (sch : Flock.Schedule)
       (link : List ByteArray × List ByteArray) (row : Array F128),
       setupOf false x = some (s, spec, sts) ∧ sts[0]? = some st ∧ fast100 st.m = some sch ∧
@@ -261,7 +261,7 @@ opens at `q` is the witness lanes of an opened row whose opening against `root_B
 input of it in the run's verifier log. -/
 theorem zk_opening {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {r : Fin ((V true).k x) → Coin}
     {q : ℕ} {u : List 𝔽} (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
-    (hu : Claims.Flock.lookCol (cols true (Claims.run sha512 P (V true) x ω r).seen) q = some u) :
+    (hu : Claims.Flock.lookCol (cols true (Claims.run sha512 P (V true) x ω r).seen 0) q = some u) :
     ∃ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ)
       (link : List ByteArray × List ByteArray) (row : Array F128),
       setupOf true x = some (s, spec, sts) ∧ sts[0]? = some st ∧ Zk.schedule st.m = .ok (sch, tPad) ∧
@@ -407,14 +407,18 @@ theorem zk_conflictTied (rel : Readable.Parsed → Readable.Relation) :
 
 /-- **The deployed plain verifier: KS**, at SHA-512, from a fixed table's bound alone. -/
 theorem plain_KS_of_table (rel : Readable.Parsed → Readable.Relation)
+    (hone : ∀ x, (∃ s, (deployPlain rel).parse x = some s ∧ s.tables = 1) ∨
+      Claims.Flock.NoAcc sha512 (deployPlain rel).V x)
     (htab : Claims.Flock.TableBoundθ sha512 (deployPlain rel) (wordLen false) (Claims.Flock.orZero (wide false))) :
     Claims.Flock.KS sha512 (deployPlain rel) :=
-  plain_KS_sha512 rel (plain_conflictTied rel) htab
+  plain_KS_sha512 rel hone (plain_conflictTied rel) htab
 
 /-- **The deployed masked (`--zk`) verifier: KS**, at SHA-512, from a fixed table's bound alone. -/
 theorem zk_KS_of_table (rel : Readable.Parsed → Readable.Relation)
+    (hone : ∀ x, (∃ s, (deployZk rel).parse x = some s ∧ s.tables = 1) ∨
+      Claims.Flock.NoAcc sha512 (deployZk rel).V x)
     (htab : Claims.Flock.TableBoundθ sha512 (deployZk rel) (wordLen true) (Claims.Flock.orZero (wide true))) :
     Claims.Flock.KS sha512 (deployZk rel) :=
-  zk_KS_sha512 rel (zk_conflictTied rel) htab
+  zk_KS_sha512 rel hone (zk_conflictTied rel) htab
 
 end FlockDeploy.KS
