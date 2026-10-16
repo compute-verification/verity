@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.GS.RadiusDeploy
 import Proofs.Flock.Claims.Sampling.Leaf
+import Proofs.Flock.Claims.Sampling.Select.DrawLaw
 import Proofs.Flock.Claims.Sampling.Session
 import Proofs.Flock.SamplingBoundary
 
@@ -12,7 +13,8 @@ import Proofs.Flock.SamplingBoundary
 * `ScopeMatches`, `Universal`, `Complete` and `ZK`: hypotheses;
 * `Binding`, at hm96 leaves under the registered frame-v3-sha512 path check (`Binding_of_hm96`);
 * `FaultyBoundary` (`faultyBoundary`);
-* `KS` from Flock's KS at the checked units' sessions (`SessionKS_of`, `KS_of`), with the binding;
+* `KS` from Flock's KS at the checked units' sessions (`SessionKS_of`, `KS_of`), with the binding and the draw law
+  (`drawLaw_of_slots`);
 * `KSCount` from `KS` (`KSCount_of_KS`);
 * `Bits` from `KS` and the extractor's expected reruns and own calls (`Bits_of_KS`);
 * `Efficient` at Flock's masked radius decoder (`GS.zkDecodeRD`), its `ListWithin` and `DecoderComplexity` at
@@ -31,7 +33,10 @@ import Proofs.Flock.SamplingBoundary
   and the draw doesn't read them; a checked unit's session is a Flock run on its own rounds that decides the run, with
   the Flock verifier's `H` calls among the sampled verifier's; the inner numbers are Flock's at each session. The Lean
   sampled-proofs verifier, held to the Python by difftest.
-* `DrawLaw`, `SessionOpens`, `InteriorFixed`, `Refuses` (`Sampling.KS`): the same verifier, starting with the draw.
+* `DrawSlots` (`Sampling.Select.DrawLaw`): the deployed draw is `Slots.select`'s on the statement's partition and
+  design, from uniform bytes of the coins, every slot checked where it is refused; the Lean sampled-proofs verifier's
+  run, which builds `D`.
+* `SessionOpens`, `InteriorFixed`, `Refuses` (`Sampling.KS`): the same verifier.
 * `hrunsLe`, `hrunsExp`, `hown`: `Efficient`'s run bounds on `E`, from the rerun programs' counts (`Sampling.Cost`:
   `waitAccC_runs_eq`, `accExp_le`, `ownLog_flatMapRP`); not yet assembled.
 * `hscope : ScopeMatches D`: the deployed scope check, the Lean sampled-proofs verifier's.
@@ -57,7 +62,7 @@ theorem sampling_assembled (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
     (own : Array _root_.Flock.Registered.Port) (at_ : List Msg → ℕ → Option (Msg × ℕ))
     (row salt π : Opening Bool → Msg) (layer : (Msg → Msg) → List Msg → List (Opening Bool) → List Msg)
     (hcommit : D.commit = pathCommit at_ (hm96Leaf row salt) π (regPath own) layer) (hrow : RowPlaces row)
-    (hfixed : DrawFixed D) (hsessions : SessionRuns H D) (hnum : InnerNumbers D) (hdraw : DrawLaw D)
+    (hfixed : DrawFixed D) (hsessions : SessionRuns H D) (hnum : InnerNumbers D) (hslots : DrawSlots D)
     (iroots : Msg → Seen → ℕ → List Msg) (hopens : SessionOpens H D iroots) (hfix : InteriorFixed H D iroots)
     (hrefuse : Refuses H D)
     (hrunsLe : ∀ decode, ExtractRunsLe H (E D decode)
@@ -76,7 +81,8 @@ theorem sampling_assembled (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
   have hKS' : Claims.Flock.KS H D.flock := by
     rw [hflock]
     exact hKS
-  have hks : KS H D := KS_of iroots (hbind H) (SessionKS_of hKS' hfixed hsessions hnum hε) hopens hfix hdraw hrefuse hε
+  have hks : KS H D := KS_of iroots (hbind H) (SessionKS_of hKS' hfixed hsessions hnum hε) hopens hfix
+    (drawLaw_of_slots D hslots) hrefuse hε
   have hlist : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ Claims.GS.zkDecodeRD := by
     rw [hflock]
     exact (Claims.GS.radius_deployZk rel).1
