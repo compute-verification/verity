@@ -23,6 +23,10 @@ window): exact group feasibility per alphabet and piece scales, the best of a fe
 (seeded sampling), and the arithmetic bit-exact through the dense BLACKWELL_SM120_NVF4 model standing in for the
 sparse instruction (UE4M3 scale 1.25, two-window fields in the normal range).
 Part 7. Prices per route: B_1/5 (ρ = 1/32), a ρ = 1/4 vector, and a real-time pipe model at RS-MODEL's rates.
+Part 8. The three-piece drops, bounded from both sides with scales chosen per 16-block (NVF4's scale block): a lower
+bound over every real scale of each piece (a group of 4 with no zero entry and ≥ 3 entries no single piece holds
+overflows 6 slots), and an achievable count from part 6's exact packing over every integer UE4M3 scale up to 2n.
+`8` runs the cross-checks (the bound is never above either router on the same windows); `8.N` prices {±1..±N}.
 
 Usage: wide_peel.py SEED [PART ...]
 """
@@ -574,9 +578,148 @@ def part7(drops):
     return routes
 
 
+# ---------------------------------------------------------------- part 8: a lower bound on the three-piece drops
+H_NUM = (1, 2, 3, 4, 6, 8, 12)
+POPC4 = np.array([bin(i).count("1") for i in range(16)])
+
+
+def held_table(mmax):
+    """One row per maximal set of magnitudes in 1..mmax that a single piece holds at some scale (any real scale)."""
+    sets = set()
+    for n in range(1, mmax + 1):
+        for h in H_NUM:
+            s = Fr(2 * n, h)
+            sets.add(frozenset(int(s * g / 2) for g in H_NUM if (s * g / 2).denominator == 1 and s * g / 2 <= mmax))
+    sets = [a for a in sets if not any(a < b for b in sets)]
+    tab = np.zeros((len(sets), mmax + 1), dtype=bool)
+    for r, a in enumerate(sets):
+        tab[r, sorted(a)] = True
+    return tab
+
+
+def block_drops_lb(vals, tab):
+    """Least Σ_groups [no zero entry, ≥ 3 entries no single piece holds] over the three pieces' scales for a block."""
+    mags = np.abs(vals)
+    zero = mags == 0
+    cov = tab[:, mags] | zero[None, :]
+    m = np.unique((cov.astype(np.int64) << np.arange(len(vals))).sum(axis=1))
+    m = np.array([a for a in m if not any(a != b and (a | b) == b for b in m)], dtype=np.int64)
+    trip = np.unique((np.unique((m[:, None] | m[None, :]).ravel())[:, None] | m[None, :]).ravel())
+    d = np.zeros(len(trip), dtype=np.int64)
+    for g in range(len(vals) // 4):
+        if not zero[4 * g:4 * g + 4].any():
+            d += (4 - POPC4[(trip >> (4 * g)) & 0xF]) >= 3
+    return int(d.min())
+
+
+UE4M3_INTS = sorted({(8 + m) * 2 ** e // 8 for e in range(8) for m in range(8) if (8 + m) * 2 ** e % 8 == 0})
+
+
+def router_block(tabs, b):
+    return min(sum(group_drops(tuple(sorted(t[v] for v in b[g:g + 4]))) for g in range(0, len(b), 4)) for t in tabs)
+
+
+def router_all_scales(rng, n, nwin):
+    """Part 6's exact group packing (caps of 2 per piece, sums of integer piece values), with the three pieces' scales
+    chosen per 16-block from every integer UE4M3 scale up to 2n: an achievable drop count."""
+    tabs = router_tables(n)
+    tot = 0
+    for _ in range(nwin):
+        p = [int(v) for v in rng.choice(alphabet(n), 32)]
+        tot += router_block(tabs, p[:16]) + router_block(tabs, p[16:])
+    return Fr(tot, nwin), len(tabs)
+
+
+def router_tables(n):
+    S = alphabet(n)
+    held = {}
+    for s in UE4M3_INTS:
+        if s <= 2 * n:
+            held.setdefault(frozenset(held_ints(s) - {0}), s)
+    hs_list = list(held)
+
+    def sums(a, b):
+        return frozenset(x + y for x in a for y in b)
+
+    tabs = []
+    for h0, h1, h2 in itertools.combinations_with_replacement(hs_list, 3):
+        p01, p02, p12 = sums(h0, h1), sums(h0, h2), sums(h1, h2)
+        p012 = sums(p01, h2)
+        tabs.append({v: tuple(sub for sub, ok in (((0,), v in h0), ((1,), v in h1), ((2,), v in h2),
+                                                   ((0, 1), v in p01), ((0, 2), v in p02), ((1, 2), v in p12),
+                                                   ((0, 1, 2), v in p012)) if ok) for v in S})
+    return tabs
+
+
+def part8(rng, ns=(8, 16, 24, 32, 64), nwin=400, nwin_router=200, check=True):
+    rows, kc = [], Fr(15, 2) * Fr(5, 4) / 8 / Fr(4, 5) + 1
+    for n in ns:
+        S = alphabet(n)
+        best = None
+        for c in (0, 1, 2):
+            tab = held_table(n + c)
+            tot = 0
+            for _ in range(nwin):
+                p = c + rng.choice(S, 32)
+                tot += block_drops_lb(p[:16], tab) + block_drops_lb(p[16:], tab)
+            d = Fr(tot, nwin)
+            if best is None or d < best[0]:
+                best = (d, c)
+        d, c = best
+        dr, ntrip = router_all_scales(rng, n, nwin_router)
+
+        def rt_lb(st):
+            return max(24, (16 + 8 * float(d)) / FP32_RATE, 18.5 + 8 * float(d) + st) / 32
+
+        def priced(ext, st):
+            return real_time(mma=1.5, fp32=8 * float(ext), alu=8 * float(dr), lsu=1 + 1.3 * float(dr), stores=st)
+
+        rows.append({"part": 8, "alphabet": f"{{±1..±{n}}}", "headroom": 127 - n,
+                     "lb": {"shift": c, "windows": nwin, "E_drops_per_window": round(float(d), 4),
+                            "B_1/5_kappa1": round(float(Fr(3, 4) + Fr(2, 32) + d / 32), 4),
+                            "rho_quarter": round(float(Fr(3, 4) + Fr(2, 4) + d / 4), 4),
+                            "real_time": round(rt_lb(0), 3), "real_time_with_stores": round(rt_lb(8), 3)},
+                     "router": {"windows": nwin_router, "triples": ntrip, "E_drops_per_window": round(float(dr), 4),
+                                "B_1/5_ext2": round(float(Fr(3, 4) + Fr(2, 32) + dr * kc / 32), 4),
+                                "B_1/5_ext13/4": round(float(Fr(3, 4) + Fr(13, 128) + dr * kc / 32), 4),
+                                "rho_quarter_ext2": round(float(Fr(3, 4) + Fr(2, 4) + dr * kc / 4), 4),
+                                "real_time_ext2": round(priced(2, 0), 3),
+                                "real_time_ext13/4": round(priced(Fr(13, 4), 0), 3),
+                                "real_time_ext2_with_stores": round(priced(2, 8), 3),
+                                "real_time_ext13/4_with_stores": round(priced(Fr(13, 4), 8), 3)},
+                     "two_12bit_fields_hold_a_window": 2 * 32 * n + 1 <= 4096})
+    if not check:
+        return rows
+    only2 = np.zeros((1, 9), dtype=bool)
+    only2[0, [1, 2, 3, 4, 6, 8]] = True
+    assert block_drops_lb(np.array([5, 7, 5, 7] * 4), held_table(8)) == 0
+    assert block_drops_lb(np.array([5, 7, 5, 1] * 4), only2) == 4
+    assert block_drops_lb(np.array([5, 7, 5, 0] * 4), only2) == 0
+    over = 0
+    for n in (8, 16):
+        S, tab = alphabet(n), held_table(n)
+        opts = [{v: options(v, tr) for v in S} for tr in TRIPLES]
+        for _ in range(200):
+            p = rng.choice(S, 32)
+            router = min(sum(group_drops(tuple(sorted(o[int(v)] for v in p[g:g + 4]))) for g in range(0, 32, 4))
+                         for o in opts)
+            over += block_drops_lb(p[:16], tab) + block_drops_lb(p[16:], tab) > router
+    over_all, tab32, tabs32 = 0, held_table(32), router_tables(32)
+    for _ in range(40):
+        p = [int(v) for v in rng.choice(alphabet(32), 16)]
+        over_all += block_drops_lb(np.array(p), tab32) > router_block(tabs32, p)
+    rows.append({"part": 8, "bound_above_router_windows": over, "bound_above_all_scales_router_blocks": over_all,
+                 "verdict": over == 0 and over_all == 0,
+                 "claim": "a group of 4 with no zero entry and ≥ 3 entries no single piece holds sends one to CUDA "
+                          "(6 nonzero slots), minimized over every scale of each of the three pieces per 16-block "
+                          "and over shifts 0..2: a lower bound on any three-piece router's drops, never above part "
+                          "6's router on the same windows"})
+    return rows
+
+
 def main():
     rng = np.random.default_rng(int(sys.argv[1]))
-    parts = set(sys.argv[2:]) or {"1", "2", "3", "4", "5", "6", "7"}
+    parts = set(sys.argv[2:]) or {"1", "2", "3", "4", "5", "6", "7", "8"}
     drops = {}
     for name, fn in (("1", part1), ("2", lambda r: part2()), ("3", part3), ("4", part4), ("5", part5),
                      ("6", part6)):
@@ -587,6 +730,12 @@ def main():
                 print(json.dumps(row, default=str), flush=True)
     if "7" in parts:
         for row in part7(drops or {"{±1..±8}": Fr(0)}):
+            print(json.dumps(row, default=str), flush=True)
+    if "8" in parts:
+        for row in part8(rng, ns=()):
+            print(json.dumps(row, default=str), flush=True)
+    for p in sorted(p for p in parts if p.startswith("8.")):
+        for row in part8(rng, ns=(int(p[2:]),), check=False):
             print(json.dumps(row, default=str), flush=True)
 
 

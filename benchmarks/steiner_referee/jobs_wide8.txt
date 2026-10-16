@@ -1,0 +1,6 @@
+python3 wide_peel.py 311 8
+python3 wide_peel.py 312 8.8
+python3 wide_peel.py 313 8.16
+python3 wide_peel.py 314 8.24
+python3 wide_peel.py 315 8.32
+python3 wide_peel.py 316 8.64
