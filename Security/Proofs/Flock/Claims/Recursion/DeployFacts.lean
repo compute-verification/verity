@@ -17,6 +17,8 @@ stated as the analysis states it (`Refuses`, `InnerRounds`, `SessionNums`, `Sess
 * `innerViewRun`: the inner view is `I.V`'s run of the readers' messages at the oracle the record runs it against, and a
   run of replayed messages is the run of the messages it shows (`stepWith_replay`), so with no hypothesis on the
   witnesses.
+
+`zeroCommit_sha512`: the record's commit string to the zero digest is the deployed one at SHA-512.
 -/
 
 namespace RecDeploy
@@ -200,5 +202,25 @@ theorem innerViewRun (H : Claims.Msg → Claims.Msg) (I : Claims.Recursion.Inner
       fun i => Claims.coinSeq r i.val).seen
   unfold innerView
   rw [run_replay_seen]
+
+/-! ## The inner rounds' commit strings -/
+
+theorem toMsg_append (a b : ByteArray) : Claims.toMsg (a ++ b) = Claims.toMsg a ++ Claims.toMsg b := by
+  simp [Claims.toMsg, ByteArray.data_append]
+
+theorem toMsg_ofMsg (a : Claims.Msg) : Claims.toMsg (Claims.ofMsg a) = a := by
+  simp [Claims.toMsg, Claims.ofMsg]
+
+/-- **`zeroCommit` at SHA-512 is the deployed commit string to the zero digest**: hm96-sha512's `b ‖ c` at the pinned
+key (`Hm96.Default512.commitString`). -/
+theorem zeroCommit_sha512 (x : Claims.Msg) (j : ℕ) (salt : Claims.Msg) :
+    ((zeroCommit x j salt).eval FlockDeploy.sha512).1 =
+      Claims.toMsg (Flock.Hm96.Default512.commitString (ByteArray.mk (Array.replicate 64 0)) (Claims.ofMsg salt)) := by
+  have hs : Claims.toMsg Flock.Hm96.Default512.saltPrefix ++ salt =
+      Claims.toMsg (Flock.Hm96.Default512.saltPrefix ++ Claims.ofMsg salt) := by
+    rw [toMsg_append, toMsg_ofMsg]
+  simp only [zeroCommit, Claims.OC.eval, FlockDeploy.sha512, Flock.Hm96.Default512.commitString, hs,
+    Claims.ofMsg_toMsg]
+  rw [toMsg_append]
 
 end RecDeploy
