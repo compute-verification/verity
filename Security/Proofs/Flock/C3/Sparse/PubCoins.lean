@@ -87,13 +87,14 @@ theorem sparsePubRead_scOf {e : ExecHolo} {sch₀ : Accounting.Schedule}
   have ham : U.sh.m = e.cls.m := U.m.symm.trans U.mS
   have hak : U.sh.kLog = e.cls.kLog := U.kL.symm.trans U.fold.kLog
   obtain ⟨hx, hy⟩ := points_size_of_unit U hrows ham hak
-  obtain ⟨Uf, hU⟩ := layoutFactors_ok_of_size hok (by rw [hx, Array.size_replicate] <;> rfl)
-    (by rw [hy, Array.size_replicate] <;> rfl)
+  obtain ⟨Uf, hU⟩ := layoutFactors_ok_of_size hok (by rw [hx, Array.size_replicate]; rfl)
+    (by rw [hy, Array.size_replicate]; rfl)
   have hsc : scOf e rng U.sh cs U.d = ⟨info.lc.fold.alpha, info.zc.z, info.lc.fold.rhoIn, info.lc.rIn, Uf, cs⟩ := by
     unfold scOf
     rw [hrows]
     dsimp only
-    rw [hU] <;> rfl
+    rw [hU]
+    rfl
   rw [hsc]
   exact ⟨U.sh, U.d.extras, U.d.comb, v, info, kappa, hrows, ham, hak, rfl, rfl, rfl, rfl, hU⟩
 
