@@ -146,9 +146,10 @@ def test_e2m1_arm_adds_only_the_conditional_l64_reading(tmp_path):
     assert "theorem-k" not in f4
 
 
-def test_k_arms_add_only_the_projected_theorem_k_reading(tmp_path):
+def test_k_arms_add_only_the_theorem_k_reading(tmp_path):
     """A pfill-k or pfill-bU run keeps every reading of a ±1 run, E's proved 0.225 included, and adds Theorem K's c = 1
-    at φ = 0.9, marked projected; a ±1 run never gets it."""
+    at φ = 0.9, marked pending referee for pfill-k and projected for pfill-bU (r4 refereed bU's setting); a ±1 run never
+    gets it."""
     S = _module("scoring")
     P = _load_file("pfill_proved")
     A = _load_file("pfill_arm")
@@ -161,9 +162,9 @@ def test_k_arms_add_only_the_projected_theorem_k_reading(tmp_path):
     (tmp_path / "arm.json").write_text(json.dumps({"lineage": lineage(A.PFillPowerSplit)}))
     pm1 = P.readings(tmp_path)
     assert "theorem-k" not in pm1
-    for cls in (A.PFillK, A.PFillBU):
+    for cls, status in ((A.PFillK, "pending referee"), (A.PFillBU, "projected")):
         (tmp_path / "arm.json").write_text(json.dumps({"lineage": lineage(cls)}))
         k = P.readings(tmp_path)
         assert {n: k[n] for n in pm1} == pm1 and set(k) - set(pm1) == {"theorem-k"}
-        assert (k["theorem-k"]["filler_fraction"], k["theorem-k"]["status"]) == (0.9, "projected")
+        assert (k["theorem-k"]["filler_fraction"], k["theorem-k"]["status"]) == (0.9, status)
         assert k["theorem-k"]["SCORE"] > k["proved"]["SCORE"]
