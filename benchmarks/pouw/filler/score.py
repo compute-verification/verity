@@ -326,7 +326,9 @@ def main(argv=None) -> int:
         ap.add_argument("--no-robust", action="store_true")
         a = ap.parse_args(argv[1:])
         return measure(A.load(a.arm), a.bin, a.out, a.rounds, a.reps, not a.no_robust)
-    ap = argparse.ArgumentParser(prog="score.py", description="score a filler arm: build, lease one GPU, measure, report")
+    ap = argparse.ArgumentParser(prog="score.py", description="score a filler arm: build, lease one GPU, measure, report",
+                                 epilog="\n\n".join(__doc__.split("\n\n")[1:4]),
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("arm", help=f"one of {sorted(A.ARMS)}, or benchmarks/pouw/filler/FILE.py:Class")
     ap.add_argument("--out", type=Path, default=Path(os.environ["OUT"]) if os.environ.get("OUT") else None)
     ap.add_argument("--rounds", type=int, default=8)
