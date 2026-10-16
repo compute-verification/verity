@@ -61,17 +61,18 @@ class PFillKCoDep(PFillKCo):
 
 @dataclass
 class PFillKDual(PFillKCoDep):
-    """pfill-k itself on its decode splits (the 8-warp tile, its B and A moved from shared memory to L1, -DPFILL_DUAL) and
-    the co tile at one MMA in flight for prefill co: the kernel's only shared memory is the co tile's 2 KB, so one build
-    holds both. A co chunk runs 4-warp co tiles (dfill_make sets the chunk's W, its receipts dfill_ref's 4-warp tile)."""
+    """pfill-k itself on its decode splits (the 8-warp tile in 48 KB of shared memory) and the co tile at one MMA in
+    flight for prefill co (2 KB), one kernel whose shared memory is dynamic (-DPFILL_DUAL), so a co block asks only for
+    the co tile's. A co chunk runs 4-warp co tiles (dfill_make sets the chunk's W, its receipts dfill_ref's 4-warp
+    tile)."""
 
     name: str = "hcpre-pfill-k-dual"
     lineage: dict = field(default_factory=lambda: {
         "parent": "pfill-k", "approach": "pouw/filler-prefill",
-        "mechanism": ["filler:fresh-noise-imma", "noise:sha512-coins-01", "receipt:ram-k32", "tile:pfill-k-l1",
+        "mechanism": ["filler:fresh-noise-imma", "noise:sha512-coins-01", "receipt:ram-k32", "tile:pfill-k-dyn-smem",
                       "tile:co-w4-bits-b-regs-a", "place:split", "split:per-point-table", "split:every-scored-point",
                       "prefill:co", "co:one-block-an-sm", "co:one-mma-in-flight", "chunk:2^19"],
-        "hypothesis": "pfill-k's tile with B and A in L1 keeps its decode rate, and the co tile adds prefill at the gate "
-                      "in the same build"})
+        "hypothesis": "pfill-k's tile in dynamic shared memory keeps its decode rate, and the co tile adds prefill at "
+                      "the gate in the same build"})
     filler: Filler | None = Filler(W=8, NC=4, S=256, chunk_log2=19, noise="bits01")
     nvcc_flags: str = "-DPFILL_BITS -DPFILL_DUAL -DPFILL_NO_PHASE -DPF_CO_DEP=2"
