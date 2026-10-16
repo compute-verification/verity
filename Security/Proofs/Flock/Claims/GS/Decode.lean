@@ -20,7 +20,8 @@ included) along the same computation. With `N` opened columns and threshold `t =
    `k − 1` of the distinct points, and at `(k+1)·N < t²` Johnson's bound (`johnson_card_le`) caps the family at `N`.
 4. Each full prefix read back as a message (`Reader`, `rd.cost` operations each).
 
-On `s = 0` rows it returns the one message `rd.read []`.
+On `s = 0` rows it returns the one message `rd.read []`. So it lists at most `max 1 N` messages
+(`length_gsDecode_le`).
 
 **Completeness** (`mem_gsDecode`): on opened columns at distinct points, from the Johnson count `C.nMin agree` on, at
 `agree > 0`, every message agreeing with at least `agree·N` of them is listed, the conclusion of
@@ -396,6 +397,20 @@ theorem length_kept_le {F : Type} [Field F] [DecidableEq F] {s : ℕ} (rf : Root
     rw [List.getD_eq_getElem _ _ hi, horner_eq] at h1
     rw [List.getD_eq_getElem _ _ hi', horner_eq] at h2
     rw [h1, h2]
+
+/-- **The decoder lists at most `max 1 N` messages**: one on `s = 0` rows, else at most one per opened column
+(`length_kept_le`). -/
+theorem length_gsDecode_le {F T : Type} [Field F] [DecidableEq F] {s : ℕ} (C : IRS F T s) (rf : RootFinder F)
+    (rd : Reader C) (agree : ℝ) (os : List (ℕ × (Fin s → F))) :
+    (gsDecode C rf rd agree os).length ≤ max 1 os.length := by
+  unfold gsDecode
+  split_ifs with hs h
+  · simp
+  · rw [List.length_map]
+    refine (length_kept_le rf (cs := cols C os) (by rw [length_cols]; exact h.1) h.2 s).trans ?_
+    rw [length_cols]
+    exact le_max_right _ _
+  · simp
 
 /-! ## The count -/
 
