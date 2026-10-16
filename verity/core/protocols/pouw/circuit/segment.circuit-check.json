@@ -1,7 +1,10 @@
 {
  "definitions": {
-  "PouwDuoSeg_v2": {
+  "PouwDuoAbsorb_v2": {
    "and": 8688
+  },
+  "PouwDuoFinal_v2": {
+   "and": 0
   },
   "PouwI8AddBit_v2": {
    "and": 7
@@ -12,26 +15,26 @@
   "PouwI8Pm1_v2": {
    "and": 6
   },
-  "PouwSegCheckDither_v1{KS=128}": {
-   "and": 161311
-  },
-  "PouwSegCheckDither_v1{KS=4}": {
-   "and": 153375
-  },
-  "PouwSegCheck_v1{KS=128}": {
-   "and": 161055
-  },
-  "PouwSegCheck_v1{KS=4}": {
-   "and": 153119
-  },
   "PouwSegDot_v2": {
    "and": 4125
   },
-  "PouwSegOk_v2": {
-   "and": 1087
-  },
   "PouwSel32_v2": {
    "and": 32
+  },
+  "PouwSel8_v2": {
+   "and": 8
+  },
+  "PouwWinOk_v2": {
+   "and": 2080
+  },
+  "PouwXinAbsorb_v2": {
+   "and": 3822
+  },
+  "PouwXinFinal_v2": {
+   "and": 0
+  },
+  "PouwXor8_v2": {
+   "and": 0
   }
  }
 }
