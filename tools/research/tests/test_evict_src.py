@@ -278,6 +278,21 @@ def test_a_tree_that_may_be_a_runs_only_copy_of_its_source_is_kept(node, setup, 
     assert (node.src / node.a).is_dir()
 
 
+def test_a_run_refused_before_its_workload_does_not_keep_the_tree_once_it_is_old(node):
+    """On node 2 (16 Oct), 43 trees and 1.15M inodes were kept only by refused runs (launch.json, refused.json, no job.json), as
+    "records no source commit": a refused run ran nothing, so the tree can't be the only copy of what it ran."""
+    for name, hours in (("r15", 3.0), ("r16", 1.0)):
+        rd = node.root / "runs" / name
+        rd.mkdir(parents=True)
+        (rd / "launch.json").write_text(json.dumps({"run_id": name, "cwd": f"{node.src}/{node.a if name == 'r15' else node.b}"}))
+        (rd / "refused.json").write_text(json.dumps({"run_id": name, "reason": "memory"}))
+        (rd / "job.json").write_text(json.dumps({"run": {"id": name}}))
+        _age(rd, hours)
+    rep = run(node)
+    assert rep["error"] is None and node.a in [d["tree"] for d in rep["deleted"]], kept(rep)
+    assert kept(rep)[node.b] == ["recent: run r16 was recorded within 2 h"], "a refused run still counts as recent"
+
+
 def _captured(n, *, marker: dict | None, digest: str = "d" * 64, cap_digest: str | None = None) -> None:
     rd = write_run(n, "r14", source=n.a, store={"commit": n.a, "dirty": True, "dirty_digest": digest})
     job = json.loads((rd / "job.json").read_text())
