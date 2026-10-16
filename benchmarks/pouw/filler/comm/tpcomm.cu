@@ -29,26 +29,14 @@
 // (kf_ref_warp). A whole tile's eight warp receipts XOR to pfill's own tile receipt (dfill_ref of pfill.cuh).
 //
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a tpcomm.cu -lcublasLt -lnvidia-ml -ldl -lnccl
+// dcap.cu's filler is pfill.cuh's, here its bits tile (PFILL_BITS); dcap.cu's phase-filler state takes another name, since
+// `PFill` below is this file's.
+#define PFILL_BITS
+#define PFill DcapPFill
 #define main dcap_main
 #include "../dcap.cu"
 #undef main
-
-#define PFILL_BITS
-#define DFill PfDFill
-#define dfill_k pf_dfill_k
-#define dfill_launch pf_dfill_launch
-#define dfill_prep pf_dfill_prep
-#define dfill_make pf_dfill_make
-#define dfill_check pf_dfill_check
-#define dfill_ref pf_dfill_ref
-#include "../pfill.cuh"
-#undef DFill
-#undef dfill_k
-#undef dfill_launch
-#undef dfill_prep
-#undef dfill_make
-#undef dfill_check
-#undef dfill_ref
+#undef PFill
 
 #include <nccl.h>
 #include <sys/wait.h>
@@ -59,7 +47,7 @@
 // The fold the TP filler path (tp_dfill_k) and the deferred pass commit their receipts with (decision 43, the filler
 // receipt break). Default duo (NC 2): it binds every word under Theorem K (c = 1 at φ 0.9), PROVED. -DTP_NC=4 is the ram
 // fold, which binds a word PAIR only through Q = a0·d0 + d1, so it certifies half the words (round 8, P2-FF). At NC 4 one
-// of P2-FF r9's XOR-family folds is built with -DPFILL_LI or -DPFILL_XIN13 (FILL-SEC's D3 pfill.cuh, 0b09c978f); each is
+// of P2-FF r9's XOR-family folds is built with -DPFILL_LI or -DPFILL_XIN13 (pfill.cuh's r9 folds); each is
 // provisional and reads at Theorem K's proved half (0.45) until RS-E-REF r7's select-charging lemma lands. -DPFILL_XIN
 // (rotl 7) is retired (pfill.cuh #errors on it). pf_absorb and pf_fold read NC, so one macro picks the fold for every
 // launch and every host reference.
@@ -502,7 +490,7 @@ static uint64_t kf_ref_warp(uint64_t c0, uint64_t c1, uint64_t tile, int S, int 
         const int jn = std::min(KF_PAIRS_J, std::max(0, q - (f / 4) * KF_PAIRS_J));
         const uint64_t R0 = Ar[16 * f + g], R1 = Ar[16 * f + g + 8];
         for (int j = 0; j < jn; j++) {
-          const uint64_t b0 = Bb[8 * j + 2 * t], b1 = Bb[8 * j + 2 * t + 1];
+          const uint64_t *b0 = &Bb[8 * j + 2 * t], *b1 = b0 + 1;  // the bits tile's one plane a column
           pf_absorb<TP_NC>(y, z, pf_word<PF_BITS>(R0, b0), pf_word<PF_BITS>(R0, b1), pf_word<PF_BITS>(R1, b0),
                        pf_word<PF_BITS>(R1, b1), key);
         }
@@ -867,8 +855,8 @@ static KCheck kf_sample(const PFill& f, const KRecs& k, int slot0, int nsl, unsi
     for (int w = 0; w < PF_W; w++) whole &= k.q[f.rix(s, gi, i, w)] == full;
     if (whole && r.whole < n) {
       const unsigned long long x = kf_xor(f, k, s, gi, i);
-      r.whole_bad += x != pf_dfill_ref(g_tc0, g_tc1, tile, TP_NC, f.S);
-      r.whole_ctl += x == pf_dfill_ref(g_tc0, g_tc1, tile, TP_NC, f.S - 8);
+      r.whole_bad += x != dfill_ref(g_tc0, g_tc1, tile, TP_NC, f.S);
+      r.whole_ctl += x == dfill_ref(g_tc0, g_tc1, tile, TP_NC, f.S - 8);
       r.whole++;
     } else if (!whole && r.warps < n) {
       for (int w = 0; w < PF_W; w++) {
@@ -935,8 +923,8 @@ static int pf_gate(Rank& R) {
           for (int i = 0; i < f.tiles; i++) {
             if ((gi * f.tiles + i) % 97) continue;
             const unsigned long long x = kf_xor(f, k, 0, gi, i), tile = f.tile(ep, slot, gi, i);
-            ck.whole_bad += x != pf_dfill_ref(g_tc0, g_tc1, tile, TP_NC, f.S);
-            ck.whole_ctl += x == pf_dfill_ref(g_tc0, g_tc1, tile, TP_NC, f.S - 8);
+            ck.whole_bad += x != dfill_ref(g_tc0, g_tc1, tile, TP_NC, f.S);
+            ck.whole_ctl += x == dfill_ref(g_tc0, g_tc1, tile, TP_NC, f.S - 8);
             ck.whole++;
           }
         }
