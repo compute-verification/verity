@@ -5,6 +5,7 @@ import Proofs.Flock.Claims.Aggregate
 import Proofs.Flock.Claims.Bits
 import Proofs.Flock.Claims.ERep
 import Proofs.Flock.Claims.ERepCost
+import Proofs.Flock.Claims.Bridge
 import Proofs.Flock.Claims.Numbers
 import Proofs.Flock.Claims.NumbersTable
 import Proofs.Flock.Claims.NumbersPads
