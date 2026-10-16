@@ -13,6 +13,7 @@ import Proofs.Flock.Claims.KS.ConflictOC
 import Proofs.Flock.Claims.KS.ConflictMerkle
 import Proofs.Flock.Claims.KS.ConflictWithin
 import Proofs.Flock.Claims.KS.PlainQueryRound
+import Proofs.Flock.Claims.KS.ConflictRun
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -47,4 +48,6 @@ position against one cap with different rows collide in the two logs (`FlockDepl
 answered only within a log (`ConflictWithin`, `FlockDeploy.KS.hashesIn`) carries a run within its log to a verdict in
 `V` and back (`FlockDeploy.KS.within`, `FlockDeploy.KS.back`), so the verifier's lemmas under every oracle hold of it:
 among them where level 0's query coins sit in a plain rep's stream, as `ZkQueryRound` has it for the masked one
-(`PlainQueryRound`, `FlockDeploy.KS.plainQueryRound_verifyWithM`). -/
+(`PlainQueryRound`, `FlockDeploy.KS.plainQueryRound_verifyWithM`). An accepted run decides within its own verifier
+log, so its verdict accepts with SHA-512 answered only within that log, on the link of the tape's first message and
+on tables committed under `hm96-sha512/v1` (`ConflictRun`, `FlockDeploy.KS.acc_within`, `FlockDeploy.KS.checks_hm96`). -/
