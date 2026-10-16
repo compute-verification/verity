@@ -19,7 +19,7 @@ the deployed sampled verifier, each a hypothesis to discharge there.
   (`wait_bad_le`), its union's size against the slack `c` (`k = 2^40·(n_RU + n_PU + 1)`), the draw law and Flock's
   error at the inner wait, averaged over the first stage and the tapes: `Pr[Fails] ≤ κ(δ) + √(γ·Pr[B])`.
 * `KS_of`, `Bits_of`, `KSCount_of_KS`: **the claims**: `KS` through `KSLin_of_ownColl`; `Bits` with the extractor's
-  costs; and the count form where the design's miss is nonnegative.
+  costs; and the count form, at the miss clamped at `0`.
 -/
 
 namespace Claims.Sampling
@@ -849,12 +849,16 @@ theorem Pa_le_miss (d : Design) (P : Partition) {t : ℕ} {B : Finset ℕ} (hB :
   exact le_ciSup (f := fun B : {B : Finset ℕ // B ⊆ range P.rus.length ∧ t ≤ B.card} => d.Pa P B.1)
     (Set.finite_range _).bddAbove ⟨B, hB, ht⟩
 
-/-- **Sampling: the count form from KS**, where the design's miss is nonnegative: `KS` at `δ = miss(t)`, a faulty
-set in `M_δ` having fewer than `t` units (`Pa_le_miss`). -/
-theorem KSCount_of_KS {H : Msg → Msg} {D : Deploy Coin Col T} (h : KS H D) (hmiss : ∀ t x, 0 ≤ missAt D t x) :
-    KSCount H D := by
+/-- **Sampling: the count form from KS**: `KS` at `δ = max(0, miss(t))` (`missAt`), a faulty set in `M_δ` having
+fewer than `t` units (`Pa_le_miss`). -/
+theorem KSCount_of_KS {H : Msg → Msg} {D : Deploy Coin Col T} (h : KS H D) : KSCount H D := by
   intro t decode hdec x Ω _ _ P
-  have hk := h (missAt D t x) decode (hmiss t x) hdec x Ω P
+  have h0 : 0 ≤ missAt D t x := by
+    unfold missAt
+    split
+    · exact le_max_left _ _
+    · exact le_rfl
+  have hk := h (missAt D t x) decode h0 hdec x Ω P
   unfold PrBad at hk ⊢
   refine le_trans (Pr_mono fun s hs => ⟨hs.1, fun hR => hs.2 ?_⟩) hk
   revert hR
@@ -863,11 +867,12 @@ theorem KSCount_of_KS {H : Msg → Msg} {D : Deploy Coin Col T} (h : KS H D) (hm
   | some w =>
     rintro ⟨s', Pt, hs, hPt, hM⟩
     refine ⟨s', Pt, hs, hPt, lt_of_not_ge fun ht => ?_⟩
-    have hmx : missAt D t x = s'.design.miss Pt t := by
+    have hmx : missAt D t x = max 0 (s'.design.miss Pt t) := by
       simp only [missAt, hs, Deploy.part, hPt, Option.getD_some]
     have hM' : missAt D t x < s'.design.Pa Pt (faulty H D.commit s' Pt w) := hM
     rw [hmx] at hM'
-    exact absurd (Pa_le_miss s'.design Pt (by classical exact filter_subset _ _) ht) (not_le.2 hM')
+    exact absurd ((Pa_le_miss s'.design Pt (by classical exact filter_subset _ _) ht).trans (le_max_right _ _))
+      (not_le.2 hM')
 
 end KS
 
