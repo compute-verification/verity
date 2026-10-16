@@ -105,6 +105,37 @@ def main(argv: list[str]) -> int:
               f"{row['watt']['full']:6.1f} {row['watt']['split']:6.1f} {row['watt']['split_fill']:6.1f} "
               f"{row['watt']['fill']:6.1f} {row['mhz']['full']:8.0f} {row['mhz']['split_fill']:8.0f} "
               f"{row['pcap']['split_fill']:9.2f} {fshare:7.3f} {bad:4d}")
+        if arms.get("co_fill"):
+            row["co"] = dict(slowdown=m("co_fill", "step_ms") / full, watt=m("co_fill", "watt_energy"),
+                             mhz=m("co_fill", "mhz"), mhz_min=m("co_fill", "mhz_min"), pcap=m("co_fill", "frac_pcap"),
+                             fill_share=share(m("co_fill", "fill_mma_per_s"), m("co_fill", "mhz")))
+            c = row["co"]
+            print(f"{'':16s} co-resident on all SMs: step {c['slowdown']:.3f}x, {c['watt']:.1f} W, {c['mhz']:.0f} MHz "
+                  f"(min {c['mhz_min']:.0f}), pcap {c['pcap']:.2f}, filler share {c['fill_share']:.3f}")
+    pre: dict = defaultdict(lambda: defaultdict(list))
+    for d in rs:
+        if d["mode"] == "pprefill":
+            pre[(d["M"], d["B"], d["L"], d["fill_sms"], variant(d), d["_run"])][d["arm"]].append(d)
+    if pre:
+        print("\nprefill right after heat (decode on its partition alone, or beside the filler):")
+        print(f"{'M':>5s} {'B':>4s} {'L':>6s} {'fSMs':>4s} {'variant':18s} {'heat':>10s} {'W heat':>6s} {'temp':>9s} "
+              f"{'pre ms':>8s} {'pre W':>6s} {'pre MHz':>7s} {'MHz min':>7s} {'pcap':>5s}")
+    for (mm, b, l, f, var, run), arms in sorted(pre.items()):
+        out.setdefault("prefill", [])
+        for h, p in (("heat_split", "pre_after_split"), ("heat_fill", "pre_after_fill")):
+            def m2(arm: str, k: str) -> float:
+                v = [d[k] for d in arms.get(arm, [])]
+                return statistics.median(v) if v else float("nan")
+
+            temps = [d["temp"][1] for d in arms.get(h, [])]
+            row = dict(M=mm, B=b, L=l, fill_sms=f, variant=var, heat=h, heat_watt=m2(h, "watt_energy"),
+                       heat_temp_end=statistics.median(temps) if temps else None, pre_ms=m2(p, "step_ms"),
+                       pre_watt=m2(p, "watt_energy"), pre_mhz=m2(p, "mhz"), pre_mhz_min=m2(p, "mhz_min"),
+                       pre_pcap=m2(p, "frac_pcap"), run=run)
+            out["prefill"].append(row)
+            print(f"{mm:5d} {b:4d} {l:6d} {f:4d} {var:18s} {h:>10s} {row['heat_watt']:6.1f} {str(temps):>9s} "
+                  f"{row['pre_ms']:8.2f} {row['pre_watt']:6.1f} {row['pre_mhz']:7.0f} {row['pre_mhz_min']:7.0f} "
+                  f"{row['pre_pcap']:5.2f}")
     if as_json:
         print(json.dumps(out, indent=1))
     return 0
