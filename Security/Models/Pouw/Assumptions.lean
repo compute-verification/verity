@@ -52,6 +52,7 @@ import Models.Pouw.Assumptions.PearlC.TTOutRowSeedK
 import Models.Pouw.Assumptions.PearlC.TTOutTileUOnly
 import Models.Pouw.Assumptions.PearlC.TTOutUOnly
 import Models.Pouw.Assumptions.Pinned
+import Models.Pouw.Assumptions.RelativeSecurity
 
 /-!
 # PoUW's named assumptions, and the definitions and statements over them (trusted)
