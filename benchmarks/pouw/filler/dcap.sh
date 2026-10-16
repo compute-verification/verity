@@ -4,7 +4,7 @@
 # context) grid. Nothing is timed unless the gate passes. Clocks are read, never set. Results in $OUT/dcap.jsonl.
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=CAP \
-#     --send benchmarks/pouw/filler/run.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/run.sh"'
+#     --send benchmarks/pouw/filler/dcap.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/dcap.sh"'
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
