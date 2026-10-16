@@ -20,6 +20,7 @@ import Proofs.Flock.Claims.Scope
 import Proofs.Flock.Claims.DeployOC
 import Proofs.Flock.Claims.DeployInputs
 import Proofs.Flock.Claims.Deploy
+import Proofs.Flock.Claims.DeployCode
 
 /-! `Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated`, by reflexivity: the guarantee is there for its
 record, which holds the claims' text.
