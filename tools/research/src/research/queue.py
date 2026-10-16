@@ -526,9 +526,17 @@ class Queue:
                 place(a)
             out.append(n)
 
-        for n in held + [f for f in self.first if f in ready] + kept + sorted(ready - set(kept)):
+        new = sorted(ready - set(kept))
+        cold = {n for n in new if self._forces_cold(n)}
+        # a newly ready PR that makes circuit-check run cold goes above the warm ones, so they land in their own warm trains;
+        # members already on `next` keep their place, and so the check that covers them
+        for n in held + [f for f in self.first if f in ready] + kept + [n for n in new if n not in cold] + sorted(cold):
             place(n)
         return out
+
+    def _forces_cold(self, n: int) -> bool:
+        r = _git(self.workdir, "diff", "--name-only", f"refs/remotes/origin/main...refs/queue/pr/{n}", check=False)
+        return r.returncode == 0 and forces_cold(r.stdout.split())
 
     # -- building `next`
 
@@ -719,6 +727,22 @@ class Queue:
             elif e.state == "ready":
                 e.why = f"admitted: the next sync merges it onto `{self.branch}`, and drive checks and lands it in a train"
         return entries
+
+
+#: what a change must touch to move most circuit-check targets' cache keys: the circuits package (every Definition imports its
+#: library), the checker, the lock and the workspace's member list (installed distributions), and a sidecar (the registries)
+_COLD_PREFIXES = ("verity/ml/circuits/", "tools/verity/circuit_check/")
+
+
+def forces_cold(files: Iterable[str]) -> bool:
+    """Whether a change to ``files`` makes the next check's circuit-check run cold (hours, not seconds), so drive checks it in a
+    train of its own, above the warm PRs: a scheduling estimate, never a gate."""
+    for f in files:
+        if f.endswith(".md") or "/tests/" in f:
+            continue
+        if f.startswith(_COLD_PREFIXES) or f in ("uv.lock", "pyproject.toml") or f.endswith(".circuit-check.py"):
+            return True
+    return False
 
 
 def conflicting_files(repo: Path, base: str, head: str) -> list[str]:
