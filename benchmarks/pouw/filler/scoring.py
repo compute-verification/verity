@@ -250,14 +250,16 @@ def dram_gate(filler_csv: str | None, control_csv: str | None) -> dict:
         return {"ok": False, "why": "an ncu metric is missing (control bytes/time, filler bytes/time: "
                                     f"{len(cb)}/{len(ct)}, {len(fb)}/{len(ft)})"}
     ratio = _med(cb) / CONTROL_BYTES
-    hbm = _med(cb) / _med(ct)
     rate = max(b / t for b, t in zip(fb, ft))
-    valid = CONTROL_RANGE[0] <= ratio <= CONTROL_RANGE[1]
-    ok = valid and rate <= DRAM_LIMIT * hbm
+    valid = CONTROL_RANGE[0] <= ratio <= CONTROL_RANGE[1] and _med(ct) > 0
+    if not valid:
+        return {"ok": False, "control_bytes_ratio": ratio, "counter_valid": False, "filler_bytes_per_s": rate,
+                "why": f"the counter's control read {ratio:.3f} of 1 GiB"}
+    hbm = _med(cb) / _med(ct)
+    ok = rate <= DRAM_LIMIT * hbm
     return {"ok": ok, "control_bytes_ratio": ratio, "counter_valid": valid, "hbm_bytes_per_s": hbm,
             "filler_bytes_per_s": rate, "filler_bytes_per_launch": max(fb), "share_of_hbm": rate / hbm,
-            "why": None if ok else ("the counter's control read " f"{ratio:.3f} of 1 GiB" if not valid
-                                    else f"filler DRAM {rate / hbm:.2%} of HBM > {DRAM_LIMIT:.0%}")}
+            "why": None if ok else f"filler DRAM {rate / hbm:.2%} of HBM > {DRAM_LIMIT:.0%}"}
 
 
 def gates(stats: dict, sc: dict, *, has_filler: bool, sgate: dict | None, dgate: list[dict], dram: dict,

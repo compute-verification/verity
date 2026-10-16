@@ -45,6 +45,7 @@ import arms as A  # noqa: E402
 import scoring as S  # noqa: E402
 
 NVCC = os.environ.get("NVCC", "/usr/local/cuda-13.0/bin/nvcc")
+os.environ["PATH"] = f"{Path(NVCC).parent}:{os.environ.get('PATH', '')}"  # cuobjdump and ncu beside nvcc, as dfill.sh
 NVFLAGS = ["-O3", "-std=c++17", "-gencode", "arch=compute_120a,code=sm_120a", "-Xptxas", "-v"]
 LIBS = ["-lcublasLt", "-lnvidia-ml", "-ldl"]
 SMI_FIELDS = ("clocks.sm,clocks.max.sm,power.draw,power.limit,clocks.applications.graphics,"
