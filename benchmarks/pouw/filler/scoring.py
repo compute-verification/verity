@@ -39,8 +39,8 @@ LIMIT = 1.05  # serving slowdown, every entry
 DRAM_LIMIT = 0.01  # of the HBM bandwidth the same run's validated counter measures
 CONTROL_BYTES = 1 << 30  # bw_read streams 1 GiB a launch: the DRAM counter's positive control
 CONTROL_RANGE = (0.97, 1.10)  # dram__bytes.sum ÷ 1 GiB that validates the counter (FILL read 1.074–1.078 GB)
-TOO_GOOD = 1.02  # rows without standalone blocks: beside ÷ the one calibration above this goes to the assessor
-TOO_GOOD_FLOOR = 0.01  # with them: beside ÷ their median above 1 + max(this, their spread)
+TOO_GOOD = 1.02  # a filler faster beside serving than alone on the same SMs by more than this goes to the assessor
+TOO_GOOD_FLOOR = TOO_GOOD - 1  # beside ÷ the standalone blocks' median above 1 + max(this, their trimmed spread)
 CHEAT = 16  # the honest gate's positive control credits S steps a tile and runs S - S/16 beside serving
 SMS, PER_SM = share.SMS, share.PER_SM
 MAX_BL = 786432
@@ -121,6 +121,16 @@ def fill_rate(blocks: list[dict], chunk_macs: float) -> tuple[float, list[float]
     return rate, per
 
 
+def solo_spread(rates: list[float]) -> float:
+    """The standalone blocks' spread: their range over their median, without the single highest and lowest of four or
+    more (one block whose host-side completion stamps a scheduling hiccup delayed reads up to ~15% off on a ~20-chunk
+    window; the rest of a point's blocks agree within ~0.3%)."""
+    xs = sorted(rates)
+    if len(xs) >= 4:
+        xs = xs[1:-1]
+    return (xs[-1] - xs[0]) / _med(rates)
+
+
 def point_stats(row: dict) -> dict:
     """A `dscore` row's numbers: the paired slowdown (median over rounds of the arm block's median rep over the alone
     block's), both sides' median time, clock and power, the filler's rate over its windows and its per-block spread, and
@@ -138,7 +148,7 @@ def point_stats(row: dict) -> dict:
     cal = row["alone_fill"]["mac_per_s"] if fill else 0.0
     if len(solo) >= 2:
         ref = _med(solo)
-        spread = (max(solo) - min(solo)) / ref
+        spread = solo_spread(solo)
         limit = 1 + max(TOO_GOOD_FLOOR, spread)
     else:
         ref, spread, limit = cal, None, TOO_GOOD
@@ -322,7 +332,7 @@ def row_rounds(r: dict) -> list[tuple[str, int, dict | None]]:
     for i, b in enumerate(r["blocks"]):
         out.append((f"arm block {i}", 1 + i, b["arm"].get("round")))
         if "solo" in b:
-            out.append((f"standalone block {i}", 1 + r["rounds"] + i, b["solo"].get("round")))
+            out.append((f"standalone block {i}", 1 + r.get("rounds", len(r["blocks"])) + i, b["solo"].get("round")))
         out += [(f"{side} block {i} {k}", None, v) for side in ("arm", "solo") for k, v in (b.get(side) or {}).items()
                 if k.endswith("_round")]
     return out
@@ -341,7 +351,7 @@ def replay_gate(rows: list[dict]) -> dict:
     if len(set(pts)) != len(pts) or None in pts:
         bad.append(f"point indices missing or repeated: {pts}")
     for r in fill_rows:
-        slots = r.get("slots", r["rounds"] + 1)
+        slots = r.get("slots", r.get("rounds", len(r["blocks"])) + 1)
         for name, pos, rd in row_rounds(r):
             where = f"{r['kind']} {r['B']}/{r['L']} {name}"
             if rd is None or r.get("point") is None:
@@ -418,7 +428,8 @@ def _too_good(v: dict) -> bool:
 def honesty(arm, stats: dict, phases_points, *, control: dict | None = None, has_filler: bool = False) -> dict:
     """The arm's placement is a pure function of the point (asked twice, the same answer); no filler ran faster beside
     serving than alone on the same SMs (beside ÷ the median of the round-interleaved standalone blocks above
-    1 + max(TOO_GOOD_FLOOR, their spread); such a result goes to the assessor), and every filler point has that reference;
+    1 + max(TOO_GOOD_FLOOR, their trimmed spread, `solo_spread`); such a result goes to the assessor), and every filler
+    point has that reference;
     none ran above its SMs' int8 tensor peak at the clock its blocks read; and, with a filler, the positive control (a
     filler credited for S steps a tile that runs S - S/CHEAT beside serving and S alone, `control`) is caught as too good,
     so the check can see a dishonest arm at the run's own spread."""
