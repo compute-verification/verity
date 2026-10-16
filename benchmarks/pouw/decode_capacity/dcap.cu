@@ -1197,8 +1197,9 @@ static void plaunch_nc(const PFill& f, unsigned long long off, int tiles, const 
 }
 static void plaunch(const PFill& f, unsigned long long off, int tiles, const int* stop, cudaStream_t st) {
 #ifndef DFILL_V1
-  if (f.W != PF_W || f.S < 4 || f.S % 4) {
-    fprintf(stderr, "pfill's dfill_p: W must be %d and S a positive multiple of 4 (W %d, S %d)\n", PF_W, f.W, f.S);
+  if (f.W != PF_PW || f.S < 4 || f.S % 4) {
+    fprintf(stderr, "pfill's dfill_p: W must be PF_PW = %d (-DPF_PW=W) and S a positive multiple of 4 (W %d, S %d)\n", PF_PW,
+            f.W, f.S);
     exit(1);
   }
 #endif

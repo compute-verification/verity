@@ -21,8 +21,9 @@ inline uint64_t dseed(uint64_t c0, uint64_t c1, uint64_t tile) { return smix(smi
 
 #include "pfill.cuh"
 
-extern "C" uint64_t pfill_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int steps, int kind) {
-  return dfill_ref_kind(c0, c1, tile, nc, steps, kind);
+extern "C" uint64_t pfill_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int steps, int kind, int w) {
+  return dfill_ref_kind(c0, c1, tile, nc, steps, kind, w);
 }
+extern "C" int pfill_width(uint64_t tile) { return (tile >> 62) == 1 ? PF_PW : PF_W; }
 extern "C" uint32_t pfill_e2m1x8(uint32_t byte) { return pf_e2m1x8(byte); }
 extern "C" uint32_t pfill_s8x4(uint32_t nib, int kind) { return kind == PF_BITS ? pf_s8x4<PF_BITS>(nib) : pf_s8x4<PF_S8>(nib); }

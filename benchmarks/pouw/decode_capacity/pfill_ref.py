@@ -81,20 +81,22 @@ def words(a: np.ndarray, b: np.ndarray, kind: int) -> np.ndarray:
     return ((32 - 2 * popcount(a ^ b)) & M32).astype(np.uint32)
 
 
-def receipt(c0: int, c1: int, tile: int, nc: int, steps: int, kind: int = S8) -> int:
-    """The tile's receipt: warp w's fragments w S .. w S + S - 1 (16 rows each) against all TN columns, fragment f's
-    outputs absorbed by chain f % 4 of each lane in order of f, then of the B fragment j."""
-    bb = np.concatenate([rows(c0, c1, tile, CTR_B, b, kind) for b in range(TN // 16)])  # bit k of bb[n]: entry (k, n)
+def receipt(c0: int, c1: int, tile: int, nc: int, steps: int, kind: int = S8, w: int = W) -> int:
+    """The tile's receipt: warp v's fragments v S .. v S + S - 1 (16 rows each) against all 128 w columns (w warps: the
+    pump's tile is 8, dfill_p's PF_PW), fragment f's outputs absorbed by chain f % 4 of each lane in order of f, then of
+    the B fragment j."""
+    tn = 128 * w
+    bb = np.concatenate([rows(c0, c1, tile, CTR_B, b, kind) for b in range(tn // 16)])  # bit k of bb[n]: entry (k, n)
     kb = block(c0, c1, tile, CTR_KEY, DOMS[kind])
     a0, a1, k0, k1 = (np.uint32(v) for v in keys(kb))
     lane = np.arange(32)
     g, t = lane >> 2, lane & 3
-    pos = (np.arange(W)[:, None, None] * 32 + lane[None, :, None]) * 4 + np.arange(4)[None, None, :]
+    pos = (np.arange(w)[:, None, None] * 32 + lane[None, :, None]) * 4 + np.arange(4)[None, None, :]
     y = pos.astype(np.uint32)
     z = (pos.astype(np.uint64) * 0x9E3779B9 & M32).astype(np.uint32)
-    ar = np.stack([np.concatenate([rows(c0, c1, tile, 0, w * steps + f, kind) for f in range(steps)]
-                                  or [np.zeros(0, np.uint64)]) for w in range(W)])  # ar[w, 16 f + i]: row i of fragment f
-    jj = np.arange(TN // 8)
+    ar = np.stack([np.concatenate([rows(c0, c1, tile, 0, v * steps + f, kind) for f in range(steps)]
+                                  or [np.zeros(0, np.uint64)]) for v in range(w)])  # ar[v, 16 f + i]: row i of fragment f
+    jj = np.arange(tn // 8)
     b0 = bb[8 * jj[:, None] + 2 * t[None, :]]  # [j, lane]
     b1 = bb[8 * jj[:, None] + 2 * t[None, :] + 1]
     for fi in range((steps + 3) // 4):
@@ -104,7 +106,7 @@ def receipt(c0: int, c1: int, tile: int, nc: int, steps: int, kind: int = S8) ->
         r0 = ar[:, 16 * fc[None, :] + g[:, None]]  # [w, lane, c]
         r1 = ar[:, 16 * fc[None, :] + g[:, None] + 8]
         d0, d1, d2, d3 = (words(r[None], b[:, None, :, None], kind) for r in (r0, r1) for b in (b0, b1))  # [j, w, lane, c]
-        for j in range(TN // 8):
+        for j in range(tn // 8):
             ny, nz = y.copy(), z.copy()
             if nc == RAM:
                 ny = (rotl(ny, 7) + d0[j]) * a0 + d1[j]

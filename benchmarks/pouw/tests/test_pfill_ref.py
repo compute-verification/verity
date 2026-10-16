@@ -36,7 +36,9 @@ def lib(tmp_path_factory):
                     "-o", str(so), str(HERE / "pfill_host.cpp")], check=True)
     cdll = ctypes.CDLL(str(so))
     cdll.pfill_ref.restype = ctypes.c_uint64
-    cdll.pfill_ref.argtypes = [ctypes.c_uint64] * 3 + [ctypes.c_int] * 3
+    cdll.pfill_ref.argtypes = [ctypes.c_uint64] * 3 + [ctypes.c_int] * 4
+    cdll.pfill_width.restype = ctypes.c_int
+    cdll.pfill_width.argtypes = [ctypes.c_uint64]
     cdll.pfill_e2m1x8.restype = ctypes.c_uint32
     cdll.pfill_e2m1x8.argtypes = [ctypes.c_uint32]
     cdll.pfill_s8x4.restype = ctypes.c_uint32
@@ -46,7 +48,7 @@ def lib(tmp_path_factory):
 
 @pytest.fixture(scope="module")
 def host(lib):
-    return lambda c0, c1, tile, nc, steps, kind=R.S8: lib.pfill_ref(c0, c1, tile, nc, steps, kind)
+    return lambda c0, c1, tile, nc, steps, kind=R.S8, w=R.W: lib.pfill_ref(c0, c1, tile, nc, steps, kind, w)
 
 
 @pytest.mark.parametrize("kind", R.KINDS)
@@ -55,6 +57,19 @@ def host(lib):
 @pytest.mark.parametrize("tile", [0, 1, 1000003])
 def test_twin_equals_host_reference(host, nc, steps, tile, kind):
     assert R.receipt(C0, C1, tile, nc, steps, kind) == host(C0, C1, tile, nc, steps, kind)
+
+
+@pytest.mark.parametrize("kind", R.KINDS)
+@pytest.mark.parametrize("w", [2, 4])
+@pytest.mark.parametrize("nc", [R.DUO, R.RAM])
+def test_narrow_phase_tile_equals_host_reference(lib, host, nc, w, kind):
+    """dfill_p's tile at PF_PW = 2 or 4 warps (128 w columns) under a phase id; the width is in what a receipt binds, and
+    dfill_ref takes PF_PW (8 unless built otherwise) for phase ids and the pump's 8 for every other id."""
+    tile = (1 << 62) | 12345
+    got = host(C0, C1, tile, nc, 16, kind, w)
+    assert R.receipt(C0, C1, tile, nc, 16, kind, w) == got
+    assert got != host(C0, C1, tile, nc, 16, kind, 8)
+    assert lib.pfill_width(tile) == 8 and lib.pfill_width(12345) == 8
 
 
 @pytest.mark.parametrize("kind", R.KINDS)
