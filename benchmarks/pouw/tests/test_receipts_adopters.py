@@ -1,9 +1,10 @@
-"""The receipt folds' implementations against the one reference (receipts/receipt_conform.py): pfill's twin and header, the
-filler scorer's fold table, and E2E's PouwSegCheck word twins. Each test skips until its implementation is in the tree."""
+"""The receipt folds' implementations against the one reference (receipts/receipt_conform.py): pfill's twin and pfill.cuh
+itself, the filler scorer's fold table, and E2E's PouwSegCheck word twins. Each test skips until its implementation is in
+the tree."""
 from __future__ import annotations
 
 import importlib.util
-import re
+import shutil
 import sys
 from pathlib import Path
 
@@ -15,9 +16,15 @@ sys.path.insert(0, str(POUW / "receipts"))
 import receipt_conform as C  # noqa: E402
 
 
+def _find(name: str) -> Path:
+    """One of pfill's or the scorer's files: in decode_capacity/ or filler/, whichever this tree keeps it in."""
+    for d in ("decode_capacity", "filler"):
+        if (POUW / d / name).exists():
+            return POUW / d / name
+    pytest.skip(f"{name} isn't in this tree")
+
+
 def _load(path: Path, name: str):
-    if not path.exists():
-        pytest.skip(f"{path.relative_to(POUW)} isn't in this tree")
     spec = importlib.util.spec_from_file_location(name, path)
     mod = importlib.util.module_from_spec(spec)
     sys.modules[name] = mod
@@ -26,22 +33,19 @@ def _load(path: Path, name: str):
 
 
 def test_pfill_ref_runs_the_reference_folds():
-    assert C.pfill_ref(_load(POUW / "decode_capacity" / "pfill_ref.py", "pfill_ref")) > 100
+    assert C.pfill_ref(_load(_find("pfill_ref.py"), "pfill_ref")) > 100
 
 
-def test_pfill_cuh_folds_with_the_reference_header():
-    path = POUW / "decode_capacity" / "pfill.cuh"
-    if not path.exists():
-        pytest.skip("pfill.cuh isn't in this tree")
-    src = path.read_text()
-    assert '#include "../receipts/receipt_folds.cuh"' in src
-    absorb = re.search(r"void pf_absorb\(.*?\n}\n", src, re.S)[0]
-    for fn in ("rf_ram_step", "rf_xin13_step", "rf_li_step", "rf_duo_step"):
-        assert fn in absorb, f"pf_absorb doesn't call {fn}"
+def test_pfill_cuh_runs_the_reference_folds():
+    """pf_absorb, pfill's key rules, pf_keys and its lane starts, in its default, LI and XIN13 builds (g++)."""
+    path = _find("pfill.cuh")
+    if not shutil.which("g++"):
+        pytest.skip("no g++ for pfill.cuh's host build")
+    assert C.pfill_cuh(path) > 500
 
 
 def test_the_scorers_fold_table_is_the_references():
-    sc = _load(POUW / "filler" / "scoring.py", "scoring")
+    sc = _load(_find("scoring.py"), "scoring")
     assert C.scorer_folds(sc.FOLDS, sc.RECEIPT_TAGS) == 5
 
 

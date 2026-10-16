@@ -8,11 +8,13 @@ differs.
     p2ff_r9(mod), pfill_ref(mod), egemm_ref(mod), e2e_segment(mod), e2e_definitions(mod), scorer_folds(FOLDS, RECEIPT_TAGS)
                                            the existing implementations, each against the vectors and the schedule it runs
                                            (e2e_definitions evaluates E2E's Boolean Definitions on bits)
+    pfill_cuh(path)                        pfill.cuh itself, through its host build, in each fold build
 
     python receipt_conform.py                       check receipt_folds.py and receipt_folds.cuh against vectors.json
     python receipt_conform.py --write               rewrite vectors.json from receipt_folds.py
     python receipt_conform.py --adopter NAME PATH   check an implementation's module (p2ff_r9, pfill_ref, egemm_ref,
-                                                    e2e_segment, e2e_definitions) or scoring.py (scorer) at PATH
+                                                    e2e_segment, e2e_definitions), scoring.py (scorer) or pfill.cuh
+                                                    (pfill_cuh) at PATH
 """
 from __future__ import annotations
 
@@ -417,6 +419,122 @@ def pfill_ref(pr, v: dict | None = None) -> int:
     return n
 
 
+_PFILL_HARNESS = r"""
+#include <algorithm>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <vector>
+#define __host__
+#define __device__
+#define __forceinline__ inline
+#define __constant__ static const
+inline uint64_t smix(uint64_t x) {
+  x += 0x9E3779B97F4A7C15ull;
+  x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull;
+  x = (x ^ (x >> 27)) * 0x94D049BB133111EBull;
+  return x ^ (x >> 31);
+}
+inline uint64_t dseed(uint64_t c0, uint64_t c1, uint64_t tile) { return smix(smix(c0 ^ smix(tile)) ^ c1); }
+#include PFILL_CUH
+int main() {
+  char op[16];
+  unsigned w[16];
+  while (std::scanf("%15s", op) == 1) {
+    if (!std::strcmp(op, "absorb")) {
+      int nc;
+      if (std::scanf("%d", &nc) != 1) return 2;
+      for (int i = 0; i < 10; i++) if (std::scanf("%x", &w[i]) != 1) return 2;
+      uint32_t y = w[0], z = w[1];
+      const PfKeys k{w[6], w[7], w[8], w[9]};
+      if (nc == 2) pf_absorb<2>(y, z, w[2], w[3], w[4], w[5], k);
+      else pf_absorb<4>(y, z, w[2], w[3], w[4], w[5], k);
+      std::printf("%08x %08x\n", y, z);
+    } else if (!std::strcmp(op, "rule")) {
+      if (std::scanf("%x", &w[0]) != 1) return 2;
+      std::printf("%d\n", (int)(PF_R9 ? pf_key_ok_r9(w[0]) : pf_key_ok(w[0])));
+    } else if (!std::strcmp(op, "keys")) {
+      for (int i = 0; i < 16; i++) if (std::scanf("%x", &w[i]) != 1) return 2;
+      uint64_t st[8];
+      for (int i = 0; i < 8; i++) st[i] = (uint64_t)pf_bswap(w[2 * i]) << 32 | pf_bswap(w[2 * i + 1]);
+      const PfKeys k = pf_keys(st);
+      std::printf("%08x %08x %08x %08x\n", k.a0, k.a1, k.k0, k.k1);
+    } else if (!std::strcmp(op, "start")) {
+      if (std::scanf("%x", &w[0]) != 1) return 2;
+      std::printf("%08x %08x\n", pf_y0(w[0]), pf_z0(w[0]));
+    } else {
+      return 2;
+    }
+  }
+}
+"""
+
+
+def _pfill_build_ops(v: dict, flag: str | None) -> tuple[list[str], list[str]]:
+    builds = F.SCHEDULES["pfill-lane"]["build"]
+    folds = [f for f in F.SCHEDULES["pfill-lane"]["folds"] if builds[f][1] == flag or (f == "duo" and flag)]
+    r9 = flag is not None
+    ops, want = [], []
+
+    def chain(fold, start, words, keys, out):
+        nc, s = builds[fold][0], list(start) if fold == "duo" else [start[0], "00000000"]
+        for d, nxt in zip(words, out):
+            ops.append(" ".join(["absorb", str(nc), *s, *d, *keys]))
+            s = list(nxt) if fold == "duo" else [nxt[0], s[1]]
+            want.append(" ".join(s))
+
+    for case in v["steps"]:
+        if case["fold"] in folds:
+            k = case["keys"]
+            chain(case["fold"], case["start"], case["words"], [k["a0"], k["a1"], k.get("k0", "0"), k.get("k1", "0")],
+                  case["chain"])
+    for c in v["key_rules"]:
+        ops.append(f"rule {c['a']}")
+        want.append(str(int(c["key_ok_r9" if r9 else "key_ok"])))
+    for c in v["schedules"]["pfill-lane"]:
+        if c["r9"] != r9:
+            continue
+        ops.append("keys " + " ".join(c["rows"]))
+        want.append(" ".join(c["keys"][k] for k in ("a0", "a1", "k0", "k1")))
+        ops.append(f"start {c['pos']:x}")
+        want.append(" ".join(c["start"]))
+        for fold in folds:
+            if fold in c["chains"]:
+                chain(fold, c["start"], c["words"], [c["keys"][k] for k in ("a0", "a1", "k0", "k1")], c["chains"][fold])
+    return ops, want
+
+
+def pfill_cuh(path: Path | str, compiler: str = "g++", v: dict | None = None) -> int:
+    """pfill.cuh itself, built for the host with `compiler` as pfill_host.cpp builds it (dcap.cu's smix and dseed), once a
+    fold build: pf_absorb at each NC on the vectors' steps, the build's key rule (pf_key_ok, or pf_key_ok_r9 in an r9
+    build), pf_keys on the pfill-lane cases' rows and pf_y0, pf_z0 at their positions, and their chains. Returns the
+    operations checked."""
+    v = v or load()
+    cuh = Path(path).resolve()
+    flags = sorted({f for _, f in F.SCHEDULES["pfill-lane"]["build"].values() if f != "-DPFILL_XIN"}, key=str)
+    n = 0
+    with tempfile.TemporaryDirectory() as tmp:
+        src = Path(tmp) / "pfill_conform.cpp"
+        src.write_text(_PFILL_HARNESS)
+        runs = []
+        for flag in [None] + [f for f in flags if f]:
+            exe = Path(tmp) / f"pfill_conform{flag or ''}"
+            cmd = [compiler, "-O1", "-std=c++17", "-Wno-unknown-pragmas", f"-DPFILL_CUH=\"{cuh}\"", *([flag] if flag else []),
+                   "-o", str(exe), str(src)]
+            runs.append((flag, exe, subprocess.Popen(cmd, stderr=subprocess.PIPE, text=True)))
+        for flag, exe, p in runs:
+            err = p.communicate()[1]
+            assert p.returncode == 0, f"{cuh} ({flag or 'default'} build) didn't compile:\n{err[-2000:]}"
+            ops, want = _pfill_build_ops(v, flag)
+            r = subprocess.run([str(exe)], input="\n".join(ops) + "\n", capture_output=True, text=True, check=True)
+            got = r.stdout.splitlines()
+            assert len(got) == len(want), f"{path} ({flag or 'default'}): {len(got)} answers to {len(want)} operations"
+            for op, g, w in zip(ops, got, want):
+                assert g == w, f"{path} ({flag or 'default'} build): {op} gave {g}, want {w}"
+            n += len(ops)
+    return n
+
+
 def egemm_ref(er, v: dict | None = None) -> int:
     """egemm_ref.py: xin_keys, xin13_receipts and the duo tile_receipts on one whole tile (TILE_TAG's rule), every thread
     against receipt_folds' egemm-xin13 and served-duo schedules."""
@@ -545,6 +663,8 @@ def main(argv: list[str]) -> int:
         if name == "scorer":
             mod = _load(path, "scoring")
             print(f"scorer: {scorer_folds(mod.FOLDS, mod.RECEIPT_TAGS)} folds agree")
+        elif name == "pfill_cuh":
+            print(f"pfill_cuh: {pfill_cuh(path)} operations agree")
         else:
             mod = _load(path, Path(path).stem)
             print(f"{name}: {globals()[name](mod)} checks agree")
