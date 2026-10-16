@@ -362,7 +362,7 @@ static void emit(Rank& R, const char* arm, int B, int L, const std::vector<Rep>&
   fflush(stdout);
 }
 
-// one (B, L) point: plans, then arms in the order TPC_ARMS names (default base phase nocomm comm phase base)
+// one (B, L) point: plans, then arms in the order TPC_ARMS names (default base phase nocomm comm phase base; spaces or commas)
 static int run_point(Rank& R, int B, int L, int reps) {
   if (B % R.tp) { fprintf(stderr, "B %d not a multiple of TP %d\n", B, R.tp); return 1; }
   std::vector<Lt> p(4);
@@ -381,7 +381,7 @@ static int run_point(Rank& R, int B, int L, int reps) {
   int rc = 0;
   size_t pos = 0;
   while (pos < arms.size()) {
-    size_t e = arms.find(' ', pos);
+    size_t e = arms.find_first_of(" ,", pos);
     if (e == std::string::npos) e = arms.size();
     const std::string a = arms.substr(pos, e - pos);
     pos = e + 1;
