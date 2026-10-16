@@ -61,4 +61,7 @@ every SHA-512 input in the run's log (`FlockDeploy.KS.Opening`, `FlockDeploy.KS.
 `Flock.TableBoundθAt`): where the verifier accepts no run it holds with no escapes (`Flock.tableBoundθAt_of_noAcc`), as
 at every statement the deployed verifier does not set up, so at both records it is its bound at the statements that set
 up (`FlockDeploy.KS.plain_tableBoundθ_of_setup`, `FlockDeploy.KS.zk_tableBoundθ_of_setup`,
-`FlockDeploy.KS.plain_KSθ_of_setup`, `FlockDeploy.KS.zk_KSθ_of_setup`). -/
+`FlockDeploy.KS.plain_KSθ_of_setup`, `FlockDeploy.KS.zk_KSθ_of_setup`); at the deployed relation, a table of
+full-width columns that does not extract is not committed to the plain record's table 0
+(`FlockDeploy.KS.plain_hwit`, `FlockDeploy.KS.plain_not_committed`), and under `--zk` `hwit` holds at one table
+(`FlockDeploy.KS.zk_hwit`). -/

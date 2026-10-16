@@ -1,4 +1,6 @@
 import Proofs.Flock.Claims.KS.ConflictTied
+import Proofs.Flock.Claims.KS.Trace
+import Proofs.Flock.Claims.Scope.Deployed
 
 /-!
 # `TableBoundθ` statement by statement
@@ -9,6 +11,13 @@ deployed verifier does not set up is one: it has no tables, so `ε_table`, `N₀
 (`εtable_none`, `k_none_plain`, `k_none_zk`, `weight_none`), and an accepted run sets up (`acc_verdict`, `noAcc_of_none`). So at both
 records `TableBoundθ` is its bound at the statements that set up (`plain_tableBoundθ_of_setup`,
 `zk_tableBoundθ_of_setup`), and KS at SHA-512 rests on that alone (`plain_KSθ_of_setup`, `zk_KSθ_of_setup`).
+
+At a statement that sets up, the old theorems bound a table of table 0's level-0 code that is not `Committed` to table
+0's model statement (`Layout.model` at `regionsOf`). At the deployed relation, when the setup has one table, a message
+whose witness satisfies that statement reads as a witness of the statement (`relS_of_table0`, from `relS_deployed`): the
+plain scope has one table (`plain_one`), so `not_committed_plain`'s `hwit` holds there (`plain_hwit`), and a table of
+full-width columns that does not extract is not committed (`plain_not_committed`). Under `--zk` it holds at one table
+(`zk_hwit`); the masked scope admits several, where a trace of table 0 alone does not read as a witness of the others.
 -/
 
 namespace Claims.Flock
@@ -88,6 +97,8 @@ namespace FlockDeploy.KS
 
 open Flock
 
+local notation "𝔽" => FlockLevel3.GF128
+
 /-- **A statement the deployed verifier does not set up accepts no run**, at SHA-512. -/
 theorem noAcc_of_none {zk : Bool} {x : Claims.Msg} (h : setupOf zk x = none) :
     Claims.Flock.NoAcc sha512 (V zk) x := by
@@ -166,5 +177,160 @@ theorem zk_KSθ_of_setup (rel : Readable.Parsed → Readable.Relation)
       Claims.Flock.TableBoundθAt sha512 (deployZk rel) zkRadius (wide true) x) :
     Claims.Flock.KSθ sha512 (deployZk rel) zkRadius :=
   zk_KSθ_of_table rel (zk_tableBoundθ_of_setup rel h)
+
+/-! ## `hwit` at one table -/
+
+theorem toZ_decide : ∀ z : ZMod 2, Readable.toZ (decide (z = 1)) = z := by decide
+
+/-- **Table 0's share of a read trace is the trace's witness.** -/
+theorem zOf_readTrace (m lanes cols : ℕ) (M : FlockSoundness.Model.Message 𝔽 lanes cols) :
+    Readable.zOf (2 ^ m) (Claims.Flock.readTrace FlockSoundness.execArith m lanes cols M) 0 m =
+      FlockSoundness.Model.witnessOf FlockSoundness.execArith m lanes cols M := by
+  funext a
+  unfold Readable.zOf
+  rw [zero_mul, zero_add, Claims.Flock.readTrace_hid]
+  exact toZ_decide _
+
+/-- **The parser reads the setup's statement**: its tables are the setup's, read off the setup's `Read`. -/
+theorem parseBytes_setup {zk : Bool} {x : Claims.Msg} {p : Readable.Parsed} {ins : Ins} {spec : SessionSpec}
+    {sts : Array Stmt} (hp : Readable.parseBytes (readOf zk) x = some p) (hset : setupOf zk x = some (ins, spec, sts)) :
+    p.sts = sts ∧ p.toRead = ins.read ∧ ins.read.setup = .ok (spec, sts) := by
+  have hins : insOf zk x = some ins ∧ ins.setup = .ok (spec, sts) := by
+    unfold setupOf at hset
+    cases hi : insOf zk x with
+    | none => rw [hi] at hset; cases hset
+    | some ins' =>
+      rw [hi] at hset
+      cases hs : ins'.setup with
+      | error e => simp [hs, Except.toOption] at hset
+      | ok v =>
+        obtain ⟨spec', sts'⟩ := v
+        simp only [hs, Except.toOption, Option.bind_eq_bind, Option.bind_some, Option.pure_def,
+          Option.some.injEq, Prod.mk.injEq] at hset
+        obtain ⟨rfl, rfl, rfl⟩ := hset
+        exact ⟨rfl, hs⟩
+  have hsr := Ins.setup_read hins.2
+  have hr : readOf zk x = some ins.read := by unfold readOf; rw [hins.1]; rfl
+  have hzk : ins.read.zk = zk := readOf_zk hr
+  unfold Readable.parseBytes at hp
+  rw [hr, Option.bind_some] at hp
+  unfold Readable.Read.parse Readable.Read.tablesOf at hp
+  rw [hsr, hzk] at hp
+  cases zk
+  · simp only [Bool.false_eq_true, ↓reduceIte, Option.map_some, Option.some.injEq] at hp
+    subst hp
+    exact ⟨rfl, rfl, hsr⟩
+  · simp only [↓reduceIte] at hp
+    split at hp
+    · simp only [Option.map_some, Option.some.injEq] at hp
+      subst hp
+      exact ⟨rfl, rfl, hsr⟩
+    · cases hp
+
+/-- **At one table, a message satisfying table 0's model statement reads as a witness**: at a statement in scope that
+the deployed parser reads at the deployed relation (`relS_deployed`), when the setup has one table, a message whose
+witness satisfies its model statement (`Layout.model` at `regionsOf`) reads as a witness of the statement. -/
+theorem relS_of_table0 (H : Claims.Msg → Claims.Msg) {zk : Bool} {x : Claims.Msg} {s : Claims.Flock.Stmt}
+    (hs : parse zk Readable.relation x = some s) (hin : Claims.Flock.InScope zk s) {ins : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf zk x = some (ins, spec, sts)) (hone : sts.size = 1)
+    (L : FlockSoundness.Layout (sts[0]'(by omega))) {m lanes cols : ℕ} (hm : m = (sts[0]'(by omega)).m)
+    (M : FlockSoundness.Model.Message 𝔽 lanes cols)
+    (hsat : (L.model (FlockSoundness.Refine.regionsOf (sts[0]'(by omega)))).Satisfies
+      (FlockSoundness.Model.witnessOf FlockSoundness.execArith
+        (L.model (FlockSoundness.Refine.regionsOf (sts[0]'(by omega)))).m lanes cols M)) :
+    Claims.Flock.RelS H s (Claims.Flock.readTrace FlockSoundness.execArith m lanes cols M) := by
+  obtain ⟨p, hp, rfl, hiff⟩ :=
+    Readable.relS_deployed H hs hin (Claims.Flock.readTrace FlockSoundness.execArith m lanes cols M)
+  obtain ⟨hps, -, -⟩ := parseBytes_setup hp hset
+  subst hps
+  refine hiff.2 fun c hc => ?_
+  have hc0 : c = 0 := by omega
+  subst hc0
+  refine ⟨L, ?_⟩
+  have hm' : (Readable.toReadable Readable.relation p).m = p.sts[0].m := by
+    simp only [Readable.toReadable, Array.getElem?_eq_getElem (show 0 < p.sts.size by omega), Option.map_some,
+      Option.getD_some]
+  rw [hm', hm, zOf_readTrace]
+  exact hsat
+
+/-- **The plain setup has one table** at a statement in scope. -/
+theorem plain_one {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+    (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hset : setupOf false x = some (ins, spec, sts)) : sts.size = 1 := by
+  obtain ⟨p, hp, hps⟩ := Option.map_eq_some_iff.1 hs
+  obtain ⟨hpst, hpr, hsr⟩ := parseBytes_setup hp hset
+  subst hps hpst
+  obtain ⟨-, -, -, -, -, -, -, -, ht, hpi, -⟩ := hin
+  have ht' : p.I.count ≤ 1 := by simpa [Readable.toReadable, Readable.Read.form] using ht
+  have hpi' : p.publicInputs = none := by
+    simp only [Readable.toReadable, Readable.Read.form, Option.isSome_iff_ne_none, ne_eq, Decidable.not_not] at hpi
+    exact hpi
+  rw [← hpr] at hsr
+  unfold Readable.Read.setup at hsr
+  rw [hpi'] at hsr
+  rcases FlockSoundness.Discharge.HiddenExec.setupTables_okAny hsr with ⟨-, st, -, -, hst⟩ | ⟨hc, -⟩
+  · rw [hst]; rfl
+  · omega
+
+/-- **`hwit` at the plain record** (`not_committed_plain`'s): at a statement in scope that the deployed plain parser
+reads at the deployed relation, with table 0 at index `i`, every message whose witness satisfies table 0's model
+statement reads as a witness of the statement. -/
+theorem plain_hwit (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {s : Claims.Flock.Stmt}
+    (hs : (deployPlain Readable.relation).parse x = some s) (hin : Claims.Flock.InScope false s) {ins : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf false x = some (ins, spec, sts)) (h0 : 0 < sts.size)
+    (L : FlockSoundness.Layout sts[0]) (i : Claims.Flock.PlainIdx) (hi : i.m = sts[0].m) :
+    ∀ M : FlockSoundness.Model.Message 𝔽 (Claims.Flock.plainLanes i) (Claims.Flock.plainCols i),
+      (L.model (FlockSoundness.Refine.regionsOf sts[0])).Satisfies
+        (FlockSoundness.Model.witnessOf FlockSoundness.execArith (L.model (FlockSoundness.Refine.regionsOf sts[0])).m
+          (Claims.Flock.plainLanes i) (Claims.Flock.plainCols i) M) →
+      Claims.Flock.RelS H s (Claims.Flock.plainReadD ⟨i, M⟩) :=
+  fun M hsat => relS_of_table0 H hs hin hset (plain_one hs hin hset) L hi M hsat
+
+/-- **`hwit` at the masked record at one table** (`not_committed_zk`'s): at a statement in scope that the deployed
+masked parser reads at the deployed relation, set up with one table, at index `i`, every message whose witness
+satisfies table 0's model statement reads as a witness of the statement. The masked scope admits several tables, where
+a trace of table 0 alone does not read as a witness of the others. -/
+theorem zk_hwit (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {s : Claims.Flock.Stmt}
+    (hs : (deployZk Readable.relation).parse x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (hone : sts.size = 1)
+    (L : FlockSoundness.Layout (sts[0]'(by omega))) (i : Claims.Flock.ZkIdx) (hi : i.m = (sts[0]'(by omega)).m) :
+    ∀ P : FlockSoundness.Model.Message 𝔽 (Claims.Flock.zkLanes i) (Claims.Flock.zkCols i),
+      (L.model (FlockSoundness.Refine.regionsOf (sts[0]'(by omega)))).Satisfies
+        (FlockSoundness.Model.witnessOf FlockSoundness.execArith
+          (L.model (FlockSoundness.Refine.regionsOf (sts[0]'(by omega)))).m (Claims.Flock.zkLanes i)
+          (Claims.Flock.zkCols i) P) →
+      Claims.Flock.RelS H s
+        (Claims.Flock.readTrace FlockSoundness.execArith i.m (Claims.Flock.zkLanes i) (Claims.Flock.zkCols i) P) :=
+  fun P hsat => relS_of_table0 H hs hin hset hone L hi P hsat
+
+/-- The readable statement's `m` is table 0's. -/
+theorem parse_m {zk : Bool} {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse zk Readable.relation x = some s)
+    {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf zk x = some (ins, spec, sts))
+    (h0 : 0 < sts.size) : s.m = sts[0].m := by
+  obtain ⟨p, hp, rfl⟩ := Option.map_eq_some_iff.1 hs
+  obtain ⟨hpst, -, -⟩ := parseBytes_setup hp hset
+  subst hpst
+  simp only [Readable.toReadable, Array.getElem?_eq_getElem h0, Option.map_some, Option.getD_some]
+
+/-- **At the plain record, a table that does not extract is not committed** to table 0's model statement, at the
+old theorems' schedule (`not_committed_plain` at `plain_hwit`): at a statement in scope that the deployed plain
+parser reads at the deployed relation and the verifier sets up, for every table of full-width columns. -/
+theorem plain_not_committed (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {s : Claims.Flock.Stmt}
+    (hs : (deployPlain Readable.relation).parse x = some s) (hin : Claims.Flock.InScope false s) {ins : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf false x = some (ins, spec, sts)) (h0 : 0 < sts.size)
+    (L : FlockSoundness.Layout sts[0]) (C : Fin (plainRadius.N x) → List 𝔽) (hw : ∀ q, wide false x (C q))
+    (hg : ¬ Claims.Flock.GoodTable H (deployPlain Readable.relation) plainRadius x C) :
+    ¬ FlockSoundness.Committed FlockSoundness.execArith (L.model (FlockSoundness.Refine.regionsOf sts[0]))
+      (FlockSoundness.Refine.schedOf (Claims.Flock.plainSched sts[0].m)) (Claims.Flock.oracleOf C) := by
+  have hm := parse_m hs hset h0
+  have h22 : 22 ≤ sts[0].m := by have := hin.1; simp only [Bool.false_eq_true, ↓reduceIte] at this; omega
+  have h35 : sts[0].m ≤ 35 := by have := hin.2.1; omega
+  have hi : Claims.Flock.PlainIdx.m ⟨sts[0].m - 22, by omega⟩ = sts[0].m := by
+    simp only [Claims.Flock.PlainIdx.m]
+    omega
+  have := not_committed_plain H Readable.relation x s hs
+    (tables_head hset (Array.getElem?_eq_getElem h0)) ⟨sts[0].m - 22, by omega⟩ hi C hw
+    (L.model (FlockSoundness.Refine.regionsOf sts[0])) (plain_hwit H hs hin hset h0 L _ hi) hg
+  rwa [hi] at this
 
 end FlockDeploy.KS
