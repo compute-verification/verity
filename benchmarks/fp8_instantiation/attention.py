@@ -37,8 +37,13 @@ Method names are '-'-joined tokens:
                peeled operand's top drops by max|E|.  One limb only (`prow`/`pfix`, no `qk2`).  `poffN`: P keeps its
                full grid and is served as P - N + E_P on the causal support (within int8's [-128, 127]); the public
                offset is peeled with E, N sum_{k <= i} (V + F_V)_k
-    linears    `lin8r`: every linear on exact_grid.py's `int8_rot@-` (rotated, int8 per row, s8 x s8 -> s32)
-    `rot`, `sN` (noise seed)
+    P's base   one-limb int8 P only: `pnorm` divides O's integer rows by P's integer row sums (instead of multiplying by
+               P's scale); `pblkB` gives P one scale per (query row, block of B keys), each block's product read and
+               scaled on its own; `psink` puts key 0 alone in a block; `ptopT` sets P's top (with `poffN` to serve
+               P - N within int8, the offset added back as N sum_{k <= i} V_k, peeled or not)
+    linears    `lin8r`: every linear on exact_grid.py's `int8_rot@-` (rotated, int8 per row, s8 x s8 -> s32); `lin8rd`
+               on `int8_rot@a:dither:wtop63:sN` (the activations served as floor(x / s) + b, the weights on [-63, 63])
+    `rot`, `sN` (noise seed, also the linears' under `lin8rd`)
 
 `bf16` is the model's own eager attention and `ref` this file's attention in FP32 with no edit (`ref-rot` checks the
 rotation).  IDS is one window (T,) or several (N, T) (`windows.py`); perplexity is over every token of every window, and
@@ -75,7 +80,9 @@ ALPHABETS = {"none": [0], "pm1": [-1, 1], "pm13": [-3, -1, 1, 3], "pm57": [-7, -
              **{f"u{k}": list(range(-k, k + 1)) for k in (1, 2, 4, 8, 16, 32, 64)}}
 OPERANDS = "qkpv"
 PEEL_L = 32
-LINS = {"int8_rot": "int8_rot@-"}
+LINS = {"int8_rot": "int8_rot@-", "int8_rot_dith63": "int8_rot@a:dither:wtop63:s{seed}"}
+#: P's blocks: each block's integer product (B max|P| max|V| <= 1024 * 128 * 128 = 2^24) is exact in one FP32 GEMM
+PBLK_MAX = 1024
 #: K or V served as floor(x / s) + b, b a fresh bit (note:20261016T0525Z-draft-fullfloor-s-r6)
 DITHER = "dith"
 
@@ -102,7 +109,8 @@ def alphabet_info(name: str) -> dict:
 
 def parse(method: str) -> dict:
     spec = {"method": method, "grid": None, "p": "prow", "v": "vchan", "qk2": False, "rot": False, "seed": 0,
-            "lin": "bf16", "e": {"q": "none", "p": "none"}, "poff": 0}
+            "lin": "bf16", "e": {"q": "none", "p": "none"}, "poff": 0, "pnorm": False, "pblk": 0, "psink": False,
+            "ptop": 0}
     default, where, over = "none", "both", {}
     for t in method.split("-"):
         ops, _, a = t.partition("=")
@@ -128,8 +136,14 @@ def parse(method: str) -> dict:
             where = t
         elif t == "lin8r":
             spec["lin"] = "int8_rot"
+        elif t == "lin8rd":
+            spec["lin"] = "int8_rot_dith63"
         elif t[:4] == "poff" and t[4:].isdigit():
             spec["poff"] = int(t[4:])
+        elif t in ("pnorm", "psink"):
+            spec[t] = True
+        elif t[:4] in ("pblk", "ptop") and t[4:].isdigit():
+            spec[t[:4]] = int(t[4:])
         elif t[0] == "s" and t[1:].isdigit():
             spec["seed"] = int(t[1:])
         else:
@@ -140,8 +154,12 @@ def parse(method: str) -> dict:
     spec["n"] = {x: over.get(x, default if x in on else "none") for x in OPERANDS}
     if spec["e"] != {"q": "none", "p": "none"} and (spec["grid"] not in GRID_PAIRS or spec["qk2"] or spec["p"] == "prow2"):
         raise ValueError(f"{method}: peeled noise needs a one-limb grid")
-    if spec["poff"] and (spec["e"]["p"] == "none" or GRID_PAIRS[spec["grid"]][1] != "int8"):
-        raise ValueError(f"{method}: P's offset needs P's peeled noise on int8")
+    pbase = spec["poff"] or spec["pnorm"] or spec["pblk"] or spec["psink"] or spec["ptop"]
+    if pbase and (spec["grid"] not in GRID_PAIRS or GRID_PAIRS[spec["grid"]][1] != "int8" or spec["p"] != "prow"
+                  or spec["n"]["p"] != "none"):
+        raise ValueError(f"{method}: P's offset, top, blocks and row-sum norm need P on one int8 limb (prow), unserved")
+    if spec["pblk"] and (spec["pblk"] % PEEL_L or spec["pblk"] > PBLK_MAX):
+        raise ValueError(f"{method}: P's blocks are a multiple of {PEEL_L} keys, at most {PBLK_MAX}")
     dithered = [x for x in OPERANDS if spec["n"][x] == DITHER]
     if dithered and (set(dithered) - set("kv") or spec["grid"] != "int8" or spec["qk2"] or spec["v"] == "vchan2"):
         raise ValueError(f"{method}: the dither serves K or V on one int8 limb")
@@ -273,6 +291,46 @@ def fold_peel(u: torch.Tensor, k: torch.Tensor) -> torch.Tensor:
     return u @ folded.transpose(-1, -2)
 
 
+def p_edges(s: int, spec: dict) -> list[int]:
+    """The key blocks of P's scales, as edges: one block, blocks of `pblk` keys, and key 0 alone under `psink`."""
+    edges = set(range(0, s, spec["pblk"])) if spec["pblk"] else {0}
+    if spec["psink"] and s > 1:
+        edges.add(1)
+    return sorted(edges) + [s]
+
+
+def blocked_pv(p, vi, top: int, vmax: int, edges: list[int], term: int, poff: int, up, ep, causal,
+               check_range: bool, check_peel: bool, norm: bool) -> torch.Tensor:
+    """O's integer rows times P's scales for P on one int8 limb with one scale per (query row, key block): block b serves
+    P_b = round(p_b / s_b) in 0..top (s_b its row's max over the block, over top), its product P_b V_b read exactly and
+    scaled by s_b, summed over blocks; `norm` divides by sum_b s_b rowsum(P_b) instead.  check_range: every served
+    block P_b - poff + E_b is within int8; check_peel: each one's product, peeled and offset back, is P_b V_b."""
+    rep, s, d = vi.shape
+    num = torch.zeros(rep, s, d, dtype=torch.float64, device=vi.device)
+    den = torch.zeros(rep, s, 1, dtype=torch.float64, device=vi.device)
+    for a, b in zip(edges, edges[1:]):
+        sb = p[..., a:b].amax(-1, keepdim=True).clamp(min=1e-30) / top
+        pi = torch.round(p[..., a:b] / sb).clamp(0, top)
+        vb = vi[..., a:b, :]
+        ob = exact_mm(pi, vb, top * vmax)
+        if check_range or check_peel:
+            pt = pi - poff * causal[:, a:b].float() if poff else pi
+            pt = pt + ep[:, a:b] if ep is not None else pt
+            assert in_int8(pt)
+            if check_peel and (poff or up is not None):
+                mask = torch.zeros(s, 1, device=vi.device)
+                mask[a:b] = 1
+                served = exact_mm(pt, vb, term)
+                if up is not None:
+                    served = served - causal_peel(up, vi * mask)
+                if poff:
+                    served = served + poff * (vi * mask).double().cumsum(-2)
+                STATE["peel"].append(bool(torch.equal(served, ob)))
+        num += sb.double() * ob
+        den += sb.double() * pi.double().sum(-1, keepdim=True)
+    return num / den if norm else num
+
+
 def edited_attention(module, query, key, value, attention_mask, scaling=None, dropout=0.0, **kwargs):
     spec = STATE["spec"]
     if spec is None or spec["grid"] == "bf16":
@@ -297,19 +355,23 @@ def edited_attention(module, query, key, value, attention_mask, scaling=None, dr
         emax = {x: alphabet_info(e.get(x, "none"))["max"] for x in OPERANDS}
         poff = spec["poff"]
         m = {x: (gqk if x in "qk" else gpv)[0] - nmax[x] - (0 if x == "p" and poff else emax[x]) for x in OPERANDS}
+        if spec["ptop"]:
+            m["p"] = spec["ptop"]
         if min(m.values()) < 1:
             raise ValueError(f"{spec['method']}: its noise does not fit the grid ({m})")
         two = {"q": spec["qk2"], "k": spec["qk2"], "p": spec["p"] == "prow2", "v": spec["v"] == "vchan2"}
         lmax = {x: (128 if x != "p" else 127) if two[x] else m[x] + nmax[x] + emax[x] for x in OPERANDS}
         lmax.update({x: 128 for x in OPERANDS if n[x] == DITHER})
-        if poff:
+        if poff or spec["ptop"]:
             lo, hi = -poff - nmax["p"] - emax["p"], m["p"] - poff + nmax["p"] + emax["p"]
             if lo < -128 or hi > 127:
                 raise ValueError(f"{spec['method']}: P - {poff} + E spans [{lo}, {hi}], outside int8")
             lmax["p"] = max(-lo, hi)
+        edges = p_edges(s, spec)
         STATE["record"] = {"tops": m, "acc_qk": gqk[1], "acc_pv": gpv[1], "bound_qk": d * lmax["q"] * lmax["k"],
                            "bound_pv": s * lmax["p"] * lmax["v"],
-                           "int8_products": {"qk": (1 + two["q"]) * (1 + two["k"]), "pv": (1 + two["p"]) * (1 + two["v"])}}
+                           "int8_products": {"qk": (1 + two["q"]) * (1 + two["k"]), "pv": (1 + two["p"]) * (1 + two["v"])},
+                           "p_blocks": len(edges) - 1}
         # U has its own stream, so the served noise is the same draw with or without a peel.
         ugen = torch.Generator(device=dev).manual_seed(noise_seed + 104_729 * 10 ** 9)
         if e["q"] != "none":
@@ -365,19 +427,32 @@ def edited_attention(module, query, key, value, attention_mask, scaling=None, dr
             else:
                 vl, sv = signed_limbs(vg, m["v"], vdims, two["v"])
             vl = add_noise([(x.expand(rep, s, d), w) for x, w in vl], n["v"], gen, dev)
-            if up is not None:
-                [(pi, _)], [(vi, _)] = pl, vl
-                term = lmax["p"] * lmax["v"]
-                pt = pi + ep - poff * causal.float() if poff else pi + ep
-                oint = exact_mm(pt, vi, term) - causal_peel(up, vi)
-                if poff:
-                    oint = oint + poff * vi.double().cumsum(-2)
-                if first:
-                    assert in_int8(pt) and in_int8(vi)
-                    STATE["peel"].append(bool(torch.equal(oint, exact_mm(pi, vi, term))))
+            if len(edges) > 2:
+                [(vi, _)] = vl
+                o = (blocked_pv(p, vi, m["p"], lmax["v"], edges, lmax["p"] * lmax["v"], poff, up,
+                                ep if up is not None else None, causal, first, first and layer == 0, spec["pnorm"])
+                     * sv.double()).float()
             else:
-                oint = limb_product(pl, vl, lmax["p"] * lmax["v"])
-            o = (oint * sp.double() * sv.double()).float()
+                if up is not None or poff:
+                    [(pi, _)], [(vi, _)] = pl, vl
+                    term = lmax["p"] * lmax["v"]
+                    pt = pi - poff * causal.float() if poff else pi
+                    pt = pt + ep if up is not None else pt
+                    oint = exact_mm(pt, vi, term)
+                    if up is not None:
+                        oint = oint - causal_peel(up, vi)
+                    if poff:
+                        oint = oint + poff * vi.double().cumsum(-2)
+                    if first:
+                        assert in_int8(pt) and in_int8(vi)
+                        STATE["peel"].append(bool(torch.equal(oint, exact_mm(pi, vi, m["p"] * lmax["v"]))))
+                else:
+                    oint = limb_product(pl, vl, lmax["p"] * lmax["v"])
+                if spec["pnorm"]:
+                    [(pi, _)] = pl
+                    o = (oint / pi.double().sum(-1, keepdim=True) * sv.double()).float()
+                else:
+                    o = (oint * sp.double() * sv.double()).float()
         else:
             o = p @ vg
         if R is not None:
@@ -399,7 +474,8 @@ def evaluate(model, ids: torch.Tensor, method: str) -> dict:
     ids = ids if ids.dim() == 2 else ids[None]
     STATE.update(spec=spec, calls=0, err=[0.0, 0.0], record={}, peel=[], window=0)
     log: list = []
-    hooks = exact_grid.attach(model, LINS[spec["lin"]], log) if spec["lin"] != "bf16" else []
+    lin = LINS[spec["lin"]].format(seed=spec["seed"]) if spec["lin"] != "bf16" else None
+    hooks = exact_grid.attach(model, lin, log) if lin else []
     t0 = time.time()
     nlls = []
     try:
@@ -553,7 +629,9 @@ def selftest() -> dict:
     assert wide["int8-rot-eqp=w64-poff64-kv=pm1245"]["bound_pv"] == 96 * 128 * 127
     off, plain = wide["int8-rot-eqp=w64-poff64"]["ppl"], wide["int8-rot-eq=w64"]["ppl"]
     assert same(off, plain), out["tiny_wide"]
-    for bad, where in (("int8-rot-ep=w64-poff32", evaluate), ("int8-poff64", parse)):
+    for bad, where in (("int8-rot-ep=w64-poff32", evaluate), ("int8-prow2-poff64", parse), ("int8-ptop255", evaluate),
+                       ("int8-rot-eqp=w64-ptop255-poff128", evaluate), ("int8-pblk48", parse), ("int8-p=pm1-pnorm", parse),
+                       ("e4m3-psink", parse), ("int8-pfix-pblk32", parse), ("int8-pblk2048", parse)):
         try:
             where(model, ids, bad) if where is evaluate else where(bad)
             raise AssertionError(f"{bad} must not fit")
@@ -585,6 +663,43 @@ def selftest() -> dict:
     for m, r in dith.items():
         assert r["exact"] and (r.get("peel_exact", True) and (r.get("peel_checks", 0) >= 4 or "eqp" not in m)), (m, out["tiny_dither"])
     assert kv["attn_rel_err"] < dith["int8-rot-eqp=w64-poff64-kv=pm1"]["attn_rel_err"], out["tiny_dither"]
+    causal = torch.ones(50, 50, dtype=torch.bool, device=dev).tril()
+    p = torch.softmax((3 * torch.randn(2, 50, 50, device=dev)).masked_fill(~causal, float("-inf")), -1)
+    vv = torch.randint(-127, 128, (2, 50, 16), generator=g).float().to(dev)
+    [(pi, _)], sp = edit_p(p, "prow", "none", 127, causal, gen, dev)
+    one = blocked_pv(p, vv, 127, 127, [0, 50], 127 * 127, 0, None, None, causal, True, True, False)
+    assert torch.equal(one, exact_mm(pi, vv, 127 * 127) * sp.double())
+    ones = torch.ones(2, 50, 4, device=dev)
+    for edges in ([0, 50], [0, 1, 50], [0, 32, 50], [0, 1, 32, 50]):
+        assert torch.equal(blocked_pv(p, ones, 127, 1, edges, 127, 0, None, None, causal, True, True, True),
+                           torch.ones(2, 50, 4, dtype=torch.float64, device=dev)), edges
+    eye = torch.eye(50, device=dev).expand(2, 50, 50)
+    err = {str(e_): float((blocked_pv(p, eye, 127, 1, e_, 127, 0, None, None, causal, False, False, False) - p.double()).abs().max())
+           for e_ in ([0, 50], [0, 32, 50])}
+    assert err["[0, 32, 50]"] <= err["[0, 50]"], err
+    assert p_edges(96, parse("int8-pblk32-psink")) == [0, 1, 32, 64, 96] and p_edges(96, parse("int8-psink")) == [0, 1, 96]
+    assert p_edges(5, parse("int8-pblk32")) == [0, 5] and parse("int8-rot-lin8rd-s2")["lin"] == "int8_rot_dith63"
+    pb = {m: evaluate(model, ids, m) for m in (
+        "int8-rot", "int8-rot-pnorm", "int8-rot-psink", "int8-rot-pblk32", "int8-rot-pblk32-psink-pnorm",
+        "int8-rot-ptop255-poff128", "int8-rot-eqp=w64-poff64-pblk32-kv=dith", "int8-rot-eq=w64-pblk32-kv=dith",
+        "int8-rot-eqp=w64-poff64-pnorm-kv=dith", "int8-rot-eq=w64-pnorm-kv=dith",
+        "int8-rot-eqp=w64-poff64-psink-pnorm-kv=dith", "int8-rot-eq=w64-psink-pnorm-kv=dith",
+        "bf16-lin8rd", "bf16-lin8rd-s1", "bf16-lin8r", "int8-rot-lin8rd-eqp=w64-poff64-kv=dith-s1")}
+    out["tiny_pbase"] = {m: {k: r.get(k) for k in ("ppl", "attn_rel_err", "peel_exact", "peel_checks", "p_blocks", "lin_exact_all")}
+                         for m, r in pb.items()}
+    for m, r in pb.items():
+        assert r.get("exact", True) and r.get("peel_exact", True) and r.get("lin_exact_all", True), (m, out["tiny_pbase"])
+    assert [pb[m]["p_blocks"] for m in ("int8-rot", "int8-rot-psink", "int8-rot-pblk32", "int8-rot-pblk32-psink-pnorm")] == [1, 2, 3, 4]
+    assert pb["int8-rot-pblk32"]["attn_rel_err"] < pb["int8-rot"]["attn_rel_err"], out["tiny_pbase"]
+    top = pb["int8-rot-ptop255-poff128"]
+    assert top["tops"]["p"] == 255 and top["bound_pv"] == 96 * 128 * 127 and top["peel_checks"] == 4, top
+    assert top["attn_rel_err"] < pb["int8-rot"]["attn_rel_err"], out["tiny_pbase"]
+    assert pb["int8-rot-eqp=w64-poff64-pblk32-kv=dith"]["peel_checks"] == 2 * 2 + 2 * 3, out["tiny_pbase"]
+    for a_, b_ in (("eqp=w64-poff64-pblk32", "eq=w64-pblk32"), ("eqp=w64-poff64-pnorm", "eq=w64-pnorm"),
+                   ("eqp=w64-poff64-psink-pnorm", "eq=w64-psink-pnorm")):
+        assert pb[f"int8-rot-{a_}-kv=dith"]["ppl"] == pb[f"int8-rot-{b_}-kv=dith"]["ppl"], (a_, out["tiny_pbase"])
+    assert len({pb[m]["ppl"] for m in ("bf16-lin8rd", "bf16-lin8rd-s1", "bf16-lin8r")}) == 3, out["tiny_pbase"]
+    assert pb["int8-rot-lin8rd-eqp=w64-poff64-kv=dith-s1"]["lin_exact_all"], out["tiny_pbase"]
     return out
 
 
@@ -601,7 +716,15 @@ def _key(r: dict, clean: bool = False, bare: bool = False) -> tuple:
     n = {x: "none" for x in OPERANDS} if clean or bare else operand_noise(r)
     e = {"q": "none", "p": "none"} if bare else r.get("e", {"q": "none", "p": "none"})
     return (r["grid"], r["p"], r["v"], r.get("qk2", False), r["rot"], n["q"], n["k"], n["p"], n["v"],
-            r.get("lin", "bf16"), e["q"], e["p"], 0 if bare else r.get("poff", 0), r["ctx"])
+            r.get("lin", "bf16"), e["q"], e["p"], 0 if bare else r.get("poff", 0), r["ctx"], "" if bare else p_base(r))
+
+
+def p_base(r: dict) -> str:
+    """P's base options of a record: blocks, sink, norm, top (and an offset not tied to a peel)."""
+    parts = [f"blk{r['pblk']}" if r.get("pblk") else "", "sink" if r.get("psink") else "",
+             "norm" if r.get("pnorm") else "", f"top{r['ptop']}" if r.get("ptop") else "",
+             f"off{r['poff']}" if r.get("poff") and r.get("e", {}).get("p", "none") == "none" else ""]
+    return " ".join(x for x in parts if x)
 
 
 def noise_label(n: dict) -> str:
@@ -623,8 +746,8 @@ def rows(results: list[dict]) -> list[dict]:
         if (_key(r), r["seed"]) not in seen:
             seen.add((_key(r), r["seed"]))
             groups.setdefault(_key(r), []).append(r)
-    bf16 = {(r["ctx"], r.get("lin", "bf16")): r["ppl"] for r in results if r["grid"] == "bf16"}
     mean = lambda rs: sum(x["ppl"] for x in rs) / len(rs)  # noqa: E731
+    bf16 = {(k[13], k[9]): mean(rs) for k, rs in groups.items() if k[0] == "bf16"}
     out = []
     for key, rs in groups.items():
         r, n = rs[0], operand_noise(rs[0])
@@ -636,6 +759,7 @@ def rows(results: list[dict]) -> list[dict]:
         lin = r.get("lin", "bf16")
         out.append({"ctx": r["ctx"], "grid": r["grid"], "p": r["p"], "v": r["v"], "qk2": r.get("qk2", False), "rot": r["rot"], "n": n,
                     "products": r.get("int8_products"), "lin": lin, "e": e, "poff": r.get("poff", 0), "tops": r.get("tops"),
+                    "pbase": p_base(r),
                     "windows": r.get("windows", 1), "peel_exact": [x.get("peel_exact") for x in rs],
                     "label": noise_label(n), "info": info, "seeds": len(rs), "ppl": ppl, "min": min(ppls), "max": max(ppls),
                     "d_grid": 100 * (ppl / mean(base) - 1) if base and any(v != "none" for v in n.values()) else None,
@@ -665,6 +789,7 @@ def peel_table(results: list[dict]) -> str:
     for x in sorted(rows(results), key=order):
         q = x["grid"] in GRID_PAIRS
         attn = (f"{x['grid']}{'-rot' if x['rot'] else ''} {x['p']}/{x['v']}" if q else x["grid"])
+        attn += f" P {x['pbase']}" if x["pbase"] else ""
         tops = ", ".join(str(x["tops"][o]) for o in OPERANDS) if x["tops"] else "-"
         peeled = ", ".join(f"{o.upper()}: {a}" for o, a in x["e"].items() if a != "none") or "-"
         peeled += f"; P offset -{x['poff']}" if x["poff"] else ""

@@ -4,7 +4,7 @@
 # WikiText-2's test window 0 that must begin with those 2048).  Clocks are read, never set.
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd clone --custody-ttl 12h \
-#     --env GPU_LEASE_WHO=... --env D4A_CTX=2048 --env D4A_PLAN=grid|frontier|limbs|limbs2|limbsall|seeds|longseeds|wide|both|peel|peelabc|peeld|alph|alph8192a|alph8192b|dith|dith8192a|dith8192b [--env D4A_TAG=SUBDIR] [--env D4A_METHODS="..."] \
+#     --env GPU_LEASE_WHO=... --env D4A_CTX=2048 --env D4A_PLAN=grid|frontier|limbs|limbs2|limbsall|seeds|longseeds|wide|both|peel|peelabc|peeld|alph|alph8192a|alph8192b|dith|dith8192a|dith8192b|e2e|e2e8192|pbase [--env D4A_TAG=SUBDIR] [--env D4A_METHODS="..."] \
 #     [--env D4A_IDS=ids8192.npy --send ids8192.npy] --send benchmarks/fp8_instantiation/run_attention.sh \
 #     -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/run_attention.sh"'
 # D4A_IDS may hold several windows (N x T, windows.py), whose window 0 must begin with those 2048 tokens.
@@ -128,7 +128,37 @@ dith_plan() {
     m+=" int8-rot-lin8r-eqp=w64-poff64-$x=$a-$s"; done; done; done
   echo "$m"
 }
+# The adopted design end to end (`e2e`): every linear dithered (`lin8rd`, D4-PPL's Table 4 setting), the w64 peel on Q and
+# P and the dither on K and V; then each part alone (E2E_PARTS): the dithered linears under bf16 attention (`lin`), the
+# attention under bf16 linears (`attn`), its one-limb base (`base`) and peel (`peel`), and the dithered linears with the
+# base (`linbase`) and the peel (`linpeel`); seeds S.
+e2e_plan() {
+  m=""
+  for x in ${E2E_PARTS:-e2e lin attn base peel linbase linpeel}; do for s in ${SEEDS:-s0 s1 s2}; do
+    case $x in
+      e2e) m+=" int8-rot-lin8rd-eqp=w64-poff64-kv=dith-$s" ;;
+      lin) m+=" bf16-lin8rd-$s" ;;
+      attn) m+=" int8-rot-eqp=w64-poff64-kv=dith-$s" ;;
+      base) m+=" int8-rot-$s" ;;
+      peel) m+=" int8-rot-eqp=w64-poff64-$s" ;;
+      linbase) m+=" int8-rot-lin8rd-$s" ;;
+      linpeel) m+=" int8-rot-lin8rd-eqp=w64-poff64-$s" ;;
+    esac
+  done; done
+  echo "$m"
+}
+# P's one-limb base over (a) (int8 linears): row-sum norm, key 0 alone, per-key-block scales, P on [0, 255] served as
+# P - 128 (PBASE); seeds S.
+pbase_plan() {
+  m=""
+  for s in ${SEEDS:-s0}; do for x in ${PBASE:-pnorm psink psink-pnorm ptop255-poff128 pblk256 pblk1024 pblk64}; do
+    m+=" int8-rot-lin8r-$x-$s"; done; done
+  echo "$m"
+}
 case "${D4A_PLAN:-}" in
+  e2e) D4A_METHODS="bf16 bf16-lin8r $(e2e_plan)" ;;
+  e2e8192) D4A_METHODS="$(E2E_PARTS='e2e lin attn base peel' e2e_plan)" ;;
+  pbase) D4A_METHODS="$(pbase_plan)" ;;
   dith) D4A_METHODS="bf16 bf16-lin8r"; for s in ${SEEDS:-s0 s1 s2}; do D4A_METHODS+=" int8-rot-lin8r-$s int8-rot-lin8r-eqp=w64-poff64-$s"; done
         D4A_METHODS+=" $(dith_plan)" ;;
   dith8192a) D4A_METHODS="bf16 $(SERVED_ALPH=dith dith_plan)" ;;
