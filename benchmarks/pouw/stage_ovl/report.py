@@ -10,8 +10,9 @@ For each chunk size M and depth k (k chunks of M tokens in flight, each its own 
 - lone TTFT: k = 1's eq over plain at k = 1; under load: each chunk's end (from the draws' stamps) over plain's makespan;
 - memory a chunk in flight: the bench's activations (operands, A, the int32 outputs, a cuBLASLt workspace) and commitment
   state (stage.cu's Commit: digests, leaves, tree, the salt-only parts of all 32 layers), measured by cudaMemGetInfo;
-- beside.jsonl: plain's GEMMs against the same tokens' commitment compressions as one small resident kernel: its cost
-  launched before (hfirst) or after (gfirst) the GEMMs, its rate beside them, and the rate the GEMMs need (need_rate);
+- beside.jsonl: plain's GEMMs against the same tokens' commitment compressions in small CTAs at the highest priority: its
+  cost launched before (hfirst) or after (gfirst) the GEMMs as one kernel, or spread (a slice after each GEMM, waiting on
+  it), its rate, and the rate the GEMMs need (need_rate);
 - cells are keyed by (FR_ROT, M): FR_ROT is the build's choice of rotations on the FMA pipe (stage.cu's bits), and
   shathru.jsonl's SHA-512 compressions a second on the whole GPU are printed by rotation choice and CTAs a SM.
 """
@@ -74,7 +75,9 @@ def main() -> int:
             print(f"  {c['thr']:3d} threads x {c['ctas_a_sm']} a SM: alone {al['ms']:.1f} ms ({100 * al['of_gemm']:.1f}% of the GEMMs, "
                   f"{al['hash_rate']:.2e}/s); hash first {100 * hf['cost']:+.1f}% (hash ends {hf['hash_end_ms']:.1f}, GEMMs "
                   f"{hf['gemm_end_ms']:.1f} ms, {hf['hash_rate']:.2e}/s); GEMMs first {100 * gf['cost']:+.1f}% (hash "
-                  f"{gf['hash_start_ms']:.1f}-{gf['hash_end_ms']:.1f}, GEMMs {gf['gemm_end_ms']:.1f} ms)")
+                  f"{gf['hash_start_ms']:.1f}-{gf['hash_end_ms']:.1f}, GEMMs {gf['gemm_end_ms']:.1f} ms)"
+                  + (f"; spread over {c['slices']} slices {100 * c['spread']['cost']:+.1f}% (GEMMs end "
+                     f"{c['spread']['gemm_end_ms']:.1f}, hash {c['spread']['hash_end_ms']:.1f} ms)" if "spread" in c else ""))
     res: dict = {"gate_lines": len(gates), "beside": beside, "gate_failed": len(bad), "setup": {f"{r}/{m}": v for (r, m), v in setups.items()},
                  "cells": []}
     res["shathru"] = thru

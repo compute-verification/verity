@@ -16,7 +16,8 @@
 //   shathru                 SHA-512 compressions a second on the whole GPU (stage.cu's sha_chain at 4-32 CTAs a SM, by
 //                           which rotations run on the FMA pipe; the commitments use -DFR_ROT's)
 //   beside M K [rN]         plain's GEMMs for K sequences of M tokens against the same commitments' compressions as one
-//                           small resident kernel (32-256 threads a SM): alone, and launched just before or after the GEMMs
+//                           small resident kernel (32-256 threads a SM): alone, launched just before or after the GEMMs,
+//                           and spread (a slice after each GEMM, waiting on it, as each GEMM's output's commitment)
 // Arms (k chunks of M tokens; the QK^T and P.V stand-ins are stage.cu's, m = M, n = M/2, k = 4096, against a sequence's own
 // distinct buffer a layer):
 //   plain     the k sequences plain int8 on one stream: the linears over all k * M tokens in row blocks of PLAIN_RB (8192),
@@ -457,8 +458,9 @@ __global__ void ts_reset(unsigned long long* ts) {
 
 // beside: whether the commitments' hashing can hide next to the GEMMs if it is shaped to fit beside their CTAs. plain's
 // GEMMs for k sequences of M tokens (as in ovl) against H = C x k x M x 32 compressions (C = BESIDE_C, 367: a token-layer's
-// segment, row, leaf, node and salt compressions in stage.cu's tree) as one sha_beside launch of b CTAs of thr threads
-// a SM: alone, launched just before the GEMMs (hfirst) and just after them (gfirst), on a stream at the highest priority
+// segment, row, leaf, node and salt compressions in stage.cu's tree) in b CTAs of thr threads a SM on a stream at the
+// highest priority: alone, as one launch just before the GEMMs (hfirst) or just after them (gfirst), or spread (a slice
+// after each GEMM, waiting on it)
 static int run_beside(Dev& d, int M, int k, int reps) {
   const int C = getenv("BESIDE_C") ? atoi(getenv("BESIDE_C")) : 367;
   const int RB = getenv("PLAIN_RB") ? atoi(getenv("PLAIN_RB")) : 8192;
@@ -485,15 +487,28 @@ static int run_beside(Dev& d, int M, int k, int reps) {
   int lo, hi;
   CK(cudaDeviceGetStreamPriorityRange(&lo, &hi));
   cudaStream_t sg = prio_stream(lo), sh = prio_stream(hi);
-  auto gemms = [&](cudaStream_t s) {
+  // after(i) runs after the i-th GEMM launch
+  auto gemms = [&](cudaStream_t s, const std::function<void(int)>& after) {
+    int i = 0;
     for (int l = 0; l < LAYERS; l++)
       for (int t = 0; t < NSTAGE; t++) {
         if (LJ[t] >= 0)
-          for (int r0 = 0; r0 < rows; r0 += rb) ltb_run(pl[t], plt, Ap + (size_t)r0 * GK[t], d.W[l][LJ[t]], Dp, s);
-        else
+          for (int r0 = 0; r0 < rows; r0 += rb) {
+            ltb_run(pl[t], plt, Ap + (size_t)r0 * GK[t], d.W[l][LJ[t]], Dp, s);
+            if (after) after(i);
+            i++;
+          }
+        else {
           ltb_run(pl[t], plt, Ap, Kb[t == 1 ? l : (l + 1) % LAYERS], Dp, s);
+          if (after) after(i);
+          i++;
+        }
       }
+    return i;
   };
+  const int nlaunch = LAYERS * (4 * ((rows + rb - 1) / rb) + 2);
+  std::vector<cudaEvent_t> gev(nlaunch);
+  for (auto& e : gev) CK(cudaEventCreateWithFlags(&e, cudaEventDisableTiming));
   const double H = (double)C * k * M * LAYERS;
   const int cfg[][2] = {{32, 1}, {64, 1}, {128, 1}, {128, 2}, {256, 2}};
   uint64_t* out;
@@ -509,7 +524,8 @@ static int run_beside(Dev& d, int M, int k, int reps) {
     std::sort(v.begin(), v.end());
     return v[v.size() / 2];
   };
-  // one timed rep of `order`: 0 the GEMMs alone, 1 the hash alone, 2 hash then GEMMs, 3 GEMMs then hash
+  // one timed rep of `order`: 0 the GEMMs alone, 1 the hash alone, 2 hash then GEMMs, 3 GEMMs then hash, 4 spread: the
+  // hash in one slice a GEMM, each after its GEMM (as a commitment of that GEMM's output)
   struct Out { double ms, mhz, t_hs, t_he, t_ge; };
   auto rep = [&](int order, int thr, int b, int n) -> Out {
     stamp<<<1, 1, 0, sg>>>(ts + 2);
@@ -518,7 +534,15 @@ static int run_beside(Dev& d, int M, int k, int reps) {
     CK(cudaEventRecord(ef, sg));
     CK(cudaStreamWaitEvent(sh, ef, 0));
     if (order == 1 || order == 2) sha_beside<<<b * d.sms, thr, 0, sh>>>(n, out, ts);
-    if (order != 1) gemms(sg);
+    const int ns = (n + nlaunch - 1) / nlaunch;
+    if (order == 4)
+      gemms(sg, [&](int i) {
+        CK(cudaEventRecord(gev[i], sg));
+        CK(cudaStreamWaitEvent(sh, gev[i], 0));
+        sha_beside<<<b * d.sms, thr, 0, sh>>>(ns, out, ts);
+      });
+    else if (order != 1)
+      gemms(sg, nullptr);
     stamp<<<1, 1, 0, sg>>>(ts + 3);
     if (order == 3) sha_beside<<<b * d.sms, thr, 0, sh>>>(n, out, ts);
     CK(cudaEventRecord(eh, sh));
@@ -541,6 +565,7 @@ static int run_beside(Dev& d, int M, int k, int reps) {
             order == 1 ? 0 : (h[3] - z) * 1e-6};
   };
   for (int i = 0; i < 2; i++) rep(0, 128, 1, 16);
+  rep(4, 128, 1, nlaunch);
   std::vector<double> gv, gm;
   for (int r = 0; r < reps; r++) {
     const Out o = rep(0, 0, 0, 0);
@@ -555,25 +580,28 @@ static int run_beside(Dev& d, int M, int k, int reps) {
     const int thr = cfg[ci][0], b = cfg[ci][1];
     const int n = (int)std::ceil(H / ((double)d.sms * b * thr));
     rep(1, thr, b, n);
-    std::vector<Out> v[4];
+    std::vector<Out> v[5];
     for (int r = 0; r < reps; r++)
-      for (int o = 1; o <= 3; o++) v[o].push_back(rep(o, thr, b, n));
-    printf("%s{\"thr\": %d, \"ctas_a_sm\": %d, \"n\": %d", ci ? ", " : "", thr, b, n);
-    const char* nm[4] = {"", "alone", "hfirst", "gfirst"};
-    for (int o = 1; o <= 3; o++) {
+      for (int o = 1; o <= 4; o++) v[o].push_back(rep(o, thr, b, n));
+    printf("%s{\"thr\": %d, \"ctas_a_sm\": %d, \"n\": %d, \"slices\": %d, \"n_slice\": %d", ci ? ", " : "", thr, b, n,
+           nlaunch, (n + nlaunch - 1) / nlaunch);
+    const char* nm[5] = {"", "alone", "hfirst", "gfirst", "spread"};
+    for (int o = 1; o <= 4; o++) {
       std::sort(v[o].begin(), v[o].end(), [](const Out& a, const Out& c) { return a.ms < c.ms; });
       const Out& m = v[o][v[o].size() / 2];
       const double span = m.t_he - m.t_hs;
+      const double done = o == 4 ? (double)d.sms * b * thr * ((n + nlaunch - 1) / nlaunch) * nlaunch : (double)d.sms * b * thr * n;
       printf(", \"%s\": {\"ms\": %.3f, \"mhz\": %.0f, \"%s\": %.4f, \"hash_start_ms\": %.3f, \"hash_end_ms\": %.3f, "
              "\"gemm_end_ms\": %.3f, \"hash_rate\": %.4e}",
              nm[o], m.ms, m.mhz, o == 1 ? "of_gemm" : "cost", o == 1 ? m.ms / g_ms : m.ms / g_ms - 1, m.t_hs, m.t_he, m.t_ge,
-             (double)d.sms * b * thr * n / (span * 1e-3));
+             done / (span * 1e-3));
     }
     printf("}");
     fflush(stdout);
   }
   printf("]}\n");
   fflush(stdout);
+  for (auto& e : gev) CK(cudaEventDestroy(e));
   CK(cudaFree(out));
   CK(cudaFree(ts));
   CK(cudaFree(Ap));
