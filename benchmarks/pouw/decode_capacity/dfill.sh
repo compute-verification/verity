@@ -8,7 +8,8 @@
 #     --send benchmarks/pouw/decode_capacity/dfill.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/dfill.sh"'
 #
 # DF_ALONE ("W:NC ..."), DF_ARMS ("split|co:FILL_SMS:W:NC[:CHUNK_LOG2] ..."), DF_BLS and DF_CO_BLS ("B:L ...", for split
-# and co arms), DF_S (steps a tile), DF_REPS, NCU (0|1)
+# and co arms), DF_S (steps a tile), DF_REPS, NCU (0|1), DF_T2 ("FILL_SMS ...": T2's chain, dcap fill ... big, at DF_BLS in
+# the same lease, into fill.jsonl, for the comparison)
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
