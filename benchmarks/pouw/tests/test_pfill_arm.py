@@ -32,12 +32,20 @@ def _load_file(name):
     return mod
 
 
-def test_pfill_arms_meet_the_contract_and_place_as_fill_v1():
+ARMS = (("PFillRam", 4, "s8", 1), ("PFillDuo", 2, "s8", 1), ("PFillE2m1Ram", 4, "e2m1", 2))
+
+
+def test_pfill_arms_meet_the_contract_and_place_as_fill_v1(monkeypatch):
+    """Each arm sets the tile kind its gates and dscore inherit (PFILL_MMA), and says its products a slot."""
     A, S = _module("arms"), _module("scoring")
+    P = _load_file("pfill_arm")
+    monkeypatch.setenv("PFILL_MMA", "unset")
     v1 = A.load("fill-v1")
-    for attr, nc in (("PFillRam", 4), ("PFillDuo", 2)):
+    for attr, nc, mma, per_slot in ARMS:
         arm = A.load(f"benchmarks/pouw/filler/pfill_arm.py:{attr}")
         assert A.check_arm(arm) == []
+        assert __import__("os").environ["PFILL_MMA"] == mma
+        assert P.products_per_slot(arm.lineage) == per_slot
         assert arm.filler == A.Filler(W=8, NC=nc, S=256, chunk_log2=19)
         assert arm.filler.S % 32 == 0  # pfill's dfill_make refuses any other S
         assert "benchmarks/pouw/decode_capacity/pfill.cuh" in arm.sources
@@ -68,3 +76,23 @@ def test_proved_readings_rescore_with_only_the_filler_fraction(tmp_path):
     order = sorted(res, key=lambda k: res[k]["filler_fraction"])
     scores = [res[k]["SCORE"] for k in order]
     assert scores == sorted(scores) and scores[0] < scores[-1]
+    assert res["proved"]["filler_fraction"] == 0.225
+
+
+def test_e2m1_arm_is_read_at_twice_the_product_fraction(tmp_path):
+    """An e2m1 run (its arm.json's lineage) reads the theorems at two products a slot; the placeholder and the chained
+    floor don't move."""
+    S = _module("scoring")
+    P = _load_file("pfill_proved")
+    A = _load_file("pfill_arm")
+    rows = [_row("step" if ph == "decode" else "prefill", b, l, 10.0, 10.2) for ph, b, l in S.points()]
+    (tmp_path / "dscore.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+    s8 = P.readings(tmp_path)
+    (tmp_path / "arm.json").write_text(json.dumps({"lineage": A.PFillE2m1Ram.__dataclass_fields__["lineage"]
+                                                   .default_factory()}))
+    f4 = P.readings(tmp_path)
+    for k in ("proved", "theorem-m-week", "theorem-s"):
+        assert f4[k]["filler_fraction"] == 2 * s8[k]["filler_fraction"]
+        assert f4[k]["SCORE"] > s8[k]["SCORE"]
+    for k in ("provisional", "chained-proved"):
+        assert f4[k] == s8[k]
