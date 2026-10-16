@@ -23,8 +23,8 @@ ARCHS = {"LlamaForCausalLM": "llama", "Qwen2ForCausalLM": "qwen2"}
 #: a KV group's s x s work runs on all query rows at once while a (rep, s, s) float64 tensor is within ROWS_WHOLE bytes,
 #: else on chunks of ROWS_BYTES (32K), as attention.py
 ROWS_WHOLE, ROWS_BYTES = 2 ** 32, 2 ** 31
-#: tokens per chunk of the head and loss
-LOSS_ROWS = 4096
+#: the head and loss run on a whole window up to LOSS_WHOLE tokens, else in chunks of LOSS_ROWS
+LOSS_WHOLE, LOSS_ROWS = 8192, 4096
 
 
 @dataclass(frozen=True)
@@ -258,7 +258,7 @@ def head(cfg: Config, norm_w: torch.Tensor, head_w: torch.Tensor, h: torch.Tenso
     """The NLL of every next token of one window (T - 1 of them): the final norm, the head, the cross entropy, in chunks
     of LOSS_ROWS tokens past 8K."""
     T = h.shape[0]
-    if T <= 8192:
+    if T <= LOSS_WHOLE:
         logits = (rms_norm(h, norm_w, cfg.eps) @ head_w.T).float()
         return F.cross_entropy(logits[:-1], ids[1:], reduction="none")
     n = rms_norm(h, norm_w, cfg.eps)

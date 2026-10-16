@@ -176,6 +176,22 @@ def test_hf_parity(llama, qwen, ids):
         assert g["checked"] == M.Config.read(snap).layers and g["failed"] == 0, g
 
 
+def test_row_chunks_change_no_bit(llama, ids, calib, monkeypatch):
+    """At 32K the s x s attention work and the loss run in chunks of query rows; the chunks change no bit, since every
+    coin and scale is drawn per row or for the whole window, and the products are exact."""
+    arms = ["adopted", "int8-all"]
+    whole = evaluate(llama, ids[:4], arms, calib=calib)
+    monkeypatch.setattr(M, "ROWS_WHOLE", 0)
+    monkeypatch.setattr(M, "ROWS_BYTES", 16 * 2 * 64 * 8)
+    monkeypatch.setattr(M, "LOSS_WHOLE", 16)
+    monkeypatch.setattr(M, "LOSS_ROWS", 24)
+    assert M.row_chunk(2, 64) == 16
+    chunked = evaluate(llama, ids[:4], arms, calib=calib)
+    assert passed(chunked), chunked["gates"]
+    for k in whole["nll"]:
+        assert np.array_equal(whole["nll"][k], chunked["nll"][k]), k
+
+
 def test_the_readme_plugin_example_runs(llama, ids, monkeypatch, tmp_path):
     """README's "Adding an intervention" example, as written, is a step a spec names and the engine runs and gates."""
     monkeypatch.setattr(spec, "REGISTRY", {k: dict(v) for k, v in spec.REGISTRY.items()})
