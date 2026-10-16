@@ -10,9 +10,13 @@ layout), and U (tag 6, lpgemm.cu's LP_UW 64, derive.py's u_noise64 on the weight
     receipts over C's running sums T_s (s = 1 .. k / 32), each dumped kernel's by its kind (meta.json's kinds):
       duo32  derive.py's tile_receipts over every T_s;  duo64  the same over T_2, T_4, ... (the odd steps, 0-based)
       xin    P2-FF's XOR-in fold (egemm.cu's XIN), tile t's words into chain t % 4;  xin64  the same over T_2, T_4, ...
+      xin13  P2-FF r9's twin itself (receipt_folds_r9.py, art:91c156a1…, pinned by its sha256 below): its xorin_step on
+             the same words and chains, each chain from pfill's y = pos = (tile NCT + ctid) 4 + c, keys the first two
+             words that pass its key_ok_r9
       tb4, tb2w, tb1w, tb4c  floored_gemm/ref.py's tb_receipts and tbc_receipts on the tile
-and every one is compared with the device's bytes. One JSON line a gate directory; exit 1 on any difference, on a
-device mismatch or on a control the device didn't reject.
+and every one is compared with the device's bytes, as are the device's key_ok_r9 answers on its boundary words
+(r9_words.bin, r9_ok.bin). One JSON line a gate directory; exit 1 on any difference, on a device mismatch or on a
+control the device didn't reject.
     python3 egemm_ref.py GATE_DIR...
 """
 from __future__ import annotations
@@ -33,6 +37,14 @@ from derive import BN, NCT, U_TAG, WM, mix32, tile_receipts  # noqa: E402
 _spec = importlib.util.spec_from_file_location("fgemm_ref", HERE.parent / "floored_gemm" / "ref.py")
 fref = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(fref)
+
+RF_SHA256 = "c5a3424f90850ca818eff182f43132ae72cf21aadcaacb99758ca454932f5bb4"   # art:91c156a1…'s MANIFEST.sha256
+_rf_path = HERE / "receipt_folds_r9.py"
+if hashlib.sha256(_rf_path.read_bytes()).hexdigest() != RF_SHA256:
+    sys.exit(f"{_rf_path} is not P2-FF r9's reference (sha256 {RF_SHA256}): restore it from art:91c156a1…, don't edit it")
+_spec = importlib.util.spec_from_file_location("receipt_folds_r9", _rf_path)
+rf = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(rf)
 
 DITHER_TAG = 7
 T = 128
@@ -73,16 +85,18 @@ def rotl(x: np.ndarray, r: int) -> np.ndarray:
     return (x << np.uint32(r)) | (x >> np.uint32(32 - r))
 
 
-def xin_keys(seed: int) -> tuple[int, int]:
-    """egemm.cu's xin_keys: the first two words mix32(seed ^ (0x5A5A0000 + i)) that pass pfill.cuh's key rule."""
-    out, i = [], 0
+def xin_keys(seed: int, r9: bool = False) -> tuple[int, int, int]:
+    """egemm.cu's xin_keys: the first two words mix32(seed ^ (0x5A5A0000 + i)) that pass pfill.cuh's key rule (r9:
+    receipt_folds_r9.key_ok_r9), and how many words passing the key rule r9 skipped before them."""
+    out, skipped, i = [], 0, 0
     while len(out) < 2:
         a = int(mix32(np.uint32((seed ^ (0x5A5A0000 + i)) & 0xFFFFFFFF)))
-        m, r = a & 0xFFFFFF, a & 31
-        if a & 1 and 256 < m < (1 << 24) - 256 and r not in (1, 31):
+        if rf.key_ok_r9(a) if r9 else rf.key_ok(a):
             out.append(a)
+        elif r9 and rf.key_ok(a):
+            skipped += 1
         i += 1
-    return out[0], out[1]
+    return out[0], out[1], skipped
 
 
 def frag_words(Tw: np.ndarray, mi: int, ni: int) -> np.ndarray:
@@ -114,6 +128,33 @@ def xin_receipts(seed: int, Ts: list[np.ndarray], tile: int) -> np.ndarray:
     return out
 
 
+def xin13_receipts(seed: int, Ts: list[np.ndarray], tile: int) -> np.ndarray:
+    """XIN13's receipts, (NCT, 8): receipt_folds_r9.xorin_step over the same words and chains as xin_receipts, chain c
+    of thread ctid from y = (tile NCT + ctid) 4 + c, keys under key_ok_r9; then four zeros."""
+    a0, a1, _ = xin_keys(seed, r9=True)
+    y = ((tile * NCT + np.arange(NCT)[:, None]) * 4 + np.arange(4)[None, :]).astype(np.uint32)
+    MI, NI = WM // 16, 4
+    with np.errstate(over="ignore"):
+        for Tw in Ts:
+            for t in range(MI * NI):
+                p = frag_words(Tw, t // NI, t % NI)
+                c = t % 4
+                y[:, c] = rf.xorin_step(y[:, c], p[:, 0], p[:, 1], p[:, 2], p[:, 3], np.uint32(a0), np.uint32(a1))
+    out = np.zeros((NCT, 8), np.uint32)
+    out[:, :4] = y
+    return out
+
+
+def r9_probe(d: Path) -> dict:
+    """The device's key_ok_r9 answers on egemm.cu's r9_words against receipt_folds_r9.key_ok_r9's."""
+    w = np.fromfile(d / "r9_words.bin", np.uint32)
+    dev = np.fromfile(d / "r9_ok.bin", np.uint8).astype(bool)
+    ref = np.array([rf.key_ok_r9(int(a)) for a in w])
+    kok = np.array([rf.key_ok(int(a)) for a in w])
+    return {"n": int(w.size), "key_ok": int(kok.sum()), "r9_rejected": int((kok & ~ref).sum()),
+            "mismatch": int((dev != ref).sum()) if dev.size == w.size else -1}
+
+
 def receipts(kind: str, seed: int, Ts: list[np.ndarray], tile: int) -> np.ndarray:
     if kind == "duo32":
         return tile_receipts(seed, Ts, tile)
@@ -123,6 +164,8 @@ def receipts(kind: str, seed: int, Ts: list[np.ndarray], tile: int) -> np.ndarra
         return xin_receipts(seed, Ts, tile)
     if kind == "xin64":
         return xin_receipts(seed, Ts[1::2], tile)
+    if kind == "xin13":
+        return xin13_receipts(seed, Ts, tile)
     kid = TB_KIND[kind]
     if kid in fref.CHAINED:
         return fref.tbc_receipts(kid, Ts, T, BN, WM, NCT, 1, 1)[0]
@@ -139,6 +182,9 @@ def check(d: Path) -> dict:
     out = {"dir": str(d), "m": m, "n": n, "k": k, "device_ok": meta["device_ok"], "control_rejected": meta["control_rejected"],
            "tiles": {}}
     ok = bool(meta["device_ok"]) and bool(meta["control_rejected"]) and bool(kinds)
+    out["r9_probe"] = r9_probe(d)
+    out["r9_seed_skips"] = xin_keys(seed, r9=True)[2]
+    ok &= out["r9_probe"]["mismatch"] == 0 and out["r9_probe"]["r9_rejected"] > 0
     z = np.zeros((T, 32), np.int64)
     for tm, tn in meta["tiles"]:
         sfx = f"_{tm}_{tn}.bin"

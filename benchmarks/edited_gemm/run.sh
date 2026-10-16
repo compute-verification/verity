@@ -6,7 +6,8 @@
 # them on the CPU from x, W and the key, every kernel's receipts by its kind; only if both pass, lease 2 times o_proj's
 # hot items (EG_ARMS), the slice's per-call interleaving (IL pairs ARM:BASE; IL_COLD the same with L2 flushed before each
 # call), each other linear's hot items and interleaving (LAYER_ARMS, LAYER_IL), and ncu's issue and pipe counters at
-# o_proj. EG_SET=best times each receipt kind's fastest kernels instead, also after wedit alone (edited:K). Clocks are
+# o_proj. EG_SET=best times each receipt kind's fastest kernels instead, also after wedit alone (edited:K); EG_SET=x13
+# r9's XOR-in (13, 19) beside x_l2o and e_l4q. The small gate's seed has a key that key_ok_r9 rejects. Clocks are
 # read, never set.
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=EGEMM \
@@ -57,7 +58,7 @@ mkdir -p "$W/small" "$W/o"
 gpu-lease 1 --wait --max-min 10 -- bash -c '
   nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,clocks.applications.graphics,power.limit \
     --format=csv -i "$GPU_LEASE_UUID" > "$O/gpu.txt" 2>&1
-  "$BIN/egemm" gate "$W/small" 1024 256 512 0x1234 >> "$O/gate.jsonl" 2>> "$O/gate.err"; echo "gate small rc $?" >> "$O/rc.txt"
+  "$BIN/egemm" gate "$W/small" 1024 256 512 0x10483 >> "$O/gate.jsonl" 2>> "$O/gate.err"; echo "gate small rc $?" >> "$O/rc.txt"
   "$BIN/egemm" gate "$W/o" $O_SHAPE 0x5678 >> "$O/gate.jsonl" 2>> "$O/gate.err"; echo "gate o rc $?" >> "$O/rc.txt"
   for l in $LAYERS; do
     IFS=: read -r name m n k <<< "$l"
@@ -105,6 +106,15 @@ if [ "${EG_SET:-all}" = best ]; then
   larms="plain,plainq,wedit,qwe,e_plain" lil=""
   for k in $lk; do larms="$larms,$k,edited:$k,editedf:$k"; lil="$lil $k:plain edited:$k:plain editedf:$k:plainq"; done
   ncu="e_l4q d64_l2q x_l2o x64_l2o x64_l2q" stall="d64_l2q x_l2o x64_l2o"
+fi
+# EG_SET=x13: r9's served candidate x13_l2o beside x_l2o (rotl 7) and duo32's e_l4q, at every linear, each also as
+# edited:K and editedf:K
+if [ "${EG_SET:-all}" = x13 ]; then
+  arms="plain,plainq,wedit,qwe,e_plain" il="e_plain:plain"
+  for k in x13_l2o x_l2o e_l4q; do arms="$arms,$k,edited:$k,editedf:$k"; il="$il $k:plain edited:$k:plain editedf:$k:plainq"; done
+  cold="x13_l2o:plain editedf:x13_l2o:plainq"
+  larms=$arms lil=$il
+  ncu="x13_l2o x_l2o" stall="x13_l2o"
 fi
 export EG_ARMS=${EG_ARMS:-$arms} IL=${IL:-$il} IL_COLD=${IL_COLD:-$cold}
 export LAYER_ARMS=${LAYER_ARMS:-$larms} LAYER_IL=${LAYER_IL:-$lil}

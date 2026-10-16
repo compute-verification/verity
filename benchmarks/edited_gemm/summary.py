@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 LAYER = {(8192, 4096, 4096): "o_proj", (8192, 6144, 4096): "qkv", (8192, 28672, 4096): "gate_up", (8192, 4096, 14336): "down"}
-KIND = {"e_": "duo32", "t_duo32": "duo32", "d64_": "duo64", "x_": "xin", "x64_": "xin64", "t4_": "tb4", "t4c_": "tb4c", "t2w_": "tb2w",
+KIND = {"e_": "duo32", "t_duo32": "duo32", "d64_": "duo64", "x_": "xin", "x64_": "xin64", "x13_": "xin13", "t4_": "tb4", "t4c_": "tb4c", "t2w_": "tb2w",
         "t1w_": "tb1w"}
 
 
@@ -53,8 +53,11 @@ def main(o: Path) -> None:
         nr = sum(len(t["R"]) for t in r["tiles"].values())
         okr = sum(sum(t["R"].values()) for t in r["tiles"].values())
         other = all(all(v for v in t.values() if isinstance(v, bool)) for t in r["tiles"].values())
+        p = r.get("r9_probe", {})
         print(f"- CPU ref {r['m']} x {r['n']} x {r['k']}: ok {r['ok']}; receipts {okr}/{nr} tile-kernels bit-exact; X, Xq, P_A, W', "
-              f"P_B, peel, Y {other}; S range {[t['S_range'] for t in r['tiles'].values()]}")
+              f"P_B, peel, Y {other}; S range {[t['S_range'] for t in r['tiles'].values()]}; key_ok_r9 on the device: "
+              f"{p.get('mismatch')} of {p.get('n')} words differ from receipt_folds_r9's ({p.get('r9_rejected')} key_ok words "
+              f"rejected); the seed's key_ok words r9 skipped: {r.get('r9_seed_skips')}")
     bench = {shape(b): b for b in jl(o / "bench.jsonl")}
     il: dict[tuple, dict] = {}
     for r in jl(o / "il.jsonl"):

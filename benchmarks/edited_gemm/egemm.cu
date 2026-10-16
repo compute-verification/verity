@@ -16,11 +16,11 @@
 //                    32 patches at once, a chunk 4096 columns)
 //   wedit            W' = W + U and the tail rows P_B = [U | U | U | 0], U's hashes in each block of 8 rows
 //   qwe<ORD>         quant<true> and wedit in one launch (block orders: the quantizer's first, the edit's, interleaved)
-//   e_*, d64_*, x_*, x64_*, t*_*  the GEMM: lpgemm.cu's 16-warp 128 x 128 TMA mainloop (fgemm.cu's ML) with the receipts'
+//   e_*, d64_*, x_*, x64_*, x13_*, t*_*  the GEMM: lpgemm.cu's 16-warp 128 x 128 TMA mainloop (fgemm.cu's ML) with the receipts'
 //                    absorbs interleaved with the MMAs, and the peel as a 2-atom tail (acc -= 256 S_1 U^T + S_0 U^T; with
 //                    S_2's atom a 3-atom tail at k > 4096; the rows t_duo32's 4-atom tail reads). Receipts (EL's RK): duo
 //                    every 32 steps (e_*: t_duo32's), duo every 64 (d64_*), P2-FF's XOR-in fold every 32 (x_*) and every
-//                    64 (x64_*), and the tensor-byte
+//                    64 (x64_*), r9's XOR-in with rotations (13, 19) (x13_*), and the tensor-byte
 //                    receipts TB4, TB4C, TB2W, TB1W (t4_*, t4c_*, t2w_*, t1w_*: fgemm.cu's). Interleaving: the absorb of
 //                    a running sum runs LAG MMAs after its tile's MMA (each value is still in its accumulator then, so the
 //                    absorb order and the receipts are the unscheduled ones), and with TIE every TIE-th MMA's accumulator
@@ -31,7 +31,8 @@
 // Modes:
 //   egemm gate DIR M N K SEED       every arm once on poisoned buffers: each GEMM's output against cuBLASLt's X W^T, each
 //                                   duo32 kernel's receipts against t_duo32's and each other kernel's against its kind's
-//                                   first, a no-write control; tiles (every kernel's receipts) to DIR for egemm_ref.py
+//                                   first, a no-write control; tiles (every kernel's receipts) and key_ok_r9's
+//                                   device answers on its boundary words to DIR for egemm_ref.py
 //   egemm bench REPS M N K          hot items (about 20 ms each) interleaved across EG_ARMS, one JSON line
 //   egemm il REPS ARM BASE M N K    per call, ARM and BASE alternating (the slice's timing; EG_COLD=1: L2 flushed
 //                                   before each call), one JSON line
@@ -49,21 +50,38 @@ using MLW = ML<128, 128, 32, 3>;
 // The receipt kinds beyond fgemm.cu's DUO, TB4, TB4C, TB2W and TB1W (NONE: no receipts). DUO64: duo on every second
 // running sum only (the odd steps', so derive.py's tile_receipts on Ts[1::2]). XIN: P2-FF's XOR-in fold (pfill.cuh's NC 4
 // under -DPFILL_XIN), three ops a pair: y = (rotl(y, 7) ^ d0) a0 + d1, then y = (rotl(y, 19) ^ d2) a1 + d3 on an
-// accumulator's four words, tile t into chain t % 4. XIN64: XIN on the odd steps' running sums only (as DUO64). Negative,
-// so fgemm.cu's is_tb is false for them
-constexpr int DUO64 = -1, XIN = -2, XIN64 = -3;
+// accumulator's four words, tile t into chain t % 4. XIN64: XIN on the odd steps' running sums only (as DUO64). XIN and
+// XIN64 are timing references, not receipts: rotl 7 puts a bad merge ratio at ±128, an int8 ratio, at the step boundary
+// (note:20261016T1117Z-draft-fullfloor-s-r9). XIN13, the served candidate: P2-FF r9's XOR-in, y = (rotl(y, 13) ^ d0) a0
+// + d1, then y = (rotl(y, 19) ^ d2) a1 + d3 (receipt_folds_r9.xorin_step), keys under key_ok_r9, chain c of thread ctid
+// of tile t starting at pfill's y = pos = (32 w + lane) 4 + c with the output's warps numbered in order (w = 16 t +
+// warp, so pos = (t NCT + ctid) 4 + c). Negative, so fgemm.cu's is_tb is false for them
+constexpr int DUO64 = -1, XIN = -2, XIN64 = -3, XIN13 = -4;
 // XIN's multipliers: pfill.cuh's key rule (odd, more than 2^8 from 0 mod 2^24, not ±1 mod 32) on the words
 // mix32(seed ^ (0x5A5A0000 + i)), i = 0, 1, ..., the first two that pass (P2-FF draws them per tile from a SHA block;
-// either way two registers)
+// either way two registers); XIN13's the first two that pass key_ok_r9
 __host__ __device__ inline bool xin_ok(uint32_t a) {
   const uint32_t m = a & 0xFFFFFFu, r = a & 31u;
   return (a & 1u) && m > 256u && m < (1u << 24) - 256u && r != 1u && r != 31u;
 }
+// receipt_folds_r9.key_ok_r9 (pfill.cuh's pf_key_ok_r9): xin_ok, and neither a nor -a an int8 ratio mod 2^30, i.e.
+// a b mod 2^30 outside [-128, 128] for every b in 1..128
+__host__ __device__ inline bool xin_ok_r9(uint32_t a) {
+  if (!xin_ok(a)) return false;
+  uint32_t t = 0;
+#pragma unroll 1
+  for (int b = 1; b <= 128; b++) {
+    t += a;
+    if (((t + 128u) & 0x3FFFFFFFu) <= 256u) return false;
+  }
+  return true;
+}
+template <bool R9>
 __host__ __device__ inline void xin_keys(uint32_t seed, uint32_t& a0, uint32_t& a1) {
   int n = 0;
   for (uint32_t i = 0; n < 2; i++) {
     const uint32_t a = mix32(seed ^ (0x5A5A0000u + i));
-    if (xin_ok(a)) {
+    if (R9 ? xin_ok_r9(a) : xin_ok(a)) {
       if (n == 0) a0 = a;
       else a1 = a;
       n++;
@@ -84,7 +102,9 @@ template <bool FMA> DEV void tie(int& d, uint32_t z, uint32_t zero) {
 // next). TIE: a tie before every |TIE|-th MMA (0: none; negative: the IMAD tie) on the state the last absorb wrote
 template <int RK, int LAG, int TIE> struct EL : MLW {
   static_assert(LAG >= -1 && LAG < MI * NI, "an absorb runs before its accumulator's next MMA");
-  static constexpr bool R = RK != NONE, TB = is_tb(RK), XF = RK == XIN || RK == XIN64, HALF = RK == DUO64 || RK == XIN64;
+  static constexpr bool R = RK != NONE, TB = is_tb(RK), XF = RK == XIN || RK == XIN64 || RK == XIN13,
+                        HALF = RK == DUO64 || RK == XIN64;
+  static constexpr int ROT0 = RK == XIN13 ? 13 : 7;   // the XOR-in fold's first rotation
   static constexpr int B = tb_base(RK);
   static constexpr int NKR = XF ? 2 : TB ? NK<RK> : 1;   // key registers: XIN's a0, a1; a TB kind's B fragments
   using MLW::MLW;
@@ -177,7 +197,7 @@ template <int RK, int LAG, int TIE> struct EL : MLW {
       absorb<DUO, mi, ni>(ch, w);
     } else if constexpr (XF) {
       St& c = ch[J % 4];
-      c.y = (rotl(c.y, 7) ^ (uint32_t)w[0]) * kr[0] + (uint32_t)w[1];
+      c.y = (rotl(c.y, ROT0) ^ (uint32_t)w[0]) * kr[0] + (uint32_t)w[1];
       c.y = (rotl(c.y, 19) ^ (uint32_t)w[2]) * kr[1] + (uint32_t)w[3];
     } else {
       if constexpr (tb_chained(RK) && J == (B == TB2W ? 1 : B == TB1W ? NI - 1 : 0)) rch(ch, kr[NKP<RK>], kr[NKP<RK> + 1]);
@@ -325,7 +345,7 @@ template <int RK, int LAG, int TIE, bool THREE> DEV void e_body(const Args& a) {
   const int wm = warp / L::WARPS_N, wn = warp % L::WARPS_N, g = lane >> 2, q = lane & 3, ctid = threadIdx.x;
   const uint32_t zero = (uint32_t)a.KR;
   uint32_t kr[L::NKR];
-  if constexpr (L::XF) xin_keys(a.seed, kr[0], kr[1]);
+  if constexpr (L::XF) xin_keys<RK == XIN13>(a.seed, kr[0], kr[1]);
   else if constexpr (L::TB) L::template keys<RK>(kr, lane);
   else kr[0] = 0;
   typename L::Place pl{0, 0};
@@ -337,7 +357,7 @@ template <int RK, int LAG, int TIE, bool THREE> DEV void e_body(const Args& a) {
     St ch[8];
 #pragma unroll
     for (int e = 0; e < 8; e++) {
-      ch[e].y = L::TB ? 0u : mix32(a.seed ^ mix32((tile_id * L::NCT + ctid) * 8 + e));
+      ch[e].y = RK == XIN13 ? (tile_id * L::NCT + ctid) * 4 + e : L::TB ? 0u : mix32(a.seed ^ mix32((tile_id * L::NCT + ctid) * 8 + e));
       ch[e].z = L::TB ? 0u : mix32(ch[e].y + 0x9E3779B9u);
     }
     int acc[MI][NI][4];
@@ -367,7 +387,7 @@ template <int RK, int LAG, int TIE, bool THREE> DEV void e_body(const Args& a) {
     }
   }
 }
-// <kind>_l<LAG><tie>: e duo, d64 DUO64, x XIN, x64 XIN64, t4/t4c/t2w/t1w the TB kinds; l s the spread schedule; tie h every second
+// <kind>_l<LAG><tie>: e duo, d64 DUO64, x XIN, x64 XIN64, x13 XIN13, t4/t4c/t2w/t1w the TB kinds; l s the spread schedule; tie h every second
 // MMA, q every fourth, o every eighth, none if absent; m: the IMAD tie. NAME_k3 is NAME with the 3-atom tail (k > 4096;
 // one kernel with both tails behind a branch on K spills 50 bytes more in the 2-atom one)
 #define EGEMM(NAME, RK, LAG, TIE)                                                                                         \
@@ -389,6 +409,7 @@ EGEMM(x_l3qm, XIN, 3, -4)
 EGEMM(x_l2o, XIN, 2, 8)
 EGEMM(x64_l2q, XIN64, 2, 4)
 EGEMM(x64_l2o, XIN64, 2, 8)
+EGEMM(x13_l2o, XIN13, 2, 8)
 EGEMM(t4_l2, TB4, 2, 0)
 EGEMM(t4c_l2, TB4C, 2, 0)
 EGEMM(t2w_l0, TB2W, 0, 0)
@@ -630,6 +651,7 @@ static const EKn EK[] = {
     EKE(e_l3qm, "duo32"), EKE(e_l2o, "duo32"), EKE(e_l4q, "duo32"),
     EKE(d64_l2q, "duo64"), EKE(d64_l7q, "duo64"), EKE(d64_lsq, "duo64"), EKE(d64_lsqm, "duo64"),
     EKE(x_l2, "xin"), EKE(x_l2q, "xin"), EKE(x_l3qm, "xin"), EKE(x_l2o, "xin"), EKE(x64_l2q, "xin64"), EKE(x64_l2o, "xin64"),
+    EKE(x13_l2o, "xin13"),
     EKE(t4_l2, "tb4"), EKE(t4c_l2, "tb4c"), EKE(t2w_l0, "tb2w"), EKE(t2w_l2, "tb2w"),
     EKE(t1w_l0, "tb1w"), EKE(t1w_l2, "tb1w")};
 static const EKn* ekern(const std::string& n) {
@@ -775,6 +797,29 @@ static unsigned long long ecmp(EP& P, const void* a, const void* b, size_t words
   return h;
 }
 
+// key_ok_r9 on the device, on words at its boundary (a b = t mod 2^30 for each b in 1..128 and t just inside and just
+// outside [-128, 128], three lifts each) and 4096 others; egemm_ref.py holds every answer to receipt_folds_r9.key_ok_r9
+__global__ void r9_probe(const uint32_t* a, uint8_t* ok, int n) {
+  const int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i < n) ok[i] = xin_ok_r9(a[i]);
+}
+static std::vector<uint32_t> r9_words() {
+  std::vector<uint32_t> v;
+  for (int b = 1; b <= 128; b++) {
+    const int e = __builtin_ctz(b), s = 1 << e;
+    const uint32_t o = (uint32_t)b >> e, mod = 1u << (30 - e);
+    uint32_t inv = o;   // o^-1 mod 2^32 by Newton's iteration
+    for (int i = 0; i < 5; i++) inv *= 2u - o * inv;
+    for (int t : {127, 128, 129, 128 + s, -127, -128, -129, -128 - s}) {
+      if (t % s) continue;
+      const uint32_t a0 = ((uint32_t)(t / s) * inv) & (mod - 1);
+      for (uint32_t j : {0u, 1u, 3u}) v.push_back(a0 + j * mod);
+    }
+  }
+  for (uint32_t i = 0; i < 4096; i++) v.push_back(mix32(0xC0FFEE00u + i));
+  return v;
+}
+
 static int egate(const std::string& dir, int m, int n, int k, uint32_t seed) {
   EP P;
   esetup(P, m, n, k, seed, true);
@@ -835,6 +880,21 @@ static int egate(const std::string& dir, int m, int n, int k, uint32_t seed) {
   }
   CK(cudaStreamSynchronize(P.st));
   CK(cudaFree(R3));
+  {
+    const std::vector<uint32_t> pw = r9_words();
+    uint32_t* dw;
+    uint8_t* dok;
+    CK(cudaMalloc(&dw, pw.size() * 4));
+    CK(cudaMalloc(&dok, pw.size()));
+    CK(cudaMemcpy(dw, pw.data(), pw.size() * 4, cudaMemcpyHostToDevice));
+    r9_probe<<<(unsigned)(pw.size() + 255) / 256, 256, 0, P.st>>>(dw, dok, (int)pw.size());
+    CK(cudaStreamSynchronize(P.st));
+    CK(cudaGetLastError());
+    dump(dir, "r9_words.bin", dw, pw.size() * 4, true);
+    dump(dir, "r9_ok.bin", dok, pw.size(), true);
+    CK(cudaFree(dw));
+    CK(cudaFree(dok));
+  }
   // each fused producer under the same key: its X, P_A, W', P_B bitwise those of quant<true> and wedit, and e_l2h on them
   for (auto& [sfx, f] : QWE) {
     for (auto [p, b] : {std::pair<void*, size_t>{P.Xf, xb}, {P.PAf, (size_t)m * 128}, {P.Wf, wb}, {P.PBf, (size_t)n * 128},
