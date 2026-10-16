@@ -9,6 +9,7 @@ import Proofs.Flock.Claims.Complete.Json.Goals
 /-! The session record's JSON round trip: what it needs from the JSON library (`Spec`: `JsonSpec`, `Same`, `Good`), the
 hex round trips (`Hex`: `unhex_hexOf`, `f128OfHex_toHex`), and the honest record as a JSON value with the decoder's reads
 through `Same` (`Record`: `recordObj`, `good_mkObj`, `str_same`, …), and the decoder's checks S1–S14 on it (`Decode`:
-`decode_recordObj`), what the one-table session returns and sends first (`Session`: `recordJson_eq`,
-`sessionP_facts`), the record's live session and draw (`Live`: `live_recordObj`, `recordDraw_recordObj`), and B's
-record checks at the honest run under named hypotheses (`Goals`: `Run.json`, `decodes_goal`, …). -/
+`decode_recordObj`), what the one-table session returns and sends (`Session`: `recordJson_eq`, `sessionP_facts`,
+with a rep's rounds its sends, `repP_rec`), the record's live session and draw (`Live`:
+`live_recordObj`, `recordDraw_recordObj`), and B's record checks at the honest run under named hypotheses (`Goals`:
+`Run.json`, `decodes_goal`, …, `custodyRounds_goal`). -/

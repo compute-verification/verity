@@ -12,14 +12,13 @@ The goals of `Goals` on the record, proved at every honest run (`Run`) from four
   message's, so an oracle with outputs of varying length fails the honest record.
 * `StmtOk`: the statement names no keyed coin tree, a non-empty `Σ`, a printable draw that decodes (`DrawOk`), and its
   draw is the one it was set up at (`Ins.read.draw`).
-* `ProverOk`: at the case's table, the commitment's cap is non-empty and under `2^64` bytes, and each rep records rounds of
-  `1 ≤ n ≤ 65536` coins, at least one (`RoundsOk`).
+* `ProverOk`: at the case's table, the commitment's cap is non-empty and under `2^64` bytes, and each rep records a
+  round, each of at most `65536` coins (`RepOk`).
 
 `Run.json` is the record at the run: `Record.decodeWith` reads `sessOf` and `liveOf` the live session, its points the
-first coin's (`coinOf_bytes`: a coin's bytes read back are the coin), and the first send is the link of its `root_B`.
-The goals follow: `Decodes`, `LiveReads`, `DrawMatches`, `CustodyRootB`, `CustodyPublics`, `CustodyPoints`, `Publics`,
-`ProofList`, `ProofDigests`, `RepStream` and `RepExtras`. `CustodyRounds` (each recorded round its message and coin)
-needs every round send of the reps, so it is not here.
+first coin's (`coinOf_bytes`: a coin's bytes read back are the coin), the first send is the link of its `root_B`, and
+the rest are its streams' rounds (`Recs`). The goals follow: `Decodes`, `LiveReads`, `DrawMatches`, `CustodyRootB`,
+`CustodyPublics`, `CustodyPoints`, `Publics`, `ProofList`, `ProofDigests`, `RepStream`, `RepExtras` and `CustodyRounds`.
 -/
 
 namespace FlockComplete.JsonRT
@@ -40,8 +39,8 @@ def StmtOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.R
   ∀ c : Case H rel, c.spec.coinTree = none ∧ 0 < c.spec.sigma.size ∧ DrawOk c.spec ∧ c.spec.unitDraw = c.s.read.draw
 
 /-- **What the record needs of the prover's pieces**, at every good case's table: the commitment's cap, at the
-schedule's first level, is non-empty and under `2^64` bytes, and each rep records rounds of `1 ≤ n ≤ 65536` coins, at
-least one. -/
+schedule's first level, is non-empty and under `2^64` bytes, and each rep records a round, each of at most `65536`
+coins. -/
 def ProverOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ c : Case H rel, ∀ st ∈ c.sts,
     (∀ sch, fast100 (Setup.ofCircuit st).m = some sch → ∀ g salt cm,
@@ -49,7 +48,7 @@ def ProverOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable
         salt = .ok cm → 0 < (flat cm.cap).size ∧ (flat cm.cap).size < 2 ^ 64) ∧
     ∀ sch, fast100 (Setup.ofCircuit st).m = some sch → ∀ tr tb cm₀ extras salt nonce d,
       Ret ((repP (asksS c.resp) (Hashes.ofSha512 (Claims.hOf H)) (Setup.ofCircuit st) sch tr tb cm₀ extras salt
-        nonce).run (Transcript.init #[] d)) fun pt => RoundsOk pt.2.rounds
+        nonce).run (Transcript.init #[] d)) fun pt => RepOk pt.2.rounds
 
 theorem toBytes_length' (a : F128) : a.toBytes.data.toList.length = 16 := by simp [F128.toBytes]
 
@@ -108,12 +107,15 @@ theorem ptsOf_coin (spec : SessionSpec) (c : Coin) : ptsOf spec (coinOf c.bytes)
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **The honest run's record**, at one table: it is the printed honest record, `Record.decodeWith` reads it as `sessOf`
-and `liveOf` as its live session, its points the first coin's, and the link is its `root_B` and no public words. -/
+and `liveOf` as its live session, its points the first coin's, the link is its `root_B` and no public words, and the
+sends after the link are its streams' rounds. -/
 theorem Run.json (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel) (o : Run H rel) :
     ∃ st rb streams, o.sts = #[st] ∧ o.spec.tables = #[st.tags.table] ∧ o.tabs = #[Setup.ofCircuit st] ∧
       streams.size = o.spec.repStreams.size ∧ o.proofs.size = o.spec.repStreams.size ∧
       (∃ e, (Setup.ofCircuit st).extra (pointsOf o.spec (Claims.coinSeq o.r 0)) = .ok e) ∧
       o.link = ([rb], [ByteArray.empty]) ∧
+      (∃ bs, o.bodies.toList = linkBody [rb] [ByteArray.empty] :: bs ∧
+        Recs o.resp 1 (streams.toList.flatMap Array.toList) bs) ∧
       o.record = (recordObj o.spec (Claims.hOf H) #[rb] (pointsOf o.spec (Claims.coinSeq o.r 0)) streams
         o.proofs).compress ∧
       Record.decodeWith o.hs o.spec o.record =
@@ -130,7 +132,7 @@ theorem Run.json (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : Prover
   have hrun := o.ran
   unfold sessionS at hrun
   rw [hst, htabs] at hrun
-  obtain ⟨rb, streams, hrec, hrb, hrb64, hss, hrs, hex, hb⟩ :=
+  obtain ⟨rb, streams, hrec, hrb, hrb64, hss, hrs, hex, bs, hbs, hrecs⟩ :=
     sessionP_facts H o.resp ht hct (Setup.ofCircuit st) _ _ hC hR hrun
   have hpf := sessionP_proofs (Claims.hOf H) o.resp o.spec (tabsOf o.sts) (tracesOf o.sts o.w) o.ω #[] _ _ o.ran
   rw [show o.resp 0 = (Claims.coinSeq o.r 0).bytes from rfl, ptsOf_coin] at hrec hex
@@ -156,14 +158,9 @@ theorem Run.json (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : Prover
     exact live_recordObj S ht hd hss o.proofs
   have hsend : o.sends.headD [] = 0 :: linkBody [rb] [ByteArray.empty] := by
     unfold Run.sends
-    rcases hbs : o.bodies.toList with _ | ⟨b, bs⟩
-    · have : o.bodies.size = 0 := by simpa using congrArg List.length hbs
-      simp [this] at hb
-    · have : o.bodies[0]? = some b := by rw [← Array.getElem?_toList, hbs]; rfl
-      rw [hb] at this
-      cases this
-      rfl
-  refine ⟨st, rb, streams, hst, ht, by simp [Run.tabs, tabsOf, hst], hss, hpf, hex, ?_, hrec, hdec,
+    rw [hbs]
+    rfl
+  refine ⟨st, rb, streams, hst, ht, by simp [Run.tabs, tabsOf, hst], hss, hpf, hex, ?_, ⟨bs, hbs, hrecs⟩, hrec, hdec,
     by unfold Run.sess; rw [hdec]; rfl, by unfold Run.live; rw [hlv], by unfold Run.live; rw [hlv]⟩
   unfold Run.link
   rw [hsend, linkOf_linkBody (by simp) (by simp) (by simpa using hrb64) (by simp)]
@@ -172,7 +169,7 @@ theorem Run.json (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : Prover
 /-- **The record decodes** (S1–S14): the goal `Decodes`. -/
 theorem decodes_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel) : Decodes H rel := by
   intro o
-  obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, hrec, hdec, hsess, hlv, hlive⟩ :=
+  obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
     Run.json S h64 hS hP o
   rw [hdec, ← hsess]
 
@@ -180,7 +177,7 @@ theorem decodes_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : Pr
 theorem liveReads_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel) :
     LiveReads H rel := by
   intro o
-  obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, hrec, hdec, hsess, hlv, hlive⟩ :=
+  obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
     Run.json S h64 hS hP o
   exact hlv
 
@@ -188,7 +185,7 @@ theorem liveReads_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : 
 theorem drawMatches_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel) :
     DrawMatches H rel := by
   intro o
-  obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, hrec, hdec, hsess, hlv, hlive⟩ :=
+  obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
     Run.json S h64 hS hP o
   obtain ⟨-, -, hdraw, hdr⟩ := hS o.toCase
   have hd := recordDraw_recordObj S (h := Claims.hOf H) ht hdraw rb (pointsOf o.spec (Claims.coinSeq o.r 0)) streams
@@ -211,7 +208,7 @@ theorem list_bytes_beq_self (l : List ByteArray) : (l == l) = true := by
 theorem custodyRootB_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel) :
     CustodyRootB H rel := by
   intro o
-  obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, hrec, hdec, hsess, hlv, hlive⟩ :=
+  obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
     Run.json S h64 hS hP o
   rw [hlive, hlink]
   exact list_bytes_beq_self _
@@ -220,7 +217,7 @@ theorem custodyRootB_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP
 theorem custodyPublics_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel) :
     CustodyPublics H rel := by
   intro o
-  obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, hrec, hdec, hsess, hlv, hlive⟩ :=
+  obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
     Run.json S h64 hS hP o
   rw [hlive, hlink]
   dsimp only
@@ -232,7 +229,7 @@ theorem custodyPublics_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (
 theorem custodyPoints_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel) :
     CustodyPoints H rel := by
   intro o
-  obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, hrec, hdec, hsess, hlv, hlive⟩ :=
+  obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
     Run.json S h64 hS hP o
   rw [hlive]
   exact beq_self_eq_true _
@@ -240,7 +237,7 @@ theorem custodyPoints_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (h
 /-- **Each table's public words are its statement's**: the goal `Publics`. -/
 theorem publics_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel) : Publics H rel := by
   intro o
-  obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, hrec, hdec, hsess, hlv, hlive⟩ :=
+  obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
     Run.json S h64 hS hP o
   intro q hq
   rw [htabs, hsess] at hq
@@ -258,7 +255,7 @@ theorem two_of {α : Type} {xs : Array α} (h : xs.size = 2) : ∃ a b, xs = #[a
 theorem proofList_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel) :
     ProofList H rel := by
   intro o
-  obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, hrec, hdec, hsess, hlv, hlive⟩ :=
+  obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
     Run.json S h64 hS hP o
   have hrs1 := repStreams_one ht
   obtain ⟨p0, p1, hp⟩ := two_of (xs := o.proofs) (by rw [hpf, hrs1]; rfl)
@@ -272,7 +269,7 @@ theorem proofList_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : 
 theorem proofDigests_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel) :
     ProofDigests H rel := by
   intro o
-  obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, hrec, hdec, hsess, hlv, hlive⟩ :=
+  obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
     Run.json S h64 hS hP o
   have hrs1 := repStreams_one ht
   obtain ⟨p0, p1, hp⟩ := two_of (xs := o.proofs) (by rw [hpf, hrs1]; rfl)
@@ -291,7 +288,7 @@ theorem proofDigests_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP
 theorem repStream_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel) :
     RepStream H rel := by
   intro o
-  obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, hrec, hdec, hsess, hlv, hlive⟩ :=
+  obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
     Run.json S h64 hS hP o
   have hrs1 := repStreams_one ht
   obtain ⟨s0, s1, rfl⟩ := two_of (xs := streams) (by rw [hss, hrs1]; rfl)
@@ -310,7 +307,7 @@ theorem repStream_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : 
 theorem repExtras_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel) :
     RepExtras H rel := by
   intro o
-  obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, hrec, hdec, hsess, hlv, hlive⟩ :=
+  obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
     Run.json S h64 hS hP o
   obtain ⟨e, he⟩ := hex
   intro i hi
@@ -322,5 +319,64 @@ theorem repExtras_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : 
   rw [show (#[Setup.ofCircuit st])[0]! = Setup.ofCircuit st from rfl]
   simp only [sessOf, he]
   rfl
+
+/-- Rounds that are sends from index `i` on, each answered by its coin's bytes, pass custody's round check against
+those sends and coins. -/
+theorem recs_all {k : ℕ} (r : Fin k → Coin) :
+    ∀ (i : ℕ) (rs : List Round) (bs : List Claims.Msg), Recs (fun j => (Claims.coinSeq r j).bytes) i rs bs →
+      ((rs.map liveRound).zip (bs.zip ((List.range bs.length).map fun j => Claims.coinSeq r (i + j)))).all
+        (fun (x, a, c) => x.bytes == some ⟨a.toArray⟩ && x.coins == c.vals x.n) = true
+  | _, [], [], _ => rfl
+  | i, x :: rs, b :: bs, h => by
+    obtain ⟨⟨c, hb, rfl, -, hc⟩, h⟩ := h
+    rw [List.length_cons, List.range_succ_eq_map]
+    have hm : ((List.range bs.length).map Nat.succ).map (fun j => Claims.coinSeq r (i + j)) =
+        (List.range bs.length).map fun j => Claims.coinSeq r (i + 1 + j) := by
+      simp only [List.map_map, Function.comp_def, Nat.succ_eq_add_one]
+      congr 1
+      funext j
+      rw [Nat.add_comm j 1, Nat.add_assoc]
+    simp only [List.map_cons, List.zip_cons_cons, List.all_cons, hm, recs_all r (i + 1) rs bs h, Bool.and_true,
+      Nat.add_zero]
+    have hcv : x.coins = (Claims.coinSeq r i).vals x.n := by
+      rw [hc, Coin.vals]
+      congr 1
+      funext j
+      exact coinOf_bytes _ j
+    simp only [liveRound, hb, Option.getD_some, Claims.toMsg, Array.toArray_toList, hcv]
+    simp only [Bool.and_eq_true]
+    exact ⟨bytes_beq_self c, beq_self_eq_true _⟩
+  | _, [], _ :: _, h => h.elim
+  | _, _ :: _, [], h => h.elim
+
+theorem range_succ_dropLast {α : Type} (f : ℕ → α) (n : ℕ) :
+    ((List.range (n + 1)).map f).dropLast = (List.range n).map f := by
+  rw [List.range_succ, List.map_append, List.map_singleton, List.dropLast_concat]
+
+/-- **Custody: each recorded round is its message and its coin's first `n` elements**: the goal `CustodyRounds`. -/
+theorem custodyRounds_goal (S : JsonSpec) (h64 : Out64 H) (hS : StmtOk H rel) (hP : ProverOk H rel) :
+    CustodyRounds H rel := by
+  intro o
+  obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, ⟨bs, hbs, hrecs⟩, hrec, hdec, hsess, hlv, hlive⟩ :=
+    Run.json S h64 hS hP o
+  have hn : o.bodies.size = bs.length + 1 := by
+    rw [← Array.length_toList, hbs, List.length_cons]
+  have hmids : o.mids = bs.zip ((List.range bs.length).map fun j => Claims.coinSeq o.r (1 + j)) := by
+    unfold Run.mids Run.sends
+    rw [hbs, hn, List.range_succ_eq_map]
+    simp only [List.map_cons, List.cons_append, midsOf, List.map_map]
+    rw [List.dropLast_concat]
+    have : ((List.range (bs.length + 1)).map (Claims.coinSeq o.r ∘ Nat.succ)).dropLast =
+        (List.range bs.length).map fun j => Claims.coinSeq o.r (1 + j) := by
+      rw [range_succ_dropLast]
+      congr 1
+      funext j
+      simp [Nat.add_comm]
+    rw [this]
+    congr 1
+    simp [Function.comp_def]
+  rw [hmids, hlive]
+  have := recs_all o.r 1 _ bs hrecs
+  simpa [Array.toList_map, List.flatMap_map, List.map_flatMap] using this
 
 end FlockComplete.JsonRT
