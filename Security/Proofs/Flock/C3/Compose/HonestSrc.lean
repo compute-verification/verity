@@ -9,6 +9,7 @@ import Proofs.Flock.C3.Sparse.SessionReg
 import Proofs.Flock.C3.RegLevels.SrcMaps
 import Proofs.Flock.C3.RegLevels.LgHeld
 import Proofs.Flock.C3.Compose.OffZs
+import Proofs.Flock.C3.Sparse.PubCoins
 
 /-!
 # `hbr_honest_reg` at the honest source
@@ -16,7 +17,8 @@ import Proofs.Flock.C3.Compose.OffZs
 `hbr_honest_src`: the guarantee's `_hbr` in its form (`hbr_honest_reg`) at the checked family and the fixed decoder
 `c3DecOf` over the honest source, `tiedSrc (normSrc (repsOfVals (sparseOf (histPts ish tbl bcM stp0) sw sc) sh rep
 vals))`: the run's points the history's first coin (`histPts`), each rep's sparse stage the steps of the session's
-words `sw` at its coins `sc` (`sparseOf`), the reps' steps and openings their values' (`repsOfVals`).
+words `sw` at its coins `sc` (`sparseOf`), the reps' steps and openings their values' (`repsOfVals`). `sc` is `scOf`: the
+points `verifierRows` gives at the rep's own values, the layout factors there, and check 5's phase coins (`csOf`).
 
 G's items 1–4 (`halg`, `hacc`) are needed only off a bad event `Bad` inside `hbr_honest_reg`'s (`hBad`; at
 `Bad := ValueColl …`, where the value ties hold): the decoder, `SrcOK` and every read fact are built at V*'s sessions
@@ -35,6 +37,8 @@ back off `Bad` (`atAcceptedOff_offZs`). What the verifier's checks give is disch
   (`repFormsAt_holoAt`), `hc`, and at `c₀` R's first history round, `he` (`partEnds_sparse_roundAt`) and R's opening's
   committed rounds (`openMsgsRead_of_layer` at `rsRead_checked`, `roundReads_checked` at the map's `sel`,
   `holoSel_opening_at`); `hshape` from `SparseIs` (`shape_holoAt`);
+* the pub read at `scOf` (`srcSparsePub_scOf`), the layout factors passing where check 5's range verdict says
+  (`SparseRangeOk`, which also gives `ℓ`'s range, `ellOk_of_sparseRange`);
 * `hrread`, `hsread`, `horead`, `hlread` and `hfr` at the fixed decoder (`repsRead_c3DecOf`, `sparseRead_c3DecOf`,
   `openingRead_c3DecOf`, `regLevelsRead_of_tie`, `hFrame_c3DecOf`), each tie moved to the normalized source
   (`stepsOfVals_norm_repsOfVals`, `openingReadAt_normOs`, `levelTie_normOs`; the sparse plays read no openings); `hown`
@@ -43,7 +47,7 @@ back off `Bad` (`atAcceptedOff_offZs`). What the verifier's checks give is disch
 
 What stays a hypothesis no check gives at this source: G's items 1–4 off `Bad` (`halg`, `hacc`), the values' parts
 (`hpr`, `hsv`, `hf`, `hvcap`) at every accepted proof, the reps' held rounds (`hrd`), V*'s sessions and copies
-(`hsess`), the pub read (`hpub`), R's opening at the maps (`hmaps`, `hot`), the other parts' read facts (`hrp`, `hsm`,
+(`hsess`), R's opening at the maps (`hmaps`, `hot`), the other parts' read facts (`hrp`, `hsm`,
 `hlg`, `hos`, `hall`, `hk`, `hx`, `hts`), the named `HCols` and `HAlgRows`, and the commit strings' custody (`hbc`).
 -/
 
@@ -159,7 +163,7 @@ theorem hbr_honest_src {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Arr
     (hF : ∀ R ω t R₂ j, TagsFound (zr R ω t R₂ j).I)
     (hsi : FlockC3.VStarList.SparseIs ish hp) (hsS : ss[(sI : ℕ)]? = some (.sparse shS hR))
     (hfiles : ∀ r src, coins r = some src → ∃ f, src = .files f ∧ f.record = r)
-    (hell : hp.EllOk (execClassAt st).cls.kLog)
+    (hrok : SparseRangeOk ish st)
     (hosh : RecOpening.shape? (holoAt st hp).cls.shape.mReg 2 = some osh)
     (hrep : holoRounds ish.m ish.kLog ish.claims = some rr)
     (hsp : ish.sparse = some sp) (hsh : ish.stacked = some shR) (hcl : shR.claims = RecVStar.STACKED_CLAIMS)
@@ -195,8 +199,8 @@ theorem hbr_honest_src {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Arr
       (tiedSrc (repsOfVals (FlockC3.Sparse.sparseOf (histPts ish tbl bcM stp0) sw sc) sh rep vals)) fun _ u =>
         RepStagesCounted rr u)
     (hu : UnitsOf st hp) (hrng : unitRangeOf st = .ok rng)
-    (hpub : AtRep zs dg N k Rw sh rep fun R ω t Lb i =>
-      FlockC3.Sparse.SparsePubRead (holoAt st hp) rng (rep R ω t Lb i) (sc R ω t Lb i))
+    (hsc : sc = fun R ω t Lb i => FlockC3.Sparse.scOf (holoAt st hp) rng sh
+      (FlockC3.Sparse.csOf (heldC3 ish sp (innerCommitsAt (wr t).1 (wr t).2 st reg)) unit i.val) (rep R ω t Lb i))
     (hsess : ∀ R ω t R₂ τ o, FlockVBridge.Compiled.Accepted (I := ℐ) zs dg N k Rw R ω t R₂ τ o → ∀ i : Fin 2,
       FlockC3.Sparse.SparseSessionAt (zs R ω t R₂) (layers zs dg N k Rw R ω t R₂ τ) (holoAt st hp)
           (heldC3 ish sp (innerCommitsAt (wr t).1 (wr t).2 st reg)) unit i
@@ -235,6 +239,17 @@ theorem hbr_honest_src {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Arr
       (wmsgOf Vs (skLeaf Vs own sel (ℐ).r) (ℐ).r dec) (skOf Vs own sel)
       (cmtOf Vs bc) (msgOf Vs (skLeaf Vs own sel (ℐ).r) dec) := by
   have hS : 0 < vstarCount ish := Nat.lt_of_le_of_lt (Nat.zero_le _) sI.isLt
+  have hell : hp.EllOk (execClassAt st).cls.kLog := FlockC3.VStarList.ellOk_of_sparseRange hrok hsi
+  have hok : (Flock.RecCoins.layoutFactors (FlockC3.Sparse.unitShape (holoAt st hp))
+      (Array.replicate ((holoAt st hp).cls.kLog - 6) (0 : Flock.F128))
+      (Array.replicate ((holoAt st hp).cls.kLog - 6) (0 : Flock.F128)) rng).isOk = true := by
+    obtain ⟨-, -, rng', hr', hl⟩ := hrok sp hsp
+    obtain rfl : rng' = rng := Except.ok.inj (hr'.symm.trans hrng)
+    have hsp' : FlockC3.Sparse.unitShape (holoAt st hp) = sp := by
+      rw [FlockC3.Sparse.unitShape_holoAt hell]
+      exact Option.some.inj (hsi.symm.trans hsp)
+    rw [hsp']
+    exact hl
   have hzsF : zs = (C3Family.checked (T := Flock.Guarantees.holoTys st hp) (CT := holoCTs st hp) (xR := xR) ish hss
       bind hob zr hCust h coins rows own sel bc dec wr reg).zs := hzs
   have hc : 0 < ish.claims := by omega
@@ -291,8 +306,6 @@ theorem hbr_honest_src {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Arr
   have hfZ : FramesOfVals (offZs zs Bad) dg N k Rw sh rep vals := atRep_offZs hS hf
   have hvcapZ : AtRep (offZs zs Bad) dg N k Rw sh rep fun R ω t Lb i =>
       capDig (vals R ω t Lb i).p.cap = (stp0 R ω t Lb).cap₀ := atRep_offZs hS hvcap
-  have hpubZ : AtRep (offZs zs Bad) dg N k Rw sh rep fun R ω t Lb i =>
-      FlockC3.Sparse.SparsePubRead (holoAt st hp) rng (rep R ω t Lb i) (sc R ω t Lb i) := atRep_offZs hS hpub
   have hcovZ : AtSrc (offZs zs Bad) dg N k Rw
       (tiedSrc (repsOfVals (FlockC3.Sparse.sparseOf (histPts ish tbl bcM stp0) sw sc) sh rep vals)) fun t _ =>
         ∀ c, Flock.Guarantees.innerHeld wr st reg t = some c → (RecVStar.checkCovers ish c).isOk = true :=
@@ -326,6 +339,10 @@ theorem hbr_honest_src {xR : HoloReg GF128 Dig} {ish : RecVStar.Inner} {ss : Arr
       rep :=
     FlockC3.Reps.repUnitOfAlg_of_parts (src := tiedSrc (repsOfVals (histPts ish tbl bcM stp0) sh rep vals)) hprZ hsvZ
       hfZ (FlockC3.Reps.stepsOfVals_repsOfVals (stp := histPts ish tbl bcM stp0) hprZ hsvZ hfZ hvcapZ)
+  have hpubZ : AtRep (offZs zs Bad) dg N k Rw sh rep fun R ω t Lb i =>
+      FlockC3.Sparse.SparsePubRead (holoAt st hp) rng (rep R ω t Lb i) (sc R ω t Lb i) := by
+    subst hsc
+    exact FlockC3.Sparse.srcSparsePub_scOf hUZ hok _
   have hstZ : FlockC3.Sparse.SrcSparseTie (offZs zs Bad) dg N k Rw
       (tiedSrc (repsOfVals (FlockC3.Sparse.sparseOf (histPts ish tbl bcM stp0) sw sc) sh rep vals)) := by
     rw [repsOfVals_sparseOf]

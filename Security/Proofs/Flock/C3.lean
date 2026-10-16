@@ -46,6 +46,7 @@ import Proofs.Flock.C3.Sparse.SrcSessions
 import Proofs.Flock.C3.Sparse.MsgsLayers
 import Proofs.Flock.C3.Sparse.PubTie
 import Proofs.Flock.C3.Sparse.PubLift
+import Proofs.Flock.C3.Sparse.PubCoins
 import Proofs.Flock.C3.Sparse.HeldStages
 import Proofs.Flock.C3.Sparse.ClaimSparseOf
 import Proofs.Flock.C3.Sparse.PubChecked
