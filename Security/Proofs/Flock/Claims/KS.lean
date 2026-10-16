@@ -9,6 +9,8 @@ import Proofs.Flock.Claims.KS.Radius
 import Proofs.Flock.Claims.KS.Joint
 import Proofs.Flock.Claims.KS.Trace
 import Proofs.Flock.Claims.KS.Width
+import Proofs.Flock.Claims.KS.ConflictOC
+import Proofs.Flock.Claims.KS.ConflictMerkle
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -35,4 +37,8 @@ deployed plain code, read step, schedule and radius as the old model's, so an ol
 the old padded ones (`Flock.zkEnc_eq_encAt`, `Flock.zkReadD_eq_padWit`, `Flock.radius_zk`), so an old `CommittedPad`
 table extracts (`FlockDeploy.KS.good_of_committed_zk`, `FlockDeploy.KS.not_committed_zk`). Accepted runs open only
 full-width columns at both records (`Width`, `FlockDeploy.KS.plain_colsOk`, `FlockDeploy.KS.zk_colsOk`), which leaves
-`TableBoundθ` and `ConflictTied` for KS at SHA-512 (`FlockDeploy.KS.plain_KSθ_sha512`, `FlockDeploy.KS.zk_KSθ_sha512`). -/
+`TableBoundθ` and `ConflictTied` for KS at SHA-512 (`FlockDeploy.KS.plain_KSθ_sha512`, `FlockDeploy.KS.zk_KSθ_sha512`).
+Toward `ConflictTied`: a run over `OC` within a log, peeled step by step, with the shipped step's verdict alongside
+(`ConflictOC`, `FlockDeploy.KS.Runs`, `FlockDeploy.KS.shadow`); the shipped `hm96-sha512/v1` Merkle check logs every
+SHA-512 input of each opening (`ConflictMerkle`, `FlockDeploy.KS.merkleCheck_logs`), and two accepted openings of one
+position against one cap with different rows collide in the two logs (`FlockDeploy.KS.tiedColl_of_opens`). -/
