@@ -1,5 +1,5 @@
 import Definitions.Claims
-import Flock.With.Log
+import Flock.With.SimSetup
 
 /-!
 # The verifier over `OC`: every SHA-512 call an oracle query
@@ -8,8 +8,10 @@ The claims' oracle programs `OC` form a lawful monad (`OC.bind`), and `OCV := Ex
 hash-parametric verifier runs in: `Hashes.oc` answers each SHA-512 call with `OC.query`, and SHA-256 and BLAKE3 as
 shipped (`Hashes.ofSha512`'s). Evaluated against `H : Msg → Msg`, a run of `verifyWithM Hashes.oc` has
 `verifyWith (hOf H)`'s verdict, and its oracle log is the SHA-512 inputs `verifyLogged (hOf H)` logs, `shaCalls (hOf H)`
-of them (`verifyOC_eval`, `verifyOC_log`, `verifyOC_log_length`, and their `Zk` copies). All of it is one simulation of
-`Flock.With.Sim` (`ocLog`) between `OCV` and the logging monad `LogV`, at #2105's `verifyWithM_sim`.
+of them (`verifyOC_eval`, `verifyOC_log`, `verifyOC_log_length`, and their `Zk` copies). So too the statement's setup:
+a run of `Stmt.setupTablesWith Hashes.oc` has the verdict of setup at `hOf H`, and makes `Stmt.setupCalls (hOf H)`
+queries (`setupOC_eval`, `setupOC_log`, `setupOC_log_length`). All of it is one simulation of `Flock.With.Sim` (`ocLog`)
+between `OCV` and the logging monad `LogV`, at #2105's `verifyWithM_sim` and at `setupTablesWith_sim` (`Flock.With.SimSetup`).
 
 `hOf H` is `H` on byte arrays: `ByteArray` and `Msg = List UInt8` are the same bytes (`ofMsg_toMsg`).
 -/
@@ -170,5 +172,44 @@ theorem verifyOC_log_length (H : Msg → Msg) (spec : SessionSpec) (tabs : Array
   rw [← _root_.Flock.Zk.verifyLogged_size, ← Array.length_toList, ← verifyOC_log, List.length_map]
 
 end Zk
+
+/-- **Setup over `OC`, against `H`, is setup at `hOf H`.** -/
+theorem setupOC_eval (H : Msg → Msg) (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (count : ℕ)
+    (tables : List (String × ByteArray)) (draw : Option Lean.Json) (partition : Option Lean.Json)
+    (program : Option ByteArray) (work : Option (ℕ × Array (String × ℕ × ℕ))) (stratified : Option ℕ)
+    (closure : Option (Std.HashMap ℕ (Array ℕ))) (publicInputs : Option ByteArray) :
+    ((Stmt.setupTablesWith Hashes.oc tags circuitFile publicFile coins count tables draw partition program work stratified
+        closure publicInputs).run.eval H).1 =
+      Stmt.setupTablesWith (M := _root_.Flock.V) (_root_.Flock.Hashes.ofSha512 (hOf H)) tags circuitFile publicFile coins
+        count tables draw partition program work stratified closure publicInputs := by
+  rw [← (With.setupTablesWith_sim (ocLog H) With.Throws.exceptT With.Throws.exceptT (ocLog_hashes H) tags circuitFile
+    publicFile coins count tables draw partition program work stratified closure publicInputs #[]).1]
+  exact Stmt.setupLogged_fst _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+/-- **Its oracle log is `Stmt.setupLogged`'s log**: the SHA-512 inputs, in call order. -/
+theorem setupOC_log (H : Msg → Msg) (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (count : ℕ)
+    (tables : List (String × ByteArray)) (draw : Option Lean.Json) (partition : Option Lean.Json)
+    (program : Option ByteArray) (work : Option (ℕ × Array (String × ℕ × ℕ))) (stratified : Option ℕ)
+    (closure : Option (Std.HashMap ℕ (Array ℕ))) (publicInputs : Option ByteArray) :
+    ((Stmt.setupTablesWith Hashes.oc tags circuitFile publicFile coins count tables draw partition program work stratified
+        closure publicInputs).run.eval H).2.map (fun p => ofMsg p.1) =
+      (Stmt.setupLogged (hOf H) tags circuitFile publicFile coins count tables draw partition program work stratified
+        closure publicInputs).2.toList := by
+  have := (With.setupTablesWith_sim (ocLog H) With.Throws.exceptT With.Throws.exceptT (ocLog_hashes H) tags circuitFile
+    publicFile coins count tables draw partition program work stratified closure publicInputs #[]).2
+  simp only [Stmt.setupLogged] at this ⊢
+  rw [this]
+  simp
+
+/-- **It makes `Stmt.setupCalls (hOf H)` queries.** -/
+theorem setupOC_log_length (H : Msg → Msg) (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins)
+    (count : ℕ) (tables : List (String × ByteArray)) (draw : Option Lean.Json) (partition : Option Lean.Json)
+    (program : Option ByteArray) (work : Option (ℕ × Array (String × ℕ × ℕ))) (stratified : Option ℕ)
+    (closure : Option (Std.HashMap ℕ (Array ℕ))) (publicInputs : Option ByteArray) :
+    ((Stmt.setupTablesWith Hashes.oc tags circuitFile publicFile coins count tables draw partition program work stratified
+        closure publicInputs).run.eval H).2.length =
+      Stmt.setupCalls (hOf H) tags circuitFile publicFile coins count tables draw partition program work stratified
+        closure publicInputs := by
+  rw [← Stmt.setupLogged_size, ← Array.length_toList, ← setupOC_log, List.length_map]
 
 end Claims

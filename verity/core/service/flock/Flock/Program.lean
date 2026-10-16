@@ -633,6 +633,52 @@ def decode (bytes : ByteArray) : V Prog := do
   let bare := Json.mkObj (top.toArray.filter (·.1 != "annotations")).toList
   return { defs := st.defs, index := st.index, root, programFn, sha512 := Sha512.hash (← canon bare).toUTF8 }
 
+/-- `decode` in a verdict monad `M`, the program's SHA-512 by `sha512` (`Flock.With.Setup`). It is here because `decode`'s
+decoder state is this module's own. -/
+def decodeWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (sha512 : ByteArray → M ByteArray)
+    (bytes : ByteArray) : M Prog := do
+  let some text := String.fromUTF8? bytes | throw "program: not UTF-8"
+  let j ← match Json.parse text with
+    | .ok j => pure j
+    | .error e => throw s!"program: not JSON: {e}"
+  let .obj top := j | throw "program: not an object"
+  match (j.getObjValAs? String "schema").toOption with
+  | some s => if s != SCHEMA then throw s!"unexpected descriptor schema '{s}' (this verifier reads {SCHEMA})"
+  | none => throw s!"unexpected descriptor schema (this verifier reads {SCHEMA})"
+  let .ok (.obj dkv) := j.getObjVal? "definitions" | throw "program: definitions"
+  for (fid, d) in dkv.toArray do
+    let .obj _ := d | throw s!"definition '{fid}': not an object"
+  let freeDefs := dkv.toArray.map fun (fid, d) => (fid, match d with
+    | .obj kvs => Json.mkObj ((kvs.toArray.filter (·.1 != "body")).toList ++
+        ((d.getObjVal? "body").toOption.map (fun b => ["params", "ret_type"].filterMap fun k =>
+          (b.getObjVal? k).toOption.map (k, ·))).getD [])
+    | x => x)
+  let free := Json.mkObj ((top.toArray.filter (fun (k, _) => k != "definitions" && k != "annotations")).toList ++
+    [("definitions", Json.mkObj freeDefs.toList)])
+  if let some e := domainError free then throw s!"descriptor outside the canonical JSON domain (PROTOCOL.md §1): {e}"
+  let .ok (.arr callees) := j.getObjVal? "callees" | throw "program: callees"
+  let .ok (.arr tys) := j.getObjVal? "types" | throw "program: types"
+  let types ← (tys.mapM Ty.ofJson : V _)
+  let desc : Desc := { ddefs := dkv.toArray.foldl (fun m (k, v) => m.insert k v) {}, callees, types }
+  let some rootId := (j.getObjValAs? String "root").toOption | throw "program: root"
+  let some programFn := (j.getObjValAs? String "program_fn").toOption | throw "program: program_fn"
+  let go : D Nat := do
+    let r ← getDef desc rootId
+    for f in recordFunctionIds programFn do
+      if desc.ddefs.contains f then discard (getDef desc f)
+    return r
+  let (root, st) ← (go.run {} : V _)
+  let rd := st.defs[root]!
+  if rd.prim || !rd.params.isEmpty then throw s!"root '{rootId}': the root is a composite without parameters"
+  for d in st.defs do
+    if d.prim || d.key == rootId then continue
+    for k in [0:d.body.nodes.size] do
+      let c := st.defs[d.body.nodes[k]!.fn]!
+      if c.prim && (isInputId c.key || (c.key.startsWith "Registered" && isInputId (c.key.drop 10).toString)) then
+        throw s!"definition '{d.key}' node {k}: an input node ({c.key}) appears only in the root's body"
+  let bare := Json.mkObj (top.toArray.filter (·.1 != "annotations")).toList
+  return { defs := st.defs, index := st.index, root, programFn, sha512 := ← sha512 (← canon bare).toUTF8 }
+
 /-! ### §6 The canonical layout and §7 scope resolution -/
 
 /-- An activation: the root (no parameters), a Call cut as its Definition's activation in a one-Call Program (its parameter `i`'s
