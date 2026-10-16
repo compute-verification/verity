@@ -17,8 +17,15 @@ anything is timed: FILL's receipt gate (`dcap dgate`), the scorer's own at the a
 and launched, every receipt equal to the host's; poisoned with nothing launched, none; stale and skipped work, none) and
 CAP's serving gate (`dcap gate`); a failed gate times nothing (exit 5). Then ncu's DRAM bytes for the filler's launches
 beside the counter's positive control (1 GiB streamed), and every suite point: ROUNDS rounds in ABBA order of K reps of
-serving alone on the whole GPU and K reps under the arm's placement, every rep's SM clock and board power read (clocks are
-never set). After the lease it scores the run (`report`), writes `score.json` and one `kernel-attempt/v1` record
+serving alone on the whole GPU and K reps under the arm's placement, each arm block followed by a standalone block (the
+filler alone on the same SMs as long), every rep's SM clock and board power read (clocks are never set), then serving
+alone, the arm and the filler alone each sustained for a settled power window (the energy counter's watts; secondary).
+Each filler round (a point's calibration, each arm and standalone block) numbers its tiles from a public range the scorer
+fixes from the point and the round, then draws the round's coins from the OS; the replay gate checks the ranges and that
+no tile id, coins or sampled seed repeats across rounds. The honest gate's too-good check compares each point's filler
+beside serving with the median of its standalone blocks, its limit 1 + max(1%, their spread), and a positive control
+(`control.jsonl`: at one point, a filler credited for S steps a tile that runs S - S/16 beside serving) must be caught.
+After the lease it scores the run (`report`), writes `score.json` and one `kernel-attempt/v1` record
 (`ledger/<arm>/filler-suite.json`, declared in the run's `outputs.json` so `research run --on` publishes it).
 
 An arm that fails a gate isn't scored: its SCORE is null and `score_if_gated` keeps the number for diagnosis.
@@ -48,9 +55,11 @@ NVCC = os.environ.get("NVCC", "/usr/local/cuda-13.0/bin/nvcc")
 os.environ["PATH"] = f"{Path(NVCC).parent}:{os.environ.get('PATH', '')}"  # cuobjdump and ncu beside nvcc, as dfill.sh
 NVFLAGS = ["-O3", "-std=c++17", "-gencode", "arch=compute_120a,code=sm_120a", "-Xptxas", "-v"]
 LIBS = ["-lcublasLt", "-lnvidia-ml", "-ldl"]
+GATES = ("slowdown", "receipts", "replay", "honest", "dram", "clocks", "serving_exact")
 SMI_FIELDS = ("clocks.sm,clocks.max.sm,power.draw,power.limit,clocks.applications.graphics,"
               "clocks.default_applications.graphics,clocks_event_reasons.active")
 SHAPE = "filler-suite"
+CONTROL = ("decode", 32, 8192)  # the positive control's point, or the arm's first filler point if it places none there
 
 
 def sh(cmd, out=None, err=None, env=None) -> int:
@@ -133,15 +142,49 @@ def measure(arm, bdir: Path, out: Path, rounds: int, reps: int, robust: bool) ->
                 env=dict(env, DCAP_NOGRAPH="1"))
         note(f"ncu control rc {rc}")
     smi(out)
-    for ph, b, l in S.points(robust):
+    pts = S.points(robust)
+    for i, (ph, b, l) in enumerate(pts):
         p = A.placed(arm, ph, b, l)
         f = fl or A.Filler()
         cmd = [str(bdir / "dscore"), "dscore", "step" if ph == "decode" else "prefill", str(b), str(l), p.place,
-               str(p.fill_sms), str(f.W), str(f.NC), str(f.S), str(rounds), str(reps)]
+               str(p.fill_sms), str(f.W), str(f.NC), str(f.S), str(rounds), str(reps), str(i)]
         rc = sh(cmd, out=out / "dscore.jsonl", err=err, env=env)
         note(f"dscore {ph} {b} {l} {p.place} {p.fill_sms} rc {rc}")
         smi(out)
+    if fl:
+        control(arm, fl, bdir, out, env, rounds, reps, len(pts), note)
     return 0
+
+
+def control_point(arm, pts=None):
+    """The positive control's point: CONTROL, unless the arm places no filler there, then its first filler point."""
+    cand = [CONTROL] + list(pts or S.points())
+    return next(((ph, b, l) for ph, b, l in cand if A.placed(arm, ph, b, l).place != "none"), None)
+
+
+def control(arm, fl, bdir: Path, out: Path, env: dict, rounds: int, reps: int, index: int, note) -> int:
+    """The honest gate's positive control (`control.jsonl`): the arm's filler shape and placement at `control_point`,
+    its arm blocks running S - S/CHEAT steps a tile credited at S (DSCORE_CHEAT_S), its standalone blocks S. Its rounds
+    take point index `index`, past the suite's, so its tile ranges are its own."""
+    pt = control_point(arm)
+    if pt is None:
+        return 0
+    ph, b, l = pt
+    p = A.placed(arm, ph, b, l)
+    cmd = [str(bdir / "dscore"), "dscore", "step" if ph == "decode" else "prefill", str(b), str(l), p.place,
+           str(p.fill_sms), str(fl.W), str(fl.NC), str(fl.S), str(rounds), str(reps), str(index)]
+    rc = sh(cmd, out=out / "control.jsonl", err=out / "errors.txt", env=dict(env, DSCORE_CHEAT_S=str(S.cheat_s(fl.S))))
+    note(f"control {ph} {b} {l} {p.place} {p.fill_sms} S {fl.S} runs {S.cheat_s(fl.S)} rc {rc}")
+    return rc
+
+
+def control_stats(out: Path) -> dict | None:
+    r = rows(out / "control.jsonl")
+    if not r:
+        return None
+    r = r[0]
+    return {**S.point_stats(r), "at": f"{'decode' if r['kind'] == 'step' else 'prefill'} {r['B']}/{r['L']}",
+            "cheat_S": r.get("cheat_S"), "S": r["S"]}
 
 
 def rows(path: Path) -> list[dict]:
@@ -156,7 +199,8 @@ def report(out: Path, arm=None) -> dict:
         except (A.ArmError, OSError, AttributeError):
             arm = None
     stats = {}
-    for r in rows(out / "dscore.jsonl"):
+    drows = rows(out / "dscore.jsonl")
+    for r in drows:
         stats[("decode" if r["kind"] == "step" else "prefill", r["B"], r["L"])] = S.point_stats(r)
     sc = S.score(stats)
     has_filler = doc["filler"] is not None
@@ -166,10 +210,11 @@ def report(out: Path, arm=None) -> dict:
 
     dram = S.dram_gate(read(out / "ncu-filler.csv") if has_filler else None, read(out / "ncu-control.csv"))
     clocks = S.clock_gate(stats, S.parse_smi(read(out / "smi.csv") or ""))
-    honest = (S.honesty(arm, stats, S.points()) if arm is not None else
-              {"ok": False, "why": f"arm {doc['name']} can't be loaded to check its placement"})
+    honest = (S.honesty(arm, stats, S.points(), control=control_stats(out), has_filler=has_filler) if arm is not None
+              else {"ok": False, "why": f"arm {doc['name']} can't be loaded to check its placement"})
     g = S.gates(stats, sc, has_filler=has_filler, sgate=sg[0] if sg else None, dgate=rows(out / "dgate.jsonl"),
-                dram=dram, clocks=clocks, honest=honest)
+                dram=dram, clocks=clocks, honest=honest,
+                replay=S.replay_gate(drows) if has_filler else {"ok": True, "why": "no filler"})
     serving_gate = rows(out / "gate.jsonl")
     g["serving_exact"] = {"ok": bool(serving_gate) and all(r.get("ok") is not False for r in serving_gate),
                           "rows": len(serving_gate)}
@@ -206,7 +251,9 @@ def record(res: dict, doc: dict, run_dir: Path, by: str | None) -> dict:
                     "slowdown_at": g["slowdown"]["at"], "dram_share_of_hbm": g["dram"].get("share_of_hbm"),
                     "entries": {e["entry"]: {"coverage": e["coverage"], "time": e["time"],
                                              "filler_share": e["filler_share"]} for e in res["entries"]},
-                    "work_cv_max": res["secondary"]["work_cv_max"]},
+                    "work_cv_max": res["secondary"]["work_cv_max"],
+                    "honest_control": {k: (g["honest"].get("control") or {}).get(k)
+                                       for k in ("beside_over_alone", "limit", "caught")}},
         "flags": res["flags"], "certified": res["certified"], "coins": res["coins"],
     }
     rec = {"kind": ledger.KIND, "meta": ledger._clean(meta), "refs": {"parent": lin["parent"]}
@@ -221,21 +268,37 @@ def fmt(x, p=3):
     return "–" if x is None else f"{x:.{p}f}" if isinstance(x, float) else str(x)
 
 
+def control_line(c: dict | None) -> str:
+    if c is None:
+        return "no filler, no control"
+    if "why" in c:
+        return f"control: {c['why']}"
+    return (f"control (S {c['S']} credited, {c['cheat_S']} run beside serving, at {c['point']}): beside ÷ standalone "
+            f"{fmt(c['beside_over_alone'])} vs limit {fmt(c['limit'])}, {'caught' if c['caught'] else 'NOT CAUGHT'}")
+
+
 def show(res: dict) -> None:
     g = res["gates"]
     print(f"\n{res['arm']} ({res['variant']}), {S.SCORER}: SCORE {fmt(res['SCORE'])}"
           + ("" if res["scored"] else f" (not scored; {fmt(res['score_if_gated'])} if gated)")
           + f", min {fmt((res['min'] or {}).get('coverage'))} at {(res['min'] or {}).get('entry')}"
+          + f" (mixes: {fmt((res['min_mix'] or {}).get('coverage'))} at {(res['min_mix'] or {}).get('entry')})"
           + f"; nominal ÷ capacity {fmt(res['score_nominal'])}, at 0.99 for all {fmt(res['score_at_target'])}")
     for f in res["flags"]:
         print(f"  FLAG: {f}")
-    for name in ("slowdown", "receipts", "honest", "dram", "clocks", "serving_exact"):
+    for name in GATES:
         v = g.get(name, {})
         extra = {"slowdown": lambda: f"worst {fmt(v.get('worst'))} at {v.get('at')} ({v.get('phase')})",
+                 "replay": lambda: v.get("why") or f"{v.get('rounds')} rounds, {v.get('tiles'):.3g} tiles, ranges the "
+                                   f"scorer's and disjoint, coins and {v.get('seeds_sampled')} sampled seeds distinct",
                  "receipts": lambda: v.get("why") or f"timed {v.get('timed_checked')} checked, {v.get('timed_bad')} bad",
+                 "honest": lambda: v.get("why") or "; ".join(
+                     [f"{k}: {', '.join(v[k])}" for k in ("unstable_placement", "too_good", "over_peak", "no_reference")
+                      if v.get(k)] + [control_line(v.get("control"))]),
                  "dram": lambda: v.get("why") if not v.get("share_of_hbm") else
                  f"{v['share_of_hbm']:.3%} of HBM, counter control {fmt(v.get('control_bytes_ratio'))}",
-                 "clocks": lambda: f"{v.get('reps')} reps, MHz {v.get('mhz')}, W {v.get('watt')}",
+                 "clocks": lambda: f"{v.get('reps')} reps read; nvidia-smi between points: MHz {v.get('mhz')}, W "
+                                   f"{v.get('watt')}",
                  }.get(name, lambda: "")()
         print(f"  gate {name}: {'pass' if v.get('ok') else 'FAIL'}  {extra}")
     print("\n| entry | coverage | filler share | time | slowdowns | τ (VF) |\n|---|---|---|---|---|---|")
@@ -243,8 +306,17 @@ def show(res: dict) -> None:
         print(f"| {e['entry']} | {fmt(e['coverage'])} | {fmt(e['filler_share'])} | {fmt(e['time'])} | "
               + ", ".join(f"{k} {fmt(s)}" for k, s in e["slowdowns"].items()) + f" | {fmt(e['tau_vf'])} |")
     sec = res["secondary"]
-    print(f"\nsecondary: work CV max {fmt(sec['work_cv_max'])}; robust " +
-          "; ".join(f"B {r['B']} L {r['L']}: {fmt(r['slowdown'])}x, cov {fmt(r['coverage'])}" for r in sec["robust"]))
+    ck = [v for v in sec["clock"].values() if all(S.isfinite(x) for x in v)]
+    setup = sorted(sec["placement_setup_ms"].values())
+
+    def wmax(k):
+        return fmt(max((v[k] for v in sec["power"].values() if S.isfinite(v.get(k)) and v[k] > 0), default=None), 0)
+    print(f"\nsecondary: work CV max {fmt(sec['work_cv_max'])}; board W (settled) serving alone/arm/filler alone, max "
+          f"{wmax('alone')}/{wmax('arm')}/{wmax('filler_alone')}; SM MHz "
+          f"alone/arm, min {fmt(min((a for a, _ in ck), default=None), 0)}/{fmt(min((b for _, b in ck), default=None), 0)}"
+          f"; placement setup ms median {fmt(setup[len(setup) // 2] if setup else None, 0)}; choice: {res['choice']}")
+    print("robust (not scored): " + ("; ".join(f"B {r['B']} L {r['L']}: {fmt(r['slowdown'])}x, coverage "
+                                               f"{fmt(r['coverage'])}" for r in sec["robust"]) or "–"))
     if res["missing"]:
         print(f"missing entries: {res['missing']}")
 
@@ -271,21 +343,27 @@ def leaderboard(local: list[Path], refresh: bool, as_json: bool) -> int:
         if key not in seen:
             seen.add(key)
             uniq.append((art, m))
-    uniq.sort(key=lambda x: (not (x[1].get("gate") or {}).get("ok"), -((x[1]["metrics"].get("SCORE") or
-                                                                         x[1]["metrics"].get("score_if_gated") or 0))))
+
+    def gated(m):  # a record from a scorer without one of today's gates (replay came at 6d10838ff) isn't gated
+        gt = m.get("gate") or {}
+        return bool(gt.get("ok")) and all(k in gt for k in GATES)
+
+    uniq.sort(key=lambda x: (not gated(x[1]), -((x[1]["metrics"].get("SCORE") or
+                                                  x[1]["metrics"].get("score_if_gated") or 0))))
     if as_json:
-        print(json.dumps([{"record": a, **m} for a, m in uniq]))
+        print(json.dumps([{"record": a, "gated": gated(m), **m} for a, m in uniq]))
         return 0
-    print("| # | arm | variant | SCORE | min (entry) | worst slowdown | gates | run | parent | mechanism | flags |")
-    print("|---|---|---|---|---|---|---|---|---|---|---|")
+    print("| # | arm | variant | SCORE | min (entry) | worst slowdown | gates | run | scorer | parent | mechanism | flags |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|")
     for i, (art, m) in enumerate(uniq, 1):
         mt, gt = m["metrics"], m.get("gate") or {}
-        sc = fmt(mt.get("SCORE")) if gt.get("ok") else f"({fmt(mt.get('score_if_gated'))})"
-        failed = [k for k, v in gt.items() if k != "ok" and not v]
+        sc = fmt(mt.get("SCORE")) if gated(m) else f"({fmt(mt.get('score_if_gated'))})"
+        failed = [k for k, v in gt.items() if k != "ok" and not v] + [f"no {k}" for k in GATES if k not in gt]
         print(f"| {i} | {m['arm']} | {m.get('variant')} | {sc} | {fmt((mt.get('min') or {}).get('coverage'))} "
               f"({(mt.get('min') or {}).get('entry')}) | {fmt(mt.get('slowdown_worst'))} | "
-              f"{'pass' if gt.get('ok') else 'FAIL ' + ','.join(failed)} | {m.get('run')} | {m.get('parent')} | "
-              f"{','.join(m.get('mechanism') or [])} | {'provisional' if m.get('flags') else ''} |")
+              f"{'pass' if gated(m) else 'FAIL ' + ','.join(failed)} | {m.get('run')} | "
+              f"{(m.get('scorer') or '').removeprefix('filler-scorer/')}@{(m.get('harness') or '')[:9]} | "
+              f"{m.get('parent')} | {','.join(m.get('mechanism') or [])} | {'provisional' if m.get('flags') else ''} |")
     return 0
 
 
@@ -317,7 +395,9 @@ def main(argv=None) -> int:
         ap.add_argument("--no-robust", action="store_true")
         a = ap.parse_args(argv[1:])
         return measure(A.load(a.arm), a.bin, a.out, a.rounds, a.reps, not a.no_robust)
-    ap = argparse.ArgumentParser(prog="score.py", description="score a filler arm: build, lease one GPU, measure, report")
+    ap = argparse.ArgumentParser(prog="score.py", description="score a filler arm: build, lease one GPU, measure, report",
+                                 epilog="\n\n".join(__doc__.split("\n\n")[1:4]),
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("arm", help=f"one of {sorted(A.ARMS)}, or benchmarks/pouw/filler/FILE.py:Class")
     ap.add_argument("--out", type=Path, default=Path(os.environ["OUT"]) if os.environ.get("OUT") else None)
     ap.add_argument("--rounds", type=int, default=8)
