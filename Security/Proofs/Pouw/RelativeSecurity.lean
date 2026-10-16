@@ -462,6 +462,18 @@ theorem pathBound_of_passBound [Fintype Ω] {p : ℝ} : ∀ {n : ℕ} (G : Round
       rw [h1, mul_one]
       exact hpass
 
+/-- Round `w`'s deficiency along the realized coins. -/
+def dAt : {n : ℕ} → RoundGame Ω n → Paths Ω n → Fin n → ℝ
+  | _, .done, _, w => w.elim0
+  | _, .round d _ next, x, w => Fin.cases (motive := fun _ => ℝ) (d x.1) (fun w' => (next x.1).dAt x.2 w') w
+
+theorem deficiency_eq_sum : ∀ {n : ℕ} (G : RoundGame Ω n) (x : Paths Ω n), G.deficiency x = ∑ w, G.dAt x w
+  | _, .done, _ => by simp [deficiency]
+  | _, .round d _ next, x => by
+    rw [Fin.sum_univ_succ]
+    simp only [deficiency, dAt, Fin.cases_zero, Fin.cases_succ]
+    rw [deficiency_eq_sum (next x.1) x.2]
+
 end RoundGame
 
 end Rounds
@@ -2592,6 +2604,488 @@ theorem secure_lowRank_advTime_grid (hmat : IsMatmulOn P emb) (r : ℕ) (hs : Mc
 end WideGridMatMachine
 
 end EditedInstances
+
+section TheoremK
+
+/-! ### Theorem K: {0,1} data, integer operands, any arithmetic (P2-FF round 5 §3.6, round 6 §2)
+
+Theorem K is `note:20261016T0341Z-draft-fullfloor-s-r5` §3.6, and the re-encoded design it is applied to is
+`note:20261016T0525Z-draft-fullfloor-s-r6` §2. Words are functions of bits `z : V → R`, over a ring with a map
+`φ : R → F₂`: `Z/2³²` (s32 wrap, `toF2`) or `ℤ` (exact). A run is a straight-line program over `R` (`Slp`): products
+of bit-affine operands (integer operands) and linear steps (merges, with ring operations only, so reads are
+unscaled). Each word is a combination of the products plus a bit-affine word (`Slp.val_eq`). The bit-pair second
+difference mod 2 (`projF2`) is a symmetric form with zero diagonal. Each product contributes `a bᵀ + b aᵀ`, of rank
+at most 2, whose diagonal `2 a_u b_u` vanishes mod 2. So a word that agrees with a target needs at least half the
+target's `F₂` rank in products (`theoremK`, `Slp.rank_projF2_le`). On the re-encoded design, a cell-block's target
+has `F₂` rank `2L` (`rank_projF2_dIncr`). Each certified cell-block therefore needs `L` products
+(`Slp.dIncr_products_ge`), and a cell-pure run needs `L` per certified cell-block (`Slp.card_mul_le`): `c = 1`.
+That gives the window's cost line with `F₀ = κ L n n' B` (`RoundsHypK`, `roundsHyp_of_K`). -/
+
+
+/-- An operand affine in the bits `z : V → R`: `c + Σ_v α_v z_v`. -/
+structure BitAff (V R : Type) where
+  c : R
+  α : V → R
+
+/-- Its value at the bits `z`. -/
+def BitAff.eval {V R : Type} [Fintype V] [CommRing R] (A : BitAff V R) (z : V → R) : R := A.c + ∑ v, A.α v * z v
+
+/-- The bit point with ones on `S`. -/
+def bitInd {V R : Type} [DecidableEq V] [CommRing R] (S : Finset V) : V → R := fun v => if v ∈ S then 1 else 0
+
+theorem BitAff.eval_bitInd {V R : Type} [Fintype V] [DecidableEq V] [CommRing R] (A : BitAff V R) (S : Finset V) :
+    A.eval (bitInd S) = A.c + ∑ v ∈ S, A.α v := by
+  simp [BitAff.eval, bitInd, mul_ite, Finset.sum_ite_mem]
+
+/-- The bit-pair second difference `f(e_u + e_v) − f(e_u) − f(e_v) + f(0)`. -/
+def pairDiff {V R : Type} [DecidableEq V] [CommRing R] (f : (V → R) → R) (u v : V) : R :=
+  f (bitInd {u, v}) - f (bitInd {u}) - f (bitInd {v}) + f (bitInd ∅)
+
+/-- **The projection mod 2** onto bit pairs (Theorem K's form over `F₂`), zero on the diagonal. -/
+def projF2 {V R : Type} [DecidableEq V] [CommRing R] (φ : R →+* ZMod 2) (f : (V → R) → R) :
+    Matrix V V (ZMod 2) :=
+  fun u v => if u = v then 0 else φ (pairDiff f u v)
+
+section
+variable {V R : Type} [Fintype V] [DecidableEq V] [CommRing R]
+
+omit [Fintype V] in
+theorem pairDiff_add (f g : (V → R) → R) (u v : V) :
+    pairDiff (fun z => f z + g z) u v = pairDiff f u v + pairDiff g u v := by
+  simp only [pairDiff]
+  ring
+
+omit [Fintype V] in
+theorem pairDiff_sum {ι : Type} (S : Finset ι) (f : ι → (V → R) → R) (u v : V) :
+    pairDiff (fun z => ∑ j ∈ S, f j z) u v = ∑ j ∈ S, pairDiff (f j) u v := by
+  simp only [pairDiff, Finset.sum_sub_distrib, Finset.sum_add_distrib]
+
+omit [Fintype V] in
+theorem pairDiff_mul_left (k : R) (f : (V → R) → R) (u v : V) :
+    pairDiff (fun z => k * f z) u v = k * pairDiff f u v := by
+  simp only [pairDiff]
+  ring
+
+/-- A product of two bit-affine operands: `α_u β_v + α_v β_u`; its constants cancel. -/
+theorem pairDiff_mul (A B : BitAff V R) {u v : V} (huv : u ≠ v) :
+    pairDiff (fun z => A.eval z * B.eval z) u v = A.α u * B.α v + A.α v * B.α u := by
+  simp only [pairDiff, BitAff.eval_bitInd, Finset.sum_pair huv, Finset.sum_singleton, Finset.sum_empty]
+  ring
+
+/-- Bit-affine words project to 0. -/
+theorem pairDiff_aff (A : BitAff V R) {u v : V} (huv : u ≠ v) : pairDiff (fun z => A.eval z) u v = 0 := by
+  simp only [pairDiff, BitAff.eval_bitInd, Finset.sum_pair huv, Finset.sum_singleton, Finset.sum_empty]
+  ring
+
+theorem two_eq_zero_F2 (x : ZMod 2) : x + x = 0 := by
+  fin_cases x <;> decide
+
+/-- A word computed from products of bit-affine operands, projected mod 2: each product contributes the
+alternating form `a bᵀ + b aᵀ`, whose diagonal `2 a_u b_u` vanishes mod 2. -/
+theorem projF2_word (φ : R →+* ZMod 2) {ι : Type} (S : Finset ι) (lam : ι → R) (A B : ι → BitAff V R)
+    (r : BitAff V R) :
+    projF2 φ (fun z => ∑ j ∈ S, lam j * ((A j).eval z * (B j).eval z) + r.eval z) =
+      ∑ j ∈ S, (Matrix.vecMulVec (fun u => φ (lam j * (A j).α u)) (fun v => φ ((B j).α v)) +
+        Matrix.vecMulVec (fun u => φ ((B j).α u)) (fun v => φ (lam j * (A j).α v))) := by
+  ext u v
+  simp only [projF2, Matrix.sum_apply, Matrix.add_apply, Matrix.vecMulVec_apply]
+  by_cases huv : u = v
+  · subst huv
+    simp only [↓reduceIte]
+    refine (Finset.sum_eq_zero fun j _ => ?_).symm
+    rw [mul_comm (φ ((B j).α u))]
+    exact two_eq_zero_F2 _
+  · simp only [huv, ↓reduceIte]
+    rw [pairDiff_add (fun z => ∑ j ∈ S, lam j * ((A j).eval z * (B j).eval z)) (fun z => r.eval z),
+      pairDiff_aff r huv, add_zero,
+      pairDiff_sum S (fun j z => lam j * ((A j).eval z * (B j).eval z)), map_sum]
+    refine Finset.sum_congr rfl fun j _ => ?_
+    rw [pairDiff_mul_left (lam j) (fun z => (A j).eval z * (B j).eval z), pairDiff_mul (A j) (B j) huv]
+    simp only [map_mul, map_add]
+    ring
+
+/-- A sum of pairs of rank-one terms, indexed by any finite type, has rank at most twice its size. -/
+theorem rank_sum_vecMulVec_le_card {X Y ι K : Type} [Fintype X] [Fintype Y] [Fintype ι] [CommRing K]
+    [StrongRankCondition K] (a c : ι → X → K) (b d : ι → Y → K) :
+    (∑ j, (Matrix.vecMulVec (a j) (b j) + Matrix.vecMulVec (c j) (d j))).rank ≤ 2 * Fintype.card ι := by
+  let U : Matrix X (ι ⊕ ι) K := fun x s => Sum.elim (fun j => a j x) (fun j => c j x) s
+  let W : Matrix (ι ⊕ ι) Y K := fun s y => Sum.elim (fun j => b j y) (fun j => d j y) s
+  have hUW : ∑ j, (Matrix.vecMulVec (a j) (b j) + Matrix.vecMulVec (c j) (d j)) = U * W := by
+    ext x y
+    rw [Matrix.mul_apply, Fintype.sum_sum_type]
+    simp only [Matrix.sum_apply, Matrix.add_apply, Matrix.vecMulVec_apply, Finset.sum_add_distrib, U, W,
+      Sum.elim_inl, Sum.elim_inr]
+  rw [hUW]
+  refine (Matrix.rank_mul_le_left U W).trans ((Matrix.rank_le_card_width U).trans ?_)
+  simp [two_mul]
+
+/-- **Theorem K** (P2-FF round 5 §3.6), abstract: over any ring `R` with a map to `F₂` (`Z/2³²` in s32 wrap, `ℤ`
+exactly), a word that agrees with a target `T` at every bit point with at most two ones, and is a combination of
+the products of the bit-affine operands in `S` plus a bit-affine word, has `rank_F₂ P₂(T) ≤ 2 |S|`. The
+coefficients are any ring elements: integer operands and unscaled reads are what makes the word such a combination. -/
+theorem theoremK (φ : R →+* ZMod 2) {ι : Type} (S : Finset ι) (lam : ι → R) (A B : ι → BitAff V R)
+    (r : BitAff V R) (T : (V → R) → R)
+    (hT : ∀ U : Finset V, U.card ≤ 2 →
+      T (bitInd U) = ∑ j ∈ S, lam j * ((A j).eval (bitInd U) * (B j).eval (bitInd U)) + r.eval (bitInd U)) :
+    (projF2 φ T).rank ≤ 2 * S.card := by
+  have h : projF2 φ T = projF2 φ (fun z => ∑ j ∈ S, lam j * ((A j).eval z * (B j).eval z) + r.eval z) := by
+    ext u v
+    simp only [projF2, pairDiff]
+    rw [hT {u, v} ((Finset.card_insert_le u {v}).trans (by simp)), hT {u} (by simp), hT {v} (by simp),
+      hT ∅ (by simp)]
+  rw [h, projF2_word, ← Finset.sum_coe_sort S]
+  exact (rank_sum_vecMulVec_le_card _ _ _ _).trans (by simp)
+
+end
+
+/-- **A straight-line program over `R` on the bits** (Theorem K's runs): slot `j` is a product of two bit-affine
+operands (`isProd j`: an MMA slot on bytes loaded from committed or coin data, or formed from them by adds), or a
+linear combination of earlier slots plus a bit-affine word (accumulation, merges, copies; ring operations only, so
+no shift and no fractional scale). -/
+structure Slp (V R : Type) (N : ℕ) where
+  isProd : Fin N → Bool
+  opA : Fin N → BitAff V R
+  opB : Fin N → BitAff V R
+  lin : (j : Fin N) → Fin j.val → R
+  off : Fin N → BitAff V R
+
+namespace Slp
+
+variable {V R : Type} [Fintype V] [CommRing R] {N : ℕ}
+
+/-- The slots' values at the bits `z`. -/
+def val (P : Slp V R N) (z : V → R) (j : Fin N) : R :=
+  if P.isProd j then (P.opA j).eval z * (P.opB j).eval z
+  else ∑ k : Fin j.val, P.lin j k * P.val z ⟨k.val, k.isLt.trans j.isLt⟩ + (P.off j).eval z
+termination_by j.val
+decreasing_by exact k.isLt
+
+/-- Each slot's coefficients on the products (the closed form). -/
+def coef (P : Slp V R N) (j : Fin N) : Fin N → R :=
+  if P.isProd j then Pi.single j 1
+  else ∑ k : Fin j.val, P.lin j k • P.coef ⟨k.val, k.isLt.trans j.isLt⟩
+termination_by j.val
+decreasing_by exact k.isLt
+
+/-- Each slot's bit-affine part (the closed form). -/
+def aff (P : Slp V R N) (j : Fin N) : BitAff V R :=
+  if P.isProd j then ⟨0, 0⟩
+  else ⟨∑ k : Fin j.val, P.lin j k * (P.aff ⟨k.val, k.isLt.trans j.isLt⟩).c + (P.off j).c,
+    fun v => ∑ k : Fin j.val, P.lin j k * (P.aff ⟨k.val, k.isLt.trans j.isLt⟩).α v + (P.off j).α v⟩
+termination_by j.val
+decreasing_by all_goals exact k.isLt
+
+theorem aff_eval (P : Slp V R N) (z : V → R) (j : Fin N) :
+    (P.aff j).eval z = if P.isProd j then 0
+      else ∑ k : Fin j.val, P.lin j k * (P.aff ⟨k.val, k.isLt.trans j.isLt⟩).eval z + (P.off j).eval z := by
+  rw [aff]
+  split_ifs
+  · simp [BitAff.eval]
+  · simp only [BitAff.eval, add_mul, Finset.sum_add_distrib, mul_add, Finset.mul_sum, Finset.sum_mul, mul_assoc]
+    rw [Finset.sum_comm (s := (Finset.univ : Finset V)) (t := (Finset.univ : Finset (Fin j.val)))]
+    ring
+
+/-- **The closed form**: every slot is a combination of the program's products plus a bit-affine word. -/
+theorem val_eq (P : Slp V R N) (z : V → R) (j : Fin N) :
+    P.val z j = ∑ i, P.coef j i * ((P.opA i).eval z * (P.opB i).eval z) + (P.aff j).eval z := by
+  obtain ⟨n, hn⟩ := j
+  induction n using Nat.strong_induction_on with
+  | _ n ih =>
+    rw [val, coef, aff_eval]
+    by_cases hp : P.isProd ⟨n, hn⟩ = true
+    · simp only [hp, ↓reduceIte, Pi.single_apply, ite_mul, one_mul, zero_mul, Finset.sum_ite_eq',
+        Finset.mem_univ, add_zero]
+    · simp only [hp, Bool.false_eq_true, ↓reduceIte]
+      have hk : ∀ k : Fin n, P.val z ⟨k.val, k.isLt.trans hn⟩ =
+          ∑ i, P.coef ⟨k.val, k.isLt.trans hn⟩ i * ((P.opA i).eval z * (P.opB i).eval z) +
+            (P.aff ⟨k.val, k.isLt.trans hn⟩).eval z := fun k => ih k.val k.isLt _
+      simp only [hk, mul_add, Finset.sum_add_distrib, Finset.mul_sum, Finset.sum_apply, Pi.smul_apply,
+        smul_eq_mul, Finset.sum_mul, mul_assoc]
+      rw [Finset.sum_comm (s := (Finset.univ : Finset (Fin n))) (t := (Finset.univ : Finset (Fin N)))]
+      ring
+
+omit [Fintype V] in
+/-- Only products carry coefficients. -/
+theorem isProd_of_coef_ne_zero (P : Slp V R N) (j i : Fin N) (h : P.coef j i ≠ 0) : P.isProd i = true := by
+  obtain ⟨n, hn⟩ := j
+  induction n using Nat.strong_induction_on with
+  | _ n ih =>
+    rw [coef] at h
+    by_cases hp : P.isProd ⟨n, hn⟩ = true
+    · simp only [hp, ↓reduceIte, Pi.single_apply] at h
+      by_cases hi : i = ⟨n, hn⟩
+      · exact hi ▸ hp
+      · simp [hi] at h
+    · simp only [hp, Bool.false_eq_true, ↓reduceIte, Finset.sum_apply, Pi.smul_apply, smul_eq_mul] at h
+      obtain ⟨k, -, hk⟩ := Finset.exists_ne_zero_of_sum_ne_zero h
+      exact ih k.val k.isLt _ (right_ne_zero_of_mul hk)
+
+open Classical in
+/-- **A cell-block's pieces**: the products whose coefficient changes from the word `c'` (the cell's previous
+committed word, `none` for its first) to `c`. -/
+noncomputable def pieces (P : Slp V R N) (c : Fin N) (c' : Option (Fin N)) : Finset (Fin N) :=
+  univ.filter fun i => P.coef c i - c'.elim 0 (fun k => P.coef k i) ≠ 0
+
+omit [Fintype V] in
+theorem pieces_isProd (P : Slp V R N) (c : Fin N) (c' : Option (Fin N)) {i : Fin N} (hi : i ∈ P.pieces c c') :
+    P.isProd i = true := by
+  classical
+  simp only [pieces, Finset.mem_filter, Finset.mem_univ, true_and] at hi
+  by_cases h : P.coef c i = 0
+  · cases c' with
+    | none => simp [h] at hi
+    | some k =>
+      simp only [h, Option.elim_some, zero_sub, neg_ne_zero] at hi
+      exact P.isProd_of_coef_ne_zero k i hi
+  · exact P.isProd_of_coef_ne_zero c i h
+
+/-- The cell-block's increment `val c − val c'` is a combination of its pieces plus a bit-affine word. -/
+theorem incr_eq (P : Slp V R N) (c : Fin N) (c' : Option (Fin N)) :
+    ∃ r : BitAff V R, ∀ z, P.val z c - c'.elim 0 (fun k => P.val z k) =
+      ∑ i ∈ P.pieces c c', (P.coef c i - c'.elim 0 (fun k => P.coef k i)) *
+        ((P.opA i).eval z * (P.opB i).eval z) + r.eval z := by
+  classical
+  refine ⟨⟨(P.aff c).c - c'.elim 0 (fun k => (P.aff k).c), fun v => (P.aff c).α v - c'.elim 0 (fun k => (P.aff k).α v)⟩,
+    fun z => ?_⟩
+  rw [pieces, Finset.sum_filter_of_ne fun i _ h => left_ne_zero_of_mul h]
+  cases c' with
+  | none =>
+    simp only [Option.elim_none, sub_zero, val_eq]
+  | some k =>
+    simp only [Option.elim_some, val_eq, BitAff.eval, sub_mul, Finset.sum_sub_distrib]
+    ring
+
+/-- **Theorem K for a program's cell-block**: if the increment agrees with a target at every bit point with at most
+two ones, the target's `F₂` rank is at most twice the cell-block's pieces. -/
+theorem rank_projF2_le (φ : R →+* ZMod 2) [DecidableEq V] (P : Slp V R N) (c : Fin N) (c' : Option (Fin N))
+    (T : (V → R) → R)
+    (hT : ∀ U : Finset V, U.card ≤ 2 → P.val (bitInd U) c - c'.elim 0 (fun k => P.val (bitInd U) k) = T (bitInd U)) :
+    (projF2 φ T).rank ≤ 2 * (P.pieces c c').card := by
+  obtain ⟨r, hr⟩ := P.incr_eq c c'
+  exact theoremK φ _ _ _ _ r T fun U hU => (hT U hU).symm.trans (hr _)
+
+omit [Fintype V] in
+/-- **Cell-pure runs add up**: if each certified cell-block needs `L` pieces and distinct ones share no product,
+the program has at least `L` products per certified cell-block. -/
+theorem card_mul_le {E : Type} (P : Slp V R N) (Cor : Finset E) (cur : E → Fin N) (prev : E → Option (Fin N))
+    (L : ℕ) (hL : ∀ e ∈ Cor, L ≤ (P.pieces (cur e) (prev e)).card)
+    (hpure : (Cor : Set E).PairwiseDisjoint fun e => P.pieces (cur e) (prev e)) :
+    L * Cor.card ≤ (univ.filter fun j => P.isProd j = true).card := by
+  classical
+  calc L * Cor.card = ∑ _e ∈ Cor, L := by rw [Finset.sum_const, smul_eq_mul, mul_comm]
+    _ ≤ ∑ e ∈ Cor, (P.pieces (cur e) (prev e)).card := Finset.sum_le_sum hL
+    _ = (Cor.biUnion fun e => P.pieces (cur e) (prev e)).card := (Finset.card_biUnion hpure).symm
+    _ ≤ _ := Finset.card_le_card fun i hi => by
+      obtain ⟨e, -, he⟩ := Finset.mem_biUnion.mp hi
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, P.pieces_isProd _ _ he⟩
+
+end Slp
+
+/-! ### The re-encoded design (P2-FF round 6 §2): `X = ⌊x/s⌋ + b` -/
+
+/-- The design's bits: U's planes `β_p(i, j)` (row `i`, column `j < L`, plane `p`) and the coins `b(t, j, l)` of
+`X`'s entries `(tL + j, l)`. -/
+abbrev DBits (n L np B n' : ℕ) : Type := (Fin n × Fin L × Fin np) ⊕ (Fin B × Fin L × Fin n')
+
+section Design
+
+variable {R : Type} [CommRing R] {n L np B n' : ℕ}
+
+/-- `P̃_(i, tL+j) = P_(i, tL+j) − 64 + U_ij` with `U_ij = −64 + Σ_p w_p β_p(i, j)` (the constants in `pc`): with `W`
+stacked identities, U's column `j` serves every block. -/
+def dP (pc : Fin n → Fin B → Fin L → R) (w : Fin np → R) (i : Fin n) (t : Fin B) (j : Fin L) :
+    BitAff (DBits n L np B n') R :=
+  ⟨pc i t j, Sum.elim (fun a => if a.1 = i ∧ a.2.1 = j then w a.2.2 else 0) fun _ => 0⟩
+
+/-- `X_(tL+j, l) = ⌊x/s⌋_(tL+j, l) + b(t, j, l)` (`⌊x/s⌋` in `vq`). -/
+def dX (vq : Fin B → Fin L → Fin n' → R) (t : Fin B) (j : Fin L) (l : Fin n') : BitAff (DBits n L np B n') R :=
+  ⟨vq t j l, Sum.elim (fun _ => 0) fun a => if a = (t, j, l) then 1 else 0⟩
+
+/-- Cell-block `(i, l, t)`'s target: block `t`'s increment `Σ_j P̃_(i, tL+j) X_(tL+j, l)` of the committed prefix
+sum at cell `(i, l)`. -/
+def dIncr (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R) (i : Fin n)
+    (l : Fin n') (t : Fin B) : (DBits n L np B n' → R) → R :=
+  fun z => ∑ j, (dP pc w i t j).eval z * (dX vq t j l).eval z
+
+/-- The committed prefix word `T_t(i, l) = Σ_{k < (t+1)L} P̃_ik X_kl`. -/
+def dPrefix (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R) (i : Fin n)
+    (l : Fin n') (t : ℕ) : (DBits n L np B n' → R) → R :=
+  fun z => ∑ t' : Fin B, if t'.val ≤ t then dIncr pc vq w i l t' z else 0
+
+theorem dPrefix_zero (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R)
+    (i : Fin n) (l : Fin n') (h : 0 < B) (z : DBits n L np B n' → R) :
+    dPrefix pc vq w i l 0 z = dIncr pc vq w i l ⟨0, h⟩ z := by
+  rw [dPrefix, Finset.sum_eq_single ⟨0, h⟩]
+  · simp
+  · intro b _ hb
+    have : b.val ≠ 0 := fun h' => hb (Fin.ext h')
+    simp only [Nat.le_zero, this, ↓reduceIte]
+  · simp
+
+/-- The committed words' increments are the cell-blocks' targets. -/
+theorem dPrefix_succ (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R)
+    (i : Fin n) (l : Fin n') {t : ℕ} (h : t + 1 < B) (z : DBits n L np B n' → R) :
+    dPrefix pc vq w i l (t + 1) z - dPrefix pc vq w i l t z = dIncr pc vq w i l ⟨t + 1, h⟩ z := by
+  rw [dPrefix, dPrefix, ← Finset.sum_sub_distrib, Finset.sum_eq_single ⟨t + 1, h⟩]
+  · simp
+  · intro b _ hb
+    have : b.val ≠ t + 1 := fun h' => hb (Fin.ext h')
+    by_cases h1 : b.val ≤ t
+    · simp only [h1, Nat.le_succ_of_le h1, ↓reduceIte, sub_self]
+    · have h2 : ¬b.val ≤ t + 1 := by omega
+      simp only [h1, h2, ↓reduceIte, sub_self]
+  · simp
+
+omit [CommRing R] in
+theorem dP_α_inl [CommRing R] (pc : Fin n → Fin B → Fin L → R) (w : Fin np → R) (i : Fin n) (t : Fin B) (j : Fin L)
+    (a : Fin n × Fin L × Fin np) :
+    (dP (n' := n') pc w i t j).α (.inl a) = if a.1 = i ∧ a.2.1 = j then w a.2.2 else 0 := rfl
+
+omit [CommRing R] in
+theorem dP_α_inr [CommRing R] (pc : Fin n → Fin B → Fin L → R) (w : Fin np → R) (i : Fin n) (t : Fin B) (j : Fin L)
+    (a : Fin B × Fin L × Fin n') : (dP pc w i t j).α (.inr a) = 0 := rfl
+
+omit [CommRing R] in
+theorem dX_α_inl [CommRing R] (vq : Fin B → Fin L → Fin n' → R) (t : Fin B) (j : Fin L) (l : Fin n')
+    (a : Fin n × Fin L × Fin np) : (dX vq t j l).α (.inl a) = 0 := rfl
+
+omit [CommRing R] in
+theorem dX_α_inr [CommRing R] (vq : Fin B → Fin L → Fin n' → R) (t : Fin B) (j : Fin L) (l : Fin n')
+    (a : Fin B × Fin L × Fin n') :
+    (dX (n := n) (np := np) vq t j l).α (.inr a) = if a = (t, j, l) then 1 else 0 := rfl
+
+/-- **The design's rank** (P2-FF round 6 §2): with a plane of odd weight (`w_0 = 1`), a cell-block's target has
+`F₂` rank `2L`: its projection has the identity on the rows `β_p₀(i, j)`, `b(t, j, l)` against the columns
+`b(t, j, l)`, `β_p₀(i, j)`. -/
+theorem rank_projF2_dIncr (φ : R →+* ZMod 2) (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R)
+    (w : Fin np → R) {p₀ : Fin np} (hw : φ (w p₀) = 1) (i : Fin n) (l : Fin n') (t : Fin B) :
+    2 * L ≤ (projF2 φ (dIncr pc vq w i l t)).rank := by
+  classical
+  have h : dIncr pc vq w i l t = fun z => ∑ j ∈ univ, (1 : R) * ((dP pc w i t j).eval z *
+      (dX (n := n) (np := np) vq t j l).eval z) + (⟨0, 0⟩ : BitAff (DBits n L np B n') R).eval z := by
+    funext z
+    simp [dIncr, BitAff.eval]
+  rw [h, projF2_word]
+  set M := ∑ j ∈ univ, (Matrix.vecMulVec (fun u => φ (1 * (dP pc w i t j).α u))
+      (fun v => φ ((dX (n := n) (np := np) vq t j l).α v)) +
+      Matrix.vecMulVec (fun u => φ ((dX (n := n) (np := np) vq t j l).α u))
+        (fun v => φ (1 * (dP pc w i t j).α v))) with hM
+  have hent : ∀ u v, M u v = ∑ j, (φ ((dP pc w i t j).α u) * φ ((dX (n := n) (np := np) vq t j l).α v) +
+      φ ((dX (n := n) (np := np) vq t j l).α u) * φ ((dP pc w i t j).α v)) := by
+    intro u v
+    simp only [hM, Matrix.sum_apply, Matrix.add_apply, Matrix.vecMulVec_apply, one_mul]
+  let f : Fin L ⊕ Fin L → DBits n L np B n' := Sum.elim (fun j => .inl (i, j, p₀)) fun j => .inr (t, j, l)
+  let g : Fin L ⊕ Fin L → DBits n L np B n' := Sum.elim (fun j => .inr (t, j, l)) fun j => .inl (i, j, p₀)
+  have hsub : M.submatrix f g = 1 := by
+    ext a a'
+    rw [Matrix.submatrix_apply, hent, Matrix.one_apply]
+    rcases a with j | j <;> rcases a' with j' | j'
+    · simp only [f, g, Sum.elim_inl, dP_α_inl, dP_α_inr, dX_α_inl, dX_α_inr, map_zero, mul_zero, add_zero,
+        true_and, Prod.mk.injEq, and_true, Sum.inl.injEq]
+      rw [Finset.sum_eq_single j (fun b _ hb => by simp [Ne.symm hb]) (by simp)]
+      by_cases hj : j = j' <;> simp [hj, hw, eq_comm]
+    · simp only [f, g, Sum.elim_inl, Sum.elim_inr, dP_α_inl, dX_α_inl, map_zero, mul_zero, zero_mul, add_zero,
+        Finset.sum_const_zero, reduceCtorEq, ↓reduceIte]
+    · simp only [f, g, Sum.elim_inl, Sum.elim_inr, dP_α_inr, dX_α_inr, map_zero, mul_zero, zero_mul, add_zero,
+        Finset.sum_const_zero, reduceCtorEq, ↓reduceIte]
+    · simp only [f, g, Sum.elim_inr, dP_α_inl, dP_α_inr, dX_α_inr, map_zero, zero_mul, zero_add,
+        true_and, Prod.mk.injEq, and_true, Sum.inr.injEq]
+      rw [Finset.sum_eq_single j (fun b _ hb => by simp [Ne.symm hb]) (by simp)]
+      by_cases hj : j = j' <;> simp [hj, hw, eq_comm]
+  calc 2 * L = (1 : Matrix (Fin L ⊕ Fin L) (Fin L ⊕ Fin L) (ZMod 2)).rank := by
+        rw [Matrix.rank_one, Fintype.card_sum, Fintype.card_fin, two_mul]
+    _ ≤ M.rank := by
+        rw [← hsub]
+        exact Matrix.rank_submatrix_le M f g
+
+/-- **Theorem K on the re-encoded design**: a straight-line program over `R` (`Z/2³²`: s32 wrap) whose increment
+from the cell's previous committed word agrees with cell-block `(i, l, t)`'s target at every bit point with at most
+two ones has at least `L` pieces, whatever the committed `P`, `⌊x/s⌋`, the partners and the merges. -/
+theorem Slp.dIncr_products_ge (φ : R →+* ZMod 2) (pc : Fin n → Fin B → Fin L → R)
+    (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R) {p₀ : Fin np} (hw : φ (w p₀) = 1) {N : ℕ}
+    (P : Slp (DBits n L np B n') R N) (c : Fin N) (c' : Option (Fin N)) (i : Fin n) (l : Fin n') (t : Fin B)
+    (hT : ∀ U : Finset (DBits n L np B n'), U.card ≤ 2 →
+      P.val (bitInd U) c - c'.elim 0 (fun k => P.val (bitInd U) k) = dIncr pc vq w i l t (bitInd U)) :
+    L ≤ (P.pieces c c').card := by
+  have := (rank_projF2_dIncr φ pc vq w hw i l t).trans (P.rank_projF2_le φ c c' _ hT)
+  omega
+
+end Design
+
+
+/-- `Z/2³² → F₂`. -/
+def toF2 : ZMod (2 ^ 32) →+* ZMod 2 := ZMod.castHom (by norm_num) (ZMod 2)
+
+/-- The re-encoded design's plane weights `w = (1, 2, 4, 8, 16, 32, 65)`: `U = −64 + Σ_p w_p β_p` maps 7 bits onto
+`{±1, …, ±64}`, and plane 0's weight is odd. -/
+def wRe : Fin 7 → ZMod (2 ^ 32) := ![1, 2, 4, 8, 16, 32, 65]
+
+theorem toF2_wRe_zero : toF2 (wRe 0) = 1 := by
+  simp [toF2, wRe]
+
+/-- A round's cell-blocks: cells `(i, l)` and blocks `t`. -/
+abbrev DCells (n n' B : ℕ) : Type := Fin n × Fin n' × Fin B
+
+/-- **The window's rounds with Theorem K's cost line** (the re-encoded design), a named hypothesis. It is
+`RoundsHyp` with the cost line derived rather than assumed. Along every play `x`:
+- round `w`'s run is a straight-line program over `Z/2³²` on the round's bits (`prog w`: s32 wrap, integer operands,
+  unscaled reads), on committed constants `pc w` (`P − 128`) and `vq w` (`⌊x/s⌋`);
+- at each cell-block it certifies (`cor w`), the increment from the cell's previous committed word (`prev w c`) to its
+  word (`cur w c`) agrees with the cell-block's target at every bit pair;
+- certified cell-blocks share no product (cell-pure);
+- it certifies at least `(1 − d_w) C` of the round's `C = n n' B` cell-blocks, `d_w` the game's round-`w` deficiency;
+- the run is charged at least `κ` a product, less the noise reads `V`. -/
+def RoundsHypK (Mc : Machine) (S : Service) (Ω : Type) [Fintype Ω] (R : ℕ) (p Vmax δb δz κ : ℝ)
+    (n L np B n' : ℕ) (wt : Fin np → ZMod (2 ^ 32)) : Prop :=
+  ∃ e : S.Seed ≃ Paths Ω R, ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
+    (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ r : Ω',
+    ∃ (G : RoundGame Ω R) (Bind ZK : Fin R → Paths Ω R → Prop) (V : Paths Ω R → ℝ),
+      G.PathBound p ∧ (∀ w, prob (Bind w) ≤ δb) ∧ (∀ w, prob (ZK w) ≤ δz) ∧
+      (∀ x, S.verify (Mc.eval M (e.symm x, r)).1 (e.symm x) (Mc.eval M (e.symm x, r)).2 = true →
+        G.accepts x ∨ ∃ w, Bind w x ∨ ZK w x) ∧
+      (∀ x, V x ≤ Vmax) ∧
+      ∀ x, ∃ (N : Fin R → ℕ) (prog : ∀ w, Slp (DBits n L np B n') (ZMod (2 ^ 32)) (N w))
+        (pc : Fin R → Fin n → Fin B → Fin L → ZMod (2 ^ 32))
+        (vq : Fin R → Fin B → Fin L → Fin n' → ZMod (2 ^ 32))
+        (cur : ∀ w, DCells n n' B → Fin (N w)) (prev : ∀ w, DCells n n' B → Option (Fin (N w)))
+        (cor : Fin R → Finset (DCells n n' B)),
+        (∀ w, ∀ c ∈ cor w, ∀ U : Finset (DBits n L np B n'), U.card ≤ 2 →
+          (prog w).val (bitInd U) (cur w c) - (prev w c).elim 0 (fun k => (prog w).val (bitInd U) k) =
+            dIncr (pc w) (vq w) wt c.1 c.2.1 c.2.2 (bitInd U)) ∧
+        (∀ w, ((cor w : Finset (DCells n n' B)) : Set (DCells n n' B)).PairwiseDisjoint
+          fun c => (prog w).pieces (cur w c) (prev w c)) ∧
+        (∀ w, ((n * n' * B : ℕ) : ℝ) * (1 - G.dAt x w) ≤ (cor w).card) ∧
+        κ * ∑ w, ((univ.filter fun j => (prog w).isProd j = true).card : ℝ) - V x ≤ Mc.charge M (e.symm x, r)
+
+/-- **Theorem K gives the window's cost line**: under `RoundsHypK` with a plane of odd weight, `RoundsHyp` holds with
+`F₀ = κ L n n' B`, the round's `n × LB × n'` GEMM at `κ` a product (`c = 1`), and no slack. -/
+theorem roundsHyp_of_K {Mc : Machine} {S : Service} {Ω : Type} [Fintype Ω] {R : ℕ} {p Vmax δb δz κ : ℝ}
+    {n L np B n' : ℕ} {wt : Fin np → ZMod (2 ^ 32)} {p₀ : Fin np}
+    (h : RoundsHypK Mc S Ω R p Vmax δb δz κ n L np B n' wt) (hwt : toF2 (wt p₀) = 1) (hκ : 0 ≤ κ) :
+    RoundsHyp Mc S Ω R p (κ * L * ((n * n' * B : ℕ) : ℝ)) 0 Vmax δb δz := by
+  obtain ⟨e, h⟩ := h
+  refine ⟨e, fun Ω' _ M hc r => ?_⟩
+  obtain ⟨G, Bind, ZK, V, hG, hB, hZ, hacc, hV, hK⟩ := h Ω' M hc r
+  refine ⟨G, Bind, ZK, V, hG, hB, hZ, hacc, hV, fun x => ?_⟩
+  obtain ⟨N, prog, pc, vq, cur, prev, cor, hT, hpure, hcor, hcharge⟩ := hK x
+  have hprod : ∀ w, (L : ℝ) * (cor w).card ≤ ((univ.filter fun j => (prog w).isProd j = true).card : ℝ) :=
+    fun w => by
+      exact_mod_cast (prog w).card_mul_le (cor w) (cur w) (prev w) L
+        (fun c hc => (prog w).dIncr_products_ge toF2 (pc w) (vq w) wt hwt (cur w c) (prev w c) c.1 c.2.1 c.2.2
+          (hT w c hc)) (hpure w)
+  set C : ℝ := ((n * n' * B : ℕ) : ℝ)
+  have hsum : ((R : ℝ) - G.deficiency x) * (κ * L * C) = κ * ∑ w, (L : ℝ) * (C * (1 - G.dAt x w)) := by
+    rw [G.deficiency_eq_sum, ← Finset.mul_sum, ← Finset.mul_sum, Finset.sum_sub_distrib, Finset.sum_const,
+      Finset.card_univ, Fintype.card_fin, nsmul_eq_mul, mul_one]
+    ring
+  calc ((R : ℝ) - G.deficiency x) * (κ * L * C) - V x - R * 0
+      = κ * ∑ w, (L : ℝ) * (C * (1 - G.dAt x w)) - V x := by rw [hsum]; ring
+    _ ≤ κ * ∑ w, ((univ.filter fun j => (prog w).isProd j = true).card : ℝ) - V x := by
+      gcongr with w
+      exact (mul_le_mul_of_nonneg_left (hcor w) (Nat.cast_nonneg L)).trans (hprod w)
+    _ ≤ Mc.charge M (e.symm x, r) := hcharge
+
+end TheoremK
 
 section ModelB
 
