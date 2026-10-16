@@ -117,6 +117,7 @@
         "benchmarks/steiner_referee/",
         "benchmarks/fp4_sparse_tp/",
         "benchmarks/fp4_nobits/",
+        "benchmarks/commit_gpu/",
         ".agents/skills/kernel-engineering/"
       ]
     },
