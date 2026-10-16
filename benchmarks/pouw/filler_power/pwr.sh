@@ -44,7 +44,7 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
       echo "rc $? for palone $a" >> "$O/errors.txt"
   done
   q
-  for a in ${PW_NCU:-}; do  # "KIND:PAT:W:NC ...": the filler's DRAM bytes a chunk, and the counters' positive control
+  for a in ${PW_NCU:-}; do  # "KIND:PAT:W:NC ...": DRAM bytes a filler chunk, then the counter positive control (bw_read)
     IFS=: read -r k p w nc <<< "$a"
     ncu --clock-control none -k regex:pfill_k --launch-count 3 --metrics \
       gpu__time_duration.sum,dram__bytes.sum,lts__t_bytes.sum,sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_elapsed \
