@@ -80,6 +80,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "serving-view": ("verity_vllm.pipeline.serving_view", "a served row's Programs as vLLM serves them (engine steps, requests, model runner, ranks)"),
     "profile-descriptor": ("verity_vllm.program.profile_descriptor", "where a serialised descriptor's bytes go"),
     "program-compare": ("verity_vllm.check.match.program_compare", "structural comparison of two Programs"),
+    "program-dag": ("verity_vllm.check.match.program_dag", "a derived Program and a fold: live-cone DAG multisets equal"),
     "properties-admission": ("verity_vllm.properties.admission", "quarantine admission differential tests"),
     "protected": ("verity_vllm.properties.protected", "protected-path diff check"),
     "quarantine-lint": ("verity_vllm.properties.quarantine_lint", "quarantine registry lint"),

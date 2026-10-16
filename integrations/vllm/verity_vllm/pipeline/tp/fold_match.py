@@ -110,10 +110,17 @@ def compare_rank(py: str, rank_dir: Path, build: Path, derived: list[str], withi
     tot = cmp.get("totals") or {}
     sa, sb = (cmp.get("a") or {}).get("steps"), (cmp.get("b") or {}).get("steps")
     canon = (cmp.get("canonical_sha256") or {}).get("equal")
-    ok = rc == 0 and canon is True and sa == sb and int(tot.get("operands_different", 0) or 0) == 0
+    dag_doc = None
+    if canon is not True and within == "dag" and rc == 0:     # the within-step criterion of record (COORD M-0177): a step order may differ
+        _run([py, "-m", "verity_vllm.pipeline.cli", "program-dag", "--a", str(build), "--b", str(rank_dir), "--out", str(rank_dir / "match_dag.json")],
+             rank_dir / "match_dag.log", timeout)
+        dag_doc = _load(rank_dir / "match_dag.json")
+    dag = (dag_doc or {}).get("equal") is True
+    ok = rc == 0 and (canon is True or dag) and sa == sb and int(tot.get("operands_different", 0) or 0) == 0
     return {"comparator": "cb_a.compare", "rc": rc, "seconds": round(time.time() - t0, 1),
-            "verdict": "PASS" if ok else f"FAIL canonical_equal={canon} steps={sa}/{sb} operands_different={tot.get('operands_different')} rc={rc}",
-            "canonical_equal": canon, "steps": [sa, sb], "totals": tot, "histogram_diff_T_normalised": len(doc.get("histogram_diff_T_normalised") or {}), "first_diff": (cmp.get("first_differences") or cmp.get("diffs") or [None])[0]}
+            "verdict": "PASS" if ok else f"FAIL canonical_equal={canon} dag_multiset_equal={dag} steps={sa}/{sb} operands_different={tot.get('operands_different')} rc={rc}",
+            "criterion": "sequence" if canon is True else "dag-multiset over the live cone (within-step criterion of record, COORD M-0177)",
+            "dag_multiset": dag_doc, "canonical_equal": canon, "steps": [sa, sb], "totals": tot, "histogram_diff_T_normalised": len(doc.get("histogram_diff_T_normalised") or {}), "first_diff": (cmp.get("first_differences") or cmp.get("diffs") or [None])[0]}
 
 
 def global_match_rank(py: str, rank_dir: Path, gprog: Path, workload: Path, within: str, timeout: int | None) -> dict:

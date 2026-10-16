@@ -152,16 +152,11 @@ class Prog(PeerReads):
 
     def _bind_splits(self) -> None:
         """[R16 stoch/global, COORD M-0169 (4)] Bind the derived split count S of every top-p TokenSelect (its operand SPLITS_OPERAND).
-
-        Fold side: the operand is a `Const32[S]` instance emitted right before the select -- the constant is REMOVED from the instance
-        sequence (it is the value of a prescribed input, not a computation of the Program), its value kept in `splits_values[select node]`
-        and the operand canonicalises as ("SPLITS", e, e+1) with e the select's event ordinal in this Prog's segmentation (a request
-        projection: the request's e-th sampling event).  Program side: the operand reads an Input batch that is neither the prompt nor a
-        seed nor a weight field -- the request-owned `splits` input; `splits_nodes` holds it and every read of it canonicalises as
-        ("SPLITS", lo, hi) = ("SPLITS", s, s+1) for event s.  Both sides therefore agree exactly when the fold's e-th select of the request
-        carries the constant the Program's event e reads: no value is compared here (GM-01 checks S_t against the live count).  A select
-        whose splits operand is neither form (the R15 {V,S} static form has no 6th operand) binds nothing and compares as before; a
-        `Const32` read by anything other than a select's splits operand is never removed.  A single-request Program's own binds alike."""
+        Fold side: the `Const32[S]` emitted right before the select is REMOVED from the sequence (a prescribed input's value), kept in
+        `splits_values[select node]`, and the operand canonicalises as ("SPLITS", e, e+1), e the select's event ordinal.  Program side:
+        the request-owned `splits` Input (neither prompt, seed nor weight; `splits_nodes`) read as ("SPLITS", s, s+1) for event s.  Both
+        agree exactly when the fold's e-th select carries the constant the Program's event e reads (GM-01 checks S_t against the live
+        count).  Any other select binds nothing; a `Const32` read by anything but a splits operand is never removed."""
         self.splits_values: dict[int, int] = {}      # select node k -> S (fold side)
         self.splits_nodes: set[int] = set()          # Input nodes read as the splits operand (Program side)
         bound_consts: dict[int, int] = {}            # const instance index -> select node k
