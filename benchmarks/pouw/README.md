@@ -42,6 +42,7 @@ of `pfill.cuh`, not a copy of the kernel. Its tests are one suite: `uv run tools
 |---|---|
 | The decode step's driver and the filler ABI (`dfill_k`, `DFill`): pfill's filler, or FILL v1's chained one with `-DDFILL_V1` | `dcap.cu`, `dcap.sh`, `dfill.sh`, `fill.sh`, `dfill_ref.py`, `share.py` |
 | pfill, the proved filler: tiles `-DPFILL_BITS`, `-DPFILL_BU`, `-DPFILL_E2M1`; folds ram (NC 4), duo (NC 2), `-DPFILL_LI`, `-DPFILL_XIN13` | `pfill.cuh`, its host build `pfill_host.cpp` and Python twin `pfill_ref.py`, `pfill_probe.sh`, `tile_probe.sh` |
+| The receipt folds' steps, key rules and pfill's lane starts, which `pfill.cuh` and `pfill_ref.py` call: change a fold there, never in the filler | `../receipts/` (`receipt_folds.cuh`, `receipt_folds.py`, `vectors.json`; its own README) |
 | The locked scorer (filler-scorer/v5, SCORE-TP) and the arm contract with its baseline arms (`idle`, `fill-v1`) | `score.py`, `scoring.py`, `arms.py`, `dscore.cu`, `rounds.cuh` |
 | The phase filler's runner, HC-SCHED's arms | `psched_score.py` on `pscore.cu`, `psched_arm.py`, `psched.sh`, `psched_probe.sh`, `psched_probe.py`, `psum.py` |
 | The fused linears with filler warps, FILL's arms | `flin.cuh`, `flin.sh`, `fused_score.py` on `fscore.cu`, `fused_arm.py` |
