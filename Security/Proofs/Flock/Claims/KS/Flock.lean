@@ -18,9 +18,10 @@ import Proofs.Flock.Claims.KS.Fork
   `4·(ε_table + 𝔼[escapes]) + 2^{−m′} + 2k/K + e^{−k/8}`, and `Escapes.le` puts `4·𝔼[escapes]` under `√(γ·Pr[B])`.
 
 `assemble` decodes the waits' opened columns as they come, `vs.flatMap cols`, which repeats a position whenever two
-reruns open it; `ListComplete` speaks only of lists at distinct positions. So the theorem is at decoders that read
-each position once (`Flock.ReadsOnce`); every decoder `d` that meets `ListComplete` gives one, `d ∘ dedupPos`, that
-meets it too (`Flock.KS_of_oneWait_dedup`).
+reruns open it; `ListComplete` speaks only of lists at distinct positions, so a decoder that meets it may list nothing
+from a list with a repeat (`Flock.guardNodup`, `Flock.assemble_guardNodup`), and `E^rep` at it fails on every such
+wait. So the theorem is at decoders that read each position once (`Flock.ReadsOnce`); every decoder `d` that meets
+`ListComplete` gives one, `d ∘ dedupPos`, that meets it too (`Flock.KS_of_oneWait_dedup`).
 -/
 
 namespace Claims
@@ -55,6 +56,26 @@ theorem listComplete_dedup {Col T : Type} [DecidableEq Col] {enc : T → ℕ →
   intro os M hnd hn hag
   simp only [Function.comp_apply, dedupPos_of_nodup os hnd]
   exact h os M hnd hn hag
+
+/-- A decoder that lists nothing from opened columns that repeat a position, and `decode`'s list otherwise. -/
+def guardNodup {Col T : Type} (decode : List (ℕ × Col) → List T) (os : List (ℕ × Col)) : List T :=
+  if (os.map Prod.fst).Nodup then decode os else []
+
+/-- `ListComplete` leaves lists that repeat a position free: guarding a decoder that meets it still meets it. -/
+theorem listComplete_guardNodup {Col T : Type} [DecidableEq Col] {enc : T → ℕ → Col} {agree : ℝ}
+    {nMin : T → ℕ} {decode : List (ℕ × Col) → List T} (h : ListComplete enc agree nMin decode) :
+    ListComplete enc agree nMin (guardNodup decode) := by
+  intro os M hnd hn hag
+  simp only [guardNodup, hnd, ↓reduceIte]
+  exact h os M hnd hn hag
+
+/-- At a guarded decoder, `assemble` returns nothing from opened columns that repeat a position, as two reruns of a
+wait that open one position give. -/
+theorem assemble_guardNodup {Col T : Type} (H : Msg → Msg) (parse : Msg → Option Stmt)
+    (decode : List (ℕ × Col) → List T) (read : T → Wit) (x : Msg) (os : List (ℕ × Col))
+    (h : ¬ (os.map Prod.fst).Nodup) : assemble H parse (guardNodup decode) read x os = none := by
+  unfold assemble guardNodup
+  split <;> simp [h]
 
 /-! ## Extraction -/
 
