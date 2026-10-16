@@ -427,6 +427,156 @@ theorem PRuns.query (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64)
     (PRuns.powC nonce _ _).bind fun _ _ => (PRuns.sampleVec resp (Nat.succ_ne_zero _) _ _).bind fun _ _ =>
     PRuns.pure trivial _ _
 
+/-- **A level's four challenges**, against the model's (`chals`): the last keeps the folded table, then splits it. -/
+theorem levelChals (resp : ℕ → Claims.Msg) (sm : LState) (tm : Transcript) :
+    PRuns p L (forIn [:4] (#[] : Array F256) fun i (f : Array F256) =>
+        if (i + 1 == 4) = true then do
+          let r ← liftT (sampleKP (asksS resp))
+          modify fun st : LigState =>
+            { tab := foldK r st.tab, w := foldK r st.w, msgs := st.msgs, oods := st.oods, qn := st.qn, cn := st.cn,
+              cbn := st.cbn }
+          let d ← get
+          modify fun st : LigState =>
+            { tab := embedF (splitK st.tab), w := liftU st.w, msgs := st.msgs, oods := st.oods, qn := st.qn,
+              cn := st.cn, cbn := st.cbn }
+          let st ← get
+          FlockComplete.sendMsg (roundPoly st.tab st.w)
+          pure (ForInStep.yield d.tab)
+        else do
+          let _ ← challengeP (asksS resp) false
+          pure (ForInStep.yield f))
+      (cur sm) tm (cur (chals p (cfOf resp L) #[] sm tm 4).2.1) (chals p (cfOf resp L) #[] sm tm 4).2.2
+      (fun _ => True) fun _ => True :=
+  (PRuns.loop _ (fun i => cur (chals p (cfOf resp L) #[] sm tm i).2.1) (fun i => (chals p (cfOf resp L) #[] sm tm i).2.2)
+    (fun _ _ => True) (fun _ _ => True) (fun _ => trivial) (fun _ _ _ _ _ => trivial) (fun _ _ => True) (fun _ => True) 4
+    (fun _ _ _ _ => PRuns.ite
+      (fun _ => (PRuns.sampleK resp _ _).bind fun _ _ =>
+        (PRuns.modify _ (fun _ => by exact ⟨rfl, rfl, rfl, rfl, rfl⟩) _ _).bind fun _ _ => (PRuns.get _ _).bind fun _ _ =>
+        (PRuns.modify _ (fun _ => by exact ⟨rfl, rfl, rfl, rfl, rfl⟩) _ _).bind fun _ _ => (PRuns.get _ _).bind fun _ _ =>
+        (PRuns.sendMsg _ _ _).bind fun _ _ => PRuns.pure ⟨_, rfl, trivial, trivial⟩ _ _)
+      fun _ => (PRuns.challenge resp false _ _).bind fun _ _ => PRuns.pure ⟨_, rfl, trivial, trivial⟩ _ _)
+    (fun _ _ _ _ _ _ _ _ => trivial) _ trivial).mono (fun _ _ => trivial) fun _ _ _ => trivial
+
+/-! ## The prover's Ligerito -/
+
+/-- **The honest prover's Ligerito ends where the model does** on the proof it returns: run from a transcript at which
+`L + k` bodies have been sent, at the replies' coins (`cfOf resp L`), its transcript ends at `out`'s and it keeps
+`L + k` bodies sent; its first cap is the commitment's. -/
+theorem ligeritoP_go (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule)
+    (T : F128) (cm0 : Commit) (tb b : Array F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (L : ℕ)
+    (hn : sch.n ≠ 0) (hL : 2 ≤ sch.levels.size) (hq : ∀ j < sch.levels.size, (sch.levels.getD j default).q ≠ 0)
+    {t : Transcript} {l : Array Claims.Msg} (hl : l.size = L + t.k) {P : LigeritoProof} {t' : Transcript}
+    {l' : Array Claims.Msg}
+    (hrun : ((ligeritoP (asksS resp) (Hashes.ofSha512 h) ms sch T cm0 tb b salt nonce).run t).go l =
+      (.ok (P, t'), l')) :
+    P.initialCap = cm0.cap ∧ t' = (out P (cfOf resp L) sch T cm0.cap t).2.2 ∧ l'.size = L + t'.k := by
+  unfold ligeritoP at hrun
+  rw [bind_go (liftTM_ok (Flock.RecAlgebra.label_eq _ _) l), bind_go (liftTM_ok (Flock.RecAlgebra.absorbF_eq _ _) l),
+    bind_go (liftTM_ok (Flock.RecAlgebra.absorbBytes_eq _ _) l)] at hrun
+  dsimp only at hrun
+  rw [StateT.run_bind] at hrun
+  obtain ⟨⟨⟨⟨caps, rproofs, fin, op0⟩, stF⟩, t₁⟩, l₁, h1, h2⟩ := JsonRT.go_bind_ok hrun
+  obtain ⟨h21, rfl⟩ := Prod.mk.inj h2
+  obtain ⟨hP, rfl⟩ := Prod.mk.inj (Except.ok.inj h21)
+  have key := (?prog : PRuns (β := Array (Array ByteArray) × Array LevelProof × FinalProof × LevelProof) P L _
+    (cur (init T)) (start cm0.cap T t) (cur (out P (cfOf resp L) sch T cm0.cap t).2.1)
+    (out P (cfOf resp L) sch T cm0.cap t).2.2 (fun _ => True) fun r => r.1 = P.recursiveCaps ∧
+      r.2.2.1.yr = P.finalProof.yr) _ (start cm0.cap T t) l _ _ _ _ hl h1
+  case prog =>
+    refine (PRuns.sampleVec resp hn _ _).bind fun z _ => PRuns.oodPush _ ?_
+    refine (PRuns.powB nonce _ _).bind fun _ _ => (PRuns.sample resp _ _).bind fun _ _ =>
+      (PRuns.modify _ (fun _ => by exact ⟨rfl, rfl, rfl, rfl, rfl⟩) _ _).bind fun _ _ => (PRuns.get _ _).bind fun _ _ =>
+      (PRuns.sendMsg _ _ _).bind fun _ _ => ?_
+    refine PRuns.bind (PRuns.loop _
+      (fun j => cur (chals P (cfOf resp L) #[] (head P (cfOf resp L) sch.n (init T) (start cm0.cap T t)).1
+        (head P (cfOf resp L) sch.n (init T) (start cm0.cap T t)).2 j).2.1)
+      (fun j => (chals P (cfOf resp L) #[] (head P (cfOf resp L) sch.n (init T) (start cm0.cap T t)).1
+        (head P (cfOf resp L) sch.n (init T) (start cm0.cap T t)).2 j).2.2)
+      (fun _ _ => True) (fun _ _ => True) (fun _ => trivial) (fun _ _ _ _ _ => trivial) (fun _ _ => True) (fun _ => True)
+      sch.k0 (fun j _ s _ => (PRuns.challenge resp _ _ _).bind fun _ _ => PRuns.pure ⟨(), rfl, trivial, trivial⟩ _ _)
+      (fun _ _ _ _ _ _ _ _ => trivial) _ trivial) fun _ _ => ?_
+    refine (PRuns.get _ _).bind fun d _ => ?_
+    refine PRuns.bindD (PRuns.commit h ms _ _ _ _ _) (fun cm1 _ => ?_)
+      (Qf := fun cm1 r => Pre #[cm1.cap] r.1) (Xf := fun _ r => r.1 = P.recursiveCaps ∧ r.2.2.1.yr = P.finalProof.yr)
+      (fun _ _ _ _ => trivial) (fun _ _ _ _ hx => ⟨trivial, hx⟩)
+    refine PRuns.bindY (PRuns.absorbCap cm1.cap P.recursiveCaps[0]! _ _) (fun _ _ => ?_)
+      (fun _ r _ hr hx => (Pre.get (A := #[]) (hr.trans (Pre.of_eq hx.1))).symm)
+    refine (PRuns.oodIntro resp nonce _ (Nat.succ_ne_zero _) 0 _ _).bind fun _ _ =>
+      (PRuns.oodIntro resp nonce _ (Nat.succ_ne_zero _) 0 _ _).bind fun _ _ => ?_
+    refine (PRuns.query resp nonce ms _ cm0 (hq 0 (by omega)) P.initialProof.rows
+      (chals P (cfOf resp L) #[] (head P (cfOf resp L) sch.n (init T) (start cm0.cap T t)).1
+        (head P (cfOf resp L) sch.n (init T) (start cm0.cap T t)).2 sch.k0).1 _ _).bind fun x _ => ?_
+    refine (PRuns.sendMsg _ _ _).bind fun _ _ => (PRuns.powB nonce _ _).bind fun _ _ =>
+      (PRuns.sample resp _ _).bind fun _ _ =>
+      (PRuns.modify _ (fun _ => by exact ⟨rfl, rfl, rfl, rfl, rfl⟩) _ _).bind fun _ _ => ?_
+    refine PRuns.bindD (PRuns.loop (σ := ℕ × Commit × Array (Array ByteArray) × Array LevelProof × FinalProof) _
+      (fun j => cur (loop P (cfOf resp L) sch (x₀ P (cfOf resp L) sch T cm0.cap t) j).2.1)
+      (fun j => (loop P (cfOf resp L) sch (x₀ P (cfOf resp L) sch T cm0.cap t) j).2.2)
+      (fun j s => s.1 = (loop P (cfOf resp L) sch (x₀ P (cfOf resp L) sch T cm0.cap t) j).1.1 ∧
+        (j < sch.levels.size - 1 → s.2.2.1.size = j + 1))
+      (fun s s' => Pre s.2.2.1 s'.2.2.1) (fun _ => Pre.refl _) (fun _ _ _ h₁ h₂ => h₁.trans h₂)
+      (fun j s => Pre s.2.2.1 P.recursiveCaps ∧ (j + 1 = sch.levels.size - 1 → s.2.2.2.2.yr = P.finalProof.yr))
+      (fun s => s.2.2.1 = P.recursiveCaps ∧ s.2.2.2.2.yr = P.finalProof.yr) (sch.levels.size - 1) ?body
+      (fun _ _ s s' _ he hG hx => ⟨hG.trans (Pre.of_eq hx.1), fun hj => by rw [← he hj]; exact hx.2⟩) _
+      ⟨rfl, fun _ => rfl⟩)
+      (fun σ _ => PRuns.pure (by rfl) _ _) (Qf := fun σ r => r = (σ.2.2.1, σ.2.2.2.1, σ.2.2.2.2, x.1))
+      (Xf := fun _ _ => True) (fun σ r hσ hr => hr ▸ hσ.2) (fun σ r _ hr hx => by subst hr; exact ⟨hx, trivial⟩)
+    case body =>
+      intro j hj s hs
+      by_cases hj1 : j + 1 < sch.levels.size - 1
+      · rw [loop_stepN P (cfOf resp L) sch _ hj1]
+        have hsz := hs.2 hj
+        generalize loop P (cfOf resp L) sch (x₀ P (cfOf resp L) sch T cm0.cap t) j = x at hs ⊢
+        rw [hs.1]
+        refine PRuns.bind (levelChals resp x.2.1 x.2.2) fun f _ => ?_
+        refine PRuns.ite (fun _ => ?_) fun hne => absurd (by simp; omega) hne
+        refine PRuns.bindD (PRuns.commit h ms _ _ _ _ _) (fun cmN _ => ?_)
+          (Qf := fun cmN r => (∃ s', r = .yield s' ∧ (s'.1 = (stepN P (cfOf resp L) sch j x).1.1 ∧
+            (j + 1 < sch.levels.size - 1 → s'.2.2.1.size = j + 1 + 1)) ∧ Pre s.2.2.1 s'.2.2.1) ∧
+            ∀ s', r = .yield s' → s'.2.2.1 = s.2.2.1.push cmN.cap)
+          (fun _ _ _ hr => hr.1) (fun _ _ _ _ hx => ⟨trivial, hx⟩)
+        refine PRuns.bindY (PRuns.absorbCap cmN.cap P.recursiveCaps[j + 1]! _ _) (fun _ _ => ?_)
+          (fun _ r _ hr hx => ?_)
+        · refine (PRuns.oodIntro resp nonce _ (Nat.succ_ne_zero _) (j + 1) _ _).bind fun _ _ =>
+            (PRuns.oodIntro resp nonce _ (Nat.succ_ne_zero _) (j + 1) _ _).bind fun _ _ => ?_
+          refine (PRuns.query resp nonce ms _ s.2.1 (hq (j + 1) (by omega)) P.recursiveProofs[j]!.rows
+            (chals P (cfOf resp L) #[] x.2.1 x.2.2 4).1 _ _).bind fun q _ => ?_
+          refine (PRuns.sendMsg _ _ _).bind fun _ _ => (PRuns.powB nonce _ _).bind fun _ _ =>
+            (PRuns.sample resp _ _).bind fun _ _ =>
+            (PRuns.modify _ (fun _ => by exact ⟨rfl, rfl, rfl, rfl, rfl⟩) _ _).bind fun _ _ => PRuns.pure ?_ _ _
+          refine ⟨⟨_, rfl, ⟨rfl, fun _ => by rw [Array.size_push, hsz]⟩, Pre.push _ _⟩, fun s' e => ?_⟩
+          obtain rfl := ForInStep.yield.inj e
+          rfl
+        · obtain ⟨⟨s', rfl, -⟩, hcap⟩ := hr
+          have hp := (hx s' rfl).1
+          rw [hcap s' rfl] at hp
+          have := Pre.get hp
+          rw [hsz] at this
+          exact this.symm
+      · rw [loop_stepL P (cfOf resp L) sch _ hj1]
+        have hjR : j + 1 = sch.levels.size - 1 := by omega
+        generalize loop P (cfOf resp L) sch (x₀ P (cfOf resp L) sch T cm0.cap t) j = x at hs ⊢
+        refine PRuns.bindD (levelChals resp x.2.1 x.2.2) (fun f _ => ?_)
+          (Qf := fun f r => (∃ s', r = .yield s' ∧ (s'.1 = (stepL P (cfOf resp L) sch x).1.1 ∧
+            (j + 1 < sch.levels.size - 1 → s'.2.2.1.size = j + 1 + 1)) ∧ Pre s.2.2.1 s'.2.2.1) ∧
+            ∀ s', r = .yield s' → s'.2.2.2.2.yr = Array.foldl (fun acc v => (acc.push v.c0).push v.c1) #[] f)
+          (Xf := fun _ r => ∀ s', r = .yield s' → Pre s'.2.2.1 P.recursiveCaps ∧
+            (j + 1 = sch.levels.size - 1 → s'.2.2.2.2.yr = P.finalProof.yr))
+          (fun _ _ _ hr => hr.1) (fun _ _ _ _ hx => ⟨trivial, hx⟩)
+        refine PRuns.ite (fun hc => absurd hc (by simp [hjR])) fun _ => ?_
+        refine PRuns.bindY (PRuns.absorbAll _ P.finalProof.yr _ _) (fun _ _ => ?_) (fun _ r _ hr hx => ?_)
+        · refine (PRuns.query resp nonce ms _ s.2.1 (hq _ (by omega)) P.finalProof.rows
+            (chals P (cfOf resp L) #[] x.2.1 x.2.2 4).1 _ _).bind fun q _ => ?_
+          refine (PRuns.powB nonce _ _).bind fun _ _ => (PRuns.sample resp _ _).bind fun _ _ => PRuns.pure ?_ _ _
+          refine ⟨⟨_, rfl, ⟨hs.1, fun h => absurd h (by omega)⟩, Pre.refl _⟩, fun s' e => ?_⟩
+          obtain rfl := ForInStep.yield.inj e
+          rfl
+        · obtain ⟨⟨s', rfl, -⟩, hyr⟩ := hr
+          exact (hyr s' rfl).symm.trans ((hx s' rfl).2 hjR)
+  obtain ⟨-, -, hl₁, hC⟩ := key
+  subst hP
+  exact ⟨rfl, (hC ⟨Pre.refl _, Pre.refl _, Pre.refl _, Pre.refl _, Pre.refl _⟩ ⟨rfl, rfl⟩ rfl rfl).2, hl₁⟩
+
 end Lg
 
 end FlockComplete.Replay
