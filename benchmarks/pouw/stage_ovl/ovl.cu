@@ -30,6 +30,9 @@
 //   hlo       the commitments at the lowest priority, the GEMMs at the highest
 //   rrW       hhi with the GEMMs in one static order (stage-major, chunk-minor), each after the GEMM W places before it
 //   nodraw    hhi without the draws; nohash: eq without the commitments; hashonly: the k chunks' commitments alone
+//   lite, liteprio, literrW, liteonly: hhi, hprio, rrW and hashonly with each commitment a stand-in of the same
+//             compressions a row (LITE_C, 367 a token-layer) in 128-thread CTAs of LITE_N (8) chained compressions, no
+//             shared memory: what a committer of that shape would cost (its latency understated, its roots not real)
 //
 // env: ARMS, DRAW_US (300), PLAIN_RB (8192), MID (1: stage.cu's frame heads ahead), CARVE (unset: the commitments' and draws'
 // kernels at the driver's carveout; P: P% shared memory), BESIDE_C (367)
@@ -77,12 +80,39 @@ __global__ void stamp(unsigned long long* o) {
   *o = t;
 }
 
+// the commitments' compressions as one small resident kernel: b CTAs of blockDim threads a SM, n chained compressions a
+// thread; ts[0] / ts[1] take the earliest CTA start and the latest CTA end
+__global__ void sha_beside(int n, uint64_t* out, unsigned long long* ts) {
+  unsigned long long t;
+  if (threadIdx.x == 0) {
+    asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t));
+    atomicMin(&ts[0], t);
+  }
+  uint64_t s[8], w[16];
+  s512_iv(s);
+  for (int j = 0; j < 16; j++) w[j] = (uint64_t)(blockIdx.x * blockDim.x + threadIdx.x + 1) * (j + 1);
+  for (int i = 0; i < n; i++) {
+    fr_compress(s, w);
+    for (int j = 0; j < 8; j++) w[j] ^= s[j];
+  }
+  out[blockIdx.x * blockDim.x + threadIdx.x] = s[0];
+  __syncthreads();
+  if (threadIdx.x == 0) {
+    asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t));
+    atomicMax(&ts[1], t);
+  }
+}
+__global__ void ts_reset(unsigned long long* ts) {
+  ts[0] = ~0ull;
+  ts[1] = 0;
+}
+
 // CARVE=P: the commitments' and the draws' kernels prefer a P% shared-memory carveout (100: the most, as the GEMMs), so
 // an SM need not drain to switch its carveout between them and a GEMM's CTAs
 static int g_carve = -1;
 static void set_carve(int p) {
   const void* f[] = {(const void*)fr_salt, (const void*)fr_mid0, (const void*)fr_segments, (const void*)fr_tree,
-                     (const void*)draw_stamp, (const void*)stamp};
+                     (const void*)draw_stamp, (const void*)stamp, (const void*)sha_beside};
   for (const void* k : f) CK(cudaFuncSetAttribute(k, cudaFuncAttributePreferredSharedMemoryCarveout, p));
   g_carve = p;
 }
@@ -101,18 +131,24 @@ struct Sched {
   int hp;        // the commitments' stream: 0 the chunk's own, 1 one of their own at the highest priority, -1 at the lowest
                  // with the GEMMs at the highest
   int rr;        // > 0: the GEMMs in one static order, each after the one rr places before it
+  bool lite;     // each commitment a stand-in: its stage's compressions a row (LITE_C) in 128-thread CTAs of LITE_N
+                 // chained compressions a thread, no shared memory (the shape beside's probe hides next to GEMMs)
 };
 static Sched sched_of(const std::string& n) {
-  if (n == "chunked") return {n, false, false, true, false, 0, 0};
-  if (n == "eq") return {n, true, true, true, false, 0, 0};
-  if (n == "prio") return {n, true, true, true, true, 0, 0};
-  if (n == "hhi") return {n, true, true, true, false, 1, 0};
-  if (n == "hprio") return {n, true, true, true, true, 1, 0};
-  if (n == "hlo") return {n, true, true, true, false, -1, 0};
-  if (n == "nodraw") return {n, true, false, true, false, 1, 0};
-  if (n == "nohash") return {n, false, true, true, false, 0, 0};
-  if (n == "hashonly") return {n, true, false, false, false, 0, 0};
-  if (n.rfind("rr", 0) == 0) return {n, true, true, true, false, 1, atoi(n.c_str() + 2)};
+  if (n == "chunked") return {n, false, false, true, false, 0, 0, false};
+  if (n == "eq") return {n, true, true, true, false, 0, 0, false};
+  if (n == "prio") return {n, true, true, true, true, 0, 0, false};
+  if (n == "hhi") return {n, true, true, true, false, 1, 0, false};
+  if (n == "hprio") return {n, true, true, true, true, 1, 0, false};
+  if (n == "hlo") return {n, true, true, true, false, -1, 0, false};
+  if (n == "nodraw") return {n, true, false, true, false, 1, 0, false};
+  if (n == "nohash") return {n, false, true, true, false, 0, 0, false};
+  if (n == "hashonly") return {n, true, false, false, false, 0, 0, false};
+  if (n.rfind("rr", 0) == 0) return {n, true, true, true, false, 1, atoi(n.c_str() + 2), false};
+  if (n == "lite") return {n, true, true, true, false, 1, 0, true};
+  if (n == "liteprio") return {n, true, true, true, true, 1, 0, true};
+  if (n == "liteonly") return {n, true, false, false, false, 1, 0, true};
+  if (n.rfind("literr", 0) == 0) return {n, true, true, true, false, 1, atoi(n.c_str() + 6), true};
   fprintf(stderr, "unknown arm %s\n", n.c_str());
   exit(1);
 }
@@ -214,6 +250,16 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
   CK(cudaDeviceGetStreamPriorityRange(&lo, &hi));
   const int levels = lo - hi + 1;
   cudaStream_t sm = prio_stream(lo);
+  // the lite arms' stand-in commitments: a stage's compressions a row (segments, row, salt part, hm96 leaf, frame leaf,
+  // node; 367 a token-layer in all) in 128-thread CTAs of lite_n chained compressions a thread
+  const int LITE_C[NSTAGE] = {48, 67, 14, 48, 48, 143};
+  const int lite_n = getenv("LITE_N") ? atoi(getenv("LITE_N")) : 8;
+  int lite_grid[NSTAGE];
+  for (int t = 0; t < NSTAGE; t++) lite_grid[t] = (int)(((long long)LITE_C[t] * M + 128LL * lite_n - 1) / (128LL * lite_n));
+  uint64_t* lite_out;
+  unsigned long long* lite_ts;
+  CK(cudaMalloc(&lite_out, (size_t)*std::max_element(lite_grid, lite_grid + NSTAGE) * 128 * sizeof(uint64_t)));
+  CK(cudaMalloc(&lite_ts, 2 * sizeof(unsigned long long)));
   unsigned long long* stamps;
   const int narms = (int)arm_names.size();
   CK(cudaMalloc(&stamps, sizeof(unsigned long long) * ((size_t)K * NSTAMP + 1) * narms));
@@ -248,9 +294,9 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
   const std::vector<uint8_t> ref = roots(K);
 
   printf("{\"mode\": \"ovl_setup\", \"M\": %d, \"k_max\": %d, \"draw_us\": %d, \"plain_rb\": %d, \"levels\": %d, "
-         "\"fr_rot\": %d, \"carve\": %d, \"mid_ahead\": %d, \"macs_chunk\": %.6e, \"gemm_alone_ms_chunk\": %.4f, \"mem_bytes\": {\"before\": "
+         "\"fr_rot\": %d, \"carve\": %d, \"mid_ahead\": %d, \"lite_n\": %d, \"macs_chunk\": %.6e, \"gemm_alone_ms_chunk\": %.4f, \"mem_bytes\": {\"before\": "
          "%zu, \"att_standins\": %zu, \"activations\": %zu, \"commit_state\": %zu}, \"gemms\": [",
-         M, K, draw_us, RB, levels, FR_ROT, g_carve, g_mid, macs_chunk, gemm_alone_ms, mem0, mem_kb - mem0, mem_act - mem_kb,
+         M, K, draw_us, RB, levels, FR_ROT, g_carve, g_mid, lite_n, macs_chunk, gemm_alone_ms, mem0, mem_kb - mem0, mem_act - mem_kb,
          mem_cm - mem_act);
   for (int t = 0; t < NSTAGE; t++)
     printf("%s{\"stage\": \"%s\", \"m\": %d, \"n\": %d, \"k\": %d, \"algo\": %d, \"ms_alone\": %.4f}", t ? ", " : "", SNAME[t], M,
@@ -291,7 +337,7 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
       const Sched S = sched_of(nm);
       if (k == 1 && (S.classes || S.hp || S.rr)) continue;  // one chunk: the same as eq or nodraw
       if (S.rr && S.rr >= k) continue;
-      a.hash = S.hash;
+      a.hash = S.hash && !S.lite;
       a.stamps = S.draw;
       std::vector<cudaStream_t> sg(k), sh(k), ss(k);
       for (int c = 0; c < k; c++) {
@@ -312,7 +358,7 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
         std::vector<std::vector<cudaEvent_t>> salt_ev(k);
         for (int c = 0; c < k; c++) {
           pool.join(sm, sg[c]);
-          if (!S.hash) continue;
+          if (!S.hash || S.lite) continue;
           pool.join(sg[c], ss[c]);
           for (int t = 0; t < NSTAGE; t++) {
             commit_salt(ch[c].cm[t], LAYERS, ss[c]);
@@ -326,8 +372,12 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
               const int s = l * NSTAGE + t, idx = s * k + c;
               if (S.hash) {
                 if (sh[c] != sg[c]) pool.join(sg[c], sh[c]);
-                if (l == 0) CK(cudaStreamWaitEvent(sh[c], salt_ev[c][t], 0));
-                commit_tree(ch[c].cm[t], l, ch[c].op[t], sh[c]);
+                if (S.lite) {
+                  sha_beside<<<lite_grid[t], 128, 0, sh[c]>>>(lite_n, lite_out, lite_ts);
+                } else {
+                  if (l == 0) CK(cudaStreamWaitEvent(sh[c], salt_ev[c][t], 0));
+                  commit_tree(ch[c].cm[t], l, ch[c].op[t], sh[c]);
+                }
                 if (sh[c] != sg[c]) pool.join(sh[c], sg[c]);
               }
               if (S.draw) draw_stamp<<<1, 1, 0, sg[c]>>>((unsigned long long)draw_us * 1000ull, st + (size_t)c * NSTAMP + 2 * s);
@@ -439,33 +489,6 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
     CK(cudaEventDestroy(e1));
   }
   return fails;
-}
-
-// the commitments' compressions as one small resident kernel: b CTAs of blockDim threads a SM, n chained compressions a
-// thread; ts[0] / ts[1] take the earliest CTA start and the latest CTA end
-__global__ void sha_beside(int n, uint64_t* out, unsigned long long* ts) {
-  unsigned long long t;
-  if (threadIdx.x == 0) {
-    asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t));
-    atomicMin(&ts[0], t);
-  }
-  uint64_t s[8], w[16];
-  s512_iv(s);
-  for (int j = 0; j < 16; j++) w[j] = (uint64_t)(blockIdx.x * blockDim.x + threadIdx.x + 1) * (j + 1);
-  for (int i = 0; i < n; i++) {
-    fr_compress(s, w);
-    for (int j = 0; j < 8; j++) w[j] ^= s[j];
-  }
-  out[blockIdx.x * blockDim.x + threadIdx.x] = s[0];
-  __syncthreads();
-  if (threadIdx.x == 0) {
-    asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t));
-    atomicMax(&ts[1], t);
-  }
-}
-__global__ void ts_reset(unsigned long long* ts) {
-  ts[0] = ~0ull;
-  ts[1] = 0;
 }
 
 // beside: whether the commitments' hashing can hide next to the GEMMs if it is shaped to fit beside their CTAs. plain's
