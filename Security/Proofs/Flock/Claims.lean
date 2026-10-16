@@ -11,7 +11,6 @@ import Proofs.Flock.Claims.NumbersTable
 import Proofs.Flock.Claims.NumbersPads
 import Proofs.Flock.Claims.NumbersGamma
 import Proofs.Flock.Claims.NumbersNMin
-import Proofs.Flock.Claims.RootFindGF128
 import Proofs.Flock.Claims.Decode
 import Proofs.Flock.Claims.DecodeFlock
 import Proofs.Flock.Claims.ZkDecode
@@ -24,6 +23,8 @@ import Proofs.Flock.Claims.DeployInputs
 import Proofs.Flock.Claims.Deploy
 import Proofs.Flock.Claims.DeployCode
 import Proofs.Flock.Claims.KS
+import Proofs.Flock.Claims.RootFindGF128
+import Proofs.Flock.Claims.GS
 
 /-! `Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated`, by reflexivity: the guarantee is there for its
 record, which holds the claims' text.
@@ -41,7 +42,9 @@ pads' domain (`NumbersPads`), the weight and `γ` (`NumbersGamma`), and `nMin` (
 `Claims.Flock.Deploy`: the hash-parametric verdict over the oracle (`DeployOC`), the statement's bytes, parser and setup
 (`DeployInputs`), the verifier in public-coin form (`Deploy`), and the code, columns and numbers that complete the
 plain and masked instances (`DeployCode`: `FlockDeploy.deployPlain`, `FlockDeploy.deployZk`). Flock's `KS` at `E^rep`
-from one wait's bound (`KS`). -/
+from one wait's bound (`KS`). A counted Guruswami–Sudan decoder with its `DecoderComplexity`, over Berlekamp's root
+finder in GF(2^128) (`RootFindGF128`), is `GS`; `GS.Radius` states the list-decoding spec in its radius form
+(`Flock.ListWithin`) and proves that decoder meets it at Flock's level-0 code. -/
 
 /-- **The claims are stated** (`Flock.Guarantees.ClaimsStated`). -/
 theorem Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated := rfl
