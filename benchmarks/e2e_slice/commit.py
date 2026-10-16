@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import multiprocessing as mp
 import os
+import time
 
 import numpy as np
 
@@ -75,6 +76,14 @@ def commit_strings(rows: np.ndarray, salts: np.ndarray) -> np.ndarray:
     return np.concatenate([b, c], axis=1)
 
 
+def label_a(session: str, rnd: int, call: int) -> dict:
+    return {"session": session, "round": rnd, "call": call, "operand": "A"}
+
+
+def label_b(session: str) -> dict:
+    return {"session": session, "operand": "B", "layer": "llama-3.1-8b/o_proj"}
+
+
 def domain(label: dict, count: int) -> CommitmentDomain:
     return CommitmentDomain(identity_digest_sha512(BINDING_TAG, label), OWNER, RangeIndexedDomain(0, count), hash="sha512")
 
@@ -95,6 +104,7 @@ def leaf_salt(salt_key: bytes, label: dict, pos: int) -> bytes:
 
 
 def _chunk(args):
+    t = time.process_time()
     path, shape, label, count, salt_key, ci = args
     X = np.memmap(path, np.int8, "r", shape=shape)
     per_row = shape[1] // 32
@@ -108,14 +118,14 @@ def _chunk(args):
         level = [dom.node(depth, base + i // 2, level[i], level[i + 1]) for i in range(0, len(level), 2)]
         levels.append(level)
         depth += 1
-    return bc.tobytes(), [b"".join(lv) for lv in levels]
+    return bc.tobytes(), [b"".join(lv) for lv in levels], time.process_time() - t
 
 
 class Tree:
-    """One operand's committed tree: its root, every leaf's b || c and the levels (for paths)."""
+    """One operand's committed tree: its root, every leaf's b || c, the levels (for paths) and the workers' CPU seconds."""
 
-    def __init__(self, label: dict, count: int, bc: bytes, levels: list[bytes]):
-        self.label, self.count, self.bc, self.levels = label, count, bc, levels
+    def __init__(self, label: dict, count: int, bc: bytes, levels: list[bytes], cpu_s: float = 0.0):
+        self.label, self.count, self.bc, self.levels, self.cpu_s = label, count, bc, levels, cpu_s
         self.root = levels[-1]
 
     def path(self, pos: int) -> list[bytes]:
@@ -143,7 +153,7 @@ def commit_operand(pool, path: str, shape: tuple[int, int], label: dict, salt_ke
         level = [dom.node(depth, i // 2, level[i], level[i + 1]) for i in range(0, len(level), 2)]
         levels.append(b"".join(level))
         depth += 1
-    return Tree(label, count, bc, levels)
+    return Tree(label, count, bc, levels, sum(p[2] for p in parts))
 
 
 def verify_path(label: dict, count: int, root: bytes, pos: int, bc: bytes, path: list[bytes]) -> bool:
@@ -155,6 +165,23 @@ def verify_path(label: dict, count: int, root: bytes, pos: int, bc: bytes, path:
         idx = pos >> d
         cur = dom.node(d, idx // 2, cur, sib) if idx % 2 == 0 else dom.node(d, idx // 2, sib, cur)
     return cur == root
+
+
+RECEIPT_SCHEMA = "verity/e2e-slice/duo-receipts/v1"
+
+
+def receipt_root(R: np.ndarray, session: str, rnd: int, call: int, salt_key: bytes) -> bytes:
+    """A call's duo receipts (tiles x NCT x 8 u32) under one frame-v3-sha512 tree, a leaf a tile: its 64-byte salt (SHAKE-256
+    of the salt key and the tree's label) then the tile's 16 KB of receipts."""
+    from verity.ml.commitments.merkle import tree_levels
+
+    label = {"session": session, "round": rnd, "call": call, "operand": "receipts"}
+    tiles, raw = R.shape[0], np.ascontiguousarray(R).tobytes()
+    per = len(raw) // tiles
+    salts = hashlib.shake_256(b"verity/e2e-slice/receipt-salt/v1\0" + salt_key + identity_digest_sha512(BINDING_TAG, label)).digest(64 * tiles)
+    dom = domain(label, tiles)
+    return tree_levels(dom, [dom.leaf(t, t, RECEIPT_SCHEMA, salts[64 * t:64 * t + 64] + raw[per * t:per * t + per])
+                             for t in range(tiles)])[-1][0]
 
 
 def pool(workers: int | None = None):
