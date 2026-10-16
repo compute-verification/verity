@@ -20,7 +20,7 @@ spec = importlib.util.spec_from_file_location("check_for_lean_records", ROOT / "
 CHECK = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(CHECK)
 
-#: `audit.py` as far as `--records` sees it: its arguments, working directory, threads, Lean slot and the lock files it holds
+#: `check.py` as far as `--records` sees it: its arguments, working directory, threads, Lean slot and the lock files it holds
 #: open logged; reports under `--out` as `--no-replay` leaves them (no replay time); `--update` writing a record
 FAKE_AUDIT = """\
 import json, os, sys
@@ -51,7 +51,7 @@ sys.exit(rc)
 
 @pytest.fixture
 def repo(tmp_path, monkeypatch) -> Path:
-    """A checkout with package `a` (a git dependency, and `p` by path), `p` and `c`; `audit.py` as `FAKE_AUDIT`; no Lean slots
+    """A checkout with package `a` (a git dependency, and `p` by path), `p` and `c`; `check.py` as `FAKE_AUDIT`; no Lean slots
     file and no run, whatever machine runs the tests."""
     root = tmp_path / "repo"
     files = {
@@ -69,8 +69,8 @@ def repo(tmp_path, monkeypatch) -> Path:
         monkeypatch.setattr(m, "ROOT", root)
     monkeypatch.setattr(LC.LA.COMMON, "tracked_files", lambda r=None: sorted(files))
     monkeypatch.setattr(LC.LA.COMMON, "cores", lambda: 2)
-    (tmp_path / "audit.py").write_text(FAKE_AUDIT)
-    monkeypatch.setattr(LC, "AUDIT_PY", tmp_path / "audit.py")
+    (tmp_path / "check.py").write_text(FAKE_AUDIT)
+    monkeypatch.setattr(LC, "AUDIT_PY", tmp_path / "check.py")
     monkeypatch.setenv("AUDIT_LOG", str(tmp_path / "audit.log"))
     monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "cache"))
     for k in (LC.LEAN_SLOT.HELD, "LEAN_SLOT_POOL", "RESEARCH_LANE", "RESEARCH_RUN_DIR", "RESEARCH_RUN_ID", "CHECK_SLOT",
@@ -107,7 +107,7 @@ def test_the_audit_runs_without_the_replay_on_the_trees_own_copy_of_the_audits_d
     assert copied.read_text() == "olean" and copied.stat().st_ino != kept.stat().st_ino, "a copy, never a link to the audit's"
     assert json.loads((tree / LC.LINKS).read_text()) == {"a": k}
     out = capsys.readouterr().out
-    assert f"dependencies copied ({k[:12]})" in out and "lean-records: a: audit.py exit 0" in out
+    assert f"dependencies copied ({k[:12]})" in out and "lean-records: a: check.py exit 0" in out
 
     assert LC.audit_records("a", deps, tree, update=True) == 0
     assert _argv(_calls(tmp_path)[0]) == ["--build", "--no-replay", "--no-runs", "--update", "--out", "OUT", str(tree / "a")]
@@ -253,7 +253,7 @@ def test_a_tree_keeps_one_packages_dependencies(repo, tmp_path):
 
 def test_it_holds_a_lean_slot_of_pool_build_and_works_on_that_slots_tree(repo, tmp_path, monkeypatch, capsys):
     """Never the `audit` pool, where hour-long audits hold every slot, nor the one LEAN_SLOT_POOL names, nor the one LEAN_SLOT
-    says its caller holds; audit.py holds the slot's lock itself. A node whose SLOTS lists no `build` refuses it, even with an
+    says its caller holds; check.py holds the slot's lock itself. A node whose SLOTS lists no `build` refuses it, even with an
     `any` pool, and nothing runs."""
     deps, slots = tmp_path / "deps", tmp_path / "locks" / "lean-slots"
     slots.parent.mkdir()
@@ -266,7 +266,7 @@ def test_it_holds_a_lean_slot_of_pool_build_and_works_on_that_slots_tree(repo, t
     os.close(held)
     (call,) = _calls(tmp_path)
     assert call["lean_slot"] == "build/1" and LC.LEAN_SLOT.HELD not in os.environ
-    assert call["locks"] == [str(slots.parent / "lean-build-1.lock")], "the slot is held until audit.py exits, whoever dies first"
+    assert call["locks"] == [str(slots.parent / "lean-build-1.lock")], "the slot is held until check.py exits, whoever dies first"
     tree = tmp_path / "cache" / "lean-records" / "build-1"
     assert (tree / "p" / "Pp.lean").is_file() and not (tmp_path / "cache" / "lean-records" / "build-0").exists()
     fd = os.open(slots.parent / "lean-build-1.lock", os.O_RDWR)

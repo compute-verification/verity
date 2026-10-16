@@ -86,8 +86,8 @@ def test_a_recorded_package_passes_and_its_record_is_the_statement():
     assert list(pol["reads"]["P.Defs"]["definitions"]) == ["P.f"] and pol["reads"]["P.Defs"]["guarantees"] == ["P.t"]
     assert all(g["digest"] == A.module_digest(g["definitions"]) for g in pol["reads"].values())
     assert A.judge(pol, facts(), FILES) == ([], pol)
-    assert A.judge(POLICY, facts(), FILES)[0] == ["guarantees: P.t has no record; run `audit.py --update` and commit the record",
-                                                  "assumptions: P.Hyp has no record; run `audit.py --update` and commit the record"]
+    assert A.judge(POLICY, facts(), FILES)[0] == ["guarantees: P.t has no record; run `check.py --update` and commit the record",
+                                                  "assumptions: P.Hyp has no record; run `check.py --update` and commit the record"]
 
 
 def test_every_field_of_a_reads_record_is_checked():
@@ -98,14 +98,14 @@ def test_every_field_of_a_reads_record_is_checked():
                                                  "`python tools/verity/lean/merge.py --normalize` recomputes it"]
     readers = pol | {"reads": pol["reads"] | {"P.Defs": group | {"guarantees": ["P.t", "P.u"]}}}
     assert A.judge(readers, facts(), FILES)[0] == ["guarantees: those that read P.Defs are P.t; the record lists "
-                                                   "P.t, P.u; run `audit.py --update`"]
+                                                   "P.t, P.u; run `check.py --update`"]
 
 
 def test_every_guarantee_has_an_owner_and_an_update_keeps_it():
     pol = recorded()
     bare = {**POLICY, "guarantees": {"P.t": {}}}
     no_owner = ('guarantees: P.t has no owner: write "owner": "@lane" in its entry, the handle of the lane that answers for '
-                'it, or run `audit.py --update --owner @lane`')
+                'it, or run `check.py --update --owner @lane`')
     fails, written = A.judge(bare, facts(), FILES, update=True)
     assert fails == [no_owner] and written["guarantees"] == {"P.t": {}}, "no record is written for a guarantee without an owner"
     assert A.judge(bare, facts(), FILES, update=True, owner="@proofs")[1]["guarantees"]["P.t"]["owner"] == "@proofs"
@@ -145,7 +145,7 @@ def test_a_guarantee_reads_only_spec_definitions_and_pinned_dependencies():
     unlocked = pol | {"meaning": ["P.Assumptions"]}
     assert A.spec_reads(unlocked, spec_facts(outside=[("P.f", "P.Defs")]), home) == [
         "reads: P.t read P.f in P.Defs, a spec module outside `meaning`, so the record holds nothing of them: add P.Defs to "
-        "`meaning` and run `audit.py --update`"]
+        "`meaning` and run `check.py --update`"]
     exempt = pol | {"reads_exempt": {"P.Proofs": "until its spec is extracted", "P.Old": "stale"}}
     assert A.spec_reads(exempt, spec_facts(reads=fact()["reads"] + extra), home) == [
         "reads: `reads_exempt` lists P.Old, under which no guarantee reads outside the spec; remove the entry"]
@@ -166,7 +166,7 @@ def test_a_reads_exemption_names_a_prefix_and_a_reason_and_covers_only_reads_out
     spec_only = pol | {"reads_exempt": {"P.Defs": "hides a spec module outside meaning"}}
     assert A.spec_reads(spec_only, spec_facts(outside=[("P.f", "P.Defs")]), home) == [
         "reads: P.t read P.f in P.Defs, a spec module outside `meaning`, so the record holds nothing of them: add P.Defs to "
-        "`meaning` and run `audit.py --update`",
+        "`meaning` and run `check.py --update`",
         "reads: `reads_exempt` lists P.Defs, under which no guarantee reads outside the spec; remove the entry"]
     whole = pol | {"meaning": ["P"], "reads_exempt": {"P": "covers spec modules only"}}
     assert A.spec_reads(whole, spec_facts(outside=[("P.f", "P.Defs")]), home) == [
@@ -599,7 +599,7 @@ def test_naming_the_anonymous_instances_keeps_their_names_and_the_record(tmp_pat
     assert audit(update=True)["failures"] == [
         f"instance: Control/Inst.lean:{line} declares an instance without a name, which Lean names Control.{n} from its type "
         f"(and, when nothing in the type is the project's own, its project's root): a move or a split renames it, and with it "
-        f"every record whose definitions use it. Write `instance {n}` there (`audit.py --name-instances` writes each one)"
+        f"every record whose definitions use it. Write `instance {n}` there (`check.py --name-instances` writes each one)"
         for line, n in ((6, "instInhabitedBox"), (7, "instToStringBox"), (9, "instInhabitedNat_control"),
                         (10, "instInhabitedFinOfNatNat_control"))]
     record = (pkg / A.POLICY).read_text()
@@ -953,6 +953,28 @@ def test_a_premise_the_lock_does_not_list_fails():
         "with its guarantees' owner and commit the record (Daniel's DM shows it when it lands)"]
 
 
+def test_the_verifiers_path_has_no_unlisted_compiled_code_and_hashes_through_its_parameter():
+    """Daniel's checks (a) and (b) on the verifier's path (`verifier` in the policy): an `@[extern]` or `@[implemented_by]`
+    constant its entries reach fails unless `allow` names it (a name prefix, or `module:` for a module), and so does each
+    entry into the `hash` namespace that bypasses `stop`, naming its path; a missing entry is named; no rule, no checks."""
+    path = {"missing": ["P.gone"], "reached": 40,
+            "implemented_by": [{"name": "P.fast", "module": "P.Defs", "by": "P.fastImpl"}],
+            "extern": [{"name": "Nat.add", "module": "Init.Prelude"}, {"name": "ByteArray.push", "module": "Init.Data.ByteArray"}],
+            "hash": [{"name": "P.Sha512.hash", "module": "P.Hash", "path": ["P.verify", "P.tag", "P.Sha512.hash"]}]}
+    rule = {"entries": ["P.verify", "P.gone"], "stop": ["P.key"], "hash": "P.Sha512", "allow": ["Nat.add", "module:Init.Data"]}
+    fails = A.verifier_failures(rule, path)
+    assert fails == [
+        "verifier: entry P.gone is not a constant of the build; fix `verifier.entries`",
+        "verifier: P.fast (@[implemented_by], in P.Defs) is on the path from P.verify, P.gone: compiled code no proof sees; "
+        "add it to `verifier.allow` only if it is a core primitive",
+        "verifier: P.verify, P.gone reach P.Sha512.hash outside the hash parameter, by P.verify -> P.tag -> P.Sha512.hash; "
+        "route it through the parameter, or add the public constant it serves to `verifier.stop`"]
+    assert A.verifier_failures(None, path) == []
+    assert A.verifier_failures(rule, None)[0].startswith("verifier: `Facts.lean` reported no verifier path")
+    f = facts(); f["verifier"] = {**path, "missing": [], "implemented_by": [], "hash": []}
+    assert A.judge({**POLICY, "verifier": rule}, f, FILES, update=True)[0] == []
+
+
 def test_an_assumption_is_listed_by_name_with_its_record():
     """Each assumption has an owner and the digest of its definition as `reads` holds it, so a changed assumption is its own
     record; an entry no guarantee reads fails; an update converts a list of assumption modules into the definitions read
@@ -961,14 +983,14 @@ def test_an_assumption_is_listed_by_name_with_its_record():
     assert pol["assumptions"] == {"P.Hyp": {"owner": "@lean", "digest": pol["reads"]["P.Assumptions"]["definitions"]["P.Hyp"]}}
     changed = facts(pins={"P.t": fact(reads=[{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "1" * 32},
                                              {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "4" * 32}])})
-    assert "assumptions: P.Hyp's definition in P.Assumptions changed; run `audit.py --update` and commit the record " \
+    assert "assumptions: P.Hyp's definition in P.Assumptions changed; run `check.py --update` and commit the record " \
            "(Daniel's DM shows the change when it lands)" in A.judge(pol, changed, FILES)[0]
     unread = {**pol, "assumptions": pol["assumptions"] | {"P.Other": {"owner": "@lean", "digest": "0" * 64}}}
     assert A.judge(unread, facts(), FILES)[0] == ["assumptions: P.Other is listed, but no guarantee reads it; remove the entry"]
     assert A.judge(unread, facts(), FILES, update=True)[1]["assumptions"] == pol["assumptions"]
     unowned = {**pol, "assumptions": {"P.Hyp": {"digest": pol["assumptions"]["P.Hyp"]["digest"]}}}
     assert A.judge(unowned, facts(), FILES)[0] == ['assumptions: P.Hyp has no owner: write "owner": "@lane" in its entry, or '
-                                                   'run `audit.py --update --owner @lane`']
+                                                   'run `check.py --update --owner @lane`']
     unlisted = {**pol, "assumptions": {}}
     assert A.judge(unlisted, facts(), FILES)[0][0] == ("guarantees: P.t assumes (h : P.Hyp), a closed Prop that is not a "
                                                        "named assumption: a Prop constant listed under `assumptions`")

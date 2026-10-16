@@ -479,5 +479,18 @@
  },
  "dependencies": {
   "toolchain": "513be6f65da6a790e2509328291cf6b3b0a116c63fe0c492f467adf0b068c114"
+ },
+ "verifier": {
+  "entries": ["Flock.verifyWith", "Flock.Zk.verifyWith"],
+  "stop": [
+   "Flock.Hm96.Default512.cols",
+   "Flock.Hm96.Default512.key",
+   "Flock.Hm96.Default512.leafPrefix",
+   "Flock.Hm96.Default512.mask",
+   "Flock.Hm96.Default512.saltPrefix",
+   "Flock.Hm96.Default512.tables"
+  ],
+  "hash": "Flock.Sha512",
+  "allow": ["module:Init"]
  }
 }
