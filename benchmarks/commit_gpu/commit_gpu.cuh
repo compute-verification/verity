@@ -432,9 +432,20 @@ struct RowBytes {
   u32 lb;
   DEV void digest(u64 pos, u64* x) const { hash_after_block(C.mid_P, Contig{base + pos * stride}, lb, x); }
 };
+#ifdef COMMIT_GPU_DIAG_NOOP
+// timing only: a leaf's bytes from registers, the same compressions without the operand's loads
+struct FakeSrc {
+  u32 seed;
+  DEV uint4 ld16(u32 off) const { return make_uint4(seed ^ off, seed + off, seed * 3u ^ off, off); }
+};
+#endif
 struct RowTile {
   TileGeom g;
+#ifdef COMMIT_GPU_DIAG_NOOP
+  DEV void digest(u64 pos, u64* x) const { hash_after_block(C.mid_P, FakeSrc{(u32)pos}, 32 * g.R, x); }
+#else
   DEV void digest(u64 pos, u64* x) const { hash_after_block(C.mid_P, g.block(pos), 32 * g.R, x); }
+#endif
 };
 
 DEV void ld8(const u64* p, u64* d) {
@@ -493,8 +504,13 @@ template <int SX>
 DEV void leaf_from_digest(int dom, u64 pos, const u64* x, const u64* __restrict__ S, u64* out, u64* __restrict__ bc,
                           const u64* __restrict__ F = nullptr) {
   u64 B[16];
+#ifdef COMMIT_GPU_DIAG_NOS   // timing only: S[pos] and F[pos] from registers
+#pragma unroll
+  for (int i = 0; i < 16; ++i) B[i] = pos * (2 * i + 1);
+#else
   ld8(S + 16 * pos, B);
   ld8(S + 16 * pos + 8, B + 8);
+#endif
 #pragma unroll
   for (int i = 0; i < 8; ++i) B[i] ^= x[i];
   if (bc) {
@@ -510,7 +526,12 @@ DEV void leaf_from_digest(int dom, u64 pos, const u64* x, const u64* __restrict_
   sha::compress_kw(h, C.kw_leafpad);
 #endif
   if (F) {
+#ifdef COMMIT_GPU_DIAG_NOS
+#pragma unroll
+    for (int i = 0; i < 8; ++i) out[i] = pos ^ (u64)i << 40;
+#else
     ld8(F + 8 * pos, out);
+#endif
     frame_second<SX>(dom, pos, h, out);
   } else {
     frame_leaf<SX>(dom, pos, h, out);
@@ -569,6 +590,25 @@ DEV void fold_cta(int dom, u64* levels, u64 width, u32 cnt, int L) {
     }
   }
 }
+#ifdef COMMIT_GPU_DIAG_NOTREE
+// timing only: fold_cta's compressions and barriers on the thread's own node o, without the levels' loads and stores
+// (the CTA's root, level L, is still stored for the levels above)
+DEV void fold_cta_regs(int dom, u64* levels, u64 width, u32 cnt, int L, u64* o) {
+  const u32 t = threadIdx.x;
+  for (int l = 1; l <= L; ++l) {
+    __syncthreads();
+    const u32 m = cnt >> l;
+    if (t < m) {
+      const u64 i = (u64)blockIdx.x * m + t;
+      u64 Lc[8], Rc[8];
+#pragma unroll
+      for (int j = 0; j < 8; ++j) { Lc[j] = o[j]; Rc[j] = o[(j + 1) & 7]; }
+      node(dom, l - 1, i, Lc, Rc, o);
+      if (l == L) st8(level_at(levels, width, l) + 8 * i, o);
+    }
+  }
+}
+#endif
 
 // The small path's salt phase for slots s0 .. s0 + gridDim.y - 1 of the commitments of one domain (S_k = S + 16 n k), and
 // with slot 0 the frame leaves' first blocks F and the pads (positions n .. width) into level 0 with every CTA subtree that
@@ -607,6 +647,18 @@ __global__ void __launch_bounds__(SMALL_THREADS, SMALL_MINB)
                u64* __restrict__ bc) {
   const u64 pos = (u64)blockIdx.x * SMALL_THREADS + threadIdx.x;
   const u32 cnt = (u32)(width < SMALL_THREADS ? width : SMALL_THREADS);
+#ifdef COMMIT_GPU_DIAG_NOTREE
+  u64 out[8] = {};
+  if (pos < n) {
+    u64 x[8];
+    row.digest(pos, x);
+    leaf_from_digest<SX>(dom, pos, x, S, out, bc, F);
+    st8(levels + 8 * pos, out);
+  }
+  int L = 0;
+  while ((1u << L) < cnt) ++L;
+  fold_cta_regs(dom, levels, width, cnt, L, out);
+#else
   if (pos < n) {
     u64 x[8], out[8];
     row.digest(pos, x);
@@ -616,6 +668,7 @@ __global__ void __launch_bounds__(SMALL_THREADS, SMALL_MINB)
   int L = 0;
   while ((1u << L) < cnt) ++L;
   fold_cta(dom, levels, width, cnt, L);
+#endif
 }
 
 // Levels d+1 .. d+nl from level d (at most SMALL_TOP nodes) in one CTA through global memory.

@@ -46,7 +46,8 @@
 //             operands, levels and params for `reference.py verify` (benchmarks/commit_gpu) after the lease
 //
 // env: ARMS, DRAW_US (300), PLAIN_RB (8192), MID (1: stage.cu's frame heads ahead), CARVE (unset: the commitments' and draws'
-// kernels at the driver's carveout; P: P% shared memory), BESIDE_C (367), CG_R (64), CG_DUMP
+// kernels at the driver's carveout; P: P% shared memory), BESIDE_C (367), CG_R (64), CG_DUMP, CG_SKIP (timing only: salts,
+// leaves, top dropped from the cg arms' graphs; with commit_gpu's -DCOMMIT_GPU_DIAG_* builds, run.sh's cgdiag breakdown)
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a [-DFR_ROT=BITS] ovl.cu -lcublasLt -lnvidia-ml -ldl
 #include <cublasLt.h>
 #include <cuda.h>
@@ -81,6 +82,21 @@ namespace cg {
 #include "../../commit_gpu/commit_gpu.cuh"
 }
 #undef HD  // sha512.cuh's qualifier macro; HD below is stage.cu's head dimension
+// commit_gpu's timing-only builds (-DCOMMIT_GPU_DIAG_*), named in ovl_setup's cg_diag
+static const char* const CG_DIAG = ""
+#ifdef COMMIT_GPU_DIAG_NOOP
+                                   "noop "
+#endif
+#ifdef COMMIT_GPU_DIAG_NOS
+                                   "nos "
+#endif
+#ifdef COMMIT_GPU_DIAG_NOMASK
+                                   "nomask "
+#endif
+#ifdef COMMIT_GPU_DIAG_NOTREE
+                                   "notree "
+#endif
+    ;
 
 // the draw: one thread waits ns on the global timer and stamps when it started (its commitment done) and ended
 __global__ void draw_stamp(unsigned long long ns, unsigned long long* o) {
@@ -438,11 +454,17 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
   CK(cudaGetLastError());
   const std::vector<uint8_t> ref = roots(K);
 
-  printf("{\"mode\": \"ovl_setup\", \"M\": %d, \"k_max\": %d, \"draw_us\": %d, \"plain_rb\": %d, \"levels\": %d, "
+  // CG_SKIP (timing only; the cg arms' roots then differ): any of salts, leaves, top drops those launches from the cg
+  // arms' graphs, so a phase's share is the difference
+  const std::string cg_skip = getenv("CG_SKIP") ? getenv("CG_SKIP") : "";
+  const bool skip_salts = cg_skip.find("salts") != std::string::npos, skip_leaves = cg_skip.find("leaves") != std::string::npos,
+             skip_top = cg_skip.find("top") != std::string::npos;
+  printf("{\"mode\": \"ovl_setup\", \"M\": %d, \"k_max\": %d, \"draw_us\": %d, \"plain_rb\": %d, \"levels\": %d, \"cg_skip\": \"%s\", "
+         "\"cg_diag\": \"%s\", "
          "\"fr_rot\": %d, \"carve\": %d, \"mid_ahead\": %d, \"lite_n\": %d, \"cg_r\": %d, \"cg_leaves\": [%llu, %llu, %llu, %llu, %llu, %llu], "
          "\"macs_chunk\": %.6e, \"gemm_alone_ms_chunk\": %.4f, \"mem_bytes\": {\"before\": "
          "%zu, \"att_standins\": %zu, \"activations\": %zu, \"commit_state\": %zu, \"cg_state\": %zu}, \"gemms\": [",
-         M, K, draw_us, RB, levels, FR_ROT, g_carve, g_mid, lite_n, use_cg ? CGR : 0, (unsigned long long)cg_n[0],
+         M, K, draw_us, RB, levels, cg_skip.c_str(), CG_DIAG, FR_ROT, g_carve, g_mid, lite_n, use_cg ? CGR : 0, (unsigned long long)cg_n[0],
          (unsigned long long)cg_n[1], (unsigned long long)cg_n[2], (unsigned long long)cg_n[3], (unsigned long long)cg_n[4],
          (unsigned long long)cg_n[5], macs_chunk, gemm_alone_ms, mem0, mem_kb - mem0, mem_act - mem_kb, mem_cm - mem_act, mem_cg - mem_cm);
   for (int t = 0; t < NSTAGE; t++)
@@ -510,7 +532,9 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
           if (!S.hash || (S.lite && S.lite != 3)) continue;
           pool.join(sg[c], ss[c]);
           for (int t = 0; t < NSTAGE; t++) {
-            if (S.lite == 3) ch[c].cgc[t].salts<true>(nullptr, ss[c], 0, 1);
+            if (S.lite == 3) {
+              if (!skip_salts) ch[c].cgc[t].salts<true>(nullptr, ss[c], 0, 1);
+            }
             else commit_salt(ch[c].cm[t], LAYERS, ss[c]);
             salt_ev[c][t] = pool.get();
             CK(cudaEventRecord(salt_ev[c][t], ss[c]));
@@ -535,11 +559,11 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
                   // the next layer's salts for this stage on the chunk's salt stream, behind this commitment: they run
                   // beside the GEMMs, NSTAGE stages ahead of their use
                   CK(cudaStreamWaitEvent(sh[c], salt_ev[c][s], 0));
-                  ch[c].cgc[t].tiles(ch[c].op[t], M, SK[t], CGR, false, sh[c], l);
-                  ch[c].cgc[t].nodes(sh[c]);
+                  if (!skip_leaves) ch[c].cgc[t].tiles(ch[c].op[t], M, SK[t], CGR, false, sh[c], l);
+                  if (!skip_top) ch[c].cgc[t].nodes(sh[c]);
                   if (l + 1 < LAYERS) {
                     pool.join(sh[c], ss[c]);
-                    ch[c].cgc[t].salts<true>(nullptr, ss[c], l + 1, 1);
+                    if (!skip_salts) ch[c].cgc[t].salts<true>(nullptr, ss[c], l + 1, 1);
                     salt_ev[c][s + NSTAGE] = pool.get();
                     CK(cudaEventRecord(salt_ev[c][s + NSTAGE], ss[c]));
                   }

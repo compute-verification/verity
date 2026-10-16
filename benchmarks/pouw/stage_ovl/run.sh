@@ -13,6 +13,10 @@
 # The cg arms (commit_gpu's committer): CG_RS (64), the tile heights; ovl runs with ARMS at the first and with CG_ARMS
 # (plain chunked chunkedrr2 chunkedrr4 cgrr2 cgrr4 cgonly nohashrr4) over CG_KS (8 16) at each further one. Every such
 # run dumps chunk 0's six commitments, which `reference.py verify` holds to verity.ml.commitments after the lease.
+# cgdiag: the committer's breakdown at each M (DIAG_R, 128; DIAG_KS, 8; DIAG_ARMS, chunked cgrr2 cgonly liteconly litecrr2):
+# ovl, then each timing-only build of DIAGS (noop nos nomask notree all: commit_gpu's -DCOMMIT_GPU_DIAG_*, the same
+# compressions without the operand's loads, the salt records' loads, M_key y's lookups, the CTA levels' global memory;
+# all four) and ovl with CG_SKIP=salts and CG_SKIP=top, into diag-NAME.jsonl (its cg roots differ by construction).
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -23,6 +27,8 @@ export B; B=$(mktemp -d /tmp/stage-ovl.XXXXXX); trap 'rm -rf "$B"' EXIT
 export MS=${MS:-512 1024 2048} KS=${KS:-1 2 4 8 16 32} REPS=${REPS:-5} PARTS=${PARTS:-thru gate ovl}
 export BESIDE=${BESIDE:-2048:4 2048:16 512:32}
 export CG_RS=${CG_RS:-64} CG_KS=${CG_KS:-8 16} CG_ARMS=${CG_ARMS:-plain chunked chunkedrr2 chunkedrr4 cgrr2 cgrr4 cgonly nohashrr4}
+export DIAGS=${DIAGS:-noop nos nomask notree all} DIAG_R=${DIAG_R:-128} DIAG_KS=${DIAG_KS:-8}
+export DIAG_ARMS=${DIAG_ARMS:-chunked cgrr2 cgonly liteconly litecrr2}
 export PYTHONPATH=.
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 nvcc --version | tail -2 > "$O/nvcc.txt"
@@ -30,6 +36,17 @@ if [[ " $PARTS " == *" cgcheck "* ]]; then
   nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/commit_gpu" $G/commit_gpu.cu -lcublasLt -lnvidia-ml \
     > "$O/build-commit_gpu.log" 2>&1 &
   python3 $G/reference.py prepare "$B/cases" "${CHECK:-full}" > "$O/prepare.jsonl" 2> "$O/prepare.err" &
+fi
+if [[ " $PARTS " == *" cgdiag "* ]]; then
+  for v in $DIAGS; do
+    case $v in
+      all) f="-DCOMMIT_GPU_DIAG_NOOP -DCOMMIT_GPU_DIAG_NOS -DCOMMIT_GPU_DIAG_NOMASK -DCOMMIT_GPU_DIAG_NOTREE" ;;
+      *) f="-DCOMMIT_GPU_DIAG_${v^^}" ;;
+    esac
+    # shellcheck disable=SC2086
+    nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -DFR_ROT="${FR_ROT:-0}" $f -Xptxas -v -o "$B/ovl-$v" $D/ovl.cu \
+      -lcublasLt -lnvidia-ml -ldl > "$O/build-$v.log" 2>&1 &
+  done
 fi
 nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -DFR_ROT="${FR_ROT:-0}" -Xptxas -v -o "$B/ovl" $D/ovl.cu \
   -lcublasLt -lnvidia-ml -ldl > "$O/build.log" 2>&1 || { grep -E "error" "$O/build.log" | head -40; tail -20 "$O/build.log"; exit 4; }
@@ -73,6 +90,15 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-25}" -- bash -c '
     "$B/ovl" gate "$B/c" "$M" >> "$O/gate.jsonl" 2>> "$O/errors.txt"; g=$?
     echo "gate $M rc $g" >> "$O/rc.txt"
     if [ "$g" -ne 0 ]; then gf=5; continue; fi
+    if [[ " $PARTS " == *" cgdiag "* ]]; then
+      for v in base $DIAGS nosalts notop; do
+        bin="$B/ovl-$v" skip=""
+        case $v in base) bin="$B/ovl" ;; nosalts) bin="$B/ovl" skip=salts ;; notop) bin="$B/ovl" skip=top ;; esac
+        [ -x "$bin" ] || { echo "diag $v not built" >> "$O/rc.txt"; continue; }
+        CG_R=$DIAG_R CG_SKIP=$skip ARMS="$DIAG_ARMS" "$bin" ovl "$B/c" "$M" $DIAG_KS "r$REPS" > "$O/diag-$M-$v.jsonl" 2>> "$O/errors.txt"
+        echo "diag $M $v rc $?" >> "$O/rc.txt"
+      done
+    fi
     [[ " $PARTS " == *" ovl "* ]] || continue
     first=1
     for R in $CG_RS; do

@@ -13,7 +13,10 @@
 // (-DCOMMIT_GPU_DIAG_NOMASK: a timing-only build that skips M_key y, to measure its share; -DCOMMIT_GPU_DIAG_MERGED: one
 // that skips h's two compressions (the frame leaf takes b ^ c), the timing of a format whose one leaf hash takes b || c and
 // pos after a constant midstate (2 compressions where h and the frame leaf take 4); -DCOMMIT_GPU_DIAG_QUAD: one whose tree
-// is 4-ary, 3 compressions a node, the timing of a 4-ary node format; all three refuse `check`)
+// is 4-ary, 3 compressions a node, the timing of a 4-ary node format; the small path's -DCOMMIT_GPU_DIAG_NOOP (tile
+// leaves' bytes from registers), -DCOMMIT_GPU_DIAG_NOS (S and F from registers) and -DCOMMIT_GPU_DIAG_NOTREE (a CTA's
+// levels on registers, not through global memory): the same compressions without those loads and stores; all refuse
+// `check`)
 // COMMIT_GPU_SMALL=1: `check` takes the small path (no shared memory), from domain slot 1 and salt slot 1 of 2.
 #include <cublasLt.h>
 #include <nvml.h>
@@ -470,7 +473,8 @@ static int sha_bench(int reps) {
 
 int main(int argc, char** argv) {
   if (argc >= 2 && !strcmp(argv[1], "selftest")) return selftest();
-#if defined(COMMIT_GPU_DIAG_NOMASK) || defined(COMMIT_GPU_DIAG_MERGED) || defined(COMMIT_GPU_DIAG_QUAD)
+#if defined(COMMIT_GPU_DIAG_NOMASK) || defined(COMMIT_GPU_DIAG_MERGED) || defined(COMMIT_GPU_DIAG_QUAD) || \
+    defined(COMMIT_GPU_DIAG_NOOP) || defined(COMMIT_GPU_DIAG_NOS) || defined(COMMIT_GPU_DIAG_NOTREE)
   if (argc >= 2 && !strcmp(argv[1], "check")) { fprintf(stderr, "a timing-only build (COMMIT_GPU_DIAG_*) has no check\n"); return 2; }
 #endif
   if (argc >= 2 && !strcmp(argv[1], "check")) return check(argc, argv);
