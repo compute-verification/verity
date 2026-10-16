@@ -12,6 +12,9 @@ the decoder that tries everything (`efficient_univ`).
 * `decoderComplexity_zero`: every decoder, at `counted = (decode, 0)` and `p = 0`.
 * `efficient_zero`: Flock's `Efficient` at every decoder that meets `ListWithin`, at `p = 0`; at the deployed decoders,
   `RedTeam.Deployed`.
+* `listWithin_univ`, `not_listWithin_nil`: `ListWithin` is met (by the decoder that lists every trace, at finitely many;
+  at the deployed codes, `GS.listWithin_deployPlain`, `GS.listWithin_deployZk`) and constrains the decoder (the one that
+  lists nothing fails it).
 * `decoderComplexity_listLength`: a list-length bound `(decode os).length ≤ p.eval (size os)` at the same free `size`
   and `p` adds nothing: both hold at `size = (decode ·).length`, `p = X`, for every decoder.
 -/
@@ -44,6 +47,25 @@ noncomputable def decodeUniv {Col T : Type} [Fintype T] : List (ℕ × Col) → 
 theorem listWithin_univ {Col T : Type} [DecidableEq Col] [Zero Col] [Fintype T] (len : T → ℕ) (enc : T → ℕ → Col)
     (θ : T → ℝ) : Flock.ListWithin len enc θ (decodeUniv (Col := Col)) :=
   fun _ M _ => Finset.mem_toList.2 (Finset.mem_univ M)
+
+theorem fill_enc {Col T : Type} [Zero Col] (enc : T → ℕ → Col) (M : T) (n : ℕ) (i : Fin n) :
+    Flock.fill n ((List.range n).map fun j => (j, enc M j)) i = enc M i.val := by
+  have hsome : ((List.range n).find? fun j => j == i.val).isSome :=
+    List.find?_isSome.2 ⟨i.val, List.mem_range.2 i.isLt, beq_self_eq_true _⟩
+  obtain ⟨j, hj⟩ := Option.isSome_iff_exists.1 hsome
+  have hji : j = i.val := by simpa using List.find?_some hj
+  subst hji
+  simp [Flock.fill, List.find?_map, hj]
+
+/-- **`ListWithin` constrains the decoder**: the decoder that lists nothing fails it at every code with a trace of
+nonnegative radius, whose own encoding, opened everywhere, agrees with it everywhere. -/
+theorem not_listWithin_nil {Col T : Type} [DecidableEq Col] [Zero Col] (len : T → ℕ) (enc : T → ℕ → Col)
+    (θ : T → ℝ) (M : T) (hθ : 0 ≤ θ M) : ¬ Flock.ListWithin len enc θ fun _ => [] := by
+  intro h
+  refine absurd (h ((List.range (len M)).map fun j => (j, enc M j)) M ?_) List.not_mem_nil
+  rw [Finset.filter_true_of_mem fun i _ => (fill_enc enc M (len M) i).symm, Finset.card_univ, Fintype.card_fin]
+  have : (0 : ℝ) ≤ len M := Nat.cast_nonneg _
+  nlinarith
 
 /-- **Flock's `Efficient` at `p = 0` for the decoder that tries every trace**, at a record with finitely many. -/
 theorem efficient_univ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
