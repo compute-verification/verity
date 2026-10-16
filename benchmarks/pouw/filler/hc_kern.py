@@ -99,6 +99,27 @@ class KernM2C20(KernM2):
 
 
 @dataclass
+class KernM2C20P4(KernM2C20):
+    """kern-m2-c20 with the filler on a 4-SM green split in prefill too (the smallest split; HC-SCHED's screen
+    r20261016-051913-f189: 1.039 slowdown for +0.014 prefill coverage). The scorer runs one chunk shape at every point,
+    and co-scheduling in prefill needs chunks of 2^15 or less (HC-SCHED), so a split is the prefill placement a 2^20 chunk
+    can take; every mix's prompt share gains with it."""
+
+    name: str = "kern-m2-c20-p4"
+    lineage: dict = field(default_factory=lambda: {
+        "parent": "kern-m2-c20", "approach": "pouw/filler-kernel",
+        "mechanism": ["filler:chained-imma-registers", "kernel:map-in-register-order", "kernel:seed-128",
+                      "kernel:c-16bit", "kernel:w16-s8192", "chunk:2^20", "place:split", "split:per-point-table",
+                      "prefill:split-4"],
+        "hypothesis": "prefill's linears lose ~4% on 184 SMs, and 4 filler SMs at 0.99 of peak add ~0.02 of capacity "
+                      "to the prefill step and every mix's prompt share"})
+    choice: str = "fill-v1's offline table of 11 (B, L) splits, and a 4-SM split in prefill; a lookup and a green split"
+
+    def placement(self, phase, b, l):
+        return A.Placement("split", 4) if phase == "prefill" else super().placement(phase, b, l)
+
+
+@dataclass
 class KernM1(KernM2):
     """Map 1 (in-place, unhardened) at FILL v1's own shape, W 8, NC 4, S 2048: 0.984 of peak alone."""
 
