@@ -43,6 +43,8 @@ SCREENS = {
         (256, 3072, 60, 64, 8),
     ]),
     # the narrower tile (-DPF_PW=2, 8K registers and 12 KB a block, so pv_dec keeps its 3 blocks an SM): s2's work a layer
+    # (r20261016-085255-cdd2: every row 1.12-2.0, its quarter-peak blocks outlast attention; s2 at PF_PW 4 1.019-1.088
+    # below its cliff)
     "s3": _at(2, [
         (32, 1024, 92, 128, 1), (32, 2048, 92, 128, 2),
         (32, 8192, 108, 128, 4), (32, 8192, 108, 128, 8),
@@ -52,12 +54,30 @@ SCREENS = {
         (256, 1024, 60, 128, 4), (256, 2048, 60, 128, 10), (256, 2048, 60, 128, 20),
         (256, 3072, 60, 128, 16),
     ]),
+    # PF_PW 4 toward ~70% of attention's layer time (B L 2 KB of KV at ~1.6 TB/s; a S 64 tile ~61 µs alone) where s2 had
+    # room, lighter splits with a phase where pfill-k's split alone has little margin; W 0 rows are the split alone (dscore)
+    "s4": [
+        (1, 32768, 100, 0, 0, 0), (1, 32768, 92, 0, 0, 0),
+        (32, 8192, 116, 4, 64, 2), (32, 8192, 108, 4, 64, 3), (32, 8192, 116, 0, 0, 0),
+        (32, 24576, 124, 4, 64, 6), (32, 24576, 132, 4, 64, 4),
+        (48, 16384, 108, 4, 64, 8), (48, 16384, 116, 4, 64, 8), (48, 16384, 124, 4, 64, 6),
+        (128, 2048, 76, 4, 64, 2), (128, 2048, 76, 4, 64, 3),
+        (128, 6144, 92, 4, 64, 11), (128, 6144, 92, 4, 64, 13), (128, 6144, 108, 4, 64, 8),
+        (132, 5120, 60, 4, 64, 9), (132, 5120, 60, 4, 64, 10),
+        (144, 5120, 60, 4, 64, 9), (144, 5120, 60, 4, 64, 11),
+        (256, 1024, 44, 4, 64, 2), (256, 1024, 52, 4, 64, 2),
+        (256, 2048, 60, 4, 64, 6), (256, 2048, 60, 4, 64, 7),
+        (256, 3072, 60, 4, 64, 10), (256, 3072, 60, 4, 64, 12),
+    ],
 }
 
 
 def probes(rows):
-    return ";".join(f"DFILL_CHUNK_LOG2=19 pscore pscore {b} {l} {f} 8 4 256 {w} 4 {s} {t} {ROUNDS} {K} {i % 64}"
-                    for i, (b, l, f, w, s, t) in enumerate(rows))
+    def row(i, b, l, f, w, s, t):
+        if w == 0:
+            return f"DFILL_CHUNK_LOG2=19 dscore dscore step {b} {l} split {f} 8 4 256 {ROUNDS} {K} {i % 64}"
+        return f"DFILL_CHUNK_LOG2=19 pscore pscore {b} {l} {f} 8 4 256 {w} 4 {s} {t} {ROUNDS} {K} {i % 64}"
+    return ";".join(row(i, *r) for i, r in enumerate(rows))
 
 
 if __name__ == "__main__":
