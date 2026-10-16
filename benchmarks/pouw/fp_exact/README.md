@@ -61,7 +61,7 @@ Each value of C0 (`c0_words`) has a role:
 |---|---|
 | `fp_exact.cu` | One kernel a format: 3 accumulation orders of the chain, the int64 reference and its representability, the counts, the first tiles' words (`gpu_kit/bench.cuh`'s 0xA5 poisoning and no-write control). `--dump` writes a config's operands from the device's generator, without a GPU |
 | `fp_exact.py` | `configs` (the sweep over formats, grids, scales, distributions, C0 and K), `run` (the SASS gate, then the sweep and its control), `summarize` (the host's own regeneration and recheck of the recorded tiles, a replay of them through `verity.ml.circuits.silicon`'s models, the verdicts), `limits` (the K-limit table per format, grid and scale), `rates` (`../opcode_probe/probes/mma.cu`'s rows as MACs per SM per clock against IMMA, each format's `_data` probe against its fixed one to rule out a data-dependent clock) |
-| `run.sh` | The job: build and gate outside the lease, then under one `gpu-lease` the sweep and the MMA rates, then the summary |
+| `run.sh` | The job: build and gate outside the lease, then under one `gpu-lease` the sweep and the MMA rates, then the summary and the K-limit table |
 
 ~~~text
 research run --on vy-nebius-2 --project verity --cwd source -- bash benchmarks/pouw/fp_exact/run.sh [--quick]
