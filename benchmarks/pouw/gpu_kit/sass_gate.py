@@ -278,7 +278,9 @@ def judge_kernel(fn, expect: list[dict[str, int]], forbid=FORBID, smem: list[dic
                         what = ("ptxas merged, hoisted or eliminated some; give every instruction of every iteration "
                                 "its own operands (the lmmix ring of addresses, a dependent chain)") if got[p] < n else \
                                "ptxas duplicated them; time one iteration a loop (#pragma unroll 1)"
-                        reasons.append(f"loops: {p}: {got[p]} in the loop at {_addr(fn, jk[0])}, {n} expected: {what}")
+                        held = ", ".join(f"{c} {o}" for o, c in body[jk].most_common(6))
+                        reasons.append(f"loops: {p}: {got[p]} in the loop at {_addr(fn, jk[0])}, {n} expected: {what} "
+                                       f"(the loop holds {held})")
     elif not expect and timed:
         assigned = dict(enumerate(timed))
 
