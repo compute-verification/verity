@@ -133,6 +133,12 @@ __device__ __noinline__ uint64_t dfill_k_warp(uint64_t c0, uint64_t c1, unsigned
   for (int c = 0; c < 4; c++) h ^= pf_fold(K, 4 * lane + c, y[c]);
   return h;
 }
+// A filler warp's receipt and step count into its slot of the ring: its only global stores, in a dfill_k function of
+// their own, since the scorer's path check (filler-scorer/v4) refuses a global store on a filler warp's path outside one.
+__device__ __noinline__ void dfill_k_put(unsigned long long* rec, int* cnt, uint64_t h, int steps) {
+  *rec = h;
+  *cnt = steps;
+}
 static uint64_t pw_step_ref(uint64_t c0, uint64_t c1, uint64_t tile, uint64_t step) {
   pf_host_k();
   uint32_t R[32][16];
@@ -221,10 +227,7 @@ __device__ __forceinline__ void filler_warp(const FSlots& fs, size_t slot, const
   }
 #pragma unroll
   for (int o = 16; o; o >>= 1) h ^= __shfl_xor_sync(0xffffffffu, h, o);
-  if (lane == 0) {
-    fs.rec[at] = h;
-    fs.cnt[at] = steps;
-  }
+  if (lane == 0) dfill_k_put(fs.rec + at, fs.cnt + at, h, steps);
 }
 #else
 static uint64_t fwarp_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc, int steps) {
