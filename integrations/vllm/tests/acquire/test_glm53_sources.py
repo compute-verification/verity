@@ -552,8 +552,10 @@ def test_the_allreduce_norm_wrap_binds_the_maps_names_on_either_path(monkeypatch
     route = ("dense-mha",)
     got = CM.bind_names(CMAP, ENV, names, profile="0123456789ab", request="r0", t=0, phase="prefill", routes=route, rank=3,
                         binders=("allreduce_norm",))
-    # layer 0's input_layernorm is the module hook's own tap (no residual: a tensor), every other name is the map's
-    assert got["unknown"] == ["model.layers.0.input_layernorm"] and got["missing"] == [] and len(names) == len(set(names))
+    # layer 0's input_layernorm is the module hook's own tap (no residual: a tensor); the unfused path's reduced input to each norm is
+    # the call's own (`<norm>/all_reduce`, off the map: the manifest's identity rows bind it); every other name is the map's
+    reduced = sorted(f"{s}/all_reduce" for s in src.far.site_names()) if path == "N" else []
+    assert got["unknown"] == sorted(["model.layers.0.input_layernorm", *reduced]) and got["missing"] == [] and len(names) == len(set(names))
     assert got["ids"] == sorted(CM.identities(CMAP, ENV, profile="0123456789ab", request="r0", t=0, phase="prefill", routes=route,
                                               rank=3, binders=("allreduce_norm",)))
     assert run.v.calls == [{"F": "flashinfer", "N": "all_reduce"}[path]] * (2 * ENV["L"])
@@ -626,7 +628,8 @@ def test_a_model_that_calls_it_and_makes_no_call_declares_a_site_no_step_binds(m
     fake_far(monkeypatch)
     src = TPPartialSource(far_committer(), Root(), rank=0, world=TP)
     assert src.far.used and src.far.site_names() == [NO_CALL_SITE] and src.site_counts()[NO_CALL_SITE] == 1
-    assert len(src.far.candidates) == 2 * ENV["L"] + 1 and src.extra_step_bytes({}, None)["tensors_per_step"] == 2 * ENV["L"] + 1
+    # per candidate: its partial, and the unfused path's all-reduce output
+    assert len(src.far.candidates) == 2 * ENV["L"] + 1 and src.extra_step_bytes({}, None)["tensors_per_step"] == 2 * (2 * ENV["L"] + 1)
     assert TPPartialSource(far_committer(), Root(), rank=0, world=1).far.site_names() == []
 
 
@@ -634,7 +637,9 @@ def test_steps_on_different_paths_commit_the_same_names_and_a_step_missing_a_cal
     run = FarRun(monkeypatch)
     run.step(256)
     run.step(4)
-    assert run.steps[0] == run.steps[1]                                  # the same names in the same order: the module hook fires inside
+    reduced = [n for n in run.steps[0] if n.endswith("/all_reduce")]   # the unfused path's own: its all-reduce output, per call
+    assert reduced == [f"{s}/all_reduce" for s in run.src.far.order] and not any(n.endswith("/all_reduce") for n in run.steps[1])
+    assert [n for n in run.steps[0] if n not in reduced] == run.steps[1]  # otherwise the same names in the same order: the module hook fires inside
     assert [p for _s, p in run.src.far.paths] == ["N" * (2 * ENV["L"]), "F" * (2 * ENV["L"])]
     assert run.identity_check()["ok"] is True
     run.root.model.layers[5].forward = lambda hs, res: (T(*hs.shape), res)
