@@ -66,6 +66,7 @@ full-width columns that does not extract is not committed to the plain record's 
 record's (`FlockDeploy.KS.zk_hwit`, `FlockDeploy.KS.zk_not_committed`). The old bound's terms at one table (`Refit`):
 an opening off the old oracle is a looked-up column off the word (`Flock.exists_ne_of_off`, `Flock.Pr_le_of_off`), the
 old table error is `ε_table` (`FlockDeploy.KS.εtable_one_plain`, `FlockDeploy.KS.bound_le_εtable_zk`), and the old
-fork and self-clash terms are escapes' (`Flock.oldEsc`, `Flock.oldEsc_term`) that fit the plain weight with the fork
-event of weight `k` (`FlockDeploy.KS.oldEsc_fitsFork_plain`), so the salted session's `ε_c⁻` is at most `ε_table`
-and their term (`FlockDeploy.KS.epsSL_le`). -/
+fork and self-clash terms are escapes' (`Flock.oldEsc`, `Flock.oldEsc_term`; masked, with the pads roots' and `τ`'s,
+`Flock.oldEscZ`, `Flock.oldEscZ_term`) that fit the weight with the fork event of weight `k`
+(`FlockDeploy.KS.oldEsc_fitsFork_plain`, `FlockDeploy.KS.oldEscZ_fitsFork_zk`), so the salted and masked sessions'
+`ε_c⁻` are at most `ε_table` and their term (`FlockDeploy.KS.epsSL_le`, `FlockDeploy.KS.epsSZ_le`). -/

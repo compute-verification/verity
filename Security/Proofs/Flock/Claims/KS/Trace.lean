@@ -109,7 +109,6 @@ theorem radius_plain (M : PlainTrace) : plainThetaD M = (levelOf (plainLevel0 M.
   have e : ((2 : ℝ) ^ plainCols i / 2 ^ plainLen i) = (2⁻¹ : ℝ) ^ (levelOf (plainLevel0 i.m)).logInvRate := by
     show _ = (2⁻¹ : ℝ) ^ (plainLevel0 i.m).rate
     rw [hr, hd]
-    push_cast
     rw [pow_succ]
     field_simp
   rw [e]

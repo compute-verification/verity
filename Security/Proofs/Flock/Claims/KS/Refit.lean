@@ -20,7 +20,10 @@ terms one by one, at one table.
   the self-clash probability are at most the term of escapes with those weights and one one-run event of weight `1`
   (`oldEsc`, `oldEsc_term`), given fork and one-run events whose probabilities bound them. With at most one fork
   event per round they fit the plain weight with the fork event of weight `k` (`oldEsc_fitsFork_plain`), and the
-  salted session's `ε_c⁻` is at most `ε_table` plus their term (`epsSL_le`).
+  salted session's `ε_c⁻` is at most `ε_table` plus their term (`epsSL_le`). Under `--zk` each rep adds a pads root's
+  fork term of weight `N_p²` and `τ`'s of weight `1` (`IZ`, `cZ`, `oldEscZ`, `oldEscZ_term`); they fit the masked
+  weight when `N_p` is at most the deployed pads' domain, level 0's `2·2^{d₀}·Q₀ ≥ 2` paying for `k`'s rounding
+  (`oldEscZ_fitsFork_zk`), and the masked session's `ε_c⁻` is at most `ε_table` plus their term (`epsSZ_le`).
 -/
 
 namespace Claims.Flock
@@ -165,6 +168,81 @@ theorem oldEsc_term {Ω Coin : Type} [Fintype Coin] [Inhabited Coin] (H : Msg �
   exact Finset.sum_le_sum fun ℓ _ =>
     Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left (hadv r ℓ) (cOf_nonneg sch _))
 
+/-- The old masked bound's fork events: one per rep and level `ℓ + 1`, one per rep's pads root, one per rep's `τ`. -/
+abbrev IZ (L : ℕ) : Type := (Fin 2 × Fin L) ⊕ (Fin 2 ⊕ Fin 2)
+
+/-- Their weights: the level's `2^{d}·Q`, the pads root's `N_p²` and `τ`'s `1`. -/
+noncomputable def cZ (sch : FlockSoundness.Accounting.Schedule) (Np : ℕ) : IZ sch.levels.length → ℝ
+  | .inl i => cOf sch (i.2.val + 1)
+  | .inr (.inl _) => (Np : ℝ) * Np
+  | .inr (.inr _) => 1
+
+theorem cZ_nonneg (sch : FlockSoundness.Accounting.Schedule) (Np : ℕ) (i : IZ sch.levels.length) : 0 ≤ cZ sch Np i :=
+  match i with
+  | .inl _ => cOf_nonneg sch _
+  | .inr (.inl _) => mul_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)
+  | .inr (.inr _) => zero_le_one
+
+/-- **The old masked fork and self-clash terms as escapes**: the fork events of `IZ` at rounds `j` with weights `cZ`,
+and one one-run event of weight `1`. -/
+noncomputable def oldEscZ {Ω Coin : Type} [Inhabited Coin] (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω)
+    (x : Msg) (sch : FlockSoundness.Accounting.Schedule) (Np : ℕ) (j : IZ sch.levels.length → Fin (V.k x))
+    (ev : IZ sch.levels.length → Ω → (Fin (V.k x) → Coin) → (Fin (V.k x) → Coin) → Prop)
+    (ev₁ : Ω → (Fin (V.k x) → Coin) → Prop)
+    (tied : ∀ i ω s s', ev i ω s s' →
+      TiedColl H ((run H P V x ω s).vLog ++ (run H P V x ω (forkCoins (j i) s s')).vLog))
+    (tied₁ : ∀ ω s, ev₁ ω s → TiedColl H (run H P V x ω s).vLog) : Escapes H V P x where
+  I := IZ sch.levels.length
+  c := cZ sch Np
+  j := j
+  ev := ev
+  L := Unit
+  β _ := 1
+  ev₁ _ := ev₁
+  c_nonneg := cZ_nonneg sch Np
+  β_nonneg _ := zero_le_one
+  tied := tied
+  tied₁ _ := tied₁
+
+/-- **The old masked fork and self-clash terms are at most the escapes' term**, at a tape where each fork term's
+`Adv` (a level's, a pads root's, `τ`'s) is at most its fork event's probability and the self-clash probability at
+most the one-run event's. -/
+theorem oldEscZ_term {Ω Coin : Type} [Fintype Coin] [Inhabited Coin] (H : Msg → Msg) (V : Verifier Coin)
+    (P : Prover Ω) (x : Msg) (sch : FlockSoundness.Accounting.Schedule) (Np : ℕ)
+    (j : IZ sch.levels.length → Fin (V.k x))
+    (ev : IZ sch.levels.length → Ω → (Fin (V.k x) → Coin) → (Fin (V.k x) → Coin) → Prop)
+    (ev₁ : Ω → (Fin (V.k x) → Coin) → Prop)
+    (tied : ∀ i ω s s', ev i ω s s' →
+      TiedColl H ((run H P V x ω s).vLog ++ (run H P V x ω (forkCoins (j i) s s')).vLog))
+    (tied₁ : ∀ ω s, ev₁ ω s → TiedColl H (run H P V x ω s).vLog) (ω : Ω) (adv : ℕ → ℕ → ℝ) (advP advT : ℕ → ℝ)
+    (sc : ℝ)
+    (hadv : ∀ r ℓ, adv r.val (ℓ.val + 1) ≤
+      Pr fun s : (Fin (V.k x) → Coin) × (Fin (V.k x) → Coin) => ev (.inl (r, ℓ)) ω s.1 s.2)
+    (hP : ∀ r : Fin 2, advP r.val ≤
+      Pr fun s : (Fin (V.k x) → Coin) × (Fin (V.k x) → Coin) => ev (.inr (.inl r)) ω s.1 s.2)
+    (hT : ∀ r : Fin 2, advT r.val ≤
+      Pr fun s : (Fin (V.k x) → Coin) × (Fin (V.k x) → Coin) => ev (.inr (.inr r)) ω s.1 s.2)
+    (hsc : sc ≤ Pr fun s : Fin (V.k x) → Coin => ev₁ ω s) :
+    (∑ r ∈ Finset.range 2, ∑ ℓ ∈ Finset.Icc 1 sch.levels.length,
+        Real.sqrt (2 ^ (FlockSoundness.lvOf sch ℓ).logLen * (FlockSoundness.lvOf sch ℓ).queries * adv r ℓ)) +
+      ∑ r ∈ Finset.range 2, Real.sqrt (Np * Np * advP r) + ∑ r ∈ Finset.range 2, Real.sqrt (advT r) + sc ≤
+      (oldEscZ H V P x sch Np j ev ev₁ tied tied₁).term ω := by
+  show _ ≤ (∑ i : (Fin 2 × Fin sch.levels.length) ⊕ (Fin 2 ⊕ Fin 2), Real.sqrt (cZ sch Np i *
+      Pr fun s : (Fin (V.k x) → Coin) × (Fin (V.k x) → Coin) => ev i ω s.1 s.2)) +
+    ∑ _l : Unit, (1 : ℝ) * Pr fun s : Fin (V.k x) → Coin => ev₁ ω s
+  have hu : (∑ _l : Unit, (1 : ℝ) * Pr fun s : Fin (V.k x) → Coin => ev₁ ω s) =
+      Pr fun s : Fin (V.k x) → Coin => ev₁ ω s := by
+    simp
+  rw [Fintype.sum_sum_type, Fintype.sum_sum_type, Fintype.sum_prod_type, Finset.sum_range, Finset.sum_range,
+    Finset.sum_range, hu, ← add_assoc]
+  refine add_le_add (add_le_add (add_le_add (Finset.sum_le_sum fun r _ => ?_)
+    (Finset.sum_le_sum fun r _ => ?_)) (Finset.sum_le_sum fun r _ => ?_)) hsc
+  · rw [sum_Icc_one]
+    exact Finset.sum_le_sum fun ℓ _ =>
+      Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left (hadv r ℓ) (cOf_nonneg sch _))
+  · exact Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left (hP r) (cZ_nonneg sch Np (.inr (.inl r))))
+  · exact Real.sqrt_le_sqrt ((hT r).trans_eq (one_mul _).symm)
+
 end Claims.Flock
 
 namespace FlockDeploy.KS
@@ -232,12 +310,28 @@ theorem bound_le_εtable_zk {F : Type} [Field F] [Fintype F] [DecidableEq F] (hF
 
 /-! ## The escapes fit the plain weight -/
 
-/-- The weight's level sum, in `ℝ`. -/
-theorem weightNat_cast (sch : FlockSoundness.Accounting.Schedule) :
-    (Claims.Flock.Numbers.weightNat sch 0 : ℝ) =
-      2 * (sch.levels.map fun l => (2 : ℝ) ^ l.logLen * l.queries).sum + 2 := by
+/-- The weight's level sum and pads term, in `ℝ`. -/
+theorem weightNat_cast (sch : FlockSoundness.Accounting.Schedule) (Np : ℕ) :
+    (Claims.Flock.Numbers.weightNat sch Np : ℝ) =
+      2 * (sch.levels.map fun l => (2 : ℝ) ^ l.logLen * l.queries).sum + 2 * (Np : ℝ) ^ 2 + 2 := by
   unfold Claims.Flock.Numbers.weightNat
   simp [Nat.cast_list_sum, List.map_map, Function.comp_def]
+
+/-- A table's weight is at most the session's, at table 0. -/
+theorem tableWeight_le_weight {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
+    (h0 : (tables zk x).head? = some (spec, st)) : tableWeight zk st ≤ weight zk x := by
+  unfold weight
+  cases ht : tables zk x with
+  | nil => rw [ht] at h0; cases h0
+  | cons p rest =>
+    rw [ht, List.head?_cons, Option.some.injEq] at h0
+    subst h0
+    simp only [List.map_cons, List.sum_cons]
+    have : 0 ≤ (rest.map fun p => tableWeight zk p.2).sum :=
+      List.sum_nonneg fun a ha => by
+        obtain ⟨q, -, rfl⟩ := List.mem_map.1 ha
+        exact tableWeight_nonneg zk q.2
+    linarith
 
 /-- **The old escapes fit the plain weight with the fork event of weight `k`**, at a statement whose table 0 has
 schedule `sch`, when no two of them share a round: the fork events' weights are `2·Σ_{ℓ ≥ 1} 2^{d_ℓ}·Q_ℓ`, within the
@@ -274,19 +368,7 @@ theorem oldEsc_fitsFork_plain (rel : Readable.Parsed → Readable.Relation) {Ω 
     have hd : (default : FlockSoundness.Accounting.Level).queries = 0 := rfl
     have hhead := Claims.Flock.head_add_sum_shift f (by simp [hf, hd]) sch.levels
     have hf0 : 0 ≤ f (sch.levels.headD default) := by simp only [hf]; positivity
-    have hw : tableWeight false st ≤ weight false x := by
-      unfold weight
-      cases ht : tables false x with
-      | nil => rw [ht] at h0; cases h0
-      | cons p rest =>
-        rw [ht, List.head?_cons, Option.some.injEq] at h0
-        subst h0
-        simp only [List.map_cons, List.sum_cons]
-        have : 0 ≤ (rest.map fun p => tableWeight false p.2).sum :=
-          List.sum_nonneg fun a ha => by
-            obtain ⟨q, -, rfl⟩ := List.mem_map.1 ha
-            exact tableWeight_nonneg false q.2
-        linarith
+    have hw := tableWeight_le_weight h0
     have htw : tableWeight false st = Claims.Flock.Numbers.weightOf sch 0 := by
       simp only [tableWeight, Bool.false_eq_true, ↓reduceIte, hgs]
     have hN : N₀ false x = 2 ^ (Claims.Flock.plainLevel0 st.m).d := by
@@ -309,7 +391,7 @@ theorem oldEsc_fitsFork_plain (rel : Readable.Parsed → Readable.Relation) {Ω 
       Claims.Flock.cOf sch (i.2.val + 1)) ≤ 2 * weight false x
     rw [hsum, hk]
     rw [htw, Claims.Flock.Numbers.weightOf, weightNat_cast] at hw
-    push_cast
+    push_cast at hw ⊢
     linarith
   · show ∑ _l : Unit, (1 : ℝ) ≤ (V false).k x
     rw [Fintype.sum_unique]
@@ -353,5 +435,133 @@ theorem epsSL_le {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [F
   unfold epsSL
   rw [εtable_one_plain h hsch L, add_assoc]
   exact add_le_add le_rfl key
+
+/-! ## The masked escapes fit the masked weight -/
+
+/-- C-Flock ZK's level 0 reads at least one position at every `m` it serves. -/
+theorem m1_queries₀_pos : ∀ m : Fin 11,
+    1 ≤ ((FlockSoundness.Accounting.m1Schedule (m.val + 25)).levels.headD default).queries := by
+  decide +kernel
+
+/-- **The old masked escapes fit the masked weight with the fork event of weight `k`**, at a statement whose table 0
+has C-Flock ZK's schedule, when no two of them share a round and the pads' weight `N_p` is at most the deployed pads'
+domain: the fork events' weights are `2·Σ_{ℓ ≥ 1} 2^{d_ℓ}·Q_ℓ + 2·N_p² + 2`, within the weight's
+`2·Σ_ℓ 2^{d_ℓ}·Q_ℓ + 2·N² + 2`, and `k < 4·N₀/e + 1` within `4·2^{d₀}/e` and level 0's `2·2^{d₀}·Q₀ ≥ 2`. -/
+theorem oldEscZ_fitsFork_zk (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)
+    (x : Claims.Msg) {spec : SessionSpec} {st : Stmt} (h0 : (tables true x).head? = some (spec, st))
+    (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) {sch : FlockSoundness.Accounting.Schedule}
+    (hsch : sch = FlockSoundness.Accounting.m1Schedule st.m) (Np : ℕ)
+    (hNp : Np ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.m).1.k0))
+    (j : Claims.Flock.IZ sch.levels.length → Fin ((deployZk rel).V.k x)) (hj : Function.Injective j)
+    (ev : Claims.Flock.IZ sch.levels.length → Ω → (Fin ((deployZk rel).V.k x) → Coin) →
+      (Fin ((deployZk rel).V.k x) → Coin) → Prop)
+    (ev₁ : Ω → (Fin ((deployZk rel).V.k x) → Coin) → Prop)
+    (tied : ∀ i ω s s', ev i ω s s' → Claims.TiedColl sha512
+      ((Claims.run sha512 P (deployZk rel).V x ω s).vLog ++
+        (Claims.run sha512 P (deployZk rel).V x ω (Claims.forkCoins (j i) s s')).vLog))
+    (tied₁ : ∀ ω s, ev₁ ω s → Claims.TiedColl sha512 (Claims.run sha512 P (deployZk rel).V x ω s).vLog) :
+    (Claims.Flock.oldEscZ sha512 (deployZk rel).V P x sch Np j ev ev₁ tied tied₁).FitsFork
+      ((deployZk rel).weight x) ((deployZk rel).k x) := by
+  refine ⟨2, fun r => ?_, ?_, ?_⟩
+  · have hc : (Finset.univ.filter fun i : Claims.Flock.IZ sch.levels.length => j i = r).card ≤ 1 :=
+      Finset.card_le_one.2 fun a ha b hb => by
+        simp only [Finset.mem_filter, Finset.mem_univ, true_and] at ha hb
+        exact hj (ha.trans hb.symm)
+    have hr : (if r.val = 0 then 1 else 0) ≤ 1 := by split <;> omega
+    exact Nat.add_le_add hc hr
+  · set f : FlockSoundness.Accounting.Level → ℝ := fun l => 2 ^ l.logLen * l.queries with hf
+    have hsum : ∑ i : Claims.Flock.IZ sch.levels.length, Claims.Flock.cZ sch Np i =
+        2 * ∑ ℓ : Fin sch.levels.length, f (sch.levels.getD (ℓ.val + 1) default) + 2 * ((Np : ℝ) * Np) + 2 := by
+      show ∑ i : (Fin 2 × Fin sch.levels.length) ⊕ (Fin 2 ⊕ Fin 2), Claims.Flock.cZ sch Np i = _
+      rw [Fintype.sum_sum_type, Fintype.sum_sum_type, Fintype.sum_prod_type]
+      simp only [Claims.Flock.cZ, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul,
+        Nat.cast_ofNat, mul_one]
+      rw [add_assoc]
+      rfl
+    have hd : (default : FlockSoundness.Accounting.Level).queries = 0 := rfl
+    have hhead := Claims.Flock.head_add_sum_shift f (by simp [hf, hd]) sch.levels
+    have hq0 : 1 ≤ (sch.levels.headD default).queries := by
+      have := m1_queries₀_pos ⟨st.m - 25, by omega⟩
+      simp only [Nat.sub_add_cancel h25] at this
+      rw [hsch]
+      exact this
+    have hf1 : 1 ≤ f (sch.levels.headD default) := by
+      simp only [hf]
+      have h1 : (1 : ℝ) ≤ 2 ^ (sch.levels.headD default).logLen := one_le_pow₀ (by norm_num)
+      have h2 : (1 : ℝ) ≤ (sch.levels.headD default).queries := by exact_mod_cast hq0
+      nlinarith
+    have hw := tableWeight_le_weight h0
+    set pd := Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.m).1.k0)
+    have htw : tableWeight true st = Claims.Flock.Numbers.weightOf sch pd := by
+      simp only [tableWeight, ↓reduceIte, hsch, pd]
+    have hNp2 : (Np : ℝ) * Np ≤ (pd : ℝ) ^ 2 := by
+      have := Nat.mul_le_mul hNp hNp
+      rw [sq]
+      exact_mod_cast this
+    have hN : N₀ true x = 2 ^ (Claims.Flock.zkLevel0 st.m).d := by
+      unfold N₀
+      rw [h0]
+      rfl
+    have hfits := kFits_all true st.m
+    simp only [level0, wSched, ↓reduceIte, ← hsch] at hfits
+    have he := Real.exp_pos 1
+    have hpow : (2 : ℝ) ^ (Claims.Flock.zkLevel0 st.m).d ≤ 2 ^ (sch.levels.headD default).logLen :=
+      pow_le_pow_right₀ (by norm_num) hfits
+    have hdiv : 4 * (2 : ℝ) ^ (Claims.Flock.zkLevel0 st.m).d / Real.exp 1 ≤
+        4 * 2 ^ (sch.levels.headD default).logLen / Real.exp 1 := by
+      gcongr
+    have hceil := Nat.ceil_lt_add_one (show (0 : ℝ) ≤ 4 * N₀ true x / Real.exp 1 by rw [hN]; positivity)
+    rw [hN] at hceil
+    have hk : ((deployZk rel).k x : ℝ) = (⌈4 * N₀ true x / Real.exp 1⌉₊ : ℝ) := rfl
+    rw [hN] at hk
+    show ((2 : ℕ) : ℝ) * ((deployZk rel).k x + ∑ i : Claims.Flock.IZ sch.levels.length, Claims.Flock.cZ sch Np i) ≤
+      2 * weight true x
+    rw [hsum, hk]
+    rw [htw, Claims.Flock.Numbers.weightOf, weightNat_cast] at hw
+    push_cast at hw ⊢
+    linarith
+  · show ∑ _l : Unit, (1 : ℝ) ≤ (V true).k x
+    rw [Fintype.sum_unique]
+    exact_mod_cast V_k_pos true x
+
+open FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkSession in
+/-- **The masked session's `ε_c⁻` at one table is at most `ε_table` and the old masked escapes' term**: its padded
+table's bound is at most the deployed `ε_table` (`bound_le_εtable_zk`), and its fork terms (levels, pads roots, `τ`)
+and self-clash are at most the term of escapes, at the table's schedule and pads' domain, whose fork and one-run
+events bound them at the tape (`oldEscZ_term`). -/
+theorem epsSZ_le {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
+    (hF : Fintype.card F = 2 ^ 128) {D Sl : Type} [Inhabited D] [Inhabited Sl] (A : FlockSoundness.Model.Arith F K)
+    (Hs : Hashes F D Sl) {mPts : ℕ} (T : TabZK F mPts)
+    (pre post : List ((Fin 2 → Fin mPts → F) → FlockSoundness.Game (OutZC F D Sl)))
+    (cap₀ : FlockSoundness.Model.Cap D) (σ : FlockSoundness.Game.Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀)))
+    {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables true x = [(spec, st)]) (h25 : 25 ≤ st.m)
+    (h35 : st.m ≤ 35) (hsch : T.sch = FlockSoundness.Accounting.m1Schedule st.m)
+    (ht : T.t = FlockSoundness.Accounting.m1Pad st.m) (he : T.e = 2) (hS : T.S.shape mPts = acct spec st)
+    (hN : T.N ≤ 2 ^ 13) (hq : T.q = 168) (hδ : 7 / 16 ≤ T.δ)
+    {Ω Coin : Type} [Fintype Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg) (V : Claims.Verifier Coin)
+    (P : Claims.Prover Ω) (j : Claims.Flock.IZ T.sch.levels.length → Fin (V.k x))
+    (ev : Claims.Flock.IZ T.sch.levels.length → Ω → (Fin (V.k x) → Coin) → (Fin (V.k x) → Coin) → Prop)
+    (ev₁ : Ω → (Fin (V.k x) → Coin) → Prop)
+    (tied : ∀ i ω s s', ev i ω s s' → Claims.TiedColl H
+      ((Claims.run H P V x ω s).vLog ++ (Claims.run H P V x ω (Claims.forkCoins (j i) s s')).vLog))
+    (tied₁ : ∀ ω s, ev₁ ω s → Claims.TiedColl H (Claims.run H P V x ω s).vLog) (ω : Ω)
+    (hadv : ∀ r ℓ, advRSZ A Hs T pre post cap₀ r.val (ℓ.val + 1) σ ≤
+      Claims.Pr fun s : (Fin (V.k x) → Coin) × (Fin (V.k x) → Coin) => ev (.inl (r, ℓ)) ω s.1 s.2)
+    (hP : ∀ r : Fin 2, advPadsSZ A Hs T pre post cap₀ r.val σ ≤
+      Claims.Pr fun s : (Fin (V.k x) → Coin) × (Fin (V.k x) → Coin) => ev (.inr (.inl r)) ω s.1 s.2)
+    (hT : ∀ r : Fin 2, advTauSZ A Hs T pre post cap₀ r.val σ ≤
+      Claims.Pr fun s : (Fin (V.k x) → Coin) × (Fin (V.k x) → Coin) => ev (.inr (.inr r)) ω s.1 s.2)
+    (hsc : FlockSoundness.Game.expect (FlockSoundness.Game.ind fun outs : List (OutZC F D Sl) =>
+        SelfClashZ Hs T (outs.getD pre.length dfltOutZC)) (sessAtZ pre post (tabAfterZC A Hs T cap₀)) σ ≤
+      Claims.Pr fun s : Fin (V.k x) → Coin => ev₁ ω s) :
+    epsSZ A Hs T pre post cap₀ σ ≤
+      εtable true x + (Claims.Flock.oldEscZ H V P x T.sch T.N j ev ev₁ tied tied₁).term ω := by
+  have key := Claims.Flock.oldEscZ_term H V P x T.sch T.N j ev ev₁ tied tied₁ ω
+    (fun r ℓ => advRSZ A Hs T pre post cap₀ r ℓ σ) (fun r => advPadsSZ A Hs T pre post cap₀ r σ)
+    (fun r => advTauSZ A Hs T pre post cap₀ r σ) _ hadv hP hT hsc
+  have hb := bound_le_εtable_zk hF h T h25 h35 hsch ht he hS hN hq hδ
+  unfold epsSZ
+  rw [add_assoc, add_assoc, add_assoc]
+  exact add_le_add hb (by simpa only [add_assoc] using key)
 
 end FlockDeploy.KS
