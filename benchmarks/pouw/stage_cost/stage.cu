@@ -394,11 +394,16 @@ static std::vector<Rep> time_graph(Dev& d, const Graph& G, cudaStream_t st, int 
   CK(cudaEventDestroy(e1));
   return out;
 }
+static double mean_ms(const std::vector<Rep>& v) {
+  double s = 0;
+  for (const Rep& r : v) s += r.ms;
+  return v.empty() ? 0 : s / v.size();
+}
 static void print_reps(const char* name, const std::vector<Rep>& v, double macs, int sms, bool comma) {
   const Rep m = median(v);
   const double peak = 1024.0 * sms * m.mhz * 1e6;
-  printf("\"%s\": {\"ms\": %.4f, \"mhz\": %.1f, \"watt\": %.1f, \"share_of_peak\": %.5f, \"reps_ms\": [", name, m.ms, m.mhz,
-         m.watt, macs > 0 ? macs / (m.ms * 1e-3) / peak : 0.0);
+  printf("\"%s\": {\"ms\": %.4f, \"mean_ms\": %.4f, \"mhz\": %.1f, \"watt\": %.1f, \"share_of_peak\": %.5f, \"reps_ms\": [", name,
+         m.ms, mean_ms(v), m.mhz, m.watt, macs > 0 ? macs / (m.ms * 1e-3) / peak : 0.0);
   for (size_t i = 0; i < v.size(); i++) printf("%s%.4f", i ? ", " : "", v[i].ms);
   printf("]}%s", comma ? ", " : "");
 }
@@ -772,6 +777,64 @@ static long long items_in(const PumpG& p, double t0, double t1) {
   for (double x : p.t) n += x > t0 && x <= t1;
   return n;
 }
+// the step on sst, and beside each step per_step of the pass's layers (credit carried across steps), so the pass gets exactly
+// the token-layers decode produces; the mean step over whole periods, and how long the pass's stream takes to drain after
+// the last step (a pass that can't keep up leaves a backlog that grows with the reps)
+static std::vector<Rep> time_paced(Dev& d, const std::function<void()>& step, cudaStream_t sst, const Graph& Gp, cudaStream_t pst,
+                                   double per_step, int reps, long long* launched, double* tail_ms) {
+  d.st = sst;
+  cudaGraph_t g;
+  cudaGraphExec_t ge;
+  CK(cudaStreamBeginCapture(sst, cudaStreamCaptureModeThreadLocal));
+  step();
+  CK(cudaStreamEndCapture(sst, &g));
+  CK(cudaGraphInstantiate(&ge, g, 0));
+  for (int i = 0; i < 2; i++) CK(cudaGraphLaunch(ge, sst));
+  CK(cudaStreamSynchronize(sst));
+  cudaEvent_t e0, e1, ep;
+  CK(cudaEventCreate(&e0));
+  CK(cudaEventCreate(&e1));
+  CK(cudaEventCreate(&ep));
+  std::vector<Rep> out;
+  double credit = 0;
+  long long n = 0;
+  for (int r = 0; r < reps; r++) {
+    CK(cudaEventRecord(e0, sst));
+    CK(cudaGraphLaunch(ge, sst));
+    CK(cudaEventRecord(e1, sst));
+    credit += per_step;
+    while (credit >= 1 - 1e-9) {
+      CK(cudaGraphLaunch(Gp.ge, pst));
+      credit -= 1;
+      n++;
+    }
+    double cs = 0, ps = 0;
+    int nc = 0, np = 0;
+    while (cudaEventQuery(e1) == cudaErrorNotReady) {
+      const double c = nvml_mhz(d), p = nvml_w(d);
+      if (c > 0) { cs += c; nc++; }
+      if (p > 0) { ps += p; np++; }
+    }
+    CK(cudaEventSynchronize(e1));
+    if (nc == 0) { cs = nvml_mhz(d); nc = 1; }
+    if (np == 0) { ps = nvml_w(d); np = 1; }
+    float ms;
+    CK(cudaEventElapsedTime(&ms, e0, e1));
+    out.push_back({ms, cs / nc, ps / np});
+  }
+  const double t = now_ms();
+  CK(cudaEventRecord(ep, pst));
+  CK(cudaEventSynchronize(ep));
+  *tail_ms = now_ms() - t;
+  *launched = n;
+  CK(cudaGetLastError());
+  CK(cudaEventDestroy(e0));
+  CK(cudaEventDestroy(e1));
+  CK(cudaEventDestroy(ep));
+  CK(cudaGraphExecDestroy(ge));
+  CK(cudaGraphDestroy(g));
+  return out;
+}
 static int run_beside(Dev& d, int T, bool b32, int B, int L, int fill_sms, bool forming, int reps) {
   Pass p = make_pass(d, T, b32);
   pass_layer(d, p, 0, forming, d.st, true);
@@ -801,11 +864,16 @@ static int run_beside(Dev& d, int T, bool b32, int B, int L, int fill_sms, bool 
   pumpg_stop(pump);
   const long long n_prio = items_in(pump, t0, t1);
   const double w_prio = t1 - t0;
+  const double per_step = (double)B * LAYERS / T;
+  const int preps = std::min(256, std::max(reps, (int)std::ceil(4.0 / per_step)));
+  long long pl_prio = 0, pl_green = 0;
+  double tail_prio = 0, tail_green = 0;
+  const std::vector<Rep> a_pprio = time_paced(d, step, s_hi, Gp, s_lo, per_step, preps, &pl_prio, &tail_prio);
   // a green split: the step on the rest, the pass on fill_sms SMs
   cudaStream_t ss = nullptr, fs = nullptr;
   int got[2] = {0, 0};
   const int e = gc_split(d.sms - fill_sms, &ss, &fs, got);
-  std::vector<Rep> a_split, a_green;
+  std::vector<Rep> a_split, a_green, a_pgreen;
   long long n_green = 0;
   double w_green = 0;
   std::vector<Rep> pg;
@@ -821,6 +889,7 @@ static int run_beside(Dev& d, int T, bool b32, int B, int L, int fill_sms, bool 
     pumpg_stop(pump);
     n_green = items_in(pump, t0, t1);
     w_green = t1 - t0;
+    a_pgreen = time_paced(d, step, ss, Gg, fs, per_step, preps, &pl_green, &tail_green);
     CK(cudaGraphExecDestroy(Gg.ge));
   } else {
     fprintf(stderr, "gc_split(%d): %d\n", d.sms - fill_sms, e);
@@ -840,13 +909,20 @@ static int run_beside(Dev& d, int T, bool b32, int B, int L, int fill_sms, bool 
   printf(", \"green\": {\"window_ms\": %.3f, \"pass_layers\": %lld, \"slowdown\": %.4f, \"slowdown_vs_split\": %.4f}", w_green, n_green,
          a_green.empty() ? 0.0 : median(a_green).ms / base,
          a_green.empty() ? 0.0 : median(a_green).ms / median(a_split).ms);
+  const double base_mean = (mean_ms(a_full) + mean_ms(a_full2)) / 2;
+  printf(", \"paced\": {\"per_step\": %.6f, \"reps\": %d, \"prio\": {\"pass_layers\": %lld, \"tail_ms\": %.3f, \"slowdown_mean\": %.4f}, "
+         "\"green\": {\"pass_layers\": %lld, \"tail_ms\": %.3f, \"slowdown_mean\": %.4f}}",
+         per_step, preps, pl_prio, tail_prio, mean_ms(a_pprio) / base_mean, pl_green, tail_green,
+         a_pgreen.empty() ? 0.0 : mean_ms(a_pgreen) / base_mean);
   printf(", \"arms\": {");
   print_reps("pass_alone", pa, pass_macs, d.sms, true);
   if (!pg.empty()) print_reps("pass_alone_green", pg, pass_macs, d.sms, true);
   print_reps("full", a_full, step_macs, d.sms, true);
   print_reps("prio", a_prio, step_macs, d.sms, true);
+  print_reps("paced_prio", a_pprio, step_macs, d.sms, true);
   if (!a_split.empty()) print_reps("split", a_split, step_macs, d.sms, true);
   if (!a_green.empty()) print_reps("green", a_green, step_macs, d.sms, true);
+  if (!a_pgreen.empty()) print_reps("paced_green", a_pgreen, step_macs, d.sms, true);
   print_reps("full2", a_full2, step_macs, d.sms, false);
   printf("}}\n");
   fflush(stdout);
