@@ -10,14 +10,16 @@ ROWS = [json.loads(l) for l in open(f"{OUT}/issue_wide.jsonl") if l.strip()]
 # enum order in issue_wide.cu
 KINDS = ["iadd3_32", "imad_32", "iadd_64", "mov_64", "cs2r_64", "imad_wide"]
 KIND_IDX = {k: i for i, k in enumerate(KINDS)}
-# the SASS opcode(s) that implement each op (besides shared loop control). ptxas lowers add.u64 to IADD3 + IADD3.X.
-OP_OPCODES = {
-    "iadd3_32":  ["IADD3"],
-    "imad_32":   ["IMAD"],
-    "iadd_64":   ["IADD3", "IADD3.X"],
-    "mov_64":    ["MOV"],
-    "cs2r_64":   ["CS2R"],
-    "imad_wide": ["IMAD.WIDE"],
+# the SASS mnemonic each op lowers to on sm_120 (measured): add.u64 -> single IADD.64 (not IADD3+IADD3.X); mad.wide.u32
+# -> IMAD.WIDE.U32; mov.b64 -> MOV.64 (mostly elided); clock64 -> CS2UR (uniform) + MOV.64. 32-bit add fuses pairs into
+# a 3-input IADD3, so its per-op count reads ~0.5 (a 32-bit-only optimization, not the 64-bit question).
+OP_MATCH = {
+    "iadd3_32":  lambda o: o == "IADD3",
+    "imad_32":   lambda o: o == "IMAD",
+    "iadd_64":   lambda o: o == "IADD.64",
+    "mov_64":    lambda o: o == "MOV.64",
+    "cs2r_64":   lambda o: o.startswith("CS2UR") or o.startswith("CS2R"),
+    "imad_wide": lambda o: o.startswith("IMAD.WIDE"),
 }
 OPS_PER_ITER = 64  # k_alone unrolls 64 ops an iteration
 
@@ -30,7 +32,7 @@ def load_funcs(path):
             if name: funcs[name] = lines
             name, lines = m.group(1), []
             continue
-        m = re.search(r"/\*[0-9a-f]+\*/\s+@?\S*\s*([A-Z][A-Z0-9_.]*)", ln)
+        m = re.search(r"/\*[0-9a-f]+\*/\s+(?:@!?U?P[T0-9]+\s+)?([A-Z][A-Z0-9_.]*)", ln)
         if m and name is not None:
             lines.append(m.group(1))
     if name: funcs[name] = lines
@@ -43,12 +45,6 @@ def alone_func(funcs, xidx):
             return nm, ins
     return None, []
 
-def count(ins, opcode):
-    # exact-prefix match: IADD3 counts IADD3 but not IADD3.X; IADD3.X counts only the carry form
-    if opcode.endswith(".X"):
-        return sum(1 for o in ins if o == opcode)
-    return sum(1 for o in ins if o == opcode or o.startswith(opcode + "."))
-
 def sass_per_op(funcs, kind):
     xidx = KIND_IDX[kind]
     nm, ins = alone_func(funcs, xidx)
@@ -56,17 +52,8 @@ def sass_per_op(funcs, kind):
         return None, {}, nm
     hist = {}
     for o in ins:
-        base = o.split(".")[0]
         hist[o] = hist.get(o, 0) + 1
-    # instrs an op = total op-specific opcodes / 64. For iadd_64 that is IADD3(non-.X) + IADD3.X.
-    total = 0
-    for opc in OP_OPCODES[kind]:
-        if opc == "IADD3":  # count IADD3 but exclude the .X variant and loop control is tiny
-            total += sum(1 for o in ins if o == "IADD3")
-        elif opc == "IADD3.X":
-            total += sum(1 for o in ins if o == "IADD3.X")
-        else:
-            total += count(ins, opc)
+    total = sum(1 for o in ins if OP_MATCH[kind](o))
     return total / OPS_PER_ITER, hist, nm
 
 def slope(pairs):
